@@ -4,13 +4,19 @@
 
 ## 1. 当前项目状态
 
-当前项目仍是 UE 5.7 空项目结构。
+当前项目是 UE 5.7 项目，采用 6 模块结构。
 
-现有运行时模块：
+现有模块：
 
-- `Wacom`
+- `WacomCore`：基础类型、ID、GameplayTags 声明。
+- `WacomData`：卡牌、敌人、意图、角色等静态定义。
+- `WacomBattle`：战斗内核。
+- `WacomRun`：战斗之间的状态与探索（第一阶段几乎为空）。
+- `WacomApp`：游戏层、第一人称、输入绑定、UI、测试 Actor。同时作为主游戏模块。
+- `WacomEditor`：编辑器工具、数据校验（Editor-only target）。
+- `WacomTests`：自动化测试（DeveloperTool）。
 
-当前源码规模很小，暂时不需要立即拆成多个 UE 模块。第一阶段可以先在 `Wacom` 模块内部建立清晰目录边界；等战斗、数据、UI、Run 的职责稳定后，再拆成真实模块。
+选择 Day 1 就拆成多个模块而不是单模块内部目录模拟，原因是编译器级别的反循环依赖约束在空项目期成本最低，后期迁移成本最高。不走 UE 插件化，保留将来剥离为 `WacomRules` 插件的可能。
 
 ## 2. 架构目标
 
@@ -31,9 +37,9 @@
 - 运行时模块不依赖编辑器模块。
 - 表现层不成为规则真相。
 
-## 3. 目标模块图
+## 3. 模块图
 
-长期目标模块可以按以下方向拆分：
+模块拆分如下：
 
 ```text
 WacomCore
@@ -46,51 +52,63 @@ WacomEditor
   -> WacomCore
   -> WacomData
   -> WacomBattle
+
+WacomTests
+  -> WacomCore
+  -> WacomData
+  -> WacomBattle
+  -> WacomRun
 ```
 
-第一阶段先不强制拆真实 UE 模块。可以在 `Source/Wacom` 内用目录模拟这些边界。
+依赖方向由各模块的 `Build.cs` 硬约束，禁止反向依赖。
 
 ## 4. 模块职责
 
 | 模块 | 职责 | 不应该负责 |
 | --- | --- | --- |
-| `WacomCore` | 基础 ID、轻量枚举、GameplayTags、通用结果类型 | 战斗流程、UI、资产编辑器 |
-| `WacomData` | 卡牌、敌人、意图、状态、角色等静态定义 | 本场战斗状态、Widget、输入 |
+| `WacomCore` | 基础 ID、轻量枚举、GameplayTags 声明、通用结果类型 | 战斗流程、UI、资产编辑器 |
+| `WacomData` | 卡牌、敌人、意图、状态、角色等静态定义；资产查询入口 | 本场战斗状态、Widget、输入 |
 | `WacomBattle` | 战斗生命周期、命令结算、手牌区域、卡牌效果、敌方部位行动、快照事件 | UI 展示、Run 探索、关卡交互 |
-| `WacomRun` | 战斗之间的状态、背包、SAN、探索事件、商店、休息、路线或区域状态 | 单场战斗内规则细节 |
-| `WacomApp` | 第一人称角色、输入绑定、测试场景交互、UI、HUD、动画和特效触发 | 修改战斗状态真相 |
+| `WacomRun` | 战斗之间的状态、背包、探索事件、商店、休息、路线或区域状态 | 单场战斗内规则细节 |
+| `WacomApp` | 第一人称角色、输入绑定、测试场景交互、UI、HUD、动画和特效触发；游戏主模块 | 修改战斗状态真相 |
 | `WacomEditor` | 数据校验、开发按钮、内容生成、自动化测试辅助 | 运行时规则依赖 |
+| `WacomTests` | 自动化测试、测试 fixture | 运行时业务逻辑 |
 
-## 5. 第一阶段目录建议
+## 5. 目录结构
 
-在不拆真实模块的情况下，建议先使用以下目录结构：
+模块层：
 
 ```text
-Source/Wacom/Public
-  Core/
-  Data/
-  Battle/
-  Run/
-  App/
-
-Source/Wacom/Private
-  Core/
-  Data/
-  Battle/
-    Core/
-    Commands/
-    Cards/
-    Deck/
-    Hand/
-    Enemy/
-    Events/
-    Snapshots/
-    Tests/
-  Run/
-  App/
+Source/
+  WacomCore/
+    Public/ { Types/, Tags/ }
+    Private/ { Tags/ }
+  WacomData/
+    Public/ { Cards/, Enemies/, Characters/, Registry/ }
+    Private/ { Cards/, Enemies/, Characters/, Registry/ }
+  WacomBattle/
+    Public/ { Session/, Commands/, Snapshots/, Events/, Runtime/ }
+    Private/ {
+      Session/, Core/, Commands/, Cards/, Deck/, Hand/,
+      Enemy/, Status/, Events/, Snapshots/
+    }
+  WacomRun/
+    Public/, Private/
+  WacomApp/
+    Public/ { Actors/, Pawns/, Controllers/, UI/ }
+    Private/ { Actors/, Pawns/, Controllers/, UI/ }
+  WacomEditor/
+    Public/
+    Private/ { Validators/, Commands/, Bootstrap/ }
+  WacomTests/
+    Public/ { Fixtures/ }
+    Private/ { Fixtures/, Battle/ }
 ```
 
-第一阶段重点放在 `Private/Battle`。`Run` 和 `App` 只做最小入口。
+第一阶段重点在 `WacomBattle/Private`。`WacomRun` 和 `WacomApp` 只做最小入口。
+
+`BattleState`、`BattleResolver`、各命令 Resolver、各效果执行器都在 `WacomBattle/Private`，
+外部模块编译期不可见。对外入口是 `WacomBattle/Public/Session/BattleSession.h`。
 
 ## 6. 战斗内核边界
 
@@ -275,16 +293,19 @@ UI 不可以：
 代码依赖方向应保持单向：
 
 ```text
-Core <- Data <- Battle <- Run <- App
+WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 ```
+
+`WacomEditor` 和 `WacomTests` 位于依赖链之外，只允许向运行时模块单向依赖。
 
 约束：
 
+- 依赖方向由 `Build.cs` 强制，严禁反向依赖。
 - Public 头文件只放外部需要的协议和轻量类型。
-- Private 放规则实现和服务类。
+- Private 放规则实现和服务类；外部模块无法 include Private 头。
 - 头文件优先前向声明，具体 include 放到 `.cpp`。
 - 只有需要反射、蓝图、资产或序列化的类型才使用 `UCLASS / USTRUCT / UENUM`。
-- 不让 UI 模块依赖 Battle 的私有实现。
+- `WacomApp` 不得直接修改 `BattleState`，只能通过 `UBattleSession` 提交命令、读取快照和事件。
 
 ## 15. 暂不处理
 
