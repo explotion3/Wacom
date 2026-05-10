@@ -1,0 +1,57 @@
+// Copyright Wacom. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+
+struct FBattleState;
+enum class ECardLocation : uint8;
+
+/**
+ * 抽牌堆 / 弃牌堆 / 消耗区的原子操作。
+ *
+ * 仅 WacomBattle/Private 使用。所有 API 都直接操作 FBattleState。
+ * 禁止在这里做"卡牌能不能抽"类的规则判断——那是 TurnFlow / Resolver 的职责。
+ *
+ * 约束：
+ * - 所有修改都会更新对应 FRuntimeCardInstance::Location。
+ * - 抽牌堆空了自动从弃牌堆洗回，使用 BattleState.Rng。
+ * - 本服务不发射事件，事件由调用方在完成阶段性工作后一次性发射。
+ */
+class FDeckService
+{
+public:
+	/**
+	 * 从抽牌堆顶抽 N 张到传入的 OutDrawnCardIds。
+	 *
+	 * 抽牌堆不足时，自动把弃牌堆洗回抽牌堆再继续。
+	 * 最终可能抽不满（抽牌堆 + 弃牌堆都耗尽）。
+	 * 返回实际抽出的张数。
+	 *
+	 * OutDrawnCardIds 仅接收本次新抽出的卡，不包含已在手牌中的。
+	 * 调用方负责把这些卡加入 State.Hand 的合适位置（由 HandZoneService 决定）。
+	 */
+	static int32 DrawCards(FBattleState& State, int32 Count, TArray<FGuid>& OutDrawnCardIds);
+
+	/**
+	 * 把弃牌堆洗回抽牌堆。弃牌堆清空。
+	 * 使用 BattleState.Rng 做随机。
+	 */
+	static void ReshuffleDiscardIntoDraw(FBattleState& State);
+
+	/**
+	 * 把一张卡从手牌移到弃牌区。
+	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
+	 */
+	static bool DiscardFromHand(FBattleState& State, const FGuid& CardInstanceId);
+
+	/**
+	 * 把一张卡从手牌移到消耗区。
+	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
+	 */
+	static bool ExhaustFromHand(FBattleState& State, const FGuid& CardInstanceId);
+
+private:
+	/** 内部：根据 CardInstanceId 更新 FRuntimeCardInstance::Location。找不到则忽略。 */
+	static void SetCardLocation(FBattleState& State, const FGuid& CardInstanceId, ECardLocation NewLocation);
+};

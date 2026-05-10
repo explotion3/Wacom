@@ -17,6 +17,8 @@ public class WacomApp : ModuleRules
 			"EnhancedInput",
 			"GameplayTags",
 			"UMG",
+			"CommonUI",
+			"CommonInput",
 			"WacomCore",
 			"WacomData",
 			"WacomBattle",

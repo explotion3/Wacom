@@ -1,31 +1,26 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Snapshots/BattleSnapshotBuilder.h"
+#include "Core/BattleRules.h"
 #include "Core/BattleState.h"
+#include "Hand/HandZoneService.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Cards/CardDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Enemies/IntentDefinition.h"
 
 namespace
 {
 	int32 ComputeRuntimeCost(const FRuntimeCardInstance& Card)
 	{
-		const int32 Base = Card.Definition ? Card.Definition->BaseCost : 0;
-		return FMath::Max(0, Base + Card.RuntimeCostModifier);
+		return FBattleRules::ComputeRuntimeCost(Card);
 	}
 
 	const FRuntimeCardInstance* FindCard(const FBattleState& State, const FGuid& InstanceId)
 	{
-		for (const FRuntimeCardInstance& Card : State.AllCards)
-		{
-			if (Card.InstanceId == InstanceId)
-			{
-				return &Card;
-			}
-		}
-		return nullptr;
+		return FBattleRules::FindCard(State, InstanceId);
 	}
 }
 
@@ -62,7 +57,16 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		PartSnap.bDestroyed        = Part.bDestroyed;
 		PartSnap.Statuses          = Part.Statuses;
 		PartSnap.StatusStacks      = Part.StatusStacks;
-		// CurrentIntent 在 S6 之后从 IntentSequence 填充。
+
+		// CurrentIntent：从 IntentSequence[CurrentIntentIndex] 读取。
+		if (Part.Definition && Part.Definition->IntentSequence.IsValidIndex(Part.CurrentIntentIndex))
+		{
+			const FIntentDefinition& IntentDef = Part.Definition->IntentSequence[Part.CurrentIntentIndex];
+			PartSnap.CurrentIntent.IntentId        = IntentDef.IntentId;
+			PartSnap.CurrentIntent.DisplayName     = IntentDef.DisplayName;
+			PartSnap.CurrentIntent.Initiative      = IntentDef.Initiative;
+			PartSnap.CurrentIntent.ResistanceValue = IntentDef.ResistanceValue;
+		}
 
 		if (!Part.bDestroyed)
 		{
@@ -94,10 +98,9 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		HandCard.InstanceId    = Card->InstanceId;
 		HandCard.Definition    = Card->Definition;
 		HandCard.RuntimeCost   = ComputeRuntimeCost(*Card);
-		HandCard.Zone          = EHandZone::None;     // S4 HandZoneService 后填充
-		HandCard.bIsHandAnchor = (CardId == State.LeftHandInstanceId)
-		                      || (CardId == State.RightHandInstanceId);
-		HandCard.bIsPlayable   = false;                // S5 费用判断后填充
+		HandCard.Zone          = FHandZoneService::GetZoneOf(State, CardId);
+		HandCard.bIsHandAnchor = FHandZoneService::IsHandAnchor(State, CardId);
+		HandCard.bIsPlayable   = FBattleRules::IsCardCostLegal(State, *Card);
 
 		if (CardId == State.LeftHandInstanceId)  { Out.Hand.bLeftHandPresent = true; }
 		if (CardId == State.RightHandInstanceId) { Out.Hand.bRightHandPresent = true; }

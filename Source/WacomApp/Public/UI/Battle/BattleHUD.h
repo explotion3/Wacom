@@ -1,0 +1,177 @@
+// Copyright Wacom. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UI/Battle/WacomBattleWidgetBase.h"
+#include "BattleHUD.generated.h"
+
+class UWacomBattleWidgetBase;
+struct FBattleCommand;
+
+/**
+ * 战斗 UI 根 Widget。
+ *
+ * 状态机（EBattleUIState）驱动所有子 Widget 的交互模式。
+ * 命令提交的唯一入口：子 Widget 发委托给 HUD，HUD 统一调 Session->SubmitCommand。
+ *
+ * 交互流程：
+ *   Idle
+ *     ├── 点击 UCardWidget → HUD 判断 TargetMode
+ *     │     ├── None / Self → 直接提交 PlayCard（空目标），回 Idle
+ *     │     └── SingleEnemyPart → 切 TargetSelect，记录 Pending 卡
+ *     ├── 点击 Wait 按钮 → 提交 Wait，回 Idle
+ *     └── 点击 EndTurn 按钮 → 提交 EndTurn，回 Idle
+ *
+ *   TargetSelect
+ *     ├── 点击 UEnemyPartWidget → 提交 PlayCard(PendingCard, PartId)，回 Idle
+ *     └── 右键 / ESC → 取消，回 Idle
+ *
+ *   Resolving（P5 起使用）：命令已提交，等动画播放完成。第一阶段同步完成所以几乎瞬间。
+ *
+ *   BattleEnd：战斗结束，显示胜利/失败面板（P2.7 通过 Modal 实现）。
+ *
+ * WBP 子类约定（BindWidget 大部分可选，P2 子步骤按需添加）：
+ * - PlayerStatusBar   : UPlayerStatusBar     (P2.2)
+ * - HandPanel         : UHandPanel           (P2.3)
+ * - EnemyInfoBar      : UEnemyInfoBar        (P2.4)
+ * - ActionPanel       : UActionPanel         (P2.5)
+ * - DrawPileView      : UDrawPileView        (P2.6)
+ * - DiscardPileView   : UDiscardPileView     (P2.6)
+ * - EquipmentBar      : UEquipmentBar        (P2.6)
+ * - EventToast        : UEventToast          (P2.7)
+ */
+UENUM(BlueprintType)
+enum class EBattleUIState : uint8
+{
+	Idle,
+	TargetSelect,
+	Resolving,
+	BattleEnd,
+};
+
+UCLASS(Blueprintable)
+class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
+{
+	GENERATED_BODY()
+
+public:
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	EBattleUIState GetUIState() const { return UIState; }
+
+	// ---- 子 Widget 交互入口 ----
+	// 子 Widget 通过这些方法通知 HUD 玩家意图。HUD 按状态机决策。
+
+	/**
+	 * 某张手牌被点击。
+	 * - TargetMode == None / Self：立即提交 PlayCard
+	 * - TargetMode == SingleEnemyPart：进入 TargetSelect 状态
+	 * - 其他：第一阶段不支持，忽略
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	void OnCardClickedByUser(const FGuid& CardInstanceId);
+
+	/**
+	 * TargetSelect 状态下玩家点击了某个敌方部位。
+	 * 提交 PlayCard(PendingCardId, PartId)，回到 Idle。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	void OnEnemyPartClickedByUser(const FGuid& PartInstanceId);
+
+	/** 等待按钮点击。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	void OnWaitRequested();
+
+	/** 结束回合按钮点击。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	void OnEndTurnRequested();
+
+	/** 取消目标选择（ESC、右键、再次点同一张牌等）。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	void CancelTargetSelect();
+
+	// ---- 状态机查询（供子 Widget 做视觉反馈）----
+
+	/** 当前是否正在选目标。UI 可据此高亮可选敌方部位。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	bool IsInTargetSelect() const { return UIState == EBattleUIState::TargetSelect; }
+
+	/** 当前等待目标的卡 ID。IsInTargetSelect == false 时返回 invalid。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	FGuid GetPendingTargetingCardId() const { return PendingTargetingCardId; }
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeOnInitialized() override;
+	virtual void NativeConstruct() override;
+	virtual void NativeRefreshFromSnapshot(const FBattleSnapshot& Snap) override;
+	virtual void NativeOnSessionChanged(class UBattleSession* OldSession, class UBattleSession* NewSession) override;
+
+	/** 告诉 CommonUI：本 HUD 希望鼠标可见 + 游戏输入透传（键盘快捷键仍工作）。 */
+	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
+
+	/**
+	 * 子类 override 可以在状态切换时做额外处理。
+	 * 第一阶段保留空实现。WBP 可以通过 BP_OnUIStateChanged 做表现反馈。
+	 */
+	virtual void NativeOnUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On UI State Changed")
+	void BP_OnUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
+
+	// ---- BindWidget（子 Widget 按 P2.x 子步骤陆续加）----
+
+	/** 玩家状态条。P2.2。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UPlayerStatusBar> PlayerStatusBar;
+
+	/** 手牌面板。P2.3。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UHandPanel> HandPanel;
+
+	/** 敌人信息条。P2.4。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UEnemyInfoBar> EnemyInfoBar;
+
+	/** 操作面板。P2.5。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UActionPanel> ActionPanel;
+
+	/** 装备条。P2.6。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UEquipmentBar> EquipmentBar;
+
+	/** 抽牌堆计数。P2.6。PileCountView 不是 BattleWidget，Refresh 时手动更新。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UPileCountView> DrawPileView;
+
+	/** 弃牌堆计数。P2.6。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UPileCountView> DiscardPileView;
+
+	/** 消耗区计数。P2.6。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UPileCountView> ExhaustPileView;
+
+	/** 事件 Toast。P2.7。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<class UEventToast> EventToast;
+
+private:
+	EBattleUIState UIState = EBattleUIState::Idle;
+
+	/** TargetSelect 状态下待确认目标的卡实例 ID。 */
+	FGuid PendingTargetingCardId;
+
+	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
+	void SetUIState(EBattleUIState NewState);
+
+	/** 内部：提交 PlayCard 命令 + 事件消费 + 刷新。 */
+	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
+
+	/** 内部：消费 Session 事件到日志。P5 之后改为分发到 EventToast。 */
+	void ConsumeAndLogEvents();
+
+	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
+	void AfterCommand();
+};

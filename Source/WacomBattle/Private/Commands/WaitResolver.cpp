@@ -1,14 +1,51 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Commands/WaitResolver.h"
+#include "Commands/BattleCommand.h"
+#include "Core/BattleRules.h"
 #include "Core/BattleState.h"
+#include "Enemy/EnemyPartActionResolver.h"
+#include "Events/BattleEventBus.h"
+#include "Runtime/RuntimeEnemyPart.h"
 
-FWacomStatus FWaitResolver::Resolve(FBattleState& /*State*/, FBattleEventBus& /*Events*/, const FBattleCommand& /*Command*/)
+FWacomStatus FWaitResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& /*Command*/)
 {
-	// S5 实现：
-	// - 所有敌方部位当前先机减去当前等待值
-	// - 若有部位先机 <= 0，调用敌方部位行动子流程（S6）
-	// - 当前等待值 +1
-	// - 发射 WaitPerformed 事件
-	return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("NotImplemented"));
+	// Battle_Rules §6：
+	// 1. 所有敌人部位当前先机减去当前等待值
+	// 2. 若有部位先机 <= 0，执行敌方部位行动子流程（S6 填实现）
+	// 3. 当前等待值 +1
+	// 4. 返回执行阶段
+
+	const int32 Amount = State.CurrentWaitValue;
+
+	for (FRuntimeEnemyPart& Part : State.EnemyParts)
+	{
+		if (Part.bDestroyed)
+		{
+			continue;
+		}
+		Part.CurrentInitiative -= Amount;
+	}
+
+	{
+		FBattleEvent Ev;
+		Ev.Type   = EBattleEventType::WaitPerformed;
+		Ev.Amount = Amount;
+		Events.Emit(Ev);
+	}
+
+	// 先机归零 → 敌方部位行动子流程（S6）
+	FEnemyPartActionResolver::ResolveInitiativeZeroActions(State, Events);
+
+	// 等待值 +1
+	++State.CurrentWaitValue;
+
+	// 战斗是否因玩家受伤或意外结束
+	if (FBattleRules::CheckAndApplyBattleEnd(State, Events))
+	{
+		return FWacomStatus::Ok();
+	}
+
+	++State.StateVersion;
+	return FWacomStatus::Ok();
 }

@@ -4,6 +4,7 @@
 
 #include "Core/BattleState.h"
 #include "Core/BattleResolver.h"
+#include "Core/BattleTurnFlow.h"
 #include "Events/BattleEventBus.h"
 #include "Snapshots/BattleSnapshotBuilder.h"
 
@@ -11,6 +12,7 @@
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Cards/CardDefinition.h"
+#include "Cards/CardPhysique.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 
@@ -61,6 +63,11 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 	ReferencedAssets.Add(Params.Character);
 
 	// ---- 卡牌：左手 / 右手 / StarterDeck ----
+	// 第一阶段简化：在 Initialize 时把所有卡的身材 MaxHpBonus 累加到玩家 HP。
+	// 对齐 Data_Schema_Draft §5.2、FirstPerson_HD2D_Card_Variant "入战属性立即生效"。
+	// 严格讲身材应在"卡进入手牌时"触发；第一阶段 StarterDeck 首回合全部能进入手牌，
+	// 所以提前在 Initialize 累加与"进入手牌触发"行为等价。
+	// 未来若引入"卡留在抽牌堆时不生效"语义，再改为懒触发。
 	auto CreateCardInstance = [this](const UCardDefinition* Def, ECardLocation InitialLocation) -> FGuid
 	{
 		FRuntimeCardInstance Card;
@@ -71,6 +78,12 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 		if (Def)
 		{
 			ReferencedAssets.Add(Def);
+			const int32 HpBonus = Def->Physique.MaxHpBonus;
+			if (HpBonus > 0)
+			{
+				State->PlayerMaxHp     += HpBonus;
+				State->PlayerCurrentHp += HpBonus;
+			}
 		}
 		return Card.InstanceId;
 	};
@@ -105,32 +118,42 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 		Part.Definition         = Slot.PartDef;
 		Part.CurrentHp          = Slot.PartDef->MaxHp;
 		Part.CurrentIntentIndex = Slot.PartDef->InitialIntentIndex;
-		// CurrentInitiative 在 S6/S9 随 IntentSequence 就位后从首个意图填入。
-		// 第一阶段 IntentSequence 还未定义，这里保持 0。
-		Part.CurrentInitiative  = 0;
+		// 从初始意图读取先机值。若 IntentSequence 为空，保持 0。
+		if (Slot.PartDef->IntentSequence.IsValidIndex(Part.CurrentIntentIndex))
+		{
+			Part.CurrentInitiative = Slot.PartDef->IntentSequence[Part.CurrentIntentIndex].Initiative;
+		}
+		else
+		{
+			Part.CurrentInitiative = 0;
+		}
 		State->EnemyParts.Add(Part);
 		ReferencedAssets.Add(Slot.PartDef);
 	}
 
 	// ---- 阶段推进 ----
-	// Setup -> PlayerAction。
-	// S3 会在这里插入 TurnStart 抽牌流程；S2 只把阶段切到 PlayerAction 以便命令可以进入。
-	State->Phase        = EBattlePhase::Setup;
-	State->TurnNumber   = 1;
+	// Setup -> TurnStart -> PlayerAction。
+	// Setup 阶段完成敌人初始化；TurnStart 由 FBattleTurnFlow::BeginPlayerTurn 执行。
+	State->Phase            = EBattlePhase::Setup;
+	State->TurnNumber       = 1;
 	State->CurrentWaitValue = 2;
-	State->StateVersion = 0;
+	State->StateVersion     = 0;
 
-	FBattleEvent StartEvent;
-	StartEvent.Type = EBattleEventType::BattleStarted;
-	EventBus->Emit(StartEvent);
+	{
+		FBattleEvent StartEvent;
+		StartEvent.Type = EBattleEventType::BattleStarted;
+		EventBus->Emit(StartEvent);
+	}
 
-	State->Phase = EBattlePhase::PlayerAction;
-	++State->StateVersion;
+	{
+		FBattleEvent TurnEvent;
+		TurnEvent.Type  = EBattleEventType::TurnStarted;
+		TurnEvent.Count = State->TurnNumber;
+		EventBus->Emit(TurnEvent);
+	}
 
-	FBattleEvent TurnEvent;
-	TurnEvent.Type  = EBattleEventType::TurnStarted;
-	TurnEvent.Count = State->TurnNumber;
-	EventBus->Emit(TurnEvent);
+	// 起始阶段：抽牌、重置等待值、生成手牌队列（S3 初版，S4 重写）。
+	FBattleTurnFlow::BeginPlayerTurn(*State, *EventBus, /*bIsFirstTurn=*/true);
 
 	return FWacomStatus::Ok();
 }

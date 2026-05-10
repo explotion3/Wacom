@@ -578,7 +578,7 @@ struct FStatusInstance
 
 | 状态 | 归属 | 行为 |
 | --- | --- | --- |
-| `Status.Poison` | EnemyPart | 每当"归属方"行动一次后，该归属扣除 `Stacks` 点直伤，不穿透护盾（第一阶段先按普通伤害处理） |
+| `Status.Poison` | EnemyPart | 触发时机：玩家每打出一张牌后 + 敌方部位每行动一次后，对拥有中毒的一方造成等于层数的伤害。穿透护盾，直接扣生命值。层数不因结算减少 |
 | `Status.Slow` | EnemyPart | 仅记录层数，不影响数值。先占位不生效 |
 | `Status.Freeze` | EnemyPart | 持有时该部位下一次行动跳过并刷新意图。作用等同晕厥，第一阶段可共用跳过分支 |
 | `Status.Twilight` | EnemyPart | 仅记录层数，不触发任何效果。为暮蛉的被动留钩子 |

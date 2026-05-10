@@ -32,7 +32,7 @@
 		{
 			"Name": "WacomEditor",
 			"Type": "Editor",
-			"LoadingPhase": "PostEngineInit"
+			"LoadingPhase": "Default"
 		},
 		{
 			"Name": "WacomTests",

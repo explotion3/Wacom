@@ -23,6 +23,7 @@ public class WacomEditor : ModuleRules
 		{
 			"UnrealEd",
 			"AssetTools",
+			"AssetRegistry",
 			"EditorStyle",
 			"Slate",
 			"SlateCore",
