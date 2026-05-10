@@ -1,0 +1,116 @@
+# DreamShader ChangeLog
+
+## 1.3.1 - 2026-05-09
+
+### Graph Functions
+
+- Added top-level and namespaced `GraphFunction` blocks for reusable graph-node logic.
+- `GraphFunction` calls expand into the caller's current Graph, so they can use `UE.*` material graph nodes such as `UE.TexCoord(...)`.
+- Added GraphFunction argument validation, local expansion scope, recursive call detection, and explicit out-variable writeback.
+
+## 1.3.0 - 2026-05-08
+
+### Material Layer Functions
+
+- Added top-level `MaterialLayer(Name="...", Root="...")` and `MaterialLayerBlend(Name="...", Root="...")` blocks.
+- Generated Material Layer assets are standard `UMaterialFunction` assets with Unreal `MaterialFunctionUsage` set to `MaterialLayer` or `MaterialLayerBlend`.
+- `MaterialLayer` / `MaterialLayerBlend` reuse the existing `Properties`, `Inputs`, `Outputs`, `Settings`, and `Graph` sections.
+- Added validation that Material Layer blocks output exactly one `MaterialAttributes` value, and Material Layer Blend blocks declare at least two `MaterialAttributes` inputs.
+- Vector parameter properties now keep their RGBA output available in Graph, so `.a` / `.w` can read alpha and assignments to lower component counts automatically use leading channels.
+
+## 1.2.10 - 2026-05-08
+
+### VSCode MaterialExpression Manifest
+
+- Added editor-side export of reflected `UMaterialExpression` metadata to `Saved/DreamShader/Bridge/material-expressions.json`.
+- The manifest is refreshed on editor bridge startup and when opening the DreamShader VSCode workspace.
+- Exported metadata includes expression class names, editable reflected properties, expression inputs, output pins, and inferred DreamShader `OutputType` hints.
+- Release workflow now downloads the latest `dreamshader-language-support` GitHub Release assets and attaches them to DreamShader releases.
+
+## 1.2.6 - 2026-04-30
+
+### ShaderFunction Properties
+
+- Added `ShaderFunction` `Properties` as material-function-local property nodes.
+- Added `const` property declarations for scalar, vector, and texture helper nodes that are not externally adjustable parameters.
+- `ShaderFunction` `Inputs` preview defaults can now reference generated `Properties`, including texture object previews such as `opt Texture2D BaseColorTex = Tex;`.
+
+## 1.2.5 - 2026-04-30
+
+### Material Attributes
+
+- Added `MaterialAttributes` as a graph value type for `Shader`, `ShaderFunction`, and `VirtualFunction` signatures.
+- Added struct-like member writes such as `Attrs.BaseColor = Color;` and `Attrs.Roughness = Roughness;`.
+- Added `Base.MaterialAttributes = Attrs;` output binding support and automatic `Use Material Attributes` enablement on generated materials.
+- MaterialAttributes values can be returned from generated or virtual Material Functions and passed through Graph assignments.
+
+## 1.2.4 - 2026-04-30
+
+### Parameter Reflection
+
+- Replaced the documented comma-style metadata suffix with a semicolon-based trailing reflection block for declarations.
+- Parameter reflection blocks can now set any reflected `UMaterialExpression` property exposed by the generated parameter node.
+- Basic `float` / vector / texture property shorthand declarations use the same reflection path as explicit parameter node declarations.
+- Texture sample parameters can now configure reflected properties such as `SamplerType`, `SamplerSource`, `MipValueMode`, `AutomaticViewMipBias`, `ConstCoordinate`, and `ConstMipValue`.
+
+## 1.2.3 - 2026-04-29
+
+### Parameters
+
+- Added declaration metadata `[Group="...", SortPriority=32, Description="..."]` for material `Properties` and function input/output declarations.
+- Added explicit Parameter node declarations including `ScalarParameter`, `VectorParameter`, `TextureObjectParameter`, texture sample parameter nodes, `StaticBoolParameter`, and `StaticSwitchParameter`.
+- Added `StaticSwitchParameter` graph calls, for example `UseDetail(True=detailColor, False=baseColor)`.
+- Added `UE.CollectionParam(Collection=Path(...), Parameter="...")` for Material Parameter Collection reads.
+
+### Function Defaults
+
+- Added `opt` inputs for `ShaderFunction` and `VirtualFunction`.
+- Added `default` call arguments for optional material function inputs, preserving Unreal FunctionInput preview defaults.
+- Generated `ShaderFunction` assets now write input/output descriptions and sort priorities to FunctionInput / FunctionOutput nodes.
+- VirtualFunction copy/create/sync now emits optional inputs, preview defaults, and pin metadata when available.
+
+## 1.2.2 - 2026-04-29
+
+### VirtualFunction Workflow
+
+- `CreateVirtualFunction` now reuses the existing declaration for the selected Material Function instead of creating duplicate `.dsh` files.
+- When a matching declaration already exists, the Material Function `DreamShader` menu shows `OpenVirtualFunction` and `Copy Virtual Function Reference` instead of the create/copy-definition actions.
+- `OpenVirtualFunction` opens the existing declaration in VSCode and jumps to the declaration location when possible.
+- Added startup validation and refresh for `VirtualFunction` declarations under `DShader`, reporting missing source `UMaterialFunction` assets and updating changed signatures.
+
+### Import Compatibility
+
+- `import "File.dsh"` now works with or without a trailing semicolon in the Unreal generator import pass.
+
+## 1.2.1 - 2026-04-29
+
+### Editor Workflow
+
+- Replaced the single Material Function toolbar action with a `DreamShader` dropdown menu.
+- Added `CopyVirtualFunction`, `CreateVirtualFunction`, and `CopyVirtualFunctionCall` actions to the Material Function editor toolbar and Material Function asset context menu.
+- `CreateVirtualFunction` writes a `.dsh` declaration file under the configured `DShader/VirtualFunctions` directory and opens it in the default external editor.
+- `CopyVirtualFunctionCall` copies a ready-to-paste Graph call using the generated input names and first output.
+- Added `Open Dream Shader Workspace (VSCode)` to the editor Tools menu and DreamShader toolbar section. It writes `DShader/DreamShader.code-workspace`, opens it in VSCode when available, and falls back to the default editor or Notepad.
+
+### Release
+
+- Added a GitHub Actions release workflow that packages the plugin source and publishes a GitHub Release from version tags or manual workflow dispatch.
+
+## 1.2.0 - 2026-04-28
+
+### VirtualFunction
+
+- Added `VirtualFunction(Name="...")` declarations for existing Unreal `UMaterialFunction` assets.
+- `VirtualFunction` calls can be used from `Graph` like `ShaderFunction` calls, without generating or overwriting the referenced asset.
+- `Options.Asset` supports `Path(Game, "...")`, `Path(Engine, "...")`, `Path(Plugin.PluginName, "...")` / `Path(Plugins.PluginName, "...")`, and full Unreal object paths.
+- Added Material Function context-menu and Material Editor toolbar actions that copy a complete `VirtualFunction` declaration with inputs, outputs, and options.
+
+### Asset Roots
+
+- Kept `Root="Plugin.PluginName"` mapped to the project plugin content root, physically saving generated assets under `[Project]/Plugins/PluginName/Content`.
+- `Plugins.PluginName` and `Plugins/PluginName` remain compatibility spellings.
+
+### Tooling
+
+- Updated the VSCode extension language service for `VirtualFunction`, plugin path completion inside `Path(Plugins.)`, snippets, hover text, signatures, and diagnostics.
+- Updated plugin documentation for DreamShader `1.2.0`.

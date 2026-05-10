@@ -1,0 +1,44 @@
+# Unreal generated files
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# IDE and local user files
+.vs/
+.idea/
+Docs/.obsidian/
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+
+# Build artifacts
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+*.app
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Unreal local config
+*.xcworkspace
+*.xcodeproj
+
+# Keep project source, config, content, plugins, and docs versioned.
