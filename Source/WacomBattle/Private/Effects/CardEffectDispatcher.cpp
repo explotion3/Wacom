@@ -1,0 +1,147 @@
+// Copyright Wacom. All Rights Reserved.
+
+#include "Effects/CardEffectDispatcher.h"
+#include "Effects/EffectContext.h"
+#include "Effects/EffectExecutor.h"
+
+#include "Core/BattleState.h"
+#include "Runtime/RuntimeEnemyPart.h"
+#include "Tags/WacomGameplayTags.h"
+
+#include "Cards/CardEffect.h"
+
+namespace
+{
+	/**
+	 * 把卡牌效果条目的 Target tag 映射到 EffectContext 的目标。
+	 *
+	 * 支持：
+	 * - Target.Self / Target.Player    → Player（默认），但 Self 对 Shuffle.ToRandomZone
+	 *                                    和 Effect.Card.AddCost/ReduceCost 指向本卡（HandCard）
+	 * - Target.SingleEnemyPart         → 用调用方提供的 SelectedPartId
+	 * - Target.AllEnemyParts           → EnemyPart 但 TargetInstanceId 留空；
+	 *                                    调用方需要循环执行该效果
+	 * - Target.RandomHandCard          → HandCard（由服务自选）
+	 * - Target.ZoneHandCard            → HandCard（按 TargetZone 过滤，由服务自选）
+	 * - Target.LastShuffledCard        → HandCard，TargetInstanceId = LastShuffledCardId
+	 * 其余第一阶段不支持。
+	 */
+	void FillTargetFromCardEffect(
+		FEffectContext& Ctx,
+		const FCardEffect& Effect,
+		const FGuid& SelectedPartId,
+		const FGuid& SelfCardId,
+		const FGuid& LastShuffledCardId)
+	{
+		const FGameplayTag& Tag = Effect.Target;
+
+		if (Tag == WacomTags::Target_Self || Tag == WacomTags::Target_Player)
+		{
+			// Card 语境下 Target.Self 的语义由 EffectType 决定：
+			// - Shuffle.ToRandomZone / Card.AddCost / Card.ReduceCost：指向本卡
+			// - 其他（治疗、加盾、施加状态给玩家）：指向玩家
+			const bool bPointsToSelfCard =
+				Effect.EffectType == WacomTags::Effect_Shuffle_ToRandomZone
+				|| Effect.EffectType == WacomTags::Effect_Card_AddCost
+				|| Effect.EffectType == WacomTags::Effect_Card_ReduceCost;
+
+			if (bPointsToSelfCard)
+			{
+				Ctx.TargetKind       = EEffectTargetKind::HandCard;
+				Ctx.TargetInstanceId = SelfCardId;
+			}
+			else
+			{
+				Ctx.TargetKind       = EEffectTargetKind::Player;
+				Ctx.TargetInstanceId = FGuid();
+			}
+			return;
+		}
+		if (Tag == WacomTags::Target_SingleEnemyPart)
+		{
+			Ctx.TargetKind       = EEffectTargetKind::EnemyPart;
+			Ctx.TargetInstanceId = SelectedPartId;
+			return;
+		}
+		if (Tag == WacomTags::Target_AllEnemyParts)
+		{
+			Ctx.TargetKind       = EEffectTargetKind::EnemyPart;
+			Ctx.TargetInstanceId = FGuid();  // 由调用方展开
+			return;
+		}
+		if (Tag == WacomTags::Target_RandomHandCard
+		 || Tag == WacomTags::Target_ZoneHandCard)
+		{
+			Ctx.TargetKind       = EEffectTargetKind::HandCard;
+			Ctx.TargetInstanceId = FGuid();  // 由腾挪服务自选
+			return;
+		}
+		if (Tag == WacomTags::Target_LastShuffledCard)
+		{
+			Ctx.TargetKind       = EEffectTargetKind::HandCard;
+			Ctx.TargetInstanceId = LastShuffledCardId;
+			return;
+		}
+
+		Ctx.TargetKind       = EEffectTargetKind::None;
+		Ctx.TargetInstanceId = FGuid();
+	}
+
+	void FillCommonContext(
+		FEffectContext& Ctx,
+		FBattleState& State,
+		FBattleEventBus& Events,
+		const FCardEffect& Effect,
+		int32 FinalMag,
+		const FGuid& SelfCardId,
+		const FGuid& LastShuffledCardId)
+	{
+		Ctx.State              = &State;
+		Ctx.Events             = &Events;
+		Ctx.SourceKind         = EEffectSourceKind::Card;
+		Ctx.SourceInstanceId   = SelfCardId;
+		Ctx.EffectTag          = Effect.EffectType;
+		Ctx.Magnitude          = FinalMag;
+		Ctx.Duration           = Effect.Duration;
+		Ctx.MetaTag            = Effect.TargetZone;
+		Ctx.ExcludeHandCardId  = SelfCardId;
+		Ctx.LastShuffledCardId = LastShuffledCardId;
+	}
+}
+
+void FCardEffectDispatcher::Execute(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	const FCardEffect& Effect,
+	int32 RuntimeCost,
+	const FGuid& SelectedPartId,
+	const FGuid& SelfCardId,
+	FGuid& InOutLastShuffledCardId)
+{
+	const int32 FinalMag = Effect.bMagnitudeFromRuntimeCost ? RuntimeCost : Effect.Magnitude;
+
+	// AllEnemyParts：展开到每个存活部位。
+	if (Effect.Target == WacomTags::Target_AllEnemyParts)
+	{
+		for (FRuntimeEnemyPart& Part : State.Enemy.Parts)
+		{
+			if (Part.bDestroyed) { continue; }
+
+			FEffectContext Ctx;
+			FillCommonContext(Ctx, State, Events, Effect, FinalMag, SelfCardId, InOutLastShuffledCardId);
+			Ctx.TargetKind       = EEffectTargetKind::EnemyPart;
+			Ctx.TargetInstanceId = Part.InstanceId;
+
+			FEffectExecutor::Execute(Ctx);
+			InOutLastShuffledCardId = Ctx.LastShuffledCardId;
+		}
+		return;
+	}
+
+	FEffectContext Ctx;
+	FillCommonContext(Ctx, State, Events, Effect, FinalMag, SelfCardId, InOutLastShuffledCardId);
+	FillTargetFromCardEffect(Ctx, Effect, SelectedPartId, SelfCardId, InOutLastShuffledCardId);
+
+	FEffectExecutor::Execute(Ctx);
+	InOutLastShuffledCardId = Ctx.LastShuffledCardId;
+}

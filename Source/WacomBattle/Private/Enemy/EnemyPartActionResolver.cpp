@@ -8,6 +8,7 @@
 #include "Effects/EffectExecutor.h"
 #include "Events/BattleEventBus.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Status/PoisonResolver.h"
 #include "Tags/WacomGameplayTags.h"
 
 #include "Enemies/EnemyPartDefinition.h"
@@ -139,7 +140,7 @@ namespace
 				FEffectExecutor::Execute(Ctx);
 
 				// 玩家被打死就立即停手，不继续执行该意图剩余效果。
-				if (State.PlayerCurrentHp <= 0)
+				if (State.Player.CurrentHp <= 0)
 				{
 					break;
 				}
@@ -153,20 +154,27 @@ namespace
 
 		// 无论是否跳过，行动结算后都刷新意图。
 		AdvanceToNextIntent(Part);
+
+		// ---- P3.1 中毒结算（Battle_Rules §15）----
+		// "敌方部位每行动一次后"对双方中毒结算一次。
+		// 放在意图刷新之后：即使此次行动本部位被中毒打死，AdvanceToNextIntent 内部已对
+		// bDestroyed 做 no-op。玩家若被中毒打死，外层 ResolveInitiativeZeroActions /
+		// ResolveEndTurnActions 会在下一轮 PlayerCurrentHp <= 0 检查时 return。
+		FPoisonResolver::ResolvePoisonForAllHosts(State, Events);
 	}
 }
 
 void FEnemyPartActionResolver::ResolveInitiativeZeroActions(FBattleState& State, FBattleEventBus& Events)
 {
 	// Battle_Rules §10：收集 CurrentInitiative <= 0 且未破坏的部位，按部位顺序行动。
-	// 按 State.EnemyParts 的数组顺序即为部位顺序（Definition 的 Parts 顺序）。
+	// 按 State.Enemy.Parts 的数组顺序即为部位顺序（Definition 的 Parts 顺序）。
 	//
 	// 注意：一轮行动可能推动其他部位再次归零吗？第一阶段敌人意图不会修改其它部位的先机，
 	// 所以一次收集 + 逐个结算即可。若未来有"意图之间影响先机"的效果，再改为循环。
 
-	for (int32 i = 0; i < State.EnemyParts.Num(); ++i)
+	for (int32 i = 0; i < State.Enemy.Parts.Num(); ++i)
 	{
-		FRuntimeEnemyPart& Part = State.EnemyParts[i];
+		FRuntimeEnemyPart& Part = State.Enemy.Parts[i];
 		if (Part.bDestroyed)
 		{
 			continue;
@@ -178,7 +186,7 @@ void FEnemyPartActionResolver::ResolveInitiativeZeroActions(FBattleState& State,
 		ActOnce(State, Events, Part);
 
 		// 玩家死亡则停止后续部位行动（战斗结束由调用方统一判断）。
-		if (State.PlayerCurrentHp <= 0)
+		if (State.Player.CurrentHp <= 0)
 		{
 			return;
 		}
@@ -189,16 +197,16 @@ void FEnemyPartActionResolver::ResolveEndTurnActions(FBattleState& State, FBattl
 {
 	// Battle_Rules §12：结束阶段所有存活且可行动部位按部位顺序行动，
 	// 即使该部位本回合内已因先机归零行动过。
-	for (int32 i = 0; i < State.EnemyParts.Num(); ++i)
+	for (int32 i = 0; i < State.Enemy.Parts.Num(); ++i)
 	{
-		FRuntimeEnemyPart& Part = State.EnemyParts[i];
+		FRuntimeEnemyPart& Part = State.Enemy.Parts[i];
 		if (Part.bDestroyed)
 		{
 			continue;
 		}
 		ActOnce(State, Events, Part);
 
-		if (State.PlayerCurrentHp <= 0)
+		if (State.Player.CurrentHp <= 0)
 		{
 			return;
 		}

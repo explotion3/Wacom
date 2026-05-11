@@ -23,7 +23,7 @@ class FEnemyPartActionResolver
 public:
 	/**
 	 * 部位先机归零触发的行动。
-	 * 对 State.EnemyParts 中 CurrentInitiative <= 0 且未破坏的部位逐个结算。
+	 * 对 State.Enemy.Parts 中 CurrentInitiative <= 0 且未破坏的部位逐个结算。
 	 * S6 实现。S5 暂时空实现，保持编译通过。
 	 */
 	static void ResolveInitiativeZeroActions(FBattleState& State, FBattleEventBus& Events);

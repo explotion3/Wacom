@@ -16,7 +16,7 @@ int32 FBattleRules::ComputeRuntimeCost(const FRuntimeCardInstance& Card)
 int32 FBattleRules::ComputeEnemyInitiativeSum(const FBattleState& State)
 {
 	int32 Sum = 0;
-	for (const FRuntimeEnemyPart& Part : State.EnemyParts)
+	for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
 	{
 		if (!Part.bDestroyed)
 		{
@@ -33,59 +33,67 @@ bool FBattleRules::IsCardCostLegal(const FBattleState& State, const FRuntimeCard
 
 FRuntimeEnemyPart* FBattleRules::FindEnemyPart(FBattleState& State, const FGuid& PartInstanceId)
 {
-	for (FRuntimeEnemyPart& Part : State.EnemyParts)
+	if (const int32* Idx = State.Enemy.PartIndexById.Find(PartInstanceId))
 	{
-		if (Part.InstanceId == PartInstanceId)
-		{
-			return &Part;
-		}
+		return State.Enemy.Parts.IsValidIndex(*Idx) ? &State.Enemy.Parts[*Idx] : nullptr;
 	}
 	return nullptr;
 }
 
 const FRuntimeEnemyPart* FBattleRules::FindEnemyPart(const FBattleState& State, const FGuid& PartInstanceId)
 {
-	for (const FRuntimeEnemyPart& Part : State.EnemyParts)
+	if (const int32* Idx = State.Enemy.PartIndexById.Find(PartInstanceId))
 	{
-		if (Part.InstanceId == PartInstanceId)
-		{
-			return &Part;
-		}
+		return State.Enemy.Parts.IsValidIndex(*Idx) ? &State.Enemy.Parts[*Idx] : nullptr;
 	}
 	return nullptr;
 }
 
 FRuntimeCardInstance* FBattleRules::FindCard(FBattleState& State, const FGuid& CardInstanceId)
 {
-	for (FRuntimeCardInstance& Card : State.AllCards)
+	if (const int32* Idx = State.Cards.CardIndexById.Find(CardInstanceId))
 	{
-		if (Card.InstanceId == CardInstanceId)
-		{
-			return &Card;
-		}
+		return State.Cards.AllCards.IsValidIndex(*Idx) ? &State.Cards.AllCards[*Idx] : nullptr;
 	}
 	return nullptr;
 }
 
 const FRuntimeCardInstance* FBattleRules::FindCard(const FBattleState& State, const FGuid& CardInstanceId)
 {
-	for (const FRuntimeCardInstance& Card : State.AllCards)
+	if (const int32* Idx = State.Cards.CardIndexById.Find(CardInstanceId))
 	{
-		if (Card.InstanceId == CardInstanceId)
-		{
-			return &Card;
-		}
+		return State.Cards.AllCards.IsValidIndex(*Idx) ? &State.Cards.AllCards[*Idx] : nullptr;
 	}
 	return nullptr;
 }
 
+void FBattleRules::SetCardLocation(FBattleState& State, const FGuid& CardInstanceId, ECardLocation NewLocation)
+{
+	if (FRuntimeCardInstance* Card = FindCard(State, CardInstanceId))
+	{
+		Card->Location = NewLocation;
+	}
+}
+
+void FBattleRules::PushEnemyInitiative(FBattleState& State, int32 Amount)
+{
+	if (Amount == 0) { return; }
+	for (FRuntimeEnemyPart& Part : State.Enemy.Parts)
+	{
+		if (!Part.bDestroyed)
+		{
+			Part.CurrentInitiative -= Amount;
+		}
+	}
+}
+
 bool FBattleRules::AreAllEnemyPartsDestroyed(const FBattleState& State)
 {
-	if (State.EnemyParts.IsEmpty())
+	if (State.Enemy.Parts.IsEmpty())
 	{
 		return false;
 	}
-	for (const FRuntimeEnemyPart& Part : State.EnemyParts)
+	for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
 	{
 		if (!Part.bDestroyed)
 		{
@@ -98,7 +106,7 @@ bool FBattleRules::AreAllEnemyPartsDestroyed(const FBattleState& State)
 bool FBattleRules::CheckAndApplyBattleEnd(FBattleState& State, FBattleEventBus& Events)
 {
 	const bool bEnemyAllDestroyed = AreAllEnemyPartsDestroyed(State);
-	const bool bPlayerDead        = State.PlayerCurrentHp <= 0;
+	const bool bPlayerDead        = State.Player.CurrentHp <= 0;
 
 	if (!bEnemyAllDestroyed && !bPlayerDead)
 	{

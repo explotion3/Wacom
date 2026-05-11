@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Types/WacomEnums.h"
 #include "Snapshots/HandSnapshot.h"
 #include "Snapshots/EnemySnapshot.h"
@@ -24,6 +25,13 @@ struct WACOMBATTLE_API FPlayerSnapshot
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 Shield = 0;
+
+	/** 玩家持有的状态集合。P3.1 起支持 Status.Poison。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FGameplayTagContainer Statuses;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	TMap<FGameplayTag, int32> StatusStacks;
 };
 
 /**
@@ -70,6 +78,13 @@ struct WACOMBATTLE_API FBattleSnapshot
 	/** 当前等待值。每回合开始重置为 2。对齐 Battle_Rules §6。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 CurrentWaitValue = 2;
+
+	/**
+	 * 本场战斗内已累计打出的 Companion 关键字卡牌数。
+	 * 驱动 Passive.Trigger.OnCompanionCount（拂晓飞蛾）。任一此类被动触发后清零。
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	int32 CompanionPlayedCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	FPlayerSnapshot Player;

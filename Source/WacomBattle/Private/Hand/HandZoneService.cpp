@@ -2,32 +2,28 @@
 
 #include "Hand/HandZoneService.h"
 
+#include "Cards/CardDefinition.h"
+#include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Runtime/RuntimeCardInstance.h"
+#include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 
 namespace
 {
 	void SetCardLocation(FBattleState& State, const FGuid& CardId, ECardLocation NewLocation)
 	{
-		for (FRuntimeCardInstance& Card : State.AllCards)
-		{
-			if (Card.InstanceId == CardId)
-			{
-				Card.Location = NewLocation;
-				return;
-			}
-		}
+		FBattleRules::SetCardLocation(State, CardId, NewLocation);
 	}
 
 	int32 IndexOfInHand(const FBattleState& State, const FGuid& CardId)
 	{
-		return State.Hand.IndexOfByKey(CardId);
+		return State.Cards.Hand.IndexOfByKey(CardId);
 	}
 
 	bool IsInHand(const FBattleState& State, const FGuid& CardId)
 	{
-		return CardId.IsValid() && State.Hand.Contains(CardId);
+		return CardId.IsValid() && State.Cards.Hand.Contains(CardId);
 	}
 
 	/**
@@ -52,17 +48,17 @@ namespace
 	 */
 	TArray<FGuid> BuildQueue_BothAnchorsAbsent(FBattleState& State, const TArray<FGuid>& NewlyDrawnCards)
 	{
-		// Step 1. 把新抽卡随机插入已有手牌（当前 State.Hand，此时普通卡全在）。
-		// 首回合 State.Hand 为空，所以最后是纯随机排列 NewlyDrawnCards。
-		TArray<FGuid> Pre = State.Hand;   // 先复制已有普通卡
+		// Step 1. 把新抽卡随机插入已有手牌（当前 State.Cards.Hand，此时普通卡全在）。
+		// 首回合 State.Cards.Hand 为空，所以最后是纯随机排列 NewlyDrawnCards。
+		TArray<FGuid> Pre = State.Cards.Hand;   // 先复制已有普通卡
 		for (const FGuid& NewId : NewlyDrawnCards)
 		{
 			const int32 InsertAt = State.Rng.RandRange(0, Pre.Num());
 			Pre.Insert(NewId, InsertAt);
 		}
 
-		const bool bHasLeft  = State.LeftHandInstanceId.IsValid();
-		const bool bHasRight = State.RightHandInstanceId.IsValid();
+		const bool bHasLeft  = State.Cards.LeftHandInstanceId.IsValid();
+		const bool bHasRight = State.Cards.RightHandInstanceId.IsValid();
 
 		if (!bHasLeft && !bHasRight)
 		{
@@ -71,13 +67,13 @@ namespace
 		if (bHasLeft && !bHasRight)
 		{
 			const int32 InsertAt = State.Rng.RandRange(0, Pre.Num());
-			Pre.Insert(State.LeftHandInstanceId, InsertAt);
+			Pre.Insert(State.Cards.LeftHandInstanceId, InsertAt);
 			return Pre;
 		}
 		if (!bHasLeft && bHasRight)
 		{
 			const int32 InsertAt = State.Rng.RandRange(0, Pre.Num());
-			Pre.Insert(State.RightHandInstanceId, InsertAt);
+			Pre.Insert(State.Cards.RightHandInstanceId, InsertAt);
 			return Pre;
 		}
 
@@ -112,8 +108,8 @@ namespace
 		{
 			// 保底：两锚点并排，违反规则。正常情况下被调用方拦住。
 			TArray<FGuid> Fallback;
-			Fallback.Add(State.LeftHandInstanceId);
-			Fallback.Add(State.RightHandInstanceId);
+			Fallback.Add(State.Cards.LeftHandInstanceId);
+			Fallback.Add(State.Cards.RightHandInstanceId);
 			return Fallback;
 		}
 
@@ -132,8 +128,8 @@ namespace
 
 		const int32 FirstSlot  = FMath::Max(SlotLeft, SlotRight);
 		const int32 SecondSlot = FMath::Min(SlotLeft, SlotRight);
-		const FGuid FirstId    = (FirstSlot  == SlotLeft) ? State.LeftHandInstanceId : State.RightHandInstanceId;
-		const FGuid SecondId   = (SecondSlot == SlotLeft) ? State.LeftHandInstanceId : State.RightHandInstanceId;
+		const FGuid FirstId    = (FirstSlot  == SlotLeft) ? State.Cards.LeftHandInstanceId : State.Cards.RightHandInstanceId;
+		const FGuid SecondId   = (SecondSlot == SlotLeft) ? State.Cards.LeftHandInstanceId : State.Cards.RightHandInstanceId;
 
 		Final.Insert(FirstId, FirstSlot);
 		Final.Insert(SecondId, SecondSlot);
@@ -147,16 +143,16 @@ namespace
 	 */
 	TArray<FGuid> BuildQueue_BothAnchorsPresent(FBattleState& State, const TArray<FGuid>& NewlyDrawnCards)
 	{
-		// Note: 进入本分支时 State.Hand 已经包含了左右手锚点。
-		// NewlyDrawnCards 是本回合新抽出的、FDeckService 已放到 State.Hand
+		// Note: 进入本分支时 State.Cards.Hand 已经包含了左右手锚点。
+		// NewlyDrawnCards 是本回合新抽出的、FDeckService 已放到 State.Cards.Hand
 		// 末尾（S3 DrawCards 逻辑）—— 实际上 S3 流程里 FDeckService 只把
 		// 抽到的 ID 返回给 OutDrawnCardIds，并不直接 append 到 Hand；
-		// 本服务作为唯一进入 Hand 的入口，在这里重写 State.Hand。
+		// 本服务作为唯一进入 Hand 的入口，在这里重写 State.Cards.Hand。
 		//
-		// 因此本分支的输入假设：State.Hand 已包含锚点 + 上回合保留卡；
-		// NewlyDrawnCards 尚未进入 Hand。我们不改变 State.Hand 中已有卡的相对位置，
+		// 因此本分支的输入假设：State.Cards.Hand 已包含锚点 + 上回合保留卡；
+		// NewlyDrawnCards 尚未进入 Hand。我们不改变 State.Cards.Hand 中已有卡的相对位置，
 		// 逐张随机插入新卡。
-		TArray<FGuid> Result = State.Hand;
+		TArray<FGuid> Result = State.Cards.Hand;
 		for (const FGuid& NewId : NewlyDrawnCards)
 		{
 			const int32 InsertAt = State.Rng.RandRange(0, Result.Num());
@@ -169,19 +165,19 @@ namespace
 void FHandZoneService::GenerateHandQueueOnTurnStart(FBattleState& State, const TArray<FGuid>& NewlyDrawnCards)
 {
 	// 调用方约定：FDeckService::DrawCards 已把 NewlyDrawnCards 的 Location 置为 Hand，
-	// 但本服务才是 Hand 的"唯一编排者"。我们把 NewlyDrawnCards 从 State.Hand 中移除
+	// 但本服务才是 Hand 的"唯一编排者"。我们把 NewlyDrawnCards 从 State.Cards.Hand 中移除
 	// （如果调用方提前放进去了），然后重新编排。
 	for (const FGuid& Id : NewlyDrawnCards)
 	{
-		const int32 Idx = State.Hand.IndexOfByKey(Id);
+		const int32 Idx = State.Cards.Hand.IndexOfByKey(Id);
 		if (Idx != INDEX_NONE)
 		{
-			State.Hand.RemoveAt(Idx);
+			State.Cards.Hand.RemoveAt(Idx);
 		}
 	}
 
-	const bool bLeftInHand  = IsInHand(State, State.LeftHandInstanceId);
-	const bool bRightInHand = IsInHand(State, State.RightHandInstanceId);
+	const bool bLeftInHand  = IsInHand(State, State.Cards.LeftHandInstanceId);
+	const bool bRightInHand = IsInHand(State, State.Cards.RightHandInstanceId);
 
 	TArray<FGuid> NewHand;
 	if (bLeftInHand && bRightInHand)
@@ -191,27 +187,27 @@ void FHandZoneService::GenerateHandQueueOnTurnStart(FBattleState& State, const T
 	else
 	{
 		// Hand_Zone_Rules §3 "只有一张锚点"按"都不在"重新生成。
-		// 需要先把 State.Hand 中的锚点抽离，让 BuildQueue_BothAnchorsAbsent
-		// 拿到的 State.Hand 只剩普通卡，再由它负责重新插入两个锚点。
+		// 需要先把 State.Cards.Hand 中的锚点抽离，让 BuildQueue_BothAnchorsAbsent
+		// 拿到的 State.Cards.Hand 只剩普通卡，再由它负责重新插入两个锚点。
 		auto ExtractAnchor = [&State](const FGuid& AnchorId)
 		{
 			if (!AnchorId.IsValid()) { return; }
-			const int32 Idx = State.Hand.IndexOfByKey(AnchorId);
+			const int32 Idx = State.Cards.Hand.IndexOfByKey(AnchorId);
 			if (Idx != INDEX_NONE)
 			{
-				State.Hand.RemoveAt(Idx);
+				State.Cards.Hand.RemoveAt(Idx);
 			}
 		};
-		ExtractAnchor(State.LeftHandInstanceId);
-		ExtractAnchor(State.RightHandInstanceId);
+		ExtractAnchor(State.Cards.LeftHandInstanceId);
+		ExtractAnchor(State.Cards.RightHandInstanceId);
 
 		NewHand = BuildQueue_BothAnchorsAbsent(State, NewlyDrawnCards);
 	}
 
-	State.Hand = MoveTemp(NewHand);
+	State.Cards.Hand = MoveTemp(NewHand);
 
 	// 更新 Location。
-	for (const FGuid& Id : State.Hand)
+	for (const FGuid& Id : State.Cards.Hand)
 	{
 		SetCardLocation(State, Id, ECardLocation::Hand);
 	}
@@ -228,15 +224,15 @@ void FHandZoneService::EnforceNormalCardLimit(FBattleState& State, TArray<FGuid>
 	}
 
 	// 从末尾向前扫描，跳过锚点，把超限的普通卡移入弃牌区。
-	for (int32 i = State.Hand.Num() - 1; i >= 0 && NormalCount > NormalCardLimit; --i)
+	for (int32 i = State.Cards.Hand.Num() - 1; i >= 0 && NormalCount > NormalCardLimit; --i)
 	{
-		const FGuid Id = State.Hand[i];
+		const FGuid Id = State.Cards.Hand[i];
 		if (IsHandAnchor(State, Id))
 		{
 			continue;
 		}
-		State.Hand.RemoveAt(i);
-		State.DiscardPile.Add(Id);
+		State.Cards.Hand.RemoveAt(i);
+		State.Cards.DiscardPile.Add(Id);
 		SetCardLocation(State, Id, ECardLocation::Discard);
 		OutDiscarded.Add(Id);
 		--NormalCount;
@@ -260,8 +256,8 @@ EHandZone FHandZoneService::GetZoneOf(const FBattleState& State, const FGuid& Ca
 		return EHandZone::None;
 	}
 
-	const int32 LeftIdx  = IndexOfInHand(State, State.LeftHandInstanceId);
-	const int32 RightIdx = IndexOfInHand(State, State.RightHandInstanceId);
+	const int32 LeftIdx  = IndexOfInHand(State, State.Cards.LeftHandInstanceId);
+	const int32 RightIdx = IndexOfInHand(State, State.Cards.RightHandInstanceId);
 	const bool bLeftIn   = LeftIdx  != INDEX_NONE;
 	const bool bRightIn  = RightIdx != INDEX_NONE;
 
@@ -292,14 +288,14 @@ EHandZone FHandZoneService::GetZoneOf(const FBattleState& State, const FGuid& Ca
 bool FHandZoneService::IsHandAnchor(const FBattleState& State, const FGuid& CardInstanceId)
 {
 	return CardInstanceId.IsValid()
-		&& (CardInstanceId == State.LeftHandInstanceId
-		 || CardInstanceId == State.RightHandInstanceId);
+		&& (CardInstanceId == State.Cards.LeftHandInstanceId
+		 || CardInstanceId == State.Cards.RightHandInstanceId);
 }
 
 int32 FHandZoneService::CountNormalCardsInHand(const FBattleState& State)
 {
 	int32 Count = 0;
-	for (const FGuid& Id : State.Hand)
+	for (const FGuid& Id : State.Cards.Hand)
 	{
 		if (!IsHandAnchor(State, Id))
 		{
@@ -309,6 +305,79 @@ int32 FHandZoneService::CountNormalCardsInHand(const FBattleState& State)
 	return Count;
 }
 
+// ================ 回合结束：保留判定 / 非保留卡入弃牌区 ================
+// 对齐 Battle_Rules §12 + Hand_Zone_Rules §7。
+
+bool FHandZoneService::ShouldRetainCardAtTurnEnd(const FBattleState& State, const FGuid& CardInstanceId)
+{
+	if (!CardInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	// 锚点：自带保留。
+	if (IsHandAnchor(State, CardInstanceId))
+	{
+		return true;
+	}
+
+	// 找到卡实例，读 Definition / TemporaryKeywords。
+	const FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardInstanceId);
+	if (!Card)
+	{
+		return false;
+	}
+
+	// Retain 关键字：永久或临时。
+	const bool bHasRetainDef  = Card->Definition
+		&& Card->Definition->Keywords.HasTag(WacomTags::Card_Keyword_Retain);
+	const bool bHasRetainTemp = Card->TemporaryKeywords.HasTag(WacomTags::Card_Keyword_Retain);
+	if (bHasRetainDef || bHasRetainTemp)
+	{
+		return true;
+	}
+
+	// 虫妹专属：左右手都在手牌 + 本卡在双手区 → 保留（Hand_Zone_Rules §7 第三段）。
+	const bool bLeftIn  = State.Cards.Hand.Contains(State.Cards.LeftHandInstanceId)  && State.Cards.LeftHandInstanceId.IsValid();
+	const bool bRightIn = State.Cards.Hand.Contains(State.Cards.RightHandInstanceId) && State.Cards.RightHandInstanceId.IsValid();
+	if (bLeftIn && bRightIn && GetZoneOf(State, CardInstanceId) == EHandZone::Both)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+void FHandZoneService::DiscardNonRetainedNormalCardsAtTurnEnd(FBattleState& State, TArray<FGuid>& OutDiscarded)
+{
+	OutDiscarded.Reset();
+
+	// 从末尾向前扫，索引稳定；用快照的 State.Cards.Hand 做决策（所有"双手区"计算基于
+	// 回合结束那一刻的手牌布局）。
+	// 注意：ShouldRetainCardAtTurnEnd 对"双手区"的判断依赖锚点位置，我们不在
+	// 扫描中途移除锚点，所以"双手区"判断在整个过程中保持一致。
+	for (int32 i = State.Cards.Hand.Num() - 1; i >= 0; --i)
+	{
+		const FGuid Id = State.Cards.Hand[i];
+
+		// 锚点永不进弃牌，ShouldRetainCardAtTurnEnd 会返回 true，这里直接跳过。
+		if (IsHandAnchor(State, Id))
+		{
+			continue;
+		}
+
+		if (ShouldRetainCardAtTurnEnd(State, Id))
+		{
+			continue;
+		}
+
+		State.Cards.Hand.RemoveAt(i);
+		State.Cards.DiscardPile.Add(Id);
+		SetCardLocation(State, Id, ECardLocation::Discard);
+		OutDiscarded.Add(Id);
+	}
+}
+
 // ================ Shuffle 腾挪 ================
 // 对齐 Hand_Zone_Rules §8。
 
@@ -316,8 +385,8 @@ void FHandZoneService::GetAvailableZones(const FBattleState& State, TArray<EHand
 {
 	OutZones.Reset();
 
-	const bool bLeft  = State.Hand.Contains(State.LeftHandInstanceId)  && State.LeftHandInstanceId.IsValid();
-	const bool bRight = State.Hand.Contains(State.RightHandInstanceId) && State.RightHandInstanceId.IsValid();
+	const bool bLeft  = State.Cards.Hand.Contains(State.Cards.LeftHandInstanceId)  && State.Cards.LeftHandInstanceId.IsValid();
+	const bool bRight = State.Cards.Hand.Contains(State.Cards.RightHandInstanceId) && State.Cards.RightHandInstanceId.IsValid();
 
 	// 规则 §6：
 	// - 左右手都在：三个区都存在
@@ -346,14 +415,14 @@ void FHandZoneService::InsertIntoZoneAtRandom(FBattleState& State, const FGuid& 
 		return;
 	}
 
-	const int32 LeftIdx  = State.Hand.IndexOfByKey(State.LeftHandInstanceId);
-	const int32 RightIdx = State.Hand.IndexOfByKey(State.RightHandInstanceId);
+	const int32 LeftIdx  = State.Cards.Hand.IndexOfByKey(State.Cards.LeftHandInstanceId);
+	const int32 RightIdx = State.Cards.Hand.IndexOfByKey(State.Cards.RightHandInstanceId);
 	const bool bLeftIn  = LeftIdx != INDEX_NONE;
 	const bool bRightIn = RightIdx != INDEX_NONE;
 
 	// 计算目标区间 [Begin, End]（闭区间，都是"插入位置"坐标）。
 	int32 Begin = 0;
-	int32 End   = State.Hand.Num();
+	int32 End   = State.Cards.Hand.Num();
 
 	if (bLeftIn && bRightIn)
 	{
@@ -363,7 +432,7 @@ void FHandZoneService::InsertIntoZoneAtRandom(FBattleState& State, const FGuid& 
 		{
 		case EHandZone::Left:  Begin = 0;     End = Lo;          break;
 		case EHandZone::Both:  Begin = Lo + 1;End = Hi;          break;
-		case EHandZone::Right: Begin = Hi + 1;End = State.Hand.Num(); break;
+		case EHandZone::Right: Begin = Hi + 1;End = State.Cards.Hand.Num(); break;
 		default: return;
 		}
 	}
@@ -373,7 +442,7 @@ void FHandZoneService::InsertIntoZoneAtRandom(FBattleState& State, const FGuid& 
 		switch (Zone)
 		{
 		case EHandZone::Left:  Begin = 0;            End = AnchorIdx;        break;
-		case EHandZone::Right: Begin = AnchorIdx + 1;End = State.Hand.Num(); break;
+		case EHandZone::Right: Begin = AnchorIdx + 1;End = State.Cards.Hand.Num(); break;
 		default: return;
 		}
 	}
@@ -381,20 +450,13 @@ void FHandZoneService::InsertIntoZoneAtRandom(FBattleState& State, const FGuid& 
 	{
 		// 锚点都不在：§6 不提供区域判定，插末尾兜底。
 		Begin = 0;
-		End   = State.Hand.Num();
+		End   = State.Cards.Hand.Num();
 	}
 
 	const int32 InsertAt = State.Rng.RandRange(Begin, End);
-	State.Hand.Insert(CardId, InsertAt);
+	State.Cards.Hand.Insert(CardId, InsertAt);
 
-	for (FRuntimeCardInstance& Card : State.AllCards)
-	{
-		if (Card.InstanceId == CardId)
-		{
-			Card.Location = ECardLocation::Hand;
-			break;
-		}
-	}
+	FBattleRules::SetCardLocation(State, CardId, ECardLocation::Hand);
 }
 
 bool FHandZoneService::MoveCardToRandomZone(FBattleState& State, const FGuid& CardInstanceId)
@@ -408,7 +470,7 @@ bool FHandZoneService::MoveCardToRandomZone(FBattleState& State, const FGuid& Ca
 		return false;
 	}
 
-	const int32 Idx = State.Hand.IndexOfByKey(CardInstanceId);
+	const int32 Idx = State.Cards.Hand.IndexOfByKey(CardInstanceId);
 	if (Idx == INDEX_NONE)
 	{
 		return false;
@@ -422,7 +484,7 @@ bool FHandZoneService::MoveCardToRandomZone(FBattleState& State, const FGuid& Ca
 	}
 
 	// 先从 Hand 取出，再选目标区域插入。
-	State.Hand.RemoveAt(Idx);
+	State.Cards.Hand.RemoveAt(Idx);
 
 	const int32 ZonePick = State.Rng.RandRange(0, AvailableZones.Num() - 1);
 	InsertIntoZoneAtRandom(State, CardInstanceId, AvailableZones[ZonePick]);
@@ -432,8 +494,8 @@ bool FHandZoneService::MoveCardToRandomZone(FBattleState& State, const FGuid& Ca
 FGuid FHandZoneService::MoveRandomFromBothToOther(FBattleState& State, const FGuid& ExcludeId)
 {
 	// 双手区必须存在。
-	const int32 LeftIdx  = State.Hand.IndexOfByKey(State.LeftHandInstanceId);
-	const int32 RightIdx = State.Hand.IndexOfByKey(State.RightHandInstanceId);
+	const int32 LeftIdx  = State.Cards.Hand.IndexOfByKey(State.Cards.LeftHandInstanceId);
+	const int32 RightIdx = State.Cards.Hand.IndexOfByKey(State.Cards.RightHandInstanceId);
 	if (LeftIdx == INDEX_NONE || RightIdx == INDEX_NONE)
 	{
 		return FGuid();
@@ -452,11 +514,11 @@ FGuid FHandZoneService::MoveRandomFromBothToOther(FBattleState& State, const FGu
 	BothIndices.Reserve(Hi - Lo - 1);
 	for (int32 i = Lo + 1; i < Hi; ++i)
 	{
-		if (IsHandAnchor(State, State.Hand[i]))
+		if (IsHandAnchor(State, State.Cards.Hand[i]))
 		{
 			continue;
 		}
-		if (ExcludeId.IsValid() && State.Hand[i] == ExcludeId)
+		if (ExcludeId.IsValid() && State.Cards.Hand[i] == ExcludeId)
 		{
 			continue;
 		}
@@ -468,9 +530,9 @@ FGuid FHandZoneService::MoveRandomFromBothToOther(FBattleState& State, const FGu
 	}
 
 	const int32 Pick = BothIndices[State.Rng.RandRange(0, BothIndices.Num() - 1)];
-	const FGuid CardId = State.Hand[Pick];
+	const FGuid CardId = State.Cards.Hand[Pick];
 
-	State.Hand.RemoveAt(Pick);
+	State.Cards.Hand.RemoveAt(Pick);
 
 	// 目标区域排除双手区：只从 Left / Right 中选。
 	TArray<EHandZone> TargetZones;
@@ -486,14 +548,14 @@ FGuid FHandZoneService::RandomShuffleOneInHand(FBattleState& State, const FGuid&
 {
 	// 收集非锚点卡，排除 ExcludeId。
 	TArray<int32> CandIdx;
-	CandIdx.Reserve(State.Hand.Num());
-	for (int32 i = 0; i < State.Hand.Num(); ++i)
+	CandIdx.Reserve(State.Cards.Hand.Num());
+	for (int32 i = 0; i < State.Cards.Hand.Num(); ++i)
 	{
-		if (IsHandAnchor(State, State.Hand[i]))
+		if (IsHandAnchor(State, State.Cards.Hand[i]))
 		{
 			continue;
 		}
-		if (ExcludeId.IsValid() && State.Hand[i] == ExcludeId)
+		if (ExcludeId.IsValid() && State.Cards.Hand[i] == ExcludeId)
 		{
 			continue;
 		}
@@ -505,7 +567,7 @@ FGuid FHandZoneService::RandomShuffleOneInHand(FBattleState& State, const FGuid&
 	}
 
 	const int32 Pick = CandIdx[State.Rng.RandRange(0, CandIdx.Num() - 1)];
-	const FGuid CardId = State.Hand[Pick];
+	const FGuid CardId = State.Cards.Hand[Pick];
 
 	// MoveCardToRandomZone 会处理取出与重新插入。
 	MoveCardToRandomZone(State, CardId);

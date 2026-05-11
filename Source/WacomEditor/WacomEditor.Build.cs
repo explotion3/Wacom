@@ -28,7 +28,9 @@ public class WacomEditor : ModuleRules
 			"Slate",
 			"SlateCore",
 			"ToolMenus",
-			"DataValidation"
+			"DataValidation",
+			"EnhancedInput",
+			"InputCore"
 		});
 	}
 }

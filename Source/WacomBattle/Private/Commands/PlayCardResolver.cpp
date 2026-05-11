@@ -2,24 +2,23 @@
 
 #include "Commands/PlayCardResolver.h"
 #include "Commands/BattleCommand.h"
+
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
-#include "Deck/DeckService.h"
-#include "Effects/EffectContext.h"
-#include "Effects/EffectExecutor.h"
+#include "Effects/CardEffectDispatcher.h"
 #include "Enemy/EnemyPartActionResolver.h"
 #include "Events/BattleEventBus.h"
+#include "Passives/PassiveDispatcher.h"
+#include "Resolution/InitiativeResolver.h"
+#include "Resolution/ZoneHookResolver.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Status/PoisonResolver.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 
 #include "Cards/CardDefinition.h"
 #include "Cards/CardEffect.h"
-#include "Cards/CardPassive.h"
-
-#include "Enemies/EnemyPartDefinition.h"
-#include "Enemies/IntentDefinition.h"
 
 namespace
 {
@@ -35,383 +34,47 @@ namespace
 	 */
 	void SendCardAfterPlay(FBattleState& State, const FGuid& CardInstanceId, bool bIsAnchor, bool bIsCombo)
 	{
-		const int32 HandIdx = State.Hand.IndexOfByKey(CardInstanceId);
+		const int32 HandIdx = State.Cards.Hand.IndexOfByKey(CardInstanceId);
 
 		if (bIsCombo && HandIdx != INDEX_NONE)
 		{
-			// 连击：留在原位置。更新 Location 为 Hand（其实没变）。
-			for (FRuntimeCardInstance& Card : State.AllCards)
-			{
-				if (Card.InstanceId == CardInstanceId)
-				{
-					Card.Location = ECardLocation::Hand;
-					break;
-				}
-			}
+			// 连击：留在原位置。Location 保持 Hand。
+			FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Hand);
 			return;
 		}
 
 		if (HandIdx != INDEX_NONE)
 		{
-			State.Hand.RemoveAt(HandIdx);
+			State.Cards.Hand.RemoveAt(HandIdx);
 		}
 
 		if (bIsAnchor)
 		{
-			State.Limbo.Add(CardInstanceId);
-			for (FRuntimeCardInstance& Card : State.AllCards)
-			{
-				if (Card.InstanceId == CardInstanceId)
-				{
-					Card.Location = ECardLocation::Limbo;
-					break;
-				}
-			}
+			State.Cards.Limbo.Add(CardInstanceId);
+			FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Limbo);
 			return;
 		}
 
-		// 默认进弃牌区。
-		State.DiscardPile.Add(CardInstanceId);
-		for (FRuntimeCardInstance& Card : State.AllCards)
-		{
-			if (Card.InstanceId == CardInstanceId)
-			{
-				Card.Location = ECardLocation::Discard;
-				break;
-			}
-		}
+		State.Cards.DiscardPile.Add(CardInstanceId);
+		FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Discard);
 	}
 
-	bool IsSwift(const FRuntimeCardInstance& Card)
+	bool HasKeyword(const FRuntimeCardInstance& Card, const FGameplayTag& Keyword)
 	{
 		if (!Card.Definition) { return false; }
-		// 永久关键字或本场临时关键字中任意命中即可。
-		return Card.Definition->Keywords.HasTag(WacomTags::Card_Keyword_Swift)
-		    || Card.TemporaryKeywords.HasTag(WacomTags::Card_Keyword_Swift);
-	}
-
-	bool IsCombo(const FRuntimeCardInstance& Card)
-	{
-		if (!Card.Definition) { return false; }
-		return Card.Definition->Keywords.HasTag(WacomTags::Card_Keyword_Combo)
-		    || Card.TemporaryKeywords.HasTag(WacomTags::Card_Keyword_Combo);
-	}
-
-	/**
-	 * 把卡牌效果条目的 Target tag 映射到 EffectContext 的目标。
-	 *
-	 * 支持：
-	 * - Target.Self / Target.Player    → Player
-	 * - Target.SingleEnemyPart         → 用调用方提供的 SelectedPartId
-	 * - Target.AllEnemyParts           → EnemyPart 但 TargetInstanceId 留空；
-	 *                                    调用方需要循环执行该效果
-	 * - Target.RandomHandCard          → HandCard（由服务自选）
-	 * - Target.ZoneHandCard            → HandCard（按 TargetZone 过滤，由服务自选）
-	 * 其余第一阶段不支持。
-	 */
-	void FillTargetFromCardEffect(
-		FEffectContext& Ctx,
-		const FCardEffect& Effect,
-		const FGuid& SelectedPartId,
-		const FGuid& SelfCardId)
-	{
-		const FGameplayTag& Tag = Effect.Target;
-
-		if (Tag == WacomTags::Target_Self || Tag == WacomTags::Target_Player)
-		{
-			// Card 语境下 Target.Self 有两种含义：
-			// - 作用于玩家本体（治疗、加盾）
-			// - 作用于本卡（腾挪 ToRandomZone）
-			// 靠 EffectType 消歧：Shuffle.ToRandomZone 时 Target 指向本卡；其余指玩家。
-			if (Effect.EffectType == WacomTags::Effect_Shuffle_ToRandomZone)
-			{
-				Ctx.TargetKind       = EEffectTargetKind::HandCard;
-				Ctx.TargetInstanceId = SelfCardId;
-			}
-			else
-			{
-				Ctx.TargetKind       = EEffectTargetKind::Player;
-				Ctx.TargetInstanceId = FGuid();
-			}
-			return;
-		}
-		if (Tag == WacomTags::Target_SingleEnemyPart)
-		{
-			Ctx.TargetKind       = EEffectTargetKind::EnemyPart;
-			Ctx.TargetInstanceId = SelectedPartId;
-			return;
-		}
-		if (Tag == WacomTags::Target_AllEnemyParts)
-		{
-			// 由调用方拆解到每个部位。这里先占位。
-			Ctx.TargetKind       = EEffectTargetKind::EnemyPart;
-			Ctx.TargetInstanceId = FGuid();
-			return;
-		}
-		if (Tag == WacomTags::Target_RandomHandCard
-		 || Tag == WacomTags::Target_ZoneHandCard)
-		{
-			Ctx.TargetKind       = EEffectTargetKind::HandCard;
-			Ctx.TargetInstanceId = FGuid();  // 由腾挪服务自选
-			return;
-		}
-
-		Ctx.TargetKind       = EEffectTargetKind::None;
-		Ctx.TargetInstanceId = FGuid();
-	}
-
-	/**
-	 * 把一条 FCardEffect 执行一次。AllEnemyParts 会展开到每个存活部位。
-	 * Magnitude 若 bMagnitudeFromRuntimeCost 则用传入的 RuntimeCost 覆盖。
-	 */
-	void ExecuteCardEffectOnce(
-		FBattleState& State,
-		FBattleEventBus& Events,
-		const FCardEffect& Effect,
-		int32 RuntimeCost,
-		const FGuid& SelectedPartId,
-		const FGuid& SelfCardId)
-	{
-		const int32 FinalMag = Effect.bMagnitudeFromRuntimeCost ? RuntimeCost : Effect.Magnitude;
-
-		// AllEnemyParts 展开
-		if (Effect.Target == WacomTags::Target_AllEnemyParts)
-		{
-			for (FRuntimeEnemyPart& Part : State.EnemyParts)
-			{
-				if (Part.bDestroyed) { continue; }
-
-				FEffectContext Ctx;
-				Ctx.State            = &State;
-				Ctx.Events           = &Events;
-				Ctx.SourceKind       = EEffectSourceKind::Card;
-				Ctx.SourceInstanceId = SelfCardId;
-				Ctx.EffectTag        = Effect.EffectType;
-				Ctx.Magnitude        = FinalMag;
-				Ctx.Duration         = Effect.Duration;
-				Ctx.MetaTag          = Effect.TargetZone;
-				Ctx.TargetKind       = EEffectTargetKind::EnemyPart;
-				Ctx.TargetInstanceId = Part.InstanceId;
-				Ctx.ExcludeHandCardId = SelfCardId;
-				FEffectExecutor::Execute(Ctx);
-			}
-			return;
-		}
-
-		FEffectContext Ctx;
-		Ctx.State            = &State;
-		Ctx.Events           = &Events;
-		Ctx.SourceKind       = EEffectSourceKind::Card;
-		Ctx.SourceInstanceId = SelfCardId;
-		Ctx.EffectTag        = Effect.EffectType;
-		Ctx.Magnitude        = FinalMag;
-		Ctx.Duration         = Effect.Duration;
-		Ctx.MetaTag          = Effect.TargetZone;
-		Ctx.ExcludeHandCardId = SelfCardId;
-		FillTargetFromCardEffect(Ctx, Effect, SelectedPartId, SelfCardId);
-		FEffectExecutor::Execute(Ctx);
-	}
-
-	/**
-	 * 执行 AfterPlayed 被动。第一阶段需求：烁光蝶的"打出后腾挪到随机区域"。
-	 */
-	void RunAfterPlayedPassives(
-		FBattleState& State,
-		FBattleEventBus& Events,
-		const FRuntimeCardInstance& Card,
-		int32 RuntimeCost)
-	{
-		if (!Card.Definition) { return; }
-
-		for (const FCardPassive& Passive : Card.Definition->Passives)
-		{
-			if (Passive.Trigger != WacomTags::Passive_Trigger_AfterPlayed)
-			{
-				continue;
-			}
-			for (const FCardEffect& Eff : Passive.Effects)
-			{
-				// AfterPlayed 发生在"卡牌去向"之后。若 Effect 作用于本卡（ToRandomZone），
-				// 本卡必须在手牌中。对连击牌，本卡确实留在手牌中；其他进 Discard 的卡调用
-				// Shuffle.ToRandomZone 不会命中。
-				ExecuteCardEffectOnce(State, Events, Eff, RuntimeCost, /*SelectedPartId=*/FGuid(), Card.InstanceId);
-			}
-		}
-	}
-
-	// ================ S8：先机命中 / 抵抗 / 完美释放 ================
-	// 对齐 Battle_Rules §9 + Data_Schema_Draft §4。
-
-	/**
-	 * 出牌前先机快照条目。
-	 */
-	struct FPreCastInitiativeEntry
-	{
-		FGuid PartInstanceId;
-		int32 InitiativeBeforePlay = 0;
-	};
-
-	/**
-	 * 记录所有存活部位的出牌前当前先机。
-	 */
-	void SnapshotInitiativeBeforePlay(const FBattleState& State, TArray<FPreCastInitiativeEntry>& Out)
-	{
-		Out.Reset();
-		Out.Reserve(State.EnemyParts.Num());
-		for (const FRuntimeEnemyPart& Part : State.EnemyParts)
-		{
-			if (Part.bDestroyed) { continue; }
-			Out.Add({ Part.InstanceId, Part.CurrentInitiative });
-		}
-	}
-
-	/**
-	 * 按 Battle_Rules §9 判断先机命中。
-	 * RuntimeCost 正好等于某部位出牌前当前先机即命中。
-	 * 多个部位可同时命中。
-	 */
-	void CollectInitiativeHits(
-		const TArray<FPreCastInitiativeEntry>& PreCast,
-		int32 RuntimeCost,
-		TArray<FGuid>& OutHitPartIds)
-	{
-		OutHitPartIds.Reset();
-		for (const FPreCastInitiativeEntry& E : PreCast)
-		{
-			if (E.InitiativeBeforePlay == RuntimeCost)
-			{
-				OutHitPartIds.Add(E.PartInstanceId);
-			}
-		}
-	}
-
-	/**
-	 * 取一张卡的抵抗比较数值。
-	 * Data_Schema_Draft §4：主效果首个 Effect.Damage 的 Magnitude；无伤害效果为 0。
-	 * RuntimeCost 用于 bMagnitudeFromRuntimeCost 覆写。
-	 */
-	int32 ComputeCardResistanceValue(const UCardDefinition& Def, int32 RuntimeCost)
-	{
-		for (const FCardEffect& Eff : Def.Effects)
-		{
-			if (Eff.EffectType == WacomTags::Effect_Damage)
-			{
-				return Eff.bMagnitudeFromRuntimeCost ? RuntimeCost : Eff.Magnitude;
-			}
-		}
-		return 0;
-	}
-
-	/**
-	 * 取一个部位当前意图的抵抗比较数值。
-	 * Data_Schema_Draft §4：意图上的 ResistanceValue 字段。
-	 */
-	int32 GetPartIntentResistanceValue(const FRuntimeEnemyPart& Part)
-	{
-		if (!Part.Definition) { return 0; }
-		if (!Part.Definition->IntentSequence.IsValidIndex(Part.CurrentIntentIndex)) { return 0; }
-		return Part.Definition->IntentSequence[Part.CurrentIntentIndex].ResistanceValue;
-	}
-
-	/**
-	 * 对命中部位执行抵抗判定。CardResistance > IntentResistance → 部位晕厥。
-	 *
-	 * 晕厥用 Status.Stunned 层数模型记录。第一阶段抵抗施加 1 层。
-	 */
-	void ResolveResistance(
-		FBattleState& State,
-		FBattleEventBus& Events,
-		const UCardDefinition& Def,
-		int32 RuntimeCost,
-		const TArray<FGuid>& HitPartIds,
-		const FGuid& CardId)
-	{
-		const int32 CardResist = ComputeCardResistanceValue(Def, RuntimeCost);
-
-		for (const FGuid& PartId : HitPartIds)
-		{
-			FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(State, PartId);
-			if (!Part || Part->bDestroyed) { continue; }
-
-			const int32 IntentResist = GetPartIntentResistanceValue(*Part);
-			const bool bStun = CardResist > IntentResist;
-
-			{
-				FBattleEvent Ev;
-				Ev.Type            = EBattleEventType::ResistanceResolved;
-				Ev.ActorInstanceId = PartId;
-				Ev.CardInstanceId  = CardId;
-				Ev.Amount          = CardResist;
-				Ev.Count           = IntentResist;
-				Ev.Tag             = bStun ? WacomTags::Status_Stunned : FGameplayTag();
-				Events.Emit(Ev);
-			}
-
-			if (bStun)
-			{
-				Part->Statuses.AddTag(WacomTags::Status_Stunned);
-				int32& Stacks = Part->StatusStacks.FindOrAdd(WacomTags::Status_Stunned);
-				Stacks += 1;
-
-				FBattleEvent SEv;
-				SEv.Type            = EBattleEventType::StatusApplied;
-				SEv.ActorInstanceId = PartId;
-				SEv.CardInstanceId  = CardId;
-				SEv.Tag             = WacomTags::Status_Stunned;
-				SEv.Amount          = 1;
-				Events.Emit(SEv);
-			}
-		}
-	}
-
-	/**
-	 * 对命中部位执行完美释放效果。
-	 * Battle_Rules §9：迅捷卡不触发；已破坏部位（主效果致死）不参与。
-	 */
-	void ResolvePerfectRelease(
-		FBattleState& State,
-		FBattleEventBus& Events,
-		const UCardDefinition& Def,
-		int32 RuntimeCost,
-		const TArray<FGuid>& HitPartIds,
-		const FGuid& CardId,
-		bool bSwift)
-	{
-		if (bSwift) { return; }
-		if (Def.PerfectReleaseEffects.IsEmpty()) { return; }
-
-		for (const FGuid& PartId : HitPartIds)
-		{
-			FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(State, PartId);
-			if (!Part || Part->bDestroyed) { continue; }   // §9：主效果致死不参与
-
-			{
-				FBattleEvent Ev;
-				Ev.Type            = EBattleEventType::PerfectReleaseResolved;
-				Ev.ActorInstanceId = PartId;
-				Ev.CardInstanceId  = CardId;
-				Events.Emit(Ev);
-			}
-
-			for (const FCardEffect& Eff : Def.PerfectReleaseEffects)
-			{
-				// 完美释放效果默认作用于命中部位。
-				// 若 PerfectRelease 定义里显式写了 Target = Target.Player 等，
-				// 由 ExecuteCardEffectOnce 的映射处理。
-				ExecuteCardEffectOnce(State, Events, Eff, RuntimeCost, /*SelectedPartId=*/PartId, CardId);
-			}
-		}
+		return Card.Definition->Keywords.HasTag(Keyword)
+		    || Card.TemporaryKeywords.HasTag(Keyword);
 	}
 }
 
 FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
 {
+	// ================ 1. 基础合法性 ================
 	if (!Command.CardInstanceId.IsValid())
 	{
 		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoCardInstanceId"));
 	}
 
-	// ---- 基础合法性 ----
 	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, Command.CardInstanceId);
 	if (!Card)
 	{
@@ -426,16 +89,11 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("CardHasNoDefinition"));
 	}
 
-	// TODO(S7/S8)：特殊条件、被冻结等状态禁止打出、区域条件。
-
-	// ---- 目标枚举 ----
+	// ================ 2. 目标枚举 ================
 	const UCardDefinition* Def = Card->Definition;
-	const ECardTargetMode TargetMode = Def->TargetMode;
 
 	FRuntimeEnemyPart* TargetPart = nullptr;
-	switch (TargetMode)
-	{
-	case ECardTargetMode::SingleEnemyPart:
+	if (Def->TargetMode == ECardTargetMode::SingleEnemyPart)
 	{
 		if (!Command.TargetPartInstanceId.IsValid())
 		{
@@ -446,54 +104,44 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		{
 			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetInvalid"));
 		}
-		break;
 	}
-	case ECardTargetMode::None:
-	case ECardTargetMode::Self:
-	case ECardTargetMode::AllEnemyParts:
-	case ECardTargetMode::HandCard:
-	default:
-		// 第一阶段这些模式不要求 Command 带 TargetPartInstanceId。
-		break;
-	}
+	// 其他 TargetMode 不要求 Command 带 TargetPartInstanceId。
 
-	// TODO(S7/S8)：目标修正、费用枚举、费用转移。
-
-	// ---- 费用判断 ----
-	// Battle_Rules §5：RuntimeCost > Enemy Initiative Sum → 不可用。
+	// ================ 3. 费用判断 ================
 	if (!FBattleRules::IsCardCostLegal(State, *Card))
 	{
 		return FWacomStatus::Fail(EWacomError::NotEnoughInitiative, TEXT("CostExceedsInitiativeSum"));
 	}
 
 	const int32 RuntimeCost = FBattleRules::ComputeRuntimeCost(*Card);
-	const bool  bAnchor     = (Card->InstanceId == State.LeftHandInstanceId)
-	                       || (Card->InstanceId == State.RightHandInstanceId);
-	const bool  bSwift      = IsSwift(*Card);
-	const bool  bCombo      = IsCombo(*Card);
+	const bool  bAnchor     = (Card->InstanceId == State.Cards.LeftHandInstanceId)
+	                       || (Card->InstanceId == State.Cards.RightHandInstanceId);
+	const bool  bSwift      = HasKeyword(*Card, WacomTags::Card_Keyword_Swift);
+	const bool  bCombo      = HasKeyword(*Card, WacomTags::Card_Keyword_Combo);
 
-	const FGuid CardId      = Card->InstanceId;  // 之后可能重排 State.AllCards，提前保存
+	const FGuid CardId            = Card->InstanceId;
+	const FGuid SelectedPartId    = TargetPart ? TargetPart->InstanceId : FGuid();
 
-	// ---- 打牌事件 ----
+	// ================ 4. 打牌事件 ================
 	{
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::CardPlayed;
 		Ev.CardInstanceId  = CardId;
-		Ev.ActorInstanceId = TargetPart ? TargetPart->InstanceId : FGuid();
+		Ev.ActorInstanceId = SelectedPartId;
 		Ev.Amount          = RuntimeCost;
 		Events.Emit(Ev);
 	}
 
-	// ---- 步骤 1：记录出牌前先机 ----
-	TArray<FPreCastInitiativeEntry> PreCastInitiative;
-	SnapshotInitiativeBeforePlay(State, PreCastInitiative);
+	// ================ 5. ZoneHook: OnPlay ================
+	// 放在 CardPlayed 之后、"记录出牌前先机"之前。
+	FZoneHookResolver::RunOnPlayHooks(State, Events, *Def, RuntimeCost, SelectedPartId, CardId);
 
-	// ---- 步骤 2：判断先机命中 ----
-	// 迅捷卡不触发完美释放（Battle_Rules §9），但抵抗判定仍按"先机命中"窗口发生。
-	// 第一阶段按此口径：迅捷卡的先机命中列表仍然生成，完美释放跳过。
-	// 这样抵抗表现一致，与"迅捷卡仍能执行自身其他规则效果"兼容。
+	// ================ 6. 先机命中 + 抵抗（先于完美释放）================
+	TArray<FInitiativeResolver::FPreCastEntry> PreCastInitiative;
+	FInitiativeResolver::SnapshotInitiativeBeforePlay(State, PreCastInitiative);
+
 	TArray<FGuid> HitPartIds;
-	CollectInitiativeHits(PreCastInitiative, RuntimeCost, HitPartIds);
+	FInitiativeResolver::CollectInitiativeHits(PreCastInitiative, RuntimeCost, HitPartIds);
 
 	for (const FGuid& HitId : HitPartIds)
 	{
@@ -505,33 +153,31 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		Events.Emit(Ev);
 	}
 
-	// ---- 步骤 3：抵抗判定（先于完美释放）----
-	ResolveResistance(State, Events, *Def, RuntimeCost, HitPartIds, CardId);
+	FInitiativeResolver::ResolveResistance(State, Events, *Def, RuntimeCost, HitPartIds, CardId);
 
-	// ---- 步骤 4：卡牌主动效果 ----
-	// 部位 HP 归零立即破坏由 EffectExecutor 的 Damage 分支处理（§8 step 6）。
-	const FGuid SelectedPartId = TargetPart ? TargetPart->InstanceId : FGuid();
-	for (const FCardEffect& Eff : Def->Effects)
+	// ================ 7. 主效果 ================
+	// 主效果链独立维护 LastShuffledCardId（与 ZoneHook / PerfectRelease / AfterPlayed 互不串）。
 	{
-		ExecuteCardEffectOnce(State, Events, Eff, RuntimeCost, SelectedPartId, CardId);
+		FGuid MainLastShuffledCardId;
+		for (const FCardEffect& Eff : Def->Effects)
+		{
+			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
+				SelectedPartId, CardId, MainLastShuffledCardId);
+		}
 	}
 
-	// ---- 步骤 5：完美释放（迅捷卡跳过；主效果致死的部位已被 ResolvePerfectRelease 内部过滤）----
-	ResolvePerfectRelease(State, Events, *Def, RuntimeCost, HitPartIds, CardId, bSwift);
+	// ================ 8. 完美释放 ================
+	FInitiativeResolver::ResolvePerfectRelease(State, Events, *Def, RuntimeCost, HitPartIds, CardId, bSwift);
 
-	// ---- 先机推进（§8 第 7 步）----
+	// ================ 9. 先机推进 ================
 	// 非迅捷卡：所有仍拥有先机的敌方部位当前先机 -= RuntimeCost。
-	// 注：这里的"仍拥有先机"指"未破坏"。第一阶段暂无"部位 HP 归零后立刻失去先机"
-	// 的效果先行执行（那是 S7/S8），故此处按"未破坏"过滤即可。
-	if (!bSwift)
+	// P3.3：左手区 + 先机命中 → ZoneHook(OnPerfectReleaseHit) 跳过推进。
+	const bool bSkipPush = FZoneHookResolver::ShouldSkipInitiativePush(
+		State, *Def, CardId, !HitPartIds.IsEmpty());
+
+	if (!bSwift && !bSkipPush)
 	{
-		for (FRuntimeEnemyPart& Part : State.EnemyParts)
-		{
-			if (!Part.bDestroyed)
-			{
-				Part.CurrentInitiative -= RuntimeCost;
-			}
-		}
+		FBattleRules::PushEnemyInitiative(State, RuntimeCost);
 
 		FBattleEvent Ev;
 		Ev.Type   = EBattleEventType::InitiativePushed;
@@ -539,24 +185,40 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		Events.Emit(Ev);
 	}
 
-	// ---- 卡牌去向（§8 第 8 步）----
+	// ================ 10. 卡牌去向 ================
 	SendCardAfterPlay(State, CardId, bAnchor, bCombo);
 
-	// ---- AfterPlayed 被动（S7）----
-	// Battle_Rules §8 没有为 Passive 指定独立步骤，但烁光蝶的"打出后腾挪至随机区域"
-	// 必须在卡留在手牌（Combo 保留）之后触发，否则目标卡不在手牌里。
-	if (FRuntimeCardInstance* CardAfter = FBattleRules::FindCard(State, CardId))
+	// ================ 11. Companion 计数累加（在 AfterPlayed 之前）================
+	if (const FRuntimeCardInstance* PlayedCard = FBattleRules::FindCard(State, CardId))
 	{
-		RunAfterPlayedPassives(State, Events, *CardAfter, RuntimeCost);
+		if (HasKeyword(*PlayedCard, WacomTags::Card_Keyword_Companion))
+		{
+			++State.Player.CompanionPlayedCount;
+		}
 	}
 
-	// ---- 敌方部位行动子流程（§8 第 9 步，S6 填实现）----
+	// ================ 12. AfterPlayed 被动 ================
+	// 必须在"卡牌去向"之后触发（Combo 留在手牌，其他的如果作用于本卡会失败但不崩）。
+	if (const FRuntimeCardInstance* CardAfter = FBattleRules::FindCard(State, CardId))
+	{
+		FPassiveDispatcher::RunAfterPlayed(State, Events, *CardAfter, RuntimeCost);
+	}
+
+	// ================ 13. OnCompanionCount 被动 ================
+	// AfterPlayed 之后触发：此时本次打出的 Companion 已计入 CompanionPlayedCount。
+	FPassiveDispatcher::RunOnCompanionCount(State, Events);
+
+	// ================ 14. 中毒结算（Battle_Rules §15）================
+	// 敌方部位行动之前：中毒可能破坏部位，从而影响随后的先机归零行动集合。
+	FPoisonResolver::ResolvePoisonForAllHosts(State, Events);
+
+	// ================ 15. 敌方部位行动子流程 ================
 	if (!bSwift)
 	{
 		FEnemyPartActionResolver::ResolveInitiativeZeroActions(State, Events);
 	}
 
-	// ---- 战斗结束判断（§8 第 10 步）----
+	// ================ 16. 战斗结束判断 ================
 	if (FBattleRules::CheckAndApplyBattleEnd(State, Events))
 	{
 		return FWacomStatus::Ok();

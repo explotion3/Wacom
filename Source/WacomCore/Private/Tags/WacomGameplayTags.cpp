@@ -33,6 +33,8 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Shuffle_Random,            "Effect.Shuffle.Random");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Shuffle_FromBothToOther,   "Effect.Shuffle.FromBothToOther");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Shuffle_ToRandomZone,      "Effect.Shuffle.ToRandomZone");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_AddCost,              "Effect.Card.AddCost");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_ReduceCost,           "Effect.Card.ReduceCost");
 
 	// -------- Status --------
 	UE_DEFINE_GAMEPLAY_TAG(Status_Poison,   "Status.Poison");
@@ -50,6 +52,7 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Target_RandomHandCard,   "Target.RandomHandCard");
 	UE_DEFINE_GAMEPLAY_TAG(Target_ZoneHandCard,     "Target.ZoneHandCard");
 	UE_DEFINE_GAMEPLAY_TAG(Target_Adjacent_Right,   "Target.Adjacent.Right");
+	UE_DEFINE_GAMEPLAY_TAG(Target_LastShuffledCard, "Target.LastShuffledCard");
 
 	// -------- ZoneHook --------
 	UE_DEFINE_GAMEPLAY_TAG(ZoneHook_Trigger_OnPlay,               "ZoneHook.Trigger.OnPlay");

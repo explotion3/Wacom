@@ -31,21 +31,24 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 	Out.Phase            = State.Phase;
 	Out.TurnNumber       = State.TurnNumber;
 	Out.CurrentWaitValue = State.CurrentWaitValue;
+	Out.CompanionPlayedCount = State.Player.CompanionPlayedCount;
 	Out.Outcome          = State.Outcome;
 
 	// ---- Player ----
-	Out.Player.CurrentHp = State.PlayerCurrentHp;
-	Out.Player.MaxHp     = State.PlayerMaxHp;
-	Out.Player.Shield    = State.PlayerShield;
+	Out.Player.CurrentHp = State.Player.CurrentHp;
+	Out.Player.MaxHp     = State.Player.MaxHp;
+	Out.Player.Shield    = State.Player.Shield;
+	Out.Player.Statuses  = State.Player.Statuses;
+	Out.Player.StatusStacks = State.Player.StatusStacks;
 
 	// ---- Enemy ----
-	Out.Enemy.Definition = State.EnemyDef;
-	Out.Enemy.Parts.Reserve(State.EnemyParts.Num());
+	Out.Enemy.Definition = State.Enemy.Definition;
+	Out.Enemy.Parts.Reserve(State.Enemy.Parts.Num());
 
 	int32 InitiativeSum = 0;
-	bool bAllDestroyed  = !State.EnemyParts.IsEmpty();
+	bool bAllDestroyed  = !State.Enemy.Parts.IsEmpty();
 
-	for (const FRuntimeEnemyPart& Part : State.EnemyParts)
+	for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
 	{
 		FEnemyPartSnapshot PartSnap;
 		PartSnap.InstanceId        = Part.InstanceId;
@@ -80,13 +83,13 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 	Out.Enemy.bAllPartsDestroyed = bAllDestroyed;
 
 	// ---- Hand ----
-	Out.Hand.Cards.Reserve(State.Hand.Num());
+	Out.Hand.Cards.Reserve(State.Cards.Hand.Num());
 	Out.Hand.bLeftHandPresent  = false;
 	Out.Hand.bRightHandPresent = false;
 	Out.Hand.NormalCardCount   = 0;
 	Out.Hand.NormalCardLimit   = 10;
 
-	for (const FGuid& CardId : State.Hand)
+	for (const FGuid& CardId : State.Cards.Hand)
 	{
 		const FRuntimeCardInstance* Card = FindCard(State, CardId);
 		if (!Card)
@@ -102,17 +105,17 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		HandCard.bIsHandAnchor = FHandZoneService::IsHandAnchor(State, CardId);
 		HandCard.bIsPlayable   = FBattleRules::IsCardCostLegal(State, *Card);
 
-		if (CardId == State.LeftHandInstanceId)  { Out.Hand.bLeftHandPresent = true; }
-		if (CardId == State.RightHandInstanceId) { Out.Hand.bRightHandPresent = true; }
+		if (CardId == State.Cards.LeftHandInstanceId)  { Out.Hand.bLeftHandPresent = true; }
+		if (CardId == State.Cards.RightHandInstanceId) { Out.Hand.bRightHandPresent = true; }
 		if (!HandCard.bIsHandAnchor)             { ++Out.Hand.NormalCardCount; }
 
 		Out.Hand.Cards.Add(MoveTemp(HandCard));
 	}
 
 	// ---- Pile counts ----
-	Out.PileCounts.DrawCount    = State.DrawPile.Num();
-	Out.PileCounts.DiscardCount = State.DiscardPile.Num();
-	Out.PileCounts.ExhaustCount = State.ExhaustPile.Num();
+	Out.PileCounts.DrawCount    = State.Cards.DrawPile.Num();
+	Out.PileCounts.DiscardCount = State.Cards.DiscardPile.Num();
+	Out.PileCounts.ExhaustCount = State.Cards.ExhaustPile.Num();
 
 	return Out;
 }

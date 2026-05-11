@@ -29,7 +29,7 @@ public:
 	 * 返回实际抽出的张数。
 	 *
 	 * OutDrawnCardIds 仅接收本次新抽出的卡，不包含已在手牌中的。
-	 * 调用方负责把这些卡加入 State.Hand 的合适位置（由 HandZoneService 决定）。
+	 * 调用方负责把这些卡加入 State.Cards.Hand 的合适位置（由 HandZoneService 决定）。
 	 */
 	static int32 DrawCards(FBattleState& State, int32 Count, TArray<FGuid>& OutDrawnCardIds);
 
@@ -38,6 +38,15 @@ public:
 	 * 使用 BattleState.Rng 做随机。
 	 */
 	static void ReshuffleDiscardIntoDraw(FBattleState& State);
+
+	/**
+	 * 对当前 DrawPile 执行一次 Fisher-Yates 洗牌。
+	 * 使用 BattleState.Rng。
+	 *
+	 * 典型调用：BattleSession::Initialize 末尾。消除"StarterDeck 数组顺序 =
+	 * 首回合抽牌顺序"的隐式依赖。
+	 */
+	static void ShuffleDrawPile(FBattleState& State);
 
 	/**
 	 * 把一张卡从手牌移到弃牌区。

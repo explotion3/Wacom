@@ -21,6 +21,12 @@ struct FEffectContext;
 class FEffectExecutor
 {
 public:
-	/** 执行一次效果。返回值表示是否成功执行；暂不细分错误码。 */
-	static bool Execute(const FEffectContext& Ctx);
+	/**
+	 * 执行一次效果。返回值表示是否成功执行；暂不细分错误码。
+	 *
+	 * 传入 `Ctx` 为非 const 引用：Shuffle 分支会把被移动的卡 ID 写入 `Ctx.LastShuffledCardId`，
+	 * 供后续 `Effect.Card.AddCost` / `Effect.Card.ReduceCost` + `Target.LastShuffledCard` 组合读取。
+	 * 调用方若要跨多个 Execute 共享该字段，必须传同一个 Ctx 对象。
+	 */
+	static bool Execute(FEffectContext& Ctx);
 };

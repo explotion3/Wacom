@@ -163,13 +163,35 @@ namespace Wacom::ContentBuilder
 
 		// ==== 朝光暮蝶 Zhaoguang Mudie ====
 		FCardPhysique ZMPhysique; ZMPhysique.MaxHpBonus = 1;
-		// Zone hooks 第一阶段只建占位（S8+ 才消费）。
+
+		// ZoneHook：左手区 + OnPerfectReleaseHit = 不推进先机。P3.3 起生效。
+		// ExtraEffects 留空——"跳过先机推进"由 PlayCardResolver 在 Hook 存在即触发。
 		FCardZoneHook ZM_Left;
 		ZM_Left.Zone    = WacomTags::HandZone_Left;
 		ZM_Left.Trigger = WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit;
+
+		// ZoneHook：右手区 + OnPlay = 费用转移。P3.3 起生效。
+		// 组合三条通用效果：
+		//   [0] Shuffle.Random           → 随机腾挪一张手牌，写 LastShuffledCardId
+		//   [1] Card.ReduceCost Mag=1    → 对被腾挪卡 -1 RuntimeCostModifier
+		//   [2] Card.AddCost    Mag=1    → 对本卡 +1 RuntimeCostModifier（可叠加）
+		FCardEffect ZH_Shuffle; ZH_Shuffle.EffectType = WacomTags::Effect_Shuffle_Random;
+		ZH_Shuffle.Target                           = WacomTags::Target_RandomHandCard;
+
+		FCardEffect ZH_ReduceCostOnShuffled;
+		ZH_ReduceCostOnShuffled.EffectType = WacomTags::Effect_Card_ReduceCost;
+		ZH_ReduceCostOnShuffled.Magnitude  = 1;
+		ZH_ReduceCostOnShuffled.Target     = WacomTags::Target_LastShuffledCard;
+
+		FCardEffect ZH_AddCostOnSelf;
+		ZH_AddCostOnSelf.EffectType = WacomTags::Effect_Card_AddCost;
+		ZH_AddCostOnSelf.Magnitude  = 1;
+		ZH_AddCostOnSelf.Target     = WacomTags::Target_Self;
+
 		FCardZoneHook ZM_Right;
 		ZM_Right.Zone    = WacomTags::HandZone_Right;
 		ZM_Right.Trigger = WacomTags::ZoneHook_Trigger_OnPlay;
+		ZM_Right.ExtraEffects = { ZH_Shuffle, ZH_ReduceCostOnShuffled, ZH_AddCostOnSelf };
 
 		UCardDefinition* Zhaoguang = BuildCard(
 			CardsRoot + TEXT("DA_Card_ZhaoguangMudie"),

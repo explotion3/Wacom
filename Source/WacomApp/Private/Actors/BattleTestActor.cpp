@@ -2,10 +2,12 @@
 
 #include "Actors/BattleTestActor.h"
 
-#include "Components/InputComponent.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
 #include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
-#include "InputCoreTypes.h"
 #include "Blueprint/UserWidget.h"
 
 #include "Cards/CardDefinition.h"
@@ -33,7 +35,8 @@ void ABattleTestActor::BeginPlay()
 {
 	Super::BeginPlay();
 
-	BindDebugInput();
+	RegisterMappingContext();
+	BindEnhancedInput();
 	EnsurePrimaryLayout();
 
 	if (bAutoStart)
@@ -104,39 +107,45 @@ void ABattleTestActor::EnsureBattleHUD()
 	BattleHUDInstance->SetSession(Session);
 }
 
-// ================ 输入绑定 ================
+// ================ Enhanced Input ================
 
-void ABattleTestActor::BindDebugInput()
+void ABattleTestActor::RegisterMappingContext()
+{
+	if (!BattleMappingContext) { return; }
+
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (!PC) { return; }
+
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+	{
+		Subsystem->AddMappingContext(BattleMappingContext, 0);
+	}
+}
+
+void ABattleTestActor::BindEnhancedInput()
 {
 	if (!InputComponent) { return; }
 
-	auto Bind = [this](FKey Key, int32 OneBasedIndex)
+	UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(InputComponent);
+	if (!EIC)
 	{
-		FInputKeyBinding KB(FInputChord(Key), IE_Pressed);
-		KB.KeyDelegate.GetDelegateForManualSet().BindLambda([this, OneBasedIndex]()
-		{
-			PlayHandIndex(OneBasedIndex);
-		});
-		InputComponent->KeyBindings.Add(KB);
-	};
+		UE_LOG(LogTemp, Warning, TEXT("[BattleTestActor] InputComponent is not UEnhancedInputComponent"));
+		return;
+	}
 
-	Bind(EKeys::One,   1);
-	Bind(EKeys::Two,   2);
-	Bind(EKeys::Three, 3);
-	Bind(EKeys::Four,  4);
-	Bind(EKeys::Five,  5);
+	if (IA_PlayCard1) { EIC->BindAction(IA_PlayCard1, ETriggerEvent::Started, this, &ABattleTestActor::OnPlayCard1); }
+	if (IA_PlayCard2) { EIC->BindAction(IA_PlayCard2, ETriggerEvent::Started, this, &ABattleTestActor::OnPlayCard2); }
+	if (IA_PlayCard3) { EIC->BindAction(IA_PlayCard3, ETriggerEvent::Started, this, &ABattleTestActor::OnPlayCard3); }
+	if (IA_PlayCard4) { EIC->BindAction(IA_PlayCard4, ETriggerEvent::Started, this, &ABattleTestActor::OnPlayCard4); }
+	if (IA_PlayCard5) { EIC->BindAction(IA_PlayCard5, ETriggerEvent::Started, this, &ABattleTestActor::OnPlayCard5); }
+	if (IA_PlayCard6) { EIC->BindAction(IA_PlayCard6, ETriggerEvent::Started, this, &ABattleTestActor::OnPlayCard6); }
+	if (IA_PlayCard7) { EIC->BindAction(IA_PlayCard7, ETriggerEvent::Started, this, &ABattleTestActor::OnPlayCard7); }
 
-	auto BindAction = [this](FKey Key, TFunction<void()> Fn)
-	{
-		FInputKeyBinding KB(FInputChord(Key), IE_Pressed);
-		KB.KeyDelegate.GetDelegateForManualSet().BindLambda(MoveTemp(Fn));
-		InputComponent->KeyBindings.Add(KB);
-	};
-
-	BindAction(EKeys::W, [this]() { Wait(); });
-	BindAction(EKeys::E, [this]() { EndTurn(); });
-	BindAction(EKeys::R, [this]() { StartBattle(); });
-	BindAction(EKeys::P, [this]() { RefreshHUD(); });
+	if (IA_Wait)       { EIC->BindAction(IA_Wait,       ETriggerEvent::Started, this, &ABattleTestActor::Wait); }
+	if (IA_EndTurn)    { EIC->BindAction(IA_EndTurn,    ETriggerEvent::Started, this, &ABattleTestActor::EndTurn); }
+	if (IA_Restart)    { EIC->BindAction(IA_Restart,    ETriggerEvent::Started, this, &ABattleTestActor::StartBattle); }
+	if (IA_RefreshHUD) { EIC->BindAction(IA_RefreshHUD, ETriggerEvent::Started, this, &ABattleTestActor::RefreshHUD); }
 }
 
 // ================ 战斗操作 ================
@@ -292,6 +301,7 @@ namespace
 		case EBattleEventType::EnemyPartHpEmptied:     return TEXT("EnemyPartHpEmptied");
 		case EBattleEventType::EnemyKnockdown:         return TEXT("EnemyKnockdown");
 		case EBattleEventType::TurnEnded:              return TEXT("TurnEnded");
+		case EBattleEventType::PassiveTriggered:       return TEXT("PassiveTriggered");
 		case EBattleEventType::BattleEnded:            return TEXT("BattleEnded");
 		default:                                        return TEXT("?");
 		}

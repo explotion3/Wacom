@@ -10,26 +10,20 @@ class UBattleSession;
 class UCardDefinition;
 class UCharacterDefinition;
 class UEnemyDefinition;
+class UInputAction;
+class UInputMappingContext;
 class UWacomPrimaryGameLayout;
 class UWacomBattleWidgetBase;
 
 /**
  * 第一阶段测试战斗入口 Actor。
  *
- * 使用方式：
- *   1. 把此 Actor 拖到关卡里
- *   2. Details 面板：
- *      - Character  = DA_Character_BugGirl
- *      - Enemy      = DA_Enemy_Snake
- *      - PrimaryLayoutClass = WBP_PrimaryGameLayout
- *      - DebugHUDClass      = WBP_DebugBattleHUD
- *   3. BeginPlay 自动创建 PrimaryLayout + 把 DebugHUD Push 到 Game Layer
- *   4. PIE 按键：
- *        1..5  打出手牌第 N 张
- *        W     等待
- *        E     结束回合
- *        R     重启战斗
- *        P     手动刷新 HUD
+ * Details 面板配置：
+ *   - Wacom|Battle: Character / Enemy / RandomSeed / bAutoStart
+ *   - Wacom|UI:     PrimaryLayoutClass / BattleHUDClass
+ *   - Wacom|Input:  BattleMappingContext + 11 个 IA
+ *
+ * PIE 按键：1..7 打手牌 / W 等待 / E 结束回合 / R 重启 / P 刷新 HUD
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API ABattleTestActor : public AActor
@@ -60,13 +54,49 @@ public:
 
 	// ---- UI 配置 ----
 
-	/** 主 UI 容器的 Widget Blueprint 类。指向 WBP_PrimaryGameLayout。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
 	TSubclassOf<UWacomPrimaryGameLayout> PrimaryLayoutClass;
 
-	/** 战斗 HUD 类。指向 WBP_BattleHUD 或调试占位 WBP_DebugBattleHUD。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
 	TSubclassOf<UWacomBattleWidgetBase> BattleHUDClass;
+
+	// ---- Enhanced Input 配置 ----
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputMappingContext> BattleMappingContext;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard1;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard2;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard3;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard4;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard5;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard6;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard7;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_Wait;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_EndTurn;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_Restart;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_RefreshHUD;
 
 	// ---- 操作 ----
 
@@ -95,8 +125,17 @@ private:
 	UPROPERTY()
 	TObjectPtr<UWacomBattleWidgetBase> BattleHUDInstance = nullptr;
 
-	void BindDebugInput();
+	void RegisterMappingContext();
+	void BindEnhancedInput();
 	void EnsurePrimaryLayout();
 	void EnsureBattleHUD();
 	void ConsumeAndLogEvents();
+
+	void OnPlayCard1() { PlayHandIndex(1); }
+	void OnPlayCard2() { PlayHandIndex(2); }
+	void OnPlayCard3() { PlayHandIndex(3); }
+	void OnPlayCard4() { PlayHandIndex(4); }
+	void OnPlayCard5() { PlayHandIndex(5); }
+	void OnPlayCard6() { PlayHandIndex(6); }
+	void OnPlayCard7() { PlayHandIndex(7); }
 };

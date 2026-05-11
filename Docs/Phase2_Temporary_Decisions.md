@@ -44,6 +44,9 @@
 - **[P5] CompanionPlayedCount 是全局计数**：不区分"哪张伙伴"。
   → 对齐 `BugGirl.md §5` 拂晓飞蛾的"三张伙伴"是战斗内全局计数。触发后清零。
 
+- **[P3.4] OnCompanionCount 触发时超手牌上限强行加入**：触发时不检查普通卡上限 10，直接加到 Hand 末尾。下回合 `BeginPlayerTurn` 的 `EnforceNormalCardLimit` 会处理多余的普通卡。
+  → 后续若有"手牌满时不触发"的规则变更，改 `RunOnCompanionCountPassives` 里加上限检查即可。
+
 - **[P5] 暮蛉 OnTwilightTriggered 需要暮气"生效"**：第一阶段暮气只记录层数不生效。
   → P5 需要先定义"暮气生效"的触发点（回合开始？部位行动前？），然后才能触发暮蛉被动。这是一个规则未决项。
 

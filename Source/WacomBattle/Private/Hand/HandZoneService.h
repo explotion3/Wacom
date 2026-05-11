@@ -13,7 +13,7 @@ enum class EHandZone : uint8;
  * 对齐 Hand_Zone_Rules.md。仅 WacomBattle/Private 使用。
  *
  * 所有涉及手牌队列生成、区域判定、普通卡上限的逻辑都汇聚在这里。
- * Resolver / TurnFlow 不得直接操作 State.Hand 排列。
+ * Resolver / TurnFlow 不得直接操作 State.Cards.Hand 排列。
  */
 class FHandZoneService
 {
@@ -30,8 +30,8 @@ public:
 	 * - 左右手锚点的 InstanceId 在 State 中已就位，当前 Location 不要求。
 	 *
 	 * 本方法职责（Hand_Zone_Rules §3）：
-	 * - 按左右手在 State.Hand 中的出现情况选择"都不在 / 都在 / 只有一张"分支。
-	 * - 生成最终 State.Hand。
+	 * - 按左右手在 State.Cards.Hand 中的出现情况选择"都不在 / 都在 / 只有一张"分支。
+	 * - 生成最终 State.Cards.Hand。
 	 * - 更新所有相关卡的 Location = Hand。
 	 *
 	 * 调用方需在此后调用 EnforceNormalCardLimit 处理上限。
@@ -52,7 +52,7 @@ public:
 	 *
 	 * 约定：
 	 * - 锚点自身返回 EHandZone::None。
-	 * - 卡不在 State.Hand 中返回 EHandZone::None。
+	 * - 卡不在 State.Cards.Hand 中返回 EHandZone::None。
 	 * - 左右手都在：按位置切成 Left / Both / Right。
 	 * - 只有左手：左手左侧 = Left，右侧 = Right，双手区不存在。
 	 * - 只有右手：右手左侧 = Left，右侧 = Right，双手区不存在。
@@ -65,6 +65,31 @@ public:
 
 	/** 普通卡数量。不计锚点。 */
 	static int32 CountNormalCardsInHand(const FBattleState& State);
+
+	// ======== 回合结束处理 ========
+	// 对齐 Battle_Rules §12 + Hand_Zone_Rules §7。P3.2 引入。
+
+	/**
+	 * 判断一张手牌在回合结束时是否应保留（不进弃牌区）。
+	 *
+	 * 保留条件（任一命中）：
+	 * - 左右手锚点（§7 第一句：自带保留；GenerateHandQueueOnTurnStart 会把留下的锚点重新插入）
+	 * - 拥有 `Card.Keyword.Retain`（Definition 的 Keywords 或 Runtime 的 TemporaryKeywords）
+	 * - 虫妹专属：回合结束时左右手锚点都还在手牌，且本卡位于双手区（§7 第三段）
+	 *
+	 * 注：本方法在"玩家回合结束、尚未把非保留卡进弃牌区"的那个瞬间被调用，
+	 * 调用方保证此时 State.Cards.Hand 即是回合结束前的快照。
+	 */
+	static bool ShouldRetainCardAtTurnEnd(const FBattleState& State, const FGuid& CardInstanceId);
+
+	/**
+	 * 回合结束时把所有不满足保留条件的普通卡移到弃牌区。
+	 * 锚点不动。保留的普通卡留在 State.Cards.Hand 中，BeginPlayerTurn 会通过
+	 * GenerateHandQueueOnTurnStart 的 "两锚点都在" 分支保持它们的相对位置。
+	 *
+	 * 从末尾向前扫描以保证索引稳定，输出被弃掉的卡 ID 列表供事件发射使用。
+	 */
+	static void DiscardNonRetainedNormalCardsAtTurnEnd(FBattleState& State, TArray<FGuid>& OutDiscarded);
 
 	// ======== 腾挪（Shuffle）API ========
 	// 对齐 Hand_Zone_Rules §8。腾挪总是作用于当前手牌中的卡。

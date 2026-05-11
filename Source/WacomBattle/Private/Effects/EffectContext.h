@@ -64,4 +64,18 @@ struct FEffectContext
 	 * 为空（invalid FGuid）表示不排除任何卡。
 	 */
 	FGuid ExcludeHandCardId;
+
+	/**
+	 * 最近一次 Shuffle 执行后被移动的卡 ID。由 EffectExecutor 在 Shuffle 成功时写入。
+	 *
+	 * 用途：后续效果用 `Target.LastShuffledCard` 引用该卡。典型组合——
+	 *   朝光暮蝶右手区 OnPlay：
+	 *     [0] Effect.Shuffle.Random          → 腾挪一张，写 LastShuffledCardId
+	 *     [1] Effect.Card.ReduceCost Mag=1   → 对被腾挪卡 -1 Cost
+	 *     [2] Effect.Card.AddCost    Mag=1   → 对本卡 +1 Cost
+	 *
+	 * 由调用方共享一个 FEffectContext（或手动在调用间传递字段）使其在同一批效果
+	 * 调用之间可见。PlayCardResolver 的 ExecuteCardEffectOnce 负责透传。
+	 */
+	FGuid LastShuffledCardId;
 };

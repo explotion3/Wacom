@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Types/WacomEnums.h"
 
 struct FBattleState;
 struct FRuntimeCardInstance;
@@ -34,6 +35,22 @@ public:
 	static const FRuntimeEnemyPart* FindEnemyPart(const FBattleState& State, const FGuid& PartInstanceId);
 	static FRuntimeCardInstance* FindCard(FBattleState& State, const FGuid& CardInstanceId);
 	static const FRuntimeCardInstance* FindCard(const FBattleState& State, const FGuid& CardInstanceId);
+
+	/**
+	 * 找到卡实例并设置 Location。找不到则 no-op。
+	 * 统一 helper，替代各处 "FindCard + 赋 Location" 的重复代码。
+	 */
+	static void SetCardLocation(FBattleState& State, const FGuid& CardInstanceId, ECardLocation NewLocation);
+
+	// -------- 先机 --------
+
+	/**
+	 * 对所有未破坏部位的 CurrentInitiative 减去 Amount。
+	 *
+	 * 不发事件、不判断战斗结束、不触发先机归零行动。调用方负责后续流程。
+	 * 当前在 PlayCardResolver（非迅捷且非 ZoneHook 跳过时）和 WaitResolver 中共用。
+	 */
+	static void PushEnemyInitiative(FBattleState& State, int32 Amount);
 
 	// -------- 战斗结束 --------
 

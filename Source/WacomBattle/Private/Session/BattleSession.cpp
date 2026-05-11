@@ -5,6 +5,7 @@
 #include "Core/BattleState.h"
 #include "Core/BattleResolver.h"
 #include "Core/BattleTurnFlow.h"
+#include "Deck/DeckService.h"
 #include "Events/BattleEventBus.h"
 #include "Snapshots/BattleSnapshotBuilder.h"
 
@@ -56,10 +57,10 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 	State->Rng.Initialize(Seed);
 
 	// ---- 玩家 ----
-	State->CharacterDef    = Params.Character;
-	State->PlayerMaxHp     = Params.Character->BaseMaxHp;
-	State->PlayerCurrentHp = State->PlayerMaxHp;
-	State->PlayerShield    = 0;
+	State->Player.CharacterDef    = Params.Character;
+	State->Player.MaxHp     = Params.Character->BaseMaxHp;
+	State->Player.CurrentHp = State->Player.MaxHp;
+	State->Player.Shield    = 0;
 	ReferencedAssets.Add(Params.Character);
 
 	// ---- 卡牌：左手 / 右手 / StarterDeck ----
@@ -74,15 +75,18 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 		Card.InstanceId = FGuid::NewGuid();
 		Card.Definition = Def;
 		Card.Location   = InitialLocation;
-		State->AllCards.Add(Card);
+
+		const int32 NewIdx = State->Cards.AllCards.Add(Card);
+		State->Cards.CardIndexById.Add(Card.InstanceId, NewIdx);
+
 		if (Def)
 		{
 			ReferencedAssets.Add(Def);
 			const int32 HpBonus = Def->Physique.MaxHpBonus;
 			if (HpBonus > 0)
 			{
-				State->PlayerMaxHp     += HpBonus;
-				State->PlayerCurrentHp += HpBonus;
+				State->Player.MaxHp     += HpBonus;
+				State->Player.CurrentHp += HpBonus;
 			}
 		}
 		return Card.InstanceId;
@@ -92,22 +96,26 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 	{
 		// 左右手第一阶段放入手牌锚点容器：S3 起始阶段会按规则生成最终手牌队列。
 		// 这里先以 Unknown 位置登记，交给 S3/S4 的 HandZoneService 放入 Hand。
-		State->LeftHandInstanceId  = CreateCardInstance(Params.Character->LeftHandCard, ECardLocation::Unknown);
+		State->Cards.LeftHandInstanceId  = CreateCardInstance(Params.Character->LeftHandCard, ECardLocation::Unknown);
 	}
 	if (Params.Character->RightHandCard)
 	{
-		State->RightHandInstanceId = CreateCardInstance(Params.Character->RightHandCard, ECardLocation::Unknown);
+		State->Cards.RightHandInstanceId = CreateCardInstance(Params.Character->RightHandCard, ECardLocation::Unknown);
 	}
 
 	for (const TObjectPtr<UCardDefinition>& CardDef : Params.Character->StarterDeck)
 	{
 		if (!CardDef) { continue; }
 		const FGuid CardId = CreateCardInstance(CardDef.Get(), ECardLocation::Draw);
-		State->DrawPile.Add(CardId);
+		State->Cards.DrawPile.Add(CardId);
 	}
 
+	// 初始洗牌：消除"StarterDeck 数组顺序 = 首回合抽牌顺序"的隐式依赖。
+	// 之后的 ReshuffleDiscardIntoDraw 会用同样的 Rng 做洗牌，保持一致。
+	FDeckService::ShuffleDrawPile(*State);
+
 	// ---- 敌人 ----
-	State->EnemyDef = Params.Enemy;
+	State->Enemy.Definition = Params.Enemy;
 	ReferencedAssets.Add(Params.Enemy);
 
 	for (const FEnemyPartSlot& Slot : Params.Enemy->Parts)
@@ -127,7 +135,10 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 		{
 			Part.CurrentInitiative = 0;
 		}
-		State->EnemyParts.Add(Part);
+
+		const int32 NewIdx = State->Enemy.Parts.Add(Part);
+		State->Enemy.PartIndexById.Add(Part.InstanceId, NewIdx);
+
 		ReferencedAssets.Add(Slot.PartDef);
 	}
 

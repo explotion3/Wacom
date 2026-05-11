@@ -291,11 +291,49 @@ PIE 测试：打开 `L_TestBattle` → 检查 `BattleTestActor` 的字段：
 
 按 Play，默认 C++ 硬编码布局的战斗 UI 就会出现。
 
+### P3：规则补全
+
+| 切片 | 内容 | 关键产出 |
+| --- | --- | --- |
+| P3.1 | 中毒结算（Battle_Rules §15） | `WacomBattle/Private/Status/PoisonResolver.h/.cpp`；`FBattleState` 加 `PlayerStatuses` + `PlayerStatusStacks`；`FPlayerSnapshot` 镜像；`EffectExecutor` 玩家中毒分支写入 State；`PlayCardResolver` 在 AfterPlayed 之后调用 + `EnemyPartActionResolver::ActOnce` 末尾调用；`PoisonSpec.cpp` 4 条测试（TickOnCardPlay / TickOnEnemyAct / PenetratesShield / StacksUnchanged）|
+| P3.2 | 保留关键字 + 双手区保留（Hand_Zone_Rules §7 + Battle_Rules §12） | `HandZoneService` 加 `ShouldRetainCardAtTurnEnd` / `DiscardNonRetainedNormalCardsAtTurnEnd`；`EndTurnResolver` 在敌方行动前调用弃牌；保留判定覆盖"锚点 / Retain 关键字（Def + Temp）/ 左右手都在时的双手区普通卡"；`RetainSpec.cpp` 4 条测试（NormalCardRetainKeeps / NormalCardNoRetainDiscards / BothZoneKeepsWhenAnchorsPresent / BothZoneDiscardsWhenAnchorMissing） |
+| P3.3 | ZoneHook 消费（朝光暮蝶左/右手区） | 新增 3 个 tag：`Effect.Card.AddCost` / `Effect.Card.ReduceCost` / `Target.LastShuffledCard`；`FEffectContext::LastShuffledCardId`；`FEffectExecutor::Execute` 签名改为 `FEffectContext&`（Shuffle 写回被移动卡 ID）；`EffectExecutor` 新增 AddCost / ReduceCost 分支；`PlayCardResolver` 加 `RunOnPlayZoneHooks` + `ShouldSkipInitiativePushByZoneHook` 两个 helper，`ExecuteCardEffectOnce` 额外透传 `InOutLastShuffledCardId`；`FillTargetFromCardEffect` 映射 `Target.Self` → 本卡（Card.AddCost/ReduceCost 语义），映射 `Target.LastShuffledCard`；`BugGirlBuilder` 朝光暮蝶右手区 OnPlay ExtraEffects 配 `Shuffle.Random + ReduceCost(LastShuffled) + AddCost(Self)`；`ZoneHookSpec.cpp` 5 条测试（LeftHitSkipsInitiativePush / RightPlayTransfersCost / RightPlayCostAccumulates / Effect.AddCostWorksOnSelf / Effect.ReduceCostClampsAtZero） |
+| P3.4 | OnCompanionCount 被动（拂晓飞蛾） | `FBattleState::CompanionPlayedCount`；`FBattleSnapshot::CompanionPlayedCount` + `BattleSnapshotBuilder` 镜像；`PlayCardResolver` 在卡牌去向之后累加 Companion 计数 + AfterPlayed 之后调 `RunOnCompanionCountPassives`；`MoveCardToHandFromAnywhere` helper（从 Draw/Discard/Exhaust/Limbo 移到 Hand 末尾）；触发后计数清零；`CompanionCountSpec.cpp` 2 条测试（CompanionCountTriggersReturn / CompanionCountResetsAfterTrigger） |
+| P3.5 | OnTwilightTriggered 被动占位（暮蛉） | 新增 `EBattleEventType::PassiveTriggered`；`EffectExecutor` 的 Twilight 分支施加成功后遍历 AllCards 对拥有 `OnTwilightTriggered` 被动的卡发 `PassiveTriggered` 事件（`Tag = Passive.Trigger.OnTwilightTriggered`）；不真正改中毒层数（`EffectMagnitudeModifiers` 未引入）；`BattleHUD` / `BattleTestActor` 的 EventTypeToString 补 `PassiveTriggered` 分支；无新增测试（占位，规则未决） |
+
+#### P3.1 实现约束
+
+- **Unity Build 命名空间冲突**：`BattleHUD.cpp` 和 `BattleTestActor.cpp` 都在匿名 namespace 定义 `EventTypeToString`，在 Unity Build 合并 TU 时冲突。把 HUD 那份改名 `HUDEventTypeToString`。
+- **中毒穿透护盾**不走 `EffectExecutor::ApplyDamage`（那份会先扣 Shield），`PoisonResolver` 直接扣 `CurrentHp`。发 `DamageDealt` 事件时 `Tag = Status.Poison` 标明来源。
+- **调用点选位**：
+  - 玩家打牌 → 放在 AfterPlayed 被动之后、`ResolveInitiativeZeroActions` 之前。这样中毒破坏部位能触发 `EnemyPartHpEmptied`，随后行动子流程只考虑存活部位。
+  - 敌方部位行动 → 放在 `AdvanceToNextIntent` 之后。此时该部位可能本身就是中毒载体被结算致死；`bDestroyed` 在中毒后置位，`AdvanceToNextIntent` 内部对 bDestroyed 已有 no-op，顺序上没问题。
+- **`PoisonSpec` 辅助卡工厂**：用 `MakeShieldThenPoisonPlayerCard` 组合两个效果，验证护盾穿透时不能先加毒再加盾（否则毒触发时盾还没建）。
+
+#### P3.2 实现约束
+
+- **保留判定顺序**：先判断锚点（`IsHandAnchor`），再查 `Keywords` 和 `TemporaryKeywords`，最后判断双手区兜底。保证锚点永不被误弃。
+- **弃牌扫描方向**：`DiscardNonRetainedNormalCardsAtTurnEnd` 从数组末尾向前扫，保证索引稳定；扫描过程中不移除锚点，所以`GetZoneOf` 在整个过程中的"双手区"判断一致。
+- **双手区判定时机**：P3.2 按 Hand_Zone_Rules §7 的字面口径实现——"回合结束时左右手锚点都还在手牌"才启用双手区保留。若玩家本回合打出了一张锚点，`bLeftHandPresent` / `bRightHandPresent` 其中一个为 false，保留降级为只看 `Retain` 关键字。
+- **测试的 Reshuffle 坑**：`NormalCardNoRetainDiscards` 第一版用 `Snap.PileCounts.DiscardCount >= N` 验证，但新回合 BeginPlayerTurn 会在 DrawPile 空时触发 ReshuffleDiscardIntoDraw 把 Discard 清空。第二版改用 InstanceId 精确追踪 + 把 Deck 做大到 15 张避免 Reshuffle。
+- **Hand_Zone_Rules §3 第三段**的"双手区被保留的普通卡保持原有相对位置"依赖 `GenerateHandQueueOnTurnStart` 的 "两锚点都在" 分支（已实现 S4 无改动）：保留的卡仍在 `State.Hand` 里，新抽的卡随机 `Insert`，不会打乱已有相对顺序。
+
+#### P3.3 实现约束
+
+- **`FEffectExecutor::Execute` 签名改成 `FEffectContext&`**：Shuffle 分支把被移动卡 ID 写回 `Ctx.LastShuffledCardId`，后续 `AddCost/ReduceCost + Target.LastShuffledCard` 读取。同一批效果链内 `PlayCardResolver::ExecuteCardEffectOnce` 额外接一个 `FGuid& InOutLastShuffledCardId` 引用，跨 `Execute` 调用共享。
+- **独立效果链**：主效果 / 完美释放 / AfterPlayed 被动 / ZoneHook ExtraEffects 各自维护自己的 `LastShuffledCardId` 局部变量，语义上互不串。朝光暮蝶主效果里也有 `Shuffle.Random`，但它不会覆盖 ZoneHook 的 `LastShuffledCardId`（因为后者已经在 ZoneHook 阶段消费完）。
+- **`FillTargetFromCardEffect` 的 `Target.Self` 消歧**：原本只有 `Shuffle.ToRandomZone` 时才指向本卡。P3.3 把 `Effect.Card.AddCost` / `Effect.Card.ReduceCost` 也归入"指向本卡"分支。其它 `Target.Self` 仍指玩家（治疗、加盾、给玩家施毒）。
+- **ZoneHook 触发点**：
+  - `OnPlay`：放在 `CardPlayed` 事件之后、"记录出牌前先机"之前。此时 `RuntimeCost` 已定档（上面 `ComputeRuntimeCost` 一次性算）。AddCost 影响的是本卡"下次进手牌后"的 RuntimeCost。
+  - `OnPerfectReleaseHit`：判断条件为 `!HitPartIds.IsEmpty()`。命中即跳过先机推进——一次判断一次生效，不执行 ExtraEffects（P3.3 朝光暮蝶左手区的规则仅限"不推先机"）。
+- **ZoneHook 顺序要求**：ZoneHook(OnPlay) 在 `CardPlayed` 之后运行，所以若 Hook 里的 `Shuffle.Random` 改变了本卡所在区域，`GetZoneOfCard` 仍应用"进入 Resolve 时的区域"去判断哪些 Hook 触发。当前实现每个 Hook 迭代时都重查 `GetZoneOfCard`，为避免 Hook 内 Shuffle 自动扰动本卡区域，Hook 的效果链只 Shuffle 其他手牌，不 Shuffle 本卡。朝光暮蝶配法符合此约束。
+- **DataAsset 重建**：修改 `BugGirlBuilder` 后必须跑 `WacomRegenerateContent` commandlet 重新生成 `DA_Card_ZhaoguangMudie.uasset`，否则 PIE / PIE 下的战斗仍是旧数据。自动化测试用的是 fixture 构造的 transient 卡，不受影响。
+
 ## 当前阶段状态
 
 ✅ 第一阶段 S1-S11 战斗内核 + 数据 + 自动化测试 + PIE 测试入口
 ✅ 第二阶段 P1 UI 基础设施 + P2 战斗 UI
-⏳ 第二阶段 P3：规则补全（保留 / 中毒 / ZoneHook / 伙伴被动）
+⏳ 第二阶段 P3：规则补全（P3.1-P3.5 全部完成）
 ⏳ 第二阶段 P4：Enhanced Input 迁移
 ⏳ 第二阶段 P5：UI 动画基础
 ⏳ 第二阶段 P6：主题与样式

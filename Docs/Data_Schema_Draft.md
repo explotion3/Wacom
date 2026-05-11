@@ -56,6 +56,8 @@ Effect.ApplyStatus.Twilight  暮气
 Effect.Shuffle.Random        随机腾挪
 Effect.Shuffle.FromBothToOther
 Effect.Shuffle.ToRandomZone
+Effect.Card.AddCost          对目标卡 RuntimeCostModifier 增加
+Effect.Card.ReduceCost       对目标卡 RuntimeCostModifier 减少（下限在 ComputeRuntimeCost 统一 clamp）
 Effect.Heal
 
 Status.Poison
@@ -71,6 +73,7 @@ Target.AllEnemyParts
 Target.RandomHandCard
 Target.ZoneHandCard
 Target.Adjacent.Right
+Target.LastShuffledCard      最近一次 Shuffle 效果产生的被移动卡（仅在同一批效果链内有效）
 ```
 
 第一阶段不实现的 tag（如背包相关、任务相关、夜幕相关）暂不预留。

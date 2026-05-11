@@ -365,7 +365,7 @@ void UBattleHUD::AfterCommand()
 
 namespace
 {
-	const TCHAR* EventTypeToString(EBattleEventType T)
+	const TCHAR* HUDEventTypeToString(EBattleEventType T)
 	{
 		switch (T)
 		{
@@ -385,6 +385,7 @@ namespace
 		case EBattleEventType::EnemyPartHpEmptied:     return TEXT("EnemyPartHpEmptied");
 		case EBattleEventType::EnemyKnockdown:         return TEXT("EnemyKnockdown");
 		case EBattleEventType::TurnEnded:              return TEXT("TurnEnded");
+		case EBattleEventType::PassiveTriggered:       return TEXT("PassiveTriggered");
 		case EBattleEventType::BattleEnded:            return TEXT("BattleEnded");
 		default:                                        return TEXT("?");
 		}
@@ -401,7 +402,7 @@ void UBattleHUD::ConsumeAndLogEvents()
 		UE_LOG(LogTemp, Display,
 			TEXT("[BattleHUD] [#%d] %-22s Amount=%d Count=%d Actor=%s Card=%s Tag=%s"),
 			E.Sequence,
-			EventTypeToString(E.Type),
+			HUDEventTypeToString(E.Type),
 			E.Amount,
 			E.Count,
 			*E.ActorInstanceId.ToString(EGuidFormats::Short),
