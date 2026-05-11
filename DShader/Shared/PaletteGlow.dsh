@@ -1,0 +1,45 @@
+Namespace(Name="PaletteGlow")
+{
+    Function Evaluate(
+        in float2 uv,
+        in float4 resolutionParam,
+        in float timeSec,
+        out float3 color)
+    {
+        float2 resolution = resolutionParam.xy;
+        float2 fragCoord = uv * resolution;
+
+        float2 p = (fragCoord * 2.0 - resolution) / max(resolution.y, 0.0001);
+        float2 uv0 = p;
+        float2 curUv = p;
+
+        float3 finalColor = float3(0.0, 0.0, 0.0);
+
+        for (int idx = 0; idx < 4; idx++)
+        {
+            float i = (float)idx;
+
+            curUv = frac(curUv * 1.5) - 0.5;
+
+            float dist = length(curUv) * exp(-length(uv0));
+
+            float paletteT = length(uv0) + i * 0.4 + timeSec * 0.4;
+
+            float3 palA = float3(0.5, 0.5, 0.5);
+            float3 palB = float3(0.5, 0.5, 0.5);
+            float3 palC = float3(1.0, 1.0, 1.0);
+            float3 palD = float3(0.263, 0.416, 0.557);
+
+            float3 col = palA + palB * cos(6.28318 * (palC * paletteT + palD));
+
+            dist = sin(dist * 8.0 + timeSec) / 8.0;
+            dist = abs(dist);
+
+            dist = pow(0.01 / max(dist, 0.0001), 1.2);
+
+            finalColor += col * dist;
+        }
+
+        color = finalColor;
+    }
+}

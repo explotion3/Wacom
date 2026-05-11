@@ -41,9 +41,14 @@ namespace Wacom::ContentBuilder
 	{
 		if (UObject* Existing = StaticFindObject(nullptr, Package, *AssetName.ToString()))
 		{
+			// CDO 的 FObjectFinder 在资产不存在时可能留下 rooted 占位对象；
+			// 跳过这类对象的 MarkAsGarbage，直接 Rename 到 Transient。
 			Existing->Rename(nullptr, GetTransientPackage(),
 				REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
-			Existing->MarkAsGarbage();
+			if (!Existing->IsRooted())
+			{
+				Existing->MarkAsGarbage();
+			}
 		}
 		T* NewAsset = NewObject<T>(Package, AssetName, RF_Public | RF_Standalone);
 		return NewAsset;

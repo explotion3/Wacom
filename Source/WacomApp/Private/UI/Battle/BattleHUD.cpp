@@ -168,10 +168,16 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 
 void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
-	// 战斗结束 → 切到 BattleEnd 状态
+	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
 	if (Snap.Phase == EBattlePhase::BattleEnd)
 	{
 		SetUIState(EBattleUIState::BattleEnd);
+
+		if (!bHasBroadcastBattleEnd)
+		{
+			bHasBroadcastBattleEnd = true;
+			OnBattleEndedNative.Broadcast(Snap.Outcome);
+		}
 	}
 
 	// 手动刷新 PileCountView（它们不是 BattleWidget，不走递归）
@@ -189,6 +195,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	// 新 Session 接入时，重置状态机到 Idle。
 	UIState = EBattleUIState::Idle;
 	PendingTargetingCardId.Invalidate();
+	bHasBroadcastBattleEnd = false;
 }
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const

@@ -6,6 +6,8 @@
 #include "InputMappingContext.h"
 
 #include "GameFramework/WacomGameMode.h"
+#include "RunSession.h"
+#include "Characters/CharacterDefinition.h"
 #include "Types/WacomEnums.h"
 
 void AWacomPlayerController::BeginPlay()
@@ -14,15 +16,58 @@ void AWacomPlayerController::BeginPlay()
 
 	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] BeginPlay"));
 
-	// R2 会在这里 PushMappingContext(ExplorationMappingContext)。
-	// R1 不 Push 任何 IMC——保持骨架状态。
+	// 鼠标锁定窗口（第一人称视角），不显示光标。
+	bShowMouseCursor = false;
+	SetInputMode(FInputModeGameOnly{});
+
+	// 延迟到 BeginPlay 才 LoadObject，避免 CDO 阶段资产不存在导致警告/崩溃。
+	if (!ExplorationMappingContext)
+	{
+		ExplorationMappingContext = LoadObject<UInputMappingContext>(nullptr,
+			TEXT("/Game/Wacom/Input/IMC_Exploration.IMC_Exploration"));
+	}
+	if (!BattleMappingContext)
+	{
+		BattleMappingContext = LoadObject<UInputMappingContext>(nullptr,
+			TEXT("/Game/Wacom/Input/IMC_Battle.IMC_Battle"));
+	}
+
+	// 默认进入探索输入。R4 开始战斗时 Pop。
+	if (ExplorationMappingContext)
+	{
+		PushMappingContext(ExplorationMappingContext, /*Priority*/0);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerController] ExplorationMappingContext 未配置，请先运行 WacomCreateInputAssets"));
+	}
+
+	// ---- R5：创建 RunSession ----
+	if (!RunSession)
+	{
+		RunSession = NewObject<URunSession>(this);
+
+		// 角色取自 GameMode::DefaultCharacter。GameMode 已在 BeginPlay 里 LoadObject。
+		UCharacterDefinition* CharDef = nullptr;
+		if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
+		{
+			CharDef = GM->DefaultCharacter;
+		}
+
+		if (!RunSession->Initialize(CharDef))
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomPlayerController] RunSession 初始化失败：DefaultCharacter 为空"));
+		}
+	}
 }
 
-void AWacomPlayerController::RequestEnterBattle(UEnemyDefinition* EnemyDef)
+void AWacomPlayerController::RequestEnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger)
 {
 	if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
 	{
-		GM->EnterBattle(EnemyDef);
+		GM->EnterBattle(EnemyDef, Trigger);
 	}
 	else
 	{

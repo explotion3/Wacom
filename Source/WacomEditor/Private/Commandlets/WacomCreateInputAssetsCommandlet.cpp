@@ -8,6 +8,7 @@
 #include "InputMappingContext.h"
 #include "EnhancedActionKeyMapping.h"
 #include "InputCoreTypes.h"
+#include "InputModifiers.h"
 
 using namespace Wacom::ContentBuilder;
 
@@ -16,10 +17,11 @@ namespace
 	struct FInputActionDef
 	{
 		FName AssetName;
-		FKey DefaultKey;
+		FKey  DefaultKey;
 	};
 
-	UInputAction* CreateIA(const FString& BasePath, FName AssetName)
+	/** 生成一个 Boolean 类型的 IA 资产。 */
+	UInputAction* CreateBoolIA(const FString& BasePath, FName AssetName)
 	{
 		const FString PkgPath = BasePath / AssetName.ToString();
 		UPackage* Pkg = FindOrCreatePackage(PkgPath);
@@ -28,11 +30,40 @@ namespace
 		UInputAction* IA = CreateOrReplaceAsset<UInputAction>(Pkg, AssetName);
 		if (!IA) { return nullptr; }
 
-		// Digital (bool) trigger — default for button presses.
 		IA->ValueType = EInputActionValueType::Boolean;
 
 		SaveAssetPackage(Pkg, IA, PkgPath);
 		return IA;
+	}
+
+	/** 生成一个 Axis2D 类型的 IA 资产（用于 WASD 移动 / 鼠标视角）。 */
+	UInputAction* CreateAxis2DIA(const FString& BasePath, FName AssetName)
+	{
+		const FString PkgPath = BasePath / AssetName.ToString();
+		UPackage* Pkg = FindOrCreatePackage(PkgPath);
+		if (!Pkg) { return nullptr; }
+
+		UInputAction* IA = CreateOrReplaceAsset<UInputAction>(Pkg, AssetName);
+		if (!IA) { return nullptr; }
+
+		IA->ValueType = EInputActionValueType::Axis2D;
+
+		SaveAssetPackage(Pkg, IA, PkgPath);
+		return IA;
+	}
+
+	UInputModifierNegate* MakeNegate(UObject* Outer, bool bX, bool bY, bool bZ)
+	{
+		UInputModifierNegate* Mod = NewObject<UInputModifierNegate>(Outer);
+		Mod->bX = bX; Mod->bY = bY; Mod->bZ = bZ;
+		return Mod;
+	}
+
+	UInputModifierSwizzleAxis* MakeSwizzleYXZ(UObject* Outer)
+	{
+		UInputModifierSwizzleAxis* Mod = NewObject<UInputModifierSwizzleAxis>(Outer);
+		Mod->Order = EInputAxisSwizzle::YXZ;
+		return Mod;
 	}
 }
 
@@ -50,8 +81,9 @@ int32 UWacomCreateInputAssetsCommandlet::Main(const FString& /*Params*/)
 
 	const FString BasePath = TEXT("/Game/Wacom/Input");
 
-	// ---- Define all InputActions ----
-	const TArray<FInputActionDef> ActionDefs = {
+	// ================ Battle IMC ================
+
+	const TArray<FInputActionDef> BattleActionDefs = {
 		{ TEXT("IA_PlayCard1"),  EKeys::One   },
 		{ TEXT("IA_PlayCard2"),  EKeys::Two   },
 		{ TEXT("IA_PlayCard3"),  EKeys::Three },
@@ -65,47 +97,100 @@ int32 UWacomCreateInputAssetsCommandlet::Main(const FString& /*Params*/)
 		{ TEXT("IA_RefreshHUD"), EKeys::P     },
 	};
 
-	// ---- Create InputActions ----
-	TArray<TPair<UInputAction*, FKey>> CreatedActions;
-	CreatedActions.Reserve(ActionDefs.Num());
+	TArray<TPair<UInputAction*, FKey>> BattleActions;
+	BattleActions.Reserve(BattleActionDefs.Num());
 
-	for (const FInputActionDef& Def : ActionDefs)
+	for (const FInputActionDef& Def : BattleActionDefs)
 	{
-		UInputAction* IA = CreateIA(BasePath, Def.AssetName);
+		UInputAction* IA = CreateBoolIA(BasePath, Def.AssetName);
 		if (!IA)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create %s"), *Def.AssetName.ToString());
+			UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create %s"),
+				*Def.AssetName.ToString());
 			return 1;
 		}
-		CreatedActions.Add({ IA, Def.DefaultKey });
-		UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created %s"), *Def.AssetName.ToString());
+		BattleActions.Add({ IA, Def.DefaultKey });
+		UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created %s"),
+			*Def.AssetName.ToString());
 	}
 
-	// ---- Create InputMappingContext ----
-	const FString IMCPkgPath = BasePath / TEXT("IMC_Battle");
-	UPackage* IMCPkg = FindOrCreatePackage(IMCPkgPath);
-	if (!IMCPkg)
+	const FString BattleIMCPkgPath = BasePath / TEXT("IMC_Battle");
+	UPackage* BattleIMCPkg = FindOrCreatePackage(BattleIMCPkgPath);
+	if (!BattleIMCPkg)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IMC package"));
+		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IMC_Battle package"));
 		return 2;
 	}
-
-	UInputMappingContext* IMC = CreateOrReplaceAsset<UInputMappingContext>(IMCPkg, TEXT("IMC_Battle"));
-	if (!IMC)
+	UInputMappingContext* IMC_Battle = CreateOrReplaceAsset<UInputMappingContext>(
+		BattleIMCPkg, TEXT("IMC_Battle"));
+	if (!IMC_Battle)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IMC_Battle"));
 		return 3;
 	}
-
-	// Add mappings: each IA → its default key.
-	for (const auto& Pair : CreatedActions)
+	for (const auto& Pair : BattleActions)
 	{
-		FEnhancedActionKeyMapping& Mapping = IMC->MapKey(Pair.Key, Pair.Value);
-		(void)Mapping;  // No modifiers/triggers needed for simple digital press.
+		IMC_Battle->MapKey(Pair.Key, Pair.Value);
+	}
+	SaveAssetPackage(BattleIMCPkg, IMC_Battle, BattleIMCPkgPath);
+	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IMC_Battle with %d mappings"),
+		BattleActions.Num());
+
+	// ================ Exploration IMC ================
+
+	UInputAction* IA_Move = CreateAxis2DIA(BasePath, TEXT("IA_Move"));
+	UInputAction* IA_Look = CreateAxis2DIA(BasePath, TEXT("IA_Look"));
+	if (!IA_Move || !IA_Look)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IA_Move/IA_Look"));
+		return 4;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IA_Move / IA_Look"));
+
+	const FString ExpIMCPkgPath = BasePath / TEXT("IMC_Exploration");
+	UPackage* ExpIMCPkg = FindOrCreatePackage(ExpIMCPkgPath);
+	if (!ExpIMCPkg)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IMC_Exploration package"));
+		return 5;
+	}
+	UInputMappingContext* IMC_Exploration = CreateOrReplaceAsset<UInputMappingContext>(
+		ExpIMCPkg, TEXT("IMC_Exploration"));
+	if (!IMC_Exploration)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IMC_Exploration"));
+		return 6;
 	}
 
-	SaveAssetPackage(IMCPkg, IMC, IMCPkgPath);
-	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IMC_Battle with %d mappings"), CreatedActions.Num());
+	// ---- IA_Move: WASD -> Axis2D ----
+	// X 轴为右方向 / Y 轴为前方向。
+	// D = X+, A = X-（Negate X）
+	// W = Y+（Swizzle YXZ 把 X 换到 Y）
+	// S = Y-（Swizzle YXZ + Negate X 得到 Y-）
+	{
+		FEnhancedActionKeyMapping& D_Map = IMC_Exploration->MapKey(IA_Move, EKeys::D);
+		(void)D_Map;
+
+		FEnhancedActionKeyMapping& A_Map = IMC_Exploration->MapKey(IA_Move, EKeys::A);
+		A_Map.Modifiers.Add(MakeNegate(IMC_Exploration, /*X*/true, false, false));
+
+		FEnhancedActionKeyMapping& W_Map = IMC_Exploration->MapKey(IA_Move, EKeys::W);
+		W_Map.Modifiers.Add(MakeSwizzleYXZ(IMC_Exploration));
+
+		FEnhancedActionKeyMapping& S_Map = IMC_Exploration->MapKey(IA_Move, EKeys::S);
+		S_Map.Modifiers.Add(MakeNegate(IMC_Exploration, /*X*/true, false, false));
+		S_Map.Modifiers.Add(MakeSwizzleYXZ(IMC_Exploration));
+	}
+
+	// ---- IA_Look: Mouse XY -> Axis2D ----
+	// UE 里 pitch+ 表示低头，所以对 Y 取负让"鼠标上移 = 抬头"。
+	{
+		FEnhancedActionKeyMapping& Look_Map = IMC_Exploration->MapKey(IA_Look, EKeys::Mouse2D);
+		Look_Map.Modifiers.Add(MakeNegate(IMC_Exploration, /*X*/false, /*Y*/true, /*Z*/false));
+	}
+
+	SaveAssetPackage(ExpIMCPkg, IMC_Exploration, ExpIMCPkgPath);
+	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IMC_Exploration"));
 
 	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Done"));
 	return 0;

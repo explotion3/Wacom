@@ -108,11 +108,11 @@ AWacomPlayerCharacter : ACharacter
 
 | 切片 | 内容 | 验收 |
 |---|---|---|
-| R1 | `AWacomGameMode` + `AWacomPlayerController` + `EGameFlowState` 骨架 | PIE 启动后 GameMode 正确 Spawn Pawn，状态为 Exploration |
-| R2 | `AWacomPlayerCharacter`（第一人称移动 + 视角）+ `IMC_Exploration` | PIE 中 WASD 移动 + 鼠标转视角 |
-| R3 | `ABattleTriggerActor`（Overlap + EnemyDef 配置）| 走进范围后 Log 输出"触发战斗" |
-| R4 | `EnterBattle` / `ExitBattle` 状态切换 | Overlap 后禁用移动 + 显示战斗 UI + 战斗可玩；战斗结束后恢复移动 + 敌人消失 |
-| R5 | `URunSession` + `FRunState` 最小骨架 | RunSession 持有玩家 HP 和卡组，战斗参数从 RunState 读取而非硬编码 |
+| R1 ✅ | `AWacomGameMode` + `AWacomPlayerController` + `EGameFlowState` 骨架 | PIE 启动后 GameMode 正确 Spawn Pawn，状态为 Exploration |
+| R2 ✅ | `AWacomPlayerCharacter`（第一人称移动 + 视角）+ `IMC_Exploration` | PIE 中 WASD 移动 + 鼠标转视角 |
+| R3 ✅ | `ABattleTriggerActor`（Overlap + EnemyDef 配置）| 走进范围后 Log 输出"触发战斗" |
+| R4 ✅ | `EnterBattle` / `ExitBattle` 状态切换 | Overlap 后禁用移动 + 显示战斗 UI + 战斗可玩；战斗结束后恢复移动 + 敌人消失 |
+| R5 ✅ | `URunSession` + `FRunState` 最小骨架 | RunSession 持有玩家角色，战斗参数从 RunState 读取而非硬编码 |
 
 ## 8. 文件位置预期
 

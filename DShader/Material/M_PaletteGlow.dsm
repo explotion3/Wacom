@@ -1,0 +1,44 @@
+import "Shared/PaletteGlow.dsh";
+
+Shader(Name="DreamMaterials/M_PaletteGlow")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="PaletteGlow";
+            SortPriority=10;
+            Description="Target resolution. X = width, Y = height. Used to convert UV to screen-like coordinates and preserve aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="PaletteGlow";
+            SortPriority=20;
+            Description="Animation speed multiplier. Higher values make the pattern evolve faster over time.";
+        ];
+
+        ScalarParameter Intensity = 1.0 [
+            Group="PaletteGlow";
+            SortPriority=30;
+            Description="Final brightness multiplier for the whole effect.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        PaletteGlow::Evaluate(uv, Resolution, time, Color);
+
+        Color = Color * Intensity;
+    }
+}

@@ -4,10 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
+#include "Types/WacomEnums.h"
 #include "BattleHUD.generated.h"
 
 class UWacomBattleWidgetBase;
 struct FBattleCommand;
+
+/** 战斗结束时的原生委托。参数为战斗结果。 */
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEndedNative, EBattleOutcome);
 
 /**
  * 战斗 UI 根 Widget。
@@ -90,6 +94,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
 	void CancelTargetSelect();
 
+	/**
+	 * 战斗结束时广播（保证只广播一次）。
+	 * GameMode 绑定这个来触发 ExitBattle。
+	 */
+	FOnBattleEndedNative OnBattleEndedNative;
+
 	// ---- 状态机查询（供子 Widget 做视觉反馈）----
 
 	/** 当前是否正在选目标。UI 可据此高亮可选敌方部位。 */
@@ -162,6 +172,9 @@ private:
 
 	/** TargetSelect 状态下待确认目标的卡实例 ID。 */
 	FGuid PendingTargetingCardId;
+
+	/** 战斗结束回调是否已广播过。保证只广播一次。 */
+	bool bHasBroadcastBattleEnd = false;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);

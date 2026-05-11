@@ -8,6 +8,8 @@
 
 class UEnemyDefinition;
 class UInputMappingContext;
+class ABattleTriggerActor;
+class URunSession;
 
 /**
  * Wacom PlayerController。
@@ -26,9 +28,9 @@ class WACOMAPP_API AWacomPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
-	/** 由 ABattleTriggerActor Overlap 时调用，转发到 GameMode。Trigger 在 R3 加入。 */
+	/** 由 ABattleTriggerActor Overlap 时调用，转发到 GameMode。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
-	void RequestEnterBattle(UEnemyDefinition* EnemyDef);
+	void RequestEnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger = nullptr);
 
 	/** 由战斗 UI 在 BattleEnd 时调用，转发到 GameMode。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
@@ -41,12 +43,18 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputMappingContext> BattleMappingContext;
 
-protected:
-	virtual void BeginPlay() override;
-
-	/** IMC 切换统一入口。R2 开始使用，R1 只是骨架。 */
+	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */
 	void PushMappingContext(UInputMappingContext* IMC, int32 Priority = 0);
 	void PopMappingContext(UInputMappingContext* IMC);
 
-	// R5 会在这里加入：TObjectPtr<URunSession> RunSession。
+	/** 当前 Run 的 Session。BeginPlay 时自动创建并 Initialize。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
+	URunSession* GetRunSession() const { return RunSession; }
+
+protected:
+	virtual void BeginPlay() override;
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<URunSession> RunSession = nullptr;
 };

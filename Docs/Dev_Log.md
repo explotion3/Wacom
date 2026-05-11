@@ -337,3 +337,49 @@ PIE 测试：打开 `L_TestBattle` → 检查 `BattleTestActor` 的字段：
 ⏳ 第二阶段 P4：Enhanced Input 迁移
 ⏳ 第二阶段 P5：UI 动画基础
 ⏳ 第二阶段 P6：主题与样式
+
+---
+
+## Phase 3 R1–R5：战斗外 Run 骨架
+
+Run 骨架五个切片一次性落地。战斗外探索 + 战斗自动切换 + 退出回归探索的闭环跑通。
+
+### R1：GameMode / PlayerController / EGameFlowState 骨架
+- `AWacomGameMode` 管理 `EGameFlowState { Exploration, Battle }`，提供 `EnterBattle` / `ExitBattle` 入口（R1 阶段只做状态切换日志）
+- `AWacomPlayerController`：`RequestEnterBattle` / `RequestExitBattle` 转发，统一 `Push/PopMappingContext` 入口
+
+### R2：第一人称 Pawn + IMC_Exploration
+- `AWacomPlayerCharacter`：`UCameraComponent` + 跟随 Controller 旋转，WASD 通过 `IA_Move`（Axis2D + Negate/Swizzle 修饰符），鼠标通过 `IA_Look`（Axis2D + Y Negate 使"上移 = 抬头"）
+- 扩展 `WacomCreateInputAssetsCommandlet`：新增 `IA_Move` / `IA_Look` / `IMC_Exploration`
+- 默认资产引用用 `LoadObject` 在 `SetupPlayerInputComponent` / `BeginPlay` 解析，取代 `ConstructorHelpers::FObjectFinder`（CDO 阶段首次运行资产不存在会崩溃；命令行重新生成资产时也更友好）
+- `ContentBuilderHelpers::CreateOrReplaceAsset` 对 rooted 占位对象跳过 `MarkAsGarbage`，修复首次 bootstrap assertion
+
+### R3：BattleTriggerActor
+- `ABattleTriggerActor`：`USphereComponent` + `UEnemyDefinition` 配置，Overlap 只接受被 Player 控制的 Pawn，转发到 `AWacomPlayerController::RequestEnterBattle`
+- `bConsumeOnTrigger` + `bTriggered` + `SetGenerateOverlapEvents(false)` 三重防重入
+
+### R4：EnterBattle / ExitBattle 完整切换
+- GameMode 内创建 `UBattleSession` / `UWacomPrimaryGameLayout` / `UBattleHUD`，Push 到 Game Layer
+- IMC 切换：`Pop Exploration` → `Push Battle(prio 1)`；退出时反向
+- `UBattleHUD::OnBattleEndedNative`（新增 FMulticastDelegate）在 `Snapshot.Phase == BattleEnd` 时广播，GameMode 订阅后自动触发 `ExitBattle`
+- 战斗结束：移除 HUD / Session，恢复 `GameOnly` 输入模式，`SetExplorationInputEnabled(true)`，`Trigger->Destroy()`
+- `BattleHUDClass` 默认指向 C++ 类 `UBattleHUD`，避免 WBP 布局缺组件时 HUD 残缺（WBP 有全部 BindWidget 时再在 Details 覆盖）
+
+### R5：URunSession + FRunState 骨架
+- `URunSession`（`UObject`）+ `FRunState`（`USTRUCT`）拆分：Session 是行为入口，State 是数据
+- `FRunState`：`Character` / `BattleSeed` / `DefeatedEnemies` / `bRunActive`
+- PlayerController BeginPlay 创建 RunSession，`Initialize(GameMode->DefaultCharacter)`
+- GameMode::EnterBattle 优先走 `Run->BuildInitParamsForBattle(EnemyDef)`，未就绪时回退到 GameMode 字段
+- GameMode::ExitBattle 调 `Run->OnBattleFinished(Outcome, PendingEnemyDef)`：胜利添加 DefeatedEnemies，失败置 `bRunActive = false`
+- `URunSession` 放在 `WacomRun` 模块；`WacomApp` 已有 `WacomRun` Public 依赖，无需改 Build.cs
+
+### 关键约束 / 踩坑
+
+- `AController::Character` 是 UE 内置字段，局部变量同名会触发 `C4458` 警告转错误——用 `CharDef` 之类的短名
+- CommonUI 需要 `GameViewportClientClassName=/Script/CommonUI.CommonGameViewportClient`（`DefaultEngine.ini [/Script/Engine.Engine]`），否则 `LogUIActionRouter` 报错导致输入路由异常
+- `APawn::SetupPlayerInputComponent` 可能早于 `BeginPlay` 被调用（possession 时），资产 `LoadObject` 要挪到绑定之前同一函数里做
+- Battle HUD 用 C++ 默认布局时可直接铺全部组件；改用 WBP 时必须把全部 `BindWidget` 都放进去，否则 `RebuildWidget` 的默认布局分支被跳过
+
+### 文档同步
+
+- `Phase3_Run_Skeleton_Plan.md` 切片表 R1–R5 标记完成

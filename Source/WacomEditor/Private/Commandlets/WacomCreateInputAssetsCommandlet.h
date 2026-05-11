@@ -7,7 +7,9 @@
 #include "WacomCreateInputAssetsCommandlet.generated.h"
 
 /**
- * 生成 Enhanced Input 资产：11 个 InputAction + 1 个 InputMappingContext。
+ * 生成 Enhanced Input 资产：
+ *   - 战斗：11 个 Bool IA + IMC_Battle（1..7 / W / E / R / P）
+ *   - 探索：IA_Move / IA_Look（Axis2D）+ IMC_Exploration（WASD + Mouse）
  *
  * 用法：
  *   "<UE>/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "<project>/Wacom.uproject" -run=WacomCreateInputAssets -NoSplash -Unattended

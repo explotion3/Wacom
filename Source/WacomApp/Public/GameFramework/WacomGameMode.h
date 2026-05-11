@@ -9,17 +9,24 @@
 #include "WacomGameMode.generated.h"
 
 class UEnemyDefinition;
+class UCharacterDefinition;
+class UBattleSession;
+class UWacomPrimaryGameLayout;
+class UWacomBattleWidgetBase;
+class UBattleHUD;
+class ABattleTriggerActor;
 
 /**
  * Wacom 游戏 GameMode。
  *
- * 职责（R1 只保留骨架，R4 才真正接入战斗切换）：
- *   - 持有当前 EGameFlowState
- *   - 暴露 EnterBattle / ExitBattle 作为状态切换唯一入口
- *   - 未来在 EnterBattle 时创建/激活战斗 UI 和 BattleSession
- *   - 未来在 ExitBattle 时销毁战斗 UI、恢复探索输入、销毁触发器
+ * 职责：
+ *   - 持有当前 EGameFlowState（Exploration / Battle）
+ *   - EnterBattle：创建 BattleSession + PrimaryLayout + BattleHUD；切 IMC；禁用探索输入；记录触发器
+ *   - ExitBattle：销毁 HUD + Session；恢复 IMC；恢复探索输入；Destroy 触发器
+ *   - 订阅 BattleHUD::OnBattleEndedNative，让战斗结束自动触发 ExitBattle
  *
- * DefaultPawnClass / PlayerControllerClass 由 GameMode 配置。
+ * DefaultPawnClass = AWacomPlayerCharacter
+ * PlayerControllerClass = AWacomPlayerController
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API AWacomGameMode : public AGameModeBase
@@ -29,23 +36,44 @@ class WACOMAPP_API AWacomGameMode : public AGameModeBase
 public:
 	AWacomGameMode();
 
-	/** 当前游戏流程状态。 */
+	// ---- 配置（默认通过 LoadObject 填好，蓝图/关卡可覆盖）----
+
+	/** 战斗使用的玩家角色配置。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle")
+	TObjectPtr<UCharacterDefinition> DefaultCharacter;
+
+	/** 战斗随机种子。0 表示使用默认。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle")
+	int32 DefaultRandomSeed = 0;
+
+	/** CommonUI PrimaryLayout WBP。战斗期间加到 Viewport。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
+	TSubclassOf<UWacomPrimaryGameLayout> PrimaryLayoutClass;
+
+	/** 战斗 HUD WBP，Push 到 Game Layer。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
+	TSubclassOf<UWacomBattleWidgetBase> BattleHUDClass;
+
+	// ---- 状态 ----
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|GameFlow")
 	EGameFlowState GetGameFlowState() const { return CurrentState; }
 
-	/**
-	 * 请求进入战斗。
-	 * 由 ABattleTriggerActor 的 Overlap 路由到 PlayerController 再转发到这里。
-	 * R1：只做状态切换和日志，不创建战斗 UI。R4 接入 UI/Session。
-	 * R3 会把 Trigger 参数补回来，用于战斗结束后 Destroy 触发器。
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
-	void EnterBattle(UEnemyDefinition* EnemyDef);
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
+	UBattleSession* GetActiveBattleSession() const { return ActiveSession; }
+
+	// ---- 切换入口 ----
 
 	/**
-	 * 请求退出战斗。
-	 * 战斗 UI 监听到 Phase == BattleEnd 后路由到这里。
-	 * R1：只做状态切换和日志，不销毁 UI / 触发器。R4 接入。
+	 * 进入战斗。由 AWacomPlayerController::RequestEnterBattle 转发。
+	 * 传入的 Trigger 在战斗结束后被 Destroy（可为空）。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
+	void EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger = nullptr);
+
+	/**
+	 * 退出战斗。战斗 UI 检测到 Phase == BattleEnd 时自动广播触发。
+	 * 也可以由外部手动调用（例如玩家认输）。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
 	void ExitBattle(EBattleOutcome Outcome);
@@ -53,11 +81,29 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	/** BattleHUD::OnBattleEndedNative 回调。 */
+	void HandleBattleEnded(EBattleOutcome Outcome);
+
 private:
-	/** 当前流程状态；只有 GameMode 能写入。 */
 	UPROPERTY(VisibleInstanceOnly, Category = "Wacom|GameFlow", Transient)
 	EGameFlowState CurrentState = EGameFlowState::Exploration;
 
-	// R3 会在这里加入：TObjectPtr<ABattleTriggerActor> PendingTrigger，
-	// 用于战斗结束后 Destroy 触发器。
+	UPROPERTY(Transient)
+	TObjectPtr<UBattleSession> ActiveSession = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomPrimaryGameLayout> PrimaryLayout = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UBattleHUD> BattleHUD = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ABattleTriggerActor> PendingTrigger = nullptr;
+
+	/** 本场战斗的敌人定义，ExitBattle 时传给 RunSession::OnBattleFinished。 */
+	UPROPERTY(Transient)
+	TObjectPtr<UEnemyDefinition> PendingEnemyDefForRun = nullptr;
+
+	/** HUD::OnBattleEndedNative 的订阅句柄，ExitBattle 时反注册。 */
+	FDelegateHandle BattleEndedHandle;
 };
