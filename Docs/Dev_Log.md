@@ -383,3 +383,47 @@ Run 骨架五个切片一次性落地。战斗外探索 + 战斗自动切换 + �
 ### 文档同步
 
 - `Phase3_Run_Skeleton_Plan.md` 切片表 R1–R5 标记完成
+
+---
+
+## Phase 3.5 存档骨架 S1–S4
+
+### S1：SaveGame 基础设施
+- `UWacomSaveGame`（USaveGame）磁盘层；`FRunState` 扩展 `DestroyedTriggerIds`（TSet<FName>）/ `PlayerTransform` / `bHasPlayerTransform`
+- `URunSession` 补 `SaveToSlot` / `LoadFromSlot` / `HasSaveInSlot` / `ResetRunState` / `BuildSaveGameFromRunState` / `ApplySaveGameToRunState` / `MarkTriggerDestroyed` / `IsTriggerDestroyed` / `SetPlayerTransform`
+- 资产引用用 `FSoftObjectPath` 存盘，内存层保持 `TObjectPtr`
+- `TSet<FName>` 落盘用 `TArray<FName>` 规避 UPROPERTY(SaveGame) 对容器的历史兼容问题
+- 新测试 `Wacom.Run.Save.Roundtrip` 覆盖字段往返 + 空指针拒绝 + 未来版本拒绝 + 时序
+
+### S2：GameMode 接入
+- `AWacomGameMode::SlotName_Main` / `SlotName_Auto`
+- `BeginPlay` 延后一帧 `BootstrapRunFromSave`（等 PlayerController 创建完 RunSession）
+- Bootstrap 顺序：`Main` → `Auto` → 新开
+- `ExitBattle` 末尾先写 `Auto` 再写 `Main`，防止单次崩溃丢两份
+- `EndPlay` 只在 Exploration 状态写 `Main`；战斗中退出按规则丢弃进度
+
+### S3：场景 Actor + 玩家位置
+- `ABattleTriggerActor::PersistentId`（EditAnywhere FName）；BeginPlay 做 NAME_None warning + 同 id 唯一性检查 + RunSession 查询自销毁
+- `ExitBattle` 胜利时 `Run->MarkTriggerDestroyed(id)` 再 Destroy Actor（非胜利不标记，下次重建触发器可再战）
+- `BootstrapRunFromSave` 读档成功后先**清理已销毁 Trigger**再 teleport 玩家；顺序颠倒会让 `TeleportPhysics` 触发同一场战斗
+- `SaveRunToSlot` 在 Exploration 状态存档前把当前 Pawn Transform 写入 `FRunState`
+
+### S4：版本迁移骨架
+- `UWacomSaveGame::MigrateIfNeeded(SaveGame)` 静态方法，switch + fallthrough 的链式迁移模板
+- `ApplySaveGameToRunState` 把旧版本从"拒绝"改为"走迁移"，新版本仍拒绝
+- Roundtrip 测试补 v0→Current 迁移用例 + 迁移后字段完整性断言
+- 约束：已发布 case 不改只加
+
+### 关键踩坑
+- UE 5.7 的 UBT `GitSourceFileWorkingSet` 对 git 非 ASCII 路径敏感；`git config core.quotepath false` 修好
+- `FAutomationTestBase::TestEqual` 对 `TObjectPtr<T>` 模板推导不明确，`.Get()` 拉出原始指针
+- `AController::Character` UE 字段与局部变量同名会触发 `C4458` 警告转错误
+- `SetupPlayerInputComponent` 可能早于 `BeginPlay` 触发，资产加载要挪到绑定前同函数
+- `TeleportPhysics` 在瞬移路径上会生成 Overlap——读档顺序必须先清 Trigger 再 teleport
+- GameMode + PlayerController 的 BeginPlay 顺序不保证；Bootstrap 用 `SetTimerForNextTick` 延一帧
+- WBP_BattleHUD 有 BindWidget 但设计器里不全时，`RebuildWidget` 默认布局分支被跳过——第一版用 C++ 类 UBattleHUD 避开
+- CommonUI 需要 `GameViewportClientClassName=/Script/CommonUI.CommonGameViewportClient`，否则 `LogUIActionRouter` 路由异常
+
+### 文档同步
+- `Save_System_Plan.md` 切片表与实现对齐
+- `Phase3_Run_Skeleton_Plan.md` 标记 R1–R5 完成（历史切片）

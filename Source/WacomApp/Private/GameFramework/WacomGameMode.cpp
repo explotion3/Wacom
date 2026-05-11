@@ -4,6 +4,7 @@
 
 #include "Blueprint/UserWidget.h"
 #include "CommonActivatableWidget.h"
+#include "EngineUtils.h"
 
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
@@ -13,6 +14,9 @@
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
+
+const FString AWacomGameMode::SlotName_Main = TEXT("Main");
+const FString AWacomGameMode::SlotName_Auto = TEXT("Auto");
 
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
@@ -58,6 +62,141 @@ void AWacomGameMode::BeginPlay()
 		*GetNameSafe(DefaultCharacter),
 		*GetNameSafe(PrimaryLayoutClass.Get()),
 		*GetNameSafe(BattleHUDClass.Get()));
+
+	// 存档引导延后一帧：此时 PlayerController 可能尚未 BeginPlay，
+	// RunSession 还没创建。下一帧所有 actor 都已 BeginPlay 完毕。
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(
+			FTimerDelegate::CreateUObject(this, &AWacomGameMode::BootstrapRunFromSave));
+	}
+}
+
+void AWacomGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 只对正常退出做存档。关卡切换 / 崩溃 / Editor 停止 PIE 都归属"游戏结束"。
+	// 如果当前在战斗中（CurrentState == Battle），按规则丢弃进度：不存档。
+	if (CurrentState == EGameFlowState::Exploration)
+	{
+		// World 可能已进入 TearingDown，PlayerController 已被销毁。
+		// 此时 SaveRunToSlot 会找不到 Run——用 bQuiet=true 避免 Warning 噪音。
+		// 上一次 ExitBattle 的 SaveToSlot 已经写入，此处丢一次无功能损失。
+		SaveRunToSlot(SlotName_Main, /*bQuiet*/true);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Display,
+			TEXT("[WacomGameMode] EndPlay 期间仍在战斗中，按规则丢弃进度，不写存档"));
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
+// ================ 存档引导 ================
+
+void AWacomGameMode::BootstrapRunFromSave()
+{
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
+	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
+	if (!Run)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomGameMode] BootstrapRunFromSave: RunSession 未就位，保持新 Run"));
+		return;
+	}
+
+	bool bLoaded = false;
+	if (Run->LoadFromSlot(SlotName_Main))
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] Bootstrap: 从 Main 读档成功"));
+		bLoaded = true;
+	}
+	else if (Run->LoadFromSlot(SlotName_Auto))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomGameMode] Bootstrap: Main 读档失败，已回退到 Auto"));
+		bLoaded = true;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] Bootstrap: 无有效存档，保持新 Run"));
+	}
+
+	// 读档成功：先清理已销毁的触发器，再传送玩家。
+	// 顺序关键：teleport 用 TeleportPhysics 会触发 Overlap；如果已销毁的 Trigger
+	// 还在场景里，teleport 到原来位置会立刻再次触发同一场战斗。
+	if (bLoaded)
+	{
+		// 1. 销毁存档中已标记为"已销毁"的触发器。
+		// Trigger::BeginPlay 做过一次自销毁检查，但那时 Bootstrap 尚未加载存档，
+		// RunSession 是空的，所以还得在这里补一刀。
+		for (TActorIterator<ABattleTriggerActor> It(GetWorld()); It; ++It)
+		{
+			ABattleTriggerActor* Trigger = *It;
+			if (Trigger
+				&& !Trigger->PersistentId.IsNone()
+				&& Run->IsTriggerDestroyed(Trigger->PersistentId))
+			{
+				UE_LOG(LogTemp, Display,
+					TEXT("[WacomGameMode] Bootstrap: 清理存档中已销毁的触发器 %s (id=%s)"),
+					*Trigger->GetName(), *Trigger->PersistentId.ToString());
+				Trigger->Destroy();
+			}
+		}
+
+		// 2. 传送玩家到存档位置。
+		const FRunState& State = Run->GetRunState();
+		if (State.bHasPlayerTransform)
+		{
+			if (APawn* Pawn = PC ? PC->GetPawn() : nullptr)
+			{
+				Pawn->SetActorLocationAndRotation(
+					State.PlayerTransform.GetLocation(),
+					State.PlayerTransform.Rotator(),
+					/*bSweep*/false,
+					nullptr,
+					ETeleportType::TeleportPhysics);
+
+				// 同时把 Controller 视角对齐玩家朝向，避免瞬移后视角错乱
+				if (PC)
+				{
+					PC->SetControlRotation(State.PlayerTransform.Rotator());
+				}
+
+				UE_LOG(LogTemp, Display,
+					TEXT("[WacomGameMode] Bootstrap: 恢复玩家 Transform 到 %s"),
+					*State.PlayerTransform.GetLocation().ToString());
+			}
+		}
+	}
+}
+
+bool AWacomGameMode::SaveRunToSlot(const FString& SlotName, bool bQuiet) const
+{
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
+	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
+	if (!Run)
+	{
+		if (!bQuiet)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomGameMode] SaveRunToSlot(%s): RunSession 未就位"), *SlotName);
+		}
+		return false;
+	}
+
+	// 存档前：把玩家当前 Transform 记下。
+	// 只在探索状态这么做；战斗中 Pawn 位置不会变，但 Save 不该在战斗中被调用。
+	if (CurrentState == EGameFlowState::Exploration)
+	{
+		if (APawn* Pawn = PC ? PC->GetPawn() : nullptr)
+		{
+			Run->SetPlayerTransform(Pawn->GetActorTransform());
+		}
+	}
+
+	return Run->SaveToSlot(SlotName);
 }
 
 void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger)
@@ -232,9 +371,19 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		}
 	}
 
-	// 3) 销毁触发器
+	// 3) 标记触发器为已销毁（在 Destroy 前读 PersistentId）+ Destroy 本身
 	if (PendingTrigger)
 	{
+		AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
+		URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
+
+		// 只有胜利时才记录"已销毁"。失败 / 未定场景不销毁。
+		if (Outcome == EBattleOutcome::Victory && Run && !PendingTrigger->PersistentId.IsNone())
+		{
+			Run->MarkTriggerDestroyed(PendingTrigger->PersistentId);
+		}
+
+		// 无论胜负都 Destroy 当前帧 Actor；失败场景下存档里没记录，下次启动会重新生成触发器。
 		PendingTrigger->Destroy();
 		PendingTrigger = nullptr;
 	}
@@ -251,4 +400,10 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 
 	// 5) 状态复位
 	CurrentState = EGameFlowState::Exploration;
+
+	// 6) 存档：先写 Auto 备份，再覆盖 Main。
+	// 顺序很重要——如果程序在这两次 Save 之间崩掉，Auto 至少是新的，Main 还是上次的旧档，
+	// 下次启动会先试 Main 失败（或读到旧数据）再回退 Auto。
+	SaveRunToSlot(SlotName_Auto);
+	SaveRunToSlot(SlotName_Main);
 }

@@ -12,15 +12,20 @@ class UEnemyDefinition;
 /**
  * 一次冒险（Run）的持久状态。
  *
- * R5 骨架阶段：只保留最关键字段。后续扩展：
- *   - 当前 HP（跨战斗保留；现在每场战斗从 Character BaseMaxHp 重置）
- *   - 当前卡组（现在战斗内用 Character StarterDeck；未来支持换卡/加卡）
- *   - 金币 / 装备 / 各种 Buff / 事件标记
- *   - 当前地图位置 / 已探索区域
+ * 第一阶段字段：
+ *   - Character / BattleSeed / DefeatedEnemies / bRunActive（R5 骨架）
+ *   - DestroyedTriggerIds / PlayerTransform（S1 存档骨架）
+ *
+ * 后续扩展（未实现）：
+ *   - 跨战斗 HP 传递
+ *   - 当前卡组 / 金币 / 装备 / 各种 Buff / 事件标记
  *
  * 为什么是 USTRUCT（而不是纯 C++ struct）：
  *   - 含有 UObject 指针（Character、DefeatedEnemies），需要反射 GC 跟踪
  *   - 放在 URunSession 的 UPROPERTY 里就能被 UObject 系统管理引用
+ *
+ * 注意：FRunState 是内存数据层，不直接序列化到磁盘。
+ * 磁盘格式见 UWacomSaveGame，两者之间做字段拷贝，参见 Docs/Save_System_Plan.md §3。
  */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunState
@@ -46,4 +51,20 @@ struct WACOMRUN_API FRunState
 	/** 当前 Run 是否仍在进行（玩家未死亡、未主动退出）。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
 	bool bRunActive = true;
+
+	/**
+	 * 已被永久销毁的场景触发器 ID 列表。
+	 * Key 来自 ABattleTriggerActor::PersistentId。
+	 * 关卡加载时用于跳过重新创建 Trigger。
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
+	TSet<FName> DestroyedTriggerIds;
+
+	/** 玩家在探索地图的 Transform。仅当 bHasPlayerTransform == true 时有效。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
+	FTransform PlayerTransform = FTransform::Identity;
+
+	/** PlayerTransform 是否有效；新开 Run 时为 false，玩家探索 / 存档时置 true。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
+	bool bHasPlayerTransform = false;
 };

@@ -8,19 +8,26 @@
 
 class UEnemyDefinition;
 class UInputMappingContext;
+class UInputAction;
 class ABattleTriggerActor;
 class URunSession;
+class UBattleHUD;
 
 /**
  * Wacom PlayerController。
  *
  * 职责：
- *   - 持有 URunSession 引用（R5 接入）。
- *   - 管理 Enhanced Input 的 MappingContext 切换：IMC_Exploration <-> IMC_Battle。
- *   - 把 ABattleTriggerActor 的"进入战斗请求"转发给 GameMode。
- *   - 战斗 UI 的"退出战斗请求"转发给 GameMode（未来由战斗 UI 调用）。
+ *   - 持有 URunSession
+ *   - 管理 Enhanced Input 的 MappingContext 切换（IMC_Exploration <-> IMC_Battle）
+ *   - 绑定战斗相关 IA（1..7 / W / E / R / P）到内部回调，转发到当前 BattleHUD
+ *   - 把 ABattleTriggerActor 的"进入战斗请求"转发给 GameMode
+ *   - 把战斗 UI 的"退出战斗请求"转发给 GameMode
  *
- * R1：只定义类和转发方法，IMC 切换骨架放好但不实际注册任何 IMC。
+ * 为什么由 Controller 绑定战斗 IA：
+ *   - 玩家 Pawn 已绑定探索期 IA（Move/Look）
+ *   - 战斗 IA 和当前 Pawn 无关，而且 HUD 是 Widget 不能绑 IA
+ *   - Controller 持久存在，HUD 可能动态创建销毁，绑在 Controller 最稳
+ *   - 战斗 IMC Pop 后按键无 mapping，IA 不会触发（无需运行时解除绑定）
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API AWacomPlayerController : public APlayerController
@@ -36,12 +43,39 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
 	void RequestExitBattle(uint8 Outcome);
 
-	/** 第一阶段配置：探索 / 战斗 IMC。R2/R4 会 Push/Pop。 */
+	// ---- IMC 资产（LoadObject 填默认，蓝图可覆盖）----
+
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputMappingContext> ExplorationMappingContext;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputMappingContext> BattleMappingContext;
+
+	// ---- 战斗 IA（LoadObject 填默认）----
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard1;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard2;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard3;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard4;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard5;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard6;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_PlayCard7;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_Wait;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_EndTurn;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_Restart;
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_RefreshHUD;
 
 	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */
 	void PushMappingContext(UInputMappingContext* IMC, int32 Priority = 0);
@@ -53,8 +87,28 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
+
+	// IA 回调：路由到当前 BattleHUD
+	void OnPlayCard1();
+	void OnPlayCard2();
+	void OnPlayCard3();
+	void OnPlayCard4();
+	void OnPlayCard5();
+	void OnPlayCard6();
+	void OnPlayCard7();
+	void OnWaitPressed();
+	void OnEndTurnPressed();
+	void OnRestartPressed();
+	void OnRefreshHUDPressed();
 
 private:
+	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
+	UBattleHUD* GetActiveBattleHUD() const;
+
+	/** 点击手牌 index（1-based，与按键对应）。 */
+	void RouteHandIndex(int32 OneBasedIndex);
+
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSession = nullptr;
 };

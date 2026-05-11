@@ -36,6 +36,14 @@ class WACOMAPP_API AWacomGameMode : public AGameModeBase
 public:
 	AWacomGameMode();
 
+	// ---- 存档 Slot 名常量 ----
+
+	/** 主存档 slot。玩家每次正常操作写入这里。 */
+	static const FString SlotName_Main;
+
+	/** 自动备份 slot。和 Main 同时写入，Main 损坏时回退。 */
+	static const FString SlotName_Auto;
+
 	// ---- 配置（默认通过 LoadObject 填好，蓝图/关卡可覆盖）----
 
 	/** 战斗使用的玩家角色配置。 */
@@ -62,6 +70,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	UBattleSession* GetActiveBattleSession() const { return ActiveSession; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
+	UBattleHUD* GetActiveBattleHUD() const { return BattleHUD; }
+
 	// ---- 切换入口 ----
 
 	/**
@@ -80,9 +91,19 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** BattleHUD::OnBattleEndedNative 回调。 */
 	void HandleBattleEnded(EBattleOutcome Outcome);
+
+	/**
+	 * 启动时的存档引导：优先 Main → Auto → 新开 Run。
+	 * 由 BeginPlay 末尾调用，因为此时 PlayerController 的 RunSession 已就位。
+	 */
+	void BootstrapRunFromSave();
+
+	/** 存档到指定 slot，用到 PlayerController 的 RunSession。 */
+	bool SaveRunToSlot(const FString& SlotName, bool bQuiet = false) const;
 
 private:
 	UPROPERTY(VisibleInstanceOnly, Category = "Wacom|GameFlow", Transient)

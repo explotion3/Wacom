@@ -26,6 +26,17 @@ class WACOMAPP_API ABattleTriggerActor : public AActor
 public:
 	ABattleTriggerActor();
 
+	/**
+	 * 持久化 ID。存档层面唯一标识本触发器。
+	 *
+	 * - 关卡级别必须唯一；同 id 重复时 BeginPlay 会报错
+	 * - 置空（NAME_None）视为"不参与存档"，BeginPlay 打 Warning
+	 * - 战斗结束后 RunSession 会把本 id 加入 DestroyedTriggerIds
+	 * - 下次关卡加载时若 id 在 DestroyedTriggerIds 中，本 Actor 立即 Destroy，不触发 Overlap
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Persistence")
+	FName PersistentId;
+
 	/** 本触发器对应的敌人配置。必填。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	TObjectPtr<UEnemyDefinition> EnemyDef = nullptr;
