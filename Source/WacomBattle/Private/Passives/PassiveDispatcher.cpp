@@ -2,6 +2,7 @@
 
 #include "Passives/PassiveDispatcher.h"
 #include "Effects/CardEffectDispatcher.h"
+#include "Effects/ConditionResolver.h"
 
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
@@ -60,6 +61,14 @@ void FPassiveDispatcher::RunAfterPlayed(
 		{
 			continue;
 		}
+
+		// 被动级门控：未设置则永真。
+		// AfterPlayed 没有明确目标，Target 类条件传 Invalid 作为 TargetPartId。
+		if (!FConditionResolver::Evaluate(State, Passive.Condition, Card.InstanceId, /*TargetPartId=*/FGuid()))
+		{
+			continue;
+		}
+
 		for (const FCardEffect& Eff : Passive.Effects)
 		{
 			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
@@ -84,10 +93,15 @@ void FPassiveDispatcher::RunOnCompanionCount(FBattleState& State, FBattleEventBu
 		{
 			if (Passive.Trigger != WacomTags::Passive_Trigger_OnCompanionCount) { continue; }
 			if (Passive.TriggerThreshold <= 0) { continue; }
-			if (State.Player.CompanionPlayedCount >= Passive.TriggerThreshold)
+			if (State.Player.CompanionPlayedCount < Passive.TriggerThreshold) { continue; }
+
+			// 被动级门控。OnCompanionCount 没有明确目标。
+			if (!FConditionResolver::Evaluate(State, Passive.Condition, C.InstanceId, /*TargetPartId=*/FGuid()))
 			{
-				Candidates.Add(C.InstanceId);
+				continue;
 			}
+
+			Candidates.Add(C.InstanceId);
 			break;  // 一张卡有多个 OnCompanionCount 也只计一次
 		}
 	}

@@ -1,8 +1,10 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Effects/CardEffectDispatcher.h"
+#include "Effects/ConditionResolver.h"
 #include "Effects/EffectContext.h"
 #include "Effects/EffectExecutor.h"
+#include "Effects/MagnitudeResolver.h"
 
 #include "Core/BattleState.h"
 #include "Runtime/RuntimeEnemyPart.h"
@@ -118,7 +120,7 @@ void FCardEffectDispatcher::Execute(
 	const FGuid& SelfCardId,
 	FGuid& InOutLastShuffledCardId)
 {
-	const int32 FinalMag = Effect.bMagnitudeFromRuntimeCost ? RuntimeCost : Effect.Magnitude;
+	const int32 FinalMag = FMagnitudeResolver::Compute(State, Effect, RuntimeCost);
 
 	// AllEnemyParts：展开到每个存活部位。
 	if (Effect.Target == WacomTags::Target_AllEnemyParts)
@@ -126,6 +128,12 @@ void FCardEffectDispatcher::Execute(
 		for (FRuntimeEnemyPart& Part : State.Enemy.Parts)
 		{
 			if (Part.bDestroyed) { continue; }
+
+			// 条件按部位逐个评估：不同部位状态可能不同，不能合并。
+			if (!FConditionResolver::Evaluate(State, Effect.Condition, SelfCardId, Part.InstanceId))
+			{
+				continue;
+			}
 
 			FEffectContext Ctx;
 			FillCommonContext(Ctx, State, Events, Effect, FinalMag, SelfCardId, InOutLastShuffledCardId);
@@ -135,6 +143,12 @@ void FCardEffectDispatcher::Execute(
 			FEffectExecutor::Execute(Ctx);
 			InOutLastShuffledCardId = Ctx.LastShuffledCardId;
 		}
+		return;
+	}
+
+	// 单目标路径：一次条件评估，失败则跳过。
+	if (!FConditionResolver::Evaluate(State, Effect.Condition, SelfCardId, SelectedPartId))
+	{
 		return;
 	}
 

@@ -41,10 +41,10 @@ namespace
 	FCardEffect ApplyPoisonFromCost()
 	{
 		FCardEffect E;
-		E.EffectType               = WacomTags::Effect_ApplyStatus_Poison;
-		E.Magnitude                = 0;
-		E.bMagnitudeFromRuntimeCost = true;
-		E.Target                   = WacomTags::Target_SingleEnemyPart;
+		E.EffectType       = WacomTags::Effect_ApplyStatus_Poison;
+		E.Magnitude        = 0;
+		E.MagnitudeSource  = WacomTags::Magnitude_Source_RuntimeCost;
+		E.Target           = WacomTags::Target_SingleEnemyPart;
 		return E;
 	}
 

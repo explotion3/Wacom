@@ -2,6 +2,7 @@
 
 #include "Resolution/InitiativeResolver.h"
 #include "Effects/CardEffectDispatcher.h"
+#include "Effects/MagnitudeResolver.h"
 
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
@@ -19,15 +20,15 @@ namespace
 	/**
 	 * 取一张卡的抵抗比较数值。
 	 * Data_Schema_Draft §4：主效果首个 Effect.Damage 的 Magnitude；无伤害效果为 0。
-	 * RuntimeCost 用于 bMagnitudeFromRuntimeCost 覆写。
+	 * Magnitude 的实际值由 MagnitudeResolver 决定（Literal / RuntimeCost / ...）。
 	 */
-	int32 ComputeCardResistanceValue(const UCardDefinition& Def, int32 RuntimeCost)
+	int32 ComputeCardResistanceValue(const FBattleState& State, const UCardDefinition& Def, int32 RuntimeCost)
 	{
 		for (const FCardEffect& Eff : Def.Effects)
 		{
 			if (Eff.EffectType == WacomTags::Effect_Damage)
 			{
-				return Eff.bMagnitudeFromRuntimeCost ? RuntimeCost : Eff.Magnitude;
+				return FMagnitudeResolver::Compute(State, Eff, RuntimeCost);
 			}
 		}
 		return 0;
@@ -79,7 +80,7 @@ void FInitiativeResolver::ResolveResistance(
 	const TArray<FGuid>& HitPartIds,
 	const FGuid& CardId)
 {
-	const int32 CardResist = ComputeCardResistanceValue(Def, RuntimeCost);
+	const int32 CardResist = ComputeCardResistanceValue(State, Def, RuntimeCost);
 
 	for (const FGuid& PartId : HitPartIds)
 	{

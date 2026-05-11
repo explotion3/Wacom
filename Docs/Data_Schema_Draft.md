@@ -74,6 +74,12 @@ Target.RandomHandCard
 Target.ZoneHandCard
 Target.Adjacent.Right
 Target.LastShuffledCard      最近一次 Shuffle 效果产生的被移动卡（仅在同一批效果链内有效）
+
+Magnitude.Source.Literal     FinalMagnitude = Effect.Magnitude 字段（默认）
+Magnitude.Source.RuntimeCost FinalMagnitude = 本卡当前 RuntimeCost
+
+Condition.Self.InZone        本卡当前在指定区域（ParamTag = HandZone.*）
+Condition.Target.HasStatus   目标部位含指定状态（ParamTag = Status.*）
 ```
 
 第一阶段不实现的 tag（如背包相关、任务相关、夜幕相关）暂不预留。
@@ -149,7 +155,7 @@ Cost 1（烁光蝶）、Cost 2（右手）、Cost 5（暮蛉）中只有 Cost 1 
 
 | 项 | 抵抗值 | 说明 |
 | --- | --- | --- |
-| 卡牌 | 主效果中首个 `Effect.Damage` 的 `Magnitude`；若卡牌不含伤害效果，记为 0 | 用 `RuntimeCost` 调整后的伤害值，即经过目标修正和费用修正的最终数字 |
+| 卡牌 | 主效果中首个 `Effect.Damage` 的 FinalMagnitude（由 `MagnitudeResolver` 计算）；若卡牌不含伤害效果，记为 0 | `MagnitudeSource = Literal` 时为 `Magnitude` 字段；`= RuntimeCost` 时为本次 RuntimeCost |
 | 意图 | 意图上的 `ResistanceValue` 字段（见 `FIntentDefinition`）；攻击类意图填伤害值，非攻击类意图填 0 | 已在 §3 每条意图的"抵抗值"列列出 |
 
 ### 判定
@@ -223,64 +229,206 @@ struct FCardPhysique
 USTRUCT(BlueprintType)
 struct FCardEffect
 {
-    UPROPERTY(EditDefaultsOnly) FGameplayTag EffectType;   // Effect.*
-    UPROPERTY(EditDefaultsOnly) int32        Magnitude = 0;// 伤害值 / 状态层数 / 次数
-    UPROPERTY(EditDefaultsOnly) FGameplayTag Target;       // Target.*
-    UPROPERTY(EditDefaultsOnly) FGameplayTag TargetZone;   // HandZone.*（仅当 Target 涉及区域时使用）
-    UPROPERTY(EditDefaultsOnly) int32        Duration = 0; // 状态回合数
-    UPROPERTY(EditDefaultsOnly) bool         bMagnitudeFromRuntimeCost = false; // 例如朝光暮蝶"施加等于当前 Cost 的中毒"
+    UPROPERTY(EditDefaultsOnly) FGameplayTag     EffectType;       // Effect.*
+    UPROPERTY(EditDefaultsOnly) int32            Magnitude = 0;    // 伤害值 / 状态层数 / 次数（Source = Literal 时使用）
+    UPROPERTY(EditDefaultsOnly) FGameplayTag     Target;           // Target.*
+    UPROPERTY(EditDefaultsOnly) FGameplayTag     TargetZone;       // HandZone.*（仅当 Target 涉及区域时使用）
+    UPROPERTY(EditDefaultsOnly) int32            Duration = 0;     // 状态回合数
+    UPROPERTY(EditDefaultsOnly) FGameplayTag     MagnitudeSource;  // Magnitude.Source.*（见下）
+    UPROPERTY(EditDefaultsOnly) FEffectCondition Condition;        // 执行条件（见 §5.3.1）
+    // Deprecated: bMagnitudeFromRuntimeCost —— 保留仅用于旧 DataAsset 兼容，新数据用 MagnitudeSource
 };
 ```
 
-第一阶段需要实现的 `EffectType`：
+**Magnitude.Source 取值**（决定 FinalMagnitude 的计算方式）：
 
-| EffectType | 含义 | 第一阶段范围 |
-| --- | --- | --- |
-| `Effect.Damage` | 对目标造成伤害 | 必须 |
-| `Effect.ApplyStatus.Poison` | 施加中毒 | 必须（层数，结算先以占位方式在目标回合结束触发一次伤害） |
-| `Effect.ApplyStatus.Slow` | 施加减速 | 必须（占位，仅记录层数，不影响先机数值） |
-| `Effect.ApplyStatus.Freeze` | 施加冻结 | 必须（占位，仅标记部位被冻结，行动时跳过） |
-| `Effect.ApplyStatus.Twilight` | 施加暮气 | 必须（占位，仅记录层数） |
-| `Effect.Shuffle.Random` | 随机腾挪一张手牌至随机区域 | 必须 |
-| `Effect.Shuffle.FromBothToOther` | 把双手区随机一张腾挪到左或右手区 | 必须 |
+| Source Tag | FinalMagnitude = |
+| --- | --- |
+| Invalid / `Magnitude.Source.Literal` | `Magnitude` 字段 |
+| `Magnitude.Source.RuntimeCost` | 本卡当前 RuntimeCost（朝光暮蝶用） |
+| 未来扩展 | 在 `MagnitudeResolver` 注册即可，如 `HandSize` / `DrawPileSize` / `DamageCardsPlayed` |
 
-第一阶段不实现：`Effect.Heal`、费用转移、`突袭`、`夜幕降临` 等。
+### 5.3.1 `FEffectCondition`（效果执行条件）
 
-### 5.4 `FCardZoneHook`（第一阶段占位）
+```cpp
+USTRUCT(BlueprintType)
+struct FEffectCondition
+{
+    UPROPERTY(EditDefaultsOnly) FGameplayTag ConditionType;  // Condition.*，未设置 = 永真
+    UPROPERTY(EditDefaultsOnly) FGameplayTag ParamTag;       // 辅助 tag（Zone / Status / Keyword）
+    UPROPERTY(EditDefaultsOnly) int32        ParamInt = 0;   // 辅助数值（阈值）
+    UPROPERTY(EditDefaultsOnly) bool         bNegate = false;// 结果取反
+};
+```
+
+**Condition 取值**：
+
+| ConditionType | 语义 | ParamTag | ParamInt |
+| --- | --- | --- | --- |
+| Invalid（未设置） | 永真，效果永远执行 | - | - |
+| `Condition.Self.InZone` | 本卡当前在指定区域 | `HandZone.Left/Both/Right` | - |
+| `Condition.Target.HasStatus` | 目标部位含指定状态（层数 > 0） | `Status.*` | - |
+| 未来扩展 | 在 `ConditionResolver` 注册即可，如 `Hand.SizeAtLeast` / `EnemyParts.AliveAtLeast` | | |
+
+`bNegate = true` 把结果取反。例如 "自卡不在左手区" = `InZone(Left) + bNegate=true`。
+
+### 5.3.2 EffectType 字段速查表
+
+每个 EffectType 对 `FCardEffect` 字段的使用方式不同。配卡时对照本表。
+"-" 表示该字段对此 EffectType 无效，填写默认值。
+
+| EffectType | Magnitude 语义 | Target（典型值）| TargetZone | Duration | MagnitudeSource | 备注 |
+| --- | --- | --- | --- | --- | --- | --- |
+| `Effect.Damage` | 伤害值 | `Target.SingleEnemyPart` / `Target.AllEnemyParts` / `Target.Player` | - | - | Literal / RuntimeCost | 部位 HP 归零立即破坏 |
+| `Effect.Heal` | 治疗量 | `Target.Self` → 玩家 / `Target.SingleEnemyPart` | - | - | Literal | 第一阶段未实现 |
+| `Effect.ApplyStatus.Poison` | 层数 | `Target.Player` / `Target.SingleEnemyPart` / `Target.AllEnemyParts` | - | - | Literal / RuntimeCost（朝光暮蝶）| 层数模型，不用 Duration |
+| `Effect.ApplyStatus.Slow` | 层数 | 同上 | - | - | Literal | 层数模型，第一阶段只记录 |
+| `Effect.ApplyStatus.Freeze` | 层数 | `Target.SingleEnemyPart` | - | 回合数（0 = 层数模型）| Literal | 当前按层数消耗实现 |
+| `Effect.ApplyStatus.Twilight` | 层数 | `Target.SingleEnemyPart` | - | - | Literal | 第一阶段只记录 |
+| `Status.Shield`（复用为效果 tag）| 护盾值 | `Target.Player` / `Target.Self`（部位）| - | - | Literal | 直接加到 Shield 字段，不走状态层数 |
+| `Effect.Shuffle.Random` | - | `Target.RandomHandCard` | - | - | - | 从手牌随机选一张（排除本卡）腾挪；写 `LastShuffledCardId` |
+| `Effect.Shuffle.FromBothToOther` | - | `Target.ZoneHandCard` | `HandZone.Both` | - | - | 从双手区随机挑一张腾挪到左/右手区 |
+| `Effect.Shuffle.ToRandomZone` | - | `Target.Self`（本卡）| - | - | - | 把本卡腾挪到随机区域（烁光蝶 AfterPlayed 用）|
+| `Effect.Card.AddCost` | Modifier 增量 | `Target.Self`（本卡）/ `Target.LastShuffledCard` | - | - | Literal | 修改 `RuntimeCostModifier`，下次进手牌生效；无上限 |
+| `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 下限由 `ComputeRuntimeCost` clamp 到 0 |
+
+### 5.3.3 Target 字段速查表
+
+`Target` 决定 `EffectContext::TargetKind` / `TargetInstanceId`。配卡时对照本表选合适的值。
+
+| Target | 解析为 | TargetInstanceId 来源 | 是否需要 TargetZone |
+| --- | --- | --- | --- |
+| `Target.Self` | Player 或本卡（视 EffectType）| 本卡 InstanceId（HandCard 类效果）或 Invalid（Player 类效果）| 否 |
+| `Target.Player` | Player | Invalid | 否 |
+| `Target.SingleEnemyPart` | EnemyPart | 调用方选中的部位（来自 BattleCommand）| 否 |
+| `Target.AllEnemyParts` | EnemyPart（循环展开）| CardEffectDispatcher 自动遍历存活部位 | 否 |
+| `Target.RandomHandCard` | HandCard | HandZoneService 自选（Shuffle 类效果）| 否 |
+| `Target.ZoneHandCard` | HandCard | HandZoneService 按 TargetZone 过滤后自选 | **是**（必须填 `HandZone.*`）|
+| `Target.LastShuffledCard` | HandCard | `EffectContext::LastShuffledCardId`（上一条 Shuffle 效果的产物）| 否 |
+| `Target.Adjacent.Right` | EnemyPart | 第一阶段未实现（右手"相邻右方伙伴代打"）| 否 |
+
+**Target.Self 的 EffectType 消歧**（由 `CardEffectDispatcher::FillTargetFromCardEffect` 处理）：
+- `Effect.Shuffle.ToRandomZone` / `Effect.Card.AddCost` / `Effect.Card.ReduceCost` → 指向本卡（HandCard）
+- 其他（Damage / Heal / ApplyStatus）→ 指向玩家（Player）
+
+### 5.3.4 配卡速查示例
+
+以下是几个常见配法，供新卡对照：
+
+**"对单个敌方部位造成 5 伤害"**
+```yaml
+EffectType: Effect.Damage
+Magnitude: 5
+Target: Target.SingleEnemyPart
+```
+
+**"对目标施加等于本卡 Cost 的中毒"**（朝光暮蝶）
+```yaml
+EffectType: Effect.ApplyStatus.Poison
+Magnitude: 0
+MagnitudeSource: Magnitude.Source.RuntimeCost
+Target: Target.SingleEnemyPart
+```
+
+**"把本卡腾挪到随机区域"**（烁光蝶 AfterPlayed）
+```yaml
+EffectType: Effect.Shuffle.ToRandomZone
+Target: Target.Self
+```
+
+**"从双手区腾挪一张到其他区域"**（赤腹工蚁）
+```yaml
+EffectType: Effect.Shuffle.FromBothToOther
+Target: Target.ZoneHandCard
+TargetZone: HandZone.Both
+```
+
+**"被腾挪卡 -1 Cost，本卡 +1 Cost"**（朝光暮蝶右手区 ZoneHook 组合）
+```yaml
+[0] EffectType: Effect.Shuffle.Random           Target: Target.RandomHandCard
+[1] EffectType: Effect.Card.ReduceCost Mag=1    Target: Target.LastShuffledCard
+[2] EffectType: Effect.Card.AddCost    Mag=1    Target: Target.Self
+```
+
+**"只有目标中毒时才造成额外伤害"**（示例，未来扩展）
+```yaml
+EffectType: Effect.Damage
+Magnitude: 3
+Target: Target.SingleEnemyPart
+Condition:
+  ConditionType: Condition.Target.HasStatus
+  ParamTag: Status.Poison
+```
+
+### 5.3.5 现有 EffectType 的完整清单
+
+| EffectType | 现状 |
+| --- | --- |
+| `Effect.Damage` | 已实现 |
+| `Effect.Heal` | 预留，未实现 |
+| `Effect.ApplyStatus.Poison` | 已实现（P3.1 真正结算伤害）|
+| `Effect.ApplyStatus.Slow` | 占位（仅记录层数）|
+| `Effect.ApplyStatus.Freeze` | 占位（行动时跳过，消耗层数）|
+| `Effect.ApplyStatus.Twilight` | 占位（仅记录层数，触发 OnTwilightTriggered 事件）|
+| `Effect.Shuffle.Random` | 已实现 |
+| `Effect.Shuffle.FromBothToOther` | 已实现 |
+| `Effect.Shuffle.ToRandomZone` | 已实现 |
+| `Effect.Card.AddCost` | 已实现 |
+| `Effect.Card.ReduceCost` | 已实现 |
+| `Status.Shield` | 已实现（作为效果 tag 直接加 Shield 字段）|
+
+第一阶段不实现：费用转移的显式 tag、`突袭`、`夜幕降临` 等。
+
+### 5.4 `FCardZoneHook`
 
 ```cpp
 USTRUCT(BlueprintType)
 struct FCardZoneHook
 {
-    UPROPERTY(EditDefaultsOnly) FGameplayTag Zone;         // HandZone.*
-    UPROPERTY(EditDefaultsOnly) FGameplayTag Trigger;      // e.g. Card.Keyword.Swift 使本次打出获得迅捷
+    UPROPERTY(EditDefaultsOnly) FGameplayTag Zone;         // HandZone.Left / Both / Right
+    UPROPERTY(EditDefaultsOnly) FGameplayTag Trigger;      // ZoneHook.Trigger.*
     UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> ExtraEffects;
 };
 ```
 
-`Trigger` 第一阶段仅支持：
-- `ZoneHook.Trigger.OnPerfectReleaseHit`：完美释放命中时附加处理。
-- `ZoneHook.Trigger.OnPlay`：打出时附加处理。
+**ZoneHook.Trigger 取值**：
 
-### 5.5 `FCardPassive`（第一阶段占位）
+| Trigger | 触发时机 | ExtraEffects 执行? | 典型卡 |
+| --- | --- | --- | --- |
+| `ZoneHook.Trigger.OnPlay` | 本卡打出时（CardPlayed 事件之后、主效果之前）| 是 | 朝光暮蝶右手区（费用转移）|
+| `ZoneHook.Trigger.OnPerfectReleaseHit` | 本卡完美释放命中时 | 否，仅作为"跳过先机推进"标记 | 朝光暮蝶左手区（不推先机）|
 
-第一阶段仅用于表达：
-- 烁光蝶的「打出后腾挪至随机区域」。
-- 赤腹工蚁的「保留」由 `Card.Keyword.Retain` 覆盖，不进 Passive。
-- 拂晓飞蛾的「每打三张伙伴回手」作为后续功能，第一阶段只预留字段。
+**触发顺序**：
+1. `OnPlay` 发生在 `CardPlayed` 事件之后、"记录出牌前先机"之前
+2. `OnPerfectReleaseHit` 的判定紧跟在抵抗判定之后，作为先机推进的 skip 条件
+3. 不同区域的 Hook 不会同时命中（卡只在一个区域）
+
+### 5.5 `FCardPassive`
 
 ```cpp
 USTRUCT(BlueprintType)
 struct FCardPassive
 {
-    UPROPERTY(EditDefaultsOnly) FGameplayTag Trigger;      // Passive.Trigger.*
-    UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> Effects;
-    UPROPERTY(EditDefaultsOnly) int32 TriggerThreshold = 0;
+    UPROPERTY(EditDefaultsOnly) FGameplayTag     Trigger;            // Passive.Trigger.*
+    UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> Effects;          // 触发后执行，走 CardEffectDispatcher
+    UPROPERTY(EditDefaultsOnly) FEffectCondition Condition;          // 触发门控，未设置则永真
+    UPROPERTY(EditDefaultsOnly) int32            TriggerThreshold = 0;// 仅计数类 trigger（OnCompanionCount）使用
 };
 ```
 
-已预留 `Passive.Trigger.AfterPlayed`、`Passive.Trigger.OnCompanionCount`。
-实现顺序：`AfterPlayed` 先做，`OnCompanionCount` 后做。
+**Passive.Trigger 取值**：
+
+| Trigger | 触发时机 | 使用 TriggerThreshold? | 典型卡 |
+| --- | --- | --- | --- |
+| `Passive.Trigger.AfterPlayed` | 本卡打出完成后（卡牌去向之后）| 否 | 烁光蝶（自腾挪） |
+| `Passive.Trigger.OnCompanionCount` | 全局 Companion 计数达阈值 | 是 | 拂晓飞蛾（回手，阈值 3）|
+| `Passive.Trigger.OnTwilightTriggered` | 暮气施加成功时 | 否 | 暮蛉（P3.5 占位）|
+
+**Condition 字段**复用 `FEffectCondition`（§5.3.1）。典型用法：
+- "本卡在双手区时 AfterPlayed 才触发" → `Condition.Self.InZone(HandZone.Both)`
+- 未设置时永真（所有现有被动的默认行为）
+
+**TriggerThreshold** 只用于计数类 trigger（当前只有 OnCompanionCount）。达到阈值后触发并清零计数。其他 trigger 不读此字段，保留 0 即可。
 
 ## 6. 敌人数据 Schema
 
@@ -345,7 +493,7 @@ struct FIntentEffect
 ### 6.4 蛇的 DataAsset 组织
 
 ```text
-Content/Wacom/Data/Enemies/
+Content/Wacom/Enemies/
   Snake/
     DA_Enemy_Snake.uasset               UEnemyDefinition
     DA_Part_Snake_Head.uasset           UEnemyPartDefinition
@@ -367,7 +515,7 @@ struct FRuntimeCardInstance
     TObjectPtr<const UCardDefinition> Def;
     int32                    RuntimeCostModifier = 0; // 本场战斗累计修正
     FGameplayTagContainer    TemporaryKeywords;       // 本场战斗内临时关键字
-    // 本卡当前所在容器由上层 BattleState 维护
+    ECardLocation            Location = ECardLocation::Unknown; // 当前所在容器
 };
 
 USTRUCT()
@@ -400,8 +548,7 @@ Rarity: Intrinsic
 Keywords: [Hand, Weapon, Tool]
 TargetMode: None
 Effects: []                              # 第一阶段不给左手配主效果
-PerfectReleaseEffects:
-  - EffectType: ZoneHook.Effect.DodgeNextAttackIntent  # 占位，第一阶段不实现
+PerfectReleaseEffects: []                # 第一阶段留空
 ZoneHooks:
   - Zone: HandZone.Left
     Trigger: ZoneHook.Trigger.OnPlay
@@ -445,7 +592,7 @@ Effects:
     Target: Target.RandomHandCard
   - EffectType: Effect.ApplyStatus.Poison
     Magnitude: 0
-    bMagnitudeFromRuntimeCost: true      # 层数 = 当前 RuntimeCost
+    MagnitudeSource: Magnitude.Source.RuntimeCost  # 层数 = 当前 RuntimeCost
     Target: Target.SingleEnemyPart
     Duration: 0                          # 中毒为层数模型，不使用 Duration
 ZoneHooks:
@@ -581,14 +728,14 @@ struct FStatusInstance
 
 | 状态 | 归属 | 行为 |
 | --- | --- | --- |
-| `Status.Poison` | EnemyPart | 触发时机：玩家每打出一张牌后 + 敌方部位每行动一次后，对拥有中毒的一方造成等于层数的伤害。穿透护盾，直接扣生命值。层数不因结算减少 |
+| `Status.Poison` | EnemyPart 或 Player | 触发时机：玩家每打出一张牌后 + 敌方部位每行动一次后，对拥有中毒的一方造成等于层数的伤害。穿透护盾，直接扣生命值。层数不因结算减少 |
 | `Status.Slow` | EnemyPart | 仅记录层数，不影响数值。先占位不生效 |
 | `Status.Freeze` | EnemyPart | 持有时该部位下一次行动跳过并刷新意图。作用等同晕厥，第一阶段可共用跳过分支 |
 | `Status.Twilight` | EnemyPart | 仅记录层数，不触发任何效果。为暮蛉的被动留钩子 |
 | `Status.Stunned` | EnemyPart | 由抵抗判定施加，规则见 `Battle_Rules.md §10` |
 | `Status.Shield` | EnemyPart 或 Player | `Shield` 字段已在运行时实例中单独存储，不使用层数模型 |
 
-第一阶段状态公式、中毒具体触发时机细节（按卡 vs 按行动批次）、减速/暮气的数值效果 **不做**。
+第一阶段状态公式：中毒已正式化（见 `Battle_Rules.md §15`）；减速/暮气的数值效果仍未决。
 
 ## 11. Cost 合法性与先机一致性
 
@@ -608,13 +755,13 @@ struct FStatusInstance
 
 这些条目在 Resolver / Executor 写到对应位置前必须确认，但不妨碍 S0~S5 开工。
 
-- 朝光暮蝶左手区效果的最终文本（"获得迅捷" vs "本次不推进先机"）。
+- ~~朝光暮蝶左手区效果的最终文本~~ → 已确定为"本次不推进先机"（P3.3 实现）。
 - 右手的"相邻右方伙伴代打"语义。
-- 拂晓飞蛾回手时手牌已满的落地位置。
+- ~~拂晓飞蛾回手时手牌已满的落地位置~~ → 临时决定：强行加入（`Phase2_Temporary_Decisions.md`）。
 - 暮气触发点的正式时机。
-- 中毒触发到底是"每张打出后" vs "每次行动批次后"。
+- ~~中毒触发到底是"每张打出后" vs "每次行动批次后"~~ → 已正式化为"每张打出后 + 每次行动后"（`Battle_Rules.md §15`）。
 - `Effect.Shuffle.ToRandomZone` 在手牌锚点缺失时的回退规则。
-- 费用转移的运行时表达：是落到 `RuntimeCostModifier` 还是走独立 `CostLedger`。
+- ~~费用转移的运行时表达~~ → 已确定落到 `RuntimeCostModifier`（P3.3 实现）。
 
 ## 14. 第一阶段暂不处理
 

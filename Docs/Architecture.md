@@ -4,7 +4,7 @@
 
 ## 1. 当前项目状态
 
-当前项目是 UE 5.7 项目，采用 6 模块结构。
+当前项目是 UE 5.7 项目，采用 7 模块结构。
 
 现有模块：
 
@@ -89,8 +89,9 @@ Source/
   WacomBattle/
     Public/ { Session/, Commands/, Snapshots/, Events/, Runtime/ }
     Private/ {
-      Session/, Core/, Commands/, Cards/, Deck/, Hand/,
-      Enemy/, Status/, Events/, Snapshots/
+      Session/, Core/, Commands/, Deck/, Hand/,
+      Enemy/, Status/, Events/, Snapshots/,
+      Effects/, Resolution/, Passives/
     }
   WacomRun/
     Public/, Private/
@@ -122,7 +123,14 @@ Source/
 - `BattleResolver`：统一结算命令。
 - `BattleSnapshot`：给 UI 读取的只读状态。
 - `BattleEvent`：给 UI、日志和测试读取的事件流。
-- `CardEffectExecutor`：卡牌效果执行入口。
+- `CardEffectDispatcher`：卡牌效果分发（Target 映射 + 条件评估 + Magnitude 计算 + 执行）。
+- `EffectExecutor`：效果注册制执行器（按 EffectTag 分派到 Handler）。
+- `MagnitudeResolver`：Magnitude 计算注册制（Literal / RuntimeCost / 扩展）。
+- `ConditionResolver`：效果/被动条件评估注册制。
+- `InitiativeResolver`：先机命中 / 抵抗 / 完美释放。
+- `ZoneHookResolver`：ZoneHook 消费（OnPlay / OnPerfectReleaseHit）。
+- `PassiveDispatcher`：被动触发调度（AfterPlayed / OnCompanionCount）。
+- `PoisonResolver`：中毒结算。
 - `HandZoneService`：手牌区域和腾挪规则。
 - `EnemyPartActionResolver`：敌方部位行动子流程。
 
@@ -274,7 +282,7 @@ UI 不可以：
 - 抵抗先于完美释放。
 - HP 归零部位立刻失去意图和先机，不参与后续先机扣减。
 - 左右手牌打出后不进入任何区域。
-- 连击牌打出后回到原位置。
+- 连击牌打出后留在原位置。
 - 结束阶段调用敌方部位行动子流程。
 
 ## 13. 插件与系统选择

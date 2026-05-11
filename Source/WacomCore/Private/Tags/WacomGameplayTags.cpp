@@ -36,6 +36,14 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_AddCost,              "Effect.Card.AddCost");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_ReduceCost,           "Effect.Card.ReduceCost");
 
+	// -------- Magnitude.Source --------
+	UE_DEFINE_GAMEPLAY_TAG(Magnitude_Source_Literal,         "Magnitude.Source.Literal");
+	UE_DEFINE_GAMEPLAY_TAG(Magnitude_Source_RuntimeCost,     "Magnitude.Source.RuntimeCost");
+
+	// -------- Condition --------
+	UE_DEFINE_GAMEPLAY_TAG(Condition_Self_InZone,            "Condition.Self.InZone");
+	UE_DEFINE_GAMEPLAY_TAG(Condition_Target_HasStatus,       "Condition.Target.HasStatus");
+
 	// -------- Status --------
 	UE_DEFINE_GAMEPLAY_TAG(Status_Poison,   "Status.Poison");
 	UE_DEFINE_GAMEPLAY_TAG(Status_Slow,     "Status.Slow");

@@ -48,6 +48,17 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Card_AddCost);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Card_ReduceCost);
 
+	// -------- Magnitude.Source --------
+	// FCardEffect::MagnitudeSource 决定 FinalMagnitude 怎么算。
+	// 未设置（invalid tag）时默认 = Literal，即直接用 FCardEffect::Magnitude 字段。
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Magnitude_Source_Literal);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Magnitude_Source_RuntimeCost);
+
+	// -------- Condition --------
+	// FEffectCondition::ConditionType 的取值。Invalid 视为永真。
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Condition_Self_InZone);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Condition_Target_HasStatus);
+
 	// -------- Status --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Poison);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Status_Slow);
