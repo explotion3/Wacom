@@ -17,7 +17,7 @@ namespace
 	/**
 	 * 把 ZoneHook.Zone tag 转成 EHandZone。不支持的返回 EHandZone::None。
 	 */
-	EHandZone ZoneTagToEnum(const FGameplayTag& Tag)
+	EHandZone HookZoneTagToEnum(const FGameplayTag& Tag)
 	{
 		if (Tag == WacomTags::HandZone_Left)  { return EHandZone::Left;  }
 		if (Tag == WacomTags::HandZone_Both)  { return EHandZone::Both;  }
@@ -43,7 +43,7 @@ void FZoneHookResolver::RunOnPlayHooks(
 	for (const FCardZoneHook& Hook : Def.ZoneHooks)
 	{
 		if (Hook.Trigger != WacomTags::ZoneHook_Trigger_OnPlay) { continue; }
-		if (ZoneTagToEnum(Hook.Zone) != CurrentZone)            { continue; }
+		if (HookZoneTagToEnum(Hook.Zone) != CurrentZone)            { continue; }
 
 		for (const FCardEffect& Eff : Hook.ExtraEffects)
 		{
@@ -67,8 +67,10 @@ bool FZoneHookResolver::ShouldSkipInitiativePush(
 	for (const FCardZoneHook& Hook : Def.ZoneHooks)
 	{
 		if (Hook.Trigger != WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit) { continue; }
-		if (ZoneTagToEnum(Hook.Zone) != CurrentZone)                         { continue; }
+		if (HookZoneTagToEnum(Hook.Zone) != CurrentZone)                         { continue; }
 		return true;
 	}
 	return false;
 }
+
+

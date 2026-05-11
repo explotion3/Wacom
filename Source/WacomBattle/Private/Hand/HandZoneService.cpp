@@ -121,18 +121,17 @@ namespace
 		}
 		// 现在 SlotLeft != SlotRight，均属于 [0, N]。
 
-		// 构建最终数组：把 Pre 拷贝出来，按 slot 顺序从大到小插入（避免索引错位）。
+		// 保证左手牌在右手牌左边：较小的 slot 给 LeftHand，较大的给 RightHand。
+		const int32 LeftSlotFinal  = FMath::Min(SlotLeft, SlotRight);
+		const int32 RightSlotFinal = FMath::Max(SlotLeft, SlotRight);
+
+		// 构建最终数组：从大到小插入（避免索引错位）。
 		TArray<FGuid> Final;
 		Final.Reserve(N + 2);
 		Final = Pre;
 
-		const int32 FirstSlot  = FMath::Max(SlotLeft, SlotRight);
-		const int32 SecondSlot = FMath::Min(SlotLeft, SlotRight);
-		const FGuid FirstId    = (FirstSlot  == SlotLeft) ? State.Cards.LeftHandInstanceId : State.Cards.RightHandInstanceId;
-		const FGuid SecondId   = (SecondSlot == SlotLeft) ? State.Cards.LeftHandInstanceId : State.Cards.RightHandInstanceId;
-
-		Final.Insert(FirstId, FirstSlot);
-		Final.Insert(SecondId, SecondSlot);
+		Final.Insert(State.Cards.RightHandInstanceId, RightSlotFinal);
+		Final.Insert(State.Cards.LeftHandInstanceId, LeftSlotFinal);
 
 		return Final;
 	}
@@ -281,8 +280,10 @@ EHandZone FHandZoneService::GetZoneOf(const FBattleState& State, const FGuid& Ca
 	}
 
 	// 只有一张锚点：双手区不存在。
+	// 锚点左边的卡属于 Left 区，锚点右边的卡不属于任何区域（Zone = None）。
+	// Hand_Zone_Rules §6：只有一张锚点时，只有锚点左侧有区域归属。
 	const int32 AnchorIdx = bLeftIn ? LeftIdx : RightIdx;
-	return (Idx < AnchorIdx) ? EHandZone::Left : EHandZone::Right;
+	return (Idx < AnchorIdx) ? EHandZone::Left : EHandZone::None;
 }
 
 bool FHandZoneService::IsHandAnchor(const FBattleState& State, const FGuid& CardInstanceId)
@@ -401,8 +402,9 @@ void FHandZoneService::GetAvailableZones(const FBattleState& State, TArray<EHand
 	}
 	if (bLeft || bRight)
 	{
+		// 只有一张锚点：只有锚点左侧是 Left 区，右侧无区域。
+		// 腾挪可用区域 = 只有 Left。
 		OutZones.Add(EHandZone::Left);
-		OutZones.Add(EHandZone::Right);
 		return;
 	}
 	// 都不在：空集合
@@ -438,12 +440,13 @@ void FHandZoneService::InsertIntoZoneAtRandom(FBattleState& State, const FGuid& 
 	}
 	else if (bLeftIn || bRightIn)
 	{
+		// 只有一张锚点：只有 Left 区存在（锚点左侧）。
+		// Right 不是合法区域，如果调用方传了 Right 直接 return。
 		const int32 AnchorIdx = bLeftIn ? LeftIdx : RightIdx;
 		switch (Zone)
 		{
-		case EHandZone::Left:  Begin = 0;            End = AnchorIdx;        break;
-		case EHandZone::Right: Begin = AnchorIdx + 1;End = State.Cards.Hand.Num(); break;
-		default: return;
+		case EHandZone::Left:  Begin = 0;  End = AnchorIdx;  break;
+		default: return;  // Right / Both 不存在
 		}
 	}
 	else
