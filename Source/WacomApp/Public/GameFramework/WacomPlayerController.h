@@ -77,6 +77,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_RefreshHUD;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_OpenMenu;
+
 	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */
 	void PushMappingContext(UInputMappingContext* IMC, int32 Priority = 0);
 	void PopMappingContext(UInputMappingContext* IMC);
@@ -101,6 +104,7 @@ protected:
 	void OnEndTurnPressed();
 	void OnRestartPressed();
 	void OnRefreshHUDPressed();
+	void OnOpenMenuPressed();
 
 private:
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */

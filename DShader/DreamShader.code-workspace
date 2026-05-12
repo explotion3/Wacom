@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"name": "DreamShader Source",
+			"path": "."
+		}
+	],
+	"settings":
+	{
+		"files.associations":
+		{
+			"*.dsm": "dreamshaderlang",
+			"*.dsh": "dreamshaderlang"
+		}
+	}
+}

@@ -15,6 +15,11 @@
 #include "UI/Battle/BattleHUD.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
+#include "UI/Foundation/WacomPrimaryGameLayout.h"
+#include "UI/Foundation/WacomUITags.h"
+#include "UI/Menus/WacomPauseMenuScreen.h"
+#include "Widgets/CommonActivatableWidgetContainer.h"
 
 namespace
 {
@@ -34,11 +39,7 @@ void AWacomPlayerController::BeginPlay()
 
 	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] BeginPlay"));
 
-	// 鼠标锁定窗口（第一人称视角），不显示光标。
-	bShowMouseCursor = false;
-	SetInputMode(FInputModeGameOnly{});
-
-	// ---- IMC 懒加载 ----
+	// ---- IMC 懒加载（两个场景都可能用到）----
 	if (!ExplorationMappingContext)
 	{
 		ExplorationMappingContext = LoadObject<UInputMappingContext>(nullptr,
@@ -50,33 +51,38 @@ void AWacomPlayerController::BeginPlay()
 			TEXT("/Game/Wacom/Input/IMC_Battle.IMC_Battle"));
 	}
 
-	// ---- 默认进入探索输入 ----
-	if (ExplorationMappingContext)
+	// 探索 GameMode（AWacomGameMode）才走：锁鼠标 + Push IMC_Exploration + 建 RunSession
+	// 菜单 GameMode（AWacomMenuGameMode）由它自己的 BeginPlay 管鼠标 / 输入模式
+	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	if (GM)
 	{
-		PushMappingContext(ExplorationMappingContext, /*Priority*/0);
+		bShowMouseCursor = false;
+		SetInputMode(FInputModeGameOnly{});
+
+		if (ExplorationMappingContext)
+		{
+			PushMappingContext(ExplorationMappingContext, /*Priority*/0);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomPlayerController] ExplorationMappingContext 未配置，请先运行 WacomCreateInputAssets"));
+		}
+
+		if (!RunSession)
+		{
+			RunSession = NewObject<URunSession>(this);
+			if (!RunSession->Initialize(GM->DefaultCharacter))
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[WacomPlayerController] RunSession 初始化失败：DefaultCharacter 为空"));
+			}
+		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[WacomPlayerController] ExplorationMappingContext 未配置，请先运行 WacomCreateInputAssets"));
-	}
-
-	// ---- R5：创建 RunSession ----
-	if (!RunSession)
-	{
-		RunSession = NewObject<URunSession>(this);
-
-		UCharacterDefinition* CharDef = nullptr;
-		if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
-		{
-			CharDef = GM->DefaultCharacter;
-		}
-
-		if (!RunSession->Initialize(CharDef))
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[WacomPlayerController] RunSession 初始化失败：DefaultCharacter 为空"));
-		}
+		UE_LOG(LogTemp, Display,
+			TEXT("[WacomPlayerController] 非探索 GameMode，跳过 IMC_Exploration / RunSession 初始化"));
 	}
 }
 
@@ -104,6 +110,7 @@ void AWacomPlayerController::SetupInputComponent()
 	LazyLoadIA(IA_EndTurn,    TEXT("/Game/Wacom/Input/IA_EndTurn.IA_EndTurn"));
 	LazyLoadIA(IA_Restart,    TEXT("/Game/Wacom/Input/IA_Restart.IA_Restart"));
 	LazyLoadIA(IA_RefreshHUD, TEXT("/Game/Wacom/Input/IA_RefreshHUD.IA_RefreshHUD"));
+	LazyLoadIA(IA_OpenMenu,   TEXT("/Game/Wacom/Input/IA_OpenMenu.IA_OpenMenu"));
 
 	if (IA_PlayCard1) { EIC->BindAction(IA_PlayCard1, ETriggerEvent::Started, this, &AWacomPlayerController::OnPlayCard1); }
 	if (IA_PlayCard2) { EIC->BindAction(IA_PlayCard2, ETriggerEvent::Started, this, &AWacomPlayerController::OnPlayCard2); }
@@ -117,6 +124,7 @@ void AWacomPlayerController::SetupInputComponent()
 	if (IA_EndTurn)    { EIC->BindAction(IA_EndTurn,    ETriggerEvent::Started, this, &AWacomPlayerController::OnEndTurnPressed); }
 	if (IA_Restart)    { EIC->BindAction(IA_Restart,    ETriggerEvent::Started, this, &AWacomPlayerController::OnRestartPressed); }
 	if (IA_RefreshHUD) { EIC->BindAction(IA_RefreshHUD, ETriggerEvent::Started, this, &AWacomPlayerController::OnRefreshHUDPressed); }
+	if (IA_OpenMenu)   { EIC->BindAction(IA_OpenMenu,   ETriggerEvent::Started, this, &AWacomPlayerController::OnOpenMenuPressed); }
 }
 
 // ================ 战斗状态切换转发 ================
@@ -227,4 +235,37 @@ void AWacomPlayerController::OnRefreshHUDPressed()
 			HUD->RefreshFromSnapshot(S->BuildSnapshot());
 		}
 	}
+}
+
+void AWacomPlayerController::OnOpenMenuPressed()
+{
+	UGameInstance* GI = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+	if (!UIManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OnOpenMenuPressed: UIManager 未就位"));
+		return;
+	}
+
+	// 如果 GameMenu 层已有内容（暂停菜单已打开），ESC = 关闭（Resume）
+	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
+	if (Layout)
+	{
+		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
+			WacomUITags::UI_Layer_GameMenu.GetTag());
+		if (MenuStack && MenuStack->GetActiveWidget())
+		{
+			// 已有菜单打开 → Pop 它（等同于 Resume）
+			MenuStack->GetActiveWidget()->DeactivateWidget();
+			UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 关闭暂停菜单"));
+			return;
+		}
+	}
+
+	// 没有菜单打开 → Push 暂停菜单
+	UIManager->PushContentToLayer(
+		WacomUITags::UI_Layer_GameMenu.GetTag(),
+		UWacomPauseMenuScreen::StaticClass());
+	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 打开暂停菜单"));
 }

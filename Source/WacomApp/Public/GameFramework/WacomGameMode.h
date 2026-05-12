@@ -11,7 +11,6 @@
 class UEnemyDefinition;
 class UCharacterDefinition;
 class UBattleSession;
-class UWacomPrimaryGameLayout;
 class UWacomBattleWidgetBase;
 class UBattleHUD;
 class ABattleTriggerActor;
@@ -21,9 +20,11 @@ class ABattleTriggerActor;
  *
  * 职责：
  *   - 持有当前 EGameFlowState（Exploration / Battle）
- *   - EnterBattle：创建 BattleSession + PrimaryLayout + BattleHUD；切 IMC；禁用探索输入；记录触发器
- *   - ExitBattle：销毁 HUD + Session；恢复 IMC；恢复探索输入；Destroy 触发器
+ *   - EnterBattle：创建 BattleSession；通过 UIManager Push BattleHUD；切 IMC；禁用探索输入；记录触发器
+ *   - ExitBattle：Pop BattleHUD；清 Session；恢复 IMC；恢复探索输入；Destroy 触发器
  *   - 订阅 BattleHUD::OnBattleEndedNative，让战斗结束自动触发 ExitBattle
+ *
+ * UI 生命周期不由 GameMode 管——PrimaryLayout 由 UWacomGameUIManagerSubsystem 跨关卡持有。
  *
  * DefaultPawnClass = AWacomPlayerCharacter
  * PlayerControllerClass = AWacomPlayerController
@@ -54,11 +55,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle")
 	int32 DefaultRandomSeed = 0;
 
-	/** CommonUI PrimaryLayout WBP。战斗期间加到 Viewport。 */
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
-	TSubclassOf<UWacomPrimaryGameLayout> PrimaryLayoutClass;
-
-	/** 战斗 HUD WBP，Push 到 Game Layer。 */
+	/**
+	 * 战斗 HUD WBP，Push 到 Game Layer。
+	 * PrimaryLayout 类由 UWacomGameUIManagerSubsystem 管理，不在这里配置。
+	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomBattleWidgetBase> BattleHUDClass;
 
@@ -111,9 +111,6 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UBattleSession> ActiveSession = nullptr;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UWacomPrimaryGameLayout> PrimaryLayout = nullptr;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UBattleHUD> BattleHUD = nullptr;

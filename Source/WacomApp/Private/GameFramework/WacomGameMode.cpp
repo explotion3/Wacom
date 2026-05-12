@@ -15,13 +15,14 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 
-const FString AWacomGameMode::SlotName_Main = TEXT("Main");
-const FString AWacomGameMode::SlotName_Auto = TEXT("Auto");
-
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
-#include "UI/Foundation/WacomPrimaryGameLayout.h"
+#include "UI/Foundation/WacomExplorationHUD.h"
+#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
+
+const FString AWacomGameMode::SlotName_Main = TEXT("Main");
+const FString AWacomGameMode::SlotName_Auto = TEXT("Auto");
 
 AWacomGameMode::AWacomGameMode()
 {
@@ -35,20 +36,12 @@ void AWacomGameMode::BeginPlay()
 
 	CurrentState = EGameFlowState::Exploration;
 
-	// 默认 CharacterDefinition / PrimaryLayout / HUD 类的懒加载。
+	// 默认 CharacterDefinition / HUD 类的懒加载。
 	// 避免 CDO ConstructorHelpers 阶段资产可能还没就绪。
 	if (!DefaultCharacter)
 	{
 		DefaultCharacter = LoadObject<UCharacterDefinition>(nullptr,
 			TEXT("/Game/Wacom/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
-	}
-	if (!PrimaryLayoutClass)
-	{
-		if (UClass* Loaded = LoadObject<UClass>(nullptr,
-			TEXT("/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C")))
-		{
-			PrimaryLayoutClass = Loaded;
-		}
 	}
 	if (!BattleHUDClass)
 	{
@@ -58,10 +51,44 @@ void AWacomGameMode::BeginPlay()
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[WacomGameMode] BeginPlay, State=Exploration, DefaultCharacter=%s, PrimaryLayout=%s, BattleHUD=%s"),
+		TEXT("[WacomGameMode] BeginPlay, State=Exploration, DefaultCharacter=%s, BattleHUD=%s"),
 		*GetNameSafe(DefaultCharacter),
-		*GetNameSafe(PrimaryLayoutClass.Get()),
 		*GetNameSafe(BattleHUDClass.Get()));
+
+	// 进入探索关卡时的 UI 重置：
+	// 1. EnsurePrimaryLayout（若跨关卡而来，stale 检测会重建）
+	// 2. ClearAllLayers 清上一关残留
+	// 3. Push ExplorationHUD 作为 Game 层底层 widget——声明 Game input config，
+	//    让 CommonUIActionRouter 离开上一关的 Menu config 状态。这条尤其关键：
+	//    否则从主菜单切过来时 Router 会卡在 MainMenuScreen 的 Menu config，WASD 失效。
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UWacomGameUIManagerSubsystem* UIManager = GI->GetSubsystem<UWacomGameUIManagerSubsystem>())
+		{
+			if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+			{
+				UIManager->EnsurePrimaryLayout(PC);
+			}
+			UIManager->ClearAllLayers();
+			UIManager->PushContentToLayer(
+				WacomUITags::UI_Layer_Game.GetTag(),
+				UWacomExplorationHUD::StaticClass());
+		}
+	}
+
+	// 从主菜单 OpenLevel 过来时，PC 是复用的（PIE 里 OpenLevel 不销毁 PC），
+	// PC::BeginPlay 不会再次被调用，IMC_Exploration 从未被 Push。
+	// 这里主动确保 IMC_Exploration 就位。
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+	{
+		if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
+		{
+			if (WacomPC->ExplorationMappingContext)
+			{
+				WacomPC->PushMappingContext(WacomPC->ExplorationMappingContext, /*Priority*/0);
+			}
+		}
+	}
 
 	// 存档引导延后一帧：此时 PlayerController 可能尚未 BeginPlay，
 	// RunSession 还没创建。下一帧所有 actor 都已 BeginPlay 完毕。
@@ -216,9 +243,9 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] EnterBattle: DefaultCharacter 未配置"));
 		return;
 	}
-	if (!PrimaryLayoutClass || !BattleHUDClass)
+	if (!BattleHUDClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] EnterBattle: PrimaryLayoutClass/BattleHUDClass 未配置"));
+		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] EnterBattle: BattleHUDClass 未配置"));
 		return;
 	}
 
@@ -231,6 +258,16 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
 	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
+
+	UGameInstance* GI = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+	if (!UIManager)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] EnterBattle: 找不到 UWacomGameUIManagerSubsystem"));
+		return;
+	}
 
 	// 1) 创建 BattleSession + Initialize
 	ActiveSession = NewObject<UBattleSession>(this);
@@ -255,24 +292,16 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 		}
 	}
 
-	// 2) 创建 PrimaryLayout + Push BattleHUD 到 Game Layer
-	PrimaryLayout = CreateWidget<UWacomPrimaryGameLayout>(PC, PrimaryLayoutClass);
-	if (!PrimaryLayout)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] 创建 PrimaryLayout 失败"));
-		ActiveSession = nullptr;
-		return;
-	}
-	PrimaryLayout->AddToViewport();
+	// 2) 确保 PrimaryLayout 就位（跨场景长存，Subsystem 负责生命周期）
+	UIManager->EnsurePrimaryLayout(PC);
 
-	UCommonActivatableWidget* Pushed = PrimaryLayout->PushWidgetToLayer(
+	// 3) Push BattleHUD 到 Game Layer
+	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
 		WacomUITags::UI_Layer_Game.GetTag(), BattleHUDClass);
 	BattleHUD = Cast<UBattleHUD>(Pushed);
 	if (!BattleHUD)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] Push BattleHUD 失败"));
-		PrimaryLayout->RemoveFromParent();
-		PrimaryLayout = nullptr;
 		ActiveSession = nullptr;
 		return;
 	}
@@ -283,7 +312,7 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	BattleEndedHandle = BattleHUD->OnBattleEndedNative.AddUObject(
 		this, &AWacomGameMode::HandleBattleEnded);
 
-	// 3) 禁用探索输入 + 切 IMC
+	// 4) 禁用探索输入 + 切 IMC
 	if (WacomPC)
 	{
 		if (WacomPC->ExplorationMappingContext)
@@ -301,7 +330,7 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 		Pawn->SetExplorationInputEnabled(false);
 	}
 
-	// 4) 记录状态
+	// 5) 记录状态
 	CurrentState        = EGameFlowState::Battle;
 	PendingTrigger      = Trigger;
 	PendingEnemyDefForRun = EnemyDef;
@@ -332,19 +361,22 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 
-	// 1) 反订阅 HUD 委托 + 销毁 UI
+	UGameInstance* GI = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+
+	// 1) 反订阅 HUD 委托 + Pop HUD
 	if (BattleHUD && BattleEndedHandle.IsValid())
 	{
 		BattleHUD->OnBattleEndedNative.Remove(BattleEndedHandle);
 	}
 	BattleEndedHandle.Reset();
 
-	if (PrimaryLayout)
+	if (UIManager && BattleHUD)
 	{
-		PrimaryLayout->RemoveFromParent();
+		UIManager->PopContentFromLayer(BattleHUD);
 	}
 	BattleHUD     = nullptr;
-	PrimaryLayout = nullptr;
 	ActiveSession = nullptr;
 
 	// 2) 恢复探索输入 + 切 IMC

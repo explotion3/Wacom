@@ -189,7 +189,25 @@ int32 UWacomCreateInputAssetsCommandlet::Main(const FString& /*Params*/)
 		Look_Map.Modifiers.Add(MakeNegate(IMC_Exploration, /*X*/false, /*Y*/true, /*Z*/false));
 	}
 
+	// ---- IA_OpenMenu: ESC -> Bool ----
+	UInputAction* IA_OpenMenu = CreateBoolIA(BasePath, TEXT("IA_OpenMenu"));
+	if (!IA_OpenMenu)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IA_OpenMenu"));
+		return 7;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IA_OpenMenu"));
+
+	// 加到 IMC_Exploration
+	IMC_Exploration->MapKey(IA_OpenMenu, EKeys::Escape);
+
+	// 也加到 IMC_Battle（战斗中也能 ESC 暂停）
+	IMC_Battle->MapKey(IA_OpenMenu, EKeys::Escape);
+
 	SaveAssetPackage(ExpIMCPkg, IMC_Exploration, ExpIMCPkgPath);
+	// 重新保存 IMC_Battle（刚加了 ESC 映射）
+	SaveAssetPackage(BattleIMCPkg, IMC_Battle, BattleIMCPkgPath);
+
 	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IMC_Exploration"));
 
 	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Done"));

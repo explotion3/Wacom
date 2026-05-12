@@ -427,3 +427,99 @@ Run 骨架五个切片一次性落地。战斗外探索 + 战斗自动切换 + �
 ### 文档同步
 - `Save_System_Plan.md` 切片表与实现对齐
 - `Phase3_Run_Skeleton_Plan.md` 标记 R1–R5 完成（历史切片）
+
+---
+
+## M1–M2：UI 基底 + 主菜单
+
+### M1：Subsystem + PrimaryLayout 搬家
+- `UWacomGameInstance`（空壳）+ `UWacomGameUIManagerSubsystem`（GameInstance Subsystem）
+- PrimaryLayout 生命周期从 GameMode 迁到 Subsystem：EnsurePrimaryLayout / TearDown / Push / Pop / ClearLayer / ClearAllLayers
+- GameMode 不再 CreateWidget / AddToViewport，改走 Subsystem 接口
+- `DefaultEngine.ini` 加 `GameInstanceClass=/Script/WacomApp.WacomGameInstance`
+- ClearLayer 实现：快照 WidgetList → 逐个 DeactivateWidget + RemoveWidget → ClearWidgets 兜底
+- TearDownPrimaryLayout：先 ClearAllLayers（让 CommonUI Router 释放 UIInputConfig），再 RemoveFromParent
+- EnsurePrimaryLayout 加 stale 检测：若 PrimaryLayout 的 OwningPlayer 不是当前 PC，TearDown 重建
+
+### M2：菜单基类 + 主菜单 + L_MainMenu
+- `UWacomMenuWidgetBase`：菜单血统基类，`SetIsFocusable(true)`，`GetDesiredInputConfig` 返回 `Menu + NoCapture`
+- `UWacomMainMenuScreen`：C++ 默认布局（标题 + 三按钮），按钮回调委托给 MenuGameMode
+- `AWacomMenuGameMode`：菜单关 GameMode，DefaultPawn=nullptr，BeginPlay Push MainMenu 到 GameMenu 层
+  - `RequestStartNewGame`：清存档 → TearDown UI → OpenLevel(L_Exploration)
+  - `RequestContinueGame`：TearDown UI → OpenLevel(L_Exploration)
+- `UWacomExplorationHUD`：探索关 Game 层常驻占位 Widget，声明 `FUIInputConfig(Game, CapturePermanently)`
+  - 让 CommonUI Router 在进入探索关卡时切回 Game 输入模式
+  - 未来放小地图 / 任务提示 / 探索 HUD 元素
+- `AWacomGameMode::BeginPlay`：Push ExplorationHUD + 主动 Push IMC_Exploration（幂等，防 PIE 复用 PC 时 IMC 丢失）
+- `L_MainMenu` 关卡手动创建，WorldSettings 配 `AWacomMenuGameMode`
+- `DefaultEngine.ini`：`GameDefaultMap` / `EditorStartupMap` 指向 `L_MainMenu`
+
+### 关键踩坑
+
+**PIE 里 OpenLevel 后输入失效（Standalone / 打包正常）：**
+- 根因：PIE 模式下 `OpenLevel` 不销毁 `PlayerController`（跟着 LocalPlayer 走），PC 的 `BeginPlay` 不再调用，IMC_Exploration 从未被 Push
+- 同时 PIE 的 Slate 焦点在 OpenLevel 后被编辑器主窗口抢走，PIE 视口收不到键盘事件
+- 这是 UE5 PIE + CommonUI + OpenLevel 的已知交互问题，Standalone Game / 打包后完全正常
+- 解决方案：`AWacomGameMode::BeginPlay` 主动 Push IMC_Exploration（幂等无害）；日常测试主菜单流程用 Standalone Game
+
+**CommonUI UIActionRouter 跨关卡残留 UIInputConfig：**
+- Router 是 LocalPlayer Subsystem，跨关卡存活
+- 旧 Widget 如果没正常 Deactivate，Router 的 leaf-most config 会卡在 Menu 模式
+- 解决方案：TearDown 时先 DeactivateWidget + RemoveWidget 每个 Widget；新关卡 Push ExplorationHUD 强制覆盖 Router config
+
+**Widget 按钮 Click 回调里不应直接 OpenLevel：**
+- Click 在 Slate 派发栈里执行，同帧 OpenLevel 会销毁 World，Widget 生命周期不稳定
+- 解决方案：Widget 只发请求给 GameMode，由 GameMode 控制切关卡
+
+**UWidget::IsFocusable() 在 UE5.7 不存在：**
+- 改用 `SetIsFocusable(true)` 在构造函数里设置
+
+**UWidget::Slot 成员名冲突：**
+- Widget 派生类的函数里局部变量不能叫 `Slot`，会触发 C4458
+
+**NativeOnInitialized 早于 RebuildWidget：**
+- 按钮绑定（OnClicked.AddDynamic）必须放在 NativeConstruct，不能放 NativeOnInitialized
+
+### 测试约定
+
+- 主菜单 → 探索完整流程：用 **Standalone Game** 测试
+- 探索 / 战斗 / 存档：直接 PIE Play L_Exploration（跳过主菜单）
+- 自动化测试：30 个全绿（不涉及 UI / 关卡切换）
+
+---
+
+## M3–M4：暂停菜单 + 确认对话框 + 焦点收尾
+
+### M3：暂停菜单 + ConfirmDialog + ESC 路由
+- `UWacomPauseMenuScreen`：Resume / Save / Quit to Menu 三按钮
+- `UWacomConfirmDialog`：通用确认框，静态工厂 `Show(WorldContext, Title, Message, OnConfirm, OnCancel)`，Push 到 Modal 层
+- `IA_OpenMenu`（ESC 键）加到 `IMC_Exploration` 和 `IMC_Battle` 两个 IMC
+- `AWacomPlayerController::OnOpenMenuPressed`：GameMenu 层有 Widget → ESC = Pop（Resume）；无 Widget → Push PauseMenu
+- MainMenu 的 New Game（有存档时）/ Quit Game 改走 ConfirmDialog
+- PauseMenu 的 Quit to Menu 改走 ConfirmDialog
+- PIE 设置：`StopPIEOnESC=False`（编辑器偏好设置取消"按 ESC 停止 PIE"）
+
+### M4：焦点自动聚焦
+- `UWacomMenuWidgetBase::NativeOnActivated`：延迟一帧后遍历 WidgetTree 找第一个 enabled 的 UButton，调 `SetKeyboardFocus`
+- 延迟一帧的原因：CommonUI Router 在 Push 后需要一帧完成 leaf-most 切换；同帧 SetFocus 会被下层 Widget 抢回
+- 键盘 Enter/Space 可直接确认聚焦按钮，方向键/Tab 可在按钮间切换
+- Modal（ConfirmDialog）打开时焦点正确落在 Confirm 按钮，不会跑到下层 PauseMenu
+
+### 踩坑
+- CommonUI 的 leaf-most 切换是异步的（下一帧才生效），同帧 SetKeyboardFocus 会被旧 leaf-most 抢回
+- PIE 默认 ESC 退出 PIE，需要在编辑器偏好设置里关闭
+- Standalone Game 看日志：启动参数加 `-log` 或看 `Saved/Logs/Wacom.log`
+
+### 文件清单
+
+新增：
+- `WacomApp/Public/UI/Menus/WacomPauseMenuScreen.h` + `.cpp`
+- `WacomApp/Public/UI/Menus/WacomConfirmDialog.h` + `.cpp`
+- `Content/Wacom/Input/IA_OpenMenu.uasset`
+
+修改：
+- `WacomCreateInputAssetsCommandlet.cpp`：加 IA_OpenMenu + ESC 映射到两个 IMC
+- `WacomPlayerController.h/.cpp`：加 IA_OpenMenu 字段 + OnOpenMenuPressed
+- `WacomMainMenuScreen.cpp`：New Game / Quit 改走 ConfirmDialog
+- `WacomPauseMenuScreen.cpp`：Quit to Menu 改走 ConfirmDialog
+- `WacomMenuWidgetBase.h/.cpp`：焦点延迟一帧 + FocusFirstButton 提取为独立方法
