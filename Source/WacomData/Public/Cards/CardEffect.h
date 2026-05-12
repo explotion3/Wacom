@@ -8,6 +8,38 @@
 #include "CardEffect.generated.h"
 
 /**
+ * Magnitude 修正操作类型。
+ */
+UENUM(BlueprintType)
+enum class EMagnitudeModOp : uint8
+{
+	Add      UMETA(DisplayName = "Add"),
+	Multiply UMETA(DisplayName = "Multiply"),
+};
+
+/**
+ * 条件 Magnitude 修正。满足条件时对 FinalMagnitude 做加/乘修正。
+ *
+ * 典型用法：
+ * - "在左手区时伤害 ×2" → Condition=InZone(Left), Op=Multiply, Value=2
+ * - "目标有中毒时额外 +3" → Condition=HasStatus(Poison), Op=Add, Value=3
+ */
+USTRUCT(BlueprintType)
+struct WACOMDATA_API FMagnitudeModifier
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect")
+	FEffectCondition Condition;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect")
+	EMagnitudeModOp Op = EMagnitudeModOp::Add;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect")
+	int32 Value = 0;
+};
+
+/**
  * 卡牌效果条目。对齐 Data_Schema_Draft §5.3。
  *
  * 所有卡牌效果用 EffectType + Magnitude + Target + 辅助字段描述。
@@ -63,6 +95,13 @@ struct WACOMDATA_API FCardEffect
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect")
 	FEffectCondition Condition;
+
+	/**
+	 * 条件 Magnitude 修正列表。满足条件时对 FinalMagnitude 做加/乘修正。
+	 * 空列表 = 不修正。多条按顺序依次应用。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect")
+	TArray<FMagnitudeModifier> MagnitudeModifiers;
 
 	/**
 	 * @deprecated 已被 MagnitudeSource 替代。保留用于兼容旧 DataAsset 反序列化。

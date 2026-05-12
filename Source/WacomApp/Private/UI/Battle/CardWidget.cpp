@@ -2,6 +2,8 @@
 
 #include "UI/Battle/CardWidget.h"
 
+#define LOCTEXT_NAMESPACE "WacomCard"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/Border.h"
@@ -132,7 +134,7 @@ void UCardWidget::ApplyCardSnapshot(const FHandCardSnapshot& InSnap)
 	if (CostText)
 	{
 		CostText->SetText(FText::Format(
-			FText::FromString(TEXT("Cost {0}")), FFormatOrderedArguments{ FFormatArgumentValue(InSnap.RuntimeCost) }));
+			LOCTEXT("CostFmt", "费用 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(InSnap.RuntimeCost) }));
 	}
 
 	if (ZoneText)
@@ -184,3 +186,6 @@ void UCardWidget::HandleRootButtonClicked()
 {
 	OnCardClicked.Broadcast(CachedSnap.InstanceId);
 }
+
+#undef LOCTEXT_NAMESPACE
+

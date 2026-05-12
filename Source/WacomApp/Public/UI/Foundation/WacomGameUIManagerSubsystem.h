@@ -80,7 +80,13 @@ public:
 	void TearDownPrimaryLayout();
 
 protected:
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+
+private:
+	void HandleWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+
+	FDelegateHandle WorldCleanupHandle;
 
 private:
 	/** 默认的 PrimaryLayout WBP 路径；EnsurePrimaryLayout 时懒加载。 */

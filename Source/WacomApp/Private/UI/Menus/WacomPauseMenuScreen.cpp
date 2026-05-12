@@ -2,6 +2,8 @@
 
 #include "UI/Menus/WacomPauseMenuScreen.h"
 
+#define LOCTEXT_NAMESPACE "WacomPauseMenu"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
@@ -57,7 +59,7 @@ TSharedRef<SWidget> UWacomPauseMenuScreen::RebuildWidget()
 		}
 
 		UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Title"));
-		Title->SetText(FText::FromString(TEXT("Paused")));
+		Title->SetText(LOCTEXT("Title", "暂停"));
 		Title->SetJustification(ETextJustify::Center);
 		FSlateFontInfo Font = Title->GetFont();
 		Font.Size = 36;
@@ -68,9 +70,9 @@ TSharedRef<SWidget> UWacomPauseMenuScreen::RebuildWidget()
 			TitleSlot->SetHorizontalAlignment(HAlign_Center);
 		}
 
-		if (!ResumeButton)     { ResumeButton     = MakePauseButton(WidgetTree, TEXT("ResumeButton"),     FText::FromString(TEXT("Resume")),          VBox); }
-		if (!SaveButton)       { SaveButton       = MakePauseButton(WidgetTree, TEXT("SaveButton"),       FText::FromString(TEXT("Save")),            VBox); }
-		if (!QuitToMenuButton) { QuitToMenuButton = MakePauseButton(WidgetTree, TEXT("QuitToMenuButton"), FText::FromString(TEXT("Quit to Menu")),    VBox); }
+		if (!ResumeButton)     { ResumeButton     = MakePauseButton(WidgetTree, TEXT("ResumeButton"),     LOCTEXT("Resume", "继续游戏"),     VBox); }
+		if (!SaveButton)       { SaveButton       = MakePauseButton(WidgetTree, TEXT("SaveButton"),       LOCTEXT("Save", "保存"),           VBox); }
+		if (!QuitToMenuButton) { QuitToMenuButton = MakePauseButton(WidgetTree, TEXT("QuitToMenuButton"), LOCTEXT("QuitToMenu", "回到主菜单"), VBox); }
 	}
 	return Super::RebuildWidget();
 }
@@ -110,8 +112,8 @@ void UWacomPauseMenuScreen::HandleQuitToMenuClicked()
 {
 	UWacomConfirmDialog::Show(
 		this,
-		FText::FromString(TEXT("Quit to Main Menu")),
-		FText::FromString(TEXT("Unsaved progress will be lost. Return to main menu?")),
+		LOCTEXT("QuitToMenuTitle", "回到主菜单"),
+		LOCTEXT("QuitToMenuMsg", "未保存的进度将丢失。确定返回主菜单？"),
 		[this]()
 		{
 			UE_LOG(LogTemp, Display, TEXT("[PauseMenu] Quit to Main Menu confirmed"));
@@ -126,3 +128,5 @@ void UWacomPauseMenuScreen::HandleQuitToMenuClicked()
 			UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/Wacom/Maps/L_MainMenu.L_MainMenu")));
 		});
 }
+
+#undef LOCTEXT_NAMESPACE

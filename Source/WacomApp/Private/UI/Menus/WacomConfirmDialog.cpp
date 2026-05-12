@@ -2,6 +2,8 @@
 
 #include "UI/Menus/WacomConfirmDialog.h"
 
+#define LOCTEXT_NAMESPACE "WacomConfirmDialog"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
@@ -93,7 +95,7 @@ TSharedRef<SWidget> UWacomConfirmDialog::RebuildWidget()
 
 		// 标题
 		TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TitleText"));
-		TitleText->SetText(FText::FromString(TEXT("Confirm")));
+		TitleText->SetText(LOCTEXT("DefaultTitle", "确认"));
 		TitleText->SetJustification(ETextJustify::Center);
 		FSlateFontInfo TitleFont = TitleText->GetFont();
 		TitleFont.Size = 24;
@@ -106,7 +108,7 @@ TSharedRef<SWidget> UWacomConfirmDialog::RebuildWidget()
 
 		// 正文
 		MessageText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MessageText"));
-		MessageText->SetText(FText::FromString(TEXT("Are you sure?")));
+		MessageText->SetText(LOCTEXT("DefaultMsg", "确定吗？"));
 		MessageText->SetJustification(ETextJustify::Center);
 		MessageText->SetAutoWrapText(true);
 		if (UVerticalBoxSlot* MsgSlot = VBox->AddChildToVerticalBox(MessageText))
@@ -126,7 +128,7 @@ TSharedRef<SWidget> UWacomConfirmDialog::RebuildWidget()
 		ConfirmButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("ConfirmButton"));
 		{
 			UTextBlock* BtnText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-			BtnText->SetText(FText::FromString(TEXT("Confirm")));
+			BtnText->SetText(LOCTEXT("ConfirmBtn", "确认"));
 			BtnText->SetJustification(ETextJustify::Center);
 			ConfirmButton->AddChild(BtnText);
 		}
@@ -139,7 +141,7 @@ TSharedRef<SWidget> UWacomConfirmDialog::RebuildWidget()
 		CancelButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CancelButton"));
 		{
 			UTextBlock* BtnText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-			BtnText->SetText(FText::FromString(TEXT("Cancel")));
+			BtnText->SetText(LOCTEXT("CancelBtn", "取消"));
 			BtnText->SetJustification(ETextJustify::Center);
 			CancelButton->AddChild(BtnText);
 		}
@@ -176,3 +178,5 @@ void UWacomConfirmDialog::HandleCancelClicked()
 	DeactivateWidget();
 	if (Cb) { Cb(); }
 }
+
+#undef LOCTEXT_NAMESPACE

@@ -38,4 +38,17 @@ namespace WacomEffects
 	// ---- Card Cost 修正 ----
 	bool HandleCardAddCost(FEffectContext& Ctx);
 	bool HandleCardReduceCost(FEffectContext& Ctx);
+
+	// ---- Draw / Discard / Exhaust ----
+	bool HandleDraw(FEffectContext& Ctx);
+	bool HandleDiscard(FEffectContext& Ctx);
+	bool HandleExhaustSelf(FEffectContext& Ctx);
+
+	// ---- Heal ----
+	bool HandleHeal(FEffectContext& Ctx);
+
+	// ---- GainKeyword / RemoveStatus / ModifyInitiative ----
+	bool HandleGainKeyword(FEffectContext& Ctx);
+	bool HandleRemoveStatus(FEffectContext& Ctx);
+	bool HandleModifyInitiative(FEffectContext& Ctx);
 }

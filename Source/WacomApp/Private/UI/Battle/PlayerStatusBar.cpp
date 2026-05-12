@@ -1,6 +1,8 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "UI/Battle/PlayerStatusBar.h"
+
+#define LOCTEXT_NAMESPACE "WacomPlayerStatus"
 #include "UI/Common/WacomProgressBar.h"
 
 #include "Components/TextBlock.h"
@@ -32,13 +34,13 @@ TSharedRef<SWidget> UPlayerStatusBar::RebuildWidget()
 
 		// Shield
 		ShieldText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ShieldText"));
-		ShieldText->SetText(FText::FromString(TEXT("Shield 0")));
+		ShieldText->SetText(LOCTEXT("ShieldDefault", "护盾 0"));
 		ShieldText->SetColorAndOpacity(FSlateColor(FLinearColor(0.7f, 0.9f, 1.0f)));
 		Root->AddChildToVerticalBox(ShieldText);
 
 		// SAN（占位）
 		SanText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("SanText"));
-		SanText->SetText(FText::FromString(TEXT("SAN --")));
+		SanText->SetText(LOCTEXT("SanDefault", "SAN --"));
 		Root->AddChildToVerticalBox(SanText);
 	}
 	return Super::RebuildWidget();
@@ -61,12 +63,15 @@ void UPlayerStatusBar::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		{
 			ShieldText->SetVisibility(ESlateVisibility::HitTestInvisible);
 			ShieldText->SetText(FText::Format(
-				FText::FromString(TEXT("Shield {0}")), FFormatOrderedArguments{ FFormatArgumentValue(Snap.Player.Shield) }));
+				LOCTEXT("ShieldFmt", "护盾 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(Snap.Player.Shield) }));
 		}
 	}
 
 	if (SanText)
 	{
-		SanText->SetText(FText::FromString(TEXT("SAN --")));
+		SanText->SetText(LOCTEXT("SanDefault", "SAN --"));
 	}
 }
+
+#undef LOCTEXT_NAMESPACE
+

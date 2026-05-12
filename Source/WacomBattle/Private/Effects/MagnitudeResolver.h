@@ -32,5 +32,5 @@ public:
 	 * @param Effect        效果条目
 	 * @param RuntimeCost   本次打牌的最终 Cost
 	 */
-	static int32 Compute(const FBattleState& State, const FCardEffect& Effect, int32 RuntimeCost);
+	static int32 Compute(const FBattleState& State, const FCardEffect& Effect, int32 RuntimeCost, const FGuid& TargetPartId = FGuid());
 };

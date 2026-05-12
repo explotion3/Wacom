@@ -120,7 +120,25 @@ void FCardEffectDispatcher::Execute(
 	const FGuid& SelfCardId,
 	FGuid& InOutLastShuffledCardId)
 {
-	const int32 FinalMag = FMagnitudeResolver::Compute(State, Effect, RuntimeCost);
+	int32 FinalMag = FMagnitudeResolver::Compute(State, Effect, RuntimeCost, SelectedPartId);
+
+	// 应用 MagnitudeModifiers（条件加伤）
+	for (const FMagnitudeModifier& Mod : Effect.MagnitudeModifiers)
+	{
+		if (!FConditionResolver::Evaluate(State, Mod.Condition, SelfCardId, SelectedPartId))
+		{
+			continue;
+		}
+		switch (Mod.Op)
+		{
+		case EMagnitudeModOp::Add:
+			FinalMag += Mod.Value;
+			break;
+		case EMagnitudeModOp::Multiply:
+			FinalMag *= Mod.Value;
+			break;
+		}
+	}
 
 	// AllEnemyParts：展开到每个存活部位。
 	if (Effect.Target == WacomTags::Target_AllEnemyParts)

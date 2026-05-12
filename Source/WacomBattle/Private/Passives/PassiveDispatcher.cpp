@@ -124,3 +124,85 @@ void FPassiveDispatcher::RunOnCompanionCount(FBattleState& State, FBattleEventBu
 		State.Player.CompanionPlayedCount = 0;
 	}
 }
+
+
+// ================ OnTurnStart / OnTurnEnd / OnDraw / OnDiscard ================
+
+void FPassiveDispatcher::RunOnTurnStart(FBattleState& State, FBattleEventBus& Events)
+{
+	// 遍历所有卡（不限位置），触发拥有 OnTurnStart 被动的卡。
+	for (const FRuntimeCardInstance& C : State.Cards.AllCards)
+	{
+		if (!C.Definition) { continue; }
+		for (const FCardPassive& Passive : C.Definition->Passives)
+		{
+			if (Passive.Trigger != WacomTags::Passive_Trigger_OnTurnStart) { continue; }
+			if (!FConditionResolver::Evaluate(State, Passive.Condition, C.InstanceId, FGuid())) { continue; }
+
+			FGuid LocalLastShuffled;
+			for (const FCardEffect& Eff : Passive.Effects)
+			{
+				FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
+					FGuid(), C.InstanceId, LocalLastShuffled);
+			}
+		}
+	}
+}
+
+void FPassiveDispatcher::RunOnTurnEnd(FBattleState& State, FBattleEventBus& Events)
+{
+	for (const FRuntimeCardInstance& C : State.Cards.AllCards)
+	{
+		if (!C.Definition) { continue; }
+		for (const FCardPassive& Passive : C.Definition->Passives)
+		{
+			if (Passive.Trigger != WacomTags::Passive_Trigger_OnTurnEnd) { continue; }
+			if (!FConditionResolver::Evaluate(State, Passive.Condition, C.InstanceId, FGuid())) { continue; }
+
+			FGuid LocalLastShuffled;
+			for (const FCardEffect& Eff : Passive.Effects)
+			{
+				FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
+					FGuid(), C.InstanceId, LocalLastShuffled);
+			}
+		}
+	}
+}
+
+void FPassiveDispatcher::RunOnDraw(FBattleState& State, FBattleEventBus& Events, const FGuid& DrawnCardId)
+{
+	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, DrawnCardId);
+	if (!Card || !Card->Definition) { return; }
+
+	for (const FCardPassive& Passive : Card->Definition->Passives)
+	{
+		if (Passive.Trigger != WacomTags::Passive_Trigger_OnDraw) { continue; }
+		if (!FConditionResolver::Evaluate(State, Passive.Condition, DrawnCardId, FGuid())) { continue; }
+
+		FGuid LocalLastShuffled;
+		for (const FCardEffect& Eff : Passive.Effects)
+		{
+			FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
+				FGuid(), DrawnCardId, LocalLastShuffled);
+		}
+	}
+}
+
+void FPassiveDispatcher::RunOnDiscard(FBattleState& State, FBattleEventBus& Events, const FGuid& DiscardedCardId)
+{
+	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, DiscardedCardId);
+	if (!Card || !Card->Definition) { return; }
+
+	for (const FCardPassive& Passive : Card->Definition->Passives)
+	{
+		if (Passive.Trigger != WacomTags::Passive_Trigger_OnDiscard) { continue; }
+		if (!FConditionResolver::Evaluate(State, Passive.Condition, DiscardedCardId, FGuid())) { continue; }
+
+		FGuid LocalLastShuffled;
+		for (const FCardEffect& Eff : Passive.Effects)
+		{
+			FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
+				FGuid(), DiscardedCardId, LocalLastShuffled);
+		}
+	}
+}

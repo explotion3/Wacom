@@ -24,6 +24,7 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_Weapon);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_Tool);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_Hand);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_Exhaust);
 
 	// -------- Card.Rarity --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Rarity_White);
@@ -38,6 +39,12 @@ namespace WacomTags
 	// -------- Effect --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Damage);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Heal);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Draw);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Discard);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_ExhaustSelf);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_GainKeyword);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_RemoveStatus);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_ModifyInitiative);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_ApplyStatus_Poison);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_ApplyStatus_Slow);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_ApplyStatus_Freeze);
@@ -49,10 +56,10 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Card_ReduceCost);
 
 	// -------- Magnitude.Source --------
-	// FCardEffect::MagnitudeSource 决定 FinalMagnitude 怎么算。
-	// 未设置（invalid tag）时默认 = Literal，即直接用 FCardEffect::Magnitude 字段。
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Magnitude_Source_Literal);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Magnitude_Source_RuntimeCost);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Magnitude_Source_HandCount);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Magnitude_Source_TargetStatusStacks);
 
 	// -------- Condition --------
 	// FEffectCondition::ConditionType 的取值。Invalid 视为永真。
@@ -83,6 +90,16 @@ namespace WacomTags
 
 	// -------- Passive.Trigger --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_AfterPlayed);
+
+	// -------- CardLocation（Effect.Draw 的源/目标区域参数）--------
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(CardLocation_Draw);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(CardLocation_Discard);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(CardLocation_Exhaust);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(CardLocation_Hand);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnCompanionCount);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnTwilightTriggered);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnTurnStart);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnTurnEnd);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnDraw);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnDiscard);
 }

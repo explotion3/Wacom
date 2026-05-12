@@ -1,6 +1,8 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "UI/Battle/EnemyPartWidget.h"
+
+#define LOCTEXT_NAMESPACE "WacomEnemyPart"
 #include "UI/Common/WacomProgressBar.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -127,20 +129,20 @@ void UEnemyPartWidget::ApplyPartSnapshot(const FEnemyPartSnapshot& InSnap)
 	if (InitiativeText)
 	{
 		InitiativeText->SetText(FText::Format(
-			FText::FromString(TEXT("Init {0}")), FFormatOrderedArguments{ FFormatArgumentValue(InSnap.CurrentInitiative) }));
+			LOCTEXT("InitFmt", "先机 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(InSnap.CurrentInitiative) }));
 	}
 
 	if (IntentText)
 	{
 		if (InSnap.bDestroyed)
 		{
-			IntentText->SetText(FText::FromString(TEXT("(Destroyed)")));
+			IntentText->SetText(LOCTEXT("Destroyed", "(已破坏)"));
 		}
 		else
 		{
 			FString IntentName = InSnap.CurrentIntent.DisplayName.ToString();
 			if (IntentName.IsEmpty()) { IntentName = TEXT("--"); }
-			IntentText->SetText(FText::FromString(FString::Printf(TEXT("Intent: %s"), *IntentName)));
+			IntentText->SetText(FText::Format(LOCTEXT("IntentFmt", "意图: {0}"), FText::FromString(IntentName)));
 		}
 	}
 
@@ -154,7 +156,7 @@ void UEnemyPartWidget::ApplyPartSnapshot(const FEnemyPartSnapshot& InSnap)
 		{
 			ShieldText->SetVisibility(ESlateVisibility::HitTestInvisible);
 			ShieldText->SetText(FText::Format(
-				FText::FromString(TEXT("Shield {0}")), FFormatOrderedArguments{ FFormatArgumentValue(InSnap.Shield) }));
+				LOCTEXT("ShieldFmt", "护盾 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(InSnap.Shield) }));
 		}
 	}
 
@@ -212,3 +214,6 @@ void UEnemyPartWidget::HandleRootButtonClicked()
 {
 	OnPartClicked.Broadcast(CachedSnap.InstanceId);
 }
+
+#undef LOCTEXT_NAMESPACE
+

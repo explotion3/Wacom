@@ -2,6 +2,8 @@
 
 #include "UI/Battle/EquipmentBar.h"
 
+#define LOCTEXT_NAMESPACE "WacomEquipment"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
@@ -22,7 +24,7 @@ TSharedRef<SWidget> UEquipmentBar::RebuildWidget()
 		WidgetTree->RootWidget = FrameBorder;
 
 		TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TitleText"));
-		TitleText->SetText(FText::FromString(TEXT("Equipment: (none)")));
+		TitleText->SetText(LOCTEXT("EquipNone", "装备: (无)"));
 		TitleText->SetColorAndOpacity(FSlateColor(FLinearColor(0.8f, 0.85f, 0.95f)));
 		FrameBorder->SetContent(TitleText);
 	}
@@ -34,6 +36,9 @@ void UEquipmentBar::NativeRefreshFromSnapshot(const FBattleSnapshot& /*Snap*/)
 	// 第一阶段 Snapshot 没有装备数据，保持占位。
 	if (TitleText)
 	{
-		TitleText->SetText(FText::FromString(TEXT("Equipment: (none)")));
+		TitleText->SetText(LOCTEXT("EquipNone", "装备: (无)"));
 	}
 }
+
+#undef LOCTEXT_NAMESPACE
+

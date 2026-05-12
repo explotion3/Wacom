@@ -44,6 +44,17 @@ namespace
 			M.Add(WacomTags::Effect_Card_AddCost,            &WacomEffects::HandleCardAddCost);
 			M.Add(WacomTags::Effect_Card_ReduceCost,         &WacomEffects::HandleCardReduceCost);
 
+			// Draw / Discard / Exhaust / Heal
+			M.Add(WacomTags::Effect_Draw,                    &WacomEffects::HandleDraw);
+			M.Add(WacomTags::Effect_Discard,                 &WacomEffects::HandleDiscard);
+			M.Add(WacomTags::Effect_ExhaustSelf,             &WacomEffects::HandleExhaustSelf);
+			M.Add(WacomTags::Effect_Heal,                    &WacomEffects::HandleHeal);
+
+			// GainKeyword / RemoveStatus / ModifyInitiative
+			M.Add(WacomTags::Effect_GainKeyword,             &WacomEffects::HandleGainKeyword);
+			M.Add(WacomTags::Effect_RemoveStatus,            &WacomEffects::HandleRemoveStatus);
+			M.Add(WacomTags::Effect_ModifyInitiative,        &WacomEffects::HandleModifyInitiative);
+
 			return M;
 		}();
 		return Registry;

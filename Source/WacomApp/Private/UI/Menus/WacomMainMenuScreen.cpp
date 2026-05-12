@@ -2,6 +2,8 @@
 
 #include "UI/Menus/WacomMainMenuScreen.h"
 
+#define LOCTEXT_NAMESPACE "WacomMainMenu"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
@@ -62,7 +64,7 @@ TSharedRef<SWidget> UWacomMainMenuScreen::RebuildWidget()
 
 		// 标题
 		UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Title"));
-		Title->SetText(FText::FromString(TEXT("Wacom")));
+		Title->SetText(LOCTEXT("Title", "Wacom"));
 		Title->SetJustification(ETextJustify::Center);
 		FSlateFontInfo Font = Title->GetFont();
 		Font.Size = 48;
@@ -76,17 +78,17 @@ TSharedRef<SWidget> UWacomMainMenuScreen::RebuildWidget()
 		if (!NewGameButton)
 		{
 			NewGameButton = MakeLabelButton(WidgetTree, TEXT("NewGameButton"),
-				FText::FromString(TEXT("New Game")), VBox);
+				LOCTEXT("NewGame", "新游戏"), VBox);
 		}
 		if (!ContinueButton)
 		{
 			ContinueButton = MakeLabelButton(WidgetTree, TEXT("ContinueButton"),
-				FText::FromString(TEXT("Continue")), VBox);
+				LOCTEXT("Continue", "继续"), VBox);
 		}
 		if (!QuitButton)
 		{
 			QuitButton = MakeLabelButton(WidgetTree, TEXT("QuitButton"),
-				FText::FromString(TEXT("Quit Game")), VBox);
+				LOCTEXT("QuitGame", "退出游戏"), VBox);
 		}
 	}
 	return Super::RebuildWidget();
@@ -140,8 +142,8 @@ void UWacomMainMenuScreen::HandleNewGameClicked()
 	{
 		UWacomConfirmDialog::Show(
 			this,
-			FText::FromString(TEXT("New Game")),
-			FText::FromString(TEXT("Starting a new game will overwrite your existing save. Continue?")),
+			LOCTEXT("NewGameConfirmTitle", "新游戏"),
+			LOCTEXT("NewGameConfirmMsg", "开始新游戏将覆盖现有存档，确定继续？"),
 			[this]()
 			{
 				// 确认：委托给 MenuGameMode
@@ -189,11 +191,13 @@ void UWacomMainMenuScreen::HandleQuitClicked()
 {
 	UWacomConfirmDialog::Show(
 		this,
-		FText::FromString(TEXT("Quit Game")),
-		FText::FromString(TEXT("Are you sure you want to quit?")),
+		LOCTEXT("QuitConfirmTitle", "退出游戏"),
+		LOCTEXT("QuitConfirmMsg", "确定要退出游戏吗？"),
 		[this]()
 		{
 			UE_LOG(LogTemp, Display, TEXT("[MainMenu] Quit confirmed"));
 			UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, false);
 		});
 }
+
+#undef LOCTEXT_NAMESPACE

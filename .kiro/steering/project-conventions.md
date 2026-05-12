@@ -9,7 +9,7 @@ inclusion: always
 ## 项目身份
 
 - 单人第一人称 HD-2D 卡牌冒险游戏，UE 5.7，主导程序单人。
-- 文档位于 `Docs/`：`Game_Design.md` / `Architecture.md` / `WacomBattle.md` / `WacomRun.md` / `WacomApp.md` / `WacomData.md` / `TODO.md` / `Dev_Log.md` / `Characters/BugGirl.md` / `Karpathy_Guidelines_CN.md`
+- 文档位于 `Docs/`：`Game_Design.md` / `Architecture.md` / `WacomBattle.md` / `WacomRun.md` / `WacomApp.md` / `WacomData.md` / `TODO.md` / `DevLog/` / `Characters/BugGirl.md` / `Karpathy_Guidelines_CN.md`
 
 ## 任务启动流程
 
@@ -83,4 +83,7 @@ inclusion: always
 
 ## 开发日志
 
-重要里程碑写入 `Dev_Log.md`：哪个切片完成、踩坑、文档修订点。不写流水账。
+大规模任务完成后在 `Docs/DevLog/` 新建一个 md 文件：
+- 文件名一眼看懂（如 `存档系统S1-S4.md`、`主菜单M1-M4.md`）
+- 内容简单明了：做了什么、关键决策、踩坑点
+- 不追加到旧文件，每次新开一个

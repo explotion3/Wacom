@@ -42,4 +42,28 @@ public:
 	 * 手牌上限在此不检查（Phase2_Temporary_Decisions：触发时强行加入）。
 	 */
 	static void RunOnCompanionCount(FBattleState& State, FBattleEventBus& Events);
+
+	/**
+	 * 回合开始时触发所有拥有 OnTurnStart 被动的卡。
+	 * 调用点：BattleTurnFlow::BeginPlayerTurn 起始阶段。
+	 */
+	static void RunOnTurnStart(FBattleState& State, FBattleEventBus& Events);
+
+	/**
+	 * 回合结束时触发所有拥有 OnTurnEnd 被动的卡。
+	 * 调用点：EndTurnResolver 弃牌之前。
+	 */
+	static void RunOnTurnEnd(FBattleState& State, FBattleEventBus& Events);
+
+	/**
+	 * 某张卡被抽到手牌时触发该卡的 OnDraw 被动。
+	 * 调用点：DeckService::DrawCards 之后，由 TurnFlow 或 HandleDraw 调用。
+	 */
+	static void RunOnDraw(FBattleState& State, FBattleEventBus& Events, const FGuid& DrawnCardId);
+
+	/**
+	 * 某张卡被弃掉时触发该卡的 OnDiscard 被动。
+	 * 调用点：DeckService::DiscardFromHand 之后。
+	 */
+	static void RunOnDiscard(FBattleState& State, FBattleEventBus& Events, const FGuid& DiscardedCardId);
 };

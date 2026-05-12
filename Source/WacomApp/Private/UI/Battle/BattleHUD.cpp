@@ -1,6 +1,8 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "UI/Battle/BattleHUD.h"
+
+#define LOCTEXT_NAMESPACE "WacomBattleHUD"
 #include "UI/Battle/ActionPanel.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
@@ -122,7 +124,7 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 
 		// DrawPileView: 底部左侧
 		DrawPileView = WidgetTree->ConstructWidget<UPileCountView>(UPileCountView::StaticClass(), TEXT("DrawPileView"));
-		DrawPileView->SetLabel(FText::FromString(TEXT("Draw")));
+		DrawPileView->SetLabel(LOCTEXT("DrawPile", "抽牌堆"));
 		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(DrawPileView))
 		{
 			S->SetAnchors(FAnchors(0.0f, 1.0f));
@@ -133,7 +135,7 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 
 		// DiscardPileView: 底部右侧偏左（放在 ActionPanel 左边）
 		DiscardPileView = WidgetTree->ConstructWidget<UPileCountView>(UPileCountView::StaticClass(), TEXT("DiscardPileView"));
-		DiscardPileView->SetLabel(FText::FromString(TEXT("Discard")));
+		DiscardPileView->SetLabel(LOCTEXT("DiscardPile", "弃牌堆"));
 		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(DiscardPileView))
 		{
 			S->SetAnchors(FAnchors(1.0f, 1.0f));
@@ -144,7 +146,7 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 
 		// ExhaustPileView: Discard 上方
 		ExhaustPileView = WidgetTree->ConstructWidget<UPileCountView>(UPileCountView::StaticClass(), TEXT("ExhaustPileView"));
-		ExhaustPileView->SetLabel(FText::FromString(TEXT("Exhaust")));
+		ExhaustPileView->SetLabel(LOCTEXT("ExhaustPile", "消耗区"));
 		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(ExhaustPileView))
 		{
 			S->SetAnchors(FAnchors(1.0f, 1.0f));
@@ -423,3 +425,6 @@ void UBattleHUD::ConsumeAndLogEvents()
 		EventToast->EnqueueEvents(Events);
 	}
 }
+
+#undef LOCTEXT_NAMESPACE
+

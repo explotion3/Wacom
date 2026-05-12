@@ -7,6 +7,7 @@
 #include "Cards/CardPassive.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
+#include "Deck/DeckService.h"
 #include "Events/BattleEventBus.h"
 #include "Hand/HandZoneService.h"
 #include "Runtime/RuntimeCardInstance.h"
@@ -271,6 +272,236 @@ bool HandleCardReduceCost(FEffectContext& Ctx)
 	FRuntimeCardInstance* CardInst = FindCardInstance(*Ctx.State, Ctx.TargetInstanceId);
 	if (!CardInst) { return false; }
 	CardInst->RuntimeCostModifier -= Ctx.Magnitude;
+	return true;
+}
+
+// ================ Draw / Discard / Exhaust / Heal ================
+
+bool HandleDraw(FEffectContext& Ctx)
+{
+	// Effect.Draw：从源区域移动 Magnitude 张卡到手牌。
+	//
+	// 字段约定：
+	//   Magnitude = 移动几张
+	//   MetaTag（= Effect.TargetZone）= 源区域 Tag
+	//     空 / CardLocation.Draw = 抽牌堆（默认）
+	//     CardLocation.Discard   = 弃牌堆
+	//     CardLocation.Exhaust   = 消耗区
+	//
+	// 筛选关键词：第一版不支持（需要给 FEffectContext 加 FilterTag 字段）。
+	// 等策划给出具体需要筛选的卡牌时再扩展。
+	//
+	if (Ctx.Magnitude <= 0) { return false; }
+
+	// 确定源区域
+	TArray<FGuid>* SourcePile = nullptr;
+	ECardLocation SourceLocation = ECardLocation::Draw;
+
+	if (!Ctx.MetaTag.IsValid() || Ctx.MetaTag == WacomTags::CardLocation_Draw)
+	{
+		SourcePile = &Ctx.State->Cards.DrawPile;
+		SourceLocation = ECardLocation::Draw;
+	}
+	else if (Ctx.MetaTag == WacomTags::CardLocation_Discard)
+	{
+		SourcePile = &Ctx.State->Cards.DiscardPile;
+		SourceLocation = ECardLocation::Discard;
+	}
+	else if (Ctx.MetaTag == WacomTags::CardLocation_Exhaust)
+	{
+		SourcePile = &Ctx.State->Cards.ExhaustPile;
+		SourceLocation = ECardLocation::Exhaust;
+	}
+	else
+	{
+		SourcePile = &Ctx.State->Cards.DrawPile;
+		SourceLocation = ECardLocation::Draw;
+	}
+
+	// 从抽牌堆：用 DeckService（支持自动 Reshuffle）
+	if (SourceLocation == ECardLocation::Draw)
+	{
+		TArray<FGuid> DrawnIds;
+		FDeckService::DrawCards(*Ctx.State, Ctx.Magnitude, DrawnIds);
+		for (const FGuid& Id : DrawnIds)
+		{
+			Ctx.State->Cards.Hand.Add(Id);
+			FBattleRules::SetCardLocation(*Ctx.State, Id, ECardLocation::Hand);
+		}
+		if (DrawnIds.Num() > 0)
+		{
+			FBattleEvent Ev;
+			Ev.Type  = EBattleEventType::CardsDrawn;
+			Ev.Count = DrawnIds.Num();
+			Ctx.Events->Emit(Ev);
+		}
+		return DrawnIds.Num() > 0;
+	}
+
+	// 从弃牌堆 / 消耗区：随机选 Magnitude 张移到手牌
+	if (!SourcePile || SourcePile->IsEmpty()) { return false; }
+
+	int32 Moved = 0;
+	for (int32 i = 0; i < Ctx.Magnitude && !SourcePile->IsEmpty(); ++i)
+	{
+		const int32 Idx = Ctx.State->Rng.RandRange(0, SourcePile->Num() - 1);
+		const FGuid CardId = (*SourcePile)[Idx];
+		SourcePile->RemoveAt(Idx);
+		Ctx.State->Cards.Hand.Add(CardId);
+		FBattleRules::SetCardLocation(*Ctx.State, CardId, ECardLocation::Hand);
+		++Moved;
+	}
+
+	if (Moved > 0)
+	{
+		FBattleEvent Ev;
+		Ev.Type  = EBattleEventType::CardsDrawn;
+		Ev.Count = Moved;
+		Ctx.Events->Emit(Ev);
+	}
+	return Moved > 0;
+}
+
+bool HandleDiscard(FEffectContext& Ctx)
+{
+	// 随机弃掉手牌中 Magnitude 张普通卡（不弃锚点）。
+	if (Ctx.Magnitude <= 0) { return false; }
+
+	int32 Discarded = 0;
+	for (int32 i = 0; i < Ctx.Magnitude; ++i)
+	{
+		// 收集可弃的普通卡
+		TArray<FGuid> Candidates;
+		for (const FGuid& Id : Ctx.State->Cards.Hand)
+		{
+			if (Id == Ctx.State->Cards.LeftHandInstanceId) { continue; }
+			if (Id == Ctx.State->Cards.RightHandInstanceId) { continue; }
+			Candidates.Add(Id);
+		}
+		if (Candidates.IsEmpty()) { break; }
+
+		const int32 Idx = Ctx.State->Rng.RandRange(0, Candidates.Num() - 1);
+		FDeckService::DiscardFromHand(*Ctx.State, Candidates[Idx]);
+		++Discarded;
+	}
+	return Discarded > 0;
+}
+
+bool HandleExhaustSelf(FEffectContext& Ctx)
+{
+	// 标记本卡打出后进消耗区。
+	// 实际的"去向"由 PlayCardResolver 在卡牌去向阶段读取。
+	// 这里给卡加一个临时关键词标记，PlayCardResolver 检查它。
+	// 更简单的做法：直接在 EffectContext 里设一个 flag。
+	// 但 EffectContext 生命周期只在一次 Execute 内。
+	// 最稳的做法：给 FRuntimeCardInstance 加一个 bExhaustOnPlay 标记。
+	// 第一版简化：直接在这里把卡从手牌移到消耗区。
+	// 但这会在效果执行中途就移走卡——可能影响后续效果。
+	// 折中：只设标记，PlayCardResolver 的卡牌去向阶段检查。
+	if (Ctx.SourceKind != EEffectSourceKind::Card) { return false; }
+	FRuntimeCardInstance* Card = FindCardInstance(*Ctx.State, Ctx.SourceInstanceId);
+	if (!Card) { return false; }
+	Card->TemporaryKeywords.AddTag(WacomTags::Card_Keyword_Exhaust);
+	return true;
+}
+
+bool HandleHeal(FEffectContext& Ctx)
+{
+	// 恢复玩家 HP。顺带移除 10% 中毒层数（向下取整）。
+	if (Ctx.Magnitude <= 0) { return false; }
+	if (Ctx.TargetKind != EEffectTargetKind::Player) { return false; }
+
+	const int32 HealAmount = Ctx.Magnitude;
+	Ctx.State->Player.CurrentHp = FMath::Min(
+		Ctx.State->Player.CurrentHp + HealAmount,
+		Ctx.State->Player.MaxHp);
+
+	// 移除 10% 中毒层数
+	int32* PoisonStacks = Ctx.State->Player.StatusStacks.Find(WacomTags::Status_Poison);
+	if (PoisonStacks && *PoisonStacks > 0)
+	{
+		const int32 Remove = FMath::FloorToInt32(static_cast<float>(HealAmount) * 0.1f);
+		if (Remove > 0)
+		{
+			*PoisonStacks = FMath::Max(0, *PoisonStacks - Remove);
+			if (*PoisonStacks == 0)
+			{
+				Ctx.State->Player.Statuses.RemoveTag(WacomTags::Status_Poison);
+				Ctx.State->Player.StatusStacks.Remove(WacomTags::Status_Poison);
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("[EffectHandler] Heal %d → Player HP=%d/%d"),
+		HealAmount, Ctx.State->Player.CurrentHp, Ctx.State->Player.MaxHp);
+	return true;
+}
+
+// ================ GainKeyword / RemoveStatus / ModifyInitiative ================
+
+bool HandleGainKeyword(FEffectContext& Ctx)
+{
+	// 给目标卡临时添加关键词。MetaTag 里存要添加的 Keyword Tag。
+	if (Ctx.TargetKind != EEffectTargetKind::HandCard || !Ctx.TargetInstanceId.IsValid())
+	{
+		return false;
+	}
+	if (!Ctx.MetaTag.IsValid()) { return false; }
+
+	FRuntimeCardInstance* CardInst = FindCardInstance(*Ctx.State, Ctx.TargetInstanceId);
+	if (!CardInst) { return false; }
+
+	CardInst->TemporaryKeywords.AddTag(Ctx.MetaTag);
+	return true;
+}
+
+bool HandleRemoveStatus(FEffectContext& Ctx)
+{
+	// 移除目标的指定状态 Magnitude 层。MetaTag 里存要移除的 Status Tag。
+	if (!Ctx.MetaTag.IsValid()) { return false; }
+	if (Ctx.Magnitude <= 0) { return false; }
+
+	if (Ctx.TargetKind == EEffectTargetKind::EnemyPart)
+	{
+		FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(*Ctx.State, Ctx.TargetInstanceId);
+		if (!Part || Part->bDestroyed) { return false; }
+
+		int32* Stacks = Part->StatusStacks.Find(Ctx.MetaTag);
+		if (!Stacks || *Stacks <= 0) { return false; }
+
+		*Stacks = FMath::Max(0, *Stacks - Ctx.Magnitude);
+		if (*Stacks == 0)
+		{
+			Part->Statuses.RemoveTag(Ctx.MetaTag);
+			Part->StatusStacks.Remove(Ctx.MetaTag);
+		}
+		return true;
+	}
+	if (Ctx.TargetKind == EEffectTargetKind::Player)
+	{
+		int32* Stacks = Ctx.State->Player.StatusStacks.Find(Ctx.MetaTag);
+		if (!Stacks || *Stacks <= 0) { return false; }
+
+		*Stacks = FMath::Max(0, *Stacks - Ctx.Magnitude);
+		if (*Stacks == 0)
+		{
+			Ctx.State->Player.Statuses.RemoveTag(Ctx.MetaTag);
+			Ctx.State->Player.StatusStacks.Remove(Ctx.MetaTag);
+		}
+		return true;
+	}
+	return false;
+}
+
+bool HandleModifyInitiative(FEffectContext& Ctx)
+{
+	// 直接修改目标部位的当前先机。Magnitude 为正 = 增加先机，为负 = 减少先机。
+	if (Ctx.TargetKind != EEffectTargetKind::EnemyPart) { return false; }
+
+	FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(*Ctx.State, Ctx.TargetInstanceId);
+	if (!Part || Part->bDestroyed) { return false; }
+
+	Part->CurrentInitiative += Ctx.Magnitude;
 	return true;
 }
 

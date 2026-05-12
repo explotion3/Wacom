@@ -9,10 +9,40 @@
 #include "GameFramework/PlayerController.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 
+void UWacomGameUIManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+
+	// 只在有渲染的环境（PIE / Standalone / Shipping）注册 World 清理监听。
+	// -NullRHI（自动化测试 / Commandlet）不需要 UI 管理。
+	if (!IsRunningCommandlet() && !FApp::IsUnattended())
+	{
+		WorldCleanupHandle = FWorldDelegates::OnWorldCleanup.AddUObject(
+			this, &UWacomGameUIManagerSubsystem::HandleWorldCleanup);
+	}
+}
+
 void UWacomGameUIManagerSubsystem::Deinitialize()
 {
+	if (WorldCleanupHandle.IsValid())
+	{
+		FWorldDelegates::OnWorldCleanup.Remove(WorldCleanupHandle);
+		WorldCleanupHandle.Reset();
+	}
 	TearDownPrimaryLayout();
 	Super::Deinitialize();
+}
+
+void UWacomGameUIManagerSubsystem::HandleWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources)
+{
+	if (!PrimaryLayout) { return; }
+
+	// 只清理属于被销毁 World 的 PrimaryLayout。
+	if (PrimaryLayout->GetWorld() == World)
+	{
+		// 直接置空引用，不调 TearDown（World 正在销毁，Widget 可能已经无效）。
+		PrimaryLayout = nullptr;
+	}
 }
 
 void UWacomGameUIManagerSubsystem::TearDownPrimaryLayout()

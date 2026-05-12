@@ -55,6 +55,17 @@ namespace
 			return;
 		}
 
+		// ExhaustSelf：如果本卡有临时 Exhaust 关键词，进消耗区而不是弃牌堆。
+		if (FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardInstanceId))
+		{
+			if (Card->TemporaryKeywords.HasTagExact(WacomTags::Card_Keyword_Exhaust))
+			{
+				State.Cards.ExhaustPile.Add(CardInstanceId);
+				FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Exhaust);
+				return;
+			}
+		}
+
 		State.Cards.DiscardPile.Add(CardInstanceId);
 		FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Discard);
 	}
