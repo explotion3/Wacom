@@ -1,0 +1,93 @@
+import "Shared/CosmicBlob.dsh";
+
+Shader(Name="DreamMaterials/M_CosmicBlob")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="CosmicBlob";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="Animation";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter Zoom = 0.2 [
+            Group="View";
+            SortPriority=10;
+            Description="Coordinate scale. Lower=more zoomed in. Try 0.1~0.5.";
+        ];
+
+        ScalarParameter Iterations = 19.0 [
+            Group="Fractal";
+            SortPriority=15;
+            Description="Distortion iterations (integer). More=richer. 8~19.";
+        ];
+
+        ScalarParameter DistortSpeed = 1.0 [
+            Group="Fractal";
+            SortPriority=20;
+            Description="Rotation distortion speed. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter WarpStrength = 1.0 [
+            Group="Fractal";
+            SortPriority=25;
+            Description="Color accumulation warp intensity. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter TanhStrength = 40.0 [
+            Group="Fractal";
+            SortPriority=30;
+            Description="Tanh distortion strength. Try 10~80.";
+        ];
+
+        ScalarParameter DriftAmount = 0.2 [
+            Group="Motion";
+            SortPriority=35;
+            Description="UV drift per iteration. Try 0.1~0.4.";
+        ];
+
+        ScalarParameter PulseAmount = 1.0 [
+            Group="Motion";
+            SortPriority=40;
+            Description="Breathing pulse intensity. Try 0.0~2.0.";
+        ];
+
+        ScalarParameter ColorContrast = 1.0 [
+            Group="Color";
+            SortPriority=45;
+            Description="Edge darkening contrast. Try 0.5~3.0.";
+        ];
+
+        ScalarParameter FinalBrightness = 1.0 [
+            Group="Color";
+            SortPriority=50;
+            Description="Final output brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 blobColor;
+        CosmicBlob_Evaluate(uv, Resolution, time, Zoom, Iterations, DistortSpeed, WarpStrength, TanhStrength, DriftAmount, PulseAmount, ColorContrast, blobColor);
+
+        Color = blobColor * FinalBrightness;
+    }
+}

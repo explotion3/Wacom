@@ -1,0 +1,123 @@
+import "Shared/StarNest.dsh";
+
+Shader(Name="DreamMaterials/M_StarNest")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="StarNest";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="StarNest";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter Zoom = 0.8 [
+            Group="Camera";
+            SortPriority=10;
+            Description="Camera zoom / field of view. Lower = wider. Try 0.4~2.0.";
+        ];
+
+        ScalarParameter Speed = 0.01 [
+            Group="Camera";
+            SortPriority=15;
+            Description="Travel speed through the starfield. Try 0.005~0.05.";
+        ];
+
+        ScalarParameter RotationX = 0.5 [
+            Group="Camera";
+            SortPriority=20;
+            Description="Horizontal rotation (replaces mouse.x). 0~1 range.";
+        ];
+
+        ScalarParameter RotationY = 0.5 [
+            Group="Camera";
+            SortPriority=25;
+            Description="Vertical rotation (replaces mouse.y). 0~1 range.";
+        ];
+
+        ScalarParameter Tile = 0.85 [
+            Group="Fractal";
+            SortPriority=30;
+            Description="Tiling fold size. Controls repetition scale. Try 0.5~1.5.";
+        ];
+
+        ScalarParameter FormuParam = 0.53 [
+            Group="Fractal";
+            SortPriority=35;
+            Description="The magic formula parameter. Core fractal shape. Try 0.4~0.7.";
+        ];
+
+        ScalarParameter Iterations = 17.0 [
+            Group="Fractal";
+            SortPriority=40;
+            Description="Fractal iterations (integer). More = finer detail but heavier. 8~17.";
+        ];
+
+        ScalarParameter VolSteps = 20.0 [
+            Group="Rendering";
+            SortPriority=45;
+            Description="Volume steps (integer). More = denser accumulation. 10~20.";
+        ];
+
+        ScalarParameter StepSize = 0.1 [
+            Group="Rendering";
+            SortPriority=50;
+            Description="Ray step size. Smaller = denser sampling. Try 0.05~0.2.";
+        ];
+
+        ScalarParameter Brightness = 0.0015 [
+            Group="Color";
+            SortPriority=55;
+            Description="Star brightness. Try 0.001~0.005.";
+        ];
+
+        ScalarParameter DarkMatter = 0.3 [
+            Group="Color";
+            SortPriority=60;
+            Description="Dark matter amount. Adds dark nebula regions. Try 0.0~0.8.";
+        ];
+
+        ScalarParameter DistFading = 0.73 [
+            Group="Color";
+            SortPriority=65;
+            Description="Distance fading per step. Lower = faster fade. Try 0.5~0.95.";
+        ];
+
+        ScalarParameter Saturation = 0.85 [
+            Group="Color";
+            SortPriority=70;
+            Description="Color saturation. 0=grayscale, 1=full color. Try 0.5~1.0.";
+        ];
+
+        ScalarParameter FinalBrightness = 1.0 [
+            Group="Color";
+            SortPriority=75;
+            Description="Final output brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 starColor;
+        StarNest_Evaluate(uv, Resolution, time, Zoom, Tile, Speed, VolSteps, Iterations, FormuParam, StepSize, Brightness, DarkMatter, DistFading, Saturation, RotationX, RotationY, starColor);
+
+        Color = starColor * FinalBrightness;
+    }
+}

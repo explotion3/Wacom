@@ -1,0 +1,99 @@
+import "Shared/RainRipples.dsh";
+
+Shader(Name="DreamMaterials/M_RainRipples")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="RainRipples";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="Animation";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter GridResolution = 10.0 [
+            Group="Ripples";
+            SortPriority=10;
+            Description="Grid density for ripple cells. Higher=more ripples. Try 5~20.";
+        ];
+
+        ScalarParameter RippleSpeed = 0.3 [
+            Group="Ripples";
+            SortPriority=15;
+            Description="How fast ripples expand and new ones appear. Try 0.1~0.6.";
+        ];
+
+        ScalarParameter RippleFrequency = 31.0 [
+            Group="Ripples";
+            SortPriority=20;
+            Description="Wave frequency within each ripple. Try 15~50.";
+        ];
+
+        ScalarParameter RippleIntensity = 0.15 [
+            Group="Ripples";
+            SortPriority=25;
+            Description="How much ripples distort the background. Try 0.05~0.3.";
+        ];
+
+        ScalarParameter RainVariation = 0.05 [
+            Group="Ripples";
+            SortPriority=30;
+            Description="Rain intensity variation speed over time. Try 0.02~0.1.";
+        ];
+
+        ScalarParameter SpecularPower = 6.0 [
+            Group="Lighting";
+            SortPriority=35;
+            Description="Specular highlight sharpness. Try 3~20.";
+        ];
+
+        ScalarParameter SpecularIntensity = 5.0 [
+            Group="Lighting";
+            SortPriority=40;
+            Description="Specular highlight brightness. Try 1~10.";
+        ];
+
+        VectorParameter BackgroundTop = float4(0.1, 0.15, 0.25, 1.0) [
+            Group="Background";
+            SortPriority=45;
+            Description="Background gradient top color (dark sky/water).";
+        ];
+
+        VectorParameter BackgroundBottom = float4(0.2, 0.25, 0.35, 1.0) [
+            Group="Background";
+            SortPriority=50;
+            Description="Background gradient bottom color.";
+        ];
+
+        ScalarParameter FinalBrightness = 1.0 [
+            Group="Color";
+            SortPriority=55;
+            Description="Final output brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 rippleColor;
+        RR_Evaluate(uv, Resolution, time, GridResolution, RippleSpeed, RippleFrequency, RippleIntensity, SpecularPower, SpecularIntensity, RainVariation, BackgroundTop, BackgroundBottom, rippleColor);
+
+        Color = rippleColor * FinalBrightness;
+    }
+}

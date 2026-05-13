@@ -1,0 +1,96 @@
+// Phantom Tunnel - IFS box raymarching with volumetric accumulation
+// Based on Shadertoy "Phantom Mode" style
+
+Function PhantomTunnel_Evaluate(in float2 fragUV, in float4 resParam, in float time, in float speed, in float iterBrightness, out float3 color, out float alpha)
+{
+    float2 resolution = resParam.xy;
+    float2 p = (fragUV * 2.0 - 1.0);
+    p.x *= resolution.x / max(resolution.y, 0.0001);
+
+    float pi = 3.1415926535;
+    float pi2 = pi * 2.0;
+
+    // Camera
+    float3 cPos = float3(0.0, 0.0, -3.0 * time * speed);
+    float3 cDir = normalize(float3(0.0, 0.0, -1.0));
+    float3 cUp = float3(sin(time), 1.0, 0.0);
+    float3 cSide = cross(cDir, cUp);
+    float3 ray = normalize(cSide * p.x + cUp * p.y + cDir);
+
+    // Raymarching with volumetric accumulation
+    float acc = 0.0;
+    float acc2 = 0.0;
+    float t = 0.0;
+
+    for (int i = 0; i < 99; i++)
+    {
+        float3 pos = cPos + ray * t;
+
+        // --- map function ---
+        float3 p1 = pos;
+
+        // mod repetition
+        p1.x = p1.x - 10.0 * floor((p1.x - 5.0) / 10.0) - 10.0;  // mod(p1.x-5, 10) - 5
+        p1.y = p1.y - 10.0 * floor((p1.y - 5.0) / 10.0) - 10.0;  // mod(p1.y-5, 10) - 5
+        p1.z = p1.z - 16.0 * floor(p1.z / 16.0) - 8.0;            // mod(p1.z, 16) - 8
+
+        // pmod - polar repetition with 5 segments
+        float pmod_a = atan2(p1.x, p1.y) + pi / 5.0;
+        float pmod_n = pi2 / 5.0;
+        pmod_a = floor(pmod_a / pmod_n) * pmod_n;
+        float pcos = cos(-pmod_a);
+        float psin = sin(-pmod_a);
+        float2 p1xy = float2(p1.x * pcos + p1.y * psin, -p1.x * psin + p1.y * pcos);
+        p1.x = p1xy.x;
+        p1.y = p1xy.y;
+
+        // ifsBox - iterated function system
+        float3 bp = p1;
+        for (int j = 0; j < 5; j++)
+        {
+            bp = abs(bp) - 1.0;
+            // rotate xy by time*0.3
+            float ca1 = cos(time * 0.3);
+            float sa1 = sin(time * 0.3);
+            float2 bpxy = float2(bp.x * ca1 + bp.y * sa1, -bp.x * sa1 + bp.y * ca1);
+            bp.x = bpxy.x;
+            bp.y = bpxy.y;
+            // rotate xz by time*0.1
+            float ca2 = cos(time * 0.1);
+            float sa2 = sin(time * 0.1);
+            float2 bpxz = float2(bp.x * ca2 + bp.z * sa2, -bp.x * sa2 + bp.z * ca2);
+            bp.x = bpxz.x;
+            bp.z = bpxz.y;
+        }
+        // final xz rotation by time
+        float ca3 = cos(time);
+        float sa3 = sin(time);
+        float2 bpxz2 = float2(bp.x * ca3 + bp.z * sa3, -bp.x * sa3 + bp.z * ca3);
+        bp.x = bpxz2.x;
+        bp.z = bpxz2.y;
+
+        // box SDF
+        float3 bd = abs(bp) - float3(0.4, 0.8, 0.3);
+        float dist = min(max(bd.x, max(bd.y, bd.z)), 0.0) + length(max(bd, 0.0));
+
+        // --- end map ---
+
+        dist = max(abs(dist), 0.02);
+        float a = exp(-dist * 3.0);
+
+        // Pulsing highlight bands
+        float posLen = length(pos);
+        float modVal = posLen + 24.0 * time;
+        modVal = modVal - 30.0 * floor(modVal / 30.0); // mod(x, 30)
+        if (modVal < 3.0)
+        {
+            a *= 2.0;
+            acc2 += a;
+        }
+        acc += a;
+        t += dist * 0.5;
+    }
+
+    color = float3(acc * 0.01, acc * 0.011 + acc2 * 0.002, acc * 0.012 + acc2 * 0.005) * iterBrightness;
+    alpha = saturate(1.0 - t * 0.03);
+}

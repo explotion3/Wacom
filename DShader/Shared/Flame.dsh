@@ -1,0 +1,114 @@
+// Flame effect by anatole duprat - XT95/2013
+// License: Creative Commons Attribution-NonCommercial-ShareAlike 3.0
+// Adapted for DreamShaderLang
+
+Function Flame_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float zoom,
+    in float flameHeight,
+    in float flameWidth,
+    in float noiseStrength,
+    in float noiseSpeed,
+    in float marchSteps,
+    in float glowPower,
+    in float camDist,
+    in float4 hotColor,
+    in float4 coolColor,
+    in float colorMix,
+    out float3 color,
+    out float alpha)
+{
+    float2 resolution = resParam.xy;
+
+    float2 v = (fragUV * 2.0 - 1.0);
+    v.x *= resolution.x / max(resolution.y, 0.0001);
+
+    // Camera
+    float3 org = float3(0.0, -2.0, camDist);
+    float3 dir = normalize(float3(v.x * 1.6 / zoom, -v.y * 1.6 / zoom, -1.5));
+
+    // Raymarch
+    float d = 0.0;
+    float glow = 0.0;
+    float eps = 0.02;
+    float3 p = org;
+    bool glowed = false;
+
+    int maxSteps = (int)marchSteps;
+    float pi = 3.1415926535;
+
+    for (int iter = 0; iter < 64; iter++)
+    {
+        if (iter >= maxSteps) break;
+
+        // --- scene: min(100 - length(p), abs(flame(p))) ---
+
+        // flame(p): sphere + noise displacement
+        float3 sp = p * float3(flameWidth, 0.5, flameWidth);
+        float sphereDist = length(sp - float3(0.0, -1.0, 0.0)) - 1.0;
+
+        // noise(p + vec3(0, time*2, 0))
+        float3 np1 = p + float3(0.0, time * noiseSpeed, 0.0);
+        float3 ni1 = floor(np1);
+        float4 na1 = dot(ni1, float3(1.0, 57.0, 21.0)) + float4(0.0, 57.0, 21.0, 78.0);
+        float3 nf1 = cos((np1 - ni1) * pi) * (-0.5) + 0.5;
+        na1 = lerp(sin(cos(na1) * na1), sin(cos(1.0 + na1) * (1.0 + na1)), nf1.x);
+        float2 na1xy = lerp(float2(na1.x, na1.z), float2(na1.y, na1.w), nf1.y);
+        float noise1 = lerp(na1xy.x, na1xy.y, nf1.z);
+
+        // noise(p * 3)
+        float3 np2 = p * 3.0;
+        float3 ni2 = floor(np2);
+        float4 na2 = dot(ni2, float3(1.0, 57.0, 21.0)) + float4(0.0, 57.0, 21.0, 78.0);
+        float3 nf2 = cos((np2 - ni2) * pi) * (-0.5) + 0.5;
+        na2 = lerp(sin(cos(na2) * na2), sin(cos(1.0 + na2) * (1.0 + na2)), nf2.x);
+        float2 na2xy = lerp(float2(na2.x, na2.z), float2(na2.y, na2.w), nf2.y);
+        float noise2 = lerp(na2xy.x, na2xy.y, nf2.z);
+
+        float flameDist = sphereDist + (noise1 + noise2 * 0.5) * noiseStrength * p.y * flameHeight;
+
+        float sceneDist = min(100.0 - length(p), abs(flameDist));
+
+        d = sceneDist + eps;
+        p += d * dir;
+
+        if (d > eps)
+        {
+            // Recompute flame at new position for glow check
+            float3 sp2 = p * float3(flameWidth, 0.5, flameWidth);
+            float sph2 = length(sp2 - float3(0.0, -1.0, 0.0)) - 1.0;
+
+            float3 np3 = p + float3(0.0, time * noiseSpeed, 0.0);
+            float3 ni3 = floor(np3);
+            float4 na3 = dot(ni3, float3(1.0, 57.0, 21.0)) + float4(0.0, 57.0, 21.0, 78.0);
+            float3 nf3 = cos((np3 - ni3) * pi) * (-0.5) + 0.5;
+            na3 = lerp(sin(cos(na3) * na3), sin(cos(1.0 + na3) * (1.0 + na3)), nf3.x);
+            float2 na3xy = lerp(float2(na3.x, na3.z), float2(na3.y, na3.w), nf3.y);
+            float n3 = lerp(na3xy.x, na3xy.y, nf3.z);
+
+            float3 np4 = p * 3.0;
+            float3 ni4 = floor(np4);
+            float4 na4 = dot(ni4, float3(1.0, 57.0, 21.0)) + float4(0.0, 57.0, 21.0, 78.0);
+            float3 nf4 = cos((np4 - ni4) * pi) * (-0.5) + 0.5;
+            na4 = lerp(sin(cos(na4) * na4), sin(cos(1.0 + na4) * (1.0 + na4)), nf4.x);
+            float2 na4xy = lerp(float2(na4.x, na4.z), float2(na4.y, na4.w), nf4.y);
+            float n4 = lerp(na4xy.x, na4xy.y, nf4.z);
+
+            float flameCheck = sph2 + (n3 + n4 * 0.5) * noiseStrength * p.y * flameHeight;
+
+            if (flameCheck < 0.0) glowed = true;
+            if (glowed) glow = (float)(iter) / (float)(maxSteps);
+        }
+    }
+
+    // Color
+    float3 hot = float3(hotColor.x, hotColor.y, hotColor.z);
+    float3 cool = float3(coolColor.x, coolColor.y, coolColor.z);
+    float3 flameCol = lerp(hot, cool, p.y * 0.02 + colorMix);
+
+    float glowFinal = pow(saturate(glow * 2.0), glowPower);
+    color = flameCol * glowFinal;
+    alpha = glowFinal;
+}

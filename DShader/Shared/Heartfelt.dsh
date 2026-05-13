@@ -1,0 +1,208 @@
+// Heartfelt - by Martijn Steinrucken aka BigWings - 2017
+// License: Creative Commons Attribution-NonCommercial-ShareAlike 3.0
+// Rain on glass with fog trails, heart shape, and lightning
+// Adapted for DreamShaderLang (no texture input - uses procedural background)
+
+Function HF_N(in float t, out float result)
+{
+    result = frac(sin(t * 12345.564) * 7658.76);
+}
+
+Function HF_N13(in float p, out float3 result)
+{
+    float3 p3 = frac(float3(p, p, p) * float3(0.1031, 0.11369, 0.13787));
+    float d = dot(p3, float3(p3.y, p3.z, p3.x) + 19.19);
+    p3 += d;
+    result = frac(float3((p3.x + p3.y) * p3.z, (p3.x + p3.z) * p3.y, (p3.y + p3.z) * p3.x));
+}
+
+Function HF_Saw(in float b, in float t, out float result)
+{
+    result = smoothstep(0.0, b, t) * smoothstep(1.0, b, t);
+}
+
+Function HF_StaticDrops(in float2 uv, in float t, out float result)
+{
+    uv *= 40.0;
+    float2 id = floor(uv);
+    uv = frac(uv) - 0.5;
+    float3 n;
+    HF_N13(id.x * 107.45 + id.y * 3543.654, n);
+    float2 p = (n.xy - 0.5) * 0.7;
+    float d = length(uv - p);
+    float fade;
+    HF_Saw(0.025, frac(t + n.z), fade);
+    result = smoothstep(0.3, 0.0, d) * frac(n.z * 10.0) * fade;
+}
+
+Function HF_DropLayer2(in float2 uv, in float t, out float2 result)
+{
+    float2 UV = uv;
+    uv.y += t * 0.75;
+    float2 a = float2(6.0, 1.0);
+    float2 grid = a * 2.0;
+
+    float2 id = floor(uv * grid);
+    float colShift;
+    HF_N(id.x, colShift);
+    uv.y += colShift;
+
+    id = floor(uv * grid);
+    float3 n;
+    HF_N13(id.x * 35.2 + id.y * 2376.1, n);
+    float2 st = frac(uv * grid) - float2(0.5, 0.0);
+
+    float x = n.x - 0.5;
+    float y = UV.y * 20.0;
+    float wiggle = sin(y + sin(y));
+    x += wiggle * (0.5 - abs(x)) * (n.z - 0.5);
+    x *= 0.7;
+
+    float ti = frac(t + n.z);
+    float saw;
+    HF_Saw(0.85, ti, saw);
+    y = (saw - 0.5) * 0.9 + 0.5;
+
+    float2 p = float2(x, y);
+    float d = length((st - p) * float2(a.y, a.x));
+    float mainDrop = smoothstep(0.4, 0.0, d);
+
+    float r = sqrt(smoothstep(1.0, y, st.y));
+    float cd = abs(st.x - x);
+    float trail = smoothstep(0.23 * r, 0.15 * r * r, cd);
+    float trailFront = smoothstep(-0.02, 0.02, st.y - y);
+    trail *= trailFront * r * r;
+
+    y = UV.y;
+    float trail2 = smoothstep(0.2 * r, 0.0, cd);
+    float droplets = max(0.0, (sin(y * (1.0 - y) * 120.0) - st.y)) * trail2 * trailFront * n.z;
+    y = frac(y * 10.0) + (st.y - 0.5);
+    float dd = length(st - float2(x, y));
+    droplets = smoothstep(0.3, 0.0, dd);
+
+    float m = mainDrop + droplets * r * trailFront;
+    result = float2(m, trail);
+}
+
+Function HF_Drops(in float2 uv, in float t, in float l0, in float l1, in float l2, out float2 result)
+{
+    float s;
+    HF_StaticDrops(uv, t, s);
+    s *= l0;
+
+    float2 m1;
+    HF_DropLayer2(uv, t, m1);
+    m1 *= l1;
+
+    float2 m2;
+    HF_DropLayer2(uv * 1.85, t, m2);
+    m2 *= l2;
+
+    float c = s + m1.x + m2.x;
+    c = smoothstep(0.3, 1.0, c);
+
+    result = float2(c, max(m1.y * l0, m2.y * l1));
+}
+
+Function HF_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float rainAmount,
+    in float minBlur,
+    in float maxBlur,
+    in float heartEnabled,
+    in float lightningIntensity,
+    in float vignetteStrength,
+    in float4 bgColor1,
+    in float4 bgColor2,
+    out float3 color,
+    out float alpha)
+{
+    float2 resolution = resParam.xy;
+    // UE TexCoord Y=0 at bottom, Y=1 at top (same as Shadertoy)
+    // Negate uv.y so drops flow downward visually
+    float2 uv = (fragUV - 0.5);
+    uv.x *= resolution.x / max(resolution.y, 0.0001);
+    uv.y = -uv.y;
+    float2 UV = fragUV;
+
+    float T = time;
+    float t = T * 0.2;
+
+    float rain = rainAmount;
+    float mxBlur = maxBlur;
+    float mnBlur = minBlur;
+    float story = 0.0;
+    float heart = 0.0;
+
+    // Heart mode
+    if (heartEnabled > 0.5)
+    {
+        T = T - 102.0 * floor(T / 102.0); // mod(T, 102)
+        story = smoothstep(0.0, 70.0, T);
+        // Keep t linear - no zoom or time remapping
+        t = T * 0.2;
+        mnBlur = 4.0 + smoothstep(0.5, 1.0, story) * 3.0;
+        mxBlur = 6.0 + smoothstep(0.5, 1.0, story) * 1.5;
+
+        float2 hv = uv - float2(0.0, 0.1);
+        hv.x *= 0.5;
+        float s = smoothstep(110.0, 70.0, T);
+        hv.y -= sqrt(abs(hv.x)) * 0.5 * s;
+        heart = length(hv);
+        heart = smoothstep(0.4 * s, 0.2 * s, heart) * s;
+        rain = heart;
+        mxBlur -= heart;
+    }
+    else
+    {
+        // No zoom scaling
+    }
+
+    float staticDrops = smoothstep(-0.5, 1.0, rain) * 2.0;
+    float layer1 = smoothstep(0.25, 0.75, rain);
+    float layer2 = smoothstep(0.0, 0.5, rain);
+
+    float2 c;
+    HF_Drops(uv, t, staticDrops, layer1, layer2, c);
+
+    // Normals (cheap version using offset)
+    float2 e = float2(0.002, 0.0);
+    float2 uv_ex = uv + e;
+    float2 uv_ey = uv + float2(0.0, 0.002);
+    float2 cx;
+    HF_Drops(uv_ex, t, staticDrops, layer1, layer2, cx);
+    float2 cy;
+    HF_Drops(uv_ey, t, staticDrops, layer1, layer2, cy);
+    float2 n = float2(cx.x - c.x, cy.x - c.x);
+
+    if (heartEnabled > 0.5)
+    {
+        n *= 1.0 - smoothstep(60.0, 85.0, T);
+        c.y *= 1.0 - smoothstep(80.0, 100.0, T) * 0.8;
+    }
+
+    float focus = lerp(mxBlur - c.y, mnBlur, smoothstep(0.1, 0.2, c.x));
+
+    // Drops only - no background. Use drop mask and trail as alpha.
+    // c.x = drop coverage, c.y = trail coverage
+    // n = normal distortion from drops
+    float dropMask = c.x + c.y * 0.5;
+    float normalStrength = length(n) * 20.0;
+    float totalAlpha = saturate(dropMask + normalStrength);
+
+    // Drop color: bright refraction-like highlight
+    float3 dropColor = float3(0.7, 0.8, 1.0) * (1.0 + normalStrength * 2.0);
+    // Add specular highlight from normal
+    dropColor += float3(1.0, 1.0, 1.0) * pow(saturate(n.x * 3.0 + 0.2), 4.0);
+
+    float3 col = dropColor * totalAlpha;
+
+    // Vignette
+    float2 vigUV = UV - 0.5;
+    col *= 1.0 - dot(vigUV, vigUV) * vignetteStrength;
+
+    color = max(col, 0.0);
+    alpha = totalAlpha;
+}

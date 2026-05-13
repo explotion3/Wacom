@@ -1,0 +1,45 @@
+import "Shared/NightSky.dsh";
+
+Shader(Name="DreamMaterials/M_NightSky")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="NightSky";
+            SortPriority=10;
+            Description="Viewport resolution for aspect ratio correction.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="NightSky";
+            SortPriority=20;
+            Description="Animation speed. Controls star twinkle and nebula drift rate.";
+        ];
+
+        ScalarParameter Intensity = 1.0 [
+            Group="NightSky";
+            SortPriority=30;
+            Description="Overall brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 skyColor;
+        NightSky_Evaluate(uv, Resolution, time, skyColor);
+
+        Color = skyColor * Intensity;
+    }
+}

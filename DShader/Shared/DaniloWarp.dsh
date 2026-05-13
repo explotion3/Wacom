@@ -1,0 +1,50 @@
+// Danilo Guanabara's warp effect (pouet.net #57245)
+// Credits: Danilo Guanabara
+// Adapted for DreamShaderLang
+
+Function DaniloWarp_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float warpSpeed,
+    in float warpStrength,
+    in float waveFreq,
+    in float dotSize,
+    in float colorSeparation,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+    float aspect = resolution.x / max(resolution.y, 0.0001);
+
+    float cr = 0.0;
+    float cg = 0.0;
+    float cb = 0.0;
+    float l = 1.0;
+    float z = time;
+
+    for (int i = 0; i < 3; i++)
+    {
+        float2 uv = fragUV;
+        float2 p = fragUV - 0.5;
+        p.x *= aspect;
+
+        z += warpSpeed;
+        l = length(p);
+
+        // Warp distortion
+        float warp = (sin(z) + 1.0) * abs(sin(l * waveFreq - z - z));
+        uv += p / max(l, 0.0001) * warp * warpStrength;
+
+        // Mod grid dots
+        float2 modUV = uv - floor(uv); // frac(uv)
+        float dotDist = length(modUV - 0.5);
+        float dotVal = dotSize / max(dotDist, 0.0001);
+
+        if (i == 0) cr = dotVal;
+        if (i == 1) cg = dotVal;
+        if (i == 2) cb = dotVal;
+    }
+
+    float invL = 1.0 / max(l, 0.0001);
+    color = float3(cr, cg, cb) * invL;
+}

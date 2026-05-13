@@ -1,0 +1,115 @@
+// Star Nest - volumetric fractal starfield
+// Original by Pablo Roman Andrioli (MIT License)
+// Adapted for DreamShaderLang
+
+Function StarNest_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float zoom,
+    in float tile,
+    in float speed,
+    in float volsteps,
+    in float iterations,
+    in float formuparam,
+    in float stepsize,
+    in float brightness,
+    in float darkmatter,
+    in float distfading,
+    in float saturation,
+    in float rotX,
+    in float rotY,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+
+    // Get coords and direction
+    float2 uv = fragUV - 0.5;
+    uv.y *= resolution.y / max(resolution.x, 0.0001);
+    float3 dir = float3(uv.x * zoom, uv.y * zoom, 1.0);
+
+    float t = time * speed + 0.25;
+
+    // Rotation matrices
+    float a1 = 0.5 + rotX * 2.0;
+    float a2 = 0.8 + rotY * 2.0;
+    float c1 = cos(a1); float s1 = sin(a1);
+    float c2 = cos(a2); float s2 = sin(a2);
+
+    // dir.xz *= rot1
+    float dx1 = dir.x * c1 + dir.z * s1;
+    float dz1 = -dir.x * s1 + dir.z * c1;
+    dir.x = dx1; dir.z = dz1;
+    // dir.xy *= rot2
+    float dx2 = dir.x * c2 + dir.y * s2;
+    float dy2 = -dir.x * s2 + dir.y * c2;
+    dir.x = dx2; dir.y = dy2;
+
+    // Origin
+    float3 from = float3(1.0, 0.5, 0.5);
+    from += float3(t * 2.0, t, -2.0);
+    // from.xz *= rot1
+    float fx1 = from.x * c1 + from.z * s1;
+    float fz1 = -from.x * s1 + from.z * c1;
+    from.x = fx1; from.z = fz1;
+    // from.xy *= rot2
+    float fx2 = from.x * c2 + from.y * s2;
+    float fy2 = -from.x * s2 + from.y * c2;
+    from.x = fx2; from.y = fy2;
+
+    // Volumetric rendering
+    float s = 0.1;
+    float fade = 1.0;
+    float3 v = float3(0.0, 0.0, 0.0);
+
+    int maxVol = (int)volsteps;
+    int maxIter = (int)iterations;
+
+    for (int r = 0; r < 20; r++)
+    {
+        if (r >= maxVol) break;
+
+        float3 p = from + s * dir * 0.5;
+
+        // Tiling fold: abs(tile - mod(p, tile*2))
+        float tile2 = tile * 2.0;
+        p.x = abs(tile - (p.x - tile2 * floor(p.x / tile2)));
+        p.y = abs(tile - (p.y - tile2 * floor(p.y / tile2)));
+        p.z = abs(tile - (p.z - tile2 * floor(p.z / tile2)));
+
+        float pa = 0.0;
+        float a = 0.0;
+
+        for (int i = 0; i < 17; i++)
+        {
+            if (i >= maxIter) break;
+
+            // The magic formula: p = abs(p) / dot(p,p) - formuparam
+            float d = dot(p, p);
+            p = abs(p) / max(d, 0.0001) - formuparam;
+
+            // Absolute sum of average change
+            float pl = length(p);
+            a += abs(pl - pa);
+            pa = pl;
+        }
+
+        float dm = max(0.0, darkmatter - a * a * 0.001);
+        a *= a * a; // add contrast
+
+        if (r > 6) fade *= 1.0 - dm; // dark matter fade
+
+        v += fade;
+        v += float3(s, s * s, s * s * s * s) * a * brightness * fade;
+
+        fade *= distfading;
+        s += stepsize;
+    }
+
+    // Color adjust: mix(vec3(length(v)), v, saturation)
+    float vLen = length(v);
+    float3 gray = float3(vLen, vLen, vLen);
+    v = lerp(gray, v, saturation);
+
+    color = v * 0.01;
+}

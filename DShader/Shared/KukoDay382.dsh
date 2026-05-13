@@ -1,0 +1,105 @@
+// KuKo Day 382 - Voxelized tunnel with volumetric glow
+// Adapted for DreamShaderLang
+
+Function KuKo382_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float travelSpeed,
+    in float fov,
+    in float marchSteps,
+    in float stepMul,
+    in float voxelRes,
+    in float tubeRadius,
+    in float tubeThickness,
+    in float waveAmp,
+    in float waveFreq,
+    in float twistAmount,
+    in float colorSpeed,
+    in float colorFreq,
+    in float glowIntensity,
+    in float toneMapDiv,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+    float2 uv = (fragUV * 2.0 - 1.0);
+    uv.x *= resolution.x / max(resolution.y, 0.0001);
+
+    float3 ro = float3(0.0, 0.0, -time * travelSpeed);
+    float3 rd = normalize(float3(uv.x * fov, uv.y * fov, -1.0));
+
+    float dt = 0.0;
+    float4 O = float4(0.0, 0.0, 0.0, 0.0);
+
+    int maxSteps = (int)marchSteps;
+
+    for (int i = 0; i < 60; i++)
+    {
+        if (i >= maxSteps) break;
+
+        // Ray position
+        float3 rp = ro + rd * dt;
+
+        // Path offset (tunnel waviness)
+        float3 pathOffset = rp;
+        pathOffset.y += sin(rp.z * waveFreq + time * 2.0) * waveAmp;
+        pathOffset.z -= time;
+        rp += pathOffset;
+
+        // Twist rotation: p.xy *= mat2(cos(dt*twistAmount + vec4(0,11,33,0)))
+        float twistAngle = dt * twistAmount;
+        float m00 = cos(twistAngle);
+        float m01 = cos(twistAngle + 11.0);
+        float m10 = cos(twistAngle + 33.0);
+        float m11 = cos(twistAngle);
+        float rpx = rp.x * m00 + rp.y * m01;
+        float rpy = rp.x * m10 + rp.y * m11;
+        rp.x = rpx;
+        rp.y = rpy;
+
+        // Voxel quantization
+        float vr = voxelRes;
+        rp = floor(rp * vr + 0.5) / vr;
+
+        // SDF: map function
+        // path transform for SDF
+        float3 p1 = rp;
+        p1.y += sin(p1.z * 1.0 + time * 2.0) * waveAmp;
+        p1.z -= time;
+        // mod repetition
+        p1.x = p1.x - 2.0 * floor(p1.x / 2.0) - 1.0; // mod(p1.x, 2) - 1
+        p1.y = p1.y - 2.0 * floor(p1.y / 2.0) - 1.0;
+        p1.z = p1.z - 2.0 * floor(p1.z / 2.0) - 1.0;
+        // rects: sqrt(x^2 + y^2) - radius
+        float sdfDist = sqrt(p1.x * p1.x + p1.y * p1.y) - 0.1;
+
+        dt += sdfDist * stepMul;
+
+        // Repetition & reflection in xy for glow calculation
+        float2 I2;
+        I2.x = abs((rp.x - 1.0) - 2.0 * floor((rp.x - 1.0) / 2.0) - 1.0) - 1.0;
+        I2.y = abs((rp.y - 1.0) - 2.0 * floor((rp.y - 1.0) / 2.0) - 1.0) - 1.0;
+
+        // Density: distance to thin cylinder
+        float cylDist = abs(length(I2 * 1.0) - tubeRadius) + tubeThickness;
+
+        // Color accumulation
+        float density = exp(-dt) / max(cylDist, 0.001) * glowIntensity;
+
+        // Color from position
+        float colorPhase = (rp.x * rp.y * rp.z) * colorFreq - time * colorSpeed;
+        float4 colMod = abs(sin(colorPhase + float4(0.0, 4.42, 1.4, 0.0))) + 0.05;
+
+        O += density / colMod;
+    }
+
+    // Tone mapping: tanh(O / toneMapDiv)
+    O = O / toneMapDiv;
+    float3 result = float3(
+        tanh(O.x),
+        tanh(O.y),
+        tanh(O.z)
+    );
+
+    color = result;
+}

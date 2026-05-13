@@ -1,0 +1,55 @@
+import "Shared/PhantomTunnel.dsh";
+
+Shader(Name="DreamMaterials/M_PhantomTunnel")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="PhantomTunnel";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio correction.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="PhantomTunnel";
+            SortPriority=10;
+            Description="Animation speed multiplier.";
+        ];
+
+        ScalarParameter TunnelSpeed = 1.0 [
+            Group="PhantomTunnel";
+            SortPriority=20;
+            Description="Camera travel speed through the tunnel.";
+        ];
+
+        ScalarParameter Brightness = 1.0 [
+            Group="PhantomTunnel";
+            SortPriority=30;
+            Description="Overall brightness multiplier for the volumetric glow.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 tunnelColor;
+        float tunnelAlpha;
+        PhantomTunnel_Evaluate(uv, Resolution, time, TunnelSpeed, Brightness, tunnelColor, tunnelAlpha);
+
+        Color = tunnelColor;
+        Alpha = tunnelAlpha;
+    }
+}

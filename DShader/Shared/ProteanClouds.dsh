@@ -1,0 +1,178 @@
+// Protean Clouds by nimitz (twitter: @stormoid)
+// License: Creative Commons Attribution-NonCommercial-ShareAlike 3.0
+// Adapted for DreamShaderLang
+
+Function PC_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float travelSpeed,
+    in float cloudDensity,
+    in float cloudScale,
+    in float lightIntensity,
+    in float fogAmount,
+    in float colorShift,
+    in float vignetteStrength,
+    in float marchSteps,
+    in float mouseX,
+    in float mouseY,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+    float2 q = fragUV;
+    float2 p = (fragUV - 0.5);
+    p.x *= resolution.x / max(resolution.y, 0.0001);
+
+    float2 bsMo = float2(mouseX - 0.5, mouseY - 0.5);
+
+    float iTime = time;
+    float timeScaled = time * travelSpeed;
+
+    // m3 matrix (rotation matrix * 1.93)
+    float m3_00 = 0.33338 * 1.93; float m3_01 = 0.56034 * 1.93; float m3_02 = -0.71817 * 1.93;
+    float m3_10 = -0.87887 * 1.93; float m3_11 = 0.32651 * 1.93; float m3_12 = -0.15323 * 1.93;
+    float m3_20 = 0.15162 * 1.93; float m3_21 = 0.69596 * 1.93; float m3_22 = 0.61339 * 1.93;
+
+    // prm1 - smooth oscillation
+    float prm1 = smoothstep(-0.4, 0.4, sin(iTime * 0.3));
+
+    // Camera setup
+    float3 ro = float3(0.0, 0.0, timeScaled);
+    ro += float3(sin(iTime) * 0.5, 0.0, 0.0);
+
+    // disp function: vec2(sin(t*0.22), cos(t*0.175)) * 2
+    float dspAmp = 0.85;
+    float2 dispRo = float2(sin(ro.z * 0.22), cos(ro.z * 0.175)) * 2.0;
+    ro.x += dispRo.x * dspAmp;
+    ro.y += dispRo.y * dspAmp;
+
+    float tgtDst = 3.5;
+    float2 dispTgt = float2(sin((timeScaled + tgtDst) * 0.22), cos((timeScaled + tgtDst) * 0.175)) * 2.0;
+    float3 target = normalize(ro - float3(dispTgt.x * dspAmp, dispTgt.y * dspAmp, timeScaled + tgtDst));
+
+    ro.x -= bsMo.x * 2.0;
+
+    float3 rightdir = normalize(cross(target, float3(0.0, 1.0, 0.0)));
+    float3 updir = normalize(cross(rightdir, target));
+    rightdir = normalize(cross(updir, target));
+    float3 rd = normalize((p.x * rightdir + p.y * updir) * 1.0 - target);
+
+    // Rotate rd.xy
+    float2 dispRd = float2(sin((timeScaled + 3.5) * 0.22), cos((timeScaled + 3.5) * 0.175)) * 2.0;
+    float rotA = -dispRd.x * 0.2 + bsMo.x;
+    float cra = cos(rotA); float sra = sin(rotA);
+    float rdx = rd.x * cra + rd.y * sra;
+    float rdy = -rd.x * sra + rd.y * cra;
+    rd.x = rdx; rd.y = rdy;
+
+    // Render - volumetric marching
+    float4 rez = float4(0.0, 0.0, 0.0, 0.0);
+    float ldst = 8.0;
+    float2 dispL = float2(sin((timeScaled + ldst) * 0.22), cos((timeScaled + ldst) * 0.175)) * 2.0;
+    float3 lpos = float3(dispL.x * 0.5, dispL.y * 0.5, timeScaled + ldst);
+
+    float t = 1.5;
+    float fogT = 0.0;
+
+    int maxSteps = (int)marchSteps;
+
+    for (int i = 0; i < 130; i++)
+    {
+        if (i >= maxSteps) break;
+        if (rez.w > 0.99) break;
+
+        float3 pos = ro + t * rd;
+
+        // --- map function ---
+        float3 p2 = pos;
+        float2 dispP = float2(sin(pos.z * 0.22), cos(pos.z * 0.175)) * 2.0;
+        p2.x -= dispP.x;
+        p2.y -= dispP.y;
+
+        // rotate pos.xy
+        float rotB = sin(pos.z + iTime) * (0.1 + prm1 * 0.05) + iTime * 0.09;
+        float crb = cos(rotB); float srb = sin(rotB);
+        float posx = pos.x * crb + pos.y * srb;
+        float posy = -pos.x * srb + pos.y * crb;
+        float3 mp = float3(posx, posy, pos.z);
+
+        float cl = dot(p2.xy, p2.xy); // mag2
+        float d = 0.0;
+        mp *= 0.61 * cloudScale;
+        float z = 1.0;
+        float trk = 1.0;
+        float dspAmpN = 0.1 + prm1 * 0.2;
+
+        for (int j = 0; j < 5; j++)
+        {
+            // p += sin(p.zxy * 0.75 * trk + iTime * trk * 0.8) * dspAmpN
+            mp += sin(float3(mp.z, mp.x, mp.y) * 0.75 * trk + iTime * trk * 0.8) * dspAmpN;
+            // d -= abs(dot(cos(p), sin(p.yzx)) * z)
+            float3 cosP = cos(mp);
+            float3 sinPyzx = sin(float3(mp.y, mp.z, mp.x));
+            d -= abs(dot(cosP, sinPyzx) * z);
+            z *= 0.57;
+            trk *= 1.4;
+            // p = p * m3
+            float nx = mp.x * m3_00 + mp.y * m3_01 + mp.z * m3_02;
+            float ny = mp.x * m3_10 + mp.y * m3_11 + mp.z * m3_12;
+            float nz = mp.x * m3_20 + mp.y * m3_21 + mp.z * m3_22;
+            mp = float3(nx, ny, nz);
+        }
+
+        d = abs(d + prm1 * 3.0) + prm1 * 0.3 - 2.5 + bsMo.y;
+        float mapX = d + cl * 0.2 + 0.25;
+        float mapY = cl;
+        // --- end map ---
+
+        float den = clamp((mapX - 0.3) * cloudDensity, 0.0, 1.0) * 1.12;
+        float dn = clamp(mapX + 2.0, 0.0, 3.0);
+
+        float4 col = float4(0.0, 0.0, 0.0, 0.0);
+        if (mapX > 0.6)
+        {
+            // Color from position
+            float3 sinCol = sin(float3(5.0, 0.4, 0.2) + mapY * 0.1 + sin(pos.z * 0.4) * 0.5 + 1.8) * 0.5 + 0.5;
+            col = float4(sinCol.x, sinCol.y, sinCol.z, 0.08);
+            col *= den * den * den;
+
+            // linstep(4, -2.5, mapX) * 2.3
+            float ls = clamp((mapX - 4.0) / (-2.5 - 4.0), 0.0, 1.0);
+            col.x *= ls * 2.3; col.y *= ls * 2.3; col.z *= ls * 2.3;
+
+            // Simplified lighting (skip second map call for performance)
+            float dif = clamp(den * 0.5, 0.001, 1.0);
+            float3 lighting = den * (float3(0.005, 0.045, 0.075) + lightIntensity * float3(0.033, 0.07, 0.03) * dif);
+            col.x *= lighting.x; col.y *= lighting.y; col.z *= lighting.z;
+        }
+
+        // Fog
+        float fogC = exp(t * 0.2 - 2.2);
+        float fogDelta = clamp(fogC - fogT, 0.0, 1.0) * fogAmount;
+        col += float4(0.06, 0.11, 0.11, 0.1) * fogDelta;
+        fogT = fogC;
+
+        // Accumulate
+        float oneMinusA = 1.0 - rez.w;
+        rez += col * oneMinusA;
+
+        t += clamp(0.5 - dn * dn * 0.05, 0.09, 0.3);
+    }
+
+    rez = clamp(rez, 0.0, 1.0);
+    float3 finalCol = float3(rez.x, rez.y, rez.z);
+
+    // Color shift (iLerp between bgr and rgb)
+    float3 colBGR = float3(finalCol.z, finalCol.y, finalCol.x);
+    float mixAmt = clamp(1.0 - prm1 * colorShift, 0.05, 1.0);
+    finalCol = lerp(colBGR, finalCol, mixAmt);
+
+    // Gamma
+    finalCol = pow(max(finalCol, 0.0001), float3(0.55, 0.65, 0.6)) * float3(1.0, 0.97, 0.9);
+
+    // Vignette
+    float vig = pow(16.0 * q.x * q.y * (1.0 - q.x) * (1.0 - q.y), 0.12) * vignetteStrength + (1.0 - vignetteStrength);
+    finalCol *= vig;
+
+    color = finalCol;
+}

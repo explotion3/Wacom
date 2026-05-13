@@ -1,0 +1,58 @@
+import "Shared/CrystalOrb.dsh";
+
+Function LuminanceAlpha(in float3 color, out float result)
+{
+    float lum = dot(color, float3(0.299, 0.587, 0.114));
+    result = saturate(lum * 3.0);
+}
+
+Shader(Name="DreamMaterials/M_CrystalOrb")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="CrystalOrb";
+            SortPriority=10;
+            Description="Viewport resolution for aspect ratio correction.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="CrystalOrb";
+            SortPriority=20;
+            Description="Animation speed multiplier.";
+        ];
+
+        ScalarParameter Brightness = 1.0 [
+            Group="CrystalOrb";
+            SortPriority=30;
+            Description="Final brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 orbColor;
+        CrystalOrb_Evaluate(uv, Resolution, time, orbColor);
+
+        Color = orbColor * Brightness;
+
+        // Alpha from luminance (sphere fades at edges)
+        float alphaRaw;
+        LuminanceAlpha(orbColor, alphaRaw);
+        Alpha = alphaRaw;
+    }
+}

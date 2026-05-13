@@ -1,0 +1,115 @@
+import "Shared/Flame.dsh";
+
+Shader(Name="DreamMaterials/M_Flame")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="Flame";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="Animation";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter Zoom = 1.0 [
+            Group="Camera";
+            SortPriority=10;
+            Description="Camera zoom. Lower=wider view. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter CameraDistance = 4.0 [
+            Group="Camera";
+            SortPriority=15;
+            Description="Camera distance from flame. Try 2.0~8.0.";
+        ];
+
+        ScalarParameter FlameHeight = 1.0 [
+            Group="Flame";
+            SortPriority=20;
+            Description="Flame vertical stretch. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter FlameWidth = 1.0 [
+            Group="Flame";
+            SortPriority=25;
+            Description="Flame horizontal squeeze. Higher=thinner. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter NoiseStrength = 0.25 [
+            Group="Flame";
+            SortPriority=30;
+            Description="Noise displacement intensity. Try 0.1~0.5.";
+        ];
+
+        ScalarParameter NoiseSpeed = 2.0 [
+            Group="Flame";
+            SortPriority=35;
+            Description="Noise scroll speed (flame flicker). Try 1.0~5.0.";
+        ];
+
+        ScalarParameter MarchSteps = 64.0 [
+            Group="Rendering";
+            SortPriority=40;
+            Description="Raymarch steps (integer). More=better quality. 32~64.";
+        ];
+
+        ScalarParameter GlowPower = 4.0 [
+            Group="Color";
+            SortPriority=45;
+            Description="Glow falloff power. Higher=sharper flame edge. Try 2.0~8.0.";
+        ];
+
+        VectorParameter HotColor = float4(1.0, 0.5, 0.1, 1.0) [
+            Group="Color";
+            SortPriority=50;
+            Description="Hot/inner flame color (orange/yellow).";
+        ];
+
+        VectorParameter CoolColor = float4(0.1, 0.5, 1.0, 1.0) [
+            Group="Color";
+            SortPriority=55;
+            Description="Cool/outer flame color (blue).";
+        ];
+
+        ScalarParameter ColorMix = 0.4 [
+            Group="Color";
+            SortPriority=60;
+            Description="Hot/cool color blend position. Try 0.2~0.6.";
+        ];
+
+        ScalarParameter FinalBrightness = 1.0 [
+            Group="Color";
+            SortPriority=65;
+            Description="Final output brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 flameColor;
+        float flameAlpha;
+        Flame_Evaluate(uv, Resolution, time, Zoom, FlameHeight, FlameWidth, NoiseStrength, NoiseSpeed, MarchSteps, GlowPower, CameraDistance, HotColor, CoolColor, ColorMix, flameColor, flameAlpha);
+
+        Color = flameColor * FinalBrightness;
+        Alpha = flameAlpha;
+    }
+}

@@ -1,0 +1,99 @@
+import "Shared/Accretion.dsh";
+
+Shader(Name="DreamMaterials/M_Accretion")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="Accretion";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="Animation";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter Zoom = 1.0 [
+            Group="Camera";
+            SortPriority=10;
+            Description="Camera zoom. Lower=wider. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter MarchSteps = 20.0 [
+            Group="Rendering";
+            SortPriority=15;
+            Description="Raymarch steps (integer). More=better quality. 10~20.";
+        ];
+
+        ScalarParameter TurbulenceSteps = 7.0 [
+            Group="Rendering";
+            SortPriority=20;
+            Description="Turbulence iterations (integer). More=finer detail. 3~7.";
+        ];
+
+        ScalarParameter RefractionAmount = 0.3 [
+            Group="Effect";
+            SortPriority=25;
+            Description="Refraction coupling to raymarch iterator. The key effect. Try 0.1~0.8.";
+        ];
+
+        ScalarParameter RingRadius = 5.0 [
+            Group="Effect";
+            SortPriority=30;
+            Description="Accretion ring base radius. Try 3.0~8.0.";
+        ];
+
+        ScalarParameter RingDepthScale = 0.2 [
+            Group="Effect";
+            SortPriority=35;
+            Description="How much depth affects ring radius. Try 0.0~0.5.";
+        ];
+
+        ScalarParameter ColorSpeed = 1.0 [
+            Group="Color";
+            SortPriority=40;
+            Description="Color variation speed along the ring. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter ColorOffset = 0.4 [
+            Group="Color";
+            SortPriority=45;
+            Description="Color offset per iteration. Try 0.2~0.8.";
+        ];
+
+        ScalarParameter ToneMapDivisor = 400.0 [
+            Group="Color";
+            SortPriority=50;
+            Description="Tone mapping divisor. Lower=brighter. Try 100~800.";
+        ];
+
+        ScalarParameter FinalBrightness = 1.0 [
+            Group="Color";
+            SortPriority=55;
+            Description="Final output brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 accColor;
+        Accretion_Evaluate(uv, Resolution, time, Zoom, MarchSteps, TurbulenceSteps, RefractionAmount, RingRadius, RingDepthScale, ColorSpeed, ColorOffset, ToneMapDivisor, accColor);
+
+        Color = accColor * FinalBrightness;
+    }
+}

@@ -1,0 +1,71 @@
+// "Accretion" by @XorDev
+// Refraction effect with raymarch iterator added to turbulence
+// Adapted for DreamShaderLang
+
+Function Accretion_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float zoom,
+    in float marchSteps,
+    in float turbulenceSteps,
+    in float refractionAmount,
+    in float ringRadius,
+    in float ringDepthScale,
+    in float colorSpeed,
+    in float colorOffset,
+    in float toneMapDiv,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+
+    // Screen coordinates centered
+    float2 I = fragUV * resolution;
+    float3 resVec = float3(resolution.x, resolution.y, resolution.x);
+
+    float z = 0.0;
+    float d = 0.0;
+    float4 O = float4(0.0, 0.0, 0.0, 0.0);
+
+    int maxMarch = (int)marchSteps;
+    int maxTurb = (int)turbulenceSteps;
+
+    for (int iter = 0; iter < 20; iter++)
+    {
+        if (iter >= maxMarch) break;
+        float i = (float)(iter + 1);
+
+        // Sample point from ray direction
+        float3 rayDir = normalize(float3(I.x * 2.0 - resolution.x, I.y * 2.0 - resolution.y, -resolution.x) * zoom);
+        float3 p = z * rayDir + 0.1;
+
+        // Polar coordinates transformation
+        float angle = atan2(p.y / 0.2, p.x) * 2.0;
+        float pz = p.z / 3.0;
+        float radius = length(p.xy) - ringRadius - z * ringDepthScale;
+        p = float3(angle, pz, radius);
+
+        // Turbulence with refraction (i added to turbulence)
+        for (int ti = 0; ti < 7; ti++)
+        {
+            if (ti >= maxTurb) break;
+            float td = (float)(ti + 1);
+            p += sin(float3(p.y, p.z, p.x) * td + time + refractionAmount * i) / td;
+        }
+
+        // Distance to cylinder and waves
+        float3 cosP = cos(p);
+        float4 distVec = float4(0.4 * cosP - 0.4, p.z);
+        d = length(distVec);
+        z += d;
+
+        // Coloring: (1 + cos(p.x + i*0.4 + z + vec4(6,1,2,0))) / d
+        float4 colPhase = float4(6.0, 1.0, 2.0, 0.0);
+        float4 col = (1.0 + cos(p.x * colorSpeed + i * colorOffset + z + colPhase)) / max(d, 0.001);
+        O += col;
+    }
+
+    // Tanh tonemap: tanh(O*O / 400)
+    float4 sq = O * O / toneMapDiv;
+    color = float3(tanh(sq.x), tanh(sq.y), tanh(sq.z));
+}

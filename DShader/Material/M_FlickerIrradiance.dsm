@@ -1,0 +1,87 @@
+import "Shared/FlickerIrradiance.dsh";
+
+Shader(Name="DreamMaterials/M_FlickerIrradiance")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="FlickerIrradiance";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="Animation";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter LoopDuration = 4.0 [
+            Group="Animation";
+            SortPriority=10;
+            Description="Loop cycle duration in seconds. Original is 4.0.";
+        ];
+
+        ScalarParameter ShapeScale = 1.0 [
+            Group="Shape";
+            SortPriority=20;
+            Description="Size of the light quadrilaterals. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter ShapeSpread = 0.7 [
+            Group="Shape";
+            SortPriority=25;
+            Description="How far shapes travel from center. Try 0.3~1.5.";
+        ];
+
+        ScalarParameter GridScale = 5.0 [
+            Group="Background";
+            SortPriority=30;
+            Description="Checkerboard grid density. Try 3~10.";
+        ];
+
+        ScalarParameter GridBrightness = 0.05 [
+            Group="Background";
+            SortPriority=35;
+            Description="Checkerboard grid brightness. Try 0.0~0.15.";
+        ];
+
+        ScalarParameter ColorIntensity = 1.0 [
+            Group="Color";
+            SortPriority=40;
+            Description="Color saturation/intensity of the light shapes. Try 0.5~3.0.";
+        ];
+
+        ScalarParameter FlickerStrength = 0.3 [
+            Group="Color";
+            SortPriority=45;
+            Description="Strength of the random flicker effect. 0=no flicker, 1=full.";
+        ];
+
+        ScalarParameter FinalBrightness = 1.0 [
+            Group="Color";
+            SortPriority=50;
+            Description="Final output brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 flickerColor;
+        FI_Evaluate(uv, Resolution, time, LoopDuration, ShapeScale, ShapeSpread, ColorIntensity, FlickerStrength, GridBrightness, GridScale, flickerColor);
+
+        Color = flickerColor * FinalBrightness;
+    }
+}

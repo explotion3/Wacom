@@ -1,0 +1,123 @@
+import "Shared/KukoDay382.dsh";
+
+Shader(Name="DreamMaterials/M_KukoDay382")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="KukoDay382";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="Animation";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter TravelSpeed = 0.0 [
+            Group="Camera";
+            SortPriority=10;
+            Description="Camera forward travel speed. 0=stationary, try 0.0~2.0.";
+        ];
+
+        ScalarParameter FOV = 1.0 [
+            Group="Camera";
+            SortPriority=15;
+            Description="Field of view multiplier. Lower=zoomed in. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter MarchSteps = 60.0 [
+            Group="Rendering";
+            SortPriority=20;
+            Description="Raymarch iterations (integer). More=better but heavier. 30~60.";
+        ];
+
+        ScalarParameter StepMultiplier = 0.252 [
+            Group="Rendering";
+            SortPriority=25;
+            Description="Step size multiplier. Smaller=more detail. Try 0.1~0.5.";
+        ];
+
+        ScalarParameter VoxelResolution = 25.0 [
+            Group="Voxel";
+            SortPriority=30;
+            Description="Voxel grid resolution. Higher=finer voxels. Try 10~50.";
+        ];
+
+        ScalarParameter TubeRadius = 0.13 [
+            Group="Geometry";
+            SortPriority=35;
+            Description="Radius of the glowing tube structure. Try 0.05~0.3.";
+        ];
+
+        ScalarParameter TubeThickness = 0.051 [
+            Group="Geometry";
+            SortPriority=40;
+            Description="Tube wall thickness (affects glow width). Try 0.01~0.1.";
+        ];
+
+        ScalarParameter WaveAmplitude = 0.05 [
+            Group="Motion";
+            SortPriority=45;
+            Description="Tunnel wave amplitude. Try 0.0~0.2.";
+        ];
+
+        ScalarParameter WaveFrequency = 1.0 [
+            Group="Motion";
+            SortPriority=50;
+            Description="Tunnel wave frequency. Try 0.5~3.0.";
+        ];
+
+        ScalarParameter TwistAmount = 0.6 [
+            Group="Motion";
+            SortPriority=55;
+            Description="Twist rotation per unit distance. Try 0.0~1.5.";
+        ];
+
+        ScalarParameter ColorSpeed = 0.35 [
+            Group="Color";
+            SortPriority=60;
+            Description="Color animation speed. Try 0.1~1.0.";
+        ];
+
+        ScalarParameter ColorFrequency = 2.3 [
+            Group="Color";
+            SortPriority=65;
+            Description="Color pattern frequency. Try 1.0~5.0.";
+        ];
+
+        ScalarParameter GlowIntensity = 1.0 [
+            Group="Color";
+            SortPriority=70;
+            Description="Volumetric glow brightness. Try 0.5~3.0.";
+        ];
+
+        ScalarParameter ToneMapDivisor = 2000.0 [
+            Group="Color";
+            SortPriority=75;
+            Description="Tone mapping divisor. Lower=brighter. Try 500~5000.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 tunnelColor;
+        KuKo382_Evaluate(uv, Resolution, time, TravelSpeed, FOV, MarchSteps, StepMultiplier, VoxelResolution, TubeRadius, TubeThickness, WaveAmplitude, WaveFrequency, TwistAmount, ColorSpeed, ColorFrequency, GlowIntensity, ToneMapDivisor, tunnelColor);
+
+        Color = tunnelColor;
+    }
+}

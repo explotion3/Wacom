@@ -1,0 +1,96 @@
+// "Singularity" by @XorDev - A whirling blackhole
+// Adapted for DreamShaderLang
+
+Function Singularity_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float zoom,
+    in float spiralSpeed,
+    in float waveIterations,
+    in float waveDistort,
+    in float diskSize,
+    in float diskBrightness,
+    in float rimRadius,
+    in float rimSharpness,
+    in float colorRedBlue,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+
+    // Centered ratio-corrected coordinates
+    float2 p = (fragUV * 2.0 - 1.0);
+    p.x *= resolution.x / max(resolution.y, 0.0001);
+    p /= zoom;
+
+    float2 d = float2(-1.0, 1.0);
+
+    // Blackhole center offset
+    float i = 0.2;
+    float2 b = p - i * d;
+
+    // Rotate and apply perspective (gravitational lensing)
+    float bDot = dot(b, b);
+    float2 skew = d / (0.1 + i / max(bDot, 0.0001));
+    // c = p * mat2(1, 1, skew.x, skew.y)
+    float2 c;
+    c.x = p.x * 1.0 + p.y * skew.x;
+    c.y = p.x * 1.0 + p.y * skew.y;
+
+    // Rotate into spiraling coordinates
+    float a = dot(c, c);
+    float logR = 0.5 * log(max(a, 0.0001));
+    float angle = logR + time * spiralSpeed;
+    // v = c * mat2(cos(angle + vec4(0,33,11,0))) / i
+    float m00 = cos(angle);
+    float m01 = cos(angle + 33.0);
+    float m10 = cos(angle + 11.0);
+    float m11 = cos(angle);
+    float2 v;
+    v.x = (c.x * m00 + c.y * m01) / i;
+    v.y = (c.x * m10 + c.y * m11) / i;
+
+    // Wave accumulation
+    float2 w = float2(0.0, 0.0);
+    int maxIter = (int)waveIterations;
+    float fi = 1.0;
+    for (int iter = 0; iter < 9; iter++)
+    {
+        fi += 1.0;
+        if (iter >= maxIter) break;
+        // w += 1 + sin(v)
+        w += 1.0 + sin(v);
+        // v += 0.7 * sin(v.yx * i + time) / i + 0.5
+        v += waveDistort * sin(float2(v.y, v.x) * fi + time) / fi + 0.5;
+    }
+    // Final w accumulation
+    w += 1.0 + sin(v);
+
+    // Accretion disk radius
+    float2 diskUV = sin(v / 0.3) * 0.4 + c * (3.0 + d);
+    float diskDist = length(diskUV) * diskSize;
+
+    // Color computation: 1 - exp(-exp(c.x * gradient) / w.xyyx / disk / center / rim)
+
+    // Red/blue gradient from c.x
+    float4 gradient = exp(c.x * float4(0.6, -0.4, -1.0, 0.0) * colorRedBlue);
+
+    // Wave coloring divisor (w.xyyx)
+    float4 wDiv = float4(w.x, w.y, w.y, w.x);
+
+    // Accretion disk brightness
+    float diskFactor = diskBrightness + diskDist * diskDist / 4.0 - diskDist;
+
+    // Center darkness (1/a falloff)
+    float centerDark = 0.5 + 1.0 / max(a, 0.001);
+
+    // Rim highlight
+    float rimDist = abs(length(p) - rimRadius);
+    float rimFactor = rimSharpness + rimDist;
+
+    // Combine
+    float4 denom = wDiv * diskFactor * centerDark * rimFactor;
+    float4 result = 1.0 - exp(-gradient / max(denom, 0.001));
+
+    color = float3(result.x, result.y, result.z);
+}

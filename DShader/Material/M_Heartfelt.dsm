@@ -1,0 +1,97 @@
+import "Shared/Heartfelt.dsh";
+
+Shader(Name="DreamMaterials/M_Heartfelt")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="Heartfelt";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="Animation";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter RainAmount = 0.7 [
+            Group="Rain";
+            SortPriority=10;
+            Description="Amount of rain. 0=dry, 1=heavy rain. Ignored when HeartMode is on.";
+        ];
+
+        ScalarParameter MinBlur = 2.0 [
+            Group="Rain";
+            SortPriority=15;
+            Description="Minimum fog level (clear spots). Try 1~4.";
+        ];
+
+        ScalarParameter MaxBlur = 4.0 [
+            Group="Rain";
+            SortPriority=20;
+            Description="Maximum fog level (foggy areas). Try 3~8.";
+        ];
+
+        ScalarParameter HeartMode = 0.0 [
+            Group="Heart";
+            SortPriority=25;
+            Description="Enable heart animation (1=on, 0=off). Heart controls rain pattern.";
+        ];
+
+        ScalarParameter LightningIntensity = 0.0 [
+            Group="Atmosphere";
+            SortPriority=30;
+            Description="Lightning flash intensity. 0=none.";
+        ];
+
+        ScalarParameter VignetteStrength = 0.0 [
+            Group="Atmosphere";
+            SortPriority=35;
+            Description="Edge darkening strength. 0=none.";
+        ];
+
+        VectorParameter BackgroundTop = float4(0.15, 0.2, 0.35, 1.0) [
+            Group="Background";
+            SortPriority=40;
+            Description="Unused (transparent mode). Kept for compatibility.";
+        ];
+
+        VectorParameter BackgroundBottom = float4(0.4, 0.3, 0.2, 1.0) [
+            Group="Background";
+            SortPriority=45;
+            Description="Unused (transparent mode). Kept for compatibility.";
+        ];
+
+        ScalarParameter FinalBrightness = 1.0 [
+            Group="Color";
+            SortPriority=50;
+            Description="Final output brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 rainColor;
+        float rainAlpha;
+        HF_Evaluate(uv, Resolution, time, RainAmount, MinBlur, MaxBlur, HeartMode, LightningIntensity, VignetteStrength, BackgroundTop, BackgroundBottom, rainColor, rainAlpha);
+
+        Color = rainColor * FinalBrightness;
+        Alpha = rainAlpha;
+    }
+}

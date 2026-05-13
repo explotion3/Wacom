@@ -1,0 +1,105 @@
+import "Shared/ProteanClouds.dsh";
+
+Shader(Name="DreamMaterials/M_ProteanClouds")
+{
+    Properties = {
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="ProteanClouds";
+            SortPriority=0;
+            Description="Viewport resolution for aspect ratio.";
+        ];
+
+        ScalarParameter TimeScale = 1.0 [
+            Group="Animation";
+            SortPriority=5;
+            Description="Global time multiplier.";
+        ];
+
+        ScalarParameter TravelSpeed = 3.0 [
+            Group="Camera";
+            SortPriority=10;
+            Description="Camera travel speed through the clouds. Try 1.0~6.0.";
+        ];
+
+        ScalarParameter MouseX = 0.5 [
+            Group="Camera";
+            SortPriority=15;
+            Description="Horizontal look direction (replaces mouse). 0~1 range.";
+        ];
+
+        ScalarParameter MouseY = 0.5 [
+            Group="Camera";
+            SortPriority=20;
+            Description="Vertical look / density offset (replaces mouse). 0~1 range.";
+        ];
+
+        ScalarParameter CloudDensity = 1.0 [
+            Group="Clouds";
+            SortPriority=30;
+            Description="Overall cloud density multiplier. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter CloudScale = 1.0 [
+            Group="Clouds";
+            SortPriority=35;
+            Description="Scale of the cloud noise pattern. Try 0.5~2.0.";
+        ];
+
+        ScalarParameter MarchSteps = 80.0 [
+            Group="Clouds";
+            SortPriority=40;
+            Description="Raymarch steps (integer). More = better quality, heavier. 40~130.";
+        ];
+
+        ScalarParameter LightIntensity = 1.5 [
+            Group="Lighting";
+            SortPriority=50;
+            Description="Diffuse light intensity on clouds. Try 0.5~3.0.";
+        ];
+
+        ScalarParameter FogAmount = 1.0 [
+            Group="Lighting";
+            SortPriority=55;
+            Description="Background fog density. Try 0.0~2.0.";
+        ];
+
+        ScalarParameter ColorShift = 1.0 [
+            Group="Color";
+            SortPriority=60;
+            Description="Amount of animated color channel shifting. 0=none, 1=full.";
+        ];
+
+        ScalarParameter VignetteStrength = 0.7 [
+            Group="Color";
+            SortPriority=65;
+            Description="Vignette darkening at edges. 0=none, 1=full.";
+        ];
+
+        ScalarParameter FinalBrightness = 1.0 [
+            Group="Color";
+            SortPriority=70;
+            Description="Final output brightness multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        Base.EmissiveColor = Color;
+        Base.Opacity = 1.0;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float3 cloudColor;
+        PC_Evaluate(uv, Resolution, time, TravelSpeed, CloudDensity, CloudScale, LightIntensity, FogAmount, ColorShift, VignetteStrength, MarchSteps, MouseX, MouseY, cloudColor);
+
+        Color = cloudColor * FinalBrightness;
+    }
+}

@@ -1,0 +1,130 @@
+// Flickering Irradiance - by Jaenam (CC BY-NC-SA 4.0)
+// Animated geometric light shapes with flickering effect
+// Adapted for DreamShaderLang
+
+Function FI_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float loopDuration,
+    in float shapeScale,
+    in float shapeSpread,
+    in float colorIntensity,
+    in float flickerStrength,
+    in float gridBrightness,
+    in float gridScale,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+    float2 u = (fragUV * 2.0 - 1.0);
+    u.x *= resolution.x / max(resolution.y, 0.0001);
+
+    float pi = 3.1415926535;
+    float T = time - loopDuration * floor(time / loopDuration); // mod(time, loopDuration)
+
+    // Grid background
+    float2 gridCell = float2(
+        ceil(gridScale * u.x) + ceil(gridScale * u.y),
+        0.0
+    );
+    float gridMod = gridCell.x - 2.0 * floor(gridCell.x / 2.0); // mod(x, 2)
+    float3 result = float3(gridBrightness * gridMod, gridBrightness * gridMod, gridBrightness * gridMod);
+
+    // Iterate 3 light shapes
+    for (int idx = 0; idx < 3; idx++)
+    {
+        float fi = (float)idx;
+        float k = fi / 3.0;
+        float t = T + k * 0.1;
+        float m = t - loopDuration * floor(t / loopDuration); // mod(t, loopDuration)
+        float s = -(0.2 + (0.5 - 0.2) * k) * shapeScale; // -mix(.2, .5, k) * scale
+
+        // E(x) = 1 - pow(1-clamp(x,0,1), 6) * (6 - 5*(1-clamp(x,0,1)))
+        // Smooth ease function for position
+        float em = clamp(m, 0.0, 1.0);
+        float em1 = 1.0 - em;
+        float Ex_m = 1.0 - em1*em1*em1*em1*em1*em1 * (6.0 - 5.0*em1);
+
+        float em_2 = clamp(m - 2.0, 0.0, 1.0);
+        float em_2i = 1.0 - em_2;
+        float Ex_m2 = 1.0 - em_2i*em_2i*em_2i*em_2i*em_2i*em_2i * (6.0 - 5.0*em_2i);
+
+        float em_1 = clamp(m - 1.0, 0.0, 1.0);
+        float em_1i = 1.0 - em_1;
+        float Ex_m1 = 1.0 - em_1i*em_1i*em_1i*em_1i*em_1i*em_1i * (6.0 - 5.0*em_1i);
+
+        float em_3 = clamp(m - 3.0, 0.0, 1.0);
+        float em_3i = 1.0 - em_3;
+        float Ex_m3 = 1.0 - em_3i*em_3i*em_3i*em_3i*em_3i*em_3i * (6.0 - 5.0*em_3i);
+
+        float2 center = float2(-0.3, -0.3) + shapeSpread * float2(Ex_m - Ex_m2, Ex_m1 - Ex_m3);
+
+        // Rotation: E(fract(t))
+        float ft = t - floor(t); // fract(t)
+        float fti = 1.0 - ft;
+        float Ex_ft = 1.0 - fti*fti*fti*fti*fti*fti * (6.0 - 5.0*fti);
+        float rotAngle = 1.5707963 * Ex_ft; // pi/2 * E(fract(t))
+
+        // mat2 M = mat2(cos(rotAngle + vec4(0,33,11,0)))
+        // This creates: M = [[cos(r), cos(r+33)], [cos(r+11), cos(r)]]
+        float m00 = cos(rotAngle);
+        float m01 = cos(rotAngle + 33.0);
+        float m10 = cos(rotAngle + 11.0);
+        float m11 = cos(rotAngle);
+
+        // a = M * vec2(s, s) + center
+        float2 a = float2(m00 * s + m01 * s, m10 * s + m11 * s) + center;
+        // b = M * vec2(s, -s) + center
+        float2 b = float2(m00 * s + m01 * (-s), m10 * s + m11 * (-s)) + center;
+        // c2 = center + center (doubled center)
+        float2 c2 = center + center;
+
+        // L(A, B) = acos(clamp(dot(A-u, B-u) / length(A-u) / length(B-u), -1, 1)) / (2*pi)
+        // Compute 4 edges of the quadrilateral
+        float2 da, db, dc2a, dc2b;
+        float la, lb, lc2a, lc2b;
+        float dotAB, dotBC, dotCD, dotDA;
+        float angAB, angBC, angCD, angDA;
+
+        // L(a, b)
+        da = a - u; db = b - u;
+        la = length(da); lb = length(db);
+        dotAB = clamp(dot(da, db) / max(la * lb, 0.0001), -1.0, 1.0);
+        angAB = acos(dotAB) / (2.0 * pi);
+
+        // L(b, c2-a)
+        dc2a = c2 - a - u;
+        lc2a = length(dc2a);
+        dotBC = clamp(dot(db, dc2a) / max(lb * lc2a, 0.0001), -1.0, 1.0);
+        angBC = acos(dotBC) / (2.0 * pi);
+
+        // L(c2-a, c2-b)
+        dc2b = c2 - b - u;
+        lc2b = length(dc2b);
+        dotCD = clamp(dot(dc2a, dc2b) / max(lc2a * lc2b, 0.0001), -1.0, 1.0);
+        angCD = acos(dotCD) / (2.0 * pi);
+
+        // L(c2-b, a)
+        dotDA = clamp(dot(dc2b, da) / max(lc2b * la, 0.0001), -1.0, 1.0);
+        angDA = acos(dotDA) / (2.0 * pi);
+
+        float solidAngle = (angAB + angBC + angCD + angDA) * (0.5 + 0.5 * k);
+        result += float3(solidAngle, solidAngle, solidAngle);
+    }
+
+    // Color grading: tanh(result^2 * 0.2 * vec3(1,2,3) * flicker)
+    float3 colored = result * result * 0.2 * float3(1.0, 2.0, 3.0) * colorIntensity;
+
+    // Flicker effect
+    float flickerRand = frac(sin(T * 43.7) * 1000.0);
+    float flickerMask = smoothstep(0.2, 0.8, flickerRand) * step(0.2, T) * flickerStrength;
+    float fadeIn = smoothstep(0.7, 0.9, T) * smoothstep(loopDuration, loopDuration - 1.0, T);
+    float flicker = lerp(flickerMask, 1.0, fadeIn);
+
+    colored *= flicker;
+
+    // tanh approximation: x / (1 + abs(x)) is cheaper, but let's use the real thing
+    // tanh(x) = (exp(2x)-1)/(exp(2x)+1), but for shader we use: x/(1+abs(x)) * sign
+    // Actually HLSL has tanh built-in
+    color = tanh(colored);
+}

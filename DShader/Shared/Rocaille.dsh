@@ -1,0 +1,52 @@
+// "Rocaille" by @XorDev
+// Multi-layer turbulence with time and color offsets
+// Adapted for DreamShaderLang
+
+Function Rocaille_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float zoom,
+    in float layers,
+    in float turbulenceSteps,
+    in float turbulenceStrength,
+    in float colorBrightness,
+    in float animSpeed,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+
+    // Centered and scaled coordinates
+    float2 p = (fragUV * 2.0 - 1.0);
+    p.x *= resolution.x / max(resolution.y, 0.0001);
+    p /= zoom;
+
+    int maxLayers = (int)layers;
+    int maxTurb = (int)turbulenceSteps;
+
+    float4 O = float4(0.0, 0.0, 0.0, 0.0);
+
+    for (int li = 0; li < 9; li++)
+    {
+        if (li >= maxLayers) break;
+        float i = (float)(li + 1);
+
+        // Turbulence loop: v = p, then v += sin(v.yx * f + i + time) / f
+        float2 v = p;
+        for (int fi = 0; fi < 9; fi++)
+        {
+            if (fi >= maxTurb) break;
+            float f = (float)(fi + 1);
+            v += sin(float2(v.y, v.x) * f + i + time * animSpeed) / f * turbulenceStrength;
+        }
+
+        // Color: (cos(i + vec4(0,1,2,3)) + 1) / 6 / length(v)
+        float vLen = length(v);
+        float4 col = (cos(i + float4(0.0, 1.0, 2.0, 3.0)) + 1.0) / 6.0 / max(vLen, 0.001);
+        O += col * colorBrightness;
+    }
+
+    // Tanh tonemapping of O*O
+    float4 sq = O * O;
+    color = float3(tanh(sq.x), tanh(sq.y), tanh(sq.z));
+}

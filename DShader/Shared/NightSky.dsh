@@ -1,0 +1,120 @@
+// Night sky with twinkling stars and subtle nebula gradient
+
+Function NightSky_Hash21(in float2 p, out float result)
+{
+    float3 p3 = frac(float3(p.x, p.y, p.x) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    result = frac((p3.x + p3.y) * p3.z);
+}
+
+Function NightSky_Hash22(in float2 p, out float2 result)
+{
+    float3 p3 = frac(float3(p.x, p.y, p.x) * float3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    result = frac(float2((p3.x + p3.y) * p3.z, (p3.x + p3.z) * p3.y));
+}
+
+Function NightSky_Stars(in float2 uv, in float time, in float density, in float brightness, out float result)
+{
+    // Tile the space into cells
+    float2 cellId = floor(uv * density);
+    float2 cellUv = frac(uv * density);
+
+    float starVal = 0.0;
+
+    // Check 3x3 neighborhood for smooth star edges
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            float2 neighbor = float2((float)x, (float)y);
+            float2 id = cellId + neighbor;
+
+            // Random position within cell
+            float2 starPos;
+            NightSky_Hash22(id, starPos);
+            starPos = 0.1 + 0.8 * starPos; // keep away from edges
+
+            // Random twinkle phase and speed
+            float phase;
+            NightSky_Hash21(id * 17.31, phase);
+            float speed;
+            NightSky_Hash21(id * 43.17, speed);
+            speed = 1.0 + speed * 3.0;
+
+            // Random star size
+            float sizeSeed;
+            NightSky_Hash21(id * 7.77, sizeSeed);
+            float starSize = 0.02 + sizeSeed * 0.04;
+
+            // Distance from current pixel to star center
+            float2 diff = cellUv - neighbor - starPos;
+            float dist = length(diff);
+
+            // Star glow
+            float glow = exp(-dist * dist / (starSize * starSize));
+
+            // Twinkle
+            float twinkle = sin(time * speed + phase * 6.2831) * 0.5 + 0.5;
+            twinkle = 0.3 + 0.7 * twinkle;
+
+            starVal += glow * twinkle;
+        }
+    }
+
+    result = starVal * brightness;
+}
+
+Function NightSky_Nebula(in float2 uv, in float time, out float3 result)
+{
+    // Soft nebula-like color gradient
+    float2 p = uv * 2.0 - 1.0;
+
+    // Slow drifting noise approximation using sin waves
+    float n1 = sin(p.x * 3.0 + time * 0.1) * cos(p.y * 2.5 - time * 0.08);
+    float n2 = sin(p.x * 1.7 - time * 0.12 + p.y * 4.0) * 0.5;
+    float n3 = cos(p.y * 3.3 + time * 0.07 + p.x * 2.0) * 0.3;
+    float nebulaMask = (n1 + n2 + n3) * 0.5 + 0.5;
+    nebulaMask = smoothstep(0.3, 0.8, nebulaMask) * 0.15;
+
+    // Purple/blue nebula tones
+    float3 nebulaColor1 = float3(0.15, 0.05, 0.3);
+    float3 nebulaColor2 = float3(0.05, 0.1, 0.25);
+    result = lerp(nebulaColor2, nebulaColor1, nebulaMask);
+}
+
+Function NightSky_Evaluate(in float2 uv, in float4 resParam, in float time, out float3 color)
+{
+    float2 resolution = resParam.xy;
+    float aspect = resolution.x / max(resolution.y, 0.0001);
+    float2 correctedUV = float2(uv.x * aspect, uv.y);
+
+    // Dark sky gradient (darker at top, slightly lighter at horizon)
+    float gradient = 1.0 - uv.y;
+    float3 skyTop = float3(0.01, 0.01, 0.04);
+    float3 skyBottom = float3(0.02, 0.03, 0.08);
+    float3 sky = lerp(skyTop, skyBottom, gradient * gradient);
+
+    // Nebula layer
+    float3 nebula;
+    NightSky_Nebula(uv, time, nebula);
+    sky += nebula;
+
+    // Star layers at different densities for depth
+    float starsSmall;
+    NightSky_Stars(correctedUV, time, 30.0, 0.6, starsSmall);
+
+    float starsMedium;
+    NightSky_Stars(correctedUV + float2(7.7, 3.3), time * 0.8, 15.0, 0.9, starsMedium);
+
+    float starsLarge;
+    NightSky_Stars(correctedUV + float2(13.1, 17.7), time * 0.6, 8.0, 1.2, starsLarge);
+
+    float totalStars = starsSmall + starsMedium + starsLarge;
+
+    // Star color variation (white to slightly blue/warm)
+    float3 starColor = lerp(float3(0.8, 0.85, 1.0), float3(1.0, 0.95, 0.8), frac(totalStars * 3.7));
+    sky += starColor * totalStars;
+
+    color = sky;
+}

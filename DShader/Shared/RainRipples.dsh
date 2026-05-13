@@ -1,0 +1,103 @@
+// Rain Drop Ripples - by Zavie / Ctrl-Alt-Test
+// From the 64kB intro "H - Immersion"
+// Adapted for DreamShaderLang (procedural background, no texture)
+
+Function RR_Hash12(in float2 p, out float result)
+{
+    float3 p3 = frac(float3(p.x, p.y, p.x) * 0.1031);
+    p3 += dot(p3, float3(p3.y, p3.z, p3.x) + 19.19);
+    result = frac((p3.x + p3.y) * p3.z);
+}
+
+Function RR_Hash22(in float2 p, out float2 result)
+{
+    float3 p3 = frac(float3(p.x, p.y, p.x) * float3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, float3(p3.y, p3.z, p3.x) + 19.19);
+    result = frac(float2((p3.x + p3.x) + (p3.y + p3.z), (p3.x + p3.x) + (p3.z + p3.y)) * float2(p3.z, p3.y));
+    // Simplified: frac((p3.xx + p3.yz) * p3.zy)
+}
+
+Function RR_Evaluate(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float gridResolution,
+    in float rippleSpeed,
+    in float rippleFrequency,
+    in float rippleIntensity,
+    in float specularPower,
+    in float specularIntensity,
+    in float rainVariation,
+    in float4 bgColor1,
+    in float4 bgColor2,
+    out float3 color)
+{
+    float2 resolution = resParam.xy;
+
+    float2 uv = fragUV * gridResolution;
+    uv.x *= resolution.x / max(resolution.y, 0.0001);
+
+    float2 p0 = floor(uv);
+
+    float2 circles = float2(0.0, 0.0);
+
+    // Loop through 5x5 neighborhood (MAX_RADIUS = 2)
+    for (int j = -2; j <= 2; j++)
+    {
+        for (int i = -2; i <= 2; i++)
+        {
+            float2 pi = p0 + float2((float)i, (float)j);
+            float2 hsh = pi;
+
+            // Random position within cell
+            float2 cellHash;
+            RR_Hash22(hsh, cellHash);
+            float2 p = pi + cellHash;
+
+            // Random time offset
+            float timeHash;
+            RR_Hash12(hsh, timeHash);
+            float t = frac(rippleSpeed * time + timeHash);
+
+            // Vector from ripple center to current point
+            float2 v = p - uv;
+            float d = length(v) - 3.0 * t; // (MAX_RADIUS+1) * t
+
+            // Ripple wave with envelope
+            float h = 0.001;
+            float d1 = d - h;
+            float d2 = d + h;
+
+            float p1 = sin(rippleFrequency * d1) * smoothstep(-0.6, -0.3, d1) * smoothstep(0.0, -0.3, d1);
+            float p2 = sin(rippleFrequency * d2) * smoothstep(-0.6, -0.3, d2) * smoothstep(0.0, -0.3, d2);
+
+            // Normal contribution (gradient * fade)
+            float fade = (1.0 - t) * (1.0 - t);
+            circles += 0.5 * normalize(v + 0.0001) * ((p2 - p1) / (2.0 * h)) * fade;
+        }
+    }
+
+    // Average over all cells
+    circles /= 25.0; // (2*2+1)^2 = 25
+
+    // Rain intensity variation over time
+    float intensity = lerp(0.01, rippleIntensity, smoothstep(0.1, 0.6, abs(frac(rainVariation * time + 0.5) * 2.0 - 1.0)));
+
+    // Construct normal from ripple displacement
+    float circDot = dot(circles, circles);
+    float3 n = float3(circles.x, circles.y, sqrt(max(1.0 - circDot, 0.0)));
+
+    // Background color (procedural gradient distorted by ripples)
+    float2 distortedUV = fragUV - intensity * n.xy;
+    float3 bg = lerp(
+        float3(bgColor1.x, bgColor1.y, bgColor1.z),
+        float3(bgColor2.x, bgColor2.y, bgColor2.z),
+        distortedUV.y + sin(distortedUV.x * 5.0) * 0.1
+    );
+
+    // Specular highlight
+    float3 lightDir = normalize(float3(1.0, 0.7, 0.5));
+    float spec = pow(max(dot(n, lightDir), 0.0), specularPower) * specularIntensity;
+
+    color = bg + spec;
+}

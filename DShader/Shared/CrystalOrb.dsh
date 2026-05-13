@@ -1,0 +1,155 @@
+Function CrystalOrb_Hash33(in float3 p, out float3 result)
+{
+    float3 q = float3(
+        dot(p, float3(127.1, 311.7, 74.7)),
+        dot(p, float3(269.5, 183.3, 246.1)),
+        dot(p, float3(113.5, 271.9, 124.6))
+    );
+    result = -1.0 + 2.0 * frac(sin(q) * 43758.5453123);
+}
+
+Function CrystalOrb_Perlin(in float3 p, out float result)
+{
+    float3 pi = floor(p);
+    float3 pf = p - pi;
+    float3 w = pf * pf * (3.0 - 2.0 * pf);
+
+    float3 e1 = float3(1, 0, 0);
+    float3 e2 = float3(0, 1, 0);
+    float3 e3 = float3(0, 0, 1);
+
+    float3 h000; CrystalOrb_Hash33(pi, h000);
+    float3 h100; CrystalOrb_Hash33(pi + e1, h100);
+    float3 h010; CrystalOrb_Hash33(pi + e2, h010);
+    float3 h110; CrystalOrb_Hash33(pi + e1 + e2, h110);
+    float3 h001; CrystalOrb_Hash33(pi + e3, h001);
+    float3 h101; CrystalOrb_Hash33(pi + e1 + e3, h101);
+    float3 h011; CrystalOrb_Hash33(pi + e2 + e3, h011);
+    float3 h111; CrystalOrb_Hash33(pi + e1 + e2 + e3, h111);
+
+    float d000 = dot(h000, pf);
+    float d100 = dot(h100, pf - e1);
+    float d010 = dot(h010, pf - e2);
+    float d110 = dot(h110, pf - e1 - e2);
+    float d001 = dot(h001, pf - e3);
+    float d101 = dot(h101, pf - e1 - e3);
+    float d011 = dot(h011, pf - e2 - e3);
+    float d111 = dot(h111, pf - e1 - e2 - e3);
+
+    float x1 = lerp(d000, d100, w.x);
+    float x2 = lerp(d010, d110, w.x);
+    float x3 = lerp(d001, d101, w.x);
+    float x4 = lerp(d011, d111, w.x);
+
+    float y1 = lerp(x1, x2, w.y);
+    float y2 = lerp(x3, x4, w.y);
+
+    result = lerp(y1, y2, w.z);
+}
+
+Function CrystalOrb_FBM(in float3 p, out float result)
+{
+    float v = 0.0;
+    float a = 0.5;
+    float3 pos = p;
+    for (int i = 0; i < 4; i++)
+    {
+        float n;
+        CrystalOrb_Perlin(pos, n);
+        v += a * n;
+        pos *= 2.0;
+        a *= 0.5;
+    }
+    result = v * 0.5 + 0.5;
+}
+
+Function CrystalOrb_OrbNoise(in float2 uv, in float time, out float result)
+{
+    float3 p = float3(uv * float2(1.5, 5.0) - float2(0.0, time * 8.0), time);
+    CrystalOrb_FBM(p, result);
+}
+
+Function CrystalOrb_SeamBlend(in float2 uv, in float time, out float result)
+{
+    float ori1;
+    CrystalOrb_OrbNoise(uv, time, ori1);
+
+    float signX = (uv.x >= 0.0) ? 1.0 : -1.0;
+    float2 uvMirror = uv + float2(-signX * 2.0, 0.0);
+    float ori2;
+    CrystalOrb_OrbNoise(uvMirror, time, ori2);
+
+    float blend = smoothstep(0.9, 1.0, abs(uv.x)) * 0.5;
+    result = lerp(ori1, ori2, blend);
+}
+
+Function CrystalOrb_Height(in float2 uv, in float time, out float h)
+{
+    float rawCore;
+    CrystalOrb_SeamBlend(uv, time, rawCore);
+
+    float s = smoothstep(0.33, 0.85, rawCore);
+    s = s * s * (3.0 - 2.0 * s);
+    s += 1.5 * smoothstep(0.55, 0.65, rawCore);
+    h = s;
+}
+
+Function CrystalOrb_CalcNormal(in float2 uv, in float time, in float2 resolution, out float3 normal)
+{
+    float eps = 1.0 / resolution.y;
+
+    float hL; CrystalOrb_Height(uv - float2(eps, 0.0), time, hL);
+    float hR; CrystalOrb_Height(uv + float2(eps, 0.0), time, hR);
+    float hD; CrystalOrb_Height(uv - float2(0.0, eps), time, hD);
+    float hU; CrystalOrb_Height(uv + float2(0.0, eps), time, hU);
+
+    float2 g = float2(hR - hL, hU - hD);
+    normal = normalize(float3(-g * 18.0, 1.0));
+}
+
+Function CrystalOrb_Evaluate(in float2 fragUV, in float4 resParam, in float time, out float3 color)
+{
+    float2 resolution = resParam.xy;
+    float2 fragCoord = fragUV * resolution;
+
+    float2 u = (2.0 * fragCoord - resolution) / resolution.y;
+
+    float PI = 3.1415926535;
+    float2 polarUV = float2(atan2(u.y, u.x) / PI, length(u) * 2.0 - 1.0);
+
+    float3 lightCol = float3(0.7, 0.8, 1.0);
+    float3 viewDir = float3(0.0, 0.0, 1.0);
+    float3 darkCol = float3(0.035, 0.065, 0.085);
+    float3 surfCol = float3(0.1, 0.22, 0.25);
+
+    float3 n;
+    CrystalOrb_CalcNormal(polarUV, time, resolution, n);
+
+    float h;
+    CrystalOrb_Height(polarUV, time, h);
+
+    float3 baseCol = lerp(darkCol, surfCol, h);
+
+    // Directional lights
+    float3 ld1 = normalize(float3(1.0, 1.0, 1.0));
+    float3 ld2 = normalize(float3(-1.0, 1.0, 1.0));
+    float ndl1 = max(dot(n, ld1), 0.0);
+    float ndl2 = max(dot(n, ld2), 0.0);
+
+    float3 hd1 = normalize(ld1 + viewDir);
+    float3 hd2 = normalize(ld2 + viewDir);
+    float spec = (pow(max(dot(n, hd1), 0.0), 64.0) + pow(max(dot(n, hd2), 0.0), 64.0)) * 1.15;
+
+    // Fresnel
+    float f = 0.02 + 0.98 * pow(1.0 - max(dot(n, viewDir), 0.0), 5.0);
+    float3 env = float3(0.03, 0.10, 0.18) * (1.0 - f) + f * float3(0.25, 0.45, 0.75);
+
+    // Final color
+    float3 col = env + (ndl1 + ndl2) * baseCol + spec * lightCol;
+    col += smoothstep(0.18, 0.75, length(n.xy)) * 0.08 * float3(0.5, 0.8, 1.0);
+
+    // Vignette + sphere mask
+    col = col * h * exp(-dot(u, u) * 1.5) * smoothstep(0.0, 0.2, length(u));
+
+    color = col;
+}
