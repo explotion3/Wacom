@@ -1,0 +1,102 @@
+// HoloCard - 3D physical card material with holographic effect
+// Surface domain, DefaultLit, for use on card mesh
+
+// Paper texture normal generation (procedural fiber noise)
+Function HC_PaperNormal(in float2 uv, in float scale, in float strength, out float3 normal)
+{
+    // Multi-octave hash noise for paper fiber
+    float2 p = uv * scale;
+    float2 i = floor(p);
+    float2 f = frac(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+
+    // 4 corner hashes
+    float n00 = frac(sin(dot(i, float2(127.1, 311.7))) * 43758.5453);
+    float n10 = frac(sin(dot(i + float2(1.0, 0.0), float2(127.1, 311.7))) * 43758.5453);
+    float n01 = frac(sin(dot(i + float2(0.0, 1.0), float2(127.1, 311.7))) * 43758.5453);
+    float n11 = frac(sin(dot(i + float2(1.0, 1.0), float2(127.1, 311.7))) * 43758.5453);
+
+    float nx = lerp(lerp(n00, n10, u.x), lerp(n01, n11, u.x), u.y);
+
+    // Second octave offset
+    float2 p2 = uv * scale * 2.3 + float2(37.7, 91.1);
+    float2 i2 = floor(p2);
+    float2 f2 = frac(p2);
+    float2 u2 = f2 * f2 * (3.0 - 2.0 * f2);
+
+    float m00 = frac(sin(dot(i2, float2(269.5, 183.3))) * 43758.5453);
+    float m10 = frac(sin(dot(i2 + float2(1.0, 0.0), float2(269.5, 183.3))) * 43758.5453);
+    float m01 = frac(sin(dot(i2 + float2(0.0, 1.0), float2(269.5, 183.3))) * 43758.5453);
+    float m11 = frac(sin(dot(i2 + float2(1.0, 1.0), float2(269.5, 183.3))) * 43758.5453);
+
+    float ny = lerp(lerp(m00, m10, u2.x), lerp(m01, m11, u2.x), u2.y);
+
+    // Construct tangent-space normal from height differences
+    float dx = nx - 0.5;
+    float dy = ny - 0.5;
+    normal = normalize(float3(dx * strength, dy * strength, 1.0));
+}
+
+// Holographic rainbow based on view angle
+Function HC_HoloRainbow(
+    in float2 uv,
+    in float3 viewDir,
+    in float3 normalWS,
+    in float frequency,
+    in float speed,
+    out float3 rainbow)
+{
+    // View-dependent offset
+    float viewAngle = dot(viewDir, normalWS);
+    float offset = viewAngle * 3.0;
+
+    // Rainbow from UV + view angle
+    float phase = uv.x * frequency + uv.y * frequency * 0.5 + offset;
+    rainbow = float3(
+        cos(phase) * 0.5 + 0.5,
+        cos(phase + 2.094) * 0.5 + 0.5,  // +2pi/3
+        cos(phase + 4.189) * 0.5 + 0.5   // +4pi/3
+    );
+}
+
+// Sparkle/glitter points
+Function HC_Sparkles(
+    in float2 uv,
+    in float3 viewDir,
+    in float3 normalWS,
+    in float density,
+    in float threshold,
+    out float sparkle)
+{
+    // High frequency hash grid
+    float2 cell = floor(uv * density);
+    float2 cellUV = frac(uv * density);
+
+    // Random per cell
+    float hash = frac(sin(dot(cell, float2(12.9898, 78.233))) * 43758.5453);
+    float2 center = float2(
+        frac(sin(dot(cell + float2(1.0, 7.0), float2(12.9898, 78.233))) * 43758.5453),
+        frac(sin(dot(cell + float2(3.0, 11.0), float2(12.9898, 78.233))) * 43758.5453)
+    );
+    center = 0.2 + 0.6 * center;
+
+    float dist = length(cellUV - center);
+    float dot_val = dot(viewDir, normalWS);
+
+    // Only visible at certain angles (hash determines which angle)
+    float angleMask = smoothstep(threshold, threshold + 0.1, abs(dot_val - hash * 0.8 - 0.1));
+    float pointMask = exp(-dist * dist * 200.0);
+
+    sparkle = pointMask * angleMask * step(0.7, hash);
+}
+
+// Holographic mask (procedural - center area of card)
+Function HC_HoloMask(in float2 uv, in float borderSize, out float mask)
+{
+    // Card center area (exclude borders)
+    float left = smoothstep(borderSize, borderSize + 0.02, uv.x);
+    float right = smoothstep(borderSize, borderSize + 0.02, 1.0 - uv.x);
+    float bottom = smoothstep(borderSize, borderSize + 0.02, uv.y);
+    float top = smoothstep(borderSize, borderSize + 0.02, 1.0 - uv.y);
+    mask = left * right * bottom * top;
+}

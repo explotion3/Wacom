@@ -1,0 +1,162 @@
+import "Shared/HoloCard.dsh";
+
+Function HC_Fresnel(in float3 viewDir, in float3 normal, in float power, out float result)
+{
+    float d = 1.0 - abs(dot(viewDir, normal));
+    result = pow(d, power);
+}
+
+Shader(Name="DreamMaterials/M_HoloCard")
+{
+    Properties = {
+        VectorParameter BaseColor = float4(0.15, 0.12, 0.1, 1.0) [
+            Group="Base";
+            SortPriority=0;
+            Description="Card base color (placeholder for card face texture).";
+        ];
+
+        ScalarParameter Roughness = 0.6 [
+            Group="Base";
+            SortPriority=5;
+            Description="Base roughness. Lower=shinier card surface. Try 0.3~0.8.";
+        ];
+
+        ScalarParameter Metallic = 0.0 [
+            Group="Base";
+            SortPriority=10;
+            Description="Base metallic. 0=paper, 1=foil card. Try 0.0~0.3.";
+        ];
+
+        ScalarParameter PaperNormalScale = 80.0 [
+            Group="Paper";
+            SortPriority=15;
+            Description="Paper fiber noise scale. Higher=finer texture. Try 40~150.";
+        ];
+
+        ScalarParameter PaperNormalStrength = 0.15 [
+            Group="Paper";
+            SortPriority=20;
+            Description="Paper bump strength. Try 0.05~0.3.";
+        ];
+
+        ScalarParameter HoloEnabled = 1.0 [
+            Group="Holographic";
+            SortPriority=25;
+            Description="Enable holographic effect. 0=off (common card), 1=on (rare card).";
+        ];
+
+        ScalarParameter HoloIntensity = 0.4 [
+            Group="Holographic";
+            SortPriority=30;
+            Description="Holographic rainbow emission intensity. Try 0.1~1.0.";
+        ];
+
+        ScalarParameter HoloFrequency = 8.0 [
+            Group="Holographic";
+            SortPriority=35;
+            Description="Rainbow band frequency. Try 4~20.";
+        ];
+
+        ScalarParameter HoloBorder = 0.1 [
+            Group="Holographic";
+            SortPriority=40;
+            Description="Border margin where holo is masked out. Try 0.05~0.2.";
+        ];
+
+        ScalarParameter SparkleEnabled = 1.0 [
+            Group="Sparkle";
+            SortPriority=45;
+            Description="Enable sparkle glitter. 0=off, 1=on.";
+        ];
+
+        ScalarParameter SparkleDensity = 60.0 [
+            Group="Sparkle";
+            SortPriority=50;
+            Description="Glitter point density. Try 30~100.";
+        ];
+
+        ScalarParameter SparkleThreshold = 0.3 [
+            Group="Sparkle";
+            SortPriority=55;
+            Description="View angle threshold for sparkle visibility. Try 0.1~0.5.";
+        ];
+
+        ScalarParameter SparkleIntensity = 2.0 [
+            Group="Sparkle";
+            SortPriority=60;
+            Description="Sparkle brightness. Try 1.0~5.0.";
+        ];
+
+        ScalarParameter FresnelPower = 4.0 [
+            Group="Edge";
+            SortPriority=65;
+            Description="Edge fresnel falloff power. Try 2~8.";
+        ];
+
+        ScalarParameter FresnelIntensity = 0.1 [
+            Group="Edge";
+            SortPriority=70;
+            Description="Edge glow intensity. Try 0.0~0.3.";
+        ];
+    }
+
+    Settings = {
+        Domain = "Surface";
+        ShadingModel = "DefaultLit";
+        BlendMode = "Opaque";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float3 Normal;
+        float Rough;
+        float Metal;
+        float3 Emissive;
+        Base.BaseColor = Color;
+        Base.Normal = Normal;
+        Base.Roughness = Rough;
+        Base.Metallic = Metal;
+        Base.EmissiveColor = Emissive;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float3 camVec = UE.CameraVectorWS();
+        float3 worldNormal = float3(0.0, 0.0, 1.0);
+
+        // --- Base Color ---
+        Color = float3(BaseColor.x, BaseColor.y, BaseColor.z);
+
+        // --- Paper Normal ---
+        float3 paperNorm;
+        HC_PaperNormal(uv, PaperNormalScale, PaperNormalStrength, paperNorm);
+        Normal = paperNorm;
+
+        // --- Roughness & Metallic ---
+        Rough = Roughness;
+        Metal = Metallic;
+
+        // --- Emissive (Holo + Sparkle + Fresnel) ---
+        float3 emissiveTotal = float3(0.0, 0.0, 0.0);
+
+        // Holographic rainbow
+        float3 rainbow;
+        HC_HoloRainbow(uv, camVec, worldNormal, HoloFrequency, 0.0, rainbow);
+        float holoMask;
+        HC_HoloMask(uv, HoloBorder, holoMask);
+        emissiveTotal = emissiveTotal + rainbow * HoloIntensity * holoMask * HoloEnabled;
+
+        // Sparkles
+        float sparkle;
+        HC_Sparkles(uv, camVec, worldNormal, SparkleDensity, SparkleThreshold, sparkle);
+        emissiveTotal = emissiveTotal + float3(1.0, 0.95, 0.8) * sparkle * SparkleIntensity * holoMask * SparkleEnabled;
+
+        // Fresnel edge glow
+        float fresnel;
+        HC_Fresnel(camVec, worldNormal, FresnelPower, fresnel);
+        emissiveTotal = emissiveTotal + float3(0.5, 0.6, 1.0) * fresnel * FresnelIntensity;
+
+        Emissive = emissiveTotal;
+    }
+}

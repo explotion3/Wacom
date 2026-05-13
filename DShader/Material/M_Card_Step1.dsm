@@ -1,0 +1,66 @@
+// Step 1: Minimal card material - single texture to BaseColor
+// Use with /Engine/BasicShapes/Plane, scale (1, 1.5, 1) for 2:3 ratio
+
+import "Shared/CardCommon.dsh";
+
+Shader(Name="DreamMaterials/M_Card_Step1")
+{
+    Properties = {
+        VectorParameter UVScale = float4(1.0, 1.0, 0.0, 0.0) [
+            Group="UV";
+            SortPriority=0;
+            Description="Texture scale. X=U scale, Y=V scale. Smaller = texture appears larger. Try 0.5~2.0.";
+        ];
+
+        VectorParameter UVOffset = float4(0.0, 0.0, 0.0, 0.0) [
+            Group="UV";
+            SortPriority=5;
+            Description="Texture offset. X=horizontal, Y=vertical. Positive shifts texture in that direction.";
+        ];
+
+        ScalarParameter Roughness = 0.7 [
+            Group="Surface";
+            SortPriority=20;
+            Description="Surface roughness. 0=mirror, 1=fully matte.";
+        ];
+    }
+
+    Settings = {
+        Domain = "Surface";
+        ShadingModel = "DefaultLit";
+        BlendMode = "Masked";
+        TwoSided = true;
+        OpacityMaskClipValue = 0.3333;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Rough;
+        float Mask;
+        Base.BaseColor = Color;
+        Base.Roughness = Rough;
+        Base.OpacityMask = Mask;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+
+        // UV transform done in a single Custom node to keep material graph clean
+        float2 finalUV;
+        Card_TransformUV(uv, UVScale, UVOffset, finalUV);
+
+        // Texture sample parameter. Replaceable per material instance.
+        float4 sampled = UE.Expression(
+            Class="TextureSampleParameter2D",
+            OutputType="float4",
+            ParameterName="CardFaceTexture",
+            Group="Card",
+            SortPriority=0,
+            Texture=Path(Game, "Asset/card/Card_OuterFrame_512x768"),
+            Coordinates=finalUV);
+
+        Color = sampled.rgb;
+        Rough = Roughness;
+        Mask = sampled.a;
+    }
+}
