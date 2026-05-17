@@ -72,6 +72,8 @@ namespace UE::DreamShader
 	{
 		FString Type;
 		FString Name;
+		bool bHasDefaultValue = false;
+		FString DefaultValueText;
 	};
 
 	struct FTextShaderFunctionParameter

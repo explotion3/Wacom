@@ -13,8 +13,10 @@
 class UMaterial;
 class UMaterialFunction;
 class UMaterialExpression;
+class UMaterialExpressionMaterialFunctionCall;
 class UClass;
 class FProperty;
+struct FScopedSlowTask;
 
 namespace UE::DreamShader::Editor::Private
 {
@@ -114,7 +116,14 @@ namespace UE::DreamShader::Editor::Private
 		bool bIsMaterialAttributes = false;
 	};
 
+	bool ParseCodeExpression(const FString& InExpression, TSharedPtr<FCodeExpression>& OutExpression, FString& OutError);
 	bool ParseCodeStatements(const FString& InCode, TArray<FCodeStatement>& OutStatements, FString& OutError);
+	bool MakeCodeDeclarationStatement(
+		const FString& DeclaredType,
+		const FString& TargetName,
+		const FString& InitializerText,
+		FCodeStatement& OutStatement,
+		FString& OutError);
 
 	bool ResolveMaterialProperty(const FString& InName, FResolvedMaterialProperty& OutProperty);
 	bool TryResolveCustomOutputType(const FString& InTypeName, ECustomMaterialOutputType& OutOutputType);
@@ -145,6 +154,7 @@ namespace UE::DreamShader::Editor::Private
 	bool WriteGeneratedInclude(const FString& SourceFilePath, const FTextShaderDefinition& Definition, FString& OutError);
 	void ClearMaterialExpressions(UMaterial* Material);
 	void ClearMaterialFunctionExpressions(UMaterialFunction* MaterialFunction);
+	void LayoutGeneratedExpressions(UMaterial* Material, UMaterialFunction* MaterialFunction);
 	void ResetMaterialToDefaults(UMaterial* Material);
 	bool ValidateSettings(const FTextShaderDefinition& Definition, FString& OutError);
 	bool ApplySettings(UMaterial* Material, const FTextShaderDefinition& Definition, FString& OutError);
@@ -218,9 +228,15 @@ namespace UE::DreamShader::Editor::Private
 		FString SourceFilePath;
 		FString IncludeVirtualPath;
 		TMap<FString, FCodeValue>* Values = nullptr;
-		int32 NextNodeY = 320;
+		TMap<FString, UMaterialExpression*> GeneratedPropertyExpressions;
+		TSet<FString> CreatingPropertyNames;
+		int32 NextPropertyNodeY = -620;
+		int32 NextNodeY = -120;
+		FScopedSlowTask* ActiveBuildSlowTask = nullptr;
+		mutable int32 ProgressTickCounter = 0;
 
 		FCodeValue* FindValue(const FString& Name) const;
+		bool TryCreatePropertyValue(const FString& Name, FCodeValue& OutValue, FString& OutError);
 		int32 ConsumeNodeY();
 		UMaterialExpression* CreateExpression(TSubclassOf<UMaterialExpression> ExpressionClass, int32 PositionX, int32 PositionY) const;
 		UMaterialExpression* CreateScalarLiteralNode(double Value, int32 PositionY) const;
@@ -260,6 +276,7 @@ namespace UE::DreamShader::Editor::Private
 			const FCodeValue& RightValue,
 			FCodeValue& OutValue,
 			FString& OutError);
+		bool EvaluateMathBuiltinCall(const FString& FunctionName, const TArray<FCodeCallArgument>& Arguments, FCodeValue& OutValue, FString& OutError);
 		bool EvaluateMemberAccess(const TSharedPtr<FCodeExpression>& Expression, FCodeValue& OutValue, FString& OutError);
 		bool CreateSingleChannelMask(
 			const FCodeValue& BaseValue,
@@ -295,6 +312,11 @@ namespace UE::DreamShader::Editor::Private
 			const TArray<FCodeCallArgument>& Arguments,
 			FCodeValue& OutValue,
 			FString& OutError);
+		bool EvaluateGraphFunctionCall(
+			const FTextShaderFunctionDefinition& Function,
+			const TArray<FCodeCallArgument>& Arguments,
+			FCodeValue& OutValue,
+			FString& OutError);
 		bool ExecuteCustomFunctionCall(
 			const FTextShaderFunctionDefinition& Function,
 			const TArray<FCodeCallArgument>& Arguments,
@@ -308,10 +330,35 @@ namespace UE::DreamShader::Editor::Private
 			const TArray<FCodeCallArgument>& Arguments,
 			FCodeValue& OutValue,
 			FString& OutError);
+		bool ExecuteMaterialFunctionCall(
+			const FTextShaderMaterialFunctionDefinition& Function,
+			const TArray<FCodeCallArgument>& Arguments,
+			FString& OutError);
 		bool EvaluateVirtualFunctionCall(
 			const FTextShaderVirtualFunctionDefinition& Function,
 			const TArray<FCodeCallArgument>& Arguments,
 			FCodeValue& OutValue,
+			FString& OutError);
+		bool ExecuteVirtualFunctionCall(
+			const FTextShaderVirtualFunctionDefinition& Function,
+			const TArray<FCodeCallArgument>& Arguments,
+			FString& OutError);
+		bool ExecuteMaterialFunctionCallAsset(
+			const FString& CallKind,
+			const FString& FunctionName,
+			const FString& ObjectPath,
+			const TArray<FTextShaderFunctionParameter>& Inputs,
+			const TArray<FTextShaderFunctionParameter>& Outputs,
+			const TArray<FCodeCallArgument>& Arguments,
+			FString& OutError);
+		bool CreateAndConnectMaterialFunctionCallAsset(
+			const FString& CallKind,
+			const FString& FunctionName,
+			const FString& ObjectPath,
+			const TArray<FTextShaderFunctionParameter>& Inputs,
+			const TArray<FTextShaderFunctionParameter>& Outputs,
+			const TArray<FCodeCallArgument>& InputArguments,
+			UMaterialExpressionMaterialFunctionCall*& OutFunctionCall,
 			FString& OutError);
 		bool EvaluateMaterialFunctionCallAsset(
 			const FString& CallKind,

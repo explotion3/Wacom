@@ -1,11 +1,11 @@
 # DreamShaderLang 语法参考
 
-DreamShaderLang 是 DreamShader 插件使用的文本语言。它用 `.dsm` / `.dsh` 源文件描述 Unreal 材质、材质函数和共享 helper，并由插件生成标准 Unreal 资产。
+DreamShaderLang 是 DreamShader 插件使用的文本语言。它用 `.dsm` / `.dsf` / `.dsh` 源文件描述 Unreal 材质、材质函数和共享 helper，并由插件生成标准 Unreal 资产。
 
 | 项目 | 内容 |
 | --- | --- |
-| 插件版本 | `1.2.6` |
-| 源文件 | `.dsm` / `.dsh` |
+| 插件版本 | `1.3.6` |
+| 源文件 | `.dsm` / `.dsf` / `.dsh` |
 | 主要产物 | `UMaterial` / `UMaterialFunction` |
 | 开发者 | TypeDreamMoon |
 
@@ -17,21 +17,38 @@ Dream Shader Material。用于生成资产，通常包含：
 
 - `Shader(Name="...")`
 - `ShaderFunction(Name="...")`
+- `ShaderLayer(Name="...")`
+- `ShaderLayerBlend(Name="...")`
 - `VirtualFunction(Name="...")`
 - `import "Shared/Common.dsh";`
+- `import "Functions/F_PulseTint.dsf";`
 
-一个 `.dsm` 可以包含共享 `Function` / `Namespace`，但推荐把可复用逻辑放入 `.dsh`，让材质文件更聚焦。
+一个 `.dsm` 可以包含共享 `Function` / `Namespace` 和 `ShaderFunction`，但推荐把可复用 helper 放入 `.dsh`，把可复用生成函数放入 `.dsf`，让材质文件更聚焦。
 
-### 1.2 `.dsh`
+### 1.2 `.dsf`
+
+Dream Shader Function。用于生成可复用 Unreal `UMaterialFunction` 资产，通常包含：
+
+- `import "Shared/Common.dsh";`
+- `import "OtherFunction.dsf";`
+- `ShaderFunction(Name="...")`
+- `Function Name(...) { ... }`
+- `GraphFunction Name(...) { ... }`
+- `VirtualFunction(Name="...")`
+
+`.dsf` 可以被 `.dsm` 或其他 `.dsf` 导入。导入后，文件中的 `ShaderFunction` 会先生成资产，再作为当前 Graph 可调用的函数签名参与生成。`.dsf` 不允许声明顶层 `Shader(...)`。
+
+### 1.3 `.dsh`
 
 Dream Shader Header。用于存放共享代码，通常包含：
 
 - `import "OtherHeader.dsh";`
 - `Function Name(...) { ... }`
+- `GraphFunction Name(...) { ... }`
 - `Namespace(Name="...") { ... }`
 - `VirtualFunction(Name="...")`
 
-`.dsh` 不建议包含 `Shader(...)` 或 `ShaderFunction(...)`，但可以包含 `VirtualFunction(...)` 这种只声明现有资产的签名。
+`.dsh` 不建议包含 `Shader(...)`、`ShaderFunction(...)`、`ShaderLayer(...)` 或 `ShaderLayerBlend(...)`，但可以包含共享 `Function` / `GraphFunction` 和只声明现有资产签名的 `VirtualFunction(...)`。
 
 ## 2. 顶层声明
 
@@ -114,7 +131,19 @@ ShaderFunction(Name="Functions/F_Tint", Root="Plugin.MyPlugin")
 - `Outputs` 声明输出 pin。
 - `Graph` 负责生成材质函数内部图。
 
-### 2.3 `VirtualFunction(Name="...")`
+### 2.3 `ShaderLayer(Name="...", Root="...")` / `ShaderLayerBlend(Name="...", Root="...")`
+
+生成 Unreal 原生 Material Layer / Layer Blend 资产。旧语法 `MaterialLayer(...)` / `MaterialLayerBlend(...)` 仍可解析，但会产生兼容警告。
+
+规则：
+
+- `ShaderLayer` 会创建 `UMaterialFunctionMaterialLayer` 资产。
+- `ShaderLayerBlend` 会创建 `UMaterialFunctionMaterialLayerBlend` 资产。
+- 两者复用 `ShaderFunction` 的 `Properties`、`Inputs`、`Outputs`、`Settings` 和 `Graph` sections。
+- `ShaderLayer` / `ShaderLayerBlend` 必须声明且只声明一个 `MaterialAttributes` 输出。
+- `ShaderLayerBlend` 至少需要两个 `MaterialAttributes` 输入。
+
+### 2.4 `VirtualFunction(Name="...")`
 
 声明一个已经存在的 Unreal `UMaterialFunction`，让 `Graph` 可以像调用 `ShaderFunction` 一样调用它。`VirtualFunction` 不会生成、保存或覆盖对应资产。
 
@@ -153,7 +182,7 @@ Graph = {
 }
 ```
 
-### 2.4 `Function [Inline|SelfContained] Name(...) { ... }`
+### 2.5 `Function [Inline|SelfContained] Name(...) { ... }`
 
 定义可复用 helper。函数体是 HLSL 风格代码。
 
@@ -180,7 +209,27 @@ Function SelfContained ApplyTint(in vec3 color, in vec3 tint, out vec3 result) {
 - 普通 `Function` 会生成 `.ush` 并由 Custom 节点 include。
 - `SelfContained` / `Inline` 会把依赖代码嵌入 Custom 节点，便于生成资产脱离 DreamShader 插件使用。
 
-### 2.5 `Namespace(Name="...")`
+### 2.6 `GraphFunction Name(...) { ... }`
+
+定义可复用 Custom 节点 helper。函数体仍是 HLSL 风格代码，但可以直接调用 `UE.*(...)` 作为自动输入来源。
+
+```c
+GraphFunction WindPulse(in float2 uv, out float pulse) {
+    float t = UE.Time();
+    pulse = sin(uv.x * 8.0 + t);
+}
+```
+
+规则：
+
+- 参数支持 `in` / `out`。
+- 至少声明一个 `out` 参数。
+- 单输出 `GraphFunction` 可以作为值表达式调用；多输出调用必须显式传入 `out` 目标变量。
+- 调用会生成一个 `UMaterialExpressionCustom` 节点，而不是把 body 展开成一组 Graph 语句。
+- body 中的 `UE.*(...)` 调用会先生成 Unreal 材质节点，再作为自动输入引脚连接到 Custom 节点。
+- body 中可以调用普通 `Function` / `Namespace::Function` HLSL helper，生成器会按普通 Custom 节点规则重写和 include。
+
+### 2.7 `Namespace(Name="...")`
 
 组织一组共享 helper。
 
@@ -201,7 +250,7 @@ Texture::Sample2DRGB(MainTex, uv, sampledColor);
 
 规则：
 
-- `Namespace` 内只能包含 `Function`。
+- `Namespace` 内只能包含 `Function` 或 `GraphFunction`。
 - namespace 名必须是合法标识符。
 - 生成 HLSL 时会把 `Texture::Sample2DRGB` 映射为安全的内部符号。
 
@@ -307,6 +356,18 @@ Outputs = {
 }
 ```
 
+输出变量可以直接声明初始化值；这种写法即使 `Graph = {}` 为空也会生成对应材质图：
+
+```c
+Outputs = {
+    vec3 Color = Tint;
+    Base.EmissiveColor = Color;
+}
+
+Graph = {
+}
+```
+
 `ShaderFunction` / `VirtualFunction` 中用于声明输出 pin：
 
 ```c
@@ -373,10 +434,21 @@ Options = {
 - `UE.CollectionParam(Collection=Path(...), Parameter="Name")` 读取 Material Parameter Collection。
 - `UE.StaticSwitchParameter(...)` 或 `StaticSwitchParameter` 属性调用。
 - `Function(...)` / `Namespace::Function(...)` 独立调用。
-- `ShaderFunction(...)` / `VirtualFunction(...)` 值调用。
+- `GraphFunction(...)` / `Namespace::GraphFunction(...)` Custom 节点调用。
+- `ShaderFunction(...)` / `VirtualFunction(...)` 值调用和多输出独立调用。
 - `MaterialAttributes` 聚合值，以及 `Attrs.BaseColor = ...` / `Attrs.Roughness = ...` 形式的成员写入。
 - 基础 `if` / `else` 图分支。
 - 将结果绑定到输出变量。
+
+`ShaderFunction` / `VirtualFunction` 多输出独立调用使用“输入参数在前，输出目标变量在后”的顺序：
+
+```c
+Graph = {
+    F_PulseTint(BaseColor, Tint, Strength, TimeScale, Color, Pulse, Alpha);
+}
+```
+
+上例中 `BaseColor`、`Tint`、`Strength`、`TimeScale` 对应函数 `Inputs`，`Color`、`Pulse`、`Alpha` 对应函数 `Outputs`。
 
 限制：
 
@@ -386,10 +458,11 @@ Options = {
 
 ## 4. `import`
 
-在 `.dsm` 或 `.dsh` 顶部引入头文件：
+在 `.dsm`、`.dsf` 或 `.dsh` 顶部引入依赖文件：
 
 ```c
 import "Shared/Common.dsh";
+import "Functions/F_PulseTint.dsf";
 import "Builtin/Texture.dsh";
 import "@typedreammoon/dream-noise/Library/Noise.dsh";
 ```
@@ -399,6 +472,7 @@ import "@typedreammoon/dream-noise/Library/Noise.dsh";
 | 路径形式 | 解析位置 |
 | --- | --- |
 | `"Shared/Common.dsh"` | 当前文件目录和项目 `DShader` 根目录。 |
+| `"Functions/F_PulseTint.dsf"` | 当前文件目录和项目 `DShader` 根目录。 |
 | `"Builtin/Texture.dsh"` | 插件内置库目录。 |
 | `"@scope/package/Library/File.dsh"` | 项目 `DShader/Packages`。 |
 
@@ -406,7 +480,8 @@ import "@typedreammoon/dream-noise/Library/Noise.dsh";
 
 - 支持递归导入。
 - 会检测循环导入。
-- `.dsh` 变更后只刷新依赖它的 `.dsm`。
+- 省略扩展名时默认按 `.dsh` 解析；导入 `.dsf` 需要显式写出 `.dsf` 扩展名。
+- `.dsh` / `.dsf` 变更后只刷新依赖它们的 `.dsm` / `.dsf`。
 
 Package 相关说明见 [Packages.md](Packages.md)。
 
@@ -622,12 +697,23 @@ DreamShader 会维护源文件和资产之间的关系：
 
 - `.dsm` 直接生成资产。
 - `.dsh` 不直接生成资产。
-- `.dsh` 保存后只重编依赖它的 `.dsm`。
-- Parser 错误会尽量通过 source map 映射回真实 `.dsm` / `.dsh` 行列。
+- `.dsf` 会生成其中声明的 `ShaderFunction` 资产。
+- `.dsh` / `.dsf` 保存后只重编依赖它们的 `.dsm` / `.dsf`。
+- Parser 错误会尽量通过 source map 映射回真实 `.dsm` / `.dsf` / `.dsh` 行列。
 - 生成资产会写入 `DreamShader.SourceFile`、`DreamShader.SourceHash`、`DreamShader.GeneratedAtUtc`。
 - source hash 未变化时会跳过重复生成。
 
-## 12. Project Settings
+## 12. 反编译导出
+
+Content Browser 中右键 `Material` 或 `Material Function`，可以通过 `DreamShader > Export DSM/DSF` 导出 DreamShader 源文件：
+
+- `UMaterial` 导出到 `DShader/Decompiled/Materials/*.dsm`。
+- `UMaterialFunction` 导出到 `DShader/Decompiled/Functions/*.dsf`。
+- 文件名会自动避让已有文件，导出的 `Name` 默认指向 `Decompiled/...`，避免直接覆盖原始资产。
+- 常见参数、常量、算术、swizzle、Texture Sample、Custom、MaterialFunctionCall 会尽量导出为可读 Graph。
+- 不常见节点会降级为 `UE.Expression(Class="...", OutputType="...", ...)`，导出后建议按项目命名和风格人工整理。
+
+## 13. Project Settings
 
 Project Settings > Plugins > DreamShader：
 
@@ -639,7 +725,7 @@ Project Settings > Plugins > DreamShader：
 | `SaveDebounceSeconds` | `0.25` | 保存防抖时间。 |
 | `VerboseLogs` | `false` | 输出详细日志。 |
 
-## 13. 当前限制
+## 14. 当前限制
 
 - `Graph` 不是完整通用语言。
 - `Graph` 支持基础 `if` / `else`，不支持 `for` / `while`。

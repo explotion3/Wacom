@@ -1,5 +1,6 @@
 #include "DreamShaderEditorBridge.h"
 
+#include "CoreGlobals.h"
 #include "Modules/ModuleManager.h"
 #include "Templates/SharedPointer.h"
 
@@ -8,6 +9,11 @@ class FDreamShaderEditorModule : public IModuleInterface
 public:
 	virtual void StartupModule() override
 	{
+		if (IsRunningCommandlet())
+		{
+			return;
+		}
+
 		Bridge = MakeShared<UE::DreamShader::Editor::Private::FDreamShaderEditorBridge, ESPMode::ThreadSafe>();
 		Bridge->Startup();
 	}

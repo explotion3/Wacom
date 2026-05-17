@@ -6,7 +6,7 @@
 #include "Misc/Crc.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "Factories/MaterialFunctionFactoryNew.h"
+#include "EdGraph/EdGraphNode.h"
 #include "Factories/MaterialFactoryNew.h"
 #include "FileHelpers.h"
 #include "Interfaces/IPluginManager.h"
@@ -37,6 +37,8 @@
 #include "Materials/MaterialExpressionVertexColor.h"
 #include "Materials/MaterialExpressionWorldPosition.h"
 #include "Materials/MaterialFunction.h"
+#include "Materials/MaterialFunctionMaterialLayer.h"
+#include "Materials/MaterialFunctionMaterialLayerBlend.h"
 #include "Materials/MaterialExpressionFunctionInput.h"
 #include "Materials/MaterialParameterCollection.h"
 #include "Engine/Texture.h"
@@ -46,6 +48,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/OutputDeviceNull.h"
 #include "Misc/PackageName.h"
+#include "Misc/ScopedSlowTask.h"
 #include "ObjectTools.h"
 #include "UObject/MetaData.h"
 #include "UObject/Package.h"
@@ -500,6 +503,14 @@ namespace UE::DreamShader::Editor::Private
 		const int32 PositionY)
 	{
 		return UMaterialEditingLibrary::CreateMaterialExpressionEx(Material, MaterialFunction, ExpressionClass, nullptr, PositionX, PositionY);
+	}
+
+	static void EnsureExpressionCanBeDeleted(UMaterialExpression* Expression)
+	{
+		if (Expression && Expression->IsRooted())
+		{
+			Expression->RemoveFromRoot();
+		}
 	}
 
 	static UMaterialExpression* CreateScalarLiteralExpressionEx(
@@ -1923,6 +1934,35 @@ namespace UE::DreamShader::Editor::Private
 		return true;
 	}
 
+	static bool TryRewriteValueFunctionCall(
+		const FTextShaderFunctionDefinition& Function,
+		const FString& GeneratedFunctionName,
+		const FString& ArgumentBlock,
+		FString& OutCall)
+	{
+		const TArray<FString> Arguments = SplitTopLevelCallArguments(ArgumentBlock);
+		if (Function.Results.Num() != 1 || Arguments.Num() != Function.Inputs.Num())
+		{
+			return false;
+		}
+
+		TArray<FString> Parameters;
+		for (int32 InputIndex = 0; InputIndex < Function.Inputs.Num(); ++InputIndex)
+		{
+			Parameters.Add(Arguments[InputIndex]);
+			if (IsTextureFunctionParameterType(Function.Inputs[InputIndex].Type))
+			{
+				Parameters.Add(BuildTextureSamplerArgumentName(Arguments[InputIndex]));
+			}
+		}
+
+		OutCall = FString::Printf(
+			TEXT("%s(%s)"),
+			*GeneratedFunctionName,
+			*FString::Join(Parameters, TEXT(", ")));
+		return true;
+	}
+
 	static void AddFunctionLookupEntries(
 		const FTextShaderFunctionDefinition& Function,
 		TMap<FString, const FTextShaderFunctionDefinition*>& OutFunctionsBySpelling,
@@ -2274,6 +2314,12 @@ namespace UE::DreamShader::Editor::Private
 								Index = CloseParenthesisIndex + 1;
 								continue;
 							}
+							if (TryRewriteValueFunctionCall(**Function, *Replacement, ArgumentBlock, RewrittenCall))
+							{
+								Result += RewrittenCall;
+								Index = CloseParenthesisIndex + 1;
+								continue;
+							}
 						}
 
 						Result += *Replacement;
@@ -2529,6 +2575,7 @@ namespace UE::DreamShader::Editor::Private
 
 		if (RootFunctions.IsEmpty())
 		{
+			OutCode = RewriteDreamShaderFunctionBodyCalls(SourceCode, FunctionsBySpelling, GeneratedNamesBySpelling);
 			bOutUsesGeneratedInclude = !DirectCalls.IsEmpty();
 			return true;
 		}
@@ -2548,13 +2595,16 @@ namespace UE::DreamShader::Editor::Private
 
 		const FString WrapperTypeName = BuildSelfContainedWrapperTypeName(WrapperNameHint);
 		const FString WrapperVariableName = BuildSelfContainedWrapperVariableName(WrapperNameHint);
+		TMap<FString, FString> CustomNodeReferenceReplacements = GeneratedNamesBySpelling;
 		for (const FTextShaderFunctionDefinition* Function : EmbeddedFunctions)
 		{
 			const FString GeneratedFunctionName = BuildGeneratedFunctionSymbolName(*Function);
 			EmbeddedReferenceReplacements.Add(Function->Name, WrapperVariableName + TEXT(".") + GeneratedFunctionName);
+			CustomNodeReferenceReplacements.Add(Function->Name, WrapperVariableName + TEXT(".") + GeneratedFunctionName);
 			if (!GeneratedFunctionName.Equals(Function->Name, ESearchCase::CaseSensitive))
 			{
 				EmbeddedReferenceReplacements.Add(GeneratedFunctionName, WrapperVariableName + TEXT(".") + GeneratedFunctionName);
+				CustomNodeReferenceReplacements.Add(GeneratedFunctionName, WrapperVariableName + TEXT(".") + GeneratedFunctionName);
 			}
 		}
 
@@ -2567,7 +2617,7 @@ namespace UE::DreamShader::Editor::Private
 		}
 		WrapperSource += FString::Printf(TEXT("};\n%s %s;\n"), *WrapperTypeName, *WrapperVariableName);
 
-		OutCode = WrapperSource + TEXT("\n") + RewriteDreamShaderFunctionReferences(SourceCode, EmbeddedReferenceReplacements);
+		OutCode = WrapperSource + TEXT("\n") + RewriteDreamShaderFunctionBodyCalls(SourceCode, FunctionsBySpelling, CustomNodeReferenceReplacements);
 
 		for (const FTextShaderFunctionDefinition* DirectCall : DirectCalls)
 		{
@@ -2675,6 +2725,10 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
+		FScopedSlowTask ClearSlowTask(
+			FMath::Max(1.0f, static_cast<float>(Material->GetExpressions().Num())),
+			FText::FromString(FString::Printf(TEXT("Clearing Material graph '%s'..."), *Material->GetName())));
+
 		for (int32 MaterialPropertyIndex = 0; MaterialPropertyIndex < MP_MAX; ++MaterialPropertyIndex)
 		{
 			if (FExpressionInput* ExpressionInput = Material->GetExpressionInputForProperty(static_cast<EMaterialProperty>(MaterialPropertyIndex)))
@@ -2703,6 +2757,10 @@ namespace UE::DreamShader::Editor::Private
 
 			for (UMaterialExpression* Expression : ExpressionSnapshot)
 			{
+				ClearSlowTask.EnterProgressFrame(1.0f, FText::FromString(FString::Printf(
+					TEXT("Deleting old Material node '%s'..."),
+					Expression ? *Expression->GetName() : TEXT("<null>"))));
+				EnsureExpressionCanBeDeleted(Expression);
 				UMaterialEditingLibrary::DeleteMaterialExpression(Material, Expression);
 			}
 
@@ -2716,6 +2774,10 @@ namespace UE::DreamShader::Editor::Private
 		{
 			return;
 		}
+
+		FScopedSlowTask ClearSlowTask(
+			FMath::Max(1.0f, static_cast<float>(MaterialFunction->GetExpressions().Num())),
+			FText::FromString(FString::Printf(TEXT("Clearing Material Function graph '%s'..."), *MaterialFunction->GetName())));
 
 		int32 SafetyCounter = 0;
 		while (!MaterialFunction->GetExpressions().IsEmpty() && SafetyCounter < 64)
@@ -2737,10 +2799,295 @@ namespace UE::DreamShader::Editor::Private
 
 			for (UMaterialExpression* Expression : ExpressionSnapshot)
 			{
+				ClearSlowTask.EnterProgressFrame(1.0f, FText::FromString(FString::Printf(
+					TEXT("Deleting old Material Function node '%s'..."),
+					Expression ? *Expression->GetName() : TEXT("<null>"))));
+				EnsureExpressionCanBeDeleted(Expression);
 				UMaterialEditingLibrary::DeleteMaterialExpressionInFunction(MaterialFunction, Expression);
 			}
 
 			++SafetyCounter;
+		}
+	}
+
+	namespace
+	{
+		static void CollectMaterialExpressions(UMaterial* Material, UMaterialFunction* MaterialFunction, TArray<UMaterialExpression*>& OutExpressions)
+		{
+			OutExpressions.Reset();
+			if (Material)
+			{
+				OutExpressions.Reserve(Material->GetExpressions().Num());
+				for (const TObjectPtr<UMaterialExpression>& Expression : Material->GetExpressions())
+				{
+					if (Expression)
+					{
+						OutExpressions.Add(Expression.Get());
+					}
+				}
+				return;
+			}
+
+			if (MaterialFunction)
+			{
+				OutExpressions.Reserve(MaterialFunction->GetExpressions().Num());
+				for (const TObjectPtr<UMaterialExpression>& Expression : MaterialFunction->GetExpressions())
+				{
+					if (Expression)
+					{
+						OutExpressions.Add(Expression.Get());
+					}
+				}
+			}
+		}
+
+		static bool TryAddUniqueExpression(TArray<UMaterialExpression*>& Expressions, UMaterialExpression* Expression)
+		{
+			if (!Expression || Expressions.Contains(Expression))
+			{
+				return false;
+			}
+
+			Expressions.Add(Expression);
+			return true;
+		}
+
+		static UMaterialExpression* GetDirectInputExpression(const FExpressionInput& Input)
+		{
+			if (Input.Expression)
+			{
+				return Input.Expression;
+			}
+
+			const FExpressionInput TracedInput = Input.GetTracedInput();
+			return TracedInput.Expression;
+		}
+
+		static void SetGeneratedExpressionPosition(UMaterialExpression* Expression, const int32 PositionX, const int32 PositionY)
+		{
+			if (!Expression)
+			{
+				return;
+			}
+
+			Expression->MaterialExpressionEditorX = PositionX;
+			Expression->MaterialExpressionEditorY = PositionY;
+			if (Expression->GraphNode)
+			{
+				Expression->GraphNode->NodePosX = PositionX;
+				Expression->GraphNode->NodePosY = PositionY;
+			}
+		}
+	}
+
+	void LayoutGeneratedExpressions(UMaterial* Material, UMaterialFunction* MaterialFunction)
+	{
+		TArray<UMaterialExpression*> Expressions;
+		CollectMaterialExpressions(Material, MaterialFunction, Expressions);
+		if (Expressions.Num() < 2)
+		{
+			return;
+		}
+
+		FScopedSlowTask LayoutSlowTask(
+			FMath::Max(1.0f, static_cast<float>(Expressions.Num())),
+			FText::FromString(TEXT("Laying out DreamShader material graph...")));
+
+		TSet<UMaterialExpression*> ExpressionSet;
+		TMap<UMaterialExpression*, int32> OriginalOrder;
+		ExpressionSet.Reserve(Expressions.Num());
+		OriginalOrder.Reserve(Expressions.Num());
+		for (int32 Index = 0; Index < Expressions.Num(); ++Index)
+		{
+			ExpressionSet.Add(Expressions[Index]);
+			OriginalOrder.Add(Expressions[Index], Index);
+		}
+
+		TMap<UMaterialExpression*, TArray<UMaterialExpression*>> Dependencies;
+		TMap<UMaterialExpression*, TArray<UMaterialExpression*>> Consumers;
+		for (UMaterialExpression* Expression : Expressions)
+		{
+			if (!Expression)
+			{
+				continue;
+			}
+
+			for (int32 InputIndex = 0; InputIndex < Expression->CountInputs(); ++InputIndex)
+			{
+				FExpressionInput* Input = Expression->GetInput(InputIndex);
+				if (!Input)
+				{
+					continue;
+				}
+
+				UMaterialExpression* SourceExpression = GetDirectInputExpression(*Input);
+				if (!SourceExpression || SourceExpression == Expression || !ExpressionSet.Contains(SourceExpression))
+				{
+					continue;
+				}
+
+				TryAddUniqueExpression(Dependencies.FindOrAdd(Expression), SourceExpression);
+				TryAddUniqueExpression(Consumers.FindOrAdd(SourceExpression), Expression);
+			}
+		}
+
+		TMap<UMaterialExpression*, int32> RankByExpression;
+		TSet<UMaterialExpression*> Resolving;
+		TFunction<int32(UMaterialExpression*)> ResolveRank;
+		ResolveRank = [&](UMaterialExpression* Expression) -> int32
+		{
+			if (!Expression)
+			{
+				return 0;
+			}
+
+			if (const int32* ExistingRank = RankByExpression.Find(Expression))
+			{
+				return *ExistingRank;
+			}
+
+			if (Resolving.Contains(Expression))
+			{
+				return 0;
+			}
+
+			Resolving.Add(Expression);
+			int32 Rank = 0;
+			if (const TArray<UMaterialExpression*>* ExpressionConsumers = Consumers.Find(Expression))
+			{
+				for (UMaterialExpression* Consumer : *ExpressionConsumers)
+				{
+					Rank = FMath::Max(Rank, ResolveRank(Consumer) + 1);
+				}
+			}
+			Resolving.Remove(Expression);
+
+			RankByExpression.Add(Expression, Rank);
+			return Rank;
+		};
+
+		int32 MaxRank = 0;
+		for (UMaterialExpression* Expression : Expressions)
+		{
+			MaxRank = FMath::Max(MaxRank, ResolveRank(Expression));
+		}
+
+		TMap<int32, TArray<UMaterialExpression*>> Layers;
+		for (UMaterialExpression* Expression : Expressions)
+		{
+			const int32 Rank = RankByExpression.FindRef(Expression);
+			Layers.FindOrAdd(Rank).Add(Expression);
+		}
+
+		for (TPair<int32, TArray<UMaterialExpression*>>& LayerPair : Layers)
+		{
+			LayerPair.Value.StableSort([&OriginalOrder](UMaterialExpression& Left, UMaterialExpression& Right)
+			{
+				if (Left.MaterialExpressionEditorY != Right.MaterialExpressionEditorY)
+				{
+					return Left.MaterialExpressionEditorY < Right.MaterialExpressionEditorY;
+				}
+				return OriginalOrder.FindRef(&Left) < OriginalOrder.FindRef(&Right);
+			});
+		}
+
+		TMap<UMaterialExpression*, int32> OrderInLayer;
+		auto RefreshOrder = [&]()
+		{
+			OrderInLayer.Reset();
+			for (const TPair<int32, TArray<UMaterialExpression*>>& LayerPair : Layers)
+			{
+				const TArray<UMaterialExpression*>& Layer = LayerPair.Value;
+				for (int32 Index = 0; Index < Layer.Num(); ++Index)
+				{
+					OrderInLayer.Add(Layer[Index], Index);
+				}
+			}
+		};
+
+		auto AverageNeighborOrder = [&OrderInLayer, &OriginalOrder](
+			UMaterialExpression* Expression,
+			const TArray<UMaterialExpression*>* Neighbors) -> float
+		{
+			if (!Expression || !Neighbors || Neighbors->IsEmpty())
+			{
+				return static_cast<float>(OriginalOrder.FindRef(Expression));
+			}
+
+			float Sum = 0.0f;
+			int32 Count = 0;
+			for (UMaterialExpression* Neighbor : *Neighbors)
+			{
+				if (const int32* NeighborOrder = OrderInLayer.Find(Neighbor))
+				{
+					Sum += static_cast<float>(*NeighborOrder);
+					++Count;
+				}
+			}
+
+			return Count > 0
+				? Sum / static_cast<float>(Count)
+				: static_cast<float>(OriginalOrder.FindRef(Expression));
+		};
+
+		RefreshOrder();
+		for (int32 Iteration = 0; Iteration < 4; ++Iteration)
+		{
+			for (int32 Rank = MaxRank - 1; Rank >= 0; --Rank)
+			{
+				if (TArray<UMaterialExpression*>* Layer = Layers.Find(Rank))
+				{
+					Layer->StableSort([&](UMaterialExpression& Left, UMaterialExpression& Right)
+					{
+						const float LeftOrder = AverageNeighborOrder(&Left, Consumers.Find(&Left));
+						const float RightOrder = AverageNeighborOrder(&Right, Consumers.Find(&Right));
+						return LeftOrder == RightOrder
+							? OriginalOrder.FindRef(&Left) < OriginalOrder.FindRef(&Right)
+							: LeftOrder < RightOrder;
+					});
+				}
+			}
+			RefreshOrder();
+
+			for (int32 Rank = 1; Rank <= MaxRank; ++Rank)
+			{
+				if (TArray<UMaterialExpression*>* Layer = Layers.Find(Rank))
+				{
+					Layer->StableSort([&](UMaterialExpression& Left, UMaterialExpression& Right)
+					{
+						const float LeftOrder = AverageNeighborOrder(&Left, Dependencies.Find(&Left));
+						const float RightOrder = AverageNeighborOrder(&Right, Dependencies.Find(&Right));
+						return LeftOrder == RightOrder
+							? OriginalOrder.FindRef(&Left) < OriginalOrder.FindRef(&Right)
+							: LeftOrder < RightOrder;
+					});
+				}
+			}
+			RefreshOrder();
+		}
+
+		constexpr int32 OutputX = 900;
+		constexpr int32 ColumnSpacing = 380;
+		constexpr int32 RowSpacing = 190;
+		int32 PositionedCount = 0;
+		for (int32 Rank = 0; Rank <= MaxRank; ++Rank)
+		{
+			TArray<UMaterialExpression*>* Layer = Layers.Find(Rank);
+			if (!Layer || Layer->IsEmpty())
+			{
+				continue;
+			}
+
+			const int32 PositionX = OutputX - Rank * ColumnSpacing;
+			const int32 StartY = -((Layer->Num() - 1) * RowSpacing) / 2;
+			for (int32 Index = 0; Index < Layer->Num(); ++Index)
+			{
+				LayoutSlowTask.EnterProgressFrame(1.0f, FText::FromString(FString::Printf(
+					TEXT("Positioning node %d of %d..."),
+					++PositionedCount,
+					Expressions.Num())));
+				SetGeneratedExpressionPosition((*Layer)[Index], PositionX, StartY + Index * RowSpacing);
+			}
 		}
 	}
 
@@ -4443,12 +4790,39 @@ namespace UE::DreamShader::Editor::Private
 			return false;
 		}
 
+		UClass* ExpectedClass = UMaterialFunction::StaticClass();
+		const TCHAR* ExpectedKindText = TEXT("ShaderFunction");
+		if (Definition.Kind == ETextShaderMaterialFunctionKind::MaterialLayer)
+		{
+			ExpectedClass = UMaterialFunctionMaterialLayer::StaticClass();
+			ExpectedKindText = TEXT("ShaderLayer");
+		}
+		else if (Definition.Kind == ETextShaderMaterialFunctionKind::MaterialLayerBlend)
+		{
+			ExpectedClass = UMaterialFunctionMaterialLayerBlend::StaticClass();
+			ExpectedKindText = TEXT("ShaderLayerBlend");
+		}
+
 		if (UObject* ExistingObject = LoadObject<UObject>(nullptr, *ObjectPath))
 		{
+			const bool bClassMatches = Definition.Kind == ETextShaderMaterialFunctionKind::ShaderFunction
+				? ExistingObject->GetClass() == ExpectedClass
+				: ExistingObject->IsA(ExpectedClass);
+			if (!bClassMatches)
+			{
+				OutError = FString::Printf(
+					TEXT("Asset '%s' already exists as '%s', but %s generation requires '%s'. Delete or move the existing asset and regenerate it."),
+					*ObjectPath,
+					*ExistingObject->GetClass()->GetName(),
+					ExpectedKindText,
+					*ExpectedClass->GetName());
+				return false;
+			}
+
 			OutFunction = Cast<UMaterialFunction>(ExistingObject);
 			if (!OutFunction)
 			{
-				OutError = FString::Printf(TEXT("Asset '%s' already exists and is not a MaterialFunction."), *ObjectPath);
+				OutError = FString::Printf(TEXT("Asset '%s' already exists and is not a MaterialFunction asset."), *ObjectPath);
 				return false;
 			}
 
@@ -4462,14 +4836,11 @@ namespace UE::DreamShader::Editor::Private
 			return false;
 		}
 
-		UMaterialFunctionFactoryNew* Factory = NewObject<UMaterialFunctionFactoryNew>();
-		OutFunction = Cast<UMaterialFunction>(Factory->FactoryCreateNew(
-			UMaterialFunction::StaticClass(),
+		OutFunction = Cast<UMaterialFunction>(NewObject<UObject>(
 			FunctionPackage,
+			ExpectedClass,
 			FName(*AssetName),
-			RF_Public | RF_Standalone,
-			nullptr,
-			GWarn));
+			RF_Public | RF_Standalone));
 
 		if (!OutFunction)
 		{

@@ -17,16 +17,24 @@ Function Card_TransformUV(
 }
 
 // Classic "over" alpha compositing: top over bottom
+// Split into two separate single-output functions to avoid DreamShader
+// multi-output function signature bug.
+
 // out_color = bottom * (1 - top_a) + top_rgb * top_a
-// out_alpha = bottom_a + top_a * (1 - bottom_a)
-// Split into two outputs to avoid DreamShader single-float4-output issue.
-Function Card_AlphaOver(
+Function Card_AlphaOverColor(
     in float4 bottom,
     in float4 top,
-    out float3 outColor,
-    out float outAlpha)
+    out float3 result)
 {
     float oneMinusTopA = 1.0 - top.a;
-    outColor = bottom.rgb * oneMinusTopA + top.rgb * top.a;
-    outAlpha = bottom.a + top.a * (1.0 - bottom.a);
+    result = bottom.rgb * oneMinusTopA + top.rgb * top.a;
+}
+
+// out_alpha = bottom_a + top_a * (1 - bottom_a)
+Function Card_AlphaOverMask(
+    in float4 bottom,
+    in float4 top,
+    out float result)
+{
+    result = bottom.a + top.a * (1.0 - bottom.a);
 }

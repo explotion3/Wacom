@@ -16,6 +16,7 @@ namespace UE::DreamShader
 	DREAMSHADER_API FString NormalizeSourceFilePath(const FString& InPath);
 	DREAMSHADER_API bool IsDreamShaderMaterialFile(const FString& InPath);
 	DREAMSHADER_API bool IsDreamShaderHeaderFile(const FString& InPath);
+	DREAMSHADER_API bool IsDreamShaderFunctionFile(const FString& InPath);
 	DREAMSHADER_API bool IsDreamShaderSourceFile(const FString& InPath);
 }
 

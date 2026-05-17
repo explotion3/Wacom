@@ -161,9 +161,14 @@ namespace UE::DreamShader
 		return FPaths::GetExtension(InPath, true).Equals(TEXT(".dsh"), ESearchCase::IgnoreCase);
 	}
 
+	bool IsDreamShaderFunctionFile(const FString& InPath)
+	{
+		return FPaths::GetExtension(InPath, true).Equals(TEXT(".dsf"), ESearchCase::IgnoreCase);
+	}
+
 	bool IsDreamShaderSourceFile(const FString& InPath)
 	{
-		return IsDreamShaderMaterialFile(InPath) || IsDreamShaderHeaderFile(InPath);
+		return IsDreamShaderMaterialFile(InPath) || IsDreamShaderHeaderFile(InPath) || IsDreamShaderFunctionFile(InPath);
 	}
 }
 

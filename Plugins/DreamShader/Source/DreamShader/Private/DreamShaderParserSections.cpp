@@ -99,6 +99,31 @@ namespace UE::DreamShader::Private
 		return InTypeToken.Equals(Candidate, ESearchCase::IgnoreCase);
 	}
 
+	static bool IsIdentifierToken(const FString& InText)
+	{
+		const FString Trimmed = InText.TrimStartAndEnd();
+		if (Trimmed.IsEmpty())
+		{
+			return false;
+		}
+
+		if (!(FChar::IsAlpha(Trimmed[0]) || Trimmed[0] == TCHAR('_')))
+		{
+			return false;
+		}
+
+		for (int32 Index = 1; Index < Trimmed.Len(); ++Index)
+		{
+			const TCHAR Char = Trimmed[Index];
+			if (!(FChar::IsAlnum(Char) || Char == TCHAR('_')))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	static bool IsStaticSwitchParameterType(const FString& InTypeToken)
 	{
 		return IsParameterNodeType(InTypeToken, TEXT("StaticSwitchParameter"));
@@ -606,7 +631,9 @@ namespace UE::DreamShader::Private
 					|| IsParameterNodeType(TypeToken, TEXT("SpriteTextureSampler")))
 				{
 					Property.Type = ETextShaderPropertyType::Vector;
-					Property.ComponentCount = IsParameterNodeType(TypeToken, TEXT("ChannelMaskParameter")) ? 1 : 4;
+					Property.ComponentCount = IsParameterNodeType(TypeToken, TEXT("ChannelMaskParameter"))
+						? 1
+						: (IsParameterNodeType(TypeToken, TEXT("CurveAtlasRowParameter")) ? 3 : 4);
 					if (Property.bHasDefaultValue && !ParseVectorLiteral(Right, Property.VectorDefaultValue))
 					{
 						OutError = FString::Printf(TEXT("Invalid vector default value '%s' for property '%s'."), *Right, *Property.Name);
@@ -823,7 +850,7 @@ namespace UE::DreamShader::Private
 		OutDeclaration.Type = Trimmed.Left(LastSpaceIndex).TrimStartAndEnd();
 		OutDeclaration.Name = Trimmed.Mid(LastSpaceIndex + 1).TrimStartAndEnd();
 
-		if (OutDeclaration.Type.IsEmpty() || OutDeclaration.Name.IsEmpty())
+		if (OutDeclaration.Type.IsEmpty() || !IsIdentifierToken(OutDeclaration.Name))
 		{
 			OutError = FString::Printf(TEXT("Invalid typed declaration '%s'."), *Statement);
 			return false;
@@ -964,6 +991,21 @@ namespace UE::DreamShader::Private
 			FString RightSide;
 			if (SplitTopLevelAssignment(Trimmed, LeftSide, RightSide))
 			{
+				FTextShaderVariableDeclaration Declaration;
+				if (ParseTypedDeclarationStatement(LeftSide, Declaration, OutError))
+				{
+					Declaration.bHasDefaultValue = true;
+					Declaration.DefaultValueText = RightSide.TrimStartAndEnd();
+					if (Declaration.DefaultValueText.IsEmpty())
+					{
+						OutError = FString::Printf(TEXT("Invalid output declaration initializer '%s'."), *Statement);
+						return false;
+					}
+
+					OutOutputDeclarations.Add(Declaration);
+					continue;
+				}
+
 				Binding.SourceText = RightSide.TrimStartAndEnd();
 				if (Binding.SourceText.IsEmpty())
 				{

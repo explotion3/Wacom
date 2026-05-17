@@ -69,6 +69,7 @@ Shader(Name="DreamMaterials/M_Card_Step2")
         float4 bg = UE.Expression(
             Class="TextureSampleParameter2D",
             OutputType="float4",
+            Output="RGBA",
             ParameterName="BackgroundTexture",
             Group="01 - Background",
             SortPriority=1,
@@ -82,6 +83,7 @@ Shader(Name="DreamMaterials/M_Card_Step2")
         float4 frame = UE.Expression(
             Class="TextureSampleParameter2D",
             OutputType="float4",
+            Output="RGBA",
             ParameterName="FrameTexture",
             Group="02 - Frame",
             SortPriority=11,
@@ -90,8 +92,10 @@ Shader(Name="DreamMaterials/M_Card_Step2")
 
         // --- Composite (frame over background) ---
         float3 composedColor;
+        Card_AlphaOverColor(bg, frame, composedColor);
+
         float composedAlpha;
-        Card_AlphaOver(bg, frame, composedColor, composedAlpha);
+        Card_AlphaOverMask(bg, frame, composedAlpha);
 
         Color = composedColor;
         Rough = Roughness;

@@ -676,15 +676,27 @@ namespace UE::DreamShader
 				{
 					MaterialFunctionBlockName = TEXT("ShaderFunction");
 				}
+				else if (Scanner.TryConsumeKeyword(TEXT("ShaderLayerBlend")))
+				{
+					MaterialFunctionBlockName = TEXT("ShaderLayerBlend");
+					MaterialFunctionKind = ETextShaderMaterialFunctionKind::MaterialLayerBlend;
+				}
+				else if (Scanner.TryConsumeKeyword(TEXT("ShaderLayer")))
+				{
+					MaterialFunctionBlockName = TEXT("ShaderLayer");
+					MaterialFunctionKind = ETextShaderMaterialFunctionKind::MaterialLayer;
+				}
 				else if (Scanner.TryConsumeKeyword(TEXT("MaterialLayerBlend")))
 				{
 					MaterialFunctionBlockName = TEXT("MaterialLayerBlend");
 					MaterialFunctionKind = ETextShaderMaterialFunctionKind::MaterialLayerBlend;
+					OutDefinition.Warnings.Add(TEXT("MaterialLayerBlend is deprecated; use ShaderLayerBlend instead."));
 				}
 				else if (Scanner.TryConsumeKeyword(TEXT("MaterialLayer")))
 				{
 					MaterialFunctionBlockName = TEXT("MaterialLayer");
 					MaterialFunctionKind = ETextShaderMaterialFunctionKind::MaterialLayer;
+					OutDefinition.Warnings.Add(TEXT("MaterialLayer is deprecated; use ShaderLayer instead."));
 				}
 
 				if (MaterialFunctionBlockName.IsEmpty())
@@ -732,11 +744,21 @@ namespace UE::DreamShader
 
 		if (!bFoundShader && OutDefinition.Functions.IsEmpty() && OutDefinition.GraphFunctions.IsEmpty() && OutDefinition.MaterialFunctions.IsEmpty() && OutDefinition.VirtualFunctions.IsEmpty())
 		{
-			OutError = TEXT("A top-level Shader, Function, GraphFunction, Namespace, ShaderFunction, MaterialLayer, MaterialLayerBlend, or VirtualFunction block was not found.");
+			OutError = TEXT("A top-level Shader, Function, GraphFunction, Namespace, ShaderFunction, ShaderLayer, ShaderLayerBlend, or VirtualFunction block was not found.");
 			return false;
 		}
 
-		if (bFoundShader && OutDefinition.Code.IsEmpty())
+		bool bHasInitializedOutput = false;
+		for (const FTextShaderVariableDeclaration& OutputDeclaration : OutDefinition.OutputDeclarations)
+		{
+			if (OutputDeclaration.bHasDefaultValue)
+			{
+				bHasInitializedOutput = true;
+				break;
+			}
+		}
+
+		if (bFoundShader && OutDefinition.Code.IsEmpty() && !bHasInitializedOutput)
 		{
 			OutError = TEXT("Shader must provide a Graph block.");
 			return false;
