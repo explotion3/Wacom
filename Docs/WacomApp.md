@@ -138,7 +138,10 @@ enum class EGameFlowState : uint8
 ### UWacomExplorationHUD
 
 - Game 层锚点
-- 探索状态下的 HUD（当前为 placeholder）
+- 探索状态下的 Run HUD：显示时段、剩余节点、天数、手指、经验、压力分项和交互 Toast
+- 数据来源：`UWacomRunViewModelProvider` → `UWacomRunViewModel`
+- 刷新方式：订阅 `OnRunViewModelRefreshedNative`，并在 `NativeOnActivated` 中补订阅 + 补刷新
+- 战斗中行为：BattleHUD push 到同一个 Game 层后成为 active widget，ExplorationHUD 被压到栈下；ExitBattle pop BattleHUD 后 ExplorationHUD 重新激活
 
 ### MVVM 数据流（M1+M2）
 
@@ -217,30 +220,53 @@ Widget（C++ 直接订阅 OnRunViewModelRefreshedNative，未来 WBP 可走 View
 - 战斗 IMC 不绑定 IA_OpenBackpack（战斗内 B 不可打开背包；OnOpenBackpackPressed 内部还有 GameMode 状态防御）
 - ESC 关闭：复用 OnOpenMenuPressed 的"GameMenu 顶层 widget 直接 Deactivate"逻辑
 
-UI 结构（垂直堆叠）：
+UI 结构（三大区）：
 
 | 区 | 容器 | 说明 |
 |---|---|---|
 | 顶部行 | HorizontalBox | 标题 / 金币 / 关闭按钮 |
-| 删牌区 | `UWacomDeleteZoneDropTarget` | 拖入卡牌调用 `DeleteCardForGold` |
+| 删牌区 | `UWacomDeleteZoneDropTarget` | 拖入卡牌后弹 ConfirmDialog，确认后调用 `DeleteCardForGold` |
 | 备战区 | `UWacomZoneDropTarget + WrapBox` | BattleDeck 卡，标题显示 N/Capacity；同时显示已入战 SpecialZone 投影卡 |
-| 背包区 | `UWacomZoneDropTarget + WrapBox` | Backpack 卡，标题显示 N/FluxCapacity |
-| SpecialZone 区块 | 动态 `UWacomZoneDropTarget + WrapBox` | 每张 B 主卡一个区块，标题显示主卡名与 `n/(Capacity-1)` |
-| 负重区 | `UWacomZoneDropTarget + WrapBox` | 渲染 `RunState.BurdenZone` |
+| 背包区 / 通量存放区 | `UWacomZoneDropTarget + WrapBox` | Backpack 卡，标题显示 N/FluxCapacity |
+| 背包区 / 特殊存放区 | 动态 `UWacomZoneDropTarget + WrapBox` | 每张 B 主卡一个区块，标题显示主卡名与 `n/(Capacity-1)` |
+| 背包区 / 负重区 | `UWacomZoneDropTarget + WrapBox` | 渲染 `RunState.BurdenZone` |
+
+`UWacomBackpackScreen` 暴露以下 WBP 绑定槽位：
+
+- `DeleteZoneHost`
+- `BattleDeckZoneHost`
+- `FluxZoneHost`
+- `SpecialZonesHost`
+- `BurdenZoneHost`
+
+C++ fallback 会创建默认三大区布局；如果 WBP 绑定这些 Host，C++ 只向 Host 填充运行时 DropTarget / WrapBox，不再要求美术布局复刻 C++ 默认结构。
 
 子控件：`UWacomDeckCardWidget`
 
 - 主体区域：左键拖拽，生成 `UWacomCardDragOperation`（InstanceId / FromZone / FromZoneOwnerInstanceId / Definition）
-- 右上角 X：保留旧入口，点击 → 弹 ConfirmDialog → DeleteCardForGold
+- 拖拽视觉：创建当前 `UWacomDeckCardWidget` 类的新实例作为 `DefaultDragVisual`；拖拽源卡牌透明度降为 50%，拖拽完成或取消后恢复
+- 删牌入口：卡牌本体不提供删除按钮；拖到删牌区后由 `UWacomDeleteZoneDropTarget` 弹确认框，确认后调 `DeleteCardForGold`
 - SpecialZone 内卡：右键切换 `bBattleEnabledInSpecialZone`
 - `BattleEnabledBadge`：SpecialZone 内已选择入战的卡显示“已选”
 - `ProjectedFromBadge`：BattleDeck 视觉投影卡显示“来自 [B 主卡名]”
-- Delete 按钮启用规则：Intrinsic / 最后 BagProvider 禁用
+
+### CardView
+
+`UWacomCardView` 是通用卡牌显示基类，只负责渲染 `FWacomCardViewData`：
+
+- 显示 Cost、卡名、类型/词条、描述、卡图和禁用遮罩
+- 不提交 `BattleSession` 命令
+- 不调用 `RunSession::MoveInstance` / `DeleteCardForGold`
+- 背包卡牌、战斗手牌、拖拽预览、奖励/商店卡牌后续都应包一层 `UWacomCardView` 复用显示
+
+`WBP_CardView` 可继承 `UWacomCardView`，用同名 `BindWidgetOptional` 控件替换 C++ fallback 布局。
 
 DropTarget 规则：
 - 普通 zone drop 调 `RunSession->MoveInstance`。
-- DeleteZone drop 调 `RunSession->DeleteCardForGold`。
+- DeleteZone drop 先弹 `UWacomConfirmDialog`，确认后调 `RunSession->DeleteCardForGold`。
 - `NativeOnDragOver` 只做视觉预判，例如 BattleDeck 已满且来源 Backpack 时返回 false；最终规则仍以 RunSession 返回值为准。
+- DropTarget 暴露 `EWacomDropTargetState`：`Normal / HoverValid / HoverInvalid / DropAccepted / DropRejected`。
+- WBP 可实现 `BP_OnDropTargetStateChanged` 做高亮、禁用提示和失败反馈。
 
 刷新模型：
 - 操作命令 → RunSession 写状态 → `OnRunStateChangedNative` → Provider 刷 ViewModel → `OnRunViewModelRefreshedNative` → `BackpackScreen::RebuildAll()`。
@@ -254,6 +280,18 @@ DropTarget 规则：
 ### CommonUI UIActionRouter leaf-most 机制
 
 CommonUI 的 UIActionRouter 会把输入路由到"最前面的可激活 Widget"。战斗 UI 激活时，探索输入自然被屏蔽。
+
+### Game 层切换语义
+
+Game 层同一时间只应有一个主要 HUD 处于 active 状态：
+
+```
+探索 BeginPlay → Push ExplorationHUD 到 Game 层
+EnterBattle → Push BattleHUD 到 Game 层，ExplorationHUD 进入非 active 状态
+ExitBattle → Pop BattleHUD，ExplorationHUD 重新 active，并在 NativeOnActivated 补刷新
+```
+
+`AWacomPlayerController::RefreshInteractToast` 只在 `EGameFlowState::Exploration` 时显示交互 Toast。战斗中即使候选 Trigger 仍在列表中，也不会显示"按 E 战斗"。
 
 ### IMC 资产
 

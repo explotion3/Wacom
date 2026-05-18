@@ -13,6 +13,16 @@ class UBorder;
 class UDragDropOperation;
 class UWidget;
 
+UENUM(BlueprintType)
+enum class EWacomDropTargetState : uint8
+{
+	Normal,
+	HoverValid,
+	HoverInvalid,
+	DropAccepted,
+	DropRejected
+};
+
 /**
  * 背包 zone 拖拽接收器（Stage 4.5.3a）。
  *
@@ -33,12 +43,20 @@ public:
 	void SetOwnerScreen(UWacomBackpackScreen* InScreen);
 	void SetDropContent(UWidget* InContent);
 	bool TryHandleDropOperation(UDragDropOperation* InOperation);
+	void SetDropTargetState(EWacomDropTargetState InState);
 	static bool ShouldPreviewDrop(EZoneKind TargetZone, EZoneKind SourceZone, int32 BattleDeckCount, int32 BattleDeckCapacity);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Drop")
+	EWacomDropTargetState GetDropTargetState() const { return DropTargetState; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual bool NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+	virtual void NativeOnDragLeave(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Backpack|Drop")
+	void BP_OnDropTargetStateChanged(EWacomDropTargetState NewState);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack")
 	EZoneKind ZoneKind = EZoneKind::Backpack;
@@ -54,6 +72,9 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWidget> DropContent;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Wacom|Backpack|Drop", meta = (AllowPrivateAccess = "true"))
+	EWacomDropTargetState DropTargetState = EWacomDropTargetState::Normal;
 
 	bool CanPreviewDrop(const UWacomCardDragOperation& CardOp) const;
 };

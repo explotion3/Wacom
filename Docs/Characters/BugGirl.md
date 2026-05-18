@@ -1,6 +1,6 @@
 # Bug Girl Character Design
 
-本文记录“虫妹”作为当前项目第一名初始角色的设计。本文用于沉淀角色定位、初始卡牌、核心机制和第一阶段实现范围。具体战斗通用规则仍以 `Battle_Core_Rules.md`、`Hand_Zone_Rules.md` 和后续数据结构文档为准。
+本文记录“虫妹”作为当前项目第一名初始角色的设计。本文用于沉淀角色定位、初始卡牌、核心机制和第一阶段实现范围。具体通用规则仍以 `Docs/WacomBattle.md`、`Docs/WacomData.md`、`Docs/WacomRun.md` 和后续数据结构文档为准。
 
 ## 1. 角色定位
 

@@ -41,4 +41,11 @@ Desktop.ini
 *.xcworkspace
 *.xcodeproj
 
-# Keep project source, config, content, plugins, and docs versioned.
+# Project content policy
+# Keep only project-owned Wacom assets versioned. Ignore other Content assets
+# by default so large marketplace/reference imports do not enter source control.
+Content/*
+!Content/Wacom/
+!Content/Wacom/**
+
+# Keep project source, config, Wacom content, plugins, and docs versioned.

@@ -230,8 +230,9 @@ WacomBattle/
 
 ### 层数衰减
 
-- 被治疗时，移除治疗效果 10% 的中毒层数（向下取整）
-- 第一阶段未实现
+- `Effect.Heal` 治疗玩家时，移除治疗量 10% 的中毒层数（向下取整）
+- 移除后层数为 0 时移除 `Status.Poison`
+- 第一阶段仅玩家治疗路径接入；敌方部位治疗、状态清除等更复杂路径待规则确认
 
 ### 归属
 
@@ -310,7 +311,7 @@ WacomBattle/
 | EffectTag | Handler | 现状 |
 |---|---|---|
 | `Effect.Damage` | DamageHandler | 已实现 |
-| `Effect.Heal` | HealHandler | 预留，未实现 |
+| `Effect.Heal` | HealHandler | 已实现（恢复玩家 HP，并移除治疗量 10% 的中毒层数，向下取整） |
 | `Effect.ApplyStatus.Poison` | ApplyStatusHandler | 已实现 |
 | `Effect.ApplyStatus.Slow` | ApplyStatusHandler | 占位（仅记录层数）|
 | `Effect.ApplyStatus.Freeze` | ApplyStatusHandler | 占位（行动时跳过）|

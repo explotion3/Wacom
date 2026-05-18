@@ -8,6 +8,7 @@
 #include "WacomBackpackScreen.generated.h"
 
 class UButton;
+class UPanelWidget;
 class UTextBlock;
 class UWrapBox;
 class UVerticalBox;
@@ -25,10 +26,10 @@ struct FCardInstance;
  *
  * 由 PlayerController 在按 B 时 Push（或 Console Command）。
  *
- * 三大区域（垂直堆叠）：
+ * 三大区域：
  *   - 删牌区（DeleteZone）：玩家拖卡过来 → 置换金币
  *   - 备战区（BattleDeckZone）：BattleDeck 内容
- *   - 背包区（BackpackZone）：Backpack 内容（通量 + 负重区，第一阶段同一 WrapBox 区分前后）
+ *   - 背包区：通量存放区 + SpecialZone + 负重区
  *
  * Stage 4.2 用点击切换语义：
  *   - Backpack 卡点击主体 → AddCardToBattleDeck
@@ -73,9 +74,6 @@ protected:
 	/** 订阅 Provider（如果还没订阅）+ 刷新一次。 */
 	void TrySubscribeAndRefresh();
 
-	/** 卡按钮回调：删牌（弹 Confirm 后调 DeleteCardForGold）。 */
-	void HandleDeleteCard(UCardDefinition* Card);
-
 	/** SpecialZone 卡右键切换入战标记。 */
 	void HandleBattleEnabledToggle(FGuid InstanceId);
 
@@ -93,6 +91,26 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> BackpackTitleText;
+
+	/** WBP 可绑定的删牌区运行时内容槽。未绑定时 C++ fallback 会创建。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> DeleteZoneHost;
+
+	/** WBP 可绑定的备战区运行时内容槽。未绑定时 C++ fallback 会创建。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> BattleDeckZoneHost;
+
+	/** WBP 可绑定的通量存放区运行时内容槽。未绑定时 C++ fallback 会创建。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> FluxZoneHost;
+
+	/** WBP 可绑定的特殊存放区运行时内容槽。未绑定时 C++ fallback 会创建。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> SpecialZonesHost;
+
+	/** WBP 可绑定的负重区运行时内容槽。未绑定时 C++ fallback 会创建。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> BurdenZoneHost;
 
 	/** 备战区卡牌容器（WrapBox 自动横向流式 + 换行）。 */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -139,6 +157,9 @@ private:
 
 	/** 销毁现有 WrapBox 子项。 */
 	void ClearCardBoxes();
+
+	/** 默认 C++ 布局只负责搭出三大区和 Host，实际 DropTarget 由 EnsureRuntimeZoneWidgets 填充。 */
+	void EnsureRuntimeZoneWidgets();
 
 	/** 子控件类（默认 UWacomDeckCardWidget，蓝图可覆盖）。 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack")

@@ -205,7 +205,7 @@ class UCharacterDefinition : public UPrimaryDataAsset
 | Tag | 代码名 | 说明 |
 |---|---|---|
 | `Effect.Damage` | `Effect_Damage` | 伤害 |
-| `Effect.Heal` | `Effect_Heal` | 治疗（未实现）|
+| `Effect.Heal` | `Effect_Heal` | 治疗玩家 HP，并移除治疗量 10% 的中毒层数（向下取整）|
 | `Effect.ApplyStatus.Poison` | `Effect_ApplyStatus_Poison` | 施加中毒 |
 | `Effect.ApplyStatus.Slow` | `Effect_ApplyStatus_Slow` | 施加减速 |
 | `Effect.ApplyStatus.Freeze` | `Effect_ApplyStatus_Freeze` | 施加冻结 |
@@ -215,6 +215,12 @@ class UCharacterDefinition : public UPrimaryDataAsset
 | `Effect.Shuffle.ToRandomZone` | `Effect_Shuffle_ToRandomZone` | 腾挪到随机区域 |
 | `Effect.Card.AddCost` | `Effect_Card_AddCost` | 对目标卡 RuntimeCostModifier 增加 |
 | `Effect.Card.ReduceCost` | `Effect_Card_ReduceCost` | 对目标卡 RuntimeCostModifier 减少 |
+| `Effect.Draw` | `Effect_Draw` | 从指定卡牌区域移动卡牌到手牌 |
+| `Effect.Discard` | `Effect_Discard` | 随机弃掉手牌中的普通卡 |
+| `Effect.ExhaustSelf` | `Effect_ExhaustSelf` | 标记本卡打出后进入消耗区 |
+| `Effect.GainKeyword` | `Effect_GainKeyword` | 给目标手牌临时添加关键词 |
+| `Effect.RemoveStatus` | `Effect_RemoveStatus` | 移除目标指定状态层数 |
+| `Effect.ModifyInitiative` | `Effect_ModifyInitiative` | 修改目标敌方部位当前先机 |
 
 ### Magnitude.Source
 
@@ -268,10 +274,10 @@ class UCharacterDefinition : public UPrimaryDataAsset
 | `Passive.Trigger.AfterPlayed` | `Passive_Trigger_AfterPlayed` | 本卡打出完成后 |
 | `Passive.Trigger.OnCompanionCount` | `Passive_Trigger_OnCompanionCount` | 全局 Companion 计数达阈值 |
 | `Passive.Trigger.OnTwilightTriggered` | `Passive_Trigger_OnTwilightTriggered` | 暮气施加成功时 |
-| `Passive.Trigger.OnTurnStart` | `Passive_Trigger_OnTurnStart` | 玩家回合开始时（Handler 注册，调用点未接入）|
-| `Passive.Trigger.OnTurnEnd` | `Passive_Trigger_OnTurnEnd` | 玩家回合结束时（Handler 注册，调用点未接入）|
-| `Passive.Trigger.OnDraw` | `Passive_Trigger_OnDraw` | 本卡被抽到手牌时（Handler 注册，调用点未接入）|
-| `Passive.Trigger.OnDiscard` | `Passive_Trigger_OnDiscard` | 本卡被弃掉时（Handler 注册，调用点未接入）|
+| `Passive.Trigger.OnTurnStart` | `Passive_Trigger_OnTurnStart` | 玩家回合开始时（Dispatcher 方法已就位，调用点未接入）|
+| `Passive.Trigger.OnTurnEnd` | `Passive_Trigger_OnTurnEnd` | 玩家回合结束时（Dispatcher 方法已就位，调用点未接入）|
+| `Passive.Trigger.OnDraw` | `Passive_Trigger_OnDraw` | 本卡被抽到手牌时（Dispatcher 方法已就位，调用点未接入）|
+| `Passive.Trigger.OnDiscard` | `Passive_Trigger_OnDiscard` | 本卡被弃掉时（Dispatcher 方法已就位，调用点未接入）|
 
 ### CardLocation
 
@@ -311,7 +317,7 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 | EffectType | Magnitude 语义 | Target（典型值）| TargetZone | Duration | MagnitudeSource | 备注 |
 |---|---|---|---|---|---|---|
 | `Effect.Damage` | 伤害值 | SingleEnemyPart / AllEnemyParts / Player | - | - | Literal / RuntimeCost | 部位 HP 归零立即破坏 |
-| `Effect.Heal` | 治疗量 | Self(→Player) / SingleEnemyPart | - | - | Literal | 未实现 |
+| `Effect.Heal` | 治疗量 | Self(→Player) / Player | - | - | Literal | 恢复玩家 HP，并移除治疗量 10% 的中毒层数 |
 | `Effect.ApplyStatus.Poison` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | - | Literal / RuntimeCost | 层数模型，不用 Duration |
 | `Effect.ApplyStatus.Slow` | 层数 | 同上 | - | - | Literal | 第一阶段只记录 |
 | `Effect.ApplyStatus.Freeze` | 层数 | SingleEnemyPart | - | 回合数(0=层数模型) | Literal | 按层数消耗实现 |
@@ -322,6 +328,12 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 | `Effect.Shuffle.ToRandomZone` | - | Self(本卡) | - | - | - | 把本卡腾挪到随机区域 |
 | `Effect.Card.AddCost` | Modifier 增量 | Self(本卡) / LastShuffledCard | - | - | Literal | 修改 RuntimeCostModifier |
 | `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 下限由 ComputeRuntimeCost clamp 到 0 |
+| `Effect.Draw` | 张数 | Self / Player | CardLocation.* | - | Literal | `TargetZone` 复用为源区域 tag，默认抽牌堆 |
+| `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉手牌中普通卡，不弃锚点 |
+| `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 标记交给打出后去向阶段处理 |
+| `Effect.GainKeyword` | - | HandCard | KeywordTag | - | - | `TargetZone` 复用为要添加的 Keyword tag |
+| `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | StatusTag | - | Literal | `TargetZone` 复用为要移除的 Status tag |
+| `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal | 正数增加，负数减少 |
 
 ### Target 字段速查表
 

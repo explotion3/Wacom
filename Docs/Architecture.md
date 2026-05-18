@@ -11,8 +11,8 @@
 - `WacomCore`：基础类型、ID、GameplayTags 声明。
 - `WacomData`：卡牌、敌人、意图、角色等静态定义。
 - `WacomBattle`：战斗内核。
-- `WacomRun`：战斗之间的状态与探索（第一阶段几乎为空）。
-- `WacomApp`：游戏层、第一人称、输入绑定、UI、测试 Actor。同时作为主游戏模块。
+- `WacomRun`：战斗之间的 Run 状态、背包、SpecialZone、负重、压力、经验、战斗结果回传和存档结构。
+- `WacomApp`：游戏层、第一人称、输入绑定、CommonUI/MVVM UI、战斗触发 Actor。同时作为主游戏模块。
 - `WacomEditor`：编辑器工具、数据校验（Editor-only target）。
 - `WacomTests`：自动化测试（DeveloperTool）。
 
@@ -20,13 +20,13 @@
 
 ## 2. 架构目标
 
-第一阶段架构目标：
+当前架构目标：
 
-- 可以通过测试场景中的战斗 Actor 启动一场测试战斗。
+- 可以通过探索场景中的战斗触发 Actor 启动一场战斗，并在战斗结束后回到探索。
 - 战斗规则集中在战斗内核中，不写进 UI 或场景 Actor。
 - UI 只读取快照和事件，不直接修改战斗状态。
 - 玩家输入转换为命令，由战斗内核统一结算。
-- 卡牌效果、手牌区域、敌方部位行动可以独立测试。
+- 卡牌效果、手牌区域、敌方部位行动、Run 背包和战斗结果回传可以独立测试。
 - 策划规则变化时，优先修改数据、效果执行器或局部 Resolver，而不是重写整体流程。
 
 长期架构目标：
@@ -94,10 +94,11 @@ Source/
       Effects/, Resolution/, Passives/
     }
   WacomRun/
-    Public/, Private/
+    Public/ { RunSession.h, RunState.h, RunStateTypes.h, WacomSaveGame.h }
+    Private/
   WacomApp/
-    Public/ { Actors/, Pawns/, Controllers/, UI/ }
-    Private/ { Actors/, Pawns/, Controllers/, UI/ }
+    Public/ { Actors/, GameFramework/, UI/ }
+    Private/ { Actors/, GameFramework/, UI/ }
   WacomEditor/
     Public/
     Private/ { Validators/, Commands/, Bootstrap/ }
@@ -106,7 +107,11 @@ Source/
     Private/ { Fixtures/, Battle/ }
 ```
 
-第一阶段重点在 `WacomBattle/Private`。`WacomRun` 和 `WacomApp` 只做最小入口。
+当前重点已经从纯战斗内核扩展到 Run/App 闭环：
+
+- `WacomBattle/Private` 继续承载战斗规则真相。
+- `WacomRun` 承载战斗外状态、背包、多 zone 卡牌归属、压力/经验、战斗结果回传。
+- `WacomApp` 承载 CommonUI 层级、探索/战斗状态切换、输入协调和 HUD/背包界面。
 
 `BattleState`、`BattleResolver`、各命令 Resolver、各效果执行器都在 `WacomBattle/Private`，
 外部模块编译期不可见。对外入口是 `WacomBattle/Public/Session/BattleSession.h`。
@@ -142,15 +147,15 @@ UI、Actor 和测试入口都不应该直接改 `BattleState`。它们只能提�
 
 玩家操作进入战斗内核时统一转换为命令。
 
-第一阶段命令：
+当前核心命令：
 
 - `PlayCard`
 - `Wait`
 - `EndTurn`
+- `KnockdownChoice`
 
 后续可扩展：
 
-- `SelectKnockdownOption`
 - `ChooseReward`
 - `MoveCardByDebug`
 
@@ -230,46 +235,46 @@ UI 不可以：
 - 直接修改敌人 HP。
 - 自己计算最终规则结果作为真相。
 
-第一阶段 UI 可以简陋，但必须遵守边界。
+当前 UI 仍以 C++ 默认布局为主，但必须遵守边界。
 
-## 10. 测试入口
+Run 域 UI 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Battle UI 保持 `FBattleSnapshot` 推送模型。两者都不直接修改规则状态。
 
-第一阶段需要一个测试场景和一个战斗 Actor。
+## 10. 验证入口
 
-测试流程：
+当前有两类验证入口：
+
+### 探索闭环
 
 ```text
-进入测试场景
--> 与战斗 Actor 交互
--> 创建 BattleSession
--> 加载虫妹测试卡组
--> 加载蛇测试敌人
--> 进入战斗 UI 或调试界面
--> 战斗胜利 / 失败
--> 返回测试场景入口或战斗 Actor 附近
+进入探索关卡
+-> 玩家进入 BattleTriggerActor 范围
+-> 按 E 触发战斗
+-> GameMode 创建 BattleSession 并 Push BattleHUD
+-> 战斗胜利 / 失败 / 撤离
+-> ExitBattle 回探索，RunSession 结算战斗结果
 ```
 
-测试 Actor 只负责启动和结束测试战斗，不负责战斗规则。
+### 开发测试入口
 
-## 11. 第一阶段实现顺序
+`BattleTestActor` 保留为开发验证入口，只负责启动和结束测试战斗，不负责战斗规则。
 
-建议按以下顺序实现：
+## 11. 当前已落地骨架
 
-1. 建立 `BattleState`、`BattleCommand`、`BattleSnapshot`、`BattleEvent`。
-2. 实现 `BattleSession` 和 `BattleResolver`。
-3. 实现起始阶段抽牌和等待值。
-4. 实现 `HandZoneService`。
-5. 实现 `PlayCard / Wait / EndTurn` 三个命令。
-6. 实现敌方部位行动子流程。
-7. 实现最小卡牌效果：伤害、腾挪、等待、先机扣减。
-8. 实现先机命中、抵抗、完美释放的占位流程。
-9. 实现测试敌人蛇。
-10. 实现测试场景战斗 Actor。
-11. 添加自动化测试覆盖关键规则。
+已经落地的骨架包括：
+
+1. `BattleState / BattleCommand / BattleSnapshot / BattleEvent`。
+2. `BattleSession` 和命令 Resolver。
+3. 起始阶段抽牌、等待值、手牌区域、保留、上限。
+4. `PlayCard / Wait / EndTurn / KnockdownChoice`。
+5. 敌方部位行动、先机命中、抵抗、完美释放、击倒事件。
+6. 效果执行器、条件、Magnitude、状态、CapacityEffect。
+7. RunSession、背包、SpecialZone、负重、经验/压力、战斗结果回传。
+8. CommonUI 层级、探索 HUD、BattleHUD、背包 UI、菜单和确认框。
+9. 自动化测试覆盖 Battle / Run / UI 关键规则。
 
 ## 12. 自动化测试重点
 
-第一阶段至少覆盖：
+当前测试至少应持续覆盖：
 
 - 回合开始抽 5 张普通卡牌。
 - 左右手牌插入后两者之间至少有一张普通卡牌。
@@ -287,11 +292,12 @@ UI 不可以：
 
 ## 13. 插件与系统选择
 
-第一阶段建议使用：
+当前已采用 / 保持采用：
 
 - `Enhanced Input`：输入映射。
 - `GameplayTags`：词条、状态、效果类型、区域等标识。
-- `CommonUI`：如果第一阶段就开始搭 UI 层，建议早用。
+- `CommonUI`：主 UI 层级和 Activatable Widget 管理。
+- `ModelViewViewModel`：Run 域 ViewModel / Provider，供探索 HUD 和背包顶部统计使用。
 - `Niagara`：后续表现。
 
 第一阶段不建议把 GAS 作为战斗核心。当前核心是卡牌规则内核，不是典型技能 Ability 生命周期。GAS 后续可以作为状态和属性系统参考，但不应阻塞第一阶段战斗框架。
@@ -315,15 +321,15 @@ WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 - 只有需要反射、蓝图、资产或序列化的类型才使用 `UCLASS / USTRUCT / UENUM`。
 - `WacomApp` 不得直接修改 `BattleState`，只能通过 `UBattleSession` 提交命令、读取快照和事件。
 
-## 15. 暂不处理
+## 15. 暂不处理 / 后续方向
 
-第一阶段暂不实现：
+当前暂不实现：
 
-- 完整 Run。
 - SAN 对探索场景的影响。
-- 背包容量成长。
 - 完整状态公式。
 - 暮色引虫灯任务。
 - 击倒奖励分支。
 - 失去手指后的左右手变化。
 - 正式 UI 美术。
+- 地图系统与节点事件正式流程。
+- 战斗 UI ViewModel 化。

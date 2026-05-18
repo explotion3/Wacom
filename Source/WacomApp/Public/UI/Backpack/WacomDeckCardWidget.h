@@ -5,9 +5,9 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "RunStateTypes.h"
+#include "UI/Card/WacomCardView.h"
 #include "WacomDeckCardWidget.generated.h"
 
-class UButton;
 class UBorder;
 class UTextBlock;
 class UCardDefinition;
@@ -17,15 +17,15 @@ class UDragDropOperation;
  * 单张卡的 UI 表示（背包系统用）。
  *
  * Stage 4.5.3a 拖拽源：
- *   - 主体大按钮 → 纯展示 / 拖拽热区，不再触发点击移动
- *   - 右上角小红 X → 点击触发 OnDeleteRequested（删牌区入口）
+ *   - 纯展示 / 拖拽热区，不触发点击移动
+ *   - 删牌不在卡牌本体上处理；拖到 DeleteZone 后由 DropTarget 调 DeleteCardForGold
  *
  * 由 UWacomBackpackZoneWidget 创建并管理生命周期。
  *
  * 设计：用 UUserWidget 而非 ActivatableWidget。它不参与 GameMenu 层栈，
  * 只是父 BackpackScreen 内部的子控件。
  */
-UCLASS()
+UCLASS(Blueprintable)
 class WACOMAPP_API UWacomDeckCardWidget : public UUserWidget
 {
 	GENERATED_BODY()
@@ -56,15 +56,12 @@ public:
 	 */
 	void SetMoveEnabled(bool bEnabled);
 
-	/**
-	 * 删除按钮启用状态。
-	 *
-	 * Intrinsic / 最后 BagProvider 卡禁用。
-	 */
-	void SetDeleteEnabled(bool bEnabled);
-
 	/** 构造当前卡片的拖拽 payload。返回 nullptr 表示当前卡片不能被拖拽。 */
 	UDragDropOperation* BuildDragOperation();
+
+	/** 标记当前 widget 是否只作为拖拽视觉使用。拖拽视觉不再响应交互。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Backpack|Drag")
+	void SetDragVisualMode(bool bInDragVisualMode);
 
 	/** 测试/诊断用：主按钮是否仍绑定了点击移动语义。 */
 	bool HasMoveButtonClickBindings() const;
@@ -81,40 +78,21 @@ public:
 	/** 右键切换请求的可测试入口。返回 false 表示当前卡片不响应该请求。 */
 	bool RequestBattleEnabledToggle();
 
-	/** 删除按钮点击委托。 */
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnDeleteRequestedNative, UCardDefinition*);
-	FOnDeleteRequestedNative OnDeleteRequestedNative;
-
 	/** 右键请求切换 SpecialZone 入战标记。Payload 是 instance id。 */
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEnabledToggleRequestedNative, FGuid);
 	FOnBattleEnabledToggleRequestedNative OnBattleEnabledToggleRequestedNative;
 
 protected:
-	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
-
-	UFUNCTION()
-	void HandleDeleteClicked();
+	virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> CardBody;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> DeleteButton;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> NameText;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> CostText;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> KeywordsText;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> CapacityText;
+	TObjectPtr<UWacomCardView> CardView;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> BattleEnabledBadge;
@@ -131,7 +109,14 @@ private:
 	FGuid FromZoneOwnerInstanceId;
 	bool bBattleEnabledBadgeVisible = false;
 	bool bRightClickToggleEnabled = false;
+	bool bCardInteractionEnabled = true;
+	bool bDragVisualMode = false;
 	FText ProjectedFromBadgeText;
 
+	UFUNCTION()
+	void HandleDragOperationFinished(UDragDropOperation* Operation);
+
 	void RefreshContentFromCard();
+	FWacomCardViewData BuildCurrentCardViewData() const;
+	void ApplyDragSourceVisualState(bool bDragging);
 };

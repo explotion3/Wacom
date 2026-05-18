@@ -59,15 +59,35 @@ void UWacomZoneDropTarget::SetDropContent(UWidget* InContent)
 	}
 }
 
+void UWacomZoneDropTarget::SetDropTargetState(EWacomDropTargetState InState)
+{
+	if (DropTargetState == InState)
+	{
+		return;
+	}
+
+	DropTargetState = InState;
+	BP_OnDropTargetStateChanged(DropTargetState);
+}
+
 bool UWacomZoneDropTarget::NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
 	if (!CardOp)
 	{
+		SetDropTargetState(EWacomDropTargetState::HoverInvalid);
 		return false;
 	}
 
-	return CanPreviewDrop(*CardOp);
+	const bool bCanPreview = CanPreviewDrop(*CardOp);
+	SetDropTargetState(bCanPreview ? EWacomDropTargetState::HoverValid : EWacomDropTargetState::HoverInvalid);
+	return bCanPreview;
+}
+
+void UWacomZoneDropTarget::NativeOnDragLeave(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
+{
+	Super::NativeOnDragLeave(InDragDropEvent, InOperation);
+	SetDropTargetState(EWacomDropTargetState::Normal);
 }
 
 bool UWacomZoneDropTarget::CanPreviewDrop(const UWacomCardDragOperation& CardOp) const
@@ -102,7 +122,9 @@ bool UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind TargetZone, EZoneKind Sou
 
 bool UWacomZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
-	return TryHandleDropOperation(InOperation);
+	const bool bHandled = TryHandleDropOperation(InOperation);
+	SetDropTargetState(bHandled ? EWacomDropTargetState::DropAccepted : EWacomDropTargetState::DropRejected);
+	return bHandled;
 }
 
 bool UWacomZoneDropTarget::TryHandleDropOperation(UDragDropOperation* InOperation)

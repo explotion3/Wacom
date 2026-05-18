@@ -10,10 +10,9 @@
 
 | 项 | 现状 | 后续方向 |
 |---|---|---|
-| `Status.Slow` 减速数值效果 | 只记录层数，不影响先机或 Cost | 等 `Battle_Rules §16` 正式定义减速公式后实现 |
+| `Status.Slow` 减速数值效果 | 只记录层数，不影响先机或 Cost | 等 `WacomBattle.md` 正式定义减速公式后实现 |
 | `Status.Twilight` 暮气数值效果 | 只记录层数，不触发任何效果 | 等"暮气生效触发点"规则确认（回合开始？部位行动前？）|
 | 暮蛉 `OnTwilightTriggered` 真正改中毒层数 | P3.5 只发 `PassiveTriggered` 事件，不改 Magnitude | 需引入 `FRuntimeCardInstance::EffectMagnitudeModifiers` 或等价机制 |
-| 治疗移除 10% 中毒层数 | 治疗效果 `Effect.Heal` 未实现 | 实现 Heal 时一并加中毒层数衰减 |
 | 卡牌耐久 `Durability` 消耗 | `FCardPhysique::Durability` 字段存在但不读取 | 等耐久系统设计（暮色引虫灯 1 耐久 = 打出一次进消耗区）|
 | 左手主动效果 / 完美释放效果 | 左手 `Effects` / `PerfectReleaseEffects` 留空 | 等具体卡牌设计 |
 | 右手"相邻右方伙伴代打" | 未实现 | 等 `Target.Adjacent.Right` 的 Executor 分支 |
@@ -21,7 +20,6 @@
 | 蛇部位间联动 | 无（头被破坏时身体不强化）| 等更多敌人设计后按需加 |
 | 手牌满时 OnCompanionCount 处理 | 强行加入，下回合 EnforceLimit 处理 | 若规则变更为"满时不触发"，改 `RunOnCompanionCountPassives` |
 | 存档系统恢复 | Stage 0.1 暂停（`bSaveSystemEnabled = false`），底层 UWacomSaveGame / FRunState 拷贝/迁移机制保留 | demo 完善后恢复：Bootstrap 读盘 / PauseMenu Save 按钮 / MainMenu Continue |
-| 容量效果应用到特殊存放区卡牌 | `CapacityEffect` tag 字段就位，B 类识别 API 就位，但"放进特殊区的卡获得效果"未实现 | 等具体效果设计 |
 | `IsDeleteFunctionAvailable` 接入 `DeleteCardForGold` 校验 | 接口就位但 DeleteCardForGold 不读（GDD §11.7 第一阶段始终允许删牌）| 等 GDD 切换为"按需可用"后接入 |
 
 ### 卡牌扩展（按需做，未来卡牌出现时再实现）
@@ -40,10 +38,10 @@
 
 | 项 | 现状 | 接入要求 |
 |---|---|---|
-| `Passive.Trigger.OnTurnStart` | Handler 注册，无调用点 | 出现需要回合开始触发的被动卡时，在 `BattleTurnFlow` 起始阶段加调用 |
-| `Passive.Trigger.OnTurnEnd` | Handler 注册，无调用点 | 出现回合结束触发的被动卡时，在 `EndTurnResolver` 加调用（注意时序） |
-| `Passive.Trigger.OnDraw` | Handler 注册，无调用点 | 出现入手触发的被动卡时，在 `DeckService::DrawTo` 加调用 |
-| `Passive.Trigger.OnDiscard` | Handler 注册，无调用点 | 出现弃牌触发的被动卡时，在弃牌路径加调用 |
+| `Passive.Trigger.OnTurnStart` | Dispatcher 方法已就位，无调用点 | 出现需要回合开始触发的被动卡时，在 `BattleTurnFlow` 起始阶段加调用 |
+| `Passive.Trigger.OnTurnEnd` | Dispatcher 方法已就位，无调用点 | 出现回合结束触发的被动卡时，在 `EndTurnResolver` 加调用（注意时序） |
+| `Passive.Trigger.OnDraw` | Dispatcher 方法已就位，无调用点 | 出现入手触发的被动卡时，在 `DeckService::DrawCards` / 手牌编排路径加调用 |
+| `Passive.Trigger.OnDiscard` | Dispatcher 方法已就位，无调用点 | 出现弃牌触发的被动卡时，在 `DeckService::DiscardFromHand` 与回合结束弃牌路径加调用 |
 
 ### 卡牌扩展（新 GDD 触发的依赖项）
 
@@ -51,7 +49,7 @@
 |---|---|---|
 | `Passive.Trigger.OnEnemyPartDestroyed` | 未做 | GDD §6 / §3.3。Stage 7 已让"玩家三选一"在 `RecordPartDestroyed` 路径有挂载点，被动触发可一并接入 |
 | `Passive.Trigger.OnPlayerDamaged` | 未做 | 战内"玩家受扣血"事件可由战内伤口阈值跨越（GDD §3.2 / §9.2）的 flag 维护承接，不一定要走 Passive trigger。先观察 |
-| B 类容器卡容量效果应用机制 | `FCardPhysique.CapacityEffect` 字段 + `IsTypeBContainerCard` 判定已做，但"放进特殊存放区的卡获得效果"的 effect 应用逻辑未实现 | 等具体容量效果设计（cost-1 / 关键词加成 / 数值修正）落地后实现 |
+| B 类容器卡容量效果扩展 | `WeaponDamagePlus3` 已实现；其他 CapacityEffect 尚无通用扩展框架 | 等具体容量效果设计（cost-1 / 关键词加成 / 数值修正）落地后逐个接入 |
 | 暮色引虫灯战斗主动效果 | 当前 Cost=0 无效果，打出无意义 | GDD §4.4 定义了 1 耐久 / 打出一次进消耗区，等耐久系统接入 |
 | 暮色引虫灯任务后升级 | 未做 | 远期，等任务系统 |
 | 击倒事件 UI dialog 美术 | Stage 7 已落地：C++ 硬编码 CanvasPanel + Border + Button 布局，BindWidget 锚点 PartNameText/AidButton/WithdrawButton/DestroyButton 就位 | 美术阶段配 WBP 即接 |
@@ -65,23 +63,21 @@
 | UI 动画（P5 整体）| 全部跳过，HP/卡牌/伤害数字无过渡 | 美术资源到位后做事件队列化 + 具体动画 |
 | 主题与样式（P6 整体）| Widget Blueprint 纯色块 + 文字 | 美术阶段只改 WBP，C++ 不动 |
 | 手牌扇形布局 | HorizontalBox + ScrollBox 线性排列 | 美术阶段替换为自定义 `UHandLayoutPanel` |
-| 卡牌拖拽 | 不支持 | 后续交互升级时加 |
+| 战斗卡牌拖拽 | BattleHUD 仍是点击手牌再点敌方部位，不支持把战斗手牌拖到目标 | HD-2D 表现阶段评估是否改为拖拽到 3D 部位 / 悬停高亮 / 点击确认 |
 | 目标选择 3D 射线 | 点击 EnemyPartWidget 2D 按钮 | HD-2D 表现时改为 3D 部位高亮 + 点击 |
 | EventToast 图标/动画 | 纯文字 | 升级为"事件表现调度器" + Niagara + 音效 |
 | 锚点左右归属 | 遍历顺序启发式（第一个锚点进 LeftSlot）| 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
-| 背包 UI 特殊存放区渲染 | B 类容器卡骨架已做（Stage 4.3），BackpackScreen 只显示通量区 + 备战区 | Stage 4.5：为每张 B 类容器卡渲染独立的特殊存放区 WrapBox，显示 SpecialZoneCapacity |
 | 背包 UI 删牌区与 DeleteProvider 联动 | 删牌区始终显示（GDD §11.7 第一阶段约定），`IsDeleteFunctionAvailable()` 接口就位但 UI 不读 | 等 GDD 切换为"按需可用"后，BackpackScreen 根据 `IsDeleteFunctionAvailable()` 显示/隐藏删牌区 |
-| 背包 UI 负重区 | 超容卡进负重区的逻辑在 `RecomputeBurden` 中计算，但 UI 没有独立的"负重区"视觉分区 | 加独立 WrapBox 或颜色标记区分超容卡 |
 | 探索 HUD 压力阈值警示色 | 压力值纯数字白色 | 压力 >50% 黄色 / >80% 红色 |
-| 探索 HUD 战斗中压制 | 战斗时 BattleHUD 叠在 ExplorationHUD 上面，ExplorationHUD 仍可见 | 战斗激活时隐藏 ExplorationHUD 或降低透明度 |
-| 背包 UI B 类主卡进备战区时特殊区保留 | GDD §11.3 末注"主卡移至备战区时，主卡位置消失但容量效果区保留"，未实现 | Stage 4.5 一起做 |
+| 背包 UI WBP 美术落地 | 暂缓继续推进。`BackpackScreen` 已拆为三大区 Host：`DeleteZoneHost / BattleDeckZoneHost / FluxZoneHost / SpecialZonesHost / BurdenZoneHost`，C++ fallback 可运行 | 后续在编辑器中创建/调整正式 `WBP_BackpackScreen`，绑定 5 个 Host，并按 `Docs/Image/背包界面.png` 调整外层结构和样式；规则仍通过 `RunSession::MoveInstance` / `DeleteCardForGold` |
+| 背包 UI 拖拽手感 | 已接入 UMG DragDropOperation，但当前仍是 C++ 默认布局与全量重建，缺少悬停高亮、失败提示、动效反馈 | 后续做交互 polish；真实规则继续以 `RunSession::MoveInstance` / `DeleteCardForGold` 为准 |
+| 背包 UI 增量刷新 | `BackpackScreen::RebuildAll()` 每次从 RunState 全量重建所有区块 | 卡牌数量明显增加或需要动画时，迁 ListView/TileView 或做 instance diff |
 
 ### 架构层
 
 | 项 | 现状 | 后续方向 |
 |---|---|---|
 | 网络复制 | 未实现 | 远期，单人游戏暂不需要 |
-| ViewModel 层 | Widget 直接持有 Session | UI 复杂度上升时抽 `UBattleViewModel` |
 | GAS（GameplayAbilitySystem）| 不使用 | 保持不引入，战斗用自研 Resolver/Executor |
 | UI 架构迁移 MVVM | M1+M2 已落地：Run 域走 ViewModel + Provider 订阅模型；C++ 父类硬编码布局 + 订阅粗粒度多播 + 手动 SetText；FieldNotify 字段就位但未被 WBP ViewBinding 消费 | 美术阶段切 WBP：ViewModel 加到 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 绑字段到 TextBlock/ProgressBar；C++ 父类 SetText 路径作 fallback 保留 → 全 WBP 后逐步删 |
 | 战斗 UI 接 ViewModel | 保留 Snapshot 推送模型（BattleHUD 作 Controller 递归 RefreshFromSnapshot） | 第一阶段不动。如果将来非战斗 widget 需要"看战斗状态"（如击倒事件 UI / 探索期小窗），加 `UWacomBattleViewModel` 作外部观察入口；子 widget 内部仍用 Snapshot |
@@ -106,10 +102,10 @@
 
 | 项 | 临时做法 | 正式方案 |
 |---|---|---|
-| 全量刷新 | 每次命令后 Snapshot 全量重建 Widget 数据 | 加动画时动画系统自己做 diff |
+| 战斗 UI 全量刷新 | 每次命令后 BattleHUD 从 Snapshot 全量刷新子 widget | 加动画时动画系统自己做 diff，数据刷新仍保持 Snapshot 源 |
 | C++ 硬编码默认布局 | Widget 类 `Blueprintable` 非 Abstract，带 C++ 默认布局 | 后续美术只改 WBP |
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick Lerp 插值 |
-| 背包 UI 点击切换 | 第一版用点击主按钮 Move + X 按钮 Delete，无拖拽 | 后续可加 DragDropOperation 拖拽语义 |
+| 背包 UI C++ 默认布局 | 已切到拖拽模型，但视觉仍由 C++ 构造默认布局承载 | 美术阶段用 WBP 子类替代布局，C++ 保留协议和 fallback |
 | 背包 UI 全量 RebuildAll | 每次 ViewModel 刷新后清空 WrapBox 重建所有子控件 | 增量 diff 或迁 ListView/TileView |
 | 探索 HUD 时段总节点数 | 只显示"剩余节点"，没有"本时段总节点数"快照 | FRunState 加 `TotalNodeCountForPhase` 字段或 HUD 在时段切换时记录初始值 |
 | ViewModel FieldNotify 暂未被 WBP 消费 | C++ 父类用粗粒度 OnRunViewModelRefreshedNative + 手动 SetText | 美术阶段切 WBP 时启用 ViewBinding 直接绑字段，删除粗粒度 multicast |
@@ -122,7 +118,6 @@
 | MSVC 工具链 14.38 | UE 5.7 警告 "not preferred"，不影响功能 | 升级到 14.44+ |
 | `RunSession.cpp::ApplySaveGameToRunState` 内嵌套 lambda 触发 MSVC C1001 ICE | 把 `RestoreCardInstanceList` 提取为 anonymous-namespace file-scope free function | MSVC 14.44+ 升级 / 切 Clang 后视情况合回 lambda |
 | `OnRunStateChangedNative` 多次广播 | 一次玩家操作可能链式触发多次 Broadcast（如 AddCardToBackpack → RecomputeBurden → SetPressure 各一次）| ViewModel 端 UE_MVVM_SET_PROPERTY_VALUE 已 dedupe，FieldNotify 不会重复触发；粗粒度多播订阅方应保证刷新幂等 |
-| 蛛茧绒囊 CapacityEffect = Placeholder | 占位 tag，不挂任何实际效果 | 等具体容量效果设计后替换为真实 tag（如 `Card.CapacityEffect.CostMinusOne`）|
 
 ---
 
@@ -130,10 +125,10 @@
 
 ### UI 相关
 
-- **[P1] 全量刷新策略**：每次命令后从 Snapshot 重建所有 Widget 数据，不做增量 diff。
+- **[P1] 战斗 UI 全量刷新策略**：每次命令后从 Snapshot 刷新 BattleHUD 子 widget，不做增量 diff。
   → 后续加动画时，动画系统自己做 diff，数据刷新仍然全量。
 
-- **[P1] 不做 ViewModel 层**：Widget 直接持有 `UBattleSession*`，调用 `BuildSnapshot` 刷新。
+- **[P1] 战斗 UI 不做 ViewModel 层**：BattleHUD 持有 `UBattleSession*`，子 widget 读 `FBattleSnapshot` 刷新。
   → 后续 UI 复杂度上升时抽 `UBattleViewModel`。
 
 - **[P1] 手牌用 HorizontalBox 线性排列**：不做扇形、不做拖拽。
@@ -179,9 +174,9 @@
 
 以下条目曾是临时决定，现已写入正式规则文档，代码实现与文档一致：
 
-- 中毒穿透护盾 → `Battle_Rules.md §15`
-- 中毒触发时机（打牌后 + 行动后）→ `Battle_Rules.md §15`
-- 晕厥层数模型（每次行动消耗 1 层）→ `Battle_Rules.md §10`
+- 中毒穿透护盾 → `WacomBattle.md §6`
+- 中毒触发时机（打牌后 + 行动后）→ `WacomBattle.md §6`
+- 晕厥层数模型（每次行动消耗 1 层）→ `WacomBattle.md §11`
 - [P3] 中毒穿透护盾 → 已正式化
 - [P3] 中毒触发时机 → 已正式化
 - [P1] BattleHUD 由 BattleTestActor 创建 → 已迁移到 `UWacomGameUIManagerSubsystem` 管理
