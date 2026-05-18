@@ -20,6 +20,7 @@ public class WacomTests : ModuleRules
 			"WacomBattle",
 			"WacomRun",
 			"WacomApp",
+			"UMG",
 			"ModelViewViewModel",
 			"FieldNotification"
 		});

@@ -222,18 +222,30 @@ UI 结构（垂直堆叠）：
 | 区 | 容器 | 说明 |
 |---|---|---|
 | 顶部行 | HorizontalBox | 标题 / 金币 / 关闭按钮 |
-| 删牌区 | TextBlock 提示 | 第一阶段始终显示，删除走每张卡的 X 按钮 + ConfirmDialog |
-| 备战区 | WrapBox | BattleDeck 卡，标题显示 N/Capacity |
-| 背包区 | WrapBox | Backpack 卡（通量+负重），标题显示 N/FluxCapacity |
+| 删牌区 | `UWacomDeleteZoneDropTarget` | 拖入卡牌调用 `DeleteCardForGold` |
+| 备战区 | `UWacomZoneDropTarget + WrapBox` | BattleDeck 卡，标题显示 N/Capacity；同时显示已入战 SpecialZone 投影卡 |
+| 背包区 | `UWacomZoneDropTarget + WrapBox` | Backpack 卡，标题显示 N/FluxCapacity |
+| SpecialZone 区块 | 动态 `UWacomZoneDropTarget + WrapBox` | 每张 B 主卡一个区块，标题显示主卡名与 `n/(Capacity-1)` |
+| 负重区 | `UWacomZoneDropTarget + WrapBox` | 渲染 `RunState.BurdenZone` |
 
 子控件：`UWacomDeckCardWidget`
 
-- 主按钮：点击 → Move（Backpack ↔ BattleDeck 互换）
-- 右上角 X：点击 → 弹 ConfirmDialog → DeleteCardForGold
-- Move 按钮启用规则：BattleDeck 已满时 Backpack 卡禁用；Intrinsic 卡禁用
+- 主体区域：左键拖拽，生成 `UWacomCardDragOperation`（InstanceId / FromZone / FromZoneOwnerInstanceId / Definition）
+- 右上角 X：保留旧入口，点击 → 弹 ConfirmDialog → DeleteCardForGold
+- SpecialZone 内卡：右键切换 `bBattleEnabledInSpecialZone`
+- `BattleEnabledBadge`：SpecialZone 内已选择入战的卡显示“已选”
+- `ProjectedFromBadge`：BattleDeck 视觉投影卡显示“来自 [B 主卡名]”
 - Delete 按钮启用规则：Intrinsic / 最后 BagProvider 禁用
 
-操作完成后全量 RebuildFromRunState 刷新（GDD §11.5）。
+DropTarget 规则：
+- 普通 zone drop 调 `RunSession->MoveInstance`。
+- DeleteZone drop 调 `RunSession->DeleteCardForGold`。
+- `NativeOnDragOver` 只做视觉预判，例如 BattleDeck 已满且来源 Backpack 时返回 false；最终规则仍以 RunSession 返回值为准。
+
+刷新模型：
+- 操作命令 → RunSession 写状态 → `OnRunStateChangedNative` → Provider 刷 ViewModel → `OnRunViewModelRefreshedNative` → `BackpackScreen::RebuildAll()`。
+- RebuildAll 已拆为 `RebuildTopStats / RebuildBattleDeckZone / RebuildBackpackZone / RebuildSpecialZones / RebuildBurdenZone`。
+- UI 不做局部 patch，成功操作后从 RunState 全量重建。
 
 ---
 

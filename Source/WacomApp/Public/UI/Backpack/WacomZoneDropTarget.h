@@ -8,6 +8,10 @@
 #include "WacomZoneDropTarget.generated.h"
 
 class UWacomBackpackScreen;
+class UWacomCardDragOperation;
+class UBorder;
+class UDragDropOperation;
+class UWidget;
 
 /**
  * 背包 zone 拖拽接收器（Stage 4.5.3a）。
@@ -27,8 +31,12 @@ class WACOMAPP_API UWacomZoneDropTarget : public UUserWidget
 public:
 	void Configure(EZoneKind InZoneKind, FGuid InOwnerInstanceId);
 	void SetOwnerScreen(UWacomBackpackScreen* InScreen);
+	void SetDropContent(UWidget* InContent);
+	bool TryHandleDropOperation(UDragDropOperation* InOperation);
+	static bool ShouldPreviewDrop(EZoneKind TargetZone, EZoneKind SourceZone, int32 BattleDeckCount, int32 BattleDeckCapacity);
 
 protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual bool NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
@@ -40,4 +48,12 @@ protected:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomBackpackScreen> OwnerScreen;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UBorder> RootBorder;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWidget> DropContent;
+
+	bool CanPreviewDrop(const UWacomCardDragOperation& CardOp) const;
 };

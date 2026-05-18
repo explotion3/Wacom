@@ -13,7 +13,9 @@ class UWrapBox;
 class UVerticalBox;
 class UCardDefinition;
 class URunSession;
+class UWacomDeleteZoneDropTarget;
 class UWacomDeckCardWidget;
+class UWacomZoneDropTarget;
 class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
 struct FCardInstance;
@@ -51,6 +53,10 @@ public:
 	/** 从 PC 拿当前 RunSession（每帧都拿，不持引用）。DropTarget 通过这里提交 MoveInstance。 */
 	URunSession* GetRunSession() const;
 
+	static FText BuildSpecialZoneTitleText(const FText& OwnerName, int32 CardCount, int32 Capacity);
+	static ESlateVisibility GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind OwnerZone);
+	static FText BuildBurdenZoneTitleText(int32 CardCount);
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
@@ -69,6 +75,9 @@ protected:
 
 	/** 卡按钮回调：删牌（弹 Confirm 后调 DeleteCardForGold）。 */
 	void HandleDeleteCard(UCardDefinition* Card);
+
+	/** SpecialZone 卡右键切换入战标记。 */
+	void HandleBattleEnabledToggle(FGuid InstanceId);
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TitleText;
@@ -93,6 +102,27 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWrapBox> BackpackCardsBox;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomZoneDropTarget> BattleDeckDropTarget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomZoneDropTarget> BackpackDropTarget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomDeleteZoneDropTarget> DeleteDropTarget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UVerticalBox> SpecialZonesPanel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWrapBox> BurdenCardsBox;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomZoneDropTarget> BurdenDropTarget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> BurdenZoneTitleText;
+
 	/** 关闭按钮（点击 = DeactivateWidget）。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CloseButton;
@@ -116,4 +146,11 @@ private:
 
 	/** 创建一张卡的 widget 并接好回调。 */
 	UWacomDeckCardWidget* CreateCardWidget(const FCardInstance& Inst, EZoneKind FromZone, FGuid FromZoneOwnerInstanceId);
+
+	void RebuildTopStats(UWacomRunViewModel* VM, URunSession* Run);
+	void RebuildBattleDeckZone(URunSession* Run);
+	void AddBattleEnabledSpecialZoneCardsToBattleDeckView(URunSession* Run);
+	void RebuildBackpackZone(URunSession* Run);
+	void RebuildSpecialZones(URunSession* Run);
+	void RebuildBurdenZone(URunSession* Run);
 };

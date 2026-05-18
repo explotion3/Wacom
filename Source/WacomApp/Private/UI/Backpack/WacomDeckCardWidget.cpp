@@ -44,19 +44,21 @@ TSharedRef<SWidget> UWacomDeckCardWidget::RebuildWidget()
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("CardCanvas"));
 		SizeRoot->AddChild(Root);
 
-		// 主按钮（占满）
-		if (!MoveButton)
+		// 卡片主体（占满）。不能用 UButton，否则按钮会吃掉 MouseDown，导致 UserWidget 拿不到拖拽起点。
+		if (!CardBody)
 		{
-			MoveButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("MoveButton"));
-			if (UCanvasPanelSlot* MoveSlot = Root->AddChildToCanvas(MoveButton))
+			CardBody = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CardBody"));
+			CardBody->SetBrushColor(FLinearColor(0.70f, 0.70f, 0.70f, 1.f));
+			CardBody->SetPadding(FMargin(0.f));
+			if (UCanvasPanelSlot* BodySlot = Root->AddChildToCanvas(CardBody))
 			{
-				MoveSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
-				MoveSlot->SetOffsets(FMargin(0.f));
+				BodySlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+				BodySlot->SetOffsets(FMargin(0.f));
 			}
 
-			// 主按钮内的内容：VerticalBox（Cost / Name / Keywords / Capacity）
+			// 卡片内容：VerticalBox（Cost / Name / Keywords / Capacity）
 			UVerticalBox* InnerVBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("InnerVBox"));
-			MoveButton->AddChild(InnerVBox);
+			CardBody->AddChild(InnerVBox);
 
 			// Cost 行
 			if (!CostText)
@@ -138,6 +140,42 @@ TSharedRef<SWidget> UWacomDeckCardWidget::RebuildWidget()
 			}
 		}
 
+		if (!BattleEnabledBadge)
+		{
+			BattleEnabledBadge = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("BattleEnabledBadge"));
+			BattleEnabledBadge->SetText(LOCTEXT("BattleEnabledBadge", "已选"));
+			BattleEnabledBadge->SetColorAndOpacity(FSlateColor(FLinearColor(0.2f, 0.9f, 0.45f, 1.f)));
+			FSlateFontInfo BadgeFont = BattleEnabledBadge->GetFont();
+			BadgeFont.Size = 11;
+			BattleEnabledBadge->SetFont(BadgeFont);
+			BattleEnabledBadge->SetVisibility(bBattleEnabledBadgeVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+			if (UCanvasPanelSlot* BadgeSlot = Root->AddChildToCanvas(BattleEnabledBadge))
+			{
+				BadgeSlot->SetAnchors(FAnchors(0.f, 0.f));
+				BadgeSlot->SetAlignment(FVector2D(0.f, 0.f));
+				BadgeSlot->SetOffsets(FMargin(6.f, 4.f, 44.f, 18.f));
+				BadgeSlot->SetAutoSize(false);
+			}
+		}
+
+		if (!ProjectedFromBadge)
+		{
+			ProjectedFromBadge = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ProjectedFromBadge"));
+			ProjectedFromBadge->SetText(ProjectedFromBadgeText);
+			ProjectedFromBadge->SetColorAndOpacity(FSlateColor(FLinearColor(0.6f, 0.8f, 1.f, 1.f)));
+			FSlateFontInfo FromFont = ProjectedFromBadge->GetFont();
+			FromFont.Size = 10;
+			ProjectedFromBadge->SetFont(FromFont);
+			ProjectedFromBadge->SetVisibility(ProjectedFromBadgeText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+			if (UCanvasPanelSlot* FromSlot = Root->AddChildToCanvas(ProjectedFromBadge))
+			{
+				FromSlot->SetAnchors(FAnchors(0.f, 1.f));
+				FromSlot->SetAlignment(FVector2D(0.f, 1.f));
+				FromSlot->SetOffsets(FMargin(6.f, -24.f, 120.f, 18.f));
+				FromSlot->SetAutoSize(false);
+			}
+		}
+
 		// 整体卡片尺寸由父容器（WrapBox / Slot）决定。这里在容器侧设置 size。
 	}
 	return Super::RebuildWidget();
@@ -161,17 +199,42 @@ void UWacomDeckCardWidget::SetCard(const FCardInstance& Inst, EZoneKind InFromZo
 	InstanceId = Inst.InstanceId;
 	FromZone = InFromZone;
 	FromZoneOwnerInstanceId = (FromZone == EZoneKind::SpecialZone) ? InFromZoneOwnerInstanceId : FGuid();
+	SetBattleEnabledBadgeVisible(FromZone == EZoneKind::SpecialZone && Inst.bBattleEnabledInSpecialZone);
 	RefreshContentFromCard();
 }
 
 void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)
 {
-	if (MoveButton) { MoveButton->SetIsEnabled(bEnabled); }
+	if (CardBody) { CardBody->SetIsEnabled(bEnabled); }
 }
 
 void UWacomDeckCardWidget::SetDeleteEnabled(bool bEnabled)
 {
 	if (DeleteButton) { DeleteButton->SetIsEnabled(bEnabled); }
+}
+
+void UWacomDeckCardWidget::SetBattleEnabledBadgeVisible(bool bVisible)
+{
+	bBattleEnabledBadgeVisible = bVisible;
+	if (BattleEnabledBadge)
+	{
+		BattleEnabledBadge->SetVisibility(bBattleEnabledBadgeVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+}
+
+void UWacomDeckCardWidget::SetProjectedFromBadgeText(const FText& InText)
+{
+	ProjectedFromBadgeText = InText;
+	if (ProjectedFromBadge)
+	{
+		ProjectedFromBadge->SetText(ProjectedFromBadgeText);
+		ProjectedFromBadge->SetVisibility(ProjectedFromBadgeText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	}
+}
+
+void UWacomDeckCardWidget::SetRightClickToggleEnabled(bool bEnabled)
+{
+	bRightClickToggleEnabled = bEnabled;
 }
 
 void UWacomDeckCardWidget::RefreshContentFromCard()
@@ -229,6 +292,10 @@ FReply UWacomDeckCardWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
 	{
 		return UWidgetBlueprintLibrary::DetectDragIfPressed(InMouseEvent, this, EKeys::LeftMouseButton).NativeReply;
 	}
+	if (InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton && RequestBattleEnabledToggle())
+	{
+		return FReply::Handled();
+	}
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
@@ -236,9 +303,14 @@ void UWacomDeckCardWidget::NativeOnDragDetected(const FGeometry& InGeometry, con
 {
 	Super::NativeOnDragDetected(InGeometry, InMouseEvent, OutOperation);
 
+	OutOperation = BuildDragOperation();
+}
+
+UDragDropOperation* UWacomDeckCardWidget::BuildDragOperation()
+{
 	if (!Card || !InstanceId.IsValid())
 	{
-		return;
+		return nullptr;
 	}
 
 	UWacomCardDragOperation* DragOp = NewObject<UWacomCardDragOperation>(this);
@@ -248,7 +320,38 @@ void UWacomDeckCardWidget::NativeOnDragDetected(const FGeometry& InGeometry, con
 	DragOp->Definition = Card;
 	DragOp->DefaultDragVisual = this;
 	DragOp->Pivot = EDragPivot::MouseDown;
-	OutOperation = DragOp;
+	return DragOp;
+}
+
+bool UWacomDeckCardWidget::HasMoveButtonClickBindings() const
+{
+	return false;
+}
+
+bool UWacomDeckCardWidget::IsBattleEnabledBadgeVisible() const
+{
+	return BattleEnabledBadge ? BattleEnabledBadge->GetVisibility() != ESlateVisibility::Collapsed : bBattleEnabledBadgeVisible;
+}
+
+bool UWacomDeckCardWidget::IsProjectedFromBadgeVisible() const
+{
+	return ProjectedFromBadge ? ProjectedFromBadge->GetVisibility() != ESlateVisibility::Collapsed : !ProjectedFromBadgeText.IsEmpty();
+}
+
+FText UWacomDeckCardWidget::GetProjectedFromBadgeText() const
+{
+	return ProjectedFromBadge ? ProjectedFromBadge->GetText() : ProjectedFromBadgeText;
+}
+
+bool UWacomDeckCardWidget::RequestBattleEnabledToggle()
+{
+	if (!InstanceId.IsValid() || !bRightClickToggleEnabled)
+	{
+		return false;
+	}
+
+	OnBattleEnabledToggleRequestedNative.Broadcast(InstanceId);
+	return true;
 }
 
 void UWacomDeckCardWidget::HandleDeleteClicked()

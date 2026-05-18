@@ -8,8 +8,10 @@
 #include "WacomDeckCardWidget.generated.h"
 
 class UButton;
+class UBorder;
 class UTextBlock;
 class UCardDefinition;
+class UDragDropOperation;
 
 /**
  * 单张卡的 UI 表示（背包系统用）。
@@ -37,6 +39,15 @@ public:
 	/** 获取关联卡定义。 */
 	UCardDefinition* GetCard() const { return Card; }
 
+	/** SpecialZone 中已选择入战的视觉标记。 */
+	void SetBattleEnabledBadgeVisible(bool bVisible);
+
+	/** BattleDeck 视觉投影来源标记。为空时隐藏。 */
+	void SetProjectedFromBadgeText(const FText& InText);
+
+	/** 是否允许右键请求切换 SpecialZone 入战标记。 */
+	void SetRightClickToggleEnabled(bool bEnabled);
+
 	/**
 	 * 移动按钮启用状态。
 	 *
@@ -52,9 +63,31 @@ public:
 	 */
 	void SetDeleteEnabled(bool bEnabled);
 
+	/** 构造当前卡片的拖拽 payload。返回 nullptr 表示当前卡片不能被拖拽。 */
+	UDragDropOperation* BuildDragOperation();
+
+	/** 测试/诊断用：主按钮是否仍绑定了点击移动语义。 */
+	bool HasMoveButtonClickBindings() const;
+
+	/** 测试/诊断用：SpecialZone 入战角标当前是否可见。 */
+	bool IsBattleEnabledBadgeVisible() const;
+
+	/** 测试/诊断用：BattleDeck 投影来源角标当前是否可见。 */
+	bool IsProjectedFromBadgeVisible() const;
+
+	/** 测试/诊断用：BattleDeck 投影来源角标文本。 */
+	FText GetProjectedFromBadgeText() const;
+
+	/** 右键切换请求的可测试入口。返回 false 表示当前卡片不响应该请求。 */
+	bool RequestBattleEnabledToggle();
+
 	/** 删除按钮点击委托。 */
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnDeleteRequestedNative, UCardDefinition*);
 	FOnDeleteRequestedNative OnDeleteRequestedNative;
+
+	/** 右键请求切换 SpecialZone 入战标记。Payload 是 instance id。 */
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEnabledToggleRequestedNative, FGuid);
+	FOnBattleEnabledToggleRequestedNative OnBattleEnabledToggleRequestedNative;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -66,7 +99,7 @@ protected:
 	void HandleDeleteClicked();
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> MoveButton;
+	TObjectPtr<UBorder> CardBody;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> DeleteButton;
@@ -83,6 +116,12 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> CapacityText;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> BattleEnabledBadge;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> ProjectedFromBadge;
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCardDefinition> Card = nullptr;
@@ -90,6 +129,9 @@ private:
 	FGuid InstanceId;
 	EZoneKind FromZone = EZoneKind::Backpack;
 	FGuid FromZoneOwnerInstanceId;
+	bool bBattleEnabledBadgeVisible = false;
+	bool bRightClickToggleEnabled = false;
+	FText ProjectedFromBadgeText;
 
 	void RefreshContentFromCard();
 };

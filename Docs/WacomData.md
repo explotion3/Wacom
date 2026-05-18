@@ -65,8 +65,13 @@ struct FCardPhysique
     UPROPERTY(EditDefaultsOnly) int32 Capacity = 0;       // GDD §11.2：容量字段
                                                           //   0：普通卡，不贡献存放空间
                                                           //   >0：容器卡，进入背包时贡献容量
+    UPROPERTY(EditDefaultsOnly) FGameplayTag CapacityEffect; // 空=A类容器；有效=B类容器，开 SpecialZone
 };
 ```
+
+`CapacityEffect` 使用 `Card.CapacityEffect.*` 命名空间。当前已实现：
+- 空 tag：A 类容器，容量计入通量 / 备战容量公式。
+- `Card.CapacityEffect.WeaponDamagePlus3`：B 类容器效果。SpecialZone 内已选择入战且带 `Card.Keyword.Weapon` 的卡，伤害结算 +3。
 
 ---
 

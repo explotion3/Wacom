@@ -10,6 +10,7 @@
 #include "Characters/CharacterDefinition.h"
 #include "Cards/CardDefinition.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Tags/WacomGameplayTags.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "UObject/StrongObjectPtr.h"
@@ -346,6 +347,151 @@ bool FWacomRunSaveGameStarterDeckRebuildSpec::RunTest(const FString& /*Parameter
 		bool bAlreadyInSet = false;
 		SeenIds.Add(Inst.InstanceId, &bAlreadyInSet);
 		TestFalse(TEXT("BattleDeck instance.InstanceId 全表唯一"), bAlreadyInSet);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunSaveGameV2InstanceZoneRoundtripSpec,
+	"Wacom.Run.Save.V2InstanceZoneRoundtrip",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunSaveGameV2InstanceZoneRoundtripSpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, Property 16: SaveGame v2 round-trip 完整保留 instance 归属
+	// Validates: Requirements 7.2, 7.5
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = Fx.MakeNoopCard(0);
+	TypeA->Physique.Capacity = 8;
+	TypeA->Keywords.AddTag(WacomTags::Card_Keyword_BagProvider);
+	TypeA->Rarity = WacomTags::Card_Rarity_White;
+
+	UCardDefinition* TypeB = Fx.MakeNoopCard(0);
+	TypeB->Physique.Capacity = 3;
+	TypeB->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_WeaponDamagePlus3;
+	TypeB->Rarity = WacomTags::Card_Rarity_White;
+
+	UCardDefinition* BattleNative = Fx.MakeNoopCard(0);
+	UCardDefinition* BackpackOnly = Fx.MakeNoopCard(0);
+	UCardDefinition* SpecialStored = Fx.MakeNoopCard(0);
+	UCardDefinition* BurdenStored = Fx.MakeNoopCard(0);
+
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, TypeB, BattleNative });
+
+	TStrongObjectPtr<URunSession> Source(NewObject<URunSession>());
+	TestTrue(TEXT("Initialize source"), Source->Initialize(Char));
+
+	const FGuid BOwnerId = Source->GetRunState().SpecialZones[0].OwnerInstanceId;
+	Source->AddCardToBackpack(BackpackOnly);
+	Source->AddCardToBackpack(SpecialStored);
+	const FGuid SpecialId = Source->GetBackpack().Last().InstanceId;
+	TestTrue(TEXT("Move stored card to SpecialZone"), Source->MoveInstance(SpecialId, EZoneKind::SpecialZone, BOwnerId));
+	TestTrue(TEXT("Enable stored card"), Source->SetSpecialZoneCardBattleEnabled(SpecialId, true));
+	TestTrue(TEXT("Move B owner to BattleDeck"), Source->MoveInstance(BOwnerId, EZoneKind::BattleDeck, FGuid()));
+
+	FCardInstance BurdenInst;
+	BurdenInst.InstanceId = FGuid::NewGuid();
+	BurdenInst.Definition = BurdenStored;
+	BurdenInst.bBattleEnabledInSpecialZone = true; // round-trip 应原样保存，虽 BurdenZone 不使用该 flag
+	Source->GetMutableRunState().BurdenZone.Add(BurdenInst);
+
+	auto SnapshotInstanceMap = [](const FRunState& State)
+	{
+		TMap<FGuid, FString> Out;
+		for (const FCardInstance& Inst : State.Backpack)
+		{
+			Out.Add(Inst.InstanceId, FString::Printf(TEXT("Backpack|%s|%d"),
+				*GetNameSafe(Inst.Definition.Get()),
+				Inst.bBattleEnabledInSpecialZone ? 1 : 0));
+		}
+		for (const FCardInstance& Inst : State.BattleDeck)
+		{
+			Out.Add(Inst.InstanceId, FString::Printf(TEXT("BattleDeck|%s|%d"),
+				*GetNameSafe(Inst.Definition.Get()),
+				Inst.bBattleEnabledInSpecialZone ? 1 : 0));
+		}
+		for (const FCardInstance& Inst : State.BurdenZone)
+		{
+			Out.Add(Inst.InstanceId, FString::Printf(TEXT("BurdenZone|%s|%d"),
+				*GetNameSafe(Inst.Definition.Get()),
+				Inst.bBattleEnabledInSpecialZone ? 1 : 0));
+		}
+		for (const FSpecialZone& SZ : State.SpecialZones)
+		{
+			for (const FCardInstance& Inst : SZ.Cards)
+			{
+				Out.Add(Inst.InstanceId, FString::Printf(TEXT("SpecialZone:%s|%s|%d"),
+					*SZ.OwnerInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
+					*GetNameSafe(Inst.Definition.Get()),
+					Inst.bBattleEnabledInSpecialZone ? 1 : 0));
+			}
+		}
+		return Out;
+	};
+
+	const TMap<FGuid, FString> BeforeMap = SnapshotInstanceMap(Source->GetRunState());
+	TestTrue(TEXT("Before map has instances"), BeforeMap.Num() > 0);
+
+	UWacomSaveGame* Save = Source->BuildSaveGameFromRunState();
+	TestNotNull(TEXT("Save non-null"), Save);
+	if (!Save) { return false; }
+
+	TestEqual(TEXT("Save Backpack count"), Save->Backpack.Num(), Source->GetRunState().Backpack.Num());
+	TestEqual(TEXT("Save BattleDeck count"), Save->BattleDeck.Num(), Source->GetRunState().BattleDeck.Num());
+	TestEqual(TEXT("Save BurdenZone count"), Save->BurdenZone.Num(), Source->GetRunState().BurdenZone.Num());
+	TestEqual(TEXT("Save SpecialZones count"), Save->SpecialZones.Num(), Source->GetRunState().SpecialZones.Num());
+
+	TSet<FGuid> SaveIds;
+	auto CheckSaveEntries = [this, &SaveIds](const TArray<FCardInstanceSaveEntry>& Entries, const TCHAR* Label) -> bool
+	{
+		for (const FCardInstanceSaveEntry& Entry : Entries)
+		{
+			if (!Entry.InstanceId.IsValid())
+			{
+				AddError(FString::Printf(TEXT("%s has zero InstanceId"), Label));
+				return false;
+			}
+			bool bAlready = false;
+			SaveIds.Add(Entry.InstanceId, &bAlready);
+			if (bAlready)
+			{
+				AddError(FString::Printf(TEXT("%s duplicate InstanceId %s"),
+					Label,
+					*Entry.InstanceId.ToString(EGuidFormats::DigitsWithHyphens)));
+				return false;
+			}
+		}
+		return true;
+	};
+
+	if (!CheckSaveEntries(Save->Backpack, TEXT("Backpack"))) { return false; }
+	if (!CheckSaveEntries(Save->BattleDeck, TEXT("BattleDeck"))) { return false; }
+	if (!CheckSaveEntries(Save->BurdenZone, TEXT("BurdenZone"))) { return false; }
+	for (const FSpecialZoneSaveEntry& SZ : Save->SpecialZones)
+	{
+		TestTrue(TEXT("SpecialZone owner valid"), SZ.OwnerInstanceId.IsValid());
+		if (!CheckSaveEntries(SZ.Cards, TEXT("SpecialZone"))) { return false; }
+	}
+
+	TStrongObjectPtr<URunSession> Loaded(NewObject<URunSession>());
+	TestTrue(TEXT("Apply v2 save"), Loaded->ApplySaveGameToRunState(Save));
+
+	const TMap<FGuid, FString> AfterMap = SnapshotInstanceMap(Loaded->GetRunState());
+	TestEqual(TEXT("Instance count preserved"), AfterMap.Num(), BeforeMap.Num());
+	for (const TPair<FGuid, FString>& Pair : BeforeMap)
+	{
+		const FString* AfterValue = AfterMap.Find(Pair.Key);
+		if (!AfterValue)
+		{
+			AddError(FString::Printf(TEXT("Missing InstanceId after load: %s"),
+				*Pair.Key.ToString(EGuidFormats::DigitsWithHyphens)));
+			return false;
+		}
+		TestEqual(TEXT("Instance zone/definition/flag preserved"), *AfterValue, Pair.Value);
 	}
 
 	return true;

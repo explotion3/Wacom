@@ -107,7 +107,12 @@ WacomRun 负责**战斗外的持久状态和存档**。
 | `IsTypeAContainerCard(Card) static` | 卡是 A 类容器卡（容器 + CapacityEffect 为空，计入 Flux）|
 | `IsTypeBContainerCard(Card) static` | 卡是 B 类容器卡（容器 + CapacityEffect 有效，开辟特殊存放区）|
 | `GetSpecialZoneCapacity(BCard) static` | B 类容器卡的特殊存放区容量 = `Capacity - 1`（clamp 到 0）|
-| `CollectTypeBContainers(OutCards) const` | 枚举玩家拥有的所有 B 类容器卡（Backpack + BattleDeck），UI 渲染特殊存放区时使用 |
+| `CollectTypeBContainers(OutOwnerInstanceIds) const` | 按 `RunState.SpecialZones` 顺序枚举玩家拥有的 B 主卡 instance id，输出不含悬空 owner |
+| `GetSpecialZoneCapacityFor(OwnerInstanceId) const` | 按 B 主卡 instance 查询 SpecialZone 容量，公式 `Max(0, Capacity - 1)` |
+| `GetSpecialZone(OwnerInstanceId, Out) const` | 按 owner instance 查询 SpecialZone 快照 |
+| `FindInstance(InstanceId, OutInstance, OutZone, OutOwnerInstanceId) const` | 全区查找 instance 当前所在 zone |
+| `MoveInstance(InstanceId, ToZone, ToOwnerInstanceId)` | 通用迁移入口，支持 Backpack / BattleDeck / SpecialZone / BurdenZone |
+| `SetSpecialZoneCardBattleEnabled(InstanceId, bEnabled)` | SpecialZone 内卡牌切换是否随 B 主卡入战 |
 | `IsBagProviderCard(Card) static` | 卡是否带 BagProvider 关键词 |
 | `IsDeleteProviderCard(Card) static` | 卡是否带 DeleteProvider 关键词（GDD §11.7）|
 | `IsDeleteFunctionAvailable() const` | 删牌功能是否可用（Backpack 至少一张 DeleteProvider）。第一阶段 UI 不读 |
@@ -212,15 +217,23 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| `Backpack` | `TArray<TObjectPtr<UCardDefinition>>` | 背包：永久卡牌池 |
-| `BattleDeck` | `TArray<TObjectPtr<UCardDefinition>>` | 备战卡组：从玩家拥有卡牌中选出，战斗实际读取的卡组 |
+| `Backpack` | `TArray<FCardInstance>` | 通量/背包区，持有独立卡牌 instance |
+| `BattleDeck` | `TArray<FCardInstance>` | 备战区，战斗入场的基础卡组 |
+| `BurdenZone` | `TArray<FCardInstance>` | 负重区，容量不足时的溢出卡牌 |
+| `SpecialZones` | `TArray<FSpecialZone>` | 每张 B 主卡 instance 对应一个特殊存放区 |
 
 **容量公式**（GDD §11.4）由 `URunSession::GetFluxCapacity()` / `GetBattleDeckCapacity()` 动态计算：
 - 通量容量 = `Σ(Backpack + BattleDeck 里所有 A 类容器卡 Capacity)`
 - 备战容量 = `GetFluxCapacity()`（Stage 4.5.1 R3 回归：与通量严格相等，B 类不再计入；4.4 hotfix 已被覆盖）
 - B 类容器卡（`Physique.CapacityEffect` 非空）不计入通量 / 备战公式，每张 B 主卡自己开辟一个特殊存放区，容量 = `Capacity - 1`
 
-**互斥**：一张卡同时只能在一个区。Initialize / AddToBattleDeck / RemoveFromBattleDeck / DestroyCardFromBackpack 都维护这个不变量。
+**instance 互斥**：同一个 `FCardInstance.InstanceId` 同时只能位于 `Backpack / BattleDeck / BurdenZone / 任一 SpecialZone.Cards` 之一。`MoveInstance` 是通用迁移入口，失败路径不修改 RunState、不广播。
+
+**B 类容器卡与 SpecialZone**：
+- B 主卡 instance 进入 `Backpack` 或 `BattleDeck` 时，`RunState.SpecialZones` 中会幂等存在一条 `OwnerInstanceId == 主卡 InstanceId` 的 entry。
+- SpecialZone 容量 = 主卡 `Physique.Capacity - 1`，最小为 0。
+- SpecialZone 内卡牌默认不入战；`bBattleEnabledInSpecialZone == true` 时，且主卡位于 `BattleDeck`，该卡会被 `BuildInitParamsForBattle` 输出到 `BattleDeckEntries`，并携带主卡 `Physique.CapacityEffect`。
+- B 主卡从 `Backpack` 移到 `BattleDeck` 或移回时，SpecialZone 内容保持；销毁 B 主卡时，内含卡退回 `Backpack`，装不下则进入 `BurdenZone`，并清除入战标记。
 
 **Initialize 行为**（Stage 4.1 a2 规则）：
 - 容器卡（Capacity > 0）→ 进 Backpack
@@ -289,6 +302,10 @@ UWacomSaveGame（USaveGame，磁盘数据层）
 | `DefeatedEnemyAssetPaths` | `TArray<FSoftObjectPath>` | 已击败敌人资产路径列表 |
 | `bRunActive` | `bool` | Run 是否活跃 |
 | `DestroyedTriggerIds` | `TArray<FName>` | 已销毁触发器 ID（TArray 避免 TSet 序列化兼容问题）|
+| `Backpack` | `TArray<FCardInstanceSaveEntry>` | v2 起保存 Backpack instances |
+| `BattleDeck` | `TArray<FCardInstanceSaveEntry>` | v2 起保存 BattleDeck instances |
+| `BurdenZone` | `TArray<FCardInstanceSaveEntry>` | v2 起保存 BurdenZone instances |
+| `SpecialZones` | `TArray<FSpecialZoneSaveEntry>` | v2 起保存 owner 与 SpecialZone 内卡 |
 | `PlayerTransform` | `FTransform` | 玩家位置 |
 | `bHasPlayerTransform` | `bool` | 位置是否有效 |
 
@@ -329,11 +346,11 @@ static bool MigrateIfNeeded(UWacomSaveGame* SaveGame)
         // v0 → v1：初始版本，无需迁移字段
         SaveGame->SaveVersion = 1;
         [[fallthrough]];
-    // case 1:
-    //     // v1 → v2：例如加了 Gold 字段
-    //     SaveGame->Gold = 0;
-    //     SaveGame->SaveVersion = 2;
-    //     [[fallthrough]];
+    case 1:
+        // v1 → v2：新增 Backpack/BattleDeck/BurdenZone/SpecialZones instance 列表。
+        // 新数组保持空，ApplySaveGameToRunState 会按 StarterDeck 重建 instance。
+        SaveGame->SaveVersion = 2;
+        [[fallthrough]];
     default:
         break;
     }

@@ -597,6 +597,332 @@ bool FWacomRunDeckBuildInitParamsUsesBattleDeckSpec::RunTest(const FString& /*Pa
 	return true;
 }
 
+namespace
+{
+	UCardDefinition* MakeStage45TypeBCard(FWacomBattleFixture& Fx, int32 Capacity)
+	{
+		UCardDefinition* Card = Fx.MakeNoopCard(0);
+		Card->Physique.Capacity = Capacity;
+		Card->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_Placeholder;
+		return Card;
+	}
+
+	FCardInstance MakeStage45Instance(UCardDefinition* Definition, bool bBattleEnabled = false)
+	{
+		FCardInstance Inst;
+		Inst.InstanceId = FGuid::NewGuid();
+		Inst.Definition = Definition;
+		Inst.bBattleEnabledInSpecialZone = bBattleEnabled;
+		return Inst;
+	}
+
+	TArray<FGuid> CollectStage45Ids(const TArray<FCardInstance>& Pile)
+	{
+		TArray<FGuid> Result;
+		for (const FCardInstance& Inst : Pile)
+		{
+			Result.Add(Inst.InstanceId);
+		}
+		return Result;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckRecomputeBurdenContractSpec,
+	"Wacom.Run.Deck.RecomputeBurdenContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckRecomputeBurdenContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, Property 8: RecomputeBurden 输出契约
+	// Validates: Requirements 2.12, 2.13, 2.14, 9.1
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 2);
+	UCardDefinition* TypeB = MakeStage45TypeBCard(Fx, 2);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, TypeB });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	FRunState& State = Run->GetMutableRunState();
+	if (!TestEqual(TEXT("One SpecialZone"), State.SpecialZones.Num(), 1))
+	{
+		return false;
+	}
+
+	FCardInstance N1 = MakeStage45Instance(Fx.MakeNoopCard(0), true);
+	FCardInstance N2 = MakeStage45Instance(Fx.MakeNoopCard(0), true);
+	FCardInstance N3 = MakeStage45Instance(Fx.MakeNoopCard(0), true);
+	FCardInstance N4 = MakeStage45Instance(Fx.MakeNoopCard(0));
+	FCardInstance N5 = MakeStage45Instance(Fx.MakeNoopCard(0));
+
+	State.Backpack.Add(N1);
+	State.Backpack.Add(N2);
+	State.Backpack.Add(N3);
+	State.BattleDeck.Add(N4);
+	State.BattleDeck.Add(N5);
+
+	Run->RecomputeBurden();
+
+	TestEqual(TEXT("Backpack trimmed to FluxCapacity"), State.Backpack.Num(), 2);
+	TestEqual(TEXT("BattleDeck remains full"), State.BattleDeck.Num(), 2);
+	TestEqual(TEXT("First overflow card refills first SpecialZone slot"), State.SpecialZones[0].Cards.Num(), 1);
+	if (State.SpecialZones[0].Cards.Num() == 1)
+	{
+		TestEqual(TEXT("SpecialZone receives most recent overflow first"), State.SpecialZones[0].Cards[0].InstanceId, N3.InstanceId);
+		TestFalse(TEXT("SpecialZone refill clears battle flag"), State.SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
+	}
+	TestEqual(TEXT("Remaining two cards stay in BurdenZone"), State.BurdenZone.Num(), 2);
+	if (State.BurdenZone.Num() == 2)
+	{
+		TestEqual(TEXT("Burden order[0]"), State.BurdenZone[0].InstanceId, N2.InstanceId);
+		TestEqual(TEXT("Burden order[1]"), State.BurdenZone[1].InstanceId, N1.InstanceId);
+	}
+	TestEqual(TEXT("Burden pressure n=2 -> 3"), Run->GetPressureValue(EWacomPressureType::Burden), 3);
+
+	const TArray<FGuid> BackpackIds = CollectStage45Ids(State.Backpack);
+	const TArray<FGuid> BattleDeckIds = CollectStage45Ids(State.BattleDeck);
+	const TArray<FGuid> BurdenIds = CollectStage45Ids(State.BurdenZone);
+	const TArray<FGuid> SpecialIds = CollectStage45Ids(State.SpecialZones[0].Cards);
+
+	Run->RecomputeBurden();
+
+	TestEqual(TEXT("Idempotent Backpack"), CollectStage45Ids(State.Backpack), BackpackIds);
+	TestEqual(TEXT("Idempotent BattleDeck"), CollectStage45Ids(State.BattleDeck), BattleDeckIds);
+	TestEqual(TEXT("Idempotent BurdenZone"), CollectStage45Ids(State.BurdenZone), BurdenIds);
+	TestEqual(TEXT("Idempotent SpecialZone"), CollectStage45Ids(State.SpecialZones[0].Cards), SpecialIds);
+	TestEqual(TEXT("Idempotent pressure"), Run->GetPressureValue(EWacomPressureType::Burden), 3);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckRecomputeBurdenRefillPrioritySpec,
+	"Wacom.Run.Deck.RecomputeBurdenRefillPriority",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckRecomputeBurdenRefillPrioritySpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, Property 8: BurdenZone 回填优先序
+	// Validates: Requirements 2.13, 2.14
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 3);
+	UCardDefinition* TypeB = MakeStage45TypeBCard(Fx, 2);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, TypeB });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	FRunState& State = Run->GetMutableRunState();
+	if (!TestEqual(TEXT("One SpecialZone"), State.SpecialZones.Num(), 1))
+	{
+		return false;
+	}
+
+	FCardInstance ToBackpack = MakeStage45Instance(Fx.MakeNoopCard(0));
+	FCardInstance ToBattleDeck = MakeStage45Instance(Fx.MakeNoopCard(0));
+	FCardInstance ToSpecialZone = MakeStage45Instance(Fx.MakeNoopCard(0), true);
+
+	State.BattleDeck.Add(MakeStage45Instance(Fx.MakeNoopCard(0)));
+	State.BattleDeck.Add(MakeStage45Instance(Fx.MakeNoopCard(0)));
+	State.BurdenZone = { ToBackpack, ToBattleDeck, ToSpecialZone };
+
+	Run->RecomputeBurden();
+
+	TestEqual(TEXT("Burden fully refilled"), State.BurdenZone.Num(), 0);
+	TestEqual(TEXT("Backpack receives first burden card"), State.Backpack.Last().InstanceId, ToBackpack.InstanceId);
+	TestEqual(TEXT("BattleDeck receives second burden card"), State.BattleDeck.Last().InstanceId, ToBattleDeck.InstanceId);
+	TestEqual(TEXT("SpecialZone receives third burden card"), State.SpecialZones[0].Cards.Last().InstanceId, ToSpecialZone.InstanceId);
+	TestFalse(TEXT("SpecialZone refill clears stale flag"), State.SpecialZones[0].Cards.Last().bBattleEnabledInSpecialZone);
+	TestEqual(TEXT("Burden pressure n=0 -> 0"), Run->GetPressureValue(EWacomPressureType::Burden), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckBurdenPressureFormulaSpec,
+	"Wacom.Run.Deck.BurdenPressureFormula",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckBurdenPressureFormulaSpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, EXAMPLE R9.3: Burden pressure formula
+	// Validates: Requirements 9.1, 9.3
+	FWacomBattleFixture Fx;
+
+	auto CheckPressure = [this, &Fx](int32 Count, int32 ExpectedPressure) -> bool
+	{
+		UCharacterDefinition* Char = Fx.MakeCharacter(
+			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+			{});
+
+		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+		Run->Initialize(Char);
+
+		FRunState& State = Run->GetMutableRunState();
+		for (int32 i = 0; i < Count; ++i)
+		{
+			State.BurdenZone.Add(MakeStage45Instance(Fx.MakeNoopCard(0)));
+		}
+
+		Run->RecomputeBurden();
+		return TestEqual(FString::Printf(TEXT("n=%d pressure"), Count),
+			Run->GetPressureValue(EWacomPressureType::Burden), ExpectedPressure);
+	};
+
+	bool bOk = true;
+	bOk &= CheckPressure(0, 0);
+	bOk &= CheckPressure(1, 1);
+	bOk &= CheckPressure(3, 6);
+	bOk &= CheckPressure(14, 100);
+	return bOk;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckZoneBroadcastCountSpec,
+	"Wacom.Run.Deck.ZoneBroadcastCount",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckZoneBroadcastCountSpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, Property 9: 广播计数与 Burden 通道写入唯一性
+	// Validates: Requirements 2.8, 2.16, 9.2
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 1);
+	UCardDefinition* BattleFiller = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, BattleFiller });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	int32 BroadcastCount = 0;
+	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
+	{
+		++BroadcastCount;
+	});
+
+	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
+	TestEqual(TEXT("AddCardToBackpack emits once"), BroadcastCount, 1);
+	TestEqual(TEXT("AddCardToBackpack writes Burden pressure once"), Run->GetPressureValue(EWacomPressureType::Burden), 1);
+
+	Run->RecomputeBurden();
+	TestEqual(TEXT("Public RecomputeBurden emits once"), BroadcastCount, 2);
+	TestEqual(TEXT("Pressure remains stable"), Run->GetPressureValue(EWacomPressureType::Burden), 1);
+
+	TestFalse(TEXT("Invalid MoveInstance rejected"), Run->MoveInstance(FGuid::NewGuid(), EZoneKind::Backpack, FGuid()));
+	TestEqual(TEXT("Rejected MoveInstance does not broadcast"), BroadcastCount, 2);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckSpecialZoneFlagResetSpec,
+	"Wacom.Run.Deck.SpecialZoneFlagReset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckSpecialZoneFlagResetSpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, Property 10: 进入 / 离开 SpecialZone 重置 bBattleEnabledInSpecialZone
+	// Validates: Requirements 2.9, 8.6
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 6);
+	UCardDefinition* TypeB = MakeStage45TypeBCard(Fx, 3);
+	UCardDefinition* Stored = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, TypeB });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+	Run->AddCardToBackpack(Stored);
+
+	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+	const FGuid StoredId = Run->GetBackpack().Last().InstanceId;
+
+	TestTrue(TEXT("Move into SpecialZone"), Run->MoveInstance(StoredId, EZoneKind::SpecialZone, OwnerId));
+	TestFalse(TEXT("Initial SpecialZone flag false"), Run->GetRunState().SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
+
+	TestTrue(TEXT("Enable flag"), Run->SetSpecialZoneCardBattleEnabled(StoredId, true));
+	TestTrue(TEXT("Flag enabled"), Run->GetRunState().SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
+
+	TestTrue(TEXT("Move out to Backpack"), Run->MoveInstance(StoredId, EZoneKind::Backpack, FGuid()));
+	TestFalse(TEXT("Leaving SpecialZone clears flag"), Run->GetBackpack().Last().bBattleEnabledInSpecialZone);
+
+	TestTrue(TEXT("Move back into SpecialZone"), Run->MoveInstance(StoredId, EZoneKind::SpecialZone, OwnerId));
+	TestFalse(TEXT("Re-entering SpecialZone starts disabled"), Run->GetRunState().SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
+
+	TestTrue(TEXT("Enable flag again"), Run->SetSpecialZoneCardBattleEnabled(StoredId, true));
+	TestFalse(TEXT("B owner cannot move into own SpecialZone"), Run->MoveInstance(OwnerId, EZoneKind::SpecialZone, OwnerId));
+	TestTrue(TEXT("Rejected self move leaves stored flag unchanged"), Run->GetRunState().SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckSetSpecialZoneFlagOnlySpec,
+	"Wacom.Run.Deck.SetSpecialZoneFlagOnly",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckSetSpecialZoneFlagOnlySpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, Property 11: SetSpecialZoneCardBattleEnabled 切 flag 不移卡
+	// Validates: Requirements 2.10, 8.1, 8.5
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 6);
+	UCardDefinition* TypeB = MakeStage45TypeBCard(Fx, 3);
+	UCardDefinition* Stored = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, TypeB });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+	Run->AddCardToBackpack(Stored);
+
+	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+	const FGuid StoredId = Run->GetBackpack().Last().InstanceId;
+	const FGuid NonSpecialId = Run->GetBackpack()[0].InstanceId;
+
+	TestTrue(TEXT("Move stored card into SpecialZone"), Run->MoveInstance(StoredId, EZoneKind::SpecialZone, OwnerId));
+
+	int32 BroadcastCount = 0;
+	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
+	{
+		++BroadcastCount;
+	});
+
+	TestTrue(TEXT("Set flag true succeeds"), Run->SetSpecialZoneCardBattleEnabled(StoredId, true));
+	TestEqual(TEXT("Broadcast once after flag true"), BroadcastCount, 1);
+	TestEqual(TEXT("Still one card in SpecialZone"), Run->GetRunState().SpecialZones[0].Cards.Num(), 1);
+	TestEqual(TEXT("Instance remains in same SpecialZone"), Run->GetRunState().SpecialZones[0].Cards[0].InstanceId, StoredId);
+	TestTrue(TEXT("Flag true"), Run->GetRunState().SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
+
+	TestTrue(TEXT("Set same flag still succeeds"), Run->SetSpecialZoneCardBattleEnabled(StoredId, true));
+	TestEqual(TEXT("Same-value set still broadcasts by contract"), BroadcastCount, 2);
+	TestEqual(TEXT("Still not moved"), Run->GetRunState().SpecialZones[0].Cards[0].InstanceId, StoredId);
+
+	TestTrue(TEXT("Set flag false succeeds"), Run->SetSpecialZoneCardBattleEnabled(StoredId, false));
+	TestEqual(TEXT("Broadcast once after flag false"), BroadcastCount, 3);
+	TestFalse(TEXT("Flag false"), Run->GetRunState().SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
+
+	TestFalse(TEXT("Non-SpecialZone instance rejected"), Run->SetSpecialZoneCardBattleEnabled(NonSpecialId, true));
+	TestFalse(TEXT("Invalid instance rejected"), Run->SetSpecialZoneCardBattleEnabled(FGuid::NewGuid(), true));
+	TestEqual(TEXT("Rejected SetSpecialZoneCardBattleEnabled does not broadcast"), BroadcastCount, 3);
+
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunDeckBuildInitParamsIncludesEnabledSpecialZoneSpec,
 	"Wacom.Run.Deck.BuildInitParamsIncludesEnabledSpecialZone",
@@ -648,6 +974,109 @@ bool FWacomRunDeckBuildInitParamsIncludesEnabledSpecialZoneSpec::RunTest(const F
 
 	TestEqual(TEXT("SpecialZone enabled weapon included once"), SpecialZoneEntries, 1);
 	TestEqual(TEXT("Legacy BattleDeckOverride no longer written by RunSession"), Params.BattleDeckOverride.Num(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckBuildInitParamsSpecialZoneEntryScenariosSpec,
+	"Wacom.Run.Deck.BuildInitParamsSpecialZoneEntryScenarios",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckBuildInitParamsSpecialZoneEntryScenariosSpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, EXAMPLE R4.8 a/d:
+	// flag=false 不入战；主卡仍在 Backpack 时即使 flag=true 也不入战。
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 8);
+	UCardDefinition* TypeB = MakeBagCard(Fx, 3);
+	TypeB->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_WeaponDamagePlus3;
+	UCardDefinition* Weapon = Fx.MakeDamageCardWithKeywords(
+		/*Cost*/1,
+		/*Damage*/4,
+		{ WacomTags::Card_Keyword_Weapon });
+	UCardDefinition* Normal = Fx.MakeNoopCard(0);
+
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TypeA, TypeB, Normal });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 5, 0);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
+
+	const FGuid BOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+	Run->AddCardToBackpack(Weapon);
+	const FGuid WeaponId = Run->GetBackpack().Last().InstanceId;
+	TestTrue(TEXT("Move weapon into SpecialZone"), Run->MoveInstance(WeaponId, EZoneKind::SpecialZone, BOwnerId));
+
+	TestTrue(TEXT("Move B owner to BattleDeck"), Run->MoveInstance(BOwnerId, EZoneKind::BattleDeck, FGuid()));
+
+	FBattleInitParams Params;
+	TestTrue(TEXT("Build params flag=false"), Run->BuildInitParamsForBattle(Enemy, Params));
+	TestEqual(TEXT("flag=false weapon not included"), Params.BattleDeckEntries.Num(), 2);
+
+	TestTrue(TEXT("Enable weapon"), Run->SetSpecialZoneCardBattleEnabled(WeaponId, true));
+	TestTrue(TEXT("Move B owner back to Backpack"), Run->MoveInstance(BOwnerId, EZoneKind::Backpack, FGuid()));
+
+	Params = FBattleInitParams();
+	TestTrue(TEXT("Build params owner in Backpack"), Run->BuildInitParamsForBattle(Enemy, Params));
+	TestEqual(TEXT("owner in Backpack weapon not included"), Params.BattleDeckEntries.Num(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckBContainerMoveKeepsSpecialZoneSpec,
+	"Wacom.Run.Deck.BContainerMoveKeepsSpecialZone",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckBContainerMoveKeepsSpecialZoneSpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, Property 15: B 主卡跨 Backpack ↔ BattleDeck 移动 SpecialZone 内容保持
+	// Validates: Requirements 5.1, 5.4
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 8);
+	UCardDefinition* TypeB = MakeBagCard(Fx, 3);
+	TypeB->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_WeaponDamagePlus3;
+	UCardDefinition* Stored = Fx.MakeNoopCard(0);
+	UCardDefinition* Normal = Fx.MakeNoopCard(0);
+
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, TypeB, Normal });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
+
+	const FGuid BOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+	Run->AddCardToBackpack(Stored);
+	const FGuid StoredId = Run->GetBackpack().Last().InstanceId;
+	TestTrue(TEXT("Move stored card into SpecialZone"), Run->MoveInstance(StoredId, EZoneKind::SpecialZone, BOwnerId));
+	TestTrue(TEXT("Enable stored card"), Run->SetSpecialZoneCardBattleEnabled(StoredId, true));
+
+	FSpecialZone Before;
+	TestTrue(TEXT("Get SpecialZone before move"), Run->GetSpecialZone(BOwnerId, Before));
+	TestEqual(TEXT("Before one stored card"), Before.Cards.Num(), 1);
+	TestEqual(TEXT("Before stored id"), Before.Cards[0].InstanceId, StoredId);
+	TestTrue(TEXT("Before flag true"), Before.Cards[0].bBattleEnabledInSpecialZone);
+
+	TestTrue(TEXT("Move B owner to BattleDeck"), Run->MoveInstance(BOwnerId, EZoneKind::BattleDeck, FGuid()));
+	FSpecialZone InBattleDeck;
+	TestTrue(TEXT("Get SpecialZone after move to BattleDeck"), Run->GetSpecialZone(BOwnerId, InBattleDeck));
+	TestEqual(TEXT("Still one stored card"), InBattleDeck.Cards.Num(), 1);
+	TestEqual(TEXT("Stored id preserved"), InBattleDeck.Cards[0].InstanceId, StoredId);
+	TestTrue(TEXT("Flag preserved"), InBattleDeck.Cards[0].bBattleEnabledInSpecialZone);
+
+	TestTrue(TEXT("Move B owner back to Backpack"), Run->MoveInstance(BOwnerId, EZoneKind::Backpack, FGuid()));
+	FSpecialZone BackInBackpack;
+	TestTrue(TEXT("Get SpecialZone after move back"), Run->GetSpecialZone(BOwnerId, BackInBackpack));
+	TestEqual(TEXT("Still one stored card after back"), BackInBackpack.Cards.Num(), 1);
+	TestEqual(TEXT("Stored id preserved after back"), BackInBackpack.Cards[0].InstanceId, StoredId);
+	TestTrue(TEXT("Flag preserved after back"), BackInBackpack.Cards[0].bBattleEnabledInSpecialZone);
 
 	return true;
 }
@@ -747,6 +1176,59 @@ bool FWacomRunDeckSpecialZoneCapacitySpec::RunTest(const FString& /*Parameters*/
 	TestEqual(TEXT("Cap=1 → SpecialZone=0"), URunSession::GetSpecialZoneCapacity(B1), 0);
 	TestEqual(TEXT("Cap=0 → SpecialZone=0"), URunSession::GetSpecialZoneCapacity(B0), 0);
 	TestEqual(TEXT("nullptr → 0"),           URunSession::GetSpecialZoneCapacity(nullptr), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckSpecialZoneCapacityForOwnerSpec,
+	"Wacom.Run.Deck.SpecialZoneCapacityForOwner",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckSpecialZoneCapacityForOwnerSpec::RunTest(const FString& /*Parameters*/)
+{
+	// Feature: backpack-special-zone-stage-4-5, Property 7: GetSpecialZoneCapacityFor 公式
+	// Validates: Requirements 2.5
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 8);
+
+	UCardDefinition* TypeB4 = Fx.MakeNoopCard(0);
+	TypeB4->Physique.Capacity = 4;
+	TypeB4->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_Placeholder;
+
+	UCardDefinition* TypeB1 = Fx.MakeNoopCard(0);
+	TypeB1->Physique.Capacity = 1;
+	TypeB1->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_Placeholder;
+
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, TypeB4, TypeB1 });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	const FRunState& State = Run->GetRunState();
+	if (!TestEqual(TEXT("Two SpecialZones"), State.SpecialZones.Num(), 2))
+	{
+		return false;
+	}
+
+	const FGuid Owner4 = State.SpecialZones[0].OwnerInstanceId;
+	const FGuid Owner1 = State.SpecialZones[1].OwnerInstanceId;
+
+	TestEqual(TEXT("Owner cap 4 -> SpecialZone cap 3"),
+		Run->GetSpecialZoneCapacityFor(Owner4), 3);
+	TestEqual(TEXT("Owner cap 1 -> SpecialZone cap 0"),
+		Run->GetSpecialZoneCapacityFor(Owner1), 0);
+	TestEqual(TEXT("Invalid owner -> 0"),
+		Run->GetSpecialZoneCapacityFor(FGuid::NewGuid()), 0);
+	TestEqual(TEXT("Zero GUID -> 0"),
+		Run->GetSpecialZoneCapacityFor(FGuid()), 0);
+
+	TestTrue(TEXT("Move owner to BattleDeck"), Run->AddCardToBattleDeck(TypeB4));
+	TestEqual(TEXT("Capacity stable after owner moves to BattleDeck"),
+		Run->GetSpecialZoneCapacityFor(Owner4), 3);
 
 	return true;
 }

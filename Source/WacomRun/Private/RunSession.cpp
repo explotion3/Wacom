@@ -1722,8 +1722,8 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 	//   2) "in-place 移动"语义：当 FromZone == ToZone（且 SpecialZone 同 owner）时仍走"先移除再追加"
 	//      路径，副作用是末尾位置变化；ToZone 容量校验排除 in-place 情况以避免误判（见各分支
 	//      EffectiveCount 计算）。
-	//   3) task 8.2 会在本路径上接入"从 SpecialZone 移出时把 bBattleEnabledInSpecialZone 重置
-	//      为 false"逻辑（R8.6 / Property 10），当前版本仅做基础移动。
+	//   3) 从 SpecialZone 移出、或从其他 zone 进入 SpecialZone 时，清理
+	//      bBattleEnabledInSpecialZone；同一 SpecialZone 内重排保留原 flag。
 
 	// 1) 找源 zone（R1.7：InstanceId 在所有 zone 中均不存在 → 拒绝）。
 	//    复用 FindInstance（task 8.1 起遍历全部四区）。
@@ -1893,6 +1893,15 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 		ensureMsgf(false,
 			TEXT("[RunSession] MoveInstance: 未知 FromZone 枚举 %d"), (int32)FromZone);
 		return false;
+	}
+
+	const bool bSameSpecialZoneMove =
+		FromZone == EZoneKind::SpecialZone
+		&& ToZone == EZoneKind::SpecialZone
+		&& FromZoneOwnerInstanceId == ToZoneOwnerInstanceId;
+	if (!bSameSpecialZoneMove && (FromZone == EZoneKind::SpecialZone || ToZone == EZoneKind::SpecialZone))
+	{
+		Found.bBattleEnabledInSpecialZone = false;
 	}
 
 	switch (ToZone)

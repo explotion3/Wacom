@@ -165,7 +165,7 @@
     - 命中写入 + return true；未命中不修改 + return false
     - _Requirements: 2.6_
 
-- [ ] 8. `MoveInstance` 扩展到 SpecialZone / BurdenZone + 校验表
+- [x] 8. `MoveInstance` 扩展到 SpecialZone / BurdenZone + 校验表
   - [x] 8.1 在 `MoveInstance` 中加入 SpecialZone 分支 + 校验表（R2.7 a-d）：a) ToOwner 在 SpecialZones 中存在；b) InstanceId != ToOwner；c) `Cards.Num() < GetSpecialZoneCapacityFor(ToOwner)`；d) InstanceId 在所有 zone 中存在
     - 校验失败 → return false + 不修改 + 不广播
     - _Requirements: 2.7, 2.8_
@@ -215,7 +215,7 @@
     - 校验损坏档：DefinitionAssetPath 失效 / OwnerInstanceId 在还原 Backpack ∪ BattleDeck 中找不到 / InstanceId 重复 → 任一命中 → 拒绝加载，RunState 保留调用前状态
     - _Requirements: 7.5, 7.6_
 
-- [ ] 12. 4.5.1 切片测试（属性测试 + 例子测试）
+- [x] 12. 4.5.1 切片测试（属性测试 + 例子测试）
   - [x] 12.1 Property 5 — B 主卡 ↔ SpecialZone 双射不变量
     - **Property 5: B 主卡 ↔ SpecialZone 双射不变量**
     - **Validates: Requirements 2.2, 2.3, 3.5, 3.6, 5.6**
@@ -227,39 +227,39 @@
     - **Validates: Requirements 2.4**
     - _Requirements: 2.4_
 
-  - [ ] 12.3 Property 7 — GetSpecialZoneCapacityFor 公式
+  - [x] 12.3 Property 7 — GetSpecialZoneCapacityFor 公式
     - **Property 7: GetSpecialZoneCapacityFor 公式**
     - **Validates: Requirements 2.5**
     - _Requirements: 2.5_
 
-  - [~] 12.4 Property 8 — RecomputeBurden 输出契约
+  - [x] 12.4 Property 8 — RecomputeBurden 输出契约
     - **Property 8: RecomputeBurden 输出契约**
     - **Validates: Requirements 2.12, 2.13, 2.14, 9.1**
     - 含溢出 / 回填 / 优先序 / 压力公式 / 幂等五条 sub-clause
     - _Requirements: 2.12, 2.13, 2.14, 9.1_
 
-  - [~] 12.5 Property 9 — 广播计数与 Burden 通道写入唯一性
+  - [x] 12.5 Property 9 — 广播计数与 Burden 通道写入唯一性
     - **Property 9: 广播计数与 Burden 通道写入唯一性**
     - **Validates: Requirements 2.8, 2.16, 9.2**
     - 用一个监听 `OnRunStateChangedNative` 的计数器 + `Pressure.Burden` 前后差校验
     - _Requirements: 2.8, 2.16, 9.2_
 
-  - [~] 12.6 Property 10 — 进入 / 离开 SpecialZone 重置 bBattleEnabledInSpecialZone
+  - [x] 12.6 Property 10 — 进入 / 离开 SpecialZone 重置 bBattleEnabledInSpecialZone
     - **Property 10: 进入 / 离开 SpecialZone 重置 bBattleEnabledInSpecialZone**
     - **Validates: Requirements 2.9, 8.6**
     - _Requirements: 2.9, 8.6_
 
-  - [~] 12.7 Property 11 — SetSpecialZoneCardBattleEnabled 切 flag 不移卡
+  - [x] 12.7 Property 11 — SetSpecialZoneCardBattleEnabled 切 flag 不移卡
     - **Property 11: SetSpecialZoneCardBattleEnabled 切 flag 不移卡**
     - **Validates: Requirements 2.10, 8.1, 8.5**
     - _Requirements: 2.10, 8.1, 8.5_
 
-  - [~] 12.8 Property 12 — BattleDeckCapacity == FluxCapacity == Σ A 类容器 Capacity
+  - [x] 12.8 Property 12 — BattleDeckCapacity == FluxCapacity == Σ A 类容器 Capacity
     - **Property 12: BattleDeckCapacity == FluxCapacity == Σ A 类容器 Capacity**
     - **Validates: Requirements 3.1, 3.2, 3.3, 3.4**
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-  - [~] 12.9 EXAMPLE / EDGE_CASE — 4.5.1 具体场景与 SaveGame round-trip
+  - [x] 12.9 EXAMPLE / EDGE_CASE — 4.5.1 具体场景与 SaveGame round-trip
     - 文件：`BackpackSpec.cpp` + `SaveGameRoundtripSpec.cpp`（追加）
     - R2.1 / R2.11 默认构造结构断言
     - R2.6 `GetSpecialZone` 命中 / 未命中
@@ -270,7 +270,7 @@
     - SaveGame 三类损坏档拒绝（R7.6 / R7.8c）
     - _Requirements: 2.1, 2.6, 2.11, 2.15, 3.7, 7.5, 7.6, 9.3_
 
-- [~] 13. Slice 4.5.1 检查点
+- [x] 13. Slice 4.5.1 检查点
   - 编译：`Build.bat WacomEditor Win64 Development`
   - 测试：`Automation RunTests Wacom`
   - Ensure all tests pass, ask the user if questions arise.
@@ -316,7 +316,7 @@
     - 注释引用 design §9 的归属理由（cross-cutting 修正放 Dispatcher 而非 Resolver）
     - _Requirements: 4.4, 4.5, 4.6_
 
-- [ ] 18. 4.5.2 切片测试
+- [x] 18. 4.5.2 切片测试
   - [x] 18.1 Property 13 — BuildInitParamsForBattle 入战清单组成
     - **Property 13: BuildInitParamsForBattle 入战清单组成**
     - **Validates: Requirements 4.3, 4.7, 5.2, 5.3, 8.2, 8.3, 8.4**
@@ -330,19 +330,19 @@
     - 注入 mock 卡（带 / 不带 `Card.Keyword.Weapon` 关键词）+ 不同 base damage + 不同 modifier 组合
     - _Requirements: 4.4, 4.5, 4.6_
 
-  - [~] 18.3 Property 15 — B 主卡跨 zone 移动 SpecialZone 内容保持
+  - [x] 18.3 Property 15 — B 主卡跨 zone 移动 SpecialZone 内容保持
     - **Property 15: B 主卡跨 Backpack ↔ BattleDeck 移动 SpecialZone 内容保持**
     - **Validates: Requirements 5.1, 5.4**
     - _Requirements: 5.1, 5.4_
 
-  - [~] 18.4 SMOKE / EXAMPLE — Tag 注册 + 蛛茧绒囊 Builder + 四条具体场景
+  - [x] 18.4 SMOKE / EXAMPLE — Tag 注册 + 蛛茧绒囊 Builder + 四条具体场景
     - SMOKE：`WacomTags::Card_CapacityEffect_WeaponDamagePlus3.IsValid() == true` 与 `Card_Keyword_Weapon.IsValid() == true`（R4.1）
     - EXAMPLE：蛛茧绒囊 builder 输出 CapacityEffect == WeaponDamagePlus3（R4.2）
     - EXAMPLE R4.8 a~d 四条具体场景：a) flag=false 武器卡不入战；b) flag=true 武器卡 = base+3；c) flag=true 非武器卡 = base；d) 主卡仍在背包时其 SpecialZone 内含卡不入战
     - 回归：BattleSpec / BackpackSpec 既有用例全过（R4.9）
     - _Requirements: 4.1, 4.2, 4.8, 4.9_
 
-- [~] 19. Slice 4.5.2 检查点
+- [x] 19. Slice 4.5.2 检查点
   - 编译：`Build.bat WacomEditor Win64 Development`
   - 测试：`Automation RunTests Wacom`
   - Ensure all tests pass, ask the user if questions arise.
@@ -374,8 +374,8 @@
     - 当 `FromZone != SpecialZone` 时 `FromZoneOwnerInstanceId = FGuid()`（R6.1 约束）
     - _Requirements: 6.1, 6.2_
 
-- [ ] 22. `UWacomBackpackScreen` 4.5.3a 重构
-  - [~] 22.1 把 BattleDeckZone 与 BackpackZone WrapBox 包进各自 `UWacomZoneDropTarget` 实例（C++ 父类创建，调 `SetOwnerScreen(this)`）
+- [x] 22. `UWacomBackpackScreen` 4.5.3a 重构
+  - [x] 22.1 把 BattleDeckZone 与 BackpackZone WrapBox 包进各自 `UWacomZoneDropTarget` 实例（C++ 父类创建，调 `SetOwnerScreen(this)`）
     - 4.5.3a 只接入这两个 zone（DeleteZone / SpecialZone / BurdenZone 在 4.5.3b 接入）
     - _Requirements: 6.3, 6.4_
 
@@ -384,7 +384,7 @@
     - 失败路径（DropTarget MoveInstance 返回 false）→ 不广播 → RebuildAll 不被调 → UI 自然保持原状（R6.5）
     - _Requirements: 6.4, 6.5_
 
-  - [~] 22.3 EXAMPLE — 4.5.3a 拖拽框架单测
+  - [x] 22.3 EXAMPLE — 4.5.3a 拖拽框架单测
     - 文件：`Source/WacomTests/Private/UI/BackpackScreenSpec.cpp`（新增）
     - R6.1：DragOperation 四种 FromZone 字段约束（非 SpecialZone 时 OwnerInstanceId 必须为 invalid GUID）
     - R6.2：DeckCardWidget `NativeOnDragDetected` 输出非空 `UWacomCardDragOperation` 且四字段已填
@@ -394,50 +394,50 @@
     - R6.6：DeckCardWidget 主按钮的 Move 委托绑定已删除（widget tree 中主按钮 OnClicked 监听器为空）
     - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [~] 23. Slice 4.5.3a 检查点
+- [x] 23. Slice 4.5.3a 检查点
   - 编译：`Build.bat WacomEditor Win64 Development`
   - 测试：`Automation RunTests Wacom`
   - Ensure all tests pass, ask the user if questions arise.
 
 ### Slice 4.5.3b — SpecialZone / BurdenZone 渲染 + 删牌拖拽
 
-- [ ] 24. DeleteZone + SpecialZone 区块渲染 + BurdenZone 区块
-  - [~] 24.1 新增 `UWacomDeleteZoneDropTarget : UWacomZoneDropTarget`（独立子类路径，design §10 Note）
+- [x] 24. DeleteZone + SpecialZone 区块渲染 + BurdenZone 区块
+  - [x] 24.1 新增 `UWacomDeleteZoneDropTarget : UWacomZoneDropTarget`（独立子类路径，design §10 Note）
     - `NativeOnDrop` 改调 `RunSession->DeleteCardForGold(Op->Definition)`，按返回值返回
     - 头文件类注释含完整五项 widget 生命周期声明
     - _Requirements: 6.9_
 
-  - [~] 24.2 在 `UWacomBackpackScreen` `RebuildAll()` 末尾按 `RunState.SpecialZones` 顺序动态创建 SpecialZone 区块
+  - [x] 24.2 在 `UWacomBackpackScreen` `RebuildAll()` 末尾按 `RunState.SpecialZones` 顺序动态创建 SpecialZone 区块
     - 每区块：标题 `特殊存放区 [Definition.DisplayName]  n/(Capacity-1)` + WrapBox + 包外的 `UWacomZoneDropTarget(SpecialZone, OwnerInstanceId)`
     - WrapBox 按 `SZ.Cards` 顺序逐张创建 `UWacomDeckCardWidget`，FromZone=SpecialZone，FromZoneOwnerInstanceId=该 OwnerInstanceId
     - `bBattleEnabledInSpecialZone == true` 的卡 widget 显示 widget tree 可识别的"已选"角标元素（命名 `BattleEnabledBadge` 或独立类型 `UWacomBattleEnabledBadge`）
     - _Requirements: 6.7_
 
-  - [~] 24.3 新增"已入战"标记 widget 元素：当 SpecialZone 主卡 instance 当前位于 BattleDeck 时区块标题显示该元素，主卡回 Backpack 时元素 visibility=collapsed
+  - [x] 24.3 新增"已入战"标记 widget 元素：当 SpecialZone 主卡 instance 当前位于 BattleDeck 时区块标题显示该元素，主卡回 Backpack 时元素 visibility=collapsed
     - widget tree 中元素可被名称 / 类型查询识别（design §10 SpecialZonesPanel 布局）
     - _Requirements: 6.13_
 
-  - [~] 24.4 在 `RebuildAll()` 末尾按 `RunState.BurdenZone` 顺序构建 BurdenZone 区块（标题"负重区 n" + WrapBox）
+  - [x] 24.4 在 `RebuildAll()` 末尾按 `RunState.BurdenZone` 顺序构建 BurdenZone 区块（标题"负重区 n" + WrapBox）
     - WrapBox 子项与 `RunState.BurdenZone` 数组按顺序逐张对应（Definition / InstanceId 一致）
     - 包外 `UWacomZoneDropTarget(BurdenZone, FGuid())`（API 允许，UI 层不主动让玩家拖入；按 design §5 校验表"无额外校验"通过）
     - _Requirements: 6.8_
 
-- [ ] 25. BattleDeckZone 视觉合并 + 右键单击 + 容量满拒绝
-  - [~] 25.1 在 `RebuildAll` 中 BattleDeckZone WrapBox 渲染时同步追加：所有 B 主卡 instance 当前位于 BattleDeck 时，其 SpecialZone 中 `bBattleEnabledInSpecialZone == true` 的卡 widget（带 widget tree 可识别的"来自 [B 主卡名]"角标）
+- [x] 25. BattleDeckZone 视觉合并 + 右键单击 + 容量满拒绝
+  - [x] 25.1 在 `RebuildAll` 中 BattleDeckZone WrapBox 渲染时同步追加：所有 B 主卡 instance 当前位于 BattleDeck 时，其 SpecialZone 中 `bBattleEnabledInSpecialZone == true` 的卡 widget（带 widget tree 可识别的"来自 [B 主卡名]"角标）
     - 这些卡同时在原 SpecialZone 区块中保留并显示"已选"标记（不消失）
     - _Requirements: 6.10_
 
-  - [~] 25.2 在 `UWacomDeckCardWidget` 覆写 `NativeOnPreviewMouseButtonDown` 或 `NativeOnMouseButtonDown` 处理鼠标右键单击
+  - [x] 25.2 在 `UWacomDeckCardWidget` 覆写 `NativeOnPreviewMouseButtonDown` 或 `NativeOnMouseButtonDown` 处理鼠标右键单击
     - 仅当 `FromZone == EZoneKind::SpecialZone` 时响应；调用 `OwnerScreen->GetRunSession()->SetSpecialZoneCardBattleEnabled(InstanceId, !current_flag)`
     - 切换成功后通过 `OnRunViewModelRefreshedNative` → `RebuildAll` 重建；"已选"角标 visibility 严格等于 RunState 中切换后的 flag 值
     - _Requirements: 6.11_
 
-  - [~] 25.3 在 `UWacomZoneDropTarget::NativeOnDragOver` 内对 BattleDeckZone + 来源 Backpack + 容量满场景返回 false（视觉上拒绝接收）
+  - [x] 25.3 在 `UWacomZoneDropTarget::NativeOnDragOver` 内对 BattleDeckZone + 来源 Backpack + 容量满场景返回 false（视觉上拒绝接收）
     - 即便 NativeOnDragOver 返回 true，`NativeOnDrop` 调 `MoveInstance` 也会因容量满返回 false → 仍走 R6.5 路径保留原位
     - _Requirements: 6.12_
 
-- [ ] 26. 4.5.3b 切片测试 + 贯穿 Property 16
-  - [~] 26.1 EXAMPLE / EDGE_CASE — 4.5.3b 渲染与交互
+- [x] 26. 4.5.3b 切片测试 + 贯穿 Property 16
+  - [x] 26.1 EXAMPLE / EDGE_CASE — 4.5.3b 渲染与交互
     - 文件：`Source/WacomTests/Private/UI/BackpackScreenSpec.cpp`（追加）
     - R6.7：SpecialZone 区块 widget tree 含标题 + `n/(Capacity-1)` + `BattleEnabledBadge`（断言 widget 元素存在性）
     - R6.8：BurdenZone 区块 widget tree 子项与 `RunState.BurdenZone` 顺序 / Definition / InstanceId 对应
@@ -448,7 +448,7 @@
     - R6.13：B 主卡在 BattleDeck → SpecialZone 区块标题"已入战"标记 visible；主卡回 Backpack → 标记 collapsed
     - _Requirements: 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13_
 
-  - [~] 26.2 Property 16 — SaveGame v2 round-trip 完整保留 instance 归属
+  - [x] 26.2 Property 16 — SaveGame v2 round-trip 完整保留 instance 归属
     - **Property 16: SaveGame v2 round-trip 完整保留 instance 归属**
     - **Validates: Requirements 7.2, 7.5**
     - 文件：`Source/WacomTests/Private/Run/SaveGameRoundtripSpec.cpp`（追加）
@@ -456,7 +456,7 @@
     - 断言：Save → Apply 后四个映射（InstanceId 集合 / InstanceId→Definition / InstanceId→(zone, ownerInstanceId) / InstanceId→bBattleEnabledInSpecialZone）逐项相等；SaveA 内 InstanceId 非零且全表唯一
     - _Requirements: 7.2, 7.5_
 
-- [~] 27. Slice 4.5.3b 最终检查点 + 文档同步
+- [x] 27. Slice 4.5.3b 最终检查点 + 文档同步
   - 编译：`Build.bat WacomEditor Win64 Development`
   - 测试：`Automation RunTests Wacom`
   - 更新 `Docs/WacomRun.md §3 / §4`：FRunState 字段升级 + SaveGame v2 字段
