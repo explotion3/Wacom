@@ -13,6 +13,8 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_Tool,      "Card.Keyword.Tool");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_Hand,      "Card.Keyword.Hand");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_Exhaust,   "Card.Keyword.Exhaust");
+	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_BagProvider, "Card.Keyword.BagProvider");
+	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_DeleteProvider, "Card.Keyword.DeleteProvider");
 
 	// -------- Card.Rarity --------
 	UE_DEFINE_GAMEPLAY_TAG(Card_Rarity_White,     "Card.Rarity.White");
@@ -89,4 +91,11 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(CardLocation_Discard,    "CardLocation.Discard");
 	UE_DEFINE_GAMEPLAY_TAG(CardLocation_Exhaust,    "CardLocation.Exhaust");
 	UE_DEFINE_GAMEPLAY_TAG(CardLocation_Hand,       "CardLocation.Hand");
+
+	// -------- SkillSlot --------
+	UE_DEFINE_GAMEPLAY_TAG(SkillSlot_Placeholder,   "SkillSlot.Placeholder");
+
+	// -------- Card.CapacityEffect --------
+	UE_DEFINE_GAMEPLAY_TAG(Card_CapacityEffect_Placeholder, "Card.CapacityEffect.Placeholder");
+	UE_DEFINE_GAMEPLAY_TAG(Card_CapacityEffect_WeaponDamagePlus3, "Card.CapacityEffect.WeaponDamagePlus3");
 }

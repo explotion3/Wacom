@@ -14,12 +14,49 @@
 | `Status.Twilight` 暮气数值效果 | 只记录层数，不触发任何效果 | 等"暮气生效触发点"规则确认（回合开始？部位行动前？）|
 | 暮蛉 `OnTwilightTriggered` 真正改中毒层数 | P3.5 只发 `PassiveTriggered` 事件，不改 Magnitude | 需引入 `FRuntimeCardInstance::EffectMagnitudeModifiers` 或等价机制 |
 | 治疗移除 10% 中毒层数 | 治疗效果 `Effect.Heal` 未实现 | 实现 Heal 时一并加中毒层数衰减 |
-| 卡牌耐久 `Durability` 消耗 | `FCardPhysique::Durability` 字段存在但不读取 | 等背包系统引入后消耗耐久 |
-| 左手主动效果 / 完美释放效果 | 左手 `Effects` / `PerfectReleaseEffects` 留空 | 等背包系统接入后配置 |
+| 卡牌耐久 `Durability` 消耗 | `FCardPhysique::Durability` 字段存在但不读取 | 等耐久系统设计（暮色引虫灯 1 耐久 = 打出一次进消耗区）|
+| 左手主动效果 / 完美释放效果 | 左手 `Effects` / `PerfectReleaseEffects` 留空 | 等具体卡牌设计 |
 | 右手"相邻右方伙伴代打" | 未实现 | 等 `Target.Adjacent.Right` 的 Executor 分支 |
-| 击倒事件奖励 | `EnemyKnockdown` 事件只发不处理 | Run 外层实现奖励分发 |
+| 击倒事件三选一具体效果 | Stage 7 已搭好"撤离/援助/破坏"框架 + dialog UI + BattleProgress 持久化撤离破坏部位；Run 层第一阶段仅记日志 | Stage 9 节点事件接入时按 `FKnockdownChoice::Choice` 分支触发实际效果（左手 buff / 永久强化部位 / 特殊节点等）|
 | 蛇部位间联动 | 无（头被破坏时身体不强化）| 等更多敌人设计后按需加 |
 | 手牌满时 OnCompanionCount 处理 | 强行加入，下回合 EnforceLimit 处理 | 若规则变更为"满时不触发"，改 `RunOnCompanionCountPassives` |
+| 存档系统恢复 | Stage 0.1 暂停（`bSaveSystemEnabled = false`），底层 UWacomSaveGame / FRunState 拷贝/迁移机制保留 | demo 完善后恢复：Bootstrap 读盘 / PauseMenu Save 按钮 / MainMenu Continue |
+| 容量效果应用到特殊存放区卡牌 | `CapacityEffect` tag 字段就位，B 类识别 API 就位，但"放进特殊区的卡获得效果"未实现 | 等具体效果设计 |
+| `IsDeleteFunctionAvailable` 接入 `DeleteCardForGold` 校验 | 接口就位但 DeleteCardForGold 不读（GDD §11.7 第一阶段始终允许删牌）| 等 GDD 切换为"按需可用"后接入 |
+
+### 卡牌扩展（按需做，未来卡牌出现时再实现）
+
+| 项 | 现状 | 触发实现的条件 |
+|---|---|---|
+| `Effect.CopyCard` 复制手牌临时副本 | 未做 | 出现需要复制机制的卡 |
+| `Magnitude.Source.DiscardCount` 弃牌堆数量 Magnitude | 未做 | 出现按弃牌堆数量调整数值的卡 |
+| `Magnitude.Source.DestroyedPartCount` 已破坏部位数 Magnitude | 未做 | 出现按破坏部位数加伤的卡 |
+| `Target.AllHandCards` 手牌全展开 | 未做 | 出现"对所有手牌生效"的卡 |
+| `Target.Adjacent.Left` 本卡左相邻 | 未做 | 出现按相邻位置定位的卡（与右手代打类卡共用 Executor 分支）|
+| `Target.Adjacent.Right` 本卡右相邻 | 未做 | 同上；右手代打也依赖此 |
+| `Target.RandomEnemyPart` 随机存活部位 | 未做 | 出现随机选部位的卡 |
+
+### 卡牌扩展（已注册 Handler 但调用点未接入）
+
+| 项 | 现状 | 接入要求 |
+|---|---|---|
+| `Passive.Trigger.OnTurnStart` | Handler 注册，无调用点 | 出现需要回合开始触发的被动卡时，在 `BattleTurnFlow` 起始阶段加调用 |
+| `Passive.Trigger.OnTurnEnd` | Handler 注册，无调用点 | 出现回合结束触发的被动卡时，在 `EndTurnResolver` 加调用（注意时序） |
+| `Passive.Trigger.OnDraw` | Handler 注册，无调用点 | 出现入手触发的被动卡时，在 `DeckService::DrawTo` 加调用 |
+| `Passive.Trigger.OnDiscard` | Handler 注册，无调用点 | 出现弃牌触发的被动卡时，在弃牌路径加调用 |
+
+### 卡牌扩展（新 GDD 触发的依赖项）
+
+| 项 | 现状 | 依赖 GDD 章节 |
+|---|---|---|
+| `Passive.Trigger.OnEnemyPartDestroyed` | 未做 | GDD §6 / §3.3。Stage 7 已让"玩家三选一"在 `RecordPartDestroyed` 路径有挂载点，被动触发可一并接入 |
+| `Passive.Trigger.OnPlayerDamaged` | 未做 | 战内"玩家受扣血"事件可由战内伤口阈值跨越（GDD §3.2 / §9.2）的 flag 维护承接，不一定要走 Passive trigger。先观察 |
+| B 类容器卡容量效果应用机制 | `FCardPhysique.CapacityEffect` 字段 + `IsTypeBContainerCard` 判定已做，但"放进特殊存放区的卡获得效果"的 effect 应用逻辑未实现 | 等具体容量效果设计（cost-1 / 关键词加成 / 数值修正）落地后实现 |
+| 暮色引虫灯战斗主动效果 | 当前 Cost=0 无效果，打出无意义 | GDD §4.4 定义了 1 耐久 / 打出一次进消耗区，等耐久系统接入 |
+| 暮色引虫灯任务后升级 | 未做 | 远期，等任务系统 |
+| 击倒事件 UI dialog 美术 | Stage 7 已落地：C++ 硬编码 CanvasPanel + Border + Button 布局，BindWidget 锚点 PartNameText/AidButton/WithdrawButton/DestroyButton 就位 | 美术阶段配 WBP 即接 |
+| 地图系统（Stage 8）| 节点/通道/迷雾/撤离回路规则已在 GDD §10 确认，代码未开始 | 新建 WacomMap 模块或放 WacomRun 下 |
+| 节点事件（Stage 9）| 露营/野炊/商店/探险/事件规则已在 GDD §10 确认，代码未开始 | 强依赖 Stage 8 地图系统完成 |
 
 ### UI / 表现层
 
@@ -32,6 +69,12 @@
 | 目标选择 3D 射线 | 点击 EnemyPartWidget 2D 按钮 | HD-2D 表现时改为 3D 部位高亮 + 点击 |
 | EventToast 图标/动画 | 纯文字 | 升级为"事件表现调度器" + Niagara + 音效 |
 | 锚点左右归属 | 遍历顺序启发式（第一个锚点进 LeftSlot）| 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
+| 背包 UI 特殊存放区渲染 | B 类容器卡骨架已做（Stage 4.3），BackpackScreen 只显示通量区 + 备战区 | Stage 4.5：为每张 B 类容器卡渲染独立的特殊存放区 WrapBox，显示 SpecialZoneCapacity |
+| 背包 UI 删牌区与 DeleteProvider 联动 | 删牌区始终显示（GDD §11.7 第一阶段约定），`IsDeleteFunctionAvailable()` 接口就位但 UI 不读 | 等 GDD 切换为"按需可用"后，BackpackScreen 根据 `IsDeleteFunctionAvailable()` 显示/隐藏删牌区 |
+| 背包 UI 负重区 | 超容卡进负重区的逻辑在 `RecomputeBurden` 中计算，但 UI 没有独立的"负重区"视觉分区 | 加独立 WrapBox 或颜色标记区分超容卡 |
+| 探索 HUD 压力阈值警示色 | 压力值纯数字白色 | 压力 >50% 黄色 / >80% 红色 |
+| 探索 HUD 战斗中压制 | 战斗时 BattleHUD 叠在 ExplorationHUD 上面，ExplorationHUD 仍可见 | 战斗激活时隐藏 ExplorationHUD 或降低透明度 |
+| 背包 UI B 类主卡进备战区时特殊区保留 | GDD §11.3 末注"主卡移至备战区时，主卡位置消失但容量效果区保留"，未实现 | Stage 4.5 一起做 |
 
 ### 架构层
 
@@ -40,6 +83,8 @@
 | 网络复制 | 未实现 | 远期，单人游戏暂不需要 |
 | ViewModel 层 | Widget 直接持有 Session | UI 复杂度上升时抽 `UBattleViewModel` |
 | GAS（GameplayAbilitySystem）| 不使用 | 保持不引入，战斗用自研 Resolver/Executor |
+| UI 架构迁移 MVVM | M1+M2 已落地：Run 域走 ViewModel + Provider 订阅模型；C++ 父类硬编码布局 + 订阅粗粒度多播 + 手动 SetText；FieldNotify 字段就位但未被 WBP ViewBinding 消费 | 美术阶段切 WBP：ViewModel 加到 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 绑字段到 TextBlock/ProgressBar；C++ 父类 SetText 路径作 fallback 保留 → 全 WBP 后逐步删 |
+| 战斗 UI 接 ViewModel | 保留 Snapshot 推送模型（BattleHUD 作 Controller 递归 RefreshFromSnapshot） | 第一阶段不动。如果将来非战斗 widget 需要"看战斗状态"（如击倒事件 UI / 探索期小窗），加 `UWacomBattleViewModel` 作外部观察入口；子 widget 内部仍用 Snapshot |
 
 ---
 
@@ -54,6 +99,8 @@
 | 费用转移 | 只支持 `ReduceCost(LastShuffled) + AddCost(Self)` 组合 | 更复杂的多点/条件费用转移用 `CostLedger` |
 | CompanionPlayedCount | 全局计数，不区分哪张伙伴 | 当前口径正确（BugGirl.md §5），多角色时再评估 |
 | 回合结束时保留/弃牌的时序 | 在 `EndTurnResolver` 里放在敌方行动之前 | 若规则后续明确放在敌方行动之后，需要调整 |
+| `Magnitude.Source.TargetStatusStacks` 借用 `FCardEffect::TargetZone` 传 Status Tag | 字段复用：TargetZone 字段对非 Shuffle 效果无其他用途，所以借来传状态 Tag | 给 `FCardEffect` / `FEffectContext` 加专用 `FilterTag` 字段 |
+| `Effect.GainKeyword` / `Effect.RemoveStatus` 借用 `FEffectContext::MetaTag` 传 Keyword/Status Tag | 同上字段复用 | 同上 `FilterTag` 字段 |
 
 ### UI 层
 
@@ -62,6 +109,10 @@
 | 全量刷新 | 每次命令后 Snapshot 全量重建 Widget 数据 | 加动画时动画系统自己做 diff |
 | C++ 硬编码默认布局 | Widget 类 `Blueprintable` 非 Abstract，带 C++ 默认布局 | 后续美术只改 WBP |
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick Lerp 插值 |
+| 背包 UI 点击切换 | 第一版用点击主按钮 Move + X 按钮 Delete，无拖拽 | 后续可加 DragDropOperation 拖拽语义 |
+| 背包 UI 全量 RebuildAll | 每次 ViewModel 刷新后清空 WrapBox 重建所有子控件 | 增量 diff 或迁 ListView/TileView |
+| 探索 HUD 时段总节点数 | 只显示"剩余节点"，没有"本时段总节点数"快照 | FRunState 加 `TotalNodeCountForPhase` 字段或 HUD 在时段切换时记录初始值 |
+| ViewModel FieldNotify 暂未被 WBP 消费 | C++ 父类用粗粒度 OnRunViewModelRefreshedNative + 手动 SetText | 美术阶段切 WBP 时启用 ViewBinding 直接绑字段，删除粗粒度 multicast |
 
 ### 架构层
 
@@ -69,6 +120,9 @@
 |---|---|---|
 | BattleState 非反射 | 裸 struct + pImpl，GC 引用靠 Session 的 `ReferencedAssets` | 若需存档/网络，升级为 USTRUCT 或 UObject |
 | MSVC 工具链 14.38 | UE 5.7 警告 "not preferred"，不影响功能 | 升级到 14.44+ |
+| `RunSession.cpp::ApplySaveGameToRunState` 内嵌套 lambda 触发 MSVC C1001 ICE | 把 `RestoreCardInstanceList` 提取为 anonymous-namespace file-scope free function | MSVC 14.44+ 升级 / 切 Clang 后视情况合回 lambda |
+| `OnRunStateChangedNative` 多次广播 | 一次玩家操作可能链式触发多次 Broadcast（如 AddCardToBackpack → RecomputeBurden → SetPressure 各一次）| ViewModel 端 UE_MVVM_SET_PROPERTY_VALUE 已 dedupe，FieldNotify 不会重复触发；粗粒度多播订阅方应保证刷新幂等 |
+| 蛛茧绒囊 CapacityEffect = Placeholder | 占位 tag，不挂任何实际效果 | 等具体容量效果设计后替换为真实 tag（如 `Card.CapacityEffect.CostMinusOne`）|
 
 ---
 

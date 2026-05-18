@@ -71,7 +71,11 @@ TSharedRef<SWidget> UWacomPauseMenuScreen::RebuildWidget()
 		}
 
 		if (!ResumeButton)     { ResumeButton     = MakePauseButton(WidgetTree, TEXT("ResumeButton"),     LOCTEXT("Resume", "继续游戏"),     VBox); }
-		if (!SaveButton)       { SaveButton       = MakePauseButton(WidgetTree, TEXT("SaveButton"),       LOCTEXT("Save", "保存"),           VBox); }
+		// 存档系统暂停（Stage 0.1）：Save 按钮不创建。
+		if (!SaveButton && AWacomGameMode::bSaveSystemEnabled)
+		{
+			SaveButton = MakePauseButton(WidgetTree, TEXT("SaveButton"), LOCTEXT("Save", "保存"), VBox);
+		}
 		if (!QuitToMenuButton) { QuitToMenuButton = MakePauseButton(WidgetTree, TEXT("QuitToMenuButton"), LOCTEXT("QuitToMenu", "回到主菜单"), VBox); }
 	}
 	return Super::RebuildWidget();

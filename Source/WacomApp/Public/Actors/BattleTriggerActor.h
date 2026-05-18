@@ -12,11 +12,14 @@ class UEnemyDefinition;
 /**
  * 场景中的战斗触发器。
  *
- * Details 面板配置一个 UEnemyDefinition。玩家 Pawn 走进 Sphere 范围
- * 即触发 AWacomPlayerController::RequestEnterBattle。
+ * 交互模型（Stage 7 之后）：use-key 模型。
+ *   - Sphere 范围只用来判定"玩家是否在交互范围"
+ *   - 进入范围 → 注册到 PlayerController.CandidateTriggers + ExplorationHUD 显示"按 E 战斗"
+ *   - 离开范围 → 从 CandidateTriggers 移除
+ *   - 玩家按 IA_Interact（E）→ PC 从候选列表挑最近的调 TryActivate → 进战斗
  *
- * R3：只做 Overlap 转发 + 日志，真正的进入战斗逻辑（UI / Session / IMC 切换）在 R4。
- * 战斗结束后由 AWacomGameMode::ExitBattle 负责 Destroy 本触发器（避免重复战斗）。
+ * 旧模型（overlap 自动触发）已废弃，原因是撤离回探索后玩家仍在 Sphere 内，
+ * 永远不会有 EndOverlap → BeginOverlap 的循环，无法重入战斗。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API ABattleTriggerActor : public AActor
@@ -31,8 +34,8 @@ public:
 	 *
 	 * - 关卡级别必须唯一；同 id 重复时 BeginPlay 会报错
 	 * - 置空（NAME_None）视为"不参与存档"，BeginPlay 打 Warning
-	 * - 战斗结束后 RunSession 会把本 id 加入 DestroyedTriggerIds
-	 * - 下次关卡加载时若 id 在 DestroyedTriggerIds 中，本 Actor 立即 Destroy，不触发 Overlap
+	 * - 真胜利时 RunSession 会把本 id 加入 DestroyedTriggerIds，下次关卡加载本 Actor 立即 Destroy
+	 * - 撤离时不进 DestroyedTriggerIds，但 BattleProgress 会持久化已破坏部位
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Persistence")
 	FName PersistentId;
@@ -46,15 +49,18 @@ public:
 		meta = (ClampMin = "50.0", UIMin = "50.0"))
 	float TriggerRadius = 200.f;
 
-	/** 一次性触发：Overlap 之后禁用，避免在过渡期间再次触发。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
-	bool bConsumeOnTrigger = true;
-
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	USphereComponent* GetTriggerSphere() const { return TriggerSphere; }
 
+	/**
+	 * 玩家按 E 时由 PlayerController 调用。
+	 * 转发到 PC->RequestEnterBattle。Trigger 自身不直接调 GameMode。
+	 */
+	void TryActivate(class AWacomPlayerController* PC);
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION()
 	void HandleBeginOverlap(UPrimitiveComponent* OverlappedComp,
@@ -64,11 +70,14 @@ protected:
 		bool bFromSweep,
 		const FHitResult& SweepResult);
 
+	UFUNCTION()
+	void HandleEndOverlap(UPrimitiveComponent* OverlappedComp,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		int32 OtherBodyIndex);
+
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle",
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USphereComponent> TriggerSphere = nullptr;
-
-	/** 已触发标记；防止单帧多次 Overlap 重入。 */
-	bool bTriggered = false;
 };

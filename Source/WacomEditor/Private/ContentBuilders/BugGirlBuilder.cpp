@@ -129,7 +129,7 @@ namespace Wacom::ContentBuilder
 			CardsRoot + TEXT("DA_Card_LeftHand"),
 			TEXT("DA_Card_LeftHand"),
 			TEXT("LeftHand"),
-			TEXT("Left Hand"),
+			TEXT("左手"),
 			TEXT("Anchor card for hand zone. Details TBD."),
 			/*BaseCost*/ 2,
 			WacomTags::Card_Rarity_Intrinsic,
@@ -148,7 +148,7 @@ namespace Wacom::ContentBuilder
 			CardsRoot + TEXT("DA_Card_RightHand"),
 			TEXT("DA_Card_RightHand"),
 			TEXT("RightHand"),
-			TEXT("Right Hand"),
+			TEXT("右手"),
 			TEXT("Anchor card. Deal 8 damage."),
 			/*BaseCost*/ 2,
 			WacomTags::Card_Rarity_Intrinsic,
@@ -197,7 +197,7 @@ namespace Wacom::ContentBuilder
 			CardsRoot + TEXT("DA_Card_ZhaoguangMudie"),
 			TEXT("DA_Card_ZhaoguangMudie"),
 			TEXT("ZhaoguangMudie"),
-			TEXT("Zhaoguang Mudie"),
+			TEXT("朝光暮蝶"),
 			TEXT("Random shuffle 1 card; apply poison equal to current cost."),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_White,
@@ -220,7 +220,7 @@ namespace Wacom::ContentBuilder
 			CardsRoot + TEXT("DA_Card_FuxiaoFeie"),
 			TEXT("DA_Card_FuxiaoFeie"),
 			TEXT("FuxiaoFeie"),
-			TEXT("Fuxiao Feie"),
+			TEXT("拂晓飞蛾"),
 			TEXT("Apply 1 slow to an enemy part."),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_Blue,
@@ -240,7 +240,7 @@ namespace Wacom::ContentBuilder
 			CardsRoot + TEXT("DA_Card_ChifuGongyi"),
 			TEXT("DA_Card_ChifuGongyi"),
 			TEXT("ChifuGongyi"),
-			TEXT("Chifu Gongyi"),
+			TEXT("赤腹工蚁"),
 			TEXT("Retain. Shuffle a random card from the Both zone to another zone."),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_White,
@@ -263,7 +263,7 @@ namespace Wacom::ContentBuilder
 			CardsRoot + TEXT("DA_Card_ShuoguangDie"),
 			TEXT("DA_Card_ShuoguangDie"),
 			TEXT("ShuoguangDie"),
-			TEXT("Shuoguang Die"),
+			TEXT("烁光蝶"),
 			TEXT("Combo. Deal 7 damage. After play, shuffle to a random zone."),
 			/*BaseCost*/ 1,
 			WacomTags::Card_Rarity_White,
@@ -285,7 +285,7 @@ namespace Wacom::ContentBuilder
 			CardsRoot + TEXT("DA_Card_Muling"),
 			TEXT("DA_Card_Muling"),
 			TEXT("Muling"),
-			TEXT("Muling"),
+			TEXT("暮蛉"),
 			TEXT("Freeze an enemy part for 1 turn."),
 			/*BaseCost*/ 5,
 			WacomTags::Card_Rarity_Blue,
@@ -298,8 +298,92 @@ namespace Wacom::ContentBuilder
 			/*Passives*/ { ML_OnTwilight }
 		);
 
+		// ==== 虫妹的小布袋 BugGirlBag（基础容器卡，GDD §11）====
+		// Stage 4.0 / 4.1 引入：背包能力提供者，Capacity = 12。
+		// 自身打出无意义但合法（Cost=0，无主动效果）。
+		// 玩家可以选择把它放进备战卡组（Initialize a2：默认只放 Backpack 不进 BattleDeck）。
+		FCardPhysique BagPhysique;
+		BagPhysique.Capacity = 12;
+
+		UCardDefinition* BugGirlBag = BuildCard(
+			CardsRoot + TEXT("DA_Card_BugGirlBag"),
+			TEXT("DA_Card_BugGirlBag"),
+			TEXT("BugGirlBag"),
+			TEXT("虫妹的小布袋"),
+			TEXT("Provides backpack capacity. Bag UI is unlocked while at least one BagProvider card is in the backpack."),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_BagProvider },
+			ECardTargetMode::None,
+			BagPhysique,
+			/*Effects*/ {},
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
+		// ==== 蛛茧绒囊 ZhujianRongnang（B 类容器卡，GDD §11.2 / Stage 4.5.2）====
+		// Stage 4.3 引入：演示 B 类容器卡机制；Stage 4.5.2 把 CapacityEffect 从占位升级为首个具体效果。
+		//   Capacity = 3 → 不计入通量公式（CapacityEffect 非空）
+		//   特殊存放区容量 = Capacity - 1 = 2
+		//   CapacityEffect = Card.CapacityEffect.WeaponDamagePlus3
+		//     → 放进特殊存放区且 bBattleEnabledInSpecialZone=true 的"武器关键词卡"入战伤害 +3
+		// 玩家手上同时有小布袋（A，12）+ 蛛茧绒囊（B，3）时：
+		//   Flux 仍 = 12，蛛茧绒囊不增加通量
+		FCardPhysique CocoonPhysique;
+		CocoonPhysique.Capacity       = 3;
+		CocoonPhysique.CapacityEffect = WacomTags::Card_CapacityEffect_WeaponDamagePlus3;
+
+		UCardDefinition* ZhujianRongnang = BuildCard(
+			CardsRoot + TEXT("DA_Card_ZhujianRongnang"),
+			TEXT("DA_Card_ZhujianRongnang"),
+			TEXT("ZhujianRongnang"),
+			TEXT("蛛茧绒囊"),
+			TEXT("Type-B container card. Opens a special storage zone (capacity = 2)."
+			     " Weapon cards stored there gain +3 damage when battle-enabled."),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ {}, // 不带 BagProvider，专门测 B 类与 BagProvider 互相独立
+			ECardTargetMode::None,
+			CocoonPhysique,
+			/*Effects*/ {},
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
+		// ==== 暮色引虫灯 MuseiYinchongdeng（删牌能力提供者，GDD §4.4 / §11.5 / §11.7）====
+		// Stage 4.4 引入：背包删牌能力的"卡牌承载体"。
+		//   Capacity = 3，A 类容器卡（无 CapacityEffect）→ 计入 Flux 公式
+		//   关键词：Card.Keyword.DeleteProvider（背包至少一张就有删牌功能）
+		//   不带 BagProvider，与小布袋职责正交
+		// 第一阶段简化：
+		//   - 不读耐久，自身打出无意义但合法（Cost=0，无主动效果）
+		//   - 删牌区始终显示，不绑定具体卡（GDD §11.7）
+		//   - 任务后升级远期不做
+		FCardPhysique LanternPhysique;
+		LanternPhysique.Capacity = 3;
+
+		UCardDefinition* MuseiLantern = BuildCard(
+			CardsRoot + TEXT("DA_Card_MuseiYinchongdeng"),
+			TEXT("DA_Card_MuseiYinchongdeng"),
+			TEXT("MuseiYinchongdeng"),
+			TEXT("暮色引虫灯"),
+			TEXT("Type-A container with capacity 3. Carries the delete-card ability"
+			     " (DeleteProvider keyword). Stage 1 ignores durability and combat effects."),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_DeleteProvider },
+			ECardTargetMode::None,
+			LanternPhysique,
+			/*Effects*/ {},
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
 		// 检查：任一建造失败则放弃。
-		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling)
+		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling || !BugGirlBag || !ZhujianRongnang || !MuseiLantern)
 		{
 			return nullptr;
 		}
@@ -314,10 +398,14 @@ namespace Wacom::ContentBuilder
 
 		Char->CharacterId    = TEXT("BugGirl");
 		Char->DisplayName    = FText::FromString(TEXT("Bug Girl"));
-		Char->BaseMaxHp      = 20;
+		// 默认 10 指 × 2 HP = 20 本体 HP。和重构前 BaseMaxHp = 20 一致。
+		Char->FingerCount    = 10;
+		Char->HpPerFinger    = 2;
 		Char->LeftHandCard   = LeftHand;
 		Char->RightHandCard  = RightHand;
-		Char->StarterDeck    = { Zhaoguang, Fuxiao, Chifu, Shuoguang, Muling };
+		// 顺序：5 张参战伙伴卡 + 虫妹的小布袋（A 类）+ 蛛茧绒囊（B 类占位）+ 暮色引虫灯（A 类，DeleteProvider）。
+		// Initialize 时按 Stage 4.1 a2 规则：非容器卡进 BattleDeck，容器卡只进 Backpack。
+		Char->StarterDeck    = { Zhaoguang, Fuxiao, Chifu, Shuoguang, Muling, BugGirlBag, ZhujianRongnang, MuseiLantern };
 
 		SaveAssetPackage(CharPkg, Char, CharPkgPath);
 		return Char;

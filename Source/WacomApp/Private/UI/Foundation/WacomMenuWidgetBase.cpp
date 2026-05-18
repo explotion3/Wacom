@@ -66,3 +66,16 @@ TOptional<FUIInputConfig> UWacomMenuWidgetBase::GetDesiredInputConfig() const
 	// Menu 模式：鼠标可见、不锁 viewport、UIOnly 阻断游戏输入
 	return FUIInputConfig(ECommonInputMode::Menu, EMouseCaptureMode::NoCapture);
 }
+
+FReply UWacomMenuWidgetBase::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	// ECommonInputMode::Menu 会屏蔽 EnhancedInput 的 IA_OpenMenu，
+	// 因此 ESC 关闭菜单的逻辑必须在 widget 层处理。
+	// 子类如果需要不同行为（例如 ConfirmDialog 把 ESC 当 Cancel），可以 override。
+	if (InKeyEvent.GetKey() == EKeys::Escape)
+	{
+		DeactivateWidget();
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}

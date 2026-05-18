@@ -28,6 +28,7 @@ namespace
 		case EBattlePhase::TurnStart:    return TEXT("TurnStart");
 		case EBattlePhase::PlayerAction: return TEXT("PlayerAction");
 		case EBattlePhase::TurnEnd:      return TEXT("TurnEnd");
+		case EBattlePhase::PendingKnockdownChoice: return TEXT("PendingKnockdownChoice");
 		case EBattlePhase::BattleEnd:    return TEXT("BattleEnd");
 		default:                          return TEXT("None");
 		}

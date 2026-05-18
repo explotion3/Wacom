@@ -131,12 +131,32 @@ void UWacomMainMenuScreen::RefreshContinueEnabled()
 {
 	if (!ContinueButton) { return; }
 
+	// 存档系统暂停（Stage 0.1）：Continue 永远禁用。
+	if (!AWacomGameMode::bSaveSystemEnabled)
+	{
+		ContinueButton->SetIsEnabled(false);
+		return;
+	}
+
 	const bool bHasMain = UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, /*UserIndex*/0);
 	ContinueButton->SetIsEnabled(bHasMain);
 }
 
 void UWacomMainMenuScreen::HandleNewGameClicked()
 {
+	// 存档系统暂停（Stage 0.1）：直接开新游戏，不弹 Confirm。
+	if (!AWacomGameMode::bSaveSystemEnabled)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			if (AWacomMenuGameMode* GM = World->GetAuthGameMode<AWacomMenuGameMode>())
+			{
+				GM->RequestStartNewGame();
+			}
+		}
+		return;
+	}
+
 	// 有存档时弹确认对话框
 	if (UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, 0))
 	{
@@ -170,6 +190,13 @@ void UWacomMainMenuScreen::HandleNewGameClicked()
 
 void UWacomMainMenuScreen::HandleContinueClicked()
 {
+	// 存档系统暂停（Stage 0.1）：忽略 Continue。
+	if (!AWacomGameMode::bSaveSystemEnabled)
+	{
+		UE_LOG(LogTemp, Display, TEXT("[MainMenu] Continue 被点但存档系统已暂停"));
+		return;
+	}
+
 	if (!UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, 0))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[MainMenu] Continue 被按到但无存档"));

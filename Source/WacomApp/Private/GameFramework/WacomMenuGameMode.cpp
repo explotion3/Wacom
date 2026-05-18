@@ -80,14 +80,17 @@ void AWacomMenuGameMode::RequestStartNewGame()
 {
 	UE_LOG(LogTemp, Display, TEXT("[MenuGameMode] RequestStartNewGame"));
 
-	// 清存档
-	if (UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, 0))
+	// 存档系统启用时清掉旧存档；暂停时跳过。
+	if (AWacomGameMode::bSaveSystemEnabled)
 	{
-		UGameplayStatics::DeleteGameInSlot(AWacomGameMode::SlotName_Main, 0);
-	}
-	if (UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Auto, 0))
-	{
-		UGameplayStatics::DeleteGameInSlot(AWacomGameMode::SlotName_Auto, 0);
+		if (UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, 0))
+		{
+			UGameplayStatics::DeleteGameInSlot(AWacomGameMode::SlotName_Main, 0);
+		}
+		if (UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Auto, 0))
+		{
+			UGameplayStatics::DeleteGameInSlot(AWacomGameMode::SlotName_Auto, 0);
+		}
 	}
 
 	// TearDown UI 后 next-tick OpenLevel。
@@ -108,6 +111,15 @@ void AWacomMenuGameMode::RequestStartNewGame()
 void AWacomMenuGameMode::RequestContinueGame()
 {
 	UE_LOG(LogTemp, Display, TEXT("[MenuGameMode] RequestContinueGame"));
+
+	// 存档系统暂停（Stage 0.1）：Continue 不可用。理论上 UI 已禁用按钮，
+	// 这里再防一次以防其他入口（命令行 / 蓝图）调用。
+	if (!AWacomGameMode::bSaveSystemEnabled)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[MenuGameMode] RequestContinueGame 被调用但存档系统已暂停，忽略"));
+		return;
+	}
 
 	if (!UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, 0))
 	{

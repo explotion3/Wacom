@@ -32,6 +32,8 @@ enum class EBattleEventType : uint8
 	EnemyPartActed        UMETA(DisplayName = "EnemyPartActed"),
 	EnemyPartHpEmptied    UMETA(DisplayName = "EnemyPartHpEmptied"),   // 部位被破坏
 	EnemyKnockdown        UMETA(DisplayName = "EnemyKnockdown"),       // 击倒事件（第一阶段仅记录）
+	KnockdownChoiceRequested UMETA(DisplayName = "KnockdownChoiceRequested"), // 等待玩家三选一
+	KnockdownChoiceMade   UMETA(DisplayName = "KnockdownChoiceMade"),  // 玩家选完一项
 	TurnEnded             UMETA(DisplayName = "TurnEnded"),
 	PassiveTriggered      UMETA(DisplayName = "PassiveTriggered"),    // P3.5 占位：被动触发通知
 	BattleEnded           UMETA(DisplayName = "BattleEnded"),

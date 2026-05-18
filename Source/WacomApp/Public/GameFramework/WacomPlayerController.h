@@ -12,6 +12,7 @@ class UInputAction;
 class ABattleTriggerActor;
 class URunSession;
 class UBattleHUD;
+class UWacomBackpackScreen;
 
 /**
  * Wacom PlayerController。
@@ -80,6 +81,36 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_OpenMenu;
 
+	/**
+	 * 交互键（默认 E）。Stage 7：玩家在 BattleTriggerActor 范围内按此键发起战斗。
+	 *
+	 * IA 资产由用户在 Editor 中手动建（IA_Interact.uasset）+ 加到 IMC_Exploration 绑定 E 键。
+	 * 建好后 BeginPlay/SetupInputComponent 的 LazyLoadIA 会自动加载。
+	 * 资产未建时控制台命令 `Wacom.Interact` 作为兜底入口。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_Interact;
+
+	/**
+	 * 打开背包 IA。
+	 *
+	 * Stage 4.2：默认不绑定（IA 资产由用户手动建）。建好后改 BeginPlay 里的 LoadObject 路径。
+	 * 入口由 console command Wacom.OpenBackpack / Wacom.CloseBackpack 提供。
+	 * 战斗 IMC 不绑定该 IA（探索期 IMC 才会绑）。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
+	TObjectPtr<UInputAction> IA_OpenBackpack;
+
+	/**
+	 * 背包 UI（M2：MVVM 架构）。蓝图未配则回退 C++ 父类 UWacomBackpackScreen。
+	 * 蓝图子类（如 BP_PlayerController）可在 Details 面板拖 WBP_BackpackScreen 覆盖。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
+	TSubclassOf<UWacomBackpackScreen> BackpackScreenClass;
+
+	/** Console command 入口（等同于按 B）。public 是为了被 console lambda 调到。 */
+	void TryOpenBackpackFromConsole();
+
 	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */
 	void PushMappingContext(UInputMappingContext* IMC, int32 Priority = 0);
 	void PopMappingContext(UInputMappingContext* IMC);
@@ -87,6 +118,23 @@ public:
 	/** 当前 Run 的 Session。BeginPlay 时自动创建并 Initialize。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	URunSession* GetRunSession() const { return RunSession; }
+
+	// ---- 候选交互对象（Stage 7 use-key 模型）----
+
+	/** Trigger 进入玩家 Sphere 时调用（由 BattleTriggerActor::HandleBeginOverlap）。 */
+	void RegisterCandidateTrigger(ABattleTriggerActor* Trigger);
+
+	/** Trigger 离开玩家 Sphere 或销毁时调用。 */
+	void UnregisterCandidateTrigger(ABattleTriggerActor* Trigger);
+
+	/** Console command 入口（IA_Interact 资产建好前的兜底）。 */
+	void TryInteractFromConsole();
+
+	/**
+	 * 候选 Trigger / GameFlowState 变化后刷新 ExplorationHUD 的 Toast。
+	 * GameMode 在 EnterBattle / ExitBattle 时调用。
+	 */
+	void RefreshInteractToast();
 
 protected:
 	virtual void BeginPlay() override;
@@ -105,6 +153,8 @@ protected:
 	void OnRestartPressed();
 	void OnRefreshHUDPressed();
 	void OnOpenMenuPressed();
+	void OnOpenBackpackPressed();
+	void OnInteractPressed();
 
 private:
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
@@ -115,4 +165,14 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSession = nullptr;
+
+	/**
+	 * 玩家当前在范围内的 BattleTriggerActor 列表。Sphere Begin/End Overlap 维护。
+	 * 按 IA_Interact 时挑距离玩家最近的一个调 TryActivate。
+	 */
+	UPROPERTY(Transient)
+	TArray<TWeakObjectPtr<ABattleTriggerActor>> CandidateTriggers;
+
+	/** 从候选列表中挑距离玩家最近的有效 Trigger。 */
+	ABattleTriggerActor* PickClosestCandidate() const;
 };

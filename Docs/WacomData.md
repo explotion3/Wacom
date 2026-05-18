@@ -60,9 +60,11 @@ class UCardDefinition : public UPrimaryDataAsset
 USTRUCT(BlueprintType)
 struct FCardPhysique
 {
-    UPROPERTY(EditDefaultsOnly) int32 MaxHpBonus = 0;     // 入战生命值上限加成
-    UPROPERTY(EditDefaultsOnly) int32 Durability = 0;     // 0 = 无耐久限制
-    UPROPERTY(EditDefaultsOnly) int32 BagCapacity = 0;    // 背包容量加成（第一阶段不读取）
+    UPROPERTY(EditDefaultsOnly) int32 MaxHpBonus = 0;     // 入战生命值上限加成（仅带 Companion 关键词的卡计入）
+    UPROPERTY(EditDefaultsOnly) int32 Durability = 0;     // 0 = 无耐久限制（第一阶段不使用）
+    UPROPERTY(EditDefaultsOnly) int32 Capacity = 0;       // GDD §11.2：容量字段
+                                                          //   0：普通卡，不贡献存放空间
+                                                          //   >0：容器卡，进入背包时贡献容量
 };
 ```
 
@@ -99,8 +101,11 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
     UPROPERTY(EditDefaultsOnly) int32             MaxHp = 0;
     UPROPERTY(EditDefaultsOnly) TArray<FIntentDefinition> IntentSequence; // 循环执行
     UPROPERTY(EditDefaultsOnly) int32             InitialIntentIndex = 0;
+    UPROPERTY(EditDefaultsOnly) int32             ExperienceReward = 0;  // GDD §3.3 部位被破坏给予玩家的经验值
 };
 ```
+
+蛇默认配置：Head=3 / Body=2 / Tail=2 经验。
 
 ### FIntentDefinition
 
@@ -135,14 +140,23 @@ class UCharacterDefinition : public UPrimaryDataAsset
 {
     UPROPERTY(EditDefaultsOnly) FName CharacterId;
     UPROPERTY(EditDefaultsOnly) FText DisplayName;
-    UPROPERTY(EditDefaultsOnly) int32 BaseMaxHp = 20;
+
+    // HP 上限规则（GDD §3.1 / §3.4）：
+    //   PlayerBaseMaxHp = FingerCount × HpPerFinger
+    //   战内 MaxHp = PlayerBaseMaxHp + Σ(备战卡组中带 Companion 关键词的卡的 MaxHpBonus)
+    UPROPERTY(EditDefaultsOnly) int32 FingerCount = 10;
+    UPROPERTY(EditDefaultsOnly) int32 HpPerFinger = 2;
+    int32 GetBasePlayerMaxHp() const;     // 返回 FingerCount * HpPerFinger
+
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> LeftHandCard;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> RightHandCard;
     UPROPERTY(EditDefaultsOnly) TArray<TObjectPtr<UCardDefinition>> StarterDeck; // 不含左右手
 };
 ```
 
-虫妹 `BaseMaxHp = 20`。算上初始卡组全部带入战斗的身材加成 `1+1+1+6+23 = 32`，战斗开始时最大 HP = `20 + 32 = 52`。
+虫妹 `FingerCount = 10`，`HpPerFinger = 2`，本体 HP = 20。
+算上初始卡组带 Companion 的卡 `1+1+1+6+23 = 32`，战斗开始时最大 HP = `20 + 32 = 52`。
+非 Companion 卡（武器/工具/中立）即便填了 `MaxHpBonus` 也不计入战内 MaxHp。
 
 ---
 
@@ -161,6 +175,9 @@ class UCharacterDefinition : public UPrimaryDataAsset
 | `Card.Keyword.Weapon` | `Card_Keyword_Weapon` | 武器 |
 | `Card.Keyword.Tool` | `Card_Keyword_Tool` | 工具 |
 | `Card.Keyword.Hand` | `Card_Keyword_Hand` | 手（左右手专属）|
+| `Card.Keyword.Exhaust` | `Card_Keyword_Exhaust` | 临时关键词：本卡打出后进消耗区 |
+| `Card.Keyword.BagProvider` | `Card_Keyword_BagProvider` | 容器卡：背包能力提供者（GDD §11.1 / §11.2）|
+| `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌能力提供者（GDD §11.7）。Backpack 至少一张此关键词卡 → 删牌功能可用。第一阶段 UI 不读，接口就位 |
 
 ### Card.Rarity
 
@@ -246,6 +263,39 @@ class UCharacterDefinition : public UPrimaryDataAsset
 | `Passive.Trigger.AfterPlayed` | `Passive_Trigger_AfterPlayed` | 本卡打出完成后 |
 | `Passive.Trigger.OnCompanionCount` | `Passive_Trigger_OnCompanionCount` | 全局 Companion 计数达阈值 |
 | `Passive.Trigger.OnTwilightTriggered` | `Passive_Trigger_OnTwilightTriggered` | 暮气施加成功时 |
+| `Passive.Trigger.OnTurnStart` | `Passive_Trigger_OnTurnStart` | 玩家回合开始时（Handler 注册，调用点未接入）|
+| `Passive.Trigger.OnTurnEnd` | `Passive_Trigger_OnTurnEnd` | 玩家回合结束时（Handler 注册，调用点未接入）|
+| `Passive.Trigger.OnDraw` | `Passive_Trigger_OnDraw` | 本卡被抽到手牌时（Handler 注册，调用点未接入）|
+| `Passive.Trigger.OnDiscard` | `Passive_Trigger_OnDiscard` | 本卡被弃掉时（Handler 注册，调用点未接入）|
+
+### CardLocation
+
+`Effect.Draw` 通过 `MetaTag` 指定源区域（默认 `CardLocation.Draw`）：
+
+| Tag | 代码名 | 说明 |
+|---|---|---|
+| `CardLocation.Draw` | `CardLocation_Draw` | 抽牌堆 |
+| `CardLocation.Discard` | `CardLocation_Discard` | 弃牌堆 |
+| `CardLocation.Exhaust` | `CardLocation_Exhaust` | 消耗区 |
+| `CardLocation.Hand` | `CardLocation_Hand` | 手牌 |
+
+### SkillSlot
+
+Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添加 `SkillSlot.*`。
+
+| Tag | 代码名 | 说明 |
+|---|---|---|
+| `SkillSlot.Placeholder` | `SkillSlot_Placeholder` | 占位（满 10 经验入账一个；不挂效果）|
+
+### Card.CapacityEffect
+
+容器卡的容量效果分类（GDD §11.2）。`FCardPhysique::CapacityEffect` 字段的取值，
+空 tag = A 类容器卡（无容量效果），有效 tag = B 类容器卡（特殊存放区按效果应用）。
+
+| Tag | 代码名 | 说明 |
+|---|---|---|
+| `Card.CapacityEffect.Placeholder` | `Card_CapacityEffect_Placeholder` | 占位 tag，早期 B 类骨架使用（已不再分配给具体卡）。具体卡定义后逐步替换为下列具体效果 tag。 |
+| `Card.CapacityEffect.WeaponDamagePlus3` | `Card_CapacityEffect_WeaponDamagePlus3` | 蛛茧绒囊（GDD §11.2 / Stage 4.5.2）。SpecialZone 内 `bBattleEnabledInSpecialZone == true` 且带 `Card.Keyword.Weapon` 关键词的入战 instance，其 `Effect.Damage` 最终结算 +3。 |
 
 ---
 

@@ -35,6 +35,21 @@ struct WACOMBATTLE_API FRuntimeCardInstance
 	UPROPERTY()
 	FGameplayTagContainer TemporaryKeywords;
 
+	/**
+	 * 本卡入战时携带的 CapacityEffect tag 集合。
+	 *
+	 * 来源（见 Stage 4.5 design §8 / R4.3）：
+	 *   - 来自 BattleDeck 原生位置的 instance：空集合。
+	 *   - 来自 SpecialZone 的 instance：单元素集合 `{ B 主卡.Physique.CapacityEffect }`。
+	 *
+	 * 由 `UBattleSession::Initialize` 从 `FBattleDeckEntry::CapacityEffectTags` 拷贝而来，
+	 * 战斗中只读，用于 `FCardEffectDispatcher` Damage 路径的 +3 修正等增量分支。
+	 *
+	 * 反射门槛：仅 UPROPERTY()，不暴露 Blueprint —— 战斗内核字段，不需要 WBP 直接读取。
+	 */
+	UPROPERTY()
+	FGameplayTagContainer CapacityEffectTags;
+
 	/** 本卡当前所在容器。由 BattleState 维护，非规则真相的扩展字段。 */
 	UPROPERTY()
 	ECardLocation Location = ECardLocation::Unknown;

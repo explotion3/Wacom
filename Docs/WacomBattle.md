@@ -361,7 +361,50 @@ WacomBattle/
 
 ---
 
-## §12 BattleState 结构
+## §12 战斗结束 / 同归于尽
+
+### 战斗结束判定
+
+`FBattleRules::CheckAndApplyBattleEnd` 在每次状态变更后被调用：
+
+- 敌方部位全死 + 玩家 HP > 0 → Outcome = **Victory**
+- 敌方部位全死 + 玩家 HP = 0 → Outcome = **Victory**，置 `BattleState.bMutualDestruction = true`（同归于尽，GDD §9.2）
+- 敌方未全死 + 玩家 HP = 0 → Outcome = **Defeat**
+
+任一情况都把 `Phase` 切到 `BattleEnd` 并发射 `BattleEnded` 事件。
+
+### 战内 → 战外回传
+
+战斗结束时 `UBattleSession::BuildResultPacket()` 构造 `FBattleResultPacket` 给 Run 层：
+
+| Packet 字段 | 来源 | Run 层处理 |
+|---|---|---|
+| `Outcome` | `BattleState.Outcome` | Victory 加击败列表 / Defeat 终止 Run |
+| `bCrossedHighHpThreshold` | `BattleState.bCrossedHighHpThreshold` | 伤口 +1%（Stage 6 已实现：玩家受伤后 `FBattleState::CheckHpThresholdsCrossed` 判跨越）|
+| `bCrossedLowHpThreshold` | `BattleState.bCrossedLowHpThreshold` | 伤口 +5%（同上，阈值默认 0.5 / 0.2）|
+| `bMutualDestruction` | `BattleState.bMutualDestruction` | 伤口 +10%；不影响 bRunActive |
+| `bWithdrawn` | `KnockdownChoices` 含 Withdraw | 撤离（GDD §6 / §10.5）：敌人不进 DefeatedEnemies、节点不变完成、写 BattleProgress |
+| `KnockdownExpGains[]` | `BattleState.PendingKnockdownExpGains` | Victory（含同归于尽 / 撤离）累加经验；Defeat 不结算 |
+| `KnockdownChoices[]` | `BattleState.PendingKnockdownChoices` | 玩家三选一选择列表（GDD §6）；Run 层第一阶段记日志，Stage 9 节点事件接入时按 Choice 分支处理 |
+| `DestroyedPartIds[]` | `BattleState.DestroyedPartIds` | 撤离时写 RunState.BattleProgress[TriggerId]；真胜利时清理 |
+
+每场战斗结束（含 Defeat）疲劳 +1%。
+
+`Outcome=Undetermined` 时不结算压力（异常路径 / 玩家取消）。
+
+### 部位破坏经验记账
+
+部位 HP 归零的瞬间（伤害命中 / 中毒结算）记一条 `FKnockdownExpGain` 到 `BattleState.PendingKnockdownExpGains`：
+
+- `PartId`：来自 `UEnemyPartDefinition::PartId`
+- `ExpAmount`：来自 `UEnemyPartDefinition::ExperienceReward`
+
+每个部位只记一次（在 `bDestroyed false → true` 边沿记账）。
+未填 `ExperienceReward` 的部位仍记一条 `ExpAmount=0`，让 Run 层有完整的"被破坏部位列表"，未来挂副作用更方便。
+
+---
+
+## §13 BattleState 结构
 
 ### 概览
 
@@ -375,9 +418,15 @@ BattleState
 │   ├── Phase（当前阶段）
 │   ├── TurnNumber
 │   ├── CurrentWaitValue（每回合重置为 2）
+│   ├── Outcome（BattleEnd 时填充）
 │   ├── StateVersion（每次命令后递增）
 │   ├── Rng（FRandomStream，确定性随机）
 │   └── CompanionPlayedCount（全局伙伴计数）
+├── 战内 → 战外回传 flag
+│   ├── bCrossedHighHpThreshold（GDD §3.2 / §10，Stage 6 已接入：CheckHpThresholdsCrossed）
+│   ├── bCrossedLowHpThreshold（同上）
+│   ├── bMutualDestruction（同归于尽；CheckAndApplyBattleEnd 维护）
+│   └── PendingKnockdownExpGains[]（部位破坏经验记账，GDD §3.3）
 ├── PlayerState
 │   ├── CurrentHp / MaxHp
 │   ├── Shield

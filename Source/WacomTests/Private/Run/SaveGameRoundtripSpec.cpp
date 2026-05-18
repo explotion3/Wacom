@@ -178,3 +178,175 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 
 	return true;
 }
+
+
+// =====================================================================================
+// Stage 4.5.0 task 4.7：SaveGame 升档与拒绝（SMOKE / EXAMPLE / EDGE_CASE）
+//
+// 覆盖 backpack-special-zone-stage-4-5 spec：
+//   - R7.1：UWacomSaveGame::CurrentSaveVersion 编译期为 2（SMOKE 静态断言）
+//   - R7.3 / R7.8a：v0 → v2 与 v1 → v2 迁移后新字段全部为空容器 + SaveVersion==2
+//   - R7.7 / R7.8d：SaveVersion = 3 → MigrateIfNeeded false 且 SaveVersion 不被改写
+//   - R7.4：v2 + 四数组全空 + 当前 Character.StarterDeck → 按 StarterDeck 重建路径
+//
+// SMOKE 静态断言放在文件作用域：UWacomSaveGame.h 自身已有 static_assert，本文件再放一份
+// 是为了在测试模块编译时也复检（spec task 4.7 明确要求）。两处任一失配都会触发编译错。
+// =====================================================================================
+
+static_assert(UWacomSaveGame::CurrentSaveVersion == 2,
+	"Stage 4.5.0 SaveGame 必须升到 v2（R7.1 / task 4.7 SMOKE）；"
+	"若改 CurrentSaveVersion，请同步更新 MigrateIfNeeded 迁移链与本文件断言。");
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunSaveGameMigrateAndRejectSpec,
+	"Wacom.Run.Save.MigrateAndReject",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunSaveGameMigrateAndRejectSpec::RunTest(const FString& /*Parameters*/)
+{
+	// ---- R7.3 / R7.8a：v0 → v2 迁移 ----
+	// 即便外部改档把 v0 档塞了脏数据，MigrateIfNeeded 也必须按 R7.3 把四个新数组清空。
+	{
+		TStrongObjectPtr<UWacomSaveGame> Sg(NewObject<UWacomSaveGame>());
+		Sg->SaveVersion = 0;
+
+		FCardInstanceSaveEntry JunkCard;
+		JunkCard.InstanceId = FGuid::NewGuid();
+		Sg->Backpack.Add(JunkCard);
+		Sg->BattleDeck.Add(JunkCard);
+		Sg->BurdenZone.Add(JunkCard);
+
+		FSpecialZoneSaveEntry JunkSz;
+		JunkSz.OwnerInstanceId = FGuid::NewGuid();
+		Sg->SpecialZones.Add(JunkSz);
+
+		const bool bMigrated = UWacomSaveGame::MigrateIfNeeded(Sg.Get());
+		TestTrue(TEXT("v0 → v2 迁移成功"), bMigrated);
+		TestEqual(TEXT("v0 → SaveVersion == 2"), Sg->SaveVersion, 2);
+		TestEqual(TEXT("v0 → Backpack 清空"), Sg->Backpack.Num(), 0);
+		TestEqual(TEXT("v0 → BattleDeck 清空"), Sg->BattleDeck.Num(), 0);
+		TestEqual(TEXT("v0 → BurdenZone 清空"), Sg->BurdenZone.Num(), 0);
+		TestEqual(TEXT("v0 → SpecialZones 清空"), Sg->SpecialZones.Num(), 0);
+	}
+
+	// ---- R7.3 / R7.8a：v1 → v2 迁移 ----
+	{
+		TStrongObjectPtr<UWacomSaveGame> Sg(NewObject<UWacomSaveGame>());
+		Sg->SaveVersion = 1;
+
+		FCardInstanceSaveEntry JunkCard;
+		JunkCard.InstanceId = FGuid::NewGuid();
+		Sg->Backpack.Add(JunkCard);
+		Sg->BattleDeck.Add(JunkCard);
+
+		const bool bMigrated = UWacomSaveGame::MigrateIfNeeded(Sg.Get());
+		TestTrue(TEXT("v1 → v2 迁移成功"), bMigrated);
+		TestEqual(TEXT("v1 → SaveVersion == 2"), Sg->SaveVersion, 2);
+		TestEqual(TEXT("v1 → Backpack 清空"), Sg->Backpack.Num(), 0);
+		TestEqual(TEXT("v1 → BattleDeck 清空"), Sg->BattleDeck.Num(), 0);
+		TestEqual(TEXT("v1 → BurdenZone 清空"), Sg->BurdenZone.Num(), 0);
+		TestEqual(TEXT("v1 → SpecialZones 清空"), Sg->SpecialZones.Num(), 0);
+	}
+
+	// ---- R7.7 / R7.8d：SaveVersion = 3（来自更新版本客户端）→ MigrateIfNeeded false ----
+	// 此外 SaveVersion 不应被改写（保持 3，便于上层日志诊断）。
+	{
+		TStrongObjectPtr<UWacomSaveGame> Sg(NewObject<UWacomSaveGame>());
+		Sg->SaveVersion = 3;
+
+		const bool bMigrated = UWacomSaveGame::MigrateIfNeeded(Sg.Get());
+		TestFalse(TEXT("v3（未来版本）拒绝迁移"), bMigrated);
+		TestEqual(TEXT("v3 SaveVersion 不被改写"), Sg->SaveVersion, 3);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunSaveGameStarterDeckRebuildSpec,
+	"Wacom.Run.Save.StarterDeckRebuild",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunSaveGameStarterDeckRebuildSpec::RunTest(const FString& /*Parameters*/)
+{
+	// ---- R7.4：v2 + 四数组全空 + 当前 Character.StarterDeck → 按 StarterDeck 重建 ----
+	//
+	// StarterDeck 含一张容器卡（Capacity > 0，进 Backpack）+ 两张普通卡（进 BattleDeck），
+	// 验证：
+	//   1) ApplySaveGameToRunState 返回 true
+	//   2) Backpack/BattleDeck 数量 + Definition 与 StarterDeck 分流一致
+	//   3) 每张 instance 的 InstanceId 非 zero GUID 且全表唯一
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* LH = Fx.MakeNoopCard(1);
+	UCardDefinition* RH = Fx.MakeNoopCard(1);
+
+	UCardDefinition* Container = Fx.MakeNoopCard(0);
+	Container->Physique.Capacity = 5;  // 容器卡 → Initialize / 重建路径都进 Backpack
+
+	UCardDefinition* Normal1 = Fx.MakeNoopCard(0);
+	UCardDefinition* Normal2 = Fx.MakeNoopCard(0);
+
+	TArray<UCardDefinition*> Deck = { Container, Normal1, Normal2 };
+	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
+
+	// 手动构造 v2 + 四数组全空 + 指向当前角色的 SaveGame，
+	// 模拟"v0/v1 迁移后"或"全新档"两种共同走 R7.4 重建路径的情形。
+	TStrongObjectPtr<UWacomSaveGame> Sg(NewObject<UWacomSaveGame>());
+	Sg->SaveVersion = UWacomSaveGame::CurrentSaveVersion;  // == 2
+	Sg->CharacterAssetPath = FSoftObjectPath(Char);
+	Sg->BattleSeed = 7;
+	Sg->bRunActive = true;
+	// Backpack / BattleDeck / BurdenZone / SpecialZones 保持默认空数组
+
+	TStrongObjectPtr<URunSession> Session(NewObject<URunSession>());
+	// 不预先 Initialize：Apply 内部会通过 SaveGame.CharacterAssetPath 加载 Character
+	// 并按 StarterDeck 重建（覆盖 R7.4 主路径）。
+	const bool bApplied = Session->ApplySaveGameToRunState(Sg.Get());
+	TestTrue(TEXT("v2 + 四数组全空 → ApplySaveGameToRunState 成功（R7.4）"), bApplied);
+	if (!bApplied) { return false; }
+
+	const FRunState& State = Session->GetRunState();
+
+	TestEqual(TEXT("Character roundtrip"), State.Character.Get(), Char);
+	TestEqual(TEXT("BattleSeed roundtrip"), State.BattleSeed, 7);
+	TestTrue(TEXT("bRunActive roundtrip"), State.bRunActive);
+
+	// 分流：容器卡进 Backpack，普通卡进 BattleDeck（与 Initialize 同源逻辑 R1.3 一致）
+	TestEqual(TEXT("Backpack 重建后含 1 张容器卡"), State.Backpack.Num(), 1);
+	TestEqual(TEXT("BattleDeck 重建后含 2 张普通卡"), State.BattleDeck.Num(), 2);
+
+	if (State.Backpack.Num() == 1)
+	{
+		TestEqual(TEXT("Backpack[0].Definition == Container"),
+			State.Backpack[0].Definition.Get(), Container);
+	}
+	if (State.BattleDeck.Num() == 2)
+	{
+		TestEqual(TEXT("BattleDeck[0].Definition == Normal1"),
+			State.BattleDeck[0].Definition.Get(), Normal1);
+		TestEqual(TEXT("BattleDeck[1].Definition == Normal2"),
+			State.BattleDeck[1].Definition.Get(), Normal2);
+	}
+
+	// InstanceId 全部合法 + 跨 zone 全表唯一（R7.2 不变量）
+	TSet<FGuid> SeenIds;
+	for (const FCardInstance& Inst : State.Backpack)
+	{
+		TestTrue(TEXT("Backpack instance.InstanceId 非 zero GUID"),
+			Inst.InstanceId.IsValid());
+		bool bAlreadyInSet = false;
+		SeenIds.Add(Inst.InstanceId, &bAlreadyInSet);
+		TestFalse(TEXT("Backpack instance.InstanceId 全表唯一"), bAlreadyInSet);
+	}
+	for (const FCardInstance& Inst : State.BattleDeck)
+	{
+		TestTrue(TEXT("BattleDeck instance.InstanceId 非 zero GUID"),
+			Inst.InstanceId.IsValid());
+		bool bAlreadyInSet = false;
+		SeenIds.Add(Inst.InstanceId, &bAlreadyInSet);
+		TestFalse(TEXT("BattleDeck instance.InstanceId 全表唯一"), bAlreadyInSet);
+	}
+
+	return true;
+}

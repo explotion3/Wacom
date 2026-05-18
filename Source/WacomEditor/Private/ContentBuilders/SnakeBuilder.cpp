@@ -71,6 +71,7 @@ namespace
 		FName PartId,
 		const FString& DisplayName,
 		int32 MaxHp,
+		int32 ExperienceReward,
 		TArray<FIntentDefinition> IntentSequence)
 	{
 		UPackage* Pkg = FindOrCreatePackage(PackagePath);
@@ -84,6 +85,7 @@ namespace
 		Part->MaxHp               = MaxHp;
 		Part->InitialIntentIndex  = 0;
 		Part->IntentSequence      = MoveTemp(IntentSequence);
+		Part->ExperienceReward    = ExperienceReward;
 
 		SaveAssetPackage(Pkg, Part, PackagePath);
 		return Part;
@@ -95,12 +97,14 @@ namespace Wacom::ContentBuilder
 	UEnemyDefinition* BuildSnakeContent()
 	{
 		// ---- 头 ----
+		// 经验奖励：Head=3 / Body=2 / Tail=2（GDD §3.3，头是核心，多给 1 点）
 		UEnemyPartDefinition* Head = BuildPart(
 			TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Head"),
 			TEXT("DA_Part_Snake_Head"),
 			TEXT("Snake.Head"),
 			TEXT("Snake Head"),
 			/*MaxHp*/ 16,
+			/*Exp*/ 3,
 			{
 				MakeIntent(TEXT("Snake.Head.Bite"),   TEXT("Bite"),   /*Initiative*/ 3, /*Resist*/ 6,
 				           { MakeDamage(6) }),
@@ -118,6 +122,7 @@ namespace Wacom::ContentBuilder
 			TEXT("Snake.Body"),
 			TEXT("Snake Body"),
 			/*MaxHp*/ 22,
+			/*Exp*/ 2,
 			{
 				MakeIntent(TEXT("Snake.Body.Constrict"), TEXT("Constrict"), 4, 0,
 				           { MakeSlowOnPlayer(1) }),
@@ -135,6 +140,7 @@ namespace Wacom::ContentBuilder
 			TEXT("Snake.Tail"),
 			TEXT("Snake Tail"),
 			/*MaxHp*/ 10,
+			/*Exp*/ 2,
 			{
 				MakeIntent(TEXT("Snake.Tail.Sweep"), TEXT("Sweep"), 1, 3,
 				           { MakeDamage(3) }),

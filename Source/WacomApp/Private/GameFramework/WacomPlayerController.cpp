@@ -7,6 +7,7 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 
+#include "Actors/BattleTriggerActor.h"
 #include "GameFramework/WacomGameMode.h"
 #include "RunSession.h"
 #include "Characters/CharacterDefinition.h"
@@ -15,11 +16,16 @@
 #include "UI/Battle/BattleHUD.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "UI/Foundation/WacomExplorationHUD.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
+#include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
+
+#define LOCTEXT_NAMESPACE "WacomPlayerController"
 
 namespace
 {
@@ -78,6 +84,17 @@ void AWacomPlayerController::BeginPlay()
 					TEXT("[WacomPlayerController] RunSession 初始化失败：DefaultCharacter 为空"));
 			}
 		}
+
+		// MVVM：把 RunSession 绑到 RunViewModelProvider Subsystem，
+		// ViewModel 立刻同步当前 RunState 字段。即便 RunSession::Initialize 失败也调，
+		// Provider 内部会安全处理（找不到 RunSession 就跳过）。
+		if (UGameInstance* GI = GetGameInstance())
+		{
+			if (UWacomRunViewModelProvider* Provider = GI->GetSubsystem<UWacomRunViewModelProvider>())
+			{
+				Provider->BindToPlayerController(this);
+			}
+		}
 	}
 	else
 	{
@@ -111,6 +128,8 @@ void AWacomPlayerController::SetupInputComponent()
 	LazyLoadIA(IA_Restart,    TEXT("/Game/Wacom/Input/IA_Restart.IA_Restart"));
 	LazyLoadIA(IA_RefreshHUD, TEXT("/Game/Wacom/Input/IA_RefreshHUD.IA_RefreshHUD"));
 	LazyLoadIA(IA_OpenMenu,   TEXT("/Game/Wacom/Input/IA_OpenMenu.IA_OpenMenu"));
+	LazyLoadIA(IA_OpenBackpack, TEXT("/Game/Wacom/Input/IA_OpenBackpack.IA_OpenBackpack"));
+	LazyLoadIA(IA_Interact,     TEXT("/Game/Wacom/Input/IA_Interact.IA_Interact"));
 
 	if (IA_PlayCard1) { EIC->BindAction(IA_PlayCard1, ETriggerEvent::Started, this, &AWacomPlayerController::OnPlayCard1); }
 	if (IA_PlayCard2) { EIC->BindAction(IA_PlayCard2, ETriggerEvent::Started, this, &AWacomPlayerController::OnPlayCard2); }
@@ -125,6 +144,8 @@ void AWacomPlayerController::SetupInputComponent()
 	if (IA_Restart)    { EIC->BindAction(IA_Restart,    ETriggerEvent::Started, this, &AWacomPlayerController::OnRestartPressed); }
 	if (IA_RefreshHUD) { EIC->BindAction(IA_RefreshHUD, ETriggerEvent::Started, this, &AWacomPlayerController::OnRefreshHUDPressed); }
 	if (IA_OpenMenu)   { EIC->BindAction(IA_OpenMenu,   ETriggerEvent::Started, this, &AWacomPlayerController::OnOpenMenuPressed); }
+	if (IA_OpenBackpack) { EIC->BindAction(IA_OpenBackpack, ETriggerEvent::Started, this, &AWacomPlayerController::OnOpenBackpackPressed); }
+	if (IA_Interact)     { EIC->BindAction(IA_Interact,     ETriggerEvent::Started, this, &AWacomPlayerController::OnInteractPressed); }
 }
 
 // ================ 战斗状态切换转发 ================
@@ -269,3 +290,234 @@ void AWacomPlayerController::OnOpenMenuPressed()
 		UWacomPauseMenuScreen::StaticClass());
 	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 打开暂停菜单"));
 }
+
+// ================ 背包入口（Stage 4.2） ================
+
+namespace
+{
+	/**
+	 * 找到第一个本地 AWacomPlayerController。
+	 * 用于 console command（无 PC 上下文）。
+	 */
+	AWacomPlayerController* FindLocalWacomPC(UWorld* World)
+	{
+		if (!World) { return nullptr; }
+		for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (AWacomPlayerController* WPC = Cast<AWacomPlayerController>(It->Get()))
+			{
+				return WPC;
+			}
+		}
+		return nullptr;
+	}
+}
+
+void AWacomPlayerController::OnOpenBackpackPressed()
+{
+	TryOpenBackpackFromConsole();
+}
+
+// ================ 候选 Trigger（Stage 7 use-key 模型）================
+
+void AWacomPlayerController::RegisterCandidateTrigger(ABattleTriggerActor* Trigger)
+{
+	if (!Trigger) { return; }
+	// 避免重复
+	for (const TWeakObjectPtr<ABattleTriggerActor>& Weak : CandidateTriggers)
+	{
+		if (Weak.Get() == Trigger) { return; }
+	}
+	CandidateTriggers.Add(Trigger);
+	RefreshInteractToast();
+}
+
+void AWacomPlayerController::UnregisterCandidateTrigger(ABattleTriggerActor* Trigger)
+{
+	const int32 NumRemoved = CandidateTriggers.RemoveAllSwap(
+		[Trigger](const TWeakObjectPtr<ABattleTriggerActor>& Weak)
+		{
+			return !Weak.IsValid() || Weak.Get() == Trigger;
+		});
+	if (NumRemoved > 0)
+	{
+		RefreshInteractToast();
+	}
+}
+
+ABattleTriggerActor* AWacomPlayerController::PickClosestCandidate() const
+{
+	APawn* OwnedPawn = GetPawn();
+	if (!OwnedPawn) { return nullptr; }
+	const FVector PlayerLoc = OwnedPawn->GetActorLocation();
+
+	ABattleTriggerActor* Best = nullptr;
+	float BestSqDist = TNumericLimits<float>::Max();
+	for (const TWeakObjectPtr<ABattleTriggerActor>& Weak : CandidateTriggers)
+	{
+		ABattleTriggerActor* T = Weak.Get();
+		if (!T) { continue; }
+		const float SqDist = FVector::DistSquared(T->GetActorLocation(), PlayerLoc);
+		if (SqDist < BestSqDist)
+		{
+			BestSqDist = SqDist;
+			Best       = T;
+		}
+	}
+	return Best;
+}
+
+void AWacomPlayerController::RefreshInteractToast()
+{
+	// 只在探索状态显示 Toast；战斗中即便候选列表非空也不显示。
+	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	const bool bExploration = GM && GM->GetGameFlowState() == EGameFlowState::Exploration;
+
+	UGameInstance* GI = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+	UWacomPrimaryGameLayout* Layout = UIManager ? UIManager->GetPrimaryLayout() : nullptr;
+	if (!Layout) { return; }
+
+	UCommonActivatableWidgetStack* GameStack = Layout->GetLayerStack(
+		WacomUITags::UI_Layer_Game.GetTag());
+	UWacomExplorationHUD* HUD = GameStack
+		? Cast<UWacomExplorationHUD>(GameStack->GetActiveWidget())
+		: nullptr;
+	if (!HUD) { return; }
+
+	// 候选列表里至少有一个活的 Trigger 才显示
+	bool bHasCandidate = false;
+	for (const TWeakObjectPtr<ABattleTriggerActor>& Weak : CandidateTriggers)
+	{
+		if (Weak.IsValid()) { bHasCandidate = true; break; }
+	}
+
+	HUD->SetInteractToastVisible(
+		bExploration && bHasCandidate,
+		LOCTEXT("InteractHint", "按 E 战斗"));
+}
+
+void AWacomPlayerController::OnInteractPressed()
+{
+	TryInteractFromConsole();
+}
+
+void AWacomPlayerController::TryInteractFromConsole()
+{
+	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	if (!GM || GM->GetGameFlowState() != EGameFlowState::Exploration)
+	{
+		return;
+	}
+
+	ABattleTriggerActor* Best = PickClosestCandidate();
+	if (!Best)
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] Interact: 没有候选 Trigger"));
+		return;
+	}
+	Best->TryActivate(this);
+}
+
+void AWacomPlayerController::TryOpenBackpackFromConsole()
+{
+	// 只在探索 GameMode 下允许打开（战斗 IMC 也不绑这个 IA，多一层防御）
+	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	if (!GM)
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenBackpack: 非探索 GameMode，忽略"));
+		return;
+	}
+	if (GM->GetGameFlowState() != EGameFlowState::Exploration)
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenBackpack: 当前不在探索状态，忽略"));
+		return;
+	}
+
+	UGameInstance* GI = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+	if (!UIManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenBackpack: UIManager 未就位"));
+		return;
+	}
+
+	// 已经有 GameMenu 顶层 widget（暂停菜单 / 背包）→ 切换关闭语义交给调用方（B 不二开）
+	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
+	if (Layout)
+	{
+		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
+			WacomUITags::UI_Layer_GameMenu.GetTag());
+		if (MenuStack && MenuStack->GetActiveWidget())
+		{
+			MenuStack->GetActiveWidget()->DeactivateWidget();
+			UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 关闭 GameMenu 顶层"));
+			return;
+		}
+	}
+
+	if (!BackpackScreenClass)
+	{
+		BackpackScreenClass = UWacomBackpackScreen::StaticClass();
+	}
+
+	UIManager->PushContentToLayer(
+		WacomUITags::UI_Layer_GameMenu.GetTag(),
+		BackpackScreenClass);
+	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 打开背包"));
+}
+
+// ---- Console Commands（B 键 IA 资产建好前的临时入口）----
+
+static FAutoConsoleCommandWithWorld GWacomOpenBackpackCmd(
+	TEXT("Wacom.OpenBackpack"),
+	TEXT("打开背包界面（探索 GameMode 才生效）。"),
+	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+	{
+		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))
+		{
+			WPC->TryOpenBackpackFromConsole();
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Wacom.OpenBackpack] 找不到 AWacomPlayerController"));
+		}
+	}));
+
+static FAutoConsoleCommandWithWorld GWacomCloseBackpackCmd(
+	TEXT("Wacom.CloseBackpack"),
+	TEXT("关闭 GameMenu 层最顶上的背包界面。"),
+	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+	{
+		if (!World) { return; }
+		UGameInstance* GI = World->GetGameInstance();
+		UWacomGameUIManagerSubsystem* UIManager =
+			GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+		if (!UIManager) { return; }
+
+		UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
+		if (!Layout) { return; }
+
+		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
+			WacomUITags::UI_Layer_GameMenu.GetTag());
+		if (MenuStack && MenuStack->GetActiveWidget())
+		{
+			MenuStack->GetActiveWidget()->DeactivateWidget();
+		}
+	}));
+
+static FAutoConsoleCommandWithWorld GWacomInteractCmd(
+	TEXT("Wacom.Interact"),
+	TEXT("在 BattleTriggerActor 范围内时触发战斗（IA_Interact 资产建好前的兜底）。"),
+	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+	{
+		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))
+		{
+			WPC->TryInteractFromConsole();
+		}
+	}));
+
+#undef LOCTEXT_NAMESPACE
+

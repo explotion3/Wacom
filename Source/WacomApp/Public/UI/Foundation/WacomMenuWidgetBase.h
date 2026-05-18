@@ -39,6 +39,7 @@ public:
 
 protected:
 	virtual void NativeOnActivated() override;
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** 激活期间期望的输入配置：UIOnly + NoCapture（鼠标可见）。 */
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;

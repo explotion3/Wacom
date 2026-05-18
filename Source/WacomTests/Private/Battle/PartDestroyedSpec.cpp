@@ -59,6 +59,15 @@ bool FWacomBattlePartDestroyedSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("BodyInit == 6"),     FWacomBattleFixture::FindPartInitiative(Snap, 1), 6);
 	TestEqual(TEXT("TailInit == 6"),     FWacomBattleFixture::FindPartInitiative(Snap, 2), 6);
 
+	// Stage 7：部位破坏后弹击倒事件，需要玩家选一个非撤离选项才能继续战斗。
+	// 测试场景里左右手都在手牌（LH/RH 是 NoopCard 且未打出），选援助即可。
+	TestTrue(TEXT("Phase pending knockdown"),
+		S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+	TestTrue(TEXT("Aid OK"),
+		S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
+	TestTrue(TEXT("Phase back to PlayerAction"),
+		S->GetPhase() == EBattlePhase::PlayerAction);
+
 	// 再打 Light（Cost=1）：Head 已破坏，先机不变；Body/Tail -1 = 5。
 	TestTrue(TEXT("PlayLight"), S->SubmitCommand(FBattleCommand::MakePlayCard(LightId, Body)).IsOk());
 	Snap = S->BuildSnapshot();

@@ -8,6 +8,7 @@
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Deck/DeckService.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEventBus.h"
 #include "Hand/HandZoneService.h"
 #include "Runtime/RuntimeCardInstance.h"
@@ -95,6 +96,7 @@ namespace
 		if (Remaining > 0)
 		{
 			State.Player.CurrentHp = FMath::Max(0, State.Player.CurrentHp - Remaining);
+			State.CheckHpThresholdsCrossed();
 		}
 
 		FBattleEvent Ev;
@@ -137,10 +139,11 @@ namespace
 			Part->bDestroyed        = true;
 			Part->CurrentInitiative = 0;
 
-			FBattleEvent EmptyEv;
-			EmptyEv.Type            = EBattleEventType::EnemyPartHpEmptied;
-			EmptyEv.ActorInstanceId = Part->InstanceId;
-			Ctx.Events->Emit(EmptyEv);
+			// 统一处理：发事件 + 经验 + DestroyedPartIds + 击倒事件队列（GDD §3.3 / §6 / §10.5）
+			// 传当前卡实例 ID：让击倒选项排除"正在被打出的左/右手 anchor"
+			const FGuid InflictedByCardId =
+				(Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
+			Ctx.State->RecordPartDestroyed(*Part, *Ctx.Events, InflictedByCardId);
 		}
 	}
 

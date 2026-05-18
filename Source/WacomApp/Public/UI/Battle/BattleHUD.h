@@ -95,6 +95,15 @@ public:
 	void CancelTargetSelect();
 
 	/**
+	 * 击倒事件 dialog 的选择入口（GDD §6）。
+	 * dialog 不直接调 Session->SubmitCommand，而是走这里，
+	 * 让 HUD 在提交后统一调 AfterCommand（事件消费 + Snapshot 刷新 + BattleEnd 广播）。
+	 * 与 OnWaitRequested / OnEndTurnRequested 对称。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	void OnKnockdownChoiceSelected(EKnockdownChoice Choice);
+
+	/**
 	 * 战斗结束时广播（保证只广播一次）。
 	 * GameMode 绑定这个来触发 ExitBattle。
 	 */

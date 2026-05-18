@@ -11,6 +11,7 @@
 #include "Tags/WacomGameplayTags.h"
 
 #include "Cards/CardEffect.h"
+#include "Cards/CardDefinition.h"
 
 namespace
 {
@@ -138,6 +139,23 @@ void FCardEffectDispatcher::Execute(
 			FinalMag *= Mod.Value;
 			break;
 		}
+	}
+
+	if (Effect.EffectType == WacomTags::Effect_Damage)
+	{
+		if (const int32* SelfIdx = State.Cards.CardIndexById.Find(SelfCardId))
+		{
+			const FRuntimeCardInstance& Self = State.Cards.AllCards[*SelfIdx];
+			if (Self.Definition
+				&& Self.Definition->Keywords.HasTagExact(WacomTags::Card_Keyword_Weapon)
+				&& Self.CapacityEffectTags.HasTagExact(WacomTags::Card_CapacityEffect_WeaponDamagePlus3))
+			{
+				// Stage 4.5.2: cross-cutting CapacityEffect 修正放在 Dispatcher，
+				// 确保主效果、完美释放、ZoneHook ExtraEffects 共用同一 Damage 路径。
+				FinalMag += 3;
+			}
+		}
+		FinalMag = FMath::Max(0, FinalMag);
 	}
 
 	// AllEnemyParts：展开到每个存活部位。

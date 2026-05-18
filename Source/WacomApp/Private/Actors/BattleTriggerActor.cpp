@@ -35,7 +35,7 @@ void ABattleTriggerActor::BeginPlay()
 	}
 	else
 	{
-		// 关卡级 id 唯一性检查：如果场景里已存在同 id Actor 且已经 BeginPlay，报错。
+		// 关卡级 id 唯一性检查
 		for (TActorIterator<ABattleTriggerActor> It(GetWorld()); It; ++It)
 		{
 			ABattleTriggerActor* Other = *It;
@@ -52,7 +52,7 @@ void ABattleTriggerActor::BeginPlay()
 			}
 		}
 
-		// 已被销毁过：直接 Destroy 并退出。
+		// 已被销毁过：直接 Destroy
 		if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 		{
 			if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
@@ -78,6 +78,8 @@ void ABattleTriggerActor::BeginPlay()
 		TriggerSphere->SetSphereRadius(TriggerRadius);
 		TriggerSphere->OnComponentBeginOverlap.AddDynamic(
 			this, &ABattleTriggerActor::HandleBeginOverlap);
+		TriggerSphere->OnComponentEndOverlap.AddDynamic(
+			this, &ABattleTriggerActor::HandleEndOverlap);
 	}
 
 	if (!EnemyDef)
@@ -88,6 +90,20 @@ void ABattleTriggerActor::BeginPlay()
 	}
 }
 
+void ABattleTriggerActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// Trigger 销毁前从 PC 候选列表里反注册，避免悬空指针。
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+	{
+		if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
+		{
+			WacomPC->UnregisterCandidateTrigger(this);
+		}
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void ABattleTriggerActor::HandleBeginOverlap(UPrimitiveComponent* /*OverlappedComp*/,
 	AActor* OtherActor,
 	UPrimitiveComponent* /*OtherComp*/,
@@ -95,31 +111,46 @@ void ABattleTriggerActor::HandleBeginOverlap(UPrimitiveComponent* /*OverlappedCo
 	bool /*bFromSweep*/,
 	const FHitResult& /*SweepResult*/)
 {
-	if (bTriggered) { return; }
-	if (!OtherActor) { return; }
-	if (!EnemyDef)   { return; }
+	if (!OtherActor || !EnemyDef) { return; }
 
-	// 只接受被 Player 控制的 Pawn。
 	APawn* Pawn = Cast<APawn>(OtherActor);
 	if (!Pawn) { return; }
 
 	AWacomPlayerController* PC = Cast<AWacomPlayerController>(Pawn->GetController());
 	if (!PC) { return; }
 
+	PC->RegisterCandidateTrigger(this);
+}
+
+void ABattleTriggerActor::HandleEndOverlap(UPrimitiveComponent* /*OverlappedComp*/,
+	AActor* OtherActor,
+	UPrimitiveComponent* /*OtherComp*/,
+	int32 /*OtherBodyIndex*/)
+{
+	if (!OtherActor) { return; }
+
+	APawn* Pawn = Cast<APawn>(OtherActor);
+	if (!Pawn) { return; }
+
+	AWacomPlayerController* PC = Cast<AWacomPlayerController>(Pawn->GetController());
+	if (!PC) { return; }
+
+	PC->UnregisterCandidateTrigger(this);
+}
+
+void ABattleTriggerActor::TryActivate(AWacomPlayerController* PC)
+{
+	if (!PC) { return; }
+	if (!EnemyDef)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[BattleTriggerActor] %s: TryActivate 时 EnemyDef 仍为空"), *GetName());
+		return;
+	}
+
 	UE_LOG(LogTemp, Display,
 		TEXT("[BattleTriggerActor] %s 触发战斗：EnemyDef=%s"),
-		*GetName(),
-		*GetNameSafe(EnemyDef));
-
-	if (bConsumeOnTrigger)
-	{
-		bTriggered = true;
-		// 先关掉 Overlap 事件避免重入；Destroy 留给 GameMode::ExitBattle 统一处理。
-		if (TriggerSphere)
-		{
-			TriggerSphere->SetGenerateOverlapEvents(false);
-		}
-	}
+		*GetName(), *GetNameSafe(EnemyDef));
 
 	PC->RequestEnterBattle(EnemyDef, this);
 }

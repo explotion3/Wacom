@@ -1,0 +1,434 @@
+// Copyright Wacom. All Rights Reserved.
+
+#include "Fixtures/BattleTestFixtures.h"
+#include "Misc/AutomationTest.h"
+
+#include "Cards/CardDefinition.h"
+#include "Cards/CardEffect.h"
+#include "Characters/CharacterDefinition.h"
+#include "Commands/BattleCommand.h"
+#include "Events/BattleEvent.h"
+#include "Session/BattleSession.h"
+#include "Session/BattleResultPacket.h"
+#include "Snapshots/BattleSnapshot.h"
+#include "Tags/WacomGameplayTags.h"
+#include "Types/WacomEnums.h"
+
+#include "UObject/StrongObjectPtr.h"
+#include "RunSession.h"
+#include "RunState.h"
+
+/**
+ * Stage 7：击倒事件三选一（GDD §6 / §10.5）。
+ *
+ * 验证：
+ *   - 部位 HP 归零后 Phase 切到 PendingKnockdownChoice
+ *   - 撤离 → BattleEnd Outcome=Victory + bWithdrawn
+ *   - 援助 → 战斗继续（多部位时仍非空时维持 Pending；单部位时进 BattleEnd）
+ *   - 左右手已打出时 Aid/Destroy 不可选
+ *   - 一次行动多部位破坏 → 逐个弹 dialog
+ *   - RunSession 撤离写 BattleProgress；真胜利清 BattleProgress
+ *   - 第二次进同一战斗 PreDestroyedPartIds 应用为预破坏
+ */
+
+namespace
+{
+	UCharacterDefinition* MakeStandardChar(FWacomBattleFixture& Fx,
+		UCardDefinition** OutKiller = nullptr, UCardDefinition** OutLight = nullptr)
+	{
+		UCardDefinition* LH = Fx.MakeNoopCard(0);
+		UCardDefinition* RH = Fx.MakeNoopCard(0);
+		UCardDefinition* Killer = Fx.MakeSimpleDamageCard(/*Cost*/0, /*Dmg*/100);
+		UCardDefinition* Light  = Fx.MakeSimpleDamageCard(/*Cost*/0, /*Dmg*/1);
+		if (OutKiller) { *OutKiller = Killer; }
+		if (OutLight)  { *OutLight  = Light; }
+
+		TArray<UCardDefinition*> Deck = { Killer, Light };
+		for (int32 i = 0; i < 5; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
+		return Fx.MakeCharacter(LH, RH, Deck);
+	}
+}
+
+// ================ 部位破坏后切到 PendingKnockdownChoice ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoicePhaseSpec,
+	"Wacom.Battle.Knockdown.PhaseSwitchesOnPartDestroyed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoicePhaseSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+
+	// 三部位敌人：Head/Body/Tail HP=50，Head 先打死会有击倒事件
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+
+	TestTrue(TEXT("Phase 起始 PlayerAction"), S->GetPhase() == EBattlePhase::PlayerAction);
+
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+
+	TestTrue(TEXT("部位破坏后 Phase 切到 PendingKnockdownChoice"),
+		S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+
+	return true;
+}
+
+// ================ 撤离结束战斗 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceWithdrawSpec,
+	"Wacom.Battle.Knockdown.WithdrawEndsBattle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceWithdrawSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+
+	TestTrue(TEXT("撤离后 Phase=BattleEnd"), S->GetPhase() == EBattlePhase::BattleEnd);
+	TestTrue(TEXT("Outcome=Victory"),         S->BuildSnapshot().Outcome == EBattleOutcome::Victory);
+
+	const FBattleResultPacket P = S->BuildResultPacket();
+	TestTrue(TEXT("packet.bWithdrawn=true"),  P.bWithdrawn);
+	TestEqual(TEXT("DestroyedPartIds 1 项"),  P.DestroyedPartIds.Num(), 1);
+	TestEqual(TEXT("KnockdownChoices 1 项"),  P.KnockdownChoices.Num(), 1);
+
+	return true;
+}
+
+// ================ 援助战斗继续（多部位） ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceAidContinuesSpec,
+	"Wacom.Battle.Knockdown.AidContinuesBattleInMultiPartFight",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceAidContinuesSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+
+	// 三部位敌人，Head 50 / Body 50 / Tail 50
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+
+	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	TestTrue(TEXT("Aid 后回到 PlayerAction（敌人未全死）"),
+		S->GetPhase() == EBattlePhase::PlayerAction);
+
+	return true;
+}
+
+// ================ 左手已打出 → Aid 不可选 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceAidUnavailableWhenLeftHandPlayedSpec,
+	"Wacom.Battle.Knockdown.AidRejectedWhenLeftHandPlayed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceAidUnavailableWhenLeftHandPlayedSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* LH = Fx.MakeNoopCard(0);
+	UCardDefinition* RH = Fx.MakeNoopCard(0);
+	UCardDefinition* Killer = Fx.MakeSimpleDamageCard(0, 100);
+
+	TArray<UCardDefinition*> Deck = { Killer };
+	for (int32 i = 0; i < 5; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
+	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Head    = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId= FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+	const FGuid LHId    = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, LH->CardId);
+
+	// 先打出左手（无目标）
+	S->SubmitCommand(FBattleCommand::MakePlayCard(LHId, FGuid()));
+	// 再打死 Head
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+
+	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+
+	// Aid 应被拒
+	const FWacomStatus AidStatus = S->SubmitCommand(
+		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	TestFalse(TEXT("左手已打出，Aid 拒绝"), AidStatus.IsOk());
+
+	// Withdraw 应该可以
+	const FWacomStatus WithdrawStatus = S->SubmitCommand(
+		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+	TestTrue(TEXT("Withdraw 始终可用"), WithdrawStatus.IsOk());
+
+	return true;
+}
+
+// ================ 用左/右手 anchor 直接打死部位 → 对应分支不可选 ================
+// 部位破坏时，触发本次破坏的 anchor 仍在 Hand 数组（"卡牌离开手牌"在 §3 第 9 步），
+// 但应视为"已经离开手牌"。RecordPartDestroyed 的 InflictedByCardId 参数负责排除。
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceAnchorAsKillerExcludedSpec,
+	"Wacom.Battle.Knockdown.AnchorAsKillerExcludedFromChoice",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceAnchorAsKillerExcludedSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* LH = Fx.MakeNoopCard(0);
+	// 右手就是杀手卡：cost 0 + 100 伤害
+	UCardDefinition* RH = Fx.MakeSimpleDamageCard(0, 100);
+
+	TArray<UCardDefinition*> Deck;
+	for (int32 i = 0; i < 5; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
+	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid RHId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, RH->CardId);
+
+	// 用右手 anchor 直接打死 Head
+	S->SubmitCommand(FBattleCommand::MakePlayCard(RHId, Head));
+	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+
+	// Destroy 应被拒（右手就是这次的杀手）
+	const FWacomStatus DestroyStatus = S->SubmitCommand(
+		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Destroy));
+	TestFalse(TEXT("右手就是杀手，Destroy 拒绝"), DestroyStatus.IsOk());
+
+	// Aid 应该可以（左手仍在）
+	const FWacomStatus AidStatus = S->SubmitCommand(
+		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	TestTrue(TEXT("左手仍可援助"), AidStatus.IsOk());
+
+	return true;
+}
+
+// ================ 撤离持久化 + 重入恢复 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceWithdrawPersistsProgressSpec,
+	"Wacom.Battle.Knockdown.WithdrawPersistsThenReentryRestoresDestroyed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+
+	// 用 RunSession 接收战斗结果，模拟完整闭环
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	// 第一场战斗：撤离前击倒 Head
+	{
+		FBattleInitParams Params;
+		Params.Character = Char;
+		Params.Enemy     = Enemy;
+		// 第一次进入 → 没有 BattleProgress，PreDestroyedPartIds 应为空
+
+		UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+		const FBattleSnapshot Snap0 = S->BuildSnapshot();
+		const FGuid Head    = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+		const FGuid KillerId= FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+
+		S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+		S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+
+		const FBattleResultPacket Packet = S->BuildResultPacket();
+		Run->OnBattleFinishedFromTrigger(Packet, Enemy, FName(TEXT("TestTrigger")));
+
+		// BattleProgress 应该有 TestTrigger 的进度
+		TestTrue(TEXT("BattleProgress 含 TestTrigger"),
+			Run->GetRunState().BattleProgress.Contains(FName(TEXT("TestTrigger"))));
+		TestEqual(TEXT("DestroyedPartIds 1 项"),
+			Run->GetRunState().BattleProgress[FName(TEXT("TestTrigger"))].DestroyedPartIds.Num(), 1);
+	}
+
+	// 第二场战斗（重入同一 Trigger）：BuildInitParamsForBattle 应灌入 PreDestroyedPartIds
+	{
+		FBattleInitParams Params;
+		const bool bOk = Run->BuildInitParamsForBattle(Enemy, FName(TEXT("TestTrigger")), Params);
+		TestTrue(TEXT("BuildInitParams"), bOk);
+		TestEqual(TEXT("PreDestroyedPartIds 1 项"), Params.PreDestroyedPartIds.Num(), 1);
+	}
+
+	return true;
+}
+
+// ================ 真胜利清 BattleProgress ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceVictoryClearsProgressSpec,
+	"Wacom.Battle.Knockdown.VictoryClearsBattleProgress",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceVictoryClearsProgressSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(50, 7, 0);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	// 先模拟一次撤离写入 BattleProgress
+	{
+		FBattleProgressSnapshot FakeProgress;
+		FakeProgress.DestroyedPartIds.Add(FName(TEXT("Test.Part.Solo")));
+		FRunState* RunStateMut = const_cast<FRunState*>(&Run->GetRunState());
+		RunStateMut->BattleProgress.Add(FName(TEXT("TestTrigger")), FakeProgress);
+	}
+
+	// 真胜利
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Solo = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Solo));
+	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+
+	const FBattleResultPacket Packet = S->BuildResultPacket();
+	TestFalse(TEXT("非撤离"), Packet.bWithdrawn);
+
+	Run->OnBattleFinishedFromTrigger(Packet, Enemy, FName(TEXT("TestTrigger")));
+	TestFalse(TEXT("真胜利后 BattleProgress 清理"),
+		Run->GetRunState().BattleProgress.Contains(FName(TEXT("TestTrigger"))));
+
+	return true;
+}
+
+// ================ 多部位同时破坏 → 逐个发 KnockdownChoiceRequested ================
+// 回归用：一张 AllEnemyParts 伤害卡一次性打死 N 个部位时，
+// 必须连续发出 N 条 KnockdownChoiceRequested 让 UI 顺序 push N 个 dialog。
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceMultiPartSequenceSpec,
+	"Wacom.Battle.Knockdown.MultiPartDestroyedTriggersSequentialRequests",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceMultiPartSequenceSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	// 一张 AllEnemyParts 高伤卡一次打死三个部位
+	UCardDefinition* Aoe = Fx.MakeNoopCard(/*Cost*/0);
+	{
+		FCardEffect Eff;
+		Eff.EffectType = WacomTags::Effect_Damage;
+		Eff.Magnitude  = 100;
+		Eff.Target     = WacomTags::Target_AllEnemyParts;
+		Aoe->Effects.Add(Eff);
+	}
+
+	UCardDefinition* LH = Fx.MakeNoopCard(0);
+	UCardDefinition* RH = Fx.MakeNoopCard(0);
+	TArray<UCardDefinition*> Deck = { Aoe };
+	for (int32 i = 0; i < 5; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
+	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid AoeId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Aoe->CardId);
+
+	// 打出 AoE 卡，目标随便给 part0（AllEnemyParts 不依赖 TargetInstanceId）
+	const FGuid Part0 = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	S->SubmitCommand(FBattleCommand::MakePlayCard(AoeId, Part0));
+
+	// 出牌后应进入 PendingKnockdownChoice 阶段
+	TestTrue(TEXT("AoE 后 Phase=PendingKnockdownChoice"),
+		S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+
+	// 这一波事件里应有 1 条 KnockdownChoiceRequested（首次入队时由 Session 末尾发）
+	{
+		TArray<FBattleEvent> Events = S->ConsumeEvents();
+		int32 RequestCount = 0;
+		for (const FBattleEvent& E : Events)
+		{
+			if (E.Type == EBattleEventType::KnockdownChoiceRequested) { ++RequestCount; }
+		}
+		TestEqual(TEXT("首条 Request 已发"), RequestCount, 1);
+	}
+
+	// 第一次 Aid → 队列还剩 2 条 → Resolver 必须再发一条 Request
+	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	TestTrue(TEXT("仍 Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+	{
+		TArray<FBattleEvent> Events = S->ConsumeEvents();
+		int32 RequestCount = 0;
+		for (const FBattleEvent& E : Events)
+		{
+			if (E.Type == EBattleEventType::KnockdownChoiceRequested) { ++RequestCount; }
+		}
+		TestEqual(TEXT("Aid 后再发一条 Request"), RequestCount, 1);
+	}
+
+	// 第二次 Aid → 队列还剩 1 条
+	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	TestTrue(TEXT("仍 Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+	{
+		TArray<FBattleEvent> Events = S->ConsumeEvents();
+		int32 RequestCount = 0;
+		for (const FBattleEvent& E : Events)
+		{
+			if (E.Type == EBattleEventType::KnockdownChoiceRequested) { ++RequestCount; }
+		}
+		TestEqual(TEXT("第二次 Aid 后再发一条 Request"), RequestCount, 1);
+	}
+
+	// 第三次 Aid → 队列空 → 触发 CheckAndApplyBattleEnd → 三部位全死 → Victory
+	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	TestTrue(TEXT("第三次 Aid 后 BattleEnd"), S->GetPhase() == EBattlePhase::BattleEnd);
+
+	const FBattleResultPacket P = S->BuildResultPacket();
+	TestTrue(TEXT("Outcome=Victory"), P.Outcome == EBattleOutcome::Victory);
+	TestFalse(TEXT("非撤离"),         P.bWithdrawn);
+	TestEqual(TEXT("KnockdownChoices 3 项"), P.KnockdownChoices.Num(), 3);
+	TestEqual(TEXT("DestroyedPartIds 3 项"), P.DestroyedPartIds.Num(), 3);
+
+	return true;
+}

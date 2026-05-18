@@ -25,6 +25,12 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_Tool);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_Hand);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_Exhaust);
+	// 容器卡：背包能力提供者（Game_Design.md §11.1 / §11.2）。
+	// 背包里至少有一张此关键词卡时，背包 UI 可打开。
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_BagProvider);
+	// 删牌能力提供者（GDD §11.7）。Backpack 至少有一张此关键词卡时，
+	// 删牌功能可用。第一阶段 UI 始终显示删牌区，不读此关键词；接口先就位等后续接入。
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_DeleteProvider);
 
 	// -------- Card.Rarity --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Rarity_White);
@@ -102,4 +108,18 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnTurnEnd);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnDraw);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Passive_Trigger_OnDiscard);
+
+	// -------- SkillSlot（Run 层角色技能池占位 tag）--------
+	// 第一阶段技能内容未定（GDD §3.3 / §14.26-27），用 SkillSlot.Placeholder
+	// 累计已获得技能数。等技能列表正式定义后，按角色添加各自的 SkillSlot.* tag。
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SkillSlot_Placeholder);
+
+	// -------- Card.CapacityEffect（GDD §11.2 B 类容器卡的容量效果）--------
+	// FCardPhysique::CapacityEffect 字段的取值。空 tag = A 类容器卡（无容量效果）。
+	// Placeholder：早期骨架占位，未挂任何具体效果。
+	// WeaponDamagePlus3：蛛茧绒囊的具体效果（GDD §11.2 / Stage 4.5.2）——
+	// 当带本 tag 的入战 instance 同时具有 Card.Keyword.Weapon 关键词时，
+	// 其 Effect.Damage 最终结算 +3。
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_CapacityEffect_Placeholder);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_CapacityEffect_WeaponDamagePlus3);
 }

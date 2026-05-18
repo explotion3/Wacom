@@ -50,6 +50,12 @@ void AWacomGameMode::BeginPlay()
 		BattleHUDClass = UBattleHUD::StaticClass();
 	}
 
+	// 探索 HUD：默认 C++ 父类，蓝图子类可在 GameMode Details 面板覆盖。
+	if (!ExplorationHUDClass)
+	{
+		ExplorationHUDClass = UWacomExplorationHUD::StaticClass();
+	}
+
 	UE_LOG(LogTemp, Display,
 		TEXT("[WacomGameMode] BeginPlay, State=Exploration, DefaultCharacter=%s, BattleHUD=%s"),
 		*GetNameSafe(DefaultCharacter),
@@ -72,7 +78,7 @@ void AWacomGameMode::BeginPlay()
 			UIManager->ClearAllLayers();
 			UIManager->PushContentToLayer(
 				WacomUITags::UI_Layer_Game.GetTag(),
-				UWacomExplorationHUD::StaticClass());
+				ExplorationHUDClass);
 		}
 	}
 
@@ -123,6 +129,14 @@ void AWacomGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AWacomGameMode::BootstrapRunFromSave()
 {
+	// 存档系统暂停（Stage 0.1）：直接走新 Run，不读盘。
+	if (!bSaveSystemEnabled)
+	{
+		UE_LOG(LogTemp, Display,
+			TEXT("[WacomGameMode] Bootstrap: 存档系统暂停，保持新 Run"));
+		return;
+	}
+
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
 	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
@@ -200,6 +214,12 @@ void AWacomGameMode::BootstrapRunFromSave()
 
 bool AWacomGameMode::SaveRunToSlot(const FString& SlotName, bool bQuiet) const
 {
+	// 存档系统暂停（Stage 0.1）：静默 no-op。不影响调用方流程。
+	if (!bSaveSystemEnabled)
+	{
+		return false;
+	}
+
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
 	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
@@ -274,8 +294,10 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	{
 		FBattleInitParams Params;
 
-		// 优先从 RunSession 构造（含角色 / 种子）；若 Run 未就绪则回退到 GameMode 字段。
-		if (!Run || !Run->BuildInitParamsForBattle(EnemyDef, Params))
+		// 优先从 RunSession 构造（含角色 / 种子 / 撤离持久化的破坏部位）；
+		// 若 Run 未就绪则回退到 GameMode 字段。
+		const FName TriggerPersistentId = Trigger ? Trigger->PersistentId : NAME_None;
+		if (!Run || !Run->BuildInitParamsForBattle(EnemyDef, TriggerPersistentId, Params))
 		{
 			Params.Character  = DefaultCharacter;
 			Params.Enemy      = EnemyDef;
@@ -335,6 +357,12 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	PendingTrigger      = Trigger;
 	PendingEnemyDefForRun = EnemyDef;
 
+	// 战斗期间 Toast 应隐藏（即便候选列表非空）。
+	if (AWacomPlayerController* WPC = Cast<AWacomPlayerController>(PC))
+	{
+		WPC->RefreshInteractToast();
+	}
+
 	// 让 HUD 立即刷出初始 Snapshot
 	BattleHUD->RefreshFromSnapshot(ActiveSession->BuildSnapshot());
 
@@ -365,13 +393,27 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	UWacomGameUIManagerSubsystem* UIManager =
 		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
 
-	// 1) 反订阅 HUD 委托 + Pop HUD
+	// 1) 反订阅 HUD 委托。
+	// Session 这里还活着，先 build packet 再清理。
 	if (BattleHUD && BattleEndedHandle.IsValid())
 	{
 		BattleHUD->OnBattleEndedNative.Remove(BattleEndedHandle);
 	}
 	BattleEndedHandle.Reset();
 
+	// 1.5) 在 Session 释放前组装战后包，传给 Run 层。
+	FBattleResultPacket Packet;
+	if (ActiveSession)
+	{
+		Packet = ActiveSession->BuildResultPacket();
+	}
+	else
+	{
+		// 异常路径（理论上不会发生）：手工填 Outcome，其他 flag 默认 false。
+		Packet.Outcome = Outcome;
+	}
+
+	// 2) Pop HUD + 清理 Session
 	if (UIManager && BattleHUD)
 	{
 		UIManager->PopContentFromLayer(BattleHUD);
@@ -404,34 +446,56 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	}
 
 	// 3) 标记触发器为已销毁（在 Destroy 前读 PersistentId）+ Destroy 本身
+	const FName TriggerPersistentId = PendingTrigger ? PendingTrigger->PersistentId : NAME_None;
 	if (PendingTrigger)
 	{
 		AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
 		URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
 
-		// 只有胜利时才记录"已销毁"。失败 / 未定场景不销毁。
-		if (Outcome == EBattleOutcome::Victory && Run && !PendingTrigger->PersistentId.IsNone())
+		// 真胜利（非撤离）才标记已销毁 + Destroy。
+		// 撤离（Packet.Outcome == Victory + bWithdrawn）不销毁，玩家可重入；
+		// 失败 / 未定场景也不销毁。
+		const bool bRealVictory = (Packet.Outcome == EBattleOutcome::Victory) && !Packet.bWithdrawn;
+
+		if (bRealVictory && Run && !TriggerPersistentId.IsNone())
 		{
-			Run->MarkTriggerDestroyed(PendingTrigger->PersistentId);
+			Run->MarkTriggerDestroyed(TriggerPersistentId);
 		}
 
-		// 无论胜负都 Destroy 当前帧 Actor；失败场景下存档里没记录，下次启动会重新生成触发器。
-		PendingTrigger->Destroy();
+		if (bRealVictory)
+		{
+			PendingTrigger->Destroy();
+		}
 		PendingTrigger = nullptr;
 	}
 
-	// 4) 通知 RunSession 战斗结束，让它更新击败列表 / run active 状态
+	// 4) 通知 RunSession 战斗结束，让它更新击败列表 / run active 状态 / 战外结算压力
+	//    + 撤离时持久化破坏部位、真胜利时清理（GDD §10.5）
 	if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
 	{
 		if (URunSession* Run = WacomPC->GetRunSession())
 		{
-			Run->OnBattleFinished(Outcome, PendingEnemyDefForRun);
+			Run->OnBattleFinishedFromTrigger(Packet, PendingEnemyDefForRun, TriggerPersistentId);
+
+			// 战斗结束统一结算 1 节点（GDD §10.5：胜利 / 失败 / 撤离都消耗）
+			if (Packet.Outcome != EBattleOutcome::Undetermined)
+			{
+				Run->ConsumeNode(1);
+			}
 		}
 	}
 	PendingEnemyDefForRun = nullptr;
 
 	// 5) 状态复位
 	CurrentState = EGameFlowState::Exploration;
+
+	// 撤离回探索时玩家仍在 Sphere 内（不会再发 BeginOverlap），
+	// 但候选列表里 Trigger 还在；显式刷一次 Toast 让 ExplorationHUD 显示"按 E 战斗"。
+	// 真胜利时 Trigger 已在前面 Destroy，EndPlay 会反注册候选，Toast 自然隐藏。
+	if (AWacomPlayerController* WPC = Cast<AWacomPlayerController>(PC))
+	{
+		WPC->RefreshInteractToast();
+	}
 
 	// 6) 存档：先写 Auto 备份，再覆盖 Main。
 	// 顺序很重要——如果程序在这两次 Save 之间崩掉，Auto 至少是新的，Main 还是上次的旧档，

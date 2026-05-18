@@ -144,7 +144,10 @@ UCharacterDefinition* FWacomBattleFixture::MakeCharacter(UCardDefinition* LeftHa
 {
 	UCharacterDefinition* Char = NewTransient<UCharacterDefinition>();
 	Char->CharacterId   = TEXT("Test.Character");
-	Char->BaseMaxHp     = 100;
+	// 测试角色 100 本体 HP（高血量避免被中毒/敌方意外打死）。
+	// 用 FingerCount × HpPerFinger 计算（HP 重构后字段）。
+	Char->FingerCount   = 50;
+	Char->HpPerFinger   = 2;
 	Char->LeftHandCard  = LeftHand;
 	Char->RightHandCard = RightHand;
 	for (UCardDefinition* C : StarterDeck) { Char->StarterDeck.Add(C); }

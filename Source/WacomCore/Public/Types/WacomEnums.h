@@ -19,7 +19,27 @@ enum class EBattlePhase : uint8
 	TurnStart   UMETA(DisplayName = "TurnStart"),   // 起始阶段
 	PlayerAction UMETA(DisplayName = "PlayerAction"),// 执行阶段
 	TurnEnd     UMETA(DisplayName = "TurnEnd"),     // 结束阶段
+	PendingKnockdownChoice UMETA(DisplayName = "PendingKnockdownChoice"), // 等玩家三选一
 	BattleEnd   UMETA(DisplayName = "BattleEnd"),   // 战斗结束
+};
+
+/**
+ * 击倒事件玩家选择（GDD §6 击倒事件）。
+ *
+ * 部位被击倒时玩家三选一：
+ *   - Aid（援助）：左手分支。第一阶段不消耗左手牌、不改战内状态，仅记账
+ *   - Destroy（破坏）：右手分支。同上
+ *   - Withdraw（撤离）：直接结束战斗。Outcome 设 Victory，敌人不进 DefeatedEnemies
+ *
+ * 详见 GDD §6 击倒事件 + §10.5 节点可重入规则。
+ */
+UENUM(BlueprintType)
+enum class EKnockdownChoice : uint8
+{
+	None      UMETA(DisplayName = "None"),
+	Aid       UMETA(DisplayName = "援助"),
+	Destroy   UMETA(DisplayName = "破坏"),
+	Withdraw  UMETA(DisplayName = "撤离"),
 };
 
 /**

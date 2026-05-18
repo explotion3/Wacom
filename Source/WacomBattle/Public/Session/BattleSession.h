@@ -4,14 +4,42 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "GameplayTagContainer.h"
 #include "Types/WacomResult.h"
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEvent.h"
+#include "Session/BattleResultPacket.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "BattleSession.generated.h"
 
 class UCharacterDefinition;
 class UEnemyDefinition;
+class UCardDefinition;
+
+/**
+ * 一张参战卡的入战清单条目（Stage 4.5.2 引入）。
+ *
+ * URunSession::BuildInitParamsForBattle 在战斗启动前填上备战区原生 instances
+ * 与各 SpecialZone 中 bBattleEnabledInSpecialZone == true 的 instances；
+ * BattleSession 在 Initialize 时按 entry 创建 FRuntimeCardInstance，把
+ * CapacityEffectTags 拷入 RuntimeCardInstance，供 FCardEffectDispatcher
+ * 在 Damage 路径上叠加修正（如蛛茧绒囊给武器卡 +3）。
+ *
+ * - 来自备战区原生位置：CapacityEffectTags = 空集合
+ * - 来自 SpecialZone 的卡：CapacityEffectTags = { 主卡 Definition.Physique.CapacityEffect }
+ */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattleDeckEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	TObjectPtr<const UCardDefinition> Definition = nullptr;
+
+	/** 来自 SpecialZone 的卡：单元素集合 = 主卡 CapacityEffect。来自备战区原生位置：空集合。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	FGameplayTagContainer CapacityEffectTags;
+};
 
 struct FBattleState;
 struct FBattleEventBus;
@@ -21,6 +49,13 @@ struct FBattleEventBus;
  *
  * Character 和 Enemy 都是 DataAsset。RandomSeed 为 0 时使用基于时间的 seed。
  * 测试可注入固定 seed 以得到可复现序列。
+ *
+ * 备战卡组来源（Stage 4.5.2 起，按优先级从高到低）：
+ *   1) BattleDeckEntries 非空 → 使用 entries（含 CapacityEffectTags，RunSession 路径）
+ *   2) BattleDeckOverride 非空 → 旧路径，仅含 Definition（fixture 向后兼容）
+ *   3) 都为空 → 回退到 Character->StarterDeck
+ *
+ * 左右手卡始终从 Character 加载，不通过 Override / Entries。
  */
 USTRUCT(BlueprintType)
 struct WACOMBATTLE_API FBattleInitParams
@@ -36,6 +71,60 @@ struct WACOMBATTLE_API FBattleInitParams
 	/** 0 表示基于时间。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	int32 RandomSeed = 0;
+
+	/**
+	 * 备战卡组覆盖（旧字段，仅作为 fixture 向后兼容）。空时使用 Character->StarterDeck。
+	 *
+	 * Stage 4.5.2 起 RunSession::BuildInitParamsForBattle 不再写本字段，改写
+	 * BattleDeckEntries（携带 CapacityEffectTags）。BattleSession::Initialize 的选择规则：
+	 *   1) BattleDeckEntries.Num() > 0 → 用 entries（推荐路径）
+	 *   2) 否则 BattleDeckOverride.Num() > 0 → 旧路径（CapacityEffectTags 留空）
+	 *   3) 否则 → 用 Character->StarterDeck
+	 *
+	 * 仅供 BattleSpec / BattleFixture 等老测试用例继续使用。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	TArray<TObjectPtr<const UCardDefinition>> BattleDeckOverride;
+
+	/**
+	 * 备战卡组入战清单（Stage 4.5.2 引入）。
+	 *
+	 * 由 URunSession::BuildInitParamsForBattle 填充，包含：
+	 *   - RunState.BattleDeck 中所有原生 instances（CapacityEffectTags 为空）
+	 *   - 各 SpecialZone（其 OwnerInstanceId 当前位于 BattleDeck）中
+	 *     bBattleEnabledInSpecialZone == true 的 instances
+	 *     （CapacityEffectTags = { 主卡 Definition.Physique.CapacityEffect } 单元素集合）
+	 *
+	 * BattleSession::Initialize 在 BattleDeckEntries.Num() > 0 时优先按 entry 创建
+	 * RuntimeCardInstance，把 entry 的 CapacityEffectTags 拷入 RuntimeCardInstance；
+	 * FCardEffectDispatcher 在 Damage 路径上读取 RuntimeCardInstance.CapacityEffectTags
+	 * 决定是否叠加修正（如 Card.CapacityEffect.WeaponDamagePlus3 给武器卡 +3）。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	TArray<FBattleDeckEntry> BattleDeckEntries;
+
+	/**
+	 * 战内伤口阈值（GDD §10）。Stage 6 起 BattleSession 维护跨越 flag。
+	 * 默认值与 FRunState 一致（0.5 / 0.2）。RunSession::BuildInitParamsForBattle 灌入。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	float HighHpThreshold = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	float LowHpThreshold = 0.2f;
+
+	/**
+	 * 预先破坏的部位 ID 列表（GDD §10.5 撤离重入）。
+	 *
+	 * Initialize 时按此 list 把对应 RuntimeEnemyPart 设为 bDestroyed=true / HP=0 /
+	 * Initiative=0。**不入 PendingKnockdownEvents 队列**（已经记过账了），
+	 * **不发 KnockdownExpGain**（避免反复撤离刷经验）。
+	 *
+	 * 来源：URunSession::BuildInitParamsForBattle 读 RunState.BattleProgress
+	 * 中该 Trigger 对应的进度。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	TArray<FName> PreDestroyedPartIds;
 };
 
 /**
@@ -87,6 +176,21 @@ public:
 	/** 当前阶段，只读。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	EBattlePhase GetPhase() const;
+
+	/**
+	 * 构造战斗结束时传给 Run 层的"战后包"。
+	 *
+	 * 调用约束：
+	 *   - 仅在 Phase == BattleEnd 时调用。其他阶段返回的 packet 字段值未定义。
+	 *   - 调用者应当在 Session 释放前完成；之后 Session 内部状态不再可用。
+	 *
+	 * 字段填充：
+	 *   - Outcome：取自 BattleState.Outcome
+	 *   - bCrossedHighHpThreshold / bCrossedLowHpThreshold：取自 BattleState 的同名 flag
+	 *     （Stage 1.2 第一版字段一直为 false，等 Stage 6 在玩家受伤路径接入触发逻辑）
+	 *   - bMutualDestruction：取自 BattleState.bMutualDestruction（CheckAndApplyBattleEnd 维护）
+	 */
+	FBattleResultPacket BuildResultPacket() const;
 
 private:
 	/** 持有 FBattleState 和 FBattleEventBus。裸指针 + 手动管理，避免 TUniquePtr 在 UHT gen.cpp 里需要完整定义。 */

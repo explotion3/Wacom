@@ -6,11 +6,22 @@
 #include "Commands/PlayCardResolver.h"
 #include "Commands/WaitResolver.h"
 #include "Commands/EndTurnResolver.h"
+#include "Commands/KnockdownChoiceResolver.h"
 
 FWacomStatus FBattleResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
 {
-	// 只允许在 PlayerAction 阶段提交命令。
-	// Setup / TurnStart / TurnEnd / BattleEnd 阶段由 Session 内部状态机推进。
+	// KnockdownChoice 命令独立 Phase 受理（GDD §6 击倒事件）：仅在 PendingKnockdownChoice 阶段允许。
+	if (Command.Type == EBattleCommandType::KnockdownChoice)
+	{
+		if (State.Phase != EBattlePhase::PendingKnockdownChoice)
+		{
+			return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("NotPendingKnockdown"));
+		}
+		return FKnockdownChoiceResolver::Resolve(State, Events, Command);
+	}
+
+	// 其余命令仅在 PlayerAction 阶段。
+	// Setup / TurnStart / TurnEnd / PendingKnockdownChoice / BattleEnd 阶段由 Session 内部状态机推进。
 	if (State.Phase != EBattlePhase::PlayerAction)
 	{
 		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("NotPlayerAction"));

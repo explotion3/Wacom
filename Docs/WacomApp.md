@@ -88,17 +88,25 @@ enum class EGameFlowState : uint8
 
 `ABattleTriggerActor` 职责：
 
-- 场景中的敌人触发器
-- SphereCollision Overlap → 通知 Controller 进入战斗
+- 场景中的敌人触发器（use-key 交互模型，Stage 7 改）
+- SphereCollision **仅做距离判定**：Begin/EndOverlap 维护 PlayerController 的候选 Trigger 列表
+- 玩家按 IA_Interact（默认 E 键）→ PlayerController 从候选列表挑距离最近的调 `TryActivate`
 - 持有 `UEnemyDefinition*` 配置
 - `FName PersistentId`（必填，关卡级唯一）
-- `bConsumeOnTrigger`：战斗结束后是否销毁（默认 true）
+
+### 为什么是 use-key 而非自动触发
+
+旧模型（overlap 自动触发）有个致命漏洞：撤离回探索时玩家仍在 Sphere 内，永远不会有 EndOverlap → BeginOverlap 的循环，无法重入战斗（GDD §10.5 撤离重入）。use-key 模型用"在范围内"作为前置条件，按键作为触发点，重入天然支持。
 
 ### BeginPlay 逻辑
 
 1. `PersistentId == NAME_None` → Warning，继续跑
-2. RunSession 中 `DestroyedTriggerIds` 包含本 id → 立即 `Destroy()`（不触发 Overlap）
-3. 否则正常运行
+2. RunSession 中 `DestroyedTriggerIds` 包含本 id → 立即 `Destroy()`（真胜利时被销毁）
+3. 否则正常运行 + 注册 Begin/EndOverlap → PlayerController.Register/UnregisterCandidateTrigger
+
+### EndPlay
+
+向 PlayerController 反注册自己，避免悬空。
 
 ---
 
@@ -132,6 +140,49 @@ enum class EGameFlowState : uint8
 - Game 层锚点
 - 探索状态下的 HUD（当前为 placeholder）
 
+### MVVM 数据流（M1+M2）
+
+Run 域 widget 用 **ViewModel + Provider 订阅模型**，避免 widget 直接订阅业务层导致的生命周期错位 bug（CommonUI Stack Activate/Deactivate vs widget Construct/Destruct 不一致）。
+
+```
+RunSession 写 API（AddPressure / OnBattleFinished / DeleteCardForGold ...）
+  ↓ 末尾 NotifyRunStateChanged() 内部 Broadcast
+URunSession::OnRunStateChangedNative（粗粒度多播）
+  ↓ 唯一订阅者
+UWacomRunViewModelProvider（GameInstance Subsystem）
+  ↓ 读 RunState 字段
+  ↓ 调 ViewModel.SetXxx()（UE_MVVM_SET_PROPERTY_VALUE 内置 dedupe + FieldNotify）
+  ↓ 末尾 OnRunViewModelRefreshedNative.Broadcast()（粗粒度，给非 ViewBinding 的订阅方）
+UWacomRunViewModel（UMVVMViewModelBase）
+  ↓ 21 个 FieldNotify 字段（Phase / NodeCount / Pressure 8 条 / Capacity / Gold / ...）
+Widget（C++ 直接订阅 OnRunViewModelRefreshedNative，未来 WBP 可走 ViewBinding）
+  ↓ 收到事件 → 读 ViewModel → SetText
+```
+
+**当前状态（M1+M2）**：Widget 端用 C++ 父类硬编码布局 + 订阅 Provider 粗粒度事件 + 手动 SetText。FieldNotify 字段已就位但暂未被 WBP ViewBinding 消费。
+
+**美术阶段切 WBP 时**：在 WBP Designer 里把 ViewModel 加到 widget（创建模式 = Global Viewmodel Collection，Identifier = `WacomRunViewModel`），用 View Bindings 编辑器把字段绑到 TextBlock/ProgressBar 等。WBP 启用后 C++ 父类的 SetText 路径作 fallback 保留，逐步删除。
+
+**关键设计**：
+
+- ViewModel 是**纯数据**，不持有 Session 指针、不订阅事件。便于单测。
+- Provider 是 **GameInstance Subsystem**，跨关卡持久。声明 `Collection.InitializeDependency(UMVVMGameSubsystem)` 保证销毁顺序。
+- Widget 订阅 **Provider 的粗粒度 multicast**，不订阅 RunSession——隔离业务层。
+- Widget 在 NativeOnActivated 也调 `TrySubscribeAndRefresh`：CommonUI Reactivate 时补刷一次，防漏更新。
+
+参考 DevLog：`Docs/DevLog/UI架构MVVM迁移M1M2.md`
+
+### 战斗 UI（保持原有 Snapshot 推送模型）
+
+战斗 UI 用 **Snapshot + Controller 推送**而非 ViewModel 订阅模型。理由：
+
+- BattleHUD 战斗开始 Push、结束 Pop，无 Reactivate 风险
+- 9 个子 widget 在同一棵树里，BattleHUD 作为 Controller 递归 RefreshFromSnapshot 自然
+- Snapshot 是值类型快照，子 widget 各读不同字段，结构稳定
+- Hand / EnemyParts 动态列表 ViewModel 不擅长，保留 ChildBattleWidgets 白名单递归
+
+战斗 UI 的命令出口唯一在 BattleHUD（`Session->SubmitCommand`），子 widget 只发委托。
+
 ---
 
 ## §7 菜单系统
@@ -159,6 +210,31 @@ enum class EGameFlowState : uint8
 - 菜单按钮不直接 OpenLevel：委托给 GameMode 控制切关卡
 - Widget 不直接调用 SubmitCommand：通过委托通知 HUD，HUD 统一提交
 
+### BackpackScreen（GDD §11）
+
+- 入口：探索期 B 键（IA_OpenBackpack 资产手动建后接入）→ Push 到 GameMenu 层
+- 临时 console command：`Wacom.OpenBackpack` / `Wacom.CloseBackpack`
+- 战斗 IMC 不绑定 IA_OpenBackpack（战斗内 B 不可打开背包；OnOpenBackpackPressed 内部还有 GameMode 状态防御）
+- ESC 关闭：复用 OnOpenMenuPressed 的"GameMenu 顶层 widget 直接 Deactivate"逻辑
+
+UI 结构（垂直堆叠）：
+
+| 区 | 容器 | 说明 |
+|---|---|---|
+| 顶部行 | HorizontalBox | 标题 / 金币 / 关闭按钮 |
+| 删牌区 | TextBlock 提示 | 第一阶段始终显示，删除走每张卡的 X 按钮 + ConfirmDialog |
+| 备战区 | WrapBox | BattleDeck 卡，标题显示 N/Capacity |
+| 背包区 | WrapBox | Backpack 卡（通量+负重），标题显示 N/FluxCapacity |
+
+子控件：`UWacomDeckCardWidget`
+
+- 主按钮：点击 → Move（Backpack ↔ BattleDeck 互换）
+- 右上角 X：点击 → 弹 ConfirmDialog → DeleteCardForGold
+- Move 按钮启用规则：BattleDeck 已满时 Backpack 卡禁用；Intrinsic 卡禁用
+- Delete 按钮启用规则：Intrinsic / 最后 BagProvider 禁用
+
+操作完成后全量 RebuildFromRunState 刷新（GDD §11.5）。
+
 ---
 
 ## §8 输入协调
@@ -171,8 +247,8 @@ CommonUI 的 UIActionRouter 会把输入路由到"最前面的可激活 Widget"�
 
 | IMC | 内容 |
 |---|---|
-| `IMC_Exploration` | WASD 移动 + 鼠标视角 + ESC 打开暂停菜单 |
-| `IMC_Battle` | 1-7 打牌 + W 等待 + E 结束回合 + R 重启 + P 刷新 HUD |
+| `IMC_Exploration` | WASD 移动 + 鼠标视角 + ESC 打开暂停菜单 + B 打开背包（IA 资产建好后） |
+| `IMC_Battle` | 1-7 打牌 + W 等待 + E 结束回合 + R 重启 + P 刷新 HUD（不绑 IA_OpenBackpack） |
 
 ### IA 资产
 
@@ -186,6 +262,7 @@ CommonUI 的 UIActionRouter 会把输入路由到"最前面的可激活 Widget"�
 | `IA_EndTurn` | 结束回合 |
 | `IA_Restart` | 重启战斗 |
 | `IA_RefreshHUD` | 刷新 HUD |
+| `IA_OpenBackpack` | 打开背包（探索 IMC 绑定，资产由用户手动创建后启用） |
 
 ### 切关卡时的 IMC 重新 Push
 
@@ -198,9 +275,15 @@ CommonUI 的 UIActionRouter 会把输入路由到"最前面的可激活 Widget"�
 ### EnterBattle 完整步骤
 
 ```
-玩家走进 ABattleTriggerActor 的 Overlap
-→ ABattleTriggerActor::OnOverlapBegin
-→ 通知 AWacomPlayerController::RequestEnterBattle(EnemyDef, TriggerActor)
+玩家走进 ABattleTriggerActor 的 Sphere 范围
+→ ABattleTriggerActor::HandleBeginOverlap
+→ AWacomPlayerController::RegisterCandidateTrigger(this)
+→ ExplorationHUD 显示 Toast"按 E 战斗"
+
+玩家按 E（IA_Interact 或 console `Wacom.Interact`）
+→ AWacomPlayerController::OnInteractPressed
+→ PickClosestCandidate → ABattleTriggerActor::TryActivate
+→ AWacomPlayerController::RequestEnterBattle(EnemyDef, TriggerActor)
 → Controller 调 GameMode::EnterBattle(EnemyDef)
 → GameMode:
     1. 设 State = Battle
@@ -221,7 +304,7 @@ BattleSession 结算完毕 → Phase = BattleEnd
     2. 销毁战斗 UI
     3. Pop IMC_Battle → Push IMC_Exploration
     4. 恢复玩家移动（Character->SetExplorationInputEnabled(true)）
-    5. Destroy 触发战斗的 ABattleTriggerActor（bConsumeOnTrigger 时）
+    5. 真胜利时 Destroy 触发战斗的 ABattleTriggerActor（撤离时不销毁，玩家可重入）
     6. 通知 RunSession::OnBattleFinished(Outcome)
     7. MarkTriggerDestroyed(PersistentId)
     8. SaveToSlot("Main") + SaveToSlot("Auto")

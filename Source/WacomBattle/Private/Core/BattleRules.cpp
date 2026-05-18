@@ -113,9 +113,33 @@ bool FBattleRules::CheckAndApplyBattleEnd(FBattleState& State, FBattleEventBus& 
 		return false;
 	}
 
-	// Battle_Rules §14：同时满足时优先胜利。
-	State.Outcome = bEnemyAllDestroyed ? EBattleOutcome::Victory : EBattleOutcome::Defeat;
-	State.Phase   = EBattlePhase::BattleEnd;
+	// GDD §6 击倒事件：部位破坏时弹三选一面板，处理完才能判终局。
+	// 如果还有未处理的击倒事件，**不**设 BattleEnd——等 KnockdownChoiceResolver
+	// 处理完队列后会再次调用本函数。
+	// 玩家死亡（bPlayerDead）路径例外：失败优先级高于击倒事件，立刻判 Defeat
+	// （本场最后一击不会再让玩家选择援助/破坏/撤离）。
+	if (bEnemyAllDestroyed && !bPlayerDead && State.PendingKnockdownEvents.Num() > 0)
+	{
+		return false;
+	}
+
+	// GDD §9.2 / Game_Design.md §6 部位击倒：
+	//   敌方全死 + 玩家 HP=0 = 同归于尽：判 Victory，置 bMutualDestruction，战外 +10% 伤口
+	//   敌方全死 + 玩家 HP>0 = 普通胜利：判 Victory
+	//   敌方未全死 + 玩家 HP=0 = 失败：判 Defeat
+	if (bEnemyAllDestroyed)
+	{
+		State.Outcome = EBattleOutcome::Victory;
+		if (bPlayerDead)
+		{
+			State.bMutualDestruction = true;
+		}
+	}
+	else
+	{
+		State.Outcome = EBattleOutcome::Defeat;
+	}
+	State.Phase = EBattlePhase::BattleEnd;
 
 	FBattleEvent Ev;
 	Ev.Type  = EBattleEventType::BattleEnded;

@@ -34,13 +34,25 @@ bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 		// 约定示例：给 v1 才加入的字段填默认值。
 		// 本项目 v1 的所有字段默认构造即可，无需额外处理。
 		SaveGame->SaveVersion = 1;
-		// 未来加 v1 → v2 时在这里取消 fallthrough 注释并加新 case。
-		// [[fallthrough]];
+		[[fallthrough]];
 
-	// case 1:
-	//     // v1 → v2：示例——假设加了 Gold 字段。
-	//     SaveGame->Gold = 0;
-	//     SaveGame->SaveVersion = 2;
+	case 1:
+		// v1 → v2：Stage 4.5.0 引入 instance 列表（Backpack / BattleDeck / BurdenZone / SpecialZones）。
+		// R7.3：在不修改任何 v0/v1 已存在字段原值的前提下，把新增的所有 instance 列表与
+		//       SpecialZones 列表初始化为空 TArray，并把 SaveVersion 写为 2。
+		// Empty() 是幂等的：USTRUCT 默认构造时这些 TArray 已经是空，这里显式 Empty()
+		// 仅是把"语义"标注清楚——v1 旧档没有这些字段，迁到 v2 后语义就是"空容器"。
+		// 后续 ApplySaveGameToRunState 见到四数组全空即走 R7.4 StarterDeck 重建路径。
+		SaveGame->Backpack.Empty();
+		SaveGame->BattleDeck.Empty();
+		SaveGame->BurdenZone.Empty();
+		SaveGame->SpecialZones.Empty();
+		SaveGame->SaveVersion = 2;
+		[[fallthrough]];
+
+	// case 2:
+	//     // v2 → v3：未来加新字段时在这里追加。
+	//     SaveGame->SaveVersion = 3;
 	//     [[fallthrough]];
 
 	// case CurrentSaveVersion - 1: // 实际会是具体数字

@@ -3,6 +3,7 @@
 #include "Status/PoisonResolver.h"
 
 #include "Core/BattleState.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEventBus.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
@@ -17,6 +18,7 @@ void FPoisonResolver::ResolvePoisonForAllHosts(FBattleState& State, FBattleEvent
 		{
 			// 穿透护盾：直接扣 HP。
 			State.Player.CurrentHp = FMath::Max(0, State.Player.CurrentHp - Dmg);
+			State.CheckHpThresholdsCrossed();
 
 			FBattleEvent Ev;
 			Ev.Type            = EBattleEventType::DamageDealt;
@@ -55,10 +57,8 @@ void FPoisonResolver::ResolvePoisonForAllHosts(FBattleState& State, FBattleEvent
 			Part.bDestroyed       = true;
 			Part.CurrentInitiative = 0;
 
-			FBattleEvent Empty;
-			Empty.Type            = EBattleEventType::EnemyPartHpEmptied;
-			Empty.ActorInstanceId = Part.InstanceId;
-			Events.Emit(Empty);
+			// 统一处理：发事件 + 经验 + DestroyedPartIds + 击倒事件队列（GDD §3.3 / §6 / §10.5）
+			State.RecordPartDestroyed(Part, Events);
 		}
 	}
 }

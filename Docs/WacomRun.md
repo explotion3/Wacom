@@ -31,23 +31,128 @@ WacomRun 负责**战斗外的持久状态和存档**。
 
 ### 公开接口
 
+#### 生命周期 / 状态访问
+
 | 方法 | 职责 |
 |---|---|
-| `Initialize(UCharacterDefinition*)` | 初始化一次 Run（新开档时调用）|
-| `ResetRunState()` | 重置为"新 Run"默认值（保留 Character）。死亡后重开用 |
+| `Initialize(UCharacterDefinition*)` | 初始化一次 Run（新开档时调用）。读 Character 的 FingerCount/HpPerFinger，复制 StarterDeck 到 Backpack/BattleDeck，重置时段 = Morning |
+| `ResetRunState()` | 重置为"新 Run"默认值（保留 Character）|
 | `GetRunState() const` | 只读访问当前 Run 状态 |
 | `GetMutableRunState()` | 非 const 访问（仅 GameMode 内部写入用）|
-| `IsRunActive() const` | 是否仍在 Run 中 |
-| `BuildInitParamsForBattle(EnemyDef, OutParams)` | 构造一场战斗所需的 FBattleInitParams |
-| `OnBattleFinished(Outcome, EnemyDef)` | 战斗结束通知（Victory 加入 DefeatedEnemies / Defeat 标记 bRunActive=false）|
+| `IsRunActive() const` | 是否仍在 Run 中（bRunActive == true）|
+| `IsRunFailed() const` | Run 是否失败（bRunActive=false OR 压力满 OR 手指=0）|
+
+#### 手指（GDD §3.1 / §3.4）
+
+| 方法 | 职责 |
+|---|---|
+| `GetFingerCount() const` | 当前手指数 |
+| `IsFingerDepleted() const` | 手指是否 = 0 |
+| `RemoveFinger(Count)` | 失去手指；同步增加 Disability 压力（每指 +5%）|
+
+#### 压力（GDD §3.2）
+
+| 方法 | 职责 |
+|---|---|
+| `GetPressureValue(Type) const` | 读单条压力 |
+| `GetTotalPressure() const` | 读 8 条加和 |
+| `AddPressure(Type, Delta)` | 增量压力（可负，clamp [0, 100]）|
+| `SetPressure(Type, Value)` | 覆盖压力（用于幂等型，如负重）|
+| `RemovePressure(Type, Amount)` | AddPressure 的负向命名别名 |
+| `ClearPressure(Type)` | 单条归零 |
+| `IsPressureCapReached() const` | 总和是否 ≥ 100 |
+
+#### 战外行为触发（GDD §3.2）
+
+| 方法 | 职责 |
+|---|---|
+| `OnRightHandDestructiveAction()` | 节点事件分支选"右手破坏" → 伤口 +1%（Stage 9 接入调用）|
+| `OnCompanionCardPermanentlyDestroyed()` | 永久销毁伙伴卡 → 嗜血 +1%（Stage 4 背包接入调用）|
+| `OnTheftCommitted()` | 完成偷窃 → 劣迹 +(n*(n+1)/2 +1)%（Stage 9 接入调用）|
+| `RecomputeBurden()` | 背包变动后调用 → 负重 = (overCount * (overCount+1)) / 2（Stage 4 接入调用）|
+
+#### 时段定时副作用（自动）
+
+`AdvanceToNextPhase` 自动触发：
+- 进入 Morning → 饥饿 +5%；若 PrevPhase=Sunrise（跨日）腐朽 +5%
+- 进入 Dusk → 饥饿 +5%
+- 进入 Sunrise → 疲劳 +10%
+
+#### 经验 / 技能（GDD §3.3）
+
+| 方法 | 职责 |
+|---|---|
+| `GetExperienceCurrent / Capacity()` | 读经验值 |
+| `GetAcquiredSkillCount()` | 已获得技能数 |
+| `AddExperience(Amount)` | 增加经验；满 Capacity 时入账技能（占位 SkillSlot.Placeholder）并扣减 Capacity（可多次）|
+
+#### 时段 / 节点（GDD §8）
+
+| 方法 | 职责 |
+|---|---|
+| `GetCurrentTimePhase()` | 当前时段 |
+| `GetRemainingNodeCount()` | 当前时段剩余节点 |
+| `GetCurrentDayNumber()` | 当前天数 |
+| `ConsumeNode(Count=1)` | 消耗节点；归零时自动 AdvanceToNextPhase |
+| `AdvanceToNextPhase()` | 推进时段（一般由 ConsumeNode 自动触发；留 public 调试用）|
+
+#### 背包 / 备战卡组（GDD §11）
+
+| 方法 | 职责 |
+|---|---|
+| `GetBackpack() / GetBattleDeck()` | 只读访问 |
+| `GetFluxCapacity() const` | 通量存放区容量（动态：Σ(玩家拥有所有 A 类容器卡 Capacity)）|
+| `GetBattleDeckCapacity() const` | 备战区容量（动态：与 GetFluxCapacity 严格相等，Σ A 类容器卡 Capacity；Stage 4.5.1 R3 回归）|
+| `IsContainerCard(Card) static` | 卡是否容器（Capacity > 0）|
+| `IsTypeAContainerCard(Card) static` | 卡是 A 类容器卡（容器 + CapacityEffect 为空，计入 Flux）|
+| `IsTypeBContainerCard(Card) static` | 卡是 B 类容器卡（容器 + CapacityEffect 有效，开辟特殊存放区）|
+| `GetSpecialZoneCapacity(BCard) static` | B 类容器卡的特殊存放区容量 = `Capacity - 1`（clamp 到 0）|
+| `CollectTypeBContainers(OutCards) const` | 枚举玩家拥有的所有 B 类容器卡（Backpack + BattleDeck），UI 渲染特殊存放区时使用 |
+| `IsBagProviderCard(Card) static` | 卡是否带 BagProvider 关键词 |
+| `IsDeleteProviderCard(Card) static` | 卡是否带 DeleteProvider 关键词（GDD §11.7）|
+| `IsDeleteFunctionAvailable() const` | 删牌功能是否可用（Backpack 至少一张 DeleteProvider）。第一阶段 UI 不读 |
+| `IsIntrinsicCard(Card) static` | 卡是否固有（Rarity = Intrinsic）|
+| `IsBackpackUiAvailable() const` | 背包 UI 是否可打开（至少一张 BagProvider）|
+| `IsCardInBackpack(Card) / IsCardInBattleDeck(Card)` | 查询 |
+| `AddCardToBackpack(Card)` | 加卡进背包 + RecomputeBurden |
+| `DestroyCardFromBackpack(Card)` | 永久销毁（含 Intrinsic / 最后 BagProvider 拒绝 / Companion 嗜血）|
+| `DeleteCardForGold(Card)` | 删牌区入口：销毁 + 按稀有度发金币（白=1 / 蓝=2）|
+| `AddCardToBattleDeck(Card)` | 从 Backpack 移到 BattleDeck（互斥）|
+| `RemoveCardFromBattleDeck(Card)` | 从 BattleDeck 移回 Backpack（Intrinsic 拒绝）|
+
+#### 经济（GDD §11.7）
+
+| 方法 | 职责 |
+|---|---|
+| `GetGold() const` | 当前金币 |
+| `AddGold(Amount)` | 增加金币 |
+| `RemoveGold(Amount)` | 减少金币（余额不足返回 false）|
+
+#### 战斗联动 / 场景持久化 / 存档
+
+| 方法 | 职责 |
+|---|---|
+| `BuildInitParamsForBattle(EnemyDef, OutParams)` | 构造一场战斗所需的 FBattleInitParams（向后兼容签名，TriggerPersistentId=NAME_None）|
+| `BuildInitParamsForBattle(EnemyDef, TriggerPersistentId, OutParams)` | 同上，传入 Trigger 持久化 ID 让 Run 层灌入 PreDestroyedPartIds（GDD §10.5 撤离重入）|
+| `OnBattleFinished(const FBattleResultPacket&, EnemyDef)` | 战斗结束通知（向后兼容签名）|
+| `OnBattleFinishedFromTrigger(Packet, EnemyDef, TriggerPersistentId)` | 同上，传入 TriggerPersistentId 让 Run 层撤离时写 BattleProgress、真胜利时清理（Stage 7）|
 | `MarkTriggerDestroyed(PersistentId)` | 标记一个触发器已被永久销毁 |
 | `IsTriggerDestroyed(PersistentId) const` | 查询触发器是否已被销毁 |
 | `SetPlayerTransform(InTransform)` | 记录玩家当前 Transform |
-| `SaveToSlot(SlotName) const` | 写入指定 slot |
-| `LoadFromSlot(SlotName)` | 从指定 slot 读档 |
-| `HasSaveInSlot(SlotName) const` | 指定 slot 是否存在存档 |
-| `BuildSaveGameFromRunState() const` | 把 RunState 拷贝到新建 UWacomSaveGame（公开以便测试）|
-| `ApplySaveGameToRunState(SaveGame*)` | 把 SaveGame 字段应用到 RunState（含版本检查和资产 TryLoad）|
+| `SaveToSlot(SlotName) const` / `LoadFromSlot(SlotName)` / `HasSaveInSlot(SlotName) const` | 存档接口（Stage 0.1 暂停）|
+| `BuildSaveGameFromRunState() const` / `ApplySaveGameToRunState(SaveGame*)` | 存档字段拷贝（公开以便测试）|
+
+`OnBattleFinishedFromTrigger(Packet, EnemyDef, TriggerPersistentId)` 行为（GDD §9.2 / §3.3 / §6 / §10.5）：
+- Outcome=Victory + bWithdrawn=true（撤离）：敌人**不**进 DefeatedEnemies；写 RunState.BattleProgress[TriggerId]
+- Outcome=Victory + bWithdrawn=false（真胜利）：敌人进 DefeatedEnemies；清理 BattleProgress[TriggerId]
+- Outcome=Defeat：终止 Run
+- Outcome=Undetermined：跳过结算
+- 任一非 Undetermined 结果加 +1% 疲劳
+- `bCrossedHighHpThreshold` → +1% 伤口
+- `bCrossedLowHpThreshold` → +5% 伤口
+- `bMutualDestruction` → +10% 伤口（不影响 bRunActive）
+- `KnockdownExpGains[]`：Victory（含同归于尽 / 撤离）累加经验；Defeat 不结算
+- `KnockdownChoices[]`：第一阶段仅日志，Stage 9 节点事件接入时按 Choice 触发分支
 
 ---
 
@@ -55,22 +160,95 @@ WacomRun 负责**战斗外的持久状态和存档**。
 
 `FRunState` 是内存数据层（USTRUCT），不直接序列化到磁盘。
 
+Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
+
 ### 字段清单
+
+#### §3.1 / §3.4：本体 HP（手指）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `FingerCount` | `int32` | 战外手指数量。Initialize 时从 Character 读取 |
+| `HpPerFinger` | `int32` | 每指对应 HP（默认 2）|
+
+战内 MaxHp = `FingerCount * HpPerFinger` + Companion 卡的 `MaxHpBonus` 累加（在 `BattleSession::Initialize` 中计算）。
+
+#### §3.2：压力（数值化常量 / 八种状态）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `Pressure` | `FPressureValues` | 八种压力值容器 |
+| `HighHpThreshold` | `float` | 战内伤口阈值 1（默认 0.5）|
+| `LowHpThreshold` | `float` | 战内伤口阈值 2（默认 0.2）|
+
+`FPressureValues` 字段直接拆 8 个 int32（不是 array / map）。提供 `Get / Set / Add / GetTotal` 接口。
+
+#### §3.2：辅助计数
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `TheftCount` | `int32` | 累计偷窃次数。`OnTheftCommitted` 用于劣迹增量公式 |
+
+#### §3.3：经验值与技能
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ExperienceCurrent` | `int32` | 累计经验 |
+| `ExperienceCapacity` | `int32` | 经验值上限（默认 10）|
+| `AcquiredSkills` | `TArray<FGameplayTag>` | 已获得技能。第一阶段全用 `SkillSlot.Placeholder` 占位 |
+
+#### §8：时间与昼夜
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `CurrentDayNumber` | `int32` | 当前天数（从 1 开始）|
+| `CurrentTimePhase` | `ETimePhase` | 当前时段 |
+| `RemainingNodeCount` | `int32` | 当前时段剩余节点数 |
+| `InitialNodeCount_Morning/Day/Dusk/Night/Sunrise` | `int32` | 五时段初始节点数（数值常量化）|
+
+`ETimePhase` 枚举：`Morning / Day / Dusk / Night / Sunrise`。
+
+#### §11：背包与备战卡组
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `Backpack` | `TArray<TObjectPtr<UCardDefinition>>` | 背包：永久卡牌池 |
+| `BattleDeck` | `TArray<TObjectPtr<UCardDefinition>>` | 备战卡组：从玩家拥有卡牌中选出，战斗实际读取的卡组 |
+
+**容量公式**（GDD §11.4）由 `URunSession::GetFluxCapacity()` / `GetBattleDeckCapacity()` 动态计算：
+- 通量容量 = `Σ(Backpack + BattleDeck 里所有 A 类容器卡 Capacity)`
+- 备战容量 = `GetFluxCapacity()`（Stage 4.5.1 R3 回归：与通量严格相等，B 类不再计入；4.4 hotfix 已被覆盖）
+- B 类容器卡（`Physique.CapacityEffect` 非空）不计入通量 / 备战公式，每张 B 主卡自己开辟一个特殊存放区，容量 = `Capacity - 1`
+
+**互斥**：一张卡同时只能在一个区。Initialize / AddToBattleDeck / RemoveFromBattleDeck / DestroyCardFromBackpack 都维护这个不变量。
+
+**Initialize 行为**（Stage 4.1 a2 规则）：
+- 容器卡（Capacity > 0）→ 进 Backpack
+- 非容器卡（Capacity = 0）→ 进 BattleDeck
+- 玩家可用 AddToBattleDeck / RemoveFromBattleDeck 调整
+
+#### §11.7 / 经济：金币
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `Gold` | `int32` | 玩家金币（GDD §11.7）。Run 内资源，存档第一阶段不持久化。 |
+
+#### 既有字段（R5 / S1 骨架）
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `Character` | `TObjectPtr<UCharacterDefinition>` | 玩家选择的角色（第一阶段固定为 BugGirl）|
 | `BattleSeed` | `int32` | 战斗随机种子（0 = 每场独立随机）|
 | `DefeatedEnemies` | `TArray<TObjectPtr<UEnemyDefinition>>` | 已击败的敌人列表 |
-| `bRunActive` | `bool` | 当前 Run 是否仍在进行 |
+| `bRunActive` | `bool` | 当前 Run 是否仍在进行（战内 Defeat 置 false）|
 | `DestroyedTriggerIds` | `TSet<FName>` | 已被永久销毁的场景触发器 ID 列表 |
 | `PlayerTransform` | `FTransform` | 玩家在探索地图的位置/朝向 |
 | `bHasPlayerTransform` | `bool` | PlayerTransform 是否有效 |
 
 ### 后续扩展（未实现）
 
-- 跨战斗 HP 传递
-- 当前卡组 / 金币 / 装备 / 各种 Buff / 事件标记
+- 地图运行时状态（GDD §10 §10.7 引入 `MapNodeStates: TMap<FName, FMapNodeState>`）
+- 战内 → 战外回传契约（Stage 1.2 引入 `FBattleResultPacket`）
 
 ---
 

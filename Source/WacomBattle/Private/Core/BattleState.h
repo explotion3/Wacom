@@ -7,6 +7,7 @@
 #include "Types/WacomEnums.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Session/BattleResultPacket.h"
 
 class UEnemyDefinition;
 class UCharacterDefinition;
@@ -109,8 +110,132 @@ struct FBattleState
 	/** 每次状态变更递增，用于 Snapshot Version 字段。 */
 	int32 StateVersion = 0;
 
+	// ---- 战内 → 战外回传 flag（GDD §3.2 / §9.2 / §9.2 表）----
+	// 这些 flag 由 BattleSession::BuildResultPacket 读取后封装到 FBattleResultPacket
+	// 传给 RunSession 处理压力 / 经验等战外结算。
+	//
+	// 字段就位但维护逻辑分阶段：
+	//   - Stage 1.2：bMutualDestruction 在 CheckAndApplyBattleEnd 内设置
+	//   - Stage 6（本轮）：bCrossedHighHpThreshold / bCrossedLowHpThreshold 在玩家受伤路径维护
+
+	/** 阈值比例（GDD §10）。BattleSession::Initialize 从 InitParams 灌入。 */
+	float HighHpThreshold = 0.5f;
+	float LowHpThreshold  = 0.2f;
+
+	/** 战内首次跨过 CurrentHp/MaxHp < HighHpThreshold（默认 0.5）时置 true。 */
+	bool bCrossedHighHpThreshold = false;
+
+	/** 战内首次跨过 CurrentHp/MaxHp < LowHpThreshold（默认 0.2）时置 true。 */
+	bool bCrossedLowHpThreshold = false;
+
+	/**
+	 * 同归于尽：玩家 CurrentHp = 0 与敌方部位全死同时发生。
+	 * 战斗结果仍判 Victory（GDD §9.2），战外加 +10% 伤口压力。
+	 */
+	bool bMutualDestruction = false;
+
+	/**
+	 * 战内累计的部位击倒经验记账（GDD §3.3）。
+	 *
+	 * 部位破坏时（伤害命中或中毒结算导致 bDestroyed=true 的瞬间）追加一条。
+	 * BattleSession::BuildResultPacket 拷给 packet.KnockdownExpGains。
+	 *
+	 * 每个部位只记账一次：触发点都在 `bDestroyed false → true` 边沿。
+	 * 部位定义未填 ExperienceReward 或值为 0 时仍记一条 ExpAmount=0
+	 * （让 Run 层有完整的"被破坏部位列表"，未来挂副作用更方便）。
+	 */
+	TArray<FKnockdownExpGain> PendingKnockdownExpGains;
+
+	/**
+	 * 待玩家三选一的击倒事件队列（GDD §6 / Stage 7）。
+	 *
+	 * 部位 bDestroyed false→true 边沿同时 push 一条到此队列。
+	 * BattleSession 命令处理后检查队列：
+	 *   - 非空 → Phase = PendingKnockdownChoice，发 KnockdownChoiceRequested 事件
+	 *   - 空 → 正常推进
+	 *
+	 * 玩家提交 KnockdownChoice 命令后从头部 dequeue + 记账到 PendingKnockdownChoices。
+	 *
+	 * **预先破坏的部位**（来自 RunState.BattleProgress 的持久化破坏态）
+	 * 在 Initialize 时设 bDestroyed = true，但**不入此队列**——避免重复弹 dialog。
+	 */
+	struct FPendingKnockdownEvent
+	{
+		FGuid PartInstanceId;
+		FName PartId = NAME_None;
+		bool bLeftHandAvailable = true;
+		bool bRightHandAvailable = true;
+	};
+	TArray<FPendingKnockdownEvent> PendingKnockdownEvents;
+
+	/**
+	 * 玩家在击倒事件中的选择累计列表（GDD §6）。
+	 *
+	 * 每次玩家选完一项 push 一条。
+	 * BuildResultPacket 拷给 packet.KnockdownChoices。
+	 */
+	TArray<FKnockdownChoice> PendingKnockdownChoices;
+
+	/**
+	 * 本场战斗中所有被破坏的部位 ID（GDD §10.5）。
+	 *
+	 * 撤离时由 Run 层用 packet.DestroyedPartIds 写入 RunState.BattleProgress；
+	 * 胜利时清理 BattleProgress。
+	 *
+	 * **包含**预先破坏的部位（持久化的）+ 本场新破坏的部位——这样撤离时
+	 * 写入的列表是"截至当前所有破坏过的部位"，覆盖式更新 BattleProgress。
+	 */
+	TArray<FName> DestroyedPartIds;
+
 	// ---- 分组字段 ----
 	FPlayerState    Player;
 	FCardContainers Cards;
 	FEnemyState     Enemy;
+
+	/**
+	 * 玩家 HP 变更后（**减少**或维持）调用，按当前 CurrentHp/MaxHp 比例
+	 * 检查是否首次跨过 High / Low 阈值，触发后置 flag 永久 true（不会回退）。
+	 *
+	 * 调用约定：所有扣血路径在写入 CurrentHp 之后调用一次。
+	 * 治疗（HP 增加）也可以调，逻辑等价于"现在是否已经在阈值下"，
+	 * 但因为 flag 已设置就不会再设，对治疗实质 no-op。
+	 */
+	FORCEINLINE void CheckHpThresholdsCrossed()
+	{
+		if (Player.MaxHp <= 0) { return; }
+		const float Ratio = static_cast<float>(Player.CurrentHp) / static_cast<float>(Player.MaxHp);
+		if (!bCrossedHighHpThreshold && Ratio < HighHpThreshold)
+		{
+			bCrossedHighHpThreshold = true;
+		}
+		if (!bCrossedLowHpThreshold && Ratio < LowHpThreshold)
+		{
+			bCrossedLowHpThreshold = true;
+		}
+	}
+
+	/**
+	 * 部位被破坏的统一处理（伤害 / 中毒共用路径）。
+	 *
+	 * 调用约定：CurrentHp <= 0 且 bDestroyed 即将从 false 变 true 时调用一次。
+	 * 调用方应已经把 Part->bDestroyed = true、CurrentInitiative = 0 设好。
+	 *
+	 * 本函数：
+	 *   1. 发 EnemyPartHpEmptied 事件
+	 *   2. 记 KnockdownExpGain 经验
+	 *   3. 加入 DestroyedPartIds（撤离时持久化用）
+	 *   4. push PendingKnockdownEvent 队列（等玩家三选一）
+	 *
+	 * 不调用本函数的场景：
+	 *   - Initialize 时按 PreDestroyedPartIds 设的预先破坏部位（已经处理过经验和选择，不重复）
+	 *
+	 * @param Part           被破坏的部位（已置 bDestroyed=true / CurrentHp=0）
+	 * @param Events         事件总线
+	 * @param InflictedByCardId 触发本次破坏的卡牌实例 ID（Effect.Damage 命中时传 Ctx.SourceInstanceId；
+	 *                          中毒结算等没有"卡牌来源"的路径传空）。
+	 *                          击倒事件三选一可用性判定时排除此卡——它正在被打出的过程中，
+	 *                          虽然仍在 Hand 数组里，但应视为"已经离开手牌"。
+	 */
+	void RecordPartDestroyed(struct FRuntimeEnemyPart& Part, struct FBattleEventBus& Events,
+		const FGuid& InflictedByCardId = FGuid());
 };

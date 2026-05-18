@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Types/WacomEnums.h"
 #include "BattleCommand.generated.h"
 
 /**
@@ -17,6 +18,7 @@ enum class EBattleCommandType : uint8
 	PlayCard UMETA(DisplayName = "PlayCard"),
 	Wait     UMETA(DisplayName = "Wait"),
 	EndTurn  UMETA(DisplayName = "EndTurn"),
+	KnockdownChoice UMETA(DisplayName = "KnockdownChoice"),
 };
 
 /**
@@ -48,6 +50,10 @@ struct WACOMBATTLE_API FBattleCommand
 	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
 	FGuid TargetPartInstanceId;
 
+	/** 击倒事件玩家选择。仅 KnockdownChoice 使用。 */
+	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
+	EKnockdownChoice KnockdownChoiceValue = EKnockdownChoice::None;
+
 	FBattleCommand() = default;
 
 	static FBattleCommand MakePlayCard(const FGuid& InCardInstanceId, const FGuid& InTargetPartInstanceId = FGuid())
@@ -70,6 +76,14 @@ struct WACOMBATTLE_API FBattleCommand
 	{
 		FBattleCommand Cmd;
 		Cmd.Type = EBattleCommandType::EndTurn;
+		return Cmd;
+	}
+
+	static FBattleCommand MakeKnockdownChoice(EKnockdownChoice InChoice)
+	{
+		FBattleCommand Cmd;
+		Cmd.Type = EBattleCommandType::KnockdownChoice;
+		Cmd.KnockdownChoiceValue = InChoice;
 		return Cmd;
 	}
 };

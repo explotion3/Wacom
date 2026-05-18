@@ -18,7 +18,10 @@ public class WacomTests : ModuleRules
 			"WacomCore",
 			"WacomData",
 			"WacomBattle",
-			"WacomRun"
+			"WacomRun",
+			"WacomApp",
+			"ModelViewViewModel",
+			"FieldNotification"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

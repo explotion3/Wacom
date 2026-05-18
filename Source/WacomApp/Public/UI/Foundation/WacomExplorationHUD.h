@@ -6,18 +6,25 @@
 #include "UI/Foundation/WacomActivatableWidget.h"
 #include "WacomExplorationHUD.generated.h"
 
+class UTextBlock;
+class UProgressBar;
+class UWacomRunViewModel;
+class UWacomRunViewModelProvider;
+
 /**
- * 探索关卡默认 HUD 占位。
+ * 探索关卡 HUD（M1 半 MVVM 过渡：C++ 布局 + 读 ViewModel）。
  *
- * 目前为空 Widget，只起两个作用：
- *   1. 作为 PrimaryLayout::Game 层的长期根，让 CommonUI UIActionRouter 有一个
- *      有效的 leaf-most node，避免切关卡后 Router 卡在旧 widget 的 UIInputConfig。
- *   2. 声明 FUIInputConfig(Game, CapturePermanently)，强制 Router 切回游戏输入模式。
+ * 数据流：
+ *   RunSession 写 → OnRunStateChangedNative
+ *     → Provider 监听 → 灌 ViewModel 字段 + 广播 OnRunViewModelRefreshedNative
+ *     → 本 widget 收到 → RefreshFromViewModel 读 ViewModel 的字段 → SetText
  *
- * 战斗开始时 BattleHUD 会被 Push 到同一层叠在它上面，Router 自动切到 BattleHUD 的
- * Menu 模式；战斗结束 Pop BattleHUD 后 Router 回到 ExplorationHUD 的 Game 模式。
+ * 本 widget 不直接订阅 RunSession，也不读 RunState。只认 ViewModel + Provider。
  *
- * 未来策划给出探索 HUD 方案时（小地图、任务提示、等）在此扩展。
+ * Stage 5+ 后会被 WBP 子类替代（Designer 布局 + ViewBinding 绑定字段），
+ * 届时 C++ 只保留协议（GetDesiredInputConfig）。
+ *
+ * 输入：Game / CapturePermanently（探索期游戏输入）。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomExplorationHUD : public UWacomActivatableWidget
@@ -27,6 +34,59 @@ class WACOMAPP_API UWacomExplorationHUD : public UWacomActivatableWidget
 public:
 	UWacomExplorationHUD(const FObjectInitializer& ObjectInitializer);
 
+	/**
+	 * 显示/隐藏交互 Toast（"按 E 战斗"）。由 PlayerController 在候选 Trigger 列表
+	 * 变化时调用。Toast 文字由调用方传入，便于将来扩展（如"按 E 拾取"）。
+	 */
+	void SetInteractToastVisible(bool bVisible, const FText& Message = FText::GetEmpty());
+
 protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+	virtual void NativeOnActivated() override;
+
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
+
+	/** 从当前 ViewModel 全量刷新 SetText / SetPercent。 */
+	void RefreshFromViewModel();
+
+	/** Provider 的全量刷新广播回调。 */
+	void HandleViewModelRefreshed();
+
+	/** 订阅 Provider（如果还没订阅）+ 刷新一次。 */
+	void TrySubscribeAndRefresh();
+
+private:
+	UWacomRunViewModelProvider* GetProvider() const;
+	UWacomRunViewModel* GetViewModel() const;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomRunViewModelProvider> SubscribedProvider = nullptr;
+
+	// ---- C++ 默认布局占位（M1 之后由 WBP 子类替代）----
+
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> PhaseText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> NodeText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DayText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> FingerText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> ExpText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UProgressBar> ExpBar;
+
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> PressureTotalText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> HungerText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> WoundText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> FatigueText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> BurdenText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DecayText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> MisdeedText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> BloodlustText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DisabilityText;
+
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> HintText;
+
+	/** 交互 Toast Border（容器 + 背景）。BindWidgetOptional：WBP 可覆盖。 */
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<class UBorder> InteractToastBg;
+	/** 交互 Toast 文字。BindWidgetOptional。 */
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> InteractToastText;
 };

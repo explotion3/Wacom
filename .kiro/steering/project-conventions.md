@@ -31,6 +31,39 @@ inclusion: always
 
 跨领域任务读取多个文档。不确定归属时先问。
 
+## 虚幻相关任务的 skill 调用
+
+在**计划或落实任何与 Unreal Engine 相关的代码改动之前**（包括但不限于：模块/Build.cs 调整、UPROPERTY/UFUNCTION 反射边界、Actor/Component/Subsystem 设计、UMG/Slate UI、Blueprint 工作流、保存/复制、PCG、性能/打包、世界交互、调试验证），**必须先查可用 skill 列表**，命中就激活，避免凭直觉绕过 UE 既有最佳实践（典型反例：UI 用 Tick 拉数据 vs 用 MVVM/委托推送）。
+
+**触发条件**：任务涉及 UE API、UE 子系统、UE 资产工作流、UE 性能/打包、UE 测试，任一条命中即查。
+
+**当前可用 UE skill**：
+
+| skill 名 | 适用范围 |
+|---|---|
+| `ue5-auto-assistant` | 不确定该选哪个 skill 时的入口路由 |
+| `ue5-module-router` | 涉及模块名 / Build.cs 依赖 / 跨模块边界判定 |
+| `ue5-architecture` | 模块布局 / Public-Private 边界 / 反射暴露策略 / 防循环依赖 |
+| `ue5-cpp-gameplay` | Actor / Component / DataAsset / GameplayTags / 蓝图暴露 |
+| `ue5-blueprint-workflow` | Blueprint 图、节点连线、输入事件、图验证 |
+| `ue5-ui-umg-slate` | Widget / Slate / WBP / 输入焦点 / 视口适配 / **MVVM** |
+| `ue5-save-load-replication` | SaveGame / 序列化 / RepNotify / RPC |
+| `ue5-world-interaction` | 拾取 / 触发器 / Overlap / 交互反馈 / Spawner |
+| `ue5-pcg-building` | PCG / 程序化建筑 / Shape Grammar |
+| `ue5-debug-validation` | 调试日志 / 资产校验 / 最小复现 / 修复步骤 |
+| `ue5-performance-packaging` | PIE 性能检查 / stat / 打包前验证 / 构建配置 |
+
+**调用顺序**：
+1. 任务进来 → 先判断是否涉及 UE → 命中就在表里挑最贴切的 skill 激活
+2. 不确定挑哪个 → 激活 `ue5-auto-assistant` 路由
+3. 同时仍按"任务启动流程"读领域文档和代码
+4. 需求模糊时叠加 `karpathy-guidelines` 列假设
+
+**反面用例**：
+- 写探索 HUD 直接 `NativeTick + SetText` 拉数据 → 应先查 `ue5-ui-umg-slate`，命中 MVVM 章节
+- 加新 UCLASS 凭感觉决定 Public 还是 Private → 应先查 `ue5-architecture`
+- 调试 Editor 崩溃直接看代码猜 → 应先查 `ue5-debug-validation`
+
 ## UI 约定
 
 - CommonUI 管理层：`UWacomGameUIManagerSubsystem` + `UWacomPrimaryGameLayout`
@@ -39,6 +72,37 @@ inclusion: always
 - C++ 定义结构和接口，WBP 做布局和样式
 - UI 只读 Snapshot + 发 Command，不修改战斗状态
 - Widget 不直接 SubmitCommand / OpenLevel，委托给 HUD / GameMode
+
+### Widget 生命周期契约（必须）
+
+每个新建的 Activatable Widget 在头文件类注释中**必须显式声明**以下五项，缺一不可：
+
+```
+数据源：XXX（如 URunSession / UBattleSession / UWacomRunViewModelProvider）
+更新触发：Push（订阅 multicast）/ Pull（Snapshot Version 比较）/ 一次性
+订阅时机：NativeConstruct + NativeOnActivated（补订阅）
+反订阅时机：NativeDestruct
+焦点/输入：Game / Menu / All + CapturePermanently / NoCapture
+```
+
+**为什么 NativeOnActivated 也要处理**：CommonUI Stack Push 新 widget 时底层 Deactivate（不 Destruct），Pop 后底层 Reactivate（不重新 Construct）。如果只在 NativeConstruct 订阅/刷新，Reactivate 后会错过战斗期间的状态变更。
+
+### Run 域 widget 数据流（M1+M2 起强制）
+
+新增 Run 域 widget（探索 HUD / 背包 / 菜单 / 节点事件 UI）数据获取顺序：
+
+1. **不直接订阅 `URunSession`**——业务事件订阅由 `UWacomRunViewModelProvider` 集中处理
+2. **订阅 `Provider.OnRunViewModelRefreshedNative`**（粗粒度多播），不订阅 ViewModel 的 FieldNotify
+3. **数据来源是 `UWacomRunViewModel` 字段**（`Provider->GetRunViewModel()->GetXxx()`）
+4. **NativeConstruct + NativeOnActivated 都调 `TrySubscribeAndRefresh`**，NativeDestruct 反订阅
+
+例外：动态列表（卡牌实例数组 / 部位实例数组）允许直接读 `RunSession.GetBackpack()`——MVVM 不擅长数组绑定，列表数据保留命令式读取。
+
+### 战斗域 widget 数据流（保持现有 Snapshot 推送）
+
+战斗 widget 继承 `UWacomBattleWidgetBase`，由 `BattleHUD` 作 Controller 递归 `RefreshFromSnapshot`。子 widget 不订阅 Session，命令通过委托发回 BattleHUD。**不要硬迁 ViewModel**——战斗 widget 短生命周期 + 同步 push 没有 Reactivate 风险，迁了反而复杂。
+
+**反面用例**：ExplorationHUD 第一版只在 NativeConstruct 订阅 + 用 Tick 拉数据 → 战斗结束后不刷新 → 反复修补。修法是抽 ViewModel + Provider 层，让订阅生命周期与 widget 解耦。
 
 ## 反射使用门槛
 
@@ -68,6 +132,22 @@ inclusion: always
 编译: "e:\UE_5.7\Engine\Build\BatchFiles\Build.bat" WacomEditor Win64 Development -Project="d:\UE_Project\5.7\Wacom\Wacom.uproject" -WaitMutex -FromMsBuild
 测试: "e:\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "d:\UE_Project\5.7\Wacom\Wacom.uproject" -ExecCmds="Automation RunTests Wacom; Quit" -Unattended -NoPause -NoSplash -NullRHI
 ```
+
+## 修 bug 不取捷径
+
+修复问题时**禁止**选最省事的修法（加判空、try/catch 吞错、加 flag 兜底、改 oldStr 改最少行），而要追根因，选**正规、长期有效、与项目架构方向一致**的方案。捷径修法会让症状消失但根因还在，下一次返工会成倍花时间。
+
+判断方法：
+
+1. **找根因**：用调用栈、日志、代码追踪，说出"为什么会发生"。仅说"加判空就不会崩"不算找到根因。
+2. **找规范修法**：查 UE 官方文档 / 相关 skill / 项目已有同类问题的解决先例。如果存在更正规的 API（例子：`Collection.InitializeDependency` 决定 Subsystem 销毁顺序，比每个使用点判空更正规），优先用规范方案。
+3. **判空 / 兜底 / try-catch 只能作为防御层**：在已经走过 1+2 之后再加，作为"即使根因方案失效也不崩"的兜底；不可作为唯一修法。
+4. **改动方向**：每次修复要让代码**离正确架构更近**，不能更远。修一个 bug 引入一个临时 hack 是负向重构，必须避免。
+5. **如果时间紧迫只能取捷径**：必须显式标注 `// TODO(技术债)` 并写进 `Docs/TODO.md §2 临时写法` 表，注明"正式方案"是什么。
+
+**反面用例**：
+- ViewModelProvider 在 Deinitialize 崩 → 第一反应"加 nullptr 判空"。判空只是兜底，根因是 Subsystem 销毁顺序不保证。规范修法是 `InitializeDependency` 声明依赖顺序；判空作为防御层留在 Deinitialize，但**不是唯一修法**。
+- 探索 HUD 战斗结束后不刷新 → 第一反应"在 NativeOnActivated 里补刷一次"。补刷只是兜底，根因是 widget 直接订阅业务层数据，CommonUI 生命周期不匹配。规范修法是 MVVM 解耦，让 ViewModel 维持订阅、widget 只读 ViewModel。
 
 ## 随机与确定性
 

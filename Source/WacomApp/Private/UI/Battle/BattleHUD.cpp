@@ -9,7 +9,10 @@
 #include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/PlayerStatusBar.h"
+#include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Common/PileCountView.h"
+#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
+#include "UI/Foundation/WacomUITags.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -22,9 +25,11 @@
 
 #include "Cards/CardDefinition.h"
 #include "Commands/BattleCommand.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEvent.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "Snapshots/EnemySnapshot.h"
 #include "Types/WacomEnums.h"
 
 void UBattleHUD::NativeOnInitialized()
@@ -343,6 +348,25 @@ void UBattleHUD::CancelTargetSelect()
 	SetUIState(EBattleUIState::Idle);
 }
 
+void UBattleHUD::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
+{
+	if (Choice == EKnockdownChoice::None) { return; }
+
+	UBattleSession* S = GetSession();
+	if (!S) { return; }
+
+	const FWacomStatus Status = S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(Choice));
+	if (!Status.IsOk())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] KnockdownChoice failed, code=%d detail=%s"),
+			(int32)Status.Code, *Status.Detail.ToString());
+		return;
+	}
+	// 走通用收尾路径：消费事件（包含连续 push 下一个 dialog 的 KnockdownChoiceRequested）
+	// + RefreshFromSnapshot（包含战斗结束广播 OnBattleEndedNative）
+	AfterCommand();
+}
+
 // ================ 内部 ================
 
 void UBattleHUD::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)
@@ -393,6 +417,8 @@ namespace
 		case EBattleEventType::EnemyPartActed:         return TEXT("EnemyPartActed");
 		case EBattleEventType::EnemyPartHpEmptied:     return TEXT("EnemyPartHpEmptied");
 		case EBattleEventType::EnemyKnockdown:         return TEXT("EnemyKnockdown");
+		case EBattleEventType::KnockdownChoiceRequested: return TEXT("KnockdownChoiceRequested");
+		case EBattleEventType::KnockdownChoiceMade:    return TEXT("KnockdownChoiceMade");
 		case EBattleEventType::TurnEnded:              return TEXT("TurnEnded");
 		case EBattleEventType::PassiveTriggered:       return TEXT("PassiveTriggered");
 		case EBattleEventType::BattleEnded:            return TEXT("BattleEnded");
@@ -423,6 +449,46 @@ void UBattleHUD::ConsumeAndLogEvents()
 	if (EventToast)
 	{
 		EventToast->EnqueueEvents(Events);
+	}
+
+	// Stage 7：处理击倒事件请求 → push KnockdownChoiceDialog 到 Modal 层
+	for (const FBattleEvent& E : Events)
+	{
+		if (E.Type != EBattleEventType::KnockdownChoiceRequested) { continue; }
+
+		UGameInstance* GI = GetGameInstance();
+		UWacomGameUIManagerSubsystem* UIManager =
+			GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+		if (!UIManager) { continue; }
+
+		UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
+			WacomUITags::UI_Layer_Modal.GetTag(),
+			UWacomKnockdownChoiceDialog::StaticClass());
+		UWacomKnockdownChoiceDialog* Dialog = Cast<UWacomKnockdownChoiceDialog>(Pushed);
+		if (!Dialog) { continue; }
+
+		// 从 Snapshot 查 part 显示名
+		UBattleSession* S2 = GetSession();
+		FText PartName = LOCTEXT("UnknownPart", "敌方部位");
+		if (S2)
+		{
+			const FBattleSnapshot Snap = S2->BuildSnapshot();
+			for (const FEnemyPartSnapshot& P : Snap.Enemy.Parts)
+			{
+				if (P.InstanceId == E.ActorInstanceId && P.Definition)
+				{
+					PartName = P.Definition->DisplayName.IsEmpty()
+						? FText::FromName(P.Definition->PartId)
+						: P.Definition->DisplayName;
+					break;
+				}
+			}
+		}
+
+		// E.Count 编码：1=左可 / 2=右可 / 3=都可
+		const bool bLeftAvail  = (E.Count & 1) != 0;
+		const bool bRightAvail = (E.Count & 2) != 0;
+		Dialog->SetContext(this, PartName, bLeftAvail, bRightAvail);
 	}
 }
 

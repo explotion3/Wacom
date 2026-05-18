@@ -12,6 +12,7 @@ class UEnemyDefinition;
 class UCharacterDefinition;
 class UBattleSession;
 class UWacomBattleWidgetBase;
+class UWacomExplorationHUD;
 class UBattleHUD;
 class ABattleTriggerActor;
 
@@ -37,6 +38,24 @@ class WACOMAPP_API AWacomGameMode : public AGameModeBase
 public:
 	AWacomGameMode();
 
+	// ---- 存档系统总开关 ----
+
+	/**
+	 * 存档系统总开关。
+	 *
+	 * 第一阶段停用：见 Docs/Game_Design.md §3.0 / §14。
+	 * 等到 demo 完善（节点/压力/经验等系统稳定）后再恢复。
+	 *
+	 * 关闭后：
+	 *   - Bootstrap 不读盘，直接走新 Run
+	 *   - SaveRunToSlot / 战斗结束自动存档 静默 no-op
+	 *   - PauseMenu Save 按钮隐藏
+	 *   - MainMenu Continue 按钮永远禁用，New Game 不再弹 ConfirmDialog
+	 *
+	 * 底层 UWacomSaveGame / FRunState 拷贝 / 迁移机制不动，自动化测试照常跑。
+	 */
+	static constexpr bool bSaveSystemEnabled = false;
+
 	// ---- 存档 Slot 名常量 ----
 
 	/** 主存档 slot。玩家每次正常操作写入这里。 */
@@ -61,6 +80,14 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomBattleWidgetBase> BattleHUDClass;
+
+	/**
+	 * 探索 HUD（M1：MVVM 架构）。
+	 * BeginPlay 时若蓝图未配，回退 C++ 父类 UWacomExplorationHUD。
+	 * 蓝图子类（如 BP_GameMode）可在 Details 面板拖 WBP_ExplorationHUD 覆盖。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
+	TSubclassOf<UWacomExplorationHUD> ExplorationHUDClass;
 
 	// ---- 状态 ----
 

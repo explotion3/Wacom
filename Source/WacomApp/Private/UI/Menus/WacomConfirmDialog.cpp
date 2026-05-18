@@ -179,4 +179,15 @@ void UWacomConfirmDialog::HandleCancelClicked()
 	if (Cb) { Cb(); }
 }
 
+FReply UWacomConfirmDialog::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+{
+	// ESC = 取消（触发 OnCancel 回调，等价于点 Cancel）
+	if (InKeyEvent.GetKey() == EKeys::Escape)
+	{
+		HandleCancelClicked();
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+}
+
 #undef LOCTEXT_NAMESPACE
