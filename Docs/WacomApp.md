@@ -227,8 +227,8 @@ UI 结构（三大区）：
 | 顶部行 | HorizontalBox | 标题 / 金币 / 关闭按钮 |
 | 删牌区 | `UWacomDeleteZoneDropTarget` | 拖入卡牌后弹 ConfirmDialog，确认后调用 `DeleteCardForGold` |
 | 备战区 | `UWacomZoneDropTarget + WrapBox` | BattleDeck 卡，标题显示 N/Capacity；同时显示已入战 SpecialZone 投影卡 |
-| 背包区 / 通量存放区 | `UWacomZoneDropTarget + WrapBox` | Backpack 卡，标题显示 N/FluxCapacity |
-| 背包区 / 特殊存放区 | 动态 `UWacomZoneDropTarget + WrapBox` | 每张 B 主卡一个区块，标题显示主卡名与 `n/(Capacity-1)` |
+| 背包区 / 通量存放区 | 主卡区 + `UWacomZoneDropTarget + WrapBox` | 主卡区显示所有 A 类主卡；内容区显示被通量区收纳的卡 |
+| 背包区 / 特殊存放区 | 主卡区 + 动态 `UWacomZoneDropTarget + WrapBox` | 每张 B 主卡一个区块；主卡区只显示该 B 主卡，内容区显示受其容量效果影响的卡 |
 | 背包区 / 负重区 | `UWacomZoneDropTarget + WrapBox` | 渲染 `RunState.BurdenZone` |
 
 `UWacomBackpackScreen` 暴露以下 WBP 绑定槽位：
@@ -240,6 +240,12 @@ UI 结构（三大区）：
 - `BurdenZoneHost`
 
 C++ fallback 会创建默认三大区布局；如果 WBP 绑定这些 Host，C++ 只向 Host 填充运行时 DropTarget / WrapBox，不再要求美术布局复刻 C++ 默认结构。
+
+主卡投影规则：
+- 出战卡的物理 instance 位于 `BattleDeck`。
+- 如果出战卡是 A/B 类主卡，背包区对应主卡槽仍显示该卡投影，并标记"已出战"。
+- 投影不产生新的 InstanceId，不作为第二张卡参与销毁、容量计算或存档。
+- B 类主卡出战时，其特殊存放区仍保留；特殊区内容不因主卡物理进入 `BattleDeck` 而消失。
 
 子控件：`UWacomDeckCardWidget`
 

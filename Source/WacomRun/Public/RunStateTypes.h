@@ -177,3 +177,107 @@ struct WACOMRUN_API FSpecialZone
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck")
 	TArray<FCardInstance> Cards;
 };
+
+/**
+ * 背包 UI 查询用的单卡视图。
+ *
+ * 这是只读 Snapshot，不是新的物理归属模型；真实归属仍由 FRunState 四个 zone 数组决定。
+ */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunStorageCardView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	FCardInstance Instance;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	EZoneKind PhysicalZone = EZoneKind::Backpack;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	FGuid ZoneOwnerInstanceId;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	bool bIsContainer = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	bool bIsTypeAContainer = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	bool bIsTypeBContainer = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	bool bIsPhysicalInBattleDeck = false;
+};
+
+/** 通量存放区查询视图：A 类主卡 + 普通内容卡。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunFluxStorageView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	TArray<FRunStorageCardView> MainCards;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	TArray<FRunStorageCardView> ContentCards;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	int32 FluxCapacity = 0;
+};
+
+/** 单个 B 类特殊存放区查询视图。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunSpecialStorageView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	FRunStorageCardView OwnerCard;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	TArray<FRunStorageCardView> ContentCards;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	int32 Capacity = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	bool bOwnerInBattleDeck = false;
+};
+
+/** 背包界面用的 Run 层只读存放区 Snapshot。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunBackpackStorageSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	FRunFluxStorageView Flux;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	TArray<FRunSpecialStorageView> SpecialZones;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	TArray<FRunStorageCardView> BurdenCards;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	TArray<FRunStorageCardView> BattleDeckPhysicalCards;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	TArray<FRunStorageCardView> BattleDeckProjectedCards;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	int32 FluxCapacity = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	int32 BattleDeckCapacity = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	int32 BackpackPhysicalCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	int32 BattleDeckPhysicalCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	int32 BurdenCount = 0;
+};

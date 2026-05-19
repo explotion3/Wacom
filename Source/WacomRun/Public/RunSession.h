@@ -263,24 +263,30 @@ public:
 	 * 通量存放区当前容量（GDD §11.4）。
 	 *
 	 * 公式：Σ(玩家拥有的所有 A 类容器卡的 Capacity)
-	 *      = 遍历 Backpack + BattleDeck，对所有 IsTypeAContainerCard 的卡求和
+	 *      = 遍历当前 RunState 全部物理持有区，对所有 IsTypeAContainerCard 的卡求和
 	 * B 类容器卡（CapacityEffect 非空）不计入此公式，独立开辟特殊存放区。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	int32 GetFluxCapacity() const;
 
 	/**
-	 * 备战区当前容量（GDD §11.4 / Stage 4.5.1 R3）。
+	 * 备战区当前容量（GDD §11.4）。
 	 *
-	 * 公式：与 GetFluxCapacity 严格相等 = Σ(玩家拥有的所有 A 类容器卡的 Capacity)
-	 * B 类容器卡（CapacityEffect 非空）不计入此公式——每张 B 主卡有自己的
-	 * 特殊存放区（容量 = `Capacity - 1`），不再贡献备战区格数。
-	 *
-	 * 历史：Stage 4.4 hotfix 曾让此公式独立为"A + B 都算"；Stage 4.5.1 R3 回归
-	 * 与 Flux 一致，因为 B 类已通过 SpecialZone 独立承载。
+	 * 公式：Σ(玩家拥有的所有容器卡 Capacity)
+	 *      = 遍历当前 RunState 全部物理持有区，对所有 IsContainerCard 的卡求和
+	 * A 类和 B 类容器卡都计入备战区容量。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	int32 GetBattleDeckCapacity() const;
+
+	/**
+	 * 构建背包界面可直接读取的存放区 Snapshot。
+	 *
+	 * 只读查询：不修改 RunState、不触发广播、不创建新的 FCardInstance。
+	 * 用于把物理四区重组为通量主卡/内容、特殊区、负重区、备战物理卡与备战投影卡。
+	 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck|Snapshot")
+	FRunBackpackStorageSnapshot BuildBackpackStorageSnapshot() const;
 
 	/** 卡是否是容器卡（Capacity > 0）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
@@ -706,6 +712,9 @@ private:
 	 * 不在本函数内广播 OnRunStateChangedNative：调用方公共入口在末尾统一广播一次。
 	 */
 	void EnsureSpecialZoneEntryFor(const FCardInstance& Inst);
+
+	/** 遍历 RunState 全部物理持有区，按过滤条件累计卡牌 Capacity。 */
+	int32 SumOwnedCardCapacity(bool bTypeAOnly) const;
 
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|Run", Transient)
 	FRunState RunState;

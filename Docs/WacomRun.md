@@ -102,7 +102,7 @@ WacomRun 负责**战斗外的持久状态和存档**。
 |---|---|
 | `GetBackpack() / GetBattleDeck()` | 只读访问 |
 | `GetFluxCapacity() const` | 通量存放区容量（动态：Σ(玩家拥有所有 A 类容器卡 Capacity)）|
-| `GetBattleDeckCapacity() const` | 备战区容量（动态：与 GetFluxCapacity 严格相等，Σ A 类容器卡 Capacity；Stage 4.5.1 R3 回归）|
+| `GetBattleDeckCapacity() const` | 备战区容量（动态：Σ 玩家拥有的所有容器卡 Capacity，A/B 类都计入）|
 | `IsContainerCard(Card) static` | 卡是否容器（Capacity > 0）|
 | `IsTypeAContainerCard(Card) static` | 卡是 A 类容器卡（容器 + CapacityEffect 为空，计入 Flux）|
 | `IsTypeBContainerCard(Card) static` | 卡是 B 类容器卡（容器 + CapacityEffect 有效，开辟特殊存放区）|
@@ -196,11 +196,11 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 
 #### §3.3：经验值与技能
 
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `ExperienceCurrent` | `int32` | 累计经验 |
-| `ExperienceCapacity` | `int32` | 经验值上限（默认 10）|
-| `AcquiredSkills` | `TArray<FGameplayTag>` | 已获得技能。第一阶段全用 `SkillSlot.Placeholder` 占位 |
+| 字段                   | 类型                     | 说明                                      |
+| -------------------- | ---------------------- | --------------------------------------- |
+| `ExperienceCurrent`  | `int32`                | 累计经验                                    |
+| `ExperienceCapacity` | `int32`                | 经验值上限（默认 10）                            |
+| `AcquiredSkills`     | `TArray<FGameplayTag>` | 已获得技能。第一阶段全用 `SkillSlot.Placeholder` 占位 |
 
 #### §8：时间与昼夜
 
@@ -224,10 +224,14 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 
 **容量公式**（GDD §11.4）由 `URunSession::GetFluxCapacity()` / `GetBattleDeckCapacity()` 动态计算：
 - 通量容量 = `Σ(Backpack + BattleDeck 里所有 A 类容器卡 Capacity)`
-- 备战容量 = `GetFluxCapacity()`（Stage 4.5.1 R3 回归：与通量严格相等，B 类不再计入；4.4 hotfix 已被覆盖）
-- B 类容器卡（`Physique.CapacityEffect` 非空）不计入通量 / 备战公式，每张 B 主卡自己开辟一个特殊存放区，容量 = `Capacity - 1`
+- 备战容量 = `Σ(Backpack + BattleDeck 里所有容器卡 Capacity)`，A 类与 B 类都计入
+- B 类容器卡（`Physique.CapacityEffect` 非空）不计入通量公式，但计入备战容量；每张 B 主卡自己开辟一个特殊存放区，内容区容量 = `Capacity - 1`
+- 通量存放区内容区实际可收纳数量 = `Σ(A 类主卡 Capacity) - A 类主卡数量`
+- B 类特殊存放区内容区实际可收纳数量 = `B.Capacity - 1`
 
 **instance 互斥**：同一个 `FCardInstance.InstanceId` 同时只能位于 `Backpack / BattleDeck / BurdenZone / 任一 SpecialZone.Cards` 之一。`MoveInstance` 是通用迁移入口，失败路径不修改 RunState、不广播。
+
+**主卡投影**：主卡进入 `BattleDeck` 时，物理 instance 位于备战区；背包区对应的主卡槽仍应显示该主卡投影，并标记"已出战"。投影只用于表现和交互提示，不新增 instance，不参与存档和规则归属。
 
 **B 类容器卡与 SpecialZone**：
 - B 主卡 instance 进入 `Backpack` 或 `BattleDeck` 时，`RunState.SpecialZones` 中会幂等存在一条 `OwnerInstanceId == 主卡 InstanceId` 的 entry。

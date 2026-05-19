@@ -1578,33 +1578,154 @@ int32 URunSession::GetFluxCapacity() const
 	// GDD §11.4 容量公式：
 	//   通量存放区容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
 	//
-	// "玩家拥有" = Backpack + BattleDeck（两个独立的存放槽，但容量数值同步）。
+	// "玩家拥有" = 当前 RunState 全部物理持有区。
 	// B 类容器卡（CapacityEffect 非空）不进通量公式，自行开辟特殊存放区。
-	int32 Sum = 0;
-	for (const FCardInstance& Inst : RunState.Backpack)
-	{
-		if (IsTypeAContainerCard(Inst.Definition))
-		{
-			Sum += Inst.Definition->Physique.Capacity;
-		}
-	}
-	for (const FCardInstance& Inst : RunState.BattleDeck)
-	{
-		if (IsTypeAContainerCard(Inst.Definition))
-		{
-			Sum += Inst.Definition->Physique.Capacity;
-		}
-	}
-	return Sum;
+	return SumOwnedCardCapacity(/*bTypeAOnly=*/true);
 }
 
 int32 URunSession::GetBattleDeckCapacity() const
 {
-	// GDD §11.4 / Stage 4.5.1 R3：备战区容量与通量容量严格相等：
-	//   备战区容量 = 通量容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
-	// B 类容器卡（CapacityEffect 非空）不计入此公式——每张 B 主卡有自己的特殊存放区。
-	// 直接复用 GetFluxCapacity() 实现，保证两者公式不会漂移（R3.4）。
-	return GetFluxCapacity();
+	// GDD §11.4 容量公式：
+	//   备战区容量 = Σ(玩家拥有的所有容器卡 Capacity)
+	//
+	// A 类和 B 类容器卡都计入；UI 中的主卡投影不改变物理 instance 归属。
+	return SumOwnedCardCapacity(/*bTypeAOnly=*/false);
+}
+
+FRunBackpackStorageSnapshot URunSession::BuildBackpackStorageSnapshot() const
+{
+	FRunBackpackStorageSnapshot Snapshot;
+	Snapshot.FluxCapacity = GetFluxCapacity();
+	Snapshot.BattleDeckCapacity = GetBattleDeckCapacity();
+	Snapshot.BackpackPhysicalCount = RunState.Backpack.Num();
+	Snapshot.BattleDeckPhysicalCount = RunState.BattleDeck.Num();
+	Snapshot.BurdenCount = RunState.BurdenZone.Num();
+	Snapshot.Flux.FluxCapacity = Snapshot.FluxCapacity;
+
+	auto MakeCardView = [](const FCardInstance& Inst, EZoneKind PhysicalZone, FGuid ZoneOwnerInstanceId)
+	{
+		FRunStorageCardView View;
+		View.Instance = Inst;
+		View.PhysicalZone = PhysicalZone;
+		View.ZoneOwnerInstanceId = ZoneOwnerInstanceId;
+		View.bIsContainer = URunSession::IsContainerCard(Inst.Definition);
+		View.bIsTypeAContainer = URunSession::IsTypeAContainerCard(Inst.Definition);
+		View.bIsTypeBContainer = URunSession::IsTypeBContainerCard(Inst.Definition);
+		View.bIsPhysicalInBattleDeck = PhysicalZone == EZoneKind::BattleDeck;
+		return View;
+	};
+
+	for (const FCardInstance& Inst : RunState.Backpack)
+	{
+		if (!Inst.Definition)
+		{
+			continue;
+		}
+
+		if (IsTypeAContainerCard(Inst.Definition))
+		{
+			Snapshot.Flux.MainCards.Add(MakeCardView(Inst, EZoneKind::Backpack, FGuid()));
+		}
+		else if (!IsTypeBContainerCard(Inst.Definition))
+		{
+			Snapshot.Flux.ContentCards.Add(MakeCardView(Inst, EZoneKind::Backpack, FGuid()));
+		}
+	}
+
+	for (const FCardInstance& Inst : RunState.BattleDeck)
+	{
+		if (!Inst.Definition)
+		{
+			continue;
+		}
+
+		const FRunStorageCardView View = MakeCardView(Inst, EZoneKind::BattleDeck, FGuid());
+		Snapshot.BattleDeckPhysicalCards.Add(View);
+
+		if (IsTypeAContainerCard(Inst.Definition))
+		{
+			Snapshot.Flux.MainCards.Add(View);
+		}
+	}
+
+	for (const FSpecialZone& SZ : RunState.SpecialZones)
+	{
+		FCardInstance OwnerInst;
+		EZoneKind OwnerZone = EZoneKind::Backpack;
+		FGuid OwnerSelfOwnerId;
+		if (!FindInstance(SZ.OwnerInstanceId, OwnerInst, OwnerZone, OwnerSelfOwnerId)
+			|| !OwnerInst.Definition
+			|| !IsTypeBContainerCard(OwnerInst.Definition)
+			|| (OwnerZone != EZoneKind::Backpack && OwnerZone != EZoneKind::BattleDeck))
+		{
+			continue;
+		}
+
+		FRunSpecialStorageView SpecialView;
+		SpecialView.OwnerCard = MakeCardView(OwnerInst, OwnerZone, FGuid());
+		SpecialView.Capacity = GetSpecialZoneCapacityFor(SZ.OwnerInstanceId);
+		SpecialView.bOwnerInBattleDeck = OwnerZone == EZoneKind::BattleDeck;
+
+		for (const FCardInstance& Inst : SZ.Cards)
+		{
+			if (!Inst.Definition)
+			{
+				continue;
+			}
+
+			FRunStorageCardView ContentView = MakeCardView(Inst, EZoneKind::SpecialZone, SZ.OwnerInstanceId);
+			SpecialView.ContentCards.Add(ContentView);
+			if (SpecialView.bOwnerInBattleDeck && Inst.bBattleEnabledInSpecialZone)
+			{
+				Snapshot.BattleDeckProjectedCards.Add(ContentView);
+			}
+		}
+
+		Snapshot.SpecialZones.Add(MoveTemp(SpecialView));
+	}
+
+	for (const FCardInstance& Inst : RunState.BurdenZone)
+	{
+		if (!Inst.Definition)
+		{
+			continue;
+		}
+		Snapshot.BurdenCards.Add(MakeCardView(Inst, EZoneKind::BurdenZone, FGuid()));
+	}
+
+	return Snapshot;
+}
+
+int32 URunSession::SumOwnedCardCapacity(bool bTypeAOnly) const
+{
+	auto ShouldCount = [bTypeAOnly](const UCardDefinition* Card)
+	{
+		return bTypeAOnly
+			? URunSession::IsTypeAContainerCard(Card)
+			: URunSession::IsContainerCard(Card);
+	};
+
+	int32 Sum = 0;
+	auto AccumulatePile = [&Sum, &ShouldCount](const TArray<FCardInstance>& Pile)
+	{
+		for (const FCardInstance& Inst : Pile)
+		{
+			if (ShouldCount(Inst.Definition))
+			{
+				Sum += Inst.Definition->Physique.Capacity;
+			}
+		}
+	};
+
+	AccumulatePile(RunState.Backpack);
+	AccumulatePile(RunState.BattleDeck);
+	AccumulatePile(RunState.BurdenZone);
+	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
+	{
+		AccumulatePile(SpecialZone.Cards);
+	}
+
+	return Sum;
 }
 
 bool URunSession::IsBackpackUiAvailable() const

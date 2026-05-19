@@ -8,31 +8,31 @@
 
 ### 规则层
 
-| 项 | 现状 | 后续方向 |
-|---|---|---|
-| `Status.Slow` 减速数值效果 | 只记录层数，不影响先机或 Cost | 等 `WacomBattle.md` 正式定义减速公式后实现 |
-| `Status.Twilight` 暮气数值效果 | 只记录层数，不触发任何效果 | 等"暮气生效触发点"规则确认（回合开始？部位行动前？）|
-| 暮蛉 `OnTwilightTriggered` 真正改中毒层数 | P3.5 只发 `PassiveTriggered` 事件，不改 Magnitude | 需引入 `FRuntimeCardInstance::EffectMagnitudeModifiers` 或等价机制 |
-| 卡牌耐久 `Durability` 消耗 | `FCardPhysique::Durability` 字段存在但不读取 | 等耐久系统设计（暮色引虫灯 1 耐久 = 打出一次进消耗区）|
-| 左手主动效果 / 完美释放效果 | 左手 `Effects` / `PerfectReleaseEffects` 留空 | 等具体卡牌设计 |
-| 右手"相邻右方伙伴代打" | 未实现 | 等 `Target.Adjacent.Right` 的 Executor 分支 |
-| 击倒事件三选一具体效果 | Stage 7 已搭好"撤离/援助/破坏"框架 + dialog UI + BattleProgress 持久化撤离破坏部位；Run 层第一阶段仅记日志 | Stage 9 节点事件接入时按 `FKnockdownChoice::Choice` 分支触发实际效果（左手 buff / 永久强化部位 / 特殊节点等）|
-| 蛇部位间联动 | 无（头被破坏时身体不强化）| 等更多敌人设计后按需加 |
-| 手牌满时 OnCompanionCount 处理 | 强行加入，下回合 EnforceLimit 处理 | 若规则变更为"满时不触发"，改 `RunOnCompanionCountPassives` |
-| 存档系统恢复 | Stage 0.1 暂停（`bSaveSystemEnabled = false`），底层 UWacomSaveGame / FRunState 拷贝/迁移机制保留 | demo 完善后恢复：Bootstrap 读盘 / PauseMenu Save 按钮 / MainMenu Continue |
-| `IsDeleteFunctionAvailable` 接入 `DeleteCardForGold` 校验 | 接口就位但 DeleteCardForGold 不读（GDD §11.7 第一阶段始终允许删牌）| 等 GDD 切换为"按需可用"后接入 |
+| 项                                                     | 现状                                                                                 | 后续方向                                                                           |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `Status.Slow` 减速数值效果                                  | 只记录层数，不影响先机或 Cost                                                                  | 等 `WacomBattle.md` 正式定义减速公式后实现                                                 |
+| `Status.Twilight` 暮气数值效果                              | 只记录层数，不触发任何效果                                                                      | 等"暮气生效触发点"规则确认（回合开始？部位行动前？）                                                    |
+| 暮蛉 `OnTwilightTriggered` 真正改中毒层数                      | P3.5 只发 `PassiveTriggered` 事件，不改 Magnitude                                         | 需引入 `FRuntimeCardInstance::EffectMagnitudeModifiers` 或等价机制                     |
+| 卡牌耐久 `Durability` 消耗                                  | `FCardPhysique::Durability` 字段存在但不读取                                               | 等耐久系统设计（暮色引虫灯 1 耐久 = 打出一次进消耗区）                                                 |
+| 左手主动效果 / 完美释放效果                                       | 左手 `Effects` / `PerfectReleaseEffects` 留空                                          | 等具体卡牌设计                                                                        |
+| 右手"相邻右方伙伴代打"                                          | 未实现                                                                                | 等 `Target.Adjacent.Right` 的 Executor 分支                                        |
+| 击倒事件三选一具体效果                                           | Stage 7 已搭好"撤离/援助/破坏"框架 + dialog UI + BattleProgress 持久化撤离破坏部位；Run 层第一阶段仅记日志       | Stage 9 节点事件接入时按 `FKnockdownChoice::Choice` 分支触发实际效果（左手 buff / 永久强化部位 / 特殊节点等） |
+| 蛇部位间联动                                                | 无（头被破坏时身体不强化）                                                                      | 等更多敌人设计后按需加                                                                    |
+| 手牌满时 OnCompanionCount 处理                              | 强行加入，下回合 EnforceLimit 处理                                                           | 若规则变更为"满时不触发"，改 `RunOnCompanionCountPassives`                                  |
+| 存档系统恢复                                                | Stage 0.1 暂停（`bSaveSystemEnabled = false`），底层 UWacomSaveGame / FRunState 拷贝/迁移机制保留 | demo 完善后恢复：Bootstrap 读盘 / PauseMenu Save 按钮 / MainMenu Continue                |
+| `IsDeleteFunctionAvailable` 接入 `DeleteCardForGold` 校验 | 接口就位但 DeleteCardForGold 不读（GDD §11.7 第一阶段始终允许删牌）                                   | 等 GDD 切换为"按需可用"后接入                                                             |
 
 ### 卡牌扩展（按需做，未来卡牌出现时再实现）
 
-| 项 | 现状 | 触发实现的条件 |
-|---|---|---|
-| `Effect.CopyCard` 复制手牌临时副本 | 未做 | 出现需要复制机制的卡 |
-| `Magnitude.Source.DiscardCount` 弃牌堆数量 Magnitude | 未做 | 出现按弃牌堆数量调整数值的卡 |
-| `Magnitude.Source.DestroyedPartCount` 已破坏部位数 Magnitude | 未做 | 出现按破坏部位数加伤的卡 |
-| `Target.AllHandCards` 手牌全展开 | 未做 | 出现"对所有手牌生效"的卡 |
-| `Target.Adjacent.Left` 本卡左相邻 | 未做 | 出现按相邻位置定位的卡（与右手代打类卡共用 Executor 分支）|
-| `Target.Adjacent.Right` 本卡右相邻 | 未做 | 同上；右手代打也依赖此 |
-| `Target.RandomEnemyPart` 随机存活部位 | 未做 | 出现随机选部位的卡 |
+| 项                                                      | 现状  | 触发实现的条件                            |
+| ------------------------------------------------------ | --- | ---------------------------------- |
+| `Effect.CopyCard` 复制手牌临时副本                             | 未做  | 出现需要复制机制的卡                         |
+| `Magnitude.Source.DiscardCount` 弃牌堆数量 Magnitude        | 未做  | 出现按弃牌堆数量调整数值的卡                     |
+| `Magnitude.Source.DestroyedPartCount` 已破坏部位数 Magnitude | 未做  | 出现按破坏部位数加伤的卡                       |
+| `Target.AllHandCards` 手牌全展开                            | 未做  | 出现"对所有手牌生效"的卡                      |
+| `Target.Adjacent.Left` 本卡左相邻                           | 未做  | 出现按相邻位置定位的卡（与右手代打类卡共用 Executor 分支） |
+| `Target.Adjacent.Right` 本卡右相邻                          | 未做  | 同上；右手代打也依赖此                        |
+| `Target.RandomEnemyPart` 随机存活部位                        | 未做  | 出现随机选部位的卡                          |
 
 ### 卡牌扩展（已注册 Handler 但调用点未接入）
 
@@ -69,6 +69,7 @@
 | 锚点左右归属 | 遍历顺序启发式（第一个锚点进 LeftSlot）| 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
 | 背包 UI 删牌区与 DeleteProvider 联动 | 删牌区始终显示（GDD §11.7 第一阶段约定），`IsDeleteFunctionAvailable()` 接口就位但 UI 不读 | 等 GDD 切换为"按需可用"后，BackpackScreen 根据 `IsDeleteFunctionAvailable()` 显示/隐藏删牌区 |
 | 探索 HUD 压力阈值警示色 | 压力值纯数字白色 | 压力 >50% 黄色 / >80% 红色 |
+| 背包存放区主卡槽/内容槽重构 | 新 GDD 已明确通量区和特殊区都由"左侧主卡区 + 右侧内容区"组成；当前 C++/UI 仍按单一 WrapBox 渲染 | 将通量区拆成 A 类主卡槽 + 内容槽；每张 B 类主卡独立特殊区；主卡出战时背包区显示投影与"已出战"标记 |
 | 背包 UI WBP 美术落地 | 暂缓继续推进。`BackpackScreen` 已拆为三大区 Host：`DeleteZoneHost / BattleDeckZoneHost / FluxZoneHost / SpecialZonesHost / BurdenZoneHost`，C++ fallback 可运行 | 后续在编辑器中创建/调整正式 `WBP_BackpackScreen`，绑定 5 个 Host，并按 `Docs/Image/背包界面.png` 调整外层结构和样式；规则仍通过 `RunSession::MoveInstance` / `DeleteCardForGold` |
 | 背包 UI 拖拽手感 | 已接入 UMG DragDropOperation，但当前仍是 C++ 默认布局与全量重建，缺少悬停高亮、失败提示、动效反馈 | 后续做交互 polish；真实规则继续以 `RunSession::MoveInstance` / `DeleteCardForGold` 为准 |
 | 背包 UI 增量刷新 | `BackpackScreen::RebuildAll()` 每次从 RunState 全量重建所有区块 | 卡牌数量明显增加或需要动画时，迁 ListView/TileView 或做 instance diff |

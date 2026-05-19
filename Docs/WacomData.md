@@ -70,7 +70,8 @@ struct FCardPhysique
 ```
 
 `CapacityEffect` 使用 `Card.CapacityEffect.*` 命名空间。当前已实现：
-- 空 tag：A 类容器，容量计入通量 / 备战容量公式。
+- 空 tag：A 类容器，容量计入通量容量和备战容量。
+- 有效 tag：B 类容器，容量不计入通量容量，但计入备战容量；每张 B 类主卡独立展开一个 SpecialZone。
 - `Card.CapacityEffect.WeaponDamagePlus3`：B 类容器效果。SpecialZone 内已选择入战且带 `Card.Keyword.Weapon` 的卡，伤害结算 +3。
 
 ---
