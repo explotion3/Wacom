@@ -108,6 +108,18 @@ FWacomCardViewData UWacomDeckCardWidget::BuildCurrentCardViewData() const
 	return Data;
 }
 
+void UWacomDeckCardWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+	RequestCardHover();
+}
+
+void UWacomDeckCardWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+{
+	RequestCardUnhover();
+	Super::NativeOnMouseLeave(InMouseEvent);
+}
+
 FReply UWacomDeckCardWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
 {
 	if (bDragVisualMode)
@@ -129,6 +141,7 @@ FReply UWacomDeckCardWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
 void UWacomDeckCardWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
 {
 	Super::NativeOnDragDetected(InGeometry, InMouseEvent, OutOperation);
+	RequestDragStartedForDetail();
 
 	OutOperation = BuildDragOperation();
 	if (OutOperation)
@@ -203,6 +216,39 @@ bool UWacomDeckCardWidget::RequestBattleEnabledToggle()
 	}
 
 	OnBattleEnabledToggleRequestedNative.Broadcast(InstanceId);
+	return true;
+}
+
+bool UWacomDeckCardWidget::RequestCardHover()
+{
+	if (bDragVisualMode || !Card || !InstanceId.IsValid())
+	{
+		return false;
+	}
+
+	OnCardHoveredNative.Broadcast(this);
+	return true;
+}
+
+bool UWacomDeckCardWidget::RequestCardUnhover()
+{
+	if (bDragVisualMode || !Card || !InstanceId.IsValid())
+	{
+		return false;
+	}
+
+	OnCardUnhoveredNative.Broadcast(this);
+	return true;
+}
+
+bool UWacomDeckCardWidget::RequestDragStartedForDetail()
+{
+	if (bDragVisualMode || !Card || !InstanceId.IsValid())
+	{
+		return false;
+	}
+
+	OnCardUnhoveredNative.Broadcast(this);
 	return true;
 }
 

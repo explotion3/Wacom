@@ -5,14 +5,19 @@
 #include "Blueprint/WidgetTree.h"
 #include "Cards/CardDefinition.h"
 #include "Components/Border.h"
+#include "Components/HorizontalBox.h"
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/PanelWidget.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/WrapBox.h"
 #include "Engine/Texture2D.h"
+#include "UI/Card/WacomCardEffectBadgeWidget.h"
+#include "Tags/WacomGameplayTags.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardView"
 
@@ -40,6 +45,21 @@ namespace
 		return LastDot != INDEX_NONE ? TagName.Mid(LastDot + 1) : TagName;
 	}
 
+	FString GetKeywordDisplayName(const FGameplayTag& Tag)
+	{
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Swift))          { return TEXT("迅捷"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Retain))         { return TEXT("保留"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Combo))          { return TEXT("连击"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Companion))      { return TEXT("伙伴"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Weapon))         { return TEXT("武器"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Tool))           { return TEXT("工具"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Hand))           { return TEXT("手"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Exhaust))        { return TEXT("消耗"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_BagProvider))    { return TEXT("容器"); }
+		if (Tag.MatchesTagExact(WacomTags::Card_Keyword_DeleteProvider)) { return TEXT("删牌"); }
+		return ShortGameplayTagName(Tag);
+	}
+
 	FText BuildTypeLine(const UCardDefinition* Card)
 	{
 		if (!Card)
@@ -54,12 +74,15 @@ namespace
 				: LOCTEXT("TypeContainerA", "背包");
 		}
 
+		TArray<FString> KeywordNames;
 		for (const FGameplayTag& Tag : Card->Keywords)
 		{
-			return FText::FromString(ShortGameplayTagName(Tag));
+			KeywordNames.Add(GetKeywordDisplayName(Tag));
 		}
 
-		return FText::GetEmpty();
+		return KeywordNames.Num() > 0
+			? FText::FromString(FString::Join(KeywordNames, TEXT(" / ")))
+			: FText::GetEmpty();
 	}
 
 	FText BuildCompactDescriptionText(const UCardDefinition* Card)
@@ -88,6 +111,217 @@ namespace
 		return FText::FromString(Text);
 	}
 
+	int32 GetDeleteValueFromRarity(const UCardDefinition* Card)
+	{
+		if (!Card)
+		{
+			return 0;
+		}
+		if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_White))
+		{
+			return 1;
+		}
+		if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Blue))
+		{
+			return 2;
+		}
+		return 0;
+	}
+
+	FText BuildPhysiqueText(const UCardDefinition* Card)
+	{
+		if (!Card)
+		{
+			return FText::GetEmpty();
+		}
+
+		TArray<FString> Parts;
+		if (Card->Physique.Durability > 0)
+		{
+			Parts.Add(FString::Printf(TEXT("%d耐久"), Card->Physique.Durability));
+		}
+		if (Card->Physique.Capacity > 0)
+		{
+			Parts.Add(FString::Printf(TEXT("%d容量"), Card->Physique.Capacity));
+		}
+		if (Card->Physique.MaxHpBonus > 0)
+		{
+			Parts.Add(FString::Printf(TEXT("+%d生命"), Card->Physique.MaxHpBonus));
+		}
+
+		return Parts.Num() > 0
+			? FText::FromString(FString::Join(Parts, TEXT("/")))
+			: FText::GetEmpty();
+	}
+
+	int32 GetDisplayMagnitude(const FCardEffect& Effect, const UCardDefinition* Card)
+	{
+		if (Effect.MagnitudeSource.MatchesTagExact(WacomTags::Magnitude_Source_RuntimeCost))
+		{
+			return Card ? Card->BaseCost : Effect.Magnitude;
+		}
+		return Effect.Magnitude;
+	}
+
+	FText BuildEffectBadgeText(EWacomCardViewEffectBadgeKind Kind, int32 Value)
+	{
+		switch (Kind)
+		{
+		case EWacomCardViewEffectBadgeKind::Damage:
+			return FText::Format(LOCTEXT("DamageBadgeFmt", "伤{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Heal:
+			return FText::Format(LOCTEXT("HealBadgeFmt", "疗{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Poison:
+			return FText::Format(LOCTEXT("PoisonBadgeFmt", "毒{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Slow:
+			return FText::Format(LOCTEXT("SlowBadgeFmt", "缓{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Freeze:
+			return FText::Format(LOCTEXT("FreezeBadgeFmt", "冻{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Twilight:
+			return FText::Format(LOCTEXT("TwilightBadgeFmt", "暮{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Draw:
+			return FText::Format(LOCTEXT("DrawBadgeFmt", "抽{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Discard:
+			return FText::Format(LOCTEXT("DiscardBadgeFmt", "弃{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Initiative:
+			return FText::Format(LOCTEXT("InitiativeBadgeFmt", "机{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Cost:
+			return FText::Format(LOCTEXT("CostBadgeFmt", "费{0}"), FText::AsNumber(Value));
+		default:
+			return FText::AsNumber(Value);
+		}
+	}
+
+	bool TryBuildEffectBadge(const FCardEffect& Effect, const UCardDefinition* Card, FWacomCardViewEffectBadge& OutBadge)
+	{
+		const int32 Value = GetDisplayMagnitude(Effect, Card);
+		if (Value == 0)
+		{
+			return false;
+		}
+
+		if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Damage))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Damage;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Heal))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Heal;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Poison))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Poison;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Slow))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Slow;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Freeze))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Freeze;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Twilight))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Twilight;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Draw))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Draw;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Discard))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Discard;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ModifyInitiative))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Initiative;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_AddCost)
+			|| Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_ReduceCost))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Cost;
+		}
+		else
+		{
+			return false;
+		}
+
+		OutBadge.Value = Value;
+		OutBadge.DisplayText = BuildEffectBadgeText(OutBadge.Kind, Value);
+		return true;
+	}
+
+	TArray<FWacomCardViewEffectBadge> BuildEffectBadges(const UCardDefinition* Card)
+	{
+		TArray<FWacomCardViewEffectBadge> Badges;
+		if (!Card)
+		{
+			return Badges;
+		}
+
+		for (const FCardEffect& Effect : Card->Effects)
+		{
+			FWacomCardViewEffectBadge Badge;
+			if (TryBuildEffectBadge(Effect, Card, Badge))
+			{
+				Badges.Add(Badge);
+			}
+		}
+		return Badges;
+	}
+
+	FText BuildPassiveTriggerText(const FCardPassive& Passive)
+	{
+		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_AfterPlayed))
+		{
+			return LOCTEXT("PassiveTriggerAfterPlayed", "被动：打出后");
+		}
+		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnCompanionCount))
+		{
+			return Passive.TriggerThreshold > 0
+				? FText::Format(LOCTEXT("PassiveTriggerOnCompanionCountFmt", "被动：每打出{0}张伙伴"), FText::AsNumber(Passive.TriggerThreshold))
+				: LOCTEXT("PassiveTriggerOnCompanionCount", "被动：打出伙伴计数");
+		}
+		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnTwilightTriggered))
+		{
+			return LOCTEXT("PassiveTriggerOnTwilightTriggered", "被动：暮气触发");
+		}
+		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnTurnStart))
+		{
+			return LOCTEXT("PassiveTriggerOnTurnStart", "被动：回合开始");
+		}
+		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnTurnEnd))
+		{
+			return LOCTEXT("PassiveTriggerOnTurnEnd", "被动：回合结束");
+		}
+		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnDraw))
+		{
+			return LOCTEXT("PassiveTriggerOnDraw", "被动：抽到时");
+		}
+		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnDiscard))
+		{
+			return LOCTEXT("PassiveTriggerOnDiscard", "被动：弃掉时");
+		}
+
+		return Passive.Trigger.IsValid()
+			? FText::FromString(FString::Printf(TEXT("被动：%s"), *ShortGameplayTagName(Passive.Trigger)))
+			: LOCTEXT("PassiveTriggerUnknown", "被动");
+	}
+
+	FText BuildPassiveLine(const FCardPassive& Passive)
+	{
+		FText TriggerText = BuildPassiveTriggerText(Passive);
+		if (Passive.Effects.Num() <= 0)
+		{
+			return TriggerText;
+		}
+
+		return FText::Format(
+			LOCTEXT("PassiveLineWithEffectCountFmt", "{0}（效果 {1}）"),
+			TriggerText,
+			FText::AsNumber(Passive.Effects.Num()));
+	}
+
 	void SetOptionalText(UTextBlock* TextBlock, const FText& Text)
 	{
 		if (!TextBlock)
@@ -97,6 +331,32 @@ namespace
 
 		TextBlock->SetText(Text);
 		TextBlock->SetVisibility(Text.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	}
+
+	void SetOptionalNumberText(UTextBlock* TextBlock, int32 Value, bool bShow)
+	{
+		if (!TextBlock)
+		{
+			return;
+		}
+
+		TextBlock->SetText(FText::AsNumber(Value));
+		TextBlock->SetVisibility(bShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+}
+
+UWacomCardView::UWacomCardView(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	if (UClass* Loaded = LoadObject<UClass>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_CardEffectBadge.WBP_CardEffectBadge_C")))
+	{
+		EffectBadgeWidgetClass = Loaded;
+	}
+	else
+	{
+		EffectBadgeWidgetClass = UWacomCardEffectBadgeWidget::StaticClass();
 	}
 }
 
@@ -137,6 +397,21 @@ TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 			CostSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 		}
 
+		UHorizontalBox* HeaderStats = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("HeaderStats"));
+		if (UVerticalBoxSlot* HeaderStatsSlot = Content->AddChildToVerticalBox(HeaderStats))
+		{
+			HeaderStatsSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+		}
+
+		ValueText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ValueText"));
+		ValueText->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.9f, 1.f, 1.f)));
+		HeaderStats->AddChild(ValueText);
+
+		PhysiqueText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("PhysiqueText"));
+		PhysiqueText->SetAutoWrapText(true);
+		PhysiqueText->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 1.f, 0.75f, 1.f)));
+		HeaderStats->AddChild(PhysiqueText);
+
 		NameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("NameText"));
 		NameText->SetJustification(ETextJustify::Center);
 		NameText->SetAutoWrapText(true);
@@ -166,6 +441,12 @@ TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 		if (UVerticalBoxSlot* TypeSlot = Content->AddChildToVerticalBox(TypeText))
 		{
 			TypeSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+		}
+
+		EffectStatsHost = WidgetTree->ConstructWidget<UWrapBox>(UWrapBox::StaticClass(), TEXT("EffectStatsHost"));
+		if (UVerticalBoxSlot* BadgeSlot = Content->AddChildToVerticalBox(EffectStatsHost))
+		{
+			BadgeSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
 		}
 
 		DescriptionText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("DescriptionText"));
@@ -215,6 +496,28 @@ FWacomCardViewData UWacomCardView::BuildFromCardDefinition(const UCardDefinition
 	Data.Description = BuildCompactDescriptionText(Card);
 	Data.Cost = Card ? Card->BaseCost : 0;
 	Data.bShowCost = Card != nullptr;
+	Data.Value = GetDeleteValueFromRarity(Card);
+	Data.bShowValue = Data.Value > 0;
+	Data.PhysiqueText = BuildPhysiqueText(Card);
+	Data.bShowPhysique = !Data.PhysiqueText.IsEmpty();
+	Data.EffectBadges = BuildEffectBadges(Card);
+	return Data;
+}
+
+FWacomCardDetailViewData UWacomCardView::BuildDetailFromCardDefinition(const UCardDefinition* Card)
+{
+	FWacomCardDetailViewData Data;
+	Data.Name = GetCardDisplayName(Card);
+	if (!Card)
+	{
+		return Data;
+	}
+
+	Data.Description = Card->Description;
+	for (const FCardPassive& Passive : Card->Passives)
+	{
+		Data.PassiveLines.Add(BuildPassiveLine(Passive));
+	}
 	return Data;
 }
 
@@ -226,9 +529,29 @@ void UWacomCardView::ApplyCurrentDataToWidgets()
 		CostText->SetVisibility(CurrentData.bShowCost ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 
+	SetOptionalNumberText(ValueText, CurrentData.Value, CurrentData.bShowValue);
+	SetOptionalText(PhysiqueText, CurrentData.bShowPhysique ? CurrentData.PhysiqueText : FText::GetEmpty());
 	SetOptionalText(NameText, CurrentData.Name);
 	SetOptionalText(TypeText, CurrentData.TypeText);
 	SetOptionalText(DescriptionText, CurrentData.Description);
+	if (EffectStatsHost)
+	{
+		EffectStatsHost->ClearChildren();
+		UClass* BadgeClass = EffectBadgeWidgetClass
+			? EffectBadgeWidgetClass.Get()
+			: UWacomCardEffectBadgeWidget::StaticClass();
+		for (const FWacomCardViewEffectBadge& Badge : CurrentData.EffectBadges)
+		{
+			UWacomCardEffectBadgeWidget* BadgeWidget = CreateWidget<UWacomCardEffectBadgeWidget>(this, BadgeClass);
+			if (!BadgeWidget)
+			{
+				continue;
+			}
+			BadgeWidget->SetEffectBadgeData(Badge);
+			EffectStatsHost->AddChild(BadgeWidget);
+		}
+		EffectStatsHost->SetVisibility(CurrentData.EffectBadges.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
 
 	if (CardArt)
 	{

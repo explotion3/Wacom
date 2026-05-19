@@ -149,10 +149,11 @@ void UWacomRunViewModelProvider::RefreshAllFields(URunSession* Run)
 
 	RunViewModel->SetGold(Run->GetGold());
 
-	RunViewModel->SetFluxCapacity(Run->GetFluxCapacity());
-	RunViewModel->SetBattleDeckCapacity(Run->GetBattleDeckCapacity());
-	RunViewModel->SetBackpackCount(Run->GetBackpack().Num());
-	RunViewModel->SetBattleDeckCount(Run->GetBattleDeck().Num());
+	const FRunBackpackStorageSnapshot StorageSnapshot = Run->BuildBackpackStorageSnapshot();
+	RunViewModel->SetFluxCapacity(StorageSnapshot.FluxCapacity);
+	RunViewModel->SetBattleDeckCapacity(StorageSnapshot.BattleDeckCapacity);
+	RunViewModel->SetBackpackCount(StorageSnapshot.BackpackPhysicalCount);
+	RunViewModel->SetBattleDeckCount(StorageSnapshot.BattleDeckPhysicalCount);
 
 	RunViewModel->SetPressureHunger    (State.Pressure.Hunger);
 	RunViewModel->SetPressureWound     (State.Pressure.Wound);

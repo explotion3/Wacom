@@ -6,11 +6,184 @@
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
+#include "UI/Backpack/WacomSpecialZoneWidget.h"
 #include "UI/Backpack/WacomZoneDropTarget.h"
+#include "UI/Card/WacomCardEffectBadgeWidget.h"
+#include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomCardView.h"
 
 #include "Cards/CardDefinition.h"
+#include "Tags/WacomGameplayTags.h"
 
 #include "UObject/StrongObjectPtr.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewUnboundFallbackSpec,
+	"Wacom.UI.Backpack.CardViewUnboundFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewUnboundFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardView> CardView(NewObject<UWacomCardView>());
+
+	FWacomCardViewData Data;
+	Data.Name = FText::FromString(TEXT("测试卡"));
+	Data.TypeText = FText::FromString(TEXT("Companion"));
+	Data.Description = FText::FromString(TEXT("测试描述"));
+	Data.Cost = 2;
+	Data.bShowCost = true;
+	Data.bDisabled = true;
+
+	CardView->SetCardViewData(Data);
+
+	TestEqual(TEXT("Unbound CardView preserves data name"),
+		CardView->GetCardViewData().Name.ToString(),
+		Data.Name.ToString());
+	TestEqual(TEXT("Unbound CardView preserves data cost"),
+		CardView->GetCardViewData().Cost,
+		Data.Cost);
+	TestTrue(TEXT("Unbound CardView preserves disabled flag"),
+		CardView->GetCardViewData().bDisabled);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewBuildSummarySpec,
+	"Wacom.UI.Backpack.CardViewBuildSummary",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewBuildSummarySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	Card->CardId = TEXT("Shuoguangdie");
+	Card->DisplayName = FText::FromString(TEXT("烁光蝶"));
+	Card->BaseCost = 1;
+	Card->Rarity = WacomTags::Card_Rarity_White;
+	Card->Keywords.AddTag(WacomTags::Card_Keyword_Companion);
+	Card->Keywords.AddTag(WacomTags::Card_Keyword_Weapon);
+	Card->Physique.MaxHpBonus = 6;
+
+	FCardEffect Damage;
+	Damage.EffectType = WacomTags::Effect_Damage;
+	Damage.Magnitude = 7;
+	Card->Effects.Add(Damage);
+
+	FCardEffect Freeze;
+	Freeze.EffectType = WacomTags::Effect_ApplyStatus_Freeze;
+	Freeze.Magnitude = 1;
+	Card->Effects.Add(Freeze);
+
+	const FWacomCardViewData Data = UWacomCardView::BuildFromCardDefinition(Card.Get());
+
+	TestEqual(TEXT("Summary name"), Data.Name.ToString(), TEXT("烁光蝶"));
+	TestEqual(TEXT("Summary cost"), Data.Cost, 1);
+	TestTrue(TEXT("White rarity exposes value"), Data.bShowValue);
+	TestEqual(TEXT("White rarity value"), Data.Value, 1);
+	TestTrue(TEXT("Physique summary visible"), Data.bShowPhysique);
+	TestTrue(TEXT("Physique summary contains max hp"), Data.PhysiqueText.ToString().Contains(TEXT("6")));
+	TestTrue(TEXT("Keyword line contains localized companion"), Data.TypeText.ToString().Contains(TEXT("伙伴")));
+	TestTrue(TEXT("Keyword line contains localized weapon"), Data.TypeText.ToString().Contains(TEXT("武器")));
+	TestEqual(TEXT("Two effect badges"), Data.EffectBadges.Num(), 2);
+	if (Data.EffectBadges.Num() >= 2)
+	{
+		TestTrue(TEXT("First badge is damage"), Data.EffectBadges[0].Kind == EWacomCardViewEffectBadgeKind::Damage);
+		TestEqual(TEXT("Damage badge value"), Data.EffectBadges[0].Value, 7);
+		TestTrue(TEXT("Second badge is freeze"), Data.EffectBadges[1].Kind == EWacomCardViewEffectBadgeKind::Freeze);
+		TestEqual(TEXT("Freeze badge value"), Data.EffectBadges[1].Value, 1);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardEffectBadgeWidgetDataSpec,
+	"Wacom.UI.Backpack.CardEffectBadgeWidgetData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardEffectBadgeWidgetDataSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardEffectBadgeWidget> BadgeWidget(NewObject<UWacomCardEffectBadgeWidget>());
+
+	FWacomCardViewEffectBadge Badge;
+	Badge.Kind = EWacomCardViewEffectBadgeKind::Damage;
+	Badge.Value = 7;
+	Badge.DisplayText = FText::FromString(TEXT("伤7"));
+
+	BadgeWidget->SetEffectBadgeData(Badge);
+	BadgeWidget->TakeWidget();
+	BadgeWidget->SetEffectBadgeData(Badge);
+
+	TestTrue(TEXT("Badge kind preserved"),
+		BadgeWidget->GetEffectBadgeData().Kind == EWacomCardViewEffectBadgeKind::Damage);
+	TestEqual(TEXT("Badge value preserved"), BadgeWidget->GetEffectBadgeData().Value, 7);
+	TestEqual(TEXT("Fallback ValueText shows numeric value"), BadgeWidget->GetValueText().ToString(), TEXT("7"));
+	TestEqual(TEXT("Fallback LabelText is localized"), BadgeWidget->GetLabelText().ToString(), TEXT("伤害"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardDetailBuildDataSpec,
+	"Wacom.UI.Backpack.CardDetailBuildData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	Card->CardId = TEXT("TwilightLantern");
+	Card->DisplayName = FText::FromString(TEXT("暮色引虫灯"));
+	Card->Description = FText::FromString(TEXT("造成1暮气，1中毒。\n被动细节应进入详情面板。"));
+
+	FCardPassive Passive;
+	Passive.Trigger = WacomTags::Passive_Trigger_OnCompanionCount;
+	Passive.TriggerThreshold = 3;
+	Card->Passives.Add(Passive);
+
+	const FWacomCardDetailViewData Data = UWacomCardView::BuildDetailFromCardDefinition(Card.Get());
+
+	TestEqual(TEXT("Detail name"), Data.Name.ToString(), TEXT("暮色引虫灯"));
+	TestEqual(TEXT("Detail keeps full description"),
+		Data.Description.ToString(),
+		TEXT("造成1暮气，1中毒。\n被动细节应进入详情面板。"));
+	TestEqual(TEXT("Task lines empty before schema support"), Data.TaskLines.Num(), 0);
+	TestEqual(TEXT("Change lines empty before schema support"), Data.ChangeLines.Num(), 0);
+	TestEqual(TEXT("One passive line"), Data.PassiveLines.Num(), 1);
+	if (Data.PassiveLines.Num() > 0)
+	{
+		TestTrue(TEXT("Passive line contains companion threshold"), Data.PassiveLines[0].ToString().Contains(TEXT("3")));
+		TestTrue(TEXT("Passive line contains localized companion"), Data.PassiveLines[0].ToString().Contains(TEXT("伙伴")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardDetailPanelFallbackSpec,
+	"Wacom.UI.Backpack.CardDetailPanelFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardDetailPanelFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardDetailPanel> Panel(NewObject<UWacomCardDetailPanel>());
+
+	FWacomCardDetailViewData Data;
+	Data.Name = FText::FromString(TEXT("详情测试卡"));
+	Data.Description = FText::FromString(TEXT("完整描述文本"));
+	Data.PassiveLines.Add(FText::FromString(TEXT("被动：回合结束")));
+
+	Panel->SetCardDetailData(Data);
+	Panel->TakeWidget();
+	Panel->SetCardDetailData(Data);
+
+	TestEqual(TEXT("Detail panel preserves name"), Panel->GetCardDetailData().Name.ToString(), TEXT("详情测试卡"));
+	TestEqual(TEXT("Detail panel preserves description"), Panel->GetCardDetailData().Description.ToString(), TEXT("完整描述文本"));
+	TestEqual(TEXT("Detail panel name getter"), Panel->GetNameText().ToString(), TEXT("详情测试卡"));
+	TestEqual(TEXT("Detail panel description getter"), Panel->GetDescriptionText().ToString(), TEXT("完整描述文本"));
+	TestEqual(TEXT("Detail panel passive lines preserved"), Panel->GetCardDetailData().PassiveLines.Num(), 1);
+
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackDragOperationDefaultsSpec,
@@ -80,6 +253,129 @@ bool FWacomUIBackpackDeckCardDragPayloadSpec::RunTest(const FString& /*Parameter
 		TestTrue(TEXT("SpecialZone FromZone copied"), SpecialDragOp->FromZone == EZoneKind::SpecialZone);
 		TestEqual(TEXT("SpecialZone owner id preserved"), SpecialDragOp->FromZoneOwnerInstanceId, SpecialOwnerId);
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackDeckCardHoverEventsSpec,
+	"Wacom.UI.Backpack.DeckCardHoverEvents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackDeckCardHoverEventsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomDeckCardWidget> Widget(NewObject<UWacomDeckCardWidget>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	FCardInstance Inst;
+	Inst.InstanceId = FGuid::NewGuid();
+	Inst.Definition = Card.Get();
+	Widget->SetCard(Inst, EZoneKind::Backpack, FGuid());
+
+	int32 HoverCount = 0;
+	int32 UnhoverCount = 0;
+	UWacomDeckCardWidget* LastHoverSource = nullptr;
+	UWacomDeckCardWidget* LastUnhoverSource = nullptr;
+	Widget->OnCardHoveredNative.AddLambda(
+		[&HoverCount, &LastHoverSource](UWacomDeckCardWidget* Source)
+		{
+			++HoverCount;
+			LastHoverSource = Source;
+		});
+	Widget->OnCardUnhoveredNative.AddLambda(
+		[&UnhoverCount, &LastUnhoverSource](UWacomDeckCardWidget* Source)
+		{
+			++UnhoverCount;
+			LastUnhoverSource = Source;
+		});
+
+	TestTrue(TEXT("Hover request accepted"), Widget->RequestCardHover());
+	TestEqual(TEXT("Hover emitted once"), HoverCount, 1);
+	TestEqual(TEXT("Hover carries source widget"), LastHoverSource, Widget.Get());
+
+	TestTrue(TEXT("Unhover request accepted"), Widget->RequestCardUnhover());
+	TestEqual(TEXT("Unhover emitted once"), UnhoverCount, 1);
+	TestEqual(TEXT("Unhover carries source widget"), LastUnhoverSource, Widget.Get());
+
+	TestTrue(TEXT("Drag start detail request accepted"), Widget->RequestDragStartedForDetail());
+	TestEqual(TEXT("Drag start emits unhover"), UnhoverCount, 2);
+
+	Widget->SetDragVisualMode(true);
+	TestFalse(TEXT("Drag visual does not emit hover"), Widget->RequestCardHover());
+	TestFalse(TEXT("Drag visual does not emit unhover"), Widget->RequestCardUnhover());
+	TestEqual(TEXT("No extra hover from drag visual"), HoverCount, 1);
+	TestEqual(TEXT("No extra unhover from drag visual"), UnhoverCount, 2);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardDetailPanelPositionSpec,
+	"Wacom.UI.Backpack.CardDetailPanelPosition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardDetailPanelPositionSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FVector2D LayerSize(1000.f, 700.f);
+	const FVector2D PanelSize(360.f, 420.f);
+	const FVector2D AnchorSize(260.f, 380.f);
+
+	const FVector2D Right = UWacomBackpackScreen::ComputeCardDetailPanelPosition(
+		FVector2D(100.f, 80.f),
+		AnchorSize,
+		LayerSize,
+		PanelSize,
+		12.f);
+	TestEqual(TEXT("Detail panel prefers right side"), Right.X, 372.0);
+	TestEqual(TEXT("Detail panel keeps top alignment"), Right.Y, 80.0);
+
+	const FVector2D Left = UWacomBackpackScreen::ComputeCardDetailPanelPosition(
+		FVector2D(700.f, 80.f),
+		AnchorSize,
+		LayerSize,
+		PanelSize,
+		12.f);
+	TestEqual(TEXT("Detail panel flips to left when right side overflows"), Left.X, 328.0);
+
+	const FVector2D Clamped = UWacomBackpackScreen::ComputeCardDetailPanelPosition(
+		FVector2D(900.f, 650.f),
+		AnchorSize,
+		LayerSize,
+		PanelSize,
+		12.f);
+	TestEqual(TEXT("Detail panel clamps x within layer"), Clamped.X, 528.0);
+	TestEqual(TEXT("Detail panel clamps y within layer"), Clamped.Y, 280.0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardDetailHoverShowsPanelSpec,
+	"Wacom.UI.Backpack.CardDetailHoverShowsPanel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardDetailHoverShowsPanelSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(NewObject<UWacomBackpackScreen>());
+	TStrongObjectPtr<UWacomDeckCardWidget> Widget(NewObject<UWacomDeckCardWidget>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	Card->CardId = TEXT("DetailHoverCard");
+	Card->DisplayName = FText::FromString(TEXT("悬停详情卡"));
+	Card->Description = FText::FromString(TEXT("悬停时显示完整描述"));
+
+	FCardInstance Inst;
+	Inst.InstanceId = FGuid::NewGuid();
+	Inst.Definition = Card.Get();
+	Widget->SetCard(Inst, EZoneKind::Backpack, FGuid());
+
+	Screen->TakeWidget();
+	TestTrue(TEXT("BackpackScreen can show detail panel for hovered card"), Screen->ShowCardDetailForCardWidget(Widget.Get()));
+	TestTrue(TEXT("Detail panel visible after hover"), Screen->IsCardDetailPanelVisible());
+	TestEqual(TEXT("Detail panel receives card name"), Screen->GetCardDetailPanelNameText().ToString(), TEXT("悬停详情卡"));
+
+	Screen->HideCardDetailPanel();
+	TestFalse(TEXT("Detail panel hidden on request"), Screen->IsCardDetailPanelVisible());
 
 	return true;
 }
@@ -166,6 +462,120 @@ bool FWacomUIBackpackDragOperationPayloadSpec::RunTest(const FString& /*Paramete
 	Op->FromZone = EZoneKind::Backpack;
 	Op->FromZoneOwnerInstanceId = FGuid();
 	TestFalse(TEXT("Non-SpecialZone owner invalid by convention"), Op->FromZoneOwnerInstanceId.IsValid());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackStorageCardViewPayloadSpec,
+	"Wacom.UI.Backpack.StorageCardViewPayload",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackStorageCardViewPayloadSpec::RunTest(const FString& /*Parameters*/)
+{
+	// BackpackScreen 现在从 FRunBackpackStorageSnapshot 读取列表；
+	// 子 widget 仍应把 FRunStorageCardView 的物理归属字段原样转成拖拽 payload。
+	TStrongObjectPtr<UWacomDeckCardWidget> Widget(NewObject<UWacomDeckCardWidget>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	FRunStorageCardView View;
+	View.Instance.InstanceId = FGuid::NewGuid();
+	View.Instance.Definition = Card.Get();
+	View.PhysicalZone = EZoneKind::SpecialZone;
+	View.ZoneOwnerInstanceId = FGuid::NewGuid();
+
+	Widget->SetCard(View.Instance, View.PhysicalZone, View.ZoneOwnerInstanceId);
+
+	UWacomCardDragOperation* DragOp = Cast<UWacomCardDragOperation>(Widget->BuildDragOperation());
+	TestNotNull(TEXT("StorageCardView-backed card emits drag operation"), DragOp);
+	if (!DragOp)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("StorageCardView instance id copied"), DragOp->InstanceId, View.Instance.InstanceId);
+	TestTrue(TEXT("StorageCardView physical zone copied"), DragOp->FromZone == View.PhysicalZone);
+	TestEqual(TEXT("StorageCardView owner id copied"), DragOp->FromZoneOwnerInstanceId, View.ZoneOwnerInstanceId);
+	TestEqual(TEXT("StorageCardView definition copied"), DragOp->Definition.Get(), Card.Get());
+
+	Widget->SetProjectedFromBadgeText(FText::FromString(TEXT("来自 蛛茧绒囊")));
+	TestTrue(TEXT("Projected badge still available for snapshot projection cards"), Widget->IsProjectedFromBadgeVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackSpecialZoneWidgetSnapshotSpec,
+	"Wacom.UI.Backpack.SpecialZoneWidgetSnapshot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackSpecialZoneWidgetSnapshotSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomSpecialZoneWidget> Widget(NewObject<UWacomSpecialZoneWidget>());
+	TStrongObjectPtr<UCardDefinition> OwnerCard(NewObject<UCardDefinition>());
+	TStrongObjectPtr<UCardDefinition> ContentCard(NewObject<UCardDefinition>());
+
+	OwnerCard->DisplayName = FText::FromString(TEXT("蛛茧绒囊"));
+	ContentCard->DisplayName = FText::FromString(TEXT("内容卡"));
+
+	const FGuid OwnerId = FGuid::NewGuid();
+	const FGuid ContentId = FGuid::NewGuid();
+
+	FRunSpecialStorageView View;
+	View.Capacity = 2;
+	View.bOwnerInBattleDeck = true;
+	View.OwnerCard.Instance.InstanceId = OwnerId;
+	View.OwnerCard.Instance.Definition = OwnerCard.Get();
+	View.OwnerCard.PhysicalZone = EZoneKind::BattleDeck;
+	View.OwnerCard.bIsPhysicalInBattleDeck = true;
+	View.OwnerCard.bIsContainer = true;
+	View.OwnerCard.bIsTypeBContainer = true;
+
+	FRunStorageCardView ContentView;
+	ContentView.Instance.InstanceId = ContentId;
+	ContentView.Instance.Definition = ContentCard.Get();
+	ContentView.Instance.bBattleEnabledInSpecialZone = true;
+	ContentView.PhysicalZone = EZoneKind::SpecialZone;
+	ContentView.ZoneOwnerInstanceId = OwnerId;
+	View.ContentCards.Add(ContentView);
+
+	int32 ToggleCount = 0;
+	FGuid LastToggledId;
+	Widget->OnBattleEnabledToggleRequestedNative.AddLambda(
+		[&ToggleCount, &LastToggledId](FGuid InstanceId)
+		{
+			++ToggleCount;
+			LastToggledId = InstanceId;
+		});
+
+	Widget->SetSpecialZoneView(View, nullptr, UWacomDeckCardWidget::StaticClass());
+
+	const FString Title = Widget->GetZoneTitleText().ToString();
+	TestTrue(TEXT("SpecialZoneWidget title includes owner"), Title.Contains(TEXT("蛛茧绒囊")));
+	TestTrue(TEXT("SpecialZoneWidget title includes count/capacity"), Title.Contains(TEXT("1 / 2")));
+	TestTrue(TEXT("Battle ready badge visible when owner is in BattleDeck"), Widget->IsBattleReadyBadgeVisible());
+
+	UWacomCardDragOperation* OwnerDragOp = Cast<UWacomCardDragOperation>(Widget->BuildOwnerCardDragOperation());
+	TestNotNull(TEXT("Owner card emits drag operation"), OwnerDragOp);
+	if (OwnerDragOp)
+	{
+		TestEqual(TEXT("Owner drag instance id"), OwnerDragOp->InstanceId, OwnerId);
+		TestTrue(TEXT("Owner drag zone is BattleDeck"), OwnerDragOp->FromZone == EZoneKind::BattleDeck);
+		TestFalse(TEXT("Owner drag has no SpecialZone owner id"), OwnerDragOp->FromZoneOwnerInstanceId.IsValid());
+	}
+
+	UWacomCardDragOperation* ContentDragOp = Cast<UWacomCardDragOperation>(Widget->BuildContentCardDragOperation(0));
+	TestNotNull(TEXT("Content card emits drag operation"), ContentDragOp);
+	if (ContentDragOp)
+	{
+		TestEqual(TEXT("Content drag instance id"), ContentDragOp->InstanceId, ContentId);
+		TestTrue(TEXT("Content drag zone is SpecialZone"), ContentDragOp->FromZone == EZoneKind::SpecialZone);
+		TestEqual(TEXT("Content drag owner id"), ContentDragOp->FromZoneOwnerInstanceId, OwnerId);
+	}
+
+	TestTrue(TEXT("Content toggle request accepted"), Widget->RequestContentCardBattleEnabledToggle(0));
+	TestEqual(TEXT("Content toggle emits once"), ToggleCount, 1);
+	TestEqual(TEXT("Content toggle carries content id"), LastToggledId, ContentId);
 
 	return true;
 }

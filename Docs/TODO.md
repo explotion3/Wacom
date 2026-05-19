@@ -69,8 +69,8 @@
 | 锚点左右归属 | 遍历顺序启发式（第一个锚点进 LeftSlot）| 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
 | 背包 UI 删牌区与 DeleteProvider 联动 | 删牌区始终显示（GDD §11.7 第一阶段约定），`IsDeleteFunctionAvailable()` 接口就位但 UI 不读 | 等 GDD 切换为"按需可用"后，BackpackScreen 根据 `IsDeleteFunctionAvailable()` 显示/隐藏删牌区 |
 | 探索 HUD 压力阈值警示色 | 压力值纯数字白色 | 压力 >50% 黄色 / >80% 红色 |
-| 背包存放区主卡槽/内容槽重构 | 新 GDD 已明确通量区和特殊区都由"左侧主卡区 + 右侧内容区"组成；当前 C++/UI 仍按单一 WrapBox 渲染 | 将通量区拆成 A 类主卡槽 + 内容槽；每张 B 类主卡独立特殊区；主卡出战时背包区显示投影与"已出战"标记 |
-| 背包 UI WBP 美术落地 | 暂缓继续推进。`BackpackScreen` 已拆为三大区 Host：`DeleteZoneHost / BattleDeckZoneHost / FluxZoneHost / SpecialZonesHost / BurdenZoneHost`，C++ fallback 可运行 | 后续在编辑器中创建/调整正式 `WBP_BackpackScreen`，绑定 5 个 Host，并按 `Docs/Image/背包界面.png` 调整外层结构和样式；规则仍通过 `RunSession::MoveInstance` / `DeleteCardForGold` |
+| 背包存放区主卡槽/内容槽重构 | 通量区接口已拆出 `FluxMainCardsHost / FluxContentDropTargetHost`；SpecialZone 已抽成 `UWacomSpecialZoneWidget`，接口层按 OwnerCard + ContentCards 渲染 | 正式 WBP 按美术草图落主卡槽/内容槽视觉；后续可为 `UWacomSpecialZoneWidget` 创建独立 WBP |
+| 背包 UI WBP 美术落地 | 暂缓继续推进。`BackpackScreen` 已拆为三大区 Host，并删除旧通量混合布局，只保留通量主卡/内容槽接口；WBP 绑定清单已落在 `Docs/UI_Backpack_WBP_Binding.md`；C++ fallback 可运行 | 后续在编辑器中创建/调整正式 `WBP_BackpackScreen`，按绑定清单接 `DeleteZoneHost / BattleDeckZoneHost / FluxMainCardsHost / FluxContentDropTargetHost / SpecialZonesHost / BurdenZoneHost`，并按 `Docs/Image/背包界面.png` 调整外层结构和样式；规则仍通过 `RunSession::MoveInstance` / `DeleteCardForGold` |
 | 背包 UI 拖拽手感 | 已接入 UMG DragDropOperation，但当前仍是 C++ 默认布局与全量重建，缺少悬停高亮、失败提示、动效反馈 | 后续做交互 polish；真实规则继续以 `RunSession::MoveInstance` / `DeleteCardForGold` 为准 |
 | 背包 UI 增量刷新 | `BackpackScreen::RebuildAll()` 每次从 RunState 全量重建所有区块 | 卡牌数量明显增加或需要动画时，迁 ListView/TileView 或做 instance diff |
 

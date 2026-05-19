@@ -98,7 +98,8 @@ bool UWacomZoneDropTarget::CanPreviewDrop(const UWacomCardDragOperation& CardOp)
 		return false;
 	}
 
-	if (!ShouldPreviewDrop(ZoneKind, CardOp.FromZone, Run->GetBattleDeck().Num(), Run->GetBattleDeckCapacity()))
+	const FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
+	if (!ShouldPreviewDrop(ZoneKind, CardOp.FromZone, Snapshot.BattleDeckPhysicalCount, Snapshot.BattleDeckCapacity))
 	{
 		return false;
 	}

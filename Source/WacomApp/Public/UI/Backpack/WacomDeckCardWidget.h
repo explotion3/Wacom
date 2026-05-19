@@ -78,12 +78,27 @@ public:
 	/** 右键切换请求的可测试入口。返回 false 表示当前卡片不响应该请求。 */
 	bool RequestBattleEnabledToggle();
 
+	/** 测试/诊断用：模拟卡牌悬停。返回 false 表示当前卡片不会广播 hover。 */
+	bool RequestCardHover();
+
+	/** 测试/诊断用：模拟卡牌移出。返回 false 表示当前卡片不会广播 unhover。 */
+	bool RequestCardUnhover();
+
+	/** 测试/诊断用：模拟开始拖拽时的详情隐藏通知。 */
+	bool RequestDragStartedForDetail();
+
 	/** 右键请求切换 SpecialZone 入战标记。Payload 是 instance id。 */
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEnabledToggleRequestedNative, FGuid);
 	FOnBattleEnabledToggleRequestedNative OnBattleEnabledToggleRequestedNative;
 
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnCardHoverStateChangedNative, UWacomDeckCardWidget*);
+	FOnCardHoverStateChangedNative OnCardHoveredNative;
+	FOnCardHoverStateChangedNative OnCardUnhoveredNative;
+
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
 	virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;

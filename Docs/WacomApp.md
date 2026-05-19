@@ -229,17 +229,24 @@ UI 结构（三大区）：
 | 备战区 | `UWacomZoneDropTarget + WrapBox` | BattleDeck 卡，标题显示 N/Capacity；同时显示已入战 SpecialZone 投影卡 |
 | 背包区 / 通量存放区 | 主卡区 + `UWacomZoneDropTarget + WrapBox` | 主卡区显示所有 A 类主卡；内容区显示被通量区收纳的卡 |
 | 背包区 / 特殊存放区 | 主卡区 + 动态 `UWacomZoneDropTarget + WrapBox` | 每张 B 主卡一个区块；主卡区只显示该 B 主卡，内容区显示受其容量效果影响的卡 |
-| 背包区 / 负重区 | `UWacomZoneDropTarget + WrapBox` | 渲染 `RunState.BurdenZone` |
+| 背包区 / 负重区 | `UWacomZoneDropTarget + WrapBox` | 渲染 Run 层 Snapshot 中的 `BurdenCards` |
 
 `UWacomBackpackScreen` 暴露以下 WBP 绑定槽位：
 
 - `DeleteZoneHost`
 - `BattleDeckZoneHost`
-- `FluxZoneHost`
+- `FluxMainCardsHost`
+- `FluxContentDropTargetHost`
+- `FluxMainCardsBox`
+- `FluxContentCardsBox`
 - `SpecialZonesHost`
 - `BurdenZoneHost`
 
 C++ fallback 会创建默认三大区布局；如果 WBP 绑定这些 Host，C++ 只向 Host 填充运行时 DropTarget / WrapBox，不再要求美术布局复刻 C++ 默认结构。
+
+通量区只保留新接口：`FluxMainCardsHost` 填充 A 类容器主卡，`FluxContentDropTargetHost` 填充可投放内容卡的 DropTarget。旧 `FluxZoneHost / BackpackCardsBox` 混合布局已删除。
+
+WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主文档只保留结构和职责说明。
 
 主卡投影规则：
 - 出战卡的物理 instance 位于 `BattleDeck`。
@@ -256,16 +263,34 @@ C++ fallback 会创建默认三大区布局；如果 WBP 绑定这些 Host，C++
 - `BattleEnabledBadge`：SpecialZone 内已选择入战的卡显示“已选”
 - `ProjectedFromBadge`：BattleDeck 视觉投影卡显示“来自 [B 主卡名]”
 
+子控件：`UWacomSpecialZoneWidget`
+
+- 负责单个 B 类特殊存放区区块，`BackpackScreen` 只负责遍历 Snapshot 并创建它。
+- 输入数据为 `FRunSpecialStorageView`，显示标题、B 主卡、已入战标记和内容卡列表。
+- 内容区内部创建 `UWacomZoneDropTarget`，目标为 `EZoneKind::SpecialZone + OwnerInstanceId`。
+- 内容卡右键入战 toggle 先由该组件转发，再由 `BackpackScreen` 调 `RunSession::SetSpecialZoneCardBattleEnabled()`。
+
 ### CardView
 
 `UWacomCardView` 是通用卡牌显示基类，只负责渲染 `FWacomCardViewData`：
 
-- 显示 Cost、卡名、类型/词条、描述、卡图和禁用遮罩
+- 默认小卡面显示 Cost、价值、身材/容量、卡名、类型/词条、效果数值徽章、卡图和禁用遮罩
+- `Description` 在小卡面中只显示摘要；完整描述、任务、变化、被动说明由详情面板承接
+- 效果数值徽章由 `UWacomCardEffectBadgeWidget` 承接，`CardView` 只按 `EffectBadges[]` 动态创建并填入 `EffectStatsHost`
 - 不提交 `BattleSession` 命令
 - 不调用 `RunSession::MoveInstance` / `DeleteCardForGold`
 - 背包卡牌、战斗手牌、拖拽预览、奖励/商店卡牌后续都应包一层 `UWacomCardView` 复用显示
 
 `WBP_CardView` 可继承 `UWacomCardView`，用同名 `BindWidgetOptional` 控件替换 C++ fallback 布局。
+
+`UWacomCardDetailPanel` 是可复用详情面板，只负责渲染 `FWacomCardDetailViewData`：
+
+- 当前数据从 `CardDefinition.DisplayName / Description / Passives` 推导
+- 任务和变化暂为空数组，等待卡牌 DataAsset 字段正式扩展后接入
+- 背包界面第一版由 `UWacomBackpackScreen` 在卡牌悬停时把它显示在卡牌旁边；移出、开始拖拽、列表重建或关闭背包时隐藏
+- 面板为 `HitTestInvisible`，不抢鼠标，不影响左键拖拽和 SpecialZone 右键入战切换
+- 不自动处理战斗手牌详情、选中态或固定详情栏生命周期
+- `WBP_CardDetailPanel` 的绑定清单见 `Docs/UI_Backpack_WBP_Binding.md`
 
 DropTarget 规则：
 - 普通 zone drop 调 `RunSession->MoveInstance`。
@@ -277,7 +302,8 @@ DropTarget 规则：
 刷新模型：
 - 操作命令 → RunSession 写状态 → `OnRunStateChangedNative` → Provider 刷 ViewModel → `OnRunViewModelRefreshedNative` → `BackpackScreen::RebuildAll()`。
 - RebuildAll 已拆为 `RebuildTopStats / RebuildBattleDeckZone / RebuildBackpackZone / RebuildSpecialZones / RebuildBurdenZone`。
-- UI 不做局部 patch，成功操作后从 RunState 全量重建。
+- `RebuildBackpackZone` 只编排通量区，内部继续拆分 `RebuildFluxMainCards` 和 `RebuildFluxContentCards`；`RebuildSpecialZones` 只创建 `UWacomSpecialZoneWidget`，单个区块内部按 `OwnerCard + ContentCards` 渲染。
+- UI 不做局部 patch，成功操作后通过 `RunSession::BuildBackpackStorageSnapshot()` 全量重建列表；顶部背包/备战容量计数由 Provider 从同一 Snapshot 写入 `UWacomRunViewModel`，压力、时间等非列表标量仍由 Provider 读取 Run 状态。
 
 ---
 
