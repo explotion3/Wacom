@@ -3,6 +3,11 @@
 #include "Misc/AutomationTest.h"
 
 #include "Cards/CardDefinition.h"
+#include "Characters/CharacterDefinition.h"
+#include "Enemies/EnemyDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
+#include "Fixtures/BattleTestFixtures.h"
+#include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleHUD.h"
@@ -523,6 +528,111 @@ bool FWacomUIBattleHUDCardDetailPositionSpec::RunTest(const FString& /*Parameter
 		PanelSize,
 		12.0f);
 	TestEqual(TEXT("Detail panel clamps to bottom edge"), ClampBottom, FVector2D(128.0f, 380.0f));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDTargetSelectionViewSpec,
+	"Wacom.UI.Battle.HUDTargetSelectionView",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeftHand = Fx.MakeNoopCard(0);
+	UCardDefinition* RightHand = Fx.MakeNoopCard(0);
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(1, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, { TargetCard });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+
+	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
+	FBattleInitParams Params;
+	Params.Character = Character;
+	Params.Enemy = Enemy;
+	Params.RandomSeed = 1;
+	Params.PreDestroyedPartIds.Add(TEXT("Test.Part.Body"));
+	TestTrue(TEXT("Session initialize"), Session->Initialize(Params).IsOk());
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetSession(Session.Get());
+	HUD->TakeWidget();
+
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	TestEqual(TEXT("Enemy part count"), Snapshot.Enemy.Parts.Num(), 3);
+	if (Snapshot.Enemy.Parts.Num() != 3)
+	{
+		return false;
+	}
+
+	const FBattleTargetSelectionView IdleView = HUD->BuildTargetSelectionView();
+	TestFalse(TEXT("Idle view is not selecting"), IdleView.bIsTargetSelecting);
+	TestEqual(TEXT("Idle view includes all parts"), IdleView.TargetableParts.Num(), 3);
+	TestFalse(TEXT("Idle head not targetable"), IdleView.TargetableParts[0].bTargetable);
+	TestEqual(TEXT("Idle disabled reason"), IdleView.TargetableParts[0].DisabledReason, FName(TEXT("NotTargetSelecting")));
+
+	HUD->SetTargetSelectionStateForTest(FGuid::NewGuid());
+	const FBattleTargetSelectionView TargetView = HUD->BuildTargetSelectionView();
+	TestTrue(TEXT("Target view is selecting"), TargetView.bIsTargetSelecting);
+	TestTrue(TEXT("Target view pending card valid"), TargetView.PendingCardInstanceId.IsValid());
+	TestEqual(TEXT("Target view includes all parts"), TargetView.TargetableParts.Num(), 3);
+	TestTrue(TEXT("Living head is targetable"), TargetView.TargetableParts[0].bTargetable);
+	TestEqual(TEXT("Living head reason none"), TargetView.TargetableParts[0].DisabledReason, NAME_None);
+	TestFalse(TEXT("Destroyed body is not targetable"), TargetView.TargetableParts[1].bTargetable);
+	TestEqual(TEXT("Destroyed body reason"), TargetView.TargetableParts[1].DisabledReason, FName(TEXT("PartDestroyed")));
+	TestTrue(TEXT("Living tail is targetable"), TargetView.TargetableParts[2].bTargetable);
+
+	HUD->ClearTargetSelectionStateForTest();
+	const FBattleTargetSelectionView ClearedView = HUD->BuildTargetSelectionView();
+	TestFalse(TEXT("Cleared view is not selecting"), ClearedView.bIsTargetSelecting);
+	TestFalse(TEXT("Cleared view invalid pending card"), ClearedView.PendingCardInstanceId.IsValid());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec,
+	"Wacom.UI.Battle.EnemyInfoBarUsesTargetSelectionView",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeftHand = Fx.MakeNoopCard(0);
+	UCardDefinition* RightHand = Fx.MakeNoopCard(0);
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(1, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, { TargetCard });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+
+	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
+	FBattleInitParams Params;
+	Params.Character = Character;
+	Params.Enemy = Enemy;
+	Params.RandomSeed = 1;
+	Params.PreDestroyedPartIds.Add(TEXT("Test.Part.Body"));
+	TestTrue(TEXT("Session initialize"), Session->Initialize(Params).IsOk());
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
+	HUD->SetSession(Session.Get());
+	EnemyInfo->SetSession(Session.Get());
+	HUD->TakeWidget();
+	EnemyInfo->TakeWidget();
+
+	HUD->ClearTargetSelectionStateForTest();
+	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
+
+	TestEqual(TEXT("EnemyInfoBar spawns three part widgets"), EnemyInfo->GetSpawnedPartCountForTest(), 3);
+	TestFalse(TEXT("Idle head not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(0));
+	TestFalse(TEXT("Idle body not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(1));
+	TestFalse(TEXT("Idle tail not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(2));
+
+	HUD->SetTargetSelectionStateForTest(FGuid::NewGuid());
+	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
+
+	TestTrue(TEXT("TargetSelect head targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(0));
+	TestFalse(TEXT("TargetSelect destroyed body not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(1));
+	TestTrue(TEXT("TargetSelect tail targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(2));
 
 	return true;
 }

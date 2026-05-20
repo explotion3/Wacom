@@ -44,4 +44,6 @@ private:
 	TArray<TObjectPtr<UEnemyPartWidget>> SpawnedParts;
 
 	void ApplyTargetableFromHUDState();
+
+	friend class UWacomBattleEnemyInfoBarTest;
 };

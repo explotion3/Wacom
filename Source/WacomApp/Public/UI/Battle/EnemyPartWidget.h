@@ -55,6 +55,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	const FEnemyPartSnapshot& GetPartSnapshot() const { return CachedSnap; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	bool IsTargetable() const { return bLastTargetable; }
+
 	UPROPERTY(BlueprintAssignable, Category = "Wacom|Battle|UI")
 	FWacomEnemyPartClicked OnPartClicked;
 

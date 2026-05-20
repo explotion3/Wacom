@@ -17,6 +17,56 @@ struct FBattleCommand;
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEndedNative, EBattleOutcome);
 
 /**
+ * 单个敌方部位的目标选择表现视图。
+ *
+ * DisabledReason 约定：
+ * - None：当前可选或无禁用原因。
+ * - NotTargetSelecting：HUD 当前不在目标选择状态。
+ * - PartDestroyed：该敌方部位已破坏。
+ */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FBattleTargetablePartView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
+	FGuid PartInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
+	FName PartId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
+	FText PartName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
+	bool bTargetable = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
+	FName DisabledReason = NAME_None;
+};
+
+/**
+ * 当前 BattleHUD 目标选择状态的只读表现桥。
+ *
+ * 临时 UEnemyPartWidget 和未来 HD-2D/PaperZD 敌方部位表现都应读取本视图，
+ * 再把点击意图回传到 BattleHUD，而不是各自解析 HUD 内部状态。
+ */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FBattleTargetSelectionView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
+	bool bIsTargetSelecting = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
+	FGuid PendingCardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
+	TArray<FBattleTargetablePartView> TargetableParts;
+};
+
+/**
  * 战斗 UI 根 Widget。
  *
  * 状态机（EBattleUIState）驱动所有子 Widget 的交互模式。
@@ -146,6 +196,10 @@ public:
 	/** 当前等待目标的卡 ID。IsInTargetSelect == false 时返回 invalid。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	FGuid GetPendingTargetingCardId() const { return PendingTargetingCardId; }
+
+	/** 构建当前目标选择表现视图。UI/场景表现只读消费，不修改战斗状态。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Targeting")
+	FBattleTargetSelectionView BuildTargetSelectionView() const;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

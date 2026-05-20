@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/CardWidget.h"
+#include "UI/Battle/EnemyInfoBar.h"
+#include "UI/Battle/EnemyPartWidget.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "Components/BorderSlot.h"
@@ -137,6 +139,18 @@ class UWacomBattleHUDDetailTest : public UBattleHUD
 	GENERATED_BODY()
 
 public:
+	void SetTargetSelectionStateForTest(const FGuid& PendingCardId)
+	{
+		PendingTargetingCardId = PendingCardId;
+		SetUIState(EBattleUIState::TargetSelect);
+	}
+
+	void ClearTargetSelectionStateForTest()
+	{
+		PendingTargetingCardId.Invalidate();
+		SetUIState(EBattleUIState::Idle);
+	}
+
 	bool ShowCardDetailForTest(UCardWidget* SourceWidget)
 	{
 		return ShowCardDetailForCardWidget(SourceWidget);
@@ -155,6 +169,25 @@ public:
 	void HandleCardUnhoveredForTest(UCardWidget* SourceWidget)
 	{
 		HandleHandCardUnhovered(SourceWidget);
+	}
+};
+
+UCLASS()
+class UWacomBattleEnemyInfoBarTest : public UEnemyInfoBar
+{
+	GENERATED_BODY()
+
+public:
+	int32 GetSpawnedPartCountForTest() const
+	{
+		return SpawnedParts.Num();
+	}
+
+	bool IsSpawnedPartTargetableForTest(int32 Index) const
+	{
+		return SpawnedParts.IsValidIndex(Index) && SpawnedParts[Index]
+			? SpawnedParts[Index]->IsTargetable()
+			: false;
 	}
 };
 

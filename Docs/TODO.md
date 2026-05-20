@@ -19,7 +19,7 @@
 | 击倒事件三选一具体效果                                           | Stage 7 已搭好"撤离/援助/破坏"框架 + dialog UI + BattleProgress 持久化撤离破坏部位；援助/破坏不依赖当前手牌区左右手是否存在；最后存活部位击倒后撤离不可选；Run 层第一阶段仅记日志       | Stage 9 节点事件接入时按 `FKnockdownChoice::Choice` 分支触发实际效果（左手 buff / 永久强化部位 / 特殊节点等） |
 | 击倒事件左右手永久缺失可用性                                      | `FKnockdownChoiceView` 已预留 `LeftHandMissing / RightHandMissing` reason；当前 Aid/Destroy 不看手牌区锚点是否存在，也不处理角色永久失去左/右手 | 等手指/事件导致永久失去左/右手牌的 Run/Battle 字段确定后，在击倒可用性 helper 中禁用对应分支 |
 | 蛇部位间联动                                                | 无（头被破坏时身体不强化）                                                                      | 等更多敌人设计后按需加                                                                    |
-| 手牌满时 OnCompanionCount 处理                              | 强行加入，下回合 EnforceLimit 处理                                                           | 若规则变更为"满时不触发"，改 `RunOnCompanionCountPassives`                                  |
+| 手牌满时 OnCompanionCount 处理                              | 随机插入当前手牌后立即执行普通卡上限，超限卡进弃牌区                                                           | 若规则变更为"满时不触发"，改 `RunOnCompanionCountPassives`                                  |
 | 存档系统恢复                                                | Stage 0.1 暂停（`bSaveSystemEnabled = false`），底层 UWacomSaveGame / FRunState 拷贝/迁移机制保留 | demo 完善后恢复：Bootstrap 读盘 / PauseMenu Save 按钮 / MainMenu Continue                |
 | `IsDeleteFunctionAvailable` 接入 `DeleteCardForGold` 校验 | 接口就位但 DeleteCardForGold 不读（GDD §11.7 第一阶段始终允许删牌）                                   | 等 GDD 切换为"按需可用"后接入                                                             |
 
@@ -65,7 +65,7 @@
 | 主题与样式（P6 整体）                 | Widget Blueprint 纯色块 + 文字                                                                                                           | 美术阶段只改 WBP，C++ 不动                                                                                                                                                                                                                                              |
 | 手牌扇形布局                       | `UHandPanel` 已先将 Snapshot 转成 `FHandCardVisualEntry[]`，当前默认 renderer 是统一水平手牌带；`BattleHUD` 可加载 `WBP_HandPanel`，WBP 只绑定 `UnifiedHandSlot`，并支持间距/边距/居中参数；`UCardWidget` 已支持基础 hover 上浮/缩放反馈和 hover 详情；点击目标牌进入目标选择，再点同一张牌可取消选择                    | 后续新增更强选中突出、详情样式美术化和扇形 renderer；必要时替换为自定义 `UHandLayoutPanel`，但继续消费 VisualEntry，不重读规则 Snapshot                                                                                                                         |
 | 战斗卡牌拖拽                       | BattleHUD 仍是点击手牌再点敌方部位，不支持把战斗手牌拖到目标                                                                                                 | HD-2D 表现阶段评估是否改为拖拽到 3D 部位 / 悬停高亮 / 点击确认                                                                                                                                                                                                                        |
-| 目标选择 3D 射线                   | 点击 EnemyPartWidget 2D 按钮                                                                                                            | HD-2D 表现时改为 3D 部位高亮 + 点击                                                                                                                                                                                                                                       |
+| 目标选择 3D 射线                   | 点击 EnemyPartWidget 2D 按钮；`BattleHUD::BuildTargetSelectionView()` 已作为只读表现桥，当前 2D UI 和未来 HD-2D/PaperZD 部位表现都可按 `PartInstanceId` 消费                                                                                                            | HD-2D 表现时改为 3D 部位高亮 + 点击；正式 Actor/Component 继续读取 TargetSelectionView，不重复解析 HUD 内部状态                                                                                                                                                                                                                                       |
 | EventToast 图标/动画             | 纯文字                                                                                                                                 | 升级为"事件表现调度器" + Niagara + 音效                                                                                                                                                                                                                                    |
 | 锚点左右归属                       | 遍历顺序启发式（第一个锚点进 LeftSlot）                                                                                                            | 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段                                                                                                                                                                                                                   |
 | 背包 UI 删牌区与 DeleteProvider 联动 | 删牌区始终显示（GDD §11.7 第一阶段约定），`IsDeleteFunctionAvailable()` 接口就位但 UI 不读                                                                 | 等 GDD 切换为"按需可用"后，BackpackScreen 根据 `IsDeleteFunctionAvailable()` 显示/隐藏删牌区                                                                                                                                                                                      |
@@ -139,8 +139,8 @@
 - **[P1] 手牌用 HorizontalBox 线性排列**：不做扇形、不做拖拽。
   → 后续美术阶段替换为自定义 `UHandLayoutPanel`。
 
-- **[P1] 目标选择用"点击 EnemyPartWidget"实现**：不做拖拽到目标、不做射线检测。
-  → 后续第一人称 HD-2D 表现时，目标选择可能改为"鼠标悬停 3D 部位 → 高亮 → 点击"。
+- **[P1] 目标选择用"点击 EnemyPartWidget"实现**：不做拖拽到目标、不做射线检测；目标可选性已通过 `FBattleTargetSelectionView` 从 BattleHUD 输出。
+  → 后续第一人称 HD-2D 表现时，目标选择可能改为"鼠标悬停 3D 部位 → 高亮 → 点击"，但仍消费同一份 TargetSelectionView。
 
 - **[P1] EventToast 只显示文字**：不做图标、不做动画。
   → 后续加 Niagara 特效和音效时，EventToast 升级为"事件表现调度器"。
@@ -162,8 +162,8 @@
 - **[P5] CompanionPlayedCount 是全局计数**：不区分"哪张伙伴"。
   → 对齐 BugGirl.md §5 拂晓飞蛾的"三张伙伴"是战斗内全局计数。触发后清零。
 
-- **[P3.4] OnCompanionCount 触发时超手牌上限强行加入**：触发时不检查普通卡上限 10，直接加到 Hand 末尾。
-  → 后续若有"手牌满时不触发"的规则变更，改 `RunOnCompanionCountPassives` 里加上限检查。
+- **[P3.4] OnCompanionCount 触发时超手牌上限**：触发时随机插入当前 Hand，然后立即执行普通卡上限 10，超限卡进弃牌区。
+  → 后续若有"手牌满时不触发"的规则变更，改 `RunOnCompanionCountPassives` 里改为拒绝回手。
 
 - **[P5] 暮蛉 OnTwilightTriggered 需要暮气"生效"**：第一阶段暮气只记录层数不生效。
   → 需要先定义"暮气生效"的触发点，然后才能触发暮蛉被动。规则未决项。
@@ -203,3 +203,6 @@
 10. 减速/暮气的数值公式。
 11. 击倒事件的正式触发条件。
 12. `Effect.Shuffle.ToRandomZone` 在手牌锚点缺失时的回退规则。
+13. 是否需要正式 `DrawToZone` 效果：从 Draw/Discard/Exhaust 入手后直接放入指定 `HandZone.*`，还是保持 `Effect.Draw` 随机插入 + `Effect.Shuffle.*` 只腾挪现有手牌。
+14. 如果未来 `DrawToZone` 指向不存在的区域（如 `HandZone.Both` 但双手区不存在，或左右手都离手），效果应失败、随机插入、还是降级到可用区域。
+15. 如果未来 `DrawToZone` 在普通手牌满时触发，上限处理应先弃牌再放入以保证新卡进手，还是先放入再按普通上限规则弃掉超限卡。

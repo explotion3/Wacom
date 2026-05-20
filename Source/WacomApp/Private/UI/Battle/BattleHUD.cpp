@@ -271,6 +271,54 @@ TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
 	return FUIInputConfig(ECommonInputMode::All, EMouseCaptureMode::NoCapture);
 }
 
+FBattleTargetSelectionView UBattleHUD::BuildTargetSelectionView() const
+{
+	FBattleTargetSelectionView View;
+	View.bIsTargetSelecting = UIState == EBattleUIState::TargetSelect && PendingTargetingCardId.IsValid();
+	View.PendingCardInstanceId = View.bIsTargetSelecting ? PendingTargetingCardId : FGuid();
+
+	const UBattleSession* S = GetSession();
+	if (!S)
+	{
+		return View;
+	}
+
+	const FBattleSnapshot Snap = S->BuildSnapshot();
+	View.TargetableParts.Reserve(Snap.Enemy.Parts.Num());
+	for (const FEnemyPartSnapshot& Part : Snap.Enemy.Parts)
+	{
+		FBattleTargetablePartView PartView;
+		PartView.PartInstanceId = Part.InstanceId;
+		if (Part.Definition)
+		{
+			PartView.PartId = Part.Definition->PartId;
+			PartView.PartName = Part.Definition->DisplayName.IsEmpty()
+				? FText::FromName(Part.Definition->PartId)
+				: Part.Definition->DisplayName;
+		}
+
+		if (!View.bIsTargetSelecting)
+		{
+			PartView.bTargetable = false;
+			PartView.DisabledReason = FName(TEXT("NotTargetSelecting"));
+		}
+		else if (Part.bDestroyed)
+		{
+			PartView.bTargetable = false;
+			PartView.DisabledReason = FName(TEXT("PartDestroyed"));
+		}
+		else
+		{
+			PartView.bTargetable = true;
+			PartView.DisabledReason = NAME_None;
+		}
+
+		View.TargetableParts.Add(PartView);
+	}
+
+	return View;
+}
+
 // ================ 状态机 ================
 
 void UBattleHUD::SetUIState(EBattleUIState NewState)

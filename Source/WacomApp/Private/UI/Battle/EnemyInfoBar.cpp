@@ -64,12 +64,23 @@ void UEnemyInfoBar::ApplyTargetableFromHUDState()
 		HUD = Cast<UBattleHUD>(P);
 		if (HUD) { break; }
 	}
-	const bool bTargeting = HUD ? HUD->IsInTargetSelect() : false;
+
+	TMap<FGuid, bool> TargetableByPartId;
+	if (HUD)
+	{
+		const FBattleTargetSelectionView TargetView = HUD->BuildTargetSelectionView();
+		TargetableByPartId.Reserve(TargetView.TargetableParts.Num());
+		for (const FBattleTargetablePartView& PartView : TargetView.TargetableParts)
+		{
+			TargetableByPartId.Add(PartView.PartInstanceId, PartView.bTargetable);
+		}
+	}
 
 	for (const TObjectPtr<UEnemyPartWidget>& Part : SpawnedParts)
 	{
 		if (!Part) { continue; }
-		Part->SetTargetable(bTargeting);
+		const bool* bTargetable = TargetableByPartId.Find(Part->GetPartInstanceId());
+		Part->SetTargetable(bTargetable ? *bTargetable : false);
 	}
 }
 

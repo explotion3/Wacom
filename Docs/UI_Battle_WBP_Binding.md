@@ -112,6 +112,16 @@ WBP_HandPanel
 - 详情面板默认显示在悬停卡牌左侧；左侧空间不足时显示在右侧，并会 clamp 到 `CardDetailLayer` 可见范围内。
 - `BattleHUD` 会记录当前详情来源卡，快速切换 hover 卡牌时，旧卡的 unhover 不会关闭新卡详情。
 - 详情面板为 `HitTestInvisible`，不抢点击；进入目标选择时会隐藏。
+- `BattleHUD::BuildTargetSelectionView()` 是敌方目标选择表现桥。当前 2D `EnemyInfoBar / EnemyPartWidget` 使用它，后续 HD-2D/PaperZD 敌方部位 Actor 也应按 `PartInstanceId` 读取它来驱动高亮和可点击状态。
+
+## EnemyPartWidget / EnemyInfoBar
+
+当前 `EnemyInfoBar` 和 `EnemyPartWidget` 是战斗早期 2D fallback/debug 表现，不是最终 HD-2D 敌人实现。
+
+注意：
+- `EnemyInfoBar` 动态生成 `EnemyPartWidget`，并从 `BattleHUD::BuildTargetSelectionView()` 读取哪些部位可被选中。
+- `EnemyPartWidget` 只负责显示 `FEnemyPartSnapshot`、接收 `SetTargetable(bool)` 和把点击委托回 `EnemyInfoBar`。
+- 不建议在 `EnemyPartWidget` 上继续堆正式敌人动画、像素精灵或复杂命中逻辑；正式 HD-2D/PaperZD 敌人表现应消费同一份 `FBattleTargetSelectionView`，再把点击意图回传到 `BattleHUD->OnEnemyPartClickedByUser()`。
 
 PIE 检查清单：
 - `CardDetailLayer` 覆盖整个 HUD 可见区域，并位于手牌和敌方部位之上。

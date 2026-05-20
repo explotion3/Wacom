@@ -7,6 +7,8 @@
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Events/BattleEventBus.h"
+#include "Events/BattleEventHelpers.h"
+#include "Hand/HandZoneService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
@@ -18,8 +20,8 @@
 namespace
 {
 	/**
-	 * 把一张卡从当前容器移到手牌末尾。
-	 * 不做手牌上限检查（Phase2_Temporary_Decisions：OnCompanionCount 触发时强行加入）。
+	 * 把一张卡从当前容器随机插入手牌。
+	 * 上限检查由 RunOnCompanionCount 在所有候选卡移动完成后统一执行。
 	 *
 	 * 返回是否发生了容器迁移。若卡已在 Hand 或 Definition 缺失，返回 false。
 	 */
@@ -38,8 +40,7 @@ namespace
 		default: break;  // Unknown / Hand 不处理
 		}
 
-		State.Cards.Hand.Add(CardId);
-		Card->Location = ECardLocation::Hand;
+		FHandZoneService::InsertCardsIntoHandAtRandom(State, { CardId });
 		return true;
 	}
 }
@@ -121,6 +122,19 @@ void FPassiveDispatcher::RunOnCompanionCount(FBattleState& State, FBattleEventBu
 
 	if (bAnyTriggered)
 	{
+		TArray<FGuid> DiscardedByLimit;
+		FHandZoneService::EnforceNormalCardLimit(State, DiscardedByLimit);
+		WacomBattleEvents::EmitHandLimitDiscardedEvents(
+			Events,
+			DiscardedByLimit,
+			EHandLimitDiscardSource::PassiveOnCompanionCount);
+		if (!DiscardedByLimit.IsEmpty())
+		{
+			FBattleEvent Ev;
+			Ev.Type = EBattleEventType::HandZoneChanged;
+			Ev.Count = DiscardedByLimit.Num();
+			Events.Emit(Ev);
+		}
 		State.Player.CompanionPlayedCount = 0;
 	}
 }

@@ -36,10 +36,10 @@ public:
 	 * 检查所有拥有 OnCompanionCount 被动的卡：
 	 *   - 当前不在 Hand
 	 *   - State.Player.CompanionPlayedCount >= Passive.TriggerThreshold
-	 * 满足则把卡移到 Hand 末尾 + 发 HandZoneChanged 事件；
+	 * 满足则把卡随机插入 Hand + 发 HandZoneChanged 事件；
 	 * 任一触发后 State.Player.CompanionPlayedCount 清零。
 	 *
-	 * 手牌上限在此不检查（Phase2_Temporary_Decisions：触发时强行加入）。
+	 * 触发后立即执行普通卡手牌上限，超限卡进入弃牌堆。
 	 */
 	static void RunOnCompanionCount(FBattleState& State, FBattleEventBus& Events);
 

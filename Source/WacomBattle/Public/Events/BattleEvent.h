@@ -36,7 +36,20 @@ enum class EBattleEventType : uint8
 	KnockdownChoiceMade   UMETA(DisplayName = "KnockdownChoiceMade"),  // 玩家选完一项
 	TurnEnded             UMETA(DisplayName = "TurnEnded"),
 	PassiveTriggered      UMETA(DisplayName = "PassiveTriggered"),    // P3.5 占位：被动触发通知
+	HandLimitDiscarded    UMETA(DisplayName = "HandLimitDiscarded"),  // 普通手牌上限导致弃牌
 	BattleEnded           UMETA(DisplayName = "BattleEnded"),
+};
+
+/**
+ * 普通手牌上限弃牌来源。用于表现层区分是回合开始抽牌、中途抽牌，还是被动回手触发。
+ */
+UENUM(BlueprintType)
+enum class EHandLimitDiscardSource : uint8
+{
+	None                    UMETA(DisplayName = "None"),
+	TurnStart               UMETA(DisplayName = "TurnStart"),
+	EffectDraw              UMETA(DisplayName = "EffectDraw"),
+	PassiveOnCompanionCount UMETA(DisplayName = "PassiveOnCompanionCount"),
 };
 
 /**
@@ -55,6 +68,7 @@ enum class EBattleEventType : uint8
  * - WaitPerformed       ：Amount = 本次等待值
  * - EnemyPartActed      ：ActorInstanceId = 行动部位、Tag = Intent id（用 tag 承载方便扩展；第一阶段也可留空）
  * - EnemyPartHpEmptied  ：ActorInstanceId = 被破坏部位
+ * - HandLimitDiscarded  ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡（仅 EffectDraw）
  * - BattleEnded         ：Count = 1 表示胜利、0 表示失败（后续换专用字段）
  */
 USTRUCT(BlueprintType)
@@ -88,4 +102,8 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 通用计数字段：抽牌数、连击次数等。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	int32 Count = 0;
+
+	/** 普通手牌上限弃牌的来源，仅 HandLimitDiscarded 使用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	EHandLimitDiscardSource HandLimitDiscardSource = EHandLimitDiscardSource::None;
 };

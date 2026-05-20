@@ -10,6 +10,7 @@
 #include "Deck/DeckService.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEventBus.h"
+#include "Events/BattleEventHelpers.h"
 #include "Hand/HandZoneService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
@@ -71,6 +72,13 @@ namespace
 		Ev.Type           = EBattleEventType::HandZoneChanged;
 		Ev.CardInstanceId = MovedId;
 		Ctx.Events->Emit(Ev);
+	}
+
+	TArray<FGuid> EnforceHandLimitAfterCardsEnterHand(FEffectContext& Ctx)
+	{
+		TArray<FGuid> DiscardedByLimit;
+		FHandZoneService::EnforceNormalCardLimit(*Ctx.State, DiscardedByLimit, Ctx.SourceInstanceId);
+		return DiscardedByLimit;
 	}
 
 	/** 在 AllCards 线性查找卡实例。 */
@@ -326,16 +334,24 @@ bool HandleDraw(FEffectContext& Ctx)
 	{
 		TArray<FGuid> DrawnIds;
 		FDeckService::DrawCards(*Ctx.State, Ctx.Magnitude, DrawnIds);
-		for (const FGuid& Id : DrawnIds)
-		{
-			Ctx.State->Cards.Hand.Add(Id);
-			FBattleRules::SetCardLocation(*Ctx.State, Id, ECardLocation::Hand);
-		}
+		FHandZoneService::InsertCardsIntoHandAtRandom(*Ctx.State, DrawnIds);
+		const TArray<FGuid> DiscardedByLimit = EnforceHandLimitAfterCardsEnterHand(Ctx);
 		if (DrawnIds.Num() > 0)
 		{
 			FBattleEvent Ev;
 			Ev.Type  = EBattleEventType::CardsDrawn;
 			Ev.Count = DrawnIds.Num();
+			Ctx.Events->Emit(Ev);
+		}
+		WacomBattleEvents::EmitHandLimitDiscardedEvents(
+			*Ctx.Events,
+			DiscardedByLimit,
+			EHandLimitDiscardSource::EffectDraw,
+			Ctx.SourceInstanceId);
+		if (!DiscardedByLimit.IsEmpty())
+		{
+			FBattleEvent Ev;
+			Ev.Type = EBattleEventType::HandZoneChanged;
 			Ctx.Events->Emit(Ev);
 		}
 		return DrawnIds.Num() > 0;
@@ -344,25 +360,38 @@ bool HandleDraw(FEffectContext& Ctx)
 	// 从弃牌堆 / 消耗区：随机选 Magnitude 张移到手牌
 	if (!SourcePile || SourcePile->IsEmpty()) { return false; }
 
-	int32 Moved = 0;
+	TArray<FGuid> MovedIds;
+	MovedIds.Reserve(Ctx.Magnitude);
 	for (int32 i = 0; i < Ctx.Magnitude && !SourcePile->IsEmpty(); ++i)
 	{
 		const int32 Idx = Ctx.State->Rng.RandRange(0, SourcePile->Num() - 1);
 		const FGuid CardId = (*SourcePile)[Idx];
 		SourcePile->RemoveAt(Idx);
-		Ctx.State->Cards.Hand.Add(CardId);
-		FBattleRules::SetCardLocation(*Ctx.State, CardId, ECardLocation::Hand);
-		++Moved;
+		MovedIds.Add(CardId);
 	}
 
-	if (Moved > 0)
+	FHandZoneService::InsertCardsIntoHandAtRandom(*Ctx.State, MovedIds);
+	const TArray<FGuid> DiscardedByLimit = EnforceHandLimitAfterCardsEnterHand(Ctx);
+
+	if (MovedIds.Num() > 0)
 	{
 		FBattleEvent Ev;
 		Ev.Type  = EBattleEventType::CardsDrawn;
-		Ev.Count = Moved;
+		Ev.Count = MovedIds.Num();
 		Ctx.Events->Emit(Ev);
 	}
-	return Moved > 0;
+	WacomBattleEvents::EmitHandLimitDiscardedEvents(
+		*Ctx.Events,
+		DiscardedByLimit,
+		EHandLimitDiscardSource::EffectDraw,
+		Ctx.SourceInstanceId);
+	if (!DiscardedByLimit.IsEmpty())
+	{
+		FBattleEvent Ev;
+		Ev.Type = EBattleEventType::HandZoneChanged;
+		Ctx.Events->Emit(Ev);
+	}
+	return MovedIds.Num() > 0;
 }
 
 bool HandleDiscard(FEffectContext& Ctx)

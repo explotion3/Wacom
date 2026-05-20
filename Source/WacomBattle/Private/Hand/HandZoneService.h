@@ -30,8 +30,9 @@ public:
 	 * - 左右手锚点的 InstanceId 在 State 中已就位，当前 Location 不要求。
 	 *
 	 * 本方法职责（Hand_Zone_Rules §3）：
-	 * - 按左右手在 State.Cards.Hand 中的出现情况选择"都不在 / 都在 / 只有一张"分支。
-	 * - 生成最终 State.Cards.Hand。
+	 * - 把上回合保留普通卡和新抽普通卡合并为本回合普通卡池。
+	 * - 每回合重新随机编排普通卡池，再插入有效左右手锚点。
+	 * - 保留只保留"卡在手牌中"，不保留 index、相对顺序或区域。
 	 * - 更新所有相关卡的 Location = Hand。
 	 *
 	 * 调用方需在此后调用 EnforceNormalCardLimit 处理上限。
@@ -39,13 +40,23 @@ public:
 	static void GenerateHandQueueOnTurnStart(FBattleState& State, const TArray<FGuid>& NewlyDrawnCards);
 
 	/**
+	 * 中途把普通卡加入当前手牌队列。
+	 *
+	 * 用于 Effect.Draw / 从弃牌或消耗区回收等非回合开始路径。它不重建整条手牌，
+	 * 只把传入卡逐张随机插入当前 Hand，以免所有中途入手卡固定堆在最右侧。
+	 * 调用方需保证这些卡已从源牌堆移除；本方法会设置 Location = Hand。
+	 */
+	static void InsertCardsIntoHandAtRandom(FBattleState& State, const TArray<FGuid>& CardInstanceIds);
+
+	/**
 	 * 执行普通卡手牌上限规则。超限的普通卡移动到弃牌区。
 	 * 锚点不计入上限，也不会因上限进入弃牌区。
+	 * ExcludeId 用于排除正在结算、随后会离开手牌的源卡，避免中途抽牌时多弃一张。
 	 *
 	 * 算法：从手牌末尾向前扫描，跳过锚点，把超限的普通卡依次移入弃牌区。
 	 * 返回被移入弃牌区的卡 ID 列表，调用方可据此发射事件。
 	 */
-	static void EnforceNormalCardLimit(FBattleState& State, TArray<FGuid>& OutDiscarded);
+	static void EnforceNormalCardLimit(FBattleState& State, TArray<FGuid>& OutDiscarded, const FGuid& ExcludeId = FGuid());
 
 	/**
 	 * 计算某张卡当前所属区域。
@@ -84,8 +95,8 @@ public:
 
 	/**
 	 * 回合结束时把所有不满足保留条件的普通卡移到弃牌区。
-	 * 锚点不动。保留的普通卡留在 State.Cards.Hand 中，BeginPlayerTurn 会通过
-	 * GenerateHandQueueOnTurnStart 的 "两锚点都在" 分支保持它们的相对位置。
+	 * 锚点不动。保留的普通卡留在 State.Cards.Hand 中，BeginPlayerTurn 会把
+	 * 它们和新抽普通卡一起重新编排。
 	 *
 	 * 从末尾向前扫描以保证索引稳定，输出被弃掉的卡 ID 列表供事件发射使用。
 	 */

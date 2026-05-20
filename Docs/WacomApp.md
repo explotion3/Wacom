@@ -186,6 +186,12 @@ Widget（C++ 直接订阅 OnRunViewModelRefreshedNative，未来 WBP 可走 View
 
 战斗 UI 的命令出口唯一在 BattleHUD（`Session->SubmitCommand`），子 widget 只发委托。
 
+战斗事件表现：
+
+- `HandLimitDiscarded` 表示某张卡因普通手牌上限进入弃牌区，UI/日志可以用它播放"因手牌上限弃牌"表现。
+- `HandLimitDiscarded.CardInstanceId` 是被弃掉的卡；`ActorInstanceId` 只在 `EffectDraw` 时表示触发抽牌的源卡；`HandLimitDiscardSource` 区分 `TurnStart / EffectDraw / PassiveOnCompanionCount`。
+- `HandZoneChanged` 仍是刷新提示，不再作为具体弃牌语义来源。
+
 击倒事件 UI：
 
 - `BattleHUD` 收到 `KnockdownChoiceRequested` 事件后，调用 `UBattleSession::BuildPendingKnockdownChoiceView()` 获取当前击倒事件可用性。
@@ -306,10 +312,11 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 - 点击、hover 上浮/缩放、目标选择高亮、提交出牌命令仍由 `UCardWidget / UHandPanel / BattleHUD` 负责，`UWacomCardView` 不知道战斗交互
 - `UCardWidget` 的 hover 反馈使用 Render Transform 移动 `HoverVisualRoot` 视觉层，不移动根命中区域，也不改变 `UHandPanel` 中的布局占位；`HoverLift / HoverScale` 可在 WBP Details 中调整
 - 点击需要敌方部位目标的手牌时，`BattleHUD` 进入 `TargetSelect` 并记录 `PendingTargetingCardId`；再次点击同一张牌会调用 `CancelTargetSelect()` 回到 `Idle`
-- 手牌选中反馈由 `UHandPanel` 根据 `BattleHUD::IsInTargetSelect()` 和 `PendingTargetingCardId` 刷新；敌方部位可选反馈由 `EnemyInfoBar` 根据同一 HUD 状态刷新
+- 手牌选中反馈由 `UHandPanel` 根据 `BattleHUD::IsInTargetSelect()` 和 `PendingTargetingCardId` 刷新；敌方部位可选反馈由 `BattleHUD::BuildTargetSelectionView()` 输出只读表现桥，当前 `EnemyInfoBar` 按 `PartInstanceId` 消费它，未来 HD-2D/PaperZD 敌方部位 Actor 也应消费同一份视图
 - 战斗手牌 hover 详情由 `BattleHUD` 管理：`UCardWidget` 上报 hover，`UHandPanel` 转发，`BattleHUD` 创建 `UWacomCardDetailPanel` 并用 `UWacomCardPresentationBuilder` 填充详情数据；面板默认显示在悬停卡牌左侧，左侧空间不足时显示在右侧
 - `BattleHUD` 会记录当前详情来源卡；快速从 A 卡 hover 到 B 卡时，A 卡随后 unhover 不会误关 B 卡详情
 - 进入目标选择、提交命令、刷新 Snapshot、切换 Session 或战斗结束时都会隐藏手牌详情；目标选择阶段只保留选中卡高亮和敌方部位 targetable 反馈
+- `FBattleTargetSelectionView` 是 UI/App 层只读 ViewData，不是战斗规则真相；第一版只区分是否正在选目标和部位是否已破坏，最终合法性仍由 `BattleSession::SubmitCommand` / `PlayCardResolver` 校验
 - `UHandPanel` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_CardWidget`；找不到时回退到 C++ 默认 `UCardWidget`
 - `BattleHUD` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_HandPanel`；找不到时回退到 C++ 默认 `UHandPanel`
 - `WBP_CardWidget / WBP_HandPanel` 制作时按 `Docs/UI_Battle_WBP_Binding.md` 绑定；缺少 `RootButton` 时手牌不会崩溃但无法点击

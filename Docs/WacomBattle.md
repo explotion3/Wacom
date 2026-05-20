@@ -155,15 +155,20 @@ WacomBattle/
 ### 抽牌规则
 
 - 回合开始固定从抽牌堆抽取 5 张普通卡牌
-- **左右手牌都不在手牌区**：预备队列 + 插入左右手牌（两者之间至少一张普通卡牌）
-- **左右手牌都在手牌区**：不移动已有卡牌，新抽卡随机插入当前手牌区
-- **只有一张锚点在手牌区**：按"都不在"的规则重新生成
+- 回合开始统一生成预备普通卡池：上回合保留在手牌中的普通卡 + 本回合新抽普通卡
+- 预备普通卡池每回合重新随机编排，不保留上回合 index、相对顺序或区域
+- 然后重新插入有效左右手牌；两张左右手牌都有效且普通卡池非空时，两者之间至少一张普通卡牌
+- 只有一张有效锚点时，只插入该锚点；没有有效锚点时只保留普通卡队列
+- 战斗中途的 `Effect.Draw` 不重建整条手牌；抽到或回收的普通卡逐张随机插入当前手牌队列，并立即执行普通卡手牌上限
 
 ### 手牌上限
 
 - 普通卡牌上限 10，不计算左手牌和右手牌
 - 最终手牌队列上限 12
-- 超出上限的普通卡牌移动到弃牌区
+- 超出上限的普通卡牌立即移动到弃牌区；中途抽牌/回手也会即时检查
+- 每张因普通手牌上限进入弃牌区的卡都会产生一条 `HandLimitDiscarded` 事件；这是 UI/日志表现事件，不改变战斗规则真相
+- `HandLimitDiscarded.CardInstanceId` 是被上限弃掉的卡；`ActorInstanceId` 只在 `EffectDraw` 来源时填写触发抽牌的源卡；`HandLimitDiscardSource` 区分 `TurnStart / EffectDraw / PassiveOnCompanionCount`
+- `HandZoneChanged` 仍只表示手牌区需要刷新，不承载具体哪张牌因上限被弃掉的语义
 
 ### 腾挪
 
@@ -251,7 +256,7 @@ WacomBattle/
 ### 区域条件
 
 - 虫妹的双手区可以保留手牌：当回合结束时左右手牌都仍在手牌区，双手区中的普通卡牌可以保留到下一回合
-- 被保留的普通卡牌在下回合生成手牌队列时保持原有相对位置
+- 保留只保留卡牌仍在下一回合的手牌池中，不保留 index、相对顺序或区域；下回合开始会与新抽卡一起重新编排位置
 - 保留牌如果被主动打出，仍按普通打出处理（进入弃牌区），除非卡牌文本另有说明
 
 ---
@@ -285,7 +290,7 @@ WacomBattle/
 - 触发时机：全局 Companion 计数达阈值
 - 典型卡：拂晓飞蛾（阈值 3，回手）
 - 触发后计数清零
-- 当前实现：触发时超手牌上限强行加入，下回合 EnforceLimit 处理
+- 当前实现：触发时随机插入当前手牌，并立即执行普通卡手牌上限；超限卡进入弃牌堆
 
 ### OnTwilightTriggered
 
@@ -319,6 +324,7 @@ WacomBattle/
 | `Effect.Shuffle.Random` | ShuffleHandler | 已实现 |
 | `Effect.Shuffle.FromBothToOther` | ShuffleHandler | 已实现 |
 | `Effect.Shuffle.ToRandomZone` | ShuffleHandler | 已实现 |
+| `Effect.Draw` | DrawHandler | 已实现；从 Draw/Discard/Exhaust 入手并随机插入当前手牌，不支持直接抽到指定 HandZone |
 | `Effect.Card.AddCost` | CostModHandler | 已实现 |
 | `Effect.Card.ReduceCost` | CostModHandler | 已实现 |
 | `Status.Shield` | ShieldHandler | 已实现 |

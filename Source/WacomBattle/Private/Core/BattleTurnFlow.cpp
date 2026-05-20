@@ -5,6 +5,7 @@
 #include "Core/BattleState.h"
 #include "Deck/DeckService.h"
 #include "Events/BattleEventBus.h"
+#include "Events/BattleEventHelpers.h"
 #include "Hand/HandZoneService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Types/WacomEnums.h"
@@ -48,6 +49,11 @@ void FBattleTurnFlow::BeginPlayerTurn(FBattleState& State, FBattleEventBus& Even
 		CardsDrawnEv.Count = ActuallyDrawn;
 		Events.Emit(CardsDrawnEv);
 	}
+
+	WacomBattleEvents::EmitHandLimitDiscardedEvents(
+		Events,
+		DiscardedByLimit,
+		EHandLimitDiscardSource::TurnStart);
 
 	{
 		FBattleEvent HandZoneEv;

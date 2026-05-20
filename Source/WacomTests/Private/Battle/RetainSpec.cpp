@@ -7,6 +7,7 @@
 #include "Commands/BattleCommand.h"
 
 #include "Cards/CardDefinition.h"
+#include "Events/BattleEvent.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 
@@ -41,6 +42,18 @@ namespace
 			if (C.InstanceId == Id) { return true; }
 		}
 		return false;
+	}
+
+	int32 FindHandIndex(const FBattleSnapshot& Snap, const FGuid& Id)
+	{
+		for (int32 Index = 0; Index < Snap.Hand.Cards.Num(); ++Index)
+		{
+			if (Snap.Hand.Cards[Index].InstanceId == Id)
+			{
+				return Index;
+			}
+		}
+		return INDEX_NONE;
 	}
 }
 
@@ -151,7 +164,8 @@ bool FWacomBattleRetainNormalCardDiscardsSpec::RunTest(const FString& /*Paramete
 
 // ================================================================
 // Test 3: BothZoneKeepsWhenAnchorsPresent
-// 双手区普通卡（即使不带 Retain）在左右手都在手牌时应保留。
+// 双手区普通卡（即使不带 Retain）在左右手都在手牌时应保留到下一回合手牌池。
+// 保留不保证下回合继续处于双手区，也不保证 index 稳定。
 // ================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattleRetainBothZoneKeepsSpec,
@@ -183,6 +197,8 @@ bool FWacomBattleRetainBothZoneKeepsSpec::RunTest(const FString& /*Parameters*/)
 		const FGuid BothCardId = FindFirstCardInZone(Snap, EHandZone::Both);
 		TestTrue(FString::Printf(TEXT("Seed=%d has Both-zone card"), Seed),
 			BothCardId.IsValid());
+		const int32 IndexBefore = FindHandIndex(Snap, BothCardId);
+		TestTrue(FString::Printf(TEXT("Seed=%d both card index before valid"), Seed), IndexBefore != INDEX_NONE);
 
 		// 结束回合。左右手都未被打出，仍在手牌 → 双手区普通卡保留。
 		TestTrue(TEXT("EndTurn ok"),
@@ -191,6 +207,8 @@ bool FWacomBattleRetainBothZoneKeepsSpec::RunTest(const FString& /*Parameters*/)
 		Snap = S->BuildSnapshot();
 		TestTrue(FString::Printf(TEXT("Seed=%d Both-zone card kept"), Seed),
 			HandHas(Snap, BothCardId));
+		TestTrue(FString::Printf(TEXT("Seed=%d kept card re-enters hand pool with valid index"), Seed),
+			FindHandIndex(Snap, BothCardId) != INDEX_NONE);
 	}
 	return true;
 }
@@ -253,5 +271,64 @@ bool FWacomBattleRetainBothZoneDiscardsIfAnchorMissingSpec::RunTest(const FStrin
 				HandHas(Snap, Id));
 		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleTurnStartHandLimitDiscardEventSpec,
+	"Wacom.Battle.TurnStart.HandLimitDiscardEvent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleTurnStartHandLimitDiscardEventSpec::RunTest(const FString& /*Parameters*/)
+{
+	for (int32 Seed = 1; Seed <= 10; ++Seed)
+	{
+		FWacomBattleFixture Fx;
+
+		UCardDefinition* LH = Fx.MakeNoopCard(2);
+		UCardDefinition* RH = Fx.MakeNoopCard(2);
+
+		TArray<UCardDefinition*> Deck;
+		for (int32 i = 0; i < 12; ++i)
+		{
+			UCardDefinition* RetainCard = Fx.MakeNoopCard(0);
+			RetainCard->Keywords.AddTag(WacomTags::Card_Keyword_Retain);
+			Deck.Add(RetainCard);
+		}
+
+		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50, 0);
+		UBattleSession* S = Fx.CreateSession(Char, Enemy, Seed);
+
+		// 清掉初始化事件。第一轮结束后：保留 5 张 + 新抽 5 张 = 10，刚好不超限。
+		// 第二轮结束后：保留 10 张 + 新抽剩余 2 张 = 12，稳定触发 2 张上限弃牌。
+		S->ConsumeEvents();
+		TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		S->ConsumeEvents();
+		TestTrue(TEXT("EndTurn second turn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+
+		const FBattleSnapshot Snap = S->BuildSnapshot();
+		TestEqual(TEXT("Turn start enforces normal hand limit"),
+			Snap.Hand.NormalCardCount, Snap.Hand.NormalCardLimit);
+
+		const TArray<FBattleEvent> Events = S->ConsumeEvents();
+		int32 LimitDiscardEvents = 0;
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Type != EBattleEventType::HandLimitDiscarded)
+			{
+				continue;
+			}
+
+			++LimitDiscardEvents;
+			TestTrue(TEXT("Turn start limit discard card id valid"), Event.CardInstanceId.IsValid());
+			TestFalse(TEXT("Turn start limit discard actor empty"), Event.ActorInstanceId.IsValid());
+			TestEqual(TEXT("Turn start limit discard source"),
+				Event.HandLimitDiscardSource, EHandLimitDiscardSource::TurnStart);
+		}
+		TestEqual(TEXT("Turn start emits one event per limit discard"),
+			LimitDiscardEvents, 2);
+	}
+
 	return true;
 }

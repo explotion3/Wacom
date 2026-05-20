@@ -8,6 +8,7 @@
 
 #include "Cards/CardDefinition.h"
 #include "Cards/CardPassive.h"
+#include "Events/BattleEvent.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 
@@ -17,6 +18,7 @@
  * 两条测试覆盖：
  *   - Wacom.Battle.Passive.CompanionCountTriggersReturn   打 3 张 Companion 后 Fuxiao 回手
  *   - Wacom.Battle.Passive.CompanionCountResetsAfterTrigger 触发后计数清零
+ *   - Wacom.Battle.Passive.CompanionCountHandLimitDiscardEvent 回手超限时发专用事件
  */
 
 namespace
@@ -224,5 +226,109 @@ for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 	}
 
 	TestTrue(TEXT("At least one seed covers reset scenario"), bCovered);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleCompanionCountHandLimitDiscardEventSpec,
+	"Wacom.Battle.Passive.CompanionCountHandLimitDiscardEvent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleCompanionCountHandLimitDiscardEventSpec::RunTest(const FString& /*Parameters*/)
+{
+	bool bCovered = false;
+
+	for (int32 Seed = 1; Seed <= 200 && !bCovered; ++Seed)
+	{
+		FWacomBattleFixture Fx;
+
+		UCardDefinition* LH = Fx.MakeNoopCard(5);
+		UCardDefinition* RH = Fx.MakeNoopCard(5);
+
+		UCardDefinition* Comp[10];
+		for (int32 i = 0; i < 10; ++i) { Comp[i] = MakeCompanionNoop(Fx, 0); }
+
+		TArray<UCardDefinition*> ReturnCards;
+		for (int32 i = 0; i < 12; ++i)
+		{
+			ReturnCards.Add(MakeFuxiaoLikeCard(Fx, 3));
+		}
+
+		TArray<UCardDefinition*> Deck;
+		for (UCardDefinition* ReturnCard : ReturnCards)
+		{
+			Deck.Add(ReturnCard);
+		}
+		for (int32 i = 0; i < 10; ++i) { Deck.Add(Comp[i]); }
+
+		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50, 0);
+		UBattleSession* S = Fx.CreateSession(Char, Enemy, Seed);
+
+		FBattleSnapshot Snap = S->BuildSnapshot();
+		bool bAnyReturnCardInHand = false;
+		for (UCardDefinition* ReturnCard : ReturnCards)
+		{
+			if (FWacomBattleFixture::FindHandInstanceByCardId(Snap, ReturnCard->CardId).IsValid())
+			{
+				bAnyReturnCardInHand = true;
+				break;
+			}
+		}
+		if (bAnyReturnCardInHand)
+		{
+			continue;
+		}
+
+		TArray<FGuid> CompIds;
+		for (const FHandCardSnapshot& C : Snap.Hand.Cards)
+		{
+			if (C.bIsHandAnchor) { continue; }
+			if (C.Definition && C.Definition->Keywords.HasTag(WacomTags::Card_Keyword_Companion))
+			{
+				CompIds.Add(C.InstanceId);
+			}
+		}
+		if (CompIds.Num() < 3)
+		{
+			continue;
+		}
+
+		// 清掉初始化事件，让断言只看本次触发。
+		S->ConsumeEvents();
+
+		for (int32 i = 0; i < 3; ++i)
+		{
+			TestTrue(TEXT("Play companion for limit event"),
+				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i], FGuid())).IsOk());
+		}
+
+		Snap = S->BuildSnapshot();
+		TestEqual(TEXT("Companion trigger keeps hand at normal limit"),
+			Snap.Hand.NormalCardCount, Snap.Hand.NormalCardLimit);
+
+		const TArray<FBattleEvent> Events = S->ConsumeEvents();
+		int32 LimitDiscardEvents = 0;
+		const int32 ExpectedDiscardedByLimit = 4; // 5 opening - 3 played + 12 returned = 14 normals, limit 10.
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Type != EBattleEventType::HandLimitDiscarded)
+			{
+				continue;
+			}
+
+			++LimitDiscardEvents;
+			TestTrue(TEXT("Companion limit discard card id valid"), Event.CardInstanceId.IsValid());
+			TestFalse(TEXT("Companion limit discard actor empty"), Event.ActorInstanceId.IsValid());
+			TestEqual(TEXT("Companion limit discard source"),
+				Event.HandLimitDiscardSource, EHandLimitDiscardSource::PassiveOnCompanionCount);
+		}
+		TestEqual(TEXT("Companion trigger emits one event per limit discard"),
+			LimitDiscardEvents, ExpectedDiscardedByLimit);
+
+		bCovered = true;
+	}
+
+	TestTrue(TEXT("At least one seed covers companion limit discard event"), bCovered);
 	return true;
 }
