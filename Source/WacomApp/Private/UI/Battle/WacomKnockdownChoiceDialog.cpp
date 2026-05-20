@@ -23,6 +23,21 @@
 
 namespace
 {
+	bool IsOptionAvailable(const FKnockdownChoiceView& View, EKnockdownChoice Choice)
+	{
+		switch (Choice)
+		{
+		case EKnockdownChoice::Aid:
+			return View.AidOption.bAvailable;
+		case EKnockdownChoice::Withdraw:
+			return View.WithdrawOption.bAvailable;
+		case EKnockdownChoice::Destroy:
+			return View.DestroyOption.bAvailable;
+		default:
+			return false;
+		}
+	}
+
 	UButton* MakeChoiceButton(UWidgetTree* Tree, FName Name, const FText& Label,
 		UHorizontalBox* Parent, float MinWidth)
 	{
@@ -148,35 +163,31 @@ void UWacomKnockdownChoiceDialog::NativeConstruct()
 	if (WithdrawButton) { WithdrawButton->OnClicked.AddUniqueDynamic(this, &UWacomKnockdownChoiceDialog::HandleWithdrawClicked); }
 	if (DestroyButton)  { DestroyButton ->OnClicked.AddUniqueDynamic(this, &UWacomKnockdownChoiceDialog::HandleDestroyClicked); }
 
-	// 应用 SetContext 传入的状态
-	if (PartNameText && !PendingPartName.IsEmpty())
+	// 应用 SetContext 传入的状态。
+	if (PartNameText && !CurrentView.PartName.IsEmpty())
 	{
-		PartNameText->SetText(PendingPartName);
+		PartNameText->SetText(CurrentView.PartName);
 	}
-	if (AidButton)     { AidButton    ->SetIsEnabled(bLeftHandAvailable); }
-	if (WithdrawButton){ WithdrawButton->SetIsEnabled(bWithdrawAvailable); }
-	if (DestroyButton) { DestroyButton->SetIsEnabled(bRightHandAvailable); }
+	if (AidButton) { AidButton->SetIsEnabled(CurrentView.AidOption.bAvailable); }
+	if (WithdrawButton) { WithdrawButton->SetIsEnabled(CurrentView.WithdrawOption.bAvailable); }
+	if (DestroyButton) { DestroyButton->SetIsEnabled(CurrentView.DestroyOption.bAvailable); }
 }
 
-void UWacomKnockdownChoiceDialog::SetContext(UBattleHUD* InHUD, const FText& InPartName,
-	bool bInLeftHandAvailable, bool bInWithdrawAvailable, bool bInRightHandAvailable)
+void UWacomKnockdownChoiceDialog::SetContext(UBattleHUD* InHUD, const FKnockdownChoiceView& InView)
 {
 	OwningHUD = InHUD;
-	PendingPartName = InPartName;
-	bLeftHandAvailable = bInLeftHandAvailable;
-	bWithdrawAvailable = bInWithdrawAvailable;
-	bRightHandAvailable = bInRightHandAvailable;
+	CurrentView = InView;
 
 	// 即时应用（如果 NativeConstruct 已经跑过）
-	if (PartNameText) { PartNameText->SetText(PendingPartName); }
-	if (AidButton)    { AidButton->SetIsEnabled(bLeftHandAvailable); }
-	if (WithdrawButton){ WithdrawButton->SetIsEnabled(bWithdrawAvailable); }
-	if (DestroyButton){ DestroyButton->SetIsEnabled(bRightHandAvailable); }
+	if (PartNameText) { PartNameText->SetText(CurrentView.PartName); }
+	if (AidButton) { AidButton->SetIsEnabled(CurrentView.AidOption.bAvailable); }
+	if (WithdrawButton) { WithdrawButton->SetIsEnabled(CurrentView.WithdrawOption.bAvailable); }
+	if (DestroyButton) { DestroyButton->SetIsEnabled(CurrentView.DestroyOption.bAvailable); }
 }
 
 void UWacomKnockdownChoiceDialog::HandleAidClicked()
 {
-	if (OwningHUD && bLeftHandAvailable)
+	if (OwningHUD && IsOptionAvailable(CurrentView, EKnockdownChoice::Aid))
 	{
 		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Aid);
 		DeactivateWidget();
@@ -185,7 +196,7 @@ void UWacomKnockdownChoiceDialog::HandleAidClicked()
 
 void UWacomKnockdownChoiceDialog::HandleWithdrawClicked()
 {
-	if (OwningHUD && bWithdrawAvailable)
+	if (OwningHUD && IsOptionAvailable(CurrentView, EKnockdownChoice::Withdraw))
 	{
 		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Withdraw);
 		DeactivateWidget();
@@ -194,7 +205,7 @@ void UWacomKnockdownChoiceDialog::HandleWithdrawClicked()
 
 void UWacomKnockdownChoiceDialog::HandleDestroyClicked()
 {
-	if (OwningHUD && bRightHandAvailable)
+	if (OwningHUD && IsOptionAvailable(CurrentView, EKnockdownChoice::Destroy))
 	{
 		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Destroy);
 		DeactivateWidget();

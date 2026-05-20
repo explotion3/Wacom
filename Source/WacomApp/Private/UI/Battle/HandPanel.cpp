@@ -117,6 +117,8 @@ UCardWidget* UHandPanel::CreateAndPlaceCard(const FHandCardVisualEntry& Entry, U
 	ApplyCardSlotLayout(Card, CardIndex, CardCount);
 	Card->ApplyCardSnapshot(Entry.Snapshot);
 	Card->OnCardClicked.AddDynamic(this, &UHandPanel::HandleCardClicked);
+	Card->OnCardHoveredNative.AddUObject(this, &UHandPanel::HandleCardHovered);
+	Card->OnCardUnhoveredNative.AddUObject(this, &UHandPanel::HandleCardUnhovered);
 
 	SpawnedCards.Add(Card);
 	return Card;
@@ -184,6 +186,11 @@ int32 UHandPanel::GetUnifiedHandSlotCardCount() const
 	return UnifiedHandSlot ? UnifiedHandSlot->GetChildrenCount() : 0;
 }
 
+UCardWidget* UHandPanel::GetSpawnedCardForTest(int32 Index) const
+{
+	return SpawnedCards.IsValidIndex(Index) ? SpawnedCards[Index] : nullptr;
+}
+
 void UHandPanel::ClearAllSlots()
 {
 	auto ClearSlot = [](UPanelWidget* P) { if (P) { P->ClearChildren(); } };
@@ -223,4 +230,14 @@ void UHandPanel::HandleCardClicked(FGuid CardInstanceId)
 		}
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[HandPanel] 未找到 UBattleHUD 父 Widget，点击被吞"));
+}
+
+void UHandPanel::HandleCardHovered(UCardWidget* SourceWidget)
+{
+	OnCardHoveredNative.Broadcast(SourceWidget);
+}
+
+void UHandPanel::HandleCardUnhovered(UCardWidget* SourceWidget)
+{
+	OnCardUnhoveredNative.Broadcast(SourceWidget);
 }

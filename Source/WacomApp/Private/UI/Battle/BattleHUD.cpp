@@ -10,6 +10,9 @@
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
+#include "UI/Battle/CardWidget.h"
+#include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Common/PileCountView.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
@@ -32,6 +35,11 @@
 #include "Snapshots/EnemySnapshot.h"
 #include "Types/WacomEnums.h"
 
+namespace
+{
+	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
+}
+
 void UBattleHUD::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
@@ -42,6 +50,18 @@ void UBattleHUD::NativeConstruct()
 {
 	Super::NativeConstruct();
 
+	if (!CardDetailPanelClass)
+	{
+		if (UClass* LoadedPanelClass = LoadClass<UWacomCardDetailPanel>(nullptr, CardDetailPanelPath))
+		{
+			CardDetailPanelClass = LoadedPanelClass;
+		}
+		else
+		{
+			CardDetailPanelClass = UWacomCardDetailPanel::StaticClass();
+		}
+	}
+
 	// 此时 RebuildWidget 已执行，BindWidget 字段都填好了。
 	// 登记子 BattleWidget，让基类 SetSession / RefreshFromSnapshot 能递归到它们。
 	ChildBattleWidgets.Reset();
@@ -50,6 +70,14 @@ void UBattleHUD::NativeConstruct()
 	if (EnemyInfoBar)    { ChildBattleWidgets.Add(EnemyInfoBar); }
 	if (ActionPanel)     { ChildBattleWidgets.Add(ActionPanel); }
 	if (EquipmentBar)    { ChildBattleWidgets.Add(EquipmentBar); }
+
+	if (HandPanel)
+	{
+		HandPanel->OnCardHoveredNative.RemoveAll(this);
+		HandPanel->OnCardUnhoveredNative.RemoveAll(this);
+		HandPanel->OnCardHoveredNative.AddUObject(this, &UBattleHUD::HandleHandCardHovered);
+		HandPanel->OnCardUnhoveredNative.AddUObject(this, &UBattleHUD::HandleHandCardUnhovered);
+	}
 
 	// 如果 Session 在 RebuildWidget 之前就被 SetSession 过了，
 	// 子 Widget 还没拿到 Session。这里补一次。
@@ -61,6 +89,18 @@ void UBattleHUD::NativeConstruct()
 		}
 		RefreshFromSnapshot(S->BuildSnapshot());
 	}
+}
+
+void UBattleHUD::NativeDestruct()
+{
+	if (HandPanel)
+	{
+		HandPanel->OnCardHoveredNative.RemoveAll(this);
+		HandPanel->OnCardUnhoveredNative.RemoveAll(this);
+	}
+	HideCardDetailPanel();
+	CardDetailPanel = nullptr;
+	Super::NativeDestruct();
 }
 
 TSharedRef<SWidget> UBattleHUD::RebuildWidget()
@@ -176,12 +216,24 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			S->SetOffsets(FMargin(-20.0f, 0.0f, 320.0f, 200.0f));
 			S->SetAutoSize(false);
 		}
+
+		CardDetailLayer = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("CardDetailLayer"));
+		CardDetailLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(CardDetailLayer))
+		{
+			S->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+			S->SetOffsets(FMargin(0.0f));
+			S->SetAutoSize(false);
+			S->SetZOrder(10);
+		}
 	}
 	return Super::RebuildWidget();
 }
 
 void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
+	HideCardDetailPanel();
+
 	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
 	if (Snap.Phase == EBattlePhase::BattleEnd)
 	{
@@ -210,6 +262,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	UIState = EBattleUIState::Idle;
 	PendingTargetingCardId.Invalidate();
 	bHasBroadcastBattleEnd = false;
+	HideCardDetailPanel();
 }
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
@@ -244,6 +297,8 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 
 void UBattleHUD::OnCardClickedByUser(const FGuid& CardInstanceId)
 {
+	HideCardDetailPanel();
+
 	if (UIState == EBattleUIState::BattleEnd || UIState == EBattleUIState::Resolving)
 	{
 		return;
@@ -296,6 +351,8 @@ void UBattleHUD::OnCardClickedByUser(const FGuid& CardInstanceId)
 
 void UBattleHUD::OnEnemyPartClickedByUser(const FGuid& PartInstanceId)
 {
+	HideCardDetailPanel();
+
 	if (UIState != EBattleUIState::TargetSelect) { return; }
 	if (!PendingTargetingCardId.IsValid())       { return; }
 
@@ -307,6 +364,8 @@ void UBattleHUD::OnEnemyPartClickedByUser(const FGuid& PartInstanceId)
 
 void UBattleHUD::OnWaitRequested()
 {
+	HideCardDetailPanel();
+
 	if (UIState == EBattleUIState::BattleEnd || UIState == EBattleUIState::Resolving) { return; }
 
 	// Wait 期间自动取消 TargetSelect
@@ -329,6 +388,8 @@ void UBattleHUD::OnWaitRequested()
 
 void UBattleHUD::OnEndTurnRequested()
 {
+	HideCardDetailPanel();
+
 	if (UIState == EBattleUIState::BattleEnd || UIState == EBattleUIState::Resolving) { return; }
 
 	if (UIState == EBattleUIState::TargetSelect)
@@ -350,6 +411,8 @@ void UBattleHUD::OnEndTurnRequested()
 
 void UBattleHUD::CancelTargetSelect()
 {
+	HideCardDetailPanel();
+
 	if (UIState != EBattleUIState::TargetSelect) { return; }
 	PendingTargetingCardId.Invalidate();
 	SetUIState(EBattleUIState::Idle);
@@ -357,6 +420,8 @@ void UBattleHUD::CancelTargetSelect()
 
 void UBattleHUD::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
 {
+	HideCardDetailPanel();
+
 	if (Choice == EKnockdownChoice::None) { return; }
 
 	UBattleSession* S = GetSession();
@@ -378,6 +443,8 @@ void UBattleHUD::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
 
 void UBattleHUD::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)
 {
+	HideCardDetailPanel();
+
 	UBattleSession* S = GetSession();
 	if (!S) { return; }
 
@@ -395,12 +462,171 @@ void UBattleHUD::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)
 
 void UBattleHUD::AfterCommand()
 {
+	HideCardDetailPanel();
 	ConsumeAndLogEvents();
 
 	UBattleSession* S = GetSession();
 	if (!S) { return; }
 
 	RefreshFromSnapshot(S->BuildSnapshot());
+}
+
+FVector2D UBattleHUD::ComputeCardDetailPanelPositionBeside(
+	const FVector2D& AnchorPosition,
+	const FVector2D& AnchorSize,
+	const FVector2D& LayerSize,
+	const FVector2D& PanelSize,
+	float Padding)
+{
+	const float SafePadding = FMath::Max(0.0f, Padding);
+	const float MaxX = FMath::Max(0.0f, LayerSize.X - PanelSize.X);
+	const float MaxY = FMath::Max(0.0f, LayerSize.Y - PanelSize.Y);
+
+	const float LeftX = AnchorPosition.X - PanelSize.X - SafePadding;
+	const float RightX = AnchorPosition.X + AnchorSize.X + SafePadding;
+	const float DesiredX = LeftX >= 0.0f ? LeftX : RightX;
+	const float DesiredY = AnchorPosition.Y + (AnchorSize.Y - PanelSize.Y) * 0.5f;
+
+	return FVector2D(
+		FMath::Clamp(DesiredX, 0.0f, MaxX),
+		FMath::Clamp(DesiredY, 0.0f, MaxY));
+}
+
+bool UBattleHUD::IsCardDetailPanelVisible() const
+{
+	return CardDetailPanel && CardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
+}
+
+FText UBattleHUD::GetCardDetailPanelNameText() const
+{
+	return CardDetailPanel ? CardDetailPanel->GetNameText() : FText::GetEmpty();
+}
+
+void UBattleHUD::HandleHandCardHovered(UCardWidget* SourceWidget)
+{
+	ShowCardDetailForCardWidget(SourceWidget);
+}
+
+void UBattleHUD::HandleHandCardUnhovered(UCardWidget* /*SourceWidget*/)
+{
+	HideCardDetailPanel();
+}
+
+bool UBattleHUD::ShowCardDetailForCardWidget(UCardWidget* SourceWidget)
+{
+	if (!SourceWidget || !SourceWidget->GetCardSnapshot().Definition || UIState != EBattleUIState::Idle)
+	{
+		HideCardDetailPanel();
+		return false;
+	}
+
+	UWacomCardDetailPanel* Panel = EnsureCardDetailPanel();
+	if (!Panel)
+	{
+		return false;
+	}
+
+	Panel->SetCardDetailData(
+		UWacomCardPresentationBuilder::BuildCardDetailViewData(SourceWidget->GetCardSnapshot().Definition));
+	PositionCardDetailPanelNear(SourceWidget);
+	Panel->SetRenderOpacity(1.0f);
+	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
+	return true;
+}
+
+void UBattleHUD::HideCardDetailPanel()
+{
+	if (CardDetailPanel)
+	{
+		CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+UWacomCardDetailPanel* UBattleHUD::EnsureCardDetailPanel()
+{
+	EnsureCardDetailLayer();
+	if (!CardDetailLayer)
+	{
+		return nullptr;
+	}
+
+	if (CardDetailPanel)
+	{
+		return CardDetailPanel;
+	}
+
+	UClass* PanelClass = CardDetailPanelClass
+		? CardDetailPanelClass.Get()
+		: UWacomCardDetailPanel::StaticClass();
+	CardDetailPanel = GetWorld()
+		? CreateWidget<UWacomCardDetailPanel>(this, PanelClass)
+		: NewObject<UWacomCardDetailPanel>(this, PanelClass);
+	if (!CardDetailPanel)
+	{
+		return nullptr;
+	}
+
+	CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+	CardDetailPanel->SetIsEnabled(true);
+	CardDetailPanel->SetRenderOpacity(1.0f);
+	if (UCanvasPanelSlot* DetailSlot = CardDetailLayer->AddChildToCanvas(CardDetailPanel))
+	{
+		DetailSlot->SetAutoSize(false);
+		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
+		DetailSlot->SetZOrder(1);
+	}
+	return CardDetailPanel;
+}
+
+void UBattleHUD::EnsureCardDetailLayer()
+{
+	if (CardDetailLayer)
+	{
+		return;
+	}
+
+	if (UCanvasPanel* RootCanvas = WidgetTree ? Cast<UCanvasPanel>(WidgetTree->RootWidget) : nullptr)
+	{
+		CardDetailLayer = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("CardDetailLayer_Runtime"));
+		CardDetailLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (UCanvasPanelSlot* DetailLayerSlot = RootCanvas->AddChildToCanvas(CardDetailLayer))
+		{
+			DetailLayerSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+			DetailLayerSlot->SetOffsets(FMargin(0.0f));
+			DetailLayerSlot->SetAutoSize(false);
+			DetailLayerSlot->SetZOrder(10);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] CardDetailLayer 未绑定，且 RootWidget 不是 CanvasPanel，战斗手牌悬浮详情不会显示"));
+	}
+}
+
+void UBattleHUD::PositionCardDetailPanelNear(UCardWidget* SourceWidget)
+{
+	if (!SourceWidget || !CardDetailLayer || !CardDetailPanel)
+	{
+		return;
+	}
+
+	const FGeometry& LayerGeometry = CardDetailLayer->GetCachedGeometry();
+	const FGeometry& SourceGeometry = SourceWidget->GetCachedGeometry();
+	const FVector2D AnchorPosition = LayerGeometry.AbsoluteToLocal(SourceGeometry.GetAbsolutePosition());
+	const FVector2D AnchorSize = SourceGeometry.GetLocalSize();
+	const FVector2D LayerSize = LayerGeometry.GetLocalSize();
+	const FVector2D Position = ComputeCardDetailPanelPositionBeside(
+		AnchorPosition,
+		AnchorSize,
+		LayerSize,
+		CardDetailPanelEstimatedSize,
+		CardDetailPanelPadding);
+
+	if (UCanvasPanelSlot* DetailSlot = Cast<UCanvasPanelSlot>(CardDetailPanel->Slot))
+	{
+		DetailSlot->SetPosition(Position);
+		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
+	}
 }
 
 namespace
@@ -474,29 +700,21 @@ void UBattleHUD::ConsumeAndLogEvents()
 		UWacomKnockdownChoiceDialog* Dialog = Cast<UWacomKnockdownChoiceDialog>(Pushed);
 		if (!Dialog) { continue; }
 
-		// 从 Snapshot 查 part 显示名
 		UBattleSession* S2 = GetSession();
-		FText PartName = LOCTEXT("UnknownPart", "敌方部位");
-		if (S2)
+		if (!S2)
 		{
-			const FBattleSnapshot Snap = S2->BuildSnapshot();
-			for (const FEnemyPartSnapshot& P : Snap.Enemy.Parts)
-			{
-				if (P.InstanceId == E.ActorInstanceId && P.Definition)
-				{
-					PartName = P.Definition->DisplayName.IsEmpty()
-						? FText::FromName(P.Definition->PartId)
-						: P.Definition->DisplayName;
-					break;
-				}
-			}
+			continue;
 		}
 
-		// E.Count 编码：1=左可 / 2=右可 / 4=撤退可。
-		const bool bLeftAvail  = (E.Count & 1) != 0;
-		const bool bRightAvail = (E.Count & 2) != 0;
-		const bool bWithdrawAvail = (E.Count & 4) != 0;
-		Dialog->SetContext(this, PartName, bLeftAvail, bWithdrawAvail, bRightAvail);
+		const FKnockdownChoiceView ChoiceView = S2->BuildPendingKnockdownChoiceView();
+		if (!ChoiceView.bHasPendingChoice)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[BattleHUD] KnockdownChoiceRequested received but no pending choice view"));
+			continue;
+		}
+
+		Dialog->SetContext(this, ChoiceView);
 	}
 }
 

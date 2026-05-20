@@ -1,35 +1,11 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Commands/KnockdownChoiceResolver.h"
+#include "Commands/KnockdownChoiceAvailability.h"
 #include "Core/BattleState.h"
 #include "Core/BattleRules.h"
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEventBus.h"
-
-namespace
-{
-	bool HasAnyLivingEnemyPart(const FBattleState& State)
-	{
-		for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
-		{
-			if (!Part.bDestroyed && Part.CurrentHp > 0)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	int32 BuildKnockdownChoiceAvailabilityMask(const FBattleState::FPendingKnockdownEvent& Event,
-		const FBattleState& State)
-	{
-		int32 Mask = 0;
-		if (Event.bLeftHandAvailable)  { Mask |= 1; }
-		if (Event.bRightHandAvailable) { Mask |= 2; }
-		if (HasAnyLivingEnemyPart(State)) { Mask |= 4; }
-		return Mask;
-	}
-}
 
 FWacomStatus FKnockdownChoiceResolver::Resolve(
 	FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
@@ -47,19 +23,14 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 
 	// 取队头
 	const FBattleState::FPendingKnockdownEvent Head = State.PendingKnockdownEvents[0];
+	const FKnockdownChoiceView ChoiceView = FKnockdownChoiceAvailability::BuildView(State);
 
 	// 可选性校验
-	if (Choice == EKnockdownChoice::Aid && !Head.bLeftHandAvailable)
+	if (!FKnockdownChoiceAvailability::IsChoiceAvailable(ChoiceView, Choice))
 	{
-		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("AidUnavailable"));
-	}
-	if (Choice == EKnockdownChoice::Destroy && !Head.bRightHandAvailable)
-	{
-		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("DestroyUnavailable"));
-	}
-	if (Choice == EKnockdownChoice::Withdraw && !HasAnyLivingEnemyPart(State))
-	{
-		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("WithdrawUnavailableNoLivingPart"));
+		return FWacomStatus::Fail(
+			EWacomError::InvalidArgument,
+			FKnockdownChoiceAvailability::GetDisabledReason(ChoiceView, Choice));
 	}
 
 	// dequeue + 记账
@@ -113,7 +84,8 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 		FBattleEvent NextRequest;
 		NextRequest.Type            = EBattleEventType::KnockdownChoiceRequested;
 		NextRequest.ActorInstanceId = NextHead.PartInstanceId;
-		NextRequest.Count           = BuildKnockdownChoiceAvailabilityMask(NextHead, State);
+		NextRequest.Count           = FKnockdownChoiceAvailability::BuildLegacyEventMask(
+			FKnockdownChoiceAvailability::BuildView(State));
 		Events.Emit(NextRequest);
 	}
 	// 不论是否非空都视为 state 有变更

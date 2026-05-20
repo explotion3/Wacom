@@ -8,6 +8,9 @@
 #include "BattleHUD.generated.h"
 
 class UWacomBattleWidgetBase;
+class UCanvasPanel;
+class UCardWidget;
+class UWacomCardDetailPanel;
 struct FBattleCommand;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
@@ -66,8 +69,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Layout", meta = (UIMin = "-400.0", UIMax = "400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板相对屏幕底部的上移距离。正数会让手牌面板离底部更远。"))
 	float HandPanelBottomOffset = 10.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "战斗手牌悬浮详情面板的估算宽高，单位为 Slate 像素。用于 CanvasPanel Slot 尺寸和边界 clamp；实际样式仍由 WBP_CardDetailPanel 决定。"))
+	FVector2D CardDetailPanelEstimatedSize = FVector2D(360.0f, 420.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "战斗手牌悬浮详情面板与卡牌之间的间距，单位为 Slate 像素。面板默认显示在卡牌左侧，左侧空间不足时换到右侧。"))
+	float CardDetailPanelPadding = 12.0f;
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	EBattleUIState GetUIState() const { return UIState; }
+
+	static FVector2D ComputeCardDetailPanelPositionBeside(
+		const FVector2D& AnchorPosition,
+		const FVector2D& AnchorSize,
+		const FVector2D& LayerSize,
+		const FVector2D& PanelSize,
+		float Padding);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	bool IsCardDetailPanelVisible() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	FText GetCardDetailPanelNameText() const;
 
 	// ---- 子 Widget 交互入口 ----
 	// 子 Widget 通过这些方法通知 HUD 玩家意图。HUD 按状态机决策。
@@ -129,6 +151,7 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeRefreshFromSnapshot(const FBattleSnapshot& Snap) override;
 	virtual void NativeOnSessionChanged(class UBattleSession* OldSession, class UBattleSession* NewSession) override;
 
@@ -182,6 +205,12 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UEventToast> EventToast;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCanvasPanel> CardDetailLayer;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI|CardDetail")
+	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;
+
 private:
 	EBattleUIState UIState = EBattleUIState::Idle;
 
@@ -190,6 +219,9 @@ private:
 
 	/** 战斗结束回调是否已广播过。保证只广播一次。 */
 	bool bHasBroadcastBattleEnd = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
@@ -202,4 +234,14 @@ private:
 
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
 	void AfterCommand();
+
+	void HandleHandCardHovered(UCardWidget* SourceWidget);
+	void HandleHandCardUnhovered(UCardWidget* SourceWidget);
+	bool ShowCardDetailForCardWidget(UCardWidget* SourceWidget);
+	void HideCardDetailPanel();
+	UWacomCardDetailPanel* EnsureCardDetailPanel();
+	void EnsureCardDetailLayer();
+	void PositionCardDetailPanelNear(UCardWidget* SourceWidget);
+
+	friend class UWacomBattleHUDDetailTest;
 };

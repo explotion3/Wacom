@@ -395,6 +395,8 @@ WacomBattle/
 
 - 援助 / 破坏是击倒事件分支，不依赖左 / 右手牌当前是否仍在手牌区，也不消耗左右手牌。
 - 撤离只在敌人仍有存活部位时可选；如果本次击倒后敌人所有部位都已清空，必须选择援助或破坏来完成最后一次击倒事件并进入胜利结算。
+- UI 可通过 `UBattleSession::BuildPendingKnockdownChoiceView()` 读取当前击倒事件的 `FKnockdownChoiceView`，包含部位信息与 Aid / Withdraw / Destroy 三个选项的可用性。
+- `KnockdownChoiceRequested` 事件只负责通知 UI 需要展示选择面板；`FBattleEvent.Count` 的旧位掩码仅保留日志兼容，不再作为 UI 读取契约。
 
 `Outcome=Undetermined` 时不结算压力（异常路径 / 玩家取消）。
 

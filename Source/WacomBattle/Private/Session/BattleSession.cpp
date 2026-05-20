@@ -5,6 +5,7 @@
 #include "Core/BattleState.h"
 #include "Core/BattleResolver.h"
 #include "Core/BattleTurnFlow.h"
+#include "Commands/KnockdownChoiceAvailability.h"
 #include "Deck/DeckService.h"
 #include "Events/BattleEventBus.h"
 #include "Snapshots/BattleSnapshotBuilder.h"
@@ -17,32 +18,6 @@
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
-
-namespace
-{
-	bool HasAnyLivingEnemyPartForKnockdownChoice(const FBattleState& State)
-	{
-		for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
-		{
-			if (!Part.bDestroyed && Part.CurrentHp > 0)
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	int32 BuildKnockdownChoiceAvailabilityMaskForSession(
-		const FBattleState::FPendingKnockdownEvent& Event,
-		const FBattleState& State)
-	{
-		int32 Mask = 0;
-		if (Event.bLeftHandAvailable)  { Mask |= 1; }
-		if (Event.bRightHandAvailable) { Mask |= 2; }
-		if (HasAnyLivingEnemyPartForKnockdownChoice(State)) { Mask |= 4; }
-		return Mask;
-	}
-}
 
 UBattleSession::UBattleSession()
 	: State(nullptr)
@@ -293,7 +268,8 @@ FWacomStatus UBattleSession::SubmitCommand(const FBattleCommand& Command)
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::KnockdownChoiceRequested;
 		Ev.ActorInstanceId = Head.PartInstanceId;
-		Ev.Count           = BuildKnockdownChoiceAvailabilityMaskForSession(Head, *State);
+		Ev.Count           = FKnockdownChoiceAvailability::BuildLegacyEventMask(
+			FKnockdownChoiceAvailability::BuildView(*State));
 		EventBus->Emit(Ev);
 	}
 
@@ -326,6 +302,11 @@ bool UBattleSession::IsBattleEnded() const
 EBattlePhase UBattleSession::GetPhase() const
 {
 	return State != nullptr ? State->Phase : EBattlePhase::None;
+}
+
+FKnockdownChoiceView UBattleSession::BuildPendingKnockdownChoiceView() const
+{
+	return State ? FKnockdownChoiceAvailability::BuildView(*State) : FKnockdownChoiceView{};
 }
 
 FBattleResultPacket UBattleSession::BuildResultPacket() const

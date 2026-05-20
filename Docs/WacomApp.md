@@ -186,6 +186,13 @@ Widget（C++ 直接订阅 OnRunViewModelRefreshedNative，未来 WBP 可走 View
 
 战斗 UI 的命令出口唯一在 BattleHUD（`Session->SubmitCommand`），子 widget 只发委托。
 
+击倒事件 UI：
+
+- `BattleHUD` 收到 `KnockdownChoiceRequested` 事件后，调用 `UBattleSession::BuildPendingKnockdownChoiceView()` 获取当前击倒事件可用性。
+- `UWacomKnockdownChoiceDialog` 只消费 `FKnockdownChoiceView`：按钮启用状态来自 `AidOption / WithdrawOption / DestroyOption`，不解析 `FBattleEvent.Count`。
+- `FBattleEvent.Count` 中的旧位掩码仅保留日志兼容；正式 UI 合同以 BattleSession ViewData 为准。
+- Dialog 点击后仍回到 `BattleHUD->OnKnockdownChoiceSelected()` 提交命令，Dialog 不直接修改战斗状态。
+
 ---
 
 ## §7 菜单系统
@@ -297,7 +304,11 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 - `ApplyCardSnapshot` 通过 `UWacomCardPresentationBuilder` 生成卡面数据，并用 `FHandCardSnapshot.RuntimeCost` 覆盖显示费用
 - `bIsPlayable=false` 时写入 `FWacomCardViewData.bDisabled`，同时禁用 `RootButton`
 - 点击、hover 上浮/缩放、目标选择高亮、提交出牌命令仍由 `UCardWidget / UHandPanel / BattleHUD` 负责，`UWacomCardView` 不知道战斗交互
-- `UCardWidget` 的 hover 反馈使用 Render Transform，不改变 `UHandPanel` 中的布局占位；`HoverLift / HoverScale` 可在 WBP Details 中调整
+- `UCardWidget` 的 hover 反馈使用 Render Transform 移动 `HoverVisualRoot` 视觉层，不移动根命中区域，也不改变 `UHandPanel` 中的布局占位；`HoverLift / HoverScale` 可在 WBP Details 中调整
+- 点击需要敌方部位目标的手牌时，`BattleHUD` 进入 `TargetSelect` 并记录 `PendingTargetingCardId`；再次点击同一张牌会调用 `CancelTargetSelect()` 回到 `Idle`
+- 手牌选中反馈由 `UHandPanel` 根据 `BattleHUD::IsInTargetSelect()` 和 `PendingTargetingCardId` 刷新；敌方部位可选反馈由 `EnemyInfoBar` 根据同一 HUD 状态刷新
+- 战斗手牌 hover 详情由 `BattleHUD` 管理：`UCardWidget` 上报 hover，`UHandPanel` 转发，`BattleHUD` 创建 `UWacomCardDetailPanel` 并用 `UWacomCardPresentationBuilder` 填充详情数据；面板默认显示在悬停卡牌左侧，左侧空间不足时显示在右侧
+- 进入目标选择、提交命令、刷新 Snapshot、切换 Session 或战斗结束时都会隐藏手牌详情；目标选择阶段只保留选中卡高亮和敌方部位 targetable 反馈
 - `UHandPanel` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_CardWidget`；找不到时回退到 C++ 默认 `UCardWidget`
 - `BattleHUD` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_HandPanel`；找不到时回退到 C++ 默认 `UHandPanel`
 - `WBP_CardWidget / WBP_HandPanel` 制作时按 `Docs/UI_Battle_WBP_Binding.md` 绑定；缺少 `RootButton` 时手牌不会崩溃但无法点击

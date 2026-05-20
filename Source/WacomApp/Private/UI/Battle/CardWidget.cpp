@@ -49,11 +49,26 @@ TSharedRef<SWidget> UCardWidget::RebuildWidget()
 		UOverlay* Stack = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Stack"));
 		Root->AddChild(Stack);
 
+		HoverVisualRoot = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("HoverVisualRoot"));
+		if (UOverlaySlot* VisualSlot = Stack->AddChildToOverlay(HoverVisualRoot))
+		{
+			VisualSlot->SetHorizontalAlignment(HAlign_Fill);
+			VisualSlot->SetVerticalAlignment(VAlign_Fill);
+		}
+
 		// Layer 0: Frame Border
 		FrameBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("FrameBorder"));
 		FrameBorder->SetBrushColor(FLinearColor(0.1f, 0.1f, 0.1f, 0.9f));
 		FrameBorder->SetPadding(FMargin(6));
-		if (UOverlaySlot* BSlot = Stack->AddChildToOverlay(FrameBorder))
+		if (UOverlay* VisualRootOverlay = Cast<UOverlay>(HoverVisualRoot))
+		{
+			if (UOverlaySlot* BSlot = VisualRootOverlay->AddChildToOverlay(FrameBorder))
+			{
+				BSlot->SetHorizontalAlignment(HAlign_Fill);
+				BSlot->SetVerticalAlignment(VAlign_Fill);
+			}
+		}
+		else if (UOverlaySlot* BSlot = Stack->AddChildToOverlay(FrameBorder))
 		{
 			BSlot->SetHorizontalAlignment(HAlign_Fill);
 			BSlot->SetVerticalAlignment(VAlign_Fill);
@@ -193,6 +208,18 @@ void UCardWidget::RequestUnhoverForTest()
 	RequestUnhover();
 }
 
+FWidgetTransform UCardWidget::GetHoverVisualRenderTransformForTest() const
+{
+	const UWidget* Target = GetHoverTransformTarget();
+	return Target ? Target->GetRenderTransform() : FWidgetTransform();
+}
+
+FVector2D UCardWidget::GetHoverVisualRenderTransformPivotForTest() const
+{
+	const UWidget* Target = GetHoverTransformTarget();
+	return Target ? Target->GetRenderTransformPivot() : FVector2D(0.5f, 0.5f);
+}
+
 void UCardWidget::ApplyZoneText(const FHandCardSnapshot& InSnap)
 {
 	if (ZoneText)
@@ -260,6 +287,7 @@ void UCardWidget::RequestHover()
 	bIsHovered = true;
 	ApplyHoverFeedback();
 	BP_OnHoverChanged(true);
+	OnCardHoveredNative.Broadcast(this);
 }
 
 void UCardWidget::RequestUnhover()
@@ -272,6 +300,7 @@ void UCardWidget::RequestUnhover()
 	bIsHovered = false;
 	RestoreHoverFeedback();
 	BP_OnHoverChanged(false);
+	OnCardUnhoveredNative.Broadcast(this);
 }
 
 void UCardWidget::ApplyHoverFeedback()
@@ -289,8 +318,11 @@ void UCardWidget::ApplyHoverFeedback()
 		BaseHoverRenderTransform.Scale.X * HoverScale,
 		BaseHoverRenderTransform.Scale.Y * HoverScale);
 
-	SetRenderTransformPivot(FVector2D(0.5f, 1.0f));
-	SetRenderTransform(HoverTransform);
+	if (UWidget* Target = GetHoverTransformTarget())
+	{
+		Target->SetRenderTransformPivot(FVector2D(0.5f, 1.0f));
+		Target->SetRenderTransform(HoverTransform);
+	}
 }
 
 void UCardWidget::RestoreHoverFeedback()
@@ -300,20 +332,35 @@ void UCardWidget::RestoreHoverFeedback()
 		return;
 	}
 
-	SetRenderTransform(BaseHoverRenderTransform);
-	SetRenderTransformPivot(BaseHoverRenderTransformPivot);
+	if (UWidget* Target = CachedHoverTransformTarget.Get())
+	{
+		Target->SetRenderTransform(BaseHoverRenderTransform);
+		Target->SetRenderTransformPivot(BaseHoverRenderTransformPivot);
+	}
 }
 
 void UCardWidget::CaptureBaseHoverTransformIfNeeded()
 {
-	if (bHasBaseHoverRenderTransform)
+	UWidget* Target = GetHoverTransformTarget();
+	if (!Target)
 	{
 		return;
 	}
 
-	BaseHoverRenderTransform = GetRenderTransform();
-	BaseHoverRenderTransformPivot = GetRenderTransformPivot();
+	if (bHasBaseHoverRenderTransform && CachedHoverTransformTarget.Get() == Target)
+	{
+		return;
+	}
+
+	CachedHoverTransformTarget = Target;
+	BaseHoverRenderTransform = Target->GetRenderTransform();
+	BaseHoverRenderTransformPivot = Target->GetRenderTransformPivot();
 	bHasBaseHoverRenderTransform = true;
+}
+
+UWidget* UCardWidget::GetHoverTransformTarget() const
+{
+	return HoverVisualRoot ? HoverVisualRoot.Get() : const_cast<UCardWidget*>(this);
 }
 
 #undef LOCTEXT_NAMESPACE

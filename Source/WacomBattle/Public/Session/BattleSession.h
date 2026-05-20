@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "GameplayTagContainer.h"
+#include "Types/WacomEnums.h"
 #include "Types/WacomResult.h"
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEvent.h"
@@ -43,6 +44,62 @@ struct WACOMBATTLE_API FBattleDeckEntry
 
 struct FBattleState;
 struct FBattleEventBus;
+
+/**
+ * 击倒事件单个选项的只读展示/校验视图。
+ *
+ * DisabledReason 约定：
+ * - None：可用或无禁用原因。
+ * - NoLivingEnemyPart：撤离不可用，因为敌人已经没有存活部位。
+ * - LeftHandMissing / RightHandMissing：预留，未来角色永久失去对应手牌时使用。
+ */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FKnockdownChoiceOptionView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	EKnockdownChoice Choice = EKnockdownChoice::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	bool bAvailable = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FName DisabledReason = NAME_None;
+};
+
+/**
+ * 当前待处理击倒事件的只读视图。
+ *
+ * UI 通过 UBattleSession::BuildPendingKnockdownChoiceView() 读取本结构，
+ * 不再解析 FBattleEvent.Count 的临时位掩码。
+ */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FKnockdownChoiceView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	bool bHasPendingChoice = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FGuid PartInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FName PartId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FText PartName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FKnockdownChoiceOptionView AidOption;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FKnockdownChoiceOptionView WithdrawOption;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FKnockdownChoiceOptionView DestroyOption;
+};
 
 /**
  * 战斗初始化参数。
@@ -176,6 +233,10 @@ public:
 	/** 当前阶段，只读。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	EBattlePhase GetPhase() const;
+
+	/** 当前待处理击倒事件的可用性视图。没有待处理事件时 bHasPendingChoice=false。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Knockdown")
+	FKnockdownChoiceView BuildPendingKnockdownChoiceView() const;
 
 	/**
 	 * 构造战斗结束时传给 Run 层的"战后包"。

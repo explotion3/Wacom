@@ -142,6 +142,14 @@ bool FWacomKnockdownChoiceAidContinuesSpec::RunTest(const FString& /*Parameters*
 	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
 	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 
+	const FKnockdownChoiceView View = S->BuildPendingKnockdownChoiceView();
+	TestTrue(TEXT("View has pending knockdown choice"), View.bHasPendingChoice);
+	TestEqual(TEXT("View points at destroyed head"), View.PartInstanceId, Head);
+	TestTrue(TEXT("Aid available in multi-part fight"), View.AidOption.bAvailable);
+	TestTrue(TEXT("Withdraw available while enemy still has living parts"), View.WithdrawOption.bAvailable);
+	TestTrue(TEXT("Destroy available in multi-part fight"), View.DestroyOption.bAvailable);
+	TestEqual(TEXT("Withdraw reason none"), View.WithdrawOption.DisabledReason, FName(TEXT("None")));
+
 	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 	TestTrue(TEXT("Aid 后回到 PlayerAction（敌人未全死）"),
 		S->GetPhase() == EBattlePhase::PlayerAction);
@@ -258,6 +266,15 @@ bool FWacomKnockdownChoiceWithdrawUnavailableOnLastLivingPartSpec::RunTest(const
 
 	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Solo));
 	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+
+	const FKnockdownChoiceView View = S->BuildPendingKnockdownChoiceView();
+	TestTrue(TEXT("View has pending final knockdown choice"), View.bHasPendingChoice);
+	TestTrue(TEXT("Final-part Aid available"), View.AidOption.bAvailable);
+	TestFalse(TEXT("Final-part Withdraw unavailable"), View.WithdrawOption.bAvailable);
+	TestEqual(TEXT("Final-part Withdraw disabled reason"),
+		View.WithdrawOption.DisabledReason,
+		FName(TEXT("NoLivingEnemyPart")));
+	TestTrue(TEXT("Final-part Destroy available"), View.DestroyOption.bAvailable);
 
 	{
 		const TArray<FBattleEvent> Events = S->ConsumeEvents();

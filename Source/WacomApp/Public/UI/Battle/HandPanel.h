@@ -10,6 +10,8 @@
 class UCardWidget;
 class UPanelWidget;
 
+DECLARE_MULTICAST_DELEGATE_OneParam(FWacomHandPanelCardHoverStateChangedNative, UCardWidget*);
+
 /**
  * UI-only hand card visual entry.
  *
@@ -75,8 +77,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	int32 GetSpawnedCardCount() const { return SpawnedCards.Num(); }
 
+	UCardWidget* GetSpawnedCardForTest(int32 Index) const;
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	int32 GetUnifiedHandSlotCardCount() const;
+
+	FWacomHandPanelCardHoverStateChangedNative OnCardHoveredNative;
+	FWacomHandPanelCardHoverStateChangedNative OnCardUnhoveredNative;
 
 	static TArray<FHandCardVisualEntry> BuildVisualEntries(const FHandQueueSnapshot& HandSnapshot);
 
@@ -94,6 +101,9 @@ protected:
 private:
 	UFUNCTION()
 	void HandleCardClicked(FGuid CardInstanceId);
+
+	void HandleCardHovered(UCardWidget* SourceWidget);
+	void HandleCardUnhovered(UCardWidget* SourceWidget);
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UCardWidget>> SpawnedCards;

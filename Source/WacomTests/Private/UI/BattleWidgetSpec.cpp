@@ -95,7 +95,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBattleCardWidgetHoverFeedbackSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<UCardWidget> Widget(NewObject<UCardWidget>());
+	TStrongObjectPtr<UWacomBattleCardWidgetHoverVisualRootTest> Widget(NewObject<UWacomBattleCardWidgetHoverVisualRootTest>());
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 	TStrongObjectPtr<UWacomBattleCardWidgetClickReceiver> Receiver(NewObject<UWacomBattleCardWidgetClickReceiver>());
 
@@ -110,40 +110,90 @@ bool FWacomUIBattleCardWidgetHoverFeedbackSpec::RunTest(const FString& /*Paramet
 	Widget->TakeWidget();
 	Widget->ApplyCardSnapshot(Snap);
 
+	Widget->OnCardHoveredNative.AddUObject(Receiver.Get(), &UWacomBattleCardWidgetClickReceiver::HandleHovered);
+	Widget->OnCardUnhoveredNative.AddUObject(Receiver.Get(), &UWacomBattleCardWidgetClickReceiver::HandleUnhovered);
+
 	TestTrue(TEXT("Hover feedback enabled by default"), Widget->bEnableHoverFeedback);
 	TestEqual(TEXT("Default hover lift"), Widget->HoverLift, 28.0f);
 	TestEqual(TEXT("Default hover scale"), Widget->HoverScale, 1.06f);
 
 	const FWidgetTransform BaseTransform = Widget->GetRenderTransformForTest();
 	const FVector2D BasePivot = Widget->GetRenderTransformPivotForTest();
+	const FWidgetTransform BaseVisualTransform = Widget->GetHoverVisualRenderTransformForTest();
+	const FVector2D BaseVisualPivot = Widget->GetHoverVisualRenderTransformPivotForTest();
+
+	TestTrue(TEXT("Fallback builds hover visual root"), Widget->HasHoverVisualRootForTest());
 
 	Widget->RequestHoverForTest();
 
 	const FWidgetTransform HoverTransform = Widget->GetRenderTransformForTest();
+	const FWidgetTransform HoverVisualTransform = Widget->GetHoverVisualRenderTransformForTest();
+	TestEqual(TEXT("Native hover broadcasts once"), Receiver->HoverCount, 1);
+	TestTrue(TEXT("Native hover carries source widget"), Receiver->LastHoveredWidget.Get() == Widget.Get());
 	TestTrue(TEXT("Widget enters hovered state"), Widget->IsHoveredForTest());
-	TestEqual(TEXT("Hover lift applies upward translation"), HoverTransform.Translation.Y, BaseTransform.Translation.Y - Widget->HoverLift);
-	TestEqual(TEXT("Hover preserves base X translation"), HoverTransform.Translation.X, BaseTransform.Translation.X);
-	TestEqual(TEXT("Hover scale applies X"), HoverTransform.Scale.X, BaseTransform.Scale.X * Widget->HoverScale);
-	TestEqual(TEXT("Hover scale applies Y"), HoverTransform.Scale.Y, BaseTransform.Scale.Y * Widget->HoverScale);
-	TestEqual(TEXT("Hover pivot uses bottom center"), Widget->GetRenderTransformPivotForTest(), FVector2D(0.5f, 1.0f));
+	TestEqual(TEXT("Hover keeps stable card widget translation"), HoverTransform.Translation, BaseTransform.Translation);
+	TestEqual(TEXT("Hover keeps stable card widget scale"), HoverTransform.Scale, BaseTransform.Scale);
+	TestEqual(TEXT("Hover lift applies to visual root"), HoverVisualTransform.Translation.Y, BaseVisualTransform.Translation.Y - Widget->HoverLift);
+	TestEqual(TEXT("Hover preserves visual root X translation"), HoverVisualTransform.Translation.X, BaseVisualTransform.Translation.X);
+	TestEqual(TEXT("Hover scale applies visual root X"), HoverVisualTransform.Scale.X, BaseVisualTransform.Scale.X * Widget->HoverScale);
+	TestEqual(TEXT("Hover scale applies visual root Y"), HoverVisualTransform.Scale.Y, BaseVisualTransform.Scale.Y * Widget->HoverScale);
+	TestEqual(TEXT("Hover visual root pivot uses bottom center"), Widget->GetHoverVisualRenderTransformPivotForTest(), FVector2D(0.5f, 1.0f));
 
 	Widget->SetTargetingHighlight(true);
-	TestEqual(TEXT("Targeting highlight does not reset hover transform"), Widget->GetRenderTransformForTest().Translation.Y, BaseTransform.Translation.Y - Widget->HoverLift);
+	TestEqual(TEXT("Targeting highlight does not reset hover visual transform"), Widget->GetHoverVisualRenderTransformForTest().Translation.Y, BaseVisualTransform.Translation.Y - Widget->HoverLift);
 	Widget->RequestClickForTest();
 	TestEqual(TEXT("Hover does not block click broadcast"), Receiver->ClickCount, 1);
 	TestEqual(TEXT("Hover click carries card id"), Receiver->LastClickedId, Snap.InstanceId);
 
 	Widget->RequestUnhoverForTest();
+	TestEqual(TEXT("Native unhover broadcasts once"), Receiver->UnhoverCount, 1);
+	TestTrue(TEXT("Native unhover carries source widget"), Receiver->LastUnhoveredWidget.Get() == Widget.Get());
 	TestFalse(TEXT("Widget leaves hovered state"), Widget->IsHoveredForTest());
 	TestEqual(TEXT("Unhover restores transform translation"), Widget->GetRenderTransformForTest().Translation, BaseTransform.Translation);
 	TestEqual(TEXT("Unhover restores transform scale"), Widget->GetRenderTransformForTest().Scale, BaseTransform.Scale);
 	TestEqual(TEXT("Unhover restores pivot"), Widget->GetRenderTransformPivotForTest(), BasePivot);
+	TestEqual(TEXT("Unhover restores visual root translation"), Widget->GetHoverVisualRenderTransformForTest().Translation, BaseVisualTransform.Translation);
+	TestEqual(TEXT("Unhover restores visual root scale"), Widget->GetHoverVisualRenderTransformForTest().Scale, BaseVisualTransform.Scale);
+	TestEqual(TEXT("Unhover restores visual root pivot"), Widget->GetHoverVisualRenderTransformPivotForTest(), BaseVisualPivot);
 
 	Widget->bEnableHoverFeedback = false;
 	Widget->RequestHoverForTest();
 	TestTrue(TEXT("Disabled feedback still tracks hovered state"), Widget->IsHoveredForTest());
-	TestEqual(TEXT("Disabled hover does not change transform"), Widget->GetRenderTransformForTest().Translation, BaseTransform.Translation);
+	TestEqual(TEXT("Disabled hover does not change visual transform"), Widget->GetHoverVisualRenderTransformForTest().Translation, BaseVisualTransform.Translation);
 	Widget->RequestUnhoverForTest();
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCardWidgetHoverFeedbackLegacyFallbackSpec,
+	"Wacom.UI.Battle.CardWidgetHoverFeedbackLegacyFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCardWidgetHoverFeedbackLegacyFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleCardWidgetHoverVisualRootTest> Widget(NewObject<UWacomBattleCardWidgetHoverVisualRootTest>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	FHandCardSnapshot Snap;
+	Snap.InstanceId = FGuid::NewGuid();
+	Snap.Definition = Card.Get();
+	Snap.RuntimeCost = 1;
+	Snap.bIsPlayable = true;
+
+	Widget->TakeWidget();
+	Widget->ApplyCardSnapshot(Snap);
+	Widget->DisableHoverVisualRootForTest();
+
+	const FWidgetTransform BaseTransform = Widget->GetRenderTransformForTest();
+	Widget->RequestHoverForTest();
+
+	const FWidgetTransform HoverTransform = Widget->GetRenderTransformForTest();
+	TestEqual(TEXT("Legacy fallback applies hover lift to card widget"), HoverTransform.Translation.Y, BaseTransform.Translation.Y - Widget->HoverLift);
+	TestEqual(TEXT("Legacy fallback applies hover scale X"), HoverTransform.Scale.X, BaseTransform.Scale.X * Widget->HoverScale);
+
+	Widget->RequestUnhoverForTest();
+	TestEqual(TEXT("Legacy fallback restores card widget transform"), Widget->GetRenderTransformForTest().Translation, BaseTransform.Translation);
 
 	return true;
 }
@@ -209,6 +259,51 @@ bool FWacomUIBattleCardWidgetMissingRootButtonSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Missing RootButton cannot click"), Receiver->ClickCount, 0);
 	TestFalse(TEXT("Missing RootButton reports disabled"), Widget->IsRootButtonEnabled());
 	TestTrue(TEXT("Data still refreshes without widgets"), Widget->GetCurrentCardViewData().bShowCost);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleKnockdownChoiceDialogViewSpec,
+	"Wacom.UI.Battle.KnockdownChoiceDialogUsesViewData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleKnockdownChoiceDialogViewSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleKnockdownChoiceDialogTest> Dialog(
+		NewObject<UWacomBattleKnockdownChoiceDialogTest>());
+
+	FKnockdownChoiceView View;
+	View.bHasPendingChoice = true;
+	View.PartName = FText::FromString(TEXT("蛇尾"));
+	View.AidOption.Choice = EKnockdownChoice::Aid;
+	View.AidOption.bAvailable = true;
+	View.WithdrawOption.Choice = EKnockdownChoice::Withdraw;
+	View.WithdrawOption.bAvailable = false;
+	View.WithdrawOption.DisabledReason = FName(TEXT("NoLivingEnemyPart"));
+	View.DestroyOption.Choice = EKnockdownChoice::Destroy;
+	View.DestroyOption.bAvailable = true;
+
+	Dialog->TakeWidget();
+	Dialog->SetContext(nullptr, View);
+
+	TestEqual(TEXT("Part name comes from view data"), Dialog->GetPartNameTextForTest(), TEXT("蛇尾"));
+	TestTrue(TEXT("Aid button follows view availability"), Dialog->IsAidButtonEnabledForTest());
+	TestFalse(TEXT("Withdraw button follows view availability"), Dialog->IsWithdrawButtonEnabledForTest());
+	TestTrue(TEXT("Destroy button follows view availability"), Dialog->IsDestroyButtonEnabledForTest());
+
+	View.AidOption.bAvailable = false;
+	View.AidOption.DisabledReason = FName(TEXT("LeftHandMissing"));
+	View.WithdrawOption.bAvailable = true;
+	View.WithdrawOption.DisabledReason = FName(TEXT("None"));
+	View.DestroyOption.bAvailable = false;
+	View.DestroyOption.DisabledReason = FName(TEXT("RightHandMissing"));
+
+	Dialog->SetContext(nullptr, View);
+
+	TestFalse(TEXT("Aid button refreshes from updated view"), Dialog->IsAidButtonEnabledForTest());
+	TestTrue(TEXT("Withdraw button refreshes from updated view"), Dialog->IsWithdrawButtonEnabledForTest());
+	TestFalse(TEXT("Destroy button refreshes from updated view"), Dialog->IsDestroyButtonEnabledForTest());
 
 	return true;
 }
@@ -309,6 +404,49 @@ bool FWacomUIBattleHandPanelUnifiedHorizontalRendererSpec::RunTest(const FString
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHandPanelHoverForwardingSpec,
+	"Wacom.UI.Battle.HandPanelHoverForwarding",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHandPanelHoverForwardingSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHandPanelLayoutTest> Panel(NewObject<UWacomBattleHandPanelLayoutTest>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	TStrongObjectPtr<UWacomBattleCardWidgetClickReceiver> Receiver(NewObject<UWacomBattleCardWidgetClickReceiver>());
+	Panel->CardWidgetClass = UCardWidget::StaticClass();
+
+	FBattleSnapshot Snapshot;
+	FHandCardSnapshot HandCard;
+	HandCard.InstanceId = FGuid::NewGuid();
+	HandCard.Definition = Card.Get();
+	HandCard.bIsPlayable = true;
+	Snapshot.Hand.Cards.Add(HandCard);
+
+	Panel->OnCardHoveredNative.AddUObject(Receiver.Get(), &UWacomBattleCardWidgetClickReceiver::HandleHovered);
+	Panel->OnCardUnhoveredNative.AddUObject(Receiver.Get(), &UWacomBattleCardWidgetClickReceiver::HandleUnhovered);
+
+	Panel->TakeWidget();
+	Panel->RefreshFromSnapshot(Snapshot);
+
+	UCardWidget* SpawnedCard = Panel->GetSpawnedCardForTest(0);
+	TestNotNull(TEXT("Panel creates a card widget"), SpawnedCard);
+	if (!SpawnedCard)
+	{
+		return false;
+	}
+
+	SpawnedCard->RequestHoverForTest();
+	TestEqual(TEXT("HandPanel forwards hover"), Receiver->HoverCount, 1);
+	TestEqual(TEXT("Forwarded hover carries spawned card"), Receiver->LastHoveredWidget.Get(), SpawnedCard);
+
+	SpawnedCard->RequestUnhoverForTest();
+	TestEqual(TEXT("HandPanel forwards unhover"), Receiver->UnhoverCount, 1);
+	TestEqual(TEXT("Forwarded unhover carries spawned card"), Receiver->LastUnhoveredWidget.Get(), SpawnedCard);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHandPanelLayoutDefaultsSpec,
 	"Wacom.UI.Battle.HandPanelLayoutDefaults",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -337,6 +475,95 @@ bool FWacomUIBattleHUDHandPanelLayoutDefaultsSpec::RunTest(const FString& /*Para
 	TestEqual(TEXT("Default hand panel fallback width"), HUD->HandPanelSize.X, 1700.0);
 	TestEqual(TEXT("Default hand panel fallback height"), HUD->HandPanelSize.Y, 420.0);
 	TestEqual(TEXT("Default hand panel bottom offset"), HUD->HandPanelBottomOffset, 10.0f);
+	TestEqual(TEXT("Default card detail width"), HUD->CardDetailPanelEstimatedSize.X, 360.0);
+	TestEqual(TEXT("Default card detail height"), HUD->CardDetailPanelEstimatedSize.Y, 420.0);
+	TestEqual(TEXT("Default card detail padding"), HUD->CardDetailPanelPadding, 12.0f);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailPositionSpec,
+	"Wacom.UI.Battle.HUDCardDetailPosition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailPositionSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FVector2D PanelSize(360.0f, 420.0f);
+	const FVector2D LayerSize(1200.0f, 800.0f);
+
+	const FVector2D LeftSide = UBattleHUD::ComputeCardDetailPanelPositionBeside(
+		FVector2D(500.0f, 500.0f),
+		FVector2D(120.0f, 160.0f),
+		LayerSize,
+		PanelSize,
+		12.0f);
+	TestEqual(TEXT("Detail panel prefers left side when there is room"), LeftSide, FVector2D(128.0f, 370.0f));
+
+	const FVector2D RightSide = UBattleHUD::ComputeCardDetailPanelPositionBeside(
+		FVector2D(20.0f, 100.0f),
+		FVector2D(120.0f, 160.0f),
+		LayerSize,
+		PanelSize,
+		12.0f);
+	TestEqual(TEXT("Detail panel falls back to right side when left side has no room"), RightSide, FVector2D(152.0f, 0.0f));
+
+	const FVector2D ClampRight = UBattleHUD::ComputeCardDetailPanelPositionBeside(
+		FVector2D(1120.0f, 700.0f),
+		FVector2D(120.0f, 160.0f),
+		LayerSize,
+		PanelSize,
+		12.0f);
+	TestEqual(TEXT("Detail panel uses left side near right edge and clamps vertical position"), ClampRight, FVector2D(748.0f, 380.0f));
+
+	const FVector2D ClampBottom = UBattleHUD::ComputeCardDetailPanelPositionBeside(
+		FVector2D(500.0f, 780.0f),
+		FVector2D(120.0f, 160.0f),
+		LayerSize,
+		PanelSize,
+		12.0f);
+	TestEqual(TEXT("Detail panel clamps to bottom edge"), ClampBottom, FVector2D(128.0f, 380.0f));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailLifecycleSpec,
+	"Wacom.UI.Battle.HUDCardDetailLifecycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailLifecycleSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UCardWidget> CardWidget(NewObject<UCardWidget>(HUD.Get()));
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	Card->CardId = TEXT("BattleDetailCard");
+	Card->DisplayName = FText::FromString(TEXT("战斗详情卡"));
+	Card->Description = FText::FromString(TEXT("造成 7 伤害。"));
+
+	FHandCardSnapshot Snap;
+	Snap.InstanceId = FGuid::NewGuid();
+	Snap.Definition = Card.Get();
+	Snap.RuntimeCost = 1;
+	Snap.bIsPlayable = true;
+
+	HUD->TakeWidget();
+	CardWidget->TakeWidget();
+	CardWidget->ApplyCardSnapshot(Snap);
+
+	TestTrue(TEXT("HUD shows detail for hovered hand card"), HUD->ShowCardDetailForTest(CardWidget.Get()));
+	TestTrue(TEXT("Detail panel is visible"), HUD->IsCardDetailPanelVisible());
+	TestEqual(TEXT("Detail panel uses card detail data"), HUD->GetCardDetailPanelNameText().ToString(), TEXT("战斗详情卡"));
+
+	HUD->HideCardDetailForTest();
+	TestFalse(TEXT("Detail panel hides explicitly"), HUD->IsCardDetailPanelVisible());
+
+	HUD->HandleCardHoveredForTest(CardWidget.Get());
+	TestTrue(TEXT("Hover handler shows detail"), HUD->IsCardDetailPanelVisible());
+
+	HUD->HandleCardUnhoveredForTest(CardWidget.Get());
+	TestFalse(TEXT("Unhover handler hides detail"), HUD->IsCardDetailPanelVisible());
 
 	return true;
 }

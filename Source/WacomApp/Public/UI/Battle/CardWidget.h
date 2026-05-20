@@ -11,9 +11,11 @@
 class UButton;
 class UTextBlock;
 class UBorder;
+class UWidget;
 class UWacomCardView;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWacomCardWidgetClicked, FGuid, CardInstanceId);
+DECLARE_MULTICAST_DELEGATE_OneParam(FWacomBattleCardHoverStateChangedNative, UCardWidget*);
 
 /**
  * 单张手牌 Widget。
@@ -30,6 +32,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWacomCardWidgetClicked, FGuid, Card
  *
  * WBP 约定（BindWidgetOptional）：
  * - RootButton : UButton    (可选；未绑定时不能点击)
+ * - HoverVisualRoot : UWidget (可选；推荐把视觉内容放入该层，hover 只移动它)
  * - CardView   : UWacomCardView (可选；推荐绑定)
  * - ZoneText   : UTextBlock (可选；显示 Left/Both/Right 分区)
  * - FrameBorder: UBorder    (用于 Playable/Targeting 色变)
@@ -85,8 +88,17 @@ public:
 	/** 测试/诊断用：读取当前 Render Transform Pivot。 */
 	FVector2D GetRenderTransformPivotForTest() const { return GetRenderTransformPivot(); }
 
+	/** 测试/诊断用：读取 hover 视觉层 Render Transform。 */
+	FWidgetTransform GetHoverVisualRenderTransformForTest() const;
+
+	/** 测试/诊断用：读取 hover 视觉层 Render Transform Pivot。 */
+	FVector2D GetHoverVisualRenderTransformPivotForTest() const;
+
 	UPROPERTY(BlueprintAssignable, Category = "Wacom|Battle|UI")
 	FWacomCardWidgetClicked OnCardClicked;
+
+	FWacomBattleCardHoverStateChangedNative OnCardHoveredNative;
+	FWacomBattleCardHoverStateChangedNative OnCardUnhoveredNative;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -110,6 +122,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> RootButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> HoverVisualRoot;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> ZoneText;
@@ -138,11 +153,13 @@ private:
 	void ApplyHoverFeedback();
 	void RestoreHoverFeedback();
 	void CaptureBaseHoverTransformIfNeeded();
+	UWidget* GetHoverTransformTarget() const;
 
 	FHandCardSnapshot CachedSnap;
 	FWacomCardViewData CurrentCardViewData;
 	FWidgetTransform BaseHoverRenderTransform;
 	FVector2D BaseHoverRenderTransformPivot = FVector2D(0.5f, 0.5f);
+	TWeakObjectPtr<UWidget> CachedHoverTransformTarget;
 	bool bLastPlayable = false;
 	bool bLastTargeting = false;
 	bool bIsHovered = false;
