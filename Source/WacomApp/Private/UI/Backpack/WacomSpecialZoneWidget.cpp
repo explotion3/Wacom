@@ -18,6 +18,7 @@
 #include "Components/WrapBoxSlot.h"
 
 #include "Cards/CardDefinition.h"
+#include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Backpack/WacomZoneDropTarget.h"
@@ -281,7 +282,7 @@ void UWacomSpecialZoneWidget::RebuildFromCurrentView()
 	const FText OwnerName = OwnerCard ? OwnerCard->DisplayName : LOCTEXT("UnknownSpecialZoneOwner", "未知主卡");
 	if (TitleText)
 	{
-		TitleText->SetText(UWacomBackpackScreen::BuildSpecialZoneTitleText(
+		TitleText->SetText(UWacomBackpackScreenPresenter::BuildSpecialZoneTitleText(
 			OwnerName,
 			CurrentView.ContentCards.Num(),
 			CurrentView.Capacity));
@@ -289,9 +290,7 @@ void UWacomSpecialZoneWidget::RebuildFromCurrentView()
 
 	if (BattleReadyBadge)
 	{
-		BattleReadyBadge->SetVisibility(CurrentView.bOwnerInBattleDeck
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
+		BattleReadyBadge->SetVisibility(UWacomBackpackScreenPresenter::GetSpecialZoneBattleReadyBadgeVisibility(CurrentView.OwnerCard.PhysicalZone));
 	}
 
 	if (ContentDropTarget)

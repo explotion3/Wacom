@@ -5,13 +5,14 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "RunStateTypes.h"
-#include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomDeckCardWidget.generated.h"
 
 class UBorder;
 class UTextBlock;
 class UCardDefinition;
 class UDragDropOperation;
+class UWacomCardView;
 
 /**
  * 单张卡的 UI 表示（背包系统用）。

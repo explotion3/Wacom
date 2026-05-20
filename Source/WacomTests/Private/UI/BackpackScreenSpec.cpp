@@ -4,13 +4,16 @@
 
 #include "Blueprint/DragDropOperation.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
+#include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
 #include "UI/Backpack/WacomZoneDropTarget.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomCardDetailSectionWidget.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomCardView.h"
 
 #include "Cards/CardDefinition.h"
@@ -75,7 +78,7 @@ bool FWacomUIBackpackCardViewBuildSummarySpec::RunTest(const FString& /*Paramete
 	Freeze.Magnitude = 1;
 	Card->Effects.Add(Freeze);
 
-	const FWacomCardViewData Data = UWacomCardView::BuildFromCardDefinition(Card.Get());
+	const FWacomCardViewData Data = UWacomCardPresentationBuilder::BuildCardViewData(Card.Get());
 
 	TestEqual(TEXT("Summary name"), Data.Name.ToString(), TEXT("烁光蝶"));
 	TestEqual(TEXT("Summary cost"), Data.Cost, 1);
@@ -125,6 +128,76 @@ bool FWacomUIBackpackCardEffectBadgeWidgetDataSpec::RunTest(const FString& /*Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewBuilderCompatibilitySpec,
+	"Wacom.UI.Backpack.CardViewBuilderCompatibility",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewBuilderCompatibilitySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	Card->CardId = TEXT("CompatibilityCard");
+	Card->DisplayName = FText::FromString(TEXT("兼容测试卡"));
+	Card->Description = FText::FromString(TEXT("造成 3 伤害。"));
+	Card->BaseCost = 2;
+	Card->Rarity = WacomTags::Card_Rarity_Blue;
+
+	FCardEffect Damage;
+	Damage.EffectType = WacomTags::Effect_Damage;
+	Damage.Magnitude = 3;
+	Card->Effects.Add(Damage);
+
+	FCardPassive Passive;
+	Passive.Trigger = WacomTags::Passive_Trigger_AfterPlayed;
+	Passive.DisplayText = FText::FromString(TEXT("打出后：兼容测试。"));
+	Card->Passives.Add(Passive);
+
+	const FWacomCardViewData BuilderSummary = UWacomCardPresentationBuilder::BuildCardViewData(Card.Get());
+	const FWacomCardViewData LegacySummary = UWacomCardView::BuildFromCardDefinition(Card.Get());
+
+	TestEqual(TEXT("Legacy summary name matches builder"), LegacySummary.Name.ToString(), BuilderSummary.Name.ToString());
+	TestEqual(TEXT("Legacy summary cost matches builder"), LegacySummary.Cost, BuilderSummary.Cost);
+	TestEqual(TEXT("Legacy summary value matches builder"), LegacySummary.Value, BuilderSummary.Value);
+	TestEqual(TEXT("Legacy summary badge count matches builder"), LegacySummary.EffectBadges.Num(), BuilderSummary.EffectBadges.Num());
+	if (LegacySummary.EffectBadges.Num() > 0 && BuilderSummary.EffectBadges.Num() > 0)
+	{
+		TestTrue(TEXT("Legacy badge kind matches builder"), LegacySummary.EffectBadges[0].Kind == BuilderSummary.EffectBadges[0].Kind);
+		TestEqual(TEXT("Legacy badge value matches builder"), LegacySummary.EffectBadges[0].Value, BuilderSummary.EffectBadges[0].Value);
+	}
+
+	const FWacomCardDetailViewData BuilderDetail = UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
+	const FWacomCardDetailViewData LegacyDetail = UWacomCardView::BuildDetailFromCardDefinition(Card.Get());
+
+	TestEqual(TEXT("Legacy detail name matches builder"), LegacyDetail.Name.ToString(), BuilderDetail.Name.ToString());
+	TestEqual(TEXT("Legacy detail description matches builder"), LegacyDetail.Description.ToString(), BuilderDetail.Description.ToString());
+	TestEqual(TEXT("Legacy detail passive count matches builder"), LegacyDetail.PassiveLines.Num(), BuilderDetail.PassiveLines.Num());
+	if (LegacyDetail.PassiveLines.Num() > 0 && BuilderDetail.PassiveLines.Num() > 0)
+	{
+		TestEqual(TEXT("Legacy detail passive matches builder"), LegacyDetail.PassiveLines[0].ToString(), BuilderDetail.PassiveLines[0].ToString());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackZoneSectionWidgetDataSpec,
+	"Wacom.UI.Backpack.ZoneSectionWidgetData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackZoneSectionWidgetDataSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBackpackZoneSectionWidget> Section(NewObject<UWacomBackpackZoneSectionWidget>());
+
+	Section->SetZoneTitleText(FText::FromString(TEXT("[ 备战区 ] 5 / 15")));
+	TestNotNull(TEXT("Zone section EnsureContentHost builds fallback"), Section->EnsureContentHost());
+	Section->SetZoneTitleText(FText::FromString(TEXT("[ 备战区 ] 6 / 15")));
+
+	TestEqual(TEXT("Zone section title preserved"), Section->GetZoneTitleText().ToString(), TEXT("[ 备战区 ] 6 / 15"));
+	TestNotNull(TEXT("Zone section fallback creates content host"), Section->GetContentHost());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackCardDetailBuildDataSpec,
 	"Wacom.UI.Backpack.CardDetailBuildData",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -142,7 +215,7 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 	Passive.DisplayText = FText::FromString(TEXT("每当你打出 3 张伙伴时，使此牌回到手中。"));
 	Card->Passives.Add(Passive);
 
-	const FWacomCardDetailViewData Data = UWacomCardView::BuildDetailFromCardDefinition(Card.Get());
+	const FWacomCardDetailViewData Data = UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 
 	TestEqual(TEXT("Detail name"), Data.Name.ToString(), TEXT("暮色引虫灯"));
 	TestEqual(TEXT("Detail keeps full description"),
@@ -177,7 +250,7 @@ bool FWacomUIBackpackCardDetailPassiveFallbackSpec::RunTest(const FString& /*Par
 	Passive.TriggerThreshold = 3;
 	Card->Passives.Add(Passive);
 
-	const FWacomCardDetailViewData Data = UWacomCardView::BuildDetailFromCardDefinition(Card.Get());
+	const FWacomCardDetailViewData Data = UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 
 	TestEqual(TEXT("One fallback passive line"), Data.PassiveLines.Num(), 1);
 	if (Data.PassiveLines.Num() > 0)
@@ -379,7 +452,7 @@ bool FWacomUIBackpackCardDetailPanelPositionSpec::RunTest(const FString& /*Param
 	const FVector2D PanelSize(360.f, 420.f);
 	const FVector2D AnchorSize(260.f, 380.f);
 
-	const FVector2D Right = UWacomBackpackScreen::ComputeCardDetailPanelPosition(
+	const FVector2D Right = UWacomBackpackScreenPresenter::ComputeCardDetailPanelPosition(
 		FVector2D(100.f, 80.f),
 		AnchorSize,
 		LayerSize,
@@ -388,7 +461,7 @@ bool FWacomUIBackpackCardDetailPanelPositionSpec::RunTest(const FString& /*Param
 	TestEqual(TEXT("Detail panel prefers right side"), Right.X, 372.0);
 	TestEqual(TEXT("Detail panel keeps top alignment"), Right.Y, 80.0);
 
-	const FVector2D Left = UWacomBackpackScreen::ComputeCardDetailPanelPosition(
+	const FVector2D Left = UWacomBackpackScreenPresenter::ComputeCardDetailPanelPosition(
 		FVector2D(700.f, 80.f),
 		AnchorSize,
 		LayerSize,
@@ -396,7 +469,7 @@ bool FWacomUIBackpackCardDetailPanelPositionSpec::RunTest(const FString& /*Param
 		12.f);
 	TestEqual(TEXT("Detail panel flips to left when right side overflows"), Left.X, 328.0);
 
-	const FVector2D Clamped = UWacomBackpackScreen::ComputeCardDetailPanelPosition(
+	const FVector2D Clamped = UWacomBackpackScreenPresenter::ComputeCardDetailPanelPosition(
 		FVector2D(900.f, 650.f),
 		AnchorSize,
 		LayerSize,
@@ -614,6 +687,17 @@ bool FWacomUIBackpackSpecialZoneWidgetSnapshotSpec::RunTest(const FString& /*Par
 	TestTrue(TEXT("SpecialZoneWidget title includes count/capacity"), Title.Contains(TEXT("1 / 2")));
 	TestTrue(TEXT("Battle ready badge visible when owner is in BattleDeck"), Widget->IsBattleReadyBadgeVisible());
 
+	View.bOwnerInBattleDeck = false;
+	View.OwnerCard.PhysicalZone = EZoneKind::Backpack;
+	View.OwnerCard.bIsPhysicalInBattleDeck = false;
+	Widget->SetSpecialZoneView(View, nullptr, UWacomDeckCardWidget::StaticClass());
+	TestFalse(TEXT("Battle ready badge hidden when owner is in Backpack"), Widget->IsBattleReadyBadgeVisible());
+
+	View.bOwnerInBattleDeck = true;
+	View.OwnerCard.PhysicalZone = EZoneKind::BattleDeck;
+	View.OwnerCard.bIsPhysicalInBattleDeck = true;
+	Widget->SetSpecialZoneView(View, nullptr, UWacomDeckCardWidget::StaticClass());
+
 	UWacomCardDragOperation* OwnerDragOp = Cast<UWacomCardDragOperation>(Widget->BuildOwnerCardDragOperation());
 	TestNotNull(TEXT("Owner card emits drag operation"), OwnerDragOp);
 	if (OwnerDragOp)
@@ -675,7 +759,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUIBackpackSpecialZoneTitleAndReadyBadgeSpec::RunTest(const FString& /*Parameters*/)
 {
 	// Feature: backpack-special-zone-stage-4-5, R6.7/R6.13: SpecialZone section title and battle-ready badge are deterministic.
-	const FString Title = UWacomBackpackScreen::BuildSpecialZoneTitleText(
+	const FString Title = UWacomBackpackScreenPresenter::BuildSpecialZoneTitleText(
 		FText::FromString(TEXT("蛛茧绒囊")),
 		1,
 		2).ToString();
@@ -684,10 +768,10 @@ bool FWacomUIBackpackSpecialZoneTitleAndReadyBadgeSpec::RunTest(const FString& /
 	TestTrue(TEXT("SpecialZone title includes count/capacity"), Title.Contains(TEXT("1 / 2")));
 	TestTrue(
 		TEXT("BattleReady badge visible when owner is in BattleDeck"),
-		UWacomBackpackScreen::GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind::BattleDeck) != ESlateVisibility::Collapsed);
+		UWacomBackpackScreenPresenter::GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind::BattleDeck) != ESlateVisibility::Collapsed);
 	TestEqual(
 		TEXT("BattleReady badge collapsed when owner is in Backpack"),
-		UWacomBackpackScreen::GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind::Backpack),
+		UWacomBackpackScreenPresenter::GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind::Backpack),
 		ESlateVisibility::Collapsed);
 
 	return true;
@@ -714,6 +798,85 @@ bool FWacomUIBackpackProjectedFromBadgeSpec::RunTest(const FString& /*Parameters
 
 	Widget->SetProjectedFromBadgeText(FText::GetEmpty());
 	TestFalse(TEXT("ProjectedFromBadge collapsed when text is cleared"), Widget->IsProjectedFromBadgeVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackProjectedFromBadgePresenterSpec,
+	"Wacom.UI.Backpack.ProjectedFromBadgePresenter",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackProjectedFromBadgePresenterSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> OwnerCard(NewObject<UCardDefinition>());
+	OwnerCard->DisplayName = FText::FromString(TEXT("蛛茧绒囊"));
+
+	FRunBackpackStorageSnapshot Snapshot;
+	FRunSpecialStorageView SpecialView;
+	SpecialView.OwnerCard.Instance.InstanceId = FGuid::NewGuid();
+	SpecialView.OwnerCard.Instance.Definition = OwnerCard.Get();
+	Snapshot.SpecialZones.Add(SpecialView);
+
+	FRunStorageCardView ProjectedCard;
+	ProjectedCard.ZoneOwnerInstanceId = SpecialView.OwnerCard.Instance.InstanceId;
+
+	const FText BadgeText = UWacomBackpackScreenPresenter::BuildBattleDeckProjectedFromBadgeText(ProjectedCard, Snapshot);
+	TestEqual(TEXT("Projected badge text uses special zone owner name"), BadgeText.ToString(), TEXT("来自 蛛茧绒囊"));
+
+	ProjectedCard.ZoneOwnerInstanceId = FGuid::NewGuid();
+	TestTrue(
+		TEXT("Projected badge text is empty when owner cannot be found"),
+		UWacomBackpackScreenPresenter::BuildBattleDeckProjectedFromBadgeText(ProjectedCard, Snapshot).IsEmpty());
+
+	TestEqual(
+		TEXT("Direct projected badge text helper formats owner name"),
+		UWacomBackpackScreenPresenter::BuildProjectedFromBadgeText(FText::FromString(TEXT("引虫灯"))).ToString(),
+		TEXT("来自 引虫灯"));
+	TestTrue(
+		TEXT("Direct projected badge text helper keeps empty owner empty"),
+		UWacomBackpackScreenPresenter::BuildProjectedFromBadgeText(FText::GetEmpty()).IsEmpty());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackPresenterCompatibilitySpec,
+	"Wacom.UI.Backpack.PresenterCompatibility",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackPresenterCompatibilitySpec::RunTest(const FString& /*Parameters*/)
+{
+	const FText OwnerName = FText::FromString(TEXT("兼容主卡"));
+	TestEqual(
+		TEXT("Legacy special title helper forwards to presenter"),
+		UWacomBackpackScreen::BuildSpecialZoneTitleText(OwnerName, 2, 5).ToString(),
+		UWacomBackpackScreenPresenter::BuildSpecialZoneTitleText(OwnerName, 2, 5).ToString());
+
+	TestEqual(
+		TEXT("Legacy burden title helper forwards to presenter"),
+		UWacomBackpackScreen::BuildBurdenZoneTitleText(4).ToString(),
+		UWacomBackpackScreenPresenter::BuildBurdenZoneTitleText(4).ToString());
+
+	TestEqual(
+		TEXT("Legacy battle-ready visibility helper forwards to presenter"),
+		UWacomBackpackScreen::GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind::BattleDeck),
+		UWacomBackpackScreenPresenter::GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind::BattleDeck));
+
+	const FVector2D LegacyPosition = UWacomBackpackScreen::ComputeCardDetailPanelPosition(
+		FVector2D(100.f, 80.f),
+		FVector2D(260.f, 380.f),
+		FVector2D(1000.f, 700.f),
+		FVector2D(360.f, 420.f),
+		12.f);
+	const FVector2D PresenterPosition = UWacomBackpackScreenPresenter::ComputeCardDetailPanelPosition(
+		FVector2D(100.f, 80.f),
+		FVector2D(260.f, 380.f),
+		FVector2D(1000.f, 700.f),
+		FVector2D(360.f, 420.f),
+		12.f);
+	TestEqual(TEXT("Legacy detail position helper forwards to presenter X"), LegacyPosition.X, PresenterPosition.X);
+	TestEqual(TEXT("Legacy detail position helper forwards to presenter Y"), LegacyPosition.Y, PresenterPosition.Y);
 
 	return true;
 }
@@ -791,7 +954,7 @@ bool FWacomUIBackpackBurdenZoneTitleAndCardOrderSpec::RunTest(const FString& /*P
 	// Feature: backpack-special-zone-stage-4-5, R6.8: BurdenZone title count and rendered card widgets preserve instance order.
 	TestTrue(
 		TEXT("BurdenZone title includes card count"),
-		UWacomBackpackScreen::BuildBurdenZoneTitleText(3).ToString().Contains(TEXT("3")));
+		UWacomBackpackScreenPresenter::BuildBurdenZoneTitleText(3).ToString().Contains(TEXT("3")));
 
 	TArray<FCardInstance> BurdenCards;
 	TArray<TStrongObjectPtr<UCardDefinition>> CardDefinitions;

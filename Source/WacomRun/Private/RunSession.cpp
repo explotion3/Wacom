@@ -1083,7 +1083,7 @@ void URunSession::RecomputeBurdenInternal()
 	// 入口（含本文件 RecomputeBurden）统一在尾部 NotifyRunStateChanged 一次。
 	//
 	//   ① 超容溢出（R2.12，task 9.1）：
-	//        while Backpack.Num() > GetFluxCapacity()      → 弹末尾追加 BurdenZone
+	//        while CountFluxContentCards(Backpack) > GetFluxCapacity() → 弹末尾通量内容卡追加 BurdenZone
 	//        while BattleDeck.Num() > GetBattleDeckCapacity() → 同上
 	//   ② 回填（R2.14，task 9.2）：BurdenZone 头部按 通量 → 备战 → SpecialZones（数组下标升序）
 	//        优先序回填到第一个有空位的目标区，回填到 SpecialZone 时强制
@@ -1095,9 +1095,10 @@ void URunSession::RecomputeBurdenInternal()
 
 	// ---- 步骤 ① 超容溢出（R2.12 / R2.2a / R5.6 — "skip B-master"）----
 	// 末尾摘卡 → 追加到 BurdenZone 末尾。两区独立处理；处理完成后保证
-	//   Backpack.Num() <= GetFluxCapacity() AND BattleDeck.Num() <= GetBattleDeckCapacity()，
+	//   CountFluxContentCards(Backpack) <= GetFluxCapacity() AND BattleDeck.Num() <= GetBattleDeckCapacity()，
 	//   除非整个数组全是 B 主卡 instance（极端退化情形）。
 	//
+	// 通量区溢出只移动内容卡；A/B 容器主卡只贡献或开启存放区，不占用通量内容格。
 	// "skip B-master" 规则（R2.2a / R2.12 / R5.6）：
 	//   B 主卡 instance 在生命周期内只可能位于 Backpack ∪ BattleDeck，永远不能进入
 	//   BurdenZone（与 Property 5 双射 reverse 方向构成的不变量）。否则 SpecialZones
@@ -1110,6 +1111,20 @@ void URunSession::RecomputeBurdenInternal()
 	//   该状态本身违反 GDD §11 的容量约束（一张 A 主卡贡献 1 容量），属于异常 RunState。
 	//   Stage 4.5.3b UI 不主动暴露此入口；测试 fixture 不应制造此状态。
 	{
+		auto PopFluxContent = [this](TArray<FCardInstance>& Pile) -> bool
+		{
+			for (int32 i = Pile.Num() - 1; i >= 0; --i)
+			{
+				if (!IsContainerCard(Pile[i].Definition))
+				{
+					RunState.BurdenZone.Add(Pile[i]);
+					Pile.RemoveAt(i);
+					return true;
+				}
+			}
+			return false;
+		};
+
 		auto SkipBMasterPop = [this](TArray<FCardInstance>& Pile) -> bool
 		{
 			for (int32 i = Pile.Num() - 1; i >= 0; --i)
@@ -1124,13 +1139,13 @@ void URunSession::RecomputeBurdenInternal()
 			return false;  // 所有 instance 都是 B 主卡 → 无法溢出
 		};
 
-		while (RunState.Backpack.Num() > GetFluxCapacity())
+		while (CountFluxContentCards(RunState.Backpack) > GetFluxCapacity())
 		{
-			if (!SkipBMasterPop(RunState.Backpack))
+			if (!PopFluxContent(RunState.Backpack))
 			{
 				UE_LOG(LogTemp, Warning,
-					TEXT("[RunSession] RecomputeBurden: Backpack 全是 B 主卡 instance（Num=%d > FluxCapacity=%d），无法溢出，临时超容"),
-					RunState.Backpack.Num(), GetFluxCapacity());
+					TEXT("[RunSession] RecomputeBurden: Backpack 没有可溢出的通量内容卡（Content=%d > FluxCapacity=%d），临时超容"),
+					CountFluxContentCards(RunState.Backpack), GetFluxCapacity());
 				break;
 			}
 		}
@@ -1162,10 +1177,12 @@ void URunSession::RecomputeBurdenInternal()
 		// 头部按值拷贝出来；后面 RemoveAt(0) 会让原引用失效。
 		FCardInstance Instance = RunState.BurdenZone[0];
 
-		// 优先级 1：通量区。
-		if (RunState.Backpack.Num() < GetFluxCapacity())
+		// 优先级 1：通量区。容器主卡不占通量内容格；普通内容卡才需要检查内容容量。
+		const bool bContainerMainCard = IsContainerCard(Instance.Definition);
+		if (bContainerMainCard || CountFluxContentCards(RunState.Backpack) < GetFluxCapacity())
 		{
 			RunState.Backpack.Add(Instance);
+			EnsureSpecialZoneEntryFor(Instance);
 			RunState.BurdenZone.RemoveAt(0);
 			continue;
 		}
@@ -1576,11 +1593,32 @@ bool URunSession::IsIntrinsicCard(const UCardDefinition* Card)
 int32 URunSession::GetFluxCapacity() const
 {
 	// GDD §11.4 容量公式：
-	//   通量存放区容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
+	//   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 max(Capacity - 1, 0))
 	//
 	// "玩家拥有" = 当前 RunState 全部物理持有区。
+	// A 类容器卡自身占主卡位，不再额外占用内容格。
 	// B 类容器卡（CapacityEffect 非空）不进通量公式，自行开辟特殊存放区。
-	return SumOwnedCardCapacity(/*bTypeAOnly=*/true);
+	int32 Sum = 0;
+	auto AccumulatePile = [&Sum](const TArray<FCardInstance>& Pile)
+	{
+		for (const FCardInstance& Inst : Pile)
+		{
+			if (IsTypeAContainerCard(Inst.Definition))
+			{
+				Sum += FMath::Max(0, Inst.Definition->Physique.Capacity - 1);
+			}
+		}
+	};
+
+	AccumulatePile(RunState.Backpack);
+	AccumulatePile(RunState.BattleDeck);
+	AccumulatePile(RunState.BurdenZone);
+	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
+	{
+		AccumulatePile(SpecialZone.Cards);
+	}
+
+	return Sum;
 }
 
 int32 URunSession::GetBattleDeckCapacity() const
@@ -1631,6 +1669,7 @@ FRunBackpackStorageSnapshot URunSession::BuildBackpackStorageSnapshot() const
 			Snapshot.Flux.ContentCards.Add(MakeCardView(Inst, EZoneKind::Backpack, FGuid()));
 		}
 	}
+	Snapshot.FluxContentCount = Snapshot.Flux.ContentCards.Num();
 
 	for (const FCardInstance& Inst : RunState.BattleDeck)
 	{
@@ -1726,6 +1765,19 @@ int32 URunSession::SumOwnedCardCapacity(bool bTypeAOnly) const
 	}
 
 	return Sum;
+}
+
+int32 URunSession::CountFluxContentCards(const TArray<FCardInstance>& Pile) const
+{
+	int32 Count = 0;
+	for (const FCardInstance& Inst : Pile)
+	{
+		if (Inst.Definition && !IsContainerCard(Inst.Definition))
+		{
+			++Count;
+		}
+	}
+	return Count;
 }
 
 bool URunSession::IsBackpackUiAvailable() const

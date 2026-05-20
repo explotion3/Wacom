@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomCardEffectBadgeWidget.generated.h"
 
 class UBorder;

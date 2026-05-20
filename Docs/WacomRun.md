@@ -101,7 +101,7 @@ WacomRun 负责**战斗外的持久状态和存档**。
 | 方法 | 职责 |
 |---|---|
 | `GetBackpack() / GetBattleDeck()` | 只读访问 |
-| `GetFluxCapacity() const` | 通量存放区容量（动态：Σ(玩家拥有所有 A 类容器卡 Capacity)）|
+| `GetFluxCapacity() const` | 通量内容容量（动态：Σ(玩家拥有所有 A 类容器卡 `max(Capacity - 1, 0)`））|
 | `GetBattleDeckCapacity() const` | 备战区容量（动态：Σ 玩家拥有的所有容器卡 Capacity，A/B 类都计入）|
 | `IsContainerCard(Card) static` | 卡是否容器（Capacity > 0）|
 | `IsTypeAContainerCard(Card) static` | 卡是 A 类容器卡（容器 + CapacityEffect 为空，计入 Flux）|
@@ -223,10 +223,10 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 | `SpecialZones` | `TArray<FSpecialZone>` | 每张 B 主卡 instance 对应一个特殊存放区 |
 
 **容量公式**（GDD §11.4）由 `URunSession::GetFluxCapacity()` / `GetBattleDeckCapacity()` 动态计算：
-- 通量容量 = `Σ(Backpack + BattleDeck 里所有 A 类容器卡 Capacity)`
+- 通量内容容量 = `Σ(玩家拥有的所有 A 类容器卡 max(Capacity - 1, 0))`
 - 备战容量 = `Σ(Backpack + BattleDeck 里所有容器卡 Capacity)`，A 类与 B 类都计入
 - B 类容器卡（`Physique.CapacityEffect` 非空）不计入通量公式，但计入备战容量；每张 B 主卡自己开辟一个特殊存放区，内容区容量 = `Capacity - 1`
-- 通量存放区内容区实际可收纳数量 = `Σ(A 类主卡 Capacity) - A 类主卡数量`
+- A 类主卡只占通量主卡区，不额外占用通量内容容量
 - B 类特殊存放区内容区实际可收纳数量 = `B.Capacity - 1`
 
 **instance 互斥**：同一个 `FCardInstance.InstanceId` 同时只能位于 `Backpack / BattleDeck / BurdenZone / 任一 SpecialZone.Cards` 之一。`MoveInstance` 是通用迁移入口，失败路径不修改 RunState、不广播。

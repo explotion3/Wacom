@@ -276,6 +276,9 @@ struct WACOMRUN_API FRunBackpackStorageSnapshot
 	int32 BackpackPhysicalCount = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	int32 FluxContentCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
 	int32 BattleDeckPhysicalCount = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")

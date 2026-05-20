@@ -11,6 +11,7 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Cards/CardDefinition.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomCardView.h"
 
 namespace
@@ -103,7 +104,7 @@ void UWacomDeckCardWidget::RefreshContentFromCard()
 
 FWacomCardViewData UWacomDeckCardWidget::BuildCurrentCardViewData() const
 {
-	FWacomCardViewData Data = UWacomCardView::BuildFromCardDefinition(Card);
+	FWacomCardViewData Data = UWacomCardPresentationBuilder::BuildCardViewData(Card);
 	Data.bDisabled = !bCardInteractionEnabled;
 	return Data;
 }

@@ -19,7 +19,7 @@
  *
  * 覆盖（GDD §11）：
  *   - IsContainerCard / IsBagProviderCard / IsIntrinsicCard 静态判定
- *   - GetFluxCapacity 公式：Σ(玩家拥有的所有 A 类容器卡 Capacity)
+ *   - GetFluxCapacity 公式：Σ(玩家拥有的所有 A 类容器卡 max(Capacity - 1, 0))
  *   - GetBattleDeckCapacity 公式：Σ(玩家拥有的所有容器卡 Capacity)
  *   - IsBackpackUiAvailable：Backpack 至少一张 BagProvider
  *   - Initialize Stage 4.1 a2：非容器卡进 BattleDeck，容器卡只进 Backpack
@@ -141,7 +141,7 @@ bool FWacomRunDeckInitializeA2Spec::RunTest(const FString& /*Parameters*/)
 	TestFalse(TEXT("Normal1 NOT in Backpack"), ContainsDef(State.Backpack, Normal1));
 	TestTrue(TEXT("Normal1 in BattleDeck"), ContainsDef(State.BattleDeck, Normal1));
 
-	TestEqual(TEXT("FluxCapacity=12 from Bag"), Run->GetFluxCapacity(), 12);
+	TestEqual(TEXT("FluxCapacity=11 from Bag content slots"), Run->GetFluxCapacity(), 11);
 	TestEqual(TEXT("BattleDeckCapacity=12"), Run->GetBattleDeckCapacity(), 12);
 	TestTrue(TEXT("Backpack UI available with BagProvider"), Run->IsBackpackUiAvailable());
 
@@ -170,13 +170,13 @@ bool FWacomRunDeckCapacitySumSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	TestEqual(TEXT("FluxCapacity=10+3=13"), Run->GetFluxCapacity(), 13);
+	TestEqual(TEXT("FluxCapacity=(10-1)+(3-1)=11"), Run->GetFluxCapacity(), 11);
 
 	// 把 Bag2 加进 BattleDeck（虽然它是容器卡，第一阶段允许玩家手动加入备战）
 	TestTrue(TEXT("Add Bag2 to BattleDeck"), Run->AddCardToBattleDeck(Bag2));
 
-	// 容量公式：Σ(背包 + 备战) = 仍然 13（容器卡换位置不影响公式）
-	TestEqual(TEXT("FluxCapacity unchanged after move"), Run->GetFluxCapacity(), 13);
+	// 容量公式：Σ(背包 + 备战) = 仍然 11（容器卡换位置不影响公式）
+	TestEqual(TEXT("FluxCapacity unchanged after move"), Run->GetFluxCapacity(), 11);
 
 	return true;
 }
@@ -324,8 +324,8 @@ bool FWacomRunDeckDestroyOneOfTwoBagProvidersAllowedSpec::RunTest(const FString&
 	TestTrue(TEXT("Destroy Bag1 allowed (Bag2 still BagProvider)"),
 		Run->DestroyCardFromBackpack(Bag1));
 	TestTrue(TEXT("UI still available"), Run->IsBackpackUiAvailable());
-	TestEqual(TEXT("FluxCapacity=8 only Bag2"),
-		Run->GetFluxCapacity(), 8);
+	TestEqual(TEXT("FluxCapacity=7 only Bag2 content slots"),
+		Run->GetFluxCapacity(), 7);
 
 	return true;
 }
@@ -671,7 +671,7 @@ bool FWacomRunDeckRecomputeBurdenContractSpec::RunTest(const FString& /*Paramete
 
 	Run->RecomputeBurden();
 
-	TestEqual(TEXT("Backpack trimmed to FluxCapacity"), State.Backpack.Num(), 2);
+	TestEqual(TEXT("Backpack keeps A/B main cards plus one flux content card"), State.Backpack.Num(), 3);
 	TestEqual(TEXT("BattleDeck remains full"), State.BattleDeck.Num(), 4);
 	TestEqual(TEXT("First overflow card refills first SpecialZone slot"), State.SpecialZones[0].Cards.Num(), 1);
 	if (State.SpecialZones[0].Cards.Num() == 1)
@@ -679,13 +679,12 @@ bool FWacomRunDeckRecomputeBurdenContractSpec::RunTest(const FString& /*Paramete
 		TestEqual(TEXT("SpecialZone receives most recent overflow first"), State.SpecialZones[0].Cards[0].InstanceId, N3.InstanceId);
 		TestFalse(TEXT("SpecialZone refill clears battle flag"), State.SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
 	}
-	TestEqual(TEXT("Remaining two cards stay in BurdenZone"), State.BurdenZone.Num(), 2);
-	if (State.BurdenZone.Num() == 2)
+	TestEqual(TEXT("Remaining one card stays in BurdenZone"), State.BurdenZone.Num(), 1);
+	if (State.BurdenZone.Num() == 1)
 	{
 		TestEqual(TEXT("Burden order[0]"), State.BurdenZone[0].InstanceId, N2.InstanceId);
-		TestEqual(TEXT("Burden order[1]"), State.BurdenZone[1].InstanceId, N1.InstanceId);
 	}
-	TestEqual(TEXT("Burden pressure n=2 -> 3"), Run->GetPressureValue(EWacomPressureType::Burden), 3);
+	TestEqual(TEXT("Burden pressure n=1 -> 1"), Run->GetPressureValue(EWacomPressureType::Burden), 1);
 
 	const TArray<FGuid> BackpackIds = CollectStage45Ids(State.Backpack);
 	const TArray<FGuid> BattleDeckIds = CollectStage45Ids(State.BattleDeck);
@@ -698,7 +697,7 @@ bool FWacomRunDeckRecomputeBurdenContractSpec::RunTest(const FString& /*Paramete
 	TestEqual(TEXT("Idempotent BattleDeck"), CollectStage45Ids(State.BattleDeck), BattleDeckIds);
 	TestEqual(TEXT("Idempotent BurdenZone"), CollectStage45Ids(State.BurdenZone), BurdenIds);
 	TestEqual(TEXT("Idempotent SpecialZone"), CollectStage45Ids(State.SpecialZones[0].Cards), SpecialIds);
-	TestEqual(TEXT("Idempotent pressure"), Run->GetPressureValue(EWacomPressureType::Burden), 3);
+	TestEqual(TEXT("Idempotent pressure"), Run->GetPressureValue(EWacomPressureType::Burden), 1);
 
 	return true;
 }
@@ -714,8 +713,8 @@ bool FWacomRunDeckRecomputeBurdenRefillPrioritySpec::RunTest(const FString& /*Pa
 	// Validates: Requirements 2.13, 2.14
 	FWacomBattleFixture Fx;
 
-	UCardDefinition* TypeA = MakeBagCard(Fx, 3);
-	UCardDefinition* TypeB = MakeStage45TypeBCard(Fx, 2);
+	UCardDefinition* TypeA = MakeBagCard(Fx, 2);
+	UCardDefinition* TypeB = MakeStage45TypeBCard(Fx, 3);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ TypeA, TypeB });
@@ -1265,13 +1264,13 @@ bool FWacomRunDeckFluxCapacityOnlyCountsTypeASpec::RunTest(const FString& /*Para
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	// FluxCapacity 只算 A 类：10；BattleDeckCapacity 统计 A+B：13
-	TestEqual(TEXT("FluxCapacity ignores TypeB"), Run->GetFluxCapacity(), 10);
+	// FluxCapacity 只算 A 类内容格：10-1；BattleDeckCapacity 统计 A+B：13
+	TestEqual(TEXT("FluxCapacity ignores TypeB and excludes A main card"), Run->GetFluxCapacity(), 9);
 	TestEqual(TEXT("BattleDeckCapacity counts TypeA and TypeB"), Run->GetBattleDeckCapacity(), 13);
 
 	// 容器卡换到 BattleDeck 后两个公式都稳定
 	TestTrue(TEXT("Add TypeB to BattleDeck"), Run->AddCardToBattleDeck(TypeB));
-	TestEqual(TEXT("FluxCapacity stable"), Run->GetFluxCapacity(), 10);
+	TestEqual(TEXT("FluxCapacity stable"), Run->GetFluxCapacity(), 9);
 	TestEqual(TEXT("BattleDeckCapacity stable"), Run->GetBattleDeckCapacity(), 13);
 
 	return true;
@@ -1330,8 +1329,8 @@ bool FWacomRunDeckCapacityCountsAllPhysicalZonesSpec::RunTest(const FString& /*P
 	TestTrue(TEXT("Move TypeA container into BurdenZone"),
 		Run->MoveInstance(TypeAInBurdenZoneId, EZoneKind::BurdenZone, FGuid()));
 
-	TestEqual(TEXT("FluxCapacity counts TypeA containers in all physical zones"),
-		Run->GetFluxCapacity(), 14);
+	TestEqual(TEXT("FluxCapacity counts TypeA content slots in all physical zones"),
+		Run->GetFluxCapacity(), 11);
 	TestEqual(TEXT("BattleDeckCapacity counts all containers in all physical zones"),
 		Run->GetBattleDeckCapacity(), 17);
 
@@ -1786,7 +1785,7 @@ bool FWacomRunDeckBattleDeckCapacityCountsAllContainersSpec::RunTest(const FStri
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 		Run->Initialize(Char);
 
-		TestEqual(TEXT("FluxCapacity = 12 (A only)"), Run->GetFluxCapacity(), 12);
+		TestEqual(TEXT("FluxCapacity = 11 (A content slots only)"), Run->GetFluxCapacity(), 11);
 		TestEqual(TEXT("BattleDeckCapacity = 16 (A+B)"), Run->GetBattleDeckCapacity(), 16);
 	}
 
@@ -3296,7 +3295,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 	//   (A) 不丢失：原 FSpecialZone.Cards 中的每个 InstanceId 在 RunState 的某个 zone 里
 	//       仍然存在（Backpack ∪ BattleDeck ∪ BurdenZone ∪ ⋃SpecialZones.Cards）。
 	//   (B) 退回顺序：内含卡按原 SZ.Cards 数组下标升序追加到 Backpack 末尾，直到
-	//       Backpack.Num() == GetFluxCapacity()，剩余按原顺序追加到 BurdenZone 末尾。
+	//       通量内容卡数量 == GetFluxCapacity()，剩余按原顺序追加到 BurdenZone 末尾。
 	//   (C) SpecialZones 中不再含原 OwnerInstanceId 对应的 entry。
 	//   (D) 每张退回 instance 的 bBattleEnabledInSpecialZone == false（R8.6）。
 	//
@@ -3315,7 +3314,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 	//       b) 1+F+S > ACap：前 K=ACap-1-F 张退回 Backpack，剩余 S-K 张退回 BurdenZone。
 	//
 	// 测试构造保证 RecomputeBurden 在 DestroyCardFromBackpackInternal 末尾的调用
-	// 是 no-op（BattleDeck 已满到 B 主卡销毁后的 BattleDeckCap=ACap、Backpack 退回后恰好不超 FluxCap=ACap、
+	// 是 no-op（BattleDeck 已满到 B 主卡销毁后的 BattleDeckCap=ACap、Backpack 退回后恰好不超 FluxCap=ACap-1、
 	// 销毁后没有其他 SpecialZone 可承接 refill），从而后置状态严格等于步骤 6 退回循环
 	// 的输出，可以直接对比期望布局。
 
@@ -3415,7 +3414,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 
 		// ---- 快照 ----
 		const int32 BackpackOrigSize = Run->GetBackpack().Num();   // 期望 = 2 + F
-		const int32 FluxCap          = Run->GetFluxCapacity();      // 期望 = ACap
+		const int32 FluxCap          = Run->GetFluxCapacity();      // 期望 = ACap - 1
 		const TArray<FCardInstance> BackpackBefore = Run->GetBackpack();
 		const TArray<FCardInstance> BattleDeckBefore = Run->GetBattleDeck();
 		const TArray<FCardInstance> BurdenZoneBefore = Run->GetRunState().BurdenZone;
@@ -3433,18 +3432,19 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 		}
 
 		// 期望退回布局
-		const int32 K = FMath::Clamp(FluxCap - (BackpackOrigSize - 1), 0, S);
+		const int32 K = FMath::Clamp(FluxCap - F, 0, S);
 
 		// 设置健全性校验：本测试构造确保 RecomputeBurden 是 no-op，需要 BattleDeck 在销毁前
 		// 已经满到 B 主卡销毁后的 BattleDeckCap（ACap 张非容器卡 Initialize 进 BattleDeck），且销毁后
 		// 没有其他 SpecialZone 可以承接 refill（StarterDeck 仅含一张 B 主卡）。
-		if (BattleDeckBefore.Num() != FluxCap)
+		const int32 PostDestroyBattleDeckCap = BagProviderDef->Physique.Capacity;
+		if (BattleDeckBefore.Num() != PostDestroyBattleDeckCap)
 		{
 			AddError(FString::Printf(
 				TEXT("Property 6 SETUP FAILED: BattleDeck pre-destroy size=%d != post-destroy BattleDeckCap=%d, ")
 				TEXT("RecomputeBurden no-op assumption broken. ")
 				TEXT("Counterexample: Seed=%d Iter=%d ACap=%d BCap=%d S=%d F=%d"),
-				BattleDeckBefore.Num(), FluxCap,
+				BattleDeckBefore.Num(), PostDestroyBattleDeckCap,
 				Seed, Iter, ACap, BCap, S, F));
 			return false;
 		}

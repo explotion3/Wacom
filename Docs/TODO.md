@@ -58,21 +58,21 @@
 
 ### UI / 表现层
 
-| 项 | 现状 | 后续方向 |
-|---|---|---|
-| UI 动画（P5 整体）| 全部跳过，HP/卡牌/伤害数字无过渡 | 美术资源到位后做事件队列化 + 具体动画 |
-| 主题与样式（P6 整体）| Widget Blueprint 纯色块 + 文字 | 美术阶段只改 WBP，C++ 不动 |
-| 手牌扇形布局 | HorizontalBox + ScrollBox 线性排列 | 美术阶段替换为自定义 `UHandLayoutPanel` |
-| 战斗卡牌拖拽 | BattleHUD 仍是点击手牌再点敌方部位，不支持把战斗手牌拖到目标 | HD-2D 表现阶段评估是否改为拖拽到 3D 部位 / 悬停高亮 / 点击确认 |
-| 目标选择 3D 射线 | 点击 EnemyPartWidget 2D 按钮 | HD-2D 表现时改为 3D 部位高亮 + 点击 |
-| EventToast 图标/动画 | 纯文字 | 升级为"事件表现调度器" + Niagara + 音效 |
-| 锚点左右归属 | 遍历顺序启发式（第一个锚点进 LeftSlot）| 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
-| 背包 UI 删牌区与 DeleteProvider 联动 | 删牌区始终显示（GDD §11.7 第一阶段约定），`IsDeleteFunctionAvailable()` 接口就位但 UI 不读 | 等 GDD 切换为"按需可用"后，BackpackScreen 根据 `IsDeleteFunctionAvailable()` 显示/隐藏删牌区 |
-| 探索 HUD 压力阈值警示色 | 压力值纯数字白色 | 压力 >50% 黄色 / >80% 红色 |
-| 背包存放区主卡槽/内容槽重构 | 通量区接口已拆出 `FluxMainCardsHost / FluxContentDropTargetHost`；SpecialZone 已抽成 `UWacomSpecialZoneWidget`，接口层按 OwnerCard + ContentCards 渲染 | 正式 WBP 按美术草图落主卡槽/内容槽视觉；后续可为 `UWacomSpecialZoneWidget` 创建独立 WBP |
-| 背包 UI WBP 美术落地 | 暂缓继续推进。`BackpackScreen` 已拆为三大区 Host，并删除旧通量混合布局，只保留通量主卡/内容槽接口；WBP 绑定清单已落在 `Docs/UI_Backpack_WBP_Binding.md`；C++ fallback 可运行 | 后续在编辑器中创建/调整正式 `WBP_BackpackScreen`，按绑定清单接 `DeleteZoneHost / BattleDeckZoneHost / FluxMainCardsHost / FluxContentDropTargetHost / SpecialZonesHost / BurdenZoneHost`，并按 `Docs/Image/背包界面.png` 调整外层结构和样式；规则仍通过 `RunSession::MoveInstance` / `DeleteCardForGold` |
-| 背包 UI 拖拽手感 | 已接入 UMG DragDropOperation，但当前仍是 C++ 默认布局与全量重建，缺少悬停高亮、失败提示、动效反馈 | 后续做交互 polish；真实规则继续以 `RunSession::MoveInstance` / `DeleteCardForGold` 为准 |
-| 背包 UI 增量刷新 | `BackpackScreen::RebuildAll()` 每次从 RunState 全量重建所有区块 | 卡牌数量明显增加或需要动画时，迁 ListView/TileView 或做 instance diff |
+| 项                            | 现状                                                                                                                                  | 后续方向                                                                                                                                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI 动画（P5 整体）                 | 全部跳过，HP/卡牌/伤害数字无过渡                                                                                                                  | 美术资源到位后做事件队列化 + 具体动画                                                                                                                                                                                                                                           |
+| 主题与样式（P6 整体）                 | Widget Blueprint 纯色块 + 文字                                                                                                           | 美术阶段只改 WBP，C++ 不动                                                                                                                                                                                                                                              |
+| 手牌扇形布局                       | HorizontalBox + ScrollBox 线性排列                                                                                                      | 美术阶段替换为自定义 `UHandLayoutPanel`                                                                                                                                                                                                                                  |
+| 战斗卡牌拖拽                       | BattleHUD 仍是点击手牌再点敌方部位，不支持把战斗手牌拖到目标                                                                                                 | HD-2D 表现阶段评估是否改为拖拽到 3D 部位 / 悬停高亮 / 点击确认                                                                                                                                                                                                                        |
+| 目标选择 3D 射线                   | 点击 EnemyPartWidget 2D 按钮                                                                                                            | HD-2D 表现时改为 3D 部位高亮 + 点击                                                                                                                                                                                                                                       |
+| EventToast 图标/动画             | 纯文字                                                                                                                                 | 升级为"事件表现调度器" + Niagara + 音效                                                                                                                                                                                                                                    |
+| 锚点左右归属                       | 遍历顺序启发式（第一个锚点进 LeftSlot）                                                                                                            | 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段                                                                                                                                                                                                                   |
+| 背包 UI 删牌区与 DeleteProvider 联动 | 删牌区始终显示（GDD §11.7 第一阶段约定），`IsDeleteFunctionAvailable()` 接口就位但 UI 不读                                                                 | 等 GDD 切换为"按需可用"后，BackpackScreen 根据 `IsDeleteFunctionAvailable()` 显示/隐藏删牌区                                                                                                                                                                                      |
+| 探索 HUD 压力阈值警示色               | 压力值纯数字白色                                                                                                                            | 压力 >50% 黄色 / >80% 红色                                                                                                                                                                                                                                           |
+| 背包存放区主卡槽/内容槽重构               | 通量区接口已拆出 `FluxMainCardsHost / FluxContentDropTargetHost`；SpecialZone 已抽成 `UWacomSpecialZoneWidget`，接口层按 OwnerCard + ContentCards 渲染 | 正式 WBP 按美术草图落主卡槽/内容槽视觉；后续可为 `UWacomSpecialZoneWidget` 创建独立 WBP                                                                                                                                                                                                 |
+| 背包 UI WBP 美术落地               | 暂缓继续推进。`BackpackScreen` 已拆为三大区 Host，并删除旧通量混合布局，只保留通量主卡/内容槽接口；WBP 绑定清单已落在 `Docs/UI_Backpack_WBP_Binding.md`；C++ fallback 可运行         | 后续在编辑器中创建/调整正式 `WBP_BackpackScreen`，按绑定清单接 `DeleteZoneHost / BattleDeckZoneHost / FluxMainCardsHost / FluxContentDropTargetHost / SpecialZonesHost / BurdenZoneHost`，并按 `Docs/Image/背包界面.png` 调整外层结构和样式；规则仍通过 `RunSession::MoveInstance` / `DeleteCardForGold` |
+| 背包 UI 拖拽手感                   | 已接入 UMG DragDropOperation，但当前仍是 C++ 默认布局与全量重建，缺少悬停高亮、失败提示、动效反馈                                                                      | 后续做交互 polish；真实规则继续以 `RunSession::MoveInstance` / `DeleteCardForGold` 为准                                                                                                                                                                                       |
+| 背包 UI 增量刷新                   | `BackpackScreen::RebuildAll()` 每次从 RunState 全量重建所有区块                                                                                | 卡牌数量明显增加或需要动画时，迁 ListView/TileView 或做 instance diff                                                                                                                                                                                                            |
 
 ### 架构层
 
@@ -82,6 +82,8 @@
 | GAS（GameplayAbilitySystem）| 不使用 | 保持不引入，战斗用自研 Resolver/Executor |
 | UI 架构迁移 MVVM | M1+M2 已落地：Run 域走 ViewModel + Provider 订阅模型；C++ 父类硬编码布局 + 订阅粗粒度多播 + 手动 SetText；FieldNotify 字段就位但未被 WBP ViewBinding 消费 | 美术阶段切 WBP：ViewModel 加到 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 绑字段到 TextBlock/ProgressBar；C++ 父类 SetText 路径作 fallback 保留 → 全 WBP 后逐步删 |
 | 战斗 UI 接 ViewModel | 保留 Snapshot 推送模型（BattleHUD 作 Controller 递归 RefreshFromSnapshot） | 第一阶段不动。如果将来非战斗 widget 需要"看战斗状态"（如击倒事件 UI / 探索期小窗），加 `UWacomBattleViewModel` 作外部观察入口；子 widget 内部仍用 Snapshot |
+| 卡牌 UI 展示数据复用 | `UWacomCardPresentationBuilder` 已从 `UWacomCardView` 抽出；背包卡牌、拖拽预览、详情面板、战斗手牌已走统一构建入口；旧 `UWacomCardView::Build*` 静态函数仅作兼容转发 | 后续奖励、商店、事件预览等卡牌显示统一接入 Builder；确认无蓝图/代码依赖后再考虑移除旧兼容入口 |
+| 背包 UI Presenter 收口 | `UWacomBackpackScreenPresenter` 已抽出标题文本、投影来源、详情数据和悬浮定位等纯展示逻辑；`SpecialZoneWidget` 标题/已出战可见性也已改走 Presenter；`BackpackScreen` 继续负责 Widget 编排和命令提交 | 后续如 `BackpackScreen` 继续膨胀，可再抽列表 section view data 或命令协调对象；当前不把拖拽/确认框/RunSession 命令搬进 Presenter |
 
 ---
 

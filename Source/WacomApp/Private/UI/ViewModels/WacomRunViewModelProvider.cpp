@@ -152,7 +152,7 @@ void UWacomRunViewModelProvider::RefreshAllFields(URunSession* Run)
 	const FRunBackpackStorageSnapshot StorageSnapshot = Run->BuildBackpackStorageSnapshot();
 	RunViewModel->SetFluxCapacity(StorageSnapshot.FluxCapacity);
 	RunViewModel->SetBattleDeckCapacity(StorageSnapshot.BattleDeckCapacity);
-	RunViewModel->SetBackpackCount(StorageSnapshot.BackpackPhysicalCount);
+	RunViewModel->SetBackpackCount(StorageSnapshot.FluxContentCount);
 	RunViewModel->SetBattleDeckCount(StorageSnapshot.BattleDeckPhysicalCount);
 
 	RunViewModel->SetPressureHunger    (State.Pressure.Hunger);

@@ -272,7 +272,7 @@ bool FWacomRunPressureBurdenSetByOverCountSpec::RunTest(const FString& /*Paramet
 
 	FRunState& State = Run->GetMutableRunState();
 	const int32 Capacity = Run->GetFluxCapacity();
-	TestEqual(TEXT("FluxCapacity=12 from container card"), Capacity, 12);
+	TestEqual(TEXT("FluxCapacity=11 from container card content slots"), Capacity, 11);
 
 	// Stage 4.5.0：zone 元素是 FCardInstance；测试中按 Definition 包成 instance 追加。
 	auto MakeInst = [](UCardDefinition* Def) -> FCardInstance
@@ -282,8 +282,8 @@ bool FWacomRunPressureBurdenSetByOverCountSpec::RunTest(const FString& /*Paramet
 		return Inst;
 	};
 
-	// 加普通卡到刚好 Capacity → 0 超出
-	while (State.Backpack.Num() < Capacity)
+	// 加普通卡到刚好通量内容 Capacity。Backpack 里已有 1 张 A 主卡，主卡不占内容格。
+	while (State.Backpack.Num() < Capacity + 1)
 	{
 		State.Backpack.Add(MakeInst(Fx.MakeNoopCard(0)));
 	}

@@ -29,7 +29,7 @@
 
 namespace
 {
-	URunSession* MakeRunWithCharacter(FWacomBattleFixture& Fx, TStrongObjectPtr<URunSession>& RunPtr)
+	URunSession* MakeExperienceRunWithCharacter(FWacomBattleFixture& Fx, TStrongObjectPtr<URunSession>& RunPtr)
 	{
 		UCharacterDefinition* Char = Fx.MakeCharacter(
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
@@ -58,7 +58,7 @@ bool FWacomRunExperienceVictoryGrantsExpSpec::RunTest(const FString& /*Parameter
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Victory;
@@ -81,7 +81,7 @@ bool FWacomRunExperienceDefeatDoesNotGrantSpec::RunTest(const FString& /*Paramet
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Defeat;
@@ -104,7 +104,7 @@ bool FWacomRunExperienceMutualDestructionGrantsSpec::RunTest(const FString& /*Pa
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
 
 	// 同归于尽：Outcome 仍判 Victory，经验正常发。
 	FBattleResultPacket Packet;
@@ -130,7 +130,7 @@ bool FWacomRunExperienceFullGrantsSkillSpec::RunTest(const FString& /*Parameters
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
 
 	const int32 Cap = Run->GetExperienceCapacity();
 
@@ -160,7 +160,7 @@ bool FWacomRunExperienceZeroRewardRecordsButGrantsZeroSpec::RunTest(const FStrin
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
 
 	// ExperienceReward=0 的部位破坏时仍记一条（让 Run 层有完整破坏列表）
 	// 但累计 0 经验。

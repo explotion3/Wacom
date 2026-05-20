@@ -26,7 +26,7 @@
 | `GoldText` | `TextBlock` | 金币显示 |
 | `DeleteZoneTitleText` | `TextBlock` | 删牌区提示，可不绑，由 C++ 创建 |
 | `BattleDeckTitleText` | `TextBlock` | 备战区数量/容量标题 |
-| `BackpackTitleText` | `TextBlock` | 背包区数量/通量容量标题 |
+| `BackpackTitleText` | `TextBlock` | 背包区标题。通量内容占用/容量由通量内容区标题显示 |
 | `CloseButton` | `Button` | 关闭背包 |
 | `BattleDeckCardsBox` | `WrapBox` | 直接承接备战卡列表；不绑则 C++ 在 Host 中创建 |
 | `FluxMainCardsBox` | `WrapBox` | 直接承接通量主卡；不绑则 C++ 在 Host 中创建 |
@@ -37,6 +37,35 @@
 - 如果推荐 Host 没绑定，C++ 会输出 warning，该区域不会显示运行时内容。
 - `CardDetailLayer` 应覆盖背包界面可见区域，并放在卡牌区域之上；详情面板为 `HitTestInvisible`，不会抢拖拽或右键输入。
 - WBP 只负责布局和样式，不直接调用 `RunSession`。
+
+## 局部 Zone WBP
+
+如果暂时不制作完整 `WBP_BackpackScreen`，可以先制作局部区块 WBP。`UWacomBackpackScreen`
+的 C++ fallback 会按下列约定路径自动加载；资产不存在时继续使用 C++ fallback。
+
+父类统一选择：`UWacomBackpackZoneSectionWidget`
+
+| 资产名 | 用途 |
+|---|---|
+| `WBP_BackpackDeleteZone` | 删牌区外壳 |
+| `WBP_BackpackBattleDeckZone` | 备战区外壳 |
+| `WBP_BackpackFluxMainZone` | 通量主卡区外壳 |
+| `WBP_BackpackFluxContentZone` | 通量内容区外壳 |
+| `WBP_BackpackSpecialZones` | 特殊存放区列表外壳 |
+| `WBP_BackpackBurdenZone` | 负重区外壳 |
+
+推荐绑定：
+
+| 控件名 | 推荐类型 | 用途 |
+|---|---|---|
+| `TitleText` | `TextBlock` | C++ 写入区块标题，例如 `[ 备战区 ] 5 / 15` |
+| `ContentHost` | `PanelWidget` | C++ 填充 DropTarget、WrapBox、动态卡牌或 SpecialZone 列表 |
+
+注意：
+- 局部 Zone WBP 只做外壳样式；不要在里面写移动、删牌、刷新逻辑。
+- `ContentHost` 必须是容器控件，例如 `VerticalBox`、`Overlay`、`CanvasPanel`。
+- 如果某个局部 Zone WBP 缺少 `ContentHost`，C++ 会只让该区块回退默认外壳，其他区块不受影响。
+- 不要在 `ContentHost` 里预放卡牌；运行时内容由 C++ 填入。
 
 ## WBP_WacomSpecialZoneWidget
 

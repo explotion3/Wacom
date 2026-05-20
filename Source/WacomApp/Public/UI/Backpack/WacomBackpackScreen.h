@@ -18,6 +18,7 @@ class URunSession;
 class UWacomDeleteZoneDropTarget;
 class UWacomCardDetailPanel;
 class UWacomDeckCardWidget;
+class UWacomBackpackZoneSectionWidget;
 class UWacomSpecialZoneWidget;
 class UWacomZoneDropTarget;
 class UWacomRunViewModel;
@@ -208,6 +209,33 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBackpackZoneSectionWidget> BattleDeckZoneSection;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBackpackZoneSectionWidget> FluxContentZoneSection;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBackpackZoneSectionWidget> BurdenZoneSection;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Sections")
+	TSubclassOf<UWacomBackpackZoneSectionWidget> DeleteZoneSectionWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Sections")
+	TSubclassOf<UWacomBackpackZoneSectionWidget> BattleDeckZoneSectionWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Sections")
+	TSubclassOf<UWacomBackpackZoneSectionWidget> FluxMainZoneSectionWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Sections")
+	TSubclassOf<UWacomBackpackZoneSectionWidget> FluxContentZoneSectionWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Sections")
+	TSubclassOf<UWacomBackpackZoneSectionWidget> SpecialZonesSectionWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Sections")
+	TSubclassOf<UWacomBackpackZoneSectionWidget> BurdenZoneSectionWidgetClass;
 
 	/** 创建一张卡的 widget 并接好回调。 */
 	UWacomDeckCardWidget* CreateCardWidget(const FCardInstance& Inst, EZoneKind FromZone, FGuid FromZoneOwnerInstanceId);

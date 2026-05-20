@@ -19,17 +19,26 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
+#include "Misc/PackageName.h"
 
 #include "Cards/CardDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
+#include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomDeleteZoneDropTarget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
+#include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
 #include "UI/Backpack/WacomZoneDropTarget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/ViewModels/WacomRunViewModel.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
+
+namespace
+{
+template <typename TWidget>
+TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath);
+}
 
 UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -75,12 +84,60 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 			CardDetailPanelClass = UWacomCardDetailPanel::StaticClass();
 		}
 	}
+
+	if (!DeleteZoneSectionWidgetClass)
+	{
+		DeleteZoneSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
+			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackDeleteZone.WBP_BackpackDeleteZone_C"));
+	}
+	if (!BattleDeckZoneSectionWidgetClass)
+	{
+		BattleDeckZoneSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
+			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackBattleDeckZone.WBP_BackpackBattleDeckZone_C"));
+	}
+	if (!FluxMainZoneSectionWidgetClass)
+	{
+		FluxMainZoneSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
+			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackFluxMainZone.WBP_BackpackFluxMainZone_C"));
+	}
+	if (!FluxContentZoneSectionWidgetClass)
+	{
+		FluxContentZoneSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
+			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackFluxContentZone.WBP_BackpackFluxContentZone_C"));
+	}
+	if (!SpecialZonesSectionWidgetClass)
+	{
+		SpecialZonesSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
+			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackSpecialZones.WBP_BackpackSpecialZones_C"));
+	}
+	if (!BurdenZoneSectionWidgetClass)
+	{
+		BurdenZoneSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
+			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackBurdenZone.WBP_BackpackBurdenZone_C"));
+	}
 }
 
 namespace
 {
 const FVector2D CardDetailPanelEstimatedSize(360.f, 420.f);
 constexpr float CardDetailPanelPadding = 12.f;
+
+template <typename TWidget>
+TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath)
+{
+	const FString ObjectPath(ClassPath);
+	const FString PackagePath = FPackageName::ObjectPathToPackageName(ObjectPath);
+	if (!FPackageName::DoesPackageExist(PackagePath))
+	{
+		return TWidget::StaticClass();
+	}
+
+	if (UClass* Loaded = LoadObject<UClass>(nullptr, ClassPath))
+	{
+		return Loaded;
+	}
+	return TWidget::StaticClass();
+}
 
 UTextBlock* CreateBackpackText(UWidgetTree* WidgetTree, FName Name, const FText& Text, int32 FontSize)
 {
@@ -112,6 +169,73 @@ UVerticalBox* AddVerticalHostSection(UWidgetTree* WidgetTree, UVerticalBox* Pare
 	UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 	Border->AddChild(Host);
 	return Host;
+}
+
+UPanelWidget* AddZoneSectionWidget(
+	UUserWidget* Owner,
+	UWidgetTree* WidgetTree,
+	UVerticalBox* Parent,
+	TSubclassOf<UWacomBackpackZoneSectionWidget> SectionClass,
+	const FText& Title,
+	const FMargin& Padding,
+	UWacomBackpackZoneSectionWidget** OutSection = nullptr)
+{
+	if (!Owner || !WidgetTree || !Parent)
+	{
+		return nullptr;
+	}
+
+	auto AttachSection = [Parent, &Padding](UWacomBackpackZoneSectionWidget* SectionToAttach)
+	{
+		if (UVerticalBoxSlot* Slot = Parent->AddChildToVerticalBox(SectionToAttach))
+		{
+			Slot->SetPadding(Padding);
+			Slot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+		}
+	};
+
+	auto CreateSection = [WidgetTree, &Title](UClass* ClassToUse)
+	{
+		UWacomBackpackZoneSectionWidget* Section = WidgetTree->ConstructWidget<UWacomBackpackZoneSectionWidget>(ClassToUse);
+		if (Section)
+		{
+			Section->SetZoneTitleText(Title);
+		}
+		return Section;
+	};
+
+	UClass* ClassToUse = SectionClass ? SectionClass.Get() : UWacomBackpackZoneSectionWidget::StaticClass();
+	UWacomBackpackZoneSectionWidget* Section = CreateSection(ClassToUse);
+	if (!Section)
+	{
+		return nullptr;
+	}
+
+	AttachSection(Section);
+	UPanelWidget* ContentHost = Section->EnsureContentHost();
+	if (!ContentHost && ClassToUse != UWacomBackpackZoneSectionWidget::StaticClass())
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[Backpack] %s 缺少 ContentHost 绑定，当前区块回退到 C++ 默认布局。"),
+			*GetNameSafe(ClassToUse));
+
+		Parent->RemoveChild(Section);
+		Section = CreateSection(UWacomBackpackZoneSectionWidget::StaticClass());
+		if (!Section)
+		{
+			return nullptr;
+		}
+		AttachSection(Section);
+		ContentHost = Section->EnsureContentHost();
+	}
+
+	if (OutSection)
+	{
+		*OutSection = Section;
+	}
+	return ContentHost;
 }
 
 void LogBackpackBindingWarningOnce(FName Key, const TCHAR* Message)
@@ -225,11 +349,12 @@ TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
 			}
 		}
 
-		DeleteZoneHost = AddVerticalHostSection(
+		DeleteZoneHost = AddZoneSectionWidget(
+			this,
 			WidgetTree,
 			MainVBox,
-			TEXT("DeleteZoneBorder"),
-			FLinearColor(0.18f, 0.06f, 0.06f, 0.85f),
+			DeleteZoneSectionWidgetClass,
+			LOCTEXT("DeleteZoneTitle", "[ 删牌区 ]"),
 			FMargin(0.f, 0.f, 0.f, 8.f));
 
 		UScrollBox* ContentScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("BackpackContentScroll"));
@@ -241,19 +366,16 @@ TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
 		UVerticalBox* ZonesVBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BackpackZonesVBox"));
 		ContentScroll->AddChild(ZonesVBox);
 
-		UVerticalBox* BattleDeckVBox = AddVerticalHostSection(
+		UWacomBackpackZoneSectionWidget* BattleDeckSectionRaw = nullptr;
+		BattleDeckZoneHost = AddZoneSectionWidget(
+			this,
 			WidgetTree,
 			ZonesVBox,
-			TEXT("BattleDeckBorder"),
-			FLinearColor(0.06f, 0.10f, 0.18f, 0.85f),
-			FMargin(0.f, 0.f, 0.f, 8.f));
-		BattleDeckTitleText = CreateBackpackText(WidgetTree, TEXT("BattleDeckTitleText"), LOCTEXT("BattleDeckTitle", "[ 备战区 ]"), 16);
-		if (UVerticalBoxSlot* S = BattleDeckVBox->AddChildToVerticalBox(BattleDeckTitleText))
-		{
-			S->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-		}
-		BattleDeckZoneHost = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BattleDeckZoneHost"));
-		BattleDeckVBox->AddChildToVerticalBox(BattleDeckZoneHost);
+			BattleDeckZoneSectionWidgetClass,
+			LOCTEXT("BattleDeckTitle", "[ 备战区 ]"),
+			FMargin(0.f, 0.f, 0.f, 8.f),
+			&BattleDeckSectionRaw);
+		BattleDeckZoneSection = BattleDeckSectionRaw;
 
 		UVerticalBox* BackpackVBox = AddVerticalHostSection(
 			WidgetTree,
@@ -282,20 +404,29 @@ TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
 			MainSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
 			MainSlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 		}
-		UTextBlock* FluxMainTitle = CreateBackpackText(WidgetTree, TEXT("FluxMainCardsTitle"), LOCTEXT("FluxMainCardsTitle", "[ 通量主卡 ]"), 14);
-		FluxMainColumn->AddChildToVerticalBox(FluxMainTitle);
-		FluxMainCardsHost = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("FluxMainCardsHost"));
-		FluxMainColumn->AddChildToVerticalBox(FluxMainCardsHost);
+		FluxMainCardsHost = AddZoneSectionWidget(
+			this,
+			WidgetTree,
+			FluxMainColumn,
+			FluxMainZoneSectionWidgetClass,
+			LOCTEXT("FluxMainCardsTitle", "[ 通量主卡 ]"),
+			FMargin(0.f));
 
 		UVerticalBox* FluxContentColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("FluxContentCardsColumn"));
 		if (UHorizontalBoxSlot* ContentSlot = FluxLayout->AddChildToHorizontalBox(FluxContentColumn))
 		{
 			ContentSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		}
-		UTextBlock* FluxContentTitle = CreateBackpackText(WidgetTree, TEXT("FluxContentCardsTitle"), LOCTEXT("FluxContentCardsTitle", "[ 通量内容 ]"), 14);
-		FluxContentColumn->AddChildToVerticalBox(FluxContentTitle);
-		FluxContentDropTargetHost = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("FluxContentDropTargetHost"));
-		FluxContentColumn->AddChildToVerticalBox(FluxContentDropTargetHost);
+		UWacomBackpackZoneSectionWidget* FluxContentSectionRaw = nullptr;
+		FluxContentDropTargetHost = AddZoneSectionWidget(
+			this,
+			WidgetTree,
+			FluxContentColumn,
+			FluxContentZoneSectionWidgetClass,
+			LOCTEXT("FluxContentCardsTitle", "[ 通量内容 ]"),
+			FMargin(0.f),
+			&FluxContentSectionRaw);
+		FluxContentZoneSection = FluxContentSectionRaw;
 
 		UScrollBox* BackpackInnerScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("BackpackInnerScroll"));
 		if (UVerticalBoxSlot* S = BackpackVBox->AddChildToVerticalBox(BackpackInnerScroll))
@@ -307,23 +438,24 @@ TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
 		UVerticalBox* BackpackInnerVBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BackpackInnerVBox"));
 		BackpackInnerScroll->AddChild(BackpackInnerVBox);
 
-		UVerticalBox* SpecialSection = AddVerticalHostSection(
+		SpecialZonesHost = AddZoneSectionWidget(
+			this,
 			WidgetTree,
 			BackpackInnerVBox,
-			TEXT("SpecialZonesBorder"),
-			FLinearColor(0.11f, 0.09f, 0.16f, 0.82f),
+			SpecialZonesSectionWidgetClass,
+			LOCTEXT("SpecialZonesTitle", "[ 特殊存放区 ]"),
 			FMargin(0.f, 0.f, 0.f, 8.f));
-		SpecialZonesHost = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("SpecialZonesHost"));
-		SpecialSection->AddChildToVerticalBox(SpecialZonesHost);
 
-		UVerticalBox* BurdenSection = AddVerticalHostSection(
+		UWacomBackpackZoneSectionWidget* BurdenSectionRaw = nullptr;
+		BurdenZoneHost = AddZoneSectionWidget(
+			this,
 			WidgetTree,
 			BackpackInnerVBox,
-			TEXT("BurdenZoneBorder"),
-			FLinearColor(0.18f, 0.12f, 0.05f, 0.85f),
-			FMargin(0.f));
-		BurdenZoneHost = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BurdenZoneHost"));
-		BurdenSection->AddChildToVerticalBox(BurdenZoneHost);
+			BurdenZoneSectionWidgetClass,
+			LOCTEXT("BurdenZoneTitle", "[ 负重区 ] 0"),
+			FMargin(0.f),
+			&BurdenSectionRaw);
+		BurdenZoneSection = BurdenSectionRaw;
 	}
 	return Super::RebuildWidget();
 }
@@ -405,23 +537,17 @@ URunSession* UWacomBackpackScreen::GetRunSession() const
 
 FText UWacomBackpackScreen::BuildSpecialZoneTitleText(const FText& OwnerName, int32 CardCount, int32 Capacity)
 {
-	return FText::Format(
-		LOCTEXT("SpecialZoneTitleFmt", "[ 特殊存放区 ] {0}   {1} / {2}"),
-		OwnerName,
-		FText::AsNumber(CardCount),
-		FText::AsNumber(Capacity));
+	return UWacomBackpackScreenPresenter::BuildSpecialZoneTitleText(OwnerName, CardCount, Capacity);
 }
 
 ESlateVisibility UWacomBackpackScreen::GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind OwnerZone)
 {
-	return OwnerZone == EZoneKind::BattleDeck ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;
+	return UWacomBackpackScreenPresenter::GetSpecialZoneBattleReadyBadgeVisibility(OwnerZone);
 }
 
 FText UWacomBackpackScreen::BuildBurdenZoneTitleText(int32 CardCount)
 {
-	return FText::Format(
-		LOCTEXT("BurdenZoneTitleFmt", "[ 负重区 ] {0}"),
-		FText::AsNumber(CardCount));
+	return UWacomBackpackScreenPresenter::BuildBurdenZoneTitleText(CardCount);
 }
 
 FVector2D UWacomBackpackScreen::ComputeCardDetailPanelPosition(
@@ -431,18 +557,12 @@ FVector2D UWacomBackpackScreen::ComputeCardDetailPanelPosition(
 	FVector2D PanelSize,
 	float Padding)
 {
-	const float MaxX = FMath::Max(0.f, LayerSize.X - PanelSize.X);
-	const float MaxY = FMath::Max(0.f, LayerSize.Y - PanelSize.Y);
-
-	float X = AnchorPosition.X + AnchorSize.X + Padding;
-	if (X + PanelSize.X > LayerSize.X)
-	{
-		X = AnchorPosition.X - PanelSize.X - Padding;
-	}
-
-	return FVector2D(
-		FMath::Clamp(X, 0.f, MaxX),
-		FMath::Clamp(AnchorPosition.Y, 0.f, MaxY));
+	return UWacomBackpackScreenPresenter::ComputeCardDetailPanelPosition(
+		AnchorPosition,
+		AnchorSize,
+		LayerSize,
+		PanelSize,
+		Padding);
 }
 
 bool UWacomBackpackScreen::IsCardDetailPanelVisible() const
@@ -494,7 +614,7 @@ void UWacomBackpackScreen::EnsureRuntimeZoneWidgets()
 			DeleteZoneTitleText = CreateBackpackText(
 				WidgetTree,
 				TEXT("DeleteZoneTitleText"),
-				LOCTEXT("DeleteZoneHint", "[ 删牌区 ] 拖入卡牌置换金币（白=1 / 蓝=2）"),
+				LOCTEXT("DeleteZoneHint", "拖入卡牌置换金币（白=1 / 蓝=2）"),
 				14);
 		}
 		DeleteDropTarget->SetDropContent(DeleteZoneTitleText);
@@ -671,25 +791,25 @@ void UWacomBackpackScreen::RebuildTopStats(UWacomRunViewModel* VM)
 {
 	if (VM)
 	{
+		const FText BattleDeckTitle = UWacomBackpackScreenPresenter::BuildBattleDeckTitleText(
+			VM->GetBattleDeckCount(),
+			VM->GetBattleDeckCapacity());
 		if (BattleDeckTitleText)
 		{
-			BattleDeckTitleText->SetText(FText::Format(
-				LOCTEXT("BattleDeckTitleFmt", "[ 备战区 ]   {0} / {1}"),
-				FText::AsNumber(VM->GetBattleDeckCount()),
-				FText::AsNumber(VM->GetBattleDeckCapacity())));
+			BattleDeckTitleText->SetText(BattleDeckTitle);
 		}
+		if (BattleDeckZoneSection)
+		{
+			BattleDeckZoneSection->SetZoneTitleText(BattleDeckTitle);
+		}
+
 		if (BackpackTitleText)
 		{
-			BackpackTitleText->SetText(FText::Format(
-				LOCTEXT("BackpackTitleFmt", "[ 背包区 ]   {0} / {1}（容量来自容器卡）"),
-				FText::AsNumber(VM->GetBackpackCount()),
-				FText::AsNumber(VM->GetFluxCapacity())));
+			BackpackTitleText->SetText(UWacomBackpackScreenPresenter::BuildBackpackTitleText());
 		}
 		if (GoldText)
 		{
-			GoldText->SetText(FText::Format(
-				LOCTEXT("GoldFmt", "金币：{0}"),
-				FText::AsNumber(VM->GetGold())));
+			GoldText->SetText(UWacomBackpackScreenPresenter::BuildGoldText(VM->GetGold()));
 		}
 	}
 }
@@ -713,16 +833,10 @@ void UWacomBackpackScreen::RebuildBattleDeckZone(const FRunBackpackStorageSnapsh
 				continue;
 			}
 
-			const FRunSpecialStorageView* OwnerSpecialView = Snapshot.SpecialZones.FindByPredicate(
-				[&ProjectedView](const FRunSpecialStorageView& SpecialView)
-				{
-					return SpecialView.OwnerCard.Instance.InstanceId == ProjectedView.ZoneOwnerInstanceId;
-				});
-			if (OwnerSpecialView && OwnerSpecialView->OwnerCard.Instance.Definition)
+			const FText ProjectedBadgeText = UWacomBackpackScreenPresenter::BuildBattleDeckProjectedFromBadgeText(ProjectedView, Snapshot);
+			if (!ProjectedBadgeText.IsEmpty())
 			{
-				W->SetProjectedFromBadgeText(FText::Format(
-					LOCTEXT("ProjectedFromBadgeFmt", "来自 {0}"),
-					OwnerSpecialView->OwnerCard.Instance.Definition->DisplayName));
+				W->SetProjectedFromBadgeText(ProjectedBadgeText);
 			}
 			W->SetRightClickToggleEnabled(true);
 			BattleDeckCardsBox->AddChildToWrapBox(W);
@@ -755,6 +869,13 @@ void UWacomBackpackScreen::RebuildFluxMainCards(const FRunBackpackStorageSnapsho
 
 void UWacomBackpackScreen::RebuildFluxContentCards(const FRunBackpackStorageSnapshot& Snapshot)
 {
+	if (FluxContentZoneSection)
+	{
+		FluxContentZoneSection->SetZoneTitleText(UWacomBackpackScreenPresenter::BuildFluxContentTitleText(
+			Snapshot.FluxContentCount,
+			Snapshot.FluxCapacity));
+	}
+
 	if (FluxContentCardsBox)
 	{
 		for (const FRunStorageCardView& CardView : Snapshot.Flux.ContentCards)
@@ -792,9 +913,14 @@ void UWacomBackpackScreen::RebuildSpecialZones(const FRunBackpackStorageSnapshot
 
 void UWacomBackpackScreen::RebuildBurdenZone(const FRunBackpackStorageSnapshot& Snapshot)
 {
+	const FText BurdenTitle = UWacomBackpackScreenPresenter::BuildBurdenZoneTitleText(Snapshot.BurdenCount);
 	if (BurdenZoneTitleText)
 	{
-		BurdenZoneTitleText->SetText(BuildBurdenZoneTitleText(Snapshot.BurdenCount));
+		BurdenZoneTitleText->SetText(BurdenTitle);
+	}
+	if (BurdenZoneSection)
+	{
+		BurdenZoneSection->SetZoneTitleText(BurdenTitle);
 	}
 
 	if (BurdenCardsBox)
@@ -851,7 +977,7 @@ bool UWacomBackpackScreen::ShowCardDetailForCardWidget(UWacomDeckCardWidget* Sou
 		return false;
 	}
 
-	Panel->SetCardDetailData(UWacomCardView::BuildDetailFromCardDefinition(SourceWidget->GetCard()));
+	Panel->SetCardDetailData(UWacomBackpackScreenPresenter::BuildCardDetailViewData(SourceWidget->GetCard()));
 	PositionCardDetailPanelNear(SourceWidget);
 	Panel->SetRenderOpacity(1.f);
 	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -914,7 +1040,7 @@ void UWacomBackpackScreen::PositionCardDetailPanelNear(UWacomDeckCardWidget* Sou
 	const FVector2D AnchorPosition = LayerGeometry.AbsoluteToLocal(SourceGeometry.GetAbsolutePosition());
 	const FVector2D AnchorSize = SourceGeometry.GetLocalSize();
 	const FVector2D LayerSize = LayerGeometry.GetLocalSize();
-	const FVector2D Position = ComputeCardDetailPanelPosition(
+	const FVector2D Position = UWacomBackpackScreenPresenter::ComputeCardDetailPanelPosition(
 		AnchorPosition,
 		AnchorSize,
 		LayerSize,

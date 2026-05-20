@@ -15,6 +15,8 @@
 #include "Components/SizeBox.h"
 #include "Cards/CardDefinition.h"
 #include "Types/WacomEnums.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
+#include "UI/Card/WacomCardView.h"
 
 namespace
 {
@@ -61,6 +63,12 @@ TSharedRef<SWidget> UCardWidget::RebuildWidget()
 		UVerticalBox* Content = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Content"));
 		FrameBorder->SetContent(Content);
 
+		CardView = WidgetTree->ConstructWidget<UWacomCardView>(UWacomCardView::StaticClass(), TEXT("CardView"));
+		if (UVerticalBoxSlot* CardViewSlot = Content->AddChildToVerticalBox(CardView))
+		{
+			CardViewSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		}
+
 		NameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("NameText"));
 		NameText->SetText(FText::FromString(TEXT("CardName")));
 		NameText->SetJustification(ETextJustify::Center);
@@ -73,18 +81,21 @@ TSharedRef<SWidget> UCardWidget::RebuildWidget()
 			NameText->SetFont(Font);
 		}
 		Content->AddChildToVerticalBox(NameText);
+		NameText->SetVisibility(ESlateVisibility::Collapsed);
 
 		CostText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("CostText"));
 		CostText->SetText(FText::FromString(TEXT("Cost 0")));
 		CostText->SetJustification(ETextJustify::Center);
 		CostText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.85f, 0.3f)));
 		Content->AddChildToVerticalBox(CostText);
+		CostText->SetVisibility(ESlateVisibility::Collapsed);
 
 		ZoneText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ZoneText"));
 		ZoneText->SetText(FText::FromString(TEXT("-")));
 		ZoneText->SetJustification(ETextJustify::Center);
 		ZoneText->SetColorAndOpacity(FSlateColor(FLinearColor(0.7f, 0.7f, 0.9f)));
 		Content->AddChildToVerticalBox(ZoneText);
+		ZoneText->SetVisibility(ESlateVisibility::Collapsed);
 
 		// Layer 1: 透明按钮铺满，拦截点击
 		RootButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("RootButton"));
@@ -123,6 +134,47 @@ void UCardWidget::ApplyCardSnapshot(const FHandCardSnapshot& InSnap)
 {
 	CachedSnap = InSnap;
 
+	CurrentCardViewData = UWacomCardPresentationBuilder::BuildCardViewData(InSnap.Definition);
+	CurrentCardViewData.Cost = InSnap.RuntimeCost;
+	CurrentCardViewData.bShowCost = InSnap.Definition != nullptr;
+	CurrentCardViewData.bDisabled = !InSnap.bIsPlayable;
+
+	if (CardView)
+	{
+		CardView->SetCardViewData(CurrentCardViewData);
+	}
+	else
+	{
+		ApplyFallbackText(InSnap);
+	}
+
+	if (RootButton)
+	{
+		RootButton->SetIsEnabled(InSnap.bIsPlayable);
+	}
+
+	if (bLastPlayable != InSnap.bIsPlayable)
+	{
+		bLastPlayable = InSnap.bIsPlayable;
+		BP_OnPlayableChanged(InSnap.bIsPlayable);
+	}
+
+	UpdateFrameColor();
+	BP_OnDataApplied(InSnap);
+}
+
+bool UCardWidget::IsRootButtonEnabled() const
+{
+	return RootButton ? RootButton->GetIsEnabled() : false;
+}
+
+void UCardWidget::RequestClickForTest()
+{
+	HandleRootButtonClicked();
+}
+
+void UCardWidget::ApplyFallbackText(const FHandCardSnapshot& InSnap)
+{
 	if (NameText && InSnap.Definition)
 	{
 		const FText Display = InSnap.Definition->DisplayName.IsEmpty()
@@ -141,20 +193,6 @@ void UCardWidget::ApplyCardSnapshot(const FHandCardSnapshot& InSnap)
 	{
 		ZoneText->SetText(ZoneToText(InSnap.Zone));
 	}
-
-	if (RootButton)
-	{
-		RootButton->SetIsEnabled(InSnap.bIsPlayable);
-	}
-
-	if (bLastPlayable != InSnap.bIsPlayable)
-	{
-		bLastPlayable = InSnap.bIsPlayable;
-		BP_OnPlayableChanged(InSnap.bIsPlayable);
-	}
-
-	UpdateFrameColor();
-	BP_OnDataApplied(InSnap);
 }
 
 void UCardWidget::SetTargetingHighlight(bool bTargeting)

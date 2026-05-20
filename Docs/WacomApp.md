@@ -267,10 +267,18 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 
 - 负责单个 B 类特殊存放区区块，`BackpackScreen` 只负责遍历 Snapshot 并创建它。
 - 输入数据为 `FRunSpecialStorageView`，显示标题、B 主卡、已入战标记和内容卡列表。
+- 标题文本与已出战可见性走 `UWacomBackpackScreenPresenter`，不再依赖 `BackpackScreen` 的展示 helper。
 - 内容区内部创建 `UWacomZoneDropTarget`，目标为 `EZoneKind::SpecialZone + OwnerInstanceId`。
 - 内容卡右键入战 toggle 先由该组件转发，再由 `BackpackScreen` 调 `RunSession::SetSpecialZoneCardBattleEnabled()`。
 
 ### CardView
+
+`UWacomCardPresentationBuilder` 是卡牌 UI 展示数据的统一构建入口：
+
+- 从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData` 和 `FWacomCardViewEffectBadge`
+- 负责中文词条、费用、价值、身材/容量、效果徽章、被动 fallback 文本等展示推导
+- 只服务 UI 表现，不参与战斗或 Run 规则结算
+- 背包卡牌、战斗手牌、拖拽预览已复用该 Builder；奖励/商店卡牌后续也应接入，避免各界面重复解析 `CardDefinition`
 
 `UWacomCardView` 是通用卡牌显示基类，只负责渲染 `FWacomCardViewData`：
 
@@ -279,9 +287,32 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 - 效果数值徽章由 `UWacomCardEffectBadgeWidget` 承接，`CardView` 只按 `EffectBadges[]` 动态创建并填入 `EffectStatsHost`
 - 不提交 `BattleSession` 命令
 - 不调用 `RunSession::MoveInstance` / `DeleteCardForGold`
-- 背包卡牌、战斗手牌、拖拽预览、奖励/商店卡牌后续都应包一层 `UWacomCardView` 复用显示
+- 兼容保留 `BuildFromCardDefinition` / `BuildDetailFromCardDefinition` 静态函数，但新代码应直接调用 `UWacomCardPresentationBuilder`
 
 `WBP_CardView` 可继承 `UWacomCardView`，用同名 `BindWidgetOptional` 控件替换 C++ fallback 布局。
+
+战斗手牌 `UCardWidget` 是战斗交互外壳：
+
+- 可选绑定 `CardView : UWacomCardView` 复用统一卡面；未绑定时仍使用旧 `NameText / CostText / ZoneText` fallback
+- `ApplyCardSnapshot` 通过 `UWacomCardPresentationBuilder` 生成卡面数据，并用 `FHandCardSnapshot.RuntimeCost` 覆盖显示费用
+- `bIsPlayable=false` 时写入 `FWacomCardViewData.bDisabled`，同时禁用 `RootButton`
+- 点击、目标选择高亮、提交出牌命令仍由 `UCardWidget / UHandPanel / BattleHUD` 负责，`UWacomCardView` 不知道战斗交互
+
+`UWacomBackpackZoneSectionWidget` 是背包区块的局部 WBP 承接点：
+
+- 用于先替换备战区、通量主卡区、通量内容区、特殊区列表、负重区等单个外壳，不要求同时制作完整 `WBP_BackpackScreen`
+- C++ fallback 会按约定路径尝试加载 `WBP_BackpackBattleDeckZone`、`WBP_BackpackFluxMainZone` 等局部 WBP
+- 每个局部 WBP 只绑定 `TitleText / ContentHost`，运行时 DropTarget、WrapBox 和卡牌仍由 `UWacomBackpackScreen` 填充
+- 如果某个局部 WBP 缺少 `ContentHost`，只让该区块回退到 C++ 默认外壳，不影响其他区块继续显示
+- 局部 WBP 不直接调用 `RunSession`
+
+`UWacomBackpackScreenPresenter` 是背包界面的纯展示/纯计算层：
+
+- 负责备战区、背包区、通量内容、特殊区、负重区、金币等标题文本
+- 负责 BattleDeck 投影来源 badge 文本、特殊区已出战可见性、悬浮详情面板定位
+- 负责把悬停卡牌转成详情面板数据；底层仍复用 `UWacomCardPresentationBuilder`
+- 不持有 Widget，不订阅事件，不调用 `RunSession` 命令
+- `UWacomBackpackScreen` 保留编排职责：创建控件、绑定事件、管理详情面板生命周期、提交 Move/Delete/Toggle 命令
 
 `UWacomCardDetailPanel` 是可复用详情面板，只负责渲染 `FWacomCardDetailViewData`：
 

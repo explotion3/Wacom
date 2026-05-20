@@ -5,11 +5,13 @@
 #include "CoreMinimal.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "Snapshots/HandSnapshot.h"
+#include "UI/Card/WacomCardPresentationTypes.h"
 #include "CardWidget.generated.h"
 
 class UButton;
 class UTextBlock;
 class UBorder;
+class UWacomCardView;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWacomCardWidgetClicked, FGuid, CardInstanceId);
 
@@ -52,6 +54,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	const FHandCardSnapshot& GetCardSnapshot() const { return CachedSnap; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	const FWacomCardViewData& GetCurrentCardViewData() const { return CurrentCardViewData; }
+
+	/** 测试/诊断用：RootButton 当前是否允许点击。 */
+	bool IsRootButtonEnabled() const;
+
+	/** 测试/诊断用：模拟点击 RootButton。 */
+	void RequestClickForTest();
+
 	UPROPERTY(BlueprintAssignable, Category = "Wacom|Battle|UI")
 	FWacomCardWidgetClicked OnCardClicked;
 
@@ -84,13 +95,18 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> FrameBorder;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWacomCardView> CardView;
+
 private:
 	UFUNCTION()
 	void HandleRootButtonClicked();
 
 	void UpdateFrameColor();
+	void ApplyFallbackText(const FHandCardSnapshot& InSnap);
 
 	FHandCardSnapshot CachedSnap;
+	FWacomCardViewData CurrentCardViewData;
 	bool bLastPlayable = false;
 	bool bLastTargeting = false;
 };

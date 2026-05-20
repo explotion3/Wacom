@@ -183,8 +183,8 @@ public:
 	 * 重算负重压力（幂等）。
 	 *
 	 * 公式（GDD §11.4）：
-	 *   超出"通量存放区容量"的卡数 n → Burden = n*(n+1)/2
-	 *   通量容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
+	 *   超出"通量内容容量"的卡数 n → Burden = n*(n+1)/2
+	 *   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 max(Capacity - 1, 0))
 	 *
 	 * 由 AddCardToBackpack / DestroyCardFromBackpack 等改背包卡数的方法
 	 * 自动调用，UI 一般不需要手动调。
@@ -715,6 +715,9 @@ private:
 
 	/** 遍历 RunState 全部物理持有区，按过滤条件累计卡牌 Capacity。 */
 	int32 SumOwnedCardCapacity(bool bTypeAOnly) const;
+
+	/** 统计指定列表中真正占用通量内容格的卡：容器主卡不计入。 */
+	int32 CountFluxContentCards(const TArray<FCardInstance>& Pile) const;
 
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|Run", Transient)
 	FRunState RunState;
