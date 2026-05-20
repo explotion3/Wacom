@@ -223,6 +223,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
 
+	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
+	bool bLoggedMissingCardDetailLayer = false;
+
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
 
@@ -239,6 +242,7 @@ private:
 	void HandleHandCardUnhovered(UCardWidget* SourceWidget);
 	bool ShowCardDetailForCardWidget(UCardWidget* SourceWidget);
 	void HideCardDetailPanel();
+	void HideCardDetailPanelForSource(UCardWidget* SourceWidget);
 	UWacomCardDetailPanel* EnsureCardDetailPanel();
 	void EnsureCardDetailLayer();
 	void PositionCardDetailPanelNear(UCardWidget* SourceWidget);

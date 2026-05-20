@@ -507,9 +507,9 @@ void UBattleHUD::HandleHandCardHovered(UCardWidget* SourceWidget)
 	ShowCardDetailForCardWidget(SourceWidget);
 }
 
-void UBattleHUD::HandleHandCardUnhovered(UCardWidget* /*SourceWidget*/)
+void UBattleHUD::HandleHandCardUnhovered(UCardWidget* SourceWidget)
 {
-	HideCardDetailPanel();
+	HideCardDetailPanelForSource(SourceWidget);
 }
 
 bool UBattleHUD::ShowCardDetailForCardWidget(UCardWidget* SourceWidget)
@@ -528,6 +528,7 @@ bool UBattleHUD::ShowCardDetailForCardWidget(UCardWidget* SourceWidget)
 
 	Panel->SetCardDetailData(
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(SourceWidget->GetCardSnapshot().Definition));
+	CurrentCardDetailSource = SourceWidget;
 	PositionCardDetailPanelNear(SourceWidget);
 	Panel->SetRenderOpacity(1.0f);
 	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -540,6 +541,16 @@ void UBattleHUD::HideCardDetailPanel()
 	{
 		CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
 	}
+	CurrentCardDetailSource.Reset();
+}
+
+void UBattleHUD::HideCardDetailPanelForSource(UCardWidget* SourceWidget)
+{
+	if (!SourceWidget || CurrentCardDetailSource.Get() != SourceWidget)
+	{
+		return;
+	}
+	HideCardDetailPanel();
 }
 
 UWacomCardDetailPanel* UBattleHUD::EnsureCardDetailPanel()
@@ -599,7 +610,11 @@ void UBattleHUD::EnsureCardDetailLayer()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] CardDetailLayer 未绑定，且 RootWidget 不是 CanvasPanel，战斗手牌悬浮详情不会显示"));
+		if (!bLoggedMissingCardDetailLayer)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] CardDetailLayer 未绑定，且 RootWidget 不是 CanvasPanel，战斗手牌悬浮详情不会显示"));
+			bLoggedMissingCardDetailLayer = true;
+		}
 	}
 }
 

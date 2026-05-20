@@ -308,6 +308,7 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 - 点击需要敌方部位目标的手牌时，`BattleHUD` 进入 `TargetSelect` 并记录 `PendingTargetingCardId`；再次点击同一张牌会调用 `CancelTargetSelect()` 回到 `Idle`
 - 手牌选中反馈由 `UHandPanel` 根据 `BattleHUD::IsInTargetSelect()` 和 `PendingTargetingCardId` 刷新；敌方部位可选反馈由 `EnemyInfoBar` 根据同一 HUD 状态刷新
 - 战斗手牌 hover 详情由 `BattleHUD` 管理：`UCardWidget` 上报 hover，`UHandPanel` 转发，`BattleHUD` 创建 `UWacomCardDetailPanel` 并用 `UWacomCardPresentationBuilder` 填充详情数据；面板默认显示在悬停卡牌左侧，左侧空间不足时显示在右侧
+- `BattleHUD` 会记录当前详情来源卡；快速从 A 卡 hover 到 B 卡时，A 卡随后 unhover 不会误关 B 卡详情
 - 进入目标选择、提交命令、刷新 Snapshot、切换 Session 或战斗结束时都会隐藏手牌详情；目标选择阶段只保留选中卡高亮和敌方部位 targetable 反馈
 - `UHandPanel` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_CardWidget`；找不到时回退到 C++ 默认 `UCardWidget`
 - `BattleHUD` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_HandPanel`；找不到时回退到 C++ 默认 `UHandPanel`

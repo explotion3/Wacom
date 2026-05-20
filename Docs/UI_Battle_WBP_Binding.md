@@ -46,6 +46,13 @@ WBP_CardWidget
 - 如果没有绑定 `RootButton`，该手牌不会崩溃，但无法点击。
 - 如果没有绑定 `FrameBorder`，目标选择高亮颜色不会显示，但不会影响出牌流程。
 
+PIE 检查清单：
+- `RootButton` 与 `HoverVisualRoot` 是同级，不在 `HoverVisualRoot` 内部。
+- `RootButton` 覆盖整张卡牌的原始占位；hover 后鼠标停在卡牌下沿不应抖动。
+- `FrameBorder / CardView / ZoneText` 在 `HoverVisualRoot` 内，hover 时整张卡面一起上浮。
+- 鼠标移到卡牌上时会出现详情面板；进入目标选择后详情面板隐藏。
+- 点击需要目标的卡牌后，当前卡仍能通过 `FrameBorder` 或 `BP_OnTargetingHighlightChanged` 显示选中态。
+
 ## WBP_HandPanel
 
 父类：`UHandPanel`
@@ -103,4 +110,11 @@ WBP_HandPanel
 - `CardDetailLayer` 未绑定时，如果 HUD 根控件是 `CanvasPanel`，C++ 会运行时创建 fallback layer。
 - 详情面板使用 `/Game/Wacom/UI/Card/WBP_CardDetailPanel`，缺失时回退到 C++ `UWacomCardDetailPanel`。
 - 详情面板默认显示在悬停卡牌左侧；左侧空间不足时显示在右侧，并会 clamp 到 `CardDetailLayer` 可见范围内。
+- `BattleHUD` 会记录当前详情来源卡，快速切换 hover 卡牌时，旧卡的 unhover 不会关闭新卡详情。
 - 详情面板为 `HitTestInvisible`，不抢点击；进入目标选择时会隐藏。
+
+PIE 检查清单：
+- `CardDetailLayer` 覆盖整个 HUD 可见区域，并位于手牌和敌方部位之上。
+- 详情面板不会阻挡点击手牌、等待、结束回合或敌方部位。
+- 从一张手牌快速滑到另一张手牌时，详情内容应切换到新卡，不应闪关。
+- 最左侧手牌空间不足时，详情面板应显示在卡牌右侧。

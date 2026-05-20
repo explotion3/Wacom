@@ -567,3 +567,57 @@ bool FWacomUIBattleHUDCardDetailLifecycleSpec::RunTest(const FString& /*Paramete
 
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailSourceGuardSpec,
+	"Wacom.UI.Battle.HUDCardDetailSourceGuard",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailSourceGuardSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UCardWidget> FirstWidget(NewObject<UCardWidget>(HUD.Get()));
+	TStrongObjectPtr<UCardWidget> SecondWidget(NewObject<UCardWidget>(HUD.Get()));
+	TStrongObjectPtr<UCardDefinition> FirstCard(NewObject<UCardDefinition>());
+	TStrongObjectPtr<UCardDefinition> SecondCard(NewObject<UCardDefinition>());
+
+	FirstCard->CardId = TEXT("FirstBattleDetailCard");
+	FirstCard->DisplayName = FText::FromString(TEXT("第一张详情卡"));
+	SecondCard->CardId = TEXT("SecondBattleDetailCard");
+	SecondCard->DisplayName = FText::FromString(TEXT("第二张详情卡"));
+
+	FHandCardSnapshot FirstSnap;
+	FirstSnap.InstanceId = FGuid::NewGuid();
+	FirstSnap.Definition = FirstCard.Get();
+	FirstSnap.RuntimeCost = 1;
+	FirstSnap.bIsPlayable = true;
+
+	FHandCardSnapshot SecondSnap;
+	SecondSnap.InstanceId = FGuid::NewGuid();
+	SecondSnap.Definition = SecondCard.Get();
+	SecondSnap.RuntimeCost = 1;
+	SecondSnap.bIsPlayable = true;
+
+	HUD->TakeWidget();
+	FirstWidget->TakeWidget();
+	SecondWidget->TakeWidget();
+	FirstWidget->ApplyCardSnapshot(FirstSnap);
+	SecondWidget->ApplyCardSnapshot(SecondSnap);
+
+	HUD->HandleCardHoveredForTest(FirstWidget.Get());
+	TestTrue(TEXT("First hover shows detail"), HUD->IsCardDetailPanelVisible());
+	TestEqual(TEXT("First hover uses first card"), HUD->GetCardDetailPanelNameText().ToString(), TEXT("第一张详情卡"));
+
+	HUD->HandleCardHoveredForTest(SecondWidget.Get());
+	TestTrue(TEXT("Second hover keeps detail visible"), HUD->IsCardDetailPanelVisible());
+	TestEqual(TEXT("Second hover replaces detail source"), HUD->GetCardDetailPanelNameText().ToString(), TEXT("第二张详情卡"));
+
+	HUD->HandleCardUnhoveredForTest(FirstWidget.Get());
+	TestTrue(TEXT("Old source unhover does not hide current detail"), HUD->IsCardDetailPanelVisible());
+	TestEqual(TEXT("Old source unhover keeps second detail"), HUD->GetCardDetailPanelNameText().ToString(), TEXT("第二张详情卡"));
+
+	HUD->HandleCardUnhoveredForTest(SecondWidget.Get());
+	TestFalse(TEXT("Current source unhover hides detail"), HUD->IsCardDetailPanelVisible());
+
+	return true;
+}

@@ -84,7 +84,7 @@
 | UI 架构迁移 MVVM | M1+M2 已落地：Run 域走 ViewModel + Provider 订阅模型；C++ 父类硬编码布局 + 订阅粗粒度多播 + 手动 SetText；FieldNotify 字段就位但未被 WBP ViewBinding 消费 | 美术阶段切 WBP：ViewModel 加到 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 绑字段到 TextBlock/ProgressBar；C++ 父类 SetText 路径作 fallback 保留 → 全 WBP 后逐步删 |
 | 战斗 UI 接 ViewModel | 保留 Snapshot 推送模型（BattleHUD 作 Controller 递归 RefreshFromSnapshot） | 第一阶段不动。如果将来非战斗 widget 需要"看战斗状态"（如击倒事件 UI / 探索期小窗），加 `UWacomBattleViewModel` 作外部观察入口；子 widget 内部仍用 Snapshot |
 | 卡牌 UI 展示数据复用 | `UWacomCardPresentationBuilder` 已从 `UWacomCardView` 抽出；背包卡牌、拖拽预览、详情面板、战斗手牌已走统一构建入口；旧 `UWacomCardView::Build*` 静态函数仅作兼容转发 | 后续奖励、商店、事件预览等卡牌显示统一接入 Builder；确认无蓝图/代码依赖后再考虑移除旧兼容入口 |
-| 战斗手牌 WBP 承接 | `UCardWidget` 已支持可选 `CardView`、缺槽容错、运行时费用展示和基础 hover 上浮/缩放；`BattleHUD` 已优先加载 `WBP_HandPanel`；`Docs/UI_Battle_WBP_Binding.md` 已记录 `WBP_CardWidget / WBP_HandPanel` 绑定清单 | 后续在编辑器中调整正式战斗手牌 WBP；选中突出、扇形布局、拖拽出牌、战斗手牌详情悬浮另行推进 |
+| 战斗手牌 WBP 承接 | `UCardWidget` 已支持可选 `CardView / HoverVisualRoot`、缺槽容错、运行时费用展示、hover 上浮/缩放和详情上报；`BattleHUD` 已优先加载 `WBP_HandPanel` 并管理手牌 hover 详情；`Docs/UI_Battle_WBP_Binding.md` 已记录 WBP 绑定清单与 PIE 检查项 | 后续在编辑器中调整正式战斗手牌 WBP；选中突出、扇形布局、拖拽出牌和详情样式美术化另行推进 |
 | 背包 UI Presenter 收口 | `UWacomBackpackScreenPresenter` 已抽出标题文本、投影来源、详情数据和悬浮定位等纯展示逻辑；`SpecialZoneWidget` 标题/已出战可见性也已改走 Presenter；`BackpackScreen` 继续负责 Widget 编排和命令提交 | 后续如 `BackpackScreen` 继续膨胀，可再抽列表 section view data 或命令协调对象；当前不把拖拽/确认框/RunSession 命令搬进 Presenter |
 
 ---
