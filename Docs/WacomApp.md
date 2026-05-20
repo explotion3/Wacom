@@ -286,7 +286,10 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 `UWacomCardDetailPanel` 是可复用详情面板，只负责渲染 `FWacomCardDetailViewData`：
 
 - 当前数据从 `CardDefinition.DisplayName / Description / Passives` 推导
+- `Description` 只承接主动效果/效果词条；被动说明从 `FCardPassive.DisplayText` 进入“被动” section，为空时使用规则字段生成 fallback 文本
 - 任务和变化暂为空数组，等待卡牌 DataAsset 字段正式扩展后接入
+- 面板自身只绑定 `SectionsBox`，不固定绑定 `NameText / DescriptionText / TasksBox / ChangesBox / PassivesBox`
+- `UWacomCardDetailSectionWidget` 承接单个详情区块；描述、任务、变化、被动都会按需转成 section，空区块不创建
 - 背包界面第一版由 `UWacomBackpackScreen` 在卡牌悬停时把它显示在卡牌旁边；移出、开始拖拽、列表重建或关闭背包时隐藏
 - 面板为 `HitTestInvisible`，不抢鼠标，不影响左键拖拽和 SpecialZone 右键入战切换
 - 不自动处理战斗手牌详情、选中态或固定详情栏生命周期

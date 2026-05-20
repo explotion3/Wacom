@@ -31,6 +31,13 @@ struct WACOMDATA_API FCardPassive
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Passive")
 	FGameplayTag Trigger;
 
+	/**
+	 * UI 详情面板展示文本。只服务卡牌说明，不参与规则结算。
+	 * 为空时 UI 会根据 Trigger / Effects 生成一条 fallback 文本。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Passive", meta = (MultiLine = true))
+	FText DisplayText;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Passive")
 	TArray<FCardEffect> Effects;
 

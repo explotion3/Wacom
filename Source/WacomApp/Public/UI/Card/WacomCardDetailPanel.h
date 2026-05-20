@@ -8,7 +8,7 @@
 #include "WacomCardDetailPanel.generated.h"
 
 class UPanelWidget;
-class UTextBlock;
+class UWacomCardDetailSectionWidget;
 
 /**
  * Expanded card detail display.
@@ -22,6 +22,8 @@ class WACOMAPP_API UWacomCardDetailPanel : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	UWacomCardDetailPanel(const FObjectInitializer& ObjectInitializer);
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|CardDetail")
 	void SetCardDetailData(const FWacomCardDetailViewData& InData);
 
@@ -34,29 +36,29 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardDetail")
 	FText GetDescriptionText() const { return CurrentData.Description; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|CardDetail")
+	int32 GetSectionCount() const { return SectionWidgets.Num(); }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|CardDetail")
+	FText GetSectionTitleText(int32 Index) const;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> NameText;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> DescriptionText;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UPanelWidget> TasksBox;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UPanelWidget> ChangesBox;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UPanelWidget> PassivesBox;
+	TObjectPtr<UPanelWidget> SectionsBox;
 
 private:
 	UPROPERTY(Transient)
 	FWacomCardDetailViewData CurrentData;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardDetail")
+	TSubclassOf<UWacomCardDetailSectionWidget> SectionWidgetClass;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UWacomCardDetailSectionWidget>> SectionWidgets;
+
 	void ApplyCurrentDataToWidgets();
-	void RebuildLineBox(UPanelWidget* Box, const TArray<FText>& Lines);
+	void AddSection(const FText& Title, const TArray<FText>& Lines);
 };

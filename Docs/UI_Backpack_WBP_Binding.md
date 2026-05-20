@@ -121,17 +121,30 @@
 
 | 控件名 | 推荐类型 | 用途 |
 |---|---|---|
-| `NameText` | `TextBlock` | 卡牌名称 |
-| `DescriptionText` | `TextBlock` | 完整描述文本 |
-| `TasksBox` | `PanelWidget` | C++ 动态填充任务行 |
-| `ChangesBox` | `PanelWidget` | C++ 动态填充变化行 |
-| `PassivesBox` | `PanelWidget` | C++ 动态填充被动行 |
+| `SectionsBox` | `PanelWidget` | C++ 动态填充详情区块 |
 
 注意：
 - `UWacomCardDetailPanel` 只显示 `FWacomCardDetailViewData`，不提交战斗、背包或 Run 命令。
 - 当前详情数据只从 `CardDefinition.DisplayName / Description / Passives` 推导；任务、变化字段等待卡牌数据结构正式扩展后接入。
-- 该面板不会自动弹出，也不处理 hover / selected 生命周期；背包或战斗 UI 后续决定何时显示它。
-- 未绑定槽位时 C++ fallback 会创建基础标题、描述、任务、变化、被动区域。
+- 面板本身不显示卡名；小卡旁悬浮时只展示默认隐藏内容。
+- 面板会把非空 `Description / TaskLines / ChangeLines / PassiveLines` 转成多个 `UWacomCardDetailSectionWidget`。
+- 未绑定 `SectionsBox` 时 C++ fallback 会创建基础容器。
+
+## WBP_CardDetailSection
+
+父类：`UWacomCardDetailSectionWidget`
+
+推荐绑定：
+
+| 控件名 | 推荐类型 | 用途 |
+|---|---|---|
+| `TitleText` | `TextBlock` | 区块标题，例如 `描述`、`任务`、`变化`、`被动` |
+| `LinesBox` | `PanelWidget` | C++ 动态填充区块文本行 |
+
+注意：
+- `UWacomCardDetailSectionWidget` 是详情区块通用模板。
+- 后续新增“容量效果 / 获得方式 / 稀有度说明”等详情内容时，优先新增数据到 section，不再给 `WBP_CardDetailPanel` 添加固定控件。
+- 未绑定槽位时 C++ fallback 会创建基础标题和多行文本。
 
 ## WBP_CardEffectBadge
 

@@ -130,7 +130,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_LeftHand"),
 			TEXT("LeftHand"),
 			TEXT("左手"),
-			TEXT("Anchor card for hand zone. Details TBD."),
+			TEXT("完美释放：闪避敌人攻击意图。\n如果左方没有卡牌，从背包随机抽取一张牌并使其迅捷。\n回合结束时：双手皆在手牌中则保留其区间内的手牌。"),
 			/*BaseCost*/ 2,
 			WacomTags::Card_Rarity_Intrinsic,
 			/*Keywords*/ { WacomTags::Card_Keyword_Hand, WacomTags::Card_Keyword_Weapon, WacomTags::Card_Keyword_Tool },
@@ -149,7 +149,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_RightHand"),
 			TEXT("RightHand"),
 			TEXT("右手"),
-			TEXT("Anchor card. Deal 8 damage."),
+			TEXT("造成 8 伤害。\n如果相邻右方有伙伴，则改为使用它并减少 1 点费用，随后腾挪到左手。\n回合结束时：双手皆在手牌中则保留其区间内的手牌。"),
 			/*BaseCost*/ 2,
 			WacomTags::Card_Rarity_Intrinsic,
 			/*Keywords*/ { WacomTags::Card_Keyword_Hand, WacomTags::Card_Keyword_Weapon, WacomTags::Card_Keyword_Tool },
@@ -198,7 +198,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_ZhaoguangMudie"),
 			TEXT("ZhaoguangMudie"),
 			TEXT("朝光暮蝶"),
-			TEXT("Random shuffle 1 card; apply poison equal to current cost."),
+			TEXT("随机腾挪 1 张我方卡牌。\n施加等于此卡当前费用的中毒。\n处于左手区时：完美释放使此卡获得迅捷。\n处于右手区时：通过此卡腾挪的卡牌费用 -1，减少的费用转移给本卡。"),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_White,
 			/*Keywords*/ { WacomTags::Card_Keyword_Companion },
@@ -215,13 +215,14 @@ namespace Wacom::ContentBuilder
 		FCardPassive FF_OnCompanion;
 		FF_OnCompanion.Trigger          = WacomTags::Passive_Trigger_OnCompanionCount;
 		FF_OnCompanion.TriggerThreshold = 3;
+		FF_OnCompanion.DisplayText      = FText::FromString(TEXT("每当你打出 3 张伙伴时，使此牌回到手中。"));
 
 		UCardDefinition* Fuxiao = BuildCard(
 			CardsRoot + TEXT("DA_Card_FuxiaoFeie"),
 			TEXT("DA_Card_FuxiaoFeie"),
 			TEXT("FuxiaoFeie"),
 			TEXT("拂晓飞蛾"),
-			TEXT("Apply 1 slow to an enemy part."),
+			TEXT("对一个敌方部位施加 1 减速。"),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_Blue,
 			/*Keywords*/ { WacomTags::Card_Keyword_Companion },
@@ -241,7 +242,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_ChifuGongyi"),
 			TEXT("ChifuGongyi"),
 			TEXT("赤腹工蚁"),
-			TEXT("Retain. Shuffle a random card from the Both zone to another zone."),
+			TEXT("保留。\n将双手区的随机 1 张卡牌腾挪至其他区域。"),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_White,
 			/*Keywords*/ { WacomTags::Card_Keyword_Companion, WacomTags::Card_Keyword_Retain },
@@ -258,13 +259,14 @@ namespace Wacom::ContentBuilder
 		FCardPassive SD_AfterPlayed;
 		SD_AfterPlayed.Trigger = WacomTags::Passive_Trigger_AfterPlayed;
 		SD_AfterPlayed.Effects = { ShuffleSelfToRandomZone() };
+		SD_AfterPlayed.DisplayText = FText::FromString(TEXT("打出后：此牌腾挪至随机区域。"));
 
 		UCardDefinition* Shuoguang = BuildCard(
 			CardsRoot + TEXT("DA_Card_ShuoguangDie"),
 			TEXT("DA_Card_ShuoguangDie"),
 			TEXT("ShuoguangDie"),
 			TEXT("烁光蝶"),
-			TEXT("Combo. Deal 7 damage. After play, shuffle to a random zone."),
+			TEXT("连击。\n造成 7 伤害。"),
 			/*BaseCost*/ 1,
 			WacomTags::Card_Rarity_White,
 			/*Keywords*/ { WacomTags::Card_Keyword_Companion, WacomTags::Card_Keyword_Weapon, WacomTags::Card_Keyword_Combo },
@@ -280,13 +282,14 @@ namespace Wacom::ContentBuilder
 		FCardPhysique MLPhysique; MLPhysique.MaxHpBonus = 23;
 		FCardPassive ML_OnTwilight;
 		ML_OnTwilight.Trigger = WacomTags::Passive_Trigger_OnTwilightTriggered;
+		ML_OnTwilight.DisplayText = FText::FromString(TEXT("当触发暮气时，使一张中毒卡牌效果 +1。"));
 
 		UCardDefinition* Muling = BuildCard(
 			CardsRoot + TEXT("DA_Card_Muling"),
 			TEXT("DA_Card_Muling"),
 			TEXT("Muling"),
 			TEXT("暮蛉"),
-			TEXT("Freeze an enemy part for 1 turn."),
+			TEXT("突袭。\n冻结一个敌方部位 1 回合。"),
 			/*BaseCost*/ 5,
 			WacomTags::Card_Rarity_Blue,
 			/*Keywords*/ { WacomTags::Card_Keyword_Companion },
@@ -310,7 +313,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_BugGirlBag"),
 			TEXT("BugGirlBag"),
 			TEXT("虫妹的小布袋"),
-			TEXT("Provides backpack capacity. Bag UI is unlocked while at least one BagProvider card is in the backpack."),
+			TEXT("提供背包容量。\n背包中至少有一张背包能力提供卡时，背包界面可用。"),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_White,
 			/*Keywords*/ { WacomTags::Card_Keyword_BagProvider },
@@ -339,8 +342,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_ZhujianRongnang"),
 			TEXT("ZhujianRongnang"),
 			TEXT("蛛茧绒囊"),
-			TEXT("Type-B container card. Opens a special storage zone (capacity = 2)."
-			     " Weapon cards stored there gain +3 damage when battle-enabled."),
+			TEXT("B 类容器卡，开启一个特殊存放区，内容容量为 2。\n放入其中且选择入战的武器卡，战斗中伤害 +3。"),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_White,
 			/*Keywords*/ {}, // 不带 BagProvider，专门测 B 类与 BagProvider 互相独立
@@ -369,8 +371,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_MuseiYinchongdeng"),
 			TEXT("MuseiYinchongdeng"),
 			TEXT("暮色引虫灯"),
-			TEXT("Type-A container with capacity 3. Carries the delete-card ability"
-			     " (DeleteProvider keyword). Stage 1 ignores durability and combat effects."),
+			TEXT("A 类容器卡，容量为 3。\n携带删牌能力。\n第一阶段暂不处理耐久与战斗主动效果。"),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_White,
 			/*Keywords*/ { WacomTags::Card_Keyword_DeleteProvider },

@@ -398,6 +398,7 @@ USTRUCT(BlueprintType)
 struct FCardPassive
 {
     UPROPERTY(EditDefaultsOnly) FGameplayTag     Trigger;            // Passive.Trigger.*
+    UPROPERTY(EditDefaultsOnly) FText            DisplayText;        // UI 详情展示文本，不参与规则
     UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> Effects;          // 触发后执行
     UPROPERTY(EditDefaultsOnly) FEffectCondition Condition;          // 触发门控，未设置则永真
     UPROPERTY(EditDefaultsOnly) int32            TriggerThreshold = 0;// 仅计数类 trigger 使用
@@ -411,3 +412,7 @@ struct FCardPassive
 | `Passive.Trigger.OnTwilightTriggered` | 暮气施加成功时 | 否 | 暮蛉（占位）|
 
 **TriggerThreshold** 只用于计数类 trigger。达到阈值后触发并清零计数。其他 trigger 不读此字段。
+
+**DisplayText** 只用于卡牌详情面板的“被动”区块展示。战斗规则不读取该字段，仍以
+`Trigger / Effects / Condition / TriggerThreshold` 为准。若为空，UI 可以根据规则字段生成
+fallback 文本，避免旧资产无说明。

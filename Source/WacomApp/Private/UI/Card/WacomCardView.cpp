@@ -516,7 +516,7 @@ FWacomCardDetailViewData UWacomCardView::BuildDetailFromCardDefinition(const UCa
 	Data.Description = Card->Description;
 	for (const FCardPassive& Passive : Card->Passives)
 	{
-		Data.PassiveLines.Add(BuildPassiveLine(Passive));
+		Data.PassiveLines.Add(Passive.DisplayText.IsEmpty() ? BuildPassiveLine(Passive) : Passive.DisplayText);
 	}
 	return Data;
 }

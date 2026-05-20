@@ -5,46 +5,24 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/PanelWidget.h"
-#include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "UI/Card/WacomCardDetailSectionWidget.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardDetailPanel"
 
-namespace
+UWacomCardDetailPanel::UWacomCardDetailPanel(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
-	UTextBlock* AddSectionLabel(UWidgetTree* WidgetTree, UVerticalBox* Root, const FName Name, const FText& Text)
+	if (UClass* Loaded = LoadObject<UClass>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_CardDetailSection.WBP_CardDetailSection_C")))
 	{
-		UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
-		Label->SetText(Text);
-		Label->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.82f, 1.f, 1.f)));
-		FSlateFontInfo Font = Label->GetFont();
-		Font.Size = 12;
-		Label->SetFont(Font);
-		if (UVerticalBoxSlot* Slot = Root->AddChildToVerticalBox(Label))
-		{
-			Slot->SetPadding(FMargin(0.f, 10.f, 0.f, 4.f));
-		}
-		return Label;
+		SectionWidgetClass = Loaded;
 	}
-
-	UTextBlock* MakeBodyText(UWidgetTree* WidgetTree, const FName Name, const FText& Text)
+	else
 	{
-		UTextBlock* TextBlock = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
-		TextBlock->SetText(Text);
-		TextBlock->SetAutoWrapText(true);
-		TextBlock->SetColorAndOpacity(FSlateColor(FLinearColor(0.92f, 0.9f, 0.84f, 1.f)));
-		return TextBlock;
-	}
-
-	void SetOptionalText(UTextBlock* TextBlock, const FText& Text)
-	{
-		if (!TextBlock)
-		{
-			return;
-		}
-		TextBlock->SetText(Text);
-		TextBlock->SetVisibility(Text.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+		SectionWidgetClass = UWacomCardDetailSectionWidget::StaticClass();
 	}
 }
 
@@ -62,39 +40,8 @@ TSharedRef<SWidget> UWacomCardDetailPanel::RebuildWidget()
 		RootBorder->SetPadding(FMargin(14.f));
 		WidgetTree->RootWidget = RootBorder;
 
-		UVerticalBox* RootBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("CardDetailContent"));
-		RootBorder->AddChild(RootBox);
-
-		NameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("NameText"));
-		NameText->SetAutoWrapText(true);
-		NameText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-		{
-			FSlateFontInfo Font = NameText->GetFont();
-			Font.Size = 18;
-			NameText->SetFont(Font);
-		}
-		if (UVerticalBoxSlot* NameSlot = RootBox->AddChildToVerticalBox(NameText))
-		{
-			NameSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-		}
-
-		DescriptionText = MakeBodyText(WidgetTree, TEXT("DescriptionText"), FText::GetEmpty());
-		if (UVerticalBoxSlot* DescriptionSlot = RootBox->AddChildToVerticalBox(DescriptionText))
-		{
-			DescriptionSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
-		}
-
-		AddSectionLabel(WidgetTree, RootBox, FName(TEXT("TasksLabel")), LOCTEXT("TasksLabel", "任务"));
-		TasksBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), FName(TEXT("TasksBox")));
-		RootBox->AddChildToVerticalBox(TasksBox);
-
-		AddSectionLabel(WidgetTree, RootBox, FName(TEXT("ChangesLabel")), LOCTEXT("ChangesLabel", "变化"));
-		ChangesBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), FName(TEXT("ChangesBox")));
-		RootBox->AddChildToVerticalBox(ChangesBox);
-
-		AddSectionLabel(WidgetTree, RootBox, FName(TEXT("PassivesLabel")), LOCTEXT("PassivesLabel", "被动"));
-		PassivesBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), FName(TEXT("PassivesBox")));
-		RootBox->AddChildToVerticalBox(PassivesBox);
+		SectionsBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("SectionsBox"));
+		RootBorder->AddChild(SectionsBox);
 	}
 
 	return Super::RebuildWidget();
@@ -112,38 +59,77 @@ void UWacomCardDetailPanel::SetCardDetailData(const FWacomCardDetailViewData& In
 	ApplyCurrentDataToWidgets();
 }
 
-void UWacomCardDetailPanel::ApplyCurrentDataToWidgets()
+FText UWacomCardDetailPanel::GetSectionTitleText(int32 Index) const
 {
-	SetOptionalText(NameText, CurrentData.Name);
-	SetOptionalText(DescriptionText, CurrentData.Description);
-	RebuildLineBox(TasksBox, CurrentData.TaskLines);
-	RebuildLineBox(ChangesBox, CurrentData.ChangeLines);
-	RebuildLineBox(PassivesBox, CurrentData.PassiveLines);
+	return SectionWidgets.IsValidIndex(Index) && SectionWidgets[Index]
+		? SectionWidgets[Index]->GetTitleText()
+		: FText::GetEmpty();
 }
 
-void UWacomCardDetailPanel::RebuildLineBox(UPanelWidget* Box, const TArray<FText>& Lines)
+void UWacomCardDetailPanel::ApplyCurrentDataToWidgets()
 {
-	if (!Box)
+	if (!SectionsBox)
 	{
 		return;
 	}
 
-	Box->ClearChildren();
-	for (int32 Index = 0; Index < Lines.Num(); ++Index)
-	{
-		const FText& Line = Lines[Index];
-		if (Line.IsEmpty())
-		{
-			continue;
-		}
+	SectionsBox->ClearChildren();
+	SectionWidgets.Reset();
 
-		UTextBlock* TextBlock = MakeBodyText(
-			WidgetTree,
-			FName(*FString::Printf(TEXT("DetailLine_%d_%d"), GetUniqueID(), Index)),
-			Line);
-		Box->AddChild(TextBlock);
+	if (!CurrentData.Description.IsEmpty())
+	{
+		TArray<FText> DescriptionLines;
+		DescriptionLines.Add(CurrentData.Description);
+		AddSection(LOCTEXT("DescriptionSectionTitle", "描述"), DescriptionLines);
 	}
-	Box->SetVisibility(Box->GetChildrenCount() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	AddSection(LOCTEXT("TasksSectionTitle", "任务"), CurrentData.TaskLines);
+	AddSection(LOCTEXT("ChangesSectionTitle", "变化"), CurrentData.ChangeLines);
+	AddSection(LOCTEXT("PassivesSectionTitle", "被动"), CurrentData.PassiveLines);
+
+	SectionsBox->SetVisibility(SectionWidgets.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
+void UWacomCardDetailPanel::AddSection(const FText& Title, const TArray<FText>& Lines)
+{
+	if (!SectionsBox || Lines.Num() <= 0)
+	{
+		return;
+	}
+
+	TArray<FText> NonEmptyLines;
+	for (const FText& Line : Lines)
+	{
+		if (!Line.IsEmpty())
+		{
+			NonEmptyLines.Add(Line);
+		}
+	}
+	if (NonEmptyLines.Num() <= 0)
+	{
+		return;
+	}
+
+	UClass* WidgetClass = SectionWidgetClass
+		? SectionWidgetClass.Get()
+		: UWacomCardDetailSectionWidget::StaticClass();
+	UWacomCardDetailSectionWidget* SectionWidget = GetWorld()
+		? CreateWidget<UWacomCardDetailSectionWidget>(this, WidgetClass)
+		: NewObject<UWacomCardDetailSectionWidget>(this, WidgetClass);
+	if (!SectionWidget)
+	{
+		return;
+	}
+
+	FWacomCardDetailSectionData SectionData;
+	SectionData.Title = Title;
+	SectionData.Lines = NonEmptyLines;
+	SectionWidget->SetSectionData(SectionData);
+
+	if (UVerticalBoxSlot* SectionSlot = Cast<UVerticalBoxSlot>(SectionsBox->AddChild(SectionWidget)))
+	{
+		SectionSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+	}
+	SectionWidgets.Add(SectionWidget);
 }
 
 #undef LOCTEXT_NAMESPACE

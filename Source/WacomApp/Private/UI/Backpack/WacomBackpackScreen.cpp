@@ -853,6 +853,7 @@ bool UWacomBackpackScreen::ShowCardDetailForCardWidget(UWacomDeckCardWidget* Sou
 
 	Panel->SetCardDetailData(UWacomCardView::BuildDetailFromCardDefinition(SourceWidget->GetCard()));
 	PositionCardDetailPanelNear(SourceWidget);
+	Panel->SetRenderOpacity(1.f);
 	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
 	return true;
 }
@@ -890,7 +891,8 @@ UWacomCardDetailPanel* UWacomBackpackScreen::EnsureCardDetailPanel()
 	}
 
 	CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
-	CardDetailPanel->SetIsEnabled(false);
+	CardDetailPanel->SetIsEnabled(true);
+	CardDetailPanel->SetRenderOpacity(1.f);
 	if (UCanvasPanelSlot* DetailSlot = CardDetailLayer->AddChildToCanvas(CardDetailPanel))
 	{
 		DetailSlot->SetAutoSize(false);

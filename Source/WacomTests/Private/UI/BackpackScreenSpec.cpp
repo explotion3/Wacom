@@ -10,6 +10,7 @@
 #include "UI/Backpack/WacomZoneDropTarget.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomCardDetailSectionWidget.h"
 #include "UI/Card/WacomCardView.h"
 
 #include "Cards/CardDefinition.h"
@@ -133,7 +134,43 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 	Card->CardId = TEXT("TwilightLantern");
 	Card->DisplayName = FText::FromString(TEXT("暮色引虫灯"));
-	Card->Description = FText::FromString(TEXT("造成1暮气，1中毒。\n被动细节应进入详情面板。"));
+	Card->Description = FText::FromString(TEXT("造成1暮气，1中毒。"));
+
+	FCardPassive Passive;
+	Passive.Trigger = WacomTags::Passive_Trigger_OnCompanionCount;
+	Passive.TriggerThreshold = 3;
+	Passive.DisplayText = FText::FromString(TEXT("每当你打出 3 张伙伴时，使此牌回到手中。"));
+	Card->Passives.Add(Passive);
+
+	const FWacomCardDetailViewData Data = UWacomCardView::BuildDetailFromCardDefinition(Card.Get());
+
+	TestEqual(TEXT("Detail name"), Data.Name.ToString(), TEXT("暮色引虫灯"));
+	TestEqual(TEXT("Detail keeps full description"),
+		Data.Description.ToString(),
+		TEXT("造成1暮气，1中毒。"));
+	TestFalse(TEXT("Description does not contain passive copy"), Data.Description.ToString().Contains(TEXT("被动")));
+	TestEqual(TEXT("Task lines empty before schema support"), Data.TaskLines.Num(), 0);
+	TestEqual(TEXT("Change lines empty before schema support"), Data.ChangeLines.Num(), 0);
+	TestEqual(TEXT("One passive line"), Data.PassiveLines.Num(), 1);
+	if (Data.PassiveLines.Num() > 0)
+	{
+		TestEqual(TEXT("Passive line uses DisplayText"), Data.PassiveLines[0].ToString(), TEXT("每当你打出 3 张伙伴时，使此牌回到手中。"));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardDetailPassiveFallbackSpec,
+	"Wacom.UI.Backpack.CardDetailPassiveFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardDetailPassiveFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	Card->CardId = TEXT("PassiveFallbackCard");
+	Card->DisplayName = FText::FromString(TEXT("被动回退卡"));
+	Card->Description = FText::FromString(TEXT("主动效果。"));
 
 	FCardPassive Passive;
 	Passive.Trigger = WacomTags::Passive_Trigger_OnCompanionCount;
@@ -142,17 +179,11 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 
 	const FWacomCardDetailViewData Data = UWacomCardView::BuildDetailFromCardDefinition(Card.Get());
 
-	TestEqual(TEXT("Detail name"), Data.Name.ToString(), TEXT("暮色引虫灯"));
-	TestEqual(TEXT("Detail keeps full description"),
-		Data.Description.ToString(),
-		TEXT("造成1暮气，1中毒。\n被动细节应进入详情面板。"));
-	TestEqual(TEXT("Task lines empty before schema support"), Data.TaskLines.Num(), 0);
-	TestEqual(TEXT("Change lines empty before schema support"), Data.ChangeLines.Num(), 0);
-	TestEqual(TEXT("One passive line"), Data.PassiveLines.Num(), 1);
+	TestEqual(TEXT("One fallback passive line"), Data.PassiveLines.Num(), 1);
 	if (Data.PassiveLines.Num() > 0)
 	{
-		TestTrue(TEXT("Passive line contains companion threshold"), Data.PassiveLines[0].ToString().Contains(TEXT("3")));
-		TestTrue(TEXT("Passive line contains localized companion"), Data.PassiveLines[0].ToString().Contains(TEXT("伙伴")));
+		TestTrue(TEXT("Fallback passive line contains threshold"), Data.PassiveLines[0].ToString().Contains(TEXT("3")));
+		TestTrue(TEXT("Fallback passive line contains companion"), Data.PassiveLines[0].ToString().Contains(TEXT("伙伴")));
 	}
 
 	return true;
@@ -181,6 +212,34 @@ bool FWacomUIBackpackCardDetailPanelFallbackSpec::RunTest(const FString& /*Param
 	TestEqual(TEXT("Detail panel name getter"), Panel->GetNameText().ToString(), TEXT("详情测试卡"));
 	TestEqual(TEXT("Detail panel description getter"), Panel->GetDescriptionText().ToString(), TEXT("完整描述文本"));
 	TestEqual(TEXT("Detail panel passive lines preserved"), Panel->GetCardDetailData().PassiveLines.Num(), 1);
+	TestEqual(TEXT("Detail panel creates description and passive sections"), Panel->GetSectionCount(), 2);
+	TestEqual(TEXT("First section is description"), Panel->GetSectionTitleText(0).ToString(), TEXT("描述"));
+	TestEqual(TEXT("Second section is passive"), Panel->GetSectionTitleText(1).ToString(), TEXT("被动"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardDetailSectionWidgetDataSpec,
+	"Wacom.UI.Backpack.CardDetailSectionWidgetData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardDetailSectionWidgetDataSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardDetailSectionWidget> SectionWidget(NewObject<UWacomCardDetailSectionWidget>());
+
+	FWacomCardDetailSectionData Data;
+	Data.Title = FText::FromString(TEXT("描述"));
+	Data.Lines.Add(FText::FromString(TEXT("第一行")));
+	Data.Lines.Add(FText::FromString(TEXT("第二行")));
+
+	SectionWidget->SetSectionData(Data);
+	SectionWidget->TakeWidget();
+	SectionWidget->SetSectionData(Data);
+
+	TestEqual(TEXT("Section title preserved"), SectionWidget->GetTitleText().ToString(), TEXT("描述"));
+	TestEqual(TEXT("Section line count preserved"), SectionWidget->GetLineCount(), 2);
+	TestEqual(TEXT("Section first line preserved"), SectionWidget->GetSectionData().Lines[0].ToString(), TEXT("第一行"));
 
 	return true;
 }
