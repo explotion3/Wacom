@@ -12,11 +12,20 @@
 #include "Components/ScrollBox.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Types/WacomEnums.h"
+#include "UObject/ConstructorHelpers.h"
 
 UHandPanel::UHandPanel()
 {
-	// 默认卡类：自己构造时用自己的类
-	CardWidgetClass = UCardWidget::StaticClass();
+	static ConstructorHelpers::FClassFinder<UCardWidget> DefaultCardWidgetClass(
+		TEXT("/Game/Wacom/UI/Battle/WBP_CardWidget"));
+	if (DefaultCardWidgetClass.Succeeded())
+	{
+		CardWidgetClass = DefaultCardWidgetClass.Class;
+	}
+	else
+	{
+		CardWidgetClass = UCardWidget::StaticClass();
+	}
 }
 
 TSharedRef<SWidget> UHandPanel::RebuildWidget()

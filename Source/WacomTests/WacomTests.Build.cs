@@ -21,6 +21,7 @@ public class WacomTests : ModuleRules
 			"WacomRun",
 			"WacomApp",
 			"UMG",
+			"CommonUI",
 			"ModelViewViewModel",
 			"FieldNotification"
 		});

@@ -24,7 +24,7 @@
 
 namespace
 {
-	URunSession* MakeRunWithCharacter(FWacomBattleFixture& Fx, TStrongObjectPtr<URunSession>& RunPtr)
+	URunSession* MakePressureRunWithCharacter(FWacomBattleFixture& Fx, TStrongObjectPtr<URunSession>& RunPtr)
 	{
 		UCharacterDefinition* Char = Fx.MakeCharacter(
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
@@ -47,7 +47,7 @@ bool FWacomRunPressureMorningAtInitDoesNotTriggerSpec::RunTest(const FString& /*
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	// Initialize 后应在 Morning，但不应触发饥饿（Initialize 不算"进入清晨"）。
 	TestEqual(TEXT("Hunger=0 at start"),
@@ -65,7 +65,7 @@ bool FWacomRunPressureEnterDuskAddsHungerSpec::RunTest(const FString& /*Paramete
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	// Morning → Day（无副作用）→ Dusk（饥饿 +5）
 	Run->AdvanceToNextPhase();  // Day
@@ -88,7 +88,7 @@ bool FWacomRunPressureEnterSunriseAddsFatigueSpec::RunTest(const FString& /*Para
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	// Morning → Day → Dusk → Night → Sunrise
 	Run->AdvanceToNextPhase();  // Day
@@ -113,7 +113,7 @@ bool FWacomRunPressureCompletingDayAddsDecayAndHungerSpec::RunTest(const FString
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	// 完整循环到次日 Morning
 	Run->AdvanceToNextPhase();  // Day
@@ -148,7 +148,7 @@ bool FWacomRunPressureRightHandActionAddsWoundSpec::RunTest(const FString& /*Par
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	Run->OnRightHandDestructiveAction();
 	TestEqual(TEXT("Wound +1"),
@@ -171,7 +171,7 @@ bool FWacomRunPressureCompanionDestroyedAddsBloodlustSpec::RunTest(const FString
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	Run->OnCompanionCardPermanentlyDestroyed();
 	TestEqual(TEXT("Bloodlust +1"),
@@ -193,7 +193,7 @@ bool FWacomRunPressureTheftAccumulatesSpec::RunTest(const FString& /*Parameters*
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	// b 增量语义：第 n 次 +(n*(n+1)/2 + 1)
 	// n=1 → +2     total 2
@@ -330,7 +330,7 @@ bool FWacomRunPressureRemovePressureClampsSpec::RunTest(const FString& /*Paramet
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	Run->AddPressure(EWacomPressureType::Wound, 5);
 	TestEqual(TEXT("Wound=5"),
@@ -366,7 +366,7 @@ bool FWacomRunPressureClearPressureSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	Run->AddPressure(EWacomPressureType::Wound, 50);
 	Run->AddPressure(EWacomPressureType::Hunger, 50);
@@ -390,7 +390,7 @@ bool FWacomRunPressureSetPressureClampsSpec::RunTest(const FString& /*Parameters
 {
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
 
 	Run->SetPressure(EWacomPressureType::Wound, 200);
 	TestEqual(TEXT("Wound clamped to 100"),

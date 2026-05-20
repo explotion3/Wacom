@@ -124,9 +124,16 @@ void UCardWidget::NativeOnInitialized()
 void UCardWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	if (RootButton && !RootButton->OnClicked.IsBound())
+	if (RootButton)
 	{
-		RootButton->OnClicked.AddDynamic(this, &UCardWidget::HandleRootButtonClicked);
+		if (!RootButton->OnClicked.IsAlreadyBound(this, &UCardWidget::HandleRootButtonClicked))
+		{
+			RootButton->OnClicked.AddDynamic(this, &UCardWidget::HandleRootButtonClicked);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CardWidget] RootButton 未绑定，战斗手牌无法点击：%s"), *GetName());
 	}
 }
 
@@ -134,10 +141,7 @@ void UCardWidget::ApplyCardSnapshot(const FHandCardSnapshot& InSnap)
 {
 	CachedSnap = InSnap;
 
-	CurrentCardViewData = UWacomCardPresentationBuilder::BuildCardViewData(InSnap.Definition);
-	CurrentCardViewData.Cost = InSnap.RuntimeCost;
-	CurrentCardViewData.bShowCost = InSnap.Definition != nullptr;
-	CurrentCardViewData.bDisabled = !InSnap.bIsPlayable;
+	CurrentCardViewData = BuildCardViewDataFromSnapshot(InSnap);
 
 	if (CardView)
 	{
@@ -170,29 +174,39 @@ bool UCardWidget::IsRootButtonEnabled() const
 
 void UCardWidget::RequestClickForTest()
 {
+	if (!RootButton || !RootButton->GetIsEnabled())
+	{
+		return;
+	}
 	HandleRootButtonClicked();
 }
 
 void UCardWidget::ApplyFallbackText(const FHandCardSnapshot& InSnap)
 {
-	if (NameText && InSnap.Definition)
+	if (NameText)
 	{
-		const FText Display = InSnap.Definition->DisplayName.IsEmpty()
-			? FText::FromName(InSnap.Definition->CardId)
-			: InSnap.Definition->DisplayName;
-		NameText->SetText(Display);
+		NameText->SetText(CurrentCardViewData.Name);
 	}
 
 	if (CostText)
 	{
 		CostText->SetText(FText::Format(
-			LOCTEXT("CostFmt", "费用 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(InSnap.RuntimeCost) }));
+			LOCTEXT("CostFmt", "费用 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(CurrentCardViewData.Cost) }));
 	}
 
 	if (ZoneText)
 	{
 		ZoneText->SetText(ZoneToText(InSnap.Zone));
 	}
+}
+
+FWacomCardViewData UCardWidget::BuildCardViewDataFromSnapshot(const FHandCardSnapshot& InSnap) const
+{
+	FWacomCardViewData Data = UWacomCardPresentationBuilder::BuildCardViewData(InSnap.Definition);
+	Data.Cost = InSnap.RuntimeCost;
+	Data.bShowCost = InSnap.Definition != nullptr;
+	Data.bDisabled = !InSnap.bIsPlayable;
+	return Data;
 }
 
 void UCardWidget::SetTargetingHighlight(bool bTargeting)

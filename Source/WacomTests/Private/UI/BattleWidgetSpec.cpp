@@ -84,3 +84,65 @@ bool FWacomUIBattleCardWidgetClickAndHighlightSpec::RunTest(const FString& /*Par
 
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCardWidgetFallbackSpec,
+	"Wacom.UI.Battle.CardWidgetFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCardWidgetFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleCardWidgetNoCardViewTest> Widget(NewObject<UWacomBattleCardWidgetNoCardViewTest>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	Card->CardId = TEXT("BattleFallbackCard");
+	Card->DisplayName = FText::FromString(TEXT("旧界面卡"));
+	Card->BaseCost = 1;
+
+	FHandCardSnapshot Snap;
+	Snap.InstanceId = FGuid::NewGuid();
+	Snap.Definition = Card.Get();
+	Snap.RuntimeCost = 6;
+	Snap.Zone = EHandZone::Right;
+	Snap.bIsPlayable = true;
+
+	Widget->TakeWidget();
+	Widget->DisableCardViewForTest();
+	Widget->ApplyCardSnapshot(Snap);
+
+	TestEqual(TEXT("Fallback uses view data name"), Widget->GetFallbackNameText(), TEXT("旧界面卡"));
+	TestTrue(TEXT("Fallback uses runtime cost"), Widget->GetFallbackCostText().Contains(TEXT("6")));
+	TestEqual(TEXT("Fallback keeps zone text"), Widget->GetFallbackZoneText(), TEXT("R"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCardWidgetMissingRootButtonSpec,
+	"Wacom.UI.Battle.CardWidgetMissingRootButton",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCardWidgetMissingRootButtonSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardWidget> Widget(NewObject<UCardWidget>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	TStrongObjectPtr<UWacomBattleCardWidgetClickReceiver> Receiver(NewObject<UWacomBattleCardWidgetClickReceiver>());
+
+	Widget->OnCardClicked.AddDynamic(Receiver.Get(), &UWacomBattleCardWidgetClickReceiver::HandleClicked);
+
+	FHandCardSnapshot Snap;
+	Snap.InstanceId = FGuid::NewGuid();
+	Snap.Definition = Card.Get();
+	Snap.RuntimeCost = 1;
+	Snap.bIsPlayable = true;
+
+	Widget->ApplyCardSnapshot(Snap);
+	Widget->SetTargetingHighlight(true);
+	Widget->RequestClickForTest();
+
+	TestEqual(TEXT("Missing RootButton cannot click"), Receiver->ClickCount, 0);
+	TestFalse(TEXT("Missing RootButton reports disabled"), Widget->IsRootButtonEnabled());
+	TestTrue(TEXT("Data still refreshes without widgets"), Widget->GetCurrentCardViewData().bShowCost);
+
+	return true;
+}

@@ -29,12 +29,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FWacomCardWidgetClicked, FGuid, Card
  *
  * WBP 子类可完全覆盖。
  *
- * WBP 约定（BindWidget）：
- * - RootButton : UButton
- * - NameText   : UTextBlock (Optional)
- * - CostText   : UTextBlock (Optional)
- * - ZoneText   : UTextBlock (Optional)
- * - FrameBorder: UBorder    (Optional，用于 Playable/Targeting 色变)
+ * WBP 约定（BindWidgetOptional）：
+ * - RootButton : UButton    (可选；未绑定时不能点击)
+ * - CardView   : UWacomCardView (可选；推荐绑定)
+ * - NameText   : UTextBlock (旧 fallback)
+ * - CostText   : UTextBlock (旧 fallback)
+ * - ZoneText   : UTextBlock (旧 fallback)
+ * - FrameBorder: UBorder    (用于 Playable/Targeting 色变)
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UCardWidget : public UWacomBattleWidgetBase
@@ -80,7 +81,7 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On Targeting Highlight Changed")
 	void BP_OnTargetingHighlightChanged(bool bTargeting);
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> RootButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -102,6 +103,7 @@ private:
 	UFUNCTION()
 	void HandleRootButtonClicked();
 
+	FWacomCardViewData BuildCardViewDataFromSnapshot(const FHandCardSnapshot& InSnap) const;
 	void UpdateFrameColor();
 	void ApplyFallbackText(const FHandCardSnapshot& InSnap);
 

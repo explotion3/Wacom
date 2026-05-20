@@ -3,6 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UI/Battle/CardWidget.h"
+#include "Components/TextBlock.h"
 #include "BattleWidgetSpecReceiver.generated.h"
 
 UCLASS()
@@ -19,5 +21,32 @@ public:
 	{
 		++ClickCount;
 		LastClickedId = CardInstanceId;
+	}
+};
+
+UCLASS()
+class UWacomBattleCardWidgetNoCardViewTest : public UCardWidget
+{
+	GENERATED_BODY()
+
+public:
+	void DisableCardViewForTest()
+	{
+		CardView = nullptr;
+	}
+
+	FString GetFallbackNameText() const
+	{
+		return NameText ? NameText->GetText().ToString() : FString();
+	}
+
+	FString GetFallbackCostText() const
+	{
+		return CostText ? CostText->GetText().ToString() : FString();
+	}
+
+	FString GetFallbackZoneText() const
+	{
+		return ZoneText ? ZoneText->GetText().ToString() : FString();
 	}
 };

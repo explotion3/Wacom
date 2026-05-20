@@ -297,6 +297,8 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 - `ApplyCardSnapshot` 通过 `UWacomCardPresentationBuilder` 生成卡面数据，并用 `FHandCardSnapshot.RuntimeCost` 覆盖显示费用
 - `bIsPlayable=false` 时写入 `FWacomCardViewData.bDisabled`，同时禁用 `RootButton`
 - 点击、目标选择高亮、提交出牌命令仍由 `UCardWidget / UHandPanel / BattleHUD` 负责，`UWacomCardView` 不知道战斗交互
+- `UHandPanel` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_CardWidget`；找不到时回退到 C++ 默认 `UCardWidget`
+- `WBP_CardWidget / WBP_HandPanel` 制作时按 `Docs/UI_Battle_WBP_Binding.md` 绑定；缺少 `RootButton` 时手牌不会崩溃但无法点击
 
 `UWacomBackpackZoneSectionWidget` 是背包区块的局部 WBP 承接点：
 
