@@ -69,27 +69,6 @@ TSharedRef<SWidget> UCardWidget::RebuildWidget()
 			CardViewSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		}
 
-		NameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("NameText"));
-		NameText->SetText(FText::FromString(TEXT("CardName")));
-		NameText->SetJustification(ETextJustify::Center);
-		NameText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
-		NameText->SetAutoWrapText(true);
-		// 字号调小到 10 以容纳两行长名
-		{
-			FSlateFontInfo Font = NameText->GetFont();
-			Font.Size = 10;
-			NameText->SetFont(Font);
-		}
-		Content->AddChildToVerticalBox(NameText);
-		NameText->SetVisibility(ESlateVisibility::Collapsed);
-
-		CostText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("CostText"));
-		CostText->SetText(FText::FromString(TEXT("Cost 0")));
-		CostText->SetJustification(ETextJustify::Center);
-		CostText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.85f, 0.3f)));
-		Content->AddChildToVerticalBox(CostText);
-		CostText->SetVisibility(ESlateVisibility::Collapsed);
-
 		ZoneText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ZoneText"));
 		ZoneText->SetText(FText::FromString(TEXT("-")));
 		ZoneText->SetJustification(ETextJustify::Center);
@@ -130,11 +109,37 @@ void UCardWidget::NativeConstruct()
 		{
 			RootButton->OnClicked.AddDynamic(this, &UCardWidget::HandleRootButtonClicked);
 		}
+		if (!RootButton->OnHovered.IsAlreadyBound(this, &UCardWidget::HandleRootButtonHovered))
+		{
+			RootButton->OnHovered.AddDynamic(this, &UCardWidget::HandleRootButtonHovered);
+		}
+		if (!RootButton->OnUnhovered.IsAlreadyBound(this, &UCardWidget::HandleRootButtonUnhovered))
+		{
+			RootButton->OnUnhovered.AddDynamic(this, &UCardWidget::HandleRootButtonUnhovered);
+		}
 	}
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[CardWidget] RootButton 未绑定，战斗手牌无法点击：%s"), *GetName());
 	}
+}
+
+void UCardWidget::NativeDestruct()
+{
+	RequestUnhover();
+	Super::NativeDestruct();
+}
+
+void UCardWidget::NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+	RequestHover();
+}
+
+void UCardWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
+{
+	RequestUnhover();
+	Super::NativeOnMouseLeave(InMouseEvent);
 }
 
 void UCardWidget::ApplyCardSnapshot(const FHandCardSnapshot& InSnap)
@@ -147,10 +152,7 @@ void UCardWidget::ApplyCardSnapshot(const FHandCardSnapshot& InSnap)
 	{
 		CardView->SetCardViewData(CurrentCardViewData);
 	}
-	else
-	{
-		ApplyFallbackText(InSnap);
-	}
+	ApplyZoneText(InSnap);
 
 	if (RootButton)
 	{
@@ -181,19 +183,18 @@ void UCardWidget::RequestClickForTest()
 	HandleRootButtonClicked();
 }
 
-void UCardWidget::ApplyFallbackText(const FHandCardSnapshot& InSnap)
+void UCardWidget::RequestHoverForTest()
 {
-	if (NameText)
-	{
-		NameText->SetText(CurrentCardViewData.Name);
-	}
+	RequestHover();
+}
 
-	if (CostText)
-	{
-		CostText->SetText(FText::Format(
-			LOCTEXT("CostFmt", "费用 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(CurrentCardViewData.Cost) }));
-	}
+void UCardWidget::RequestUnhoverForTest()
+{
+	RequestUnhover();
+}
 
+void UCardWidget::ApplyZoneText(const FHandCardSnapshot& InSnap)
+{
 	if (ZoneText)
 	{
 		ZoneText->SetText(ZoneToText(InSnap.Zone));
@@ -237,6 +238,82 @@ void UCardWidget::UpdateFrameColor()
 void UCardWidget::HandleRootButtonClicked()
 {
 	OnCardClicked.Broadcast(CachedSnap.InstanceId);
+}
+
+void UCardWidget::HandleRootButtonHovered()
+{
+	RequestHover();
+}
+
+void UCardWidget::HandleRootButtonUnhovered()
+{
+	RequestUnhover();
+}
+
+void UCardWidget::RequestHover()
+{
+	if (bIsHovered)
+	{
+		return;
+	}
+
+	bIsHovered = true;
+	ApplyHoverFeedback();
+	BP_OnHoverChanged(true);
+}
+
+void UCardWidget::RequestUnhover()
+{
+	if (!bIsHovered)
+	{
+		return;
+	}
+
+	bIsHovered = false;
+	RestoreHoverFeedback();
+	BP_OnHoverChanged(false);
+}
+
+void UCardWidget::ApplyHoverFeedback()
+{
+	if (!bEnableHoverFeedback)
+	{
+		return;
+	}
+
+	CaptureBaseHoverTransformIfNeeded();
+
+	FWidgetTransform HoverTransform = BaseHoverRenderTransform;
+	HoverTransform.Translation += FVector2D(0.0f, -HoverLift);
+	HoverTransform.Scale = FVector2D(
+		BaseHoverRenderTransform.Scale.X * HoverScale,
+		BaseHoverRenderTransform.Scale.Y * HoverScale);
+
+	SetRenderTransformPivot(FVector2D(0.5f, 1.0f));
+	SetRenderTransform(HoverTransform);
+}
+
+void UCardWidget::RestoreHoverFeedback()
+{
+	if (!bHasBaseHoverRenderTransform)
+	{
+		return;
+	}
+
+	SetRenderTransform(BaseHoverRenderTransform);
+	SetRenderTransformPivot(BaseHoverRenderTransformPivot);
+}
+
+void UCardWidget::CaptureBaseHoverTransformIfNeeded()
+{
+	if (bHasBaseHoverRenderTransform)
+	{
+		return;
+	}
+
+	BaseHoverRenderTransform = GetRenderTransform();
+	BaseHoverRenderTransformPivot = GetRenderTransformPivot();
+	bHasBaseHoverRenderTransform = true;
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -154,48 +154,51 @@ void UWacomKnockdownChoiceDialog::NativeConstruct()
 		PartNameText->SetText(PendingPartName);
 	}
 	if (AidButton)     { AidButton    ->SetIsEnabled(bLeftHandAvailable); }
+	if (WithdrawButton){ WithdrawButton->SetIsEnabled(bWithdrawAvailable); }
 	if (DestroyButton) { DestroyButton->SetIsEnabled(bRightHandAvailable); }
 }
 
 void UWacomKnockdownChoiceDialog::SetContext(UBattleHUD* InHUD, const FText& InPartName,
-	bool bInLeftHandAvailable, bool bInRightHandAvailable)
+	bool bInLeftHandAvailable, bool bInWithdrawAvailable, bool bInRightHandAvailable)
 {
 	OwningHUD = InHUD;
 	PendingPartName = InPartName;
 	bLeftHandAvailable = bInLeftHandAvailable;
+	bWithdrawAvailable = bInWithdrawAvailable;
 	bRightHandAvailable = bInRightHandAvailable;
 
 	// 即时应用（如果 NativeConstruct 已经跑过）
 	if (PartNameText) { PartNameText->SetText(PendingPartName); }
 	if (AidButton)    { AidButton->SetIsEnabled(bLeftHandAvailable); }
+	if (WithdrawButton){ WithdrawButton->SetIsEnabled(bWithdrawAvailable); }
 	if (DestroyButton){ DestroyButton->SetIsEnabled(bRightHandAvailable); }
 }
 
 void UWacomKnockdownChoiceDialog::HandleAidClicked()
 {
-	if (OwningHUD)
+	if (OwningHUD && bLeftHandAvailable)
 	{
 		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Aid);
+		DeactivateWidget();
 	}
-	DeactivateWidget();
 }
 
 void UWacomKnockdownChoiceDialog::HandleWithdrawClicked()
 {
-	if (OwningHUD)
+	if (OwningHUD && bWithdrawAvailable)
 	{
 		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Withdraw);
+		DeactivateWidget();
 	}
-	DeactivateWidget();
 }
 
 void UWacomKnockdownChoiceDialog::HandleDestroyClicked()
 {
-	if (OwningHUD)
+	if (OwningHUD && bRightHandAvailable)
 	{
 		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Destroy);
+		DeactivateWidget();
 	}
-	DeactivateWidget();
 }
 
 FReply UWacomKnockdownChoiceDialog::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)

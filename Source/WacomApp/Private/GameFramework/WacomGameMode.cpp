@@ -453,9 +453,13 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
 
 		// 真胜利（非撤离）才标记已销毁 + Destroy。
-		// 撤离（Packet.Outcome == Victory + bWithdrawn）不销毁，玩家可重入；
+		// 若异常路径产生"撤离但所有部位都已毁"，也按胜利清理，避免留下空血敌人反复重入。
+		// 正常规则层会在最后一个存活部位被击倒时禁用撤离。
 		// 失败 / 未定场景也不销毁。
-		const bool bRealVictory = (Packet.Outcome == EBattleOutcome::Victory) && !Packet.bWithdrawn;
+		const bool bAllPartsDestroyed = PendingEnemyDefForRun
+			&& Packet.DestroyedPartIds.Num() >= PendingEnemyDefForRun->Parts.Num();
+		const bool bRealVictory = (Packet.Outcome == EBattleOutcome::Victory)
+			&& (!Packet.bWithdrawn || bAllPartsDestroyed);
 
 		if (bRealVictory && Run && !TriggerPersistentId.IsNone())
 		{

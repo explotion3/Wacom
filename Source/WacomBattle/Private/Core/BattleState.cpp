@@ -6,7 +6,7 @@
 #include "Runtime/RuntimeEnemyPart.h"
 
 void FBattleState::RecordPartDestroyed(FRuntimeEnemyPart& Part, FBattleEventBus& Events,
-	const FGuid& InflictedByCardId)
+	const FGuid& /*InflictedByCardId*/)
 {
 	const FName PartId = Part.Definition ? Part.Definition->PartId : NAME_None;
 	const int32 ExpAmount = Part.Definition ? Part.Definition->ExperienceReward : 0;
@@ -38,19 +38,10 @@ void FBattleState::RecordPartDestroyed(FRuntimeEnemyPart& Part, FBattleEventBus&
 	Event.PartInstanceId = Part.InstanceId;
 	Event.PartId         = PartId;
 
-	// 左右手可用性：手牌中是否仍有左/右手卡（"在手牌"= 未打出）。
-	// 注意：Battle_Rules §3 第 6 步执行卡牌效果时部位即可破坏，但"卡牌离开手牌"
-	// 在第 9 步才发生——此时正在打出的卡仍在 Hand 数组里。InflictedByCardId 显式
-	// 排除掉这张卡，避免玩家选择已经被打出的左/右手 anchor 作为援助/破坏来源。
-	auto IsAnchorAvailable = [&](const FGuid& AnchorId) -> bool
-	{
-		if (!AnchorId.IsValid()) { return false; }
-		if (AnchorId == InflictedByCardId) { return false; }
-		return Cards.Hand.Contains(AnchorId);
-	};
-
-	Event.bLeftHandAvailable  = IsAnchorAvailable(Cards.LeftHandInstanceId);
-	Event.bRightHandAvailable = IsAnchorAvailable(Cards.RightHandInstanceId);
+	// 击倒事件的左/右手分支是事件选项，不依赖左右手锚点当前是否仍在手牌区。
+	// 第一阶段不消耗左右手牌，也不按正在打出的 anchor 排除对应分支。
+	Event.bLeftHandAvailable  = true;
+	Event.bRightHandAvailable = true;
 
 	PendingKnockdownEvents.Add(MoveTemp(Event));
 }

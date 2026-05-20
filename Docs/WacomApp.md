@@ -293,12 +293,17 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 
 战斗手牌 `UCardWidget` 是战斗交互外壳：
 
-- 可选绑定 `CardView : UWacomCardView` 复用统一卡面；未绑定时仍使用旧 `NameText / CostText / ZoneText` fallback
+- 推荐绑定 `CardView : UWacomCardView` 复用统一卡面；`ZoneText` 可作为战斗外壳上的额外分区标签显示左手/双手/右手
 - `ApplyCardSnapshot` 通过 `UWacomCardPresentationBuilder` 生成卡面数据，并用 `FHandCardSnapshot.RuntimeCost` 覆盖显示费用
 - `bIsPlayable=false` 时写入 `FWacomCardViewData.bDisabled`，同时禁用 `RootButton`
-- 点击、目标选择高亮、提交出牌命令仍由 `UCardWidget / UHandPanel / BattleHUD` 负责，`UWacomCardView` 不知道战斗交互
+- 点击、hover 上浮/缩放、目标选择高亮、提交出牌命令仍由 `UCardWidget / UHandPanel / BattleHUD` 负责，`UWacomCardView` 不知道战斗交互
+- `UCardWidget` 的 hover 反馈使用 Render Transform，不改变 `UHandPanel` 中的布局占位；`HoverLift / HoverScale` 可在 WBP Details 中调整
 - `UHandPanel` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_CardWidget`；找不到时回退到 C++ 默认 `UCardWidget`
+- `BattleHUD` 默认尝试加载 `/Game/Wacom/UI/Battle/WBP_HandPanel`；找不到时回退到 C++ 默认 `UHandPanel`
 - `WBP_CardWidget / WBP_HandPanel` 制作时按 `Docs/UI_Battle_WBP_Binding.md` 绑定；缺少 `RootButton` 时手牌不会崩溃但无法点击
+- `UHandPanel` 内部先把 `FHandQueueSnapshot` 转成 `FHandCardVisualEntry[]`，默认使用统一水平手牌带 renderer；WBP 只需要绑定 `UnifiedHandSlot`
+- 统一手牌带支持 `CardSpacing / HandContentPadding / bCenterCardsWhenNotOverflow / CardVerticalAlignment` 等编辑器参数；卡牌尺寸仍由 `WBP_CardWidget` 自己控制
+- C++ fallback `BattleHUD` 的手牌区域大小由 `HandPanelSize / HandPanelBottomOffset` 控制；正式 BattleHUD WBP 中应直接通过 `HandPanel` 的父级 slot 控制显示区域
 
 `UWacomBackpackZoneSectionWidget` 是背包区块的局部 WBP 承接点：
 

@@ -18,9 +18,9 @@ class UBattleSession;
  *    BattleHUD 在 push dialog 时调用 SetContext 传入队头信息）
  *
  * 三个按钮：
- *   - 援助（左）：Aid。需要 BattleState 的左手卡仍在手牌
- *   - 撤离（中）：Withdraw。永远可用
- *   - 破坏（右）：Destroy。需要 BattleState 的右手卡仍在手牌
+ *   - 援助（左）：Aid。第一阶段不依赖左手牌当前是否在手牌区
+ *   - 撤离（中）：Withdraw。敌人仍有存活部位时可用
+ *   - 破坏（右）：Destroy。第一阶段不依赖右手牌当前是否在手牌区
  *
  * 点击 → 通过 BattleHUD 提交 KnockdownChoice 命令 → 关闭自己（DeactivateWidget）
  *
@@ -39,10 +39,11 @@ public:
 	 * @param InHUD                父 HUD（提交命令用）
 	 * @param InPartName           部位显示名
 	 * @param bInLeftHandAvailable 援助是否可用
+	 * @param bInWithdrawAvailable 撤退是否可用
 	 * @param bInRightHandAvailable 破坏是否可用
 	 */
 	void SetContext(class UBattleHUD* InHUD, const FText& InPartName,
-		bool bInLeftHandAvailable, bool bInRightHandAvailable);
+		bool bInLeftHandAvailable, bool bInWithdrawAvailable, bool bInRightHandAvailable);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -64,6 +65,7 @@ private:
 	TObjectPtr<UBattleHUD> OwningHUD = nullptr;
 
 	bool bLeftHandAvailable  = true;
+	bool bWithdrawAvailable = true;
 	bool bRightHandAvailable = true;
 	FText PendingPartName;
 };

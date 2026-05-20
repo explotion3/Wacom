@@ -6,10 +6,12 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/PanelWidget.h"
+#include "Components/BorderSlot.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Border.h"
-#include "Components/ScrollBox.h"
+#include "Components/OverlaySlot.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Types/WacomEnums.h"
 #include "UObject/ConstructorHelpers.h"
@@ -37,71 +39,15 @@ TSharedRef<SWidget> UHandPanel::RebuildWidget()
 			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
 		}
 
-		UHorizontalBox* Root = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Root"));
-		WidgetTree->RootWidget = Root;
+		UBorder* UnifiedFrame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("UnifiedHandFrame"));
+		WidgetTree->RootWidget = UnifiedFrame;
+		UnifiedFrame->SetBrushColor(FLinearColor(0.08f, 0.08f, 0.10f, 0.35f));
+		UnifiedFrame->SetPadding(FMargin(4));
 
-		// 普通 Zone Slot：水平 ScrollBox + HorizontalBox 内层。卡多时可滚动。
-		// 返回的 UHorizontalBox 就是实际往里加卡的容器。
-		auto MakeZoneSlot = [this, Root](const FName& Name, FLinearColor Tint, float FillSize) -> UHorizontalBox*
-		{
-			UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), Name);
-			Frame->SetBrushColor(Tint);
-			Frame->SetPadding(FMargin(4));
-
-			UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(),
-				FName(*(Name.ToString() + TEXT("Scroll"))));
-			Scroll->SetOrientation(Orient_Horizontal);
-			Scroll->SetScrollBarVisibility(ESlateVisibility::Collapsed);
-			Frame->SetContent(Scroll);
-
-			UHorizontalBox* Inner = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(),
-				FName(*(Name.ToString() + TEXT("Inner"))));
-			Scroll->AddChild(Inner);
-
-			if (UHorizontalBoxSlot* HS = Root->AddChildToHorizontalBox(Frame))
-			{
-				HS->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-				HS->SetPadding(FMargin(2));
-				// 通过 SlateChildSize 的 Value 控制占比
-				FSlateChildSize Sz(ESlateSizeRule::Fill);
-				Sz.Value = FillSize;
-				HS->SetSize(Sz);
-			}
-			return Inner;
-		};
-
-		// 锚点 Slot：只放一张卡，用 HorizontalBox + Border 即可。
-		auto MakeAnchorSlot = [this, Root](const FName& Name, FLinearColor Tint) -> UHorizontalBox*
-		{
-			UBorder* Frame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), Name);
-			Frame->SetBrushColor(Tint);
-			Frame->SetPadding(FMargin(4));
-
-			UHorizontalBox* Inner = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(),
-				FName(*(Name.ToString() + TEXT("Inner"))));
-			Frame->SetContent(Inner);
-
-			if (UHorizontalBoxSlot* HS = Root->AddChildToHorizontalBox(Frame))
-			{
-				// 锚点 Slot 宽度自适应内容（一张卡 130 宽）
-				FSlateChildSize Sz(ESlateSizeRule::Automatic);
-				HS->SetSize(Sz);
-				HS->SetPadding(FMargin(2));
-			}
-			return Inner;
-		};
-
-		UHorizontalBox* LZ = MakeZoneSlot  (TEXT("LeftZoneSlot"),    FLinearColor(0.10f, 0.20f, 0.40f, 0.3f), 2.0f);
-		UHorizontalBox* LA = MakeAnchorSlot(TEXT("LeftAnchorSlot"),  FLinearColor(0.30f, 0.40f, 0.15f, 0.3f));
-		UHorizontalBox* BZ = MakeZoneSlot  (TEXT("BothZoneSlot"),    FLinearColor(0.15f, 0.15f, 0.30f, 0.3f), 3.0f);
-		UHorizontalBox* RA = MakeAnchorSlot(TEXT("RightAnchorSlot"), FLinearColor(0.30f, 0.40f, 0.15f, 0.3f));
-		UHorizontalBox* RZ = MakeZoneSlot  (TEXT("RightZoneSlot"),   FLinearColor(0.10f, 0.20f, 0.40f, 0.3f), 2.0f);
-
-		LeftZoneSlot    = LZ;
-		LeftAnchorSlot  = LA;
-		BothZoneSlot    = BZ;
-		RightAnchorSlot = RA;
-		RightZoneSlot   = RZ;
+		UHorizontalBox* UnifiedInner = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(), TEXT("UnifiedHandSlot"));
+		UnifiedFrame->SetContent(UnifiedInner);
+		UnifiedHandSlot = UnifiedInner;
 	}
 	return Super::RebuildWidget();
 }
@@ -109,37 +55,57 @@ TSharedRef<SWidget> UHandPanel::RebuildWidget()
 void UHandPanel::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
 	ClearAllSlots();
-
-	for (const FHandCardSnapshot& C : Snap.Hand.Cards)
-	{
-		UPanelWidget* TargetSlot = nullptr;
-		if (C.bIsHandAnchor)
-		{
-			TargetSlot = (LeftAnchorSlot && LeftAnchorSlot->GetChildrenCount() == 0)
-				? LeftAnchorSlot : RightAnchorSlot;
-		}
-		else
-		{
-			switch (C.Zone)
-			{
-			case EHandZone::Left:  TargetSlot = LeftZoneSlot;  break;
-			case EHandZone::Both:  TargetSlot = BothZoneSlot;  break;
-			case EHandZone::Right: TargetSlot = RightZoneSlot; break;
-			default:               TargetSlot = BothZoneSlot;  break;
-			}
-		}
-		if (!TargetSlot) { continue; }
-		CreateAndPlaceCard(C, TargetSlot);
-	}
+	CurrentVisualEntries.Reset();
+	CurrentVisualEntries = BuildVisualEntries(Snap.Hand);
+	RebuildUnifiedHorizontalRenderer(CurrentVisualEntries);
 
 	ApplyTargetingHighlight();
 }
 
-UCardWidget* UHandPanel::CreateAndPlaceCard(const FHandCardSnapshot& CardSnap, UPanelWidget* TargetSlot)
+TArray<FHandCardVisualEntry> UHandPanel::BuildVisualEntries(const FHandQueueSnapshot& HandSnapshot)
+{
+	TArray<FHandCardVisualEntry> Entries;
+	Entries.Reserve(HandSnapshot.Cards.Num());
+	for (int32 Index = 0; Index < HandSnapshot.Cards.Num(); ++Index)
+	{
+		const FHandCardSnapshot& Card = HandSnapshot.Cards[Index];
+		FHandCardVisualEntry Entry;
+		Entry.Snapshot = Card;
+		Entry.VisualIndex = Index;
+		Entry.LogicalZone = Card.Zone;
+		Entry.bIsAnchor = Card.bIsHandAnchor;
+		Entries.Add(Entry);
+	}
+	return Entries;
+}
+
+void UHandPanel::RebuildUnifiedHorizontalRenderer(const TArray<FHandCardVisualEntry>& Entries)
+{
+	if (!UnifiedHandSlot)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[HandPanel] UnifiedHorizontal renderer requires UnifiedHandSlot, but it is not bound."));
+		return;
+	}
+
+	TArray<FHandCardVisualEntry> SortedEntries = Entries;
+	SortedEntries.Sort([](const FHandCardVisualEntry& A, const FHandCardVisualEntry& B)
+	{
+		return A.VisualIndex < B.VisualIndex;
+	});
+
+	ApplyUnifiedHandSlotAlignment();
+
+	for (int32 Index = 0; Index < SortedEntries.Num(); ++Index)
+	{
+		CreateAndPlaceCard(SortedEntries[Index], UnifiedHandSlot, Index, SortedEntries.Num());
+	}
+}
+
+UCardWidget* UHandPanel::CreateAndPlaceCard(const FHandCardVisualEntry& Entry, UPanelWidget* TargetSlot, int32 CardIndex, int32 CardCount)
 {
 	if (!TargetSlot) { return nullptr; }
 
-	TSubclassOf<UCardWidget> ClassToUse = CardSnap.bIsHandAnchor && AnchorCardWidgetClass
+	TSubclassOf<UCardWidget> ClassToUse = Entry.bIsAnchor && AnchorCardWidgetClass
 		? AnchorCardWidgetClass
 		: CardWidgetClass;
 	if (!ClassToUse) { ClassToUse = UCardWidget::StaticClass(); }
@@ -148,21 +114,80 @@ UCardWidget* UHandPanel::CreateAndPlaceCard(const FHandCardSnapshot& CardSnap, U
 	if (!Card) { return nullptr; }
 
 	TargetSlot->AddChild(Card);
-	Card->ApplyCardSnapshot(CardSnap);
+	ApplyCardSlotLayout(Card, CardIndex, CardCount);
+	Card->ApplyCardSnapshot(Entry.Snapshot);
 	Card->OnCardClicked.AddDynamic(this, &UHandPanel::HandleCardClicked);
 
 	SpawnedCards.Add(Card);
 	return Card;
 }
 
+void UHandPanel::ApplyUnifiedHandSlotAlignment() const
+{
+	if (!UnifiedHandSlot)
+	{
+		return;
+	}
+
+	if (UHorizontalBox* HorizontalBox = Cast<UHorizontalBox>(UnifiedHandSlot))
+	{
+		if (UHorizontalBoxSlot* HorizontalSlot = Cast<UHorizontalBoxSlot>(HorizontalBox->Slot))
+		{
+			HorizontalSlot->SetHorizontalAlignment(bCenterCardsWhenNotOverflow ? HAlign_Center : HAlign_Left);
+			HorizontalSlot->SetVerticalAlignment(CardVerticalAlignment);
+		}
+		else if (UBorderSlot* BorderSlot = Cast<UBorderSlot>(HorizontalBox->Slot))
+		{
+			BorderSlot->SetHorizontalAlignment(bCenterCardsWhenNotOverflow ? HAlign_Center : HAlign_Fill);
+			BorderSlot->SetVerticalAlignment(CardVerticalAlignment);
+		}
+		else if (UOverlaySlot* OverlaySlot = Cast<UOverlaySlot>(HorizontalBox->Slot))
+		{
+			OverlaySlot->SetHorizontalAlignment(bCenterCardsWhenNotOverflow ? HAlign_Center : HAlign_Fill);
+			OverlaySlot->SetVerticalAlignment(CardVerticalAlignment);
+		}
+		else if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(HorizontalBox->Slot))
+		{
+			CanvasSlot->SetAlignment(bCenterCardsWhenNotOverflow ? FVector2D(0.5f, 0.5f) : FVector2D(0.0f, 0.5f));
+		}
+	}
+}
+
+void UHandPanel::ApplyCardSlotLayout(UCardWidget* Card, int32 CardIndex, int32 CardCount) const
+{
+	if (!Card)
+	{
+		return;
+	}
+
+	if (UHorizontalBoxSlot* HorizontalSlot = Cast<UHorizontalBoxSlot>(Card->Slot))
+	{
+		HorizontalSlot->SetPadding(BuildCardSlotPadding(CardIndex, CardCount));
+		HorizontalSlot->SetVerticalAlignment(CardVerticalAlignment);
+		HorizontalSlot->SetHorizontalAlignment(HAlign_Center);
+	}
+}
+
+FMargin UHandPanel::BuildCardSlotPadding(int32 CardIndex, int32 CardCount) const
+{
+	const float HalfSpacing = FMath::Max(0.0f, CardSpacing) * 0.5f;
+	const bool bFirst = CardIndex <= 0;
+	const bool bLast = CardIndex >= CardCount - 1;
+
+	const float Left = HandContentPadding.Left + (bFirst ? 0.0f : HalfSpacing);
+	const float Right = HandContentPadding.Right + (bLast ? 0.0f : HalfSpacing);
+	return FMargin(Left, HandContentPadding.Top, Right, HandContentPadding.Bottom);
+}
+
+int32 UHandPanel::GetUnifiedHandSlotCardCount() const
+{
+	return UnifiedHandSlot ? UnifiedHandSlot->GetChildrenCount() : 0;
+}
+
 void UHandPanel::ClearAllSlots()
 {
 	auto ClearSlot = [](UPanelWidget* P) { if (P) { P->ClearChildren(); } };
-	ClearSlot(LeftZoneSlot);
-	ClearSlot(LeftAnchorSlot);
-	ClearSlot(BothZoneSlot);
-	ClearSlot(RightAnchorSlot);
-	ClearSlot(RightZoneSlot);
+	ClearSlot(UnifiedHandSlot);
 	SpawnedCards.Reset();
 }
 

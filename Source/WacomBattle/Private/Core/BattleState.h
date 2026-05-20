@@ -232,9 +232,8 @@ struct FBattleState
 	 * @param Part           被破坏的部位（已置 bDestroyed=true / CurrentHp=0）
 	 * @param Events         事件总线
 	 * @param InflictedByCardId 触发本次破坏的卡牌实例 ID（Effect.Damage 命中时传 Ctx.SourceInstanceId；
-	 *                          中毒结算等没有"卡牌来源"的路径传空）。
-	 *                          击倒事件三选一可用性判定时排除此卡——它正在被打出的过程中，
-	 *                          虽然仍在 Hand 数组里，但应视为"已经离开手牌"。
+	 *                          中毒结算等没有"卡牌来源"的路径传空）。第一阶段保留参数用于事件来源追踪扩展；
+	 *                          击倒事件的左右手分支不再依赖手牌区锚点是否存在。
 	 */
 	void RecordPartDestroyed(struct FRuntimeEnemyPart& Part, struct FBattleEventBus& Events,
 		const FGuid& InflictedByCardId = FGuid());

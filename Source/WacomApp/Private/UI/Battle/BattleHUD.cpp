@@ -96,14 +96,21 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			S->SetAutoSize(false);
 		}
 
-		// HandPanel: 底部
-		HandPanel = WidgetTree->ConstructWidget<UHandPanel>(UHandPanel::StaticClass(), TEXT("HandPanel"));
+		// HandPanel: 底部。优先使用项目 WBP，资产不存在时回退到 C++ fallback。
+		TSubclassOf<UHandPanel> HandPanelClass = UHandPanel::StaticClass();
+		if (UClass* LoadedHandPanelClass = LoadClass<UHandPanel>(
+			nullptr,
+			TEXT("/Game/Wacom/UI/Battle/WBP_HandPanel.WBP_HandPanel_C")))
+		{
+			HandPanelClass = LoadedHandPanelClass;
+		}
+
+		HandPanel = WidgetTree->ConstructWidget<UHandPanel>(HandPanelClass, TEXT("HandPanel"));
 		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(HandPanel))
 		{
 			S->SetAnchors(FAnchors(0.5f, 1.0f));
 			S->SetAlignment(FVector2D(0.5f, 1.0f));
-			// 更宽 + 更高：水平装下 N 张卡 + Anchor Slot 不挤
-			S->SetOffsets(FMargin(0.0f, -10.0f, 1400.0f, 200.0f));
+			S->SetOffsets(FMargin(0.0f, -HandPanelBottomOffset, HandPanelSize.X, HandPanelSize.Y));
 			S->SetAutoSize(false);
 		}
 
@@ -485,10 +492,11 @@ void UBattleHUD::ConsumeAndLogEvents()
 			}
 		}
 
-		// E.Count 编码：1=左可 / 2=右可 / 3=都可
+		// E.Count 编码：1=左可 / 2=右可 / 4=撤退可。
 		const bool bLeftAvail  = (E.Count & 1) != 0;
 		const bool bRightAvail = (E.Count & 2) != 0;
-		Dialog->SetContext(this, PartName, bLeftAvail, bRightAvail);
+		const bool bWithdrawAvail = (E.Count & 4) != 0;
+		Dialog->SetContext(this, PartName, bLeftAvail, bWithdrawAvail, bRightAvail);
 	}
 }
 

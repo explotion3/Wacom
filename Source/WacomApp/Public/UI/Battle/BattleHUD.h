@@ -60,6 +60,12 @@ class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 	GENERATED_BODY()
 
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板的宽高。只影响未用完整 BattleHUD WBP 覆盖布局时的默认 CanvasPanel Slot 尺寸。"))
+	FVector2D HandPanelSize = FVector2D(1700.0f, 420.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Layout", meta = (UIMin = "-400.0", UIMax = "400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板相对屏幕底部的上移距离。正数会让手牌面板离底部更远。"))
+	float HandPanelBottomOffset = 10.0f;
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	EBattleUIState GetUIState() const { return UIState; }
 

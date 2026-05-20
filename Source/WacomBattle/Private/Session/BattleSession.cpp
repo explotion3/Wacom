@@ -18,6 +18,32 @@
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
 
+namespace
+{
+	bool HasAnyLivingEnemyPartForKnockdownChoice(const FBattleState& State)
+	{
+		for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
+		{
+			if (!Part.bDestroyed && Part.CurrentHp > 0)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	int32 BuildKnockdownChoiceAvailabilityMaskForSession(
+		const FBattleState::FPendingKnockdownEvent& Event,
+		const FBattleState& State)
+	{
+		int32 Mask = 0;
+		if (Event.bLeftHandAvailable)  { Mask |= 1; }
+		if (Event.bRightHandAvailable) { Mask |= 2; }
+		if (HasAnyLivingEnemyPartForKnockdownChoice(State)) { Mask |= 4; }
+		return Mask;
+	}
+}
+
 UBattleSession::UBattleSession()
 	: State(nullptr)
 	, EventBus(nullptr)
@@ -267,8 +293,7 @@ FWacomStatus UBattleSession::SubmitCommand(const FBattleCommand& Command)
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::KnockdownChoiceRequested;
 		Ev.ActorInstanceId = Head.PartInstanceId;
-		Ev.Count           = (Head.bLeftHandAvailable ? 1 : 0)
-		                   + (Head.bRightHandAvailable ? 2 : 0);
+		Ev.Count           = BuildKnockdownChoiceAvailabilityMaskForSession(Head, *State);
 		EventBus->Emit(Ev);
 	}
 

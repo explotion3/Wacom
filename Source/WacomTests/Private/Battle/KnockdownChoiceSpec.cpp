@@ -25,7 +25,8 @@
  *   - 部位 HP 归零后 Phase 切到 PendingKnockdownChoice
  *   - 撤离 → BattleEnd Outcome=Victory + bWithdrawn
  *   - 援助 → 战斗继续（多部位时仍非空时维持 Pending；单部位时进 BattleEnd）
- *   - 左右手已打出时 Aid/Destroy 不可选
+ *   - 左右手事件不依赖左右手牌当前是否仍在手牌区
+ *   - 最后一个存活部位击倒后 Withdraw 不可选
  *   - 一次行动多部位破坏 → 逐个弹 dialog
  *   - RunSession 撤离写 BattleProgress；真胜利清 BattleProgress
  *   - 第二次进同一战斗 PreDestroyedPartIds 应用为预破坏
@@ -148,14 +149,14 @@ bool FWacomKnockdownChoiceAidContinuesSpec::RunTest(const FString& /*Parameters*
 	return true;
 }
 
-// ================ 左手已打出 → Aid 不可选 ================
+// ================ 左手已打出 → Aid 仍可选 ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomKnockdownChoiceAidUnavailableWhenLeftHandPlayedSpec,
-	"Wacom.Battle.Knockdown.AidRejectedWhenLeftHandPlayed",
+	FWacomKnockdownChoiceAidAvailableWhenLeftHandPlayedSpec,
+	"Wacom.Battle.Knockdown.AidAllowedWhenLeftHandPlayed",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomKnockdownChoiceAidUnavailableWhenLeftHandPlayedSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomKnockdownChoiceAidAvailableWhenLeftHandPlayedSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 
@@ -182,29 +183,26 @@ bool FWacomKnockdownChoiceAidUnavailableWhenLeftHandPlayedSpec::RunTest(const FS
 
 	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 
-	// Aid 应被拒
+	// Aid 是击倒事件分支，不依赖左手锚点当前是否在手牌区。
 	const FWacomStatus AidStatus = S->SubmitCommand(
 		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
-	TestFalse(TEXT("左手已打出，Aid 拒绝"), AidStatus.IsOk());
+	TestTrue(TEXT("左手已打出，Aid 仍可选"), AidStatus.IsOk());
 
-	// Withdraw 应该可以
-	const FWacomStatus WithdrawStatus = S->SubmitCommand(
-		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
-	TestTrue(TEXT("Withdraw 始终可用"), WithdrawStatus.IsOk());
+	TestTrue(TEXT("Aid 后回到 PlayerAction（敌人未全死）"),
+		S->GetPhase() == EBattlePhase::PlayerAction);
 
 	return true;
 }
 
-// ================ 用左/右手 anchor 直接打死部位 → 对应分支不可选 ================
-// 部位破坏时，触发本次破坏的 anchor 仍在 Hand 数组（"卡牌离开手牌"在 §3 第 9 步），
-// 但应视为"已经离开手牌"。RecordPartDestroyed 的 InflictedByCardId 参数负责排除。
+// ================ 用左/右手 anchor 直接打死部位 → 对应分支仍可选 ================
+// 击倒事件左右手分支不再按手牌区锚点存在与否判断。
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomKnockdownChoiceAnchorAsKillerExcludedSpec,
-	"Wacom.Battle.Knockdown.AnchorAsKillerExcludedFromChoice",
+	FWacomKnockdownChoiceAnchorAsKillerStillAllowsChoiceSpec,
+	"Wacom.Battle.Knockdown.AnchorAsKillerStillAllowsChoice",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomKnockdownChoiceAnchorAsKillerExcludedSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomKnockdownChoiceAnchorAsKillerStillAllowsChoiceSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 
@@ -227,15 +225,67 @@ bool FWacomKnockdownChoiceAnchorAsKillerExcludedSpec::RunTest(const FString& /*P
 	S->SubmitCommand(FBattleCommand::MakePlayCard(RHId, Head));
 	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 
-	// Destroy 应被拒（右手就是这次的杀手）
+	// Destroy 是击倒事件分支，不依赖右手锚点当前是否在手牌区。
 	const FWacomStatus DestroyStatus = S->SubmitCommand(
 		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Destroy));
-	TestFalse(TEXT("右手就是杀手，Destroy 拒绝"), DestroyStatus.IsOk());
+	TestTrue(TEXT("右手就是杀手，Destroy 仍可选"), DestroyStatus.IsOk());
 
-	// Aid 应该可以（左手仍在）
+	TestTrue(TEXT("Destroy 后回到 PlayerAction（敌人未全死）"),
+		S->GetPhase() == EBattlePhase::PlayerAction);
+
+	return true;
+}
+
+// ================ 最后一个存活部位击倒后 → Withdraw 不可选 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceWithdrawUnavailableOnLastLivingPartSpec,
+	"Wacom.Battle.Knockdown.WithdrawRejectedWhenNoLivingPartRemains",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceWithdrawUnavailableOnLastLivingPartSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(50, 7, 0);
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Solo = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Solo));
+	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+
+	{
+		const TArray<FBattleEvent> Events = S->ConsumeEvents();
+		int32 LastRequestMask = INDEX_NONE;
+		for (const FBattleEvent& E : Events)
+		{
+			if (E.Type == EBattleEventType::KnockdownChoiceRequested)
+			{
+				LastRequestMask = E.Count;
+			}
+		}
+		TestEqual(TEXT("Last-part request exposes Aid+Destroy but not Withdraw"), LastRequestMask, 3);
+	}
+
+	const FWacomStatus WithdrawStatus = S->SubmitCommand(
+		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+	TestFalse(TEXT("No living part remains, Withdraw rejected"), WithdrawStatus.IsOk());
+	TestTrue(TEXT("Still pending after rejected Withdraw"),
+		S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+
 	const FWacomStatus AidStatus = S->SubmitCommand(
 		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
-	TestTrue(TEXT("左手仍可援助"), AidStatus.IsOk());
+	TestTrue(TEXT("Aid still resolves final knockdown"), AidStatus.IsOk());
+	TestTrue(TEXT("Final Aid ends battle as victory"), S->GetPhase() == EBattlePhase::BattleEnd);
+
+	const FBattleResultPacket Packet = S->BuildResultPacket();
+	TestFalse(TEXT("Final Aid is not withdrawal"), Packet.bWithdrawn);
+	TestTrue(TEXT("Outcome=Victory"), Packet.Outcome == EBattleOutcome::Victory);
 
 	return true;
 }
