@@ -72,10 +72,10 @@ void UEventToast::EnqueueEvents(const TArray<FBattleEvent>& Events)
 {
 	for (const FBattleEvent& E : Events)
 	{
-		const FString Msg = UWacomBattleEventPresentationBuilder::FormatEventForPlayer(E);
-		if (!Msg.IsEmpty())
+		const FBattleEventPresentationView View = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(E);
+		if (View.bShouldDisplay)
 		{
-			PushMessage(Msg);
+			PushMessage(View.MessageText.ToString());
 		}
 	}
 }

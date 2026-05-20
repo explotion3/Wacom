@@ -35,9 +35,16 @@ bool FWacomUIBattleEventToastChineseTextSpec::RunTest(const FString& /*Parameter
 		FBattleEvent Event;
 		Event.Type = EBattleEventType::CardGained;
 		Event.CardDefinition = PoisonFang.Get();
+		const FBattleEventPresentationView View = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
 		TestEqual(TEXT("CardGained uses display name"),
-			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			View.MessageText.ToString(),
 			FString(TEXT("获得卡牌：毒牙")));
+		TestTrue(TEXT("CardGained should display"), View.bShouldDisplay);
+		TestEqual(TEXT("CardGained tone is positive"), View.VisualTone, EWacomBattleEventVisualTone::Positive);
+		TestEqual(TEXT("CardGained icon key"), View.IconKey, FName(TEXT("CardGained")));
+		TestEqual(TEXT("FormatEventForPlayer matches view message"),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			View.MessageText.ToString());
 		TestEqual(TEXT("EventToast compatibility wrapper matches builder"),
 			UEventToast::FormatEventForPlayer(Event),
 			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event));
@@ -67,30 +74,59 @@ bool FWacomUIBattleEventToastChineseTextSpec::RunTest(const FString& /*Parameter
 		FBattleEvent Event;
 		Event.Type = EBattleEventType::BattleEnded;
 		Event.Count = 1;
+		const FBattleEventPresentationView VictoryView = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
 		TestEqual(TEXT("BattleEnded victory is Chinese"),
-			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			VictoryView.MessageText.ToString(),
 			FString(TEXT("战斗胜利")));
+		TestEqual(TEXT("BattleEnded victory is positive"),
+			VictoryView.VisualTone,
+			EWacomBattleEventVisualTone::Positive);
 
 		Event.Count = 0;
+		const FBattleEventPresentationView DefeatView = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
 		TestEqual(TEXT("BattleEnded defeat is Chinese"),
-			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			DefeatView.MessageText.ToString(),
 			FString(TEXT("战斗失败")));
+		TestEqual(TEXT("BattleEnded defeat is danger"),
+			DefeatView.VisualTone,
+			EWacomBattleEventVisualTone::Danger);
 	}
 
 	{
 		FBattleEvent Event;
 		Event.Type = EBattleEventType::HandLimitDiscarded;
 		Event.HandLimitDiscardSource = EHandLimitDiscardSource::EffectDraw;
+		const FBattleEventPresentationView View = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
 		TestEqual(TEXT("HandLimitDiscarded source is Chinese"),
-			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			View.MessageText.ToString(),
 			FString(TEXT("因抽牌效果弃置 1 张牌")));
+		TestEqual(TEXT("HandLimitDiscarded tone is warning"),
+			View.VisualTone,
+			EWacomBattleEventVisualTone::Warning);
+		TestEqual(TEXT("HandLimitDiscarded icon key"),
+			View.IconKey,
+			FName(TEXT("HandLimitDiscarded")));
 	}
 
 	{
 		FBattleEvent Event;
 		Event.Type = EBattleEventType::HandZoneChanged;
+		const FBattleEventPresentationView View = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
 		TestTrue(TEXT("HandZoneChanged remains hidden"),
-			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event).IsEmpty());
+			View.MessageText.IsEmpty());
+		TestFalse(TEXT("HandZoneChanged should not display"), View.bShouldDisplay);
+		TestEqual(TEXT("Hidden event has no icon"), View.IconKey, NAME_None);
+	}
+
+	{
+		FBattleEvent Event;
+		Event.Type = EBattleEventType::CardPlayed;
+		Event.Amount = 2;
+		const FBattleEventPresentationView View = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
+		TestTrue(TEXT("CardPlayed should display"), View.bShouldDisplay);
+		TestEqual(TEXT("CardPlayed defaults to neutral tone"),
+			View.VisualTone,
+			EWacomBattleEventVisualTone::Neutral);
 	}
 
 	return true;

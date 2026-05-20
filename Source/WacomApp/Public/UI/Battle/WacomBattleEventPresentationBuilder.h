@@ -11,6 +11,37 @@
 
 class UCardDefinition;
 
+UENUM(BlueprintType)
+enum class EWacomBattleEventVisualTone : uint8
+{
+	Neutral  UMETA(DisplayName = "Neutral"),
+	Positive UMETA(DisplayName = "Positive"),
+	Warning  UMETA(DisplayName = "Warning"),
+	Danger   UMETA(DisplayName = "Danger"),
+	System   UMETA(DisplayName = "System"),
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FBattleEventPresentationView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation")
+	EBattleEventType EventType = EBattleEventType::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation")
+	FText MessageText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation")
+	bool bShouldDisplay = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation")
+	EWacomBattleEventVisualTone VisualTone = EWacomBattleEventVisualTone::Neutral;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation")
+	FName IconKey = NAME_None;
+};
+
 /**
  * Builds player-facing presentation text for battle events.
  *
@@ -24,6 +55,9 @@ class WACOMAPP_API UWacomBattleEventPresentationBuilder : public UBlueprintFunct
 	GENERATED_BODY()
 
 public:
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation")
+	static FBattleEventPresentationView BuildEventPresentationView(const FBattleEvent& Event);
+
 	/** 将战斗事件格式化为玩家可读中文提示。空字符串表示不显示该事件。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation")
 	static FString FormatEventForPlayer(const FBattleEvent& Event);
