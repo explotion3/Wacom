@@ -323,6 +323,7 @@ FBattleResultPacket UBattleSession::BuildResultPacket() const
 	Packet.bMutualDestruction       = State->bMutualDestruction;
 	Packet.KnockdownExpGains        = State->PendingKnockdownExpGains;
 	Packet.KnockdownChoices         = State->PendingKnockdownChoices;
+	Packet.GainedCards              = State->PendingGainedCards;
 	Packet.DestroyedPartIds         = State->DestroyedPartIds;
 	// bWithdrawn：通过 KnockdownChoices 末尾是否有 Withdraw 项判定（撤离结束后队列清空、最后一项必是 Withdraw）
 	for (const FKnockdownChoice& C : State->PendingKnockdownChoices)

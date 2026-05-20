@@ -12,10 +12,89 @@
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/CardWidget.h"
+#include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
+#include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "Events/BattleEvent.h"
 
 #include "UObject/StrongObjectPtr.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEventToastChineseTextSpec,
+	"Wacom.UI.Battle.EventToastChineseText",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEventToastChineseTextSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> PoisonFang(NewObject<UCardDefinition>());
+	PoisonFang->CardId = TEXT("PoisonFang");
+	PoisonFang->DisplayName = FText::FromString(TEXT("毒牙"));
+
+	{
+		FBattleEvent Event;
+		Event.Type = EBattleEventType::CardGained;
+		Event.CardDefinition = PoisonFang.Get();
+		TestEqual(TEXT("CardGained uses display name"),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			FString(TEXT("获得卡牌：毒牙")));
+		TestEqual(TEXT("EventToast compatibility wrapper matches builder"),
+			UEventToast::FormatEventForPlayer(Event),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event));
+	}
+
+	{
+		FBattleEvent Event;
+		Event.Type = EBattleEventType::StatusApplied;
+		Event.Tag = WacomTags::Status_Poison;
+		Event.Amount = 1;
+		TestEqual(TEXT("StatusApplied localizes poison"),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			FString(TEXT("施加中毒 1 层")));
+	}
+
+	{
+		FBattleEvent Event;
+		Event.Type = EBattleEventType::DamageDealt;
+		Event.Tag = WacomTags::Status_Poison;
+		Event.Amount = 3;
+		TestEqual(TEXT("DamageDealt localizes poison source"),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			FString(TEXT("中毒造成 3 点伤害")));
+	}
+
+	{
+		FBattleEvent Event;
+		Event.Type = EBattleEventType::BattleEnded;
+		Event.Count = 1;
+		TestEqual(TEXT("BattleEnded victory is Chinese"),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			FString(TEXT("战斗胜利")));
+
+		Event.Count = 0;
+		TestEqual(TEXT("BattleEnded defeat is Chinese"),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			FString(TEXT("战斗失败")));
+	}
+
+	{
+		FBattleEvent Event;
+		Event.Type = EBattleEventType::HandLimitDiscarded;
+		Event.HandLimitDiscardSource = EHandLimitDiscardSource::EffectDraw;
+		TestEqual(TEXT("HandLimitDiscarded source is Chinese"),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
+			FString(TEXT("因抽牌效果弃置 1 张牌")));
+	}
+
+	{
+		FBattleEvent Event;
+		Event.Type = EBattleEventType::HandZoneChanged;
+		TestTrue(TEXT("HandZoneChanged remains hidden"),
+			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event).IsEmpty());
+	}
+
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCardWidgetPresentationSpec,

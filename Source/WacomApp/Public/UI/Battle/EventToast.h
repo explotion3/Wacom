@@ -35,6 +35,9 @@ public:
 	/** 把一批事件压入队列。 */
 	void EnqueueEvents(const TArray<FBattleEvent>& Events);
 
+	/** 将战斗事件格式化为玩家可读中文提示。空字符串表示不显示该事件。 */
+	static FString FormatEventForPlayer(const FBattleEvent& Event);
+
 	/** 每条消息的显示时长（秒）。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
 	float MessageLifetime = 3.0f;
@@ -67,6 +70,4 @@ private:
 
 	void PushMessage(const FString& Message);
 	void RemoveAt(int32 Index);
-
-	static FString FormatEvent(const FBattleEvent& Event);
 };

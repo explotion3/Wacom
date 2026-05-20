@@ -27,6 +27,7 @@ WacomData 负责**静态定义和 DataAsset**。
 ```
 Content/Wacom/
 ├── Cards/BugGirl/DA_Card_*.uasset
+├── Cards/Rewards/DA_Card_PoisonFang.uasset
 ├── Characters/DA_Character_BugGirl.uasset
 └── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
 ```
@@ -108,10 +109,20 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
     UPROPERTY(EditDefaultsOnly) TArray<FIntentDefinition> IntentSequence; // 循环执行
     UPROPERTY(EditDefaultsOnly) int32             InitialIntentIndex = 0;
     UPROPERTY(EditDefaultsOnly) int32             ExperienceReward = 0;  // GDD §3.3 部位被破坏给予玩家的经验值
+    UPROPERTY(EditDefaultsOnly) UCardDefinition*  KnockdownRewardCard = nullptr; // 击倒后 Aid/Destroy 获得的奖励卡
 };
 ```
 
 蛇默认配置：Head=3 / Body=2 / Tail=2 经验。
+
+`KnockdownRewardCard` 是"万物成卡"第一版部位奖励配置：
+- 部位击倒后选择 Aid 或 Destroy 时，如果该字段非空，战斗内会创建一张对应卡牌并随机插入当前手牌。
+- 该奖励同时写入战后包，Victory（含撤离）结算进 Run 背包；Defeat 不结算。
+- Aid / Destroy 第一版共用同一张奖励卡；不同分支不同奖励表留到后续扩展。
+
+当前蛇敌人内容：
+- `DA_Card_PoisonFang`（毒牙）是第一张击倒奖励卡样例，临时效果为 0 费、对单个敌方部位施加 1 中毒。
+- 蛇头、蛇身、蛇尾当前都配置同一张毒牙，便于验证完整奖励链路；后续可替换为各部位专属奖励。
 
 ### FIntentDefinition
 

@@ -471,6 +471,15 @@ public:
 	void AddCardToBackpack(UCardDefinition* Card);
 
 	/**
+	 * 战外获得一张卡的统一入口。
+	 *
+	 * 当前实现等价于加入背包并重算负重；后续战斗奖励、节点事件、商店购买、
+	 * 探险拾取都应优先走本入口，而不是各自生成 FCardInstance。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
+	void AcquireCardToRun(UCardDefinition* Card);
+
+	/**
 	 * 永久销毁一张卡（删牌区 / 商店出售 / 战败丢弃 / 节点事件）。
 	 *
 	 * 行为（GDD §11.8）：

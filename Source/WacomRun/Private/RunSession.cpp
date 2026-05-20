@@ -411,7 +411,26 @@ void URunSession::OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet,
 		}
 	}
 
-	// 4) 击倒事件玩家选择记账（GDD §6）。
+	// 4) 战斗中获得的卡牌结算（万物成卡第一版）。
+	// Victory 包括撤离；Defeat / Undetermined 不结算。
+	if (Packet.Outcome == EBattleOutcome::Victory)
+	{
+		for (const FBattleGainedCard& GainedCard : Packet.GainedCards)
+		{
+			if (!GainedCard.Definition)
+			{
+				continue;
+			}
+			AcquireCardToRun(GainedCard.Definition.Get());
+			UE_LOG(LogTemp, Display,
+				TEXT("[RunSession] Gained card from battle: Card=%s, Part=%s, Choice=%d"),
+				*GetNameSafe(GainedCard.Definition),
+				*GainedCard.SourcePartId.ToString(),
+				static_cast<int32>(GainedCard.SourceChoice));
+		}
+	}
+
+	// 5) 击倒事件玩家选择记账（GDD §6）。
 	// 第一阶段仅日志，节点事件 Stage 9 接入时按 Choice 触发分支：
 	//   - Aid 援助：未来对应援助节点事件
 	//   - Destroy 破坏：未来 +1% 伤口或劣迹（按节点事件配置）
@@ -431,7 +450,7 @@ void URunSession::OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet,
 			*Choice.PartId.ToString(), ChoiceName);
 	}
 
-	// 4) 整体通知一次（即便上面没改字段也发，让 UI 在战斗结束统一刷新）
+	// 6) 整体通知一次（即便上面没改字段也发，让 UI 在战斗结束统一刷新）
 	NotifyRunStateChanged();
 }
 
@@ -2150,6 +2169,18 @@ void URunSession::AddCardToBackpack(UCardDefinition* Card)
 	// 一次（R2.16 / task 9.4：避免一次操作多次广播尾部串）。
 	RecomputeBurdenInternal();
 	NotifyRunStateChanged();
+}
+
+void URunSession::AcquireCardToRun(UCardDefinition* Card)
+{
+	if (!Card)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] AcquireCardToRun: Card 为空，拒绝"));
+		return;
+	}
+
+	AddCardToBackpack(Card);
 }
 
 bool URunSession::DestroyCardFromBackpack(UCardDefinition* Card)

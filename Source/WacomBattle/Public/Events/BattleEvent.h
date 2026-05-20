@@ -6,6 +6,8 @@
 #include "GameplayTagContainer.h"
 #include "BattleEvent.generated.h"
 
+class UCardDefinition;
+
 /**
  * 战斗事件类型。
  *
@@ -37,6 +39,7 @@ enum class EBattleEventType : uint8
 	TurnEnded             UMETA(DisplayName = "TurnEnded"),
 	PassiveTriggered      UMETA(DisplayName = "PassiveTriggered"),    // P3.5 占位：被动触发通知
 	HandLimitDiscarded    UMETA(DisplayName = "HandLimitDiscarded"),  // 普通手牌上限导致弃牌
+	CardGained            UMETA(DisplayName = "CardGained"),          // 战斗中获得一张新卡
 	BattleEnded           UMETA(DisplayName = "BattleEnded"),
 };
 
@@ -69,6 +72,7 @@ enum class EHandLimitDiscardSource : uint8
  * - EnemyPartActed      ：ActorInstanceId = 行动部位、Tag = Intent id（用 tag 承载方便扩展；第一阶段也可留空）
  * - EnemyPartHpEmptied  ：ActorInstanceId = 被破坏部位
  * - HandLimitDiscarded  ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡（仅 EffectDraw）
+ * - CardGained          ：CardInstanceId = 战斗内新卡实例；ActorInstanceId = 来源部位；CardDefinition = 新卡定义；Count = EKnockdownChoice
  * - BattleEnded         ：Count = 1 表示胜利、0 表示失败（后续换专用字段）
  */
 USTRUCT(BlueprintType)
@@ -106,4 +110,8 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 普通手牌上限弃牌的来源，仅 HandLimitDiscarded 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	EHandLimitDiscardSource HandLimitDiscardSource = EHandLimitDiscardSource::None;
+
+	/** 事件涉及的新卡定义。第一版仅 CardGained 使用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
 };

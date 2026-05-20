@@ -169,6 +169,7 @@ WacomBattle/
 - 每张因普通手牌上限进入弃牌区的卡都会产生一条 `HandLimitDiscarded` 事件；这是 UI/日志表现事件，不改变战斗规则真相
 - `HandLimitDiscarded.CardInstanceId` 是被上限弃掉的卡；`ActorInstanceId` 只在 `EffectDraw` 来源时填写触发抽牌的源卡；`HandLimitDiscardSource` 区分 `TurnStart / EffectDraw / PassiveOnCompanionCount`
 - `HandZoneChanged` 仍只表示手牌区需要刷新，不承载具体哪张牌因上限被弃掉的语义
+- 击倒奖励卡进入手牌后同样立即执行普通卡手牌上限；若因此弃牌，会按逐张 `HandLimitDiscarded` 事件通知表现层
 
 ### 腾挪
 
@@ -393,6 +394,7 @@ WacomBattle/
 | `bWithdrawn` | `KnockdownChoices` 含 Withdraw | 撤离（GDD §6 / §10.5）：敌人不进 DefeatedEnemies、节点不变完成、写 BattleProgress |
 | `KnockdownExpGains[]` | `BattleState.PendingKnockdownExpGains` | Victory（含同归于尽 / 撤离）累加经验；Defeat 不结算 |
 | `KnockdownChoices[]` | `BattleState.PendingKnockdownChoices` | 玩家三选一选择列表（GDD §6）；Run 层第一阶段记日志，Stage 9 节点事件接入时按 Choice 分支处理 |
+| `GainedCards[]` | `BattleState.PendingGainedCards` | Victory（含撤离）归入 Run 背包；Defeat / Undetermined 不结算 |
 | `DestroyedPartIds[]` | `BattleState.DestroyedPartIds` | 撤离时写 RunState.BattleProgress[TriggerId]；真胜利时清理 |
 
 每场战斗结束（含 Defeat）疲劳 +1%。
@@ -400,6 +402,9 @@ WacomBattle/
 击倒事件补充：
 
 - 援助 / 破坏是击倒事件分支，不依赖左 / 右手牌当前是否仍在手牌区，也不消耗左右手牌。
+- 如果被击倒部位配置了 `KnockdownRewardCard`，选择援助或破坏会立刻创建一张战斗内 runtime card，随机插入当前手牌，并发出 `CardGained` 事件；撤离不触发奖励卡。
+- `CardGained.CardInstanceId` 是新建的战斗内卡实例，`ActorInstanceId` 是来源部位实例，`CardDefinition` 是奖励卡定义，`Count` 记录本次 `EKnockdownChoice`。
+- 奖励卡选择时即写入 `FBattleResultPacket.GainedCards`；后续即使这张战内卡被打出、弃掉、消耗或被上限弃牌，战后 Victory 仍会进入 Run。
 - 撤离只在敌人仍有存活部位时可选；如果本次击倒后敌人所有部位都已清空，必须选择援助或破坏来完成最后一次击倒事件并进入胜利结算。
 - UI 可通过 `UBattleSession::BuildPendingKnockdownChoiceView()` 读取当前击倒事件的 `FKnockdownChoiceView`，包含部位信息与 Aid / Withdraw / Destroy 三个选项的可用性。
 - `KnockdownChoiceRequested` 事件只负责通知 UI 需要展示选择面板；`FBattleEvent.Count` 的旧位掩码仅保留日志兼容，不再作为 UI 读取契约。

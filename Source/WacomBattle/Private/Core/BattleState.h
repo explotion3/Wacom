@@ -177,6 +177,13 @@ struct FBattleState
 	TArray<FKnockdownChoice> PendingKnockdownChoices;
 
 	/**
+	 * 战斗中获得、战后归入 Run 的卡牌。
+	 *
+	 * 第一版由击倒事件 Aid / Destroy 的部位奖励卡写入。
+	 */
+	TArray<FBattleGainedCard> PendingGainedCards;
+
+	/**
 	 * 本场战斗中所有被破坏的部位 ID（GDD §10.5）。
 	 *
 	 * 撤离时由 Run 层用 packet.DestroyedPartIds 写入 RunState.BattleProgress；

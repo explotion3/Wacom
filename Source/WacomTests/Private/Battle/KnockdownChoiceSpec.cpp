@@ -8,9 +8,12 @@
 #include "Characters/CharacterDefinition.h"
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEvent.h"
+#include "Enemies/EnemyDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Session/BattleSession.h"
 #include "Session/BattleResultPacket.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "Snapshots/HandSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 
@@ -47,6 +50,42 @@ namespace
 		TArray<UCardDefinition*> Deck = { Killer, Light };
 		for (int32 i = 0; i < 5; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 		return Fx.MakeCharacter(LH, RH, Deck);
+	}
+
+	bool HandContainsDefinition(const FBattleSnapshot& Snap, const UCardDefinition* Definition)
+	{
+		for (const FHandCardSnapshot& Card : Snap.Hand.Cards)
+		{
+			if (Card.Definition == Definition)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	const FBattleEvent* FindCardGainedEvent(const TArray<FBattleEvent>& Events, const UCardDefinition* Definition)
+	{
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Type == EBattleEventType::CardGained && Event.CardDefinition == Definition)
+			{
+				return &Event;
+			}
+		}
+		return nullptr;
+	}
+
+	UCardDefinition* MakeDrawCard(FWacomBattleFixture& Fx, int32 DrawCount)
+	{
+		UCardDefinition* Card = Fx.MakeNoopCard(/*Cost*/0);
+
+		FCardEffect Effect;
+		Effect.EffectType = WacomTags::Effect_Draw;
+		Effect.Magnitude = DrawCount;
+		Effect.TargetZone = WacomTags::CardLocation_Draw;
+		Card->Effects.Add(Effect);
+		return Card;
 	}
 }
 
@@ -154,6 +193,225 @@ bool FWacomKnockdownChoiceAidContinuesSpec::RunTest(const FString& /*Parameters*
 	TestTrue(TEXT("Aid 后回到 PlayerAction（敌人未全死）"),
 		S->GetPhase() == EBattlePhase::PlayerAction);
 
+	return true;
+}
+
+// ================ Aid 击倒奖励卡：战内入手 + 战后包记账 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceRewardCardAidSpec,
+	"Wacom.Battle.Knockdown.RewardCardAid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceRewardCardAidSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+	UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	Enemy->Parts[0].PartDef->KnockdownRewardCard = RewardCard;
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+	const FWacomStatus AidStatus = S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	TestTrue(TEXT("Aid resolves"), AidStatus.IsOk());
+
+	const FBattleSnapshot SnapAfter = S->BuildSnapshot();
+	TestTrue(TEXT("Reward card immediately appears in battle hand"),
+		HandContainsDefinition(SnapAfter, RewardCard));
+
+	const TArray<FBattleEvent> Events = S->ConsumeEvents();
+	const FBattleEvent* CardGained = FindCardGainedEvent(Events, RewardCard);
+	TestNotNull(TEXT("CardGained event emitted"), CardGained);
+	if (CardGained)
+	{
+		TestTrue(TEXT("CardGained has battle runtime card id"), CardGained->CardInstanceId.IsValid());
+		TestEqual(TEXT("CardGained source part instance id"), CardGained->ActorInstanceId, Head);
+		TestEqual(TEXT("CardGained choice count is Aid"), CardGained->Count, static_cast<int32>(EKnockdownChoice::Aid));
+	}
+
+	const FBattleResultPacket Packet = S->BuildResultPacket();
+	TestEqual(TEXT("GainedCards has one reward"), Packet.GainedCards.Num(), 1);
+	if (Packet.GainedCards.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Reward definition recorded"), Packet.GainedCards[0].Definition.Get(), RewardCard);
+		TestEqual(TEXT("Reward source part id recorded"), Packet.GainedCards[0].SourcePartId, FName(TEXT("Test.Part.Head")));
+		TestEqual(TEXT("Reward source choice recorded"), Packet.GainedCards[0].SourceChoice, EKnockdownChoice::Aid);
+	}
+
+	return true;
+}
+
+// ================ Destroy 击倒奖励卡：同一部位奖励配置 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceRewardCardDestroySpec,
+	"Wacom.Battle.Knockdown.RewardCardDestroy",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceRewardCardDestroySpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+	UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	Enemy->Parts[0].PartDef->KnockdownRewardCard = RewardCard;
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+	const FWacomStatus DestroyStatus = S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Destroy));
+	TestTrue(TEXT("Destroy resolves"), DestroyStatus.IsOk());
+
+	const FBattleSnapshot SnapAfter = S->BuildSnapshot();
+	TestTrue(TEXT("Reward card immediately appears in battle hand"),
+		HandContainsDefinition(SnapAfter, RewardCard));
+
+	const TArray<FBattleEvent> Events = S->ConsumeEvents();
+	const FBattleEvent* CardGained = FindCardGainedEvent(Events, RewardCard);
+	TestNotNull(TEXT("CardGained event emitted"), CardGained);
+	if (CardGained)
+	{
+		TestTrue(TEXT("CardGained has battle runtime card id"), CardGained->CardInstanceId.IsValid());
+		TestEqual(TEXT("CardGained source part instance id"), CardGained->ActorInstanceId, Head);
+		TestEqual(TEXT("CardGained choice count is Destroy"), CardGained->Count, static_cast<int32>(EKnockdownChoice::Destroy));
+	}
+
+	const FBattleResultPacket Packet = S->BuildResultPacket();
+	TestEqual(TEXT("GainedCards has one reward"), Packet.GainedCards.Num(), 1);
+	if (Packet.GainedCards.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Reward definition recorded"), Packet.GainedCards[0].Definition.Get(), RewardCard);
+		TestEqual(TEXT("Reward source part id recorded"), Packet.GainedCards[0].SourcePartId, FName(TEXT("Test.Part.Head")));
+		TestEqual(TEXT("Reward source choice recorded"), Packet.GainedCards[0].SourceChoice, EKnockdownChoice::Destroy);
+	}
+
+	return true;
+}
+
+// ================ Withdraw 不触发奖励卡 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceRewardCardWithdrawIgnoredSpec,
+	"Wacom.Battle.Knockdown.RewardCardWithdrawIgnored",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceRewardCardWithdrawIgnoredSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Killer = nullptr;
+	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
+	UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	Enemy->Parts[0].PartDef->KnockdownRewardCard = RewardCard;
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+
+	const FBattleSnapshot Snap0 = S->BuildSnapshot();
+	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+
+	S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+	const FWacomStatus WithdrawStatus = S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+	TestTrue(TEXT("Withdraw resolves"), WithdrawStatus.IsOk());
+
+	const TArray<FBattleEvent> Events = S->ConsumeEvents();
+	TestNull(TEXT("Withdraw does not emit CardGained"), FindCardGainedEvent(Events, RewardCard));
+
+	const FBattleResultPacket Packet = S->BuildResultPacket();
+	TestEqual(TEXT("Withdraw records no gained cards"), Packet.GainedCards.Num(), 0);
+
+	return true;
+}
+
+// ================ 奖励卡入手后仍执行普通手牌上限 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceRewardCardRespectsHandLimitSpec,
+	"Wacom.Battle.Knockdown.RewardCardRespectsHandLimit",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceRewardCardRespectsHandLimitSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* LH = Fx.MakeNoopCard(/*Cost*/0);
+	UCardDefinition* RH = Fx.MakeSimpleDamageCard(/*Cost*/0, /*Damage*/100);
+	UCardDefinition* DrawCard = MakeDrawCard(Fx, /*DrawCount*/7);
+	UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
+
+	TArray<UCardDefinition*> Deck = { DrawCard };
+	for (int32 Index = 0; Index < 20; ++Index)
+	{
+		Deck.Add(Fx.MakeNoopCard(/*Cost*/0));
+	}
+	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
+
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 100, 100, 100);
+	Enemy->Parts[0].PartDef->KnockdownRewardCard = RewardCard;
+
+	bool bCovered = false;
+	for (int32 Seed = 1; Seed <= 80 && !bCovered; ++Seed)
+	{
+		UBattleSession* S = Fx.CreateSession(Char, Enemy, Seed);
+		FBattleSnapshot Snap = S->BuildSnapshot();
+		const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap, 0);
+		const FGuid DrawCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snap, DrawCard->CardId);
+		const FGuid KillerAnchorId = FWacomBattleFixture::FindHandInstanceByCardId(Snap, RH->CardId);
+		if (!DrawCardId.IsValid() || !KillerAnchorId.IsValid())
+		{
+			continue;
+		}
+
+		TestTrue(TEXT("Play draw card to fill hand"),
+			S->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId, FGuid())).IsOk());
+		Snap = S->BuildSnapshot();
+		TestEqual(TEXT("Draw effect fills normal hand to limit"),
+			Snap.Hand.NormalCardCount,
+			Snap.Hand.NormalCardLimit);
+		S->ConsumeEvents();
+
+		TestTrue(TEXT("Play right-hand killer anchor"),
+			S->SubmitCommand(FBattleCommand::MakePlayCard(KillerAnchorId, Head)).IsOk());
+		TestTrue(TEXT("Choose Aid"), S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
+
+		const TArray<FBattleEvent> Events = S->ConsumeEvents();
+		Snap = S->BuildSnapshot();
+
+		int32 LimitDiscardEvents = 0;
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Type == EBattleEventType::HandLimitDiscarded)
+			{
+				++LimitDiscardEvents;
+				TestTrue(TEXT("Limit discard has valid card id"), Event.CardInstanceId.IsValid());
+			}
+		}
+
+		TestLessEqual(TEXT("Normal cards remain within hand limit"),
+			Snap.Hand.NormalCardCount,
+			Snap.Hand.NormalCardLimit);
+		TestNotNull(TEXT("Reward still emits CardGained even if limit discard happens"),
+			FindCardGainedEvent(Events, RewardCard));
+		TestTrue(TEXT("Reward grant over full hand emits HandLimitDiscarded"), LimitDiscardEvents > 0);
+		bCovered = true;
+	}
+
+	TestTrue(TEXT("A seed put the killer card in opening hand"), bCovered);
 	return true;
 }
 

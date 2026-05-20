@@ -3,6 +3,8 @@
 #include "ContentBuilders/SnakeBuilder.h"
 #include "ContentBuilders/ContentBuilderHelpers.h"
 
+#include "Cards/CardDefinition.h"
+#include "Cards/CardEffect.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
@@ -62,6 +64,41 @@ namespace
 		return Intent;
 	}
 
+	FCardEffect MakePoisonOnEnemyPart(int32 Stacks)
+	{
+		FCardEffect Eff;
+		Eff.EffectType = WacomTags::Effect_ApplyStatus_Poison;
+		Eff.Magnitude  = Stacks;
+		Eff.Target     = WacomTags::Target_SingleEnemyPart;
+		return Eff;
+	}
+
+	UCardDefinition* BuildPoisonFangCard()
+	{
+		const FString PackagePath = TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang");
+		UPackage* Pkg = FindOrCreatePackage(PackagePath);
+		if (!Pkg) { return nullptr; }
+
+		UCardDefinition* Card = CreateOrReplaceAsset<UCardDefinition>(Pkg, TEXT("DA_Card_PoisonFang"));
+		if (!Card) { return nullptr; }
+
+		Card->CardId      = TEXT("PoisonFang");
+		Card->DisplayName = FText::FromString(TEXT("毒牙"));
+		Card->Description = FText::FromString(TEXT("对一个敌方部位施加 1 中毒。"));
+		Card->BaseCost    = 0;
+		Card->Rarity      = WacomTags::Card_Rarity_White;
+		Card->Keywords.Reset();
+		Card->TargetMode = ECardTargetMode::SingleEnemyPart;
+		Card->Physique = FCardPhysique{};
+		Card->Effects = { MakePoisonOnEnemyPart(1) };
+		Card->PerfectReleaseEffects.Reset();
+		Card->ZoneHooks.Reset();
+		Card->Passives.Reset();
+
+		SaveAssetPackage(Pkg, Card, PackagePath);
+		return Card;
+	}
+
 	/**
 	 * 通用：在给定 package 里建一个 UEnemyPartDefinition。
 	 */
@@ -72,6 +109,7 @@ namespace
 		const FString& DisplayName,
 		int32 MaxHp,
 		int32 ExperienceReward,
+		UCardDefinition* KnockdownRewardCard,
 		TArray<FIntentDefinition> IntentSequence)
 	{
 		UPackage* Pkg = FindOrCreatePackage(PackagePath);
@@ -86,6 +124,7 @@ namespace
 		Part->InitialIntentIndex  = 0;
 		Part->IntentSequence      = MoveTemp(IntentSequence);
 		Part->ExperienceReward    = ExperienceReward;
+		Part->KnockdownRewardCard = KnockdownRewardCard;
 
 		SaveAssetPackage(Pkg, Part, PackagePath);
 		return Part;
@@ -96,6 +135,9 @@ namespace Wacom::ContentBuilder
 {
 	UEnemyDefinition* BuildSnakeContent()
 	{
+		UCardDefinition* PoisonFang = BuildPoisonFangCard();
+		if (!PoisonFang) { return nullptr; }
+
 		// ---- 头 ----
 		// 经验奖励：Head=3 / Body=2 / Tail=2（GDD §3.3，头是核心，多给 1 点）
 		UEnemyPartDefinition* Head = BuildPart(
@@ -105,6 +147,7 @@ namespace Wacom::ContentBuilder
 			TEXT("Snake Head"),
 			/*MaxHp*/ 16,
 			/*Exp*/ 3,
+			PoisonFang,
 			{
 				MakeIntent(TEXT("Snake.Head.Bite"),   TEXT("Bite"),   /*Initiative*/ 3, /*Resist*/ 6,
 				           { MakeDamage(6) }),
@@ -123,6 +166,7 @@ namespace Wacom::ContentBuilder
 			TEXT("Snake Body"),
 			/*MaxHp*/ 22,
 			/*Exp*/ 2,
+			PoisonFang,
 			{
 				MakeIntent(TEXT("Snake.Body.Constrict"), TEXT("Constrict"), 4, 0,
 				           { MakeSlowOnPlayer(1) }),
@@ -141,6 +185,7 @@ namespace Wacom::ContentBuilder
 			TEXT("Snake Tail"),
 			/*MaxHp*/ 10,
 			/*Exp*/ 2,
+			PoisonFang,
 			{
 				MakeIntent(TEXT("Snake.Tail.Sweep"), TEXT("Sweep"), 1, 3,
 				           { MakeDamage(3) }),

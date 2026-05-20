@@ -39,6 +39,32 @@ namespace
 		RunPtr->Initialize(Char);
 		return RunPtr.Get();
 	}
+
+	int32 CountCardInOwnedZones(const URunSession* Run, const UCardDefinition* Card)
+	{
+		int32 Count = 0;
+		const FRunState& State = Run->GetRunState();
+
+		auto CountInPile = [Card, &Count](const TArray<FCardInstance>& Pile)
+		{
+			for (const FCardInstance& Instance : Pile)
+			{
+				if (Instance.Definition == Card)
+				{
+					++Count;
+				}
+			}
+		};
+
+		CountInPile(State.Backpack);
+		CountInPile(State.BattleDeck);
+		CountInPile(State.BurdenZone);
+		for (const FSpecialZone& SpecialZone : State.SpecialZones)
+		{
+			CountInPile(SpecialZone.Cards);
+		}
+		return Count;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -203,6 +229,80 @@ bool FWacomRunResultUndeterminedSkipsAccumulationSpec::RunTest(const FString& /*
 	TestEqual(TEXT("Wound unchanged on Undetermined"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 0);
 	TestTrue(TEXT("bRunActive unchanged on Undetermined"), Run->IsRunActive());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunBattleRewardCardsAddedToBackpackSpec,
+	"Wacom.Run.BattleRewardCardsAddedToBackpack",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 1, 0);
+
+	{
+		TStrongObjectPtr<URunSession> RunPtr;
+		URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+		UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
+
+		FBattleResultPacket Packet;
+		Packet.Outcome = EBattleOutcome::Victory;
+		FBattleGainedCard GainedCard;
+		GainedCard.Definition = RewardCard;
+		GainedCard.SourcePartId = FName(TEXT("Test.Part.Solo"));
+		GainedCard.SourceChoice = EKnockdownChoice::Aid;
+		Packet.GainedCards.Add(GainedCard);
+
+		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
+		Run->OnBattleFinished(Packet, Enemy);
+		TestEqual(TEXT("Victory settles gained reward card to Run ownership"),
+			CountCardInOwnedZones(Run, RewardCard),
+			Before + 1);
+	}
+
+	{
+		TStrongObjectPtr<URunSession> RunPtr;
+		URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+		UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
+
+		FBattleResultPacket Packet;
+		Packet.Outcome = EBattleOutcome::Victory;
+		Packet.bWithdrawn = true;
+		FBattleGainedCard GainedCard;
+		GainedCard.Definition = RewardCard;
+		GainedCard.SourcePartId = FName(TEXT("Test.Part.Solo"));
+		GainedCard.SourceChoice = EKnockdownChoice::Destroy;
+		Packet.GainedCards.Add(GainedCard);
+
+		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
+		Run->OnBattleFinished(Packet, Enemy);
+		TestEqual(TEXT("Withdraw victory still settles already gained reward card"),
+			CountCardInOwnedZones(Run, RewardCard),
+			Before + 1);
+	}
+
+	{
+		TStrongObjectPtr<URunSession> RunPtr;
+		URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+		UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
+
+		FBattleResultPacket Packet;
+		Packet.Outcome = EBattleOutcome::Defeat;
+		FBattleGainedCard GainedCard;
+		GainedCard.Definition = RewardCard;
+		GainedCard.SourcePartId = FName(TEXT("Test.Part.Solo"));
+		GainedCard.SourceChoice = EKnockdownChoice::Aid;
+		Packet.GainedCards.Add(GainedCard);
+
+		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
+		Run->OnBattleFinished(Packet, Enemy);
+		TestEqual(TEXT("Defeat does not settle gained reward card"),
+			CountCardInOwnedZones(Run, RewardCard),
+			Before);
+	}
 
 	return true;
 }

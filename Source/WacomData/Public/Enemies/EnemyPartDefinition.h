@@ -7,6 +7,8 @@
 #include "Enemies/IntentDefinition.h"
 #include "EnemyPartDefinition.generated.h"
 
+class UCardDefinition;
+
 /**
  * 敌方部位静态定义。
  *
@@ -46,4 +48,13 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Reward")
 	int32 ExperienceReward = 0;
+
+	/**
+	 * 击倒事件奖励卡（万物成卡第一版）。
+	 *
+	 * 当玩家在该部位击倒事件中选择 Aid 或 Destroy 时，战斗内会获得这张卡，
+	 * 并在战斗结束后由 Run 层加入背包。Withdraw 不触发本奖励。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Reward")
+	TObjectPtr<UCardDefinition> KnockdownRewardCard = nullptr;
 };

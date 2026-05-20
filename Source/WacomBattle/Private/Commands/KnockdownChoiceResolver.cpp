@@ -6,6 +6,9 @@
 #include "Core/BattleRules.h"
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEventBus.h"
+#include "Enemies/EnemyPartDefinition.h"
+#include "Rewards/BattleCardGrantService.h"
+#include "Runtime/RuntimeEnemyPart.h"
 
 FWacomStatus FKnockdownChoiceResolver::Resolve(
 	FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
@@ -66,7 +69,35 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 		return FWacomStatus::Ok();
 	}
 
-	// 援助 / 破坏：本轮不改战内状态，仅记账。
+	// 援助 / 破坏：如果部位配置了击倒奖励卡，立即获得一张战斗内卡并记入战后包。
+	if (Choice == EKnockdownChoice::Aid || Choice == EKnockdownChoice::Destroy)
+	{
+		const FRuntimeEnemyPart* SourcePart = State.Enemy.Parts.FindByPredicate(
+			[&Head](const FRuntimeEnemyPart& Part)
+			{
+				return Part.InstanceId == Head.PartInstanceId;
+			});
+		UCardDefinition* RewardCard = (SourcePart && SourcePart->Definition)
+			? SourcePart->Definition->KnockdownRewardCard.Get()
+			: nullptr;
+
+		if (RewardCard)
+		{
+			FBattleCardGrantService::GrantCardToHand(
+				State,
+				Events,
+				RewardCard,
+				Head.PartInstanceId,
+				Choice);
+
+			FBattleGainedCard GainedCard;
+			GainedCard.Definition = RewardCard;
+			GainedCard.SourcePartId = Head.PartId;
+			GainedCard.SourceChoice = Choice;
+			State.PendingGainedCards.Add(GainedCard);
+		}
+	}
+
 	// 队列仍非空 → 继续等下一条；队列空 → 回 PlayerAction
 	if (State.PendingKnockdownEvents.Num() == 0)
 	{

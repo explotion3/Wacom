@@ -8,7 +8,9 @@
 #include "Snapshots/BattleSnapshot.h"
 
 #include "Cards/CardDefinition.h"
+#include "Cards/CardEffect.h"
 #include "Characters/CharacterDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Tags/WacomGameplayTags.h"
 
 #include "UObject/StrongObjectPtr.h"
@@ -84,6 +86,63 @@ bool FWacomBattleCapacityEffectBugGirlCocoonAssetSpec::RunTest(const FString& /*
 	TestEqual(TEXT("ZhujianRongnang SpecialZone capacity source = 3"),
 		Cocoon->Physique.Capacity,
 		3);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleKnockdownRewardPoisonFangAssetSpec,
+	"Wacom.Battle.KnockdownReward.PoisonFangAsset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleKnockdownRewardPoisonFangAssetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UCardDefinition* PoisonFang = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+
+	if (!TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("PoisonFang CardId"), PoisonFang->CardId, FName(TEXT("PoisonFang")));
+	TestEqual(TEXT("PoisonFang DisplayName"), PoisonFang->DisplayName.ToString(), FString(TEXT("毒牙")));
+	TestEqual(TEXT("PoisonFang BaseCost"), PoisonFang->BaseCost, 0);
+	TestEqual(TEXT("PoisonFang TargetMode"), PoisonFang->TargetMode, ECardTargetMode::SingleEnemyPart);
+	TestEqual(TEXT("PoisonFang has one effect"), PoisonFang->Effects.Num(), 1);
+	if (PoisonFang->Effects.IsValidIndex(0))
+	{
+		const FCardEffect& Effect = PoisonFang->Effects[0];
+		TestEqual(TEXT("PoisonFang effect type is poison"),
+			Effect.EffectType,
+			FGameplayTag(WacomTags::Effect_ApplyStatus_Poison));
+		TestEqual(TEXT("PoisonFang applies one poison stack"), Effect.Magnitude, 1);
+		TestEqual(TEXT("PoisonFang targets one enemy part"),
+			Effect.Target,
+			FGameplayTag(WacomTags::Target_SingleEnemyPart));
+	}
+
+	const TCHAR* PartPaths[] =
+	{
+		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"),
+		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"),
+		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"),
+	};
+
+	for (const TCHAR* PartPath : PartPaths)
+	{
+		UEnemyPartDefinition* Part = LoadObject<UEnemyPartDefinition>(nullptr, PartPath);
+		if (!TestNotNull(FString::Printf(TEXT("Snake part asset loads: %s"), PartPath), Part))
+		{
+			return false;
+		}
+
+		TestEqual(
+			FString::Printf(TEXT("Snake part reward is PoisonFang: %s"), PartPath),
+			Part->KnockdownRewardCard.Get(),
+			PoisonFang);
+	}
 
 	return true;
 }

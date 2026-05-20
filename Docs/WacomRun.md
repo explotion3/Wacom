@@ -120,6 +120,7 @@ WacomRun 负责**战斗外的持久状态和存档**。
 | `IsBackpackUiAvailable() const` | 背包 UI 是否可打开（至少一张 BagProvider）|
 | `IsCardInBackpack(Card) / IsCardInBattleDeck(Card)` | 查询 |
 | `AddCardToBackpack(Card)` | 加卡进背包 + RecomputeBurden |
+| `AcquireCardToRun(Card)` | 战外获得卡统一入口；当前等价于加入背包并重算负重，后续战斗奖励、节点事件、商店、探险奖励都优先走这里 |
 | `DestroyCardFromBackpack(Card)` | 永久销毁（含 Intrinsic / 最后 BagProvider 拒绝 / Companion 嗜血）|
 | `DeleteCardForGold(Card)` | 删牌区入口：销毁 + 按稀有度发金币（白=1 / 蓝=2）|
 | `AddCardToBattleDeck(Card)` | 从 Backpack 移到 BattleDeck（互斥）|
@@ -157,6 +158,7 @@ WacomRun 负责**战斗外的持久状态和存档**。
 - `bCrossedLowHpThreshold` → +5% 伤口
 - `bMutualDestruction` → +10% 伤口（不影响 bRunActive）
 - `KnockdownExpGains[]`：Victory（含同归于尽 / 撤离）累加经验；Defeat 不结算
+- `GainedCards[]`：Victory（含撤离）通过 `AcquireCardToRun()` 归入 Run；Defeat / Undetermined 不结算。第一版来源是击倒事件 Aid / Destroy 的部位奖励卡
 - `KnockdownChoices[]`：第一阶段仅日志，Stage 9 节点事件接入时按 Choice 触发分支
 
 ---

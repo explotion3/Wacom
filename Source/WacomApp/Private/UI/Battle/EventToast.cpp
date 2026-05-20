@@ -9,6 +9,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Events/BattleEvent.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 
 UEventToast::UEventToast()
 {
@@ -71,7 +72,7 @@ void UEventToast::EnqueueEvents(const TArray<FBattleEvent>& Events)
 {
 	for (const FBattleEvent& E : Events)
 	{
-		const FString Msg = FormatEvent(E);
+		const FString Msg = UWacomBattleEventPresentationBuilder::FormatEventForPlayer(E);
 		if (!Msg.IsEmpty())
 		{
 			PushMessage(Msg);
@@ -120,47 +121,7 @@ void UEventToast::RemoveAt(int32 Index)
 
 // ---- Event → 人类可读文本 ----
 
-FString UEventToast::FormatEvent(const FBattleEvent& E)
+FString UEventToast::FormatEventForPlayer(const FBattleEvent& E)
 {
-	switch (E.Type)
-	{
-	case EBattleEventType::BattleStarted:
-		return TEXT("Battle started");
-	case EBattleEventType::TurnStarted:
-		return FString::Printf(TEXT("Turn %d start"), E.Count);
-	case EBattleEventType::CardsDrawn:
-		return FString::Printf(TEXT("Drew %d cards"), E.Count);
-	case EBattleEventType::CardPlayed:
-		return FString::Printf(TEXT("Played card (cost %d)"), E.Amount);
-	case EBattleEventType::InitiativeHit:
-		return FString::Printf(TEXT("Initiative hit at %d"), E.Amount);
-	case EBattleEventType::ResistanceResolved:
-		return E.Tag.IsValid()
-			? FString::Printf(TEXT("Resistance: STUN  card=%d  intent=%d"), E.Amount, E.Count)
-			: FString::Printf(TEXT("Resistance: no stun  card=%d  intent=%d"), E.Amount, E.Count);
-	case EBattleEventType::PerfectReleaseResolved:
-		return TEXT("Perfect release!");
-	case EBattleEventType::DamageDealt:
-		return FString::Printf(TEXT("Dealt %d damage"), E.Amount);
-	case EBattleEventType::StatusApplied:
-		return FString::Printf(TEXT("%s +%d"), *E.Tag.ToString(), E.Amount);
-	case EBattleEventType::InitiativePushed:
-		return FString::Printf(TEXT("Initiative -%d"), E.Amount);
-	case EBattleEventType::WaitPerformed:
-		return FString::Printf(TEXT("Wait (-%d)"), E.Amount);
-	case EBattleEventType::EnemyPartActed:
-		return E.Count > 0 ? TEXT("Enemy acted") : TEXT("Enemy skipped (stun)");
-	case EBattleEventType::EnemyPartHpEmptied:
-		return TEXT("Part destroyed");
-	case EBattleEventType::EnemyKnockdown:
-		return TEXT("Enemy knockdown!");
-	case EBattleEventType::TurnEnded:
-		return FString::Printf(TEXT("Turn %d end"), E.Count);
-	case EBattleEventType::BattleEnded:
-		return E.Count == 1 ? TEXT("VICTORY") : TEXT("DEFEAT");
-	case EBattleEventType::HandZoneChanged:
-		return FString();  // 太频繁，不弹提示
-	default:
-		return FString();
-	}
+	return UWacomBattleEventPresentationBuilder::FormatEventForPlayer(E);
 }

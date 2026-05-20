@@ -6,6 +6,8 @@
 #include "Types/WacomEnums.h"
 #include "BattleResultPacket.generated.h"
 
+class UCardDefinition;
+
 /**
  * 单个被破坏部位给予玩家的经验值记账（GDD §3.3）。
  *
@@ -44,6 +46,27 @@ struct WACOMBATTLE_API FKnockdownChoice
 };
 
 /**
+ * 战斗中获得、战后需要归入 Run 的卡牌记账。
+ *
+ * 第一版来源是击倒事件 Aid / Destroy 的部位奖励卡。战斗内创建 runtime card，
+ * 战斗结束后 Run 层按 Definition 生成新的持久 FCardInstance。
+ */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattleGainedCard
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TObjectPtr<UCardDefinition> Definition = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FName SourcePartId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	EKnockdownChoice SourceChoice = EKnockdownChoice::None;
+};
+
+/**
  * 战斗结束时打包给 Run 层结算的"战后包"。
  *
  * 对齐 Game_Design.md §9.2 战内 → 战外回传表。
@@ -56,6 +79,7 @@ struct WACOMBATTLE_API FKnockdownChoice
  *   - bWithdrawn：玩家通过击倒事件选择"撤离"结束战斗（Outcome=Victory，但 Run 层不计敌人为已击败）
  *   - KnockdownExpGains：战内被破坏部位的经验奖励列表（Stage 3）
  *   - KnockdownChoices：玩家在击倒事件中的选择列表（Stage 7）
+ *   - GainedCards：战斗中获得、战后归入 Run 的卡牌列表
  *   - DestroyedPartIds：本场战斗中被破坏的部位 ID 列表（Stage 7，撤离时持久化）
  *
  * 由 UBattleSession::BuildResultPacket() 构造，
@@ -109,6 +133,14 @@ struct WACOMBATTLE_API FBattleResultPacket
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FKnockdownChoice> KnockdownChoices;
+
+	/**
+	 * 战斗中获得、战斗结束后归入 Run 的卡牌。
+	 *
+	 * 第一版仅 Aid / Destroy 击倒奖励会写入；Defeat 时 Run 层不结算。
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TArray<FBattleGainedCard> GainedCards;
 
 	/**
 	 * 本场战斗中所有被破坏的部位 ID（GDD §10.5）。
