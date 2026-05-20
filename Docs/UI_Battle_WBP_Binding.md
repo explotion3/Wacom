@@ -105,6 +105,7 @@ WBP_HandPanel
 | 控件名 | 推荐类型 | 用途 |
 |---|---|---|
 | `CardDetailLayer` | `CanvasPanel` | 承接战斗手牌 hover 详情面板，建议覆盖整个 HUD 并位于手牌与敌方部位之上 |
+| `EventLogPanel` | `UBattleEventLogPanel` | 可选战斗事件日志抽屉，显示本场战斗最近事件；不走 CommonUI Layer |
 
 注意：
 - `CardDetailLayer` 未绑定时，如果 HUD 根控件是 `CanvasPanel`，C++ 会运行时创建 fallback layer。
@@ -113,6 +114,31 @@ WBP_HandPanel
 - `BattleHUD` 会记录当前详情来源卡，快速切换 hover 卡牌时，旧卡的 unhover 不会关闭新卡详情。
 - 详情面板为 `HitTestInvisible`，不抢点击；进入目标选择时会隐藏。
 - `BattleHUD::BuildTargetSelectionView()` 是敌方目标选择表现桥。当前 2D `EnemyInfoBar / EnemyPartWidget` 使用它，后续 HD-2D/PaperZD 敌方部位 Actor 也应按 `PartInstanceId` 读取它来驱动高亮和可点击状态。
+- `EventLogPanel` 是 `BattleHUD` 内部 UMG 子组件，不通过 `UWacomGameUIManagerSubsystem::PushContentToLayer()` 打开。WBP 中可以用自定义按钮调用 `BattleHUD::ToggleBattleEventLog()`。
+
+## WBP_BattleEventLogPanel
+
+父类：`UBattleEventLogPanel`
+
+推荐绑定：
+
+| 控件名 | 推荐类型 | 用途 |
+|---|---|---|
+| `EntriesBox` | `PanelWidget` | C++ 动态填充日志行 |
+| `TitleText` | `TextBlock` | 标题，建议显示“战斗日志” |
+| `CloseButton` | `Button` | 点击后关闭日志抽屉 |
+
+配置项：
+
+| 属性 | 用途 |
+|---|---|
+| `MaxEntries` | 日志面板最多保留的可显示事件数量 |
+| `bAutoScrollToLatest` | 追加事件后是否滚动到最新 |
+
+注意：
+- 当前日志行只显示 `FBattleEventPresentationView.MessageText`；`VisualTone / IconKey` 已在 ViewData 中保留，后续 WBP 可用来做颜色和图标。
+- `HandZoneChanged` 等 `bShouldDisplay=false` 的事件不会进入日志。
+- 日志历史只保存在 BattleHUD 生命周期内，切换 BattleSession 时清空。
 
 ## EnemyPartWidget / EnemyInfoBar
 

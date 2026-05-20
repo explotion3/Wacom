@@ -11,6 +11,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
@@ -173,6 +174,105 @@ bool FWacomUIBattleCardWidgetPresentationSpec::RunTest(const FString& /*Paramete
 	TestEqual(TEXT("Runtime cost refreshes"), Widget->GetCurrentCardViewData().Cost, 2);
 	TestFalse(TEXT("Playable card clears disabled flag"), Widget->GetCurrentCardViewData().bDisabled);
 	TestTrue(TEXT("Playable card enables root button"), Widget->IsRootButtonEnabled());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEventLogPanelSpec,
+	"Wacom.UI.Battle.EventLogPanel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UBattleEventLogPanel> Panel(NewObject<UBattleEventLogPanel>());
+	Panel->MaxEntries = 2;
+	Panel->TakeWidget();
+
+	FBattleEventPresentationView Hidden;
+	Hidden.EventType = EBattleEventType::HandZoneChanged;
+	Hidden.bShouldDisplay = false;
+
+	FBattleEventPresentationView First;
+	First.EventType = EBattleEventType::BattleStarted;
+	First.bShouldDisplay = true;
+	First.MessageText = FText::FromString(TEXT("战斗开始"));
+	First.VisualTone = EWacomBattleEventVisualTone::System;
+	First.IconKey = TEXT("BattleStarted");
+
+	FBattleEventPresentationView Second = First;
+	Second.EventType = EBattleEventType::CardPlayed;
+	Second.MessageText = FText::FromString(TEXT("打出卡牌，消耗 1 先机"));
+	Second.VisualTone = EWacomBattleEventVisualTone::Neutral;
+	Second.IconKey = TEXT("CardPlayed");
+
+	FBattleEventPresentationView Third = First;
+	Third.EventType = EBattleEventType::CardGained;
+	Third.MessageText = FText::FromString(TEXT("获得卡牌：毒牙"));
+	Third.VisualTone = EWacomBattleEventVisualTone::Positive;
+	Third.IconKey = TEXT("CardGained");
+
+	Panel->AppendEventLogEntries({ Hidden, First, Second, Third });
+
+	TestEqual(TEXT("Panel filters hidden entries and trims to max"), Panel->GetEntryCount(), 2);
+	TestEqual(TEXT("Panel keeps second entry after trim"), Panel->GetCurrentEntries()[0].MessageText.ToString(), FString(TEXT("打出卡牌，消耗 1 先机")));
+	TestEqual(TEXT("Panel keeps latest entry after trim"), Panel->GetCurrentEntries()[1].MessageText.ToString(), FString(TEXT("获得卡牌：毒牙")));
+	TestFalse(TEXT("Panel closed by default"), Panel->IsDrawerOpen());
+
+	Panel->ToggleDrawerOpen();
+	TestTrue(TEXT("Panel opens"), Panel->IsDrawerOpen());
+	Panel->ToggleDrawerOpen();
+	TestFalse(TEXT("Panel closes"), Panel->IsDrawerOpen());
+
+	Panel->ClearEventLog();
+	TestEqual(TEXT("Panel clears entries"), Panel->GetEntryCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDEventLogSpec,
+	"Wacom.UI.Battle.HUDEventLog",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDEventLogSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UBattleEventLogPanel> Panel(NewObject<UBattleEventLogPanel>(HUD.Get()));
+	HUD->BattleEventLogMaxEntries = 2;
+	HUD->SetEventLogPanelForTest(Panel.Get());
+	Panel->TakeWidget();
+
+	FBattleEvent Hidden;
+	Hidden.Type = EBattleEventType::HandZoneChanged;
+
+	FBattleEvent First;
+	First.Type = EBattleEventType::BattleStarted;
+
+	FBattleEvent Second;
+	Second.Type = EBattleEventType::HandLimitDiscarded;
+	Second.HandLimitDiscardSource = EHandLimitDiscardSource::EffectDraw;
+
+	FBattleEvent Third;
+	Third.Type = EBattleEventType::BattleEnded;
+	Third.Count = 1;
+
+	HUD->AppendBattleEventLogEntriesForTest({ Hidden, First, Second, Third });
+
+	TestEqual(TEXT("HUD history filters hidden and trims to max"), HUD->GetBattleEventLogEntryCount(), 2);
+	TestEqual(TEXT("Panel mirrors HUD history"), Panel->GetEntryCount(), 2);
+	TestEqual(TEXT("Panel latest text"), Panel->GetCurrentEntries()[1].MessageText.ToString(), FString(TEXT("战斗胜利")));
+
+	HUD->ToggleBattleEventLog();
+	TestTrue(TEXT("HUD toggles panel open"), HUD->IsBattleEventLogOpen());
+	HUD->SetBattleEventLogOpen(false);
+	TestFalse(TEXT("HUD closes panel"), HUD->IsBattleEventLogOpen());
+
+	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
+	HUD->SetSession(Session.Get());
+	HUD->SetSession(nullptr);
+	TestEqual(TEXT("Session change clears HUD history"), HUD->GetBattleEventLogEntryCount(), 0);
+	TestEqual(TEXT("Session change clears panel"), Panel->GetEntryCount(), 0);
 
 	return true;
 }

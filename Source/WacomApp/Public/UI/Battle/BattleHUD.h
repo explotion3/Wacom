@@ -4,12 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
+#include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 #include "Types/WacomEnums.h"
 #include "BattleHUD.generated.h"
 
 class UWacomBattleWidgetBase;
 class UCanvasPanel;
 class UCardWidget;
+class UBattleEventLogPanel;
 class UWacomCardDetailPanel;
 struct FBattleCommand;
 
@@ -125,6 +127,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "战斗手牌悬浮详情面板与卡牌之间的间距，单位为 Slate 像素。面板默认显示在卡牌左侧，左侧空间不足时换到右侧。"))
 	float CardDetailPanelPadding = 12.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|BattleEventLog", meta = (ClampMin = "1", UIMin = "10", UIMax = "300", ToolTip = "BattleHUD 内部保存的战斗事件日志最大条数。超过后只保留最近 N 条，并同步到日志抽屉。"))
+	int32 BattleEventLogMaxEntries = 80;
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	EBattleUIState GetUIState() const { return UIState; }
 
@@ -201,6 +206,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Targeting")
 	FBattleTargetSelectionView BuildTargetSelectionView() const;
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|EventLog")
+	void ToggleBattleEventLog();
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|EventLog")
+	void SetBattleEventLogOpen(bool bOpen);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|EventLog")
+	bool IsBattleEventLogOpen() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|EventLog")
+	int32 GetBattleEventLogEntryCount() const { return BattleEventLogHistory.Num(); }
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeOnInitialized() override;
@@ -260,6 +277,9 @@ protected:
 	TObjectPtr<class UEventToast> EventToast;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBattleEventLogPanel> EventLogPanel;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> CardDetailLayer;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI|CardDetail")
@@ -277,6 +297,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
 
+	UPROPERTY(Transient)
+	TArray<FBattleEventPresentationView> BattleEventLogHistory;
+
 	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
 	bool bLoggedMissingCardDetailLayer = false;
 
@@ -286,8 +309,15 @@ private:
 	/** 内部：提交 PlayCard 命令 + 事件消费 + 刷新。 */
 	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
 
-	/** 内部：消费 Session 事件到日志。P5 之后改为分发到 EventToast。 */
+	/** 内部：消费 Session 事件并分发给 Toast / 日志抽屉 / 击倒 dialog。 */
 	void ConsumeAndLogEvents();
+
+	void AppendBattleEventLogEntries(const TArray<struct FBattleEvent>& Events);
+	void TrimBattleEventLogHistory();
+	void SyncBattleEventLogPanel();
+
+	UFUNCTION()
+	void HandleBattleEventLogButtonClicked();
 
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
 	void AfterCommand();

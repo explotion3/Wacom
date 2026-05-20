@@ -76,7 +76,7 @@ namespace
 		return nullptr;
 	}
 
-	UCardDefinition* MakeDrawCard(FWacomBattleFixture& Fx, int32 DrawCount)
+	UCardDefinition* MakeKnockdownRewardLimitDrawCard(FWacomBattleFixture& Fx, int32 DrawCount)
 	{
 		UCardDefinition* Card = Fx.MakeNoopCard(/*Cost*/0);
 
@@ -351,7 +351,7 @@ bool FWacomKnockdownChoiceRewardCardRespectsHandLimitSpec::RunTest(const FString
 
 	UCardDefinition* LH = Fx.MakeNoopCard(/*Cost*/0);
 	UCardDefinition* RH = Fx.MakeSimpleDamageCard(/*Cost*/0, /*Damage*/100);
-	UCardDefinition* DrawCard = MakeDrawCard(Fx, /*DrawCount*/7);
+	UCardDefinition* DrawCard = MakeKnockdownRewardLimitDrawCard(Fx, /*DrawCount*/7);
 	UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
 
 	TArray<UCardDefinition*> Deck = { DrawCard };

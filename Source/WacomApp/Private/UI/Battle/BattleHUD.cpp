@@ -7,6 +7,7 @@
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/EventToast.h"
+#include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
@@ -20,6 +21,8 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/Button.h"
+#include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 
@@ -70,6 +73,7 @@ void UBattleHUD::NativeConstruct()
 	if (EnemyInfoBar)    { ChildBattleWidgets.Add(EnemyInfoBar); }
 	if (ActionPanel)     { ChildBattleWidgets.Add(ActionPanel); }
 	if (EquipmentBar)    { ChildBattleWidgets.Add(EquipmentBar); }
+	if (EventLogPanel)   { ChildBattleWidgets.Add(EventLogPanel); }
 
 	if (HandPanel)
 	{
@@ -217,6 +221,32 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			S->SetAutoSize(false);
 		}
 
+		UButton* EventLogButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("EventLogButton"));
+		UTextBlock* EventLogButtonLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("EventLogButtonLabel"));
+		EventLogButtonLabel->SetText(LOCTEXT("EventLogButton", "日志"));
+		EventLogButtonLabel->SetJustification(ETextJustify::Center);
+		EventLogButton->AddChild(EventLogButtonLabel);
+		EventLogButton->OnClicked.AddDynamic(this, &UBattleHUD::HandleBattleEventLogButtonClicked);
+		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(EventLogButton))
+		{
+			S->SetAnchors(FAnchors(1.0f, 0.0f));
+			S->SetAlignment(FVector2D(1.0f, 0.0f));
+			S->SetOffsets(FMargin(-20.0f, 20.0f, 72.0f, 34.0f));
+			S->SetAutoSize(false);
+			S->SetZOrder(8);
+		}
+
+		EventLogPanel = WidgetTree->ConstructWidget<UBattleEventLogPanel>(UBattleEventLogPanel::StaticClass(), TEXT("EventLogPanel"));
+		EventLogPanel->SetDrawerOpen(false);
+		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(EventLogPanel))
+		{
+			S->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 1.0f));
+			S->SetAlignment(FVector2D(1.0f, 0.0f));
+			S->SetOffsets(FMargin(0.0f, 0.0f, 520.0f, 0.0f));
+			S->SetAutoSize(false);
+			S->SetZOrder(9);
+		}
+
 		CardDetailLayer = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("CardDetailLayer"));
 		CardDetailLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
 		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(CardDetailLayer))
@@ -263,6 +293,8 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	PendingTargetingCardId.Invalidate();
 	bHasBroadcastBattleEnd = false;
 	HideCardDetailPanel();
+	BattleEventLogHistory.Reset();
+	SyncBattleEventLogPanel();
 }
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
@@ -317,6 +349,24 @@ FBattleTargetSelectionView UBattleHUD::BuildTargetSelectionView() const
 	}
 
 	return View;
+}
+
+void UBattleHUD::ToggleBattleEventLog()
+{
+	SetBattleEventLogOpen(!IsBattleEventLogOpen());
+}
+
+void UBattleHUD::SetBattleEventLogOpen(bool bOpen)
+{
+	if (EventLogPanel)
+	{
+		EventLogPanel->SetDrawerOpen(bOpen);
+	}
+}
+
+bool UBattleHUD::IsBattleEventLogOpen() const
+{
+	return EventLogPanel && EventLogPanel->IsDrawerOpen();
 }
 
 // ================ 状态机 ================
@@ -747,6 +797,8 @@ void UBattleHUD::ConsumeAndLogEvents()
 		EventToast->EnqueueEvents(Events);
 	}
 
+	AppendBattleEventLogEntries(Events);
+
 	// Stage 7：处理击倒事件请求 → push KnockdownChoiceDialog 到 Modal 层
 	for (const FBattleEvent& E : Events)
 	{
@@ -779,6 +831,52 @@ void UBattleHUD::ConsumeAndLogEvents()
 
 		Dialog->SetContext(this, ChoiceView);
 	}
+}
+
+void UBattleHUD::AppendBattleEventLogEntries(const TArray<FBattleEvent>& Events)
+{
+	TArray<FBattleEventPresentationView> VisibleEntries;
+	for (const FBattleEvent& E : Events)
+	{
+		FBattleEventPresentationView View = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(E);
+		if (!View.bShouldDisplay)
+		{
+			continue;
+		}
+		BattleEventLogHistory.Add(View);
+		VisibleEntries.Add(MoveTemp(View));
+	}
+	if (VisibleEntries.IsEmpty())
+	{
+		return;
+	}
+
+	TrimBattleEventLogHistory();
+	SyncBattleEventLogPanel();
+}
+
+void UBattleHUD::TrimBattleEventLogHistory()
+{
+	const int32 SafeMaxEntries = FMath::Max(1, BattleEventLogMaxEntries);
+	if (BattleEventLogHistory.Num() > SafeMaxEntries)
+	{
+		BattleEventLogHistory.RemoveAt(0, BattleEventLogHistory.Num() - SafeMaxEntries);
+	}
+}
+
+void UBattleHUD::SyncBattleEventLogPanel()
+{
+	if (!EventLogPanel)
+	{
+		return;
+	}
+	EventLogPanel->MaxEntries = FMath::Max(1, BattleEventLogMaxEntries);
+	EventLogPanel->SetEventLogEntries(BattleEventLogHistory);
+}
+
+void UBattleHUD::HandleBattleEventLogButtonClicked()
+{
+	ToggleBattleEventLog();
 }
 
 #undef LOCTEXT_NAMESPACE

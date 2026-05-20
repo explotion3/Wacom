@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EnemyPartWidget.h"
@@ -169,6 +170,21 @@ public:
 	void HandleCardUnhoveredForTest(UCardWidget* SourceWidget)
 	{
 		HandleHandCardUnhovered(SourceWidget);
+	}
+
+	void AppendBattleEventLogEntriesForTest(const TArray<FBattleEvent>& Events)
+	{
+		AppendBattleEventLogEntries(Events);
+	}
+
+	void SyncBattleEventLogPanelForTest()
+	{
+		SyncBattleEventLogPanel();
+	}
+
+	void SetEventLogPanelForTest(UBattleEventLogPanel* InPanel)
+	{
+		EventLogPanel = InPanel;
 	}
 };
 
