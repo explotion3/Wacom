@@ -205,6 +205,15 @@ struct FShopOfferDefinition
 当前生成内容：
 - `DA_Shop_DebugSnake`（蛇巢调试商店）：卖 `毒牙`、`赤腹工蚁`、`朝光暮蝶`、`虫妹的小布袋`。
 
+编辑器侧已接入 `UWacomShopDefinitionValidator` 内容防呆。校验重点：
+- `ShopId` 不能为空。
+- `Offers` 不能为空；如果需要剧情空商店，后续应加显式字段表达，不用空列表伪装。
+- 每个 Offer 必须配置 `CardDefinition`。
+- `Price` 不能为负数；`0` 表示免费商品，合法。
+- 第一版不禁止同一张卡重复出现在多个 Offer 中，因为后续可能用于多份库存或不同价格变体。
+
+自动化测试 `Wacom.Data.Shop.DebugSnakeAssetValidation` 会验证 `DA_Shop_DebugSnake` 能通过同一套校验规则，避免商店内容生成漂移。
+
 ---
 
 ## §6 UWacomRunEventDefinition 字段表

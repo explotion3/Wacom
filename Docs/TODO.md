@@ -57,7 +57,7 @@
 | 击倒事件 UI dialog 美术 | Stage 7 已落地：C++ 硬编码 CanvasPanel + Border + Button 布局，BindWidget 锚点 PartNameText/AidButton/WithdrawButton/DestroyButton 就位 | 美术阶段配 WBP 即接 |
 | 地图系统（Stage 8）| 节点/通道/迷雾/撤离回路规则已在 GDD §10 确认，代码未开始 | 新建 WacomMap 模块或放 WacomRun 下 |
 | 节点事件（Stage 9）| 轻量 RunEvent 事件图基础链路已就位：`UWacomRunEventDefinition`、`RunSession::BeginRunEvent / BuildCurrentRunEventSnapshot / ChooseRunEventOptionWithResult / EndRunEvent`、`AWacomRunEventTriggerActor`、最小 `UWacomRunEventScreen`、调试事件资产生成器；事件选项结果已接入 AppToast，禁用原因已中文化；完成事件会显示弱提示且按 E 弹已完成 Toast；条件/效果已支持拥有/缺少卡牌、事件完成状态、交出卡牌、标记指定事件完成；`DA_Event_DebugSnakeGift` 已有资产结构验证并包含“交出毒牙”分支；`UWacomRunEventDefinitionValidator` 已接入编辑器内容防呆 | 后续补随机事件池、更多条件/效果类型、事件池按地图节点生成、正式 `WBP_RunEventScreen`、存档接入 `RunEventStates` |
-| 商店内容与 UI | `RunSession::BeginShopVisit(ShopId, Offers) / BuildCurrentShopSnapshot / PurchaseShopOffer / EndShopVisit` 已支持按节点持久化库存、已购买状态、关闭商店时按访问扣 1 节点；`AWacomShopTriggerActor` 可引用 `UShopDefinition` 或兼容旧手动 Offers；`DA_Shop_DebugSnake` 已作为调试商店内容；商品行已通过 `UWacomShopPresentationBuilder` 输出 ViewData 并复用卡牌展示 Builder | 后续设计随机商品池、价格公式、正式 `WBP_ShopScreen`、商品卡面预览、hover 详情、存档接入 `ShopStates`；当前 `ShopStates` 暂不进 SaveGame |
+| 商店内容与 UI | `RunSession::BeginShopVisit(ShopId, Offers) / BuildCurrentShopSnapshot / PurchaseShopOffer / EndShopVisit` 已支持按节点持久化库存、已购买状态、关闭商店时按访问扣 1 节点；`AWacomShopTriggerActor` 可引用 `UShopDefinition` 或兼容旧手动 Offers；`DA_Shop_DebugSnake` 已作为调试商店内容；商品行已通过 `UWacomShopPresentationBuilder` 输出 ViewData 并复用卡牌展示 Builder；`UWacomShopDefinitionValidator` 已接入编辑器内容防呆并验证调试商店资产 | 后续设计随机商品池、价格公式、正式 `WBP_ShopScreen`、商品卡面预览、hover 详情、存档接入 `ShopStates`；当前 `ShopStates` 暂不进 SaveGame |
 
 ### UI / 表现层
 
