@@ -8,6 +8,7 @@
 #include "BattleEventLogPanel.generated.h"
 
 class UButton;
+class UBattleEventLogEntryWidget;
 class UPanelWidget;
 class UScrollBox;
 class UTextBlock;
@@ -30,6 +31,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|BattleEventLog", meta = (ToolTip = "追加新事件后是否自动滚动到最新条目。第一版只在 C++ fallback ScrollBox 存在时生效。"))
 	bool bAutoScrollToLatest = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|BattleEventLog", meta = (ToolTip = "单条战斗日志使用的 Widget 类。为空时使用 C++ UBattleEventLogEntryWidget fallback；后续可指定 WBP_BattleEventLogEntry 来按 tone/icon key 做样式。"))
+	TSubclassOf<UBattleEventLogEntryWidget> EntryWidgetClass;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|EventLog")
 	void SetEventLogEntries(const TArray<FBattleEventPresentationView>& Entries);
@@ -83,4 +87,5 @@ private:
 	void TrimToMaxEntries();
 	void RebuildEntryWidgets();
 	void AddEntryWidget(const FBattleEventPresentationView& Entry);
+	UBattleEventLogEntryWidget* CreateEntryWidget(const FBattleEventPresentationView& Entry);
 };

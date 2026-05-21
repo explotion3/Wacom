@@ -1117,6 +1117,221 @@ bool FWacomRunDeckGoldOpsSpec::RunTest(const FString& /*Parameters*/)
 	return true;
 }
 
+// ================ 商店购买 ================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckShopOffersInitializeSnapshotSpec,
+	"Wacom.Run.Deck.ShopOffersInitializeSnapshot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckShopOffersInitializeSnapshotSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Bag = MakeBagCard(Fx, 5);
+	UCardDefinition* ShopCardA = Fx.MakeNoopCard(0);
+	UCardDefinition* ShopCardB = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Bag });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	const int32 StartNodes = Run->GetRemainingNodeCount();
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ ShopCardA, 3 });
+	Offers.Add({ ShopCardB, 0 });
+
+	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.A"), Offers));
+	const FRunShopSnapshot Snapshot = Run->BuildCurrentShopSnapshot();
+	TestTrue(TEXT("Shop visit active"), Snapshot.bIsActive);
+	TestEqual(TEXT("Snapshot shop id"), Snapshot.ShopId, FName(TEXT("Shop.A")));
+	TestFalse(TEXT("No purchase on enter"), Snapshot.bHasPurchaseThisVisit);
+	TestEqual(TEXT("Two offers"), Snapshot.Offers.Num(), 2);
+	TestTrue(TEXT("Offer A id valid"), Snapshot.Offers[0].OfferId.IsValid());
+	TestTrue(TEXT("Offer B id valid"), Snapshot.Offers[1].OfferId.IsValid());
+	TestNotEqual(TEXT("Offer ids differ"), Snapshot.Offers[0].OfferId, Snapshot.Offers[1].OfferId);
+	TestEqual(TEXT("Offer A card"), Snapshot.Offers[0].CardDefinition.Get(), ShopCardA);
+	TestEqual(TEXT("Offer A price"), Snapshot.Offers[0].Price, 3);
+	TestFalse(TEXT("Offer A not purchased"), Snapshot.Offers[0].bPurchased);
+	TestEqual(TEXT("Offer B card"), Snapshot.Offers[1].CardDefinition.Get(), ShopCardB);
+	TestEqual(TEXT("Offer B free"), Snapshot.Offers[1].Price, 0);
+	TestEqual(TEXT("Nodes unchanged after entering shop"), Run->GetRemainingNodeCount(), StartNodes);
+
+	Run->EndShopVisit();
+	TestFalse(TEXT("Shop visit closed"), Run->IsShopVisitActive());
+	TestEqual(TEXT("Closing without purchase does not consume node"), Run->GetRemainingNodeCount(), StartNodes);
+	TestFalse(TEXT("Closed snapshot inactive"), Run->BuildCurrentShopSnapshot().bIsActive);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckShopOfferPurchaseSpec,
+	"Wacom.Run.Deck.ShopOfferPurchase",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckShopOfferPurchaseSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Bag = MakeBagCard(Fx, 5);
+	UCardDefinition* ShopCardA = Fx.MakeNoopCard(0);
+	UCardDefinition* ShopCardB = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Bag });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+	Run->AddGold(10);
+
+	const int32 StartNodes = Run->GetRemainingNodeCount();
+	const int32 StartBackpackCount = Run->GetBackpack().Num();
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ ShopCardA, 3 });
+	Offers.Add({ ShopCardB, 2 });
+	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.A"), Offers));
+
+	FRunShopSnapshot Snapshot = Run->BuildCurrentShopSnapshot();
+	const FGuid OfferAId = Snapshot.Offers[0].OfferId;
+	const FGuid OfferBId = Snapshot.Offers[1].OfferId;
+
+	TestTrue(TEXT("Purchase offer A succeeds"), Run->PurchaseShopOffer(OfferAId));
+	TestEqual(TEXT("Gold reduced by A price"), Run->GetGold(), 7);
+	TestTrue(TEXT("Purchased card A enters backpack"), Run->IsCardInBackpack(ShopCardA));
+	TestEqual(TEXT("Backpack gained one card"), Run->GetBackpack().Num(), StartBackpackCount + 1);
+	TestEqual(TEXT("Purchase does not consume node before close"), Run->GetRemainingNodeCount(), StartNodes);
+
+	Snapshot = Run->BuildCurrentShopSnapshot();
+	TestTrue(TEXT("Visit marked purchased"), Snapshot.bHasPurchaseThisVisit);
+	TestTrue(TEXT("Offer A marked purchased"), Snapshot.Offers[0].bPurchased);
+	TestFalse(TEXT("Offer B still unpurchased"), Snapshot.Offers[1].bPurchased);
+
+	TestTrue(TEXT("Purchase offer B succeeds"), Run->PurchaseShopOffer(OfferBId));
+	TestEqual(TEXT("Gold reduced by B price"), Run->GetGold(), 5);
+	TestTrue(TEXT("Purchased card B enters backpack"), Run->IsCardInBackpack(ShopCardB));
+	TestEqual(TEXT("Backpack gained two cards"), Run->GetBackpack().Num(), StartBackpackCount + 2);
+	TestEqual(TEXT("Second purchase still does not consume node before close"), Run->GetRemainingNodeCount(), StartNodes);
+
+	Run->EndShopVisit();
+	TestEqual(TEXT("Closing after purchases consumes exactly one node"), Run->GetRemainingNodeCount(), StartNodes - 1);
+	TestFalse(TEXT("Shop closed"), Run->IsShopVisitActive());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckShopOfferRejectsInvalidCasesSpec,
+	"Wacom.Run.Deck.ShopOfferRejectsInvalidCases",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckShopOfferRejectsInvalidCasesSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Bag = MakeBagCard(Fx, 5);
+	UCardDefinition* ShopCard = Fx.MakeNoopCard(0);
+	UCardDefinition* ValidCard = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Bag });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+	Run->AddGold(1);
+
+	const int32 StartGold = Run->GetGold();
+	const int32 StartNodes = Run->GetRemainingNodeCount();
+	const int32 StartBackpackCount = Run->GetBackpack().Num();
+	TestFalse(TEXT("Purchase without active shop fails"), Run->PurchaseShopOffer(FGuid::NewGuid()));
+
+	TArray<FRunShopOfferInput> InvalidOffers;
+	InvalidOffers.Add({ nullptr, 0 });
+	InvalidOffers.Add({ ShopCard, -1 });
+	InvalidOffers.Add({ ValidCard, 2 });
+	TestFalse(TEXT("None shop id fails"), Run->BeginShopVisit(NAME_None, InvalidOffers));
+	TestTrue(TEXT("Valid shop id succeeds"), Run->BeginShopVisit(TEXT("Shop.Invalid"), InvalidOffers));
+
+	FRunShopSnapshot Snapshot = Run->BuildCurrentShopSnapshot();
+	TestEqual(TEXT("Only valid non-negative card offer kept"), Snapshot.Offers.Num(), 1);
+	const FGuid ValidOfferId = Snapshot.Offers[0].OfferId;
+	TestEqual(TEXT("Kept offer card"), Snapshot.Offers[0].CardDefinition.Get(), ValidCard);
+
+	TestFalse(TEXT("Unknown offer fails"), Run->PurchaseShopOffer(FGuid::NewGuid()));
+	TestFalse(TEXT("Invalid offer id fails"), Run->PurchaseShopOffer(FGuid()));
+	TestFalse(TEXT("Insufficient gold fails"), Run->PurchaseShopOffer(ValidOfferId));
+	TestEqual(TEXT("Gold unchanged on failures"), Run->GetGold(), StartGold);
+	TestEqual(TEXT("Backpack unchanged on failures"), Run->GetBackpack().Num(), StartBackpackCount);
+	TestEqual(TEXT("Nodes unchanged on failures"), Run->GetRemainingNodeCount(), StartNodes);
+	TestFalse(TEXT("Failed purchase does not mark visit purchase"), Run->BuildCurrentShopSnapshot().bHasPurchaseThisVisit);
+
+	Run->AddGold(2);
+	TestTrue(TEXT("Purchase succeeds after adding gold"), Run->PurchaseShopOffer(ValidOfferId));
+	TestFalse(TEXT("Repeat purchase rejected"), Run->PurchaseShopOffer(ValidOfferId));
+	TestEqual(TEXT("Repeat rejection keeps one purchased card"), Run->GetBackpack().Num(), StartBackpackCount + 1);
+
+	Run->EndShopVisit();
+	TestEqual(TEXT("One successful purchase consumes one node on close"), Run->GetRemainingNodeCount(), StartNodes - 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckShopNodeInventoryPersistsSpec,
+	"Wacom.Run.Deck.ShopNodeInventoryPersists",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckShopNodeInventoryPersistsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Bag = MakeBagCard(Fx, 5);
+	UCardDefinition* ShopACard1 = Fx.MakeNoopCard(0);
+	UCardDefinition* ShopACard2 = Fx.MakeNoopCard(0);
+	UCardDefinition* ReplacementCard = Fx.MakeNoopCard(0);
+	UCardDefinition* ShopBCard = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Bag });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+	Run->AddGold(10);
+
+	TArray<FRunShopOfferInput> ShopAOffers;
+	ShopAOffers.Add({ ShopACard1, 1 });
+	ShopAOffers.Add({ ShopACard2, 1 });
+	TestTrue(TEXT("Begin shop A succeeds"), Run->BeginShopVisit(TEXT("Shop.A"), ShopAOffers));
+	FRunShopSnapshot SnapshotA = Run->BuildCurrentShopSnapshot();
+	const FGuid ShopAOffer1 = SnapshotA.Offers[0].OfferId;
+	const FGuid ShopAOffer2 = SnapshotA.Offers[1].OfferId;
+	TestTrue(TEXT("Buy first A offer"), Run->PurchaseShopOffer(ShopAOffer1));
+	Run->EndShopVisit();
+
+	const int32 NodesAfterFirstVisit = Run->GetRemainingNodeCount();
+	TArray<FRunShopOfferInput> ReplacementOffers;
+	ReplacementOffers.Add({ ReplacementCard, 9 });
+	TestTrue(TEXT("Reopen shop A succeeds"), Run->BeginShopVisit(TEXT("Shop.A"), ReplacementOffers));
+	SnapshotA = Run->BuildCurrentShopSnapshot();
+	TestEqual(TEXT("Shop A keeps original offer count"), SnapshotA.Offers.Num(), 2);
+	TestEqual(TEXT("Shop A ignores replacement card"), SnapshotA.Offers[0].CardDefinition.Get(), ShopACard1);
+	TestTrue(TEXT("Shop A preserves purchased flag"), SnapshotA.Offers[0].bPurchased);
+	TestFalse(TEXT("Shop A second offer still unpurchased"), SnapshotA.Offers[1].bPurchased);
+	TestEqual(TEXT("Shop A offer id stable after reopen"), SnapshotA.Offers[1].OfferId, ShopAOffer2);
+	TestTrue(TEXT("Buy second A offer on later visit"), Run->PurchaseShopOffer(ShopAOffer2));
+	Run->EndShopVisit();
+	TestTrue(TEXT("Second paid visit can advance phase when nodes run out"), Run->GetCurrentTimePhase() == ETimePhase::Day);
+	TestEqual(TEXT("Day nodes reset after second paid visit"), Run->GetRemainingNodeCount(), Run->GetRunState().InitialNodeCount_Day);
+
+	TArray<FRunShopOfferInput> ShopBOffers;
+	ShopBOffers.Add({ ShopBCard, 0 });
+	TestTrue(TEXT("Begin shop B succeeds"), Run->BeginShopVisit(TEXT("Shop.B"), ShopBOffers));
+	const FRunShopSnapshot SnapshotB = Run->BuildCurrentShopSnapshot();
+	TestEqual(TEXT("Shop B independent offer count"), SnapshotB.Offers.Num(), 1);
+	TestEqual(TEXT("Shop B independent card"), SnapshotB.Offers[0].CardDefinition.Get(), ShopBCard);
+	TestFalse(TEXT("Shop B offer starts unpurchased"), SnapshotB.Offers[0].bPurchased);
+
+	return true;
+}
+
 // ================ Stage 4.3：B 类容器卡骨架 ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

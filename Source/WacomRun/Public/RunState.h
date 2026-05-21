@@ -34,6 +34,67 @@ struct WACOMRUN_API FBattleProgressSnapshot
 	TArray<FName> DestroyedPartIds;
 };
 
+/** 调用方传入的一条商店商品配置。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopOfferInput
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop")
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop", meta = (ClampMin = "0", UIMin = "0", ToolTip = "商品价格，单位为金币。0 表示免费商品；负数输入会被跳过。"))
+	int32 Price = 0;
+};
+
+/** Run 内保存的一条商店商品状态。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopOffer
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	FGuid OfferId;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	int32 Price = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	bool bPurchased = false;
+};
+
+/** 单个商店节点在当前 Run 内的库存状态。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	TArray<FRunShopOffer> Offers;
+};
+
+/** 当前商店 UI/测试可读取的只读快照。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	FName ShopId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	bool bIsActive = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	bool bHasPurchaseThisVisit = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	TArray<FRunShopOffer> Offers;
+};
+
 /**
  * 一次冒险（Run）的持久状态。
  *
@@ -140,6 +201,14 @@ struct WACOMRUN_API FRunState
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Economy")
 	int32 Gold = 0;
+
+	/** 当前正在访问的商店节点 ID。NAME_None 表示没有打开商店。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	FName ActiveShopId = NAME_None;
+
+	/** 当前商店访问内是否买过至少一件商品。关闭商店时据此消耗 1 节点。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	bool bShopVisitHasPurchase = false;
 
 	// ---- §8：时间与昼夜 ----
 
@@ -270,6 +339,10 @@ struct WACOMRUN_API FRunState
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
 	TMap<FName, FBattleProgressSnapshot> BattleProgress;
+
+	/** 商店节点库存状态。Key = 场景商店/节点 PersistentId；当前只在 Run 内存态保留，不接 SaveGame。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	TMap<FName, FRunShopState> ShopStates;
 
 	/** 玩家在探索地图的 Transform。仅当 bHasPlayerTransform == true 时有效。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")

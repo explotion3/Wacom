@@ -41,6 +41,7 @@
 namespace
 {
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
+	const TCHAR* BattleEventLogPanelPath = TEXT("/Game/Wacom/UI/Battle/WBP_BattleEventLogPanel.WBP_BattleEventLogPanel_C");
 }
 
 void UBattleHUD::NativeOnInitialized()
@@ -236,7 +237,13 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			S->SetZOrder(8);
 		}
 
-		EventLogPanel = WidgetTree->ConstructWidget<UBattleEventLogPanel>(UBattleEventLogPanel::StaticClass(), TEXT("EventLogPanel"));
+		TSubclassOf<UBattleEventLogPanel> EventLogPanelClass = UBattleEventLogPanel::StaticClass();
+		if (UClass* LoadedEventLogPanelClass = LoadClass<UBattleEventLogPanel>(nullptr, BattleEventLogPanelPath))
+		{
+			EventLogPanelClass = LoadedEventLogPanelClass;
+		}
+
+		EventLogPanel = WidgetTree->ConstructWidget<UBattleEventLogPanel>(EventLogPanelClass, TEXT("EventLogPanel"));
 		EventLogPanel->SetDrawerOpen(false);
 		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(EventLogPanel))
 		{

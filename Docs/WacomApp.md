@@ -190,7 +190,7 @@ Widget（C++ 直接订阅 OnRunViewModelRefreshedNative，未来 WBP 可走 View
 
 - `UWacomBattleEventPresentationBuilder` 负责把部分 `FBattleEvent` 转成 `FBattleEventPresentationView`；它只做 UI 展示文本、tone、icon key，不参与规则判断。
 - `EventToast` 当前只消费 `PresentationView.MessageText` 并显示 Toast 队列；`VisualTone / IconKey` 已预留给后续颜色、图标、音效和战斗日志。
-- `BattleEventLogPanel` 是 `BattleHUD` 内部半屏日志抽屉，复用同一份 `FBattleEventPresentationView` 显示本场战斗最近事件；它不是独立 CommonUI 页面，不通过 Layer Stack push/pop。
+- `BattleEventLogPanel` 是 `BattleHUD` 内部半屏日志抽屉，复用同一份 `FBattleEventPresentationView` 显示本场战斗最近事件；它不是独立 CommonUI 页面，不通过 Layer Stack push/pop。C++ fallback 会尝试加载 `WBP_BattleEventLogPanel / WBP_BattleEventLogEntry`，缺失时使用 C++ 默认布局。
 - `HandLimitDiscarded` 表示某张卡因普通手牌上限进入弃牌区，UI/日志可以用它播放"因手牌上限弃牌"表现。
 - `HandLimitDiscarded.CardInstanceId` 是被弃掉的卡；`ActorInstanceId` 只在 `EffectDraw` 时表示触发抽牌的源卡；`HandLimitDiscardSource` 区分 `TurnStart / EffectDraw / PassiveOnCompanionCount`。
 - `CardGained` 表示战斗中获得一张新卡。第一版来源是击倒事件 Aid / Destroy 的部位奖励卡；`CardDefinition` 给 UI/日志显示卡名，`CardInstanceId` 是本场战斗 runtime 实例，战后是否归入 Run 以 `FBattleResultPacket.GainedCards` 为准。

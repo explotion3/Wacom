@@ -115,10 +115,13 @@ WBP_HandPanel
 - 详情面板为 `HitTestInvisible`，不抢点击；进入目标选择时会隐藏。
 - `BattleHUD::BuildTargetSelectionView()` 是敌方目标选择表现桥。当前 2D `EnemyInfoBar / EnemyPartWidget` 使用它，后续 HD-2D/PaperZD 敌方部位 Actor 也应按 `PartInstanceId` 读取它来驱动高亮和可点击状态。
 - `EventLogPanel` 是 `BattleHUD` 内部 UMG 子组件，不通过 `UWacomGameUIManagerSubsystem::PushContentToLayer()` 打开。WBP 中可以用自定义按钮调用 `BattleHUD::ToggleBattleEventLog()`。
+- C++ fallback `BattleHUD` 会默认尝试加载 `/Game/Wacom/UI/Battle/WBP_BattleEventLogPanel`，缺失时回退到 C++ `UBattleEventLogPanel`。
 
 ## WBP_BattleEventLogPanel
 
 父类：`UBattleEventLogPanel`
+
+推荐资产路径：`/Game/Wacom/UI/Battle/WBP_BattleEventLogPanel`
 
 推荐绑定：
 
@@ -128,17 +131,49 @@ WBP_HandPanel
 | `TitleText` | `TextBlock` | 标题，建议显示“战斗日志” |
 | `CloseButton` | `Button` | 点击后关闭日志抽屉 |
 
+推荐结构：
+
+```text
+WBP_BattleEventLogPanel
+└─ Root / Border / Overlay
+   └─ VerticalBox
+      ├─ Header / HorizontalBox
+      │  ├─ TitleText
+      │  └─ CloseButton
+      └─ ScrollBox
+         └─ VerticalBox，命名为 EntriesBox
+```
+
 配置项：
 
 | 属性 | 用途 |
 |---|---|
 | `MaxEntries` | 日志面板最多保留的可显示事件数量 |
 | `bAutoScrollToLatest` | 追加事件后是否滚动到最新 |
+| `EntryWidgetClass` | 单条日志使用的 widget 类，建议指定 `WBP_BattleEventLogEntry` |
 
 注意：
 - 当前日志行只显示 `FBattleEventPresentationView.MessageText`；`VisualTone / IconKey` 已在 ViewData 中保留，后续 WBP 可用来做颜色和图标。
 - `HandZoneChanged` 等 `bShouldDisplay=false` 的事件不会进入日志。
 - 日志历史只保存在 BattleHUD 生命周期内，切换 BattleSession 时清空。
+- `EntriesBox` 可以是 `VerticalBox`；C++ 只负责动态 AddChild，不在这里写死美术样式。
+
+## WBP_BattleEventLogEntry
+
+父类：`UBattleEventLogEntryWidget`
+
+推荐资产路径：`/Game/Wacom/UI/Battle/WBP_BattleEventLogEntry`
+
+推荐绑定：
+
+| 控件名 | 推荐类型 | 用途 |
+|---|---|---|
+| `MessageText` | `TextBlock` | 显示 `FBattleEventPresentationView.MessageText` |
+
+注意：
+- `SetEventLogEntryData()` 会保存完整 `FBattleEventPresentationView`，然后触发 `BP_OnEventLogEntryUpdated`。
+- WBP 可在 `BP_OnEventLogEntryUpdated` 中读取 `VisualTone / IconKey`，用来切换文字颜色、图标或背景。
+- 单条日志只是显示组件，不提交战斗命令。
 
 ## EnemyPartWidget / EnemyInfoBar
 

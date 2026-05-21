@@ -541,6 +541,59 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Economy")
 	bool RemoveGold(int32 Amount);
 
+	// ---- 商店购买 ----
+
+	/**
+	 * 开始一次商店访问。
+	 *
+	 * ShopId 使用场景商店/节点的 PersistentId。第一次打开该 ShopId 时用传入 Offers 初始化库存；
+	 * 之后重复打开同一 ShopId 会保留既有库存和已购买状态，忽略新的 Offers。
+	 * 打开商店不消耗节点，关闭时若本次访问买过至少一件商品才消耗 1 节点。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
+	bool BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
+
+	/**
+	 * 结束当前商店访问并清理访问标记。
+	 *
+	 * 如果本次访问买过至少一件商品，则在关闭时消耗 1 节点；未购买则不消耗。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
+	void EndShopVisit();
+
+	/** 当前是否处于一次商店访问。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Shop")
+	bool IsShopVisitActive() const { return !RunState.ActiveShopId.IsNone(); }
+
+	/** 当前商店访问是否已经买过至少一件商品。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Shop")
+	bool HasCurrentShopVisitPurchase() const { return RunState.bShopVisitHasPurchase; }
+
+	/** 构建当前商店的只读快照。无 active shop 时返回空快照。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Shop")
+	FRunShopSnapshot BuildCurrentShopSnapshot() const;
+
+	/**
+	 * 购买当前商店中的一条商品。
+	 *
+	 * 成功后立即扣金币、获得卡牌并标记 Offer 已购买；节点消耗延迟到 EndShopVisit。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
+	bool PurchaseShopOffer(FGuid OfferId);
+
+	/**
+	 * 从商店购买一张卡。
+	 *
+	 * 行为：
+	 *   - Card 为空、Price < 0、金币不足时拒绝，不修改 RunState。
+	 *   - 成功时扣金币，并通过 AcquireCardToRun 的同等内部路径把卡加入背包。
+	 *   - 不处理商店库存或节点消耗；正式商店节点流程使用 PurchaseShopOffer。
+	 *
+	 * @return true=购买成功；false=拒绝。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
+	bool PurchaseCardFromShop(UCardDefinition* Card, int32 Price);
+
 	// ---- 战斗联动 ----
 
 	/**
@@ -686,6 +739,9 @@ private:
 	 *     `NotifyRunStateChanged()` 一次。
 	 */
 	void RecomputeBurdenInternal();
+
+	/** 私有路径：AcquireCardToRun 的"不广播"版本，供复合 Run 操作统一尾部广播。 */
+	bool AcquireCardToRunInternal(UCardDefinition* Card);
 
 	/**
 	 * 私有路径：DestroyCardFromBackpack 的"不广播"版本（Stage 4.5.1 任务 9.4 / R2.16）。

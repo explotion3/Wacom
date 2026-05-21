@@ -2,6 +2,8 @@
 
 #include "UI/Battle/BattleEventLogPanel.h"
 
+#include "UI/Battle/BattleEventLogEntryWidget.h"
+
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -99,6 +101,20 @@ TSharedRef<SWidget> UBattleEventLogPanel::RebuildWidget()
 void UBattleEventLogPanel::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (!EntryWidgetClass)
+	{
+		if (UClass* LoadedEntryClass = LoadClass<UBattleEventLogEntryWidget>(
+			nullptr,
+			TEXT("/Game/Wacom/UI/Battle/WBP_BattleEventLogEntry.WBP_BattleEventLogEntry_C")))
+		{
+			EntryWidgetClass = LoadedEntryClass;
+		}
+		else
+		{
+			EntryWidgetClass = UBattleEventLogEntryWidget::StaticClass();
+		}
+	}
+
 	if (CloseButton)
 	{
 		CloseButton->OnClicked.RemoveAll(this);
@@ -198,23 +214,42 @@ void UBattleEventLogPanel::AddEntryWidget(const FBattleEventPresentationView& En
 		return;
 	}
 
-	UTextBlock* Text = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), NAME_None);
-	Text->SetText(Entry.MessageText);
-	Text->SetAutoWrapText(true);
-	Text->SetColorAndOpacity(GetToneTextColor(Entry.VisualTone));
+	UBattleEventLogEntryWidget* EntryWidget = CreateEntryWidget(Entry);
+	if (!EntryWidget)
 	{
-		FSlateFontInfo Font = Text->GetFont();
-		Font.Size = 13;
-		Text->SetFont(Font);
+		return;
 	}
 
-	if (UPanelSlot* AddedSlot = EntriesBox->AddChild(Text))
+	{
+		if (UTextBlock* FallbackText = Cast<UTextBlock>(EntryWidget->GetRootWidget()))
+		{
+			FallbackText->SetColorAndOpacity(GetToneTextColor(Entry.VisualTone));
+			FSlateFontInfo Font = FallbackText->GetFont();
+			Font.Size = 13;
+			FallbackText->SetFont(Font);
+		}
+	}
+
+	if (UPanelSlot* AddedSlot = EntriesBox->AddChild(EntryWidget))
 	{
 		if (UVerticalBoxSlot* VerticalSlot = Cast<UVerticalBoxSlot>(AddedSlot))
 		{
 			VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
 		}
 	}
+}
+
+UBattleEventLogEntryWidget* UBattleEventLogPanel::CreateEntryWidget(const FBattleEventPresentationView& Entry)
+{
+	UClass* WidgetClass = EntryWidgetClass ? EntryWidgetClass.Get() : UBattleEventLogEntryWidget::StaticClass();
+	UBattleEventLogEntryWidget* EntryWidget = GetWorld()
+		? CreateWidget<UBattleEventLogEntryWidget>(this, WidgetClass)
+		: NewObject<UBattleEventLogEntryWidget>(this, WidgetClass);
+	if (EntryWidget)
+	{
+		EntryWidget->SetEventLogEntryData(Entry);
+	}
+	return EntryWidget;
 }
 
 #undef LOCTEXT_NAMESPACE

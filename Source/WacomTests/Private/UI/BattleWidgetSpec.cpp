@@ -11,6 +11,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/BattleEventLogEntryWidget.h"
 #include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/EventToast.h"
@@ -188,6 +189,7 @@ bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<UBattleEventLogPanel> Panel(NewObject<UBattleEventLogPanel>());
 	Panel->MaxEntries = 2;
 	Panel->TakeWidget();
+	TestTrue(TEXT("Panel falls back to C++ entry widget class"), Panel->EntryWidgetClass == UBattleEventLogEntryWidget::StaticClass());
 
 	FBattleEventPresentationView Hidden;
 	Hidden.EventType = EBattleEventType::HandZoneChanged;
@@ -226,6 +228,32 @@ bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
 
 	Panel->ClearEventLog();
 	TestEqual(TEXT("Panel clears entries"), Panel->GetEntryCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEventLogEntryWidgetSpec,
+	"Wacom.UI.Battle.EventLogEntryWidget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEventLogEntryWidgetSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UBattleEventLogEntryWidget> EntryWidget(NewObject<UBattleEventLogEntryWidget>());
+	EntryWidget->TakeWidget();
+
+	FBattleEventPresentationView Entry;
+	Entry.EventType = EBattleEventType::CardGained;
+	Entry.bShouldDisplay = true;
+	Entry.MessageText = FText::FromString(TEXT("获得卡牌：毒牙"));
+	Entry.VisualTone = EWacomBattleEventVisualTone::Positive;
+	Entry.IconKey = TEXT("CardGained");
+
+	EntryWidget->SetEventLogEntryData(Entry);
+
+	TestEqual(TEXT("Entry widget stores message"), EntryWidget->GetCurrentEntry().MessageText.ToString(), FString(TEXT("获得卡牌：毒牙")));
+	TestEqual(TEXT("Entry widget stores tone"), EntryWidget->GetCurrentEntry().VisualTone, EWacomBattleEventVisualTone::Positive);
+	TestEqual(TEXT("Entry widget stores icon key"), EntryWidget->GetCurrentEntry().IconKey, FName(TEXT("CardGained")));
 
 	return true;
 }

@@ -36,6 +36,37 @@ namespace
 		return INDEX_NONE;
 	}
 
+	FRunShopState BuildShopStateFromInputs(const TArray<FRunShopOfferInput>& Inputs)
+	{
+		FRunShopState State;
+		for (const FRunShopOfferInput& Input : Inputs)
+		{
+			if (!Input.CardDefinition)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[RunSession] BeginShopVisit: 跳过空 CardDefinition 的商品"));
+				continue;
+			}
+			if (Input.Price < 0)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[RunSession] BeginShopVisit: 跳过负价格商品 Card=%s Price=%d"),
+					*GetNameSafe(Input.CardDefinition), Input.Price);
+				continue;
+			}
+
+			FRunShopOffer Offer;
+			Offer.OfferId = FGuid::NewGuid();
+			ensureMsgf(Offer.OfferId.IsValid(),
+				TEXT("[RunSession] BeginShopVisit: FGuid::NewGuid() 生成了 zero GUID"));
+			Offer.CardDefinition = Input.CardDefinition;
+			Offer.Price = Input.Price;
+			Offer.bPurchased = false;
+			State.Offers.Add(MoveTemp(Offer));
+		}
+		return State;
+	}
+
 	/**
 	 * Stage 4.5.0 任务 4.6 / R7.5 / R7.6：
 	 *   把 SaveGame 里的 FCardInstanceSaveEntry 列表还原到 TempState 的 FCardInstance 列表，
@@ -2173,14 +2204,30 @@ void URunSession::AddCardToBackpack(UCardDefinition* Card)
 
 void URunSession::AcquireCardToRun(UCardDefinition* Card)
 {
+	if (AcquireCardToRunInternal(Card))
+	{
+		NotifyRunStateChanged();
+	}
+}
+
+bool URunSession::AcquireCardToRunInternal(UCardDefinition* Card)
+{
 	if (!Card)
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("[RunSession] AcquireCardToRun: Card 为空，拒绝"));
-		return;
+		return false;
 	}
 
-	AddCardToBackpack(Card);
+	FCardInstance Inst;
+	Inst.Definition = Card;
+	Inst.InstanceId = FGuid::NewGuid();
+	ensureMsgf(Inst.InstanceId.IsValid(),
+		TEXT("[RunSession] AcquireCardToRun: FGuid::NewGuid() 生成了 zero GUID，违反 R1.14 不变量"));
+	RunState.Backpack.Add(Inst);
+	EnsureSpecialZoneEntryFor(Inst);
+	RecomputeBurdenInternal();
+	return true;
 }
 
 bool URunSession::DestroyCardFromBackpack(UCardDefinition* Card)
@@ -2502,6 +2549,176 @@ bool URunSession::RemoveGold(int32 Amount)
 		return false;
 	}
 	RunState.Gold -= Amount;
+	NotifyRunStateChanged();
+	return true;
+}
+
+// ================ 商店购买 ================
+
+bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers)
+{
+	if (ShopId.IsNone())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] BeginShopVisit: ShopId 为 None，拒绝"));
+		return false;
+	}
+
+	if (!RunState.ShopStates.Contains(ShopId))
+	{
+		RunState.ShopStates.Add(ShopId, BuildShopStateFromInputs(Offers));
+	}
+
+	RunState.ActiveShopId = ShopId;
+	RunState.bShopVisitHasPurchase = false;
+	NotifyRunStateChanged();
+	return true;
+}
+
+void URunSession::EndShopVisit()
+{
+	if (RunState.ActiveShopId.IsNone())
+	{
+		return;
+	}
+
+	const bool bShouldConsumeNode = RunState.bShopVisitHasPurchase;
+	RunState.ActiveShopId = NAME_None;
+	RunState.bShopVisitHasPurchase = false;
+
+	if (bShouldConsumeNode)
+	{
+		ConsumeNode(1);
+	}
+	else
+	{
+		NotifyRunStateChanged();
+	}
+}
+
+FRunShopSnapshot URunSession::BuildCurrentShopSnapshot() const
+{
+	FRunShopSnapshot Snapshot;
+	Snapshot.ShopId = RunState.ActiveShopId;
+	Snapshot.bIsActive = !RunState.ActiveShopId.IsNone();
+	Snapshot.bHasPurchaseThisVisit = RunState.bShopVisitHasPurchase;
+
+	if (const FRunShopState* ShopState = RunState.ShopStates.Find(RunState.ActiveShopId))
+	{
+		Snapshot.Offers = ShopState->Offers;
+	}
+
+	return Snapshot;
+}
+
+bool URunSession::PurchaseShopOffer(FGuid OfferId)
+{
+	if (RunState.ActiveShopId.IsNone())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseShopOffer: 当前没有 active shop，拒绝"));
+		return false;
+	}
+	if (!OfferId.IsValid())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseShopOffer: OfferId 无效，拒绝"));
+		return false;
+	}
+
+	FRunShopState* ShopState = RunState.ShopStates.Find(RunState.ActiveShopId);
+	if (!ShopState)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseShopOffer: active shop %s 没有库存状态"),
+			*RunState.ActiveShopId.ToString());
+		return false;
+	}
+
+	FRunShopOffer* FoundOffer = ShopState->Offers.FindByPredicate(
+		[OfferId](const FRunShopOffer& Offer)
+		{
+			return Offer.OfferId == OfferId;
+		});
+	if (!FoundOffer)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseShopOffer: 找不到 OfferId=%s"),
+			*OfferId.ToString());
+		return false;
+	}
+	if (FoundOffer->bPurchased)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseShopOffer: OfferId=%s 已购买，拒绝"),
+			*OfferId.ToString());
+		return false;
+	}
+	if (!FoundOffer->CardDefinition)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseShopOffer: OfferId=%s CardDefinition 为空，拒绝"),
+			*OfferId.ToString());
+		return false;
+	}
+	if (FoundOffer->Price < 0)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseShopOffer: OfferId=%s Price=%d 非法，拒绝"),
+			*OfferId.ToString(), FoundOffer->Price);
+		return false;
+	}
+	if (RunState.Gold < FoundOffer->Price)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseShopOffer: 余额不足（%d < %d）"),
+			RunState.Gold, FoundOffer->Price);
+		return false;
+	}
+
+	RunState.Gold -= FoundOffer->Price;
+	if (!AcquireCardToRunInternal(FoundOffer->CardDefinition.Get()))
+	{
+		RunState.Gold += FoundOffer->Price;
+		return false;
+	}
+
+	FoundOffer->bPurchased = true;
+	RunState.bShopVisitHasPurchase = true;
+	NotifyRunStateChanged();
+	return true;
+}
+
+bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
+{
+	if (!Card)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseCardFromShop: Card 为空，拒绝"));
+		return false;
+	}
+	if (Price < 0)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseCardFromShop: Price=%d 非法，拒绝"), Price);
+		return false;
+	}
+	if (RunState.Gold < Price)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] PurchaseCardFromShop: 余额不足（%d < %d）"),
+			RunState.Gold, Price);
+		return false;
+	}
+
+	RunState.Gold -= Price;
+
+	if (!AcquireCardToRunInternal(Card))
+	{
+		RunState.Gold += Price;
+		return false;
+	}
+
 	NotifyRunStateChanged();
 	return true;
 }

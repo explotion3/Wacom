@@ -134,6 +134,25 @@ WacomRun 负责**战斗外的持久状态和存档**。
 | `AddGold(Amount)` | 增加金币 |
 | `RemoveGold(Amount)` | 减少金币（余额不足返回 false）|
 
+#### 商店购买
+
+| 方法 | 职责 |
+|---|---|
+| `BeginShopVisit(ShopId, Offers)` | 开始访问指定商店节点。`ShopId` 第一次出现时用调用方传入的 Offers 初始化库存；已存在时保留原库存和已购买状态，忽略新 Offers |
+| `EndShopVisit()` | 结束商店访问；如果本次访问买过至少一件商品，则消耗 1 节点，否则不消耗 |
+| `IsShopVisitActive()` | 当前是否处于商店访问 |
+| `HasCurrentShopVisitPurchase()` | 当前商店访问是否已买过至少一件商品 |
+| `BuildCurrentShopSnapshot()` | 构建当前商店只读快照；无 active shop 时返回空快照 |
+| `PurchaseShopOffer(OfferId)` | 购买当前商店中未购买的 Offer；成功后扣金币、获得卡牌、标记商品已购买，不立刻扣节点 |
+| `PurchaseCardFromShop(Card, Price)` | 低层兼容购买事务：只负责扣金币并获得卡牌，不处理库存和节点消耗 |
+
+商店第一版规则：
+- 购买卡牌直接进入背包，不自动加入备战区。
+- 商店库存按 `ShopId` 在当前 Run 内存态保留；本轮不接 SaveGame。
+- 商品列表由调用方传入；本轮不硬编码商品资产路径。
+- 进入商店但不购买不消耗节点；买过任意商品后，关闭商店时统一消耗 1 节点。
+- `ShopId == NAME_None`、未知 Offer、重复购买、金币不足等失败路径不修改 RunState。
+
 #### 战斗联动 / 场景持久化 / 存档
 
 | 方法 | 职责 |
@@ -251,6 +270,14 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `Gold` | `int32` | 玩家金币（GDD §11.7）。Run 内资源，存档第一阶段不持久化。 |
+
+#### 商店访问状态
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ActiveShopId` | `FName` | 当前正在访问的商店节点 ID；`NAME_None` 表示没有打开商店 |
+| `bShopVisitHasPurchase` | `bool` | 当前商店访问内是否买过至少一件商品；关闭商店时据此消耗 1 节点 |
+| `ShopStates` | `TMap<FName, FRunShopState>` | 商店节点库存状态。Key 为商店/节点 `PersistentId`；当前只在 Run 内存态保留 |
 
 #### 既有字段（R5 / S1 骨架）
 
