@@ -84,13 +84,26 @@ enum class EGameFlowState : uint8
 
 ---
 
-## §5 BattleTriggerActor
+## §5 世界交互接口
+
+探索期 `E` 交互已从“只认识 BattleTriggerActor”收口为通用接口：
+
+| 类型 | 职责 |
+|---|---|
+| `IWacomWorldInteractable` | 世界交互对象协议：提示文本、交互位置、可用性、执行交互 |
+| `AWacomPlayerController` | 维护 `CandidateInteractables`，按距离选择最近且可交互对象，刷新 ExplorationHUD Toast，按 E 调用接口 |
+| `UWacomExplorationHUD` | 只显示调用方传入的交互提示文本，不解析交互类型 |
+
+交互对象进入范围时调用 `RegisterCandidateInteractable`，离开范围或销毁时调用 `UnregisterCandidateInteractable`。多个候选对象重叠时，PlayerController 使用接口返回的 `GetInteractLocation()` 按距离选最近对象；`CanInteract=false` 的对象不会显示 Toast，也不会响应 E。
+
+### BattleTriggerActor
 
 `ABattleTriggerActor` 职责：
 
 - 场景中的敌人触发器（use-key 交互模型，Stage 7 改）
-- SphereCollision **仅做距离判定**：Begin/EndOverlap 维护 PlayerController 的候选 Trigger 列表
-- 玩家按 IA_Interact（默认 E 键）→ PlayerController 从候选列表挑距离最近的调 `TryActivate`
+- 实现 `IWacomWorldInteractable`，提示文本为“按 E 战斗”
+- SphereCollision **仅做距离判定**：Begin/EndOverlap 注册/反注册为候选交互对象
+- 玩家按 IA_Interact（默认 E 键）→ PlayerController 选中最近对象并调用 `TryInteract`
 - 持有 `UEnemyDefinition*` 配置
 - `FName PersistentId`（必填，关卡级唯一）
 
@@ -102,11 +115,21 @@ enum class EGameFlowState : uint8
 
 1. `PersistentId == NAME_None` → Warning，继续跑
 2. RunSession 中 `DestroyedTriggerIds` 包含本 id → 立即 `Destroy()`（真胜利时被销毁）
-3. 否则正常运行 + 注册 Begin/EndOverlap → PlayerController.Register/UnregisterCandidateTrigger
+3. 否则正常运行 + 注册 Begin/EndOverlap → PlayerController.Register/UnregisterCandidateInteractable
 
 ### EndPlay
 
 向 PlayerController 反注册自己，避免悬空。
+
+### ShopTriggerActor
+
+`AWacomShopTriggerActor` 职责：
+
+- 场景中的商店交互触发器，和 BattleTriggerActor 共用 `IWacomWorldInteractable` 管线
+- `PersistentId` 作为 Run 商店节点 ID；RunSession 使用它保存库存和已购买状态
+- `Offers` 由关卡 Actor 手动配置；同一 `PersistentId` 第一次打开时初始化库存，之后重复打开保留旧库存
+- 玩家按 E 后调用 `AWacomPlayerController::RequestOpenShop(PersistentId, Offers)`
+- 不切换 `EGameFlowState`，商店只是 GameMenu 层界面；关闭商店时由 Run 层按购买情况结算节点
 
 ---
 
@@ -387,7 +410,16 @@ EnterBattle → Push BattleHUD 到 Game 层，ExplorationHUD 进入非 active �
 ExitBattle → Pop BattleHUD，ExplorationHUD 重新 active，并在 NativeOnActivated 补刷新
 ```
 
-`AWacomPlayerController::RefreshInteractToast` 只在 `EGameFlowState::Exploration` 时显示交互 Toast。战斗中即使候选 Trigger 仍在列表中，也不会显示"按 E 战斗"。
+`AWacomPlayerController::RefreshInteractToast` 只在 `EGameFlowState::Exploration` 时显示交互 Toast。战斗中即使候选交互对象仍在列表中，也不会显示交互提示。Toast 文案来自当前最近可交互对象的 `GetInteractPromptText()`。
+
+### ShopScreen
+
+`UWacomShopScreen` 是第一版最小可用商店界面，Push 到 `UI_Layer_GameMenu`：
+
+- 数据源：`URunSession::BuildCurrentShopSnapshot()`
+- 商品购买：点击 Offer 行按钮调用 `URunSession::PurchaseShopOffer(OfferId)`，成功后刷新列表和金币
+- 关闭结算：`NativeOnDeactivated` 中调用一次 `URunSession::EndShopVisit()`
+- 默认 C++ fallback 可运行；后续可创建 `/Game/Wacom/UI/Shop/WBP_ShopScreen` 继承本类替换视觉
 
 ### IMC 资产
 
@@ -423,12 +455,12 @@ ExitBattle → Pop BattleHUD，ExplorationHUD 重新 active，并在 NativeOnAct
 ```
 玩家走进 ABattleTriggerActor 的 Sphere 范围
 → ABattleTriggerActor::HandleBeginOverlap
-→ AWacomPlayerController::RegisterCandidateTrigger(this)
+→ AWacomPlayerController::RegisterCandidateInteractable(this)
 → ExplorationHUD 显示 Toast"按 E 战斗"
 
 玩家按 E（IA_Interact 或 console `Wacom.Interact`）
 → AWacomPlayerController::OnInteractPressed
-→ PickClosestCandidate → ABattleTriggerActor::TryActivate
+→ PickClosestInteractable → IWacomWorldInteractable::TryInteract
 → AWacomPlayerController::RequestEnterBattle(EnemyDef, TriggerActor)
 → Controller 调 GameMode::EnterBattle(EnemyDef)
 → GameMode:

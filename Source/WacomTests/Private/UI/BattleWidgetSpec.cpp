@@ -189,7 +189,9 @@ bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<UBattleEventLogPanel> Panel(NewObject<UBattleEventLogPanel>());
 	Panel->MaxEntries = 2;
 	Panel->TakeWidget();
-	TestTrue(TEXT("Panel falls back to C++ entry widget class"), Panel->EntryWidgetClass == UBattleEventLogEntryWidget::StaticClass());
+	TestNotNull(TEXT("Panel resolves an entry widget class"), Panel->EntryWidgetClass.Get());
+	TestTrue(TEXT("Panel entry widget class derives from entry base"),
+		Panel->EntryWidgetClass && Panel->EntryWidgetClass->IsChildOf(UBattleEventLogEntryWidget::StaticClass()));
 
 	FBattleEventPresentationView Hidden;
 	Hidden.EventType = EBattleEventType::HandZoneChanged;

@@ -10,7 +10,9 @@
 #include "Actors/BattleTriggerActor.h"
 #include "GameFramework/WacomGameMode.h"
 #include "RunSession.h"
+#include "RunState.h"
 #include "Characters/CharacterDefinition.h"
+#include "Interaction/WacomWorldInteractable.h"
 #include "Types/WacomEnums.h"
 
 #include "UI/Battle/BattleHUD.h"
@@ -21,6 +23,7 @@
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
+#include "UI/Shop/WacomShopScreen.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
@@ -36,6 +39,65 @@ namespace
 		{
 			Slot = LoadObject<UInputAction>(nullptr, Path);
 		}
+	}
+
+	bool IsWorldInteractableActor(const AActor* Actor)
+	{
+		return Actor && Actor->GetClass()->ImplementsInterface(UWacomWorldInteractable::StaticClass());
+	}
+
+	FText GetInteractPromptTextFromActor(AActor* Actor, AWacomPlayerController* PC)
+	{
+		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
+		{
+			if (Actor->GetClass()->IsNative())
+			{
+				return Native->GetInteractPromptText_Implementation(PC);
+			}
+		}
+		return IsWorldInteractableActor(Actor)
+			? IWacomWorldInteractable::Execute_GetInteractPromptText(Actor, PC)
+			: FText::GetEmpty();
+	}
+
+	FVector GetInteractLocationFromActor(AActor* Actor, AWacomPlayerController* PC)
+	{
+		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
+		{
+			if (Actor->GetClass()->IsNative())
+			{
+				return Native->GetInteractLocation_Implementation(PC);
+			}
+		}
+		return IsWorldInteractableActor(Actor)
+			? IWacomWorldInteractable::Execute_GetInteractLocation(Actor, PC)
+			: FVector::ZeroVector;
+	}
+
+	bool CanInteractWithActor(AActor* Actor, AWacomPlayerController* PC)
+	{
+		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
+		{
+			if (Actor->GetClass()->IsNative())
+			{
+				return Native->CanInteract_Implementation(PC);
+			}
+		}
+		return IsWorldInteractableActor(Actor)
+			&& IWacomWorldInteractable::Execute_CanInteract(Actor, PC);
+	}
+
+	bool TryInteractWithActor(AActor* Actor, AWacomPlayerController* PC)
+	{
+		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
+		{
+			if (Actor->GetClass()->IsNative())
+			{
+				return Native->TryInteract_Implementation(PC);
+			}
+		}
+		return IsWorldInteractableActor(Actor)
+			&& IWacomWorldInteractable::Execute_TryInteract(Actor, PC);
 	}
 }
 
@@ -318,26 +380,29 @@ void AWacomPlayerController::OnOpenBackpackPressed()
 	TryOpenBackpackFromConsole();
 }
 
-// ================ 候选 Trigger（Stage 7 use-key 模型）================
+// ================ 候选世界交互对象（use-key 模型）================
 
-void AWacomPlayerController::RegisterCandidateTrigger(ABattleTriggerActor* Trigger)
+void AWacomPlayerController::RegisterCandidateInteractable(AActor* InteractableActor)
 {
-	if (!Trigger) { return; }
-	// 避免重复
-	for (const TWeakObjectPtr<ABattleTriggerActor>& Weak : CandidateTriggers)
+	if (!IsWorldInteractableActor(InteractableActor))
 	{
-		if (Weak.Get() == Trigger) { return; }
+		return;
 	}
-	CandidateTriggers.Add(Trigger);
+
+	for (const TWeakObjectPtr<AActor>& Weak : CandidateInteractables)
+	{
+		if (Weak.Get() == InteractableActor) { return; }
+	}
+	CandidateInteractables.Add(InteractableActor);
 	RefreshInteractToast();
 }
 
-void AWacomPlayerController::UnregisterCandidateTrigger(ABattleTriggerActor* Trigger)
+void AWacomPlayerController::UnregisterCandidateInteractable(AActor* InteractableActor)
 {
-	const int32 NumRemoved = CandidateTriggers.RemoveAllSwap(
-		[Trigger](const TWeakObjectPtr<ABattleTriggerActor>& Weak)
+	const int32 NumRemoved = CandidateInteractables.RemoveAllSwap(
+		[InteractableActor](const TWeakObjectPtr<AActor>& Weak)
 		{
-			return !Weak.IsValid() || Weak.Get() == Trigger;
+			return !Weak.IsValid() || Weak.Get() == InteractableActor;
 		});
 	if (NumRemoved > 0)
 	{
@@ -345,26 +410,62 @@ void AWacomPlayerController::UnregisterCandidateTrigger(ABattleTriggerActor* Tri
 	}
 }
 
-ABattleTriggerActor* AWacomPlayerController::PickClosestCandidate() const
+void AWacomPlayerController::RegisterCandidateTrigger(ABattleTriggerActor* Trigger)
+{
+	RegisterCandidateInteractable(Trigger);
+}
+
+void AWacomPlayerController::UnregisterCandidateTrigger(ABattleTriggerActor* Trigger)
+{
+	UnregisterCandidateInteractable(Trigger);
+}
+
+AActor* AWacomPlayerController::PickClosestInteractable() const
 {
 	APawn* OwnedPawn = GetPawn();
 	if (!OwnedPawn) { return nullptr; }
 	const FVector PlayerLoc = OwnedPawn->GetActorLocation();
 
-	ABattleTriggerActor* Best = nullptr;
+	AActor* Best = nullptr;
 	float BestSqDist = TNumericLimits<float>::Max();
-	for (const TWeakObjectPtr<ABattleTriggerActor>& Weak : CandidateTriggers)
+	for (const TWeakObjectPtr<AActor>& Weak : CandidateInteractables)
 	{
-		ABattleTriggerActor* T = Weak.Get();
-		if (!T) { continue; }
-		const float SqDist = FVector::DistSquared(T->GetActorLocation(), PlayerLoc);
+		AActor* Candidate = Weak.Get();
+		if (!IsWorldInteractableActor(Candidate))
+		{
+			continue;
+		}
+		if (!CanInteractWithActor(Candidate, const_cast<AWacomPlayerController*>(this)))
+		{
+			continue;
+		}
+
+		const FVector InteractLoc = GetInteractLocationFromActor(
+			Candidate,
+			const_cast<AWacomPlayerController*>(this));
+		const float SqDist = FVector::DistSquared(InteractLoc, PlayerLoc);
 		if (SqDist < BestSqDist)
 		{
 			BestSqDist = SqDist;
-			Best       = T;
+			Best       = Candidate;
 		}
 	}
 	return Best;
+}
+
+FText AWacomPlayerController::BuildCurrentInteractPromptForTest() const
+{
+	AActor* Best = PickClosestInteractable();
+	if (!Best)
+	{
+		return FText::GetEmpty();
+	}
+	return GetInteractPromptTextFromActor(Best, const_cast<AWacomPlayerController*>(this));
+}
+
+AActor* AWacomPlayerController::PickClosestInteractableForTest() const
+{
+	return PickClosestInteractable();
 }
 
 void AWacomPlayerController::RefreshInteractToast()
@@ -386,16 +487,11 @@ void AWacomPlayerController::RefreshInteractToast()
 		: nullptr;
 	if (!HUD) { return; }
 
-	// 候选列表里至少有一个活的 Trigger 才显示
-	bool bHasCandidate = false;
-	for (const TWeakObjectPtr<ABattleTriggerActor>& Weak : CandidateTriggers)
-	{
-		if (Weak.IsValid()) { bHasCandidate = true; break; }
-	}
+	const FText Prompt = BuildCurrentInteractPromptForTest();
 
 	HUD->SetInteractToastVisible(
-		bExploration && bHasCandidate,
-		LOCTEXT("InteractHint", "按 E 战斗"));
+		bExploration && !Prompt.IsEmpty(),
+		Prompt);
 }
 
 void AWacomPlayerController::OnInteractPressed()
@@ -411,13 +507,84 @@ void AWacomPlayerController::TryInteractFromConsole()
 		return;
 	}
 
-	ABattleTriggerActor* Best = PickClosestCandidate();
+	AActor* Best = PickClosestInteractable();
 	if (!Best)
 	{
-		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] Interact: 没有候选 Trigger"));
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] Interact: 没有候选交互对象"));
 		return;
 	}
-	Best->TryActivate(this);
+	TryInteractWithActor(Best, this);
+}
+
+bool AWacomPlayerController::RequestOpenShop(FName ShopId, const TArray<FRunShopOfferInput>& Offers)
+{
+	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	if (!GM || GM->GetGameFlowState() != EGameFlowState::Exploration)
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenShop: 当前不在探索状态，忽略"));
+		return false;
+	}
+	if (ShopId.IsNone())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: ShopId 为 None，拒绝"));
+		return false;
+	}
+	if (!RunSession || !RunSession->BeginShopVisit(ShopId, Offers))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: BeginShopVisit 失败 ShopId=%s"), *ShopId.ToString());
+		return false;
+	}
+
+	UGameInstance* GI = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+	if (!UIManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: UIManager 未就位"));
+		RunSession->EndShopVisit();
+		return false;
+	}
+
+	UIManager->EnsurePrimaryLayout(this);
+
+	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
+	if (Layout)
+	{
+		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
+			WacomUITags::UI_Layer_GameMenu.GetTag());
+		if (MenuStack && MenuStack->GetActiveWidget())
+		{
+			MenuStack->GetActiveWidget()->DeactivateWidget();
+		}
+	}
+
+	if (!ShopScreenClass)
+	{
+		if (UClass* Loaded = LoadObject<UClass>(nullptr,
+			TEXT("/Game/Wacom/UI/Shop/WBP_ShopScreen.WBP_ShopScreen_C")))
+		{
+			ShopScreenClass = Loaded;
+		}
+	}
+	if (!ShopScreenClass)
+	{
+		ShopScreenClass = UWacomShopScreen::StaticClass();
+	}
+
+	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
+		WacomUITags::UI_Layer_GameMenu.GetTag(),
+		ShopScreenClass);
+	UWacomShopScreen* ShopScreen = Cast<UWacomShopScreen>(Pushed);
+	if (!ShopScreen)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: Push ShopScreen 失败"));
+		RunSession->EndShopVisit();
+		return false;
+	}
+
+	ShopScreen->RefreshShop();
+	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开商店 ShopId=%s"), *ShopId.ToString());
+	return true;
 }
 
 void AWacomPlayerController::TryOpenBackpackFromConsole()
@@ -510,7 +677,7 @@ static FAutoConsoleCommandWithWorld GWacomCloseBackpackCmd(
 
 static FAutoConsoleCommandWithWorld GWacomInteractCmd(
 	TEXT("Wacom.Interact"),
-	TEXT("在 BattleTriggerActor 范围内时触发战斗（IA_Interact 资产建好前的兜底）。"),
+	TEXT("在世界交互对象范围内时触发最近对象（IA_Interact 资产建好前的兜底）。"),
 	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
 	{
 		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interaction/WacomWorldInteractable.h"
 #include "BattleTriggerActor.generated.h"
 
 class USphereComponent;
@@ -14,15 +15,15 @@ class UEnemyDefinition;
  *
  * 交互模型（Stage 7 之后）：use-key 模型。
  *   - Sphere 范围只用来判定"玩家是否在交互范围"
- *   - 进入范围 → 注册到 PlayerController.CandidateTriggers + ExplorationHUD 显示"按 E 战斗"
- *   - 离开范围 → 从 CandidateTriggers 移除
- *   - 玩家按 IA_Interact（E）→ PC 从候选列表挑最近的调 TryActivate → 进战斗
+ *   - 进入范围 → 注册到 PlayerController.CandidateInteractables + ExplorationHUD 显示"按 E 战斗"
+ *   - 离开范围 → 从 CandidateInteractables 移除
+ *   - 玩家按 IA_Interact（E）→ PC 从候选列表挑最近的 interactable → 进战斗
  *
  * 旧模型（overlap 自动触发）已废弃，原因是撤离回探索后玩家仍在 Sphere 内，
  * 永远不会有 EndOverlap → BeginOverlap 的循环，无法重入战斗。
  */
 UCLASS(Blueprintable)
-class WACOMAPP_API ABattleTriggerActor : public AActor
+class WACOMAPP_API ABattleTriggerActor : public AActor, public IWacomWorldInteractable
 {
 	GENERATED_BODY()
 
@@ -46,7 +47,8 @@ public:
 
 	/** 触发半径（cm）。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",
-		meta = (ClampMin = "50.0", UIMin = "50.0"))
+		meta = (ToolTip = "玩家进入该半径后，探索期按 E 可以触发本战斗节点。单位：厘米。建议范围 50-1000。",
+			ClampMin = "50.0", UIMin = "50.0", UIMax = "1000.0"))
 	float TriggerRadius = 200.f;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
@@ -57,6 +59,12 @@ public:
 	 * 转发到 PC->RequestEnterBattle。Trigger 自身不直接调 GameMode。
 	 */
 	void TryActivate(class AWacomPlayerController* PC);
+
+	// ---- IWacomWorldInteractable ----
+	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* PC) const override;
+	virtual FVector GetInteractLocation_Implementation(AWacomPlayerController* PC) const override;
+	virtual bool CanInteract_Implementation(AWacomPlayerController* PC) const override;
+	virtual bool TryInteract_Implementation(AWacomPlayerController* PC) override;
 
 protected:
 	virtual void BeginPlay() override;

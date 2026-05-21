@@ -2,6 +2,8 @@
 
 #include "Actors/BattleTriggerActor.h"
 
+#define LOCTEXT_NAMESPACE "BattleTriggerActor"
+
 #include "Components/SphereComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
@@ -97,7 +99,7 @@ void ABattleTriggerActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
 		{
-			WacomPC->UnregisterCandidateTrigger(this);
+			WacomPC->UnregisterCandidateInteractable(this);
 		}
 	}
 
@@ -111,7 +113,7 @@ void ABattleTriggerActor::HandleBeginOverlap(UPrimitiveComponent* /*OverlappedCo
 	bool /*bFromSweep*/,
 	const FHitResult& /*SweepResult*/)
 {
-	if (!OtherActor || !EnemyDef) { return; }
+	if (!OtherActor) { return; }
 
 	APawn* Pawn = Cast<APawn>(OtherActor);
 	if (!Pawn) { return; }
@@ -119,7 +121,7 @@ void ABattleTriggerActor::HandleBeginOverlap(UPrimitiveComponent* /*OverlappedCo
 	AWacomPlayerController* PC = Cast<AWacomPlayerController>(Pawn->GetController());
 	if (!PC) { return; }
 
-	PC->RegisterCandidateTrigger(this);
+	PC->RegisterCandidateInteractable(this);
 }
 
 void ABattleTriggerActor::HandleEndOverlap(UPrimitiveComponent* /*OverlappedComp*/,
@@ -135,7 +137,7 @@ void ABattleTriggerActor::HandleEndOverlap(UPrimitiveComponent* /*OverlappedComp
 	AWacomPlayerController* PC = Cast<AWacomPlayerController>(Pawn->GetController());
 	if (!PC) { return; }
 
-	PC->UnregisterCandidateTrigger(this);
+	PC->UnregisterCandidateInteractable(this);
 }
 
 void ABattleTriggerActor::TryActivate(AWacomPlayerController* PC)
@@ -154,3 +156,30 @@ void ABattleTriggerActor::TryActivate(AWacomPlayerController* PC)
 
 	PC->RequestEnterBattle(EnemyDef, this);
 }
+
+FText ABattleTriggerActor::GetInteractPromptText_Implementation(AWacomPlayerController* /*PC*/) const
+{
+	return LOCTEXT("InteractPrompt", "按 E 战斗");
+}
+
+FVector ABattleTriggerActor::GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const
+{
+	return GetActorLocation();
+}
+
+bool ABattleTriggerActor::CanInteract_Implementation(AWacomPlayerController* PC) const
+{
+	return PC && EnemyDef;
+}
+
+bool ABattleTriggerActor::TryInteract_Implementation(AWacomPlayerController* PC)
+{
+	if (!CanInteract_Implementation(PC))
+	{
+		return false;
+	}
+	TryActivate(PC);
+	return true;
+}
+
+#undef LOCTEXT_NAMESPACE

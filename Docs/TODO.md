@@ -56,8 +56,8 @@
 | 暮色引虫灯任务后升级 | 未做 | 远期，等任务系统 |
 | 击倒事件 UI dialog 美术 | Stage 7 已落地：C++ 硬编码 CanvasPanel + Border + Button 布局，BindWidget 锚点 PartNameText/AidButton/WithdrawButton/DestroyButton 就位 | 美术阶段配 WBP 即接 |
 | 地图系统（Stage 8）| 节点/通道/迷雾/撤离回路规则已在 GDD §10 确认，代码未开始 | 新建 WacomMap 模块或放 WacomRun 下 |
-| 节点事件（Stage 9）| 露营/野炊/探险/事件规则已在 GDD §10 确认，代码未开始；商店购买的 Run 层基础 API 已就位 | 强依赖 Stage 8 地图系统完成；商店后续补商品来源、ShopScreen、场景入口 |
-| 商店内容与 UI | `RunSession::BeginShopVisit(ShopId, Offers) / BuildCurrentShopSnapshot / PurchaseShopOffer / EndShopVisit` 已支持按节点持久化库存、已购买状态、关闭商店时按访问扣 1 节点 | 后续设计 `ShopDefinition`/商品生成、价格表、ShopScreen C++ fallback 或 WBP、进入/离开商店交互；当前 `ShopStates` 暂不进 SaveGame |
+| 节点事件（Stage 9）| 露营/野炊/探险/事件规则已在 GDD §10 确认，代码未开始；商店购买的 Run 层基础 API、世界交互入口和最小 ShopScreen 已就位 | 强依赖 Stage 8 地图系统完成；商店后续补商品来源、ShopDefinition、价格表 |
+| 商店内容与 UI | `RunSession::BeginShopVisit(ShopId, Offers) / BuildCurrentShopSnapshot / PurchaseShopOffer / EndShopVisit` 已支持按节点持久化库存、已购买状态、关闭商店时按访问扣 1 节点；`AWacomShopTriggerActor` 可在场景中按 E 打开 `UWacomShopScreen` C++ fallback | 后续设计 `ShopDefinition`/商品生成、价格表、正式 `WBP_ShopScreen`、商品池和存档接入；当前 `ShopStates` 暂不进 SaveGame |
 
 ### UI / 表现层
 

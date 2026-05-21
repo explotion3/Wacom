@@ -10,9 +10,12 @@ class UEnemyDefinition;
 class UInputMappingContext;
 class UInputAction;
 class ABattleTriggerActor;
+class UCommonActivatableWidget;
 class URunSession;
 class UBattleHUD;
 class UWacomBackpackScreen;
+class UWacomShopScreen;
+struct FRunShopOfferInput;
 
 /**
  * Wacom PlayerController。
@@ -21,7 +24,7 @@ class UWacomBackpackScreen;
  *   - 持有 URunSession
  *   - 管理 Enhanced Input 的 MappingContext 切换（IMC_Exploration <-> IMC_Battle）
  *   - 绑定战斗相关 IA（1..7 / W / E / R / P）到内部回调，转发到当前 BattleHUD
- *   - 把 ABattleTriggerActor 的"进入战斗请求"转发给 GameMode
+ *   - 把世界交互对象的请求转发给对应系统（战斗 / 商店等）
  *   - 把战斗 UI 的"退出战斗请求"转发给 GameMode
  *
  * 为什么由 Controller 绑定战斗 IA：
@@ -82,7 +85,7 @@ public:
 	TObjectPtr<UInputAction> IA_OpenMenu;
 
 	/**
-	 * 交互键（默认 E）。Stage 7：玩家在 BattleTriggerActor 范围内按此键发起战斗。
+	 * 交互键（默认 E）。探索期在世界交互对象范围内按此键触发最近对象。
 	 *
 	 * IA 资产由用户在 Editor 中手动建（IA_Interact.uasset）+ 加到 IMC_Exploration 绑定 E 键。
 	 * 建好后 BeginPlay/SetupInputComponent 的 LazyLoadIA 会自动加载。
@@ -108,6 +111,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomBackpackScreen> BackpackScreenClass;
 
+	/**
+	 * 商店 UI。默认优先懒加载 /Game/Wacom/UI/Shop/WBP_ShopScreen；没有 WBP 时回退 C++ 最小界面。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
+	TSubclassOf<UWacomShopScreen> ShopScreenClass;
+
 	/** Console command 入口（等同于按 B）。public 是为了被 console lambda 调到。 */
 	void TryOpenBackpackFromConsole();
 
@@ -121,11 +130,26 @@ public:
 
 	// ---- 候选交互对象（Stage 7 use-key 模型）----
 
-	/** Trigger 进入玩家 Sphere 时调用（由 BattleTriggerActor::HandleBeginOverlap）。 */
+	/** 世界交互对象进入玩家交互范围时调用。 */
+	void RegisterCandidateInteractable(AActor* InteractableActor);
+
+	/** 世界交互对象离开玩家交互范围或销毁时调用。 */
+	void UnregisterCandidateInteractable(AActor* InteractableActor);
+
+	/** Trigger 进入玩家 Sphere 时调用（由 BattleTriggerActor::HandleBeginOverlap）。兼容旧调用点。 */
 	void RegisterCandidateTrigger(ABattleTriggerActor* Trigger);
 
-	/** Trigger 离开玩家 Sphere 或销毁时调用。 */
+	/** Trigger 离开玩家 Sphere 或销毁时调用。兼容旧调用点。 */
 	void UnregisterCandidateTrigger(ABattleTriggerActor* Trigger);
+
+	/** 由 ShopTriggerActor 调用：开始商店访问并 Push 商店界面。 */
+	bool RequestOpenShop(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
+
+	/** 测试/内部使用：按当前候选对象计算显示的 Toast 文案。 */
+	FText BuildCurrentInteractPromptForTest() const;
+
+	/** 测试/内部使用：返回当前最近且可交互的候选对象。 */
+	AActor* PickClosestInteractableForTest() const;
 
 	/** Console command 入口（IA_Interact 资产建好前的兜底）。 */
 	void TryInteractFromConsole();
@@ -167,12 +191,12 @@ private:
 	TObjectPtr<URunSession> RunSession = nullptr;
 
 	/**
-	 * 玩家当前在范围内的 BattleTriggerActor 列表。Sphere Begin/End Overlap 维护。
-	 * 按 IA_Interact 时挑距离玩家最近的一个调 TryActivate。
+	 * 玩家当前在范围内的世界交互对象列表。Sphere Begin/End Overlap 维护。
+	 * 按 IA_Interact 时挑距离玩家最近且可交互的一个调用接口 TryInteract。
 	 */
 	UPROPERTY(Transient)
-	TArray<TWeakObjectPtr<ABattleTriggerActor>> CandidateTriggers;
+	TArray<TWeakObjectPtr<AActor>> CandidateInteractables;
 
-	/** 从候选列表中挑距离玩家最近的有效 Trigger。 */
-	ABattleTriggerActor* PickClosestCandidate() const;
+	/** 从候选列表中挑距离玩家最近的有效交互对象。 */
+	AActor* PickClosestInteractable() const;
 };
