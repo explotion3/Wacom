@@ -152,6 +152,18 @@ enum class EZoneKind : uint8
 	BurdenZone  UMETA(DisplayName = "负重区"),
 };
 
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunDeckOperationValidation
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Validation")
+	bool bCanExecute = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Validation")
+	FName DisabledReason = NAME_None;
+};
+
 /**
  * 单个 B 主卡 instance 在 RunState 中开辟的特殊存放区（Stage 4.5.1 引入）。
  *
@@ -210,7 +222,7 @@ struct WACOMRUN_API FRunStorageCardView
 	bool bIsPhysicalInBattleDeck = false;
 };
 
-/** 通量存放区查询视图：A 类主卡 + 普通内容卡。 */
+/** 通量存放区查询视图：MainCards 仅保留兼容，当前通量内容包含 A 类容器和普通卡。 */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunFluxStorageView
 {

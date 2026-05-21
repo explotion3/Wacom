@@ -19,9 +19,9 @@
  *
  * 覆盖（GDD §11）：
  *   - IsContainerCard / IsBagProviderCard / IsIntrinsicCard 静态判定
- *   - GetFluxCapacity 公式：Σ(玩家拥有的所有 A 类容器卡 max(Capacity - 1, 0))
+ *   - GetFluxCapacity 公式：Σ(玩家拥有的所有 A 类容器卡 Capacity)
  *   - GetBattleDeckCapacity 公式：Σ(玩家拥有的所有容器卡 Capacity)
- *   - IsBackpackUiAvailable：Backpack 至少一张 BagProvider
+ *   - IsBackpackUiAvailable：玩家持有区至少一张 BagProvider
  *   - Initialize Stage 4.1 a2：非容器卡进 BattleDeck，容器卡只进 Backpack
  *   - AddCardToBackpack 自动 RecomputeBurden
  *   - DestroyCardFromBackpack：
@@ -141,7 +141,7 @@ bool FWacomRunDeckInitializeA2Spec::RunTest(const FString& /*Parameters*/)
 	TestFalse(TEXT("Normal1 NOT in Backpack"), ContainsDef(State.Backpack, Normal1));
 	TestTrue(TEXT("Normal1 in BattleDeck"), ContainsDef(State.BattleDeck, Normal1));
 
-	TestEqual(TEXT("FluxCapacity=11 from Bag content slots"), Run->GetFluxCapacity(), 11);
+	TestEqual(TEXT("FluxCapacity=12 from Bag capacity"), Run->GetFluxCapacity(), 12);
 	TestEqual(TEXT("BattleDeckCapacity=12"), Run->GetBattleDeckCapacity(), 12);
 	TestTrue(TEXT("Backpack UI available with BagProvider"), Run->IsBackpackUiAvailable());
 
@@ -170,13 +170,13 @@ bool FWacomRunDeckCapacitySumSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	TestEqual(TEXT("FluxCapacity=(10-1)+(3-1)=11"), Run->GetFluxCapacity(), 11);
+	TestEqual(TEXT("FluxCapacity=10+3=13"), Run->GetFluxCapacity(), 13);
 
 	// 把 Bag2 加进 BattleDeck（虽然它是容器卡，第一阶段允许玩家手动加入备战）
 	TestTrue(TEXT("Add Bag2 to BattleDeck"), Run->AddCardToBattleDeck(Bag2));
 
-	// 容量公式：Σ(背包 + 备战) = 仍然 11（容器卡换位置不影响公式）
-	TestEqual(TEXT("FluxCapacity unchanged after move"), Run->GetFluxCapacity(), 11);
+	// 容量公式：Σ(背包 + 备战) = 仍然 13（容器卡换位置不影响公式）
+	TestEqual(TEXT("FluxCapacity unchanged after move"), Run->GetFluxCapacity(), 13);
 
 	return true;
 }
@@ -324,8 +324,8 @@ bool FWacomRunDeckDestroyOneOfTwoBagProvidersAllowedSpec::RunTest(const FString&
 	TestTrue(TEXT("Destroy Bag1 allowed (Bag2 still BagProvider)"),
 		Run->DestroyCardFromBackpack(Bag1));
 	TestTrue(TEXT("UI still available"), Run->IsBackpackUiAvailable());
-	TestEqual(TEXT("FluxCapacity=7 only Bag2 content slots"),
-		Run->GetFluxCapacity(), 7);
+	TestEqual(TEXT("FluxCapacity=8 only Bag2 capacity"),
+		Run->GetFluxCapacity(), 8);
 
 	return true;
 }
@@ -422,6 +422,43 @@ bool FWacomRunDeckDeleteCardForGoldByRaritySpec::RunTest(const FString& /*Parame
 	TestTrue(TEXT("Delete blue card succeeded"),
 		Run->DeleteCardForGold(BlueCard));
 	TestEqual(TEXT("Blue card → +2 gold (total 3)"), Run->GetGold(), 3);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDeleteCardForGoldValidationSpec,
+	"Wacom.Run.Deck.DeleteCardForGoldValidation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDeleteCardForGoldValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* WhiteCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
+	UCardDefinition* IntrinsicCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Intrinsic);
+	UCardDefinition* OnlyBag = MakeBagCard(Fx, 5);
+	UCardDefinition* MissingCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ WhiteCard, IntrinsicCard, OnlyBag });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	TestTrue(TEXT("White card can be deleted"),
+		Run->ValidateDeleteCardForGold(WhiteCard).bCanExecute);
+	TestEqual(TEXT("Null delete reason"),
+		Run->ValidateDeleteCardForGold(nullptr).DisabledReason,
+		FName(TEXT("MissingCard")));
+	TestEqual(TEXT("Missing card delete reason"),
+		Run->ValidateDeleteCardForGold(MissingCard).DisabledReason,
+		FName(TEXT("CardNotOwned")));
+	TestEqual(TEXT("Intrinsic delete reason"),
+		Run->ValidateDeleteCardForGold(IntrinsicCard).DisabledReason,
+		FName(TEXT("Intrinsic")));
+	TestEqual(TEXT("Last bag provider delete reason"),
+		Run->ValidateDeleteCardForGold(OnlyBag).DisabledReason,
+		FName(TEXT("LastBagProvider")));
 
 	return true;
 }
@@ -593,6 +630,55 @@ bool FWacomRunDeckBuildInitParamsUsesBattleDeckSpec::RunTest(const FString& /*Pa
 		Params.BattleDeckEntries[0].CapacityEffectTags.IsEmpty());
 	TestEqual(TEXT("BattleDeckOverride no longer written by RunSession"),
 		Params.BattleDeckOverride.Num(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckMoveInstanceValidationSpec,
+	"Wacom.Run.Deck.MoveInstanceValidation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckMoveInstanceValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Normal = Fx.MakeNoopCard(0);
+	UCardDefinition* SecondNormal = Fx.MakeNoopCard(0);
+	UCardDefinition* Bag = MakeBagCard(Fx, 2);
+	UCardDefinition* TypeB = Fx.MakeNoopCard(0);
+	TypeB->Physique.Capacity = 2;
+	TypeB->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_Placeholder;
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Normal, SecondNormal, Bag, TypeB });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	const FGuid NormalId = Run->GetBattleDeck()[0].InstanceId;
+	const FGuid SecondNormalId = Run->GetBattleDeck()[1].InstanceId;
+	const FGuid TypeBId = Run->GetBackpack()[1].InstanceId;
+	const FGuid SpecialOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+
+	TestTrue(TEXT("BattleDeck normal can return to Backpack when flux has room"),
+		Run->ValidateMoveInstance(NormalId, EZoneKind::Backpack, FGuid()).bCanExecute);
+	TestEqual(TEXT("Unknown move reason"),
+		Run->ValidateMoveInstance(FGuid::NewGuid(), EZoneKind::Backpack, FGuid()).DisabledReason,
+		FName(TEXT("CardNotFound")));
+	TestEqual(TEXT("Self special zone reason"),
+		Run->ValidateMoveInstance(SpecialOwnerId, EZoneKind::SpecialZone, SpecialOwnerId).DisabledReason,
+		FName(TEXT("SelfSpecialZone")));
+	TestEqual(TEXT("TypeB special zone reason"),
+		Run->ValidateMoveInstance(TypeBId, EZoneKind::SpecialZone, SpecialOwnerId).DisabledReason,
+		FName(TEXT("SelfSpecialZone")));
+	TestEqual(TEXT("TypeB burden reason"),
+		Run->ValidateMoveInstance(TypeBId, EZoneKind::BurdenZone, FGuid()).DisabledReason,
+		FName(TEXT("TypeBInBurdenZone")));
+
+	TestTrue(TEXT("Move one normal to Backpack succeeds"), Run->MoveInstance(NormalId, EZoneKind::Backpack, FGuid()));
+	TestEqual(TEXT("Returning second normal to full flux is rejected"),
+		Run->ValidateMoveInstance(SecondNormalId, EZoneKind::Backpack, FGuid()).DisabledReason,
+		FName(TEXT("FluxFull")));
 
 	return true;
 }
@@ -1479,13 +1565,13 @@ bool FWacomRunDeckFluxCapacityOnlyCountsTypeASpec::RunTest(const FString& /*Para
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	// FluxCapacity 只算 A 类内容格：10-1；BattleDeckCapacity 统计 A+B：13
-	TestEqual(TEXT("FluxCapacity ignores TypeB and excludes A main card"), Run->GetFluxCapacity(), 9);
+	// FluxCapacity 只算 A 类容量：10；BattleDeckCapacity 统计 A+B：13
+	TestEqual(TEXT("FluxCapacity ignores TypeB and counts TypeA capacity"), Run->GetFluxCapacity(), 10);
 	TestEqual(TEXT("BattleDeckCapacity counts TypeA and TypeB"), Run->GetBattleDeckCapacity(), 13);
 
 	// 容器卡换到 BattleDeck 后两个公式都稳定
 	TestTrue(TEXT("Add TypeB to BattleDeck"), Run->AddCardToBattleDeck(TypeB));
-	TestEqual(TEXT("FluxCapacity stable"), Run->GetFluxCapacity(), 9);
+	TestEqual(TEXT("FluxCapacity stable"), Run->GetFluxCapacity(), 10);
 	TestEqual(TEXT("BattleDeckCapacity stable"), Run->GetBattleDeckCapacity(), 13);
 
 	return true;
@@ -1544,8 +1630,8 @@ bool FWacomRunDeckCapacityCountsAllPhysicalZonesSpec::RunTest(const FString& /*P
 	TestTrue(TEXT("Move TypeA container into BurdenZone"),
 		Run->MoveInstance(TypeAInBurdenZoneId, EZoneKind::BurdenZone, FGuid()));
 
-	TestEqual(TEXT("FluxCapacity counts TypeA content slots in all physical zones"),
-		Run->GetFluxCapacity(), 11);
+	TestEqual(TEXT("FluxCapacity counts full TypeA capacity in all physical zones"),
+		Run->GetFluxCapacity(), 14);
 	TestEqual(TEXT("BattleDeckCapacity counts all containers in all physical zones"),
 		Run->GetBattleDeckCapacity(), 17);
 
@@ -1617,27 +1703,31 @@ bool FWacomRunDeckBackpackStorageSnapshotSpec::RunTest(const FString& /*Paramete
 	};
 
 	const FRunBackpackStorageSnapshot InitialSnap = Run->BuildBackpackStorageSnapshot();
-	TestTrue(TEXT("A main in Backpack appears as Flux.MainCards"),
-		HasDefinition(InitialSnap.Flux.MainCards, TypeAMain));
+	TestEqual(TEXT("Flux.MainCards kept empty for compatibility"),
+		InitialSnap.Flux.MainCards.Num(), 0);
+	TestTrue(TEXT("A container in Backpack appears as Flux.ContentCards"),
+		HasDefinition(InitialSnap.Flux.ContentCards, TypeAMain));
 	TestTrue(TEXT("Backpack normal card appears as Flux.ContentCards"),
 		HasDefinition(InitialSnap.Flux.ContentCards, FluxContent));
-	if (const FRunStorageCardView* TypeAView = FindView(InitialSnap.Flux.MainCards, TypeAMain))
+	if (const FRunStorageCardView* TypeAView = FindView(InitialSnap.Flux.ContentCards, TypeAMain))
 	{
-		TestEqual(TEXT("Initial A main physical zone"), TypeAView->PhysicalZone, EZoneKind::Backpack);
-		TestFalse(TEXT("Initial A main not physical BattleDeck"), TypeAView->bIsPhysicalInBattleDeck);
+		TestEqual(TEXT("Initial A container physical zone"), TypeAView->PhysicalZone, EZoneKind::Backpack);
+		TestFalse(TEXT("Initial A container not physical BattleDeck"), TypeAView->bIsPhysicalInBattleDeck);
 	}
 
-	TestTrue(TEXT("Move A main to BattleDeck"), Run->AddCardToBattleDeck(TypeAMain));
+	TestTrue(TEXT("Move A container to BattleDeck"), Run->AddCardToBattleDeck(TypeAMain));
 	FRunBackpackStorageSnapshot Snap = Run->BuildBackpackStorageSnapshot();
-	if (const FRunStorageCardView* TypeAView = FindView(Snap.Flux.MainCards, TypeAMain))
+	TestFalse(TEXT("Moved A container no longer appears in Flux.ContentCards"),
+		HasDefinition(Snap.Flux.ContentCards, TypeAMain));
+	if (const FRunStorageCardView* TypeAView = FindView(Snap.BattleDeckPhysicalCards, TypeAMain))
 	{
-		TestEqual(TEXT("Moved A main still appears in Flux.MainCards with BattleDeck zone"),
+		TestEqual(TEXT("Moved A container appears as physical BattleDeck card"),
 			TypeAView->PhysicalZone, EZoneKind::BattleDeck);
-		TestTrue(TEXT("Moved A main physical BattleDeck flag"), TypeAView->bIsPhysicalInBattleDeck);
+		TestTrue(TEXT("Moved A container physical BattleDeck flag"), TypeAView->bIsPhysicalInBattleDeck);
 	}
 	else
 	{
-		AddError(TEXT("Moved A main missing from Flux.MainCards"));
+		AddError(TEXT("Moved A container missing from BattleDeckPhysicalCards"));
 		return false;
 	}
 
@@ -1918,6 +2008,33 @@ bool FWacomRunDeckIsDeleteFunctionAvailableSpec::RunTest(const FString& /*Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckMuseiLanternStartsInBattleDeckSpec,
+	"Wacom.Run.Deck.MuseiLanternStartsInBattleDeckAndContributesFlux",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckMuseiLanternStartsInBattleDeckSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Lantern = MakeDeleteProviderCard(Fx, 3);
+	Lantern->CardId = TEXT("MuseiYinchongdeng");
+
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Lantern });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	TestFalse(TEXT("Lantern not initially in Backpack"), Run->IsCardInBackpack(Lantern));
+	TestTrue(TEXT("Lantern initially in BattleDeck"), Run->IsCardInBattleDeck(Lantern));
+	TestEqual(TEXT("Lantern capacity contributes FluxCapacity"), Run->GetFluxCapacity(), 3);
+	TestTrue(TEXT("Delete provider available from BattleDeck"), Run->IsDeleteFunctionAvailable());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunDeckDeleteFunctionLostAfterDestroySpec,
 	"Wacom.Run.Deck.DeleteFunctionLostAfterDestroy",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2000,7 +2117,7 @@ bool FWacomRunDeckBattleDeckCapacityCountsAllContainersSpec::RunTest(const FStri
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 		Run->Initialize(Char);
 
-		TestEqual(TEXT("FluxCapacity = 11 (A content slots only)"), Run->GetFluxCapacity(), 11);
+		TestEqual(TEXT("FluxCapacity = 12 (A capacity)"), Run->GetFluxCapacity(), 12);
 		TestEqual(TEXT("BattleDeckCapacity = 16 (A+B)"), Run->GetBattleDeckCapacity(), 16);
 	}
 
@@ -2075,6 +2192,24 @@ namespace
 			Card->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_Placeholder;
 		}
 		return Card;
+	}
+
+	bool IsPbtFluxContentCard(const UCardDefinition* Card)
+	{
+		return Card && !URunSession::IsTypeBContainerCard(Card);
+	}
+
+	int32 CountPbtFluxContentCards(const TArray<FCardInstance>& Pile)
+	{
+		int32 Count = 0;
+		for (const FCardInstance& Inst : Pile)
+		{
+			if (IsPbtFluxContentCard(Inst.Definition))
+			{
+				++Count;
+			}
+		}
+		return Count;
 	}
 }
 
@@ -2339,7 +2474,11 @@ bool FWacomRunDeckPropertyMoveInstanceAtomicSpec::RunTest(const FString& /*Param
 			TargetInstanceId    = Run->GetBattleDeck()[PickIdx].InstanceId;
 			ToZone              = EZoneKind::Backpack;
 			ExpectedFromZone    = EZoneKind::BattleDeck;
-			bExpectSuccess      = true;
+			const UCardDefinition* TargetDef = Run->GetBattleDeck()[PickIdx].Definition;
+			const bool bTargetConsumesFlux = IsPbtFluxContentCard(TargetDef);
+			const bool bBackpackHasFluxSpace =
+				CountPbtFluxContentCards(Run->GetBackpack()) < Run->GetFluxCapacity();
+			bExpectSuccess = !bTargetConsumesFlux || bBackpackHasFluxSpace;
 			break;
 		}
 		case EScenario::FailCapacityFull:
@@ -3529,7 +3668,8 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 	//       b) 1+F+S > ACap：前 K=ACap-1-F 张退回 Backpack，剩余 S-K 张退回 BurdenZone。
 	//
 	// 测试构造保证 RecomputeBurden 在 DestroyCardFromBackpackInternal 末尾的调用
-	// 是 no-op（BattleDeck 已满到 B 主卡销毁后的 BattleDeckCap=ACap、Backpack 退回后恰好不超 FluxCap=ACap-1、
+	// 是 no-op（BattleDeck 已满到 B 主卡销毁后的 BattleDeckCap=ACap、Backpack 退回后恰好不超 FluxCap=ACap；
+	// 小布袋自己也占 1 个通量内容格，
 	// 销毁后没有其他 SpecialZone 可承接 refill），从而后置状态严格等于步骤 6 退回循环
 	// 的输出，可以直接对比期望布局。
 
@@ -3629,7 +3769,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 
 		// ---- 快照 ----
 		const int32 BackpackOrigSize = Run->GetBackpack().Num();   // 期望 = 2 + F
-		const int32 FluxCap          = Run->GetFluxCapacity();      // 期望 = ACap - 1
+		const int32 FluxCap          = Run->GetFluxCapacity();      // 期望 = ACap
 		const TArray<FCardInstance> BackpackBefore = Run->GetBackpack();
 		const TArray<FCardInstance> BattleDeckBefore = Run->GetBattleDeck();
 		const TArray<FCardInstance> BurdenZoneBefore = Run->GetRunState().BurdenZone;
@@ -3647,7 +3787,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 		}
 
 		// 期望退回布局
-		const int32 K = FMath::Clamp(FluxCap - F, 0, S);
+		const int32 K = FMath::Clamp(FluxCap - 1 - F, 0, S);
 
 		// 设置健全性校验：本测试构造确保 RecomputeBurden 是 no-op，需要 BattleDeck 在销毁前
 		// 已经满到 B 主卡销毁后的 BattleDeckCap（ACap 张非容器卡 Initialize 进 BattleDeck），且销毁后

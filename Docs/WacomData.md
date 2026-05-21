@@ -73,7 +73,7 @@ struct FCardPhysique
 ```
 
 `CapacityEffect` 使用 `Card.CapacityEffect.*` 命名空间。当前已实现：
-- 空 tag：A 类容器，容量计入通量容量和备战容量。
+- 空 tag：A 类容器，容量计入通量容量和备战容量；物理位于 Backpack 时作为通量内容卡显示。
 - 有效 tag：B 类容器，容量不计入通量容量，但计入备战容量；每张 B 类主卡独立展开一个 SpecialZone。
 - `Card.CapacityEffect.WeaponDamagePlus3`：B 类容器效果。SpecialZone 内已选择入战且带 `Card.Keyword.Weapon` 的卡，伤害结算 +3。
 
@@ -223,7 +223,7 @@ struct FShopOfferDefinition
 | `Card.Keyword.Hand` | `Card_Keyword_Hand` | 手（左右手专属）|
 | `Card.Keyword.Exhaust` | `Card_Keyword_Exhaust` | 临时关键词：本卡打出后进消耗区 |
 | `Card.Keyword.BagProvider` | `Card_Keyword_BagProvider` | 容器卡：背包能力提供者（GDD §11.1 / §11.2）|
-| `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌能力提供者（GDD §11.7）。Backpack 至少一张此关键词卡 → 删牌功能可用。第一阶段 UI 不读，接口就位 |
+| `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌能力提供者（GDD §11.7）。玩家持有区至少一张此关键词卡 → 删牌功能可用。第一阶段 UI 不读，接口就位 |
 
 ### Card.Rarity
 

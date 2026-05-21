@@ -12,7 +12,6 @@
 |---|---|---|
 | `DeleteZoneHost` | `PanelWidget` | C++ 填充删牌 DropTarget |
 | `BattleDeckZoneHost` | `PanelWidget` | C++ 填充备战区 DropTarget 和卡牌列表 |
-| `FluxMainCardsHost` | `PanelWidget` | C++ 填充通量主卡区 |
 | `FluxContentDropTargetHost` | `PanelWidget` | C++ 填充通量内容 DropTarget 和内容卡列表 |
 | `SpecialZonesHost` | `PanelWidget` | C++ 动态填充 `UWacomSpecialZoneWidget` |
 | `BurdenZoneHost` | `PanelWidget` | C++ 填充负重区标题、DropTarget 和卡牌列表 |
@@ -29,11 +28,13 @@
 | `BackpackTitleText` | `TextBlock` | 背包区标题。通量内容占用/容量由通量内容区标题显示 |
 | `CloseButton` | `Button` | 关闭背包 |
 | `BattleDeckCardsBox` | `WrapBox` | 直接承接备战卡列表；不绑则 C++ 在 Host 中创建 |
-| `FluxMainCardsBox` | `WrapBox` | 直接承接通量主卡；不绑则 C++ 在 Host 中创建 |
 | `FluxContentCardsBox` | `WrapBox` | 直接承接通量内容卡；不绑则 C++ 在 Host 中创建 |
+| `FluxMainCardsHost` | `PanelWidget` | 旧 WBP 兼容字段；当前不会被 C++ 填充 |
+| `FluxMainCardsBox` | `WrapBox` | 旧 WBP 兼容字段；当前不会被 C++ 填充 |
 
 注意：
 - 旧 `FluxZoneHost / BackpackCardsBox` 混合布局已删除，不要再绑定。
+- 通量区不再有 A 类主卡槽；A 类容器卡物理位于 Backpack 时会作为 `FluxContentCardsBox` 中的内容卡显示。
 - 如果推荐 Host 没绑定，C++ 会输出 warning，该区域不会显示运行时内容。
 - `CardDetailLayer` 应覆盖背包界面可见区域，并放在卡牌区域之上；详情面板为 `HitTestInvisible`，不会抢拖拽或右键输入。
 - WBP 只负责布局和样式，不直接调用 `RunSession`。
@@ -49,7 +50,6 @@
 |---|---|
 | `WBP_BackpackDeleteZone` | 删牌区外壳 |
 | `WBP_BackpackBattleDeckZone` | 备战区外壳 |
-| `WBP_BackpackFluxMainZone` | 通量主卡区外壳 |
 | `WBP_BackpackFluxContentZone` | 通量内容区外壳 |
 | `WBP_BackpackSpecialZones` | 特殊存放区列表外壳 |
 | `WBP_BackpackBurdenZone` | 负重区外壳 |

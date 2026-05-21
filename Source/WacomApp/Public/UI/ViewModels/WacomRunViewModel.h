@@ -70,7 +70,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Getter, meta=(AllowPrivateAccess))
 	int32 BattleDeckCapacity = 0;
 
-	/** 通量内容已占用数量；A/B 容器主卡不计入。 */
+	/** 通量内容已占用数量；普通卡和 A 类容器卡计入，B 主卡不计入。 */
 	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Getter, meta=(AllowPrivateAccess))
 	int32 BackpackCount = 0;
 

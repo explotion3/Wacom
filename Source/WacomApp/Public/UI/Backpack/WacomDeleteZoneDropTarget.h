@@ -28,6 +28,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Delete")
 	static int32 GetDeleteGoldRewardPreviewForToast(UCardDefinition* Card);
 
+	static FText FormatDeleteFailureReasonForToast(FName DisabledReason);
+
 protected:
 	virtual bool NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;

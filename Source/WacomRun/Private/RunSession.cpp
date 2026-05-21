@@ -36,6 +36,20 @@ namespace
 		return INDEX_NONE;
 	}
 
+	bool ShouldStarterCardStartInBattleDeck(const UCardDefinition* Card)
+	{
+		// 原型内容规则：暮色引虫灯默认进入备战区，但仍作为 A 类容器贡献通量容量。
+		// 后续若类似规则增多，应抽成 Card/Character 数据字段，而不是继续扩硬编码列表。
+		return Card && Card->CardId == FName(TEXT("MuseiYinchongdeng"));
+	}
+
+	bool IsFluxContentCardDefinition(const UCardDefinition* Card)
+	{
+		// 通量存放区现在没有 A 类主卡槽；A 类容器和普通卡都作为通量内容。
+		// B 类容器仍是特殊存放区 owner，不进入通量内容。
+		return Card && !URunSession::IsTypeBContainerCard(Card);
+	}
+
 	FRunShopState BuildShopStateFromInputs(const TArray<FRunShopOfferInput>& Inputs)
 	{
 		FRunShopState State;
@@ -221,7 +235,11 @@ bool URunSession::Initialize(UCharacterDefinition* InCharacter)
 		Inst.InstanceId = FGuid::NewGuid();
 		ensureMsgf(Inst.InstanceId.IsValid(),
 			TEXT("[RunSession] Initialize: FGuid::NewGuid() 生成了 zero GUID，违反 R1.14 不变量"));
-		if (URunSession::IsContainerCard(Card))
+		if (ShouldStarterCardStartInBattleDeck(Card))
+		{
+			RunState.BattleDeck.Add(Inst);
+		}
+		else if (URunSession::IsContainerCard(Card))
 		{
 			RunState.Backpack.Add(Inst);
 		}
@@ -783,7 +801,11 @@ bool URunSession::ApplySaveGameToRunState(UWacomSaveGame* SaveGame)
 			Inst.InstanceId = FGuid::NewGuid();
 			ensureMsgf(Inst.InstanceId.IsValid(),
 				TEXT("[RunSession] ApplySaveGameToRunState (StarterDeck rebuild): FGuid::NewGuid() 生成 zero GUID，违反 R1.14"));
-			if (URunSession::IsContainerCard(Card))
+			if (ShouldStarterCardStartInBattleDeck(Card))
+			{
+				TempState.BattleDeck.Add(Inst);
+			}
+			else if (URunSession::IsContainerCard(Card))
 			{
 				TempState.Backpack.Add(Inst);
 			}
@@ -1148,7 +1170,7 @@ void URunSession::RecomputeBurdenInternal()
 	//   CountFluxContentCards(Backpack) <= GetFluxCapacity() AND BattleDeck.Num() <= GetBattleDeckCapacity()，
 	//   除非整个数组全是 B 主卡 instance（极端退化情形）。
 	//
-	// 通量区溢出只移动内容卡；A/B 容器主卡只贡献或开启存放区，不占用通量内容格。
+	// 通量区溢出只移动内容卡；普通卡和 A 类容器卡占用通量内容格，B 主卡只开启特殊存放区。
 	// "skip B-master" 规则（R2.2a / R2.12 / R5.6）：
 	//   B 主卡 instance 在生命周期内只可能位于 Backpack ∪ BattleDeck，永远不能进入
 	//   BurdenZone（与 Property 5 双射 reverse 方向构成的不变量）。否则 SpecialZones
@@ -1165,7 +1187,7 @@ void URunSession::RecomputeBurdenInternal()
 		{
 			for (int32 i = Pile.Num() - 1; i >= 0; --i)
 			{
-				if (!IsContainerCard(Pile[i].Definition))
+				if (IsFluxContentCardDefinition(Pile[i].Definition))
 				{
 					RunState.BurdenZone.Add(Pile[i]);
 					Pile.RemoveAt(i);
@@ -1227,9 +1249,17 @@ void URunSession::RecomputeBurdenInternal()
 		// 头部按值拷贝出来；后面 RemoveAt(0) 会让原引用失效。
 		FCardInstance Instance = RunState.BurdenZone[0];
 
-		// 优先级 1：通量区。容器主卡不占通量内容格；普通内容卡才需要检查内容容量。
-		const bool bContainerMainCard = IsContainerCard(Instance.Definition);
-		if (bContainerMainCard || CountFluxContentCards(RunState.Backpack) < GetFluxCapacity())
+		// 优先级 1：通量区。B 主卡仍是特殊存放区 owner，必须回到 Backpack/BattleDeck 之一，
+		// 不占通量内容格；A 类容器和普通卡按通量内容容量占格。
+		if (IsTypeBContainerCard(Instance.Definition))
+		{
+			RunState.Backpack.Add(Instance);
+			EnsureSpecialZoneEntryFor(Instance);
+			RunState.BurdenZone.RemoveAt(0);
+			continue;
+		}
+		if (IsFluxContentCardDefinition(Instance.Definition)
+			&& CountFluxContentCards(RunState.Backpack) < GetFluxCapacity())
 		{
 			RunState.Backpack.Add(Instance);
 			EnsureSpecialZoneEntryFor(Instance);
@@ -1643,32 +1673,12 @@ bool URunSession::IsIntrinsicCard(const UCardDefinition* Card)
 int32 URunSession::GetFluxCapacity() const
 {
 	// GDD §11.4 容量公式：
-	//   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 max(Capacity - 1, 0))
+	//   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
 	//
 	// "玩家拥有" = 当前 RunState 全部物理持有区。
-	// A 类容器卡自身占主卡位，不再额外占用内容格。
+	// A 类容器卡自身也作为通量内容卡显示 / 占格，不再有通量主卡位。
 	// B 类容器卡（CapacityEffect 非空）不进通量公式，自行开辟特殊存放区。
-	int32 Sum = 0;
-	auto AccumulatePile = [&Sum](const TArray<FCardInstance>& Pile)
-	{
-		for (const FCardInstance& Inst : Pile)
-		{
-			if (IsTypeAContainerCard(Inst.Definition))
-			{
-				Sum += FMath::Max(0, Inst.Definition->Physique.Capacity - 1);
-			}
-		}
-	};
-
-	AccumulatePile(RunState.Backpack);
-	AccumulatePile(RunState.BattleDeck);
-	AccumulatePile(RunState.BurdenZone);
-	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
-	{
-		AccumulatePile(SpecialZone.Cards);
-	}
-
-	return Sum;
+	return SumOwnedCardCapacity(/*bTypeAOnly=*/true);
 }
 
 int32 URunSession::GetBattleDeckCapacity() const
@@ -1710,11 +1720,7 @@ FRunBackpackStorageSnapshot URunSession::BuildBackpackStorageSnapshot() const
 			continue;
 		}
 
-		if (IsTypeAContainerCard(Inst.Definition))
-		{
-			Snapshot.Flux.MainCards.Add(MakeCardView(Inst, EZoneKind::Backpack, FGuid()));
-		}
-		else if (!IsTypeBContainerCard(Inst.Definition))
+		if (IsFluxContentCardDefinition(Inst.Definition))
 		{
 			Snapshot.Flux.ContentCards.Add(MakeCardView(Inst, EZoneKind::Backpack, FGuid()));
 		}
@@ -1731,10 +1737,8 @@ FRunBackpackStorageSnapshot URunSession::BuildBackpackStorageSnapshot() const
 		const FRunStorageCardView View = MakeCardView(Inst, EZoneKind::BattleDeck, FGuid());
 		Snapshot.BattleDeckPhysicalCards.Add(View);
 
-		if (IsTypeAContainerCard(Inst.Definition))
-		{
-			Snapshot.Flux.MainCards.Add(View);
-		}
+		// BattleDeck 中的 A 类容器仍贡献通量容量，但不投影到通量内容区；
+		// 它只作为物理备战卡显示在 BattleDeckPhysicalCards。
 	}
 
 	for (const FSpecialZone& SZ : RunState.SpecialZones)
@@ -1822,7 +1826,7 @@ int32 URunSession::CountFluxContentCards(const TArray<FCardInstance>& Pile) cons
 	int32 Count = 0;
 	for (const FCardInstance& Inst : Pile)
 	{
-		if (Inst.Definition && !IsContainerCard(Inst.Definition))
+		if (IsFluxContentCardDefinition(Inst.Definition))
 		{
 			++Count;
 		}
@@ -1832,9 +1836,24 @@ int32 URunSession::CountFluxContentCards(const TArray<FCardInstance>& Pile) cons
 
 bool URunSession::IsBackpackUiAvailable() const
 {
-	for (const FCardInstance& Inst : RunState.Backpack)
+	auto HasProvider = [](const TArray<FCardInstance>& Pile)
 	{
-		if (IsBagProviderCard(Inst.Definition))
+		for (const FCardInstance& Inst : Pile)
+		{
+			if (IsBagProviderCard(Inst.Definition))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	if (HasProvider(RunState.Backpack) || HasProvider(RunState.BattleDeck) || HasProvider(RunState.BurdenZone))
+	{
+		return true;
+	}
+	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
+	{
+		if (HasProvider(SpecialZone.Cards))
 		{
 			return true;
 		}
@@ -1844,9 +1863,24 @@ bool URunSession::IsBackpackUiAvailable() const
 
 bool URunSession::IsDeleteFunctionAvailable() const
 {
-	for (const FCardInstance& Inst : RunState.Backpack)
+	auto HasProvider = [](const TArray<FCardInstance>& Pile)
 	{
-		if (IsDeleteProviderCard(Inst.Definition))
+		for (const FCardInstance& Inst : Pile)
+		{
+			if (IsDeleteProviderCard(Inst.Definition))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	if (HasProvider(RunState.Backpack) || HasProvider(RunState.BattleDeck) || HasProvider(RunState.BurdenZone))
+	{
+		return true;
+	}
+	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
+	{
+		if (HasProvider(SpecialZone.Cards))
 		{
 			return true;
 		}
@@ -1948,6 +1982,15 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 	//   3) 从 SpecialZone 移出、或从其他 zone 进入 SpecialZone 时，清理
 	//      bBattleEnabledInSpecialZone；同一 SpecialZone 内重排保留原 flag。
 
+	const FRunDeckOperationValidation Validation = ValidateMoveInstance(InstanceId, ToZone, ToZoneOwnerInstanceId);
+	if (!Validation.bCanExecute)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] MoveInstance: 拒绝 InstanceId %s ToZone=%d Reason=%s"),
+			*InstanceId.ToString(), (int32)ToZone, *Validation.DisabledReason.ToString());
+		return false;
+	}
+
 	// 1) 找源 zone（R1.7：InstanceId 在所有 zone 中均不存在 → 拒绝）。
 	//    复用 FindInstance（task 8.1 起遍历全部四区）。
 	FCardInstance Found;
@@ -1965,8 +2008,23 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 	switch (ToZone)
 	{
 	case EZoneKind::Backpack:
-		// 无额外校验。
+	{
+		if (IsFluxContentCardDefinition(Found.Definition))
+		{
+			const int32 CurrentCount = CountFluxContentCards(RunState.Backpack);
+			const bool bInPlaceBackpack = FromZone == EZoneKind::Backpack;
+			const int32 EffectiveCount = bInPlaceBackpack ? (CurrentCount - 1) : CurrentCount;
+			const int32 Capacity = GetFluxCapacity();
+			if (EffectiveCount >= Capacity)
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[RunSession] MoveInstance: Backpack 通量内容已达容量上限 %d，拒绝 InstanceId %s"),
+					Capacity, *InstanceId.ToString());
+				return false;
+			}
+		}
 		break;
+	}
 
 	case EZoneKind::BattleDeck:
 	{
@@ -2170,8 +2228,108 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 		*InstanceId.ToString(), (int32)FromZone, (int32)ToZone,
 		RunState.Backpack.Num(), RunState.BattleDeck.Num());
 
+	if (ToZone != EZoneKind::BurdenZone)
+	{
+		RecomputeBurdenInternal();
+	}
 	NotifyRunStateChanged();
 	return true;
+}
+
+FRunDeckOperationValidation URunSession::ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const
+{
+	FRunDeckOperationValidation Result;
+	Result.DisabledReason = TEXT("Unknown");
+
+	FCardInstance Found;
+	EZoneKind FromZone = EZoneKind::Backpack;
+	FGuid FromZoneOwnerInstanceId;
+	if (!FindInstance(InstanceId, Found, FromZone, FromZoneOwnerInstanceId))
+	{
+		Result.DisabledReason = TEXT("CardNotFound");
+		return Result;
+	}
+
+	switch (ToZone)
+	{
+	case EZoneKind::Backpack:
+	{
+		if (IsFluxContentCardDefinition(Found.Definition))
+		{
+			const int32 CurrentCount = CountFluxContentCards(RunState.Backpack);
+			const bool bInPlaceBackpack = FromZone == EZoneKind::Backpack;
+			const int32 EffectiveCount = bInPlaceBackpack ? (CurrentCount - 1) : CurrentCount;
+			if (EffectiveCount >= GetFluxCapacity())
+			{
+				Result.DisabledReason = TEXT("FluxFull");
+				return Result;
+			}
+		}
+		break;
+	}
+
+	case EZoneKind::BattleDeck:
+	{
+		const int32 EffectiveCount = (FromZone == EZoneKind::BattleDeck)
+			? (RunState.BattleDeck.Num() - 1)
+			: RunState.BattleDeck.Num();
+		if (EffectiveCount >= GetBattleDeckCapacity())
+		{
+			Result.DisabledReason = TEXT("BattleDeckFull");
+			return Result;
+		}
+		break;
+	}
+
+	case EZoneKind::SpecialZone:
+	{
+		const int32 ToSZIdx = RunState.SpecialZones.IndexOfByPredicate(
+			[&](const FSpecialZone& SZ) { return SZ.OwnerInstanceId == ToZoneOwnerInstanceId; });
+		if (ToSZIdx == INDEX_NONE)
+		{
+			Result.DisabledReason = TEXT("SpecialZoneMissing");
+			return Result;
+		}
+		if (InstanceId == ToZoneOwnerInstanceId)
+		{
+			Result.DisabledReason = TEXT("SelfSpecialZone");
+			return Result;
+		}
+		if (IsTypeBContainerCard(Found.Definition))
+		{
+			Result.DisabledReason = TEXT("TypeBInSpecialZone");
+			return Result;
+		}
+
+		const int32 CurrentCount = RunState.SpecialZones[ToSZIdx].Cards.Num();
+		const bool bInPlaceSameSZ =
+			(FromZone == EZoneKind::SpecialZone)
+			&& (FromZoneOwnerInstanceId == ToZoneOwnerInstanceId);
+		const int32 EffectiveCount = bInPlaceSameSZ ? (CurrentCount - 1) : CurrentCount;
+		if (EffectiveCount >= GetSpecialZoneCapacityFor(ToZoneOwnerInstanceId))
+		{
+			Result.DisabledReason = TEXT("SpecialZoneFull");
+			return Result;
+		}
+		break;
+	}
+
+	case EZoneKind::BurdenZone:
+		if (IsTypeBContainerCard(Found.Definition))
+		{
+			Result.DisabledReason = TEXT("TypeBInBurdenZone");
+			return Result;
+		}
+		break;
+
+	default:
+		Result.DisabledReason = TEXT("InvalidTargetZone");
+		return Result;
+	}
+
+	Result.bCanExecute = true;
+	Result.DisabledReason = NAME_None;
+	return Result;
 }
 
 void URunSession::AddCardToBackpack(UCardDefinition* Card)
@@ -2336,8 +2494,8 @@ bool URunSession::DestroyCardFromBackpackInternal(UCardDefinition* Card)
 	}
 
 	// 6) Stage 4.5.1 任务 7.2 / R2.4 / R8.6：B 主卡销毁分支 — 按 FSpecialZone.Cards
-	//    数组下标升序逐张退回；Backpack 未满（Num < GetFluxCapacity）→ 追加 Backpack；
-	//    Backpack 已满 → 追加 BurdenZone；处理完后从 RunState.SpecialZones 移除该 entry。
+	//    数组下标升序逐张退回；通量内容未满（CountFluxContentCards < GetFluxCapacity）
+	//    → 追加 Backpack；已满 → 追加 BurdenZone；处理完后从 RunState.SpecialZones 移除该 entry。
 	//
 	//    退回前每张 instance 强制把 bBattleEnabledInSpecialZone 重置为 false（R8.6 /
 	//    Property 10：从 SpecialZone 移出时必须清掉旧参战标记，避免下次再进入残留）。
@@ -2365,7 +2523,7 @@ bool URunSession::DestroyCardFromBackpackInternal(UCardDefinition* Card)
 			{
 				// R8.6 / Property 10：从 SpecialZone 移出 → flag 重置为 false。
 				Inst.bBattleEnabledInSpecialZone = false;
-				if (RunState.Backpack.Num() < FluxCap)
+				if (CountFluxContentCards(RunState.Backpack) < FluxCap)
 				{
 					RunState.Backpack.Add(MoveTemp(Inst));
 				}
@@ -2399,8 +2557,12 @@ bool URunSession::DestroyCardFromBackpackInternal(UCardDefinition* Card)
 
 bool URunSession::DeleteCardForGold(UCardDefinition* Card)
 {
-	if (!Card)
+	const FRunDeckOperationValidation Validation = ValidateDeleteCardForGold(Card);
+	if (!Validation.bCanExecute)
 	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] DeleteCardForGold: 拒绝 Card=%s Reason=%s"),
+			*GetNameSafe(Card), *Validation.DisabledReason.ToString());
 		return false;
 	}
 
@@ -2440,6 +2602,60 @@ bool URunSession::DeleteCardForGold(UCardDefinition* Card)
 		*GetNameSafe(Card), GoldReward, RunState.Gold);
 	NotifyRunStateChanged();
 	return true;
+}
+
+FRunDeckOperationValidation URunSession::ValidateDeleteCardForGold(UCardDefinition* Card) const
+{
+	FRunDeckOperationValidation Result;
+	Result.DisabledReason = TEXT("Unknown");
+
+	if (!Card)
+	{
+		Result.DisabledReason = TEXT("MissingCard");
+		return Result;
+	}
+
+	const int32 BackpackIdx = FindFirstIndexByDefinition(RunState.Backpack, Card);
+	const int32 BattleDeckIdx = FindFirstIndexByDefinition(RunState.BattleDeck, Card);
+	if (BackpackIdx == INDEX_NONE && BattleDeckIdx == INDEX_NONE)
+	{
+		Result.DisabledReason = TEXT("CardNotOwned");
+		return Result;
+	}
+
+	if (IsIntrinsicCard(Card))
+	{
+		Result.DisabledReason = TEXT("Intrinsic");
+		return Result;
+	}
+
+	if (IsBagProviderCard(Card))
+	{
+		auto CountProviders = [](const TArray<FCardInstance>& Pile) -> int32
+		{
+			int32 Count = 0;
+			for (const FCardInstance& Inst : Pile)
+			{
+				if (IsBagProviderCard(Inst.Definition))
+				{
+					++Count;
+				}
+			}
+			return Count;
+		};
+
+		const int32 RemainingProviders =
+			CountProviders(RunState.Backpack) + CountProviders(RunState.BattleDeck) - 1;
+		if (RemainingProviders <= 0)
+		{
+			Result.DisabledReason = TEXT("LastBagProvider");
+			return Result;
+		}
+	}
+
+	Result.bCanExecute = true;
+	Result.DisabledReason = NAME_None;
+	return Result;
 }
 
 bool URunSession::AddCardToBattleDeck(UCardDefinition* Card)

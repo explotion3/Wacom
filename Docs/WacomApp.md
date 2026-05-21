@@ -289,7 +289,7 @@ UI 结构（三大区）：
 | 顶部行 | HorizontalBox | 标题 / 金币 / 关闭按钮 |
 | 删牌区 | `UWacomDeleteZoneDropTarget` | 拖入卡牌后弹 ConfirmDialog，确认后调用 `DeleteCardForGold` |
 | 备战区 | `UWacomZoneDropTarget + WrapBox` | BattleDeck 卡，标题显示 N/Capacity；同时显示已入战 SpecialZone 投影卡 |
-| 背包区 / 通量存放区 | 主卡区 + `UWacomZoneDropTarget + WrapBox` | 主卡区显示所有 A 类主卡；内容区显示被通量区收纳的卡 |
+| 背包区 / 通量存放区 | `UWacomZoneDropTarget + WrapBox` | 显示物理位于 Backpack 的通量内容；A 类容器和普通卡都作为内容卡显示 |
 | 背包区 / 特殊存放区 | 主卡区 + 动态 `UWacomZoneDropTarget + WrapBox` | 每张 B 主卡一个区块；主卡区只显示该 B 主卡，内容区显示受其容量效果影响的卡 |
 | 背包区 / 负重区 | `UWacomZoneDropTarget + WrapBox` | 渲染 Run 层 Snapshot 中的 `BurdenCards` |
 
@@ -297,23 +297,20 @@ UI 结构（三大区）：
 
 - `DeleteZoneHost`
 - `BattleDeckZoneHost`
-- `FluxMainCardsHost`
 - `FluxContentDropTargetHost`
-- `FluxMainCardsBox`
 - `FluxContentCardsBox`
 - `SpecialZonesHost`
 - `BurdenZoneHost`
 
 C++ fallback 会创建默认三大区布局；如果 WBP 绑定这些 Host，C++ 只向 Host 填充运行时 DropTarget / WrapBox，不再要求美术布局复刻 C++ 默认结构。
 
-通量区只保留新接口：`FluxMainCardsHost` 填充 A 类容器主卡，`FluxContentDropTargetHost` 填充可投放内容卡的 DropTarget。旧 `FluxZoneHost / BackpackCardsBox` 混合布局已删除。
+通量区只保留当前正式接口：`FluxContentDropTargetHost` 填充可投放内容卡的 DropTarget。`FluxMainCardsHost / FluxMainCardsBox` 仅作为旧 WBP 兼容字段保留，默认 C++ fallback 不再创建或填充通量主卡区。
 
 WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主文档只保留结构和职责说明。
 
 主卡投影规则：
 - 出战卡的物理 instance 位于 `BattleDeck`。
-- 如果出战卡是 A/B 类主卡，背包区对应主卡槽仍显示该卡投影，并标记"已出战"。
-- 投影不产生新的 InstanceId，不作为第二张卡参与销毁、容量计算或存档。
+- A 类容器卡不再在通量区生成投影；它出战时只显示在备战区，但仍贡献通量容量。
 - B 类主卡出战时，其特殊存放区仍保留；特殊区内容不因主卡物理进入 `BattleDeck` 而消失。
 
 子控件：`UWacomDeckCardWidget`
@@ -375,8 +372,8 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 
 `UWacomBackpackZoneSectionWidget` 是背包区块的局部 WBP 承接点：
 
-- 用于先替换备战区、通量主卡区、通量内容区、特殊区列表、负重区等单个外壳，不要求同时制作完整 `WBP_BackpackScreen`
-- C++ fallback 会按约定路径尝试加载 `WBP_BackpackBattleDeckZone`、`WBP_BackpackFluxMainZone` 等局部 WBP
+- 用于先替换备战区、通量内容区、特殊区列表、负重区等单个外壳，不要求同时制作完整 `WBP_BackpackScreen`
+- C++ fallback 会按约定路径尝试加载 `WBP_BackpackBattleDeckZone`、`WBP_BackpackFluxContentZone` 等局部 WBP
 - 每个局部 WBP 只绑定 `TitleText / ContentHost`，运行时 DropTarget、WrapBox 和卡牌仍由 `UWacomBackpackScreen` 填充
 - 如果某个局部 WBP 缺少 `ContentHost`，只让该区块回退到 C++ 默认外壳，不影响其他区块继续显示
 - 局部 WBP 不直接调用 `RunSession`
@@ -404,15 +401,17 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 DropTarget 规则：
 - 普通 zone drop 调 `RunSession->MoveInstance`。
 - DeleteZone drop 先弹 `UWacomConfirmDialog`，确认后调 `RunSession->DeleteCardForGold`。
-- DeleteZone 删除成功后通过 `UWacomAppToastSubsystem` 显示“销毁卡牌：{CardName}，获得 {Gold} 金币”；取消确认或规则删除失败不显示成功提示。
-- `NativeOnDragOver` 只做视觉预判，例如 BattleDeck 已满且来源 Backpack 时返回 false；最终规则仍以 RunSession 返回值为准。
+- 普通 zone drop 会先读 `RunSession->ValidateMoveInstance()`，成功后通过 `UWacomAppToastSubsystem` 显示“移动卡牌：{CardName} → {ZoneName}”，失败时显示玩家可读原因，例如通量区已满、备战区已满、特殊存放区已满、主卡不能进入特殊存放区。
+- DeleteZone 会先读 `RunSession->ValidateDeleteCardForGold()`；固有卡、最后一张 BagProvider、未持有卡等情况直接显示失败 Toast，不弹确认框。确认后若规则状态变化导致删除失败，也会显示失败原因。
+- DeleteZone 删除成功后通过 `UWacomAppToastSubsystem` 显示“销毁卡牌：{CardName}，获得 {Gold} 金币”；取消确认不显示成功提示。
+- `NativeOnDragOver` 只做视觉预判，并优先消费 RunSession validation；最终规则仍以 RunSession 写命令返回值为准。
 - DropTarget 暴露 `EWacomDropTargetState`：`Normal / HoverValid / HoverInvalid / DropAccepted / DropRejected`。
 - WBP 可实现 `BP_OnDropTargetStateChanged` 做高亮、禁用提示和失败反馈。
 
 刷新模型：
 - 操作命令 → RunSession 写状态 → `OnRunStateChangedNative` → Provider 刷 ViewModel → `OnRunViewModelRefreshedNative` → `BackpackScreen::RebuildAll()`。
 - RebuildAll 已拆为 `RebuildTopStats / RebuildBattleDeckZone / RebuildBackpackZone / RebuildSpecialZones / RebuildBurdenZone`。
-- `RebuildBackpackZone` 只编排通量区，内部继续拆分 `RebuildFluxMainCards` 和 `RebuildFluxContentCards`；`RebuildSpecialZones` 只创建 `UWacomSpecialZoneWidget`，单个区块内部按 `OwnerCard + ContentCards` 渲染。
+- `RebuildBackpackZone` 只编排通量内容区；`RebuildFluxMainCards` 仅保留兼容空实现；`RebuildSpecialZones` 只创建 `UWacomSpecialZoneWidget`，单个区块内部按 `OwnerCard + ContentCards` 渲染。
 - UI 不做局部 patch，成功操作后通过 `RunSession::BuildBackpackStorageSnapshot()` 全量重建列表；顶部背包/备战容量计数由 Provider 从同一 Snapshot 写入 `UWacomRunViewModel`，压力、时间等非列表标量仍由 Provider 读取 Run 状态。
 
 ---

@@ -62,7 +62,7 @@ public:
 	 *
 	 * 行为：
 	 *   - FingerCount / HpPerFinger 从 Character 字段读
-	 *   - 把 Character->StarterDeck 全量复制到 Backpack 和 BattleDeck（第一阶段两者等值）
+	 *   - 非容器卡默认进 BattleDeck，容器卡默认进 Backpack；原型特例暮色引虫灯默认进 BattleDeck
 	 *   - 时段重置为 Morning + 初始节点数
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run")
@@ -184,7 +184,7 @@ public:
 	 *
 	 * 公式（GDD §11.4）：
 	 *   超出"通量内容容量"的卡数 n → Burden = n*(n+1)/2
-	 *   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 max(Capacity - 1, 0))
+	 *   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
 	 *
 	 * 由 AddCardToBackpack / DestroyCardFromBackpack 等改背包卡数的方法
 	 * 自动调用，UI 一般不需要手动调。
@@ -283,7 +283,7 @@ public:
 	 * 构建背包界面可直接读取的存放区 Snapshot。
 	 *
 	 * 只读查询：不修改 RunState、不触发广播、不创建新的 FCardInstance。
-	 * 用于把物理四区重组为通量主卡/内容、特殊区、负重区、备战物理卡与备战投影卡。
+	 * 用于把物理四区重组为通量内容、特殊区、负重区、备战物理卡与备战投影卡。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck|Snapshot")
 	FRunBackpackStorageSnapshot BuildBackpackStorageSnapshot() const;
@@ -394,12 +394,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static bool IsIntrinsicCard(const UCardDefinition* Card);
 
-	/** 玩家是否能打开背包 UI：背包里至少存在一张 BagProvider 卡。 */
+	/** 玩家是否能打开背包 UI：玩家持有区至少存在一张 BagProvider 卡。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	bool IsBackpackUiAvailable() const;
 
 	/**
-	 * 删牌功能是否可用（GDD §11.7）：背包里至少存在一张 DeleteProvider 卡。
+	 * 删牌功能是否可用（GDD §11.7）：玩家持有区至少存在一张 DeleteProvider 卡。
 	 *
 	 * 第一阶段 UI 始终显示删牌区不读此判定，DeleteCardForGold 也不强制校验。
 	 * 接口先就位，等 GDD 定下"删牌能力切换为按需 / 始终"再接入调用点。
@@ -436,7 +436,7 @@ public:
 	 * 通用迁移入口（Stage 4.5.0 任务 3.2 / R1.6 / R1.7；Stage 4.5.1 任务 8.1 接入 SpecialZone / BurdenZone）。
 	 *
 	 * 校验表（design §5）：
-	 *   - ToZone == Backpack            → 无额外校验
+	 *   - ToZone == Backpack            → 普通卡 / A 类容器卡需要通量内容区未满；B 主卡不占通量内容格
 	 *   - ToZone == BattleDeck          → BattleDeck.Num() < GetBattleDeckCapacity()
 	 *                                       （FromZone 已是 BattleDeck 的 in-place 移动不计入 capacity 检查）
 	 *   - ToZone == SpecialZone         → R2.7 a-d：
@@ -452,9 +452,8 @@ public:
 	 *   - 校验失败 → return false 且 RunState 任何字段不修改、不广播 OnRunStateChangedNative（R1.6 / R5.5）
 	 *   - 校验通过 → 从源 zone 删除该 instance、追加到目标 zone 末尾、尾部统一广播一次 NotifyRunStateChanged（R2.16）
 	 *
-	 * 注：本入口不调用 RecomputeBurden（Backpack/BattleDeck 互转不改变 GetFluxCapacity 公式 Σ(全部) 的总和；
-	 *      同款 instance 跨 zone 移动只影响"哪一边的占用"）。task 8.2 会在本路径上接入"从 SpecialZone
-	 *      移出时把 bBattleEnabledInSpecialZone 重置为 false"逻辑（R8.6 / Property 10）。
+	 * 注：成功移动到 BurdenZone 以外的 zone 后会调用 RecomputeBurdenInternal，
+	 *      确保 A 类容器作为通量内容占格后的超容状态被及时整理。
 	 *
 	 * @param InstanceId               要移动的卡 InstanceId
 	 * @param ToZone                   目标 zone 种类
@@ -462,6 +461,9 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
+	FRunDeckOperationValidation ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const;
 
 	/**
 	 * 把卡加入背包。重复调用允许（同一 Definition 可以多张）。
@@ -504,6 +506,9 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool DeleteCardForGold(UCardDefinition* Card);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
+	FRunDeckOperationValidation ValidateDeleteCardForGold(UCardDefinition* Card) const;
 
 	// ---- 备战卡组操作 ----
 
@@ -781,7 +786,7 @@ private:
 	/** 遍历 RunState 全部物理持有区，按过滤条件累计卡牌 Capacity。 */
 	int32 SumOwnedCardCapacity(bool bTypeAOnly) const;
 
-	/** 统计指定列表中真正占用通量内容格的卡：容器主卡不计入。 */
+	/** 统计指定列表中真正占用通量内容格的卡：A 类容器和普通卡计入，B 主卡不计入。 */
 	int32 CountFluxContentCards(const TArray<FCardInstance>& Pile) const;
 
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|Run", Transient)

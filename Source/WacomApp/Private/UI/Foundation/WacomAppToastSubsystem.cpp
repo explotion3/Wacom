@@ -14,7 +14,7 @@
 
 namespace
 {
-	FText GetCardDisplayName(const UCardDefinition* Card)
+	FText GetAppToastCardDisplayName(const UCardDefinition* Card)
 	{
 		if (!Card)
 		{
@@ -58,7 +58,7 @@ void UWacomAppToastSubsystem::ShowCardGained(UCardDefinition* Card)
 	FWacomAppToastView View;
 	View.MessageText = FText::Format(
 		LOCTEXT("CardGained", "获得卡牌：{0}"),
-		GetCardDisplayName(Card));
+		GetAppToastCardDisplayName(Card));
 	View.Tone = EWacomAppToastTone::Positive;
 	View.IconKey = TEXT("CardGained");
 	ShowToast(View);

@@ -367,6 +367,32 @@ bool FWacomUIBackpackDeleteGoldToastPreviewSpec::RunTest(const FString& /*Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackToastTextSpec,
+	"Wacom.UI.Backpack.ToastText",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackToastTextSpec::RunTest(const FString& /*Parameters*/)
+{
+	TestEqual(TEXT("Move success target name"),
+		UWacomZoneDropTarget::FormatZoneNameForToast(EZoneKind::BattleDeck).ToString(),
+		FString(TEXT("备战区")));
+	TestEqual(TEXT("Move flux full reason"),
+		UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("FluxFull")).ToString(),
+		FString(TEXT("无法移动：通量区已满。")));
+	TestEqual(TEXT("Move battle deck full reason"),
+		UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("BattleDeckFull")).ToString(),
+		FString(TEXT("无法移动：备战区已满。")));
+	TestEqual(TEXT("Delete intrinsic reason"),
+		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("Intrinsic")).ToString(),
+		FString(TEXT("无法销毁：固有卡不能被销毁。")));
+	TestEqual(TEXT("Delete last bag reason"),
+		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("LastBagProvider")).ToString(),
+		FString(TEXT("无法销毁：这是最后一张背包容量卡。")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackDeckCardDragPayloadSpec,
 	"Wacom.UI.Backpack.DeckCardDragPayload",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

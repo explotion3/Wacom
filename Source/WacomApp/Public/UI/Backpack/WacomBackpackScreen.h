@@ -122,11 +122,11 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> BattleDeckZoneHost;
 
-	/** WBP 可绑定：通量区左侧主卡槽，显示所有 A 类容器主卡。 */
+	/** 已废弃兼容绑定：通量区不再显示 A 类主卡槽，旧 WBP 可留空。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> FluxMainCardsHost;
 
-	/** WBP 可绑定：通量区右侧内容 DropTarget 槽，接收放入 Backpack 的普通内容卡。 */
+	/** WBP 可绑定：通量内容 DropTarget 槽，接收放入 Backpack 的 A 类容器和普通内容卡。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> FluxContentDropTargetHost;
 
@@ -146,7 +146,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWrapBox> BattleDeckCardsBox;
 
-	/** 通量区主卡容器。 */
+	/** 已废弃兼容绑定：通量区不再主动填充主卡容器。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWrapBox> FluxMainCardsBox;
 

@@ -48,12 +48,39 @@ int32 UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(UCardDefini
 	return GetDeleteGoldRewardPreview(Card);
 }
 
+FText UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(FName DisabledReason)
+{
+	if (DisabledReason == TEXT("MissingCard"))
+	{
+		return LOCTEXT("DeleteFailMissingCard", "无法销毁：没有卡牌数据。");
+	}
+	if (DisabledReason == TEXT("CardNotOwned"))
+	{
+		return LOCTEXT("DeleteFailCardNotOwned", "无法销毁：这张卡不在当前背包中。");
+	}
+	if (DisabledReason == TEXT("Intrinsic"))
+	{
+		return LOCTEXT("DeleteFailIntrinsic", "无法销毁：固有卡不能被销毁。");
+	}
+	if (DisabledReason == TEXT("LastBagProvider"))
+	{
+		return LOCTEXT("DeleteFailLastBagProvider", "无法销毁：这是最后一张背包容量卡。");
+	}
+	return LOCTEXT("DeleteFailUnknown", "无法销毁：当前规则不允许。");
+}
+
 bool UWacomDeleteZoneDropTarget::NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
-	const bool bCanDrop = CardOp && CardOp->Definition && OwnerScreen.IsValid() && OwnerScreen->GetRunSession() != nullptr;
+	URunSession* Run = OwnerScreen.IsValid() ? OwnerScreen->GetRunSession() : nullptr;
+	if (!CardOp || !CardOp->Definition || !Run)
+	{
+		SetDropTargetState(EWacomDropTargetState::HoverInvalid);
+		return false;
+	}
+	const bool bCanDrop = Run->ValidateDeleteCardForGold(CardOp->Definition).bCanExecute;
 	SetDropTargetState(bCanDrop ? EWacomDropTargetState::HoverValid : EWacomDropTargetState::HoverInvalid);
-	return bCanDrop;
+	return true;
 }
 
 bool UWacomDeleteZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
@@ -70,10 +97,25 @@ bool UWacomDeleteZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const
 	if (!Run)
 	{
 		SetDropTargetState(EWacomDropTargetState::DropRejected);
+		ShowMoveFailureToast(TEXT("RunSessionMissing"));
 		return false;
 	}
 
 	UCardDefinition* Card = CardOp->Definition;
+	const FRunDeckOperationValidation Validation = Run->ValidateDeleteCardForGold(Card);
+	if (!Validation.bCanExecute)
+	{
+		SetDropTargetState(EWacomDropTargetState::DropRejected);
+		if (UGameInstance* GI = Screen->GetGameInstance())
+		{
+			if (UWacomAppToastSubsystem* ToastSubsystem = GI->GetSubsystem<UWacomAppToastSubsystem>())
+			{
+				ToastSubsystem->ShowWarning(FormatDeleteFailureReasonForToast(Validation.DisabledReason));
+			}
+		}
+		return false;
+	}
+
 	const FText CardName = GetCardDisplayName(Card);
 	const int32 GoldReward = GetDeleteGoldRewardPreview(Card);
 	const TWeakObjectPtr<UWacomBackpackScreen> WeakScreen(Screen);
@@ -90,12 +132,12 @@ bool UWacomDeleteZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const
 			if (PinnedRun && Card)
 			{
 				const bool bDeleted = PinnedRun->DeleteCardForGold(Card);
+				UGameInstance* GI = PinnedScreen->GetGameInstance();
+				UWacomAppToastSubsystem* ToastSubsystem = GI
+					? GI->GetSubsystem<UWacomAppToastSubsystem>()
+					: nullptr;
 				if (bDeleted)
 				{
-					UGameInstance* GI = PinnedScreen->GetGameInstance();
-					UWacomAppToastSubsystem* ToastSubsystem = GI
-						? GI->GetSubsystem<UWacomAppToastSubsystem>()
-						: nullptr;
 					if (ToastSubsystem)
 					{
 						FWacomAppToastView ToastView;
@@ -107,6 +149,11 @@ bool UWacomDeleteZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const
 						ToastView.IconKey = TEXT("CardDestroyed");
 						ToastSubsystem->ShowToast(ToastView);
 					}
+				}
+				else if (ToastSubsystem)
+				{
+					const FRunDeckOperationValidation RetryValidation = PinnedRun->ValidateDeleteCardForGold(Card);
+					ToastSubsystem->ShowWarning(FormatDeleteFailureReasonForToast(RetryValidation.DisabledReason));
 				}
 			}
 		});

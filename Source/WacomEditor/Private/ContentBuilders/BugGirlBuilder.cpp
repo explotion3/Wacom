@@ -357,8 +357,9 @@ namespace Wacom::ContentBuilder
 		// ==== 暮色引虫灯 MuseiYinchongdeng（删牌能力提供者，GDD §4.4 / §11.5 / §11.7）====
 		// Stage 4.4 引入：背包删牌能力的"卡牌承载体"。
 		//   Capacity = 3，A 类容器卡（无 CapacityEffect）→ 计入 Flux 公式
-		//   关键词：Card.Keyword.DeleteProvider（背包至少一张就有删牌功能）
+		//   关键词：Card.Keyword.DeleteProvider（玩家持有区至少一张就有删牌功能）
 		//   不带 BagProvider，与小布袋职责正交
+		//   原型规则：Run 初始化时默认进入 BattleDeck，但仍贡献通量容量。
 		// 第一阶段简化：
 		//   - 不读耐久，自身打出无意义但合法（Cost=0，无主动效果）
 		//   - 删牌区始终显示，不绑定具体卡（GDD §11.7）
@@ -405,7 +406,8 @@ namespace Wacom::ContentBuilder
 		Char->LeftHandCard   = LeftHand;
 		Char->RightHandCard  = RightHand;
 		// 顺序：5 张参战伙伴卡 + 虫妹的小布袋（A 类）+ 蛛茧绒囊（B 类占位）+ 暮色引虫灯（A 类，DeleteProvider）。
-		// Initialize 时按 Stage 4.1 a2 规则：非容器卡进 BattleDeck，容器卡只进 Backpack。
+		// Initialize 时按 Stage 4.1 a2 规则：非容器卡进 BattleDeck，容器卡默认进 Backpack；
+		// 暮色引虫灯按原型特例默认进 BattleDeck。
 		Char->StarterDeck    = { Zhaoguang, Fuxiao, Chifu, Shuoguang, Muling, BugGirlBag, ZhujianRongnang, MuseiLantern };
 
 		SaveAssetPackage(CharPkg, Char, CharPkgPath);

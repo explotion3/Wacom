@@ -247,7 +247,7 @@ struct WACOMRUN_API FRunState
 	 * 战斗结束所有战内卡回背包；事件 / 掉落进背包。
 	 *
 	 * 内容容量公式见 GDD §11.4，由 URunSession::GetFluxCapacity() 动态计算
-	 * （遍历所有 A 类容器卡 max(Capacity - 1, 0) 求和）。
+	 * （遍历所有 A 类容器卡 Capacity 求和）。
 	 *
 	 * Stage 4.5.0：元素从 `TObjectPtr<UCardDefinition>` 升级为 `FCardInstance`。
 	 * 升级动机：同款 Definition 的多张卡需被独立放进不同 zone（备战 / 通量 / 各 SpecialZone /

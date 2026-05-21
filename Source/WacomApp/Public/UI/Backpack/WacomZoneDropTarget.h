@@ -12,6 +12,7 @@ class UWacomCardDragOperation;
 class UBorder;
 class UDragDropOperation;
 class UWidget;
+struct FRunDeckOperationValidation;
 
 UENUM(BlueprintType)
 enum class EWacomDropTargetState : uint8
@@ -45,6 +46,8 @@ public:
 	bool TryHandleDropOperation(UDragDropOperation* InOperation);
 	void SetDropTargetState(EWacomDropTargetState InState);
 	static bool ShouldPreviewDrop(EZoneKind TargetZone, EZoneKind SourceZone, int32 BattleDeckCount, int32 BattleDeckCapacity);
+	static FText FormatZoneNameForToast(EZoneKind Zone);
+	static FText FormatMoveFailureReasonForToast(FName DisabledReason);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Drop")
 	EWacomDropTargetState GetDropTargetState() const { return DropTargetState; }
@@ -77,4 +80,6 @@ protected:
 	EWacomDropTargetState DropTargetState = EWacomDropTargetState::Normal;
 
 	bool CanPreviewDrop(const UWacomCardDragOperation& CardOp) const;
+	void ShowMoveSuccessToast(const UWacomCardDragOperation& CardOp) const;
+	void ShowMoveFailureToast(FName DisabledReason) const;
 };

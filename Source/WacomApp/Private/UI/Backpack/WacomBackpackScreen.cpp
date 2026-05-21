@@ -95,11 +95,6 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 		BattleDeckZoneSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
 			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackBattleDeckZone.WBP_BackpackBattleDeckZone_C"));
 	}
-	if (!FluxMainZoneSectionWidgetClass)
-	{
-		FluxMainZoneSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
-			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackFluxMainZone.WBP_BackpackFluxMainZone_C"));
-	}
 	if (!FluxContentZoneSectionWidgetClass)
 	{
 		FluxContentZoneSectionWidgetClass = LoadOptionalWidgetClass<UWacomBackpackZoneSectionWidget>(
@@ -395,25 +390,9 @@ TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
 			TEXT("FluxZoneBorder"),
 			FLinearColor(0.09f, 0.16f, 0.10f, 0.8f),
 			FMargin(0.f, 0.f, 0.f, 8.f));
-		UHorizontalBox* FluxLayout = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("FluxSplitLayout"));
-		FluxSection->AddChildToVerticalBox(FluxLayout);
-
-		UVerticalBox* FluxMainColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("FluxMainCardsColumn"));
-		if (UHorizontalBoxSlot* MainSlot = FluxLayout->AddChildToHorizontalBox(FluxMainColumn))
-		{
-			MainSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-			MainSlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
-		}
-		FluxMainCardsHost = AddZoneSectionWidget(
-			this,
-			WidgetTree,
-			FluxMainColumn,
-			FluxMainZoneSectionWidgetClass,
-			LOCTEXT("FluxMainCardsTitle", "[ 通量主卡 ]"),
-			FMargin(0.f));
 
 		UVerticalBox* FluxContentColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("FluxContentCardsColumn"));
-		if (UHorizontalBoxSlot* ContentSlot = FluxLayout->AddChildToHorizontalBox(FluxContentColumn))
+		if (UVerticalBoxSlot* ContentSlot = FluxSection->AddChildToVerticalBox(FluxContentColumn))
 		{
 			ContentSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		}
@@ -645,18 +624,6 @@ void UWacomBackpackScreen::EnsureRuntimeZoneWidgets()
 		LogBackpackBindingWarningOnce(TEXT("BattleDeckZoneHost"), TEXT("[Backpack] BattleDeckZoneHost 未绑定，备战区运行时内容不会显示"));
 	}
 
-	if (!FluxMainCardsBox && FluxMainCardsHost)
-	{
-		FluxMainCardsHost->ClearChildren();
-		FluxMainCardsBox = WidgetTree->ConstructWidget<UWrapBox>(UWrapBox::StaticClass(), TEXT("FluxMainCardsBox_Runtime"));
-		FluxMainCardsBox->SetInnerSlotPadding(FVector2D(8.f, 8.f));
-		FluxMainCardsHost->AddChild(FluxMainCardsBox);
-	}
-	else if (!FluxMainCardsHost && !FluxMainCardsBox)
-	{
-		LogBackpackBindingWarningOnce(TEXT("FluxMainCardsHost"), TEXT("[Backpack] FluxMainCardsHost/FluxMainCardsBox 未绑定，通量主卡区不会显示"));
-	}
-
 	if (!BackpackDropTarget && FluxContentDropTargetHost)
 	{
 		FluxContentDropTargetHost->ClearChildren();
@@ -726,7 +693,6 @@ void UWacomBackpackScreen::ClearCardBoxes()
 {
 	HideCardDetailPanel();
 	if (BattleDeckCardsBox) { BattleDeckCardsBox->ClearChildren(); }
-	if (FluxMainCardsBox)   { FluxMainCardsBox->ClearChildren(); }
 	if (FluxContentCardsBox) { FluxContentCardsBox->ClearChildren(); }
 	if (SpecialZonesPanel)  { SpecialZonesPanel->ClearChildren(); }
 	if (BurdenCardsBox)     { BurdenCardsBox->ClearChildren(); }
@@ -846,25 +812,12 @@ void UWacomBackpackScreen::RebuildBattleDeckZone(const FRunBackpackStorageSnapsh
 
 void UWacomBackpackScreen::RebuildBackpackZone(const FRunBackpackStorageSnapshot& Snapshot)
 {
-	RebuildFluxMainCards(Snapshot);
 	RebuildFluxContentCards(Snapshot);
 }
 
 void UWacomBackpackScreen::RebuildFluxMainCards(const FRunBackpackStorageSnapshot& Snapshot)
 {
-	if (FluxMainCardsBox)
-	{
-		for (const FRunStorageCardView& CardView : Snapshot.Flux.MainCards)
-		{
-			UWacomDeckCardWidget* W = CreateCardWidget(CardView);
-			if (!W) { continue; }
-			if (CardView.bIsPhysicalInBattleDeck)
-			{
-				W->SetProjectedFromBadgeText(LOCTEXT("FluxMainCardInBattleDeck", "已出战"));
-			}
-			FluxMainCardsBox->AddChildToWrapBox(W);
-		}
-	}
+	// 兼容旧 API：通量区已不再有 A 类主卡槽，默认不渲染 Flux.MainCards。
 }
 
 void UWacomBackpackScreen::RebuildFluxContentCards(const FRunBackpackStorageSnapshot& Snapshot)

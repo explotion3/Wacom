@@ -101,7 +101,7 @@ WacomRun 负责**战斗外的持久状态和存档**。
 | 方法 | 职责 |
 |---|---|
 | `GetBackpack() / GetBattleDeck()` | 只读访问 |
-| `GetFluxCapacity() const` | 通量内容容量（动态：Σ(玩家拥有所有 A 类容器卡 `max(Capacity - 1, 0)`））|
+| `GetFluxCapacity() const` | 通量内容容量（动态：Σ 玩家拥有所有 A 类容器卡 `Capacity`）|
 | `GetBattleDeckCapacity() const` | 备战区容量（动态：Σ 玩家拥有的所有容器卡 Capacity，A/B 类都计入）|
 | `IsContainerCard(Card) static` | 卡是否容器（Capacity > 0）|
 | `IsTypeAContainerCard(Card) static` | 卡是 A 类容器卡（容器 + CapacityEffect 为空，计入 Flux）|
@@ -112,12 +112,14 @@ WacomRun 负责**战斗外的持久状态和存档**。
 | `GetSpecialZone(OwnerInstanceId, Out) const` | 按 owner instance 查询 SpecialZone 快照 |
 | `FindInstance(InstanceId, OutInstance, OutZone, OutOwnerInstanceId) const` | 全区查找 instance 当前所在 zone |
 | `MoveInstance(InstanceId, ToZone, ToOwnerInstanceId)` | 通用迁移入口，支持 Backpack / BattleDeck / SpecialZone / BurdenZone |
+| `ValidateMoveInstance(InstanceId, ToZone, ToOwnerInstanceId)` | 只读校验移动是否可执行，并返回稳定 `DisabledReason` 供 UI/日志提示 |
 | `SetSpecialZoneCardBattleEnabled(InstanceId, bEnabled)` | SpecialZone 内卡牌切换是否随 B 主卡入战 |
 | `IsBagProviderCard(Card) static` | 卡是否带 BagProvider 关键词 |
 | `IsDeleteProviderCard(Card) static` | 卡是否带 DeleteProvider 关键词（GDD §11.7）|
-| `IsDeleteFunctionAvailable() const` | 删牌功能是否可用（Backpack 至少一张 DeleteProvider）。第一阶段 UI 不读 |
+| `IsDeleteFunctionAvailable() const` | 删牌功能是否可用（玩家持有区至少一张 DeleteProvider）。第一阶段 UI 不读 |
 | `IsIntrinsicCard(Card) static` | 卡是否固有（Rarity = Intrinsic）|
 | `IsBackpackUiAvailable() const` | 背包 UI 是否可打开（至少一张 BagProvider）|
+| `ValidateDeleteCardForGold(Card)` | 只读校验删牌置换是否可执行，并返回 `MissingCard / CardNotOwned / Intrinsic / LastBagProvider` 等 reason |
 | `IsCardInBackpack(Card) / IsCardInBattleDeck(Card)` | 查询 |
 | `AddCardToBackpack(Card)` | 加卡进背包 + RecomputeBurden |
 | `AcquireCardToRun(Card)` | 战外获得卡统一入口；当前等价于加入背包并重算负重，后续战斗奖励、节点事件、商店、探险奖励都优先走这里 |
@@ -248,15 +250,15 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 | `SpecialZones` | `TArray<FSpecialZone>` | 每张 B 主卡 instance 对应一个特殊存放区 |
 
 **容量公式**（GDD §11.4）由 `URunSession::GetFluxCapacity()` / `GetBattleDeckCapacity()` 动态计算：
-- 通量内容容量 = `Σ(玩家拥有的所有 A 类容器卡 max(Capacity - 1, 0))`
+- 通量内容容量 = `Σ(玩家拥有的所有 A 类容器卡 Capacity)`
 - 备战容量 = `Σ(Backpack + BattleDeck 里所有容器卡 Capacity)`，A 类与 B 类都计入
 - B 类容器卡（`Physique.CapacityEffect` 非空）不计入通量公式，但计入备战容量；每张 B 主卡自己开辟一个特殊存放区，内容区容量 = `Capacity - 1`
-- A 类主卡只占通量主卡区，不额外占用通量内容容量
+- A 类容器卡没有通量主卡概念；如果物理位于 `Backpack`，它和普通卡一样显示为通量内容并占 1 格
 - B 类特殊存放区内容区实际可收纳数量 = `B.Capacity - 1`
 
 **instance 互斥**：同一个 `FCardInstance.InstanceId` 同时只能位于 `Backpack / BattleDeck / BurdenZone / 任一 SpecialZone.Cards` 之一。`MoveInstance` 是通用迁移入口，失败路径不修改 RunState、不广播。
 
-**主卡投影**：主卡进入 `BattleDeck` 时，物理 instance 位于备战区；背包区对应的主卡槽仍应显示该主卡投影，并标记"已出战"。投影只用于表现和交互提示，不新增 instance，不参与存档和规则归属。
+**通量内容与备战**：A 类容器卡进入 `BattleDeck` 时，物理 instance 只显示在备战区；它仍贡献通量容量，但不会在通量区生成投影或第二张卡。
 
 **B 类容器卡与 SpecialZone**：
 - B 主卡 instance 进入 `Backpack` 或 `BattleDeck` 时，`RunState.SpecialZones` 中会幂等存在一条 `OwnerInstanceId == 主卡 InstanceId` 的 entry。
@@ -267,6 +269,7 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 **Initialize 行为**（Stage 4.1 a2 规则）：
 - 容器卡（Capacity > 0）→ 进 Backpack
 - 非容器卡（Capacity = 0）→ 进 BattleDeck
+- 暮色引虫灯是当前原型特例：默认初始进入 BattleDeck，但仍作为 A 类容器贡献通量容量
 - 玩家可用 AddToBattleDeck / RemoveFromBattleDeck 调整
 
 #### §11.7 / 经济：金币
