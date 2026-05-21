@@ -27,6 +27,7 @@ FWacomShopOfferPresentationView UWacomShopPresentationBuilder::BuildOfferPresent
 {
 	FWacomShopOfferPresentationView View;
 	View.OfferId = Offer.OfferId;
+	View.CardDefinition = Offer.CardDefinition.Get();
 	View.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(Offer.CardDefinition.Get());
 	View.CardNameText = GetCardNameText(Offer.CardDefinition.Get());
 	View.PriceText = Offer.Price == 0

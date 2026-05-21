@@ -8,6 +8,8 @@
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomShopPresentationBuilder.generated.h"
 
+class UCardDefinition;
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomShopOfferPresentationView
 {
@@ -15,6 +17,9 @@ struct WACOMAPP_API FWacomShopOfferPresentationView
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop")
 	FGuid OfferId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop")
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop")
 	FWacomCardViewData CardViewData;

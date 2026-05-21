@@ -17,6 +17,7 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "RunState.h"
+#include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Shop/WacomShopOfferRowWidget.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
 
@@ -176,6 +177,11 @@ FWacomShopOfferPresentationView UWacomShopScreen::GetOfferPresentationViewForTes
 		: FWacomShopOfferPresentationView();
 }
 
+FText UWacomShopScreen::BuildPurchaseFailureToastTextForTest(FName DisabledReason)
+{
+	return BuildPurchaseFailureToastText(DisabledReason);
+}
+
 FText UWacomShopScreen::GetGoldTextForTest() const
 {
 	return GoldText ? GoldText->GetText() : FText::GetEmpty();
@@ -260,9 +266,73 @@ bool UWacomShopScreen::PurchaseOffer(FGuid OfferId)
 		return false;
 	}
 
+	const FWacomShopOfferPresentationView* OfferView = FindCachedOfferView(OfferId);
 	const bool bPurchased = Run->PurchaseShopOffer(OfferId);
+	if (bPurchased)
+	{
+		ShowPurchaseSuccessToast(OfferView);
+	}
+	else
+	{
+		ShowPurchaseFailureToast(OfferView);
+	}
 	RefreshShop();
 	return bPurchased;
+}
+
+const FWacomShopOfferPresentationView* UWacomShopScreen::FindCachedOfferView(FGuid OfferId) const
+{
+	return CachedOfferViews.FindByPredicate(
+		[OfferId](const FWacomShopOfferPresentationView& View)
+		{
+			return View.OfferId == OfferId;
+		});
+}
+
+UWacomAppToastSubsystem* UWacomShopScreen::GetToastSubsystem() const
+{
+	if (ToastSubsystemOverride)
+	{
+		return ToastSubsystemOverride;
+	}
+
+	UGameInstance* GI = GetGameInstance();
+	return GI ? GI->GetSubsystem<UWacomAppToastSubsystem>() : nullptr;
+}
+
+void UWacomShopScreen::ShowPurchaseSuccessToast(const FWacomShopOfferPresentationView* OfferView) const
+{
+	if (UWacomAppToastSubsystem* ToastSubsystem = GetToastSubsystem())
+	{
+		ToastSubsystem->ShowCardGained(OfferView ? OfferView->CardDefinition.Get() : nullptr);
+	}
+}
+
+FText UWacomShopScreen::BuildPurchaseFailureToastText(FName DisabledReason)
+{
+	if (DisabledReason == FName(TEXT("InsufficientGold")))
+	{
+		return LOCTEXT("PurchaseFailedInsufficientGold", "金币不足");
+	}
+	if (DisabledReason == FName(TEXT("Purchased")))
+	{
+		return LOCTEXT("PurchaseFailedPurchased", "该商品已购买");
+	}
+	if (DisabledReason == FName(TEXT("MissingCard")))
+	{
+		return LOCTEXT("PurchaseFailedMissingCard", "商品不可购买");
+	}
+	return LOCTEXT("PurchaseFailed", "购买失败");
+}
+
+void UWacomShopScreen::ShowPurchaseFailureToast(const FWacomShopOfferPresentationView* OfferView) const
+{
+	const FText Message = BuildPurchaseFailureToastText(OfferView ? OfferView->DisabledReason : NAME_None);
+
+	if (UWacomAppToastSubsystem* ToastSubsystem = GetToastSubsystem())
+	{
+		ToastSubsystem->ShowWarning(Message);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

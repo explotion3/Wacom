@@ -18,6 +18,7 @@
 #include "UI/Battle/BattleHUD.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Foundation/WacomExplorationHUD.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
@@ -155,6 +156,10 @@ void AWacomPlayerController::BeginPlay()
 			if (UWacomRunViewModelProvider* Provider = GI->GetSubsystem<UWacomRunViewModelProvider>())
 			{
 				Provider->BindToPlayerController(this);
+			}
+			if (UWacomAppToastSubsystem* ToastSubsystem = GI->GetSubsystem<UWacomAppToastSubsystem>())
+			{
+				ToastSubsystem->EnsureAppToastReady();
 			}
 		}
 	}

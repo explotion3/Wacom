@@ -11,6 +11,7 @@ class UButton;
 class UTextBlock;
 class UVerticalBox;
 class URunSession;
+class UWacomAppToastSubsystem;
 struct FRunShopOffer;
 
 /**
@@ -27,6 +28,9 @@ class WACOMAPP_API UWacomShopScreen : public UWacomMenuWidgetBase
 public:
 	/** 测试/非标准创建路径可直接设置 RunSession；正常运行时从 OwningPlayer 获取。 */
 	void SetRunSessionOverrideForTest(URunSession* InRunSession) { RunSessionOverride = InRunSession; }
+
+	/** 测试/非标准创建路径可直接设置 ToastSubsystem；正常运行时从 GameInstance 获取。 */
+	void SetToastSubsystemOverrideForTest(UWacomAppToastSubsystem* InToastSubsystem) { ToastSubsystemOverride = InToastSubsystem; }
 
 	/** 从当前 RunSession 拉取商店快照并重建商品列表。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Shop")
@@ -47,6 +51,9 @@ public:
 	/** 测试/诊断用：读取当前列表中的第 Index 个商品表现数据。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
 	FWacomShopOfferPresentationView GetOfferPresentationViewForTest(int32 Index) const;
+
+	/** 测试/诊断用：按 DisabledReason 复用正式购买失败提示口径。 */
+	static FText BuildPurchaseFailureToastTextForTest(FName DisabledReason);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -79,6 +86,11 @@ private:
 	UFUNCTION()
 	bool PurchaseOffer(FGuid OfferId);
 	void HandleOfferPurchaseRequested(FGuid OfferId);
+	UWacomAppToastSubsystem* GetToastSubsystem() const;
+	const FWacomShopOfferPresentationView* FindCachedOfferView(FGuid OfferId) const;
+	static FText BuildPurchaseFailureToastText(FName DisabledReason);
+	void ShowPurchaseSuccessToast(const FWacomShopOfferPresentationView* OfferView) const;
+	void ShowPurchaseFailureToast(const FWacomShopOfferPresentationView* OfferView) const;
 
 	UPROPERTY(Transient)
 	TArray<FGuid> CachedOfferIds;
@@ -88,6 +100,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSessionOverride = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomAppToastSubsystem> ToastSubsystemOverride = nullptr;
 
 	bool bDidEndShopVisit = false;
 };

@@ -6,6 +6,8 @@
 #include "UI/Backpack/WacomZoneDropTarget.h"
 #include "WacomDeleteZoneDropTarget.generated.h"
 
+class UCardDefinition;
+
 /**
  * 背包删牌区拖拽接收器（Stage 4.5.3b）。
  *
@@ -20,6 +22,11 @@ UCLASS(Blueprintable)
 class WACOMAPP_API UWacomDeleteZoneDropTarget : public UWacomZoneDropTarget
 {
 	GENERATED_BODY()
+
+public:
+	/** 测试/诊断用：按当前删牌置换规则预估成功 Toast 中显示的金币数。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Delete")
+	static int32 GetDeleteGoldRewardPreviewForToast(UCardDefinition* Card);
 
 protected:
 	virtual bool NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;

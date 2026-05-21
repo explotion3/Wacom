@@ -8,6 +8,7 @@
 #include "UI/Backpack/WacomCardDragOperation.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
+#include "UI/Backpack/WacomDeleteZoneDropTarget.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
 #include "UI/Backpack/WacomZoneDropTarget.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
@@ -331,6 +332,36 @@ bool FWacomUIBackpackDragOperationDefaultsSpec::RunTest(const FString& /*Paramet
 	TestTrue(TEXT("Default FromZone is Backpack"), Op->FromZone == EZoneKind::Backpack);
 	TestFalse(TEXT("Default FromZoneOwnerInstanceId invalid"), Op->FromZoneOwnerInstanceId.IsValid());
 	TestNull(TEXT("Default Definition null"), Op->Definition.Get());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackDeleteGoldToastPreviewSpec,
+	"Wacom.UI.Backpack.DeleteGoldToastPreview",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackDeleteGoldToastPreviewSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> WhiteCard(NewObject<UCardDefinition>());
+	WhiteCard->Rarity = WacomTags::Card_Rarity_White;
+	TStrongObjectPtr<UCardDefinition> BlueCard(NewObject<UCardDefinition>());
+	BlueCard->Rarity = WacomTags::Card_Rarity_Blue;
+	TStrongObjectPtr<UCardDefinition> IntrinsicCard(NewObject<UCardDefinition>());
+	IntrinsicCard->Rarity = WacomTags::Card_Rarity_Intrinsic;
+
+	TestEqual(TEXT("White card delete toast gold preview"),
+		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(WhiteCard.Get()),
+		1);
+	TestEqual(TEXT("Blue card delete toast gold preview"),
+		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(BlueCard.Get()),
+		2);
+	TestEqual(TEXT("Intrinsic card delete toast gold preview"),
+		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(IntrinsicCard.Get()),
+		0);
+	TestEqual(TEXT("Null card delete toast gold preview"),
+		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(nullptr),
+		0);
 
 	return true;
 }

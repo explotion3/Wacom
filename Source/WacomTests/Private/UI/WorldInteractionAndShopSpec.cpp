@@ -13,10 +13,13 @@
 #include "Shops/ShopDefinition.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
+#include "UI/Foundation/WacomAppToastSubsystem.h"
+#include "UI/Foundation/WacomAppToastWidget.h"
 #include "UI/Shop/WacomShopOfferRowWidget.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "UI/Shop/WacomShopScreen.h"
 
+#include "Engine/GameInstance.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace
@@ -145,6 +148,7 @@ bool FWacomUIShopOfferPresentationBuilderSpec::RunTest(const FString& /*Paramete
 	FWacomShopOfferPresentationView View =
 		UWacomShopPresentationBuilder::BuildOfferPresentationView(Offer, /*CurrentGold*/ 5);
 	TestTrue(TEXT("Affordable offer can be purchased"), View.bCanPurchase);
+	TestEqual(TEXT("Affordable view keeps card definition"), View.CardDefinition.Get(), DamageCard);
 	TestEqual(TEXT("Affordable action text"), View.ActionText.ToString(), FString(TEXT("购买")));
 	TestEqual(TEXT("Affordable disabled reason"), View.DisabledReason, NAME_None);
 	TestEqual(TEXT("Price text uses gold"), View.PriceText.ToString(), FString(TEXT("3 金币")));
@@ -181,6 +185,29 @@ bool FWacomUIShopOfferPresentationBuilderSpec::RunTest(const FString& /*Paramete
 	TestEqual(TEXT("Missing card name"), View.CardNameText.ToString(), FString(TEXT("未知卡牌")));
 	TestEqual(TEXT("Missing card action text"), View.ActionText.ToString(), FString(TEXT("不可购买")));
 	TestEqual(TEXT("Missing card reason"), View.DisabledReason, FName(TEXT("MissingCard")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopPurchaseFailureToastTextSpec,
+	"Wacom.UI.Shop.PurchaseFailureToastText",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopPurchaseFailureToastTextSpec::RunTest(const FString& /*Parameters*/)
+{
+	TestEqual(TEXT("Insufficient gold toast"),
+		UWacomShopScreen::BuildPurchaseFailureToastTextForTest(TEXT("InsufficientGold")).ToString(),
+		FString(TEXT("金币不足")));
+	TestEqual(TEXT("Purchased toast"),
+		UWacomShopScreen::BuildPurchaseFailureToastTextForTest(TEXT("Purchased")).ToString(),
+		FString(TEXT("该商品已购买")));
+	TestEqual(TEXT("Missing card toast"),
+		UWacomShopScreen::BuildPurchaseFailureToastTextForTest(TEXT("MissingCard")).ToString(),
+		FString(TEXT("商品不可购买")));
+	TestEqual(TEXT("Fallback purchase failure toast"),
+		UWacomShopScreen::BuildPurchaseFailureToastTextForTest(NAME_None).ToString(),
+		FString(TEXT("购买失败")));
 
 	return true;
 }
@@ -235,12 +262,17 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
 	TStrongObjectPtr<UWacomShopScreen> Screen(NewObject<UWacomShopScreen>());
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomAppToastWidget> ToastWidget(NewObject<UWacomAppToastWidget>());
 
 	SetRunSessionForTest(PC.Get(), Run.Get());
 	if (!TestNotNull(TEXT("Injected run session"), PC->GetRunSession()))
 	{
 		return false;
 	}
+	ToastWidget->TakeWidget();
+	ToastSubsystem->SetToastWidgetOverrideForTest(ToastWidget.Get());
 
 	Run->AddGold(5);
 	TArray<FRunShopOfferInput> Offers;
@@ -249,6 +281,7 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Screen"), Offers));
 
 	Screen->SetRunSessionOverrideForTest(Run.Get());
+	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
 	Screen->TakeWidget();
 	Screen->RefreshShop();
 
@@ -258,6 +291,17 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	TestTrue(TEXT("Gold text reflects run gold"), Screen->GetGoldTextForTest().ToString().Contains(TEXT("5")));
 	TestTrue(TEXT("Purchase first offer succeeds"), Screen->PurchaseOfferByIndexForTest(0));
 	TestEqual(TEXT("Gold after purchase"), Run->GetGold(), 2);
+	TestEqual(TEXT("Purchase success emits one app toast"), ToastWidget->GetVisibleToastCount(), 1);
+	const TArray<FWacomAppToastView> PurchaseToasts = ToastWidget->GetCurrentToastsForTest();
+	if (PurchaseToasts.IsValidIndex(0))
+	{
+		const FWacomAppToastView& Toast = PurchaseToasts[0];
+		TestEqual(TEXT("Purchase success toast text"),
+			Toast.MessageText.ToString(),
+			FString(TEXT("获得卡牌：商店测试卡")));
+		TestTrue(TEXT("Purchase success toast is positive"), Toast.Tone == EWacomAppToastTone::Positive);
+		TestEqual(TEXT("Purchase success toast icon"), Toast.IconKey, FName(TEXT("CardGained")));
+	}
 	TestFalse(TEXT("Purchased offer disabled after refresh"), Screen->GetOfferPresentationViewForTest(0).bCanPurchase);
 	TestEqual(TEXT("Purchased offer action after refresh"),
 		Screen->GetOfferPresentationViewForTest(0).ActionText.ToString(),

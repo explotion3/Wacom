@@ -153,6 +153,25 @@ enum class EGameFlowState : uint8
 | Modal | 确认框 |
 | Overlay | Toast |
 
+### AppToast（战斗外通用反馈）
+
+`UWacomAppToastSubsystem` 是 Run / 探索 / 菜单侧关键反馈的统一出口，持有唯一 `UWacomAppToastWidget` 并直接 `AddToViewport` 到高 ZOrder：
+
+- 数据：调用方传入 `FWacomAppToastView`（`MessageText / Tone / IconKey / LifetimeOverride`）
+- 生命周期：Subsystem 保证当前 GameInstance 内只有一个 AppToast Widget；探索局开始时由 PlayerController 预热，首次 Toast 触发时也会懒加载兜底；无消息时 `Collapsed`，队列有消息时 `HitTestInvisible`，播完后只隐藏不销毁
+- 输入：Toast Widget 为非焦点、HitTestInvisible，不抢菜单或探索输入
+- CommonUI 边界：AppToast 不进 CommonUI Stack，不成为 leaf-most active widget，不改变 `FUIInputConfig`；避免背包/商店关闭后探索 IMC 被 Overlay Toast 卡住
+- 当前接入：商店购买成功/失败、背包删牌成功
+- 边界：不合并战斗 `EventToast`，不复用 `ExplorationHUD` 的交互提示 Toast；它们分别服务不同节奏的反馈
+
+三类 Toast 分工：
+
+| 类型 | 出口 | 用途 |
+|---|---|---|
+| 交互提示 | `UWacomExplorationHUD::SetInteractToastVisible` | “按 E 战斗/商店”等范围内提示 |
+| 战斗事件 | `EventToast + UWacomBattleEventPresentationBuilder` | 战斗 Snapshot/Event 后的战斗日志与即时事件 |
+| AppToast | `UWacomAppToastSubsystem` | 战斗外获得卡牌、金币变化、删牌、节点奖励、拾取等关键反馈 |
+
 ### Widget 基类体系
 
 | 基类 | 职责 |
@@ -385,6 +404,7 @@ WBP 制作时按 `Docs/UI_Backpack_WBP_Binding.md` 的清单绑定控件；主�
 DropTarget 规则：
 - 普通 zone drop 调 `RunSession->MoveInstance`。
 - DeleteZone drop 先弹 `UWacomConfirmDialog`，确认后调 `RunSession->DeleteCardForGold`。
+- DeleteZone 删除成功后通过 `UWacomAppToastSubsystem` 显示“销毁卡牌：{CardName}，获得 {Gold} 金币”；取消确认或规则删除失败不显示成功提示。
 - `NativeOnDragOver` 只做视觉预判，例如 BattleDeck 已满且来源 Backpack 时返回 false；最终规则仍以 RunSession 返回值为准。
 - DropTarget 暴露 `EWacomDropTargetState`：`Normal / HoverValid / HoverInvalid / DropAccepted / DropRejected`。
 - WBP 可实现 `BP_OnDropTargetStateChanged` 做高亮、禁用提示和失败反馈。
@@ -423,6 +443,7 @@ ExitBattle → Pop BattleHUD，ExplorationHUD 重新 active，并在 NativeOnAct
 - 商品表现：`UWacomShopPresentationBuilder` 把 `FRunShopOffer + 当前金币` 转成 `FWacomShopOfferPresentationView`
 - 卡牌展示：商品 ViewData 内部复用 `UWacomCardPresentationBuilder::BuildCardViewData()`
 - 商品购买：点击 Offer 行按钮调用 `URunSession::PurchaseShopOffer(OfferId)`，成功后刷新列表和金币
+- 购买反馈：成功后通过 `UWacomAppToastSubsystem` 显示“获得卡牌：{CardName}”；失败时按 Offer ViewData 的 `DisabledReason` 显示“金币不足 / 该商品已购买 / 商品不可购买”
 - Offer 行只渲染 ViewData 并广播购买请求，不直接解析 `CardDefinition` 或判断金币状态
 - 关闭结算：`NativeOnDeactivated` 中调用一次 `URunSession::EndShopVisit()`
 - 默认 C++ fallback 可运行；后续可创建 `/Game/Wacom/UI/Shop/WBP_ShopScreen` 继承本类替换视觉
