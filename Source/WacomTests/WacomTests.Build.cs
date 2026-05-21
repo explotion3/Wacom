@@ -20,6 +20,7 @@ public class WacomTests : ModuleRules
 			"WacomBattle",
 			"WacomRun",
 			"WacomApp",
+			"WacomEditor",
 			"UMG",
 			"CommonUI",
 			"ModelViewViewModel",

@@ -28,6 +28,14 @@ namespace
 		return Effect;
 	}
 
+	FWacomRunEventEffectDefinition MakeRemoveCard(UCardDefinition* Card)
+	{
+		FWacomRunEventEffectDefinition Effect;
+		Effect.Type = EWacomRunEventEffectType::RemoveCard;
+		Effect.CardDefinition = Card;
+		return Effect;
+	}
+
 	FWacomRunEventEffectDefinition MakeAddGold(int32 Amount)
 	{
 		FWacomRunEventEffectDefinition Effect;
@@ -58,6 +66,14 @@ namespace
 		FWacomRunEventConditionDefinition Condition;
 		Condition.Type = EWacomRunEventConditionType::MinGold;
 		Condition.Value = Amount;
+		return Condition;
+	}
+
+	FWacomRunEventConditionDefinition MakeHasCard(UCardDefinition* Card)
+	{
+		FWacomRunEventConditionDefinition Condition;
+		Condition.Type = EWacomRunEventConditionType::HasCard;
+		Condition.CardDefinition = Card;
 		return Condition;
 	}
 }
@@ -97,6 +113,13 @@ namespace Wacom::ContentBuilder
 		PayRespect.Effects = { MakeAddGold(-1), MakeAddPressure(TEXT("Misdeed"), -1), MakeConsumeNode(1) };
 		PayRespect.NextNodeId = TEXT("End");
 
+		FWacomRunEventChoiceDefinition HandOverFang;
+		HandOverFang.ChoiceId = TEXT("HandOverFang");
+		HandOverFang.LabelText = FText::FromString(TEXT("交出毒牙"));
+		HandOverFang.Conditions = { MakeHasCard(PoisonFang) };
+		HandOverFang.Effects = { MakeRemoveCard(PoisonFang), MakeConsumeNode(1) };
+		HandOverFang.NextNodeId = TEXT("End");
+
 		FWacomRunEventChoiceDefinition Leave;
 		Leave.ChoiceId = TEXT("Leave");
 		Leave.LabelText = FText::FromString(TEXT("离开"));
@@ -106,7 +129,7 @@ namespace Wacom::ContentBuilder
 		StartNode.NodeId = TEXT("Start");
 		StartNode.TitleText = FText::FromString(TEXT("蛇巢遗物"));
 		StartNode.BodyText = FText::FromString(TEXT("一枚还带着温热毒意的獠牙躺在枯叶里。"));
-		StartNode.Choices = { TakeGift, PayRespect, Leave };
+		StartNode.Choices = { TakeGift, PayRespect, HandOverFang, Leave };
 
 		FWacomRunEventChoiceDefinition Close;
 		Close.ChoiceId = TEXT("Close");

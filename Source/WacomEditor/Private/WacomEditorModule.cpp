@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "WacomEditorModule.h"
+
 #include "Modules/ModuleManager.h"
 
 void FWacomEditorModule::StartupModule()

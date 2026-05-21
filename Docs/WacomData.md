@@ -230,8 +230,15 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 
 事件状态条件/效果使用 `TargetPersistentId` 字段，填写场景事件 Actor 的 `PersistentId`，不是 `EventDefinition.EventId`。`EventCompleted / EventNotCompleted` 读取对应状态；`MarkEventCompleted` 标记指定 `PersistentId` 完成。当前选项自身仍可继续使用 `bMarkEventCompleted` 标记当前事件完成。
 
+编辑器侧已接入 `UWacomRunEventDefinitionValidator` 内容防呆。校验重点：
+- `EventId / StartNodeId` 不能为空，`StartNodeId` 必须能找到节点。
+- `NodeId` 在事件内唯一，`ChoiceId` 在同一节点内唯一，`NextNodeId` 必须能找到目标节点。
+- `HasCard / MissingCard / GainCard / RemoveCard` 必须配置 `CardDefinition`。
+- `EventCompleted / EventNotCompleted / MarkEventCompleted` 必须配置 `TargetPersistentId`。
+- `MaxPressure / AddPressure` 必须配置有效压力 ID，`ConsumeNode` 不能为负数。
+
 调试资产：
-- `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、消耗节点、调整金币/劣迹压力。
+- `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、交出已有 `毒牙`、消耗节点、调整金币/劣迹压力。
 - 价格为原型调试值，不代表正式平衡。
 - 自动化测试 `Wacom.Data.RunEvent.DebugSnakeGiftAsset` 会验证该资产的节点、选项、条件、效果和 `毒牙` 引用，避免内容生成漂移。
 

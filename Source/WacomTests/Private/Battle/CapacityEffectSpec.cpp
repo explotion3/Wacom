@@ -252,6 +252,11 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 		{
 			return Choice.ChoiceId == TEXT("PayRespect");
 		});
+	const FWacomRunEventChoiceDefinition* HandOverFang = StartNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("HandOverFang");
+		});
 	const FWacomRunEventChoiceDefinition* Leave = StartNode->Choices.FindByPredicate(
 		[](const FWacomRunEventChoiceDefinition& Choice)
 		{
@@ -265,6 +270,7 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 
 	if (!TestNotNull(TEXT("TakeGift choice exists"), TakeGift)
 		|| !TestNotNull(TEXT("PayRespect choice exists"), PayRespect)
+		|| !TestNotNull(TEXT("HandOverFang choice exists"), HandOverFang)
 		|| !TestNotNull(TEXT("Leave choice exists"), Leave)
 		|| !TestNotNull(TEXT("Close choice exists"), Close))
 	{
@@ -313,6 +319,25 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 		}));
 	TestTrue(TEXT("PayRespect consumes one node"),
 		PayRespect->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::ConsumeNode
+				&& Effect.Value == 1;
+		}));
+
+	TestTrue(TEXT("HandOverFang requires PoisonFang"),
+		HandOverFang->Conditions.ContainsByPredicate([PoisonFang](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::HasCard
+				&& Condition.CardDefinition.Get() == PoisonFang;
+		}));
+	TestTrue(TEXT("HandOverFang removes PoisonFang"),
+		HandOverFang->Effects.ContainsByPredicate([PoisonFang](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::RemoveCard
+				&& Effect.CardDefinition.Get() == PoisonFang;
+		}));
+	TestTrue(TEXT("HandOverFang consumes one node"),
+		HandOverFang->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
 		{
 			return Effect.Type == EWacomRunEventEffectType::ConsumeNode
 				&& Effect.Value == 1;
