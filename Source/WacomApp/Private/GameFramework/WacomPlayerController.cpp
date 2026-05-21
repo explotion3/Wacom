@@ -24,6 +24,7 @@
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
+#include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
@@ -589,6 +590,77 @@ bool AWacomPlayerController::RequestOpenShop(FName ShopId, const TArray<FRunShop
 
 	ShopScreen->RefreshShop();
 	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开商店 ShopId=%s"), *ShopId.ToString());
+	return true;
+}
+
+bool AWacomPlayerController::RequestOpenRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition)
+{
+	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	if (!GM || GM->GetGameFlowState() != EGameFlowState::Exploration)
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenRunEvent: 当前不在探索状态，忽略"));
+		return false;
+	}
+	if (PersistentId.IsNone() || !EventDefinition)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: PersistentId 或 EventDefinition 无效，拒绝"));
+		return false;
+	}
+	if (!RunSession || !RunSession->BeginRunEvent(PersistentId, EventDefinition))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: BeginRunEvent 失败 PersistentId=%s"), *PersistentId.ToString());
+		return false;
+	}
+
+	UGameInstance* GI = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+	if (!UIManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: UIManager 未就位"));
+		RunSession->EndRunEvent();
+		return false;
+	}
+
+	UIManager->EnsurePrimaryLayout(this);
+
+	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
+	if (Layout)
+	{
+		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
+			WacomUITags::UI_Layer_GameMenu.GetTag());
+		if (MenuStack && MenuStack->GetActiveWidget())
+		{
+			MenuStack->GetActiveWidget()->DeactivateWidget();
+		}
+	}
+
+	if (!RunEventScreenClass)
+	{
+		if (UClass* Loaded = LoadObject<UClass>(nullptr,
+			TEXT("/Game/Wacom/UI/Event/WBP_RunEventScreen.WBP_RunEventScreen_C")))
+		{
+			RunEventScreenClass = Loaded;
+		}
+	}
+	if (!RunEventScreenClass)
+	{
+		RunEventScreenClass = UWacomRunEventScreen::StaticClass();
+	}
+
+	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
+		WacomUITags::UI_Layer_GameMenu.GetTag(),
+		RunEventScreenClass);
+	UWacomRunEventScreen* EventScreen = Cast<UWacomRunEventScreen>(Pushed);
+	if (!EventScreen)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: Push RunEventScreen 失败"));
+		RunSession->EndRunEvent();
+		return false;
+	}
+
+	EventScreen->RefreshEvent();
+	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开事件 PersistentId=%s"), *PersistentId.ToString());
 	return true;
 }
 

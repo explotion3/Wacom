@@ -15,6 +15,8 @@ class URunSession;
 class UBattleHUD;
 class UWacomBackpackScreen;
 class UWacomShopScreen;
+class UWacomRunEventScreen;
+class UWacomRunEventDefinition;
 struct FRunShopOfferInput;
 
 /**
@@ -117,6 +119,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomShopScreen> ShopScreenClass;
 
+	/**
+	 * 探索事件 UI。默认优先懒加载 /Game/Wacom/UI/Event/WBP_RunEventScreen；没有 WBP 时回退 C++ 最小界面。
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
+	TSubclassOf<UWacomRunEventScreen> RunEventScreenClass;
+
 	/** Console command 入口（等同于按 B）。public 是为了被 console lambda 调到。 */
 	void TryOpenBackpackFromConsole();
 
@@ -144,6 +152,9 @@ public:
 
 	/** 由 ShopTriggerActor 调用：开始商店访问并 Push 商店界面。 */
 	bool RequestOpenShop(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
+
+	/** 由 RunEventTriggerActor 调用：开始事件访问并 Push 事件界面。 */
+	bool RequestOpenRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition);
 
 	/** 测试/内部使用：按当前候选对象计算显示的 Toast 文案。 */
 	FText BuildCurrentInteractPromptForTest() const;

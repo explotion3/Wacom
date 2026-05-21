@@ -6,6 +6,7 @@
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Events/RunEventDefinition.h"
 #include "Session/BattleSession.h"
 #include "Tags/WacomGameplayTags.h"
 
@@ -85,6 +86,32 @@ namespace
 			State.Offers.Add(MoveTemp(Offer));
 		}
 		return State;
+	}
+
+	const FWacomRunEventNodeDefinition* FindRunEventNode(const UWacomRunEventDefinition* EventDefinition, FName NodeId)
+	{
+		if (!EventDefinition || NodeId.IsNone())
+		{
+			return nullptr;
+		}
+		return EventDefinition->Nodes.FindByPredicate(
+			[NodeId](const FWacomRunEventNodeDefinition& Node)
+			{
+				return Node.NodeId == NodeId;
+			});
+	}
+
+	const FWacomRunEventChoiceDefinition* FindRunEventChoice(const FWacomRunEventNodeDefinition* Node, FName ChoiceId)
+	{
+		if (!Node || ChoiceId.IsNone())
+		{
+			return nullptr;
+		}
+		return Node->Choices.FindByPredicate(
+			[ChoiceId](const FWacomRunEventChoiceDefinition& Choice)
+			{
+				return Choice.ChoiceId == ChoiceId;
+			});
 	}
 
 	/**
@@ -2340,6 +2367,158 @@ bool URunSession::HasCapacityProviderAfterDestroyingFirstOwnedInstance(const UCa
 	return false;
 }
 
+bool URunSession::DoesRunOwnCardDefinition(const UCardDefinition* Card) const
+{
+	if (!Card)
+	{
+		return false;
+	}
+
+	if (FindFirstIndexByDefinition(RunState.Backpack, Card) != INDEX_NONE
+		|| FindFirstIndexByDefinition(RunState.BattleDeck, Card) != INDEX_NONE
+		|| FindFirstIndexByDefinition(RunState.BurdenZone, Card) != INDEX_NONE)
+	{
+		return true;
+	}
+
+	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
+	{
+		if (FindFirstIndexByDefinition(SpecialZone.Cards, Card) != INDEX_NONE)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool URunSession::ValidateRunEventRemoveCard(const UCardDefinition* Card, FName& OutDisabledReason) const
+{
+	OutDisabledReason = NAME_None;
+	if (!Card)
+	{
+		OutDisabledReason = TEXT("MissingCard");
+		return false;
+	}
+	if (!DoesRunOwnCardDefinition(Card))
+	{
+		OutDisabledReason = TEXT("MissingRequiredCard");
+		return false;
+	}
+	if (IsIntrinsicCard(Card))
+	{
+		OutDisabledReason = TEXT("ProtectedCard");
+		return false;
+	}
+	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingFirstOwnedInstance(Card))
+	{
+		OutDisabledReason = TEXT("LastCapacityProvider");
+		return false;
+	}
+	return true;
+}
+
+bool URunSession::RemoveOwnedCardForRunEventInternal(UCardDefinition* Card, FName& OutDisabledReason)
+{
+	if (!ValidateRunEventRemoveCard(Card, OutDisabledReason))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] RemoveOwnedCardForRunEvent: 拒绝 Card=%s Reason=%s"),
+			*GetNameSafe(Card),
+			*OutDisabledReason.ToString());
+		return false;
+	}
+
+	const int32 BackpackIdx = FindFirstIndexByDefinition(RunState.Backpack, Card);
+	const int32 BattleDeckIdx = FindFirstIndexByDefinition(RunState.BattleDeck, Card);
+	const int32 BurdenIdx = FindFirstIndexByDefinition(RunState.BurdenZone, Card);
+
+	const bool bRemovedIsBMaster = IsTypeBContainerCard(Card);
+	FCardInstance RemovedInst;
+	bool bRemoved = false;
+	if (BackpackIdx != INDEX_NONE)
+	{
+		RemovedInst = RunState.Backpack[BackpackIdx];
+		RunState.Backpack.RemoveAt(BackpackIdx);
+		bRemoved = true;
+	}
+	else if (BattleDeckIdx != INDEX_NONE)
+	{
+		RemovedInst = RunState.BattleDeck[BattleDeckIdx];
+		RunState.BattleDeck.RemoveAt(BattleDeckIdx);
+		bRemoved = true;
+	}
+	else if (BurdenIdx != INDEX_NONE)
+	{
+		RemovedInst = RunState.BurdenZone[BurdenIdx];
+		RunState.BurdenZone.RemoveAt(BurdenIdx);
+		bRemoved = true;
+	}
+	else
+	{
+		for (FSpecialZone& SpecialZone : RunState.SpecialZones)
+		{
+			const int32 SpecialIdx = FindFirstIndexByDefinition(SpecialZone.Cards, Card);
+			if (SpecialIdx != INDEX_NONE)
+			{
+				RemovedInst = SpecialZone.Cards[SpecialIdx];
+				SpecialZone.Cards.RemoveAt(SpecialIdx);
+				bRemoved = true;
+				break;
+			}
+		}
+	}
+
+	if (!bRemoved)
+	{
+		OutDisabledReason = TEXT("MissingRequiredCard");
+		return false;
+	}
+
+	if (Card->Keywords.HasTagExact(WacomTags::Card_Keyword_Companion))
+	{
+		RunState.Pressure.Add(EWacomPressureType::Bloodlust, 1);
+	}
+
+	if (bRemovedIsBMaster && RemovedInst.InstanceId.IsValid())
+	{
+		const int32 SZIdx = RunState.SpecialZones.IndexOfByPredicate(
+			[&](const FSpecialZone& SZ)
+			{
+				return SZ.OwnerInstanceId == RemovedInst.InstanceId;
+			});
+		if (SZIdx != INDEX_NONE)
+		{
+			TArray<FCardInstance> CardsToReturn = MoveTemp(RunState.SpecialZones[SZIdx].Cards);
+			RunState.SpecialZones.RemoveAt(SZIdx);
+
+			const int32 FluxCap = GetFluxCapacity();
+			for (FCardInstance& Inst : CardsToReturn)
+			{
+				Inst.bBattleEnabledInSpecialZone = false;
+				if (CountFluxContentCards(RunState.Backpack) < FluxCap)
+				{
+					RunState.Backpack.Add(MoveTemp(Inst));
+				}
+				else
+				{
+					RunState.BurdenZone.Add(MoveTemp(Inst));
+				}
+			}
+		}
+	}
+
+	RecomputeBurdenInternal(/*bAllowBurdenRefill=*/!IsContainerCard(Card));
+	OutDisabledReason = NAME_None;
+	UE_LOG(LogTemp, Display,
+		TEXT("[RunSession] RemoveOwnedCardForRunEvent: %s, Backpack=%d, BattleDeck=%d, Burden=%d"),
+		*GetNameSafe(Card),
+		RunState.Backpack.Num(),
+		RunState.BattleDeck.Num(),
+		RunState.BurdenZone.Num());
+	return true;
+}
+
 FRunDeckOperationValidation URunSession::ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const
 {
 	FRunDeckOperationValidation Result;
@@ -3007,5 +3186,432 @@ bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
 	}
 
 	NotifyRunStateChanged();
+	return true;
+}
+
+// ================ 探索事件 ================
+
+bool URunSession::BeginRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition)
+{
+	if (PersistentId.IsNone())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[RunSession] BeginRunEvent: PersistentId 为 None，拒绝"));
+		return false;
+	}
+	if (!EventDefinition)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[RunSession] BeginRunEvent: EventDefinition 为空，拒绝"));
+		return false;
+	}
+	if (!FindRunEventNode(EventDefinition, EventDefinition->StartNodeId))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] BeginRunEvent: Event=%s StartNodeId=%s 无效"),
+			*GetNameSafe(EventDefinition),
+			*EventDefinition->StartNodeId.ToString());
+		return false;
+	}
+
+	FRunEventState& EventState = RunState.RunEventStates.FindOrAdd(PersistentId);
+	if (EventState.bCompleted)
+	{
+		UE_LOG(LogTemp, Display,
+			TEXT("[RunSession] BeginRunEvent: PersistentId=%s 已完成，拒绝重复打开"),
+			*PersistentId.ToString());
+		return false;
+	}
+
+	if (EventState.CurrentNodeId.IsNone() || !FindRunEventNode(EventDefinition, EventState.CurrentNodeId))
+	{
+		EventState.CurrentNodeId = EventDefinition->StartNodeId;
+	}
+
+	RunState.ActiveRunEventId = PersistentId;
+	RunState.ActiveRunEventDefinition = EventDefinition;
+	NotifyRunStateChanged();
+	return true;
+}
+
+void URunSession::EndRunEvent()
+{
+	if (RunState.ActiveRunEventId.IsNone() && !RunState.ActiveRunEventDefinition)
+	{
+		return;
+	}
+
+	RunState.ActiveRunEventId = NAME_None;
+	RunState.ActiveRunEventDefinition = nullptr;
+	NotifyRunStateChanged();
+}
+
+bool URunSession::IsRunEventCompleted(FName PersistentId) const
+{
+	if (const FRunEventState* EventState = RunState.RunEventStates.Find(PersistentId))
+	{
+		return EventState->bCompleted;
+	}
+	return false;
+}
+
+FRunEventSnapshot URunSession::BuildCurrentRunEventSnapshot() const
+{
+	FRunEventSnapshot Snapshot;
+	Snapshot.PersistentId = RunState.ActiveRunEventId;
+	Snapshot.bIsActive = !RunState.ActiveRunEventId.IsNone() && RunState.ActiveRunEventDefinition;
+
+	const UWacomRunEventDefinition* EventDefinition = RunState.ActiveRunEventDefinition;
+	if (!Snapshot.bIsActive || !EventDefinition)
+	{
+		return Snapshot;
+	}
+
+	Snapshot.EventId = EventDefinition->EventId;
+	const FRunEventState* EventState = RunState.RunEventStates.Find(RunState.ActiveRunEventId);
+	Snapshot.bCompleted = EventState ? EventState->bCompleted : false;
+	Snapshot.CurrentNodeId = EventState ? EventState->CurrentNodeId : EventDefinition->StartNodeId;
+
+	const FWacomRunEventNodeDefinition* Node = FindRunEventNode(EventDefinition, Snapshot.CurrentNodeId);
+	if (!Node)
+	{
+		return Snapshot;
+	}
+
+	Snapshot.TitleText = Node->TitleText.IsEmpty() ? EventDefinition->DisplayName : Node->TitleText;
+	Snapshot.BodyText = Node->BodyText;
+	Snapshot.Choices.Reserve(Node->Choices.Num());
+	for (const FWacomRunEventChoiceDefinition& Choice : Node->Choices)
+	{
+		FRunEventChoiceSnapshot ChoiceSnapshot;
+		ChoiceSnapshot.ChoiceId = Choice.ChoiceId;
+		ChoiceSnapshot.LabelText = Choice.LabelText;
+		ChoiceSnapshot.bAvailable = IsRunEventChoiceAvailable(Choice, ChoiceSnapshot.DisabledReason);
+		Snapshot.Choices.Add(MoveTemp(ChoiceSnapshot));
+	}
+
+	return Snapshot;
+}
+
+bool URunSession::ChooseRunEventOption(FName ChoiceId)
+{
+	return ChooseRunEventOptionWithResult(ChoiceId).bSucceeded;
+}
+
+FRunEventChoiceResult URunSession::ChooseRunEventOptionWithResult(FName ChoiceId)
+{
+	FRunEventChoiceResult Result;
+	Result.ChoiceId = ChoiceId;
+
+	if (RunState.ActiveRunEventId.IsNone() || !RunState.ActiveRunEventDefinition)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[RunSession] ChooseRunEventOption: 当前没有 active event，拒绝"));
+		Result.DisabledReason = TEXT("NoActiveEvent");
+		return Result;
+	}
+
+	FRunEventState* EventState = RunState.RunEventStates.Find(RunState.ActiveRunEventId);
+	if (!EventState || EventState->bCompleted)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[RunSession] ChooseRunEventOption: 事件状态无效或已完成，拒绝"));
+		Result.DisabledReason = TEXT("InvalidEventState");
+		return Result;
+	}
+
+	const FWacomRunEventNodeDefinition* Node = FindRunEventNode(RunState.ActiveRunEventDefinition, EventState->CurrentNodeId);
+	const FWacomRunEventChoiceDefinition* Choice = FindRunEventChoice(Node, ChoiceId);
+	if (!Choice)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] ChooseRunEventOption: 找不到 ChoiceId=%s"),
+			*ChoiceId.ToString());
+		Result.DisabledReason = TEXT("ChoiceNotFound");
+		return Result;
+	}
+
+	FName DisabledReason = NAME_None;
+	if (!IsRunEventChoiceAvailable(*Choice, DisabledReason))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] ChooseRunEventOption: ChoiceId=%s 不可用 Reason=%s"),
+			*ChoiceId.ToString(),
+			*DisabledReason.ToString());
+		Result.DisabledReason = DisabledReason;
+		return Result;
+	}
+
+	if (!ApplyRunEventChoiceEffects(*Choice, &Result.EffectResults, &Result.DisabledReason))
+	{
+		if (Result.DisabledReason.IsNone())
+		{
+			Result.DisabledReason = TEXT("EffectFailed");
+		}
+		return Result;
+	}
+
+	if (Choice->bMarkEventCompleted)
+	{
+		EventState->bCompleted = true;
+	}
+
+	if (!Choice->NextNodeId.IsNone())
+	{
+		if (!FindRunEventNode(RunState.ActiveRunEventDefinition, Choice->NextNodeId))
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[RunSession] ChooseRunEventOption: NextNodeId=%s 无效，保持当前节点"),
+				*Choice->NextNodeId.ToString());
+		}
+		else
+		{
+			EventState->CurrentNodeId = Choice->NextNodeId;
+		}
+	}
+
+	if (Choice->bCloseEventAfterResolve || EventState->bCompleted)
+	{
+		RunState.ActiveRunEventId = NAME_None;
+		RunState.ActiveRunEventDefinition = nullptr;
+	}
+
+	NotifyRunStateChanged();
+	Result.bSucceeded = true;
+	return Result;
+}
+
+bool URunSession::TryResolveRunEventPressureType(FName PressureTypeId, EWacomPressureType& OutType) const
+{
+	if (PressureTypeId == TEXT("Hunger"))     { OutType = EWacomPressureType::Hunger; return true; }
+	if (PressureTypeId == TEXT("Wound"))      { OutType = EWacomPressureType::Wound; return true; }
+	if (PressureTypeId == TEXT("Fatigue"))    { OutType = EWacomPressureType::Fatigue; return true; }
+	if (PressureTypeId == TEXT("Burden"))     { OutType = EWacomPressureType::Burden; return true; }
+	if (PressureTypeId == TEXT("Decay"))      { OutType = EWacomPressureType::Decay; return true; }
+	if (PressureTypeId == TEXT("Misdeed"))    { OutType = EWacomPressureType::Misdeed; return true; }
+	if (PressureTypeId == TEXT("Bloodlust"))  { OutType = EWacomPressureType::Bloodlust; return true; }
+	if (PressureTypeId == TEXT("Disability")) { OutType = EWacomPressureType::Disability; return true; }
+	return false;
+}
+
+bool URunSession::IsRunEventChoiceAvailable(const FWacomRunEventChoiceDefinition& Choice, FName& OutDisabledReason) const
+{
+	OutDisabledReason = NAME_None;
+	for (const FWacomRunEventConditionDefinition& Condition : Choice.Conditions)
+	{
+		switch (Condition.Type)
+		{
+		case EWacomRunEventConditionType::None:
+			break;
+		case EWacomRunEventConditionType::MinGold:
+			if (RunState.Gold < Condition.Value)
+			{
+				OutDisabledReason = TEXT("InsufficientGold");
+				return false;
+			}
+			break;
+		case EWacomRunEventConditionType::MinNodeCount:
+			if (RunState.RemainingNodeCount < Condition.Value)
+			{
+				OutDisabledReason = TEXT("InsufficientNode");
+				return false;
+			}
+			break;
+		case EWacomRunEventConditionType::MaxPressure:
+		{
+			EWacomPressureType PressureType = EWacomPressureType::Count;
+			if (!TryResolveRunEventPressureType(Condition.PressureType, PressureType))
+			{
+				OutDisabledReason = TEXT("InvalidPressureType");
+				return false;
+			}
+			if (GetPressureValue(PressureType) > Condition.Value)
+			{
+				OutDisabledReason = TEXT("PressureTooHigh");
+				return false;
+			}
+			break;
+		}
+		case EWacomRunEventConditionType::HasCard:
+			if (!Condition.CardDefinition)
+			{
+				OutDisabledReason = TEXT("MissingCard");
+				return false;
+			}
+			if (!DoesRunOwnCardDefinition(Condition.CardDefinition.Get()))
+			{
+				OutDisabledReason = TEXT("MissingRequiredCard");
+				return false;
+			}
+			break;
+		case EWacomRunEventConditionType::MissingCard:
+			if (!Condition.CardDefinition)
+			{
+				OutDisabledReason = TEXT("MissingCard");
+				return false;
+			}
+			if (DoesRunOwnCardDefinition(Condition.CardDefinition.Get()))
+			{
+				OutDisabledReason = TEXT("AlreadyHasCard");
+				return false;
+			}
+			break;
+		case EWacomRunEventConditionType::EventCompleted:
+			if (Condition.TargetPersistentId.IsNone())
+			{
+				OutDisabledReason = TEXT("MissingTargetPersistentId");
+				return false;
+			}
+			if (!IsRunEventCompleted(Condition.TargetPersistentId))
+			{
+				OutDisabledReason = TEXT("RequiredEventNotCompleted");
+				return false;
+			}
+			break;
+		case EWacomRunEventConditionType::EventNotCompleted:
+			if (Condition.TargetPersistentId.IsNone())
+			{
+				OutDisabledReason = TEXT("MissingTargetPersistentId");
+				return false;
+			}
+			if (IsRunEventCompleted(Condition.TargetPersistentId))
+			{
+				OutDisabledReason = TEXT("RequiredEventAlreadyCompleted");
+				return false;
+			}
+			break;
+		default:
+			OutDisabledReason = TEXT("UnknownCondition");
+			return false;
+		}
+	}
+	return true;
+}
+
+bool URunSession::ApplyRunEventChoiceEffects(const FWacomRunEventChoiceDefinition& Choice, TArray<FRunEventChoiceEffectResult>* OutEffectResults, FName* OutDisabledReason)
+{
+	for (const FWacomRunEventEffectDefinition& Effect : Choice.Effects)
+	{
+		FRunEventChoiceEffectResult EffectResult;
+		EffectResult.EffectType = Effect.Type;
+		EffectResult.CardDefinition = Effect.CardDefinition;
+		EffectResult.Amount = Effect.Value;
+
+		switch (Effect.Type)
+		{
+		case EWacomRunEventEffectType::None:
+			EffectResult.bApplied = true;
+			break;
+		case EWacomRunEventEffectType::GainCard:
+			if (!Effect.CardDefinition)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplyRunEventChoiceEffects: GainCard 缺少 CardDefinition"));
+				if (OutDisabledReason)
+				{
+					*OutDisabledReason = TEXT("MissingCard");
+				}
+				return false;
+			}
+			if (!AcquireCardToRunInternal(Effect.CardDefinition.Get()))
+			{
+				if (OutDisabledReason)
+				{
+					*OutDisabledReason = TEXT("EffectFailed");
+				}
+				return false;
+			}
+			EffectResult.bApplied = true;
+			break;
+		case EWacomRunEventEffectType::AddGold:
+		{
+			const int32 GoldBefore = RunState.Gold;
+			RunState.Gold = FMath::Max(0, RunState.Gold + Effect.Value);
+			EffectResult.ActualDelta = RunState.Gold - GoldBefore;
+			EffectResult.bApplied = true;
+			break;
+		}
+		case EWacomRunEventEffectType::AddPressure:
+		{
+			EWacomPressureType PressureType = EWacomPressureType::Count;
+			if (!TryResolveRunEventPressureType(Effect.PressureType, PressureType))
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[RunSession] ApplyRunEventChoiceEffects: 无效 PressureType=%s"),
+					*Effect.PressureType.ToString());
+				if (OutDisabledReason)
+				{
+					*OutDisabledReason = TEXT("InvalidPressureType");
+				}
+				return false;
+			}
+			const int32 PressureBefore = RunState.Pressure.Get(PressureType);
+			RunState.Pressure.Add(PressureType, Effect.Value);
+			EffectResult.PressureType = PressureType;
+			EffectResult.ActualDelta = RunState.Pressure.Get(PressureType) - PressureBefore;
+			EffectResult.bApplied = true;
+			break;
+		}
+		case EWacomRunEventEffectType::ConsumeNode:
+		{
+			const int32 Count = FMath::Max(0, Effect.Value);
+			const int32 NodesBefore = RunState.RemainingNodeCount;
+			EffectResult.ActualDelta = -FMath::Min(Count, NodesBefore);
+			if (Count > 0)
+			{
+				const bool bHadEnoughNode = RunState.RemainingNodeCount >= Count;
+				RunState.RemainingNodeCount = FMath::Max(0, RunState.RemainingNodeCount - Count);
+				if (RunState.RemainingNodeCount <= 0)
+				{
+					AdvanceToNextPhase();
+				}
+				if (!bHadEnoughNode)
+				{
+					UE_LOG(LogTemp, Warning,
+						TEXT("[RunSession] ApplyRunEventChoiceEffects: 节点不足但已推进时段 Count=%d"),
+						Count);
+				}
+			}
+			EffectResult.bApplied = true;
+			break;
+		}
+		case EWacomRunEventEffectType::RemoveCard:
+		{
+			FName RemoveDisabledReason = NAME_None;
+			if (!RemoveOwnedCardForRunEventInternal(Effect.CardDefinition.Get(), RemoveDisabledReason))
+			{
+				if (OutDisabledReason)
+				{
+					*OutDisabledReason = RemoveDisabledReason.IsNone() ? FName(TEXT("EffectFailed")) : RemoveDisabledReason;
+				}
+				return false;
+			}
+			EffectResult.ActualDelta = -1;
+			EffectResult.bApplied = true;
+			break;
+		}
+		case EWacomRunEventEffectType::MarkEventCompleted:
+			if (Effect.TargetPersistentId.IsNone())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplyRunEventChoiceEffects: MarkEventCompleted 缺少 TargetPersistentId"));
+				if (OutDisabledReason)
+				{
+					*OutDisabledReason = TEXT("MissingTargetPersistentId");
+				}
+				return false;
+			}
+			RunState.RunEventStates.FindOrAdd(Effect.TargetPersistentId).bCompleted = true;
+			EffectResult.ActualDelta = 1;
+			EffectResult.bApplied = true;
+			break;
+		default:
+			UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplyRunEventChoiceEffects: 未知效果类型"));
+			if (OutDisabledReason)
+			{
+				*OutDisabledReason = TEXT("EffectFailed");
+			}
+			return false;
+		}
+
+		if (OutEffectResults)
+		{
+			OutEffectResults->Add(MoveTemp(EffectResult));
+		}
+	}
 	return true;
 }

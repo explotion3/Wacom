@@ -14,7 +14,7 @@
 
 namespace
 {
-	FText GetCardDisplayName(const UCardDefinition* Card)
+	FText GetDeleteZoneCardDisplayName(const UCardDefinition* Card)
 	{
 		if (!Card)
 		{
@@ -116,7 +116,7 @@ bool UWacomDeleteZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const
 		return false;
 	}
 
-	const FText CardName = GetCardDisplayName(Card);
+	const FText CardName = GetDeleteZoneCardDisplayName(Card);
 	const int32 GoldReward = GetDeleteGoldRewardPreview(Card);
 	const TWeakObjectPtr<UWacomBackpackScreen> WeakScreen(Screen);
 	UWacomConfirmDialog* Dialog = UWacomConfirmDialog::Show(

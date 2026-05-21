@@ -11,6 +11,7 @@
 #include "Cards/CardEffect.h"
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Events/RunEventDefinition.h"
 #include "Shops/ShopDefinition.h"
 #include "Tags/WacomGameplayTags.h"
 
@@ -201,6 +202,125 @@ bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 			DebugShop->Offers[Index].Price,
 			ExpectedOffers[Index].Price);
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataRunEventDebugSnakeGiftAssetSpec,
+	"Wacom.Data.RunEvent.DebugSnakeGiftAsset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWacomRunEventDefinition* Event = LoadObject<UWacomRunEventDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Events/DA_Event_DebugSnakeGift.DA_Event_DebugSnakeGift"));
+
+	if (!TestNotNull(TEXT("DebugSnakeGift event asset loads"), Event))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("EventId"), Event->EventId, FName(TEXT("Event.DebugSnakeGift")));
+	TestEqual(TEXT("DisplayName"), Event->DisplayName.ToString(), FString(TEXT("蛇巢遗物")));
+	TestEqual(TEXT("StartNodeId"), Event->StartNodeId, FName(TEXT("Start")));
+
+	const FWacomRunEventNodeDefinition* StartNode = Event->Nodes.FindByPredicate(
+		[](const FWacomRunEventNodeDefinition& Node)
+		{
+			return Node.NodeId == TEXT("Start");
+		});
+	const FWacomRunEventNodeDefinition* EndNode = Event->Nodes.FindByPredicate(
+		[](const FWacomRunEventNodeDefinition& Node)
+		{
+			return Node.NodeId == TEXT("End");
+		});
+	if (!TestNotNull(TEXT("Start node exists"), StartNode)
+		|| !TestNotNull(TEXT("End node exists"), EndNode))
+	{
+		return false;
+	}
+
+	const FWacomRunEventChoiceDefinition* TakeGift = StartNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("TakeGift");
+		});
+	const FWacomRunEventChoiceDefinition* PayRespect = StartNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("PayRespect");
+		});
+	const FWacomRunEventChoiceDefinition* Leave = StartNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("Leave");
+		});
+	const FWacomRunEventChoiceDefinition* Close = EndNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("Close");
+		});
+
+	if (!TestNotNull(TEXT("TakeGift choice exists"), TakeGift)
+		|| !TestNotNull(TEXT("PayRespect choice exists"), PayRespect)
+		|| !TestNotNull(TEXT("Leave choice exists"), Leave)
+		|| !TestNotNull(TEXT("Close choice exists"), Close))
+	{
+		return false;
+	}
+
+	UCardDefinition* PoisonFang = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+	if (!TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("TakeGift gains PoisonFang"),
+		TakeGift->Effects.ContainsByPredicate([PoisonFang](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::GainCard
+				&& Effect.CardDefinition.Get() == PoisonFang;
+		}));
+	TestTrue(TEXT("TakeGift consumes one node"),
+		TakeGift->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::ConsumeNode
+				&& Effect.Value == 1;
+		}));
+
+	TestTrue(TEXT("PayRespect requires one gold"),
+		PayRespect->Conditions.ContainsByPredicate([](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::MinGold
+				&& Condition.Value == 1;
+		}));
+	TestTrue(TEXT("PayRespect removes one gold"),
+		PayRespect->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::AddGold
+				&& Effect.Value == -1;
+		}));
+	TestTrue(TEXT("PayRespect reduces Misdeed pressure"),
+		PayRespect->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::AddPressure
+				&& Effect.PressureType == TEXT("Misdeed")
+				&& Effect.Value == -1;
+		}));
+	TestTrue(TEXT("PayRespect consumes one node"),
+		PayRespect->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::ConsumeNode
+				&& Effect.Value == 1;
+		}));
+
+	TestTrue(TEXT("Leave closes event"), Leave->bCloseEventAfterResolve);
+	TestTrue(TEXT("Close closes event"), Close->bCloseEventAfterResolve);
+	TestTrue(TEXT("Close marks event completed"), Close->bMarkEventCompleted);
 
 	return true;
 }

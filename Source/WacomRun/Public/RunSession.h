@@ -13,6 +13,7 @@
 class UCharacterDefinition;
 class UEnemyDefinition;
 class UCardDefinition;
+class UWacomRunEventDefinition;
 class UWacomSaveGame;
 struct FBattleInitParams;
 
@@ -599,6 +600,49 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
 	bool PurchaseCardFromShop(UCardDefinition* Card, int32 Price);
 
+	// ---- 探索事件 ----
+
+	/**
+	 * 开始一次轻量事件访问。
+	 *
+	 * PersistentId 使用场景事件 Actor 的持久化 ID；EventDefinition 只提供静态事件图。
+	 * 已完成的 PersistentId 第一版拒绝再次打开。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
+	bool BeginRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition);
+
+	/** 结束当前事件访问，不改变完成状态。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
+	void EndRunEvent();
+
+	/** 当前是否处于一次事件访问。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Event")
+	bool IsRunEventActive() const { return !RunState.ActiveRunEventId.IsNone(); }
+
+	/** 指定场景事件是否已完成。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Event")
+	bool IsRunEventCompleted(FName PersistentId) const;
+
+	/** 构建当前事件的只读 UI 快照。无 active event 时返回空快照。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Event")
+	FRunEventSnapshot BuildCurrentRunEventSnapshot() const;
+
+	/**
+	 * 选择当前节点中的一个选项。
+	 *
+	 * 成功后执行 Effects，并按 Choice 配置跳转、关闭或标记完成。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
+	bool ChooseRunEventOption(FName ChoiceId);
+
+	/**
+	 * 选择当前节点中的一个选项，并返回本次实际执行结果。
+	 *
+	 * UI/日志可读取 EffectResults 播放反馈；规则真相仍由 RunSession 内部执行。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
+	FRunEventChoiceResult ChooseRunEventOptionWithResult(FName ChoiceId);
+
 	// ---- 战斗联动 ----
 
 	/**
@@ -791,6 +835,19 @@ private:
 
 	/** 统计指定列表中真正占用通量内容格的卡：A 类容器和普通卡计入，B 主卡不计入。 */
 	int32 CountFluxContentCards(const TArray<FCardInstance>& Pile) const;
+
+	/** RunEvent 卡牌条件使用：玩家任意持有区是否拥有该 Definition。 */
+	bool DoesRunOwnCardDefinition(const UCardDefinition* Card) const;
+
+	/** RunEvent RemoveCard 防御校验，复用背包永久移除的安全约束。 */
+	bool ValidateRunEventRemoveCard(const UCardDefinition* Card, FName& OutDisabledReason) const;
+
+	/** RunEvent RemoveCard 私有执行路径：从任意拥有区永久移除一张卡，不发金币、不广播。 */
+	bool RemoveOwnedCardForRunEventInternal(UCardDefinition* Card, FName& OutDisabledReason);
+
+	bool TryResolveRunEventPressureType(FName PressureTypeId, EWacomPressureType& OutType) const;
+	bool IsRunEventChoiceAvailable(const struct FWacomRunEventChoiceDefinition& Choice, FName& OutDisabledReason) const;
+	bool ApplyRunEventChoiceEffects(const struct FWacomRunEventChoiceDefinition& Choice, TArray<FRunEventChoiceEffectResult>* OutEffectResults = nullptr, FName* OutDisabledReason = nullptr);
 
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|Run", Transient)
 	FRunState RunState;

@@ -3,8 +3,10 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomRunEventTriggerActor.h"
 #include "Actors/WacomShopTriggerActor.h"
 #include "Cards/CardDefinition.h"
+#include "Events/RunEventDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Interaction/WacomWorldInteractable.h"
@@ -13,6 +15,8 @@
 #include "Shops/ShopDefinition.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
+#include "UI/Events/WacomRunEventPresentationBuilder.h"
+#include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
 #include "UI/Shop/WacomShopOfferRowWidget.h"
@@ -31,6 +35,28 @@ namespace
 		{
 			RunSessionProperty->SetObjectPropertyValue_InContainer(PC, Run);
 		}
+	}
+
+	UWacomRunEventDefinition* MakeUiRunEvent(UObject* Outer)
+	{
+		UWacomRunEventDefinition* Event = NewObject<UWacomRunEventDefinition>(Outer);
+		Event->EventId = TEXT("Event.UI");
+		Event->DisplayName = FText::FromString(TEXT("UI事件"));
+		Event->StartNodeId = TEXT("Start");
+
+		FWacomRunEventChoiceDefinition Close;
+		Close.ChoiceId = TEXT("Close");
+		Close.LabelText = FText::FromString(TEXT("关闭事件"));
+		Close.bCloseEventAfterResolve = true;
+		Close.bMarkEventCompleted = true;
+
+		FWacomRunEventNodeDefinition Start;
+		Start.NodeId = TEXT("Start");
+		Start.TitleText = FText::FromString(TEXT("UI标题"));
+		Start.BodyText = FText::FromString(TEXT("UI正文"));
+		Start.Choices = { Close };
+		Event->Nodes = { Start };
+		return Event;
 	}
 }
 
@@ -100,6 +126,82 @@ bool FWacomUIWorldInteractionShopTriggerNativeContractSpec::RunTest(const FStrin
 	TestEqual(TEXT("Shop interact location is actor location"),
 		Shop->GetInteractLocation_Implementation(PC.Get()),
 		Shop->GetActorLocation());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIWorldInteractionRunEventTriggerNativeContractSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerNativeContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIWorldInteractionRunEventTriggerNativeContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Trigger.Get()));
+	SetRunSessionForTest(PC.Get(), Run.Get());
+
+	TestFalse(TEXT("Event trigger without id/definition is not interactable"),
+		Trigger->CanInteract_Implementation(PC.Get()));
+
+	Trigger->PersistentId = TEXT("Event.UI.Trigger");
+	Trigger->EventDefinition = Event.Get();
+	Trigger->InteractPromptText = FText::FromString(TEXT("按 E 事件"));
+	Trigger->CompletedPromptText = FText::FromString(TEXT("事件已完成"));
+	Trigger->CompletedToastText = FText::FromString(TEXT("该事件已完成"));
+
+	TestTrue(TEXT("Event trigger with id and definition is interactable"),
+		Trigger->CanInteract_Implementation(PC.Get()));
+	TestEqual(TEXT("Event prompt uses configured text"),
+		Trigger->GetInteractPromptText_Implementation(PC.Get()).ToString(),
+		FString(TEXT("按 E 事件")));
+	TestEqual(TEXT("Event interact location is actor location"),
+		Trigger->GetInteractLocation_Implementation(PC.Get()),
+		Trigger->GetActorLocation());
+
+	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(Trigger->PersistentId, Event.Get()));
+	TestTrue(TEXT("Complete event via option"), Run->ChooseRunEventOption(TEXT("Close")));
+	TestTrue(TEXT("Completed event trigger remains weakly interactable"),
+		Trigger->CanInteract_Implementation(PC.Get()));
+	TestEqual(TEXT("Completed prompt uses weak text"),
+		Trigger->GetInteractPromptText_Implementation(PC.Get()).ToString(),
+		FString(TEXT("事件已完成")));
+	TestFalse(TEXT("Completed event does not reopen"), Trigger->TryInteract_Implementation(PC.Get()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIWorldInteractionCompletedRunEventWeakPromptSpec,
+	"Wacom.UI.WorldInteraction.CompletedRunEventWeakPrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIWorldInteractionCompletedRunEventWeakPromptSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Trigger.Get()));
+	SetRunSessionForTest(PC.Get(), Run.Get());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	Trigger->SetActorLocation(FVector(80.f, 0.f, 0.f));
+	Trigger->PersistentId = TEXT("Event.UI.CompletedPrompt");
+	Trigger->EventDefinition = Event.Get();
+	Trigger->CompletedPromptText = FText::FromString(TEXT("事件已完成"));
+
+	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(Trigger->PersistentId, Event.Get()));
+	TestTrue(TEXT("Complete event via option"), Run->ChooseRunEventOption(TEXT("Close")));
+
+	PC->RegisterCandidateInteractable(Trigger.Get());
+	TestTrue(TEXT("Completed event remains closest candidate"), PC->PickClosestInteractableForTest() == Trigger.Get());
+	TestEqual(TEXT("Completed event prompt shown"),
+		PC->BuildCurrentInteractPromptForTest().ToString(),
+		FString(TEXT("事件已完成")));
 
 	return true;
 }
@@ -185,6 +287,185 @@ bool FWacomUIShopOfferPresentationBuilderSpec::RunTest(const FString& /*Paramete
 	TestEqual(TEXT("Missing card name"), View.CardNameText.ToString(), FString(TEXT("未知卡牌")));
 	TestEqual(TEXT("Missing card action text"), View.ActionText.ToString(), FString(TEXT("不可购买")));
 	TestEqual(TEXT("Missing card reason"), View.DisabledReason, FName(TEXT("MissingCard")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventPresentationBuilderSpec,
+	"Wacom.UI.Event.PresentationBuilder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = Fx.MakeNoopCard(0);
+	Card->CardId = TEXT("Event.Toast.Card");
+	Card->DisplayName = FText::FromString(TEXT("事件提示卡"));
+
+	TestEqual(TEXT("Gold reason text"),
+		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("InsufficientGold")).ToString(),
+		FString(TEXT("金币不足")));
+	TestEqual(TEXT("Node reason text"),
+		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("InsufficientNode")).ToString(),
+		FString(TEXT("行动点不足")));
+	TestEqual(TEXT("Pressure reason text"),
+		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("PressureTooHigh")).ToString(),
+		FString(TEXT("压力过高")));
+	TestEqual(TEXT("Missing required card reason text"),
+		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("MissingRequiredCard")).ToString(),
+		FString(TEXT("缺少所需卡牌")));
+	TestEqual(TEXT("Protected card reason text"),
+		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("ProtectedCard")).ToString(),
+		FString(TEXT("该卡牌不能被移除")));
+	TestEqual(TEXT("Last capacity reason text"),
+		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("LastCapacityProvider")).ToString(),
+		FString(TEXT("这是最后一张背包容量卡")));
+	TestEqual(TEXT("Event dependency reason text"),
+		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("RequiredEventNotCompleted")).ToString(),
+		FString(TEXT("前置事件未完成")));
+	TestEqual(TEXT("Pressure name text"),
+		UWacomRunEventPresentationBuilder::FormatPressureName(EWacomPressureType::Misdeed).ToString(),
+		FString(TEXT("恶行")));
+
+	FRunEventChoiceResult Result;
+	Result.bSucceeded = true;
+	FRunEventChoiceEffectResult GainCard;
+	GainCard.EffectType = EWacomRunEventEffectType::GainCard;
+	GainCard.CardDefinition = Card;
+	GainCard.bApplied = true;
+	FRunEventChoiceEffectResult Gold;
+	Gold.EffectType = EWacomRunEventEffectType::AddGold;
+	Gold.ActualDelta = 2;
+	Gold.bApplied = true;
+	FRunEventChoiceEffectResult Pressure;
+	Pressure.EffectType = EWacomRunEventEffectType::AddPressure;
+	Pressure.PressureType = EWacomPressureType::Misdeed;
+	Pressure.ActualDelta = 3;
+	Pressure.bApplied = true;
+	FRunEventChoiceEffectResult Node;
+	Node.EffectType = EWacomRunEventEffectType::ConsumeNode;
+	Node.ActualDelta = -1;
+	Node.bApplied = true;
+	FRunEventChoiceEffectResult RemoveCard;
+	RemoveCard.EffectType = EWacomRunEventEffectType::RemoveCard;
+	RemoveCard.CardDefinition = Card;
+	RemoveCard.ActualDelta = -1;
+	RemoveCard.bApplied = true;
+	FRunEventChoiceEffectResult MarkEvent;
+	MarkEvent.EffectType = EWacomRunEventEffectType::MarkEventCompleted;
+	MarkEvent.ActualDelta = 1;
+	MarkEvent.bApplied = true;
+	Result.EffectResults = { GainCard, Gold, Pressure, Node, RemoveCard, MarkEvent };
+
+	const TArray<FWacomAppToastView> Toasts =
+		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(Result);
+	TestEqual(TEXT("Five visible toasts"), Toasts.Num(), 5);
+	if (Toasts.Num() == 5)
+	{
+		TestEqual(TEXT("Card toast"), Toasts[0].MessageText.ToString(), FString(TEXT("获得卡牌：事件提示卡")));
+		TestEqual(TEXT("Gold toast"), Toasts[1].MessageText.ToString(), FString(TEXT("获得 2 金币")));
+		TestEqual(TEXT("Pressure toast"), Toasts[2].MessageText.ToString(), FString(TEXT("恶行 +3")));
+		TestEqual(TEXT("Node toast"), Toasts[3].MessageText.ToString(), FString(TEXT("消耗 1 行动点")));
+		TestEqual(TEXT("Remove card toast"), Toasts[4].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
+	}
+
+	FRunEventChoiceResult Blocked;
+	Blocked.DisabledReason = TEXT("InsufficientGold");
+	const TArray<FWacomAppToastView> BlockedToasts =
+		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(Blocked);
+	TestEqual(TEXT("Blocked emits one toast"), BlockedToasts.Num(), 1);
+	if (BlockedToasts.Num() == 1)
+	{
+		TestEqual(TEXT("Blocked toast text"), BlockedToasts[0].MessageText.ToString(), FString(TEXT("金币不足")));
+		TestTrue(TEXT("Blocked toast warning"), BlockedToasts[0].Tone == EWacomAppToastTone::Warning);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventScreenSnapshotAndChoiceSpec,
+	"Wacom.UI.Event.ScreenSnapshotAndChoice",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Run.Get()));
+	TStrongObjectPtr<UWacomRunEventScreen> Screen(NewObject<UWacomRunEventScreen>());
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomAppToastWidget> ToastWidget(NewObject<UWacomAppToastWidget>());
+	ToastWidget->TakeWidget();
+	ToastSubsystem->SetToastWidgetOverrideForTest(ToastWidget.Get());
+
+	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(TEXT("Event.UI.Screen"), Event.Get()));
+	Screen->SetRunSessionOverrideForTest(Run.Get());
+	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
+	Screen->TakeWidget();
+	Screen->RefreshEvent();
+
+	TestEqual(TEXT("Screen title from snapshot"), Screen->GetTitleTextForTest().ToString(), FString(TEXT("UI标题")));
+	TestEqual(TEXT("Screen body from snapshot"), Screen->GetBodyTextForTest().ToString(), FString(TEXT("UI正文")));
+	TestEqual(TEXT("One choice row"), Screen->GetChoiceCountForTest(), 1);
+	TestEqual(TEXT("Choice label stored"),
+		Screen->GetChoiceSnapshotForTest(0).LabelText.ToString(),
+		FString(TEXT("关闭事件")));
+	TestTrue(TEXT("Choose close succeeds"), Screen->ChooseChoiceByIndexForTest(0));
+	TestTrue(TEXT("Event completed after choice"), Run->IsRunEventCompleted(TEXT("Event.UI.Screen")));
+	TestFalse(TEXT("Event no longer active after close choice"), Run->IsRunEventActive());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventScreenBlockedChoiceToastSpec,
+	"Wacom.UI.Event.ScreenBlockedChoiceToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventScreenBlockedChoiceToastSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(NewObject<UWacomRunEventDefinition>(Run.Get()));
+	TStrongObjectPtr<UWacomRunEventScreen> Screen(NewObject<UWacomRunEventScreen>());
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomAppToastWidget> ToastWidget(NewObject<UWacomAppToastWidget>());
+	ToastWidget->TakeWidget();
+	ToastSubsystem->SetToastWidgetOverrideForTest(ToastWidget.Get());
+
+	Event->EventId = TEXT("Event.UI.Blocked");
+	Event->DisplayName = FText::FromString(TEXT("禁用事件"));
+	Event->StartNodeId = TEXT("Start");
+	FWacomRunEventChoiceDefinition Locked;
+	Locked.ChoiceId = TEXT("Locked");
+	Locked.LabelText = FText::FromString(TEXT("金币选项"));
+	FWacomRunEventConditionDefinition GoldCondition;
+	GoldCondition.Type = EWacomRunEventConditionType::MinGold;
+	GoldCondition.Value = 1;
+	Locked.Conditions.Add(GoldCondition);
+	FWacomRunEventNodeDefinition Start;
+	Start.NodeId = TEXT("Start");
+	Start.Choices = { Locked };
+	Event->Nodes = { Start };
+
+	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(TEXT("Event.UI.Blocked.Actor"), Event.Get()));
+	Screen->SetRunSessionOverrideForTest(Run.Get());
+	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
+	Screen->TakeWidget();
+	Screen->RefreshEvent();
+
+	TestEqual(TEXT("One blocked choice"), Screen->GetChoiceCountForTest(), 1);
+	TestFalse(TEXT("Choice unavailable"), Screen->GetChoiceSnapshotForTest(0).bAvailable);
+	TestFalse(TEXT("Choosing blocked option fails"), Screen->ChooseChoiceByIndexForTest(0));
+	TestTrue(TEXT("Event remains active"), Run->IsRunEventActive());
+	TestEqual(TEXT("Blocked choice emits toast"), ToastWidget->GetVisibleToastCount(), 1);
+	const TArray<FWacomAppToastView> Toasts = ToastWidget->GetCurrentToastsForTest();
+	if (Toasts.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Blocked toast text"), Toasts[0].MessageText.ToString(), FString(TEXT("金币不足")));
+	}
 
 	return true;
 }

@@ -159,6 +159,28 @@ WacomRun 负责**战斗外的持久状态和存档**。
 
 `UShopDefinition.ShopId` 是静态内容 ID，不参与 `RunState.ShopStates` 的 key 选择；库存身份仍以场景商店的 `PersistentId` 为准。
 
+#### 探索事件
+
+| 方法 | 职责 |
+|---|---|
+| `BeginRunEvent(PersistentId, EventDefinition)` | 开始访问指定轻量事件图。`PersistentId` 是场景事件 Actor 的状态 key；已完成事件第一版拒绝重复打开 |
+| `EndRunEvent()` | 关闭当前事件访问，不改变完成状态 |
+| `IsRunEventActive()` | 当前是否处于事件访问 |
+| `IsRunEventCompleted(PersistentId)` | 查询某场景事件是否已完成 |
+| `BuildCurrentRunEventSnapshot()` | 构建当前事件只读快照，包含当前 Node 标题、正文、选项可用性和禁用原因 |
+| `ChooseRunEventOptionWithResult(ChoiceId)` | 选择当前 Node 的选项并返回 `FRunEventChoiceResult`，其中包含实际执行效果，供 UI/日志展示 |
+| `ChooseRunEventOption(ChoiceId)` | 兼容旧入口；内部转发到 `ChooseRunEventOptionWithResult()` 并返回是否成功 |
+
+事件第一版规则：
+- 事件内容来自 `UWacomRunEventDefinition`，运行态按场景 `PersistentId` 保存，不按 `EventDefinition.EventId` 共享。
+- 进入事件本身不消耗节点；只有选项 Effects 配置 `ConsumeNode` 时才消耗。
+- 条件 v1：金币足够、节点足够、压力不高于阈值、拥有/缺少指定卡牌、指定事件是否完成。
+- 效果 v1：获得卡牌、交出/移除一张拥有的卡、金币变化、压力变化、消耗节点、标记指定事件完成。
+- 卡牌条件和 `RemoveCard` 搜索全部拥有区：通量、备战、特殊存放区和负重区。`RemoveCard` 是永久移除，不发金币，并遵守固有卡/最后容量来源卡保护；移除 Companion 仍会增加嗜血。
+- 事件状态条件和 `MarkEventCompleted` 使用场景 Actor 的 `PersistentId`，不使用 `EventDefinition.EventId`；同一事件定义放在多个地点时状态彼此独立。
+- 选择结果包只表达本次选项直接效果：获得/移除卡牌、金币实际变化、压力 clamp 后的实际变化、实际消耗行动点、事件标记结果；它是表现/日志数据，不作为后续规则输入。
+- 当前只保存在 Run 内存态，暂不接 SaveGame；完成事件默认不可重复触发。
+
 #### 战斗联动 / 场景持久化 / 存档
 
 | 方法 | 职责 |
@@ -288,6 +310,14 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 | `ActiveShopId` | `FName` | 当前正在访问的商店节点 ID；`NAME_None` 表示没有打开商店 |
 | `bShopVisitHasPurchase` | `bool` | 当前商店访问内是否买过至少一件商品；关闭商店时据此消耗 1 节点 |
 | `ShopStates` | `TMap<FName, FRunShopState>` | 商店节点库存状态。Key 为商店/节点 `PersistentId`；当前只在 Run 内存态保留 |
+
+#### 探索事件状态
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ActiveRunEventId` | `FName` | 当前正在访问的事件节点 ID；`NAME_None` 表示没有打开事件 |
+| `ActiveRunEventDefinition` | `UWacomRunEventDefinition*` | 当前事件访问使用的静态事件图定义 |
+| `RunEventStates` | `TMap<FName, FRunEventState>` | 事件节点状态。Key 为场景事件 Actor 的 `PersistentId`；当前只在 Run 内存态保留 |
 
 #### 既有字段（R5 / S1 骨架）
 

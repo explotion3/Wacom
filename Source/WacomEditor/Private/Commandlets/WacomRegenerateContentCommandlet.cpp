@@ -2,11 +2,13 @@
 
 #include "Commandlets/WacomRegenerateContentCommandlet.h"
 #include "ContentBuilders/BugGirlBuilder.h"
+#include "ContentBuilders/RunEventBuilder.h"
 #include "ContentBuilders/ShopBuilder.h"
 #include "ContentBuilders/SnakeBuilder.h"
 
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Events/RunEventDefinition.h"
 #include "Shops/ShopDefinition.h"
 
 UWacomRegenerateContentCommandlet::UWacomRegenerateContentCommandlet()
@@ -44,6 +46,14 @@ int32 UWacomRegenerateContentCommandlet::Main(const FString& /*Params*/)
 		return 3;
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Shops built"));
+
+	UWacomRunEventDefinition* DebugEvent = Wacom::ContentBuilder::BuildRunEventContent();
+	if (!DebugEvent)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomRegenerateContent] BuildRunEventContent failed"));
+		return 4;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Run events built"));
 
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Done"));
 	return 0;

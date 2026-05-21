@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Events/RunEventDefinition.h"
 #include "GameplayTagContainer.h"
 #include "Session/BattleSession.h"  // FBattleInitParams
 #include "RunStateTypes.h"
@@ -11,6 +12,7 @@
 class UCharacterDefinition;
 class UCardDefinition;
 class UEnemyDefinition;
+class UWacomRunEventDefinition;
 
 /**
  * 单个战斗节点（Trigger）的进度快照（GDD §10.5 撤离重入）。
@@ -93,6 +95,113 @@ struct WACOMRUN_API FRunShopSnapshot
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	TArray<FRunShopOffer> Offers;
+};
+
+/** 单个场景事件节点在当前 Run 内的状态。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunEventState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	bool bCompleted = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName CurrentNodeId = NAME_None;
+};
+
+/** 当前事件选项的只读展示/校验快照。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunEventChoiceSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName ChoiceId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FText LabelText;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	bool bAvailable = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName DisabledReason = NAME_None;
+};
+
+/** 当前事件 UI/测试可读取的只读快照。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunEventSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName PersistentId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	bool bIsActive = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	bool bCompleted = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName EventId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName CurrentNodeId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FText TitleText;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FText BodyText;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TArray<FRunEventChoiceSnapshot> Choices;
+};
+
+/** 单条 RunEvent 选项效果的实际执行结果，用于 UI/日志表现，不作为规则输入。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunEventChoiceEffectResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	EWacomRunEventEffectType EffectType = EWacomRunEventEffectType::None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 Amount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 ActualDelta = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	EWacomPressureType PressureType = EWacomPressureType::Count;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	bool bApplied = false;
+};
+
+/** RunEvent 选项提交结果。UI 只读该结果并展示，不根据它修改 RunState。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunEventChoiceResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	bool bSucceeded = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName ChoiceId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName DisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TArray<FRunEventChoiceEffectResult> EffectResults;
 };
 
 /**
@@ -209,6 +318,14 @@ struct WACOMRUN_API FRunState
 	/** 当前商店访问内是否买过至少一件商品。关闭商店时据此消耗 1 节点。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	bool bShopVisitHasPurchase = false;
+
+	/** 当前正在访问的事件节点 ID。NAME_None 表示没有打开事件。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName ActiveRunEventId = NAME_None;
+
+	/** 当前事件访问使用的事件定义。仅内存态引用，不接第一版 SaveGame。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TObjectPtr<UWacomRunEventDefinition> ActiveRunEventDefinition = nullptr;
 
 	// ---- §8：时间与昼夜 ----
 
@@ -343,6 +460,10 @@ struct WACOMRUN_API FRunState
 	/** 商店节点库存状态。Key = 场景商店/节点 PersistentId；当前只在 Run 内存态保留，不接 SaveGame。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	TMap<FName, FRunShopState> ShopStates;
+
+	/** 事件节点状态。Key = 场景事件 Actor 的 PersistentId；当前只在 Run 内存态保留，不接 SaveGame。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TMap<FName, FRunEventState> RunEventStates;
 
 	/** 玩家在探索地图的 Transform。仅当 bHasPlayerTransform == true 时有效。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")

@@ -134,6 +134,33 @@ enum class EGameFlowState : uint8
 
 `ShopDefinition.ShopId` 是内容 ID，不替代 `PersistentId`。多个场景商店可以引用同一份商品定义，但仍通过各自 `PersistentId` 拥有独立库存。
 
+### RunEventTriggerActor
+
+`AWacomRunEventTriggerActor` 职责：
+- 场景中的探索事件交互触发器，和 Battle/Shop Trigger 共用 `IWacomWorldInteractable` 管线。
+- `PersistentId` 作为 Run 事件节点状态 key；RunSession 使用它保存当前节点和完成状态。
+- `EventDefinition` 引用 `UWacomRunEventDefinition` 静态事件图资产；多个 Actor 可引用同一事件定义，但状态按各自 `PersistentId` 独立。
+- 玩家按 E 后调用 `AWacomPlayerController::RequestOpenRunEvent(PersistentId, EventDefinition)`。
+- 已完成事件不会重复打开，但仍会显示 `CompletedPromptText` 弱提示；玩家按 E 时弹 `CompletedToastText`，用于说明该事件已经完成而不是交互失效。
+
+`UWacomRunEventScreen` 是第一版最小可用事件界面，Push 到 `UI_Layer_GameMenu`：
+- 打开时读取 `RunSession->BuildCurrentRunEventSnapshot()`。
+- 选项按钮只提交 `ChoiceId`，由 `RunSession->ChooseRunEventOptionWithResult()` 执行条件、效果、跳转和完成标记，并返回本次实际效果结果。
+- `UWacomRunEventPresentationBuilder` 负责把禁用原因和结果包转成中文 `FWacomAppToastView`；EventScreen 只负责播放 Toast，不在 UI 里预演规则。
+- `RemoveCard` 结果显示“交出卡牌：{卡名}”；`MarkEventCompleted` 默认不弹 Toast，避免把内部事件状态变化直接暴露给玩家。
+- 不可选选项会显示中文禁用原因，点击后也通过 AppToast 提示原因，但不会提交 Run 命令。
+- 事件界面关闭时调用 `EndRunEvent()`；选择关闭型选项时由 Run 层先清 active event，再 Deactivate。
+- 第一版 C++ fallback 只显示标题、正文、选项和禁用原因；正式 WBP 后续继承同一父类。
+
+关卡放置 Debug RunEvent 的步骤：
+1. 在关卡里放置 `AWacomRunEventTriggerActor`（或其蓝图子类）。
+2. `PersistentId` 填唯一值，例如 `Event.DebugSnakeGift.01`；同一事件定义放多个地点时也必须改成不同 ID。
+3. `EventDefinition` 指向 `/Game/Wacom/Events/DA_Event_DebugSnakeGift`。
+4. `InteractPromptText` 可填 `按 E 查看事件`。
+5. `CompletedPromptText` 可填 `事件已完成`，`CompletedToastText` 可填 `该事件已完成`。
+6. `TriggerRadius` 单位是 cm，原型验证建议先用 `200-300`。
+7. PIE 中玩家进入半径后，探索 HUD 显示交互提示；按 E 打开 `UWacomRunEventScreen`，选项结果通过 AppToast 显示。完成后再次靠近会显示弱提示，按 E 只弹完成提示。
+
 ---
 
 ## §6 UI 架构
@@ -161,7 +188,7 @@ enum class EGameFlowState : uint8
 - 生命周期：Subsystem 保证当前 GameInstance 内只有一个 AppToast Widget；探索局开始时由 PlayerController 预热，首次 Toast 触发时也会懒加载兜底；无消息时 `Collapsed`，队列有消息时 `HitTestInvisible`，播完后只隐藏不销毁
 - 输入：Toast Widget 为非焦点、HitTestInvisible，不抢菜单或探索输入
 - CommonUI 边界：AppToast 不进 CommonUI Stack，不成为 leaf-most active widget，不改变 `FUIInputConfig`；避免背包/商店关闭后探索 IMC 被 Overlay Toast 卡住
-- 当前接入：商店购买成功/失败、背包删牌成功
+- 当前接入：商店购买成功/失败、背包移动成功/失败、背包删牌成功/失败、RunEvent 选项结果/不可用原因
 - 边界：不合并战斗 `EventToast`，不复用 `ExplorationHUD` 的交互提示 Toast；它们分别服务不同节奏的反馈
 
 三类 Toast 分工：

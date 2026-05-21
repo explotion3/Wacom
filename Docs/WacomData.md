@@ -13,6 +13,7 @@ WacomData 负责**静态定义和 DataAsset**。
 - 敌人定义（UEnemyDefinition + UEnemyPartDefinition）
 - 角色定义（UCharacterDefinition）
 - 商店定义（UShopDefinition）
+- 探索事件定义（UWacomRunEventDefinition）
 - 意图定义（FIntentDefinition）
 - 效果结构（FCardEffect / FCardZoneHook / FCardPassive）
 - 条件结构（FEffectCondition）
@@ -31,6 +32,7 @@ Content/Wacom/
 ├── Cards/Rewards/DA_Card_PoisonFang.uasset
 ├── Characters/DA_Character_BugGirl.uasset
 ├── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
+├── Events/DA_Event_DebugSnakeGift.uasset
 └── Shops/DA_Shop_DebugSnake.uasset
 ```
 
@@ -202,7 +204,36 @@ struct FShopOfferDefinition
 
 当前生成内容：
 - `DA_Shop_DebugSnake`（蛇巢调试商店）：卖 `毒牙`、`赤腹工蚁`、`朝光暮蝶`、`虫妹的小布袋`。
+
+---
+
+## §6 UWacomRunEventDefinition 字段表
+
+`UWacomRunEventDefinition` 是轻量探索事件图 DataAsset：
+
+```cpp
+UCLASS(BlueprintType)
+class UWacomRunEventDefinition : public UPrimaryDataAsset
+{
+    UPROPERTY(EditDefaultsOnly) FName EventId;
+    UPROPERTY(EditDefaultsOnly) FText DisplayName;
+    UPROPERTY(EditDefaultsOnly) FName StartNodeId;
+    UPROPERTY(EditDefaultsOnly) TArray<FWacomRunEventNodeDefinition> Nodes;
+};
+```
+
+Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId / LabelText / Conditions / Effects / NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted`。
+
+当前条件：`MinGold / MinNodeCount / MaxPressure / HasCard / MissingCard / EventCompleted / EventNotCompleted`。当前效果：`GainCard / RemoveCard / AddGold / AddPressure / ConsumeNode / MarkEventCompleted`。压力类型在 DataAsset 中使用稳定 `FName`（`Hunger / Wound / Fatigue / Burden / Decay / Misdeed / Bloodlust / Disability`），由 `WacomRun` 执行时转换为运行时枚举，避免 `WacomData` 反向依赖 `WacomRun`。
+
+卡牌条件/效果使用 `CardDefinition` 字段。`HasCard / MissingCard` 会检查玩家全部拥有区：通量、备战、特殊存放区和负重区。`RemoveCard` 表示永久交出/移除一张拥有的卡，不发金币，并遵守 Run 层现有安全限制（固有卡、最后一张容量来源卡不可移除）。
+
+事件状态条件/效果使用 `TargetPersistentId` 字段，填写场景事件 Actor 的 `PersistentId`，不是 `EventDefinition.EventId`。`EventCompleted / EventNotCompleted` 读取对应状态；`MarkEventCompleted` 标记指定 `PersistentId` 完成。当前选项自身仍可继续使用 `bMarkEventCompleted` 标记当前事件完成。
+
+调试资产：
+- `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、消耗节点、调整金币/劣迹压力。
 - 价格为原型调试值，不代表正式平衡。
+- 自动化测试 `Wacom.Data.RunEvent.DebugSnakeGiftAsset` 会验证该资产的节点、选项、条件、效果和 `毒牙` 引用，避免内容生成漂移。
 
 ---
 

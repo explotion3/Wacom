@@ -1,0 +1,197 @@
+// Copyright Wacom. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Engine/DataAsset.h"
+#include "RunEventDefinition.generated.h"
+
+class UCardDefinition;
+
+UENUM(BlueprintType)
+enum class EWacomRunEventConditionType : uint8
+{
+	None,
+	MinGold,
+	MinNodeCount,
+	MaxPressure,
+	HasCard,
+	MissingCard,
+	EventCompleted,
+	EventNotCompleted,
+};
+
+UENUM(BlueprintType)
+enum class EWacomRunEventEffectType : uint8
+{
+	None,
+	GainCard,
+	AddGold,
+	AddPressure,
+	ConsumeNode,
+	RemoveCard,
+	MarkEventCompleted,
+};
+
+/** 轻量事件图选项条件。Run 层执行时按类型解释，DataAsset 只保存静态配置。 */
+USTRUCT(BlueprintType)
+struct WACOMDATA_API FWacomRunEventConditionDefinition
+{
+	GENERATED_BODY()
+
+	/** 条件类型。None 会被忽略。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "条件类型。None 表示该条条件被忽略。"))
+	EWacomRunEventConditionType Type = EWacomRunEventConditionType::None;
+
+	/** 条件数值。MinGold/MinNodeCount 表示至少需要的数量；MaxPressure 表示压力必须小于等于该值。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "条件数值。MinGold/MinNodeCount 表示至少需要的数量；MaxPressure 表示压力必须小于等于该值。建议范围 0-100。",
+			ClampMin = "0", UIMin = "0", UIMax = "100"))
+	int32 Value = 0;
+
+	/** 压力类型 ID，仅 MaxPressure 使用。可填 Hunger/Wound/Fatigue/Burden/Decay/Misdeed/Bloodlust/Disability。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "压力类型 ID，仅 MaxPressure 使用。可填 Hunger/Wound/Fatigue/Burden/Decay/Misdeed/Bloodlust/Disability。"))
+	FName PressureType = NAME_None;
+
+	/** 卡牌条件目标，仅 HasCard/MissingCard 使用。Run 层会检查玩家所有拥有区。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "卡牌条件目标，仅 HasCard/MissingCard 使用。Run 层会检查玩家所有拥有区：通量、备战、特殊存放区和负重区。"))
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
+
+	/** 事件状态条件目标，仅 EventCompleted/EventNotCompleted 使用。填写场景 Actor 的 PersistentId。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "事件状态条件目标，仅 EventCompleted/EventNotCompleted 使用。填写场景 Actor 的 PersistentId，而不是事件定义 EventId。"))
+	FName TargetPersistentId = NAME_None;
+};
+
+/** 轻量事件图选项效果。Run 层执行时按类型解释。 */
+USTRUCT(BlueprintType)
+struct WACOMDATA_API FWacomRunEventEffectDefinition
+{
+	GENERATED_BODY()
+
+	/** 效果类型。None 会被忽略。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "效果类型。None 表示该条效果被忽略。"))
+	EWacomRunEventEffectType Type = EWacomRunEventEffectType::None;
+
+	/** 卡牌奖励，仅 GainCard 使用。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "卡牌目标，仅 GainCard/RemoveCard 使用。GainCard 会获得该卡；RemoveCard 会从玩家拥有区永久移除一张该卡。"))
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
+
+	/** 效果数值。AddGold 可正可负；AddPressure 为压力增量；ConsumeNode 为消耗节点数。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "效果数值。AddGold 可正可负；AddPressure 为压力增量；ConsumeNode 为消耗节点数。建议范围 -100 到 100。",
+			ClampMin = "-100", ClampMax = "100", UIMin = "-10", UIMax = "10"))
+	int32 Value = 0;
+
+	/** 压力类型 ID，仅 AddPressure 使用。可填 Hunger/Wound/Fatigue/Burden/Decay/Misdeed/Bloodlust/Disability。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "压力类型 ID，仅 AddPressure 使用。可填 Hunger/Wound/Fatigue/Burden/Decay/Misdeed/Bloodlust/Disability。"))
+	FName PressureType = NAME_None;
+
+	/** 事件状态效果目标，仅 MarkEventCompleted 使用。填写要标记完成的场景 Actor PersistentId。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "事件状态效果目标，仅 MarkEventCompleted 使用。填写要标记完成的场景 Actor PersistentId，而不是事件定义 EventId。"))
+	FName TargetPersistentId = NAME_None;
+};
+
+/** 轻量事件图中的一个选项。 */
+USTRUCT(BlueprintType)
+struct WACOMDATA_API FWacomRunEventChoiceDefinition
+{
+	GENERATED_BODY()
+
+	/** 选项 ID。同一 Node 内必须唯一；Run 层按该 ID 提交选择。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "选项 ID。同一 Node 内必须唯一；Run 层按该 ID 提交选择。"))
+	FName ChoiceId = NAME_None;
+
+	/** 选项按钮显示文本。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "选项按钮显示文本。"))
+	FText LabelText;
+
+	/** 选项可用条件。所有条件都满足时才可选择。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "选项可用条件。所有条件都满足时才可选择；支持金币、节点、压力阈值、拥有卡牌和事件完成状态。"))
+	TArray<FWacomRunEventConditionDefinition> Conditions;
+
+	/** 选中后依次执行的效果。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "选中后依次执行的效果。支持获得/移除卡牌、金币变化、压力变化、消耗节点和标记事件完成。"))
+	TArray<FWacomRunEventEffectDefinition> Effects;
+
+	/** 执行后跳转到的 Node。为空且不关闭事件时，会留在当前 Node。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "执行后跳转到的 Node。为空且不关闭事件时，会留在当前 Node。"))
+	FName NextNodeId = NAME_None;
+
+	/** 选择后是否关闭事件界面。关闭前仍会先执行 Effects 和完成标记。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "选择后是否关闭事件界面。关闭前仍会先执行 Effects 和完成标记。"))
+	bool bCloseEventAfterResolve = false;
+
+	/** 选择后是否标记该 PersistentId 的事件已完成。已完成事件第一版不可重复打开。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "选择后是否标记该 PersistentId 的事件已完成。已完成事件第一版不可重复打开。"))
+	bool bMarkEventCompleted = false;
+};
+
+/** 轻量事件图中的一个文本节点。 */
+USTRUCT(BlueprintType)
+struct WACOMDATA_API FWacomRunEventNodeDefinition
+{
+	GENERATED_BODY()
+
+	/** 节点 ID。同一事件内必须唯一。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "节点 ID。同一事件内必须唯一；StartNodeId 和 Choice.NextNodeId 都通过它定位。"))
+	FName NodeId = NAME_None;
+
+	/** 当前节点标题。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "当前节点标题。"))
+	FText TitleText;
+
+	/** 当前节点正文。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "当前节点正文。"))
+	FText BodyText;
+
+	/** 当前节点可显示的选项列表。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "当前节点可显示的选项列表。"))
+	TArray<FWacomRunEventChoiceDefinition> Choices;
+};
+
+/** 轻量 Run 事件图定义。运行时状态由 URunSession 按场景 PersistentId 保存。 */
+UCLASS(BlueprintType)
+class WACOMDATA_API UWacomRunEventDefinition : public UPrimaryDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	/** 事件内容 ID，用于内容识别和调试；运行时状态 key 仍来自场景 EventTriggerActor.PersistentId。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "事件内容 ID，用于内容识别和调试；运行时状态 key 仍来自场景 EventTriggerActor 的 PersistentId。"))
+	FName EventId = NAME_None;
+
+	/** 事件显示名。EventScreen 第一版可用它作为兜底标题。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "事件显示名。EventScreen 第一版可用它作为兜底标题。"))
+	FText DisplayName;
+
+	/** 打开事件时进入的起始节点 ID。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "打开事件时进入的起始节点 ID。必须能在 Nodes 中找到对应 NodeId。"))
+	FName StartNodeId = NAME_None;
+
+	/** 事件图节点列表。第一版不做随机池和脚本回调，只按 NodeId/ChoiceId 跳转。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "事件图节点列表。第一版不做随机池和脚本回调，只按 NodeId/ChoiceId 跳转。"))
+	TArray<FWacomRunEventNodeDefinition> Nodes;
+};
