@@ -18,6 +18,7 @@
 #include "RunSession.h"
 #include "RunState.h"
 #include "UI/Shop/WacomShopOfferRowWidget.h"
+#include "UI/Shop/WacomShopPresentationBuilder.h"
 
 namespace
 {
@@ -168,6 +169,13 @@ bool UWacomShopScreen::PurchaseOfferByIndexForTest(int32 Index)
 	return PurchaseOffer(CachedOfferIds[Index]);
 }
 
+FWacomShopOfferPresentationView UWacomShopScreen::GetOfferPresentationViewForTest(int32 Index) const
+{
+	return CachedOfferViews.IsValidIndex(Index)
+		? CachedOfferViews[Index]
+		: FWacomShopOfferPresentationView();
+}
+
 FText UWacomShopScreen::GetGoldTextForTest() const
 {
 	return GoldText ? GoldText->GetText() : FText::GetEmpty();
@@ -191,6 +199,7 @@ URunSession* UWacomShopScreen::GetRunSession() const
 void UWacomShopScreen::RebuildOfferRows()
 {
 	CachedOfferIds.Reset();
+	CachedOfferViews.Reset();
 	if (OfferList)
 	{
 		OfferList->ClearChildren();
@@ -210,14 +219,18 @@ void UWacomShopScreen::RebuildOfferRows()
 		return;
 	}
 
-	for (const FRunShopOffer& Offer : Snapshot.Offers)
+	const int32 CurrentGold = Run ? Run->GetGold() : 0;
+	const TArray<FWacomShopOfferPresentationView> OfferViews =
+		UWacomShopPresentationBuilder::BuildOfferPresentationViews(Snapshot, CurrentGold);
+	CachedOfferViews = OfferViews;
+	for (const FWacomShopOfferPresentationView& OfferView : OfferViews)
 	{
-		CachedOfferIds.Add(Offer.OfferId);
-		AddOfferRow(Offer);
+		CachedOfferIds.Add(OfferView.OfferId);
+		AddOfferRow(OfferView);
 	}
 }
 
-void UWacomShopScreen::AddOfferRow(const FRunShopOffer& Offer)
+void UWacomShopScreen::AddOfferRow(const FWacomShopOfferPresentationView& OfferView)
 {
 	if (!WidgetTree || !OfferList)
 	{
@@ -226,7 +239,7 @@ void UWacomShopScreen::AddOfferRow(const FRunShopOffer& Offer)
 
 	UWacomShopOfferRowWidget* RowWidget = WidgetTree->ConstructWidget<UWacomShopOfferRowWidget>(
 		UWacomShopOfferRowWidget::StaticClass());
-	RowWidget->SetOffer(Offer);
+	RowWidget->SetOfferPresentationView(OfferView);
 	RowWidget->OnPurchaseRequestedNative.AddUObject(this, &UWacomShopScreen::HandleOfferPurchaseRequested);
 	if (UVerticalBoxSlot* RowSlot = OfferList->AddChildToVerticalBox(RowWidget))
 	{

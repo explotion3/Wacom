@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "UI/Foundation/WacomMenuWidgetBase.h"
+#include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "WacomShopScreen.generated.h"
 
 class UButton;
@@ -43,6 +44,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Shop")
 	bool PurchaseOfferByIndexForTest(int32 Index);
 
+	/** 测试/诊断用：读取当前列表中的第 Index 个商品表现数据。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
+	FWacomShopOfferPresentationView GetOfferPresentationViewForTest(int32 Index) const;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
@@ -70,13 +75,16 @@ protected:
 private:
 	URunSession* GetRunSession() const;
 	void RebuildOfferRows();
-	void AddOfferRow(const FRunShopOffer& Offer);
+	void AddOfferRow(const FWacomShopOfferPresentationView& OfferView);
 	UFUNCTION()
 	bool PurchaseOffer(FGuid OfferId);
 	void HandleOfferPurchaseRequested(FGuid OfferId);
 
 	UPROPERTY(Transient)
 	TArray<FGuid> CachedOfferIds;
+
+	UPROPERTY(Transient)
+	TArray<FWacomShopOfferPresentationView> CachedOfferViews;
 
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSessionOverride = nullptr;

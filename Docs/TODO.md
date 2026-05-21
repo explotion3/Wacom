@@ -57,7 +57,7 @@
 | 击倒事件 UI dialog 美术 | Stage 7 已落地：C++ 硬编码 CanvasPanel + Border + Button 布局，BindWidget 锚点 PartNameText/AidButton/WithdrawButton/DestroyButton 就位 | 美术阶段配 WBP 即接 |
 | 地图系统（Stage 8）| 节点/通道/迷雾/撤离回路规则已在 GDD §10 确认，代码未开始 | 新建 WacomMap 模块或放 WacomRun 下 |
 | 节点事件（Stage 9）| 露营/野炊/探险/事件规则已在 GDD §10 确认，代码未开始；商店购买的 Run 层基础 API、世界交互入口、固定 `ShopDefinition` 商品来源和最小 ShopScreen 已就位 | 强依赖 Stage 8 地图系统完成；商店后续补商品池、价格表、节点事件奖励表 |
-| 商店内容与 UI | `RunSession::BeginShopVisit(ShopId, Offers) / BuildCurrentShopSnapshot / PurchaseShopOffer / EndShopVisit` 已支持按节点持久化库存、已购买状态、关闭商店时按访问扣 1 节点；`AWacomShopTriggerActor` 可引用 `UShopDefinition` 或兼容旧手动 Offers；`DA_Shop_DebugSnake` 已作为调试商店内容 | 后续设计随机商品池、价格公式、正式 `WBP_ShopScreen`、商品预览接 `CardPresentationBuilder`、存档接入 `ShopStates`；当前 `ShopStates` 暂不进 SaveGame |
+| 商店内容与 UI | `RunSession::BeginShopVisit(ShopId, Offers) / BuildCurrentShopSnapshot / PurchaseShopOffer / EndShopVisit` 已支持按节点持久化库存、已购买状态、关闭商店时按访问扣 1 节点；`AWacomShopTriggerActor` 可引用 `UShopDefinition` 或兼容旧手动 Offers；`DA_Shop_DebugSnake` 已作为调试商店内容；商品行已通过 `UWacomShopPresentationBuilder` 输出 ViewData 并复用卡牌展示 Builder | 后续设计随机商品池、价格公式、正式 `WBP_ShopScreen`、商品卡面预览、hover 详情、存档接入 `ShopStates`；当前 `ShopStates` 暂不进 SaveGame |
 
 ### UI / 表现层
 
@@ -85,7 +85,7 @@
 | GAS（GameplayAbilitySystem）| 不使用 | 保持不引入，战斗用自研 Resolver/Executor |
 | UI 架构迁移 MVVM | M1+M2 已落地：Run 域走 ViewModel + Provider 订阅模型；C++ 父类硬编码布局 + 订阅粗粒度多播 + 手动 SetText；FieldNotify 字段就位但未被 WBP ViewBinding 消费 | 美术阶段切 WBP：ViewModel 加到 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 绑字段到 TextBlock/ProgressBar；C++ 父类 SetText 路径作 fallback 保留 → 全 WBP 后逐步删 |
 | 战斗 UI 接 ViewModel | 保留 Snapshot 推送模型（BattleHUD 作 Controller 递归 RefreshFromSnapshot） | 第一阶段不动。如果将来非战斗 widget 需要"看战斗状态"（如击倒事件 UI / 探索期小窗），加 `UWacomBattleViewModel` 作外部观察入口；子 widget 内部仍用 Snapshot |
-| 卡牌 UI 展示数据复用 | `UWacomCardPresentationBuilder` 已从 `UWacomCardView` 抽出；背包卡牌、拖拽预览、详情面板、战斗手牌已走统一构建入口；旧 `UWacomCardView::Build*` 静态函数仅作兼容转发 | 后续奖励、商店、事件预览等卡牌显示统一接入 Builder；确认无蓝图/代码依赖后再考虑移除旧兼容入口 |
+| 卡牌 UI 展示数据复用 | `UWacomCardPresentationBuilder` 已从 `UWacomCardView` 抽出；背包卡牌、拖拽预览、详情面板、战斗手牌、商店商品展示 ViewData 已走统一构建入口；旧 `UWacomCardView::Build*` 静态函数仅作兼容转发 | 后续奖励、事件预览等卡牌显示统一接入 Builder；确认无蓝图/代码依赖后再考虑移除旧兼容入口 |
 | 战斗手牌 WBP 承接 | `UCardWidget` 已支持可选 `CardView / HoverVisualRoot`、缺槽容错、运行时费用展示、hover 上浮/缩放和详情上报；`BattleHUD` 已优先加载 `WBP_HandPanel` 并管理手牌 hover 详情；`Docs/UI_Battle_WBP_Binding.md` 已记录 WBP 绑定清单与 PIE 检查项 | 后续在编辑器中调整正式战斗手牌 WBP；选中突出、扇形布局、拖拽出牌和详情样式美术化另行推进 |
 | 背包 UI Presenter 收口 | `UWacomBackpackScreenPresenter` 已抽出标题文本、投影来源、详情数据和悬浮定位等纯展示逻辑；`SpecialZoneWidget` 标题/已出战可见性也已改走 Presenter；`BackpackScreen` 继续负责 Widget 编排和命令提交 | 后续如 `BackpackScreen` 继续膨胀，可再抽列表 section view data 或命令协调对象；当前不把拖拽/确认框/RunSession 命令搬进 Presenter |
 

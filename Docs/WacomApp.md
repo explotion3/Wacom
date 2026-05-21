@@ -420,7 +420,10 @@ ExitBattle → Pop BattleHUD，ExplorationHUD 重新 active，并在 NativeOnAct
 `UWacomShopScreen` 是第一版最小可用商店界面，Push 到 `UI_Layer_GameMenu`：
 
 - 数据源：`URunSession::BuildCurrentShopSnapshot()`
+- 商品表现：`UWacomShopPresentationBuilder` 把 `FRunShopOffer + 当前金币` 转成 `FWacomShopOfferPresentationView`
+- 卡牌展示：商品 ViewData 内部复用 `UWacomCardPresentationBuilder::BuildCardViewData()`
 - 商品购买：点击 Offer 行按钮调用 `URunSession::PurchaseShopOffer(OfferId)`，成功后刷新列表和金币
+- Offer 行只渲染 ViewData 并广播购买请求，不直接解析 `CardDefinition` 或判断金币状态
 - 关闭结算：`NativeOnDeactivated` 中调用一次 `URunSession::EndShopVisit()`
 - 默认 C++ fallback 可运行；后续可创建 `/Game/Wacom/UI/Shop/WBP_ShopScreen` 继承本类替换视觉
 

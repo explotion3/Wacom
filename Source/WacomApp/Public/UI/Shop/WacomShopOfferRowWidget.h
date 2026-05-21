@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "RunState.h"
+#include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "WacomShopOfferRowWidget.generated.h"
 
 class UButton;
@@ -20,7 +21,11 @@ public:
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnShopOfferPurchaseRequestedNative, FGuid);
 	FOnShopOfferPurchaseRequestedNative OnPurchaseRequestedNative;
 
+	void SetOfferPresentationView(const FWacomShopOfferPresentationView& InView);
 	void SetOffer(const FRunShopOffer& InOffer);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
+	FWacomShopOfferPresentationView GetOfferPresentationView() const { return OfferView; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -33,8 +38,11 @@ protected:
 	TObjectPtr<UTextBlock> OfferText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> StatusText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> BuyButton;
 
 private:
-	FRunShopOffer Offer;
+	FWacomShopOfferPresentationView OfferView;
 };

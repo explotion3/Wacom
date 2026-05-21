@@ -5,7 +5,6 @@
 #define LOCTEXT_NAMESPACE "WacomShopOfferRowWidget"
 
 #include "Blueprint/WidgetTree.h"
-#include "Cards/CardDefinition.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "Components/HorizontalBox.h"
@@ -23,18 +22,6 @@ namespace
 		Block->SetFont(Font);
 		Block->SetColorAndOpacity(FSlateColor(FLinearColor(0.95f, 0.95f, 0.95f, 1.f)));
 		return Block;
-	}
-
-	FText GetOfferCardName(const FRunShopOffer& Offer)
-	{
-		const UCardDefinition* Card = Offer.CardDefinition.Get();
-		if (!Card)
-		{
-			return LOCTEXT("MissingCard", "未知卡牌");
-		}
-		return Card->DisplayName.IsEmpty()
-			? FText::FromName(Card->CardId)
-			: Card->DisplayName;
 	}
 }
 
@@ -62,6 +49,14 @@ TSharedRef<SWidget> UWacomShopOfferRowWidget::RebuildWidget()
 			LabelSlot->SetVerticalAlignment(VAlign_Center);
 		}
 
+		StatusText = MakeRowText(WidgetTree, TEXT("StatusText"), FText::GetEmpty(), 15);
+		StatusText->SetColorAndOpacity(FSlateColor(FLinearColor(0.78f, 0.78f, 0.78f, 1.f)));
+		if (UHorizontalBoxSlot* StatusSlot = Row->AddChildToHorizontalBox(StatusText))
+		{
+			StatusSlot->SetPadding(FMargin(12.f, 0.f, 0.f, 0.f));
+			StatusSlot->SetVerticalAlignment(VAlign_Center);
+		}
+
 		BuyButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("BuyButton"));
 		UTextBlock* BuyText = MakeRowText(WidgetTree, TEXT("BuyText"), LOCTEXT("Buy", "购买"), 16);
 		BuyText->SetJustification(ETextJustify::Center);
@@ -83,36 +78,52 @@ void UWacomShopOfferRowWidget::NativeConstruct()
 	{
 		BuyButton->OnClicked.AddUniqueDynamic(this, &UWacomShopOfferRowWidget::HandleBuyClicked);
 	}
-	SetOffer(Offer);
+	SetOfferPresentationView(OfferView);
 }
 
 void UWacomShopOfferRowWidget::SetOffer(const FRunShopOffer& InOffer)
 {
-	Offer = InOffer;
+	SetOfferPresentationView(UWacomShopPresentationBuilder::BuildOfferPresentationView(
+		InOffer,
+		/*CurrentGold*/ 0));
+}
+
+void UWacomShopOfferRowWidget::SetOfferPresentationView(const FWacomShopOfferPresentationView& InView)
+{
+	OfferView = InView;
 
 	if (OfferText)
 	{
 		OfferText->SetText(FText::Format(
-			LOCTEXT("OfferLine", "{0}    {1} 金币"),
-			GetOfferCardName(Offer),
-			FText::AsNumber(Offer.Price)));
+			LOCTEXT("OfferLine", "{0}    {1}"),
+			OfferView.CardNameText,
+			OfferView.PriceText));
+	}
+
+	if (StatusText)
+	{
+		StatusText->SetText(OfferView.StatusText);
+		StatusText->SetVisibility(OfferView.StatusText.IsEmpty()
+			? ESlateVisibility::Collapsed
+			: ESlateVisibility::HitTestInvisible);
 	}
 
 	if (BuyButton)
 	{
-		BuyButton->SetIsEnabled(!Offer.bPurchased);
+		BuyButton->SetIsEnabled(OfferView.bCanPurchase);
 		if (UTextBlock* ButtonText = Cast<UTextBlock>(BuyButton->GetChildAt(0)))
 		{
-			ButtonText->SetText(Offer.bPurchased
-				? LOCTEXT("Purchased", "已购买")
-				: LOCTEXT("Buy", "购买"));
+			ButtonText->SetText(OfferView.ActionText);
 		}
 	}
 }
 
 void UWacomShopOfferRowWidget::HandleBuyClicked()
 {
-	OnPurchaseRequestedNative.Broadcast(Offer.OfferId);
+	if (OfferView.bCanPurchase)
+	{
+		OnPurchaseRequestedNative.Broadcast(OfferView.OfferId);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

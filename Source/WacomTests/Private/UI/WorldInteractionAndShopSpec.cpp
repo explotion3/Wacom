@@ -11,6 +11,10 @@
 #include "RunSession.h"
 #include "RunState.h"
 #include "Shops/ShopDefinition.h"
+#include "Tags/WacomGameplayTags.h"
+#include "UI/Card/WacomCardPresentationTypes.h"
+#include "UI/Shop/WacomShopOfferRowWidget.h"
+#include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "UI/Shop/WacomShopScreen.h"
 
 #include "UObject/StrongObjectPtr.h"
@@ -122,6 +126,98 @@ bool FWacomUIWorldInteractionBattleTriggerCompatibilitySpec::RunTest(const FStri
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopOfferPresentationBuilderSpec,
+	"Wacom.UI.Shop.OfferPresentationBuilder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopOfferPresentationBuilderSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* DamageCard = Fx.MakeSimpleDamageCard(/*Cost*/2, /*Damage*/5);
+	DamageCard->CardId = TEXT("Shop.Damage");
+	DamageCard->DisplayName = FText::FromString(TEXT("伤害商品"));
+
+	FRunShopOffer Offer;
+	Offer.OfferId = FGuid::NewGuid();
+	Offer.CardDefinition = DamageCard;
+	Offer.Price = 3;
+
+	FWacomShopOfferPresentationView View =
+		UWacomShopPresentationBuilder::BuildOfferPresentationView(Offer, /*CurrentGold*/ 5);
+	TestTrue(TEXT("Affordable offer can be purchased"), View.bCanPurchase);
+	TestEqual(TEXT("Affordable action text"), View.ActionText.ToString(), FString(TEXT("购买")));
+	TestEqual(TEXT("Affordable disabled reason"), View.DisabledReason, NAME_None);
+	TestEqual(TEXT("Price text uses gold"), View.PriceText.ToString(), FString(TEXT("3 金币")));
+	TestEqual(TEXT("Card view data name from card builder"), View.CardViewData.Name.ToString(), FString(TEXT("伤害商品")));
+	TestEqual(TEXT("Card view data cost from card builder"), View.CardViewData.Cost, 2);
+	TestEqual(TEXT("Card view data has one badge"), View.CardViewData.EffectBadges.Num(), 1);
+	if (View.CardViewData.EffectBadges.IsValidIndex(0))
+	{
+		TestTrue(TEXT("Badge is damage"),
+			View.CardViewData.EffectBadges[0].Kind == EWacomCardViewEffectBadgeKind::Damage);
+		TestEqual(TEXT("Damage badge value"), View.CardViewData.EffectBadges[0].Value, 5);
+	}
+
+	Offer.bPurchased = true;
+	View = UWacomShopPresentationBuilder::BuildOfferPresentationView(Offer, /*CurrentGold*/ 5);
+	TestFalse(TEXT("Purchased offer disabled"), View.bCanPurchase);
+	TestEqual(TEXT("Purchased action text"), View.ActionText.ToString(), FString(TEXT("已购买")));
+	TestEqual(TEXT("Purchased reason"), View.DisabledReason, FName(TEXT("Purchased")));
+
+	Offer.bPurchased = false;
+	View = UWacomShopPresentationBuilder::BuildOfferPresentationView(Offer, /*CurrentGold*/ 1);
+	TestFalse(TEXT("Insufficient gold disabled"), View.bCanPurchase);
+	TestEqual(TEXT("Insufficient action text"), View.ActionText.ToString(), FString(TEXT("金币不足")));
+	TestEqual(TEXT("Insufficient reason"), View.DisabledReason, FName(TEXT("InsufficientGold")));
+
+	Offer.Price = 0;
+	View = UWacomShopPresentationBuilder::BuildOfferPresentationView(Offer, /*CurrentGold*/ 0);
+	TestTrue(TEXT("Free offer can be purchased"), View.bCanPurchase);
+	TestEqual(TEXT("Free price text"), View.PriceText.ToString(), FString(TEXT("免费")));
+
+	Offer.CardDefinition = nullptr;
+	View = UWacomShopPresentationBuilder::BuildOfferPresentationView(Offer, /*CurrentGold*/ 99);
+	TestFalse(TEXT("Missing card disabled"), View.bCanPurchase);
+	TestEqual(TEXT("Missing card name"), View.CardNameText.ToString(), FString(TEXT("未知卡牌")));
+	TestEqual(TEXT("Missing card action text"), View.ActionText.ToString(), FString(TEXT("不可购买")));
+	TestEqual(TEXT("Missing card reason"), View.DisabledReason, FName(TEXT("MissingCard")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopOfferRowPresentationSpec,
+	"Wacom.UI.Shop.OfferRowPresentation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopOfferRowPresentationSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomShopOfferPresentationView View;
+	View.OfferId = FGuid::NewGuid();
+	View.CardNameText = FText::FromString(TEXT("行测试卡"));
+	View.PriceText = FText::FromString(TEXT("免费"));
+	View.ActionText = FText::FromString(TEXT("购买"));
+	View.bCanPurchase = true;
+
+	TStrongObjectPtr<UWacomShopOfferRowWidget> Row(NewObject<UWacomShopOfferRowWidget>());
+	Row->TakeWidget();
+	Row->SetOfferPresentationView(View);
+	TestEqual(TEXT("Row stores presentation view"), Row->GetOfferPresentationView().OfferId, View.OfferId);
+	TestTrue(TEXT("Row stored offer remains purchasable"), Row->GetOfferPresentationView().bCanPurchase);
+
+	View.bCanPurchase = false;
+	View.ActionText = FText::FromString(TEXT("金币不足"));
+	View.DisabledReason = TEXT("InsufficientGold");
+	Row->SetOfferPresentationView(View);
+	TestFalse(TEXT("Row stores disabled view"), Row->GetOfferPresentationView().bCanPurchase);
+	TestEqual(TEXT("Row disabled reason stored"),
+		Row->GetOfferPresentationView().DisabledReason,
+		FName(TEXT("InsufficientGold")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIShopScreenSnapshotAndPurchaseSpec,
 	"Wacom.UI.Shop.ScreenSnapshotAndPurchase",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -132,6 +228,9 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	UCardDefinition* ShopCard = Fx.MakeNoopCard(0);
 	ShopCard->CardId = TEXT("Shop.Test.Card");
 	ShopCard->DisplayName = FText::FromString(TEXT("商店测试卡"));
+	UCardDefinition* SecondCard = Fx.MakeNoopCard(0);
+	SecondCard->CardId = TEXT("Shop.Test.Second");
+	SecondCard->DisplayName = FText::FromString(TEXT("第二张商店卡"));
 
 	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
@@ -146,16 +245,27 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	Run->AddGold(5);
 	TArray<FRunShopOfferInput> Offers;
 	Offers.Add({ ShopCard, 3 });
+	Offers.Add({ SecondCard, 3 });
 	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Screen"), Offers));
 
 	Screen->SetRunSessionOverrideForTest(Run.Get());
 	Screen->TakeWidget();
 	Screen->RefreshShop();
 
-	TestEqual(TEXT("One offer row"), Screen->GetOfferRowCount(), 1);
+	TestEqual(TEXT("Two offer rows"), Screen->GetOfferRowCount(), 2);
+	TestTrue(TEXT("First offer starts purchasable"), Screen->GetOfferPresentationViewForTest(0).bCanPurchase);
+	TestTrue(TEXT("Second offer starts purchasable"), Screen->GetOfferPresentationViewForTest(1).bCanPurchase);
 	TestTrue(TEXT("Gold text reflects run gold"), Screen->GetGoldTextForTest().ToString().Contains(TEXT("5")));
 	TestTrue(TEXT("Purchase first offer succeeds"), Screen->PurchaseOfferByIndexForTest(0));
 	TestEqual(TEXT("Gold after purchase"), Run->GetGold(), 2);
+	TestFalse(TEXT("Purchased offer disabled after refresh"), Screen->GetOfferPresentationViewForTest(0).bCanPurchase);
+	TestEqual(TEXT("Purchased offer action after refresh"),
+		Screen->GetOfferPresentationViewForTest(0).ActionText.ToString(),
+		FString(TEXT("已购买")));
+	TestFalse(TEXT("Second offer disabled after gold drops"), Screen->GetOfferPresentationViewForTest(1).bCanPurchase);
+	TestEqual(TEXT("Second offer becomes insufficient"),
+		Screen->GetOfferPresentationViewForTest(1).DisabledReason,
+		FName(TEXT("InsufficientGold")));
 	const FRunBackpackStorageSnapshot StorageSnapshot = Run->BuildBackpackStorageSnapshot();
 	TestTrue(TEXT("Purchased card enters run storage"),
 		StorageSnapshot.Flux.ContentCards.ContainsByPredicate([ShopCard](const FRunStorageCardView& CardView)
