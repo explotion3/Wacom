@@ -10,6 +10,7 @@
 #include "Interaction/WacomWorldInteractable.h"
 #include "RunSession.h"
 #include "RunState.h"
+#include "Shops/ShopDefinition.h"
 #include "UI/Shop/WacomShopScreen.h"
 
 #include "UObject/StrongObjectPtr.h"
@@ -171,6 +172,52 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	Run->EndShopVisit();
 	TestFalse(TEXT("Shop visit closed"), Run->IsShopVisitActive());
 	TestEqual(TEXT("Close after purchase consumes one node"), Run->GetRemainingNodeCount(), NodesBeforeClose - 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopTriggerDefinitionOffersSpec,
+	"Wacom.UI.Shop.TriggerDefinitionOffers",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopTriggerDefinitionOffersSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* DefinitionCard = Fx.MakeNoopCard(0);
+	DefinitionCard->CardId = TEXT("Shop.Definition.Card");
+	UCardDefinition* ManualCard = Fx.MakeNoopCard(0);
+	ManualCard->CardId = TEXT("Shop.Manual.Card");
+
+	TStrongObjectPtr<UShopDefinition> ShopDefinition(NewObject<UShopDefinition>());
+	ShopDefinition->ShopId = TEXT("Shop.Definition");
+	ShopDefinition->DisplayName = FText::FromString(TEXT("测试商店定义"));
+	FShopOfferDefinition DefinitionOffer;
+	DefinitionOffer.CardDefinition = DefinitionCard;
+	DefinitionOffer.Price = 2;
+	ShopDefinition->Offers.Add(DefinitionOffer);
+
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	Shop->PersistentId = TEXT("Shop.TriggerDefinition");
+	Shop->ShopDefinition = ShopDefinition.Get();
+	Shop->Offers.Add({ ManualCard, 9 });
+
+	TArray<FRunShopOfferInput> ResolvedOffers = Shop->BuildResolvedOffers();
+	TestEqual(TEXT("Definition offer wins count"), ResolvedOffers.Num(), 1);
+	if (ResolvedOffers.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Definition offer wins card"), ResolvedOffers[0].CardDefinition.Get(), DefinitionCard);
+		TestEqual(TEXT("Definition offer wins price"), ResolvedOffers[0].Price, 2);
+	}
+
+	Shop->ShopDefinition = nullptr;
+	ResolvedOffers = Shop->BuildResolvedOffers();
+	TestEqual(TEXT("Manual offers fallback count"), ResolvedOffers.Num(), 1);
+	if (ResolvedOffers.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Manual fallback card"), ResolvedOffers[0].CardDefinition.Get(), ManualCard);
+		TestEqual(TEXT("Manual fallback price"), ResolvedOffers[0].Price, 9);
+	}
 
 	return true;
 }

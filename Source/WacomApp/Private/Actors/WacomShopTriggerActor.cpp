@@ -9,6 +9,7 @@
 #include "GameFramework/Pawn.h"
 
 #include "GameFramework/WacomPlayerController.h"
+#include "Shops/ShopDefinition.h"
 
 AWacomShopTriggerActor::AWacomShopTriggerActor()
 {
@@ -122,13 +123,32 @@ bool AWacomShopTriggerActor::CanInteract_Implementation(AWacomPlayerController* 
 	return PC && !PersistentId.IsNone();
 }
 
+TArray<FRunShopOfferInput> AWacomShopTriggerActor::BuildResolvedOffers() const
+{
+	if (!ShopDefinition)
+	{
+		return Offers;
+	}
+
+	TArray<FRunShopOfferInput> ResolvedOffers;
+	ResolvedOffers.Reserve(ShopDefinition->Offers.Num());
+	for (const FShopOfferDefinition& OfferDefinition : ShopDefinition->Offers)
+	{
+		FRunShopOfferInput OfferInput;
+		OfferInput.CardDefinition = OfferDefinition.CardDefinition;
+		OfferInput.Price = OfferDefinition.Price;
+		ResolvedOffers.Add(OfferInput);
+	}
+	return ResolvedOffers;
+}
+
 bool AWacomShopTriggerActor::TryInteract_Implementation(AWacomPlayerController* PC)
 {
 	if (!CanInteract_Implementation(PC))
 	{
 		return false;
 	}
-	return PC->RequestOpenShop(PersistentId, Offers);
+	return PC->RequestOpenShop(PersistentId, BuildResolvedOffers());
 }
 
 #undef LOCTEXT_NAMESPACE

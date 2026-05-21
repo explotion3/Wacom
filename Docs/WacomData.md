@@ -12,6 +12,7 @@ WacomData 负责**静态定义和 DataAsset**。
 - 卡牌定义（UCardDefinition）
 - 敌人定义（UEnemyDefinition + UEnemyPartDefinition）
 - 角色定义（UCharacterDefinition）
+- 商店定义（UShopDefinition）
 - 意图定义（FIntentDefinition）
 - 效果结构（FCardEffect / FCardZoneHook / FCardPassive）
 - 条件结构（FEffectCondition）
@@ -29,7 +30,8 @@ Content/Wacom/
 ├── Cards/BugGirl/DA_Card_*.uasset
 ├── Cards/Rewards/DA_Card_PoisonFang.uasset
 ├── Characters/DA_Character_BugGirl.uasset
-└── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
+├── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
+└── Shops/DA_Shop_DebugSnake.uasset
 ```
 
 ---
@@ -177,7 +179,34 @@ class UCharacterDefinition : public UPrimaryDataAsset
 
 ---
 
-## §5 GameplayTag 清单
+## §5 UShopDefinition 字段表
+
+```cpp
+UCLASS(BlueprintType)
+class UShopDefinition : public UPrimaryDataAsset
+{
+    UPROPERTY(EditDefaultsOnly) FName ShopId;          // 内容 ID，不是运行时库存 key
+    UPROPERTY(EditDefaultsOnly) FText DisplayName;     // 商店显示名
+    UPROPERTY(EditDefaultsOnly) TArray<FShopOfferDefinition> Offers;
+};
+
+USTRUCT(BlueprintType)
+struct FShopOfferDefinition
+{
+    UPROPERTY(EditDefaultsOnly) UCardDefinition* CardDefinition;
+    UPROPERTY(EditDefaultsOnly) int32 Price = 0;       // 金币价格，0 表示免费
+};
+```
+
+`UShopDefinition` 只定义静态商品内容，不保存购买状态。当前 Run 内的库存和已购买状态仍由 `AWacomShopTriggerActor.PersistentId` 作为 key 存在 `URunSession` 中。
+
+当前生成内容：
+- `DA_Shop_DebugSnake`（蛇巢调试商店）：卖 `毒牙`、`赤腹工蚁`、`朝光暮蝶`、`虫妹的小布袋`。
+- 价格为原型调试值，不代表正式平衡。
+
+---
+
+## §6 GameplayTag 清单
 
 所有 tag 在 `WacomCore/Public/Tags/WacomGameplayTags.h` 中声明。严禁业务代码里用字符串拼 tag。
 

@@ -2,10 +2,12 @@
 
 #include "Commandlets/WacomRegenerateContentCommandlet.h"
 #include "ContentBuilders/BugGirlBuilder.h"
+#include "ContentBuilders/ShopBuilder.h"
 #include "ContentBuilders/SnakeBuilder.h"
 
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Shops/ShopDefinition.h"
 
 UWacomRegenerateContentCommandlet::UWacomRegenerateContentCommandlet()
 {
@@ -34,6 +36,14 @@ int32 UWacomRegenerateContentCommandlet::Main(const FString& /*Params*/)
 		return 2;
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] BugGirl built"));
+
+	UShopDefinition* DebugShop = Wacom::ContentBuilder::BuildShopContent();
+	if (!DebugShop)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomRegenerateContent] BuildShopContent failed"));
+		return 3;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Shops built"));
 
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Done"));
 	return 0;

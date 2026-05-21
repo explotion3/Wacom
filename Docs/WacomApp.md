@@ -127,9 +127,12 @@ enum class EGameFlowState : uint8
 
 - 场景中的商店交互触发器，和 BattleTriggerActor 共用 `IWacomWorldInteractable` 管线
 - `PersistentId` 作为 Run 商店节点 ID；RunSession 使用它保存库存和已购买状态
-- `Offers` 由关卡 Actor 手动配置；同一 `PersistentId` 第一次打开时初始化库存，之后重复打开保留旧库存
+- `ShopDefinition` 可引用 `UShopDefinition` 静态商品资产；配置后优先使用资产商品列表
+- `Offers` 作为旧关卡兼容兜底；未配置 `ShopDefinition` 时才使用手动商品列表
 - 玩家按 E 后调用 `AWacomPlayerController::RequestOpenShop(PersistentId, Offers)`
 - 不切换 `EGameFlowState`，商店只是 GameMenu 层界面；关闭商店时由 Run 层按购买情况结算节点
+
+`ShopDefinition.ShopId` 是内容 ID，不替代 `PersistentId`。多个场景商店可以引用同一份商品定义，但仍通过各自 `PersistentId` 拥有独立库存。
 
 ---
 

@@ -150,10 +150,12 @@ WacomRun 负责**战斗外的持久状态和存档**。
 - 购买卡牌直接进入背包，不自动加入备战区。
 - 场景商店入口使用 `AWacomShopTriggerActor.PersistentId` 作为 `ShopId`。
 - 商店库存按 `ShopId` 在当前 Run 内存态保留；本轮不接 SaveGame。
-- 商品列表由调用方传入；本轮不硬编码商品资产路径。
+- 商品列表由调用方传入；`AWacomShopTriggerActor` 可从 `UShopDefinition` 解析固定商品，也可兼容旧手动 Offers。
 - 进入商店但不购买不消耗节点；买过任意商品后，关闭商店时统一消耗 1 节点。
 - `ShopId == NAME_None`、未知 Offer、重复购买、金币不足等失败路径不修改 RunState。
 - UI 入口为 `UWacomShopScreen`：打开时只读取快照，购买时提交 `PurchaseShopOffer`，关闭时调用 `EndShopVisit`。
+
+`UShopDefinition.ShopId` 是静态内容 ID，不参与 `RunState.ShopStates` 的 key 选择；库存身份仍以场景商店的 `PersistentId` 为准。
 
 #### 战斗联动 / 场景持久化 / 存档
 

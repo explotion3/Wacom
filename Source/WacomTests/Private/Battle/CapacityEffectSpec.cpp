@@ -11,6 +11,7 @@
 #include "Cards/CardEffect.h"
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Shops/ShopDefinition.h"
 #include "Tags/WacomGameplayTags.h"
 
 #include "UObject/StrongObjectPtr.h"
@@ -142,6 +143,63 @@ bool FWacomBattleKnockdownRewardPoisonFangAssetSpec::RunTest(const FString& /*Pa
 			FString::Printf(TEXT("Snake part reward is PoisonFang: %s"), PartPath),
 			Part->KnockdownRewardCard.Get(),
 			PoisonFang);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataShopDebugSnakeAssetSpec,
+	"Wacom.Data.Shop.DebugSnakeAsset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UShopDefinition* DebugShop = LoadObject<UShopDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Shops/DA_Shop_DebugSnake.DA_Shop_DebugSnake"));
+
+	if (!TestNotNull(TEXT("DebugSnake shop asset loads"), DebugShop))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("DebugSnake ShopId"), DebugShop->ShopId, FName(TEXT("Shop.DebugSnake")));
+	TestEqual(TEXT("DebugSnake DisplayName"), DebugShop->DisplayName.ToString(), FString(TEXT("蛇巢调试商店")));
+	TestEqual(TEXT("DebugSnake offer count"), DebugShop->Offers.Num(), 4);
+
+	struct FExpectedOffer
+	{
+		const TCHAR* ObjectPath;
+		int32 Price;
+	};
+	const FExpectedOffer ExpectedOffers[] =
+	{
+		{ TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"), 0 },
+		{ TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"), 2 },
+		{ TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"), 2 },
+		{ TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"), 3 },
+	};
+
+	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ExpectedOffers); ++Index)
+	{
+		if (!DebugShop->Offers.IsValidIndex(Index))
+		{
+			return false;
+		}
+
+		UCardDefinition* ExpectedCard = LoadObject<UCardDefinition>(nullptr, ExpectedOffers[Index].ObjectPath);
+		if (!TestNotNull(FString::Printf(TEXT("Offer card asset loads %d"), Index), ExpectedCard))
+		{
+			return false;
+		}
+
+		TestEqual(FString::Printf(TEXT("Offer card %d"), Index),
+			DebugShop->Offers[Index].CardDefinition.Get(),
+			ExpectedCard);
+		TestEqual(FString::Printf(TEXT("Offer price %d"), Index),
+			DebugShop->Offers[Index].Price,
+			ExpectedOffers[Index].Price);
 	}
 
 	return true;

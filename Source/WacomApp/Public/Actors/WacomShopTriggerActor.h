@@ -9,6 +9,7 @@
 #include "WacomShopTriggerActor.generated.h"
 
 class USphereComponent;
+class UShopDefinition;
 
 /**
  * 场景中的商店交互触发器。
@@ -34,12 +35,21 @@ public:
 	FName PersistentId;
 
 	/**
-	 * 关卡中手动配置的商店商品列表。
+	 * 商店静态内容定义。
 	 *
-	 * 同一个 PersistentId 第一次打开时用本列表初始化库存；之后再次打开会保留已有库存并忽略新的列表。
+	 * 配置后优先使用本资产中的商品列表；PersistentId 仍来自本 Actor，用于当前 Run 的库存持久化。
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop",
-		meta = (ToolTip = "该商店第一次打开时用于初始化库存的商品列表。每个商品包含卡牌定义和金币价格。"))
+		meta = (ToolTip = "商店静态内容定义。配置后优先使用本资产的商品列表；库存和已购买状态仍由本 Actor 的 PersistentId 持久化。"))
+	TObjectPtr<UShopDefinition> ShopDefinition = nullptr;
+
+	/**
+	 * 关卡中手动配置的商店商品列表。
+	 *
+	 * 同一个 PersistentId 第一次打开时用本列表初始化库存；如果配置了 ShopDefinition，则本列表只作为旧关卡兼容兜底。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop",
+		meta = (ToolTip = "该商店第一次打开时用于初始化库存的手动商品列表。配置 ShopDefinition 后会优先使用资产商品，本列表仅作兼容兜底。"))
 	TArray<FRunShopOfferInput> Offers;
 
 	/** 触发半径（cm）。玩家进入该范围后，探索期按 E 可以打开商店。 */
@@ -55,6 +65,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
 	USphereComponent* GetTriggerSphere() const { return TriggerSphere; }
+
+	/** 解析当前将传给 RunSession 的商品列表：优先 ShopDefinition，未配置时使用手动 Offers。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
+	TArray<FRunShopOfferInput> BuildResolvedOffers() const;
 
 	// ---- IWacomWorldInteractable ----
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* PC) const override;
