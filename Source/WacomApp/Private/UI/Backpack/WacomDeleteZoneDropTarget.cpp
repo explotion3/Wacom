@@ -62,9 +62,9 @@ FText UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(FName Disabl
 	{
 		return LOCTEXT("DeleteFailIntrinsic", "无法销毁：固有卡不能被销毁。");
 	}
-	if (DisabledReason == TEXT("LastBagProvider"))
+	if (DisabledReason == TEXT("LastCapacityProvider") || DisabledReason == TEXT("LastBagProvider"))
 	{
-		return LOCTEXT("DeleteFailLastBagProvider", "无法销毁：这是最后一张背包容量卡。");
+		return LOCTEXT("DeleteFailLastCapacityProvider", "无法销毁：这是最后一张背包容量卡。");
 	}
 	return LOCTEXT("DeleteFailUnknown", "无法销毁：当前规则不允许。");
 }

@@ -402,11 +402,12 @@ DropTarget 规则：
 - 普通 zone drop 调 `RunSession->MoveInstance`。
 - DeleteZone drop 先弹 `UWacomConfirmDialog`，确认后调 `RunSession->DeleteCardForGold`。
 - 普通 zone drop 会先读 `RunSession->ValidateMoveInstance()`，成功后通过 `UWacomAppToastSubsystem` 显示“移动卡牌：{CardName} → {ZoneName}”，失败时显示玩家可读原因，例如通量区已满、备战区已满、特殊存放区已满、主卡不能进入特殊存放区。
-- DeleteZone 会先读 `RunSession->ValidateDeleteCardForGold()`；固有卡、最后一张 BagProvider、未持有卡等情况直接显示失败 Toast，不弹确认框。确认后若规则状态变化导致删除失败，也会显示失败原因。
+- DeleteZone 会先读 `RunSession->ValidateDeleteCardForGold()`；固有卡、最后一张容量来源卡、未持有卡等情况直接显示失败 Toast，不弹确认框。确认后若规则状态变化导致删除失败，也会显示失败原因。
 - DeleteZone 删除成功后通过 `UWacomAppToastSubsystem` 显示“销毁卡牌：{CardName}，获得 {Gold} 金币”；取消确认不显示成功提示。
 - `NativeOnDragOver` 只做视觉预判，并优先消费 RunSession validation；最终规则仍以 RunSession 写命令返回值为准。
 - DropTarget 暴露 `EWacomDropTargetState`：`Normal / HoverValid / HoverInvalid / DropAccepted / DropRejected`。
 - WBP 可实现 `BP_OnDropTargetStateChanged` 做高亮、禁用提示和失败反馈。
+- 负重区只在 `BurdenCount > 0` 时显示；没有卡牌溢出时，`BurdenZoneHost` / `BurdenZoneSection` 会折叠。
 
 刷新模型：
 - 操作命令 → RunSession 写状态 → `OnRunStateChangedNative` → Provider 刷 ViewModel → `OnRunViewModelRefreshedNative` → `BackpackScreen::RebuildAll()`。

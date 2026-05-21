@@ -866,6 +866,16 @@ void UWacomBackpackScreen::RebuildSpecialZones(const FRunBackpackStorageSnapshot
 
 void UWacomBackpackScreen::RebuildBurdenZone(const FRunBackpackStorageSnapshot& Snapshot)
 {
+	const ESlateVisibility BurdenVisibility = UWacomBackpackScreenPresenter::GetBurdenZoneVisibility(Snapshot.BurdenCount);
+	if (BurdenZoneHost)
+	{
+		BurdenZoneHost->SetVisibility(BurdenVisibility);
+	}
+	if (BurdenZoneSection)
+	{
+		BurdenZoneSection->SetVisibility(BurdenVisibility);
+	}
+
 	const FText BurdenTitle = UWacomBackpackScreenPresenter::BuildBurdenZoneTitleText(Snapshot.BurdenCount);
 	if (BurdenZoneTitleText)
 	{

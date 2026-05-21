@@ -118,12 +118,12 @@ WacomRun 负责**战斗外的持久状态和存档**。
 | `IsDeleteProviderCard(Card) static` | 卡是否带 DeleteProvider 关键词（GDD §11.7）|
 | `IsDeleteFunctionAvailable() const` | 删牌功能是否可用（玩家持有区至少一张 DeleteProvider）。第一阶段 UI 不读 |
 | `IsIntrinsicCard(Card) static` | 卡是否固有（Rarity = Intrinsic）|
-| `IsBackpackUiAvailable() const` | 背包 UI 是否可打开（至少一张 BagProvider）|
-| `ValidateDeleteCardForGold(Card)` | 只读校验删牌置换是否可执行，并返回 `MissingCard / CardNotOwned / Intrinsic / LastBagProvider` 等 reason |
+| `IsBackpackUiAvailable() const` | 背包 UI 是否可打开（至少一张容器卡 Capacity > 0）|
+| `ValidateDeleteCardForGold(Card)` | 只读校验删牌置换是否可执行，并返回 `MissingCard / CardNotOwned / Intrinsic / LastCapacityProvider` 等 reason |
 | `IsCardInBackpack(Card) / IsCardInBattleDeck(Card)` | 查询 |
 | `AddCardToBackpack(Card)` | 加卡进背包 + RecomputeBurden |
 | `AcquireCardToRun(Card)` | 战外获得卡统一入口；当前等价于加入背包并重算负重，后续战斗奖励、节点事件、商店、探险奖励都优先走这里 |
-| `DestroyCardFromBackpack(Card)` | 永久销毁（含 Intrinsic / 最后 BagProvider 拒绝 / Companion 嗜血）|
+| `DestroyCardFromBackpack(Card)` | 永久销毁（含 Intrinsic / 最后容量来源卡拒绝 / Companion 嗜血）|
 | `DeleteCardForGold(Card)` | 删牌区入口：销毁 + 按稀有度发金币（白=1 / 蓝=2）|
 | `AddCardToBattleDeck(Card)` | 从 Backpack 移到 BattleDeck（互斥）|
 | `RemoveCardFromBattleDeck(Card)` | 从 BattleDeck 移回 Backpack（Intrinsic 拒绝）|
@@ -255,6 +255,8 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 - B 类容器卡（`Physique.CapacityEffect` 非空）不计入通量公式，但计入备战容量；每张 B 主卡自己开辟一个特殊存放区，内容区容量 = `Capacity - 1`
 - A 类容器卡没有通量主卡概念；如果物理位于 `Backpack`，它和普通卡一样显示为通量内容并占 1 格
 - B 类特殊存放区内容区实际可收纳数量 = `B.Capacity - 1`
+- 背包 UI 可用性按“是否仍拥有至少一张容器卡”判断，不再绑定 `BagProvider` 关键词；暮色引虫灯这类 A 类容器也能作为容量兜底。
+- 永久销毁容器卡时，若销毁后仍有其他容器卡提供容量则允许；容量缩小导致备战区超限时，溢出的卡会优先迁回通量区，通量区也满时才进入 `BurdenZone`；通量区自身超限时仍直接进入 `BurdenZone`。
 
 **instance 互斥**：同一个 `FCardInstance.InstanceId` 同时只能位于 `Backpack / BattleDeck / BurdenZone / 任一 SpecialZone.Cards` 之一。`MoveInstance` 是通用迁移入口，失败路径不修改 RunState、不广播。
 
@@ -270,6 +272,7 @@ Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
 - 容器卡（Capacity > 0）→ 进 Backpack
 - 非容器卡（Capacity = 0）→ 进 BattleDeck
 - 暮色引虫灯是当前原型特例：默认初始进入 BattleDeck，但仍作为 A 类容器贡献通量容量
+- 通量区或备战区因容量缩小发生溢出时，优先迁移普通卡，尽量保留 A/B 类容器卡在原区继续提供容量与原型特例位置；备战区溢出先尝试补到通量区，通量区满了才进入负重区。
 - 玩家可用 AddToBattleDeck / RemoveFromBattleDeck 调整
 
 #### §11.7 / 经济：金币

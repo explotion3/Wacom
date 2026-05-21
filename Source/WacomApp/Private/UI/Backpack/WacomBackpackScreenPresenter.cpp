@@ -52,6 +52,11 @@ FText UWacomBackpackScreenPresenter::BuildBurdenZoneTitleText(int32 CardCount)
 		FText::AsNumber(CardCount));
 }
 
+ESlateVisibility UWacomBackpackScreenPresenter::GetBurdenZoneVisibility(int32 CardCount)
+{
+	return CardCount > 0 ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed;
+}
+
 ESlateVisibility UWacomBackpackScreenPresenter::GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind OwnerZone)
 {
 	return OwnerZone == EZoneKind::BattleDeck ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed;

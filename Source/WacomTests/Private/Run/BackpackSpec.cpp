@@ -21,12 +21,12 @@
  *   - IsContainerCard / IsBagProviderCard / IsIntrinsicCard 静态判定
  *   - GetFluxCapacity 公式：Σ(玩家拥有的所有 A 类容器卡 Capacity)
  *   - GetBattleDeckCapacity 公式：Σ(玩家拥有的所有容器卡 Capacity)
- *   - IsBackpackUiAvailable：玩家持有区至少一张 BagProvider
+ *   - IsBackpackUiAvailable：玩家持有区至少一张容器卡
  *   - Initialize Stage 4.1 a2：非容器卡进 BattleDeck，容器卡只进 Backpack
  *   - AddCardToBackpack 自动 RecomputeBurden
  *   - DestroyCardFromBackpack：
  *       Intrinsic 拒绝
- *       最后一张 BagProvider 拒绝
+ *       最后一张容量来源卡拒绝
  *       同一卡多份 → 只销毁一份
  *       Companion 卡 → 嗜血 +1
  *       同步移除 BattleDeck 中一张
@@ -61,6 +61,18 @@ namespace
 		if (bCompanion)
 		{
 			Card->Keywords.AddTag(WacomTags::Card_Keyword_Companion);
+		}
+		return Card;
+	}
+
+	UCardDefinition* MakeTypeAContainerCard(FWacomBattleFixture& Fx, int32 Capacity, FName CardId = NAME_None)
+	{
+		UCardDefinition* Card = Fx.MakeNoopCard(0);
+		Card->Physique.Capacity = Capacity;
+		Card->Rarity = WacomTags::Card_Rarity_White;
+		if (!CardId.IsNone())
+		{
+			Card->CardId = CardId;
 		}
 		return Card;
 	}
@@ -190,16 +202,16 @@ bool FWacomRunDeckBackpackUiAvailabilitySpec::RunTest(const FString& /*Parameter
 {
 	FWacomBattleFixture Fx;
 
-	// 没 BagProvider → 不可打开
+	// 没容器卡 → 不可打开
 	UCharacterDefinition* CharNoProvider = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Fx.MakeNoopCard(0) });
 	TStrongObjectPtr<URunSession> Run1(NewObject<URunSession>());
 	Run1->Initialize(CharNoProvider);
-	TestFalse(TEXT("UI not available without BagProvider"),
+	TestFalse(TEXT("UI not available without container capacity"),
 		Run1->IsBackpackUiAvailable());
 
-	// 有 BagProvider → 可打开
+	// 有 BagProvider 容器 → 可打开
 	UCardDefinition* Bag = MakeBagCard(Fx, 5);
 	UCharacterDefinition* CharWithProvider = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
@@ -208,6 +220,16 @@ bool FWacomRunDeckBackpackUiAvailabilitySpec::RunTest(const FString& /*Parameter
 	Run2->Initialize(CharWithProvider);
 	TestTrue(TEXT("UI available with BagProvider"),
 		Run2->IsBackpackUiAvailable());
+
+	// 有非 BagProvider 容器也可打开；背包入口与 BagProvider 关键词不再绑定。
+	UCardDefinition* Lantern = MakeTypeAContainerCard(Fx, 3, TEXT("MuseiYinchongdeng"));
+	UCharacterDefinition* CharWithCapacityProvider = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Lantern });
+	TStrongObjectPtr<URunSession> Run3(NewObject<URunSession>());
+	Run3->Initialize(CharWithCapacityProvider);
+	TestTrue(TEXT("UI available with non-BagProvider capacity card"),
+		Run3->IsBackpackUiAvailable());
 
 	return true;
 }
@@ -281,11 +303,11 @@ bool FWacomRunDeckDestroyIntrinsicRejectedSpec::RunTest(const FString& /*Paramet
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunDeckDestroyLastBagProviderRejectedSpec,
-	"Wacom.Run.Deck.DestroyLastBagProviderRejected",
+	FWacomRunDeckDestroyLastCapacityProviderRejectedSpec,
+	"Wacom.Run.Deck.DestroyLastCapacityProviderRejected",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunDeckDestroyLastBagProviderRejectedSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomRunDeckDestroyLastCapacityProviderRejectedSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 
@@ -296,7 +318,7 @@ bool FWacomRunDeckDestroyLastBagProviderRejectedSpec::RunTest(const FString& /*P
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	TestFalse(TEXT("Destroy last BagProvider rejected"),
+	TestFalse(TEXT("Destroy last capacity provider rejected"),
 		Run->DestroyCardFromBackpack(OnlyBag));
 	TestTrue(TEXT("UI still available"),
 		Run->IsBackpackUiAvailable());
@@ -305,27 +327,109 @@ bool FWacomRunDeckDestroyLastBagProviderRejectedSpec::RunTest(const FString& /*P
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunDeckDestroyOneOfTwoBagProvidersAllowedSpec,
-	"Wacom.Run.Deck.DestroyOneOfTwoBagProvidersAllowed",
+	FWacomRunDeckDestroyOneOfTwoCapacityProvidersAllowedSpec,
+	"Wacom.Run.Deck.DestroyOneOfTwoCapacityProvidersAllowed",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunDeckDestroyOneOfTwoBagProvidersAllowedSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomRunDeckDestroyOneOfTwoCapacityProvidersAllowedSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 
 	UCardDefinition* Bag1 = MakeBagCard(Fx, 5);
-	UCardDefinition* Bag2 = MakeBagCard(Fx, 8);
+	UCardDefinition* Bag2 = MakeTypeAContainerCard(Fx, 8);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Bag1, Bag2 });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	TestTrue(TEXT("Destroy Bag1 allowed (Bag2 still BagProvider)"),
+	TestTrue(TEXT("Destroy Bag1 allowed (Bag2 still provides capacity)"),
 		Run->DestroyCardFromBackpack(Bag1));
 	TestTrue(TEXT("UI still available"), Run->IsBackpackUiAvailable());
 	TestEqual(TEXT("FluxCapacity=8 only Bag2 capacity"),
 		Run->GetFluxCapacity(), 8);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDestroyBugGirlBagAllowedWhenLanternProvidesCapacitySpec,
+	"Wacom.Run.Deck.DestroyBugGirlBagAllowedWhenLanternProvidesCapacity",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDestroyBugGirlBagAllowedWhenLanternProvidesCapacitySpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Normal1 = Fx.MakeNoopCard(0);
+	UCardDefinition* Normal2 = Fx.MakeNoopCard(0);
+	UCardDefinition* Normal3 = Fx.MakeNoopCard(0);
+	UCardDefinition* Bag = MakeBagCard(Fx, 4);
+	UCardDefinition* Lantern = MakeTypeAContainerCard(Fx, 3, TEXT("MuseiYinchongdeng"));
+
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Normal1, Normal2, Normal3, Bag, Lantern });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	TestTrue(TEXT("Lantern starts in BattleDeck"), Run->IsCardInBattleDeck(Lantern));
+	TestTrue(TEXT("Bag starts in Backpack"), Run->IsCardInBackpack(Bag));
+	TestEqual(TEXT("Initial flux capacity includes bag and lantern"), Run->GetFluxCapacity(), 7);
+	TestEqual(TEXT("Initial battle capacity includes bag and lantern"), Run->GetBattleDeckCapacity(), 7);
+
+	TestTrue(TEXT("Delete validation allows Bag while Lantern provides capacity"),
+		Run->ValidateDeleteCardForGold(Bag).bCanExecute);
+	TestTrue(TEXT("Destroy Bag succeeds"),
+		Run->DestroyCardFromBackpack(Bag));
+
+	TestFalse(TEXT("Bag removed"), Run->IsCardInBackpack(Bag));
+	TestTrue(TEXT("Lantern remains in BattleDeck"), Run->IsCardInBattleDeck(Lantern));
+	TestTrue(TEXT("Backpack UI remains available from Lantern capacity"), Run->IsBackpackUiAvailable());
+	TestEqual(TEXT("Flux capacity now only Lantern"), Run->GetFluxCapacity(), 3);
+	TestEqual(TEXT("Battle capacity now only Lantern"), Run->GetBattleDeckCapacity(), 3);
+	TestEqual(TEXT("BattleDeck overflow moved one normal card to Backpack first"), Run->GetBackpack().Num(), 1);
+	TestEqual(TEXT("BattleDeck overflow does not reach burden while flux has room"), Run->GetRunState().BurdenZone.Num(), 0);
+	TestEqual(TEXT("No burden pressure while overflow fits flux"), Run->GetPressureValue(EWacomPressureType::Burden), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDestroyBugGirlBagOverflowUsesBurdenOnlyWhenFluxFullSpec,
+	"Wacom.Run.Deck.DestroyBugGirlBagOverflowUsesBurdenOnlyWhenFluxFull",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDestroyBugGirlBagOverflowUsesBurdenOnlyWhenFluxFullSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Normal1 = Fx.MakeNoopCard(0);
+	UCardDefinition* Normal2 = Fx.MakeNoopCard(0);
+	UCardDefinition* Normal3 = Fx.MakeNoopCard(0);
+	UCardDefinition* Bag = MakeBagCard(Fx, 4);
+	UCardDefinition* Lantern = MakeTypeAContainerCard(Fx, 3, TEXT("MuseiYinchongdeng"));
+
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Normal1, Normal2, Normal3, Bag, Lantern });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
+	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
+	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
+	TestEqual(TEXT("Pre-delete Backpack has Bag plus three flux cards"), Run->GetBackpack().Num(), 4);
+
+	TestTrue(TEXT("Destroy Bag succeeds with Lantern still providing capacity"),
+		Run->DestroyCardFromBackpack(Bag));
+
+	TestFalse(TEXT("Bag removed"), Run->IsCardInBackpack(Bag));
+	TestTrue(TEXT("Lantern remains in BattleDeck"), Run->IsCardInBattleDeck(Lantern));
+	TestEqual(TEXT("Flux capacity now only Lantern"), Run->GetFluxCapacity(), 3);
+	TestEqual(TEXT("Backpack remains at full flux capacity"), Run->GetBackpack().Num(), 3);
+	TestEqual(TEXT("BattleDeck overflow reaches burden only after flux is full"), Run->GetRunState().BurdenZone.Num(), 1);
+	TestEqual(TEXT("Burden pressure for one overflow card"), Run->GetPressureValue(EWacomPressureType::Burden), 1);
 
 	return true;
 }
@@ -456,9 +560,9 @@ bool FWacomRunDeckDeleteCardForGoldValidationSpec::RunTest(const FString& /*Para
 	TestEqual(TEXT("Intrinsic delete reason"),
 		Run->ValidateDeleteCardForGold(IntrinsicCard).DisabledReason,
 		FName(TEXT("Intrinsic")));
-	TestEqual(TEXT("Last bag provider delete reason"),
+	TestEqual(TEXT("Last capacity provider delete reason"),
 		Run->ValidateDeleteCardForGold(OnlyBag).DisabledReason,
-		FName(TEXT("LastBagProvider")));
+		FName(TEXT("LastCapacityProvider")));
 
 	return true;
 }
@@ -1905,8 +2009,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomRunDeckOnlyTypeBProvidersStillUnlockBackpackSpec::RunTest(const FString& /*Parameters*/)
 {
-	// IsBackpackUiAvailable 用 BagProvider 关键词独立判定，
-	// 玩家若只有 B 类 BagProvider 也应能打开背包（虽然 Flux=0 暂时无法存通量卡）。
+	// IsBackpackUiAvailable 按容器卡容量判定；
+	// 玩家若只有 B 类容器也应能打开背包（虽然 Flux=0 暂时无法存通量卡）。
 	FWacomBattleFixture Fx;
 
 	UCardDefinition* TypeBProvider = MakeBagCard(Fx, 4);
@@ -2043,7 +2147,7 @@ bool FWacomRunDeckDeleteFunctionLostAfterDestroySpec::RunTest(const FString& /*P
 {
 	FWacomBattleFixture Fx;
 
-	// Bag 保证背包 UI 一直可用，避免"最后 BagProvider 被拒"干扰
+	// Bag 保证背包 UI 一直可用，避免"最后容量来源卡被拒"干扰
 	UCardDefinition* Bag = MakeBagCard(Fx, 12);
 	UCardDefinition* Lantern = MakeDeleteProviderCard(Fx, 3);
 
@@ -2083,9 +2187,9 @@ bool FWacomRunDeckBagAndDeleteProvidersIndependentSpec::RunTest(const FString& /
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	// 只有 DeleteProvider，无 BagProvider → 删牌功能可用，但背包 UI 不可用
+	// 只有 DeleteProvider 容器、无 BagProvider → 删牌功能和背包 UI 都可用。
 	TestTrue (TEXT("Delete function available"), Run->IsDeleteFunctionAvailable());
-	TestFalse(TEXT("Backpack UI unavailable (no BagProvider)"), Run->IsBackpackUiAvailable());
+	TestTrue(TEXT("Backpack UI available from DeleteProvider capacity"), Run->IsBackpackUiAvailable());
 
 	return true;
 }
@@ -2899,7 +3003,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 		UCardDefinition* CardY = Fx.MakeNoopCard(0);
 
 		// Bag 兜底两件事：a) 提供 BattleDeckCapacity > 0 让 AddCardToBattleDeck 有空位；
-		// b) 让 DestroyCardFromBackpack 不会因"最后一张 BagProvider"被拒（CardX 不是 Provider）。
+		// b) 让 DestroyCardFromBackpack 不会因"最后一张容量来源卡"被拒（CardX 不是容器）。
 		// Capacity=12 远大于本测试构造的 BattleDeck 数量上限。
 		UCardDefinition* Bag = MakeBagCard(Fx, /*Capacity*/ 12);
 
@@ -3643,7 +3747,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 	// Validates: Requirements 2.4 (兼带 R8.6 验证：每张退回 instance 强制 bBattleEnabledInSpecialZone=false)
 	//
 	// 对任意 URunSession 状态，若 DestroyCardFromBackpack(BMain) 被接受
-	// （BMain 非 Intrinsic、非最后一张 BagProvider）且 BMain 是 B 类容器卡且
+	// （BMain 非 Intrinsic、非最后一张容量来源卡）且 BMain 是 B 类容器卡且
 	// 其 SpecialZone 非空，调用之后必须满足以下四条不变量：
 	//
 	//   (A) 不丢失：原 FSpecialZone.Cards 中的每个 InstanceId 在 RunState 的某个 zone 里

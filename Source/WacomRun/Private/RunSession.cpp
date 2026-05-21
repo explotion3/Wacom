@@ -50,6 +50,12 @@ namespace
 		return Card && !URunSession::IsTypeBContainerCard(Card);
 	}
 
+	bool IsPreferredBurdenOverflowCandidate(const UCardDefinition* Card)
+	{
+		// 容量来源卡（A/B 类容器）尽量留在原区；容量缩小时优先把普通内容卡挪到负重区。
+		return Card && !URunSession::IsContainerCard(Card);
+	}
+
 	FRunShopState BuildShopStateFromInputs(const TArray<FRunShopOfferInput>& Inputs)
 	{
 		FRunShopState State;
@@ -1147,7 +1153,7 @@ void URunSession::RecomputeBurden()
 	NotifyRunStateChanged();
 }
 
-void URunSession::RecomputeBurdenInternal()
+void URunSession::RecomputeBurdenInternal(bool bAllowBurdenRefill)
 {
 	// Stage 4.5.1 重写（design.md §Components and Interfaces #6 / requirements R2.12-R2.14 / R9.1）：
 	// 本函数分三步执行；任务 9.1 实现步骤 ①，9.2 / 9.3 依次填入 ② / ③。
@@ -1156,7 +1162,7 @@ void URunSession::RecomputeBurdenInternal()
 	//
 	//   ① 超容溢出（R2.12，task 9.1）：
 	//        while CountFluxContentCards(Backpack) > GetFluxCapacity() → 弹末尾通量内容卡追加 BurdenZone
-	//        while BattleDeck.Num() > GetBattleDeckCapacity() → 同上
+	//        while BattleDeck.Num() > GetBattleDeckCapacity() → 优先迁入 Backpack，Backpack 接不住再追加 BurdenZone
 	//   ② 回填（R2.14，task 9.2）：BurdenZone 头部按 通量 → 备战 → SpecialZones（数组下标升序）
 	//        优先序回填到第一个有空位的目标区，回填到 SpecialZone 时强制
 	//        bBattleEnabledInSpecialZone = false。
@@ -1166,7 +1172,8 @@ void URunSession::RecomputeBurdenInternal()
 	//        内部的 NotifyRunStateChanged，确保私有路径不广播（R2.16）。
 
 	// ---- 步骤 ① 超容溢出（R2.12 / R2.2a / R5.6 — "skip B-master"）----
-	// 末尾摘卡 → 追加到 BurdenZone 末尾。两区独立处理；处理完成后保证
+	// 末尾摘卡。通量区溢出追加到 BurdenZone 末尾；备战区溢出优先迁入通量区，通量区接不住再追加
+	// BurdenZone。处理完成后保证
 	//   CountFluxContentCards(Backpack) <= GetFluxCapacity() AND BattleDeck.Num() <= GetBattleDeckCapacity()，
 	//   除非整个数组全是 B 主卡 instance（极端退化情形）。
 	//
@@ -1175,7 +1182,8 @@ void URunSession::RecomputeBurdenInternal()
 	//   B 主卡 instance 在生命周期内只可能位于 Backpack ∪ BattleDeck，永远不能进入
 	//   BurdenZone（与 Property 5 双射 reverse 方向构成的不变量）。否则 SpecialZones
 	//   entry 的 OwnerInstanceId 就会找不到对应主卡 instance（悬空），违反 R5.6。
-	//   因此本循环每次溢出选择"末尾向 0 方向"搜索的第一个非 B 主卡 instance 摘出。
+	//   因此通量区溢出只摘通量内容卡；备战区溢出会先尝试把卡放回 Backpack，只有非 B 主卡且
+	//   Backpack 接不住时才进入 BurdenZone。
 	//   若找不到任何非 B 主卡（整个数组都是 B 主卡）→ 立即终止溢出循环；Backpack /
 	//   BattleDeck 临时保持 Num() > Capacity，但 B 主卡绝不会被错放入 BurdenZone。
 	//
@@ -1185,6 +1193,15 @@ void URunSession::RecomputeBurdenInternal()
 	{
 		auto PopFluxContent = [this](TArray<FCardInstance>& Pile) -> bool
 		{
+			for (int32 i = Pile.Num() - 1; i >= 0; --i)
+			{
+				if (IsPreferredBurdenOverflowCandidate(Pile[i].Definition))
+				{
+					RunState.BurdenZone.Add(Pile[i]);
+					Pile.RemoveAt(i);
+					return true;
+				}
+			}
 			for (int32 i = Pile.Num() - 1; i >= 0; --i)
 			{
 				if (IsFluxContentCardDefinition(Pile[i].Definition))
@@ -1197,15 +1214,64 @@ void URunSession::RecomputeBurdenInternal()
 			return false;
 		};
 
-		auto SkipBMasterPop = [this](TArray<FCardInstance>& Pile) -> bool
+		auto CanMoveOverflowCardToFlux = [this](const FCardInstance& Instance) -> bool
 		{
+			if (!Instance.Definition)
+			{
+				return false;
+			}
+			if (IsTypeBContainerCard(Instance.Definition))
+			{
+				return true;
+			}
+			return IsFluxContentCardDefinition(Instance.Definition)
+				&& CountFluxContentCards(RunState.Backpack) < GetFluxCapacity();
+		};
+
+		auto MoveBattleDeckOverflowAt = [this, &CanMoveOverflowCardToFlux](TArray<FCardInstance>& Pile, int32 Index) -> bool
+		{
+			if (!Pile.IsValidIndex(Index))
+			{
+				return false;
+			}
+
+			FCardInstance Instance = Pile[Index];
+			Pile.RemoveAt(Index);
+
+			if (CanMoveOverflowCardToFlux(Instance))
+			{
+				RunState.Backpack.Add(Instance);
+				EnsureSpecialZoneEntryFor(Instance);
+				return true;
+			}
+
+			if (IsTypeBContainerCard(Instance.Definition))
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[RunSession] RecomputeBurden: BattleDeck 溢出卡 %s 是 B 主卡且无法进入通量区，临时保持在 BattleDeck 外不可行"),
+					*GetNameSafe(Instance.Definition));
+				Pile.Insert(Instance, Index);
+				return false;
+			}
+
+			RunState.BurdenZone.Add(Instance);
+			return true;
+		};
+
+		auto PopBattleDeckOverflow = [this, &MoveBattleDeckOverflowAt](TArray<FCardInstance>& Pile) -> bool
+		{
+			for (int32 i = Pile.Num() - 1; i >= 0; --i)
+			{
+				if (IsPreferredBurdenOverflowCandidate(Pile[i].Definition))
+				{
+					return MoveBattleDeckOverflowAt(Pile, i);
+				}
+			}
 			for (int32 i = Pile.Num() - 1; i >= 0; --i)
 			{
 				if (!IsTypeBContainerCard(Pile[i].Definition))
 				{
-					RunState.BurdenZone.Add(Pile[i]);
-					Pile.RemoveAt(i);
-					return true;
+					return MoveBattleDeckOverflowAt(Pile, i);
 				}
 			}
 			return false;  // 所有 instance 都是 B 主卡 → 无法溢出
@@ -1223,7 +1289,7 @@ void URunSession::RecomputeBurdenInternal()
 		}
 		while (RunState.BattleDeck.Num() > GetBattleDeckCapacity())
 		{
-			if (!SkipBMasterPop(RunState.BattleDeck))
+			if (!PopBattleDeckOverflow(RunState.BattleDeck))
 			{
 				UE_LOG(LogTemp, Warning,
 					TEXT("[RunSession] RecomputeBurden: BattleDeck 全是 B 主卡 instance（Num=%d > BattleDeckCapacity=%d），无法溢出，临时超容"),
@@ -1244,7 +1310,7 @@ void URunSession::RecomputeBurdenInternal()
 	//
 	// 幂等性：稳态下要么 BurdenZone 已清空、要么所有目标都满；下次再调时
 	// 第一次循环或立即退出，或 break 退出，均不再迁移任何 instance。
-	while (RunState.BurdenZone.Num() > 0)
+	while (bAllowBurdenRefill && RunState.BurdenZone.Num() > 0)
 	{
 		// 头部按值拷贝出来；后面 RemoveAt(0) 会让原引用失效。
 		FCardInstance Instance = RunState.BurdenZone[0];
@@ -1836,24 +1902,24 @@ int32 URunSession::CountFluxContentCards(const TArray<FCardInstance>& Pile) cons
 
 bool URunSession::IsBackpackUiAvailable() const
 {
-	auto HasProvider = [](const TArray<FCardInstance>& Pile)
+	auto HasCapacityProvider = [](const TArray<FCardInstance>& Pile)
 	{
 		for (const FCardInstance& Inst : Pile)
 		{
-			if (IsBagProviderCard(Inst.Definition))
+			if (IsContainerCard(Inst.Definition))
 			{
 				return true;
 			}
 		}
 		return false;
 	};
-	if (HasProvider(RunState.Backpack) || HasProvider(RunState.BattleDeck) || HasProvider(RunState.BurdenZone))
+	if (HasCapacityProvider(RunState.Backpack) || HasCapacityProvider(RunState.BattleDeck) || HasCapacityProvider(RunState.BurdenZone))
 	{
 		return true;
 	}
 	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
 	{
-		if (HasProvider(SpecialZone.Cards))
+		if (HasCapacityProvider(SpecialZone.Cards))
 		{
 			return true;
 		}
@@ -2236,6 +2302,44 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 	return true;
 }
 
+bool URunSession::HasCapacityProviderAfterDestroyingFirstOwnedInstance(const UCardDefinition* Card) const
+{
+	bool bSkippedTargetInstance = false;
+	auto HasProviderAfterSkippingTarget = [&bSkippedTargetInstance, Card](const TArray<FCardInstance>& Pile) -> bool
+	{
+		for (const FCardInstance& Inst : Pile)
+		{
+			if (!bSkippedTargetInstance && Inst.Definition == Card)
+			{
+				bSkippedTargetInstance = true;
+				continue;
+			}
+			if (IsContainerCard(Inst.Definition))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (HasProviderAfterSkippingTarget(RunState.Backpack)
+		|| HasProviderAfterSkippingTarget(RunState.BattleDeck)
+		|| HasProviderAfterSkippingTarget(RunState.BurdenZone))
+	{
+		return true;
+	}
+
+	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
+	{
+		if (HasProviderAfterSkippingTarget(SpecialZone.Cards))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 FRunDeckOperationValidation URunSession::ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const
 {
 	FRunDeckOperationValidation Result;
@@ -2434,29 +2538,13 @@ bool URunSession::DestroyCardFromBackpackInternal(UCardDefinition* Card)
 		return false;
 	}
 
-	// 3) 最后一张 BagProvider 拒绝（销毁后玩家无 BagProvider 会让背包打不开）
-	if (IsBagProviderCard(Card))
+	// 3) 最后一张容量来源卡拒绝（销毁后玩家无容器卡会让背包容量归零）
+	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingFirstOwnedInstance(Card))
 	{
-		// 计算销毁后剩余的 BagProvider 卡数（Backpack + BattleDeck）。
-		auto CountProviders = [](const TArray<FCardInstance>& Pile) -> int32
-		{
-			int32 N = 0;
-			for (const FCardInstance& Inst : Pile)
-			{
-				if (IsBagProviderCard(Inst.Definition)) { ++N; }
-			}
-			return N;
-		};
-		// 减一个本次要销毁的（无论它在 Backpack 还是 BattleDeck）。
-		const int32 RemainingProviders = CountProviders(RunState.Backpack)
-		                               + CountProviders(RunState.BattleDeck) - 1;
-		if (RemainingProviders <= 0)
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[RunSession] DestroyCardFromBackpack: %s 是最后一张 BagProvider，拒绝销毁"),
-				*GetNameSafe(Card));
-			return false;
-		}
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] DestroyCardFromBackpack: %s 是最后一张容量来源卡，拒绝销毁"),
+			*GetNameSafe(Card));
+		return false;
 	}
 
 	// 4) 移除一张：哪边有就从哪边移除（按 R1.10 的"下标升序匹配第一个"语义）
@@ -2542,7 +2630,8 @@ bool URunSession::DestroyCardFromBackpackInternal(UCardDefinition* Card)
 
 	// 7) 重算负重（容器卡销毁可能让其他卡溢出）
 	//    走"不广播"的私有路径：本函数尾部统一 NotifyRunStateChanged 一次（R2.16 / task 9.4）。
-	RecomputeBurdenInternal();
+	//    容量缩小导致的溢出要留在 BurdenZone，避免同一次重算又立刻回填到其他区。
+	RecomputeBurdenInternal(/*bAllowBurdenRefill=*/false);
 
 	UE_LOG(LogTemp, Display,
 		TEXT("[RunSession] DestroyCardFromBackpack: %s, Backpack=%d, BattleDeck=%d, FluxCapacity=%d"),
@@ -2629,28 +2718,10 @@ FRunDeckOperationValidation URunSession::ValidateDeleteCardForGold(UCardDefiniti
 		return Result;
 	}
 
-	if (IsBagProviderCard(Card))
+	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingFirstOwnedInstance(Card))
 	{
-		auto CountProviders = [](const TArray<FCardInstance>& Pile) -> int32
-		{
-			int32 Count = 0;
-			for (const FCardInstance& Inst : Pile)
-			{
-				if (IsBagProviderCard(Inst.Definition))
-				{
-					++Count;
-				}
-			}
-			return Count;
-		};
-
-		const int32 RemainingProviders =
-			CountProviders(RunState.Backpack) + CountProviders(RunState.BattleDeck) - 1;
-		if (RemainingProviders <= 0)
-		{
-			Result.DisabledReason = TEXT("LastBagProvider");
-			return Result;
-		}
+		Result.DisabledReason = TEXT("LastCapacityProvider");
+		return Result;
 	}
 
 	Result.bCanExecute = true;

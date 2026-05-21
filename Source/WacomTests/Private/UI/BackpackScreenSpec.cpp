@@ -388,6 +388,9 @@ bool FWacomUIBackpackToastTextSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("Delete last bag reason"),
 		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("LastBagProvider")).ToString(),
 		FString(TEXT("无法销毁：这是最后一张背包容量卡。")));
+	TestEqual(TEXT("Delete last capacity provider reason"),
+		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("LastCapacityProvider")).ToString(),
+		FString(TEXT("无法销毁：这是最后一张背包容量卡。")));
 
 	return true;
 }
@@ -1012,6 +1015,14 @@ bool FWacomUIBackpackBurdenZoneTitleAndCardOrderSpec::RunTest(const FString& /*P
 	TestTrue(
 		TEXT("BurdenZone title includes card count"),
 		UWacomBackpackScreenPresenter::BuildBurdenZoneTitleText(3).ToString().Contains(TEXT("3")));
+	TestEqual(
+		TEXT("BurdenZone hidden when empty"),
+		UWacomBackpackScreenPresenter::GetBurdenZoneVisibility(0),
+		ESlateVisibility::Collapsed);
+	TestEqual(
+		TEXT("BurdenZone visible when cards overflow"),
+		UWacomBackpackScreenPresenter::GetBurdenZoneVisibility(1),
+		ESlateVisibility::SelfHitTestInvisible);
 
 	TArray<FCardInstance> BurdenCards;
 	TArray<TStrongObjectPtr<UCardDefinition>> CardDefinitions;

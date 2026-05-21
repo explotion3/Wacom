@@ -41,6 +41,9 @@ public:
 	static FText BuildBurdenZoneTitleText(int32 CardCount);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Presentation")
+	static ESlateVisibility GetBurdenZoneVisibility(int32 CardCount);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Presentation")
 	static ESlateVisibility GetSpecialZoneBattleReadyBadgeVisibility(EZoneKind OwnerZone);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Presentation")

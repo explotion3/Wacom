@@ -8,21 +8,21 @@
 
 ### 规则层
 
-| 项                                                     | 现状                                                                                 | 后续方向                                                                           |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `Status.Slow` 减速数值效果                                  | 只记录层数，不影响先机或 Cost                                                                  | 等 `WacomBattle.md` 正式定义减速公式后实现                                                 |
-| `Status.Twilight` 暮气数值效果                              | 只记录层数，不触发任何效果                                                                      | 等"暮气生效触发点"规则确认（回合开始？部位行动前？）                                                    |
-| 暮蛉 `OnTwilightTriggered` 真正改中毒层数                      | P3.5 只发 `PassiveTriggered` 事件，不改 Magnitude                                         | 需引入 `FRuntimeCardInstance::EffectMagnitudeModifiers` 或等价机制                     |
-| 卡牌耐久 `Durability` 消耗                                  | `FCardPhysique::Durability` 字段存在但不读取                                               | 等耐久系统设计（暮色引虫灯 1 耐久 = 打出一次进消耗区）                                                 |
-| 左手主动效果 / 完美释放效果                                       | 左手 `Effects` / `PerfectReleaseEffects` 留空                                          | 等具体卡牌设计                                                                        |
-| 右手"相邻右方伙伴代打"                                          | 未实现                                                                                | 等 `Target.Adjacent.Right` 的 Executor 分支                                        |
-| 击倒事件三选一具体效果                                           | Stage 7 已搭好"撤离/援助/破坏"框架 + dialog UI + BattleProgress 持久化撤离破坏部位；援助/破坏不依赖当前手牌区左右手是否存在；最后存活部位击倒后撤离不可选；Run 层第一阶段仅记日志       | Stage 9 节点事件接入时按 `FKnockdownChoice::Choice` 分支触发实际效果（左手 buff / 永久强化部位 / 特殊节点等） |
-| 击倒奖励卡分支扩展                                             | `EnemyPartDefinition.KnockdownRewardCard` 已支持 Aid / Destroy 共用同一张奖励卡，选择后战内入手并在 Victory 后归入 Run；蛇三部位当前都配置占位卡“毒牙” | 后续按策划细化为 Aid / Destroy 不同奖励、毒牙正式效果、敌人奖励表或节点事件奖励表 |
-| 击倒事件左右手永久缺失可用性                                      | `FKnockdownChoiceView` 已预留 `LeftHandMissing / RightHandMissing` reason；当前 Aid/Destroy 不看手牌区锚点是否存在，也不处理角色永久失去左/右手 | 等手指/事件导致永久失去左/右手牌的 Run/Battle 字段确定后，在击倒可用性 helper 中禁用对应分支 |
-| 蛇部位间联动                                                | 无（头被破坏时身体不强化）                                                                      | 等更多敌人设计后按需加                                                                    |
-| 手牌满时 OnCompanionCount 处理                              | 随机插入当前手牌后立即执行普通卡上限，超限卡进弃牌区                                                           | 若规则变更为"满时不触发"，改 `RunOnCompanionCountPassives`                                  |
-| 存档系统恢复                                                | Stage 0.1 暂停（`bSaveSystemEnabled = false`），底层 UWacomSaveGame / FRunState 拷贝/迁移机制保留 | demo 完善后恢复：Bootstrap 读盘 / PauseMenu Save 按钮 / MainMenu Continue                |
-| `IsDeleteFunctionAvailable` 接入 `DeleteCardForGold` 校验 | 接口就位但 DeleteCardForGold 不读（GDD §11.7 第一阶段始终允许删牌）                                   | 等 GDD 切换为"按需可用"后接入                                                             |
+| 项                                                     | 现状                                                                                                               | 后续方向                                                                           |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `Status.Slow` 减速数值效果                                  | 只记录层数，不影响先机或 Cost                                                                                                | 等 `WacomBattle.md` 正式定义减速公式后实现                                                 |
+| `Status.Twilight` 暮气数值效果                              | 只记录层数，不触发任何效果                                                                                                    | 等"暮气生效触发点"规则确认（回合开始？部位行动前？）                                                    |
+| 暮蛉 `OnTwilightTriggered` 真正改中毒层数                      | P3.5 只发 `PassiveTriggered` 事件，不改 Magnitude                                                                       | 需引入 `FRuntimeCardInstance::EffectMagnitudeModifiers` 或等价机制                     |
+| 卡牌耐久 `Durability` 消耗                                  | `FCardPhysique::Durability` 字段存在但不读取                                                                             | 等耐久系统设计（暮色引虫灯 1 耐久 = 打出一次进消耗区）                                                 |
+| 左手主动效果 / 完美释放效果                                       | 左手 `Effects` / `PerfectReleaseEffects` 留空                                                                        | 等具体卡牌设计                                                                        |
+| 右手"相邻右方伙伴代打"                                          | 未实现                                                                                                              | 等 `Target.Adjacent.Right` 的 Executor 分支                                        |
+| 击倒事件三选一具体效果                                           | Stage 7 已搭好"撤离/援助/破坏"框架 + dialog UI + BattleProgress 持久化撤离破坏部位；援助/破坏不依赖当前手牌区左右手是否存在；最后存活部位击倒后撤离不可选；Run 层第一阶段仅记日志 | Stage 9 节点事件接入时按 `FKnockdownChoice::Choice` 分支触发实际效果（左手 buff / 永久强化部位 / 特殊节点等） |
+| 击倒奖励卡分支扩展                                             | `EnemyPartDefinition.KnockdownRewardCard` 已支持 Aid / Destroy 共用同一张奖励卡，选择后战内入手并在 Victory 后归入 Run；蛇三部位当前都配置占位卡“毒牙”  | 后续按策划细化为 Aid / Destroy 不同奖励、毒牙正式效果、敌人奖励表或节点事件奖励表                               |
+| 击倒事件左右手永久缺失可用性                                        | `FKnockdownChoiceView` 已预留 `LeftHandMissing / RightHandMissing` reason；当前 Aid/Destroy 不看手牌区锚点是否存在，也不处理角色永久失去左/右手 | 等手指/事件导致永久失去左/右手牌的 Run/Battle 字段确定后，在击倒可用性 helper 中禁用对应分支                      |
+| 蛇部位间联动                                                | 无（头被破坏时身体不强化）                                                                                                    | 等更多敌人设计后按需加                                                                    |
+| 手牌满时 OnCompanionCount 处理                              | 随机插入当前手牌后立即执行普通卡上限，超限卡进弃牌区                                                                                       | 若规则变更为"满时不触发"，改 `RunOnCompanionCountPassives`                                  |
+| 存档系统恢复                                                | Stage 0.1 暂停（`bSaveSystemEnabled = false`），底层 UWacomSaveGame / FRunState 拷贝/迁移机制保留                               | demo 完善后恢复：Bootstrap 读盘 / PauseMenu Save 按钮 / MainMenu Continue                |
+| `IsDeleteFunctionAvailable` 接入 `DeleteCardForGold` 校验 | 接口就位但 DeleteCardForGold 不读（GDD §11.7 第一阶段始终允许删牌）                                                                 | 等 GDD 切换为"按需可用"后接入                                                             |
 
 ### 卡牌扩展（按需做，未来卡牌出现时再实现）
 

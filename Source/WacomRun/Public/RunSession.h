@@ -394,7 +394,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static bool IsIntrinsicCard(const UCardDefinition* Card);
 
-	/** 玩家是否能打开背包 UI：玩家持有区至少存在一张 BagProvider 卡。 */
+	/** 玩家是否能打开背包 UI：玩家持有区至少存在一张容器卡（Capacity > 0）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	bool IsBackpackUiAvailable() const;
 
@@ -486,7 +486,7 @@ public:
 	 *
 	 * 行为（GDD §11.8）：
 	 *   - 若 Card 是 Intrinsic → 拒绝
-	 *   - 若 Card 是最后一张 BagProvider（销毁后玩家无 BagProvider）→ 拒绝
+	 *   - 若 Card 是最后一张容量来源卡（销毁后玩家无容器卡 Capacity）→ 拒绝
 	 *   - 从 Backpack 移除一张
 	 *   - 若 BattleDeck 含此 Card → 同时移除一张
 	 *   - 若 Card 带 Companion 关键词 → 嗜血 +1%
@@ -500,7 +500,7 @@ public:
 	/**
 	 * 删牌区入口：销毁卡 + 按稀有度发金币（GDD §11.7）。
 	 *
-	 * 第一阶段占位数值：白=1 / 蓝=2。固有 / 最后 BagProvider 拒绝。
+	 * 第一阶段占位数值：白=1 / 蓝=2。固有 / 最后容量来源卡拒绝。
 	 *
 	 * 返回 true=成功销毁并发金币；false=拒绝（同 DestroyCardFromBackpack）。
 	 */
@@ -743,7 +743,7 @@ private:
 	 *   - 直接被外部蓝图 / 测试调用的 `RecomputeBurden()` 是公开入口，内部先调本函数再
 	 *     `NotifyRunStateChanged()` 一次。
 	 */
-	void RecomputeBurdenInternal();
+	void RecomputeBurdenInternal(bool bAllowBurdenRefill = true);
 
 	/** 私有路径：AcquireCardToRun 的"不广播"版本，供复合 Run 操作统一尾部广播。 */
 	bool AcquireCardToRunInternal(UCardDefinition* Card);
@@ -751,7 +751,7 @@ private:
 	/**
 	 * 私有路径：DestroyCardFromBackpack 的"不广播"版本（Stage 4.5.1 任务 9.4 / R2.16）。
 	 *
-	 * 行为与 public `DestroyCardFromBackpack` 完全一致（同样的 Intrinsic / 最后 BagProvider
+	 * 行为与 public `DestroyCardFromBackpack` 完全一致（同样的 Intrinsic / 最后容量来源卡
 	 * 拒绝、Companion 嗜血累加、B 主卡 SpecialZone 退回流、负重重算），区别仅在尾部
 	 * 不发 NotifyRunStateChanged。
 	 *
@@ -785,6 +785,9 @@ private:
 
 	/** 遍历 RunState 全部物理持有区，按过滤条件累计卡牌 Capacity。 */
 	int32 SumOwnedCardCapacity(bool bTypeAOnly) const;
+
+	/** 如果按 Definition 删除当前会被选中的第一张 instance，删除后是否仍有容器卡提供容量。 */
+	bool HasCapacityProviderAfterDestroyingFirstOwnedInstance(const UCardDefinition* Card) const;
 
 	/** 统计指定列表中真正占用通量内容格的卡：A 类容器和普通卡计入，B 主卡不计入。 */
 	int32 CountFluxContentCards(const TArray<FCardInstance>& Pile) const;
