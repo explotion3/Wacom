@@ -46,18 +46,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Toast")
 	void ShowWarning(FText Message);
 
-	void SetToastWidgetOverrideForTest(UWacomAppToastWidget* InWidget) { ToastWidget = InWidget; }
-	UWacomAppToastWidget* GetToastWidgetForTest() const { return ToastWidget; }
-
+private:
 #if WITH_AUTOMATION_TESTS
-	bool IsToastOwnerPairUsableForTest(
-		const UWorld* WidgetWorld,
-		const APlayerController* WidgetOwner,
-		const UWorld* CurrentWorld,
-		const APlayerController* CurrentPC) const;
+	friend class FWacomUITestAccess;
 #endif
 
-private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomAppToastWidget> ToastWidget = nullptr;
 

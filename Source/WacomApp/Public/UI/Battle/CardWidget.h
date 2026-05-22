@@ -67,33 +67,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	const FWacomCardViewData& GetCurrentCardViewData() const { return CurrentCardViewData; }
 
-	/** 测试/诊断用：RootButton 当前是否允许点击。 */
-	bool IsRootButtonEnabled() const;
-
-	/** 测试/诊断用：模拟点击 RootButton。 */
-	void RequestClickForTest();
-
-	/** 测试/诊断用：模拟鼠标悬停。 */
-	void RequestHoverForTest();
-
-	/** 测试/诊断用：模拟鼠标移出。 */
-	void RequestUnhoverForTest();
-
-	/** 测试/诊断用：当前是否处于 hover 状态。 */
-	bool IsHoveredForTest() const { return bIsHovered; }
-
-	/** 测试/诊断用：读取当前 Render Transform。 */
-	FWidgetTransform GetRenderTransformForTest() const { return GetRenderTransform(); }
-
-	/** 测试/诊断用：读取当前 Render Transform Pivot。 */
-	FVector2D GetRenderTransformPivotForTest() const { return GetRenderTransformPivot(); }
-
-	/** 测试/诊断用：读取 hover 视觉层 Render Transform。 */
-	FWidgetTransform GetHoverVisualRenderTransformForTest() const;
-
-	/** 测试/诊断用：读取 hover 视觉层 Render Transform Pivot。 */
-	FVector2D GetHoverVisualRenderTransformPivotForTest() const;
-
 	UPROPERTY(BlueprintAssignable, Category = "Wacom|Battle|UI")
 	FWacomCardWidgetClicked OnCardClicked;
 
@@ -135,6 +108,13 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWacomCardView> CardView;
 
+	bool IsRootButtonInteractable() const;
+	bool TryClickRootButton();
+	bool IsHoverActive() const { return bIsHovered; }
+	void RequestHover();
+	void RequestUnhover();
+	UWidget* GetHoverTransformTarget() const;
+
 private:
 	UFUNCTION()
 	void HandleRootButtonClicked();
@@ -148,12 +128,9 @@ private:
 	FWacomCardViewData BuildCardViewDataFromSnapshot(const FHandCardSnapshot& InSnap) const;
 	void UpdateFrameColor();
 	void ApplyZoneText(const FHandCardSnapshot& InSnap);
-	void RequestHover();
-	void RequestUnhover();
 	void ApplyHoverFeedback();
 	void RestoreHoverFeedback();
 	void CaptureBaseHoverTransformIfNeeded();
-	UWidget* GetHoverTransformTarget() const;
 
 	FHandCardSnapshot CachedSnap;
 	FWacomCardViewData CurrentCardViewData;

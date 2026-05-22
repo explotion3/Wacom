@@ -87,17 +87,3 @@ FReply UWacomMenuWidgetBase::NativeHandleBackRequested()
 	DeactivateWidget();
 	return FReply::Handled();
 }
-
-#if WITH_AUTOMATION_TESTS
-FReply UWacomMenuWidgetBase::HandleEscapeKeyDownForAutomationTest()
-{
-	const FKeyEvent KeyEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
-	return NativeOnKeyDown(FGeometry(), KeyEvent);
-}
-
-FReply UWacomMenuWidgetBase::HandleGamepadBackKeyDownForAutomationTest()
-{
-	const FKeyEvent KeyEvent(EKeys::Gamepad_FaceButton_Right, FModifierKeysState(), 0, false, 0, 0);
-	return NativeOnKeyDown(FGeometry(), KeyEvent);
-}
-#endif

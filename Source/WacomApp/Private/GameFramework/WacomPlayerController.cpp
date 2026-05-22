@@ -426,7 +426,7 @@ AActor* AWacomPlayerController::PickClosestInteractable() const
 	return Best;
 }
 
-FText AWacomPlayerController::BuildCurrentInteractPromptForTest() const
+FText AWacomPlayerController::BuildCurrentInteractPrompt() const
 {
 	AActor* Best = PickClosestInteractable();
 	if (!Best)
@@ -434,11 +434,6 @@ FText AWacomPlayerController::BuildCurrentInteractPromptForTest() const
 		return FText::GetEmpty();
 	}
 	return GetInteractPromptTextFromActor(Best, const_cast<AWacomPlayerController*>(this));
-}
-
-AActor* AWacomPlayerController::PickClosestInteractableForTest() const
-{
-	return PickClosestInteractable();
 }
 
 void AWacomPlayerController::RefreshInteractToast()
@@ -460,7 +455,7 @@ void AWacomPlayerController::RefreshInteractToast()
 		: nullptr;
 	if (!HUD) { return; }
 
-	const FText Prompt = BuildCurrentInteractPromptForTest();
+	const FText Prompt = BuildCurrentInteractPrompt();
 
 	HUD->SetInteractToastVisible(
 		bExploration && !Prompt.IsEmpty(),

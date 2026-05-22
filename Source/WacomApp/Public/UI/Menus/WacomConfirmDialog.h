@@ -49,16 +49,12 @@ public:
 	/** 设置文本（Show 内部调用；WBP 子类也可以在 NativeConstruct 后调用）。 */
 	void SetContent(const FText& Title, const FText& Message);
 
-#if WITH_AUTOMATION_TESTS
-	void SetCallbacksForAutomationTest(TFunction<void()> OnConfirm, TFunction<void()> OnCancel);
-	FReply HandleEscapeKeyDownForAutomationTest();
-	FReply HandleGamepadBackKeyDownForAutomationTest();
-#endif
-
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	void SetCallbacks(TFunction<void()> OnConfirm, TFunction<void()> OnCancel);
 
 	UFUNCTION()
 	void HandleConfirmClicked();

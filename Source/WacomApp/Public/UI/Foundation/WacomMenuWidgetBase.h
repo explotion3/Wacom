@@ -37,11 +37,6 @@ public:
 	DECLARE_MULTICAST_DELEGATE(FOnBackRequestedNative);
 	FOnBackRequestedNative OnBackRequestedNative;
 
-#if WITH_AUTOMATION_TESTS
-	FReply HandleEscapeKeyDownForAutomationTest();
-	FReply HandleGamepadBackKeyDownForAutomationTest();
-#endif
-
 protected:
 	virtual void NativeOnActivated() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;

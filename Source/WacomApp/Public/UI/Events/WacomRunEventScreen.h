@@ -20,33 +20,18 @@ class WACOMAPP_API UWacomRunEventScreen : public UWacomMenuWidgetBase
 	GENERATED_BODY()
 
 public:
-	void SetRunSessionOverrideForTest(URunSession* InRunSession) { RunSessionOverride = InRunSession; }
-	void SetToastSubsystemOverrideForTest(UWacomAppToastSubsystem* InToastSubsystem) { ToastSubsystemOverride = InToastSubsystem; }
-
 	/** 从当前 RunSession 拉取事件快照并重建选项。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|RunEvent")
 	void RefreshEvent();
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
-	int32 GetChoiceCountForTest() const { return CachedChoices.Num(); }
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
-	FRunEventChoiceSnapshot GetChoiceSnapshotForTest(int32 Index) const;
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|RunEvent")
-	bool ChooseChoiceByIndexForTest(int32 Index);
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
-	FText GetTitleTextForTest() const;
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
-	FText GetBodyTextForTest() const;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeOnActivated() override;
 	virtual void NativeOnDeactivated() override;
+
+	virtual URunSession* ResolveRunSession() const;
+	virtual UWacomAppToastSubsystem* ResolveToastSubsystem() const;
 
 	UFUNCTION()
 	void HandleCloseClicked();
@@ -67,8 +52,16 @@ protected:
 	TObjectPtr<UButton> CloseButton;
 
 private:
-	URunSession* GetRunSession() const;
-	UWacomAppToastSubsystem* GetToastSubsystem() const;
+#if WITH_AUTOMATION_TESTS
+	friend class UWacomRunEventScreenProbe;
+
+	int32 GetChoiceCount() const { return CachedChoices.Num(); }
+	FRunEventChoiceSnapshot GetCachedChoiceSnapshot(int32 Index) const;
+	bool ChooseChoiceByIndex(int32 Index);
+	FText GetDisplayedTitleText() const;
+	FText GetDisplayedBodyText() const;
+#endif
+
 	void RebuildChoices();
 	void AddChoiceButton(const FRunEventChoiceSnapshot& Choice);
 	void HandleChoiceClicked(FName ChoiceId);
@@ -76,12 +69,6 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<FRunEventChoiceSnapshot> CachedChoices;
-
-	UPROPERTY(Transient)
-	TObjectPtr<URunSession> RunSessionOverride = nullptr;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UWacomAppToastSubsystem> ToastSubsystemOverride = nullptr;
 
 	bool bDidEndRunEvent = false;
 };

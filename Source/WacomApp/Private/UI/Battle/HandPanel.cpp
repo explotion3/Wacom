@@ -186,7 +186,7 @@ int32 UHandPanel::GetUnifiedHandSlotCardCount() const
 	return UnifiedHandSlot ? UnifiedHandSlot->GetChildrenCount() : 0;
 }
 
-UCardWidget* UHandPanel::GetSpawnedCardForTest(int32 Index) const
+UCardWidget* UHandPanel::GetSpawnedCardAt(int32 Index) const
 {
 	return SpawnedCards.IsValidIndex(Index) ? SpawnedCards[Index] : nullptr;
 }

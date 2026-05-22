@@ -84,11 +84,6 @@ void UWacomAppToastWidget::EnqueueToast(const FWacomAppToastView& View)
 	PushToast(View);
 }
 
-void UWacomAppToastWidget::TickToastsForTest(float DeltaTime)
-{
-	TickToasts(DeltaTime);
-}
-
 void UWacomAppToastWidget::PushToast(const FWacomAppToastView& View)
 {
 	if (!Container || !WidgetTree)

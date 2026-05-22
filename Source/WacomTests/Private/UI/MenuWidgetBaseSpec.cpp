@@ -4,6 +4,7 @@
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Menus/WacomConfirmDialog.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
+#include "UI/WacomUITestAccess.h"
 
 #include "UObject/StrongObjectPtr.h"
 
@@ -25,9 +26,9 @@ struct FWacomMenuBackDelegateProbe
 	}
 };
 
-bool RunMenuBackRequestedHookTest(FAutomationTestBase& Test, TFunctionRef<FReply(UWacomPauseMenuScreen&)> SendBackKeyDown)
+bool RunMenuBackRequestedHookTest(FAutomationTestBase& Test, TFunctionRef<FReply(UWacomPauseMenuScreenInputProbe&)> SendBackKeyDown)
 {
-	TStrongObjectPtr<UWacomPauseMenuScreen> Widget(NewObject<UWacomPauseMenuScreen>());
+	TStrongObjectPtr<UWacomPauseMenuScreenInputProbe> Widget(NewObject<UWacomPauseMenuScreenInputProbe>());
 	FWacomMenuBackDelegateProbe Probe;
 
 	Widget->OnBackRequestedNative.AddRaw(&Probe, &FWacomMenuBackDelegateProbe::HandleBackRequested);
@@ -64,9 +65,9 @@ bool FWacomUIMenuBackRequestedEscapeSpec::RunTest(const FString& /*Parameters*/)
 {
 	return RunMenuBackRequestedHookTest(
 		*this,
-		[](UWacomPauseMenuScreen& Widget)
+		[](UWacomPauseMenuScreenInputProbe& Widget)
 		{
-			return Widget.HandleEscapeKeyDownForAutomationTest();
+			return Widget.SendEscapeKeyDown();
 		});
 }
 
@@ -79,9 +80,9 @@ bool FWacomUIMenuBackRequestedGamepadBackSpec::RunTest(const FString& /*Paramete
 {
 	return RunMenuBackRequestedHookTest(
 		*this,
-		[](UWacomPauseMenuScreen& Widget)
+		[](UWacomPauseMenuScreenInputProbe& Widget)
 		{
-			return Widget.HandleGamepadBackKeyDownForAutomationTest();
+			return Widget.SendGamepadBackKeyDown();
 		});
 }
 
@@ -92,9 +93,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIMenuBackRequestedConfirmDialogGamepadCancelsSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<UWacomConfirmDialog> Dialog(NewObject<UWacomConfirmDialog>());
+	TStrongObjectPtr<UWacomConfirmDialogInputProbe> Dialog(NewObject<UWacomConfirmDialogInputProbe>());
 	int32 CancelCount = 0;
-	Dialog->SetCallbacksForAutomationTest(nullptr, [&CancelCount]()
+	Dialog->SetDialogCallbacks(nullptr, [&CancelCount]()
 	{
 		++CancelCount;
 	});
@@ -105,7 +106,7 @@ bool FWacomUIMenuBackRequestedConfirmDialogGamepadCancelsSpec::RunTest(const FSt
 		1);
 	Dialog->ActivateWidget();
 
-	const FReply Reply = Dialog->HandleGamepadBackKeyDownForAutomationTest();
+	const FReply Reply = Dialog->SendGamepadBackKeyDown();
 	TestTrue(TEXT("Confirm dialog gamepad back is handled"), Reply.IsEventHandled());
 	TestEqual(TEXT("Confirm dialog gamepad back triggers cancel callback"), CancelCount, 1);
 	TestFalse(TEXT("Confirm dialog deactivates after cancel"), Dialog->IsActivated());
@@ -120,7 +121,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIMenuBackRequestedKnockdownGamepadBlockedSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<UWacomKnockdownChoiceDialog> Dialog(NewObject<UWacomKnockdownChoiceDialog>());
+	TStrongObjectPtr<UWacomKnockdownChoiceDialogInputProbe> Dialog(NewObject<UWacomKnockdownChoiceDialogInputProbe>());
 	int32 BackRequestedCount = 0;
 	Dialog->OnBackRequestedNative.AddLambda([&BackRequestedCount]()
 	{
@@ -133,7 +134,7 @@ bool FWacomUIMenuBackRequestedKnockdownGamepadBlockedSpec::RunTest(const FString
 		1);
 	Dialog->ActivateWidget();
 
-	const FReply Reply = Dialog->HandleGamepadBackKeyDownForAutomationTest();
+	const FReply Reply = Dialog->SendGamepadBackKeyDown();
 	TestTrue(TEXT("Knockdown dialog gamepad back is handled"), Reply.IsEventHandled());
 	TestEqual(TEXT("Knockdown dialog does not broadcast default back"), BackRequestedCount, 0);
 	TestTrue(TEXT("Knockdown dialog remains active after blocked back"), Dialog->IsActivated());

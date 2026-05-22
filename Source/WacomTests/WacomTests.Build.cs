@@ -27,6 +27,10 @@ public class WacomTests : ModuleRules
 			"FieldNotification"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[]
+		{
+			"InputCore",
+			"SlateCore"
+		});
 	}
 }

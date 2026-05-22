@@ -190,8 +190,8 @@ bool UWacomAppToastSubsystem::IsToastOwnerPairUsable(
 	const UWorld* CurrentWorld,
 	const APlayerController* CurrentPC) const
 {
-	// Unit tests often inject a transient widget with no real world or player owner.
-	// Keep that override reusable instead of classifying "unknown" as stale.
+	// Transient widgets can have no real world or player owner.
+	// Keep that cache reusable instead of classifying "unknown" as stale.
 	const bool bHasNoRuntimeOwner = WidgetWorld == nullptr && WidgetOwner == nullptr;
 	if (bHasNoRuntimeOwner)
 	{
@@ -215,17 +215,6 @@ bool UWacomAppToastSubsystem::IsToastOwnerPairUsable(
 
 	return true;
 }
-
-#if WITH_AUTOMATION_TESTS
-bool UWacomAppToastSubsystem::IsToastOwnerPairUsableForTest(
-	const UWorld* WidgetWorld,
-	const APlayerController* WidgetOwner,
-	const UWorld* CurrentWorld,
-	const APlayerController* CurrentPC) const
-{
-	return IsToastOwnerPairUsable(WidgetWorld, WidgetOwner, CurrentWorld, CurrentPC);
-}
-#endif
 
 void UWacomAppToastSubsystem::ClearToastWidget()
 {

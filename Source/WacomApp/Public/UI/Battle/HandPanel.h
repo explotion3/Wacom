@@ -77,8 +77,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	int32 GetSpawnedCardCount() const { return SpawnedCards.Num(); }
 
-	UCardWidget* GetSpawnedCardForTest(int32 Index) const;
-
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	int32 GetUnifiedHandSlotCardCount() const;
 
@@ -97,6 +95,7 @@ protected:
 	void ApplyUnifiedHandSlotAlignment() const;
 	void ApplyCardSlotLayout(UCardWidget* Card, int32 CardIndex, int32 CardCount) const;
 	FMargin BuildCardSlotPadding(int32 CardIndex, int32 CardCount) const;
+	UCardWidget* GetSpawnedCardAt(int32 Index) const;
 
 private:
 	UFUNCTION()

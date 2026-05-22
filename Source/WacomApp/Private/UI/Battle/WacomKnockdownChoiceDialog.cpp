@@ -223,18 +223,4 @@ FReply UWacomKnockdownChoiceDialog::NativeOnKeyDown(const FGeometry& InGeometry,
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
-#if WITH_AUTOMATION_TESTS
-FReply UWacomKnockdownChoiceDialog::HandleEscapeKeyDownForAutomationTest()
-{
-	const FKeyEvent KeyEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
-	return NativeOnKeyDown(FGeometry(), KeyEvent);
-}
-
-FReply UWacomKnockdownChoiceDialog::HandleGamepadBackKeyDownForAutomationTest()
-{
-	const FKeyEvent KeyEvent(EKeys::Gamepad_FaceButton_Right, FModifierKeysState(), 0, false, 0, 0);
-	return NativeOnKeyDown(FGeometry(), KeyEvent);
-}
-#endif
-
 #undef LOCTEXT_NAMESPACE

@@ -49,8 +49,7 @@ UWacomConfirmDialog* UWacomConfirmDialog::Show(
 		return nullptr;
 	}
 
-	Dialog->OnConfirmCallback = MoveTemp(OnConfirm);
-	Dialog->OnCancelCallback  = MoveTemp(OnCancel);
+	Dialog->SetCallbacks(MoveTemp(OnConfirm), MoveTemp(OnCancel));
 	Dialog->PendingTitle      = Title;
 	Dialog->PendingMessage    = Message;
 
@@ -67,6 +66,12 @@ void UWacomConfirmDialog::SetContent(const FText& Title, const FText& Message)
 {
 	if (TitleText)   { TitleText->SetText(Title); }
 	if (MessageText) { MessageText->SetText(Message); }
+}
+
+void UWacomConfirmDialog::SetCallbacks(TFunction<void()> OnConfirm, TFunction<void()> OnCancel)
+{
+	OnConfirmCallback = MoveTemp(OnConfirm);
+	OnCancelCallback = MoveTemp(OnCancel);
 }
 
 // ================ 默认布局 ================
@@ -190,25 +195,5 @@ FReply UWacomConfirmDialog::NativeOnKeyDown(const FGeometry& InGeometry, const F
 	}
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
-
-#if WITH_AUTOMATION_TESTS
-void UWacomConfirmDialog::SetCallbacksForAutomationTest(TFunction<void()> OnConfirm, TFunction<void()> OnCancel)
-{
-	OnConfirmCallback = MoveTemp(OnConfirm);
-	OnCancelCallback = MoveTemp(OnCancel);
-}
-
-FReply UWacomConfirmDialog::HandleEscapeKeyDownForAutomationTest()
-{
-	const FKeyEvent KeyEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
-	return NativeOnKeyDown(FGeometry(), KeyEvent);
-}
-
-FReply UWacomConfirmDialog::HandleGamepadBackKeyDownForAutomationTest()
-{
-	const FKeyEvent KeyEvent(EKeys::Gamepad_FaceButton_Right, FModifierKeysState(), 0, false, 0, 0);
-	return NativeOnKeyDown(FGeometry(), KeyEvent);
-}
-#endif
 
 #undef LOCTEXT_NAMESPACE

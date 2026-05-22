@@ -129,13 +129,13 @@ void UWacomShopScreen::NativeOnActivated()
 
 void UWacomShopScreen::NativeOnDeactivated()
 {
-	FWacomShopScreenFlow::EndShopVisitOnDeactivate(GetRunSession(), bDidEndShopVisit);
+	FWacomShopScreenFlow::EndShopVisitOnDeactivate(ResolveRunSession(), bDidEndShopVisit);
 	Super::NativeOnDeactivated();
 }
 
 void UWacomShopScreen::RefreshShop()
 {
-	if (URunSession* Run = GetRunSession())
+	if (URunSession* Run = ResolveRunSession())
 	{
 		const FRunShopSnapshot Snapshot = Run->BuildCurrentShopSnapshot();
 		if (TitleText)
@@ -155,7 +155,13 @@ void UWacomShopScreen::RefreshShop()
 	RebuildOfferRows();
 }
 
-bool UWacomShopScreen::PurchaseOfferByIndexForTest(int32 Index)
+void UWacomShopScreen::HandleCloseClicked()
+{
+	DeactivateWidget();
+}
+
+#if WITH_AUTOMATION_TESTS
+bool UWacomShopScreen::PurchaseOfferByIndex(int32 Index)
 {
 	if (!CachedOfferIds.IsValidIndex(Index))
 	{
@@ -164,34 +170,26 @@ bool UWacomShopScreen::PurchaseOfferByIndexForTest(int32 Index)
 	return PurchaseOffer(CachedOfferIds[Index]);
 }
 
-FWacomShopOfferPresentationView UWacomShopScreen::GetOfferPresentationViewForTest(int32 Index) const
+FWacomShopOfferPresentationView UWacomShopScreen::GetCachedOfferView(int32 Index) const
 {
 	return CachedOfferViews.IsValidIndex(Index)
 		? CachedOfferViews[Index]
 		: FWacomShopOfferPresentationView();
 }
 
-FText UWacomShopScreen::BuildPurchaseFailureToastTextForTest(FName DisabledReason)
+FText UWacomShopScreen::BuildPurchaseFailureToastText(FName DisabledReason)
 {
 	return FWacomShopScreenFlow::BuildPurchaseFailureToastText(DisabledReason);
 }
 
-FText UWacomShopScreen::GetGoldTextForTest() const
+FText UWacomShopScreen::GetDisplayedGoldText() const
 {
 	return GoldText ? GoldText->GetText() : FText::GetEmpty();
 }
+#endif
 
-void UWacomShopScreen::HandleCloseClicked()
+URunSession* UWacomShopScreen::ResolveRunSession() const
 {
-	DeactivateWidget();
-}
-
-URunSession* UWacomShopScreen::GetRunSession() const
-{
-	if (RunSessionOverride)
-	{
-		return RunSessionOverride;
-	}
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(GetOwningPlayer());
 	return WacomPC ? WacomPC->GetRunSession() : nullptr;
 }
@@ -205,7 +203,7 @@ void UWacomShopScreen::RebuildOfferRows()
 		OfferList->ClearChildren();
 	}
 
-	URunSession* Run = GetRunSession();
+	URunSession* Run = ResolveRunSession();
 	const FRunShopSnapshot Snapshot = Run ? Run->BuildCurrentShopSnapshot() : FRunShopSnapshot();
 	if (EmptyText)
 	{
@@ -254,22 +252,17 @@ void UWacomShopScreen::HandleOfferPurchaseRequested(FGuid OfferId)
 
 bool UWacomShopScreen::PurchaseOffer(FGuid OfferId)
 {
-	URunSession* Run = GetRunSession();
+	URunSession* Run = ResolveRunSession();
 	if (!Run)
 	{
 		return false;
 	}
 
-	return FWacomShopScreenFlow::PurchaseOffer(*this, Run, GetToastSubsystem(), OfferId, CachedOfferViews);
+	return FWacomShopScreenFlow::PurchaseOffer(*this, Run, ResolveToastSubsystem(), OfferId, CachedOfferViews);
 }
 
-UWacomAppToastSubsystem* UWacomShopScreen::GetToastSubsystem() const
+UWacomAppToastSubsystem* UWacomShopScreen::ResolveToastSubsystem() const
 {
-	if (ToastSubsystemOverride)
-	{
-		return ToastSubsystemOverride;
-	}
-
 	UGameInstance* GI = GetGameInstance();
 	return GI ? GI->GetSubsystem<UWacomAppToastSubsystem>() : nullptr;
 }

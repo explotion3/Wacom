@@ -22,13 +22,15 @@
 #include "UI/Shop/WacomShopOfferRowWidget.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "UI/Shop/WacomShopScreen.h"
+#include "UI/WacomUITestAccess.h"
+#include "UI/WacomShopRunEventTestProbes.h"
 
 #include "Engine/GameInstance.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace
 {
-	void SetRunSessionForTest(AWacomPlayerController* PC, URunSession* Run)
+	void InjectRunSession(AWacomPlayerController* PC, URunSession* Run)
 	{
 		FObjectProperty* RunSessionProperty = FindFProperty<FObjectProperty>(PC->GetClass(), TEXT("RunSession"));
 		if (RunSessionProperty)
@@ -67,7 +69,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIWorldInteractionClosestPromptSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
 	TStrongObjectPtr<AWacomShopTriggerActor> Near(NewObject<AWacomShopTriggerActor>());
 	TStrongObjectPtr<AWacomShopTriggerActor> Far(NewObject<AWacomShopTriggerActor>());
@@ -89,15 +91,15 @@ bool FWacomUIWorldInteractionClosestPromptSpec::RunTest(const FString& /*Paramet
 	PC->RegisterCandidateInteractable(Near.Get());
 	PC->RegisterCandidateInteractable(Disabled.Get());
 
-	TestTrue(TEXT("Closest available interactable wins"), PC->PickClosestInteractableForTest() == Near.Get());
+	TestTrue(TEXT("Closest available interactable wins"), PC->ReadClosestInteractable() == Near.Get());
 	TestEqual(TEXT("Prompt comes from closest available interactable"),
-		PC->BuildCurrentInteractPromptForTest().ToString(),
+		PC->ReadCurrentInteractPrompt().ToString(),
 		FString(TEXT("按 E 交易")));
 
 	PC->UnregisterCandidateInteractable(Near.Get());
-	TestTrue(TEXT("After unregister, far candidate wins"), PC->PickClosestInteractableForTest() == Far.Get());
+	TestTrue(TEXT("After unregister, far candidate wins"), PC->ReadClosestInteractable() == Far.Get());
 	TestEqual(TEXT("Disabled candidate still ignored"),
-		PC->BuildCurrentInteractPromptForTest().ToString(),
+		PC->ReadCurrentInteractPrompt().ToString(),
 		FString(TEXT("按 E 战斗")));
 
 	return true;
@@ -110,7 +112,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIWorldInteractionShopTriggerNativeContractSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
 
 	TestFalse(TEXT("Shop with None id is not interactable"),
@@ -137,11 +139,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIWorldInteractionRunEventTriggerNativeContractSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
 	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Trigger.Get()));
-	SetRunSessionForTest(PC.Get(), Run.Get());
+	InjectRunSession(PC.Get(), Run.Get());
 
 	TestFalse(TEXT("Event trigger without id/definition is not interactable"),
 		Trigger->CanInteract_Implementation(PC.Get()));
@@ -180,12 +182,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIWorldInteractionCompletedRunEventWeakPromptSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
 	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Trigger.Get()));
-	SetRunSessionForTest(PC.Get(), Run.Get());
+	InjectRunSession(PC.Get(), Run.Get());
 
 	Pawn->SetActorLocation(FVector::ZeroVector);
 	PC->SetPawn(Pawn.Get());
@@ -198,9 +200,9 @@ bool FWacomUIWorldInteractionCompletedRunEventWeakPromptSpec::RunTest(const FStr
 	TestTrue(TEXT("Complete event via option"), Run->ChooseRunEventOption(TEXT("Close")));
 
 	PC->RegisterCandidateInteractable(Trigger.Get());
-	TestTrue(TEXT("Completed event remains closest candidate"), PC->PickClosestInteractableForTest() == Trigger.Get());
+	TestTrue(TEXT("Completed event remains closest candidate"), PC->ReadClosestInteractable() == Trigger.Get());
 	TestEqual(TEXT("Completed event prompt shown"),
-		PC->BuildCurrentInteractPromptForTest().ToString(),
+		PC->ReadCurrentInteractPrompt().ToString(),
 		FString(TEXT("事件已完成")));
 
 	return true;
@@ -213,7 +215,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIWorldInteractionBattleTriggerCompatibilitySpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
 	TStrongObjectPtr<ABattleTriggerActor> Trigger(NewObject<ABattleTriggerActor>());
 
@@ -225,7 +227,7 @@ bool FWacomUIWorldInteractionBattleTriggerCompatibilitySpec::RunTest(const FStri
 		Trigger->CanInteract_Implementation(PC.Get()));
 
 	PC->RegisterCandidateTrigger(Trigger.Get());
-	TestNull(TEXT("Compatibility registration ignores unavailable trigger"), PC->PickClosestInteractableForTest());
+	TestNull(TEXT("Compatibility registration ignores unavailable trigger"), PC->ReadClosestInteractable());
 
 	return true;
 }
@@ -393,28 +395,28 @@ bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Param
 {
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Run.Get()));
-	TStrongObjectPtr<UWacomRunEventScreen> Screen(NewObject<UWacomRunEventScreen>());
+	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
 	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
 	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
 	TStrongObjectPtr<UWacomAppToastWidget> ToastWidget(NewObject<UWacomAppToastWidget>());
 	ToastWidget->TakeWidget();
-	ToastSubsystem->SetToastWidgetOverrideForTest(ToastWidget.Get());
+	FWacomUITestAccess::SetToastWidget(*ToastSubsystem, ToastWidget.Get());
 
 	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(TEXT("Event.UI.Screen"), Event.Get()));
-	Screen->SetRunSessionOverrideForTest(Run.Get());
-	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
+	Screen->SetRunSession(Run.Get());
+	Screen->SetToastSubsystem(ToastSubsystem.Get());
 	Screen->TakeWidget();
 	Screen->ActivateWidget();
 	Screen->RefreshEvent();
 	TestTrue(TEXT("Event screen activates without world stack"), Screen->IsActivated());
 
-	TestEqual(TEXT("Screen title from snapshot"), Screen->GetTitleTextForTest().ToString(), FString(TEXT("UI标题")));
-	TestEqual(TEXT("Screen body from snapshot"), Screen->GetBodyTextForTest().ToString(), FString(TEXT("UI正文")));
-	TestEqual(TEXT("One choice row"), Screen->GetChoiceCountForTest(), 1);
+	TestEqual(TEXT("Screen title from snapshot"), Screen->ReadTitleText().ToString(), FString(TEXT("UI标题")));
+	TestEqual(TEXT("Screen body from snapshot"), Screen->ReadBodyText().ToString(), FString(TEXT("UI正文")));
+	TestEqual(TEXT("One choice row"), Screen->ReadChoiceCount(), 1);
 	TestEqual(TEXT("Choice label stored"),
-		Screen->GetChoiceSnapshotForTest(0).LabelText.ToString(),
+		Screen->ReadChoiceSnapshot(0).LabelText.ToString(),
 		FString(TEXT("关闭事件")));
-	TestTrue(TEXT("Choose close succeeds"), Screen->ChooseChoiceByIndexForTest(0));
+	TestTrue(TEXT("Choose close succeeds"), Screen->ChooseChoiceAt(0));
 	TestTrue(TEXT("Event completed after choice"), Run->IsRunEventCompleted(TEXT("Event.UI.Screen")));
 	TestFalse(TEXT("Event no longer active after close choice"), Run->IsRunEventActive());
 	TestFalse(TEXT("Close choice deactivates event screen once flow ends"), Screen->IsActivated());
@@ -431,12 +433,12 @@ bool FWacomUIRunEventScreenBlockedChoiceToastSpec::RunTest(const FString& /*Para
 {
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(NewObject<UWacomRunEventDefinition>(Run.Get()));
-	TStrongObjectPtr<UWacomRunEventScreen> Screen(NewObject<UWacomRunEventScreen>());
+	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
 	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
 	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
 	TStrongObjectPtr<UWacomAppToastWidget> ToastWidget(NewObject<UWacomAppToastWidget>());
 	ToastWidget->TakeWidget();
-	ToastSubsystem->SetToastWidgetOverrideForTest(ToastWidget.Get());
+	FWacomUITestAccess::SetToastWidget(*ToastSubsystem, ToastWidget.Get());
 
 	Event->EventId = TEXT("Event.UI.Blocked");
 	Event->DisplayName = FText::FromString(TEXT("禁用事件"));
@@ -454,20 +456,20 @@ bool FWacomUIRunEventScreenBlockedChoiceToastSpec::RunTest(const FString& /*Para
 	Event->Nodes = { Start };
 
 	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(TEXT("Event.UI.Blocked.Actor"), Event.Get()));
-	Screen->SetRunSessionOverrideForTest(Run.Get());
-	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
+	Screen->SetRunSession(Run.Get());
+	Screen->SetToastSubsystem(ToastSubsystem.Get());
 	Screen->TakeWidget();
 	Screen->ActivateWidget();
 	Screen->RefreshEvent();
 	TestTrue(TEXT("Blocked event screen remains active before choice"), Screen->IsActivated());
 
-	TestEqual(TEXT("One blocked choice"), Screen->GetChoiceCountForTest(), 1);
-	TestFalse(TEXT("Choice unavailable"), Screen->GetChoiceSnapshotForTest(0).bAvailable);
-	TestFalse(TEXT("Choosing blocked option fails"), Screen->ChooseChoiceByIndexForTest(0));
+	TestEqual(TEXT("One blocked choice"), Screen->ReadChoiceCount(), 1);
+	TestFalse(TEXT("Choice unavailable"), Screen->ReadChoiceSnapshot(0).bAvailable);
+	TestFalse(TEXT("Choosing blocked option fails"), Screen->ChooseChoiceAt(0));
 	TestTrue(TEXT("Event remains active"), Run->IsRunEventActive());
 	TestTrue(TEXT("Blocked choice keeps screen active"), Screen->IsActivated());
 	TestEqual(TEXT("Blocked choice emits toast"), ToastWidget->GetVisibleToastCount(), 1);
-	const TArray<FWacomAppToastView> Toasts = ToastWidget->GetCurrentToastsForTest();
+	const TArray<FWacomAppToastView> Toasts = FWacomUITestAccess::GetCurrentToasts(*ToastWidget);
 	if (Toasts.IsValidIndex(0))
 	{
 		TestEqual(TEXT("Blocked toast text"), Toasts[0].MessageText.ToString(), FString(TEXT("金币不足")));
@@ -484,16 +486,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUIShopPurchaseFailureToastTextSpec::RunTest(const FString& /*Parameters*/)
 {
 	TestEqual(TEXT("Insufficient gold toast"),
-		UWacomShopScreen::BuildPurchaseFailureToastTextForTest(TEXT("InsufficientGold")).ToString(),
+		UWacomShopScreenProbe::FormatPurchaseFailureToast(TEXT("InsufficientGold")).ToString(),
 		FString(TEXT("金币不足")));
 	TestEqual(TEXT("Purchased toast"),
-		UWacomShopScreen::BuildPurchaseFailureToastTextForTest(TEXT("Purchased")).ToString(),
+		UWacomShopScreenProbe::FormatPurchaseFailureToast(TEXT("Purchased")).ToString(),
 		FString(TEXT("该商品已购买")));
 	TestEqual(TEXT("Missing card toast"),
-		UWacomShopScreen::BuildPurchaseFailureToastTextForTest(TEXT("MissingCard")).ToString(),
+		UWacomShopScreenProbe::FormatPurchaseFailureToast(TEXT("MissingCard")).ToString(),
 		FString(TEXT("商品不可购买")));
 	TestEqual(TEXT("Fallback purchase failure toast"),
-		UWacomShopScreen::BuildPurchaseFailureToastTextForTest(NAME_None).ToString(),
+		UWacomShopScreenProbe::FormatPurchaseFailureToast(NAME_None).ToString(),
 		FString(TEXT("购买失败")));
 
 	return true;
@@ -546,20 +548,20 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	SecondCard->CardId = TEXT("Shop.Test.Second");
 	SecondCard->DisplayName = FText::FromString(TEXT("第二张商店卡"));
 
-	TStrongObjectPtr<AWacomPlayerController> PC(NewObject<AWacomPlayerController>());
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
-	TStrongObjectPtr<UWacomShopScreen> Screen(NewObject<UWacomShopScreen>());
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
 	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
 	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
 	TStrongObjectPtr<UWacomAppToastWidget> ToastWidget(NewObject<UWacomAppToastWidget>());
 
-	SetRunSessionForTest(PC.Get(), Run.Get());
+	InjectRunSession(PC.Get(), Run.Get());
 	if (!TestNotNull(TEXT("Injected run session"), PC->GetRunSession()))
 	{
 		return false;
 	}
 	ToastWidget->TakeWidget();
-	ToastSubsystem->SetToastWidgetOverrideForTest(ToastWidget.Get());
+	FWacomUITestAccess::SetToastWidget(*ToastSubsystem, ToastWidget.Get());
 
 	Run->AddGold(5);
 	TArray<FRunShopOfferInput> Offers;
@@ -567,21 +569,21 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	Offers.Add({ SecondCard, 3 });
 	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Screen"), Offers));
 
-	Screen->SetRunSessionOverrideForTest(Run.Get());
-	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
+	Screen->SetRunSession(Run.Get());
+	Screen->SetToastSubsystem(ToastSubsystem.Get());
 	Screen->TakeWidget();
 	Screen->ActivateWidget();
 	Screen->RefreshShop();
 	TestTrue(TEXT("Shop screen activates without world stack"), Screen->IsActivated());
 
-	TestEqual(TEXT("Two offer rows"), Screen->GetOfferRowCount(), 2);
-	TestTrue(TEXT("First offer starts purchasable"), Screen->GetOfferPresentationViewForTest(0).bCanPurchase);
-	TestTrue(TEXT("Second offer starts purchasable"), Screen->GetOfferPresentationViewForTest(1).bCanPurchase);
-	TestTrue(TEXT("Gold text reflects run gold"), Screen->GetGoldTextForTest().ToString().Contains(TEXT("5")));
-	TestTrue(TEXT("Purchase first offer succeeds"), Screen->PurchaseOfferByIndexForTest(0));
+	TestEqual(TEXT("Two offer rows"), Screen->ReadOfferCount(), 2);
+	TestTrue(TEXT("First offer starts purchasable"), Screen->ReadOfferPresentationView(0).bCanPurchase);
+	TestTrue(TEXT("Second offer starts purchasable"), Screen->ReadOfferPresentationView(1).bCanPurchase);
+	TestTrue(TEXT("Gold text reflects run gold"), Screen->ReadGoldText().ToString().Contains(TEXT("5")));
+	TestTrue(TEXT("Purchase first offer succeeds"), Screen->PurchaseOfferAt(0));
 	TestEqual(TEXT("Gold after purchase"), Run->GetGold(), 2);
 	TestEqual(TEXT("Purchase success emits one app toast"), ToastWidget->GetVisibleToastCount(), 1);
-	const TArray<FWacomAppToastView> PurchaseToasts = ToastWidget->GetCurrentToastsForTest();
+	const TArray<FWacomAppToastView> PurchaseToasts = FWacomUITestAccess::GetCurrentToasts(*ToastWidget);
 	if (PurchaseToasts.IsValidIndex(0))
 	{
 		const FWacomAppToastView& Toast = PurchaseToasts[0];
@@ -591,13 +593,13 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 		TestTrue(TEXT("Purchase success toast is positive"), Toast.Tone == EWacomAppToastTone::Positive);
 		TestEqual(TEXT("Purchase success toast icon"), Toast.IconKey, FName(TEXT("CardGained")));
 	}
-	TestFalse(TEXT("Purchased offer disabled after refresh"), Screen->GetOfferPresentationViewForTest(0).bCanPurchase);
+	TestFalse(TEXT("Purchased offer disabled after refresh"), Screen->ReadOfferPresentationView(0).bCanPurchase);
 	TestEqual(TEXT("Purchased offer action after refresh"),
-		Screen->GetOfferPresentationViewForTest(0).ActionText.ToString(),
+		Screen->ReadOfferPresentationView(0).ActionText.ToString(),
 		FString(TEXT("已购买")));
-	TestFalse(TEXT("Second offer disabled after gold drops"), Screen->GetOfferPresentationViewForTest(1).bCanPurchase);
+	TestFalse(TEXT("Second offer disabled after gold drops"), Screen->ReadOfferPresentationView(1).bCanPurchase);
 	TestEqual(TEXT("Second offer becomes insufficient"),
-		Screen->GetOfferPresentationViewForTest(1).DisabledReason,
+		Screen->ReadOfferPresentationView(1).DisabledReason,
 		FName(TEXT("InsufficientGold")));
 	const FRunBackpackStorageSnapshot StorageSnapshot = Run->BuildBackpackStorageSnapshot();
 	TestTrue(TEXT("Purchased card enters run storage"),
@@ -689,10 +691,10 @@ bool FWacomUIGameMenuSwitchClosesOldShopBeforeBeginNewShopSpec::RunTest(const FS
 
 	{
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TStrongObjectPtr<UWacomShopScreen> OldScreen(NewObject<UWacomShopScreen>());
+		TStrongObjectPtr<UWacomShopScreenProbe> OldScreen(NewObject<UWacomShopScreenProbe>());
 
 		TestTrue(TEXT("Hazard: old shop begins before switch"), Run->BeginShopVisit(OldShopId, Offers));
-		OldScreen->SetRunSessionOverrideForTest(Run.Get());
+		OldScreen->SetRunSession(Run.Get());
 		OldScreen->TakeWidget();
 		OldScreen->ActivateWidget();
 
@@ -708,11 +710,11 @@ bool FWacomUIGameMenuSwitchClosesOldShopBeforeBeginNewShopSpec::RunTest(const FS
 	}
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TStrongObjectPtr<UWacomShopScreen> OldScreen(NewObject<UWacomShopScreen>());
+	TStrongObjectPtr<UWacomShopScreenProbe> OldScreen(NewObject<UWacomShopScreenProbe>());
 	int32 OldScreenDeactivatedCount = 0;
 
 	TestTrue(TEXT("Old shop begins before switch"), Run->BeginShopVisit(OldShopId, Offers));
-	OldScreen->SetRunSessionOverrideForTest(Run.Get());
+	OldScreen->SetRunSession(Run.Get());
 	OldScreen->OnDeactivated().AddLambda([&OldScreenDeactivatedCount]()
 	{
 		++OldScreenDeactivatedCount;
@@ -752,10 +754,10 @@ bool FWacomUIGameMenuSwitchClosesOldRunEventBeforeBeginNewRunEventSpec::RunTest(
 	{
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Run.Get()));
-		TStrongObjectPtr<UWacomRunEventScreen> OldScreen(NewObject<UWacomRunEventScreen>());
+		TStrongObjectPtr<UWacomRunEventScreenProbe> OldScreen(NewObject<UWacomRunEventScreenProbe>());
 
 		TestTrue(TEXT("Hazard: old event begins before switch"), Run->BeginRunEvent(OldEventId, Event.Get()));
-		OldScreen->SetRunSessionOverrideForTest(Run.Get());
+		OldScreen->SetRunSession(Run.Get());
 		OldScreen->TakeWidget();
 		OldScreen->ActivateWidget();
 
@@ -772,11 +774,11 @@ bool FWacomUIGameMenuSwitchClosesOldRunEventBeforeBeginNewRunEventSpec::RunTest(
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Run.Get()));
-	TStrongObjectPtr<UWacomRunEventScreen> OldScreen(NewObject<UWacomRunEventScreen>());
+	TStrongObjectPtr<UWacomRunEventScreenProbe> OldScreen(NewObject<UWacomRunEventScreenProbe>());
 	int32 OldScreenDeactivatedCount = 0;
 
 	TestTrue(TEXT("Old event begins before switch"), Run->BeginRunEvent(OldEventId, Event.Get()));
-	OldScreen->SetRunSessionOverrideForTest(Run.Get());
+	OldScreen->SetRunSession(Run.Get());
 	OldScreen->OnDeactivated().AddLambda([&OldScreenDeactivatedCount]()
 	{
 		++OldScreenDeactivatedCount;

@@ -40,11 +40,6 @@ public:
 	 */
 	void SetContext(class UBattleHUD* InHUD, const FKnockdownChoiceView& InView);
 
-#if WITH_AUTOMATION_TESTS
-	FReply HandleEscapeKeyDownForAutomationTest();
-	FReply HandleGamepadBackKeyDownForAutomationTest();
-#endif
-
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;

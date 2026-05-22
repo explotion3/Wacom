@@ -8,6 +8,7 @@
 #include "UI/Foundation/WacomAppToastTypes.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
+#include "UI/WacomUITestAccess.h"
 
 #include "UObject/StrongObjectPtr.h"
 
@@ -46,7 +47,7 @@ bool FWacomUIAppToastWidgetQueueSpec::RunTest(const FString& /*Parameters*/)
 
 	TestEqual(TEXT("Toast widget becomes passive visible when messages exist"), Widget->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	TestEqual(TEXT("Max visible messages enforced"), Widget->GetVisibleToastCount(), 2);
-	const TArray<FWacomAppToastView> Current = Widget->GetCurrentToastsForTest();
+	const TArray<FWacomAppToastView> Current = FWacomUITestAccess::GetCurrentToasts(*Widget);
 	if (!TestEqual(TEXT("Current toast count"), Current.Num(), 2))
 	{
 		return false;
@@ -76,15 +77,15 @@ bool FWacomUIAppToastLifecycleOwnerPolicySpec::RunTest(const FString& /*Paramete
 	TStrongObjectPtr<APlayerController> CurrentPC(NewObject<APlayerController>());
 
 	TestTrue(TEXT("Matching owner pair is reusable"),
-		ToastSubsystem->IsToastOwnerPairUsableForTest(CurrentWorld.Get(), CurrentPC.Get(), CurrentWorld.Get(), CurrentPC.Get()));
+		FWacomUITestAccess::IsToastOwnerPairUsable(*ToastSubsystem, CurrentWorld.Get(), CurrentPC.Get(), CurrentWorld.Get(), CurrentPC.Get()));
 	TestFalse(TEXT("Old world owner pair is stale"),
-		ToastSubsystem->IsToastOwnerPairUsableForTest(OldWorld.Get(), CurrentPC.Get(), CurrentWorld.Get(), CurrentPC.Get()));
+		FWacomUITestAccess::IsToastOwnerPairUsable(*ToastSubsystem, OldWorld.Get(), CurrentPC.Get(), CurrentWorld.Get(), CurrentPC.Get()));
 	TestFalse(TEXT("Old player controller owner pair is stale"),
-		ToastSubsystem->IsToastOwnerPairUsableForTest(CurrentWorld.Get(), OldPC.Get(), CurrentWorld.Get(), CurrentPC.Get()));
+		FWacomUITestAccess::IsToastOwnerPairUsable(*ToastSubsystem, CurrentWorld.Get(), OldPC.Get(), CurrentWorld.Get(), CurrentPC.Get()));
 	TestFalse(TEXT("Runtime-owned widget is stale when current PC is missing"),
-		ToastSubsystem->IsToastOwnerPairUsableForTest(CurrentWorld.Get(), CurrentPC.Get(), CurrentWorld.Get(), nullptr));
+		FWacomUITestAccess::IsToastOwnerPairUsable(*ToastSubsystem, CurrentWorld.Get(), CurrentPC.Get(), CurrentWorld.Get(), nullptr));
 	TestTrue(TEXT("Transient override without runtime owner is reusable"),
-		ToastSubsystem->IsToastOwnerPairUsableForTest(nullptr, nullptr, nullptr, nullptr));
+		FWacomUITestAccess::IsToastOwnerPairUsable(*ToastSubsystem, nullptr, nullptr, nullptr, nullptr));
 
 	return true;
 }
@@ -100,11 +101,11 @@ bool FWacomUIAppToastLifecycleStaleWidgetClearedSpec::RunTest(const FString& /*P
 	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
 	TStrongObjectPtr<UWorld> OldWorld(NewObject<UWorld>(GetTransientPackage(), TEXT("AppToastOldWorld")));
 	TStrongObjectPtr<UWacomAppToastWidget> StaleWidget(NewObject<UWacomAppToastWidget>(OldWorld.Get()));
-	ToastSubsystem->SetToastWidgetOverrideForTest(StaleWidget.Get());
+	FWacomUITestAccess::SetToastWidget(*ToastSubsystem, StaleWidget.Get());
 
 	UWacomAppToastWidget* ReadyWidget = ToastSubsystem->EnsureAppToastReady();
 	TestNull(TEXT("Stale widget is not reused when current local PC is unavailable"), ReadyWidget);
-	TestNull(TEXT("Stale widget cache is cleared"), ToastSubsystem->GetToastWidgetForTest());
+	TestNull(TEXT("Stale widget cache is cleared"), FWacomUITestAccess::GetToastWidget(*ToastSubsystem));
 
 	return true;
 }
@@ -120,7 +121,7 @@ bool FWacomUIAppToastLifecycleTransientOverrideSpec::RunTest(const FString& /*Pa
 	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
 	TStrongObjectPtr<UWacomAppToastWidget> ToastWidget(NewObject<UWacomAppToastWidget>());
 	ToastWidget->TakeWidget();
-	ToastSubsystem->SetToastWidgetOverrideForTest(ToastWidget.Get());
+	FWacomUITestAccess::SetToastWidget(*ToastSubsystem, ToastWidget.Get());
 
 	UWacomAppToastWidget* ReadyWidget = ToastSubsystem->EnsureAppToastReady();
 	TestEqual(TEXT("Transient override is reused without real world or PC"), ReadyWidget, ToastWidget.Get());
@@ -131,7 +132,7 @@ bool FWacomUIAppToastLifecycleTransientOverrideSpec::RunTest(const FString& /*Pa
 	TestEqual(TEXT("Reused transient override receives toast"), ToastWidget->GetVisibleToastCount(), 1);
 
 	ToastSubsystem->Deinitialize();
-	TestNull(TEXT("Deinitialize clears cached toast widget"), ToastSubsystem->GetToastWidgetForTest());
+	TestNull(TEXT("Deinitialize clears cached toast widget"), FWacomUITestAccess::GetToastWidget(*ToastSubsystem));
 
 	return true;
 }
@@ -146,7 +147,7 @@ bool FWacomUIAppToastWidgetExpirySpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<UWacomAppToastWidget> Widget(NewObject<UWacomAppToastWidget>());
 	Widget->DefaultMessageLifetime = 3.0f;
 	Widget->TakeWidget();
-	TestTrue(TEXT("Toast widget idle hidden before enqueue"), Widget->IsIdleHiddenForTest());
+	TestTrue(TEXT("Toast widget idle hidden before enqueue"), FWacomUITestAccess::IsToastIdleHidden(*Widget));
 
 	FWacomAppToastView ShortToast;
 	ShortToast.MessageText = FText::FromString(TEXT("短提示"));
@@ -156,9 +157,9 @@ bool FWacomUIAppToastWidgetExpirySpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("Toast starts visible"), Widget->GetVisibleToastCount(), 1);
 	TestEqual(TEXT("Toast widget is hit-test-invisible while showing"), Widget->GetVisibility(), ESlateVisibility::HitTestInvisible);
 
-	Widget->TickToastsForTest(0.3f);
+	FWacomUITestAccess::TickToasts(*Widget, 0.3f);
 	TestEqual(TEXT("Toast expires after lifetime"), Widget->GetVisibleToastCount(), 0);
-	TestTrue(TEXT("Toast widget hides instead of deactivating when queue becomes empty"), Widget->IsIdleHiddenForTest());
+	TestTrue(TEXT("Toast widget hides instead of deactivating when queue becomes empty"), FWacomUITestAccess::IsToastIdleHidden(*Widget));
 	TestFalse(TEXT("Toast widget never needs CommonUI activation for passive viewport display"), Widget->IsActivated());
 
 	return true;

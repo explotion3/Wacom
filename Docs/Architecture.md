@@ -216,7 +216,15 @@ Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / 
 
 当前 UI 侧 ViewData / PresentationBuilder 包括卡牌展示、商店商品、RunEvent 结果、BattleEvent 表现、AppToast 和目标选择视图。它们属于 `WacomApp` 表现层。
 
-复杂 `WacomApp` Widget 流程不要扩成跨模块 Public API。Screen / HUD 负责 View 所有权、生命周期、绑定和重建；购买、选择、移动、删除、确认弹窗、Toast 和访问结束等编排应收口到 `WacomApp/Private` 的 coordinator / command flow helper，再由 Screen 的公开测试包装验证行为。
+复杂 `WacomApp` Widget 流程不要扩成跨模块 Public API。Screen / HUD 负责 View 所有权、生命周期、绑定和重建；购买、选择、移动、删除、确认弹窗、Toast 和访问结束等编排应收口到 `WacomApp/Private` 的 coordinator / command flow helper。
+
+`WacomApp/Public` 的 Widget 头文件只保留 WBP 绑定、运行时生命周期和玩家真实操作所需的 API。测试口不得以 Blueprint / Public Widget API 的形式暴露，尤其不得新增 callable 的 `ForTest`、`ForAutomationTest`、`OverrideForTest` UFUNCTION 或 Blueprint 可见测试函数。测试访问的优先级如下：
+
+1. 在 `WacomTests` 中定义 tests-only probe subclass，借由真实生命周期和公开玩家意图入口观察行为。
+2. 如生产代码确有扩展点需求，提供 protected production seam；该 seam 必须有运行时语义，不能只为测试绕过流程。
+3. 最后才使用 automation-only private friend / test-access；这类入口不能是 `UFUNCTION` 或 Blueprint 可见 API，并应尽量藏在 `WacomApp/Private` 或测试模块内。
+
+测试不能锁死未来 WBP、CommonUI 生命周期或 MVVM 重构的内部形状。自动化测试应验证玩家可观察行为、Snapshot / ViewData 输出和命令副作用，而不是依赖某个临时 C++ fallback 布局或 Public Widget 测试捷径。
 
 ## 10. 验证入口
 
@@ -255,6 +263,7 @@ Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / 
 
 - 关键规则必须有自动化测试覆盖。
 - UI / App 测试不能绕过领域入口直接改内部状态。
+- UI / App 测试不能要求 `WacomApp/Public` 暴露 Blueprint callable 的测试接口；需要测试访问时按 tests-only probe subclass、protected production seam、automation-only private friend / test-access 的顺序收口。
 - DataAsset 生成和 Validator 至少有结构验证测试。
 - 影响 Build.cs 依赖、Public API、SaveGame schema 或跨模块契约的改动要优先补测试。
 

@@ -125,13 +125,13 @@ void UWacomRunEventScreen::NativeOnActivated()
 
 void UWacomRunEventScreen::NativeOnDeactivated()
 {
-	FWacomRunEventScreenFlow::EndRunEventOnDeactivate(GetRunSession(), bDidEndRunEvent);
+	FWacomRunEventScreenFlow::EndRunEventOnDeactivate(ResolveRunSession(), bDidEndRunEvent);
 	Super::NativeOnDeactivated();
 }
 
 void UWacomRunEventScreen::RefreshEvent()
 {
-	if (URunSession* Run = GetRunSession())
+	if (URunSession* Run = ResolveRunSession())
 	{
 		const FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
 		if (TitleText)
@@ -147,12 +147,18 @@ void UWacomRunEventScreen::RefreshEvent()
 	RebuildChoices();
 }
 
-FRunEventChoiceSnapshot UWacomRunEventScreen::GetChoiceSnapshotForTest(int32 Index) const
+void UWacomRunEventScreen::HandleCloseClicked()
+{
+	DeactivateWidget();
+}
+
+#if WITH_AUTOMATION_TESTS
+FRunEventChoiceSnapshot UWacomRunEventScreen::GetCachedChoiceSnapshot(int32 Index) const
 {
 	return CachedChoices.IsValidIndex(Index) ? CachedChoices[Index] : FRunEventChoiceSnapshot();
 }
 
-bool UWacomRunEventScreen::ChooseChoiceByIndexForTest(int32 Index)
+bool UWacomRunEventScreen::ChooseChoiceByIndex(int32 Index)
 {
 	if (!CachedChoices.IsValidIndex(Index))
 	{
@@ -161,37 +167,25 @@ bool UWacomRunEventScreen::ChooseChoiceByIndexForTest(int32 Index)
 	return ChooseChoice(CachedChoices[Index].ChoiceId);
 }
 
-FText UWacomRunEventScreen::GetTitleTextForTest() const
+FText UWacomRunEventScreen::GetDisplayedTitleText() const
 {
 	return TitleText ? TitleText->GetText() : FText::GetEmpty();
 }
 
-FText UWacomRunEventScreen::GetBodyTextForTest() const
+FText UWacomRunEventScreen::GetDisplayedBodyText() const
 {
 	return BodyText ? BodyText->GetText() : FText::GetEmpty();
 }
+#endif
 
-void UWacomRunEventScreen::HandleCloseClicked()
+URunSession* UWacomRunEventScreen::ResolveRunSession() const
 {
-	DeactivateWidget();
-}
-
-URunSession* UWacomRunEventScreen::GetRunSession() const
-{
-	if (RunSessionOverride)
-	{
-		return RunSessionOverride;
-	}
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(GetOwningPlayer());
 	return WacomPC ? WacomPC->GetRunSession() : nullptr;
 }
 
-UWacomAppToastSubsystem* UWacomRunEventScreen::GetToastSubsystem() const
+UWacomAppToastSubsystem* UWacomRunEventScreen::ResolveToastSubsystem() const
 {
-	if (ToastSubsystemOverride)
-	{
-		return ToastSubsystemOverride;
-	}
 	const UGameInstance* GI = GetGameInstance();
 	return GI ? GI->GetSubsystem<UWacomAppToastSubsystem>() : nullptr;
 }
@@ -204,7 +198,7 @@ void UWacomRunEventScreen::RebuildChoices()
 		ChoiceList->ClearChildren();
 	}
 
-	URunSession* Run = GetRunSession();
+	URunSession* Run = ResolveRunSession();
 	const FRunEventSnapshot Snapshot = Run ? Run->BuildCurrentRunEventSnapshot() : FRunEventSnapshot();
 	CachedChoices = Snapshot.Choices;
 
@@ -250,7 +244,7 @@ void UWacomRunEventScreen::HandleChoiceClicked(FName ChoiceId)
 
 bool UWacomRunEventScreen::ChooseChoice(FName ChoiceId)
 {
-	URunSession* Run = GetRunSession();
+	URunSession* Run = ResolveRunSession();
 	if (!Run)
 	{
 		return false;
@@ -259,7 +253,7 @@ bool UWacomRunEventScreen::ChooseChoice(FName ChoiceId)
 	return FWacomRunEventScreenFlow::ChooseChoice(
 		*this,
 		Run,
-		GetToastSubsystem(),
+		ResolveToastSubsystem(),
 		ChoiceId,
 		CachedChoices,
 		bDidEndRunEvent);

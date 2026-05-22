@@ -154,12 +154,6 @@ public:
 	/** 由 RunEventTriggerActor 调用：开始事件访问并 Push 事件界面。 */
 	bool RequestOpenRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition);
 
-	/** 测试/内部使用：按当前候选对象计算显示的 Toast 文案。 */
-	FText BuildCurrentInteractPromptForTest() const;
-
-	/** 测试/内部使用：返回当前最近且可交互的候选对象。 */
-	AActor* PickClosestInteractableForTest() const;
-
 	/** Console command / IA 共用入口（等同于按 E）。 */
 	void TryInteractFromConsole();
 
@@ -189,6 +183,12 @@ protected:
 	void OnOpenBackpackPressed();
 	void OnInteractPressed();
 
+	/** 按当前候选对象计算显示的交互提示文案。 */
+	FText BuildCurrentInteractPrompt() const;
+
+	/** 从候选列表中挑距离玩家最近的有效交互对象。 */
+	AActor* PickClosestInteractable() const;
+
 private:
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
 	UBattleHUD* GetActiveBattleHUD() const;
@@ -205,7 +205,4 @@ private:
 	 */
 	UPROPERTY(Transient)
 	TArray<TWeakObjectPtr<AActor>> CandidateInteractables;
-
-	/** 从候选列表中挑距离玩家最近的有效交互对象。 */
-	AActor* PickClosestInteractable() const;
 };

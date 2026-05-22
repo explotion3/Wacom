@@ -141,7 +141,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBattleCardWidgetPresentationSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<UCardWidget> Widget(NewObject<UCardWidget>());
+	TStrongObjectPtr<UWacomBattleCardWidgetTestProbe> Widget(NewObject<UWacomBattleCardWidgetTestProbe>());
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 
 	Card->CardId = TEXT("BattleRuntimeCostCard");
@@ -166,7 +166,7 @@ bool FWacomUIBattleCardWidgetPresentationSpec::RunTest(const FString& /*Paramete
 	TestTrue(TEXT("Card view data preserves rarity value"), Widget->GetCurrentCardViewData().bShowValue);
 	TestTrue(TEXT("Card view data localizes keyword"), Widget->GetCurrentCardViewData().TypeText.ToString().Contains(TEXT("伙伴")));
 	TestTrue(TEXT("Unplayable card is disabled in card view data"), Widget->GetCurrentCardViewData().bDisabled);
-	TestFalse(TEXT("Unplayable card disables root button"), Widget->IsRootButtonEnabled());
+	TestFalse(TEXT("Unplayable card disables root button"), Widget->IsRootButtonEnabledForTest());
 
 	Snap.RuntimeCost = 2;
 	Snap.bIsPlayable = true;
@@ -174,7 +174,7 @@ bool FWacomUIBattleCardWidgetPresentationSpec::RunTest(const FString& /*Paramete
 
 	TestEqual(TEXT("Runtime cost refreshes"), Widget->GetCurrentCardViewData().Cost, 2);
 	TestFalse(TEXT("Playable card clears disabled flag"), Widget->GetCurrentCardViewData().bDisabled);
-	TestTrue(TEXT("Playable card enables root button"), Widget->IsRootButtonEnabled());
+	TestTrue(TEXT("Playable card enables root button"), Widget->IsRootButtonEnabledForTest());
 
 	return true;
 }
@@ -314,7 +314,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBattleCardWidgetClickAndHighlightSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<UCardWidget> Widget(NewObject<UCardWidget>());
+	TStrongObjectPtr<UWacomBattleCardWidgetTestProbe> Widget(NewObject<UWacomBattleCardWidgetTestProbe>());
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 
 	FHandCardSnapshot Snap;
@@ -490,7 +490,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBattleCardWidgetMissingRootButtonSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<UCardWidget> Widget(NewObject<UCardWidget>());
+	TStrongObjectPtr<UWacomBattleCardWidgetTestProbe> Widget(NewObject<UWacomBattleCardWidgetTestProbe>());
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 	TStrongObjectPtr<UWacomBattleCardWidgetClickReceiver> Receiver(NewObject<UWacomBattleCardWidgetClickReceiver>());
 
@@ -507,7 +507,7 @@ bool FWacomUIBattleCardWidgetMissingRootButtonSpec::RunTest(const FString& /*Par
 	Widget->RequestClickForTest();
 
 	TestEqual(TEXT("Missing RootButton cannot click"), Receiver->ClickCount, 0);
-	TestFalse(TEXT("Missing RootButton reports disabled"), Widget->IsRootButtonEnabled());
+	TestFalse(TEXT("Missing RootButton reports disabled"), Widget->IsRootButtonEnabledForTest());
 	TestTrue(TEXT("Data still refreshes without widgets"), Widget->GetCurrentCardViewData().bShowCost);
 
 	return true;
@@ -604,7 +604,7 @@ bool FWacomUIBattleHandPanelUnifiedHorizontalRendererSpec::RunTest(const FString
 {
 	TStrongObjectPtr<UWacomBattleHandPanelLayoutTest> Panel(NewObject<UWacomBattleHandPanelLayoutTest>());
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
-	Panel->CardWidgetClass = UCardWidget::StaticClass();
+	Panel->CardWidgetClass = UWacomBattleCardWidgetTestProbe::StaticClass();
 	Panel->AnchorCardWidgetClass = UCardWidget::StaticClass();
 	Panel->CardSpacing = 12.0f;
 	Panel->HandContentPadding = FMargin(2.0f, 3.0f, 4.0f, 5.0f);
@@ -663,7 +663,7 @@ bool FWacomUIBattleHandPanelHoverForwardingSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UWacomBattleHandPanelLayoutTest> Panel(NewObject<UWacomBattleHandPanelLayoutTest>());
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 	TStrongObjectPtr<UWacomBattleCardWidgetClickReceiver> Receiver(NewObject<UWacomBattleCardWidgetClickReceiver>());
-	Panel->CardWidgetClass = UCardWidget::StaticClass();
+	Panel->CardWidgetClass = UWacomBattleCardWidgetTestProbe::StaticClass();
 
 	FBattleSnapshot Snapshot;
 	FHandCardSnapshot HandCard;
@@ -678,7 +678,7 @@ bool FWacomUIBattleHandPanelHoverForwardingSpec::RunTest(const FString& /*Parame
 	Panel->TakeWidget();
 	Panel->RefreshFromSnapshot(Snapshot);
 
-	UCardWidget* SpawnedCard = Panel->GetSpawnedCardForTest(0);
+	UWacomBattleCardWidgetTestProbe* SpawnedCard = Panel->GetSpawnedCardProbeForTest(0);
 	TestNotNull(TEXT("Panel creates a card widget"), SpawnedCard);
 	if (!SpawnedCard)
 	{
@@ -687,11 +687,11 @@ bool FWacomUIBattleHandPanelHoverForwardingSpec::RunTest(const FString& /*Parame
 
 	SpawnedCard->RequestHoverForTest();
 	TestEqual(TEXT("HandPanel forwards hover"), Receiver->HoverCount, 1);
-	TestEqual(TEXT("Forwarded hover carries spawned card"), Receiver->LastHoveredWidget.Get(), SpawnedCard);
+	TestEqual(TEXT("Forwarded hover carries spawned card"), Receiver->LastHoveredWidget.Get(), static_cast<UCardWidget*>(SpawnedCard));
 
 	SpawnedCard->RequestUnhoverForTest();
 	TestEqual(TEXT("HandPanel forwards unhover"), Receiver->UnhoverCount, 1);
-	TestEqual(TEXT("Forwarded unhover carries spawned card"), Receiver->LastUnhoveredWidget.Get(), SpawnedCard);
+	TestEqual(TEXT("Forwarded unhover carries spawned card"), Receiver->LastUnhoveredWidget.Get(), static_cast<UCardWidget*>(SpawnedCard));
 
 	return true;
 }

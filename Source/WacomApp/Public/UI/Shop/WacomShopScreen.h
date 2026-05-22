@@ -26,40 +26,18 @@ class WACOMAPP_API UWacomShopScreen : public UWacomMenuWidgetBase
 	GENERATED_BODY()
 
 public:
-	/** 测试/非标准创建路径可直接设置 RunSession；正常运行时从 OwningPlayer 获取。 */
-	void SetRunSessionOverrideForTest(URunSession* InRunSession) { RunSessionOverride = InRunSession; }
-
-	/** 测试/非标准创建路径可直接设置 ToastSubsystem；正常运行时从 GameInstance 获取。 */
-	void SetToastSubsystemOverrideForTest(UWacomAppToastSubsystem* InToastSubsystem) { ToastSubsystemOverride = InToastSubsystem; }
-
 	/** 从当前 RunSession 拉取商店快照并重建商品列表。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Shop")
 	void RefreshShop();
-
-	/** 测试/诊断用：当前界面重建出的商品行数量。 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
-	int32 GetOfferRowCount() const { return CachedOfferIds.Num(); }
-
-	/** 测试/诊断用：当前金币文本。 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
-	FText GetGoldTextForTest() const;
-
-	/** 测试/诊断用：尝试购买当前列表中的第 Index 个商品。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Shop")
-	bool PurchaseOfferByIndexForTest(int32 Index);
-
-	/** 测试/诊断用：读取当前列表中的第 Index 个商品表现数据。 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
-	FWacomShopOfferPresentationView GetOfferPresentationViewForTest(int32 Index) const;
-
-	/** 测试/诊断用：按 DisabledReason 复用正式购买失败提示口径。 */
-	static FText BuildPurchaseFailureToastTextForTest(FName DisabledReason);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeOnActivated() override;
 	virtual void NativeOnDeactivated() override;
+
+	virtual URunSession* ResolveRunSession() const;
+	virtual UWacomAppToastSubsystem* ResolveToastSubsystem() const;
 
 	UFUNCTION()
 	void HandleCloseClicked();
@@ -80,25 +58,27 @@ protected:
 	TObjectPtr<UButton> CloseButton;
 
 private:
-	URunSession* GetRunSession() const;
+#if WITH_AUTOMATION_TESTS
+	friend class UWacomShopScreenProbe;
+
+	FText GetDisplayedGoldText() const;
+	int32 GetCachedOfferCount() const { return CachedOfferIds.Num(); }
+	FWacomShopOfferPresentationView GetCachedOfferView(int32 Index) const;
+	bool PurchaseOfferByIndex(int32 Index);
+	static FText BuildPurchaseFailureToastText(FName DisabledReason);
+#endif
+
 	void RebuildOfferRows();
 	void AddOfferRow(const FWacomShopOfferPresentationView& OfferView);
 	UFUNCTION()
 	bool PurchaseOffer(FGuid OfferId);
 	void HandleOfferPurchaseRequested(FGuid OfferId);
-	UWacomAppToastSubsystem* GetToastSubsystem() const;
 
 	UPROPERTY(Transient)
 	TArray<FGuid> CachedOfferIds;
 
 	UPROPERTY(Transient)
 	TArray<FWacomShopOfferPresentationView> CachedOfferViews;
-
-	UPROPERTY(Transient)
-	TObjectPtr<URunSession> RunSessionOverride = nullptr;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UWacomAppToastSubsystem> ToastSubsystemOverride = nullptr;
 
 	bool bDidEndShopVisit = false;
 };

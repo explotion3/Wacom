@@ -184,40 +184,19 @@ void UCardWidget::ApplyCardSnapshot(const FHandCardSnapshot& InSnap)
 	BP_OnDataApplied(InSnap);
 }
 
-bool UCardWidget::IsRootButtonEnabled() const
+bool UCardWidget::IsRootButtonInteractable() const
 {
 	return RootButton ? RootButton->GetIsEnabled() : false;
 }
 
-void UCardWidget::RequestClickForTest()
+bool UCardWidget::TryClickRootButton()
 {
 	if (!RootButton || !RootButton->GetIsEnabled())
 	{
-		return;
+		return false;
 	}
 	HandleRootButtonClicked();
-}
-
-void UCardWidget::RequestHoverForTest()
-{
-	RequestHover();
-}
-
-void UCardWidget::RequestUnhoverForTest()
-{
-	RequestUnhover();
-}
-
-FWidgetTransform UCardWidget::GetHoverVisualRenderTransformForTest() const
-{
-	const UWidget* Target = GetHoverTransformTarget();
-	return Target ? Target->GetRenderTransform() : FWidgetTransform();
-}
-
-FVector2D UCardWidget::GetHoverVisualRenderTransformPivotForTest() const
-{
-	const UWidget* Target = GetHoverTransformTarget();
-	return Target ? Target->GetRenderTransformPivot() : FVector2D(0.5f, 0.5f);
+	return true;
 }
 
 void UCardWidget::ApplyZoneText(const FHandCardSnapshot& InSnap)

@@ -31,16 +31,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Toast")
 	int32 GetVisibleToastCount() const { return ActiveViews.Num(); }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Toast")
-	TArray<FWacomAppToastView> GetCurrentToastsForTest() const { return ActiveViews; }
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|Toast")
-	bool IsIdleHiddenForTest() const { return ActiveViews.Num() == 0 && GetVisibility() == ESlateVisibility::Collapsed; }
-
-	/** Test hook for deterministic expiry without relying on protected NativeTick access. */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Toast")
-	void TickToastsForTest(float DeltaTime);
-
 	/** 每条 Toast 的默认显示时长，单位为秒。单条 View 的 LifetimeOverride > 0 时会覆盖它。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Toast", meta = (ToolTip = "每条 Toast 的默认显示时长，单位为秒。单条 Toast 的 LifetimeOverride 大于 0 时会覆盖该值；建议范围 0.5-10 秒。", ClampMin = "0.1", UIMin = "0.5", UIMax = "10.0"))
 	float DefaultMessageLifetime = 3.0f;
@@ -63,6 +53,10 @@ protected:
 	TObjectPtr<UVerticalBox> Container;
 
 private:
+#if WITH_AUTOMATION_TESTS
+	friend class FWacomUITestAccess;
+#endif
+
 	UPROPERTY(Transient)
 	TArray<FWacomAppToastView> ActiveViews;
 

@@ -34,6 +34,16 @@ UI 不直接修改战斗或 Run 状态。UI 读取 Snapshot、ViewData 或 ViewM
 Widget 可以有 C++ fallback 布局，但 C++ 的职责是协议、生命周期和兜底显示；正式视觉由 WBP 承接。
 复杂 Widget 的流程逻辑应收口到 `WacomApp/Private` 的 command flow / coordinator helper。Screen 负责 View、CommonUI 生命周期、绑定和重建；helper 负责命令编排、确认弹窗、Toast 和关闭访问等副作用。
 
+### Public Widget API 与测试口
+
+复杂 Widget 的 public 头只保留 WBP 绑定、运行时生命周期和真实玩家意图入口。不要为了自动化测试在 `WacomApp/Public` 暴露 callable 的 `ForTest`、`ForAutomationTest`、`OverrideForTest`，也不要新增 Blueprint 可见测试 `UFUNCTION`。测试不应把未来 WBP、CommonUI 生命周期或 MVVM 重构锁死在当前 C++ fallback 结构上。
+
+需要测试复杂 Widget 行为时按以下优先级处理：
+
+1. 在 `WacomTests` 中写 tests-only probe subclass，通过真实激活、刷新和玩家意图入口观察结果。
+2. 如果运行时代码本身需要可扩展点，提炼 protected production seam；它必须对生产行为有清晰语义。
+3. 只有前两者不适合时，才使用 automation-only private friend / test-access；这类入口不能是 `UFUNCTION` 或 Blueprint API，并应尽量放在 `WacomApp/Private` 或测试模块内。
+
 ---
 
 ## §2 CommonUI 层级
