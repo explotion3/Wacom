@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-05-22
+updated: 2026-05-23
 tags:
   - wacom/app
   - wacom/gameflow
@@ -150,6 +150,8 @@ enum class EGameFlowState : uint8
 PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md` 维护；本文只记录 App 侧创建、重建和 Push / Pop 入口。
 
 探索期背包、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、Push 失败回滚，以及商店 / RunEvent 这类外部流程返回时的 RunSession 清理。
+
+商店和 RunEvent 切换必须遵守生命周期顺序：Router 先关闭已有 `GameMenu` 顶层，让旧 Screen 的 `NativeOnDeactivated` 完成 `EndShopVisit()` / `EndRunEvent()`；随后才对新访问调用 `BeginShopVisit()` / `BeginRunEvent()` 并 Push 新 Screen。如果 Push 新 Screen 失败，Router 必须立即调用对应 `End*` 回滚刚 Begin 的 active 访问。
 
 UI 行为细节见 `WacomUI.md`：
 

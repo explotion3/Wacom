@@ -169,22 +169,27 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 		return false;
 	}
 
+	UWacomGameUIManagerSubsystem* UIManager = GetUIManager(PC, TEXT("OpenShop"));
+	if (!UIManager)
+	{
+		return false;
+	}
+
+	UIManager->EnsurePrimaryLayout(&PC);
+	if (!IsValid(UIManager->GetPrimaryLayout()))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: PrimaryLayout 未就位，拒绝打开商店"));
+		return false;
+	}
+
+	DeactivateActiveGameMenuWidget(*UIManager);
+
 	URunSession* RunSession = PC.GetRunSession();
 	if (!RunSession || !RunSession->BeginShopVisit(ShopId, Offers))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: BeginShopVisit 失败 ShopId=%s"), *ShopId.ToString());
 		return false;
 	}
-
-	UWacomGameUIManagerSubsystem* UIManager = GetUIManager(PC, TEXT("OpenShop"));
-	if (!UIManager)
-	{
-		RunSession->EndShopVisit();
-		return false;
-	}
-
-	UIManager->EnsurePrimaryLayout(&PC);
-	DeactivateActiveGameMenuWidget(*UIManager);
 
 	if (!PC.ShopScreenClass)
 	{
@@ -227,22 +232,27 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(AWacomPlayerController& PC, FNa
 		return false;
 	}
 
+	UWacomGameUIManagerSubsystem* UIManager = GetUIManager(PC, TEXT("OpenRunEvent"));
+	if (!UIManager)
+	{
+		return false;
+	}
+
+	UIManager->EnsurePrimaryLayout(&PC);
+	if (!IsValid(UIManager->GetPrimaryLayout()))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: PrimaryLayout 未就位，拒绝打开事件"));
+		return false;
+	}
+
+	DeactivateActiveGameMenuWidget(*UIManager);
+
 	URunSession* RunSession = PC.GetRunSession();
 	if (!RunSession || !RunSession->BeginRunEvent(PersistentId, EventDefinition))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: BeginRunEvent 失败 PersistentId=%s"), *PersistentId.ToString());
 		return false;
 	}
-
-	UWacomGameUIManagerSubsystem* UIManager = GetUIManager(PC, TEXT("OpenRunEvent"));
-	if (!UIManager)
-	{
-		RunSession->EndRunEvent();
-		return false;
-	}
-
-	UIManager->EnsurePrimaryLayout(&PC);
-	DeactivateActiveGameMenuWidget(*UIManager);
 
 	if (!PC.RunEventScreenClass)
 	{

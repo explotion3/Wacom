@@ -656,3 +656,138 @@ bool FWacomUIShopTriggerDefinitionOffersSpec::RunTest(const FString& /*Parameter
 
 	return true;
 }
+
+// Lifecycle contract/regression harness:
+// FWacomExplorationScreenRouter is a WacomApp Private helper, and the public
+// RequestOpenShop/RequestOpenRunEvent path needs a real exploration World,
+// AWacomGameMode, GameInstance UIManager, LocalPlayer, and PrimaryLayout stack.
+// Without changing Build.cs/runtime or introducing a brittle PIE/UI-asset test,
+// this locks the domain invariant the Router must preserve: old GameMenu screen
+// deactivation must complete before the new RunSession Begin*, otherwise the
+// old screen's NativeOnDeactivated End* can clear the newly active visit/event.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIGameMenuSwitchClosesOldShopBeforeBeginNewShopSpec,
+	"Wacom.UI.GameMenu.SwitchClosesOldShopBeforeBeginNewShop",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIGameMenuSwitchClosesOldShopBeforeBeginNewShopSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FName OldShopId(TEXT("Shop.GameMenu.Old"));
+	const FName NewShopId(TEXT("Shop.GameMenu.New"));
+	const TArray<FRunShopOfferInput> Offers;
+
+	{
+		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+		TStrongObjectPtr<UWacomShopScreen> OldScreen(NewObject<UWacomShopScreen>());
+
+		TestTrue(TEXT("Hazard: old shop begins before switch"), Run->BeginShopVisit(OldShopId, Offers));
+		OldScreen->SetRunSessionOverrideForTest(Run.Get());
+		OldScreen->TakeWidget();
+		OldScreen->ActivateWidget();
+
+		TestTrue(TEXT("Hazard: new Begin can replace active shop before old screen closes"),
+			Run->BeginShopVisit(NewShopId, Offers));
+		TestEqual(TEXT("Hazard: active shop is new before old deactivation"),
+			Run->BuildCurrentShopSnapshot().ShopId,
+			NewShopId);
+
+		OldScreen->DeactivateWidget();
+		TestFalse(TEXT("Hazard: old NativeOnDeactivated End clears the new active shop"),
+			Run->IsShopVisitActive());
+	}
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomShopScreen> OldScreen(NewObject<UWacomShopScreen>());
+	int32 OldScreenDeactivatedCount = 0;
+
+	TestTrue(TEXT("Old shop begins before switch"), Run->BeginShopVisit(OldShopId, Offers));
+	OldScreen->SetRunSessionOverrideForTest(Run.Get());
+	OldScreen->OnDeactivated().AddLambda([&OldScreenDeactivatedCount]()
+	{
+		++OldScreenDeactivatedCount;
+	});
+	OldScreen->TakeWidget();
+	OldScreen->ActivateWidget();
+
+	OldScreen->DeactivateWidget();
+	TestEqual(TEXT("Old shop screen deactivates before new Begin"), OldScreenDeactivatedCount, 1);
+	TestFalse(TEXT("Old shop End cleared active visit before switch"), Run->IsShopVisitActive());
+
+	TestTrue(TEXT("New shop begins after old screen close"), Run->BeginShopVisit(NewShopId, Offers));
+	const FRunShopSnapshot NewSnapshot = Run->BuildCurrentShopSnapshot();
+	TestTrue(TEXT("New shop remains active after switch"), NewSnapshot.bIsActive);
+	TestEqual(TEXT("Active shop id belongs to new Begin"), NewSnapshot.ShopId, NewShopId);
+
+	OldScreen->DeactivateWidget();
+	const FRunShopSnapshot AfterDuplicateDeactivate = Run->BuildCurrentShopSnapshot();
+	TestTrue(TEXT("Duplicate old deactivation does not clear new shop"), AfterDuplicateDeactivate.bIsActive);
+	TestEqual(TEXT("New shop id survives duplicate old deactivation"),
+		AfterDuplicateDeactivate.ShopId,
+		NewShopId);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIGameMenuSwitchClosesOldRunEventBeforeBeginNewRunEventSpec,
+	"Wacom.UI.GameMenu.SwitchClosesOldRunEventBeforeBeginNewRunEvent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIGameMenuSwitchClosesOldRunEventBeforeBeginNewRunEventSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FName OldEventId(TEXT("Event.GameMenu.Old"));
+	const FName NewEventId(TEXT("Event.GameMenu.New"));
+
+	{
+		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Run.Get()));
+		TStrongObjectPtr<UWacomRunEventScreen> OldScreen(NewObject<UWacomRunEventScreen>());
+
+		TestTrue(TEXT("Hazard: old event begins before switch"), Run->BeginRunEvent(OldEventId, Event.Get()));
+		OldScreen->SetRunSessionOverrideForTest(Run.Get());
+		OldScreen->TakeWidget();
+		OldScreen->ActivateWidget();
+
+		TestTrue(TEXT("Hazard: new Begin can replace active event before old screen closes"),
+			Run->BeginRunEvent(NewEventId, Event.Get()));
+		TestEqual(TEXT("Hazard: active event is new before old deactivation"),
+			Run->BuildCurrentRunEventSnapshot().PersistentId,
+			NewEventId);
+
+		OldScreen->DeactivateWidget();
+		TestFalse(TEXT("Hazard: old NativeOnDeactivated End clears the new active event"),
+			Run->IsRunEventActive());
+	}
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Run.Get()));
+	TStrongObjectPtr<UWacomRunEventScreen> OldScreen(NewObject<UWacomRunEventScreen>());
+	int32 OldScreenDeactivatedCount = 0;
+
+	TestTrue(TEXT("Old event begins before switch"), Run->BeginRunEvent(OldEventId, Event.Get()));
+	OldScreen->SetRunSessionOverrideForTest(Run.Get());
+	OldScreen->OnDeactivated().AddLambda([&OldScreenDeactivatedCount]()
+	{
+		++OldScreenDeactivatedCount;
+	});
+	OldScreen->TakeWidget();
+	OldScreen->ActivateWidget();
+
+	OldScreen->DeactivateWidget();
+	TestEqual(TEXT("Old event screen deactivates before new Begin"), OldScreenDeactivatedCount, 1);
+	TestFalse(TEXT("Old event End cleared active event before switch"), Run->IsRunEventActive());
+
+	TestTrue(TEXT("New event begins after old screen close"), Run->BeginRunEvent(NewEventId, Event.Get()));
+	const FRunEventSnapshot NewSnapshot = Run->BuildCurrentRunEventSnapshot();
+	TestTrue(TEXT("New event remains active after switch"), NewSnapshot.bIsActive);
+	TestEqual(TEXT("Active event id belongs to new Begin"), NewSnapshot.PersistentId, NewEventId);
+
+	OldScreen->DeactivateWidget();
+	const FRunEventSnapshot AfterDuplicateDeactivate = Run->BuildCurrentRunEventSnapshot();
+	TestTrue(TEXT("Duplicate old deactivation does not clear new event"), AfterDuplicateDeactivate.bIsActive);
+	TestEqual(TEXT("New event id survives duplicate old deactivation"),
+		AfterDuplicateDeactivate.PersistentId,
+		NewEventId);
+
+	return true;
+}

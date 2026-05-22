@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-ui
 status: active
-updated: 2026-05-22
+updated: 2026-05-23
 tags:
   - wacom/ui
   - wacom/commonui
@@ -186,13 +186,13 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 当前流程：
 
-- 打开商店前由 PlayerController 调 `RunSession->BeginShopVisit(PersistentId, Offers)`。
+- 商店公开请求入口在 PlayerController；内部由 Router 先关闭已有 `GameMenu` 顶层，再调用 `RunSession->BeginShopVisit(PersistentId, Offers)`。
 - Screen 刷新时读取 `BuildCurrentShopSnapshot()`。
 - `UWacomShopPresentationBuilder` 把 `FRunShopOffer + 当前金币` 转成 `FWacomShopOfferPresentationView`。
 - Offer 行只渲染 ViewData 并广播购买请求，不直接解析 `CardDefinition` 或判断金币。
 - 点击购买调用 `PurchaseShopOffer(OfferId)`，成功后刷新商品列表和金币。
 - `NativeOnDeactivated` 中只调用一次 `EndShopVisit()`；本次访问买过任意商品时 Run 层关闭时消耗 1 节点。
-- 如果 Push 商店 UI 失败，PlayerController 会调用 `EndShopVisit()` 清理 active shop。
+- 如果 Push 商店 UI 失败，Router 会调用 `RunSession->EndShopVisit()` 回滚刚 Begin 的 active shop。
 
 正式商店视觉和 hover 详情属于后续表现项；商品规则、库存和节点消耗见 `WacomRun.md`。
 
@@ -204,13 +204,14 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 当前流程：
 
-- 打开前由 PlayerController 调 `RunSession->BeginRunEvent(PersistentId, EventDefinition)`。
+- RunEvent 公开请求入口在 PlayerController；内部由 Router 先关闭已有 `GameMenu` 顶层，再调用 `RunSession->BeginRunEvent(PersistentId, EventDefinition)`。
 - Screen 刷新时读取 `BuildCurrentRunEventSnapshot()`。
 - ChoiceButton 显示 Label 和中文禁用原因；不可用选项也允许点击以弹出原因 Toast。
 - 可用选项调用 `ChooseRunEventOptionWithResult(ChoiceId)`，Run 层执行条件、效果、跳转和完成标记。
 - `UWacomRunEventPresentationBuilder` 把 `FRunEventChoiceResult` 转成 AppToast。
 - `RemoveCard` 结果显示“交出卡牌：{CardName}”；`MarkEventCompleted` 默认不弹 Toast。
 - 关闭事件界面时调用 `EndRunEvent()`；关闭型选项先由 Run 层清 active event，再 Deactivate。
+- 如果 Push 事件 UI 失败，Router 会调用 `RunSession->EndRunEvent()` 回滚刚 Begin 的 active event。
 
 事件规则、条件、效果和 PersistentId 口径见 `WacomRun.md` / `WacomData.md`。
 
