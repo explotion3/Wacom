@@ -1068,6 +1068,30 @@ bool URunSession::DestroyCardFromBackpackInternal(UCardDefinition* Card)
 	return true;
 }
 
+bool URunSession::DestroyCardByInstance(FGuid InstanceId)
+{
+	const bool bOk = DestroyCardByInstanceInternal(InstanceId);
+	if (bOk)
+	{
+		NotifyRunStateChanged();
+	}
+	return bOk;
+}
+
+bool URunSession::DestroyCardByInstanceInternal(FGuid InstanceId)
+{
+	FName DisabledReason = NAME_None;
+	if (!FRunDeckRules::PermanentRemoveOwnedInstance(RunState, InstanceId, &DisabledReason))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] DestroyCardByInstance: 拒绝 InstanceId=%s Reason=%s"),
+			*InstanceId.ToString(), *DisabledReason.ToString());
+		return false;
+	}
+
+	return true;
+}
+
 bool URunSession::DeleteCardForGold(UCardDefinition* Card)
 {
 	const FRunDeckOperationValidation Validation = ValidateDeleteCardForGold(Card);
@@ -1154,6 +1178,11 @@ int32 URunSession::GetDeleteGoldRewardForInstance(FGuid InstanceId) const
 FRunDeckOperationValidation URunSession::ValidateDeleteCardForGold(UCardDefinition* Card) const
 {
 	return FRunDeckRules::ValidatePermanentRemoveCard(RunState, Card);
+}
+
+FRunDeckOperationValidation URunSession::ValidateDestroyCardByInstance(FGuid InstanceId) const
+{
+	return FRunDeckRules::ValidatePermanentRemoveInstance(RunState, InstanceId);
 }
 
 FRunDeckOperationValidation URunSession::ValidateDeleteCardForGoldByInstance(FGuid InstanceId) const

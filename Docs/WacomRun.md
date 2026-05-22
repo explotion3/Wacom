@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-run
 status: active
-updated: 2026-05-22
+updated: 2026-05-23
 tags:
   - wacom/run
   - wacom/rules
@@ -137,6 +137,10 @@ Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCard
 | `BurdenZone` | 其他区超容后的兜底区 |
 
 同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`，失败路径不修改 RunState。
+
+玩家已拥有卡的操作以 `InstanceId` 为主。`DestroyCardByInstance()` / `ValidateDestroyCardByInstance()`、`DeleteCardForGoldByInstance()`、`MoveInstance()` 等入口用于 UI 和交互层提交某一张具体卡。
+
+旧 Definition 级入口 `DestroyCardFromBackpack()`、`DeleteCardForGold()`、`AddCardToBattleDeck()`、`RemoveCardFromBattleDeck()` 只作为兼容入口保留：它们会在对应来源范围内删除或移动第一张匹配 Definition 的 instance。RunEvent / DataAsset 仍可用 Definition 表达“获得一张某种卡”或“交出一张某种卡”，因为这些是资产语义，不指向玩家当前拥有的某个具体实例。
 
 ### 容器分类
 

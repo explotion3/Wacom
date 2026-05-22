@@ -459,10 +459,11 @@ public:
 	FRunDeckOperationValidation ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const;
 
 	/**
-	 * 把卡加入背包。重复调用允许（同一 Definition 可以多张）。
-	 * 自动 RecomputeBurden。
+	 * 兼容旧入口：按 Definition 创建一张新 instance 并加入背包。
+	 * 新逻辑应使用 AcquireCardToRun；本函数仅保留给旧蓝图 / 测试兼容。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
+		meta = (DeprecatedFunction, DeprecationMessage = "Legacy API. Use AcquireCardToRun to create a new owned card instance."))
 	void AddCardToBackpack(UCardDefinition* Card);
 
 	/**
@@ -475,7 +476,8 @@ public:
 	void AcquireCardToRun(UCardDefinition* Card);
 
 	/**
-	 * 永久销毁一张卡（删牌区 / 商店出售 / 战败丢弃 / 节点事件）。
+	 * 兼容旧入口：按 Definition 永久销毁第一张匹配的已拥有 instance。
+	 * 新逻辑应使用 DestroyCardByInstance；RunEvent/DataAsset 可继续用 Definition 语义表达“移除一张匹配卡”。
 	 *
 	 * 行为：
 	 *   - 若 Card 是 Intrinsic → 拒绝
@@ -486,17 +488,34 @@ public:
 	 *
 	 * 返回 true=销毁成功；false=拒绝。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
+		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use DestroyCardByInstance for owned card operations."))
 	bool DestroyCardFromBackpack(UCardDefinition* Card);
 
 	/**
-	 * 删牌区入口：销毁卡 + 按稀有度发金币。
+	 * 按 InstanceId 精确永久销毁一张已拥有卡，不发金币。
+	 *
+	 * 遵守 Intrinsic / 最后容量来源 / SpecialZone / Companion 嗜血等永久销毁规则。
+	 *
+	 * 返回 true=销毁成功并广播一次；false=拒绝且不广播。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
+	bool DestroyCardByInstance(FGuid InstanceId);
+
+	/** 校验 DestroyCardByInstance 是否可执行；不修改 RunState。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
+	FRunDeckOperationValidation ValidateDestroyCardByInstance(FGuid InstanceId) const;
+
+	/**
+	 * 兼容旧入口：按 Definition 选择第一张匹配的已拥有 instance，销毁后按稀有度发金币。
+	 * UI / 玩家操作应使用 ByInstance 入口。
 	 *
 	 * 当前原型数值：白=1 / 蓝=2。固有 / 最后容量来源卡拒绝。
 	 *
 	 * 返回 true=成功销毁并发金币；false=拒绝（同 DestroyCardFromBackpack）。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
+		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use DeleteCardForGoldByInstance for player/UI operations."))
 	bool DeleteCardForGold(UCardDefinition* Card);
 
 	/** 删牌区入口：按 instance 精确销毁一张卡并按稀有度发金币。 */
@@ -511,7 +530,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	int32 GetDeleteGoldRewardForInstance(FGuid InstanceId) const;
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
+	/** 兼容旧校验入口：按 Definition 校验第一张匹配的已拥有 instance；UI / 玩家操作应使用 ByInstance。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck",
+		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use ValidateDeleteCardForGoldByInstance for player/UI operations."))
 	FRunDeckOperationValidation ValidateDeleteCardForGold(UCardDefinition* Card) const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
@@ -520,7 +541,8 @@ public:
 	// ---- 备战卡组操作 ----
 
 	/**
-	 * 把卡加入备战卡组。
+	 * 兼容旧入口：按 Definition 把背包中第一张匹配的 instance 加入备战卡组。
+	 * 新逻辑应使用 MoveInstance。
 	 *
 	 * 拒绝条件：
 	 *   - Card 不在 Backpack 中（必须先在背包）
@@ -528,17 +550,20 @@ public:
 	 *
 	 * 注意：同一 Card Definition 在 Backpack 中有多张时允许多次加入 BattleDeck。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
+		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use MoveInstance for owned card movement."))
 	bool AddCardToBattleDeck(UCardDefinition* Card);
 
 	/**
-	 * 从备战卡组移除（不删除 Backpack 中的卡）。
+	 * 兼容旧入口：按 Definition 把备战区中第一张匹配的 instance 移回背包。
+	 * 新逻辑应使用 MoveInstance。
 	 *
 	 * 拒绝条件：
 	 *   - Card 是 Intrinsic
 	 *   - Card 不在 BattleDeck 中
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
+		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use MoveInstance for owned card movement."))
 	bool RemoveCardFromBattleDeck(UCardDefinition* Card);
 
 	// ---- 经济：金币 ----
@@ -793,6 +818,9 @@ private:
 	 *   - public DestroyCardFromBackpack 内部先调本函数再 NotifyRunStateChanged 一次。
 	 */
 	bool DestroyCardFromBackpackInternal(UCardDefinition* Card);
+
+	/** 私有路径：DestroyCardByInstance 的"不广播"版本。 */
+	bool DestroyCardByInstanceInternal(FGuid InstanceId);
 
 	/**
 	 * 幂等保证：B 主卡 instance 进入 Backpack/BattleDeck 时 `RunState.SpecialZones`

@@ -26,7 +26,7 @@ UI 不直接修改战斗或 Run 状态。UI 读取 Snapshot、ViewData 或 ViewM
 |---|---|---|
 | ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 无；只读显示探索状态和交互提示 |
 | Run Screen / 菜单类 Widget | Run Snapshot / ViewModel / Presentation ViewData | `URunSession` 写 API，通常经 PlayerController / Screen 调用 |
-| 背包 | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 调 `MoveInstance / DeleteCardForGold / SetSpecialZoneCardBattleEnabled` |
+| 背包 | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 调 `MoveInstance / DeleteCardForGoldByInstance / SetSpecialZoneCardBattleEnabled` |
 | 商店 | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 调 `PurchaseShopOffer`，关闭时调 `EndShopVisit` |
 | 探索事件 | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 调 `ChooseRunEventOptionWithResult` |
 | 战斗 | `FBattleSnapshot`、`FBattleEvent`、BattleSession ViewData | `UBattleHUD` 统一调 `Session->SubmitCommand` |
@@ -150,6 +150,8 @@ RunSession 写状态
 
 `UWacomBackpackScreen` 位于 `GameMenu` 层。它负责 UI 编排、拖拽、详情面板生命周期和命令提交；规则真相仍在 `URunSession`。
 C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时 DropTarget / WrapBox / 详情层由私有 `FBackpackRuntimeZoneBuilder` 创建；WBP 绑定字段和命令入口仍保留在 `UWacomBackpackScreen`。
+
+背包 UI 对玩家已拥有卡只提交 `InstanceId`。卡牌 Definition 可用于展示、卡名 fallback 和资产语义说明，但不能作为 UI 删除或移动某张已拥有卡的身份。
 
 当前结构：
 

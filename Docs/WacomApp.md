@@ -34,6 +34,7 @@ tags:
 
 - 单场战斗规则真相，战斗命令必须提交给 `UBattleSession`。
 - Run / 背包 / 商店 / 探索事件规则真相，战外命令必须提交给 `URunSession`。
+- App / UI 对玩家已拥有卡提交 `InstanceId`，不以 Definition 指代某张具体卡；DataAsset / RunEvent 表达“某种卡”的资产语义时例外。
 - 静态数据资产定义。
 - WBP 视觉细节和卡牌展示规则；这些见 `WacomUI.md` 与两个 UI Binding 文档。
 
