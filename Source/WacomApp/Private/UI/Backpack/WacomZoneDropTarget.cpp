@@ -9,29 +9,8 @@
 #include "RunSession.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
-#include "UI/Foundation/WacomAppToastSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "WacomZoneDropTarget"
-
-namespace
-{
-	FText GetDropCardDisplayName(const UCardDefinition* Card)
-	{
-		if (!Card)
-		{
-			return LOCTEXT("UnknownCard", "未知卡牌");
-		}
-		return Card->DisplayName.IsEmpty()
-			? FText::FromName(Card->CardId)
-			: Card->DisplayName;
-	}
-
-	UWacomAppToastSubsystem* GetToastSubsystemFromScreen(UWacomBackpackScreen* Screen)
-	{
-		const UGameInstance* GI = Screen ? Screen->GetGameInstance() : nullptr;
-		return GI ? GI->GetSubsystem<UWacomAppToastSubsystem>() : nullptr;
-	}
-}
 
 TSharedRef<SWidget> UWacomZoneDropTarget::RebuildWidget()
 {
@@ -137,7 +116,7 @@ bool UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind TargetZone, EZoneKind Sou
 		&& BattleDeckCount >= BattleDeckCapacity)
 	{
 		// 视觉预判：从通量区拖入已满备战区时拒绝接收。
-		// 最终规则仍以 NativeOnDrop 调用 RunSession::MoveInstance 的返回值为准。
+		// 最终规则仍以 BackpackScreen 命令出口提交到 RunSession 的返回值为准。
 		return false;
 	}
 
@@ -214,64 +193,16 @@ bool UWacomZoneDropTarget::TryHandleDropOperation(UDragDropOperation* InOperatio
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
 	if (!CardOp || !CardOp->InstanceId.IsValid())
 	{
-		ShowMoveFailureToast(TEXT("CardNotFound"));
 		return false;
 	}
 
 	UWacomBackpackScreen* Screen = OwnerScreen.Get();
-	URunSession* Run = Screen ? Screen->GetRunSession() : nullptr;
-	if (!Run)
+	if (!Screen)
 	{
-		ShowMoveFailureToast(TEXT("RunSessionMissing"));
 		return false;
 	}
 
-	const FRunDeckOperationValidation Validation =
-		Run->ValidateMoveInstance(CardOp->InstanceId, ZoneKind, OwnerInstanceId);
-	if (!Validation.bCanExecute)
-	{
-		ShowMoveFailureToast(Validation.DisabledReason);
-		return false;
-	}
-
-	const bool bMoved = Run->MoveInstance(CardOp->InstanceId, ZoneKind, OwnerInstanceId);
-	if (bMoved)
-	{
-		ShowMoveSuccessToast(*CardOp);
-	}
-	else
-	{
-		ShowMoveFailureToast(TEXT("Unknown"));
-	}
-	return bMoved;
-}
-
-void UWacomZoneDropTarget::ShowMoveSuccessToast(const UWacomCardDragOperation& CardOp) const
-{
-	UWacomAppToastSubsystem* ToastSubsystem = GetToastSubsystemFromScreen(OwnerScreen.Get());
-	if (!ToastSubsystem)
-	{
-		return;
-	}
-
-	FWacomAppToastView ToastView;
-	ToastView.MessageText = FText::Format(
-		LOCTEXT("MoveSuccessToast", "移动卡牌：{0} → {1}"),
-		GetDropCardDisplayName(CardOp.Definition.Get()),
-		FormatZoneNameForToast(ZoneKind));
-	ToastView.Tone = EWacomAppToastTone::System;
-	ToastView.IconKey = TEXT("CardMoved");
-	ToastSubsystem->ShowToast(ToastView);
-}
-
-void UWacomZoneDropTarget::ShowMoveFailureToast(FName DisabledReason) const
-{
-	UWacomAppToastSubsystem* ToastSubsystem = GetToastSubsystemFromScreen(OwnerScreen.Get());
-	if (!ToastSubsystem)
-	{
-		return;
-	}
-	ToastSubsystem->ShowWarning(FormatMoveFailureReasonForToast(DisabledReason));
+	return Screen->HandleZoneDropRequested(*CardOp, ZoneKind, OwnerInstanceId);
 }
 
 #undef LOCTEXT_NAMESPACE

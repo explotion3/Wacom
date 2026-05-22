@@ -180,7 +180,7 @@ public:
 	 *   超出"通量内容容量"的卡数 n → Burden = n*(n+1)/2
 	 *   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
 	 *
-	 * 由 AddCardToBackpack / DestroyCardFromBackpack 等改背包卡数的方法
+	 * 由 AddCardToBackpack / DestroyCardFromBackpack 等改拥有卡数量的方法
 	 * 自动调用，UI 一般不需要手动调。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pressure")
@@ -474,8 +474,7 @@ public:
 	 * 行为：
 	 *   - 若 Card 是 Intrinsic → 拒绝
 	 *   - 若 Card 是最后一张容量来源卡（销毁后玩家无容器卡 Capacity）→ 拒绝
-	 *   - 从 Backpack 移除一张
-	 *   - 若 BattleDeck 含此 Card → 同时移除一张
+	 *   - 从玩家拥有的所有物理持有区中移除一张
 	 *   - 若 Card 带 Companion 关键词 → 嗜血 +1%
 	 *   - RecomputeBurden
 	 *
@@ -493,6 +492,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool DeleteCardForGold(UCardDefinition* Card);
+
+	/** 删牌区统一金币奖励查询：白=1 / 蓝=2 / 其他=0。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
+	static int32 GetDeleteGoldRewardForCard(const UCardDefinition* Card);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	FRunDeckOperationValidation ValidateDeleteCardForGold(UCardDefinition* Card) const;
@@ -816,24 +819,8 @@ private:
 	/** 遍历 RunState 全部物理持有区，按过滤条件累计卡牌 Capacity。 */
 	int32 SumOwnedCardCapacity(bool bTypeAOnly) const;
 
-	/** 如果按 Definition 删除当前会被选中的第一张 instance，删除后是否仍有容器卡提供容量。 */
-	bool HasCapacityProviderAfterDestroyingFirstOwnedInstance(const UCardDefinition* Card) const;
-
 	/** 统计指定列表中真正占用通量内容格的卡：A 类容器和普通卡计入，B 主卡不计入。 */
 	int32 CountFluxContentCards(const TArray<FCardInstance>& Pile) const;
-
-	/** RunEvent 卡牌条件使用：玩家任意持有区是否拥有该 Definition。 */
-	bool DoesRunOwnCardDefinition(const UCardDefinition* Card) const;
-
-	/** RunEvent RemoveCard 防御校验，复用背包永久移除的安全约束。 */
-	bool ValidateRunEventRemoveCard(const UCardDefinition* Card, FName& OutDisabledReason) const;
-
-	/** RunEvent RemoveCard 私有执行路径：从任意拥有区永久移除一张卡，不发金币、不广播。 */
-	bool RemoveOwnedCardForRunEventInternal(UCardDefinition* Card, FName& OutDisabledReason);
-
-	bool TryResolveRunEventPressureType(FName PressureTypeId, EWacomPressureType& OutType) const;
-	bool IsRunEventChoiceAvailable(const struct FWacomRunEventChoiceDefinition& Choice, FName& OutDisabledReason) const;
-	bool ApplyRunEventChoiceEffects(const struct FWacomRunEventChoiceDefinition& Choice, TArray<FRunEventChoiceEffectResult>* OutEffectResults = nullptr, FName* OutDisabledReason = nullptr);
 
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|Run", Transient)
 	FRunState RunState;

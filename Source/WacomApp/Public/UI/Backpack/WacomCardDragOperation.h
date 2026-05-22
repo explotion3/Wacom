@@ -14,7 +14,7 @@ class UCardDefinition;
  *
  * 拖拽源（UWacomDeckCardWidget::NativeOnDragDetected）构造本对象并填四字段，
  * 拖拽目标（UWacomZoneDropTarget::NativeOnDrop）通过 `Cast<UWacomCardDragOperation>(Op)`
- * 取出 payload 并调用 URunSession::MoveInstance / DeleteCardForGold。
+ * 取出 payload 并转发给 UWacomBackpackScreen 统一提交命令。
  *
  * 字段约束：
  *   - 当 `FromZone != EZoneKind::SpecialZone` 时，`FromZoneOwnerInstanceId` 必须为 `FGuid()`（invalid GUID）。

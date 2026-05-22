@@ -133,13 +133,14 @@ RunSession 写状态
 ## §5 背包 UI
 
 `UWacomBackpackScreen` 位于 `GameMenu` 层。它负责 UI 编排、拖拽、详情面板生命周期和命令提交；规则真相仍在 `URunSession`。
+C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时 DropTarget / WrapBox / 详情层由私有 `FBackpackRuntimeZoneBuilder` 创建；WBP 绑定字段和命令入口仍保留在 `UWacomBackpackScreen`。
 
 当前结构：
 
 | 区域 | 当前职责 |
 |---|---|
-| 删牌区 | `UWacomDeleteZoneDropTarget`，确认后调 `DeleteCardForGold` |
-| 备战区 | `UWacomZoneDropTarget`，显示 `BattleDeck` 和已入战 SpecialZone 投影卡 |
+| 删牌区 | `UWacomDeleteZoneDropTarget` 只做预览和转发删牌意图；金币预览读取 `URunSession::GetDeleteGoldRewardForCard()` |
+| 备战区 | `UWacomZoneDropTarget` 显示 `BattleDeck` 和已入战 SpecialZone 投影卡，只做预览和转发移动意图 |
 | 通量内容区 | 显示物理位于 `Backpack` 的通量内容，A 类容器也作为内容卡显示 |
 | 特殊存放区 | 每张 B 主卡对应一个 `UWacomSpecialZoneWidget` |
 | 负重区 | 仅 `BurdenCount > 0` 时显示 |
@@ -153,8 +154,9 @@ RunSession 写状态
 
 交互：
 
-- 普通 drop 先调用 `ValidateMoveInstance()`，再调用 `MoveInstance()`。
-- Delete drop 先调用 `ValidateDeleteCardForGold()`；失败直接 AppToast，成功才弹 ConfirmDialog。
+- DropTarget 只读 RunSession 做 hover 预览校验；drop 时把 `UWacomCardDragOperation` 转发给 `UWacomBackpackScreen`。
+- 普通 drop 由 `UWacomBackpackScreen::HandleZoneDropRequested()` 先调用 `ValidateMoveInstance()`，再调用 `MoveInstance()`，并统一发 AppToast。
+- Delete drop 由 `UWacomBackpackScreen::HandleDeleteDropRequested()` 先调用 `ValidateDeleteCardForGold()`；失败直接 AppToast，成功才弹 ConfirmDialog，确认后提交 `DeleteCardForGold()`。
 - SpecialZone 内容卡右键入战请求由 `UWacomSpecialZoneWidget` 转发给 `UWacomBackpackScreen`。
 - 卡牌 hover 详情由 `UWacomBackpackScreen` 管理，数据来自 `UWacomBackpackScreenPresenter` 和 `UWacomCardPresentationBuilder`。
 
@@ -211,6 +213,7 @@ RunSession 写状态
 - 子 Widget 都在同一棵树里，由 `BattleHUD` 统一递归刷新。
 - `FBattleSnapshot` 是值类型快照，适合一次性读当前战斗状态。
 - 动态手牌和敌方部位列表由 HUD / Panel 直接重建更简单。
+- C++ fallback BattleHUD 布局由私有 `FBattleHUDFallbackLayoutBuilder` 搭建；WBP 绑定字段、命令入口和刷新流程仍保留在 `UBattleHUD`。
 
 命令出口：
 
@@ -262,9 +265,9 @@ RunSession 写状态
 
 Binding 文档只记录 WBP 制作合约：
 
-| 文档 | 职责 |
-|---|---|
+| 文档                           | 职责                                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
 | `UI_Backpack_WBP_Binding.md` | 背包、局部 Zone、SpecialZone、DeckCard、CardView、CardDetail、EffectBadge 的父类、路径、绑定槽位和 PIE 检查 |
-| `UI_Battle_WBP_Binding.md` | 战斗手牌、HandPanel、BattleHUD、BattleEventLog、Enemy fallback UI 的父类、路径、绑定槽位和 PIE 检查 |
+| `UI_Battle_WBP_Binding.md`   | 战斗手牌、HandPanel、BattleHUD、BattleEventLog、Enemy fallback UI 的父类、路径、绑定槽位和 PIE 检查       |
 
 规则真相不写在 Binding 文档里。若 WBP 制作时需要知道为什么这么做，应回到 `WacomUI.md`、`WacomRun.md` 或 `WacomBattle.md`。

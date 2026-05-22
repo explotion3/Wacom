@@ -19,7 +19,7 @@ class UWacomCardView;
  *
  * 拖拽源：
  *   - 纯展示 / 拖拽热区，不触发点击移动
- *   - 删牌不在卡牌本体上处理；拖到 DeleteZone 后由 DropTarget 调 DeleteCardForGold
+ *   - 删牌不在卡牌本体上处理；拖到 DeleteZone 后由 DropTarget 转发给 BackpackScreen
  *
  * 由 UWacomBackpackZoneWidget 创建并管理生命周期。
  *

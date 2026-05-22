@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UCardWidget;
 class UBattleEventLogPanel;
 class UWacomCardDetailPanel;
+struct FBattleHUDFallbackLayoutBuilder;
 struct FBattleCommand;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
@@ -331,5 +332,6 @@ private:
 	void EnsureCardDetailLayer();
 	void PositionCardDetailPanelNear(UCardWidget* SourceWidget);
 
+	friend struct FBattleHUDFallbackLayoutBuilder;
 	friend class UWacomBattleHUDDetailTest;
 };

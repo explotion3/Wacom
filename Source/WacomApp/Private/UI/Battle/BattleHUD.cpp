@@ -12,6 +12,7 @@
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Battle/CardWidget.h"
+#include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Common/PileCountView.h"
@@ -21,8 +22,6 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
-#include "Components/Button.h"
-#include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 
@@ -41,7 +40,6 @@
 namespace
 {
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
-	const TCHAR* BattleEventLogPanelPath = TEXT("/Game/Wacom/UI/Battle/WBP_BattleEventLogPanel.WBP_BattleEventLogPanel_C");
 }
 
 void UBattleHUD::NativeOnInitialized()
@@ -117,152 +115,22 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
 		}
 
-		// 默认布局：顶部 EnemyInfoBar，中间留空，底部 HandPanel，左下 PlayerStatusBar。
-		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
-		WidgetTree->RootWidget = Root;
-
-		// EnemyInfoBar: 顶部中间
-		EnemyInfoBar = WidgetTree->ConstructWidget<UEnemyInfoBar>(UEnemyInfoBar::StaticClass(), TEXT("EnemyInfoBar"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(EnemyInfoBar))
-		{
-			S->SetAnchors(FAnchors(0.5f, 0.0f));      // 顶部中心
-			S->SetAlignment(FVector2D(0.5f, 0.0f));
-			S->SetOffsets(FMargin(0.0f, 20.0f, 720.0f, 130.0f));
-			S->SetAutoSize(false);
-		}
-
-		// PlayerStatusBar: 左下
-		PlayerStatusBar = WidgetTree->ConstructWidget<UPlayerStatusBar>(UPlayerStatusBar::StaticClass(), TEXT("PlayerStatusBar"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(PlayerStatusBar))
-		{
-			S->SetAnchors(FAnchors(0.0f, 1.0f));
-			S->SetAlignment(FVector2D(0.0f, 1.0f));
-			S->SetOffsets(FMargin(20.0f, -140.0f, 220.0f, 120.0f));
-			S->SetAutoSize(false);
-		}
-
-		// HandPanel: 底部。优先使用项目 WBP，资产不存在时回退到 C++ fallback。
-		TSubclassOf<UHandPanel> HandPanelClass = UHandPanel::StaticClass();
-		if (UClass* LoadedHandPanelClass = LoadClass<UHandPanel>(
-			nullptr,
-			TEXT("/Game/Wacom/UI/Battle/WBP_HandPanel.WBP_HandPanel_C")))
-		{
-			HandPanelClass = LoadedHandPanelClass;
-		}
-
-		HandPanel = WidgetTree->ConstructWidget<UHandPanel>(HandPanelClass, TEXT("HandPanel"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(HandPanel))
-		{
-			S->SetAnchors(FAnchors(0.5f, 1.0f));
-			S->SetAlignment(FVector2D(0.5f, 1.0f));
-			S->SetOffsets(FMargin(0.0f, -HandPanelBottomOffset, HandPanelSize.X, HandPanelSize.Y));
-			S->SetAutoSize(false);
-		}
-
-		// ActionPanel: 右下
-		ActionPanel = WidgetTree->ConstructWidget<UActionPanel>(UActionPanel::StaticClass(), TEXT("ActionPanel"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(ActionPanel))
-		{
-			S->SetAnchors(FAnchors(1.0f, 1.0f));
-			S->SetAlignment(FVector2D(1.0f, 1.0f));
-			S->SetOffsets(FMargin(-30.0f, -200.0f, 160.0f, 140.0f));
-			S->SetAutoSize(false);
-		}
-
-		// EquipmentBar: 顶部左侧
-		EquipmentBar = WidgetTree->ConstructWidget<UEquipmentBar>(UEquipmentBar::StaticClass(), TEXT("EquipmentBar"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(EquipmentBar))
-		{
-			S->SetAnchors(FAnchors(0.0f, 0.0f));
-			S->SetAlignment(FVector2D(0.0f, 0.0f));
-			S->SetOffsets(FMargin(20.0f, 20.0f, 240.0f, 32.0f));
-			S->SetAutoSize(false);
-		}
-
-		// DrawPileView: 底部左侧
-		DrawPileView = WidgetTree->ConstructWidget<UPileCountView>(UPileCountView::StaticClass(), TEXT("DrawPileView"));
-		DrawPileView->SetLabel(LOCTEXT("DrawPile", "抽牌堆"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(DrawPileView))
-		{
-			S->SetAnchors(FAnchors(0.0f, 1.0f));
-			S->SetAlignment(FVector2D(0.0f, 1.0f));
-			S->SetOffsets(FMargin(20.0f, -20.0f, 80.0f, 80.0f));
-			S->SetAutoSize(false);
-		}
-
-		// DiscardPileView: 底部右侧偏左（放在 ActionPanel 左边）
-		DiscardPileView = WidgetTree->ConstructWidget<UPileCountView>(UPileCountView::StaticClass(), TEXT("DiscardPileView"));
-		DiscardPileView->SetLabel(LOCTEXT("DiscardPile", "弃牌堆"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(DiscardPileView))
-		{
-			S->SetAnchors(FAnchors(1.0f, 1.0f));
-			S->SetAlignment(FVector2D(1.0f, 1.0f));
-			S->SetOffsets(FMargin(-200.0f, -20.0f, 80.0f, 80.0f));
-			S->SetAutoSize(false);
-		}
-
-		// ExhaustPileView: Discard 上方
-		ExhaustPileView = WidgetTree->ConstructWidget<UPileCountView>(UPileCountView::StaticClass(), TEXT("ExhaustPileView"));
-		ExhaustPileView->SetLabel(LOCTEXT("ExhaustPile", "消耗区"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(ExhaustPileView))
-		{
-			S->SetAnchors(FAnchors(1.0f, 1.0f));
-			S->SetAlignment(FVector2D(1.0f, 1.0f));
-			S->SetOffsets(FMargin(-200.0f, -110.0f, 80.0f, 80.0f));
-			S->SetAutoSize(false);
-		}
-
-		// EventToast: 右侧中上
-		EventToast = WidgetTree->ConstructWidget<UEventToast>(UEventToast::StaticClass(), TEXT("EventToast"));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(EventToast))
-		{
-			S->SetAnchors(FAnchors(1.0f, 0.25f));
-			S->SetAlignment(FVector2D(1.0f, 0.0f));
-			S->SetOffsets(FMargin(-20.0f, 0.0f, 320.0f, 200.0f));
-			S->SetAutoSize(false);
-		}
-
-		UButton* EventLogButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("EventLogButton"));
-		UTextBlock* EventLogButtonLabel = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("EventLogButtonLabel"));
-		EventLogButtonLabel->SetText(LOCTEXT("EventLogButton", "日志"));
-		EventLogButtonLabel->SetJustification(ETextJustify::Center);
-		EventLogButton->AddChild(EventLogButtonLabel);
-		EventLogButton->OnClicked.AddDynamic(this, &UBattleHUD::HandleBattleEventLogButtonClicked);
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(EventLogButton))
-		{
-			S->SetAnchors(FAnchors(1.0f, 0.0f));
-			S->SetAlignment(FVector2D(1.0f, 0.0f));
-			S->SetOffsets(FMargin(-20.0f, 20.0f, 72.0f, 34.0f));
-			S->SetAutoSize(false);
-			S->SetZOrder(8);
-		}
-
-		TSubclassOf<UBattleEventLogPanel> EventLogPanelClass = UBattleEventLogPanel::StaticClass();
-		if (UClass* LoadedEventLogPanelClass = LoadClass<UBattleEventLogPanel>(nullptr, BattleEventLogPanelPath))
-		{
-			EventLogPanelClass = LoadedEventLogPanelClass;
-		}
-
-		EventLogPanel = WidgetTree->ConstructWidget<UBattleEventLogPanel>(EventLogPanelClass, TEXT("EventLogPanel"));
-		EventLogPanel->SetDrawerOpen(false);
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(EventLogPanel))
-		{
-			S->SetAnchors(FAnchors(1.0f, 0.0f, 1.0f, 1.0f));
-			S->SetAlignment(FVector2D(1.0f, 0.0f));
-			S->SetOffsets(FMargin(0.0f, 0.0f, 520.0f, 0.0f));
-			S->SetAutoSize(false);
-			S->SetZOrder(9);
-		}
-
-		CardDetailLayer = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("CardDetailLayer"));
-		CardDetailLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(CardDetailLayer))
-		{
-			S->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
-			S->SetOffsets(FMargin(0.0f));
-			S->SetAutoSize(false);
-			S->SetZOrder(10);
-		}
+		FBattleHUDFallbackLayoutBuilder::Build(FBattleHUDFallbackLayoutBuilderContext{
+			this,
+			WidgetTree,
+			HandPanelSize,
+			HandPanelBottomOffset,
+			&EnemyInfoBar,
+			&PlayerStatusBar,
+			&HandPanel,
+			&ActionPanel,
+			&EquipmentBar,
+			&DrawPileView,
+			&DiscardPileView,
+			&ExhaustPileView,
+			&EventToast,
+			&EventLogPanel,
+			&CardDetailLayer});
 	}
 	return Super::RebuildWidget();
 }

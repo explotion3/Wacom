@@ -18,6 +18,7 @@
 #include "UI/Card/WacomCardView.h"
 
 #include "Cards/CardDefinition.h"
+#include "RunSession.h"
 #include "Tags/WacomGameplayTags.h"
 
 #include "UObject/StrongObjectPtr.h"
@@ -352,16 +353,16 @@ bool FWacomUIBackpackDeleteGoldToastPreviewSpec::RunTest(const FString& /*Parame
 
 	TestEqual(TEXT("White card delete toast gold preview"),
 		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(WhiteCard.Get()),
-		1);
+		URunSession::GetDeleteGoldRewardForCard(WhiteCard.Get()));
 	TestEqual(TEXT("Blue card delete toast gold preview"),
 		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(BlueCard.Get()),
-		2);
+		URunSession::GetDeleteGoldRewardForCard(BlueCard.Get()));
 	TestEqual(TEXT("Intrinsic card delete toast gold preview"),
 		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(IntrinsicCard.Get()),
-		0);
+		URunSession::GetDeleteGoldRewardForCard(IntrinsicCard.Get()));
 	TestEqual(TEXT("Null card delete toast gold preview"),
 		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(nullptr),
-		0);
+		URunSession::GetDeleteGoldRewardForCard(nullptr));
 
 	return true;
 }

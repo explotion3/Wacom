@@ -60,7 +60,7 @@ enum class EGameFlowState : uint8
 - BeginPlay 创建并持有 `URunSession`。
 - 提供 `IMC_Exploration` 与 `IMC_Battle` 的 Push / Pop helper；正式战斗进出时由 GameMode 调用这些 helper。
 - 处理 BeginPlay 初始探索 IMC 和 PIE / 切关卡后的兜底恢复。
-- 处理探索交互、暂停菜单、背包、商店、RunEvent 打开请求。
+- 处理探索交互、暂停菜单、背包、商店、RunEvent 打开请求；背包 / 商店 / RunEvent 的 GameMenu 打开细节由私有 `FWacomExplorationScreenRouter` 承接。
 - 转发战斗快捷键到当前 BattleHUD / BattleSession。
 
 `AWacomPlayerCharacter` 是第一人称探索 Pawn：
@@ -134,6 +134,8 @@ enum class EGameFlowState : uint8
 - 切关卡时 TearDown 旧 Layout，跟随当前 PlayerController 重建。
 
 PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md` 维护；本文只记录 App 侧创建、重建和 Push / Pop 入口。
+
+探索期背包、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、Push 失败回滚等流程。
 
 UI 行为细节见 `WacomUI.md`：
 

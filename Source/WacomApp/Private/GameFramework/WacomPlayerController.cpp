@@ -8,9 +8,9 @@
 #include "InputMappingContext.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
 #include "RunSession.h"
-#include "RunState.h"
 #include "Characters/CharacterDefinition.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "Types/WacomEnums.h"
@@ -24,9 +24,6 @@
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
-#include "UI/Events/WacomRunEventScreen.h"
-#include "UI/Shop/WacomShopScreen.h"
-#include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 
@@ -523,193 +520,17 @@ void AWacomPlayerController::TryInteractFromConsole()
 
 bool AWacomPlayerController::RequestOpenShop(FName ShopId, const TArray<FRunShopOfferInput>& Offers)
 {
-	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
-	if (!GM || GM->GetGameFlowState() != EGameFlowState::Exploration)
-	{
-		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenShop: 当前不在探索状态，忽略"));
-		return false;
-	}
-	if (ShopId.IsNone())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: ShopId 为 None，拒绝"));
-		return false;
-	}
-	if (!RunSession || !RunSession->BeginShopVisit(ShopId, Offers))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: BeginShopVisit 失败 ShopId=%s"), *ShopId.ToString());
-		return false;
-	}
-
-	UGameInstance* GI = GetGameInstance();
-	UWacomGameUIManagerSubsystem* UIManager =
-		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-	if (!UIManager)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: UIManager 未就位"));
-		RunSession->EndShopVisit();
-		return false;
-	}
-
-	UIManager->EnsurePrimaryLayout(this);
-
-	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
-	if (Layout)
-	{
-		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
-			WacomUITags::UI_Layer_GameMenu.GetTag());
-		if (MenuStack && MenuStack->GetActiveWidget())
-		{
-			MenuStack->GetActiveWidget()->DeactivateWidget();
-		}
-	}
-
-	if (!ShopScreenClass)
-	{
-		if (UClass* Loaded = LoadObject<UClass>(nullptr,
-			TEXT("/Game/Wacom/UI/Shop/WBP_ShopScreen.WBP_ShopScreen_C")))
-		{
-			ShopScreenClass = Loaded;
-		}
-	}
-	if (!ShopScreenClass)
-	{
-		ShopScreenClass = UWacomShopScreen::StaticClass();
-	}
-
-	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		ShopScreenClass);
-	UWacomShopScreen* ShopScreen = Cast<UWacomShopScreen>(Pushed);
-	if (!ShopScreen)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: Push ShopScreen 失败"));
-		RunSession->EndShopVisit();
-		return false;
-	}
-
-	ShopScreen->RefreshShop();
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开商店 ShopId=%s"), *ShopId.ToString());
-	return true;
+	return FWacomExplorationScreenRouter::OpenShop(*this, ShopId, Offers);
 }
 
 bool AWacomPlayerController::RequestOpenRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition)
 {
-	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
-	if (!GM || GM->GetGameFlowState() != EGameFlowState::Exploration)
-	{
-		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenRunEvent: 当前不在探索状态，忽略"));
-		return false;
-	}
-	if (PersistentId.IsNone() || !EventDefinition)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: PersistentId 或 EventDefinition 无效，拒绝"));
-		return false;
-	}
-	if (!RunSession || !RunSession->BeginRunEvent(PersistentId, EventDefinition))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: BeginRunEvent 失败 PersistentId=%s"), *PersistentId.ToString());
-		return false;
-	}
-
-	UGameInstance* GI = GetGameInstance();
-	UWacomGameUIManagerSubsystem* UIManager =
-		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-	if (!UIManager)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: UIManager 未就位"));
-		RunSession->EndRunEvent();
-		return false;
-	}
-
-	UIManager->EnsurePrimaryLayout(this);
-
-	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
-	if (Layout)
-	{
-		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
-			WacomUITags::UI_Layer_GameMenu.GetTag());
-		if (MenuStack && MenuStack->GetActiveWidget())
-		{
-			MenuStack->GetActiveWidget()->DeactivateWidget();
-		}
-	}
-
-	if (!RunEventScreenClass)
-	{
-		if (UClass* Loaded = LoadObject<UClass>(nullptr,
-			TEXT("/Game/Wacom/UI/Event/WBP_RunEventScreen.WBP_RunEventScreen_C")))
-		{
-			RunEventScreenClass = Loaded;
-		}
-	}
-	if (!RunEventScreenClass)
-	{
-		RunEventScreenClass = UWacomRunEventScreen::StaticClass();
-	}
-
-	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		RunEventScreenClass);
-	UWacomRunEventScreen* EventScreen = Cast<UWacomRunEventScreen>(Pushed);
-	if (!EventScreen)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: Push RunEventScreen 失败"));
-		RunSession->EndRunEvent();
-		return false;
-	}
-
-	EventScreen->RefreshEvent();
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开事件 PersistentId=%s"), *PersistentId.ToString());
-	return true;
+	return FWacomExplorationScreenRouter::OpenRunEvent(*this, PersistentId, EventDefinition);
 }
 
 void AWacomPlayerController::TryOpenBackpackFromConsole()
 {
-	// 只在探索 GameMode 下允许打开（战斗 IMC 也不绑这个 IA，多一层防御）
-	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
-	if (!GM)
-	{
-		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenBackpack: 非探索 GameMode，忽略"));
-		return;
-	}
-	if (GM->GetGameFlowState() != EGameFlowState::Exploration)
-	{
-		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenBackpack: 当前不在探索状态，忽略"));
-		return;
-	}
-
-	UGameInstance* GI = GetGameInstance();
-	UWacomGameUIManagerSubsystem* UIManager =
-		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-	if (!UIManager)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenBackpack: UIManager 未就位"));
-		return;
-	}
-
-	// 已经有 GameMenu 顶层 widget（暂停菜单 / 背包）→ 切换关闭语义交给调用方（B 不二开）
-	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
-	if (Layout)
-	{
-		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
-			WacomUITags::UI_Layer_GameMenu.GetTag());
-		if (MenuStack && MenuStack->GetActiveWidget())
-		{
-			MenuStack->GetActiveWidget()->DeactivateWidget();
-			UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 关闭 GameMenu 顶层"));
-			return;
-		}
-	}
-
-	if (!BackpackScreenClass)
-	{
-		BackpackScreenClass = UWacomBackpackScreen::StaticClass();
-	}
-
-	UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		BackpackScreenClass);
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 打开背包"));
+	FWacomExplorationScreenRouter::OpenBackpack(*this);
 }
 
 // ---- Console Commands（调试入口）----

@@ -29,7 +29,7 @@
  *       最后一张容量来源卡拒绝
  *       同一卡多份 → 只销毁一份
  *       Companion 卡 → 嗜血 +1
- *       同步移除 BattleDeck 中一张
+ *       按 Backpack → BattleDeck → BurdenZone → SpecialZones 优先级移除一张
  *   - DeleteCardForGold：白=1 / 蓝=2
  *   - AddCardToBattleDeck / RemoveCardFromBattleDeck 边界规则
  *   - BuildInitParamsForBattle 用 BattleDeck 而不是 StarterDeck
@@ -75,6 +75,147 @@ namespace
 			Card->CardId = CardId;
 		}
 		return Card;
+	}
+
+	UCardDefinition* MakeTypeBContainerCard(FWacomBattleFixture& Fx, int32 Capacity)
+	{
+		UCardDefinition* Card = Fx.MakeNoopCard(0);
+		Card->Physique.Capacity = Capacity;
+		Card->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_Placeholder;
+		Card->Rarity = WacomTags::Card_Rarity_White;
+		return Card;
+	}
+
+	bool OwnedCardsContainDefinition(const FRunState& State, const UCardDefinition* Card)
+	{
+		auto PileContains = [Card](const TArray<FCardInstance>& Pile) -> bool
+		{
+			for (const FCardInstance& Inst : Pile)
+			{
+				if (Inst.Definition == Card)
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+
+		if (PileContains(State.Backpack) || PileContains(State.BattleDeck) || PileContains(State.BurdenZone))
+		{
+			return true;
+		}
+		for (const FSpecialZone& SpecialZone : State.SpecialZones)
+		{
+			if (PileContains(SpecialZone.Cards))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool OwnedCardsContainInstance(const FRunState& State, FGuid InstanceId)
+	{
+		auto PileContains = [InstanceId](const TArray<FCardInstance>& Pile) -> bool
+		{
+			for (const FCardInstance& Inst : Pile)
+			{
+				if (Inst.InstanceId == InstanceId)
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+
+		if (PileContains(State.Backpack) || PileContains(State.BattleDeck) || PileContains(State.BurdenZone))
+		{
+			return true;
+		}
+		for (const FSpecialZone& SpecialZone : State.SpecialZones)
+		{
+			if (PileContains(SpecialZone.Cards))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	int32 CountOwnedCardsByDefinition(const FRunState& State, const UCardDefinition* Card)
+	{
+		auto CountPile = [Card](const TArray<FCardInstance>& Pile) -> int32
+		{
+			int32 Count = 0;
+			for (const FCardInstance& Inst : Pile)
+			{
+				if (Inst.Definition == Card)
+				{
+					++Count;
+				}
+			}
+			return Count;
+		};
+
+		int32 Count = CountPile(State.Backpack) + CountPile(State.BattleDeck) + CountPile(State.BurdenZone);
+		for (const FSpecialZone& SpecialZone : State.SpecialZones)
+		{
+			Count += CountPile(SpecialZone.Cards);
+		}
+		return Count;
+	}
+
+	FGuid FindFirstBackpackInstanceIdByDefinition(const FRunState& State, const UCardDefinition* Card)
+	{
+		for (const FCardInstance& Inst : State.Backpack)
+		{
+			if (Inst.Definition == Card)
+			{
+				return Inst.InstanceId;
+			}
+		}
+		return FGuid();
+	}
+
+	FGuid FindFirstOwnedInstanceIdByDefinitionInZone(const FRunState& State, const UCardDefinition* Card, EZoneKind Zone)
+	{
+		const TArray<FCardInstance>* Pile = nullptr;
+		if (Zone == EZoneKind::Backpack)
+		{
+			Pile = &State.Backpack;
+		}
+		else if (Zone == EZoneKind::BattleDeck)
+		{
+			Pile = &State.BattleDeck;
+		}
+		else if (Zone == EZoneKind::BurdenZone)
+		{
+			Pile = &State.BurdenZone;
+		}
+
+		if (Pile)
+		{
+			for (const FCardInstance& Inst : *Pile)
+			{
+				if (Inst.Definition == Card)
+				{
+					return Inst.InstanceId;
+				}
+			}
+			return FGuid();
+		}
+
+		for (const FSpecialZone& SpecialZone : State.SpecialZones)
+		{
+			for (const FCardInstance& Inst : SpecialZone.Cards)
+			{
+				if (Inst.Definition == Card)
+				{
+					return Inst.InstanceId;
+				}
+			}
+		}
+		return FGuid();
 	}
 }
 
@@ -497,6 +638,136 @@ bool FWacomRunDeckDestroyAlsoRemovesFromBattleDeckSpec::RunTest(const FString& /
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDestroyCardFromAllOwnedZonesSpec,
+	"Wacom.Run.Deck.DestroyCardFromAllOwnedZones",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDestroyCardFromAllOwnedZonesSpec::RunTest(const FString& /*Parameters*/)
+{
+	auto BuildRunWithTargetInZone = [this](FWacomBattleFixture& Fx, EZoneKind TargetZone, UCardDefinition*& OutTarget) -> TStrongObjectPtr<URunSession>
+	{
+		UCardDefinition* Bag = MakeBagCard(Fx, 8);
+		UCardDefinition* TypeB = MakeTypeBContainerCard(Fx, 3);
+		OutTarget = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
+
+		TArray<UCardDefinition*> Starter = { Bag, TypeB };
+		if (TargetZone == EZoneKind::BattleDeck)
+		{
+			Starter.Add(OutTarget);
+		}
+
+		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), Starter);
+		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+		TestTrue(TEXT("Initialize all-zones destroy run"), Run->Initialize(Char));
+
+		if (TargetZone != EZoneKind::BattleDeck)
+		{
+			Run->AddCardToBackpack(OutTarget);
+		}
+
+		if (TargetZone == EZoneKind::BurdenZone)
+		{
+			const FGuid TargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), OutTarget);
+			TestTrue(TEXT("Target id valid before burden move"), TargetId.IsValid());
+			TestTrue(TEXT("Move target to burden"), Run->MoveInstance(TargetId, EZoneKind::BurdenZone, FGuid()));
+		}
+		else if (TargetZone == EZoneKind::SpecialZone)
+		{
+			const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+			const FGuid TargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), OutTarget);
+			TestTrue(TEXT("Target id valid before special move"), TargetId.IsValid());
+			TestTrue(TEXT("Move target to special"), Run->MoveInstance(TargetId, EZoneKind::SpecialZone, OwnerId));
+		}
+
+		return Run;
+	};
+
+	const EZoneKind Zones[] = {
+		EZoneKind::Backpack,
+		EZoneKind::BattleDeck,
+		EZoneKind::BurdenZone,
+		EZoneKind::SpecialZone,
+	};
+
+	for (const EZoneKind Zone : Zones)
+	{
+		FWacomBattleFixture Fx;
+		UCardDefinition* Target = nullptr;
+		TStrongObjectPtr<URunSession> Run = BuildRunWithTargetInZone(Fx, Zone, Target);
+		const FRunState& Before = Run->GetRunState();
+		const FGuid RemovedId = FindFirstOwnedInstanceIdByDefinitionInZone(Before, Target, Zone);
+		TestTrue(TEXT("Target starts in expected zone"), RemovedId.IsValid());
+
+		int32 BroadcastCount = 0;
+		Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
+		{
+			++BroadcastCount;
+		});
+
+		TestTrue(TEXT("Delete validation sees target in owned zone"), Run->ValidateDeleteCardForGold(Target).bCanExecute);
+		TestTrue(TEXT("Destroy from owned zone succeeds"), Run->DestroyCardFromBackpack(Target));
+		TestFalse(TEXT("Removed instance is gone"), OwnedCardsContainInstance(Run->GetRunState(), RemovedId));
+		TestFalse(TEXT("Target definition gone"), OwnedCardsContainDefinition(Run->GetRunState(), Target));
+		TestEqual(TEXT("Destroy broadcasts once"), BroadcastCount, 1);
+		TestEqual(TEXT("Destroy does not add gold"), Run->GetGold(), 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckPermanentRemoveDefinitionPrioritySpec,
+	"Wacom.Run.Deck.PermanentRemoveDefinitionPriority",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckPermanentRemoveDefinitionPrioritySpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Target = MakeTypeAContainerCard(Fx, 1);
+	UCardDefinition* Bag = MakeBagCard(Fx, 12);
+	UCardDefinition* TypeB = MakeTypeBContainerCard(Fx, 3);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Bag, TypeB });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	Run->AddCardToBackpack(Target);
+	Run->AddCardToBackpack(Target);
+	Run->AddCardToBackpack(Target);
+	Run->AddCardToBackpack(Target);
+	const FGuid BattleDeckTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
+	TestTrue(TEXT("BattleDeck target id valid"), BattleDeckTargetId.IsValid());
+	TestTrue(TEXT("Move target to battle deck"), Run->MoveInstance(BattleDeckTargetId, EZoneKind::BattleDeck, FGuid()));
+	const FGuid SpecialTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
+	TestTrue(TEXT("Special target id valid"), SpecialTargetId.IsValid());
+	TestTrue(TEXT("Move target to special"), Run->MoveInstance(SpecialTargetId, EZoneKind::SpecialZone, Run->GetRunState().SpecialZones[0].OwnerInstanceId));
+	const FGuid BurdenTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
+	TestTrue(TEXT("Burden target id valid"), BurdenTargetId.IsValid());
+	TestTrue(TEXT("Move target to burden"), Run->MoveInstance(BurdenTargetId, EZoneKind::BurdenZone, FGuid()));
+
+	const TArray<FGuid> ExpectedOrder = {
+		FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::Backpack),
+		FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::BattleDeck),
+		FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::BurdenZone),
+		FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::SpecialZone),
+	};
+
+	for (const FGuid ExpectedRemovedId : ExpectedOrder)
+	{
+		TestTrue(TEXT("Expected priority id valid"), ExpectedRemovedId.IsValid());
+		TestTrue(TEXT("Destroy next priority instance"), Run->DestroyCardFromBackpack(Target));
+		TestFalse(TEXT("Expected priority instance removed"), OwnedCardsContainInstance(Run->GetRunState(), ExpectedRemovedId));
+	}
+
+	TestEqual(TEXT("All target instances removed"), CountOwnedCardsByDefinition(Run->GetRunState(), Target), 0);
+	TestFalse(TEXT("Further target removal rejected"), Run->DestroyCardFromBackpack(Target));
+
+	return true;
+}
+
 // ================ DeleteCardForGold ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -526,6 +797,55 @@ bool FWacomRunDeckDeleteCardForGoldByRaritySpec::RunTest(const FString& /*Parame
 	TestTrue(TEXT("Delete blue card succeeded"),
 		Run->DeleteCardForGold(BlueCard));
 	TestEqual(TEXT("Blue card → +2 gold (total 3)"), Run->GetGold(), 3);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDeleteCardForGoldFromBurdenAndSpecialZoneSpec,
+	"Wacom.Run.Deck.DeleteCardForGoldFromBurdenAndSpecialZone",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDeleteCardForGoldFromBurdenAndSpecialZoneSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* WhiteCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
+	UCardDefinition* BlueCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Blue);
+	UCardDefinition* Bag = MakeBagCard(Fx, 8);
+	UCardDefinition* TypeB = MakeTypeBContainerCard(Fx, 3);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Bag, TypeB });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	Run->AddCardToBackpack(WhiteCard);
+	const FGuid WhiteId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), WhiteCard);
+	TestTrue(TEXT("White id valid"), WhiteId.IsValid());
+	TestTrue(TEXT("Move white to burden"), Run->MoveInstance(WhiteId, EZoneKind::BurdenZone, FGuid()));
+
+	Run->AddCardToBackpack(BlueCard);
+	const FGuid BlueId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), BlueCard);
+	TestTrue(TEXT("Blue id valid"), BlueId.IsValid());
+	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+	TestTrue(TEXT("Move blue to special"), Run->MoveInstance(BlueId, EZoneKind::SpecialZone, OwnerId));
+
+	int32 BroadcastCount = 0;
+	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
+	{
+		++BroadcastCount;
+	});
+
+	TestTrue(TEXT("Delete white from burden succeeds"), Run->DeleteCardForGold(WhiteCard));
+	TestEqual(TEXT("White from burden gives 1 gold"), Run->GetGold(), 1);
+	TestFalse(TEXT("White removed from all owned zones"), OwnedCardsContainDefinition(Run->GetRunState(), WhiteCard));
+	TestEqual(TEXT("White delete broadcasts once"), BroadcastCount, 1);
+
+	TestTrue(TEXT("Delete blue from special succeeds"), Run->DeleteCardForGold(BlueCard));
+	TestEqual(TEXT("Blue from special gives 2 more gold"), Run->GetGold(), 3);
+	TestFalse(TEXT("Blue removed from all owned zones"), OwnedCardsContainDefinition(Run->GetRunState(), BlueCard));
+	TestEqual(TEXT("Blue delete broadcasts once"), BroadcastCount, 2);
 
 	return true;
 }
@@ -2957,7 +3277,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 	//     DestroyCardFromBackpack(Card) 在源 zone 内按下标升序选取第一个
 	//     Definition 匹配的 instance 操作；其它同 Definition 的 instance 与
 	//     另一区的同 Definition instance 全部保留（InstanceId 与数组顺序不变）。
-	//   - DestroyCardFromBackpack 的源 zone 优先级：Backpack 第一个 → BattleDeck 第一个。
+	//   - DestroyCardFromBackpack 的源 zone 优先级：Backpack → BattleDeck → BurdenZone → SpecialZones。
 
 	const int32 NumIterations = 150;     // ≥ 100，按 design §Testing Strategy
 	const int32 BaseSeed      = 0xDEFCA11;
@@ -3210,9 +3530,8 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			}
 		}
 
-		// ---------- 4) DestroyCardFromBackpack(CardX)：Backpack 优先 → BattleDeck 第一张（R1.10）----------
-		// 现实施 priority：先 Backpack 第一个匹配；若 Backpack 没有则 BattleDeck 第一个。
-		// （DestroyCardFromBackpack 的 instance 选择规则，见 RunSession.cpp §11.8 实现）
+		// ---------- 4) DestroyCardFromBackpack(CardX)：Backpack → BattleDeck 优先（R1.10）----------
+		// 本 property 只构造 Backpack/BattleDeck；四区优先级由 DestroyCardFromAllOwnedZones/PermanentRemoveDefinitionPriority 覆盖。
 		const TArray<FGuid> BpIdsPreD = CollectIdsByDefinition(Run->GetBackpack(),   CardX);
 		const TArray<FGuid> BdIdsPreD = CollectIdsByDefinition(Run->GetBattleDeck(), CardX);
 		if (BpIdsPreD.Num() > 0 || BdIdsPreD.Num() > 0)

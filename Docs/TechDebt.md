@@ -43,13 +43,13 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 |---|---|---|
 | 战斗 UI 全量刷新 | 每次命令后 BattleHUD 从 Snapshot 全量刷新子 widget | 加动画时动画系统自行 diff；数据源仍保持 Snapshot |
 | 战斗 UI 不做 ViewModel | BattleHUD 持有 `UBattleSession*`，子 widget 读 `FBattleSnapshot` | UI 复杂度上升或外部 widget 需要战斗状态时，再抽 `UWacomBattleViewModel` |
-| C++ 硬编码默认布局 | Widget 类 `Blueprintable` 非 Abstract，带 C++ fallback 布局 | 美术阶段用 WBP 替换视觉，C++ 保留协议和兜底 |
+| C++ 硬编码默认布局 | Widget 类 `Blueprintable` 非 Abstract，带 C++ fallback 布局；BattleHUD / BackpackScreen 的 fallback 构建已抽到私有 helper | 美术阶段用 WBP 替换视觉，C++ 保留协议和兜底 |
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
 | 手牌线性排列 | HorizontalBox / 统一水平手牌带 | 美术阶段替换为扇形 renderer 或自定义 `UHandLayoutPanel`，继续消费 `FHandCardVisualEntry` |
 | 目标选择 2D 点击 | 点击 EnemyPartWidget，不做射线检测 | HD-2D 阶段改为 3D 部位 hover / 高亮 / 点击，继续消费 `FBattleTargetSelectionView` |
 | EventToast 纯文字 | 文案、tone、icon key 已生成，但 Toast / 日志抽屉暂不做图标和动画 | 升级为事件表现调度器，接图标、颜色、Niagara、音效和战后日志 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
-| 背包 UI C++ 默认布局 | 拖拽模型已接入，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
+| 背包 UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
 | 背包 UI 全量 RebuildAll | ViewModel 刷新后清空 WrapBox 重建 | 卡量或动画需求上升时做 instance diff，或迁 ListView / TileView |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
 | AppToast fallback | 直接 AddToViewport，文本显示为主；保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
@@ -61,7 +61,7 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 
 | 项 | 临时做法 / 当前决定 | 正式方案 / 处理方向 |
 |---|---|---|
-| `URunSession` 仍承担多个领域流程 | 背包 / 负重规则已抽到私有 `FRunDeckRules`；RunEvent、Shop、SaveGame、战斗回传仍留在 `RunSession.cpp` | 后续按低风险切片继续抽 `RunEvent executor`、`Shop transaction`、`SaveGame serializer`，保持 public API 不变 |
+| `URunSession` 仍承担多个领域流程 | 背包 / 负重 / 永久移除规则、RunEvent 执行、商店事务、战斗回传结算、SaveGame 字段拷贝均已抽到私有 helper；`RunSession.cpp` 仍保留 public 命令协调、slot IO、时间 / 压力等基础入口 | 暂不继续拆；后续若时间 / 压力或 slot IO 继续膨胀，再按低风险切片拆私有 helper |
 
 <a id="techdebt-ui-architecture"></a>
 ## UI 架构债
@@ -70,7 +70,7 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 |---|---|---|
 | ViewModel FieldNotify 未被 WBP 消费 | C++ 父类用 `OnRunViewModelRefreshedNative` 粗粒度多播 + 手动 SetText | 美术阶段 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 直接绑字段；全 WBP 后删粗粒度路径 |
 | `OnRunStateChangedNative` 多次广播 | 一次玩家操作可能链式触发多次 Broadcast | ViewModel 的 `UE_MVVM_SET_PROPERTY_VALUE` 已 dedupe；粗粒度订阅方必须保证刷新幂等 |
-| BackpackScreen Presenter 边界 | Presenter 已抽展示计算；命令提交、拖拽、确认框仍在 Screen | 如果 Screen 继续膨胀，再抽 section view data 或命令协调对象 |
+| BackpackScreen Presenter 边界 | Presenter 已抽展示计算；DropTarget 只转发拖拽意图，命令提交和确认框统一在 Screen | 如果 Screen 继续膨胀，再抽 section view data 或命令协调对象 |
 
 ---
 

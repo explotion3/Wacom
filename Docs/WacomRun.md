@@ -170,14 +170,17 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 
 永久销毁入口用于删牌、事件交出卡、未来出售或战败丢弃。
 
+当前统一规则由 `Private/Deck/RunDeckRules.*` 承接。历史 public API `DestroyCardFromBackpack()` 保留旧名兼容蓝图和测试，但实际会按固定顺序搜索所有玩家拥有区：`Backpack -> BattleDeck -> BurdenZone -> SpecialZones`。
+
 当前保护规则：
 
 - `Rarity == Intrinsic` 的卡拒绝销毁。
 - 最后一张容量来源卡拒绝销毁。
 - 销毁 Companion 卡会增加嗜血压力。
 - 销毁 B 主卡时，它的 SpecialZone 内卡退回 Backpack；装不下则进 BurdenZone。
+- 移除非容量卡后允许从负重区回填；移除容量来源卡后不做回填，只处理容量缩小导致的超容。
 
-删牌换金币当前是简易数值：白卡 +1，蓝卡 +2。金币是 Run 内资源，但当前不写入 SaveGame。
+删牌换金币当前是简易数值：白卡 +1，蓝卡 +2。奖励查询入口是 `URunSession::GetDeleteGoldRewardForCard()`，UI 只读取这个 Run 层口径。金币是 Run 内资源，但当前不写入 SaveGame。
 
 ---
 
@@ -361,8 +364,12 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | 文件 | 作用 |
 |---|---|
 | `Public/RunSession.h` | Run 的命令 / 查询入口；UI 和 GameMode 不直接改 RunState |
-| `Private/RunSession.cpp` | 时间、压力、商店、RunEvent、战斗回传、SaveGame 拷贝的协调实现 |
+| `Private/RunSession.cpp` | 时间、压力、商店 / RunEvent public 入口、战斗回传 public 入口、SaveGame slot IO 的协调实现 |
+| `Private/Battle/RunBattleSettlementResolver.*` | 战斗结束回传包的 Run 结算流程；只操作 `FRunState` 并通过回调复用 RunSession 压力 / 经验 / 获得卡牌入口 |
 | `Private/Deck/RunDeckRules.*` | 背包、备战区、SpecialZone、负重区的私有规则 helper；只操作 `FRunState`，不广播、不访问 UI |
+| `Private/Events/RunEventExecutor.*` | RunEvent 事件图解释、选项条件、效果执行和结果包生成；只操作 `FRunState`，不广播、不访问 UI |
+| `Private/Save/RunSaveGameSerializer.*` | `FRunState <-> UWacomSaveGame` 字段拷贝、SaveEntry 写入和读档校验；不广播、不做磁盘 IO |
+| `Private/Shops/RunShopTransaction.*` | 商店访问、库存快照和购买事务的私有 helper；只操作 `FRunState`，不广播、不访问 UI |
 | `Public/RunState.h` | `FRunState`、商店状态、事件状态、战斗进度快照 |
 | `Public/RunStateTypes.h` | `FCardInstance`、压力枚举、时段枚举、Zone 枚举与背包 Snapshot |
 | `Public/WacomSaveGame.h` | 当前磁盘 schema |

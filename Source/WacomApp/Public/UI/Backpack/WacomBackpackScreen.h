@@ -23,6 +23,7 @@ class UWacomSpecialZoneWidget;
 class UWacomZoneDropTarget;
 class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
+class UWacomCardDragOperation;
 struct FCardInstance;
 
 /**
@@ -50,7 +51,7 @@ class WACOMAPP_API UWacomBackpackScreen : public UWacomMenuWidgetBase
 public:
 	UWacomBackpackScreen(const FObjectInitializer& ObjectInitializer);
 
-	/** 从 PC 拿当前 RunSession（每帧都拿，不持引用）。DropTarget 通过这里提交 MoveInstance。 */
+	/** 从 PC 拿当前 RunSession（每帧都拿，不持引用）。 */
 	URunSession* GetRunSession() const;
 
 	static FText BuildSpecialZoneTitleText(const FText& OwnerName, int32 CardCount, int32 Capacity);
@@ -74,6 +75,12 @@ public:
 
 	/** 测试/诊断用：隐藏当前详情面板。 */
 	void HideCardDetailPanel();
+
+	/** DropTarget 命令出口：移动卡牌。DropTarget 只负责转发拖拽意图，规则提交和 Toast 由 Screen 统一处理。 */
+	bool HandleZoneDropRequested(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId);
+
+	/** DropTarget 命令出口：请求销毁卡牌。会弹确认框，确认后由 Screen 提交 Run 命令。 */
+	bool HandleDeleteDropRequested(const UWacomCardDragOperation& CardOp);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

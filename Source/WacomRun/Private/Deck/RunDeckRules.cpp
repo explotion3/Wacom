@@ -4,6 +4,7 @@
 
 #include "Cards/CardDefinition.h"
 #include "RunState.h"
+#include "Tags/WacomGameplayTags.h"
 
 bool FRunDeckRules::IsContainerCard(const UCardDefinition* Card)
 {
@@ -187,6 +188,286 @@ void FRunDeckRules::CollectTypeBContainers(const FRunState& State, TArray<FGuid>
 		OutOwnerInstanceIds.Add(OwnerId);
 		Seen.Add(OwnerId);
 	}
+}
+
+bool FRunDeckRules::FindFirstOwnedCardDefinition(const FRunState& State, const UCardDefinition* Card, FRunOwnedCardLocation& OutLocation)
+{
+	OutLocation = FRunOwnedCardLocation{};
+	if (!Card)
+	{
+		return false;
+	}
+
+	auto FindInPile = [Card, &OutLocation](const TArray<FCardInstance>& Pile, EZoneKind Zone, FGuid ZoneOwnerInstanceId) -> bool
+	{
+		for (int32 i = 0; i < Pile.Num(); ++i)
+		{
+			if (Pile[i].Definition == Card)
+			{
+				OutLocation.Instance = Pile[i];
+				OutLocation.Zone = Zone;
+				OutLocation.ZoneOwnerInstanceId = ZoneOwnerInstanceId;
+				OutLocation.CardIndex = i;
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (FindInPile(State.Backpack, EZoneKind::Backpack, FGuid()))
+	{
+		return true;
+	}
+	if (FindInPile(State.BattleDeck, EZoneKind::BattleDeck, FGuid()))
+	{
+		return true;
+	}
+	if (FindInPile(State.BurdenZone, EZoneKind::BurdenZone, FGuid()))
+	{
+		return true;
+	}
+
+	for (const FSpecialZone& SpecialZone : State.SpecialZones)
+	{
+		if (FindInPile(SpecialZone.Cards, EZoneKind::SpecialZone, SpecialZone.OwnerInstanceId))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool FRunDeckRules::DoesRunOwnCardDefinition(const FRunState& State, const UCardDefinition* Card)
+{
+	FRunOwnedCardLocation Location;
+	return FindFirstOwnedCardDefinition(State, Card, Location);
+}
+
+bool FRunDeckRules::HasCapacityProviderAfterDestroyingFirstOwnedInstance(const FRunState& State, const UCardDefinition* Card)
+{
+	FRunOwnedCardLocation TargetLocation;
+	if (!FindFirstOwnedCardDefinition(State, Card, TargetLocation))
+	{
+		return false;
+	}
+
+	bool bSkippedTargetInstance = false;
+	auto HasProviderAfterSkippingTarget = [&TargetLocation, &bSkippedTargetInstance, Card](const TArray<FCardInstance>& Pile) -> bool
+	{
+		for (const FCardInstance& Inst : Pile)
+		{
+			const bool bIsTargetInstance = TargetLocation.Instance.InstanceId.IsValid()
+				? Inst.InstanceId == TargetLocation.Instance.InstanceId
+				: (!bSkippedTargetInstance && Inst.Definition == Card);
+			if (bIsTargetInstance)
+			{
+				bSkippedTargetInstance = true;
+				continue;
+			}
+			if (IsContainerCard(Inst.Definition))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (HasProviderAfterSkippingTarget(State.Backpack)
+		|| HasProviderAfterSkippingTarget(State.BattleDeck)
+		|| HasProviderAfterSkippingTarget(State.BurdenZone))
+	{
+		return true;
+	}
+
+	for (const FSpecialZone& SpecialZone : State.SpecialZones)
+	{
+		if (HasProviderAfterSkippingTarget(SpecialZone.Cards))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+FRunDeckOperationValidation FRunDeckRules::ValidatePermanentRemoveCard(const FRunState& State, const UCardDefinition* Card)
+{
+	FRunDeckOperationValidation Result;
+	Result.DisabledReason = TEXT("Unknown");
+
+	if (!Card)
+	{
+		Result.DisabledReason = TEXT("MissingCard");
+		return Result;
+	}
+
+	if (!DoesRunOwnCardDefinition(State, Card))
+	{
+		Result.DisabledReason = TEXT("CardNotOwned");
+		return Result;
+	}
+
+	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Intrinsic))
+	{
+		Result.DisabledReason = TEXT("Intrinsic");
+		return Result;
+	}
+
+	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingFirstOwnedInstance(State, Card))
+	{
+		Result.DisabledReason = TEXT("LastCapacityProvider");
+		return Result;
+	}
+
+	Result.bCanExecute = true;
+	Result.DisabledReason = NAME_None;
+	return Result;
+}
+
+bool FRunDeckRules::PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* Card, FName* OutDisabledReason)
+{
+	if (OutDisabledReason)
+	{
+		*OutDisabledReason = NAME_None;
+	}
+
+	const FRunDeckOperationValidation Validation = ValidatePermanentRemoveCard(State, Card);
+	if (!Validation.bCanExecute)
+	{
+		if (OutDisabledReason)
+		{
+			*OutDisabledReason = Validation.DisabledReason;
+		}
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunDeckRules] PermanentRemoveOwnedCard: 拒绝 Card=%s Reason=%s"),
+			*GetNameSafe(Card),
+			*Validation.DisabledReason.ToString());
+		return false;
+	}
+
+	FRunOwnedCardLocation Location;
+	if (!FindFirstOwnedCardDefinition(State, Card, Location))
+	{
+		if (OutDisabledReason)
+		{
+			*OutDisabledReason = TEXT("CardNotOwned");
+		}
+		return false;
+	}
+
+	FCardInstance RemovedInst = Location.Instance;
+	switch (Location.Zone)
+	{
+	case EZoneKind::Backpack:
+		if (!State.Backpack.IsValidIndex(Location.CardIndex))
+		{
+			if (OutDisabledReason) { *OutDisabledReason = TEXT("CardNotOwned"); }
+			return false;
+		}
+		State.Backpack.RemoveAt(Location.CardIndex);
+		break;
+
+	case EZoneKind::BattleDeck:
+		if (!State.BattleDeck.IsValidIndex(Location.CardIndex))
+		{
+			if (OutDisabledReason) { *OutDisabledReason = TEXT("CardNotOwned"); }
+			return false;
+		}
+		State.BattleDeck.RemoveAt(Location.CardIndex);
+		break;
+
+	case EZoneKind::BurdenZone:
+		if (!State.BurdenZone.IsValidIndex(Location.CardIndex))
+		{
+			if (OutDisabledReason) { *OutDisabledReason = TEXT("CardNotOwned"); }
+			return false;
+		}
+		State.BurdenZone.RemoveAt(Location.CardIndex);
+		break;
+
+	case EZoneKind::SpecialZone:
+	{
+		const int32 SpecialZoneIndex = State.SpecialZones.IndexOfByPredicate(
+			[&Location](const FSpecialZone& SpecialZone)
+			{
+				return SpecialZone.OwnerInstanceId == Location.ZoneOwnerInstanceId;
+			});
+		if (SpecialZoneIndex == INDEX_NONE || !State.SpecialZones[SpecialZoneIndex].Cards.IsValidIndex(Location.CardIndex))
+		{
+			if (OutDisabledReason) { *OutDisabledReason = TEXT("CardNotOwned"); }
+			return false;
+		}
+		State.SpecialZones[SpecialZoneIndex].Cards.RemoveAt(Location.CardIndex);
+		break;
+	}
+
+	default:
+		if (OutDisabledReason)
+		{
+			*OutDisabledReason = TEXT("CardNotOwned");
+		}
+		return false;
+	}
+
+	if (Card->Keywords.HasTagExact(WacomTags::Card_Keyword_Companion))
+	{
+		State.Pressure.Add(EWacomPressureType::Bloodlust, 1);
+	}
+
+	if (IsTypeBContainerCard(Card) && RemovedInst.InstanceId.IsValid())
+	{
+		const int32 SpecialZoneIndex = State.SpecialZones.IndexOfByPredicate(
+			[&RemovedInst](const FSpecialZone& SpecialZone)
+			{
+				return SpecialZone.OwnerInstanceId == RemovedInst.InstanceId;
+			});
+		if (SpecialZoneIndex != INDEX_NONE)
+		{
+			TArray<FCardInstance> CardsToReturn = MoveTemp(State.SpecialZones[SpecialZoneIndex].Cards);
+			State.SpecialZones.RemoveAt(SpecialZoneIndex);
+
+			const int32 FluxCapacity = SumOwnedCardCapacity(State, /*bTypeAOnly=*/true);
+			for (FCardInstance& Inst : CardsToReturn)
+			{
+				Inst.bBattleEnabledInSpecialZone = false;
+				if (CountFluxContentCards(State.Backpack) < FluxCapacity)
+				{
+					State.Backpack.Add(MoveTemp(Inst));
+				}
+				else
+				{
+					State.BurdenZone.Add(MoveTemp(Inst));
+				}
+			}
+		}
+	}
+
+	RecomputeBurden(State, /*bAllowBurdenRefill=*/!IsContainerCard(Card));
+	UE_LOG(LogTemp, Display,
+		TEXT("[RunDeckRules] PermanentRemoveOwnedCard: %s, Backpack=%d, BattleDeck=%d, Burden=%d"),
+		*GetNameSafe(Card),
+		State.Backpack.Num(),
+		State.BattleDeck.Num(),
+		State.BurdenZone.Num());
+	return true;
+}
+
+int32 FRunDeckRules::GetDeleteGoldRewardForCard(const UCardDefinition* Card)
+{
+	if (!Card)
+	{
+		return 0;
+	}
+	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_White))
+	{
+		return 1;
+	}
+	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Blue))
+	{
+		return 2;
+	}
+	return 0;
 }
 
 int32 FRunDeckRules::SumOwnedCardCapacity(const FRunState& State, bool bTypeAOnly)

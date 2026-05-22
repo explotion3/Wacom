@@ -8,6 +8,14 @@
 class UCardDefinition;
 struct FRunState;
 
+struct FRunOwnedCardLocation
+{
+	FCardInstance Instance;
+	EZoneKind Zone = EZoneKind::Backpack;
+	FGuid ZoneOwnerInstanceId;
+	int32 CardIndex = INDEX_NONE;
+};
+
 /**
  * 背包、备战区、特殊存放区、负重区的私有规则 helper。
  *
@@ -30,6 +38,13 @@ struct FRunDeckRules
 	static bool GetSpecialZone(const FRunState& State, FGuid OwnerInstanceId, FSpecialZone& Out);
 	static int32 GetSpecialZoneCapacityFor(const FRunState& State, FGuid OwnerInstanceId);
 	static void CollectTypeBContainers(const FRunState& State, TArray<FGuid>& OutOwnerInstanceIds);
+
+	static bool FindFirstOwnedCardDefinition(const FRunState& State, const UCardDefinition* Card, FRunOwnedCardLocation& OutLocation);
+	static bool DoesRunOwnCardDefinition(const FRunState& State, const UCardDefinition* Card);
+	static bool HasCapacityProviderAfterDestroyingFirstOwnedInstance(const FRunState& State, const UCardDefinition* Card);
+	static FRunDeckOperationValidation ValidatePermanentRemoveCard(const FRunState& State, const UCardDefinition* Card);
+	static bool PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* Card, FName* OutDisabledReason = nullptr);
+	static int32 GetDeleteGoldRewardForCard(const UCardDefinition* Card);
 
 	static int32 SumOwnedCardCapacity(const FRunState& State, bool bTypeAOnly);
 	static int32 CountFluxContentCards(const TArray<FCardInstance>& Pile);

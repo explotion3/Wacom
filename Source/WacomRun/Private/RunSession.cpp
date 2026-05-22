@@ -3,16 +3,19 @@
 #include "RunSession.h"
 #include "WacomSaveGame.h"
 
+#include "Battle/RunBattleSettlementResolver.h"
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Deck/RunDeckRules.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Events/RunEventExecutor.h"
 #include "Events/RunEventDefinition.h"
+#include "Save/RunSaveGameSerializer.h"
 #include "Session/BattleSession.h"
+#include "Shops/RunShopTransaction.h"
 #include "Tags/WacomGameplayTags.h"
 
 #include "Kismet/GameplayStatics.h"
-#include "UObject/SoftObjectPath.h"
 
 // ================ 内部辅助 ================
 
@@ -44,114 +47,6 @@ namespace
 		return FRunDeckRules::IsFluxContentCardDefinition(Card);
 	}
 
-	FRunShopState BuildShopStateFromInputs(const TArray<FRunShopOfferInput>& Inputs)
-	{
-		FRunShopState State;
-		for (const FRunShopOfferInput& Input : Inputs)
-		{
-			if (!Input.CardDefinition)
-			{
-				UE_LOG(LogTemp, Warning,
-					TEXT("[RunSession] BeginShopVisit: 跳过空 CardDefinition 的商品"));
-				continue;
-			}
-			if (Input.Price < 0)
-			{
-				UE_LOG(LogTemp, Warning,
-					TEXT("[RunSession] BeginShopVisit: 跳过负价格商品 Card=%s Price=%d"),
-					*GetNameSafe(Input.CardDefinition), Input.Price);
-				continue;
-			}
-
-			FRunShopOffer Offer;
-			Offer.OfferId = FGuid::NewGuid();
-			ensureMsgf(Offer.OfferId.IsValid(),
-				TEXT("[RunSession] BeginShopVisit: FGuid::NewGuid() 生成了 zero GUID"));
-			Offer.CardDefinition = Input.CardDefinition;
-			Offer.Price = Input.Price;
-			Offer.bPurchased = false;
-			State.Offers.Add(MoveTemp(Offer));
-		}
-		return State;
-	}
-
-	const FWacomRunEventNodeDefinition* FindRunEventNode(const UWacomRunEventDefinition* EventDefinition, FName NodeId)
-	{
-		if (!EventDefinition || NodeId.IsNone())
-		{
-			return nullptr;
-		}
-		return EventDefinition->Nodes.FindByPredicate(
-			[NodeId](const FWacomRunEventNodeDefinition& Node)
-			{
-				return Node.NodeId == NodeId;
-			});
-	}
-
-	const FWacomRunEventChoiceDefinition* FindRunEventChoice(const FWacomRunEventNodeDefinition* Node, FName ChoiceId)
-	{
-		if (!Node || ChoiceId.IsNone())
-		{
-			return nullptr;
-		}
-		return Node->Choices.FindByPredicate(
-			[ChoiceId](const FWacomRunEventChoiceDefinition& Choice)
-			{
-				return Choice.ChoiceId == ChoiceId;
-			});
-	}
-
-	/**
-	 * 把 SaveGame 里的 FCardInstanceSaveEntry 列表还原到 TempState，并校验：
-	 * - InstanceId 必须有效；
-	 * - InstanceId 在所有已还原 zone 中全局唯一；
-	 * - DefinitionAssetPath 必须能加载出 UCardDefinition。
-	 *
-	 * 失败时 OutErr 写入诊断字符串，调用方负责 UE_LOG Error。
-	 * 本函数保持 file-scope，避免 ApplySaveGameToRunState 继续膨胀。
-	 */
-	bool RestoreCardInstanceList(const TArray<FCardInstanceSaveEntry>& Source,
-	                              TArray<FCardInstance>& Dest,
-	                              TSet<FGuid>& SeenInstanceIds,
-	                              const TCHAR* ZoneName,
-	                              FString& OutErr)
-	{
-		Dest.Reset();
-		Dest.Reserve(Source.Num());
-		for (const FCardInstanceSaveEntry& Entry : Source)
-		{
-			if (!Entry.InstanceId.IsValid())
-			{
-				OutErr = FString::Printf(
-					TEXT("zone=%s entry InstanceId 为 zero GUID"), ZoneName);
-				return false;
-			}
-			bool bAlreadyInSet = false;
-			SeenInstanceIds.Add(Entry.InstanceId, &bAlreadyInSet);
-			if (bAlreadyInSet)
-			{
-				OutErr = FString::Printf(
-					TEXT("zone=%s 中 InstanceId %s 与其他 zone 重复"),
-					ZoneName, *Entry.InstanceId.ToString());
-				return false;
-			}
-			UCardDefinition* Def = Cast<UCardDefinition>(Entry.DefinitionAssetPath.TryLoad());
-			if (!Def)
-			{
-				OutErr = FString::Printf(
-					TEXT("zone=%s InstanceId=%s DefinitionAssetPath 加载失败: %s"),
-					ZoneName, *Entry.InstanceId.ToString(),
-					*Entry.DefinitionAssetPath.ToString());
-				return false;
-			}
-			FCardInstance Inst;
-			Inst.InstanceId                  = Entry.InstanceId;
-			Inst.Definition                  = Def;
-			Inst.bBattleEnabledInSpecialZone = Entry.bBattleEnabledInSpecialZone;
-			Dest.Add(MoveTemp(Inst));
-		}
-		return true;
-	}
 }
 
 // ================ 通知辅助 ================
@@ -349,134 +244,35 @@ void URunSession::OnBattleFinished(const FBattleResultPacket& Packet, UEnemyDefi
 
 void URunSession::OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet, UEnemyDefinition* EnemyDef, FName TriggerPersistentId)
 {
-	// 1) Outcome 主分支
-	switch (Packet.Outcome)
+	const bool bResolved = FRunBattleSettlementResolver::Resolve(
+		RunState,
+		Packet,
+		EnemyDef,
+		TriggerPersistentId,
+		FRunBattleSettlementResolver::FCallbacks{
+			[this](EWacomPressureType Type, int32 Delta)
+			{
+				AddPressure(Type, Delta);
+			},
+			[this](int32 Amount)
+			{
+				AddExperience(Amount);
+			},
+			[this](UCardDefinition* Card)
+			{
+				AcquireCardToRun(Card);
+			},
+			[this](EWacomPressureType Type)
+			{
+				return GetPressureValue(Type);
+			},
+		});
+	if (!bResolved)
 	{
-	case EBattleOutcome::Victory:
-		if (Packet.bWithdrawn)
-		{
-			// 撤离：敌人不进 DefeatedEnemies、节点不算完成。
-			// 持久化破坏部位列表，下次进入同一战斗 Trigger 时维持破坏态。
-			if (!TriggerPersistentId.IsNone())
-			{
-				FBattleProgressSnapshot Snapshot;
-				Snapshot.DestroyedPartIds = Packet.DestroyedPartIds;
-				RunState.BattleProgress.Add(TriggerPersistentId, MoveTemp(Snapshot));
-			}
-			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Battle withdrawn from %s (Trigger=%s, %d parts persisted destroyed)"),
-				*GetNameSafe(EnemyDef),
-				*TriggerPersistentId.ToString(),
-				Packet.DestroyedPartIds.Num());
-		}
-		else
-		{
-			// 真胜利：进 DefeatedEnemies + 清理该 Trigger 的进度（一次性完成）
-			if (EnemyDef)
-			{
-				RunState.DefeatedEnemies.AddUnique(EnemyDef);
-			}
-			if (!TriggerPersistentId.IsNone())
-			{
-				RunState.BattleProgress.Remove(TriggerPersistentId);
-			}
-			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Battle victory against %s (%d total defeated)"),
-				*GetNameSafe(EnemyDef),
-				RunState.DefeatedEnemies.Num());
-		}
-		break;
-
-	case EBattleOutcome::Defeat:
-		RunState.bRunActive = false;
-		UE_LOG(LogTemp, Display, TEXT("[RunSession] Battle defeat, run ended"));
-		break;
-
-	case EBattleOutcome::Undetermined:
-	default:
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] OnBattleFinished with Undetermined outcome, ignored"));
-		// 未定结果不做战外结算（疲劳 / 伤口都不加），直接返回。
 		return;
 	}
 
-	// 2) 战外结算压力。
-	// 疲劳：每场战斗后 +1%（无论胜败）。
-	AddPressure(EWacomPressureType::Fatigue, 1);
-
-	// 伤口阈值跨越。
-	if (Packet.bCrossedHighHpThreshold)
-	{
-		AddPressure(EWacomPressureType::Wound, 1);
-	}
-	if (Packet.bCrossedLowHpThreshold)
-	{
-		AddPressure(EWacomPressureType::Wound, 5);
-	}
-	// 同归于尽：+10% 伤口；不影响 bRunActive（Outcome 已是 Victory）。
-	if (Packet.bMutualDestruction)
-	{
-		AddPressure(EWacomPressureType::Wound, 10);
-		UE_LOG(LogTemp, Display,
-			TEXT("[RunSession] Mutual destruction: Wound +10%%, total Wound=%d"),
-			GetPressureValue(EWacomPressureType::Wound));
-	}
-
-	// 3) 经验结算。
-	// Defeat 不结算：Run 都结束了发了无意义。
-	// Victory（含同归于尽）正常结算。
-	if (Packet.Outcome == EBattleOutcome::Victory)
-	{
-		int32 TotalExp = 0;
-		for (const FKnockdownExpGain& Gain : Packet.KnockdownExpGains)
-		{
-			TotalExp += Gain.ExpAmount;
-		}
-		if (TotalExp > 0)
-		{
-			AddExperience(TotalExp);
-			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Exp granted: %d (from %d destroyed parts)"),
-				TotalExp, Packet.KnockdownExpGains.Num());
-		}
-	}
-
-	// 4) 战斗中获得的卡牌结算。
-	// Victory 包括撤离；Defeat / Undetermined 不结算。
-	if (Packet.Outcome == EBattleOutcome::Victory)
-	{
-		for (const FBattleGainedCard& GainedCard : Packet.GainedCards)
-		{
-			if (!GainedCard.Definition)
-			{
-				continue;
-			}
-			AcquireCardToRun(GainedCard.Definition.Get());
-			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Gained card from battle: Card=%s, Part=%s, Choice=%d"),
-				*GetNameSafe(GainedCard.Definition),
-				*GainedCard.SourcePartId.ToString(),
-				static_cast<int32>(GainedCard.SourceChoice));
-		}
-	}
-
-	// 5) 击倒事件玩家选择记账。当前只打日志；后续可由 RunEvent 按 Choice 衔接分支。
-	for (const FKnockdownChoice& Choice : Packet.KnockdownChoices)
-	{
-		const TCHAR* ChoiceName = TEXT("?");
-		switch (Choice.Choice)
-		{
-		case EKnockdownChoice::Aid:      ChoiceName = TEXT("Aid"); break;
-		case EKnockdownChoice::Destroy:  ChoiceName = TEXT("Destroy"); break;
-		case EKnockdownChoice::Withdraw: ChoiceName = TEXT("Withdraw"); break;
-		default: break;
-		}
-		UE_LOG(LogTemp, Display,
-			TEXT("[RunSession] KnockdownChoice: Part=%s, Choice=%s"),
-			*Choice.PartId.ToString(), ChoiceName);
-	}
-
-	// 6) 整体通知一次（即便上面没改字段也发，让 UI 在战斗结束统一刷新）
+	// 整体通知一次（即便上面没改字段也发，让 UI 在战斗结束统一刷新）
 	NotifyRunStateChanged();
 }
 
@@ -510,399 +306,15 @@ void URunSession::SetPlayerTransform(const FTransform& InTransform)
 
 UWacomSaveGame* URunSession::BuildSaveGameFromRunState() const
 {
-	UWacomSaveGame* Save = Cast<UWacomSaveGame>(
-		UGameplayStatics::CreateSaveGameObject(UWacomSaveGame::StaticClass()));
-	if (!Save) { return nullptr; }
-
-	Save->SaveVersion    = UWacomSaveGame::CurrentSaveVersion;
-	Save->SavedAtUtc     = FDateTime::UtcNow();
-	Save->ClientBuildId  = FString();  // 第一版留空，未来可接 FApp::GetBuildVersion()
-
-	Save->CharacterAssetPath = RunState.Character
-		? FSoftObjectPath(RunState.Character)
-		: FSoftObjectPath();
-
-	Save->BattleSeed = RunState.BattleSeed;
-	Save->bRunActive = RunState.bRunActive;
-
-	Save->DefeatedEnemyAssetPaths.Reset();
-	Save->DefeatedEnemyAssetPaths.Reserve(RunState.DefeatedEnemies.Num());
-	for (UEnemyDefinition* E : RunState.DefeatedEnemies)
-	{
-		if (E) { Save->DefeatedEnemyAssetPaths.Add(FSoftObjectPath(E)); }
-	}
-
-	Save->DestroyedTriggerIds = RunState.DestroyedTriggerIds.Array();
-
-	Save->PlayerTransform     = RunState.PlayerTransform;
-	Save->bHasPlayerTransform = RunState.bHasPlayerTransform;
-
-	// ---- v2 instance 列表 ----
-	//
-	// 写入约束：
-	//   1) 每条 entry 的 InstanceId 必须非 zero GUID（违反则 UE_LOG Error 并跳过）
-	//   2) 全表合并（Backpack ∪ BattleDeck ∪ BurdenZone ∪ ⋃SpecialZones.Cards）后 InstanceId 全局唯一
-	//      （违反则 UE_LOG Error 并跳过该条；首次出现的保留，后续重复的跳过）
-	//   3) FSpecialZone.OwnerInstanceId 必须非 zero GUID 且能在 Backpack ∪ BattleDeck 中找到对应 owner instance
-	//      （违反则 UE_LOG Error 并整条 SpecialZone 跳过；不写半截 entry）
-	//
-	// 注意：Definition == nullptr 的 instance 也允许写入（DefinitionAssetPath 为空 path）；
-	//   读档时由 ApplySaveGameToRunState 的损坏档校验处理。
-	Save->Backpack.Reset();
-	Save->BattleDeck.Reset();
-	Save->BurdenZone.Reset();
-	Save->SpecialZones.Reset();
-
-	TSet<FGuid> SeenInstanceIds;
-	{
-		int32 SpecialZoneCardTotal = 0;
-		for (const FSpecialZone& SZ : RunState.SpecialZones)
-		{
-			SpecialZoneCardTotal += SZ.Cards.Num();
-		}
-		SeenInstanceIds.Reserve(
-			RunState.Backpack.Num() + RunState.BattleDeck.Num()
-			+ RunState.BurdenZone.Num() + SpecialZoneCardTotal);
-	}
-
-	auto WriteInstanceList = [&SeenInstanceIds](const TArray<FCardInstance>& Source,
-	                                             TArray<FCardInstanceSaveEntry>& Dest,
-	                                             const TCHAR* ZoneName)
-	{
-		Dest.Reserve(Source.Num());
-		for (const FCardInstance& Inst : Source)
-		{
-			if (!Inst.InstanceId.IsValid())
-			{
-				UE_LOG(LogTemp, Error,
-					TEXT("[RunSession] BuildSaveGameFromRunState: %s 中存在 zero GUID InstanceId 的 instance（Definition=%s），跳过"),
-					ZoneName, *GetNameSafe(Inst.Definition));
-				continue;
-			}
-			bool bAlreadyInSet = false;
-			SeenInstanceIds.Add(Inst.InstanceId, &bAlreadyInSet);
-			if (bAlreadyInSet)
-			{
-				UE_LOG(LogTemp, Error,
-					TEXT("[RunSession] BuildSaveGameFromRunState: %s 中 InstanceId %s 与其他 zone 重复，跳过"),
-					ZoneName, *Inst.InstanceId.ToString());
-				continue;
-			}
-			FCardInstanceSaveEntry Entry;
-			Entry.InstanceId = Inst.InstanceId;
-			Entry.DefinitionAssetPath = Inst.Definition
-				? FSoftObjectPath(Inst.Definition)
-				: FSoftObjectPath();
-			Entry.bBattleEnabledInSpecialZone = Inst.bBattleEnabledInSpecialZone;
-			Dest.Add(MoveTemp(Entry));
-		}
-	};
-
-	WriteInstanceList(RunState.Backpack,   Save->Backpack,   TEXT("Backpack"));
-	WriteInstanceList(RunState.BattleDeck, Save->BattleDeck, TEXT("BattleDeck"));
-	WriteInstanceList(RunState.BurdenZone, Save->BurdenZone, TEXT("BurdenZone"));
-
-	// SpecialZones：每条 FSpecialZone → 一条 FSpecialZoneSaveEntry（OwnerInstanceId + Cards 列表）。
-	// 同一 SeenInstanceIds 集合贯穿所有 zone，所以 SpecialZone 内的卡若 InstanceId 与 Backpack /
-	// BattleDeck / BurdenZone / 其他 SpecialZone 中已写入的 InstanceId 重复也会被 lambda 跳过并报错。
-	//
-	// OwnerInstanceId 校验：
-	//   - zero GUID → 整条 entry 跳过（写半截 entry 没有意义，读档侧也无法关联回 owner）
-	//   - 非 zero 但在 Backpack ∪ BattleDeck 中找不到 owner instance → 跳过整条
-	//     （RunState 不变量本来就保证此关联存在，此处是双保险防外部直接构造异常 RunState）
-	Save->SpecialZones.Reserve(RunState.SpecialZones.Num());
-	for (const FSpecialZone& SZ : RunState.SpecialZones)
-	{
-		if (!SZ.OwnerInstanceId.IsValid())
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunSession] BuildSaveGameFromRunState: SpecialZone OwnerInstanceId 为 zero GUID（Cards=%d），跳过整条"),
-				SZ.Cards.Num());
-			continue;
-		}
-
-		auto OwnerInBackpackOrBattleDeck = [this, &SZ]()
-		{
-			for (const FCardInstance& Inst : RunState.Backpack)
-			{
-				if (Inst.InstanceId == SZ.OwnerInstanceId) { return true; }
-			}
-			for (const FCardInstance& Inst : RunState.BattleDeck)
-			{
-				if (Inst.InstanceId == SZ.OwnerInstanceId) { return true; }
-			}
-			return false;
-		};
-		if (!OwnerInBackpackOrBattleDeck())
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunSession] BuildSaveGameFromRunState: SpecialZone OwnerInstanceId %s 在 Backpack/BattleDeck 中找不到 owner instance，跳过整条"),
-				*SZ.OwnerInstanceId.ToString());
-			continue;
-		}
-
-		FSpecialZoneSaveEntry Entry;
-		Entry.OwnerInstanceId = SZ.OwnerInstanceId;
-		const FString ZoneNameStr = FString::Printf(TEXT("SpecialZone[%s]"), *SZ.OwnerInstanceId.ToString());
-		WriteInstanceList(SZ.Cards, Entry.Cards, *ZoneNameStr);
-		Save->SpecialZones.Add(MoveTemp(Entry));
-	}
-
-	return Save;
+	return FRunSaveGameSerializer::BuildSaveGameFromRunState(RunState);
 }
 
 bool URunSession::ApplySaveGameToRunState(UWacomSaveGame* SaveGame)
 {
-	if (!SaveGame)
+	if (!FRunSaveGameSerializer::TryApplySaveGameToRunState(SaveGame, RunState))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplySaveGameToRunState: SaveGame 为空"));
 		return false;
 	}
-
-	// 版本检查：新版本拒绝。
-	if (SaveGame->SaveVersion > UWacomSaveGame::CurrentSaveVersion)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] 存档版本 %d 高于当前 %d，拒绝读档"),
-			SaveGame->SaveVersion, UWacomSaveGame::CurrentSaveVersion);
-		return false;
-	}
-
-	// 旧版本走迁移链。迁移失败拒绝读档。
-	if (!UWacomSaveGame::MigrateIfNeeded(SaveGame))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] 存档迁移失败（源版本 %d → 目标 %d），拒绝读档"),
-			SaveGame->SaveVersion, UWacomSaveGame::CurrentSaveVersion);
-		return false;
-	}
-
-	// Character 资产必须加载成功；失败说明 Character 被删了，整个档作废。
-	UCharacterDefinition* LoadedChar = Cast<UCharacterDefinition>(
-		SaveGame->CharacterAssetPath.TryLoad());
-	if (!LoadedChar)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] CharacterAssetPath 加载失败: %s"),
-			*SaveGame->CharacterAssetPath.ToString());
-		return false;
-	}
-
-	// 原子还原：所有字段先写入 TempState，校验全部通过后才替换 RunState。
-	// 四个 instance 数组全空时按 Character.StarterDeck 重建；否则按 SaveEntry 还原。
-	// 任何损坏档校验失败都会提前返回，保留调用前的 RunState。
-
-	FRunState TempState;
-	TempState.Character          = LoadedChar;
-	TempState.BattleSeed         = SaveGame->BattleSeed;
-	TempState.bRunActive         = SaveGame->bRunActive;
-	TempState.PlayerTransform    = SaveGame->PlayerTransform;
-	TempState.bHasPlayerTransform = SaveGame->bHasPlayerTransform;
-
-	TempState.DefeatedEnemies.Reset();
-	TempState.DefeatedEnemies.Reserve(SaveGame->DefeatedEnemyAssetPaths.Num());
-	for (const FSoftObjectPath& Path : SaveGame->DefeatedEnemyAssetPaths)
-	{
-		if (UEnemyDefinition* E = Cast<UEnemyDefinition>(Path.TryLoad()))
-		{
-			TempState.DefeatedEnemies.Add(E);
-		}
-		else
-		{
-			// 单条敌人加载失败仅警告 + 跳过：DefeatedEnemies 是日志性数据，
-			// 不参与 instance 模型校验，丢一两条不致整档作废。
-			UE_LOG(LogTemp, Warning,
-				TEXT("[RunSession] DefeatedEnemy 加载失败，跳过: %s"),
-				*Path.ToString());
-		}
-	}
-
-	TempState.DestroyedTriggerIds.Reset();
-	for (const FName& Id : SaveGame->DestroyedTriggerIds)
-	{
-		if (!Id.IsNone()) { TempState.DestroyedTriggerIds.Add(Id); }
-	}
-
-	const bool bAllInstanceArraysEmpty =
-		   SaveGame->Backpack.Num()     == 0
-		&& SaveGame->BattleDeck.Num()   == 0
-		&& SaveGame->BurdenZone.Num()   == 0
-		&& SaveGame->SpecialZones.Num() == 0;
-
-	if (bAllInstanceArraysEmpty)
-	{
-		// ---- 按 StarterDeck 重建 instances ----
-		// 复用 Initialize 的 A/B/普通卡分流：容器卡进 Backpack，非容器卡进 BattleDeck。
-		// 每张新分配 InstanceId；B 主卡同步创建空 SpecialZone entry。
-		// BurdenZone 保持空，等待后续容量重算。
-		//
-		// 此处 inline 实现而非调 EnsureSpecialZoneEntryFor，因为该 helper 操作的是
-		// `this->RunState.SpecialZones`；这里写入的是 TempState。
-		for (const TObjectPtr<UCardDefinition>& Card : LoadedChar->StarterDeck)
-		{
-			if (!Card)
-			{
-				continue;
-			}
-			FCardInstance Inst;
-			Inst.Definition = Card;
-			Inst.InstanceId = FGuid::NewGuid();
-			ensureMsgf(Inst.InstanceId.IsValid(),
-				TEXT("[RunSession] ApplySaveGameToRunState (StarterDeck rebuild): FGuid::NewGuid() 生成 zero GUID"));
-			if (ShouldStarterCardStartInBattleDeck(Card))
-			{
-				TempState.BattleDeck.Add(Inst);
-			}
-			else if (URunSession::IsContainerCard(Card))
-			{
-				TempState.Backpack.Add(Inst);
-			}
-			else
-			{
-				TempState.BattleDeck.Add(Inst);
-			}
-			// StarterDeck 同款 B 主卡可能多张（不同 InstanceId），各自一条 entry。
-			if (IsTypeBContainerCard(Inst.Definition) && Inst.InstanceId.IsValid())
-			{
-				FSpecialZone NewEntry;
-				NewEntry.OwnerInstanceId = Inst.InstanceId;
-				TempState.SpecialZones.Add(MoveTemp(NewEntry));
-			}
-		}
-
-		UE_LOG(LogTemp, Display,
-			TEXT("[RunSession] ApplySaveGameToRunState: SaveVersion=%d 四数组全空，按 Character=%s StarterDeck 重建（Backpack=%d, BattleDeck=%d, SpecialZones=%d）"),
-			SaveGame->SaveVersion, *GetNameSafe(LoadedChar),
-			TempState.Backpack.Num(), TempState.BattleDeck.Num(), TempState.SpecialZones.Num());
-	}
-	else
-	{
-		// ---- 按 SaveEntry 还原 + 损坏档校验 ----
-		// 校验聚合在一个 TSet<FGuid> SeenInstanceIds 中：每读一条 entry 就尝试 Add，
-		// 若 bAlreadyInSet 命中即说明 InstanceId 重复。SeenInstanceIds 跨
-		// Backpack / BattleDeck / BurdenZone / 各 SpecialZone.Cards 共享，覆盖全表唯一性。
-		//
-		// DefinitionAssetPath 为空 path 视为损坏：BuildSaveGameFromRunState 写入
-		// nullptr Definition 时输出空 path，读档时 TryLoad 返回 nullptr 即按损坏处理。
-		//
-		// 还原逻辑提取为 file-scope helper RestoreCardInstanceList。
-		// BurdenZone + SpecialZones 归属关系：
-		//   - BurdenZone 直接走 RestoreCardInstanceList，与三区共享 SeenInstanceIds。
-		//   - 每个 FSpecialZoneSaveEntry：
-		//       a) OwnerInstanceId 非 zero GUID
-		//       b) OwnerInstanceId 必须在 TempState.Backpack ∪ TempState.BattleDeck 中存在
-		//          （B 主卡 instance 只能在这两区）
-		//       c) OwnerInstanceId 跨 SpecialZoneSaveEntry 唯一（防御性；
-		//          BuildSaveGameFromRunState 写入侧已保证 RunState.SpecialZones 内唯一）
-		//       d) Cards 列表通过 RestoreCardInstanceList 还原，复用同一 SeenInstanceIds
-		//   - 任一校验失败 → return false，TempState 已写入的部分被丢弃。
-
-		TSet<FGuid> SeenInstanceIds;
-		{
-			int32 SpecialZoneCardTotal = 0;
-			for (const FSpecialZoneSaveEntry& SZ : SaveGame->SpecialZones)
-			{
-				SpecialZoneCardTotal += SZ.Cards.Num();
-			}
-			SeenInstanceIds.Reserve(
-				SaveGame->Backpack.Num() + SaveGame->BattleDeck.Num()
-				+ SaveGame->BurdenZone.Num() + SpecialZoneCardTotal);
-		}
-
-		FString ErrMsg;
-		if (!RestoreCardInstanceList(SaveGame->Backpack, TempState.Backpack, SeenInstanceIds, TEXT("Backpack"), ErrMsg))
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: %s"), *ErrMsg);
-			return false;
-		}
-		if (!RestoreCardInstanceList(SaveGame->BattleDeck, TempState.BattleDeck, SeenInstanceIds, TEXT("BattleDeck"), ErrMsg))
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: %s"), *ErrMsg);
-			return false;
-		}
-		if (!RestoreCardInstanceList(SaveGame->BurdenZone, TempState.BurdenZone, SeenInstanceIds, TEXT("BurdenZone"), ErrMsg))
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: %s"), *ErrMsg);
-			return false;
-		}
-
-		// SpecialZones 还原：每条 SaveEntry 走 (a) → (c) → (b) → (d) → (e) 校验/还原。
-		// 顺序约束：(b) 依赖 TempState.Backpack/BattleDeck 已还原（前面三个 RestoreCardInstanceList
-		// 调用之后），所以本块必然在三区还原之后执行。
-		TSet<FGuid> SeenSpecialZoneOwners;
-		SeenSpecialZoneOwners.Reserve(SaveGame->SpecialZones.Num());
-		TempState.SpecialZones.Reserve(SaveGame->SpecialZones.Num());
-
-		for (const FSpecialZoneSaveEntry& SZEntry : SaveGame->SpecialZones)
-		{
-			// (a) OwnerInstanceId 非 zero GUID
-			if (!SZEntry.OwnerInstanceId.IsValid())
-			{
-				UE_LOG(LogTemp, Error,
-					TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: SpecialZone OwnerInstanceId 为 zero GUID"));
-				return false;
-			}
-
-			// (c) OwnerInstanceId 跨 entry 唯一（防御性：写入侧保证不重复，但读取仍校验）
-			bool bAlreadyOwner = false;
-			SeenSpecialZoneOwners.Add(SZEntry.OwnerInstanceId, &bAlreadyOwner);
-			if (bAlreadyOwner)
-			{
-				UE_LOG(LogTemp, Error,
-					TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: SpecialZone OwnerInstanceId %s 在 SaveGame.SpecialZones 中重复"),
-					*SZEntry.OwnerInstanceId.ToString());
-				return false;
-			}
-
-			// (b) OwnerInstanceId 必须在 TempState.Backpack ∪ TempState.BattleDeck 中存在。
-			auto OwnerInBackpackOrBattleDeck = [&]()
-			{
-				for (const FCardInstance& Inst : TempState.Backpack)
-				{
-					if (Inst.InstanceId == SZEntry.OwnerInstanceId) { return true; }
-				}
-				for (const FCardInstance& Inst : TempState.BattleDeck)
-				{
-					if (Inst.InstanceId == SZEntry.OwnerInstanceId) { return true; }
-				}
-				return false;
-			};
-			if (!OwnerInBackpackOrBattleDeck())
-			{
-				UE_LOG(LogTemp, Error,
-					TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: SpecialZone OwnerInstanceId %s 在 Backpack/BattleDeck 中找不到 owner instance"),
-					*SZEntry.OwnerInstanceId.ToString());
-				return false;
-			}
-
-			// (d) 还原 Cards 列表。共享 SeenInstanceIds 保证 SpecialZone 内 InstanceId
-			//     与四区其它 InstanceId 全表唯一。
-			FSpecialZone Restored;
-			Restored.OwnerInstanceId = SZEntry.OwnerInstanceId;
-			const FString ZoneNameStr = FString::Printf(TEXT("SpecialZone[%s]"), *SZEntry.OwnerInstanceId.ToString());
-			if (!RestoreCardInstanceList(SZEntry.Cards, Restored.Cards, SeenInstanceIds, *ZoneNameStr, ErrMsg))
-			{
-				UE_LOG(LogTemp, Error,
-					TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: %s"), *ErrMsg);
-				return false;
-			}
-
-			// (e) 追加到 TempState.SpecialZones
-			TempState.SpecialZones.Add(MoveTemp(Restored));
-		}
-
-		UE_LOG(LogTemp, Display,
-			TEXT("[RunSession] ApplySaveGameToRunState: SaveVersion=%d 按 SaveEntry 还原（Backpack=%d, BattleDeck=%d, BurdenZone=%d, SpecialZones=%d）"),
-			SaveGame->SaveVersion,
-			TempState.Backpack.Num(), TempState.BattleDeck.Num(),
-			TempState.BurdenZone.Num(), TempState.SpecialZones.Num());
-	}
-
-	// 所有还原 + 校验通过 → 原子赋值 + 广播一次。
-	RunState = MoveTemp(TempState);
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1659,196 +1071,6 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 	return true;
 }
 
-bool URunSession::HasCapacityProviderAfterDestroyingFirstOwnedInstance(const UCardDefinition* Card) const
-{
-	bool bSkippedTargetInstance = false;
-	auto HasProviderAfterSkippingTarget = [&bSkippedTargetInstance, Card](const TArray<FCardInstance>& Pile) -> bool
-	{
-		for (const FCardInstance& Inst : Pile)
-		{
-			if (!bSkippedTargetInstance && Inst.Definition == Card)
-			{
-				bSkippedTargetInstance = true;
-				continue;
-			}
-			if (IsContainerCard(Inst.Definition))
-			{
-				return true;
-			}
-		}
-		return false;
-	};
-
-	if (HasProviderAfterSkippingTarget(RunState.Backpack)
-		|| HasProviderAfterSkippingTarget(RunState.BattleDeck)
-		|| HasProviderAfterSkippingTarget(RunState.BurdenZone))
-	{
-		return true;
-	}
-
-	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
-	{
-		if (HasProviderAfterSkippingTarget(SpecialZone.Cards))
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool URunSession::DoesRunOwnCardDefinition(const UCardDefinition* Card) const
-{
-	if (!Card)
-	{
-		return false;
-	}
-
-	if (FindFirstIndexByDefinition(RunState.Backpack, Card) != INDEX_NONE
-		|| FindFirstIndexByDefinition(RunState.BattleDeck, Card) != INDEX_NONE
-		|| FindFirstIndexByDefinition(RunState.BurdenZone, Card) != INDEX_NONE)
-	{
-		return true;
-	}
-
-	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
-	{
-		if (FindFirstIndexByDefinition(SpecialZone.Cards, Card) != INDEX_NONE)
-		{
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool URunSession::ValidateRunEventRemoveCard(const UCardDefinition* Card, FName& OutDisabledReason) const
-{
-	OutDisabledReason = NAME_None;
-	if (!Card)
-	{
-		OutDisabledReason = TEXT("MissingCard");
-		return false;
-	}
-	if (!DoesRunOwnCardDefinition(Card))
-	{
-		OutDisabledReason = TEXT("MissingRequiredCard");
-		return false;
-	}
-	if (IsIntrinsicCard(Card))
-	{
-		OutDisabledReason = TEXT("ProtectedCard");
-		return false;
-	}
-	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingFirstOwnedInstance(Card))
-	{
-		OutDisabledReason = TEXT("LastCapacityProvider");
-		return false;
-	}
-	return true;
-}
-
-bool URunSession::RemoveOwnedCardForRunEventInternal(UCardDefinition* Card, FName& OutDisabledReason)
-{
-	if (!ValidateRunEventRemoveCard(Card, OutDisabledReason))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] RemoveOwnedCardForRunEvent: 拒绝 Card=%s Reason=%s"),
-			*GetNameSafe(Card),
-			*OutDisabledReason.ToString());
-		return false;
-	}
-
-	const int32 BackpackIdx = FindFirstIndexByDefinition(RunState.Backpack, Card);
-	const int32 BattleDeckIdx = FindFirstIndexByDefinition(RunState.BattleDeck, Card);
-	const int32 BurdenIdx = FindFirstIndexByDefinition(RunState.BurdenZone, Card);
-
-	const bool bRemovedIsBMaster = IsTypeBContainerCard(Card);
-	FCardInstance RemovedInst;
-	bool bRemoved = false;
-	if (BackpackIdx != INDEX_NONE)
-	{
-		RemovedInst = RunState.Backpack[BackpackIdx];
-		RunState.Backpack.RemoveAt(BackpackIdx);
-		bRemoved = true;
-	}
-	else if (BattleDeckIdx != INDEX_NONE)
-	{
-		RemovedInst = RunState.BattleDeck[BattleDeckIdx];
-		RunState.BattleDeck.RemoveAt(BattleDeckIdx);
-		bRemoved = true;
-	}
-	else if (BurdenIdx != INDEX_NONE)
-	{
-		RemovedInst = RunState.BurdenZone[BurdenIdx];
-		RunState.BurdenZone.RemoveAt(BurdenIdx);
-		bRemoved = true;
-	}
-	else
-	{
-		for (FSpecialZone& SpecialZone : RunState.SpecialZones)
-		{
-			const int32 SpecialIdx = FindFirstIndexByDefinition(SpecialZone.Cards, Card);
-			if (SpecialIdx != INDEX_NONE)
-			{
-				RemovedInst = SpecialZone.Cards[SpecialIdx];
-				SpecialZone.Cards.RemoveAt(SpecialIdx);
-				bRemoved = true;
-				break;
-			}
-		}
-	}
-
-	if (!bRemoved)
-	{
-		OutDisabledReason = TEXT("MissingRequiredCard");
-		return false;
-	}
-
-	if (Card->Keywords.HasTagExact(WacomTags::Card_Keyword_Companion))
-	{
-		RunState.Pressure.Add(EWacomPressureType::Bloodlust, 1);
-	}
-
-	if (bRemovedIsBMaster && RemovedInst.InstanceId.IsValid())
-	{
-		const int32 SZIdx = RunState.SpecialZones.IndexOfByPredicate(
-			[&](const FSpecialZone& SZ)
-			{
-				return SZ.OwnerInstanceId == RemovedInst.InstanceId;
-			});
-		if (SZIdx != INDEX_NONE)
-		{
-			TArray<FCardInstance> CardsToReturn = MoveTemp(RunState.SpecialZones[SZIdx].Cards);
-			RunState.SpecialZones.RemoveAt(SZIdx);
-
-			const int32 FluxCap = GetFluxCapacity();
-			for (FCardInstance& Inst : CardsToReturn)
-			{
-				Inst.bBattleEnabledInSpecialZone = false;
-				if (CountFluxContentCards(RunState.Backpack) < FluxCap)
-				{
-					RunState.Backpack.Add(MoveTemp(Inst));
-				}
-				else
-				{
-					RunState.BurdenZone.Add(MoveTemp(Inst));
-				}
-			}
-		}
-	}
-
-	RecomputeBurdenInternal(/*bAllowBurdenRefill=*/!IsContainerCard(Card));
-	OutDisabledReason = NAME_None;
-	UE_LOG(LogTemp, Display,
-		TEXT("[RunSession] RemoveOwnedCardForRunEvent: %s, Backpack=%d, BattleDeck=%d, Burden=%d"),
-		*GetNameSafe(Card),
-		RunState.Backpack.Num(),
-		RunState.BattleDeck.Num(),
-		RunState.BurdenZone.Num());
-	return true;
-}
-
 FRunDeckOperationValidation URunSession::ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const
 {
 	return FRunDeckRules::ValidateMoveInstance(RunState, InstanceId, ToZone, ToZoneOwnerInstanceId);
@@ -1918,129 +1140,15 @@ bool URunSession::DestroyCardFromBackpack(UCardDefinition* Card)
 
 bool URunSession::DestroyCardFromBackpackInternal(UCardDefinition* Card)
 {
-	if (!Card)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[RunSession] DestroyCardFromBackpack: Card 为空"));
-		return false;
-	}
-
-	// 1) 必须在 Backpack 或 BattleDeck 里（玩家拥有），其中任何一个分支都允许销毁。
-	//    一张卡同时只能在一个区，所以两边只会在一处找到；按 Definition 选第一个匹配 instance。
-	const int32 BackpackIdx   = FindFirstIndexByDefinition(RunState.Backpack,   Card);
-	const int32 BattleDeckIdx = FindFirstIndexByDefinition(RunState.BattleDeck, Card);
-	const bool bInBackpack    = (BackpackIdx   != INDEX_NONE);
-	const bool bInBattleDeck  = (BattleDeckIdx != INDEX_NONE);
-	if (!bInBackpack && !bInBattleDeck)
+	FName DisabledReason = NAME_None;
+	if (!FRunDeckRules::PermanentRemoveOwnedCard(RunState, Card, &DisabledReason))
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] DestroyCardFromBackpack: %s 不在玩家手中"), *GetNameSafe(Card));
+			TEXT("[RunSession] DestroyCardFromBackpack: 拒绝 Card=%s Reason=%s"),
+			*GetNameSafe(Card), *DisabledReason.ToString());
 		return false;
 	}
 
-	// 2) Intrinsic 拒绝。
-	if (IsIntrinsicCard(Card))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] DestroyCardFromBackpack: %s 是 Intrinsic，拒绝销毁"),
-			*GetNameSafe(Card));
-		return false;
-	}
-
-	// 3) 最后一张容量来源卡拒绝（销毁后玩家无容器卡会让背包容量归零）
-	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingFirstOwnedInstance(Card))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] DestroyCardFromBackpack: %s 是最后一张容量来源卡，拒绝销毁"),
-			*GetNameSafe(Card));
-		return false;
-	}
-
-	// 4) 移除一张：哪边有就从哪边移除。销毁的 instance 若是 B 主卡，需要保留其 InstanceId
-	// 以便随后在 SpecialZones 中找到对应 entry，并按数组下标升序逐张退回内含卡。先把要销毁
-	// 的 FCardInstance 拷贝出来再 RemoveAt，确保拿到 InstanceId 后引用不悬空。
-	const bool bDestroyedIsBMaster = IsTypeBContainerCard(Card);
-	FCardInstance DestroyedInst;
-	if (bInBackpack)
-	{
-		DestroyedInst = RunState.Backpack[BackpackIdx];
-		RunState.Backpack.RemoveAt(BackpackIdx);
-	}
-	else
-	{
-		DestroyedInst = RunState.BattleDeck[BattleDeckIdx];
-		RunState.BattleDeck.RemoveAt(BattleDeckIdx);
-	}
-
-	// 5) 若 Card 带 Companion 关键词 → 嗜血 +1%。
-	//    直接写 RunState.Pressure 而非调用 OnCompanionCardPermanentlyDestroyed()，
-	//    避免 public 入口尾部统一广播之外再多发一次。
-	//    OnCompanionCardPermanentlyDestroyed 仍保留作为外部独立调用入口（如未来节点
-	//    事件分支），它有自己的 tail 广播契约。
-	if (Card->Keywords.HasTagExact(WacomTags::Card_Keyword_Companion))
-	{
-		RunState.Pressure.Add(EWacomPressureType::Bloodlust, 1);
-		UE_LOG(LogTemp, Display,
-			TEXT("[RunSession] DestroyCardFromBackpack (Companion): %s → Bloodlust=%d"),
-			*GetNameSafe(Card),
-			GetPressureValue(EWacomPressureType::Bloodlust));
-	}
-
-	// 6) B 主卡销毁分支：按 FSpecialZone.Cards
-	//    数组下标升序逐张退回；通量内容未满（CountFluxContentCards < GetFluxCapacity）
-	//    → 追加 Backpack；已满 → 追加 BurdenZone；处理完后从 RunState.SpecialZones 移除该 entry。
-	//
-	//    退回前每张 instance 强制把 bBattleEnabledInSpecialZone 重置为 false，避免下次再进入残留。
-	//
-	//    注：B 主卡（B 类容器）本身 CapacityEffect 非空，不计入 GetFluxCapacity 公式
-	//    （A 类总和），因此本次销毁不会改变 GetFluxCapacity 返回值，循环内的 Backpack
-	//    满判定可以稳定使用 GetFluxCapacity()。
-	if (bDestroyedIsBMaster && DestroyedInst.InstanceId.IsValid())
-	{
-		const int32 SZIdx = RunState.SpecialZones.IndexOfByPredicate(
-			[&](const FSpecialZone& SZ)
-			{
-				return SZ.OwnerInstanceId == DestroyedInst.InstanceId;
-			});
-		if (SZIdx != INDEX_NONE)
-		{
-			// 把内含卡列表移出（避免在循环中读 RunState.SpecialZones[SZIdx] 引用悬空），
-			// 然后再移除空 entry。MoveTemp 后内含卡都已搬到 Backpack/BurdenZone，原 entry 是空壳。
-			TArray<FCardInstance> CardsToReturn = MoveTemp(RunState.SpecialZones[SZIdx].Cards);
-			RunState.SpecialZones.RemoveAt(SZIdx);
-
-			const int32 FluxCap = GetFluxCapacity();
-			for (FCardInstance& Inst : CardsToReturn)
-			{
-				// 从 SpecialZone 移出 → flag 重置为 false。
-				Inst.bBattleEnabledInSpecialZone = false;
-				if (CountFluxContentCards(RunState.Backpack) < FluxCap)
-				{
-					RunState.Backpack.Add(MoveTemp(Inst));
-				}
-				else
-				{
-					RunState.BurdenZone.Add(MoveTemp(Inst));
-				}
-			}
-
-			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] DestroyCardFromBackpack (B-master): %s 退回 %d 张内含卡，Backpack=%d, BurdenZone=%d, FluxCapacity=%d"),
-				*GetNameSafe(Card), CardsToReturn.Num(),
-				RunState.Backpack.Num(), RunState.BurdenZone.Num(), FluxCap);
-		}
-	}
-
-	// 7) 重算负重（容器卡销毁可能让其他卡溢出）。
-	//    走不广播的私有路径，外层 public 入口统一广播一次。
-	//    容量缩小导致的溢出要留在 BurdenZone，避免同一次重算又立刻回填到其他区。
-	RecomputeBurdenInternal(/*bAllowBurdenRefill=*/false);
-
-	UE_LOG(LogTemp, Display,
-		TEXT("[RunSession] DestroyCardFromBackpack: %s, Backpack=%d, BattleDeck=%d, FluxCapacity=%d"),
-		*GetNameSafe(Card), RunState.Backpack.Num(), RunState.BattleDeck.Num(), GetFluxCapacity());
-
-	// 本函数是私有路径，不在尾部 NotifyRunStateChanged。
-	// public 入口 DestroyCardFromBackpack 和 DeleteCardForGold 分别负责成功后的尾部广播。
 	return true;
 }
 
@@ -2058,17 +1166,8 @@ bool URunSession::DeleteCardForGold(UCardDefinition* Card)
 	// 委托 DestroyCardFromBackpackInternal 完成 instance 选择和销毁；本函数只追加金币结算。
 	// Internal 不广播，这里直接写 Gold 后统一广播一次。
 
-	// 计算金币：白=1 / 蓝=2。后续正式经济规则可替换这里。
 	// 在销毁前算，因为销毁后 Card 可能不再被引用。
-	int32 GoldReward = 0;
-	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_White))
-	{
-		GoldReward = 1;
-	}
-	else if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Blue))
-	{
-		GoldReward = 2;
-	}
+	const int32 GoldReward = GetDeleteGoldRewardForCard(Card);
 
 	if (!DestroyCardFromBackpackInternal(Card))
 	{
@@ -2088,40 +1187,14 @@ bool URunSession::DeleteCardForGold(UCardDefinition* Card)
 	return true;
 }
 
+int32 URunSession::GetDeleteGoldRewardForCard(const UCardDefinition* Card)
+{
+	return FRunDeckRules::GetDeleteGoldRewardForCard(Card);
+}
+
 FRunDeckOperationValidation URunSession::ValidateDeleteCardForGold(UCardDefinition* Card) const
 {
-	FRunDeckOperationValidation Result;
-	Result.DisabledReason = TEXT("Unknown");
-
-	if (!Card)
-	{
-		Result.DisabledReason = TEXT("MissingCard");
-		return Result;
-	}
-
-	const int32 BackpackIdx = FindFirstIndexByDefinition(RunState.Backpack, Card);
-	const int32 BattleDeckIdx = FindFirstIndexByDefinition(RunState.BattleDeck, Card);
-	if (BackpackIdx == INDEX_NONE && BattleDeckIdx == INDEX_NONE)
-	{
-		Result.DisabledReason = TEXT("CardNotOwned");
-		return Result;
-	}
-
-	if (IsIntrinsicCard(Card))
-	{
-		Result.DisabledReason = TEXT("Intrinsic");
-		return Result;
-	}
-
-	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingFirstOwnedInstance(Card))
-	{
-		Result.DisabledReason = TEXT("LastCapacityProvider");
-		return Result;
-	}
-
-	Result.bCanExecute = true;
-	Result.DisabledReason = NAME_None;
-	return Result;
+	return FRunDeckRules::ValidatePermanentRemoveCard(RunState, Card);
 }
 
 bool URunSession::AddCardToBattleDeck(UCardDefinition* Card)
@@ -2238,36 +1311,22 @@ bool URunSession::RemoveGold(int32 Amount)
 
 bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers)
 {
-	if (ShopId.IsNone())
+	if (FRunShopTransaction::BeginVisit(RunState, ShopId, Offers))
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] BeginShopVisit: ShopId 为 None，拒绝"));
-		return false;
+		NotifyRunStateChanged();
+		return true;
 	}
-
-	if (!RunState.ShopStates.Contains(ShopId))
-	{
-		RunState.ShopStates.Add(ShopId, BuildShopStateFromInputs(Offers));
-	}
-
-	RunState.ActiveShopId = ShopId;
-	RunState.bShopVisitHasPurchase = false;
-	NotifyRunStateChanged();
-	return true;
+	return false;
 }
 
 void URunSession::EndShopVisit()
 {
-	if (RunState.ActiveShopId.IsNone())
+	if (!IsShopVisitActive())
 	{
 		return;
 	}
 
-	const bool bShouldConsumeNode = RunState.bShopVisitHasPurchase;
-	RunState.ActiveShopId = NAME_None;
-	RunState.bShopVisitHasPurchase = false;
-
-	if (bShouldConsumeNode)
+	if (FRunShopTransaction::EndVisit(RunState))
 	{
 		ConsumeNode(1);
 	}
@@ -2279,124 +1338,39 @@ void URunSession::EndShopVisit()
 
 FRunShopSnapshot URunSession::BuildCurrentShopSnapshot() const
 {
-	FRunShopSnapshot Snapshot;
-	Snapshot.ShopId = RunState.ActiveShopId;
-	Snapshot.bIsActive = !RunState.ActiveShopId.IsNone();
-	Snapshot.bHasPurchaseThisVisit = RunState.bShopVisitHasPurchase;
-
-	if (const FRunShopState* ShopState = RunState.ShopStates.Find(RunState.ActiveShopId))
-	{
-		Snapshot.Offers = ShopState->Offers;
-	}
-
-	return Snapshot;
+	return FRunShopTransaction::BuildSnapshot(RunState);
 }
 
 bool URunSession::PurchaseShopOffer(FGuid OfferId)
 {
-	if (RunState.ActiveShopId.IsNone())
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseShopOffer: 当前没有 active shop，拒绝"));
-		return false;
-	}
-	if (!OfferId.IsValid())
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseShopOffer: OfferId 无效，拒绝"));
-		return false;
-	}
-
-	FRunShopState* ShopState = RunState.ShopStates.Find(RunState.ActiveShopId);
-	if (!ShopState)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseShopOffer: active shop %s 没有库存状态"),
-			*RunState.ActiveShopId.ToString());
-		return false;
-	}
-
-	FRunShopOffer* FoundOffer = ShopState->Offers.FindByPredicate(
-		[OfferId](const FRunShopOffer& Offer)
+	const bool bPurchased = FRunShopTransaction::PurchaseOffer(
+		RunState,
+		OfferId,
+		[this](UCardDefinition* Card)
 		{
-			return Offer.OfferId == OfferId;
+			return AcquireCardToRunInternal(Card);
 		});
-	if (!FoundOffer)
+	if (!bPurchased)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseShopOffer: 找不到 OfferId=%s"),
-			*OfferId.ToString());
-		return false;
-	}
-	if (FoundOffer->bPurchased)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseShopOffer: OfferId=%s 已购买，拒绝"),
-			*OfferId.ToString());
-		return false;
-	}
-	if (!FoundOffer->CardDefinition)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseShopOffer: OfferId=%s CardDefinition 为空，拒绝"),
-			*OfferId.ToString());
-		return false;
-	}
-	if (FoundOffer->Price < 0)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseShopOffer: OfferId=%s Price=%d 非法，拒绝"),
-			*OfferId.ToString(), FoundOffer->Price);
-		return false;
-	}
-	if (RunState.Gold < FoundOffer->Price)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseShopOffer: 余额不足（%d < %d）"),
-			RunState.Gold, FoundOffer->Price);
 		return false;
 	}
 
-	RunState.Gold -= FoundOffer->Price;
-	if (!AcquireCardToRunInternal(FoundOffer->CardDefinition.Get()))
-	{
-		RunState.Gold += FoundOffer->Price;
-		return false;
-	}
-
-	FoundOffer->bPurchased = true;
-	RunState.bShopVisitHasPurchase = true;
 	NotifyRunStateChanged();
 	return true;
 }
 
 bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
 {
-	if (!Card)
+	const bool bPurchased = FRunShopTransaction::PurchaseCard(
+		RunState,
+		Card,
+		Price,
+		[this](UCardDefinition* CardToAcquire)
+		{
+			return AcquireCardToRunInternal(CardToAcquire);
+		});
+	if (!bPurchased)
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseCardFromShop: Card 为空，拒绝"));
-		return false;
-	}
-	if (Price < 0)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseCardFromShop: Price=%d 非法，拒绝"), Price);
-		return false;
-	}
-	if (RunState.Gold < Price)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] PurchaseCardFromShop: 余额不足（%d < %d）"),
-			RunState.Gold, Price);
-		return false;
-	}
-
-	RunState.Gold -= Price;
-
-	if (!AcquireCardToRunInternal(Card))
-	{
-		RunState.Gold += Price;
 		return false;
 	}
 
@@ -2408,43 +1382,12 @@ bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
 
 bool URunSession::BeginRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition)
 {
-	if (PersistentId.IsNone())
+	if (FRunEventExecutor::BeginEvent(RunState, PersistentId, EventDefinition))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[RunSession] BeginRunEvent: PersistentId 为 None，拒绝"));
-		return false;
+		NotifyRunStateChanged();
+		return true;
 	}
-	if (!EventDefinition)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[RunSession] BeginRunEvent: EventDefinition 为空，拒绝"));
-		return false;
-	}
-	if (!FindRunEventNode(EventDefinition, EventDefinition->StartNodeId))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] BeginRunEvent: Event=%s StartNodeId=%s 无效"),
-			*GetNameSafe(EventDefinition),
-			*EventDefinition->StartNodeId.ToString());
-		return false;
-	}
-
-	FRunEventState& EventState = RunState.RunEventStates.FindOrAdd(PersistentId);
-	if (EventState.bCompleted)
-	{
-		UE_LOG(LogTemp, Display,
-			TEXT("[RunSession] BeginRunEvent: PersistentId=%s 已完成，拒绝重复打开"),
-			*PersistentId.ToString());
-		return false;
-	}
-
-	if (EventState.CurrentNodeId.IsNone() || !FindRunEventNode(EventDefinition, EventState.CurrentNodeId))
-	{
-		EventState.CurrentNodeId = EventDefinition->StartNodeId;
-	}
-
-	RunState.ActiveRunEventId = PersistentId;
-	RunState.ActiveRunEventDefinition = EventDefinition;
-	NotifyRunStateChanged();
-	return true;
+	return false;
 }
 
 void URunSession::EndRunEvent()
@@ -2461,49 +1404,12 @@ void URunSession::EndRunEvent()
 
 bool URunSession::IsRunEventCompleted(FName PersistentId) const
 {
-	if (const FRunEventState* EventState = RunState.RunEventStates.Find(PersistentId))
-	{
-		return EventState->bCompleted;
-	}
-	return false;
+	return FRunEventExecutor::IsEventCompleted(RunState, PersistentId);
 }
 
 FRunEventSnapshot URunSession::BuildCurrentRunEventSnapshot() const
 {
-	FRunEventSnapshot Snapshot;
-	Snapshot.PersistentId = RunState.ActiveRunEventId;
-	Snapshot.bIsActive = !RunState.ActiveRunEventId.IsNone() && RunState.ActiveRunEventDefinition;
-
-	const UWacomRunEventDefinition* EventDefinition = RunState.ActiveRunEventDefinition;
-	if (!Snapshot.bIsActive || !EventDefinition)
-	{
-		return Snapshot;
-	}
-
-	Snapshot.EventId = EventDefinition->EventId;
-	const FRunEventState* EventState = RunState.RunEventStates.Find(RunState.ActiveRunEventId);
-	Snapshot.bCompleted = EventState ? EventState->bCompleted : false;
-	Snapshot.CurrentNodeId = EventState ? EventState->CurrentNodeId : EventDefinition->StartNodeId;
-
-	const FWacomRunEventNodeDefinition* Node = FindRunEventNode(EventDefinition, Snapshot.CurrentNodeId);
-	if (!Node)
-	{
-		return Snapshot;
-	}
-
-	Snapshot.TitleText = Node->TitleText.IsEmpty() ? EventDefinition->DisplayName : Node->TitleText;
-	Snapshot.BodyText = Node->BodyText;
-	Snapshot.Choices.Reserve(Node->Choices.Num());
-	for (const FWacomRunEventChoiceDefinition& Choice : Node->Choices)
-	{
-		FRunEventChoiceSnapshot ChoiceSnapshot;
-		ChoiceSnapshot.ChoiceId = Choice.ChoiceId;
-		ChoiceSnapshot.LabelText = Choice.LabelText;
-		ChoiceSnapshot.bAvailable = IsRunEventChoiceAvailable(Choice, ChoiceSnapshot.DisabledReason);
-		Snapshot.Choices.Add(MoveTemp(ChoiceSnapshot));
-	}
-
-	return Snapshot;
+	return FRunEventExecutor::BuildSnapshot(RunState);
 }
 
 bool URunSession::ChooseRunEventOption(FName ChoiceId)
@@ -2513,320 +1419,10 @@ bool URunSession::ChooseRunEventOption(FName ChoiceId)
 
 FRunEventChoiceResult URunSession::ChooseRunEventOptionWithResult(FName ChoiceId)
 {
-	FRunEventChoiceResult Result;
-	Result.ChoiceId = ChoiceId;
-
-	if (RunState.ActiveRunEventId.IsNone() || !RunState.ActiveRunEventDefinition)
+	FRunEventChoiceResult Result = FRunEventExecutor::ChooseOption(RunState, ChoiceId);
+	if (Result.bSucceeded)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[RunSession] ChooseRunEventOption: 当前没有 active event，拒绝"));
-		Result.DisabledReason = TEXT("NoActiveEvent");
-		return Result;
+		NotifyRunStateChanged();
 	}
-
-	FRunEventState* EventState = RunState.RunEventStates.Find(RunState.ActiveRunEventId);
-	if (!EventState || EventState->bCompleted)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[RunSession] ChooseRunEventOption: 事件状态无效或已完成，拒绝"));
-		Result.DisabledReason = TEXT("InvalidEventState");
-		return Result;
-	}
-
-	const FWacomRunEventNodeDefinition* Node = FindRunEventNode(RunState.ActiveRunEventDefinition, EventState->CurrentNodeId);
-	const FWacomRunEventChoiceDefinition* Choice = FindRunEventChoice(Node, ChoiceId);
-	if (!Choice)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] ChooseRunEventOption: 找不到 ChoiceId=%s"),
-			*ChoiceId.ToString());
-		Result.DisabledReason = TEXT("ChoiceNotFound");
-		return Result;
-	}
-
-	FName DisabledReason = NAME_None;
-	if (!IsRunEventChoiceAvailable(*Choice, DisabledReason))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] ChooseRunEventOption: ChoiceId=%s 不可用 Reason=%s"),
-			*ChoiceId.ToString(),
-			*DisabledReason.ToString());
-		Result.DisabledReason = DisabledReason;
-		return Result;
-	}
-
-	if (!ApplyRunEventChoiceEffects(*Choice, &Result.EffectResults, &Result.DisabledReason))
-	{
-		if (Result.DisabledReason.IsNone())
-		{
-			Result.DisabledReason = TEXT("EffectFailed");
-		}
-		return Result;
-	}
-
-	if (Choice->bMarkEventCompleted)
-	{
-		EventState->bCompleted = true;
-	}
-
-	if (!Choice->NextNodeId.IsNone())
-	{
-		if (!FindRunEventNode(RunState.ActiveRunEventDefinition, Choice->NextNodeId))
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[RunSession] ChooseRunEventOption: NextNodeId=%s 无效，保持当前节点"),
-				*Choice->NextNodeId.ToString());
-		}
-		else
-		{
-			EventState->CurrentNodeId = Choice->NextNodeId;
-		}
-	}
-
-	if (Choice->bCloseEventAfterResolve || EventState->bCompleted)
-	{
-		RunState.ActiveRunEventId = NAME_None;
-		RunState.ActiveRunEventDefinition = nullptr;
-	}
-
-	NotifyRunStateChanged();
-	Result.bSucceeded = true;
 	return Result;
-}
-
-bool URunSession::TryResolveRunEventPressureType(FName PressureTypeId, EWacomPressureType& OutType) const
-{
-	if (PressureTypeId == TEXT("Hunger"))     { OutType = EWacomPressureType::Hunger; return true; }
-	if (PressureTypeId == TEXT("Wound"))      { OutType = EWacomPressureType::Wound; return true; }
-	if (PressureTypeId == TEXT("Fatigue"))    { OutType = EWacomPressureType::Fatigue; return true; }
-	if (PressureTypeId == TEXT("Burden"))     { OutType = EWacomPressureType::Burden; return true; }
-	if (PressureTypeId == TEXT("Decay"))      { OutType = EWacomPressureType::Decay; return true; }
-	if (PressureTypeId == TEXT("Misdeed"))    { OutType = EWacomPressureType::Misdeed; return true; }
-	if (PressureTypeId == TEXT("Bloodlust"))  { OutType = EWacomPressureType::Bloodlust; return true; }
-	if (PressureTypeId == TEXT("Disability")) { OutType = EWacomPressureType::Disability; return true; }
-	return false;
-}
-
-bool URunSession::IsRunEventChoiceAvailable(const FWacomRunEventChoiceDefinition& Choice, FName& OutDisabledReason) const
-{
-	OutDisabledReason = NAME_None;
-	for (const FWacomRunEventConditionDefinition& Condition : Choice.Conditions)
-	{
-		switch (Condition.Type)
-		{
-		case EWacomRunEventConditionType::None:
-			break;
-		case EWacomRunEventConditionType::MinGold:
-			if (RunState.Gold < Condition.Value)
-			{
-				OutDisabledReason = TEXT("InsufficientGold");
-				return false;
-			}
-			break;
-		case EWacomRunEventConditionType::MinNodeCount:
-			if (RunState.RemainingNodeCount < Condition.Value)
-			{
-				OutDisabledReason = TEXT("InsufficientNode");
-				return false;
-			}
-			break;
-		case EWacomRunEventConditionType::MaxPressure:
-		{
-			EWacomPressureType PressureType = EWacomPressureType::Count;
-			if (!TryResolveRunEventPressureType(Condition.PressureType, PressureType))
-			{
-				OutDisabledReason = TEXT("InvalidPressureType");
-				return false;
-			}
-			if (GetPressureValue(PressureType) > Condition.Value)
-			{
-				OutDisabledReason = TEXT("PressureTooHigh");
-				return false;
-			}
-			break;
-		}
-		case EWacomRunEventConditionType::HasCard:
-			if (!Condition.CardDefinition)
-			{
-				OutDisabledReason = TEXT("MissingCard");
-				return false;
-			}
-			if (!DoesRunOwnCardDefinition(Condition.CardDefinition.Get()))
-			{
-				OutDisabledReason = TEXT("MissingRequiredCard");
-				return false;
-			}
-			break;
-		case EWacomRunEventConditionType::MissingCard:
-			if (!Condition.CardDefinition)
-			{
-				OutDisabledReason = TEXT("MissingCard");
-				return false;
-			}
-			if (DoesRunOwnCardDefinition(Condition.CardDefinition.Get()))
-			{
-				OutDisabledReason = TEXT("AlreadyHasCard");
-				return false;
-			}
-			break;
-		case EWacomRunEventConditionType::EventCompleted:
-			if (Condition.TargetPersistentId.IsNone())
-			{
-				OutDisabledReason = TEXT("MissingTargetPersistentId");
-				return false;
-			}
-			if (!IsRunEventCompleted(Condition.TargetPersistentId))
-			{
-				OutDisabledReason = TEXT("RequiredEventNotCompleted");
-				return false;
-			}
-			break;
-		case EWacomRunEventConditionType::EventNotCompleted:
-			if (Condition.TargetPersistentId.IsNone())
-			{
-				OutDisabledReason = TEXT("MissingTargetPersistentId");
-				return false;
-			}
-			if (IsRunEventCompleted(Condition.TargetPersistentId))
-			{
-				OutDisabledReason = TEXT("RequiredEventAlreadyCompleted");
-				return false;
-			}
-			break;
-		default:
-			OutDisabledReason = TEXT("UnknownCondition");
-			return false;
-		}
-	}
-	return true;
-}
-
-bool URunSession::ApplyRunEventChoiceEffects(const FWacomRunEventChoiceDefinition& Choice, TArray<FRunEventChoiceEffectResult>* OutEffectResults, FName* OutDisabledReason)
-{
-	for (const FWacomRunEventEffectDefinition& Effect : Choice.Effects)
-	{
-		FRunEventChoiceEffectResult EffectResult;
-		EffectResult.EffectType = Effect.Type;
-		EffectResult.CardDefinition = Effect.CardDefinition;
-		EffectResult.Amount = Effect.Value;
-
-		switch (Effect.Type)
-		{
-		case EWacomRunEventEffectType::None:
-			EffectResult.bApplied = true;
-			break;
-		case EWacomRunEventEffectType::GainCard:
-			if (!Effect.CardDefinition)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplyRunEventChoiceEffects: GainCard 缺少 CardDefinition"));
-				if (OutDisabledReason)
-				{
-					*OutDisabledReason = TEXT("MissingCard");
-				}
-				return false;
-			}
-			if (!AcquireCardToRunInternal(Effect.CardDefinition.Get()))
-			{
-				if (OutDisabledReason)
-				{
-					*OutDisabledReason = TEXT("EffectFailed");
-				}
-				return false;
-			}
-			EffectResult.bApplied = true;
-			break;
-		case EWacomRunEventEffectType::AddGold:
-		{
-			const int32 GoldBefore = RunState.Gold;
-			RunState.Gold = FMath::Max(0, RunState.Gold + Effect.Value);
-			EffectResult.ActualDelta = RunState.Gold - GoldBefore;
-			EffectResult.bApplied = true;
-			break;
-		}
-		case EWacomRunEventEffectType::AddPressure:
-		{
-			EWacomPressureType PressureType = EWacomPressureType::Count;
-			if (!TryResolveRunEventPressureType(Effect.PressureType, PressureType))
-			{
-				UE_LOG(LogTemp, Warning,
-					TEXT("[RunSession] ApplyRunEventChoiceEffects: 无效 PressureType=%s"),
-					*Effect.PressureType.ToString());
-				if (OutDisabledReason)
-				{
-					*OutDisabledReason = TEXT("InvalidPressureType");
-				}
-				return false;
-			}
-			const int32 PressureBefore = RunState.Pressure.Get(PressureType);
-			RunState.Pressure.Add(PressureType, Effect.Value);
-			EffectResult.PressureType = PressureType;
-			EffectResult.ActualDelta = RunState.Pressure.Get(PressureType) - PressureBefore;
-			EffectResult.bApplied = true;
-			break;
-		}
-		case EWacomRunEventEffectType::ConsumeNode:
-		{
-			const int32 Count = FMath::Max(0, Effect.Value);
-			const int32 NodesBefore = RunState.RemainingNodeCount;
-			EffectResult.ActualDelta = -FMath::Min(Count, NodesBefore);
-			if (Count > 0)
-			{
-				const bool bHadEnoughNode = RunState.RemainingNodeCount >= Count;
-				RunState.RemainingNodeCount = FMath::Max(0, RunState.RemainingNodeCount - Count);
-				if (RunState.RemainingNodeCount <= 0)
-				{
-					AdvanceToNextPhase();
-				}
-				if (!bHadEnoughNode)
-				{
-					UE_LOG(LogTemp, Warning,
-						TEXT("[RunSession] ApplyRunEventChoiceEffects: 节点不足但已推进时段 Count=%d"),
-						Count);
-				}
-			}
-			EffectResult.bApplied = true;
-			break;
-		}
-		case EWacomRunEventEffectType::RemoveCard:
-		{
-			FName RemoveDisabledReason = NAME_None;
-			if (!RemoveOwnedCardForRunEventInternal(Effect.CardDefinition.Get(), RemoveDisabledReason))
-			{
-				if (OutDisabledReason)
-				{
-					*OutDisabledReason = RemoveDisabledReason.IsNone() ? FName(TEXT("EffectFailed")) : RemoveDisabledReason;
-				}
-				return false;
-			}
-			EffectResult.ActualDelta = -1;
-			EffectResult.bApplied = true;
-			break;
-		}
-		case EWacomRunEventEffectType::MarkEventCompleted:
-			if (Effect.TargetPersistentId.IsNone())
-			{
-				UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplyRunEventChoiceEffects: MarkEventCompleted 缺少 TargetPersistentId"));
-				if (OutDisabledReason)
-				{
-					*OutDisabledReason = TEXT("MissingTargetPersistentId");
-				}
-				return false;
-			}
-			RunState.RunEventStates.FindOrAdd(Effect.TargetPersistentId).bCompleted = true;
-			EffectResult.ActualDelta = 1;
-			EffectResult.bApplied = true;
-			break;
-		default:
-			UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplyRunEventChoiceEffects: 未知效果类型"));
-			if (OutDisabledReason)
-			{
-				*OutDisabledReason = TEXT("EffectFailed");
-			}
-			return false;
-		}
-
-		if (OutEffectResults)
-		{
-			OutEffectResults->Add(MoveTemp(EffectResult));
-		}
-	}
-	return true;
 }
