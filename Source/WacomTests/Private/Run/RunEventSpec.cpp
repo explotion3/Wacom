@@ -828,7 +828,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunEventTransactionRollbackAfterConsumeNodeSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	FRunState& State = Run->GetMutableRunState();
+	FRunState& State = Run->GetMutableRunStateForAutomationTest();
 	State.CurrentTimePhase = ETimePhase::Day;
 	State.RemainingNodeCount = 1;
 
@@ -872,7 +872,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunEventConsumeNodeEffectEntersDuskWithPressureSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	FRunState& State = Run->GetMutableRunState();
+	FRunState& State = Run->GetMutableRunStateForAutomationTest();
 	State.CurrentTimePhase = ETimePhase::Day;
 	State.RemainingNodeCount = 1;
 
@@ -910,7 +910,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunEventConsumeNodeEffectInsufficientNodesStillAppliesSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	FRunState& State = Run->GetMutableRunState();
+	FRunState& State = Run->GetMutableRunStateForAutomationTest();
 	State.CurrentTimePhase = ETimePhase::Day;
 	State.RemainingNodeCount = 1;
 

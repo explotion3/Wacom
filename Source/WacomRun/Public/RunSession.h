@@ -79,8 +79,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	const FRunState& GetRunState() const { return RunState; }
 
-	/** 非 const 只给 GameMode 内部字段写入用（比如 PlayerTransform）。 */
-	FRunState& GetMutableRunState() { return RunState; }
+#if WITH_AUTOMATION_TESTS
+	/**
+	 * 仅供 automation tests 构造边界/非法 RunState。
+	 *
+	 * 生产代码必须使用窄命令入口修改 RunState，不能调用本方法。
+	 */
+	FRunState& GetMutableRunStateForAutomationTest() { return RunState; }
+#endif
 
 	/** 是否仍在 Run 中（bRunActive == true）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")

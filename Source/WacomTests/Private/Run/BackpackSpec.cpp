@@ -1361,7 +1361,7 @@ bool FWacomRunDeckRecomputeBurdenContractSpec::RunTest(const FString& /*Paramete
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	FRunState& State = Run->GetMutableRunState();
+	FRunState& State = Run->GetMutableRunStateForAutomationTest();
 	if (!TestEqual(TEXT("One SpecialZone"), State.SpecialZones.Num(), 1))
 	{
 		return false;
@@ -1436,7 +1436,7 @@ bool FWacomRunDeckRecomputeBurdenRefillPrioritySpec::RunTest(const FString& /*Pa
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	FRunState& State = Run->GetMutableRunState();
+	FRunState& State = Run->GetMutableRunStateForAutomationTest();
 	if (!TestEqual(TEXT("One SpecialZone"), State.SpecialZones.Num(), 1))
 	{
 		return false;
@@ -1484,7 +1484,7 @@ bool FWacomRunDeckBurdenPressureFormulaSpec::RunTest(const FString& /*Parameters
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 		Run->Initialize(Char);
 
-		FRunState& State = Run->GetMutableRunState();
+		FRunState& State = Run->GetMutableRunStateForAutomationTest();
 		for (int32 i = 0; i < Count; ++i)
 		{
 			State.BurdenZone.Add(MakeStage45Instance(Fx.MakeNoopCard(0)));
@@ -2389,7 +2389,7 @@ bool FWacomRunDeckBackpackStorageSnapshotSpec::RunTest(const FString& /*Paramete
 	// 异常 instance：Snapshot 应跳过 nullptr Definition 且不崩溃。
 	FCardInstance NullInst;
 	NullInst.InstanceId = FGuid::NewGuid();
-	Run->GetMutableRunState().Backpack.Add(NullInst);
+	Run->GetMutableRunStateForAutomationTest().Backpack.Add(NullInst);
 
 	Snap = Run->BuildBackpackStorageSnapshot();
 	if (!TestEqual(TEXT("One SpecialZone view"), Snap.SpecialZones.Num(), 1))

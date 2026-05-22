@@ -643,8 +643,8 @@ bool FWacomKnockdownChoiceVictoryClearsProgressSpec::RunTest(const FString& /*Pa
 	{
 		FBattleProgressSnapshot FakeProgress;
 		FakeProgress.DestroyedPartIds.Add(FName(TEXT("Test.Part.Solo")));
-		FRunState* RunStateMut = const_cast<FRunState*>(&Run->GetRunState());
-		RunStateMut->BattleProgress.Add(FName(TEXT("TestTrigger")), FakeProgress);
+		FRunState& RunState = Run->GetMutableRunStateForAutomationTest();
+		RunState.BattleProgress.Add(FName(TEXT("TestTrigger")), FakeProgress);
 	}
 
 	// 真胜利

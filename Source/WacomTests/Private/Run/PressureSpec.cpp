@@ -270,7 +270,7 @@ bool FWacomRunPressureBurdenSetByOverCountSpec::RunTest(const FString& /*Paramet
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	FRunState& State = Run->GetMutableRunState();
+	FRunState& State = Run->GetMutableRunStateForAutomationTest();
 	const int32 Capacity = Run->GetFluxCapacity();
 	TestEqual(TEXT("FluxCapacity=12 from container card capacity"), Capacity, 12);
 

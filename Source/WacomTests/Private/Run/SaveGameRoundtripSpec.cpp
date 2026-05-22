@@ -68,7 +68,7 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<URunSession> A(NewObject<URunSession>());
 	A->Initialize(Char);
 
-	FRunState& SA = A->GetMutableRunState();
+	FRunState& SA = A->GetMutableRunStateForAutomationTest();
 	SA.BattleSeed = 4242;
 	SA.bRunActive = true;
 	SA.DefeatedEnemies.Add(Enemy1);
@@ -397,7 +397,7 @@ bool FWacomRunSaveGameV2InstanceZoneRoundtripSpec::RunTest(const FString& /*Para
 	BurdenInst.InstanceId = FGuid::NewGuid();
 	BurdenInst.Definition = BurdenStored;
 	BurdenInst.bBattleEnabledInSpecialZone = true; // round-trip 应原样保存，虽 BurdenZone 不使用该 flag
-	Source->GetMutableRunState().BurdenZone.Add(BurdenInst);
+	Source->GetMutableRunStateForAutomationTest().BurdenZone.Add(BurdenInst);
 
 	auto SnapshotInstanceMap = [](const FRunState& State)
 	{
