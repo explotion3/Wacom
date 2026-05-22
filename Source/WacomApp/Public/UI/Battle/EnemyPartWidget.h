@@ -26,7 +26,7 @@
  * - InitiativeText  : UCommonTextBlock   当前先机
  * - IntentText      : UCommonTextBlock   意图展示（"Bite(6)" 之类）
  * - ShieldText      : UCommonTextBlock   Shield 数值（0 时折叠）
- * - StatusText      : UCommonTextBlock   BUFF/DEBUFF 简要（第一阶段占位）
+ * - StatusText      : UCommonTextBlock   BUFF/DEBUFF 简要
  *
  * 蓝图钩子：
  * - BP_OnDataApplied(FEnemyPartSnapshot)

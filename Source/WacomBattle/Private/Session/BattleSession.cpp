@@ -65,18 +65,18 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 	State->Player.Shield    = 0;
 	ReferencedAssets.Add(Params.Character);
 
-	// 阈值灌入（GDD §10）。Stage 6：BattleSession 在玩家 HP 变更后判跨越。
+	// 阈值灌入。玩家 HP 变更路径负责维护跨阈值 flag。
 	State->HighHpThreshold = Params.HighHpThreshold;
 	State->LowHpThreshold  = Params.LowHpThreshold;
 
 	// ---- 卡牌：左手 / 右手 / StarterDeck ----
-	// 战内 HP 上限规则（Game_Design.md §3.1）：
+	// 战内 HP 上限规则：
 	//   战内 MaxHp = 本体上限 + Σ(备战卡组中带 Companion 关键词的卡的 MaxHpBonus)
 	//
 	// 只有带 Card.Keyword.Companion 的卡才计入累加。武器 / 工具 / 中立卡即便填了
 	// MaxHpBonus 也不计入。烁光蝶（伙伴+武器+连击）因为带伙伴关键词，仍然计入。
 	//
-	// 第一阶段简化：在 Initialize 时全量累加。等引入"卡留在抽牌堆时不生效"语义时再改懒触发。
+	// 当前在 Initialize 时全量累加；若以后定义"卡留在抽牌堆时不生效"，再改为懒触发。
 	auto CreateCardInstance = [this](
 		const UCardDefinition* Def,
 		ECardLocation InitialLocation,
@@ -110,8 +110,7 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 
 	if (Params.Character->LeftHandCard)
 	{
-		// 左右手第一阶段放入手牌锚点容器：S3 起始阶段会按规则生成最终手牌队列。
-		// 这里先以 Unknown 位置登记，交给 S3/S4 的 HandZoneService 放入 Hand。
+		// 左右手先以 Unknown 位置登记，回合开始由 HandZoneService 放入 Hand。
 		State->Cards.LeftHandInstanceId  = CreateCardInstance(Params.Character->LeftHandCard, ECardLocation::Unknown);
 	}
 	if (Params.Character->RightHandCard)
@@ -119,7 +118,7 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 		State->Cards.RightHandInstanceId = CreateCardInstance(Params.Character->RightHandCard, ECardLocation::Unknown);
 	}
 
-	// GDD §11.6：战斗只读备战卡组。优先使用 BattleDeckEntries（来自 RunState.BattleDeck
+	// 战斗只读备战卡组。优先使用 BattleDeckEntries（来自 RunState.BattleDeck
 	// 与 SpecialZone 入战卡），其次使用旧 BattleDeckOverride，空时回退 StarterDeck。
 	if (Params.BattleDeckEntries.Num() > 0)
 	{
@@ -184,7 +183,7 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 		ReferencedAssets.Add(Slot.PartDef);
 	}
 
-	// ---- 应用预先破坏部位（GDD §10.5 撤离重入）----
+	// ---- 应用预先破坏部位（撤离重入）----
 	// 来自 RunSession.BattleProgress 的持久化破坏列表。
 	// 不发 EnemyPartHpEmptied 事件、不入 PendingKnockdownEvents、不发 KnockdownExpGain
 	// （已经在上一次撤离时处理过了，避免重复弹 dialog 和刷经验）。
@@ -229,7 +228,7 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 		EventBus->Emit(TurnEvent);
 	}
 
-	// 起始阶段：抽牌、重置等待值、生成手牌队列（S3 初版，S4 重写）。
+	// 起始阶段：抽牌、重置等待值、生成手牌队列。
 	FBattleTurnFlow::BeginPlayerTurn(*State, *EventBus, /*bIsFirstTurn=*/true);
 
 	return FWacomStatus::Ok();
@@ -254,8 +253,7 @@ FWacomStatus UBattleSession::SubmitCommand(const FBattleCommand& Command)
 		++State->StateVersion;
 	}
 
-	// 命令成功 + 战斗未结束 + 队列非空 → 切到 PendingKnockdownChoice 阶段
-	// 等玩家三选一（GDD §6 击倒事件）。
+	// 命令成功 + 战斗未结束 + 队列非空 -> 切到 PendingKnockdownChoice 阶段。
 	if (Status.IsOk()
 		&& State->Phase != EBattlePhase::BattleEnd
 		&& State->Phase != EBattlePhase::PendingKnockdownChoice

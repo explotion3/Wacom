@@ -70,7 +70,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomBattleCapacityEffectBugGirlCocoonAssetSpec::RunTest(const FString& /*Parameters*/)
 {
-	// Feature: backpack-special-zone-stage-4-5, EXAMPLE R4.2:
 	// 蛛茧绒囊落盘资产必须使用首个具体容量效果，而不是早期 Placeholder。
 	UCardDefinition* Cocoon = LoadObject<UCardDefinition>(
 		nullptr,

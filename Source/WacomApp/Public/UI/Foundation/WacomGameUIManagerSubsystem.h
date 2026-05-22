@@ -16,14 +16,14 @@ class UWacomPrimaryGameLayout;
  * Wacom UI 管理 Subsystem。
  *
  * 职责：
- *   - 创建 / 持有唯一的 UWacomPrimaryGameLayout 实例
+ *   - 为当前 PlayerController 创建 / 持有 UWacomPrimaryGameLayout 实例
  *   - 提供按 Layer Tag 的 Push / Pop / Clear 接口
- *   - 跨关卡长存（GameInstance 级生命周期）
+ *   - Subsystem 跨关卡长存；PrimaryLayout 随关卡/PC 切换拆除并重建
  *
  * 设计要点：
  *   - 不写业务逻辑。调用方（GameMode / Widget）负责决定"什么时候 Push 什么 Widget"
  *   - 调用方通过 FGameplayTag（WacomUITags::UI_Layer_* ）指定层
- *   - 第一版用同步 TSubclassOf。未来可加 TSoftClassPtr 异步版本
+ *   - 当前用同步 TSubclassOf。后续可加 TSoftClassPtr 异步版本
  *
  * 使用姿势：
  *   - GameMode::BeginPlay：EnsurePrimaryLayout(PC)

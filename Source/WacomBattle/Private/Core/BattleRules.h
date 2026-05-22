@@ -23,10 +23,10 @@ public:
 	/** 计算一张卡的 RuntimeCost。= max(0, BaseCost + RuntimeCostModifier)。 */
 	static int32 ComputeRuntimeCost(const FRuntimeCardInstance& Card);
 
-	/** 所有存活部位的当前先机之和。对齐 Battle_Rules §5 Enemy Initiative Sum。 */
+	/** 所有存活部位的当前先机之和。 */
 	static int32 ComputeEnemyInitiativeSum(const FBattleState& State);
 
-	/** 卡费用是否可用。Battle_Rules §5："RuntimeCost <= Enemy Initiative Sum" 即合法。 */
+	/** 卡费用是否可用：RuntimeCost <= Enemy Initiative Sum 即合法。 */
 	static bool IsCardCostLegal(const FBattleState& State, const FRuntimeCardInstance& Card);
 
 	// -------- 部位查找 --------
@@ -61,7 +61,7 @@ public:
 	 * 根据当前 State 推断胜败并写入 State.Outcome / Phase。
 	 *
 	 * 规则：
-	 * - 玩家 HP <= 0 且敌人全破：同时满足时判定胜利（Battle_Rules §14）。
+	 * - 玩家 HP <= 0 且敌人全破：同时满足时判定胜利。
 	 * - 仅敌人全破：胜利。
 	 * - 仅玩家 HP <= 0：失败。
 	 *

@@ -1,6 +1,7 @@
 # WacomData 模块文档
 
-> 本文是 WacomData 模块的数据结构文档。加字段时先改本文，再改代码。
+> 本文是 WacomData 模块的静态数据契约入口。加 DataAsset 字段、GameplayTag 或内容生成规则时先改本文，再改代码。
+> 运行时规则见 [WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md)，UI 展示见 [WacomUI.md](./WacomUI.md)，编辑器校验实现位于 `WacomEditor`。
 
 ---
 
@@ -21,9 +22,11 @@ WacomData 负责**静态定义和 DataAsset**。
 **不负责**：
 - 运行时实例（属于 WacomBattle）
 - 战斗逻辑
-- UI
+- Run 状态、库存、事件进度和存档
+- UI 展示、WBP 绑定和 Presentation ViewData
+- 编辑器 Validator 注册与 Commandlet 执行
 
-**依赖方向**：`WacomCore ← WacomData ← WacomBattle`
+**依赖方向**：`WacomCore ← WacomData ← WacomBattle`。`WacomData` 只能依赖 `WacomCore`，不能反向依赖 `WacomBattle / WacomRun / WacomApp / WacomEditor`。
 
 **资产位置**：
 ```
@@ -74,13 +77,16 @@ struct FCardPhysique
 };
 ```
 
-`CapacityEffect` 使用 `Card.CapacityEffect.*` 命名空间。当前已实现：
+`CapacityEffect` 使用 `Card.CapacityEffect.*` 命名空间。当前数据语义：
 - 空 tag：A 类容器，容量计入通量容量和备战容量；物理位于 Backpack 时作为通量内容卡显示。
 - 有效 tag：B 类容器，容量不计入通量容量，但计入备战容量；每张 B 类主卡独立展开一个 SpecialZone。
 - `Card.CapacityEffect.WeaponDamagePlus3`：B 类容器效果。SpecialZone 内已选择入战且带 `Card.Keyword.Weapon` 的卡，伤害结算 +3。
 
+容器运行时规则见 [WacomRun.md](./WacomRun.md)，入战后的容量效果结算见 [WacomBattle.md](./WacomBattle.md)。
+
 ---
 
+<a id="wacomdata-enemy-part"></a>
 ## §3 UEnemyDefinition + UEnemyPartDefinition 字段表
 
 ### UEnemyDefinition
@@ -113,16 +119,23 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
     UPROPERTY(EditDefaultsOnly) TArray<FIntentDefinition> IntentSequence; // 循环执行
     UPROPERTY(EditDefaultsOnly) int32             InitialIntentIndex = 0;
     UPROPERTY(EditDefaultsOnly) int32             ExperienceReward = 0;  // GDD §3.3 部位被破坏给予玩家的经验值
-    UPROPERTY(EditDefaultsOnly) UCardDefinition*  KnockdownRewardCard = nullptr; // 击倒后 Aid/Destroy 获得的奖励卡
+    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> KnockdownRewardCard = nullptr; // 击倒后 Aid/Destroy 获得的奖励卡
 };
 ```
 
-蛇默认配置：Head=3 / Body=2 / Tail=2 经验。
+蛇默认部位配置：
+
+| 部位 | MaxHp | ExperienceReward | KnockdownRewardCard |
+|---|---:|---:|---|
+| `Snake.Head` | 16 | 3 | `DA_Card_PoisonFang` |
+| `Snake.Body` | 22 | 2 | `DA_Card_PoisonFang` |
+| `Snake.Tail` | 10 | 2 | `DA_Card_PoisonFang` |
 
 `KnockdownRewardCard` 是"万物成卡"第一版部位奖励配置：
-- 部位击倒后选择 Aid 或 Destroy 时，如果该字段非空，战斗内会创建一张对应卡牌并随机插入当前手牌。
-- 该奖励同时写入战后包，Victory（含撤离）结算进 Run 背包；Defeat 不结算。
-- Aid / Destroy 第一版共用同一张奖励卡；不同分支不同奖励表留到后续扩展。
+- 字段含义：该部位被击倒后，Aid / Destroy 共用的奖励卡定义。
+- 运行时行为：Battle 在选择 Aid / Destroy 时创建战斗内 runtime card 并写入战后包，见 [WacomBattle §12](./WacomBattle.md#wacombattle-result)。
+- 战后入包：Run 在 Victory（含撤离）时结算 `GainedCards[]`，见 [WacomRun §8](./WacomRun.md#wacomrun-battle-settlement)。
+- 不同分支不同奖励表留到后续扩展。
 
 当前蛇敌人内容：
 - `DA_Card_PoisonFang`（毒牙）是第一张击倒奖励卡样例，临时效果为 0 费、对单个敌方部位施加 1 中毒。
@@ -179,6 +192,17 @@ class UCharacterDefinition : public UPrimaryDataAsset
 算上初始卡组带 Companion 的卡 `1+1+1+6+23 = 32`，战斗开始时最大 HP = `20 + 32 = 52`。
 非 Companion 卡（武器/工具/中立）即便填了 `MaxHpBonus` 也不计入战内 MaxHp。
 
+当前生成的虫妹角色内容：
+
+| 字段 | 当前值 |
+|---|---|
+| `CharacterId` | `BugGirl` |
+| `LeftHandCard` | `DA_Card_LeftHand` |
+| `RightHandCard` | `DA_Card_RightHand` |
+| `StarterDeck` | `ZhaoguangMudie / FuxiaoFeie / ChifuGongyi / ShuoguangDie / Muling / BugGirlBag / ZhujianRongnang / MuseiYinchongdeng` |
+
+`StarterDeck` 中前 5 张是默认参战伙伴卡；`BugGirlBag` 和 `ZhujianRongnang` 默认进入通量 / 特殊存放相关背包区；`MuseiYinchongdeng` 是原型特例，默认固定在备战区，但它仍作为 A 类容器卡贡献通量和备战容量。
+
 ---
 
 ## §5 UShopDefinition 字段表
@@ -195,7 +219,7 @@ class UShopDefinition : public UPrimaryDataAsset
 USTRUCT(BlueprintType)
 struct FShopOfferDefinition
 {
-    UPROPERTY(EditDefaultsOnly) UCardDefinition* CardDefinition;
+    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> CardDefinition;
     UPROPERTY(EditDefaultsOnly) int32 Price = 0;       // 金币价格，0 表示免费
 };
 ```
@@ -233,7 +257,27 @@ class UWacomRunEventDefinition : public UPrimaryDataAsset
 
 Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId / LabelText / Conditions / Effects / NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted`。
 
-当前条件：`MinGold / MinNodeCount / MaxPressure / HasCard / MissingCard / EventCompleted / EventNotCompleted`。当前效果：`GainCard / RemoveCard / AddGold / AddPressure / ConsumeNode / MarkEventCompleted`。压力类型在 DataAsset 中使用稳定 `FName`（`Hunger / Wound / Fatigue / Burden / Decay / Misdeed / Bloodlust / Disability`），由 `WacomRun` 执行时转换为运行时枚举，避免 `WacomData` 反向依赖 `WacomRun`。
+条件字段：
+
+| 字段 | 用途 |
+|---|---|
+| `Type` | `None / MinGold / MinNodeCount / MaxPressure / HasCard / MissingCard / EventCompleted / EventNotCompleted`；`None` 会被忽略 |
+| `Value` | 金币、节点、压力阈值等数值条件 |
+| `PressureType` | `MaxPressure` 使用，稳定 ID：`Hunger / Wound / Fatigue / Burden / Decay / Misdeed / Bloodlust / Disability` |
+| `CardDefinition` | `HasCard / MissingCard` 使用 |
+| `TargetPersistentId` | `EventCompleted / EventNotCompleted` 使用，填写场景事件 Actor 的 `PersistentId` |
+
+效果字段：
+
+| 字段 | 用途 |
+|---|---|
+| `Type` | `None / GainCard / RemoveCard / AddGold / AddPressure / ConsumeNode / MarkEventCompleted`；`None` 会被忽略 |
+| `CardDefinition` | `GainCard / RemoveCard` 使用 |
+| `Value` | 金币变化、压力变化、消耗节点数 |
+| `PressureType` | `AddPressure` 使用 |
+| `TargetPersistentId` | `MarkEventCompleted` 使用，填写要标记完成的场景事件 Actor `PersistentId` |
+
+压力类型在 DataAsset 中使用稳定 `FName`，由 `WacomRun` 执行时转换为运行时枚举，避免 `WacomData` 反向依赖 `WacomRun`。
 
 卡牌条件/效果使用 `CardDefinition` 字段。`HasCard / MissingCard` 会检查玩家全部拥有区：通量、备战、特殊存放区和负重区。`RemoveCard` 表示永久交出/移除一张拥有的卡，不发金币，并遵守 Run 层现有安全限制（固有卡、最后一张容量来源卡不可移除）。
 
@@ -248,12 +292,76 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 
 调试资产：
 - `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、交出已有 `毒牙`、消耗节点、调整金币/劣迹压力。
-- 价格为原型调试值，不代表正式平衡。
+- 金币、压力和节点数值均为原型调试值，不代表正式平衡。
 - 自动化测试 `Wacom.Data.RunEvent.DebugSnakeGiftAsset` 会验证该资产的节点、选项、条件、效果和 `毒牙` 引用，避免内容生成漂移。
 
 ---
 
-## §6 GameplayTag 清单
+<a id="wacomdata-content-validation"></a>
+## §7 内容生成与校验
+
+### Commandlet
+
+`UWacomRegenerateContentCommandlet` 位于 `Source/WacomEditor/Private/Commandlets/WacomRegenerateContentCommandlet.cpp`，用于重建当前原型 DataAsset。它依次调用：
+
+| Builder | 产物 |
+|---|---|
+| `BuildSnakeContent()` | 蛇敌人、三部位、奖励卡 `DA_Card_PoisonFang` |
+| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡 |
+| `BuildShopContent()` | `DA_Shop_DebugSnake` |
+| `BuildRunEventContent()` | `DA_Event_DebugSnakeGift` |
+
+命令：
+
+```powershell
+& 'E:\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomRegenerateContent -NoSplash -Unattended
+```
+
+Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后应运行它落盘资产，并跑对应 `Wacom.Data.*` 资产验证测试。
+
+### 当前生成内容
+
+| 资产 | 内容 |
+|---|---|
+| `/Game/Wacom/Characters/DA_Character_BugGirl` | 虫妹角色；左右手 + 8 张 StarterDeck |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_LeftHand` | 固有左手牌 |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_RightHand` | 固有右手牌 |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_ZhaoguangMudie` | 朝光暮蝶，0 费伙伴，随机腾挪并按 RuntimeCost 施加中毒 |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_FuxiaoFeie` | 拂晓飞蛾，0 费伙伴，施加 1 减速，3 次伙伴计数后回手 |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_ChifuGongyi` | 赤腹工蚁，0 费伙伴，保留，腾挪双手区卡 |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_ShuoguangDie` | 烁光蝶，1 费伙伴武器，连击，造成 7 伤害，打出后自腾挪 |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_Muling` | 暮蛉，5 费伙伴，冻结 1 回合，暮气触发被动占位 |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_BugGirlBag` | 虫妹的小布袋，A 类容器，`Capacity=12`，带历史兼容 `BagProvider` |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_ZhujianRongnang` | 蛛茧绒囊，B 类容器，`Capacity=3`，`WeaponDamagePlus3` |
+| `/Game/Wacom/Cards/BugGirl/DA_Card_MuseiYinchongdeng` | 暮色引虫灯，A 类容器，`Capacity=3`，带 `DeleteProvider`，默认固定在备战区 |
+| `/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang` | `PoisonFang`，0 费白卡，对单个敌方部位施加 1 中毒 |
+| `/Game/Wacom/Enemies/Snake/DA_Enemy_Snake` | 蛇敌人，包含 Head / Body / Tail 三个部位 |
+| `/Game/Wacom/Enemies/Snake/DA_Part_Snake_Head` | `Snake.Head`，HP 16，Exp 3，奖励毒牙 |
+| `/Game/Wacom/Enemies/Snake/DA_Part_Snake_Body` | `Snake.Body`，HP 22，Exp 2，奖励毒牙 |
+| `/Game/Wacom/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙 |
+| `/Game/Wacom/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋 |
+| `/Game/Wacom/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、交出毒牙、金币/压力/节点效果 |
+
+### Data Validation
+
+编辑器侧 Validator 位于 `WacomEditor`，通过 `FWacomEditorModule::StartupModule()` 注册到 `UEditorValidatorSubsystem`。
+
+| Validator | 校验对象 | 共享校验函数 |
+|---|---|---|
+| `UWacomShopDefinitionValidator` | `UShopDefinition` | `FWacomShopDefinitionValidation::Validate()` |
+| `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
+
+这些 Validator 用于编辑器 Validate Assets 和自动化测试。不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
+
+当前只有 `UShopDefinition` 和 `UWacomRunEventDefinition` 接入 Editor Validator；`UCardDefinition`、`UEnemyDefinition`、`UEnemyPartDefinition`、`UCharacterDefinition` 暂无专用 Validator。
+
+Shop Validator 只校验 `ShopId` 非空、`Offers` 非空、Offer 卡牌非空、价格非负；不校验 `DisplayName`、重复商品、价格平衡、商品池规则或生成资产路径。
+
+RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventId / StartNodeId`、Node / Choice ID、`NextNodeId`、卡牌条件 / 效果引用、事件状态目标、`ConsumeNode >= 0`。不校验标题 / 正文 / 按钮文案非空、节点可达性、选项是否至少一个、金币 / 压力数值平衡或剧情合法性。
+
+---
+
+## §8 GameplayTag 清单
 
 所有 tag 在 `WacomCore/Public/Tags/WacomGameplayTags.h` 中声明。严禁业务代码里用字符串拼 tag。
 
@@ -269,8 +377,8 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 | `Card.Keyword.Tool` | `Card_Keyword_Tool` | 工具 |
 | `Card.Keyword.Hand` | `Card_Keyword_Hand` | 手（左右手专属）|
 | `Card.Keyword.Exhaust` | `Card_Keyword_Exhaust` | 临时关键词：本卡打出后进消耗区 |
-| `Card.Keyword.BagProvider` | `Card_Keyword_BagProvider` | 容器卡：背包能力提供者（GDD §11.1 / §11.2）|
-| `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌能力提供者（GDD §11.7）。玩家持有区至少一张此关键词卡 → 删牌功能可用。第一阶段 UI 不读，接口就位 |
+| `Card.Keyword.BagProvider` | `Card_Keyword_BagProvider` | 历史 / 兼容关键词。当前背包 UI 可用性、容量和最后容量来源保护都以玩家持有区是否存在 `Physique.Capacity > 0` 的容器卡为真相；`DA_Card_BugGirlBag` 仍带此关键词作为内容标记 |
+| `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌能力提供者。`URunSession::IsDeleteFunctionAvailable()` 会读取玩家持有区是否存在该 tag；第一阶段背包 UI 和 `DeleteCardForGold` 不强制读取该判定 |
 
 ### Card.Rarity
 
@@ -316,6 +424,8 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 |---|---|---|
 | `Magnitude.Source.Literal` | `Magnitude_Source_Literal` | FinalMagnitude = Magnitude 字段 |
 | `Magnitude.Source.RuntimeCost` | `Magnitude_Source_RuntimeCost` | FinalMagnitude = 本卡当前 RuntimeCost |
+| `Magnitude.Source.HandCount` | `Magnitude_Source_HandCount` | FinalMagnitude = 当前手牌数量 |
+| `Magnitude.Source.TargetStatusStacks` | `Magnitude_Source_TargetStatusStacks` | FinalMagnitude = 目标敌方部位上 `TargetZone` 指定 Status tag 的层数；目标或 `TargetZone` 无效时 fallback 到 `Magnitude` |
 
 ### Condition
 
@@ -345,7 +455,7 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 | `Target.AllEnemyParts` | `Target_AllEnemyParts` | 所有敌方部位 |
 | `Target.RandomHandCard` | `Target_RandomHandCard` | 手牌中随机一张 |
 | `Target.ZoneHandCard` | `Target_ZoneHandCard` | 指定区域的手牌 |
-| `Target.Adjacent.Right` | `Target_Adjacent_Right` | 相邻右方（未实现）|
+| `Target.Adjacent.Right` | `Target_Adjacent_Right` | 相邻右方（Tag 已声明，解析未实现）|
 | `Target.LastShuffledCard` | `Target_LastShuffledCard` | 最近一次 Shuffle 的被移动卡 |
 
 ### ZoneHook.Trigger
@@ -369,7 +479,7 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 
 ### CardLocation
 
-`Effect.Draw` 通过 `MetaTag` 指定源区域（默认 `CardLocation.Draw`）：
+`Effect.Draw` 通过 `FCardEffect::TargetZone` 指定源区域；未设置时默认 `CardLocation.Draw`。
 
 | Tag | 代码名 | 说明 |
 |---|---|---|
@@ -394,11 +504,47 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 | Tag | 代码名 | 说明 |
 |---|---|---|
 | `Card.CapacityEffect.Placeholder` | `Card_CapacityEffect_Placeholder` | 占位 tag，早期 B 类骨架使用（已不再分配给具体卡）。具体卡定义后逐步替换为下列具体效果 tag。 |
-| `Card.CapacityEffect.WeaponDamagePlus3` | `Card_CapacityEffect_WeaponDamagePlus3` | 蛛茧绒囊（GDD §11.2 / Stage 4.5.2）。SpecialZone 内 `bBattleEnabledInSpecialZone == true` 且带 `Card.Keyword.Weapon` 关键词的入战 instance，其 `Effect.Damage` 最终结算 +3。 |
+| `Card.CapacityEffect.WeaponDamagePlus3` | `Card_CapacityEffect_WeaponDamagePlus3` | 蛛茧绒囊容量效果。SpecialZone 内 `bBattleEnabledInSpecialZone == true` 且带 `Card.Keyword.Weapon` 关键词的入战 instance，其 `Effect.Damage` 最终结算 +3。 |
 
 ---
 
-## §6 效果字段使用表
+## §9 效果字段使用表
+
+`FCardEffect` 的当前字段：
+
+```cpp
+USTRUCT(BlueprintType)
+struct FCardEffect
+{
+    FGameplayTag EffectType;
+    int32 Magnitude = 0;
+    FGameplayTag Target;
+    FGameplayTag TargetZone;
+    int32 Duration = 0;
+    FGameplayTag MagnitudeSource;
+    FEffectCondition Condition;
+    TArray<FMagnitudeModifier> MagnitudeModifiers;
+
+    // deprecated：兼容旧资产，运行时在 MagnitudeSource 为空时才回退读取。
+    bool bMagnitudeFromRuntimeCost = false;
+};
+
+USTRUCT(BlueprintType)
+struct FMagnitudeModifier
+{
+    FEffectCondition Condition;
+    EMagnitudeModOp Op = EMagnitudeModOp::Add;
+    int32 Value = 0;
+};
+```
+
+Magnitude 计算顺序：
+1. `MagnitudeSource` 有效时按 source handler 计算。
+2. `MagnitudeSource` 为空且 `bMagnitudeFromRuntimeCost=true` 时，用当前 RuntimeCost 兼容旧资产。
+3. 否则用 `Magnitude` 字段。
+4. 之后按数组顺序应用 `MagnitudeModifiers`。
+
+`Condition` 是整条效果的执行门控；`MagnitudeModifiers` 是 FinalMagnitude 计算后的条件修正列表；`bMagnitudeFromRuntimeCost` 仅用于旧资产反序列化兼容，新资产应使用 `MagnitudeSource`。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 传 Status tag，这个参数债已记录在 [TechDebt](./TechDebt.md)。
 
 每个 EffectType 对 `FCardEffect` 字段的使用方式不同。配卡时对照本表。"-" 表示该字段对此 EffectType 无效。
 
@@ -423,6 +569,17 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 | `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | StatusTag | - | Literal | `TargetZone` 复用为要移除的 Status tag |
 | `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal | 正数增加，负数减少 |
 
+### MagnitudeModifiers
+
+`FCardEffect::MagnitudeModifiers` 是条件数值修正列表。每条包含 `Condition / Op / Value`：
+
+| Op | 语义 |
+|---|---|
+| `Add` | `FinalMagnitude += Value` |
+| `Multiply` | `FinalMagnitude *= Value` |
+
+多条修正按数组顺序依次应用。条件结构沿用 `FEffectCondition`。
+
 ### Target 字段速查表
 
 | Target | 解析为 | TargetInstanceId 来源 | 是否需要 TargetZone |
@@ -443,7 +600,7 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 
 ---
 
-## §7 FEffectCondition / FCardPassive 结构
+## §10 FEffectCondition / FCardZoneHook / FCardPassive
 
 ### FEffectCondition
 

@@ -26,7 +26,7 @@ struct FPlayerState
 
 	TObjectPtr<const UCharacterDefinition> CharacterDef = nullptr;
 
-	/** 玩家持有的状态（P3.1 起支持 Poison，未来可扩展 Slow/Twilight/Freeze）。 */
+	/** 玩家持有的状态（当前支持 Poison，未来可扩展 Slow/Twilight/Freeze）。 */
 	FGameplayTagContainer Statuses;
 	TMap<FGameplayTag, int32> StatusStacks;
 
@@ -82,13 +82,13 @@ struct FEnemyState
  * 仅限 WacomBattle/Private 引用，外部模块编译期不可见。对外入口是
  * UBattleSession + FBattleSnapshot + FBattleEvent。
  *
- * 第一阶段设计为非反射 struct：
+ * 设计为非反射 struct：
  * - 不需要暴露给蓝图或序列化。
  * - 嵌套持有 FRuntimeCardInstance 的 TArray 时，非反射下仍可正常复制。
- * - TObjectPtr 在非反射容器里需要在 GC 侧手动 AddReferencedObjects。第一阶段
- *   BattleState 由 UBattleSession 持有，所有对象引用通过 Session 间接追踪。
+ * - TObjectPtr 在非反射容器里需要在 GC 侧手动追踪；BattleState 由 UBattleSession
+ *   持有，所有对象引用通过 Session 间接追踪。
  *
- * 字段分组（优化阶段）：
+ * 字段分组：
  * - Meta（阶段、回合、随机源、版本号）
  * - Player（FPlayerState）
  * - Cards  （FCardContainers）
@@ -110,15 +110,11 @@ struct FBattleState
 	/** 每次状态变更递增，用于 Snapshot Version 字段。 */
 	int32 StateVersion = 0;
 
-	// ---- 战内 → 战外回传 flag（GDD §3.2 / §9.2 / §9.2 表）----
+	// ---- 战内 → 战外回传 flag ----
 	// 这些 flag 由 BattleSession::BuildResultPacket 读取后封装到 FBattleResultPacket
 	// 传给 RunSession 处理压力 / 经验等战外结算。
 	//
-	// 字段就位但维护逻辑分阶段：
-	//   - Stage 1.2：bMutualDestruction 在 CheckAndApplyBattleEnd 内设置
-	//   - Stage 6（本轮）：bCrossedHighHpThreshold / bCrossedLowHpThreshold 在玩家受伤路径维护
-
-	/** 阈值比例（GDD §10）。BattleSession::Initialize 从 InitParams 灌入。 */
+	/** 阈值比例。BattleSession::Initialize 从 InitParams 灌入。 */
 	float HighHpThreshold = 0.5f;
 	float LowHpThreshold  = 0.2f;
 
@@ -130,12 +126,12 @@ struct FBattleState
 
 	/**
 	 * 同归于尽：玩家 CurrentHp = 0 与敌方部位全死同时发生。
-	 * 战斗结果仍判 Victory（GDD §9.2），战外加 +10% 伤口压力。
+	 * 战斗结果仍判 Victory，战外加 +10% 伤口压力。
 	 */
 	bool bMutualDestruction = false;
 
 	/**
-	 * 战内累计的部位击倒经验记账（GDD §3.3）。
+	 * 战内累计的部位击倒经验记账。
 	 *
 	 * 部位破坏时（伤害命中或中毒结算导致 bDestroyed=true 的瞬间）追加一条。
 	 * BattleSession::BuildResultPacket 拷给 packet.KnockdownExpGains。
@@ -147,7 +143,7 @@ struct FBattleState
 	TArray<FKnockdownExpGain> PendingKnockdownExpGains;
 
 	/**
-	 * 待玩家三选一的击倒事件队列（GDD §6 / Stage 7）。
+	 * 待玩家三选一的击倒事件队列。
 	 *
 	 * 部位 bDestroyed false→true 边沿同时 push 一条到此队列。
 	 * BattleSession 命令处理后检查队列：
@@ -169,7 +165,7 @@ struct FBattleState
 	TArray<FPendingKnockdownEvent> PendingKnockdownEvents;
 
 	/**
-	 * 玩家在击倒事件中的选择累计列表（GDD §6）。
+	 * 玩家在击倒事件中的选择累计列表。
 	 *
 	 * 每次玩家选完一项 push 一条。
 	 * BuildResultPacket 拷给 packet.KnockdownChoices。
@@ -184,7 +180,7 @@ struct FBattleState
 	TArray<FBattleGainedCard> PendingGainedCards;
 
 	/**
-	 * 本场战斗中所有被破坏的部位 ID（GDD §10.5）。
+	 * 本场战斗中所有被破坏的部位 ID。
 	 *
 	 * 撤离时由 Run 层用 packet.DestroyedPartIds 写入 RunState.BattleProgress；
 	 * 胜利时清理 BattleProgress。
@@ -239,7 +235,7 @@ struct FBattleState
 	 * @param Part           被破坏的部位（已置 bDestroyed=true / CurrentHp=0）
 	 * @param Events         事件总线
 	 * @param InflictedByCardId 触发本次破坏的卡牌实例 ID（Effect.Damage 命中时传 Ctx.SourceInstanceId；
-	 *                          中毒结算等没有"卡牌来源"的路径传空）。第一阶段保留参数用于事件来源追踪扩展；
+	 *                          中毒结算等没有"卡牌来源"的路径传空）。保留参数用于事件来源追踪扩展；
 	 *                          击倒事件的左右手分支不再依赖手牌区锚点是否存在。
 	 */
 	void RecordPartDestroyed(struct FRuntimeEnemyPart& Part, struct FBattleEventBus& Events,

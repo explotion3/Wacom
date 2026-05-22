@@ -176,7 +176,7 @@ bool FWacomBattleEffectConditionTargetHasStatusAllowsWhenPresent::RunTest(const 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after poison tick"), FWacomBattleFixture::FindPartHp(Snap, 0), 97);
 
-	// 打条件伤害卡：条件成立（Poison 在）→ -5 HP。P3.1 中毒会再结算 -3。
+	// 打条件伤害卡：条件成立（Poison 在）-> -5 HP。中毒会再结算 -3。
 	// 打牌后总 HP = 97 - 5 (伤害) - 3 (中毒) = 89。
 	TestTrue(TEXT("PlayDmg"), S->SubmitCommand(FBattleCommand::MakePlayCard(DmgId, PartId)).IsOk());
 	Snap = S->BuildSnapshot();

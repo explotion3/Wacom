@@ -8,7 +8,7 @@ struct FBattleState;
 struct FBattleEventBus;
 
 /**
- * 中毒结算。对齐 Battle_Rules.md §15 中毒。
+ * 中毒结算。
  *
  * 两个触发点：
  * - 玩家每打出一张牌后（由 PlayCardResolver 调用）
@@ -20,7 +20,7 @@ struct FBattleEventBus;
  * - 层数不因结算减少
  * - 敌方部位 HP 归零 → 立即破坏 + 发 EnemyPartHpEmptied
  *
- * 第一阶段不做：治疗移除 10% 层数、触发暮蛉 OnTwilightTriggered 时的级联。
+ * 治疗移除中毒层数和暮气触发由对应效果处理器负责，不在本结算器中处理。
  */
 class FPoisonResolver
 {

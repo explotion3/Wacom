@@ -48,9 +48,8 @@ UWacomPrimaryGameLayout* UWacomPrimaryGameLayout::GetPrimaryLayout(APlayerContro
 	{
 		return nullptr;
 	}
-	// 从 LocalPlayer 的 ViewportClient 的 Widget 列表里找。
-	// 第一阶段只有一个 Layout 实例，由 GameMode 或 TestActor 在 BeginPlay 时 AddToViewport。
-	// 这里用 TObjectIterator 做简单查找。
+	// 兼容/诊断入口：通常应通过 UWacomGameUIManagerSubsystem 获取当前 PrimaryLayout。
+	// 这里用 TObjectIterator 做兜底查找。
 	for (TObjectIterator<UWacomPrimaryGameLayout> It; It; ++It)
 	{
 		if (It->IsInViewport())

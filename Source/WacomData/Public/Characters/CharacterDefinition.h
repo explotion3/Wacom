@@ -11,8 +11,6 @@ class UCardDefinition;
 /**
  * 角色静态定义。
  *
- * 对齐 Game_Design.md §3.1 / §3.4。
- *
  * HP 上限规则：
  *   PlayerBaseMaxHp = FingerCount × HpPerFinger
  *   战内 MaxHp = PlayerBaseMaxHp + Σ(备战卡组中带 Companion 关键词的卡的 MaxHpBonus)

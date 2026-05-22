@@ -9,10 +9,7 @@ struct FBattleState;
 struct FBattleCommand;
 struct FBattleEventBus;
 
-/**
- * 结束回合命令解析。对齐 Battle_Rules.md §7 / §12。
- * S2 骨架：只把阶段切到 TurnEnd。具体 TurnEnd 流程在 S5/S6 补完。
- */
+/** 结束回合命令解析，执行回合结束弃牌、敌方行动和下一回合起始流程。 */
 class FEndTurnResolver
 {
 public:

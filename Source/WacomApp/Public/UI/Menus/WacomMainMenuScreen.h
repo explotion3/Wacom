@@ -17,11 +17,11 @@ class UCanvasPanel;
  * 由 AWacomMenuGameMode 在 L_MainMenu 的 BeginPlay 时 Push 到 GameMenu 层。
  *
  * 三个按钮：
- *   - New Game   ：无存档直开 L_Exploration；有存档 M3 起会弹 ConfirmDialog
+ *   - New Game   ：无存档直开 L_Exploration；有存档时可弹 ConfirmDialog
  *   - Continue   ：HasSaveInSlot(Main) 为 true 才启用，点击开 L_Exploration（GameMode Bootstrap 负责读档）
  *   - Quit Game  ：ConsoleCommand("quit")
  *
- * 第一版 C++ 自建默认布局。策划给 UI 方案后，WBP 子类 override 即可。
+ * C++ 自建 fallback 布局；WBP 子类可 override。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomMainMenuScreen : public UWacomMenuWidgetBase

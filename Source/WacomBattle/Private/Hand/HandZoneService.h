@@ -10,15 +10,13 @@ enum class EHandZone : uint8;
 /**
  * 手牌区域服务。
  *
- * 对齐 Hand_Zone_Rules.md。仅 WacomBattle/Private 使用。
- *
  * 所有涉及手牌队列生成、区域判定、普通卡上限的逻辑都汇聚在这里。
  * Resolver / TurnFlow 不得直接操作 State.Cards.Hand 排列。
  */
 class FHandZoneService
 {
 public:
-	/** 普通卡牌手牌上限。对齐 Hand_Zone_Rules §4。 */
+	/** 普通卡牌手牌上限，不计左右手锚点。 */
 	static constexpr int32 NormalCardLimit = 10;
 
 	/**
@@ -29,7 +27,7 @@ public:
 	 *   这些卡必须已经记录 Location = Hand（FDeckService::DrawCards 会自动处理）。
 	 * - 左右手锚点的 InstanceId 在 State 中已就位，当前 Location 不要求。
 	 *
-	 * 本方法职责（Hand_Zone_Rules §3）：
+	 * 本方法职责：
 	 * - 把上回合保留普通卡和新抽普通卡合并为本回合普通卡池。
 	 * - 每回合重新随机编排普通卡池，再插入有效左右手锚点。
 	 * - 保留只保留"卡在手牌中"，不保留 index、相对顺序或区域。
@@ -67,7 +65,7 @@ public:
 	 * - 左右手都在：按位置切成 Left / Both / Right。
 	 * - 只有左手：左手左侧 = Left，右侧 = Right，双手区不存在。
 	 * - 只有右手：右手左侧 = Left，右侧 = Right，双手区不存在。
-	 * - 左右手都不在：整条 Hand 返回 None（对齐 Hand_Zone_Rules §6）。
+	 * - 左右手都不在：整条 Hand 返回 None。
 	 */
 	static EHandZone GetZoneOf(const FBattleState& State, const FGuid& CardInstanceId);
 
@@ -78,15 +76,14 @@ public:
 	static int32 CountNormalCardsInHand(const FBattleState& State);
 
 	// ======== 回合结束处理 ========
-	// 对齐 Battle_Rules §12 + Hand_Zone_Rules §7。P3.2 引入。
 
 	/**
 	 * 判断一张手牌在回合结束时是否应保留（不进弃牌区）。
 	 *
 	 * 保留条件（任一命中）：
-	 * - 左右手锚点（§7 第一句：自带保留；GenerateHandQueueOnTurnStart 会把留下的锚点重新插入）
+	 * - 左右手锚点（自带保留；GenerateHandQueueOnTurnStart 会把留下的锚点重新插入）
 	 * - 拥有 `Card.Keyword.Retain`（Definition 的 Keywords 或 Runtime 的 TemporaryKeywords）
-	 * - 虫妹专属：回合结束时左右手锚点都还在手牌，且本卡位于双手区（§7 第三段）
+	 * - 虫妹专属：回合结束时左右手锚点都还在手牌，且本卡位于双手区
 	 *
 	 * 注：本方法在"玩家回合结束、尚未把非保留卡进弃牌区"的那个瞬间被调用，
 	 * 调用方保证此时 State.Cards.Hand 即是回合结束前的快照。
@@ -103,13 +100,13 @@ public:
 	static void DiscardNonRetainedNormalCardsAtTurnEnd(FBattleState& State, TArray<FGuid>& OutDiscarded);
 
 	// ======== 腾挪（Shuffle）API ========
-	// 对齐 Hand_Zone_Rules §8。腾挪总是作用于当前手牌中的卡。
+	// 腾挪总是作用于当前手牌中的卡。
 	// 所有腾挪 API 使用 State.Rng。
 
 	/**
 	 * 把指定卡从当前位置取出，重新插入一个随机区域的随机位置。
 	 * 支持三种区域：Left / Both / Right，根据当前锚点状态决定哪些区域可用。
-	 * 若目标卡是锚点，不执行（第一阶段默认规则，Hand_Zone_Rules §8）。
+	 * 若目标卡是锚点，不执行。
 	 *
 	 * 返回是否成功执行。
 	 */
@@ -134,7 +131,7 @@ public:
 	static FGuid RandomShuffleOneInHand(FBattleState& State, const FGuid& ExcludeId = FGuid());
 
 private:
-	/** 取当前存在的区域集合（按 Hand_Zone_Rules §6）。 */
+	/** 取当前存在的区域集合。 */
 	static void GetAvailableZones(const FBattleState& State, TArray<EHandZone>& OutZones);
 
 	/** 把一张已从 Hand 移除的卡插入指定区域的随机位置。 */

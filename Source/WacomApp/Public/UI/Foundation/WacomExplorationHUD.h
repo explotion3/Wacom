@@ -12,7 +12,7 @@ class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
 
 /**
- * 探索关卡 HUD（M1 半 MVVM 过渡：C++ 布局 + 读 ViewModel）。
+ * 探索关卡 HUD（C++ fallback 布局 + 读 ViewModel）。
  *
  * 数据流：
  *   RunSession 写 → OnRunStateChangedNative
@@ -21,8 +21,7 @@ class UWacomRunViewModelProvider;
  *
  * 本 widget 不直接订阅 RunSession，也不读 RunState。只认 ViewModel + Provider。
  *
- * Stage 5+ 后会被 WBP 子类替代（Designer 布局 + ViewBinding 绑定字段），
- * 届时 C++ 只保留协议（GetDesiredInputConfig）。
+ * WBP 子类可替代布局并通过 ViewBinding 绑定字段；C++ 保留 fallback 和输入协议。
  *
  * 输入：Game / CapturePermanently（探索期游戏输入）。
  */
@@ -64,7 +63,7 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomRunViewModelProvider> SubscribedProvider = nullptr;
 
-	// ---- C++ 默认布局占位（M1 之后由 WBP 子类替代）----
+	// ---- C++ 默认布局占位（WBP 可替代）----
 
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> PhaseText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> NodeText;

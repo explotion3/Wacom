@@ -19,7 +19,7 @@ namespace
 {
 	/**
 	 * 取一张卡的抵抗比较数值。
-	 * Data_Schema_Draft §4：主效果首个 Effect.Damage 的 Magnitude；无伤害效果为 0。
+	 * 使用主效果首个 Effect.Damage 的 Magnitude；无伤害效果为 0。
 	 * Magnitude 的实际值由 MagnitudeResolver 决定（Literal / RuntimeCost / ...）。
 	 */
 	int32 ComputeCardResistanceValue(const FBattleState& State, const UCardDefinition& Def, int32 RuntimeCost)
@@ -36,7 +36,6 @@ namespace
 
 	/**
 	 * 取一个部位当前意图的抵抗比较数值。
-	 * Data_Schema_Draft §4：意图上的 ResistanceValue 字段。
 	 */
 	int32 GetPartIntentResistanceValue(const FRuntimeEnemyPart& Part)
 	{

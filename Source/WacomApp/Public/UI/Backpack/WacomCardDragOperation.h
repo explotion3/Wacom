@@ -10,13 +10,13 @@
 class UCardDefinition;
 
 /**
- * 背包界面拖拽 payload（Stage 4.5.3a 引入，requirements R6.1）。
+ * 背包界面拖拽 payload。
  *
  * 拖拽源（UWacomDeckCardWidget::NativeOnDragDetected）构造本对象并填四字段，
  * 拖拽目标（UWacomZoneDropTarget::NativeOnDrop）通过 `Cast<UWacomCardDragOperation>(Op)`
  * 取出 payload 并调用 URunSession::MoveInstance / DeleteCardForGold。
  *
- * 字段约束（R6.1）：
+ * 字段约束：
  *   - 当 `FromZone != EZoneKind::SpecialZone` 时，`FromZoneOwnerInstanceId` 必须为 `FGuid()`（invalid GUID）。
  *   - 当 `FromZone == EZoneKind::SpecialZone` 时，`FromZoneOwnerInstanceId` 必须等于源 SpecialZone 的 OwnerInstanceId。
  *
@@ -43,7 +43,7 @@ public:
 
 	/**
 	 * 仅当 `FromZone == EZoneKind::SpecialZone` 时有效，存源 SpecialZone 的 OwnerInstanceId；
-	 * 其它 FromZone 取值时必须为 `FGuid()`（R6.1）。
+	 * 其它 FromZone 取值时必须为 `FGuid()`。
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Backpack")
 	FGuid FromZoneOwnerInstanceId;

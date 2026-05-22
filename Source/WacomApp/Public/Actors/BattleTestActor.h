@@ -16,7 +16,7 @@ class UWacomPrimaryGameLayout;
 class UWacomBattleWidgetBase;
 
 /**
- * 第一阶段测试战斗入口 Actor。
+ * 测试战斗入口 Actor。
  *
  * Details 面板配置：
  *   - Wacom|Battle: Character / Enemy / RandomSeed / bAutoStart

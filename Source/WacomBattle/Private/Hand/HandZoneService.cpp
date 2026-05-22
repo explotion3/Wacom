@@ -218,7 +218,7 @@ EHandZone FHandZoneService::GetZoneOf(const FBattleState& State, const FGuid& Ca
 
 	if (!bLeftIn && !bRightIn)
 	{
-		return EHandZone::None;  // Hand_Zone_Rules §6
+		return EHandZone::None;
 	}
 
 	if (bLeftIn && bRightIn)
@@ -226,7 +226,7 @@ EHandZone FHandZoneService::GetZoneOf(const FBattleState& State, const FGuid& Ca
 		const int32 Lo = FMath::Min(LeftIdx, RightIdx);
 		const int32 Hi = FMath::Max(LeftIdx, RightIdx);
 		// 注：LeftHandInstanceId 逻辑上代表"左手"，但在手牌队列里的位置不保证
-		// 一定靠左（玩家打出等操作可能导致顺序颠倒）。第一阶段按照"两锚点
+		// 一定靠左（玩家打出等操作可能导致顺序颠倒）。当前按照"两锚点
 		// 切三段"处理：位置较小的那个锚点左侧 = Left 区，中间 = Both 区，
 		// 位置较大的那个锚点右侧 = Right 区。后续若正式区分"左手 vs 右手锚
 		// 点的物理方向"再修订。
@@ -237,7 +237,7 @@ EHandZone FHandZoneService::GetZoneOf(const FBattleState& State, const FGuid& Ca
 
 	// 只有一张锚点：双手区不存在。
 	// 锚点左边的卡属于 Left 区，锚点右边的卡不属于任何区域（Zone = None）。
-	// Hand_Zone_Rules §6：只有一张锚点时，只有锚点左侧有区域归属。
+	// 只有一张锚点时，只有锚点左侧有区域归属。
 	const int32 AnchorIdx = bLeftIn ? LeftIdx : RightIdx;
 	return (Idx < AnchorIdx) ? EHandZone::Left : EHandZone::None;
 }
@@ -263,8 +263,6 @@ int32 FHandZoneService::CountNormalCardsInHand(const FBattleState& State)
 }
 
 // ================ 回合结束：保留判定 / 非保留卡入弃牌区 ================
-// 对齐 Battle_Rules §12 + Hand_Zone_Rules §7。
-
 bool FHandZoneService::ShouldRetainCardAtTurnEnd(const FBattleState& State, const FGuid& CardInstanceId)
 {
 	if (!CardInstanceId.IsValid())
@@ -294,7 +292,7 @@ bool FHandZoneService::ShouldRetainCardAtTurnEnd(const FBattleState& State, cons
 		return true;
 	}
 
-	// 虫妹专属：左右手都在手牌 + 本卡在双手区 → 保留（Hand_Zone_Rules §7 第三段）。
+	// 虫妹专属：左右手都在手牌 + 本卡在双手区 -> 保留。
 	const bool bLeftIn  = State.Cards.Hand.Contains(State.Cards.LeftHandInstanceId)  && State.Cards.LeftHandInstanceId.IsValid();
 	const bool bRightIn = State.Cards.Hand.Contains(State.Cards.RightHandInstanceId) && State.Cards.RightHandInstanceId.IsValid();
 	if (bLeftIn && bRightIn && GetZoneOf(State, CardInstanceId) == EHandZone::Both)
@@ -336,8 +334,6 @@ void FHandZoneService::DiscardNonRetainedNormalCardsAtTurnEnd(FBattleState& Stat
 }
 
 // ================ Shuffle 腾挪 ================
-// 对齐 Hand_Zone_Rules §8。
-
 void FHandZoneService::GetAvailableZones(const FBattleState& State, TArray<EHandZone>& OutZones)
 {
 	OutZones.Reset();
@@ -345,10 +341,10 @@ void FHandZoneService::GetAvailableZones(const FBattleState& State, TArray<EHand
 	const bool bLeft  = State.Cards.Hand.Contains(State.Cards.LeftHandInstanceId)  && State.Cards.LeftHandInstanceId.IsValid();
 	const bool bRight = State.Cards.Hand.Contains(State.Cards.RightHandInstanceId) && State.Cards.RightHandInstanceId.IsValid();
 
-	// 规则 §6：
+	// 区域存在性：
 	// - 左右手都在：三个区都存在
 	// - 只有一张锚点：双手区不存在，存在 Left / Right
-	// - 都不在：区域不做判定，第一阶段不提供腾挪目标
+	// - 都不在：区域不做判定，不提供腾挪目标
 	if (bLeft && bRight)
 	{
 		OutZones.Add(EHandZone::Left);

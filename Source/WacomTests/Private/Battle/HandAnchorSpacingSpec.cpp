@@ -6,7 +6,7 @@
 #include "Snapshots/BattleSnapshot.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #2：左右手牌插入后两者之间至少有一张普通卡牌。
+ * 左右手牌插入后，两者之间至少有一张普通卡牌。
  *
  * 策略：跑 10 个随机 seed，每次验证左右锚点在 Hand 中的 |index| 差 >= 2。
  */

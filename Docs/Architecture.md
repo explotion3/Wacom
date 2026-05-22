@@ -1,6 +1,6 @@
 # Architecture
 
-本文定义当前项目的长期架构方向和第一阶段落地边界。目标是在规则仍会变化的情况下，先建立一个可测试、可替换、可扩展的项目框架。
+本文定义 Wacom 当前模块边界和长期架构原则。具体规则事实放在领域文档；本文只记录跨模块依赖、所有权、Public / Private 边界和系统选择。
 
 ## 1. 当前项目状态
 
@@ -8,12 +8,12 @@
 
 现有模块：
 
-- `WacomCore`：基础类型、ID、GameplayTags 声明。
-- `WacomData`：卡牌、敌人、意图、角色等静态定义。
+- `WacomCore`：通用类型、GameplayTags、跨模块共享契约。
+- `WacomData`：卡牌、敌人、意图、角色、商店、探索事件等静态定义。
 - `WacomBattle`：战斗内核。
-- `WacomRun`：战斗之间的 Run 状态、背包、SpecialZone、负重、压力、经验、战斗结果回传和存档结构。
-- `WacomApp`：游戏层、第一人称、输入绑定、CommonUI/MVVM UI、战斗触发 Actor。同时作为主游戏模块。
-- `WacomEditor`：编辑器工具、数据校验（Editor-only target）。
+- `WacomRun`：战斗之间的 Run 状态、背包、SpecialZone、负重、压力、经验、商店、探索事件、战斗结果回传和存档结构。
+- `WacomApp`：游戏层、第一人称、输入绑定、世界交互，以及 UI 表现层的物理承载模块。具体 UI 数据流、Widget、Toast、ViewData 以 `WacomUI.md` 为准。
+- `WacomEditor`：内容生成、编辑器工具、数据校验（Editor-only target）。
 - `WacomTests`：自动化测试（DeveloperTool）。
 
 选择 Day 1 就拆成多个模块而不是单模块内部目录模拟，原因是编译器级别的反循环依赖约束在空项目期成本最低，后期迁移成本最高。不走 UE 插件化，保留将来剥离为 `WacomRules` 插件的可能。
@@ -22,11 +22,11 @@
 
 当前架构目标：
 
-- 可以通过探索场景中的战斗触发 Actor 启动一场战斗，并在战斗结束后回到探索。
+- 可以通过探索场景中的可交互 Actor 启动战斗、商店或探索事件，并在流程结束后回到探索。
 - 战斗规则集中在战斗内核中，不写进 UI 或场景 Actor。
-- UI 只读取快照和事件，不直接修改战斗状态。
-- 玩家输入转换为命令，由战斗内核统一结算。
-- 卡牌效果、手牌区域、敌方部位行动、Run 背包和战斗结果回传可以独立测试。
+- UI 只读取 Snapshot / ViewModel / ViewData / PresentationView，不直接修改领域状态。
+- 玩家输入转换为领域命令或 Run/App 请求，由对应领域入口统一结算。
+- 卡牌效果、手牌区域、敌方部位行动、Run 背包、商店、RunEvent 和战斗结果回传可以独立测试。
 - 策划规则变化时，优先修改数据、效果执行器或局部 Resolver，而不是重写整体流程。
 
 长期架构目标：
@@ -58,20 +58,23 @@ WacomTests
   -> WacomData
   -> WacomBattle
   -> WacomRun
+  -> WacomApp
+  -> WacomEditor
 ```
 
 依赖方向由各模块的 `Build.cs` 硬约束，禁止反向依赖。
+`WacomTests` 是测试 harness，可以依赖 Runtime、App UI 和 Editor validation；任何运行时模块都不能反向依赖 `WacomTests`。
 
 ## 4. 模块职责
 
 | 模块 | 职责 | 不应该负责 |
 | --- | --- | --- |
-| `WacomCore` | 基础 ID、轻量枚举、GameplayTags 声明、通用结果类型 | 战斗流程、UI、资产编辑器 |
-| `WacomData` | 卡牌、敌人、意图、状态、角色等静态定义；资产查询入口 | 本场战斗状态、Widget、输入 |
-| `WacomBattle` | 战斗生命周期、命令结算、手牌区域、卡牌效果、敌方部位行动、快照事件 | UI 展示、Run 探索、关卡交互 |
-| `WacomRun` | 战斗之间的状态、背包、探索事件、商店、休息、路线或区域状态 | 单场战斗内规则细节 |
-| `WacomApp` | 第一人称角色、输入绑定、测试场景交互、UI、HUD、动画和特效触发；游戏主模块 | 修改战斗状态真相 |
-| `WacomEditor` | 数据校验、开发按钮、内容生成、自动化测试辅助 | 运行时规则依赖 |
+| `WacomCore` | 通用类型、GameplayTags 声明、通用结果类型 | 战斗流程、UI、资产编辑器 |
+| `WacomData` | 卡牌、敌人、角色、商店、探索事件等静态定义 | 本场战斗状态、Run 库存、Widget、输入 |
+| `WacomBattle` | 战斗生命周期、命令结算、手牌区域、卡牌效果、敌方部位行动、Snapshot/Event/ResultPacket | UI 展示、Run 探索、关卡交互 |
+| `WacomRun` | 战斗外状态、背包、压力、经验、商店、探索事件、战斗结果回传和 SaveGame schema | 单场战斗内规则细节、UI |
+| `WacomApp` | GameMode、PlayerController、世界交互、输入、UI 表现层的物理实现 | 修改 Battle / Run 状态真相 |
+| `WacomEditor` | 内容生成 Commandlet、Data Validation、开发辅助 | 运行时规则依赖 |
 | `WacomTests` | 自动化测试、测试 fixture | 运行时业务逻辑 |
 
 ## 5. 目录结构
@@ -84,34 +87,34 @@ Source/
     Public/ { Types/, Tags/ }
     Private/ { Tags/ }
   WacomData/
-    Public/ { Cards/, Enemies/, Characters/, Registry/ }
-    Private/ { Cards/, Enemies/, Characters/, Registry/ }
+    Public/ { Cards/, Enemies/, Characters/, Events/, Shops/ }
+    Private/ { ... }
   WacomBattle/
     Public/ { Session/, Commands/, Snapshots/, Events/, Runtime/ }
     Private/ {
       Session/, Core/, Commands/, Deck/, Hand/,
       Enemy/, Status/, Events/, Snapshots/,
-      Effects/, Resolution/, Passives/
+      Effects/, Resolution/, Passives/, Rewards/
     }
   WacomRun/
     Public/ { RunSession.h, RunState.h, RunStateTypes.h, WacomSaveGame.h }
     Private/
   WacomApp/
-    Public/ { Actors/, GameFramework/, UI/ }
-    Private/ { Actors/, GameFramework/, UI/ }
+    Public/ { Actors/, Core/, GameFramework/, Interaction/, UI/ }
+    Private/ { Actors/, Core/, GameFramework/, Interaction/, UI/ }
   WacomEditor/
-    Public/
-    Private/ { Validators/, Commands/, Bootstrap/ }
+    Public/ { Validation/ }
+    Private/ { Commandlets/, ContentBuilders/, Validation/ }
   WacomTests/
     Public/ { Fixtures/ }
-    Private/ { Fixtures/, Battle/ }
+    Private/ { Fixtures/, Battle/, Run/, UI/ }
 ```
 
 当前重点已经从纯战斗内核扩展到 Run/App 闭环：
 
 - `WacomBattle/Private` 继续承载战斗规则真相。
-- `WacomRun` 承载战斗外状态、背包、多 zone 卡牌归属、压力/经验、战斗结果回传。
-- `WacomApp` 承载 CommonUI 层级、探索/战斗状态切换、输入协调和 HUD/背包界面。
+- `WacomRun` 承载战斗外状态、背包、多 zone 卡牌归属、压力/经验、商店、RunEvent、战斗结果回传。
+- `WacomApp` 承载 CommonUI 层级、探索/战斗状态切换、世界交互、输入协调和 HUD/Screen/Toast。
 
 `BattleState`、`BattleResolver`、各命令 Resolver、各效果执行器都在 `WacomBattle/Private`，
 外部模块编译期不可见。对外入口是 `WacomBattle/Public/Session/BattleSession.h`。
@@ -120,26 +123,9 @@ Source/
 
 战斗内核负责单场战斗的唯一规则真相。
 
-核心对象建议：
+核心公共契约是 `UBattleSession + FBattleCommand + FBattleSnapshot + FBattleEvent + FBattleResultPacket`。Resolver、Executor、Service 和 `BattleState` 都在 `WacomBattle/Private`，外部模块只通过公共契约交互。
 
-- `BattleSession`：一场战斗的生命周期入口。
-- `BattleState`：当前战斗状态。
-- `BattleCommand`：玩家或系统输入的操作。
-- `BattleResolver`：统一结算命令。
-- `BattleSnapshot`：给 UI 读取的只读状态。
-- `BattleEvent`：给 UI、日志和测试读取的事件流。
-- `CardEffectDispatcher`：卡牌效果分发（Target 映射 + 条件评估 + Magnitude 计算 + 执行）。
-- `EffectExecutor`：效果注册制执行器（按 EffectTag 分派到 Handler）。
-- `MagnitudeResolver`：Magnitude 计算注册制（Literal / RuntimeCost / 扩展）。
-- `ConditionResolver`：效果/被动条件评估注册制。
-- `InitiativeResolver`：先机命中 / 抵抗 / 完美释放。
-- `ZoneHookResolver`：ZoneHook 消费（OnPlay / OnPerfectReleaseHit）。
-- `PassiveDispatcher`：被动触发调度（AfterPlayed / OnCompanionCount）。
-- `PoisonResolver`：中毒结算。
-- `HandZoneService`：手牌区域和腾挪规则。
-- `EnemyPartActionResolver`：敌方部位行动子流程。
-
-UI、Actor 和测试入口都不应该直接改 `BattleState`。它们只能提交命令，读取快照和事件。
+UI、Actor 和测试入口都不应该直接改 `BattleState`。它们只能提交命令，读取快照、事件和战后包。
 
 ## 7. Command / Snapshot / Event
 
@@ -154,47 +140,15 @@ UI、Actor 和测试入口都不应该直接改 `BattleState`。它们只能提�
 - `EndTurn`
 - `KnockdownChoice`
 
-后续可扩展：
-
-- `ChooseReward`
-- `MoveCardByDebug`
+新增 Command 时，应先确认它是否属于战斗规则真相，再把公共命令类型放进 `WacomBattle/Public`，具体执行仍留在 `WacomBattle/Private`。
 
 ### Snapshot
 
-Snapshot 是 UI 的读取模型。
-
-Snapshot 应包含：
-
-- 当前阶段。
-- 玩家生命值、最大生命值。
-- 当前等待值。
-- 手牌队列与区域。
-- 抽牌堆、弃牌堆、消耗区数量。
-- 敌人部位 HP、意图、先机、状态。
-- 可用操作。
-- 可用卡牌和出牌预览信息。
-
-Snapshot 不允许被 UI 修改。
+Snapshot 是 UI 和测试的只读状态模型，不允许被 UI 修改。战斗 Snapshot 细节见 [WacomBattle.md](./WacomBattle.md)。
 
 ### Event
 
-Event 用来记录结算过程。
-
-示例：
-
-- `BattleStarted`
-- `TurnStarted`
-- `CardsDrawn`
-- `CardPlayed`
-- `HandZoneChanged`
-- `InitiativeHit`
-- `ResistanceResolved`
-- `PerfectReleaseResolved`
-- `EnemyPartActed`
-- `EnemyPartHpEmptied`
-- `BattleEnded`
-
-Event 不作为战斗真相，只作为表现、日志和测试验证依据。
+Event 用来记录结算过程，不作为战斗真相，只作为表现、日志和测试验证依据。UI 可以把 Event 转成 `PresentationView`，但 PresentationView 不得回流为规则输入。
 
 ## 8. 数据边界
 
@@ -207,6 +161,8 @@ Event 不作为战斗真相，只作为表现、日志和测试验证依据。
 - `EnemyPartDefinition`
 - `IntentDefinition`
 - `CharacterDefinition`
+- `ShopDefinition`
+- `RunEventDefinition`
 
 运行时实例示例：
 
@@ -227,6 +183,7 @@ UI 可以：
 - 播放 Event 对应动画。
 - 发起 Command。
 - 展示出牌预览。
+- 把领域 Snapshot / Result / Event 转成 UI-only ViewData 或 PresentationView。
 
 UI 不可以：
 
@@ -234,25 +191,27 @@ UI 不可以：
 - 直接扣敌人先机。
 - 直接修改敌人 HP。
 - 自己计算最终规则结果作为真相。
+- 让 ViewData / PresentationView 反向成为领域规则输入。
 
-当前 UI 仍以 C++ 默认布局为主，但必须遵守边界。
+当前 UI 仍以 C++ 默认布局为主，但必须遵守边界。UI 当前事实集中记录在 `WacomUI.md`，WBP 绑定合同分别记录在 `UI_Backpack_WBP_Binding.md` 和 `UI_Battle_WBP_Binding.md`。
 
-Run 域 UI 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Battle UI 保持 `FBattleSnapshot` 推送模型。两者都不直接修改规则状态。
+Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / RunEvent / Backpack Screen 读取 `URunSession` Snapshot 或 ViewData；Battle UI 保持 `FBattleSnapshot` 推送模型。两者都不直接修改规则状态。
+
+当前 UI 侧 ViewData / PresentationBuilder 包括卡牌展示、商店商品、RunEvent 结果、BattleEvent 表现、AppToast 和目标选择视图。它们属于 `WacomApp` 表现层。
 
 ## 10. 验证入口
 
-当前有两类验证入口：
-
-### 探索闭环
+当前世界交互入口统一通过 `IWacomWorldInteractable`：
 
 ```text
-进入探索关卡
--> 玩家进入 BattleTriggerActor 范围
--> 按 E 触发战斗
--> GameMode 创建 BattleSession 并 Push BattleHUD
--> 战斗胜利 / 失败 / 撤离
--> ExitBattle 回探索，RunSession 结算战斗结果
+玩家进入交互半径
+-> Actor 注册为 CandidateInteractable
+-> PlayerController 选择最近且 CanInteract 的对象
+-> 按 E 调用 TryInteract
+-> Battle / Shop / RunEvent 各自进入对应领域入口和 UI
 ```
+
+当前实现的世界交互对象包括 BattleTrigger、ShopTrigger 和 RunEventTrigger。
 
 ### 开发测试入口
 
@@ -262,33 +221,23 @@ Run 域 UI 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Battle U
 
 已经落地的骨架包括：
 
-1. `BattleState / BattleCommand / BattleSnapshot / BattleEvent`。
-2. `BattleSession` 和命令 Resolver。
-3. 起始阶段抽牌、等待值、手牌区域、保留、上限。
-4. `PlayCard / Wait / EndTurn / KnockdownChoice`。
-5. 敌方部位行动、先机命中、抵抗、完美释放、击倒事件。
-6. 效果执行器、条件、Magnitude、状态、CapacityEffect。
-7. RunSession、背包、SpecialZone、负重、经验/压力、战斗结果回传。
-8. CommonUI 层级、探索 HUD、BattleHUD、背包 UI、菜单和确认框。
-9. 自动化测试覆盖 Battle / Run / UI 关键规则。
+1. `WacomBattle`：BattleSession、Command、Snapshot、Event、ResultPacket、击倒事件、奖励卡、效果执行器。
+2. `WacomRun`：RunSession、背包、SpecialZone、负重、经验/压力、商店、RunEvent、战斗结果回传、SaveGame schema。
+3. `WacomApp`：GameMode、PlayerController、世界交互接口、CommonUI 层级、探索 HUD、BattleHUD、Backpack / Shop / RunEvent Screen、AppToast。
+4. `WacomData`：卡牌、敌人、角色、商店、RunEvent 静态定义和生成内容。
+5. `WacomEditor`：WacomRegenerateContent commandlet、Shop / RunEvent Data Validation。
+6. 自动化测试覆盖 Battle / Run / UI / Data validation 关键规则。
 
 ## 12. 自动化测试重点
 
-当前测试至少应持续覆盖：
+测试不是独立规则源。具体测试清单按领域文档和 `Source/WacomTests` 当前实现维护。
 
-- 回合开始抽 5 张普通卡牌。
-- 左右手牌插入后两者之间至少有一张普通卡牌。
-- 左右手都在手牌时，新抽卡不会移动已有手牌位置。
-- 普通卡牌上限为 10，左右手牌不计入。
-- 等待先扣当前等待值，再等待值 +1。
-- 每回合等待值重置为 2。
-- 费用大于敌方总先机时，卡牌不可用。
-- Cost 等于部位先机时触发先机命中。
-- 抵抗先于完美释放。
-- HP 归零部位立刻失去意图和先机，不参与后续先机扣减。
-- 左右手牌打出后不进入任何区域。
-- 连击牌打出后留在原位置。
-- 结束阶段调用敌方部位行动子流程。
+架构层只要求：
+
+- 关键规则必须有自动化测试覆盖。
+- UI / App 测试不能绕过领域入口直接改内部状态。
+- DataAsset 生成和 Validator 至少有结构验证测试。
+- 影响 Build.cs 依赖、Public API、SaveGame schema 或跨模块契约的改动要优先补测试。
 
 ## 13. 插件与系统选择
 
@@ -298,9 +247,9 @@ Run 域 UI 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Battle U
 - `GameplayTags`：词条、状态、效果类型、区域等标识。
 - `CommonUI`：主 UI 层级和 Activatable Widget 管理。
 - `ModelViewViewModel`：Run 域 ViewModel / Provider，供探索 HUD 和背包顶部统计使用。
-- `Niagara`：后续表现。
+- `Niagara`：计划用于后续表现；当前不构成模块边界或规则依赖。
 
-第一阶段不建议把 GAS 作为战斗核心。当前核心是卡牌规则内核，不是典型技能 Ability 生命周期。GAS 后续可以作为状态和属性系统参考，但不应阻塞第一阶段战斗框架。
+当前不把 GAS 作为战斗核心。核心是卡牌规则内核，不是典型技能 Ability 生命周期。GAS 后续可以作为状态和属性系统参考，但不应阻塞战斗框架。
 
 ## 14. 依赖规则
 
@@ -310,7 +259,7 @@ Run 域 UI 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Battle U
 WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 ```
 
-`WacomEditor` 和 `WacomTests` 位于依赖链之外，只允许向运行时模块单向依赖。
+`WacomEditor` 位于运行时依赖链之外，只允许依赖运行时模块和编辑器模块。`WacomTests` 是测试 harness，可依赖 Runtime、App 和 Editor validation；任何生产模块都不能依赖 `WacomTests`。
 
 约束：
 
@@ -323,13 +272,4 @@ WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 
 ## 15. 暂不处理 / 后续方向
 
-当前暂不实现：
-
-- SAN 对探索场景的影响。
-- 完整状态公式。
-- 暮色引虫灯任务。
-- 击倒奖励分支。
-- 失去手指后的左右手变化。
-- 正式 UI 美术。
-- 地图系统与节点事件正式流程。
-- 战斗 UI ViewModel 化。
+后续功能方向不在本文追踪，见 [Roadmap.md](./Roadmap.md)、[TechDebt.md](./TechDebt.md) 和 [Questions.md](./Questions.md)。本文只在这些方向改变模块边界或依赖图时更新。

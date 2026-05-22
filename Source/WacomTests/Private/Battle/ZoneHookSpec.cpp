@@ -13,7 +13,7 @@
 #include "Types/WacomEnums.h"
 
 /**
- * P3.3 ZoneHook 消费。对齐 Data_Schema_Draft §5.4 + Phase2_P3_Plan §5。
+ * ZoneHook 消费回归测试。
  *
  * 五条测试覆盖：
  *   - Wacom.Battle.ZoneHook.LeftHitSkipsInitiativePush   左手区 + 先机命中 → 不推进先机

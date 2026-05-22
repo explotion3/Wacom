@@ -123,8 +123,7 @@ namespace Wacom::ContentBuilder
 		const FString CardsRoot = TEXT("/Game/Wacom/Cards/BugGirl/");
 
 		// ==== 左手 ====
-		// Data_Schema_Draft §8：第一阶段左手主动效果和完美释放效果留空，
-		// 仅实现"合法可打出、打出后不入任何区域、保留关键字由手牌队列阶段处理"。
+		// 当前左手主动效果和完美释放效果留空；打出后进入 Limbo，保留由手牌队列阶段处理。
 		UCardDefinition* LeftHand = BuildCard(
 			CardsRoot + TEXT("DA_Card_LeftHand"),
 			TEXT("DA_Card_LeftHand"),
@@ -143,7 +142,7 @@ namespace Wacom::ContentBuilder
 		);
 
 		// ==== 右手 ====
-		// 主动：造成 8 伤害。其他"相邻右方伙伴代打"第一阶段不实现。
+		// 主动：造成 8 伤害。"相邻右方伙伴代打"仍待正式规则。
 		UCardDefinition* RightHand = BuildCard(
 			CardsRoot + TEXT("DA_Card_RightHand"),
 			TEXT("DA_Card_RightHand"),
@@ -164,13 +163,13 @@ namespace Wacom::ContentBuilder
 		// ==== 朝光暮蝶 Zhaoguang Mudie ====
 		FCardPhysique ZMPhysique; ZMPhysique.MaxHpBonus = 1;
 
-		// ZoneHook：左手区 + OnPerfectReleaseHit = 不推进先机。P3.3 起生效。
+		// ZoneHook：左手区 + OnPerfectReleaseHit = 不推进先机。
 		// ExtraEffects 留空——"跳过先机推进"由 PlayCardResolver 在 Hook 存在即触发。
 		FCardZoneHook ZM_Left;
 		ZM_Left.Zone    = WacomTags::HandZone_Left;
 		ZM_Left.Trigger = WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit;
 
-		// ZoneHook：右手区 + OnPlay = 费用转移。P3.3 起生效。
+		// ZoneHook：右手区 + OnPlay = 费用转移。
 		// 组合三条通用效果：
 		//   [0] Shuffle.Random           → 随机腾挪一张手牌，写 LastShuffledCardId
 		//   [1] Card.ReduceCost Mag=1    → 对被腾挪卡 -1 RuntimeCostModifier
@@ -301,8 +300,8 @@ namespace Wacom::ContentBuilder
 			/*Passives*/ { ML_OnTwilight }
 		);
 
-		// ==== 虫妹的小布袋 BugGirlBag（基础容器卡，GDD §11）====
-		// Stage 4.0 / 4.1 引入：背包能力提供者，Capacity = 12。
+		// ==== 虫妹的小布袋 BugGirlBag（基础容器卡）====
+		// 背包能力提供者，Capacity = 12。
 		// 自身打出无意义但合法（Cost=0，无主动效果）。
 		// 玩家可以选择把它放进备战卡组（Initialize a2：默认只放 Backpack 不进 BattleDeck）。
 		FCardPhysique BagPhysique;
@@ -325,8 +324,8 @@ namespace Wacom::ContentBuilder
 			/*Passives*/ {}
 		);
 
-		// ==== 蛛茧绒囊 ZhujianRongnang（B 类容器卡，GDD §11.2 / Stage 4.5.2）====
-		// Stage 4.3 引入：演示 B 类容器卡机制；Stage 4.5.2 把 CapacityEffect 从占位升级为首个具体效果。
+		// ==== 蛛茧绒囊 ZhujianRongnang（B 类容器卡）====
+		// 演示 B 类容器卡机制和首个具体 CapacityEffect。
 		//   Capacity = 3 → 不计入通量公式（CapacityEffect 非空）
 		//   特殊存放区容量 = Capacity - 1 = 2
 		//   CapacityEffect = Card.CapacityEffect.WeaponDamagePlus3
@@ -354,16 +353,16 @@ namespace Wacom::ContentBuilder
 			/*Passives*/ {}
 		);
 
-		// ==== 暮色引虫灯 MuseiYinchongdeng（删牌能力提供者，GDD §4.4 / §11.5 / §11.7）====
-		// Stage 4.4 引入：背包删牌能力的"卡牌承载体"。
+		// ==== 暮色引虫灯 MuseiYinchongdeng（删牌能力提供者）====
+		// 背包删牌能力的"卡牌承载体"。
 		//   Capacity = 3，A 类容器卡（无 CapacityEffect）→ 计入 Flux 公式
 		//   关键词：Card.Keyword.DeleteProvider（玩家持有区至少一张就有删牌功能）
 		//   不带 BagProvider，与小布袋职责正交
 		//   原型规则：Run 初始化时默认进入 BattleDeck，但仍贡献通量容量。
-		// 第一阶段简化：
+		// 当前简化：
 		//   - 不读耐久，自身打出无意义但合法（Cost=0，无主动效果）
-		//   - 删牌区始终显示，不绑定具体卡（GDD §11.7）
-		//   - 任务后升级远期不做
+		//   - 删牌区始终显示，不绑定具体卡
+		//   - 耐久和战斗主动效果暂不接入
 		FCardPhysique LanternPhysique;
 		LanternPhysique.Capacity = 3;
 
@@ -406,10 +405,9 @@ namespace Wacom::ContentBuilder
 		Char->LeftHandCard   = LeftHand;
 		Char->RightHandCard  = RightHand;
 		// 顺序：5 张参战伙伴卡 + 虫妹的小布袋（A 类）+ 蛛茧绒囊（B 类占位）+ 暮色引虫灯（A 类，DeleteProvider）。
-		// Initialize 时按 Stage 4.1 a2 规则：非容器卡进 BattleDeck，容器卡默认进 Backpack；
+		// Initialize 时：非容器卡进 BattleDeck，容器卡默认进 Backpack；
 		// 暮色引虫灯按原型特例默认进 BattleDeck。
 		Char->StarterDeck    = { Zhaoguang, Fuxiao, Chifu, Shuoguang, Muling, BugGirlBag, ZhujianRongnang, MuseiLantern };
-
 		SaveAssetPackage(CharPkg, Char, CharPkgPath);
 		return Char;
 	}

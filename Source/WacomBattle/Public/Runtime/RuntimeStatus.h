@@ -7,8 +7,7 @@
 #include "RuntimeStatus.generated.h"
 
 /**
- * 状态归属。对齐 Data_Schema_Draft §10。
- * 第一阶段只需 Player 和 EnemyPart，保留 enum 供后续扩展。
+ * 状态归属。当前只需 Player 和 EnemyPart，保留 enum 供后续扩展。
  */
 UENUM()
 enum class EStatusHost : uint8
@@ -21,7 +20,6 @@ enum class EStatusHost : uint8
 /**
  * 状态实例。
  *
- * 字段语义对齐 Data_Schema_Draft §10：
  * - Duration == 0：按层数模型，例如 Status.Poison。
  * - Duration  > 0：按回合数模型，例如 Status.Freeze 的 1 回合。
  */

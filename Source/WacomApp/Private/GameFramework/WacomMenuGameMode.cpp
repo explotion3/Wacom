@@ -93,7 +93,6 @@ void AWacomMenuGameMode::RequestStartNewGame()
 		}
 	}
 
-	// TearDown UI 后 next-tick OpenLevel。
 	// 注：TearDown 必须走到 DeactivateWidget，让 CommonUI Router 释放 UIInputConfig。
 	if (UGameInstance* GI = GetGameInstance())
 	{
@@ -112,7 +111,7 @@ void AWacomMenuGameMode::RequestContinueGame()
 {
 	UE_LOG(LogTemp, Display, TEXT("[MenuGameMode] RequestContinueGame"));
 
-	// 存档系统暂停（Stage 0.1）：Continue 不可用。理论上 UI 已禁用按钮，
+	// 存档系统关闭时 Continue 不可用。理论上 UI 已禁用按钮，
 	// 这里再防一次以防其他入口（命令行 / 蓝图）调用。
 	if (!AWacomGameMode::bSaveSystemEnabled)
 	{

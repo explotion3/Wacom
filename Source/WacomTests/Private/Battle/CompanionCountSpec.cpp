@@ -13,7 +13,7 @@
 #include "Types/WacomEnums.h"
 
 /**
- * P3.4 OnCompanionCount 被动（拂晓飞蛾）。对齐 Phase2_P3_Plan §6。
+ * OnCompanionCount 被动（拂晓飞蛾）回归测试。
  *
  * 两条测试覆盖：
  *   - Wacom.Battle.Passive.CompanionCountTriggersReturn   打 3 张 Companion 后 Fuxiao 回手

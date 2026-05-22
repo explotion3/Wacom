@@ -26,7 +26,7 @@ class UWacomRunViewModelProvider;
 struct FCardInstance;
 
 /**
- * 背包界面（GDD §11）。Push 到 GameMenu 层。
+ * 背包界面。Push 到 GameMenu 层。
  *
  * 由 PlayerController 在按 B 时 Push（或 Console Command）。
  *
@@ -35,17 +35,12 @@ struct FCardInstance;
  *   - 备战区（BattleDeckZone）：BattleDeck 内容
  *   - 背包区：通量存放区 + SpecialZone + 负重区
  *
- * Stage 4.2 用点击切换语义：
- *   - Backpack 卡点击主体 → AddCardToBattleDeck
- *   - BattleDeck 卡点击主体 → RemoveCardFromBattleDeck
- *   - 任何卡的删除按钮 → DeleteCardForGold（弹 Confirm）
- *
- * MVVM 数据流（M2）：
+ * MVVM 数据流：
  *   - 顶部标量（金币 / 备战区 N/M / 背包区 N/M）：读 RunViewModel 字段
  *   - WrapBox 列表内容：读 RunSession.BuildBackpackStorageSnapshot()
  *     （UE MVVM 不擅长数组绑定，列表数据保留命令式重建）
  *   - 刷新触发：订阅 Provider.OnRunViewModelRefreshedNative，事件驱动
- *   - 操作命令：Move/Delete 仍直接写 RunSession，写完事件自动回流刷新
+ *   - 操作命令：Move/Delete 仍写 RunSession，写完事件自动回流刷新
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomBackpackScreen : public UWacomMenuWidgetBase

@@ -12,7 +12,7 @@
 #include "Types/WacomEnums.h"
 
 /**
- * P3.1 中毒结算。对齐 Battle_Rules §15 + Phase2_P3_Plan §3。
+ * 中毒结算回归测试。
  *
  * 四条测试覆盖：
  *   - Wacom.Battle.Poison.TickOnCardPlay     玩家打牌后敌方中毒部位扣血

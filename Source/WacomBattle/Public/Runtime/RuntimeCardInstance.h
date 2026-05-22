@@ -12,7 +12,6 @@ class UCardDefinition;
 /**
  * 卡牌的运行时实例。
  *
- * 对齐 Data_Schema_Draft §7。
  * 一张卡被带入战斗后生成一个 FRuntimeCardInstance，整场战斗保持同一 InstanceId。
  * 战斗内的一切对该卡的修改写在这里，不回写到 UCardDefinition。
  */
@@ -38,7 +37,7 @@ struct WACOMBATTLE_API FRuntimeCardInstance
 	/**
 	 * 本卡入战时携带的 CapacityEffect tag 集合。
 	 *
-	 * 来源（见 Stage 4.5 design §8 / R4.3）：
+	 * 来源：
 	 *   - 来自 BattleDeck 原生位置的 instance：空集合。
 	 *   - 来自 SpecialZone 的 instance：单元素集合 `{ B 主卡.Physique.CapacityEffect }`。
 	 *

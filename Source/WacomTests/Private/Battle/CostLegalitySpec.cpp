@@ -9,8 +9,7 @@
 #include "Cards/CardDefinition.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #7：
- *   Cost > Enemy Initiative Sum 时卡牌不可用。
+ * Cost > Enemy Initiative Sum 时卡牌不可用。
  *
  * 构造：敌人总先机 = 3（单部位）；卡 Cost = 5。
  * 断言：

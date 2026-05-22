@@ -22,7 +22,7 @@
 #include "RunState.h"
 
 /**
- * Stage 7：击倒事件三选一（GDD §6 / §10.5）。
+ * 击倒事件三选一回归。
  *
  * 验证：
  *   - 部位 HP 归零后 Phase 切到 PendingKnockdownChoice

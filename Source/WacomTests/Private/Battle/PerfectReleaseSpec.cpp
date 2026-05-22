@@ -10,8 +10,8 @@
 #include "Cards/CardDefinition.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #8 / #9：
- *   - Cost == 部位出牌前先机 触发先机命中
+ * 先机命中与抵抗顺序回归：
+ *   - Cost == 部位出牌前先机时触发先机命中
  *   - 抵抗判定先于完美释放
  *
  * 验证：事件流里 InitiativeHit 出现在 ResistanceResolved 之前，

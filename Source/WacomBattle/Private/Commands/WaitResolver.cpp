@@ -9,9 +9,9 @@
 
 FWacomStatus FWaitResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& /*Command*/)
 {
-	// Battle_Rules §6：
+	// 等待流程：
 	// 1. 所有敌人部位当前先机减去当前等待值
-	// 2. 若有部位先机 <= 0，执行敌方部位行动子流程（S6 填实现）
+	// 2. 若有部位先机 <= 0，执行敌方部位行动子流程
 	// 3. 当前等待值 +1
 	// 4. 返回执行阶段
 
@@ -26,7 +26,7 @@ FWacomStatus FWaitResolver::Resolve(FBattleState& State, FBattleEventBus& Events
 		Events.Emit(Ev);
 	}
 
-	// 先机归零 → 敌方部位行动子流程（S6）
+	// 先机归零 -> 敌方部位行动子流程
 	FEnemyPartActionResolver::ResolveInitiativeZeroActions(State, Events);
 
 	// 等待值 +1

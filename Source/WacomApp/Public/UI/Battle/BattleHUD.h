@@ -86,19 +86,19 @@ struct WACOMAPP_API FBattleTargetSelectionView
  *     ├── 点击 UEnemyPartWidget → 提交 PlayCard(PendingCard, PartId)，回 Idle
  *     └── 右键 / ESC → 取消，回 Idle
  *
- *   Resolving（P5 起使用）：命令已提交，等动画播放完成。第一阶段同步完成所以几乎瞬间。
+ *   Resolving：命令已提交，等待动画/表现完成。当前同步结算时通常很短。
  *
- *   BattleEnd：战斗结束，显示胜利/失败面板（P2.7 通过 Modal 实现）。
+ *   BattleEnd：战斗结束，显示胜利/失败面板。
  *
- * WBP 子类约定（BindWidget 大部分可选，P2 子步骤按需添加）：
- * - PlayerStatusBar   : UPlayerStatusBar     (P2.2)
- * - HandPanel         : UHandPanel           (P2.3)
- * - EnemyInfoBar      : UEnemyInfoBar        (P2.4)
- * - ActionPanel       : UActionPanel         (P2.5)
- * - DrawPileView      : UDrawPileView        (P2.6)
- * - DiscardPileView   : UDiscardPileView     (P2.6)
- * - EquipmentBar      : UEquipmentBar        (P2.6)
- * - EventToast        : UEventToast          (P2.7)
+ * WBP 子类约定（BindWidget 大部分可选）：
+ * - PlayerStatusBar   : UPlayerStatusBar
+ * - HandPanel         : UHandPanel
+ * - EnemyInfoBar      : UEnemyInfoBar
+ * - ActionPanel       : UActionPanel
+ * - DrawPileView      : UDrawPileView
+ * - DiscardPileView   : UDiscardPileView
+ * - EquipmentBar      : UEquipmentBar
+ * - EventToast        : UEventToast
  */
 UENUM(BlueprintType)
 enum class EBattleUIState : uint8
@@ -153,7 +153,7 @@ public:
 	 * 某张手牌被点击。
 	 * - TargetMode == None / Self：立即提交 PlayCard
 	 * - TargetMode == SingleEnemyPart：进入 TargetSelect 状态
-	 * - 其他：第一阶段不支持，忽略
+	 * - 其他：当前不支持，忽略
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
 	void OnCardClickedByUser(const FGuid& CardInstanceId);
@@ -231,48 +231,48 @@ protected:
 
 	/**
 	 * 子类 override 可以在状态切换时做额外处理。
-	 * 第一阶段保留空实现。WBP 可以通过 BP_OnUIStateChanged 做表现反馈。
+	 * 默认空实现。WBP 可以通过 BP_OnUIStateChanged 做表现反馈。
 	 */
 	virtual void NativeOnUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On UI State Changed")
 	void BP_OnUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
 
-	// ---- BindWidget（子 Widget 按 P2.x 子步骤陆续加）----
+	// ---- BindWidget ----
 
-	/** 玩家状态条。P2.2。 */
+	/** 玩家状态条。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPlayerStatusBar> PlayerStatusBar;
 
-	/** 手牌面板。P2.3。 */
+	/** 手牌面板。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UHandPanel> HandPanel;
 
-	/** 敌人信息条。P2.4。 */
+	/** 敌人信息条。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UEnemyInfoBar> EnemyInfoBar;
 
-	/** 操作面板。P2.5。 */
+	/** 操作面板。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UActionPanel> ActionPanel;
 
-	/** 装备条。P2.6。 */
+	/** 装备条。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UEquipmentBar> EquipmentBar;
 
-	/** 抽牌堆计数。P2.6。PileCountView 不是 BattleWidget，Refresh 时手动更新。 */
+	/** 抽牌堆计数。PileCountView 不是 BattleWidget，Refresh 时手动更新。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> DrawPileView;
 
-	/** 弃牌堆计数。P2.6。 */
+	/** 弃牌堆计数。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> DiscardPileView;
 
-	/** 消耗区计数。P2.6。 */
+	/** 消耗区计数。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> ExhaustPileView;
 
-	/** 事件 Toast。P2.7。 */
+	/** 事件 Toast。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UEventToast> EventToast;
 

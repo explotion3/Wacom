@@ -139,7 +139,7 @@ namespace Wacom::ContentBuilder
 		if (!PoisonFang) { return nullptr; }
 
 		// ---- 头 ----
-		// 经验奖励：Head=3 / Body=2 / Tail=2（GDD §3.3，头是核心，多给 1 点）
+		// 经验奖励：Head=3 / Body=2 / Tail=2，头是核心，多给 1 点。
 		UEnemyPartDefinition* Head = BuildPart(
 			TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Head"),
 			TEXT("DA_Part_Snake_Head"),

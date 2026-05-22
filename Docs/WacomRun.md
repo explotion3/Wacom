@@ -1,482 +1,400 @@
 # WacomRun 模块文档
 
-> 本文是 WacomRun 模块的设计 + 实现文档。
+本文是 Run 领域规则真相与关键实现入口。字段细节以代码为准，本文不维护完整 API / UPROPERTY 镜像。
 
 ---
 
-## §1 模块职责
+## §1 模块定位
 
-WacomRun 负责**战斗外的持久状态和存档**。
+`WacomRun` 负责一次冒险中战斗外的规则状态。它持有 Run 状态，给战斗构造初始化参数，并接收战斗结束包做战外结算。
 
-**负责**：
-- 一次冒险（Run）的逻辑入口
-- 持有 FRunState（战斗外持久状态）
-- 构造战斗初始化参数
-- 接收战斗结束通知，更新 Run 状态
-- 存档 / 读档：FRunState ↔ UWacomSaveGame ↔ 磁盘
-- 场景 Actor 持久化（已销毁的触发器记录）
+它不负责战斗内牌局规则，不负责 UI 展示，不定义静态内容资产。UI 应读取 Snapshot / ViewModel，并把玩家意图提交给 Run 层入口。
 
-**不负责**：
-- 单场战斗内规则细节（属于 WacomBattle）
-- UI 展示（属于 WacomApp）
-- 静态数据定义（属于 WacomData）
-
-**依赖方向**：`WacomData ← WacomBattle ← WacomRun ← WacomApp`
-
----
-
-## §2 URunSession
-
-`URunSession` 是一次冒险的逻辑入口（UObject，Transient，行为层）。由 `AWacomPlayerController` 在 BeginPlay 时创建并持有。
-
-### 公开接口
-
-#### 生命周期 / 状态访问
-
-| 方法 | 职责 |
-|---|---|
-| `Initialize(UCharacterDefinition*)` | 初始化一次 Run（新开档时调用）。读 Character 的 FingerCount/HpPerFinger，复制 StarterDeck 到 Backpack/BattleDeck，重置时段 = Morning |
-| `ResetRunState()` | 重置为"新 Run"默认值（保留 Character）|
-| `GetRunState() const` | 只读访问当前 Run 状态 |
-| `GetMutableRunState()` | 非 const 访问（仅 GameMode 内部写入用）|
-| `IsRunActive() const` | 是否仍在 Run 中（bRunActive == true）|
-| `IsRunFailed() const` | Run 是否失败（bRunActive=false OR 压力满 OR 手指=0）|
-
-#### 手指（GDD §3.1 / §3.4）
-
-| 方法 | 职责 |
-|---|---|
-| `GetFingerCount() const` | 当前手指数 |
-| `IsFingerDepleted() const` | 手指是否 = 0 |
-| `RemoveFinger(Count)` | 失去手指；同步增加 Disability 压力（每指 +5%）|
-
-#### 压力（GDD §3.2）
-
-| 方法 | 职责 |
-|---|---|
-| `GetPressureValue(Type) const` | 读单条压力 |
-| `GetTotalPressure() const` | 读 8 条加和 |
-| `AddPressure(Type, Delta)` | 增量压力（可负，clamp [0, 100]）|
-| `SetPressure(Type, Value)` | 覆盖压力（用于幂等型，如负重）|
-| `RemovePressure(Type, Amount)` | AddPressure 的负向命名别名 |
-| `ClearPressure(Type)` | 单条归零 |
-| `IsPressureCapReached() const` | 总和是否 ≥ 100 |
-
-#### 战外行为触发（GDD §3.2）
-
-| 方法 | 职责 |
-|---|---|
-| `OnRightHandDestructiveAction()` | 节点事件分支选"右手破坏" → 伤口 +1%（Stage 9 接入调用）|
-| `OnCompanionCardPermanentlyDestroyed()` | 永久销毁伙伴卡 → 嗜血 +1%（Stage 4 背包接入调用）|
-| `OnTheftCommitted()` | 完成偷窃 → 劣迹 +(n*(n+1)/2 +1)%（Stage 9 接入调用）|
-| `RecomputeBurden()` | 背包变动后调用 → 负重 = (overCount * (overCount+1)) / 2（Stage 4 接入调用）|
-
-#### 时段定时副作用（自动）
-
-`AdvanceToNextPhase` 自动触发：
-- 进入 Morning → 饥饿 +5%；若 PrevPhase=Sunrise（跨日）腐朽 +5%
-- 进入 Dusk → 饥饿 +5%
-- 进入 Sunrise → 疲劳 +10%
-
-#### 经验 / 技能（GDD §3.3）
-
-| 方法 | 职责 |
-|---|---|
-| `GetExperienceCurrent / Capacity()` | 读经验值 |
-| `GetAcquiredSkillCount()` | 已获得技能数 |
-| `AddExperience(Amount)` | 增加经验；满 Capacity 时入账技能（占位 SkillSlot.Placeholder）并扣减 Capacity（可多次）|
-
-#### 时段 / 节点（GDD §8）
-
-| 方法 | 职责 |
-|---|---|
-| `GetCurrentTimePhase()` | 当前时段 |
-| `GetRemainingNodeCount()` | 当前时段剩余节点 |
-| `GetCurrentDayNumber()` | 当前天数 |
-| `ConsumeNode(Count=1)` | 消耗节点；归零时自动 AdvanceToNextPhase |
-| `AdvanceToNextPhase()` | 推进时段（一般由 ConsumeNode 自动触发；留 public 调试用）|
-
-#### 背包 / 备战卡组（GDD §11）
-
-| 方法 | 职责 |
-|---|---|
-| `GetBackpack() / GetBattleDeck()` | 只读访问 |
-| `GetFluxCapacity() const` | 通量内容容量（动态：Σ 玩家拥有所有 A 类容器卡 `Capacity`）|
-| `GetBattleDeckCapacity() const` | 备战区容量（动态：Σ 玩家拥有的所有容器卡 Capacity，A/B 类都计入）|
-| `IsContainerCard(Card) static` | 卡是否容器（Capacity > 0）|
-| `IsTypeAContainerCard(Card) static` | 卡是 A 类容器卡（容器 + CapacityEffect 为空，计入 Flux）|
-| `IsTypeBContainerCard(Card) static` | 卡是 B 类容器卡（容器 + CapacityEffect 有效，开辟特殊存放区）|
-| `GetSpecialZoneCapacity(BCard) static` | B 类容器卡的特殊存放区容量 = `Capacity - 1`（clamp 到 0）|
-| `CollectTypeBContainers(OutOwnerInstanceIds) const` | 按 `RunState.SpecialZones` 顺序枚举玩家拥有的 B 主卡 instance id，输出不含悬空 owner |
-| `GetSpecialZoneCapacityFor(OwnerInstanceId) const` | 按 B 主卡 instance 查询 SpecialZone 容量，公式 `Max(0, Capacity - 1)` |
-| `GetSpecialZone(OwnerInstanceId, Out) const` | 按 owner instance 查询 SpecialZone 快照 |
-| `FindInstance(InstanceId, OutInstance, OutZone, OutOwnerInstanceId) const` | 全区查找 instance 当前所在 zone |
-| `MoveInstance(InstanceId, ToZone, ToOwnerInstanceId)` | 通用迁移入口，支持 Backpack / BattleDeck / SpecialZone / BurdenZone |
-| `ValidateMoveInstance(InstanceId, ToZone, ToOwnerInstanceId)` | 只读校验移动是否可执行，并返回稳定 `DisabledReason` 供 UI/日志提示 |
-| `SetSpecialZoneCardBattleEnabled(InstanceId, bEnabled)` | SpecialZone 内卡牌切换是否随 B 主卡入战 |
-| `IsBagProviderCard(Card) static` | 卡是否带 BagProvider 关键词 |
-| `IsDeleteProviderCard(Card) static` | 卡是否带 DeleteProvider 关键词（GDD §11.7）|
-| `IsDeleteFunctionAvailable() const` | 删牌功能是否可用（玩家持有区至少一张 DeleteProvider）。第一阶段 UI 不读 |
-| `IsIntrinsicCard(Card) static` | 卡是否固有（Rarity = Intrinsic）|
-| `IsBackpackUiAvailable() const` | 背包 UI 是否可打开（至少一张容器卡 Capacity > 0）|
-| `ValidateDeleteCardForGold(Card)` | 只读校验删牌置换是否可执行，并返回 `MissingCard / CardNotOwned / Intrinsic / LastCapacityProvider` 等 reason |
-| `IsCardInBackpack(Card) / IsCardInBattleDeck(Card)` | 查询 |
-| `AddCardToBackpack(Card)` | 加卡进背包 + RecomputeBurden |
-| `AcquireCardToRun(Card)` | 战外获得卡统一入口；当前等价于加入背包并重算负重，后续战斗奖励、节点事件、商店、探险奖励都优先走这里 |
-| `DestroyCardFromBackpack(Card)` | 永久销毁（含 Intrinsic / 最后容量来源卡拒绝 / Companion 嗜血）|
-| `DeleteCardForGold(Card)` | 删牌区入口：销毁 + 按稀有度发金币（白=1 / 蓝=2）|
-| `AddCardToBattleDeck(Card)` | 从 Backpack 移到 BattleDeck（互斥）|
-| `RemoveCardFromBattleDeck(Card)` | 从 BattleDeck 移回 Backpack（Intrinsic 拒绝）|
-
-#### 经济（GDD §11.7）
-
-| 方法 | 职责 |
-|---|---|
-| `GetGold() const` | 当前金币 |
-| `AddGold(Amount)` | 增加金币 |
-| `RemoveGold(Amount)` | 减少金币（余额不足返回 false）|
-
-#### 商店购买
-
-| 方法 | 职责 |
-|---|---|
-| `BeginShopVisit(ShopId, Offers)` | 开始访问指定商店节点。`ShopId` 第一次出现时用调用方传入的 Offers 初始化库存；已存在时保留原库存和已购买状态，忽略新 Offers |
-| `EndShopVisit()` | 结束商店访问；如果本次访问买过至少一件商品，则消耗 1 节点，否则不消耗 |
-| `IsShopVisitActive()` | 当前是否处于商店访问 |
-| `HasCurrentShopVisitPurchase()` | 当前商店访问是否已买过至少一件商品 |
-| `BuildCurrentShopSnapshot()` | 构建当前商店只读快照；无 active shop 时返回空快照 |
-| `PurchaseShopOffer(OfferId)` | 购买当前商店中未购买的 Offer；成功后扣金币、获得卡牌、标记商品已购买，不立刻扣节点 |
-| `PurchaseCardFromShop(Card, Price)` | 低层兼容购买事务：只负责扣金币并获得卡牌，不处理库存和节点消耗 |
-
-商店第一版规则：
-- 购买卡牌直接进入背包，不自动加入备战区。
-- 场景商店入口使用 `AWacomShopTriggerActor.PersistentId` 作为 `ShopId`。
-- 商店库存按 `ShopId` 在当前 Run 内存态保留；本轮不接 SaveGame。
-- 商品列表由调用方传入；`AWacomShopTriggerActor` 可从 `UShopDefinition` 解析固定商品，也可兼容旧手动 Offers。
-- 进入商店但不购买不消耗节点；买过任意商品后，关闭商店时统一消耗 1 节点。
-- `ShopId == NAME_None`、未知 Offer、重复购买、金币不足等失败路径不修改 RunState。
-- UI 入口为 `UWacomShopScreen`：打开时只读取快照，购买时提交 `PurchaseShopOffer`，关闭时调用 `EndShopVisit`。
-
-`UShopDefinition.ShopId` 是静态内容 ID，不参与 `RunState.ShopStates` 的 key 选择；库存身份仍以场景商店的 `PersistentId` 为准。
-
-#### 探索事件
-
-| 方法 | 职责 |
-|---|---|
-| `BeginRunEvent(PersistentId, EventDefinition)` | 开始访问指定轻量事件图。`PersistentId` 是场景事件 Actor 的状态 key；已完成事件第一版拒绝重复打开 |
-| `EndRunEvent()` | 关闭当前事件访问，不改变完成状态 |
-| `IsRunEventActive()` | 当前是否处于事件访问 |
-| `IsRunEventCompleted(PersistentId)` | 查询某场景事件是否已完成 |
-| `BuildCurrentRunEventSnapshot()` | 构建当前事件只读快照，包含当前 Node 标题、正文、选项可用性和禁用原因 |
-| `ChooseRunEventOptionWithResult(ChoiceId)` | 选择当前 Node 的选项并返回 `FRunEventChoiceResult`，其中包含实际执行效果，供 UI/日志展示 |
-| `ChooseRunEventOption(ChoiceId)` | 兼容旧入口；内部转发到 `ChooseRunEventOptionWithResult()` 并返回是否成功 |
-
-事件第一版规则：
-- 事件内容来自 `UWacomRunEventDefinition`，运行态按场景 `PersistentId` 保存，不按 `EventDefinition.EventId` 共享。
-- 进入事件本身不消耗节点；只有选项 Effects 配置 `ConsumeNode` 时才消耗。
-- 条件 v1：金币足够、节点足够、压力不高于阈值、拥有/缺少指定卡牌、指定事件是否完成。
-- 效果 v1：获得卡牌、交出/移除一张拥有的卡、金币变化、压力变化、消耗节点、标记指定事件完成。
-- 卡牌条件和 `RemoveCard` 搜索全部拥有区：通量、备战、特殊存放区和负重区。`RemoveCard` 是永久移除，不发金币，并遵守固有卡/最后容量来源卡保护；移除 Companion 仍会增加嗜血。
-- 事件状态条件和 `MarkEventCompleted` 使用场景 Actor 的 `PersistentId`，不使用 `EventDefinition.EventId`；同一事件定义放在多个地点时状态彼此独立。
-- 选择结果包只表达本次选项直接效果：获得/移除卡牌、金币实际变化、压力 clamp 后的实际变化、实际消耗行动点、事件标记结果；它是表现/日志数据，不作为后续规则输入。
-- 当前只保存在 Run 内存态，暂不接 SaveGame；完成事件默认不可重复触发。
-
-#### 战斗联动 / 场景持久化 / 存档
-
-| 方法 | 职责 |
-|---|---|
-| `BuildInitParamsForBattle(EnemyDef, OutParams)` | 构造一场战斗所需的 FBattleInitParams（向后兼容签名，TriggerPersistentId=NAME_None）|
-| `BuildInitParamsForBattle(EnemyDef, TriggerPersistentId, OutParams)` | 同上，传入 Trigger 持久化 ID 让 Run 层灌入 PreDestroyedPartIds（GDD §10.5 撤离重入）|
-| `OnBattleFinished(const FBattleResultPacket&, EnemyDef)` | 战斗结束通知（向后兼容签名）|
-| `OnBattleFinishedFromTrigger(Packet, EnemyDef, TriggerPersistentId)` | 同上，传入 TriggerPersistentId 让 Run 层撤离时写 BattleProgress、真胜利时清理（Stage 7）|
-| `MarkTriggerDestroyed(PersistentId)` | 标记一个触发器已被永久销毁 |
-| `IsTriggerDestroyed(PersistentId) const` | 查询触发器是否已被销毁 |
-| `SetPlayerTransform(InTransform)` | 记录玩家当前 Transform |
-| `SaveToSlot(SlotName) const` / `LoadFromSlot(SlotName)` / `HasSaveInSlot(SlotName) const` | 存档接口（Stage 0.1 暂停）|
-| `BuildSaveGameFromRunState() const` / `ApplySaveGameToRunState(SaveGame*)` | 存档字段拷贝（公开以便测试）|
-
-`OnBattleFinishedFromTrigger(Packet, EnemyDef, TriggerPersistentId)` 行为（GDD §9.2 / §3.3 / §6 / §10.5）：
-- Outcome=Victory + bWithdrawn=true（撤离）：敌人**不**进 DefeatedEnemies；写 RunState.BattleProgress[TriggerId]
-- Outcome=Victory + bWithdrawn=false（真胜利）：敌人进 DefeatedEnemies；清理 BattleProgress[TriggerId]
-- Outcome=Defeat：终止 Run
-- Outcome=Undetermined：跳过结算
-- 任一非 Undetermined 结果加 +1% 疲劳
-- `bCrossedHighHpThreshold` → +1% 伤口
-- `bCrossedLowHpThreshold` → +5% 伤口
-- `bMutualDestruction` → +10% 伤口（不影响 bRunActive）
-- `KnockdownExpGains[]`：Victory（含同归于尽 / 撤离）累加经验；Defeat 不结算
-- `GainedCards[]`：Victory（含撤离）通过 `AcquireCardToRun()` 归入 Run；Defeat / Undetermined 不结算。第一版来源是击倒事件 Aid / Destroy 的部位奖励卡
-- `KnockdownChoices[]`：第一阶段仅日志，Stage 9 节点事件接入时按 Choice 触发分支
-
----
-
-## §3 FRunState
-
-`FRunState` 是内存数据层（USTRUCT），不直接序列化到磁盘。
-
-Stage 1.1 起本结构覆盖 GDD §3 / §8 / §11 描述的全部战外字段。
-
-### 字段清单
-
-#### §3.1 / §3.4：本体 HP（手指）
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `FingerCount` | `int32` | 战外手指数量。Initialize 时从 Character 读取 |
-| `HpPerFinger` | `int32` | 每指对应 HP（默认 2）|
-
-战内 MaxHp = `FingerCount * HpPerFinger` + Companion 卡的 `MaxHpBonus` 累加（在 `BattleSession::Initialize` 中计算）。
-
-#### §3.2：压力（数值化常量 / 八种状态）
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `Pressure` | `FPressureValues` | 八种压力值容器 |
-| `HighHpThreshold` | `float` | 战内伤口阈值 1（默认 0.5）|
-| `LowHpThreshold` | `float` | 战内伤口阈值 2（默认 0.2）|
-
-`FPressureValues` 字段直接拆 8 个 int32（不是 array / map）。提供 `Get / Set / Add / GetTotal` 接口。
-
-#### §3.2：辅助计数
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `TheftCount` | `int32` | 累计偷窃次数。`OnTheftCommitted` 用于劣迹增量公式 |
-
-#### §3.3：经验值与技能
-
-| 字段                   | 类型                     | 说明                                      |
-| -------------------- | ---------------------- | --------------------------------------- |
-| `ExperienceCurrent`  | `int32`                | 累计经验                                    |
-| `ExperienceCapacity` | `int32`                | 经验值上限（默认 10）                            |
-| `AcquiredSkills`     | `TArray<FGameplayTag>` | 已获得技能。第一阶段全用 `SkillSlot.Placeholder` 占位 |
-
-#### §8：时间与昼夜
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `CurrentDayNumber` | `int32` | 当前天数（从 1 开始）|
-| `CurrentTimePhase` | `ETimePhase` | 当前时段 |
-| `RemainingNodeCount` | `int32` | 当前时段剩余节点数 |
-| `InitialNodeCount_Morning/Day/Dusk/Night/Sunrise` | `int32` | 五时段初始节点数（数值常量化）|
-
-`ETimePhase` 枚举：`Morning / Day / Dusk / Night / Sunrise`。
-
-#### §11：背包与备战卡组
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `Backpack` | `TArray<FCardInstance>` | 通量/背包区，持有独立卡牌 instance |
-| `BattleDeck` | `TArray<FCardInstance>` | 备战区，战斗入场的基础卡组 |
-| `BurdenZone` | `TArray<FCardInstance>` | 负重区，容量不足时的溢出卡牌 |
-| `SpecialZones` | `TArray<FSpecialZone>` | 每张 B 主卡 instance 对应一个特殊存放区 |
-
-**容量公式**（GDD §11.4）由 `URunSession::GetFluxCapacity()` / `GetBattleDeckCapacity()` 动态计算：
-- 通量内容容量 = `Σ(玩家拥有的所有 A 类容器卡 Capacity)`
-- 备战容量 = `Σ(Backpack + BattleDeck 里所有容器卡 Capacity)`，A 类与 B 类都计入
-- B 类容器卡（`Physique.CapacityEffect` 非空）不计入通量公式，但计入备战容量；每张 B 主卡自己开辟一个特殊存放区，内容区容量 = `Capacity - 1`
-- A 类容器卡没有通量主卡概念；如果物理位于 `Backpack`，它和普通卡一样显示为通量内容并占 1 格
-- B 类特殊存放区内容区实际可收纳数量 = `B.Capacity - 1`
-- 背包 UI 可用性按“是否仍拥有至少一张容器卡”判断，不再绑定 `BagProvider` 关键词；暮色引虫灯这类 A 类容器也能作为容量兜底。
-- 永久销毁容器卡时，若销毁后仍有其他容器卡提供容量则允许；容量缩小导致备战区超限时，溢出的卡会优先迁回通量区，通量区也满时才进入 `BurdenZone`；通量区自身超限时仍直接进入 `BurdenZone`。
-
-**instance 互斥**：同一个 `FCardInstance.InstanceId` 同时只能位于 `Backpack / BattleDeck / BurdenZone / 任一 SpecialZone.Cards` 之一。`MoveInstance` 是通用迁移入口，失败路径不修改 RunState、不广播。
-
-**通量内容与备战**：A 类容器卡进入 `BattleDeck` 时，物理 instance 只显示在备战区；它仍贡献通量容量，但不会在通量区生成投影或第二张卡。
-
-**B 类容器卡与 SpecialZone**：
-- B 主卡 instance 进入 `Backpack` 或 `BattleDeck` 时，`RunState.SpecialZones` 中会幂等存在一条 `OwnerInstanceId == 主卡 InstanceId` 的 entry。
-- SpecialZone 容量 = 主卡 `Physique.Capacity - 1`，最小为 0。
-- SpecialZone 内卡牌默认不入战；`bBattleEnabledInSpecialZone == true` 时，且主卡位于 `BattleDeck`，该卡会被 `BuildInitParamsForBattle` 输出到 `BattleDeckEntries`，并携带主卡 `Physique.CapacityEffect`。
-- B 主卡从 `Backpack` 移到 `BattleDeck` 或移回时，SpecialZone 内容保持；销毁 B 主卡时，内含卡退回 `Backpack`，装不下则进入 `BurdenZone`，并清除入战标记。
-
-**Initialize 行为**（Stage 4.1 a2 规则）：
-- 容器卡（Capacity > 0）→ 进 Backpack
-- 非容器卡（Capacity = 0）→ 进 BattleDeck
-- 暮色引虫灯是当前原型特例：默认初始进入 BattleDeck，但仍作为 A 类容器贡献通量容量
-- 通量区或备战区因容量缩小发生溢出时，优先迁移普通卡，尽量保留 A/B 类容器卡在原区继续提供容量与原型特例位置；备战区溢出先尝试补到通量区，通量区满了才进入负重区。
-- 玩家可用 AddToBattleDeck / RemoveFromBattleDeck 调整
-
-#### §11.7 / 经济：金币
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `Gold` | `int32` | 玩家金币（GDD §11.7）。Run 内资源，存档第一阶段不持久化。 |
-
-#### 商店访问状态
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `ActiveShopId` | `FName` | 当前正在访问的商店节点 ID；`NAME_None` 表示没有打开商店 |
-| `bShopVisitHasPurchase` | `bool` | 当前商店访问内是否买过至少一件商品；关闭商店时据此消耗 1 节点 |
-| `ShopStates` | `TMap<FName, FRunShopState>` | 商店节点库存状态。Key 为商店/节点 `PersistentId`；当前只在 Run 内存态保留 |
-
-#### 探索事件状态
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `ActiveRunEventId` | `FName` | 当前正在访问的事件节点 ID；`NAME_None` 表示没有打开事件 |
-| `ActiveRunEventDefinition` | `UWacomRunEventDefinition*` | 当前事件访问使用的静态事件图定义 |
-| `RunEventStates` | `TMap<FName, FRunEventState>` | 事件节点状态。Key 为场景事件 Actor 的 `PersistentId`；当前只在 Run 内存态保留 |
-
-#### 既有字段（R5 / S1 骨架）
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| `Character` | `TObjectPtr<UCharacterDefinition>` | 玩家选择的角色（第一阶段固定为 BugGirl）|
-| `BattleSeed` | `int32` | 战斗随机种子（0 = 每场独立随机）|
-| `DefeatedEnemies` | `TArray<TObjectPtr<UEnemyDefinition>>` | 已击败的敌人列表 |
-| `bRunActive` | `bool` | 当前 Run 是否仍在进行（战内 Defeat 置 false）|
-| `DestroyedTriggerIds` | `TSet<FName>` | 已被永久销毁的场景触发器 ID 列表 |
-| `PlayerTransform` | `FTransform` | 玩家在探索地图的位置/朝向 |
-| `bHasPlayerTransform` | `bool` | PlayerTransform 是否有效 |
-
-### 后续扩展（未实现）
-
-- 地图运行时状态（GDD §10 §10.7 引入 `MapNodeStates: TMap<FName, FMapNodeState>`）
-- 战内 → 战外回传契约（Stage 1.2 引入 `FBattleResultPacket`）
-
----
-
-## §4 存档系统
-
-### 三层分离
+依赖边界：
 
 ```
-URunSession（UObject, Transient, 行为层）
-    │ 持有 ↓
-    ▼
-FRunState（USTRUCT，内存数据层）
-    │ Serialize / Deserialize ↕
-    ▼
-UWacomSaveGame（USaveGame，磁盘数据层）
+WacomCore / WacomData / WacomBattle  ←  WacomRun  ←  WacomApp
 ```
 
-**为什么分开**：
-1. `FRunState` 内部用 `TObjectPtr`（直接引用）；`UWacomSaveGame` 用 `FSoftObjectPath`（按路径加载）
-2. SaveGame 可以比 FRunState 多一些只用于存档的字段（版本号、时间戳、调试字段）
-3. SaveGame 的字段稳定性由版本号保证；FRunState 内部结构可以随时重构
-4. SaveGame 序列化可以在不启动完整游戏的情况下做单元测试
+Run 层可以引用卡牌、角色、敌人和战斗回传结构；不能依赖 UI Widget 或场景表现细节。
 
-**不要做的事**：
-- 不要把 FRunState 塞进 USaveGame 直接 `UPROPERTY(SaveGame)`
-- 不要让 URunSession 本身继承 USaveGame
-- 不要在 FBattleState 上加 SaveGame 标记
+---
 
-### UWacomSaveGame 字段
+## §2 Run 生命周期与失败
 
-| 字段 | 类型 | 说明 |
+一次 Run 由 `URunSession` 表示。它是 Transient UObject，由 PlayerController 创建并持有，核心数据在 `FRunState`。
+
+新 Run 初始化时读取角色的手指数与每指 HP，并按 StarterDeck 建立卡牌 instance。非容器卡默认进备战区，容器卡默认进背包；当前原型特例 `MuseiYinchongdeng`（暮色引虫灯）默认进备战区。
+
+Run 失败条件有三类：
+
+| 来源 | 条件 |
+|---|---|
+| 战内 | 战斗结果为 Defeat，`bRunActive = false` |
+| 战外压力 | 八条压力总和 `>= 100` |
+| 手指 | `FingerCount <= 0` |
+
+`bRunActive` 只记录显式 Run 活跃状态；压力满和手指耗尽通过 `IsRunFailed()` 综合判定。
+
+### 经验与占位技能
+
+经验来自战斗击倒结算。战斗结果为 Victory 时，包括撤离，会把 `FBattleResultPacket.KnockdownExpGains[]` 累加到 Run；Defeat / Undetermined 不结算经验。
+
+`URunSession::AddExperience()` 会把经验累加到 `ExperienceCurrent`。当经验达到 `ExperienceCapacity` 时，循环扣减容量并向 `AcquiredSkills` 追加 `SkillSlot.Placeholder`。
+
+当前技能只是占位计数，不挂实际效果。正式技能系统上线前，不要让战斗规则依赖 `SkillSlot.Placeholder`。
+
+---
+
+## §3 时间、时段与节点
+
+一天按固定顺序推进：
+
+```
+Morning -> Day -> Dusk -> Night -> Sunrise -> Morning(次日)
+```
+
+任一时段节点数消耗到 0 时，`URunSession::ConsumeNode()` 自动调用 `AdvanceToNextPhase()`。玩家移动本身不消耗节点，节点消耗发生在事件完成或规则明确结算时。
+
+当前初始节点数：
+
+| 时段 | 节点数 | 设计口径 |
+|---|---:|---|
+| Morning | 2 | 清晨规划事件会占用其中 1 点 |
+| Day | 6 | 主流程、战斗、商店、休息等 |
+| Dusk | 2 | 可接野炊事件 |
+| Night | 2 | 可接露营或夜间探险 |
+| Sunrise | 1 | 夜探后的后置时段 |
+
+当前 `RunSession` 已实现时段推进与压力副作用；清晨规划、野炊、露营等时段绑定事件由后续事件调度接入。
+
+时段进入副作用：
+
+| 进入时段 | 副作用 |
+|---|---|
+| Morning | 饥饿 +5 |
+| Morning 且前一时段是 Sunrise | 腐朽 +5 |
+| Dusk | 饥饿 +5 |
+| Sunrise | 疲劳 +10 |
+
+设计上露营会从 Night 直接进入次日 Morning，跳过 Sunrise。当前通用推进路径尚未实现这条特殊事件分支。
+
+---
+
+## §4 压力系统
+
+压力是战外血量。八条压力各自为 0 到 100 的百分比，总和达到 100 时 Run 失败。
+
+压力不改变战内规则。它可以被事件读取，用于限制选项、触发分支或驱动表现层效果。
+
+| 压力 | 当前来源 |
+|---|---|
+| 饥饿 | 进入 Morning / Dusk 各 +5 |
+| 伤口 | 战外右手破坏 +1；战内跨高 HP 阈值 +1；跨低 HP 阈值 +5；同归于尽 +10 |
+| 疲劳 | 进入 Sunrise +10；每场非 Undetermined 战斗后 +1 |
+| 负重 | 由 `BurdenZone.Num()` 计算，公式 `n*(n+1)/2`，Clamp 到 100 |
+| 腐朽 | 从 Sunrise 进入次日 Morning +5 |
+| 劣迹 | 第 n 次偷窃完成时 `n*(n+1)/2 + 1` |
+| 嗜血 | 永久销毁 Companion 卡 +1 |
+| 残疾 | 每失去 1 根手指 +5 |
+
+HP 阈值来自 RunState，当前默认：
+
+```
+HighHpThreshold = 0.5
+LowHpThreshold  = 0.2
+```
+
+战斗内只记录是否首次跨阈值；压力修改统一在战斗结束回传给 Run 层后处理。
+
+---
+
+## §5 背包、备战与负重
+
+Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCardInstance.InstanceId`，同名卡也必须作为独立 instance 管理。
+
+当前四个物理持有区：
+
+| Zone | 规则 |
+|---|---|
+| `Backpack` | 通量存放区内容，以及位于背包侧的 B 主卡 |
+| `BattleDeck` | 实际进入战斗的备战卡组 |
+| `SpecialZones` | 每张 B 类容器卡各自开辟一个特殊存放区 |
+| `BurdenZone` | 其他区超容后的兜底区 |
+
+同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`，失败路径不修改 RunState。
+
+### 容器分类
+
+卡牌容量来自 `CardDefinition.Physique.Capacity`。
+
+| 分类 | 条件 | 含义 |
 |---|---|---|
-| `SaveVersion` | `int32` | 版本号 |
-| `SavedAtUtc` | `FDateTime` | 写入时间戳（调试/显示用）|
-| `ClientBuildId` | `FString` | 可选 build 标识 |
-| `CharacterAssetPath` | `FSoftObjectPath` | 当前角色资产路径 |
-| `BattleSeed` | `int32` | 战斗随机种子 |
-| `DefeatedEnemyAssetPaths` | `TArray<FSoftObjectPath>` | 已击败敌人资产路径列表 |
-| `bRunActive` | `bool` | Run 是否活跃 |
-| `DestroyedTriggerIds` | `TArray<FName>` | 已销毁触发器 ID（TArray 避免 TSet 序列化兼容问题）|
-| `Backpack` | `TArray<FCardInstanceSaveEntry>` | v2 起保存 Backpack instances |
-| `BattleDeck` | `TArray<FCardInstanceSaveEntry>` | v2 起保存 BattleDeck instances |
-| `BurdenZone` | `TArray<FCardInstanceSaveEntry>` | v2 起保存 BurdenZone instances |
-| `SpecialZones` | `TArray<FSpecialZoneSaveEntry>` | v2 起保存 owner 与 SpecialZone 内卡 |
-| `PlayerTransform` | `FTransform` | 玩家位置 |
-| `bHasPlayerTransform` | `bool` | 位置是否有效 |
+| 普通卡 | `Capacity == 0` | 不提供容量 |
+| A 类容器 | `Capacity > 0` 且 `CapacityEffect` 为空 | 提供通量容量 |
+| B 类容器 | `Capacity > 0` 且 `CapacityEffect` 有效 | 开辟自己的特殊存放区 |
 
-### 存档时机
+`Card.Keyword.BagProvider` 是历史关键词。当前背包 UI 是否可用以“玩家是否拥有任意 `Capacity > 0` 容器卡”为准。
 
-| 事件 | SlotName | 备份 | 触发位置 |
-|---|---|---|---|
-| ExitBattle 完成 | `Main` + `Auto` | ✓ | `AWacomGameMode::ExitBattle` 末尾 |
-| 玩家退出游戏 | `Main` | | `AWacomGameMode::EndPlay` |
-| ESC 菜单 → 保存 | `Main` | | 手动触发 |
+### 容量公式
 
-### 读档时机
-
-| 事件 | 顺序 |
-|---|---|
-| `AWacomGameMode::BeginPlay` 完成后（延一帧）| 尝试 `Main` → 尝试 `Auto` → 新开 Run |
-
-注意：`BeginPlay` 时玩家 Pawn 已 Spawn 在 `APlayerStart`。读档如果有 `bHasPlayerTransform == true`，把 Pawn 传送到 `PlayerTransform`。
-
-### 双 Slot 策略
-
-- `Main.sav`：主存档
-- `Auto.sav`：自动备份
-- 战斗结束后同时写入两个 slot
-- 主档损坏时回退到 Auto
-
-### 版本迁移（MigrateIfNeeded switch 链）
-
-```cpp
-static bool MigrateIfNeeded(UWacomSaveGame* SaveGame)
-{
-    if (SaveGame->SaveVersion > CurrentSaveVersion) return false; // 拒绝
-    if (SaveGame->SaveVersion == CurrentSaveVersion) return true; // 无需迁移
-
-    switch (SaveGame->SaveVersion)
-    {
-    case 0:
-        // v0 → v1：初始版本，无需迁移字段
-        SaveGame->SaveVersion = 1;
-        [[fallthrough]];
-    case 1:
-        // v1 → v2：新增 Backpack/BattleDeck/BurdenZone/SpecialZones instance 列表。
-        // 新数组保持空，ApplySaveGameToRunState 会按 StarterDeck 重建 instance。
-        SaveGame->SaveVersion = 2;
-        [[fallthrough]];
-    default:
-        break;
-    }
-    return SaveGame->SaveVersion == CurrentSaveVersion;
-}
+```
+通量内容容量     = Σ(玩家拥有的所有 A 类容器卡 Capacity)
+备战区容量       = Σ(玩家拥有的所有容器卡 Capacity)
+特殊存放区容量   = B 主卡 Capacity - 1，最小为 0
+负重区容量       = 不固定
 ```
 
-**铁律**：每次升版本加一个 case，永远不改已存在的 case。
+“玩家拥有”覆盖 `Backpack`、`BattleDeck`、`BurdenZone` 和所有 `SpecialZones.Cards`。容器卡无论位于通量、备战、负重或特殊存放区，都仍然贡献容量。
+
+A 类容器卡物理位于 `Backpack` 时，也占用通量内容格。进入 `BattleDeck` 后不在通量区显示投影，但仍贡献通量容量。
+
+B 主卡只能位于 `Backpack` 或 `BattleDeck`，不能进入自己的 SpecialZone，也不能进入 `BurdenZone`。B 主卡移动时，对应 SpecialZone 保留。
+
+### 超容与负重
+
+`RecomputeBurden()` 会先整理超容卡，再写入负重压力。
+
+通量区超容时，普通卡和 A 类容器卡可进入 `BurdenZone`；B 主卡不会被挪入负重区。备战区超容时，卡优先回通量区，通量区接不住再进负重区。
+
+负重压力公式：
+
+```
+n = BurdenZone.Num()
+BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
+```
+
+永久销毁容器卡会立刻停止贡献容量。若销毁后玩家不再拥有任何容器卡，则拒绝销毁。
+
+### 永久销毁与金币
+
+永久销毁入口用于删牌、事件交出卡、未来出售或战败丢弃。
+
+当前保护规则：
+
+- `Rarity == Intrinsic` 的卡拒绝销毁。
+- 最后一张容量来源卡拒绝销毁。
+- 销毁 Companion 卡会增加嗜血压力。
+- 销毁 B 主卡时，它的 SpecialZone 内卡退回 Backpack；装不下则进 BurdenZone。
+
+删牌换金币当前是简易数值：白卡 +1，蓝卡 +2。金币是 Run 内资源，但当前不写入 SaveGame。
 
 ---
 
-## §5 场景 Actor 持久化
+## §6 商店规则
 
-### PersistentId
+商店运行态以场景入口的 `PersistentId` 为 key，而不是以商品资产 ID 为 key。
 
-- 每个可被永久销毁的 Actor（目前是 `ABattleTriggerActor`）必须在 Details 面板填 `PersistentId`
-- `PersistentId == NAME_None` 时视为"不参与存档"，触发 Warning 日志
-- 同一关卡内 PersistentId 不能重复
+`AWacomShopTriggerActor.PersistentId` 传给 `URunSession::BeginShopVisit(ShopId, Offers)`。第一次打开该 `ShopId` 时，用传入 Offers 建库存；再次打开同一 `ShopId` 时保留库存和已购买状态，忽略新 Offers。
 
-### DestroyedTriggerIds
+`UShopDefinition.ShopId` 是静态内容 ID。多个场景商店可以引用同一份 `UShopDefinition`，但只要 Actor `PersistentId` 不同，它们就是不同库存。
 
-- `FRunState::DestroyedTriggerIds` 记录已被永久销毁的触发器 ID
-- `GameMode::ExitBattle` 时把 `PendingTrigger->PersistentId` 加入列表
+购买规则：
 
-### Bootstrap 清理顺序
+- 打开商店不消耗节点。
+- 成功购买会扣金币、获得卡牌、标记 Offer 已购买。
+- 关闭商店时，如果本次访问买过至少一件商品，统一消耗 1 节点。
+- 没买东西就关闭，不消耗节点。
+- `ShopId == NAME_None`、无效 Offer、重复购买、商品为空、负价格、金币不足等失败路径不修改 RunState。
 
-1. `ABattleTriggerActor::BeginPlay` 时询问 `URunSession` 本 id 是否已在 `DestroyedTriggerIds` 中
-2. 是 → 立即 `Destroy()`（不触发 Overlap）
-3. 否 → 正常运行
-
-### 后续扩展
-
-种类变多（宝箱、门、拾取物）时，抽 `IWacomPersistent` 接口：
-```cpp
-class IWacomPersistent
-{
-    virtual FName GetPersistentId() const = 0;
-    virtual void ApplyPersistedState(const FRunState& State) = 0;
-};
-```
+当前 `ShopStates` 只保存在 Run 内存态，不写入 SaveGame。
 
 ---
 
-## §6 异常处理
+## §7 探索 RunEvent 规则
 
-| 异常 | 处理 |
+RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，运行态以场景事件 Actor 的 `PersistentId` 为 key。
+
+`UWacomRunEventDefinition.EventId` 是内容 ID，不是运行态状态 key。同一事件定义放在多个地点时，必须给每个 Actor 配不同 `PersistentId`，状态彼此独立。
+
+事件状态条件和 `MarkEventCompleted` 效果里的 `TargetPersistentId` 也填写场景 Actor 的 `PersistentId`，不是 `EventId`。
+
+当前访问规则：
+
+- `PersistentId == NAME_None` 或定义为空时拒绝打开。
+- 已完成事件第一版拒绝重复打开。
+- 打开事件不消耗节点。
+- 只有选项 Effects 配置 `ConsumeNode` 时才消耗节点。
+- 关闭事件只清 active 标记，不改变完成状态。
+
+当前条件：
+
+- 金币不少于指定值。
+- 当前节点数不少于指定值。
+- 指定压力不高于阈值。
+- 拥有 / 缺少指定卡。
+- 指定 `PersistentId` 事件已完成 / 未完成。
+
+当前效果：
+
+- 获得卡牌。
+- 增减金币，最低不低于 0。
+- 增减压力。
+- 消耗节点并可能推进时段。
+- 从玩家任意持有区永久移除一张卡。
+- 标记指定 `PersistentId` 事件完成。
+
+RunEvent 的移除卡搜索四个物理持有区：`Backpack`、`BattleDeck`、`BurdenZone` 和所有 `SpecialZones.Cards`。它不发金币，但遵守固有卡、最后容量来源卡和 Companion 嗜血规则。
+
+`FRunEventChoiceResult` 只表达本次选项直接效果，供 UI 和日志展示。后续规则不能依赖这个结果包反向修改 RunState。
+
+当前 `RunEventStates` 只保存在 Run 内存态，不写入 SaveGame。
+
+---
+
+<a id="wacomrun-battle-settlement"></a>
+## §8 战斗联动与战后结算
+
+进入战斗前，`URunSession::BuildInitParamsForBattle()` 从 RunState 构造 `FBattleInitParams`。
+
+关键输入：
+
+- 角色、敌人和战斗随机种子。
+- HP 压力阈值 `HighHpThreshold / LowHpThreshold`。
+- `BattleDeck` 中的物理卡。
+- SpecialZone 中勾选入战的卡：只有 B 主卡位于 `BattleDeck`，且主卡有 `CapacityEffect`，其 SpecialZone 内 `bBattleEnabledInSpecialZone == true` 的卡才会入战，并携带主卡容量效果。
+- 若传入 `TriggerPersistentId`，且 `RunState.BattleProgress` 有记录，则把已破坏部位写入 `PreDestroyedPartIds`。
+
+战斗结束时，GameMode 先处理战斗 UI 和场景 Trigger，再调用 `OnBattleFinishedFromTrigger(Packet, EnemyDef, TriggerPersistentId)` 做 Run 结算。
+
+Outcome 分支：
+
+| 结果 | Run 处理 |
 |---|---|
-| `LoadGameFromSlot("Main")` 返回 nullptr | 尝试 `Auto.sav`；还失败就新开 Run |
-| `SaveVersion > CurrentSaveVersion` | 拒绝读档；尝试 `Auto.sav`；还失败就新开 |
-| `CharacterAssetPath.TryLoad()` 返回 nullptr | 新开 Run（角色资产消失说明项目更新）|
-| `DefeatedEnemyAssetPaths` 中某项加载失败 | 跳过该项，继续加载 |
-| 写入磁盘失败 | 日志 Error，不崩溃；保留上次内存状态 |
-| `DestroyedTriggerIds` 中的 id 在当前关卡找不到匹配 Actor | 静默忽略 |
-| `PlayerTransform` 落地位置悬空或穿地 | 用关卡的 `APlayerStart` 重置 |
+| Victory 且 `bWithdrawn == true` | 撤离；敌人不进 `DefeatedEnemies`；写 `BattleProgress[TriggerId] = DestroyedPartIds` |
+| Victory 且未撤离 | 真胜利；敌人进 `DefeatedEnemies`；清理 `BattleProgress[TriggerId]` |
+| Defeat | `bRunActive = false` |
+| Undetermined | 不做战外结算并返回 |
 
-所有异常都走 `UE_LOG`，不用 `check` 不崩溃。玩家视角的最差后果是"存档丢了，从头开始"。
+战后压力与奖励：
+
+- 任一非 Undetermined 结果：疲劳 +1。
+- `bCrossedHighHpThreshold`：伤口 +1。
+- `bCrossedLowHpThreshold`：伤口 +5。
+- `bMutualDestruction`：伤口 +10，不直接终止 Run。
+- Victory 包含撤离：结算 `KnockdownExpGains[]` 和 `GainedCards[]`。
+- Defeat / Undetermined 不结算经验和获得卡。
+- `KnockdownChoices[]` 当前只记日志，后续事件分支再消费。
+
+节点消耗不在 `OnBattleFinishedFromTrigger()` 内部完成。当前 `AWacomGameMode::ExitBattle()` 在非 Undetermined 战斗结束后统一 `ConsumeNode(1)`，胜利、失败、撤离都消耗。
+
+战斗 Trigger 的场景销毁由 GameMode 处理。真胜利会调用 `MarkTriggerDestroyed(PersistentId)` 并 Destroy Actor；撤离不销毁，允许下次重入。
+
+---
+
+## §9 场景 PersistentId 规则
+
+`PersistentId` 是场景对象在 RunState 中的稳定身份。它不是显示名，也不是静态内容资产 ID。
+
+当前已用场景 ID：
+
+| 场景对象 | PersistentId 用途 |
+|---|---|
+| `ABattleTriggerActor` | 已销毁 Trigger、撤离 BattleProgress |
+| `AWacomShopTriggerActor` | 商店库存与已购买状态 |
+| `AWacomRunEventTriggerActor` | RunEvent 当前节点与完成状态 |
+
+规则：
+
+- 参与 Run 状态的场景 Actor 必须配置非空 `PersistentId`。
+- 同一关卡内应保持唯一。
+- `NAME_None` 表示不参与对应状态记录；入口会 Warning 或拒绝。
+- 内容资产 ID 不能替代场景 PersistentId。
+
+---
+
+## §10 SaveGame 当前边界
+
+先读这一条：当前 `AWacomGameMode::bSaveSystemEnabled == false`。正常游戏流程不读盘、不写盘；战斗结束和退出时的自动存档会静默 no-op。
+
+下面的边界描述的是底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v2 的实际字段拷贝结果。
+
+### v2 磁盘会保存
+
+| SaveGame 字段 | 来源 / 说明 |
+|---|---|
+| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 2 |
+| `CharacterAssetPath` | 当前角色资产路径 |
+| `BattleSeed` | 战斗随机种子 |
+| `bRunActive` | Run 活跃状态 |
+| `DefeatedEnemyAssetPaths` | 已击败敌人资产路径 |
+| `DestroyedTriggerIds` | 已永久销毁的战斗 Trigger |
+| `PlayerTransform`、`bHasPlayerTransform` | 探索 Pawn 位置 |
+| `Backpack` | 卡牌 instance 列表 |
+| `BattleDeck` | 卡牌 instance 列表 |
+| `BurdenZone` | 卡牌 instance 列表 |
+| `SpecialZones` | B 主卡 owner id 与区内卡牌 instance |
+
+卡牌 instance 存档条目保存 `InstanceId`、`DefinitionAssetPath` 和 `bBattleEnabledInSpecialZone`。读档时要求 InstanceId 非零、全表唯一，Definition 能加载成功。
+
+若 v0 / v1 旧档迁移到 v2 后四个 instance 数组全空，读档会按 Character 的 StarterDeck 重新生成 instance；新 GUID 会替代旧运行态身份。
+
+注意：v2 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。
+
+### 当前仍是内存态
+
+| RunState 字段 / 系统 | SaveGame v2 状态 | 读档后的实际结果 |
+|---|---|---|
+| `FingerCount`、`HpPerFinger` | 不保存 | 使用 `FRunState` 默认值，不从 SaveGame 还原 |
+| `Pressure`、`TheftCount` | 不保存 | 压力全为 0，偷窃计数为 0 |
+| `HighHpThreshold`、`LowHpThreshold` | 不保存 | 使用默认 `0.5 / 0.2` |
+| `ExperienceCurrent`、`ExperienceCapacity`、`AcquiredSkills` | 不保存 | 经验为 0，上限默认 10，技能为空 |
+| `CurrentDayNumber`、`CurrentTimePhase`、`RemainingNodeCount` | 不保存 | 回到第 1 天 Morning，节点为默认值 |
+| 五时段初始节点数 | 不保存 | 使用默认 `2 / 6 / 2 / 2 / 1` |
+| `Gold` | 不保存 | 读档后为 0 |
+| `BattleProgress` | 不保存 | 撤离留下的已破坏部位不会跨磁盘读档保留 |
+| `ActiveShopId`、`bShopVisitHasPurchase` | 不保存 | 无 active shop |
+| `ShopStates` | 不保存 | 商店库存和已购买状态清空 |
+| `ActiveRunEventId`、`ActiveRunEventDefinition` | 不保存 | 无 active event |
+| `RunEventStates` | 不保存 | 事件当前节点和完成状态清空 |
+
+因此，当前 SaveGame 不能被描述为完整 Run 存档。它只覆盖部分场景与卡牌持有状态，而且正常流程还被 GameMode 总开关禁用。
+
+后续恢复存档系统时，必须先决定这些字段的持久化策略，并同步升级 `UWacomSaveGame::CurrentSaveVersion` 与迁移链。
+
+---
+
+## §11 关键实现入口
+
+Run 领域入口集中在 `Source/WacomRun/`：
+
+| 文件 | 作用 |
+|---|---|
+| `Public/RunSession.h` | Run 的命令 / 查询入口；UI 和 GameMode 不直接改 RunState |
+| `Private/RunSession.cpp` | 时间、压力、商店、RunEvent、战斗回传、SaveGame 拷贝的协调实现 |
+| `Private/Deck/RunDeckRules.*` | 背包、备战区、SpecialZone、负重区的私有规则 helper；只操作 `FRunState`，不广播、不访问 UI |
+| `Public/RunState.h` | `FRunState`、商店状态、事件状态、战斗进度快照 |
+| `Public/RunStateTypes.h` | `FCardInstance`、压力枚举、时段枚举、Zone 枚举与背包 Snapshot |
+| `Public/WacomSaveGame.h` | 当前磁盘 schema |
+| `Private/WacomSaveGame.cpp` | SaveVersion 迁移链 |
+
+外部接入点：
+
+| 文件 | 作用 |
+|---|---|
+| `Source/WacomApp/Private/GameFramework/WacomGameMode.cpp` | 进入 / 退出战斗，调用 Run 战后结算，处理战斗节点扣点和存档开关 |
+| `Source/WacomApp/Public/Actors/BattleTriggerActor.h` | 战斗 Trigger 的 `PersistentId` |
+| `Source/WacomApp/Public/Actors/WacomShopTriggerActor.h` | 商店入口，提供 `PersistentId` 和商品来源 |
+| `Source/WacomApp/Public/Actors/WacomRunEventTriggerActor.h` | RunEvent 入口，提供 `PersistentId` 和事件定义 |
+
+设计与数据侧对应文档：
+
+| 文档 | 关注点 |
+|---|---|
+| `Docs/Game_Design.md` | 总体设计背景、时间、压力、节点、背包设计语境 |
+| `Docs/WacomData.md` | 卡牌、商店、RunEvent 静态数据定义 |
+| `Docs/WacomApp.md` | 场景 Actor、UI 入口与交互层约定 |
+
+---
+
+## §12 修改 Run 规则时的检查点
+
+改 Run 规则前先确认影响面：
+
+- 是否改变战内 / 战外边界。
+- 是否需要新增 DataAsset 字段或 GameplayTag。
+- 是否需要 SaveGame schema 升级。
+- 是否影响 `PersistentId` 的含义。
+- 是否需要更新自动化测试。
+
+涉及背包、存档、事件或战斗结算的改动，至少检查 `RunSession.cpp` 对应路径和 `WacomTests` 中的 Run / Backpack / Save 相关测试。

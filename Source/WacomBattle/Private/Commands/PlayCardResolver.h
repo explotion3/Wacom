@@ -12,8 +12,8 @@ struct FBattleEventBus;
 /**
  * 打牌命令解析。
  *
- * S2 骨架：仅检查最基本的入参，不改变 BattleState。
- * 完整流程在 S5 按 Battle_Rules.md §5 实现。
+ * 校验费用、目标和手牌状态后，执行卡牌效果、先机命中、抵抗、完美释放、
+ * 卡牌去向、被动触发、击倒事件和战斗结束判定。
  */
 class FPlayCardResolver
 {

@@ -14,7 +14,7 @@
  * - Game：战斗 HUD、探索 HUD（不阻断游戏输入）
  * - GameMenu：暂停、背包、商店（阻断游戏输入）
  * - Modal：确认框、奖励选择（阻断下层 UI）
- * - Overlay：Toast、提示（不影响输入）
+ * - Overlay：CommonUI 内 overlay 入口；AppToast 当前直接 AddToViewport，不走该 Stack。
  */
 namespace WacomUITags
 {

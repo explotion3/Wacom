@@ -17,7 +17,7 @@ class UWacomCardView;
 /**
  * 单张卡的 UI 表示（背包系统用）。
  *
- * Stage 4.5.3a 拖拽源：
+ * 拖拽源：
  *   - 纯展示 / 拖拽热区，不触发点击移动
  *   - 删牌不在卡牌本体上处理；拖到 DeleteZone 后由 DropTarget 调 DeleteCardForGold
  *

@@ -9,9 +9,9 @@ struct FBattleEventBus;
 class UCardDefinition;
 
 /**
- * ZoneHook 消费。对齐 Data_Schema_Draft §5.4 + Phase2_P3_Plan §5。
+ * ZoneHook 消费。
  *
- * 第一阶段支持两种 Trigger：
+ * 当前支持两种 Trigger：
  * - ZoneHook.Trigger.OnPlay              — 卡在指定区域打出时执行 ExtraEffects
  * - ZoneHook.Trigger.OnPerfectReleaseHit — 卡在指定区域 + 存在先机命中时，跳过先机推进
  *
@@ -37,7 +37,7 @@ public:
 	/**
 	 * 判断本卡在当前区域 + 存在先机命中时，是否需要"跳过先机推进"。
 	 *
-	 * 第一阶段规则（朝光暮蝶左手区）：命中即跳过，不执行 ExtraEffects。
+	 * 当前规则（朝光暮蝶左手区）：命中即跳过，不执行 ExtraEffects。
 	 */
 	static bool ShouldSkipInitiativePush(
 		const FBattleState& State,

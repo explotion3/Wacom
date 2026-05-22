@@ -131,7 +131,7 @@ void UWacomMainMenuScreen::RefreshContinueEnabled()
 {
 	if (!ContinueButton) { return; }
 
-	// 存档系统暂停（Stage 0.1）：Continue 永远禁用。
+	// 存档系统关闭时 Continue 永远禁用。
 	if (!AWacomGameMode::bSaveSystemEnabled)
 	{
 		ContinueButton->SetIsEnabled(false);
@@ -144,7 +144,7 @@ void UWacomMainMenuScreen::RefreshContinueEnabled()
 
 void UWacomMainMenuScreen::HandleNewGameClicked()
 {
-	// 存档系统暂停（Stage 0.1）：直接开新游戏，不弹 Confirm。
+	// 存档系统关闭时直接开新游戏，不弹 Confirm。
 	if (!AWacomGameMode::bSaveSystemEnabled)
 	{
 		if (UWorld* World = GetWorld())
@@ -190,7 +190,7 @@ void UWacomMainMenuScreen::HandleNewGameClicked()
 
 void UWacomMainMenuScreen::HandleContinueClicked()
 {
-	// 存档系统暂停（Stage 0.1）：忽略 Continue。
+	// 存档系统关闭时忽略 Continue。
 	if (!AWacomGameMode::bSaveSystemEnabled)
 	{
 		UE_LOG(LogTemp, Display, TEXT("[MainMenu] Continue 被点但存档系统已暂停"));

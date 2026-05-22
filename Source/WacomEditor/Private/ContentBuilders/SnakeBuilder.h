@@ -9,7 +9,6 @@ class UEnemyDefinition;
 /**
  * 蛇敌人及其部位的 DataAsset 构造器。
  *
- * 对齐 Data_Schema_Draft §3。
  * 部位：头 / 身体 / 尾巴。顺序即部位顺序。
  */
 namespace Wacom::ContentBuilder

@@ -8,12 +8,9 @@
 #include "CardZoneHook.generated.h"
 
 /**
- * 卡牌区域钩子。对齐 Data_Schema_Draft §5.4。
+ * 卡牌区域钩子。当卡牌处于指定区域、指定触发时机时追加效果或修正。
  *
- * 当卡牌处于指定区域、指定触发时机时追加效果或修正。
- * S1 占位，S8+ 实现。
- *
- * Trigger 第一阶段仅支持：
+ * 当前支持：
  * - ZoneHook.Trigger.OnPlay
  * - ZoneHook.Trigger.OnPerfectReleaseHit
  */

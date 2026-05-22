@@ -20,7 +20,7 @@ class UCommonTextBlock;
  * - 统一的蓝图钩子 BP_OnButtonClicked（避免每个子类各自连 OnClicked）
  * - 状态变更的蓝图事件钩子（Hover / Press / Enabled），统一做视觉反馈
  * - 可选的 ButtonText 自动 Bind（适合纯文字按钮）
- * - 音效钩子占位（BP_PlayClickSound / BP_PlayHoverSound，第一阶段空实现）
+ * - 音效钩子占位（BP_PlayClickSound / BP_PlayHoverSound，默认空实现）
  *
  * WBP 子类约定：
  * - 纯文字按钮：放一个 UCommonTextBlock 命名 "ButtonText"（BindWidgetOptional）

@@ -23,14 +23,14 @@
 namespace
 {
 	/**
-	 * 卡牌离开手牌后的去向。Battle_Rules §8 的去向规则。
+	 * 卡牌离开手牌后的去向。
 	 *
-	 * 第一阶段覆盖：
+	 * 当前覆盖：
 	 * - 左/右手锚点：进入 Limbo（本回合离开手牌但不入任何区域）
 	 * - Combo：回原位置（当前位置即原位置）
 	 * - 其它：进入弃牌区
 	 *
-	 * 第一阶段不覆盖的：消耗牌、保留牌去向（保留不进弃牌是回合结束时的行为，不是打出后去向）。
+	 * 保留不进弃牌是回合结束时的行为，不是打出后去向。
 	 */
 	void SendCardAfterPlay(FBattleState& State, const FGuid& CardInstanceId, bool bIsAnchor, bool bIsCombo)
 	{
@@ -182,7 +182,7 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 
 	// ================ 9. 先机推进 ================
 	// 非迅捷卡：所有仍拥有先机的敌方部位当前先机 -= RuntimeCost。
-	// P3.3：左手区 + 先机命中 → ZoneHook(OnPerfectReleaseHit) 跳过推进。
+	// 左手区 + 先机命中 -> ZoneHook(OnPerfectReleaseHit) 跳过推进。
 	const bool bSkipPush = FZoneHookResolver::ShouldSkipInitiativePush(
 		State, *Def, CardId, !HitPartIds.IsEmpty());
 
@@ -219,7 +219,7 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 	// AfterPlayed 之后触发：此时本次打出的 Companion 已计入 CompanionPlayedCount。
 	FPassiveDispatcher::RunOnCompanionCount(State, Events);
 
-	// ================ 14. 中毒结算（Battle_Rules §15）================
+	// ================ 14. 中毒结算 ================
 	// 敌方部位行动之前：中毒可能破坏部位，从而影响随后的先机归零行动集合。
 	FPoisonResolver::ResolvePoisonForAllHosts(State, Events);
 

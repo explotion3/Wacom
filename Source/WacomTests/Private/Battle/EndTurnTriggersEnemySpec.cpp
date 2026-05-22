@@ -8,12 +8,11 @@
 #include "Events/BattleEvent.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #13：
- *   结束阶段调用敌方部位行动子流程。
+ * 结束阶段调用敌方部位行动子流程。
  *
  * 单部位敌人，初始意图 Damage(1) 打玩家。Player MaxHp=100，结束回合后玩家 Hp=99。
  * 事件流里应出现 EnemyPartActed。
- * 同时：新一回合的 CurrentWaitValue 重置为 2（补测 §12 #6）。
+ * 同时：新一回合的 CurrentWaitValue 重置为 2。
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattleEndTurnTriggersEnemySpec,

@@ -26,7 +26,7 @@ struct WACOMBATTLE_API FIntentSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 Initiative = 0;
 
-	/** 抵抗比较用数值，对齐 Data_Schema_Draft §4。 */
+	/** 抵抗比较用数值，来自当前意图定义。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 ResistanceValue = 0;
 };
@@ -83,11 +83,11 @@ struct WACOMBATTLE_API FEnemySnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	TObjectPtr<const UEnemyDefinition> Definition = nullptr;
 
-	/** 按部位顺序排列。第一阶段蛇为 头 -> 身体 -> 尾巴。 */
+	/** 按部位定义顺序排列。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	TArray<FEnemyPartSnapshot> Parts;
 
-	/** 所有存活部位当前先机之和。对应 Battle_Rules §5 的 Enemy Initiative Sum。 */
+	/** 所有存活部位当前先机之和。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 InitiativeSum = 0;
 

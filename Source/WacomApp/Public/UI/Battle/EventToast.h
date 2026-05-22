@@ -17,7 +17,7 @@ struct FBattleEvent;
  * 本 Widget 把每条事件格式化成一行文字显示在一个 VerticalBox 里。
  * 每条消息默认 3 秒后淡出。超过最大条数时最旧的会被立即移除。
  *
- * 第一阶段用 NativeTick 做倒计时；P5 UI 动画时换成 UMG Animation。
+ * 当前用 NativeTick 做倒计时；后续可切到 UMG Animation。
  *
  * C++ 默认外观：半透明黑底竖向列表，每行一个 TextBlock。
  *

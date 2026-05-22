@@ -10,10 +10,10 @@ struct FBattleSnapshot;
 /**
  * 从 FBattleState 投影出 FBattleSnapshot。
  *
- * 只读投影，严禁反向写入。第一阶段为极简实现：
- * - 不计算 Hand.Cards 的 Zone 归属（S4 HandZoneService 就位后补）
- * - 不计算 IsPlayable（S5 费用合法性就位后补）
- * - IntentSum 只对存活部位计算，破坏部位贡献 0
+ * 只读投影，严禁反向写入。这里会补齐 UI 常用派生字段：
+ * - 手牌 Zone / 锚点状态 / 费用可用性
+ * - 敌方部位存活、意图、先机与状态
+ * - 牌堆计数与战斗结果
  */
 class FBattleSnapshotBuilder
 {

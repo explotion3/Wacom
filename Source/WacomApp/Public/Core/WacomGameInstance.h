@@ -9,15 +9,14 @@
 /**
  * Wacom 项目的 GameInstance。
  *
- * 第一阶段：空壳。配置在 `Config/DefaultEngine.ini` 的 GameInstanceClass。
+ * 当前主要作为项目 GameInstanceClass 和各类 GameInstanceSubsystem 的宿主。
  *
- * 未来扩展位：
+ * 后续扩展位：
  *   - 全局音效音量 / 图形设置
  *   - 账号 / 云存档句柄
  *   - 跨关卡持久日志句柄
  *
- * 现在立它的目的是让 UGameInstanceSubsystem 有明确的 Host，
- * 并给未来的全局状态腾位置。
+ * 它本身暂不持有玩法状态；Run / UI 等跨关卡服务通过 Subsystem 承接。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomGameInstance : public UGameInstance

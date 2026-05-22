@@ -214,7 +214,7 @@ void UWacomKnockdownChoiceDialog::HandleDestroyClicked()
 
 FReply UWacomKnockdownChoiceDialog::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	// GDD：必须三选一，ESC 不允许关闭。
+	// 击倒事件必须三选一，ESC 不允许关闭。
 	if (InKeyEvent.GetKey() == EKeys::Escape)
 	{
 		return FReply::Handled();  // 吃掉 ESC，不调父类 DeactivateWidget

@@ -10,7 +10,7 @@
 
 FWacomStatus FBattleResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
 {
-	// KnockdownChoice 命令独立 Phase 受理（GDD §6 击倒事件）：仅在 PendingKnockdownChoice 阶段允许。
+	// KnockdownChoice 命令独立 Phase 受理：仅在 PendingKnockdownChoice 阶段允许。
 	if (Command.Type == EBattleCommandType::KnockdownChoice)
 	{
 		if (State.Phase != EBattlePhase::PendingKnockdownChoice)

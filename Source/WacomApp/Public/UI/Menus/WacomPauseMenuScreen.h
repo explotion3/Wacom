@@ -16,7 +16,7 @@ class UButton;
  *   - Save：RunSession->SaveToSlot(Main)
  *   - Quit to Main Menu：OpenLevel(L_MainMenu)
  *
- * M3 第一版不做 Settings 按钮（占位留给 M4+）。
+ * Settings 按钮后续按菜单需求接入。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomPauseMenuScreen : public UWacomMenuWidgetBase

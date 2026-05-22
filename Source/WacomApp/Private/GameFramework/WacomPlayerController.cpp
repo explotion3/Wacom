@@ -310,7 +310,6 @@ void AWacomPlayerController::OnEndTurnPressed()
 
 void AWacomPlayerController::OnRestartPressed()
 {
-	// R / Restart：第一阶段占位——重启战斗由 GameMode ExitBattle 之后新建 Run 处理。
 	// 当前不做任何事，保留按键绑定避免 IMC 里的 R 映射空触发警告。
 	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] Restart 按键暂不支持"));
 }
@@ -359,13 +358,13 @@ void AWacomPlayerController::OnOpenMenuPressed()
 	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 打开暂停菜单"));
 }
 
-// ================ 背包入口（Stage 4.2） ================
+// ================ 背包入口 ================
 
 namespace
 {
 	/**
 	 * 找到第一个本地 AWacomPlayerController。
-	 * 用于 console command（无 PC 上下文）。
+	 * 用于 console command 等无 PC 上下文的调试入口。
 	 */
 	AWacomPlayerController* FindLocalWacomPC(UWorld* World)
 	{
@@ -713,7 +712,7 @@ void AWacomPlayerController::TryOpenBackpackFromConsole()
 	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 打开背包"));
 }
 
-// ---- Console Commands（B 键 IA 资产建好前的临时入口）----
+// ---- Console Commands（调试入口）----
 
 static FAutoConsoleCommandWithWorld GWacomOpenBackpackCmd(
 	TEXT("Wacom.OpenBackpack"),
@@ -754,7 +753,7 @@ static FAutoConsoleCommandWithWorld GWacomCloseBackpackCmd(
 
 static FAutoConsoleCommandWithWorld GWacomInteractCmd(
 	TEXT("Wacom.Interact"),
-	TEXT("在世界交互对象范围内时触发最近对象（IA_Interact 资产建好前的兜底）。"),
+	TEXT("在世界交互对象范围内时触发最近对象。"),
 	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
 	{
 		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))

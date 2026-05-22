@@ -33,7 +33,7 @@ TSharedRef<SWidget> UEquipmentBar::RebuildWidget()
 
 void UEquipmentBar::NativeRefreshFromSnapshot(const FBattleSnapshot& /*Snap*/)
 {
-	// 第一阶段 Snapshot 没有装备数据，保持占位。
+	// Snapshot 还没有装备数据，保持占位。
 	if (TitleText)
 	{
 		TitleText->SetText(LOCTEXT("EquipNone", "装备: (无)"));

@@ -26,7 +26,7 @@ struct WACOMBATTLE_API FPlayerSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 Shield = 0;
 
-	/** 玩家持有的状态集合。P3.1 起支持 Status.Poison。 */
+	/** 玩家持有的状态集合。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	FGameplayTagContainer Statuses;
 
@@ -55,7 +55,6 @@ struct WACOMBATTLE_API FPileCountsSnapshot
 /**
  * 战斗整体快照。
  *
- * 对齐 Architecture.md §7。
  * UI、日志、自动化测试读取本结构。禁止通过 Snapshot 回写到 BattleState。
  *
  * 生产方：WacomBattle/Private/Snapshots/BattleSnapshotBuilder。
@@ -75,7 +74,7 @@ struct WACOMBATTLE_API FBattleSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 TurnNumber = 0;
 
-	/** 当前等待值。每回合开始重置为 2。对齐 Battle_Rules §6。 */
+	/** 当前等待值。每回合开始重置为 2。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 CurrentWaitValue = 2;
 

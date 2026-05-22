@@ -9,8 +9,7 @@
 #include "Cards/CardDefinition.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #12：
- *   连击牌打出后回到原位置（仍在手牌）。
+ * 连击牌打出后回到原位置（仍在手牌）。
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattleComboReturnSpec,

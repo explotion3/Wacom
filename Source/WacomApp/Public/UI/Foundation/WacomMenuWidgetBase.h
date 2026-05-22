@@ -15,7 +15,7 @@
  *
  * 提供：
  *   - 激活时自动聚焦第一个可聚焦子控件（键盘可用）
- *   - `OnBackRequested` 委托：ESC / Gamepad B 路由到这里（M4 接）
+ *   - `OnBackRequested` 委托：ESC / Gamepad B 可路由到这里
  *   - 激活期间鼠标可见 + UIOnly 输入模式（通过 GetDesiredInputConfig）
  *
  * 不提供：
@@ -31,7 +31,7 @@ public:
 	UWacomMenuWidgetBase(const FObjectInitializer& ObjectInitializer);
 
 	/**
-	 * Back 请求委托。M4 会把 ESC / Gamepad B 路由到这里。
+	 * Back 请求委托。ESC / Gamepad B 可路由到这里。
 	 * 默认行为：DeactivateWidget（即从当前 Layer Pop）。
 	 */
 	DECLARE_MULTICAST_DELEGATE(FOnBackRequestedNative);

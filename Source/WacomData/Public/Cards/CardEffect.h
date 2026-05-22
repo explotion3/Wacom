@@ -40,9 +40,7 @@ struct WACOMDATA_API FMagnitudeModifier
 };
 
 /**
- * 卡牌效果条目。对齐 Data_Schema_Draft §5.3。
- *
- * 所有卡牌效果用 EffectType + Magnitude + Target + 辅助字段描述。
+ * 卡牌效果条目。所有卡牌效果用 EffectType + Magnitude + Target + 辅助字段描述。
  * Executor 根据 EffectType 分派。
  *
  * 字段使用约定（按 EffectType）：

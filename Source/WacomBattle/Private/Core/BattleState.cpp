@@ -19,7 +19,7 @@ void FBattleState::RecordPartDestroyed(FRuntimeEnemyPart& Part, FBattleEventBus&
 		Events.Emit(Ev);
 	}
 
-	// 2) 经验记账（GDD §3.3）
+	// 2) 经验记账
 	{
 		FKnockdownExpGain Gain;
 		Gain.PartId    = PartId;
@@ -27,19 +27,18 @@ void FBattleState::RecordPartDestroyed(FRuntimeEnemyPart& Part, FBattleEventBus&
 		PendingKnockdownExpGains.Add(Gain);
 	}
 
-	// 3) 加入 DestroyedPartIds（撤离时持久化用，GDD §10.5）
+	// 3) 加入 DestroyedPartIds（撤离时持久化用）
 	if (!PartId.IsNone() && !DestroyedPartIds.Contains(PartId))
 	{
 		DestroyedPartIds.Add(PartId);
 	}
 
-	// 4) 入队等玩家三选一（GDD §6 击倒事件）
+	// 4) 入队等玩家三选一
 	FPendingKnockdownEvent Event;
 	Event.PartInstanceId = Part.InstanceId;
 	Event.PartId         = PartId;
 
 	// 击倒事件的左/右手分支是事件选项，不依赖左右手锚点当前是否仍在手牌区。
-	// 第一阶段不消耗左右手牌，也不按正在打出的 anchor 排除对应分支。
 	Event.bLeftHandAvailable  = true;
 	Event.bRightHandAvailable = true;
 

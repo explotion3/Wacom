@@ -6,7 +6,7 @@
 #include "Snapshots/BattleSnapshot.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #1：回合开始抽 5 张普通卡牌。
+ * 回合开始抽 5 张普通卡牌。
  *
  * 条件：抽牌堆足够多普通卡 + 左右手锚点存在。
  * 断言：Initialize 后，Hand 的普通卡数量 == 5。

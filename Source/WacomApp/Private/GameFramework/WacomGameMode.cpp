@@ -129,7 +129,7 @@ void AWacomGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AWacomGameMode::BootstrapRunFromSave()
 {
-	// 存档系统暂停（Stage 0.1）：直接走新 Run，不读盘。
+	// 存档系统关闭时直接走新 Run，不读盘。
 	if (!bSaveSystemEnabled)
 	{
 		UE_LOG(LogTemp, Display,
@@ -214,7 +214,7 @@ void AWacomGameMode::BootstrapRunFromSave()
 
 bool AWacomGameMode::SaveRunToSlot(const FString& SlotName, bool bQuiet) const
 {
-	// 存档系统暂停（Stage 0.1）：静默 no-op。不影响调用方流程。
+	// 存档系统关闭时静默 no-op，不影响调用方流程。
 	if (!bSaveSystemEnabled)
 	{
 		return false;
@@ -474,14 +474,14 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	}
 
 	// 4) 通知 RunSession 战斗结束，让它更新击败列表 / run active 状态 / 战外结算压力
-	//    + 撤离时持久化破坏部位、真胜利时清理（GDD §10.5）
+	//    + 撤离时持久化破坏部位、真胜利时清理。
 	if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
 	{
 		if (URunSession* Run = WacomPC->GetRunSession())
 		{
 			Run->OnBattleFinishedFromTrigger(Packet, PendingEnemyDefForRun, TriggerPersistentId);
 
-			// 战斗结束统一结算 1 节点（GDD §10.5：胜利 / 失败 / 撤离都消耗）
+			// 战斗结束统一结算 1 节点：胜利 / 失败 / 撤离都消耗。
 			if (Packet.Outcome != EBattleOutcome::Undetermined)
 			{
 				Run->ConsumeNode(1);

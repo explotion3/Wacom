@@ -17,9 +17,9 @@ class UTextBlock;
  * 调 SetContext 传入只读 ViewData。
  *
  * 三个按钮：
- *   - 援助（左）：Aid。第一阶段不依赖左手牌当前是否在手牌区
+ *   - 援助（左）：Aid。当前不依赖左手牌当前是否在手牌区
  *   - 撤离（中）：Withdraw。敌人仍有存活部位时可用
- *   - 破坏（右）：Destroy。第一阶段不依赖右手牌当前是否在手牌区
+ *   - 破坏（右）：Destroy。当前不依赖右手牌当前是否在手牌区
  *
  * 点击 → 通过 BattleHUD 提交 KnockdownChoice 命令 → 关闭自己（DeactivateWidget）
  *

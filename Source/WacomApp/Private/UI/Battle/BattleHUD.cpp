@@ -449,7 +449,7 @@ void UBattleHUD::OnCardClickedByUser(const FGuid& CardInstanceId)
 
 	case ECardTargetMode::HandCard:
 	default:
-		// 第一阶段未支持，忽略
+		// 手卡目标尚未接入，忽略。
 		break;
 	}
 }
@@ -806,7 +806,7 @@ void UBattleHUD::ConsumeAndLogEvents()
 
 	AppendBattleEventLogEntries(Events);
 
-	// Stage 7：处理击倒事件请求 → push KnockdownChoiceDialog 到 Modal 层
+	// 处理击倒事件请求：push KnockdownChoiceDialog 到 Modal 层。
 	for (const FBattleEvent& E : Events)
 	{
 		if (E.Type != EBattleEventType::KnockdownChoiceRequested) { continue; }

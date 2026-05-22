@@ -22,10 +22,10 @@ class ABattleTriggerActor;
  * 职责：
  *   - 持有当前 EGameFlowState（Exploration / Battle）
  *   - EnterBattle：创建 BattleSession；通过 UIManager Push BattleHUD；切 IMC；禁用探索输入；记录触发器
- *   - ExitBattle：Pop BattleHUD；清 Session；恢复 IMC；恢复探索输入；Destroy 触发器
+ *   - ExitBattle：Pop BattleHUD；清 Session；恢复 IMC；恢复探索输入；真胜利时销毁触发器
  *   - 订阅 BattleHUD::OnBattleEndedNative，让战斗结束自动触发 ExitBattle
  *
- * UI 生命周期不由 GameMode 管——PrimaryLayout 由 UWacomGameUIManagerSubsystem 跨关卡持有。
+ * UI 生命周期由 UWacomGameUIManagerSubsystem 管理；切关卡时会拆除并重建 PrimaryLayout。
  *
  * DefaultPawnClass = AWacomPlayerCharacter
  * PlayerControllerClass = AWacomPlayerController
@@ -42,9 +42,6 @@ public:
 
 	/**
 	 * 存档系统总开关。
-	 *
-	 * 第一阶段停用：见 Docs/Game_Design.md §3.0 / §14。
-	 * 等到 demo 完善（节点/压力/经验等系统稳定）后再恢复。
 	 *
 	 * 关闭后：
 	 *   - Bootstrap 不读盘，直接走新 Run
@@ -82,7 +79,7 @@ public:
 	TSubclassOf<UWacomBattleWidgetBase> BattleHUDClass;
 
 	/**
-	 * 探索 HUD（M1：MVVM 架构）。
+	 * 探索 HUD（ViewModel 驱动）。
 	 * BeginPlay 时若蓝图未配，回退 C++ 父类 UWacomExplorationHUD。
 	 * 蓝图子类（如 BP_GameMode）可在 Details 面板拖 WBP_ExplorationHUD 覆盖。
 	 */
@@ -104,7 +101,7 @@ public:
 
 	/**
 	 * 进入战斗。由 AWacomPlayerController::RequestEnterBattle 转发。
-	 * 传入的 Trigger 在战斗结束后被 Destroy（可为空）。
+	 * 传入的 Trigger 在真胜利后被 Destroy（可为空）；撤离时保留以支持重入。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
 	void EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger = nullptr);

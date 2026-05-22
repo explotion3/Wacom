@@ -36,7 +36,7 @@ struct WACOMBATTLE_API FHandCardSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	bool bIsHandAnchor = false;
 
-	/** 本卡是否满足当前费用合法性（RuntimeCost <= 敌方先机总和），第一阶段只用于 UI 高亮。 */
+	/** 本卡是否满足当前费用合法性（RuntimeCost <= 敌方先机总和）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	bool bIsPlayable = false;
 };
@@ -62,5 +62,5 @@ struct WACOMBATTLE_API FHandQueueSnapshot
 	int32 NormalCardCount = 0;   // 不计左右手锚点的普通卡牌数
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
-	int32 NormalCardLimit = 10;  // 对齐 Hand_Zone_Rules §4
+	int32 NormalCardLimit = 10;  // 普通卡手牌上限，不计左右手锚点
 };

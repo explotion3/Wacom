@@ -14,7 +14,7 @@
 #include "Types/WacomEnums.h"
 
 /**
- * Stage 6：战内 HP 阈值跨越 flag 维护（GDD §10）。
+ * 战内 HP 阈值跨越 flag 维护。
  *
  * 验证 BattleSession 在玩家受伤后正确填 BattleState.bCrossedHighHpThreshold /
  * bCrossedLowHpThreshold，BuildResultPacket 拷贝到 packet 给 Run 层结算。
@@ -156,7 +156,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomBattleHpThresholdFlagPermanentSpec::RunTest(const FString& /*Parameters*/)
 {
 	// 打两张自伤卡：第一张破阈值，第二张治疗也不会清 flag
-	// 第一阶段没有治疗卡接入测试，简化为：自伤一次破阈值 → 后续 EndTurn 多次不影响 flag
+	// 当前没有治疗卡接入测试，简化为：自伤一次破阈值 -> 后续 EndTurn 多次不影响 flag。
 	FWacomBattleFixture Fx;
 	UCardDefinition* Self55 = MakeSelfDamageCard(Fx, 55); // 100 → 45
 	UBattleSession* S = MakeSession(Fx, Self55);

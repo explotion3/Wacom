@@ -22,11 +22,7 @@ struct WACOMDATA_API FEnemyPartSlot
 	TObjectPtr<UEnemyPartDefinition> PartDef = nullptr;
 };
 
-/**
- * 敌人静态定义。
- *
- * 对齐 Data_Schema_Draft §6.1。
- */
+/** 敌人静态定义。 */
 UCLASS(BlueprintType)
 class WACOMDATA_API UEnemyDefinition : public UPrimaryDataAsset
 {

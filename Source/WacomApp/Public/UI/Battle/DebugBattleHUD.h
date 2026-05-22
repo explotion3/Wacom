@@ -9,10 +9,10 @@
 class UCommonTextBlock;
 
 /**
- * P1 占位 HUD。
+ * 调试 HUD。
  *
  * 只做一件事：把 FBattleSnapshot 格式化成多行文字，显示在屏幕上。
- * P2 的正式 UBattleHUD 就绪后可以删除。
+ * 正式战斗 HUD 已就位；本类仅保留作调试/排查用。
  *
  * WBP 子类约定：
  * - SnapshotText : UCommonTextBlock（BindWidget）

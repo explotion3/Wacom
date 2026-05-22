@@ -18,7 +18,7 @@ namespace
 {
 	bool IsStunnedOrFrozen(const FRuntimeEnemyPart& Part)
 	{
-		// Battle_Rules §10：晕厥跳过。第一阶段 Freeze 与 Stunned 共享跳过分支。
+		// 晕厥和冻结都会让本次部位行动跳过效果。
 		return Part.Statuses.HasTag(WacomTags::Status_Stunned)
 		    || Part.Statuses.HasTag(WacomTags::Status_Freeze);
 	}
@@ -29,7 +29,7 @@ namespace
 	 * 约定：
 	 * - Target.Player：作用于玩家
 	 * - Target.Self   ：作用于施加该意图的部位自己（例如自身加护盾）
-	 * - 其他：第一阶段不支持，忽略
+	 * - 其他：当前不支持，忽略
 	 */
 	void FillTargetFromIntent(FEffectContext& Ctx, const FGameplayTag& TargetTag, const FGuid& ActingPartId)
 	{
@@ -67,7 +67,7 @@ namespace
 	}
 
 	/**
-	 * 晕厥消耗。Battle_Rules §10：晕厥处理后仍刷新意图。第一阶段把 Stunned / Freeze 都按
+	 * 晕厥消耗。晕厥处理后仍刷新意图。当前把 Stunned / Freeze 都按
 	 * "每次行动消耗一层"处理，层数归零时移除该状态。
 	 */
 	void ConsumeStunOrFreezeOnAct(FRuntimeEnemyPart& Part)
@@ -112,8 +112,7 @@ namespace
 		const FIntentDefinition& Intent = Seq[Part.CurrentIntentIndex];
 		const bool bSkip = IsStunnedOrFrozen(Part);
 
-		// 事件：EnemyPartActed。Tag 承载 IntentId（转为 FGameplayTag 语义在这里略。
-		// 第一阶段 IntentId 是 FName，用 Tag 字段留空；DisplayName 通过 Snapshot 提供给 UI）。
+		// 事件只记录行动部位和是否跳过；意图展示名由 Snapshot 提供给 UI。
 		{
 			FBattleEvent Ev;
 			Ev.Type            = EBattleEventType::EnemyPartActed;
@@ -155,8 +154,7 @@ namespace
 		// 无论是否跳过，行动结算后都刷新意图。
 		AdvanceToNextIntent(Part);
 
-		// ---- P3.1 中毒结算（Battle_Rules §15）----
-		// "敌方部位每行动一次后"对双方中毒结算一次。
+		// 敌方部位每行动一次后，对双方中毒结算一次。
 		// 放在意图刷新之后：即使此次行动本部位被中毒打死，AdvanceToNextIntent 内部已对
 		// bDestroyed 做 no-op。玩家若被中毒打死，外层 ResolveInitiativeZeroActions /
 		// ResolveEndTurnActions 会在下一轮 PlayerCurrentHp <= 0 检查时 return。
@@ -166,10 +164,10 @@ namespace
 
 void FEnemyPartActionResolver::ResolveInitiativeZeroActions(FBattleState& State, FBattleEventBus& Events)
 {
-	// Battle_Rules §10：收集 CurrentInitiative <= 0 且未破坏的部位，按部位顺序行动。
+	// 收集 CurrentInitiative <= 0 且未破坏的部位，按部位顺序行动。
 	// 按 State.Enemy.Parts 的数组顺序即为部位顺序（Definition 的 Parts 顺序）。
 	//
-	// 注意：一轮行动可能推动其他部位再次归零吗？第一阶段敌人意图不会修改其它部位的先机，
+	// 注意：一轮行动可能推动其他部位再次归零吗？当前敌人意图不会修改其它部位的先机，
 	// 所以一次收集 + 逐个结算即可。若未来有"意图之间影响先机"的效果，再改为循环。
 
 	for (int32 i = 0; i < State.Enemy.Parts.Num(); ++i)
@@ -195,7 +193,7 @@ void FEnemyPartActionResolver::ResolveInitiativeZeroActions(FBattleState& State,
 
 void FEnemyPartActionResolver::ResolveEndTurnActions(FBattleState& State, FBattleEventBus& Events)
 {
-	// Battle_Rules §12：结束阶段所有存活且可行动部位按部位顺序行动，
+	// 结束阶段所有存活且可行动部位按部位顺序行动，
 	// 即使该部位本回合内已因先机归零行动过。
 	for (int32 i = 0; i < State.Enemy.Parts.Num(); ++i)
 	{

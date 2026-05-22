@@ -715,7 +715,7 @@ UWacomDeckCardWidget* UWacomBackpackScreen::CreateCardWidget(const FCardInstance
 	URunSession* Run = GetRunSession();
 	if (Run)
 	{
-		// Stage 4.5.3a：主体按钮只作为展示和拖拽热区，不再绑定点击移动语义。
+		// 主体按钮只作为展示和拖拽热区，不绑定点击移动语义。
 		CardWidget->SetMoveEnabled(true);
 	}
 

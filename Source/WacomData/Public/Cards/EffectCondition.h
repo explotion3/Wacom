@@ -7,9 +7,7 @@
 #include "EffectCondition.generated.h"
 
 /**
- * 效果执行条件。对齐 Data_Schema_Draft §5.3.1（新增）。
- *
- * 附加在 FCardEffect 上。效果执行前 ConditionResolver 评估：
+ * 效果执行条件，附加在 FCardEffect 上。效果执行前 ConditionResolver 评估：
  * - ConditionType 未设置（Invalid） → 条件视为永真，效果正常执行
  * - ConditionType 设置但评估失败     → 跳过该效果
  * - ConditionType 设置且评估成功     → 效果正常执行

@@ -25,7 +25,7 @@ enum class EWacomDropTargetState : uint8
 };
 
 /**
- * 背包 zone 拖拽接收器（Stage 4.5.3a）。
+ * 背包 zone 拖拽接收器。
  *
  * Widget 生命周期声明：
  *   数据源：父 UWacomBackpackScreen 注入的 URunSession，仅作为 drop 写命令出口。

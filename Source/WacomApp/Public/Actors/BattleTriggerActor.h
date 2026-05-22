@@ -13,13 +13,13 @@ class UEnemyDefinition;
 /**
  * 场景中的战斗触发器。
  *
- * 交互模型（Stage 7 之后）：use-key 模型。
+ * 交互模型：use-key 模型。
  *   - Sphere 范围只用来判定"玩家是否在交互范围"
  *   - 进入范围 → 注册到 PlayerController.CandidateInteractables + ExplorationHUD 显示"按 E 战斗"
  *   - 离开范围 → 从 CandidateInteractables 移除
  *   - 玩家按 IA_Interact（E）→ PC 从候选列表挑最近的 interactable → 进战斗
  *
- * 旧模型（overlap 自动触发）已废弃，原因是撤离回探索后玩家仍在 Sphere 内，
+ * overlap 自动触发已废弃，原因是撤离回探索后玩家仍在 Sphere 内，
  * 永远不会有 EndOverlap → BeginOverlap 的循环，无法重入战斗。
  */
 UCLASS(Blueprintable)

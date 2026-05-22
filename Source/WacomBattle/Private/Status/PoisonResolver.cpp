@@ -57,7 +57,7 @@ void FPoisonResolver::ResolvePoisonForAllHosts(FBattleState& State, FBattleEvent
 			Part.bDestroyed       = true;
 			Part.CurrentInitiative = 0;
 
-			// 统一处理：发事件 + 经验 + DestroyedPartIds + 击倒事件队列（GDD §3.3 / §6 / §10.5）
+			// 统一处理：发事件 + 经验 + DestroyedPartIds + 击倒事件队列。
 			State.RecordPartDestroyed(Part, Events);
 		}
 	}

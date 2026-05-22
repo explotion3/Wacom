@@ -7,7 +7,7 @@
 #include "WacomRegenerateContentCommandlet.generated.h"
 
 /**
- * 重建 Wacom 第一阶段全部 DataAsset。
+ * 重建 Wacom 原型内容 DataAsset。
  *
  * 用法（工程根目录下）：
  *   "<UE>/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "<project>/Wacom.uproject" -run=WacomRegenerateContent

@@ -9,8 +9,7 @@
 #include "Cards/CardDefinition.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #11：
- *   左右手牌打出后不进入任何区域（Discard / Exhaust 都不在）。
+ * 左右手牌打出后不进入任何区域（Discard / Exhaust 都不在）。
  *
  * 构造：把左手牌做成 Cost=1、无效果的可打出牌。打出后：
  *   - 不在 Hand

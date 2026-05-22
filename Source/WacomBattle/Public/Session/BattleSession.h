@@ -18,7 +18,7 @@ class UEnemyDefinition;
 class UCardDefinition;
 
 /**
- * 一张参战卡的入战清单条目（Stage 4.5.2 引入）。
+ * 一张参战卡的入战清单条目。
  *
  * URunSession::BuildInitParamsForBattle 在战斗启动前填上备战区原生 instances
  * 与各 SpecialZone 中 bBattleEnabledInSpecialZone == true 的 instances；
@@ -107,7 +107,7 @@ struct WACOMBATTLE_API FKnockdownChoiceView
  * Character 和 Enemy 都是 DataAsset。RandomSeed 为 0 时使用基于时间的 seed。
  * 测试可注入固定 seed 以得到可复现序列。
  *
- * 备战卡组来源（Stage 4.5.2 起，按优先级从高到低）：
+ * 备战卡组来源（按优先级从高到低）：
  *   1) BattleDeckEntries 非空 → 使用 entries（含 CapacityEffectTags，RunSession 路径）
  *   2) BattleDeckOverride 非空 → 旧路径，仅含 Definition（fixture 向后兼容）
  *   3) 都为空 → 回退到 Character->StarterDeck
@@ -132,8 +132,8 @@ struct WACOMBATTLE_API FBattleInitParams
 	/**
 	 * 备战卡组覆盖（旧字段，仅作为 fixture 向后兼容）。空时使用 Character->StarterDeck。
 	 *
-	 * Stage 4.5.2 起 RunSession::BuildInitParamsForBattle 不再写本字段，改写
-	 * BattleDeckEntries（携带 CapacityEffectTags）。BattleSession::Initialize 的选择规则：
+	 * RunSession::BuildInitParamsForBattle 使用 BattleDeckEntries（携带 CapacityEffectTags）。
+	 * BattleSession::Initialize 的选择规则：
 	 *   1) BattleDeckEntries.Num() > 0 → 用 entries（推荐路径）
 	 *   2) 否则 BattleDeckOverride.Num() > 0 → 旧路径（CapacityEffectTags 留空）
 	 *   3) 否则 → 用 Character->StarterDeck
@@ -144,7 +144,7 @@ struct WACOMBATTLE_API FBattleInitParams
 	TArray<TObjectPtr<const UCardDefinition>> BattleDeckOverride;
 
 	/**
-	 * 备战卡组入战清单（Stage 4.5.2 引入）。
+	 * 备战卡组入战清单。
 	 *
 	 * 由 URunSession::BuildInitParamsForBattle 填充，包含：
 	 *   - RunState.BattleDeck 中所有原生 instances（CapacityEffectTags 为空）
@@ -161,7 +161,7 @@ struct WACOMBATTLE_API FBattleInitParams
 	TArray<FBattleDeckEntry> BattleDeckEntries;
 
 	/**
-	 * 战内伤口阈值（GDD §10）。Stage 6 起 BattleSession 维护跨越 flag。
+	 * 战内伤口阈值。BattleSession 在玩家 HP 变更后维护跨越 flag。
 	 * 默认值与 FRunState 一致（0.5 / 0.2）。RunSession::BuildInitParamsForBattle 灌入。
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
@@ -171,7 +171,7 @@ struct WACOMBATTLE_API FBattleInitParams
 	float LowHpThreshold = 0.2f;
 
 	/**
-	 * 预先破坏的部位 ID 列表（GDD §10.5 撤离重入）。
+	 * 预先破坏的部位 ID 列表，用于撤离重入。
 	 *
 	 * Initialize 时按此 list 把对应 RuntimeEnemyPart 设为 bDestroyed=true / HP=0 /
 	 * Initiative=0。**不入 PendingKnockdownEvents 队列**（已经记过账了），
@@ -248,7 +248,6 @@ public:
 	 * 字段填充：
 	 *   - Outcome：取自 BattleState.Outcome
 	 *   - bCrossedHighHpThreshold / bCrossedLowHpThreshold：取自 BattleState 的同名 flag
-	 *     （Stage 1.2 第一版字段一直为 false，等 Stage 6 在玩家受伤路径接入触发逻辑）
 	 *   - bMutualDestruction：取自 BattleState.bMutualDestruction（CheckAndApplyBattleEnd 维护）
 	 */
 	FBattleResultPacket BuildResultPacket() const;

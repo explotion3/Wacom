@@ -15,9 +15,8 @@ void UWacomButtonBase::NativeOnInitialized()
 
 	// 订阅可交互状态变更，把通知转发给蓝图钩子。
 	// CommonButtonBase 没有直接暴露 "interactability changed" 的虚函数，
-	// 但 UButton 的 SetIsEnabled 最终会触发 SynchronizeProperties。这里第一版
-	// 简化：由外部业务代码调 SetIsInteractionEnabled 后，手动通知我们。
-	// 若第一阶段不需要，留空即可——蓝图事件会在代码显式触发时才调用。
+	// 但 UButton 的 SetIsEnabled 最终会触发 SynchronizeProperties。当前由外部业务代码
+	// 调 SetIsInteractionEnabled 后手动通知；蓝图事件会在代码显式触发时才调用。
 }
 
 void UWacomButtonBase::NativeOnClicked()

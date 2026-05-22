@@ -9,7 +9,7 @@
 class UCardDefinition;
 
 /**
- * 单个被破坏部位给予玩家的经验值记账（GDD §3.3）。
+ * 单个被破坏部位给予玩家的经验值记账。
  *
  * 战内 BattleState 在部位破坏路径累积，BattleSession::BuildResultPacket
  * 拷贝到 packet 给 Run 层结算。
@@ -28,10 +28,10 @@ struct WACOMBATTLE_API FKnockdownExpGain
 };
 
 /**
- * 单个击倒事件玩家选择记账（GDD §6 / §3.3）。
+ * 单个击倒事件玩家选择记账。
  *
  * 玩家在击倒事件中选了"援助 / 破坏 / 撤离"。Run 层用此触发对应分支
- * （第一阶段先记日志，节点事件 Stage 9 时接入实际效果）。
+ * Run 层可用这些记录衔接战斗外事件、日志或奖励结算。
  */
 USTRUCT(BlueprintType)
 struct WACOMBATTLE_API FKnockdownChoice
@@ -69,18 +69,16 @@ struct WACOMBATTLE_API FBattleGainedCard
 /**
  * 战斗结束时打包给 Run 层结算的"战后包"。
  *
- * 对齐 Game_Design.md §9.2 战内 → 战外回传表。
- *
  * 当前字段：
  *   - Outcome：胜负判定
  *   - bCrossedHighHpThreshold：战内首次跨过 CurrentHp/MaxHp < HighHpThreshold（默认 0.5）
  *   - bCrossedLowHpThreshold：战内首次跨过 CurrentHp/MaxHp < LowHpThreshold（默认 0.2）
  *   - bMutualDestruction：玩家 HP=0 与敌方全死同时发生
  *   - bWithdrawn：玩家通过击倒事件选择"撤离"结束战斗（Outcome=Victory，但 Run 层不计敌人为已击败）
- *   - KnockdownExpGains：战内被破坏部位的经验奖励列表（Stage 3）
- *   - KnockdownChoices：玩家在击倒事件中的选择列表（Stage 7）
+ *   - KnockdownExpGains：战内被破坏部位的经验奖励列表
+ *   - KnockdownChoices：玩家在击倒事件中的选择列表
  *   - GainedCards：战斗中获得、战后归入 Run 的卡牌列表
- *   - DestroyedPartIds：本场战斗中被破坏的部位 ID 列表（Stage 7，撤离时持久化）
+ *   - DestroyedPartIds：本场战斗中被破坏的部位 ID 列表，撤离时持久化
  *
  * 由 UBattleSession::BuildResultPacket() 构造，
  * 由 URunSession::OnBattleFinished(Packet, EnemyDef) 消费。
@@ -103,13 +101,13 @@ struct WACOMBATTLE_API FBattleResultPacket
 
 	/**
 	 * 同归于尽。Run 层 +10% 伤口。
-	 * Outcome 仍为 Victory（GDD §9.2），不触发战外失败。
+	 * Outcome 仍为 Victory，不触发战外失败。
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	bool bMutualDestruction = false;
 
 	/**
-	 * 撤离（GDD §6 / §10.5）。Outcome=Victory 但 Run 层不计敌人为已击败、
+	 * 撤离。Outcome=Victory 但 Run 层不计敌人为已击败、
 	 * 战斗节点不变"已完成"。下次进入同一战斗节点仍触发战斗，
 	 * 但已破坏的部位（见 DestroyedPartIds）维持破坏态。
 	 */
@@ -117,7 +115,7 @@ struct WACOMBATTLE_API FBattleResultPacket
 	bool bWithdrawn = false;
 
 	/**
-	 * 战内被破坏部位的经验奖励（GDD §3.3）。
+	 * 战内被破坏部位的经验奖励。
 	 *
 	 * 部位破坏时由战内路径（伤害 / 中毒）记账。
 	 * Run 层在 Outcome=Victory（含同归于尽 / 撤离）时结算；Defeat 不结算。
@@ -126,10 +124,10 @@ struct WACOMBATTLE_API FBattleResultPacket
 	TArray<FKnockdownExpGain> KnockdownExpGains;
 
 	/**
-	 * 玩家在击倒事件中的选择列表（GDD §6）。
+	 * 玩家在击倒事件中的选择列表。
 	 *
 	 * 部位被击倒时弹出三选一面板，玩家每次选择记一条。
-	 * Run 层第一阶段记日志；节点事件 Stage 9 接入时按 Choice 分支处理。
+	 * Run 层可按 Choice 分支处理战斗外事件或奖励。
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FKnockdownChoice> KnockdownChoices;
@@ -143,7 +141,7 @@ struct WACOMBATTLE_API FBattleResultPacket
 	TArray<FBattleGainedCard> GainedCards;
 
 	/**
-	 * 本场战斗中所有被破坏的部位 ID（GDD §10.5）。
+	 * 本场战斗中所有被破坏的部位 ID。
 	 *
 	 * 撤离时由 Run 层写入 RunState.BattleProgress，下次进入同一 Trigger
 	 * 时持久化破坏状态。胜利时 Run 层会清理对应 Trigger 的进度。

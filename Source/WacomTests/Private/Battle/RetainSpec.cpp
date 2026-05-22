@@ -12,7 +12,7 @@
 #include "Types/WacomEnums.h"
 
 /**
- * P3.2 保留关键字 + 双手区保留。对齐 Hand_Zone_Rules §7 + Battle_Rules §12 + Phase2_P3_Plan §4。
+ * 保留关键字 + 双手区保留回归测试。
  *
  * 四条测试覆盖：
  *   - Wacom.Battle.Retain.NormalCardRetainKeeps           带 Retain 的普通卡回合结束留在手牌

@@ -141,13 +141,13 @@ namespace
 		Ev.Amount          = Damage;
 		Ctx.Events->Emit(Ev);
 
-		// 部位 HP 归零：立即破坏（Battle_Rules §8 第 6 步、§13）。
+		// 部位 HP 归零：立即破坏。
 		if (Part->CurrentHp <= 0 && !Part->bDestroyed)
 		{
 			Part->bDestroyed        = true;
 			Part->CurrentInitiative = 0;
 
-			// 统一处理：发事件 + 经验 + DestroyedPartIds + 击倒事件队列（GDD §3.3 / §6 / §10.5）
+			// 统一处理：发事件 + 经验 + DestroyedPartIds + 击倒事件队列。
 			// 传当前卡实例 ID：让击倒选项排除"正在被打出的左/右手 anchor"
 			const FGuid InflictedByCardId =
 				(Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
@@ -155,11 +155,11 @@ namespace
 		}
 	}
 
-	// ================ OnTwilightTriggered 占位 ================
+	// ================ OnTwilightTriggered ================
 
 	/**
-	 * P3.5 占位：暮气施加成功后，对所有拥有 OnTwilightTriggered 被动的卡发事件。
-	 * 不真正改中毒层数（EffectMagnitudeModifiers 未引入）。
+	 * 暮气施加成功后，对所有拥有 OnTwilightTriggered 被动的卡发事件。
+	 * 具体被动效果由后续调度/效果配置承接。
 	 */
 	void DispatchOnTwilightTriggered(FEffectContext& Ctx)
 	{
@@ -421,15 +421,7 @@ bool HandleDiscard(FEffectContext& Ctx)
 
 bool HandleExhaustSelf(FEffectContext& Ctx)
 {
-	// 标记本卡打出后进消耗区。
-	// 实际的"去向"由 PlayCardResolver 在卡牌去向阶段读取。
-	// 这里给卡加一个临时关键词标记，PlayCardResolver 检查它。
-	// 更简单的做法：直接在 EffectContext 里设一个 flag。
-	// 但 EffectContext 生命周期只在一次 Execute 内。
-	// 最稳的做法：给 FRuntimeCardInstance 加一个 bExhaustOnPlay 标记。
-	// 第一版简化：直接在这里把卡从手牌移到消耗区。
-	// 但这会在效果执行中途就移走卡——可能影响后续效果。
-	// 折中：只设标记，PlayCardResolver 的卡牌去向阶段检查。
+	// 只打临时关键字；实际去向由 PlayCardResolver 的卡牌去向阶段统一处理。
 	if (Ctx.SourceKind != EEffectSourceKind::Card) { return false; }
 	FRuntimeCardInstance* Card = FindCardInstance(*Ctx.State, Ctx.SourceInstanceId);
 	if (!Card) { return false; }

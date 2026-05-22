@@ -13,10 +13,10 @@ struct FInputActionValue;
 /**
  * Wacom 第一人称玩家 Pawn。
  *
- * 职责（R2）：
+ * 职责：
  *   - 第一人称摄像机（跟随 Controller 旋转）
  *   - WASD 移动 / 鼠标视角（通过 IA_Move / IA_Look）
- *   - 战斗时保留 Possess 状态，只禁用移动输入（R4 接入 SetMovementInputEnabled）
+ *   - 战斗时保留 Possess 状态，只禁用移动输入
  *
  * 输入资产默认通过 ConstructorHelpers 挂载，Blueprint 可重写。
  */
@@ -34,7 +34,7 @@ public:
 
 	/**
 	 * 禁用 / 启用探索期的移动 + 视角输入。
-	 * R4：战斗开始时 SetExplorationInputEnabled(false)，结束时恢复。
+	 * 战斗开始时 SetExplorationInputEnabled(false)，结束时恢复。
 	 * 不 UnPossess，也不移除 IMC，保持摄像机静止即可。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Input")

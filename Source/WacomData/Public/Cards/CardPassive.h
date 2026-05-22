@@ -9,7 +9,7 @@
 #include "CardPassive.generated.h"
 
 /**
- * 卡牌被动触发。对齐 Data_Schema_Draft §5.5。
+ * 卡牌被动触发。
  *
  * 字段职责：
  * - Trigger           什么时机触发（Passive.Trigger.*）
@@ -18,10 +18,10 @@
  * - TriggerThreshold  计数类 trigger 的阈值（仅 OnCompanionCount 使用：
  *                     达到此值后才触发、触发后清零）。其他 trigger 不读此字段。
  *
- * 第一阶段支持：
+ * 当前支持：
  * - Passive.Trigger.AfterPlayed         烁光蝶"打出后腾挪到随机区域"
  * - Passive.Trigger.OnCompanionCount    拂晓飞蛾"每打三张伙伴回手"
- * - Passive.Trigger.OnTwilightTriggered 暮蛉（P3.5 占位）
+ * - Passive.Trigger.OnTwilightTriggered 暮蛉暮气触发
  */
 USTRUCT(BlueprintType)
 struct WACOMDATA_API FCardPassive

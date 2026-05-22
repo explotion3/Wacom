@@ -113,7 +113,7 @@ bool FBattleRules::CheckAndApplyBattleEnd(FBattleState& State, FBattleEventBus& 
 		return false;
 	}
 
-	// GDD §6 击倒事件：部位破坏时弹三选一面板，处理完才能判终局。
+	// 部位破坏时弹三选一面板，处理完才能判终局。
 	// 如果还有未处理的击倒事件，**不**设 BattleEnd——等 KnockdownChoiceResolver
 	// 处理完队列后会再次调用本函数。
 	// 玩家死亡（bPlayerDead）路径例外：失败优先级高于击倒事件，立刻判 Defeat
@@ -123,7 +123,7 @@ bool FBattleRules::CheckAndApplyBattleEnd(FBattleState& State, FBattleEventBus& 
 		return false;
 	}
 
-	// GDD §9.2 / Game_Design.md §6 部位击倒：
+	// 部位击倒终局判定：
 	//   敌方全死 + 玩家 HP=0 = 同归于尽：判 Victory，置 bMutualDestruction，战外 +10% 伤口
 	//   敌方全死 + 玩家 HP>0 = 普通胜利：判 Victory
 	//   敌方未全死 + 玩家 HP=0 = 失败：判 Defeat

@@ -9,8 +9,7 @@
 #include "Cards/CardDefinition.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #10：
- *   HP 归零部位立刻失去意图和先机，不参与后续先机扣减。
+ * HP 归零部位立刻失去意图和先机，不参与后续先机扣减。
  *
  * 构造：三部位敌人，Head HP=5，其余 50；卡 Damage=10。打尾巴（非 Head）不会打破。
  *   然后打 Head，Head HP 归零即破坏，其 CurrentInitiative 应立即变 0，
@@ -59,7 +58,7 @@ bool FWacomBattlePartDestroyedSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("BodyInit == 6"),     FWacomBattleFixture::FindPartInitiative(Snap, 1), 6);
 	TestEqual(TEXT("TailInit == 6"),     FWacomBattleFixture::FindPartInitiative(Snap, 2), 6);
 
-	// Stage 7：部位破坏后弹击倒事件，需要玩家选一个非撤离选项才能继续战斗。
+	// 部位破坏后弹击倒事件，需要玩家选一个非撤离选项才能继续战斗。
 	// 测试场景里左右手都在手牌（LH/RH 是 NoopCard 且未打出），选援助即可。
 	TestTrue(TEXT("Phase pending knockdown"),
 		S->GetPhase() == EBattlePhase::PendingKnockdownChoice);

@@ -8,15 +8,13 @@ struct FBattleState;
 struct FBattleEventBus;
 
 /**
- * 敌方部位行动子流程。对齐 Battle_Rules.md §10。
+ * 敌方部位行动子流程。
  *
  * 触发来源：
  * - 等待使先机 <= 0
  * - 打牌推进先机后先机 <= 0
  * - 结束阶段（所有存活可行动部位）
  * - 强制行动（卡牌/状态/事件）
- *
- * S5 只有两个 stub 接口，S6 填实现。
  */
 class FEnemyPartActionResolver
 {
@@ -24,13 +22,11 @@ public:
 	/**
 	 * 部位先机归零触发的行动。
 	 * 对 State.Enemy.Parts 中 CurrentInitiative <= 0 且未破坏的部位逐个结算。
-	 * S6 实现。S5 暂时空实现，保持编译通过。
 	 */
 	static void ResolveInitiativeZeroActions(FBattleState& State, FBattleEventBus& Events);
 
 	/**
 	 * 结束阶段触发的行动：所有存活且可行动部位按部位顺序行动。
-	 * S6 实现。S5 暂时空实现。
 	 */
 	static void ResolveEndTurnActions(FBattleState& State, FBattleEventBus& Events);
 };

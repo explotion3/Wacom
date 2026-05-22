@@ -26,7 +26,7 @@ struct FBattleInitParams;
  *   - 构造 FBattleInitParams 供 GameMode 打开一场战斗
  *   - 接收战斗结束通知，更新 Run 状态
  *   - 战外失败综合判定（压力满 / 手指掉光 / Defeat）
- *   - 存档 / 读档：FRunState ↔ UWacomSaveGame ↔ 磁盘（Stage 0.1 暂停）
+ *   - 存档 / 读档：FRunState <-> UWacomSaveGame <-> 磁盘
  *
  * AWacomPlayerController 在 BeginPlay 时创建并持有 URunSession。
  */
@@ -37,7 +37,7 @@ class WACOMRUN_API URunSession : public UObject
 
 public:
 	/**
-	 * RunState 任何字段被修改后广播一次（GDD §11 / §3 / §8 等所有写路径）。
+	 * RunState 任何字段被修改后广播一次。
 	 *
 	 * 设计：
 	 *   - **原生委托**（不是 Dynamic），UI 用 AddUObject + RemoveAll 注册/反注册
@@ -86,7 +86,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	bool IsRunActive() const { return RunState.bRunActive; }
 
-	// ---- §3.1 / §3.4：手指 ----
+	// ---- 手指 ----
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|HP")
 	int32 GetFingerCount() const { return RunState.FingerCount; }
@@ -104,7 +104,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|HP")
 	void RemoveFinger(int32 Count = 1);
 
-	// ---- §3.2：压力 ----
+	// ---- 压力 ----
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Pressure")
 	int32 GetPressureValue(EWacomPressureType Type) const;
@@ -143,14 +143,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Pressure")
 	bool IsPressureCapReached() const;
 
-	// ---- §3.2：战外行为触发器 ----
+	// ---- 战外行为触发器 ----
 
 	/**
 	 * 战外右手破坏行为：节点事件分支选"右手破坏"时调用。
 	 * 伤口 +1%。
-	 *
-	 * 注：左手援助 / 右手破坏 是 GDD §1 / §6 / §9.2 的思维惯性。
-	 * 真正的事件分支 UI 由 Stage 9 节点事件接入。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pressure")
 	void OnRightHandDestructiveAction();
@@ -158,10 +155,8 @@ public:
 	/**
 	 * 永久销毁一张伙伴卡：嗜血 +1%。
 	 *
-	 * "永久销毁" = 消耗 / 战败丢弃 / 商店出售（GDD §3.2 / §11.4）。
+	 * "永久销毁" = 消耗 / 战败丢弃 / 商店出售。
 	 * 战斗内"被洗入消耗区"不算永久销毁，不触发本 API。
-	 *
-	 * 真正的卡牌池移除路径由 Stage 4 背包 UI 接入。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pressure")
 	void OnCompanionCardPermanentlyDestroyed();
@@ -169,13 +164,11 @@ public:
 	/**
 	 * 完成一次偷窃行为：劣迹累加。
 	 *
-	 * 公式（GDD §3.2，b 增量语义）：
+	 * 公式：
 	 *   第 n 次偷窃完成时，劣迹 += n*(n+1)/2 + 1
 	 *   n=1 → +2%；n=2 → +4%；n=3 → +7%；n=4 → +11%
 	 *
 	 * 内部维护 `TheftCount`，每调一次 ++。
-	 *
-	 * 真正的事件分支 UI 由 Stage 9 节点事件接入。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pressure")
 	void OnTheftCommitted();
@@ -183,7 +176,7 @@ public:
 	/**
 	 * 重算负重压力（幂等）。
 	 *
-	 * 公式（GDD §11.4）：
+	 * 公式：
 	 *   超出"通量内容容量"的卡数 n → Burden = n*(n+1)/2
 	 *   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
 	 *
@@ -196,7 +189,7 @@ public:
 	// ---- 失败综合判定 ----
 
 	/**
-	 * Run 是否失败（GDD §3.1）。
+	 * Run 是否失败。
 	 *
 	 * 任一为 true 即败：
 	 *   - 战内 Defeat（bRunActive == false）
@@ -206,7 +199,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	bool IsRunFailed() const;
 
-	// ---- §3.3：经验值与技能 ----
+	// ---- 经验值与技能 ----
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Skill")
 	int32 GetExperienceCurrent() const { return RunState.ExperienceCurrent; }
@@ -220,13 +213,13 @@ public:
 	/**
 	 * 增加经验值。
 	 *   - Amount 可为负（用于事件扣经验等）
-	 *   - 累计 ≥ Capacity 时入账：AcquiredSkills 计数 +1，ExperienceCurrent -= Capacity（可能多次入账）
-	 *   - 第一阶段技能内容占位：用一个固定 SkillSlot.Placeholder tag，不挂效果
+	 *   - 累计 >= Capacity 时入账：AcquiredSkills 计数 +1，ExperienceCurrent -= Capacity（可能多次入账）
+	 *   - 当前技能内容占位：用一个固定 SkillSlot.Placeholder tag，不挂效果
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Skill")
 	void AddExperience(int32 Amount);
 
-	// ---- §8：时段 / 节点 ----
+	// ---- 时段 / 节点 ----
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Time")
 	ETimePhase GetCurrentTimePhase() const { return RunState.CurrentTimePhase; }
@@ -250,28 +243,28 @@ public:
 	 * 推进到下一时段。
 	 * 一般不该手动调用，由 ConsumeNode 自动触发；留 public 调试用。
 	 *
-	 * 推进规则（Stage 1.1 第一版）：
+	 * 当前推进规则：
 	 *   Morning → Day → Dusk → Night → Sunrise → Morning（次日，CurrentDayNumber++）
 	 *
-	 * 露营特殊推进（Night → Morning 跳过 Sunrise）等 Stage 8 节点事件接入时再加。
+	 * 露营特殊推进（Night → Morning 跳过 Sunrise）等特殊节点效果后续单独接入。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Time")
 	void AdvanceToNextPhase();
 
-	// ---- §11：背包与备战卡组 ----
+	// ---- 背包与备战卡组 ----
 
 	/**
-	 * 通量存放区当前容量（GDD §11.4）。
+	 * 通量存放区当前容量。
 	 *
 	 * 公式：Σ(玩家拥有的所有 A 类容器卡的 Capacity)
 	 *      = 遍历当前 RunState 全部物理持有区，对所有 IsTypeAContainerCard 的卡求和
-	 * B 类容器卡（CapacityEffect 非空）不计入此公式，独立开辟特殊存放区。
+	 * B 类容器卡（CapacityEffect 非空）不计入此公式，但其 Capacity 仍计入备战容量。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	int32 GetFluxCapacity() const;
 
 	/**
-	 * 备战区当前容量（GDD §11.4）。
+	 * 备战区当前容量。
 	 *
 	 * 公式：Σ(玩家拥有的所有容器卡 Capacity)
 	 *      = 遍历当前 RunState 全部物理持有区，对所有 IsContainerCard 的卡求和
@@ -294,34 +287,34 @@ public:
 	static bool IsContainerCard(const UCardDefinition* Card);
 
 	/**
-	 * A 类容器卡：容器卡且 CapacityEffect 为空（GDD §11.2）。
+	 * A 类容器卡：容器卡且 CapacityEffect 为空。
 	 * A 类容器卡的 Capacity 计入 GetFluxCapacity。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static bool IsTypeAContainerCard(const UCardDefinition* Card);
 
 	/**
-	 * B 类容器卡：容器卡且 CapacityEffect 有效 tag（GDD §11.2）。
-	 * B 类容器卡自己开辟特殊存放区（容量 = Capacity - 1），不进通量公式。
+	 * B 类容器卡：容器卡且 CapacityEffect 有效 tag。
+	 * B 类容器卡自己开辟特殊存放区，不进通量公式。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static bool IsTypeBContainerCard(const UCardDefinition* Card);
 
 	/**
-	 * B 类容器卡的特殊存放区容量（GDD §11.4）。
+	 * B 类容器卡的特殊存放区容量。
 	 * 公式：Capacity - 1。Capacity = 0 时返回 0。
 	 *
-	 * 第一阶段调用方需要自己保证传入的是 B 类容器卡，否则结果无意义。
+	 * 调用方需要自己保证传入的是 B 类容器卡，否则结果无意义。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static int32 GetSpecialZoneCapacity(const UCardDefinition* BCard);
 
 	/**
-	 * 枚举玩家拥有的所有 B 主卡 instance 的 InstanceId（Stage 4.5.1 任务 10.2 / R3.5 / R3.6）。
+	 * 枚举玩家拥有的所有 B 主卡 instance 的 InstanceId。
 	 *
 	 * 行为契约：
 	 *   - 严格按 `RunState.SpecialZones` 数组下标升序输出每条 entry 的 `OwnerInstanceId`；
-	 *   - 输出去重（理论上 R2.2 不变量保证 SpecialZones 内 OwnerInstanceId 已唯一，
+	 *   - 输出去重（不变量保证 SpecialZones 内 OwnerInstanceId 应唯一，
 	 *     这里仍做一次防御性 dedupe）；
 	 *   - 不含悬空 InstanceId：若某 OwnerInstanceId 在 Backpack ∪ BattleDeck 中找不到对应
 	 *     instance，则跳过该 entry（防御性，正常状态下不应触发）；
@@ -332,24 +325,24 @@ public:
 	void CollectTypeBContainers(TArray<FGuid>& OutOwnerInstanceIds) const;
 
 	/**
-	 * 按 OwnerInstanceId 查询某 B 主卡的特殊存放区当前容量（Stage 4.5.1 任务 7.3 / R2.5）。
+	 * 按 OwnerInstanceId 查询某 B 主卡的特殊存放区当前容量。
 	 *
 	 * 公式：`FMath::Max(0, OwnerDefinition->Physique.Capacity - 1)`
 	 *
 	 * 与已有的 `static GetSpecialZoneCapacity(BCard)` 数值一致；区别在于本函数按
 	 * **OwnerInstanceId 关键字**查询当前 RunState 中实际存在的 SpecialZone：
 	 *   - `OwnerInstanceId` 在 `RunState.SpecialZones` 中找不到对应 entry → 返回 0；
-	 *   - 找到 entry 但 owner instance 在所有 zone 中都找不到（理论上违反 R2.2 不变量，
+	 *   - 找到 entry 但 owner instance 在所有 zone 中都找不到（理论上违反 SpecialZone 不变量，
 	 *     防御性返回）→ 返回 0；
 	 *   - 找到 owner instance 但 `Definition == nullptr` → 走 `FMath::Max(0, 0 - 1)` = 0；
 	 *   - 正常路径 → 返回 `FMath::Max(0, OwnerDefinition->Physique.Capacity - 1)`，
-	 *     在 `Capacity <= 1` 时钳到 0（R2.5 末段约束）。
+	 *     在 `Capacity <= 1` 时钳到 0。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	int32 GetSpecialZoneCapacityFor(FGuid OwnerInstanceId) const;
 
 	/**
-	 * 按 OwnerInstanceId 查询某 B 主卡的特殊存放区（Stage 4.5.1 任务 7.4 / R2.6）。
+	 * 按 OwnerInstanceId 查询某 B 主卡的特殊存放区。
 	 *
 	 * 行为：
 	 *   - 命中（`RunState.SpecialZones` 中存在 `OwnerInstanceId == InOwnerInstanceId` 的条目）
@@ -363,13 +356,11 @@ public:
 
 	/**
 	 * 切换 SpecialZone 中某张 instance 的 `bBattleEnabledInSpecialZone` 参战标记
-	 * （Stage 4.5.1 任务 8.3 / R2.10 / R8.1 / R8.5）。
-	 *
 	 * 行为契约（决策 Q-D：仅切 flag 不移卡）：
 	 *   - InstanceId 当前位于某 `FSpecialZone.Cards`（任意 SpecialZone）：
 	 *       a) 把该 instance 的 `bBattleEnabledInSpecialZone` 设为 bEnabled；
-	 *       b) 不修改该 instance 的物理归属（仍由原 `FSpecialZone.Cards` 数组在原下标位置持有，R8.1）；
-	 *       c) 尾部广播一次 `OnRunStateChangedNative`（design §4 广播规则表）；
+	 *       b) 不修改该 instance 的物理归属（仍由原 `FSpecialZone.Cards` 数组在原下标位置持有）；
+	 *       c) 尾部广播一次 `OnRunStateChangedNative`；
 	 *       d) 返回 true。
 	 *   - InstanceId 不在任何 SpecialZone 中（含 Backpack / BattleDeck / BurdenZone 命中、
 	 *     `FGuid()`、所有 zone 都未命中）：
@@ -377,8 +368,7 @@ public:
 	 *       b) 不广播；
 	 *       c) 返回 false。
 	 *
-	 * 注：bEnabled 与当前 flag 值相等时仍广播一次（R2.10 严格契约：成功路径无条件广播；
-	 * 调用方/订阅方刷新逻辑应保证幂等，与现有 `OnRunStateChangedNative` 粗粒度语义一致）。
+	 * 注：bEnabled 与当前 flag 值相等时仍广播一次；订阅方刷新逻辑应保证幂等。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool SetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnabled);
@@ -387,7 +377,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static bool IsBagProviderCard(const UCardDefinition* Card);
 
-	/** 卡是否带 DeleteProvider 关键词（GDD §11.7）。 */
+	/** 卡是否带 DeleteProvider 关键词。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static bool IsDeleteProviderCard(const UCardDefinition* Card);
 
@@ -400,10 +390,9 @@ public:
 	bool IsBackpackUiAvailable() const;
 
 	/**
-	 * 删牌功能是否可用（GDD §11.7）：玩家持有区至少存在一张 DeleteProvider 卡。
+	 * 删牌功能是否可用：玩家持有区至少存在一张 DeleteProvider 卡。
 	 *
-	 * 第一阶段 UI 始终显示删牌区不读此判定，DeleteCardForGold 也不强制校验。
-	 * 接口先就位，等 GDD 定下"删牌能力切换为按需 / 始终"再接入调用点。
+	 * 当前 UI 始终显示删牌区；本接口保留给后续按能力开关删牌入口。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	bool IsDeleteFunctionAvailable() const;
@@ -418,15 +407,12 @@ public:
 	bool IsCardInBattleDeck(const UCardDefinition* Card) const;
 
 	/**
-	 * 全表查找入口（Stage 4.5.0 任务 3.1 / R1.8）。
+	 * 全表查找入口。
 	 *
 	 * 给定 InstanceId 即可定位其当前所属 zone：
 	 *   - 命中 → 写入三个 out 参数（OutInstance / OutZone / OutZoneOwnerInstanceId）后返回 true
 	 *   - 未命中（含 InstanceId 为 `FGuid()`）→ 返回 false 且**不修改**三个 out 参数，
-	 *     保持调用方传入的初值不被覆写（R1.8 严格契约）
-	 *
-	 * Stage 4.5.1 任务 8.1：遍历范围扩展到全部四区
-	 *   `Backpack` / `BattleDeck` / `BurdenZone` / `⋃SpecialZones.Cards`。
+	 *     保持调用方传入的初值不被覆写。
 	 *
 	 * 注：来自 Backpack / BattleDeck / BurdenZone 的命中，`OutZoneOwnerInstanceId` 写为 `FGuid()`；
 	 * 仅 SpecialZone 命中时才写主卡 InstanceId。
@@ -434,24 +420,24 @@ public:
 	bool FindInstance(FGuid InstanceId, FCardInstance& OutInstance, EZoneKind& OutZone, FGuid& OutZoneOwnerInstanceId) const;
 
 	/**
-	 * 通用迁移入口（Stage 4.5.0 任务 3.2 / R1.6 / R1.7；Stage 4.5.1 任务 8.1 接入 SpecialZone / BurdenZone）。
+	 * 通用迁移入口。
 	 *
-	 * 校验表（design §5）：
+	 * 校验表：
 	 *   - ToZone == Backpack            → 普通卡 / A 类容器卡需要通量内容区未满；B 主卡不占通量内容格
 	 *   - ToZone == BattleDeck          → BattleDeck.Num() < GetBattleDeckCapacity()
 	 *                                       （FromZone 已是 BattleDeck 的 in-place 移动不计入 capacity 检查）
-	 *   - ToZone == SpecialZone         → R2.7 a-d：
+	 *   - ToZone == SpecialZone         →
 	 *                                       a) ToZoneOwnerInstanceId 在 SpecialZones 中存在
 	 *                                       b) InstanceId != ToZoneOwnerInstanceId（B 主卡不能放进自己）
 	 *                                       c) 目标 SpecialZone.Cards.Num() < GetSpecialZoneCapacityFor(ToZoneOwnerInstanceId)
 	 *                                          （in-place 同 SpecialZone 不计入 capacity）
 	 *                                       d) InstanceId 在所有 zone 中存在 — 由 FindInstance 校验
 	 *   - ToZone == BurdenZone          → 无额外校验（API 允许；UI 不主动暴露此入口）
-	 *   - InstanceId 在所有 zone 中均不存在 → 拒绝（R1.7）
+	 *   - InstanceId 在所有 zone 中均不存在 → 拒绝
 	 *
 	 * 行为：
-	 *   - 校验失败 → return false 且 RunState 任何字段不修改、不广播 OnRunStateChangedNative（R1.6 / R5.5）
-	 *   - 校验通过 → 从源 zone 删除该 instance、追加到目标 zone 末尾、尾部统一广播一次 NotifyRunStateChanged（R2.16）
+	 *   - 校验失败 → return false 且 RunState 任何字段不修改、不广播 OnRunStateChangedNative
+	 *   - 校验通过 → 从源 zone 删除该 instance、追加到目标 zone 末尾、尾部统一广播一次 NotifyRunStateChanged
 	 *
 	 * 注：成功移动到 BurdenZone 以外的 zone 后会调用 RecomputeBurdenInternal，
 	 *      确保 A 类容器作为通量内容占格后的超容状态被及时整理。
@@ -485,7 +471,7 @@ public:
 	/**
 	 * 永久销毁一张卡（删牌区 / 商店出售 / 战败丢弃 / 节点事件）。
 	 *
-	 * 行为（GDD §11.8）：
+	 * 行为：
 	 *   - 若 Card 是 Intrinsic → 拒绝
 	 *   - 若 Card 是最后一张容量来源卡（销毁后玩家无容器卡 Capacity）→ 拒绝
 	 *   - 从 Backpack 移除一张
@@ -499,9 +485,9 @@ public:
 	bool DestroyCardFromBackpack(UCardDefinition* Card);
 
 	/**
-	 * 删牌区入口：销毁卡 + 按稀有度发金币（GDD §11.7）。
+	 * 删牌区入口：销毁卡 + 按稀有度发金币。
 	 *
-	 * 第一阶段占位数值：白=1 / 蓝=2。固有 / 最后容量来源卡拒绝。
+	 * 当前原型数值：白=1 / 蓝=2。固有 / 最后容量来源卡拒绝。
 	 *
 	 * 返回 true=成功销毁并发金币；false=拒绝（同 DestroyCardFromBackpack）。
 	 */
@@ -529,13 +515,13 @@ public:
 	 * 从备战卡组移除（不删除 Backpack 中的卡）。
 	 *
 	 * 拒绝条件：
-	 *   - Card 是 Intrinsic（GDD §3.5 / §11.8）
+	 *   - Card 是 Intrinsic
 	 *   - Card 不在 BattleDeck 中
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool RemoveCardFromBattleDeck(UCardDefinition* Card);
 
-	// ---- §11.7 / 经济：金币 ----
+	// ---- 经济：金币 ----
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Economy")
 	int32 GetGold() const { return RunState.Gold; }
@@ -606,7 +592,7 @@ public:
 	 * 开始一次轻量事件访问。
 	 *
 	 * PersistentId 使用场景事件 Actor 的持久化 ID；EventDefinition 只提供静态事件图。
-	 * 已完成的 PersistentId 第一版拒绝再次打开。
+	 * 已完成的 PersistentId 当前拒绝再次打开。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
 	bool BeginRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition);
@@ -656,7 +642,7 @@ public:
 	 *   - Params.BattleDeckOverride = RunState.BattleDeck
 	 *   - Params.HighHpThreshold / LowHpThreshold = RunState 字段
 	 *   - **Params.PreDestroyedPartIds**：若 TriggerPersistentId 非空且 RunState.BattleProgress
-	 *     中有该 Trigger 的进度，灌入已破坏的部位列表（GDD §10.5 撤离重入）。
+	 *     中有该 Trigger 的进度，灌入已破坏的部位列表。
 	 *
 	 * @param EnemyDef               敌人定义
 	 * @param TriggerPersistentId    触发战斗的 Trigger 的持久化 ID。NAME_None 表示没有持久化进度（如纯测试）
@@ -670,7 +656,7 @@ public:
 	/**
 	 * 一场战斗结束时由 GameMode::ExitBattle 调用。
 	 *
-	 * 处理（GDD §3.2 / §9.2 战内 → 战外回传表）：
+	 * 战斗结果回传处理：
 	 *   - Outcome 处理：
 	 *       Victory：把 EnemyDef 加入 DefeatedEnemies
 	 *       Defeat ：标记 bRunActive = false
@@ -708,7 +694,7 @@ public:
 	/** 场景：记录玩家当前 Transform（用于下次启动恢复）。 */
 	void SetPlayerTransform(const FTransform& InTransform);
 
-	// ---- 存档 / 读档（Stage 0.1 暂停，但底层契约保留）----
+	// ---- 存档 / 读档 ----
 
 	/**
 	 * 写入指定 slot（文件位置 `Saved/SaveGames/{SlotName}.sav`）。
@@ -739,7 +725,7 @@ public:
 private:
 	/**
 	 * 当 ExperienceCurrent ≥ ExperienceCapacity 时入账技能（可多次）。
-	 * 第一版用占位 tag `SkillSlot.Placeholder`，不挂效果。
+	 * 当前用占位 tag `SkillSlot.Placeholder`，不挂效果。
 	 */
 	void TryConsumeExperienceForSkills();
 
@@ -749,7 +735,7 @@ private:
 	void ResetRemainingNodeForPhase();
 
 	/**
-	 * 时段进入时的副作用（GDD §3.2 / §8）。
+	 * 时段进入时的副作用。
 	 * 由 AdvanceToNextPhase 调用。
 	 *
 	 * 当前规则：
@@ -757,7 +743,7 @@ private:
 	 *   - 进入 Dusk：饥饿 +5%
 	 *   - 进入 Sunrise：疲劳 +10%
 	 *
-	 * 露营特殊推进（Night → Morning 跳过 Sunrise）等 Stage 8 接入时
+	 * 露营特殊推进（Night → Morning 跳过 Sunrise）等后续路径
 	 * 在那个路径自行处理"完成一天"压力，不走本函数。
 	 */
 	void OnPhaseEntered(ETimePhase NewPhase, ETimePhase PrevPhase);
@@ -774,13 +760,13 @@ private:
 	void NotifyRunStateChanged();
 
 	/**
-	 * 私有路径：RecomputeBurden 的"不广播"版本（Stage 4.5.1 任务 9.4 / R2.16）。
+	 * 私有路径：RecomputeBurden 的"不广播"版本。
 	 *
 	 * 行为与 public `RecomputeBurden` 完全一致（步骤 ① 超容溢出 + ② 回填 + ③ 写 Burden 压力），
 	 * 区别仅在 ③ 直接写 `RunState.Pressure.Set(EWacomPressureType::Burden, ...)`（绕过
 	 * public `SetPressure` 内部的 NotifyRunStateChanged 调用），且本函数不在末尾广播。
 	 *
-	 * 调用约定（R2.16 / design §4 广播规则表）：
+	 * 调用约定：
 	 *   - 由其他 public 入口（Initialize / AddCardToBackpack / DestroyCardFromBackpack /
 	 *     AddCardToBattleDeck / RemoveCardFromBattleDeck）内部链式调用，避免该 public 入口
 	 *     在尾部 NotifyRunStateChanged 之外多发一次广播。
@@ -793,13 +779,13 @@ private:
 	bool AcquireCardToRunInternal(UCardDefinition* Card);
 
 	/**
-	 * 私有路径：DestroyCardFromBackpack 的"不广播"版本（Stage 4.5.1 任务 9.4 / R2.16）。
+	 * 私有路径：DestroyCardFromBackpack 的"不广播"版本。
 	 *
 	 * 行为与 public `DestroyCardFromBackpack` 完全一致（同样的 Intrinsic / 最后容量来源卡
 	 * 拒绝、Companion 嗜血累加、B 主卡 SpecialZone 退回流、负重重算），区别仅在尾部
 	 * 不发 NotifyRunStateChanged。
 	 *
-	 * 调用约定（R2.16 / design §4 广播规则表）：
+	 * 调用约定：
 	 *   - 由 DeleteCardForGold 在 Internal 流程中调用，避免该 public 入口在尾部
 	 *     NotifyRunStateChanged 之外多发一次广播（Destroy + AddGold + tail Notify
 	 *     原本会发三次广播）。
@@ -809,7 +795,7 @@ private:
 
 	/**
 	 * 幂等保证：B 主卡 instance 进入 Backpack/BattleDeck 时 `RunState.SpecialZones`
-	 * 中存在一条 `OwnerInstanceId == Inst.InstanceId` 的 entry（Stage 4.5.1 任务 7.1 / R2.3）。
+	 * 中存在一条 `OwnerInstanceId == Inst.InstanceId` 的 entry。
 	 *
 	 * 行为：
 	 *   - `Inst.Definition` 不是 B 主卡（`IsTypeBContainerCard == false`） → 直接返回，不修改 RunState；
@@ -817,7 +803,7 @@ private:
 	 *   - 已存在同 OwnerInstanceId 的 entry → 直接返回（幂等）；
 	 *   - 否则在 `RunState.SpecialZones` 末尾追加 `FSpecialZone{ OwnerInstanceId = Inst.InstanceId, Cards = {} }`。
 	 *
-	 * 调用点（design.md §Components and Interfaces #4 / #5 + R5.1 跟随依赖）：
+	 * 调用点：
 	 *   - `Initialize` 把 StarterDeck 灌入两区时；
 	 *   - `AddCardToBackpack` 新加 B 主卡时；
 	 *   - `MoveInstance` 把 B 主卡 instance 跨入 Backpack/BattleDeck 成功后（防御性保底，

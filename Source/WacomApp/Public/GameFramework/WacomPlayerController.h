@@ -89,9 +89,8 @@ public:
 	/**
 	 * 交互键（默认 E）。探索期在世界交互对象范围内按此键触发最近对象。
 	 *
-	 * IA 资产由用户在 Editor 中手动建（IA_Interact.uasset）+ 加到 IMC_Exploration 绑定 E 键。
-	 * 建好后 BeginPlay/SetupInputComponent 的 LazyLoadIA 会自动加载。
-	 * 资产未建时控制台命令 `Wacom.Interact` 作为兜底入口。
+	 * 默认资产由 BeginPlay/SetupInputComponent 懒加载；未加载时控制台命令
+	 * `Wacom.Interact` 可作为调试入口。
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_Interact;
@@ -99,15 +98,14 @@ public:
 	/**
 	 * 打开背包 IA。
 	 *
-	 * Stage 4.2：默认不绑定（IA 资产由用户手动建）。建好后改 BeginPlay 里的 LoadObject 路径。
-	 * 入口由 console command Wacom.OpenBackpack / Wacom.CloseBackpack 提供。
-	 * 战斗 IMC 不绑定该 IA（探索期 IMC 才会绑）。
+	 * 默认资产由懒加载路径填充；控制台命令 Wacom.OpenBackpack / Wacom.CloseBackpack
+	 * 保留为调试入口。战斗 IMC 不绑定该 IA。
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_OpenBackpack;
 
 	/**
-	 * 背包 UI（M2：MVVM 架构）。蓝图未配则回退 C++ 父类 UWacomBackpackScreen。
+	 * 背包 UI。蓝图未配则回退 C++ 父类 UWacomBackpackScreen。
 	 * 蓝图子类（如 BP_PlayerController）可在 Details 面板拖 WBP_BackpackScreen 覆盖。
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
@@ -125,7 +123,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomRunEventScreen> RunEventScreenClass;
 
-	/** Console command 入口（等同于按 B）。public 是为了被 console lambda 调到。 */
+	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
 
 	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */
@@ -136,7 +134,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	URunSession* GetRunSession() const { return RunSession; }
 
-	// ---- 候选交互对象（Stage 7 use-key 模型）----
+	// ---- 候选交互对象（use-key 模型）----
 
 	/** 世界交互对象进入玩家交互范围时调用。 */
 	void RegisterCandidateInteractable(AActor* InteractableActor);
@@ -162,7 +160,7 @@ public:
 	/** 测试/内部使用：返回当前最近且可交互的候选对象。 */
 	AActor* PickClosestInteractableForTest() const;
 
-	/** Console command 入口（IA_Interact 资产建好前的兜底）。 */
+	/** Console command / IA 共用入口（等同于按 E）。 */
 	void TryInteractFromConsole();
 
 	/**

@@ -8,7 +8,6 @@
 /**
  * 战斗阶段。
  *
- * 对齐 Battle_Rules.md §1 的主阶段机。
  * `Setup` 代表敌人初始化阶段，战斗开始后唯一一次。
  */
 UENUM(BlueprintType)
@@ -24,14 +23,14 @@ enum class EBattlePhase : uint8
 };
 
 /**
- * 击倒事件玩家选择（GDD §6 击倒事件）。
+ * 击倒事件玩家选择。
  *
  * 部位被击倒时玩家三选一：
- *   - Aid（援助）：左手分支。第一阶段不消耗左手牌、不改战内状态，仅记账
- *   - Destroy（破坏）：右手分支。同上
+ *   - Aid（援助）：左手分支，不消耗左手牌
+ *   - Destroy（破坏）：右手分支，不消耗右手牌
  *   - Withdraw（撤离）：直接结束战斗。Outcome 设 Victory，敌人不进 DefeatedEnemies
  *
- * 详见 GDD §6 击倒事件 + §10.5 节点可重入规则。
+ * 具体奖励、撤离与战后包规则见 Docs/WacomBattle.md / Docs/WacomRun.md。
  */
 UENUM(BlueprintType)
 enum class EKnockdownChoice : uint8
@@ -45,8 +44,7 @@ enum class EKnockdownChoice : uint8
 /**
  * 卡牌目标模式。
  *
- * 对齐 Data_Schema_Draft §5.1。
- * 第一阶段 HandCard 目标仅用于腾挪类效果，不用于主动打牌合法性。
+ * HandCard 目标当前用于腾挪类效果，不用于主动打牌合法性。
  */
 UENUM(BlueprintType)
 enum class ECardTargetMode : uint8
@@ -61,7 +59,6 @@ enum class ECardTargetMode : uint8
 /**
  * 手牌区域。
  *
- * 对齐 Hand_Zone_Rules.md §1 / §5。
  * None 表示卡牌不在手牌队列中，或左右手锚点缺失导致该区域不存在。
  */
 UENUM(BlueprintType)
@@ -87,7 +84,6 @@ enum class EBattleOutcome : uint8
 /**
  * 卡牌在战斗中的位置容器。
  *
- * 对齐 Battle_Rules.md §8 "卡牌离开手牌后的去向"。
  * `Limbo` 用于左手牌/右手牌被打出、但本回合不进入任何卡牌区域的过渡状态。
  */
 UENUM(BlueprintType)

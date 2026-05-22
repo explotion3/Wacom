@@ -19,7 +19,7 @@
  * 生命周期钩子：
  * - OnActivated / OnDeactivated：CommonUI 的激活/失活（已由父类暴露）
  * - BP_OnPrepareActivation：C++ 激活前调用，子类可 override 做一次性准备
- * - BP_PlayTransitionIn / BP_PlayTransitionOut：动画钩子，第一阶段是空实现
+ * - BP_PlayTransitionIn / BP_PlayTransitionOut：动画钩子，默认空实现
  *
  * 约束：
  * - Widget 不修改战斗 / Run 状态，只读数据 + 通过委托通知上层
@@ -35,7 +35,6 @@ public:
 
 	/**
 	 * 进入动画。默认空实现。子类在 WBP 里 override 蓝图事件播 UMG Animation。
-	 * 第一阶段静态布局，不调用。P5 起由 HUD 或 Push 流程调用。
 	 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|UI")
 	void BP_PlayTransitionIn();
@@ -50,7 +49,6 @@ public:
 
 	/**
 	 * 激活前调用。子类可 override 做一次性准备（例如订阅事件、初始化本地状态）。
-	 * 第一阶段默认空实现。
 	 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|UI")
 	void BP_OnPrepareActivation();

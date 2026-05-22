@@ -7,7 +7,7 @@
 #include "Commands/BattleCommand.h"
 
 /**
- * 对齐 Architecture.md §12 测试项 #5/#6：
+ * 等待机制回归：
  *   - 等待先扣当前等待值，再 +1
  *   - 每回合等待值重置为 2
  */

@@ -27,7 +27,7 @@ namespace
 	 * - Target.RandomHandCard          → HandCard（由服务自选）
 	 * - Target.ZoneHandCard            → HandCard（按 TargetZone 过滤，由服务自选）
 	 * - Target.LastShuffledCard        → HandCard，TargetInstanceId = LastShuffledCardId
-	 * 其余第一阶段不支持。
+	 * 其余目标类型尚未支持。
 	 */
 	void FillTargetFromCardEffect(
 		FEffectContext& Ctx,
@@ -150,8 +150,8 @@ void FCardEffectDispatcher::Execute(
 				&& Self.Definition->Keywords.HasTagExact(WacomTags::Card_Keyword_Weapon)
 				&& Self.CapacityEffectTags.HasTagExact(WacomTags::Card_CapacityEffect_WeaponDamagePlus3))
 			{
-				// Stage 4.5.2: cross-cutting CapacityEffect 修正放在 Dispatcher，
-				// 确保主效果、完美释放、ZoneHook ExtraEffects 共用同一 Damage 路径。
+				// CapacityEffect 修正集中在 Dispatcher，确保主效果、完美释放、
+				// ZoneHook ExtraEffects 共用同一 Damage 路径。
 				FinalMag += 3;
 			}
 		}

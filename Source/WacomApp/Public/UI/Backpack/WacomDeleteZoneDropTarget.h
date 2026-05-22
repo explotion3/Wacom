@@ -9,7 +9,7 @@
 class UCardDefinition;
 
 /**
- * 背包删牌区拖拽接收器（Stage 4.5.3b）。
+ * 背包删牌区拖拽接收器。
  *
  * Widget 生命周期声明：
  *   数据源：父 UWacomBackpackScreen 注入的 URunSession，仅作为 DeleteCardForGold 写命令出口。

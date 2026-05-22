@@ -11,8 +11,6 @@ class UCardDefinition;
 /**
  * 先机命中 / 抵抗 / 完美释放。
  *
- * 对齐 Battle_Rules §9 + Data_Schema_Draft §4。
- *
  * 典型调用顺序（PlayCardResolver::Resolve 中）：
  *   1. SnapshotInitiativeBeforePlay  — 在主效果之前记录各部位先机
  *   2. CollectInitiativeHits         — 按 RuntimeCost 找命中部位
@@ -33,7 +31,6 @@ public:
 	static void SnapshotInitiativeBeforePlay(const FBattleState& State, TArray<FPreCastEntry>& Out);
 
 	/**
-	 * 按 Battle_Rules §9 判断先机命中：
 	 * RuntimeCost 正好等于某部位出牌前当前先机即命中。多个部位可同时命中。
 	 */
 	static void CollectInitiativeHits(
@@ -43,7 +40,7 @@ public:
 
 	/**
 	 * 对命中部位执行抵抗判定。CardResistance > IntentResistance → 部位晕厥。
-	 * 晕厥用 Status.Stunned 层数模型记录，第一阶段每次施加 1 层。
+	 * 晕厥用 Status.Stunned 层数模型记录，每次施加 1 层。
 	 */
 	static void ResolveResistance(
 		FBattleState& State,
@@ -55,7 +52,7 @@ public:
 
 	/**
 	 * 对命中部位执行完美释放效果。
-	 * Battle_Rules §9：迅捷卡不触发；主效果致死的部位不参与。
+	 * 迅捷卡不触发；主效果致死的部位不参与。
 	 */
 	static void ResolvePerfectRelease(
 		FBattleState& State,

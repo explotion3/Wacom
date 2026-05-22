@@ -7,7 +7,7 @@
 /**
  * Wacom 项目的 ID 类型别名。
  *
- * 第一阶段所有静态资产 ID 直接使用 FName 语义。不再做强类型 wrapper：
+ * 静态资产 ID 当前直接使用 FName 语义，不做强类型 wrapper：
  * - FName 已反射友好，可直接作为 USTRUCT 字段。
  * - 强类型 wrapper 在 DataAsset / DataTable 里编辑体验较差。
  *
