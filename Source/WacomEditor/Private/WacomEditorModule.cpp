@@ -5,11 +5,19 @@
 #include "Editor.h"
 #include "EditorValidatorSubsystem.h"
 #include "Modules/ModuleManager.h"
+#include "Validation/WacomCardDefinitionValidator.h"
+#include "Validation/WacomCharacterDefinitionValidator.h"
+#include "Validation/WacomEnemyDefinitionValidator.h"
+#include "Validation/WacomEnemyPartDefinitionValidator.h"
 #include "Validation/WacomRunEventDefinitionValidator.h"
 #include "Validation/WacomShopDefinitionValidator.h"
 
 void FWacomEditorModule::StartupModule()
 {
+	RegisterEditorValidator(NewObject<UWacomCardDefinitionValidator>(GetTransientPackage()));
+	RegisterEditorValidator(NewObject<UWacomEnemyDefinitionValidator>(GetTransientPackage()));
+	RegisterEditorValidator(NewObject<UWacomEnemyPartDefinitionValidator>(GetTransientPackage()));
+	RegisterEditorValidator(NewObject<UWacomCharacterDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomRunEventDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomShopDefinitionValidator>(GetTransientPackage()));
 }

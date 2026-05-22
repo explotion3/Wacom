@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-05-22
+updated: 2026-05-23
 tags:
   - wacom/data
   - wacom/dataasset
@@ -361,12 +361,18 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 
 | Validator | 校验对象 | 共享校验函数 |
 |---|---|---|
+| `UWacomCardDefinitionValidator` | `UCardDefinition` | `FWacomCardDefinitionValidation::Validate()` |
+| `UWacomEnemyPartDefinitionValidator` | `UEnemyPartDefinition` | `FWacomEnemyPartDefinitionValidation::Validate()` |
+| `UWacomEnemyDefinitionValidator` | `UEnemyDefinition` | `FWacomEnemyDefinitionValidation::Validate()` |
+| `UWacomCharacterDefinitionValidator` | `UCharacterDefinition` | `FWacomCharacterDefinitionValidation::Validate()` |
 | `UWacomShopDefinitionValidator` | `UShopDefinition` | `FWacomShopDefinitionValidation::Validate()` |
 | `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
 
 这些 Validator 用于编辑器 Validate Assets 和自动化测试。不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
 
-当前只有 `UShopDefinition` 和 `UWacomRunEventDefinition` 接入 Editor Validator；`UCardDefinition`、`UEnemyDefinition`、`UEnemyPartDefinition`、`UCharacterDefinition` 暂无专用 Validator。
+当前 `UCardDefinition`、`UEnemyPartDefinition`、`UEnemyDefinition`、`UCharacterDefinition`、`UShopDefinition` 和 `UWacomRunEventDefinition` 六类 DataAsset 已接入 Editor Validator。
+
+Card / EnemyPart / Enemy / Character Validator 只做结构防呆，例如必填 ID、基础数值非负或大于 0、必填数组非空、引用非空、GameplayTag 命名空间有效、数组索引有效；Character 还校验 `StarterDeck` 不包含左右手卡。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量、固定部位数量、跨资产唯一性或生成资产路径。
 
 Shop Validator 只校验 `ShopId` 非空、`Offers` 非空、Offer 卡牌非空、价格非负；不校验 `DisplayName`、重复商品、价格平衡、商品池规则或生成资产路径。
 
