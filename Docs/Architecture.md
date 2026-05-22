@@ -140,6 +140,8 @@ Source/
 
 核心公共契约是 `UBattleSession + FBattleCommand + FBattleSnapshot + FBattleEvent + FBattleResultPacket`。Resolver、Executor、Service 和 `BattleState` 都在 `WacomBattle/Private`，外部模块只通过公共契约交互。
 
+`UBattleSession` 是 public facade，不承载规则实现。初始化、命令外壳、击倒请求流和战后包构造分别收口到 `WacomBattle/Private` helper：`BattleInitializer`、`BattleCommandPipeline`、`KnockdownFlowService`、`BattleResultPacketBuilder`。这些 helper 可以读写 `BattleState`，但不进入 Public API，也不被 UI / Run / App 直接 include。
+
 UI、Actor 和测试入口都不应该直接改 `BattleState`。它们只能提交命令，读取快照、事件和战后包。
 
 ## 7. Command / Snapshot / Event

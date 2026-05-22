@@ -45,8 +45,12 @@ WacomBattle 是**战斗内核**，负责单场战斗的唯一规则真相。
 
 | 对象 | 职责 |
 |---|---|
-| `UBattleSession` | 一场战斗的生命周期入口（Public，对外唯一接口）|
+| `UBattleSession` | 一场战斗的 Public facade（对外唯一入口，只持有状态、事件并委托规则 helper）|
 | `BattleState` | 当前战斗状态（Private，外部不可见）|
+| `BattleInitializer` | 初始化规则 helper（Private）：灌入参数、创建运行时卡牌 / 部位、应用预破坏部位并启动首回合 |
+| `BattleCommandPipeline` | 命令外壳 helper（Private）：统一拦截 BattleEnd、分派 Resolver、维护版本兜底和首次击倒请求 |
+| `KnockdownFlowService` | 击倒请求流 helper（Private）：构造并发射 `KnockdownChoiceRequested` 事件 |
+| `BattleResultPacketBuilder` | 战后包 helper（Private）：从 `BattleState` 拷贝战后字段并派生 `bWithdrawn` |
 | `BattleResolver` | 统一结算命令的调度器 |
 | `BattleTurnFlow` | 回合开始流程：抽牌、重建手牌、执行手牌上限 |
 | `FBattleSnapshot` | 给 UI 读取的只读状态快照 |
@@ -431,7 +435,7 @@ WacomBattle/
 
 ### 战内 → 战外回传
 
-战斗结束时 `UBattleSession::BuildResultPacket()` 构造 `FBattleResultPacket` 给 Run 层：
+战斗结束时 `UBattleSession::BuildResultPacket()` 委托 Private `BattleResultPacketBuilder` 构造 `FBattleResultPacket` 给 Run 层：
 
 | Packet 字段 | Battle 来源 | 说明 |
 |---|---|---|

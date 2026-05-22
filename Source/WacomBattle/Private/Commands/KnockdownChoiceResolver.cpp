@@ -2,6 +2,7 @@
 
 #include "Commands/KnockdownChoiceResolver.h"
 #include "Commands/KnockdownChoiceAvailability.h"
+#include "Commands/KnockdownFlowService.h"
 #include "Core/BattleState.h"
 #include "Core/BattleRules.h"
 #include "Commands/BattleCommand.h"
@@ -110,14 +111,8 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 	{
 		// 队列还有未处理的击倒事件 → 维持 PendingKnockdownChoice 阶段
 		// 同时主动发新一条 KnockdownChoiceRequested，让 UI push 下一个 dialog。
-		// （SubmitCommand 末尾的事件分派只在"首次入队"时触发；后续连续选项必须由 Resolver 自己推送。）
-		const FBattleState::FPendingKnockdownEvent& NextHead = State.PendingKnockdownEvents[0];
-		FBattleEvent NextRequest;
-		NextRequest.Type            = EBattleEventType::KnockdownChoiceRequested;
-		NextRequest.ActorInstanceId = NextHead.PartInstanceId;
-		NextRequest.Count           = FKnockdownChoiceAvailability::BuildLegacyEventMask(
-			FKnockdownChoiceAvailability::BuildView(State));
-		Events.Emit(NextRequest);
+		// （命令 pipeline 的事件分派只在"首次入队"时触发；后续连续选项必须由 Resolver 自己推送。）
+		FKnockdownFlowService::RequestCurrentChoiceIfPending(State, Events);
 	}
 	// 不论是否非空都视为 state 有变更
 	++State.StateVersion;
