@@ -157,6 +157,47 @@ namespace
 		return false;
 	}
 
+	int32 CountStorageCardsByDefinition(const FRunBackpackStorageSnapshot& Snapshot, const UCardDefinition* Card)
+	{
+		int32 Count = 0;
+		for (const FRunStorageCardView& View : Snapshot.Flux.ContentCards)
+		{
+			if (View.Instance.Definition.Get() == Card)
+			{
+				++Count;
+			}
+		}
+		for (const FRunStorageCardView& View : Snapshot.BattleDeckPhysicalCards)
+		{
+			if (View.Instance.Definition.Get() == Card)
+			{
+				++Count;
+			}
+		}
+		for (const FRunStorageCardView& View : Snapshot.BurdenCards)
+		{
+			if (View.Instance.Definition.Get() == Card)
+			{
+				++Count;
+			}
+		}
+		for (const FRunSpecialStorageView& Special : Snapshot.SpecialZones)
+		{
+			if (Special.OwnerCard.Instance.Definition.Get() == Card)
+			{
+				++Count;
+			}
+			for (const FRunStorageCardView& View : Special.ContentCards)
+			{
+				if (View.Instance.Definition.Get() == Card)
+				{
+					++Count;
+				}
+			}
+		}
+		return Count;
+	}
+
 	FGuid FindStorageInstanceIdByDefinition(const FRunBackpackStorageSnapshot& Snapshot, const UCardDefinition* Card)
 	{
 		for (const FRunStorageCardView& View : Snapshot.Flux.ContentCards)
@@ -517,6 +558,46 @@ bool FWacomRunEventRemoveCardEffectSpec::RunTest(const FString& /*Parameters*/)
 		TestTrue(TEXT("Special remove succeeds"), Result.bSucceeded);
 		TestFalse(TEXT("Special card removed"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), SpecialCard));
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventRemoveCardDefinitionRemovesOneMatchingInstanceSpec,
+	"Wacom.Run.Event.RemoveCardDefinitionRemovesOneMatchingInstance",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventRemoveCardDefinitionRemovesOneMatchingInstanceSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* SharedCard = Fx.MakeNoopCard(0);
+	UCardDefinition* Bag = MakeRunEventTestTypeAContainer(Fx, 8);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1),
+		Fx.MakeNoopCard(1),
+		{ Bag, SharedCard, SharedCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Initialize same-definition remove run"), Run->Initialize(Char));
+
+	const FRunBackpackStorageSnapshot Before = Run->BuildBackpackStorageSnapshot();
+	TestEqual(TEXT("Two same-definition instances before RemoveCard"),
+		CountStorageCardsByDefinition(Before, SharedCard), 2);
+
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeRemoveCardRunEvent(Run.Get(), SharedCard));
+	TestTrue(TEXT("Begin RemoveCard event"), Run->BeginRunEvent(TEXT("Event.Remove.DefinitionOne"), Event.Get()));
+	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Remove"));
+
+	TestTrue(TEXT("RemoveCard by Definition succeeds"), Result.bSucceeded);
+	TestEqual(TEXT("One remove effect recorded"), Result.EffectResults.Num(), 1);
+	if (Result.EffectResults.Num() == 1)
+	{
+		TestEqual(TEXT("Remove effect type"), Result.EffectResults[0].EffectType, EWacomRunEventEffectType::RemoveCard);
+		TestEqual(TEXT("Remove effect delta"), Result.EffectResults[0].ActualDelta, -1);
+		TestTrue(TEXT("Remove effect applied"), Result.EffectResults[0].bApplied);
+	}
+	TestEqual(TEXT("RemoveCard by Definition removes exactly one matching instance"),
+		CountStorageCardsByDefinition(Run->BuildBackpackStorageSnapshot(), SharedCard), 1);
 
 	return true;
 }

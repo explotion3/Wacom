@@ -493,12 +493,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool DeleteCardForGold(UCardDefinition* Card);
 
+	/** 删牌区入口：按 instance 精确销毁一张卡并按稀有度发金币。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
+	bool DeleteCardForGoldByInstance(FGuid InstanceId);
+
 	/** 删牌区统一金币奖励查询：白=1 / 蓝=2 / 其他=0。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static int32 GetDeleteGoldRewardForCard(const UCardDefinition* Card);
 
+	/** 删牌区 instance 金币奖励查询：找不到 instance 时返回 0。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
+	int32 GetDeleteGoldRewardForInstance(FGuid InstanceId) const;
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	FRunDeckOperationValidation ValidateDeleteCardForGold(UCardDefinition* Card) const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
+	FRunDeckOperationValidation ValidateDeleteCardForGoldByInstance(FGuid InstanceId) const;
 
 	// ---- 备战卡组操作 ----
 

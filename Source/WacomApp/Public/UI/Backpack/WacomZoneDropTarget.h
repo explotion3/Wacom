@@ -21,7 +21,8 @@ enum class EWacomDropTargetState : uint8
 	HoverValid,
 	HoverInvalid,
 	DropAccepted,
-	DropRejected
+	DropRejected,
+	ConfirmPending
 };
 
 /**

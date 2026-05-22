@@ -40,7 +40,6 @@ void UWacomDeckCardWidget::SetCard(const FCardInstance& Inst, EZoneKind InFromZo
 void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)
 {
 	bCardInteractionEnabled = bEnabled;
-	if (CardBody) { CardBody->SetIsEnabled(bEnabled); }
 	RefreshContentFromCard();
 }
 
@@ -128,7 +127,7 @@ FReply UWacomDeckCardWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 	}
 
-	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && InstanceId.IsValid())
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bCardInteractionEnabled && InstanceId.IsValid())
 	{
 		return UWidgetBlueprintLibrary::DetectDragIfPressed(InMouseEvent, this, EKeys::LeftMouseButton).NativeReply;
 	}
@@ -162,7 +161,7 @@ void UWacomDeckCardWidget::NativeOnDragCancelled(const FDragDropEvent& InDragDro
 
 UDragDropOperation* UWacomDeckCardWidget::BuildDragOperation()
 {
-	if (bDragVisualMode || !Card || !InstanceId.IsValid())
+	if (bDragVisualMode || !bCardInteractionEnabled || !Card || !InstanceId.IsValid())
 	{
 		return nullptr;
 	}
@@ -211,7 +210,7 @@ FText UWacomDeckCardWidget::GetProjectedFromBadgeText() const
 
 bool UWacomDeckCardWidget::RequestBattleEnabledToggle()
 {
-	if (!InstanceId.IsValid() || !bRightClickToggleEnabled)
+	if (!InstanceId.IsValid() || !bCardInteractionEnabled || !bRightClickToggleEnabled)
 	{
 		return false;
 	}

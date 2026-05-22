@@ -887,6 +887,210 @@ bool FWacomRunDeckDeleteCardForGoldValidationSpec::RunTest(const FString& /*Para
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDeleteCardForGoldByInstanceRemovesOnlyRequestedIdSpec,
+	"Wacom.Run.Deck.DeleteCardForGoldByInstance.RemovesOnlyRequestedId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDeleteCardForGoldByInstanceRemovesOnlyRequestedIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* SharedCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
+	UCardDefinition* Bag = MakeBagCard(Fx, 5);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Bag, SharedCard, SharedCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	TestTrue(TEXT("Move first shared card to backpack"), Run->RemoveCardFromBattleDeck(SharedCard));
+	const FGuid FirstId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), SharedCard, EZoneKind::Backpack);
+	const FGuid SecondId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), SharedCard, EZoneKind::BattleDeck);
+	TestTrue(TEXT("First same-definition id valid"), FirstId.IsValid());
+	TestTrue(TEXT("Second same-definition id valid"), SecondId.IsValid());
+
+	TestTrue(TEXT("Delete by instance validates second id"),
+		Run->ValidateDeleteCardForGoldByInstance(SecondId).bCanExecute);
+	TestTrue(TEXT("Delete by instance removes second id"),
+		Run->DeleteCardForGoldByInstance(SecondId));
+
+	TestTrue(TEXT("First same-definition instance remains"), OwnedCardsContainInstance(Run->GetRunState(), FirstId));
+	TestFalse(TEXT("Requested second instance removed"), OwnedCardsContainInstance(Run->GetRunState(), SecondId));
+	TestEqual(TEXT("Only one shared definition remains"), CountOwnedCardsByDefinition(Run->GetRunState(), SharedCard), 1);
+	TestEqual(TEXT("White instance delete gives one gold"), Run->GetGold(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDeleteCardForGoldByInstanceInvalidReasonSpec,
+	"Wacom.Run.Deck.DeleteCardForGoldByInstance.InvalidReason",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDeleteCardForGoldByInstanceInvalidReasonSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+
+	TestEqual(TEXT("Invalid instance delete reason is CardNotOwned"),
+		Run->ValidateDeleteCardForGoldByInstance(FGuid()).DisabledReason,
+		FName(TEXT("CardNotOwned")));
+	TestEqual(TEXT("Missing instance delete reason is CardNotOwned"),
+		Run->ValidateDeleteCardForGoldByInstance(FGuid::NewGuid()).DisabledReason,
+		FName(TEXT("CardNotOwned")));
+	TestFalse(TEXT("Missing instance delete rejected"),
+		Run->DeleteCardForGoldByInstance(FGuid::NewGuid()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDeleteSameDefinitionCapacityInstanceRulesSpec,
+	"Wacom.Run.Deck.DeleteCardForGoldByInstance.SameDefinitionCapacityRules",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDeleteSameDefinitionCapacityInstanceRulesSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* SharedContainer = MakeTypeAContainerCard(Fx, 3);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ SharedContainer, SharedContainer });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	TestEqual(TEXT("Two same-definition capacity instances owned"),
+		CountOwnedCardsByDefinition(Run->GetRunState(), SharedContainer), 2);
+
+	const FGuid FirstId = Run->GetRunState().Backpack[0].InstanceId;
+	const FGuid SecondId = Run->GetRunState().Backpack[1].InstanceId;
+	TestTrue(TEXT("Deleting one of two same-definition capacity providers validates"),
+		Run->ValidateDeleteCardForGoldByInstance(FirstId).bCanExecute);
+	TestTrue(TEXT("Deleting one of two same-definition capacity providers succeeds"),
+		Run->DeleteCardForGoldByInstance(FirstId));
+
+	TestFalse(TEXT("First capacity instance removed"), OwnedCardsContainInstance(Run->GetRunState(), FirstId));
+	TestTrue(TEXT("Second capacity instance remains"), OwnedCardsContainInstance(Run->GetRunState(), SecondId));
+	TestEqual(TEXT("One same-definition capacity instance remains"),
+		CountOwnedCardsByDefinition(Run->GetRunState(), SharedContainer), 1);
+	TestEqual(TEXT("Last remaining capacity provider rejected"),
+		Run->ValidateDeleteCardForGoldByInstance(SecondId).DisabledReason,
+		FName(TEXT("LastCapacityProvider")));
+	TestFalse(TEXT("Last remaining capacity provider delete fails"),
+		Run->DeleteCardForGoldByInstance(SecondId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDeleteBMainInstanceClearsOnlyMatchingSpecialZoneSpec,
+	"Wacom.Run.Deck.DeleteCardForGoldByInstance.BMainClearsOnlyMatchingSpecialZone",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDeleteBMainInstanceClearsOnlyMatchingSpecialZoneSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 6);
+	UCardDefinition* SharedBMain = MakeTypeBContainerCard(Fx, 3);
+	UCardDefinition* FirstContent = Fx.MakeNoopCard(0);
+	UCardDefinition* SecondContent = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, SharedBMain, SharedBMain });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	if (!TestEqual(TEXT("Two SpecialZones for two same-definition B mains"), Run->GetRunState().SpecialZones.Num(), 2))
+	{
+		return false;
+	}
+	const FGuid FirstOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+	const FGuid SecondOwnerId = Run->GetRunState().SpecialZones[1].OwnerInstanceId;
+
+	Run->AddCardToBackpack(FirstContent);
+	const FGuid FirstContentId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), FirstContent);
+	TestTrue(TEXT("Move first content to first SpecialZone"),
+		Run->MoveInstance(FirstContentId, EZoneKind::SpecialZone, FirstOwnerId));
+
+	Run->AddCardToBackpack(SecondContent);
+	const FGuid SecondContentId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), SecondContent);
+	TestTrue(TEXT("Move second content to second SpecialZone"),
+		Run->MoveInstance(SecondContentId, EZoneKind::SpecialZone, SecondOwnerId));
+
+	TestTrue(TEXT("Delete second B main by instance succeeds"),
+		Run->DeleteCardForGoldByInstance(SecondOwnerId));
+
+	FSpecialZone FirstZoneAfter;
+	TestTrue(TEXT("First same-definition B main SpecialZone remains"),
+		Run->GetSpecialZone(FirstOwnerId, FirstZoneAfter));
+	TestEqual(TEXT("First SpecialZone content remains"), FirstZoneAfter.Cards.Num(), 1);
+	if (FirstZoneAfter.Cards.Num() == 1)
+	{
+		TestEqual(TEXT("First SpecialZone keeps its content id"),
+			FirstZoneAfter.Cards[0].InstanceId, FirstContentId);
+	}
+
+	FSpecialZone SecondZoneAfter;
+	TestFalse(TEXT("Deleted B main SpecialZone removed"),
+		Run->GetSpecialZone(SecondOwnerId, SecondZoneAfter));
+	TestTrue(TEXT("Second SpecialZone content returned to owned zones"),
+		OwnedCardsContainInstance(Run->GetRunState(), SecondContentId));
+	TestFalse(TEXT("Deleted B main instance removed"),
+		OwnedCardsContainInstance(Run->GetRunState(), SecondOwnerId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckDeleteCardForGoldDefinitionKeepsLegacyPrioritySpec,
+	"Wacom.Run.Deck.DeleteCardForGold.DefinitionKeepsLegacyPriority",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckDeleteCardForGoldDefinitionKeepsLegacyPrioritySpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* Target = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
+	UCardDefinition* Bag = MakeBagCard(Fx, 12);
+	UCardDefinition* TypeB = MakeTypeBContainerCard(Fx, 3);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ Bag, TypeB, Target });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	Run->AddCardToBackpack(Target);
+	Run->AddCardToBackpack(Target);
+	Run->AddCardToBackpack(Target);
+
+	const FGuid SpecialTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
+	TestTrue(TEXT("Move one target to SpecialZone"),
+		Run->MoveInstance(SpecialTargetId, EZoneKind::SpecialZone, Run->GetRunState().SpecialZones[0].OwnerInstanceId));
+	const FGuid BurdenTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
+	TestTrue(TEXT("Move one target to BurdenZone"),
+		Run->MoveInstance(BurdenTargetId, EZoneKind::BurdenZone, FGuid()));
+
+	const FGuid BackpackTargetId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::Backpack);
+	const FGuid BattleDeckTargetId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::BattleDeck);
+	TestTrue(TEXT("Backpack target id valid"), BackpackTargetId.IsValid());
+	TestTrue(TEXT("BattleDeck target id valid"), BattleDeckTargetId.IsValid());
+
+	TestTrue(TEXT("Legacy Definition delete removes first priority match"),
+		Run->DeleteCardForGold(Target));
+	TestFalse(TEXT("Backpack priority instance removed first"),
+		OwnedCardsContainInstance(Run->GetRunState(), BackpackTargetId));
+	TestTrue(TEXT("BattleDeck same-definition instance remains"),
+		OwnedCardsContainInstance(Run->GetRunState(), BattleDeckTargetId));
+	TestTrue(TEXT("Burden same-definition instance remains"),
+		OwnedCardsContainInstance(Run->GetRunState(), BurdenTargetId));
+	TestTrue(TEXT("Special same-definition instance remains"),
+		OwnedCardsContainInstance(Run->GetRunState(), SpecialTargetId));
+
+	return true;
+}
+
 // ================ AddCardToBattleDeck ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

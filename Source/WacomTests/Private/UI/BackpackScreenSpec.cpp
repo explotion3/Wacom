@@ -503,6 +503,45 @@ bool FWacomUIBackpackDeckCardHoverEventsSpec::RunTest(const FString& /*Parameter
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackDisabledDeckCardBlocksDragAndToggleButKeepsHoverSpec,
+	"Wacom.UI.Backpack.DisabledDeckCardBlocksDragAndToggleButKeepsHover",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackDisabledDeckCardBlocksDragAndToggleButKeepsHoverSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomDeckCardWidget> Widget(NewObject<UWacomDeckCardWidget>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	FCardInstance Inst;
+	Inst.InstanceId = FGuid::NewGuid();
+	Inst.Definition = Card.Get();
+	Widget->SetCard(Inst, EZoneKind::SpecialZone, FGuid::NewGuid());
+	Widget->SetMoveEnabled(false);
+	Widget->SetRightClickToggleEnabled(true);
+
+	int32 HoverCount = 0;
+	int32 ToggleCount = 0;
+	Widget->OnCardHoveredNative.AddLambda(
+		[&HoverCount](UWacomDeckCardWidget*)
+		{
+			++HoverCount;
+		});
+	Widget->OnBattleEnabledToggleRequestedNative.AddLambda(
+		[&ToggleCount](FGuid)
+		{
+			++ToggleCount;
+		});
+
+	TestNull(TEXT("Disabled card cannot build drag operation"), Widget->BuildDragOperation());
+	TestFalse(TEXT("Disabled card cannot request right-click toggle"), Widget->RequestBattleEnabledToggle());
+	TestEqual(TEXT("Disabled card emits no toggle request"), ToggleCount, 0);
+	TestTrue(TEXT("Disabled card still emits hover"), Widget->RequestCardHover());
+	TestEqual(TEXT("Hover still broadcasts once"), HoverCount, 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackCardDetailPanelPositionSpec,
 	"Wacom.UI.Backpack.CardDetailPanelPosition",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -609,6 +648,70 @@ bool FWacomUIBackpackDropTargetRejectsForeignOperationSpec::RunTest(const FStrin
 
 	TestFalse(TEXT("Null operation rejected"), Target->TryHandleDropOperation(nullptr));
 	TestFalse(TEXT("Foreign drag operation rejected"), Target->TryHandleDropOperation(ForeignOperation.Get()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackBurdenZoneIsSourceOnlySpec,
+	"Wacom.UI.Backpack.BurdenZoneIsSourceOnly",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackBurdenZoneIsSourceOnlySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomDeckCardWidget> Widget(NewObject<UWacomDeckCardWidget>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	FCardInstance Inst;
+	Inst.InstanceId = FGuid::NewGuid();
+	Inst.Definition = Card.Get();
+	Widget->SetCard(Inst, EZoneKind::BurdenZone, FGuid::NewGuid());
+
+	UWacomCardDragOperation* DragOp = Cast<UWacomCardDragOperation>(Widget->BuildDragOperation());
+	TestNotNull(TEXT("BurdenZone card can still start as drag source"), DragOp);
+	if (DragOp)
+	{
+		TestEqual(TEXT("BurdenZone drag payload preserves source zone"), DragOp->FromZone, EZoneKind::BurdenZone);
+		TestFalse(TEXT("BurdenZone drag payload has no owner id"), DragOp->FromZoneOwnerInstanceId.IsValid());
+	}
+
+	TestFalse(TEXT("BurdenZone target rejects Backpack-origin preview"),
+		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BurdenZone, EZoneKind::Backpack, 0, 10));
+	TestFalse(TEXT("BurdenZone target rejects BattleDeck-origin preview"),
+		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BurdenZone, EZoneKind::BattleDeck, 0, 10));
+	TestFalse(TEXT("BurdenZone target rejects BurdenZone-origin in-place preview"),
+		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BurdenZone, EZoneKind::BurdenZone, 0, 10));
+
+	TStrongObjectPtr<UWacomZoneDropTarget> BurdenTarget(NewObject<UWacomZoneDropTarget>());
+	BurdenTarget->Configure(EZoneKind::BurdenZone, FGuid());
+	TestFalse(TEXT("BurdenZone background has no owner screen and cannot accept drop"),
+		BurdenTarget->TryHandleDropOperation(DragOp));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackDeleteZoneUsesInstanceIdPayloadSpec,
+	"Wacom.UI.Backpack.DeleteZoneUsesInstanceIdPayload",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackDeleteZoneUsesInstanceIdPayloadSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardDragOperation> CardOp(NewObject<UWacomCardDragOperation>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	const FGuid InstanceId = FGuid::NewGuid();
+
+	CardOp->InstanceId = InstanceId;
+	CardOp->FromZone = EZoneKind::BurdenZone;
+	CardOp->Definition = Card.Get();
+
+	TestEqual(TEXT("DeleteZone request helper uses InstanceId, not Definition identity"),
+		UWacomDeleteZoneDropTarget::GetDeleteInstanceIdForRequest(*CardOp),
+		InstanceId);
+
+	CardOp->InstanceId = FGuid();
+	TestFalse(TEXT("DeleteZone request helper rejects invalid InstanceId"),
+		UWacomDeleteZoneDropTarget::GetDeleteInstanceIdForRequest(*CardOp).IsValid());
 
 	return true;
 }

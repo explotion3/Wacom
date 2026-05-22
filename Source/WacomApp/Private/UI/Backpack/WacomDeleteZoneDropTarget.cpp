@@ -13,6 +13,11 @@ int32 UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(UCardDefini
 	return URunSession::GetDeleteGoldRewardForCard(Card);
 }
 
+FGuid UWacomDeleteZoneDropTarget::GetDeleteInstanceIdForRequest(const UWacomCardDragOperation& CardOp)
+{
+	return CardOp.InstanceId;
+}
+
 FText UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(FName DisabledReason)
 {
 	if (DisabledReason == TEXT("MissingCard"))
@@ -38,12 +43,12 @@ bool UWacomDeleteZoneDropTarget::NativeOnDragOver(const FGeometry& InGeometry, c
 {
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
 	URunSession* Run = OwnerScreen.IsValid() ? OwnerScreen->GetRunSession() : nullptr;
-	if (!CardOp || !CardOp->Definition || !Run)
+	if (!CardOp || !CardOp->InstanceId.IsValid() || !Run)
 	{
 		SetDropTargetState(EWacomDropTargetState::HoverInvalid);
 		return false;
 	}
-	const bool bCanDrop = Run->ValidateDeleteCardForGold(CardOp->Definition).bCanExecute;
+	const bool bCanDrop = Run->ValidateDeleteCardForGoldByInstance(CardOp->InstanceId).bCanExecute;
 	SetDropTargetState(bCanDrop ? EWacomDropTargetState::HoverValid : EWacomDropTargetState::HoverInvalid);
 	return true;
 }
@@ -52,14 +57,14 @@ bool UWacomDeleteZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const
 {
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
 	UWacomBackpackScreen* Screen = OwnerScreen.Get();
-	if (!CardOp || !Screen)
+	if (!CardOp || !CardOp->InstanceId.IsValid() || !Screen)
 	{
-		SetDropTargetState(EWacomDropTargetState::DropRejected);
+		SetDropTargetState(EWacomDropTargetState::Normal);
 		return false;
 	}
 
 	const bool bDialogShown = Screen->HandleDeleteDropRequested(*CardOp);
-	SetDropTargetState(bDialogShown ? EWacomDropTargetState::DropAccepted : EWacomDropTargetState::DropRejected);
+	SetDropTargetState(bDialogShown ? EWacomDropTargetState::ConfirmPending : EWacomDropTargetState::Normal);
 	return bDialogShown;
 }
 

@@ -238,6 +238,54 @@ bool FRunDeckRules::FindFirstOwnedCardDefinition(const FRunState& State, const U
 	return false;
 }
 
+bool FRunDeckRules::FindOwnedCardInstance(const FRunState& State, FGuid InstanceId, FRunOwnedCardLocation& OutLocation)
+{
+	OutLocation = FRunOwnedCardLocation{};
+	if (!InstanceId.IsValid())
+	{
+		return false;
+	}
+
+	auto FindInPile = [InstanceId, &OutLocation](const TArray<FCardInstance>& Pile, EZoneKind Zone, FGuid ZoneOwnerInstanceId) -> bool
+	{
+		for (int32 i = 0; i < Pile.Num(); ++i)
+		{
+			if (Pile[i].InstanceId == InstanceId)
+			{
+				OutLocation.Instance = Pile[i];
+				OutLocation.Zone = Zone;
+				OutLocation.ZoneOwnerInstanceId = ZoneOwnerInstanceId;
+				OutLocation.CardIndex = i;
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (FindInPile(State.Backpack, EZoneKind::Backpack, FGuid()))
+	{
+		return true;
+	}
+	if (FindInPile(State.BattleDeck, EZoneKind::BattleDeck, FGuid()))
+	{
+		return true;
+	}
+	if (FindInPile(State.BurdenZone, EZoneKind::BurdenZone, FGuid()))
+	{
+		return true;
+	}
+
+	for (const FSpecialZone& SpecialZone : State.SpecialZones)
+	{
+		if (FindInPile(SpecialZone.Cards, EZoneKind::SpecialZone, SpecialZone.OwnerInstanceId))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool FRunDeckRules::DoesRunOwnCardDefinition(const FRunState& State, const UCardDefinition* Card)
 {
 	FRunOwnedCardLocation Location;
@@ -252,14 +300,25 @@ bool FRunDeckRules::HasCapacityProviderAfterDestroyingFirstOwnedInstance(const F
 		return false;
 	}
 
+	return HasCapacityProviderAfterDestroyingOwnedInstance(State, TargetLocation.Instance.InstanceId);
+}
+
+bool FRunDeckRules::HasCapacityProviderAfterDestroyingOwnedInstance(const FRunState& State, FGuid InstanceId)
+{
+	FRunOwnedCardLocation TargetLocation;
+	if (!FindOwnedCardInstance(State, InstanceId, TargetLocation))
+	{
+		return false;
+	}
+
 	bool bSkippedTargetInstance = false;
-	auto HasProviderAfterSkippingTarget = [&TargetLocation, &bSkippedTargetInstance, Card](const TArray<FCardInstance>& Pile) -> bool
+	auto HasProviderAfterSkippingTarget = [&TargetLocation, &bSkippedTargetInstance](const TArray<FCardInstance>& Pile) -> bool
 	{
 		for (const FCardInstance& Inst : Pile)
 		{
 			const bool bIsTargetInstance = TargetLocation.Instance.InstanceId.IsValid()
 				? Inst.InstanceId == TargetLocation.Instance.InstanceId
-				: (!bSkippedTargetInstance && Inst.Definition == Card);
+				: false;
 			if (bIsTargetInstance)
 			{
 				bSkippedTargetInstance = true;
@@ -325,6 +384,42 @@ FRunDeckOperationValidation FRunDeckRules::ValidatePermanentRemoveCard(const FRu
 	return Result;
 }
 
+FRunDeckOperationValidation FRunDeckRules::ValidatePermanentRemoveInstance(const FRunState& State, FGuid InstanceId)
+{
+	FRunDeckOperationValidation Result;
+	Result.DisabledReason = TEXT("Unknown");
+
+	FRunOwnedCardLocation Location;
+	if (!FindOwnedCardInstance(State, InstanceId, Location))
+	{
+		Result.DisabledReason = TEXT("CardNotOwned");
+		return Result;
+	}
+
+	const UCardDefinition* Card = Location.Instance.Definition;
+	if (!Card)
+	{
+		Result.DisabledReason = TEXT("MissingCard");
+		return Result;
+	}
+
+	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Intrinsic))
+	{
+		Result.DisabledReason = TEXT("Intrinsic");
+		return Result;
+	}
+
+	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingOwnedInstance(State, InstanceId))
+	{
+		Result.DisabledReason = TEXT("LastCapacityProvider");
+		return Result;
+	}
+
+	Result.bCanExecute = true;
+	Result.DisabledReason = NAME_None;
+	return Result;
+}
+
 bool FRunDeckRules::PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* Card, FName* OutDisabledReason)
 {
 	if (OutDisabledReason)
@@ -332,7 +427,27 @@ bool FRunDeckRules::PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* 
 		*OutDisabledReason = NAME_None;
 	}
 
-	const FRunDeckOperationValidation Validation = ValidatePermanentRemoveCard(State, Card);
+	FRunOwnedCardLocation Location;
+	if (!FindFirstOwnedCardDefinition(State, Card, Location))
+	{
+		if (OutDisabledReason)
+		{
+			*OutDisabledReason = Card ? FName(TEXT("CardNotOwned")) : FName(TEXT("MissingCard"));
+		}
+		return false;
+	}
+
+	return PermanentRemoveOwnedInstance(State, Location.Instance.InstanceId, OutDisabledReason);
+}
+
+bool FRunDeckRules::PermanentRemoveOwnedInstance(FRunState& State, FGuid InstanceId, FName* OutDisabledReason)
+{
+	if (OutDisabledReason)
+	{
+		*OutDisabledReason = NAME_None;
+	}
+
+	const FRunDeckOperationValidation Validation = ValidatePermanentRemoveInstance(State, InstanceId);
 	if (!Validation.bCanExecute)
 	{
 		if (OutDisabledReason)
@@ -340,14 +455,14 @@ bool FRunDeckRules::PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* 
 			*OutDisabledReason = Validation.DisabledReason;
 		}
 		UE_LOG(LogTemp, Warning,
-			TEXT("[RunDeckRules] PermanentRemoveOwnedCard: 拒绝 Card=%s Reason=%s"),
-			*GetNameSafe(Card),
+			TEXT("[RunDeckRules] PermanentRemoveOwnedInstance: 拒绝 InstanceId=%s Reason=%s"),
+			*InstanceId.ToString(),
 			*Validation.DisabledReason.ToString());
 		return false;
 	}
 
 	FRunOwnedCardLocation Location;
-	if (!FindFirstOwnedCardDefinition(State, Card, Location))
+	if (!FindOwnedCardInstance(State, InstanceId, Location))
 	{
 		if (OutDisabledReason)
 		{
@@ -357,6 +472,7 @@ bool FRunDeckRules::PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* 
 	}
 
 	FCardInstance RemovedInst = Location.Instance;
+	UCardDefinition* Card = RemovedInst.Definition.Get();
 	switch (Location.Zone)
 	{
 	case EZoneKind::Backpack:
@@ -410,7 +526,7 @@ bool FRunDeckRules::PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* 
 		return false;
 	}
 
-	if (Card->Keywords.HasTagExact(WacomTags::Card_Keyword_Companion))
+	if (Card && Card->Keywords.HasTagExact(WacomTags::Card_Keyword_Companion))
 	{
 		State.Pressure.Add(EWacomPressureType::Bloodlust, 1);
 	}
@@ -445,8 +561,9 @@ bool FRunDeckRules::PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* 
 
 	RecomputeBurden(State, /*bAllowBurdenRefill=*/!IsContainerCard(Card));
 	UE_LOG(LogTemp, Display,
-		TEXT("[RunDeckRules] PermanentRemoveOwnedCard: %s, Backpack=%d, BattleDeck=%d, Burden=%d"),
+		TEXT("[RunDeckRules] PermanentRemoveOwnedInstance: %s (%s), Backpack=%d, BattleDeck=%d, Burden=%d"),
 		*GetNameSafe(Card),
+		*InstanceId.ToString(),
 		State.Backpack.Num(),
 		State.BattleDeck.Num(),
 		State.BurdenZone.Num());

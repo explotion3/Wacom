@@ -368,6 +368,14 @@ bool UWacomBackpackScreen::HandleZoneDropRequested(const UWacomCardDragOperation
 
 bool UWacomBackpackScreen::HandleDeleteDropRequested(const UWacomCardDragOperation& CardOp)
 {
+	if (!CardOp.InstanceId.IsValid())
+	{
+		ShowBackpackWarningToast(
+			this,
+			UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("MissingCard")));
+		return false;
+	}
+
 	UCardDefinition* Card = CardOp.Definition.Get();
 	if (!Card)
 	{
@@ -386,7 +394,8 @@ bool UWacomBackpackScreen::HandleDeleteDropRequested(const UWacomCardDragOperati
 		return false;
 	}
 
-	const FRunDeckOperationValidation Validation = Run->ValidateDeleteCardForGold(Card);
+	const FGuid InstanceId = CardOp.InstanceId;
+	const FRunDeckOperationValidation Validation = Run->ValidateDeleteCardForGoldByInstance(InstanceId);
 	if (!Validation.bCanExecute)
 	{
 		ShowBackpackWarningToast(
@@ -396,7 +405,7 @@ bool UWacomBackpackScreen::HandleDeleteDropRequested(const UWacomCardDragOperati
 	}
 
 	const FText CardName = GetBackpackCommandCardDisplayName(Card);
-	const int32 GoldReward = UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(Card);
+	const int32 GoldReward = Run->GetDeleteGoldRewardForInstance(InstanceId);
 	const TWeakObjectPtr<UWacomBackpackScreen> WeakScreen(this);
 	UWacomConfirmDialog* Dialog = UWacomConfirmDialog::Show(
 		this,
@@ -404,18 +413,18 @@ bool UWacomBackpackScreen::HandleDeleteDropRequested(const UWacomCardDragOperati
 		FText::Format(
 			LOCTEXT("DeleteCardMessage", "确认永久销毁 {0} 并置换金币？"),
 			CardName),
-		[WeakScreen, Card, CardName, GoldReward]()
+		[WeakScreen, InstanceId, CardName, GoldReward]()
 		{
 			UWacomBackpackScreen* PinnedScreen = WeakScreen.Get();
 			URunSession* PinnedRun = PinnedScreen ? PinnedScreen->GetRunSession() : nullptr;
-			if (!PinnedScreen || !PinnedRun || !Card)
+			if (!PinnedScreen || !PinnedRun || !InstanceId.IsValid())
 			{
 				return;
 			}
 
 			UWacomAppToastSubsystem* ToastSubsystem = GetBackpackToastSubsystem(PinnedScreen);
 
-			const bool bDeleted = PinnedRun->DeleteCardForGold(Card);
+			const bool bDeleted = PinnedRun->DeleteCardForGoldByInstance(InstanceId);
 			if (bDeleted)
 			{
 				if (ToastSubsystem)
@@ -434,7 +443,7 @@ bool UWacomBackpackScreen::HandleDeleteDropRequested(const UWacomCardDragOperati
 
 			if (ToastSubsystem)
 			{
-				const FRunDeckOperationValidation RetryValidation = PinnedRun->ValidateDeleteCardForGold(Card);
+				const FRunDeckOperationValidation RetryValidation = PinnedRun->ValidateDeleteCardForGoldByInstance(InstanceId);
 				ToastSubsystem->ShowWarning(UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(RetryValidation.DisabledReason));
 			}
 		});

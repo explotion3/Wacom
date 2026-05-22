@@ -153,9 +153,12 @@ void FBackpackRuntimeZoneBuilder::Ensure(const FBackpackRuntimeZoneBuilderContex
 		LogBackpackBindingWarningOnce(TEXT("SpecialZonesHost"), TEXT("[Backpack] SpecialZonesHost 未绑定，特殊存放区不会显示"));
 	}
 
-	if (!BurdenDropTarget && BurdenZoneHost)
+	if (!BurdenCardsBox && BurdenZoneHost)
 	{
 		BurdenZoneHost->ClearChildren();
+		BurdenDropTarget = nullptr;
+
+		UVerticalBox* BurdenContent = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BurdenContent"));
 		if (!BurdenZoneTitleText)
 		{
 			BurdenZoneTitleText = FBackpackFallbackLayoutBuilder::CreateBackpackText(
@@ -163,20 +166,17 @@ void FBackpackRuntimeZoneBuilder::Ensure(const FBackpackRuntimeZoneBuilderContex
 				TEXT("BurdenZoneTitleText"),
 				LOCTEXT("BurdenZoneTitle", "[ 负重区 ] 0"),
 				15);
-			BurdenZoneHost->AddChild(BurdenZoneTitleText);
 		}
-
-		BurdenDropTarget = WidgetTree->ConstructWidget<UWacomZoneDropTarget>(UWacomZoneDropTarget::StaticClass(), TEXT("BurdenDropTarget"));
-		BurdenDropTarget->Configure(EZoneKind::BurdenZone, FGuid());
-		BurdenDropTarget->SetOwnerScreen(Context.OwnerScreen);
+		BurdenZoneTitleText->RemoveFromParent();
+		BurdenContent->AddChildToVerticalBox(BurdenZoneTitleText);
 
 		BurdenCardsBox = WidgetTree->ConstructWidget<UWrapBox>(UWrapBox::StaticClass(), TEXT("BurdenCardsBox"));
 		BurdenCardsBox->SetInnerSlotPadding(FVector2D(8.f, 8.f));
-		USizeBox* BurdenSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BurdenDropContent"));
+		USizeBox* BurdenSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BurdenCardContent"));
 		BurdenSize->SetMinDesiredHeight(140.f);
 		BurdenSize->AddChild(BurdenCardsBox);
-		BurdenDropTarget->SetDropContent(BurdenSize);
-		BurdenZoneHost->AddChild(BurdenDropTarget);
+		BurdenContent->AddChildToVerticalBox(BurdenSize);
+		BurdenZoneHost->AddChild(BurdenContent);
 	}
 	else if (!BurdenZoneHost)
 	{

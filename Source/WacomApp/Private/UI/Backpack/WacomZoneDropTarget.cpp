@@ -73,6 +73,12 @@ void UWacomZoneDropTarget::SetDropTargetState(EWacomDropTargetState InState)
 
 bool UWacomZoneDropTarget::NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+	if (ZoneKind == EZoneKind::BurdenZone)
+	{
+		SetDropTargetState(EWacomDropTargetState::Normal);
+		return false;
+	}
+
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
 	URunSession* Run = OwnerScreen.IsValid() ? OwnerScreen->GetRunSession() : nullptr;
 	if (!CardOp || !CardOp->InstanceId.IsValid() || !Run)
@@ -111,6 +117,11 @@ bool UWacomZoneDropTarget::CanPreviewDrop(const UWacomCardDragOperation& CardOp)
 
 bool UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind TargetZone, EZoneKind SourceZone, int32 BattleDeckCount, int32 BattleDeckCapacity)
 {
+	if (TargetZone == EZoneKind::BurdenZone)
+	{
+		return false;
+	}
+
 	if (TargetZone == EZoneKind::BattleDeck
 		&& SourceZone == EZoneKind::Backpack
 		&& BattleDeckCount >= BattleDeckCapacity)
@@ -183,6 +194,12 @@ FText UWacomZoneDropTarget::FormatMoveFailureReasonForToast(FName DisabledReason
 
 bool UWacomZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
+	if (ZoneKind == EZoneKind::BurdenZone)
+	{
+		SetDropTargetState(EWacomDropTargetState::Normal);
+		return false;
+	}
+
 	const bool bHandled = TryHandleDropOperation(InOperation);
 	SetDropTargetState(bHandled ? EWacomDropTargetState::DropAccepted : EWacomDropTargetState::DropRejected);
 	return bHandled;
@@ -190,6 +207,11 @@ bool UWacomZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const FDrag
 
 bool UWacomZoneDropTarget::TryHandleDropOperation(UDragDropOperation* InOperation)
 {
+	if (ZoneKind == EZoneKind::BurdenZone)
+	{
+		return false;
+	}
+
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
 	if (!CardOp || !CardOp->InstanceId.IsValid())
 	{

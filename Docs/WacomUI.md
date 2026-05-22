@@ -153,11 +153,11 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 | 区域 | 当前职责 |
 |---|---|
-| 删牌区 | `UWacomDeleteZoneDropTarget` 只做预览和转发删牌意图；金币预览读取 `URunSession::GetDeleteGoldRewardForCard()` |
+| 删牌区 | `UWacomDeleteZoneDropTarget` 只做预览和转发删牌意图；预览、确认前校验和确认后提交都使用卡牌 `InstanceId`；Definition 只用于卡名 fallback |
 | 备战区 | `UWacomZoneDropTarget` 显示 `BattleDeck` 和已入战 SpecialZone 投影卡，只做预览和转发移动意图 |
 | 通量内容区 | 显示物理位于 `Backpack` 的通量内容，A 类容器也作为内容卡显示 |
 | 特殊存放区 | 每张 B 主卡对应一个 `UWacomSpecialZoneWidget` |
-| 负重区 | 仅 `BurdenCount > 0` 时显示 |
+| 负重区 | 仅 `BurdenCount > 0` 时显示卡牌；卡牌可拖出，但区域背景不接收 drop |
 
 数据和刷新：
 
@@ -170,7 +170,7 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 - DropTarget 只读 RunSession 做 hover 预览校验；drop 时把 `UWacomCardDragOperation` 转发给 `UWacomBackpackScreen`。
 - 普通 drop 由 `UWacomBackpackScreen::HandleZoneDropRequested()` 先调用 `ValidateMoveInstance()`，再调用 `MoveInstance()`，并统一发 AppToast。
-- Delete drop 由 `UWacomBackpackScreen::HandleDeleteDropRequested()` 先调用 `ValidateDeleteCardForGold()`；失败直接 AppToast，成功才弹 ConfirmDialog，确认后提交 `DeleteCardForGold()`。
+- Delete drop 由 `UWacomBackpackScreen::HandleDeleteDropRequested()` 先调用 `ValidateDeleteCardForGoldByInstance()`；失败直接 AppToast，成功才弹 ConfirmDialog，确认后提交 `DeleteCardForGoldByInstance()`。
 - SpecialZone 内容卡右键入战请求由 `UWacomSpecialZoneWidget` 转发给 `UWacomBackpackScreen`。
 - 卡牌 hover 详情由 `UWacomBackpackScreen` 管理，数据来自 `UWacomBackpackScreenPresenter` 和 `UWacomCardPresentationBuilder`。
 

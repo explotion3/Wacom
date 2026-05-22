@@ -1187,14 +1187,62 @@ bool URunSession::DeleteCardForGold(UCardDefinition* Card)
 	return true;
 }
 
+bool URunSession::DeleteCardForGoldByInstance(FGuid InstanceId)
+{
+	const FRunDeckOperationValidation Validation = ValidateDeleteCardForGoldByInstance(InstanceId);
+	if (!Validation.bCanExecute)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] DeleteCardForGoldByInstance: 拒绝 InstanceId=%s Reason=%s"),
+			*InstanceId.ToString(), *Validation.DisabledReason.ToString());
+		return false;
+	}
+
+	const int32 GoldReward = GetDeleteGoldRewardForInstance(InstanceId);
+
+	FName DisabledReason = NAME_None;
+	if (!FRunDeckRules::PermanentRemoveOwnedInstance(RunState, InstanceId, &DisabledReason))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] DeleteCardForGoldByInstance: 提交失败 InstanceId=%s Reason=%s"),
+			*InstanceId.ToString(), *DisabledReason.ToString());
+		return false;
+	}
+
+	if (GoldReward > 0)
+	{
+		RunState.Gold += GoldReward;
+	}
+	UE_LOG(LogTemp, Display,
+		TEXT("[RunSession] DeleteCardForGoldByInstance: %s → +%d gold (total=%d)"),
+		*InstanceId.ToString(), GoldReward, RunState.Gold);
+	NotifyRunStateChanged();
+	return true;
+}
+
 int32 URunSession::GetDeleteGoldRewardForCard(const UCardDefinition* Card)
 {
 	return FRunDeckRules::GetDeleteGoldRewardForCard(Card);
 }
 
+int32 URunSession::GetDeleteGoldRewardForInstance(FGuid InstanceId) const
+{
+	FRunOwnedCardLocation Location;
+	if (!FRunDeckRules::FindOwnedCardInstance(RunState, InstanceId, Location))
+	{
+		return 0;
+	}
+	return FRunDeckRules::GetDeleteGoldRewardForCard(Location.Instance.Definition);
+}
+
 FRunDeckOperationValidation URunSession::ValidateDeleteCardForGold(UCardDefinition* Card) const
 {
 	return FRunDeckRules::ValidatePermanentRemoveCard(RunState, Card);
+}
+
+FRunDeckOperationValidation URunSession::ValidateDeleteCardForGoldByInstance(FGuid InstanceId) const
+{
+	return FRunDeckRules::ValidatePermanentRemoveInstance(RunState, InstanceId);
 }
 
 bool URunSession::AddCardToBattleDeck(UCardDefinition* Card)

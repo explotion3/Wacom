@@ -40,10 +40,14 @@ struct FRunDeckRules
 	static void CollectTypeBContainers(const FRunState& State, TArray<FGuid>& OutOwnerInstanceIds);
 
 	static bool FindFirstOwnedCardDefinition(const FRunState& State, const UCardDefinition* Card, FRunOwnedCardLocation& OutLocation);
+	static bool FindOwnedCardInstance(const FRunState& State, FGuid InstanceId, FRunOwnedCardLocation& OutLocation);
 	static bool DoesRunOwnCardDefinition(const FRunState& State, const UCardDefinition* Card);
 	static bool HasCapacityProviderAfterDestroyingFirstOwnedInstance(const FRunState& State, const UCardDefinition* Card);
+	static bool HasCapacityProviderAfterDestroyingOwnedInstance(const FRunState& State, FGuid InstanceId);
 	static FRunDeckOperationValidation ValidatePermanentRemoveCard(const FRunState& State, const UCardDefinition* Card);
+	static FRunDeckOperationValidation ValidatePermanentRemoveInstance(const FRunState& State, FGuid InstanceId);
 	static bool PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* Card, FName* OutDisabledReason = nullptr);
+	static bool PermanentRemoveOwnedInstance(FRunState& State, FGuid InstanceId, FName* OutDisabledReason = nullptr);
 	static int32 GetDeleteGoldRewardForCard(const UCardDefinition* Card);
 
 	static int32 SumOwnedCardCapacity(const FRunState& State, bool bTypeAOnly);

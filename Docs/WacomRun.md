@@ -194,7 +194,7 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 - 销毁 B 主卡时，它的 SpecialZone 内卡退回 Backpack；装不下则进 BurdenZone。
 - 移除非容量卡后允许从负重区回填；移除容量来源卡后不做回填，只处理容量缩小导致的超容。
 
-删牌换金币当前是简易数值：白卡 +1，蓝卡 +2。奖励查询入口是 `URunSession::GetDeleteGoldRewardForCard()`，UI 只读取这个 Run 层口径。金币是 Run 内资源，但当前不写入 SaveGame。
+删牌换金币当前是简易数值：白卡 +1，蓝卡 +2。UI 拖拽删除使用 `InstanceId`，入口是 `ValidateDeleteCardForGoldByInstance()` / `DeleteCardForGoldByInstance()` / `GetDeleteGoldRewardForInstance()`；RunEvent 等资产语义仍可用 Definition 级入口表达“移除一张匹配卡”。金币是 Run 内资源，但当前不写入 SaveGame。
 
 ---
 
