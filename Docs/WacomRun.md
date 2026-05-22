@@ -251,6 +251,8 @@ RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，�
 - 从玩家任意持有区永久移除一张卡。
 - 标记指定 `PersistentId` 事件完成。
 
+选项 `Effects` 按事务执行：任一效果失败时，本次选项不提交已执行的前置效果，且不改变节点 / 时间 / 卡牌 / 金币 / 压力 / 事件 active 或 completed 状态；失败结果不返回部分 `EffectResults`。
+
 RunEvent 的移除卡搜索四个物理持有区：`Backpack`、`BattleDeck`、`BurdenZone` 和所有 `SpecialZones.Cards`。它不发金币，但遵守固有卡、最后容量来源卡和 Companion 嗜血规则。
 
 `FRunEventChoiceResult` 只表达本次选项直接效果，供 UI 和日志展示。后续规则不能依赖这个结果包反向修改 RunState。

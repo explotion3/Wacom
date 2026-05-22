@@ -725,6 +725,146 @@ bool FWacomRunEventChoiceResultClampSpec::RunTest(const FString& /*Parameters*/)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventTransactionRollbackSpec,
+	"Wacom.Run.Event.TransactionRollback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventTransactionRollbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->AddGold(2);
+	Run->AddPressure(EWacomPressureType::Misdeed, 3);
+
+	FWacomRunEventChoiceDefinition Transaction;
+	Transaction.ChoiceId = TEXT("Transaction");
+	Transaction.bMarkEventCompleted = true;
+	Transaction.bCloseEventAfterResolve = true;
+	Transaction.NextNodeId = TEXT("MissingNode");
+
+	FWacomRunEventEffectDefinition Gold;
+	Gold.Type = EWacomRunEventEffectType::AddGold;
+	Gold.Value = 5;
+	FWacomRunEventEffectDefinition InvalidPressure;
+	InvalidPressure.Type = EWacomRunEventEffectType::AddPressure;
+	InvalidPressure.PressureType = TEXT("InvalidPressureType");
+	InvalidPressure.Value = 7;
+	Transaction.Effects = { Gold, InvalidPressure };
+
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Transaction));
+	TestTrue(TEXT("Begin transaction event"), Run->BeginRunEvent(TEXT("Event.Transaction.GoldPressure"), Event.Get()));
+	const FRunEventSnapshot Before = Run->BuildCurrentRunEventSnapshot();
+	const int32 GoldBefore = Run->GetGold();
+	const int32 MisdeedBefore = Run->GetPressureValue(EWacomPressureType::Misdeed);
+	const int32 TotalPressureBefore = Run->GetTotalPressure();
+
+	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Transaction"));
+	const FRunEventSnapshot After = Run->BuildCurrentRunEventSnapshot();
+
+	TestFalse(TEXT("Transaction fails on invalid pressure"), Result.bSucceeded);
+	TestEqual(TEXT("Invalid pressure reason"), Result.DisabledReason, FName(TEXT("InvalidPressureType")));
+	TestEqual(TEXT("No effect results are committed on rollback"), Result.EffectResults.Num(), 0);
+	TestEqual(TEXT("Gold rolled back"), Run->GetGold(), GoldBefore);
+	TestEqual(TEXT("Misdeed pressure rolled back"), Run->GetPressureValue(EWacomPressureType::Misdeed), MisdeedBefore);
+	TestEqual(TEXT("Total pressure rolled back"), Run->GetTotalPressure(), TotalPressureBefore);
+	TestTrue(TEXT("Event remains active after rollback"), Run->IsRunEventActive());
+	TestEqual(TEXT("Active event id preserved"), After.PersistentId, Before.PersistentId);
+	TestEqual(TEXT("Current node preserved"), After.CurrentNodeId, Before.CurrentNodeId);
+	TestEqual(TEXT("Completed state preserved"), After.bCompleted, Before.bCompleted);
+	TestFalse(TEXT("Persistent event not completed"), Run->IsRunEventCompleted(TEXT("Event.Transaction.GoldPressure")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventTransactionRollbackAfterCardGainSpec,
+	"Wacom.Run.Event.TransactionRollbackAfterCardGain",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventTransactionRollbackAfterCardGainSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Bag = MakeRunEventTestTypeAContainer(Fx, 8);
+	UCardDefinition* Reward = Fx.MakeNoopCard(0);
+	UCardDefinition* MissingCard = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Initialize card transaction run"), Run->Initialize(Char));
+	TestFalse(TEXT("Reward starts absent"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Reward));
+
+	FWacomRunEventChoiceDefinition Transaction;
+	Transaction.ChoiceId = TEXT("Transaction");
+	FWacomRunEventEffectDefinition GainCard;
+	GainCard.Type = EWacomRunEventEffectType::GainCard;
+	GainCard.CardDefinition = Reward;
+	FWacomRunEventEffectDefinition RemoveMissing;
+	RemoveMissing.Type = EWacomRunEventEffectType::RemoveCard;
+	RemoveMissing.CardDefinition = MissingCard;
+	Transaction.Effects = { GainCard, RemoveMissing };
+
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Transaction));
+	TestTrue(TEXT("Begin card transaction event"), Run->BeginRunEvent(TEXT("Event.Transaction.CardGain"), Event.Get()));
+	const FRunEventSnapshot Before = Run->BuildCurrentRunEventSnapshot();
+	TestEqual(TEXT("Card event starts at original node"), Before.CurrentNodeId, FName(TEXT("Start")));
+
+	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Transaction"));
+	const FRunEventSnapshot After = Run->BuildCurrentRunEventSnapshot();
+
+	TestFalse(TEXT("Transaction fails on missing card remove"), Result.bSucceeded);
+	TestEqual(TEXT("No effect results are committed after card rollback"), Result.EffectResults.Num(), 0);
+	TestFalse(TEXT("Reward rolled back from all storage zones"),
+		StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Reward));
+	TestTrue(TEXT("Event remains active after card rollback"), Run->IsRunEventActive());
+	TestEqual(TEXT("Active card event id preserved"), After.PersistentId, Before.PersistentId);
+	TestEqual(TEXT("Card event node preserved"), After.CurrentNodeId, Before.CurrentNodeId);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventTransactionRollbackAfterConsumeNodeSpec,
+	"Wacom.Run.Event.TransactionRollbackAfterConsumeNode",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventTransactionRollbackAfterConsumeNodeSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	FRunState& State = Run->GetMutableRunState();
+	State.CurrentTimePhase = ETimePhase::Day;
+	State.RemainingNodeCount = 1;
+
+	FWacomRunEventChoiceDefinition Transaction;
+	Transaction.ChoiceId = TEXT("Transaction");
+	FWacomRunEventEffectDefinition ConsumeNode;
+	ConsumeNode.Type = EWacomRunEventEffectType::ConsumeNode;
+	ConsumeNode.Value = 1;
+	FWacomRunEventEffectDefinition MarkMissingTarget;
+	MarkMissingTarget.Type = EWacomRunEventEffectType::MarkEventCompleted;
+	MarkMissingTarget.TargetPersistentId = NAME_None;
+	Transaction.Effects = { ConsumeNode, MarkMissingTarget };
+
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Transaction));
+	TestTrue(TEXT("Begin consume transaction event"), Run->BeginRunEvent(TEXT("Event.Transaction.ConsumeNode"), Event.Get()));
+	const FRunEventSnapshot Before = Run->BuildCurrentRunEventSnapshot();
+	const ETimePhase PhaseBefore = Run->GetCurrentTimePhase();
+	const int32 NodesBefore = Run->GetRemainingNodeCount();
+	const int32 HungerBefore = Run->GetPressureValue(EWacomPressureType::Hunger);
+
+	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Transaction"));
+	const FRunEventSnapshot After = Run->BuildCurrentRunEventSnapshot();
+
+	TestFalse(TEXT("Transaction fails on missing event target"), Result.bSucceeded);
+	TestEqual(TEXT("No effect results are committed after consume rollback"), Result.EffectResults.Num(), 0);
+	TestTrue(TEXT("Time phase rolled back"), Run->GetCurrentTimePhase() == PhaseBefore);
+	TestEqual(TEXT("Remaining nodes rolled back"), Run->GetRemainingNodeCount(), NodesBefore);
+	TestEqual(TEXT("Phase entry pressure rolled back"), Run->GetPressureValue(EWacomPressureType::Hunger), HungerBefore);
+	TestTrue(TEXT("Event remains active after consume rollback"), Run->IsRunEventActive());
+	TestEqual(TEXT("Consume event id preserved"), After.PersistentId, Before.PersistentId);
+	TestEqual(TEXT("Consume event node preserved"), After.CurrentNodeId, Before.CurrentNodeId);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunEventConsumeNodeEffectEntersDuskWithPressureSpec,
 	"Wacom.Run.Event.ConsumeNodeEffectEntersDuskWithPressure",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

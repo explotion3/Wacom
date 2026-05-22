@@ -188,7 +188,11 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOption(FRunState& State, FName Ch
 		return Result;
 	}
 
-	if (!ApplyChoiceEffects(State, *Choice, &Result.EffectResults, &Result.DisabledReason))
+	const FName ActiveRunEventId = State.ActiveRunEventId;
+	FRunState WorkingState = State;
+	TArray<FRunEventChoiceEffectResult> PendingEffectResults;
+
+	if (!ApplyChoiceEffects(WorkingState, *Choice, &PendingEffectResults, &Result.DisabledReason))
 	{
 		if (Result.DisabledReason.IsNone())
 		{
@@ -197,14 +201,22 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOption(FRunState& State, FName Ch
 		return Result;
 	}
 
+	FRunEventState* WorkingEventState = WorkingState.RunEventStates.Find(ActiveRunEventId);
+	if (!WorkingEventState)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[RunSession] ChooseRunEventOption: 工作事件状态无效，拒绝提交"));
+		Result.DisabledReason = TEXT("InvalidEventState");
+		return Result;
+	}
+
 	if (Choice->bMarkEventCompleted)
 	{
-		EventState->bCompleted = true;
+		WorkingEventState->bCompleted = true;
 	}
 
 	if (!Choice->NextNodeId.IsNone())
 	{
-		if (!FindNode(State.ActiveRunEventDefinition, Choice->NextNodeId))
+		if (!FindNode(WorkingState.ActiveRunEventDefinition, Choice->NextNodeId))
 		{
 			UE_LOG(LogTemp, Warning,
 				TEXT("[RunSession] ChooseRunEventOption: NextNodeId=%s 无效，保持当前节点"),
@@ -212,16 +224,18 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOption(FRunState& State, FName Ch
 		}
 		else
 		{
-			EventState->CurrentNodeId = Choice->NextNodeId;
+			WorkingEventState->CurrentNodeId = Choice->NextNodeId;
 		}
 	}
 
-	if (Choice->bCloseEventAfterResolve || EventState->bCompleted)
+	if (Choice->bCloseEventAfterResolve || WorkingEventState->bCompleted)
 	{
-		State.ActiveRunEventId = NAME_None;
-		State.ActiveRunEventDefinition = nullptr;
+		WorkingState.ActiveRunEventId = NAME_None;
+		WorkingState.ActiveRunEventDefinition = nullptr;
 	}
 
+	State = MoveTemp(WorkingState);
+	Result.EffectResults = MoveTemp(PendingEffectResults);
 	Result.bSucceeded = true;
 	return Result;
 }
