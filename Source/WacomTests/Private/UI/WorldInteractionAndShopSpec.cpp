@@ -404,7 +404,9 @@ bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Param
 	Screen->SetRunSessionOverrideForTest(Run.Get());
 	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
 	Screen->TakeWidget();
+	Screen->ActivateWidget();
 	Screen->RefreshEvent();
+	TestTrue(TEXT("Event screen activates without world stack"), Screen->IsActivated());
 
 	TestEqual(TEXT("Screen title from snapshot"), Screen->GetTitleTextForTest().ToString(), FString(TEXT("UI标题")));
 	TestEqual(TEXT("Screen body from snapshot"), Screen->GetBodyTextForTest().ToString(), FString(TEXT("UI正文")));
@@ -415,6 +417,7 @@ bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Param
 	TestTrue(TEXT("Choose close succeeds"), Screen->ChooseChoiceByIndexForTest(0));
 	TestTrue(TEXT("Event completed after choice"), Run->IsRunEventCompleted(TEXT("Event.UI.Screen")));
 	TestFalse(TEXT("Event no longer active after close choice"), Run->IsRunEventActive());
+	TestFalse(TEXT("Close choice deactivates event screen once flow ends"), Screen->IsActivated());
 
 	return true;
 }
@@ -454,12 +457,15 @@ bool FWacomUIRunEventScreenBlockedChoiceToastSpec::RunTest(const FString& /*Para
 	Screen->SetRunSessionOverrideForTest(Run.Get());
 	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
 	Screen->TakeWidget();
+	Screen->ActivateWidget();
 	Screen->RefreshEvent();
+	TestTrue(TEXT("Blocked event screen remains active before choice"), Screen->IsActivated());
 
 	TestEqual(TEXT("One blocked choice"), Screen->GetChoiceCountForTest(), 1);
 	TestFalse(TEXT("Choice unavailable"), Screen->GetChoiceSnapshotForTest(0).bAvailable);
 	TestFalse(TEXT("Choosing blocked option fails"), Screen->ChooseChoiceByIndexForTest(0));
 	TestTrue(TEXT("Event remains active"), Run->IsRunEventActive());
+	TestTrue(TEXT("Blocked choice keeps screen active"), Screen->IsActivated());
 	TestEqual(TEXT("Blocked choice emits toast"), ToastWidget->GetVisibleToastCount(), 1);
 	const TArray<FWacomAppToastView> Toasts = ToastWidget->GetCurrentToastsForTest();
 	if (Toasts.IsValidIndex(0))
@@ -564,7 +570,9 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	Screen->SetRunSessionOverrideForTest(Run.Get());
 	Screen->SetToastSubsystemOverrideForTest(ToastSubsystem.Get());
 	Screen->TakeWidget();
+	Screen->ActivateWidget();
 	Screen->RefreshShop();
+	TestTrue(TEXT("Shop screen activates without world stack"), Screen->IsActivated());
 
 	TestEqual(TEXT("Two offer rows"), Screen->GetOfferRowCount(), 2);
 	TestTrue(TEXT("First offer starts purchasable"), Screen->GetOfferPresentationViewForTest(0).bCanPurchase);
@@ -604,9 +612,12 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	TestTrue(TEXT("Shop visit has purchase"), Run->BuildCurrentShopSnapshot().bHasPurchaseThisVisit);
 
 	const int32 NodesBeforeClose = Run->GetRemainingNodeCount();
-	Run->EndShopVisit();
+	Screen->DeactivateWidget();
 	TestFalse(TEXT("Shop visit closed"), Run->IsShopVisitActive());
+	TestFalse(TEXT("Shop screen deactivates after close flow"), Screen->IsActivated());
 	TestEqual(TEXT("Close after purchase consumes one node"), Run->GetRemainingNodeCount(), NodesBeforeClose - 1);
+	Screen->DeactivateWidget();
+	TestEqual(TEXT("Duplicate deactivation does not consume another node"), Run->GetRemainingNodeCount(), NodesBeforeClose - 1);
 
 	return true;
 }

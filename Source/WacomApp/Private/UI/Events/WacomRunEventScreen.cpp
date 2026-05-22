@@ -18,9 +18,8 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "UI/Events/WacomRunEventChoiceButton.h"
-#include "UI/Events/WacomRunEventPresentationBuilder.h"
+#include "UI/Events/WacomRunEventScreenFlow.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
-#include "UI/Foundation/WacomAppToastTypes.h"
 
 namespace
 {
@@ -126,14 +125,7 @@ void UWacomRunEventScreen::NativeOnActivated()
 
 void UWacomRunEventScreen::NativeOnDeactivated()
 {
-	if (!bDidEndRunEvent)
-	{
-		if (URunSession* Run = GetRunSession())
-		{
-			Run->EndRunEvent();
-		}
-		bDidEndRunEvent = true;
-	}
+	FWacomRunEventScreenFlow::EndRunEventOnDeactivate(GetRunSession(), bDidEndRunEvent);
 	Super::NativeOnDeactivated();
 }
 
@@ -204,20 +196,6 @@ UWacomAppToastSubsystem* UWacomRunEventScreen::GetToastSubsystem() const
 	return GI ? GI->GetSubsystem<UWacomAppToastSubsystem>() : nullptr;
 }
 
-void UWacomRunEventScreen::ShowToasts(const TArray<FWacomAppToastView>& ToastViews) const
-{
-	UWacomAppToastSubsystem* ToastSubsystem = GetToastSubsystem();
-	if (!ToastSubsystem)
-	{
-		return;
-	}
-
-	for (const FWacomAppToastView& ToastView : ToastViews)
-	{
-		ToastSubsystem->ShowToast(ToastView);
-	}
-}
-
 void UWacomRunEventScreen::RebuildChoices()
 {
 	CachedChoices.Reset();
@@ -278,38 +256,13 @@ bool UWacomRunEventScreen::ChooseChoice(FName ChoiceId)
 		return false;
 	}
 
-	const FRunEventChoiceSnapshot* CachedChoice = CachedChoices.FindByPredicate(
-		[ChoiceId](const FRunEventChoiceSnapshot& Choice)
-		{
-			return Choice.ChoiceId == ChoiceId;
-		});
-
-	if (CachedChoice && !CachedChoice->bAvailable)
-	{
-		FRunEventChoiceResult BlockedResult;
-		BlockedResult.ChoiceId = ChoiceId;
-		BlockedResult.DisabledReason = CachedChoice->DisabledReason;
-		ShowToasts(UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(BlockedResult));
-		return false;
-	}
-
-	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(ChoiceId);
-	ShowToasts(UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(Result));
-	if (!Result.bSucceeded)
-	{
-		RefreshEvent();
-		return false;
-	}
-
-	if (!Run->IsRunEventActive())
-	{
-		bDidEndRunEvent = true;
-		DeactivateWidget();
-		return true;
-	}
-
-	RefreshEvent();
-	return true;
+	return FWacomRunEventScreenFlow::ChooseChoice(
+		*this,
+		Run,
+		GetToastSubsystem(),
+		ChoiceId,
+		CachedChoices,
+		bDidEndRunEvent);
 }
 
 #undef LOCTEXT_NAMESPACE

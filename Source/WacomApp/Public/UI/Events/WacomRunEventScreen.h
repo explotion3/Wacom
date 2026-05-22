@@ -69,7 +69,6 @@ protected:
 private:
 	URunSession* GetRunSession() const;
 	UWacomAppToastSubsystem* GetToastSubsystem() const;
-	void ShowToasts(const TArray<struct FWacomAppToastView>& ToastViews) const;
 	void RebuildChoices();
 	void AddChoiceButton(const FRunEventChoiceSnapshot& Choice);
 	void HandleChoiceClicked(FName ChoiceId);

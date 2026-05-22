@@ -2,7 +2,7 @@
 type: architecture
 scope: wacom-project
 status: active
-updated: 2026-05-22
+updated: 2026-05-23
 tags:
   - wacom/architecture
   - wacom/modules
@@ -215,6 +215,8 @@ UI 不可以：
 Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / RunEvent / Backpack Screen 读取 `URunSession` Snapshot 或 ViewData；Battle UI 保持 `FBattleSnapshot` 推送模型。两者都不直接修改规则状态。
 
 当前 UI 侧 ViewData / PresentationBuilder 包括卡牌展示、商店商品、RunEvent 结果、BattleEvent 表现、AppToast 和目标选择视图。它们属于 `WacomApp` 表现层。
+
+复杂 `WacomApp` Widget 流程不要扩成跨模块 Public API。Screen / HUD 负责 View 所有权、生命周期、绑定和重建；购买、选择、移动、删除、确认弹窗、Toast 和访问结束等编排应收口到 `WacomApp/Private` 的 coordinator / command flow helper，再由 Screen 的公开测试包装验证行为。
 
 ## 10. 验证入口
 

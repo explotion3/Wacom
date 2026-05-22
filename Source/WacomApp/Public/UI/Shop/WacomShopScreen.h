@@ -87,10 +87,6 @@ private:
 	bool PurchaseOffer(FGuid OfferId);
 	void HandleOfferPurchaseRequested(FGuid OfferId);
 	UWacomAppToastSubsystem* GetToastSubsystem() const;
-	const FWacomShopOfferPresentationView* FindCachedOfferView(FGuid OfferId) const;
-	static FText BuildPurchaseFailureToastText(FName DisabledReason);
-	void ShowPurchaseSuccessToast(const FWacomShopOfferPresentationView* OfferView) const;
-	void ShowPurchaseFailureToast(const FWacomShopOfferPresentationView* OfferView) const;
 
 	UPROPERTY(Transient)
 	TArray<FGuid> CachedOfferIds;

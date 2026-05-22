@@ -26,12 +26,13 @@ UI 不直接修改战斗或 Run 状态。UI 读取 Snapshot、ViewData 或 ViewM
 |---|---|---|
 | ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 无；只读显示探索状态和交互提示 |
 | Run Screen / 菜单类 Widget | Run Snapshot / ViewModel / Presentation ViewData | `URunSession` 写 API，通常经 PlayerController / Screen 调用 |
-| 背包 | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 调 `MoveInstance / DeleteCardForGoldByInstance / SetSpecialZoneCardBattleEnabled` |
-| 商店 | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 调 `PurchaseShopOffer`，关闭时调 `EndShopVisit` |
-| 探索事件 | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 调 `ChooseRunEventOptionWithResult` |
-| 战斗 | `FBattleSnapshot`、`FBattleEvent`、BattleSession ViewData | `UBattleHUD` 统一调 `Session->SubmitCommand` |
+| 背包 | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图，私有 `FWacomBackpackCommandFlow` 编排 `MoveInstance / DeleteCardForGoldByInstance / SetSpecialZoneCardBattleEnabled`、Toast 和 Confirm |
+| 商店 | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 `FWacomShopScreenFlow` 编排 `PurchaseShopOffer / EndShopVisit` 和 Toast |
+| 探索事件 | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 `FWacomRunEventScreenFlow` 编排 `ChooseRunEventOptionWithResult / EndRunEvent` 和 Toast |
+| 战斗 | `FBattleSnapshot`、`FBattleEvent`、BattleSession ViewData | `UBattleHUD` 统一调 `Session->SubmitCommand`；BattleHUD 本轮不抽 flow helper |
 
 Widget 可以有 C++ fallback 布局，但 C++ 的职责是协议、生命周期和兜底显示；正式视觉由 WBP 承接。
+复杂 Widget 的流程逻辑应收口到 `WacomApp/Private` 的 command flow / coordinator helper。Screen 负责 View、CommonUI 生命周期、绑定和重建；helper 负责命令编排、确认弹窗、Toast 和关闭访问等副作用。
 
 ---
 
@@ -148,8 +149,8 @@ RunSession 写状态
 
 ## §5 背包 UI
 
-`UWacomBackpackScreen` 位于 `GameMenu` 层。它负责 UI 编排、拖拽、详情面板生命周期和命令提交；规则真相仍在 `URunSession`。
-C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时 DropTarget / WrapBox / 详情层由私有 `FBackpackRuntimeZoneBuilder` 创建；WBP 绑定字段和命令入口仍保留在 `UWacomBackpackScreen`。
+`UWacomBackpackScreen` 位于 `GameMenu` 层。它负责 View 所有权、CommonUI 生命周期、WBP 绑定、拖拽入口、详情面板生命周期和全量重建；规则真相仍在 `URunSession`。
+C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时 DropTarget / WrapBox / 详情层由私有 `FBackpackRuntimeZoneBuilder` 创建；移动 / 删除 / 入战开关的命令编排收口到私有 `FWacomBackpackCommandFlow`。WBP 绑定字段和玩家意图入口仍保留在 `UWacomBackpackScreen`。
 
 背包 UI 对玩家已拥有卡只提交 `InstanceId`。卡牌 Definition 可用于展示、卡名 fallback 和资产语义说明，但不能作为 UI 删除或移动某张已拥有卡的身份。
 
@@ -172,10 +173,10 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 交互：
 
-- DropTarget 只读 RunSession 做 hover 预览校验；drop 时把 `UWacomCardDragOperation` 转发给 `UWacomBackpackScreen`。
-- 普通 drop 由 `UWacomBackpackScreen::HandleZoneDropRequested()` 先调用 `ValidateMoveInstance()`，再调用 `MoveInstance()`，并统一发 AppToast。
-- Delete drop 由 `UWacomBackpackScreen::HandleDeleteDropRequested()` 先调用 `ValidateDeleteCardForGoldByInstance()`；失败直接 AppToast，成功才弹 ConfirmDialog，确认后提交 `DeleteCardForGoldByInstance()`。
-- SpecialZone 内容卡右键入战请求由 `UWacomSpecialZoneWidget` 转发给 `UWacomBackpackScreen`。
+- DropTarget 只读 RunSession 做 hover 预览校验；drop 时把 `UWacomCardDragOperation` 转发给 `UWacomBackpackScreen`，再由 `FWacomBackpackCommandFlow` 处理实际命令。
+- 普通 drop 由 `FWacomBackpackCommandFlow` 先调用 `ValidateMoveInstance()`，再调用 `MoveInstance()`，并统一发 AppToast。
+- Delete drop 由 `FWacomBackpackCommandFlow` 先调用 `ValidateDeleteCardForGoldByInstance()`；失败直接 AppToast，成功才弹 ConfirmDialog，确认后提交 `DeleteCardForGoldByInstance()`。
+- SpecialZone 内容卡右键入战请求由 `UWacomSpecialZoneWidget` 转发给 `UWacomBackpackScreen`，再由 `FWacomBackpackCommandFlow` 调 `SetSpecialZoneCardBattleEnabled()`。
 - 卡牌 hover 详情由 `UWacomBackpackScreen` 管理，数据来自 `UWacomBackpackScreenPresenter` 和 `UWacomCardPresentationBuilder`。
 
 背包 WBP 制作细节见 `UI_Backpack_WBP_Binding.md`。未来正式 WBP、拖拽 polish、增量刷新等计划见 `Roadmap.md` 和 `TechDebt.md`。
@@ -184,7 +185,7 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 ## §6 商店 UI
 
-`UWacomShopScreen` 位于 `GameMenu` 层。商店打开不切换 `EGameFlowState`。
+`UWacomShopScreen` 位于 `GameMenu` 层。商店打开不切换 `EGameFlowState`。Screen 负责 View 所有权、CommonUI 生命周期、商品列表重建和按钮绑定；购买、关闭访问和 Toast 副作用收口到私有 `FWacomShopScreenFlow`。
 
 当前流程：
 
@@ -192,8 +193,8 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 - Screen 刷新时读取 `BuildCurrentShopSnapshot()`。
 - `UWacomShopPresentationBuilder` 把 `FRunShopOffer + 当前金币` 转成 `FWacomShopOfferPresentationView`。
 - Offer 行只渲染 ViewData 并广播购买请求，不直接解析 `CardDefinition` 或判断金币。
-- 点击购买调用 `PurchaseShopOffer(OfferId)`，成功后刷新商品列表和金币。
-- `NativeOnDeactivated` 中只调用一次 `EndShopVisit()`；本次访问买过任意商品时 Run 层关闭时消耗 1 节点。
+- 点击购买由 `FWacomShopScreenFlow` 调 `PurchaseShopOffer(OfferId)`，成功 / 失败后统一发 AppToast，Screen 再刷新商品列表和金币。
+- `NativeOnDeactivated` 的关闭访问路径由 `FWacomShopScreenFlow` 调 `EndShopVisit()`，每次 Screen 激活周期只结束一次；本次访问买过任意商品时 Run 层关闭时消耗 1 节点。
 - 如果 Push 商店 UI 失败，Router 会调用 `RunSession->EndShopVisit()` 回滚刚 Begin 的 active shop。
 
 正式商店视觉和 hover 详情属于后续表现项；商品规则、库存和节点消耗见 `WacomRun.md`。
@@ -202,17 +203,17 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 ## §7 RunEvent UI
 
-`UWacomRunEventScreen` 位于 `GameMenu` 层，用于展示轻量事件图当前 Node。
+`UWacomRunEventScreen` 位于 `GameMenu` 层，用于展示轻量事件图当前 Node。Screen 负责 View 所有权、CommonUI 生命周期、选项列表重建和按钮绑定；选项执行、事件关闭和 Toast 副作用收口到私有 `FWacomRunEventScreenFlow`。
 
 当前流程：
 
 - RunEvent 公开请求入口在 PlayerController；内部由 Router 先关闭已有 `GameMenu` 顶层，再调用 `RunSession->BeginRunEvent(PersistentId, EventDefinition)`。
 - Screen 刷新时读取 `BuildCurrentRunEventSnapshot()`。
 - ChoiceButton 显示 Label 和中文禁用原因；不可用选项也允许点击以弹出原因 Toast。
-- 可用选项调用 `ChooseRunEventOptionWithResult(ChoiceId)`，Run 层执行条件、效果、跳转和完成标记。
-- `UWacomRunEventPresentationBuilder` 把 `FRunEventChoiceResult` 转成 AppToast。
+- 可用选项由 `FWacomRunEventScreenFlow` 调 `ChooseRunEventOptionWithResult(ChoiceId)`，Run 层执行条件、效果、跳转和完成标记。
+- `FWacomRunEventScreenFlow` 使用 `UWacomRunEventPresentationBuilder` 把 `FRunEventChoiceResult` 转成 AppToast；不可用选项也由该 flow 发阻塞原因 Toast。
 - `RemoveCard` 结果显示“交出卡牌：{CardName}”；`MarkEventCompleted` 默认不弹 Toast。
-- 关闭事件界面时调用 `EndRunEvent()`；关闭型选项先由 Run 层清 active event，再 Deactivate。
+- 关闭事件界面时由 `FWacomRunEventScreenFlow` 调 `EndRunEvent()`；关闭型选项先由 Run 层清 active event，再 Deactivate。
 - 如果 Push 事件 UI 失败，Router 会调用 `RunSession->EndRunEvent()` 回滚刚 Begin 的 active event。
 
 事件规则、条件、效果和 PersistentId 口径见 `WacomRun.md` / `WacomData.md`。
@@ -222,7 +223,7 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 <a id="wacomui-battle-ui"></a>
 ## §8 战斗 UI
 
-战斗 UI 使用 Snapshot + Controller 推送模型，不走 Run MVVM。
+战斗 UI 使用 Snapshot + Controller 推送模型，不走 Run MVVM。本轮 Widget 流程逻辑收口不包含 BattleHUD；`UBattleHUD` 仍保留战斗命令出口职责。
 
 规则合法性和状态变更见 [WacomBattle.md](./WacomBattle.md)，战后结算见 [WacomRun §8](./WacomRun.md#wacomrun-battle-settlement)，WBP 制作合约见 [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md)。
 

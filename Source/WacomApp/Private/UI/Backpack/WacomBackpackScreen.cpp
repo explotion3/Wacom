@@ -16,21 +16,17 @@
 #include "Components/WrapBoxSlot.h"
 #include "Misc/PackageName.h"
 
-#include "Cards/CardDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "UI/Backpack/BackpackFallbackLayoutBuilder.h"
 #include "UI/Backpack/BackpackRuntimeZoneBuilder.h"
+#include "UI/Backpack/WacomBackpackCommandFlow.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
-#include "UI/Backpack/WacomDeleteZoneDropTarget.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
-#include "UI/Backpack/WacomZoneDropTarget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
-#include "UI/Foundation/WacomAppToastSubsystem.h"
-#include "UI/Menus/WacomConfirmDialog.h"
 #include "UI/ViewModels/WacomRunViewModel.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 
@@ -116,32 +112,6 @@ namespace
 {
 const FVector2D CardDetailPanelEstimatedSize(360.f, 420.f);
 constexpr float CardDetailPanelPadding = 12.f;
-
-FText GetBackpackCommandCardDisplayName(const UCardDefinition* Card)
-{
-	if (!Card)
-	{
-		return LOCTEXT("UnknownCard", "未知卡牌");
-	}
-	return Card->DisplayName.IsEmpty()
-		? FText::FromName(Card->CardId)
-		: Card->DisplayName;
-}
-
-UWacomAppToastSubsystem* GetBackpackToastSubsystem(const UObject* Context)
-{
-	const UWorld* World = Context ? Context->GetWorld() : nullptr;
-	UGameInstance* GI = World ? World->GetGameInstance() : nullptr;
-	return GI ? GI->GetSubsystem<UWacomAppToastSubsystem>() : nullptr;
-}
-
-void ShowBackpackWarningToast(const UObject* Context, const FText& Message)
-{
-	if (UWacomAppToastSubsystem* ToastSubsystem = GetBackpackToastSubsystem(Context))
-	{
-		ToastSubsystem->ShowWarning(Message);
-	}
-}
 
 template <typename TWidget>
 TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath)
@@ -313,142 +283,17 @@ FText UWacomBackpackScreen::GetCardDetailPanelNameText() const
 
 bool UWacomBackpackScreen::HandleZoneDropRequested(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId)
 {
-	UWacomAppToastSubsystem* ToastSubsystem = GetBackpackToastSubsystem(this);
-
-	auto ShowFailureToast = [ToastSubsystem](FName DisabledReason)
-	{
-		if (ToastSubsystem)
-		{
-			ToastSubsystem->ShowWarning(UWacomZoneDropTarget::FormatMoveFailureReasonForToast(DisabledReason));
-		}
-	};
-
-	if (!CardOp.InstanceId.IsValid())
-	{
-		ShowFailureToast(TEXT("CardNotFound"));
-		return false;
-	}
-
-	URunSession* Run = GetRunSession();
-	if (!Run)
-	{
-		ShowFailureToast(TEXT("RunSessionMissing"));
-		return false;
-	}
-
-	const FRunDeckOperationValidation Validation =
-		Run->ValidateMoveInstance(CardOp.InstanceId, TargetZone, TargetZoneOwnerInstanceId);
-	if (!Validation.bCanExecute)
-	{
-		ShowFailureToast(Validation.DisabledReason);
-		return false;
-	}
-
-	const bool bMoved = Run->MoveInstance(CardOp.InstanceId, TargetZone, TargetZoneOwnerInstanceId);
-	if (!bMoved)
-	{
-		ShowFailureToast(TEXT("Unknown"));
-		return false;
-	}
-
-	if (ToastSubsystem)
-	{
-		FWacomAppToastView ToastView;
-		ToastView.MessageText = FText::Format(
-			LOCTEXT("MoveSuccessToast", "移动卡牌：{0} → {1}"),
-			GetBackpackCommandCardDisplayName(CardOp.Definition.Get()),
-			UWacomZoneDropTarget::FormatZoneNameForToast(TargetZone));
-		ToastView.Tone = EWacomAppToastTone::System;
-		ToastView.IconKey = TEXT("CardMoved");
-		ToastSubsystem->ShowToast(ToastView);
-	}
-
-	return true;
+	return FWacomBackpackCommandFlow::HandleZoneDropRequested(
+		*this,
+		GetRunSession(),
+		CardOp,
+		TargetZone,
+		TargetZoneOwnerInstanceId);
 }
 
 bool UWacomBackpackScreen::HandleDeleteDropRequested(const UWacomCardDragOperation& CardOp)
 {
-	if (!CardOp.InstanceId.IsValid())
-	{
-		ShowBackpackWarningToast(
-			this,
-			UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("MissingCard")));
-		return false;
-	}
-
-	UCardDefinition* Card = CardOp.Definition.Get();
-	if (!Card)
-	{
-		ShowBackpackWarningToast(
-			this,
-			UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("MissingCard")));
-		return false;
-	}
-
-	URunSession* Run = GetRunSession();
-	if (!Run)
-	{
-		ShowBackpackWarningToast(
-			this,
-			UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("RunSessionMissing")));
-		return false;
-	}
-
-	const FGuid InstanceId = CardOp.InstanceId;
-	const FRunDeckOperationValidation Validation = Run->ValidateDeleteCardForGoldByInstance(InstanceId);
-	if (!Validation.bCanExecute)
-	{
-		ShowBackpackWarningToast(
-			this,
-			UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(Validation.DisabledReason));
-		return false;
-	}
-
-	const FText CardName = GetBackpackCommandCardDisplayName(Card);
-	const int32 GoldReward = Run->GetDeleteGoldRewardForInstance(InstanceId);
-	const TWeakObjectPtr<UWacomBackpackScreen> WeakScreen(this);
-	UWacomConfirmDialog* Dialog = UWacomConfirmDialog::Show(
-		this,
-		LOCTEXT("DeleteCardTitle", "删除卡牌"),
-		FText::Format(
-			LOCTEXT("DeleteCardMessage", "确认永久销毁 {0} 并置换金币？"),
-			CardName),
-		[WeakScreen, InstanceId, CardName, GoldReward]()
-		{
-			UWacomBackpackScreen* PinnedScreen = WeakScreen.Get();
-			URunSession* PinnedRun = PinnedScreen ? PinnedScreen->GetRunSession() : nullptr;
-			if (!PinnedScreen || !PinnedRun || !InstanceId.IsValid())
-			{
-				return;
-			}
-
-			UWacomAppToastSubsystem* ToastSubsystem = GetBackpackToastSubsystem(PinnedScreen);
-
-			const bool bDeleted = PinnedRun->DeleteCardForGoldByInstance(InstanceId);
-			if (bDeleted)
-			{
-				if (ToastSubsystem)
-				{
-					FWacomAppToastView ToastView;
-					ToastView.MessageText = FText::Format(
-						LOCTEXT("DeleteCardSuccessToast", "销毁卡牌：{0}，获得 {1} 金币"),
-						CardName,
-						FText::AsNumber(GoldReward));
-					ToastView.Tone = EWacomAppToastTone::Positive;
-					ToastView.IconKey = TEXT("CardDestroyed");
-					ToastSubsystem->ShowToast(ToastView);
-				}
-				return;
-			}
-
-			if (ToastSubsystem)
-			{
-				const FRunDeckOperationValidation RetryValidation = PinnedRun->ValidateDeleteCardForGoldByInstance(InstanceId);
-				ToastSubsystem->ShowWarning(UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(RetryValidation.DisabledReason));
-			}
-		});
-
-	return Dialog != nullptr;
+	return FWacomBackpackCommandFlow::HandleDeleteDropRequested(*this, GetRunSession(), CardOp);
 }
 
 void UWacomBackpackScreen::EnsureRuntimeZoneWidgets()
@@ -685,21 +530,7 @@ void UWacomBackpackScreen::RebuildBurdenZone(const FRunBackpackStorageSnapshot& 
 
 void UWacomBackpackScreen::HandleBattleEnabledToggle(FGuid InstanceId)
 {
-	URunSession* Run = GetRunSession();
-	if (!Run || !InstanceId.IsValid())
-	{
-		return;
-	}
-
-	FCardInstance Inst;
-	EZoneKind Zone = EZoneKind::Backpack;
-	FGuid ZoneOwner;
-	if (!Run->FindInstance(InstanceId, Inst, Zone, ZoneOwner) || Zone != EZoneKind::SpecialZone)
-	{
-		return;
-	}
-
-	Run->SetSpecialZoneCardBattleEnabled(InstanceId, !Inst.bBattleEnabledInSpecialZone);
+	FWacomBackpackCommandFlow::HandleBattleEnabledToggle(GetRunSession(), InstanceId);
 }
 
 void UWacomBackpackScreen::HandleCardHovered(UWacomDeckCardWidget* SourceWidget)

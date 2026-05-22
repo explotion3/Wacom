@@ -41,7 +41,7 @@ struct FCardInstance;
  *   - WrapBox 列表内容：读 RunSession.BuildBackpackStorageSnapshot()
  *     （UE MVVM 不擅长数组绑定，列表数据保留命令式重建）
  *   - 刷新触发：订阅 Provider.OnRunViewModelRefreshedNative，事件驱动
- *   - 操作命令：Move/Delete 仍写 RunSession，写完事件自动回流刷新
+ *   - 操作命令：Screen 只转发意图；Move/Delete/Toggle 流程由 Private command flow 提交
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomBackpackScreen : public UWacomMenuWidgetBase
@@ -76,10 +76,10 @@ public:
 	/** 测试/诊断用：隐藏当前详情面板。 */
 	void HideCardDetailPanel();
 
-	/** DropTarget 命令出口：移动卡牌。DropTarget 只负责转发拖拽意图，规则提交和 Toast 由 Screen 统一处理。 */
+	/** DropTarget 命令出口：移动卡牌。DropTarget 只转发拖拽意图，规则提交和 Toast 由 Private command flow 处理。 */
 	bool HandleZoneDropRequested(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId);
 
-	/** DropTarget 命令出口：请求销毁卡牌。会弹确认框，确认后由 Screen 提交 Run 命令。 */
+	/** DropTarget 命令出口：请求销毁卡牌。确认框和 Run 命令提交由 Private command flow 处理。 */
 	bool HandleDeleteDropRequested(const UWacomCardDragOperation& CardOp);
 
 protected:

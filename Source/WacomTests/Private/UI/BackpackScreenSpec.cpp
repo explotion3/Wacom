@@ -374,6 +374,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBackpackToastTextSpec::RunTest(const FString& /*Parameters*/)
 {
+	// Command flow extraction should keep these player-facing texts reachable via public UI wrappers.
 	TestEqual(TEXT("Move success target name"),
 		UWacomZoneDropTarget::FormatZoneNameForToast(EZoneKind::BattleDeck).ToString(),
 		FString(TEXT("备战区")));
@@ -383,9 +384,18 @@ bool FWacomUIBackpackToastTextSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("Move battle deck full reason"),
 		UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("BattleDeckFull")).ToString(),
 		FString(TEXT("无法移动：备战区已满。")));
+	TestEqual(TEXT("Move unknown helper reason falls back"),
+		UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("RunSessionMissing")).ToString(),
+		FString(TEXT("无法移动：当前规则不允许。")));
+	TestEqual(TEXT("Delete missing card reason"),
+		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("MissingCard")).ToString(),
+		FString(TEXT("无法销毁：没有卡牌数据。")));
 	TestEqual(TEXT("Delete intrinsic reason"),
 		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("Intrinsic")).ToString(),
 		FString(TEXT("无法销毁：固有卡不能被销毁。")));
+	TestEqual(TEXT("Delete not owned reason"),
+		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("CardNotOwned")).ToString(),
+		FString(TEXT("无法销毁：这张卡不在当前背包中。")));
 	TestEqual(TEXT("Delete last bag reason"),
 		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("LastBagProvider")).ToString(),
 		FString(TEXT("无法销毁：这是最后一张背包容量卡。")));

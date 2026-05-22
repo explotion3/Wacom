@@ -1,0 +1,25 @@
+// Copyright Wacom. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "UI/Shop/WacomShopPresentationBuilder.h"
+
+class URunSession;
+class UWacomAppToastSubsystem;
+class UWacomShopScreen;
+
+/** Private workflow helper for ShopScreen command/settlement behavior. */
+struct FWacomShopScreenFlow
+{
+	static void EndShopVisitOnDeactivate(URunSession* Run, bool& bDidEndShopVisit);
+
+	static bool PurchaseOffer(
+		UWacomShopScreen& Screen,
+		URunSession* Run,
+		UWacomAppToastSubsystem* ToastSubsystem,
+		FGuid OfferId,
+		const TArray<FWacomShopOfferPresentationView>& CachedOfferViews);
+
+	static FText BuildPurchaseFailureToastText(FName DisabledReason);
+};
