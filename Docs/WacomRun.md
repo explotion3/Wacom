@@ -381,6 +381,7 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | `Private/RunSession.cpp` | 时间、压力、商店 / RunEvent public 入口、战斗回传 public 入口、SaveGame slot IO 的协调实现 |
 | `Private/Battle/RunBattleSettlementResolver.*` | 战斗结束回传包的 Run 结算流程；只操作 `FRunState` 并通过回调复用 RunSession 压力 / 经验 / 获得卡牌入口 |
 | `Private/Deck/RunDeckRules.*` | 背包、备战区、SpecialZone、负重区的私有规则 helper；只操作 `FRunState`，不广播、不访问 UI |
+| `Private/Time/RunTimeRules.*` | 时间、节点消耗、时段推进与时段进入压力副作用的私有规则 helper；只操作 `FRunState`，不广播、不访问 UI |
 | `Private/Events/RunEventExecutor.*` | RunEvent 事件图解释、选项条件、效果执行和结果包生成；只操作 `FRunState`，不广播、不访问 UI |
 | `Private/Save/RunSaveGameSerializer.*` | `FRunState <-> UWacomSaveGame` 字段拷贝、SaveEntry 写入和读档校验；不广播、不做磁盘 IO |
 | `Private/Shops/RunShopTransaction.*` | 商店访问、库存快照和购买事务的私有 helper；只操作 `FRunState`，不广播、不访问 UI |

@@ -34,7 +34,4 @@ private:
 	static bool ApplyChoiceEffects(FRunState& State, const FWacomRunEventChoiceDefinition& Choice, TArray<FRunEventChoiceEffectResult>* OutEffectResults, FName* OutDisabledReason);
 
 	static bool AcquireCard(FRunState& State, UCardDefinition* Card);
-	static void AdvanceToNextPhase(FRunState& State);
-	static void OnPhaseEntered(FRunState& State, ETimePhase NewPhase, ETimePhase PrevPhase);
-	static void ResetRemainingNodeForPhase(FRunState& State);
 };

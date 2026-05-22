@@ -725,6 +725,88 @@ bool FWacomRunEventChoiceResultClampSpec::RunTest(const FString& /*Parameters*/)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventConsumeNodeEffectEntersDuskWithPressureSpec,
+	"Wacom.Run.Event.ConsumeNodeEffectEntersDuskWithPressure",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventConsumeNodeEffectEntersDuskWithPressureSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	FRunState& State = Run->GetMutableRunState();
+	State.CurrentTimePhase = ETimePhase::Day;
+	State.RemainingNodeCount = 1;
+
+	FWacomRunEventChoiceDefinition Consume;
+	Consume.ChoiceId = TEXT("Consume");
+	FWacomRunEventEffectDefinition ConsumeNode;
+	ConsumeNode.Type = EWacomRunEventEffectType::ConsumeNode;
+	ConsumeNode.Value = 1;
+	Consume.Effects.Add(ConsumeNode);
+
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Consume));
+	TestTrue(TEXT("Begin consume event succeeds"), Run->BeginRunEvent(TEXT("Event.ConsumeNode.Dusk"), Event.Get()));
+	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Consume"));
+
+	TestTrue(TEXT("Consume choice succeeds"), Result.bSucceeded);
+	TestEqual(TEXT("One consume effect recorded"), Result.EffectResults.Num(), 1);
+	if (Result.EffectResults.Num() == 1)
+	{
+		TestEqual(TEXT("Consume effect type"), Result.EffectResults[0].EffectType, EWacomRunEventEffectType::ConsumeNode);
+		TestEqual(TEXT("Consume effect actual delta"), Result.EffectResults[0].ActualDelta, -1);
+		TestTrue(TEXT("Consume effect applied"), Result.EffectResults[0].bApplied);
+	}
+	TestTrue(TEXT("Consume from Day remaining 1 enters Dusk"), Run->GetCurrentTimePhase() == ETimePhase::Dusk);
+	TestEqual(TEXT("Dusk nodes reset"), Run->GetRemainingNodeCount(), State.InitialNodeCount_Dusk);
+	TestEqual(TEXT("Entering Dusk adds Hunger"), Run->GetPressureValue(EWacomPressureType::Hunger), 5);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventConsumeNodeEffectInsufficientNodesStillAppliesSpec,
+	"Wacom.Run.Event.ConsumeNodeEffectInsufficientNodesStillApplies",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventConsumeNodeEffectInsufficientNodesStillAppliesSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	FRunState& State = Run->GetMutableRunState();
+	State.CurrentTimePhase = ETimePhase::Day;
+	State.RemainingNodeCount = 1;
+
+	FWacomRunEventChoiceDefinition ConsumeTooMuch;
+	ConsumeTooMuch.ChoiceId = TEXT("ConsumeTooMuch");
+	FWacomRunEventEffectDefinition ConsumeNode;
+	ConsumeNode.Type = EWacomRunEventEffectType::ConsumeNode;
+	ConsumeNode.Value = 3;
+	FWacomRunEventEffectDefinition Gold;
+	Gold.Type = EWacomRunEventEffectType::AddGold;
+	Gold.Value = 2;
+	ConsumeTooMuch.Effects = { ConsumeNode, Gold };
+
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), ConsumeTooMuch));
+	TestTrue(TEXT("Begin insufficient consume event succeeds"), Run->BeginRunEvent(TEXT("Event.ConsumeNode.Insufficient"), Event.Get()));
+	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("ConsumeTooMuch"));
+
+	TestTrue(TEXT("Insufficient node choice still succeeds"), Result.bSucceeded);
+	TestTrue(TEXT("Insufficient node choice has no disabled reason"), Result.DisabledReason.IsNone());
+	TestEqual(TEXT("Two effects recorded"), Result.EffectResults.Num(), 2);
+	if (Result.EffectResults.Num() == 2)
+	{
+		TestEqual(TEXT("Consume effect actual delta clamps to available node"), Result.EffectResults[0].ActualDelta, -1);
+		TestTrue(TEXT("Consume effect applied despite insufficient nodes"), Result.EffectResults[0].bApplied);
+		TestEqual(TEXT("Following gold effect still applies"), Result.EffectResults[1].ActualDelta, 2);
+		TestTrue(TEXT("Gold effect applied"), Result.EffectResults[1].bApplied);
+	}
+	TestTrue(TEXT("Insufficient consume advances exactly once to Dusk"), Run->GetCurrentTimePhase() == ETimePhase::Dusk);
+	TestEqual(TEXT("Dusk nodes reset instead of consuming into next phase"), Run->GetRemainingNodeCount(), State.InitialNodeCount_Dusk);
+	TestEqual(TEXT("Dusk pressure side effect still applies"), Run->GetPressureValue(EWacomPressureType::Hunger), 5);
+	TestEqual(TEXT("Gold gained after insufficient consume"), Run->GetGold(), 2);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunEventConditionsSpec,
 	"Wacom.Run.Event.Conditions",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

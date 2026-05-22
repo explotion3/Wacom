@@ -5,6 +5,7 @@
 #include "Cards/CardDefinition.h"
 #include "Deck/RunDeckRules.h"
 #include "Events/RunEventDefinition.h"
+#include "Time/RunTimeRules.h"
 
 namespace
 {
@@ -398,16 +399,11 @@ bool FRunEventExecutor::ApplyChoiceEffects(FRunState& State, const FWacomRunEven
 		case EWacomRunEventEffectType::ConsumeNode:
 		{
 			const int32 Count = FMath::Max(0, Effect.Value);
-			const int32 NodesBefore = State.RemainingNodeCount;
-			EffectResult.ActualDelta = -FMath::Min(Count, NodesBefore);
+			int32 ConsumedNodeCount = 0;
+			const bool bHadEnoughNode = FRunTimeRules::ConsumeNode(State, Count, &ConsumedNodeCount);
+			EffectResult.ActualDelta = -ConsumedNodeCount;
 			if (Count > 0)
 			{
-				const bool bHadEnoughNode = State.RemainingNodeCount >= Count;
-				State.RemainingNodeCount = FMath::Max(0, State.RemainingNodeCount - Count);
-				if (State.RemainingNodeCount <= 0)
-				{
-					AdvanceToNextPhase(State);
-				}
 				if (!bHadEnoughNode)
 				{
 					UE_LOG(LogTemp, Warning,
@@ -495,73 +491,4 @@ bool FRunEventExecutor::AcquireCard(FRunState& State, UCardDefinition* Card)
 	FRunDeckRules::EnsureSpecialZoneEntryFor(State, Inst);
 	FRunDeckRules::RecomputeBurden(State, /*bAllowBurdenRefill=*/true);
 	return true;
-}
-
-void FRunEventExecutor::AdvanceToNextPhase(FRunState& State)
-{
-	const ETimePhase PrevPhase = State.CurrentTimePhase;
-
-	switch (State.CurrentTimePhase)
-	{
-	case ETimePhase::Morning: State.CurrentTimePhase = ETimePhase::Day;     break;
-	case ETimePhase::Day:     State.CurrentTimePhase = ETimePhase::Dusk;    break;
-	case ETimePhase::Dusk:    State.CurrentTimePhase = ETimePhase::Night;   break;
-	case ETimePhase::Night:   State.CurrentTimePhase = ETimePhase::Sunrise; break;
-	case ETimePhase::Sunrise:
-		State.CurrentTimePhase = ETimePhase::Morning;
-		++State.CurrentDayNumber;
-		break;
-	default:
-		ensureMsgf(false, TEXT("[RunSession] AdvanceToNextPhase 收到未知时段 %d"),
-			(int32)State.CurrentTimePhase);
-		State.CurrentTimePhase = ETimePhase::Morning;
-		break;
-	}
-
-	ResetRemainingNodeForPhase(State);
-
-	UE_LOG(LogTemp, Display,
-		TEXT("[RunSession] Phase advanced: Day=%d Phase=%d RemainingNodes=%d"),
-		State.CurrentDayNumber, (int32)State.CurrentTimePhase, State.RemainingNodeCount);
-
-	OnPhaseEntered(State, State.CurrentTimePhase, PrevPhase);
-}
-
-void FRunEventExecutor::OnPhaseEntered(FRunState& State, ETimePhase NewPhase, ETimePhase PrevPhase)
-{
-	switch (NewPhase)
-	{
-	case ETimePhase::Morning:
-		State.Pressure.Add(EWacomPressureType::Hunger, 5);
-		if (PrevPhase == ETimePhase::Sunrise)
-		{
-			State.Pressure.Add(EWacomPressureType::Decay, 5);
-		}
-		break;
-	case ETimePhase::Dusk:
-		State.Pressure.Add(EWacomPressureType::Hunger, 5);
-		break;
-	case ETimePhase::Sunrise:
-		State.Pressure.Add(EWacomPressureType::Fatigue, 10);
-		break;
-	case ETimePhase::Day:
-	case ETimePhase::Night:
-	default:
-		break;
-	}
-}
-
-void FRunEventExecutor::ResetRemainingNodeForPhase(FRunState& State)
-{
-	switch (State.CurrentTimePhase)
-	{
-	case ETimePhase::Morning: State.RemainingNodeCount = State.InitialNodeCount_Morning; break;
-	case ETimePhase::Day:     State.RemainingNodeCount = State.InitialNodeCount_Day;     break;
-	case ETimePhase::Dusk:    State.RemainingNodeCount = State.InitialNodeCount_Dusk;    break;
-	case ETimePhase::Night:   State.RemainingNodeCount = State.InitialNodeCount_Night;   break;
-	case ETimePhase::Sunrise: State.RemainingNodeCount = State.InitialNodeCount_Sunrise; break;
-	default:
-		State.RemainingNodeCount = 0;
-		break;
-	}
 }

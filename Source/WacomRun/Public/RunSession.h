@@ -232,7 +232,7 @@ public:
 
 	/**
 	 * 消耗当前时段的节点数。
-	 *   - Count > 0
+	 *   - Count <= 0 时视为成功且不修改状态
 	 *   - 消耗后剩余 ≤ 0 时调用 AdvanceToNextPhase 自动推进
 	 *   - 返回是否成功消耗（节点不足时返回 false 但仍会扣到 0 + 推进）
 	 */
@@ -742,25 +742,6 @@ private:
 	 * 当前用占位 tag `SkillSlot.Placeholder`，不挂效果。
 	 */
 	void TryConsumeExperienceForSkills();
-
-	/**
-	 * 重置当前时段的剩余节点数。在 AdvanceToNextPhase 内部调用。
-	 */
-	void ResetRemainingNodeForPhase();
-
-	/**
-	 * 时段进入时的副作用。
-	 * 由 AdvanceToNextPhase 调用。
-	 *
-	 * 当前规则：
-	 *   - 进入 Morning：饥饿 +5%；若 PrevPhase=Sunrise（跨日）腐朽 +5%
-	 *   - 进入 Dusk：饥饿 +5%
-	 *   - 进入 Sunrise：疲劳 +10%
-	 *
-	 * 露营特殊推进（Night → Morning 跳过 Sunrise）等后续路径
-	 * 在那个路径自行处理"完成一天"压力，不走本函数。
-	 */
-	void OnPhaseEntered(ETimePhase NewPhase, ETimePhase PrevPhase);
 
 	/**
 	 * 通知 OnRunStateChangedNative 订阅者。

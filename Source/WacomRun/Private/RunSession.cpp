@@ -14,6 +14,7 @@
 #include "Session/BattleSession.h"
 #include "Shops/RunShopTransaction.h"
 #include "Tags/WacomGameplayTags.h"
+#include "Time/RunTimeRules.h"
 
 #include "Kismet/GameplayStatics.h"
 
@@ -554,103 +555,18 @@ void URunSession::TryConsumeExperienceForSkills()
 
 bool URunSession::ConsumeNode(int32 Count)
 {
-	if (Count <= 0)
-	{
-		return true;
-	}
-
-	const bool bEnough = RunState.RemainingNodeCount >= Count;
-	RunState.RemainingNodeCount = FMath::Max(0, RunState.RemainingNodeCount - Count);
-
-	if (RunState.RemainingNodeCount == 0)
-	{
-		AdvanceToNextPhase();
-		// AdvanceToNextPhase 内部已 Notify
-	}
-	else
+	const bool bEnough = FRunTimeRules::ConsumeNode(RunState, Count);
+	if (Count > 0)
 	{
 		NotifyRunStateChanged();
 	}
-
 	return bEnough;
 }
 
 void URunSession::AdvanceToNextPhase()
 {
-	const ETimePhase PrevPhase = RunState.CurrentTimePhase;
-
-	switch (RunState.CurrentTimePhase)
-	{
-	case ETimePhase::Morning: RunState.CurrentTimePhase = ETimePhase::Day;     break;
-	case ETimePhase::Day:     RunState.CurrentTimePhase = ETimePhase::Dusk;    break;
-	case ETimePhase::Dusk:    RunState.CurrentTimePhase = ETimePhase::Night;   break;
-	case ETimePhase::Night:   RunState.CurrentTimePhase = ETimePhase::Sunrise; break;
-	case ETimePhase::Sunrise:
-		// Sunrise 结束 = 进入次日清晨。
-		RunState.CurrentTimePhase = ETimePhase::Morning;
-		++RunState.CurrentDayNumber;
-		break;
-	default:
-		ensureMsgf(false, TEXT("[RunSession] AdvanceToNextPhase 收到未知时段 %d"),
-			(int32)RunState.CurrentTimePhase);
-		RunState.CurrentTimePhase = ETimePhase::Morning;
-		break;
-	}
-
-	ResetRemainingNodeForPhase();
-
-	UE_LOG(LogTemp, Display,
-		TEXT("[RunSession] Phase advanced: Day=%d Phase=%d RemainingNodes=%d"),
-		RunState.CurrentDayNumber, (int32)RunState.CurrentTimePhase, RunState.RemainingNodeCount);
-
-	// 时段进入副作用（饥饿 / 疲劳 / 腐朽）。OnPhaseEntered 通过 AddPressure 间接广播；
-	// 即使没有副作用（例如进入 Day），也在末尾发一次确保 UI 收到时段切换。
-	OnPhaseEntered(RunState.CurrentTimePhase, PrevPhase);
+	FRunTimeRules::AdvanceToNextPhase(RunState);
 	NotifyRunStateChanged();
-}
-
-void URunSession::OnPhaseEntered(ETimePhase NewPhase, ETimePhase PrevPhase)
-{
-	switch (NewPhase)
-	{
-	case ETimePhase::Morning:
-		// 每清晨到来 +5% 饥饿。
-		AddPressure(EWacomPressureType::Hunger, 5);
-		// 完成一天 +5% 腐朽。判定为"从 Sunrise 推进进入次日清晨"。
-		// 露营特殊推进（Night -> Morning 跳过 Sunrise）应在对应路径自行加腐朽。
-		if (PrevPhase == ETimePhase::Sunrise)
-		{
-			AddPressure(EWacomPressureType::Decay, 5);
-		}
-		break;
-	case ETimePhase::Dusk:
-		// 每黄昏到来 +5% 饥饿。
-		AddPressure(EWacomPressureType::Hunger, 5);
-		break;
-	case ETimePhase::Sunrise:
-		// 每日出 +10% 疲劳。
-		AddPressure(EWacomPressureType::Fatigue, 10);
-		break;
-	case ETimePhase::Day:
-	case ETimePhase::Night:
-	default:
-		break;
-	}
-}
-
-void URunSession::ResetRemainingNodeForPhase()
-{
-	switch (RunState.CurrentTimePhase)
-	{
-	case ETimePhase::Morning: RunState.RemainingNodeCount = RunState.InitialNodeCount_Morning; break;
-	case ETimePhase::Day:     RunState.RemainingNodeCount = RunState.InitialNodeCount_Day;     break;
-	case ETimePhase::Dusk:    RunState.RemainingNodeCount = RunState.InitialNodeCount_Dusk;    break;
-	case ETimePhase::Night:   RunState.RemainingNodeCount = RunState.InitialNodeCount_Night;   break;
-	case ETimePhase::Sunrise: RunState.RemainingNodeCount = RunState.InitialNodeCount_Sunrise; break;
-	default:
-		RunState.RemainingNodeCount = 0;
-		break;
-	}
 }
 
 
