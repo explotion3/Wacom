@@ -1,8 +1,22 @@
+---
+type: domain-spec
+scope: wacom-run
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/run
+  - wacom/rules
+  - wacom/exploration
+  - wacom/inventory
+---
+
 # WacomRun 模块文档
 
-本文是 Run 领域规则真相与关键实现入口。字段细节以代码为准，本文不维护完整 API / UPROPERTY 镜像。
+> [!info] 本文职责
+> 本文是 Run 领域规则真相与关键实现入口。字段细节以代码为准，本文不维护完整 API / UPROPERTY 镜像。
 
----
+> [!warning] 模块边界
+> `WacomRun` 是战斗外规则层。战斗内牌局规则看 [[WacomBattle]]，静态内容资产看 [[WacomData]]，UI 展示看 [[WacomUI]]。
 
 ## §1 模块定位
 

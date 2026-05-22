@@ -1,15 +1,25 @@
+---
+type: roadmap
+scope: wacom-future
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/roadmap
+  - wacom/docs
+---
+
 # Roadmap
 
-> 本文记录 Wacom 项目的未实现功能和后续方向。这里的内容不是当前事实；实现前必须回到对应领域文档确认规则，再更新代码和文档。
->
-> 表格中的“现状入口 / 依赖”只用于说明推进该方向时应该回看哪里、依赖什么前置条件；不要把它当成规则真相。规则真相仍在 `WacomBattle.md`、`WacomRun.md`、`WacomData.md`、`WacomApp.md`、`WacomUI.md`。
+> [!info] 本文职责
+> 本文记录 Wacom 项目的未实现功能和后续方向，不是当前实现事实。短期任务看 [[TODO]]，临时写法看 [[TechDebt]]，待确认口径看 [[Questions]]。
 
----
+> [!warning] 使用约束
+> 表格中的“现状入口 / 依赖”只说明推进方向时应该回看哪里、依赖什么前置条件；不要把它当成规则真相。规则真相仍在 `WacomBattle.md`、`WacomRun.md`、`WacomData.md`、`WacomApp.md`、`WacomUI.md`。
 
 <a id="roadmap-battle-rules"></a>
 ## 战斗规则与卡牌系统
 
-当前战斗规则真相见 [WacomBattle.md](./WacomBattle.md)，静态字段和 GameplayTag 见 [WacomData.md](./WacomData.md)，待确认公式见 [Questions.md](./Questions.md)。
+当前战斗规则真相见 [WacomBattle.md](./WacomBattle.md)，静态字段和 GameplayTag 见 [WacomData.md](./WacomData.md)，待确认公式见 [[Questions]]。
 
 ### 状态与被动扩展
 
@@ -133,7 +143,7 @@
 | 项 | 现状入口 / 依赖 | 后续方向 |
 |---|---|---|
 | 探索 HUD 压力阈值警示色 | 压力值纯数字白色 | 压力 > 50% 黄色，> 80% 红色 |
-| AppToast | 统一战斗外反馈出口已接入商店、背包、RunEvent；C++ fallback 只显示文字 | 正式 WBP、颜色 / 图标、动画、音效、拾取 / 战后结算接入；是否进入全局日志见 [Questions](./Questions.md) |
+| AppToast | 统一战斗外反馈出口已接入商店、背包、RunEvent；C++ fallback 只显示文字 | 正式 WBP、颜色 / 图标、动画、音效、拾取 / 战后结算接入；是否进入全局日志见 [[Questions]] |
 | CardPresentationBuilder 复用 | 背包、拖拽预览、详情、战斗手牌、商店商品已走统一入口 | 奖励、事件预览等卡牌显示继续接入 Builder |
 
 ---

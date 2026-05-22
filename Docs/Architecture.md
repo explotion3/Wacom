@@ -1,6 +1,21 @@
+---
+type: architecture
+scope: wacom-project
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/architecture
+  - wacom/modules
+  - wacom/boundaries
+---
+
 # Architecture
 
-本文定义 Wacom 当前模块边界和长期架构原则。具体规则事实放在领域文档；本文只记录跨模块依赖、所有权、Public / Private 边界和系统选择。
+> [!info] 本文职责
+> 本文定义 Wacom 当前模块边界和长期架构原则。具体规则事实放在领域文档；本文只记录跨模块依赖、所有权、Public / Private 边界和系统选择。
+
+> [!warning] 架构约束
+> 不要让高层模块反向污染底层模块。规则逻辑留在领域模块，UI 只读 Snapshot / ViewModel / ViewData 并提交命令。
 
 ## 1. 当前项目状态
 

@@ -1,8 +1,22 @@
+---
+type: ui-binding-contract
+scope: wacom-ui-backpack
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/ui
+  - wacom/wbp
+  - wacom/backpack
+  - wacom/contract
+---
+
 # 背包 UI WBP 绑定清单
 
-本文只记录背包相关 WBP 制作合约。背包规则见 `WacomRun.md`，UI 数据流和交互行为见 `WacomUI.md`。
+> [!info] 本文职责
+> 本文只记录背包相关 WBP 制作合约。背包规则见 [[WacomRun]]，UI 数据流和交互行为见 [[WacomUI]]。
 
----
+> [!warning] 合同边界
+> 本文不是背包规则文档；不要在 WBP 合同里定义移动、删牌、容量或负重规则。
 
 ## WBP_BackpackScreen
 

@@ -1,9 +1,22 @@
+---
+type: data-contract
+scope: wacom-data
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/data
+  - wacom/dataasset
+  - wacom/gameplay-tags
+  - wacom/validation
+---
+
 # WacomData 模块文档
 
+> [!info] 本文职责
 > 本文是 WacomData 模块的静态数据契约入口。加 DataAsset 字段、GameplayTag 或内容生成规则时先改本文，再改代码。
-> 运行时规则见 [WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md)，UI 展示见 [WacomUI.md](./WacomUI.md)，编辑器校验实现位于 `WacomEditor`。
 
----
+> [!note] 相关入口
+> 运行时规则见 [[WacomBattle]] / [[WacomRun]]，UI 展示见 [[WacomUI]]，编辑器校验实现位于 `WacomEditor`。
 
 ## §1 模块职责
 

@@ -1,8 +1,22 @@
+---
+type: presentation-contract
+scope: wacom-ui
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/ui
+  - wacom/commonui
+  - wacom/mvvm
+  - wacom/wbp
+---
+
 # WacomUI 文档
 
-本文是 Wacom UI 表现层的当前事实入口。`WacomApp.md` 只记录 App / GameMode / 输入 / 世界交互总控；具体 UI 数据流、Widget 职责、Toast、Screen 和 WBP 承接口径放在这里。
+> [!info] 本文职责
+> 本文是 Wacom UI 表现层的当前事实入口。[[WacomApp]] 只记录 App / GameMode / 输入 / 世界交互总控；具体 UI 数据流、Widget 职责、Toast、Screen 和 WBP 承接口径放在这里。
 
----
+> [!warning] 阅读边界
+> 本文记录 UI 数据流和表现合同，不定义战斗、Run、卡牌或资产规则。
 
 ## §1 UI 总原则
 

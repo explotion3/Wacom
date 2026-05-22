@@ -1,8 +1,22 @@
+---
+type: orchestration-spec
+scope: wacom-app
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/app
+  - wacom/gameflow
+  - wacom/input
+  - wacom/world-interaction
+---
+
 # WacomApp 模块文档
 
-本文是 WacomApp 的 App orchestration 文档。它记录 GameMode、PlayerController、PlayerCharacter、世界交互、输入、UI 总入口和战斗进出流程。具体 UI 行为、Screen、Toast、ViewData 和 WBP 承接见 `WacomUI.md`。
+> [!info] 本文职责
+> 本文是 WacomApp 的 App orchestration 文档。它记录 GameMode、PlayerController、PlayerCharacter、世界交互、输入、UI 总入口和战斗进出流程。
 
----
+> [!note] UI 边界
+> 具体 UI 行为、Screen、Toast、ViewData 和 WBP 承接见 [[WacomUI]]。
 
 ## §1 模块职责
 

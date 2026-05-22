@@ -1,8 +1,21 @@
+---
+type: character-design
+scope: wacom-character-bug-girl
+status: obsolete-draft
+updated: 2026-05-22
+tags:
+  - wacom/character
+  - wacom/design-draft
+  - wacom/obsolete-facts
+---
+
 # Bug Girl Character Design
 
-> 文档状态：初版策划设计稿，当前已不作为实现事实或验收依据。
->
-> 本文保留虫妹第一版角色方向、初始牌想法和长期机制语境。卡牌具体字段、当前生成资产、背包初始区位、战斗效果和击倒奖励的当前事实，请以 `Docs/WacomData.md`、`Docs/WacomBattle.md`、`Docs/WacomRun.md`、`Docs/WacomUI.md` 为准。后续策划会重新给出虫妹正式卡牌设计，届时再重写本文。
+> [!warning] 文档状态
+> 初版策划设计稿，当前已不作为实现事实或验收依据。
+
+> [!info] 保留原因
+> 本文保留虫妹第一版角色方向、初始牌想法和长期机制语境。卡牌具体字段、当前生成资产、背包初始区位、战斗效果和击倒奖励的当前事实，请以 [[WacomData]]、[[WacomBattle]]、[[WacomRun]]、[[WacomUI]] 为准。后续策划会重新给出虫妹正式卡牌设计，届时再重写本文。
 
 本文记录“虫妹”作为当前项目第一名初始角色的早期设计。本文只用于理解角色原始方向，不用于判断当前代码、DataAsset 或自动化测试是否正确。
 

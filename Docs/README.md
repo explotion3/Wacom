@@ -1,6 +1,20 @@
+---
+type: docs-index
+scope: wacom-docs
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/docs
+  - wacom/navigation
+---
+
 # Wacom Docs 入口
 
-本文是后续接手者的文档导航。规则真相优先看领域文档，历史过程看 `DevLog/`，短期任务看 `TODO.md`，长期方向、技术债和未决问题分别看 `Roadmap.md`、`TechDebt.md`、`Questions.md`。
+> [!info] 本文职责
+> 本文是项目文档导航。规则真相优先看领域文档，历史过程看 `DevLog/`，短期任务看 [[TODO]]，长期方向、技术债和未决问题分别看 [[Roadmap]]、[[TechDebt]]、[[Questions]]。
+
+> [!warning] 规则真相优先级
+> `Game_Design.md` 提供设计语境；若它与领域文档冲突，以 `WacomBattle.md`、`WacomRun.md`、`WacomData.md`、`WacomApp.md`、`WacomUI.md` 等当前事实文档为准。
 
 ## 建议阅读顺序
 

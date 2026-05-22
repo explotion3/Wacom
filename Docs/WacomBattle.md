@@ -1,9 +1,22 @@
+---
+type: domain-spec
+scope: wacom-battle
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/battle
+  - wacom/rules
+  - wacom/combat
+  - wacom/snapshot
+---
+
 # WacomBattle 模块文档
 
+> [!info] 本文职责
 > 本文是 WacomBattle 模块的当前规则真相。规则变更时先改本文，再改代码。
-> UI 表现见 [WacomUI.md](./WacomUI.md)，静态数据字段见 [WacomData.md](./WacomData.md)，战后 Run 结算见 [WacomRun.md](./WacomRun.md#wacomrun-battle-settlement)，后续方向见 [Roadmap.md](./Roadmap.md#roadmap-battle-rules)。
 
----
+> [!note] 相关入口
+> UI 表现见 [[WacomUI]]，静态数据字段见 [[WacomData]]，战后 Run 结算见 [WacomRun §8](./WacomRun.md#wacomrun-battle-settlement)，后续方向见 [Roadmap: 战斗规则](./Roadmap.md#roadmap-battle-rules)。
 
 ## §1 模块职责
 

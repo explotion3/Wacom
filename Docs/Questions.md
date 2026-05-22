@@ -1,8 +1,20 @@
+---
+type: question-index
+scope: wacom-open-decisions
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/questions
+  - wacom/docs
+---
+
 # Questions
 
-> 本文记录会影响规则、策划口径或长期架构的待确认问题。实现前必须先在对应领域文档中收口；不要把这里的问题静默写死到代码里。
+> [!info] 本文职责
+> 本文记录会影响规则、策划口径或长期架构的待确认问题。短期任务看 [[TODO]]，未来方向看 [[Roadmap]]，已有技术债看 [[TechDebt]]。
 
----
+> [!warning] 执行约束
+> 实现前必须先在对应领域文档中收口；不要把这里的问题静默写死到代码里。
 
 <a id="questions-status"></a>
 ## 状态与触发时机

@@ -1,8 +1,22 @@
+---
+type: ui-binding-contract
+scope: wacom-ui-battle
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/ui
+  - wacom/wbp
+  - wacom/battle
+  - wacom/contract
+---
+
 # 战斗 UI WBP 绑定清单
 
-本文只记录战斗 UI WBP 制作合约。战斗规则见 `WacomBattle.md`，战斗 UI 数据流和交互行为见 `WacomUI.md`。
+> [!info] 本文职责
+> 本文只记录战斗 UI WBP 制作合约。战斗规则见 [[WacomBattle]]，战斗 UI 数据流和交互行为见 [[WacomUI]]。
 
----
+> [!warning] 合同边界
+> 本文不是战斗规则文档；不要在 WBP 合同里定义出牌、目标选择、伤害或战后结算规则。
 
 ## WBP_CardWidget
 

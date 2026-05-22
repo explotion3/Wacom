@@ -1,8 +1,20 @@
+---
+type: game-design
+scope: wacom-design-context
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/game-design
+  - wacom/design-context
+---
+
 # Game Design（游戏设计总文档）
 
+> [!info] 本文职责
 > 本文是全局 GDD 和设计语境入口，用来解释游戏愿景、玩法口径和长期规则背景。
-> 当前实现真相以对应领域文档为准：`WacomBattle.md` / `WacomRun.md` / `WacomData.md` / `WacomApp.md` / `WacomUI.md`。
-> 若本文与领域文档冲突，先确认设计口径，再同步更新领域文档和实现。
+
+> [!warning] 当前事实边界
+> 当前实现真相以领域文档为准：[[WacomBattle]] / [[WacomRun]] / [[WacomData]] / [[WacomApp]] / [[WacomUI]]。若本文与领域文档冲突，先确认设计口径，再同步更新领域文档和实现。
 
 ---
 

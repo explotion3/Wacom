@@ -1,8 +1,20 @@
+---
+type: tech-debt
+scope: wacom-current-debt
+status: active
+updated: 2026-05-22
+tags:
+  - wacom/tech-debt
+  - wacom/docs
+---
+
 # TechDebt
 
-> 本文记录已经存在的临时写法、兼容路径、临时决定和正式替代方案。这里不是未来功能清单；能直接变成新功能的内容放 [Roadmap](./Roadmap.md)，会改变规则口径的问题放 [Questions](./Questions.md)。
+> [!info] 本文职责
+> 本文记录已经存在的临时写法、兼容路径、临时决定和正式替代方案。短期任务看 [[TODO]]，未来功能方向看 [[Roadmap]]，会改变规则口径的问题放 [[Questions]]。
 
----
+> [!warning] 使用约束
+> 这里不是功能愿望池。只有当前实现里已经存在的临时方案、兼容入口或技术债才放这里。
 
 ## 规则层技术债
 
