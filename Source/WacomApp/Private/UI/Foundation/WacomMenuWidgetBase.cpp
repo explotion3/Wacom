@@ -4,6 +4,7 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Input/Events.h"
 #include "Input/CommonUIInputTypes.h"
 #include "TimerManager.h"
 
@@ -72,10 +73,31 @@ FReply UWacomMenuWidgetBase::NativeOnKeyDown(const FGeometry& InGeometry, const 
 	// ECommonInputMode::Menu 会屏蔽 EnhancedInput 的 IA_OpenMenu，
 	// 因此 ESC 关闭菜单的逻辑必须在 widget 层处理。
 	// 子类如果需要不同行为（例如 ConfirmDialog 把 ESC 当 Cancel），可以 override。
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	if (InKeyEvent.GetKey() == EKeys::Escape
+		|| InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Right)
 	{
-		DeactivateWidget();
-		return FReply::Handled();
+		return NativeHandleBackRequested();
 	}
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
+
+FReply UWacomMenuWidgetBase::NativeHandleBackRequested()
+{
+	OnBackRequestedNative.Broadcast();
+	DeactivateWidget();
+	return FReply::Handled();
+}
+
+#if WITH_AUTOMATION_TESTS
+FReply UWacomMenuWidgetBase::HandleEscapeKeyDownForAutomationTest()
+{
+	const FKeyEvent KeyEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
+	return NativeOnKeyDown(FGeometry(), KeyEvent);
+}
+
+FReply UWacomMenuWidgetBase::HandleGamepadBackKeyDownForAutomationTest()
+{
+	const FKeyEvent KeyEvent(EKeys::Gamepad_FaceButton_Right, FModifierKeysState(), 0, false, 0, 0);
+	return NativeOnKeyDown(FGeometry(), KeyEvent);
+}
+#endif

@@ -26,6 +26,12 @@ namespace
 	}
 }
 
+void UWacomAppToastSubsystem::Deinitialize()
+{
+	ClearToastWidget();
+	Super::Deinitialize();
+}
+
 UWacomAppToastWidget* UWacomAppToastSubsystem::EnsureAppToastReady()
 {
 	return EnsureToastWidget();
@@ -88,6 +94,16 @@ UWacomAppToastWidget* UWacomAppToastSubsystem::EnsureToastWidget()
 {
 	if (IsValid(ToastWidget))
 	{
+		APlayerController* CurrentPC = FindLocalPlayerController();
+		if (!IsToastWidgetUsableForCurrentOwner(ToastWidget, CurrentPC))
+		{
+			UE_LOG(LogTemp, Display, TEXT("[AppToast] 缓存 ToastWidget 属于旧 World/PC，重建"));
+			ClearToastWidget();
+		}
+	}
+
+	if (IsValid(ToastWidget))
+	{
 		if (!ToastWidget->IsInViewport() && ToastWidget->GetWorld())
 		{
 			ToastWidget->AddToViewport(/*ZOrder*/ 10000);
@@ -100,7 +116,6 @@ UWacomAppToastWidget* UWacomAppToastSubsystem::EnsureToastWidget()
 	}
 	ToastWidget = nullptr;
 
-	UGameInstance* GI = GetGameInstance();
 	APlayerController* PC = FindLocalPlayerController();
 	if (!PC)
 	{
@@ -151,6 +166,74 @@ APlayerController* UWacomAppToastSubsystem::FindLocalPlayerController() const
 		}
 	}
 	return nullptr;
+}
+
+bool UWacomAppToastSubsystem::IsToastWidgetUsableForCurrentOwner(
+	const UWacomAppToastWidget* Widget,
+	const APlayerController* CurrentPC) const
+{
+	if (!IsValid(Widget))
+	{
+		return false;
+	}
+
+	const UWorld* CurrentWorld = GetWorld();
+	const UWorld* WidgetWorld = Widget->GetWorld();
+	const APlayerController* WidgetOwner = Widget->GetOwningPlayer();
+
+	return IsToastOwnerPairUsable(WidgetWorld, WidgetOwner, CurrentWorld, CurrentPC);
+}
+
+bool UWacomAppToastSubsystem::IsToastOwnerPairUsable(
+	const UWorld* WidgetWorld,
+	const APlayerController* WidgetOwner,
+	const UWorld* CurrentWorld,
+	const APlayerController* CurrentPC) const
+{
+	// Unit tests often inject a transient widget with no real world or player owner.
+	// Keep that override reusable instead of classifying "unknown" as stale.
+	const bool bHasNoRuntimeOwner = WidgetWorld == nullptr && WidgetOwner == nullptr;
+	if (bHasNoRuntimeOwner)
+	{
+		return true;
+	}
+
+	if (!CurrentWorld || !CurrentPC)
+	{
+		return false;
+	}
+
+	if (!WidgetWorld || WidgetWorld != CurrentWorld)
+	{
+		return false;
+	}
+
+	if (!WidgetOwner || WidgetOwner != CurrentPC)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+#if WITH_AUTOMATION_TESTS
+bool UWacomAppToastSubsystem::IsToastOwnerPairUsableForTest(
+	const UWorld* WidgetWorld,
+	const APlayerController* WidgetOwner,
+	const UWorld* CurrentWorld,
+	const APlayerController* CurrentPC) const
+{
+	return IsToastOwnerPairUsable(WidgetWorld, WidgetOwner, CurrentWorld, CurrentPC);
+}
+#endif
+
+void UWacomAppToastSubsystem::ClearToastWidget()
+{
+	if (ToastWidget)
+	{
+		ToastWidget->RemoveFromParent();
+		ToastWidget = nullptr;
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

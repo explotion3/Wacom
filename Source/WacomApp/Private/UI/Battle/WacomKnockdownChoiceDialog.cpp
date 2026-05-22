@@ -214,12 +214,27 @@ void UWacomKnockdownChoiceDialog::HandleDestroyClicked()
 
 FReply UWacomKnockdownChoiceDialog::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	// 击倒事件必须三选一，ESC 不允许关闭。
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	// 击倒事件必须三选一，Back 不允许关闭。
+	if (InKeyEvent.GetKey() == EKeys::Escape
+		|| InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Right)
 	{
-		return FReply::Handled();  // 吃掉 ESC，不调父类 DeactivateWidget
+		return FReply::Handled();  // 吃掉 Back，不调父类 DeactivateWidget
 	}
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
+
+#if WITH_AUTOMATION_TESTS
+FReply UWacomKnockdownChoiceDialog::HandleEscapeKeyDownForAutomationTest()
+{
+	const FKeyEvent KeyEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
+	return NativeOnKeyDown(FGeometry(), KeyEvent);
+}
+
+FReply UWacomKnockdownChoiceDialog::HandleGamepadBackKeyDownForAutomationTest()
+{
+	const FKeyEvent KeyEvent(EKeys::Gamepad_FaceButton_Right, FModifierKeysState(), 0, false, 0, 0);
+	return NativeOnKeyDown(FGeometry(), KeyEvent);
+}
+#endif
 
 #undef LOCTEXT_NAMESPACE

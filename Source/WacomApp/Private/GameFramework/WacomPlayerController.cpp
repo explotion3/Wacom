@@ -23,7 +23,6 @@
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
-#include "UI/Menus/WacomPauseMenuScreen.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 
@@ -324,35 +323,7 @@ void AWacomPlayerController::OnRefreshHUDPressed()
 
 void AWacomPlayerController::OnOpenMenuPressed()
 {
-	UGameInstance* GI = GetGameInstance();
-	UWacomGameUIManagerSubsystem* UIManager =
-		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-	if (!UIManager)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OnOpenMenuPressed: UIManager 未就位"));
-		return;
-	}
-
-	// 如果 GameMenu 层已有内容（暂停菜单已打开），ESC = 关闭（Resume）
-	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
-	if (Layout)
-	{
-		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
-			WacomUITags::UI_Layer_GameMenu.GetTag());
-		if (MenuStack && MenuStack->GetActiveWidget())
-		{
-			// 已有菜单打开 → Pop 它（等同于 Resume）
-			MenuStack->GetActiveWidget()->DeactivateWidget();
-			UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 关闭暂停菜单"));
-			return;
-		}
-	}
-
-	// 没有菜单打开 → Push 暂停菜单
-	UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		UWacomPauseMenuScreen::StaticClass());
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 打开暂停菜单"));
+	FWacomExplorationScreenRouter::TogglePauseMenu(*this);
 }
 
 // ================ 背包入口 ================
@@ -552,23 +523,16 @@ static FAutoConsoleCommandWithWorld GWacomOpenBackpackCmd(
 
 static FAutoConsoleCommandWithWorld GWacomCloseBackpackCmd(
 	TEXT("Wacom.CloseBackpack"),
-	TEXT("关闭 GameMenu 层最顶上的背包界面。"),
+	TEXT("关闭 GameMenu 层最顶上的界面。"),
 	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
 	{
-		if (!World) { return; }
-		UGameInstance* GI = World->GetGameInstance();
-		UWacomGameUIManagerSubsystem* UIManager =
-			GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-		if (!UIManager) { return; }
-
-		UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
-		if (!Layout) { return; }
-
-		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
-			WacomUITags::UI_Layer_GameMenu.GetTag());
-		if (MenuStack && MenuStack->GetActiveWidget())
+		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))
 		{
-			MenuStack->GetActiveWidget()->DeactivateWidget();
+			FWacomExplorationScreenRouter::CloseTopGameMenu(*WPC);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Wacom.CloseBackpack] 找不到 AWacomPlayerController"));
 		}
 	}));
 

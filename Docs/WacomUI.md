@@ -68,7 +68,7 @@ EnterBattle -> Push BattleHUD 到 Game 层，ExplorationHUD 进入非 active 状
 ExitBattle -> Pop BattleHUD，ExplorationHUD 重新 active 并补刷新
 ```
 
-CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入；战斗 HUD 和探索 HUD 由各自基类控制输入口径。
+CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入；战斗 HUD 和探索 HUD 由各自基类控制输入口径。`UWacomMenuWidgetBase` 负责 Menu 模式下的返回键口径：ESC 和 Gamepad FaceButton Right 触发 Back 请求，默认广播 `OnBackRequestedNative` 后 `DeactivateWidget()`；子类只在语义不同（例如 ConfirmDialog 把 Back 当 Cancel）时覆盖。
 
 ---
 
@@ -98,6 +98,8 @@ CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。
 - 探索局开始时 PlayerController 会预热；首次 Toast 也会懒加载兜底。
 - 无消息时 Widget `Collapsed`；入队后 `HitTestInvisible`；消息播完后只隐藏，不销毁。
 - Widget `SetIsFocusable(false)`，`GetDesiredInputConfig()` 返回空，不改变探索或菜单输入。
+- `UWacomAppToastSubsystem` 跨关卡跟随 GameInstance 存活，但缓存 Widget 只在属于当前 World 和当前本地 PlayerController 时复用；若发现旧 World、旧 PlayerController 或无效 Owner，会先 `RemoveFromParent()` 并清空引用，再用当前本地 PlayerController 重建。自动化测试注入的无真实 World/PC transient widget 属于测试 override，可继续复用。
+- Subsystem `Deinitialize()` 会移除并清空缓存 Widget，避免退出 GameInstance 后残留 viewport widget。
 - `FWacomAppToastView` 保留 `MessageText / Tone / IconKey / LifetimeOverride`；C++ fallback 第一版只显示文字。
 
 当前接入：

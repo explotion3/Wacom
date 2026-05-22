@@ -37,9 +37,15 @@ public:
 	DECLARE_MULTICAST_DELEGATE(FOnBackRequestedNative);
 	FOnBackRequestedNative OnBackRequestedNative;
 
+#if WITH_AUTOMATION_TESTS
+	FReply HandleEscapeKeyDownForAutomationTest();
+	FReply HandleGamepadBackKeyDownForAutomationTest();
+#endif
+
 protected:
 	virtual void NativeOnActivated() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply NativeHandleBackRequested();
 
 	/** 激活期间期望的输入配置：UIOnly + NoCapture（鼠标可见）。 */
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;

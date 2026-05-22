@@ -9,6 +9,8 @@
 #include "WacomAppToastSubsystem.generated.h"
 
 class UCardDefinition;
+class APlayerController;
+class UWorld;
 class UWacomAppToastWidget;
 
 /**
@@ -24,6 +26,8 @@ class WACOMAPP_API UWacomAppToastSubsystem : public UGameInstanceSubsystem
 	GENERATED_BODY()
 
 public:
+	virtual void Deinitialize() override;
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Toast")
 	UWacomAppToastWidget* EnsureAppToastReady();
 
@@ -45,6 +49,14 @@ public:
 	void SetToastWidgetOverrideForTest(UWacomAppToastWidget* InWidget) { ToastWidget = InWidget; }
 	UWacomAppToastWidget* GetToastWidgetForTest() const { return ToastWidget; }
 
+#if WITH_AUTOMATION_TESTS
+	bool IsToastOwnerPairUsableForTest(
+		const UWorld* WidgetWorld,
+		const APlayerController* WidgetOwner,
+		const UWorld* CurrentWorld,
+		const APlayerController* CurrentPC) const;
+#endif
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomAppToastWidget> ToastWidget = nullptr;
@@ -54,4 +66,11 @@ private:
 
 	UWacomAppToastWidget* EnsureToastWidget();
 	APlayerController* FindLocalPlayerController() const;
+	bool IsToastWidgetUsableForCurrentOwner(const UWacomAppToastWidget* Widget, const APlayerController* CurrentPC) const;
+	bool IsToastOwnerPairUsable(
+		const UWorld* WidgetWorld,
+		const APlayerController* WidgetOwner,
+		const UWorld* CurrentWorld,
+		const APlayerController* CurrentPC) const;
+	void ClearToastWidget();
 };

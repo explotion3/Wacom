@@ -181,13 +181,34 @@ void UWacomConfirmDialog::HandleCancelClicked()
 
 FReply UWacomConfirmDialog::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
-	// ESC = 取消（触发 OnCancel 回调，等价于点 Cancel）
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	// Back = 取消（触发 OnCancel 回调，等价于点 Cancel）
+	if (InKeyEvent.GetKey() == EKeys::Escape
+		|| InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Right)
 	{
 		HandleCancelClicked();
 		return FReply::Handled();
 	}
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
+
+#if WITH_AUTOMATION_TESTS
+void UWacomConfirmDialog::SetCallbacksForAutomationTest(TFunction<void()> OnConfirm, TFunction<void()> OnCancel)
+{
+	OnConfirmCallback = MoveTemp(OnConfirm);
+	OnCancelCallback = MoveTemp(OnCancel);
+}
+
+FReply UWacomConfirmDialog::HandleEscapeKeyDownForAutomationTest()
+{
+	const FKeyEvent KeyEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
+	return NativeOnKeyDown(FGeometry(), KeyEvent);
+}
+
+FReply UWacomConfirmDialog::HandleGamepadBackKeyDownForAutomationTest()
+{
+	const FKeyEvent KeyEvent(EKeys::Gamepad_FaceButton_Right, FModifierKeysState(), 0, false, 0, 0);
+	return NativeOnKeyDown(FGeometry(), KeyEvent);
+}
+#endif
 
 #undef LOCTEXT_NAMESPACE

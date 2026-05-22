@@ -13,6 +13,7 @@
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
+#include "UI/Menus/WacomPauseMenuScreen.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 
@@ -46,7 +47,7 @@ namespace
 		return UIManager;
 	}
 
-	UCommonActivatableWidget* GetActiveGameMenuWidget(UWacomGameUIManagerSubsystem& UIManager)
+	UCommonActivatableWidgetStack* GetGameMenuStack(UWacomGameUIManagerSubsystem& UIManager)
 	{
 		UWacomPrimaryGameLayout* Layout = UIManager.GetPrimaryLayout();
 		if (!Layout)
@@ -54,17 +55,23 @@ namespace
 			return nullptr;
 		}
 
-		UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
-			WacomUITags::UI_Layer_GameMenu.GetTag());
+		return Layout->GetLayerStack(WacomUITags::UI_Layer_GameMenu.GetTag());
+	}
+
+	UCommonActivatableWidget* GetActiveGameMenuWidget(UWacomGameUIManagerSubsystem& UIManager)
+	{
+		UCommonActivatableWidgetStack* MenuStack = GetGameMenuStack(UIManager);
 		return MenuStack ? MenuStack->GetActiveWidget() : nullptr;
 	}
 
-	void DeactivateActiveGameMenuWidget(UWacomGameUIManagerSubsystem& UIManager)
+	bool DeactivateActiveGameMenuWidget(UWacomGameUIManagerSubsystem& UIManager)
 	{
 		if (UCommonActivatableWidget* ActiveWidget = GetActiveGameMenuWidget(UIManager))
 		{
 			ActiveWidget->DeactivateWidget();
+			return true;
 		}
+		return false;
 	}
 }
 
@@ -83,9 +90,8 @@ void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)
 
 	UIManager->EnsurePrimaryLayout(&PC);
 
-	if (UCommonActivatableWidget* ActiveWidget = GetActiveGameMenuWidget(*UIManager))
+	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
-		ActiveWidget->DeactivateWidget();
 		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 关闭 GameMenu 顶层"));
 		return;
 	}
@@ -105,6 +111,50 @@ void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)
 	}
 
 	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 打开背包"));
+}
+
+void FWacomExplorationScreenRouter::TogglePauseMenu(AWacomPlayerController& PC)
+{
+	if (!IsExplorationState(PC, TEXT("TogglePauseMenu")))
+	{
+		return;
+	}
+
+	UWacomGameUIManagerSubsystem* UIManager = GetUIManager(PC, TEXT("TogglePauseMenu"));
+	if (!UIManager)
+	{
+		return;
+	}
+
+	UIManager->EnsurePrimaryLayout(&PC);
+
+	if (DeactivateActiveGameMenuWidget(*UIManager))
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 关闭 GameMenu 顶层"));
+		return;
+	}
+
+	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
+		WacomUITags::UI_Layer_GameMenu.GetTag(),
+		UWacomPauseMenuScreen::StaticClass());
+	if (!Pushed)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] TogglePauseMenu: Push PauseMenuScreen 失败"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 打开暂停菜单"));
+}
+
+void FWacomExplorationScreenRouter::CloseTopGameMenu(AWacomPlayerController& PC)
+{
+	UWacomGameUIManagerSubsystem* UIManager = GetUIManager(PC, TEXT("CloseTopGameMenu"));
+	if (!UIManager)
+	{
+		return;
+	}
+
+	DeactivateActiveGameMenuWidget(*UIManager);
 }
 
 bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName ShopId, const TArray<FRunShopOfferInput>& Offers)
