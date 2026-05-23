@@ -13,6 +13,9 @@ class UCanvasPanel;
 class UCardWidget;
 class UBattleEventLogPanel;
 class UWacomCardDetailPanel;
+class AWacomBattle3DHandPresenter;
+class AWacomBattleCardVisualActor;
+class APlayerController;
 struct FBattleHUDFallbackLayoutBuilder;
 struct FBattleCommand;
 
@@ -130,6 +133,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|BattleEventLog", meta = (ClampMin = "1", UIMin = "10", UIMax = "300", ToolTip = "BattleHUD 内部保存的战斗事件日志最大条数。超过后只保留最近 N 条，并同步到日志抽屉。"))
 	int32 BattleEventLogMaxEntries = 80;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "是否启用 CardActor + WidgetComponent 的 3D 手牌原型。默认关闭；开启后 BattleHUD 会在有战斗 Session 时创建 3D 手牌 Presenter，并继续保留现有 2D HandPanel 和 hover 详情。"))
+	bool bEnable3DHandPrototype = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "3D 手牌原型的 Presenter Actor 类。仅在 bEnable3DHandPrototype 开启且 BattleHUD 持有有效战斗 Session 时生成；负责管理 3D 手牌 Actor 的表现和点击转发。"))
+	TSubclassOf<AWacomBattle3DHandPresenter> Battle3DHandPresenterClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "3D 手牌原型使用的单张卡牌 Actor 类。BattleHUD 只把该类交给 Presenter，不直接生成或管理单卡 Actor。"))
+	TSubclassOf<AWacomBattleCardVisualActor> Battle3DCardActorClass;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	EBattleUIState GetUIState() const { return UIState; }
@@ -301,8 +313,15 @@ private:
 	UPROPERTY(Transient)
 	TArray<FBattleEventPresentationView> BattleEventLogHistory;
 
+	UPROPERTY(Transient)
+	TObjectPtr<AWacomBattle3DHandPresenter> Battle3DHandPresenter;
+
 	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
 	bool bLoggedMissingCardDetailLayer = false;
+	bool bHasSavedPlayerControllerMouseEventState = false;
+	bool bSavedPlayerControllerClickEvents = false;
+	bool bSavedPlayerControllerMouseOverEvents = false;
+	TWeakObjectPtr<APlayerController> SavedPlayerControllerFor3DHand;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
@@ -331,6 +350,11 @@ private:
 	UWacomCardDetailPanel* EnsureCardDetailPanel();
 	void EnsureCardDetailLayer();
 	void PositionCardDetailPanelNear(UCardWidget* SourceWidget);
+	AWacomBattle3DHandPresenter* EnsureBattle3DHandPresenter();
+	void DestroyBattle3DHandPresenter();
+	void SyncBattle3DHandPresenterTargeting();
+	void SaveAndEnablePlayerControllerMouseEvents();
+	void RestorePlayerControllerMouseEvents();
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
 	friend class UWacomBattleHUDDetailTest;

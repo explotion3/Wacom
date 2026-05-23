@@ -266,6 +266,18 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 - Hover 详情由 `UCardWidget` 上报、`UHandPanel` 转发、`BattleHUD` 管理；详情默认显示在卡牌左侧，空间不足时放右侧。
 - 进入目标选择、提交命令、刷新 Snapshot、切换 Session 或战斗结束时隐藏详情。
 
+### 3D hand prototype
+
+`CardActor + WidgetComponent` 的 3D 手牌目前只是原型入口，默认关闭。开启开关只用于验证 HD-2D 场景中的空间手牌可行性，不替换现有 2D `UHandPanel`，也不改变 BattleHUD 的命令出口。
+
+原型边界：
+
+- `BattleHUD` 仍是战斗 UI 命令出口；3D 手牌只把点击、悬停等玩家意图回传给 `BattleHUD`，不直接调 `BattleSession->SubmitCommand()`。
+- 3D Presenter / CardActor 只读消费 `FBattleSnapshot` / `FHandCardSnapshot`，用 `InstanceId` 维护视觉对象身份；不能回写战斗状态。
+- `WidgetComponent` 内继续承载 `UCardWidget` / 卡面展示协议，避免 2D 与 3D 卡牌展示各自解释卡牌数据。
+- 3D 手牌不替代当前 `UHandPanel` 和 2D hover 详情；开启原型时两者可以并存，便于对照和回退。
+- 本原型不做 RenderTarget 池、不做 3D hover detail、不做 3D enemy targeting；这些属于后续正式表现项。
+
 战斗 WBP 制作细节见 `UI_Battle_WBP_Binding.md`。扇形手牌、拖拽出牌、3D 目标选择等属于后续表现项。
 
 ---

@@ -20,7 +20,30 @@
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "Events/BattleEvent.h"
 
+#include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "Misc/ScopeExit.h"
 #include "UObject/StrongObjectPtr.h"
+
+namespace WacomBattleWidgetSpec
+{
+	UWorld* FindAutomationWorld()
+	{
+		if (GEngine)
+		{
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				if (UWorld* World = Context.World())
+				{
+					return World;
+				}
+			}
+		}
+
+		return GWorld;
+	}
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEventToastChineseTextSpec,
@@ -831,6 +854,66 @@ bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Paramete
 	const FBattleTargetSelectionView ClearedView = HUD->BuildTargetSelectionView();
 	TestFalse(TEXT("Cleared view is not selecting"), ClearedView.bIsTargetSelecting);
 	TestFalse(TEXT("Cleared view invalid pending card"), ClearedView.PendingCardInstanceId.IsValid());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUD3DHandPresenterLifecycleSpec,
+	"Wacom.UI.Battle.HUD3DHandPresenterLifecycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUD3DHandPresenterLifecycleSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeftHand = Fx.MakeNoopCard(0);
+	UCardDefinition* RightHand = Fx.MakeNoopCard(0);
+	UCardDefinition* DeckCard = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, { DeckCard });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	PC->bEnableClickEvents = false;
+	PC->bEnableMouseOverEvents = false;
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->Enable3DHandPrototypeForTest();
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshot(Session->BuildSnapshot());
+
+	TestTrue(TEXT("3D hand presenter is created when prototype is enabled"), HUD->HasBattle3DHandPresenterForTest());
+	TestTrue(TEXT("Prototype enables PlayerController click events"), PC->bEnableClickEvents);
+	TestTrue(TEXT("Prototype enables PlayerController mouse-over events"), PC->bEnableMouseOverEvents);
+
+	HUD->DestroyBattle3DHandPresenterForTest();
+	TestFalse(TEXT("3D hand presenter is destroyed explicitly"), HUD->HasBattle3DHandPresenterForTest());
+	TestFalse(TEXT("Destroy restores PlayerController click events"), PC->bEnableClickEvents);
+	TestFalse(TEXT("Destroy restores PlayerController mouse-over events"), PC->bEnableMouseOverEvents);
 
 	return true;
 }

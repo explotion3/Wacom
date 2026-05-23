@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameFramework/PlayerController.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/CardWidget.h"
@@ -19,6 +20,18 @@
 #include "Input/Events.h"
 #include "InputCoreTypes.h"
 #include "BattleWidgetSpecReceiver.generated.h"
+
+UCLASS()
+class AWacomBattleHUDLocalPlayerControllerTest : public APlayerController
+{
+	GENERATED_BODY()
+
+public:
+	virtual bool IsLocalController() const override
+	{
+		return true;
+	}
+};
 
 UCLASS()
 class UWacomBattleCardWidgetClickReceiver : public UObject
@@ -197,6 +210,31 @@ class UWacomBattleHUDDetailTest : public UBattleHUD
 	GENERATED_BODY()
 
 public:
+	virtual APlayerController* GetOwningPlayer() const override
+	{
+		return OwningPlayerOverride ? OwningPlayerOverride.Get() : Super::GetOwningPlayer();
+	}
+
+	void SetOwningPlayerForTest(APlayerController* InPlayerController)
+	{
+		OwningPlayerOverride = InPlayerController;
+	}
+
+	void Enable3DHandPrototypeForTest()
+	{
+		bEnable3DHandPrototype = true;
+	}
+
+	void DestroyBattle3DHandPresenterForTest()
+	{
+		DestroyBattle3DHandPresenter();
+	}
+
+	bool HasBattle3DHandPresenterForTest() const
+	{
+		return Battle3DHandPresenter.Get() != nullptr;
+	}
+
 	void SetTargetSelectionStateForTest(const FGuid& PendingCardId)
 	{
 		PendingTargetingCardId = PendingCardId;
@@ -243,6 +281,10 @@ public:
 	{
 		EventLogPanel = InPanel;
 	}
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<APlayerController> OwningPlayerOverride;
 };
 
 UCLASS()

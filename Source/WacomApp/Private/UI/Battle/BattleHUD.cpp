@@ -4,6 +4,8 @@
 
 #define LOCTEXT_NAMESPACE "WacomBattleHUD"
 #include "UI/Battle/ActionPanel.h"
+#include "Actors/WacomBattle3DHandPresenter.h"
+#include "Actors/WacomBattleCardVisualActor.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/EventToast.h"
@@ -24,6 +26,8 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 #include "Input/UIActionBindingHandle.h"
 #include "Input/CommonUIInputSettings.h"
@@ -96,6 +100,7 @@ void UBattleHUD::NativeConstruct()
 
 void UBattleHUD::NativeDestruct()
 {
+	DestroyBattle3DHandPresenter();
 	if (HandPanel)
 	{
 		HandPanel->OnCardHoveredNative.RemoveAll(this);
@@ -139,6 +144,19 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
 	HideCardDetailPanel();
 
+	if (bEnable3DHandPrototype)
+	{
+		if (AWacomBattle3DHandPresenter* Presenter = EnsureBattle3DHandPresenter())
+		{
+			Presenter->RefreshFromSnapshot(Snap);
+			SyncBattle3DHandPresenterTargeting();
+		}
+	}
+	else
+	{
+		DestroyBattle3DHandPresenter();
+	}
+
 	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
 	if (Snap.Phase == EBattlePhase::BattleEnd)
 	{
@@ -163,6 +181,11 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession)
 {
 	Super::NativeOnSessionChanged(OldSession, NewSession);
+	if (OldSession != NewSession)
+	{
+		DestroyBattle3DHandPresenter();
+	}
+
 	// 新 Session 接入时，重置状态机到 Idle。
 	UIState = EBattleUIState::Idle;
 	PendingTargetingCardId.Invalidate();
@@ -170,6 +193,15 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	HideCardDetailPanel();
 	BattleEventLogHistory.Reset();
 	SyncBattleEventLogPanel();
+
+	if (bEnable3DHandPrototype && NewSession)
+	{
+		EnsureBattle3DHandPresenter();
+	}
+	else
+	{
+		DestroyBattle3DHandPresenter();
+	}
 }
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
@@ -259,6 +291,7 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 {
 	// 状态变化时，让 HandPanel / EnemyInfoBar / ActionPanel 重新刷一次（高亮/启用状态）。
 	UBattleSession* S = GetSession();
+	SyncBattle3DHandPresenterTargeting();
 	if (!S) { return; }
 	const FBattleSnapshot Snap = S->BuildSnapshot();
 	if (HandPanel)    { HandPanel->RefreshFromSnapshot(Snap); }
@@ -615,6 +648,117 @@ void UBattleHUD::PositionCardDetailPanelNear(UCardWidget* SourceWidget)
 		DetailSlot->SetPosition(Position);
 		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
 	}
+}
+
+AWacomBattle3DHandPresenter* UBattleHUD::EnsureBattle3DHandPresenter()
+{
+	if (!bEnable3DHandPrototype || !GetSession())
+	{
+		DestroyBattle3DHandPresenter();
+		return nullptr;
+	}
+
+	if (IsValid(Battle3DHandPresenter))
+	{
+		return Battle3DHandPresenter;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+
+	TSubclassOf<AWacomBattle3DHandPresenter> PresenterClass = Battle3DHandPresenterClass;
+	if (!PresenterClass)
+	{
+		PresenterClass = AWacomBattle3DHandPresenter::StaticClass();
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = GetOwningPlayer();
+	SpawnParams.ObjectFlags |= RF_Transient;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AWacomBattle3DHandPresenter* Presenter = World->SpawnActor<AWacomBattle3DHandPresenter>(
+		PresenterClass.Get(),
+		FTransform::Identity,
+		SpawnParams);
+	if (!Presenter)
+	{
+		return nullptr;
+	}
+
+	Battle3DHandPresenter = Presenter;
+	SaveAndEnablePlayerControllerMouseEvents();
+	Presenter->SetOwningBattleHUD(this);
+	if (Battle3DCardActorClass)
+	{
+		Presenter->CardActorClass = Battle3DCardActorClass;
+	}
+	SyncBattle3DHandPresenterTargeting();
+	return Presenter;
+}
+
+void UBattleHUD::DestroyBattle3DHandPresenter()
+{
+	if (IsValid(Battle3DHandPresenter))
+	{
+		Battle3DHandPresenter->Destroy();
+	}
+	Battle3DHandPresenter = nullptr;
+	RestorePlayerControllerMouseEvents();
+}
+
+void UBattleHUD::SyncBattle3DHandPresenterTargeting()
+{
+	if (!bEnable3DHandPrototype || !IsValid(Battle3DHandPresenter))
+	{
+		return;
+	}
+
+	Battle3DHandPresenter->SetTargetSelectionView(BuildTargetSelectionView());
+}
+
+void UBattleHUD::SaveAndEnablePlayerControllerMouseEvents()
+{
+	if (bHasSavedPlayerControllerMouseEventState)
+	{
+		return;
+	}
+
+	APlayerController* PC = GetOwningPlayer();
+	if (!PC)
+	{
+		return;
+	}
+
+	SavedPlayerControllerFor3DHand = PC;
+	bSavedPlayerControllerClickEvents = PC->bEnableClickEvents;
+	bSavedPlayerControllerMouseOverEvents = PC->bEnableMouseOverEvents;
+	bHasSavedPlayerControllerMouseEventState = true;
+
+	PC->bEnableClickEvents = true;
+	PC->bEnableMouseOverEvents = true;
+}
+
+void UBattleHUD::RestorePlayerControllerMouseEvents()
+{
+	if (!bHasSavedPlayerControllerMouseEventState)
+	{
+		return;
+	}
+
+	if (APlayerController* PC = SavedPlayerControllerFor3DHand.Get())
+	{
+		PC->bEnableClickEvents = bSavedPlayerControllerClickEvents;
+		PC->bEnableMouseOverEvents = bSavedPlayerControllerMouseOverEvents;
+	}
+
+	SavedPlayerControllerFor3DHand.Reset();
+	bHasSavedPlayerControllerMouseEventState = false;
+	bSavedPlayerControllerClickEvents = false;
+	bSavedPlayerControllerMouseOverEvents = false;
 }
 
 namespace
