@@ -1,4 +1,4 @@
-#include "DreamShaderMaterialGeneratorPrivate.h"
+#include "DreamShaderMaterialGeneratorCodeShared.h"
 
 namespace UE::DreamShader::Editor::Private
 {
@@ -176,17 +176,6 @@ namespace UE::DreamShader::Editor::Private
 		return Segments;
 	}
 
-	static bool IsIdentifierBoundary(const FString& Text, const int32 Index)
-	{
-		if (!Text.IsValidIndex(Index))
-		{
-			return true;
-		}
-
-		const TCHAR Char = Text[Index];
-		return !(FChar::IsAlnum(Char) || Char == TCHAR('_'));
-	}
-
 	static bool MatchesKeywordAt(const FString& Text, const int32 Index, const TCHAR* Keyword)
 	{
 		const int32 KeywordLength = FCString::Strlen(Keyword);
@@ -195,71 +184,6 @@ namespace UE::DreamShader::Editor::Private
 			&& Text.Mid(Index, KeywordLength).Equals(Keyword, ESearchCase::CaseSensitive)
 			&& IsIdentifierBoundary(Text, Index - 1)
 			&& IsIdentifierBoundary(Text, Index + KeywordLength);
-	}
-
-	static void SkipWhitespace(const FString& Text, int32& InOutIndex)
-	{
-		while (Text.IsValidIndex(InOutIndex) && FChar::IsWhitespace(Text[InOutIndex]))
-		{
-			++InOutIndex;
-		}
-	}
-
-	static bool FindMatchingDelimiter(
-		const FString& Text,
-		const int32 OpenIndex,
-		const TCHAR OpenChar,
-		const TCHAR CloseChar,
-		int32& OutCloseIndex)
-	{
-		if (!Text.IsValidIndex(OpenIndex) || Text[OpenIndex] != OpenChar)
-		{
-			return false;
-		}
-
-		int32 Depth = 0;
-		bool bInString = false;
-		for (int32 Index = OpenIndex; Index < Text.Len(); ++Index)
-		{
-			const TCHAR Char = Text[Index];
-
-			if (bInString)
-			{
-				if (Char == TCHAR('\\') && Text.IsValidIndex(Index + 1))
-				{
-					++Index;
-				}
-				else if (Char == TCHAR('"'))
-				{
-					bInString = false;
-				}
-				continue;
-			}
-
-			if (Char == TCHAR('"'))
-			{
-				bInString = true;
-				continue;
-			}
-
-			if (Char == OpenChar)
-			{
-				++Depth;
-				continue;
-			}
-
-			if (Char == CloseChar)
-			{
-				--Depth;
-				if (Depth == 0)
-				{
-					OutCloseIndex = Index;
-					return true;
-				}
-			}
-		}
-
-		return false;
 	}
 
 	static bool FindIfStatementEnd(const FString& Text, const int32 IfIndex, int32& OutEndIndex, FString& OutError)

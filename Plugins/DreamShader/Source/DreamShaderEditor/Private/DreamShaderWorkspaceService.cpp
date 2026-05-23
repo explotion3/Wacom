@@ -28,7 +28,7 @@ namespace UE::DreamShader::Editor::Private
 			return FString::Printf(TEXT("\"%s\""), *Escaped);
 		}
 
-		FString GetMaterialExpressionShortName(const UClass* Class)
+		FString GetWorkspaceMaterialExpressionShortName(const UClass* Class)
 		{
 			if (!Class)
 			{
@@ -414,7 +414,7 @@ namespace UE::DreamShader::Editor::Private
 				continue;
 			}
 
-			const FString ShortName = GetMaterialExpressionShortName(Class);
+			const FString ShortName = GetWorkspaceMaterialExpressionShortName(Class);
 			if (ShortName.IsEmpty())
 			{
 				continue;
