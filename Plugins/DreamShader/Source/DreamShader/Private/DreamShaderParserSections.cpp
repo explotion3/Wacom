@@ -413,7 +413,11 @@ namespace UE::DreamShader::Private
 			return true;
 		}
 
-		if (Matches(TEXT("WorldPosition")) || Matches(TEXT("CameraVectorWS")) || Matches(TEXT("ObjectPositionWS")))
+		if (Matches(TEXT("WorldPosition"))
+			|| Matches(TEXT("CameraVectorWS"))
+			|| Matches(TEXT("ObjectPositionWS"))
+			|| Matches(TEXT("VertexNormalWS"))
+			|| Matches(TEXT("VertexTangentWS")))
 		{
 			OutType = ETextShaderPropertyType::Vector;
 			OutComponentCount = 3;

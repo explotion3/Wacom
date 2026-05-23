@@ -445,9 +445,19 @@ namespace UE::DreamShader::Editor::Private
 				return false;
 			}
 
+			int32 OutputComponents = Builtin.OutputComponents;
+			if (Expression->Outputs.IsValidIndex(0))
+			{
+				int32 KnownOutputComponents = 0;
+				if (TryResolveKnownExpressionOutputComponentCount(Expression, 0, KnownOutputComponents) && KnownOutputComponents > 0)
+				{
+					OutputComponents = KnownOutputComponents;
+				}
+			}
+
 			OutValue.Expression = Expression;
 			OutValue.OutputIndex = 0;
-			OutValue.ComponentCount = Builtin.OutputComponents;
+			OutValue.ComponentCount = OutputComponents;
 			OutValue.bIsTextureObject = false;
 			OutValue.bIsMaterialAttributes = false;
 			return true;
@@ -516,7 +526,9 @@ namespace UE::DreamShader::Editor::Private
 		Builtins.Add({ TEXT("WorldPosition"), UMaterialExpressionWorldPosition::StaticClass(), 3, {} });
 		Builtins.Add({ TEXT("ObjectPositionWS"), UMaterialExpressionObjectPositionWS::StaticClass(), 3, {} });
 		Builtins.Add({ TEXT("CameraVectorWS"), UMaterialExpressionCameraVectorWS::StaticClass(), 3, {} });
-		Builtins.Add({ TEXT("ScreenPosition"), UMaterialExpressionScreenPosition::StaticClass(), 4, {} });
+		Builtins.Add({ TEXT("VertexNormalWS"), UMaterialExpressionVertexNormalWS::StaticClass(), 3, {} });
+		Builtins.Add({ TEXT("VertexTangentWS"), UMaterialExpressionVertexTangentWS::StaticClass(), 3, {} });
+		Builtins.Add({ TEXT("ScreenPosition"), UMaterialExpressionScreenPosition::StaticClass(), 2, {} });
 		Builtins.Add({ TEXT("VertexColor"), UMaterialExpressionVertexColor::StaticClass(), 4, {} });
 
 		Builtins.Add({
@@ -677,6 +689,20 @@ namespace UE::DreamShader::Editor::Private
 			return false;
 		}
 
+		UMaterialExpressionCustom* CustomExpression = Cast<UMaterialExpressionCustom>(Expression);
+		if (CustomExpression)
+		{
+			ECustomMaterialOutputType CustomOutputType = CMOT_Float1;
+			if (!TryResolveCustomOutputType(OutputTypeText, CustomOutputType))
+			{
+				OutError = FString::Printf(TEXT("UE.%s OutputType '%s' is not a valid Custom node output type."), *FunctionName, *OutputTypeText);
+				return false;
+			}
+			CustomExpression->OutputType = CustomOutputType;
+			CustomExpression->Inputs.Reset();
+			CustomExpression->AdditionalOutputs.Reset();
+		}
+
 		TArray<TPair<FName, FCodeValue>> BoundInputValues;
 		for (const FCodeCallArgument& Argument : Arguments)
 		{
@@ -708,8 +734,25 @@ namespace UE::DreamShader::Editor::Private
 			FProperty* BoundProperty = BoundInputByPinName ? nullptr : FindMaterialExpressionArgumentProperty(ExpressionClass, Argument.Name);
 			if (!BoundInputByPinName && !BoundProperty)
 			{
-				OutError = FString::Printf(TEXT("UE.%s: '%s' is not a property on '%s'."), *FunctionName, *Argument.Name, *ExpressionClass->GetName());
-				return false;
+				if (!CustomExpression)
+				{
+					OutError = FString::Printf(TEXT("UE.%s: '%s' is not a property on '%s'."), *FunctionName, *Argument.Name, *ExpressionClass->GetName());
+					return false;
+				}
+
+				FCodeValue InputValue;
+				if (!EvaluateExpression(Argument.Expression, InputValue, OutError))
+				{
+					OutError = FString::Printf(TEXT("UE.%s input '%s': %s"), *FunctionName, *Argument.Name, *OutError);
+					return false;
+				}
+
+				FCustomInput CustomInput;
+				CustomInput.InputName = FName(*Argument.Name);
+				CustomExpression->Inputs.Add(CustomInput);
+				ConnectCodeValueToInput(CustomExpression->Inputs.Last().Input, InputValue);
+				BoundInputValues.Add(TPair<FName, FCodeValue>(FName(*NormalizedArgumentName), InputValue));
+				continue;
 			}
 
 			if (BoundInputByPinName || IsMaterialExpressionInputProperty(BoundProperty))
@@ -770,6 +813,43 @@ namespace UE::DreamShader::Editor::Private
 		{
 			OutError = FString::Printf(TEXT("UE.%s cannot use OutputName/Output together with OutputIndex."), *FunctionName);
 			return false;
+		}
+
+		if (CustomExpression)
+		{
+			ECustomMaterialOutputType CustomOutputType = CustomExpression->OutputType;
+			FString CustomOutputName;
+			int32 RequestedCustomOutputIndex = 0;
+			if (OutputNameArgument)
+			{
+				if (!TryExtractLiteralText(OutputNameArgument->Expression, CustomOutputName) || CustomOutputName.TrimStartAndEnd().IsEmpty())
+				{
+					OutError = FString::Printf(TEXT("UE.%s OutputName must be a non-empty literal value."), *FunctionName);
+					return false;
+				}
+				RequestedCustomOutputIndex = 1;
+			}
+			else if (OutputIndexArgument)
+			{
+				if (!TryExtractIntegerLiteral(OutputIndexArgument->Expression, RequestedCustomOutputIndex) || RequestedCustomOutputIndex < 0)
+				{
+					OutError = FString::Printf(TEXT("UE.%s OutputIndex is out of range for '%s'."), *FunctionName, *ExpressionClass->GetName());
+					return false;
+				}
+			}
+
+			for (int32 AdditionalOutputIndex = 0; AdditionalOutputIndex < RequestedCustomOutputIndex; ++AdditionalOutputIndex)
+			{
+				FCustomOutput CustomOutput;
+				CustomOutput.OutputName = FName(*(
+					AdditionalOutputIndex == RequestedCustomOutputIndex - 1 && !CustomOutputName.IsEmpty()
+						? CustomOutputName
+						: FString::Printf(TEXT("Output%d"), AdditionalOutputIndex + 1)));
+				CustomOutput.OutputType = CustomOutputType;
+				CustomExpression->AdditionalOutputs.Add(CustomOutput);
+			}
+
+			CustomExpression->RebuildOutputs();
 		}
 
 		int32 ResolvedOutputIndex = 0;
@@ -899,20 +979,6 @@ namespace UE::DreamShader::Editor::Private
 			}
 		};
 
-		auto ApplyGenericExpressionOutputType = [&OutputComponents, &bIsTextureObject, Expression, ResolvedOutputIndex]()
-		{
-			int32 ResolvedComponentCount = 0;
-			bool bResolvedIsTextureObject = false;
-			if (TryResolveMaterialValueType(
-				Expression->GetOutputValueType(ResolvedOutputIndex),
-				ResolvedComponentCount,
-				bResolvedIsTextureObject))
-			{
-				OutputComponents = ResolvedComponentCount;
-				bIsTextureObject = bResolvedIsTextureObject;
-			}
-		};
-
 		if (Expression->IsA<UMaterialExpressionTextureCoordinate>()
 			|| Expression->IsA<UMaterialExpressionPanner>()
 			|| Expression->GetClass()->GetName().Equals(TEXT("MaterialExpressionRotator"), ESearchCase::IgnoreCase))
@@ -920,7 +986,16 @@ namespace UE::DreamShader::Editor::Private
 			OutputComponents = 2;
 			bIsTextureObject = false;
 		}
-		else if (Expression->IsA<UMaterialExpressionSaturate>())
+		else
+		{
+			int32 KnownOutputComponents = 0;
+			if (TryResolveKnownExpressionOutputComponentCount(Expression, ResolvedOutputIndex, KnownOutputComponents) && KnownOutputComponents > 0)
+			{
+				OutputComponents = KnownOutputComponents;
+				bIsTextureObject = false;
+			}
+		}
+		if (Expression->IsA<UMaterialExpressionSaturate>())
 		{
 			ApplyNumericInputComponentCount(FindBoundInputValue(TEXT("Input")));
 		}
@@ -952,10 +1027,6 @@ namespace UE::DreamShader::Editor::Private
 			}
 			OutputComponents = MaskComponentCount > 0 ? MaskComponentCount : 1;
 			bIsTextureObject = false;
-		}
-		else
-		{
-			ApplyGenericExpressionOutputType();
 		}
 
 		OutValue.Expression = Expression;

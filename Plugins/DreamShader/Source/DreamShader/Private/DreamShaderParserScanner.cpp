@@ -141,7 +141,7 @@ namespace UE::DreamShader::Private
 				return false;
 			}
 
-			OutValue = Source.Mid(Start, Index - Start);
+			OutValue = UnescapeDreamShaderStringLiteral(Source.Mid(Start, Index - Start));
 			++Index;
 			return true;
 		}
@@ -692,9 +692,50 @@ namespace UE::DreamShader::Private
 		FString Result = InValue.TrimStartAndEnd();
 		if (Result.Len() >= 2 && Result.StartsWith(TEXT("\"")) && Result.EndsWith(TEXT("\"")))
 		{
-			Result = Result.Mid(1, Result.Len() - 2);
+			return UnescapeDreamShaderStringLiteral(Result.Mid(1, Result.Len() - 2));
 		}
+
 		return Result;
+	}
+
+	FString UnescapeDreamShaderStringLiteral(const FString& InValue)
+	{
+		FString Unescaped;
+		Unescaped.Reserve(InValue.Len());
+		for (int32 Index = 0; Index < InValue.Len(); ++Index)
+		{
+			const TCHAR Character = InValue[Index];
+			if (Character != TCHAR('\\') || !InValue.IsValidIndex(Index + 1))
+			{
+				Unescaped.AppendChar(Character);
+				continue;
+			}
+
+			const TCHAR EscapedCharacter = InValue[++Index];
+			switch (EscapedCharacter)
+			{
+			case TCHAR('n'):
+				Unescaped.AppendChar(TCHAR('\n'));
+				break;
+			case TCHAR('r'):
+				Unescaped.AppendChar(TCHAR('\r'));
+				break;
+			case TCHAR('t'):
+				Unescaped.AppendChar(TCHAR('\t'));
+				break;
+			case TCHAR('"'):
+				Unescaped.AppendChar(TCHAR('"'));
+				break;
+			case TCHAR('\\'):
+				Unescaped.AppendChar(TCHAR('\\'));
+				break;
+			default:
+				Unescaped.AppendChar(EscapedCharacter);
+				break;
+			}
+		}
+
+		return Unescaped;
 	}
 
 	bool ParseScalarLiteral(const FString& InText, double& OutValue)

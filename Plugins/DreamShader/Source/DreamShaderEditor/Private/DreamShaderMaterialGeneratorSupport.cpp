@@ -57,6 +57,12 @@
 
 namespace UE::DreamShader::Editor::Private
 {
+	namespace
+	{
+		constexpr int32 FastClearExpressionThreshold = 1200;
+		constexpr int32 FastLayoutExpressionThreshold = 1200;
+	}
+
 	bool ResolveMaterialProperty(const FString& InName, FResolvedMaterialProperty& OutProperty)
 	{
 		const auto Matches = [&InName](const TCHAR* Candidate)
@@ -502,7 +508,7 @@ namespace UE::DreamShader::Editor::Private
 		const int32 PositionX,
 		const int32 PositionY)
 	{
-		return UMaterialEditingLibrary::CreateMaterialExpressionEx(Material, MaterialFunction, ExpressionClass, nullptr, PositionX, PositionY);
+		return UMaterialEditingLibrary::CreateMaterialExpressionEx(Material, MaterialFunction, ExpressionClass, nullptr, PositionX, PositionY, false);
 	}
 
 	static void EnsureExpressionCanBeDeleted(UMaterialExpression* Expression)
@@ -782,6 +788,13 @@ namespace UE::DreamShader::Editor::Private
 		for (int32 Index = 0; Index < InText.Len(); ++Index)
 		{
 			const TCHAR Character = InText[Index];
+			if (bInString && Character == TCHAR('\\') && InText.IsValidIndex(Index + 1))
+			{
+				Current.AppendChar(Character);
+				Current.AppendChar(InText[++Index]);
+				continue;
+			}
+
 			if (Character == TCHAR('"'))
 			{
 				bInString = !bInString;
@@ -808,13 +821,54 @@ namespace UE::DreamShader::Editor::Private
 		return true;
 	}
 
+	static FString UnescapeDreamShaderStringLiteral(const FString& InText)
+	{
+		FString Unescaped;
+		Unescaped.Reserve(InText.Len());
+		for (int32 Index = 0; Index < InText.Len(); ++Index)
+		{
+			const TCHAR Character = InText[Index];
+			if (Character != TCHAR('\\') || !InText.IsValidIndex(Index + 1))
+			{
+				Unescaped.AppendChar(Character);
+				continue;
+			}
+
+			const TCHAR EscapedCharacter = InText[++Index];
+			switch (EscapedCharacter)
+			{
+			case TCHAR('n'):
+				Unescaped.AppendChar(TCHAR('\n'));
+				break;
+			case TCHAR('r'):
+				Unescaped.AppendChar(TCHAR('\r'));
+				break;
+			case TCHAR('t'):
+				Unescaped.AppendChar(TCHAR('\t'));
+				break;
+			case TCHAR('"'):
+				Unescaped.AppendChar(TCHAR('"'));
+				break;
+			case TCHAR('\\'):
+				Unescaped.AppendChar(TCHAR('\\'));
+				break;
+			default:
+				Unescaped.AppendChar(EscapedCharacter);
+				break;
+			}
+		}
+
+		return Unescaped;
+	}
+
 	static FString TrimMatchingQuotes(const FString& InText)
 	{
 		FString Result = InText.TrimStartAndEnd();
 		if (Result.Len() >= 2 && Result.StartsWith(TEXT("\"")) && Result.EndsWith(TEXT("\"")))
 		{
-			Result = Result.Mid(1, Result.Len() - 2);
+			return UnescapeDreamShaderStringLiteral(Result.Mid(1, Result.Len() - 2));
 		}
+
 		return Result;
 	}
 
@@ -1210,6 +1264,15 @@ namespace UE::DreamShader::Editor::Private
 			UObject* LoadedObject = StaticLoadObject(ObjectProperty->PropertyClass, nullptr, *AssetObjectPath);
 			if (!LoadedObject)
 			{
+				if (ObjectProperty->PropertyClass
+					&& ObjectProperty->PropertyClass->IsChildOf(UTexture::StaticClass())
+					&& (Property->GetName().Equals(TEXT("Texture"), ESearchCase::IgnoreCase)
+						|| Property->GetName().Equals(TEXT("TextureObject"), ESearchCase::IgnoreCase)))
+				{
+					ObjectProperty->SetObjectPropertyValue(ValuePtr, nullptr);
+					return true;
+				}
+
 				OutError = FString::Printf(TEXT("Failed to load asset '%s' for '%s'."), *AssetObjectPath, *Property->GetName());
 				return false;
 			}
@@ -2737,6 +2800,22 @@ namespace UE::DreamShader::Editor::Private
 			}
 		}
 
+		if (Material->GetExpressions().Num() >= FastClearExpressionThreshold)
+		{
+			for (const TObjectPtr<UMaterialExpression>& Expression : Material->GetExpressions())
+			{
+				EnsureExpressionCanBeDeleted(Expression.Get());
+				if (Expression)
+				{
+					Expression->MarkAsGarbage();
+				}
+			}
+
+			Material->EditorParameters.Reset();
+			Material->GetExpressionCollection().Empty();
+			return;
+		}
+
 		int32 SafetyCounter = 0;
 		while (!Material->GetExpressions().IsEmpty() && SafetyCounter < 64)
 		{
@@ -2778,6 +2857,21 @@ namespace UE::DreamShader::Editor::Private
 		FScopedSlowTask ClearSlowTask(
 			FMath::Max(1.0f, static_cast<float>(MaterialFunction->GetExpressions().Num())),
 			FText::FromString(FString::Printf(TEXT("Clearing Material Function graph '%s'..."), *MaterialFunction->GetName())));
+
+		if (MaterialFunction->GetExpressions().Num() >= FastClearExpressionThreshold)
+		{
+			for (const TObjectPtr<UMaterialExpression>& Expression : MaterialFunction->GetExpressions())
+			{
+				EnsureExpressionCanBeDeleted(Expression.Get());
+				if (Expression)
+				{
+					Expression->MarkAsGarbage();
+				}
+			}
+
+			MaterialFunction->GetExpressionCollection().Empty();
+			return;
+		}
 
 		int32 SafetyCounter = 0;
 		while (!MaterialFunction->GetExpressions().IsEmpty() && SafetyCounter < 64)
@@ -2886,6 +2980,16 @@ namespace UE::DreamShader::Editor::Private
 		CollectMaterialExpressions(Material, MaterialFunction, Expressions);
 		if (Expressions.Num() < 2)
 		{
+			return;
+		}
+
+		if (Expressions.Num() >= FastLayoutExpressionThreshold)
+		{
+			UE_LOG(
+				LogDreamShader,
+				Display,
+				TEXT("Skipping automatic layout for large DreamShader graph (%d nodes). Existing generated positions will be used."),
+				Expressions.Num());
 			return;
 		}
 
@@ -3329,6 +3433,20 @@ namespace UE::DreamShader::Editor::Private
 		return false;
 	}
 
+	static FString GetPropertyParameterName(const FTextShaderPropertyDefinition& Property)
+	{
+		if (const FString* ParameterName = Property.Metadata.ReflectedProperties.Find(UE::DreamShader::NormalizeSettingKey(TEXT("ParameterName"))))
+		{
+			const FString TrimmedParameterName = ParameterName->TrimStartAndEnd();
+			if (!TrimmedParameterName.IsEmpty())
+			{
+				return TrimmedParameterName;
+			}
+		}
+
+		return Property.Name;
+	}
+
 	static bool SetExpressionDefaultValue(UMaterialExpression* Expression, const FTextShaderPropertyDefinition& Property, FString& OutError)
 	{
 		if (!Expression || !Property.bHasDefaultValue)
@@ -3423,7 +3541,7 @@ namespace UE::DreamShader::Editor::Private
 			return nullptr;
 		}
 
-		if (!SetExpressionParameterName(Expression, Property.Name, OutError)
+		if (!SetExpressionParameterName(Expression, GetPropertyParameterName(Property), OutError)
 			|| !SetExpressionDefaultValue(Expression, Property, OutError))
 		{
 			OutError = FString::Printf(TEXT("%s: %s"), *FormatMetadataContext(Property), *OutError);
@@ -3595,7 +3713,7 @@ namespace UE::DreamShader::Editor::Private
 				return nullptr;
 			}
 
-			Expression->ParameterName = FName(*Property.Name);
+			Expression->ParameterName = FName(*GetPropertyParameterName(Property));
 			if (Property.bHasDefaultValue)
 			{
 				Expression->DefaultValue = static_cast<float>(Property.ScalarDefaultValue);
@@ -3618,7 +3736,7 @@ namespace UE::DreamShader::Editor::Private
 				return nullptr;
 			}
 
-			ParameterExpression->ParameterName = FName(*Property.Name);
+			ParameterExpression->ParameterName = FName(*GetPropertyParameterName(Property));
 			if (Property.bHasDefaultValue)
 			{
 				ParameterExpression->DefaultValue = Property.VectorDefaultValue;
@@ -3640,7 +3758,7 @@ namespace UE::DreamShader::Editor::Private
 			return nullptr;
 		}
 
-		Expression->ParameterName = FName(*Property.Name);
+		Expression->ParameterName = FName(*GetPropertyParameterName(Property));
 		if (Property.bHasDefaultValue && !Property.TextureDefaultObjectPath.IsEmpty())
 		{
 			UTexture* DefaultTexture = LoadObject<UTexture>(nullptr, *Property.TextureDefaultObjectPath);
@@ -3789,6 +3907,26 @@ namespace UE::DreamShader::Editor::Private
 			return nullptr;
 		}
 
+		if (UMaterialExpressionCustom* CustomExpression = Cast<UMaterialExpressionCustom>(Expression))
+		{
+			if (FString OutputTypeText; TryGetUEBuiltinArgument(Property, TEXT("OutputType"), OutputTypeText)
+				|| TryGetUEBuiltinArgument(Property, TEXT("ResultType"), OutputTypeText))
+			{
+				ECustomMaterialOutputType CustomOutputType = CMOT_Float1;
+				if (!TryResolveCustomOutputType(OutputTypeText, CustomOutputType))
+				{
+					OutError = FString::Printf(TEXT("UE.%s for property '%s': OutputType '%s' is not a valid Custom node output type."),
+						*Property.UEBuiltinFunctionName,
+						*Property.Name,
+						*OutputTypeText);
+					return nullptr;
+				}
+				CustomExpression->OutputType = CustomOutputType;
+			}
+			CustomExpression->Inputs.Reset();
+			CustomExpression->AdditionalOutputs.Reset();
+		}
+
 		if (!Property.UEBuiltinArguments.Contains(UE::DreamShader::NormalizeSettingKey(TEXT("ParameterName")))
 			&& FindMaterialExpressionArgumentProperty(ExpressionClass, TEXT("ParameterName")))
 		{
@@ -3807,7 +3945,10 @@ namespace UE::DreamShader::Editor::Private
 		{
 			if (Argument.Key == UE::DreamShader::NormalizeSettingKey(TEXT("Class"))
 				|| Argument.Key == UE::DreamShader::NormalizeSettingKey(TEXT("OutputType"))
-				|| Argument.Key == UE::DreamShader::NormalizeSettingKey(TEXT("ResultType")))
+				|| Argument.Key == UE::DreamShader::NormalizeSettingKey(TEXT("ResultType"))
+				|| Argument.Key == UE::DreamShader::NormalizeSettingKey(TEXT("Output"))
+				|| Argument.Key == UE::DreamShader::NormalizeSettingKey(TEXT("OutputName"))
+				|| Argument.Key == UE::DreamShader::NormalizeSettingKey(TEXT("OutputIndex")))
 			{
 				continue;
 			}
@@ -3815,6 +3956,23 @@ namespace UE::DreamShader::Editor::Private
 			FProperty* BoundProperty = FindMaterialExpressionArgumentProperty(ExpressionClass, Argument.Key);
 			if (!BoundProperty)
 			{
+				if (UMaterialExpressionCustom* CustomExpression = Cast<UMaterialExpressionCustom>(Expression))
+				{
+					UMaterialExpression* InputExpression = nullptr;
+					FString InputError;
+					if (!ResolveFlexibleExpressionInputValue(Material, MaterialFunction, Argument.Value, AvailableExpressions, PositionY - 80, InputExpression, InputError))
+					{
+						OutError = FString::Printf(TEXT("UE.%s for property '%s': %s"), *Property.UEBuiltinFunctionName, *Property.Name, *InputError);
+						return nullptr;
+					}
+
+					FCustomInput CustomInput;
+					CustomInput.InputName = FName(*Argument.Key);
+					CustomExpression->Inputs.Add(CustomInput);
+					CustomExpression->Inputs.Last().Input.Expression = InputExpression;
+					continue;
+				}
+
 				OutError = FString::Printf(TEXT("UE.%s for property '%s': '%s' is not a property on '%s'."),
 					*Property.UEBuiltinFunctionName,
 					*Property.Name,
@@ -3857,6 +4015,42 @@ namespace UE::DreamShader::Editor::Private
 					return nullptr;
 				}
 			}
+		}
+
+		if (UMaterialExpressionCustom* CustomExpression = Cast<UMaterialExpressionCustom>(Expression))
+		{
+			FString OutputNameText;
+			int32 RequestedOutputIndex = 0;
+			if (TryGetUEBuiltinArgument(Property, TEXT("Output"), OutputNameText)
+				|| TryGetUEBuiltinArgument(Property, TEXT("OutputName"), OutputNameText))
+			{
+				OutputNameText.TrimStartAndEndInline();
+				RequestedOutputIndex = 1;
+			}
+			else if (FString OutputIndexText; TryGetUEBuiltinArgument(Property, TEXT("OutputIndex"), OutputIndexText))
+			{
+				if (!ParseIntegerLiteral(OutputIndexText, RequestedOutputIndex) || RequestedOutputIndex < 0)
+				{
+					OutError = FString::Printf(TEXT("UE.%s for property '%s': OutputIndex is out of range for '%s'."),
+						*Property.UEBuiltinFunctionName,
+						*Property.Name,
+						*ExpressionClass->GetName());
+					return nullptr;
+				}
+			}
+
+			for (int32 AdditionalOutputIndex = 0; AdditionalOutputIndex < RequestedOutputIndex; ++AdditionalOutputIndex)
+			{
+				FCustomOutput CustomOutput;
+				CustomOutput.OutputName = FName(*(
+					AdditionalOutputIndex == RequestedOutputIndex - 1 && !OutputNameText.IsEmpty()
+						? OutputNameText
+						: FString::Printf(TEXT("Output%d"), AdditionalOutputIndex + 1)));
+				CustomOutput.OutputType = CustomExpression->OutputType;
+				CustomExpression->AdditionalOutputs.Add(CustomOutput);
+			}
+
+			CustomExpression->RebuildOutputs();
 		}
 
 		if (!ApplyExpressionMetadata(Expression, Property.Metadata, OutError))

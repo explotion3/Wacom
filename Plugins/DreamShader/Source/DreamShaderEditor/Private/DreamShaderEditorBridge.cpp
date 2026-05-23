@@ -1,11 +1,17 @@
 #include "DreamShaderEditorBridge.h"
 
-#include "DreamShaderMaterialGenerator.h"
+#include "DreamShaderCompileService.h"
+#include "DreamShaderCommandletRunner.h"
+#include "DreamShaderDecompileService.h"
+#include "DreamShaderDependencyGraphService.h"
 #include "DreamShaderMaterialGeneratorCodeShared.h"
 #include "DreamShaderMaterialGeneratorPrivate.h"
 #include "DreamShaderModule.h"
 #include "DreamShaderParser.h"
 #include "DreamShaderSettings.h"
+#include "DreamShaderSourceFileUtils.h"
+#include "DreamShaderVirtualFunctionService.h"
+#include "DreamShaderWorkspaceService.h"
 
 #include "Async/Async.h"
 #include "CoreGlobals.h"
@@ -14,7 +20,6 @@
 #include "Curves/CurveLinearColorAtlas.h"
 #include "DirectoryWatcherModule.h"
 #include "Dom/JsonObject.h"
-#include "Dom/JsonValue.h"
 #include "Framework/Commands/UIAction.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "HAL/FileManager.h"
@@ -75,22 +80,23 @@
 #include "Materials/MaterialExpressionTime.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
 #include "Materials/MaterialExpressionVertexColor.h"
+#include "Materials/MaterialExpressionVertexNormalWS.h"
+#include "Materials/MaterialExpressionVertexTangentWS.h"
 #include "Materials/MaterialExpressionWorldPosition.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialFunctionInterface.h"
+#include "Materials/MaterialFunctionMaterialLayer.h"
+#include "Materials/MaterialFunctionMaterialLayerBlend.h"
 #include "MaterialEditorContext.h"
 #include "MaterialShared.h"
 #include "MaterialValueType.h"
 #include "Engine/Texture.h"
-#include "Misc/Crc.h"
 #include "Misc/FileHelper.h"
-#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
 #include "Misc/ScopedSlowTask.h"
 #include "Modules/ModuleManager.h"
 #include "Serialization/JsonSerializer.h"
-#include "Serialization/JsonWriter.h"
 #include "ShaderCore.h"
 #include "Styling/AppStyle.h"
 #include "ToolMenu.h"
@@ -98,6 +104,8 @@
 #include "UObject/MetaData.h"
 #include "UObject/UObjectIterator.h"
 #include "UObject/Package.h"
+#include "UObject/EnumProperty.h"
+#include "UObject/UnrealType.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
 #include "DreamShaderCommandlet.h"
@@ -123,22 +131,6 @@ namespace UE::DreamShader::Editor::Private
 			int32 Line = 1;
 			int32 Column = 1;
 		};
-
-		bool IsPathUnderDirectory(const FString& InPath, const FString& InDirectory)
-		{
-			const FString Path = UE::DreamShader::NormalizeSourceFilePath(InPath);
-			FString Directory = UE::DreamShader::NormalizeSourceFilePath(InDirectory);
-			Directory.RemoveFromEnd(TEXT("/"));
-
-			return Path.Equals(Directory, ESearchCase::IgnoreCase)
-				|| Path.StartsWith(Directory + TEXT("/"), ESearchCase::IgnoreCase);
-		}
-
-		bool IsPackageMaterialFile(const FString& InPath)
-		{
-			return UE::DreamShader::IsDreamShaderMaterialFile(InPath)
-				&& IsPathUnderDirectory(InPath, UE::DreamShader::GetPackageShaderDirectory());
-		}
 
 		FString EscapeDreamShaderString(const FString& InText)
 		{
@@ -175,6 +167,8 @@ namespace UE::DreamShader::Editor::Private
 				return TEXT("TextureCube");
 			case FunctionInput_Texture2DArray:
 				return TEXT("Texture2DArray");
+			case FunctionInput_MaterialAttributes:
+				return TEXT("MaterialAttributes");
 			case FunctionInput_StaticBool:
 			case FunctionInput_Bool:
 				return TEXT("bool");
@@ -267,278 +261,21 @@ namespace UE::DreamShader::Editor::Private
 			}
 		}
 
-		bool TryMakeVirtualFunctionAssetLiteral(const UMaterialFunction* MaterialFunction, FString& OutLiteral, FString& OutError)
-		{
-			if (!MaterialFunction)
-			{
-				OutError = TEXT("No MaterialFunction asset was provided.");
-				return false;
-			}
-
-			FString PackageName = MaterialFunction->GetOutermost() ? MaterialFunction->GetOutermost()->GetName() : FString();
-			PackageName.TrimStartAndEndInline();
-			PackageName.ReplaceInline(TEXT("\\"), TEXT("/"));
-			if (PackageName.IsEmpty() || !PackageName.StartsWith(TEXT("/")))
-			{
-				OutError = FString::Printf(TEXT("MaterialFunction '%s' does not have a valid package path."), *MaterialFunction->GetName());
-				return false;
-			}
-
-			const auto BuildLiteral = [&OutLiteral](const TCHAR* RootName, const FString& RelativePath)
-			{
-				OutLiteral = FString::Printf(TEXT("Path(%s, %s)"), RootName, *RelativePath);
-			};
-
-			if (PackageName.StartsWith(TEXT("/Game/"), ESearchCase::IgnoreCase))
-			{
-				BuildLiteral(TEXT("Game"), PackageName.Mid(6));
-				return true;
-			}
-			if (PackageName.StartsWith(TEXT("/Engine/"), ESearchCase::IgnoreCase))
-			{
-				BuildLiteral(TEXT("Engine"), PackageName.Mid(8));
-				return true;
-			}
-
-			FString BestPluginName;
-			FString BestMountedPath;
-			for (const TSharedRef<IPlugin>& Plugin : IPluginManager::Get().GetEnabledPluginsWithContent())
-			{
-				FString MountedPath = Plugin->GetMountedAssetPath();
-				MountedPath.TrimStartAndEndInline();
-				MountedPath.ReplaceInline(TEXT("\\"), TEXT("/"));
-				while (MountedPath.EndsWith(TEXT("/")))
-				{
-					MountedPath.LeftChopInline(1, EAllowShrinking::No);
-				}
-				if (!MountedPath.StartsWith(TEXT("/")))
-				{
-					MountedPath = TEXT("/") + MountedPath;
-				}
-				if (MountedPath.IsEmpty() || MountedPath == TEXT("/"))
-				{
-					MountedPath = TEXT("/") + Plugin->GetName();
-				}
-
-				if ((PackageName.Equals(MountedPath, ESearchCase::IgnoreCase)
-					|| PackageName.StartsWith(MountedPath + TEXT("/"), ESearchCase::IgnoreCase))
-					&& MountedPath.Len() > BestMountedPath.Len())
-				{
-					BestMountedPath = MountedPath;
-					BestPluginName = Plugin->GetName();
-				}
-			}
-
-			if (!BestPluginName.IsEmpty())
-			{
-				FString RelativePath = PackageName.Mid(BestMountedPath.Len());
-				while (RelativePath.StartsWith(TEXT("/")))
-				{
-					RelativePath.RightChopInline(1, EAllowShrinking::No);
-				}
-				OutLiteral = FString::Printf(
-					TEXT("Path(Plugins.%s, %s)"),
-					*BestPluginName,
-					*RelativePath);
-				return true;
-			}
-
-			OutLiteral = MaterialFunction->GetPathName();
-			return true;
-		}
-
 		bool BuildVirtualFunctionDefinition(const UMaterialFunction* MaterialFunction, FString& OutDefinition, FString& OutError)
 		{
-			if (!MaterialFunction)
-			{
-				OutError = TEXT("No MaterialFunction asset was provided.");
-				return false;
-			}
-
-			FString AssetLiteral;
-			if (!TryMakeVirtualFunctionAssetLiteral(MaterialFunction, AssetLiteral, OutError))
-			{
-				return false;
-			}
-
-			TArray<FFunctionExpressionInput> Inputs;
-			TArray<FFunctionExpressionOutput> Outputs;
-			MaterialFunction->GetInputsAndOutputs(Inputs, Outputs);
-
-			if (Outputs.IsEmpty())
-			{
-				OutError = FString::Printf(TEXT("MaterialFunction '%s' does not expose any outputs."), *MaterialFunction->GetName());
-				return false;
-			}
-
-			TArray<FString> Lines;
-			Lines.Add(FString::Printf(
-				TEXT("VirtualFunction(Name=\"%s\")"),
-				*EscapeDreamShaderString(MakeDreamShaderDeclarationName(MaterialFunction->GetName(), TEXT("VirtualFunction"), 0))));
-			Lines.Add(TEXT("{"));
-			Lines.Add(TEXT("\tOptions = {"));
-			Lines.Add(FString::Printf(TEXT("\t\tAsset = %s;"), *AssetLiteral));
-			Lines.Add(FString::Printf(
-				TEXT("\t\tDescription = \"Generated from %s\";"),
-				*EscapeDreamShaderString(MaterialFunction->GetPathName())));
-			Lines.Add(TEXT("\t}"));
-			Lines.Add(TEXT(""));
-			Lines.Add(TEXT("\tInputs = {"));
-			for (int32 InputIndex = 0; InputIndex < Inputs.Num(); ++InputIndex)
-			{
-				const FFunctionExpressionInput& Input = Inputs[InputIndex];
-				const UMaterialExpressionFunctionInput* InputExpression = Input.ExpressionInput;
-				const FString InputName = InputExpression
-					? Input.ExpressionInput->InputName.ToString()
-					: Input.Input.InputName.ToString();
-				const EFunctionInputType InputType = InputExpression
-					? InputExpression->InputType.GetValue()
-					: FunctionInput_Vector4;
-				const bool bOptional = InputExpression && InputExpression->bUsePreviewValueAsDefault != 0;
-				const FString DefaultText = bOptional && InputExpression
-					? MakePreviewValueText(InputType, InputExpression->PreviewValue)
-					: FString();
-				const FString DefaultSuffix = DefaultText.IsEmpty()
-					? FString()
-					: FString::Printf(TEXT(" = %s"), *DefaultText);
-				const FString MetadataSuffix = InputExpression
-					? MakeFunctionParameterMetadataSuffix(InputExpression->Description, InputExpression->SortPriority, InputIndex)
-					: FString();
-				Lines.Add(FString::Printf(
-					TEXT("\t\t%s%s %s%s%s;"),
-					bOptional ? TEXT("opt ") : TEXT(""),
-					*GetDreamShaderTypeForFunctionInput(InputType),
-					*MakeDreamShaderDeclarationName(InputName, TEXT("Input"), InputIndex),
-					*DefaultSuffix,
-					*MetadataSuffix));
-			}
-			Lines.Add(TEXT("\t}"));
-			Lines.Add(TEXT(""));
-			Lines.Add(TEXT("\tOutputs = {"));
-			for (int32 OutputIndex = 0; OutputIndex < Outputs.Num(); ++OutputIndex)
-			{
-				const FFunctionExpressionOutput& Output = Outputs[OutputIndex];
-				UMaterialExpressionFunctionOutput* OutputExpression = Output.ExpressionOutput;
-				const FString OutputName = OutputExpression
-					? OutputExpression->OutputName.ToString()
-					: Output.Output.OutputName.ToString();
-				const FString MetadataSuffix = OutputExpression
-					? MakeFunctionParameterMetadataSuffix(OutputExpression->Description, OutputExpression->SortPriority, OutputIndex)
-					: FString();
-				Lines.Add(FString::Printf(
-					TEXT("\t\t%s %s%s;"),
-					*GetDreamShaderTypeForFunctionOutput(OutputExpression),
-					*MakeDreamShaderDeclarationName(OutputName, TEXT("Output"), OutputIndex),
-					*MetadataSuffix));
-			}
-			Lines.Add(TEXT("\t}"));
-			Lines.Add(TEXT("}"));
-
-			OutDefinition = FString::Join(Lines, TEXT("\n"));
-			return true;
-		}
-
-		bool BuildVirtualFunctionCallTextFromSignature(
-			const FString& FunctionName,
-			const TArray<FTextShaderFunctionParameter>& Inputs,
-			const TArray<FTextShaderFunctionParameter>& Outputs,
-			FString& OutCallText,
-			FString& OutError)
-		{
-			if (FunctionName.TrimStartAndEnd().IsEmpty())
-			{
-				OutError = TEXT("VirtualFunction name cannot be empty.");
-				return false;
-			}
-
-			if (Outputs.IsEmpty())
-			{
-				OutError = FString::Printf(TEXT("VirtualFunction '%s' does not expose any outputs."), *FunctionName);
-				return false;
-			}
-
-			TArray<FString> Arguments;
-			for (int32 InputIndex = 0; InputIndex < Inputs.Num(); ++InputIndex)
-			{
-				Arguments.Add(Inputs[InputIndex].bOptional
-					? TEXT("default")
-					: MakeDreamShaderDeclarationName(Inputs[InputIndex].Name, TEXT("Input"), InputIndex));
-			}
-
-			Arguments.Add(FString::Printf(
-				TEXT("Output=\"%s\""),
-				*EscapeDreamShaderString(MakeDreamShaderDeclarationName(Outputs[0].Name, TEXT("Output"), 0))));
-
-			OutCallText = FString::Printf(
-				TEXT("%s(%s)"),
-				*MakeDreamShaderDeclarationName(FunctionName, TEXT("VirtualFunction"), 0),
-				*FString::Join(Arguments, TEXT(", ")));
-			return true;
+			return FDreamShaderVirtualFunctionService::BuildDefinition(
+				MaterialFunction,
+				[](const UMaterialExpressionFunctionOutput* OutputExpression)
+				{
+					return GetDreamShaderTypeForFunctionOutput(OutputExpression);
+				},
+				OutDefinition,
+				OutError);
 		}
 
 		bool BuildVirtualFunctionCallText(const UMaterialFunction* MaterialFunction, FString& OutCallText, FString& OutError)
 		{
-			if (!MaterialFunction)
-			{
-				OutError = TEXT("No MaterialFunction asset was provided.");
-				return false;
-			}
-
-			TArray<FFunctionExpressionInput> FunctionInputs;
-			TArray<FFunctionExpressionOutput> FunctionOutputs;
-			MaterialFunction->GetInputsAndOutputs(FunctionInputs, FunctionOutputs);
-
-			TArray<FTextShaderFunctionParameter> Inputs;
-			for (int32 InputIndex = 0; InputIndex < FunctionInputs.Num(); ++InputIndex)
-			{
-				const FFunctionExpressionInput& Input = FunctionInputs[InputIndex];
-				const FString InputName = Input.ExpressionInput
-					? Input.ExpressionInput->InputName.ToString()
-					: Input.Input.InputName.ToString();
-				FTextShaderFunctionParameter& Parameter = Inputs.AddDefaulted_GetRef();
-				Parameter.Name = InputName;
-				Parameter.bOptional = Input.ExpressionInput && Input.ExpressionInput->bUsePreviewValueAsDefault != 0;
-			}
-
-			TArray<FTextShaderFunctionParameter> Outputs;
-			for (int32 OutputIndex = 0; OutputIndex < FunctionOutputs.Num(); ++OutputIndex)
-			{
-				const FFunctionExpressionOutput& Output = FunctionOutputs[OutputIndex];
-				const FString OutputName = Output.ExpressionOutput
-					? Output.ExpressionOutput->OutputName.ToString()
-					: Output.Output.OutputName.ToString();
-				FTextShaderFunctionParameter& Parameter = Outputs.AddDefaulted_GetRef();
-				Parameter.Name = OutputName;
-			}
-
-			return BuildVirtualFunctionCallTextFromSignature(
-				MaterialFunction->GetName(),
-				Inputs,
-				Outputs,
-				OutCallText,
-				OutError);
-		}
-
-		FString MakeVirtualFunctionDefinitionFilePath(const UMaterialFunction* MaterialFunction)
-		{
-			const FString DefinitionDirectory = FPaths::Combine(
-				UE::DreamShader::GetSourceShaderDirectory(),
-				TEXT("VirtualFunctions"));
-			const FString BaseName = MakeDreamShaderDeclarationName(
-				MaterialFunction ? MaterialFunction->GetName() : FString(),
-				TEXT("VirtualFunction"),
-				0);
-
-			const FString PreferredCandidate = FPaths::Combine(DefinitionDirectory, BaseName + TEXT(".dsh"));
-			if (!IFileManager::Get().FileExists(*PreferredCandidate) || !MaterialFunction)
-			{
-				return UE::DreamShader::NormalizeSourceFilePath(PreferredCandidate);
-			}
-
-			const uint32 AssetPathHash = FCrc::StrCrc32(*MaterialFunction->GetPathName());
-			return UE::DreamShader::NormalizeSourceFilePath(FPaths::Combine(
-				DefinitionDirectory,
-				FString::Printf(TEXT("%s_%08x.dsh"), *BaseName, AssetPathHash)));
+			return FDreamShaderVirtualFunctionService::BuildCallText(MaterialFunction, OutCallText, OutError);
 		}
 
 		FString FormatDreamShaderFloat(const double Value)
@@ -976,11 +713,26 @@ namespace UE::DreamShader::Editor::Private
 				return ComponentCount;
 			};
 
+			int32 KnownComponentCount = 0;
+			if (TryResolveKnownExpressionOutputComponentCount(Expression, OutputIndex, KnownComponentCount) && KnownComponentCount > 0)
+			{
+				return Finish(KnownComponentCount);
+			}
+
 			if (Cast<UMaterialExpressionTextureCoordinate>(Expression)
 				|| Cast<UMaterialExpressionPanner>(Expression)
 				|| Expression->GetClass()->GetName().Equals(TEXT("MaterialExpressionRotator"), ESearchCase::IgnoreCase))
 			{
 				return Finish(2);
+			}
+
+			if (Cast<UMaterialExpressionWorldPosition>(Expression)
+				|| Cast<UMaterialExpressionObjectPositionWS>(Expression)
+				|| Cast<UMaterialExpressionCameraVectorWS>(Expression)
+				|| Cast<UMaterialExpressionVertexNormalWS>(Expression)
+				|| Cast<UMaterialExpressionVertexTangentWS>(Expression))
+			{
+				return Finish(3);
 			}
 
 			if (UMaterialExpressionFunctionInput* FunctionInput = Cast<UMaterialExpressionFunctionInput>(Expression))
@@ -1243,109 +995,6 @@ namespace UE::DreamShader::Editor::Private
 			return Output.Output.OutputName.ToString();
 		}
 
-		FString MakeStableDecompiledSourcePath(const UObject* Asset, const FString& CategoryDirectory, const TCHAR* Extension)
-		{
-			FString PackageName = Asset && Asset->GetOutermost() ? Asset->GetOutermost()->GetName() : FString();
-			PackageName.TrimStartAndEndInline();
-			PackageName.ReplaceInline(TEXT("\\"), TEXT("/"));
-			while (PackageName.StartsWith(TEXT("/")))
-			{
-				PackageName.RightChopInline(1, EAllowShrinking::No);
-			}
-			while (PackageName.EndsWith(TEXT("/")))
-			{
-				PackageName.LeftChopInline(1, EAllowShrinking::No);
-			}
-
-			TArray<FString> Segments;
-			PackageName.ParseIntoArray(Segments, TEXT("/"), true);
-			if (Segments.IsEmpty())
-			{
-				Segments.Add(Asset ? Asset->GetName() : TEXT("Export"));
-			}
-
-			FString RelativePath;
-			for (int32 SegmentIndex = 0; SegmentIndex < Segments.Num(); ++SegmentIndex)
-			{
-				const FString SanitizedSegment = MakeDreamShaderDeclarationName(
-					Segments[SegmentIndex],
-					SegmentIndex + 1 == Segments.Num() ? TEXT("Asset") : TEXT("Folder"),
-					SegmentIndex);
-				RelativePath = RelativePath.IsEmpty()
-					? SanitizedSegment
-					: FPaths::Combine(RelativePath, SanitizedSegment);
-			}
-
-			return UE::DreamShader::NormalizeSourceFilePath(FPaths::Combine(
-				UE::DreamShader::GetSourceShaderDirectory(),
-				CategoryDirectory,
-				RelativePath + Extension));
-		}
-
-		FString MakeDecompiledMaterialFilePath(const UMaterial* Material)
-		{
-			return MakeStableDecompiledSourcePath(Material, TEXT("Decompiled/Materials"), TEXT(".dsm"));
-		}
-
-		FString MakeDecompiledFunctionFilePath(const UMaterialFunction* MaterialFunction)
-		{
-			return MakeStableDecompiledSourcePath(MaterialFunction, TEXT("Decompiled/Functions"), TEXT(".dsf"));
-		}
-
-		FString MakeDefaultDecompiledFilePath(const UObject* Asset)
-		{
-			if (const UMaterial* Material = Cast<UMaterial>(Asset))
-			{
-				return MakeDecompiledMaterialFilePath(Material);
-			}
-			if (const UMaterialFunction* MaterialFunction = Cast<UMaterialFunction>(Asset))
-			{
-				return MakeDecompiledFunctionFilePath(MaterialFunction);
-			}
-			return FString();
-		}
-
-		FString MakeDecompiledAssetName(const UObject* Asset, const TCHAR* Category)
-		{
-			FString PackageName = Asset && Asset->GetOutermost() ? Asset->GetOutermost()->GetName() : FString();
-			PackageName.TrimStartAndEndInline();
-			PackageName.ReplaceInline(TEXT("\\"), TEXT("/"));
-			while (PackageName.StartsWith(TEXT("/")))
-			{
-				PackageName.RightChopInline(1, EAllowShrinking::No);
-			}
-			while (PackageName.EndsWith(TEXT("/")))
-			{
-				PackageName.LeftChopInline(1, EAllowShrinking::No);
-			}
-
-			TArray<FString> Segments;
-			PackageName.ParseIntoArray(Segments, TEXT("/"), true);
-			if (Segments.IsEmpty())
-			{
-				Segments.Add(Asset ? Asset->GetName() : TEXT("Asset"));
-			}
-
-			FString RelativeName;
-			for (int32 SegmentIndex = 0; SegmentIndex < Segments.Num(); ++SegmentIndex)
-			{
-				const FString SanitizedSegment = MakeDreamShaderDeclarationName(
-					Segments[SegmentIndex],
-					SegmentIndex + 1 == Segments.Num() ? TEXT("Asset") : TEXT("Folder"),
-					SegmentIndex);
-				if (!RelativeName.IsEmpty())
-				{
-					RelativeName += TEXT("/");
-				}
-				RelativeName += SanitizedSegment;
-			}
-
-			return FString::Printf(
-				TEXT("Decompiled/%s/%s"),
-				Category,
-				*RelativeName);
-		}
-
 		FString GetMaterialExpressionShortName(const UClass* Class);
 
 		FString GetMaterialDomainText(const EMaterialDomain Domain)
@@ -1550,8 +1199,19 @@ namespace UE::DreamShader::Editor::Private
 						continue;
 					}
 
+					ReservedNames.Add(Binding.Name);
 					OutputDeclarations.Add(FString::Printf(TEXT("\t\t%s %s;"), Binding.Type, Binding.Name));
 					OutputBindings.Add(FString::Printf(TEXT("\t\t%s = %s;"), Binding.Target, Binding.Name));
+				}
+
+				for (const FMaterialOutputBinding& Binding : Bindings)
+				{
+					FExpressionInput* MaterialInput = Material->GetExpressionInputForProperty(Binding.Property);
+					if (!MaterialInput || !MaterialInput->IsConnected())
+					{
+						continue;
+					}
+
 					OutputAssignments.Add(FormatGraphSetStatement(Binding.Name, CompileInput(*MaterialInput, Binding.DefaultValue)));
 				}
 
@@ -1588,7 +1248,12 @@ namespace UE::DreamShader::Editor::Private
 				return true;
 			}
 
-			bool DecompileFunction(UMaterialFunction* MaterialFunction, const FString& DecompiledName, FString& OutSourceText, FString& OutError)
+			bool DecompileFunction(
+				UMaterialFunction* MaterialFunction,
+				const FString& DecompiledName,
+				EDreamShaderDecompiledFunctionKind FunctionKind,
+				FString& OutSourceText,
+				FString& OutError)
 			{
 				Reset();
 				if (!MaterialFunction)
@@ -1665,6 +1330,17 @@ namespace UE::DreamShader::Editor::Private
 						? OutputExpression->OutputName.ToString()
 						: Output.Output.OutputName.ToString();
 					const FString DeclarationName = MakeDreamShaderDeclarationName(OutputName, TEXT("Output"), OutputIndex);
+					ReservedNames.Add(DeclarationName);
+				}
+
+				for (int32 OutputIndex = 0; OutputIndex < Outputs.Num(); ++OutputIndex)
+				{
+					const FFunctionExpressionOutput& Output = Outputs[OutputIndex];
+					UMaterialExpressionFunctionOutput* OutputExpression = Output.ExpressionOutput;
+					const FString OutputName = OutputExpression
+						? OutputExpression->OutputName.ToString()
+						: Output.Output.OutputName.ToString();
+					const FString DeclarationName = MakeDreamShaderDeclarationName(OutputName, TEXT("Output"), OutputIndex);
 					const FString MetadataSuffix = OutputExpression
 						? MakeFunctionParameterMetadataSuffix(OutputExpression->Description, OutputExpression->SortPriority, OutputIndex)
 						: FString();
@@ -1696,7 +1372,17 @@ namespace UE::DreamShader::Editor::Private
 					Lines.Append(VirtualFunctionDefinitions);
 				}
 
-				Lines.Add(FString::Printf(TEXT("ShaderFunction(Name=\"%s\")"), *EscapeDreamShaderString(DecompiledName)));
+				const TCHAR* BlockName = TEXT("ShaderFunction");
+				if (FunctionKind == EDreamShaderDecompiledFunctionKind::MaterialLayer)
+				{
+					BlockName = TEXT("ShaderLayer");
+				}
+				else if (FunctionKind == EDreamShaderDecompiledFunctionKind::MaterialLayerBlend)
+				{
+					BlockName = TEXT("ShaderLayerBlend");
+				}
+
+				Lines.Add(FString::Printf(TEXT("%s(Name=\"%s\")"), BlockName, *EscapeDreamShaderString(DecompiledName)));
 				Lines.Add(TEXT("{"));
 				AppendSection(Lines, TEXT("Properties"), PropertyDeclarations);
 				AppendSection(Lines, TEXT("Inputs"), InputDeclarations);
@@ -1720,6 +1406,7 @@ namespace UE::DreamShader::Editor::Private
 			{
 				PropertyDeclarations.Reset();
 				PropertyNames.Reset();
+				ReservedNames.Reset();
 				FunctionInputNames.Reset();
 				GraphLines.Reset();
 				ExpressionTemps.Reset();
@@ -1731,6 +1418,7 @@ namespace UE::DreamShader::Editor::Private
 				NextTempIndex = 0;
 				ActiveDecompileSlowTask = nullptr;
 				ProgressVisitedExpressions.Reset();
+				CompilingExpressionKeys.Reset();
 			}
 
 			static void AppendSection(TArray<FString>& Lines, const TCHAR* SectionName, const TArray<FString>& LinesA)
@@ -1766,6 +1454,7 @@ namespace UE::DreamShader::Editor::Private
 				int32 Suffix = 1;
 				while (TempNames.Contains(Candidate)
 					|| PropertyNames.Contains(Candidate)
+					|| ReservedNames.Contains(Candidate)
 					|| ContainsFunctionInputName(Candidate))
 				{
 					Candidate = FString::Printf(TEXT("%s_%d"), *BaseName, Suffix++);
@@ -1795,7 +1484,33 @@ namespace UE::DreamShader::Editor::Private
 				}
 
 				PropertyNames.Add(Name);
+				ReservedNames.Add(Name);
 				PropertyDeclarations.Add(TEXT("\t\t") + Declaration);
+			}
+
+			FString MakeUniquePropertyName(const FString& DesiredName, const TCHAR* FallbackPrefix)
+			{
+				FString BaseName = MakeDreamShaderDeclarationName(DesiredName, FallbackPrefix, PropertyNames.Num());
+				FString Candidate = BaseName;
+				int32 Suffix = 1;
+				while (PropertyNames.Contains(Candidate)
+					|| ReservedNames.Contains(Candidate)
+					|| TempNames.Contains(Candidate)
+					|| ContainsFunctionInputName(Candidate))
+				{
+					Candidate = FString::Printf(TEXT("%s_%d"), *BaseName, Suffix++);
+				}
+				return Candidate;
+			}
+
+			void AddParameterNameMetadataIfNeeded(TArray<FString>& Entries, const FString& DeclarationName, const FName ParameterName)
+			{
+				if (!ParameterName.IsNone() && !ParameterName.ToString().Equals(DeclarationName, ESearchCase::CaseSensitive))
+				{
+					Entries.Add(FString::Printf(
+						TEXT("ParameterName=\"%s\";"),
+						*EscapeDreamShaderString(ParameterName.ToString())));
+				}
 			}
 
 			static FString BuildMetadataSuffix(const TArray<FString>& Entries)
@@ -1943,6 +1658,119 @@ namespace UE::DreamShader::Editor::Private
 				AddIntMetadata(Entries, TEXT("ConstMipValue"), TextureSample->ConstMipValue, INDEX_NONE);
 			}
 
+			static bool HasTextureSampleGraphInputs(const UMaterialExpressionTextureSample* TextureSample)
+			{
+				return TextureSample
+					&& (TextureSample->Coordinates.IsConnected()
+						|| TextureSample->TextureObject.IsConnected()
+						|| TextureSample->MipValue.IsConnected()
+						|| TextureSample->CoordinatesDX.IsConnected()
+						|| TextureSample->CoordinatesDY.IsConnected()
+						|| TextureSample->AutomaticViewMipBiasValue.IsConnected());
+			}
+
+			void AddTextureSampleExpressionArguments(UMaterialExpressionTextureSample* TextureSample, TArray<FExpressionCallArgument>& Arguments)
+			{
+				if (!TextureSample)
+				{
+					return;
+				}
+
+				if (TextureSample->Coordinates.IsConnected())
+				{
+					Arguments.Add({ TEXT("Coordinates"), CompileInput(TextureSample->Coordinates, TEXT("0.0")), true });
+				}
+				else if (TextureSample->ConstCoordinate != 0)
+				{
+					Arguments.Add({ TEXT("ConstCoordinate"), FString::Printf(TEXT("%d"), TextureSample->ConstCoordinate), false });
+				}
+				if (TextureSample->TextureObject.IsConnected())
+				{
+					Arguments.Add({ TEXT("TextureObject"), CompileInput(TextureSample->TextureObject, TEXT("default")), true });
+				}
+				else if (TextureSample->Texture)
+				{
+					Arguments.Add({ TEXT("Texture"), MakeDreamShaderObjectPathLiteral(TextureSample->Texture), false });
+				}
+				if (TextureSample->MipValue.IsConnected())
+				{
+					Arguments.Add({ TEXT("MipValue"), CompileInput(TextureSample->MipValue, TEXT("0.0")), true });
+				}
+				if (TextureSample->CoordinatesDX.IsConnected())
+				{
+					Arguments.Add({ TEXT("CoordinatesDX"), CompileInput(TextureSample->CoordinatesDX, TEXT("0.0")), true });
+				}
+				if (TextureSample->CoordinatesDY.IsConnected())
+				{
+					Arguments.Add({ TEXT("CoordinatesDY"), CompileInput(TextureSample->CoordinatesDY, TEXT("0.0")), true });
+				}
+				if (TextureSample->AutomaticViewMipBiasValue.IsConnected())
+				{
+					Arguments.Add({ TEXT("AutomaticViewMipBiasValue"), CompileInput(TextureSample->AutomaticViewMipBiasValue, TEXT("0.0")), true });
+				}
+
+				Arguments.Add({ TEXT("SamplerType"), BuildLiteralEnumArgument(StaticEnum<EMaterialSamplerType>(), TextureSample->SamplerType.GetValue()), false });
+				if (TextureSample->SamplerSource.GetValue() != SSM_FromTextureAsset)
+				{
+					Arguments.Add({ TEXT("SamplerSource"), BuildLiteralEnumArgument(StaticEnum<ESamplerSourceMode>(), TextureSample->SamplerSource.GetValue()), false });
+				}
+				if (TextureSample->MipValueMode.GetValue() != TMVM_None)
+				{
+					Arguments.Add({ TEXT("MipValueMode"), BuildLiteralEnumArgument(StaticEnum<ETextureMipValueMode>(), TextureSample->MipValueMode.GetValue()), false });
+				}
+				if (TextureSample->GatherMode.GetValue() != TGM_None)
+				{
+					Arguments.Add({ TEXT("GatherMode"), BuildLiteralEnumArgument(StaticEnum<ETextureGatherMode>(), TextureSample->GatherMode.GetValue()), false });
+				}
+				if (!TextureSample->AutomaticViewMipBias)
+				{
+					Arguments.Add({ TEXT("AutomaticViewMipBias"), TEXT("false"), false });
+				}
+				if (TextureSample->ConstMipValue != INDEX_NONE)
+				{
+					Arguments.Add({ TEXT("ConstMipValue"), FString::Printf(TEXT("%d"), TextureSample->ConstMipValue), false });
+				}
+			}
+
+			static void AddTextureSampleParameterExpressionArguments(
+				const UMaterialExpressionTextureSampleParameter* TextureParameter,
+				TArray<FExpressionCallArgument>& Arguments)
+			{
+				if (!TextureParameter)
+				{
+					return;
+				}
+
+				if (!TextureParameter->ParameterName.IsNone())
+				{
+					Arguments.Add({
+						TEXT("ParameterName"),
+						FString::Printf(TEXT("\"%s\""), *EscapeDreamShaderString(TextureParameter->ParameterName.ToString())),
+						false
+					});
+				}
+				if (!TextureParameter->Group.IsNone())
+				{
+					Arguments.Add({
+						TEXT("Group"),
+						FString::Printf(TEXT("\"%s\""), *EscapeDreamShaderString(TextureParameter->Group.ToString())),
+						false
+					});
+				}
+				if (TextureParameter->SortPriority != 32)
+				{
+					Arguments.Add({ TEXT("SortPriority"), FString::Printf(TEXT("%d"), TextureParameter->SortPriority), false });
+				}
+				if (!TextureParameter->Desc.IsEmpty())
+				{
+					Arguments.Add({
+						TEXT("Desc"),
+						FString::Printf(TEXT("\"%s\""), *EscapeDreamShaderString(TextureParameter->Desc)),
+						false
+					});
+				}
+			}
+
 			static int32 GetOutputComponentCount(const UMaterialExpression* Expression, const int32 OutputIndex)
 			{
 				return GetExpressionOutputComponentCount(const_cast<UMaterialExpression*>(Expression), OutputIndex);
@@ -2017,6 +1845,34 @@ namespace UE::DreamShader::Editor::Private
 					Type.Equals(TEXT("MaterialAttributes"), ESearchCase::IgnoreCase));
 			}
 
+			static FDecompiledValue MakeDefaultValueForExpressionOutput(UMaterialExpression* Expression, const int32 OutputIndex)
+			{
+				const FString Type = GetDreamShaderTypeForExpressionOutput(Expression, OutputIndex);
+				const bool bIsTextureObject = IsTextureObjectOutput(Expression, OutputIndex);
+				if (bIsTextureObject)
+				{
+					return MakeValue(TEXT("default"), Type, 0, true, true, false);
+				}
+				if (Type.Equals(TEXT("MaterialAttributes"), ESearchCase::IgnoreCase))
+				{
+					return MakeValue(TEXT("MaterialAttributes()"), Type, 0, true, false, true);
+				}
+
+				const int32 ComponentCount = GetComponentCountForExpressionOutput(Expression, OutputIndex);
+				if (ComponentCount <= 1)
+				{
+					return MakeValue(TEXT("0.0"), Type, 1, true);
+				}
+
+				TArray<FString> Components;
+				Components.Init(TEXT("0.0"), ComponentCount);
+				return MakeValue(
+					FString::Printf(TEXT("%s(%s)"), *Type, *FString::Join(Components, TEXT(", "))),
+					Type,
+					ComponentCount,
+					true);
+			}
+
 			FDecompiledValue MakeSwizzledValue(const FDecompiledValue& Source, const FString& SwizzleText)
 			{
 				if (SwizzleText.IsEmpty())
@@ -2055,6 +1911,15 @@ namespace UE::DreamShader::Editor::Private
 			FString AddTemp(const FString& Type, const FString& ExpressionText, const FString& BaseName)
 			{
 				const FString Name = MakeUniqueName(BaseName, TEXT("Node"));
+				GraphLines.Add(FormatGraphAssignment(Type, Name, ExpressionText));
+				++NextTempIndex;
+				return Name;
+			}
+
+			FString AddTempWithName(const FString& Type, const FString& ExpressionText, const FString& Name)
+			{
+				TempNames.Add(Name);
+				ReservedNames.Add(Name);
 				GraphLines.Add(FormatGraphAssignment(Type, Name, ExpressionText));
 				++NextTempIndex;
 				return Name;
@@ -2107,6 +1972,22 @@ namespace UE::DreamShader::Editor::Private
 					Value.bIsMaterialAttributes);
 			}
 
+			FDecompiledValue AddTempValueWithName(const FDecompiledValue& Value, const FString& Name)
+			{
+				if (Value.bIsSimple)
+				{
+					return Value;
+				}
+
+				return MakeValue(
+					AddTempWithName(Value.Type, Value.Text, Name),
+					Value.Type,
+					Value.ComponentCount,
+					true,
+					Value.bIsTextureObject,
+					Value.bIsMaterialAttributes);
+			}
+
 			FDecompiledValue MaybeMaterializeValue(const FDecompiledValue& Value, const FString& BaseName)
 			{
 				if (Value.bIsSimple)
@@ -2133,6 +2014,11 @@ namespace UE::DreamShader::Editor::Private
 			FDecompiledValue CacheTempExpressionValue(const FDecompiledExpressionKey& Key, const FDecompiledValue& Value, const FString& BaseName)
 			{
 				return CacheExpressionValue(Key, AddTempValue(Value, BaseName));
+			}
+
+			FDecompiledValue CacheNamedTempExpressionValue(const FDecompiledExpressionKey& Key, const FDecompiledValue& Value, const FString& Name)
+			{
+				return CacheExpressionValue(Key, AddTempValueWithName(Value, Name));
 			}
 
 			FString CompileInput(const FExpressionInput& Input, const FString& DefaultText)
@@ -2333,6 +2219,19 @@ namespace UE::DreamShader::Editor::Private
 					}
 					return MakeValue(*ExistingTemp, GetDreamShaderTypeForExpressionOutput(Expression, OutputIndex), GetComponentCountForExpressionOutput(Expression, OutputIndex), true);
 				}
+				if (CompilingExpressionKeys.Contains(Key))
+				{
+					Warnings.AddUnique(FString::Printf(
+						TEXT("Detected a recursive graph dependency while decompiling node '%s'; emitted a default literal to avoid stack overflow."),
+						*Expression->GetName()));
+					return MakeDefaultValueForExpressionOutput(Expression, OutputIndex);
+				}
+
+				CompilingExpressionKeys.Add(Key);
+				ON_SCOPE_EXIT
+				{
+					CompilingExpressionKeys.Remove(Key);
+				};
 
 				if (UMaterialExpressionFunctionInput* FunctionInput = Cast<UMaterialExpressionFunctionInput>(Expression))
 				{
@@ -2412,8 +2311,9 @@ namespace UE::DreamShader::Editor::Private
 
 				if (UMaterialExpressionScalarParameter* ScalarParameter = Cast<UMaterialExpressionScalarParameter>(Expression))
 				{
-					const FString Name = MakeDreamShaderDeclarationName(ScalarParameter->ParameterName.ToString(), TEXT("Scalar"), 0);
+					const FString Name = MakeUniquePropertyName(ScalarParameter->ParameterName.ToString(), TEXT("Scalar"));
 					TArray<FString> MetadataEntries;
+					AddParameterNameMetadataIfNeeded(MetadataEntries, Name, ScalarParameter->ParameterName);
 					AddParameterMetadata(MetadataEntries, ScalarParameter);
 					AddPropertyDeclaration(
 						Name,
@@ -2427,8 +2327,9 @@ namespace UE::DreamShader::Editor::Private
 
 				if (UMaterialExpressionVectorParameter* VectorParameter = Cast<UMaterialExpressionVectorParameter>(Expression))
 				{
-					const FString Name = MakeDreamShaderDeclarationName(VectorParameter->ParameterName.ToString(), TEXT("Vector"), 0);
+					const FString Name = MakeUniquePropertyName(VectorParameter->ParameterName.ToString(), TEXT("Vector"));
 					TArray<FString> MetadataEntries;
+					AddParameterNameMetadataIfNeeded(MetadataEntries, Name, VectorParameter->ParameterName);
 					AddParameterMetadata(MetadataEntries, VectorParameter);
 					AddPropertyDeclaration(
 						Name,
@@ -2442,11 +2343,12 @@ namespace UE::DreamShader::Editor::Private
 
 				if (UMaterialExpressionTextureObjectParameter* TextureObjectParameter = Cast<UMaterialExpressionTextureObjectParameter>(Expression))
 				{
-					const FString Name = MakeDreamShaderDeclarationName(TextureObjectParameter->ParameterName.ToString(), TEXT("Texture"), 0);
+					const FString Name = MakeUniquePropertyName(TextureObjectParameter->ParameterName.ToString(), TEXT("Texture"));
 					const FString DefaultValue = TextureObjectParameter->Texture
 						? FString::Printf(TEXT(" = %s"), *MakeDreamShaderObjectPathLiteral(TextureObjectParameter->Texture))
 						: FString();
 					TArray<FString> MetadataEntries;
+					AddParameterNameMetadataIfNeeded(MetadataEntries, Name, TextureObjectParameter->ParameterName);
 					AddTextureParameterMetadata(MetadataEntries, TextureObjectParameter);
 					AddTextureSampleMetadata(MetadataEntries, TextureObjectParameter);
 					AddPropertyDeclaration(
@@ -2461,11 +2363,41 @@ namespace UE::DreamShader::Editor::Private
 
 				if (UMaterialExpressionTextureSampleParameter2D* TextureParameter = Cast<UMaterialExpressionTextureSampleParameter2D>(Expression))
 				{
-					const FString Name = MakeDreamShaderDeclarationName(TextureParameter->ParameterName.ToString(), TEXT("Texture"), 0);
+					const FString Name = MakeUniquePropertyName(TextureParameter->ParameterName.ToString(), TEXT("Texture"));
+					if (HasTextureSampleGraphInputs(TextureParameter))
+					{
+						TArray<FExpressionCallArgument> Arguments;
+						AddTextureSampleParameterExpressionArguments(TextureParameter, Arguments);
+						AddTextureSampleExpressionArguments(TextureParameter, Arguments);
+
+						const int32 RgbaOutputIndex = FindExpressionOutputIndexByName(Expression, TEXT("RGBA"), OutputIndex);
+						const FDecompiledExpressionKey RgbaKey{ Expression, RgbaOutputIndex };
+						FDecompiledValue RgbaValue;
+						if (const FDecompiledValue* ExistingValue = ExpressionValues.Find(RgbaKey))
+						{
+							RgbaValue = *ExistingValue;
+						}
+						else
+						{
+							const FString TempName = MakeUniqueName(Name, TEXT("Texture"));
+							RgbaValue = CacheNamedTempExpressionValue(
+								RgbaKey,
+								MakeValue(BuildUEExpressionCall(Expression, RgbaOutputIndex, Arguments), TEXT("float4"), 4, false),
+								TempName);
+						}
+
+						if (OutputIndex == RgbaOutputIndex)
+						{
+							return RgbaValue;
+						}
+						return MakeExpressionOutputValue(RgbaValue, Expression, OutputIndex);
+					}
+
 					const FString DefaultValue = TextureParameter->Texture
 						? FString::Printf(TEXT(" = %s"), *MakeDreamShaderObjectPathLiteral(TextureParameter->Texture))
 						: FString();
 					TArray<FString> MetadataEntries;
+					AddParameterNameMetadataIfNeeded(MetadataEntries, Name, TextureParameter->ParameterName);
 					AddTextureParameterMetadata(MetadataEntries, TextureParameter);
 					AddTextureSampleMetadata(MetadataEntries, TextureParameter);
 					AddPropertyDeclaration(
@@ -2893,60 +2825,7 @@ namespace UE::DreamShader::Editor::Private
 				if (UMaterialExpressionTextureSample* TextureSample = Cast<UMaterialExpressionTextureSample>(Expression))
 				{
 					TArray<FExpressionCallArgument> Arguments;
-					if (TextureSample->Coordinates.IsConnected())
-					{
-						Arguments.Add({ TEXT("Coordinates"), CompileInput(TextureSample->Coordinates, TEXT("0.0")), true });
-					}
-					else if (TextureSample->ConstCoordinate != 0)
-					{
-						Arguments.Add({ TEXT("ConstCoordinate"), FString::Printf(TEXT("%d"), TextureSample->ConstCoordinate), false });
-					}
-					if (TextureSample->TextureObject.IsConnected())
-					{
-						Arguments.Add({ TEXT("TextureObject"), CompileInput(TextureSample->TextureObject, TEXT("default")), true });
-					}
-					else if (TextureSample->Texture)
-					{
-						Arguments.Add({ TEXT("Texture"), MakeDreamShaderObjectPathLiteral(TextureSample->Texture), false });
-					}
-					if (TextureSample->MipValue.IsConnected())
-					{
-						Arguments.Add({ TEXT("MipValue"), CompileInput(TextureSample->MipValue, TEXT("0.0")), true });
-					}
-					if (TextureSample->CoordinatesDX.IsConnected())
-					{
-						Arguments.Add({ TEXT("CoordinatesDX"), CompileInput(TextureSample->CoordinatesDX, TEXT("0.0")), true });
-					}
-					if (TextureSample->CoordinatesDY.IsConnected())
-					{
-						Arguments.Add({ TEXT("CoordinatesDY"), CompileInput(TextureSample->CoordinatesDY, TEXT("0.0")), true });
-					}
-					if (TextureSample->AutomaticViewMipBiasValue.IsConnected())
-					{
-						Arguments.Add({ TEXT("AutomaticViewMipBiasValue"), CompileInput(TextureSample->AutomaticViewMipBiasValue, TEXT("0.0")), true });
-					}
-
-					Arguments.Add({ TEXT("SamplerType"), BuildLiteralEnumArgument(StaticEnum<EMaterialSamplerType>(), TextureSample->SamplerType.GetValue()), false });
-					if (TextureSample->SamplerSource.GetValue() != SSM_FromTextureAsset)
-					{
-						Arguments.Add({ TEXT("SamplerSource"), BuildLiteralEnumArgument(StaticEnum<ESamplerSourceMode>(), TextureSample->SamplerSource.GetValue()), false });
-					}
-					if (TextureSample->MipValueMode.GetValue() != TMVM_None)
-					{
-						Arguments.Add({ TEXT("MipValueMode"), BuildLiteralEnumArgument(StaticEnum<ETextureMipValueMode>(), TextureSample->MipValueMode.GetValue()), false });
-					}
-					if (TextureSample->GatherMode.GetValue() != TGM_None)
-					{
-						Arguments.Add({ TEXT("GatherMode"), BuildLiteralEnumArgument(StaticEnum<ETextureGatherMode>(), TextureSample->GatherMode.GetValue()), false });
-					}
-					if (!TextureSample->AutomaticViewMipBias)
-					{
-						Arguments.Add({ TEXT("AutomaticViewMipBias"), TEXT("false"), false });
-					}
-					if (TextureSample->ConstMipValue != INDEX_NONE)
-					{
-						Arguments.Add({ TEXT("ConstMipValue"), FString::Printf(TEXT("%d"), TextureSample->ConstMipValue), false });
-					}
+					AddTextureSampleExpressionArguments(TextureSample, Arguments);
 
 					const int32 RgbaOutputIndex = FindExpressionOutputIndexByName(Expression, TEXT("RGBA"), OutputIndex);
 					const FDecompiledExpressionKey RgbaKey{ Expression, RgbaOutputIndex };
@@ -3076,6 +2955,193 @@ namespace UE::DreamShader::Editor::Private
 					Arguments);
 			}
 
+			static bool IsControlExpressionArgumentName(const FString& Name)
+			{
+				const FString NormalizedName = UE::DreamShader::NormalizeSettingKey(Name);
+				return NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("Class"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("OutputType"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("ResultType"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("Output"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("OutputName"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("OutputIndex"));
+			}
+
+			static bool IsEditorOnlyExpressionPropertyName(const FString& Name)
+			{
+				const FString NormalizedName = UE::DreamShader::NormalizeSettingKey(Name);
+				return NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("MaterialExpressionEditorX"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("MaterialExpressionEditorY"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("Desc"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("bCommentBubbleVisible"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("bShowOutputNameOnPin"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("bHidePreviewWindow"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("bCollapsed"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("bShaderInputData"))
+					|| NormalizedName == UE::DreamShader::NormalizeSettingKey(TEXT("SortPriority"));
+			}
+
+			static bool IsReflectedExpressionLiteralProperty(const FProperty* Property)
+			{
+				if (!Property
+					|| Property->HasAnyPropertyFlags(CPF_Deprecated | CPF_Transient | CPF_DuplicateTransient)
+					|| IsMaterialExpressionInputProperty(Property)
+					|| !Property->HasAnyPropertyFlags(CPF_Edit)
+					|| IsControlExpressionArgumentName(Property->GetName())
+					|| IsEditorOnlyExpressionPropertyName(Property->GetName()))
+				{
+					return false;
+				}
+
+				return CastField<FBoolProperty>(Property) != nullptr
+					|| CastField<FNumericProperty>(Property) != nullptr
+					|| CastField<FEnumProperty>(Property) != nullptr
+					|| CastField<FByteProperty>(Property) != nullptr
+					|| CastField<FNameProperty>(Property) != nullptr
+					|| CastField<FStrProperty>(Property) != nullptr
+					|| CastField<FTextProperty>(Property) != nullptr
+					|| CastField<FObjectPropertyBase>(Property) != nullptr;
+			}
+
+			static bool IsReflectedPropertyDefaultValue(const UObject* Object, const FProperty* Property)
+			{
+				if (!Object || !Property)
+				{
+					return true;
+				}
+
+				UObject* DefaultObject = Object->GetClass() ? Object->GetClass()->GetDefaultObject(false) : nullptr;
+				if (!DefaultObject)
+				{
+					return false;
+				}
+
+				return Property->Identical_InContainer(Object, DefaultObject);
+			}
+
+			static bool TryBuildReflectedExpressionLiteralArgument(
+				const UMaterialExpression* Expression,
+				const FProperty* Property,
+				FExpressionCallArgument& OutArgument)
+			{
+				if (!Expression || !Property || !IsReflectedExpressionLiteralProperty(Property) || IsReflectedPropertyDefaultValue(Expression, Property))
+				{
+					return false;
+				}
+
+				const void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Expression);
+				if (!ValuePtr)
+				{
+					return false;
+				}
+
+				FString ValueText;
+				if (const FBoolProperty* BoolProperty = CastField<FBoolProperty>(Property))
+				{
+					ValueText = BoolProperty->GetPropertyValue(ValuePtr) ? TEXT("true") : TEXT("false");
+				}
+				else if (const FEnumProperty* EnumProperty = CastField<FEnumProperty>(Property))
+				{
+					if (UEnum* Enum = EnumProperty->GetEnum())
+					{
+						ValueText = BuildLiteralEnumArgument(Enum, EnumProperty->GetUnderlyingProperty()->GetSignedIntPropertyValue(ValuePtr));
+					}
+				}
+				else if (const FByteProperty* ByteProperty = CastField<FByteProperty>(Property))
+				{
+					if (UEnum* Enum = ByteProperty->Enum)
+					{
+						ValueText = BuildLiteralEnumArgument(Enum, ByteProperty->GetPropertyValue(ValuePtr));
+					}
+					else
+					{
+						ValueText = FString::FromInt(ByteProperty->GetPropertyValue(ValuePtr));
+					}
+				}
+				else if (const FNumericProperty* NumericProperty = CastField<FNumericProperty>(Property))
+				{
+					if (NumericProperty->IsFloatingPoint())
+					{
+						ValueText = FormatDreamShaderFloat(NumericProperty->GetFloatingPointPropertyValue(ValuePtr));
+					}
+					else if (NumericProperty->IsInteger())
+					{
+						if (CastField<FUInt16Property>(Property)
+							|| CastField<FUInt32Property>(Property)
+							|| CastField<FUInt64Property>(Property))
+						{
+							ValueText = FString::Printf(TEXT("%llu"), static_cast<unsigned long long>(NumericProperty->GetUnsignedIntPropertyValue(ValuePtr)));
+						}
+						else
+						{
+							ValueText = FString::Printf(TEXT("%lld"), static_cast<long long>(NumericProperty->GetSignedIntPropertyValue(ValuePtr)));
+						}
+					}
+				}
+				else if (const FNameProperty* NameProperty = CastField<FNameProperty>(Property))
+				{
+					const FName NameValue = NameProperty->GetPropertyValue(ValuePtr);
+					if (!NameValue.IsNone())
+					{
+						ValueText = FString::Printf(TEXT("\"%s\""), *EscapeDreamShaderString(NameValue.ToString()));
+					}
+				}
+				else if (const FStrProperty* StringProperty = CastField<FStrProperty>(Property))
+				{
+					ValueText = FString::Printf(TEXT("\"%s\""), *EscapeDreamShaderString(StringProperty->GetPropertyValue(ValuePtr)));
+				}
+				else if (const FTextProperty* TextProperty = CastField<FTextProperty>(Property))
+				{
+					ValueText = FString::Printf(TEXT("\"%s\""), *EscapeDreamShaderString(TextProperty->GetPropertyValue(ValuePtr).ToString()));
+				}
+				else if (const FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property))
+				{
+					if (const UObject* ObjectValue = ObjectProperty->GetObjectPropertyValue(ValuePtr))
+					{
+						ValueText = MakeDreamShaderObjectPathLiteral(ObjectValue);
+					}
+				}
+
+				if (ValueText.TrimStartAndEnd().IsEmpty())
+				{
+					return false;
+				}
+
+				OutArgument = { Property->GetName(), ValueText, false };
+				return true;
+			}
+
+			void AddReflectedExpressionLiteralArguments(
+				const UMaterialExpression* Expression,
+				TArray<FExpressionCallArgument>& Arguments) const
+			{
+				if (!Expression)
+				{
+					return;
+				}
+
+				TSet<FString> ExistingArgumentNames;
+				for (const FExpressionCallArgument& Argument : Arguments)
+				{
+					ExistingArgumentNames.Add(UE::DreamShader::NormalizeSettingKey(Argument.Name));
+				}
+
+				for (TFieldIterator<FProperty> It(Expression->GetClass(), EFieldIteratorFlags::IncludeSuper); It; ++It)
+				{
+					FProperty* Property = *It;
+					if (!Property || ExistingArgumentNames.Contains(UE::DreamShader::NormalizeSettingKey(Property->GetName())))
+					{
+						continue;
+					}
+
+					FExpressionCallArgument ReflectedArgument;
+					if (TryBuildReflectedExpressionLiteralArgument(Expression, Property, ReflectedArgument))
+					{
+						ExistingArgumentNames.Add(UE::DreamShader::NormalizeSettingKey(ReflectedArgument.Name));
+						Arguments.Add(ReflectedArgument);
+					}
+				}
+			}
+
 			FString BuildGenericExpressionCall(UMaterialExpression* Expression, const int32 OutputIndex)
 			{
 				TArray<FExpressionCallArgument> Arguments;
@@ -3096,6 +3162,8 @@ namespace UE::DreamShader::Editor::Private
 							InputIndex);
 						Arguments.Add({ ArgumentName, CompileInput(*Input, TEXT("0.0")), true });
 					}
+
+					AddReflectedExpressionLiteralArguments(Expression, Arguments);
 				}
 
 				return BuildUEExpressionCall(Expression, OutputIndex, Arguments);
@@ -3213,10 +3281,12 @@ namespace UE::DreamShader::Editor::Private
 
 			TArray<FString> PropertyDeclarations;
 			TSet<FString> PropertyNames;
+			TSet<FString> ReservedNames;
 			TMap<const UMaterialExpressionFunctionInput*, FString> FunctionInputNames;
 			TArray<FString> GraphLines;
 			TMap<FDecompiledExpressionKey, FString> ExpressionTemps;
 			TMap<FDecompiledExpressionKey, FDecompiledValue> ExpressionValues;
+			TSet<FDecompiledExpressionKey> CompilingExpressionKeys;
 			TSet<FString> TempNames;
 			TArray<FString> VirtualFunctionDefinitions;
 			TMap<const UMaterialFunction*, FString> VirtualFunctionNames;
@@ -3239,6 +3309,33 @@ namespace UE::DreamShader::Editor::Private
 					*GetMaterialExpressionShortName(Expression->GetClass()))));
 			}
 		};
+
+		class FBridgeGraphDecompiler final : public UE::DreamShader::Editor::IDreamShaderDecompiler
+		{
+		public:
+			virtual bool DecompileMaterial(UMaterial* Material, const FString& DecompiledName, FString& OutSourceText, FString& OutError) override
+			{
+				FDreamShaderGraphDecompiler Decompiler;
+				return Decompiler.DecompileMaterial(Material, DecompiledName, OutSourceText, OutError);
+			}
+
+			virtual bool DecompileFunction(
+				UMaterialFunction* MaterialFunction,
+				const FString& DecompiledName,
+				EDreamShaderDecompiledFunctionKind FunctionKind,
+				FString& OutSourceText,
+				FString& OutError) override
+			{
+				FDreamShaderGraphDecompiler Decompiler;
+				return Decompiler.DecompileFunction(MaterialFunction, DecompiledName, FunctionKind, OutSourceText, OutError);
+			}
+		};
+
+		UE::DreamShader::Editor::IDreamShaderDecompiler& GetGraphDecompiler()
+		{
+			static FBridgeGraphDecompiler Decompiler;
+			return Decompiler;
+		}
 
 		bool IsIdentifierCharacter(TCHAR Character)
 		{
@@ -3422,7 +3519,7 @@ namespace UE::DreamShader::Editor::Private
 			return Text;
 		}
 
-		FDreamShaderEditorBridge::FDiagnosticRecord MakeVirtualFunctionDiagnostic(
+		FDreamShaderDiagnosticRecord MakeVirtualFunctionDiagnostic(
 			const FString& SourceFilePath,
 			const FString& Message,
 			const FString& Detail,
@@ -3430,7 +3527,7 @@ namespace UE::DreamShader::Editor::Private
 			int32 Line,
 			int32 Column)
 		{
-			FDreamShaderEditorBridge::FDiagnosticRecord Diagnostic;
+			FDreamShaderDiagnosticRecord Diagnostic;
 			Diagnostic.FilePath = SourceFilePath;
 			Diagnostic.Message = Message;
 			Diagnostic.Detail = Detail;
@@ -3441,50 +3538,6 @@ namespace UE::DreamShader::Editor::Private
 			Diagnostic.Column = FMath::Max(1, Column);
 			Diagnostic.Source = TEXT("DreamShader VirtualFunction");
 			return Diagnostic;
-		}
-
-		void FindProjectDreamShaderSourceFiles(TArray<FString>& OutSourceFiles)
-		{
-			TArray<FString> MaterialFiles;
-			TArray<FString> HeaderFiles;
-			TArray<FString> FunctionFiles;
-			IFileManager::Get().FindFilesRecursive(
-				MaterialFiles,
-				*UE::DreamShader::GetSourceShaderDirectory(),
-				TEXT("*.dsm"),
-				true,
-				false,
-				false);
-			IFileManager::Get().FindFilesRecursive(
-				HeaderFiles,
-				*UE::DreamShader::GetSourceShaderDirectory(),
-				TEXT("*.dsh"),
-				true,
-				false,
-				false);
-			IFileManager::Get().FindFilesRecursive(
-				FunctionFiles,
-				*UE::DreamShader::GetSourceShaderDirectory(),
-				TEXT("*.dsf"),
-				true,
-				false,
-				false);
-
-			OutSourceFiles.Reset();
-			OutSourceFiles.Append(MaterialFiles);
-			OutSourceFiles.Append(HeaderFiles);
-			OutSourceFiles.Append(FunctionFiles);
-
-			for (FString& SourceFile : OutSourceFiles)
-			{
-				SourceFile = UE::DreamShader::NormalizeSourceFilePath(SourceFile);
-			}
-
-			OutSourceFiles.RemoveAll([](const FString& SourceFile)
-			{
-				return IsPathUnderDirectory(SourceFile, UE::DreamShader::GetPackageShaderDirectory());
-			});
-			OutSourceFiles.Sort();
 		}
 
 		bool TryParseVirtualFunctionBlock(
@@ -3512,7 +3565,7 @@ namespace UE::DreamShader::Editor::Private
 			const FString& SourceFilePath,
 			TArray<FVirtualFunctionDefinitionLocation>& OutLocations,
 			FString* OutSourceText = nullptr,
-			TArray<FDreamShaderEditorBridge::FDiagnosticRecord>* OutDiagnostics = nullptr)
+			TArray<FDreamShaderDiagnosticRecord>* OutDiagnostics = nullptr)
 		{
 			OutLocations.Reset();
 
@@ -3688,7 +3741,7 @@ namespace UE::DreamShader::Editor::Private
 
 			const FString TargetObjectPath = MaterialFunction->GetPathName();
 			TArray<FString> SourceFiles;
-			FindProjectDreamShaderSourceFiles(SourceFiles);
+			FDreamShaderSourceFileUtils::FindProjectDreamShaderSourceFiles(SourceFiles);
 			for (const FString& SourceFile : SourceFiles)
 			{
 				TArray<FVirtualFunctionDefinitionLocation> Locations;
@@ -3706,23 +3759,6 @@ namespace UE::DreamShader::Editor::Private
 			return false;
 		}
 
-		FString QuoteProcessArgument(const FString& Argument)
-		{
-			FString Escaped = Argument;
-			Escaped.ReplaceInline(TEXT("\""), TEXT("\\\""));
-			return FString::Printf(TEXT("\"%s\""), *Escaped);
-		}
-
-		FString GetMaterialExpressionManifestFilePath()
-		{
-			return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("DreamShader/Bridge/material-expressions.json"));
-		}
-
-		FString GetDreamShaderSettingsManifestFilePath()
-		{
-			return FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("DreamShader/Bridge/settings.json"));
-		}
-
 		FString GetMaterialExpressionShortName(const UClass* Class)
 		{
 			if (!Class)
@@ -3736,508 +3772,6 @@ namespace UE::DreamShader::Editor::Private
 			return Name;
 		}
 
-		FString GetReflectedPropertyTypeName(const FProperty* Property)
-		{
-			if (!Property)
-			{
-				return TEXT("unknown");
-			}
-
-			if (const FStructProperty* StructProperty = CastField<FStructProperty>(Property))
-			{
-				if (StructProperty->Struct && StructProperty->Struct->GetFName() == NAME_ExpressionInput)
-				{
-					return TEXT("input");
-				}
-				return StructProperty->Struct ? StructProperty->Struct->GetName() : TEXT("struct");
-			}
-			if (CastField<FBoolProperty>(Property))
-			{
-				return TEXT("bool");
-			}
-			if (const FNumericProperty* NumericProperty = CastField<FNumericProperty>(Property))
-			{
-				if (NumericProperty->IsFloatingPoint())
-				{
-					return TEXT("float");
-				}
-				if (NumericProperty->IsInteger())
-				{
-					return TEXT("int");
-				}
-				return TEXT("number");
-			}
-			if (const FEnumProperty* EnumProperty = CastField<FEnumProperty>(Property))
-			{
-				return EnumProperty->GetEnum() ? EnumProperty->GetEnum()->GetName() : TEXT("enum");
-			}
-			if (const FByteProperty* ByteProperty = CastField<FByteProperty>(Property))
-			{
-				return ByteProperty->Enum ? ByteProperty->Enum->GetName() : TEXT("byte");
-			}
-			if (CastField<FNameProperty>(Property))
-			{
-				return TEXT("name");
-			}
-			if (CastField<FStrProperty>(Property) || CastField<FTextProperty>(Property))
-			{
-				return TEXT("string");
-			}
-			if (const FObjectPropertyBase* ObjectProperty = CastField<FObjectPropertyBase>(Property))
-			{
-				return ObjectProperty->PropertyClass ? ObjectProperty->PropertyClass->GetName() : TEXT("object");
-			}
-			if (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Property))
-			{
-				return FString::Printf(TEXT("array<%s>"), *GetReflectedPropertyTypeName(ArrayProperty->Inner));
-			}
-
-			return Property->GetCPPType();
-		}
-
-		bool IsExportedMaterialExpressionProperty(const FProperty* Property)
-		{
-			if (!Property || Property->HasAnyPropertyFlags(CPF_Deprecated | CPF_Transient | CPF_DuplicateTransient))
-			{
-				return false;
-			}
-
-			return UE::DreamShader::Editor::Private::IsMaterialExpressionInputProperty(Property)
-				|| Property->HasAnyPropertyFlags(CPF_Edit);
-		}
-
-		int32 GetExpressionOutputComponentCount(const FExpressionOutput& Output)
-		{
-			const int32 MaskCount =
-				(Output.MaskR ? 1 : 0)
-				+ (Output.MaskG ? 1 : 0)
-				+ (Output.MaskB ? 1 : 0)
-				+ (Output.MaskA ? 1 : 0);
-			return MaskCount > 0 ? MaskCount : 1;
-		}
-
-		FString GetOutputTypeNameFromComponentCount(const int32 ComponentCount)
-		{
-			if (ComponentCount <= 1)
-			{
-				return TEXT("float1");
-			}
-			if (ComponentCount == 2)
-			{
-				return TEXT("float2");
-			}
-			if (ComponentCount == 3)
-			{
-				return TEXT("float3");
-			}
-			return TEXT("float4");
-		}
-
-		template<typename EnumType>
-		TArray<TSharedPtr<FJsonValue>> BuildSettingsMappingValues(
-			const TMap<FString, TEnumAsByte<EnumType>>& Mappings,
-			const UEnum* Enum)
-		{
-			TArray<FString> Aliases;
-			Mappings.GetKeys(Aliases);
-			Aliases.Sort([](const FString& Left, const FString& Right)
-			{
-				return Left < Right;
-			});
-
-			TArray<TSharedPtr<FJsonValue>> MappingValues;
-			for (const FString& Alias : Aliases)
-			{
-				const TEnumAsByte<EnumType>* Value = Mappings.Find(Alias);
-				if (!Value)
-				{
-					continue;
-				}
-
-				const int64 EnumValue = static_cast<int64>(Value->GetValue());
-				TSharedRef<FJsonObject> MappingObject = MakeShared<FJsonObject>();
-				MappingObject->SetStringField(TEXT("alias"), Alias);
-				MappingObject->SetNumberField(TEXT("value"), static_cast<double>(EnumValue));
-				MappingObject->SetStringField(
-					TEXT("name"),
-					Enum ? Enum->GetNameStringByValue(EnumValue) : FString::FromInt(EnumValue));
-				MappingObject->SetStringField(
-					TEXT("displayName"),
-					Enum ? Enum->GetDisplayNameTextByValue(EnumValue).ToString() : FString());
-				MappingValues.Add(MakeShared<FJsonValueObject>(MappingObject));
-			}
-
-			return MappingValues;
-		}
-
-		void ExportDreamShaderSettingsManifest()
-		{
-			const FString ManifestPath = GetDreamShaderSettingsManifestFilePath();
-			IFileManager::Get().MakeDirectory(*FPaths::GetPath(ManifestPath), true);
-
-			const UDreamShaderSettings* Settings = GetDefault<UDreamShaderSettings>();
-			if (!Settings)
-			{
-				UE_LOG(LogDreamShader, Warning, TEXT("Failed to read DreamShader settings for Bridge manifest."));
-				return;
-			}
-
-			TSharedRef<FJsonObject> MappingsObject = MakeShared<FJsonObject>();
-			MappingsObject->SetArrayField(
-				TEXT("ShadingModel"),
-				BuildSettingsMappingValues(Settings->ShadingModelMappings, StaticEnum<EMaterialShadingModel>()));
-			MappingsObject->SetArrayField(
-				TEXT("BlendMode"),
-				BuildSettingsMappingValues(Settings->BlendModeMappings, StaticEnum<EBlendMode>()));
-			MappingsObject->SetArrayField(
-				TEXT("MaterialDomain"),
-				BuildSettingsMappingValues(Settings->MaterialDomainMappings, StaticEnum<EMaterialDomain>()));
-
-			TSharedRef<FJsonObject> RootObject = MakeShared<FJsonObject>();
-			RootObject->SetStringField(TEXT("schema"), TEXT("DreamShader.Settings"));
-			RootObject->SetNumberField(TEXT("version"), 1);
-			RootObject->SetStringField(TEXT("generatedAt"), FDateTime::UtcNow().ToIso8601());
-			RootObject->SetObjectField(TEXT("mappings"), MappingsObject);
-
-			FString ManifestText;
-			const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&ManifestText);
-			FJsonSerializer::Serialize(RootObject, Writer);
-
-			if (FFileHelper::SaveStringToFile(ManifestText, *ManifestPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
-			{
-				UE_LOG(LogDreamShader, Display, TEXT("Wrote DreamShader settings manifest: %s"), *ManifestPath);
-			}
-			else
-			{
-				UE_LOG(LogDreamShader, Warning, TEXT("Failed to write DreamShader settings manifest: %s"), *ManifestPath);
-			}
-		}
-
-		void ExportMaterialExpressionManifest()
-		{
-			const FString ManifestPath = GetMaterialExpressionManifestFilePath();
-			IFileManager::Get().MakeDirectory(*FPaths::GetPath(ManifestPath), true);
-
-			TArray<TSharedPtr<FJsonValue>> ExpressionValues;
-
-			for (TObjectIterator<UClass> It; It; ++It)
-			{
-				UClass* Class = *It;
-				if (!Class
-					|| !Class->IsChildOf(UMaterialExpression::StaticClass())
-					|| Class->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
-				{
-					continue;
-				}
-
-				const FString ShortName = GetMaterialExpressionShortName(Class);
-				if (ShortName.IsEmpty())
-				{
-					continue;
-				}
-
-				TSharedRef<FJsonObject> ExpressionObject = MakeShared<FJsonObject>();
-				ExpressionObject->SetStringField(TEXT("name"), ShortName);
-				ExpressionObject->SetStringField(TEXT("className"), Class->GetName());
-				ExpressionObject->SetStringField(TEXT("pathName"), Class->GetPathName());
-
-				TArray<TSharedPtr<FJsonValue>> PropertyValues;
-				TArray<TSharedPtr<FJsonValue>> InputValues;
-				for (TFieldIterator<FProperty> PropertyIt(Class, EFieldIteratorFlags::IncludeSuper); PropertyIt; ++PropertyIt)
-				{
-					FProperty* Property = *PropertyIt;
-					if (!IsExportedMaterialExpressionProperty(Property))
-					{
-						continue;
-					}
-
-					const bool bIsInput = UE::DreamShader::Editor::Private::IsMaterialExpressionInputProperty(Property);
-					TSharedRef<FJsonObject> PropertyObject = MakeShared<FJsonObject>();
-					PropertyObject->SetStringField(TEXT("name"), Property->GetName());
-					PropertyObject->SetStringField(TEXT("type"), GetReflectedPropertyTypeName(Property));
-					PropertyObject->SetBoolField(TEXT("isInput"), bIsInput);
-
-					PropertyValues.Add(MakeShared<FJsonValueObject>(PropertyObject));
-					if (bIsInput)
-					{
-						InputValues.Add(MakeShared<FJsonValueObject>(PropertyObject));
-					}
-				}
-				ExpressionObject->SetArrayField(TEXT("properties"), PropertyValues);
-				ExpressionObject->SetArrayField(TEXT("inputs"), InputValues);
-
-				TArray<TSharedPtr<FJsonValue>> OutputValues;
-				if (const UMaterialExpression* DefaultExpression = Cast<UMaterialExpression>(Class->GetDefaultObject(false)))
-				{
-					for (int32 OutputIndex = 0; OutputIndex < DefaultExpression->Outputs.Num(); ++OutputIndex)
-					{
-						const FExpressionOutput& Output = DefaultExpression->Outputs[OutputIndex];
-						const int32 ComponentCount = GetExpressionOutputComponentCount(Output);
-
-						TSharedRef<FJsonObject> OutputObject = MakeShared<FJsonObject>();
-						OutputObject->SetNumberField(TEXT("index"), OutputIndex);
-						OutputObject->SetStringField(TEXT("name"), Output.OutputName.ToString());
-						OutputObject->SetNumberField(TEXT("componentCount"), ComponentCount);
-						OutputObject->SetStringField(TEXT("outputType"), GetOutputTypeNameFromComponentCount(ComponentCount));
-						OutputValues.Add(MakeShared<FJsonValueObject>(OutputObject));
-					}
-				}
-				ExpressionObject->SetArrayField(TEXT("outputs"), OutputValues);
-				ExpressionObject->SetStringField(
-					TEXT("defaultOutputType"),
-					OutputValues.IsEmpty()
-						? TEXT("float1")
-						: OutputValues[0]->AsObject()->GetStringField(TEXT("outputType")));
-
-				ExpressionValues.Add(MakeShared<FJsonValueObject>(ExpressionObject));
-			}
-
-			ExpressionValues.Sort([](const TSharedPtr<FJsonValue>& Left, const TSharedPtr<FJsonValue>& Right)
-			{
-				const TSharedPtr<FJsonObject> LeftObject = Left.IsValid() ? Left->AsObject() : nullptr;
-				const TSharedPtr<FJsonObject> RightObject = Right.IsValid() ? Right->AsObject() : nullptr;
-				return LeftObject.IsValid()
-					&& RightObject.IsValid()
-					&& LeftObject->GetStringField(TEXT("name")) < RightObject->GetStringField(TEXT("name"));
-			});
-
-			TSharedRef<FJsonObject> RootObject = MakeShared<FJsonObject>();
-			RootObject->SetStringField(TEXT("schema"), TEXT("DreamShader.MaterialExpressions"));
-			RootObject->SetNumberField(TEXT("version"), 1);
-			RootObject->SetStringField(TEXT("generatedAt"), FDateTime::UtcNow().ToIso8601());
-			RootObject->SetArrayField(TEXT("expressions"), ExpressionValues);
-
-			FString ManifestText;
-			const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&ManifestText);
-			FJsonSerializer::Serialize(RootObject, Writer);
-
-			if (FFileHelper::SaveStringToFile(ManifestText, *ManifestPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
-			{
-				UE_LOG(LogDreamShader, Display, TEXT("Wrote DreamShader MaterialExpression manifest: %s"), *ManifestPath);
-			}
-			else
-			{
-				UE_LOG(LogDreamShader, Warning, TEXT("Failed to write DreamShader MaterialExpression manifest: %s"), *ManifestPath);
-			}
-		}
-
-		bool WriteDreamShaderWorkspaceFile(FString& OutWorkspaceFilePath, FString& OutError)
-		{
-			const FString SourceDirectory = UE::DreamShader::NormalizeSourceFilePath(UE::DreamShader::GetSourceShaderDirectory());
-			if (SourceDirectory.IsEmpty())
-			{
-				OutError = TEXT("DreamShader source directory is empty.");
-				return false;
-			}
-
-			if (!IFileManager::Get().MakeDirectory(*SourceDirectory, true))
-			{
-				OutError = FString::Printf(TEXT("Failed to create DreamShader source directory '%s'."), *SourceDirectory);
-				return false;
-			}
-
-			const FString WorkspaceFilePath = UE::DreamShader::NormalizeSourceFilePath(
-				FPaths::Combine(SourceDirectory, TEXT("DreamShader.code-workspace")));
-
-			FString WorkspaceText;
-			const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&WorkspaceText);
-			Writer->WriteObjectStart();
-			Writer->WriteArrayStart(TEXT("folders"));
-
-			Writer->WriteObjectStart();
-			Writer->WriteValue(TEXT("name"), TEXT("DreamShader Source"));
-			Writer->WriteValue(TEXT("path"), TEXT("."));
-			Writer->WriteObjectEnd();
-
-			Writer->WriteArrayEnd();
-			Writer->WriteObjectStart(TEXT("settings"));
-			Writer->WriteObjectStart(TEXT("files.associations"));
-			Writer->WriteValue(TEXT("*.dsm"), TEXT("dreamshaderlang"));
-			Writer->WriteValue(TEXT("*.dsh"), TEXT("dreamshaderlang"));
-			Writer->WriteValue(TEXT("*.dsf"), TEXT("dreamshaderlang"));
-			Writer->WriteObjectEnd();
-			Writer->WriteObjectEnd();
-			Writer->WriteObjectEnd();
-			Writer->Close();
-
-			if (!FFileHelper::SaveStringToFile(WorkspaceText, *WorkspaceFilePath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
-			{
-				OutError = FString::Printf(TEXT("Failed to write DreamShader workspace file '%s'."), *WorkspaceFilePath);
-				return false;
-			}
-
-			OutWorkspaceFilePath = WorkspaceFilePath;
-			return true;
-		}
-
-		void AddExistingFileCandidate(TArray<FString>& OutCandidates, const FString& Candidate)
-		{
-			if (!Candidate.IsEmpty() && FPaths::FileExists(Candidate))
-			{
-				OutCandidates.AddUnique(UE::DreamShader::NormalizeSourceFilePath(Candidate));
-			}
-		}
-
-		TArray<FString> FindVSCodeExecutableCandidates()
-		{
-			TArray<FString> Candidates;
-
-			auto AddFromEnvironmentDirectory = [&Candidates](const TCHAR* VariableName, const TCHAR* RelativePath)
-			{
-				const FString Directory = FPlatformMisc::GetEnvironmentVariable(VariableName);
-				if (!Directory.IsEmpty())
-				{
-					AddExistingFileCandidate(Candidates, FPaths::Combine(Directory, RelativePath));
-				}
-			};
-
-			AddFromEnvironmentDirectory(TEXT("LOCALAPPDATA"), TEXT("Programs/Microsoft VS Code/Code.exe"));
-			AddFromEnvironmentDirectory(TEXT("LOCALAPPDATA"), TEXT("Programs/Microsoft VS Code/bin/code.cmd"));
-			AddFromEnvironmentDirectory(TEXT("LOCALAPPDATA"), TEXT("Programs/Microsoft VS Code Insiders/Code - Insiders.exe"));
-			AddFromEnvironmentDirectory(TEXT("LOCALAPPDATA"), TEXT("Programs/Microsoft VS Code Insiders/bin/code-insiders.cmd"));
-			AddFromEnvironmentDirectory(TEXT("ProgramFiles"), TEXT("Microsoft VS Code/Code.exe"));
-			AddFromEnvironmentDirectory(TEXT("ProgramFiles"), TEXT("Microsoft VS Code/bin/code.cmd"));
-			AddFromEnvironmentDirectory(TEXT("ProgramFiles(x86)"), TEXT("Microsoft VS Code/Code.exe"));
-			AddFromEnvironmentDirectory(TEXT("ProgramFiles(x86)"), TEXT("Microsoft VS Code/bin/code.cmd"));
-
-			const FString PathEnvironment = FPlatformMisc::GetEnvironmentVariable(TEXT("PATH"));
-			TArray<FString> PathEntries;
-			PathEnvironment.ParseIntoArray(PathEntries, TEXT(";"), true);
-			for (FString PathEntry : PathEntries)
-			{
-				PathEntry.TrimStartAndEndInline();
-				if (PathEntry.IsEmpty())
-				{
-					continue;
-				}
-
-				AddExistingFileCandidate(Candidates, FPaths::Combine(PathEntry, TEXT("code.cmd")));
-				AddExistingFileCandidate(Candidates, FPaths::Combine(PathEntry, TEXT("code.exe")));
-				AddExistingFileCandidate(Candidates, FPaths::Combine(PathEntry, TEXT("Code.exe")));
-				AddExistingFileCandidate(Candidates, FPaths::Combine(PathEntry, TEXT("code-insiders.cmd")));
-				AddExistingFileCandidate(Candidates, FPaths::Combine(PathEntry, TEXT("Code - Insiders.exe")));
-			}
-
-			return Candidates;
-		}
-
-		bool LaunchVSCodeWorkspace(const FString& WorkspaceFilePath)
-		{
-			for (const FString& Candidate : FindVSCodeExecutableCandidates())
-			{
-				const UDreamShaderSettings* Settings = GetDefault<UDreamShaderSettings>();
-				
-				FProcHandle ProcessHandle;
-				if (Candidate.EndsWith(TEXT(".cmd"), ESearchCase::IgnoreCase)
-					|| Candidate.EndsWith(TEXT(".bat"), ESearchCase::IgnoreCase))
-				{
-					FString CmdExe = FPlatformMisc::GetEnvironmentVariable(TEXT("ComSpec"));
-					if (CmdExe.IsEmpty())
-					{
-						CmdExe = TEXT("C:/Windows/System32/cmd.exe");
-					}
-					
-					FString Parameters = FString::Printf(
-						TEXT("/C \"\"%s\" %s %s\""),
-						*Candidate,
-						((Settings && !Settings->bOpenInNewWindow) ? TEXT(" --reuse-window") : TEXT("")),
-						*QuoteProcessArgument(WorkspaceFilePath));
-					ProcessHandle = FPlatformProcess::CreateProc(*CmdExe, *Parameters, true, true, true, nullptr, 0, nullptr, nullptr);
-				}
-				else
-				{
-					const FString Parameters = FString::Printf(TEXT("%s %s"), 
-					((Settings && !Settings->bOpenInNewWindow) ? TEXT(" --reuse-window") : TEXT("")),
-					*QuoteProcessArgument(WorkspaceFilePath));
-					ProcessHandle = FPlatformProcess::CreateProc(*Candidate, *Parameters, true, false, false, nullptr, 0, nullptr, nullptr);
-				}
-
-				if (ProcessHandle.IsValid())
-				{
-					FPlatformProcess::CloseProc(ProcessHandle);
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		bool LaunchVSCodeFile(const FString& FilePath, int32 Line = 1, int32 Column = 1)
-		{
-			const FString GotoArgument = FString::Printf(
-				TEXT("%s:%d:%d"),
-				*FilePath,
-				FMath::Max(1, Line),
-				FMath::Max(1, Column));
-
-			for (const FString& Candidate : FindVSCodeExecutableCandidates())
-			{
-				FProcHandle ProcessHandle;
-				if (Candidate.EndsWith(TEXT(".cmd"), ESearchCase::IgnoreCase)
-					|| Candidate.EndsWith(TEXT(".bat"), ESearchCase::IgnoreCase))
-				{
-					FString CmdExe = FPlatformMisc::GetEnvironmentVariable(TEXT("ComSpec"));
-					if (CmdExe.IsEmpty())
-					{
-						CmdExe = TEXT("C:/Windows/System32/cmd.exe");
-					}
-
-					const FString Parameters = FString::Printf(
-						TEXT("/C \"\"%s\" --reuse-window -g %s\""),
-						*Candidate,
-						*QuoteProcessArgument(GotoArgument));
-					ProcessHandle = FPlatformProcess::CreateProc(*CmdExe, *Parameters, true, true, true, nullptr, 0, nullptr, nullptr);
-				}
-				else
-				{
-					const FString Parameters = FString::Printf(TEXT("--reuse-window -g %s"), *QuoteProcessArgument(GotoArgument));
-					ProcessHandle = FPlatformProcess::CreateProc(*Candidate, *Parameters, true, false, false, nullptr, 0, nullptr, nullptr);
-				}
-
-				if (ProcessHandle.IsValid())
-				{
-					FPlatformProcess::CloseProc(ProcessHandle);
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		bool LaunchTextFileWithNotepad(const FString& FilePath)
-		{
-			TArray<FString> Candidates;
-			const FString SystemRoot = FPlatformMisc::GetEnvironmentVariable(TEXT("SystemRoot"));
-			AddExistingFileCandidate(Candidates, FPaths::Combine(SystemRoot, TEXT("System32/notepad.exe")));
-			Candidates.Add(TEXT("notepad.exe"));
-
-			for (const FString& Candidate : Candidates)
-			{
-				const FString Parameters = QuoteProcessArgument(FilePath);
-				FProcHandle ProcessHandle = FPlatformProcess::CreateProc(*Candidate, *Parameters, true, false, false, nullptr, 0, nullptr, nullptr);
-				if (ProcessHandle.IsValid())
-				{
-					FPlatformProcess::CloseProc(ProcessHandle);
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		bool LaunchTextFileInPreferredEditor(const FString& FilePath, int32 Line = 1, int32 Column = 1)
-		{
-			if (LaunchVSCodeFile(FilePath, Line, Column))
-			{
-				return true;
-			}
-			if (FPlatformProcess::LaunchFileInDefaultExternalApplication(*FilePath, nullptr, ELaunchVerb::Edit, false))
-			{
-				return true;
-			}
-			return LaunchTextFileWithNotepad(FilePath);
-		}
-
 		void ShowDreamShaderNotification(const FText& Message, SNotificationItem::ECompletionState CompletionState)
 		{
 			FNotificationInfo Info(Message);
@@ -4247,242 +3781,6 @@ namespace UE::DreamShader::Editor::Private
 			{
 				Notification->SetCompletionState(CompletionState);
 			}
-		}
-
-		bool TryExtractImportPathFromLine(const FString& Line, FString& OutPath)
-		{
-			FString TrimmedLine = Line.TrimStartAndEnd();
-			if (TrimmedLine.StartsWith(TEXT("//"))
-				|| !TrimmedLine.StartsWith(TEXT("import"), ESearchCase::CaseSensitive))
-			{
-				return false;
-			}
-
-			TrimmedLine.RightChopInline(6, EAllowShrinking::No);
-			TrimmedLine.TrimStartInline();
-			if (TrimmedLine.Len() < 2 || (TrimmedLine[0] != TCHAR('"') && TrimmedLine[0] != TCHAR('\'')))
-			{
-				return false;
-			}
-
-			const TCHAR Quote = TrimmedLine[0];
-			int32 ClosingQuoteIndex = INDEX_NONE;
-			for (int32 Index = 1; Index < TrimmedLine.Len(); ++Index)
-			{
-				if (TrimmedLine[Index] == Quote)
-				{
-					ClosingQuoteIndex = Index;
-					break;
-				}
-			}
-
-			if (ClosingQuoteIndex == INDEX_NONE)
-			{
-				return false;
-			}
-
-			OutPath = TrimmedLine.Mid(1, ClosingQuoteIndex - 1).TrimStartAndEnd();
-			return !OutPath.IsEmpty();
-		}
-
-		FString NormalizeDreamShaderImportSpecifier(const FString& ImportSpecifier)
-		{
-			FString Normalized = ImportSpecifier.TrimStartAndEnd();
-			Normalized.ReplaceInline(TEXT("\\"), TEXT("/"));
-			while (Normalized.StartsWith(TEXT("./")))
-			{
-				Normalized.RightChopInline(2, EAllowShrinking::No);
-			}
-
-			if (FPaths::GetExtension(Normalized, true).IsEmpty())
-			{
-				Normalized += TEXT(".dsh");
-			}
-
-			return Normalized;
-		}
-
-		bool ResolveDreamShaderImportPath(const FString& CurrentFilePath, const FString& ImportSpecifier, FString& OutResolvedPath)
-		{
-			const FString NormalizedImport = NormalizeDreamShaderImportSpecifier(ImportSpecifier);
-			if (NormalizedImport.IsEmpty())
-			{
-				return false;
-			}
-
-			const TArray<FString> Candidates =
-			{
-				FPaths::Combine(FPaths::GetPath(CurrentFilePath), NormalizedImport),
-				FPaths::Combine(UE::DreamShader::GetSourceShaderDirectory(), NormalizedImport),
-				FPaths::Combine(UE::DreamShader::GetPackageShaderDirectory(), NormalizedImport),
-				FPaths::Combine(UE::DreamShader::GetBuiltinShaderLibraryDirectory(), NormalizedImport)
-			};
-
-			for (const FString& Candidate : Candidates)
-			{
-				const FString NormalizedCandidate = UE::DreamShader::NormalizeSourceFilePath(Candidate);
-				if (IFileManager::Get().FileExists(*NormalizedCandidate))
-				{
-					OutResolvedPath = NormalizedCandidate;
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		void FindProjectMaterialSourceFiles(TArray<FString>& OutSourceFiles)
-		{
-			TArray<FString> MaterialFiles;
-			TArray<FString> FunctionFiles;
-			IFileManager::Get().FindFilesRecursive(
-				MaterialFiles,
-				*UE::DreamShader::GetSourceShaderDirectory(),
-				TEXT("*.dsm"),
-				true,
-				false,
-				false);
-			IFileManager::Get().FindFilesRecursive(
-				FunctionFiles,
-				*UE::DreamShader::GetSourceShaderDirectory(),
-				TEXT("*.dsf"),
-				true,
-				false,
-				false);
-
-			OutSourceFiles.Reset();
-			OutSourceFiles.Append(MaterialFiles);
-			OutSourceFiles.Append(FunctionFiles);
-
-			for (FString& SourceFile : OutSourceFiles)
-			{
-				SourceFile = UE::DreamShader::NormalizeSourceFilePath(SourceFile);
-			}
-
-			OutSourceFiles.RemoveAll([](const FString& SourceFile)
-			{
-				return IsPackageMaterialFile(SourceFile);
-			});
-		}
-
-		void CollectHeaderDependenciesRecursive(
-			const FString& SourceFilePath,
-			TSet<FString>& OutHeaders,
-			TSet<FString>& InOutVisitedFiles)
-		{
-			const FString NormalizedPath = UE::DreamShader::NormalizeSourceFilePath(SourceFilePath);
-			if (InOutVisitedFiles.Contains(NormalizedPath))
-			{
-				return;
-			}
-			InOutVisitedFiles.Add(NormalizedPath);
-
-			FString SourceText;
-			if (!FFileHelper::LoadFileToString(SourceText, *NormalizedPath))
-			{
-				return;
-			}
-
-			TArray<FString> Lines;
-			SourceText.ParseIntoArrayLines(Lines, false);
-			for (const FString& Line : Lines)
-			{
-				FString ImportPath;
-				if (!TryExtractImportPathFromLine(Line, ImportPath))
-				{
-					continue;
-				}
-
-				FString ResolvedImportPath;
-				if (!ResolveDreamShaderImportPath(NormalizedPath, ImportPath, ResolvedImportPath))
-				{
-					continue;
-				}
-
-				if (UE::DreamShader::IsDreamShaderHeaderFile(ResolvedImportPath) || UE::DreamShader::IsDreamShaderFunctionFile(ResolvedImportPath))
-				{
-					OutHeaders.Add(ResolvedImportPath);
-				}
-
-				CollectHeaderDependenciesRecursive(ResolvedImportPath, OutHeaders, InOutVisitedFiles);
-			}
-		}
-
-		bool TryParseErrorLocation(
-			const FString& Line,
-			FString& OutFilePath,
-			int32& OutLine,
-			int32& OutColumn,
-			FString& OutMessage)
-		{
-			const int32 CloseMarkerIndex = Line.Find(TEXT("): "));
-			if (CloseMarkerIndex == INDEX_NONE)
-			{
-				return false;
-			}
-
-			const int32 OpenMarkerIndex = Line.Find(TEXT("("), ESearchCase::CaseSensitive, ESearchDir::FromEnd, CloseMarkerIndex);
-			if (OpenMarkerIndex == INDEX_NONE || OpenMarkerIndex >= CloseMarkerIndex)
-			{
-				return false;
-			}
-
-			const FString LocationText = Line.Mid(OpenMarkerIndex + 1, CloseMarkerIndex - OpenMarkerIndex - 1);
-			FString LineText;
-			FString ColumnText;
-			if (!LocationText.Split(TEXT(","), &LineText, &ColumnText))
-			{
-				return false;
-			}
-
-			LineText.TrimStartAndEndInline();
-			ColumnText.TrimStartAndEndInline();
-			if (!LineText.IsNumeric() || !ColumnText.IsNumeric())
-			{
-				return false;
-			}
-
-			OutLine = FMath::Max(1, FCString::Atoi(*LineText));
-			OutColumn = FMath::Max(1, FCString::Atoi(*ColumnText));
-
-			OutFilePath = UE::DreamShader::NormalizeSourceFilePath(Line.Left(OpenMarkerIndex));
-			OutMessage = Line.Mid(CloseMarkerIndex + 3).TrimStartAndEnd();
-			return !OutFilePath.IsEmpty() && !OutMessage.IsEmpty();
-		}
-
-		void AddDiagnosticJson(TArray<TSharedPtr<FJsonValue>>& OutDiagnostics, const FDreamShaderEditorBridge::FDiagnosticRecord& Diagnostic)
-		{
-			TSharedRef<FJsonObject> DiagnosticObject = MakeShared<FJsonObject>();
-			DiagnosticObject->SetStringField(TEXT("message"), Diagnostic.Message);
-			if (!Diagnostic.Detail.IsEmpty())
-			{
-				DiagnosticObject->SetStringField(TEXT("detail"), Diagnostic.Detail);
-			}
-			if (!Diagnostic.Stage.IsEmpty())
-			{
-				DiagnosticObject->SetStringField(TEXT("stage"), Diagnostic.Stage);
-			}
-			if (!Diagnostic.AssetPath.IsEmpty())
-			{
-				DiagnosticObject->SetStringField(TEXT("assetPath"), Diagnostic.AssetPath);
-			}
-			if (!Diagnostic.ShaderPlatform.IsEmpty())
-			{
-				DiagnosticObject->SetStringField(TEXT("shaderPlatform"), Diagnostic.ShaderPlatform);
-			}
-			if (!Diagnostic.QualityLevel.IsEmpty())
-			{
-				DiagnosticObject->SetStringField(TEXT("qualityLevel"), Diagnostic.QualityLevel);
-			}
-			if (!Diagnostic.Code.IsEmpty())
-			{
-				DiagnosticObject->SetStringField(TEXT("code"), Diagnostic.Code);
-			}
-			DiagnosticObject->SetNumberField(TEXT("line"), Diagnostic.Line);
-			DiagnosticObject->SetNumberField(TEXT("column"), Diagnostic.Column);
-			DiagnosticObject->SetStringField(TEXT("severity"), Diagnostic.Severity);
-			DiagnosticObject->SetStringField(TEXT("source"), Diagnostic.Source);
-			OutDiagnostics.Add(MakeShared<FJsonValueObject>(DiagnosticObject));
 		}
 
 		FString GetShaderPlatformLabel(const EShaderPlatform ShaderPlatform)
@@ -4513,356 +3811,6 @@ namespace UE::DreamShader::Editor::Private
 			return InError.TrimStartAndEnd();
 		}
 
-		const TCHAR* GetDreamShaderCommandletUsage()
-		{
-			return TEXT(
-				"DreamShader commandlet usage:\n"
-				"  -run=DreamShader compile -Source=\"C:/Project/DShader/File.dsm\" [-Force]\n"
-				"  -run=DreamShader compile -All [-Force]\n"
-				"  -run=DreamShader decompile -Asset=\"/Game/Path/Asset.Asset\" [-Out=\"C:/Project/DShader/Decompiled/File.dsm\"]\n"
-				"Supported asset types: Material -> .dsm, MaterialFunction -> .dsf.");
-		}
-
-		FString NormalizeCommandletValue(FString Value)
-		{
-			Value.TrimStartAndEndInline();
-			Value = Value.TrimQuotes();
-			Value.TrimStartAndEndInline();
-			return Value;
-		}
-
-		FString NormalizeCommandletKey(FString Key)
-		{
-			Key.TrimStartAndEndInline();
-			while (Key.StartsWith(TEXT("-")))
-			{
-				Key.RightChopInline(1, EAllowShrinking::No);
-			}
-			Key.TrimStartAndEndInline();
-			return Key;
-		}
-
-		bool TrySplitCommandletAssignment(const FString& Text, FString& OutKey, FString& OutValue)
-		{
-			FString Key;
-			FString Value;
-			if (!Text.Split(TEXT("="), &Key, &Value))
-			{
-				return false;
-			}
-
-			OutKey = NormalizeCommandletKey(Key);
-			OutValue = NormalizeCommandletValue(Value);
-			return !OutKey.IsEmpty();
-		}
-
-		bool TryGetCommandletParam(
-			const TArray<FString>& Tokens,
-			const TArray<FString>& Switches,
-			const TMap<FString, FString>& Params,
-			const FString& Name,
-			FString& OutValue)
-		{
-			for (const TPair<FString, FString>& Param : Params)
-			{
-				if (NormalizeCommandletKey(Param.Key).Equals(Name, ESearchCase::IgnoreCase))
-				{
-					OutValue = NormalizeCommandletValue(Param.Value);
-					return !OutValue.IsEmpty();
-				}
-			}
-
-			for (const FString& Switch : Switches)
-			{
-				FString Key;
-				FString Value;
-				if (TrySplitCommandletAssignment(Switch, Key, Value) && Key.Equals(Name, ESearchCase::IgnoreCase))
-				{
-					OutValue = MoveTemp(Value);
-					return !OutValue.IsEmpty();
-				}
-			}
-
-			for (const FString& Token : Tokens)
-			{
-				FString Key;
-				FString Value;
-				if (TrySplitCommandletAssignment(Token, Key, Value) && Key.Equals(Name, ESearchCase::IgnoreCase))
-				{
-					OutValue = MoveTemp(Value);
-					return !OutValue.IsEmpty();
-				}
-			}
-
-			return false;
-		}
-
-		bool TryParseCommandletBool(const FString& Text, bool& OutValue)
-		{
-			const FString Normalized = NormalizeCommandletValue(Text).ToLower();
-			if (Normalized.IsEmpty()
-				|| Normalized == TEXT("1")
-				|| Normalized == TEXT("true")
-				|| Normalized == TEXT("yes")
-				|| Normalized == TEXT("on"))
-			{
-				OutValue = true;
-				return true;
-			}
-
-			if (Normalized == TEXT("0")
-				|| Normalized == TEXT("false")
-				|| Normalized == TEXT("no")
-				|| Normalized == TEXT("off"))
-			{
-				OutValue = false;
-				return true;
-			}
-
-			return false;
-		}
-
-		bool HasCommandletFlag(const TArray<FString>& Tokens, const TArray<FString>& Switches, const FString& Name)
-		{
-			for (const FString& Switch : Switches)
-			{
-				FString Key;
-				FString Value;
-				const bool bHasValue = TrySplitCommandletAssignment(Switch, Key, Value);
-				if (!bHasValue)
-				{
-					Key = NormalizeCommandletKey(Switch);
-				}
-
-				if (Key.Equals(Name, ESearchCase::IgnoreCase))
-				{
-					bool bParsedValue = true;
-					return !bHasValue || !TryParseCommandletBool(Value, bParsedValue) || bParsedValue;
-				}
-			}
-
-			for (const FString& Token : Tokens)
-			{
-				FString Key;
-				FString Value;
-				const bool bHasValue = TrySplitCommandletAssignment(Token, Key, Value);
-				if (!bHasValue)
-				{
-					Key = NormalizeCommandletKey(Token);
-				}
-
-				if (Key.Equals(Name, ESearchCase::IgnoreCase))
-				{
-					bool bParsedValue = true;
-					return !bHasValue || !TryParseCommandletBool(Value, bParsedValue) || bParsedValue;
-				}
-			}
-
-			return false;
-		}
-
-		FString ResolveCommandletSourceFilePath(const FString& InSourceFilePath)
-		{
-			FString SourceFilePath = NormalizeCommandletValue(InSourceFilePath);
-			if (SourceFilePath.IsEmpty() || !FPaths::IsRelative(SourceFilePath))
-			{
-				return UE::DreamShader::NormalizeSourceFilePath(SourceFilePath);
-			}
-
-			const FString SourceDirectoryCandidate = UE::DreamShader::NormalizeSourceFilePath(
-				FPaths::Combine(UE::DreamShader::GetSourceShaderDirectory(), SourceFilePath));
-			if (IFileManager::Get().FileExists(*SourceDirectoryCandidate))
-			{
-				return SourceDirectoryCandidate;
-			}
-
-			const FString ProjectCandidate = UE::DreamShader::NormalizeSourceFilePath(
-				FPaths::Combine(FPaths::ProjectDir(), SourceFilePath));
-			if (IFileManager::Get().FileExists(*ProjectCandidate))
-			{
-				return ProjectCandidate;
-			}
-
-			return UE::DreamShader::NormalizeSourceFilePath(SourceFilePath);
-		}
-
-		FString NormalizeCommandletAssetPath(const FString& InAssetPath)
-		{
-			FString AssetPath = NormalizeCommandletValue(InAssetPath);
-			AssetPath.ReplaceInline(TEXT("\\"), TEXT("/"));
-			if (AssetPath.StartsWith(TEXT("/")) && !AssetPath.Contains(TEXT(".")))
-			{
-				const FString AssetName = FPackageName::GetShortName(AssetPath);
-				if (!AssetName.IsEmpty())
-				{
-					return FString::Printf(TEXT("%s.%s"), *AssetPath, *AssetName);
-				}
-			}
-			return AssetPath;
-		}
-
-		UObject* LoadCommandletAsset(const FString& InAssetPath, FString& OutLoadPath)
-		{
-			OutLoadPath = NormalizeCommandletAssetPath(InAssetPath);
-			UObject* Asset = StaticLoadObject(UObject::StaticClass(), nullptr, *OutLoadPath);
-			if (!Asset && !OutLoadPath.Equals(InAssetPath, ESearchCase::CaseSensitive))
-			{
-				const FString OriginalPath = NormalizeCommandletValue(InAssetPath);
-				Asset = StaticLoadObject(UObject::StaticClass(), nullptr, *OriginalPath);
-				if (Asset)
-				{
-					OutLoadPath = OriginalPath;
-				}
-			}
-			return Asset;
-		}
-
-		bool RunDreamShaderCompileCommandlet(
-			const TArray<FString>& Tokens,
-			const TArray<FString>& Switches,
-			const TMap<FString, FString>& Params)
-		{
-			const bool bForce = HasCommandletFlag(Tokens, Switches, TEXT("Force"));
-			const bool bAll = HasCommandletFlag(Tokens, Switches, TEXT("All"));
-
-			TArray<FString> SourceFiles;
-			FString SourceFilePath;
-			if (TryGetCommandletParam(Tokens, Switches, Params, TEXT("Source"), SourceFilePath)
-				|| TryGetCommandletParam(Tokens, Switches, Params, TEXT("File"), SourceFilePath))
-			{
-				SourceFiles.Add(ResolveCommandletSourceFilePath(SourceFilePath));
-			}
-			else if (bAll)
-			{
-				FindProjectDreamShaderSourceFiles(SourceFiles);
-				SourceFiles.RemoveAll([](const FString& SourceFile)
-				{
-					return UE::DreamShader::IsDreamShaderHeaderFile(SourceFile);
-				});
-				SourceFiles.Sort([](const FString& Left, const FString& Right)
-				{
-					const int32 LeftRank = UE::DreamShader::IsDreamShaderFunctionFile(Left) ? 0 : 1;
-					const int32 RightRank = UE::DreamShader::IsDreamShaderFunctionFile(Right) ? 0 : 1;
-					if (LeftRank != RightRank)
-					{
-						return LeftRank < RightRank;
-					}
-
-					return Left.Compare(Right, ESearchCase::IgnoreCase) < 0;
-				});
-			}
-			else
-			{
-				UE_LOG(LogDreamShader, Error, TEXT("%s"), GetDreamShaderCommandletUsage());
-				return false;
-			}
-
-			if (SourceFiles.IsEmpty())
-			{
-				UE_LOG(LogDreamShader, Warning, TEXT("DreamShader commandlet found no source files to compile."));
-				return true;
-			}
-
-			bool bSucceeded = true;
-			for (const FString& SourceFile : SourceFiles)
-			{
-				if (!UE::DreamShader::IsDreamShaderSourceFile(SourceFile) || UE::DreamShader::IsDreamShaderHeaderFile(SourceFile))
-				{
-					UE_LOG(LogDreamShader, Error, TEXT("DreamShader compile requires a .dsm or .dsf file: %s"), *SourceFile);
-					bSucceeded = false;
-					continue;
-				}
-
-				FString Message;
-				if (FMaterialGenerator::GenerateAssetsFromFile(SourceFile, Message, bForce))
-				{
-					UE_LOG(LogDreamShader, Display, TEXT("%s"), *Message);
-				}
-				else
-				{
-					UE_LOG(LogDreamShader, Error, TEXT("%s"), *Message);
-					bSucceeded = false;
-				}
-			}
-
-			return bSucceeded;
-		}
-
-		bool RunDreamShaderDecompileCommandlet(
-			const TArray<FString>& Tokens,
-			const TArray<FString>& Switches,
-			const TMap<FString, FString>& Params)
-		{
-			FString AssetPath;
-			if (!TryGetCommandletParam(Tokens, Switches, Params, TEXT("Asset"), AssetPath))
-			{
-				UE_LOG(LogDreamShader, Error, TEXT("%s"), GetDreamShaderCommandletUsage());
-				return false;
-			}
-
-			FString LoadPath;
-			UObject* Asset = LoadCommandletAsset(AssetPath, LoadPath);
-			if (!Asset)
-			{
-				UE_LOG(LogDreamShader, Error, TEXT("DreamShader could not load asset '%s'."), *AssetPath);
-				return false;
-			}
-
-			FString SourceText;
-			FString Error;
-			if (UMaterial* Material = Cast<UMaterial>(Asset))
-			{
-				FDreamShaderGraphDecompiler Decompiler;
-				if (!Decompiler.DecompileMaterial(Material, MakeDecompiledAssetName(Material, TEXT("Materials")), SourceText, Error))
-				{
-					UE_LOG(LogDreamShader, Error, TEXT("DreamShader failed to decompile Material '%s': %s"), *LoadPath, *Error);
-					return false;
-				}
-			}
-			else if (UMaterialFunction* MaterialFunction = Cast<UMaterialFunction>(Asset))
-			{
-				FDreamShaderGraphDecompiler Decompiler;
-				if (!Decompiler.DecompileFunction(MaterialFunction, MakeDecompiledAssetName(MaterialFunction, TEXT("Functions")), SourceText, Error))
-				{
-					UE_LOG(LogDreamShader, Error, TEXT("DreamShader failed to decompile MaterialFunction '%s': %s"), *LoadPath, *Error);
-					return false;
-				}
-			}
-			else
-			{
-				UE_LOG(LogDreamShader, Error, TEXT("DreamShader decompile supports Material and MaterialFunction assets only: %s"), *LoadPath);
-				return false;
-			}
-
-			FString OutputPath;
-			if (!TryGetCommandletParam(Tokens, Switches, Params, TEXT("Out"), OutputPath)
-				&& !TryGetCommandletParam(Tokens, Switches, Params, TEXT("Output"), OutputPath))
-			{
-				OutputPath = MakeDefaultDecompiledFilePath(Asset);
-			}
-			OutputPath = UE::DreamShader::NormalizeSourceFilePath(OutputPath);
-			if (OutputPath.IsEmpty())
-			{
-				UE_LOG(LogDreamShader, Error, TEXT("DreamShader failed to resolve an output file path for '%s'."), *LoadPath);
-				return false;
-			}
-
-			const FString OutputDirectory = FPaths::GetPath(OutputPath);
-			if (!IFileManager::Get().MakeDirectory(*OutputDirectory, true))
-			{
-				UE_LOG(LogDreamShader, Error, TEXT("DreamShader failed to create output directory '%s'."), *OutputDirectory);
-				return false;
-			}
-
-			if (!FFileHelper::SaveStringToFile(SourceText, *OutputPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
-			{
-				UE_LOG(LogDreamShader, Error, TEXT("DreamShader failed to write decompiled source '%s'."), *OutputPath);
-				return false;
-			}
-
-			UE_LOG(LogDreamShader, Display, TEXT("DreamShader decompiled '%s' to '%s'."), *LoadPath, *OutputPath);
-			return true;
-		}
 	}
 
 	FString FDreamShaderEditorBridge::GetBridgeDirectory()
@@ -4902,8 +3850,8 @@ namespace UE::DreamShader::Editor::Private
 		IFileManager::Get().MakeDirectory(*GetBridgeDirectory(), true);
 		IFileManager::Get().MakeDirectory(*GetRequestDirectory(), true);
 
-		ExportMaterialExpressionManifest();
-		ExportDreamShaderSettingsManifest();
+		FDreamShaderWorkspaceService::ExportMaterialExpressionManifest();
+		FDreamShaderWorkspaceService::ExportDreamShaderSettingsManifest();
 		SyncVirtualFunctionDefinitions();
 		QueueFullScan();
 		UpdateDiagnosticsFile();
@@ -4973,13 +3921,13 @@ namespace UE::DreamShader::Editor::Private
 		}
 
 		PendingFiles.Reset();
-		DiagnosticsByFile.Reset();
+		DiagnosticsStore.Reset();
 	}
 
 	void FDreamShaderEditorBridge::QueueFullScan()
 	{
 		TArray<FString> SourceFiles;
-		FindProjectMaterialSourceFiles(SourceFiles);
+		FDreamShaderSourceFileUtils::FindProjectMaterialSourceFiles(SourceFiles);
 		RebuildDependencyGraph();
 
 		const double Now = FPlatformTime::Seconds();
@@ -4997,25 +3945,8 @@ namespace UE::DreamShader::Editor::Private
 	void FDreamShaderEditorBridge::QueueDependentSourcesForImport(const FString& ImportFilePath)
 	{
 		const FString NormalizedImportPath = UE::DreamShader::NormalizeSourceFilePath(ImportFilePath);
-		TSet<FString> SourcesToQueue;
-
-		if (const TSet<FString>* ExistingDependents = HeaderDependentsByFile.Find(NormalizedImportPath))
-		{
-			for (const FString& Dependent : *ExistingDependents)
-			{
-				SourcesToQueue.Add(Dependent);
-			}
-		}
-
-		RebuildDependencyGraph();
-
-		if (const TSet<FString>* RebuiltDependents = HeaderDependentsByFile.Find(NormalizedImportPath))
-		{
-			for (const FString& Dependent : *RebuiltDependents)
-			{
-				SourcesToQueue.Add(Dependent);
-			}
-		}
+		const TSet<FString> SourcesToQueue =
+			FDreamShaderDependencyGraphService::RebuildAndCollectDependentsForImport(ImportFilePath, HeaderDependentsByFile);
 
 		const double Now = FPlatformTime::Seconds();
 		for (const FString& SourceFile : SourcesToQueue)
@@ -5074,13 +4005,13 @@ namespace UE::DreamShader::Editor::Private
 					}
 					else if (UE::DreamShader::IsDreamShaderFunctionFile(FileChange.Filename))
 					{
-						if (!IsPackageMaterialFile(FileChange.Filename))
+						if (!FDreamShaderSourceFileUtils::IsPackageMaterialFile(FileChange.Filename))
 						{
 							Bridge->QueueSourceFile(FileChange.Filename);
 						}
 						Bridge->QueueDependentSourcesForImport(FileChange.Filename);
 					}
-					else if (IsPackageMaterialFile(FileChange.Filename))
+					else if (FDreamShaderSourceFileUtils::IsPackageMaterialFile(FileChange.Filename))
 					{
 						continue;
 					}
@@ -5103,7 +4034,7 @@ namespace UE::DreamShader::Editor::Private
 							Bridge->UpdateDiagnosticsFile();
 						}
 					}
-					else if (IsPackageMaterialFile(FileChange.Filename))
+					else if (FDreamShaderSourceFileUtils::IsPackageMaterialFile(FileChange.Filename))
 					{
 						continue;
 					}
@@ -5209,20 +4140,22 @@ namespace UE::DreamShader::Editor::Private
 
 	void FDreamShaderEditorBridge::ProcessSourceFile(const FString& SourceFilePath)
 	{
-		FString Message;
-		if (FMaterialGenerator::GenerateAssetsFromFile(SourceFilePath, Message))
+		UE::DreamShader::Editor::FDreamShaderCompileService CompileService(UE::DreamShader::Editor::GetMaterialGeneratorCompiler());
+		const UE::DreamShader::Editor::FDreamShaderCompileResult Result = CompileService.CompileAssets(SourceFilePath);
+		if (Result.bSucceeded)
 		{
 			ClearDiagnosticsForSourceAndDependencies(SourceFilePath);
 			UpdateDiagnosticsFile();
-			UE_LOG(LogDreamShader, Display, TEXT("%s"), *Message);
+			UE_LOG(LogDreamShader, Display, TEXT("%s"), *Result.Message);
 			return;
 		}
 
-		TArray<FDiagnosticRecord> Diagnostics = BuildErrorDiagnostics(SourceFilePath, Message);
+		TArray<FDreamShaderDiagnosticRecord> Diagnostics =
+			FDreamShaderDiagnosticsStore::BuildGenerateErrorDiagnostics(SourceFilePath, Result.Message);
 		ClearDiagnosticsForSourceAndDependencies(SourceFilePath);
 		SetDiagnostics(SourceFilePath, MoveTemp(Diagnostics));
 		UpdateDiagnosticsFile();
-		UE_LOG(LogDreamShader, Error, TEXT("%s"), *Message);
+		UE_LOG(LogDreamShader, Error, TEXT("%s"), *Result.Message);
 	}
 
 	void FDreamShaderEditorBridge::OnMaterialCompilationFinished(UMaterialInterface* MaterialInterface)
@@ -5244,13 +4177,13 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		TArray<FDiagnosticRecord> Diagnostics;
+		TArray<FDreamShaderDiagnosticRecord> Diagnostics;
 		const FString MaterialAssetPath = Material->GetPathName();
 		TSet<FString> SeenDiagnosticKeys;
 		for (int32 ShaderPlatformIndex = 0; ShaderPlatformIndex < EShaderPlatform::SP_NumPlatforms; ++ShaderPlatformIndex)
 		{
 			const EShaderPlatform ShaderPlatform = static_cast<EShaderPlatform>(ShaderPlatformIndex);
-			for (int32 QualityLevelIndex = 0; QualityLevelIndex <= static_cast<int32>(EMaterialQualityLevel::Num); ++QualityLevelIndex)
+			for (int32 QualityLevelIndex = 0; QualityLevelIndex < static_cast<int32>(EMaterialQualityLevel::Num); ++QualityLevelIndex)
 			{
 				const EMaterialQualityLevel::Type QualityLevel = static_cast<EMaterialQualityLevel::Type>(QualityLevelIndex);
 				const FMaterialResource* MaterialResource = Material->GetMaterialResource(ShaderPlatform, QualityLevel);
@@ -5269,18 +4202,15 @@ namespace UE::DreamShader::Editor::Private
 						continue;
 					}
 
-					FString ParsedFilePath;
-					int32 ParsedLine = 1;
-					int32 ParsedColumn = 1;
-					FString ParsedMessage;
-					const bool bHasParsedLocation = TryParseErrorLocation(RawError, ParsedFilePath, ParsedLine, ParsedColumn, ParsedMessage);
-					const bool bMapsToDreamShaderSource = bHasParsedLocation && UE::DreamShader::IsDreamShaderSourceFile(ParsedFilePath);
+					FDreamShaderDiagnosticLocation ParsedLocation;
+					const bool bHasParsedLocation = FDreamShaderDiagnosticsStore::TryParseErrorLocation(RawError, ParsedLocation);
+					const bool bMapsToDreamShaderSource = bHasParsedLocation && UE::DreamShader::IsDreamShaderSourceFile(ParsedLocation.FilePath);
 
 					const FString DisplayMessage = FString::Printf(
 						TEXT("[%s / %s] %s"),
 						*ShaderPlatformLabel,
 						*QualityLabel,
-						*(bHasParsedLocation ? ParsedMessage : GetFirstMeaningfulErrorLine(RawError)));
+						*(bHasParsedLocation ? ParsedLocation.Message : GetFirstMeaningfulErrorLine(RawError)));
 
 					const FString DeduplicationKey = FString::Printf(
 						TEXT("%s|%s|%s|%s|%d|%d"),
@@ -5288,16 +4218,16 @@ namespace UE::DreamShader::Editor::Private
 						*ShaderPlatformLabel,
 						*QualityLabel,
 						*DisplayMessage,
-						bMapsToDreamShaderSource ? ParsedLine : 1,
-						bMapsToDreamShaderSource ? ParsedColumn : 1);
+						bMapsToDreamShaderSource ? ParsedLocation.Line : 1,
+						bMapsToDreamShaderSource ? ParsedLocation.Column : 1);
 					if (SeenDiagnosticKeys.Contains(DeduplicationKey))
 					{
 						continue;
 					}
 					SeenDiagnosticKeys.Add(DeduplicationKey);
 
-					FDiagnosticRecord& Diagnostic = Diagnostics.AddDefaulted_GetRef();
-					Diagnostic.FilePath = bMapsToDreamShaderSource ? ParsedFilePath : SourceFilePath;
+					FDreamShaderDiagnosticRecord& Diagnostic = Diagnostics.AddDefaulted_GetRef();
+					Diagnostic.FilePath = bMapsToDreamShaderSource ? ParsedLocation.FilePath : SourceFilePath;
 					Diagnostic.Message = DisplayMessage;
 					Diagnostic.Detail = RawError;
 					Diagnostic.Stage = TEXT("materialCompile");
@@ -5306,8 +4236,8 @@ namespace UE::DreamShader::Editor::Private
 					Diagnostic.QualityLevel = QualityLabel;
 					Diagnostic.Code = TEXT("material-compile");
 					Diagnostic.Source = TEXT("DreamShader Material Compile");
-					Diagnostic.Line = bMapsToDreamShaderSource ? ParsedLine : 1;
-					Diagnostic.Column = bMapsToDreamShaderSource ? ParsedColumn : 1;
+					Diagnostic.Line = bMapsToDreamShaderSource ? ParsedLocation.Line : 1;
+					Diagnostic.Column = bMapsToDreamShaderSource ? ParsedLocation.Column : 1;
 				}
 			}
 		}
@@ -5374,6 +4304,20 @@ namespace UE::DreamShader::Editor::Private
 				TEXT("DreamShader.VirtualFunctionAssetActions"),
 				FNewToolMenuSectionDelegate::CreateSP(AsShared(), &FDreamShaderEditorBridge::PopulateMaterialFunctionAssetMenu));
 		}
+		if (UToolMenu* MaterialLayerAssetMenu = UE::ContentBrowser::ExtendToolMenu_AssetContextMenu(UMaterialFunctionMaterialLayer::StaticClass()))
+		{
+			FToolMenuSection& Section = MaterialLayerAssetMenu->FindOrAddSection(TEXT("GetAssetActions"));
+			Section.AddDynamicEntry(
+				TEXT("DreamShader.MaterialLayerAssetActions"),
+				FNewToolMenuSectionDelegate::CreateSP(AsShared(), &FDreamShaderEditorBridge::PopulateMaterialFunctionAssetMenu));
+		}
+		if (UToolMenu* MaterialLayerBlendAssetMenu = UE::ContentBrowser::ExtendToolMenu_AssetContextMenu(UMaterialFunctionMaterialLayerBlend::StaticClass()))
+		{
+			FToolMenuSection& Section = MaterialLayerBlendAssetMenu->FindOrAddSection(TEXT("GetAssetActions"));
+			Section.AddDynamicEntry(
+				TEXT("DreamShader.MaterialLayerBlendAssetActions"),
+				FNewToolMenuSectionDelegate::CreateSP(AsShared(), &FDreamShaderEditorBridge::PopulateMaterialFunctionAssetMenu));
+		}
 
 		if (UToolMenu* MaterialAssetMenu = UE::ContentBrowser::ExtendToolMenu_AssetContextMenu(UMaterial::StaticClass()))
 		{
@@ -5421,7 +4365,7 @@ namespace UE::DreamShader::Editor::Private
 	void FDreamShaderEditorBridge::PopulateMaterialFunctionAssetMenu(FToolMenuSection& InSection)
 	{
 		const UContentBrowserAssetContextMenuContext* Context = UContentBrowserAssetContextMenuContext::FindContextWithAssets(InSection);
-		if (!Context || Context->SelectedAssets.Num() != 1 || !Context->SelectedAssets[0].IsInstanceOf(UMaterialFunction::StaticClass()))
+		if (!Context || Context->SelectedAssets.Num() != 1)
 		{
 			return;
 		}
@@ -5632,12 +4576,12 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		ExportMaterialExpressionManifest();
-		ExportDreamShaderSettingsManifest();
+		FDreamShaderWorkspaceService::ExportMaterialExpressionManifest();
+		FDreamShaderWorkspaceService::ExportDreamShaderSettingsManifest();
 
 		FString WorkspaceFilePath;
 		FString Error;
-		if (!WriteDreamShaderWorkspaceFile(WorkspaceFilePath, Error))
+		if (!FDreamShaderWorkspaceService::WriteDreamShaderWorkspaceFile(WorkspaceFilePath, Error))
 		{
 			ShowDreamShaderNotification(
 				FText::FromString(FString::Printf(TEXT("DreamShader failed to create workspace: %s"), *Error)),
@@ -5646,7 +4590,7 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		if (LaunchVSCodeWorkspace(WorkspaceFilePath))
+		if (FDreamShaderEditorLaunchUtils::LaunchVSCodeWorkspace(WorkspaceFilePath))
 		{
 			ShowDreamShaderNotification(
 				FText::FromString(FString::Printf(TEXT("Opened DreamShader workspace in VSCode: %s"), *WorkspaceFilePath)),
@@ -5664,7 +4608,7 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		if (LaunchTextFileWithNotepad(WorkspaceFilePath))
+		if (FDreamShaderEditorLaunchUtils::LaunchTextFileWithNotepad(WorkspaceFilePath))
 		{
 			ShowDreamShaderNotification(
 				FText::FromString(FString::Printf(TEXT("Opened DreamShader workspace in Notepad: %s"), *WorkspaceFilePath)),
@@ -5690,39 +4634,31 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		FDreamShaderGraphDecompiler Decompiler;
-		FString SourceText;
-		FString Error;
-		if (!Decompiler.DecompileMaterial(MaterialAsset, MakeDecompiledAssetName(MaterialAsset, TEXT("Materials")), SourceText, Error))
+		FDreamShaderDecompileService DecompileService(GetGraphDecompiler());
+		UE::DreamShader::Editor::FDreamShaderDecompileRequest Request;
+		Request.Asset = MaterialAsset;
+		const UE::DreamShader::Editor::FDreamShaderDecompileResult Result = DecompileService.DecompileAsset(Request);
+		if (!Result.bSucceeded)
 		{
 			ShowDreamShaderNotification(
-				FText::FromString(FString::Printf(TEXT("DreamShader failed to export DSM: %s"), *Error)),
+				FText::FromString(FString::Printf(TEXT("DreamShader failed to export DSM: %s"), *Result.Error)),
 				SNotificationItem::CS_Fail);
-			UE_LOG(LogDreamShader, Warning, TEXT("Failed to export Material '%s' to DSM: %s"), *MaterialAsset->GetPathName(), *Error);
+			UE_LOG(LogDreamShader, Warning, TEXT("Failed to export Material '%s' to DSM: %s"), *MaterialAsset->GetPathName(), *Result.Error);
 			return;
 		}
 
-		const FString SourceFilePath = MakeDecompiledMaterialFilePath(MaterialAsset);
-		const FString SourceDirectory = FPaths::GetPath(SourceFilePath);
-		if (!IFileManager::Get().MakeDirectory(*SourceDirectory, true))
+		const FString SourceFilePath = Result.OutputFilePath;
+		FString SaveError;
+		if (!FDecompiledSourceWriter::Save(Result, SaveError))
 		{
 			ShowDreamShaderNotification(
-				FText::FromString(FString::Printf(TEXT("DreamShader failed to create directory: %s"), *SourceDirectory)),
+				FText::FromString(SaveError),
 				SNotificationItem::CS_Fail);
-			UE_LOG(LogDreamShader, Warning, TEXT("Failed to create decompiled Material directory '%s'."), *SourceDirectory);
+			UE_LOG(LogDreamShader, Warning, TEXT("Failed to write decompiled Material DSM file '%s': %s"), *SourceFilePath, *SaveError);
 			return;
 		}
 
-		if (!FFileHelper::SaveStringToFile(SourceText, *SourceFilePath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
-		{
-			ShowDreamShaderNotification(
-				FText::FromString(FString::Printf(TEXT("DreamShader failed to write DSM file: %s"), *SourceFilePath)),
-				SNotificationItem::CS_Fail);
-			UE_LOG(LogDreamShader, Warning, TEXT("Failed to write decompiled Material DSM file '%s'."), *SourceFilePath);
-			return;
-		}
-
-		if (!LaunchTextFileInPreferredEditor(SourceFilePath))
+		if (!FDreamShaderEditorLaunchUtils::LaunchTextFileInPreferredEditor(SourceFilePath))
 		{
 			ShowDreamShaderNotification(
 				FText::FromString(FString::Printf(TEXT("Exported DSM but could not open it: %s"), *SourceFilePath)),
@@ -5748,39 +4684,31 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		FDreamShaderGraphDecompiler Decompiler;
-		FString SourceText;
-		FString Error;
-		if (!Decompiler.DecompileFunction(Function, MakeDecompiledAssetName(Function, TEXT("Functions")), SourceText, Error))
+		FDreamShaderDecompileService DecompileService(GetGraphDecompiler());
+		UE::DreamShader::Editor::FDreamShaderDecompileRequest Request;
+		Request.Asset = Function;
+		const UE::DreamShader::Editor::FDreamShaderDecompileResult Result = DecompileService.DecompileAsset(Request);
+		if (!Result.bSucceeded)
 		{
 			ShowDreamShaderNotification(
-				FText::FromString(FString::Printf(TEXT("DreamShader failed to export DSF: %s"), *Error)),
+				FText::FromString(FString::Printf(TEXT("DreamShader failed to export DSF: %s"), *Result.Error)),
 				SNotificationItem::CS_Fail);
-			UE_LOG(LogDreamShader, Warning, TEXT("Failed to export MaterialFunction '%s' to DSF: %s"), *Function->GetPathName(), *Error);
+			UE_LOG(LogDreamShader, Warning, TEXT("Failed to export MaterialFunction '%s' to DSF: %s"), *Function->GetPathName(), *Result.Error);
 			return;
 		}
 
-		const FString SourceFilePath = MakeDecompiledFunctionFilePath(Function);
-		const FString SourceDirectory = FPaths::GetPath(SourceFilePath);
-		if (!IFileManager::Get().MakeDirectory(*SourceDirectory, true))
+		const FString SourceFilePath = Result.OutputFilePath;
+		FString SaveError;
+		if (!FDecompiledSourceWriter::Save(Result, SaveError))
 		{
 			ShowDreamShaderNotification(
-				FText::FromString(FString::Printf(TEXT("DreamShader failed to create directory: %s"), *SourceDirectory)),
+				FText::FromString(SaveError),
 				SNotificationItem::CS_Fail);
-			UE_LOG(LogDreamShader, Warning, TEXT("Failed to create decompiled MaterialFunction directory '%s'."), *SourceDirectory);
+			UE_LOG(LogDreamShader, Warning, TEXT("Failed to write decompiled MaterialFunction DSF file '%s': %s"), *SourceFilePath, *SaveError);
 			return;
 		}
 
-		if (!FFileHelper::SaveStringToFile(SourceText, *SourceFilePath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
-		{
-			ShowDreamShaderNotification(
-				FText::FromString(FString::Printf(TEXT("DreamShader failed to write DSF file: %s"), *SourceFilePath)),
-				SNotificationItem::CS_Fail);
-			UE_LOG(LogDreamShader, Warning, TEXT("Failed to write decompiled MaterialFunction DSF file '%s'."), *SourceFilePath);
-			return;
-		}
-
-		if (!LaunchTextFileInPreferredEditor(SourceFilePath))
+		if (!FDreamShaderEditorLaunchUtils::LaunchTextFileInPreferredEditor(SourceFilePath))
 		{
 			ShowDreamShaderNotification(
 				FText::FromString(FString::Printf(TEXT("Exported DSF but could not open it: %s"), *SourceFilePath)),
@@ -5853,7 +4781,7 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		const FString DefinitionFilePath = MakeVirtualFunctionDefinitionFilePath(Function);
+		const FString DefinitionFilePath = FDreamShaderVirtualFunctionService::MakeDefinitionFilePath(Function);
 		const FString DefinitionDirectory = FPaths::GetPath(DefinitionFilePath);
 		if (!IFileManager::Get().MakeDirectory(*DefinitionDirectory, true))
 		{
@@ -5873,7 +4801,7 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		if (!LaunchTextFileInPreferredEditor(DefinitionFilePath))
+		if (!FDreamShaderEditorLaunchUtils::LaunchTextFileInPreferredEditor(DefinitionFilePath))
 		{
 			ShowDreamShaderNotification(
 				FText::FromString(FString::Printf(TEXT("Created VirtualFunction file but could not open it: %s"), *DefinitionFilePath)),
@@ -5909,7 +4837,10 @@ namespace UE::DreamShader::Editor::Private
 			return;
 		}
 
-		if (!LaunchTextFileInPreferredEditor(ExistingDefinition.SourceFilePath, ExistingDefinition.Line, ExistingDefinition.Column))
+		if (!FDreamShaderEditorLaunchUtils::LaunchTextFileInPreferredEditor(
+			ExistingDefinition.SourceFilePath,
+			ExistingDefinition.Line,
+			ExistingDefinition.Column))
 		{
 			ShowDreamShaderNotification(
 				FText::FromString(FString::Printf(TEXT("DreamShader could not open VirtualFunction file: %s"), *ExistingDefinition.SourceFilePath)),
@@ -5952,7 +4883,7 @@ namespace UE::DreamShader::Editor::Private
 
 		FString CallText;
 		FString Error;
-		if (!BuildVirtualFunctionCallTextFromSignature(
+		if (!FDreamShaderVirtualFunctionService::BuildCallTextFromSignature(
 			ExistingDefinition.FunctionName,
 			ExistingDefinition.Inputs,
 			ExistingDefinition.Outputs,
@@ -6042,20 +4973,7 @@ namespace UE::DreamShader::Editor::Private
 
 	void FDreamShaderEditorBridge::RebuildDependencyGraph()
 	{
-		HeaderDependentsByFile.Reset();
-
-		TArray<FString> MaterialFiles;
-		FindProjectMaterialSourceFiles(MaterialFiles);
-		for (const FString& MaterialFile : MaterialFiles)
-		{
-			TSet<FString> Dependencies;
-			TSet<FString> VisitedFiles;
-			CollectHeaderDependenciesRecursive(MaterialFile, Dependencies, VisitedFiles);
-			for (const FString& HeaderFile : Dependencies)
-			{
-				HeaderDependentsByFile.FindOrAdd(HeaderFile).Add(MaterialFile);
-			}
-		}
+		FDreamShaderDependencyGraphService::RebuildMaterialDependencyGraph(HeaderDependentsByFile);
 	}
 
 	void FDreamShaderEditorBridge::SyncVirtualFunctionDefinitions()
@@ -6068,7 +4986,7 @@ namespace UE::DreamShader::Editor::Private
 		};
 
 		TArray<FString> SourceFiles;
-		FindProjectDreamShaderSourceFiles(SourceFiles);
+		FDreamShaderSourceFileUtils::FindProjectDreamShaderSourceFiles(SourceFiles);
 
 		int32 ScannedDefinitionCount = 0;
 		int32 UpdatedDefinitionCount = 0;
@@ -6078,7 +4996,7 @@ namespace UE::DreamShader::Editor::Private
 		{
 			FString SourceText;
 			TArray<FVirtualFunctionDefinitionLocation> Locations;
-			TArray<FDiagnosticRecord> Diagnostics;
+			TArray<FDreamShaderDiagnosticRecord> Diagnostics;
 			CollectVirtualFunctionDefinitionLocationsFromFile(SourceFile, Locations, &SourceText, &Diagnostics);
 
 			TArray<FVirtualFunctionReplacement> Replacements;
@@ -6194,28 +5112,14 @@ namespace UE::DreamShader::Editor::Private
 		}
 	}
 
-	void FDreamShaderEditorBridge::SetDiagnostics(const FString& SourceFilePath, TArray<FDiagnosticRecord>&& Diagnostics)
+	void FDreamShaderEditorBridge::SetDiagnostics(const FString& SourceFilePath, TArray<FDreamShaderDiagnosticRecord>&& Diagnostics)
 	{
-		const FString NormalizedPath = UE::DreamShader::NormalizeSourceFilePath(SourceFilePath);
-		DiagnosticsByFile.Remove(NormalizedPath);
-		if (Diagnostics.IsEmpty())
-		{
-			return;
-		}
-
-		for (FDiagnosticRecord& Diagnostic : Diagnostics)
-		{
-			const FString DiagnosticFilePath = Diagnostic.FilePath.IsEmpty()
-				? NormalizedPath
-				: UE::DreamShader::NormalizeSourceFilePath(Diagnostic.FilePath);
-			Diagnostic.FilePath.Reset();
-			DiagnosticsByFile.FindOrAdd(DiagnosticFilePath).Add(MoveTemp(Diagnostic));
-		}
+		DiagnosticsStore.SetDiagnostics(SourceFilePath, MoveTemp(Diagnostics));
 	}
 
 	void FDreamShaderEditorBridge::ClearDiagnostics(const FString& SourceFilePath)
 	{
-		DiagnosticsByFile.Remove(UE::DreamShader::NormalizeSourceFilePath(SourceFilePath));
+		DiagnosticsStore.ClearDiagnostics(SourceFilePath);
 	}
 
 	void FDreamShaderEditorBridge::ClearDiagnosticsForSourceAndDependencies(const FString& SourceFilePath)
@@ -6224,7 +5128,7 @@ namespace UE::DreamShader::Editor::Private
 
 		TSet<FString> Dependencies;
 		TSet<FString> VisitedFiles;
-		CollectHeaderDependenciesRecursive(SourceFilePath, Dependencies, VisitedFiles);
+		FDreamShaderDependencyGraphService::CollectHeaderDependenciesRecursive(SourceFilePath, Dependencies, VisitedFiles);
 		for (const FString& HeaderFile : Dependencies)
 		{
 			ClearDiagnostics(HeaderFile);
@@ -6233,82 +5137,7 @@ namespace UE::DreamShader::Editor::Private
 
 	void FDreamShaderEditorBridge::UpdateDiagnosticsFile() const
 	{
-		TSharedRef<FJsonObject> RootObject = MakeShared<FJsonObject>();
-		RootObject->SetNumberField(TEXT("version"), 1);
-		RootObject->SetStringField(TEXT("updatedAtUtc"), FDateTime::UtcNow().ToIso8601());
-
-		TArray<TSharedPtr<FJsonValue>> FileEntries;
-		for (const TPair<FString, TArray<FDiagnosticRecord>>& Pair : DiagnosticsByFile)
-		{
-			TSharedRef<FJsonObject> FileObject = MakeShared<FJsonObject>();
-			FileObject->SetStringField(TEXT("path"), Pair.Key);
-
-			TArray<TSharedPtr<FJsonValue>> DiagnosticValues;
-			for (const FDiagnosticRecord& Diagnostic : Pair.Value)
-			{
-				AddDiagnosticJson(DiagnosticValues, Diagnostic);
-			}
-
-			FileObject->SetArrayField(TEXT("diagnostics"), DiagnosticValues);
-			FileEntries.Add(MakeShared<FJsonValueObject>(FileObject));
-		}
-
-		RootObject->SetArrayField(TEXT("files"), FileEntries);
-
-		FString OutputText;
-		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&OutputText);
-		FJsonSerializer::Serialize(RootObject, Writer);
-		FFileHelper::SaveStringToFile(OutputText, *GetDiagnosticsFilePath(), FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM);
-	}
-
-	TArray<FDreamShaderEditorBridge::FDiagnosticRecord> FDreamShaderEditorBridge::BuildErrorDiagnostics(
-		const FString& SourceFilePath,
-		const FString& ErrorMessage) const
-	{
-		TArray<FDiagnosticRecord> Diagnostics;
-
-		TArray<FString> Lines;
-		ErrorMessage.ParseIntoArrayLines(Lines, false);
-		if (Lines.IsEmpty())
-		{
-			Lines.Add(ErrorMessage);
-		}
-
-		const FString PathPrefix = UE::DreamShader::NormalizeSourceFilePath(SourceFilePath) + TEXT(": ");
-		for (FString Line : Lines)
-		{
-			FString DiagnosticFilePath;
-			int32 DiagnosticLine = 1;
-			int32 DiagnosticColumn = 1;
-			FString DiagnosticMessage;
-			if (TryParseErrorLocation(Line, DiagnosticFilePath, DiagnosticLine, DiagnosticColumn, DiagnosticMessage))
-			{
-				FDiagnosticRecord& Diagnostic = Diagnostics.AddDefaulted_GetRef();
-				Diagnostic.FilePath = DiagnosticFilePath;
-				Diagnostic.Message = DiagnosticMessage;
-				Diagnostic.Detail = Line;
-				Diagnostic.Stage = TEXT("generate");
-				Diagnostic.Code = TEXT("generate-error");
-				Diagnostic.Source = TEXT("DreamShader Generate");
-				Diagnostic.Line = DiagnosticLine;
-				Diagnostic.Column = DiagnosticColumn;
-				continue;
-			}
-
-			if (Line.StartsWith(PathPrefix))
-			{
-				Line.RightChopInline(PathPrefix.Len(), EAllowShrinking::No);
-			}
-
-			FDiagnosticRecord& Diagnostic = Diagnostics.AddDefaulted_GetRef();
-			Diagnostic.Message = Line;
-			Diagnostic.Detail = Line;
-			Diagnostic.Stage = TEXT("generate");
-			Diagnostic.Code = TEXT("generate-error");
-			Diagnostic.Source = TEXT("DreamShader Generate");
-		}
-
-		return Diagnostics;
+		DiagnosticsStore.WriteToFile(GetDiagnosticsFilePath());
 	}
 }
 
@@ -6348,7 +5177,11 @@ int32 UDreamShaderCommandlet::Main(const FString& Params)
 	if (Command.Equals(TEXT("decompile"), ESearchCase::IgnoreCase)
 		|| Command.Equals(TEXT("export"), ESearchCase::IgnoreCase))
 	{
-		return UE::DreamShader::Editor::Private::RunDreamShaderDecompileCommandlet(Tokens, Switches, ParamValues) ? 0 : 1;
+		return UE::DreamShader::Editor::Private::RunDreamShaderDecompileCommandlet(
+			Tokens,
+			Switches,
+			ParamValues,
+			UE::DreamShader::Editor::Private::GetGraphDecompiler()) ? 0 : 1;
 	}
 
 	UE_LOG(LogDreamShader, Error, TEXT("Unknown DreamShader command '%s'.\n%s"), *Command, UE::DreamShader::Editor::Private::GetDreamShaderCommandletUsage());

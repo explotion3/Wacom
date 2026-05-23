@@ -29,6 +29,7 @@ namespace UE::DreamShader::Private
 	bool SplitTopLevelAssignment(const FString& InText, FString& OutLeft, FString& OutRight);
 	bool SplitDeclarationTypeAndName(const FString& InText, FString& OutTypeToken, FString& OutNameToken);
 	FString Unquote(const FString& InValue);
+	FString UnescapeDreamShaderStringLiteral(const FString& InValue);
 	bool ParseScalarLiteral(const FString& InText, double& OutValue);
 	bool ParseIntegerLiteral(const FString& InText, int32& OutValue);
 	bool ParseVectorLiteral(const FString& InText, FLinearColor& OutColor);

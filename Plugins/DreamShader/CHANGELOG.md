@@ -1,5 +1,17 @@
 # DreamShader ChangeLog
 
+## 1.3.7 - 2026-05-18
+
+### Decompiler
+
+- Added reflected literal property export for generic `UE.Expression(...)` decompilation so unsupported `MaterialExpression` nodes retain more editable state.
+- Preserved connected `TextureSampleParameter2D` graph inputs such as UV coordinates by exporting connected sample parameters as graph expressions instead of plain `Properties` declarations.
+- Fixed decompiled `MaterialExpressionCustom` imports with dynamic named inputs and custom output type metadata.
+
+### Performance
+
+- Improved import performance for very large decompiled materials by reducing per-node package dirtying, throttling progress text updates, and skipping automatic layout on large generated graphs.
+
 ## 1.3.6 - 2026-05-12
 
 ### Build Fixes
