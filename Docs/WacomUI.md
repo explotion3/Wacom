@@ -29,7 +29,7 @@ UI 不直接修改战斗或 Run 状态。UI 读取 Snapshot、ViewData 或 ViewM
 | 背包 | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图，私有 `FWacomBackpackCommandFlow` 编排 `MoveInstance / DeleteCardForGoldByInstance / SetSpecialZoneCardBattleEnabled`、Toast 和 Confirm |
 | 商店 | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 `FWacomShopScreenFlow` 编排 `PurchaseShopOffer / EndShopVisit` 和 Toast |
 | 探索事件 | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 `FWacomRunEventScreenFlow` 编排 `ChooseRunEventOptionWithResult / EndRunEvent` 和 Toast |
-| 战斗 | `FBattleSnapshot`、`FBattleEvent`、BattleSession ViewData | `UBattleHUD` 统一调 `Session->SubmitCommand`；BattleHUD 本轮不抽 flow helper |
+| 战斗 | `FBattleSnapshot`、`FBattleEvent`、BattleSession ViewData | `UBattleHUD` 接收玩家意图，私有 BattleHUD flow helper 编排命令提交、目标选择、事件日志和击倒弹窗 |
 
 Widget 可以有 C++ fallback 布局，但 C++ 的职责是协议、生命周期和兜底显示；正式视觉由 WBP 承接。
 复杂 Widget 的流程逻辑应收口到 `WacomApp/Private` 的 command flow / coordinator helper。Screen 负责 View、CommonUI 生命周期、绑定和重建；helper 负责命令编排、确认弹窗、Toast 和关闭访问等副作用。
@@ -276,7 +276,7 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 <a id="wacomui-battle-ui"></a>
 ## §8 战斗 UI
 
-战斗 UI 使用 Snapshot + Controller 推送模型，不走 Run MVVM。本轮 Widget 流程逻辑收口不包含 BattleHUD；`UBattleHUD` 仍保留战斗命令出口职责。
+战斗 UI 使用 Snapshot + Controller 推送模型，不走 Run MVVM。`UBattleHUD` 保留 WBP 绑定、生命周期、Snapshot 刷新和玩家意图入口；命令提交、目标选择、事件消费 / 日志 / 击倒弹窗编排收口到 `WacomApp/Private/UI/Battle` 的 BattleHUD flow helper。
 
 规则合法性和状态变更见 [WacomBattle.md](./WacomBattle.md)，战后结算见 [WacomRun §8](./WacomRun.md#wacomrun-battle-settlement)，WBP 制作合约见 [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md)。
 
@@ -287,11 +287,13 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 - `FBattleSnapshot` 是值类型快照，适合一次性读当前战斗状态。
 - 动态手牌和敌方部位列表由 HUD / Panel 直接重建更简单。
 - C++ fallback BattleHUD 布局由私有 `FBattleHUDFallbackLayoutBuilder` 搭建；WBP 绑定字段、命令入口和刷新流程仍保留在 `UBattleHUD`。
+- `FWacomBattleHUDCommandFlow / TargetingFlow / EventFlow` 只在 `WacomApp/Private` 内部使用，不新增 Blueprint 或跨模块 public API。
 
 命令出口：
 
 - 子 Widget 只发委托，不直接调 `Session->SubmitCommand()`。
-- `UBattleHUD` 是战斗 UI 命令出口：PlayCard、Wait、EndTurn、KnockdownChoice 经它提交。TargetSelect 是 HUD 管理的 UI 状态，选定目标后再转成 PlayCard command。
+- `UBattleHUD` 是战斗 UI 命令出口：PlayCard、Wait、EndTurn、KnockdownChoice 仍经它的 public 玩家意图入口进入；具体 `Session->SubmitCommand()` 和命令后收尾由 private command flow 执行。
+- TargetSelect 是 HUD 持有的 UI 状态，目标选择 flow 负责状态转换和 `FBattleTargetSelectionView` 构建。
 - Dialog 点击后回到 `BattleHUD->OnKnockdownChoiceSelected()`，Dialog 不直接改战斗状态。
 
 目标选择：

@@ -126,6 +126,7 @@ WBP 合同：
 - 详情面板为 `HitTestInvisible`，不抢点击。
 - `EventLogPanel` 是 BattleHUD 内部子组件，不通过 `UWacomGameUIManagerSubsystem::PushContentToLayer()` 打开。
 - WBP 中可用自定义按钮调用 `BattleHUD::ToggleBattleEventLog()`。
+- WBP 和子控件只调用 `BattleHUD` 的玩家意图入口；出牌、等待、结束回合、目标选择、事件消费和击倒弹窗编排由 C++ private flow helper 承担，不在 WBP 图里实现。
 
 PIE 检查：
 
@@ -233,6 +234,7 @@ WBP 合同：
 - `EnemyInfoBar` 每次 Snapshot 刷新会重建部位列表。
 - 它读取 `BattleHUD::BuildTargetSelectionView()`，再调用每个 `EnemyPartWidget::SetTargetable(bool)`。
 - `EnemyInfoBar` 不提交 Battle 命令；点击由部位 Widget 委托回传到 `BattleHUD->OnEnemyPartClickedByUser()`。
+- `BuildTargetSelectionView()` 是只读表现契约；WBP 不读取或修改 HUD 内部 pending 状态。
 
 ---
 

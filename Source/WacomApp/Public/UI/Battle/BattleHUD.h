@@ -17,6 +17,9 @@ class AWacomBattle3DHandPresenter;
 class AWacomBattleCardVisualActor;
 class APlayerController;
 struct FBattleHUDFallbackLayoutBuilder;
+struct FWacomBattleHUDCommandFlow;
+struct FWacomBattleHUDEventFlow;
+struct FWacomBattleHUDTargetingFlow;
 struct FBattleCommand;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
@@ -357,5 +360,8 @@ private:
 	void RestorePlayerControllerMouseEvents();
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
+	friend struct FWacomBattleHUDCommandFlow;
+	friend struct FWacomBattleHUDEventFlow;
+	friend struct FWacomBattleHUDTargetingFlow;
 	friend class UWacomBattleHUDDetailTest;
 };

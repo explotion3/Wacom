@@ -43,6 +43,18 @@ namespace WacomBattleWidgetSpec
 
 		return GWorld;
 	}
+
+	FGuid FindFirstHandCardByTargetMode(const FBattleSnapshot& Snapshot, ECardTargetMode TargetMode)
+	{
+		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+		{
+			if (Card.Definition && Card.Definition->TargetMode == TargetMode)
+			{
+				return Card.InstanceId;
+			}
+		}
+		return FGuid();
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -854,6 +866,112 @@ bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Paramete
 	const FBattleTargetSelectionView ClearedView = HUD->BuildTargetSelectionView();
 	TestFalse(TEXT("Cleared view is not selecting"), ClearedView.bIsTargetSelecting);
 	TestFalse(TEXT("Cleared view invalid pending card"), ClearedView.PendingCardInstanceId.IsValid());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardClickFlowSpec,
+	"Wacom.UI.Battle.HUDCardClickFlow",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardClickFlowSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeftHand = Fx.MakeNoopCard(0);
+	UCardDefinition* RightHand = Fx.MakeNoopCard(0);
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCardDefinition* NoTargetCard = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, { TargetCard, NoTargetCard });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetSession(Session);
+	HUD->TakeWidget();
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid NoTargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::None);
+	TestTrue(TEXT("Targeting card is in hand"), TargetCardId.IsValid());
+	TestTrue(TEXT("No-target card is in hand"), NoTargetCardId.IsValid());
+	if (!TargetCardId.IsValid() || !NoTargetCardId.IsValid())
+	{
+		return false;
+	}
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("Targeting card enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestEqual(TEXT("Targeting card becomes pending"), HUD->GetPendingTargetingCardId(), TargetCardId);
+
+	const int32 VersionBeforeNoTarget = Session->BuildSnapshot().Version;
+	HUD->OnCardClickedByUser(NoTargetCardId);
+	TestEqual(TEXT("No-target card returns/remains idle after submit"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestFalse(TEXT("No-target submit leaves no pending card"), HUD->GetPendingTargetingCardId().IsValid());
+	TestTrue(TEXT("No-target card submit changes battle state"),
+		Session->BuildSnapshot().Version > VersionBeforeNoTarget);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec,
+	"Wacom.UI.Battle.HUDWaitEndTurnCancelTargetSelect",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+
+	{
+		UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+		TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+		HUD->SetSession(Session);
+		HUD->TakeWidget();
+
+		HUD->SetTargetSelectionStateForTest(FGuid::NewGuid());
+		TestEqual(TEXT("Wait precondition target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+		const int32 WaitValueBefore = Session->BuildSnapshot().CurrentWaitValue;
+
+		HUD->OnWaitRequested();
+
+		TestEqual(TEXT("Wait cancels target select and returns idle"), HUD->GetUIState(), EBattleUIState::Idle);
+		TestFalse(TEXT("Wait clears pending target card"), HUD->GetPendingTargetingCardId().IsValid());
+		TestEqual(TEXT("Wait command still resolves"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore + 1);
+	}
+
+	{
+		FWacomBattleFixture SecondFx;
+		UCharacterDefinition* SecondCharacter = SecondFx.MakeCharacter(
+			SecondFx.MakeNoopCard(0),
+			SecondFx.MakeNoopCard(0),
+			{ SecondFx.MakeNoopCard(0), SecondFx.MakeNoopCard(0), SecondFx.MakeNoopCard(0) });
+		UEnemyDefinition* SecondEnemy = SecondFx.MakeSinglePartEnemy(20, 5, 0);
+		UBattleSession* Session = SecondFx.CreateSession(SecondCharacter, SecondEnemy, 1);
+		TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+		HUD->SetSession(Session);
+		HUD->TakeWidget();
+
+		HUD->SetTargetSelectionStateForTest(FGuid::NewGuid());
+		TestEqual(TEXT("EndTurn precondition target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+		const FBattleSnapshot SnapshotBefore = Session->BuildSnapshot();
+
+		HUD->OnEndTurnRequested();
+
+		TestEqual(TEXT("EndTurn cancels target select and returns idle"), HUD->GetUIState(), EBattleUIState::Idle);
+		TestFalse(TEXT("EndTurn clears pending target card"), HUD->GetPendingTargetingCardId().IsValid());
+		TestTrue(TEXT("EndTurn command still resolves"),
+			Session->BuildSnapshot().Version > SnapshotBefore.Version);
+	}
 
 	return true;
 }

@@ -12,14 +12,14 @@
 #include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/PlayerStatusBar.h"
-#include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
+#include "UI/Battle/WacomBattleHUDCommandFlow.h"
+#include "UI/Battle/WacomBattleHUDEventFlow.h"
+#include "UI/Battle/WacomBattleHUDTargetingFlow.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Common/PileCountView.h"
-#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
-#include "UI/Foundation/WacomUITags.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -32,13 +32,9 @@
 #include "Input/UIActionBindingHandle.h"
 #include "Input/CommonUIInputSettings.h"
 
-#include "Cards/CardDefinition.h"
-#include "Commands/BattleCommand.h"
-#include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEvent.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
-#include "Snapshots/EnemySnapshot.h"
 #include "Types/WacomEnums.h"
 
 namespace
@@ -212,50 +208,7 @@ TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
 
 FBattleTargetSelectionView UBattleHUD::BuildTargetSelectionView() const
 {
-	FBattleTargetSelectionView View;
-	View.bIsTargetSelecting = UIState == EBattleUIState::TargetSelect && PendingTargetingCardId.IsValid();
-	View.PendingCardInstanceId = View.bIsTargetSelecting ? PendingTargetingCardId : FGuid();
-
-	const UBattleSession* S = GetSession();
-	if (!S)
-	{
-		return View;
-	}
-
-	const FBattleSnapshot Snap = S->BuildSnapshot();
-	View.TargetableParts.Reserve(Snap.Enemy.Parts.Num());
-	for (const FEnemyPartSnapshot& Part : Snap.Enemy.Parts)
-	{
-		FBattleTargetablePartView PartView;
-		PartView.PartInstanceId = Part.InstanceId;
-		if (Part.Definition)
-		{
-			PartView.PartId = Part.Definition->PartId;
-			PartView.PartName = Part.Definition->DisplayName.IsEmpty()
-				? FText::FromName(Part.Definition->PartId)
-				: Part.Definition->DisplayName;
-		}
-
-		if (!View.bIsTargetSelecting)
-		{
-			PartView.bTargetable = false;
-			PartView.DisabledReason = FName(TEXT("NotTargetSelecting"));
-		}
-		else if (Part.bDestroyed)
-		{
-			PartView.bTargetable = false;
-			PartView.DisabledReason = FName(TEXT("PartDestroyed"));
-		}
-		else
-		{
-			PartView.bTargetable = true;
-			PartView.DisabledReason = NAME_None;
-		}
-
-		View.TargetableParts.Add(PartView);
-	}
-
-	return View;
+	return FWacomBattleHUDTargetingFlow::BuildTargetSelectionView(*this);
 }
 
 void UBattleHUD::ToggleBattleEventLog()
@@ -303,178 +256,44 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 
 void UBattleHUD::OnCardClickedByUser(const FGuid& CardInstanceId)
 {
-	HideCardDetailPanel();
-
-	if (UIState == EBattleUIState::BattleEnd || UIState == EBattleUIState::Resolving)
-	{
-		return;
-	}
-
-	UBattleSession* S = GetSession();
-	if (!S) { return; }
-
-	// 同一张牌在 TargetSelect 状态下再点一次 → 取消
-	if (UIState == EBattleUIState::TargetSelect && CardInstanceId == PendingTargetingCardId)
-	{
-		CancelTargetSelect();
-		return;
-	}
-
-	const FBattleSnapshot Snap = S->BuildSnapshot();
-	const FHandCardSnapshot* Card = nullptr;
-	for (const FHandCardSnapshot& C : Snap.Hand.Cards)
-	{
-		if (C.InstanceId == CardInstanceId) { Card = &C; break; }
-	}
-	if (!Card || !Card->Definition) { return; }
-	if (!Card->bIsPlayable) { return; }
-
-	switch (Card->Definition->TargetMode)
-	{
-	case ECardTargetMode::None:
-	case ECardTargetMode::Self:
-		// 立即出牌，无目标
-		SubmitPlayCard(CardInstanceId, FGuid());
-		break;
-
-	case ECardTargetMode::SingleEnemyPart:
-		// 进入目标选择
-		PendingTargetingCardId = CardInstanceId;
-		SetUIState(EBattleUIState::TargetSelect);
-		break;
-
-	case ECardTargetMode::AllEnemyParts:
-		// 无需选目标，直接打出
-		SubmitPlayCard(CardInstanceId, FGuid());
-		break;
-
-	case ECardTargetMode::HandCard:
-	default:
-		// 手卡目标尚未接入，忽略。
-		break;
-	}
+	FWacomBattleHUDTargetingFlow::HandleCardClicked(*this, CardInstanceId);
 }
 
 void UBattleHUD::OnEnemyPartClickedByUser(const FGuid& PartInstanceId)
 {
-	HideCardDetailPanel();
-
-	if (UIState != EBattleUIState::TargetSelect) { return; }
-	if (!PendingTargetingCardId.IsValid())       { return; }
-
-	const FGuid CardId = PendingTargetingCardId;
-	PendingTargetingCardId.Invalidate();
-
-	SubmitPlayCard(CardId, PartInstanceId);
+	FWacomBattleHUDTargetingFlow::HandleEnemyPartClicked(*this, PartInstanceId);
 }
 
 void UBattleHUD::OnWaitRequested()
 {
-	HideCardDetailPanel();
-
-	if (UIState == EBattleUIState::BattleEnd || UIState == EBattleUIState::Resolving) { return; }
-
-	// Wait 期间自动取消 TargetSelect
-	if (UIState == EBattleUIState::TargetSelect)
-	{
-		PendingTargetingCardId.Invalidate();
-	}
-
-	UBattleSession* S = GetSession();
-	if (!S) { return; }
-
-	const FWacomStatus Status = S->SubmitCommand(FBattleCommand::MakeWait());
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] Wait failed, code=%d"), (int32)Status.Code);
-		return;
-	}
-	AfterCommand();
+	FWacomBattleHUDCommandFlow::SubmitWait(*this);
 }
 
 void UBattleHUD::OnEndTurnRequested()
 {
-	HideCardDetailPanel();
-
-	if (UIState == EBattleUIState::BattleEnd || UIState == EBattleUIState::Resolving) { return; }
-
-	if (UIState == EBattleUIState::TargetSelect)
-	{
-		PendingTargetingCardId.Invalidate();
-	}
-
-	UBattleSession* S = GetSession();
-	if (!S) { return; }
-
-	const FWacomStatus Status = S->SubmitCommand(FBattleCommand::MakeEndTurn());
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] EndTurn failed, code=%d"), (int32)Status.Code);
-		return;
-	}
-	AfterCommand();
+	FWacomBattleHUDCommandFlow::SubmitEndTurn(*this);
 }
 
 void UBattleHUD::CancelTargetSelect()
 {
-	HideCardDetailPanel();
-
-	if (UIState != EBattleUIState::TargetSelect) { return; }
-	PendingTargetingCardId.Invalidate();
-	SetUIState(EBattleUIState::Idle);
+	FWacomBattleHUDTargetingFlow::CancelTargetSelect(*this);
 }
 
 void UBattleHUD::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
 {
-	HideCardDetailPanel();
-
-	if (Choice == EKnockdownChoice::None) { return; }
-
-	UBattleSession* S = GetSession();
-	if (!S) { return; }
-
-	const FWacomStatus Status = S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(Choice));
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] KnockdownChoice failed, code=%d detail=%s"),
-			(int32)Status.Code, *Status.Detail.ToString());
-		return;
-	}
-	// 走通用收尾路径：消费事件（包含连续 push 下一个 dialog 的 KnockdownChoiceRequested）
-	// + RefreshFromSnapshot（包含战斗结束广播 OnBattleEndedNative）
-	AfterCommand();
+	FWacomBattleHUDCommandFlow::SubmitKnockdownChoice(*this, Choice);
 }
 
 // ================ 内部 ================
 
 void UBattleHUD::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)
 {
-	HideCardDetailPanel();
-
-	UBattleSession* S = GetSession();
-	if (!S) { return; }
-
-	const FWacomStatus Status = S->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TargetPartId));
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCard failed, code=%d detail=%s"),
-			(int32)Status.Code, *Status.Detail.ToString());
-		// 保持当前状态机，允许玩家重试
-		return;
-	}
-	SetUIState(EBattleUIState::Idle);
-	AfterCommand();
+	FWacomBattleHUDCommandFlow::SubmitPlayCard(*this, CardId, TargetPartId);
 }
 
 void UBattleHUD::AfterCommand()
 {
-	HideCardDetailPanel();
-	ConsumeAndLogEvents();
-
-	UBattleSession* S = GetSession();
-	if (!S) { return; }
-
-	RefreshFromSnapshot(S->BuildSnapshot());
+	FWacomBattleHUDCommandFlow::AfterCommand(*this);
 }
 
 FVector2D UBattleHUD::ComputeCardDetailPanelPositionBeside(
@@ -761,136 +580,24 @@ void UBattleHUD::RestorePlayerControllerMouseEvents()
 	bSavedPlayerControllerMouseOverEvents = false;
 }
 
-namespace
-{
-	const TCHAR* HUDEventTypeToString(EBattleEventType T)
-	{
-		switch (T)
-		{
-		case EBattleEventType::BattleStarted:          return TEXT("BattleStarted");
-		case EBattleEventType::TurnStarted:            return TEXT("TurnStarted");
-		case EBattleEventType::CardsDrawn:             return TEXT("CardsDrawn");
-		case EBattleEventType::HandZoneChanged:        return TEXT("HandZoneChanged");
-		case EBattleEventType::CardPlayed:             return TEXT("CardPlayed");
-		case EBattleEventType::InitiativeHit:          return TEXT("InitiativeHit");
-		case EBattleEventType::ResistanceResolved:     return TEXT("ResistanceResolved");
-		case EBattleEventType::PerfectReleaseResolved: return TEXT("PerfectReleaseResolved");
-		case EBattleEventType::DamageDealt:            return TEXT("DamageDealt");
-		case EBattleEventType::StatusApplied:          return TEXT("StatusApplied");
-		case EBattleEventType::InitiativePushed:       return TEXT("InitiativePushed");
-		case EBattleEventType::WaitPerformed:          return TEXT("WaitPerformed");
-		case EBattleEventType::EnemyPartActed:         return TEXT("EnemyPartActed");
-		case EBattleEventType::EnemyPartHpEmptied:     return TEXT("EnemyPartHpEmptied");
-		case EBattleEventType::EnemyKnockdown:         return TEXT("EnemyKnockdown");
-		case EBattleEventType::KnockdownChoiceRequested: return TEXT("KnockdownChoiceRequested");
-		case EBattleEventType::KnockdownChoiceMade:    return TEXT("KnockdownChoiceMade");
-		case EBattleEventType::TurnEnded:              return TEXT("TurnEnded");
-		case EBattleEventType::PassiveTriggered:       return TEXT("PassiveTriggered");
-		case EBattleEventType::BattleEnded:            return TEXT("BattleEnded");
-		default:                                        return TEXT("?");
-		}
-	}
-}
-
 void UBattleHUD::ConsumeAndLogEvents()
 {
-	UBattleSession* S = GetSession();
-	if (!S) { return; }
-	const TArray<FBattleEvent> Events = S->ConsumeEvents();
-	for (const FBattleEvent& E : Events)
-	{
-		UE_LOG(LogTemp, Display,
-			TEXT("[BattleHUD] [#%d] %-22s Amount=%d Count=%d Actor=%s Card=%s Tag=%s"),
-			E.Sequence,
-			HUDEventTypeToString(E.Type),
-			E.Amount,
-			E.Count,
-			*E.ActorInstanceId.ToString(EGuidFormats::Short),
-			*E.CardInstanceId.ToString(EGuidFormats::Short),
-			*E.Tag.ToString());
-	}
-
-	// 分发到 EventToast（如果就位）
-	if (EventToast)
-	{
-		EventToast->EnqueueEvents(Events);
-	}
-
-	AppendBattleEventLogEntries(Events);
-
-	// 处理击倒事件请求：push KnockdownChoiceDialog 到 Modal 层。
-	for (const FBattleEvent& E : Events)
-	{
-		if (E.Type != EBattleEventType::KnockdownChoiceRequested) { continue; }
-
-		UGameInstance* GI = GetGameInstance();
-		UWacomGameUIManagerSubsystem* UIManager =
-			GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-		if (!UIManager) { continue; }
-
-		UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-			WacomUITags::UI_Layer_Modal.GetTag(),
-			UWacomKnockdownChoiceDialog::StaticClass());
-		UWacomKnockdownChoiceDialog* Dialog = Cast<UWacomKnockdownChoiceDialog>(Pushed);
-		if (!Dialog) { continue; }
-
-		UBattleSession* S2 = GetSession();
-		if (!S2)
-		{
-			continue;
-		}
-
-		const FKnockdownChoiceView ChoiceView = S2->BuildPendingKnockdownChoiceView();
-		if (!ChoiceView.bHasPendingChoice)
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[BattleHUD] KnockdownChoiceRequested received but no pending choice view"));
-			continue;
-		}
-
-		Dialog->SetContext(this, ChoiceView);
-	}
+	FWacomBattleHUDEventFlow::ConsumeAndLogEvents(*this);
 }
 
 void UBattleHUD::AppendBattleEventLogEntries(const TArray<FBattleEvent>& Events)
 {
-	TArray<FBattleEventPresentationView> VisibleEntries;
-	for (const FBattleEvent& E : Events)
-	{
-		FBattleEventPresentationView View = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(E);
-		if (!View.bShouldDisplay)
-		{
-			continue;
-		}
-		BattleEventLogHistory.Add(View);
-		VisibleEntries.Add(MoveTemp(View));
-	}
-	if (VisibleEntries.IsEmpty())
-	{
-		return;
-	}
-
-	TrimBattleEventLogHistory();
-	SyncBattleEventLogPanel();
+	FWacomBattleHUDEventFlow::AppendBattleEventLogEntries(*this, Events);
 }
 
 void UBattleHUD::TrimBattleEventLogHistory()
 {
-	const int32 SafeMaxEntries = FMath::Max(1, BattleEventLogMaxEntries);
-	if (BattleEventLogHistory.Num() > SafeMaxEntries)
-	{
-		BattleEventLogHistory.RemoveAt(0, BattleEventLogHistory.Num() - SafeMaxEntries);
-	}
+	FWacomBattleHUDEventFlow::TrimBattleEventLogHistory(*this);
 }
 
 void UBattleHUD::SyncBattleEventLogPanel()
 {
-	if (!EventLogPanel)
-	{
-		return;
-	}
-	EventLogPanel->MaxEntries = FMath::Max(1, BattleEventLogMaxEntries);
-	EventLogPanel->SetEventLogEntries(BattleEventLogHistory);
+	FWacomBattleHUDEventFlow::SyncBattleEventLogPanel(*this);
 }
 
 void UBattleHUD::HandleBattleEventLogButtonClicked()

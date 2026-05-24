@@ -247,6 +247,11 @@ public:
 		SetUIState(EBattleUIState::Idle);
 	}
 
+	void SetUIStateForTest(EBattleUIState NewState)
+	{
+		SetUIState(NewState);
+	}
+
 	bool ShowCardDetailForTest(UCardWidget* SourceWidget)
 	{
 		return ShowCardDetailForCardWidget(SourceWidget);
