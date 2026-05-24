@@ -7,6 +7,8 @@
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "UI/Foundation/WacomUITags.h"
 
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
 #include "Blueprint/UserWidget.h"
 #include "CommonActivatableWidget.h"
 #include "GameFramework/PlayerController.h"
@@ -82,6 +84,59 @@ namespace
 		return LoadedClass;
 	}
 
+	UClass* GetLoadedSoftWidgetClassChecked(
+		const TSoftClassPtr<UWacomActivatableWidget>& SoftClass,
+		UClass* ExpectedParentClass,
+		const TCHAR* LogContext,
+		const TCHAR* FieldName)
+	{
+		if (!ExpectedParentClass)
+		{
+			ExpectedParentClass = UWacomActivatableWidget::StaticClass();
+		}
+
+		UObject* LoadedObject = SoftClass.Get();
+		if (!LoadedObject)
+		{
+			LoadedObject = SoftClass.ToSoftObjectPath().ResolveObject();
+		}
+
+		UClass* LoadedClass = Cast<UClass>(LoadedObject);
+		if (!LoadedClass)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[UIManager] %s: %s 加载失败或不是 UClass：%s"),
+				LogContext, FieldName, *SoftClass.ToString());
+			return nullptr;
+		}
+
+		if (!LoadedClass->IsChildOf(ExpectedParentClass))
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[UIManager] %s: %s=%s 必须继承 %s"),
+				LogContext,
+				FieldName,
+				*LoadedClass->GetName(),
+				*ExpectedParentClass->GetName());
+			return nullptr;
+		}
+
+		return LoadedClass;
+	}
+
+	const FWacomUIWidgetClassEntry* FindWidgetClassEntry(
+		const UWacomUIDeveloperSettings* Settings,
+		const FGameplayTag& WidgetTag)
+	{
+		return Settings
+			? Settings->WidgetClasses.FindByPredicate(
+				[WidgetTag](const FWacomUIWidgetClassEntry& Entry)
+				{
+					return Entry.WidgetTag == WidgetTag;
+				})
+			: nullptr;
+	}
+
 	UClass* LoadFallbackClassChecked(
 		const TCHAR* ClassPath,
 		UClass* ExpectedParentClass,
@@ -153,6 +208,7 @@ void UWacomGameUIManagerSubsystem::HandleWorldCleanup(UWorld* World, bool bSessi
 	// 只清理属于被销毁 World 的 PrimaryLayout。
 	if (PrimaryLayout->GetWorld() == World)
 	{
+		CancelAllPendingAsyncPushes();
 		// 直接置空引用，不调 TearDown（World 正在销毁，Widget 可能已经无效）。
 		PrimaryLayout = nullptr;
 	}
@@ -160,6 +216,8 @@ void UWacomGameUIManagerSubsystem::HandleWorldCleanup(UWorld* World, bool bSessi
 
 void UWacomGameUIManagerSubsystem::TearDownPrimaryLayout()
 {
+	CancelAllPendingAsyncPushes();
+
 	if (!PrimaryLayout) { return; }
 
 	// 先清空所有 Stack 的 Widget，确保所有 Activatable 都 OnDeactivated，
@@ -263,13 +321,7 @@ TSubclassOf<UWacomActivatableWidget> UWacomGameUIManagerSubsystem::ResolveWidget
 	}
 
 	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
-	const FWacomUIWidgetClassEntry* MatchingEntry = Settings
-		? Settings->WidgetClasses.FindByPredicate(
-			[WidgetTag](const FWacomUIWidgetClassEntry& Entry)
-			{
-				return Entry.WidgetTag == WidgetTag;
-			})
-		: nullptr;
+	const FWacomUIWidgetClassEntry* MatchingEntry = FindWidgetClassEntry(Settings, WidgetTag);
 
 	if (!MatchingEntry)
 	{
@@ -330,7 +382,276 @@ TSubclassOf<UWacomAppToastWidget> UWacomGameUIManagerSubsystem::ResolveToastWidg
 	return UWacomAppToastWidget::StaticClass();
 }
 
+bool UWacomGameUIManagerSubsystem::HasPendingAsyncPushToLayer(FGameplayTag LayerTag) const
+{
+	return LayerTag.IsValid() && PendingAsyncWidgetPushes.Contains(LayerTag);
+}
+
+void UWacomGameUIManagerSubsystem::CancelPendingAsyncPushToLayer(FGameplayTag LayerTag)
+{
+	if (!LayerTag.IsValid())
+	{
+		return;
+	}
+
+	FPendingAsyncWidgetPush Pending;
+	if (!PendingAsyncWidgetPushes.RemoveAndCopyValue(LayerTag, Pending))
+	{
+		return;
+	}
+
+	if (Pending.Handle.IsValid())
+	{
+		Pending.Handle->CancelHandle();
+		Pending.Handle.Reset();
+	}
+}
+
+void UWacomGameUIManagerSubsystem::PushRegisteredWidgetToLayerAsync(FWacomAsyncWidgetPushRequest Request)
+{
+	if (!Request.LayerTag.IsValid())
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("InvalidLayerTag"));
+		return;
+	}
+	if (!Request.WidgetTag.IsValid())
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("InvalidWidgetTag"));
+		return;
+	}
+	if (!Request.FallbackClass)
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("MissingFallbackClass"));
+		return;
+	}
+	if (!PrimaryLayout)
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("MissingPrimaryLayout"));
+		return;
+	}
+	if (PendingAsyncWidgetPushes.Contains(Request.LayerTag))
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("LayerPending"));
+		return;
+	}
+
+	const FGameplayTag LayerTag = Request.LayerTag;
+	const int32 RequestId = NextAsyncPushRequestId++;
+	FPendingAsyncWidgetPush Pending;
+	Pending.RequestId = RequestId;
+	Pending.ExpectedPrimaryLayout = PrimaryLayout;
+	Pending.Request = MoveTemp(Request);
+	PendingAsyncWidgetPushes.Add(LayerTag, MoveTemp(Pending));
+
+	FPendingAsyncWidgetPush* StoredPendingForRequest = PendingAsyncWidgetPushes.Find(LayerTag);
+	if (!StoredPendingForRequest || StoredPendingForRequest->RequestId != RequestId)
+	{
+		return;
+	}
+	FWacomAsyncWidgetPushRequest& PendingRequest = StoredPendingForRequest->Request;
+
+	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
+	const FWacomUIWidgetClassEntry* MatchingEntry = FindWidgetClassEntry(Settings, PendingRequest.WidgetTag);
+	if (!MatchingEntry)
+	{
+		if (PendingRequest.bLogMissingEntry)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[UIManager] PushRegisteredWidgetToLayerAsync: 未找到 WidgetTag=%s 的 settings 注册，使用 fallback"),
+				*PendingRequest.WidgetTag.ToString());
+		}
+		CompleteAsyncWidgetPush(LayerTag, RequestId, PendingRequest.FallbackClass.Get());
+		return;
+	}
+
+	if (MatchingEntry->WidgetClass.IsNull())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[UIManager] PushRegisteredWidgetToLayerAsync: WidgetTag=%s 的 WidgetClass 为空，使用 fallback"),
+			*PendingRequest.WidgetTag.ToString());
+		CompleteAsyncWidgetPush(LayerTag, RequestId, PendingRequest.FallbackClass.Get());
+		return;
+	}
+
+	UClass* ExpectedParentClass = PendingRequest.FallbackClass
+		? PendingRequest.FallbackClass.Get()
+		: UWacomActivatableWidget::StaticClass();
+
+	if (MatchingEntry->WidgetClass.IsValid())
+	{
+		if (UClass* Loaded = GetLoadedSoftWidgetClassChecked(
+			MatchingEntry->WidgetClass,
+			ExpectedParentClass,
+			TEXT("PushRegisteredWidgetToLayerAsync"),
+			TEXT("Settings WidgetClass")))
+		{
+			CompleteAsyncWidgetPush(LayerTag, RequestId, Loaded);
+			return;
+		}
+
+		UE_LOG(LogTemp, Warning,
+			TEXT("[UIManager] PushRegisteredWidgetToLayerAsync: WidgetTag=%s Class=%s 无法使用，使用 fallback"),
+			*PendingRequest.WidgetTag.ToString(), *MatchingEntry->WidgetClass.ToString());
+		CompleteAsyncWidgetPush(LayerTag, RequestId, PendingRequest.FallbackClass.Get());
+		return;
+	}
+
+	const FSoftObjectPath WidgetClassPath = MatchingEntry->WidgetClass.ToSoftObjectPath();
+	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakThis(this);
+	TSharedPtr<FStreamableHandle> Handle = UAssetManager::GetStreamableManager().RequestAsyncLoad(
+		WidgetClassPath,
+		[WeakThis, LayerTag, RequestId]()
+		{
+			if (UWacomGameUIManagerSubsystem* StrongThis = WeakThis.Get())
+			{
+				StrongThis->HandleAsyncWidgetClassLoaded(LayerTag, RequestId);
+			}
+		},
+		FStreamableManager::AsyncLoadHighPriority,
+		/*bManageActiveHandle*/ false,
+		/*bStartStalled*/ false,
+		FString::Printf(TEXT("WacomAsyncPush:%s"), *PendingRequest.WidgetTag.ToString()));
+
+	if (FPendingAsyncWidgetPush* StoredPendingForHandle = PendingAsyncWidgetPushes.Find(LayerTag))
+	{
+		if (StoredPendingForHandle->RequestId == RequestId)
+		{
+			StoredPendingForHandle->Handle = MoveTemp(Handle);
+		}
+	}
+}
+
+void UWacomGameUIManagerSubsystem::HandleAsyncWidgetClassLoaded(FGameplayTag LayerTag, int32 RequestId)
+{
+	FPendingAsyncWidgetPush* Pending = PendingAsyncWidgetPushes.Find(LayerTag);
+	if (!Pending || Pending->RequestId != RequestId)
+	{
+		return;
+	}
+
+	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
+	const FWacomUIWidgetClassEntry* MatchingEntry = FindWidgetClassEntry(Settings, Pending->Request.WidgetTag);
+	UClass* ExpectedParentClass = Pending->Request.FallbackClass
+		? Pending->Request.FallbackClass.Get()
+		: UWacomActivatableWidget::StaticClass();
+
+	UClass* ResolvedClass = nullptr;
+	if (MatchingEntry && !MatchingEntry->WidgetClass.IsNull())
+	{
+		ResolvedClass = GetLoadedSoftWidgetClassChecked(
+			MatchingEntry->WidgetClass,
+			ExpectedParentClass,
+			TEXT("HandleAsyncWidgetClassLoaded"),
+			TEXT("Settings WidgetClass"));
+	}
+
+	if (!ResolvedClass)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[UIManager] HandleAsyncWidgetClassLoaded: WidgetTag=%s 加载后不可用，使用 fallback"),
+			*Pending->Request.WidgetTag.ToString());
+		ResolvedClass = Pending->Request.FallbackClass.Get();
+	}
+
+	CompleteAsyncWidgetPush(LayerTag, RequestId, ResolvedClass);
+}
+
+void UWacomGameUIManagerSubsystem::CancelAllPendingAsyncPushes()
+{
+	TArray<FGameplayTag> PendingLayerTags;
+	PendingAsyncWidgetPushes.GetKeys(PendingLayerTags);
+	for (const FGameplayTag& LayerTag : PendingLayerTags)
+	{
+		CancelPendingAsyncPushToLayer(LayerTag);
+	}
+	PendingAsyncWidgetPushes.Reset();
+}
+
+void UWacomGameUIManagerSubsystem::CompleteAsyncWidgetPush(
+	FGameplayTag LayerTag,
+	int32 RequestId,
+	TSubclassOf<UCommonActivatableWidget> WidgetClass)
+{
+	FWacomAsyncWidgetPushRequest Request;
+	TWeakObjectPtr<UWacomPrimaryGameLayout> ExpectedPrimaryLayout;
+	FPendingAsyncWidgetPush Pending;
+	if (FPendingAsyncWidgetPush* Found = PendingAsyncWidgetPushes.Find(LayerTag))
+	{
+		if (Found->RequestId != RequestId)
+		{
+			return;
+		}
+		Pending = MoveTemp(*Found);
+		PendingAsyncWidgetPushes.Remove(LayerTag);
+	}
+	else
+	{
+		return;
+	}
+
+	Request = MoveTemp(Pending.Request);
+	ExpectedPrimaryLayout = Pending.ExpectedPrimaryLayout;
+
+	if (!WidgetClass)
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("MissingResolvedClass"));
+		return;
+	}
+	if (!PrimaryLayout || ExpectedPrimaryLayout.Get() != PrimaryLayout)
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("StalePrimaryLayout"), WidgetClass);
+		return;
+	}
+	if (!Request.OwningPlayer.IsExplicitlyNull()
+		&& (!Request.OwningPlayer.IsValid() || PrimaryLayout->GetOwningPlayer() != Request.OwningPlayer.Get()))
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("StaleOwningPlayer"), WidgetClass);
+		return;
+	}
+	if (Request.CanPush && !Request.CanPush())
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("PrePushGuardRejected"), WidgetClass);
+		return;
+	}
+
+	UCommonActivatableWidget* Pushed = PushResolvedWidgetToLayer(Request.LayerTag, WidgetClass);
+	if (!Pushed)
+	{
+		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("PushFailed"), WidgetClass);
+		return;
+	}
+
+	CompleteAsyncWidgetPushResult(MoveTemp(Request), NAME_None, WidgetClass, Pushed);
+}
+
+void UWacomGameUIManagerSubsystem::CompleteAsyncWidgetPushResult(
+	FWacomAsyncWidgetPushRequest&& Request,
+	FName FailureReason,
+	TSubclassOf<UCommonActivatableWidget> ResolvedClass,
+	UCommonActivatableWidget* PushedWidget)
+{
+	FWacomAsyncWidgetPushResult Result;
+	Result.bSucceeded = FailureReason.IsNone() && PushedWidget != nullptr;
+	Result.LayerTag = Request.LayerTag;
+	Result.WidgetTag = Request.WidgetTag;
+	Result.ResolvedClass = ResolvedClass;
+	Result.PushedWidget = PushedWidget;
+	Result.FailureReason = FailureReason;
+
+	if (Request.OnComplete)
+	{
+		Request.OnComplete(Result);
+	}
+}
+
 UCommonActivatableWidget* UWacomGameUIManagerSubsystem::PushContentToLayer(
+	FGameplayTag LayerTag,
+	TSubclassOf<UCommonActivatableWidget> WidgetClass)
+{
+	return PushResolvedWidgetToLayer(LayerTag, WidgetClass);
+}
+
+UCommonActivatableWidget* UWacomGameUIManagerSubsystem::PushResolvedWidgetToLayer(
 	FGameplayTag LayerTag,
 	TSubclassOf<UCommonActivatableWidget> WidgetClass)
 {

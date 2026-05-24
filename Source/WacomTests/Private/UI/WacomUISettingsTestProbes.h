@@ -8,6 +8,8 @@
 #include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomActivatableWidget.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
+#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
+#include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "WacomUISettingsTestProbes.generated.h"
@@ -82,4 +84,34 @@ UCLASS()
 class UWacomUISettingsWrongParentWidgetProbe : public UUserWidget
 {
 	GENERATED_BODY()
+};
+
+UCLASS()
+class UWacomUISettingsPrimaryLayoutProbe : public UWacomPrimaryGameLayout
+{
+	GENERATED_BODY()
+};
+
+UCLASS()
+class UWacomUISettingsGameUIManagerProbe : public UWacomGameUIManagerSubsystem
+{
+	GENERATED_BODY()
+
+public:
+	UCommonActivatableWidget* LastPushedWidget = nullptr;
+	FGameplayTag LastLayerTag;
+	TSubclassOf<UCommonActivatableWidget> LastWidgetClass;
+
+protected:
+	virtual UCommonActivatableWidget* PushResolvedWidgetToLayer(
+		FGameplayTag LayerTag,
+		TSubclassOf<UCommonActivatableWidget> WidgetClass) override
+	{
+		LastLayerTag = LayerTag;
+		LastWidgetClass = WidgetClass;
+		LastPushedWidget = WidgetClass
+			? NewObject<UCommonActivatableWidget>(this, WidgetClass)
+			: nullptr;
+		return LastPushedWidget;
+	}
 };

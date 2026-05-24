@@ -13,6 +13,28 @@ class UCommonActivatableWidget;
 class UWacomActivatableWidget;
 class UWacomAppToastWidget;
 class UWacomPrimaryGameLayout;
+struct FStreamableHandle;
+
+struct WACOMAPP_API FWacomAsyncWidgetPushResult
+{
+	bool bSucceeded = false;
+	FGameplayTag LayerTag;
+	FGameplayTag WidgetTag;
+	TSubclassOf<UCommonActivatableWidget> ResolvedClass;
+	UCommonActivatableWidget* PushedWidget = nullptr;
+	FName FailureReason = NAME_None;
+};
+
+struct WACOMAPP_API FWacomAsyncWidgetPushRequest
+{
+	FGameplayTag LayerTag;
+	FGameplayTag WidgetTag;
+	TSubclassOf<UWacomActivatableWidget> FallbackClass;
+	TWeakObjectPtr<APlayerController> OwningPlayer;
+	TFunction<bool()> CanPush;
+	TFunction<void(const FWacomAsyncWidgetPushResult&)> OnComplete;
+	bool bLogMissingEntry = true;
+};
 
 /**
  * Wacom UI 管理 Subsystem。
@@ -25,7 +47,7 @@ class UWacomPrimaryGameLayout;
  * 设计要点：
  *   - 不写业务逻辑。调用方（GameMode / Widget）负责决定"什么时候 Push 什么 Widget"
  *   - 调用方通过 FGameplayTag（WacomUITags::UI_Layer_* ）指定层
- *   - 当前用同步 TSubclassOf。后续可加 TSoftClassPtr 异步版本
+ *   - 同步 Push 仍用于已解析类；顶层注册 Widget 可走软类异步 Push
  *
  * 使用姿势：
  *   - GameMode::BeginPlay：EnsurePrimaryLayout(PC)
@@ -60,6 +82,12 @@ public:
 
 	TSubclassOf<UWacomAppToastWidget> ResolveToastWidgetClass() const;
 
+	void PushRegisteredWidgetToLayerAsync(FWacomAsyncWidgetPushRequest Request);
+
+	bool HasPendingAsyncPushToLayer(FGameplayTag LayerTag) const;
+
+	void CancelPendingAsyncPushToLayer(FGameplayTag LayerTag);
+
 	// ---- 分层 Push / Pop / Clear ----
 
 	/**
@@ -93,13 +121,38 @@ public:
 protected:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+	virtual UCommonActivatableWidget* PushResolvedWidgetToLayer(
+		FGameplayTag LayerTag,
+		TSubclassOf<UCommonActivatableWidget> WidgetClass);
 
 private:
 	void HandleWorldCleanup(UWorld* World, bool bSessionEnded, bool bCleanupResources);
+	void CancelAllPendingAsyncPushes();
+	void HandleAsyncWidgetClassLoaded(FGameplayTag LayerTag, int32 RequestId);
+	void CompleteAsyncWidgetPush(FGameplayTag LayerTag, int32 RequestId, TSubclassOf<UCommonActivatableWidget> WidgetClass);
+	void CompleteAsyncWidgetPushResult(
+		FWacomAsyncWidgetPushRequest&& Request,
+		FName FailureReason,
+		TSubclassOf<UCommonActivatableWidget> ResolvedClass = nullptr,
+		UCommonActivatableWidget* PushedWidget = nullptr);
+
+	struct FPendingAsyncWidgetPush
+	{
+		int32 RequestId = 0;
+		FWacomAsyncWidgetPushRequest Request;
+		TWeakObjectPtr<UWacomPrimaryGameLayout> ExpectedPrimaryLayout;
+		TSharedPtr<FStreamableHandle> Handle;
+	};
 
 	FDelegateHandle WorldCleanupHandle;
+	int32 NextAsyncPushRequestId = 1;
+	TMap<FGameplayTag, FPendingAsyncWidgetPush> PendingAsyncWidgetPushes;
 
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomPrimaryGameLayout> PrimaryLayout = nullptr;
+
+#if WITH_AUTOMATION_TESTS
+	friend class FWacomUITestAccess;
+#endif
 };

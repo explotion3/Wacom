@@ -7,6 +7,8 @@
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
+#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
+#include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Menus/WacomConfirmDialog.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
 #include "WacomUITestAccess.generated.h"
@@ -71,6 +73,31 @@ public:
 class FWacomUITestAccess
 {
 public:
+	static void SetPrimaryLayout(UWacomGameUIManagerSubsystem& UIManager, UWacomPrimaryGameLayout* PrimaryLayout)
+	{
+		UIManager.PrimaryLayout = PrimaryLayout;
+	}
+
+	static void CancelAllPendingAsyncPushes(UWacomGameUIManagerSubsystem& UIManager)
+	{
+		UIManager.CancelAllPendingAsyncPushes();
+	}
+
+	static void CompleteAsyncWidgetPush(
+		UWacomGameUIManagerSubsystem& UIManager,
+		FGameplayTag LayerTag,
+		TSubclassOf<UCommonActivatableWidget> WidgetClass)
+	{
+		const UWacomGameUIManagerSubsystem::FPendingAsyncWidgetPush* Pending =
+			UIManager.PendingAsyncWidgetPushes.Find(LayerTag);
+		if (!Pending)
+		{
+			return;
+		}
+
+		UIManager.CompleteAsyncWidgetPush(LayerTag, Pending->RequestId, WidgetClass);
+	}
+
 	static TArray<FWacomAppToastView> GetCurrentToasts(const UWacomAppToastWidget& Widget)
 	{
 		return Widget.ActiveViews;

@@ -57,7 +57,7 @@ Widget 可以有 C++ fallback 布局，但 C++ 的职责是协议、生命周期
 
 ### 顶层 UI 类解析
 
-Wacom UI Settings V1 使用 `UWacomUIDeveloperSettings` 作为项目级软类注册表。顶层 UI 类解析优先级为：
+Wacom UI Settings 使用 `UWacomUIDeveloperSettings` 作为项目级软类注册表。顶层 UI 类解析优先级为：
 
 ```text
 Wacom UI Settings
@@ -77,7 +77,12 @@ Wacom UI Settings
 | RunEventScreen | `UI.Widget.RunEventScreen` settings 注册 -> `UWacomRunEventScreen` C++ fallback |
 | AppToast | `Wacom UI Settings.AppToastWidgetClass` -> `UWacomAppToastWidget` C++ fallback |
 
-本轮只做同步解析：Settings 软类使用同步加载；PrimaryLayout 的路径 fallback 使用同步 `LoadObject`；CommonUI Push 仍接收已解析的 `TSubclassOf`。异步加载和异步 Push 不在 V1 内，后续需要单独设计加载状态、失败回调和 Push 时序。
+V2-A 状态：
+
+- `BackpackScreen` / `PauseMenuScreen`：Router 通过 `UWacomGameUIManagerSubsystem::PushRegisteredWidgetToLayerAsync()` 打开；settings 软类未加载时走异步加载，缺失或失败时回到 C++ fallback。GameMenu 已有异步 pending 时，重复打开请求会被忽略。
+- `ShopScreen` / `RunEventScreen`：仍保持同步解析和同步 Push；它们有 `Begin*Visit -> Push -> Refresh / rollback` 事务语义，异步化留到后续单独处理。同步打开前会取消同层未完成的 Backpack / PauseMenu pending。
+- `PrimaryLayout`：仍同步创建；settings 失败后只尝试固定 `WBP_PrimaryGameLayout` 路径 fallback。
+- `AppToast`：仍同步解析并直接 `AddToViewport`，不进入 CommonUI async push。
 
 ### Wacom UI Settings 配置校验
 

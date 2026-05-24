@@ -74,24 +74,6 @@ namespace
 		return false;
 	}
 
-	TSubclassOf<UCommonActivatableWidget> ResolveBackpackScreenType(
-		const UWacomGameUIManagerSubsystem& UIManager)
-	{
-		return UIManager.ResolveWidgetClass(
-			WacomUITags::UI_Widget_BackpackScreen.GetTag(),
-			UWacomBackpackScreen::StaticClass(),
-			/*bLogMissingEntry*/ false).Get();
-	}
-
-	TSubclassOf<UCommonActivatableWidget> ResolvePauseMenuScreenType(
-		const UWacomGameUIManagerSubsystem& UIManager)
-	{
-		return UIManager.ResolveWidgetClass(
-			WacomUITags::UI_Widget_PauseMenuScreen.GetTag(),
-			UWacomPauseMenuScreen::StaticClass(),
-			/*bLogMissingEntry*/ false).Get();
-	}
-
 	TSubclassOf<UCommonActivatableWidget> ResolveShopScreenType(
 		const UWacomGameUIManagerSubsystem& UIManager)
 	{
@@ -108,6 +90,41 @@ namespace
 			WacomUITags::UI_Widget_RunEventScreen.GetTag(),
 			UWacomRunEventScreen::StaticClass(),
 			/*bLogMissingEntry*/ false).Get();
+	}
+
+	bool CanPushExplorationGameMenu(
+		TWeakObjectPtr<AWacomPlayerController> WeakPC,
+		TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager,
+		const TCHAR* LogPrefix)
+	{
+		AWacomPlayerController* PC = WeakPC.Get();
+		UWacomGameUIManagerSubsystem* UIManager = WeakUIManager.Get();
+		if (!PC || !UIManager || !IsExplorationState(*PC, LogPrefix))
+		{
+			return false;
+		}
+
+		return GetActiveGameMenuWidget(*UIManager) == nullptr;
+	}
+
+	void LogAsyncPushResult(const FWacomAsyncWidgetPushResult& Result, const TCHAR* SuccessMessage, const TCHAR* FailurePrefix)
+	{
+		if (Result.bSucceeded)
+		{
+			UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] %s"), SuccessMessage);
+			return;
+		}
+
+		if (Result.FailureReason == TEXT("LayerPending")
+			|| Result.FailureReason == TEXT("PrePushGuardRejected"))
+		{
+			return;
+		}
+
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerController] %s 失败 Reason=%s"),
+			FailurePrefix,
+			*Result.FailureReason.ToString());
 	}
 }
 
@@ -128,23 +145,34 @@ void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)
 
 	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
+		UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
 		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 关闭 GameMenu 顶层"));
 		return;
 	}
 
-	const TSubclassOf<UCommonActivatableWidget> BackpackScreenType =
-		ResolveBackpackScreenType(*UIManager);
-
-	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		BackpackScreenType);
-	if (!Pushed)
+	if (UIManager->HasPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag()))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenBackpack: Push BackpackScreen 失败"));
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenBackpack: GameMenu 正在异步打开，忽略重复请求"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 打开背包"));
+	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
+	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_BackpackScreen.GetTag();
+	Request.FallbackClass = UWacomBackpackScreen::StaticClass();
+	Request.OwningPlayer = &PC;
+	Request.bLogMissingEntry = false;
+	Request.CanPush = [WeakPC, WeakUIManager]()
+	{
+		return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("OpenBackpack.AsyncPush"));
+	};
+	Request.OnComplete = [](const FWacomAsyncWidgetPushResult& Result)
+	{
+		LogAsyncPushResult(Result, TEXT("B: 打开背包"), TEXT("OpenBackpack: Push BackpackScreen"));
+	};
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
 }
 
 void FWacomExplorationScreenRouter::TogglePauseMenu(AWacomPlayerController& PC)
@@ -164,23 +192,34 @@ void FWacomExplorationScreenRouter::TogglePauseMenu(AWacomPlayerController& PC)
 
 	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
+		UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
 		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 关闭 GameMenu 顶层"));
 		return;
 	}
 
-	const TSubclassOf<UCommonActivatableWidget> PauseMenuScreenType =
-		ResolvePauseMenuScreenType(*UIManager);
-
-	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		PauseMenuScreenType);
-	if (!Pushed)
+	if (UIManager->HasPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag()))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] TogglePauseMenu: Push PauseMenuScreen 失败"));
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] TogglePauseMenu: GameMenu 正在异步打开，忽略重复请求"));
 		return;
 	}
 
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 打开暂停菜单"));
+	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
+	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_PauseMenuScreen.GetTag();
+	Request.FallbackClass = UWacomPauseMenuScreen::StaticClass();
+	Request.OwningPlayer = &PC;
+	Request.bLogMissingEntry = false;
+	Request.CanPush = [WeakPC, WeakUIManager]()
+	{
+		return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("TogglePauseMenu.AsyncPush"));
+	};
+	Request.OnComplete = [](const FWacomAsyncWidgetPushResult& Result)
+	{
+		LogAsyncPushResult(Result, TEXT("ESC: 打开暂停菜单"), TEXT("TogglePauseMenu: Push PauseMenuScreen"));
+	};
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
 }
 
 void FWacomExplorationScreenRouter::CloseTopGameMenu(AWacomPlayerController& PC)
@@ -191,6 +230,7 @@ void FWacomExplorationScreenRouter::CloseTopGameMenu(AWacomPlayerController& PC)
 		return;
 	}
 
+	UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
 	DeactivateActiveGameMenuWidget(*UIManager);
 }
 
@@ -219,6 +259,7 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 		return false;
 	}
 
+	UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
 	DeactivateActiveGameMenuWidget(*UIManager);
 
 	URunSession* RunSession = PC.GetRunSession();
@@ -272,6 +313,7 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(AWacomPlayerController& PC, FNa
 		return false;
 	}
 
+	UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
 	DeactivateActiveGameMenuWidget(*UIManager);
 
 	URunSession* RunSession = PC.GetRunSession();
