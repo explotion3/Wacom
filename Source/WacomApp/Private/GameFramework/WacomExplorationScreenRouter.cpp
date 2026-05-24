@@ -24,6 +24,33 @@ namespace
 	const TCHAR* RunEventScreenFallbackPath =
 		TEXT("/Game/Wacom/UI/Event/WBP_RunEventScreen.WBP_RunEventScreen_C");
 
+	UClass* LoadScreenFallbackClass(
+		const TCHAR* ClassPath,
+		UClass* ExpectedParentClass,
+		const TCHAR* LogPrefix)
+	{
+		UClass* LoadedClass = LoadObject<UClass>(nullptr, ClassPath);
+		if (!LoadedClass)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomPlayerController] %s: WBP fallback 加载失败：%s，使用 C++ fallback"),
+				LogPrefix, ClassPath);
+			return nullptr;
+		}
+
+		if (!LoadedClass->IsChildOf(ExpectedParentClass))
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomPlayerController] %s: WBP fallback=%s 必须继承 %s，使用 C++ fallback"),
+				LogPrefix,
+				*LoadedClass->GetName(),
+				*ExpectedParentClass->GetName());
+			return nullptr;
+		}
+
+		return LoadedClass;
+	}
+
 	bool IsExplorationState(const AWacomPlayerController& PC, const TCHAR* LogPrefix)
 	{
 		const AWacomGameMode* GM = PC.GetWorld() ? PC.GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
@@ -90,7 +117,8 @@ namespace
 
 		return UIManager.ResolveWidgetClass(
 			WacomUITags::UI_Widget_BackpackScreen.GetTag(),
-			UWacomBackpackScreen::StaticClass()).Get();
+			UWacomBackpackScreen::StaticClass(),
+			/*bLogMissingEntry*/ false).Get();
 	}
 
 	TSubclassOf<UCommonActivatableWidget> ResolvePauseMenuScreenClass(
@@ -98,7 +126,8 @@ namespace
 	{
 		return UIManager.ResolveWidgetClass(
 			WacomUITags::UI_Widget_PauseMenuScreen.GetTag(),
-			UWacomPauseMenuScreen::StaticClass()).Get();
+			UWacomPauseMenuScreen::StaticClass(),
+			/*bLogMissingEntry*/ false).Get();
 	}
 
 	TSubclassOf<UCommonActivatableWidget> ResolveSettingsWidgetClass(
@@ -124,7 +153,10 @@ namespace
 			return SettingsClass;
 		}
 
-		if (UClass* Loaded = LoadObject<UClass>(nullptr, ShopScreenFallbackPath))
+		if (UClass* Loaded = LoadScreenFallbackClass(
+			ShopScreenFallbackPath,
+			UWacomShopScreen::StaticClass(),
+			TEXT("ResolveShopScreenClass")))
 		{
 			return Loaded;
 		}
@@ -148,7 +180,10 @@ namespace
 			return SettingsClass;
 		}
 
-		if (UClass* Loaded = LoadObject<UClass>(nullptr, RunEventScreenFallbackPath))
+		if (UClass* Loaded = LoadScreenFallbackClass(
+			RunEventScreenFallbackPath,
+			UWacomRunEventScreen::StaticClass(),
+			TEXT("ResolveRunEventScreenClass")))
 		{
 			return Loaded;
 		}

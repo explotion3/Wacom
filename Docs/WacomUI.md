@@ -79,6 +79,19 @@ PlayerController 显式配置
 
 本轮只做同步解析：Settings 软类使用同步加载，WBP 路径 fallback 使用同步 `LoadObject`，CommonUI Push 仍接收已解析的 `TSubclassOf`。异步加载和异步 Push 不在 V1 内，后续需要单独设计加载状态、失败回调和 Push 时序。
 
+### Wacom UI Settings 配置校验
+
+Wacom UI Settings 是可选覆盖入口，不要求本轮配置所有顶层 WBP。未配置或配置加载失败时，仍按上表回退到路径 fallback 或 C++ fallback；其中 Shop / RunEvent / PauseMenu 等 `WidgetClasses` 缺失属于合法 fallback，不是错误。
+
+编辑器 Data Validation 应检查以下错误：
+
+- `PrimaryLayoutClass` 非空时，必须继承 `UWacomPrimaryGameLayout`。
+- `AppToastWidgetClass` 非空时，必须继承 `UWacomAppToastWidget`。
+- `WidgetClasses` 的 tag 必须属于 `UI.Widget.*` 命名空间。
+- `WidgetClasses` 的 class 必须继承 `UWacomActivatableWidget`。
+- `WidgetClasses` 中重复 tag 是错误。
+- `WidgetClasses` 中空 class 是错误；如果希望使用 fallback，应删除该条目而不是保留空 class。
+
 `WBP_PrimaryGameLayout` 必须绑定 4 个 `UCommonActivatableWidgetStack`：
 
 | 控件名 | 对应 Layer | 用途 |

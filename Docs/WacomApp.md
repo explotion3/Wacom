@@ -158,6 +158,12 @@ PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md
 - Shop / RunEvent / Toast 的 WBP fallback 仍失败时使用 C++ fallback；PrimaryLayout 不走 C++ fallback，解析失败则拒绝创建根布局。
 - 本轮保持同步解析和同步 Push，不引入异步 Push；异步加载状态、失败处理和 Push 时序后续单独设计。
 
+编辑器配置与验证清单：
+
+- 在 `Edit > Project Settings > Wacom UI Settings` 填写需要覆盖的 UI 类；本轮不强制配置所有顶层 WBP。
+- 保存配置后可通过编辑器 Data Validation 检查 Wacom UI Settings，确认 PrimaryLayout、AppToast 和 `WidgetClasses` 的继承关系、tag 命名、重复 tag、空 class 等错误。
+- PIE 时仍按 `PlayerController` 显式 class -> Wacom UI Settings -> fallback 的优先级解析；Shop / RunEvent / PauseMenu 等未配置 settings 项时，应继续走合法 fallback。
+
 探索期背包、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、Push 失败回滚，以及商店 / RunEvent 这类外部流程返回时的 RunSession 清理。
 
 商店和 RunEvent 切换必须遵守生命周期顺序：Router 先关闭已有 `GameMenu` 顶层，让旧 Screen 的 `NativeOnDeactivated` 完成 `EndShopVisit()` / `EndRunEvent()`；随后才对新访问调用 `BeginShopVisit()` / `BeginRunEvent()` 并 Push 新 Screen。如果 Push 新 Screen 失败，Router 必须立即调用对应 `End*` 回滚刚 Begin 的 active 访问。

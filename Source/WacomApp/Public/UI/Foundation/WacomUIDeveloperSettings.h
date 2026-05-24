@@ -5,6 +5,9 @@
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
 #include "GameplayTagContainer.h"
+#if WITH_EDITOR
+#include "Misc/DataValidation.h"
+#endif
 #include "UObject/SoftObjectPtr.h"
 #include "WacomUIDeveloperSettings.generated.h"
 
@@ -34,6 +37,12 @@ class WACOMAPP_API UWacomUIDeveloperSettings : public UDeveloperSettings
 	GENERATED_BODY()
 
 public:
+	bool ValidateSettings(TArray<FText>& OutErrors) const;
+
+#if WITH_EDITOR
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+
 	/** PrimaryLayout WBP 类；必须继承 UWacomPrimaryGameLayout 并提供所需 CommonUI Layer Stack。 */
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI", meta = (ToolTip = "PrimaryLayout WBP 类；必须继承 UWacomPrimaryGameLayout 并提供所需 CommonUI Layer Stack。"))
 	TSoftClassPtr<UWacomPrimaryGameLayout> PrimaryLayoutClass;
