@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-ui
 status: active
-updated: 2026-05-23
+updated: 2026-05-24
 tags:
   - wacom/ui
   - wacom/commonui
@@ -54,6 +54,30 @@ Widget 可以有 C++ fallback 布局，但 C++ 的职责是协议、生命周期
 
 - `/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C`
 - 父类：`UWacomPrimaryGameLayout`
+
+### 顶层 UI 类解析
+
+Wacom UI Settings V1 使用 `UWacomUIDeveloperSettings` 作为项目级软类注册表。顶层 UI 类解析优先级为：
+
+```text
+PlayerController 显式配置
+-> Wacom UI Settings
+-> 当前 WBP 路径 fallback
+-> C++ fallback
+```
+
+细节：
+
+| 入口 | 优先级 |
+|---|---|
+| PrimaryLayout | `Wacom UI Settings.PrimaryLayoutClass` -> `/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C`；PrimaryLayout 不走 C++ fallback，解析失败则不创建根布局 |
+| BackpackScreen | `AWacomPlayerController.BackpackScreenClass` -> `UI.Widget.BackpackScreen` settings 注册 -> `UWacomBackpackScreen` C++ fallback |
+| PauseMenuScreen | `UI.Widget.PauseMenuScreen` settings 注册 -> `UWacomPauseMenuScreen` C++ fallback |
+| ShopScreen | `AWacomPlayerController.ShopScreenClass` -> `UI.Widget.ShopScreen` settings 注册 -> `/Game/Wacom/UI/Shop/WBP_ShopScreen.WBP_ShopScreen_C` -> `UWacomShopScreen` C++ fallback |
+| RunEventScreen | `AWacomPlayerController.RunEventScreenClass` -> `UI.Widget.RunEventScreen` settings 注册 -> `/Game/Wacom/UI/Event/WBP_RunEventScreen.WBP_RunEventScreen_C` -> `UWacomRunEventScreen` C++ fallback |
+| AppToast | `Wacom UI Settings.AppToastWidgetClass` -> `/Game/Wacom/UI/Foundation/WBP_AppToastWidget.WBP_AppToastWidget_C` -> `UWacomAppToastWidget` C++ fallback |
+
+本轮只做同步解析：Settings 软类使用同步加载，WBP 路径 fallback 使用同步 `LoadObject`，CommonUI Push 仍接收已解析的 `TSubclassOf`。异步加载和异步 Push 不在 V1 内，后续需要单独设计加载状态、失败回调和 Push 时序。
 
 `WBP_PrimaryGameLayout` 必须绑定 4 个 `UCommonActivatableWidgetStack`：
 

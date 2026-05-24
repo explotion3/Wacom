@@ -10,6 +10,8 @@
 
 class APlayerController;
 class UCommonActivatableWidget;
+class UWacomActivatableWidget;
+class UWacomAppToastWidget;
 class UWacomPrimaryGameLayout;
 
 /**
@@ -48,6 +50,15 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|UI")
 	UWacomPrimaryGameLayout* GetPrimaryLayout() const { return PrimaryLayout; }
+
+	TSubclassOf<UWacomPrimaryGameLayout> ResolvePrimaryLayoutClass() const;
+
+	TSubclassOf<UWacomActivatableWidget> ResolveWidgetClass(
+		FGameplayTag WidgetTag,
+		TSubclassOf<UWacomActivatableWidget> FallbackClass,
+		bool bLogMissingEntry = true) const;
+
+	TSubclassOf<UWacomAppToastWidget> ResolveToastWidgetClass() const;
 
 	// ---- 分层 Push / Pop / Clear ----
 
@@ -89,10 +100,6 @@ private:
 	FDelegateHandle WorldCleanupHandle;
 
 private:
-	/** 默认的 PrimaryLayout WBP 路径；EnsurePrimaryLayout 时懒加载。 */
-	UPROPERTY(Transient)
-	TSubclassOf<UWacomPrimaryGameLayout> PrimaryLayoutClass;
-
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomPrimaryGameLayout> PrimaryLayout = nullptr;
 };

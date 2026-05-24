@@ -9,6 +9,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
+#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "WacomAppToastSubsystem"
 
@@ -125,11 +126,14 @@ UWacomAppToastWidget* UWacomAppToastSubsystem::EnsureToastWidget()
 
 	if (!ToastWidgetClass)
 	{
-		if (UClass* Loaded = LoadObject<UClass>(
-			nullptr,
-			TEXT("/Game/Wacom/UI/Foundation/WBP_AppToastWidget.WBP_AppToastWidget_C")))
+		const UGameInstance* GameInstance = GetGameInstance();
+		const UWacomGameUIManagerSubsystem* UIManager = GameInstance
+			? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>()
+			: nullptr;
+
+		if (UIManager)
 		{
-			ToastWidgetClass = Loaded;
+			ToastWidgetClass = UIManager->ResolveToastWidgetClass();
 		}
 	}
 	if (!ToastWidgetClass)

@@ -33,19 +33,18 @@ tags:
 6. 开始实现前扫计划和风险：
    - 短期任务索引：[`TODO.md`](TODO.md)
    - 长期方向、技术债、待确认问题：[`Roadmap.md`](Roadmap.md)、[`TechDebt.md`](TechDebt.md)、[`Questions.md`](Questions.md)
-7. 需要理解某个设计为什么变成现在这样时，再查 [`DevLog/`](DevLog/)。
 
 ## 常用专题入口
 
-| 主题 | 当前事实入口 | 相关入口 |
-|---|---|---|
-| 战斗规则 | [`WacomBattle.md`](WacomBattle.md) | 战后结算 [`WacomRun §8`](WacomRun.md#wacomrun-battle-settlement)，战斗 UI [`WacomUI §8`](WacomUI.md#wacomui-battle-ui)，WBP 合约 [`UI_Battle_WBP_Binding.md`](UI_Battle_WBP_Binding.md) |
-| 击倒与奖励卡 | [`WacomBattle §12`](WacomBattle.md#wacombattle-result) | 部位奖励字段 [`WacomData §3`](WacomData.md#wacomdata-enemy-part)，Run 入包 [`WacomRun §8`](WacomRun.md#wacomrun-battle-settlement)，后续方向 [`Roadmap: 击倒事件扩展`](Roadmap.md#roadmap-knockdown) |
-| 战斗表现 | [`WacomUI §8`](WacomUI.md#wacomui-battle-ui) | UI 技术债 [`TechDebt: UI 层技术债`](TechDebt.md#techdebt-ui)，后续表现 [`Roadmap: 战斗 UI`](Roadmap.md#roadmap-battle-ui) |
-| 背包构筑 | [`WacomRun.md`](WacomRun.md) | 背包 UI [`WacomUI.md`](WacomUI.md)，WBP 合约 [`UI_Backpack_WBP_Binding.md`](UI_Backpack_WBP_Binding.md)，后续表现 [`Roadmap: 背包 UI`](Roadmap.md#roadmap-backpack-ui) |
-| 商店与探索事件 | [`WacomRun.md`](WacomRun.md) | 静态定义 [`WacomData.md`](WacomData.md)，世界交互 [`WacomApp.md`](WacomApp.md)，后续方向 [`Roadmap: 商店`](Roadmap.md#roadmap-shop) / [`Roadmap: 探索事件`](Roadmap.md#roadmap-runevent) |
-| 地图与节点 | 当前节点消耗规则见 [`WacomRun.md`](WacomRun.md)，地图设计语境见 [`Game_Design §10`](Game_Design.md#game-design-run-map) | 待确认问题 [`Questions: Run、探索与地图`](Questions.md#questions-run-map)，后续方向 [`Roadmap: 地图与探索`](Roadmap.md#roadmap-map) |
-| 存档恢复 | [`WacomRun.md`](WacomRun.md) | 技术债 [`TechDebt: 数据与存档债`](TechDebt.md#techdebt-data-save)，后续方向 [`Roadmap: 存档恢复`](Roadmap.md#roadmap-save) |
+| 主题      | 当前事实入口                                                                                                 | 相关入口                                                                                                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 战斗规则    | [`WacomBattle.md`](WacomBattle.md)                                                                     | 战后结算 [`WacomRun §8`](WacomRun.md#wacomrun-battle-settlement)，战斗 UI [`WacomUI §8`](WacomUI.md#wacomui-battle-ui)，WBP 合约 [`UI_Battle_WBP_Binding.md`](UI_Battle_WBP_Binding.md)    |
+| 击倒与奖励卡  | [`WacomBattle §12`](WacomBattle.md#wacombattle-result)                                                 | 部位奖励字段 [`WacomData §3`](WacomData.md#wacomdata-enemy-part)，Run 入包 [`WacomRun §8`](WacomRun.md#wacomrun-battle-settlement)，后续方向 [`Roadmap: 击倒事件扩展`](Roadmap.md#roadmap-knockdown) |
+| 战斗表现    | [`WacomUI §8`](WacomUI.md#wacomui-battle-ui)                                                           | UI 技术债 [`TechDebt: UI 层技术债`](TechDebt.md#techdebt-ui)，后续表现 [`Roadmap: 战斗 UI`](Roadmap.md#roadmap-battle-ui)                                                                      |
+| 背包构筑    | [`WacomRun.md`](WacomRun.md)                                                                           | 背包 UI [`WacomUI.md`](WacomUI.md)，WBP 合约 [`UI_Backpack_WBP_Binding.md`](UI_Backpack_WBP_Binding.md)，后续表现 [`Roadmap: 背包 UI`](Roadmap.md#roadmap-backpack-ui)                       |
+| 商店与探索事件 | [`WacomRun.md`](WacomRun.md)                                                                           | 静态定义 [`WacomData.md`](WacomData.md)，世界交互 [`WacomApp.md`](WacomApp.md)，后续方向 [`Roadmap: 商店`](Roadmap.md#roadmap-shop) / [`Roadmap: 探索事件`](Roadmap.md#roadmap-runevent)             |
+| 地图与节点   | 当前节点消耗规则见 [`WacomRun.md`](WacomRun.md)，地图设计语境见 [`Game_Design §10`](Game_Design.md#game-design-run-map) | 待确认问题 [`Questions: Run、探索与地图`](Questions.md#questions-run-map)，后续方向 [`Roadmap: 地图与探索`](Roadmap.md#roadmap-map)                                                                   |
+| 存档恢复    | [`WacomRun.md`](WacomRun.md)                                                                           | 技术债 [`TechDebt: 数据与存档债`](TechDebt.md#techdebt-data-save)，后续方向 [`Roadmap: 存档恢复`](Roadmap.md#roadmap-save)                                                                         |
 
 ## 文档职责
 

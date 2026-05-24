@@ -19,6 +19,7 @@ public class WacomApp : ModuleRules
 			"UMG",
 			"CommonUI",
 			"CommonInput",
+			"DeveloperSettings",
 			"FieldNotification",
 			"ModelViewViewModel",
 			"WacomCore",

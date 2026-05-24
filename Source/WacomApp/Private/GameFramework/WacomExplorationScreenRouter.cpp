@@ -19,6 +19,11 @@
 
 namespace
 {
+	const TCHAR* ShopScreenFallbackPath =
+		TEXT("/Game/Wacom/UI/Shop/WBP_ShopScreen.WBP_ShopScreen_C");
+	const TCHAR* RunEventScreenFallbackPath =
+		TEXT("/Game/Wacom/UI/Event/WBP_RunEventScreen.WBP_RunEventScreen_C");
+
 	bool IsExplorationState(const AWacomPlayerController& PC, const TCHAR* LogPrefix)
 	{
 		const AWacomGameMode* GM = PC.GetWorld() ? PC.GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
@@ -73,6 +78,83 @@ namespace
 		}
 		return false;
 	}
+
+	TSubclassOf<UCommonActivatableWidget> ResolveBackpackScreenClass(
+		const AWacomPlayerController& PC,
+		const UWacomGameUIManagerSubsystem& UIManager)
+	{
+		if (PC.BackpackScreenClass)
+		{
+			return PC.BackpackScreenClass.Get();
+		}
+
+		return UIManager.ResolveWidgetClass(
+			WacomUITags::UI_Widget_BackpackScreen.GetTag(),
+			UWacomBackpackScreen::StaticClass()).Get();
+	}
+
+	TSubclassOf<UCommonActivatableWidget> ResolvePauseMenuScreenClass(
+		const UWacomGameUIManagerSubsystem& UIManager)
+	{
+		return UIManager.ResolveWidgetClass(
+			WacomUITags::UI_Widget_PauseMenuScreen.GetTag(),
+			UWacomPauseMenuScreen::StaticClass()).Get();
+	}
+
+	TSubclassOf<UCommonActivatableWidget> ResolveSettingsWidgetClass(
+		const UWacomGameUIManagerSubsystem& UIManager,
+		FGameplayTag WidgetTag)
+	{
+		return UIManager.ResolveWidgetClass(WidgetTag, nullptr, /*bLogMissingEntry*/ false).Get();
+	}
+
+	TSubclassOf<UCommonActivatableWidget> ResolveShopScreenClass(
+		const AWacomPlayerController& PC,
+		const UWacomGameUIManagerSubsystem& UIManager)
+	{
+		if (PC.ShopScreenClass)
+		{
+			return PC.ShopScreenClass.Get();
+		}
+
+		if (TSubclassOf<UCommonActivatableWidget> SettingsClass = ResolveSettingsWidgetClass(
+			UIManager,
+			WacomUITags::UI_Widget_ShopScreen.GetTag()))
+		{
+			return SettingsClass;
+		}
+
+		if (UClass* Loaded = LoadObject<UClass>(nullptr, ShopScreenFallbackPath))
+		{
+			return Loaded;
+		}
+
+		return UWacomShopScreen::StaticClass();
+	}
+
+	TSubclassOf<UCommonActivatableWidget> ResolveRunEventScreenClass(
+		const AWacomPlayerController& PC,
+		const UWacomGameUIManagerSubsystem& UIManager)
+	{
+		if (PC.RunEventScreenClass)
+		{
+			return PC.RunEventScreenClass.Get();
+		}
+
+		if (TSubclassOf<UCommonActivatableWidget> SettingsClass = ResolveSettingsWidgetClass(
+			UIManager,
+			WacomUITags::UI_Widget_RunEventScreen.GetTag()))
+		{
+			return SettingsClass;
+		}
+
+		if (UClass* Loaded = LoadObject<UClass>(nullptr, RunEventScreenFallbackPath))
+		{
+			return Loaded;
+		}
+
+		return UWacomRunEventScreen::StaticClass();
+	}
 }
 
 void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)
@@ -96,14 +178,12 @@ void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)
 		return;
 	}
 
-	if (!PC.BackpackScreenClass)
-	{
-		PC.BackpackScreenClass = UWacomBackpackScreen::StaticClass();
-	}
+	const TSubclassOf<UCommonActivatableWidget> BackpackScreenClass =
+		ResolveBackpackScreenClass(PC, *UIManager);
 
 	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
 		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		PC.BackpackScreenClass);
+		BackpackScreenClass);
 	if (!Pushed)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenBackpack: Push BackpackScreen 失败"));
@@ -134,9 +214,12 @@ void FWacomExplorationScreenRouter::TogglePauseMenu(AWacomPlayerController& PC)
 		return;
 	}
 
+	const TSubclassOf<UCommonActivatableWidget> PauseMenuScreenClass =
+		ResolvePauseMenuScreenClass(*UIManager);
+
 	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
 		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		UWacomPauseMenuScreen::StaticClass());
+		PauseMenuScreenClass);
 	if (!Pushed)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] TogglePauseMenu: Push PauseMenuScreen 失败"));
@@ -191,22 +274,12 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 		return false;
 	}
 
-	if (!PC.ShopScreenClass)
-	{
-		if (UClass* Loaded = LoadObject<UClass>(nullptr,
-			TEXT("/Game/Wacom/UI/Shop/WBP_ShopScreen.WBP_ShopScreen_C")))
-		{
-			PC.ShopScreenClass = Loaded;
-		}
-	}
-	if (!PC.ShopScreenClass)
-	{
-		PC.ShopScreenClass = UWacomShopScreen::StaticClass();
-	}
+	const TSubclassOf<UCommonActivatableWidget> ShopScreenClass =
+		ResolveShopScreenClass(PC, *UIManager);
 
 	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
 		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		PC.ShopScreenClass);
+		ShopScreenClass);
 	UWacomShopScreen* ShopScreen = Cast<UWacomShopScreen>(Pushed);
 	if (!ShopScreen)
 	{
@@ -254,22 +327,12 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(AWacomPlayerController& PC, FNa
 		return false;
 	}
 
-	if (!PC.RunEventScreenClass)
-	{
-		if (UClass* Loaded = LoadObject<UClass>(nullptr,
-			TEXT("/Game/Wacom/UI/Event/WBP_RunEventScreen.WBP_RunEventScreen_C")))
-		{
-			PC.RunEventScreenClass = Loaded;
-		}
-	}
-	if (!PC.RunEventScreenClass)
-	{
-		PC.RunEventScreenClass = UWacomRunEventScreen::StaticClass();
-	}
+	const TSubclassOf<UCommonActivatableWidget> RunEventScreenClass =
+		ResolveRunEventScreenClass(PC, *UIManager);
 
 	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
 		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		PC.RunEventScreenClass);
+		RunEventScreenClass);
 	UWacomRunEventScreen* EventScreen = Cast<UWacomRunEventScreen>(Pushed);
 	if (!EventScreen)
 	{

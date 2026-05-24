@@ -105,20 +105,20 @@ public:
 	TObjectPtr<UInputAction> IA_OpenBackpack;
 
 	/**
-	 * 背包 UI。蓝图未配则回退 C++ 父类 UWacomBackpackScreen。
+	 * 背包 UI。蓝图未配则按 UI Settings 的 UI.Widget.BackpackScreen 解析，最后回退 C++ 父类。
 	 * 蓝图子类（如 BP_PlayerController）可在 Details 面板拖 WBP_BackpackScreen 覆盖。
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomBackpackScreen> BackpackScreenClass;
 
 	/**
-	 * 商店 UI。默认优先懒加载 /Game/Wacom/UI/Shop/WBP_ShopScreen；没有 WBP 时回退 C++ 最小界面。
+	 * 商店 UI。蓝图未配则按 UI Settings 解析，再回退旧 WBP 路径，最后回退 C++ 最小界面。
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomShopScreen> ShopScreenClass;
 
 	/**
-	 * 探索事件 UI。默认优先懒加载 /Game/Wacom/UI/Event/WBP_RunEventScreen；没有 WBP 时回退 C++ 最小界面。
+	 * 探索事件 UI。蓝图未配则按 UI Settings 解析，再回退旧 WBP 路径，最后回退 C++ 最小界面。
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomRunEventScreen> RunEventScreenClass;

@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-05-23
+updated: 2026-05-24
 tags:
   - wacom/app
   - wacom/gameflow
@@ -149,6 +149,14 @@ enum class EGameFlowState : uint8
 - 切关卡时 TearDown 旧 Layout，跟随当前 PlayerController 重建。
 
 PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md` 维护；本文只记录 App 侧创建、重建和 Push / Pop 入口。
+
+顶层 UI 类解析由 App 侧入口执行，表现合同见 `WacomUI.md`：
+
+- Shop / RunEvent 优先使用 `AWacomPlayerController` 上的显式类配置。
+- 未显式配置时查询 `UWacomUIDeveloperSettings` 的软类注册表。
+- Settings 未命中、软类为空或加载失败时回到当前 WBP 路径 fallback。
+- Shop / RunEvent / Toast 的 WBP fallback 仍失败时使用 C++ fallback；PrimaryLayout 不走 C++ fallback，解析失败则拒绝创建根布局。
+- 本轮保持同步解析和同步 Push，不引入异步 Push；异步加载状态、失败处理和 Push 时序后续单独设计。
 
 探索期背包、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、Push 失败回滚，以及商店 / RunEvent 这类外部流程返回时的 RunSession 清理。
 

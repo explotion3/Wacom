@@ -1,13 +1,24 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
+#include "UI/Foundation/WacomActivatableWidget.h"
+#include "UI/Foundation/WacomAppToastWidget.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
+#include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "UI/Foundation/WacomUITags.h"
 
 #include "Blueprint/UserWidget.h"
 #include "CommonActivatableWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
+
+namespace
+{
+	const TCHAR* PrimaryLayoutFallbackPath =
+		TEXT("/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C");
+	const TCHAR* AppToastFallbackPath =
+		TEXT("/Game/Wacom/UI/Foundation/WBP_AppToastWidget.WBP_AppToastWidget_C");
+}
 
 void UWacomGameUIManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -93,15 +104,7 @@ void UWacomGameUIManagerSubsystem::EnsurePrimaryLayout(APlayerController* PC)
 		return;
 	}
 
-	// 懒加载默认 WBP 类。
-	if (!PrimaryLayoutClass)
-	{
-		if (UClass* Loaded = LoadObject<UClass>(nullptr,
-			TEXT("/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C")))
-		{
-			PrimaryLayoutClass = Loaded;
-		}
-	}
+	const TSubclassOf<UWacomPrimaryGameLayout> PrimaryLayoutClass = ResolvePrimaryLayoutClass();
 	if (!PrimaryLayoutClass)
 	{
 		UE_LOG(LogTemp, Error,
@@ -118,6 +121,108 @@ void UWacomGameUIManagerSubsystem::EnsurePrimaryLayout(APlayerController* PC)
 	PrimaryLayout->AddToViewport();
 
 	UE_LOG(LogTemp, Display, TEXT("[UIManager] PrimaryLayout 已创建并挂载到 Viewport"));
+}
+
+TSubclassOf<UWacomPrimaryGameLayout> UWacomGameUIManagerSubsystem::ResolvePrimaryLayoutClass() const
+{
+	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
+	if (Settings && !Settings->PrimaryLayoutClass.IsNull())
+	{
+		if (UClass* Loaded = Settings->PrimaryLayoutClass.LoadSynchronous())
+		{
+			return Loaded;
+		}
+
+		UE_LOG(LogTemp, Warning,
+			TEXT("[UIManager] ResolvePrimaryLayoutClass: Settings PrimaryLayoutClass 加载失败：%s"),
+			*Settings->PrimaryLayoutClass.ToString());
+	}
+
+	if (UClass* Loaded = LoadObject<UClass>(nullptr, PrimaryLayoutFallbackPath))
+	{
+		return Loaded;
+	}
+
+	UE_LOG(LogTemp, Error,
+		TEXT("[UIManager] ResolvePrimaryLayoutClass: fallback PrimaryLayoutClass 加载失败：%s"),
+		PrimaryLayoutFallbackPath);
+	return nullptr;
+}
+
+TSubclassOf<UWacomActivatableWidget> UWacomGameUIManagerSubsystem::ResolveWidgetClass(
+	FGameplayTag WidgetTag,
+	TSubclassOf<UWacomActivatableWidget> FallbackClass,
+	bool bLogMissingEntry) const
+{
+	if (!WidgetTag.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[UIManager] ResolveWidgetClass: WidgetTag 无效，使用 fallback"));
+		return FallbackClass;
+	}
+
+	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
+	const FWacomUIWidgetClassEntry* MatchingEntry = Settings
+		? Settings->WidgetClasses.FindByPredicate(
+			[WidgetTag](const FWacomUIWidgetClassEntry& Entry)
+			{
+				return Entry.WidgetTag == WidgetTag;
+			})
+		: nullptr;
+
+	if (!MatchingEntry)
+	{
+		if (bLogMissingEntry)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[UIManager] ResolveWidgetClass: 未找到 WidgetTag=%s 的 settings 注册，使用 fallback"),
+				*WidgetTag.ToString());
+		}
+		return FallbackClass;
+	}
+
+	if (MatchingEntry->WidgetClass.IsNull())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[UIManager] ResolveWidgetClass: WidgetTag=%s 的 WidgetClass 为空，使用 fallback"),
+			*WidgetTag.ToString());
+		return FallbackClass;
+	}
+
+	if (UClass* Loaded = MatchingEntry->WidgetClass.LoadSynchronous())
+	{
+		return Loaded;
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[UIManager] ResolveWidgetClass: WidgetTag=%s Class=%s 加载失败，使用 fallback"),
+		*WidgetTag.ToString(), *MatchingEntry->WidgetClass.ToString());
+	return FallbackClass;
+}
+
+TSubclassOf<UWacomAppToastWidget> UWacomGameUIManagerSubsystem::ResolveToastWidgetClass() const
+{
+	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
+	if (Settings && !Settings->AppToastWidgetClass.IsNull())
+	{
+		if (UClass* Loaded = Settings->AppToastWidgetClass.LoadSynchronous())
+		{
+			return Loaded;
+		}
+
+		UE_LOG(LogTemp, Warning,
+			TEXT("[UIManager] ResolveToastWidgetClass: Settings AppToastWidgetClass 加载失败：%s"),
+			*Settings->AppToastWidgetClass.ToString());
+	}
+
+	if (UClass* Loaded = LoadObject<UClass>(nullptr, AppToastFallbackPath))
+	{
+		return Loaded;
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[UIManager] ResolveToastWidgetClass: fallback ToastWidgetClass 加载失败：%s，使用 C++ fallback"),
+		AppToastFallbackPath);
+	return UWacomAppToastWidget::StaticClass();
 }
 
 UCommonActivatableWidget* UWacomGameUIManagerSubsystem::PushContentToLayer(
