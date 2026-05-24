@@ -66,7 +66,6 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
 | AppToast C++ fallback 表现 | 顶层旧 WBP 路径 fallback 已移除；当前未配置 settings 时仍直接 AddToViewport，文本显示为主，保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
 | PrimaryLayout 固定路径 fallback | 顶层旧路径 fallback 已收窄；PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |
-| `FluxMainCardsHost` 兼容字段 | 旧 WBP 兼容保留，正式通量主卡概念已移除 | 旧 WBP 退场后删除兼容字段和空实现 |
 
 <a id="techdebt-run-session"></a>
 ## RunSession 结构债

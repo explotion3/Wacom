@@ -124,10 +124,6 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> BattleDeckZoneHost;
 
-	/** 已废弃兼容绑定：通量区不再显示 A 类主卡槽，旧 WBP 可留空。 */
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UPanelWidget> FluxMainCardsHost;
-
 	/** WBP 可绑定：通量内容 DropTarget 槽，接收放入 Backpack 的 A 类容器和普通内容卡。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> FluxContentDropTargetHost;
@@ -147,10 +143,6 @@ protected:
 	/** 备战区卡牌容器（WrapBox 自动横向流式 + 换行）。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWrapBox> BattleDeckCardsBox;
-
-	/** 已废弃兼容绑定：通量区不再主动填充主卡容器。 */
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UWrapBox> FluxMainCardsBox;
 
 	/** 通量区内容卡容器。 */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -246,7 +238,6 @@ private:
 	void RebuildTopStats(UWacomRunViewModel* VM);
 	void RebuildBattleDeckZone(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildBackpackZone(const FRunBackpackStorageSnapshot& Snapshot);
-	void RebuildFluxMainCards(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildFluxContentCards(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildSpecialZones(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildBurdenZone(const FRunBackpackStorageSnapshot& Snapshot);

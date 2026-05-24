@@ -446,11 +446,6 @@ void UWacomBackpackScreen::RebuildBackpackZone(const FRunBackpackStorageSnapshot
 	RebuildFluxContentCards(Snapshot);
 }
 
-void UWacomBackpackScreen::RebuildFluxMainCards(const FRunBackpackStorageSnapshot& Snapshot)
-{
-	// 兼容旧 API：通量区已不再有 A 类主卡槽，默认不渲染 Flux.MainCards。
-}
-
 void UWacomBackpackScreen::RebuildFluxContentCards(const FRunBackpackStorageSnapshot& Snapshot)
 {
 	if (FluxContentZoneSection)

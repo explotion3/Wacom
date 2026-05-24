@@ -53,8 +53,6 @@ tags:
 | `BackpackTitleText` | `TextBlock` | 不绑则 C++ 默认外壳显示标题 |
 | `BattleDeckCardsBox` | `WrapBox` | 不绑则 C++ 在 Host 中创建 |
 | `FluxContentCardsBox` | `WrapBox` | 不绑则 C++ 在 Host 中创建 |
-| `FluxMainCardsHost` | `PanelWidget` | 旧 WBP 兼容字段；新 WBP 不要使用，当前不会被 C++ 填充 |
-| `FluxMainCardsBox` | `WrapBox` | 旧 WBP 兼容字段；新 WBP 不要使用，当前不会被 C++ 填充 |
 
 WBP 合同：
 
@@ -239,7 +237,7 @@ WBP 合同：
 ## PIE 检查清单
 
 - 推荐 Host 绑定后，各区能显示 C++ 动态填充内容。
-- 通量区不再出现 A 类主卡槽；旧 `FluxMainCards*` 字段不会被填充。
+- 通量区只展示内容卡。
 - 卡牌 hover 时详情层不抢拖拽或右键。
 - 负重区无溢出卡时折叠，有溢出卡时显示。
 - 拖拽失败和删牌失败仍由 AppToast 给出原因。
