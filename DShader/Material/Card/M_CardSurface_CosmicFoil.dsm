@@ -1,0 +1,234 @@
+import "Shared/CosmicEnergy.dsh";
+
+Shader(Name="DreamMaterials/Card/M_CardSurface_CosmicFoil")
+{
+    Properties = {
+        Texture2D FoilNoise = Path(Game, "Asset/Texture/noise04") [
+            Group="卡牌表层流光|纹理";
+            SortPriority=0;
+            Description="用于轻微打散卡面流光的噪声贴图，避免覆盖层过于均匀。";
+        ];
+
+        VectorParameter Resolution = float4(260.0, 380.0, 0.0, 0.0) [
+            Group="卡牌表层流光|画面";
+            SortPriority=10;
+            Description="卡牌表面材质的参考宽高，用于修正能量场比例。";
+        ];
+
+        VectorParameter FoilColor = float4(0.25, 0.72, 1.0, 1.0) [
+            Group="卡牌表层流光|颜色";
+            SortPriority=20;
+            Description="主体流光颜色。";
+        ];
+
+        VectorParameter CoreColor = float4(0.96, 0.58, 1.0, 1.0) [
+            Group="卡牌表层流光|颜色";
+            SortPriority=30;
+            Description="高能量亮丝颜色。";
+        ];
+
+        VectorParameter EdgeColor = float4(0.50, 1.0, 0.86, 1.0) [
+            Group="卡牌表层流光|颜色";
+            SortPriority=40;
+            Description="卡牌边缘的淡色装饰光。";
+        ];
+
+        ScalarParameter TimeScale = 0.55 [
+            Group="卡牌表层流光|动画";
+            SortPriority=50;
+            Description="整体流动速度，卡面装饰建议保持较低。";
+        ];
+
+        ScalarParameter Zoom = 0.23 [
+            Group="卡牌表层流光|能量场";
+            SortPriority=60;
+            Description="能量场缩放，数值越低越像放大观察流动细节。";
+        ];
+
+        ScalarParameter Iterations = 8.0 [
+            Group="卡牌表层流光|能量场";
+            SortPriority=70;
+            Description="能量场迭代次数，卡牌表层建议 6 到 10，避免过重。";
+        ];
+
+        ScalarParameter DistortSpeed = 0.7 [
+            Group="卡牌表层流光|能量场";
+            SortPriority=80;
+            Description="坐标扭曲旋转速度。";
+        ];
+
+        ScalarParameter WarpStrength = 0.48 [
+            Group="卡牌表层流光|能量场";
+            SortPriority=90;
+            Description="能量丝线累积强度，越高流光越明显。";
+        ];
+
+        ScalarParameter TanhStrength = 24.0 [
+            Group="卡牌表层流光|能量场";
+            SortPriority=100;
+            Description="高频褶皱强度。";
+        ];
+
+        ScalarParameter DriftAmount = 0.10 [
+            Group="卡牌表层流光|能量场";
+            SortPriority=110;
+            Description="每轮迭代的漂移强度。";
+        ];
+
+        ScalarParameter PulseAmount = 0.28 [
+            Group="卡牌表层流光|动画";
+            SortPriority=120;
+            Description="呼吸感强度，卡面装饰不宜太高。";
+        ];
+
+        ScalarParameter EnergyContrast = 1.1 [
+            Group="卡牌表层流光|明暗";
+            SortPriority=130;
+            Description="能量遮罩对比度。";
+        ];
+
+        ScalarParameter EnergyPower = 2.4 [
+            Group="卡牌表层流光|明暗";
+            SortPriority=140;
+            Description="能量遮罩曲线，越高亮部越细。";
+        ];
+
+        ScalarParameter UVWarpStrength = 0.018 [
+            Group="卡牌表层流光|复用输出";
+            SortPriority=150;
+            Description="流光采样 UV 的扰动强度，卡面覆盖层建议保持很小。";
+        ];
+
+        ScalarParameter NoiseScale = 3.6 [
+            Group="卡牌表层流光|纹理";
+            SortPriority=160;
+            Description="噪声采样缩放。";
+        ];
+
+        ScalarParameter NoiseStrength = 0.18 [
+            Group="卡牌表层流光|纹理";
+            SortPriority=170;
+            Description="噪声对流光强弱的影响。";
+        ];
+
+        ScalarParameter SweepStrength = 0.18 [
+            Group="卡牌表层流光|装饰";
+            SortPriority=180;
+            Description="斜向扫光强度。";
+        ];
+
+        ScalarParameter EdgeGlowStrength = 0.25 [
+            Group="卡牌表层流光|装饰";
+            SortPriority=190;
+            Description="卡牌外沿淡淡发光的强度。";
+        ];
+
+        ScalarParameter Opacity = 0.12 [
+            Group="卡牌表层流光|透明";
+            SortPriority=200;
+            Description="覆盖层整体透明度，默认保持很弱，只作为卡面装饰。";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float2 energyUV;
+        float energyMask;
+        float3 sourceColor;
+        CosmicEnergy_Field(uv, Resolution, time, Zoom, Iterations, DistortSpeed, WarpStrength, TanhStrength, DriftAmount, PulseAmount, EnergyContrast, EnergyPower, UVWarpStrength, energyUV, energyMask, sourceColor);
+
+        float2 noiseUV = energyUV * NoiseScale;
+        float2 noisePannedUV = UE.Panner(
+            Coordinate=noiseUV,
+            Time=time,
+            Speed=float2(0.018, -0.012)
+        );
+
+        float noiseValue = UE.Expression(
+            Class="TextureSample",
+            OutputType="float1",
+            OutputName="R",
+            TextureObject=FoilNoise,
+            Coordinates=noisePannedUV
+        );
+
+        float detailedEnergyRaw = energyMask * (0.76 + (noiseValue - 0.5) * NoiseStrength);
+        float detailedEnergy = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=detailedEnergyRaw
+        );
+
+        float leftInner = UE.Expression(Class="SmoothStep", OutputType="float1", Min=0.0, Max=0.20, Value=uv.x);
+        float rightInner = UE.Expression(Class="SmoothStep", OutputType="float1", Min=0.0, Max=0.20, Value=1.0 - uv.x);
+        float topInner = UE.Expression(Class="SmoothStep", OutputType="float1", Min=0.0, Max=0.16, Value=uv.y);
+        float bottomInner = UE.Expression(Class="SmoothStep", OutputType="float1", Min=0.0, Max=0.16, Value=1.0 - uv.y);
+
+        float edgeMaskRaw = (1.0 - leftInner) + (1.0 - rightInner) + (1.0 - topInner) + (1.0 - bottomInner);
+        float edgeMask = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=edgeMaskRaw
+        );
+
+        float sweepWave = UE.Expression(
+            Class="Sine",
+            OutputType="float1",
+            Input=time * 0.65
+        );
+
+        float sweepCenter = 1.0 + sweepWave * 0.34;
+        float sweepDistance = UE.Expression(
+            Class="Abs",
+            OutputType="float1",
+            Input=uv.x + uv.y - sweepCenter
+        );
+
+        float sweepFade = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.0,
+            Max=0.12,
+            Value=sweepDistance
+        );
+
+        float sweepMask = (1.0 - sweepFade) * SweepStrength;
+
+        float coreMask = UE.Expression(
+            Class="Power",
+            OutputType="float1",
+            Base=detailedEnergy,
+            Exponent=2.2
+        );
+
+        float finalMaskRaw = detailedEnergy * 0.52 + edgeMask * EdgeGlowStrength + sweepMask;
+        float finalMask = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=finalMaskRaw
+        );
+
+        float3 foil = float3(FoilColor.x, FoilColor.y, FoilColor.z);
+        float3 core = float3(CoreColor.x, CoreColor.y, CoreColor.z);
+        float3 edge = float3(EdgeColor.x, EdgeColor.y, EdgeColor.z);
+
+        Color = foil * finalMask + core * coreMask * 0.42 + edge * edgeMask * 0.18 + sourceColor * 0.05;
+        Alpha = finalMask * Opacity;
+    }
+}

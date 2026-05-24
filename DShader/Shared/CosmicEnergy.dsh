@@ -1,0 +1,96 @@
+// Reusable cosmic energy field derived from the CosmicBlob iterative distortion.
+
+Function CosmicEnergy_Field(
+    in float2 fragUV,
+    in float4 resParam,
+    in float time,
+    in float zoom,
+    in float iterations,
+    in float distortSpeed,
+    in float warpStrength,
+    in float tanhStrength,
+    in float driftAmount,
+    in float pulseAmount,
+    in float energyContrast,
+    in float energyPower,
+    in float uvWarpStrength,
+    out float2 distortedUV,
+    out float energyMask,
+    out float3 sourceColor)
+{
+    float2 resolution = resParam.xy;
+    float aspect = resolution.x / max(resolution.y, 0.0001);
+
+    float2 centeredUV = fragUV * 2.0 - 1.0;
+    float2 u = centeredUV;
+    u.x *= aspect;
+    u *= zoom;
+
+    float4 z = float4(1.0, 2.0, 3.0, 0.0);
+    float4 o = z;
+
+    float2 v = float2(0.0, 0.0);
+    float a = 0.5;
+    float t = time;
+    int maxIter = (int)iterations;
+
+    for (int iter = 0; iter < 19; iter++)
+    {
+        if (iter >= maxIter) break;
+        float i = (float)(iter + 1);
+
+        t += 1.0;
+        float ai = pow(a, i);
+        v = cos(t - 7.0 * u * ai) - 5.0 * u;
+
+        float rotBase = i + 0.02 * t * distortSpeed;
+        float r00 = cos(rotBase - 0.0);
+        float r01 = cos(rotBase - 11.0);
+        float r10 = cos(rotBase - 33.0);
+        float r11 = cos(rotBase - 0.0);
+
+        float ux = u.x * r00 + u.y * r01;
+        float uy = u.x * r10 + u.y * r11;
+        u = float2(ux, uy);
+
+        float ud = dot(u, u);
+        float2 tanhInput = tanhStrength * ud * cos(100.0 * float2(u.y, u.x) + t);
+        float2 tanhVal = float2(tanh(tanhInput.x), tanh(tanhInput.y));
+        u += tanhVal / 200.0;
+
+        a += 0.03;
+        u += driftAmount * a * u;
+
+        float pulse = cos(4.0 / exp(dot(o, o) / 100.0) + t);
+        u += pulseAmount * pulse / 300.0;
+
+        float vd = dot(v, v);
+        float denomScale = 1.0 + i * vd;
+        float udot = dot(u, u);
+        float2 sinInput = 1.5 * u / max(0.5 - udot, 0.001) - 9.0 * float2(u.y, u.x) + t;
+        float2 sinVal = sin(sinInput) * denomScale;
+        float len = length(sinVal);
+        float4 contrib = (1.0 + cos(z + t)) / max(len, 0.001);
+        o += contrib * warpStrength;
+    }
+
+    float4 oMin = min(o, 13.0);
+    float4 oSafe = max(abs(o), 0.001) * sign(o + 0.001);
+    float4 finalO = 25.6 / (oMin + 164.0 / oSafe) - dot(u, u) / (250.0 / max(energyContrast, 0.001));
+
+    sourceColor = float3(
+        saturate(finalO.x),
+        saturate(finalO.y),
+        saturate(finalO.z)
+    );
+
+    float sourceMax = max(sourceColor.x, max(sourceColor.y, sourceColor.z));
+    float sourceLuma = dot(sourceColor, float3(0.299, 0.587, 0.114));
+    float centeredFalloff = saturate(1.0 - dot(centeredUV, centeredUV) * 0.18);
+    float rawMask = saturate((sourceMax * 0.72 + sourceLuma * 0.28) * centeredFalloff);
+    energyMask = pow(rawMask, max(energyPower, 0.001));
+
+    float2 normalizedU = u;
+    normalizedU.x /= max(aspect, 0.0001);
+    distortedUV = fragUV + normalizedU * uvWarpStrength;
+}

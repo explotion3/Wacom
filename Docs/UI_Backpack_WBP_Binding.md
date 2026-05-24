@@ -167,11 +167,14 @@ WBP 合同：
 | 控件名 | 推荐类型 | 缺省行为 |
 |---|---|---|
 | `DescriptionText` | `TextBlock` | 默认小卡面建议隐藏；完整长文本由详情面板承接 |
+| `SurfaceFoilOverlay` | `Image` | 卡面弱流光覆盖层；未绑定时不显示流光 |
 
 WBP 合同：
 
 - `UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。
 - `EffectStatsHost` 内部由 C++ 按 `EffectBadges[]` 动态创建 `UWacomCardEffectBadgeWidget`。
+- `SurfaceFoilOverlay` 推荐放在卡面内容最上层、`DisabledOverlay` 下方，Brush 使用 `/Game/DreamMaterials/Card/M_CardSurface_CosmicFoil`；它必须设为不可命中，不要挡住战斗手牌或背包拖拽。
+- 未绑定 `SurfaceFoilOverlay` 时，C++ 会在运行时尝试挂到第一个 `Overlay` 容器上作为临时覆盖层；正式 WBP 仍建议显式绑定，便于控制层级。
 - 未绑定部分控件不会崩溃，但对应信息不会显示。
 
 ---

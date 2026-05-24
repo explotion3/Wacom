@@ -1,0 +1,339 @@
+Shader(Name="DreamMaterials/UI/M_UI_BloodBar")
+{
+    Properties = {
+        Texture2D SoftNoise = Path(Game, "Asset/Texture/Noise01") [
+            Group="Blood Bar|Textures";
+            SortPriority=0;
+            Description="Soft cloudy noise used for blood volume variation.";
+        ];
+
+        Texture2D VeinNoise = Path(Game, "Asset/Texture/noise03") [
+            Group="Blood Bar|Textures";
+            SortPriority=10;
+            Description="High contrast noise used for darker flowing vein streaks.";
+        ];
+
+        ScalarParameter HealthPercent = 0.72 [
+            Group="Blood Bar|State";
+            SortPriority=20;
+            Description="Filled health ratio. 0 is empty and 1 is full.";
+        ];
+
+        ScalarParameter DamagePreviewPercent = 0.12 [
+            Group="Blood Bar|State";
+            SortPriority=30;
+            Description="Trailing damage preview width measured as a 0-1 ratio behind current health.";
+        ];
+
+        VectorParameter FillColor = float4(0.78, 0.02, 0.035, 1.0) [
+            Group="Blood Bar|Color";
+            SortPriority=40;
+            Description="Main healthy blood fill color.";
+        ];
+
+        VectorParameter LowHealthColor = float4(1.0, 0.12, 0.02, 1.0) [
+            Group="Blood Bar|Color";
+            SortPriority=50;
+            Description="Fill color blended in when HealthPercent is low.";
+        ];
+
+        VectorParameter BackColor = float4(0.055, 0.012, 0.018, 1.0) [
+            Group="Blood Bar|Color";
+            SortPriority=60;
+            Description="Empty bar background color.";
+        ];
+
+        VectorParameter DamageColor = float4(0.86, 0.36, 0.12, 1.0) [
+            Group="Blood Bar|Color";
+            SortPriority=70;
+            Description="Damage preview segment color.";
+        ];
+
+        VectorParameter EdgeColor = float4(1.0, 0.43, 0.23, 1.0) [
+            Group="Blood Bar|Color";
+            SortPriority=80;
+            Description="Hot edge and highlight color.";
+        ];
+
+        ScalarParameter FlowSpeed = 1.0 [
+            Group="Blood Bar|Motion";
+            SortPriority=90;
+            Description="Animation speed multiplier for flowing noise.";
+        ];
+
+        ScalarParameter EdgeSoftness = 0.012 [
+            Group="Blood Bar|Shape";
+            SortPriority=100;
+            Description="Soft transition around the health edge in UV units.";
+        ];
+
+        ScalarParameter NoiseScale = 4.0 [
+            Group="Blood Bar|Noise";
+            SortPriority=110;
+            Description="Scale for the soft noise texture.";
+        ];
+
+        ScalarParameter NoiseStrength = 0.16 [
+            Group="Blood Bar|Noise";
+            SortPriority=120;
+            Description="How strongly the soft noise modulates the fill.";
+        ];
+
+        ScalarParameter VeinScale = 3.0 [
+            Group="Blood Bar|Noise";
+            SortPriority=130;
+            Description="Scale for the flowing vein noise texture.";
+        ];
+
+        ScalarParameter VeinStrength = 0.34 [
+            Group="Blood Bar|Noise";
+            SortPriority=140;
+            Description="How strongly the vein noise darkens and shapes the fill.";
+        ];
+
+        ScalarParameter GlowIntensity = 0.55 [
+            Group="Blood Bar|Lighting";
+            SortPriority=150;
+            Description="Brightness of the hot health-edge glow.";
+        ];
+
+        ScalarParameter PulseStrength = 0.18 [
+            Group="Blood Bar|Lighting";
+            SortPriority=160;
+            Description="Low-health pulsing brightness amount.";
+        ];
+
+        ScalarParameter Opacity = 1.0 [
+            Group="Blood Bar|Shape";
+            SortPriority=170;
+            Description="Overall UI opacity multiplier.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float t = UE.Time();
+        float flowTime = t * FlowSpeed;
+
+        float hp = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=HealthPercent
+        );
+
+        float previewWidth = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=DamagePreviewPercent
+        );
+
+        float previewStartRaw = hp - previewWidth;
+        float previewStart = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=previewStartRaw
+        );
+
+        float softness = EdgeSoftness + 0.001;
+
+        float bottomFade = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.0,
+            Max=0.12,
+            Value=uv.y
+        );
+
+        float topFade = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.0,
+            Max=0.12,
+            Value=1.0 - uv.y
+        );
+
+        float leftFade = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.0,
+            Max=0.045,
+            Value=uv.x
+        );
+
+        float rightFade = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.0,
+            Max=0.045,
+            Value=1.0 - uv.x
+        );
+
+        float shapeRaw = bottomFade * topFade * leftFade * rightFade;
+        float shapeMask = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=shapeRaw
+        );
+
+        float fillEdge = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=hp,
+            Max=hp + softness,
+            Value=uv.x
+        );
+
+        float fillMask = (1.0 - fillEdge) * shapeMask;
+
+        float previewLeft = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=previewStart - softness,
+            Max=previewStart,
+            Value=uv.x
+        );
+
+        float previewMaskRaw = previewLeft * (1.0 - fillEdge) * shapeMask;
+        float previewMask = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=previewMaskRaw
+        );
+
+        float occupied = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=fillMask + previewMask
+        );
+
+        float backMask = shapeMask * (1.0 - occupied);
+
+        float2 softNoiseUV = uv * NoiseScale;
+        float2 softNoisePannedUV = UE.Panner(
+            Coordinate=softNoiseUV,
+            Time=flowTime,
+            Speed=float2(0.05, 0.0)
+        );
+
+        float softNoise = UE.Expression(
+            Class="TextureSample",
+            OutputType="float1",
+            OutputName="R",
+            TextureObject=SoftNoise,
+            Coordinates=softNoisePannedUV
+        );
+
+        float2 veinNoiseUV = float2(uv.x * VeinScale, uv.y * VeinScale * 0.42);
+        float2 veinNoisePannedUV = UE.Panner(
+            Coordinate=veinNoiseUV,
+            Time=flowTime,
+            Speed=float2(-0.08, 0.025)
+        );
+
+        float veinNoiseSample = UE.Expression(
+            Class="TextureSample",
+            OutputType="float1",
+            OutputName="R",
+            TextureObject=VeinNoise,
+            Coordinates=veinNoisePannedUV
+        );
+
+        float veinRaised = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=veinNoiseSample * 1.35 - 0.24
+        );
+
+        float veins = UE.Expression(
+            Class="Power",
+            OutputType="float1",
+            Base=veinRaised,
+            Exponent=3.0
+        ) * VeinStrength;
+
+        float lowHealthBlend = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.48,
+            Max=0.08,
+            Value=hp
+        );
+
+        float pulseSin = UE.Expression(
+            Class="Sine",
+            OutputType="float1",
+            Input=flowTime * 5.0
+        );
+
+        float pulse = (pulseSin * 0.5 + 0.5) * lowHealthBlend * PulseStrength;
+
+        float3 fillColor = float3(FillColor.x, FillColor.y, FillColor.z) + (float3(LowHealthColor.x, LowHealthColor.y, LowHealthColor.z) - float3(FillColor.x, FillColor.y, FillColor.z)) * lowHealthBlend;
+        float3 backColor = float3(BackColor.x, BackColor.y, BackColor.z);
+        float3 damageColor = float3(DamageColor.x, DamageColor.y, DamageColor.z);
+        float3 edgeColor = float3(EdgeColor.x, EdgeColor.y, EdgeColor.z);
+
+        float edgeDistance = UE.Expression(
+            Class="Abs",
+            OutputType="float1",
+            Input=uv.x - hp
+        );
+
+        float edgeLineFade = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.0,
+            Max=0.018,
+            Value=edgeDistance
+        );
+
+        float edgeLine = (1.0 - edgeLineFade) * shapeMask;
+
+        float innerHighlight = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.0,
+            Max=0.18,
+            Value=uv.y
+        ) * UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.62,
+            Max=0.26,
+            Value=uv.y
+        ) * fillMask;
+
+        float shadow = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=0.50,
+            Max=1.0,
+            Value=uv.y
+        ) * shapeMask * 0.18;
+
+        float fillVariation = 0.82 + softNoise * 0.20 + (softNoise - 0.5) * NoiseStrength + veins * 0.45 + pulse;
+        float previewVariation = 0.72 + softNoise * 0.12;
+        float backVariation = 0.78 + softNoise * 0.10 - shadow;
+
+        float3 filled = fillColor * fillVariation + edgeColor * (innerHighlight * 0.16 + edgeLine * GlowIntensity);
+        float3 previewColor = damageColor * previewVariation;
+        float3 emptyColor = backColor * backVariation;
+
+        Color = emptyColor * backMask + previewColor * previewMask + filled * fillMask;
+        Color = Color + edgeColor * shapeMask * (0.025 + pulse * 0.08);
+        Alpha = shapeMask * Opacity;
+    }
+}

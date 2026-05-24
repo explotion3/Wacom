@@ -1,0 +1,217 @@
+import "Shared/CosmicEnergy.dsh";
+
+Shader(Name="DreamMaterials/Procedural/M_CosmicEnergy_Motif")
+{
+    Properties = {
+        Texture2D DetailNoise = Path(Game, "Asset/Texture/noise05") [
+            Group="能量母题|纹理";
+            SortPriority=0;
+            Description="叠加在能量场上的细节噪声，用来打散过于干净的流光边缘。";
+        ];
+
+        VectorParameter Resolution = float4(1920.0, 1080.0, 0.0, 0.0) [
+            Group="能量母题|画面";
+            SortPriority=10;
+            Description="用于修正宽高比的目标分辨率，xy 分别对应宽和高。";
+        ];
+
+        VectorParameter BackgroundColor = float4(0.018, 0.015, 0.036, 1.0) [
+            Group="能量母题|颜色";
+            SortPriority=20;
+            Description="能量较弱区域的底色。";
+        ];
+
+        VectorParameter FlowColor = float4(0.12, 0.34, 0.92, 1.0) [
+            Group="能量母题|颜色";
+            SortPriority=30;
+            Description="主体能量流颜色，决定大面积流线的基调。";
+        ];
+
+        VectorParameter CoreColor = float4(0.92, 0.40, 1.0, 1.0) [
+            Group="能量母题|颜色";
+            SortPriority=40;
+            Description="高能量核心颜色，会在亮丝和亮斑处混入。";
+        ];
+
+        VectorParameter AccentColor = float4(0.20, 1.0, 0.82, 1.0) [
+            Group="能量母题|颜色";
+            SortPriority=50;
+            Description="少量点缀色，用来给高亮边缘增加梦境感。";
+        ];
+
+        ScalarParameter TimeScale = 0.85 [
+            Group="能量母题|动画";
+            SortPriority=60;
+            Description="整体动画速度倍率。";
+        ];
+
+        ScalarParameter Zoom = 0.20 [
+            Group="能量母题|场";
+            SortPriority=70;
+            Description="能量场坐标缩放，数值越低越像放大观察内部流动。";
+        ];
+
+        ScalarParameter Iterations = 12.0 [
+            Group="能量母题|场";
+            SortPriority=80;
+            Description="迭代次数，越高细节越丰富但开销越大，建议 UI 大面积使用时保持 8 到 14。";
+        ];
+
+        ScalarParameter DistortSpeed = 1.0 [
+            Group="能量母题|场";
+            SortPriority=90;
+            Description="每层扭曲的旋转速度。";
+        ];
+
+        ScalarParameter WarpStrength = 0.85 [
+            Group="能量母题|场";
+            SortPriority=100;
+            Description="能量累积强度，越高越容易出现明亮丝线。";
+        ];
+
+        ScalarParameter TanhStrength = 36.0 [
+            Group="能量母题|场";
+            SortPriority=110;
+            Description="高频扰动强度，影响内部细碎皱褶。";
+        ];
+
+        ScalarParameter DriftAmount = 0.18 [
+            Group="能量母题|场";
+            SortPriority=120;
+            Description="每轮迭代的坐标漂移量。";
+        ];
+
+        ScalarParameter PulseAmount = 0.85 [
+            Group="能量母题|动画";
+            SortPriority=130;
+            Description="呼吸脉冲强度。";
+        ];
+
+        ScalarParameter EnergyContrast = 1.35 [
+            Group="能量母题|明暗";
+            SortPriority=140;
+            Description="能量遮罩对比度，越高边缘越暗、亮部越集中。";
+        ];
+
+        ScalarParameter EnergyPower = 1.25 [
+            Group="能量母题|明暗";
+            SortPriority=150;
+            Description="能量遮罩曲线，越高亮部越尖锐。";
+        ];
+
+        ScalarParameter UVWarpStrength = 0.075 [
+            Group="能量母题|复用输出";
+            SortPriority=160;
+            Description="输出扰动 UV 的强度，可用于扭曲其他贴图或 UI 图案。";
+        ];
+
+        ScalarParameter NoiseScale = 3.0 [
+            Group="能量母题|纹理";
+            SortPriority=170;
+            Description="细节噪声采样缩放。";
+        ];
+
+        ScalarParameter NoiseStrength = 0.32 [
+            Group="能量母题|纹理";
+            SortPriority=180;
+            Description="细节噪声影响能量遮罩的强度。";
+        ];
+
+        ScalarParameter CoreThreshold = 0.58 [
+            Group="能量母题|明暗";
+            SortPriority=190;
+            Description="进入核心高亮颜色的能量阈值。";
+        ];
+
+        ScalarParameter SourceColorInfluence = 0.24 [
+            Group="能量母题|颜色";
+            SortPriority=200;
+            Description="保留原始 CosmicBlob 色彩变化的比例，0 表示完全使用自定义颜色。";
+        ];
+
+        ScalarParameter FinalBrightness = 1.25 [
+            Group="能量母题|明暗";
+            SortPriority=210;
+            Description="最终亮度倍率。";
+        ];
+
+        ScalarParameter Opacity = 1.0 [
+            Group="能量母题|透明";
+            SortPriority=220;
+            Description="材质整体透明度。";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * TimeScale;
+
+        float2 energyUV;
+        float energyMask;
+        float3 sourceColor;
+        CosmicEnergy_Field(uv, Resolution, time, Zoom, Iterations, DistortSpeed, WarpStrength, TanhStrength, DriftAmount, PulseAmount, EnergyContrast, EnergyPower, UVWarpStrength, energyUV, energyMask, sourceColor);
+
+        float2 detailUV = energyUV * NoiseScale;
+        float2 detailPannedUV = UE.Panner(
+            Coordinate=detailUV,
+            Time=time,
+            Speed=float2(0.025, -0.018)
+        );
+
+        float detailNoise = UE.Expression(
+            Class="TextureSample",
+            OutputType="float1",
+            OutputName="R",
+            TextureObject=DetailNoise,
+            Coordinates=detailPannedUV
+        );
+
+        float detailedMaskRaw = energyMask * (0.84 + (detailNoise - 0.5) * NoiseStrength);
+        float detailedMask = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=detailedMaskRaw
+        );
+
+        float coreMask = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=CoreThreshold,
+            Max=1.0,
+            Value=detailedMask
+        );
+
+        float accentMask = UE.Expression(
+            Class="Power",
+            OutputType="float1",
+            Base=coreMask,
+            Exponent=2.4
+        );
+
+        float3 background = float3(BackgroundColor.x, BackgroundColor.y, BackgroundColor.z);
+        float3 flow = float3(FlowColor.x, FlowColor.y, FlowColor.z);
+        float3 core = float3(CoreColor.x, CoreColor.y, CoreColor.z);
+        float3 accent = float3(AccentColor.x, AccentColor.y, AccentColor.z);
+
+        float3 themedEnergy = flow + (core - flow) * coreMask;
+        float3 sourceTint = sourceColor * SourceColorInfluence;
+        float3 glow = themedEnergy * detailedMask + accent * accentMask * 0.35 + sourceTint;
+
+        Color = (background * (1.0 - detailedMask * 0.72) + glow) * FinalBrightness;
+        Alpha = detailedMask * Opacity;
+    }
+}

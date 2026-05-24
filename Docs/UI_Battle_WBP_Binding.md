@@ -52,6 +52,7 @@ WBP 合同：
 - `RootButton` 与 `HoverVisualRoot` 推荐为同级；`RootButton` 覆盖卡牌原始占位。
 - `CardView` 只负责视觉，不处理点击、出牌、目标选择或战斗命令。
 - `FrameBorder / CardView / ZoneText` 推荐放进 `HoverVisualRoot`，保证 hover 时整张卡面一起上浮。
+- 卡面弱流光装饰由 `UWacomCardView` 的可选 `SurfaceFoilOverlay` 承接；`WBP_CardWidget` 不需要单独处理材质参数，也不要让覆盖层挡住 `RootButton`。
 - 不要对整个 `WBP_CardWidget` 做 hover 位移，否则鼠标命中区域会移动并可能造成下沿抖动。
 - 缺 `RootButton` 不崩溃，但无法点击；缺 `FrameBorder` 只影响高亮显示。
 - `BP_OnHoverChanged` 和 `BP_OnTargetingHighlightChanged` 可用于 WBP 表现，不要在这些事件里提交规则命令。

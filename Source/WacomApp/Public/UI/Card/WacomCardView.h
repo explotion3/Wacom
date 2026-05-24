@@ -10,6 +10,7 @@
 class UBorder;
 class UCardDefinition;
 class UImage;
+class UMaterialInterface;
 class UPanelWidget;
 class UTextBlock;
 class UWacomCardEffectBadgeWidget;
@@ -73,6 +74,9 @@ protected:
 	TObjectPtr<UImage> CardArt;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> SurfaceFoilOverlay;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> EffectStatsHost;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -85,5 +89,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView")
 	TSubclassOf<UWacomCardEffectBadgeWidget> EffectBadgeWidgetClass;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Surface", meta = (ToolTip = "卡牌表面弱流光覆盖材质。为空时会保留 WBP 中 SurfaceFoilOverlay 自己配置的 Brush；两者都为空则隐藏覆盖层。"))
+	TObjectPtr<UMaterialInterface> SurfaceFoilMaterial;
+
 	void ApplyCurrentDataToWidgets();
+	void EnsureSurfaceFoilOverlay();
+	void ApplySurfaceFoilOverlay();
 };

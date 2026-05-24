@@ -1,0 +1,107 @@
+Function WacomSimplePulse_Evaluate(
+    in float2 uv,
+    in float time,
+    in float4 baseColorParam,
+    in float4 accentColorParam,
+    in float ringScale,
+    in float ringSharpness,
+    in float vignetteStrength,
+    in float intensity,
+    in float opacity,
+    out float3 color,
+    out float alpha)
+{
+    float2 centeredRaw = uv * 2.0 - 1.0;
+    float2 centered = float2(centeredRaw.x * 1.6, centeredRaw.y);
+    float dist = length(centered);
+
+    float ringWave = sin(dist * ringScale - time);
+    float ring = pow(saturate(ringWave * 0.5 + 0.5), ringSharpness);
+
+    float diagonalPhase = sin(time * 0.35) * 0.35;
+    float sweep = saturate(1.0 - abs(uv.x + uv.y - 1.0 - diagonalPhase) * 3.0);
+
+    float edgeX = smoothstep(0.0, 0.08, uv.x) * smoothstep(0.0, 0.08, 1.0 - uv.x);
+    float edgeY = smoothstep(0.0, 0.08, uv.y) * smoothstep(0.0, 0.08, 1.0 - uv.y);
+    float innerMask = edgeX * edgeY;
+
+    float vignette = saturate(1.0 - dist * vignetteStrength);
+
+    float3 base = float3(baseColorParam.x, baseColorParam.y, baseColorParam.z);
+    float3 accent = float3(accentColorParam.x, accentColorParam.y, accentColorParam.z);
+
+    color = (base * (0.65 + vignette * 0.45) + accent * (ring * 0.35 + sweep * 0.18) * innerMask) * intensity;
+    alpha = opacity;
+}
+
+Shader(Name="DreamMaterials/M_Wacom_SimplePulse_UI")
+{
+    Properties = {
+        VectorParameter BaseColor = float4(0.035, 0.050, 0.075, 1.0) [
+            Group="Wacom Simple Pulse";
+            SortPriority=0;
+            Description="Dark card/UI base color. RGB is used; alpha is reserved for future instances.";
+        ];
+
+        VectorParameter AccentColor = float4(0.320, 0.860, 0.710, 1.0) [
+            Group="Wacom Simple Pulse";
+            SortPriority=10;
+            Description="Animated pulse tint. RGB is used; alpha is reserved for future instances.";
+        ];
+
+        ScalarParameter PulseSpeed = 0.7 [
+            Group="Wacom Simple Pulse";
+            SortPriority=20;
+            Description="Animation speed multiplier in cycles per second style timing. Try 0.2 to 2.0.";
+        ];
+
+        ScalarParameter RingScale = 12.0 [
+            Group="Wacom Simple Pulse";
+            SortPriority=30;
+            Description="Radial ring density across the card. Higher values create more rings. Try 6 to 24.";
+        ];
+
+        ScalarParameter RingSharpness = 2.2 [
+            Group="Wacom Simple Pulse";
+            SortPriority=40;
+            Description="Pulse contrast exponent. Higher values make thinner brighter rings. Try 1 to 5.";
+        ];
+
+        ScalarParameter VignetteStrength = 0.55 [
+            Group="Wacom Simple Pulse";
+            SortPriority=50;
+            Description="Edge darkening amount in UV space. Try 0 to 1.";
+        ];
+
+        ScalarParameter Intensity = 1.2 [
+            Group="Wacom Simple Pulse";
+            SortPriority=60;
+            Description="Final emissive brightness multiplier. Try 0.5 to 2.5.";
+        ];
+
+        ScalarParameter Opacity = 1.0 [
+            Group="Wacom Simple Pulse";
+            SortPriority=70;
+            Description="UI opacity multiplier. 1 is fully opaque; lower values fade the widget material.";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float time = UE.Time() * PulseSpeed;
+
+        WacomSimplePulse_Evaluate(uv, time, BaseColor, AccentColor, RingScale, RingSharpness, VignetteStrength, Intensity, Opacity, Color, Alpha);
+    }
+}

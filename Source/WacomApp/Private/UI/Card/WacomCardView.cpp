@@ -15,6 +15,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
 #include "Engine/Texture2D.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/ConstructorHelpers.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 
@@ -60,6 +62,13 @@ UWacomCardView::UWacomCardView(const FObjectInitializer& ObjectInitializer)
 	else
 	{
 		EffectBadgeWidgetClass = UWacomCardEffectBadgeWidget::StaticClass();
+	}
+
+	static ConstructorHelpers::FObjectFinderOptional<UMaterialInterface> SurfaceFoilMaterialFinder(
+		TEXT("/Game/DreamMaterials/Card/M_CardSurface_CosmicFoil.M_CardSurface_CosmicFoil"));
+	if (SurfaceFoilMaterialFinder.Succeeded())
+	{
+		SurfaceFoilMaterial = SurfaceFoilMaterialFinder.Get();
 	}
 }
 
@@ -137,6 +146,15 @@ TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 			ArtSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 		}
 
+		SurfaceFoilOverlay = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("SurfaceFoilOverlay"));
+		SurfaceFoilOverlay->SetVisibility(ESlateVisibility::Collapsed);
+		SurfaceFoilOverlay->SetColorAndOpacity(FLinearColor::White);
+		if (UOverlaySlot* FoilSlot = Stack->AddChildToOverlay(SurfaceFoilOverlay))
+		{
+			FoilSlot->SetHorizontalAlignment(HAlign_Fill);
+			FoilSlot->SetVerticalAlignment(VAlign_Fill);
+		}
+
 		TypeText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TypeText"));
 		TypeText->SetJustification(ETextJustify::Center);
 		TypeText->SetAutoWrapText(true);
@@ -182,6 +200,8 @@ TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 void UWacomCardView::NativeConstruct()
 {
 	Super::NativeConstruct();
+	EnsureSurfaceFoilOverlay();
+	ApplySurfaceFoilOverlay();
 	ApplyCurrentDataToWidgets();
 }
 
@@ -246,6 +266,60 @@ void UWacomCardView::ApplyCurrentDataToWidgets()
 	{
 		DisabledOverlay->SetVisibility(CurrentData.bDisabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
+}
+
+void UWacomCardView::EnsureSurfaceFoilOverlay()
+{
+	if (SurfaceFoilOverlay || !WidgetTree)
+	{
+		return;
+	}
+
+	UOverlay* HostOverlay = Cast<UOverlay>(WidgetTree->RootWidget);
+	if (!HostOverlay)
+	{
+		WidgetTree->ForEachWidget([&HostOverlay](UWidget* Widget)
+		{
+			if (!HostOverlay)
+			{
+				HostOverlay = Cast<UOverlay>(Widget);
+			}
+		});
+	}
+
+	if (!HostOverlay)
+	{
+		return;
+	}
+
+	SurfaceFoilOverlay = WidgetTree->ConstructWidget<UImage>(
+		UImage::StaticClass(),
+		TEXT("SurfaceFoilOverlay_Runtime"));
+	SurfaceFoilOverlay->SetVisibility(ESlateVisibility::Collapsed);
+	SurfaceFoilOverlay->SetColorAndOpacity(FLinearColor::White);
+
+	if (UOverlaySlot* FoilSlot = HostOverlay->AddChildToOverlay(SurfaceFoilOverlay))
+	{
+		FoilSlot->SetHorizontalAlignment(HAlign_Fill);
+		FoilSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+}
+
+void UWacomCardView::ApplySurfaceFoilOverlay()
+{
+	if (!SurfaceFoilOverlay)
+	{
+		return;
+	}
+
+	if (SurfaceFoilMaterial)
+	{
+		SurfaceFoilOverlay->SetBrushFromMaterial(SurfaceFoilMaterial);
+		SurfaceFoilOverlay->SetColorAndOpacity(FLinearColor::White);
+	}
+
+	const bool bHasFoilBrush = SurfaceFoilOverlay->GetBrush().GetResourceObject() != nullptr;
+	SurfaceFoilOverlay->SetVisibility(bHasFoilBrush ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
 
 #undef LOCTEXT_NAMESPACE
