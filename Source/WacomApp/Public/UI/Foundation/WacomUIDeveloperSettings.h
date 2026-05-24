@@ -47,11 +47,11 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI", meta = (ToolTip = "PrimaryLayout WBP 类；必须继承 UWacomPrimaryGameLayout 并提供所需 CommonUI Layer Stack。"))
 	TSoftClassPtr<UWacomPrimaryGameLayout> PrimaryLayoutClass;
 
-	/** GameplayTag 到 Widget WBP 类的注册表；Widget tag 必须放在 UI.Widget.* 下。 */
-	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI", meta = (ToolTip = "GameplayTag 到 Widget WBP 类的注册表；Widget tag 必须放在 UI.Widget.* 下。"))
+	/** GameplayTag 到 Widget WBP 类的注册表；Widget tag 必须放在 UI.Widget.* 下，已知顶层 screen tag 会校验具体 screen 父类。 */
+	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI", meta = (ToolTip = "GameplayTag 到 Widget WBP 类的注册表；Widget tag 必须放在 UI.Widget.* 下，已知顶层 screen tag 会校验具体 screen 父类。"))
 	TArray<FWacomUIWidgetClassEntry> WidgetClasses;
 
-	/** AppToast WBP 类；未配置或加载失败时回退到现有路径，再回退到 C++ 类。 */
-	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI", meta = (ToolTip = "AppToast WBP 类；未配置或加载失败时回退到现有路径，再回退到 C++ 类。"))
+	/** AppToast WBP 类；未配置或加载失败时回退到 C++ 类。 */
+	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI", meta = (ToolTip = "AppToast WBP 类；未配置或加载失败时回退到 C++ 类。"))
 	TSoftClassPtr<UWacomAppToastWidget> AppToastWidgetClass;
 };

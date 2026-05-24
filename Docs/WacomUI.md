@@ -60,28 +60,28 @@ Widget 可以有 C++ fallback 布局，但 C++ 的职责是协议、生命周期
 Wacom UI Settings V1 使用 `UWacomUIDeveloperSettings` 作为项目级软类注册表。顶层 UI 类解析优先级为：
 
 ```text
-PlayerController 显式配置
--> Wacom UI Settings
--> 当前 WBP 路径 fallback
+Wacom UI Settings
 -> C++ fallback
 ```
+
+`AWacomPlayerController` 不再提供顶层 ScreenClass 覆盖入口。需要替换顶层界面时，在 `Edit > Project Settings > Wacom UI Settings` 注册对应类。
 
 细节：
 
 | 入口 | 优先级 |
 |---|---|
 | PrimaryLayout | `Wacom UI Settings.PrimaryLayoutClass` -> `/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C`；PrimaryLayout 不走 C++ fallback，解析失败则不创建根布局 |
-| BackpackScreen | `AWacomPlayerController.BackpackScreenClass` -> `UI.Widget.BackpackScreen` settings 注册 -> `UWacomBackpackScreen` C++ fallback |
+| BackpackScreen | `UI.Widget.BackpackScreen` settings 注册 -> `UWacomBackpackScreen` C++ fallback |
 | PauseMenuScreen | `UI.Widget.PauseMenuScreen` settings 注册 -> `UWacomPauseMenuScreen` C++ fallback |
-| ShopScreen | `AWacomPlayerController.ShopScreenClass` -> `UI.Widget.ShopScreen` settings 注册 -> `/Game/Wacom/UI/Shop/WBP_ShopScreen.WBP_ShopScreen_C` -> `UWacomShopScreen` C++ fallback |
-| RunEventScreen | `AWacomPlayerController.RunEventScreenClass` -> `UI.Widget.RunEventScreen` settings 注册 -> `/Game/Wacom/UI/Event/WBP_RunEventScreen.WBP_RunEventScreen_C` -> `UWacomRunEventScreen` C++ fallback |
-| AppToast | `Wacom UI Settings.AppToastWidgetClass` -> `/Game/Wacom/UI/Foundation/WBP_AppToastWidget.WBP_AppToastWidget_C` -> `UWacomAppToastWidget` C++ fallback |
+| ShopScreen | `UI.Widget.ShopScreen` settings 注册 -> `UWacomShopScreen` C++ fallback |
+| RunEventScreen | `UI.Widget.RunEventScreen` settings 注册 -> `UWacomRunEventScreen` C++ fallback |
+| AppToast | `Wacom UI Settings.AppToastWidgetClass` -> `UWacomAppToastWidget` C++ fallback |
 
-本轮只做同步解析：Settings 软类使用同步加载，WBP 路径 fallback 使用同步 `LoadObject`，CommonUI Push 仍接收已解析的 `TSubclassOf`。异步加载和异步 Push 不在 V1 内，后续需要单独设计加载状态、失败回调和 Push 时序。
+本轮只做同步解析：Settings 软类使用同步加载；PrimaryLayout 的路径 fallback 使用同步 `LoadObject`；CommonUI Push 仍接收已解析的 `TSubclassOf`。异步加载和异步 Push 不在 V1 内，后续需要单独设计加载状态、失败回调和 Push 时序。
 
 ### Wacom UI Settings 配置校验
 
-Wacom UI Settings 是可选覆盖入口，不要求本轮配置所有顶层 WBP。未配置或配置加载失败时，仍按上表回退到路径 fallback 或 C++ fallback；其中 Shop / RunEvent / PauseMenu 等 `WidgetClasses` 缺失属于合法 fallback，不是错误。
+Wacom UI Settings 是顶层 UI WBP 的唯一项目级覆盖入口，不要求本轮配置所有顶层 WBP。未配置或配置加载失败时，仍按上表回退：PrimaryLayout 只允许固定路径 fallback / null；其余顶层界面回到对应 C++ fallback。其中 Shop / RunEvent / PauseMenu 等 `WidgetClasses` 缺失属于合法 fallback，不是错误。
 
 编辑器 Data Validation 应检查以下错误：
 
@@ -135,10 +135,11 @@ CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。
 
 `UWacomAppToastSubsystem` 是战斗外通用反馈出口。它持有唯一 `UWacomAppToastWidget`，直接 `AddToViewport(ZOrder=10000)`，不进入 CommonUI Stack。
 
-默认 Toast WBP 路径：
+Toast WBP 注册口径：
 
-- `/Game/Wacom/UI/Foundation/WBP_AppToastWidget.WBP_AppToastWidget_C`
 - 父类：`UWacomAppToastWidget`
+- 在 `Edit > Project Settings > Wacom UI Settings` 的 `AppToastWidgetClass` 注册正式 WBP。
+- 未注册、软类加载失败或类型不匹配时，回退 `UWacomAppToastWidget` C++ fallback；不再按旧固定 WBP 路径尝试加载。
 - 可选绑定：`Container : VerticalBox`
 
 当前生命周期：
@@ -334,7 +335,7 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 - 战斗手牌卡面，额外用 `FHandCardSnapshot.RuntimeCost` 覆盖费用显示。
 - 商店商品 ViewData。
 
-`UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。旧静态入口 `BuildFromCardDefinition / BuildDetailFromCardDefinition` 仅作为兼容转发，新代码应直接用 PresentationBuilder；移除旧入口的清理项见 [TechDebt: UI 层技术债](./TechDebt.md#techdebt-ui)。
+`UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。卡牌展示数据统一由 `UWacomCardPresentationBuilder` 生成；不要在 CardView 上恢复 Definition 级 legacy static API。
 
 `UWacomCardDetailPanel` 只显示 `FWacomCardDetailViewData`。当前详情数据来自 DisplayName、Description 和 Passives；任务、变化等字段等待卡牌数据结构正式扩展。
 

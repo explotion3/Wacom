@@ -17,6 +17,10 @@ class UWacomRunEventDefinition;
 class UWacomSaveGame;
 struct FBattleInitParams;
 
+#if WITH_AUTOMATION_TESTS
+struct FWacomRunSessionTestAccess;
+#endif
+
 /**
  * 一次冒险（Run）的逻辑入口。
  *
@@ -78,15 +82,6 @@ public:
 	/** 只读：当前 Run 的状态。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	const FRunState& GetRunState() const { return RunState; }
-
-#if WITH_AUTOMATION_TESTS
-	/**
-	 * 仅供 automation tests 构造边界/非法 RunState。
-	 *
-	 * 生产代码必须使用窄命令入口修改 RunState，不能调用本方法。
-	 */
-	FRunState& GetMutableRunStateForAutomationTest() { return RunState; }
-#endif
 
 	/** 是否仍在 Run 中（bRunActive == true）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
@@ -460,10 +455,8 @@ public:
 
 	/**
 	 * 兼容旧入口：按 Definition 创建一张新 instance 并加入背包。
-	 * 新逻辑应使用 AcquireCardToRun；本函数仅保留给旧蓝图 / 测试兼容。
+	 * 新逻辑应使用 AcquireCardToRun；本函数仅保留给旧 C++ 调用点兼容。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
-		meta = (DeprecatedFunction, DeprecationMessage = "Legacy API. Use AcquireCardToRun to create a new owned card instance."))
 	void AddCardToBackpack(UCardDefinition* Card);
 
 	/**
@@ -488,8 +481,6 @@ public:
 	 *
 	 * 返回 true=销毁成功；false=拒绝。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
-		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use DestroyCardByInstance for owned card operations."))
 	bool DestroyCardFromBackpack(UCardDefinition* Card);
 
 	/**
@@ -514,8 +505,6 @@ public:
 	 *
 	 * 返回 true=成功销毁并发金币；false=拒绝（同 DestroyCardFromBackpack）。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
-		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use DeleteCardForGoldByInstance for player/UI operations."))
 	bool DeleteCardForGold(UCardDefinition* Card);
 
 	/** 删牌区入口：按 instance 精确销毁一张卡并按稀有度发金币。 */
@@ -531,8 +520,6 @@ public:
 	int32 GetDeleteGoldRewardForInstance(FGuid InstanceId) const;
 
 	/** 兼容旧校验入口：按 Definition 校验第一张匹配的已拥有 instance；UI / 玩家操作应使用 ByInstance。 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck",
-		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use ValidateDeleteCardForGoldByInstance for player/UI operations."))
 	FRunDeckOperationValidation ValidateDeleteCardForGold(UCardDefinition* Card) const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
@@ -550,8 +537,6 @@ public:
 	 *
 	 * 注意：同一 Card Definition 在 Backpack 中有多张时允许多次加入 BattleDeck。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
-		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use MoveInstance for owned card movement."))
 	bool AddCardToBattleDeck(UCardDefinition* Card);
 
 	/**
@@ -562,8 +547,6 @@ public:
 	 *   - Card 是 Intrinsic
 	 *   - Card 不在 BattleDeck 中
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck",
-		meta = (DeprecatedFunction, DeprecationMessage = "Legacy first-match API. Use MoveInstance for owned card movement."))
 	bool RemoveCardFromBattleDeck(UCardDefinition* Card);
 
 	// ---- 经济：金币 ----
@@ -768,6 +751,10 @@ public:
 	bool ApplySaveGameToRunState(UWacomSaveGame* SaveGame);
 
 private:
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomRunSessionTestAccess;
+#endif
+
 	/**
 	 * 当 ExperienceCurrent ≥ ExperienceCapacity 时入账技能（可多次）。
 	 * 当前用占位 tag `SkillSlot.Placeholder`，不挂效果。
@@ -851,3 +838,19 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|Run", Transient)
 	FRunState RunState;
 };
+
+#if WITH_AUTOMATION_TESTS
+/**
+ * Tests-only access for constructing invalid or boundary RunState fixtures.
+ *
+ * This deliberately stays outside UFUNCTION/Blueprint exposure so production
+ * callers keep using narrow RunSession command APIs.
+ */
+struct FWacomRunSessionTestAccess
+{
+	static FRunState& GetMutableRunState(URunSession& Session)
+	{
+		return Session.RunState;
+	}
+};
+#endif

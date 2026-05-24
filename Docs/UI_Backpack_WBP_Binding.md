@@ -24,9 +24,10 @@ tags:
 
 加载口径：
 
-- `AWacomPlayerController::BackpackScreenClass` 未配置时，直接回退 C++ `UWacomBackpackScreen`。
+- 顶层背包 WBP 通过 `Edit > Project Settings > Wacom UI Settings` 注册。
+- 在 `WidgetClasses` 中添加 `UI.Widget.BackpackScreen`，Class 指向正式 `WBP_BackpackScreen`。
+- 未注册、软类加载失败或类型不匹配时，直接回退 C++ `UWacomBackpackScreen`。
 - 当前不会自动按固定路径加载一个总的 `WBP_BackpackScreen`。
-- 若要使用正式 WBP，需要在 PlayerController 蓝图或关卡配置里把 `BackpackScreenClass` 指向该 WBP。
 - 局部 Zone WBP 仍由 `UWacomBackpackScreen` 按默认路径尝试加载；这些只替换单个区块外壳。
 
 推荐绑定：

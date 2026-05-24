@@ -140,7 +140,9 @@ Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCard
 
 玩家已拥有卡的操作以 `InstanceId` 为主。`DestroyCardByInstance()` / `ValidateDestroyCardByInstance()`、`DeleteCardForGoldByInstance()`、`MoveInstance()` 等入口用于 UI 和交互层提交某一张具体卡。
 
-旧 Definition 级入口 `DestroyCardFromBackpack()`、`DeleteCardForGold()`、`AddCardToBattleDeck()`、`RemoveCardFromBattleDeck()` 只作为兼容入口保留：它们会在对应来源范围内删除或移动第一张匹配 Definition 的 instance。RunEvent / DataAsset 仍可用 Definition 表达“获得一张某种卡”或“交出一张某种卡”，因为这些是资产语义，不指向玩家当前拥有的某个具体实例。
+旧 Definition 级入口 `DestroyCardFromBackpack()`、`DeleteCardForGold()`、`AddCardToBattleDeck()`、`RemoveCardFromBattleDeck()` 只作为 C++ 兼容入口和资产语义桥保留，不再 Blueprint 暴露：它们会在对应来源范围内删除或移动第一张匹配 Definition 的 instance。UI、蓝图玩家操作和交互层必须使用 `InstanceId` 入口，不能用 Definition 指代某张已拥有卡。
+
+RunEvent / DataAsset 仍可用 Definition 表达“获得一张某种卡”或“交出一张某种卡”，因为这些是资产语义，不指向玩家当前拥有的某个具体实例。
 
 ### 容器分类
 
@@ -188,7 +190,7 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 
 永久销毁入口用于删牌、事件交出卡、未来出售或战败丢弃。
 
-当前统一规则由 `Private/Deck/RunDeckRules.*` 承接。历史 public API `DestroyCardFromBackpack()` 保留旧名兼容蓝图和测试，但实际会按固定顺序搜索所有玩家拥有区：`Backpack -> BattleDeck -> BurdenZone -> SpecialZones`。
+当前统一规则由 `Private/Deck/RunDeckRules.*` 承接。历史 public API `DestroyCardFromBackpack()` 保留旧名兼容 C++ 调用点和测试，不再 Blueprint 暴露；Blueprint / UI 玩家操作必须使用 `DestroyCardByInstance()` 等 InstanceId 入口。该兼容入口实际会按固定顺序搜索所有玩家拥有区：`Backpack -> BattleDeck -> BurdenZone -> SpecialZones`。
 
 当前保护规则：
 

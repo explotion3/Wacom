@@ -130,57 +130,6 @@ bool FWacomUIBackpackCardEffectBadgeWidgetDataSpec::RunTest(const FString& /*Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBackpackCardViewBuilderCompatibilitySpec,
-	"Wacom.UI.Backpack.CardViewBuilderCompatibility",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBackpackCardViewBuilderCompatibilitySpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
-	Card->CardId = TEXT("CompatibilityCard");
-	Card->DisplayName = FText::FromString(TEXT("兼容测试卡"));
-	Card->Description = FText::FromString(TEXT("造成 3 伤害。"));
-	Card->BaseCost = 2;
-	Card->Rarity = WacomTags::Card_Rarity_Blue;
-
-	FCardEffect Damage;
-	Damage.EffectType = WacomTags::Effect_Damage;
-	Damage.Magnitude = 3;
-	Card->Effects.Add(Damage);
-
-	FCardPassive Passive;
-	Passive.Trigger = WacomTags::Passive_Trigger_AfterPlayed;
-	Passive.DisplayText = FText::FromString(TEXT("打出后：兼容测试。"));
-	Card->Passives.Add(Passive);
-
-	const FWacomCardViewData BuilderSummary = UWacomCardPresentationBuilder::BuildCardViewData(Card.Get());
-	const FWacomCardViewData LegacySummary = UWacomCardView::BuildFromCardDefinition(Card.Get());
-
-	TestEqual(TEXT("Legacy summary name matches builder"), LegacySummary.Name.ToString(), BuilderSummary.Name.ToString());
-	TestEqual(TEXT("Legacy summary cost matches builder"), LegacySummary.Cost, BuilderSummary.Cost);
-	TestEqual(TEXT("Legacy summary value matches builder"), LegacySummary.Value, BuilderSummary.Value);
-	TestEqual(TEXT("Legacy summary badge count matches builder"), LegacySummary.EffectBadges.Num(), BuilderSummary.EffectBadges.Num());
-	if (LegacySummary.EffectBadges.Num() > 0 && BuilderSummary.EffectBadges.Num() > 0)
-	{
-		TestTrue(TEXT("Legacy badge kind matches builder"), LegacySummary.EffectBadges[0].Kind == BuilderSummary.EffectBadges[0].Kind);
-		TestEqual(TEXT("Legacy badge value matches builder"), LegacySummary.EffectBadges[0].Value, BuilderSummary.EffectBadges[0].Value);
-	}
-
-	const FWacomCardDetailViewData BuilderDetail = UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
-	const FWacomCardDetailViewData LegacyDetail = UWacomCardView::BuildDetailFromCardDefinition(Card.Get());
-
-	TestEqual(TEXT("Legacy detail name matches builder"), LegacyDetail.Name.ToString(), BuilderDetail.Name.ToString());
-	TestEqual(TEXT("Legacy detail description matches builder"), LegacyDetail.Description.ToString(), BuilderDetail.Description.ToString());
-	TestEqual(TEXT("Legacy detail passive count matches builder"), LegacyDetail.PassiveLines.Num(), BuilderDetail.PassiveLines.Num());
-	if (LegacyDetail.PassiveLines.Num() > 0 && BuilderDetail.PassiveLines.Num() > 0)
-	{
-		TestEqual(TEXT("Legacy detail passive matches builder"), LegacyDetail.PassiveLines[0].ToString(), BuilderDetail.PassiveLines[0].ToString());
-	}
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackZoneSectionWidgetDataSpec,
 	"Wacom.UI.Backpack.ZoneSectionWidgetData",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

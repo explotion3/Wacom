@@ -152,17 +152,18 @@ PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md
 
 顶层 UI 类解析由 App 侧入口执行，表现合同见 `WacomUI.md`：
 
-- Shop / RunEvent 优先使用 `AWacomPlayerController` 上的显式类配置。
-- 未显式配置时查询 `UWacomUIDeveloperSettings` 的软类注册表。
-- Settings 未命中、软类为空或加载失败时回到当前 WBP 路径 fallback。
-- Shop / RunEvent / Toast 的 WBP fallback 仍失败时使用 C++ fallback；PrimaryLayout 不走 C++ fallback，解析失败则拒绝创建根布局。
+- 顶层 Screen / Toast 不再通过 `AWacomPlayerController` 暴露 ScreenClass 覆盖入口。
+- Backpack / PauseMenu / Shop / RunEvent 通过 `UWacomUIDeveloperSettings.WidgetClasses` 的 `UI.Widget.*` tag 注册。
+- AppToast 通过 `UWacomUIDeveloperSettings.AppToastWidgetClass` 注册。
+- Settings 未命中、软类为空或加载失败时，Backpack / PauseMenu / Shop / RunEvent / Toast 回到对应 C++ fallback。
+- PrimaryLayout 优先使用 `UWacomUIDeveloperSettings.PrimaryLayoutClass`；未配置或加载失败时只尝试固定 `WBP_PrimaryGameLayout` 路径 fallback，仍失败则拒绝创建根布局。
 - 本轮保持同步解析和同步 Push，不引入异步 Push；异步加载状态、失败处理和 Push 时序后续单独设计。
 
 编辑器配置与验证清单：
 
 - 在 `Edit > Project Settings > Wacom UI Settings` 填写需要覆盖的 UI 类；本轮不强制配置所有顶层 WBP。
 - 保存配置后可通过编辑器 Data Validation 检查 Wacom UI Settings，确认 PrimaryLayout、AppToast 和 `WidgetClasses` 的继承关系、tag 命名、重复 tag、空 class 等错误。
-- PIE 时仍按 `PlayerController` 显式 class -> Wacom UI Settings -> fallback 的优先级解析；Shop / RunEvent / PauseMenu 等未配置 settings 项时，应继续走合法 fallback。
+- PIE 时按 Wacom UI Settings -> fallback 的优先级解析；Shop / RunEvent / PauseMenu 等未配置 settings 项时，应继续走合法 C++ fallback。
 
 探索期背包、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、Push 失败回滚，以及商店 / RunEvent 这类外部流程返回时的 RunSession 清理。
 

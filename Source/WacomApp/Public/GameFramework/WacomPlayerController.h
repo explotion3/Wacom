@@ -10,12 +10,8 @@ class UEnemyDefinition;
 class UInputMappingContext;
 class UInputAction;
 class ABattleTriggerActor;
-class UCommonActivatableWidget;
 class URunSession;
 class UBattleHUD;
-class UWacomBackpackScreen;
-class UWacomShopScreen;
-class UWacomRunEventScreen;
 class UWacomRunEventDefinition;
 struct FRunShopOfferInput;
 
@@ -103,25 +99,6 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_OpenBackpack;
-
-	/**
-	 * 背包 UI。蓝图未配则按 UI Settings 的 UI.Widget.BackpackScreen 解析，最后回退 C++ 父类。
-	 * 蓝图子类（如 BP_PlayerController）可在 Details 面板拖 WBP_BackpackScreen 覆盖。
-	 */
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
-	TSubclassOf<UWacomBackpackScreen> BackpackScreenClass;
-
-	/**
-	 * 商店 UI。蓝图未配则按 UI Settings 解析，再回退旧 WBP 路径，最后回退 C++ 最小界面。
-	 */
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
-	TSubclassOf<UWacomShopScreen> ShopScreenClass;
-
-	/**
-	 * 探索事件 UI。蓝图未配则按 UI Settings 解析，再回退旧 WBP 路径，最后回退 C++ 最小界面。
-	 */
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
-	TSubclassOf<UWacomRunEventScreen> RunEventScreenClass;
 
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();

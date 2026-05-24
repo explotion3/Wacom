@@ -64,9 +64,9 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | 背包 UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
 | 背包 UI 全量 RebuildAll | ViewModel 刷新后清空 WrapBox 重建 | 卡量或动画需求上升时做 instance diff，或迁 ListView / TileView |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
-| AppToast fallback | 直接 AddToViewport，文本显示为主；保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
+| AppToast C++ fallback 表现 | 顶层旧 WBP 路径 fallback 已移除；当前未配置 settings 时仍直接 AddToViewport，文本显示为主，保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
+| PrimaryLayout 固定路径 fallback | 顶层旧路径 fallback 已收窄；PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |
 | `FluxMainCardsHost` 兼容字段 | 旧 WBP 兼容保留，正式通量主卡概念已移除 | 旧 WBP 退场后删除兼容字段和空实现 |
-| `UWacomCardView::Build*` 兼容入口 | 静态函数仅转发到 `UWacomCardPresentationBuilder` | 确认无蓝图 / 代码依赖后移除 |
 
 <a id="techdebt-run-session"></a>
 ## RunSession 结构债
@@ -74,6 +74,7 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | 项 | 临时做法 / 当前决定 | 正式方案 / 处理方向 |
 |---|---|---|
 | `URunSession` 仍承担多个领域流程 | 背包 / 负重 / 永久移除规则、RunEvent 执行、商店事务、战斗回传结算、SaveGame 字段拷贝均已抽到私有 helper；`RunSession.cpp` 仍保留 public 命令协调、slot IO、时间 / 压力等基础入口 | 暂不继续拆；后续若时间 / 压力或 slot IO 继续膨胀，再按低风险切片拆私有 helper |
+| Definition 级 deck wrappers | `AddCardToBattleDeck()` / `RemoveCardFromBattleDeck()` 等 Definition 级入口不再 Blueprint 暴露，但 C++ 兼容入口和资产语义桥仍保留 | 后续确认 C++ 调用点迁到 InstanceId 或显式资产语义 helper 后，再删除兼容 wrapper |
 
 <a id="techdebt-ui-architecture"></a>
 ## UI 架构债
@@ -106,3 +107,7 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 - Enhanced Input 已扩展为 `IMC_Exploration` / `IMC_Battle`，由流程 Push / Pop 切换
 - 背包容量、A / B 容器、SpecialZone、负重区规则已在 `WacomRun.md §5` 正式化
 - RunEvent、Shop、AppToast 的第一版链路已在 `WacomRun.md`、`WacomApp.md`、`WacomUI.md`、`WacomData.md` 正式化
+- 顶层 Backpack / Shop / RunEvent 的 `PlayerController` ScreenClass 配置路径已移除，统一走 Wacom UI Settings -> C++ fallback
+- Shop / RunEvent / AppToast 的旧固定 WBP 路径 fallback 已移除；PrimaryLayout 是本轮保留的唯一固定路径 fallback
+- `UWacomCardView::BuildFromCardDefinition / BuildDetailFromCardDefinition` legacy static API 已清理，新代码统一使用 `UWacomCardPresentationBuilder`
+- Run Definition 级 deck wrappers 已取消 Blueprint 暴露；C++ 兼容入口暂留，见 RunSession 结构债

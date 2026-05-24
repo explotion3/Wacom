@@ -18,7 +18,7 @@ struct FRunShopOffer;
  * 最小可用商店界面。
  *
  * 第一版提供 C++ fallback 布局：显示当前 Run 商店快照、购买按钮和关闭按钮。
- * 后续可用 WBP_ShopScreen 继承本类替换视觉，但购买和关闭结算仍走本类接口。
+ * 后续可用正式商店 WBP 子类继承本类替换视觉，但购买和关闭结算仍走本类接口。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomShopScreen : public UWacomMenuWidgetBase

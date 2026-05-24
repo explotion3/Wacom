@@ -2,9 +2,14 @@
 
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 
+#include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomActivatableWidget.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
+#include "UI/Foundation/WacomUITags.h"
+#include "UI/Menus/WacomPauseMenuScreen.h"
+#include "UI/Shop/WacomShopScreen.h"
 
 #include "UObject/SoftObjectPath.h"
 
@@ -17,6 +22,27 @@ namespace
 	bool IsUIWidgetTag(const FGameplayTag& WidgetTag)
 	{
 		return WidgetTag.IsValid() && WidgetTag.ToString().StartsWith(UIWidgetTagPrefix);
+	}
+
+	UClass* GetExpectedWidgetClassParent(const FGameplayTag& WidgetTag)
+	{
+		if (WidgetTag == WacomUITags::UI_Widget_BackpackScreen.GetTag())
+		{
+			return UWacomBackpackScreen::StaticClass();
+		}
+		if (WidgetTag == WacomUITags::UI_Widget_ShopScreen.GetTag())
+		{
+			return UWacomShopScreen::StaticClass();
+		}
+		if (WidgetTag == WacomUITags::UI_Widget_RunEventScreen.GetTag())
+		{
+			return UWacomRunEventScreen::StaticClass();
+		}
+		if (WidgetTag == WacomUITags::UI_Widget_PauseMenuScreen.GetTag())
+		{
+			return UWacomPauseMenuScreen::StaticClass();
+		}
+		return UWacomActivatableWidget::StaticClass();
 	}
 
 	template<typename ExpectedT>
@@ -47,6 +73,43 @@ namespace
 				LOCTEXT("SoftClassWrongParent", "{0} 必须继承 {1}，当前为 {2}"),
 				FieldLabel,
 				FText::FromString(ExpectedT::StaticClass()->GetName()),
+				FText::FromString(LoadedClass->GetName())));
+		}
+	}
+
+	void ValidateSoftWidgetClass(
+		const TSoftClassPtr<UWacomActivatableWidget>& SoftClass,
+		UClass* ExpectedParentClass,
+		const FText& FieldLabel,
+		TArray<FText>& OutErrors)
+	{
+		if (SoftClass.IsNull())
+		{
+			return;
+		}
+
+		if (!ExpectedParentClass)
+		{
+			ExpectedParentClass = UWacomActivatableWidget::StaticClass();
+		}
+
+		UObject* LoadedObject = SoftClass.ToSoftObjectPath().TryLoad();
+		UClass* LoadedClass = Cast<UClass>(LoadedObject);
+		if (!LoadedClass)
+		{
+			OutErrors.Add(FText::Format(
+				LOCTEXT("SoftWidgetClassLoadFailed", "{0} 加载失败或不是 UClass：{1}"),
+				FieldLabel,
+				FText::FromString(SoftClass.ToString())));
+			return;
+		}
+
+		if (!LoadedClass->IsChildOf(ExpectedParentClass))
+		{
+			OutErrors.Add(FText::Format(
+				LOCTEXT("SoftWidgetClassWrongParent", "{0} 必须继承 {1}，当前为 {2}"),
+				FieldLabel,
+				FText::FromString(ExpectedParentClass->GetName()),
 				FText::FromString(LoadedClass->GetName())));
 		}
 	}
@@ -109,8 +172,9 @@ bool UWacomUIDeveloperSettings::ValidateSettings(TArray<FText>& OutErrors) const
 			continue;
 		}
 
-		ValidateSoftClass(
+		ValidateSoftWidgetClass(
 			Entry.WidgetClass,
+			GetExpectedWidgetClassParent(Entry.WidgetTag),
 			FText::Format(
 				LOCTEXT("WidgetClassLabel", "{0}.WidgetClass"),
 				EntryLabel),

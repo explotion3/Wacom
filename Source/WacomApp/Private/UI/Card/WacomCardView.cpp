@@ -18,7 +18,6 @@
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
-#include "UI/Card/WacomCardPresentationBuilder.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardView"
 
@@ -209,16 +208,6 @@ void UWacomCardView::SetCardViewData(const FWacomCardViewData& InData)
 {
 	CurrentData = InData;
 	ApplyCurrentDataToWidgets();
-}
-
-FWacomCardViewData UWacomCardView::BuildFromCardDefinition(const UCardDefinition* Card)
-{
-	return UWacomCardPresentationBuilder::BuildCardViewData(Card);
-}
-
-FWacomCardDetailViewData UWacomCardView::BuildDetailFromCardDefinition(const UCardDefinition* Card)
-{
-	return UWacomCardPresentationBuilder::BuildCardDetailViewData(Card);
 }
 
 void UWacomCardView::ApplyCurrentDataToWidgets()

@@ -3,10 +3,12 @@
 #include "Misc/AutomationTest.h"
 
 #include "Engine/GameInstance.h"
+#include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
+#include "UI/Shop/WacomShopScreen.h"
 #include "UI/WacomUISettingsTestProbes.h"
 
 #include "UObject/StrongObjectPtr.h"
@@ -63,7 +65,7 @@ void AddMissingWidgetClassExpectedMessages(FAutomationTestBase& Test)
 
 FWacomUIWidgetClassEntry MakeWidgetEntry(
 	const FGameplayTag& WidgetTag,
-	TSubclassOf<UWacomActivatableWidget> WidgetClass = UWacomUISettingsConfiguredWidgetProbe::StaticClass())
+	TSubclassOf<UWacomActivatableWidget> WidgetClass)
 {
 	FWacomUIWidgetClassEntry Entry;
 	Entry.WidgetTag = WidgetTag;
@@ -103,11 +105,11 @@ bool FWacomUISettingsResolveWidgetClassEmptySettingsSpec::RunTest(const FString&
 
 	const TSubclassOf<UWacomActivatableWidget> ResolvedClass = UIManager->ResolveWidgetClass(
 		WacomUITags::UI_Widget_ShopScreen.GetTag(),
-		UWacomUISettingsFallbackWidgetProbe::StaticClass());
+		UWacomShopScreen::StaticClass());
 
 	TestEqual(TEXT("Missing settings entry falls back without crashing"),
 		ResolvedClass.Get(),
-		UWacomUISettingsFallbackWidgetProbe::StaticClass());
+		UWacomShopScreen::StaticClass());
 
 	return true;
 }
@@ -122,7 +124,7 @@ bool FWacomUISettingsResolveWidgetClassConfiguredTagSpec::RunTest(const FString&
 	FWacomScopedUISettingsOverride SettingsOverride;
 	FWacomUIWidgetClassEntry Entry;
 	Entry.WidgetTag = WacomUITags::UI_Widget_ShopScreen.GetTag();
-	Entry.WidgetClass = UWacomUISettingsConfiguredWidgetProbe::StaticClass();
+	Entry.WidgetClass = UWacomUISettingsShopScreenProbe::StaticClass();
 	SettingsOverride.Get().WidgetClasses.Add(Entry);
 
 	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
@@ -130,11 +132,11 @@ bool FWacomUISettingsResolveWidgetClassConfiguredTagSpec::RunTest(const FString&
 
 	const TSubclassOf<UWacomActivatableWidget> ResolvedClass = UIManager->ResolveWidgetClass(
 		WacomUITags::UI_Widget_ShopScreen.GetTag(),
-		UWacomUISettingsFallbackWidgetProbe::StaticClass());
+		UWacomShopScreen::StaticClass());
 
 	TestEqual(TEXT("Configured widget tag resolves to settings class"),
 		ResolvedClass.Get(),
-		UWacomUISettingsConfiguredWidgetProbe::StaticClass());
+		UWacomUISettingsShopScreenProbe::StaticClass());
 
 	return true;
 }
@@ -178,11 +180,11 @@ bool FWacomUISettingsResolveWidgetClassEmptyWidgetClassFallbackSpec::RunTest(con
 
 	const TSubclassOf<UWacomActivatableWidget> ResolvedClass = UIManager->ResolveWidgetClass(
 		WacomUITags::UI_Widget_RunEventScreen.GetTag(),
-		UWacomUISettingsFallbackWidgetProbe::StaticClass());
+		UWacomRunEventScreen::StaticClass());
 
 	TestEqual(TEXT("Empty settings widget class falls back"),
 		ResolvedClass.Get(),
-		UWacomUISettingsFallbackWidgetProbe::StaticClass());
+		UWacomRunEventScreen::StaticClass());
 
 	return true;
 }
@@ -195,21 +197,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUISettingsResolveToastWidgetClassEmptySettingsSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomScopedUISettingsOverride SettingsOverride;
-	AddExpectedErrorPlain(
-		TEXT("WBP_AppToastWidget"),
-		EAutomationExpectedErrorFlags::Contains,
-		-1);
 	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
 	TStrongObjectPtr<UWacomGameUIManagerSubsystem> UIManager(MakeUIManager(GameInstance.Get()));
 
 	const TSubclassOf<UWacomAppToastWidget> ResolvedClass = UIManager->ResolveToastWidgetClass();
 
-	TestNotNull(TEXT("Empty settings resolves a non-null toast fallback"), ResolvedClass.Get());
-	if (ResolvedClass)
-	{
-		TestTrue(TEXT("Toast fallback remains a UWacomAppToastWidget class"),
-			ResolvedClass->IsChildOf(UWacomAppToastWidget::StaticClass()));
-	}
+	TestEqual(TEXT("Empty settings resolves the C++ toast fallback"),
+		ResolvedClass.Get(),
+		UWacomAppToastWidget::StaticClass());
 
 	return true;
 }
@@ -223,7 +218,18 @@ bool FWacomUISettingsValidationValidDefaultsSpec::RunTest(const FString& /*Param
 {
 	FWacomScopedUISettingsOverride SettingsOverride;
 
-	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(WacomUITags::UI_Widget_BackpackScreen.GetTag()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomUITags::UI_Widget_BackpackScreen.GetTag(),
+		UWacomUISettingsBackpackScreenProbe::StaticClass()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomUITags::UI_Widget_ShopScreen.GetTag(),
+		UWacomUISettingsShopScreenProbe::StaticClass()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomUITags::UI_Widget_RunEventScreen.GetTag(),
+		UWacomUISettingsRunEventScreenProbe::StaticClass()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomUITags::UI_Widget_PauseMenuScreen.GetTag(),
+		UWacomUISettingsPauseMenuScreenProbe::StaticClass()));
 
 	return TestSettingsValid(
 		*this,
@@ -271,10 +277,6 @@ bool FWacomUISettingsValidationConfiguredToastInvalidPathSpec::RunTest(const FSt
 	FWacomScopedUISettingsOverride SettingsOverride;
 	SettingsOverride.Get().AppToastWidgetClass = MissingWidgetClassPath;
 	AddMissingWidgetClassExpectedMessages(*this);
-	AddExpectedErrorPlain(
-		TEXT("WBP_AppToastWidget"),
-		EAutomationExpectedErrorFlags::Contains,
-		-1);
 
 	TestSettingsInvalid(
 		*this,
@@ -285,12 +287,9 @@ bool FWacomUISettingsValidationConfiguredToastInvalidPathSpec::RunTest(const FSt
 	TStrongObjectPtr<UWacomGameUIManagerSubsystem> UIManager(MakeUIManager(GameInstance.Get()));
 
 	const TSubclassOf<UWacomAppToastWidget> ResolvedClass = UIManager->ResolveToastWidgetClass();
-	TestNotNull(TEXT("Bad AppToastWidgetClass falls back to a non-null class"), ResolvedClass.Get());
-	if (ResolvedClass)
-	{
-		TestTrue(TEXT("Toast fallback remains a UWacomAppToastWidget class"),
-			ResolvedClass->IsChildOf(UWacomAppToastWidget::StaticClass()));
-	}
+	TestEqual(TEXT("Bad AppToastWidgetClass falls back to the C++ toast class"),
+		ResolvedClass.Get(),
+		UWacomAppToastWidget::StaticClass());
 
 	return true;
 }
@@ -304,7 +303,9 @@ bool FWacomUISettingsValidationWidgetEntryMissingTagOrClassSpec::RunTest(const F
 {
 	{
 		FWacomScopedUISettingsOverride SettingsOverride;
-		SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(FGameplayTag()));
+		SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+			FGameplayTag(),
+			UWacomUISettingsConfiguredWidgetProbe::StaticClass()));
 
 		TestSettingsInvalid(
 			*this,
@@ -335,8 +336,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUISettingsValidationWidgetEntryDuplicateTagSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomScopedUISettingsOverride SettingsOverride;
-	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(WacomUITags::UI_Widget_ShopScreen.GetTag()));
-	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(WacomUITags::UI_Widget_ShopScreen.GetTag()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomUITags::UI_Widget_ShopScreen.GetTag(),
+		UWacomUISettingsShopScreenProbe::StaticClass()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomUITags::UI_Widget_ShopScreen.GetTag(),
+		UWacomUISettingsShopScreenProbe::StaticClass()));
 
 	return TestSettingsInvalid(
 		*this,
@@ -352,7 +357,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUISettingsValidationWidgetEntryOutsideUIWidgetNamespaceSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomScopedUISettingsOverride SettingsOverride;
-	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(WacomUITags::UI_Layer_Game.GetTag()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomUITags::UI_Layer_Game.GetTag(),
+		UWacomUISettingsConfiguredWidgetProbe::StaticClass()));
 
 	return TestSettingsInvalid(
 		*this,
@@ -404,6 +411,37 @@ bool FWacomUISettingsValidationWrongParentClassesSpec::RunTest(const FString& /*
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsValidationWidgetEntryWrongScreenParentFallbackSpec,
+	"Wacom.UI.Settings.Validation.WidgetEntryWrongScreenParentFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsValidationWidgetEntryWrongScreenParentFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	FWacomUIWidgetClassEntry Entry;
+	Entry.WidgetTag = WacomUITags::UI_Widget_ShopScreen.GetTag();
+	Entry.WidgetClass = UWacomUISettingsConfiguredWidgetProbe::StaticClass();
+	SettingsOverride.Get().WidgetClasses.Add(Entry);
+
+	TestSettingsInvalid(
+		*this,
+		SettingsOverride.Get(),
+		TEXT("ShopScreen tag with generic activatable class fails ValidateSettings"));
+
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomGameUIManagerSubsystem> UIManager(MakeUIManager(GameInstance.Get()));
+
+	const TSubclassOf<UWacomActivatableWidget> ResolvedClass = UIManager->ResolveWidgetClass(
+		WacomUITags::UI_Widget_ShopScreen.GetTag(),
+		UWacomShopScreen::StaticClass());
+	TestEqual(TEXT("ShopScreen tag with generic activatable class falls back at runtime"),
+		ResolvedClass.Get(),
+		UWacomShopScreen::StaticClass());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUISettingsValidationOptionalWidgetMissingIsValidSpec,
 	"Wacom.UI.Settings.Validation.OptionalWidgetMissingIsValid",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -411,7 +449,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUISettingsValidationOptionalWidgetMissingIsValidSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomScopedUISettingsOverride SettingsOverride;
-	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(WacomUITags::UI_Widget_BackpackScreen.GetTag()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomUITags::UI_Widget_BackpackScreen.GetTag(),
+		UWacomUISettingsBackpackScreenProbe::StaticClass()));
 
 	return TestSettingsValid(
 		*this,

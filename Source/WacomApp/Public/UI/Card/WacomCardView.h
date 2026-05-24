@@ -8,7 +8,6 @@
 #include "WacomCardView.generated.h"
 
 class UBorder;
-class UCardDefinition;
 class UImage;
 class UMaterialInterface;
 class UPanelWidget;
@@ -41,12 +40,6 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardView")
 	const FWacomCardViewData& GetCardViewData() const { return CurrentData; }
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|CardView")
-	static FWacomCardViewData BuildFromCardDefinition(const UCardDefinition* Card);
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|CardDetail")
-	static FWacomCardDetailViewData BuildDetailFromCardDefinition(const UCardDefinition* Card);
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
