@@ -74,24 +74,6 @@ namespace
 		return false;
 	}
 
-	TSubclassOf<UCommonActivatableWidget> ResolveShopScreenType(
-		const UWacomGameUIManagerSubsystem& UIManager)
-	{
-		return UIManager.ResolveWidgetClass(
-			WacomUITags::UI_Widget_ShopScreen.GetTag(),
-			UWacomShopScreen::StaticClass(),
-			/*bLogMissingEntry*/ false).Get();
-	}
-
-	TSubclassOf<UCommonActivatableWidget> ResolveRunEventScreenType(
-		const UWacomGameUIManagerSubsystem& UIManager)
-	{
-		return UIManager.ResolveWidgetClass(
-			WacomUITags::UI_Widget_RunEventScreen.GetTag(),
-			UWacomRunEventScreen::StaticClass(),
-			/*bLogMissingEntry*/ false).Get();
-	}
-
 	bool CanPushExplorationGameMenu(
 		TWeakObjectPtr<AWacomPlayerController> WeakPC,
 		TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager,
@@ -125,6 +107,123 @@ namespace
 			TEXT("[WacomPlayerController] %s 失败 Reason=%s"),
 			FailurePrefix,
 			*Result.FailureReason.ToString());
+	}
+
+	void LogShopAsyncPushResult(const FWacomAsyncWidgetPushResult& Result, FName ShopId)
+	{
+		if (Result.bSucceeded)
+		{
+			UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开商店 ShopId=%s"), *ShopId.ToString());
+			return;
+		}
+		LogAsyncPushResult(Result, TEXT("打开商店"), TEXT("OpenShop: Push ShopScreen"));
+	}
+
+	void LogRunEventAsyncPushResult(const FWacomAsyncWidgetPushResult& Result, FName PersistentId)
+	{
+		if (Result.bSucceeded)
+		{
+			UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开事件 PersistentId=%s"), *PersistentId.ToString());
+			return;
+		}
+		LogAsyncPushResult(Result, TEXT("打开事件"), TEXT("OpenRunEvent: Push RunEventScreen"));
+	}
+
+	bool BeginShopVisitForAsyncPush(
+		TWeakObjectPtr<AWacomPlayerController> WeakPC,
+		FName ShopId,
+		TArray<FRunShopOfferInput> Offers,
+		FName& OutFailureReason)
+	{
+		AWacomPlayerController* PC = WeakPC.Get();
+		URunSession* RunSession = PC ? PC->GetRunSession() : nullptr;
+		if (!RunSession || !RunSession->BeginShopVisit(ShopId, Offers))
+		{
+			OutFailureReason = TEXT("BeginShopVisitFailed");
+			UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop.AsyncPush: BeginShopVisit 失败 ShopId=%s"), *ShopId.ToString());
+			return false;
+		}
+		return true;
+	}
+
+	bool RefreshShopAfterAsyncPush(UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
+	{
+		UWacomShopScreen* ShopScreen = Cast<UWacomShopScreen>(&PushedWidget);
+		if (!ShopScreen)
+		{
+			OutFailureReason = TEXT("InvalidShopScreen");
+			return false;
+		}
+		ShopScreen->RefreshShop();
+		return true;
+	}
+
+	void RollbackShopAsyncPush(TWeakObjectPtr<AWacomPlayerController> WeakPC, FName /*FailureReason*/)
+	{
+		if (AWacomPlayerController* PC = WeakPC.Get())
+		{
+			if (URunSession* RunSession = PC->GetRunSession())
+			{
+				RunSession->EndShopVisit();
+			}
+		}
+	}
+
+	void PrepareFailedShopAsyncPush(UCommonActivatableWidget& PushedWidget, FName /*FailureReason*/)
+	{
+		if (UWacomShopScreen* ShopScreen = Cast<UWacomShopScreen>(&PushedWidget))
+		{
+			ShopScreen->SuppressEndShopVisitOnNextDeactivate();
+		}
+	}
+
+	bool BeginRunEventForAsyncPush(
+		TWeakObjectPtr<AWacomPlayerController> WeakPC,
+		FName PersistentId,
+		TWeakObjectPtr<UWacomRunEventDefinition> WeakEventDefinition,
+		FName& OutFailureReason)
+	{
+		AWacomPlayerController* PC = WeakPC.Get();
+		URunSession* RunSession = PC ? PC->GetRunSession() : nullptr;
+		UWacomRunEventDefinition* EventDefinition = WeakEventDefinition.Get();
+		if (!RunSession || !RunSession->BeginRunEvent(PersistentId, EventDefinition))
+		{
+			OutFailureReason = TEXT("BeginRunEventFailed");
+			UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent.AsyncPush: BeginRunEvent 失败 PersistentId=%s"), *PersistentId.ToString());
+			return false;
+		}
+		return true;
+	}
+
+	bool RefreshRunEventAfterAsyncPush(UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
+	{
+		UWacomRunEventScreen* EventScreen = Cast<UWacomRunEventScreen>(&PushedWidget);
+		if (!EventScreen)
+		{
+			OutFailureReason = TEXT("InvalidRunEventScreen");
+			return false;
+		}
+		EventScreen->RefreshEvent();
+		return true;
+	}
+
+	void RollbackRunEventAsyncPush(TWeakObjectPtr<AWacomPlayerController> WeakPC, FName /*FailureReason*/)
+	{
+		if (AWacomPlayerController* PC = WeakPC.Get())
+		{
+			if (URunSession* RunSession = PC->GetRunSession())
+			{
+				RunSession->EndRunEvent();
+			}
+		}
+	}
+
+	void PrepareFailedRunEventAsyncPush(UCommonActivatableWidget& PushedWidget, FName /*FailureReason*/)
+	{
+		if (UWacomRunEventScreen* EventScreen = Cast<UWacomRunEventScreen>(&PushedWidget))
+		{
+			EventScreen->SuppressEndRunEventOnNextDeactivate();
+		}
 	}
 }
 
@@ -259,32 +358,50 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 		return false;
 	}
 
-	UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
-	DeactivateActiveGameMenuWidget(*UIManager);
-
-	URunSession* RunSession = PC.GetRunSession();
-	if (!RunSession || !RunSession->BeginShopVisit(ShopId, Offers))
+	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: BeginShopVisit 失败 ShopId=%s"), *ShopId.ToString());
+		UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
+	}
+
+	if (UIManager->HasPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag()))
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenShop: GameMenu 正在异步打开，忽略请求"));
 		return false;
 	}
 
-	const TSubclassOf<UCommonActivatableWidget> ShopScreenType =
-		ResolveShopScreenType(*UIManager);
-
-	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		ShopScreenType);
-	UWacomShopScreen* ShopScreen = Cast<UWacomShopScreen>(Pushed);
-	if (!ShopScreen)
+	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
+	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_ShopScreen.GetTag();
+	Request.FallbackClass = UWacomShopScreen::StaticClass();
+	Request.OwningPlayer = &PC;
+	Request.bLogMissingEntry = false;
+	Request.CanPush = [WeakPC, WeakUIManager]()
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop: Push ShopScreen 失败"));
-		RunSession->EndShopVisit();
-		return false;
-	}
-
-	ShopScreen->RefreshShop();
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开商店 ShopId=%s"), *ShopId.ToString());
+		return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("OpenShop.AsyncPush"));
+	};
+	Request.BeforePush = [WeakPC, ShopId, Offers](FName& OutFailureReason)
+	{
+		return BeginShopVisitForAsyncPush(WeakPC, ShopId, Offers, OutFailureReason);
+	};
+	Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
+	{
+		return RefreshShopAfterAsyncPush(PushedWidget, OutFailureReason);
+	};
+	Request.PrepareFailedPushedWidget = [](UCommonActivatableWidget& PushedWidget, FName FailureReason)
+	{
+		PrepareFailedShopAsyncPush(PushedWidget, FailureReason);
+	};
+	Request.Rollback = [WeakPC](FName FailureReason)
+	{
+		RollbackShopAsyncPush(WeakPC, FailureReason);
+	};
+	Request.OnComplete = [ShopId](const FWacomAsyncWidgetPushResult& Result)
+	{
+		LogShopAsyncPushResult(Result, ShopId);
+	};
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
 	return true;
 }
 
@@ -313,31 +430,50 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(AWacomPlayerController& PC, FNa
 		return false;
 	}
 
-	UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
-	DeactivateActiveGameMenuWidget(*UIManager);
-
-	URunSession* RunSession = PC.GetRunSession();
-	if (!RunSession || !RunSession->BeginRunEvent(PersistentId, EventDefinition))
+	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: BeginRunEvent 失败 PersistentId=%s"), *PersistentId.ToString());
+		UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
+	}
+
+	if (UIManager->HasPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag()))
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] OpenRunEvent: GameMenu 正在异步打开，忽略请求"));
 		return false;
 	}
 
-	const TSubclassOf<UCommonActivatableWidget> RunEventScreenType =
-		ResolveRunEventScreenType(*UIManager);
-
-	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		RunEventScreenType);
-	UWacomRunEventScreen* EventScreen = Cast<UWacomRunEventScreen>(Pushed);
-	if (!EventScreen)
+	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
+	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
+	TWeakObjectPtr<UWacomRunEventDefinition> WeakEventDefinition(EventDefinition);
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_RunEventScreen.GetTag();
+	Request.FallbackClass = UWacomRunEventScreen::StaticClass();
+	Request.OwningPlayer = &PC;
+	Request.bLogMissingEntry = false;
+	Request.CanPush = [WeakPC, WeakUIManager]()
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent: Push RunEventScreen 失败"));
-		RunSession->EndRunEvent();
-		return false;
-	}
-
-	EventScreen->RefreshEvent();
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] 打开事件 PersistentId=%s"), *PersistentId.ToString());
+		return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("OpenRunEvent.AsyncPush"));
+	};
+	Request.BeforePush = [WeakPC, PersistentId, WeakEventDefinition](FName& OutFailureReason)
+	{
+		return BeginRunEventForAsyncPush(WeakPC, PersistentId, WeakEventDefinition, OutFailureReason);
+	};
+	Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
+	{
+		return RefreshRunEventAfterAsyncPush(PushedWidget, OutFailureReason);
+	};
+	Request.PrepareFailedPushedWidget = [](UCommonActivatableWidget& PushedWidget, FName FailureReason)
+	{
+		PrepareFailedRunEventAsyncPush(PushedWidget, FailureReason);
+	};
+	Request.Rollback = [WeakPC](FName FailureReason)
+	{
+		RollbackRunEventAsyncPush(WeakPC, FailureReason);
+	};
+	Request.OnComplete = [PersistentId](const FWacomAsyncWidgetPushResult& Result)
+	{
+		LogRunEventAsyncPushResult(Result, PersistentId);
+	};
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
 	return true;
 }

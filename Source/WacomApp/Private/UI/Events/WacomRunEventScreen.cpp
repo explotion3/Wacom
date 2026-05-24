@@ -147,6 +147,11 @@ void UWacomRunEventScreen::RefreshEvent()
 	RebuildChoices();
 }
 
+void UWacomRunEventScreen::SuppressEndRunEventOnNextDeactivate()
+{
+	bDidEndRunEvent = true;
+}
+
 void UWacomRunEventScreen::HandleCloseClicked()
 {
 	DeactivateWidget();

@@ -101,6 +101,7 @@ public:
 	UCommonActivatableWidget* LastPushedWidget = nullptr;
 	FGameplayTag LastLayerTag;
 	TSubclassOf<UCommonActivatableWidget> LastWidgetClass;
+	bool bFailNextPush = false;
 
 protected:
 	virtual UCommonActivatableWidget* PushResolvedWidgetToLayer(
@@ -109,6 +110,13 @@ protected:
 	{
 		LastLayerTag = LayerTag;
 		LastWidgetClass = WidgetClass;
+		if (bFailNextPush)
+		{
+			bFailNextPush = false;
+			LastPushedWidget = nullptr;
+			return nullptr;
+		}
+
 		LastPushedWidget = WidgetClass
 			? NewObject<UCommonActivatableWidget>(this, WidgetClass)
 			: nullptr;

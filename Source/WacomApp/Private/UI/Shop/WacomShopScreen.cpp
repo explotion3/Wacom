@@ -155,6 +155,11 @@ void UWacomShopScreen::RefreshShop()
 	RebuildOfferRows();
 }
 
+void UWacomShopScreen::SuppressEndShopVisitOnNextDeactivate()
+{
+	bDidEndShopVisit = true;
+}
+
 void UWacomShopScreen::HandleCloseClicked()
 {
 	DeactivateWidget();

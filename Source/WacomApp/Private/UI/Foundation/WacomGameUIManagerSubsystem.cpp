@@ -614,13 +614,53 @@ void UWacomGameUIManagerSubsystem::CompleteAsyncWidgetPush(
 		return;
 	}
 
+	bool bBeforePushSucceeded = false;
+	if (Request.BeforePush)
+	{
+		FName FailureReason = NAME_None;
+		bBeforePushSucceeded = Request.BeforePush(FailureReason);
+		if (!bBeforePushSucceeded)
+		{
+			CompleteAsyncWidgetPushResult(
+				MoveTemp(Request),
+				FailureReason.IsNone() ? FName(TEXT("BeforePushFailed")) : FailureReason,
+				WidgetClass);
+			return;
+		}
+	}
+
 	UCommonActivatableWidget* Pushed = PushResolvedWidgetToLayer(Request.LayerTag, WidgetClass);
 	if (!Pushed)
 	{
+		if (bBeforePushSucceeded && Request.Rollback)
+		{
+			Request.Rollback(TEXT("PushFailed"));
+		}
 		CompleteAsyncWidgetPushResult(MoveTemp(Request), TEXT("PushFailed"), WidgetClass);
 		return;
 	}
 
+	if (Request.AfterPush)
+	{
+		FName FailureReason = NAME_None;
+		if (!Request.AfterPush(*Pushed, FailureReason))
+		{
+			const FName ResolvedFailureReason = FailureReason.IsNone()
+				? FName(TEXT("AfterPushFailed"))
+				: FailureReason;
+			if (Request.PrepareFailedPushedWidget)
+			{
+				Request.PrepareFailedPushedWidget(*Pushed, ResolvedFailureReason);
+			}
+			if (bBeforePushSucceeded && Request.Rollback)
+			{
+				Request.Rollback(ResolvedFailureReason);
+			}
+			Pushed->DeactivateWidget();
+			CompleteAsyncWidgetPushResult(MoveTemp(Request), ResolvedFailureReason, WidgetClass, Pushed);
+			return;
+		}
+	}
 	CompleteAsyncWidgetPushResult(MoveTemp(Request), NAME_None, WidgetClass, Pushed);
 }
 

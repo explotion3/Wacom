@@ -24,6 +24,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|RunEvent")
 	void RefreshEvent();
 
+	void SuppressEndRunEventOnNextDeactivate();
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;

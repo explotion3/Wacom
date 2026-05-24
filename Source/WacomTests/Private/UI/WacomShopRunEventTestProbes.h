@@ -64,6 +64,11 @@ public:
 		return PurchaseOfferByIndex(Index);
 	}
 
+	void SuppressEndOnNextDeactivateForTest()
+	{
+		SuppressEndShopVisitOnNextDeactivate();
+	}
+
 	static FText FormatPurchaseFailureToast(FName DisabledReason)
 	{
 		return BuildPurchaseFailureToastText(DisabledReason);
@@ -117,6 +122,11 @@ public:
 	bool ChooseChoiceAt(int32 Index)
 	{
 		return ChooseChoiceByIndex(Index);
+	}
+
+	void SuppressEndOnNextDeactivateForTest()
+	{
+		SuppressEndRunEventOnNextDeactivate();
 	}
 
 	FText ReadTitleText() const

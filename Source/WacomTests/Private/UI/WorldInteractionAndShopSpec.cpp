@@ -804,3 +804,65 @@ bool FWacomUIGameMenuSwitchClosesOldRunEventBeforeBeginNewRunEventSpec::RunTest(
 
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIGameMenuFailedShopPushDeactivateDoesNotEndNewShopSpec,
+	"Wacom.UI.GameMenu.FailedShopPushDeactivateDoesNotEndNewShop",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIGameMenuFailedShopPushDeactivateDoesNotEndNewShopSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomShopScreenProbe> FailedScreen(NewObject<UWacomShopScreenProbe>());
+	const TArray<FRunShopOfferInput> Offers;
+
+	TestTrue(TEXT("Failed async shop Begin happens before push failure"),
+		Run->BeginShopVisit(TEXT("Shop.Async.Failed"), Offers));
+	FailedScreen->SetRunSession(Run.Get());
+	FailedScreen->SuppressEndOnNextDeactivateForTest();
+	Run->EndShopVisit();
+	TestFalse(TEXT("Rollback clears failed active shop"), Run->IsShopVisitActive());
+
+	TestTrue(TEXT("New shop begins after failed push rollback"),
+		Run->BeginShopVisit(TEXT("Shop.Async.New"), Offers));
+	FailedScreen->DeactivateWidget();
+
+	const FRunShopSnapshot Snapshot = Run->BuildCurrentShopSnapshot();
+	TestTrue(TEXT("Failed screen deactivation does not clear new shop"), Snapshot.bIsActive);
+	TestEqual(TEXT("New shop id survives failed screen deactivation"),
+		Snapshot.ShopId,
+		FName(TEXT("Shop.Async.New")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIGameMenuFailedRunEventPushDeactivateDoesNotEndNewEventSpec,
+	"Wacom.UI.GameMenu.FailedRunEventPushDeactivateDoesNotEndNewEvent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIGameMenuFailedRunEventPushDeactivateDoesNotEndNewEventSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Run.Get()));
+	TStrongObjectPtr<UWacomRunEventScreenProbe> FailedScreen(NewObject<UWacomRunEventScreenProbe>());
+
+	TestTrue(TEXT("Failed async event Begin happens before push failure"),
+		Run->BeginRunEvent(TEXT("Event.Async.Failed"), Event.Get()));
+	FailedScreen->SetRunSession(Run.Get());
+	FailedScreen->SuppressEndOnNextDeactivateForTest();
+	Run->EndRunEvent();
+	TestFalse(TEXT("Rollback clears failed active event"), Run->IsRunEventActive());
+
+	TestTrue(TEXT("New event begins after failed push rollback"),
+		Run->BeginRunEvent(TEXT("Event.Async.New"), Event.Get()));
+	FailedScreen->DeactivateWidget();
+
+	const FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
+	TestTrue(TEXT("Failed screen deactivation does not clear new event"), Snapshot.bIsActive);
+	TestEqual(TEXT("New event id survives failed screen deactivation"),
+		Snapshot.PersistentId,
+		FName(TEXT("Event.Async.New")));
+
+	return true;
+}

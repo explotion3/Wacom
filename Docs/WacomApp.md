@@ -157,8 +157,8 @@ PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md
 - AppToast 通过 `UWacomUIDeveloperSettings.AppToastWidgetClass` 注册。
 - Settings 未命中、软类为空或加载失败时，Backpack / PauseMenu / Shop / RunEvent / Toast 回到对应 C++ fallback。
 - PrimaryLayout 优先使用 `UWacomUIDeveloperSettings.PrimaryLayoutClass`；未配置或加载失败时只尝试固定 `WBP_PrimaryGameLayout` 路径 fallback，仍失败则拒绝创建根布局。
-- Backpack / PauseMenu 已接入 `PushRegisteredWidgetToLayerAsync()`：settings 软类未加载时异步加载，GameMenu pending 期间重复打开请求会被忽略。
-- Shop / RunEvent 本轮仍保持同步解析和同步 Push；它们的事务型异步化后续单独设计。
+- Backpack / PauseMenu / Shop / RunEvent 都已接入 `PushRegisteredWidgetToLayerAsync()`：settings 软类未加载时异步加载，GameMenu pending 期间重复打开请求会被忽略。
+- Shop / RunEvent 的 `RequestOpen*` 返回 true 只表示打开请求已接收；真正的 `BeginShopVisit()` / `BeginRunEvent()` 发生在 async push 的 `BeforePush` 阶段。
 
 编辑器配置与验证清单：
 
@@ -166,9 +166,9 @@ PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md
 - 保存配置后可通过编辑器 Data Validation 检查 Wacom UI Settings，确认 PrimaryLayout、AppToast 和 `WidgetClasses` 的继承关系、tag 命名、重复 tag、空 class 等错误。
 - PIE 时按 Wacom UI Settings -> fallback 的优先级解析；Shop / RunEvent / PauseMenu 等未配置 settings 项时，应继续走合法 C++ fallback。
 
-探索期背包、暂停菜单、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、Backpack / PauseMenu 异步 Push pending、防重复打开，以及商店 / RunEvent 这类外部流程返回时的 RunSession 清理。同步事务菜单（Shop / RunEvent）打开前会取消同层未完成的 Backpack / PauseMenu pending，避免晚到的异步菜单覆盖新流程。
+探索期背包、暂停菜单、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、GameMenu 异步 Push pending、防重复打开，以及商店 / RunEvent 这类外部流程返回时的 RunSession 清理。
 
-商店和 RunEvent 切换必须遵守生命周期顺序：Router 先关闭已有 `GameMenu` 顶层，让旧 Screen 的 `NativeOnDeactivated` 完成 `EndShopVisit()` / `EndRunEvent()`；随后才对新访问调用 `BeginShopVisit()` / `BeginRunEvent()` 并 Push 新 Screen。如果 Push 新 Screen 失败，Router 必须立即调用对应 `End*` 回滚刚 Begin 的 active 访问。
+商店和 RunEvent 切换必须遵守生命周期顺序：Router 先关闭已有 `GameMenu` 顶层，让旧 Screen 的 `NativeOnDeactivated` 完成 `EndShopVisit()` / `EndRunEvent()`；随后创建 async push 请求。新访问的 `BeginShopVisit()` / `BeginRunEvent()` 必须延后到 `BeforePush`，如果 Push、Cast 或 Refresh 失败，Router 必须立即调用对应 `End*` 回滚刚 Begin 的 active 访问。
 
 UI 行为细节见 `WacomUI.md`：
 

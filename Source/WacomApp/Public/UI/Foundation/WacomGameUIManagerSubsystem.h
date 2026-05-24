@@ -32,6 +32,10 @@ struct WACOMAPP_API FWacomAsyncWidgetPushRequest
 	TSubclassOf<UWacomActivatableWidget> FallbackClass;
 	TWeakObjectPtr<APlayerController> OwningPlayer;
 	TFunction<bool()> CanPush;
+	TFunction<bool(FName&)> BeforePush;
+	TFunction<bool(UCommonActivatableWidget&, FName&)> AfterPush;
+	TFunction<void(UCommonActivatableWidget&, FName)> PrepareFailedPushedWidget;
+	TFunction<void(FName)> Rollback;
 	TFunction<void(const FWacomAsyncWidgetPushResult&)> OnComplete;
 	bool bLogMissingEntry = true;
 };

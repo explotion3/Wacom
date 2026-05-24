@@ -3,6 +3,8 @@
 #include "Misc/AutomationTest.h"
 
 #include "Engine/GameInstance.h"
+#include "Events/RunEventDefinition.h"
+#include "RunSession.h"
 #include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
@@ -112,6 +114,27 @@ bool TestSettingsInvalid(FAutomationTestBase& Test, const UWacomUIDeveloperSetti
 	Test.TestFalse(What, bIsValid);
 	Test.TestTrue(TEXT("Invalid settings should emit at least one error"), Errors.Num() > 0);
 	return !bIsValid && Errors.Num() > 0;
+}
+
+UWacomRunEventDefinition* MakeAsyncPushRunEvent(UObject* Outer)
+{
+	UWacomRunEventDefinition* Event = NewObject<UWacomRunEventDefinition>(Outer);
+	Event->EventId = TEXT("Event.AsyncPush");
+	Event->DisplayName = FText::FromString(TEXT("Async Push Event"));
+	Event->StartNodeId = TEXT("Start");
+
+	FWacomRunEventChoiceDefinition Choice;
+	Choice.ChoiceId = TEXT("Close");
+	Choice.LabelText = FText::FromString(TEXT("Close"));
+	Choice.bCloseEventAfterResolve = true;
+
+	FWacomRunEventNodeDefinition Start;
+	Start.NodeId = TEXT("Start");
+	Start.TitleText = FText::FromString(TEXT("Async Push Event"));
+	Start.BodyText = FText::FromString(TEXT("Body"));
+	Start.Choices = { Choice };
+	Event->Nodes = { Start };
+	return Event;
 }
 }
 
@@ -581,6 +604,517 @@ bool FWacomUISettingsAsyncPushMissingPrimaryLayoutFailsSpec::RunTest(const FStri
 	TestFalse(TEXT("Missing PrimaryLayout does not leave a pending push"),
 		UIManager->HasPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag()));
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushHooksSuccessOrderSpec,
+	"Wacom.UI.Settings.AsyncPush.Hooks.SuccessOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushHooksSuccessOrderSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+
+	TArray<FString> Calls;
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_BackpackScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsBackpackScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.CanPush = [&Calls]()
+	{
+		Calls.Add(TEXT("CanPush"));
+		return true;
+	};
+	Request.BeforePush = [&Calls](FName& /*OutFailureReason*/)
+	{
+		Calls.Add(TEXT("BeforePush"));
+		return true;
+	};
+	Request.AfterPush = [&Calls](UCommonActivatableWidget& /*PushedWidget*/, FName& /*OutFailureReason*/)
+	{
+		Calls.Add(TEXT("AfterPush"));
+		return true;
+	};
+	Request.Rollback = [&Calls](FName /*FailureReason*/)
+	{
+		Calls.Add(TEXT("Rollback"));
+	};
+	Request.OnComplete = [&Calls, &CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		Calls.Add(TEXT("OnComplete"));
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+
+	TestTrue(TEXT("Hook success path succeeds"), CapturedResult.bSucceeded);
+	const TArray<FString> ExpectedCalls = {
+		TEXT("CanPush"),
+		TEXT("BeforePush"),
+		TEXT("AfterPush"),
+		TEXT("OnComplete")
+	};
+	TestEqual(TEXT("Hook success path order"), Calls, ExpectedCalls);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushHooksBeforePushFailedSpec,
+	"Wacom.UI.Settings.AsyncPush.Hooks.BeforePushFailed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushHooksBeforePushFailedSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+
+	bool bRollbackCalled = false;
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_BackpackScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsBackpackScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.BeforePush = [](FName& OutFailureReason)
+	{
+		OutFailureReason = TEXT("BeginFailedForTest");
+		return false;
+	};
+	Request.Rollback = [&bRollbackCalled](FName /*FailureReason*/)
+	{
+		bRollbackCalled = true;
+	};
+	Request.OnComplete = [&CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+
+	TestFalse(TEXT("BeforePush failure fails request"), CapturedResult.bSucceeded);
+	TestEqual(TEXT("BeforePush failure propagates reason"),
+		CapturedResult.FailureReason,
+		FName(TEXT("BeginFailedForTest")));
+	TestNull(TEXT("BeforePush failure does not push"), UIManager->LastPushedWidget);
+	TestFalse(TEXT("BeforePush failure does not rollback"), bRollbackCalled);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushHooksPushFailedRollsBackSpec,
+	"Wacom.UI.Settings.AsyncPush.Hooks.PushFailedRollsBack",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushHooksPushFailedRollsBackSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+	UIManager->bFailNextPush = true;
+
+	bool bBeforePushCalled = false;
+	FName RollbackReason = NAME_None;
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_BackpackScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsBackpackScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.BeforePush = [&bBeforePushCalled](FName& /*OutFailureReason*/)
+	{
+		bBeforePushCalled = true;
+		return true;
+	};
+	Request.Rollback = [&RollbackReason](FName FailureReason)
+	{
+		RollbackReason = FailureReason;
+	};
+	Request.OnComplete = [&CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+
+	TestTrue(TEXT("BeforePush ran before push failure"), bBeforePushCalled);
+	TestFalse(TEXT("Push failure fails request"), CapturedResult.bSucceeded);
+	TestEqual(TEXT("Push failure reason is stable"),
+		CapturedResult.FailureReason,
+		FName(TEXT("PushFailed")));
+	TestEqual(TEXT("Push failure rolls back"),
+		RollbackReason,
+		FName(TEXT("PushFailed")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushHooksAfterPushFailedRollsBackSpec,
+	"Wacom.UI.Settings.AsyncPush.Hooks.AfterPushFailedRollsBack",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushHooksAfterPushFailedRollsBackSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+
+	FName RollbackReason = NAME_None;
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_BackpackScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsBackpackScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.BeforePush = [](FName& /*OutFailureReason*/)
+	{
+		return true;
+	};
+	Request.AfterPush = [](UCommonActivatableWidget& /*PushedWidget*/, FName& OutFailureReason)
+	{
+		OutFailureReason = TEXT("InvalidWidgetForTest");
+		return false;
+	};
+	Request.Rollback = [&RollbackReason](FName FailureReason)
+	{
+		RollbackReason = FailureReason;
+	};
+	Request.OnComplete = [&CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+
+	TestFalse(TEXT("AfterPush failure fails request"), CapturedResult.bSucceeded);
+	TestEqual(TEXT("AfterPush failure reason propagates"),
+		CapturedResult.FailureReason,
+		FName(TEXT("InvalidWidgetForTest")));
+	TestEqual(TEXT("AfterPush failure rolls back"),
+		RollbackReason,
+		FName(TEXT("InvalidWidgetForTest")));
+	TestNotNull(TEXT("AfterPush failure still reports pushed widget for diagnostics"), CapturedResult.PushedWidget);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushHooksGuardPathsDoNotBeginSpec,
+	"Wacom.UI.Settings.AsyncPush.Hooks.GuardPathsDoNotBegin",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushHooksGuardPathsDoNotBeginSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+
+	bool bBeforePushCalled = false;
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_BackpackScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsBackpackScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.CanPush = []()
+	{
+		return false;
+	};
+	Request.BeforePush = [&bBeforePushCalled](FName& /*OutFailureReason*/)
+	{
+		bBeforePushCalled = true;
+		return true;
+	};
+	Request.OnComplete = [&CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+
+	TestFalse(TEXT("Guard rejected request fails"), CapturedResult.bSucceeded);
+	TestEqual(TEXT("Guard rejected reason is stable"),
+		CapturedResult.FailureReason,
+		FName(TEXT("PrePushGuardRejected")));
+	TestFalse(TEXT("Guard rejection does not call BeforePush"), bBeforePushCalled);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushShopTransactionTimingSpec,
+	"Wacom.UI.Settings.AsyncPush.ShopTransactionTiming",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushShopTransactionTimingSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	FWacomUIWidgetClassEntry Entry;
+	Entry.WidgetTag = WacomUITags::UI_Widget_ShopScreen.GetTag();
+	Entry.WidgetClass = MissingWidgetClassPath;
+	SettingsOverride.Get().WidgetClasses.Add(Entry);
+
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(GameInstance.Get()));
+	URunSession* RunPtr = Run.Get();
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_ShopScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsShopScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.BeforePush = [RunPtr](FName& OutFailureReason)
+	{
+		const TArray<FRunShopOfferInput> Offers;
+		if (!RunPtr->BeginShopVisit(TEXT("Shop.Async.Success"), Offers))
+		{
+			OutFailureReason = TEXT("BeginShopVisitFailed");
+			return false;
+		}
+		return true;
+	};
+	Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
+	{
+		if (!PushedWidget.IsA(UWacomShopScreen::StaticClass()))
+		{
+			OutFailureReason = TEXT("InvalidShopScreen");
+			return false;
+		}
+		return true;
+	};
+	Request.Rollback = [RunPtr](FName /*FailureReason*/)
+	{
+		RunPtr->EndShopVisit();
+	};
+	Request.OnComplete = [&CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+	TestFalse(TEXT("Shop is not active while async class is pending"), Run->IsShopVisitActive());
+
+	FWacomUITestAccess::CompleteAsyncWidgetPush(
+		*UIManager,
+		WacomUITags::UI_Layer_GameMenu.GetTag(),
+		UWacomUISettingsShopScreenProbe::StaticClass());
+
+	TestTrue(TEXT("Shop async push succeeds after completion"), CapturedResult.bSucceeded);
+	TestTrue(TEXT("Shop becomes active only after completion"), Run->IsShopVisitActive());
+	TestEqual(TEXT("Active shop id is the async shop"),
+		Run->BuildCurrentShopSnapshot().ShopId,
+		FName(TEXT("Shop.Async.Success")));
+
+	Run->EndShopVisit();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushShopTransactionRollbackSpec,
+	"Wacom.UI.Settings.AsyncPush.ShopTransactionRollback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushShopTransactionRollbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(GameInstance.Get()));
+	URunSession* RunPtr = Run.Get();
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_ShopScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsRunEventScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.BeforePush = [RunPtr](FName& OutFailureReason)
+	{
+		const TArray<FRunShopOfferInput> Offers;
+		if (!RunPtr->BeginShopVisit(TEXT("Shop.Async.Rollback"), Offers))
+		{
+			OutFailureReason = TEXT("BeginShopVisitFailed");
+			return false;
+		}
+		return true;
+	};
+	Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
+	{
+		if (!PushedWidget.IsA(UWacomShopScreen::StaticClass()))
+		{
+			OutFailureReason = TEXT("InvalidShopScreen");
+			return false;
+		}
+		return true;
+	};
+	Request.Rollback = [RunPtr](FName /*FailureReason*/)
+	{
+		RunPtr->EndShopVisit();
+	};
+	Request.OnComplete = [&CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+
+	TestFalse(TEXT("Shop wrong widget push fails"), CapturedResult.bSucceeded);
+	TestEqual(TEXT("Shop wrong widget reports InvalidShopScreen"),
+		CapturedResult.FailureReason,
+		FName(TEXT("InvalidShopScreen")));
+	TestFalse(TEXT("Shop rollback clears active visit"), Run->IsShopVisitActive());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushRunEventTransactionTimingSpec,
+	"Wacom.UI.Settings.AsyncPush.RunEventTransactionTiming",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushRunEventTransactionTimingSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	FWacomUIWidgetClassEntry Entry;
+	Entry.WidgetTag = WacomUITags::UI_Widget_RunEventScreen.GetTag();
+	Entry.WidgetClass = MissingWidgetClassPath;
+	SettingsOverride.Get().WidgetClasses.Add(Entry);
+
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeAsyncPushRunEvent(GameInstance.Get()));
+	URunSession* RunPtr = Run.Get();
+	UWacomRunEventDefinition* EventPtr = Event.Get();
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_RunEventScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsRunEventScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.BeforePush = [RunPtr, EventPtr](FName& OutFailureReason)
+	{
+		if (!RunPtr->BeginRunEvent(TEXT("Event.Async.Success"), EventPtr))
+		{
+			OutFailureReason = TEXT("BeginRunEventFailed");
+			return false;
+		}
+		return true;
+	};
+	Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
+	{
+		if (!PushedWidget.IsA(UWacomRunEventScreen::StaticClass()))
+		{
+			OutFailureReason = TEXT("InvalidRunEventScreen");
+			return false;
+		}
+		return true;
+	};
+	Request.Rollback = [RunPtr](FName /*FailureReason*/)
+	{
+		RunPtr->EndRunEvent();
+	};
+	Request.OnComplete = [&CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+	TestFalse(TEXT("RunEvent is not active while async class is pending"), Run->IsRunEventActive());
+
+	FWacomUITestAccess::CompleteAsyncWidgetPush(
+		*UIManager,
+		WacomUITags::UI_Layer_GameMenu.GetTag(),
+		UWacomUISettingsRunEventScreenProbe::StaticClass());
+
+	TestTrue(TEXT("RunEvent async push succeeds after completion"), CapturedResult.bSucceeded);
+	TestTrue(TEXT("RunEvent becomes active only after completion"), Run->IsRunEventActive());
+	TestEqual(TEXT("Active event id is the async event"),
+		Run->BuildCurrentRunEventSnapshot().PersistentId,
+		FName(TEXT("Event.Async.Success")));
+
+	Run->EndRunEvent();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsAsyncPushRunEventTransactionRollbackSpec,
+	"Wacom.UI.Settings.AsyncPush.RunEventTransactionRollback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsAsyncPushRunEventTransactionRollbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomScopedUISettingsOverride SettingsOverride;
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(NewObject<UWacomUISettingsGameUIManagerProbe>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomUISettingsPrimaryLayoutProbe> Layout(NewObject<UWacomUISettingsPrimaryLayoutProbe>(GameInstance.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeAsyncPushRunEvent(GameInstance.Get()));
+	URunSession* RunPtr = Run.Get();
+	UWacomRunEventDefinition* EventPtr = Event.Get();
+	FWacomUITestAccess::SetPrimaryLayout(*UIManager, Layout.Get());
+
+	FWacomAsyncWidgetPushResult CapturedResult;
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomUITags::UI_Widget_RunEventScreen.GetTag();
+	Request.FallbackClass = UWacomUISettingsShopScreenProbe::StaticClass();
+	Request.bLogMissingEntry = false;
+	Request.BeforePush = [RunPtr, EventPtr](FName& OutFailureReason)
+	{
+		if (!RunPtr->BeginRunEvent(TEXT("Event.Async.Rollback"), EventPtr))
+		{
+			OutFailureReason = TEXT("BeginRunEventFailed");
+			return false;
+		}
+		return true;
+	};
+	Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
+	{
+		if (!PushedWidget.IsA(UWacomRunEventScreen::StaticClass()))
+		{
+			OutFailureReason = TEXT("InvalidRunEventScreen");
+			return false;
+		}
+		return true;
+	};
+	Request.Rollback = [RunPtr](FName /*FailureReason*/)
+	{
+		RunPtr->EndRunEvent();
+	};
+	Request.OnComplete = [&CapturedResult](const FWacomAsyncWidgetPushResult& Result)
+	{
+		CapturedResult = Result;
+	};
+
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+
+	TestFalse(TEXT("RunEvent wrong widget push fails"), CapturedResult.bSucceeded);
+	TestEqual(TEXT("RunEvent wrong widget reports InvalidRunEventScreen"),
+		CapturedResult.FailureReason,
+		FName(TEXT("InvalidRunEventScreen")));
+	TestFalse(TEXT("RunEvent rollback clears active event"), Run->IsRunEventActive());
 	return true;
 }
 

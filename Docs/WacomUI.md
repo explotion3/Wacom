@@ -77,10 +77,10 @@ Wacom UI Settings
 | RunEventScreen | `UI.Widget.RunEventScreen` settings 注册 -> `UWacomRunEventScreen` C++ fallback |
 | AppToast | `Wacom UI Settings.AppToastWidgetClass` -> `UWacomAppToastWidget` C++ fallback |
 
-V2-A 状态：
+V2-B 状态：
 
 - `BackpackScreen` / `PauseMenuScreen`：Router 通过 `UWacomGameUIManagerSubsystem::PushRegisteredWidgetToLayerAsync()` 打开；settings 软类未加载时走异步加载，缺失或失败时回到 C++ fallback。GameMenu 已有异步 pending 时，重复打开请求会被忽略。
-- `ShopScreen` / `RunEventScreen`：仍保持同步解析和同步 Push；它们有 `Begin*Visit -> Push -> Refresh / rollback` 事务语义，异步化留到后续单独处理。同步打开前会取消同层未完成的 Backpack / PauseMenu pending。
+- `ShopScreen` / `RunEventScreen`：同样通过 async push 打开；`BeginShopVisit()` / `BeginRunEvent()` 只在异步类解析完成、stale guard 通过且即将 Push 前执行。Push、Cast 或 Refresh 失败时立即 `EndShopVisit()` / `EndRunEvent()` rollback。
 - `PrimaryLayout`：仍同步创建；settings 失败后只尝试固定 `WBP_PrimaryGameLayout` 路径 fallback。
 - `AppToast`：仍同步解析并直接 `AddToViewport`，不进入 CommonUI async push。
 

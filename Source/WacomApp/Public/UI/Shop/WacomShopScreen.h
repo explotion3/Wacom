@@ -30,6 +30,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Shop")
 	void RefreshShop();
 
+	void SuppressEndShopVisitOnNextDeactivate();
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
