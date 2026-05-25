@@ -16,6 +16,8 @@ class UWacomCardDetailPanel;
 class AWacomBattle3DHandPresenter;
 class AWacomBattleCardVisualActor;
 class APlayerController;
+class UWacomBattlePresentationTargetComponent;
+class FWacomBattlePresentationTargetRegistry;
 struct FBattleHUDFallbackLayoutBuilder;
 struct FWacomBattleHUDCommandFlow;
 struct FWacomBattleHUDEventFlow;
@@ -147,6 +149,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "3D 手牌原型使用的单张卡牌 Actor 类。BattleHUD 只把该类交给 Presenter，不直接生成或管理单卡 Actor。"))
 	TSubclassOf<AWacomBattleCardVisualActor> Battle3DCardActorClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Scene Enemy Target Prototype", meta = (ToolTip = "是否启用场景敌方目标表现绑定原型。默认关闭；开启后 BattleHUD 会按当前 BattleSnapshot 的 UEnemyPartDefinition::PartId，把场景中的 UWacomBattlePresentationTargetComponent 自动绑定到运行时 PartInstanceId。"))
+	bool bEnableSceneEnemyTargetBindingPrototype = false;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	EBattleUIState GetUIState() const { return UIState; }
@@ -322,16 +327,19 @@ private:
 	TArray<FBattleEventPresentationView> BattleEventLogHistory;
 
 	TSharedPtr<FWacomBattleEventPresentationQueue> BattleEventPresentationQueue;
+	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
 
 	UPROPERTY(Transient)
 	TObjectPtr<AWacomBattle3DHandPresenter> Battle3DHandPresenter;
 
 	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
 	bool bLoggedMissingCardDetailLayer = false;
-	bool bHasSavedPlayerControllerMouseEventState = false;
+	bool bHasSavedPlayerControllerInteractionEventState = false;
 	bool bSavedPlayerControllerClickEvents = false;
 	bool bSavedPlayerControllerMouseOverEvents = false;
-	TWeakObjectPtr<APlayerController> SavedPlayerControllerFor3DHand;
+	int32 PlayerControllerClickEventAcquireCount = 0;
+	int32 PlayerControllerMouseOverEventAcquireCount = 0;
+	TWeakObjectPtr<APlayerController> SavedPlayerControllerForInteractionEvents;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
@@ -349,6 +357,14 @@ private:
 	void ClearBattlePresentationQueue();
 	bool IsBattlePresentationQueueBusy() const;
 	TSharedPtr<FWacomBattleEventPresentationQueue> GetBattlePresentationQueueSelfKeepAlive() const;
+	FWacomBattlePresentationTargetRegistry& GetBattlePresentationTargetRegistry();
+	void ClearBattlePresentationTargetRegistry();
+	void RegisterBattlePresentationTarget(
+		const FGuid& PartInstanceId,
+		UObject* Owner,
+		TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler);
+	void UnregisterBattlePresentationTargetsForOwner(const UObject* Owner);
+	bool IsBattlePresentationTargetRegisteredForOwner(const UObject* Owner) const;
 	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
 	void EnqueueBattlePresentationToast(const FBattleEventPresentationView& View);
 	void PushPendingKnockdownChoiceDialog();
@@ -356,6 +372,11 @@ private:
 	void HandleBattlePresentationQueueFinished();
 	void HandleBattlePresentationBattleEndStep();
 	void AdvanceBattlePresentationQueueOnce();
+
+#if WITH_AUTOMATION_TESTS
+	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FGuid& TargetPartInstanceId, int32 Amount);
+	int32 GetBattlePresentationTargetCountForTest() const;
+#endif
 
 	UFUNCTION()
 	void HandleBattleEventLogButtonClicked();
@@ -374,13 +395,20 @@ private:
 	AWacomBattle3DHandPresenter* EnsureBattle3DHandPresenter();
 	void DestroyBattle3DHandPresenter();
 	void SyncBattle3DHandPresenterTargeting();
-	void SaveAndEnablePlayerControllerMouseEvents();
-	void RestorePlayerControllerMouseEvents();
+	void AcquirePlayerControllerClickEvents();
+	void ReleasePlayerControllerClickEvents();
+	void AcquirePlayerControllerMouseOverEvents();
+	void ReleasePlayerControllerMouseOverEvents();
+	void ReleaseAllPlayerControllerInteractionEvents();
+	void SyncSceneEnemyPresentationTargets(const FBattleSnapshot& Snap);
+	void UnregisterSceneEnemyPresentationTargets(bool bOnlyAutoBoundTargets = true);
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
 	friend struct FWacomBattleHUDCommandFlow;
 	friend struct FWacomBattleHUDEventFlow;
 	friend struct FWacomBattleHUDTargetingFlow;
 	friend class FWacomBattleEventPresentationQueue;
+	friend class UEnemyInfoBar;
+	friend class UWacomBattlePresentationTargetComponent;
 	friend class UWacomBattleHUDDetailTest;
 };

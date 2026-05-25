@@ -6,6 +6,7 @@
 #include "UI/Battle/ActionPanel.h"
 #include "Actors/WacomBattle3DHandPresenter.h"
 #include "Actors/WacomBattleCardVisualActor.h"
+#include "Components/WacomBattlePresentationTargetComponent.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/EventToast.h"
@@ -15,6 +16,7 @@
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
+#include "UI/Battle/WacomBattlePresentationTargetRegistry.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattleHUDEventFlow.h"
@@ -33,6 +35,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "UObject/UObjectIterator.h"
 
 #include "Input/UIActionBindingHandle.h"
 #include "Input/CommonUIInputSettings.h"
@@ -40,6 +43,7 @@
 #include "Events/BattleEvent.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Types/WacomEnums.h"
 
 namespace
@@ -102,7 +106,10 @@ void UBattleHUD::NativeConstruct()
 void UBattleHUD::NativeDestruct()
 {
 	ClearBattlePresentationQueue();
+	UnregisterSceneEnemyPresentationTargets(false);
 	DestroyBattle3DHandPresenter();
+	ClearBattlePresentationTargetRegistry();
+	ReleaseAllPlayerControllerInteractionEvents();
 	if (HandPanel)
 	{
 		HandPanel->OnCardHoveredNative.RemoveAll(this);
@@ -178,6 +185,8 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 
 	// 递归下发 Snapshot 给子 Widget
 	Super::NativeRefreshFromSnapshot(Snap);
+
+	SyncSceneEnemyPresentationTargets(Snap);
 }
 
 void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession)
@@ -186,7 +195,10 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	if (OldSession != NewSession)
 	{
 		ClearBattlePresentationQueue();
+		UnregisterSceneEnemyPresentationTargets(false);
 		DestroyBattle3DHandPresenter();
+		ClearBattlePresentationTargetRegistry();
+		ReleaseAllPlayerControllerInteractionEvents();
 	}
 
 	// 新 Session 接入时，重置状态机到 Idle。
@@ -262,6 +274,7 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 	if (HandPanel)    { HandPanel->RefreshFromSnapshot(Snap); }
 	if (EnemyInfoBar) { EnemyInfoBar->RefreshFromSnapshot(Snap); }
 	if (ActionPanel)  { ActionPanel->RefreshFromSnapshot(Snap); }
+	SyncSceneEnemyPresentationTargets(Snap);
 }
 
 // ================ 子 Widget 交互入口 ================
@@ -521,7 +534,8 @@ AWacomBattle3DHandPresenter* UBattleHUD::EnsureBattle3DHandPresenter()
 	}
 
 	Battle3DHandPresenter = Presenter;
-	SaveAndEnablePlayerControllerMouseEvents();
+	AcquirePlayerControllerClickEvents();
+	AcquirePlayerControllerMouseOverEvents();
 	Presenter->SetOwningBattleHUD(this);
 	if (Battle3DCardActorClass)
 	{
@@ -538,7 +552,8 @@ void UBattleHUD::DestroyBattle3DHandPresenter()
 		Battle3DHandPresenter->Destroy();
 	}
 	Battle3DHandPresenter = nullptr;
-	RestorePlayerControllerMouseEvents();
+	ReleasePlayerControllerClickEvents();
+	ReleasePlayerControllerMouseOverEvents();
 }
 
 void UBattleHUD::SyncBattle3DHandPresenterTargeting()
@@ -551,45 +566,190 @@ void UBattleHUD::SyncBattle3DHandPresenterTargeting()
 	Battle3DHandPresenter->SetTargetSelectionView(BuildTargetSelectionView());
 }
 
-void UBattleHUD::SaveAndEnablePlayerControllerMouseEvents()
+void UBattleHUD::AcquirePlayerControllerClickEvents()
 {
-	if (bHasSavedPlayerControllerMouseEventState)
-	{
-		return;
-	}
-
 	APlayerController* PC = GetOwningPlayer();
 	if (!PC)
 	{
 		return;
 	}
 
-	SavedPlayerControllerFor3DHand = PC;
-	bSavedPlayerControllerClickEvents = PC->bEnableClickEvents;
-	bSavedPlayerControllerMouseOverEvents = PC->bEnableMouseOverEvents;
-	bHasSavedPlayerControllerMouseEventState = true;
-
-	PC->bEnableClickEvents = true;
-	PC->bEnableMouseOverEvents = true;
-}
-
-void UBattleHUD::RestorePlayerControllerMouseEvents()
-{
-	if (!bHasSavedPlayerControllerMouseEventState)
+	if (!bHasSavedPlayerControllerInteractionEventState)
+	{
+		SavedPlayerControllerForInteractionEvents = PC;
+		bSavedPlayerControllerClickEvents = PC->bEnableClickEvents;
+		bSavedPlayerControllerMouseOverEvents = PC->bEnableMouseOverEvents;
+		bHasSavedPlayerControllerInteractionEventState = true;
+	}
+	else if (SavedPlayerControllerForInteractionEvents.Get() != PC)
 	{
 		return;
 	}
 
-	if (APlayerController* PC = SavedPlayerControllerFor3DHand.Get())
+	++PlayerControllerClickEventAcquireCount;
+	PC->bEnableClickEvents = true;
+}
+
+void UBattleHUD::ReleasePlayerControllerClickEvents()
+{
+	if (PlayerControllerClickEventAcquireCount > 0)
+	{
+		--PlayerControllerClickEventAcquireCount;
+	}
+
+	if (PlayerControllerClickEventAcquireCount == 0 && PlayerControllerMouseOverEventAcquireCount == 0)
+	{
+		ReleaseAllPlayerControllerInteractionEvents();
+		return;
+	}
+
+	if (PlayerControllerClickEventAcquireCount == 0)
+	{
+		if (APlayerController* PC = SavedPlayerControllerForInteractionEvents.Get())
+		{
+			PC->bEnableClickEvents = bSavedPlayerControllerClickEvents;
+		}
+	}
+}
+
+void UBattleHUD::AcquirePlayerControllerMouseOverEvents()
+{
+	APlayerController* PC = GetOwningPlayer();
+	if (!PC)
+	{
+		return;
+	}
+
+	if (!bHasSavedPlayerControllerInteractionEventState)
+	{
+		SavedPlayerControllerForInteractionEvents = PC;
+		bSavedPlayerControllerClickEvents = PC->bEnableClickEvents;
+		bSavedPlayerControllerMouseOverEvents = PC->bEnableMouseOverEvents;
+		bHasSavedPlayerControllerInteractionEventState = true;
+	}
+	else if (SavedPlayerControllerForInteractionEvents.Get() != PC)
+	{
+		return;
+	}
+
+	++PlayerControllerMouseOverEventAcquireCount;
+	PC->bEnableMouseOverEvents = true;
+}
+
+void UBattleHUD::ReleasePlayerControllerMouseOverEvents()
+{
+	if (PlayerControllerMouseOverEventAcquireCount > 0)
+	{
+		--PlayerControllerMouseOverEventAcquireCount;
+	}
+
+	if (PlayerControllerClickEventAcquireCount == 0 && PlayerControllerMouseOverEventAcquireCount == 0)
+	{
+		ReleaseAllPlayerControllerInteractionEvents();
+		return;
+	}
+
+	if (PlayerControllerMouseOverEventAcquireCount == 0)
+	{
+		if (APlayerController* PC = SavedPlayerControllerForInteractionEvents.Get())
+		{
+			PC->bEnableMouseOverEvents = bSavedPlayerControllerMouseOverEvents;
+		}
+	}
+}
+
+void UBattleHUD::ReleaseAllPlayerControllerInteractionEvents()
+{
+	if (!bHasSavedPlayerControllerInteractionEventState)
+	{
+		return;
+	}
+
+	if (APlayerController* PC = SavedPlayerControllerForInteractionEvents.Get())
 	{
 		PC->bEnableClickEvents = bSavedPlayerControllerClickEvents;
 		PC->bEnableMouseOverEvents = bSavedPlayerControllerMouseOverEvents;
 	}
 
-	SavedPlayerControllerFor3DHand.Reset();
-	bHasSavedPlayerControllerMouseEventState = false;
+	SavedPlayerControllerForInteractionEvents.Reset();
+	bHasSavedPlayerControllerInteractionEventState = false;
 	bSavedPlayerControllerClickEvents = false;
 	bSavedPlayerControllerMouseOverEvents = false;
+	PlayerControllerClickEventAcquireCount = 0;
+	PlayerControllerMouseOverEventAcquireCount = 0;
+}
+
+void UBattleHUD::SyncSceneEnemyPresentationTargets(const FBattleSnapshot& Snap)
+{
+	if (!bEnableSceneEnemyTargetBindingPrototype || !GetSession() || Snap.Phase == EBattlePhase::BattleEnd)
+	{
+		UnregisterSceneEnemyPresentationTargets();
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		UnregisterSceneEnemyPresentationTargets();
+		return;
+	}
+
+	TMap<FName, FGuid> RuntimePartIdsByStablePartId;
+	for (const FEnemyPartSnapshot& Part : Snap.Enemy.Parts)
+	{
+		if (!Part.InstanceId.IsValid() || !Part.Definition || Part.Definition->PartId.IsNone())
+		{
+			continue;
+		}
+		RuntimePartIdsByStablePartId.Add(Part.Definition->PartId, Part.InstanceId);
+	}
+
+	for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
+	{
+		UWacomBattlePresentationTargetComponent* Component = *It;
+		if (!IsValid(Component) || Component->GetWorld() != World || Component->GetPartId().IsNone())
+		{
+			continue;
+		}
+
+		if (const FGuid* RuntimePartId = RuntimePartIdsByStablePartId.Find(Component->GetPartId()))
+		{
+			Component->SetPartInstanceId(*RuntimePartId);
+			Component->RegisterWithBattleHUD(this);
+		}
+		else
+		{
+			Component->UnregisterFromBattleHUD();
+			Component->SetPartInstanceId(FGuid());
+		}
+	}
+}
+
+void UBattleHUD::UnregisterSceneEnemyPresentationTargets(bool bOnlyAutoBoundTargets)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
+	{
+		UWacomBattlePresentationTargetComponent* Component = *It;
+		if (!IsValid(Component) || Component->GetWorld() != World)
+		{
+			continue;
+		}
+		if (bOnlyAutoBoundTargets && Component->GetPartId().IsNone())
+		{
+			continue;
+		}
+		if (!Component->IsRegisteredWithBattleHUD() || Component->RegisteredHUD.Get() != this)
+		{
+			continue;
+		}
+		Component->UnregisterFromBattleHUD();
+	}
 }
 
 void UBattleHUD::ConsumeAndLogEvents()
@@ -646,14 +806,51 @@ TSharedPtr<FWacomBattleEventPresentationQueue> UBattleHUD::GetBattlePresentation
 	return BattleEventPresentationQueue;
 }
 
+FWacomBattlePresentationTargetRegistry& UBattleHUD::GetBattlePresentationTargetRegistry()
+{
+	if (!BattlePresentationTargetRegistry)
+	{
+		BattlePresentationTargetRegistry = MakeShared<FWacomBattlePresentationTargetRegistry>();
+	}
+	return *BattlePresentationTargetRegistry;
+}
+
+void UBattleHUD::ClearBattlePresentationTargetRegistry()
+{
+	if (BattlePresentationTargetRegistry)
+	{
+		BattlePresentationTargetRegistry->Clear();
+		BattlePresentationTargetRegistry.Reset();
+	}
+}
+
+void UBattleHUD::RegisterBattlePresentationTarget(
+	const FGuid& PartInstanceId,
+	UObject* Owner,
+	TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler)
+{
+	GetBattlePresentationTargetRegistry().Register(PartInstanceId, Owner, MoveTemp(Handler));
+}
+
+void UBattleHUD::UnregisterBattlePresentationTargetsForOwner(const UObject* Owner)
+{
+	if (BattlePresentationTargetRegistry)
+	{
+		BattlePresentationTargetRegistry->UnregisterOwner(Owner);
+	}
+}
+
+bool UBattleHUD::IsBattlePresentationTargetRegisteredForOwner(const UObject* Owner) const
+{
+	return BattlePresentationTargetRegistry
+		&& BattlePresentationTargetRegistry->ContainsOwner(Owner);
+}
+
 void UBattleHUD::PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue)
 {
-	if (EnemyInfoBar)
+	if (BattlePresentationTargetRegistry)
 	{
-		EnemyInfoBar->PlayBattlePresentationCue(
-			Cue.SourceEventType,
-			Cue.TargetPartInstanceId,
-			Cue.Amount);
+		BattlePresentationTargetRegistry->PlayCue(Cue);
 	}
 }
 
@@ -748,6 +945,25 @@ void UBattleHUD::AdvanceBattlePresentationQueueOnce()
 	}
 #endif
 }
+
+#if WITH_AUTOMATION_TESTS
+void UBattleHUD::PlayBattlePresentationCueForTest(
+	EBattleEventType SourceEventType,
+	const FGuid& TargetPartInstanceId,
+	int32 Amount)
+{
+	FWacomBattlePresentationTargetCue Cue;
+	Cue.SourceEventType = SourceEventType;
+	Cue.TargetPartInstanceId = TargetPartInstanceId;
+	Cue.Amount = Amount;
+	PlayBattlePresentationCue(Cue);
+}
+
+int32 UBattleHUD::GetBattlePresentationTargetCountForTest() const
+{
+	return BattlePresentationTargetRegistry ? BattlePresentationTargetRegistry->Num() : 0;
+}
+#endif
 
 void UBattleHUD::HandleBattleEventLogButtonClicked()
 {

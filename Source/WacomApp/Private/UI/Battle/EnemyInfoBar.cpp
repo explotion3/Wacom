@@ -3,6 +3,7 @@
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EnemyPartWidget.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/HorizontalBox.h"
@@ -31,10 +32,12 @@ TSharedRef<SWidget> UEnemyInfoBar::RebuildWidget()
 
 void UEnemyInfoBar::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
+	UnregisterBattlePresentationTargets();
+
+	SpawnedParts.Reset();
 	if (!PartsContainer) { return; }
 
 	PartsContainer->ClearChildren();
-	SpawnedParts.Reset();
 
 	TSubclassOf<UEnemyPartWidget> ClassToUse = PartWidgetClass;
 	if (!ClassToUse) { ClassToUse = UEnemyPartWidget::StaticClass(); }
@@ -54,16 +57,65 @@ void UEnemyInfoBar::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 	}
 
 	ApplyTargetableFromHUDState();
+
+	if (UBattleHUD* HUD = FindOwningBattleHUD())
+	{
+		RegisterBattlePresentationTargets(*HUD);
+	}
+}
+
+void UEnemyInfoBar::NativeDestruct()
+{
+	UnregisterBattlePresentationTargets();
+	Super::NativeDestruct();
+}
+
+UBattleHUD* UEnemyInfoBar::FindOwningBattleHUD() const
+{
+	for (UUserWidget* P = GetTypedOuter<UUserWidget>(); P; P = P->GetTypedOuter<UUserWidget>())
+	{
+		if (UBattleHUD* HUD = Cast<UBattleHUD>(P))
+		{
+			return HUD;
+		}
+	}
+	return nullptr;
+}
+
+void UEnemyInfoBar::RegisterBattlePresentationTargets(UBattleHUD& HUD)
+{
+	for (const TObjectPtr<UEnemyPartWidget>& Part : SpawnedParts)
+	{
+		if (!Part || !Part->GetPartInstanceId().IsValid())
+		{
+			continue;
+		}
+
+		TWeakObjectPtr<UEnemyPartWidget> WeakPart = Part;
+		HUD.RegisterBattlePresentationTarget(
+			Part->GetPartInstanceId(),
+			this,
+			[WeakPart](const FWacomBattlePresentationTargetCue& Cue)
+			{
+				if (UEnemyPartWidget* StrongPart = WeakPart.Get())
+				{
+					StrongPart->PlayBattlePresentationCue(Cue.SourceEventType, Cue.Amount);
+				}
+			});
+	}
+}
+
+void UEnemyInfoBar::UnregisterBattlePresentationTargets()
+{
+	if (UBattleHUD* HUD = FindOwningBattleHUD())
+	{
+		HUD->UnregisterBattlePresentationTargetsForOwner(this);
+	}
 }
 
 void UEnemyInfoBar::ApplyTargetableFromHUDState()
 {
-	UBattleHUD* HUD = nullptr;
-	for (UUserWidget* P = GetTypedOuter<UUserWidget>(); P; P = P->GetTypedOuter<UUserWidget>())
-	{
-		HUD = Cast<UBattleHUD>(P);
-		if (HUD) { break; }
-	}
+	UBattleHUD* HUD = FindOwningBattleHUD();
 
 	TMap<FGuid, bool> TargetableByPartId;
 	if (HUD)
@@ -86,35 +138,10 @@ void UEnemyInfoBar::ApplyTargetableFromHUDState()
 
 void UEnemyInfoBar::HandlePartClicked(FGuid PartInstanceId)
 {
-	for (UUserWidget* P = GetTypedOuter<UUserWidget>(); P; P = P->GetTypedOuter<UUserWidget>())
+	if (UBattleHUD* HUD = FindOwningBattleHUD())
 	{
-		if (UBattleHUD* HUD = Cast<UBattleHUD>(P))
-		{
-			HUD->OnEnemyPartClickedByUser(PartInstanceId);
-			return;
-		}
+		HUD->OnEnemyPartClickedByUser(PartInstanceId);
+		return;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[EnemyInfoBar] 未找到 UBattleHUD 父 Widget"));
-}
-
-void UEnemyInfoBar::PlayBattlePresentationCue(
-	EBattleEventType SourceEventType,
-	const FGuid& TargetPartInstanceId,
-	int32 Amount)
-{
-	if (!TargetPartInstanceId.IsValid())
-	{
-		return;
-	}
-
-	for (const TObjectPtr<UEnemyPartWidget>& Part : SpawnedParts)
-	{
-		if (!Part || Part->GetPartInstanceId() != TargetPartInstanceId)
-		{
-			continue;
-		}
-
-		Part->PlayBattlePresentationCue(SourceEventType, Amount);
-		return;
-	}
 }

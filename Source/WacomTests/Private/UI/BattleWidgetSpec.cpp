@@ -20,10 +20,16 @@
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "Events/BattleEvent.h"
+#include "Components/WacomBattlePresentationTargetComponent.h"
 
+#include "Components/SceneComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/EngineTypes.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -1601,11 +1607,11 @@ bool FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec::RunTest(const FString& /
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEnemyInfoBarRoutesPresentationCueSpec,
-	"Wacom.UI.Battle.EnemyInfoBarRoutesPresentationCue",
+	FWacomUIBattlePresentationTargetRegistryRoutesCueToRegisteredWidgetSpec,
+	"Wacom.UI.Battle.PresentationTargetRegistry.RoutesCueToRegisteredWidget",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleEnemyInfoBarRoutesPresentationCueSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattlePresentationTargetRegistryRoutesCueToRegisteredWidgetSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* Character = Fx.MakeCharacter(
@@ -1618,6 +1624,7 @@ bool FWacomUIBattleEnemyInfoBarRoutesPresentationCueSpec::RunTest(const FString&
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
 	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
 	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
+	HUD->SetEnemyInfoBarForTest(EnemyInfo);
 	HUD->SetSession(Session);
 	EnemyInfo->SetSession(Session);
 	HUD->TakeWidget();
@@ -1637,15 +1644,1649 @@ bool FWacomUIBattleEnemyInfoBarRoutesPresentationCueSpec::RunTest(const FString&
 		return false;
 	}
 
-	EnemyInfo->PlayCueForTest(EBattleEventType::DamageDealt, Body->GetPartInstanceId(), 4);
+	TestEqual(TEXT("Registry contains current parts"), HUD->GetBattlePresentationTargetCountForTest(), 3);
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, Body->GetPartInstanceId(), 4);
 
 	TestEqual(TEXT("Head does not receive cue"), Head->GetBattlePresentationCuePlayCountForTest(), 0);
 	TestEqual(TEXT("Body receives one cue"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
 	TestEqual(TEXT("Tail does not receive cue"), Tail->GetBattlePresentationCuePlayCountForTest(), 0);
 	TestEqual(TEXT("Body cue amount"), Body->GetLastBattlePresentationCueAmountForTest(), 4);
 
-	EnemyInfo->PlayCueForTest(EBattleEventType::DamageDealt, FGuid::NewGuid(), 9);
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, FGuid::NewGuid(), 9);
 	TestEqual(TEXT("Unknown target does not route to body again"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetRegistryUnknownTargetNoopsSpec,
+	"Wacom.UI.Battle.PresentationTargetRegistry.UnknownTargetNoops",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetRegistryUnknownTargetNoopsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, FGuid(), 3);
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, FGuid::NewGuid(), 3);
+
+	TestEqual(TEXT("Unknown cues do not create registry entries"), HUD->GetBattlePresentationTargetCountForTest(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetRegistryRefreshDoesNotAccumulateTargetsSpec,
+	"Wacom.UI.Battle.PresentationTargetRegistry.RefreshDoesNotAccumulateTargets",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetRegistryRefreshDoesNotAccumulateTargetsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
+	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
+	HUD->SetEnemyInfoBarForTest(EnemyInfo);
+	HUD->SetSession(Session);
+	EnemyInfo->SetSession(Session);
+	HUD->TakeWidget();
+	EnemyInfo->TakeWidget();
+
+	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
+	TestEqual(TEXT("Registry contains current parts after first refresh"), HUD->GetBattlePresentationTargetCountForTest(), 3);
+
+	UWacomBattleEnemyPartWidgetPresentationProbe* FirstBody =
+		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(1));
+	if (!TestNotNull(TEXT("First body probe"), FirstBody))
+	{
+		return false;
+	}
+
+	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
+	TestEqual(TEXT("Registry still contains one entry per current part after second refresh"),
+		HUD->GetBattlePresentationTargetCountForTest(),
+		3);
+
+	UWacomBattleEnemyPartWidgetPresentationProbe* CurrentBody =
+		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(1));
+	if (!TestNotNull(TEXT("Current body probe"), CurrentBody))
+	{
+		return false;
+	}
+	TestNotEqual(TEXT("Refresh rebuilt body widget"), CurrentBody, FirstBody);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, CurrentBody->GetPartInstanceId(), 6);
+	TestEqual(TEXT("Old body widget does not receive stale cue"), FirstBody->GetBattlePresentationCuePlayCountForTest(), 0);
+	TestEqual(TEXT("Current body receives cue"), CurrentBody->GetBattlePresentationCuePlayCountForTest(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetRegistrySessionChangeClearsTargetsSpec,
+	"Wacom.UI.Battle.PresentationTargetRegistry.SessionChangeClearsTargets",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetRegistrySessionChangeClearsTargetsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
+	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
+	HUD->SetEnemyInfoBarForTest(EnemyInfo);
+	HUD->SetSession(Session);
+	EnemyInfo->SetSession(Session);
+	HUD->TakeWidget();
+	EnemyInfo->TakeWidget();
+	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
+
+	UWacomBattleEnemyPartWidgetPresentationProbe* Part =
+		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(0));
+	if (!TestNotNull(TEXT("Part probe"), Part))
+	{
+		return false;
+	}
+	const FGuid PartId = Part->GetPartInstanceId();
+
+	TestEqual(TEXT("Registry contains current part"), HUD->GetBattlePresentationTargetCountForTest(), 1);
+	HUD->SetSession(nullptr);
+	TestEqual(TEXT("Session change clears registry"), HUD->GetBattlePresentationTargetCountForTest(), 0);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, PartId, 5);
+	TestEqual(TEXT("Old part does not receive cue after session change"), Part->GetBattlePresentationCuePlayCountForTest(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetComponentRegisterReceivesCueSpec,
+	"Wacom.UI.Battle.PresentationTargetComponent.RegisterReceivesCue",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetComponentRegisterReceivesCueSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+
+	const FGuid PartId = FGuid::NewGuid();
+	Component->SetPartInstanceId(PartId);
+	TestTrue(TEXT("Scene target registers with HUD"), Component->RegisterWithBattleHUD(HUD.Get()));
+	TestTrue(TEXT("Scene target reports registered"), Component->IsRegisteredWithBattleHUD());
+	TestEqual(TEXT("Registry contains scene target"), HUD->GetBattlePresentationTargetCountForTest(), 1);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, PartId, 8);
+	TestEqual(TEXT("Component receives one cue"), Component->GetBattlePresentationCuePlayCount(), 1);
+	TestEqual(TEXT("Component records cue type"), Component->GetLastBattlePresentationCueType(), EBattleEventType::DamageDealt);
+	TestEqual(TEXT("Component records cue amount"), Component->GetLastBattlePresentationCueAmount(), 8);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetComponentReplacesWidgetTargetSpec,
+	"Wacom.UI.Battle.PresentationTargetComponent.ReplacesWidgetTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetComponentReplacesWidgetTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
+	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
+	HUD->SetEnemyInfoBarForTest(EnemyInfo);
+	HUD->SetSession(Session);
+	EnemyInfo->SetSession(Session);
+	HUD->TakeWidget();
+	EnemyInfo->TakeWidget();
+	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
+
+	UWacomBattleEnemyPartWidgetPresentationProbe* WidgetPart =
+		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(0));
+	if (!TestNotNull(TEXT("Widget part probe"), WidgetPart))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* SceneOwner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Scene owner actor"), SceneOwner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(SceneOwner))
+		{
+			SceneOwner->Destroy();
+		}
+	};
+
+	UWacomBattlePresentationTargetComponent* SceneTarget =
+		NewObject<UWacomBattlePresentationTargetComponent>(SceneOwner);
+	SceneOwner->AddInstanceComponent(SceneTarget);
+	SceneTarget->RegisterComponent();
+	SceneTarget->SetPartInstanceId(WidgetPart->GetPartInstanceId());
+
+	TestEqual(TEXT("Widget target registered first"), HUD->GetBattlePresentationTargetCountForTest(), 1);
+	TestTrue(TEXT("Scene target replaces widget target"), SceneTarget->RegisterWithBattleHUD(HUD.Get()));
+	TestEqual(TEXT("Single-handler registry still has one target"), HUD->GetBattlePresentationTargetCountForTest(), 1);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, WidgetPart->GetPartInstanceId(), 11);
+	TestEqual(TEXT("Replaced widget target no longer receives cue"), WidgetPart->GetBattlePresentationCuePlayCountForTest(), 0);
+	TestEqual(TEXT("Scene target receives cue"), SceneTarget->GetBattlePresentationCuePlayCount(), 1);
+	TestEqual(TEXT("Scene target records amount"), SceneTarget->GetLastBattlePresentationCueAmount(), 11);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetComponentUnregisterNoopsSpec,
+	"Wacom.UI.Battle.PresentationTargetComponent.UnregisterNoops",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetComponentUnregisterNoopsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UBattleSession> DummySession(NewObject<UBattleSession>());
+	HUD->SetSession(DummySession.Get());
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+
+	const FGuid PartId = FGuid::NewGuid();
+	Component->SetPartInstanceId(PartId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	HUD->SetSession(nullptr);
+	TestFalse(TEXT("HUD registry clear makes component report unregistered"), Component->IsRegisteredWithBattleHUD());
+
+	TestTrue(TEXT("Scene target can register again after HUD clear"), Component->RegisterWithBattleHUD(HUD.Get()));
+	Component->UnregisterFromBattleHUD();
+
+	TestFalse(TEXT("Scene target reports unregistered"), Component->IsRegisteredWithBattleHUD());
+	TestEqual(TEXT("Registry count returns to zero"), HUD->GetBattlePresentationTargetCountForTest(), 0);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, PartId, 5);
+	TestEqual(TEXT("Unregistered component does not receive cue"), Component->GetBattlePresentationCuePlayCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetBindingBindsPartIdSpec,
+	"Wacom.UI.Battle.PresentationTargetBinding.BindsPartIdToRuntimeInstanceId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetBindingBindsPartIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->SetSession(Session);
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartId(TEXT("Test.Part.Head"));
+
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	TestEqual(TEXT("Binding writes runtime part instance id"), Component->GetPartInstanceId(), HeadInstanceId);
+	TestTrue(TEXT("Scene target registers with HUD"), Component->IsRegisteredWithBattleHUD());
+	TestEqual(TEXT("Registry contains scene target"), HUD->GetBattlePresentationTargetCountForTest(), 1);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadInstanceId, 7);
+	TestEqual(TEXT("Bound component receives cue"), Component->GetBattlePresentationCuePlayCount(), 1);
+	TestEqual(TEXT("Bound component records cue amount"), Component->GetLastBattlePresentationCueAmount(), 7);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetBindingSurvivesTargetSelectRefreshSpec,
+	"Wacom.UI.Battle.PresentationTargetBinding.SurvivesTargetSelectRefresh",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetBindingSurvivesTargetSelectRefreshSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	if (!TestTrue(TEXT("Target data is valid"), TargetCardId.IsValid() && HeadInstanceId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartId(TEXT("Test.Part.Head"));
+
+	HUD->RefreshFromSnapshot(Snapshot);
+	TestEqual(TEXT("Scene target auto-binds head"), Component->GetPartInstanceId(), HeadInstanceId);
+	TestTrue(TEXT("Scene target is registered before targeting"), Component->IsRegisteredWithBattleHUD());
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestTrue(TEXT("Scene target remains registered after target-select UI refresh"), Component->IsRegisteredWithBattleHUD());
+
+	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
+	TestTrue(TEXT("Scene target click intent still forwards after target-select refresh"), Component->RequestSceneTargetClick());
+	TestNotEqual(TEXT("Scene click exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestTrue(TEXT("Scene click submits through HUD"), Session->BuildSnapshot().Version > VersionBeforeClick);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetBindingMissingPartIdUnregistersSpec,
+	"Wacom.UI.Battle.PresentationTargetBinding.MissingPartIdUnregisters",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetBindingMissingPartIdUnregistersSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->SetSession(Session);
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartId(TEXT("Test.Part.Head"));
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	TestTrue(TEXT("Scene target initially registered"), Component->IsRegisteredWithBattleHUD());
+
+	Component->SetPartId(TEXT("Test.Part.Missing"));
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	TestFalse(TEXT("Missing stable part id unregisters component"), Component->IsRegisteredWithBattleHUD());
+	TestFalse(TEXT("Missing stable part id clears runtime instance id"), Component->GetPartInstanceId().IsValid());
+	TestEqual(TEXT("Registry count returns to zero"), HUD->GetBattlePresentationTargetCountForTest(), 0);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadInstanceId, 5);
+	TestEqual(TEXT("Unregistered component does not receive cue"), Component->GetBattlePresentationCuePlayCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetBindingDisabledDoesNotBindSpec,
+	"Wacom.UI.Battle.PresentationTargetBinding.DisabledDoesNotBind",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetBindingDisabledDoesNotBindSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartId(TEXT("Test.Part.Head"));
+
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	TestFalse(TEXT("Prototype disabled does not bind scene target"), Component->IsRegisteredWithBattleHUD());
+	TestFalse(TEXT("Prototype disabled does not write runtime id"), Component->GetPartInstanceId().IsValid());
+	TestEqual(TEXT("Registry remains empty"), HUD->GetBattlePresentationTargetCountForTest(), 0);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadInstanceId, 5);
+	TestEqual(TEXT("Unbound component does not receive cue"), Component->GetBattlePresentationCuePlayCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetBindingRefreshUpdatesSpec,
+	"Wacom.UI.Battle.PresentationTargetBinding.RefreshUpdatesBindingAcrossSnapshots",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetBindingRefreshUpdatesSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	FWacomBattleFixture FxA;
+	UCharacterDefinition* CharacterA = FxA.MakeCharacter(
+		FxA.MakeNoopCard(0),
+		FxA.MakeNoopCard(0),
+		{ FxA.MakeNoopCard(0), FxA.MakeNoopCard(0), FxA.MakeNoopCard(0) });
+	UEnemyDefinition* EnemyA = FxA.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* SessionA = FxA.CreateSession(CharacterA, EnemyA, 1);
+	const FBattleSnapshot SnapshotA = SessionA->BuildSnapshot();
+	const FGuid HeadA = FWacomBattleFixture::FindPartInstanceId(SnapshotA, 0);
+
+	FWacomBattleFixture FxB;
+	UCharacterDefinition* CharacterB = FxB.MakeCharacter(
+		FxB.MakeNoopCard(0),
+		FxB.MakeNoopCard(0),
+		{ FxB.MakeNoopCard(0), FxB.MakeNoopCard(0), FxB.MakeNoopCard(0) });
+	UEnemyDefinition* EnemyB = FxB.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* SessionB = FxB.CreateSession(CharacterB, EnemyB, 2);
+	const FBattleSnapshot SnapshotB = SessionB->BuildSnapshot();
+	const FGuid HeadB = FWacomBattleFixture::FindPartInstanceId(SnapshotB, 0);
+
+	TestNotEqual(TEXT("New session has a different runtime part id"), HeadB, HeadA);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartId(TEXT("Test.Part.Head"));
+
+	HUD->SetSession(SessionA);
+	HUD->RefreshFromSnapshot(SnapshotA);
+	TestEqual(TEXT("Initial binding writes first runtime id"), Component->GetPartInstanceId(), HeadA);
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadA, 3);
+	TestEqual(TEXT("Component receives first-session cue"), Component->GetBattlePresentationCuePlayCount(), 1);
+
+	HUD->SetSession(SessionB);
+	HUD->RefreshFromSnapshot(SnapshotB);
+	TestEqual(TEXT("Refresh rewrites runtime id"), Component->GetPartInstanceId(), HeadB);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadA, 4);
+	TestEqual(TEXT("Old runtime id no longer routes"), Component->GetBattlePresentationCuePlayCount(), 1);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadB, 6);
+	TestEqual(TEXT("New runtime id routes"), Component->GetBattlePresentationCuePlayCount(), 2);
+	TestEqual(TEXT("New cue amount recorded"), Component->GetLastBattlePresentationCueAmount(), 6);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickIntentForwardsSpec,
+	"Wacom.UI.Battle.PresentationTargetClickIntent.ForwardsTargetSelectToHUD",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickIntentForwardsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	if (!TestTrue(TEXT("Target card is valid"), TargetCardId.IsValid())
+		|| !TestTrue(TEXT("Head part is valid"), HeadInstanceId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetSession(Session);
+	HUD->TakeWidget();
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestEqual(TEXT("Target card is pending"), HUD->GetPendingTargetingCardId(), TargetCardId);
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartInstanceId(HeadInstanceId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
+	TestTrue(TEXT("Scene target click intent forwards"), Component->RequestSceneTargetClick());
+
+	TestNotEqual(TEXT("Click intent resolves through HUD and exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestFalse(TEXT("Click intent clears pending card"), HUD->GetPendingTargetingCardId().IsValid());
+	TestTrue(TEXT("Click intent changed battle state"), Session->BuildSnapshot().Version > VersionBeforeClick);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickIntentIdleNoopsSpec,
+	"Wacom.UI.Battle.PresentationTargetClickIntent.IdleClickForwardsButNoopsInHUD",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickIntentIdleNoopsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Session->BuildSnapshot(), 0);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetSession(Session);
+	HUD->TakeWidget();
+	TestEqual(TEXT("HUD starts idle"), HUD->GetUIState(), EBattleUIState::Idle);
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartInstanceId(HeadInstanceId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
+	TestTrue(TEXT("Idle scene click still forwards intent to HUD"), Component->RequestSceneTargetClick());
+
+	TestEqual(TEXT("Idle click leaves HUD idle"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestFalse(TEXT("Idle click leaves pending invalid"), HUD->GetPendingTargetingCardId().IsValid());
+	TestEqual(TEXT("Idle click does not submit battle command"), Session->BuildSnapshot().Version, VersionBeforeClick);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickIntentInvalidNoopsSpec,
+	"Wacom.UI.Battle.PresentationTargetClickIntent.InvalidOrUnregisteredNoops",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickIntentInvalidNoopsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UBattleSession> DummySession(NewObject<UBattleSession>());
+	HUD->SetSession(DummySession.Get());
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+
+	TestFalse(TEXT("Unregistered component does not forward"), Component->RequestSceneTargetClick());
+
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestFalse(TEXT("Component with id but no HUD does not forward"), Component->RequestSceneTargetClick());
+
+	TestTrue(TEXT("Component registers with HUD"), Component->RegisterWithBattleHUD(HUD.Get()));
+	Component->SetPartInstanceId(FGuid());
+	TestFalse(TEXT("Invalid runtime id does not forward"), Component->RequestSceneTargetClick());
+
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Component can register again"), Component->RegisterWithBattleHUD(HUD.Get()));
+	HUD->SetSession(nullptr);
+	TestFalse(TEXT("HUD registry clear makes component report unregistered"), Component->IsRegisteredWithBattleHUD());
+	TestFalse(TEXT("Component after HUD clear does not forward"), Component->RequestSceneTargetClick());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickIntentAutoBindingSpec,
+	"Wacom.UI.Battle.PresentationTargetClickIntent.UsesCurrentRuntimePartAfterAutoBinding",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickIntentAutoBindingSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	FWacomBattleFixture FxA;
+	UCardDefinition* TargetCardA = FxA.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* CharacterA = FxA.MakeCharacter(
+		FxA.MakeNoopCard(0),
+		FxA.MakeNoopCard(0),
+		{ TargetCardA, FxA.MakeNoopCard(0), FxA.MakeNoopCard(0) });
+	UEnemyDefinition* EnemyA = FxA.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* SessionA = FxA.CreateSession(CharacterA, EnemyA, 1);
+	const FBattleSnapshot SnapshotA = SessionA->BuildSnapshot();
+	const FGuid HeadA = FWacomBattleFixture::FindPartInstanceId(SnapshotA, 0);
+	const FGuid TargetCardIdA = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		SnapshotA,
+		ECardTargetMode::SingleEnemyPart);
+
+	FWacomBattleFixture FxB;
+	UCardDefinition* TargetCardB = FxB.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* CharacterB = FxB.MakeCharacter(
+		FxB.MakeNoopCard(0),
+		FxB.MakeNoopCard(0),
+		{ TargetCardB, FxB.MakeNoopCard(0), FxB.MakeNoopCard(0) });
+	UEnemyDefinition* EnemyB = FxB.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* SessionB = FxB.CreateSession(CharacterB, EnemyB, 2);
+	const FBattleSnapshot SnapshotB = SessionB->BuildSnapshot();
+	const FGuid HeadB = FWacomBattleFixture::FindPartInstanceId(SnapshotB, 0);
+	const FGuid TargetCardIdB = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		SnapshotB,
+		ECardTargetMode::SingleEnemyPart);
+
+	if (!TestTrue(TEXT("Session A target data valid"), HeadA.IsValid() && TargetCardIdA.IsValid())
+		|| !TestTrue(TEXT("Session B target data valid"), HeadB.IsValid() && TargetCardIdB.IsValid())
+		|| !TestNotEqual(TEXT("Sessions use different runtime part ids"), HeadB, HeadA))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartId(TEXT("Test.Part.Head"));
+
+	HUD->SetSession(SessionA);
+	HUD->RefreshFromSnapshot(SnapshotA);
+	TestEqual(TEXT("Component auto-binds session A part"), Component->GetPartInstanceId(), HeadA);
+	HUD->OnCardClickedByUser(TargetCardIdA);
+	TestTrue(TEXT("Auto-bound session A click forwards"), Component->RequestSceneTargetClick());
+	TestNotEqual(TEXT("Session A click exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+
+	HUD->SetSession(SessionB);
+	HUD->RefreshFromSnapshot(SnapshotB);
+	TestEqual(TEXT("Component auto-binds session B part"), Component->GetPartInstanceId(), HeadB);
+	HUD->OnCardClickedByUser(TargetCardIdB);
+	TestTrue(TEXT("Auto-bound session B click forwards"), Component->RequestSceneTargetClick());
+	TestNotEqual(TEXT("Session B click exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickPIEForwardsSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.PIEClickForwardsTargetSelect",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickPIEForwardsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC) || !TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	if (!TestTrue(TEXT("Target data is valid"), TargetCardId.IsValid() && HeadInstanceId.IsValid()))
+	{
+		return false;
+	}
+
+	PC->bEnableClickEvents = false;
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetSession(Session);
+	HUD->TakeWidget();
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartInstanceId(HeadInstanceId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	TestTrue(TEXT("Component binds click target"), Component->HasBoundClickTargetForTest());
+	TestTrue(TEXT("Registration enables PC click events"), PC->bEnableClickEvents);
+
+	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
+	Component->BroadcastClickForTest(Primitive);
+
+	TestNotEqual(TEXT("PIE click exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestFalse(TEXT("PIE click clears pending card"), HUD->GetPendingTargetingCardId().IsValid());
+	TestTrue(TEXT("PIE click submits through HUD"), Session->BuildSnapshot().Version > VersionBeforeClick);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickPIEIdleNoopsSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.IdleClickForwardsButHUDNoops",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickPIEIdleNoopsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Session->BuildSnapshot(), 0);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetSession(Session);
+	HUD->TakeWidget();
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartInstanceId(HeadInstanceId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
+	Component->BroadcastClickForTest(Primitive);
+
+	TestEqual(TEXT("Idle PIE click leaves HUD idle"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestFalse(TEXT("Idle PIE click leaves pending invalid"), HUD->GetPendingTargetingCardId().IsValid());
+	TestEqual(TEXT("Idle PIE click does not submit command"), Session->BuildSnapshot().Version, VersionBeforeClick);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickPIEInvalidNoopsSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.InvalidOrUnregisteredNoops",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickPIEInvalidNoopsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	AActor* NoPrimitiveOwner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	if (!TestNotNull(TEXT("No primitive owner actor"), NoPrimitiveOwner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+		if (IsValid(NoPrimitiveOwner))
+		{
+			NoPrimitiveOwner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UBattleSession> DummySession(NewObject<UBattleSession>());
+	HUD->SetSession(DummySession.Get());
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+
+	Component->BroadcastClickForTest(Primitive);
+	TestFalse(TEXT("Unregistered click target remains unbound"), Component->HasBoundClickTargetForTest());
+
+	UWacomBattlePresentationTargetComponentProbe* NoPrimitiveComponent =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(NoPrimitiveOwner);
+	NoPrimitiveOwner->AddInstanceComponent(NoPrimitiveComponent);
+	NoPrimitiveComponent->RegisterComponent();
+	NoPrimitiveComponent->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("No-primitive component can still register presentation target"),
+		NoPrimitiveComponent->RegisterWithBattleHUD(HUD.Get()));
+	TestFalse(TEXT("Missing click target does not bind click"),
+		NoPrimitiveComponent->HasBoundClickTargetForTest());
+	NoPrimitiveComponent->UnregisterFromBattleHUD();
+
+	Component->SetPartInstanceId(FGuid::NewGuid());
+
+	Component->SetClickTargetComponent(Primitive);
+	TestTrue(TEXT("Component registers with click target"), Component->RegisterWithBattleHUD(HUD.Get()));
+	TestTrue(TEXT("Click target is bound"), Component->HasBoundClickTargetForTest());
+	Component->SetPartInstanceId(FGuid());
+	Component->BroadcastClickForTest(Primitive);
+	TestFalse(TEXT("Invalid id unregisters and unbinds click target"), Component->HasBoundClickTargetForTest());
+
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Component can register again"), Component->RegisterWithBattleHUD(HUD.Get()));
+	HUD->SetSession(nullptr);
+	Component->BroadcastClickForTest(Primitive);
+	TestFalse(TEXT("HUD clear makes click no-op"), Component->RequestSceneTargetClick());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickPIEAutoBindingSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.AutoBindingUsesCurrentRuntimePart",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickPIEAutoBindingSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	FWacomBattleFixture FxA;
+	UCardDefinition* TargetCardA = FxA.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* CharacterA = FxA.MakeCharacter(
+		FxA.MakeNoopCard(0),
+		FxA.MakeNoopCard(0),
+		{ TargetCardA, FxA.MakeNoopCard(0), FxA.MakeNoopCard(0) });
+	UEnemyDefinition* EnemyA = FxA.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* SessionA = FxA.CreateSession(CharacterA, EnemyA, 1);
+	const FBattleSnapshot SnapshotA = SessionA->BuildSnapshot();
+	const FGuid HeadA = FWacomBattleFixture::FindPartInstanceId(SnapshotA, 0);
+	const FGuid TargetCardIdA = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		SnapshotA,
+		ECardTargetMode::SingleEnemyPart);
+
+	FWacomBattleFixture FxB;
+	UCardDefinition* TargetCardB = FxB.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* CharacterB = FxB.MakeCharacter(
+		FxB.MakeNoopCard(0),
+		FxB.MakeNoopCard(0),
+		{ TargetCardB, FxB.MakeNoopCard(0), FxB.MakeNoopCard(0) });
+	UEnemyDefinition* EnemyB = FxB.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* SessionB = FxB.CreateSession(CharacterB, EnemyB, 2);
+	const FBattleSnapshot SnapshotB = SessionB->BuildSnapshot();
+	const FGuid HeadB = FWacomBattleFixture::FindPartInstanceId(SnapshotB, 0);
+	const FGuid TargetCardIdB = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		SnapshotB,
+		ECardTargetMode::SingleEnemyPart);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartId(TEXT("Test.Part.Head"));
+
+	HUD->SetSession(SessionA);
+	HUD->RefreshFromSnapshot(SnapshotA);
+	TestEqual(TEXT("Component auto-binds session A part"), Component->GetPartInstanceId(), HeadA);
+	HUD->OnCardClickedByUser(TargetCardIdA);
+	Component->BroadcastClickForTest(Primitive);
+	TestNotEqual(TEXT("Session A PIE click exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+
+	HUD->SetSession(SessionB);
+	HUD->RefreshFromSnapshot(SnapshotB);
+	TestEqual(TEXT("Component auto-binds session B part"), Component->GetPartInstanceId(), HeadB);
+	HUD->OnCardClickedByUser(TargetCardIdB);
+	Component->BroadcastClickForTest(Primitive);
+	TestNotEqual(TEXT("Session B PIE click exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickPIECollisionSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.ConfiguresAndRestoresVisibilityCollision",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickPIECollisionSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Primitive->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartInstanceId(FGuid::NewGuid());
+
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	TestEqual(TEXT("Registration enables query collision"), Primitive->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
+	TestEqual(TEXT("Registration blocks Visibility"), Primitive->GetCollisionResponseToChannel(ECC_Visibility), ECR_Block);
+
+	Component->UnregisterFromBattleHUD();
+
+	TestEqual(TEXT("Unregister restores collision enabled"), Primitive->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+	TestEqual(TEXT("Unregister restores Visibility response"), Primitive->GetCollisionResponseToChannel(ECC_Visibility), ECR_Ignore);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickPIEPCRefCountSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.PlayerControllerClickEventsAreRefCounted",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickPIEPCRefCountSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC) || !TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	PC->bEnableClickEvents = false;
+	PC->bEnableMouseOverEvents = false;
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->Enable3DHandPrototypeForTest();
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshot(Session->BuildSnapshot());
+	TestTrue(TEXT("3D hand enables click events"), PC->bEnableClickEvents);
+	TestTrue(TEXT("3D hand enables mouse-over events"), PC->bEnableMouseOverEvents);
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	TestTrue(TEXT("Scene target acquired click events"), Component->HasAcquiredPlayerControllerClickEventsForTest());
+
+	HUD->DestroyBattle3DHandPresenterForTest();
+	TestTrue(TEXT("Scene target keeps click events enabled after 3D hand release"), PC->bEnableClickEvents);
+	TestFalse(TEXT("Mouse-over restores after 3D hand release"), PC->bEnableMouseOverEvents);
+
+	Component->UnregisterFromBattleHUD();
+	TestFalse(TEXT("All releases restore click events"), PC->bEnableClickEvents);
+	TestFalse(TEXT("All releases keep mouse-over restored"), PC->bEnableMouseOverEvents);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetVisualFeedbackDamagePulseSpec,
+	"Wacom.UI.Battle.PresentationTargetVisualFeedback.DamagePulseScalesAndRestores",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetVisualFeedbackDamagePulseSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(2.0f, 3.0f, 4.0f));
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->DamagePulseScale = 1.25f;
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, Component->GetPartInstanceId(), 5);
+
+	TestTrue(TEXT("Damage cue activates visual feedback"), Component->IsVisualFeedbackActiveForTest());
+	TestEqual(TEXT("Damage cue scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.25f);
+	TestEqual(TEXT("Damage cue records type"), Component->GetLastBattlePresentationCueType(), EBattleEventType::DamageDealt);
+
+	Component->RestoreVisualFeedbackForTest();
+
+	TestFalse(TEXT("Damage cue clears active state"), Component->IsVisualFeedbackActiveForTest());
+	TestEqual(TEXT("Damage cue restores primitive scale"), Primitive->GetRelativeScale3D(), BaseScale);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetVisualFeedbackDestroyedPulseSpec,
+	"Wacom.UI.Battle.PresentationTargetVisualFeedback.DestroyedPulseUsesStrongerScale",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetVisualFeedbackDestroyedPulseSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->DamagePulseScale = 1.05f;
+	Component->DestroyedPulseScale = 1.4f;
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::EnemyPartHpEmptied, Component->GetPartInstanceId(), 0);
+
+	TestTrue(TEXT("Destroyed cue activates visual feedback"), Component->IsVisualFeedbackActiveForTest());
+	TestEqual(TEXT("Destroyed cue uses stronger scale"), Primitive->GetRelativeScale3D(), FVector::OneVector * 1.4f);
+	TestEqual(TEXT("Destroyed cue records type"), Component->GetLastBattlePresentationCueType(), EBattleEventType::EnemyPartHpEmptied);
+	TestEqual(TEXT("Destroyed cue records amount"), Component->GetLastBattlePresentationCueAmount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetVisualFeedbackOverrideTargetSpec,
+	"Wacom.UI.Battle.PresentationTargetVisualFeedback.OverrideTargetIsUsed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetVisualFeedbackOverrideTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* RootPrimitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(RootPrimitive);
+	Owner->AddInstanceComponent(RootPrimitive);
+	RootPrimitive->RegisterComponent();
+	RootPrimitive->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+
+	UStaticMeshComponent* OverridePrimitive = NewObject<UStaticMeshComponent>(Owner);
+	OverridePrimitive->SetupAttachment(RootPrimitive);
+	Owner->AddInstanceComponent(OverridePrimitive);
+	OverridePrimitive->RegisterComponent();
+	OverridePrimitive->SetRelativeScale3D(FVector(2.0f, 2.0f, 2.0f));
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->DamagePulseScale = 1.5f;
+	Component->SetVisualTargetComponent(OverridePrimitive);
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, Component->GetPartInstanceId(), 3);
+
+	TestEqual(TEXT("Root primitive remains unchanged"), RootPrimitive->GetRelativeScale3D(), FVector::OneVector);
+	TestEqual(TEXT("Override primitive scales"), OverridePrimitive->GetRelativeScale3D(), FVector(3.0f, 3.0f, 3.0f));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetVisualFeedbackNoPrimitiveSpec,
+	"Wacom.UI.Battle.PresentationTargetVisualFeedback.NoPrimitiveNoopsButRecordsCue",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetVisualFeedbackNoPrimitiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, Component->GetPartInstanceId(), 9);
+
+	TestEqual(TEXT("Cue still records without primitive"), Component->GetBattlePresentationCuePlayCount(), 1);
+	TestEqual(TEXT("Cue amount records without primitive"), Component->GetLastBattlePresentationCueAmount(), 9);
+	TestFalse(TEXT("No primitive means no active visual feedback"), Component->IsVisualFeedbackActiveForTest());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetVisualFeedbackRepeatedCueSpec,
+	"Wacom.UI.Battle.PresentationTargetVisualFeedback.RepeatedCueDoesNotDriftScale",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetVisualFeedbackRepeatedCueSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(1.0f, 2.0f, 3.0f));
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->DamagePulseScale = 1.2f;
+	Component->DestroyedPulseScale = 1.5f;
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, Component->GetPartInstanceId(), 4);
+	TestEqual(TEXT("First cue scales from base"), Primitive->GetRelativeScale3D(), BaseScale * 1.2f);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::EnemyPartHpEmptied, Component->GetPartInstanceId(), 0);
+	TestEqual(TEXT("Second cue does not stack from pulsed scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.5f);
+
+	Component->RestoreVisualFeedbackForTest();
+	TestEqual(TEXT("Repeated cue restores to original base scale"), Primitive->GetRelativeScale3D(), BaseScale);
 
 	return true;
 }

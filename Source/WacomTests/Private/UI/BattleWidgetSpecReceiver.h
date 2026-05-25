@@ -12,6 +12,7 @@
 #include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
+#include "Components/WacomBattlePresentationTargetComponent.h"
 #include "Components/BorderSlot.h"
 #include "Components/Button.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -216,14 +217,29 @@ public:
 		return OwningPlayerOverride ? OwningPlayerOverride.Get() : Super::GetOwningPlayer();
 	}
 
+	virtual UWorld* GetWorld() const override
+	{
+		return WorldOverride ? WorldOverride.Get() : Super::GetWorld();
+	}
+
 	void SetOwningPlayerForTest(APlayerController* InPlayerController)
 	{
 		OwningPlayerOverride = InPlayerController;
 	}
 
+	void SetWorldForTest(UWorld* InWorld)
+	{
+		WorldOverride = InWorld;
+	}
+
 	void Enable3DHandPrototypeForTest()
 	{
 		bEnable3DHandPrototype = true;
+	}
+
+	void EnableSceneEnemyTargetBindingPrototypeForTest()
+	{
+		bEnableSceneEnemyTargetBindingPrototype = true;
 	}
 
 	void DestroyBattle3DHandPresenterForTest()
@@ -317,6 +333,19 @@ public:
 		AdvanceBattlePresentationQueueOnce();
 	}
 
+	void PlayBattlePresentationCueForTest(
+		EBattleEventType SourceEventType,
+		const FGuid& TargetPartInstanceId,
+		int32 Amount)
+	{
+		UBattleHUD::PlayBattlePresentationCueForTest(SourceEventType, TargetPartInstanceId, Amount);
+	}
+
+	int32 GetBattlePresentationTargetCountForTest() const
+	{
+		return UBattleHUD::GetBattlePresentationTargetCountForTest();
+	}
+
 	UFUNCTION()
 	void ClearPresentationQueueOnBattleEndedForTest(EBattleOutcome Outcome)
 	{
@@ -333,6 +362,9 @@ public:
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<APlayerController> OwningPlayerOverride;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWorld> WorldOverride;
 
 	int32 BattleEndedCallbackCountForTest = 0;
 };
@@ -376,11 +408,6 @@ public:
 			: false;
 	}
 
-	void PlayCueForTest(EBattleEventType SourceEventType, const FGuid& TargetPartInstanceId, int32 Amount)
-	{
-		PlayBattlePresentationCue(SourceEventType, TargetPartInstanceId, Amount);
-	}
-
 	UEnemyPartWidget* GetSpawnedPartForTest(int32 Index) const
 	{
 		return SpawnedParts.IsValidIndex(Index) ? SpawnedParts[Index] : nullptr;
@@ -421,6 +448,41 @@ public:
 	void ClearBattlePresentationCueForTest()
 	{
 		ClearBattlePresentationCue();
+	}
+};
+
+UCLASS()
+class UWacomBattlePresentationTargetComponentProbe : public UWacomBattlePresentationTargetComponent
+{
+	GENERATED_BODY()
+
+public:
+	void BroadcastClickForTest(UPrimitiveComponent* Primitive, FKey Button = EKeys::LeftMouseButton)
+	{
+		if (Primitive)
+		{
+			Primitive->OnClicked.Broadcast(Primitive, Button);
+		}
+	}
+
+	bool HasBoundClickTargetForTest() const
+	{
+		return BoundClickTarget.IsValid();
+	}
+
+	bool HasAcquiredPlayerControllerClickEventsForTest() const
+	{
+		return bHasAcquiredPlayerControllerClickEvents;
+	}
+
+	bool IsVisualFeedbackActiveForTest() const
+	{
+		return IsVisualFeedbackActive();
+	}
+
+	void RestoreVisualFeedbackForTest()
+	{
+		RestoreVisualFeedback();
 	}
 };
 

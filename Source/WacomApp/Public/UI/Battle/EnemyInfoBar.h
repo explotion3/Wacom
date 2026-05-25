@@ -8,7 +8,7 @@
 
 class UEnemyPartWidget;
 class UPanelWidget;
-enum class EBattleEventType : uint8;
+class UBattleHUD;
 
 /**
  * 敌人信息条。动态生成 N 个 UEnemyPartWidget。
@@ -33,6 +33,7 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeRefreshFromSnapshot(const struct FBattleSnapshot& Snap) override;
+	virtual void NativeDestruct() override;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UPanelWidget> PartsContainer;
@@ -44,12 +45,10 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UEnemyPartWidget>> SpawnedParts;
 
+	UBattleHUD* FindOwningBattleHUD() const;
+	void RegisterBattlePresentationTargets(UBattleHUD& HUD);
+	void UnregisterBattlePresentationTargets();
 	void ApplyTargetableFromHUDState();
-	void PlayBattlePresentationCue(
-		EBattleEventType SourceEventType,
-		const FGuid& TargetPartInstanceId,
-		int32 Amount);
 
-	friend class UBattleHUD;
 	friend class UWacomBattleEnemyInfoBarTest;
 };
