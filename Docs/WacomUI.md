@@ -164,13 +164,15 @@ Toast WBP 注册口径：
 - 背包删牌成功/失败：成功显示销毁卡牌和获得金币，失败显示固有卡、最后容量来源卡、未持有卡等原因。
 - RunEvent 选项结果/不可用原因：由 `UWacomRunEventPresentationBuilder` 转成中文 Toast。
 
-### 战斗事件 Toast 与日志
+### 战斗事件表现队列、Toast 与日志
 
 `UWacomBattleEventPresentationBuilder` 把 `FBattleEvent` 转成 `FBattleEventPresentationView`。ViewData 包含 `MessageText / bShouldDisplay / VisualTone / IconKey`，但当前 Toast 和日志主要消费文字。
 
-- `UEventToast` 负责战斗内 Toast 队列、显示和倒计时，不负责文案判断。
+- `FWacomBattleEventPresentationQueue` 负责把 `FBattleEvent` 按顺序调度为 Toast、短暂停顿和击倒弹窗 step；队列播放期间 `BattleHUD` 进入 `Resolving`，阻止继续提交战斗命令。
+- `UEventToast` 负责单条战斗 Toast 的显示和倒计时，不负责文案判断或事件排序。
 - `UBattleEventLogPanel` 是 `BattleHUD` 内部半屏日志抽屉，不通过 CommonUI Layer push/pop。
-- `BattleHUD` 保存本场 `BattleEventLogHistory`，切换 Session 时清空。
+- `BattleHUD` 保存本场 `BattleEventLogHistory`，切换 Session 时清空日志和表现队列。
+- `KnockdownChoiceRequested` 不再当帧直接 Push modal；它由表现队列延后到前序事件播放后再打开。
 - `HandZoneChanged` 等 `bShouldDisplay=false` 的事件不会进入 Toast 或日志。
 
 ---

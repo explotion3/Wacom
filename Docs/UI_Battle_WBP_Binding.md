@@ -126,7 +126,8 @@ WBP 合同：
 - 详情面板为 `HitTestInvisible`，不抢点击。
 - `EventLogPanel` 是 BattleHUD 内部子组件，不通过 `UWacomGameUIManagerSubsystem::PushContentToLayer()` 打开。
 - WBP 中可用自定义按钮调用 `BattleHUD::ToggleBattleEventLog()`。
-- WBP 和子控件只调用 `BattleHUD` 的玩家意图入口；出牌、等待、结束回合、目标选择、事件消费和击倒弹窗编排由 C++ private flow helper 承担，不在 WBP 图里实现。
+- WBP 和子控件只调用 `BattleHUD` 的玩家意图入口；出牌、等待、结束回合、目标选择、事件消费、表现队列和击倒弹窗编排由 C++ private flow helper 承担，不在 WBP 图里实现。
+- `EventToast` 只显示表现队列送来的单条提示；不要在 WBP 中自行消费 `FBattleEvent` 或直接 Push 击倒弹窗。
 
 PIE 检查：
 

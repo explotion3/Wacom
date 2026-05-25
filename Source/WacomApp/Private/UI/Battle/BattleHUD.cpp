@@ -14,12 +14,16 @@
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
+#include "UI/Battle/WacomBattleEventPresentationQueue.h"
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattleHUDEventFlow.h"
 #include "UI/Battle/WacomBattleHUDTargetingFlow.h"
+#include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Common/PileCountView.h"
+#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
+#include "UI/Foundation/WacomUITags.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
@@ -96,6 +100,7 @@ void UBattleHUD::NativeConstruct()
 
 void UBattleHUD::NativeDestruct()
 {
+	ClearBattlePresentationQueue();
 	DestroyBattle3DHandPresenter();
 	if (HandPanel)
 	{
@@ -179,6 +184,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	Super::NativeOnSessionChanged(OldSession, NewSession);
 	if (OldSession != NewSession)
 	{
+		ClearBattlePresentationQueue();
 		DestroyBattle3DHandPresenter();
 	}
 
@@ -227,6 +233,11 @@ void UBattleHUD::SetBattleEventLogOpen(bool bOpen)
 bool UBattleHUD::IsBattleEventLogOpen() const
 {
 	return EventLogPanel && EventLogPanel->IsDrawerOpen();
+}
+
+bool UBattleHUD::IsBattlePresentationBusy() const
+{
+	return IsBattlePresentationQueueBusy();
 }
 
 // ================ 状态机 ================
@@ -598,6 +609,132 @@ void UBattleHUD::TrimBattleEventLogHistory()
 void UBattleHUD::SyncBattleEventLogPanel()
 {
 	FWacomBattleHUDEventFlow::SyncBattleEventLogPanel(*this);
+}
+
+void UBattleHUD::EnqueueBattlePresentationEvents(const TArray<FBattleEvent>& Events)
+{
+	if (Events.IsEmpty())
+	{
+		return;
+	}
+
+	if (!BattleEventPresentationQueue)
+	{
+		BattleEventPresentationQueue = MakeShared<FWacomBattleEventPresentationQueue>(*this);
+	}
+
+	BattleEventPresentationQueue->EnqueueEvents(Events);
+}
+
+void UBattleHUD::ClearBattlePresentationQueue()
+{
+	if (BattleEventPresentationQueue)
+	{
+		BattleEventPresentationQueue->Clear();
+		BattleEventPresentationQueue.Reset();
+	}
+}
+
+bool UBattleHUD::IsBattlePresentationQueueBusy() const
+{
+	return BattleEventPresentationQueue && BattleEventPresentationQueue->IsBusy();
+}
+
+TSharedPtr<FWacomBattleEventPresentationQueue> UBattleHUD::GetBattlePresentationQueueSelfKeepAlive() const
+{
+	return BattleEventPresentationQueue;
+}
+
+void UBattleHUD::EnqueueBattlePresentationToast(const FBattleEventPresentationView& View)
+{
+	if (EventToast)
+	{
+		EventToast->EnqueuePresentationView(View);
+	}
+}
+
+void UBattleHUD::PushPendingKnockdownChoiceDialog()
+{
+	UBattleSession* CurrentSession = GetSession();
+	if (!CurrentSession)
+	{
+		return;
+	}
+
+	const FKnockdownChoiceView ChoiceView = CurrentSession->BuildPendingKnockdownChoiceView();
+	if (!ChoiceView.bHasPendingChoice)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[BattleHUD] KnockdownChoiceRequested presentation step has no pending choice view"));
+		return;
+	}
+
+	UGameInstance* GameInstance = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GameInstance ? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+	if (!UIManager)
+	{
+		return;
+	}
+
+	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
+		WacomUITags::UI_Layer_Modal.GetTag(),
+		UWacomKnockdownChoiceDialog::StaticClass());
+	UWacomKnockdownChoiceDialog* Dialog = Cast<UWacomKnockdownChoiceDialog>(Pushed);
+	if (!Dialog)
+	{
+		return;
+	}
+
+	Dialog->SetContext(this, ChoiceView);
+}
+
+void UBattleHUD::HandleBattlePresentationQueueStarted()
+{
+	HideCardDetailPanel();
+	if (UIState != EBattleUIState::BattleEnd)
+	{
+		SetUIState(EBattleUIState::Resolving);
+	}
+}
+
+void UBattleHUD::HandleBattlePresentationQueueFinished()
+{
+	UBattleSession* CurrentSession = GetSession();
+	if (!CurrentSession)
+	{
+		return;
+	}
+
+	const FBattleSnapshot Snapshot = CurrentSession->BuildSnapshot();
+	if (Snapshot.Phase == EBattlePhase::BattleEnd)
+	{
+		SetUIState(EBattleUIState::BattleEnd);
+		return;
+	}
+
+	if (UIState == EBattleUIState::Resolving)
+	{
+		SetUIState(EBattleUIState::Idle);
+	}
+}
+
+void UBattleHUD::HandleBattlePresentationBattleEndStep()
+{
+	if (UBattleSession* CurrentSession = GetSession())
+	{
+		RefreshFromSnapshot(CurrentSession->BuildSnapshot());
+	}
+}
+
+void UBattleHUD::AdvanceBattlePresentationQueueOnce()
+{
+#if WITH_AUTOMATION_TESTS
+	if (BattleEventPresentationQueue)
+	{
+		BattleEventPresentationQueue->AdvanceForTest();
+	}
+#endif
 }
 
 void UBattleHUD::HandleBattleEventLogButtonClicked()

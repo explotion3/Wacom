@@ -4,6 +4,7 @@
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
+#include "Commands/BattleCommand.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
@@ -338,6 +339,389 @@ bool FWacomUIBattleHUDEventLogSpec::RunTest(const FString& /*Parameters*/)
 	HUD->SetSession(nullptr);
 	TestEqual(TEXT("Session change clears HUD history"), HUD->GetBattleEventLogEntryCount(), 0);
 	TestEqual(TEXT("Session change clears panel"), Panel->GetEntryCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationQueueOrdersToastSpec,
+	"Wacom.UI.Battle.PresentationQueue.OrdersToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationQueueOrdersToastSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
+	Toast->TakeWidget();
+	HUD->SetEventToastForTest(Toast.Get());
+
+	FBattleEvent First;
+	First.Type = EBattleEventType::BattleStarted;
+	First.Sequence = 1;
+
+	FBattleEvent Second;
+	Second.Type = EBattleEventType::DamageDealt;
+	Second.Sequence = 2;
+	Second.Amount = 3;
+
+	HUD->EnqueueBattlePresentationEventsForTest({ First, Second });
+
+	World->GetTimerManager().Tick(0.01f);
+	TestTrue(TEXT("Queue is busy after first step"), HUD->IsBattlePresentationBusy());
+	TArray<FString> Texts;
+	Toast->GetActiveToastTextsForTest(Texts);
+	TestEqual(TEXT("First toast appears alone"), Texts.Num(), 1);
+	if (Texts.Num() != 1)
+	{
+		return false;
+	}
+	TestEqual(TEXT("First toast text"), Texts[0], FString(TEXT("战斗开始")));
+
+	HUD->AdvanceBattlePresentationQueueForTest();
+	Toast->GetActiveToastTextsForTest(Texts);
+	TestEqual(TEXT("Second toast appears after pacing delay"), Texts.Num(), 2);
+	if (Texts.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("Second toast text"), Texts[1], FString(TEXT("造成 3 点伤害")));
+
+	HUD->AdvanceBattlePresentationQueueForTest();
+	TestFalse(TEXT("Queue finishes after last step delay"), HUD->IsBattlePresentationBusy());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationQueueBlocksInputSpec,
+	"Wacom.UI.Battle.PresentationQueue.BlocksInput",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationQueueBlocksInputSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
+	Toast->TakeWidget();
+	HUD->SetEventToastForTest(Toast.Get());
+	HUD->SetSession(Session);
+
+	FBattleEvent Event;
+	Event.Type = EBattleEventType::BattleStarted;
+	Event.Sequence = 1;
+	HUD->EnqueueBattlePresentationEventsForTest({ Event });
+	World->GetTimerManager().Tick(0.01f);
+
+	TestTrue(TEXT("Queue reports busy"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("HUD enters resolving while presenting"), HUD->GetUIState(), EBattleUIState::Resolving);
+	const int32 WaitValueBefore = Session->BuildSnapshot().CurrentWaitValue;
+	HUD->OnWaitRequested();
+	TestEqual(TEXT("Wait is blocked while presenting"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore);
+
+	HUD->AdvanceBattlePresentationQueueForTest();
+	TestFalse(TEXT("Queue no longer busy"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("HUD returns idle after presentation"), HUD->GetUIState(), EBattleUIState::Idle);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationQueueClearsOnSessionChangeSpec,
+	"Wacom.UI.Battle.PresentationQueue.ClearsOnSessionChange",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationQueueClearsOnSessionChangeSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
+	Toast->TakeWidget();
+	HUD->SetEventToastForTest(Toast.Get());
+	HUD->SetSession(Session);
+
+	FBattleEvent First;
+	First.Type = EBattleEventType::BattleStarted;
+	First.Sequence = 1;
+	FBattleEvent Second;
+	Second.Type = EBattleEventType::DamageDealt;
+	Second.Sequence = 2;
+	Second.Amount = 4;
+	HUD->EnqueueBattlePresentationEventsForTest({ First, Second });
+
+	World->GetTimerManager().Tick(0.01f);
+	TestTrue(TEXT("Queue is busy before session change"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("First toast appears"), Toast->GetActiveToastTextCountForTest(), 1);
+
+	HUD->SetSession(nullptr);
+	TestFalse(TEXT("Session change clears queue"), HUD->IsBattlePresentationBusy());
+
+	World->GetTimerManager().Tick(0.50f);
+	TestEqual(TEXT("Cleared queue does not play second toast"), Toast->GetActiveToastTextCountForTest(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationQueueBattleEndClearsQueueSafelySpec,
+	"Wacom.UI.Battle.PresentationQueue.BattleEndClearsQueueSafely",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationQueueBattleEndClearsQueueSafelySpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* Killer = Fx.MakeSimpleDamageCard(0, 100);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Killer, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(InitialSnapshot, Killer->CardId);
+	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	TestTrue(TEXT("Play killer card"), Session->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, TargetPartId)).IsOk());
+	TestTrue(TEXT("Submit final Aid"), Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
+	TestTrue(TEXT("Session reached BattleEnd"), Session->GetPhase() == EBattlePhase::BattleEnd);
+	Session->ConsumeEvents();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetSession(Session);
+	HUD->OnBattleEndedNative.AddUObject(
+		HUD.Get(),
+		&UWacomBattleHUDDetailTest::ClearPresentationQueueOnBattleEndedForTest);
+
+	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
+	Toast->TakeWidget();
+	HUD->SetEventToastForTest(Toast.Get());
+
+	FBattleEvent VictoryToast;
+	VictoryToast.Type = EBattleEventType::BattleEnded;
+	VictoryToast.Sequence = 1;
+	VictoryToast.Count = 1;
+
+	FBattleEvent ShouldNotPlayAfterClear;
+	ShouldNotPlayAfterClear.Type = EBattleEventType::DamageDealt;
+	ShouldNotPlayAfterClear.Sequence = 2;
+	ShouldNotPlayAfterClear.Amount = 9;
+
+	HUD->EnqueueBattlePresentationEventsForTest({ VictoryToast, ShouldNotPlayAfterClear });
+
+	World->GetTimerManager().Tick(0.01f);
+	TestTrue(TEXT("BattleEnd toast starts presentation queue"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("Victory toast is visible before battle end signal"), Toast->GetActiveToastTextCountForTest(), 1);
+
+	HUD->AdvanceBattlePresentationQueueForTest();
+	TestTrue(TEXT("BattleEnd callback clears queue during presentation"),
+		HUD->GetBattleEndedCallbackCountForTest() > 0);
+	TestFalse(TEXT("Queue no longer busy after battle end callback clears it"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("HUD is in BattleEnd after battle end step"), HUD->GetUIState(), EBattleUIState::BattleEnd);
+
+	HUD->AdvanceBattlePresentationQueueForTest();
+	World->GetTimerManager().Tick(1.0f);
+	TestEqual(TEXT("Cleared queue does not play trailing event"), Toast->GetActiveToastTextCountForTest(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationQueueKnockdownDialogDelayedAndGuardedSpec,
+	"Wacom.UI.Battle.PresentationQueue.KnockdownDialogDelayedAndGuarded",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationQueueKnockdownDialogDelayedAndGuardedSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* Killer = Fx.MakeSimpleDamageCard(0, 100);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Killer, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(InitialSnapshot, Killer->CardId);
+	const FGuid HeadId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	TestTrue(TEXT("Play killer card"), Session->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, HeadId)).IsOk());
+	TestTrue(TEXT("Session is pending knockdown"), Session->BuildPendingKnockdownChoiceView().bHasPendingChoice);
+	Session->ConsumeEvents();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetSession(Session);
+	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
+	Toast->TakeWidget();
+	HUD->SetEventToastForTest(Toast.Get());
+
+	FBattleEvent IntroToast;
+	IntroToast.Type = EBattleEventType::BattleStarted;
+	IntroToast.Sequence = 1;
+
+	FBattleEvent KnockdownRequest;
+	KnockdownRequest.Type = EBattleEventType::KnockdownChoiceRequested;
+	KnockdownRequest.Sequence = 2;
+
+	HUD->EnqueueBattlePresentationEventsForTest({ IntroToast, KnockdownRequest });
+
+	World->GetTimerManager().Tick(0.01f);
+	TestEqual(TEXT("Toast plays before modal step"), Toast->GetActiveToastTextCountForTest(), 1);
+	TestTrue(TEXT("Queue remains busy before delayed knockdown step"), HUD->IsBattlePresentationBusy());
+
+	HUD->AdvanceBattlePresentationQueueForTest();
+	TestFalse(TEXT("Knockdown step is consumed after the pacing delay"), HUD->IsBattlePresentationBusy());
+	TestTrue(TEXT("Valid pending choice is still available for the dialog path"),
+		Session->BuildPendingKnockdownChoiceView().bHasPendingChoice);
+
+	HUD->ClearBattlePresentationQueueForTest();
+	TestTrue(TEXT("Resolve pending knockdown choice"),
+		Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
+	Session->ConsumeEvents();
+	TestFalse(TEXT("No pending choice remains after Aid"),
+		Session->BuildPendingKnockdownChoiceView().bHasPendingChoice);
+
+	HUD->EnqueueBattlePresentationEventsForTest({ KnockdownRequest });
+	World->GetTimerManager().Tick(0.01f);
+	TestFalse(TEXT("Stale knockdown request is guarded and finishes without a modal dependency"),
+		HUD->IsBattlePresentationBusy());
 
 	return true;
 }

@@ -9,6 +9,7 @@
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EnemyPartWidget.h"
+#include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "Components/BorderSlot.h"
@@ -287,9 +288,65 @@ public:
 		EventLogPanel = InPanel;
 	}
 
+	void SetEventToastForTest(UEventToast* InEventToast)
+	{
+		EventToast = InEventToast;
+	}
+
+	void EnqueueBattlePresentationEventsForTest(const TArray<FBattleEvent>& Events)
+	{
+		EnqueueBattlePresentationEvents(Events);
+	}
+
+	void ClearBattlePresentationQueueForTest()
+	{
+		ClearBattlePresentationQueue();
+	}
+
+	void AdvanceBattlePresentationQueueForTest()
+	{
+		AdvanceBattlePresentationQueueOnce();
+	}
+
+	UFUNCTION()
+	void ClearPresentationQueueOnBattleEndedForTest(EBattleOutcome Outcome)
+	{
+		(void)Outcome;
+		++BattleEndedCallbackCountForTest;
+		ClearBattlePresentationQueue();
+	}
+
+	int32 GetBattleEndedCallbackCountForTest() const
+	{
+		return BattleEndedCallbackCountForTest;
+	}
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<APlayerController> OwningPlayerOverride;
+
+	int32 BattleEndedCallbackCountForTest = 0;
+};
+
+UCLASS()
+class UWacomBattleEventToastProbe : public UEventToast
+{
+	GENERATED_BODY()
+
+public:
+	void GetActiveToastTextsForTest(TArray<FString>& OutTexts) const
+	{
+		OutTexts.Reset();
+		for (UTextBlock* Text : ActiveTexts)
+		{
+			OutTexts.Add(Text ? Text->GetText().ToString() : FString());
+		}
+	}
+
+	int32 GetActiveToastTextCountForTest() const
+	{
+		return ActiveTexts.Num();
+	}
 };
 
 UCLASS()

@@ -8,6 +8,7 @@
 
 class UVerticalBox;
 class UTextBlock;
+struct FBattleEventPresentationView;
 struct FBattleEvent;
 
 /**
@@ -35,6 +36,9 @@ public:
 	/** 把一批事件压入队列。 */
 	void EnqueueEvents(const TArray<FBattleEvent>& Events);
 
+	/** 把已经构建好的表现 View 压入显示队列。 */
+	void EnqueuePresentationView(const FBattleEventPresentationView& View);
+
 	/** 将战斗事件格式化为玩家可读中文提示。空字符串表示不显示该事件。 */
 	static FString FormatEventForPlayer(const FBattleEvent& Event);
 
@@ -54,7 +58,6 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> Container;
 
-private:
 	struct FActiveMessage
 	{
 		TObjectPtr<UTextBlock> Text;
@@ -68,6 +71,7 @@ private:
 	// 用并行数组而非 FActiveMessage 是为了让 Transient UPROPERTY 更简单。
 	TArray<float> ActiveRemaining;
 
+private:
 	void PushMessage(const FString& Message);
 	void RemoveAt(int32 Index);
 };

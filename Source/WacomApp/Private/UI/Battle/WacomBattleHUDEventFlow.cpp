@@ -7,13 +7,7 @@
 #include "Events/BattleEvent.h"
 #include "Session/BattleSession.h"
 #include "UI/Battle/BattleEventLogPanel.h"
-#include "UI/Battle/EventToast.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
-#include "UI/Battle/WacomKnockdownChoiceDialog.h"
-#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
-#include "UI/Foundation/WacomUITags.h"
-
-#include "CommonActivatableWidget.h"
 
 namespace
 {
@@ -68,53 +62,8 @@ void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(UBattleHUD& HUD)
 			*Event.Tag.ToString());
 	}
 
-	if (HUD.EventToast)
-	{
-		HUD.EventToast->EnqueueEvents(Events);
-	}
-
 	AppendBattleEventLogEntries(HUD, Events);
-
-	for (const FBattleEvent& Event : Events)
-	{
-		if (Event.Type != EBattleEventType::KnockdownChoiceRequested)
-		{
-			continue;
-		}
-
-		UGameInstance* GameInstance = HUD.GetGameInstance();
-		UWacomGameUIManagerSubsystem* UIManager =
-			GameInstance ? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-		if (!UIManager)
-		{
-			continue;
-		}
-
-		UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-			WacomUITags::UI_Layer_Modal.GetTag(),
-			UWacomKnockdownChoiceDialog::StaticClass());
-		UWacomKnockdownChoiceDialog* Dialog = Cast<UWacomKnockdownChoiceDialog>(Pushed);
-		if (!Dialog)
-		{
-			continue;
-		}
-
-		UBattleSession* CurrentSession = HUD.GetSession();
-		if (!CurrentSession)
-		{
-			continue;
-		}
-
-		const FKnockdownChoiceView ChoiceView = CurrentSession->BuildPendingKnockdownChoiceView();
-		if (!ChoiceView.bHasPendingChoice)
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[BattleHUD] KnockdownChoiceRequested received but no pending choice view"));
-			continue;
-		}
-
-		Dialog->SetContext(&HUD, ChoiceView);
-	}
+	HUD.EnqueueBattlePresentationEvents(Events);
 }
 
 void FWacomBattleHUDEventFlow::AppendBattleEventLogEntries(UBattleHUD& HUD, const TArray<FBattleEvent>& Events)

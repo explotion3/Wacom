@@ -20,6 +20,7 @@ struct FBattleHUDFallbackLayoutBuilder;
 struct FWacomBattleHUDCommandFlow;
 struct FWacomBattleHUDEventFlow;
 struct FWacomBattleHUDTargetingFlow;
+class FWacomBattleEventPresentationQueue;
 struct FBattleCommand;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
@@ -234,6 +235,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|EventLog")
 	int32 GetBattleEventLogEntryCount() const { return BattleEventLogHistory.Num(); }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	bool IsBattlePresentationBusy() const;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeOnInitialized() override;
@@ -316,6 +320,8 @@ private:
 	UPROPERTY(Transient)
 	TArray<FBattleEventPresentationView> BattleEventLogHistory;
 
+	TSharedPtr<FWacomBattleEventPresentationQueue> BattleEventPresentationQueue;
+
 	UPROPERTY(Transient)
 	TObjectPtr<AWacomBattle3DHandPresenter> Battle3DHandPresenter;
 
@@ -338,6 +344,16 @@ private:
 	void AppendBattleEventLogEntries(const TArray<struct FBattleEvent>& Events);
 	void TrimBattleEventLogHistory();
 	void SyncBattleEventLogPanel();
+	void EnqueueBattlePresentationEvents(const TArray<struct FBattleEvent>& Events);
+	void ClearBattlePresentationQueue();
+	bool IsBattlePresentationQueueBusy() const;
+	TSharedPtr<FWacomBattleEventPresentationQueue> GetBattlePresentationQueueSelfKeepAlive() const;
+	void EnqueueBattlePresentationToast(const FBattleEventPresentationView& View);
+	void PushPendingKnockdownChoiceDialog();
+	void HandleBattlePresentationQueueStarted();
+	void HandleBattlePresentationQueueFinished();
+	void HandleBattlePresentationBattleEndStep();
+	void AdvanceBattlePresentationQueueOnce();
 
 	UFUNCTION()
 	void HandleBattleEventLogButtonClicked();
@@ -363,5 +379,6 @@ private:
 	friend struct FWacomBattleHUDCommandFlow;
 	friend struct FWacomBattleHUDEventFlow;
 	friend struct FWacomBattleHUDTargetingFlow;
+	friend class FWacomBattleEventPresentationQueue;
 	friend class UWacomBattleHUDDetailTest;
 };

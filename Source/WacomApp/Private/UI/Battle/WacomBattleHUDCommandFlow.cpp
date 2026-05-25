@@ -18,6 +18,10 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& Ca
 	{
 		return;
 	}
+	if (HUD.IsBattlePresentationQueueBusy())
+	{
+		return;
+	}
 
 	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TargetPartId));
 	if (!Status.IsOk())
@@ -36,7 +40,9 @@ void FWacomBattleHUDCommandFlow::SubmitWait(UBattleHUD& HUD)
 {
 	HUD.HideCardDetailPanel();
 
-	if (HUD.UIState == EBattleUIState::BattleEnd || HUD.UIState == EBattleUIState::Resolving)
+	if (HUD.UIState == EBattleUIState::BattleEnd
+		|| HUD.UIState == EBattleUIState::Resolving
+		|| HUD.IsBattlePresentationQueueBusy())
 	{
 		return;
 	}
@@ -66,7 +72,9 @@ void FWacomBattleHUDCommandFlow::SubmitEndTurn(UBattleHUD& HUD)
 {
 	HUD.HideCardDetailPanel();
 
-	if (HUD.UIState == EBattleUIState::BattleEnd || HUD.UIState == EBattleUIState::Resolving)
+	if (HUD.UIState == EBattleUIState::BattleEnd
+		|| HUD.UIState == EBattleUIState::Resolving
+		|| HUD.IsBattlePresentationQueueBusy())
 	{
 		return;
 	}
@@ -78,6 +86,10 @@ void FWacomBattleHUDCommandFlow::SubmitEndTurn(UBattleHUD& HUD)
 
 	UBattleSession* Session = HUD.GetSession();
 	if (!Session)
+	{
+		return;
+	}
+	if (HUD.IsBattlePresentationQueueBusy())
 	{
 		return;
 	}
