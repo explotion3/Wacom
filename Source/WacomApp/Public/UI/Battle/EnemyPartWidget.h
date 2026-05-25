@@ -3,8 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Events/BattleEvent.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "Snapshots/EnemySnapshot.h"
+#include "TimerManager.h"
 #include "EnemyPartWidget.generated.h"
 
 /**
@@ -65,6 +67,7 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On Data Applied")
 	void BP_OnDataApplied(const FEnemyPartSnapshot& Snap);
@@ -107,9 +110,22 @@ private:
 	UFUNCTION()
 	void HandleRootButtonClicked();
 
+	void PlayBattlePresentationCue(EBattleEventType SourceEventType, int32 Amount);
+	void ClearBattlePresentationCue();
+	void StopBattlePresentationCueTimer();
+	FLinearColor BuildBaseFrameColor() const;
+	FLinearColor BuildPresentationCueFrameColor(EBattleEventType SourceEventType) const;
 	void UpdateFrameColor();
 
 	FEnemyPartSnapshot CachedSnap;
 	bool bLastDestroyed = false;
 	bool bLastTargetable = false;
+	bool bBattlePresentationCueActive = false;
+	EBattleEventType LastBattlePresentationCueType = EBattleEventType::None;
+	int32 LastBattlePresentationCueAmount = 0;
+	int32 BattlePresentationCuePlayCount = 0;
+	FTimerHandle BattlePresentationCueTimerHandle;
+
+	friend class UEnemyInfoBar;
+	friend class UWacomBattleEnemyPartWidgetPresentationProbe;
 };

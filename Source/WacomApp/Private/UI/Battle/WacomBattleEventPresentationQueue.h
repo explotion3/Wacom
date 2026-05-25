@@ -4,12 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
+#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 
 class UBattleHUD;
 
 enum class EWacomBattlePresentationStepType : uint8
 {
+	TargetCue,
 	Toast,
 	Delay,
 	KnockdownChoiceDialog,
@@ -21,6 +23,7 @@ struct FWacomBattlePresentationStep
 	EWacomBattlePresentationStepType Type = EWacomBattlePresentationStepType::Toast;
 	int32 EventSequence = 0;
 	EBattleEventType SourceEventType = EBattleEventType::None;
+	FWacomBattlePresentationTargetCue TargetCue;
 	FBattleEventPresentationView View;
 	float Duration = 0.0f;
 };

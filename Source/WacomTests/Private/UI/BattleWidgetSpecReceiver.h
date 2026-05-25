@@ -293,6 +293,15 @@ public:
 		EventToast = InEventToast;
 	}
 
+	void SetEnemyInfoBarForTest(UEnemyInfoBar* InEnemyInfoBar)
+	{
+		EnemyInfoBar = InEnemyInfoBar;
+		if (InEnemyInfoBar)
+		{
+			ChildBattleWidgets.AddUnique(InEnemyInfoBar);
+		}
+	}
+
 	void EnqueueBattlePresentationEventsForTest(const TArray<FBattleEvent>& Events)
 	{
 		EnqueueBattlePresentationEvents(Events);
@@ -365,6 +374,53 @@ public:
 		return SpawnedParts.IsValidIndex(Index) && SpawnedParts[Index]
 			? SpawnedParts[Index]->IsTargetable()
 			: false;
+	}
+
+	void PlayCueForTest(EBattleEventType SourceEventType, const FGuid& TargetPartInstanceId, int32 Amount)
+	{
+		PlayBattlePresentationCue(SourceEventType, TargetPartInstanceId, Amount);
+	}
+
+	UEnemyPartWidget* GetSpawnedPartForTest(int32 Index) const
+	{
+		return SpawnedParts.IsValidIndex(Index) ? SpawnedParts[Index] : nullptr;
+	}
+};
+
+UCLASS()
+class UWacomBattleEnemyPartWidgetPresentationProbe : public UEnemyPartWidget
+{
+	GENERATED_BODY()
+
+public:
+	void PlayCueForTest(EBattleEventType SourceEventType, int32 Amount)
+	{
+		PlayBattlePresentationCue(SourceEventType, Amount);
+	}
+
+	bool IsBattlePresentationCueActiveForTest() const
+	{
+		return bBattlePresentationCueActive;
+	}
+
+	EBattleEventType GetLastBattlePresentationCueTypeForTest() const
+	{
+		return LastBattlePresentationCueType;
+	}
+
+	int32 GetLastBattlePresentationCueAmountForTest() const
+	{
+		return LastBattlePresentationCueAmount;
+	}
+
+	int32 GetBattlePresentationCuePlayCountForTest() const
+	{
+		return BattlePresentationCuePlayCount;
+	}
+
+	void ClearBattlePresentationCueForTest()
+	{
+		ClearBattlePresentationCue();
 	}
 };
 

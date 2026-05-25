@@ -15,6 +15,12 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Engine/World.h"
+
+namespace
+{
+	constexpr float BattlePresentationCueHoldSeconds = 0.16f;
+}
 
 TSharedRef<SWidget> UEnemyPartWidget::RebuildWidget()
 {
@@ -109,6 +115,13 @@ void UEnemyPartWidget::NativeConstruct()
 	}
 }
 
+void UEnemyPartWidget::NativeDestruct()
+{
+	StopBattlePresentationCueTimer();
+	bBattlePresentationCueActive = false;
+	Super::NativeDestruct();
+}
+
 void UEnemyPartWidget::ApplyPartSnapshot(const FEnemyPartSnapshot& InSnap)
 {
 	CachedSnap = InSnap;
@@ -193,21 +206,83 @@ void UEnemyPartWidget::SetTargetable(bool bInTargetable)
 	BP_OnTargetableChanged(bInTargetable);
 }
 
+void UEnemyPartWidget::PlayBattlePresentationCue(EBattleEventType SourceEventType, int32 Amount)
+{
+	if (SourceEventType != EBattleEventType::DamageDealt
+		&& SourceEventType != EBattleEventType::EnemyPartHpEmptied)
+	{
+		return;
+	}
+
+	StopBattlePresentationCueTimer();
+	bBattlePresentationCueActive = true;
+	LastBattlePresentationCueType = SourceEventType;
+	LastBattlePresentationCueAmount = Amount;
+	++BattlePresentationCuePlayCount;
+
+	if (FrameBorder)
+	{
+		FrameBorder->SetBrushColor(BuildPresentationCueFrameColor(SourceEventType));
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			BattlePresentationCueTimerHandle,
+			this,
+			&UEnemyPartWidget::ClearBattlePresentationCue,
+			BattlePresentationCueHoldSeconds,
+			false);
+	}
+}
+
+void UEnemyPartWidget::ClearBattlePresentationCue()
+{
+	StopBattlePresentationCueTimer();
+	bBattlePresentationCueActive = false;
+	UpdateFrameColor();
+}
+
+void UEnemyPartWidget::StopBattlePresentationCueTimer()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(BattlePresentationCueTimerHandle);
+	}
+	BattlePresentationCueTimerHandle = FTimerHandle();
+}
+
+FLinearColor UEnemyPartWidget::BuildBaseFrameColor() const
+{
+	if (CachedSnap.bDestroyed)
+	{
+		return FLinearColor(0.08f, 0.08f, 0.08f, 0.9f);
+	}
+	if (bLastTargetable)
+	{
+		return FLinearColor(0.9f, 0.7f, 0.1f, 0.95f); // 黄色：可选目标
+	}
+	return FLinearColor(0.2f, 0.05f, 0.05f, 0.9f); // 暗红：默认
+}
+
+FLinearColor UEnemyPartWidget::BuildPresentationCueFrameColor(EBattleEventType SourceEventType) const
+{
+	if (SourceEventType == EBattleEventType::EnemyPartHpEmptied)
+	{
+		return FLinearColor(1.0f, 0.35f, 0.12f, 1.0f);
+	}
+	return FLinearColor(1.0f, 0.88f, 0.32f, 1.0f);
+}
+
 void UEnemyPartWidget::UpdateFrameColor()
 {
 	if (!FrameBorder) { return; }
-	if (CachedSnap.bDestroyed)
+	if (bBattlePresentationCueActive)
 	{
-		FrameBorder->SetBrushColor(FLinearColor(0.08f, 0.08f, 0.08f, 0.9f));
+		FrameBorder->SetBrushColor(BuildPresentationCueFrameColor(LastBattlePresentationCueType));
+		return;
 	}
-	else if (bLastTargetable)
-	{
-		FrameBorder->SetBrushColor(FLinearColor(0.9f, 0.7f, 0.1f, 0.95f)); // 黄色：可选目标
-	}
-	else
-	{
-		FrameBorder->SetBrushColor(FLinearColor(0.2f, 0.05f, 0.05f, 0.9f)); // 暗红：默认
-	}
+	FrameBorder->SetBrushColor(BuildBaseFrameColor());
 }
 
 void UEnemyPartWidget::HandleRootButtonClicked()

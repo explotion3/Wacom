@@ -8,6 +8,7 @@
 
 class UEnemyPartWidget;
 class UPanelWidget;
+enum class EBattleEventType : uint8;
 
 /**
  * 敌人信息条。动态生成 N 个 UEnemyPartWidget。
@@ -44,6 +45,11 @@ private:
 	TArray<TObjectPtr<UEnemyPartWidget>> SpawnedParts;
 
 	void ApplyTargetableFromHUDState();
+	void PlayBattlePresentationCue(
+		EBattleEventType SourceEventType,
+		const FGuid& TargetPartInstanceId,
+		int32 Amount);
 
+	friend class UBattleHUD;
 	friend class UWacomBattleEnemyInfoBarTest;
 };

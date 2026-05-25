@@ -168,7 +168,8 @@ Toast WBP 注册口径：
 
 `UWacomBattleEventPresentationBuilder` 把 `FBattleEvent` 转成 `FBattleEventPresentationView`。ViewData 包含 `MessageText / bShouldDisplay / VisualTone / IconKey`，但当前 Toast 和日志主要消费文字。
 
-- `FWacomBattleEventPresentationQueue` 负责把 `FBattleEvent` 按顺序调度为 Toast、短暂停顿和击倒弹窗 step；队列播放期间 `BattleHUD` 进入 `Resolving`，阻止继续提交战斗命令。
+- `FWacomBattleEventPresentationQueue` 负责把 `FBattleEvent` 按顺序调度为 TargetCue、Toast、短暂停顿和击倒弹窗 step；队列播放期间 `BattleHUD` 进入 `Resolving`，阻止继续提交战斗命令。
+- TargetCue 是 `WacomApp/Private` 内的轻量表现信号。当前 `DamageDealt / EnemyPartHpEmptied` 会经 `BattleHUD` 分发到 `EnemyInfoBar / EnemyPartWidget` 做命中或破坏闪烁；队列不依赖具体 Widget 或未来场景 Actor。
 - `UEventToast` 负责单条战斗 Toast 的显示和倒计时，不负责文案判断或事件排序。
 - `UBattleEventLogPanel` 是 `BattleHUD` 内部半屏日志抽屉，不通过 CommonUI Layer push/pop。
 - `BattleHUD` 保存本场 `BattleEventLogHistory`，切换 Session 时清空日志和表现队列。
@@ -303,7 +304,7 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 - 点击需要敌方部位目标的手牌时，`BattleHUD` 进入 `TargetSelect` 并记录 `PendingTargetingCardId`。
 - 再次点击同一张牌会取消目标选择。
 - `BattleHUD::BuildTargetSelectionView()` 输出 UI-only 只读 ViewData，当前只区分是否选目标和部位是否破坏；最终合法性仍由 BattleSession / PlayCardResolver 校验。
-- 当前 2D `EnemyInfoBar / EnemyPartWidget` 消费该 ViewData；未来 HD-2D / PaperZD 部位 Actor 也应消费同一份视图。
+- 当前 2D `EnemyInfoBar / EnemyPartWidget` 消费该 ViewData，并接收 `BattleHUD` 分发的 TargetCue 做轻量命中/破坏反馈；未来 HD-2D / PaperZD 部位 Actor 也应接入同一 HUD 分发点。
 
 手牌与详情：
 

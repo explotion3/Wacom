@@ -10,6 +10,8 @@ namespace
 {
 	constexpr float DefaultToastStepDelay = 0.35f;
 	constexpr float EnemyPartHpEmptiedExtraDelay = 0.45f;
+	constexpr float DamageTargetCueDelay = 0.18f;
+	constexpr float EnemyPartDestroyedTargetCueDelay = 0.30f;
 }
 
 FWacomBattleEventPresentationQueue::FWacomBattleEventPresentationQueue(UBattleHUD& InHUD)
@@ -89,6 +91,22 @@ void FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 		Step.SourceEventType = Event.Type;
 		Steps.Add(MoveTemp(Step));
 		return;
+	}
+
+	if ((Event.Type == EBattleEventType::DamageDealt || Event.Type == EBattleEventType::EnemyPartHpEmptied)
+		&& Event.ActorInstanceId.IsValid())
+	{
+		FWacomBattlePresentationStep CueStep;
+		CueStep.Type = EWacomBattlePresentationStepType::TargetCue;
+		CueStep.EventSequence = Event.Sequence;
+		CueStep.SourceEventType = Event.Type;
+		CueStep.TargetCue.SourceEventType = Event.Type;
+		CueStep.TargetCue.TargetPartInstanceId = Event.ActorInstanceId;
+		CueStep.TargetCue.Amount = Event.Amount;
+		CueStep.TargetCue.Duration = Event.Type == EBattleEventType::EnemyPartHpEmptied
+			? EnemyPartDestroyedTargetCueDelay
+			: DamageTargetCueDelay;
+		Steps.Add(MoveTemp(CueStep));
 	}
 
 	const FBattleEventPresentationView View =
@@ -192,6 +210,11 @@ void FWacomBattleEventPresentationQueue::Advance()
 	float NextDelay = 0.0f;
 	switch (Step.Type)
 	{
+	case EWacomBattlePresentationStepType::TargetCue:
+		StrongHUD->PlayBattlePresentationCue(Step.TargetCue);
+		NextDelay = Step.TargetCue.Duration;
+		break;
+
 	case EWacomBattlePresentationStepType::Toast:
 		StrongHUD->EnqueueBattlePresentationToast(Step.View);
 		NextDelay = Step.Duration;

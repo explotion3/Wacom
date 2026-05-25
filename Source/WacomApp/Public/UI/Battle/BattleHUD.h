@@ -22,6 +22,7 @@ struct FWacomBattleHUDEventFlow;
 struct FWacomBattleHUDTargetingFlow;
 class FWacomBattleEventPresentationQueue;
 struct FBattleCommand;
+struct FWacomBattlePresentationTargetCue;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEndedNative, EBattleOutcome);
@@ -348,6 +349,7 @@ private:
 	void ClearBattlePresentationQueue();
 	bool IsBattlePresentationQueueBusy() const;
 	TSharedPtr<FWacomBattleEventPresentationQueue> GetBattlePresentationQueueSelfKeepAlive() const;
+	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
 	void EnqueueBattlePresentationToast(const FBattleEventPresentationView& View);
 	void PushPendingKnockdownChoiceDialog();
 	void HandleBattlePresentationQueueStarted();

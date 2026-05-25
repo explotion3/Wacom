@@ -15,6 +15,7 @@
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
+#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattleHUDEventFlow.h"
 #include "UI/Battle/WacomBattleHUDTargetingFlow.h"
@@ -643,6 +644,17 @@ bool UBattleHUD::IsBattlePresentationQueueBusy() const
 TSharedPtr<FWacomBattleEventPresentationQueue> UBattleHUD::GetBattlePresentationQueueSelfKeepAlive() const
 {
 	return BattleEventPresentationQueue;
+}
+
+void UBattleHUD::PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue)
+{
+	if (EnemyInfoBar)
+	{
+		EnemyInfoBar->PlayBattlePresentationCue(
+			Cue.SourceEventType,
+			Cue.TargetPartInstanceId,
+			Cue.Amount);
+	}
 }
 
 void UBattleHUD::EnqueueBattlePresentationToast(const FBattleEventPresentationView& View)

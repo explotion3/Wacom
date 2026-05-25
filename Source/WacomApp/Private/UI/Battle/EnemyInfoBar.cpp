@@ -96,3 +96,25 @@ void UEnemyInfoBar::HandlePartClicked(FGuid PartInstanceId)
 	}
 	UE_LOG(LogTemp, Warning, TEXT("[EnemyInfoBar] 未找到 UBattleHUD 父 Widget"));
 }
+
+void UEnemyInfoBar::PlayBattlePresentationCue(
+	EBattleEventType SourceEventType,
+	const FGuid& TargetPartInstanceId,
+	int32 Amount)
+{
+	if (!TargetPartInstanceId.IsValid())
+	{
+		return;
+	}
+
+	for (const TObjectPtr<UEnemyPartWidget>& Part : SpawnedParts)
+	{
+		if (!Part || Part->GetPartInstanceId() != TargetPartInstanceId)
+		{
+			continue;
+		}
+
+		Part->PlayBattlePresentationCue(SourceEventType, Amount);
+		return;
+	}
+}
