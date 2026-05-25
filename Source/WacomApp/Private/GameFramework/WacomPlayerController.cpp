@@ -6,8 +6,10 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+#include "InputCoreTypes.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Components/WacomBattlePresentationTargetComponent.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
 #include "RunSession.h"
@@ -96,6 +98,11 @@ namespace
 		}
 		return IsWorldInteractableActor(Actor)
 			&& IWacomWorldInteractable::Execute_TryInteract(Actor, PC);
+	}
+
+	UWacomBattlePresentationTargetComponent* FindBattlePresentationTargetComponent(AActor* Actor)
+	{
+		return Actor ? Actor->FindComponentByClass<UWacomBattlePresentationTargetComponent>() : nullptr;
 	}
 }
 
@@ -212,6 +219,18 @@ void AWacomPlayerController::SetupInputComponent()
 	if (IA_Interact)     { EIC->BindAction(IA_Interact,     ETriggerEvent::Started, this, &AWacomPlayerController::OnInteractPressed); }
 }
 
+bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
+{
+	if (Params.Key == EKeys::LeftMouseButton
+		&& Params.Event == IE_Released
+		&& TryRouteBattleSceneTargetClick(/*bRequireTargetSelect*/true))
+	{
+		return true;
+	}
+
+	return Super::InputKey(Params);
+}
+
 // ================ 战斗状态切换转发 ================
 
 void AWacomPlayerController::RequestEnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger)
@@ -268,6 +287,60 @@ UBattleHUD* AWacomPlayerController::GetActiveBattleHUD() const
 	// GameMode 没暴露 HUD getter，这里依赖它最终存活于 Game Layer。
 	// 为简洁起见：让 GameMode 提供。
 	return GM ? GM->GetActiveBattleHUD() : nullptr;
+}
+
+bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetSelect)
+{
+	UBattleHUD* HUD = nullptr;
+	if (!CanRouteBattleSceneTargetClick(HUD))
+	{
+		return false;
+	}
+	if (bRequireTargetSelect && (!HUD || !HUD->IsInTargetSelect()))
+	{
+		return false;
+	}
+
+	FHitResult HitResult;
+	if (!BuildBattleSceneClickHitResult(HitResult))
+	{
+		return false;
+	}
+
+	if (UPrimitiveComponent* HitComponent = HitResult.GetComponent())
+	{
+		if (UWacomBattlePresentationTargetComponent* Target =
+			FindBattlePresentationTargetComponent(HitComponent->GetOwner()))
+		{
+			return Target->RequestSceneTargetClick();
+		}
+	}
+
+	if (UWacomBattlePresentationTargetComponent* Target =
+		FindBattlePresentationTargetComponent(HitResult.GetActor()))
+	{
+		return Target->RequestSceneTargetClick();
+	}
+
+	return false;
+}
+
+bool AWacomPlayerController::CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const
+{
+	OutHUD = nullptr;
+	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	if (!GM || GM->GetGameFlowState() != EGameFlowState::Battle)
+	{
+		return false;
+	}
+
+	OutHUD = GM->GetActiveBattleHUD();
+	return OutHUD && OutHUD->bEnableSceneEnemyTargetBindingPrototype;
+}
+
+bool AWacomPlayerController::BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const
+{
+	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
 }
 
 void AWacomPlayerController::RouteHandIndex(int32 OneBasedIndex)

@@ -2561,6 +2561,410 @@ bool FWacomUIBattlePresentationTargetClickIntentAutoBindingSpec::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickRouterForwardsSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.RouterReleaseForwardsTargetSelect",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickRouterForwardsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC) || !TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	if (!TestTrue(TEXT("Target data is valid"), TargetCardId.IsValid() && HeadInstanceId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->SetSession(Session);
+	HUD->TakeWidget();
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartId(TEXT("Test.Part.Solo"));
+	Component->SetPartInstanceId(HeadInstanceId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+
+	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
+	TestTrue(TEXT("Router consumes left mouse release"), PC->InputLeftMouseReleasedForTest());
+
+	TestNotEqual(TEXT("Router exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestFalse(TEXT("Router clears pending card"), HUD->GetPendingTargetingCardId().IsValid());
+	TestTrue(TEXT("Router submits through HUD"), Session->BuildSnapshot().Version > VersionBeforeClick);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickRouterIdleSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.RouterReleaseNoopsWhenIdle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickRouterIdleSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC) || !TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Session->BuildSnapshot(), 0);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->SetSession(Session);
+	HUD->TakeWidget();
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartInstanceId(HeadInstanceId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+
+	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
+	TestFalse(TEXT("Idle router does not consume release"), PC->InputLeftMouseReleasedForTest());
+
+	TestEqual(TEXT("Idle router leaves HUD idle"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestFalse(TEXT("Idle router leaves pending invalid"), HUD->GetPendingTargetingCardId().IsValid());
+	TestEqual(TEXT("Idle router does not submit command"), Session->BuildSnapshot().Version, VersionBeforeClick);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickHUDMouseUpFallbackSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.HUDMouseUpFallbackForwardsTargetSelect",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickHUDMouseUpFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC) || !TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	if (!TestTrue(TEXT("Target data is valid"), TargetCardId.IsValid() && HeadInstanceId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->SetSession(Session);
+	HUD->TakeWidget();
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartId(TEXT("Test.Part.Solo"));
+	Component->SetPartInstanceId(HeadInstanceId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+
+	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
+	TestTrue(TEXT("HUD mouse-up fallback handles left mouse"), HUD->MouseLeftButtonUpForTest().IsEventHandled());
+
+	TestNotEqual(TEXT("HUD mouse-up fallback exits target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestFalse(TEXT("HUD mouse-up fallback clears pending card"), HUD->GetPendingTargetingCardId().IsValid());
+	TestTrue(TEXT("HUD mouse-up fallback submits through HUD"), Session->BuildSnapshot().Version > VersionBeforeClick);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickRouterPrototypeDisabledSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.RouterNoopsWhenPrototypeDisabled",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickRouterPrototypeDisabledSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC) || !TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->TakeWidget();
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+
+	TestFalse(TEXT("Disabled prototype does not route"), PC->RouteBattleSceneTargetClickForTest());
+	TestFalse(TEXT("Right mouse does not route"), PC->InputRightMousePressedForTest());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetClickRouterInvalidSpec,
+	"Wacom.UI.Battle.PresentationTargetClick.RouterNoopsForInvalidHitOrUnregisteredTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetClickRouterInvalidSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	AActor* EmptyOwner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC)
+		|| !TestNotNull(TEXT("Owner actor"), Owner)
+		|| !TestNotNull(TEXT("Empty owner actor"), EmptyOwner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+		if (IsValid(EmptyOwner))
+		{
+			EmptyOwner->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	UStaticMeshComponent* EmptyPrimitive = NewObject<UStaticMeshComponent>(EmptyOwner);
+	EmptyOwner->SetRootComponent(EmptyPrimitive);
+	EmptyOwner->AddInstanceComponent(EmptyPrimitive);
+	EmptyPrimitive->RegisterComponent();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->TakeWidget();
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetClickTargetComponent(Primitive);
+	Component->SetPartInstanceId(FGuid::NewGuid());
+
+	PC->ClearBattleSceneClickHitForTest();
+	TestFalse(TEXT("No hit does not route"), PC->RouteBattleSceneTargetClickForTest());
+
+	PC->SetBattleSceneClickHitForTest(EmptyOwner, EmptyPrimitive);
+	TestFalse(TEXT("Hit without target component does not route"), PC->RouteBattleSceneTargetClickForTest());
+
+	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+	TestFalse(TEXT("Unregistered target component does not route"), PC->RouteBattleSceneTargetClickForTest());
+
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	Component->SetPartInstanceId(FGuid());
+	TestFalse(TEXT("Invalid runtime id does not route"), PC->RouteBattleSceneTargetClickForTest());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattlePresentationTargetClickPIEForwardsSpec,
 	"Wacom.UI.Battle.PresentationTargetClick.PIEClickForwardsTargetSelect",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

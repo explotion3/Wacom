@@ -128,7 +128,7 @@ WBP 合同：
 - WBP 中可用自定义按钮调用 `BattleHUD::ToggleBattleEventLog()`。
 - WBP 和子控件只调用 `BattleHUD` 的玩家意图入口；出牌、等待、结束回合、目标选择、事件消费、表现队列和击倒弹窗编排由 C++ private flow helper 承担，不在 WBP 图里实现。
 - `EventToast` 只显示表现队列送来的单条提示；不要在 WBP 中自行消费 `FBattleEvent` 或直接 Push 击倒弹窗。
-- 敌方目标表现由 `BattleHUD` 私有目标注册表分发 TargetCue；WBP 不直接消费 `FBattleEvent`。当前 `EnemyInfoBar` 只负责在刷新时注册当前 2D 部位 Widget，`EnemyPartWidget` 只播放命中/破坏轻反馈。场景敌人原型可通过 `UWacomBattlePresentationTargetComponent` 注册到同一表；组件可手动写 `PartInstanceId`，也可填写稳定 `PartId` 并由 BattleHUD 的 `bEnableSceneEnemyTargetBindingPrototype` 在 snapshot 刷新和目标选择 UIState 刷新后自动绑定运行时 id。组件 V0 视觉反馈是对 `VisualTargetComponent` 或 Owner 首个 primitive 的短暂 scale pulse；V0-B 支持 `ClickTargetComponent` 的 PIE collision click，只转发 HUD 目标选择意图。V0 是同 `PartInstanceId` 后注册者替换旧注册者，不保证 2D/3D 同时播放；开启场景绑定原型时，场景 target 会在 `EnemyInfoBar` 刷新后重新注册，保持替换 2D target 的 V0 语义。
+- 敌方目标表现由 `BattleHUD` 私有目标注册表分发 TargetCue；WBP 不直接消费 `FBattleEvent`。当前 `EnemyInfoBar` 只负责在刷新时注册当前 2D 部位 Widget，`EnemyPartWidget` 只播放命中/破坏轻反馈。场景敌人原型可通过 `UWacomBattlePresentationTargetComponent` 注册到同一表；组件可手动写 `PartInstanceId`，也可填写稳定 `PartId` 并由 BattleHUD 的 `bEnableSceneEnemyTargetBindingPrototype` 在 snapshot 刷新和目标选择 UIState 刷新后自动绑定运行时 id。组件 V0 视觉反馈是对 `VisualTargetComponent` 或 Owner 首个 primitive 的短暂 scale pulse；V0-C 主点击路径是 `AWacomPlayerController` 在左键 Release 且 HUD 处于 `TargetSelect` 时执行 Visibility cursor trace，命中后查找 `UWacomBattlePresentationTargetComponent` 并转发 HUD 目标选择意图；如果 Release 先落到 BattleHUD 根层，HUD 的 `MouseButtonUp` 兜底会复用同一路由。V0-B 的 `ClickTargetComponent` / `Primitive.OnClicked` 绑定仍保留为兼容辅助路径。V0 是同 `PartInstanceId` 后注册者替换旧注册者，不保证 2D/3D 同时播放；开启场景绑定原型时，场景 target 会在 `EnemyInfoBar` 刷新后重新注册，保持替换 2D target 的 V0 语义。
 
 PIE 检查：
 
@@ -137,8 +137,8 @@ PIE 检查：
 - 快速从一张手牌滑到另一张时，详情内容切换到新卡，不应闪关。
 - 场景敌方目标原型：在关卡 Actor 上挂 `UWacomBattlePresentationTargetComponent`，填写 `PartId`（例如 `Test.Part.Head` 或正式敌人部位定义的 PartId），并在 BattleHUD/WBP 上开启 `bEnableSceneEnemyTargetBindingPrototype`。Actor 上需要有可缩放/可点击的 `UPrimitiveComponent`，最小结构可以是 `DefaultSceneRoot + Cube(StaticMeshComponent) + WacomBattlePresentationTarget`。`StaticMeshComponent` 继承自 `UPrimitiveComponent`，所以 `Cube` 可以同时作为视觉反馈和点击目标。
 - `VisualTargetComponent` / `ClickTargetComponent` 可以保持 `None`；组件会自动使用 Owner 上第一个 `UPrimitiveComponent`。如果 Actor 有多个 mesh 或独立点击盒，再显式指定：例如 `VisualTargetComponent = Cube`、`ClickTargetComponent = BoxCollision`。不要在 Details 面板里创建嵌在 target component 下的 `StaticMeshComponent_0` 临时对象；这会让引用指向错误对象并挡住自动 fallback。
-- 进入战斗并刷新 snapshot 后，该组件会自动绑定当前战斗的 `PartInstanceId`；命中 / 破坏 TargetCue 到达时应短暂放大后恢复。选择需要敌方部位目标的卡牌进入 `TargetSelect` 后，再点击组件绑定的 primitive，会通过 Visibility trace 转发到 `BattleHUD->OnEnemyPartClickedByUser()`。未匹配的 `PartId` 会保持未注册。
-- 若 PIE 中 `RequestSceneTargetClick()` 返回 true 但 `Cube.OnClicked` 不触发，可临时用关卡蓝图验证：`Left Mouse Button -> Get Hit Result Under Cursor by Channel(Visibility) -> Hit Actor 上 Get Component by Class(WacomBattlePresentationTargetComponent) -> RequestSceneTargetClick()`。当前 V0-B 的 `Primitive.OnClicked` 在 CommonUI 战斗 HUD 的 `All + NoCapture` 输入模式下可能出现第一次点击用于恢复 viewport / UI focus 的手感问题；正式鼠标命中 router、hover 高亮和目标 affordance 留后续。
+- 进入战斗并刷新 snapshot 后，该组件会自动绑定当前战斗的 `PartInstanceId`；命中 / 破坏 TargetCue 到达时应短暂放大后恢复。选择需要敌方部位目标的卡牌进入 `TargetSelect` 后，单击组件绑定的 primitive，会由 `AWacomPlayerController` 的 Visibility cursor trace router 转发到 `BattleHUD->OnEnemyPartClickedByUser()`。未匹配的 `PartId` 会保持未注册。
+- `Primitive.OnClicked` 兼容路径仍保留，但 V0-C 后不再需要关卡蓝图临时 trace。当前主路由只处理左键 Release，并且只在 `TargetSelect` 中消费，用来覆盖单击有效阶段落在 MouseUp 的 PIE 情况。若仍需要点两次，优先确认 BattleHUD 根层 `MouseButtonUp` 兜底是否编译进当前 PIE；若点击完全没有触发，再检查：BattleHUD 是否开启 `bEnableSceneEnemyTargetBindingPrototype`、组件 `PartId` 是否匹配当前敌人部位定义、目标 primitive 是否阻挡 `Visibility`、以及 `AWacomPlayerController` 是否是当前 PlayerController。Hover 高亮、鼠标命中提示和正式目标 affordance 留后续。
 
 ---
 

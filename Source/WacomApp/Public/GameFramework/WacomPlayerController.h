@@ -14,6 +14,8 @@ class URunSession;
 class UBattleHUD;
 class UWacomRunEventDefinition;
 struct FRunShopOfferInput;
+struct FInputKeyEventArgs;
+struct FHitResult;
 
 /**
  * Wacom PlayerController。
@@ -111,6 +113,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	URunSession* GetRunSession() const { return RunSession; }
 
+	/** 战斗场景目标点击路由。由 InputKey 和 BattleHUD 鼠标兜底入口共用。 */
+	bool TryRouteBattleSceneTargetClick(bool bRequireTargetSelect = false);
+
 	// ---- 候选交互对象（use-key 模型）----
 
 	/** 世界交互对象进入玩家交互范围时调用。 */
@@ -143,6 +148,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
+	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
 
 	// IA 回调：路由到当前 BattleHUD
 	void OnPlayCard1();
@@ -159,6 +165,9 @@ protected:
 	void OnOpenMenuPressed();
 	void OnOpenBackpackPressed();
 	void OnInteractPressed();
+
+	virtual bool CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const;
+	virtual bool BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const;
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
 	FText BuildCurrentInteractPrompt() const;

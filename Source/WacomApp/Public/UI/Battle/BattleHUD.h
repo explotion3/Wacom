@@ -249,6 +249,7 @@ protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeRefreshFromSnapshot(const FBattleSnapshot& Snap) override;
 	virtual void NativeOnSessionChanged(class UBattleSession* OldSession, class UBattleSession* NewSession) override;
 

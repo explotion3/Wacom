@@ -35,6 +35,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/WacomPlayerController.h"
+#include "InputCoreTypes.h"
 #include "UObject/UObjectIterator.h"
 
 #include "Input/UIActionBindingHandle.h"
@@ -118,6 +120,24 @@ void UBattleHUD::NativeDestruct()
 	HideCardDetailPanel();
 	CardDetailPanel = nullptr;
 	Super::NativeDestruct();
+}
+
+FReply UBattleHUD::NativeOnMouseButtonUp(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
+{
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		if (AWacomPlayerController* PC = Cast<AWacomPlayerController>(GetOwningPlayer()))
+		{
+			if (PC->TryRouteBattleSceneTargetClick(/*bRequireTargetSelect*/true))
+			{
+				return FReply::Handled();
+			}
+		}
+	}
+
+	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
 }
 
 TSharedRef<SWidget> UBattleHUD::RebuildWidget()

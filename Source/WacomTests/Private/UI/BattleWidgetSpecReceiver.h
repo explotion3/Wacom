@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/WacomPlayerController.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/CardWidget.h"
@@ -33,6 +34,83 @@ public:
 	{
 		return true;
 	}
+};
+
+UCLASS()
+class AWacomBattleSceneClickRouterPlayerControllerTest : public AWacomPlayerController
+{
+	GENERATED_BODY()
+
+public:
+	virtual bool IsLocalController() const override
+	{
+		return true;
+	}
+
+	void SetBattleSceneClickHUDForTest(UBattleHUD* InHUD)
+	{
+		BattleSceneClickHUDOverride = InHUD;
+	}
+
+	void SetBattleSceneClickHitForTest(AActor* InActor, UPrimitiveComponent* InComponent = nullptr)
+	{
+		bHasBattleSceneClickHitOverride = true;
+		BattleSceneClickHitOverride = FHitResult();
+		BattleSceneClickHitOverride.HitObjectHandle = FActorInstanceHandle(InActor);
+		BattleSceneClickHitOverride.Component = InComponent;
+	}
+
+	void ClearBattleSceneClickHitForTest()
+	{
+		bHasBattleSceneClickHitOverride = false;
+		BattleSceneClickHitOverride = FHitResult();
+	}
+
+	bool RouteBattleSceneTargetClickForTest()
+	{
+		return TryRouteBattleSceneTargetClick();
+	}
+
+	bool InputRightMousePressedForTest()
+	{
+		FInputKeyEventArgs Args;
+		Args.Key = EKeys::RightMouseButton;
+		Args.Event = IE_Pressed;
+		return InputKey(Args);
+	}
+
+	bool InputLeftMouseReleasedForTest()
+	{
+		FInputKeyEventArgs Args;
+		Args.Key = EKeys::LeftMouseButton;
+		Args.Event = IE_Released;
+		return InputKey(Args);
+	}
+
+protected:
+	virtual bool CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const override
+	{
+		OutHUD = BattleSceneClickHUDOverride.Get();
+		return OutHUD && OutHUD->bEnableSceneEnemyTargetBindingPrototype;
+	}
+
+	virtual bool BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const override
+	{
+		if (!bHasBattleSceneClickHitOverride)
+		{
+			return false;
+		}
+
+		OutHitResult = BattleSceneClickHitOverride;
+		return OutHitResult.GetActor() || OutHitResult.GetComponent();
+	}
+
+private:
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UBattleHUD> BattleSceneClickHUDOverride;
+
+	FHitResult BattleSceneClickHitOverride;
+	bool bHasBattleSceneClickHitOverride = false;
 };
 
 UCLASS()
@@ -267,6 +345,20 @@ public:
 	void SetUIStateForTest(EBattleUIState NewState)
 	{
 		SetUIState(NewState);
+	}
+
+	FReply MouseLeftButtonUpForTest()
+	{
+		FPointerEvent MouseEvent(
+			0,
+			0,
+			FVector2D::ZeroVector,
+			FVector2D::ZeroVector,
+			TSet<FKey>(),
+			EKeys::LeftMouseButton,
+			0.0f,
+			FModifierKeysState());
+		return NativeOnMouseButtonUp(FGeometry(), MouseEvent);
 	}
 
 	bool ShowCardDetailForTest(UCardWidget* SourceWidget)
