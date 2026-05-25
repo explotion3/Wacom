@@ -396,6 +396,11 @@ public:
 		EventLogPanel = InPanel;
 	}
 
+	TArray<FBattleEventPresentationView> GetBattleEventLogHistoryForTest() const
+	{
+		return BattleEventLogHistory;
+	}
+
 	void SetEventToastForTest(UEventToast* InEventToast)
 	{
 		EventToast = InEventToast;

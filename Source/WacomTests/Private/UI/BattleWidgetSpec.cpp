@@ -62,6 +62,14 @@ namespace WacomBattleWidgetSpec
 		}
 		return FGuid();
 	}
+
+	void SettleBattlePresentationQueue(UWacomBattleHUDDetailTest& HUD, int32 MaxSteps = 32)
+	{
+		for (int32 Iteration = 0; HUD.IsBattlePresentationBusy() && Iteration < MaxSteps; ++Iteration)
+		{
+			HUD.AdvanceBattlePresentationQueueForTest();
+		}
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -350,6 +358,61 @@ bool FWacomUIBattleHUDEventLogSpec::RunTest(const FString& /*Parameters*/)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDInitialEventsConsumedSpec,
+	"Wacom.UI.Battle.HUDInitialEventsConsumedOnSessionSet",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDInitialEventsConsumedSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UBattleEventLogPanel> Panel(NewObject<UBattleEventLogPanel>(HUD.Get()));
+	HUD->SetEventLogPanelForTest(Panel.Get());
+	HUD->SetSession(Session);
+
+	TestTrue(TEXT("SetSession consumes initial visible battle events immediately"),
+		HUD->GetBattleEventLogEntryCount() > 0);
+	TestTrue(TEXT("Event log panel receives initial visible battle events"),
+		Panel->GetEntryCount() > 0);
+
+	const TArray<FBattleEventPresentationView> InitialEntries = HUD->GetBattleEventLogHistoryForTest();
+	const bool bHasBattleStarted = InitialEntries.ContainsByPredicate(
+		[](const FBattleEventPresentationView& View)
+		{
+			return View.EventType == EBattleEventType::BattleStarted;
+		});
+	const bool bHasCardsDrawn = InitialEntries.ContainsByPredicate(
+		[](const FBattleEventPresentationView& View)
+		{
+			return View.EventType == EBattleEventType::CardsDrawn;
+		});
+	TestTrue(TEXT("Initial log includes battle start"), bHasBattleStarted);
+	TestTrue(TEXT("Initial log includes opening draw"), bHasCardsDrawn);
+
+	const int32 EntryCountAfterSetSession = HUD->GetBattleEventLogEntryCount();
+	HUD->OnWaitRequested();
+
+	const TArray<FBattleEventPresentationView> EntriesAfterWait = HUD->GetBattleEventLogHistoryForTest();
+	const int32 BattleStartedCountAfterWait = EntriesAfterWait.FilterByPredicate(
+		[](const FBattleEventPresentationView& View)
+		{
+			return View.EventType == EBattleEventType::BattleStarted;
+		}).Num();
+	TestEqual(TEXT("Initial battle start is not consumed again after first command"), BattleStartedCountAfterWait, 1);
+	TestTrue(TEXT("Wait appends later command events"),
+		HUD->GetBattleEventLogEntryCount() > EntryCountAfterSetSession);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattlePresentationQueueOrdersToastSpec,
 	"Wacom.UI.Battle.PresentationQueue.OrdersToast",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -468,6 +531,10 @@ bool FWacomUIBattlePresentationQueueBlocksInputSpec::RunTest(const FString& /*Pa
 	Toast->TakeWidget();
 	HUD->SetEventToastForTest(Toast.Get());
 	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	TestFalse(TEXT("Initial session presentation has settled before focused blocking check"),
+		HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("HUD returns idle after initial session presentation"), HUD->GetUIState(), EBattleUIState::Idle);
 
 	FBattleEvent Event;
 	Event.Type = EBattleEventType::BattleStarted;
@@ -538,6 +605,8 @@ bool FWacomUIBattlePresentationQueueDamageCueBeforeToastSpec::RunTest(const FStr
 	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
 	HUD->SetEnemyInfoBarForTest(EnemyInfo);
 	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	const int32 ToastCountBeforeDamageEvent = Toast->GetActiveToastTextCountForTest();
 	EnemyInfo->TakeWidget();
 	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
 
@@ -564,10 +633,14 @@ bool FWacomUIBattlePresentationQueueDamageCueBeforeToastSpec::RunTest(const FStr
 	TestTrue(TEXT("Target cue plays before toast"), Part->IsBattlePresentationCueActiveForTest());
 	TestEqual(TEXT("Target cue type is damage"), Part->GetLastBattlePresentationCueTypeForTest(), EBattleEventType::DamageDealt);
 	TestEqual(TEXT("Target cue carries damage amount"), Part->GetLastBattlePresentationCueAmountForTest(), 7);
-	TestEqual(TEXT("Toast waits behind target cue"), Toast->GetActiveToastTextCountForTest(), 0);
+	TestEqual(TEXT("Toast waits behind target cue"),
+		Toast->GetActiveToastTextCountForTest(),
+		ToastCountBeforeDamageEvent);
 
 	HUD->AdvanceBattlePresentationQueueForTest();
-	TestEqual(TEXT("Toast appears after target cue pacing"), Toast->GetActiveToastTextCountForTest(), 1);
+	TestEqual(TEXT("Toast appears after target cue pacing"),
+		Toast->GetActiveToastTextCountForTest(),
+		ToastCountBeforeDamageEvent + 1);
 
 	return true;
 }
@@ -1945,6 +2018,199 @@ bool FWacomUIBattlePresentationTargetComponentUnregisterNoopsSpec::RunTest(const
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetDebugDefaultsSpec,
+	"Wacom.UI.Battle.PresentationTargetDebug.Defaults",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetDebugDefaultsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+
+	const FWacomBattlePresentationTargetDebugView View =
+		Component->GetBattlePresentationTargetDebugView();
+	TestEqual(TEXT("Default PartId is none"), View.PartId, NAME_None);
+	TestFalse(TEXT("Default runtime id is invalid"), View.PartInstanceId.IsValid());
+	TestFalse(TEXT("Default component is not registered"), View.bIsRegisteredWithBattleHUD);
+	TestEqual(TEXT("Default registration result"), View.LastRegistrationResult, FName(TEXT("NotAttempted")));
+	TestEqual(TEXT("Default auto-bind result"), View.LastAutoBindResult, FName(TEXT("NotAttempted")));
+	TestEqual(TEXT("Default click result"), View.LastClickResult, FName(TEXT("NotAttempted")));
+	TestEqual(TEXT("Default cue count"), View.CuePlayCount, 0);
+
+	TArray<FString> Warnings;
+	TestFalse(TEXT("Default authoring validation warns"), Component->ValidateBattlePresentationTargetAuthoring(Warnings));
+	TestTrue(TEXT("Default validation reports missing id"), Warnings.ContainsByPredicate(
+		[](const FString& Warning)
+		{
+			return Warning.Contains(TEXT("PartId")) && Warning.Contains(TEXT("PartInstanceId"));
+		}));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetDebugRegisteredSpec,
+	"Wacom.UI.Battle.PresentationTargetDebug.RegisteredViewAndCue",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetDebugRegisteredSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+
+	const FGuid PartInstanceId = FGuid::NewGuid();
+	Component->SetPartId(TEXT("Test.Part.Debug"));
+	Component->SetPartInstanceId(PartInstanceId);
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	FWacomBattlePresentationTargetDebugView View =
+		Component->GetBattlePresentationTargetDebugView();
+	TestEqual(TEXT("Debug view reports stable part id"), View.PartId, FName(TEXT("Test.Part.Debug")));
+	TestEqual(TEXT("Debug view reports runtime id"), View.PartInstanceId, PartInstanceId);
+	TestTrue(TEXT("Debug view reports registered"), View.bIsRegisteredWithBattleHUD);
+	TestEqual(TEXT("Debug view reports registration result"), View.LastRegistrationResult, FName(TEXT("Registered")));
+	TestEqual(TEXT("Debug view resolves visual target"), View.ResolvedVisualTargetName, Primitive->GetName());
+	TestEqual(TEXT("Debug view resolves click target"), View.ResolvedClickTargetName, Primitive->GetName());
+	TestEqual(TEXT("Debug view reports bound click target"), View.BoundClickTargetName, Primitive->GetName());
+	TestTrue(TEXT("Debug view reports visibility clickable"), View.bClickTargetBlocksVisibility);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, PartInstanceId, 12);
+	View = Component->GetBattlePresentationTargetDebugView();
+	TestEqual(TEXT("Debug view records cue type"), View.LastCueType, EBattleEventType::DamageDealt);
+	TestEqual(TEXT("Debug view records cue amount"), View.LastCueAmount, 12);
+	TestEqual(TEXT("Debug view records cue count"), View.CuePlayCount, 1);
+
+	const FString Summary = Component->GetBattlePresentationTargetDebugSummary();
+	TestTrue(TEXT("Summary contains part id"), Summary.Contains(TEXT("Test.Part.Debug")));
+	TestTrue(TEXT("Summary contains click result field"), Summary.Contains(TEXT("LastClick=")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetDebugClickReasonsSpec,
+	"Wacom.UI.Battle.PresentationTargetDebug.ClickReasons",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetDebugClickReasonsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UBattleSession> DummySession(NewObject<UBattleSession>());
+	HUD->SetSession(DummySession.Get());
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+
+	TestFalse(TEXT("Click without HUD fails"), Component->RequestSceneTargetClick());
+	TestEqual(TEXT("Click reason reports invalid id first"),
+		Component->GetBattlePresentationTargetDebugView().LastClickResult,
+		FName(TEXT("InvalidPartInstanceId")));
+
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestFalse(TEXT("Click with id but no HUD fails"), Component->RequestSceneTargetClick());
+	TestEqual(TEXT("Click reason reports no HUD"),
+		Component->GetBattlePresentationTargetDebugView().LastClickResult,
+		FName(TEXT("NoRegisteredHUD")));
+
+	TestTrue(TEXT("Component registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+	Component->SetPartInstanceId(FGuid());
+	TestFalse(TEXT("Click with invalid id fails"), Component->RequestSceneTargetClick());
+	TestEqual(TEXT("Click reason reports invalid id"),
+		Component->GetBattlePresentationTargetDebugView().LastClickResult,
+		FName(TEXT("InvalidPartInstanceId")));
+
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Component registers again"), Component->RegisterWithBattleHUD(HUD.Get()));
+	HUD->SetSession(nullptr);
+	TestFalse(TEXT("Click after HUD registry clear fails"), Component->RequestSceneTargetClick());
+	TestEqual(TEXT("Click reason reports stale registry"),
+		Component->GetBattlePresentationTargetDebugView().LastClickResult,
+		FName(TEXT("NotRegisteredInHUD")));
+
+	TestTrue(TEXT("Component can register after clear"), Component->RegisterWithBattleHUD(HUD.Get()));
+	TestTrue(TEXT("Click forwards to HUD"), Component->RequestSceneTargetClick());
+	TestEqual(TEXT("Click reason reports forwarded"),
+		Component->GetBattlePresentationTargetDebugView().LastClickResult,
+		FName(TEXT("Forwarded")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattlePresentationTargetBindingBindsPartIdSpec,
 	"Wacom.UI.Battle.PresentationTargetBinding.BindsPartIdToRuntimeInstanceId",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1997,6 +2263,9 @@ bool FWacomUIBattlePresentationTargetBindingBindsPartIdSpec::RunTest(const FStri
 
 	TestEqual(TEXT("Binding writes runtime part instance id"), Component->GetPartInstanceId(), HeadInstanceId);
 	TestTrue(TEXT("Scene target registers with HUD"), Component->IsRegisteredWithBattleHUD());
+	TestEqual(TEXT("Debug auto-bind reports match"),
+		Component->GetBattlePresentationTargetDebugView().LastAutoBindResult,
+		FName(TEXT("MatchedPartId")));
 	TestEqual(TEXT("Registry contains scene target"), HUD->GetBattlePresentationTargetCountForTest(), 1);
 
 	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadInstanceId, 7);
@@ -2057,6 +2326,7 @@ bool FWacomUIBattlePresentationTargetBindingSurvivesTargetSelectRefreshSpec::Run
 	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
 	HUD->TakeWidget();
 	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	HUD->RefreshFromSnapshot(Snapshot);
 
 	UWacomBattlePresentationTargetComponent* Component =
@@ -2138,6 +2408,9 @@ bool FWacomUIBattlePresentationTargetBindingMissingPartIdUnregistersSpec::RunTes
 
 	TestFalse(TEXT("Missing stable part id unregisters component"), Component->IsRegisteredWithBattleHUD());
 	TestFalse(TEXT("Missing stable part id clears runtime instance id"), Component->GetPartInstanceId().IsValid());
+	TestEqual(TEXT("Debug auto-bind reports missing snapshot part"),
+		Component->GetBattlePresentationTargetDebugView().LastAutoBindResult,
+		FName(TEXT("MissingPartInSnapshot")));
 	TestEqual(TEXT("Registry count returns to zero"), HUD->GetBattlePresentationTargetCountForTest(), 0);
 
 	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadInstanceId, 5);
@@ -2202,6 +2475,65 @@ bool FWacomUIBattlePresentationTargetBindingDisabledDoesNotBindSpec::RunTest(con
 
 	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadInstanceId, 5);
 	TestEqual(TEXT("Unbound component does not receive cue"), Component->GetBattlePresentationCuePlayCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetDebugAuthoringValidationSpec,
+	"Wacom.UI.Battle.PresentationTargetDebug.AuthoringValidation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetDebugAuthoringValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Primitive->SetCollisionResponseToChannel(ECC_Visibility, ECR_Ignore);
+
+	UWacomBattlePresentationTargetComponent* Component =
+		NewObject<UWacomBattlePresentationTargetComponent>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartId(TEXT("Test.Part.Head"));
+
+	TArray<FString> Warnings;
+	TestFalse(TEXT("Validation warns when click collision is not author-ready"),
+		Component->ValidateBattlePresentationTargetAuthoring(Warnings));
+	TestTrue(TEXT("Validation reports Visibility issue"), Warnings.ContainsByPredicate(
+		[](const FString& Warning)
+		{
+			return Warning.Contains(TEXT("Visibility"));
+		}));
+
+	Primitive->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Primitive->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	TestTrue(TEXT("Validation passes after primitive is queryable and blocks Visibility"),
+		Component->ValidateBattlePresentationTargetAuthoring(Warnings));
+	TestEqual(TEXT("Validation clears warnings"), Warnings.Num(), 0);
 
 	return true;
 }
@@ -2625,6 +2957,7 @@ bool FWacomUIBattlePresentationTargetClickRouterForwardsSpec::RunTest(const FStr
 	HUD->SetWorldForTest(World);
 	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
 	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	HUD->TakeWidget();
 	PC->SetBattleSceneClickHUDForTest(HUD.Get());
 
@@ -2706,6 +3039,7 @@ bool FWacomUIBattlePresentationTargetClickRouterIdleSpec::RunTest(const FString&
 	HUD->SetOwningPlayerForTest(PC);
 	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
 	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	HUD->TakeWidget();
 	PC->SetBattleSceneClickHUDForTest(HUD.Get());
 
@@ -2793,6 +3127,7 @@ bool FWacomUIBattlePresentationTargetClickHUDMouseUpFallbackSpec::RunTest(const 
 	HUD->SetWorldForTest(World);
 	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
 	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	HUD->TakeWidget();
 	PC->SetBattleSceneClickHUDForTest(HUD.Get());
 
@@ -3027,6 +3362,7 @@ bool FWacomUIBattlePresentationTargetClickPIEForwardsSpec::RunTest(const FString
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
 	HUD->SetOwningPlayerForTest(PC);
 	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	HUD->TakeWidget();
 	HUD->OnCardClickedByUser(TargetCardId);
 	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);

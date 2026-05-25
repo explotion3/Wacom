@@ -139,6 +139,7 @@ PIE 检查：
 - `VisualTargetComponent` / `ClickTargetComponent` 可以保持 `None`；组件会自动使用 Owner 上第一个 `UPrimitiveComponent`。如果 Actor 有多个 mesh 或独立点击盒，再显式指定：例如 `VisualTargetComponent = Cube`、`ClickTargetComponent = BoxCollision`。不要在 Details 面板里创建嵌在 target component 下的 `StaticMeshComponent_0` 临时对象；这会让引用指向错误对象并挡住自动 fallback。
 - 进入战斗并刷新 snapshot 后，该组件会自动绑定当前战斗的 `PartInstanceId`；命中 / 破坏 TargetCue 到达时应短暂放大后恢复。选择需要敌方部位目标的卡牌进入 `TargetSelect` 后，单击组件绑定的 primitive，会由 `AWacomPlayerController` 的 Visibility cursor trace router 转发到 `BattleHUD->OnEnemyPartClickedByUser()`。未匹配的 `PartId` 会保持未注册。
 - `Primitive.OnClicked` 兼容路径仍保留，但 V0-C 后不再需要关卡蓝图临时 trace。当前主路由只处理左键 Release，并且只在 `TargetSelect` 中消费，用来覆盖单击有效阶段落在 MouseUp 的 PIE 情况。若仍需要点两次，优先确认 BattleHUD 根层 `MouseButtonUp` 兜底是否编译进当前 PIE；若点击完全没有触发，再检查：BattleHUD 是否开启 `bEnableSceneEnemyTargetBindingPrototype`、组件 `PartId` 是否匹配当前敌人部位定义、目标 primitive 是否阻挡 `Visibility`、以及 `AWacomPlayerController` 是否是当前 PlayerController。Hover 高亮、鼠标命中提示和正式目标 affordance 留后续。
+- Debug/Authoring：选中带组件的 Actor，可调用 `GetBattlePresentationTargetDebugSummary()` 或 Details 面板里的 `LogBattlePresentationTargetDebugSummary()`。最小健康状态应为 `LastAutoBind=MatchedPartId`、`Registered=true`、`BlocksVisibility=true`、`LastClick=Forwarded`；如果不是，先看 `LastAutoBind / LastRegistration / LastClick` 的稳定原因。`ValidateBattlePresentationTargetAuthoring()` 可快速检查是否缺少 `PartId/PartInstanceId`、找不到 Primitive、或 click target 当前没有 Query + Visibility Block。
 
 ---
 

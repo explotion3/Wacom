@@ -16,6 +16,63 @@ class UPrimitiveComponent;
 class UWacomBattlePresentationTargetComponentProbe;
 #endif
 
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomBattlePresentationTargetDebugView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FName PartId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FGuid PartInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	bool bIsRegisteredWithBattleHUD = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FString RegisteredHUDName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FString ResolvedVisualTargetName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FString ResolvedClickTargetName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FString BoundClickTargetName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	TEnumAsByte<ECollisionEnabled::Type> ClickTargetCollisionEnabled = ECollisionEnabled::NoCollision;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	TEnumAsByte<ECollisionResponse> ClickTargetVisibilityResponse = ECR_Ignore;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	bool bClickTargetBlocksVisibility = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	EBattleEventType LastCueType = EBattleEventType::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	int32 LastCueAmount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	int32 CuePlayCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	bool bVisualFeedbackActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FName LastRegistrationResult = TEXT("NotAttempted");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FName LastAutoBindResult = TEXT("NotAttempted");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FName LastClickResult = TEXT("NotAttempted");
+};
+
 /**
  * Minimal scene-side target provider for BattleHUD presentation TargetCue.
  *
@@ -63,6 +120,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Visual", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0", Units = "s", ToolTip = "Seconds to hold the EnemyPartHpEmptied scale pulse before restoring the primitive's saved base relative scale."))
 	float DestroyedPulseSeconds = 0.28f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Debug", meta = (ToolTip = "When enabled, registration, auto-binding, click forwarding, and presentation cue state changes are written to the log. No tick or on-screen debug output is used."))
+	bool bLogDebugStateChanges = false;
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Presentation")
 	void SetPartId(FName InPartId);
 
@@ -102,6 +162,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation")
 	int32 GetBattlePresentationCuePlayCount() const { return CuePlayCount; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation|Debug")
+	FWacomBattlePresentationTargetDebugView GetBattlePresentationTargetDebugView() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation|Debug")
+	FString GetBattlePresentationTargetDebugSummary() const;
+
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Presentation|Debug")
+	void LogBattlePresentationTargetDebugSummary() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Presentation|Debug")
+	bool ValidateBattlePresentationTargetAuthoring(TArray<FString>& OutWarnings) const;
+
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;
@@ -126,6 +198,9 @@ private:
 	ECollisionEnabled::Type SavedClickTargetCollisionEnabled = ECollisionEnabled::NoCollision;
 	ECollisionResponse SavedClickTargetVisibilityResponse = ECR_Block;
 	FTimerHandle VisualFeedbackTimerHandle;
+	FName LastRegistrationResult = TEXT("NotAttempted");
+	FName LastAutoBindResult = TEXT("NotAttempted");
+	FName LastClickResult = TEXT("NotAttempted");
 
 	void HandleBattlePresentationCue(EBattleEventType SourceEventType, int32 Amount);
 	void BindPIEClickTarget();
@@ -136,6 +211,10 @@ private:
 	void PlayVisualFeedback(EBattleEventType SourceEventType);
 	void StopVisualFeedbackTimer();
 	UPrimitiveComponent* ResolveVisualTargetComponent() const;
+	void MarkRegistrationResult(FName Result);
+	void MarkAutoBindResult(FName Result);
+	void MarkClickResult(FName Result);
+	void LogDebugStateChange(const TCHAR* EventName, FName Result) const;
 
 	UFUNCTION()
 	void HandleClickTargetClicked(UPrimitiveComponent* TouchedComponent, FKey ButtonPressed);

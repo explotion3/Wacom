@@ -174,6 +174,7 @@ Toast WBP 注册口径：
 - 开启场景绑定原型时，`BattleHUD` 会在 `EnemyInfoBar` 因目标选择状态刷新并重新注册 2D 部位后，再同步一次场景目标。因此 V0 语义是：同一部位上，场景 target 保持为当前表现 / 点击 provider。
 - PIE 验证时，`VisualTargetComponent` 和 `ClickTargetComponent` 可以保持 `None`；组件会自动查找 Owner 上第一个 `UPrimitiveComponent`。如果在 Details 面板误创建了 `StaticMeshComponent_0` 这类嵌在组件下的对象，应清空引用或删除临时组件，避免 fallback 命中错误对象。推荐原型结构是 `Actor -> StaticMeshComponent(Cube) + UWacomBattlePresentationTargetComponent`。
 - 当前 V0-C 的 PIE 场景点击由 `AWacomPlayerController` 显式 cursor trace router 处理，跟随 `BattleHUD::bEnableSceneEnemyTargetBindingPrototype` 启用；路由只在左键 Release 且 HUD 已进入 `TargetSelect` 时消费。BattleHUD 根层 `MouseButtonUp` 兜底也复用同一路由，覆盖单击有效阶段落在 MouseUp 的 PIE 情况。`Primitive.OnClicked` 仍可用于旧验证，但不再是推荐主路径；选择需要敌方部位目标的卡牌进入 `TargetSelect` 后，单击匹配的场景 primitive 应直接完成目标选择，不再需要关卡蓝图临时 trace。
+- 场景目标排障优先看组件的 `GetBattlePresentationTargetDebugSummary()` 或在 Details/蓝图中调用 `LogBattlePresentationTargetDebugSummary()`：确认 `PartId`、运行时 `PartInstanceId`、`Registered=true`、实际解析到的 visual/click primitive、`BlocksVisibility=true`、`LastAutoBind=MatchedPartId`、`LastClick=Forwarded`。组件上的 `bLogDebugStateChanges` 和 PlayerController 上的 `bLogBattleSceneTargetClickRouting` 默认关闭；临时打开后只输出注册、自动绑定、点击和 cue 状态，不做屏幕常驻调试。
 - `UEventToast` 负责单条战斗 Toast 的显示和倒计时，不负责文案判断或事件排序。
 - `UBattleEventLogPanel` 是 `BattleHUD` 内部半屏日志抽屉，不通过 CommonUI Layer push/pop。
 - `BattleHUD` 保存本场 `BattleEventLogHistory`，切换 Session 时清空日志和表现队列。

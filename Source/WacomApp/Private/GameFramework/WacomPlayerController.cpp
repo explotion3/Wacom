@@ -104,6 +104,11 @@ namespace
 	{
 		return Actor ? Actor->FindComponentByClass<UWacomBattlePresentationTargetComponent>() : nullptr;
 	}
+
+	FString GetDebugObjectName(const UObject* Object)
+	{
+		return IsValid(Object) ? Object->GetName() : TEXT("None");
+	}
 }
 
 void AWacomPlayerController::BeginPlay()
@@ -294,16 +299,36 @@ bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetS
 	UBattleHUD* HUD = nullptr;
 	if (!CanRouteBattleSceneTargetClick(HUD))
 	{
+		if (bLogBattleSceneTargetClickRouting)
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=CannotRouteBattleSceneTargetClick requireTargetSelect=%s"),
+				bRequireTargetSelect ? TEXT("true") : TEXT("false"));
+		}
 		return false;
 	}
 	if (bRequireTargetSelect && (!HUD || !HUD->IsInTargetSelect()))
 	{
+		if (bLogBattleSceneTargetClickRouting)
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NotInTargetSelect hud=%s requireTargetSelect=%s"),
+				*GetDebugObjectName(HUD),
+				bRequireTargetSelect ? TEXT("true") : TEXT("false"));
+		}
 		return false;
 	}
 
 	FHitResult HitResult;
 	if (!BuildBattleSceneClickHitResult(HitResult))
 	{
+		if (bLogBattleSceneTargetClickRouting)
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NoVisibilityHit hud=%s inTargetSelect=%s"),
+				*GetDebugObjectName(HUD),
+				HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
+		}
 		return false;
 	}
 
@@ -312,16 +337,46 @@ bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetS
 		if (UWacomBattlePresentationTargetComponent* Target =
 			FindBattlePresentationTargetComponent(HitComponent->GetOwner()))
 		{
-			return Target->RequestSceneTargetClick();
+			const bool bForwarded = Target->RequestSceneTargetClick();
+			if (bLogBattleSceneTargetClickRouting)
+			{
+				UE_LOG(LogTemp, Display,
+					TEXT("[WacomBattleSceneClickRouter] RouteViaComponent forwarded=%s hitActor=%s hitComponent=%s target=%s inTargetSelect=%s"),
+					bForwarded ? TEXT("true") : TEXT("false"),
+					*GetDebugObjectName(HitResult.GetActor()),
+					*GetDebugObjectName(HitComponent),
+					*GetDebugObjectName(Target),
+					HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
+			}
+			return bForwarded;
 		}
 	}
 
 	if (UWacomBattlePresentationTargetComponent* Target =
 		FindBattlePresentationTargetComponent(HitResult.GetActor()))
 	{
-		return Target->RequestSceneTargetClick();
+		const bool bForwarded = Target->RequestSceneTargetClick();
+		if (bLogBattleSceneTargetClickRouting)
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("[WacomBattleSceneClickRouter] RouteViaActor forwarded=%s hitActor=%s hitComponent=%s target=%s inTargetSelect=%s"),
+				bForwarded ? TEXT("true") : TEXT("false"),
+				*GetDebugObjectName(HitResult.GetActor()),
+				*GetDebugObjectName(HitResult.GetComponent()),
+				*GetDebugObjectName(Target),
+				HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
+		}
+		return bForwarded;
 	}
 
+	if (bLogBattleSceneTargetClickRouting)
+	{
+		UE_LOG(LogTemp, Display,
+			TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NoTargetComponent hitActor=%s hitComponent=%s inTargetSelect=%s"),
+			*GetDebugObjectName(HitResult.GetActor()),
+			*GetDebugObjectName(HitResult.GetComponent()),
+			HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
+	}
 	return false;
 }
 

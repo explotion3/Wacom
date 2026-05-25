@@ -237,6 +237,11 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	{
 		DestroyBattle3DHandPresenter();
 	}
+
+	if (NewSession)
+	{
+		ConsumeAndLogEvents();
+	}
 }
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
@@ -701,8 +706,26 @@ void UBattleHUD::ReleaseAllPlayerControllerInteractionEvents()
 
 void UBattleHUD::SyncSceneEnemyPresentationTargets(const FBattleSnapshot& Snap)
 {
-	if (!bEnableSceneEnemyTargetBindingPrototype || !GetSession() || Snap.Phase == EBattlePhase::BattleEnd)
+	const bool bCanAttemptAutoBind =
+		bEnableSceneEnemyTargetBindingPrototype
+		&& GetSession()
+		&& Snap.Phase != EBattlePhase::BattleEnd;
+	if (!bCanAttemptAutoBind)
 	{
+		if (bEnableSceneEnemyTargetBindingPrototype)
+		{
+			if (UWorld* World = GetWorld())
+			{
+				for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
+				{
+					UWacomBattlePresentationTargetComponent* Component = *It;
+					if (IsValid(Component) && Component->GetWorld() == World)
+					{
+						Component->MarkAutoBindResult(TEXT("BattleEndedOrNoSession"));
+					}
+				}
+			}
+		}
 		UnregisterSceneEnemyPresentationTargets();
 		return;
 	}
@@ -727,8 +750,13 @@ void UBattleHUD::SyncSceneEnemyPresentationTargets(const FBattleSnapshot& Snap)
 	for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
 	{
 		UWacomBattlePresentationTargetComponent* Component = *It;
-		if (!IsValid(Component) || Component->GetWorld() != World || Component->GetPartId().IsNone())
+		if (!IsValid(Component) || Component->GetWorld() != World)
 		{
+			continue;
+		}
+		if (Component->GetPartId().IsNone())
+		{
+			Component->MarkAutoBindResult(TEXT("MissingPartId"));
 			continue;
 		}
 
@@ -736,11 +764,13 @@ void UBattleHUD::SyncSceneEnemyPresentationTargets(const FBattleSnapshot& Snap)
 		{
 			Component->SetPartInstanceId(*RuntimePartId);
 			Component->RegisterWithBattleHUD(this);
+			Component->MarkAutoBindResult(TEXT("MatchedPartId"));
 		}
 		else
 		{
 			Component->UnregisterFromBattleHUD();
 			Component->SetPartInstanceId(FGuid());
+			Component->MarkAutoBindResult(TEXT("MissingPartInSnapshot"));
 		}
 	}
 }

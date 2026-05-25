@@ -9,6 +9,34 @@
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
+namespace
+{
+	FString GetObjectDebugName(const UObject* Object)
+	{
+		return IsValid(Object) ? Object->GetName() : TEXT("None");
+	}
+
+	bool CanCollisionReceiveVisibilityQuery(ECollisionEnabled::Type CollisionEnabled)
+	{
+		return CollisionEnabled == ECollisionEnabled::QueryOnly
+			|| CollisionEnabled == ECollisionEnabled::QueryAndPhysics;
+	}
+
+	FString CollisionEnabledToString(ECollisionEnabled::Type CollisionEnabled)
+	{
+		return StaticEnum<ECollisionEnabled::Type>()
+			? StaticEnum<ECollisionEnabled::Type>()->GetNameStringByValue(static_cast<int64>(CollisionEnabled))
+			: FString::FromInt(static_cast<int32>(CollisionEnabled));
+	}
+
+	FString CollisionResponseToString(ECollisionResponse Response)
+	{
+		return StaticEnum<ECollisionResponse>()
+			? StaticEnum<ECollisionResponse>()->GetNameStringByValue(static_cast<int64>(Response))
+			: FString::FromInt(static_cast<int32>(Response));
+	}
+}
+
 UWacomBattlePresentationTargetComponent::UWacomBattlePresentationTargetComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -77,20 +105,39 @@ void UWacomBattlePresentationTargetComponent::SetClickTargetComponent(UPrimitive
 
 bool UWacomBattlePresentationTargetComponent::RequestSceneTargetClick()
 {
-	UBattleHUD* HUD = RegisteredHUD.Get();
-	if (!IsValid(HUD) || !PartInstanceId.IsValid() || !HUD->IsBattlePresentationTargetRegisteredForOwner(this))
+	if (!PartInstanceId.IsValid())
 	{
+		MarkClickResult(TEXT("InvalidPartInstanceId"));
+		return false;
+	}
+
+	UBattleHUD* HUD = RegisteredHUD.Get();
+	if (!IsValid(HUD))
+	{
+		MarkClickResult(TEXT("NoRegisteredHUD"));
+		return false;
+	}
+	if (!HUD->IsBattlePresentationTargetRegisteredForOwner(this))
+	{
+		MarkClickResult(TEXT("NotRegisteredInHUD"));
 		return false;
 	}
 
 	HUD->OnEnemyPartClickedByUser(PartInstanceId);
+	MarkClickResult(TEXT("Forwarded"));
 	return true;
 }
 
 bool UWacomBattlePresentationTargetComponent::RegisterWithBattleHUD(UBattleHUD* InHUD)
 {
-	if (!PartInstanceId.IsValid() || !IsValid(InHUD))
+	if (!PartInstanceId.IsValid())
 	{
+		MarkRegistrationResult(TEXT("InvalidPartInstanceId"));
+		return false;
+	}
+	if (!IsValid(InHUD))
+	{
+		MarkRegistrationResult(TEXT("InvalidHUD"));
 		return false;
 	}
 
@@ -110,6 +157,7 @@ bool UWacomBattlePresentationTargetComponent::RegisterWithBattleHUD(UBattleHUD* 
 
 	RegisteredHUD = InHUD;
 	BindPIEClickTarget();
+	MarkRegistrationResult(TEXT("Registered"));
 	return true;
 }
 
@@ -122,6 +170,7 @@ void UWacomBattlePresentationTargetComponent::UnregisterFromBattleHUD()
 	}
 	RegisteredHUD.Reset();
 	RestoreVisualFeedback();
+	MarkRegistrationResult(TEXT("Unregistered"));
 }
 
 bool UWacomBattlePresentationTargetComponent::IsRegisteredWithBattleHUD() const
@@ -159,6 +208,105 @@ void UWacomBattlePresentationTargetComponent::HandleBattlePresentationCue(
 	++CuePlayCount;
 	PlayVisualFeedback(SourceEventType);
 	NativeOnBattlePresentationCue(SourceEventType, Amount);
+	LogDebugStateChange(TEXT("Cue"), SourceEventType == EBattleEventType::EnemyPartHpEmptied
+		? TEXT("EnemyPartHpEmptied")
+		: SourceEventType == EBattleEventType::DamageDealt
+			? TEXT("DamageDealt")
+			: TEXT("OtherCue"));
+}
+
+FWacomBattlePresentationTargetDebugView UWacomBattlePresentationTargetComponent::GetBattlePresentationTargetDebugView() const
+{
+	FWacomBattlePresentationTargetDebugView View;
+	View.PartId = PartId;
+	View.PartInstanceId = PartInstanceId;
+	View.bIsRegisteredWithBattleHUD = IsRegisteredWithBattleHUD();
+	View.RegisteredHUDName = GetObjectDebugName(RegisteredHUD.Get());
+	View.ResolvedVisualTargetName = GetObjectDebugName(ResolveVisualTargetComponent());
+	View.ResolvedClickTargetName = GetObjectDebugName(ResolveClickTargetComponent());
+	View.BoundClickTargetName = GetObjectDebugName(BoundClickTarget.Get());
+
+	if (UPrimitiveComponent* ClickTarget = ResolveClickTargetComponent())
+	{
+		View.ClickTargetCollisionEnabled = ClickTarget->GetCollisionEnabled();
+		View.ClickTargetVisibilityResponse = ClickTarget->GetCollisionResponseToChannel(ECC_Visibility);
+		View.bClickTargetBlocksVisibility =
+			CanCollisionReceiveVisibilityQuery(ClickTarget->GetCollisionEnabled())
+			&& ClickTarget->GetCollisionResponseToChannel(ECC_Visibility) == ECR_Block;
+	}
+
+	View.LastCueType = LastCueType;
+	View.LastCueAmount = LastCueAmount;
+	View.CuePlayCount = CuePlayCount;
+	View.bVisualFeedbackActive = bVisualFeedbackActive;
+	View.LastRegistrationResult = LastRegistrationResult;
+	View.LastAutoBindResult = LastAutoBindResult;
+	View.LastClickResult = LastClickResult;
+	return View;
+}
+
+FString UWacomBattlePresentationTargetComponent::GetBattlePresentationTargetDebugSummary() const
+{
+	const FWacomBattlePresentationTargetDebugView View = GetBattlePresentationTargetDebugView();
+	return FString::Printf(
+		TEXT("PartId=%s PartInstanceId=%s Registered=%s HUD=%s Visual=%s Click=%s BoundClick=%s Collision=%s Visibility=%s BlocksVisibility=%s LastRegistration=%s LastAutoBind=%s LastClick=%s LastCue=%s Amount=%d Count=%d VisualActive=%s"),
+		*View.PartId.ToString(),
+		*View.PartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
+		View.bIsRegisteredWithBattleHUD ? TEXT("true") : TEXT("false"),
+		*View.RegisteredHUDName,
+		*View.ResolvedVisualTargetName,
+		*View.ResolvedClickTargetName,
+		*View.BoundClickTargetName,
+		*CollisionEnabledToString(View.ClickTargetCollisionEnabled.GetValue()),
+		*CollisionResponseToString(View.ClickTargetVisibilityResponse.GetValue()),
+		View.bClickTargetBlocksVisibility ? TEXT("true") : TEXT("false"),
+		*View.LastRegistrationResult.ToString(),
+		*View.LastAutoBindResult.ToString(),
+		*View.LastClickResult.ToString(),
+		*UEnum::GetValueAsString(View.LastCueType),
+		View.LastCueAmount,
+		View.CuePlayCount,
+		View.bVisualFeedbackActive ? TEXT("true") : TEXT("false"));
+}
+
+void UWacomBattlePresentationTargetComponent::LogBattlePresentationTargetDebugSummary() const
+{
+	UE_LOG(LogTemp, Display, TEXT("[WacomBattlePresentationTarget] %s :: %s"),
+		*GetObjectDebugName(this),
+		*GetBattlePresentationTargetDebugSummary());
+}
+
+bool UWacomBattlePresentationTargetComponent::ValidateBattlePresentationTargetAuthoring(
+	TArray<FString>& OutWarnings) const
+{
+	OutWarnings.Reset();
+
+	if (PartId.IsNone() && !PartInstanceId.IsValid())
+	{
+		OutWarnings.Add(TEXT("Set either PartId for BattleHUD auto-binding or PartInstanceId for manual registration."));
+	}
+
+	if (!ResolveVisualTargetComponent())
+	{
+		OutWarnings.Add(TEXT("No visual target primitive was found. Set VisualTargetComponent or add a PrimitiveComponent to the owner."));
+	}
+
+	UPrimitiveComponent* ClickTarget = ResolveClickTargetComponent();
+	if (!ClickTarget)
+	{
+		OutWarnings.Add(TEXT("No click target primitive was found. Set ClickTargetComponent, VisualTargetComponent, or add a PrimitiveComponent to the owner."));
+	}
+	else if (!CanCollisionReceiveVisibilityQuery(ClickTarget->GetCollisionEnabled())
+		|| ClickTarget->GetCollisionResponseToChannel(ECC_Visibility) != ECR_Block)
+	{
+		OutWarnings.Add(FString::Printf(
+			TEXT("Click target %s is not currently queryable and blocking Visibility. Current collision=%s visibility=%s."),
+			*ClickTarget->GetName(),
+			*CollisionEnabledToString(ClickTarget->GetCollisionEnabled()),
+			*CollisionResponseToString(ClickTarget->GetCollisionResponseToChannel(ECC_Visibility))));
+	}
+
+	return OutWarnings.IsEmpty();
 }
 
 void UWacomBattlePresentationTargetComponent::BindPIEClickTarget()
@@ -367,4 +515,36 @@ UPrimitiveComponent* UWacomBattlePresentationTargetComponent::ResolveVisualTarge
 	}
 
 	return Owner->FindComponentByClass<UPrimitiveComponent>();
+}
+
+void UWacomBattlePresentationTargetComponent::MarkRegistrationResult(FName Result)
+{
+	LastRegistrationResult = Result;
+	LogDebugStateChange(TEXT("Registration"), Result);
+}
+
+void UWacomBattlePresentationTargetComponent::MarkAutoBindResult(FName Result)
+{
+	LastAutoBindResult = Result;
+	LogDebugStateChange(TEXT("AutoBind"), Result);
+}
+
+void UWacomBattlePresentationTargetComponent::MarkClickResult(FName Result)
+{
+	LastClickResult = Result;
+	LogDebugStateChange(TEXT("Click"), Result);
+}
+
+void UWacomBattlePresentationTargetComponent::LogDebugStateChange(const TCHAR* EventName, FName Result) const
+{
+	if (!bLogDebugStateChanges)
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Display, TEXT("[WacomBattlePresentationTarget] %s %s=%s :: %s"),
+		*GetObjectDebugName(this),
+		EventName,
+		*Result.ToString(),
+		*GetBattlePresentationTargetDebugSummary());
 }
