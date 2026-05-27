@@ -26,7 +26,7 @@ public:
 		UpdateStaticCardLayer();
 	}
 
-	TArray<FWacomFirstPersonStaticCardSlotView> BuildActiveCardLayerSlotViewsForTest() const
+	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViewsForTest() const
 	{
 		return BuildActiveCardLayerSlotViews();
 	}

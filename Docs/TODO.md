@@ -83,6 +83,11 @@ tags:
   - 归属：UI / 战斗表现
   - 入口：[Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
 
+- [ ] **First-person card layer polish：详情面板跟随卡牌与层级修正**
+  - 状态：`Deferred: 等卡牌尺寸、扇形和层级调参稳定后再做`
+  - 归属：UI / 战斗表现
+  - 说明：V0-F hover 详情流程已可用；后续需要让详情面板更贴近 hovered card，并提高 ZOrder，避免被其他 first-person 卡牌遮挡。
+
 - [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
   - 状态：`Blocked: Demo 范围确认`
   - 归属：Run / App

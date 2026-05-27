@@ -37,6 +37,7 @@ void UWacomFirstPersonCardAnchorComponent::BeginPlay()
 
 void UWacomFirstPersonCardAnchorComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	SetBattleHandInteractionPrototypeEnabled(false);
 	RemoveStaticCardLayer();
 	RemoveDebugWidget();
 	Super::EndPlay(EndPlayReason);
@@ -263,24 +264,14 @@ FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFi
 	return View;
 }
 
-TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent::BuildStaticCardSlotViews() const
+TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent::BuildStaticCardSlotViews() const
 {
-	TArray<FWacomCardViewData> CardData;
-	const int32 DesiredCount = StaticPreviewCardDefinitions.Num() > 0
-		? StaticPreviewCardDefinitions.Num()
-		: StaticCardCountFallback;
-	const int32 ClampedCount = FMath::Clamp(DesiredCount, 0, 32);
-	CardData.Reserve(ClampedCount);
-	for (int32 Index = 0; Index < ClampedCount; ++Index)
-	{
-		CardData.Add(BuildStaticCardViewData(Index));
-	}
-	return BuildCardSlotViewsFromData(CardData);
+	return BuildCardSlotViewsFromEntries(BuildStaticCardLayerEntries());
 }
 
-void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerEntries(
 	FName SourceId,
-	const TArray<FWacomCardViewData>& Cards)
+	const TArray<FWacomFirstPersonCardLayerEntry>& Entries)
 {
 	if (SourceId.IsNone())
 	{
@@ -288,8 +279,23 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(
 	}
 
 	RuntimeCardLayerSourceId = SourceId;
-	RuntimeCardLayerData = Cards;
+	RuntimeCardLayerEntries.Reset(Entries.Num());
+	RuntimeCardLayerData.Reset(Entries.Num());
+	for (FWacomFirstPersonCardLayerEntry Entry : Entries)
+	{
+		Entry.bIsPlayable = Entry.bIsPlayable && !Entry.CardViewData.bDisabled;
+		Entry.CardViewData.bDisabled = !Entry.bIsPlayable;
+		RuntimeCardLayerEntries.Add(Entry);
+		RuntimeCardLayerData.Add(Entry.CardViewData);
+	}
 	bHasRuntimeCardLayerData = true;
+}
+
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(
+	FName SourceId,
+	const TArray<FWacomCardViewData>& Cards)
+{
+	SetRuntimeCardLayerEntries(SourceId, BuildCardLayerEntriesFromData(Cards));
 }
 
 void UWacomFirstPersonCardAnchorComponent::ClearRuntimeCardLayerData(FName SourceId)
@@ -301,31 +307,83 @@ void UWacomFirstPersonCardAnchorComponent::ClearRuntimeCardLayerData(FName Sourc
 
 	RuntimeCardLayerSourceId = NAME_None;
 	RuntimeCardLayerData.Reset();
+	RuntimeCardLayerEntries.Reset();
+	HoveredCardInstanceId.Invalidate();
 	bHasRuntimeCardLayerData = false;
 }
 
-TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent::BuildCardSlotViewsFromData(
-	const TArray<FWacomCardViewData>& CardData) const
+TArray<FWacomFirstPersonCardLayerEntry> UWacomFirstPersonCardAnchorComponent::BuildStaticCardLayerEntries() const
 {
-	TArray<FWacomFirstPersonStaticCardSlotView> Slots;
+	TArray<FWacomCardViewData> CardData;
+	const int32 DesiredCount = StaticPreviewCardDefinitions.Num() > 0
+		? StaticPreviewCardDefinitions.Num()
+		: StaticCardCountFallback;
+	const int32 ClampedCount = FMath::Clamp(DesiredCount, 0, 32);
+	CardData.Reserve(ClampedCount);
+	for (int32 Index = 0; Index < ClampedCount; ++Index)
+	{
+		CardData.Add(BuildStaticCardViewData(Index));
+	}
+	return BuildCardLayerEntriesFromData(CardData);
+}
+
+TArray<FWacomFirstPersonCardLayerEntry> UWacomFirstPersonCardAnchorComponent::BuildCardLayerEntriesFromData(
+	const TArray<FWacomCardViewData>& CardData)
+{
+	TArray<FWacomFirstPersonCardLayerEntry> Entries;
+	Entries.Reserve(CardData.Num());
+	for (const FWacomCardViewData& Data : CardData)
+	{
+		FWacomFirstPersonCardLayerEntry Entry;
+		Entry.CardViewData = Data;
+		Entry.bIsPlayable = !Data.bDisabled;
+		Entries.Add(MoveTemp(Entry));
+	}
+	return Entries;
+}
+
+TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent::BuildCardSlotViewsFromEntries(
+	const TArray<FWacomFirstPersonCardLayerEntry>& CardEntries) const
+{
+	TArray<FWacomFirstPersonCardLayerSlotView> Slots;
 	if (!bHasValidAnchor)
 	{
 		return Slots;
 	}
 
-	const int32 ClampedCount = FMath::Clamp(CardData.Num(), 0, 32);
+	const int32 ClampedCount = FMath::Clamp(CardEntries.Num(), 0, 32);
 	Slots.Reserve(ClampedCount);
 
 	for (int32 Index = 0; Index < ClampedCount; ++Index)
 	{
-		FWacomFirstPersonStaticCardSlotView Slot;
+		FWacomFirstPersonCardLayerSlotView Slot;
 		Slot.Index = Index;
-		Slot.CardViewData = CardData[Index];
+		Slot.Entry = CardEntries[Index];
+		Slot.Entry.bIsPlayable = Slot.Entry.bIsPlayable && !Slot.Entry.CardViewData.bDisabled;
+		Slot.Entry.CardViewData.bDisabled = !Slot.Entry.bIsPlayable;
 		Slot.RenderScale = FMath::Max(0.01f, StaticCardRenderScale);
+		Slot.RenderOpacity = Slot.Entry.bIsPlayable
+			? 1.0f
+			: FMath::Clamp(DisabledRenderOpacity, 0.0f, 1.0f);
+		Slot.ZOrder = Index;
 
 		const float CenterOffset =
 			static_cast<float>(Index) - (static_cast<float>(ClampedCount - 1) * 0.5f);
 		Slot.RenderAngleDegrees = CenterOffset * FanYawDegrees;
+		if (Slot.Entry.bIsHandAnchor)
+		{
+			Slot.RenderScale *= FMath::Max(0.01f, HandAnchorScale);
+		}
+		if (Slot.Entry.bIsPendingTargeting)
+		{
+			Slot.RenderScale *= FMath::Max(0.01f, PendingTargetingScale);
+			Slot.ZOrder += 1000;
+		}
+		if (Slot.Entry.CardInstanceId.IsValid() && Slot.Entry.CardInstanceId == HoveredCardInstanceId)
+		{
+			Slot.RenderScale *= FMath::Max(0.01f, HoverScale);
+			Slot.ZOrder += FMath::Max(0, HoverZOrderBoost);
+		}
 
 		FWacomFirstPersonCardProjectedPoint Point;
 		if (ProjectCardTransformToScreen(ComputeCardTransform(ClampedCount, Index), Point, Index))
@@ -334,6 +392,14 @@ TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent
 			const float MaxAbsCenterOffset = FMath::Max(1.0f, static_cast<float>(ClampedCount - 1) * 0.5f);
 			const float NormalizedEdgeDistance = FMath::Abs(CenterOffset) / MaxAbsCenterOffset;
 			Slot.ScreenPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, StaticCardEdgeDropPixels);
+			if (Slot.Entry.bIsPendingTargeting)
+			{
+				Slot.ScreenPosition.Y -= FMath::Max(0.0f, PendingTargetingLiftPixels);
+			}
+			if (Slot.Entry.CardInstanceId.IsValid() && Slot.Entry.CardInstanceId == HoveredCardInstanceId)
+			{
+				Slot.ScreenPosition.Y -= FMath::Max(0.0f, HoverLiftPixels);
+			}
 			Slot.bProjected = Point.bProjected;
 			Slot.bClamped = Point.bClamped;
 		}
@@ -343,11 +409,29 @@ TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent
 	return Slots;
 }
 
-TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent::BuildActiveCardLayerSlotViews() const
+TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent::BuildActiveCardLayerSlotViews() const
 {
 	return bHasRuntimeCardLayerData
-		? BuildCardSlotViewsFromData(RuntimeCardLayerData)
+		? BuildCardSlotViewsFromEntries(RuntimeCardLayerEntries)
 		: BuildStaticCardSlotViews();
+}
+
+void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnabled(bool bEnabled)
+{
+	if (bEnableBattleHandInteractionPrototype == bEnabled)
+	{
+		return;
+	}
+
+	bEnableBattleHandInteractionPrototype = bEnabled;
+	if (!bEnableBattleHandInteractionPrototype)
+	{
+		HoveredCardInstanceId.Invalidate();
+	}
+	if (StaticCardLayerWidget)
+	{
+		StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
+	}
 }
 
 FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
@@ -534,6 +618,8 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		{
 			StaticCardLayerWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 			StaticCardLayerWidget->SetCardViewClass(StaticCardViewClass);
+			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
+			BindStaticCardLayerWidget(StaticCardLayerWidget);
 			AddStaticCardLayerWidgetToViewportForAnchor(StaticCardLayerWidget, StaticCardLayerZOrder);
 		}
 	}
@@ -558,9 +644,64 @@ void UWacomFirstPersonCardAnchorComponent::RemoveStaticCardLayer()
 {
 	if (StaticCardLayerWidget)
 	{
+		UnbindStaticCardLayerWidget(StaticCardLayerWidget);
 		StaticCardLayerWidget->RemoveFromParent();
 		StaticCardLayerWidget = nullptr;
 	}
+	HoveredCardInstanceId.Invalidate();
+}
+
+void UWacomFirstPersonCardAnchorComponent::BindStaticCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget)
+{
+	if (!LayerWidget)
+	{
+		return;
+	}
+
+	LayerWidget->OnCardClickedNative.RemoveAll(this);
+	LayerWidget->OnCardHoveredNative.RemoveAll(this);
+	LayerWidget->OnCardUnhoveredNative.RemoveAll(this);
+	LayerWidget->OnCardClickedNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardClicked);
+	LayerWidget->OnCardHoveredNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardHovered);
+	LayerWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardUnhovered);
+}
+
+void UWacomFirstPersonCardAnchorComponent::UnbindStaticCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget)
+{
+	if (!LayerWidget)
+	{
+		return;
+	}
+
+	LayerWidget->OnCardClickedNative.RemoveAll(this);
+	LayerWidget->OnCardHoveredNative.RemoveAll(this);
+	LayerWidget->OnCardUnhoveredNative.RemoveAll(this);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerCardClicked(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	OnFirstPersonCardLayerCardClicked.Broadcast(CardInstanceId, SlotView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerCardHovered(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	HoveredCardInstanceId = CardInstanceId;
+	OnFirstPersonCardLayerCardHovered.Broadcast(CardInstanceId, SlotView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerCardUnhovered(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (HoveredCardInstanceId == CardInstanceId)
+	{
+		HoveredCardInstanceId.Invalidate();
+	}
+	OnFirstPersonCardLayerCardUnhovered.Broadcast(CardInstanceId, SlotView);
 }
 
 FString UWacomFirstPersonCardAnchorComponent::AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode)

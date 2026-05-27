@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Types/WacomEnums.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomFirstPersonCardAnchorComponent.generated.h"
 
@@ -13,6 +14,9 @@ class UCardDefinition;
 class UWacomCardView;
 class UWacomFirstPersonCardAnchorDebugWidget;
 class UWacomFirstPersonCardLayerWidget;
+struct FWacomFirstPersonCardLayerSlotView;
+
+DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerAnchorInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardAnchorMode : uint8
@@ -69,7 +73,31 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
 };
 
 USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomFirstPersonStaticCardSlotView
+struct WACOMAPP_API FWacomFirstPersonCardLayerEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FGuid CardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomCardViewData CardViewData;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EHandZone Zone = EHandZone::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bIsHandAnchor = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bIsPlayable = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bIsPendingTargeting = false;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 {
 	GENERATED_BODY()
 
@@ -77,7 +105,7 @@ struct WACOMAPP_API FWacomFirstPersonStaticCardSlotView
 	int32 Index = INDEX_NONE;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FWacomCardViewData CardViewData;
+	FWacomFirstPersonCardLayerEntry Entry;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D ScreenPosition = FVector2D::ZeroVector;
@@ -87,6 +115,12 @@ struct WACOMAPP_API FWacomFirstPersonStaticCardSlotView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float RenderScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RenderOpacity = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 ZOrder = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bProjected = false;
@@ -164,6 +198,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0", UIMin = "0", UIMax = "12", ToolTip = "Number of placeholder cards drawn when StaticPreviewCardDefinitions is empty."))
 	int32 StaticCardCountFallback = 5;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "Screen-space lift, in pixels, applied to the card that is currently waiting for target selection. Only affects the non-interactive first-person card layer."))
+	float PendingTargetingLiftPixels = 36.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "Extra render scale multiplier applied to the card that is currently waiting for target selection."))
+	float PendingTargetingScale = 1.08f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "Render scale multiplier applied to hand-anchor cards in the non-interactive first-person card layer."))
+	float HandAnchorScale = 0.96f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "Layer-level render opacity applied to unplayable cards. The card view disabled overlay is still driven by FWacomCardViewData::bDisabled."))
+	float DisabledRenderOpacity = 0.78f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ToolTip = "Enables hover/click handling for the first-person battle hand layer. Prototype-only; BattleHUD controls this during battle. Off by default."))
+	bool bEnableBattleHandInteractionPrototype = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "Screen-space lift, in pixels, applied to the hovered first-person card layer slot."))
+	float HoverLiftPixels = 28.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "Extra render scale multiplier applied to the hovered first-person card layer slot."))
+	float HoverScale = 1.06f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0", UIMin = "0", UIMax = "5000", ToolTip = "Z-order boost applied to the hovered first-person card layer slot."))
+	int32 HoverZOrderBoost = 500;
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Card Layer")
 	void RefreshAnchor(float DeltaTime);
 
@@ -183,10 +241,11 @@ public:
 	FWacomFirstPersonCardAnchorDebugView GetFirstPersonCardAnchorDebugView(int32 NumDebugCards = 5) const;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Card Layer")
-	TArray<FWacomFirstPersonStaticCardSlotView> BuildStaticCardSlotViews() const;
+	TArray<FWacomFirstPersonCardLayerSlotView> BuildStaticCardSlotViews() const;
 
-	TArray<FWacomFirstPersonStaticCardSlotView> BuildActiveCardLayerSlotViews() const;
+	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViews() const;
 
+	void SetRuntimeCardLayerEntries(FName SourceId, const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
 	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);
 	void ClearRuntimeCardLayerData(FName SourceId);
 
@@ -197,15 +256,33 @@ public:
 	FName GetRuntimeCardLayerSourceId() const { return RuntimeCardLayerSourceId; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
-	int32 GetRuntimeCardLayerCardCount() const { return RuntimeCardLayerData.Num(); }
+	int32 GetRuntimeCardLayerCardCount() const { return RuntimeCardLayerEntries.Num(); }
 
 	const TArray<FWacomCardViewData>& GetRuntimeCardLayerData() const { return RuntimeCardLayerData; }
+	const TArray<FWacomFirstPersonCardLayerEntry>& GetRuntimeCardLayerEntries() const { return RuntimeCardLayerEntries; }
+
+	void SetBattleHandInteractionPrototypeEnabled(bool bEnabled);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsStaticCardLayerWidgetActive() const { return StaticCardLayerWidget != nullptr; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
+	bool IsBattleHandInteractionPrototypeEnabled() const { return bEnableBattleHandInteractionPrototype; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
+	FGuid GetHoveredCardInstanceId() const { return HoveredCardInstanceId; }
+
+	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardClicked;
+	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardHovered;
+	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardUnhovered;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	FString GetDebugSummary() const;
+
+#if WITH_AUTOMATION_TESTS
+	UWacomFirstPersonCardLayerWidget* GetStaticCardLayerWidgetForTest() const { return StaticCardLayerWidget; }
+	void SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId) { HoveredCardInstanceId = CardInstanceId; }
+#endif
 
 protected:
 	virtual void BeginPlay() override;
@@ -240,17 +317,29 @@ private:
 	UPROPERTY(Transient)
 	TArray<FWacomCardViewData> RuntimeCardLayerData;
 
+	UPROPERTY(Transient)
+	TArray<FWacomFirstPersonCardLayerEntry> RuntimeCardLayerEntries;
+
 	bool bHasRuntimeCardLayerData = false;
 	FName RuntimeCardLayerSourceId = NAME_None;
+	FGuid HoveredCardInstanceId;
 
 	AWacomPlayerCharacter* GetOwnerCharacter() const;
 	APlayerController* GetOwnerPlayerController() const;
 	bool ResolveBaseAnchor(FTransform& OutBaseTransform, EWacomFirstPersonCardAnchorMode& OutMode, FName& OutFallbackReason) const;
 	FWacomCardViewData BuildStaticCardViewData(int32 CardIndex) const;
-	TArray<FWacomFirstPersonStaticCardSlotView> BuildCardSlotViewsFromData(
-		const TArray<FWacomCardViewData>& CardData) const;
+	TArray<FWacomFirstPersonCardLayerEntry> BuildStaticCardLayerEntries() const;
+	static TArray<FWacomFirstPersonCardLayerEntry> BuildCardLayerEntriesFromData(
+		const TArray<FWacomCardViewData>& CardData);
+	TArray<FWacomFirstPersonCardLayerSlotView> BuildCardSlotViewsFromEntries(
+		const TArray<FWacomFirstPersonCardLayerEntry>& CardEntries) const;
 	void UpdateDebugWidget();
 	void RemoveDebugWidget();
 	void RemoveStaticCardLayer();
+	void BindStaticCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget);
+	void UnbindStaticCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget);
+	void HandleLayerCardClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	static FString AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode);
 };

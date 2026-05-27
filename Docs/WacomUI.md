@@ -323,9 +323,9 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 Wacom 的正式卡牌表现方向不是把 `UCardWidget` 长期塞进 `WidgetComponent / RenderTarget`。主手牌应保持 HUD / UMG 渲染，以保证文本清晰、材质动画、hover 详情、拖拽和响应式布局稳定；但布局不再是传统固定 HUD，而是由 first-person card anchor 计算虚拟手牌平面，再投影为 UMG render transform。这样卡牌会像跟随玩家身体 / tunnel 前进的第一人称手牌，而不是死贴镜头的屏幕按钮。
 
-当前 V0-C 已实现 `UWacomFirstPersonCardAnchorComponent`、默认关闭的 HUD debug projection、默认关闭的静态卡牌层，以及默认关闭的战斗手牌只读 adapter。静态层使用 `UWacomCardView` 渲染配置的测试卡牌或 placeholder 卡牌；战斗 adapter 在 `BattleHUD::bEnableFirstPersonBattleHandLayerPrototype` 开启后，把 `FBattleSnapshot.Hand.Cards` 按顺序转成 `FWacomCardViewData`，覆盖同一个 first-person card layer 显示。两者都由 anchor 投影驱动屏幕位置、旋转和缩放。
+当前 V0-F 已实现 `UWacomFirstPersonCardAnchorComponent`、默认关闭的 HUD debug projection、默认关闭的静态卡牌层、默认关闭的战斗手牌 adapter、默认关闭的 first-person battle hand hover/click 交互原型，以及 first-person hover detail provider。静态层使用 `UWacomCardView` 渲染配置的测试卡牌或 placeholder 卡牌；战斗 adapter 在 `BattleHUD::bEnableFirstPersonBattleHandLayerPrototype` 开启后，把 `FBattleSnapshot.Hand.Cards` 按顺序转成 `FWacomFirstPersonCardLayerEntry`，覆盖同一个 first-person card layer 显示。Entry 保留 `InstanceId / Zone / HandAnchor / Playable / PendingTargeting`，用于轻量视觉状态和后续交互身份。
 
-第一人称战斗手牌层不创建 `UCardWidget`，不处理点击、hover、拖拽或出牌，不替换 `UHandPanel`，也不改变战斗命令出口。旧 `UHandPanel` 仍是当前唯一真实战斗手牌交互入口；first-person battle hand layer 只是视觉验证层。Runtime battle hand 数据源优先级高于静态预览，且空手牌也显示为空，不回退 placeholder。
+第一人称战斗手牌层不创建 `UCardWidget`，不做拖拽或直接出牌命令，不替换 `UHandPanel`，也不改变战斗命令出口。旧 `UHandPanel` 仍保留为正式对照入口；当 `BattleHUD::bEnableFirstPersonBattleHandLayerPrototype` 和 `bEnableFirstPersonBattleHandInteractionPrototype` 同时开启时，first-person layer 的 slot 可以接收 hover 和左键点击。Hover 会改变 first-person layer 自身的 UMG transform / ZOrder，并在 Idle 状态下通过 `BattleHUD` 显示现有 `UWacomCardDetailPanel`；详情数据来自 BattleHUD 最近一次 `FBattleSnapshot.Hand`，定位来自 first-person slot 的屏幕锚点。左键点击只把有效可用卡的 `CardInstanceId` 转发给 `BattleHUD->OnCardClickedByUser()`，后续合法性、TargetSelect 和命令提交仍走 BattleHUD 现有 flow。Runtime battle hand 数据源优先级高于静态预览，且空手牌也显示为空，不回退 placeholder。当前视觉状态只使用 UMG transform、opacity 和已有 disabled overlay：等待选目标的卡轻微上移 / 放大 / 提高 ZOrder，不可用卡降低 layer 透明度，手牌锚点卡轻微缩放。
 
 详细设计见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
@@ -356,13 +356,13 @@ Wacom 的正式卡牌表现方向不是把 `UCardWidget` 长期塞进 `WidgetCom
 当前复用方：
 
 - 背包卡牌和拖拽预览。
-- 背包与战斗手牌详情面板。
+- 背包、战斗手牌与第一人称战斗手牌 hover 详情面板。
 - 战斗手牌卡面，额外用 `FHandCardSnapshot.RuntimeCost` 覆盖费用显示。
 - 商店商品 ViewData。
 
 `UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。卡牌展示数据统一由 `UWacomCardPresentationBuilder` 生成；不要在 CardView 上恢复 Definition 级 legacy static API。
 
-`UWacomCardDetailPanel` 只显示 `FWacomCardDetailViewData`。当前详情数据来自 DisplayName、Description 和 Passives；任务、变化等字段等待卡牌数据结构正式扩展。
+`UWacomCardDetailPanel` 只显示 `FWacomCardDetailViewData`。当前详情数据来自 DisplayName、Description 和 Passives；任务、变化等字段等待卡牌数据结构正式扩展。战斗 HUD 内部已把详情显示入口从 `UCardWidget` 几何中解耦，旧手牌和 first-person slot 共用同一面板和 viewport clamp 逻辑。
 
 ---
 

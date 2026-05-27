@@ -83,7 +83,7 @@ enum class EGameFlowState : uint8
 - 探索 IMC 下响应 WASD 和鼠标视角。
 - 持有 `UWacomCursorLookDriverComponent`，把鼠标位置转成可复用的 yaw / pitch 镜头偏移；Run Tunnel 和 Battle camera 只负责把偏移应用到各自 base rotation。
 - 战斗时调用 `SetExplorationInputEnabled(false)` suspend Run Tunnel，并启用 `UWacomBattleCameraLookComponent` 做轻量鼠标镜头跟随；不 UnPossess，也不移动 Pawn。
-- 持有 `UWacomFirstPersonCardAnchorComponent`，用于计算未来 HUD 渲染卡牌的第一人称投影锚点；它读取 Run Tunnel / Battle camera 的 base transform，并只部分响应 cursor look，让卡牌像跟随玩家身体和 tunnel 前进，而不是完全贴在镜头上的 HUD。V0-C 提供默认关闭的 HUD debug projection、静态 `UWacomCardView` 卡牌层，以及由 `BattleHUD` 写入的只读 runtime battle hand 数据源；设计见 `Docs/First_Person_Card_Layer_Design.md`。
+- 持有 `UWacomFirstPersonCardAnchorComponent`，用于计算未来 HUD 渲染卡牌的第一人称投影锚点；它读取 Run Tunnel / Battle camera 的 base transform，并只部分响应 cursor look，让卡牌像跟随玩家身体和 tunnel 前进，而不是完全贴在镜头上的 HUD。V0-E 提供默认关闭的 HUD debug projection、静态 `UWacomCardView` 卡牌层、由 `BattleHUD` 写入的 runtime battle hand entry 数据源，以及默认关闭的 hover/click 交互原型；entry 保留卡牌实例身份和轻量视觉状态，点击意图仍回到 `BattleHUD`，设计见 `Docs/First_Person_Card_Layer_Design.md`。
 
 战斗时不 UnPossess 的原因是保持 PlayerController 的 InputComponent 活跃，让 `IMC_Battle` 按键继续通过 Controller 路由到战斗 UI。
 

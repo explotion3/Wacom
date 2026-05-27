@@ -326,9 +326,24 @@ public:
 		bEnableFirstPersonBattleHandLayerPrototype = true;
 	}
 
+	void EnableFirstPersonBattleHandInteractionPrototypeForTest()
+	{
+		bEnableFirstPersonBattleHandInteractionPrototype = true;
+	}
+
+	void DisableFirstPersonBattleHandInteractionPrototypeForTest()
+	{
+		bEnableFirstPersonBattleHandInteractionPrototype = false;
+	}
+
 	void DisableFirstPersonBattleHandLayerPrototypeForTest()
 	{
 		bEnableFirstPersonBattleHandLayerPrototype = false;
+	}
+
+	void RefreshFromSnapshotForTest(const FBattleSnapshot& Snapshot)
+	{
+		RefreshFromSnapshot(Snapshot);
 	}
 
 	void SyncFirstPersonBattleHandLayerForTest(const FBattleSnapshot& Snapshot)
@@ -405,6 +420,50 @@ public:
 	void HandleCardUnhoveredForTest(UCardWidget* SourceWidget)
 	{
 		HandleHandCardUnhovered(SourceWidget);
+	}
+
+	void HandleFirstPersonCardHoveredForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		HandleFirstPersonCardLayerCardHovered(CardInstanceId, SlotView);
+	}
+
+	void HandleFirstPersonCardUnhoveredForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		HandleFirstPersonCardLayerCardUnhovered(CardInstanceId, SlotView);
+	}
+
+	EBattleUIState GetUIStateForTest() const
+	{
+		return UIState;
+	}
+
+	bool HasLastBattleSnapshotForTest() const
+	{
+		return bHasLastBattleSnapshot;
+	}
+
+	int32 GetLastBattleSnapshotHandCountForTest() const
+	{
+		return LastBattleSnapshot.Hand.Cards.Num();
+	}
+
+	bool HasLastBattleHandCardForTest(const FGuid& CardInstanceId) const
+	{
+		return FindLastBattleHandCardSnapshot(CardInstanceId) != nullptr;
+	}
+
+	bool HasCardDetailLayerForTest() const
+	{
+		return CardDetailLayer != nullptr;
+	}
+
+	bool EnsureCardDetailPanelForTest()
+	{
+		return EnsureCardDetailPanel() != nullptr;
 	}
 
 	void AppendBattleEventLogEntriesForTest(const TArray<FBattleEvent>& Events)
