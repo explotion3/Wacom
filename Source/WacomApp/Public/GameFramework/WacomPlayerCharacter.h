@@ -33,7 +33,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Camera")
 	UCameraComponent* GetFirstPersonCamera() const { return FirstPersonCamera; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run Tunnel|Movement")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
 	UWacomRunTunnelMovementComponent* GetRunTunnelMovementComponent() const { return RunTunnelMovementComponent; }
 
 	/**
@@ -67,8 +67,8 @@ private:
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCameraComponent> FirstPersonCamera = nullptr;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run Tunnel|Movement",
-		meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
+		meta = (AllowPrivateAccess = "true", ToolTip = "Run Tunnel movement driver component. Tune movement values on the component's Wacom|Run Tunnel|Movement properties."))
 	TObjectPtr<UWacomRunTunnelMovementComponent> RunTunnelMovementComponent = nullptr;
 
 	/** 当前是否接受探索输入。战斗期间置 false。 */
