@@ -5,6 +5,7 @@
 #include "Actors/WacomRunTunnelSegmentActor.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/WacomCursorLookDriverComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerController.h"
@@ -48,8 +49,7 @@ void UWacomRunTunnelMovementComponent::TickComponent(
 	if (AWacomRunTunnelSegmentActor* Segment = ActiveSegment.Get())
 	{
 		DistanceAlongSpline = Segment->GetClampedDistance(DistanceAlongSpline + MoveAxis * MoveSpeed * DeltaTime);
-		UpdateLookTargetFromCursor();
-		UpdateSmoothedLook(DeltaTime);
+		UpdateCursorLook(DeltaTime);
 		ApplyTunnelTransform();
 	}
 	else
@@ -97,10 +97,10 @@ void UWacomRunTunnelMovementComponent::DeactivateRunTunnel()
 	ActiveSegment.Reset();
 	DistanceAlongSpline = 0.0f;
 	MoveAxis = 0.0f;
-	LookYawOffset = 0.0f;
-	LookPitchOffset = 0.0f;
-	TargetLookYawOffset = 0.0f;
-	TargetLookPitchOffset = 0.0f;
+	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
+	{
+		Driver->ResetLookOffset();
+	}
 	SetComponentTickEnabled(false);
 	ApplyInputProfile();
 }
@@ -127,6 +127,10 @@ bool UWacomRunTunnelMovementComponent::ResumeRunTunnel()
 
 	bRunTunnelSuspended = false;
 	SetComponentTickEnabled(true);
+	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
+	{
+		Driver->ResetLookOffset();
+	}
 	ApplyInputProfile();
 	ApplyTunnelTransform();
 	return true;
@@ -144,10 +148,10 @@ bool UWacomRunTunnelMovementComponent::SwitchToSegment(
 	ActiveSegment = TargetSegment;
 	DistanceAlongSpline = TargetSegment->GetClampedDistance(StartDistance);
 	MoveAxis = 0.0f;
-	LookYawOffset = 0.0f;
-	LookPitchOffset = 0.0f;
-	TargetLookYawOffset = 0.0f;
-	TargetLookPitchOffset = 0.0f;
+	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
+	{
+		Driver->ResetLookOffset();
+	}
 
 	if (bRunTunnelActive && !bRunTunnelSuspended)
 	{
@@ -175,7 +179,7 @@ bool UWacomRunTunnelMovementComponent::HandleLookInput(const FVector2D& Input)
 		return false;
 	}
 
-	UpdateLookTargetFromCursor();
+	UpdateCursorLook(0.0f);
 	return true;
 }
 
@@ -188,6 +192,12 @@ APlayerController* UWacomRunTunnelMovementComponent::GetOwnerPlayerController() 
 {
 	const AWacomPlayerCharacter* Character = GetOwnerCharacter();
 	return Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
+}
+
+UWacomCursorLookDriverComponent* UWacomRunTunnelMovementComponent::GetCursorLookDriver() const
+{
+	const AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	return Character ? Character->GetCursorLookDriverComponent() : nullptr;
 }
 
 void UWacomRunTunnelMovementComponent::ApplyInputProfile()
@@ -209,49 +219,23 @@ void UWacomRunTunnelMovementComponent::ApplyInputProfile()
 	}
 }
 
-void UWacomRunTunnelMovementComponent::UpdateLookTargetFromCursor()
+void UWacomRunTunnelMovementComponent::UpdateCursorLook(float DeltaTime)
 {
 	APlayerController* PC = GetOwnerPlayerController();
-	if (!PC)
+	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
+	if (!Driver)
 	{
-		TargetLookYawOffset = 0.0f;
-		TargetLookPitchOffset = 0.0f;
 		return;
 	}
 
-	int32 ViewportSizeX = 0;
-	int32 ViewportSizeY = 0;
-	PC->GetViewportSize(ViewportSizeX, ViewportSizeY);
-	float MouseX = 0.0f;
-	float MouseY = 0.0f;
-	if (ViewportSizeX <= 0
-		|| ViewportSizeY <= 0
-		|| !PC->GetMousePosition(MouseX, MouseY))
-	{
-		TargetLookYawOffset = 0.0f;
-		TargetLookPitchOffset = 0.0f;
-		return;
-	}
-
-	const float NormalizedX = FMath::Clamp((MouseX / static_cast<float>(ViewportSizeX)) * 2.0f - 1.0f, -1.0f, 1.0f);
-	const float NormalizedY = FMath::Clamp((MouseY / static_cast<float>(ViewportSizeY)) * 2.0f - 1.0f, -1.0f, 1.0f);
-	TargetLookYawOffset = NormalizedX * FMath::Abs(YawClampDegrees) * LookYawScale;
-	TargetLookPitchOffset = -NormalizedY * FMath::Abs(PitchClampDegrees) * LookPitchScale;
-	TargetLookYawOffset = FMath::Clamp(TargetLookYawOffset, -FMath::Abs(YawClampDegrees), FMath::Abs(YawClampDegrees));
-	TargetLookPitchOffset = FMath::Clamp(TargetLookPitchOffset, -FMath::Abs(PitchClampDegrees), FMath::Abs(PitchClampDegrees));
-}
-
-void UWacomRunTunnelMovementComponent::UpdateSmoothedLook(float DeltaTime)
-{
-	if (LookInterpSpeed <= 0.0f)
-	{
-		LookYawOffset = TargetLookYawOffset;
-		LookPitchOffset = TargetLookPitchOffset;
-		return;
-	}
-
-	LookYawOffset = FMath::FInterpTo(LookYawOffset, TargetLookYawOffset, DeltaTime, LookInterpSpeed);
-	LookPitchOffset = FMath::FInterpTo(LookPitchOffset, TargetLookPitchOffset, DeltaTime, LookInterpSpeed);
+	Driver->UpdateFromPlayerCursor(
+		PC,
+		DeltaTime,
+		YawClampDegrees,
+		PitchClampDegrees,
+		LookYawScale,
+		LookPitchScale,
+		LookInterpSpeed);
 }
 
 void UWacomRunTunnelMovementComponent::ApplyTunnelTransform()
@@ -265,9 +249,12 @@ void UWacomRunTunnelMovementComponent::ApplyTunnelTransform()
 
 	const FTransform SplineTransform = Segment->GetSplineTransformAtDistance(DistanceAlongSpline);
 	const FRotator SplineRotation = SplineTransform.Rotator();
+	const FRotator LookOffset = GetCursorLookDriver()
+		? GetCursorLookDriver()->GetCurrentLookOffset()
+		: FRotator::ZeroRotator;
 	const FRotator ControlRotation(
-		SplineRotation.Pitch + LookPitchOffset,
-		SplineRotation.Yaw + LookYawOffset,
+		SplineRotation.Pitch + LookOffset.Pitch,
+		SplineRotation.Yaw + LookOffset.Yaw,
 		0.0f);
 	const FRotator ActorRotation(0.0f, SplineRotation.Yaw, 0.0f);
 

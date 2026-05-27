@@ -8,6 +8,8 @@
 
 class UCameraComponent;
 class UInputAction;
+class UWacomBattleCameraLookComponent;
+class UWacomCursorLookDriverComponent;
 class UWacomRunTunnelMovementComponent;
 struct FInputActionValue;
 
@@ -35,6 +37,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
 	UWacomRunTunnelMovementComponent* GetRunTunnelMovementComponent() const { return RunTunnelMovementComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
+	UWacomCursorLookDriverComponent* GetCursorLookDriverComponent() const { return CursorLookDriverComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
+	UWacomBattleCameraLookComponent* GetBattleCameraLookComponent() const { return BattleCameraLookComponent; }
 
 	/**
 	 * 禁用 / 启用探索期的移动 + 视角输入。
@@ -70,6 +78,14 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Run Tunnel movement driver component. Tune movement values on the component's Wacom|Run Tunnel|Movement properties."))
 	TObjectPtr<UWacomRunTunnelMovementComponent> RunTunnelMovementComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
+		meta = (AllowPrivateAccess = "true", ToolTip = "Shared driver that converts the visible mouse cursor position into a smoothed camera look offset."))
+	TObjectPtr<UWacomCursorLookDriverComponent> CursorLookDriverComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
+		meta = (AllowPrivateAccess = "true", ToolTip = "Battle camera look component. It applies the shared cursor look offset while battle is active."))
+	TObjectPtr<UWacomBattleCameraLookComponent> BattleCameraLookComponent = nullptr;
 
 	/** 当前是否接受探索输入。战斗期间置 false。 */
 	bool bExplorationInputEnabled = true;

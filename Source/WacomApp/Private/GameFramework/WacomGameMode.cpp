@@ -11,6 +11,7 @@
 #include "Session/BattleSession.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Components/WacomBattleCameraLookComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
@@ -357,6 +358,10 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	if (AWacomPlayerCharacter* Pawn = PC->GetPawn<AWacomPlayerCharacter>())
 	{
 		Pawn->SetExplorationInputEnabled(false);
+		if (UWacomBattleCameraLookComponent* BattleCameraLook = Pawn->GetBattleCameraLookComponent())
+		{
+			BattleCameraLook->ActivateBattleCameraLook();
+		}
 	}
 
 	// 5) 记录状态
@@ -446,6 +451,10 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	{
 		if (AWacomPlayerCharacter* Pawn = PC->GetPawn<AWacomPlayerCharacter>())
 		{
+			if (UWacomBattleCameraLookComponent* BattleCameraLook = Pawn->GetBattleCameraLookComponent())
+			{
+				BattleCameraLook->DeactivateBattleCameraLook();
+			}
 			Pawn->SetExplorationInputEnabled(true);
 		}
 	}

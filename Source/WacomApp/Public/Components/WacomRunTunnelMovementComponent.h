@@ -8,6 +8,7 @@
 
 class AWacomRunTunnelSegmentActor;
 class AWacomPlayerCharacter;
+class UWacomCursorLookDriverComponent;
 
 /**
  * Movement driver for paper-tunnel Run exploration.
@@ -82,17 +83,13 @@ private:
 
 	float DistanceAlongSpline = 0.0f;
 	float MoveAxis = 0.0f;
-	float LookYawOffset = 0.0f;
-	float LookPitchOffset = 0.0f;
-	float TargetLookYawOffset = 0.0f;
-	float TargetLookPitchOffset = 0.0f;
 	bool bRunTunnelActive = false;
 	bool bRunTunnelSuspended = false;
 
 	AWacomPlayerCharacter* GetOwnerCharacter() const;
 	APlayerController* GetOwnerPlayerController() const;
+	UWacomCursorLookDriverComponent* GetCursorLookDriver() const;
 	void ApplyInputProfile();
-	void UpdateLookTargetFromCursor();
-	void UpdateSmoothedLook(float DeltaTime);
+	void UpdateCursorLook(float DeltaTime);
 	void ApplyTunnelTransform();
 };

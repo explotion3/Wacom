@@ -5,6 +5,7 @@
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Actors/WacomRunTunnelSegmentActor.h"
 #include "Components/SplineComponent.h"
+#include "Components/WacomCursorLookDriverComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -122,6 +123,11 @@ bool FWacomRunTunnelBranchTargetSwitchTest::RunTest(const FString& Parameters)
 	}
 
 	TestTrue(TEXT("Start segment activates"), TunnelComponent->ActivateRunTunnel(StartSegment, 0.0f));
+	if (UWacomCursorLookDriverComponent* Driver = Character->GetCursorLookDriverComponent())
+	{
+		Driver->UpdateFromNormalizedCursor(FVector2D(1.0f, -1.0f), 0.0f, 10.0f, 5.0f);
+		TestNotEqual(TEXT("Driver offset is non-zero before branch switch"), Driver->GetCurrentLookOffset(), FRotator::ZeroRotator);
+	}
 	BranchTarget->TargetSegment = nullptr;
 	TestFalse(TEXT("Null branch target refuses switch"), BranchTarget->RequestBranch(TunnelComponent));
 
@@ -130,6 +136,10 @@ bool FWacomRunTunnelBranchTargetSwitchTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Valid branch target switches"), BranchTarget->RequestBranch(TunnelComponent));
 	TestEqual(TEXT("Active segment switched"), TunnelComponent->GetActiveSegment(), TargetSegment);
 	TestEqual(TEXT("Start distance applied"), TunnelComponent->GetDistanceAlongSpline(), 125.0f);
+	if (UWacomCursorLookDriverComponent* Driver = Character->GetCursorLookDriverComponent())
+	{
+		TestEqual(TEXT("Branch switch resets shared cursor look"), Driver->GetCurrentLookOffset(), FRotator::ZeroRotator);
+	}
 
 	BranchTarget->Destroy();
 	TargetSegment->Destroy();
@@ -211,6 +221,11 @@ bool FWacomRunTunnelMovementSuspendResumeTest::RunTest(const FString& Parameters
 	}
 
 	TestTrue(TEXT("Tunnel activates"), TunnelComponent->ActivateRunTunnel(Segment, 300.0f));
+	if (UWacomCursorLookDriverComponent* Driver = Character->GetCursorLookDriverComponent())
+	{
+		Driver->UpdateFromNormalizedCursor(FVector2D(1.0f, -1.0f), 0.0f, 10.0f, 5.0f);
+		TestNotEqual(TEXT("Driver offset is non-zero before suspend"), Driver->GetCurrentLookOffset(), FRotator::ZeroRotator);
+	}
 	Character->SetExplorationInputEnabled(false);
 	TestTrue(TEXT("Tunnel remains active while exploration input is disabled"), TunnelComponent->IsRunTunnelActive());
 	TestTrue(TEXT("Tunnel is suspended while exploration input is disabled"), TunnelComponent->IsRunTunnelSuspended());
@@ -222,6 +237,10 @@ bool FWacomRunTunnelMovementSuspendResumeTest::RunTest(const FString& Parameters
 	TestTrue(TEXT("Tunnel remains active after exploration input resumes"), TunnelComponent->IsRunTunnelActive());
 	TestFalse(TEXT("Tunnel is no longer suspended after exploration input resumes"), TunnelComponent->IsRunTunnelSuspended());
 	TestEqual(TEXT("Segment is still preserved after resume"), TunnelComponent->GetActiveSegment(), Segment);
+	if (UWacomCursorLookDriverComponent* Driver = Character->GetCursorLookDriverComponent())
+	{
+		TestEqual(TEXT("Resume resets shared cursor look"), Driver->GetCurrentLookOffset(), FRotator::ZeroRotator);
+	}
 	TestTrue(TEXT("Resumed tunnel consumes move input"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
 
 	Segment->Destroy();

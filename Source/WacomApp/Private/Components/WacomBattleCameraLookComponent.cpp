@@ -1,0 +1,160 @@
+// Copyright Wacom. All Rights Reserved.
+
+#include "Components/WacomBattleCameraLookComponent.h"
+
+#include "Components/WacomCursorLookDriverComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/WacomPlayerCharacter.h"
+
+UWacomBattleCameraLookComponent::UWacomBattleCameraLookComponent()
+{
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+}
+
+void UWacomBattleCameraLookComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	SetComponentTickEnabled(false);
+}
+
+void UWacomBattleCameraLookComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	DeactivateBattleCameraLook();
+	Super::EndPlay(EndPlayReason);
+}
+
+void UWacomBattleCameraLookComponent::TickComponent(
+	float DeltaTime,
+	ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (!bBattleCameraLookActive)
+	{
+		return;
+	}
+
+	APlayerController* PC = GetOwnerPlayerController();
+	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
+	AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	if (!PC || !Driver || !Character)
+	{
+		return;
+	}
+
+	UpdateCursorLookOffset(DeltaTime);
+	const FRotator LookOffset = Driver->GetCurrentLookOffset();
+	PC->SetControlRotation(FRotator(
+		BaseBattleRotation.Pitch + LookOffset.Pitch,
+		BaseBattleRotation.Yaw + LookOffset.Yaw,
+		0.0f));
+	Character->SetActorRotation(BaseActorRotation, ETeleportType::TeleportPhysics);
+}
+
+bool UWacomBattleCameraLookComponent::ActivateBattleCameraLook()
+{
+	if (bBattleCameraLookActive)
+	{
+		return true;
+	}
+
+	APlayerController* PC = GetOwnerPlayerController();
+	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
+	AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	if (!PC || !Driver || !Character)
+	{
+		return false;
+	}
+
+	BaseBattleRotation = PC->GetControlRotation();
+	BaseActorRotation = Character->GetActorRotation();
+	bSavedUseControllerRotationYaw = Character->bUseControllerRotationYaw;
+	bSavedUseControllerRotationPitch = Character->bUseControllerRotationPitch;
+	bSavedUseControllerRotationRoll = Character->bUseControllerRotationRoll;
+	bHasSavedRotationPolicy = true;
+	Character->bUseControllerRotationYaw = false;
+	Character->bUseControllerRotationPitch = false;
+	Character->bUseControllerRotationRoll = false;
+	Driver->ResetLookOffset();
+	bBattleCameraLookActive = true;
+	SetComponentTickEnabled(true);
+	return true;
+}
+
+void UWacomBattleCameraLookComponent::DeactivateBattleCameraLook()
+{
+	if (!bBattleCameraLookActive)
+	{
+		return;
+	}
+
+	bBattleCameraLookActive = false;
+	SetComponentTickEnabled(false);
+	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
+	{
+		Driver->ResetLookOffset();
+	}
+	if (APlayerController* PC = GetOwnerPlayerController())
+	{
+		PC->SetControlRotation(BaseBattleRotation);
+	}
+	if (AWacomPlayerCharacter* Character = GetOwnerCharacter())
+	{
+		Character->SetActorRotation(BaseActorRotation, ETeleportType::TeleportPhysics);
+	}
+	RestoreOwnerRotationPolicy();
+}
+
+void UWacomBattleCameraLookComponent::UpdateCursorLookOffset(float DeltaTime)
+{
+	APlayerController* PC = GetOwnerPlayerController();
+	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
+	if (!PC || !Driver)
+	{
+		return;
+	}
+
+	Driver->UpdateFromPlayerCursor(
+		PC,
+		DeltaTime,
+		YawClampDegrees,
+		PitchClampDegrees,
+		LookYawScale,
+		LookPitchScale,
+		LookInterpSpeed);
+}
+
+AWacomPlayerCharacter* UWacomBattleCameraLookComponent::GetOwnerCharacter() const
+{
+	return Cast<AWacomPlayerCharacter>(GetOwner());
+}
+
+APlayerController* UWacomBattleCameraLookComponent::GetOwnerPlayerController() const
+{
+	const AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	return Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
+}
+
+UWacomCursorLookDriverComponent* UWacomBattleCameraLookComponent::GetCursorLookDriver() const
+{
+	const AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	return Character ? Character->GetCursorLookDriverComponent() : nullptr;
+}
+
+void UWacomBattleCameraLookComponent::RestoreOwnerRotationPolicy()
+{
+	if (!bHasSavedRotationPolicy)
+	{
+		return;
+	}
+
+	if (AWacomPlayerCharacter* Character = GetOwnerCharacter())
+	{
+		Character->bUseControllerRotationYaw = bSavedUseControllerRotationYaw;
+		Character->bUseControllerRotationPitch = bSavedUseControllerRotationPitch;
+		Character->bUseControllerRotationRoll = bSavedUseControllerRotationRoll;
+	}
+	bHasSavedRotationPolicy = false;
+}

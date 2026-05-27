@@ -4,6 +4,8 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/WacomBattleCameraLookComponent.h"
+#include "Components/WacomCursorLookDriverComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
 #include "EnhancedInputComponent.h"
 #include "InputAction.h"
@@ -24,7 +26,9 @@ AWacomPlayerCharacter::AWacomPlayerCharacter()
 	FirstPersonCamera->SetRelativeLocation(FVector(0.f, 0.f, 60.f)); // 约眼睛高度
 	FirstPersonCamera->bUsePawnControlRotation = true;
 
+	CursorLookDriverComponent = CreateDefaultSubobject<UWacomCursorLookDriverComponent>(TEXT("CursorLookDriverComponent"));
 	RunTunnelMovementComponent = CreateDefaultSubobject<UWacomRunTunnelMovementComponent>(TEXT("RunTunnelMovementComponent"));
+	BattleCameraLookComponent = CreateDefaultSubobject<UWacomBattleCameraLookComponent>(TEXT("BattleCameraLookComponent"));
 
 	// IA 资产延迟到 BeginPlay 里 LoadObject 解析，避免 CDO 阶段 FObjectFinder
 	// 在 commandlet 首次运行前 assets 不存在而崩溃。

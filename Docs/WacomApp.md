@@ -81,7 +81,8 @@ enum class EGameFlowState : uint8
 
 - 使用 `UCameraComponent` 和 `UCharacterMovementComponent`。
 - 探索 IMC 下响应 WASD 和鼠标视角。
-- 战斗时调用 `SetExplorationInputEnabled(false)` 禁用移动，但不 UnPossess，也不移动摄像机。
+- 持有 `UWacomCursorLookDriverComponent`，把鼠标位置转成可复用的 yaw / pitch 镜头偏移；Run Tunnel 和 Battle camera 只负责把偏移应用到各自 base rotation。
+- 战斗时调用 `SetExplorationInputEnabled(false)` suspend Run Tunnel，并启用 `UWacomBattleCameraLookComponent` 做轻量鼠标镜头跟随；不 UnPossess，也不移动 Pawn。
 
 战斗时不 UnPossess 的原因是保持 PlayerController 的 InputComponent 活跃，让 `IMC_Battle` 按键继续通过 Controller 路由到战斗 UI。
 
@@ -198,7 +199,7 @@ WBP 制作合约见：
 
 PlayerController 上的 `PushMappingContext / PopMappingContext` helper 仍保留为兼容 / 调试入口；正式流程由 Coordinator 管理。PlayerController BeginPlay 和 GameMode BeginPlay 会初始化 Coordinator，防止 PIE 复用 Controller 时输入状态停留在上一关。
 
-Run Tunnel 是探索期默认移动模型，不再有正式的普通 FPS FreeLook 探索 profile。进入战斗时 `UWacomRunTunnelMovementComponent` 只 `Suspend`，保留当前 Segment / Distance；战斗结束后 Coordinator 回到 `Exploration`，组件 `Resume` 后继续沿原 tunnel path 移动。
+Run Tunnel 是探索期默认移动模型，不再有正式的普通 FPS FreeLook 探索 profile。进入战斗时 `UWacomRunTunnelMovementComponent` 只 `Suspend`，保留当前 Segment / Distance；`UWacomBattleCameraLookComponent` 接管 ControlRotation 并在战斗 base rotation 上叠加共享 cursor look offset。战斗结束后先停用 Battle camera look，再让 Coordinator 回到 `Exploration`，Run Tunnel `Resume` 后继续沿原 tunnel path 移动。
 
 BattleHUD、3D 手牌和场景目标点击需要的 `bEnableClickEvents / bEnableMouseOverEvents` 也通过 Coordinator 的 owner lease 管理。多个系统同时申请时不会互相提前恢复；最后一个 owner 释放后恢复 PlayerController 原始状态。
 
@@ -246,7 +247,7 @@ BattleHUD、3D 手牌和场景目标点击需要的 `bEnableClickEvents / bEnabl
 GameMode 进入战斗时：
 
 1. 设置 `EGameFlowState::Battle`。
-2. 禁用 PlayerCharacter 探索移动。
+2. Suspend PlayerCharacter 的 Run Tunnel 探索移动，并启用 Battle camera look。
 3. Pop `IMC_Exploration`，Push `IMC_Battle`。
 4. 由 RunSession 构造 Battle init params。
 5. 创建 / 初始化 BattleSession。
@@ -266,7 +267,7 @@ GameMode 退出战斗时：
 1. 设置 `EGameFlowState::Exploration`。
 2. Pop BattleHUD。
 3. Pop `IMC_Battle`，Push `IMC_Exploration`。
-4. 恢复 PlayerCharacter 探索移动。
+4. 停用 Battle camera look，并恢复 PlayerCharacter 探索移动。
 5. 调 RunSession 结算战斗结果。
 6. 真胜利时标记并销毁触发战斗的 `ABattleTriggerActor`。
 7. 撤离时不销毁 Trigger，允许玩家再次按 E 重入。

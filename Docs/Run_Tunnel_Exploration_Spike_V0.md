@@ -16,7 +16,7 @@ tags:
 > 本文记录纸片隧道探索 Spike V0 的实施边界。它不是正式 Run 规则文档，也不替代 `WacomRun.md`、`WacomApp.md` 或 `WacomUI.md`。
 
 > [!note] Formalization V1-A
-> 本 Spike 的核心操作模型已被吸收到正式探索路径：`UWacomRunTunnelMovementComponent` 是探索期默认移动组件，普通隐藏鼠标 FPS FreeLook 不再是正式玩家路径。本文保留为历史背景和 PIE authoring 参考。
+> 本 Spike 的核心操作模型已被吸收到正式探索路径：`UWacomRunTunnelMovementComponent` 是探索期默认移动组件，普通隐藏鼠标 FPS FreeLook 不再是正式玩家路径。鼠标位置到 yaw / pitch offset 的算法已抽到共享 `UWacomCursorLookDriverComponent`，供 Run Tunnel 和 Battle camera look 共同使用。本文保留为历史背景和 PIE authoring 参考。
 
 > [!note] 关联讨论
 > 背景讨论见 `Run_Tunnel_Presentation_Discussion.md`。本 Spike 只验证最小表现和操作手感。
@@ -136,7 +136,7 @@ V0 可以用 Visibility trace 或 Actor click 作为输入路径。若和 UI 输
 - 记录当前 `ActiveSegment`。
 - 记录 `DistanceAlongSpline`。
 - 处理 W/S 输入推进。
-- 根据鼠标在屏幕内的绝对位置计算 yaw / pitch 目标值，并插值平滑到目标。
+- 通过 `UWacomCursorLookDriverComponent` 根据鼠标在屏幕内的绝对位置计算 yaw / pitch offset。
 - 每帧把 Pawn / Camera 对齐到 Spline transform。
 - 处理 branch target 切换。
 
@@ -146,10 +146,6 @@ V0 可以用 Visibility trace 或 Actor click 作为输入路径。若和 UI 输
 ActiveSegment
 DistanceAlongSpline
 MoveSpeed
-LookYawOffset
-LookPitchOffset
-TargetLookYawOffset
-TargetLookPitchOffset
 YawClamp
 PitchClamp
 bRunTunnelActive
@@ -292,6 +288,7 @@ Segment_Start
 ### 当前实现备注
 
 - `AWacomPlayerCharacter` 默认带 `UWacomRunTunnelMovementComponent`，但组件默认 inactive，等待起始 Segment 或后续正式 Run flow 激活。
+- `AWacomPlayerCharacter` 同时带 `UWacomCursorLookDriverComponent`；Run Tunnel 和 Battle camera look 共享它的 cursor offset 状态，但只有当前激活的相机模式负责写 `ControlRotation`。
 - Tunnel active 时，Character 的普通自由移动不执行；`A/D` 输入被忽略。
 - 鼠标 look 不再使用隐藏鼠标的增量输入。屏幕中心表示正前方；鼠标移到左 / 右边缘时，对应 `YawClampDegrees` 的负 / 正极值；鼠标移到上 / 下边缘时，对应抬头 / 低头极值。
 - `LookInterpSpeed` 控制镜头向鼠标目标角度的插值速度；设为 0 时立即贴合鼠标位置。
