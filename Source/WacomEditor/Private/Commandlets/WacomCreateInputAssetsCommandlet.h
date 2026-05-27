@@ -8,8 +8,8 @@
 
 /**
  * 生成 Enhanced Input 资产：
- *   - 战斗：11 个 Bool IA + IMC_Battle（1..7 / W / E / R / P）
- *   - 探索：IA_Move / IA_Look（Axis2D）+ IMC_Exploration（WASD + Mouse）
+ *   - 战斗：IA_PlayCard1~7 / IA_Wait / IA_EndTurn / IA_OpenMenu + IMC_Battle
+ *   - 探索：IA_Move / IA_Look / IA_Interact / IA_OpenBackpack / IA_OpenMenu + IMC_Exploration
  *
  * 用法：
  *   "<UE>/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" "<project>/Wacom.uproject" -run=WacomCreateInputAssets -NoSplash -Unattended

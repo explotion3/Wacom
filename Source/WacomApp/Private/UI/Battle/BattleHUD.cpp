@@ -249,7 +249,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
 {
-	// All：鼠标可见 + 游戏输入透传。这样 UI 可点击，同时 BattleTestActor 的键盘快捷键仍工作。
+	// All：鼠标可见 + 游戏输入透传。这样 UI 可点击，同时 Controller 战斗快捷键仍工作。
 	return FUIInputConfig(ECommonInputMode::All, EMouseCaptureMode::NoCapture);
 }
 

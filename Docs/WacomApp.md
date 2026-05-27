@@ -46,7 +46,6 @@ tags:
 |---|---|---|
 | `L_MainMenu` | `AWacomMenuGameMode` | 主菜单，不 Spawn 探索 Pawn，提供 New Game / Continue / Quit 入口 |
 | `L_Exploration` | `AWacomGameMode` | 探索主流程，持有 GameFlowState，进入/退出战斗，初始化探索 HUD |
-| `L_TestBattle` | 测试入口 | 纯战斗验证，不走完整 Run / 存档 / 探索流程 |
 
 当前 GameFlowState：
 
@@ -61,8 +60,6 @@ enum class EGameFlowState : uint8
 探索状态允许移动、世界交互、打开菜单/背包/商店/事件界面。战斗状态禁用探索移动，切换到战斗输入，并 Push `UBattleHUD` 到 Game 层。
 
 当前 `AWacomGameMode::bSaveSystemEnabled == false`，自动存档路径会静默 no-op。SaveGame 当前边界见 `WacomRun.md`。
-
-`L_TestBattle` 是开发验证路径，允许由 `ABattleTestActor` 手动创建测试用 UI 根和战斗会话；它不代表正式 App / UI 生命周期。正式流程以 `AWacomGameMode + UWacomGameUIManagerSubsystem` 为准。
 
 ---
 
@@ -222,8 +219,6 @@ BattleHUD、3D 手牌和场景目标点击需要的 `bEnableClickEvents / bEnabl
 | `IA_PlayCard1~7` | 战斗手牌快捷键 |
 | `IA_Wait` | 战斗等待 |
 | `IA_EndTurn` | 战斗结束回合 |
-| `IA_Restart` | 测试用重启战斗 |
-| `IA_RefreshHUD` | 测试用刷新战斗 HUD |
 
 切关卡时 PlayerController 的 InputComponent 会被重建。GameMode 在 BeginPlay 后根据当前 GameFlowState 让 Coordinator 重新应用对应 profile。
 
@@ -290,16 +285,15 @@ GameMode 退出战斗时：
 - `UWacomConfirmDialog`：推入 Modal 层，用于删除卡牌、退出确认等。
 - 菜单按钮不直接 OpenLevel；切关卡委托给 GameMode 或 PlayerController。
 
-测试入口：
+验证入口：
 
 | 场景 | 用途 |
 |---|---|
-| `L_TestBattle` | 纯战斗测试，不走完整探索与存档流程；开发路径，不代表正式 UIManager 生命周期 |
-| `L_Exploration` | 完整探索 -> 世界交互 -> 战斗 / 商店 / 事件流程 |
+| `L_Exploration` | 完整探索 -> 世界交互 -> 战斗 / 商店 / 事件流程；PIE 战斗验证走正式 `AWacomGameMode` 生命周期 |
 | `L_MainMenu` | 主菜单与启动流程 |
 
 ESC 当前语义：
 
 - 探索时 ESC 打开暂停菜单。
 - 菜单中 ESC 关闭当前菜单。
-- 战斗时 ESC 当前不响应；战斗暂停是后续项。
+- 战斗时 ESC 使用同一 `IA_OpenMenu` 入口打开或关闭暂停菜单。

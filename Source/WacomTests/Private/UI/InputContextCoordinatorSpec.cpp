@@ -5,6 +5,10 @@
 #include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/LocalPlayer.h"
+#include "EnhancedActionKeyMapping.h"
+#include "InputAction.h"
+#include "InputCoreTypes.h"
+#include "InputMappingContext.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 
 namespace WacomInputContextSpec
@@ -23,6 +27,24 @@ namespace WacomInputContextSpec
 			Coordinator->InitializeForPlayerController(PC.Get());
 		}
 	};
+
+	bool HasMapping(const UInputMappingContext* MappingContext, const TCHAR* ActionName, const FKey& Key)
+	{
+		if (!MappingContext)
+		{
+			return false;
+		}
+
+		for (const FEnhancedActionKeyMapping& Mapping : MappingContext->GetMappings())
+		{
+			const UInputAction* Action = Mapping.Action.Get();
+			if (Action && Action->GetName() == ActionName && Mapping.Key == Key)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -116,5 +138,30 @@ bool FWacomInputContextInteractionEventLeaseTest::RunTest(const FString& Paramet
 
 	Harness.PC->bEnableClickEvents = bOriginalClickEvents;
 	Harness.PC->bEnableMouseOverEvents = bOriginalMouseOverEvents;
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomExplorationInputMappingAssetContractTest,
+	"Wacom.UI.InputContext.ExplorationMappingAssetContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomExplorationInputMappingAssetContractTest::RunTest(const FString& Parameters)
+{
+	const UInputMappingContext* ExplorationIMC = LoadObject<UInputMappingContext>(
+		nullptr,
+		TEXT("/Game/Wacom/Input/IMC_Exploration.IMC_Exploration"));
+	if (!TestNotNull(TEXT("IMC_Exploration asset"), ExplorationIMC))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("E maps to IA_Interact"),
+		WacomInputContextSpec::HasMapping(ExplorationIMC, TEXT("IA_Interact"), EKeys::E));
+	TestTrue(TEXT("B maps to IA_OpenBackpack"),
+		WacomInputContextSpec::HasMapping(ExplorationIMC, TEXT("IA_OpenBackpack"), EKeys::B));
+	TestTrue(TEXT("Escape maps to IA_OpenMenu"),
+		WacomInputContextSpec::HasMapping(ExplorationIMC, TEXT("IA_OpenMenu"), EKeys::Escape));
+
 	return true;
 }

@@ -24,7 +24,7 @@ struct FHitResult;
  * 职责：
  *   - 持有 URunSession
  *   - 管理 Enhanced Input 的 MappingContext 切换（IMC_Exploration <-> IMC_Battle）
- *   - 绑定战斗相关 IA（1..7 / W / E / R / P）到内部回调，转发到当前 BattleHUD
+ *   - 绑定战斗相关 IA（1..7 / W / E / ESC）到内部回调，转发到当前 BattleHUD
  *   - 把世界交互对象的请求转发给对应系统（战斗 / 商店等）
  *   - 把战斗 UI 的"退出战斗请求"转发给 GameMode
  *
@@ -77,10 +77,6 @@ public:
 	TObjectPtr<UInputAction> IA_Wait;
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_EndTurn;
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
-	TObjectPtr<UInputAction> IA_Restart;
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
-	TObjectPtr<UInputAction> IA_RefreshHUD;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_OpenMenu;
@@ -167,8 +163,6 @@ protected:
 	void OnPlayCard7();
 	void OnWaitPressed();
 	void OnEndTurnPressed();
-	void OnRestartPressed();
-	void OnRefreshHUDPressed();
 	void OnOpenMenuPressed();
 	void OnOpenBackpackPressed();
 	void OnInteractPressed();

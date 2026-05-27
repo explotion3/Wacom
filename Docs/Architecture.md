@@ -240,10 +240,6 @@ Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / 
 
 当前实现的世界交互对象包括 BattleTrigger、ShopTrigger 和 RunEventTrigger。
 
-### 开发测试入口
-
-`BattleTestActor` 保留为开发验证入口，只负责启动和结束测试战斗，不负责战斗规则。
-
 ## 11. 当前已落地骨架
 
 已经落地的骨架包括：

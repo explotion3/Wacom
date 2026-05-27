@@ -207,8 +207,6 @@ void AWacomPlayerController::SetupInputComponent()
 	LazyLoadIA(IA_PlayCard7,  TEXT("/Game/Wacom/Input/IA_PlayCard7.IA_PlayCard7"));
 	LazyLoadIA(IA_Wait,       TEXT("/Game/Wacom/Input/IA_Wait.IA_Wait"));
 	LazyLoadIA(IA_EndTurn,    TEXT("/Game/Wacom/Input/IA_EndTurn.IA_EndTurn"));
-	LazyLoadIA(IA_Restart,    TEXT("/Game/Wacom/Input/IA_Restart.IA_Restart"));
-	LazyLoadIA(IA_RefreshHUD, TEXT("/Game/Wacom/Input/IA_RefreshHUD.IA_RefreshHUD"));
 	LazyLoadIA(IA_OpenMenu,   TEXT("/Game/Wacom/Input/IA_OpenMenu.IA_OpenMenu"));
 	LazyLoadIA(IA_OpenBackpack, TEXT("/Game/Wacom/Input/IA_OpenBackpack.IA_OpenBackpack"));
 	LazyLoadIA(IA_Interact,     TEXT("/Game/Wacom/Input/IA_Interact.IA_Interact"));
@@ -223,8 +221,6 @@ void AWacomPlayerController::SetupInputComponent()
 
 	if (IA_Wait)       { EIC->BindAction(IA_Wait,       ETriggerEvent::Started, this, &AWacomPlayerController::OnWaitPressed); }
 	if (IA_EndTurn)    { EIC->BindAction(IA_EndTurn,    ETriggerEvent::Started, this, &AWacomPlayerController::OnEndTurnPressed); }
-	if (IA_Restart)    { EIC->BindAction(IA_Restart,    ETriggerEvent::Started, this, &AWacomPlayerController::OnRestartPressed); }
-	if (IA_RefreshHUD) { EIC->BindAction(IA_RefreshHUD, ETriggerEvent::Started, this, &AWacomPlayerController::OnRefreshHUDPressed); }
 	if (IA_OpenMenu)   { EIC->BindAction(IA_OpenMenu,   ETriggerEvent::Started, this, &AWacomPlayerController::OnOpenMenuPressed); }
 	if (IA_OpenBackpack) { EIC->BindAction(IA_OpenBackpack, ETriggerEvent::Started, this, &AWacomPlayerController::OnOpenBackpackPressed); }
 	if (IA_Interact)     { EIC->BindAction(IA_Interact,     ETriggerEvent::Started, this, &AWacomPlayerController::OnInteractPressed); }
@@ -473,23 +469,6 @@ void AWacomPlayerController::OnWaitPressed()
 void AWacomPlayerController::OnEndTurnPressed()
 {
 	if (UBattleHUD* HUD = GetActiveBattleHUD()) { HUD->OnEndTurnRequested(); }
-}
-
-void AWacomPlayerController::OnRestartPressed()
-{
-	// 当前不做任何事，保留按键绑定避免 IMC 里的 R 映射空触发警告。
-	UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] Restart 按键暂不支持"));
-}
-
-void AWacomPlayerController::OnRefreshHUDPressed()
-{
-	if (UBattleHUD* HUD = GetActiveBattleHUD())
-	{
-		if (UBattleSession* S = HUD->GetSession())
-		{
-			HUD->RefreshFromSnapshot(S->BuildSnapshot());
-		}
-	}
 }
 
 void AWacomPlayerController::OnOpenMenuPressed()

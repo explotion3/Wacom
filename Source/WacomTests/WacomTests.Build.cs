@@ -23,6 +23,7 @@ public class WacomTests : ModuleRules
 			"WacomEditor",
 			"UMG",
 			"CommonUI",
+			"EnhancedInput",
 			"ModelViewViewModel",
 			"FieldNotification"
 		});

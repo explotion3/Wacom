@@ -93,8 +93,6 @@ int32 UWacomCreateInputAssetsCommandlet::Main(const FString& /*Params*/)
 		{ TEXT("IA_PlayCard7"),  EKeys::Seven },
 		{ TEXT("IA_Wait"),       EKeys::W     },
 		{ TEXT("IA_EndTurn"),    EKeys::E     },
-		{ TEXT("IA_Restart"),    EKeys::R     },
-		{ TEXT("IA_RefreshHUD"), EKeys::P     },
 	};
 
 	TArray<TPair<UInputAction*, FKey>> BattleActions;
@@ -189,7 +187,7 @@ int32 UWacomCreateInputAssetsCommandlet::Main(const FString& /*Params*/)
 		Look_Map.Modifiers.Add(MakeNegate(IMC_Exploration, /*X*/false, /*Y*/true, /*Z*/false));
 	}
 
-	// ---- IA_OpenMenu: ESC -> Bool ----
+	// ---- Exploration commands ----
 	UInputAction* IA_OpenMenu = CreateBoolIA(BasePath, TEXT("IA_OpenMenu"));
 	if (!IA_OpenMenu)
 	{
@@ -198,8 +196,25 @@ int32 UWacomCreateInputAssetsCommandlet::Main(const FString& /*Params*/)
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IA_OpenMenu"));
 
-	// 加到 IMC_Exploration
+	UInputAction* IA_Interact = CreateBoolIA(BasePath, TEXT("IA_Interact"));
+	if (!IA_Interact)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IA_Interact"));
+		return 8;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IA_Interact"));
+
+	UInputAction* IA_OpenBackpack = CreateBoolIA(BasePath, TEXT("IA_OpenBackpack"));
+	if (!IA_OpenBackpack)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IA_OpenBackpack"));
+		return 9;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IA_OpenBackpack"));
+
 	IMC_Exploration->MapKey(IA_OpenMenu, EKeys::Escape);
+	IMC_Exploration->MapKey(IA_Interact, EKeys::E);
+	IMC_Exploration->MapKey(IA_OpenBackpack, EKeys::B);
 
 	// 也加到 IMC_Battle（战斗中也能 ESC 暂停）
 	IMC_Battle->MapKey(IA_OpenMenu, EKeys::Escape);
