@@ -11,7 +11,7 @@
 #include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Components/WacomBattlePresentationTargetComponent.h"
-#include "Components/WacomRunTunnelPrototypeComponent.h"
+#include "Components/WacomRunTunnelMovementComponent.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerCharacter.h"
@@ -133,8 +133,7 @@ void AWacomPlayerController::BeginPlay()
 			TEXT("/Game/Wacom/Input/IMC_Battle.IMC_Battle"));
 	}
 
-	// 探索 GameMode（AWacomGameMode）才走：锁鼠标 + Push IMC_Exploration + 建 RunSession
-	// 菜单 GameMode（AWacomMenuGameMode）由它自己的 BeginPlay 管鼠标 / 输入模式
+	// 探索 GameMode（AWacomGameMode）才走：应用 Exploration 输入上下文 + 建 RunSession。
 	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
 	if (GM)
 	{
@@ -151,7 +150,6 @@ void AWacomPlayerController::BeginPlay()
 				InputCoordinator->InitializeForPlayerController(this);
 				InputCoordinator->SetMappingContexts(ExplorationMappingContext, BattleMappingContext);
 				InputCoordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
-				InputCoordinator->SetExplorationProfile(EWacomExplorationInputProfile::FreeLook);
 			}
 		}
 
@@ -415,11 +413,11 @@ bool AWacomPlayerController::BuildBattleSceneClickHitResult(FHitResult& OutHitRe
 bool AWacomPlayerController::TryRouteRunTunnelBranchClick()
 {
 	AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
-	UWacomRunTunnelPrototypeComponent* TunnelComponent =
-		WacomCharacter ? WacomCharacter->GetRunTunnelPrototypeComponent() : nullptr;
+	UWacomRunTunnelMovementComponent* TunnelComponent =
+		WacomCharacter ? WacomCharacter->GetRunTunnelMovementComponent() : nullptr;
 	if (!TunnelComponent
-		|| !TunnelComponent->IsTunnelPrototypeActive()
-		|| TunnelComponent->IsTunnelPrototypeSuspended())
+		|| !TunnelComponent->IsRunTunnelActive()
+		|| TunnelComponent->IsRunTunnelSuspended())
 	{
 		return false;
 	}

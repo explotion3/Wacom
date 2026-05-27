@@ -8,7 +8,7 @@
 
 class UCameraComponent;
 class UInputAction;
-class UWacomRunTunnelPrototypeComponent;
+class UWacomRunTunnelMovementComponent;
 struct FInputActionValue;
 
 /**
@@ -16,7 +16,7 @@ struct FInputActionValue;
  *
  * 职责：
  *   - 第一人称摄像机（跟随 Controller 旋转）
- *   - WASD 移动 / 鼠标视角（通过 IA_Move / IA_Look）
+ *   - Run Tunnel 探索移动输入（通过 IA_Move / IA_Look）
  *   - 战斗时保留 Possess 状态，只禁用移动输入
  *
  * 输入资产默认通过 ConstructorHelpers 挂载，Blueprint 可重写。
@@ -33,8 +33,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Camera")
 	UCameraComponent* GetFirstPersonCamera() const { return FirstPersonCamera; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run Tunnel|Prototype")
-	UWacomRunTunnelPrototypeComponent* GetRunTunnelPrototypeComponent() const { return RunTunnelPrototypeComponent; }
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run Tunnel|Movement")
+	UWacomRunTunnelMovementComponent* GetRunTunnelMovementComponent() const { return RunTunnelMovementComponent; }
 
 	/**
 	 * 禁用 / 启用探索期的移动 + 视角输入。
@@ -56,10 +56,10 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
-	/** IA_Move 回调：WASD 产生 Vector2D，转成前向 / 右向移动。 */
+	/** IA_Move 回调：WASD 产生 Vector2D，交给 Run Tunnel movement。 */
 	void HandleMoveInput(const FInputActionValue& Value);
 
-	/** IA_Look 回调：鼠标产生 Vector2D，转成 Yaw / Pitch。 */
+	/** IA_Look 回调：鼠标产生 Vector2D，交给 Run Tunnel movement。 */
 	void HandleLookInput(const FInputActionValue& Value);
 
 private:
@@ -67,10 +67,12 @@ private:
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCameraComponent> FirstPersonCamera = nullptr;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run Tunnel|Prototype",
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run Tunnel|Movement",
 		meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWacomRunTunnelPrototypeComponent> RunTunnelPrototypeComponent = nullptr;
+	TObjectPtr<UWacomRunTunnelMovementComponent> RunTunnelMovementComponent = nullptr;
 
 	/** 当前是否接受探索输入。战斗期间置 false。 */
 	bool bExplorationInputEnabled = true;
+	bool bLoggedMissingRunTunnelMovementForMove = false;
+	bool bLoggedMissingRunTunnelMovementForLook = false;
 };

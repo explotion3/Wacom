@@ -5,12 +5,13 @@
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Actors/WacomRunTunnelSegmentActor.h"
 #include "Components/SplineComponent.h"
-#include "Components/WacomRunTunnelPrototypeComponent.h"
+#include "Components/WacomRunTunnelMovementComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "UI/RunTunnelMovementSpecReceiver.h"
 
-namespace WacomRunTunnelPrototypeSpec
+namespace WacomRunTunnelMovementSpec
 {
 	UWorld* FindAutomationWorld()
 	{
@@ -55,13 +56,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomRunTunnelSegmentDistanceClampTest::RunTest(const FString& Parameters)
 {
-	UWorld* World = WacomRunTunnelPrototypeSpec::FindAutomationWorld();
+	UWorld* World = WacomRunTunnelMovementSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
 	}
 
-	AWacomRunTunnelSegmentActor* Segment = WacomRunTunnelPrototypeSpec::SpawnTestSegment(
+	AWacomRunTunnelSegmentActor* Segment = WacomRunTunnelMovementSpec::SpawnTestSegment(
 		*World,
 		FVector::ZeroVector,
 		FVector(1000.0f, 0.0f, 0.0f));
@@ -85,20 +86,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomRunTunnelBranchTargetSwitchTest::RunTest(const FString& Parameters)
 {
-	UWorld* World = WacomRunTunnelPrototypeSpec::FindAutomationWorld();
+	UWorld* World = WacomRunTunnelMovementSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
 	}
 
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
-		AWacomPlayerCharacter::StaticClass(),
+	AWacomRunTunnelMovementCharacterProbe* Character = World->SpawnActor<AWacomRunTunnelMovementCharacterProbe>(
+		AWacomRunTunnelMovementCharacterProbe::StaticClass(),
 		FTransform::Identity);
-	AWacomRunTunnelSegmentActor* StartSegment = WacomRunTunnelPrototypeSpec::SpawnTestSegment(
+	AWacomRunTunnelSegmentActor* StartSegment = WacomRunTunnelMovementSpec::SpawnTestSegment(
 		*World,
 		FVector::ZeroVector,
 		FVector(1000.0f, 0.0f, 0.0f));
-	AWacomRunTunnelSegmentActor* TargetSegment = WacomRunTunnelPrototypeSpec::SpawnTestSegment(
+	AWacomRunTunnelSegmentActor* TargetSegment = WacomRunTunnelMovementSpec::SpawnTestSegment(
 		*World,
 		FVector(0.0f, 300.0f, 0.0f),
 		FVector(1000.0f, 300.0f, 0.0f));
@@ -114,13 +115,13 @@ bool FWacomRunTunnelBranchTargetSwitchTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	UWacomRunTunnelPrototypeComponent* TunnelComponent = Character->GetRunTunnelPrototypeComponent();
+	UWacomRunTunnelMovementComponent* TunnelComponent = Character->GetRunTunnelMovementComponent();
 	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent))
 	{
 		return false;
 	}
 
-	TestTrue(TEXT("Start segment activates"), TunnelComponent->ActivateTunnelPrototype(StartSegment, 0.0f));
+	TestTrue(TEXT("Start segment activates"), TunnelComponent->ActivateRunTunnel(StartSegment, 0.0f));
 	BranchTarget->TargetSegment = nullptr;
 	TestFalse(TEXT("Null branch target refuses switch"), BranchTarget->RequestBranch(TunnelComponent));
 
@@ -138,47 +139,54 @@ bool FWacomRunTunnelBranchTargetSwitchTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunTunnelPrototypeInactiveInputTest,
-	"Wacom.UI.RunTunnel.PrototypeInactiveIgnoresInput",
+	FWacomRunTunnelMovementInactiveInputTest,
+	"Wacom.UI.RunTunnel.InactiveMovementNoops",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunTunnelPrototypeInactiveInputTest::RunTest(const FString& Parameters)
+bool FWacomRunTunnelMovementInactiveInputTest::RunTest(const FString& Parameters)
 {
-	UWorld* World = WacomRunTunnelPrototypeSpec::FindAutomationWorld();
+	UWorld* World = WacomRunTunnelMovementSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
 	}
 
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
-		AWacomPlayerCharacter::StaticClass(),
+	AWacomRunTunnelMovementCharacterProbe* Character = World->SpawnActor<AWacomRunTunnelMovementCharacterProbe>(
+		AWacomRunTunnelMovementCharacterProbe::StaticClass(),
 		FTransform::Identity);
 	if (!TestNotNull(TEXT("Character"), Character))
 	{
 		return false;
 	}
 
-	UWacomRunTunnelPrototypeComponent* TunnelComponent = Character->GetRunTunnelPrototypeComponent();
+	UWacomRunTunnelMovementComponent* TunnelComponent = Character->GetRunTunnelMovementComponent();
 	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent))
 	{
 		return false;
 	}
 
-	TestFalse(TEXT("Inactive move input is not consumed"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
-	TestFalse(TEXT("Inactive look input is not consumed"), TunnelComponent->HandleLookInput(FVector2D(4.0f, 2.0f)));
+	TestFalse(TEXT("Inactive movement component does not consume move input"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
+	TestFalse(TEXT("Inactive movement component does not consume look input"), TunnelComponent->HandleLookInput(FVector2D(4.0f, 2.0f)));
+	const FVector LocationBeforeInput = Character->GetActorLocation();
+	const FRotator RotationBeforeInput = Character->GetActorRotation();
+	Character->SetExplorationInputEnabled(true);
+	Character->HandleMoveInputForTest(FVector2D(0.0f, 1.0f));
+	Character->HandleLookInputForTest(FVector2D(5.0f, 3.0f));
+	TestEqual(TEXT("Character does not fall back to FPS movement without active tunnel"), Character->GetActorLocation(), LocationBeforeInput);
+	TestEqual(TEXT("Character does not fall back to FPS look without active tunnel"), Character->GetActorRotation(), RotationBeforeInput);
 
 	Character->Destroy();
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunTunnelPrototypeSuspendResumeTest,
-	"Wacom.UI.RunTunnel.PrototypeSuspendResumePreservesSegment",
+	FWacomRunTunnelMovementSuspendResumeTest,
+	"Wacom.UI.RunTunnel.SuspendResumePreservesSegment",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunTunnelPrototypeSuspendResumeTest::RunTest(const FString& Parameters)
+bool FWacomRunTunnelMovementSuspendResumeTest::RunTest(const FString& Parameters)
 {
-	UWorld* World = WacomRunTunnelPrototypeSpec::FindAutomationWorld();
+	UWorld* World = WacomRunTunnelMovementSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -187,7 +195,7 @@ bool FWacomRunTunnelPrototypeSuspendResumeTest::RunTest(const FString& Parameter
 	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
 		AWacomPlayerCharacter::StaticClass(),
 		FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment = WacomRunTunnelPrototypeSpec::SpawnTestSegment(
+	AWacomRunTunnelSegmentActor* Segment = WacomRunTunnelMovementSpec::SpawnTestSegment(
 		*World,
 		FVector::ZeroVector,
 		FVector(1000.0f, 0.0f, 0.0f));
@@ -196,23 +204,23 @@ bool FWacomRunTunnelPrototypeSuspendResumeTest::RunTest(const FString& Parameter
 		return false;
 	}
 
-	UWacomRunTunnelPrototypeComponent* TunnelComponent = Character->GetRunTunnelPrototypeComponent();
+	UWacomRunTunnelMovementComponent* TunnelComponent = Character->GetRunTunnelMovementComponent();
 	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent))
 	{
 		return false;
 	}
 
-	TestTrue(TEXT("Tunnel activates"), TunnelComponent->ActivateTunnelPrototype(Segment, 300.0f));
+	TestTrue(TEXT("Tunnel activates"), TunnelComponent->ActivateRunTunnel(Segment, 300.0f));
 	Character->SetExplorationInputEnabled(false);
-	TestTrue(TEXT("Tunnel remains active while exploration input is disabled"), TunnelComponent->IsTunnelPrototypeActive());
-	TestTrue(TEXT("Tunnel is suspended while exploration input is disabled"), TunnelComponent->IsTunnelPrototypeSuspended());
+	TestTrue(TEXT("Tunnel remains active while exploration input is disabled"), TunnelComponent->IsRunTunnelActive());
+	TestTrue(TEXT("Tunnel is suspended while exploration input is disabled"), TunnelComponent->IsRunTunnelSuspended());
 	TestEqual(TEXT("Segment is preserved while suspended"), TunnelComponent->GetActiveSegment(), Segment);
 	TestEqual(TEXT("Distance is preserved while suspended"), TunnelComponent->GetDistanceAlongSpline(), 300.0f);
 	TestFalse(TEXT("Suspended tunnel does not consume move input"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
 
 	Character->SetExplorationInputEnabled(true);
-	TestTrue(TEXT("Tunnel remains active after exploration input resumes"), TunnelComponent->IsTunnelPrototypeActive());
-	TestFalse(TEXT("Tunnel is no longer suspended after exploration input resumes"), TunnelComponent->IsTunnelPrototypeSuspended());
+	TestTrue(TEXT("Tunnel remains active after exploration input resumes"), TunnelComponent->IsRunTunnelActive());
+	TestFalse(TEXT("Tunnel is no longer suspended after exploration input resumes"), TunnelComponent->IsRunTunnelSuspended());
 	TestEqual(TEXT("Segment is still preserved after resume"), TunnelComponent->GetActiveSegment(), Segment);
 	TestTrue(TEXT("Resumed tunnel consumes move input"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
 

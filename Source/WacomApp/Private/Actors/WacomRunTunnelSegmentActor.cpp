@@ -3,7 +3,7 @@
 #include "Actors/WacomRunTunnelSegmentActor.h"
 
 #include "Components/SplineComponent.h"
-#include "Components/WacomRunTunnelPrototypeComponent.h"
+#include "Components/WacomRunTunnelMovementComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
@@ -66,8 +66,8 @@ void AWacomRunTunnelSegmentActor::TryAutoActivateLocalPlayer()
 
 	APlayerController* PC = World->GetFirstPlayerController();
 	AWacomPlayerCharacter* Character = PC ? Cast<AWacomPlayerCharacter>(PC->GetPawn()) : nullptr;
-	UWacomRunTunnelPrototypeComponent* TunnelComponent =
-		Character ? Character->FindComponentByClass<UWacomRunTunnelPrototypeComponent>() : nullptr;
+	UWacomRunTunnelMovementComponent* TunnelComponent =
+		Character ? Character->FindComponentByClass<UWacomRunTunnelMovementComponent>() : nullptr;
 	if (!TunnelComponent)
 	{
 		UE_LOG(LogTemp, Warning,
@@ -76,6 +76,5 @@ void AWacomRunTunnelSegmentActor::TryAutoActivateLocalPlayer()
 		return;
 	}
 
-	TunnelComponent->ActivateTunnelPrototype(this, AutoActivateStartDistance);
+	TunnelComponent->ActivateRunTunnel(this, AutoActivateStartDistance);
 }
-

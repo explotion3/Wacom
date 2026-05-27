@@ -17,13 +17,6 @@ enum class EWacomInputFlowContext : uint8
 	Battle,
 };
 
-UENUM(BlueprintType)
-enum class EWacomExplorationInputProfile : uint8
-{
-	FreeLook,
-	RunTunnel,
-};
-
 /**
  * Local-player owner for Wacom gameplay input context.
  *
@@ -41,9 +34,6 @@ public:
 
 	void SetFlowContext(EWacomInputFlowContext NewContext);
 	EWacomInputFlowContext GetFlowContext() const { return FlowContext; }
-
-	void SetExplorationProfile(EWacomExplorationInputProfile NewProfile);
-	EWacomExplorationInputProfile GetExplorationProfile() const { return ExplorationProfile; }
 
 	void SetMappingContexts(UInputMappingContext* InExplorationMappingContext, UInputMappingContext* InBattleMappingContext);
 	void ApplyCurrentInputContext();
@@ -75,7 +65,6 @@ private:
 	TObjectPtr<UInputMappingContext> BattleMappingContext = nullptr;
 
 	EWacomInputFlowContext FlowContext = EWacomInputFlowContext::Exploration;
-	EWacomExplorationInputProfile ExplorationProfile = EWacomExplorationInputProfile::FreeLook;
 	bool bApplyingInputContext = false;
 	bool bExplorationMappingActive = false;
 	bool bBattleMappingActive = false;

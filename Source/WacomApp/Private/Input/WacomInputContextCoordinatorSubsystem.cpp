@@ -9,9 +9,7 @@
 
 namespace
 {
-	FUIInputConfig BuildInputConfig(
-		EWacomInputFlowContext FlowContext,
-		EWacomExplorationInputProfile ExplorationProfile)
+	FUIInputConfig BuildInputConfig(EWacomInputFlowContext FlowContext)
 	{
 		switch (FlowContext)
 		{
@@ -21,14 +19,10 @@ namespace
 			return FUIInputConfig(ECommonInputMode::All, EMouseCaptureMode::NoCapture);
 		case EWacomInputFlowContext::Exploration:
 		default:
-			if (ExplorationProfile == EWacomExplorationInputProfile::RunTunnel)
-			{
-				return FUIInputConfig(
-					ECommonInputMode::All,
-					EMouseCaptureMode::NoCapture,
-					/*bInHideCursorDuringViewportCapture*/ false);
-			}
-			return FUIInputConfig(ECommonInputMode::Game, EMouseCaptureMode::CapturePermanently);
+			return FUIInputConfig(
+				ECommonInputMode::All,
+				EMouseCaptureMode::NoCapture,
+				/*bInHideCursorDuringViewportCapture*/ false);
 		}
 	}
 }
@@ -48,17 +42,6 @@ void UWacomInputContextCoordinatorSubsystem::SetFlowContext(EWacomInputFlowConte
 	}
 
 	FlowContext = NewContext;
-	ApplyCurrentInputContext();
-}
-
-void UWacomInputContextCoordinatorSubsystem::SetExplorationProfile(EWacomExplorationInputProfile NewProfile)
-{
-	if (ExplorationProfile == NewProfile)
-	{
-		return;
-	}
-
-	ExplorationProfile = NewProfile;
 	ApplyCurrentInputContext();
 }
 
@@ -180,7 +163,7 @@ void UWacomInputContextCoordinatorSubsystem::ReleaseAllPlayerControllerInteracti
 
 bool UWacomInputContextCoordinatorSubsystem::ShouldShowMouseCursorForCurrentContextForTest() const
 {
-	const FUIInputConfig Config = BuildInputConfig(FlowContext, ExplorationProfile);
+	const FUIInputConfig Config = BuildInputConfig(FlowContext);
 	return Config.GetMouseCaptureMode() == EMouseCaptureMode::NoCapture;
 }
 
@@ -203,7 +186,7 @@ void UWacomInputContextCoordinatorSubsystem::ApplyCommonUIInputConfig()
 		return;
 	}
 
-	const FUIInputConfig Config = BuildInputConfig(FlowContext, ExplorationProfile);
+	const FUIInputConfig Config = BuildInputConfig(FlowContext);
 	if (UCommonUIActionRouterBase* ActionRouter = ULocalPlayer::GetSubsystem<UCommonUIActionRouterBase>(GetLocalPlayer()))
 	{
 		ActionRouter->SetActiveUIInputConfig(Config, this);

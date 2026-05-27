@@ -39,11 +39,7 @@ bool FWacomInputContextProfilesTest::RunTest(const FString& Parameters)
 	}
 
 	Harness.Coordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
-	Harness.Coordinator->SetExplorationProfile(EWacomExplorationInputProfile::FreeLook);
-	TestFalse(TEXT("Exploration free-look hides cursor"), Harness.Coordinator->ShouldShowMouseCursorForCurrentContextForTest());
-
-	Harness.Coordinator->SetExplorationProfile(EWacomExplorationInputProfile::RunTunnel);
-	TestTrue(TEXT("Run tunnel shows cursor"), Harness.Coordinator->ShouldShowMouseCursorForCurrentContextForTest());
+	TestTrue(TEXT("Exploration shows cursor for Run Tunnel movement"), Harness.Coordinator->ShouldShowMouseCursorForCurrentContextForTest());
 
 	Harness.Coordinator->SetFlowContext(EWacomInputFlowContext::Battle);
 	TestTrue(TEXT("Battle shows cursor"), Harness.Coordinator->ShouldShowMouseCursorForCurrentContextForTest());
@@ -55,11 +51,11 @@ bool FWacomInputContextProfilesTest::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomInputContextBattleRestoresRunTunnelProfileTest,
-	"Wacom.UI.InputContext.BattleRestoresRunTunnelProfile",
+	FWacomInputContextBattleRestoresExplorationTest,
+	"Wacom.UI.InputContext.BattleRestoresExploration",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomInputContextBattleRestoresRunTunnelProfileTest::RunTest(const FString& Parameters)
+bool FWacomInputContextBattleRestoresExplorationTest::RunTest(const FString& Parameters)
 {
 	WacomInputContextSpec::FCoordinatorHarness Harness;
 	if (!TestNotNull(TEXT("Input coordinator"), Harness.Coordinator.Get()))
@@ -68,15 +64,12 @@ bool FWacomInputContextBattleRestoresRunTunnelProfileTest::RunTest(const FString
 	}
 
 	Harness.Coordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
-	Harness.Coordinator->SetExplorationProfile(EWacomExplorationInputProfile::RunTunnel);
 	Harness.Coordinator->SetFlowContext(EWacomInputFlowContext::Battle);
-	TestEqual(TEXT("Battle does not erase exploration subprofile"), Harness.Coordinator->GetExplorationProfile(), EWacomExplorationInputProfile::RunTunnel);
+	TestTrue(TEXT("Battle shows cursor"), Harness.Coordinator->ShouldShowMouseCursorForCurrentContextForTest());
 
 	Harness.Coordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
-	TestEqual(TEXT("Exploration returns to run tunnel profile"), Harness.Coordinator->GetExplorationProfile(), EWacomExplorationInputProfile::RunTunnel);
-	TestTrue(TEXT("Restored run tunnel profile shows cursor"), Harness.Coordinator->ShouldShowMouseCursorForCurrentContextForTest());
+	TestTrue(TEXT("Exploration returns to visible cursor profile"), Harness.Coordinator->ShouldShowMouseCursorForCurrentContextForTest());
 
-	Harness.Coordinator->SetExplorationProfile(EWacomExplorationInputProfile::FreeLook);
 	return true;
 }
 

@@ -187,20 +187,19 @@ WBP 制作合约见：
 
 ## §6 输入协调
 
-`UWacomInputContextCoordinatorSubsystem` 是本地玩家输入上下文的唯一协调者。GameMode、PlayerController 和原型组件只声明当前意图，Subsystem 统一应用 CommonUI input config、鼠标显隐 / capture、Enhanced Input MappingContext，以及 PlayerController click / mouse-over event lease。
+`UWacomInputContextCoordinatorSubsystem` 是本地玩家输入上下文的唯一协调者。GameMode、PlayerController 和运行时组件只声明当前意图，Subsystem 统一应用 CommonUI input config、鼠标显隐 / capture、Enhanced Input MappingContext，以及 PlayerController click / mouse-over event lease。
 
 当前上下文：
 
 | Context | CommonUI input config | IMC |
 |---|---|---|
 | `MainMenu` | `Menu + NoCapture`，鼠标可见 | 不启用探索 / 战斗 IMC |
-| `Exploration + FreeLook` | `Game + CapturePermanently`，鼠标隐藏 | `IMC_Exploration` |
-| `Exploration + RunTunnel` | `All + NoCapture`，鼠标可见 | `IMC_Exploration` |
+| `Exploration` | `All + NoCapture`，鼠标可见 | `IMC_Exploration` |
 | `Battle` | `All + NoCapture`，鼠标可见 | `IMC_Battle` |
 
 PlayerController 上的 `PushMappingContext / PopMappingContext` helper 仍保留为兼容 / 调试入口；正式流程由 Coordinator 管理。PlayerController BeginPlay 和 GameMode BeginPlay 会初始化 Coordinator，防止 PIE 复用 Controller 时输入状态停留在上一关。
 
-Run Tunnel 原型通过 Coordinator 切换探索子模式。进入战斗时 Tunnel 只 `Suspend`，不会清掉 `RunTunnel` 子模式；战斗结束后 Coordinator 回到 `Exploration` 时会恢复 tunnel 输入 profile，而不是退回普通 FPS 输入。
+Run Tunnel 是探索期默认移动模型，不再有正式的普通 FPS FreeLook 探索 profile。进入战斗时 `UWacomRunTunnelMovementComponent` 只 `Suspend`，保留当前 Segment / Distance；战斗结束后 Coordinator 回到 `Exploration`，组件 `Resume` 后继续沿原 tunnel path 移动。
 
 BattleHUD、3D 手牌和场景目标点击需要的 `bEnableClickEvents / bEnableMouseOverEvents` 也通过 Coordinator 的 owner lease 管理。多个系统同时申请时不会互相提前恢复；最后一个 owner 释放后恢复 PlayerController 原始状态。
 

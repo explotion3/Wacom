@@ -4,9 +4,8 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "Components/WacomRunTunnelPrototypeComponent.h"
+#include "Components/WacomRunTunnelMovementComponent.h"
 #include "EnhancedInputComponent.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
 
@@ -19,23 +18,13 @@ AWacomPlayerCharacter::AWacomPlayerCharacter()
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationRoll  = false;
 
-	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
-	{
-		Movement->bOrientRotationToMovement = false;
-		Movement->MaxWalkSpeed              = 500.f;
-		Movement->AirControl                = 0.35f;
-		Movement->JumpZVelocity             = 450.f;
-		Movement->GravityScale              = 1.f;
-		Movement->BrakingDecelerationWalking = 2000.f;
-	}
-
 	// 第一人称摄像机：挂在 Capsule 顶部，跟随 Pawn 旋转。
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
 	FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
 	FirstPersonCamera->SetRelativeLocation(FVector(0.f, 0.f, 60.f)); // 约眼睛高度
 	FirstPersonCamera->bUsePawnControlRotation = true;
 
-	RunTunnelPrototypeComponent = CreateDefaultSubobject<UWacomRunTunnelPrototypeComponent>(TEXT("RunTunnelPrototypeComponent"));
+	RunTunnelMovementComponent = CreateDefaultSubobject<UWacomRunTunnelMovementComponent>(TEXT("RunTunnelMovementComponent"));
 
 	// IA 资产延迟到 BeginPlay 里 LoadObject 解析，避免 CDO 阶段 FObjectFinder
 	// 在 commandlet 首次运行前 assets 不存在而崩溃。
@@ -107,15 +96,15 @@ void AWacomPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 void AWacomPlayerCharacter::SetExplorationInputEnabled(bool bEnabled)
 {
-	if (RunTunnelPrototypeComponent)
+	if (RunTunnelMovementComponent)
 	{
 		if (bEnabled)
 		{
-			RunTunnelPrototypeComponent->ResumeTunnelPrototype();
+			RunTunnelMovementComponent->ResumeRunTunnel();
 		}
 		else
 		{
-			RunTunnelPrototypeComponent->SuspendTunnelPrototype();
+			RunTunnelMovementComponent->SuspendRunTunnel();
 		}
 	}
 	bExplorationInputEnabled = bEnabled;
@@ -126,18 +115,16 @@ void AWacomPlayerCharacter::HandleMoveInput(const FInputActionValue& Value)
 	if (!bExplorationInputEnabled || !Controller) { return; }
 
 	const FVector2D Input = Value.Get<FVector2D>();
-	if (RunTunnelPrototypeComponent && RunTunnelPrototypeComponent->HandleMoveInput(Input))
+	if (RunTunnelMovementComponent && RunTunnelMovementComponent->HandleMoveInput(Input))
 	{
 		return;
 	}
-
-	// 仅使用 Yaw 分量构造前向 / 右向基：防止低头时移动变慢。
-	const FRotator YawRot(0.f, Controller->GetControlRotation().Yaw, 0.f);
-	const FVector  Forward = FRotationMatrix(YawRot).GetUnitAxis(EAxis::X);
-	const FVector  Right   = FRotationMatrix(YawRot).GetUnitAxis(EAxis::Y);
-
-	AddMovementInput(Forward, Input.Y);
-	AddMovementInput(Right,   Input.X);
+	if (!bLoggedMissingRunTunnelMovementForMove)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerCharacter] Ignored IA_Move because RunTunnelMovement is inactive or missing; normal FPS exploration fallback is disabled."));
+		bLoggedMissingRunTunnelMovementForMove = true;
+	}
 }
 
 void AWacomPlayerCharacter::HandleLookInput(const FInputActionValue& Value)
@@ -145,11 +132,14 @@ void AWacomPlayerCharacter::HandleLookInput(const FInputActionValue& Value)
 	if (!bExplorationInputEnabled) { return; }
 
 	const FVector2D Input = Value.Get<FVector2D>();
-	if (RunTunnelPrototypeComponent && RunTunnelPrototypeComponent->HandleLookInput(Input))
+	if (RunTunnelMovementComponent && RunTunnelMovementComponent->HandleLookInput(Input))
 	{
 		return;
 	}
-
-	AddControllerYawInput(Input.X);
-	AddControllerPitchInput(Input.Y);
+	if (!bLoggedMissingRunTunnelMovementForLook)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerCharacter] Ignored IA_Look because RunTunnelMovement is inactive or missing; normal FPS exploration fallback is disabled."));
+		bLoggedMissingRunTunnelMovementForLook = true;
+	}
 }

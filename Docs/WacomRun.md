@@ -82,6 +82,12 @@ Morning -> Day -> Dusk -> Night -> Sunrise -> Morning(次日)
 
 当前 `RunSession` 已实现时段推进与压力副作用；清晨规划、野炊、露营等时段绑定事件由后续事件调度接入。
 
+### 探索移动模型
+
+Run 探索期的正式玩家移动模型是 Run Tunnel：鼠标可见，`W/S` 沿当前 tunnel segment 的 Spline 前后推进，鼠标位置驱动受限 yaw / pitch 视角，并可点击场景目标。普通隐藏鼠标的 FPS FreeLook 不再是正式玩家路径；如以后需要，只能作为 editor/debug-only 工具单独设计。
+
+`UWacomRunTunnelMovementComponent` 属于 `WacomApp`，负责 Pawn / Camera 对齐、输入消费和场景表现移动，不写入 Run 规则状态。`WacomRun` 仍只维护战外规则真相，例如时段、节点、背包和战斗回传结算。当前关卡中的 `AWacomRunTunnelSegmentActor::bAutoActivateOnBeginPlay` 只是 authoring/bootstrap 入口；正式 Run flow 后续应由探索流程选择起始 Segment。
+
 时段进入副作用：
 
 | 进入时段 | 副作用 |

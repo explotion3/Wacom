@@ -1,6 +1,6 @@
 // Copyright Wacom. All Rights Reserved.
 
-#include "Components/WacomRunTunnelPrototypeComponent.h"
+#include "Components/WacomRunTunnelMovementComponent.h"
 
 #include "Actors/WacomRunTunnelSegmentActor.h"
 #include "Camera/CameraComponent.h"
@@ -11,36 +11,36 @@
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 
-UWacomRunTunnelPrototypeComponent::UWacomRunTunnelPrototypeComponent()
+UWacomRunTunnelMovementComponent::UWacomRunTunnelMovementComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
 }
 
-void UWacomRunTunnelPrototypeComponent::BeginPlay()
+void UWacomRunTunnelMovementComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	SetComponentTickEnabled(false);
 }
 
-void UWacomRunTunnelPrototypeComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+void UWacomRunTunnelMovementComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	DeactivateTunnelPrototype();
+	DeactivateRunTunnel();
 	Super::EndPlay(EndPlayReason);
 }
 
-void UWacomRunTunnelPrototypeComponent::TickComponent(
+void UWacomRunTunnelMovementComponent::TickComponent(
 	float DeltaTime,
 	ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (!bTunnelPrototypeActive)
+	if (!bRunTunnelActive)
 	{
 		return;
 	}
-	if (bTunnelPrototypeSuspended)
+	if (bRunTunnelSuspended)
 	{
 		return;
 	}
@@ -54,11 +54,11 @@ void UWacomRunTunnelPrototypeComponent::TickComponent(
 	}
 	else
 	{
-		DeactivateTunnelPrototype();
+		DeactivateRunTunnel();
 	}
 }
 
-bool UWacomRunTunnelPrototypeComponent::ActivateTunnelPrototype(
+bool UWacomRunTunnelMovementComponent::ActivateRunTunnel(
 	AWacomRunTunnelSegmentActor* InitialSegment,
 	float StartDistance)
 {
@@ -67,8 +67,8 @@ bool UWacomRunTunnelPrototypeComponent::ActivateTunnelPrototype(
 		return false;
 	}
 
-	bTunnelPrototypeActive = true;
-	bTunnelPrototypeSuspended = false;
+	bRunTunnelActive = true;
+	bRunTunnelSuspended = false;
 	SetComponentTickEnabled(true);
 	ApplyInputProfile();
 
@@ -85,15 +85,15 @@ bool UWacomRunTunnelPrototypeComponent::ActivateTunnelPrototype(
 	return true;
 }
 
-void UWacomRunTunnelPrototypeComponent::DeactivateTunnelPrototype()
+void UWacomRunTunnelMovementComponent::DeactivateRunTunnel()
 {
-	if (!bTunnelPrototypeActive && !ActiveSegment.IsValid())
+	if (!bRunTunnelActive && !ActiveSegment.IsValid())
 	{
 		return;
 	}
 
-	bTunnelPrototypeActive = false;
-	bTunnelPrototypeSuspended = false;
+	bRunTunnelActive = false;
+	bRunTunnelSuspended = false;
 	ActiveSegment.Reset();
 	DistanceAlongSpline = 0.0f;
 	MoveAxis = 0.0f;
@@ -103,44 +103,36 @@ void UWacomRunTunnelPrototypeComponent::DeactivateTunnelPrototype()
 	TargetLookPitchOffset = 0.0f;
 	SetComponentTickEnabled(false);
 	ApplyInputProfile();
-
-	if (AWacomPlayerCharacter* Character = GetOwnerCharacter())
-	{
-		if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
-		{
-			Movement->SetMovementMode(MOVE_Walking);
-		}
-	}
 }
 
-bool UWacomRunTunnelPrototypeComponent::SuspendTunnelPrototype()
+bool UWacomRunTunnelMovementComponent::SuspendRunTunnel()
 {
-	if (!bTunnelPrototypeActive || bTunnelPrototypeSuspended)
+	if (!bRunTunnelActive || bRunTunnelSuspended)
 	{
 		return false;
 	}
 
-	bTunnelPrototypeSuspended = true;
+	bRunTunnelSuspended = true;
 	MoveAxis = 0.0f;
 	SetComponentTickEnabled(false);
 	return true;
 }
 
-bool UWacomRunTunnelPrototypeComponent::ResumeTunnelPrototype()
+bool UWacomRunTunnelMovementComponent::ResumeRunTunnel()
 {
-	if (!bTunnelPrototypeActive || !bTunnelPrototypeSuspended || !ActiveSegment.IsValid())
+	if (!bRunTunnelActive || !bRunTunnelSuspended || !ActiveSegment.IsValid())
 	{
 		return false;
 	}
 
-	bTunnelPrototypeSuspended = false;
+	bRunTunnelSuspended = false;
 	SetComponentTickEnabled(true);
 	ApplyInputProfile();
 	ApplyTunnelTransform();
 	return true;
 }
 
-bool UWacomRunTunnelPrototypeComponent::SwitchToSegment(
+bool UWacomRunTunnelMovementComponent::SwitchToSegment(
 	AWacomRunTunnelSegmentActor* TargetSegment,
 	float StartDistance)
 {
@@ -157,7 +149,7 @@ bool UWacomRunTunnelPrototypeComponent::SwitchToSegment(
 	TargetLookYawOffset = 0.0f;
 	TargetLookPitchOffset = 0.0f;
 
-	if (bTunnelPrototypeActive && !bTunnelPrototypeSuspended)
+	if (bRunTunnelActive && !bRunTunnelSuspended)
 	{
 		ApplyTunnelTransform();
 	}
@@ -165,9 +157,9 @@ bool UWacomRunTunnelPrototypeComponent::SwitchToSegment(
 	return true;
 }
 
-bool UWacomRunTunnelPrototypeComponent::HandleMoveInput(const FVector2D& Input)
+bool UWacomRunTunnelMovementComponent::HandleMoveInput(const FVector2D& Input)
 {
-	if (!bTunnelPrototypeActive || bTunnelPrototypeSuspended)
+	if (!bRunTunnelActive || bRunTunnelSuspended)
 	{
 		return false;
 	}
@@ -176,9 +168,9 @@ bool UWacomRunTunnelPrototypeComponent::HandleMoveInput(const FVector2D& Input)
 	return true;
 }
 
-bool UWacomRunTunnelPrototypeComponent::HandleLookInput(const FVector2D& Input)
+bool UWacomRunTunnelMovementComponent::HandleLookInput(const FVector2D& Input)
 {
-	if (!bTunnelPrototypeActive || bTunnelPrototypeSuspended)
+	if (!bRunTunnelActive || bRunTunnelSuspended)
 	{
 		return false;
 	}
@@ -187,18 +179,18 @@ bool UWacomRunTunnelPrototypeComponent::HandleLookInput(const FVector2D& Input)
 	return true;
 }
 
-AWacomPlayerCharacter* UWacomRunTunnelPrototypeComponent::GetOwnerCharacter() const
+AWacomPlayerCharacter* UWacomRunTunnelMovementComponent::GetOwnerCharacter() const
 {
 	return Cast<AWacomPlayerCharacter>(GetOwner());
 }
 
-APlayerController* UWacomRunTunnelPrototypeComponent::GetOwnerPlayerController() const
+APlayerController* UWacomRunTunnelMovementComponent::GetOwnerPlayerController() const
 {
 	const AWacomPlayerCharacter* Character = GetOwnerCharacter();
 	return Character ? Cast<APlayerController>(Character->GetController()) : nullptr;
 }
 
-void UWacomRunTunnelPrototypeComponent::ApplyInputProfile()
+void UWacomRunTunnelMovementComponent::ApplyInputProfile()
 {
 	APlayerController* PC = GetOwnerPlayerController();
 	if (!PC)
@@ -212,15 +204,12 @@ void UWacomRunTunnelPrototypeComponent::ApplyInputProfile()
 			LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>())
 		{
 			InputCoordinator->InitializeForPlayerController(PC);
-			InputCoordinator->SetExplorationProfile(
-				(bTunnelPrototypeActive && !bTunnelPrototypeSuspended)
-					? EWacomExplorationInputProfile::RunTunnel
-					: EWacomExplorationInputProfile::FreeLook);
+			InputCoordinator->ApplyCurrentInputContext();
 		}
 	}
 }
 
-void UWacomRunTunnelPrototypeComponent::UpdateLookTargetFromCursor()
+void UWacomRunTunnelMovementComponent::UpdateLookTargetFromCursor()
 {
 	APlayerController* PC = GetOwnerPlayerController();
 	if (!PC)
@@ -252,7 +241,7 @@ void UWacomRunTunnelPrototypeComponent::UpdateLookTargetFromCursor()
 	TargetLookPitchOffset = FMath::Clamp(TargetLookPitchOffset, -FMath::Abs(PitchClampDegrees), FMath::Abs(PitchClampDegrees));
 }
 
-void UWacomRunTunnelPrototypeComponent::UpdateSmoothedLook(float DeltaTime)
+void UWacomRunTunnelMovementComponent::UpdateSmoothedLook(float DeltaTime)
 {
 	if (LookInterpSpeed <= 0.0f)
 	{
@@ -265,7 +254,7 @@ void UWacomRunTunnelPrototypeComponent::UpdateSmoothedLook(float DeltaTime)
 	LookPitchOffset = FMath::FInterpTo(LookPitchOffset, TargetLookPitchOffset, DeltaTime, LookInterpSpeed);
 }
 
-void UWacomRunTunnelPrototypeComponent::ApplyTunnelTransform()
+void UWacomRunTunnelMovementComponent::ApplyTunnelTransform()
 {
 	AWacomRunTunnelSegmentActor* Segment = ActiveSegment.Get();
 	AWacomPlayerCharacter* Character = GetOwnerCharacter();

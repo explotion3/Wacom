@@ -34,9 +34,7 @@ TOptional<FUIInputConfig> UWacomExplorationHUD::GetDesiredInputConfig() const
 	const ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
 	const UWacomInputContextCoordinatorSubsystem* InputCoordinator =
 		LP ? LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>() : nullptr;
-	if (InputCoordinator
-		&& InputCoordinator->GetFlowContext() == EWacomInputFlowContext::Exploration
-		&& InputCoordinator->GetExplorationProfile() == EWacomExplorationInputProfile::RunTunnel)
+	if (InputCoordinator && InputCoordinator->GetFlowContext() == EWacomInputFlowContext::Exploration)
 	{
 		return FUIInputConfig(
 			ECommonInputMode::All,
@@ -44,8 +42,10 @@ TOptional<FUIInputConfig> UWacomExplorationHUD::GetDesiredInputConfig() const
 			/*bInHideCursorDuringViewportCapture*/ false);
 	}
 
-	// Game 模式 + 锁定鼠标到 Viewport + 隐藏光标：和 PC::SetInputMode(GameOnly) 等效。
-	return FUIInputConfig(ECommonInputMode::Game, EMouseCaptureMode::CapturePermanently);
+	return FUIInputConfig(
+		ECommonInputMode::All,
+		EMouseCaptureMode::NoCapture,
+		/*bInHideCursorDuringViewportCapture*/ false);
 }
 
 namespace

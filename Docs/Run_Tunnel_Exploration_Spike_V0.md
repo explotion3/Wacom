@@ -15,6 +15,9 @@ tags:
 > [!info] 本文职责
 > 本文记录纸片隧道探索 Spike V0 的实施边界。它不是正式 Run 规则文档，也不替代 `WacomRun.md`、`WacomApp.md` 或 `WacomUI.md`。
 
+> [!note] Formalization V1-A
+> 本 Spike 的核心操作模型已被吸收到正式探索路径：`UWacomRunTunnelMovementComponent` 是探索期默认移动组件，普通隐藏鼠标 FPS FreeLook 不再是正式玩家路径。本文保留为历史背景和 PIE authoring 参考。
+
 > [!note] 关联讨论
 > 背景讨论见 `Run_Tunnel_Presentation_Discussion.md`。本 Spike 只验证最小表现和操作手感。
 
@@ -124,9 +127,9 @@ Layer 在 V0 中允许手工摆放。后续若方向成立，再考虑 editor-ti
 
 V0 可以用 Visibility trace 或 Actor click 作为输入路径。若和 UI 输入冲突，优先采用 PlayerController 显式 cursor trace。
 
-### 4.3 `UWacomRunTunnelPrototypeComponent`
+### 4.3 `UWacomRunTunnelMovementComponent`
 
-原型驱动组件，建议挂在 `AWacomPlayerCharacter` 或 `AWacomPlayerController` 可访问对象上。
+正式 Run Tunnel movement 组件，挂在 `AWacomPlayerCharacter` 上。PlayerController 只负责左键 trace 和输入意图路由，不持有 tunnel movement 状态。
 
 职责：
 
@@ -149,7 +152,7 @@ TargetLookYawOffset
 TargetLookPitchOffset
 YawClamp
 PitchClamp
-bTunnelPrototypeEnabled
+bRunTunnelActive
 ```
 
 相机计算：
@@ -190,7 +193,7 @@ V0 输入：
 LeftMouseButton
   -> PlayerController GetHitResultUnderCursor(ECC_Visibility)
     -> 找到 AWacomRunTunnelBranchTargetActor
-      -> PrototypeComponent.SwitchToSegment(TargetSegment, TargetStartDistance)
+      -> MovementComponent.SwitchToSegment(TargetSegment, TargetStartDistance)
 ```
 
 这和此前 Battle scene target click router 的经验一致：显式 cursor trace 比完全依赖 `Primitive.OnClicked` 更容易调试。
@@ -282,19 +285,19 @@ Segment_Start
 4. 在 Segment 蓝图视口或关卡中手摆纸片 Layer；Layer 只负责视觉，建议禁用 Visibility 碰撞。
 5. 为每个岔路出口放置 `AWacomRunTunnelBranchTargetActor` 或蓝图子类。
 6. 在 BranchTarget 上填写 `TargetSegment` 和 `TargetStartDistance`；它自带 `ClickBounds`，默认 QueryOnly 并阻挡 `ECC_Visibility`。
-7. PIE 后，起始 Segment 会在下一帧寻找本地 `AWacomPlayerCharacter`，激活它身上的 `UWacomRunTunnelPrototypeComponent`。
-8. Tunnel 激活后会通过 `UWacomInputContextCoordinatorSubsystem` 切到 `Exploration + RunTunnel`：鼠标可见、CommonUI `All + NoCapture`、探索 IMC 保持启用；左键 Release 仍由 PlayerController 显式 trace 路由。
+7. PIE 后，起始 Segment 会在下一帧寻找本地 `AWacomPlayerCharacter`，激活它身上的 `UWacomRunTunnelMovementComponent`。
+8. Tunnel 激活后会通过 `UWacomInputContextCoordinatorSubsystem` 保持 `Exploration` 输入：鼠标可见、CommonUI `All + NoCapture`、探索 IMC 保持启用；左键 Release 仍由 PlayerController 显式 trace 路由。
 9. `W/S` 沿 active Segment 推进，鼠标位置驱动小范围看向四周；左键 Release 命中 BranchTarget 时直接切到目标 Segment。
 
 ### 当前实现备注
 
-- `AWacomPlayerCharacter` 默认带 `UWacomRunTunnelPrototypeComponent`，但组件默认 inactive。
+- `AWacomPlayerCharacter` 默认带 `UWacomRunTunnelMovementComponent`，但组件默认 inactive，等待起始 Segment 或后续正式 Run flow 激活。
 - Tunnel active 时，Character 的普通自由移动不执行；`A/D` 输入被忽略。
 - 鼠标 look 不再使用隐藏鼠标的增量输入。屏幕中心表示正前方；鼠标移到左 / 右边缘时，对应 `YawClampDegrees` 的负 / 正极值；鼠标移到上 / 下边缘时，对应抬头 / 低头极值。
 - `LookInterpSpeed` 控制镜头向鼠标目标角度的插值速度；设为 0 时立即贴合鼠标位置。
-- Prototype component 会禁用 `CharacterMovement`，退出原型时恢复 `MOVE_Walking`。
-- 进入战斗或探索输入被禁用时，Tunnel 原型只会 `Suspend`：暂停 Tick、停止消费 W/S 和分支点击，但保留 active Segment、距离和 `RunTunnel` 探索子模式。
-- 战斗结束或探索输入恢复时，Tunnel 原型会 `Resume`：Coordinator 回到 `Exploration + RunTunnel`，并恢复进入战斗前的 Segment / Distance，继续纸片隧道控制。
+- Movement component 会禁用 `CharacterMovement`；退出或无 active Segment 时不恢复普通 FPS fallback。
+- 进入战斗或探索输入被禁用时，Tunnel movement 只会 `Suspend`：暂停 Tick、停止消费 W/S 和分支点击，但保留 active Segment 和距离。
+- 战斗结束或探索输入恢复时，Tunnel movement 会 `Resume`：Coordinator 回到 `Exploration`，并恢复进入战斗前的 Segment / Distance，继续纸片隧道控制。
 - Spline transform 表示相机路径；组件会扣除第一人称 Camera 的相对位置，使摄像机落在 Spline 上。
 - 左键点击由 `AWacomPlayerController::InputKey` 的 Release 路由处理；Battle scene target click 仍先执行，未消费时才尝试 RunTunnel branch click。
 - V0 不做 Segment 切换 blend；如果 PIE 中突兀，再单独加 V0.1。

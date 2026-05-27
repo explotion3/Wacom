@@ -3,7 +3,7 @@
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 
 #include "Components/BoxComponent.h"
-#include "Components/WacomRunTunnelPrototypeComponent.h"
+#include "Components/WacomRunTunnelMovementComponent.h"
 
 AWacomRunTunnelBranchTargetActor::AWacomRunTunnelBranchTargetActor()
 {
@@ -19,7 +19,7 @@ AWacomRunTunnelBranchTargetActor::AWacomRunTunnelBranchTargetActor()
 	ClickBounds->SetGenerateOverlapEvents(false);
 }
 
-bool AWacomRunTunnelBranchTargetActor::RequestBranch(UWacomRunTunnelPrototypeComponent* TunnelComponent) const
+bool AWacomRunTunnelBranchTargetActor::RequestBranch(UWacomRunTunnelMovementComponent* TunnelComponent) const
 {
 	return TunnelComponent && TunnelComponent->SwitchToSegment(TargetSegment, TargetStartDistance);
 }
