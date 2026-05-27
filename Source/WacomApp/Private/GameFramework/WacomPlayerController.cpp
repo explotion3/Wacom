@@ -9,12 +9,16 @@
 #include "InputCoreTypes.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Components/WacomBattlePresentationTargetComponent.h"
+#include "Components/WacomRunTunnelPrototypeComponent.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
+#include "GameFramework/WacomPlayerCharacter.h"
 #include "RunSession.h"
 #include "Characters/CharacterDefinition.h"
 #include "Interaction/WacomWorldInteractable.h"
+#include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "Types/WacomEnums.h"
 
 #include "UI/Battle/BattleHUD.h"
@@ -134,17 +138,21 @@ void AWacomPlayerController::BeginPlay()
 	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
 	if (GM)
 	{
-		bShowMouseCursor = false;
-		SetInputMode(FInputModeGameOnly{});
-
-		if (ExplorationMappingContext)
-		{
-			PushMappingContext(ExplorationMappingContext, /*Priority*/0);
-		}
-		else
+		if (!ExplorationMappingContext)
 		{
 			UE_LOG(LogTemp, Warning,
 				TEXT("[WacomPlayerController] ExplorationMappingContext 未配置，请先运行 WacomCreateInputAssets"));
+		}
+		if (ULocalPlayer* LP = GetLocalPlayer())
+		{
+			if (UWacomInputContextCoordinatorSubsystem* InputCoordinator =
+				LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>())
+			{
+				InputCoordinator->InitializeForPlayerController(this);
+				InputCoordinator->SetMappingContexts(ExplorationMappingContext, BattleMappingContext);
+				InputCoordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
+				InputCoordinator->SetExplorationProfile(EWacomExplorationInputProfile::FreeLook);
+			}
 		}
 
 		if (!RunSession)
@@ -229,6 +237,12 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 	if (Params.Key == EKeys::LeftMouseButton
 		&& Params.Event == IE_Released
 		&& TryRouteBattleSceneTargetClick(/*bRequireTargetSelect*/true))
+	{
+		return true;
+	}
+	if (Params.Key == EKeys::LeftMouseButton
+		&& Params.Event == IE_Released
+		&& TryRouteRunTunnelBranchClick())
 	{
 		return true;
 	}
@@ -394,6 +408,37 @@ bool AWacomPlayerController::CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD)
 }
 
 bool AWacomPlayerController::BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const
+{
+	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
+}
+
+bool AWacomPlayerController::TryRouteRunTunnelBranchClick()
+{
+	AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
+	UWacomRunTunnelPrototypeComponent* TunnelComponent =
+		WacomCharacter ? WacomCharacter->GetRunTunnelPrototypeComponent() : nullptr;
+	if (!TunnelComponent
+		|| !TunnelComponent->IsTunnelPrototypeActive()
+		|| TunnelComponent->IsTunnelPrototypeSuspended())
+	{
+		return false;
+	}
+
+	FHitResult HitResult;
+	if (!BuildRunTunnelBranchClickHitResult(HitResult))
+	{
+		return false;
+	}
+
+	AWacomRunTunnelBranchTargetActor* BranchTarget = Cast<AWacomRunTunnelBranchTargetActor>(HitResult.GetActor());
+	if (!BranchTarget && HitResult.GetComponent())
+	{
+		BranchTarget = Cast<AWacomRunTunnelBranchTargetActor>(HitResult.GetComponent()->GetOwner());
+	}
+	return BranchTarget && BranchTarget->RequestBranch(TunnelComponent);
+}
+
+bool AWacomPlayerController::BuildRunTunnelBranchClickHitResult(FHitResult& OutHitResult) const
 {
 	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
 }

@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-05-22
+updated: 2026-05-26
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -63,6 +63,7 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | 背包 UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
 | 背包 UI 全量 RebuildAll | ViewModel 刷新后清空 WrapBox 重建 | 卡量或动画需求上升时做 instance diff，或迁 ListView / TileView |
+| 像素风 UI 分辨率适配 | 背包卡牌等像素图控件依赖固定 SizeBox 和 `DPI Scale = 1.0`；非整数 DPI 缩放会导致像素点显示不均匀 | 后续统一设计像素安全缩放档位，并配合 WrapBox / ScrollBox 做布局重排；避免每个 widget 单独写屏幕适配 |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
 | AppToast C++ fallback 表现 | 顶层旧 WBP 路径 fallback 已移除；当前未配置 settings 时仍直接 AddToViewport，文本显示为主，保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
 | PrimaryLayout 固定路径 fallback | 顶层旧路径 fallback 已收窄；PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |

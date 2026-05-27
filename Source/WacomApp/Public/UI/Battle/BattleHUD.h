@@ -335,12 +335,11 @@ private:
 
 	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
 	bool bLoggedMissingCardDetailLayer = false;
-	bool bHasSavedPlayerControllerInteractionEventState = false;
-	bool bSavedPlayerControllerClickEvents = false;
-	bool bSavedPlayerControllerMouseOverEvents = false;
 	int32 PlayerControllerClickEventAcquireCount = 0;
 	int32 PlayerControllerMouseOverEventAcquireCount = 0;
-	TWeakObjectPtr<APlayerController> SavedPlayerControllerForInteractionEvents;
+	bool bHasFallbackPlayerControllerInteractionEventState = false;
+	bool bFallbackSavedPlayerControllerClickEvents = false;
+	bool bFallbackSavedPlayerControllerMouseOverEvents = false;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
@@ -401,7 +400,11 @@ private:
 	void AcquirePlayerControllerMouseOverEvents();
 	void ReleasePlayerControllerMouseOverEvents();
 	void ReleaseAllPlayerControllerInteractionEvents();
+	void ApplyFallbackPlayerControllerInteractionEvents();
+	void RestoreFallbackPlayerControllerInteractionEvents();
 	void SyncSceneEnemyPresentationTargets(const FBattleSnapshot& Snap);
+	void SyncSceneEnemyTargetSelectionAffordances();
+	void ClearSceneEnemyTargetSelectionAffordances(bool bOnlyThisHUD = true);
 	void UnregisterSceneEnemyPresentationTargets(bool bOnlyAutoBoundTargets = true);
 
 	friend struct FBattleHUDFallbackLayoutBuilder;

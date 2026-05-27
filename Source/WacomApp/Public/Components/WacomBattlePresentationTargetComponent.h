@@ -64,6 +64,15 @@ struct WACOMAPP_API FWacomBattlePresentationTargetDebugView
 	bool bVisualFeedbackActive = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	bool bTargetSelectionAffordanceActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	bool bTargetSelectionTargetable = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FName TargetSelectionDisabledReason = TEXT("NotAttempted");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
 	FName LastRegistrationResult = TEXT("NotAttempted");
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
@@ -119,6 +128,18 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Visual", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0", Units = "s", ToolTip = "Seconds to hold the EnemyPartHpEmptied scale pulse before restoring the primitive's saved base relative scale."))
 	float DestroyedPulseSeconds = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Selection", meta = (ToolTip = "Enables the V0 target-selection affordance. When BattleHUD is selecting a valid enemy part target, this component plays a lightweight scale breathing hint on its visual primitive."))
+	bool bEnableTargetSelectionAffordance = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Selection", meta = (ClampMin = "1.0", UIMin = "1.0", UIMax = "1.3", ToolTip = "Base relative scale multiplier used while this scene target is selectable in BattleHUD TargetSelect. 1.06 means 6 percent larger than the primitive's saved base relative scale."))
+	float TargetSelectionAffordanceScale = 1.06f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Selection", meta = (ClampMin = "1.0", UIMin = "1.0", UIMax = "1.5", ToolTip = "Upper relative scale multiplier used by the V0 breathing hint while this scene target is selectable."))
+	float TargetSelectionAffordancePulseScale = 1.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Selection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2.0", Units = "s", ToolTip = "Seconds between V0 target-selection affordance scale toggles. Set to 0 to hold TargetSelectionAffordanceScale without breathing."))
+	float TargetSelectionAffordancePulseSeconds = 0.35f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Debug", meta = (ToolTip = "When enabled, registration, auto-binding, click forwarding, and presentation cue state changes are written to the log. No tick or on-screen debug output is used."))
 	bool bLogDebugStateChanges = false;
@@ -193,15 +214,23 @@ private:
 	int32 LastCueAmount = 0;
 	int32 CuePlayCount = 0;
 	bool bVisualFeedbackActive = false;
+	bool bHasBaseVisualFeedbackScale = false;
+	float ActiveVisualFeedbackScaleMultiplier = 1.0f;
+	bool bTargetSelectionAffordanceActive = false;
+	bool bTargetSelectionTargetable = false;
+	bool bTargetSelectionAffordancePulseHigh = false;
 	bool bHasAcquiredPlayerControllerClickEvents = false;
 	bool bHasSavedClickTargetCollision = false;
 	ECollisionEnabled::Type SavedClickTargetCollisionEnabled = ECollisionEnabled::NoCollision;
 	ECollisionResponse SavedClickTargetVisibilityResponse = ECR_Block;
 	FTimerHandle VisualFeedbackTimerHandle;
+	FTimerHandle TargetSelectionAffordanceTimerHandle;
 	FName LastRegistrationResult = TEXT("NotAttempted");
 	FName LastAutoBindResult = TEXT("NotAttempted");
 	FName LastClickResult = TEXT("NotAttempted");
+	FName TargetSelectionDisabledReason = TEXT("NotAttempted");
 
+	void SetTargetSelectionAffordance(bool bTargetable, FName DisabledReason);
 	void HandleBattlePresentationCue(EBattleEventType SourceEventType, int32 Amount);
 	void BindPIEClickTarget();
 	void UnbindPIEClickTarget();
@@ -209,7 +238,16 @@ private:
 	void RestoreClickTargetCollision(UPrimitiveComponent& Target);
 	UPrimitiveComponent* ResolveClickTargetComponent() const;
 	void PlayVisualFeedback(EBattleEventType SourceEventType);
+	bool EnsureManagedVisualTarget();
+	void ApplyCurrentVisualScale();
+	void RestoreManagedVisualScaleIfIdle();
+	void RestoreManagedVisualScale();
 	void StopVisualFeedbackTimer();
+	void StartTargetSelectionAffordance();
+	void StopTargetSelectionAffordanceTimer();
+	void StopTargetSelectionAffordance();
+	void AdvanceTargetSelectionAffordancePulse();
+	void StopAllVisualPresentation();
 	UPrimitiveComponent* ResolveVisualTargetComponent() const;
 	void MarkRegistrationResult(FName Result);
 	void MarkAutoBindResult(FName Result);

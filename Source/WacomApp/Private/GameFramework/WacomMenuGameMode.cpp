@@ -10,6 +10,7 @@
 
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Foundation/WacomMenuWidgetBase.h"
@@ -39,12 +40,19 @@ void AWacomMenuGameMode::BeginPlay()
 		return;
 	}
 
-	// 菜单模式输入配置：UI 优先 + 鼠标可见，不锁窗
-	PC->bShowMouseCursor = true;
-	FInputModeGameAndUI Mode;
-	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	Mode.SetHideCursorDuringCapture(false);
-	PC->SetInputMode(Mode);
+	if (ULocalPlayer* LP = PC->GetLocalPlayer())
+	{
+		if (UWacomInputContextCoordinatorSubsystem* InputCoordinator =
+			LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>())
+		{
+			InputCoordinator->InitializeForPlayerController(PC);
+			if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
+			{
+				InputCoordinator->SetMappingContexts(WacomPC->ExplorationMappingContext, WacomPC->BattleMappingContext);
+			}
+			InputCoordinator->SetFlowContext(EWacomInputFlowContext::MainMenu);
+		}
+	}
 
 	UGameInstance* GI = GetGameInstance();
 	UWacomGameUIManagerSubsystem* UIManager =

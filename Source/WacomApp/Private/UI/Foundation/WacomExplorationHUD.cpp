@@ -14,7 +14,9 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "GameFramework/PlayerController.h"
 #include "Input/CommonUIInputTypes.h"
+#include "Input/WacomInputContextCoordinatorSubsystem.h"
 
 #include "UI/ViewModels/WacomRunViewModel.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
@@ -28,6 +30,20 @@ UWacomExplorationHUD::UWacomExplorationHUD(const FObjectInitializer& ObjectIniti
 
 TOptional<FUIInputConfig> UWacomExplorationHUD::GetDesiredInputConfig() const
 {
+	const APlayerController* PC = GetOwningPlayer();
+	const ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
+	const UWacomInputContextCoordinatorSubsystem* InputCoordinator =
+		LP ? LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>() : nullptr;
+	if (InputCoordinator
+		&& InputCoordinator->GetFlowContext() == EWacomInputFlowContext::Exploration
+		&& InputCoordinator->GetExplorationProfile() == EWacomExplorationInputProfile::RunTunnel)
+	{
+		return FUIInputConfig(
+			ECommonInputMode::All,
+			EMouseCaptureMode::NoCapture,
+			/*bInHideCursorDuringViewportCapture*/ false);
+	}
+
 	// Game 模式 + 锁定鼠标到 Viewport + 隐藏光标：和 PC::SetInputMode(GameOnly) 等效。
 	return FUIInputConfig(ECommonInputMode::Game, EMouseCaptureMode::CapturePermanently);
 }

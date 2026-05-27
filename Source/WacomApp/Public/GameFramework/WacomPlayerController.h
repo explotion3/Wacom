@@ -9,6 +9,7 @@
 class UEnemyDefinition;
 class UInputMappingContext;
 class UInputAction;
+class AWacomRunTunnelBranchTargetActor;
 class ABattleTriggerActor;
 class URunSession;
 class UBattleHUD;
@@ -119,6 +120,9 @@ public:
 	/** 战斗场景目标点击路由。由 InputKey 和 BattleHUD 鼠标兜底入口共用。 */
 	bool TryRouteBattleSceneTargetClick(bool bRequireTargetSelect = false);
 
+	/** Run tunnel spike branch click route. Active only while the possessed Wacom character tunnel prototype is active. */
+	bool TryRouteRunTunnelBranchClick();
+
 	// ---- 候选交互对象（use-key 模型）----
 
 	/** 世界交互对象进入玩家交互范围时调用。 */
@@ -171,6 +175,7 @@ protected:
 
 	virtual bool CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const;
 	virtual bool BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const;
+	virtual bool BuildRunTunnelBranchClickHitResult(FHitResult& OutHitResult) const;
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
 	FText BuildCurrentInteractPrompt() const;

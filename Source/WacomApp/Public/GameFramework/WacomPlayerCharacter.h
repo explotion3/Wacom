@@ -8,6 +8,7 @@
 
 class UCameraComponent;
 class UInputAction;
+class UWacomRunTunnelPrototypeComponent;
 struct FInputActionValue;
 
 /**
@@ -31,6 +32,9 @@ public:
 	/** 第一人称摄像机。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Camera")
 	UCameraComponent* GetFirstPersonCamera() const { return FirstPersonCamera; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run Tunnel|Prototype")
+	UWacomRunTunnelPrototypeComponent* GetRunTunnelPrototypeComponent() const { return RunTunnelPrototypeComponent; }
 
 	/**
 	 * 禁用 / 启用探索期的移动 + 视角输入。
@@ -62,6 +66,10 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Camera",
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCameraComponent> FirstPersonCamera = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run Tunnel|Prototype",
+		meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWacomRunTunnelPrototypeComponent> RunTunnelPrototypeComponent = nullptr;
 
 	/** 当前是否接受探索输入。战斗期间置 false。 */
 	bool bExplorationInputEnabled = true;

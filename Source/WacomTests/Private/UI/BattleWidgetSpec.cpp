@@ -2420,6 +2420,173 @@ bool FWacomUIBattlePresentationTargetBindingMissingPartIdUnregistersSpec::RunTes
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetAffordanceTargetSelectSpec,
+	"Wacom.UI.Battle.PresentationTargetAffordance.TargetSelectStartsAffordance",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetAffordanceTargetSelectSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(2.0f, 2.0f, 2.0f));
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	if (!TestTrue(TEXT("Target card is valid"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->TargetSelectionAffordanceScale = 1.2f;
+	Component->TargetSelectionAffordancePulseScale = 1.3f;
+	Component->SetPartId(TEXT("Test.Part.Head"));
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->OnCardClickedByUser(TargetCardId);
+
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestTrue(TEXT("Affordance becomes active"), Component->IsTargetSelectionAffordanceActiveForTest());
+	TestEqual(TEXT("Target select scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.2f);
+
+	Component->AdvanceTargetSelectionAffordancePulseForTest();
+	TestEqual(TEXT("Affordance pulse uses stronger scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.3f);
+
+	const FWacomBattlePresentationTargetDebugView View = Component->GetBattlePresentationTargetDebugView();
+	TestTrue(TEXT("Debug view reports affordance active"), View.bTargetSelectionAffordanceActive);
+	TestTrue(TEXT("Debug view reports targetable"), View.bTargetSelectionTargetable);
+	TestEqual(TEXT("Debug view target disabled reason is none"), View.TargetSelectionDisabledReason, NAME_None);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetAffordanceIdleClearsSpec,
+	"Wacom.UI.Battle.PresentationTargetAffordance.IdleClearsAffordance",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetAffordanceIdleClearsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(1.5f, 1.5f, 1.5f));
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	if (!TestTrue(TEXT("Target card is valid"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->TargetSelectionAffordanceScale = 1.2f;
+	Component->SetPartId(TEXT("Test.Part.Solo"));
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestTrue(TEXT("Affordance becomes active"), Component->IsTargetSelectionAffordanceActiveForTest());
+	TestEqual(TEXT("Target select scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.2f);
+
+	HUD->CancelTargetSelect();
+
+	TestFalse(TEXT("Affordance clears on cancel"), Component->IsTargetSelectionAffordanceActiveForTest());
+	TestEqual(TEXT("Cancel restores primitive scale"), Primitive->GetRelativeScale3D(), BaseScale);
+	TestEqual(TEXT("Debug reason reports not selecting"),
+		Component->GetBattlePresentationTargetDebugView().TargetSelectionDisabledReason,
+		FName(TEXT("NotTargetSelecting")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattlePresentationTargetBindingDisabledDoesNotBindSpec,
 	"Wacom.UI.Battle.PresentationTargetBinding.DisabledDoesNotBind",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2475,6 +2642,258 @@ bool FWacomUIBattlePresentationTargetBindingDisabledDoesNotBindSpec::RunTest(con
 
 	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadInstanceId, 5);
 	TestEqual(TEXT("Unbound component does not receive cue"), Component->GetBattlePresentationCuePlayCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetAffordanceDestroyedSpec,
+	"Wacom.UI.Battle.PresentationTargetAffordance.DestroyedPartDoesNotAfford",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetAffordanceDestroyedSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	FBattleInitParams Params;
+	Params.Character = Character;
+	Params.Enemy = Enemy;
+	Params.RandomSeed = 1;
+	Params.PreDestroyedPartIds.Add(TEXT("Test.Part.Solo"));
+	UBattleSession* Session = NewObject<UBattleSession>();
+	TestTrue(TEXT("Initialize battle session"), Session->Initialize(Params).IsOk());
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	if (!TestTrue(TEXT("Target card is valid"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->SetPartId(TEXT("Test.Part.Solo"));
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->OnCardClickedByUser(TargetCardId);
+
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestFalse(TEXT("Destroyed part does not start affordance"),
+		Component->IsTargetSelectionAffordanceActiveForTest());
+	TestEqual(TEXT("Destroyed part keeps base scale"), Primitive->GetRelativeScale3D(), BaseScale);
+	TestEqual(TEXT("Debug reason reports destroyed part"),
+		Component->GetBattlePresentationTargetDebugView().TargetSelectionDisabledReason,
+		FName(TEXT("PartDestroyed")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetAffordanceDamagePulseSpec,
+	"Wacom.UI.Battle.PresentationTargetAffordance.DamagePulseReturnsToSelectionAffordance",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetAffordanceDamagePulseSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(2.0f, 3.0f, 4.0f));
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	if (!TestTrue(TEXT("Target data is valid"), TargetCardId.IsValid() && HeadInstanceId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->TargetSelectionAffordanceScale = 1.1f;
+	Component->DamagePulseScale = 1.25f;
+	Component->SetPartId(TEXT("Test.Part.Solo"));
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("Target affordance scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.1f);
+
+	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, HeadInstanceId, 4);
+	TestTrue(TEXT("Damage pulse activates visual feedback"), Component->IsVisualFeedbackActiveForTest());
+	TestEqual(TEXT("Damage pulse overrides affordance scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.25f);
+
+	Component->RestoreVisualFeedbackForTest();
+
+	TestFalse(TEXT("Damage pulse clears active state"), Component->IsVisualFeedbackActiveForTest());
+	TestTrue(TEXT("Target affordance remains active"), Component->IsTargetSelectionAffordanceActiveForTest());
+	TestEqual(TEXT("Damage pulse returns to affordance scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.1f);
+
+	HUD->CancelTargetSelect();
+	TestEqual(TEXT("Cancel restores original scale"), Primitive->GetRelativeScale3D(), BaseScale);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationTargetAffordanceUnregisterSpec,
+	"Wacom.UI.Battle.PresentationTargetAffordance.UnregisterOrDestructRestoresScale",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationTargetAffordanceUnregisterSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(1.0f, 2.0f, 1.0f));
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	if (!TestTrue(TEXT("Target card is valid"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->EnableSceneEnemyTargetBindingPrototypeForTest();
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->TargetSelectionAffordanceScale = 1.2f;
+	Component->SetPartId(TEXT("Test.Part.Solo"));
+	HUD->RefreshFromSnapshot(Snapshot);
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestTrue(TEXT("Affordance becomes active"), Component->IsTargetSelectionAffordanceActiveForTest());
+	TestEqual(TEXT("Target select scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.2f);
+
+	Component->UnregisterFromBattleHUD();
+
+	TestFalse(TEXT("Unregister clears affordance"), Component->IsTargetSelectionAffordanceActiveForTest());
+	TestEqual(TEXT("Unregister restores primitive scale"), Primitive->GetRelativeScale3D(), BaseScale);
+	TestFalse(TEXT("Component is no longer registered"), Component->IsRegisteredWithBattleHUD());
 
 	return true;
 }

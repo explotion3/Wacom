@@ -4,6 +4,7 @@
 
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/WacomRunTunnelPrototypeComponent.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "InputAction.h"
@@ -33,6 +34,8 @@ AWacomPlayerCharacter::AWacomPlayerCharacter()
 	FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
 	FirstPersonCamera->SetRelativeLocation(FVector(0.f, 0.f, 60.f)); // 约眼睛高度
 	FirstPersonCamera->bUsePawnControlRotation = true;
+
+	RunTunnelPrototypeComponent = CreateDefaultSubobject<UWacomRunTunnelPrototypeComponent>(TEXT("RunTunnelPrototypeComponent"));
 
 	// IA 资产延迟到 BeginPlay 里 LoadObject 解析，避免 CDO 阶段 FObjectFinder
 	// 在 commandlet 首次运行前 assets 不存在而崩溃。
@@ -74,6 +77,10 @@ void AWacomPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 	{
 		EIC->BindAction(IA_Move, ETriggerEvent::Triggered, this,
 			&AWacomPlayerCharacter::HandleMoveInput);
+		EIC->BindAction(IA_Move, ETriggerEvent::Completed, this,
+			&AWacomPlayerCharacter::HandleMoveInput);
+		EIC->BindAction(IA_Move, ETriggerEvent::Canceled, this,
+			&AWacomPlayerCharacter::HandleMoveInput);
 	}
 	else
 	{
@@ -100,6 +107,17 @@ void AWacomPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 void AWacomPlayerCharacter::SetExplorationInputEnabled(bool bEnabled)
 {
+	if (RunTunnelPrototypeComponent)
+	{
+		if (bEnabled)
+		{
+			RunTunnelPrototypeComponent->ResumeTunnelPrototype();
+		}
+		else
+		{
+			RunTunnelPrototypeComponent->SuspendTunnelPrototype();
+		}
+	}
 	bExplorationInputEnabled = bEnabled;
 }
 
@@ -108,6 +126,10 @@ void AWacomPlayerCharacter::HandleMoveInput(const FInputActionValue& Value)
 	if (!bExplorationInputEnabled || !Controller) { return; }
 
 	const FVector2D Input = Value.Get<FVector2D>();
+	if (RunTunnelPrototypeComponent && RunTunnelPrototypeComponent->HandleMoveInput(Input))
+	{
+		return;
+	}
 
 	// 仅使用 Yaw 分量构造前向 / 右向基：防止低头时移动变慢。
 	const FRotator YawRot(0.f, Controller->GetControlRotation().Yaw, 0.f);
@@ -123,6 +145,11 @@ void AWacomPlayerCharacter::HandleLookInput(const FInputActionValue& Value)
 	if (!bExplorationInputEnabled) { return; }
 
 	const FVector2D Input = Value.Get<FVector2D>();
+	if (RunTunnelPrototypeComponent && RunTunnelPrototypeComponent->HandleLookInput(Input))
+	{
+		return;
+	}
+
 	AddControllerYawInput(Input.X);
 	AddControllerPitchInput(Input.Y);
 }

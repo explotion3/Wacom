@@ -13,6 +13,7 @@
 #include "Actors/BattleTriggerActor.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "RunSession.h"
 
 #include "UI/Battle/BattleHUD.h"
@@ -82,16 +83,20 @@ void AWacomGameMode::BeginPlay()
 		}
 	}
 
-	// 从主菜单 OpenLevel 过来时，PC 是复用的（PIE 里 OpenLevel 不销毁 PC），
-	// PC::BeginPlay 不会再次被调用，IMC_Exploration 从未被 Push。
-	// 这里主动确保 IMC_Exploration 就位。
+	// 从主菜单 OpenLevel 过来时，PC 可能复用；这里主动恢复探索输入 profile。
 	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 	{
 		if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
 		{
-			if (WacomPC->ExplorationMappingContext)
+			if (ULocalPlayer* LP = WacomPC->GetLocalPlayer())
 			{
-				WacomPC->PushMappingContext(WacomPC->ExplorationMappingContext, /*Priority*/0);
+				if (UWacomInputContextCoordinatorSubsystem* InputCoordinator =
+					LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>())
+				{
+					InputCoordinator->InitializeForPlayerController(WacomPC);
+					InputCoordinator->SetMappingContexts(WacomPC->ExplorationMappingContext, WacomPC->BattleMappingContext);
+					InputCoordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
+				}
 			}
 		}
 	}
@@ -334,16 +339,18 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	BattleEndedHandle = BattleHUD->OnBattleEndedNative.AddUObject(
 		this, &AWacomGameMode::HandleBattleEnded);
 
-	// 4) 禁用探索输入 + 切 IMC
+	// 4) 禁用探索输入 + 切输入上下文
 	if (WacomPC)
 	{
-		if (WacomPC->ExplorationMappingContext)
+		if (ULocalPlayer* LP = WacomPC->GetLocalPlayer())
 		{
-			WacomPC->PopMappingContext(WacomPC->ExplorationMappingContext);
-		}
-		if (WacomPC->BattleMappingContext)
-		{
-			WacomPC->PushMappingContext(WacomPC->BattleMappingContext, /*Priority*/1);
+			if (UWacomInputContextCoordinatorSubsystem* InputCoordinator =
+				LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>())
+			{
+				InputCoordinator->InitializeForPlayerController(WacomPC);
+				InputCoordinator->SetMappingContexts(WacomPC->ExplorationMappingContext, WacomPC->BattleMappingContext);
+				InputCoordinator->SetFlowContext(EWacomInputFlowContext::Battle);
+			}
 		}
 	}
 
@@ -421,21 +428,19 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	BattleHUD     = nullptr;
 	ActiveSession = nullptr;
 
-	// 2) 恢复探索输入 + 切 IMC
+	// 2) 恢复探索输入 + 切输入上下文
 	if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
 	{
-		if (WacomPC->BattleMappingContext)
+		if (ULocalPlayer* LP = WacomPC->GetLocalPlayer())
 		{
-			WacomPC->PopMappingContext(WacomPC->BattleMappingContext);
+			if (UWacomInputContextCoordinatorSubsystem* InputCoordinator =
+				LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>())
+			{
+				InputCoordinator->InitializeForPlayerController(WacomPC);
+				InputCoordinator->SetMappingContexts(WacomPC->ExplorationMappingContext, WacomPC->BattleMappingContext);
+				InputCoordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
+			}
 		}
-		if (WacomPC->ExplorationMappingContext)
-		{
-			WacomPC->PushMappingContext(WacomPC->ExplorationMappingContext, /*Priority*/0);
-		}
-
-		// 战斗中 HUD 申请了 EMouseCaptureMode::NoCapture；恢复成 GameOnly 锁鼠标。
-		WacomPC->bShowMouseCursor = false;
-		WacomPC->SetInputMode(FInputModeGameOnly{});
 	}
 	if (PC)
 	{

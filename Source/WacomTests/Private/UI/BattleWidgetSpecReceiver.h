@@ -581,6 +581,16 @@ public:
 	{
 		RestoreVisualFeedback();
 	}
+
+	bool IsTargetSelectionAffordanceActiveForTest() const
+	{
+		return bTargetSelectionAffordanceActive;
+	}
+
+	void AdvanceTargetSelectionAffordancePulseForTest()
+	{
+		AdvanceTargetSelectionAffordancePulse();
+	}
 };
 
 UCLASS()

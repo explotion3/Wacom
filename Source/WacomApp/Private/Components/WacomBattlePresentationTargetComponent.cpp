@@ -77,7 +77,7 @@ void UWacomBattlePresentationTargetComponent::SetVisualTargetComponent(UPrimitiv
 		return;
 	}
 
-	RestoreVisualFeedback();
+	StopAllVisualPresentation();
 	VisualTargetComponent = InVisualTargetComponent;
 }
 
@@ -169,7 +169,7 @@ void UWacomBattlePresentationTargetComponent::UnregisterFromBattleHUD()
 		HUD->UnregisterBattlePresentationTargetsForOwner(this);
 	}
 	RegisteredHUD.Reset();
-	RestoreVisualFeedback();
+	StopAllVisualPresentation();
 	MarkRegistrationResult(TEXT("Unregistered"));
 }
 
@@ -182,14 +182,14 @@ bool UWacomBattlePresentationTargetComponent::IsRegisteredWithBattleHUD() const
 void UWacomBattlePresentationTargetComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	UnregisterFromBattleHUD();
-	RestoreVisualFeedback();
+	StopAllVisualPresentation();
 	Super::EndPlay(EndPlayReason);
 }
 
 void UWacomBattlePresentationTargetComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 {
 	UnregisterFromBattleHUD();
-	RestoreVisualFeedback();
+	StopAllVisualPresentation();
 	Super::OnComponentDestroyed(bDestroyingHierarchy);
 }
 
@@ -239,6 +239,9 @@ FWacomBattlePresentationTargetDebugView UWacomBattlePresentationTargetComponent:
 	View.LastCueAmount = LastCueAmount;
 	View.CuePlayCount = CuePlayCount;
 	View.bVisualFeedbackActive = bVisualFeedbackActive;
+	View.bTargetSelectionAffordanceActive = bTargetSelectionAffordanceActive;
+	View.bTargetSelectionTargetable = bTargetSelectionTargetable;
+	View.TargetSelectionDisabledReason = TargetSelectionDisabledReason;
 	View.LastRegistrationResult = LastRegistrationResult;
 	View.LastAutoBindResult = LastAutoBindResult;
 	View.LastClickResult = LastClickResult;
@@ -249,7 +252,7 @@ FString UWacomBattlePresentationTargetComponent::GetBattlePresentationTargetDebu
 {
 	const FWacomBattlePresentationTargetDebugView View = GetBattlePresentationTargetDebugView();
 	return FString::Printf(
-		TEXT("PartId=%s PartInstanceId=%s Registered=%s HUD=%s Visual=%s Click=%s BoundClick=%s Collision=%s Visibility=%s BlocksVisibility=%s LastRegistration=%s LastAutoBind=%s LastClick=%s LastCue=%s Amount=%d Count=%d VisualActive=%s"),
+		TEXT("PartId=%s PartInstanceId=%s Registered=%s HUD=%s Visual=%s Click=%s BoundClick=%s Collision=%s Visibility=%s BlocksVisibility=%s LastRegistration=%s LastAutoBind=%s LastClick=%s LastCue=%s Amount=%d Count=%d VisualActive=%s TargetAffordance=%s Targetable=%s TargetDisabledReason=%s"),
 		*View.PartId.ToString(),
 		*View.PartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 		View.bIsRegisteredWithBattleHUD ? TEXT("true") : TEXT("false"),
@@ -266,7 +269,10 @@ FString UWacomBattlePresentationTargetComponent::GetBattlePresentationTargetDebu
 		*UEnum::GetValueAsString(View.LastCueType),
 		View.LastCueAmount,
 		View.CuePlayCount,
-		View.bVisualFeedbackActive ? TEXT("true") : TEXT("false"));
+		View.bVisualFeedbackActive ? TEXT("true") : TEXT("false"),
+		View.bTargetSelectionAffordanceActive ? TEXT("true") : TEXT("false"),
+		View.bTargetSelectionTargetable ? TEXT("true") : TEXT("false"),
+		*View.TargetSelectionDisabledReason.ToString());
 }
 
 void UWacomBattlePresentationTargetComponent::LogBattlePresentationTargetDebugSummary() const
@@ -441,22 +447,17 @@ void UWacomBattlePresentationTargetComponent::PlayVisualFeedback(EBattleEventTyp
 		return;
 	}
 
-	RestoreVisualFeedback();
-
-	UPrimitiveComponent* Target = ResolveVisualTargetComponent();
-	if (!IsValid(Target))
+	if (!EnsureManagedVisualTarget())
 	{
 		return;
 	}
 
-	ActiveVisualFeedbackTarget = Target;
-	BaseVisualFeedbackScale = Target->GetRelativeScale3D();
 	bVisualFeedbackActive = true;
 
-	const float ScaleMultiplier = SourceEventType == EBattleEventType::EnemyPartHpEmptied
+	ActiveVisualFeedbackScaleMultiplier = SourceEventType == EBattleEventType::EnemyPartHpEmptied
 		? FMath::Max(1.0f, DestroyedPulseScale)
 		: FMath::Max(1.0f, DamagePulseScale);
-	Target->SetRelativeScale3D(BaseVisualFeedbackScale * ScaleMultiplier);
+	ApplyCurrentVisualScale();
 
 	const float HoldSeconds = SourceEventType == EBattleEventType::EnemyPartHpEmptied
 		? FMath::Max(0.0f, DestroyedPulseSeconds)
@@ -481,15 +482,87 @@ void UWacomBattlePresentationTargetComponent::PlayVisualFeedback(EBattleEventTyp
 void UWacomBattlePresentationTargetComponent::RestoreVisualFeedback()
 {
 	StopVisualFeedbackTimer();
+	bVisualFeedbackActive = false;
+	ActiveVisualFeedbackScaleMultiplier = 1.0f;
+	ApplyCurrentVisualScale();
+	RestoreManagedVisualScaleIfIdle();
+}
+
+bool UWacomBattlePresentationTargetComponent::EnsureManagedVisualTarget()
+{
+	if (UPrimitiveComponent* CurrentTarget = ActiveVisualFeedbackTarget.Get())
+	{
+		if (CurrentTarget == ResolveVisualTargetComponent())
+		{
+			return true;
+		}
+
+		RestoreManagedVisualScale();
+	}
+
+	UPrimitiveComponent* Target = ResolveVisualTargetComponent();
+	if (!IsValid(Target))
+	{
+		return false;
+	}
+
+	ActiveVisualFeedbackTarget = Target;
+	BaseVisualFeedbackScale = Target->GetRelativeScale3D();
+	bHasBaseVisualFeedbackScale = true;
+	return true;
+}
+
+void UWacomBattlePresentationTargetComponent::ApplyCurrentVisualScale()
+{
+	UPrimitiveComponent* Target = ActiveVisualFeedbackTarget.Get();
+	if (!Target || !bHasBaseVisualFeedbackScale)
+	{
+		return;
+	}
+
+	float ScaleMultiplier = 1.0f;
+	if (bVisualFeedbackActive)
+	{
+		ScaleMultiplier = ActiveVisualFeedbackScaleMultiplier;
+	}
+	else if (bTargetSelectionAffordanceActive)
+	{
+		ScaleMultiplier = bTargetSelectionAffordancePulseHigh
+			? FMath::Max(1.0f, TargetSelectionAffordancePulseScale)
+			: FMath::Max(1.0f, TargetSelectionAffordanceScale);
+	}
+
+	Target->SetRelativeScale3D(BaseVisualFeedbackScale * ScaleMultiplier);
+}
+
+void UWacomBattlePresentationTargetComponent::RestoreManagedVisualScaleIfIdle()
+{
+	if (!bVisualFeedbackActive && !bTargetSelectionAffordanceActive)
+	{
+		RestoreManagedVisualScale();
+	}
+}
+
+void UWacomBattlePresentationTargetComponent::RestoreManagedVisualScale()
+{
+	StopVisualFeedbackTimer();
+	StopTargetSelectionAffordanceTimer();
 
 	if (UPrimitiveComponent* Target = ActiveVisualFeedbackTarget.Get())
 	{
-		Target->SetRelativeScale3D(BaseVisualFeedbackScale);
+		if (bHasBaseVisualFeedbackScale)
+		{
+			Target->SetRelativeScale3D(BaseVisualFeedbackScale);
+		}
 	}
 
 	ActiveVisualFeedbackTarget.Reset();
 	BaseVisualFeedbackScale = FVector::OneVector;
+	bHasBaseVisualFeedbackScale = false;
 	bVisualFeedbackActive = false;
+	ActiveVisualFeedbackScaleMultiplier = 1.0f;
+	bTargetSelectionAffordanceActive = false;
+	bTargetSelectionAffordancePulseHigh = false;
 }
 
 void UWacomBattlePresentationTargetComponent::StopVisualFeedbackTimer()
@@ -499,6 +572,112 @@ void UWacomBattlePresentationTargetComponent::StopVisualFeedbackTimer()
 		World->GetTimerManager().ClearTimer(VisualFeedbackTimerHandle);
 	}
 	VisualFeedbackTimerHandle = FTimerHandle();
+}
+
+void UWacomBattlePresentationTargetComponent::SetTargetSelectionAffordance(
+	bool bTargetable,
+	FName DisabledReason)
+{
+	if (bTargetable
+		&& bTargetSelectionTargetable
+		&& bTargetSelectionAffordanceActive
+		&& TargetSelectionDisabledReason.IsNone())
+	{
+		if (EnsureManagedVisualTarget())
+		{
+			ApplyCurrentVisualScale();
+		}
+		return;
+	}
+
+	if (!bTargetable
+		&& !bTargetSelectionTargetable
+		&& !bTargetSelectionAffordanceActive
+		&& TargetSelectionDisabledReason == DisabledReason)
+	{
+		return;
+	}
+
+	bTargetSelectionTargetable = bTargetable;
+	TargetSelectionDisabledReason = bTargetable ? NAME_None : DisabledReason;
+
+	if (!bEnableTargetSelectionAffordance || !bTargetable)
+	{
+		StopTargetSelectionAffordance();
+		LogDebugStateChange(TEXT("TargetSelectionAffordance"), TargetSelectionDisabledReason);
+		return;
+	}
+
+	StartTargetSelectionAffordance();
+	LogDebugStateChange(TEXT("TargetSelectionAffordance"), TEXT("Targetable"));
+}
+
+void UWacomBattlePresentationTargetComponent::StartTargetSelectionAffordance()
+{
+	if (!EnsureManagedVisualTarget())
+	{
+		bTargetSelectionAffordanceActive = false;
+		return;
+	}
+
+	bTargetSelectionAffordanceActive = true;
+	bTargetSelectionAffordancePulseHigh = false;
+	ApplyCurrentVisualScale();
+
+	const float PulseSeconds = FMath::Max(0.0f, TargetSelectionAffordancePulseSeconds);
+	if (PulseSeconds <= 0.0f)
+	{
+		StopTargetSelectionAffordanceTimer();
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			TargetSelectionAffordanceTimerHandle,
+			this,
+			&UWacomBattlePresentationTargetComponent::AdvanceTargetSelectionAffordancePulse,
+			PulseSeconds,
+			true);
+	}
+}
+
+void UWacomBattlePresentationTargetComponent::StopTargetSelectionAffordanceTimer()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TargetSelectionAffordanceTimerHandle);
+	}
+	TargetSelectionAffordanceTimerHandle = FTimerHandle();
+}
+
+void UWacomBattlePresentationTargetComponent::StopTargetSelectionAffordance()
+{
+	StopTargetSelectionAffordanceTimer();
+	bTargetSelectionAffordanceActive = false;
+	bTargetSelectionAffordancePulseHigh = false;
+	ApplyCurrentVisualScale();
+	RestoreManagedVisualScaleIfIdle();
+}
+
+void UWacomBattlePresentationTargetComponent::AdvanceTargetSelectionAffordancePulse()
+{
+	if (!bTargetSelectionAffordanceActive)
+	{
+		StopTargetSelectionAffordanceTimer();
+		RestoreManagedVisualScaleIfIdle();
+		return;
+	}
+
+	bTargetSelectionAffordancePulseHigh = !bTargetSelectionAffordancePulseHigh;
+	ApplyCurrentVisualScale();
+}
+
+void UWacomBattlePresentationTargetComponent::StopAllVisualPresentation()
+{
+	RestoreManagedVisualScale();
+	bTargetSelectionTargetable = false;
+	TargetSelectionDisabledReason = TEXT("NotTargetSelecting");
 }
 
 UPrimitiveComponent* UWacomBattlePresentationTargetComponent::ResolveVisualTargetComponent() const
