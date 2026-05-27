@@ -331,6 +331,11 @@ public:
 		bEnableFirstPersonBattleHandInteractionPrototype = true;
 	}
 
+	void EnableHideLegacyHandPanelWhenFirstPersonBattleHandInteractiveForTest()
+	{
+		bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive = true;
+	}
+
 	void DisableFirstPersonBattleHandInteractionPrototypeForTest()
 	{
 		bEnableFirstPersonBattleHandInteractionPrototype = false;
@@ -354,6 +359,29 @@ public:
 	void ClearFirstPersonBattleHandLayerForTest()
 	{
 		ClearFirstPersonBattleHandLayer();
+	}
+
+	void SyncLegacyHandPanelVisibilityForTest()
+	{
+		SyncLegacyHandPanelVisibility();
+	}
+
+	bool HasHandPanelForTest() const
+	{
+		return HandPanel != nullptr;
+	}
+
+	ESlateVisibility GetHandPanelVisibilityForTest() const
+	{
+		return HandPanel ? HandPanel->GetVisibility() : ESlateVisibility::Collapsed;
+	}
+
+	void SetHandPanelVisibilityForTest(ESlateVisibility InVisibility)
+	{
+		if (HandPanel)
+		{
+			HandPanel->SetVisibility(InVisibility);
+		}
 	}
 
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForTest() const

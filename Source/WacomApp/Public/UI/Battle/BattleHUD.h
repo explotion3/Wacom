@@ -159,6 +159,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ToolTip = "是否启用第一人称战斗手牌层 hover/click 交互原型。默认关闭；只有 bEnableFirstPersonBattleHandLayerPrototype 也开启时生效。点击只转发给 BattleHUD 现有 OnCardClickedByUser 流程，不直接提交 BattleSession 命令。"))
 	bool bEnableFirstPersonBattleHandInteractionPrototype = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ToolTip = "是否在第一人称战斗手牌层显示且交互原型开启时隐藏旧 UHandPanel。默认关闭；关闭交互、缺少 Anchor、战斗结束或清理 runtime hand 时会恢复旧手牌原始可见性。"))
+	bool bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Scene Enemy Target Prototype", meta = (ToolTip = "是否启用场景敌方目标表现绑定原型。默认关闭；开启后 BattleHUD 会按当前 BattleSnapshot 的 UEnemyPartDefinition::PartId，把场景中的 UWacomBattlePresentationTargetComponent 自动绑定到运行时 PartInstanceId。"))
 	bool bEnableSceneEnemyTargetBindingPrototype = false;
 
@@ -348,7 +351,11 @@ private:
 	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
 	FGuid CurrentFirstPersonCardDetailSourceId;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastFirstPersonBattleHandAnchor;
+	ESlateVisibility CachedLegacyHandPanelVisibility = ESlateVisibility::Visible;
 	bool bHasLastBattleSnapshot = false;
+	bool bHasCachedLegacyHandPanelVisibility = false;
+	bool bLegacyHandPanelHiddenByFirstPersonLayer = false;
+	bool bFirstPersonBattleHandLayerRuntimeActive = false;
 	bool bLoggedMissingCardDetailLayer = false;
 	int32 PlayerControllerClickEventAcquireCount = 0;
 	int32 PlayerControllerMouseOverEventAcquireCount = 0;
@@ -431,6 +438,9 @@ private:
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
 	void SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap);
 	void ClearFirstPersonBattleHandLayer();
+	void SyncLegacyHandPanelVisibility();
+	bool ShouldHideLegacyHandPanel() const;
+	void CaptureLegacyHandPanelVisibilityIfNeeded();
 	void BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 	void UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 	void HandleFirstPersonCardLayerCardClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);

@@ -108,6 +108,8 @@ void UBattleHUD::NativeConstruct()
 		}
 		RefreshFromSnapshot(S->BuildSnapshot());
 	}
+
+	SyncLegacyHandPanelVisibility();
 }
 
 void UBattleHUD::NativeDestruct()
@@ -121,6 +123,7 @@ void UBattleHUD::NativeDestruct()
 	ReleaseAllPlayerControllerInteractionEvents();
 	if (HandPanel)
 	{
+		SyncLegacyHandPanelVisibility();
 		HandPanel->OnCardHoveredNative.RemoveAll(this);
 		HandPanel->OnCardUnhoveredNative.RemoveAll(this);
 	}
@@ -198,12 +201,14 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 	}
 
 	SyncFirstPersonBattleHandLayer(Snap);
+	SyncLegacyHandPanelVisibility();
 
 	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
 	if (Snap.Phase == EBattlePhase::BattleEnd)
 	{
 		bHasLastBattleSnapshot = false;
 		SetUIState(EBattleUIState::BattleEnd);
+		SyncLegacyHandPanelVisibility();
 
 		if (!bHasBroadcastBattleEnd)
 		{
@@ -333,6 +338,7 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 	if (EnemyInfoBar) { EnemyInfoBar->RefreshFromSnapshot(Snap); }
 	if (ActionPanel)  { ActionPanel->RefreshFromSnapshot(Snap); }
 	SyncFirstPersonBattleHandLayer(Snap);
+	SyncLegacyHandPanelVisibility();
 	SyncSceneEnemyPresentationTargets(Snap);
 	SyncSceneEnemyTargetSelectionAffordances();
 }
@@ -351,6 +357,7 @@ void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
 		bEnableFirstPersonBattleHandLayerPrototype
 		&& GetSession()
 		&& Snap.Phase != EBattlePhase::BattleEnd
+		&& UIState != EBattleUIState::BattleEnd
 		&& Anchor;
 	if (!bCanShowBattleHand)
 	{
@@ -358,6 +365,7 @@ void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
 		return;
 	}
 
+	bFirstPersonBattleHandLayerRuntimeActive = true;
 	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
 	CardEntries.Reserve(Snap.Hand.Cards.Num());
 	for (const FHandCardSnapshot& CardSnapshot : Snap.Hand.Cards)
@@ -386,10 +394,12 @@ void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
 		&& bEnableFirstPersonBattleHandInteractionPrototype);
 	BindFirstPersonBattleHandLayerInteractions(Anchor);
 	LastFirstPersonBattleHandAnchor = Anchor;
+	SyncLegacyHandPanelVisibility();
 }
 
 void UBattleHUD::ClearFirstPersonBattleHandLayer()
 {
+	bFirstPersonBattleHandLayerRuntimeActive = false;
 	if (UWacomFirstPersonCardAnchorComponent* LastAnchor = LastFirstPersonBattleHandAnchor.Get())
 	{
 		LastAnchor->SetBattleHandInteractionPrototypeEnabled(false);
@@ -403,6 +413,54 @@ void UBattleHUD::ClearFirstPersonBattleHandLayer()
 		CurrentAnchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
 	}
 	LastFirstPersonBattleHandAnchor.Reset();
+	SyncLegacyHandPanelVisibility();
+}
+
+void UBattleHUD::SyncLegacyHandPanelVisibility()
+{
+	if (!HandPanel)
+	{
+		return;
+	}
+
+	if (ShouldHideLegacyHandPanel())
+	{
+		if (!bLegacyHandPanelHiddenByFirstPersonLayer)
+		{
+			CaptureLegacyHandPanelVisibilityIfNeeded();
+		}
+		HandPanel->SetVisibility(ESlateVisibility::Collapsed);
+		bLegacyHandPanelHiddenByFirstPersonLayer = true;
+		return;
+	}
+
+	if (bLegacyHandPanelHiddenByFirstPersonLayer && bHasCachedLegacyHandPanelVisibility)
+	{
+		HandPanel->SetVisibility(CachedLegacyHandPanelVisibility);
+	}
+	bLegacyHandPanelHiddenByFirstPersonLayer = false;
+}
+
+bool UBattleHUD::ShouldHideLegacyHandPanel() const
+{
+	return bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive
+		&& bEnableFirstPersonBattleHandLayerPrototype
+		&& bEnableFirstPersonBattleHandInteractionPrototype
+		&& bFirstPersonBattleHandLayerRuntimeActive
+		&& GetSession()
+		&& UIState != EBattleUIState::BattleEnd
+		&& LastFirstPersonBattleHandAnchor.IsValid();
+}
+
+void UBattleHUD::CaptureLegacyHandPanelVisibilityIfNeeded()
+{
+	if (!HandPanel)
+	{
+		return;
+	}
+
+	CachedLegacyHandPanelVisibility = HandPanel->GetVisibility();
+	bHasCachedLegacyHandPanelVisibility = true;
 }
 
 void UBattleHUD::BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
