@@ -265,23 +265,62 @@ FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFi
 
 TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent::BuildStaticCardSlotViews() const
 {
+	TArray<FWacomCardViewData> CardData;
+	const int32 DesiredCount = StaticPreviewCardDefinitions.Num() > 0
+		? StaticPreviewCardDefinitions.Num()
+		: StaticCardCountFallback;
+	const int32 ClampedCount = FMath::Clamp(DesiredCount, 0, 32);
+	CardData.Reserve(ClampedCount);
+	for (int32 Index = 0; Index < ClampedCount; ++Index)
+	{
+		CardData.Add(BuildStaticCardViewData(Index));
+	}
+	return BuildCardSlotViewsFromData(CardData);
+}
+
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(
+	FName SourceId,
+	const TArray<FWacomCardViewData>& Cards)
+{
+	if (SourceId.IsNone())
+	{
+		return;
+	}
+
+	RuntimeCardLayerSourceId = SourceId;
+	RuntimeCardLayerData = Cards;
+	bHasRuntimeCardLayerData = true;
+}
+
+void UWacomFirstPersonCardAnchorComponent::ClearRuntimeCardLayerData(FName SourceId)
+{
+	if (SourceId.IsNone() || RuntimeCardLayerSourceId != SourceId)
+	{
+		return;
+	}
+
+	RuntimeCardLayerSourceId = NAME_None;
+	RuntimeCardLayerData.Reset();
+	bHasRuntimeCardLayerData = false;
+}
+
+TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent::BuildCardSlotViewsFromData(
+	const TArray<FWacomCardViewData>& CardData) const
+{
 	TArray<FWacomFirstPersonStaticCardSlotView> Slots;
 	if (!bHasValidAnchor)
 	{
 		return Slots;
 	}
 
-	const int32 DesiredCount = StaticPreviewCardDefinitions.Num() > 0
-		? StaticPreviewCardDefinitions.Num()
-		: StaticCardCountFallback;
-	const int32 ClampedCount = FMath::Clamp(DesiredCount, 0, 32);
+	const int32 ClampedCount = FMath::Clamp(CardData.Num(), 0, 32);
 	Slots.Reserve(ClampedCount);
 
 	for (int32 Index = 0; Index < ClampedCount; ++Index)
 	{
 		FWacomFirstPersonStaticCardSlotView Slot;
 		Slot.Index = Index;
-		Slot.CardViewData = BuildStaticCardViewData(Index);
+		Slot.CardViewData = CardData[Index];
 		Slot.RenderScale = FMath::Max(0.01f, StaticCardRenderScale);
 
 		const float CenterOffset =
@@ -302,6 +341,13 @@ TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent
 		Slots.Add(Slot);
 	}
 	return Slots;
+}
+
+TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent::BuildActiveCardLayerSlotViews() const
+{
+	return bHasRuntimeCardLayerData
+		? BuildCardSlotViewsFromData(RuntimeCardLayerData)
+		: BuildStaticCardSlotViews();
 }
 
 FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
@@ -462,7 +508,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateDebugWidget()
 
 void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 {
-	if (!bDrawStaticCardLayer)
+	if (!bDrawStaticCardLayer && !bHasRuntimeCardLayerData)
 	{
 		RemoveStaticCardLayer();
 		return;
@@ -495,7 +541,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 	if (StaticCardLayerWidget)
 	{
 		StaticCardLayerWidget->SetCardViewClass(StaticCardViewClass);
-		StaticCardLayerWidget->SetStaticCardSlots(BuildStaticCardSlotViews());
+		StaticCardLayerWidget->SetStaticCardSlots(BuildActiveCardLayerSlotViews());
 	}
 }
 

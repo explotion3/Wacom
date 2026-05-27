@@ -185,6 +185,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Card Layer")
 	TArray<FWacomFirstPersonStaticCardSlotView> BuildStaticCardSlotViews() const;
 
+	TArray<FWacomFirstPersonStaticCardSlotView> BuildActiveCardLayerSlotViews() const;
+
+	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);
+	void ClearRuntimeCardLayerData(FName SourceId);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
+	bool HasRuntimeCardLayerData() const { return bHasRuntimeCardLayerData; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
+	FName GetRuntimeCardLayerSourceId() const { return RuntimeCardLayerSourceId; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
+	int32 GetRuntimeCardLayerCardCount() const { return RuntimeCardLayerData.Num(); }
+
+	const TArray<FWacomCardViewData>& GetRuntimeCardLayerData() const { return RuntimeCardLayerData; }
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsStaticCardLayerWidgetActive() const { return StaticCardLayerWidget != nullptr; }
 
@@ -221,10 +237,18 @@ private:
 	bool bHasValidAnchor = false;
 	bool bHasInitializedAnchor = false;
 
+	UPROPERTY(Transient)
+	TArray<FWacomCardViewData> RuntimeCardLayerData;
+
+	bool bHasRuntimeCardLayerData = false;
+	FName RuntimeCardLayerSourceId = NAME_None;
+
 	AWacomPlayerCharacter* GetOwnerCharacter() const;
 	APlayerController* GetOwnerPlayerController() const;
 	bool ResolveBaseAnchor(FTransform& OutBaseTransform, EWacomFirstPersonCardAnchorMode& OutMode, FName& OutFallbackReason) const;
 	FWacomCardViewData BuildStaticCardViewData(int32 CardIndex) const;
+	TArray<FWacomFirstPersonStaticCardSlotView> BuildCardSlotViewsFromData(
+		const TArray<FWacomCardViewData>& CardData) const;
 	void UpdateDebugWidget();
 	void RemoveDebugWidget();
 	void RemoveStaticCardLayer();

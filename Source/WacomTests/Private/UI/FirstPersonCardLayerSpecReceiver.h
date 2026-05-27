@@ -26,6 +26,11 @@ public:
 		UpdateStaticCardLayer();
 	}
 
+	TArray<FWacomFirstPersonStaticCardSlotView> BuildActiveCardLayerSlotViewsForTest() const
+	{
+		return BuildActiveCardLayerSlotViews();
+	}
+
 protected:
 	virtual bool CanCreateStaticCardLayerForAnchor(APlayerController* PlayerController) const override
 	{

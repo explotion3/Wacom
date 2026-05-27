@@ -14,6 +14,7 @@
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "Components/WacomBattlePresentationTargetComponent.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/BorderSlot.h"
 #include "Components/Button.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -318,6 +319,31 @@ public:
 	void EnableSceneEnemyTargetBindingPrototypeForTest()
 	{
 		bEnableSceneEnemyTargetBindingPrototype = true;
+	}
+
+	void EnableFirstPersonBattleHandLayerPrototypeForTest()
+	{
+		bEnableFirstPersonBattleHandLayerPrototype = true;
+	}
+
+	void DisableFirstPersonBattleHandLayerPrototypeForTest()
+	{
+		bEnableFirstPersonBattleHandLayerPrototype = false;
+	}
+
+	void SyncFirstPersonBattleHandLayerForTest(const FBattleSnapshot& Snapshot)
+	{
+		SyncFirstPersonBattleHandLayer(Snapshot);
+	}
+
+	void ClearFirstPersonBattleHandLayerForTest()
+	{
+		ClearFirstPersonBattleHandLayer();
+	}
+
+	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForTest() const
+	{
+		return ResolveFirstPersonCardAnchor();
 	}
 
 	void DestroyBattle3DHandPresenterForTest()

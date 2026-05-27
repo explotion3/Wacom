@@ -11,8 +11,12 @@
 #include "Cards/CardDefinition.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "Session/BattleSession.h"
+#include "Snapshots/BattleSnapshot.h"
+#include "UI/BattleWidgetSpecReceiver.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/FirstPersonCardLayerSpecReceiver.h"
@@ -95,6 +99,56 @@ namespace WacomFirstPersonCardLayerSpec
 		Card->Description = FText::FromString(TEXT("Static layer preview card"));
 		Card->BaseCost = Cost;
 		return Card;
+	}
+
+	void PrimeBattleHUDWithCharacter(
+		UWacomBattleHUDDetailTest* HUD,
+		APlayerController* PC,
+		AWacomPlayerCharacter* Character,
+		UWorld* World)
+	{
+		if (PC && Character)
+		{
+			PC->Possess(Character);
+		}
+		if (HUD)
+		{
+			HUD->SetOwningPlayerForTest(PC);
+			HUD->SetWorldForTest(World);
+		}
+	}
+
+	UBattleSession* CreateMinimalBattleSession(FWacomBattleFixture& Fixture)
+	{
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 0, 0);
+		UCharacterDefinition* CharacterDefinition = Fixture.MakeCharacter(
+			Fixture.MakeNoopCard(0),
+			Fixture.MakeNoopCard(0),
+			{ Fixture.MakeNoopCard(0) });
+		return Fixture.CreateSession(CharacterDefinition, Enemy, 1);
+	}
+
+	FBattleSnapshot MakeSnapshotWithHand(const TArray<FHandCardSnapshot>& Cards, EBattlePhase Phase = EBattlePhase::PlayerAction)
+	{
+		FBattleSnapshot Snapshot;
+		Snapshot.Phase = Phase;
+		Snapshot.Hand.Cards = Cards;
+		Snapshot.Hand.NormalCardCount = Cards.Num();
+		return Snapshot;
+	}
+
+	FHandCardSnapshot MakeHandCardSnapshot(
+		UCardDefinition* Card,
+		int32 RuntimeCost,
+		bool bPlayable)
+	{
+		FHandCardSnapshot Snapshot;
+		Snapshot.InstanceId = FGuid::NewGuid();
+		Snapshot.Definition = Card;
+		Snapshot.RuntimeCost = RuntimeCost;
+		Snapshot.Zone = EHandZone::Both;
+		Snapshot.bIsPlayable = bPlayable;
+		return Snapshot;
 	}
 }
 
@@ -601,6 +655,246 @@ bool FWacomFirstPersonCardLayerInvalidProjectionTest::RunTest(const FString& Par
 	TestFalse(TEXT("Projection failure leaves point unprojected"), Point.bProjected);
 
 	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerRuntimeSourcePriorityTest,
+	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.RuntimeSourceOverridesStaticLayer",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerRuntimeSourcePriorityTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->bDrawStaticCardLayer = true;
+	Anchor->StaticCardCountFallback = 5;
+	TestEqual(TEXT("Static fallback has five cards"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
+
+	FWacomCardViewData RuntimeCard;
+	RuntimeCard.Name = FText::FromString(TEXT("Runtime Battle Card"));
+	Anchor->SetRuntimeCardLayerData(TEXT("BattleHand"), { RuntimeCard });
+	const TArray<FWacomFirstPersonStaticCardSlotView> RuntimeSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+	TestEqual(TEXT("Runtime source overrides static fallback"), RuntimeSlots.Num(), 1);
+	if (RuntimeSlots.Num() == 1)
+	{
+		TestEqual(TEXT("Runtime card data is used"), RuntimeSlots[0].CardViewData.Name.ToString(), FString(TEXT("Runtime Battle Card")));
+	}
+
+	Anchor->ClearRuntimeCardLayerData(TEXT("BattleHand"));
+	TestEqual(TEXT("Clearing runtime source restores static fallback"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerEmptyRuntimeSourceTest,
+	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.EmptyRuntimeSourceDoesNotFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerEmptyRuntimeSourceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->bDrawStaticCardLayer = true;
+	Anchor->StaticCardCountFallback = 5;
+	Anchor->SetRuntimeCardLayerData(TEXT("BattleHand"), {});
+	TestTrue(TEXT("Empty runtime source is still active"), Anchor->HasRuntimeCardLayerData());
+	TestEqual(TEXT("Empty runtime hand shows no cards"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 0);
+
+	Anchor->ClearRuntimeCardLayerData(TEXT("BattleHand"));
+	TestEqual(TEXT("Static fallback returns after clearing empty runtime hand"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBattleHUDDisabledTest,
+	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.DisabledDoesNotWriteRuntimeHand",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBattleHUDDisabledTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(GetTransientPackage(), TEXT("Battle.Disabled"), 2);
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("Card"), Card)
+		|| !TestNotNull(TEXT("Session"), Session))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->SetSession(Session);
+	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
+		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 3, true)
+	});
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+	TestFalse(TEXT("Prototype switch defaults off"), Character->GetFirstPersonCardAnchorComponent()->HasRuntimeCardLayerData());
+
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBattleHUDWritesHandTest,
+	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.WritesSnapshotHandData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBattleHUDWritesHandTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	UCardDefinition* FirstCard = WacomFirstPersonCardLayerSpec::MakePreviewCard(GetTransientPackage(), TEXT("Battle.Alpha"), 1);
+	UCardDefinition* SecondCard = WacomFirstPersonCardLayerSpec::MakePreviewCard(GetTransientPackage(), TEXT("Battle.Beta"), 2);
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("First card"), FirstCard)
+		|| !TestNotNull(TEXT("Second card"), SecondCard)
+		|| !TestNotNull(TEXT("Session"), Session))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->SetSession(Session);
+	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
+	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
+	Anchor->RefreshAnchor(0.0f);
+	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
+		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(FirstCard, 7, true),
+		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(SecondCard, 9, false)
+	});
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+
+	TestTrue(TEXT("Runtime hand source is active"), Anchor->HasRuntimeCardLayerData());
+	TestEqual(TEXT("Runtime hand source id"), Anchor->GetRuntimeCardLayerSourceId(), FName(TEXT("BattleHand")));
+	TestEqual(TEXT("Runtime hand card count"), Anchor->GetRuntimeCardLayerCardCount(), 2);
+	const TArray<FWacomCardViewData>& RuntimeCards = Anchor->GetRuntimeCardLayerData();
+	TestEqual(TEXT("Runtime data count"), RuntimeCards.Num(), 2);
+	if (RuntimeCards.Num() == 2)
+	{
+		TestEqual(TEXT("First card preserves hand order"), RuntimeCards[0].Name.ToString(), FString(TEXT("Battle.Alpha")));
+		TestEqual(TEXT("Runtime cost overrides base cost"), RuntimeCards[0].Cost, 7);
+		TestFalse(TEXT("Playable card is not disabled"), RuntimeCards[0].bDisabled);
+		TestEqual(TEXT("Second runtime cost overrides base cost"), RuntimeCards[1].Cost, 9);
+		TestTrue(TEXT("Unplayable card is disabled"), RuntimeCards[1].bDisabled);
+	}
+
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBattleHUDClearsTest,
+	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.ClearsOnBattleEndAndExplicitClear",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBattleHUDClearsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(GetTransientPackage(), TEXT("Battle.Clear"), 1);
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("Card"), Card)
+		|| !TestNotNull(TEXT("Session"), Session))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->SetSession(Session);
+	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
+	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
+	const FBattleSnapshot ActiveSnapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
+		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 4, true)
+	});
+	HUD->SyncFirstPersonBattleHandLayerForTest(ActiveSnapshot);
+	TestTrue(TEXT("Runtime hand source is active before clear"), Anchor->HasRuntimeCardLayerData());
+
+	FBattleSnapshot BattleEndSnapshot = ActiveSnapshot;
+	BattleEndSnapshot.Phase = EBattlePhase::BattleEnd;
+	HUD->SyncFirstPersonBattleHandLayerForTest(BattleEndSnapshot);
+	TestFalse(TEXT("BattleEnd clears runtime hand source"), Anchor->HasRuntimeCardLayerData());
+
+	HUD->SyncFirstPersonBattleHandLayerForTest(ActiveSnapshot);
+	TestTrue(TEXT("Runtime hand source can be set again"), Anchor->HasRuntimeCardLayerData());
+	HUD->ClearFirstPersonBattleHandLayerForTest();
+	TestFalse(TEXT("Explicit clear removes runtime hand source"), Anchor->HasRuntimeCardLayerData());
+
 	Character->Destroy();
 	PC->Destroy();
 	return true;

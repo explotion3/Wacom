@@ -7,6 +7,7 @@
 #include "Actors/WacomBattle3DHandPresenter.h"
 #include "Actors/WacomBattleCardVisualActor.h"
 #include "Components/WacomBattlePresentationTargetComponent.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/EventToast.h"
@@ -35,6 +36,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "InputCoreTypes.h"
@@ -52,6 +54,7 @@
 namespace
 {
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
+	const FName FirstPersonBattleHandLayerSourceId(TEXT("BattleHand"));
 }
 
 void UBattleHUD::NativeOnInitialized()
@@ -109,6 +112,7 @@ void UBattleHUD::NativeConstruct()
 void UBattleHUD::NativeDestruct()
 {
 	ClearBattlePresentationQueue();
+	ClearFirstPersonBattleHandLayer();
 	ClearSceneEnemyTargetSelectionAffordances();
 	UnregisterSceneEnemyPresentationTargets(false);
 	DestroyBattle3DHandPresenter();
@@ -188,6 +192,8 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		DestroyBattle3DHandPresenter();
 	}
 
+	SyncFirstPersonBattleHandLayer(Snap);
+
 	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
 	if (Snap.Phase == EBattlePhase::BattleEnd)
 	{
@@ -217,6 +223,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	if (OldSession != NewSession)
 	{
 		ClearBattlePresentationQueue();
+		ClearFirstPersonBattleHandLayer();
 		ClearSceneEnemyTargetSelectionAffordances();
 		UnregisterSceneEnemyPresentationTargets(false);
 		DestroyBattle3DHandPresenter();
@@ -304,6 +311,55 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 	if (ActionPanel)  { ActionPanel->RefreshFromSnapshot(Snap); }
 	SyncSceneEnemyPresentationTargets(Snap);
 	SyncSceneEnemyTargetSelectionAffordances();
+}
+
+UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor() const
+{
+	const APlayerController* PC = GetOwningPlayer();
+	const AWacomPlayerCharacter* Character = PC ? Cast<AWacomPlayerCharacter>(PC->GetPawn()) : nullptr;
+	return Character ? Character->GetFirstPersonCardAnchorComponent() : nullptr;
+}
+
+void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor();
+	const bool bCanShowBattleHand =
+		bEnableFirstPersonBattleHandLayerPrototype
+		&& GetSession()
+		&& Snap.Phase != EBattlePhase::BattleEnd
+		&& Anchor;
+	if (!bCanShowBattleHand)
+	{
+		ClearFirstPersonBattleHandLayer();
+		return;
+	}
+
+	TArray<FWacomCardViewData> CardData;
+	CardData.Reserve(Snap.Hand.Cards.Num());
+	for (const FHandCardSnapshot& CardSnapshot : Snap.Hand.Cards)
+	{
+		FWacomCardViewData Data = UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot.Definition);
+		Data.Cost = CardSnapshot.RuntimeCost;
+		Data.bShowCost = CardSnapshot.Definition != nullptr;
+		Data.bDisabled = !CardSnapshot.bIsPlayable;
+		CardData.Add(MoveTemp(Data));
+	}
+
+	Anchor->SetRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId, CardData);
+	LastFirstPersonBattleHandAnchor = Anchor;
+}
+
+void UBattleHUD::ClearFirstPersonBattleHandLayer()
+{
+	if (UWacomFirstPersonCardAnchorComponent* LastAnchor = LastFirstPersonBattleHandAnchor.Get())
+	{
+		LastAnchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
+	}
+	if (UWacomFirstPersonCardAnchorComponent* CurrentAnchor = ResolveFirstPersonCardAnchor())
+	{
+		CurrentAnchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
+	}
+	LastFirstPersonBattleHandAnchor.Reset();
 }
 
 // ================ 子 Widget 交互入口 ================

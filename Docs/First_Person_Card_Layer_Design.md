@@ -108,7 +108,7 @@ UWacomFirstPersonCardLayerWidget
 
 职责：
 
-- 持有可见的 `UCardWidget` 实例。
+- 持有可见的 `UWacomCardView` / 后续交互外壳实例；只读展示阶段不使用 `UCardWidget`，避免提前引入战斗点击和 hover 语义。
 - 用 `InstanceId` 维护卡牌视觉身份。
 - 消费 `UWacomFirstPersonCardAnchorComponent` 的布局输入。
 - 把虚拟第一人称卡牌位置转换成 UMG render transform。
@@ -192,15 +192,17 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ## 建议实现顺序
 
-### V0-B 当前状态：Anchor + Static Card Layer
+### V0-C 当前状态：Anchor + Static Card Layer + Battle Hand Adapter
 
-当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点，以及默认关闭的静态卡牌层。静态层使用 `UWacomCardView` 在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；它只验证真实卡面在第一人称投影布局中的表现，不替换战斗 `UHandPanel`。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层，以及默认关闭的战斗手牌只读 adapter。静态层使用 `UWacomCardView` 在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成 `FWacomCardViewData` 后交给同一个 layer 显示。它们都只验证真实卡面在第一人称投影布局中的表现，不替换战斗 `UHandPanel`。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
 - Shared cursor look 只按配置比例影响 card anchor，默认 yaw 25%、pitch 15%。
 - `bDrawDebugProjection` 默认关闭；开启后在 HUD 上绘制 5 个非交互 debug 点，用于 PIE 验证未来手牌位置。
 - `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。
+- `BattleHUD::bEnableFirstPersonBattleHandLayerPrototype` 默认关闭；开启后，战斗 HUD 在 snapshot 刷新时把真实手牌按顺序转成 `UWacomCardView` 数据，并覆盖同一个 first-person card layer 的静态预览。
+- Runtime battle hand 是有效外部数据源；即使手牌为空，也显示为空，不回退 placeholder，避免战斗中出现假卡。
 - 静态层和卡牌都保持 `HitTestInvisible`，不处理点击、hover、拖拽、出牌或战斗命令。
 
 1. `UWacomFirstPersonCardAnchorComponent`
@@ -212,11 +214,12 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - 由 anchor 驱动屏幕位置。
 
 3. V0-C：Battle hand adapter
-   - 把 `FBattleSnapshot.Hand` 接入 card layer。
-   - 把 click / hover 意图转发给 `UBattleHUD`。
+   - 已把 `FBattleSnapshot.Hand` 接入 card layer。
+   - 当前仍是只读展示，不处理 click / hover；旧 `UHandPanel` 继续负责所有战斗手牌交互。
 
-4. Hover 和 selected pose
+4. V0-D：Hover / selected pose 与交互 adapter
    - 用第一人称锚点运动替换基础 2D `UHandPanel` 的手感。
+   - 把 click / hover 意图转发给 `UBattleHUD`，但仍不让卡牌层直接提交 `UBattleSession` 命令。
 
 5. Play focus pose
    - 在命令 / 事件表现前增加短暂卡牌打出表现位。

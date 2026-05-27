@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UCardWidget;
 class UBattleEventLogPanel;
 class UWacomCardDetailPanel;
+class UWacomFirstPersonCardAnchorComponent;
 class AWacomBattle3DHandPresenter;
 class AWacomBattleCardVisualActor;
 class APlayerController;
@@ -149,6 +150,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "3D 手牌原型使用的单张卡牌 Actor 类。BattleHUD 只把该类交给 Presenter，不直接生成或管理单卡 Actor。"))
 	TSubclassOf<AWacomBattleCardVisualActor> Battle3DCardActorClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ToolTip = "是否启用第一人称卡牌层的战斗手牌只读适配。默认关闭；开启后 BattleHUD 会把当前 BattleSnapshot.Hand 转成 UWacomCardView 数据，交给玩家角色上的 FirstPersonCardAnchorComponent 投影显示。旧 HandPanel 仍是唯一战斗手牌交互入口。"))
+	bool bEnableFirstPersonBattleHandLayerPrototype = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Scene Enemy Target Prototype", meta = (ToolTip = "是否启用场景敌方目标表现绑定原型。默认关闭；开启后 BattleHUD 会按当前 BattleSnapshot 的 UEnemyPartDefinition::PartId，把场景中的 UWacomBattlePresentationTargetComponent 自动绑定到运行时 PartInstanceId。"))
 	bool bEnableSceneEnemyTargetBindingPrototype = false;
@@ -334,6 +338,7 @@ private:
 	TObjectPtr<AWacomBattle3DHandPresenter> Battle3DHandPresenter;
 
 	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
+	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastFirstPersonBattleHandAnchor;
 	bool bLoggedMissingCardDetailLayer = false;
 	int32 PlayerControllerClickEventAcquireCount = 0;
 	int32 PlayerControllerMouseOverEventAcquireCount = 0;
@@ -406,6 +411,9 @@ private:
 	void SyncSceneEnemyTargetSelectionAffordances();
 	void ClearSceneEnemyTargetSelectionAffordances(bool bOnlyThisHUD = true);
 	void UnregisterSceneEnemyPresentationTargets(bool bOnlyAutoBoundTargets = true);
+	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
+	void SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap);
+	void ClearFirstPersonBattleHandLayer();
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
 	friend struct FWacomBattleHUDCommandFlow;
