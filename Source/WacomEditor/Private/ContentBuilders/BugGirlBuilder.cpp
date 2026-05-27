@@ -120,12 +120,12 @@ namespace Wacom::ContentBuilder
 {
 	UCharacterDefinition* BuildBugGirlContent()
 	{
-		const FString CardsRoot = TEXT("/Game/Wacom/Cards/BugGirl/");
+		const FString BugGirlCards = BugGirlCardsRoot();
 
 		// ==== 左手 ====
 		// 当前左手主动效果和完美释放效果留空；打出后进入 Limbo，保留由手牌队列阶段处理。
 		UCardDefinition* LeftHand = BuildCard(
-			CardsRoot + TEXT("DA_Card_LeftHand"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_LeftHand")),
 			TEXT("DA_Card_LeftHand"),
 			TEXT("LeftHand"),
 			TEXT("左手"),
@@ -144,7 +144,7 @@ namespace Wacom::ContentBuilder
 		// ==== 右手 ====
 		// 主动：造成 8 伤害。"相邻右方伙伴代打"仍待正式规则。
 		UCardDefinition* RightHand = BuildCard(
-			CardsRoot + TEXT("DA_Card_RightHand"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_RightHand")),
 			TEXT("DA_Card_RightHand"),
 			TEXT("RightHand"),
 			TEXT("右手"),
@@ -193,7 +193,7 @@ namespace Wacom::ContentBuilder
 		ZM_Right.ExtraEffects = { ZH_Shuffle, ZH_ReduceCostOnShuffled, ZH_AddCostOnSelf };
 
 		UCardDefinition* Zhaoguang = BuildCard(
-			CardsRoot + TEXT("DA_Card_ZhaoguangMudie"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_ZhaoguangMudie")),
 			TEXT("DA_Card_ZhaoguangMudie"),
 			TEXT("ZhaoguangMudie"),
 			TEXT("朝光暮蝶"),
@@ -217,7 +217,7 @@ namespace Wacom::ContentBuilder
 		FF_OnCompanion.DisplayText      = FText::FromString(TEXT("每当你打出 3 张伙伴时，使此牌回到手中。"));
 
 		UCardDefinition* Fuxiao = BuildCard(
-			CardsRoot + TEXT("DA_Card_FuxiaoFeie"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_FuxiaoFeie")),
 			TEXT("DA_Card_FuxiaoFeie"),
 			TEXT("FuxiaoFeie"),
 			TEXT("拂晓飞蛾"),
@@ -237,7 +237,7 @@ namespace Wacom::ContentBuilder
 		FCardPhysique CGPhysique; CGPhysique.MaxHpBonus = 1;
 
 		UCardDefinition* Chifu = BuildCard(
-			CardsRoot + TEXT("DA_Card_ChifuGongyi"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_ChifuGongyi")),
 			TEXT("DA_Card_ChifuGongyi"),
 			TEXT("ChifuGongyi"),
 			TEXT("赤腹工蚁"),
@@ -261,7 +261,7 @@ namespace Wacom::ContentBuilder
 		SD_AfterPlayed.DisplayText = FText::FromString(TEXT("打出后：此牌腾挪至随机区域。"));
 
 		UCardDefinition* Shuoguang = BuildCard(
-			CardsRoot + TEXT("DA_Card_ShuoguangDie"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_ShuoguangDie")),
 			TEXT("DA_Card_ShuoguangDie"),
 			TEXT("ShuoguangDie"),
 			TEXT("烁光蝶"),
@@ -284,7 +284,7 @@ namespace Wacom::ContentBuilder
 		ML_OnTwilight.DisplayText = FText::FromString(TEXT("当触发暮气时，使一张中毒卡牌效果 +1。"));
 
 		UCardDefinition* Muling = BuildCard(
-			CardsRoot + TEXT("DA_Card_Muling"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Muling")),
 			TEXT("DA_Card_Muling"),
 			TEXT("Muling"),
 			TEXT("暮蛉"),
@@ -308,7 +308,7 @@ namespace Wacom::ContentBuilder
 		BagPhysique.Capacity = 12;
 
 		UCardDefinition* BugGirlBag = BuildCard(
-			CardsRoot + TEXT("DA_Card_BugGirlBag"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_BugGirlBag")),
 			TEXT("DA_Card_BugGirlBag"),
 			TEXT("BugGirlBag"),
 			TEXT("虫妹的小布袋"),
@@ -337,7 +337,7 @@ namespace Wacom::ContentBuilder
 		CocoonPhysique.CapacityEffect = WacomTags::Card_CapacityEffect_WeaponDamagePlus3;
 
 		UCardDefinition* ZhujianRongnang = BuildCard(
-			CardsRoot + TEXT("DA_Card_ZhujianRongnang"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_ZhujianRongnang")),
 			TEXT("DA_Card_ZhujianRongnang"),
 			TEXT("ZhujianRongnang"),
 			TEXT("蛛茧绒囊"),
@@ -367,7 +367,7 @@ namespace Wacom::ContentBuilder
 		LanternPhysique.Capacity = 3;
 
 		UCardDefinition* MuseiLantern = BuildCard(
-			CardsRoot + TEXT("DA_Card_MuseiYinchongdeng"),
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_MuseiYinchongdeng")),
 			TEXT("DA_Card_MuseiYinchongdeng"),
 			TEXT("MuseiYinchongdeng"),
 			TEXT("暮色引虫灯"),
@@ -390,7 +390,7 @@ namespace Wacom::ContentBuilder
 		}
 
 		// ==== 角色 ====
-		const FString CharPkgPath = TEXT("/Game/Wacom/Characters/DA_Character_BugGirl");
+		const FString CharPkgPath = MakePackagePath(CharactersRoot(), TEXT("DA_Character_BugGirl"));
 		UPackage* CharPkg = FindOrCreatePackage(CharPkgPath);
 		if (!CharPkg) { return nullptr; }
 

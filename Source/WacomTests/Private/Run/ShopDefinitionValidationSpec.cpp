@@ -105,7 +105,7 @@ bool FWacomDataShopDebugSnakeAssetValidationSpec::RunTest(const FString& /*Param
 {
 	UShopDefinition* DebugShop = LoadObject<UShopDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Shops/DA_Shop_DebugSnake.DA_Shop_DebugSnake"));
+		TEXT("/Game/Wacom/Data/Shops/DA_Shop_DebugSnake.DA_Shop_DebugSnake"));
 
 	if (!TestNotNull(TEXT("DebugSnake shop asset loads"), DebugShop))
 	{

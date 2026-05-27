@@ -12,6 +12,17 @@
  */
 namespace Wacom::ContentBuilder
 {
+	FString DataRoot();
+	FString CardsRoot();
+	FString BugGirlCardsRoot();
+	FString RewardCardsRoot();
+	FString CharactersRoot();
+	FString SnakeEnemiesRoot();
+	FString EventsRoot();
+	FString ShopsRoot();
+	FString MakePackagePath(const FString& FolderPath, const TCHAR* AssetName);
+	FString MakeObjectPath(const FString& PackagePath);
+
 	/** 创建或查找一个空 package，并 FullyLoad。 */
 	UPackage* FindOrCreatePackage(const FString& PackagePath);
 
@@ -24,7 +35,7 @@ namespace Wacom::ContentBuilder
 
 	/**
 	 * 保存 package 到磁盘，并通知 AssetRegistry。
-	 * PackagePath 形如 "/Game/Wacom/Cards/BugGirl/DA_Card_LeftHand"。
+	 * PackagePath 形如 "/Game/Wacom/Data/Cards/BugGirl/DA_Card_LeftHand"。
 	 */
 	bool SaveAssetPackage(UPackage* Package, UObject* Asset, const FString& PackagePath);
 }

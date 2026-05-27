@@ -42,7 +42,7 @@ void AWacomGameMode::BeginPlay()
 	if (!DefaultCharacter)
 	{
 		DefaultCharacter = LoadObject<UCharacterDefinition>(nullptr,
-			TEXT("/Game/Wacom/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
+			TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
 	}
 	if (!BattleHUDClass)
 	{

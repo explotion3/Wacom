@@ -70,6 +70,8 @@ enum class EGameFlowState : uint8
 
 `AWacomPlayerController` 是探索输入、RunSession 持有者和 UI 请求入口。
 
+核心蓝图资产归档到 `/Game/Wacom/Core`：GameMode 放 `/Game/Wacom/Core/GameModes`，PlayerCharacter 放 `/Game/Wacom/Core/Player`，PlayerController 放 `/Game/Wacom/Core/Controllers`。Run Tunnel authoring 蓝图放 `/Game/Wacom/Run/Tunnel/Blueprints`。`/Game/Wacom/_GAME` 是历史临时目录，不再作为新增资产入口；具体目录规范见 `Docs/Content_Organization.md`。
+
 主要职责：
 
 - BeginPlay 创建并持有 `URunSession`。

@@ -14,7 +14,7 @@ class UEnemyDefinition;
 namespace Wacom::ContentBuilder
 {
 	/**
-	 * 在 /Game/Wacom/Enemies/Snake/ 下生成：
+	 * 在 /Game/Wacom/Data/Enemies/Snake/ 下生成：
 	 * - DA_Part_Snake_Head.uasset
 	 * - DA_Part_Snake_Body.uasset
 	 * - DA_Part_Snake_Tail.uasset

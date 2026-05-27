@@ -44,13 +44,16 @@ WacomData 负责**静态定义和 DataAsset**。
 **资产位置**：
 ```
 Content/Wacom/
-├── Cards/BugGirl/DA_Card_*.uasset
-├── Cards/Rewards/DA_Card_PoisonFang.uasset
-├── Characters/DA_Character_BugGirl.uasset
-├── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
-├── Events/DA_Event_DebugSnakeGift.uasset
-└── Shops/DA_Shop_DebugSnake.uasset
+└── Data/
+    ├── Cards/BugGirl/DA_Card_*.uasset
+    ├── Cards/Rewards/DA_Card_PoisonFang.uasset
+    ├── Characters/DA_Character_BugGirl.uasset
+    ├── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
+    ├── Events/DA_Event_DebugSnakeGift.uasset
+    └── Shops/DA_Shop_DebugSnake.uasset
 ```
+
+完整内容目录口径见 `Docs/Content_Organization.md`。
 
 ---
 
@@ -336,24 +339,24 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 
 | 资产 | 内容 |
 |---|---|
-| `/Game/Wacom/Characters/DA_Character_BugGirl` | 虫妹角色；左右手 + 8 张 StarterDeck |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_LeftHand` | 固有左手牌 |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_RightHand` | 固有右手牌 |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_ZhaoguangMudie` | 朝光暮蝶，0 费伙伴，随机腾挪并按 RuntimeCost 施加中毒 |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_FuxiaoFeie` | 拂晓飞蛾，0 费伙伴，施加 1 减速，3 次伙伴计数后回手 |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_ChifuGongyi` | 赤腹工蚁，0 费伙伴，保留，腾挪双手区卡 |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_ShuoguangDie` | 烁光蝶，1 费伙伴武器，连击，造成 7 伤害，打出后自腾挪 |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_Muling` | 暮蛉，5 费伙伴，冻结 1 回合，暮气触发被动占位 |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_BugGirlBag` | 虫妹的小布袋，A 类容器，`Capacity=12`，带历史兼容 `BagProvider` |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_ZhujianRongnang` | 蛛茧绒囊，B 类容器，`Capacity=3`，`WeaponDamagePlus3` |
-| `/Game/Wacom/Cards/BugGirl/DA_Card_MuseiYinchongdeng` | 暮色引虫灯，A 类容器，`Capacity=3`，带 `DeleteProvider`，默认固定在备战区 |
-| `/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang` | `PoisonFang`，0 费白卡，对单个敌方部位施加 1 中毒 |
-| `/Game/Wacom/Enemies/Snake/DA_Enemy_Snake` | 蛇敌人，包含 Head / Body / Tail 三个部位 |
-| `/Game/Wacom/Enemies/Snake/DA_Part_Snake_Head` | `Snake.Head`，HP 16，Exp 3，奖励毒牙 |
-| `/Game/Wacom/Enemies/Snake/DA_Part_Snake_Body` | `Snake.Body`，HP 22，Exp 2，奖励毒牙 |
-| `/Game/Wacom/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙 |
-| `/Game/Wacom/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋 |
-| `/Game/Wacom/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、交出毒牙、金币/压力/节点效果 |
+| `/Game/Wacom/Data/Characters/DA_Character_BugGirl` | 虫妹角色；左右手 + 8 张 StarterDeck |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_LeftHand` | 固有左手牌 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_RightHand` | 固有右手牌 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie` | 朝光暮蝶，0 费伙伴，随机腾挪并按 RuntimeCost 施加中毒 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_FuxiaoFeie` | 拂晓飞蛾，0 费伙伴，施加 1 减速，3 次伙伴计数后回手 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ChifuGongyi` | 赤腹工蚁，0 费伙伴，保留，腾挪双手区卡 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ShuoguangDie` | 烁光蝶，1 费伙伴武器，连击，造成 7 伤害，打出后自腾挪 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Muling` | 暮蛉，5 费伙伴，冻结 1 回合，暮气触发被动占位 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag` | 虫妹的小布袋，A 类容器，`Capacity=12`，带历史兼容 `BagProvider` |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang` | 蛛茧绒囊，B 类容器，`Capacity=3`，`WeaponDamagePlus3` |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_MuseiYinchongdeng` | 暮色引虫灯，A 类容器，`Capacity=3`，带 `DeleteProvider`，默认固定在备战区 |
+| `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang` | `PoisonFang`，0 费白卡，对单个敌方部位施加 1 中毒 |
+| `/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake` | 蛇敌人，包含 Head / Body / Tail 三个部位 |
+| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head` | `Snake.Head`，HP 16，Exp 3，奖励毒牙 |
+| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body` | `Snake.Body`，HP 22，Exp 2，奖励毒牙 |
+| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙 |
+| `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋 |
+| `/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、交出毒牙、金币/压力/节点效果 |
 
 ### Data Validation
 

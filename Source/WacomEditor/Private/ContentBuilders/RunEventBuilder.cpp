@@ -10,12 +10,12 @@ namespace
 {
 	using namespace Wacom::ContentBuilder;
 
-	UCardDefinition* LoadGeneratedCard(const TCHAR* ObjectPath)
+	UCardDefinition* LoadGeneratedCard(const FString& ObjectPath)
 	{
-		UCardDefinition* Card = LoadObject<UCardDefinition>(nullptr, ObjectPath);
+		UCardDefinition* Card = LoadObject<UCardDefinition>(nullptr, *ObjectPath);
 		if (!Card)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[RunEventBuilder] Failed to load card asset: %s"), ObjectPath);
+			UE_LOG(LogTemp, Error, TEXT("[RunEventBuilder] Failed to load card asset: %s"), *ObjectPath);
 		}
 		return Card;
 	}
@@ -83,13 +83,13 @@ namespace Wacom::ContentBuilder
 	UWacomRunEventDefinition* BuildRunEventContent()
 	{
 		UCardDefinition* PoisonFang = LoadGeneratedCard(
-			TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+			MakeObjectPath(MakePackagePath(RewardCardsRoot(), TEXT("DA_Card_PoisonFang"))));
 		if (!PoisonFang)
 		{
 			return nullptr;
 		}
 
-		const FString PackagePath = TEXT("/Game/Wacom/Events/DA_Event_DebugSnakeGift");
+		const FString PackagePath = MakePackagePath(EventsRoot(), TEXT("DA_Event_DebugSnakeGift"));
 		UPackage* Pkg = FindOrCreatePackage(PackagePath);
 		if (!Pkg) { return nullptr; }
 

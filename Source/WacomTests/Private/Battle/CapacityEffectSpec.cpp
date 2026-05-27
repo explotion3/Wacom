@@ -73,7 +73,7 @@ bool FWacomBattleCapacityEffectBugGirlCocoonAssetSpec::RunTest(const FString& /*
 	// 蛛茧绒囊落盘资产必须使用首个具体容量效果，而不是早期 Placeholder。
 	UCardDefinition* Cocoon = LoadObject<UCardDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ZhujianRongnang.DA_Card_ZhujianRongnang"));
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang.DA_Card_ZhujianRongnang"));
 
 	if (!TestNotNull(TEXT("BugGirl cocoon card asset loads"), Cocoon))
 	{
@@ -100,7 +100,7 @@ bool FWacomBattleKnockdownRewardPoisonFangAssetSpec::RunTest(const FString& /*Pa
 {
 	UCardDefinition* PoisonFang = LoadObject<UCardDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
 
 	if (!TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
 	{
@@ -126,9 +126,9 @@ bool FWacomBattleKnockdownRewardPoisonFangAssetSpec::RunTest(const FString& /*Pa
 
 	const TCHAR* PartPaths[] =
 	{
-		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"),
-		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"),
-		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"),
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"),
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"),
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"),
 	};
 
 	for (const TCHAR* PartPath : PartPaths)
@@ -157,7 +157,7 @@ bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 {
 	UShopDefinition* DebugShop = LoadObject<UShopDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Shops/DA_Shop_DebugSnake.DA_Shop_DebugSnake"));
+		TEXT("/Game/Wacom/Data/Shops/DA_Shop_DebugSnake.DA_Shop_DebugSnake"));
 
 	if (!TestNotNull(TEXT("DebugSnake shop asset loads"), DebugShop))
 	{
@@ -175,10 +175,10 @@ bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 	};
 	const FExpectedOffer ExpectedOffers[] =
 	{
-		{ TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"), 0 },
-		{ TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"), 2 },
-		{ TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"), 2 },
-		{ TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"), 3 },
+		{ TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"), 0 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"), 2 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"), 2 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"), 3 },
 	};
 
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ExpectedOffers); ++Index)
@@ -214,7 +214,7 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 {
 	UWacomRunEventDefinition* Event = LoadObject<UWacomRunEventDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Events/DA_Event_DebugSnakeGift.DA_Event_DebugSnakeGift"));
+		TEXT("/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift.DA_Event_DebugSnakeGift"));
 
 	if (!TestNotNull(TEXT("DebugSnakeGift event asset loads"), Event))
 	{
@@ -278,7 +278,7 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 
 	UCardDefinition* PoisonFang = LoadObject<UCardDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
 	if (!TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
 	{
 		return false;

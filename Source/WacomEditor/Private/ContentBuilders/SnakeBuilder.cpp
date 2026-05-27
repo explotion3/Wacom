@@ -75,7 +75,7 @@ namespace
 
 	UCardDefinition* BuildPoisonFangCard()
 	{
-		const FString PackagePath = TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang");
+		const FString PackagePath = MakePackagePath(RewardCardsRoot(), TEXT("DA_Card_PoisonFang"));
 		UPackage* Pkg = FindOrCreatePackage(PackagePath);
 		if (!Pkg) { return nullptr; }
 
@@ -141,7 +141,7 @@ namespace Wacom::ContentBuilder
 		// ---- 头 ----
 		// 经验奖励：Head=3 / Body=2 / Tail=2，头是核心，多给 1 点。
 		UEnemyPartDefinition* Head = BuildPart(
-			TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Head"),
+			MakePackagePath(SnakeEnemiesRoot(), TEXT("DA_Part_Snake_Head")),
 			TEXT("DA_Part_Snake_Head"),
 			TEXT("Snake.Head"),
 			TEXT("Snake Head"),
@@ -160,7 +160,7 @@ namespace Wacom::ContentBuilder
 
 		// ---- 身体 ----
 		UEnemyPartDefinition* Body = BuildPart(
-			TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Body"),
+			MakePackagePath(SnakeEnemiesRoot(), TEXT("DA_Part_Snake_Body")),
 			TEXT("DA_Part_Snake_Body"),
 			TEXT("Snake.Body"),
 			TEXT("Snake Body"),
@@ -179,7 +179,7 @@ namespace Wacom::ContentBuilder
 
 		// ---- 尾巴 ----
 		UEnemyPartDefinition* Tail = BuildPart(
-			TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Tail"),
+			MakePackagePath(SnakeEnemiesRoot(), TEXT("DA_Part_Snake_Tail")),
 			TEXT("DA_Part_Snake_Tail"),
 			TEXT("Snake.Tail"),
 			TEXT("Snake Tail"),
@@ -197,7 +197,7 @@ namespace Wacom::ContentBuilder
 		if (!Tail) { return nullptr; }
 
 		// ---- 敌人 ----
-		const FString EnemyPkgPath = TEXT("/Game/Wacom/Enemies/Snake/DA_Enemy_Snake");
+		const FString EnemyPkgPath = MakePackagePath(SnakeEnemiesRoot(), TEXT("DA_Enemy_Snake"));
 		UPackage* EnemyPkg = FindOrCreatePackage(EnemyPkgPath);
 		if (!EnemyPkg) { return nullptr; }
 

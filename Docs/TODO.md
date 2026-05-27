@@ -73,6 +73,11 @@ tags:
 
 ## P2 后续清理
 
+- [x] **用编辑器迁移旧内容目录并清理 `_GAME` 临时蓝图目录**
+  - 状态：`Done: Content Organization V1-A`
+  - 归属：Content / App / Data
+  - 入口：[Content Organization](./Content_Organization.md)
+
 - [ ] **战斗手牌表现升级：扇形布局、拖拽出牌、3D 目标选择**
   - 状态：`Blocked: HD-2D 表现方案`
   - 归属：UI / 战斗表现

@@ -487,20 +487,20 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 {
 	UCharacterDefinition* BugGirl = LoadObject<UCharacterDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
+		TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
 	UEnemyDefinition* Snake = LoadObject<UEnemyDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Enemies/Snake/DA_Enemy_Snake.DA_Enemy_Snake"));
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake.DA_Enemy_Snake"));
 
 	UEnemyPartDefinition* SnakeHead = LoadObject<UEnemyPartDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"));
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"));
 	UEnemyPartDefinition* SnakeBody = LoadObject<UEnemyPartDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"));
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"));
 	UEnemyPartDefinition* SnakeTail = LoadObject<UEnemyPartDefinition>(
 		nullptr,
-		TEXT("/Game/Wacom/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"));
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"));
 
 	bool bAllAssetsLoaded = true;
 	bAllAssetsLoaded &= TestNotNull(TEXT("BugGirl character asset loads"), BugGirl);
@@ -510,17 +510,17 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake tail part asset loads"), SnakeTail);
 
 	const TCHAR* CardAssetPaths[] = {
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_LeftHand.DA_Card_LeftHand"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_RightHand.DA_Card_RightHand"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_FuxiaoFeie.DA_Card_FuxiaoFeie"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ShuoguangDie.DA_Card_ShuoguangDie"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_Muling.DA_Card_Muling"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ZhujianRongnang.DA_Card_ZhujianRongnang"),
-		TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_MuseiYinchongdeng.DA_Card_MuseiYinchongdeng"),
-		TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang")
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_LeftHand.DA_Card_LeftHand"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_RightHand.DA_Card_RightHand"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_FuxiaoFeie.DA_Card_FuxiaoFeie"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ShuoguangDie.DA_Card_ShuoguangDie"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Muling.DA_Card_Muling"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang.DA_Card_ZhujianRongnang"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_MuseiYinchongdeng.DA_Card_MuseiYinchongdeng"),
+		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang")
 	};
 
 	TArray<UCardDefinition*> GeneratedCards;

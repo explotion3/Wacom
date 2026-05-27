@@ -10,12 +10,12 @@ namespace
 {
 	using namespace Wacom::ContentBuilder;
 
-	UCardDefinition* LoadGeneratedCard(const TCHAR* ObjectPath)
+	UCardDefinition* LoadGeneratedCard(const FString& ObjectPath)
 	{
-		UCardDefinition* Card = LoadObject<UCardDefinition>(nullptr, ObjectPath);
+		UCardDefinition* Card = LoadObject<UCardDefinition>(nullptr, *ObjectPath);
 		if (!Card)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[ShopBuilder] Failed to load card asset: %s"), ObjectPath);
+			UE_LOG(LogTemp, Error, TEXT("[ShopBuilder] Failed to load card asset: %s"), *ObjectPath);
 		}
 		return Card;
 	}
@@ -33,20 +33,22 @@ namespace Wacom::ContentBuilder
 {
 	UShopDefinition* BuildShopContent()
 	{
+		const FString RewardsRoot = RewardCardsRoot();
+		const FString BugGirlRoot = BugGirlCardsRoot();
 		UCardDefinition* PoisonFang = LoadGeneratedCard(
-			TEXT("/Game/Wacom/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+			MakeObjectPath(MakePackagePath(RewardsRoot, TEXT("DA_Card_PoisonFang"))));
 		UCardDefinition* ChifuGongyi = LoadGeneratedCard(
-			TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"));
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_ChifuGongyi"))));
 		UCardDefinition* ZhaoguangMudie = LoadGeneratedCard(
-			TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"));
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_ZhaoguangMudie"))));
 		UCardDefinition* BugGirlBag = LoadGeneratedCard(
-			TEXT("/Game/Wacom/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"));
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_BugGirlBag"))));
 		if (!PoisonFang || !ChifuGongyi || !ZhaoguangMudie || !BugGirlBag)
 		{
 			return nullptr;
 		}
 
-		const FString PackagePath = TEXT("/Game/Wacom/Shops/DA_Shop_DebugSnake");
+		const FString PackagePath = MakePackagePath(ShopsRoot(), TEXT("DA_Shop_DebugSnake"));
 		UPackage* Pkg = FindOrCreatePackage(PackagePath);
 		if (!Pkg) { return nullptr; }
 

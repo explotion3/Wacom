@@ -11,7 +11,7 @@ namespace Wacom::ContentBuilder
 	/**
 	 * 生成第一版调试商店内容。
 	 *
-	 * 在 /Game/Wacom/Shops/ 下生成 DA_Shop_DebugSnake。
+	 * 在 /Game/Wacom/Data/Shops/ 下生成 DA_Shop_DebugSnake。
 	 */
 	UShopDefinition* BuildShopContent();
 }

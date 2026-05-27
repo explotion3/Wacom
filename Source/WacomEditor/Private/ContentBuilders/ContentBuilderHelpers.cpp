@@ -11,6 +11,56 @@
 
 namespace Wacom::ContentBuilder
 {
+	FString DataRoot()
+	{
+		return TEXT("/Game/Wacom/Data");
+	}
+
+	FString CardsRoot()
+	{
+		return DataRoot() / TEXT("Cards");
+	}
+
+	FString BugGirlCardsRoot()
+	{
+		return CardsRoot() / TEXT("BugGirl");
+	}
+
+	FString RewardCardsRoot()
+	{
+		return CardsRoot() / TEXT("Rewards");
+	}
+
+	FString CharactersRoot()
+	{
+		return DataRoot() / TEXT("Characters");
+	}
+
+	FString SnakeEnemiesRoot()
+	{
+		return DataRoot() / TEXT("Enemies/Snake");
+	}
+
+	FString EventsRoot()
+	{
+		return DataRoot() / TEXT("Events");
+	}
+
+	FString ShopsRoot()
+	{
+		return DataRoot() / TEXT("Shops");
+	}
+
+	FString MakePackagePath(const FString& FolderPath, const TCHAR* AssetName)
+	{
+		return FolderPath / AssetName;
+	}
+
+	FString MakeObjectPath(const FString& PackagePath)
+	{
+		return PackagePath + TEXT(".") + FPackageName::GetLongPackageAssetName(PackagePath);
+	}
+
 	UPackage* FindOrCreatePackage(const FString& PackagePath)
 	{
 		UPackage* Package = ::CreatePackage(*PackagePath);
