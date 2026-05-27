@@ -192,24 +192,26 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ## 建议实现顺序
 
-### V0-A 当前状态：Anchor + HUD Debug Projection
+### V0-B 当前状态：Anchor + Static Card Layer
 
-第一轮只建立 `UWacomFirstPersonCardAnchorComponent` 和 HUD debug 投影点，不显示真实卡牌，也不替换战斗 `UHandPanel`。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点，以及默认关闭的静态卡牌层。静态层使用 `UWacomCardView` 在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；它只验证真实卡面在第一人称投影布局中的表现，不替换战斗 `UHandPanel`。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
 - Shared cursor look 只按配置比例影响 card anchor，默认 yaw 25%、pitch 15%。
 - `bDrawDebugProjection` 默认关闭；开启后在 HUD 上绘制 5 个非交互 debug 点，用于 PIE 验证未来手牌位置。
+- `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。
+- 静态层和卡牌都保持 `HitTestInvisible`，不处理点击、hover、拖拽、出牌或战斗命令。
 
 1. `UWacomFirstPersonCardAnchorComponent`
-   - 暂时不接真实卡牌，只暴露 debug projected points。
-   - 验证 Run Tunnel 与 Battle camera 的 base transform。
+   - 暴露 debug projected points 和 static card slot views。
+   - 验证 Run Tunnel 与 Battle camera 的 base transform，以及 UMG 卡面投影位置。
 
 2. `UWacomFirstPersonCardLayerWidget`
-   - 用静态 view data 渲染少量测试卡牌。
+   - 用静态 view data 或配置的卡牌定义渲染少量测试卡牌。
    - 由 anchor 驱动屏幕位置。
 
-3. Battle hand adapter
+3. V0-C：Battle hand adapter
    - 把 `FBattleSnapshot.Hand` 接入 card layer。
    - 把 click / hover 意图转发给 `UBattleHUD`。
 

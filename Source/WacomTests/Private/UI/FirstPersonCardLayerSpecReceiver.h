@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "FirstPersonCardLayerSpecReceiver.generated.h"
 
 UCLASS()
@@ -13,13 +14,43 @@ class UWacomFirstPersonCardAnchorSpecProbeComponent : public UWacomFirstPersonCa
 
 public:
 	bool bProjectionSucceeds = true;
+	bool bAllowStaticLayerCreation = true;
 	FVector2D ProbeViewportSize = FVector2D(1920.0f, 1080.0f);
 	FTransform ProbeCameraTransform = FTransform(
 		FRotator::ZeroRotator,
 		FVector(100.0f, 200.0f, 300.0f),
 		FVector::OneVector);
 
+	void RefreshStaticLayerForTest()
+	{
+		UpdateStaticCardLayer();
+	}
+
 protected:
+	virtual bool CanCreateStaticCardLayerForAnchor(APlayerController* PlayerController) const override
+	{
+		return bAllowStaticLayerCreation && PlayerController != nullptr;
+	}
+
+	virtual UWacomFirstPersonCardLayerWidget* CreateStaticCardLayerWidgetForAnchor(
+		APlayerController* PlayerController,
+		TSubclassOf<UWacomFirstPersonCardLayerWidget> LayerClass) const override
+	{
+		if (!PlayerController)
+		{
+			return nullptr;
+		}
+
+		UClass* ClassToUse = LayerClass ? LayerClass.Get() : UWacomFirstPersonCardLayerWidget::StaticClass();
+		return NewObject<UWacomFirstPersonCardLayerWidget>(PlayerController, ClassToUse);
+	}
+
+	virtual void AddStaticCardLayerWidgetToViewportForAnchor(
+		UWacomFirstPersonCardLayerWidget* LayerWidget,
+		int32 ZOrder) const override
+	{
+	}
+
 	virtual bool ResolveCameraTransformForAnchor(FTransform& OutCameraTransform) const override
 	{
 		OutCameraTransform = ProbeCameraTransform;

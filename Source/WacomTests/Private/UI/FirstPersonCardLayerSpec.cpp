@@ -8,10 +8,13 @@
 #include "Components/WacomCursorLookDriverComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
+#include "Cards/CardDefinition.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "UI/Card/WacomFirstPersonCardLayerWidget.h"
+#include "UI/Card/WacomCardView.h"
 #include "UI/FirstPersonCardLayerSpecReceiver.h"
 
 namespace WacomFirstPersonCardLayerSpec
@@ -61,6 +64,37 @@ namespace WacomFirstPersonCardLayerSpec
 			Probe->FollowInterpSpeed = 0.0f;
 		}
 		return Probe;
+	}
+
+	void PrimeFallbackAnchor(APlayerController* PC, AWacomPlayerCharacter* Character, UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor)
+	{
+		if (PC && Character)
+		{
+			PC->Possess(Character);
+		}
+		if (Anchor)
+		{
+			Anchor->ProbeCameraTransform = FTransform(
+				FRotator::ZeroRotator,
+				FVector(100.0f, 200.0f, 300.0f),
+				FVector::OneVector);
+			Anchor->RefreshAnchor(0.0f);
+		}
+	}
+
+	UCardDefinition* MakePreviewCard(UObject* Outer, const TCHAR* Name, int32 Cost)
+	{
+		UCardDefinition* Card = NewObject<UCardDefinition>(Outer);
+		if (!Card)
+		{
+			return nullptr;
+		}
+
+		Card->CardId = FName(Name);
+		Card->DisplayName = FText::FromString(Name);
+		Card->Description = FText::FromString(TEXT("Static layer preview card"));
+		Card->BaseCost = Cost;
+		return Card;
 	}
 }
 
@@ -230,6 +264,264 @@ bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameter
 	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
 	TestEqual(TEXT("Yaw uses partial cursor influence"), View.LookOffsetUsed.Yaw, 5.0);
 	TestEqual(TEXT("Pitch uses partial cursor influence"), View.LookOffsetUsed.Pitch, 5.0);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerFallbackStaticCardsTest,
+	"Wacom.UI.FirstPersonCardLayer.StaticLayer.CreatesCardViewsFromFallbackData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerFallbackStaticCardsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->StaticCardCountFallback = 5;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	const TArray<FWacomFirstPersonStaticCardSlotView> Slots = Anchor->BuildStaticCardSlotViews();
+	TestEqual(TEXT("Fallback creates five static slots"), Slots.Num(), 5);
+	if (Slots.Num() > 0)
+	{
+		TestEqual(TEXT("Fallback card has placeholder name"), Slots[0].CardViewData.Name.ToString(), FString(TEXT("Anchor Card 1")));
+		TestTrue(TEXT("Fallback slot is projected"), Slots[0].bProjected);
+	}
+
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (TestNotNull(TEXT("Layer widget"), Layer))
+	{
+		Layer->SetStaticCardSlots(Slots);
+		TestEqual(TEXT("Layer creates card views"), Layer->GetCardViewCount(), 5);
+		TestTrue(TEXT("First card is visible"), Layer->IsCardSlotVisible(0));
+		TestNotNull(TEXT("Layer uses card view widgets"), Layer->GetCardViewAt(0));
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDefinitionStaticCardsTest,
+	"Wacom.UI.FirstPersonCardLayer.StaticLayer.BuildsCardViewsFromDefinitions",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDefinitionStaticCardsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UCardDefinition* FirstCard = WacomFirstPersonCardLayerSpec::MakePreviewCard(GetTransientPackage(), TEXT("Preview.Alpha"), 2);
+	UCardDefinition* SecondCard = WacomFirstPersonCardLayerSpec::MakePreviewCard(GetTransientPackage(), TEXT("Preview.Beta"), 4);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("First preview card"), FirstCard)
+		|| !TestNotNull(TEXT("Second preview card"), SecondCard))
+	{
+		return false;
+	}
+
+	Anchor->StaticPreviewCardDefinitions = {
+		TSoftObjectPtr<UCardDefinition>(FirstCard),
+		TSoftObjectPtr<UCardDefinition>(SecondCard)
+	};
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	const TArray<FWacomFirstPersonStaticCardSlotView> Slots = Anchor->BuildStaticCardSlotViews();
+	TestEqual(TEXT("Definitions choose slot count"), Slots.Num(), 2);
+	if (Slots.Num() == 2)
+	{
+		TestEqual(TEXT("First definition name is used"), Slots[0].CardViewData.Name.ToString(), FString(TEXT("Preview.Alpha")));
+		TestEqual(TEXT("Second definition cost is used"), Slots[1].CardViewData.Cost, 4);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerStaticSlotOrderTest,
+	"Wacom.UI.FirstPersonCardLayer.StaticLayer.ProjectedSlotsStayOrdered",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerStaticSlotOrderTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->StaticCardCountFallback = 5;
+	Anchor->StaticCardEdgeDropPixels = 80.0f;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	const TArray<FWacomFirstPersonStaticCardSlotView> Slots = Anchor->BuildStaticCardSlotViews();
+	TestEqual(TEXT("Slot count"), Slots.Num(), 5);
+	if (Slots.Num() == 5)
+	{
+		TestTrue(TEXT("Left slot screen X is before center"), Slots[0].ScreenPosition.X < Slots[2].ScreenPosition.X);
+		TestTrue(TEXT("Right slot screen X is after center"), Slots[4].ScreenPosition.X > Slots[2].ScreenPosition.X);
+		TestTrue(TEXT("Left edge drops lower than center"), Slots[0].ScreenPosition.Y > Slots[2].ScreenPosition.Y);
+		TestTrue(TEXT("Right edge drops lower than center"), Slots[4].ScreenPosition.Y > Slots[2].ScreenPosition.Y);
+		TestEqual(TEXT("Center card has no fan angle"), Slots[2].RenderAngleDegrees, 0.0f);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerStaticHitTestTest,
+	"Wacom.UI.FirstPersonCardLayer.StaticLayer.HitTestInvisibleAndNoInputBindings",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerStaticHitTestTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("Layer widget"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonStaticCardSlotView Slot;
+	Slot.Index = 0;
+	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	Slot.RenderScale = 0.55f;
+	Slot.bProjected = true;
+	Layer->SetStaticCardSlots({ Slot });
+	TestEqual(TEXT("Layer is hit-test-invisible"), Layer->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	UWacomCardView* CardView = Layer->GetCardViewAt(0);
+	if (TestNotNull(TEXT("Created card is CardView"), CardView))
+	{
+		TestEqual(TEXT("Card view is hit-test-invisible"), CardView->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	}
+
+	Layer->RemoveFromParent();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerProjectionFailureHidesTest,
+	"Wacom.UI.FirstPersonCardLayer.StaticLayer.ProjectionFailureHidesCards",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerProjectionFailureHidesTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->bProjectionSucceeds = false;
+	const TArray<FWacomFirstPersonStaticCardSlotView> Slots = Anchor->BuildStaticCardSlotViews();
+	TestEqual(TEXT("Projection failure still builds slot data"), Slots.Num(), 5);
+	if (Slots.Num() > 0)
+	{
+		TestFalse(TEXT("Slot is not projected"), Slots[0].bProjected);
+	}
+
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (TestNotNull(TEXT("Layer widget"), Layer))
+	{
+		Layer->SetStaticCardSlots(Slots);
+		TestFalse(TEXT("Failed projection hides card"), Layer->IsCardSlotVisible(0));
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerToggleRemovesWidgetTest,
+	"Wacom.UI.FirstPersonCardLayer.StaticLayer.ToggleRemovesWidget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerToggleRemovesWidgetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->bDrawStaticCardLayer = true;
+	Anchor->RefreshStaticLayerForTest();
+	TestTrue(TEXT("Static layer is created"), Anchor->IsStaticCardLayerWidgetActive());
+
+	Anchor->bDrawStaticCardLayer = false;
+	Anchor->RefreshStaticLayerForTest();
+	TestFalse(TEXT("Static layer is removed after toggle off"), Anchor->IsStaticCardLayerWidgetActive());
 
 	Anchor->DestroyComponent();
 	Character->Destroy();

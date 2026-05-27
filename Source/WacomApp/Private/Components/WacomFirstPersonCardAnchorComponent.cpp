@@ -10,7 +10,10 @@
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "Cards/CardDefinition.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardAnchorDebugWidget.h"
+#include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 
 namespace
 {
@@ -34,6 +37,7 @@ void UWacomFirstPersonCardAnchorComponent::BeginPlay()
 
 void UWacomFirstPersonCardAnchorComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	RemoveStaticCardLayer();
 	RemoveDebugWidget();
 	Super::EndPlay(EndPlayReason);
 }
@@ -46,6 +50,7 @@ void UWacomFirstPersonCardAnchorComponent::TickComponent(
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	RefreshAnchor(DeltaTime);
 	UpdateDebugWidget();
+	UpdateStaticCardLayer();
 }
 
 void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
@@ -204,6 +209,34 @@ bool UWacomFirstPersonCardAnchorComponent::GetViewportSizeForAnchor(FVector2D& O
 	return ViewportSizeX > 0 && ViewportSizeY > 0;
 }
 
+bool UWacomFirstPersonCardAnchorComponent::CanCreateStaticCardLayerForAnchor(
+	APlayerController* PlayerController) const
+{
+	return PlayerController && PlayerController->IsLocalController();
+}
+
+UWacomFirstPersonCardLayerWidget* UWacomFirstPersonCardAnchorComponent::CreateStaticCardLayerWidgetForAnchor(
+	APlayerController* PlayerController,
+	TSubclassOf<UWacomFirstPersonCardLayerWidget> LayerClass) const
+{
+	if (!PlayerController || !LayerClass)
+	{
+		return nullptr;
+	}
+
+	return CreateWidget<UWacomFirstPersonCardLayerWidget>(PlayerController, LayerClass);
+}
+
+void UWacomFirstPersonCardAnchorComponent::AddStaticCardLayerWidgetToViewportForAnchor(
+	UWacomFirstPersonCardLayerWidget* LayerWidget,
+	int32 ZOrder) const
+{
+	if (LayerWidget)
+	{
+		LayerWidget->AddToViewport(ZOrder);
+	}
+}
+
 FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFirstPersonCardAnchorDebugView(
 	int32 NumDebugCards) const
 {
@@ -228,6 +261,47 @@ FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFi
 		View.ProjectedPoints.Add(Point);
 	}
 	return View;
+}
+
+TArray<FWacomFirstPersonStaticCardSlotView> UWacomFirstPersonCardAnchorComponent::BuildStaticCardSlotViews() const
+{
+	TArray<FWacomFirstPersonStaticCardSlotView> Slots;
+	if (!bHasValidAnchor)
+	{
+		return Slots;
+	}
+
+	const int32 DesiredCount = StaticPreviewCardDefinitions.Num() > 0
+		? StaticPreviewCardDefinitions.Num()
+		: StaticCardCountFallback;
+	const int32 ClampedCount = FMath::Clamp(DesiredCount, 0, 32);
+	Slots.Reserve(ClampedCount);
+
+	for (int32 Index = 0; Index < ClampedCount; ++Index)
+	{
+		FWacomFirstPersonStaticCardSlotView Slot;
+		Slot.Index = Index;
+		Slot.CardViewData = BuildStaticCardViewData(Index);
+		Slot.RenderScale = FMath::Max(0.01f, StaticCardRenderScale);
+
+		const float CenterOffset =
+			static_cast<float>(Index) - (static_cast<float>(ClampedCount - 1) * 0.5f);
+		Slot.RenderAngleDegrees = CenterOffset * FanYawDegrees;
+
+		FWacomFirstPersonCardProjectedPoint Point;
+		if (ProjectCardTransformToScreen(ComputeCardTransform(ClampedCount, Index), Point, Index))
+		{
+			Slot.ScreenPosition = Point.ScreenPosition;
+			const float MaxAbsCenterOffset = FMath::Max(1.0f, static_cast<float>(ClampedCount - 1) * 0.5f);
+			const float NormalizedEdgeDistance = FMath::Abs(CenterOffset) / MaxAbsCenterOffset;
+			Slot.ScreenPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, StaticCardEdgeDropPixels);
+			Slot.bProjected = Point.bProjected;
+			Slot.bClamped = Point.bClamped;
+		}
+
+		Slots.Add(Slot);
+	}
+	return Slots;
 }
 
 FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
@@ -326,6 +400,33 @@ bool UWacomFirstPersonCardAnchorComponent::ResolveBaseAnchor(
 	return true;
 }
 
+FWacomCardViewData UWacomFirstPersonCardAnchorComponent::BuildStaticCardViewData(int32 CardIndex) const
+{
+	if (StaticPreviewCardDefinitions.IsValidIndex(CardIndex))
+	{
+		const TSoftObjectPtr<UCardDefinition>& CardPtr = StaticPreviewCardDefinitions[CardIndex];
+		if (const UCardDefinition* Card = CardPtr.LoadSynchronous())
+		{
+			return UWacomCardPresentationBuilder::BuildCardViewData(Card);
+		}
+	}
+
+	FWacomCardViewData Data;
+	Data.Name = FText::Format(
+		NSLOCTEXT("Wacom.FirstPersonCardLayer", "StaticPlaceholderName", "Anchor Card {0}"),
+		FText::AsNumber(CardIndex + 1));
+	Data.TypeText = NSLOCTEXT("Wacom.FirstPersonCardLayer", "StaticPlaceholderType", "Static Preview");
+	Data.Description = NSLOCTEXT(
+		"Wacom.FirstPersonCardLayer",
+		"StaticPlaceholderDescription",
+		"HUD card view driven by the first-person anchor.");
+	Data.Cost = CardIndex;
+	Data.bShowCost = true;
+	Data.Value = CardIndex + 1;
+	Data.bShowValue = true;
+	return Data;
+}
+
 void UWacomFirstPersonCardAnchorComponent::UpdateDebugWidget()
 {
 	if (!bDrawDebugProjection)
@@ -359,12 +460,60 @@ void UWacomFirstPersonCardAnchorComponent::UpdateDebugWidget()
 	}
 }
 
+void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
+{
+	if (!bDrawStaticCardLayer)
+	{
+		RemoveStaticCardLayer();
+		return;
+	}
+
+	APlayerController* PC = GetOwnerPlayerController();
+	if (!CanCreateStaticCardLayerForAnchor(PC))
+	{
+		RemoveStaticCardLayer();
+		return;
+	}
+
+	if (!StaticCardLayerWidget)
+	{
+		TSubclassOf<UWacomFirstPersonCardLayerWidget> LayerClass = StaticCardLayerWidgetClass;
+		if (!LayerClass)
+		{
+			LayerClass = UWacomFirstPersonCardLayerWidget::StaticClass();
+		}
+
+		StaticCardLayerWidget = CreateStaticCardLayerWidgetForAnchor(PC, LayerClass);
+		if (StaticCardLayerWidget)
+		{
+			StaticCardLayerWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+			StaticCardLayerWidget->SetCardViewClass(StaticCardViewClass);
+			AddStaticCardLayerWidgetToViewportForAnchor(StaticCardLayerWidget, StaticCardLayerZOrder);
+		}
+	}
+
+	if (StaticCardLayerWidget)
+	{
+		StaticCardLayerWidget->SetCardViewClass(StaticCardViewClass);
+		StaticCardLayerWidget->SetStaticCardSlots(BuildStaticCardSlotViews());
+	}
+}
+
 void UWacomFirstPersonCardAnchorComponent::RemoveDebugWidget()
 {
 	if (DebugWidget)
 	{
 		DebugWidget->RemoveFromParent();
 		DebugWidget = nullptr;
+	}
+}
+
+void UWacomFirstPersonCardAnchorComponent::RemoveStaticCardLayer()
+{
+	if (StaticCardLayerWidget)
+	{
+		StaticCardLayerWidget->RemoveFromParent();
+		StaticCardLayerWidget = nullptr;
 	}
 }
 
