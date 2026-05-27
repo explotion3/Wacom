@@ -10,6 +10,7 @@ class UCameraComponent;
 class UInputAction;
 class UWacomBattleCameraLookComponent;
 class UWacomCursorLookDriverComponent;
+class UWacomFirstPersonCardAnchorComponent;
 class UWacomRunTunnelMovementComponent;
 struct FInputActionValue;
 
@@ -43,6 +44,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
 	UWacomBattleCameraLookComponent* GetBattleCameraLookComponent() const { return BattleCameraLookComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
+	UWacomFirstPersonCardAnchorComponent* GetFirstPersonCardAnchorComponent() const { return FirstPersonCardAnchorComponent; }
 
 	/**
 	 * 禁用 / 启用探索期的移动 + 视角输入。
@@ -86,6 +90,10 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Battle camera look component. It applies the shared cursor look offset while battle is active."))
 	TObjectPtr<UWacomBattleCameraLookComponent> BattleCameraLookComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
+		meta = (AllowPrivateAccess = "true", ToolTip = "First-person card anchor component. It projects future HUD-rendered card slots from Run Tunnel or Battle camera base transforms."))
+	TObjectPtr<UWacomFirstPersonCardAnchorComponent> FirstPersonCardAnchorComponent = nullptr;
 
 	/** 当前是否接受探索输入。战斗期间置 false。 */
 	bool bExplorationInputEnabled = true;

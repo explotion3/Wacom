@@ -88,6 +88,8 @@ Run 探索期的正式玩家移动模型是 Run Tunnel：鼠标可见，`W/S` �
 
 `UWacomRunTunnelMovementComponent` 属于 `WacomApp`，负责 Pawn / Camera 对齐、输入消费和场景表现移动，不写入 Run 规则状态。鼠标位置到镜头 offset 的计算由共享 `UWacomCursorLookDriverComponent` 承担，Run Tunnel 只把这个 offset 叠加到 Spline base rotation 上。`WacomRun` 仍只维护战外规则真相，例如时段、节点、背包和战斗回传结算。当前关卡中的 `AWacomRunTunnelSegmentActor::bAutoActivateOnBeginPlay` 只是 authoring/bootstrap 入口；正式 Run flow 后续应由探索流程选择起始 Segment。
 
+后续 Run 卡牌交互应复用 first-person card layer：卡牌仍用 HUD / UMG 渲染保证清晰和动态材质稳定，但布局由第一人称 card anchor 投影到屏幕，形成跟随玩家身体 / tunnel 前进的手牌感。Run 规则层不依赖该表现系统；设计讨论见 `Docs/First_Person_Card_Layer_Design.md`。
+
 时段进入副作用：
 
 | 进入时段 | 副作用 |
