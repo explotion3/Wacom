@@ -194,7 +194,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ### V0-A Render Quality 当前状态：Anchor + Static Card Layer + Battle Hand Interaction + Hover Detail Provider + Legacy HandPanel Toggle
 
-当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、默认关闭的战斗手牌 adapter、默认关闭的 first-person battle hand hover/click 交互原型、first-person hover detail provider、默认关闭的 legacy `UHandPanel` 可见性切换，以及 first-person card render quality 基础。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可选地接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 则把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示同一个 `UWacomCardDetailPanel`。V0-G 增加 `BattleHUD::bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive`，只有 first-person layer、interaction 和 runtime battle hand 都有效时才把旧手牌折叠隐藏；旧 `UHandPanel` 仍保留刷新、事件绑定和 fallback 能力。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，降低 UMG 整卡旋转时的边缘锯齿、像素断裂和动态抖动。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、默认关闭的战斗手牌 adapter、默认关闭的 first-person battle hand hover/click 交互原型、first-person hover detail provider、默认关闭的 legacy `UHandPanel` 可见性切换，以及 first-person card render quality 基础。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可选地接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示详情；V0-H 进一步把 first-person hover 详情拆到独立 viewport popup host，并跟随 hovered slot 的实时投影布局更新，避免被 first-person card layer 遮挡。V0-G 增加 `BattleHUD::bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive`，只有 first-person layer、interaction 和 runtime battle hand 都有效时才把旧手牌折叠隐藏；旧 `UHandPanel` 仍保留刷新、事件绑定和 fallback 能力。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，降低 UMG 整卡旋转时的边缘锯齿、像素断裂和动态抖动。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
@@ -213,7 +213,8 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - `BattleHUD::bEnableFirstPersonBattleHandInteractionPrototype` 默认关闭；只有它和 `bEnableFirstPersonBattleHandLayerPrototype` 同时开启时，first-person battle hand slot 才会变为可 hover / 可点击。
 - `BattleHUD::bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive` 默认关闭；开启后，只有第一人称战斗手牌 runtime layer 可用且交互原型开启时，旧 `UHandPanel` 才会被 `Collapsed`。关闭交互、缺少 anchor、战斗结束、Session 切换或清理 runtime hand 时会恢复旧手牌原始 visibility。
 - 交互开启后，layer 根为 `SelfHitTestInvisible`，只让具体卡牌 slot 接收鼠标，不用全屏根控件抢输入。
-- Hover 会影响 first-person layer 自身视觉：卡牌轻微上移、放大并提高 ZOrder；同时在 Idle 状态下通过 `BattleHUD` 显示现有 `UWacomCardDetailPanel`。详情数据来自 BattleHUD 最近一次 `FBattleSnapshot.Hand`，定位来自 first-person slot 投影后的屏幕锚点，不需要创建或伪装 `UCardWidget`。
+- Hover 会影响 first-person layer 自身视觉：卡牌轻微上移、放大并提高 ZOrder；同时在 Idle 状态下通过 `BattleHUD` 显示现有 `UWacomCardDetailPanel`。旧 `UHandPanel` hover 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport popup panel，默认 `FirstPersonCardDetailViewportZOrder=9999`，高于 first-person card layer。详情数据来自 BattleHUD 最近一次 `FBattleSnapshot.Hand`，定位来自 first-person slot 投影后的屏幕锚点，不需要创建或伪装 `UCardWidget`。
+- first-person hover 详情会订阅 hovered slot layout update：当 cursor look、hover lift、pending 状态或 hand layout 让 hovered 卡牌位置变化时，详情面板只重算位置，不重建数据。
 - 左键点击有效、已投影、可用的 slot 时，只广播 `CardInstanceId` 并由 `BattleHUD` 进入现有 `OnCardClickedByUser()` flow；不可用卡允许 hover，但点击 no-op。
 - Runtime source 清理、战斗结束、Session 切换、HUD destruct 或关闭开关时，会禁用交互、解绑 delegates、清理 hover 状态并移除 stale runtime hand。
 
@@ -234,9 +235,11 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - click 只转发给 `UBattleHUD`，仍不让卡牌层直接提交 `UBattleSession` 命令。
    - 不做拖拽、右键取消、长按或 Run 卡牌交互。
 
-5. V0-F：Hover Detail Provider
+5. V0-F / V0-H：Hover Detail Provider + Follow / ZOrder
    - 已把 `CardDetailPanel` 从 `UCardWidget` 专属入口抽成 BattleHUD 内部通用详情 provider。
-   - 旧 `UHandPanel` hover 和 first-person slot hover 共用同一个详情面板；first-person 详情只在 Idle 显示，进入 TargetSelect、提交命令、刷新到 BattleEnd 或 Session 切换时隐藏。
+   - 旧 `UHandPanel` hover 使用 legacy `CardDetailLayer` 内的详情面板；first-person slot hover 使用独立 viewport popup 详情面板，层级高于 first-person card layer。
+   - first-person 详情只在 Idle 显示，进入 TargetSelect、提交命令、刷新到 BattleEnd 或 Session 切换时隐藏。
+   - hovered first-person slot 每次重排后会广播最新 `FWacomFirstPersonCardLayerSlotView`，BattleHUD 只在来源 `CardInstanceId` 匹配时更新详情位置。
    - 详情 provider 只读 snapshot，不让 first-person layer 直接访问或修改 `UBattleSession`。
 
 6. V0-G：Legacy HandPanel Visibility Toggle
@@ -248,12 +251,16 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - 已加入像素对齐、最大 render angle clamp 和 projection quality debug 字段。
    - 不改 `WBP_CardView` 结构，不引入 RetainerBox / RenderTarget / Slate 自绘。
 
-8. Render Quality V0-B
+8. V0-H：Hover Detail Follow + ZOrder
+   - 已完成：first-person hover 详情跟随 hovered card 实时投影位置，并显示在 first-person card layer 之上。
+   - 旧 `UHandPanel` hover 详情路径不变，仍作为 fallback 和对照。
+   - 后续只保留细节微调：详情面板偏移、动画、避免贴边时跳动。
+
+9. Render Quality V0-B
    - 当前不把“降低旋转角”作为主线目标；`WBP_FirstPersonCardView` 已能承接较大角度旋转的抗锯齿需求，排布表现优先。
    - 后续只在美术反馈需要时微调扇形参数：下坠、层级、hover / pending 姿态和可选角度 clamp。
-   - 更高优先级是修正详情面板跟随 hovered card 和 ZOrder，避免被 first-person 卡牌遮挡。
 
-9. First-person card view polish
+10. First-person card view polish
    - 已确认第一人称层应使用专用 `WBP_FirstPersonCardView`，不要继续把通用 `WBP_CardView` 直接作为长期主手牌卡面。
    - 后续 polish 重点是沉淀该 WBP 的制作规范：RetainerBox 使用边界、贴图透明留白、内部缩放、安全边框、材质动画刷新频率，以及不同 DPI / 视口尺寸下的旋转采样表现。
 

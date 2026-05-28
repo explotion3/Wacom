@@ -56,6 +56,7 @@ public:
 	FWacomFirstPersonCardLayerInteractionNative OnCardClickedNative;
 	FWacomFirstPersonCardLayerInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerInteractionNative OnCardUnhoveredNative;
+	FWacomFirstPersonCardLayerInteractionNative OnHoveredCardSlotUpdatedNative;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

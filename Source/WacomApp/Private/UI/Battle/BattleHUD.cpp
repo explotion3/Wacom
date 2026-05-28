@@ -30,11 +30,13 @@
 #include "UI/Foundation/WacomUITags.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
+#include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -55,7 +57,6 @@ namespace
 {
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
 	const FName FirstPersonBattleHandLayerSourceId(TEXT("BattleHand"));
-	const FVector2D FirstPersonCardDetailAnchorBaseSize(260.0f, 380.0f);
 }
 
 void UBattleHUD::NativeOnInitialized()
@@ -129,6 +130,11 @@ void UBattleHUD::NativeDestruct()
 	}
 	HideCardDetailPanel();
 	CardDetailPanel = nullptr;
+	if (FirstPersonCardDetailPanel)
+	{
+		FirstPersonCardDetailPanel->RemoveFromParent();
+		FirstPersonCardDetailPanel = nullptr;
+	}
 	bHasLastBattleSnapshot = false;
 	LastBattleSnapshot = FBattleSnapshot();
 	Super::NativeDestruct();
@@ -413,6 +419,7 @@ void UBattleHUD::ClearFirstPersonBattleHandLayer()
 		CurrentAnchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
 	}
 	LastFirstPersonBattleHandAnchor.Reset();
+	HideFirstPersonCardDetailPanel();
 	SyncLegacyHandPanelVisibility();
 }
 
@@ -473,9 +480,13 @@ void UBattleHUD::BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCar
 	Anchor->OnFirstPersonCardLayerCardClicked.RemoveAll(this);
 	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(this);
 	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(this);
+	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(this);
 	Anchor->OnFirstPersonCardLayerCardClicked.AddUObject(this, &UBattleHUD::HandleFirstPersonCardLayerCardClicked);
 	Anchor->OnFirstPersonCardLayerCardHovered.AddUObject(this, &UBattleHUD::HandleFirstPersonCardLayerCardHovered);
 	Anchor->OnFirstPersonCardLayerCardUnhovered.AddUObject(this, &UBattleHUD::HandleFirstPersonCardLayerCardUnhovered);
+	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated);
 }
 
 void UBattleHUD::UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
@@ -488,6 +499,7 @@ void UBattleHUD::UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonC
 	Anchor->OnFirstPersonCardLayerCardClicked.RemoveAll(this);
 	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(this);
 	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(this);
+	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(this);
 }
 
 void UBattleHUD::HandleFirstPersonCardLayerCardClicked(
@@ -511,24 +523,25 @@ void UBattleHUD::HandleFirstPersonCardLayerCardHovered(
 		|| !CardInstanceId.IsValid()
 		|| !SlotView.bProjected)
 	{
-		HideCardDetailPanel();
+		HideFirstPersonCardDetailPanel();
 		return;
 	}
 
 	const FHandCardSnapshot* CardSnapshot = FindLastBattleHandCardSnapshot(CardInstanceId);
 	if (!CardSnapshot || !CardSnapshot->Definition)
 	{
-		HideCardDetailPanel();
+		HideFirstPersonCardDetailPanel();
 		return;
 	}
 
-	const FVector2D AnchorSize = FirstPersonCardDetailAnchorBaseSize * FMath::Max(0.01f, SlotView.RenderScale);
-	const FVector2D AnchorPosition = SlotView.ScreenPosition - AnchorSize * 0.5f;
-	if (ShowCardDetailAtAnchor(
+	if (ShowFirstPersonCardDetailAtSlot(
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(CardSnapshot->Definition),
-		AnchorPosition,
-		AnchorSize))
+		SlotView))
 	{
+		if (CardDetailPanel)
+		{
+			CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
 		CurrentCardDetailSource.Reset();
 		CurrentFirstPersonCardDetailSourceId = CardInstanceId;
 	}
@@ -539,6 +552,25 @@ void UBattleHUD::HandleFirstPersonCardLayerCardUnhovered(
 	const FWacomFirstPersonCardLayerSlotView& /*SlotView*/)
 {
 	HideFirstPersonCardDetailPanelForSource(CardInstanceId);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (!bEnableFirstPersonBattleHandLayerPrototype
+		|| !bEnableFirstPersonBattleHandInteractionPrototype
+		|| UIState != EBattleUIState::Idle
+		|| !CardInstanceId.IsValid()
+		|| CurrentFirstPersonCardDetailSourceId != CardInstanceId
+		|| !SlotView.bProjected
+		|| !FirstPersonCardDetailPanel
+		|| FirstPersonCardDetailPanel->GetVisibility() == ESlateVisibility::Collapsed)
+	{
+		return;
+	}
+
+	PositionFirstPersonCardDetailPanelBesideSlot(SlotView);
 }
 
 // ================ 子 Widget 交互入口 ================
@@ -608,11 +640,18 @@ FVector2D UBattleHUD::ComputeCardDetailPanelPositionBeside(
 
 bool UBattleHUD::IsCardDetailPanelVisible() const
 {
-	return CardDetailPanel && CardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
+	const bool bLegacyVisible = CardDetailPanel && CardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
+	const bool bFirstPersonVisible = FirstPersonCardDetailPanel
+		&& FirstPersonCardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
+	return bLegacyVisible || bFirstPersonVisible;
 }
 
 FText UBattleHUD::GetCardDetailPanelNameText() const
 {
+	if (FirstPersonCardDetailPanel && FirstPersonCardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed)
+	{
+		return FirstPersonCardDetailPanel->GetNameText();
+	}
 	return CardDetailPanel ? CardDetailPanel->GetNameText() : FText::GetEmpty();
 }
 
@@ -650,7 +689,7 @@ bool UBattleHUD::ShowCardDetailForCardWidget(UCardWidget* SourceWidget)
 		AnchorSize))
 	{
 		CurrentCardDetailSource = SourceWidget;
-		CurrentFirstPersonCardDetailSourceId.Invalidate();
+		HideFirstPersonCardDetailPanel();
 		return true;
 	}
 	return false;
@@ -680,8 +719,8 @@ void UBattleHUD::HideCardDetailPanel()
 	{
 		CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
 	}
+	HideFirstPersonCardDetailPanel();
 	CurrentCardDetailSource.Reset();
-	CurrentFirstPersonCardDetailSourceId.Invalidate();
 }
 
 void UBattleHUD::HideCardDetailPanelForSource(UCardWidget* SourceWidget)
@@ -699,7 +738,7 @@ void UBattleHUD::HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstan
 	{
 		return;
 	}
-	HideCardDetailPanel();
+	HideFirstPersonCardDetailPanel();
 }
 
 UWacomCardDetailPanel* UBattleHUD::EnsureCardDetailPanel()
@@ -749,6 +788,44 @@ UWacomCardDetailPanel* UBattleHUD::EnsureCardDetailPanel()
 		DetailSlot->SetZOrder(1);
 	}
 	return CardDetailPanel;
+}
+
+UWacomCardDetailPanel* UBattleHUD::EnsureFirstPersonCardDetailPanel()
+{
+	if (FirstPersonCardDetailPanel)
+	{
+		return FirstPersonCardDetailPanel;
+	}
+
+	UClass* PanelClass = CardDetailPanelClass
+		? CardDetailPanelClass.Get()
+		: UWacomCardDetailPanel::StaticClass();
+	if (APlayerController* OwningPlayer = GetOwningPlayer();
+		OwningPlayer && OwningPlayer->IsLocalController() && OwningPlayer->GetLocalPlayer())
+	{
+		FirstPersonCardDetailPanel = CreateWidget<UWacomCardDetailPanel>(OwningPlayer, PanelClass);
+	}
+	if (!FirstPersonCardDetailPanel)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			FirstPersonCardDetailPanel = CreateWidget<UWacomCardDetailPanel>(World, PanelClass);
+		}
+	}
+	if (!FirstPersonCardDetailPanel)
+	{
+		FirstPersonCardDetailPanel = NewObject<UWacomCardDetailPanel>(this, PanelClass);
+	}
+	if (!FirstPersonCardDetailPanel)
+	{
+		return nullptr;
+	}
+
+	FirstPersonCardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+	FirstPersonCardDetailPanel->SetIsEnabled(true);
+	FirstPersonCardDetailPanel->SetRenderOpacity(1.0f);
+	FirstPersonCardDetailPanel->AddToViewport(FirstPersonCardDetailViewportZOrder);
+	return FirstPersonCardDetailPanel;
 }
 
 void UBattleHUD::EnsureCardDetailLayer()
@@ -815,6 +892,99 @@ void UBattleHUD::PositionCardDetailPanelBesideAnchor(const FVector2D& AnchorPosi
 		DetailSlot->SetPosition(Position);
 		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
 	}
+}
+
+bool UBattleHUD::ShowFirstPersonCardDetailAtSlot(
+	const FWacomCardDetailViewData& DetailData,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	UWacomCardDetailPanel* Panel = EnsureFirstPersonCardDetailPanel();
+	if (!Panel)
+	{
+		return false;
+	}
+
+	if (!Panel->IsInViewport())
+	{
+		Panel->AddToViewport(FirstPersonCardDetailViewportZOrder);
+	}
+
+	Panel->SetCardDetailData(DetailData);
+	PositionFirstPersonCardDetailPanelBesideSlot(SlotView);
+	Panel->SetDesiredSizeInViewport(CardDetailPanelEstimatedSize);
+	Panel->SetRenderOpacity(1.0f);
+	Panel->SetIsEnabled(true);
+	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
+	return true;
+}
+
+void UBattleHUD::PositionFirstPersonCardDetailPanelBesideSlot(
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (!FirstPersonCardDetailPanel)
+	{
+		return;
+	}
+
+	const FVector2D AnchorSize = FirstPersonCardDetailAnchorBaseSize * FMath::Max(0.01f, SlotView.RenderScale);
+	const FVector2D AnchorPosition = SlotView.ScreenPosition - AnchorSize * 0.5f;
+	const FVector2D Position = ComputeCardDetailPanelPositionBeside(
+		AnchorPosition,
+		AnchorSize,
+		GetFirstPersonCardDetailViewportSize(),
+		CardDetailPanelEstimatedSize,
+		CardDetailPanelPadding);
+
+	FirstPersonCardDetailPanel->SetDesiredSizeInViewport(CardDetailPanelEstimatedSize);
+	FirstPersonCardDetailPanel->SetAlignmentInViewport(FVector2D::ZeroVector);
+	FirstPersonCardDetailPanel->SetPositionInViewport(Position, false);
+	LastFirstPersonCardDetailPanelPosition = Position;
+}
+
+void UBattleHUD::HideFirstPersonCardDetailPanel()
+{
+	if (FirstPersonCardDetailPanel)
+	{
+		FirstPersonCardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	CurrentFirstPersonCardDetailSourceId.Invalidate();
+	LastFirstPersonCardDetailPanelPosition = FVector2D::ZeroVector;
+}
+
+FVector2D UBattleHUD::GetFirstPersonCardDetailViewportSize() const
+{
+	FVector2D ViewportPixelSize = FVector2D::ZeroVector;
+	if (const UWorld* World = GetWorld())
+	{
+		if (const UGameViewportClient* GameViewport = World->GetGameViewport())
+		{
+			GameViewport->GetViewportSize(ViewportPixelSize);
+		}
+	}
+
+	if (ViewportPixelSize.X <= 0.0f || ViewportPixelSize.Y <= 0.0f)
+	{
+		if (const APlayerController* PC = GetOwningPlayer())
+		{
+			int32 ViewportX = 0;
+			int32 ViewportY = 0;
+			PC->GetViewportSize(ViewportX, ViewportY);
+			ViewportPixelSize = FVector2D(ViewportX, ViewportY);
+		}
+	}
+
+	if (ViewportPixelSize.X <= 0.0f || ViewportPixelSize.Y <= 0.0f)
+	{
+		ViewportPixelSize = FVector2D(1920.0f, 1080.0f);
+	}
+
+	float ViewportScale = 1.0f;
+	if (const APlayerController* PC = GetOwningPlayer())
+	{
+		ViewportScale = UWidgetLayoutLibrary::GetViewportScale(PC);
+	}
+	ViewportScale = FMath::Max(0.01f, ViewportScale);
+	return ViewportPixelSize / ViewportScale;
 }
 
 const FHandCardSnapshot* UBattleHUD::FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const

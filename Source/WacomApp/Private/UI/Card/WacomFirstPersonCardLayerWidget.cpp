@@ -74,6 +74,11 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 			CanvasSlot->SetPosition(SlotView.ScreenPosition);
 			CanvasSlot->SetZOrder(SlotView.ZOrder);
 		}
+
+		if (SlotView.bIsHovered && SlotView.bProjected && SlotView.Entry.CardInstanceId.IsValid())
+		{
+			OnHoveredCardSlotUpdatedNative.Broadcast(SlotView.Entry.CardInstanceId, SlotView);
+		}
 	}
 }
 
@@ -174,6 +179,7 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	OnCardClickedNative.Clear();
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
+	OnHoveredCardSlotUpdatedNative.Clear();
 	SlotWidgets.Reset();
 	RootCanvas = nullptr;
 	Super::NativeDestruct();

@@ -162,6 +162,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ToolTip = "是否在第一人称战斗手牌层显示且交互原型开启时隐藏旧 UHandPanel。默认关闭；关闭交互、缺少 Anchor、战斗结束或清理 runtime hand 时会恢复旧手牌原始可见性。"))
 	bool bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.StaticCardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
+	int32 FirstPersonCardDetailViewportZOrder = 9999;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FirstPersonCardView 或 WBP_CardView 的设计尺寸一致。"))
+	FVector2D FirstPersonCardDetailAnchorBaseSize = FVector2D(296.0f, 420.0f);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Scene Enemy Target Prototype", meta = (ToolTip = "是否启用场景敌方目标表现绑定原型。默认关闭；开启后 BattleHUD 会按当前 BattleSnapshot 的 UEnemyPartDefinition::PartId，把场景中的 UWacomBattlePresentationTargetComponent 自动绑定到运行时 PartInstanceId。"))
 	bool bEnableSceneEnemyTargetBindingPrototype = false;
 
@@ -337,6 +343,9 @@ private:
 	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
 
 	UPROPERTY(Transient)
+	TObjectPtr<UWacomCardDetailPanel> FirstPersonCardDetailPanel;
+
+	UPROPERTY(Transient)
 	FBattleSnapshot LastBattleSnapshot;
 
 	UPROPERTY(Transient)
@@ -350,6 +359,7 @@ private:
 
 	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
 	FGuid CurrentFirstPersonCardDetailSourceId;
+	FVector2D LastFirstPersonCardDetailPanelPosition = FVector2D::ZeroVector;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastFirstPersonBattleHandAnchor;
 	ESlateVisibility CachedLegacyHandPanelVisibility = ESlateVisibility::Visible;
 	bool bHasLastBattleSnapshot = false;
@@ -417,9 +427,16 @@ private:
 	void HideCardDetailPanelForSource(UCardWidget* SourceWidget);
 	void HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId);
 	UWacomCardDetailPanel* EnsureCardDetailPanel();
+	UWacomCardDetailPanel* EnsureFirstPersonCardDetailPanel();
 	void EnsureCardDetailLayer();
 	void PositionCardDetailPanelNear(UCardWidget* SourceWidget);
 	void PositionCardDetailPanelBesideAnchor(const FVector2D& AnchorPosition, const FVector2D& AnchorSize);
+	bool ShowFirstPersonCardDetailAtSlot(
+		const FWacomCardDetailViewData& DetailData,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void PositionFirstPersonCardDetailPanelBesideSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HideFirstPersonCardDetailPanel();
+	FVector2D GetFirstPersonCardDetailViewportSize() const;
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
 	AWacomBattle3DHandPresenter* EnsureBattle3DHandPresenter();
 	void DestroyBattle3DHandPresenter();
@@ -446,6 +463,7 @@ private:
 	void HandleFirstPersonCardLayerCardClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerHoveredCardLayoutUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
 	friend struct FWacomBattleHUDCommandFlow;

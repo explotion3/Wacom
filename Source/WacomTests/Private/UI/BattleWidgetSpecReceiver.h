@@ -13,6 +13,7 @@
 #include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
+#include "UI/Card/WacomCardDetailPanel.h"
 #include "Components/WacomBattlePresentationTargetComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/BorderSlot.h"
@@ -462,6 +463,44 @@ public:
 		const FWacomFirstPersonCardLayerSlotView& SlotView)
 	{
 		HandleFirstPersonCardLayerCardUnhovered(CardInstanceId, SlotView);
+	}
+
+	void HandleFirstPersonCardLayoutUpdatedForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		HandleFirstPersonCardLayerHoveredCardLayoutUpdated(CardInstanceId, SlotView);
+	}
+
+	bool IsLegacyCardDetailPanelVisibleForTest() const
+	{
+		return CardDetailPanel && CardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
+	}
+
+	bool IsFirstPersonCardDetailPanelVisibleForTest() const
+	{
+		return FirstPersonCardDetailPanel
+			&& FirstPersonCardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
+	}
+
+	FText GetFirstPersonCardDetailPanelNameTextForTest() const
+	{
+		return FirstPersonCardDetailPanel ? FirstPersonCardDetailPanel->GetNameText() : FText::GetEmpty();
+	}
+
+	FVector2D GetFirstPersonCardDetailPanelPositionForTest() const
+	{
+		return LastFirstPersonCardDetailPanelPosition;
+	}
+
+	int32 GetFirstPersonCardDetailViewportZOrderForTest() const
+	{
+		return FirstPersonCardDetailViewportZOrder;
+	}
+
+	bool EnsureFirstPersonCardDetailPanelForTest()
+	{
+		return EnsureFirstPersonCardDetailPanel() != nullptr;
 	}
 
 	EBattleUIState GetUIStateForTest() const

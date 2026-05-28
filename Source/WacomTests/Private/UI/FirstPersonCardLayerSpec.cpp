@@ -216,6 +216,21 @@ namespace WacomFirstPersonCardLayerSpec
 			LastCardId = CardInstanceId;
 		}
 	};
+
+	class FLayerLayoutUpdateReceiver
+	{
+	public:
+		int32 UpdateCount = 0;
+		FGuid LastCardId;
+		FWacomFirstPersonCardLayerSlotView LastSlotView;
+
+		void HandleUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView)
+		{
+			++UpdateCount;
+			LastCardId = CardInstanceId;
+			LastSlotView = SlotView;
+		}
+	};
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -1038,6 +1053,7 @@ bool FWacomFirstPersonCardLayerHoverVisualStateTest::RunTest(const FString& Para
 			TestEqual(TEXT("Hover scales card"), HoverSlots[0].RenderScale, BaseSlots[0].RenderScale * 1.1f);
 			TestEqual(TEXT("Hover lifts card"), HoverSlots[0].ScreenPosition.Y, BaseSlots[0].ScreenPosition.Y - 30.0f);
 			TestEqual(TEXT("Hover raises z-order"), HoverSlots[0].ZOrder, BaseSlots[0].ZOrder + 250);
+			TestTrue(TEXT("Hover slot is marked for layout updates"), HoverSlots[0].bIsHovered);
 		}
 
 		SlotWidget->RequestUnhoverForTest();
@@ -1045,6 +1061,67 @@ bool FWacomFirstPersonCardLayerHoverVisualStateTest::RunTest(const FString& Para
 		TestEqual(TEXT("Unhover broadcasts once"), Receiver.UnhoverCount, 1);
 		Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&Receiver);
 		Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&Receiver);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerHoveredSlotLayoutUpdateTest,
+	"Wacom.UI.FirstPersonCardLayer.DetailProvider.HoveredSlotLayoutUpdateBroadcasts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerHoveredSlotLayoutUpdateTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->bDrawStaticCardLayer = true;
+	Anchor->StaticCardRenderScale = 0.5f;
+	const FGuid CardInstanceId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerEntry Entry;
+	Entry.CardInstanceId = CardInstanceId;
+	Entry.CardViewData.Name = FText::FromString(TEXT("Hovered layout"));
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { Entry });
+	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	Anchor->RefreshStaticLayerForTest();
+
+	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer ? Layer->GetSlotWidgetAt(0) : nullptr;
+	if (TestNotNull(TEXT("Layer widget"), Layer)
+		&& TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		WacomFirstPersonCardLayerSpec::FLayerLayoutUpdateReceiver Receiver;
+		Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.AddRaw(
+			&Receiver,
+			&WacomFirstPersonCardLayerSpec::FLayerLayoutUpdateReceiver::HandleUpdated);
+
+		TestTrue(TEXT("Slot hover succeeds"), SlotWidget->RequestHoverForTest());
+		Anchor->RefreshStaticLayerForTest();
+		TestEqual(TEXT("Hovered layout update broadcasts"), Receiver.UpdateCount, 1);
+		TestEqual(TEXT("Hovered layout update keeps card id"), Receiver.LastCardId, CardInstanceId);
+		TestTrue(TEXT("Updated slot is marked hovered"), Receiver.LastSlotView.bIsHovered);
+
+		Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&Receiver);
 	}
 
 	Anchor->DestroyComponent();
@@ -1597,13 +1674,10 @@ bool FWacomFirstPersonCardLayerDetailProviderSwitchOffTest::RunTest(const FStrin
 		GetTransientPackage(),
 		TEXT("Battle.Detail.Disabled"),
 		1);
-	FWacomBattleFixture Fixture;
-	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
 	if (!TestNotNull(TEXT("PlayerController"), PC)
 		|| !TestNotNull(TEXT("Character"), Character)
 		|| !TestNotNull(TEXT("HUD"), HUD)
-		|| !TestNotNull(TEXT("Card"), Card)
-		|| !TestNotNull(TEXT("Session"), Session))
+		|| !TestNotNull(TEXT("Card"), Card))
 	{
 		return false;
 	}
@@ -1650,14 +1724,11 @@ bool FWacomFirstPersonCardLayerDetailProviderHoverTest::RunTest(const FString& P
 		GetTransientPackage(),
 		TEXT("第一人称详情卡 B"),
 		2);
-	FWacomBattleFixture Fixture;
-	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
 	if (!TestNotNull(TEXT("PlayerController"), PC)
 		|| !TestNotNull(TEXT("Character"), Character)
 		|| !TestNotNull(TEXT("HUD"), HUD)
 		|| !TestNotNull(TEXT("First card"), FirstCard)
-		|| !TestNotNull(TEXT("Second card"), SecondCard)
-		|| !TestNotNull(TEXT("Session"), Session))
+		|| !TestNotNull(TEXT("Second card"), SecondCard))
 	{
 		return false;
 	}
@@ -1676,13 +1747,20 @@ bool FWacomFirstPersonCardLayerDetailProviderHoverTest::RunTest(const FString& P
 	TestTrue(TEXT("Detail provider can find first card"), HUD->HasLastBattleHandCardForTest(FirstSnapshot.InstanceId));
 	TestTrue(TEXT("Detail provider has card detail layer"), HUD->HasCardDetailLayerForTest());
 	TestTrue(TEXT("Detail provider can create card detail panel"), HUD->EnsureCardDetailPanelForTest());
+	TestTrue(TEXT("Detail provider can create first-person detail panel"), HUD->EnsureFirstPersonCardDetailPanelForTest());
+	TestTrue(TEXT("First-person detail viewport z-order is above card layer"), HUD->GetFirstPersonCardDetailViewportZOrderForTest() > 9996);
 
 	HUD->HandleFirstPersonCardHoveredForTest(
 		FirstSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FirstSnapshot.InstanceId));
 	TestTrue(TEXT("First-person hover shows detail"), HUD->IsCardDetailPanelVisible());
+	TestFalse(TEXT("First-person hover does not use legacy detail panel"), HUD->IsLegacyCardDetailPanelVisibleForTest());
+	TestTrue(TEXT("First-person hover uses viewport detail panel"), HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 	TestEqual(TEXT("First-person detail uses first snapshot definition"),
 		HUD->GetCardDetailPanelNameText().ToString(),
+		FString(TEXT("第一人称详情卡 A")));
+	TestEqual(TEXT("First-person specific detail has first card name"),
+		HUD->GetFirstPersonCardDetailPanelNameTextForTest().ToString(),
 		FString(TEXT("第一人称详情卡 A")));
 
 	HUD->HandleFirstPersonCardHoveredForTest(
@@ -1705,6 +1783,72 @@ bool FWacomFirstPersonCardLayerDetailProviderHoverTest::RunTest(const FString& P
 		SecondSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SecondSnapshot.InstanceId));
 	TestFalse(TEXT("Current first-person source unhover hides detail"), HUD->IsCardDetailPanelVisible());
+	TestFalse(TEXT("First-person viewport detail is hidden on current unhover"), HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDetailProviderFollowTest,
+	"Wacom.UI.FirstPersonCardLayer.DetailProvider.FollowsHoveredSlotLayoutUpdate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDetailProviderFollowTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称跟随详情卡"),
+		1);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("Card"), Card))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->TakeWidget();
+	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
+	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
+	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
+	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	FWacomFirstPersonCardLayerSlotView InitialSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId);
+	InitialSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	InitialSlot.RenderScale = 1.0f;
+	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
+	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestTrue(TEXT("First-person detail visible before follow update"), HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+
+	FWacomFirstPersonCardLayerSlotView UpdatedSlot = InitialSlot;
+	UpdatedSlot.ScreenPosition = FVector2D(700.0f, 600.0f);
+	UpdatedSlot.bIsHovered = true;
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, UpdatedSlot);
+	const FVector2D UpdatedPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestNotEqual(TEXT("Hovered detail position follows slot layout update"), UpdatedPosition, InitialPosition);
+
+	FWacomFirstPersonCardLayerSlotView OtherSlot = UpdatedSlot;
+	OtherSlot.ScreenPosition = FVector2D(900.0f, 600.0f);
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(FGuid::NewGuid(), OtherSlot);
+	TestEqual(TEXT("Mismatched layout update does not move current detail"),
+		HUD->GetFirstPersonCardDetailPanelPositionForTest(),
+		UpdatedPosition);
 
 	Character->Destroy();
 	PC->Destroy();
@@ -1733,13 +1877,10 @@ bool FWacomFirstPersonCardLayerDetailProviderInvalidDataTest::RunTest(const FStr
 		GetTransientPackage(),
 		TEXT("第一人称有效详情卡"),
 		1);
-	FWacomBattleFixture Fixture;
-	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
 	if (!TestNotNull(TEXT("PlayerController"), PC)
 		|| !TestNotNull(TEXT("Character"), Character)
 		|| !TestNotNull(TEXT("HUD"), HUD)
-		|| !TestNotNull(TEXT("Card"), Card)
-		|| !TestNotNull(TEXT("Session"), Session))
+		|| !TestNotNull(TEXT("Card"), Card))
 	{
 		return false;
 	}
@@ -1803,13 +1944,10 @@ bool FWacomFirstPersonCardLayerDetailProviderStateClearTest::RunTest(const FStri
 		GetTransientPackage(),
 		TEXT("第一人称状态详情卡"),
 		1);
-	FWacomBattleFixture Fixture;
-	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
 	if (!TestNotNull(TEXT("PlayerController"), PC)
 		|| !TestNotNull(TEXT("Character"), Character)
 		|| !TestNotNull(TEXT("HUD"), HUD)
-		|| !TestNotNull(TEXT("Card"), Card)
-		|| !TestNotNull(TEXT("Session"), Session))
+		|| !TestNotNull(TEXT("Card"), Card))
 	{
 		return false;
 	}

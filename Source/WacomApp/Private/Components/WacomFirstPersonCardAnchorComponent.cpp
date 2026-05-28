@@ -437,6 +437,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		}
 		if (Slot.Entry.CardInstanceId.IsValid() && Slot.Entry.CardInstanceId == HoveredCardInstanceId)
 		{
+			Slot.bIsHovered = true;
 			Slot.RenderScale *= FMath::Max(0.01f, HoverScale);
 			Slot.ZOrder += FMath::Max(0, HoverZOrderBoost);
 		}
@@ -758,9 +759,13 @@ void UWacomFirstPersonCardAnchorComponent::BindStaticCardLayerWidget(UWacomFirst
 	LayerWidget->OnCardClickedNative.RemoveAll(this);
 	LayerWidget->OnCardHoveredNative.RemoveAll(this);
 	LayerWidget->OnCardUnhoveredNative.RemoveAll(this);
+	LayerWidget->OnHoveredCardSlotUpdatedNative.RemoveAll(this);
 	LayerWidget->OnCardClickedNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardClicked);
 	LayerWidget->OnCardHoveredNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardHovered);
 	LayerWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardUnhovered);
+	LayerWidget->OnHoveredCardSlotUpdatedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerHoveredCardSlotUpdated);
 }
 
 void UWacomFirstPersonCardAnchorComponent::UnbindStaticCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget)
@@ -773,6 +778,7 @@ void UWacomFirstPersonCardAnchorComponent::UnbindStaticCardLayerWidget(UWacomFir
 	LayerWidget->OnCardClickedNative.RemoveAll(this);
 	LayerWidget->OnCardHoveredNative.RemoveAll(this);
 	LayerWidget->OnCardUnhoveredNative.RemoveAll(this);
+	LayerWidget->OnHoveredCardSlotUpdatedNative.RemoveAll(this);
 }
 
 void UWacomFirstPersonCardAnchorComponent::HandleLayerCardClicked(
@@ -799,6 +805,13 @@ void UWacomFirstPersonCardAnchorComponent::HandleLayerCardUnhovered(
 		HoveredCardInstanceId.Invalidate();
 	}
 	OnFirstPersonCardLayerCardUnhovered.Broadcast(CardInstanceId, SlotView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerHoveredCardSlotUpdated(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	OnFirstPersonCardLayerHoveredCardLayoutUpdated.Broadcast(CardInstanceId, SlotView);
 }
 
 FString UWacomFirstPersonCardAnchorComponent::AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode)

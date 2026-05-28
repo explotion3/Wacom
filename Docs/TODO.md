@@ -83,10 +83,10 @@ tags:
   - 归属：UI / 战斗表现
   - 入口：[Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
 
-- [ ] **First-person card layer polish：详情面板跟随卡牌与层级修正**
-  - 状态：`Ready: WBP_FirstPersonCardView 入口已规范化，卡面尺寸和层级口径趋于稳定`
+- [x] **First-person card layer polish：详情面板跟随卡牌与层级修正**
+  - 状态：`Done: V0-H 已接入独立 viewport popup host，详情跟随 hovered slot 并高于 first-person card layer`
   - 归属：UI / 战斗表现
-  - 说明：V0-F hover 详情流程已可用；后续需要让详情面板更贴近 hovered card，并提高 ZOrder，避免被其他 first-person 卡牌遮挡。
+  - 说明：旧 `UHandPanel` 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport panel，后续只保留偏移、动画和贴边稳定性微调。
 
 - [ ] **First-person card render quality：扇形布局微调与专用卡面规范**
   - 状态：`Deferred: RetainerBox 版 WBP_FirstPersonCardView 已解决当前旋转锯齿；不把降低旋转角作为主线`
