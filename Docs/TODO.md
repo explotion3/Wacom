@@ -89,9 +89,9 @@ tags:
   - 说明：旧 `UHandPanel` 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport panel。战斗手牌入口由 `LegacyHandPanel / FirstPersonHandWithLegacyFallback / FirstPersonHandOnly` 三种模式控制，后续只保留偏移、动画和贴边稳定性微调。
 
 - [ ] **First-person card render quality：扇形布局微调与专用卡面规范**
-  - 状态：`Deferred: RetainerBox 版 WBP_FirstPersonCardView 已解决当前旋转锯齿；不把降低旋转角作为主线`
+  - 状态：`In Progress: V0-K projected basis 已回退；V0-L 默认改为 Authored2D hand layout solver`
   - 归属：UI / 战斗表现
-  - 说明：继续保留 `WBP_FirstPersonCardView` 的 RetainerBox、透明留白、内部缩放和贴图采样规范。后续只有在美术反馈需要时再微调扇形参数、下坠、层级、hover/pending 姿态或角度 clamp；不要为了抗锯齿牺牲当前手牌排布表现，也不要回退到 3D Presenter / RenderTarget 路线。
+  - 说明：继续保留 `WBP_FirstPersonCardView` 的 RetainerBox、透明留白、内部缩放和贴图采样规范。V0-K 的 projected card basis / 动态 projected scale 在 PIE 中带来像素拉伸，已回退，不作为当前主线。V0-L 改为只投影手牌中心，再用 `AuthoredCardSpacingPixels / AuthoredMaxHandWidthPixels / StaticCardEdgeDropPixels / FanYawDegrees` 等 2D 参数排布卡牌。后续只有在美术反馈需要时再微调扇形参数、下坠、层级、hover/pending 姿态或角度 clamp；不要为了抗锯齿牺牲当前手牌排布表现，也不要回退到 3D Presenter / RenderTarget 路线。
 
 - [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
   - 状态：`Blocked: Demo 范围确认`
