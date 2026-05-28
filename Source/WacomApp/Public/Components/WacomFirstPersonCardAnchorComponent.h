@@ -50,6 +50,51 @@ enum class EWacomFirstPersonCardViewportClampMode : uint8
 };
 
 USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardLayerMotionDebugView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 InputSlotCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 ActiveSlotCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 OutgoingSlotCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 RootCanvasChildCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 MotionTickSlotCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 DuplicateKeyCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 CreatedThisUpdate = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 ReusedThisUpdate = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 RemovedThisUpdate = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 OutgoingStartedThisUpdate = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 OutgoingFinishedThisUpdate = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	int32 UntrackedChildRemovedThisUpdate = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
+	bool bHadInvariantViolation = false;
+};
+
+USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 {
 	GENERATED_BODY()
@@ -176,6 +221,9 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bAnchorScreenSmoothed = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardLayerMotionDebugView LayerMotionDebugView;
 };
 
 USTRUCT(BlueprintType)
@@ -426,6 +474,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Debug", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称卡牌锚点调试 Widget 的视口层级。"))
 	int32 DebugWidgetZOrder = 9998;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "是否在第一人称卡牌层检测到槽位生命周期异常时输出简短日志；默认关闭，仅用于排查幽灵 Widget、outgoing 泄漏或重复槽位。"))
+	bool bLogCardLayerMotionDiagnostics = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ToolTip = "是否从第一人称卡牌锚点绘制非交互 HUD/UMG 静态预览卡牌层；仅原型验证使用，默认关闭。"))
 	bool bDrawStaticCardLayer = false;

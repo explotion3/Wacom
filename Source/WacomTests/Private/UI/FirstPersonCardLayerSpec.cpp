@@ -2963,6 +2963,424 @@ bool FWacomFirstPersonCardLayerMotionHoveredVisualPositionTest::RunTest(const FS
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMotionDebugCountsTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.DebugViewReportsSlotLifecycleCounts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMotionDebugCountsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FGuid::NewGuid(), 0, FVector2D(100.0f, 200.0f)),
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FGuid::NewGuid(), 1, FVector2D(220.0f, 200.0f))
+	});
+
+	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
+	TestEqual(TEXT("Input slot count"), Debug.InputSlotCount, 2);
+	TestEqual(TEXT("Active slot count"), Debug.ActiveSlotCount, 2);
+	TestEqual(TEXT("Outgoing slot count"), Debug.OutgoingSlotCount, 0);
+	TestEqual(TEXT("Root child count"), Debug.RootCanvasChildCount, 2);
+	TestEqual(TEXT("Created count"), Debug.CreatedThisUpdate, 2);
+	TestEqual(TEXT("Motion ticking count"), Debug.MotionTickSlotCount, 2);
+	TestFalse(TEXT("No invariant violation"), Debug.bHadInvariantViolation);
+	TestTrue(TEXT("Summary contains counts"), Layer->GetSlotMotionDebugSummary().Contains(TEXT("Active=2")));
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerRepeatedInsertionsNoLeakTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.RepeatedInsertionsDoNotLeakWidgets",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerRepeatedInsertionsNoLeakTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	TArray<FGuid> CardIds;
+	for (int32 Count = 1; Count <= 10; ++Count)
+	{
+		CardIds.Insert(FGuid::NewGuid(), 0);
+		TArray<FWacomFirstPersonCardLayerSlotView> Slots;
+		for (int32 Index = 0; Index < CardIds.Num(); ++Index)
+		{
+			Slots.Add(WacomFirstPersonCardLayerSpec::MakeMotionSlot(
+				CardIds[Index],
+				Index,
+				FVector2D(100.0f + Index * 80.0f, 200.0f)));
+		}
+		Layer->SetCardSlots(Slots);
+		const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
+		TestEqual(FString::Printf(TEXT("Active count after insertion %d"), Count), Debug.ActiveSlotCount, Count);
+		TestEqual(FString::Printf(TEXT("Root child count after insertion %d"), Count), Debug.RootCanvasChildCount, Count);
+		TestEqual(FString::Printf(TEXT("Outgoing count after insertion %d"), Count), Debug.OutgoingSlotCount, 0);
+		TestFalse(FString::Printf(TEXT("No invariant violation after insertion %d"), Count), Debug.bHadInvariantViolation);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerRemoveReaddNoGhostTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.RepeatedRemoveAndReaddReusesOrCleansCorrectly",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerRemoveReaddNoGhostTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Config.ExitDuration = 0.2f;
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid FirstId = FGuid::NewGuid();
+	const FGuid SecondId = FGuid::NewGuid();
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstId, 0, FVector2D(100.0f, 200.0f)),
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondId, 1, FVector2D(220.0f, 200.0f))
+	});
+	Layer->TickSlotMotionForTest(1.0f);
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondId, 0, FVector2D(100.0f, 200.0f))
+	});
+	TestEqual(TEXT("One active after remove"), Layer->GetSlotMotionDebugView().ActiveSlotCount, 1);
+	TestEqual(TEXT("One outgoing after remove"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 1);
+	Layer->TickSlotMotionForTest(0.25f);
+	TestEqual(TEXT("Outgoing cleaned after duration"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 0);
+
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstId, 0, FVector2D(100.0f, 200.0f)),
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondId, 1, FVector2D(220.0f, 200.0f))
+	});
+	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
+	TestEqual(TEXT("Two active after readd"), Debug.ActiveSlotCount, 2);
+	TestEqual(TEXT("Root children match active after readd"), Debug.RootCanvasChildCount, 2);
+	TestFalse(TEXT("No invariant violation after readd"), Debug.bHadInvariantViolation);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerReaddOutgoingReclaimsWidgetTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.ReaddedOutgoingCardReclaimsWidget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerReaddOutgoingReclaimsWidgetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Config.ExitDuration = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f)) });
+	Layer->TickSlotMotionForTest(1.0f);
+	UWacomFirstPersonCardLayerSlotWidget* OriginalWidget = Layer->GetSlotWidgetAt(0);
+
+	Layer->SetCardSlots({});
+	TestEqual(TEXT("Card is outgoing after remove"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 1);
+	TestEqual(TEXT("Outgoing keeps original widget"), Layer->GetOutgoingSlotWidgetAtForTest(0), OriginalWidget);
+
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(140.0f, 200.0f)) });
+
+	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
+	TestEqual(TEXT("Readded card reclaims original widget"), Layer->GetSlotWidgetAt(0), OriginalWidget);
+	TestEqual(TEXT("Readded card active count"), Debug.ActiveSlotCount, 1);
+	TestEqual(TEXT("Readded card outgoing count"), Debug.OutgoingSlotCount, 0);
+	TestEqual(TEXT("Readded card root children count"), Debug.RootCanvasChildCount, 1);
+	TestEqual(TEXT("Readded card reuses widget"), Debug.ReusedThisUpdate, 1);
+	TestFalse(TEXT("Readded outgoing card no invariant violation"), Debug.bHadInvariantViolation);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerHoveredInsertionStableTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.HoveredInsertionKeepsHoverStable",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerHoveredInsertionStableTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid HoveredId = FGuid::NewGuid();
+	const FGuid OtherId = FGuid::NewGuid();
+	const FGuid InsertedId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView HoveredSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(HoveredId, 0, FVector2D(100.0f, 180.0f));
+	HoveredSlot.bIsHovered = true;
+	Layer->SetCardSlots({
+		HoveredSlot,
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(OtherId, 1, FVector2D(220.0f, 200.0f))
+	});
+	UWacomFirstPersonCardLayerSlotWidget* HoveredWidget = Layer->GetSlotWidgetAt(0);
+	Layer->TickSlotMotionForTest(1.0f);
+
+	HoveredSlot.Index = 1;
+	HoveredSlot.ScreenPosition = FVector2D(220.0f, 180.0f);
+	HoveredSlot.WidgetPosition = HoveredSlot.ScreenPosition;
+	HoveredSlot.SnappedWidgetPosition = HoveredSlot.ScreenPosition;
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(InsertedId, 0, FVector2D(100.0f, 200.0f)),
+		HoveredSlot,
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(OtherId, 2, FVector2D(340.0f, 200.0f))
+	});
+
+	TestEqual(TEXT("Hovered card keeps widget identity after insertion"), Layer->GetSlotWidgetAt(1), HoveredWidget);
+	TestEqual(TEXT("Hovered card id remains on same widget"), Layer->GetSlotWidgetAt(1)->GetSlotView().Entry.CardInstanceId, HoveredId);
+	TestEqual(TEXT("No outgoing leak on hovered insertion"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 0);
+	TestFalse(TEXT("No invariant violation on hovered insertion"), Layer->GetSlotMotionDebugView().bHadInvariantViolation);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPendingRefreshOwnershipTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.PendingRefreshKeepsWidgetOwnershipStable",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPendingRefreshOwnershipTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid PendingId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Base =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(PendingId, 0, FVector2D(100.0f, 200.0f));
+	Layer->SetCardSlots({ Base });
+	UWacomFirstPersonCardLayerSlotWidget* BaseWidget = Layer->GetSlotWidgetAt(0);
+
+	FWacomFirstPersonCardLayerSlotView Pending = Base;
+	Pending.ScreenPosition = FVector2D(100.0f, 160.0f);
+	Pending.WidgetPosition = Pending.ScreenPosition;
+	Pending.SnappedWidgetPosition = Pending.ScreenPosition;
+	Pending.RenderScale = 1.08f;
+	Pending.Entry.bIsPendingTargeting = true;
+	Layer->SetCardSlots({ Pending });
+
+	TestEqual(TEXT("Pending refresh reuses widget"), Layer->GetSlotWidgetAt(0), BaseWidget);
+	TestEqual(TEXT("Pending refresh active count"), Layer->GetSlotMotionDebugView().ActiveSlotCount, 1);
+	TestEqual(TEXT("Pending refresh outgoing count"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 0);
+	TestFalse(TEXT("Pending refresh no invariant violation"), Layer->GetSlotMotionDebugView().bHadInvariantViolation);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDuplicateKeyDiagnosedTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.DuplicateKeysAreDiagnosedAndDisambiguated",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDuplicateKeyDiagnosedTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid SharedId = FGuid::NewGuid();
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SharedId, 0, FVector2D(100.0f, 200.0f)),
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SharedId, 1, FVector2D(220.0f, 200.0f))
+	});
+
+	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
+	TestEqual(TEXT("Duplicate key count"), Debug.DuplicateKeyCount, 1);
+	TestEqual(TEXT("Duplicate key active slots"), Debug.ActiveSlotCount, 2);
+	TestNotEqual(TEXT("Duplicate key uses different widgets"), Layer->GetSlotWidgetAt(0), Layer->GetSlotWidgetAt(1));
+	TestFalse(TEXT("Duplicate key disambiguation is not invariant violation"), Debug.bHadInvariantViolation);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerInvariantRepairTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.InvariantRepairRemovesUntrackedChildren",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerInvariantRepairTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f)) });
+	Layer->AddUntrackedSlotChildForTest();
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(120.0f, 200.0f)) });
+
+	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
+	TestEqual(TEXT("Untracked child removed"), Debug.UntrackedChildRemovedThisUpdate, 1);
+	TestEqual(TEXT("Root child count repaired"), Debug.RootCanvasChildCount, 1);
+	TestTrue(TEXT("Repair records invariant violation"), Debug.bHadInvariantViolation);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerOutgoingLimitTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotionRobustness.OutgoingLimitPreventsPerfLeak",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerOutgoingLimitTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Config.ExitDuration = 10.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	TArray<FWacomFirstPersonCardLayerSlotView> Slots;
+	for (int32 Index = 0; Index < 24; ++Index)
+	{
+		Slots.Add(WacomFirstPersonCardLayerSpec::MakeMotionSlot(
+			FGuid::NewGuid(),
+			Index,
+			FVector2D(100.0f + Index * 10.0f, 200.0f)));
+	}
+	Layer->SetCardSlots(Slots);
+	Layer->TickSlotMotionForTest(1.0f);
+	Layer->SetCardSlots({});
+
+	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
+	TestEqual(TEXT("No active slots after mass remove"), Debug.ActiveSlotCount, 0);
+	TestTrue(TEXT("Outgoing slots are capped"), Debug.OutgoingSlotCount <= 16);
+	TestTrue(TEXT("Outgoing cap records repair"), Debug.bHadInvariantViolation);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerHoverVisualStateTest,
 	"Wacom.UI.FirstPersonCardLayer.Interaction.HoverAppliesVisualState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

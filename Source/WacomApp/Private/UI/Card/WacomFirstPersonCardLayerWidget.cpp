@@ -22,6 +22,7 @@ namespace
 				return SlotWidget.Get() == Candidate;
 			});
 	}
+
 }
 
 void UWacomFirstPersonCardLayerWidget::SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass)
@@ -82,6 +83,7 @@ void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 	SlotWidgets.Reset();
 	OutgoingSlotWidgets.Reset();
 	LastSlots.Reset();
+	LastMotionDebugView = FWacomFirstPersonCardLayerMotionDebugView();
 }
 
 void UWacomFirstPersonCardLayerWidget::SetCardSlots(
@@ -97,7 +99,10 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		return;
 	}
 
-	RemoveOutgoingFinishedSlots();
+	LastMotionDebugView = FWacomFirstPersonCardLayerMotionDebugView();
+	LastMotionDebugView.InputSlotCount = InSlots.Num();
+	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
+
 	TMap<FString, UWacomFirstPersonCardLayerSlotWidget*> ExistingByKey;
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
 	{
@@ -106,6 +111,25 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 			if (!ExistingByKey.Contains(SlotWidget->GetSlotMotionKey()))
 			{
 				ExistingByKey.Add(SlotWidget->GetSlotMotionKey(), SlotWidget.Get());
+			}
+			else
+			{
+				LastMotionDebugView.bHadInvariantViolation = true;
+			}
+		}
+	}
+	TMap<FString, UWacomFirstPersonCardLayerSlotWidget*> ExistingOutgoingByKey;
+	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
+	{
+		if (SlotWidget)
+		{
+			if (!ExistingOutgoingByKey.Contains(SlotWidget->GetSlotMotionKey()))
+			{
+				ExistingOutgoingByKey.Add(SlotWidget->GetSlotMotionKey(), SlotWidget.Get());
+			}
+			else
+			{
+				LastMotionDebugView.bHadInvariantViolation = true;
 			}
 		}
 	}
@@ -122,19 +146,45 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		if (UsedKeys.Contains(SlotKey))
 		{
 			SlotKey = FString::Printf(TEXT("%s#SlotIndex:%d"), *BaseSlotKey, Index);
+			++LastMotionDebugView.DuplicateKeyCount;
 		}
 		UsedKeys.Add(SlotKey);
 		IncomingKeys.Add(SlotKey);
 
 		UWacomFirstPersonCardLayerSlotWidget* SlotWidget = ExistingByKey.FindRef(SlotKey);
+		if (!SlotWidget)
+		{
+			SlotWidget = ExistingOutgoingByKey.FindRef(SlotKey);
+			if (SlotWidget)
+			{
+				const int32 RemovedOutgoingReferences = OutgoingSlotWidgets.RemoveAllSwap(
+					[SlotWidget](const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& OutgoingSlotWidget)
+					{
+						return OutgoingSlotWidget.Get() == SlotWidget;
+					},
+					EAllowShrinking::No);
+				if (RemovedOutgoingReferences > 1)
+				{
+					LastMotionDebugView.bHadInvariantViolation = true;
+				}
+			}
+		}
 		const bool bIsNewSlotWidget = SlotWidget == nullptr;
 		if (!SlotWidget)
 		{
 			SlotWidget = CreateSlotWidget();
+			if (SlotWidget)
+			{
+				++LastMotionDebugView.CreatedThisUpdate;
+			}
 		}
 		if (!SlotWidget)
 		{
 			continue;
+		}
+		if (!bIsNewSlotWidget)
+		{
+			++LastMotionDebugView.ReusedThisUpdate;
 		}
 
 		SlotWidget->SetSlotMotionKey(SlotKey);
@@ -191,16 +241,22 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 				CanvasSlot->SetZOrder(SlotWidget->GetSlotView().ZOrder);
 			}
 			OutgoingSlotWidgets.Add(SlotWidget);
+			++LastMotionDebugView.OutgoingStartedThisUpdate;
 		}
 		else
 		{
 			UnbindSlotWidget(SlotWidget);
 			SlotWidget->RemoveFromParent();
+			++LastMotionDebugView.RemovedThisUpdate;
 		}
 	}
 	SlotWidgets = MoveTemp(NewSlotWidgets);
-	RemoveOutgoingFinishedSlots();
-	RemoveUntrackedSlotChildren();
+	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
+	RepairSlotMotionInvariants();
+	EnforceOutgoingSlotLimit();
+	LastMotionDebugView.UntrackedChildRemovedThisUpdate += RemoveUntrackedSlotChildren();
+	RefreshSlotMotionDebugCounts();
+	ReportSlotMotionDiagnosticsIfNeeded();
 }
 
 void UWacomFirstPersonCardLayerWidget::SetStaticCardSlots(
@@ -263,6 +319,25 @@ int32 UWacomFirstPersonCardLayerWidget::GetCardZOrderAt(int32 Index) const
 	return CanvasSlot ? CanvasSlot->GetZOrder() : INDEX_NONE;
 }
 
+FString UWacomFirstPersonCardLayerWidget::GetSlotMotionDebugSummary() const
+{
+	return FString::Printf(
+		TEXT("SlotMotion Input=%d Active=%d Outgoing=%d RootChildren=%d Ticking=%d DuplicateKeys=%d Created=%d Reused=%d Removed=%d OutStarted=%d OutFinished=%d UntrackedRemoved=%d Invariant=%s"),
+		LastMotionDebugView.InputSlotCount,
+		LastMotionDebugView.ActiveSlotCount,
+		LastMotionDebugView.OutgoingSlotCount,
+		LastMotionDebugView.RootCanvasChildCount,
+		LastMotionDebugView.MotionTickSlotCount,
+		LastMotionDebugView.DuplicateKeyCount,
+		LastMotionDebugView.CreatedThisUpdate,
+		LastMotionDebugView.ReusedThisUpdate,
+		LastMotionDebugView.RemovedThisUpdate,
+		LastMotionDebugView.OutgoingStartedThisUpdate,
+		LastMotionDebugView.OutgoingFinishedThisUpdate,
+		LastMotionDebugView.UntrackedChildRemovedThisUpdate,
+		LastMotionDebugView.bHadInvariantViolation ? TEXT("true") : TEXT("false"));
+}
+
 #if WITH_AUTOMATION_TESTS
 void UWacomFirstPersonCardLayerWidget::TickSlotMotionForTest(float DeltaTime)
 {
@@ -280,7 +355,8 @@ void UWacomFirstPersonCardLayerWidget::TickSlotMotionForTest(float DeltaTime)
 			SlotWidget->TickSlotMotionForTest(DeltaTime);
 		}
 	}
-	RemoveOutgoingFinishedSlots();
+	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
+	RefreshSlotMotionDebugCounts();
 }
 
 UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::FindSlotWidgetByKeyForTest(
@@ -300,6 +376,26 @@ UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::GetOutgo
 	int32 Index) const
 {
 	return OutgoingSlotWidgets.IsValidIndex(Index) ? OutgoingSlotWidgets[Index].Get() : nullptr;
+}
+
+void UWacomFirstPersonCardLayerWidget::AddUntrackedSlotChildForTest()
+{
+	if (!RootCanvas)
+	{
+		RebuildWidget();
+	}
+	if (!RootCanvas || !WidgetTree)
+	{
+		return;
+	}
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget =
+		WidgetTree->ConstructWidget<UWacomFirstPersonCardLayerSlotWidget>(
+			UWacomFirstPersonCardLayerSlotWidget::StaticClass());
+	if (SlotWidget)
+	{
+		RootCanvas->AddChild(SlotWidget);
+	}
 }
 #endif
 
@@ -357,7 +453,8 @@ void UWacomFirstPersonCardLayerWidget::NativeTick(
 	float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
-	RemoveOutgoingFinishedSlots();
+	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
+	RefreshSlotMotionDebugCounts();
 }
 
 UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::CreateSlotWidget()
@@ -427,8 +524,9 @@ void UWacomFirstPersonCardLayerWidget::UnbindSlotWidget(UWacomFirstPersonCardLay
 	SlotWidget->OnCardUnhoveredNative.RemoveAll(this);
 }
 
-void UWacomFirstPersonCardLayerWidget::RemoveOutgoingFinishedSlots()
+int32 UWacomFirstPersonCardLayerWidget::RemoveOutgoingFinishedSlots()
 {
+	int32 RemovedCount = 0;
 	for (int32 Index = OutgoingSlotWidgets.Num() - 1; Index >= 0; --Index)
 	{
 		UWacomFirstPersonCardLayerSlotWidget* SlotWidget = OutgoingSlotWidgets[Index];
@@ -440,17 +538,20 @@ void UWacomFirstPersonCardLayerWidget::RemoveOutgoingFinishedSlots()
 				SlotWidget->RemoveFromParent();
 			}
 			OutgoingSlotWidgets.RemoveAt(Index);
+			++RemovedCount;
 		}
 	}
+	return RemovedCount;
 }
 
-void UWacomFirstPersonCardLayerWidget::RemoveUntrackedSlotChildren()
+int32 UWacomFirstPersonCardLayerWidget::RemoveUntrackedSlotChildren()
 {
 	if (!RootCanvas)
 	{
-		return;
+		return 0;
 	}
 
+	int32 RemovedCount = 0;
 	for (int32 Index = RootCanvas->GetChildrenCount() - 1; Index >= 0; --Index)
 	{
 		UWacomFirstPersonCardLayerSlotWidget* ChildSlot =
@@ -467,7 +568,132 @@ void UWacomFirstPersonCardLayerWidget::RemoveUntrackedSlotChildren()
 
 		UnbindSlotWidget(ChildSlot);
 		ChildSlot->RemoveFromParent();
+		++RemovedCount;
 	}
+	if (RemovedCount > 0)
+	{
+		LastMotionDebugView.bHadInvariantViolation = true;
+	}
+	return RemovedCount;
+}
+
+void UWacomFirstPersonCardLayerWidget::EnforceOutgoingSlotLimit()
+{
+	const int32 MaxOutgoingSlots = FMath::Max(LastSlots.Num() * 2, 16);
+	while (OutgoingSlotWidgets.Num() > MaxOutgoingSlots)
+	{
+		TObjectPtr<UWacomFirstPersonCardLayerSlotWidget> SlotWidget = OutgoingSlotWidgets[0];
+		if (SlotWidget)
+		{
+			UnbindSlotWidget(SlotWidget);
+			SlotWidget->RemoveFromParent();
+		}
+		OutgoingSlotWidgets.RemoveAt(0);
+		++LastMotionDebugView.RemovedThisUpdate;
+		LastMotionDebugView.bHadInvariantViolation = true;
+	}
+}
+
+void UWacomFirstPersonCardLayerWidget::RepairSlotMotionInvariants()
+{
+	TSet<UWacomFirstPersonCardLayerSlotWidget*> ActiveSet;
+	TSet<FString> ActiveKeys;
+	for (int32 Index = SlotWidgets.Num() - 1; Index >= 0; --Index)
+	{
+		UWacomFirstPersonCardLayerSlotWidget* SlotWidget = SlotWidgets[Index];
+		if (!SlotWidget)
+		{
+			SlotWidgets.RemoveAt(Index);
+			LastMotionDebugView.bHadInvariantViolation = true;
+			continue;
+		}
+		if (ActiveSet.Contains(SlotWidget))
+		{
+			SlotWidgets.RemoveAt(Index);
+			LastMotionDebugView.bHadInvariantViolation = true;
+			continue;
+		}
+		ActiveSet.Add(SlotWidget);
+		ActiveKeys.Add(SlotWidget->GetSlotMotionKey());
+	}
+
+	TSet<UWacomFirstPersonCardLayerSlotWidget*> OutgoingSet;
+	for (int32 Index = OutgoingSlotWidgets.Num() - 1; Index >= 0; --Index)
+	{
+		UWacomFirstPersonCardLayerSlotWidget* SlotWidget = OutgoingSlotWidgets[Index];
+		const bool bSharesActivePointer = SlotWidget && ActiveSet.Contains(SlotWidget);
+		const bool bDuplicateOutgoingPointer = SlotWidget && OutgoingSet.Contains(SlotWidget);
+		const bool bSharesActiveKey = SlotWidget && ActiveKeys.Contains(SlotWidget->GetSlotMotionKey());
+		if (!SlotWidget || bSharesActivePointer || bDuplicateOutgoingPointer || bSharesActiveKey)
+		{
+			if (SlotWidget && !bSharesActivePointer && !bDuplicateOutgoingPointer)
+			{
+				UnbindSlotWidget(SlotWidget);
+				SlotWidget->RemoveFromParent();
+				++LastMotionDebugView.RemovedThisUpdate;
+			}
+			OutgoingSlotWidgets.RemoveAt(Index);
+			LastMotionDebugView.bHadInvariantViolation = true;
+			continue;
+		}
+		OutgoingSet.Add(SlotWidget);
+	}
+}
+
+void UWacomFirstPersonCardLayerWidget::RefreshSlotMotionDebugCounts()
+{
+	LastMotionDebugView.ActiveSlotCount = SlotWidgets.Num();
+	LastMotionDebugView.OutgoingSlotCount = OutgoingSlotWidgets.Num();
+	LastMotionDebugView.RootCanvasChildCount = CountRootCanvasSlotChildren();
+	LastMotionDebugView.MotionTickSlotCount = CountMotionTickSlots();
+}
+
+int32 UWacomFirstPersonCardLayerWidget::CountRootCanvasSlotChildren() const
+{
+	if (!RootCanvas)
+	{
+		return 0;
+	}
+
+	int32 Count = 0;
+	for (int32 Index = 0; Index < RootCanvas->GetChildrenCount(); ++Index)
+	{
+		if (Cast<UWacomFirstPersonCardLayerSlotWidget>(RootCanvas->GetChildAt(Index)))
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+int32 UWacomFirstPersonCardLayerWidget::CountMotionTickSlots() const
+{
+	int32 Count = 0;
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (SlotWidget && SlotWidget->WantsSlotMotionTick())
+		{
+			++Count;
+		}
+	}
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
+	{
+		if (SlotWidget && SlotWidget->WantsSlotMotionTick())
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+void UWacomFirstPersonCardLayerWidget::ReportSlotMotionDiagnosticsIfNeeded()
+{
+	if (!bLogSlotMotionDiagnostics || !LastMotionDebugView.bHadInvariantViolation)
+	{
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[FirstPersonCardLayer] %s"), *GetSlotMotionDebugSummary());
 }
 
 FString UWacomFirstPersonCardLayerWidget::MakeSlotMotionKey(

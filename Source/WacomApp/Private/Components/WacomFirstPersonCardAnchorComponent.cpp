@@ -337,6 +337,10 @@ FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFi
 	View.bCurrentCameraProjection = true;
 	View.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
 	View.bAnchorScreenSmoothed = bLastAnchorScreenSmoothed;
+	if (StaticCardLayerWidget)
+	{
+		View.LayerMotionDebugView = StaticCardLayerWidget->GetSlotMotionDebugView();
+	}
 
 	if (!bHasValidAnchor)
 	{
@@ -689,8 +693,11 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnab
 
 FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 {
+	const FString LayerMotionSummary = StaticCardLayerWidget
+		? StaticCardLayerWidget->GetSlotMotionDebugSummary()
+		: TEXT("SlotMotion Inactive");
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f"),
+		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f %s"),
 		*AnchorModeToString(CurrentMode),
 		*ProjectionModeToString(ProjectionMode),
 		*LayoutModeToString(CardLayoutMode),
@@ -712,7 +719,8 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		AnchorScreenSmoothingSpeed,
 		AnchorScreenSmoothingResetDistancePixels,
 		bLastAnchorScreenSmoothed ? TEXT("true") : TEXT("false"),
-		LastAnchorScreenSmoothingDistancePixels);
+		LastAnchorScreenSmoothingDistancePixels,
+		*LayerMotionSummary);
 }
 
 AWacomPlayerCharacter* UWacomFirstPersonCardAnchorComponent::GetOwnerCharacter() const
@@ -1142,6 +1150,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 			MotionConfig.ExitDuration = CardSlotExitDuration;
 			MotionConfig.ResetDistancePixels = CardSlotMotionResetDistancePixels;
 			StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
+			StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
 			BindStaticCardLayerWidget(StaticCardLayerWidget);
 			AddStaticCardLayerWidgetToViewportForAnchor(StaticCardLayerWidget, StaticCardLayerZOrder);
@@ -1160,6 +1169,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		MotionConfig.ExitDuration = CardSlotExitDuration;
 		MotionConfig.ResetDistancePixels = CardSlotMotionResetDistancePixels;
 		StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
+		StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 		StaticCardLayerWidget->SetStaticCardSlots(BuildActiveCardLayerSlotViews());
 	}

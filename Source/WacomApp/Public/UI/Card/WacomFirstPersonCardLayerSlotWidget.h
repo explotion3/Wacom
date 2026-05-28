@@ -72,6 +72,7 @@ public:
 
 	bool IsExitingForFirstPersonLayer() const { return bIsExitingForFirstPersonLayer; }
 	bool IsExitMotionFinished() const;
+	bool WantsSlotMotionTick() const { return bWantsSlotMotionTick; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsHoveredForFirstPersonLayer() const { return bIsHoveredForFirstPersonLayer; }

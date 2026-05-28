@@ -59,10 +59,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsCardLayerInteractionEnabled() const { return bCardLayerInteractionEnabled; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug")
+	FWacomFirstPersonCardLayerMotionDebugView GetSlotMotionDebugView() const { return LastMotionDebugView; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug")
+	FString GetSlotMotionDebugSummary() const;
+
+	void SetLogSlotMotionDiagnostics(bool bEnabled) { bLogSlotMotionDiagnostics = bEnabled; }
+
 #if WITH_AUTOMATION_TESTS
 	void TickSlotMotionForTest(float DeltaTime);
 	UWacomFirstPersonCardLayerSlotWidget* FindSlotWidgetByKeyForTest(const FString& SlotKey) const;
 	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
+	void AddUntrackedSlotChildForTest();
 #endif
 
 	FWacomFirstPersonCardLayerInteractionNative OnCardClickedNative;
@@ -92,14 +101,22 @@ private:
 	TSubclassOf<UWacomCardView> CardViewClass;
 
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
+	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
 	bool bCardLayerInteractionEnabled = false;
+	bool bLogSlotMotionDiagnostics = false;
 
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
 	void ApplyLayerVisibility();
 	void BindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
 	void UnbindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
-	void RemoveOutgoingFinishedSlots();
-	void RemoveUntrackedSlotChildren();
+	int32 RemoveOutgoingFinishedSlots();
+	int32 RemoveUntrackedSlotChildren();
+	void EnforceOutgoingSlotLimit();
+	void RepairSlotMotionInvariants();
+	void RefreshSlotMotionDebugCounts();
+	int32 CountRootCanvasSlotChildren() const;
+	int32 CountMotionTickSlots() const;
+	void ReportSlotMotionDiagnosticsIfNeeded();
 	FString MakeSlotMotionKey(const FWacomFirstPersonCardLayerSlotView& SlotView) const;
 	void HandleSlotClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
