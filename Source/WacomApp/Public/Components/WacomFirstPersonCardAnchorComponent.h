@@ -41,6 +41,14 @@ enum class EWacomFirstPersonCardLayoutMode : uint8
 	LegacyProjectedFan2D UMETA(DisplayName = "Legacy Projected Fan 2D", ToolTip = "旧布局对照：每张卡牌先生成 3D 槽位，再分别投影到 UMG。")
 };
 
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardViewportClampMode : uint8
+{
+	HardClampToViewport UMETA(DisplayName = "Hard Clamp To Viewport", ToolTip = "硬限制到视口安全区域内，复现旧行为。"),
+	SoftClampToViewport UMETA(DisplayName = "Soft Clamp To Viewport", ToolTip = "默认限制方式：允许手牌锚点离开视口一段距离，超过软范围后再平滑拉回。"),
+	AllowOffscreen UMETA(DisplayName = "Allow Offscreen", ToolTip = "不限制到视口内；只要世界点投影成功，就允许 UMG 坐标位于屏幕外。")
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 {
@@ -59,6 +67,9 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 	FVector2D WidgetPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D UnclampedWidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D SnappedWidgetPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -69,6 +80,9 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	EWacomFirstPersonCardLayoutMode LayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D AnchorWidgetPosition = FVector2D::ZeroVector;
@@ -83,10 +97,16 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 	float ViewportScale = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float OffscreenDistancePixels = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bProjected = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bClamped = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bOutsideViewport = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bPixelSnapped = false;
@@ -120,6 +140,9 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	EWacomFirstPersonCardLayoutMode LayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FRotator LookOffsetUsed = FRotator::ZeroRotator;
@@ -185,6 +208,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	FVector2D WidgetPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D UnclampedWidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D SnappedWidgetPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -192,6 +218,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	EWacomFirstPersonCardLayoutMode LayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D AnchorWidgetPosition = FVector2D::ZeroVector;
@@ -218,10 +247,16 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	float ViewportScale = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float OffscreenDistancePixels = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bProjected = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bClamped = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bOutsideViewport = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bPixelSnapped = false;
@@ -304,6 +339,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0", ToolTip = "投影点被限制在视口内时保留的屏幕安全边距，单位为 UMG 布局像素。"))
 	float ProjectionPadding = 24.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "第一人称手牌投影点的视口限制方式。HardClamp 会强制留在屏幕内；SoftClamp 允许离屏一段距离后柔性拉回；AllowOffscreen 完全允许离屏。"))
+	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1000.0", ToolTip = "SoftClamp 模式下允许手牌锚点离开视口安全区域的距离，单位为 UMG 布局像素；数值越大，手牌越像真实空间物体。"))
+	float SoftClampOffscreenAllowancePixels = 260.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1000.0", ToolTip = "SoftClamp 模式下超过离屏允许范围后逐步拉回的过渡距离，单位为 UMG 布局像素；0 表示越界后立即停在软边界。"))
+	float SoftClampBlendRangePixels = 240.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "是否在投影、边缘下坠、悬停上浮和等待选目标上浮后，把最终卡牌位置吸附到稳定网格；用于减少 UMG 旋转时的位置闪动。"))
 	bool bEnableCardLayerPixelSnapping = true;
@@ -484,6 +528,12 @@ private:
 	APlayerController* GetOwnerPlayerController() const;
 	bool ResolveBaseAnchor(FTransform& OutBaseTransform, EWacomFirstPersonCardAnchorMode& OutMode, FName& OutFallbackReason) const;
 	FWacomCardViewData BuildStaticCardViewData(int32 CardIndex) const;
+	FVector2D ApplyViewportClampToWidgetPosition(
+		FVector2D UnclampedPosition,
+		FVector2D WidgetViewportSize,
+		bool& bOutClamped,
+		bool& bOutOutsideViewport,
+		float& OutOffscreenDistancePixels) const;
 	TArray<FWacomFirstPersonCardLayerEntry> BuildStaticCardLayerEntries() const;
 	FVector2D SnapCardLayerPosition(FVector2D Position, bool& bOutPixelSnapped) const;
 	float ClampCardLayerRenderAngle(float AngleDegrees) const;
@@ -503,4 +553,5 @@ private:
 	static FString AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode);
 	static FString ProjectionModeToString(EWacomFirstPersonCardProjectionMode Mode);
 	static FString LayoutModeToString(EWacomFirstPersonCardLayoutMode Mode);
+	static FString ViewportClampModeToString(EWacomFirstPersonCardViewportClampMode Mode);
 };

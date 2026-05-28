@@ -1086,6 +1086,252 @@ bool FWacomFirstPersonCardLayerStaticSlotOrderTest::RunTest(const FString& Param
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerHardClampTest,
+	"Wacom.UI.FirstPersonCardLayer.ViewportClamp.HardClampPreservesCurrentViewportClamp",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerHardClampTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::HardClampToViewport;
+	Anchor->ProjectionPadding = 24.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	FWacomFirstPersonCardProjectedPoint Point;
+	const bool bProjected = Anchor->ProjectCardTransformToScreen(
+		FTransform(FRotator::ZeroRotator, FVector(0.0f, 1140.0f, 0.0f), FVector::OneVector),
+		Point);
+
+	TestTrue(TEXT("Offscreen point still projects"), bProjected);
+	TestEqual(TEXT("Hard clamp records raw widget position"), Point.UnclampedWidgetPosition, FVector2D(2100.0f, 540.0f));
+	TestEqual(TEXT("Hard clamp keeps X inside padding"), Point.WidgetPosition, FVector2D(1896.0f, 540.0f));
+	TestTrue(TEXT("Hard clamp reports clamped"), Point.bClamped);
+	TestTrue(TEXT("Hard clamp reports outside viewport"), Point.bOutsideViewport);
+	TestEqual(TEXT("Hard clamp mode recorded"), Point.ViewportClampMode, EWacomFirstPersonCardViewportClampMode::HardClampToViewport);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAllowOffscreenTest,
+	"Wacom.UI.FirstPersonCardLayer.ViewportClamp.AllowOffscreenKeepsUnclampedWidgetPosition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAllowOffscreenTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::AllowOffscreen;
+	Anchor->ProjectionPadding = 24.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	FWacomFirstPersonCardProjectedPoint Point;
+	const bool bProjected = Anchor->ProjectCardTransformToScreen(
+		FTransform(FRotator::ZeroRotator, FVector(0.0f, 1140.0f, 0.0f), FVector::OneVector),
+		Point);
+
+	TestTrue(TEXT("AllowOffscreen point projects"), bProjected);
+	TestTrue(TEXT("Projected flag remains true"), Point.bProjected);
+	TestEqual(TEXT("AllowOffscreen keeps widget position offscreen"), Point.WidgetPosition, FVector2D(2100.0f, 540.0f));
+	TestEqual(TEXT("AllowOffscreen final position is unclamped"), Point.ScreenPosition, Point.UnclampedWidgetPosition);
+	TestFalse(TEXT("AllowOffscreen does not clamp"), Point.bClamped);
+	TestTrue(TEXT("AllowOffscreen still reports outside viewport"), Point.bOutsideViewport);
+	TestEqual(TEXT("AllowOffscreen mode recorded"), Point.ViewportClampMode, EWacomFirstPersonCardViewportClampMode::AllowOffscreen);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerSoftClampAllowanceTest,
+	"Wacom.UI.FirstPersonCardLayer.ViewportClamp.SoftClampAllowsConfiguredOffscreenRange",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerSoftClampAllowanceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
+	Anchor->ProjectionPadding = 24.0f;
+	Anchor->SoftClampOffscreenAllowancePixels = 260.0f;
+	Anchor->SoftClampBlendRangePixels = 240.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	FWacomFirstPersonCardProjectedPoint Point;
+	const bool bProjected = Anchor->ProjectCardTransformToScreen(
+		FTransform(FRotator::ZeroRotator, FVector(0.0f, 1140.0f, 0.0f), FVector::OneVector),
+		Point);
+
+	TestTrue(TEXT("SoftClamp point projects"), bProjected);
+	TestEqual(TEXT("Point inside soft rect is not pulled back"), Point.WidgetPosition, FVector2D(2100.0f, 540.0f));
+	TestFalse(TEXT("Point inside soft rect is not clamped"), Point.bClamped);
+	TestTrue(TEXT("Point inside soft rect still reports outside viewport"), Point.bOutsideViewport);
+	TestTrue(TEXT("Offscreen distance is measured from safe rect"),
+		FMath::IsNearlyEqual(Point.OffscreenDistancePixels, 204.0f, 0.001f));
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerSoftClampBoundaryTest,
+	"Wacom.UI.FirstPersonCardLayer.ViewportClamp.SoftClampStopsAtExpandedBoundary",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerSoftClampBoundaryTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
+	Anchor->ProjectionPadding = 24.0f;
+	Anchor->SoftClampOffscreenAllowancePixels = 260.0f;
+	Anchor->SoftClampBlendRangePixels = 240.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	FWacomFirstPersonCardProjectedPoint HalfBlendPoint;
+	const bool bHalfBlendProjected = Anchor->ProjectCardTransformToScreen(
+		FTransform(FRotator::ZeroRotator, FVector(0.0f, 1316.0f, 0.0f), FVector::OneVector),
+		HalfBlendPoint);
+	TestTrue(TEXT("Half blend point projects"), bHalfBlendProjected);
+	TestTrue(TEXT("Half blend point clamps softly"), HalfBlendPoint.bClamped);
+	TestTrue(TEXT("Half blend point is halfway toward soft boundary"),
+		FMath::IsNearlyEqual(HalfBlendPoint.WidgetPosition.X, 2216.0f, 0.001f));
+
+	FWacomFirstPersonCardProjectedPoint BoundaryPoint;
+	const bool bBoundaryProjected = Anchor->ProjectCardTransformToScreen(
+		FTransform(FRotator::ZeroRotator, FVector(0.0f, 1436.0f, 0.0f), FVector::OneVector),
+		BoundaryPoint);
+	TestTrue(TEXT("Boundary point projects"), bBoundaryProjected);
+	TestEqual(TEXT("Beyond blend range stops at soft boundary"), BoundaryPoint.WidgetPosition, FVector2D(2156.0f, 540.0f));
+	TestTrue(TEXT("Boundary point reports clamped"), BoundaryPoint.bClamped);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAuthoredSoftClampedAnchorTest,
+	"Wacom.UI.FirstPersonCardLayer.ViewportClamp.Authored2DUsesSoftClampedAnchorCenter",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAuthoredSoftClampedAnchorTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
+	Anchor->ProjectionPadding = 24.0f;
+	Anchor->SoftClampOffscreenAllowancePixels = 260.0f;
+	Anchor->SoftClampBlendRangePixels = 240.0f;
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->StaticCardCountFallback = 1;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->AuthoredHandScreenOffset = FVector2D::ZeroVector;
+	Anchor->HorizontalOffset = 1236.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildStaticCardSlotViews();
+	TestEqual(TEXT("Slot count"), Slots.Num(), 1);
+	if (Slots.Num() == 1)
+	{
+		TestEqual(TEXT("Authored slot uses soft-clamped anchor center"), Slots[0].AnchorWidgetPosition, FVector2D(2156.0f, 310.0f));
+		TestEqual(TEXT("Authored slot final position starts at soft-clamped anchor center"), Slots[0].ScreenPosition, FVector2D(2156.0f, 310.0f));
+		TestEqual(TEXT("Authored slot records unclamped anchor position"), Slots[0].UnclampedWidgetPosition, FVector2D(2396.0f, 310.0f));
+		TestTrue(TEXT("Authored slot reports clamped anchor"), Slots[0].bClamped);
+		TestTrue(TEXT("Authored slot reports outside viewport"), Slots[0].bOutsideViewport);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerAuthoredProjectionTest,
 	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.Authored2DProjectsOnlyHandCenter",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
