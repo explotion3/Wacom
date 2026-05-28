@@ -73,6 +73,9 @@ public:
 	void TickSlotMotionForTest(float DeltaTime);
 	UWacomFirstPersonCardLayerSlotWidget* FindSlotWidgetByKeyForTest(const FString& SlotKey) const;
 	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
+	const FWacomFirstPersonCardSlotMotionConfig& GetSlotMotionConfigForTest() const { return SlotMotionConfig; }
+	const FWacomFirstPersonCardSlotFeedbackConfig& GetSlotFeedbackConfigForTest() const { return SlotFeedbackConfig; }
+	TSubclassOf<UWacomCardView> GetCardViewClassForTest() const { return CardViewClass; }
 	void AddUntrackedSlotChildForTest();
 #endif
 

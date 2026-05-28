@@ -14,6 +14,7 @@
 #include "Cards/CardDefinition.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardAnchorDebugWidget.h"
+#include "UI/Card/WacomFirstPersonCardLayoutPreset.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 
 namespace
@@ -23,23 +24,454 @@ namespace
 	const FName NoCameraManagerReason(TEXT("NoCameraManager"));
 	const FName CameraFallbackReason(TEXT("CameraFallback"));
 
-	FWacomFirstPersonCardSlotFeedbackConfig BuildSlotFeedbackConfig(
+	struct FWacomFirstPersonCardResolvedLayoutConfig
+	{
+		EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+		EWacomFirstPersonCardLayoutMode CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+		EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
+		float FanYawDegrees = 3.0f;
+		float AuthoredCardSpacingPixels = 120.0f;
+		float AuthoredMaxHandWidthPixels = 720.0f;
+		FVector2D AuthoredHandScreenOffset = FVector2D::ZeroVector;
+		float AuthoredCenterLiftPixels = 0.0f;
+		float AuthoredDropCurveExponent = 2.0f;
+		float AuthoredFanCurveExponent = 1.0f;
+		bool bAuthoredCenterCardsDrawOnTop = true;
+		float ProjectionPadding = 24.0f;
+		float SoftClampOffscreenAllowancePixels = 260.0f;
+		float SoftClampBlendRangePixels = 240.0f;
+		bool bEnableCardLayerPixelSnapping = true;
+		float CardLayerPixelSnapGrid = 1.0f;
+		bool bClampCardLayerRenderAngle = true;
+		float MaxCardLayerRenderAngleDegrees = 4.0f;
+		float StaticCardRenderScale = 0.55f;
+		float StaticCardEdgeDropPixels = 72.0f;
+		bool bEnableAnchorScreenSmoothing = true;
+		float AnchorScreenSmoothingSpeed = 18.0f;
+		float AnchorScreenSmoothingResetDistancePixels = 320.0f;
+		bool bEnableCardSlotMotion = true;
+		float CardSlotMotionSpeed = 26.0f;
+		float CardSlotOpacitySpeed = 18.0f;
+		FVector2D CardSlotEnterOffsetPixels = FVector2D(0.0f, 48.0f);
+		float CardSlotEnterOpacity = 0.0f;
+		FVector2D CardSlotExitOffsetPixels = FVector2D(0.0f, 36.0f);
+		float CardSlotExitDuration = 0.16f;
+		float CardSlotMotionResetDistancePixels = 420.0f;
+		bool bEnableEventAwareCardTransitions = true;
+		FVector2D DrawnCardEnterOffsetPixels = FVector2D(0.0f, 96.0f);
+		FVector2D GainedCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+		FVector2D PlayedCardExitOffsetPixels = FVector2D(0.0f, -120.0f);
+		FVector2D DiscardedCardExitOffsetPixels = FVector2D(0.0f, 120.0f);
+		float PendingTargetingLiftPixels = 36.0f;
+		float PendingTargetingScale = 1.08f;
+		int32 PendingTargetingZOrderBoost = 1200;
+		bool bPendingTargetingStraightenAngle = true;
+		float PendingTargetingAngleBlend = 0.75f;
+		bool bEnableTargetSelectHandDeemphasis = true;
+		float TargetSelectNonPendingOpacityMultiplier = 0.88f;
+		float HandAnchorScale = 0.96f;
+		float DisabledRenderOpacity = 0.78f;
+		float HoverLiftPixels = 28.0f;
+		float HoverScale = 1.06f;
+		int32 HoverZOrderBoost = 500;
+		bool bEnableCardInteractionFeedback = true;
+		FLinearColor PlayableHoverFeedbackColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);
+		float PlayableHoverFeedbackOpacity = 0.06f;
+		float PressedFeedbackScale = 0.985f;
+		FLinearColor PressedFeedbackColor = FLinearColor::White;
+		float PressedFeedbackOpacity = 0.10f;
+		float ConfirmFeedbackDuration = 0.08f;
+		float ConfirmFeedbackOpacity = 0.12f;
+		float DenyFeedbackDuration = 0.18f;
+		float DenyFeedbackShakePixels = 8.0f;
+		FLinearColor DenyFeedbackColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
+		float DenyFeedbackOpacity = 0.18f;
+		bool bUsingPreset = false;
+		bool bPresetFallback = true;
+		FString PresetName = TEXT("None");
+	};
+
+	FWacomFirstPersonCardResolvedLayoutConfig BuildResolvedLayoutConfigFromComponent(
 		const UWacomFirstPersonCardAnchorComponent& Anchor)
 	{
+		FWacomFirstPersonCardResolvedLayoutConfig Config;
+		Config.ProjectionMode = Anchor.ProjectionMode;
+		Config.CardLayoutMode = Anchor.CardLayoutMode;
+		Config.ViewportClampMode = Anchor.ViewportClampMode;
+		Config.FanYawDegrees = Anchor.FanYawDegrees;
+		Config.AuthoredCardSpacingPixels = Anchor.AuthoredCardSpacingPixels;
+		Config.AuthoredMaxHandWidthPixels = Anchor.AuthoredMaxHandWidthPixels;
+		Config.AuthoredHandScreenOffset = Anchor.AuthoredHandScreenOffset;
+		Config.AuthoredCenterLiftPixels = Anchor.AuthoredCenterLiftPixels;
+		Config.AuthoredDropCurveExponent = Anchor.AuthoredDropCurveExponent;
+		Config.AuthoredFanCurveExponent = Anchor.AuthoredFanCurveExponent;
+		Config.bAuthoredCenterCardsDrawOnTop = Anchor.bAuthoredCenterCardsDrawOnTop;
+		Config.ProjectionPadding = Anchor.ProjectionPadding;
+		Config.SoftClampOffscreenAllowancePixels = Anchor.SoftClampOffscreenAllowancePixels;
+		Config.SoftClampBlendRangePixels = Anchor.SoftClampBlendRangePixels;
+		Config.bEnableCardLayerPixelSnapping = Anchor.bEnableCardLayerPixelSnapping;
+		Config.CardLayerPixelSnapGrid = Anchor.CardLayerPixelSnapGrid;
+		Config.bClampCardLayerRenderAngle = Anchor.bClampCardLayerRenderAngle;
+		Config.MaxCardLayerRenderAngleDegrees = Anchor.MaxCardLayerRenderAngleDegrees;
+		Config.StaticCardRenderScale = Anchor.StaticCardRenderScale;
+		Config.StaticCardEdgeDropPixels = Anchor.StaticCardEdgeDropPixels;
+		Config.bEnableAnchorScreenSmoothing = Anchor.bEnableAnchorScreenSmoothing;
+		Config.AnchorScreenSmoothingSpeed = Anchor.AnchorScreenSmoothingSpeed;
+		Config.AnchorScreenSmoothingResetDistancePixels = Anchor.AnchorScreenSmoothingResetDistancePixels;
+		Config.bEnableCardSlotMotion = Anchor.bEnableCardSlotMotion;
+		Config.CardSlotMotionSpeed = Anchor.CardSlotMotionSpeed;
+		Config.CardSlotOpacitySpeed = Anchor.CardSlotOpacitySpeed;
+		Config.CardSlotEnterOffsetPixels = Anchor.CardSlotEnterOffsetPixels;
+		Config.CardSlotEnterOpacity = Anchor.CardSlotEnterOpacity;
+		Config.CardSlotExitOffsetPixels = Anchor.CardSlotExitOffsetPixels;
+		Config.CardSlotExitDuration = Anchor.CardSlotExitDuration;
+		Config.CardSlotMotionResetDistancePixels = Anchor.CardSlotMotionResetDistancePixels;
+		Config.bEnableEventAwareCardTransitions = Anchor.bEnableEventAwareCardTransitions;
+		Config.DrawnCardEnterOffsetPixels = Anchor.DrawnCardEnterOffsetPixels;
+		Config.GainedCardEnterOffsetPixels = Anchor.GainedCardEnterOffsetPixels;
+		Config.PlayedCardExitOffsetPixels = Anchor.PlayedCardExitOffsetPixels;
+		Config.DiscardedCardExitOffsetPixels = Anchor.DiscardedCardExitOffsetPixels;
+		Config.PendingTargetingLiftPixels = Anchor.PendingTargetingLiftPixels;
+		Config.PendingTargetingScale = Anchor.PendingTargetingScale;
+		Config.PendingTargetingZOrderBoost = Anchor.PendingTargetingZOrderBoost;
+		Config.bPendingTargetingStraightenAngle = Anchor.bPendingTargetingStraightenAngle;
+		Config.PendingTargetingAngleBlend = Anchor.PendingTargetingAngleBlend;
+		Config.bEnableTargetSelectHandDeemphasis = Anchor.bEnableTargetSelectHandDeemphasis;
+		Config.TargetSelectNonPendingOpacityMultiplier = Anchor.TargetSelectNonPendingOpacityMultiplier;
+		Config.HandAnchorScale = Anchor.HandAnchorScale;
+		Config.DisabledRenderOpacity = Anchor.DisabledRenderOpacity;
+		Config.HoverLiftPixels = Anchor.HoverLiftPixels;
+		Config.HoverScale = Anchor.HoverScale;
+		Config.HoverZOrderBoost = Anchor.HoverZOrderBoost;
+		Config.bEnableCardInteractionFeedback = Anchor.bEnableCardInteractionFeedback;
+		Config.PlayableHoverFeedbackColor = Anchor.PlayableHoverFeedbackColor;
+		Config.PlayableHoverFeedbackOpacity = Anchor.PlayableHoverFeedbackOpacity;
+		Config.PressedFeedbackScale = Anchor.PressedFeedbackScale;
+		Config.PressedFeedbackColor = Anchor.PressedFeedbackColor;
+		Config.PressedFeedbackOpacity = Anchor.PressedFeedbackOpacity;
+		Config.ConfirmFeedbackDuration = Anchor.ConfirmFeedbackDuration;
+		Config.ConfirmFeedbackOpacity = Anchor.ConfirmFeedbackOpacity;
+		Config.DenyFeedbackDuration = Anchor.DenyFeedbackDuration;
+		Config.DenyFeedbackShakePixels = Anchor.DenyFeedbackShakePixels;
+		Config.DenyFeedbackColor = Anchor.DenyFeedbackColor;
+		Config.DenyFeedbackOpacity = Anchor.DenyFeedbackOpacity;
+		return Config;
+	}
+
+	void ApplyPresetToResolvedLayoutConfig(
+		const UWacomFirstPersonCardLayoutPreset& Preset,
+		FWacomFirstPersonCardResolvedLayoutConfig& Config);
+
+	FWacomFirstPersonCardResolvedLayoutConfig ResolveLayoutConfig(
+		const UWacomFirstPersonCardAnchorComponent& Anchor)
+	{
+		FWacomFirstPersonCardResolvedLayoutConfig Config = BuildResolvedLayoutConfigFromComponent(Anchor);
+		Config.bUsingPreset = Anchor.bUseFirstPersonCardLayoutPreset && Anchor.FirstPersonCardLayoutPreset != nullptr;
+		Config.bPresetFallback = !Config.bUsingPreset;
+		Config.PresetName = Anchor.FirstPersonCardLayoutPreset
+			? Anchor.FirstPersonCardLayoutPreset->GetName()
+			: TEXT("None");
+		if (Config.bUsingPreset)
+		{
+			ApplyPresetToResolvedLayoutConfig(*Anchor.FirstPersonCardLayoutPreset, Config);
+		}
+		else if (Anchor.bUseFirstPersonCardLayoutPreset)
+		{
+			Config.PresetName = TEXT("Missing");
+		}
+		return Config;
+	}
+
+	void ApplyPresetToResolvedLayoutConfig(
+		const UWacomFirstPersonCardLayoutPreset& Preset,
+		FWacomFirstPersonCardResolvedLayoutConfig& Config)
+	{
+		Config.ProjectionMode = Preset.ProjectionMode;
+		Config.CardLayoutMode = Preset.CardLayoutMode;
+		Config.ViewportClampMode = Preset.ViewportClampMode;
+		Config.FanYawDegrees = Preset.FanYawDegrees;
+		Config.AuthoredCardSpacingPixels = Preset.AuthoredCardSpacingPixels;
+		Config.AuthoredMaxHandWidthPixels = Preset.AuthoredMaxHandWidthPixels;
+		Config.AuthoredHandScreenOffset = Preset.AuthoredHandScreenOffset;
+		Config.AuthoredCenterLiftPixels = Preset.AuthoredCenterLiftPixels;
+		Config.AuthoredDropCurveExponent = Preset.AuthoredDropCurveExponent;
+		Config.AuthoredFanCurveExponent = Preset.AuthoredFanCurveExponent;
+		Config.bAuthoredCenterCardsDrawOnTop = Preset.bAuthoredCenterCardsDrawOnTop;
+		Config.ProjectionPadding = Preset.ProjectionPadding;
+		Config.SoftClampOffscreenAllowancePixels = Preset.SoftClampOffscreenAllowancePixels;
+		Config.SoftClampBlendRangePixels = Preset.SoftClampBlendRangePixels;
+		Config.bEnableCardLayerPixelSnapping = Preset.bEnableCardLayerPixelSnapping;
+		Config.CardLayerPixelSnapGrid = Preset.CardLayerPixelSnapGrid;
+		Config.bClampCardLayerRenderAngle = Preset.bClampCardLayerRenderAngle;
+		Config.MaxCardLayerRenderAngleDegrees = Preset.MaxCardLayerRenderAngleDegrees;
+		Config.StaticCardRenderScale = Preset.StaticCardRenderScale;
+		Config.StaticCardEdgeDropPixels = Preset.StaticCardEdgeDropPixels;
+		Config.bEnableAnchorScreenSmoothing = Preset.bEnableAnchorScreenSmoothing;
+		Config.AnchorScreenSmoothingSpeed = Preset.AnchorScreenSmoothingSpeed;
+		Config.AnchorScreenSmoothingResetDistancePixels = Preset.AnchorScreenSmoothingResetDistancePixels;
+		Config.bEnableCardSlotMotion = Preset.bEnableCardSlotMotion;
+		Config.CardSlotMotionSpeed = Preset.CardSlotMotionSpeed;
+		Config.CardSlotOpacitySpeed = Preset.CardSlotOpacitySpeed;
+		Config.CardSlotEnterOffsetPixels = Preset.CardSlotEnterOffsetPixels;
+		Config.CardSlotEnterOpacity = Preset.CardSlotEnterOpacity;
+		Config.CardSlotExitOffsetPixels = Preset.CardSlotExitOffsetPixels;
+		Config.CardSlotExitDuration = Preset.CardSlotExitDuration;
+		Config.CardSlotMotionResetDistancePixels = Preset.CardSlotMotionResetDistancePixels;
+		Config.bEnableEventAwareCardTransitions = Preset.bEnableEventAwareCardTransitions;
+		Config.DrawnCardEnterOffsetPixels = Preset.DrawnCardEnterOffsetPixels;
+		Config.GainedCardEnterOffsetPixels = Preset.GainedCardEnterOffsetPixels;
+		Config.PlayedCardExitOffsetPixels = Preset.PlayedCardExitOffsetPixels;
+		Config.DiscardedCardExitOffsetPixels = Preset.DiscardedCardExitOffsetPixels;
+		Config.PendingTargetingLiftPixels = Preset.PendingTargetingLiftPixels;
+		Config.PendingTargetingScale = Preset.PendingTargetingScale;
+		Config.PendingTargetingZOrderBoost = Preset.PendingTargetingZOrderBoost;
+		Config.bPendingTargetingStraightenAngle = Preset.bPendingTargetingStraightenAngle;
+		Config.PendingTargetingAngleBlend = Preset.PendingTargetingAngleBlend;
+		Config.bEnableTargetSelectHandDeemphasis = Preset.bEnableTargetSelectHandDeemphasis;
+		Config.TargetSelectNonPendingOpacityMultiplier = Preset.TargetSelectNonPendingOpacityMultiplier;
+		Config.HandAnchorScale = Preset.HandAnchorScale;
+		Config.DisabledRenderOpacity = Preset.DisabledRenderOpacity;
+		Config.HoverLiftPixels = Preset.HoverLiftPixels;
+		Config.HoverScale = Preset.HoverScale;
+		Config.HoverZOrderBoost = Preset.HoverZOrderBoost;
+		Config.bEnableCardInteractionFeedback = Preset.bEnableCardInteractionFeedback;
+		Config.PlayableHoverFeedbackColor = Preset.PlayableHoverFeedbackColor;
+		Config.PlayableHoverFeedbackOpacity = Preset.PlayableHoverFeedbackOpacity;
+		Config.PressedFeedbackScale = Preset.PressedFeedbackScale;
+		Config.PressedFeedbackColor = Preset.PressedFeedbackColor;
+		Config.PressedFeedbackOpacity = Preset.PressedFeedbackOpacity;
+		Config.ConfirmFeedbackDuration = Preset.ConfirmFeedbackDuration;
+		Config.ConfirmFeedbackOpacity = Preset.ConfirmFeedbackOpacity;
+		Config.DenyFeedbackDuration = Preset.DenyFeedbackDuration;
+		Config.DenyFeedbackShakePixels = Preset.DenyFeedbackShakePixels;
+		Config.DenyFeedbackColor = Preset.DenyFeedbackColor;
+		Config.DenyFeedbackOpacity = Preset.DenyFeedbackOpacity;
+		Config.bUsingPreset = true;
+		Config.bPresetFallback = false;
+		Config.PresetName = Preset.GetName();
+	}
+
+	FWacomFirstPersonCardSlotFeedbackConfig BuildSlotFeedbackConfig(
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config)
+	{
 		FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig;
-		FeedbackConfig.bEnabled = Anchor.bEnableCardInteractionFeedback;
-		FeedbackConfig.PlayableHoverColor = Anchor.PlayableHoverFeedbackColor;
-		FeedbackConfig.PlayableHoverOpacity = Anchor.PlayableHoverFeedbackOpacity;
-		FeedbackConfig.PressedScale = Anchor.PressedFeedbackScale;
-		FeedbackConfig.PressedColor = Anchor.PressedFeedbackColor;
-		FeedbackConfig.PressedOpacity = Anchor.PressedFeedbackOpacity;
-		FeedbackConfig.ConfirmDuration = Anchor.ConfirmFeedbackDuration;
-		FeedbackConfig.ConfirmOpacity = Anchor.ConfirmFeedbackOpacity;
-		FeedbackConfig.DenyDuration = Anchor.DenyFeedbackDuration;
-		FeedbackConfig.DenyShakePixels = Anchor.DenyFeedbackShakePixels;
-		FeedbackConfig.DenyColor = Anchor.DenyFeedbackColor;
-		FeedbackConfig.DenyOpacity = Anchor.DenyFeedbackOpacity;
+		FeedbackConfig.bEnabled = Config.bEnableCardInteractionFeedback;
+		FeedbackConfig.PlayableHoverColor = Config.PlayableHoverFeedbackColor;
+		FeedbackConfig.PlayableHoverOpacity = Config.PlayableHoverFeedbackOpacity;
+		FeedbackConfig.PressedScale = Config.PressedFeedbackScale;
+		FeedbackConfig.PressedColor = Config.PressedFeedbackColor;
+		FeedbackConfig.PressedOpacity = Config.PressedFeedbackOpacity;
+		FeedbackConfig.ConfirmDuration = Config.ConfirmFeedbackDuration;
+		FeedbackConfig.ConfirmOpacity = Config.ConfirmFeedbackOpacity;
+		FeedbackConfig.DenyDuration = Config.DenyFeedbackDuration;
+		FeedbackConfig.DenyShakePixels = Config.DenyFeedbackShakePixels;
+		FeedbackConfig.DenyColor = Config.DenyFeedbackColor;
+		FeedbackConfig.DenyOpacity = Config.DenyFeedbackOpacity;
 		return FeedbackConfig;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig BuildSlotMotionConfig(
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config)
+	{
+		FWacomFirstPersonCardSlotMotionConfig MotionConfig;
+		MotionConfig.bEnabled = Config.bEnableCardSlotMotion;
+		MotionConfig.MotionSpeed = Config.CardSlotMotionSpeed;
+		MotionConfig.OpacitySpeed = Config.CardSlotOpacitySpeed;
+		MotionConfig.EnterOffsetPixels = Config.CardSlotEnterOffsetPixels;
+		MotionConfig.EnterOpacity = Config.CardSlotEnterOpacity;
+		MotionConfig.ExitOffsetPixels = Config.CardSlotExitOffsetPixels;
+		MotionConfig.ExitDuration = Config.CardSlotExitDuration;
+		MotionConfig.ResetDistancePixels = Config.CardSlotMotionResetDistancePixels;
+		MotionConfig.bEnableEventAwareTransitions = Config.bEnableEventAwareCardTransitions;
+		MotionConfig.DrawnEnterOffsetPixels = Config.DrawnCardEnterOffsetPixels;
+		MotionConfig.GainedEnterOffsetPixels = Config.GainedCardEnterOffsetPixels;
+		MotionConfig.PlayedExitOffsetPixels = Config.PlayedCardExitOffsetPixels;
+		MotionConfig.DiscardedExitOffsetPixels = Config.DiscardedCardExitOffsetPixels;
+		return MotionConfig;
+	}
+
+	uint32 BuildResolvedLayoutConfigHash(
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config)
+	{
+		uint32 Hash = 0;
+		const auto Combine = [&Hash](uint32 Value)
+		{
+			Hash = HashCombineFast(Hash, Value);
+		};
+		const auto AddBool = [&Combine](bool bValue)
+		{
+			Combine(bValue ? 1u : 0u);
+		};
+		const auto AddInt = [&Combine](int32 Value)
+		{
+			Combine(GetTypeHash(Value));
+		};
+		const auto AddFloat = [&Combine](float Value)
+		{
+			Combine(GetTypeHash(FMath::RoundToInt(Value * 1000.0f)));
+		};
+		const auto AddVector = [&AddFloat](const FVector2D& Value)
+		{
+			AddFloat(Value.X);
+			AddFloat(Value.Y);
+		};
+		const auto AddColor = [&AddFloat](const FLinearColor& Value)
+		{
+			AddFloat(Value.R);
+			AddFloat(Value.G);
+			AddFloat(Value.B);
+			AddFloat(Value.A);
+		};
+
+		AddInt(static_cast<int32>(Config.ProjectionMode));
+		AddInt(static_cast<int32>(Config.CardLayoutMode));
+		AddInt(static_cast<int32>(Config.ViewportClampMode));
+		AddFloat(Config.FanYawDegrees);
+		AddFloat(Config.AuthoredCardSpacingPixels);
+		AddFloat(Config.AuthoredMaxHandWidthPixels);
+		AddVector(Config.AuthoredHandScreenOffset);
+		AddFloat(Config.AuthoredCenterLiftPixels);
+		AddFloat(Config.AuthoredDropCurveExponent);
+		AddFloat(Config.AuthoredFanCurveExponent);
+		AddBool(Config.bAuthoredCenterCardsDrawOnTop);
+		AddFloat(Config.ProjectionPadding);
+		AddFloat(Config.SoftClampOffscreenAllowancePixels);
+		AddFloat(Config.SoftClampBlendRangePixels);
+		AddBool(Config.bEnableCardLayerPixelSnapping);
+		AddFloat(Config.CardLayerPixelSnapGrid);
+		AddBool(Config.bClampCardLayerRenderAngle);
+		AddFloat(Config.MaxCardLayerRenderAngleDegrees);
+		AddFloat(Config.StaticCardRenderScale);
+		AddFloat(Config.StaticCardEdgeDropPixels);
+		AddBool(Config.bEnableAnchorScreenSmoothing);
+		AddFloat(Config.AnchorScreenSmoothingSpeed);
+		AddFloat(Config.AnchorScreenSmoothingResetDistancePixels);
+		AddBool(Config.bEnableCardSlotMotion);
+		AddFloat(Config.CardSlotMotionSpeed);
+		AddFloat(Config.CardSlotOpacitySpeed);
+		AddVector(Config.CardSlotEnterOffsetPixels);
+		AddFloat(Config.CardSlotEnterOpacity);
+		AddVector(Config.CardSlotExitOffsetPixels);
+		AddFloat(Config.CardSlotExitDuration);
+		AddFloat(Config.CardSlotMotionResetDistancePixels);
+		AddBool(Config.bEnableEventAwareCardTransitions);
+		AddVector(Config.DrawnCardEnterOffsetPixels);
+		AddVector(Config.GainedCardEnterOffsetPixels);
+		AddVector(Config.PlayedCardExitOffsetPixels);
+		AddVector(Config.DiscardedCardExitOffsetPixels);
+		AddFloat(Config.PendingTargetingLiftPixels);
+		AddFloat(Config.PendingTargetingScale);
+		AddInt(Config.PendingTargetingZOrderBoost);
+		AddBool(Config.bPendingTargetingStraightenAngle);
+		AddFloat(Config.PendingTargetingAngleBlend);
+		AddBool(Config.bEnableTargetSelectHandDeemphasis);
+		AddFloat(Config.TargetSelectNonPendingOpacityMultiplier);
+		AddFloat(Config.HandAnchorScale);
+		AddFloat(Config.DisabledRenderOpacity);
+		AddFloat(Config.HoverLiftPixels);
+		AddFloat(Config.HoverScale);
+		AddInt(Config.HoverZOrderBoost);
+		AddBool(Config.bEnableCardInteractionFeedback);
+		AddColor(Config.PlayableHoverFeedbackColor);
+		AddFloat(Config.PlayableHoverFeedbackOpacity);
+		AddFloat(Config.PressedFeedbackScale);
+		AddColor(Config.PressedFeedbackColor);
+		AddFloat(Config.PressedFeedbackOpacity);
+		AddFloat(Config.ConfirmFeedbackDuration);
+		AddFloat(Config.ConfirmFeedbackOpacity);
+		AddColor(Config.DenyFeedbackColor);
+		AddFloat(Config.DenyFeedbackOpacity);
+		AddFloat(Config.DenyFeedbackDuration);
+		AddFloat(Config.DenyFeedbackShakePixels);
+		Combine(GetTypeHash(Config.PresetName));
+		return Hash;
+	}
+
+	FVector2D ApplyViewportClampToWidgetPositionForConfig(
+		FVector2D UnclampedPosition,
+		FVector2D WidgetViewportSize,
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config,
+		bool& bOutClamped,
+		bool& bOutOutsideViewport,
+		float& OutOffscreenDistancePixels)
+	{
+		bOutClamped = false;
+		bOutOutsideViewport = false;
+		OutOffscreenDistancePixels = 0.0f;
+
+		const float Padding = FMath::Max(0.0f, Config.ProjectionPadding);
+		const FVector2D SafeMin(Padding, Padding);
+		const FVector2D SafeMax(
+			FMath::Max(Padding, WidgetViewportSize.X - Padding),
+			FMath::Max(Padding, WidgetViewportSize.Y - Padding));
+		const FVector2D NearestSafePoint(
+			FMath::Clamp(UnclampedPosition.X, SafeMin.X, SafeMax.X),
+			FMath::Clamp(UnclampedPosition.Y, SafeMin.Y, SafeMax.Y));
+		OutOffscreenDistancePixels = FVector2D::Distance(UnclampedPosition, NearestSafePoint);
+		bOutOutsideViewport = OutOffscreenDistancePixels > KINDA_SMALL_NUMBER;
+
+		if (Config.ViewportClampMode == EWacomFirstPersonCardViewportClampMode::AllowOffscreen)
+		{
+			return UnclampedPosition;
+		}
+
+		if (Config.ViewportClampMode == EWacomFirstPersonCardViewportClampMode::HardClampToViewport)
+		{
+			bOutClamped = bOutOutsideViewport;
+			return NearestSafePoint;
+		}
+
+		const float Allowance = FMath::Max(0.0f, Config.SoftClampOffscreenAllowancePixels);
+		const FVector2D SoftMin = SafeMin - FVector2D(Allowance, Allowance);
+		const FVector2D SoftMax = SafeMax + FVector2D(Allowance, Allowance);
+		const FVector2D NearestSoftPoint(
+			FMath::Clamp(UnclampedPosition.X, SoftMin.X, SoftMax.X),
+			FMath::Clamp(UnclampedPosition.Y, SoftMin.Y, SoftMax.Y));
+		const float SoftOvershootDistance = FVector2D::Distance(UnclampedPosition, NearestSoftPoint);
+		if (SoftOvershootDistance <= KINDA_SMALL_NUMBER)
+		{
+			return UnclampedPosition;
+		}
+
+		const float BlendRange = FMath::Max(0.0f, Config.SoftClampBlendRangePixels);
+		const float Alpha = BlendRange <= KINDA_SMALL_NUMBER
+			? 1.0f
+			: FMath::SmoothStep(0.0f, 1.0f, FMath::Clamp(SoftOvershootDistance / BlendRange, 0.0f, 1.0f));
+		const FVector2D ClampedPosition = FMath::Lerp(UnclampedPosition, NearestSoftPoint, Alpha);
+		bOutClamped = !UnclampedPosition.Equals(ClampedPosition, KINDA_SMALL_NUMBER);
+		return ClampedPosition;
+	}
+
+	FVector2D SnapCardLayerPositionForConfig(
+		FVector2D Position,
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config,
+		bool& bOutPixelSnapped)
+	{
+		bOutPixelSnapped = false;
+		if (!Config.bEnableCardLayerPixelSnapping)
+		{
+			return Position;
+		}
+
+		const float Grid = FMath::Max(0.01f, Config.CardLayerPixelSnapGrid);
+		const FVector2D SnappedPosition(
+			FMath::RoundToFloat(Position.X / Grid) * Grid,
+			FMath::RoundToFloat(Position.Y / Grid) * Grid);
+		bOutPixelSnapped = !SnappedPosition.Equals(Position, KINDA_SMALL_NUMBER);
+		return SnappedPosition;
+	}
+
+	float ClampCardLayerRenderAngleForConfig(
+		float AngleDegrees,
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config)
+	{
+		if (!Config.bClampCardLayerRenderAngle)
+		{
+			return AngleDegrees;
+		}
+
+		const float MaxAbsAngle = FMath::Max(0.0f, Config.MaxCardLayerRenderAngleDegrees);
+		return FMath::Clamp(AngleDegrees, -MaxAbsAngle, MaxAbsAngle);
 	}
 }
 
@@ -78,6 +510,8 @@ void UWacomFirstPersonCardAnchorComponent::TickComponent(
 
 void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
 {
+	RefreshCardLayoutPresetRuntimeState();
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	FTransform BaseTransform = FTransform::Identity;
 	EWacomFirstPersonCardAnchorMode ResolvedMode = EWacomFirstPersonCardAnchorMode::Invalid;
 	FName ResolvedFallbackReason = NAME_None;
@@ -93,7 +527,7 @@ void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
 	}
 
 	FRotator LookOffset = FRotator::ZeroRotator;
-	if (ProjectionMode == EWacomFirstPersonCardProjectionMode::LegacyWorldProjected)
+	if (Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::LegacyWorldProjected)
 	{
 		if (const AWacomPlayerCharacter* Character = GetOwnerCharacter())
 		{
@@ -149,6 +583,8 @@ void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
 
 FTransform UWacomFirstPersonCardAnchorComponent::ComputeCardTransform(int32 NumCards, int32 CardIndex) const
 {
+	RefreshCardLayoutPresetRuntimeState();
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	if (!bHasValidAnchor || NumCards <= 0 || CardIndex < 0 || CardIndex >= NumCards)
 	{
 		return CurrentAnchorTransform;
@@ -163,7 +599,7 @@ FTransform UWacomFirstPersonCardAnchorComponent::ComputeCardTransform(int32 NumC
 		+ AnchorRotationMatrix.GetScaledAxis(EAxis::Y) * (CenterOffset * FMath::Max(0.0f, CardSpacing));
 
 	FRotator CardRotation = (AnchorRotation + FRotator(0.0f, 180.0f, 0.0f)).GetNormalized();
-	CardRotation.Yaw += CenterOffset * FanYawDegrees;
+	CardRotation.Yaw += CenterOffset * Config.FanYawDegrees;
 	return FTransform(CardRotation, CardLocation, FVector::OneVector);
 }
 
@@ -172,12 +608,14 @@ bool UWacomFirstPersonCardAnchorComponent::ProjectCardTransformToScreen(
 	FWacomFirstPersonCardProjectedPoint& OutProjectedPoint,
 	int32 PointIndex) const
 {
+	RefreshCardLayoutPresetRuntimeState();
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	OutProjectedPoint = FWacomFirstPersonCardProjectedPoint();
 	OutProjectedPoint.Index = PointIndex;
 	OutProjectedPoint.WorldLocation = CardTransform.GetLocation();
-	OutProjectedPoint.ProjectionMode = ProjectionMode;
-	OutProjectedPoint.LayoutMode = CardLayoutMode;
-	OutProjectedPoint.bBodyLockedLayout = ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
+	OutProjectedPoint.ProjectionMode = Config.ProjectionMode;
+	OutProjectedPoint.LayoutMode = Config.CardLayoutMode;
+	OutProjectedPoint.bBodyLockedLayout = Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
 	OutProjectedPoint.bCurrentCameraProjection = true;
 	OutProjectedPoint.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
 
@@ -206,22 +644,23 @@ bool UWacomFirstPersonCardAnchorComponent::ProjectCardTransformToScreen(
 	bool bClamped = false;
 	bool bOutsideViewport = false;
 	float OffscreenDistancePixels = 0.0f;
-	WidgetPosition = ApplyViewportClampToWidgetPosition(
+	WidgetPosition = ApplyViewportClampToWidgetPositionForConfig(
 		UnclampedPosition,
 		WidgetViewportSize,
+		Config,
 		bClamped,
 		bOutsideViewport,
 		OffscreenDistancePixels);
 
 	bool bPixelSnapped = false;
-	const FVector2D SnappedPosition = SnapCardLayerPosition(WidgetPosition, bPixelSnapped);
+	const FVector2D SnappedPosition = SnapCardLayerPositionForConfig(WidgetPosition, Config, bPixelSnapped);
 
 	OutProjectedPoint.RawScreenPosition = RawScreenPosition;
 	OutProjectedPoint.WidgetPosition = WidgetPosition;
 	OutProjectedPoint.UnclampedWidgetPosition = UnclampedPosition;
 	OutProjectedPoint.SnappedWidgetPosition = SnappedPosition;
 	OutProjectedPoint.ScreenPosition = SnappedPosition;
-	OutProjectedPoint.ViewportClampMode = ViewportClampMode;
+	OutProjectedPoint.ViewportClampMode = Config.ViewportClampMode;
 	OutProjectedPoint.ViewportScale = ViewportScale;
 	OutProjectedPoint.OffscreenDistancePixels = OffscreenDistancePixels;
 	OutProjectedPoint.UnsmoothedAnchorWidgetPosition = WidgetPosition;
@@ -343,16 +782,18 @@ void UWacomFirstPersonCardAnchorComponent::AddStaticCardLayerWidgetToViewportFor
 FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFirstPersonCardAnchorDebugView(
 	int32 NumDebugCards) const
 {
+	RefreshCardLayoutPresetRuntimeState();
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	FWacomFirstPersonCardAnchorDebugView View;
 	View.bHasValidAnchor = bHasValidAnchor;
 	View.Mode = CurrentMode;
 	View.AnchorTransform = CurrentAnchorTransform;
-	View.ProjectionMode = ProjectionMode;
-	View.LayoutMode = CardLayoutMode;
-	View.ViewportClampMode = ViewportClampMode;
+	View.ProjectionMode = Config.ProjectionMode;
+	View.LayoutMode = Config.CardLayoutMode;
+	View.ViewportClampMode = Config.ViewportClampMode;
 	View.LookOffsetUsed = CurrentLookOffsetUsed;
 	View.LastFallbackReason = LastFallbackReason;
-	View.bBodyLockedLayout = ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
+	View.bBodyLockedLayout = Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
 	View.bCurrentCameraProjection = true;
 	View.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
 	View.bAnchorScreenSmoothed = bLastAnchorScreenSmoothed;
@@ -368,7 +809,7 @@ FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFi
 
 	const int32 ClampedCount = FMath::Clamp(NumDebugCards, 0, 32);
 	View.ProjectedPoints.Reserve(ClampedCount);
-	if (CardLayoutMode == EWacomFirstPersonCardLayoutMode::Authored2D)
+	if (Config.CardLayoutMode == EWacomFirstPersonCardLayoutMode::Authored2D)
 	{
 		TArray<FWacomFirstPersonCardLayerEntry> DebugEntries;
 		DebugEntries.SetNum(ClampedCount);
@@ -526,6 +967,8 @@ TArray<FWacomFirstPersonCardLayerEntry> UWacomFirstPersonCardAnchorComponent::Bu
 TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent::BuildCardSlotViewsFromEntries(
 	const TArray<FWacomFirstPersonCardLayerEntry>& CardEntries) const
 {
+	RefreshCardLayoutPresetRuntimeState();
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	TArray<FWacomFirstPersonCardLayerSlotView> Slots;
 	if (!bHasValidAnchor)
 	{
@@ -546,7 +989,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 	}
 
 	FWacomFirstPersonCardProjectedPoint AnchorPoint;
-	const bool bUseAuthoredLayout = CardLayoutMode == EWacomFirstPersonCardLayoutMode::Authored2D;
+	const bool bUseAuthoredLayout = Config.CardLayoutMode == EWacomFirstPersonCardLayoutMode::Authored2D;
 	const bool bAuthoredAnchorProjected = !bUseAuthoredLayout
 		|| ProjectCardTransformToScreen(CurrentAnchorTransform, AnchorPoint, INDEX_NONE);
 	if (bUseAuthoredLayout && bAuthoredAnchorProjected)
@@ -565,15 +1008,15 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		Slot.Entry = CardEntries[Index];
 		Slot.Entry.bIsPlayable = Slot.Entry.bIsPlayable && !Slot.Entry.CardViewData.bDisabled;
 		Slot.Entry.CardViewData.bDisabled = !Slot.Entry.bIsPlayable;
-		Slot.RenderScale = FMath::Max(0.01f, StaticCardRenderScale);
+		Slot.RenderScale = FMath::Max(0.01f, Config.StaticCardRenderScale);
 		Slot.RenderOpacity = Slot.Entry.bIsPlayable
 			? 1.0f
-			: FMath::Clamp(DisabledRenderOpacity, 0.0f, 1.0f);
+			: FMath::Clamp(Config.DisabledRenderOpacity, 0.0f, 1.0f);
 		Slot.ZOrder = Index;
-		Slot.ProjectionMode = ProjectionMode;
-		Slot.LayoutMode = CardLayoutMode;
-		Slot.ViewportClampMode = ViewportClampMode;
-		Slot.bBodyLockedLayout = ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
+		Slot.ProjectionMode = Config.ProjectionMode;
+		Slot.LayoutMode = Config.CardLayoutMode;
+		Slot.ViewportClampMode = Config.ViewportClampMode;
+		Slot.bBodyLockedLayout = Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
 		Slot.bCurrentCameraProjection = true;
 		Slot.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
 
@@ -582,7 +1025,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		const float MaxAbsCenterOffset = FMath::Max(1.0f, static_cast<float>(ClampedCount - 1) * 0.5f);
 		const float NormalizedHandOffset = CenterOffset / MaxAbsCenterOffset;
 		const float NormalizedEdgeDistance = FMath::Abs(NormalizedHandOffset);
-		const float FanCurveExponent = FMath::Max(0.01f, AuthoredFanCurveExponent);
+		const float FanCurveExponent = FMath::Max(0.01f, Config.AuthoredFanCurveExponent);
 		const float FanDirection = CenterOffset < 0.0f ? -1.0f : 1.0f;
 		const float AuthoredFanMagnitude = FMath::Pow(NormalizedEdgeDistance, FanCurveExponent) * MaxAbsCenterOffset;
 		const float FanOffset = bUseAuthoredLayout
@@ -594,29 +1037,29 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 			&& Slot.Entry.CardInstanceId == HoveredCardInstanceId;
 		const bool bAllowHoverTransform = bIsHovered && Slot.Entry.bIsPlayable && !bIsPendingTargeting;
 		Slot.NormalizedHandOffset = NormalizedHandOffset;
-		Slot.RenderAngleDegrees = ClampCardLayerRenderAngle(FanOffset * FanYawDegrees);
-		if (bUseAuthoredLayout && bAuthoredCenterCardsDrawOnTop)
+		Slot.RenderAngleDegrees = ClampCardLayerRenderAngleForConfig(FanOffset * Config.FanYawDegrees, Config);
+		if (bUseAuthoredLayout && Config.bAuthoredCenterCardsDrawOnTop)
 		{
 			Slot.ZOrder = FMath::RoundToInt((1.0f - NormalizedEdgeDistance) * 100.0f);
 		}
 		if (Slot.Entry.bIsHandAnchor)
 		{
-			Slot.RenderScale *= FMath::Max(0.01f, HandAnchorScale);
+			Slot.RenderScale *= FMath::Max(0.01f, Config.HandAnchorScale);
 		}
 		if (bIsPendingTargeting)
 		{
-			if (bPendingTargetingStraightenAngle)
+			if (Config.bPendingTargetingStraightenAngle)
 			{
-				const float AngleBlend = FMath::Clamp(PendingTargetingAngleBlend, 0.0f, 1.0f);
+				const float AngleBlend = FMath::Clamp(Config.PendingTargetingAngleBlend, 0.0f, 1.0f);
 				Slot.RenderAngleDegrees = FMath::Lerp(Slot.RenderAngleDegrees, 0.0f, AngleBlend);
 			}
-			Slot.RenderScale *= FMath::Max(0.01f, PendingTargetingScale);
-			Slot.ZOrder += FMath::Max(0, PendingTargetingZOrderBoost);
+			Slot.RenderScale *= FMath::Max(0.01f, Config.PendingTargetingScale);
+			Slot.ZOrder += FMath::Max(0, Config.PendingTargetingZOrderBoost);
 		}
-		else if (bHasPendingTargetingCard && bEnableTargetSelectHandDeemphasis)
+		else if (bHasPendingTargetingCard && Config.bEnableTargetSelectHandDeemphasis)
 		{
 			Slot.RenderOpacity = FMath::Clamp(
-				Slot.RenderOpacity * FMath::Clamp(TargetSelectNonPendingOpacityMultiplier, 0.0f, 1.0f),
+				Slot.RenderOpacity * FMath::Clamp(Config.TargetSelectNonPendingOpacityMultiplier, 0.0f, 1.0f),
 				0.0f,
 				1.0f);
 		}
@@ -626,8 +1069,8 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		}
 		if (bAllowHoverTransform)
 		{
-			Slot.RenderScale *= FMath::Max(0.01f, HoverScale);
-			Slot.ZOrder += FMath::Max(0, HoverZOrderBoost);
+			Slot.RenderScale *= FMath::Max(0.01f, Config.HoverScale);
+			Slot.ZOrder += FMath::Max(0, Config.HoverZOrderBoost);
 		}
 
 		if (bUseAuthoredLayout)
@@ -642,7 +1085,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 			Slot.SmoothedAnchorWidgetPosition = AnchorPoint.SmoothedAnchorWidgetPosition;
 			Slot.OffscreenDistancePixels = AnchorPoint.OffscreenDistancePixels;
 			Slot.AnchorScreenSmoothingDistancePixels = AnchorPoint.AnchorScreenSmoothingDistancePixels;
-			Slot.bBodyLockedLayout = ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
+			Slot.bBodyLockedLayout = Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
 			Slot.bCurrentCameraProjection = true;
 			Slot.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
 			Slot.bClamped = AnchorPoint.bClamped;
@@ -652,21 +1095,21 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 
 			if (bAuthoredAnchorProjected)
 			{
-				const float NaturalHandWidth = FMath::Max(0, ClampedCount - 1) * FMath::Max(0.0f, AuthoredCardSpacingPixels);
-				const float MaxHandWidth = FMath::Max(0.0f, AuthoredMaxHandWidthPixels);
+				const float NaturalHandWidth = FMath::Max(0, ClampedCount - 1) * FMath::Max(0.0f, Config.AuthoredCardSpacingPixels);
+				const float MaxHandWidth = FMath::Max(0.0f, Config.AuthoredMaxHandWidthPixels);
 				const float WidthScale = (MaxHandWidth > 0.0f && NaturalHandWidth > MaxHandWidth)
 					? MaxHandWidth / NaturalHandWidth
 					: 1.0f;
-				const float XOffset = CenterOffset * FMath::Max(0.0f, AuthoredCardSpacingPixels) * WidthScale;
+				const float XOffset = CenterOffset * FMath::Max(0.0f, Config.AuthoredCardSpacingPixels) * WidthScale;
 				const float DropMagnitude =
-					FMath::Pow(NormalizedEdgeDistance, FMath::Max(0.01f, AuthoredDropCurveExponent))
-					* FMath::Max(0.0f, StaticCardEdgeDropPixels);
+					FMath::Pow(NormalizedEdgeDistance, FMath::Max(0.01f, Config.AuthoredDropCurveExponent))
+					* FMath::Max(0.0f, Config.StaticCardEdgeDropPixels);
 				const float CenterLiftMagnitude =
-					(1.0f - NormalizedEdgeDistance) * AuthoredCenterLiftPixels;
+					(1.0f - NormalizedEdgeDistance) * Config.AuthoredCenterLiftPixels;
 
 				FVector2D FinalPosition =
 					AnchorPoint.WidgetPosition
-					+ AuthoredHandScreenOffset
+					+ Config.AuthoredHandScreenOffset
 					+ FVector2D(XOffset, DropMagnitude - CenterLiftMagnitude);
 				Slot.AuthoredLayoutOffset = FinalPosition - AnchorPoint.WidgetPosition;
 				Slot.bBodyLockedLayout = AnchorPoint.bBodyLockedLayout;
@@ -674,15 +1117,15 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				Slot.bLookOffsetAppliedToLayout = AnchorPoint.bLookOffsetAppliedToLayout;
 				if (bIsPendingTargeting)
 				{
-					FinalPosition.Y -= FMath::Max(0.0f, PendingTargetingLiftPixels);
+					FinalPosition.Y -= FMath::Max(0.0f, Config.PendingTargetingLiftPixels);
 				}
 				if (bAllowHoverTransform)
 				{
-					FinalPosition.Y -= FMath::Max(0.0f, HoverLiftPixels);
+					FinalPosition.Y -= FMath::Max(0.0f, Config.HoverLiftPixels);
 				}
 				bool bPixelSnapped = false;
 				Slot.WidgetPosition = FinalPosition;
-				Slot.SnappedWidgetPosition = SnapCardLayerPosition(FinalPosition, bPixelSnapped);
+				Slot.SnappedWidgetPosition = SnapCardLayerPositionForConfig(FinalPosition, Config, bPixelSnapped);
 				Slot.ScreenPosition = Slot.SnappedWidgetPosition;
 				Slot.bPixelSnapped = bPixelSnapped;
 				Slot.bProjected = AnchorPoint.bProjected;
@@ -708,18 +1151,18 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				Slot.bBodyLockedLayout = Point.bBodyLockedLayout;
 				Slot.bCurrentCameraProjection = Point.bCurrentCameraProjection;
 				Slot.bLookOffsetAppliedToLayout = Point.bLookOffsetAppliedToLayout;
-				FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, StaticCardEdgeDropPixels);
+				FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, Config.StaticCardEdgeDropPixels);
 				if (bIsPendingTargeting)
 				{
-					FinalPosition.Y -= FMath::Max(0.0f, PendingTargetingLiftPixels);
+					FinalPosition.Y -= FMath::Max(0.0f, Config.PendingTargetingLiftPixels);
 				}
 				if (bAllowHoverTransform)
 				{
-					FinalPosition.Y -= FMath::Max(0.0f, HoverLiftPixels);
+					FinalPosition.Y -= FMath::Max(0.0f, Config.HoverLiftPixels);
 				}
 				bool bPixelSnapped = false;
 				Slot.WidgetPosition = FinalPosition;
-				Slot.SnappedWidgetPosition = SnapCardLayerPosition(FinalPosition, bPixelSnapped);
+				Slot.SnappedWidgetPosition = SnapCardLayerPositionForConfig(FinalPosition, Config, bPixelSnapped);
 				Slot.ScreenPosition = Slot.SnappedWidgetPosition;
 				Slot.bPixelSnapped = bPixelSnapped;
 				Slot.bProjected = Point.bProjected;
@@ -763,33 +1206,47 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnab
 	}
 }
 
+#if WITH_AUTOMATION_TESTS
+bool UWacomFirstPersonCardAnchorComponent::IsUsingResolvedCardLayoutPresetForTest() const
+{
+	RefreshCardLayoutPresetRuntimeState();
+	return ResolveLayoutConfig(*this).bUsingPreset;
+}
+#endif
+
 FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 {
+	RefreshCardLayoutPresetRuntimeState();
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	const FString LayerMotionSummary = StaticCardLayerWidget
 		? StaticCardLayerWidget->GetSlotMotionDebugSummary()
 		: TEXT("SlotMotion Inactive");
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f %s"),
+		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f %s"),
 		*AnchorModeToString(CurrentMode),
-		*ProjectionModeToString(ProjectionMode),
-		*LayoutModeToString(CardLayoutMode),
-		*ViewportClampModeToString(ViewportClampMode),
-		ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked ? TEXT("true") : TEXT("false"),
+		*ProjectionModeToString(Config.ProjectionMode),
+		*LayoutModeToString(Config.CardLayoutMode),
+		*ViewportClampModeToString(Config.ViewportClampMode),
+		bUseFirstPersonCardLayoutPreset ? TEXT("true") : TEXT("false"),
+		Config.bUsingPreset ? TEXT("true") : TEXT("false"),
+		*Config.PresetName,
+		Config.bPresetFallback ? TEXT("true") : TEXT("false"),
+		Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked ? TEXT("true") : TEXT("false"),
 		bCurrentLookOffsetAppliedToLayout ? TEXT("true") : TEXT("false"),
 		bHasValidAnchor ? TEXT("true") : TEXT("false"),
 		*CurrentAnchorTransform.ToHumanReadableString(),
 		*CurrentLookOffsetUsed.ToString(),
 		*LastFallbackReason.ToString(),
-		bEnableCardLayerPixelSnapping ? TEXT("true") : TEXT("false"),
-		CardLayerPixelSnapGrid,
-		bClampCardLayerRenderAngle ? TEXT("true") : TEXT("false"),
-		MaxCardLayerRenderAngleDegrees,
+		Config.bEnableCardLayerPixelSnapping ? TEXT("true") : TEXT("false"),
+		Config.CardLayerPixelSnapGrid,
+		Config.bClampCardLayerRenderAngle ? TEXT("true") : TEXT("false"),
+		Config.MaxCardLayerRenderAngleDegrees,
 		GetViewportScaleForAnchor(),
-		SoftClampOffscreenAllowancePixels,
-		SoftClampBlendRangePixels,
-		bEnableAnchorScreenSmoothing ? TEXT("true") : TEXT("false"),
-		AnchorScreenSmoothingSpeed,
-		AnchorScreenSmoothingResetDistancePixels,
+		Config.SoftClampOffscreenAllowancePixels,
+		Config.SoftClampBlendRangePixels,
+		Config.bEnableAnchorScreenSmoothing ? TEXT("true") : TEXT("false"),
+		Config.AnchorScreenSmoothingSpeed,
+		Config.AnchorScreenSmoothingResetDistancePixels,
 		bLastAnchorScreenSmoothed ? TEXT("true") : TEXT("false"),
 		LastAnchorScreenSmoothingDistancePixels,
 		*LayerMotionSummary);
@@ -922,23 +1379,74 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureTickPrerequisites()
 	}
 }
 
+void UWacomFirstPersonCardAnchorComponent::RefreshCardLayoutPresetRuntimeState() const
+{
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
+	const uint32 ConfigHash = BuildResolvedLayoutConfigHash(Config);
+	const bool bPresetStateChanged =
+		LastResolvedCardLayoutPreset.Get() != FirstPersonCardLayoutPreset
+		|| bLastResolvedCardLayoutPresetEnabled != bUseFirstPersonCardLayoutPreset
+		|| bLastResolvedCardLayoutPresetFallback != Config.bPresetFallback
+		|| !bHasResolvedCardLayoutConfigHash
+		|| LastResolvedCardLayoutConfigHash != ConfigHash;
+	if (!bPresetStateChanged)
+	{
+		return;
+	}
+
+	LastResolvedCardLayoutPreset = FirstPersonCardLayoutPreset;
+	bLastResolvedCardLayoutPresetEnabled = bUseFirstPersonCardLayoutPreset;
+	bLastResolvedCardLayoutPresetFallback = Config.bPresetFallback;
+	bHasResolvedCardLayoutConfigHash = true;
+	LastResolvedCardLayoutConfigHash = ConfigHash;
+	InvalidateCardLayoutPresetRuntimeState();
+
+	if (bLogResolvedCardLayoutPreset)
+	{
+		UE_LOG(
+			LogTemp,
+			Display,
+			TEXT("[FirstPersonCardLayoutPreset] Enabled=%s Active=%s Preset=%s Fallback=%s"),
+			bUseFirstPersonCardLayoutPreset ? TEXT("true") : TEXT("false"),
+			Config.bUsingPreset ? TEXT("true") : TEXT("false"),
+			*Config.PresetName,
+			Config.bPresetFallback ? TEXT("true") : TEXT("false"));
+		bHasLoggedResolvedCardLayoutPreset = true;
+	}
+	else
+	{
+		bHasLoggedResolvedCardLayoutPreset = false;
+	}
+}
+
+void UWacomFirstPersonCardAnchorComponent::InvalidateCardLayoutPresetRuntimeState() const
+{
+	ResetAnchorScreenSmoothing();
+	if (StaticCardLayerWidget)
+	{
+		StaticCardLayerWidget->ClearSlotMotionState();
+	}
+}
+
 void UWacomFirstPersonCardAnchorComponent::ResetAnchorScreenSmoothing() const
 {
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	bHasSmoothedAnchorWidgetPosition = false;
 	bLastAnchorScreenSmoothed = false;
 	LastAnchorScreenSmoothingDistancePixels = 0.0f;
 	SmoothedAnchorWidgetPosition = FVector2D::ZeroVector;
 	LastAnchorScreenSmoothingTargetWidgetPosition = FVector2D::ZeroVector;
 	LastAnchorScreenSmoothingFrame = 0;
-	SmoothedAnchorLayoutMode = CardLayoutMode;
-	SmoothedAnchorProjectionMode = ProjectionMode;
-	SmoothedAnchorViewportClampMode = ViewportClampMode;
+	SmoothedAnchorLayoutMode = Config.CardLayoutMode;
+	SmoothedAnchorProjectionMode = Config.ProjectionMode;
+	SmoothedAnchorViewportClampMode = Config.ViewportClampMode;
 	SmoothedAnchorMode = CurrentMode;
 }
 
 void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	FWacomFirstPersonCardProjectedPoint& AnchorPoint) const
 {
+	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	AnchorPoint.UnsmoothedAnchorWidgetPosition = AnchorPoint.WidgetPosition;
 	AnchorPoint.SmoothedAnchorWidgetPosition = AnchorPoint.WidgetPosition;
 	AnchorPoint.AnchorScreenSmoothingDistancePixels = 0.0f;
@@ -947,23 +1455,23 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	LastAnchorScreenSmoothingDistancePixels = 0.0f;
 
 	if (!AnchorPoint.bProjected
-		|| CardLayoutMode != EWacomFirstPersonCardLayoutMode::Authored2D
-		|| !bEnableAnchorScreenSmoothing
-		|| AnchorScreenSmoothingSpeed <= 0.0f)
+		|| Config.CardLayoutMode != EWacomFirstPersonCardLayoutMode::Authored2D
+		|| !Config.bEnableAnchorScreenSmoothing
+		|| Config.AnchorScreenSmoothingSpeed <= 0.0f)
 	{
 		SmoothedAnchorWidgetPosition = AnchorPoint.WidgetPosition;
 		bHasSmoothedAnchorWidgetPosition = AnchorPoint.bProjected;
-		SmoothedAnchorLayoutMode = CardLayoutMode;
-		SmoothedAnchorProjectionMode = ProjectionMode;
-		SmoothedAnchorViewportClampMode = ViewportClampMode;
+		SmoothedAnchorLayoutMode = Config.CardLayoutMode;
+		SmoothedAnchorProjectionMode = Config.ProjectionMode;
+		SmoothedAnchorViewportClampMode = Config.ViewportClampMode;
 		SmoothedAnchorMode = CurrentMode;
 		return;
 	}
 
 	const bool bModeChanged =
-		SmoothedAnchorLayoutMode != CardLayoutMode
-		|| SmoothedAnchorProjectionMode != ProjectionMode
-		|| SmoothedAnchorViewportClampMode != ViewportClampMode
+		SmoothedAnchorLayoutMode != Config.CardLayoutMode
+		|| SmoothedAnchorProjectionMode != Config.ProjectionMode
+		|| SmoothedAnchorViewportClampMode != Config.ViewportClampMode
 		|| SmoothedAnchorMode != CurrentMode;
 	const bool bSameFrameTarget =
 		LastAnchorScreenSmoothingFrame == GFrameCounter
@@ -974,7 +1482,7 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	const float PreviousDistance = bHasSmoothedAnchorWidgetPosition
 		? FVector2D::Distance(SmoothedAnchorWidgetPosition, AnchorPoint.WidgetPosition)
 		: 0.0f;
-	const float ResetDistance = FMath::Max(0.0f, AnchorScreenSmoothingResetDistancePixels);
+	const float ResetDistance = FMath::Max(0.0f, Config.AnchorScreenSmoothingResetDistancePixels);
 	const bool bLargeJump = bHasSmoothedAnchorWidgetPosition
 		&& ResetDistance > 0.0f
 		&& TargetJumpDistance > ResetDistance;
@@ -983,9 +1491,9 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	{
 		SmoothedAnchorWidgetPosition = AnchorPoint.WidgetPosition;
 		bHasSmoothedAnchorWidgetPosition = true;
-		SmoothedAnchorLayoutMode = CardLayoutMode;
-		SmoothedAnchorProjectionMode = ProjectionMode;
-		SmoothedAnchorViewportClampMode = ViewportClampMode;
+		SmoothedAnchorLayoutMode = Config.CardLayoutMode;
+		SmoothedAnchorProjectionMode = Config.ProjectionMode;
+		SmoothedAnchorViewportClampMode = Config.ViewportClampMode;
 		SmoothedAnchorMode = CurrentMode;
 		LastAnchorScreenSmoothingTargetWidgetPosition = AnchorPoint.WidgetPosition;
 		LastAnchorScreenSmoothingFrame = GFrameCounter;
@@ -1013,7 +1521,7 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 		SmoothedAnchorWidgetPosition,
 		AnchorPoint.WidgetPosition,
 		DeltaTime,
-		AnchorScreenSmoothingSpeed);
+		Config.AnchorScreenSmoothingSpeed);
 	const float SmoothedDistance = FVector2D::Distance(SmoothedAnchorWidgetPosition, AnchorPoint.WidgetPosition);
 	AnchorPoint.WidgetPosition = SmoothedAnchorWidgetPosition;
 	AnchorPoint.SmoothedAnchorWidgetPosition = SmoothedAnchorWidgetPosition;
@@ -1021,95 +1529,12 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	AnchorPoint.bAnchorScreenSmoothed = SmoothedDistance > KINDA_SMALL_NUMBER;
 	bLastAnchorScreenSmoothed = AnchorPoint.bAnchorScreenSmoothed;
 	LastAnchorScreenSmoothingDistancePixels = SmoothedDistance;
-	SmoothedAnchorLayoutMode = CardLayoutMode;
-	SmoothedAnchorProjectionMode = ProjectionMode;
-	SmoothedAnchorViewportClampMode = ViewportClampMode;
+	SmoothedAnchorLayoutMode = Config.CardLayoutMode;
+	SmoothedAnchorProjectionMode = Config.ProjectionMode;
+	SmoothedAnchorViewportClampMode = Config.ViewportClampMode;
 	SmoothedAnchorMode = CurrentMode;
 	LastAnchorScreenSmoothingTargetWidgetPosition = AnchorPoint.UnsmoothedAnchorWidgetPosition;
 	LastAnchorScreenSmoothingFrame = GFrameCounter;
-}
-
-FVector2D UWacomFirstPersonCardAnchorComponent::ApplyViewportClampToWidgetPosition(
-	FVector2D UnclampedPosition,
-	FVector2D WidgetViewportSize,
-	bool& bOutClamped,
-	bool& bOutOutsideViewport,
-	float& OutOffscreenDistancePixels) const
-{
-	bOutClamped = false;
-	bOutOutsideViewport = false;
-	OutOffscreenDistancePixels = 0.0f;
-
-	const float Padding = FMath::Max(0.0f, ProjectionPadding);
-	const FVector2D SafeMin(Padding, Padding);
-	const FVector2D SafeMax(
-		FMath::Max(Padding, WidgetViewportSize.X - Padding),
-		FMath::Max(Padding, WidgetViewportSize.Y - Padding));
-	const FVector2D NearestSafePoint(
-		FMath::Clamp(UnclampedPosition.X, SafeMin.X, SafeMax.X),
-		FMath::Clamp(UnclampedPosition.Y, SafeMin.Y, SafeMax.Y));
-	OutOffscreenDistancePixels = FVector2D::Distance(UnclampedPosition, NearestSafePoint);
-	bOutOutsideViewport = OutOffscreenDistancePixels > KINDA_SMALL_NUMBER;
-
-	if (ViewportClampMode == EWacomFirstPersonCardViewportClampMode::AllowOffscreen)
-	{
-		return UnclampedPosition;
-	}
-
-	if (ViewportClampMode == EWacomFirstPersonCardViewportClampMode::HardClampToViewport)
-	{
-		bOutClamped = bOutOutsideViewport;
-		return NearestSafePoint;
-	}
-
-	const float Allowance = FMath::Max(0.0f, SoftClampOffscreenAllowancePixels);
-	const FVector2D SoftMin = SafeMin - FVector2D(Allowance, Allowance);
-	const FVector2D SoftMax = SafeMax + FVector2D(Allowance, Allowance);
-	const FVector2D NearestSoftPoint(
-		FMath::Clamp(UnclampedPosition.X, SoftMin.X, SoftMax.X),
-		FMath::Clamp(UnclampedPosition.Y, SoftMin.Y, SoftMax.Y));
-	const float SoftOvershootDistance = FVector2D::Distance(UnclampedPosition, NearestSoftPoint);
-	if (SoftOvershootDistance <= KINDA_SMALL_NUMBER)
-	{
-		return UnclampedPosition;
-	}
-
-	const float BlendRange = FMath::Max(0.0f, SoftClampBlendRangePixels);
-	const float Alpha = BlendRange <= KINDA_SMALL_NUMBER
-		? 1.0f
-		: FMath::SmoothStep(0.0f, 1.0f, FMath::Clamp(SoftOvershootDistance / BlendRange, 0.0f, 1.0f));
-	const FVector2D ClampedPosition = FMath::Lerp(UnclampedPosition, NearestSoftPoint, Alpha);
-	bOutClamped = !UnclampedPosition.Equals(ClampedPosition, KINDA_SMALL_NUMBER);
-	return ClampedPosition;
-}
-
-FVector2D UWacomFirstPersonCardAnchorComponent::SnapCardLayerPosition(
-	FVector2D Position,
-	bool& bOutPixelSnapped) const
-{
-	bOutPixelSnapped = false;
-	if (!bEnableCardLayerPixelSnapping)
-	{
-		return Position;
-	}
-
-	const float Grid = FMath::Max(0.01f, CardLayerPixelSnapGrid);
-	FVector2D SnappedPosition(
-		FMath::RoundToFloat(Position.X / Grid) * Grid,
-		FMath::RoundToFloat(Position.Y / Grid) * Grid);
-	bOutPixelSnapped = !SnappedPosition.Equals(Position, KINDA_SMALL_NUMBER);
-	return SnappedPosition;
-}
-
-float UWacomFirstPersonCardAnchorComponent::ClampCardLayerRenderAngle(float AngleDegrees) const
-{
-	if (!bClampCardLayerRenderAngle)
-	{
-		return AngleDegrees;
-	}
-
-	const float MaxAbsAngle = FMath::Max(0.0f, MaxCardLayerRenderAngleDegrees);
-	return FMath::Clamp(AngleDegrees, -MaxAbsAngle, MaxAbsAngle);
 }
 
 void UWacomFirstPersonCardAnchorComponent::UpdateDebugWidget()
@@ -1210,24 +1635,12 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		StaticCardLayerWidget = CreateStaticCardLayerWidgetForAnchor(PC, LayerClass);
 		if (StaticCardLayerWidget)
 		{
+			RefreshCardLayoutPresetRuntimeState();
+			const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 			StaticCardLayerWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 			StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
-			FWacomFirstPersonCardSlotMotionConfig MotionConfig;
-			MotionConfig.bEnabled = bEnableCardSlotMotion;
-			MotionConfig.MotionSpeed = CardSlotMotionSpeed;
-			MotionConfig.OpacitySpeed = CardSlotOpacitySpeed;
-			MotionConfig.EnterOffsetPixels = CardSlotEnterOffsetPixels;
-			MotionConfig.EnterOpacity = CardSlotEnterOpacity;
-			MotionConfig.ExitOffsetPixels = CardSlotExitOffsetPixels;
-			MotionConfig.ExitDuration = CardSlotExitDuration;
-			MotionConfig.ResetDistancePixels = CardSlotMotionResetDistancePixels;
-			MotionConfig.bEnableEventAwareTransitions = bEnableEventAwareCardTransitions;
-			MotionConfig.DrawnEnterOffsetPixels = DrawnCardEnterOffsetPixels;
-			MotionConfig.GainedEnterOffsetPixels = GainedCardEnterOffsetPixels;
-			MotionConfig.PlayedExitOffsetPixels = PlayedCardExitOffsetPixels;
-			MotionConfig.DiscardedExitOffsetPixels = DiscardedCardExitOffsetPixels;
-			StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
-			StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(*this));
+			StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
+			StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(Config));
 			StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
 			BindStaticCardLayerWidget(StaticCardLayerWidget);
@@ -1237,22 +1650,10 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 
 	if (StaticCardLayerWidget)
 	{
-		FWacomFirstPersonCardSlotMotionConfig MotionConfig;
-		MotionConfig.bEnabled = bEnableCardSlotMotion;
-		MotionConfig.MotionSpeed = CardSlotMotionSpeed;
-		MotionConfig.OpacitySpeed = CardSlotOpacitySpeed;
-		MotionConfig.EnterOffsetPixels = CardSlotEnterOffsetPixels;
-		MotionConfig.EnterOpacity = CardSlotEnterOpacity;
-		MotionConfig.ExitOffsetPixels = CardSlotExitOffsetPixels;
-		MotionConfig.ExitDuration = CardSlotExitDuration;
-		MotionConfig.ResetDistancePixels = CardSlotMotionResetDistancePixels;
-		MotionConfig.bEnableEventAwareTransitions = bEnableEventAwareCardTransitions;
-		MotionConfig.DrawnEnterOffsetPixels = DrawnCardEnterOffsetPixels;
-		MotionConfig.GainedEnterOffsetPixels = GainedCardEnterOffsetPixels;
-		MotionConfig.PlayedExitOffsetPixels = PlayedCardExitOffsetPixels;
-		MotionConfig.DiscardedExitOffsetPixels = DiscardedCardExitOffsetPixels;
-		StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
-		StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(*this));
+		RefreshCardLayoutPresetRuntimeState();
+		const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
+		StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
+		StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(Config));
 		StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 		if (RuntimeCardLayerTransitionHintSourceId == RuntimeCardLayerSourceId

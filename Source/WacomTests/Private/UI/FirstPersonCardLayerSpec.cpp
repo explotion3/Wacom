@@ -19,6 +19,7 @@
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
+#include "UI/Card/WacomFirstPersonCardLayoutPreset.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/FirstPersonCardLayerSpecReceiver.h"
 
@@ -258,6 +259,71 @@ namespace WacomFirstPersonCardLayerSpec
 		Config.DenyColor = FLinearColor::Red;
 		Config.DenyOpacity = 0.5f;
 		return Config;
+	}
+
+	UWacomFirstPersonCardLayoutPreset* MakeLayoutPreset(UObject* Outer)
+	{
+		UWacomFirstPersonCardLayoutPreset* Preset = NewObject<UWacomFirstPersonCardLayoutPreset>(Outer);
+		if (!Preset)
+		{
+			return nullptr;
+		}
+
+		Preset->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+		Preset->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+		Preset->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
+		Preset->AuthoredCardSpacingPixels = 160.0f;
+		Preset->AuthoredMaxHandWidthPixels = 640.0f;
+		Preset->AuthoredHandScreenOffset = FVector2D(24.0f, -12.0f);
+		Preset->AuthoredCenterLiftPixels = 32.0f;
+		Preset->AuthoredDropCurveExponent = 3.0f;
+		Preset->AuthoredFanCurveExponent = 2.0f;
+		Preset->StaticCardRenderScale = 0.9f;
+		Preset->StaticCardEdgeDropPixels = 96.0f;
+		Preset->FanYawDegrees = 8.0f;
+		Preset->bClampCardLayerRenderAngle = true;
+		Preset->MaxCardLayerRenderAngleDegrees = 20.0f;
+		Preset->bEnableAnchorScreenSmoothing = true;
+		Preset->AnchorScreenSmoothingSpeed = 5.0f;
+		Preset->AnchorScreenSmoothingResetDistancePixels = 120.0f;
+		Preset->bEnableCardSlotMotion = true;
+		Preset->CardSlotMotionSpeed = 7.0f;
+		Preset->CardSlotOpacitySpeed = 9.0f;
+		Preset->CardSlotEnterOffsetPixels = FVector2D(11.0f, 22.0f);
+		Preset->CardSlotEnterOpacity = 0.25f;
+		Preset->CardSlotExitOffsetPixels = FVector2D(33.0f, 44.0f);
+		Preset->CardSlotExitDuration = 0.31f;
+		Preset->CardSlotMotionResetDistancePixels = 222.0f;
+		Preset->bEnableEventAwareCardTransitions = true;
+		Preset->DrawnCardEnterOffsetPixels = FVector2D(0.0f, 111.0f);
+		Preset->GainedCardEnterOffsetPixels = FVector2D(0.0f, -133.0f);
+		Preset->PlayedCardExitOffsetPixels = FVector2D(0.0f, -155.0f);
+		Preset->DiscardedCardExitOffsetPixels = FVector2D(0.0f, 177.0f);
+		Preset->PendingTargetingLiftPixels = 42.0f;
+		Preset->PendingTargetingScale = 1.2f;
+		Preset->PendingTargetingZOrderBoost = 1600;
+		Preset->bPendingTargetingStraightenAngle = true;
+		Preset->PendingTargetingAngleBlend = 0.5f;
+		Preset->bEnableTargetSelectHandDeemphasis = true;
+		Preset->TargetSelectNonPendingOpacityMultiplier = 0.6f;
+		Preset->HandAnchorScale = 0.7f;
+		Preset->DisabledRenderOpacity = 0.4f;
+		Preset->HoverLiftPixels = 46.0f;
+		Preset->HoverScale = 1.18f;
+		Preset->HoverZOrderBoost = 900;
+		Preset->bEnableCardInteractionFeedback = true;
+		Preset->PlayableHoverFeedbackColor = FLinearColor::Green;
+		Preset->PlayableHoverFeedbackOpacity = 0.3f;
+		Preset->PressedFeedbackScale = 0.91f;
+		Preset->PressedFeedbackColor = FLinearColor::Blue;
+		Preset->PressedFeedbackOpacity = 0.2f;
+		Preset->ConfirmFeedbackDuration = 0.12f;
+		Preset->ConfirmFeedbackOpacity = 0.22f;
+		Preset->DenyFeedbackDuration = 0.24f;
+		Preset->DenyFeedbackShakePixels = 14.0f;
+		Preset->DenyFeedbackColor = FLinearColor::Red;
+		Preset->DenyFeedbackOpacity = 0.33f;
+		return Preset;
 	}
 
 	FWacomFirstPersonCardLayerTransitionHint MakeTransitionHint(
@@ -1181,6 +1247,363 @@ bool FWacomFirstPersonCardLayerStaticSlotOrderTest::RunTest(const FString& Param
 		TestTrue(TEXT("Right edge drops lower than center"), Slots[4].ScreenPosition.Y > Slots[2].ScreenPosition.Y);
 		TestEqual(TEXT("Center card has no fan angle"), Slots[2].RenderAngleDegrees, 0.0f);
 	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPresetLayoutOverrideTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.PresetOverridesComponentLayoutValues",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPresetLayoutOverrideTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* Preset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Preset"), Preset))
+	{
+		return false;
+	}
+
+	Anchor->AuthoredCardSpacingPixels = 40.0f;
+	Anchor->AuthoredMaxHandWidthPixels = 0.0f;
+	Anchor->StaticCardEdgeDropPixels = 4.0f;
+	Anchor->FanYawDegrees = 1.0f;
+	Anchor->StaticCardRenderScale = 0.5f;
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = Preset;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	TArray<FWacomFirstPersonCardLayerEntry> Entries;
+	Entries.SetNum(5);
+	Anchor->SetRuntimeCardLayerEntries(TEXT("PresetLayout"), Entries);
+	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	TestEqual(TEXT("Preset slot count"), Slots.Num(), 5);
+	if (Slots.Num() == 5)
+	{
+		TestEqual(TEXT("Preset spacing applies"), Slots[3].AuthoredLayoutOffset.X - Slots[2].AuthoredLayoutOffset.X, 160.0);
+		TestEqual(TEXT("Preset hand width clamps spacing"), Slots.Last().AuthoredLayoutOffset.X - Slots[0].AuthoredLayoutOffset.X, 640.0);
+		TestEqual(TEXT("Preset edge drop applies"), Slots[0].AuthoredLayoutOffset.Y, Preset->StaticCardEdgeDropPixels + Preset->AuthoredHandScreenOffset.Y);
+		TestEqual(TEXT("Preset scale applies"), Slots[2].RenderScale, Preset->StaticCardRenderScale);
+		TestEqual(TEXT("Preset fan angle applies"), Slots.Last().RenderAngleDegrees, 16.0f);
+	}
+	TestTrue(TEXT("Preset is active"), Anchor->IsUsingResolvedCardLayoutPresetForTest());
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPresetFallbackTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.PresetCanBeDisabledToUseComponentFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPresetFallbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* Preset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Preset"), Preset))
+	{
+		return false;
+	}
+
+	Anchor->AuthoredCardSpacingPixels = 80.0f;
+	Anchor->AuthoredMaxHandWidthPixels = 0.0f;
+	Anchor->StaticCardRenderScale = 0.66f;
+	Anchor->FanYawDegrees = 2.0f;
+	Anchor->bClampCardLayerRenderAngle = false;
+	Anchor->FirstPersonCardLayoutPreset = Preset;
+	Anchor->bUseFirstPersonCardLayoutPreset = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	TArray<FWacomFirstPersonCardLayerEntry> Entries;
+	Entries.SetNum(3);
+	Anchor->SetRuntimeCardLayerEntries(TEXT("PresetFallback"), Entries);
+	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	if (Slots.Num() == 3)
+	{
+		TestEqual(TEXT("Component spacing is fallback"), Slots[2].AuthoredLayoutOffset.X - Slots[1].AuthoredLayoutOffset.X, 80.0);
+		TestEqual(TEXT("Component scale is fallback"), Slots[1].RenderScale, 0.66f);
+		TestEqual(TEXT("Component angle is fallback"), Slots[2].RenderAngleDegrees, 2.0f);
+	}
+	TestFalse(TEXT("Preset disabled"), Anchor->IsUsingResolvedCardLayoutPresetForTest());
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerNullPresetFallbackTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.NullPresetFallsBackSafely",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerNullPresetFallbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = nullptr;
+	Anchor->AuthoredCardSpacingPixels = 72.0f;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	TArray<FWacomFirstPersonCardLayerEntry> Entries;
+	Entries.SetNum(2);
+	Anchor->SetRuntimeCardLayerEntries(TEXT("NullPreset"), Entries);
+	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	if (Slots.Num() == 2)
+	{
+		TestEqual(TEXT("Null preset uses component spacing"), Slots[1].AuthoredLayoutOffset.X - Slots[0].AuthoredLayoutOffset.X, 72.0);
+	}
+	TestFalse(TEXT("Null preset is not active"), Anchor->IsUsingResolvedCardLayoutPresetForTest());
+	TestTrue(TEXT("Debug summary reports missing preset"), Anchor->GetDebugSummary().Contains(TEXT("PresetName=Missing")));
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPresetMotionFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.PresetOverridesMotionAndFeedbackConfig",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPresetMotionFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* Preset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Preset"), Preset))
+	{
+		return false;
+	}
+
+	Anchor->bDrawStaticCardLayer = true;
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = Preset;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->RefreshStaticLayerForTest();
+
+	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	if (TestNotNull(TEXT("Static layer"), Layer))
+	{
+		const FWacomFirstPersonCardSlotMotionConfig& MotionConfig = Layer->GetSlotMotionConfigForTest();
+		const FWacomFirstPersonCardSlotFeedbackConfig& FeedbackConfig = Layer->GetSlotFeedbackConfigForTest();
+		TestEqual(TEXT("Preset motion speed"), MotionConfig.MotionSpeed, Preset->CardSlotMotionSpeed);
+		TestEqual(TEXT("Preset opacity speed"), MotionConfig.OpacitySpeed, Preset->CardSlotOpacitySpeed);
+		TestEqual(TEXT("Preset enter offset"), MotionConfig.EnterOffsetPixels, Preset->CardSlotEnterOffsetPixels);
+		TestEqual(TEXT("Preset gained enter offset"), MotionConfig.GainedEnterOffsetPixels, Preset->GainedCardEnterOffsetPixels);
+		TestEqual(TEXT("Preset feedback enabled"), FeedbackConfig.bEnabled, Preset->bEnableCardInteractionFeedback);
+		TestEqual(TEXT("Preset hover feedback color"), FeedbackConfig.PlayableHoverColor, Preset->PlayableHoverFeedbackColor);
+		TestEqual(TEXT("Preset deny opacity"), FeedbackConfig.DenyOpacity, Preset->DenyFeedbackOpacity);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPresetScopeTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.PresetDoesNotOverrideViewClassOrDebugToggles",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPresetScopeTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* Preset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Preset"), Preset))
+	{
+		return false;
+	}
+
+	Anchor->bDrawStaticCardLayer = true;
+	Anchor->bDrawDebugProjection = false;
+	Anchor->StaticCardLayerZOrder = 1234;
+	Anchor->FirstPersonCardViewClass = UWacomFirstPersonCardLayerPresetViewClassProbe::StaticClass();
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = Preset;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->RefreshStaticLayerForTest();
+
+	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	if (TestNotNull(TEXT("Static layer"), Layer))
+	{
+		TestEqual(
+			TEXT("Preset does not override card view class"),
+			Layer->GetCardViewClassForTest(),
+			TSubclassOf<UWacomCardView>(UWacomFirstPersonCardLayerPresetViewClassProbe::StaticClass()));
+	}
+	TestFalse(TEXT("Preset does not enable debug projection"), Anchor->bDrawDebugProjection);
+	TestEqual(TEXT("Component z order remains configured"), Anchor->StaticCardLayerZOrder, 1234);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPresetSwitchResetTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.SwitchingPresetResetsSmoothingAndLargeMotionState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPresetSwitchResetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* PresetA = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	UWacomFirstPersonCardLayoutPreset* PresetB = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("PresetA"), PresetA)
+		|| !TestNotNull(TEXT("PresetB"), PresetB))
+	{
+		return false;
+	}
+
+	PresetB->AuthoredCardSpacingPixels = 220.0f;
+	PresetB->AuthoredMaxHandWidthPixels = 0.0f;
+	Anchor->bDrawStaticCardLayer = true;
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = PresetA;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->RefreshStaticLayerForTest();
+
+	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	if (!TestNotNull(TEXT("Static layer"), Layer))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Slots created before switch"), Layer->GetCardViewCount() > 0);
+
+	Anchor->FirstPersonCardLayoutPreset = PresetB;
+	Anchor->RefreshStaticLayerForTest();
+	TestEqual(TEXT("Preset switch rebuilds active slot count"), Layer->GetSlotMotionDebugView().ActiveSlotCount, Layer->GetCardViewCount());
+	TestEqual(TEXT("Preset switch does not leave outgoing slots"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 0);
+
+	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+	if (Slots.Num() >= 2)
+	{
+		TestEqual(TEXT("New preset spacing applies after switch"), Slots[1].AuthoredLayoutOffset.X - Slots[0].AuthoredLayoutOffset.X, 220.0);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPresetDebugSummaryTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.DebugSummaryReportsResolvedPreset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPresetDebugSummaryTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* Preset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Preset"), Preset))
+	{
+		return false;
+	}
+
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = Preset;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	const FString Summary = Anchor->GetDebugSummary();
+	TestTrue(TEXT("Summary reports preset enabled"), Summary.Contains(TEXT("PresetEnabled=true")));
+	TestTrue(TEXT("Summary reports preset active"), Summary.Contains(TEXT("PresetActive=true")));
+	TestTrue(TEXT("Summary reports preset fallback false"), Summary.Contains(TEXT("PresetFallback=false")));
+	TestTrue(TEXT("Summary reports preset name"), Summary.Contains(Preset->GetName()));
 
 	Anchor->DestroyComponent();
 	Character->Destroy();

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "FirstPersonCardLayerSpecReceiver.generated.h"
 
@@ -120,4 +121,10 @@ protected:
 	{
 		return FMath::Max(0.0f, ProbeAnchorSmoothingDeltaTime);
 	}
+};
+
+UCLASS()
+class UWacomFirstPersonCardLayerPresetViewClassProbe : public UWacomCardView
+{
+	GENERATED_BODY()
 };

@@ -13,6 +13,7 @@ class AWacomPlayerCharacter;
 class UCardDefinition;
 class UWacomCardView;
 class UWacomFirstPersonCardAnchorDebugWidget;
+class UWacomFirstPersonCardLayoutPreset;
 class UWacomFirstPersonCardLayerWidget;
 struct FWacomFirstPersonCardLayerSlotView;
 
@@ -398,6 +399,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (UIMin = "-30.0", UIMax = "30.0", Units = "deg", ToolTip = "每张卡牌相对第一人称手牌锚点增加的扇形偏航角，单位为度；角度越大，旋转锯齿风险越高。"))
 	float FanYawDegrees = 3.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Preset", meta = (ToolTip = "是否使用第一人称手牌表现预设。开启后布局、投影、motion、hover、pending 和交互反馈数值从 DataAsset 读取；为空或关闭时使用本组件上的参数。"))
+	bool bUseFirstPersonCardLayoutPreset = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Preset", meta = (EditCondition = "bUseFirstPersonCardLayoutPreset", ToolTip = "第一人称手牌表现预设资产；只覆盖卡牌层表现数值，不覆盖卡面 Widget、静态预览卡牌、debug、ZOrder 或 BattleHUD 呈现模式。"))
+	TObjectPtr<UWacomFirstPersonCardLayoutPreset> FirstPersonCardLayoutPreset = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Preset", meta = (ToolTip = "是否输出当前解析到的第一人称手牌表现预设状态；默认关闭，仅用于排查 preset 是否生效或是否回退到组件参数。"))
+	bool bLogResolvedCardLayoutPreset = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Authored Layout", meta = (ToolTip = "第一人称卡牌层的手牌排布方式。Authored2D 只投影手牌中心点，再用 2D 参数排卡；LegacyProjectedFan2D 保留旧的每张卡牌 3D 槽位投影，用于对照。"))
 	EWacomFirstPersonCardLayoutMode CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 
@@ -679,6 +689,7 @@ public:
 	UWacomFirstPersonCardLayerWidget* GetStaticCardLayerWidgetForTest() const { return StaticCardLayerWidget; }
 	void SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId) { HoveredCardInstanceId = CardInstanceId; }
 	void ResetAnchorScreenSmoothingForTest() { ResetAnchorScreenSmoothing(); }
+	bool IsUsingResolvedCardLayoutPresetForTest() const;
 #endif
 
 protected:
@@ -727,6 +738,12 @@ private:
 	mutable bool bHasSmoothedAnchorWidgetPosition = false;
 	mutable bool bLastAnchorScreenSmoothed = false;
 	mutable float LastAnchorScreenSmoothingDistancePixels = 0.0f;
+	mutable TWeakObjectPtr<const UWacomFirstPersonCardLayoutPreset> LastResolvedCardLayoutPreset;
+	mutable bool bLastResolvedCardLayoutPresetEnabled = false;
+	mutable bool bLastResolvedCardLayoutPresetFallback = true;
+	mutable bool bHasLoggedResolvedCardLayoutPreset = false;
+	mutable bool bHasResolvedCardLayoutConfigHash = false;
+	mutable uint32 LastResolvedCardLayoutConfigHash = 0;
 
 	UPROPERTY(Transient)
 	TArray<FWacomCardViewData> RuntimeCardLayerData;
@@ -747,17 +764,11 @@ private:
 	bool ResolveBaseAnchor(FTransform& OutBaseTransform, EWacomFirstPersonCardAnchorMode& OutMode, FName& OutFallbackReason) const;
 	FWacomCardViewData BuildStaticCardViewData(int32 CardIndex) const;
 	void ConfigureTickPrerequisites();
+	void RefreshCardLayoutPresetRuntimeState() const;
+	void InvalidateCardLayoutPresetRuntimeState() const;
 	void ResetAnchorScreenSmoothing() const;
 	void ApplyAnchorScreenSmoothing(FWacomFirstPersonCardProjectedPoint& AnchorPoint) const;
-	FVector2D ApplyViewportClampToWidgetPosition(
-		FVector2D UnclampedPosition,
-		FVector2D WidgetViewportSize,
-		bool& bOutClamped,
-		bool& bOutOutsideViewport,
-		float& OutOffscreenDistancePixels) const;
 	TArray<FWacomFirstPersonCardLayerEntry> BuildStaticCardLayerEntries() const;
-	FVector2D SnapCardLayerPosition(FVector2D Position, bool& bOutPixelSnapped) const;
-	float ClampCardLayerRenderAngle(float AngleDegrees) const;
 	static TArray<FWacomFirstPersonCardLayerEntry> BuildCardLayerEntriesFromData(
 		const TArray<FWacomCardViewData>& CardData);
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildCardSlotViewsFromEntries(
