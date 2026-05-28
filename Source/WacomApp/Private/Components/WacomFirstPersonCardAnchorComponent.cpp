@@ -65,22 +65,27 @@ void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
 		bHasValidAnchor = false;
 		CurrentMode = ResolvedMode;
 		CurrentLookOffsetUsed = FRotator::ZeroRotator;
+		bCurrentLookOffsetAppliedToLayout = false;
 		LastFallbackReason = ResolvedFallbackReason;
 		return;
 	}
 
 	FRotator LookOffset = FRotator::ZeroRotator;
-	if (const AWacomPlayerCharacter* Character = GetOwnerCharacter())
+	if (ProjectionMode == EWacomFirstPersonCardProjectionMode::LegacyWorldProjected)
 	{
-		if (const UWacomCursorLookDriverComponent* CursorLook = Character->GetCursorLookDriverComponent())
+		if (const AWacomPlayerCharacter* Character = GetOwnerCharacter())
 		{
-			const FRotator SharedOffset = CursorLook->GetCurrentLookOffset();
-			LookOffset.Pitch = SharedOffset.Pitch * LookInfluencePitch;
-			LookOffset.Yaw = SharedOffset.Yaw * LookInfluenceYaw;
+			if (const UWacomCursorLookDriverComponent* CursorLook = Character->GetCursorLookDriverComponent())
+			{
+				const FRotator SharedOffset = CursorLook->GetCurrentLookOffset();
+				LookOffset.Pitch = SharedOffset.Pitch * LookInfluencePitch;
+				LookOffset.Yaw = SharedOffset.Yaw * LookInfluenceYaw;
+			}
 		}
 	}
 
 	FRotator AnchorRotation = BaseTransform.Rotator();
+	AnchorRotation.Roll = 0.0f;
 	AnchorRotation.Pitch += LookOffset.Pitch;
 	AnchorRotation.Yaw += LookOffset.Yaw;
 	AnchorRotation.Roll = 0.0f;
@@ -116,6 +121,7 @@ void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
 	bHasValidAnchor = true;
 	CurrentMode = ResolvedMode;
 	CurrentLookOffsetUsed = LookOffset;
+	bCurrentLookOffsetAppliedToLayout = !LookOffset.IsNearlyZero();
 	LastFallbackReason = ResolvedFallbackReason;
 }
 
@@ -147,13 +153,18 @@ bool UWacomFirstPersonCardAnchorComponent::ProjectCardTransformToScreen(
 	OutProjectedPoint = FWacomFirstPersonCardProjectedPoint();
 	OutProjectedPoint.Index = PointIndex;
 	OutProjectedPoint.WorldLocation = CardTransform.GetLocation();
+	OutProjectedPoint.ProjectionMode = ProjectionMode;
+	OutProjectedPoint.bBodyLockedLayout = ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
+	OutProjectedPoint.bCurrentCameraProjection = true;
+	OutProjectedPoint.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
 
 	FVector2D WidgetPosition = FVector2D::ZeroVector;
 	FVector2D RawScreenPosition = FVector2D::ZeroVector;
-	if (!ProjectWorldLocationToWidgetPositionForAnchor(
+	const bool bProjectionSucceeded = ProjectWorldLocationToWidgetPositionForAnchor(
 		CardTransform.GetLocation(),
 		WidgetPosition,
-		RawScreenPosition))
+		RawScreenPosition);
+	if (!bProjectionSucceeded)
 	{
 		return false;
 	}
@@ -301,8 +312,12 @@ FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFi
 	View.bHasValidAnchor = bHasValidAnchor;
 	View.Mode = CurrentMode;
 	View.AnchorTransform = CurrentAnchorTransform;
+	View.ProjectionMode = ProjectionMode;
 	View.LookOffsetUsed = CurrentLookOffsetUsed;
 	View.LastFallbackReason = LastFallbackReason;
+	View.bBodyLockedLayout = ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
+	View.bCurrentCameraProjection = true;
+	View.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
 
 	if (!bHasValidAnchor)
 	{
@@ -422,6 +437,10 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 			? 1.0f
 			: FMath::Clamp(DisabledRenderOpacity, 0.0f, 1.0f);
 		Slot.ZOrder = Index;
+		Slot.ProjectionMode = ProjectionMode;
+		Slot.bBodyLockedLayout = ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
+		Slot.bCurrentCameraProjection = true;
+		Slot.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
 
 		const float CenterOffset =
 			static_cast<float>(Index) - (static_cast<float>(ClampedCount - 1) * 0.5f);
@@ -448,6 +467,10 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 			FVector2D FinalPosition = Point.WidgetPosition;
 			Slot.RawScreenPosition = Point.RawScreenPosition;
 			Slot.ViewportScale = Point.ViewportScale;
+			Slot.ProjectionMode = Point.ProjectionMode;
+			Slot.bBodyLockedLayout = Point.bBodyLockedLayout;
+			Slot.bCurrentCameraProjection = Point.bCurrentCameraProjection;
+			Slot.bLookOffsetAppliedToLayout = Point.bLookOffsetAppliedToLayout;
 			const float MaxAbsCenterOffset = FMath::Max(1.0f, static_cast<float>(ClampedCount - 1) * 0.5f);
 			const float NormalizedEdgeDistance = FMath::Abs(CenterOffset) / MaxAbsCenterOffset;
 			FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, StaticCardEdgeDropPixels);
@@ -501,8 +524,11 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnab
 FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 {
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f"),
+		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f"),
 		*AnchorModeToString(CurrentMode),
+		*ProjectionModeToString(ProjectionMode),
+		ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked ? TEXT("true") : TEXT("false"),
+		bCurrentLookOffsetAppliedToLayout ? TEXT("true") : TEXT("false"),
 		bHasValidAnchor ? TEXT("true") : TEXT("false"),
 		*CurrentAnchorTransform.ToHumanReadableString(),
 		*CurrentLookOffsetUsed.ToString(),
@@ -685,6 +711,18 @@ void UWacomFirstPersonCardAnchorComponent::UpdateDebugWidget()
 	if (DebugWidget)
 	{
 		DebugWidget->SetDebugView(GetFirstPersonCardAnchorDebugView(5));
+	}
+}
+
+FString UWacomFirstPersonCardAnchorComponent::ProjectionModeToString(EWacomFirstPersonCardProjectionMode Mode)
+{
+	switch (Mode)
+	{
+	case EWacomFirstPersonCardProjectionMode::LegacyWorldProjected:
+		return TEXT("LegacyWorldProjected");
+	case EWacomFirstPersonCardProjectionMode::BodyLocked:
+	default:
+		return TEXT("BodyLocked");
 	}
 }
 

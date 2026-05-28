@@ -101,7 +101,8 @@ WBP 合同：
 PIE 检查：
 
 - 在 `BP_WacomPlayerCharacter` 的 `FirstPersonCardAnchorComponent` 上把 `FirstPersonCardViewClass` 设置为 `WBP_FirstPersonCardView`。
-- 开启 BattleHUD 的 first-person layer / interaction / hide legacy hand panel 原型开关。
+- `FirstPersonCardAnchorComponent.ProjectionMode` 默认保持 `BodyLocked`；该模式下鼠标移动战斗镜头时，第一人称手牌仍应有空间透视变化，但扇形 layout 不应被拉扯或重新排布。需要对照旧漂移 / 扇形破坏问题时，可临时切到 `LegacyWorldProjected`。
+- BattleHUD 默认 `BattleHandPresentationMode=FirstPersonHandWithLegacyFallback`；如需只看第一人称手牌，可切到 `FirstPersonHandOnly`。
 - 进入战斗后确认 first-person 卡牌大角度排布下没有明显锯齿、黑边或像素断裂。
 - Hover、点击无目标卡、点击目标卡进入 `TargetSelect`、pending 视觉和详情面板仍走现有 first-person layer 流程。
 
@@ -178,7 +179,7 @@ PIE 检查：
 - `CardDetailLayer` 覆盖 HUD 可见区域，并位于手牌和敌方部位之上。
 - 详情面板不会阻挡手牌、等待、结束回合或敌方部位点击。
 - 快速从一张手牌滑到另一张时，详情内容切换到新卡，不应闪关。
-- 第一人称战斗手牌：在 BattleHUD / WBP_BattleHUD 上查看 `BattleHandPresentationMode`。默认 `FirstPersonHandWithLegacyFallback` 下，进入战斗后 first-person layer 应显示真实手牌并可 hover/click/detail，旧 `HandPanel` 仍显示并可作为对照入口。切到 `FirstPersonHandOnly` 后，旧 `HandPanel` 应在 first-person runtime hand 有效时隐藏，只看到 first-person hand；hover 卡牌时该 layer 会轻微上移 / 放大，并在卡牌旁显示与旧手牌一致的详情面板，详情面板应位于所有 first-person 卡牌之上。移动鼠标让 camera cursor look 带动卡牌位置变化时，详情应跟随 hovered 卡牌移动。移出卡牌后详情消失；点击需要敌方目标的卡进入 `TargetSelect` 后详情隐藏，同一张 first-person 卡保持 pending 视觉。点击无目标卡应走现有出牌流程。切到 `LegacyHandPanel` 后，first-person battle hand 不显示/不交互，旧 `HandPanel` 恢复为唯一手牌入口。
+- 第一人称战斗手牌：在 BattleHUD / WBP_BattleHUD 上查看 `BattleHandPresentationMode`。默认 `FirstPersonHandWithLegacyFallback` 下，进入战斗后 first-person layer 应显示真实手牌并可 hover/click/detail，旧 `HandPanel` 仍显示并可作为对照入口。切到 `FirstPersonHandOnly` 后，旧 `HandPanel` 应在 first-person runtime hand 有效时隐藏，只看到 first-person hand；hover 卡牌时该 layer 会轻微上移 / 放大，并在卡牌旁显示与旧手牌一致的详情面板，详情面板应位于所有 first-person 卡牌之上。`FirstPersonCardAnchorComponent.ProjectionMode=BodyLocked` 时，移动鼠标让 camera cursor look 偏转，卡牌应保留第一人称空间投影变化，但手牌扇形结构、左右顺序、世界间距不应被 cursor look 拉扯变形；hover 详情应跟随 hovered 卡牌投影位置。临时切到 `LegacyWorldProjected` 应能对照旧的轻微漂移 / 扇形破坏。移出卡牌后详情消失；点击需要敌方目标的卡进入 `TargetSelect` 后详情隐藏，同一张 first-person 卡保持 pending 视觉。点击无目标卡应走现有出牌流程。切到 `LegacyHandPanel` 后，first-person battle hand 不显示/不交互，旧 `HandPanel` 恢复为唯一手牌入口。
 - 场景敌方目标原型：在关卡 Actor 上挂 `UWacomBattlePresentationTargetComponent`，填写 `PartId`（例如 `Test.Part.Head` 或正式敌人部位定义的 PartId），并在 BattleHUD/WBP 上开启 `bEnableSceneEnemyTargetBindingPrototype`。Actor 上需要有可缩放/可点击的 `UPrimitiveComponent`，最小结构可以是 `DefaultSceneRoot + Cube(StaticMeshComponent) + WacomBattlePresentationTarget`。`StaticMeshComponent` 继承自 `UPrimitiveComponent`，所以 `Cube` 可以同时作为视觉反馈和点击目标。
 - `VisualTargetComponent` / `ClickTargetComponent` 可以保持 `None`；组件会自动使用 Owner 上第一个 `UPrimitiveComponent`。如果 Actor 有多个 mesh 或独立点击盒，再显式指定：例如 `VisualTargetComponent = Cube`、`ClickTargetComponent = BoxCollision`。不要在 Details 面板里创建嵌在 target component 下的 `StaticMeshComponent_0` 临时对象；这会让引用指向错误对象并挡住自动 fallback。
 - 进入战斗并刷新 snapshot 后，该组件会自动绑定当前战斗的 `PartInstanceId`；命中 / 破坏 TargetCue 到达时应短暂放大后恢复。选择需要敌方部位目标的卡牌进入 `TargetSelect` 后，匹配且未破坏的场景 target 应持续轻微放大/呼吸；单击组件绑定的 primitive，会由 `AWacomPlayerController` 的 Visibility cursor trace router 转发到 `BattleHUD->OnEnemyPartClickedByUser()`。未匹配的 `PartId` 会保持未注册，已破坏部位不会播放可选提示。

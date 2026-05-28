@@ -15,6 +15,7 @@ class UWacomFirstPersonCardAnchorSpecProbeComponent : public UWacomFirstPersonCa
 public:
 	bool bProjectionSucceeds = true;
 	bool bAllowStaticLayerCreation = true;
+	bool bUseCameraTransformProjection = false;
 	FVector2D ProbeViewportSize = FVector2D(1920.0f, 1080.0f);
 	float ProbeViewportScale = 1.0f;
 	FTransform ProbeCameraTransform = FTransform(
@@ -70,6 +71,13 @@ protected:
 		if (!bProjectionSucceeds)
 		{
 			return false;
+		}
+
+		if (bUseCameraTransformProjection)
+		{
+			const FVector LocalPosition = ProbeCameraTransform.InverseTransformPosition(WorldLocation);
+			OutScreenPosition = FVector2D(960.0f + LocalPosition.Y, 540.0f - LocalPosition.Z);
+			return true;
 		}
 
 		OutScreenPosition = FVector2D(960.0f + WorldLocation.Y, 540.0f - WorldLocation.Z);

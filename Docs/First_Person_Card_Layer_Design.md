@@ -60,7 +60,7 @@ Battle / Run snapshot
 
 - 卡牌跟随 PlayerCharacter / tunnel 推进，而不是独立悬在屏幕上。
 - 卡牌仍然清晰、稳定、易读，因为它们还是 HUD Widget。
-- Cursor look 可以只部分影响卡牌，并带一点滞后或阻尼，让卡牌不像死死粘在镜头上。
+- 默认身体锁定投影下，cursor look 不再影响卡牌世界槽位和扇形 layout；鼠标移动镜头时屏幕投影仍会随当前相机产生空间变化。额外视差只作为 legacy / 后续实验选项。
 - 同一套 card layer 后续可服务战斗手牌、Run 探索卡、背包 / 地图卡和打出表现位。
 
 ## 第一人称锚点模型
@@ -76,7 +76,8 @@ UWacomFirstPersonCardAnchorComponent
 - 为当前本地玩家输出虚拟手牌 transform 或虚拟手牌平面。
 - 探索期使用 Run Tunnel base transform。
 - 战斗期使用 Battle camera base rotation。
-- 只应用可配置比例的 cursor look offset。
+- 默认使用身体锁定投影，不把 cursor look offset 应用到卡牌槽位位置。
+- 保留 legacy 世界投影模式，可按配置比例应用 cursor look offset，用于调试对照或后续视差实验。
 - 提供跟随平滑、滞后等手感参数。
 - 不持有卡牌 Widget。
 - 不提交战斗或 Run 命令。
@@ -88,15 +89,16 @@ UWacomFirstPersonCardAnchorComponent
 | `DistanceFromView` | 虚拟手牌平面距离锚点多远 |
 | `VerticalOffset` | 手牌在视野里有多低 |
 | `HorizontalOffset` | 可选的左右偏移 |
-| `LookInfluenceYaw` | cursor yaw offset 对手牌的影响比例 |
-| `LookInfluencePitch` | cursor pitch offset 对手牌的影响比例 |
+| `ProjectionMode` | 投影模式；默认 `BodyLocked`，锁定身体 / tunnel / battle 基准上的 3D layout，但仍用当前真实相机投影，保留第一人称空间感 |
+| `LookInfluenceYaw` | legacy 世界投影下 cursor yaw offset 对手牌的影响比例；默认 `BodyLocked` 不使用它影响位置 |
+| `LookInfluencePitch` | legacy 世界投影下 cursor pitch offset 对手牌的影响比例；默认 `BodyLocked` 不使用它影响位置 |
 | `FollowInterpSpeed` | 手牌跟随锚点变化的速度 |
 | `ProjectionPadding` | 投影和视口 clamp 的安全边距 |
 
 关键区别：
 
 - Run Tunnel 和 Battle camera 可以把完整 cursor look 用到实际相机上。
-- 卡牌手牌只应使用部分 cursor look，甚至延迟使用 cursor look，让它更像跟随身体 / 手，而不是完全跟随眼睛。
+- 默认 `BodyLocked` 下，卡牌槽位的 3D layout 只使用 Battle base rotation / Run Tunnel spline base 这类稳定身体基准，不使用 cursor look 重新计算扇形；投影仍使用当前真实相机，所以鼠标镜头偏转时会有合理的第一人称透视变化。`LegacyWorldProjected` 保留“layout 吃 LookInfluence + 当前相机投影”的旧行为，用于对照扇形被拉扯的问题。
 
 ## Card Layer Widget
 
@@ -192,13 +194,14 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ## 建议实现顺序
 
-### V0-I 当前状态：Anchor + Static Card Layer + Battle Hand Presentation Mode
+### V0-J 当前状态：Body-Anchored Current-Camera Projection
 
-当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click、first-person hover detail provider、hover 详情跟随 / ZOrder 修正，以及 first-person card render quality 基础。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示详情；V0-H 进一步把 first-person hover 详情拆到独立 viewport popup host，并跟随 hovered slot 的实时投影布局更新，避免被 first-person card layer 遮挡。V0-I 用 `BattleHUD::BattleHandPresentationMode` 取代三个 prototype bool，默认 `FirstPersonHandWithLegacyFallback`，表示战斗默认启用第一人称手牌并保留旧 `UHandPanel` 兜底；`FirstPersonHandOnly` 只在 first-person runtime hand 有效时折叠旧手牌，异常时自动恢复。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，降低 UMG 整卡旋转时的边缘锯齿、像素断裂和动态抖动。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click、first-person hover detail provider、hover 详情跟随 / ZOrder 修正、first-person card render quality 基础，以及 V0-J 的身体锁定布局投影。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示详情；V0-H 进一步把 first-person hover 详情拆到独立 viewport popup host，并跟随 hovered slot 的实时投影布局更新，避免被 first-person card layer 遮挡。V0-I 用 `BattleHUD::BattleHandPresentationMode` 取代三个 prototype bool，默认 `FirstPersonHandWithLegacyFallback`，表示战斗默认启用第一人称手牌并保留旧 `UHandPanel` 兜底；`FirstPersonHandOnly` 只在 first-person runtime hand 有效时折叠旧手牌，异常时自动恢复。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，降低 UMG 整卡旋转时的边缘锯齿、像素断裂和动态抖动。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
-- Shared cursor look 只按配置比例影响 card anchor，默认 yaw 25%、pitch 15%。
+- `ProjectionMode` 默认 `BodyLocked`：卡牌槽位的 3D layout 使用 Battle base rotation / Run Tunnel spline base 作为稳定身体基准，不让 shared cursor look 参与扇形位置和世界槽位计算；随后仍通过当前玩家相机投影到 widget-space，避免手牌 HUD 化。
+- `LegacyWorldProjected` 保留旧路径：shared cursor look 会按 `LookInfluenceYaw/Pitch` 影响 card anchor / layout，然后再通过当前玩家相机投影；该模式只用于调试对照旧的漂移 / 扇形破坏问题，或后续视差实验。
 - `bDrawDebugProjection` 默认关闭；开启后在 HUD 上绘制 5 个非交互 debug 点，用于 PIE 验证未来手牌位置。
 - `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。
 - `FirstPersonCardViewClass` 用于指定第一人称卡牌层的卡面 Widget；正式验证建议设置为 `/Game/Wacom/UI/Card/WBP_FirstPersonCardView`。该 WBP 可以在 `WBP_CardView` 基础上加入 RetainerBox、透明边缘留白和轻微内部缩放，以降低整卡旋转采样带来的边缘锯齿。为空时只作为测试兜底回退到 `UWacomCardView`，不作为正式第一人称主手牌卡面。
@@ -213,7 +216,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - Anchor 缺失、战斗结束、Session 切换、HUD destruct 或清理 runtime hand 时，旧 `UHandPanel` 会恢复原始 visibility，避免战斗不可操作。
 - 交互开启后，layer 根为 `SelfHitTestInvisible`，只让具体卡牌 slot 接收鼠标，不用全屏根控件抢输入。
 - Hover 会影响 first-person layer 自身视觉：卡牌轻微上移、放大并提高 ZOrder；同时在 Idle 状态下通过 `BattleHUD` 显示现有 `UWacomCardDetailPanel`。旧 `UHandPanel` hover 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport popup panel，默认 `FirstPersonCardDetailViewportZOrder=9999`，高于 first-person card layer。详情数据来自 BattleHUD 最近一次 `FBattleSnapshot.Hand`，定位来自 first-person slot 投影后的屏幕锚点，不需要创建或伪装 `UCardWidget`。
-- first-person hover 详情会订阅 hovered slot layout update：当 cursor look、hover lift、pending 状态或 hand layout 让 hovered 卡牌位置变化时，详情面板只重算位置，不重建数据。
+- first-person hover 详情会订阅 hovered slot layout update：当 hover lift、pending 状态、hand layout、Run Tunnel 推进，或当前真实相机投影让 hovered 卡牌屏幕锚点变化时，详情面板只重算位置，不重建数据。默认 `BodyLocked` 下，鼠标镜头偏移不会重算扇形 layout，但会通过当前相机投影产生合理的详情跟随。
 - 左键点击有效、已投影、可用的 slot 时，只广播 `CardInstanceId` 并由 `BattleHUD` 进入现有 `OnCardClickedByUser()` flow；不可用卡允许 hover，但点击 no-op。
 - Runtime source 清理、战斗结束、Session 切换、HUD destruct 或关闭开关时，会禁用交互、解绑 delegates、清理 hover 状态并移除 stale runtime hand。
 
@@ -250,16 +253,22 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - 已加入像素对齐、最大 render angle clamp 和 projection quality debug 字段。
    - 不改 `WBP_CardView` 结构，不引入 RetainerBox / RenderTarget / Slate 自绘。
 
-8. V0-H：Hover Detail Follow + ZOrder
+8. V0-J：Body-Anchored Current-Camera Projection
+   - 已把 first-person card layer 默认投影模式切为 `BodyLocked`。
+   - 战斗中用 `UWacomBattleCameraLookComponent::GetBaseBattleRotation()` 与当前相机位置生成稳定的身体锚点；Run Tunnel 中使用 active segment spline transform 和当前 distance；fallback 仍使用当前 camera transform 并记录原因。
+   - `LookInfluenceYaw/Pitch` 暂只服务 `LegacyWorldProjected`，默认身体锁定模式不让它影响卡牌世界槽位和扇形 layout。
+   - Debug summary / slot view / projected point 会记录 projection mode、是否 body locked layout、是否 current camera projection、look offset 是否参与布局，以及 raw/widget/snapped position。
+
+9. V0-H：Hover Detail Follow + ZOrder
    - 已完成：first-person hover 详情跟随 hovered card 实时投影位置，并显示在 first-person card layer 之上。
    - 旧 `UHandPanel` hover 详情路径不变，仍作为 fallback 和对照。
    - 后续只保留细节微调：详情面板偏移、动画、避免贴边时跳动。
 
-9. Render Quality V0-B
+10. Render Quality V0-B
    - 当前不把“降低旋转角”作为主线目标；`WBP_FirstPersonCardView` 已能承接较大角度旋转的抗锯齿需求，排布表现优先。
    - 后续只在美术反馈需要时微调扇形参数：下坠、层级、hover / pending 姿态和可选角度 clamp。
 
-10. First-person card view polish
+11. First-person card view polish
    - 已确认第一人称层应使用专用 `WBP_FirstPersonCardView`，不要继续把通用 `WBP_CardView` 直接作为长期主手牌卡面。
    - 后续 polish 重点是沉淀该 WBP 的制作规范：RetainerBox 使用边界、贴图透明留白、内部缩放、安全边框、材质动画刷新频率，以及不同 DPI / 视口尺寸下的旋转采样表现。
 
@@ -291,8 +300,8 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - Hover / pending / disabled 状态由 first-person layer 的 slot transform、opacity 和 `FWacomCardViewData::bDisabled` 叠加表现，WBP 不重复实现同一套状态机。
 - 如果未来普通 HUD、背包或详情需要不同尺寸或结构，优先调整各自 WBP，不把第一人称 RetainerBox 规范反向套回通用 `WBP_CardView`。
 
-10. Play focus pose
+12. Play focus pose
    - 在命令 / 事件表现前增加短暂卡牌打出表现位。
 
-11. Run card layer
+13. Run card layer
    - 探索卡牌复用 anchor 和视觉状态机。

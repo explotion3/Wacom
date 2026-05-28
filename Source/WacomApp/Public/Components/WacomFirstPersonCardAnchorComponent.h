@@ -27,6 +27,13 @@ enum class EWacomFirstPersonCardAnchorMode : uint8
 	CameraFallback
 };
 
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardProjectionMode : uint8
+{
+	BodyLocked UMETA(DisplayName = "Body Locked Layout", ToolTip = "卡牌 3D 布局锁在身体、战斗基准或 Run Tunnel spline 上，但仍使用当前真实相机投影。"),
+	LegacyWorldProjected UMETA(DisplayName = "Legacy World Projected", ToolTip = "旧投影对照路径：共享鼠标镜头偏移会参与卡牌布局，然后再使用当前真实相机投影。")
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 {
@@ -51,6 +58,9 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 	FVector2D ScreenPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float ViewportScale = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -61,6 +71,15 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bPixelSnapped = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bBodyLockedLayout = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bCurrentCameraProjection = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bLookOffsetAppliedToLayout = false;
 };
 
 USTRUCT(BlueprintType)
@@ -78,6 +97,9 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
 	FTransform AnchorTransform = FTransform::Identity;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FRotator LookOffsetUsed = FRotator::ZeroRotator;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -85,6 +107,15 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FName LastFallbackReason = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bBodyLockedLayout = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bCurrentCameraProjection = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bLookOffsetAppliedToLayout = false;
 };
 
 USTRUCT(BlueprintType)
@@ -135,6 +166,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	FVector2D SnappedWidgetPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float RenderAngleDegrees = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -160,6 +194,15 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bIsHovered = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bBodyLockedLayout = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bCurrentCameraProjection = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bLookOffsetAppliedToLayout = false;
 };
 
 /**
@@ -197,6 +240,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "30.0", ToolTip = "第一人称卡牌锚点跟随目标位置和朝向的插值速度；设为 0 时立即贴合目标锚点。"))
 	float FollowInterpSpeed = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 会把卡牌 3D 布局锁在战斗基准朝向或 Run Tunnel spline 基准朝向上，但仍使用当前真实相机投影，保留第一人称空间感；LegacyWorldProjected 保留旧的 LookInfluence 影响布局路径，用于调试对照。"))
+	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0", ToolTip = "投影点被限制在视口内时保留的屏幕安全边距，单位为 UMG 布局像素。"))
 	float ProjectionPadding = 24.0f;
@@ -364,6 +410,7 @@ private:
 	FName LastFallbackReason = NAME_None;
 	bool bHasValidAnchor = false;
 	bool bHasInitializedAnchor = false;
+	bool bCurrentLookOffsetAppliedToLayout = false;
 
 	UPROPERTY(Transient)
 	TArray<FWacomCardViewData> RuntimeCardLayerData;
@@ -396,4 +443,5 @@ private:
 	void HandleLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleLayerHoveredCardSlotUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	static FString AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode);
+	static FString ProjectionModeToString(EWacomFirstPersonCardProjectionMode Mode);
 };

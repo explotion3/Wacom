@@ -306,6 +306,8 @@ bool FWacomFirstPersonCardLayerRunTunnelAnchorTest::RunTest(const FString& Param
 	TestTrue(TEXT("Run tunnel anchor is valid"), View.bHasValidAnchor);
 	TestEqual(TEXT("Run tunnel mode is selected"), View.Mode, EWacomFirstPersonCardAnchorMode::RunTunnel);
 	TestEqual(TEXT("Run tunnel anchor uses spline distance before layout offset"), Character->GetRunTunnelMovementComponent()->GetDistanceAlongSpline(), 200.0f);
+	TestEqual(TEXT("Run tunnel default projection is body locked"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::BodyLocked);
+	TestFalse(TEXT("Run tunnel body locked layout ignores cursor look"), View.bLookOffsetAppliedToLayout);
 
 	Anchor->DestroyComponent();
 	Segment->Destroy();
@@ -350,6 +352,8 @@ bool FWacomFirstPersonCardLayerBattlePriorityTest::RunTest(const FString& Parame
 	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
 	TestEqual(TEXT("Battle camera mode takes priority over suspended run tunnel"), View.Mode, EWacomFirstPersonCardAnchorMode::BattleCamera);
 	TestEqual(TEXT("Battle base yaw is used"), View.AnchorTransform.Rotator().Yaw, 55.0);
+	TestEqual(TEXT("Battle default projection is body locked"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::BodyLocked);
+	TestFalse(TEXT("Battle body locked layout ignores cursor look"), View.bLookOffsetAppliedToLayout);
 
 	Character->GetBattleCameraLookComponent()->DeactivateBattleCameraLook();
 	Anchor->DestroyComponent();
@@ -361,7 +365,7 @@ bool FWacomFirstPersonCardLayerBattlePriorityTest::RunTest(const FString& Parame
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerPartialLookTest,
-	"Wacom.UI.FirstPersonCardLayer.Anchor.PartialLookInfluence",
+	"Wacom.UI.FirstPersonCardLayer.Anchor.LegacyPartialLookInfluence",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameters)
@@ -389,6 +393,7 @@ bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameter
 		FVector::OneVector);
 	Anchor->LookInfluenceYaw = 0.25f;
 	Anchor->LookInfluencePitch = 0.5f;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	Character->GetCursorLookDriverComponent()->UpdateFromNormalizedCursor(
 		FVector2D(1.0f, -1.0f),
 		0.0f,
@@ -399,6 +404,254 @@ bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameter
 	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
 	TestEqual(TEXT("Yaw uses partial cursor influence"), View.LookOffsetUsed.Yaw, 5.0);
 	TestEqual(TEXT("Pitch uses partial cursor influence"), View.LookOffsetUsed.Pitch, 5.0);
+	TestTrue(TEXT("Legacy projection reports look used for layout"), View.bLookOffsetAppliedToLayout);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBodyLockedWorldLayoutTest,
+	"Wacom.UI.FirstPersonCardLayer.Projection.BodyLockedKeepsWorldLayoutStableUnderCursorLook",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBodyLockedWorldLayoutTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardCountFallback = 5;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	const FTransform InitialLeft = Anchor->ComputeCardTransform(5, 0);
+	const FTransform InitialCenter = Anchor->ComputeCardTransform(5, 2);
+	const FTransform InitialRight = Anchor->ComputeCardTransform(5, 4);
+
+	Character->GetCursorLookDriverComponent()->UpdateFromNormalizedCursor(
+		FVector2D(1.0f, -1.0f),
+		0.0f,
+		20.0f,
+		10.0f);
+	Anchor->RefreshAnchor(0.0f);
+	const FTransform LookLeft = Anchor->ComputeCardTransform(5, 0);
+	const FTransform LookCenter = Anchor->ComputeCardTransform(5, 2);
+	const FTransform LookRight = Anchor->ComputeCardTransform(5, 4);
+	const TArray<FWacomFirstPersonCardLayerSlotView> LookSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Look slot count"), LookSlots.Num(), 5);
+	TestTrue(TEXT("Body locked left world location stays stable"), LookLeft.GetLocation().Equals(InitialLeft.GetLocation(), KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("Body locked center world location stays stable"), LookCenter.GetLocation().Equals(InitialCenter.GetLocation(), KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("Body locked right world location stays stable"), LookRight.GetLocation().Equals(InitialRight.GetLocation(), KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("Body locked center world rotation stays stable"), LookCenter.Rotator().Equals(InitialCenter.Rotator(), KINDA_SMALL_NUMBER));
+	TestEqual(
+		TEXT("Body locked fan spacing remains stable"),
+		(LookRight.GetLocation() - LookCenter.GetLocation()).Size(),
+		(InitialRight.GetLocation() - InitialCenter.GetLocation()).Size());
+	if (LookSlots.Num() == 5)
+	{
+		TestFalse(TEXT("Body locked does not apply look to layout"), LookSlots[2].bLookOffsetAppliedToLayout);
+		TestTrue(TEXT("Body locked layout flag is recorded"), LookSlots[2].bBodyLockedLayout);
+		TestTrue(TEXT("Current camera projection flag is recorded"), LookSlots[2].bCurrentCameraProjection);
+	}
+
+	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView(1);
+	TestEqual(TEXT("Debug projection mode is BodyLocked"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::BodyLocked);
+	TestTrue(TEXT("Debug reports body locked layout"), View.bBodyLockedLayout);
+	TestTrue(TEXT("Debug reports current camera projection"), View.bCurrentCameraProjection);
+	TestFalse(TEXT("Debug reports look is not used for layout"), View.bLookOffsetAppliedToLayout);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBodyLockedCurrentCameraProjectionTest,
+	"Wacom.UI.FirstPersonCardLayer.Projection.BodyLockedProjectsThroughCurrentCamera",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBodyLockedCurrentCameraProjectionTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardCountFallback = 5;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->bUseCameraTransformProjection = true;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->ProbeCameraTransform = FTransform(
+		FRotator::ZeroRotator,
+		Anchor->ProbeCameraTransform.GetLocation(),
+		FVector::OneVector);
+	const TArray<FWacomFirstPersonCardLayerSlotView> InitialSlots = Anchor->BuildStaticCardSlotViews();
+
+	Anchor->ProbeCameraTransform = FTransform(
+		FRotator(0.0f, 8.0f, 0.0f),
+		Anchor->ProbeCameraTransform.GetLocation(),
+		FVector::OneVector);
+	const TArray<FWacomFirstPersonCardLayerSlotView> RotatedCameraSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Initial slot count"), InitialSlots.Num(), 5);
+	TestEqual(TEXT("Rotated camera slot count"), RotatedCameraSlots.Num(), 5);
+	if (InitialSlots.Num() == 5 && RotatedCameraSlots.Num() == 5)
+	{
+		TestNotEqual(TEXT("Body locked layout still projects through current camera"), RotatedCameraSlots[2].ScreenPosition, InitialSlots[2].ScreenPosition);
+		TestFalse(TEXT("Current camera projection does not mean look is used for layout"), RotatedCameraSlots[2].bLookOffsetAppliedToLayout);
+		TestTrue(TEXT("Body locked layout flag is recorded"), RotatedCameraSlots[2].bBodyLockedLayout);
+		TestTrue(TEXT("Current camera projection flag is recorded"), RotatedCameraSlots[2].bCurrentCameraProjection);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBodyLockedFanShapeTest,
+	"Wacom.UI.FirstPersonCardLayer.Projection.BodyLockedPreservesFanShapeUnderCameraLook",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBodyLockedFanShapeTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->StaticCardCountFallback = 5;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	TArray<FVector> InitialLocations;
+	TArray<float> InitialYaws;
+	for (int32 Index = 0; Index < 5; ++Index)
+	{
+		const FTransform Transform = Anchor->ComputeCardTransform(5, Index);
+		InitialLocations.Add(Transform.GetLocation());
+		InitialYaws.Add(Transform.Rotator().Yaw);
+	}
+
+	Character->GetCursorLookDriverComponent()->UpdateFromNormalizedCursor(
+		FVector2D(1.0f, -1.0f),
+		0.0f,
+		20.0f,
+		10.0f);
+	Anchor->RefreshAnchor(0.0f);
+
+	for (int32 Index = 0; Index < 5; ++Index)
+	{
+		const FTransform Transform = Anchor->ComputeCardTransform(5, Index);
+		TestTrue(
+			FString::Printf(TEXT("Slot %d world location remains in same fan"), Index),
+			Transform.GetLocation().Equals(InitialLocations[Index], KINDA_SMALL_NUMBER));
+		TestTrue(
+			FString::Printf(TEXT("Slot %d yaw remains in same fan"), Index),
+			FMath::IsNearlyEqual(Transform.Rotator().Yaw, InitialYaws[Index], KINDA_SMALL_NUMBER));
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerLegacyLookProjectionTest,
+	"Wacom.UI.FirstPersonCardLayer.Projection.LegacyWorldProjectedStillAppliesLookInfluence",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerLegacyLookProjectionTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardCountFallback = 5;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	const FTransform InitialCenterTransform = Anchor->ComputeCardTransform(5, 2);
+	const TArray<FWacomFirstPersonCardLayerSlotView> InitialSlots = Anchor->BuildStaticCardSlotViews();
+
+	Character->GetCursorLookDriverComponent()->UpdateFromNormalizedCursor(
+		FVector2D(1.0f, -1.0f),
+		0.0f,
+		20.0f,
+		10.0f);
+	Anchor->RefreshAnchor(0.0f);
+	const FTransform LookCenterTransform = Anchor->ComputeCardTransform(5, 2);
+	const TArray<FWacomFirstPersonCardLayerSlotView> LookSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Initial slot count"), InitialSlots.Num(), 5);
+	TestEqual(TEXT("Look slot count"), LookSlots.Num(), 5);
+	TestFalse(TEXT("Legacy look influence changes center world location"), LookCenterTransform.GetLocation().Equals(InitialCenterTransform.GetLocation(), KINDA_SMALL_NUMBER));
+	if (InitialSlots.Num() == 5 && LookSlots.Num() == 5)
+	{
+		TestNotEqual(TEXT("Legacy world-projected center card can move with look"), LookSlots[2].ScreenPosition, InitialSlots[2].ScreenPosition);
+		TestTrue(TEXT("Legacy projection reports look used for layout"), LookSlots[2].bLookOffsetAppliedToLayout);
+		TestFalse(TEXT("Legacy body locked layout flag is false"), LookSlots[2].bBodyLockedLayout);
+		TestTrue(TEXT("Legacy still uses current camera projection"), LookSlots[2].bCurrentCameraProjection);
+	}
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -526,6 +779,7 @@ bool FWacomFirstPersonCardLayerWidgetProjectionTest::RunTest(const FString& Para
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->ProbeViewportScale = 2.0f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
 	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildStaticCardSlotViews();
@@ -573,6 +827,7 @@ bool FWacomFirstPersonCardLayerPixelSnappingTest::RunTest(const FString& Paramet
 	Anchor->CardLayerPixelSnapGrid = 1.0f;
 	Anchor->StaticCardCountFallback = 1;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
 	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildStaticCardSlotViews();
@@ -620,6 +875,7 @@ bool FWacomFirstPersonCardLayerPixelSnappingDisabledTest::RunTest(const FString&
 	Anchor->bEnableCardLayerPixelSnapping = false;
 	Anchor->StaticCardCountFallback = 1;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
 	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildStaticCardSlotViews();
@@ -750,6 +1006,7 @@ bool FWacomFirstPersonCardLayerDebugProjectionQualityTest::RunTest(const FString
 	Anchor->ProbeViewportScale = 2.0f;
 	Anchor->bEnableCardLayerPixelSnapping = true;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
 	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView(1);
@@ -768,6 +1025,7 @@ bool FWacomFirstPersonCardLayerDebugProjectionQualityTest::RunTest(const FString
 	TestTrue(TEXT("Summary reports pixel snap"), Summary.Contains(TEXT("PixelSnap=true")));
 	TestTrue(TEXT("Summary reports angle clamp"), Summary.Contains(TEXT("AngleClamp=true")));
 	TestTrue(TEXT("Summary reports viewport scale"), Summary.Contains(TEXT("ViewportScale=2.00")));
+	TestTrue(TEXT("Summary reports projection mode"), Summary.Contains(TEXT("ProjectionMode=LegacyWorldProjected")));
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -881,6 +1139,7 @@ bool FWacomFirstPersonCardLayerProjectionFailureHidesTest::RunTest(const FString
 
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	Anchor->bProjectionSucceeds = false;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildStaticCardSlotViews();
 	TestEqual(TEXT("Projection failure still builds slot data"), Slots.Num(), 5);
 	if (Slots.Num() > 0)
@@ -932,6 +1191,72 @@ bool FWacomFirstPersonCardLayerToggleRemovesWidgetTest::RunTest(const FString& P
 	Anchor->bDrawStaticCardLayer = false;
 	Anchor->RefreshStaticLayerForTest();
 	TestFalse(TEXT("Static layer is removed after toggle off"), Anchor->IsStaticCardLayerWidgetActive());
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBodyLockedVisualOffsetsTest,
+	"Wacom.UI.FirstPersonCardLayer.Projection.BodyLockedStillAppliesHoverPendingAndEdgeDrop",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBodyLockedVisualOffsetsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardRenderScale = 1.0f;
+	Anchor->StaticCardEdgeDropPixels = 80.0f;
+	Anchor->PendingTargetingLiftPixels = 32.0f;
+	Anchor->HoverLiftPixels = 24.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	const FGuid HoveredCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerEntry LeftEdge;
+	LeftEdge.CardViewData.Name = FText::FromString(TEXT("Left"));
+	FWacomFirstPersonCardLayerEntry PendingCenter;
+	PendingCenter.CardViewData.Name = FText::FromString(TEXT("Pending"));
+	FWacomFirstPersonCardLayerEntry HoveredRightEdge;
+	HoveredRightEdge.CardInstanceId = HoveredCardId;
+	HoveredRightEdge.CardViewData.Name = FText::FromString(TEXT("Hovered"));
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { LeftEdge, PendingCenter, HoveredRightEdge });
+	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	PendingCenter.bIsPendingTargeting = true;
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { LeftEdge, PendingCenter, HoveredRightEdge });
+	Anchor->SetHoveredCardInstanceIdForTest(HoveredCardId);
+
+	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 3);
+	TestEqual(TEXT("Slot count"), Slots.Num(), 3);
+	if (BaseSlots.Num() == 3 && Slots.Num() == 3)
+	{
+		TestTrue(TEXT("Body locked layout is recorded"), Slots[1].bBodyLockedLayout);
+		TestTrue(TEXT("Current camera projection is recorded"), Slots[1].bCurrentCameraProjection);
+		TestTrue(TEXT("Left edge drop still lowers edge card"), BaseSlots[0].ScreenPosition.Y > BaseSlots[1].ScreenPosition.Y);
+		TestTrue(TEXT("Pending lift still raises center card"), Slots[1].ScreenPosition.Y < BaseSlots[1].ScreenPosition.Y);
+		TestTrue(TEXT("Hover lift still raises hovered edge card"), Slots[2].ScreenPosition.Y < BaseSlots[2].ScreenPosition.Y);
+		TestTrue(TEXT("Hovered slot is marked"), Slots[2].bIsHovered);
+	}
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -1288,6 +1613,7 @@ bool FWacomFirstPersonCardLayerInvalidProjectionTest::RunTest(const FString& Par
 
 	PC->Possess(Character);
 	Anchor->bProjectionSucceeds = false;
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	Anchor->RefreshAnchor(0.0f);
 	FWacomFirstPersonCardProjectedPoint Point;
 	TestFalse(TEXT("Projection failure returns false"), Anchor->ProjectCardTransformToScreen(Anchor->ComputeCardTransform(5, 2), Point, 2));
