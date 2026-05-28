@@ -40,6 +40,21 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float ResetDistancePixels = 420.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnableEventAwareTransitions = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D DrawnEnterOffsetPixels = FVector2D(0.0f, 96.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D GainedEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D DiscardedExitOffsetPixels = FVector2D(0.0f, 120.0f);
 };
 
 /**
@@ -58,7 +73,14 @@ public:
 	void SetSlotView(const FWacomFirstPersonCardLayerSlotView& InSlotView);
 	void SetSlotViewImmediate(const FWacomFirstPersonCardLayerSlotView& InSlotView);
 	void BeginSlotMotion(const FWacomFirstPersonCardLayerSlotView& InTargetSlotView, bool bTreatAsNewSlot);
+	void BeginSlotMotionWithEnterOffset(
+		const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
+		bool bTreatAsNewSlot,
+		const TOptional<FVector2D>& EnterOffsetOverride);
 	void BeginExitMotion(const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView);
+	void BeginExitMotionWithOffset(
+		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
+		const TOptional<FVector2D>& ExitOffsetOverride);
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 

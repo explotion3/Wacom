@@ -57,6 +57,23 @@ namespace
 {
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
 	const FName FirstPersonBattleHandLayerSourceId(TEXT("BattleHand"));
+
+	bool ContainsHandCardId(const FBattleSnapshot& Snapshot, const FGuid& CardInstanceId)
+	{
+		if (!CardInstanceId.IsValid())
+		{
+			return false;
+		}
+
+		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+		{
+			if (CardSnapshot.InstanceId == CardInstanceId)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 }
 
 void UBattleHUD::NativeOnInitialized()
@@ -137,6 +154,9 @@ void UBattleHUD::NativeDestruct()
 	}
 	bHasLastBattleSnapshot = false;
 	LastBattleSnapshot = FBattleSnapshot();
+	bHasLastFirstPersonCardTransitionSnapshot = false;
+	LastFirstPersonCardTransitionSnapshot = FBattleSnapshot();
+	ClearPendingFirstPersonCardTransitionEvents();
 	Super::NativeDestruct();
 }
 
@@ -190,8 +210,19 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
 	HideCardDetailPanel();
+	const bool bCanBuildFirstPersonTransitionHints =
+		bHasLastFirstPersonCardTransitionSnapshot
+		&& LastFirstPersonCardTransitionSnapshot.Phase != EBattlePhase::BattleEnd
+		&& Snap.Phase != EBattlePhase::BattleEnd;
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> FirstPersonTransitionHints =
+		bCanBuildFirstPersonTransitionHints
+			? BuildFirstPersonCardTransitionHints(LastFirstPersonCardTransitionSnapshot, Snap)
+			: TArray<FWacomFirstPersonCardLayerTransitionHint>();
+	ClearPendingFirstPersonCardTransitionEvents();
 	LastBattleSnapshot = Snap;
 	bHasLastBattleSnapshot = true;
+	LastFirstPersonCardTransitionSnapshot = Snap;
+	bHasLastFirstPersonCardTransitionSnapshot = true;
 
 	if (bEnable3DHandPrototype)
 	{
@@ -206,13 +237,15 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		DestroyBattle3DHandPresenter();
 	}
 
-	SyncFirstPersonBattleHandLayer(Snap);
+	SyncFirstPersonBattleHandLayer(Snap, FirstPersonTransitionHints);
 	SyncLegacyHandPanelVisibility();
 
 	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
 	if (Snap.Phase == EBattlePhase::BattleEnd)
 	{
+		ClearPendingFirstPersonCardTransitionEvents();
 		bHasLastBattleSnapshot = false;
+		bHasLastFirstPersonCardTransitionSnapshot = false;
 		SetUIState(EBattleUIState::BattleEnd);
 		SyncLegacyHandPanelVisibility();
 
@@ -241,6 +274,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	{
 		ClearBattlePresentationQueue();
 		ClearFirstPersonBattleHandLayer();
+		ClearPendingFirstPersonCardTransitionEvents();
 		ClearSceneEnemyTargetSelectionAffordances();
 		UnregisterSceneEnemyPresentationTargets(false);
 		DestroyBattle3DHandPresenter();
@@ -254,6 +288,9 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	bHasBroadcastBattleEnd = false;
 	bHasLastBattleSnapshot = false;
 	LastBattleSnapshot = FBattleSnapshot();
+	bHasLastFirstPersonCardTransitionSnapshot = false;
+	LastFirstPersonCardTransitionSnapshot = FBattleSnapshot();
+	ClearPendingFirstPersonCardTransitionEvents();
 	HideCardDetailPanel();
 	BattleEventLogHistory.Reset();
 	SyncBattleEventLogPanel();
@@ -359,6 +396,8 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 	{
 		LastBattleSnapshot = FBattleSnapshot();
 		bHasLastBattleSnapshot = false;
+		LastFirstPersonCardTransitionSnapshot = FBattleSnapshot();
+		bHasLastFirstPersonCardTransitionSnapshot = false;
 	}
 	else
 	{
@@ -381,7 +420,9 @@ UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor()
 	return Character ? Character->GetFirstPersonCardAnchorComponent() : nullptr;
 }
 
-void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
+void UBattleHUD::SyncFirstPersonBattleHandLayer(
+	const FBattleSnapshot& Snap,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
 {
 	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor();
 	const bool bCanShowBattleHand =
@@ -419,6 +460,7 @@ void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
 		CardEntries.Add(MoveTemp(Entry));
 	}
 
+	Anchor->SetRuntimeCardLayerTransitionHints(FirstPersonBattleHandLayerSourceId, TransitionHints);
 	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
 	Anchor->SetBattleHandInteractionPrototypeEnabled(ShouldEnableFirstPersonBattleHandInteraction());
 	BindFirstPersonBattleHandLayerInteractions(Anchor);
@@ -443,6 +485,7 @@ void UBattleHUD::ClearFirstPersonBattleHandLayer()
 	}
 	LastFirstPersonBattleHandAnchor.Reset();
 	HideFirstPersonCardDetailPanel();
+	ClearPendingFirstPersonCardTransitionEvents();
 	SyncLegacyHandPanelVisibility();
 }
 
@@ -1424,6 +1467,125 @@ void UBattleHUD::ConsumeAndLogEvents()
 void UBattleHUD::AppendBattleEventLogEntries(const TArray<FBattleEvent>& Events)
 {
 	FWacomBattleHUDEventFlow::AppendBattleEventLogEntries(*this, Events);
+}
+
+void UBattleHUD::StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>& Events)
+{
+	for (const FBattleEvent& Event : Events)
+	{
+		switch (Event.Type)
+		{
+		case EBattleEventType::CardsDrawn:
+		case EBattleEventType::CardGained:
+		case EBattleEventType::CardPlayed:
+		case EBattleEventType::HandLimitDiscarded:
+			PendingFirstPersonCardTransitionEvents.Add(Event);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+void UBattleHUD::ClearPendingFirstPersonCardTransitionEvents()
+{
+	PendingFirstPersonCardTransitionEvents.Reset();
+}
+
+TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCardTransitionHints(
+	const FBattleSnapshot& PreviousSnapshot,
+	const FBattleSnapshot& NextSnapshot) const
+{
+	TArray<FWacomFirstPersonCardLayerTransitionHint> Hints;
+	if (PendingFirstPersonCardTransitionEvents.IsEmpty())
+	{
+		return Hints;
+	}
+
+	TSet<FGuid> NewCardIds;
+	for (const FHandCardSnapshot& CardSnapshot : NextSnapshot.Hand.Cards)
+	{
+		if (CardSnapshot.InstanceId.IsValid()
+			&& !ContainsHandCardId(PreviousSnapshot, CardSnapshot.InstanceId))
+		{
+			NewCardIds.Add(CardSnapshot.InstanceId);
+		}
+	}
+
+	TSet<FGuid> RemovedCardIds;
+	for (const FHandCardSnapshot& CardSnapshot : PreviousSnapshot.Hand.Cards)
+	{
+		if (CardSnapshot.InstanceId.IsValid()
+			&& !ContainsHandCardId(NextSnapshot, CardSnapshot.InstanceId))
+		{
+			RemovedCardIds.Add(CardSnapshot.InstanceId);
+		}
+	}
+
+	auto AddHint = [&Hints](const FGuid& CardInstanceId, EWacomFirstPersonCardSlotTransitionKind TransitionKind)
+	{
+		if (!CardInstanceId.IsValid() || TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Default)
+		{
+			return;
+		}
+
+		FWacomFirstPersonCardLayerTransitionHint Hint;
+		Hint.CardInstanceId = CardInstanceId;
+		Hint.TransitionKind = TransitionKind;
+		Hints.Add(Hint);
+	};
+
+	int32 DrawnCardHintBudget = 0;
+	for (const FBattleEvent& Event : PendingFirstPersonCardTransitionEvents)
+	{
+		switch (Event.Type)
+		{
+		case EBattleEventType::CardGained:
+			if (NewCardIds.Contains(Event.CardInstanceId))
+			{
+				AddHint(Event.CardInstanceId, EWacomFirstPersonCardSlotTransitionKind::Gained);
+				NewCardIds.Remove(Event.CardInstanceId);
+			}
+			break;
+		case EBattleEventType::CardPlayed:
+			if (RemovedCardIds.Contains(Event.CardInstanceId))
+			{
+				AddHint(Event.CardInstanceId, EWacomFirstPersonCardSlotTransitionKind::Played);
+				RemovedCardIds.Remove(Event.CardInstanceId);
+			}
+			break;
+		case EBattleEventType::HandLimitDiscarded:
+			if (RemovedCardIds.Contains(Event.CardInstanceId))
+			{
+				AddHint(Event.CardInstanceId, EWacomFirstPersonCardSlotTransitionKind::Discarded);
+				RemovedCardIds.Remove(Event.CardInstanceId);
+			}
+			break;
+		case EBattleEventType::CardsDrawn:
+			DrawnCardHintBudget += FMath::Max(0, Event.Count);
+			break;
+		default:
+			break;
+		}
+	}
+
+	for (const FHandCardSnapshot& CardSnapshot : NextSnapshot.Hand.Cards)
+	{
+		if (DrawnCardHintBudget <= 0)
+		{
+			break;
+		}
+		if (!NewCardIds.Contains(CardSnapshot.InstanceId))
+		{
+			continue;
+		}
+
+		AddHint(CardSnapshot.InstanceId, EWacomFirstPersonCardSlotTransitionKind::Drawn);
+		NewCardIds.Remove(CardSnapshot.InstanceId);
+		--DrawnCardHintBudget;
+	}
+
+	return Hints;
 }
 
 void UBattleHUD::TrimBattleEventLogHistory()

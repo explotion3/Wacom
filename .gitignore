@@ -32,6 +32,9 @@ Docs/.obsidian/
 *.tmp
 *.temp
 
+# Local code intelligence indexes
+.codegraph/
+
 # OS files
 Thumbs.db
 Desktop.ini

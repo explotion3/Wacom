@@ -3,6 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Events/BattleEvent.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 #include "Types/WacomEnums.h"
@@ -13,7 +15,6 @@ class UCanvasPanel;
 class UCardWidget;
 class UBattleEventLogPanel;
 class UWacomCardDetailPanel;
-class UWacomFirstPersonCardAnchorComponent;
 class AWacomBattle3DHandPresenter;
 class AWacomBattleCardVisualActor;
 class APlayerController;
@@ -357,7 +358,13 @@ private:
 	FBattleSnapshot LastBattleSnapshot;
 
 	UPROPERTY(Transient)
+	FBattleSnapshot LastFirstPersonCardTransitionSnapshot;
+
+	UPROPERTY(Transient)
 	TArray<FBattleEventPresentationView> BattleEventLogHistory;
+
+	UPROPERTY(Transient)
+	TArray<FBattleEvent> PendingFirstPersonCardTransitionEvents;
 
 	TSharedPtr<FWacomBattleEventPresentationQueue> BattleEventPresentationQueue;
 	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
@@ -371,6 +378,7 @@ private:
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastFirstPersonBattleHandAnchor;
 	ESlateVisibility CachedLegacyHandPanelVisibility = ESlateVisibility::Visible;
 	bool bHasLastBattleSnapshot = false;
+	bool bHasLastFirstPersonCardTransitionSnapshot = false;
 	bool bHasCachedLegacyHandPanelVisibility = false;
 	bool bLegacyHandPanelHiddenByFirstPersonLayer = false;
 	bool bFirstPersonBattleHandLayerRuntimeActive = false;
@@ -391,6 +399,11 @@ private:
 	void ConsumeAndLogEvents();
 
 	void AppendBattleEventLogEntries(const TArray<struct FBattleEvent>& Events);
+	void StoreFirstPersonCardTransitionEvents(const TArray<struct FBattleEvent>& Events);
+	void ClearPendingFirstPersonCardTransitionEvents();
+	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
+		const FBattleSnapshot& PreviousSnapshot,
+		const FBattleSnapshot& NextSnapshot) const;
 	void TrimBattleEventLogHistory();
 	void SyncBattleEventLogPanel();
 	void EnqueueBattlePresentationEvents(const TArray<struct FBattleEvent>& Events);
@@ -461,7 +474,9 @@ private:
 	void ClearSceneEnemyTargetSelectionAffordances(bool bOnlyThisHUD = true);
 	void UnregisterSceneEnemyPresentationTargets(bool bOnlyAutoBoundTargets = true);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
-	void SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap);
+	void SyncFirstPersonBattleHandLayer(
+		const FBattleSnapshot& Snap,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints = TArray<FWacomFirstPersonCardLayerTransitionHint>());
 	void ClearFirstPersonBattleHandLayer();
 	void SyncLegacyHandPanelVisibility();
 	bool ShouldHideLegacyHandPanel() const;

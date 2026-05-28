@@ -25,6 +25,13 @@
 | 架构/模块 | `Docs/Architecture.md` | `Source/*/` |
 | 测试 | 对应领域文档 | `Source/WacomTests/` |
 
+### CodeGraph 使用
+
+- 项目已配置 `colbymchenry/codegraph` MCP，并在仓库内建立 `.codegraph` 索引。
+- 探索“某个系统怎么工作、某个函数被谁调用、修改会影响哪里、从 A 怎么流到 B”时，优先使用 CodeGraph：`codegraph_context`、`codegraph_callers`、`codegraph_callees`、`codegraph_impact`、`codegraph_trace`。
+- 查项目文件结构时优先使用 `codegraph_files`，少做全仓库目录扫描。
+- CodeGraph 用于快速建立结构认知；真正修改前仍要读取 live 文件内容，以当前工作区文件为准，避免索引延迟或动态调用导致误判。
+
 ## 协作模式
 
 默认采用“主对话直接负责”的工作方式。主会话应完成日常探索、实现、测试和总结，避免为了普通任务额外开启 subagent 造成等待和集成成本。

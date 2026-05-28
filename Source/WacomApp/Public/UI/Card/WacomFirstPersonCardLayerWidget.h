@@ -28,6 +28,7 @@ public:
 	void SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass);
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void ClearSlotMotionState();
+	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetStaticCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
@@ -102,6 +103,7 @@ private:
 
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
+	TMap<FString, EWacomFirstPersonCardSlotTransitionKind> PendingTransitionHintsByKey;
 	bool bCardLayerInteractionEnabled = false;
 	bool bLogSlotMotionDiagnostics = false;
 
@@ -118,6 +120,8 @@ private:
 	int32 CountMotionTickSlots() const;
 	void ReportSlotMotionDiagnosticsIfNeeded();
 	FString MakeSlotMotionKey(const FWacomFirstPersonCardLayerSlotView& SlotView) const;
+	TOptional<FVector2D> GetEnterOffsetOverrideForTransition(EWacomFirstPersonCardSlotTransitionKind TransitionKind) const;
+	TOptional<FVector2D> GetExitOffsetOverrideForTransition(EWacomFirstPersonCardSlotTransitionKind TransitionKind) const;
 	void HandleSlotClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);

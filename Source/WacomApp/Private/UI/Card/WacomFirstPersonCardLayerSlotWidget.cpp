@@ -71,6 +71,14 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotion(
 	const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
 	bool bTreatAsNewSlot)
 {
+	BeginSlotMotionWithEnterOffset(InTargetSlotView, bTreatAsNewSlot, TOptional<FVector2D>());
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterOffset(
+	const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
+	bool bTreatAsNewSlot,
+	const TOptional<FVector2D>& EnterOffsetOverride)
+{
 	if (!SlotMotionConfig.bEnabled)
 	{
 		SetSlotViewImmediate(InTargetSlotView);
@@ -108,7 +116,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotion(
 		VisualSlotView = InTargetSlotView;
 		if (bTreatAsNewSlot && InTargetSlotView.bProjected)
 		{
-			VisualSlotView.ScreenPosition = InTargetSlotView.ScreenPosition + SlotMotionConfig.EnterOffsetPixels;
+			const FVector2D EnterOffset = EnterOffsetOverride.Get(SlotMotionConfig.EnterOffsetPixels);
+			VisualSlotView.ScreenPosition = InTargetSlotView.ScreenPosition + EnterOffset;
 			VisualSlotView.WidgetPosition = VisualSlotView.ScreenPosition;
 			VisualSlotView.SnappedWidgetPosition = VisualSlotView.ScreenPosition;
 			VisualSlotView.RenderOpacity = FMath::Clamp(SlotMotionConfig.EnterOpacity, 0.0f, 1.0f);
@@ -122,6 +131,13 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotion(
 
 void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotion(
 	const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView)
+{
+	BeginExitMotionWithOffset(InExitTargetSlotView, TOptional<FVector2D>());
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithOffset(
+	const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
+	const TOptional<FVector2D>& ExitOffsetOverride)
 {
 	if (!SlotMotionConfig.bEnabled || SlotMotionConfig.ExitDuration <= 0.0f || !bHasVisualSlotView)
 	{
@@ -137,7 +153,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotion(
 	CurrentSlotView = InExitTargetSlotView;
 	CurrentSlotView.bProjected = false;
 	TargetSlotView = InExitTargetSlotView;
-	TargetSlotView.ScreenPosition = VisualSlotView.ScreenPosition + SlotMotionConfig.ExitOffsetPixels;
+	const FVector2D ExitOffset = ExitOffsetOverride.Get(SlotMotionConfig.ExitOffsetPixels);
+	TargetSlotView.ScreenPosition = VisualSlotView.ScreenPosition + ExitOffset;
 	TargetSlotView.WidgetPosition = TargetSlotView.ScreenPosition;
 	TargetSlotView.SnappedWidgetPosition = TargetSlotView.ScreenPosition;
 	TargetSlotView.RenderOpacity = 0.0f;

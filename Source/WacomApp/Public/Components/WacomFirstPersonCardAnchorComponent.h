@@ -49,6 +49,28 @@ enum class EWacomFirstPersonCardViewportClampMode : uint8
 	AllowOffscreen UMETA(DisplayName = "Allow Offscreen", ToolTip = "不限制到视口内；只要世界点投影成功，就允许 UMG 坐标位于屏幕外。")
 };
 
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardSlotTransitionKind : uint8
+{
+	Default UMETA(DisplayName = "Default", ToolTip = "默认槽位转场；使用通用入场或离场偏移。"),
+	Drawn UMETA(DisplayName = "Drawn", ToolTip = "抽牌进入手牌；默认从手牌下方进入。"),
+	Gained UMETA(DisplayName = "Gained", ToolTip = "战斗中获得卡牌进入手牌；默认从战斗空间方向进入。"),
+	Played UMETA(DisplayName = "Played", ToolTip = "卡牌被打出离开手牌；默认向上离开。"),
+	Discarded UMETA(DisplayName = "Discarded", ToolTip = "卡牌被弃置离开手牌；默认向下离开。")
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardLayerTransitionHint
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FGuid CardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind = EWacomFirstPersonCardSlotTransitionKind::Default;
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardLayerMotionDebugView
 {
@@ -457,6 +479,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Slot Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1600.0", ToolTip = "当卡牌槽目标位置跳变超过该距离时重置视觉过渡，单位为 UMG 布局像素；用于传送、切段或窗口变化时避免慢漂。"))
 	float CardSlotMotionResetDistancePixels = 420.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Slot Motion", meta = (ToolTip = "是否启用事件感知的第一人称卡牌转场；只根据 BattleHUD 提供的表现 hint 改变入场 / 离场方向，不改变战斗规则或命令路径。"))
+	bool bEnableEventAwareCardTransitions = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Slot Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "抽牌进入手牌时相对目标位置的起始偏移，单位为 UMG 布局像素；X 正值向右，Y 正值向下。"))
+	FVector2D DrawnCardEnterOffsetPixels = FVector2D(0.0f, 96.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Slot Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "战斗中获得卡牌进入手牌时相对目标位置的起始偏移，单位为 UMG 布局像素；默认从上方 / 战斗空间方向进入。"))
+	FVector2D GainedCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Slot Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "卡牌被打出时相对当前位置的离场偏移，单位为 UMG 布局像素；默认向上离开手牌。"))
+	FVector2D PlayedCardExitOffsetPixels = FVector2D(0.0f, -120.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Slot Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "卡牌被弃置时相对当前位置的离场偏移，单位为 UMG 布局像素；默认向下离开手牌。"))
+	FVector2D DiscardedCardExitOffsetPixels = FVector2D(0.0f, 120.0f);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "是否在投影、边缘下坠、悬停上浮和等待选目标上浮后，把最终卡牌位置吸附到稳定网格；用于减少 UMG 旋转时的位置闪动。"))
 	bool bEnableCardLayerPixelSnapping = true;
 
@@ -550,6 +587,9 @@ public:
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViews() const;
 
 	void SetRuntimeCardLayerEntries(FName SourceId, const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
+	void SetRuntimeCardLayerTransitionHints(
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
 	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);
 	void ClearRuntimeCardLayerData(FName SourceId);
 
@@ -643,8 +683,12 @@ private:
 	UPROPERTY(Transient)
 	TArray<FWacomFirstPersonCardLayerEntry> RuntimeCardLayerEntries;
 
+	UPROPERTY(Transient)
+	TArray<FWacomFirstPersonCardLayerTransitionHint> RuntimeCardLayerTransitionHints;
+
 	bool bHasRuntimeCardLayerData = false;
 	FName RuntimeCardLayerSourceId = NAME_None;
+	FName RuntimeCardLayerTransitionHintSourceId = NAME_None;
 	FGuid HoveredCardInstanceId;
 
 	AWacomPlayerCharacter* GetOwnerCharacter() const;

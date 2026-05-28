@@ -83,7 +83,26 @@ void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 	SlotWidgets.Reset();
 	OutgoingSlotWidgets.Reset();
 	LastSlots.Reset();
+	PendingTransitionHintsByKey.Reset();
 	LastMotionDebugView = FWacomFirstPersonCardLayerMotionDebugView();
+}
+
+void UWacomFirstPersonCardLayerWidget::SetCardTransitionHints(
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints)
+{
+	PendingTransitionHintsByKey.Reset();
+	for (const FWacomFirstPersonCardLayerTransitionHint& Hint : InHints)
+	{
+		if (!Hint.CardInstanceId.IsValid()
+			|| Hint.TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Default)
+		{
+			continue;
+		}
+
+		PendingTransitionHintsByKey.Add(
+			Hint.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphensLower),
+			Hint.TransitionKind);
+	}
 }
 
 void UWacomFirstPersonCardLayerWidget::SetCardSlots(
@@ -186,6 +205,10 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		{
 			++LastMotionDebugView.ReusedThisUpdate;
 		}
+		const EWacomFirstPersonCardSlotTransitionKind IncomingTransitionKind =
+			PendingTransitionHintsByKey.FindRef(SlotKey);
+		const TOptional<FVector2D> EnterOffsetOverride =
+			GetEnterOffsetOverrideForTransition(IncomingTransitionKind);
 
 		SlotWidget->SetSlotMotionKey(SlotKey);
 		SlotWidget->SetCardViewClass(CardViewClass);
@@ -199,7 +222,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 			&& !SlotWidget->IsExitingForFirstPersonLayer();
 		if (bShouldPlayProjectionExit)
 		{
-			SlotWidget->BeginExitMotion(SlotWidget->GetVisualSlotView());
+			SlotWidget->BeginExitMotionWithOffset(SlotWidget->GetVisualSlotView(), TOptional<FVector2D>());
 		}
 		else if (SlotMotionConfig.bEnabled && SlotWidget->IsExitingForFirstPersonLayer() && !SlotView.bProjected)
 		{
@@ -207,7 +230,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		}
 		else
 		{
-			SlotWidget->BeginSlotMotion(SlotView, bIsNewSlotWidget);
+			SlotWidget->BeginSlotMotionWithEnterOffset(SlotView, bIsNewSlotWidget, EnterOffsetOverride);
 		}
 
 		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(SlotWidget->Slot))
@@ -235,7 +258,11 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		}
 		if (SlotMotionConfig.bEnabled && SlotWidget->GetSlotView().bProjected)
 		{
-			SlotWidget->BeginExitMotion(SlotWidget->GetSlotView());
+			const EWacomFirstPersonCardSlotTransitionKind OutgoingTransitionKind =
+				PendingTransitionHintsByKey.FindRef(SlotWidget->GetSlotMotionKey());
+			const TOptional<FVector2D> ExitOffsetOverride =
+				GetExitOffsetOverrideForTransition(OutgoingTransitionKind);
+			SlotWidget->BeginExitMotionWithOffset(SlotWidget->GetSlotView(), ExitOffsetOverride);
 			if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(SlotWidget->Slot))
 			{
 				CanvasSlot->SetZOrder(SlotWidget->GetSlotView().ZOrder);
@@ -257,6 +284,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 	LastMotionDebugView.UntrackedChildRemovedThisUpdate += RemoveUntrackedSlotChildren();
 	RefreshSlotMotionDebugCounts();
 	ReportSlotMotionDiagnosticsIfNeeded();
+	PendingTransitionHintsByKey.Reset();
 }
 
 void UWacomFirstPersonCardLayerWidget::SetStaticCardSlots(
@@ -445,6 +473,7 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	SlotWidgets.Reset();
 	OutgoingSlotWidgets.Reset();
 	RootCanvas = nullptr;
+	PendingTransitionHintsByKey.Reset();
 	Super::NativeDestruct();
 }
 
@@ -704,6 +733,44 @@ FString UWacomFirstPersonCardLayerWidget::MakeSlotMotionKey(
 		return SlotView.Entry.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphensLower);
 	}
 	return FString::Printf(TEXT("StaticIndex:%d"), SlotView.Index);
+}
+
+TOptional<FVector2D> UWacomFirstPersonCardLayerWidget::GetEnterOffsetOverrideForTransition(
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind) const
+{
+	if (!SlotMotionConfig.bEnableEventAwareTransitions)
+	{
+		return TOptional<FVector2D>();
+	}
+
+	switch (TransitionKind)
+	{
+	case EWacomFirstPersonCardSlotTransitionKind::Drawn:
+		return SlotMotionConfig.DrawnEnterOffsetPixels;
+	case EWacomFirstPersonCardSlotTransitionKind::Gained:
+		return SlotMotionConfig.GainedEnterOffsetPixels;
+	default:
+		return TOptional<FVector2D>();
+	}
+}
+
+TOptional<FVector2D> UWacomFirstPersonCardLayerWidget::GetExitOffsetOverrideForTransition(
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind) const
+{
+	if (!SlotMotionConfig.bEnableEventAwareTransitions)
+	{
+		return TOptional<FVector2D>();
+	}
+
+	switch (TransitionKind)
+	{
+	case EWacomFirstPersonCardSlotTransitionKind::Played:
+		return SlotMotionConfig.PlayedExitOffsetPixels;
+	case EWacomFirstPersonCardSlotTransitionKind::Discarded:
+		return SlotMotionConfig.DiscardedExitOffsetPixels;
+	default:
+		return TOptional<FVector2D>();
+	}
 }
 
 void UWacomFirstPersonCardLayerWidget::HandleSlotClicked(

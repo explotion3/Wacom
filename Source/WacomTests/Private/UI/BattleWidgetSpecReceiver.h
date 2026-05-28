@@ -337,6 +337,23 @@ public:
 		SyncFirstPersonBattleHandLayer(Snapshot);
 	}
 
+	void StoreFirstPersonCardTransitionEventsForTest(const TArray<FBattleEvent>& Events)
+	{
+		StoreFirstPersonCardTransitionEvents(Events);
+	}
+
+	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForTest(
+		const FBattleSnapshot& PreviousSnapshot,
+		const FBattleSnapshot& NextSnapshot) const
+	{
+		return BuildFirstPersonCardTransitionHints(PreviousSnapshot, NextSnapshot);
+	}
+
+	void ClearPendingFirstPersonCardTransitionEventsForTest()
+	{
+		ClearPendingFirstPersonCardTransitionEvents();
+	}
+
 	void ClearFirstPersonBattleHandLayerForTest()
 	{
 		ClearFirstPersonBattleHandLayer();

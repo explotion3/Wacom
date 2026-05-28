@@ -62,6 +62,7 @@ void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(UBattleHUD& HUD)
 			*Event.Tag.ToString());
 	}
 
+	HUD.StoreFirstPersonCardTransitionEvents(Events);
 	AppendBattleEventLogEntries(HUD, Events);
 	HUD.EnqueueBattlePresentationEvents(Events);
 }

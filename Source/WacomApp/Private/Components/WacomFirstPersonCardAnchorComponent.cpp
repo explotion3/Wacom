@@ -425,6 +425,27 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerEntries(
 	bHasRuntimeCardLayerData = true;
 }
 
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionHints(
+	FName SourceId,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints)
+{
+	if (SourceId.IsNone())
+	{
+		return;
+	}
+
+	RuntimeCardLayerTransitionHintSourceId = SourceId;
+	RuntimeCardLayerTransitionHints.Reset(Hints.Num());
+	for (const FWacomFirstPersonCardLayerTransitionHint& Hint : Hints)
+	{
+		if (Hint.CardInstanceId.IsValid()
+			&& Hint.TransitionKind != EWacomFirstPersonCardSlotTransitionKind::Default)
+		{
+			RuntimeCardLayerTransitionHints.Add(Hint);
+		}
+	}
+}
+
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(
 	FName SourceId,
 	const TArray<FWacomCardViewData>& Cards)
@@ -442,6 +463,8 @@ void UWacomFirstPersonCardAnchorComponent::ClearRuntimeCardLayerData(FName Sourc
 	RuntimeCardLayerSourceId = NAME_None;
 	RuntimeCardLayerData.Reset();
 	RuntimeCardLayerEntries.Reset();
+	RuntimeCardLayerTransitionHints.Reset();
+	RuntimeCardLayerTransitionHintSourceId = NAME_None;
 	HoveredCardInstanceId.Invalidate();
 	bHasRuntimeCardLayerData = false;
 	ResetAnchorScreenSmoothing();
@@ -1149,6 +1172,11 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 			MotionConfig.ExitOffsetPixels = CardSlotExitOffsetPixels;
 			MotionConfig.ExitDuration = CardSlotExitDuration;
 			MotionConfig.ResetDistancePixels = CardSlotMotionResetDistancePixels;
+			MotionConfig.bEnableEventAwareTransitions = bEnableEventAwareCardTransitions;
+			MotionConfig.DrawnEnterOffsetPixels = DrawnCardEnterOffsetPixels;
+			MotionConfig.GainedEnterOffsetPixels = GainedCardEnterOffsetPixels;
+			MotionConfig.PlayedExitOffsetPixels = PlayedCardExitOffsetPixels;
+			MotionConfig.DiscardedExitOffsetPixels = DiscardedCardExitOffsetPixels;
 			StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
 			StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
@@ -1168,9 +1196,21 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		MotionConfig.ExitOffsetPixels = CardSlotExitOffsetPixels;
 		MotionConfig.ExitDuration = CardSlotExitDuration;
 		MotionConfig.ResetDistancePixels = CardSlotMotionResetDistancePixels;
+		MotionConfig.bEnableEventAwareTransitions = bEnableEventAwareCardTransitions;
+		MotionConfig.DrawnEnterOffsetPixels = DrawnCardEnterOffsetPixels;
+		MotionConfig.GainedEnterOffsetPixels = GainedCardEnterOffsetPixels;
+		MotionConfig.PlayedExitOffsetPixels = PlayedCardExitOffsetPixels;
+		MotionConfig.DiscardedExitOffsetPixels = DiscardedCardExitOffsetPixels;
 		StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
 		StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
+		if (RuntimeCardLayerTransitionHintSourceId == RuntimeCardLayerSourceId
+			&& RuntimeCardLayerTransitionHints.Num() > 0)
+		{
+			StaticCardLayerWidget->SetCardTransitionHints(RuntimeCardLayerTransitionHints);
+			RuntimeCardLayerTransitionHints.Reset();
+			RuntimeCardLayerTransitionHintSourceId = NAME_None;
+		}
 		StaticCardLayerWidget->SetStaticCardSlots(BuildActiveCardLayerSlotViews());
 	}
 }
@@ -1193,6 +1233,8 @@ void UWacomFirstPersonCardAnchorComponent::RemoveStaticCardLayer()
 		StaticCardLayerWidget->RemoveFromParent();
 		StaticCardLayerWidget = nullptr;
 	}
+	RuntimeCardLayerTransitionHints.Reset();
+	RuntimeCardLayerTransitionHintSourceId = NAME_None;
 	HoveredCardInstanceId.Invalidate();
 }
 
