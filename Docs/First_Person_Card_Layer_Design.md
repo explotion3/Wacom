@@ -192,15 +192,18 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ## 建议实现顺序
 
-### V0-G 当前状态：Anchor + Static Card Layer + Battle Hand Interaction + Hover Detail Provider + Legacy HandPanel Toggle
+### V0-A Render Quality 当前状态：Anchor + Static Card Layer + Battle Hand Interaction + Hover Detail Provider + Legacy HandPanel Toggle
 
-当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、默认关闭的战斗手牌 adapter、默认关闭的 first-person battle hand hover/click 交互原型、first-person hover detail provider，以及默认关闭的 legacy `UHandPanel` 可见性切换。静态层使用 `UWacomCardView` 在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可选地接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 则把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示同一个 `UWacomCardDetailPanel`。V0-G 增加 `BattleHUD::bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive`，只有 first-person layer、interaction 和 runtime battle hand 都有效时才把旧手牌折叠隐藏；旧 `UHandPanel` 仍保留刷新、事件绑定和 fallback 能力。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、默认关闭的战斗手牌 adapter、默认关闭的 first-person battle hand hover/click 交互原型、first-person hover detail provider、默认关闭的 legacy `UHandPanel` 可见性切换，以及 first-person card render quality 基础。静态层使用 `UWacomCardView` 在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可选地接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 则把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示同一个 `UWacomCardDetailPanel`。V0-G 增加 `BattleHUD::bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive`，只有 first-person layer、interaction 和 runtime battle hand 都有效时才把旧手牌折叠隐藏；旧 `UHandPanel` 仍保留刷新、事件绑定和 fallback 能力。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，降低 UMG 整卡旋转时的边缘锯齿、像素断裂和动态抖动。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
 - Shared cursor look 只按配置比例影响 card anchor，默认 yaw 25%、pitch 15%。
 - `bDrawDebugProjection` 默认关闭；开启后在 HUD 上绘制 5 个非交互 debug 点，用于 PIE 验证未来手牌位置。
 - `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。
+- first-person layer 的 `CanvasSlot` 使用 widget-space 投影位置，不再直接使用 raw screen pixel；debug view 同时记录 raw screen position、widget position、snapped widget position 和 viewport scale。
+- `bEnableCardLayerPixelSnapping` 默认开启，最终位置会在 edge drop、pending lift、hover lift 后 snap 到 `CardLayerPixelSnapGrid`，默认 1.0 UMG layout unit。
+- `bClampCardLayerRenderAngle` 默认开启，slot render angle 被限制在 `MaxCardLayerRenderAngleDegrees` 内，默认 4 度；后续扇形表现优先通过位置下坠和 hover/pending 归正继续优化，而不是继续增加旋转角。
 - `BattleHUD::bEnableFirstPersonBattleHandLayerPrototype` 默认关闭；开启后，战斗 HUD 在 snapshot 刷新和 UIState 变化时把真实手牌按顺序转成 `FWacomFirstPersonCardLayerEntry`，并覆盖同一个 first-person card layer 的静态预览。
 - Runtime entry 保留 `CardInstanceId / Zone / bIsHandAnchor / bIsPlayable / bIsPendingTargeting`；`UWacomCardView` 仍只显示卡面，第一人称 layer 用 render transform、opacity 和 ZOrder 表现轻量状态。
 - `bIsPendingTargeting` 的卡会轻微上移、放大并提高 ZOrder；不可用卡继续使用 disabled overlay，并叠加 layer 级透明度；手牌锚点卡只做轻微缩放区分。
@@ -239,8 +242,20 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - 已增加默认关闭的旧手牌隐藏开关，方便 PIE 验证第一人称手牌作为主入口。
    - 旧 `UHandPanel` 不删除、不解绑、不停止刷新；隐藏只改变 visibility，作为 fallback 和对照路径保留。
 
-7. Play focus pose
+7. Render Quality V0-A
+   - 已把卡牌投影从 raw screen pixel 改到 DPI-aware widget-space。
+   - 已加入像素对齐、最大 render angle clamp 和 projection quality debug 字段。
+   - 不改 `WBP_CardView` 结构，不引入 RetainerBox / RenderTarget / Slate 自绘。
+
+8. Render Quality V0-B
+   - 优化扇形布局：减少整体旋转依赖，更多使用边缘下坠、层级、hover / pending 归正。
+   - 修正详情面板跟随 hovered card 和 ZOrder，避免被 first-person 卡牌遮挡。
+
+9. First-person card view polish
+   - 如 V0-A / V0-B 仍不能满足美术标准，再规划 `WBP_FirstPersonCardView`，为第一人称主手牌制定更粗边框、更稳透明边缘和更适合旋转的卡面规范。
+
+10. Play focus pose
    - 在命令 / 事件表现前增加短暂卡牌打出表现位。
 
-8. Run card layer
+11. Run card layer
    - 探索卡牌复用 anchor 和视觉状态机。

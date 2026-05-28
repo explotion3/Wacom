@@ -10,6 +10,7 @@
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Cards/CardDefinition.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardAnchorDebugWidget.h"
@@ -147,8 +148,12 @@ bool UWacomFirstPersonCardAnchorComponent::ProjectCardTransformToScreen(
 	OutProjectedPoint.Index = PointIndex;
 	OutProjectedPoint.WorldLocation = CardTransform.GetLocation();
 
-	FVector2D ScreenPosition = FVector2D::ZeroVector;
-	if (!ProjectWorldLocationForAnchor(CardTransform.GetLocation(), ScreenPosition))
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+	FVector2D RawScreenPosition = FVector2D::ZeroVector;
+	if (!ProjectWorldLocationToWidgetPositionForAnchor(
+		CardTransform.GetLocation(),
+		WidgetPosition,
+		RawScreenPosition))
 	{
 		return false;
 	}
@@ -161,14 +166,30 @@ bool UWacomFirstPersonCardAnchorComponent::ProjectCardTransformToScreen(
 		return false;
 	}
 
-	const FVector2D UnclampedPosition = ScreenPosition;
+	const float ViewportScale = FMath::Max(0.01f, GetViewportScaleForAnchor());
+	const FVector2D WidgetViewportSize = ViewportSize / ViewportScale;
+	const FVector2D UnclampedPosition = WidgetPosition;
 	const float Padding = FMath::Max(0.0f, ProjectionPadding);
-	ScreenPosition.X = FMath::Clamp(ScreenPosition.X, Padding, FMath::Max(Padding, ViewportSize.X - Padding));
-	ScreenPosition.Y = FMath::Clamp(ScreenPosition.Y, Padding, FMath::Max(Padding, ViewportSize.Y - Padding));
+	WidgetPosition.X = FMath::Clamp(
+		WidgetPosition.X,
+		Padding,
+		FMath::Max(Padding, WidgetViewportSize.X - Padding));
+	WidgetPosition.Y = FMath::Clamp(
+		WidgetPosition.Y,
+		Padding,
+		FMath::Max(Padding, WidgetViewportSize.Y - Padding));
 
-	OutProjectedPoint.ScreenPosition = ScreenPosition;
+	bool bPixelSnapped = false;
+	const FVector2D SnappedPosition = SnapCardLayerPosition(WidgetPosition, bPixelSnapped);
+
+	OutProjectedPoint.RawScreenPosition = RawScreenPosition;
+	OutProjectedPoint.WidgetPosition = WidgetPosition;
+	OutProjectedPoint.SnappedWidgetPosition = SnappedPosition;
+	OutProjectedPoint.ScreenPosition = SnappedPosition;
+	OutProjectedPoint.ViewportScale = ViewportScale;
 	OutProjectedPoint.bProjected = true;
-	OutProjectedPoint.bClamped = !UnclampedPosition.Equals(ScreenPosition, KINDA_SMALL_NUMBER);
+	OutProjectedPoint.bClamped = !UnclampedPosition.Equals(WidgetPosition, KINDA_SMALL_NUMBER);
+	OutProjectedPoint.bPixelSnapped = bPixelSnapped;
 	return true;
 }
 
@@ -195,6 +216,29 @@ bool UWacomFirstPersonCardAnchorComponent::ProjectWorldLocationForAnchor(
 	return PC && PC->ProjectWorldLocationToScreen(WorldLocation, OutScreenPosition, false);
 }
 
+bool UWacomFirstPersonCardAnchorComponent::ProjectWorldLocationToWidgetPositionForAnchor(
+	const FVector& WorldLocation,
+	FVector2D& OutWidgetPosition,
+	FVector2D& OutRawScreenPosition) const
+{
+	APlayerController* PC = GetOwnerPlayerController();
+	if (!PC)
+	{
+		return false;
+	}
+
+	if (!ProjectWorldLocationForAnchor(WorldLocation, OutRawScreenPosition))
+	{
+		return false;
+	}
+
+	return UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(
+		PC,
+		WorldLocation,
+		OutWidgetPosition,
+		false);
+}
+
 bool UWacomFirstPersonCardAnchorComponent::GetViewportSizeForAnchor(FVector2D& OutViewportSize) const
 {
 	const APlayerController* PC = GetOwnerPlayerController();
@@ -208,6 +252,18 @@ bool UWacomFirstPersonCardAnchorComponent::GetViewportSizeForAnchor(FVector2D& O
 	PC->GetViewportSize(ViewportSizeX, ViewportSizeY);
 	OutViewportSize = FVector2D(ViewportSizeX, ViewportSizeY);
 	return ViewportSizeX > 0 && ViewportSizeY > 0;
+}
+
+float UWacomFirstPersonCardAnchorComponent::GetViewportScaleForAnchor() const
+{
+	APlayerController* PC = GetOwnerPlayerController();
+	if (!PC)
+	{
+		return 1.0f;
+	}
+
+	const float ViewportScale = UWidgetLayoutLibrary::GetViewportScale(PC);
+	return ViewportScale > 0.0f ? ViewportScale : 1.0f;
 }
 
 bool UWacomFirstPersonCardAnchorComponent::CanCreateStaticCardLayerForAnchor(
@@ -369,7 +425,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 
 		const float CenterOffset =
 			static_cast<float>(Index) - (static_cast<float>(ClampedCount - 1) * 0.5f);
-		Slot.RenderAngleDegrees = CenterOffset * FanYawDegrees;
+		Slot.RenderAngleDegrees = ClampCardLayerRenderAngle(CenterOffset * FanYawDegrees);
 		if (Slot.Entry.bIsHandAnchor)
 		{
 			Slot.RenderScale *= FMath::Max(0.01f, HandAnchorScale);
@@ -388,18 +444,25 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		FWacomFirstPersonCardProjectedPoint Point;
 		if (ProjectCardTransformToScreen(ComputeCardTransform(ClampedCount, Index), Point, Index))
 		{
-			Slot.ScreenPosition = Point.ScreenPosition;
+			FVector2D FinalPosition = Point.WidgetPosition;
+			Slot.RawScreenPosition = Point.RawScreenPosition;
+			Slot.ViewportScale = Point.ViewportScale;
 			const float MaxAbsCenterOffset = FMath::Max(1.0f, static_cast<float>(ClampedCount - 1) * 0.5f);
 			const float NormalizedEdgeDistance = FMath::Abs(CenterOffset) / MaxAbsCenterOffset;
-			Slot.ScreenPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, StaticCardEdgeDropPixels);
+			FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, StaticCardEdgeDropPixels);
 			if (Slot.Entry.bIsPendingTargeting)
 			{
-				Slot.ScreenPosition.Y -= FMath::Max(0.0f, PendingTargetingLiftPixels);
+				FinalPosition.Y -= FMath::Max(0.0f, PendingTargetingLiftPixels);
 			}
 			if (Slot.Entry.CardInstanceId.IsValid() && Slot.Entry.CardInstanceId == HoveredCardInstanceId)
 			{
-				Slot.ScreenPosition.Y -= FMath::Max(0.0f, HoverLiftPixels);
+				FinalPosition.Y -= FMath::Max(0.0f, HoverLiftPixels);
 			}
+			bool bPixelSnapped = false;
+			Slot.WidgetPosition = FinalPosition;
+			Slot.SnappedWidgetPosition = SnapCardLayerPosition(FinalPosition, bPixelSnapped);
+			Slot.ScreenPosition = Slot.SnappedWidgetPosition;
+			Slot.bPixelSnapped = bPixelSnapped;
 			Slot.bProjected = Point.bProjected;
 			Slot.bClamped = Point.bClamped;
 		}
@@ -437,12 +500,17 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnab
 FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 {
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s"),
+		TEXT("FirstPersonCardAnchor Mode=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f"),
 		*AnchorModeToString(CurrentMode),
 		bHasValidAnchor ? TEXT("true") : TEXT("false"),
 		*CurrentAnchorTransform.ToHumanReadableString(),
 		*CurrentLookOffsetUsed.ToString(),
-		*LastFallbackReason.ToString());
+		*LastFallbackReason.ToString(),
+		bEnableCardLayerPixelSnapping ? TEXT("true") : TEXT("false"),
+		CardLayerPixelSnapGrid,
+		bClampCardLayerRenderAngle ? TEXT("true") : TEXT("false"),
+		MaxCardLayerRenderAngleDegrees,
+		GetViewportScaleForAnchor());
 }
 
 AWacomPlayerCharacter* UWacomFirstPersonCardAnchorComponent::GetOwnerCharacter() const
@@ -555,6 +623,35 @@ FWacomCardViewData UWacomFirstPersonCardAnchorComponent::BuildStaticCardViewData
 	Data.Value = CardIndex + 1;
 	Data.bShowValue = true;
 	return Data;
+}
+
+FVector2D UWacomFirstPersonCardAnchorComponent::SnapCardLayerPosition(
+	FVector2D Position,
+	bool& bOutPixelSnapped) const
+{
+	bOutPixelSnapped = false;
+	if (!bEnableCardLayerPixelSnapping)
+	{
+		return Position;
+	}
+
+	const float Grid = FMath::Max(0.01f, CardLayerPixelSnapGrid);
+	FVector2D SnappedPosition(
+		FMath::RoundToFloat(Position.X / Grid) * Grid,
+		FMath::RoundToFloat(Position.Y / Grid) * Grid);
+	bOutPixelSnapped = !SnappedPosition.Equals(Position, KINDA_SMALL_NUMBER);
+	return SnappedPosition;
+}
+
+float UWacomFirstPersonCardAnchorComponent::ClampCardLayerRenderAngle(float AngleDegrees) const
+{
+	if (!bClampCardLayerRenderAngle)
+	{
+		return AngleDegrees;
+	}
+
+	const float MaxAbsAngle = FMath::Max(0.0f, MaxCardLayerRenderAngleDegrees);
+	return FMath::Clamp(AngleDegrees, -MaxAbsAngle, MaxAbsAngle);
 }
 
 void UWacomFirstPersonCardAnchorComponent::UpdateDebugWidget()

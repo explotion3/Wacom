@@ -132,7 +132,7 @@ Worker 任务必须包含：
 - Run/UI 长生命周期界面优先通过 ViewModel/Provider 获取数据。
 - Widget 生命周期要考虑 CommonUI 的 Activate/Deactivate，不要只依赖 Construct。
 - 新 UI 控件应明确：数据来源、刷新时机、输入焦点、反订阅时机。
-- 暴露给编辑器的 UI / 调试 / 数值参数必须写清 `meta` 注释：`ToolTip` 说明用途；数值型参数需要尽量提供 `ClampMin`、`ClampMax` 或 `UIMin`、`UIMax`，并在说明中写明单位、作用范围和是否影响布局。
+- 暴露给编辑器的 UI / 调试 / 数值参数必须写清 `meta` 注释：`ToolTip` 说明用途，且 `ToolTip` 文案默认使用中文；数值型参数需要尽量提供 `ClampMin`、`ClampMax` 或 `UIMin`、`UIMax`，并在说明中写明单位、作用范围和是否影响布局。
 
 ## 测试与验证
 

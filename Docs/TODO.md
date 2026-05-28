@@ -88,6 +88,11 @@ tags:
   - 归属：UI / 战斗表现
   - 说明：V0-F hover 详情流程已可用；后续需要让详情面板更贴近 hovered card，并提高 ZOrder，避免被其他 first-person 卡牌遮挡。
 
+- [ ] **First-person card render quality：扇形布局 V0-B 与专用卡面评估**
+  - 状态：`Ready: V0-A 已补 DPI-aware projection / pixel snapping / angle clamp`
+  - 归属：UI / 战斗表现
+  - 说明：如果美术仍反馈旋转卡牌边缘锯齿或细线断裂，下一步优先减少整体 UMG 旋转依赖，用边缘下坠、层级和 hover/pending 归正重做扇形表现；必要时再规划 `WBP_FirstPersonCardView`，不要回退到 3D Presenter / RenderTarget 路线。
+
 - [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
   - 状态：`Blocked: Demo 范围确认`
   - 归属：Run / App

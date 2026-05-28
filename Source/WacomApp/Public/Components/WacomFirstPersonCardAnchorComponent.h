@@ -39,13 +39,28 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 	FVector WorldLocation = FVector::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D RawScreenPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D SnappedWidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D ScreenPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float ViewportScale = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bProjected = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bClamped = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bPixelSnapped = false;
 };
 
 USTRUCT(BlueprintType)
@@ -111,6 +126,15 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	FVector2D ScreenPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D RawScreenPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D SnappedWidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float RenderAngleDegrees = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -123,10 +147,16 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	int32 ZOrder = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float ViewportScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bProjected = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bClamped = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bPixelSnapped = false;
 };
 
 /**
@@ -167,6 +197,18 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0", ToolTip = "Screen-space padding, in pixels, used when clamping projected debug card points to the viewport."))
 	float ProjectionPadding = 24.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "Snaps the final first-person card layer widget-space position to a stable grid after projection, edge drop, hover lift and pending lift. On by default to reduce UMG rotation shimmer."))
+	bool bEnableCardLayerPixelSnapping = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.01", UIMin = "0.25", UIMax = "8.0", ToolTip = "Widget-space grid size used when bEnableCardLayerPixelSnapping is enabled. 1.0 snaps to whole UMG layout units."))
+	float CardLayerPixelSnapGrid = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "Clamps first-person card layer UMG render rotation after fan angle calculation. On by default because rotated high-contrast UMG card art aliases quickly."))
+	bool bClampCardLayerRenderAngle = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "20.0", Units = "deg", ToolTip = "Maximum absolute UMG render angle for first-person card slots when bClampCardLayerRenderAngle is enabled."))
+	float MaxCardLayerRenderAngleDegrees = 4.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "Draws five non-interactive HUD debug points for the first-person card anchor projection. Development-only visual aid; off by default."))
 	bool bDrawDebugProjection = false;
@@ -290,7 +332,12 @@ protected:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	virtual bool ResolveCameraTransformForAnchor(FTransform& OutCameraTransform) const;
 	virtual bool ProjectWorldLocationForAnchor(const FVector& WorldLocation, FVector2D& OutScreenPosition) const;
+	virtual bool ProjectWorldLocationToWidgetPositionForAnchor(
+		const FVector& WorldLocation,
+		FVector2D& OutWidgetPosition,
+		FVector2D& OutRawScreenPosition) const;
 	virtual bool GetViewportSizeForAnchor(FVector2D& OutViewportSize) const;
+	virtual float GetViewportScaleForAnchor() const;
 	virtual bool CanCreateStaticCardLayerForAnchor(APlayerController* PlayerController) const;
 	virtual UWacomFirstPersonCardLayerWidget* CreateStaticCardLayerWidgetForAnchor(
 		APlayerController* PlayerController,
@@ -329,6 +376,8 @@ private:
 	bool ResolveBaseAnchor(FTransform& OutBaseTransform, EWacomFirstPersonCardAnchorMode& OutMode, FName& OutFallbackReason) const;
 	FWacomCardViewData BuildStaticCardViewData(int32 CardIndex) const;
 	TArray<FWacomFirstPersonCardLayerEntry> BuildStaticCardLayerEntries() const;
+	FVector2D SnapCardLayerPosition(FVector2D Position, bool& bOutPixelSnapped) const;
+	float ClampCardLayerRenderAngle(float AngleDegrees) const;
 	static TArray<FWacomFirstPersonCardLayerEntry> BuildCardLayerEntriesFromData(
 		const TArray<FWacomCardViewData>& CardData);
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildCardSlotViewsFromEntries(

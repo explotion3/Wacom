@@ -16,6 +16,7 @@ public:
 	bool bProjectionSucceeds = true;
 	bool bAllowStaticLayerCreation = true;
 	FVector2D ProbeViewportSize = FVector2D(1920.0f, 1080.0f);
+	float ProbeViewportScale = 1.0f;
 	FTransform ProbeCameraTransform = FTransform(
 		FRotator::ZeroRotator,
 		FVector(100.0f, 200.0f, 300.0f),
@@ -75,9 +76,29 @@ protected:
 		return true;
 	}
 
+	virtual bool ProjectWorldLocationToWidgetPositionForAnchor(
+		const FVector& WorldLocation,
+		FVector2D& OutWidgetPosition,
+		FVector2D& OutRawScreenPosition) const override
+	{
+		if (!ProjectWorldLocationForAnchor(WorldLocation, OutRawScreenPosition))
+		{
+			return false;
+		}
+
+		const float Scale = ProbeViewportScale > 0.0f ? ProbeViewportScale : 1.0f;
+		OutWidgetPosition = OutRawScreenPosition / Scale;
+		return true;
+	}
+
 	virtual bool GetViewportSizeForAnchor(FVector2D& OutViewportSize) const override
 	{
 		OutViewportSize = ProbeViewportSize;
 		return ProbeViewportSize.X > 0.0f && ProbeViewportSize.Y > 0.0f;
+	}
+
+	virtual float GetViewportScaleForAnchor() const override
+	{
+		return ProbeViewportScale > 0.0f ? ProbeViewportScale : 1.0f;
 	}
 };

@@ -45,8 +45,7 @@ int32 UWacomFirstPersonCardAnchorDebugWidget::NativePaint(
 			continue;
 		}
 
-		const FVector2D LocalPosition =
-			AllottedGeometry.AbsoluteToLocal(Point.ScreenPosition) - (DebugPointSize * 0.5f);
+		const FVector2D LocalPosition = Point.ScreenPosition - (DebugPointSize * 0.5f);
 		const FPaintGeometry PaintGeometry =
 			AllottedGeometry.ToPaintGeometry(DebugPointSize, FSlateLayoutTransform(LocalPosition));
 		const FLinearColor PointColor = (Index == CenterIndex) ? CenterPointColor : SidePointColor;
