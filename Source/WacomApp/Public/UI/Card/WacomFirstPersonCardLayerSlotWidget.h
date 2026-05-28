@@ -12,6 +12,36 @@ class UWacomCardView;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float MotionSpeed = 26.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float OpacitySpeed = 18.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D EnterOffsetPixels = FVector2D(0.0f, 48.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float EnterOpacity = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D ExitOffsetPixels = FVector2D(0.0f, 36.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float ExitDuration = 0.16f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float ResetDistancePixels = 420.0f;
+};
+
 /**
  * Single visual card slot inside the first-person card layer.
  *
@@ -26,12 +56,22 @@ class WACOMAPP_API UWacomFirstPersonCardLayerSlotWidget : public UUserWidget
 public:
 	void SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass);
 	void SetSlotView(const FWacomFirstPersonCardLayerSlotView& InSlotView);
+	void SetSlotViewImmediate(const FWacomFirstPersonCardLayerSlotView& InSlotView);
+	void BeginSlotMotion(const FWacomFirstPersonCardLayerSlotView& InTargetSlotView, bool bTreatAsNewSlot);
+	void BeginExitMotion(const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView);
+	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	UWacomCardView* GetCardView() const { return CardView; }
 
 	const FWacomFirstPersonCardLayerSlotView& GetSlotView() const { return CurrentSlotView; }
+	const FWacomFirstPersonCardLayerSlotView& GetVisualSlotView() const { return VisualSlotView; }
+	const FString& GetSlotMotionKey() const { return SlotMotionKey; }
+	void SetSlotMotionKey(const FString& InKey) { SlotMotionKey = InKey; }
+
+	bool IsExitingForFirstPersonLayer() const { return bIsExitingForFirstPersonLayer; }
+	bool IsExitMotionFinished() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsHoveredForFirstPersonLayer() const { return bIsHoveredForFirstPersonLayer; }
@@ -43,6 +83,7 @@ public:
 	bool RequestHoverForTest();
 	void RequestUnhoverForTest();
 	bool RequestClickForTest();
+	void TickSlotMotionForTest(float DeltaTime);
 #endif
 
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardClickedNative;
@@ -52,6 +93,7 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
@@ -69,13 +111,33 @@ private:
 	UPROPERTY(Transient)
 	FWacomFirstPersonCardLayerSlotView CurrentSlotView;
 
+	UPROPERTY(Transient)
+	FWacomFirstPersonCardLayerSlotView TargetSlotView;
+
+	UPROPERTY(Transient)
+	FWacomFirstPersonCardLayerSlotView VisualSlotView;
+
+	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
+	FString SlotMotionKey;
+	float ExitMotionElapsedSeconds = 0.0f;
 	bool bCardLayerInteractionEnabled = false;
 	bool bIsHoveredForFirstPersonLayer = false;
+	bool bHasVisualSlotView = false;
+	bool bIsExitingForFirstPersonLayer = false;
+	bool bWantsSlotMotionTick = false;
 
 	void EnsureCardView();
 	void ApplyCurrentSlotView();
+	void ApplyVisualSlotView();
+	void ApplySlotViewToWidget(const FWacomFirstPersonCardLayerSlotView& SlotView);
 	bool CanInteractWithCurrentSlot() const;
 	bool CanClickCurrentSlot() const;
 	void SetHoveredForFirstPersonLayer(bool bHovered);
 	void UpdateVisibilityForInteractionMode();
+	void SetTickEnabledForMotion(bool bEnabled);
+	static FWacomFirstPersonCardLayerSlotView LerpSlotView(
+		const FWacomFirstPersonCardLayerSlotView& From,
+		const FWacomFirstPersonCardLayerSlotView& To,
+		float MotionAlpha,
+		float OpacityAlpha);
 };

@@ -441,6 +441,10 @@ void UWacomFirstPersonCardAnchorComponent::ClearRuntimeCardLayerData(FName Sourc
 	HoveredCardInstanceId.Invalidate();
 	bHasRuntimeCardLayerData = false;
 	ResetAnchorScreenSmoothing();
+	if (StaticCardLayerWidget)
+	{
+		StaticCardLayerWidget->ClearSlotMotionState();
+	}
 }
 
 TArray<FWacomFirstPersonCardLayerEntry> UWacomFirstPersonCardAnchorComponent::BuildStaticCardLayerEntries() const
@@ -672,6 +676,10 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnab
 	if (!bEnableBattleHandInteractionPrototype)
 	{
 		HoveredCardInstanceId.Invalidate();
+		if (StaticCardLayerWidget)
+		{
+			StaticCardLayerWidget->ClearSlotMotionState();
+		}
 	}
 	if (StaticCardLayerWidget)
 	{
@@ -1124,6 +1132,16 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		{
 			StaticCardLayerWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 			StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
+			FWacomFirstPersonCardSlotMotionConfig MotionConfig;
+			MotionConfig.bEnabled = bEnableCardSlotMotion;
+			MotionConfig.MotionSpeed = CardSlotMotionSpeed;
+			MotionConfig.OpacitySpeed = CardSlotOpacitySpeed;
+			MotionConfig.EnterOffsetPixels = CardSlotEnterOffsetPixels;
+			MotionConfig.EnterOpacity = CardSlotEnterOpacity;
+			MotionConfig.ExitOffsetPixels = CardSlotExitOffsetPixels;
+			MotionConfig.ExitDuration = CardSlotExitDuration;
+			MotionConfig.ResetDistancePixels = CardSlotMotionResetDistancePixels;
+			StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
 			BindStaticCardLayerWidget(StaticCardLayerWidget);
 			AddStaticCardLayerWidgetToViewportForAnchor(StaticCardLayerWidget, StaticCardLayerZOrder);
@@ -1132,6 +1150,16 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 
 	if (StaticCardLayerWidget)
 	{
+		FWacomFirstPersonCardSlotMotionConfig MotionConfig;
+		MotionConfig.bEnabled = bEnableCardSlotMotion;
+		MotionConfig.MotionSpeed = CardSlotMotionSpeed;
+		MotionConfig.OpacitySpeed = CardSlotOpacitySpeed;
+		MotionConfig.EnterOffsetPixels = CardSlotEnterOffsetPixels;
+		MotionConfig.EnterOpacity = CardSlotEnterOpacity;
+		MotionConfig.ExitOffsetPixels = CardSlotExitOffsetPixels;
+		MotionConfig.ExitDuration = CardSlotExitDuration;
+		MotionConfig.ResetDistancePixels = CardSlotMotionResetDistancePixels;
+		StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
 		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 		StaticCardLayerWidget->SetStaticCardSlots(BuildActiveCardLayerSlotViews());
 	}
@@ -1150,6 +1178,7 @@ void UWacomFirstPersonCardAnchorComponent::RemoveStaticCardLayer()
 {
 	if (StaticCardLayerWidget)
 	{
+		StaticCardLayerWidget->ClearSlotMotionState();
 		UnbindStaticCardLayerWidget(StaticCardLayerWidget);
 		StaticCardLayerWidget->RemoveFromParent();
 		StaticCardLayerWidget = nullptr;

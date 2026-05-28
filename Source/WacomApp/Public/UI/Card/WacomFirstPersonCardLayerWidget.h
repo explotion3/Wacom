@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "WacomFirstPersonCardLayerWidget.generated.h"
 
 class UCanvasPanel;
@@ -25,12 +26,17 @@ class WACOMAPP_API UWacomFirstPersonCardLayerWidget : public UUserWidget
 
 public:
 	void SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass);
+	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
+	void ClearSlotMotionState();
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetStaticCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	int32 GetCardViewCount() const { return SlotWidgets.Num(); }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
+	int32 GetOutgoingCardViewCount() const { return OutgoingSlotWidgets.Num(); }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	UWacomCardView* GetCardViewAt(int32 Index) const;
@@ -53,6 +59,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsCardLayerInteractionEnabled() const { return bCardLayerInteractionEnabled; }
 
+#if WITH_AUTOMATION_TESTS
+	void TickSlotMotionForTest(float DeltaTime);
+	UWacomFirstPersonCardLayerSlotWidget* FindSlotWidgetByKeyForTest(const FString& SlotKey) const;
+	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
+#endif
+
 	FWacomFirstPersonCardLayerInteractionNative OnCardClickedNative;
 	FWacomFirstPersonCardLayerInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerInteractionNative OnCardUnhoveredNative;
@@ -61,6 +73,7 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 private:
 	UPROPERTY(Transient)
@@ -70,17 +83,24 @@ private:
 	TArray<TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>> SlotWidgets;
 
 	UPROPERTY(Transient)
+	TArray<TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>> OutgoingSlotWidgets;
+
+	UPROPERTY(Transient)
 	TArray<FWacomFirstPersonCardLayerSlotView> LastSlots;
 
 	UPROPERTY(Transient)
 	TSubclassOf<UWacomCardView> CardViewClass;
 
+	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	bool bCardLayerInteractionEnabled = false;
 
-	void EnsureSlotWidgetCount(int32 DesiredCount);
-	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget(int32 Index);
+	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
 	void ApplyLayerVisibility();
 	void BindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
+	void UnbindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
+	void RemoveOutgoingFinishedSlots();
+	void RemoveUntrackedSlotChildren();
+	FString MakeSlotMotionKey(const FWacomFirstPersonCardLayerSlotView& SlotView) const;
 	void HandleSlotClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);

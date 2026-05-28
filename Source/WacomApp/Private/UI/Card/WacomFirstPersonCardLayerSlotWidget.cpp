@@ -3,10 +3,19 @@
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "InputCoreTypes.h"
 #include "UI/Card/WacomCardView.h"
+
+namespace
+{
+	float ComputeInterpAlpha(float Speed, float DeltaTime)
+	{
+		return Speed <= 0.0f ? 1.0f : FMath::Clamp(DeltaTime * Speed, 0.0f, 1.0f);
+	}
+}
 
 void UWacomFirstPersonCardLayerSlotWidget::SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass)
 {
@@ -33,6 +42,12 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardViewClass(TSubclassOf<UWacomCa
 
 void UWacomFirstPersonCardLayerSlotWidget::SetSlotView(const FWacomFirstPersonCardLayerSlotView& InSlotView)
 {
+	BeginSlotMotion(InSlotView, !bHasVisualSlotView);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
+	const FWacomFirstPersonCardLayerSlotView& InSlotView)
+{
 	if (bIsHoveredForFirstPersonLayer
 		&& (CurrentSlotView.Entry.CardInstanceId != InSlotView.Entry.CardInstanceId
 			|| !InSlotView.bProjected
@@ -42,7 +57,117 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotView(const FWacomFirstPersonCa
 	}
 
 	CurrentSlotView = InSlotView;
+	TargetSlotView = InSlotView;
+	VisualSlotView = InSlotView;
+	bHasVisualSlotView = true;
+	bIsExitingForFirstPersonLayer = false;
+	ExitMotionElapsedSeconds = 0.0f;
 	ApplyCurrentSlotView();
+	ApplyVisualSlotView();
+	SetTickEnabledForMotion(false);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotion(
+	const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
+	bool bTreatAsNewSlot)
+{
+	if (!SlotMotionConfig.bEnabled)
+	{
+		SetSlotViewImmediate(InTargetSlotView);
+		return;
+	}
+
+	if (bIsHoveredForFirstPersonLayer
+		&& (CurrentSlotView.Entry.CardInstanceId != InTargetSlotView.Entry.CardInstanceId
+			|| !InTargetSlotView.bProjected
+			|| !InTargetSlotView.Entry.CardInstanceId.IsValid()))
+	{
+		SetHoveredForFirstPersonLayer(false);
+	}
+
+	const bool bCanReuseVisual =
+		bHasVisualSlotView
+		&& !bTreatAsNewSlot
+		&& CurrentSlotView.Entry.CardInstanceId == InTargetSlotView.Entry.CardInstanceId;
+	const float JumpDistance = bCanReuseVisual
+		? FVector2D::Distance(VisualSlotView.ScreenPosition, InTargetSlotView.ScreenPosition)
+		: 0.0f;
+	const bool bLargeJump =
+		bCanReuseVisual
+		&& SlotMotionConfig.ResetDistancePixels > 0.0f
+		&& JumpDistance > SlotMotionConfig.ResetDistancePixels;
+
+	CurrentSlotView = InTargetSlotView;
+	TargetSlotView = InTargetSlotView;
+	bIsExitingForFirstPersonLayer = false;
+	ExitMotionElapsedSeconds = 0.0f;
+	ApplyCurrentSlotView();
+
+	if (!bCanReuseVisual || bLargeJump)
+	{
+		VisualSlotView = InTargetSlotView;
+		if (bTreatAsNewSlot && InTargetSlotView.bProjected)
+		{
+			VisualSlotView.ScreenPosition = InTargetSlotView.ScreenPosition + SlotMotionConfig.EnterOffsetPixels;
+			VisualSlotView.WidgetPosition = VisualSlotView.ScreenPosition;
+			VisualSlotView.SnappedWidgetPosition = VisualSlotView.ScreenPosition;
+			VisualSlotView.RenderOpacity = FMath::Clamp(SlotMotionConfig.EnterOpacity, 0.0f, 1.0f);
+		}
+		bHasVisualSlotView = true;
+	}
+
+	ApplyVisualSlotView();
+	SetTickEnabledForMotion(true);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotion(
+	const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView)
+{
+	if (!SlotMotionConfig.bEnabled || SlotMotionConfig.ExitDuration <= 0.0f || !bHasVisualSlotView)
+	{
+		SetHoveredForFirstPersonLayer(false);
+		bIsExitingForFirstPersonLayer = true;
+		ExitMotionElapsedSeconds = SlotMotionConfig.ExitDuration;
+		SetVisibility(ESlateVisibility::Collapsed);
+		SetTickEnabledForMotion(false);
+		return;
+	}
+
+	SetHoveredForFirstPersonLayer(false);
+	CurrentSlotView = InExitTargetSlotView;
+	CurrentSlotView.bProjected = false;
+	TargetSlotView = InExitTargetSlotView;
+	TargetSlotView.ScreenPosition = VisualSlotView.ScreenPosition + SlotMotionConfig.ExitOffsetPixels;
+	TargetSlotView.WidgetPosition = TargetSlotView.ScreenPosition;
+	TargetSlotView.SnappedWidgetPosition = TargetSlotView.ScreenPosition;
+	TargetSlotView.RenderOpacity = 0.0f;
+	TargetSlotView.bProjected = VisualSlotView.bProjected;
+	bIsExitingForFirstPersonLayer = true;
+	ExitMotionElapsedSeconds = 0.0f;
+	ApplyCurrentSlotView();
+	ApplyVisualSlotView();
+	SetTickEnabledForMotion(true);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::SetSlotMotionConfig(
+	const FWacomFirstPersonCardSlotMotionConfig& InConfig)
+{
+	SlotMotionConfig = InConfig;
+	SlotMotionConfig.MotionSpeed = FMath::Max(0.0f, SlotMotionConfig.MotionSpeed);
+	SlotMotionConfig.OpacitySpeed = FMath::Max(0.0f, SlotMotionConfig.OpacitySpeed);
+	SlotMotionConfig.EnterOpacity = FMath::Clamp(SlotMotionConfig.EnterOpacity, 0.0f, 1.0f);
+	SlotMotionConfig.ExitDuration = FMath::Max(0.0f, SlotMotionConfig.ExitDuration);
+	SlotMotionConfig.ResetDistancePixels = FMath::Max(0.0f, SlotMotionConfig.ResetDistancePixels);
+	if (!SlotMotionConfig.bEnabled && bHasVisualSlotView)
+	{
+		SetSlotViewImmediate(TargetSlotView);
+	}
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::IsExitMotionFinished() const
+{
+	return bIsExitingForFirstPersonLayer
+		&& ExitMotionElapsedSeconds >= FMath::Max(0.0f, SlotMotionConfig.ExitDuration);
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::SetCardLayerInteractionEnabled(bool bEnabled)
@@ -88,12 +213,63 @@ TSharedRef<SWidget> UWacomFirstPersonCardLayerSlotWidget::RebuildWidget()
 void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 {
 	SetHoveredForFirstPersonLayer(false);
+	SetTickEnabledForMotion(false);
 	OnCardClickedNative.Clear();
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
 	CardView = nullptr;
 	RootOverlay = nullptr;
 	Super::NativeDestruct();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
+	const FGeometry& MyGeometry,
+	float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (!bWantsSlotMotionTick)
+	{
+		return;
+	}
+	if (!bHasVisualSlotView)
+	{
+		SetTickEnabledForMotion(false);
+		return;
+	}
+
+	if (bIsExitingForFirstPersonLayer)
+	{
+		ExitMotionElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
+	}
+
+	const float MotionAlpha = ComputeInterpAlpha(SlotMotionConfig.MotionSpeed, InDeltaTime);
+	const float OpacityAlpha = ComputeInterpAlpha(SlotMotionConfig.OpacitySpeed, InDeltaTime);
+	VisualSlotView = LerpSlotView(VisualSlotView, TargetSlotView, MotionAlpha, OpacityAlpha);
+	ApplyVisualSlotView();
+
+	const bool bNearTarget =
+		FVector2D::Distance(VisualSlotView.ScreenPosition, TargetSlotView.ScreenPosition) <= 0.1f
+		&& FMath::Abs(VisualSlotView.RenderAngleDegrees - TargetSlotView.RenderAngleDegrees) <= 0.05f
+		&& FMath::Abs(VisualSlotView.RenderScale - TargetSlotView.RenderScale) <= 0.001f
+		&& FMath::Abs(VisualSlotView.RenderOpacity - TargetSlotView.RenderOpacity) <= 0.01f;
+	if (bNearTarget)
+	{
+		VisualSlotView = TargetSlotView;
+		ApplyVisualSlotView();
+	}
+
+	if (IsExitMotionFinished())
+	{
+		VisualSlotView.bProjected = false;
+		ApplyVisualSlotView();
+		SetTickEnabledForMotion(false);
+		return;
+	}
+
+	if (bNearTarget && !bIsExitingForFirstPersonLayer)
+	{
+		SetTickEnabledForMotion(false);
+	}
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseEnter(
@@ -186,6 +362,34 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyCurrentSlotView()
 	UpdateVisibilityForInteractionMode();
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::ApplyVisualSlotView()
+{
+	if (!bHasVisualSlotView)
+	{
+		return;
+	}
+	ApplySlotViewToWidget(VisualSlotView);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Slot))
+	{
+		CanvasSlot->SetAutoSize(true);
+		CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+		CanvasSlot->SetPosition(SlotView.ScreenPosition);
+		CanvasSlot->SetZOrder(CurrentSlotView.ZOrder);
+	}
+	SetRenderOpacity(FMath::Clamp(SlotView.RenderOpacity, 0.0f, 1.0f));
+	SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+	FWidgetTransform CardRenderTransform;
+	CardRenderTransform.Scale = FVector2D(FMath::Max(0.01f, SlotView.RenderScale));
+	CardRenderTransform.Angle = SlotView.RenderAngleDegrees;
+	SetRenderTransform(CardRenderTransform);
+	UpdateVisibilityForInteractionMode();
+}
+
 bool UWacomFirstPersonCardLayerSlotWidget::CanInteractWithCurrentSlot() const
 {
 	return bCardLayerInteractionEnabled
@@ -225,6 +429,11 @@ bool UWacomFirstPersonCardLayerSlotWidget::RequestClickForTest()
 	OnCardClickedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
 	return true;
 }
+
+void UWacomFirstPersonCardLayerSlotWidget::TickSlotMotionForTest(float DeltaTime)
+{
+	NativeTick(FGeometry(), DeltaTime);
+}
 #endif
 
 void UWacomFirstPersonCardLayerSlotWidget::SetHoveredForFirstPersonLayer(bool bHovered)
@@ -250,7 +459,9 @@ void UWacomFirstPersonCardLayerSlotWidget::SetHoveredForFirstPersonLayer(bool bH
 
 void UWacomFirstPersonCardLayerSlotWidget::UpdateVisibilityForInteractionMode()
 {
-	const bool bVisible = CurrentSlotView.bProjected;
+	const bool bVisible = bHasVisualSlotView
+		? VisualSlotView.bProjected
+		: CurrentSlotView.bProjected;
 	SetVisibility(bVisible
 		? (bCardLayerInteractionEnabled ? ESlateVisibility::Visible : ESlateVisibility::HitTestInvisible)
 		: ESlateVisibility::Collapsed);
@@ -258,4 +469,26 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateVisibilityForInteractionMode()
 	{
 		CardView->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::SetTickEnabledForMotion(bool bEnabled)
+{
+	bWantsSlotMotionTick = bEnabled;
+}
+
+FWacomFirstPersonCardLayerSlotView UWacomFirstPersonCardLayerSlotWidget::LerpSlotView(
+	const FWacomFirstPersonCardLayerSlotView& From,
+	const FWacomFirstPersonCardLayerSlotView& To,
+	float MotionAlpha,
+	float OpacityAlpha)
+{
+	FWacomFirstPersonCardLayerSlotView Result = To;
+	Result.ScreenPosition = FMath::Lerp(From.ScreenPosition, To.ScreenPosition, MotionAlpha);
+	Result.WidgetPosition = Result.ScreenPosition;
+	Result.SnappedWidgetPosition = Result.ScreenPosition;
+	Result.RenderAngleDegrees = FMath::Lerp(From.RenderAngleDegrees, To.RenderAngleDegrees, MotionAlpha);
+	Result.RenderScale = FMath::Lerp(From.RenderScale, To.RenderScale, MotionAlpha);
+	Result.RenderOpacity = FMath::Lerp(From.RenderOpacity, To.RenderOpacity, OpacityAlpha);
+	Result.bProjected = From.bProjected || To.bProjected;
+	return Result;
 }
