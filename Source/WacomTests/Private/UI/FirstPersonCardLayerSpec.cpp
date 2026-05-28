@@ -127,6 +127,19 @@ namespace WacomFirstPersonCardLayerSpec
 		}
 	}
 
+	bool HasTickPrerequisite(const FTickFunction& TickFunction, const UObject* Object, const FTickFunction& PrerequisiteTick)
+	{
+		for (const FTickPrerequisite& Prerequisite : TickFunction.GetPrerequisites())
+		{
+			if (Prerequisite.PrerequisiteObject.Get() == Object
+				&& Prerequisite.Get() == &PrerequisiteTick)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	UBattleSession* CreateMinimalBattleSession(FWacomBattleFixture& Fixture)
 	{
 		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 0, 0);
@@ -1378,6 +1391,404 @@ bool FWacomFirstPersonCardLayerAuthoredProjectionTest::RunTest(const FString& Pa
 		TestTrue(TEXT("Authored spacing controls screen offset"),
 			FMath::IsNearlyEqual(InitialSlots[4].ScreenPosition.X - InitialSlots[2].ScreenPosition.X, 200.0f, 0.001f));
 	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerRunTunnelTickPrerequisiteTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.AnchorTicksAfterRunTunnelMovement",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerRunTunnelTickPrerequisiteTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Run tunnel component"), Character ? Character->GetRunTunnelMovementComponent() : nullptr))
+	{
+		return false;
+	}
+
+	Anchor->BeginPlayForTest();
+	const UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent();
+	TestTrue(
+		TEXT("Anchor tick has RunTunnel movement prerequisite"),
+		WacomFirstPersonCardLayerSpec::HasTickPrerequisite(
+			Anchor->PrimaryComponentTick,
+			RunTunnel,
+			RunTunnel->PrimaryComponentTick));
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBattleCameraTickPrerequisiteTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.AnchorTicksAfterBattleCameraLook",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBattleCameraTickPrerequisiteTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Battle camera component"), Character ? Character->GetBattleCameraLookComponent() : nullptr))
+	{
+		return false;
+	}
+
+	Anchor->BeginPlayForTest();
+	const UWacomBattleCameraLookComponent* BattleCamera = Character->GetBattleCameraLookComponent();
+	TestTrue(
+		TEXT("Anchor tick has BattleCamera prerequisite"),
+		WacomFirstPersonCardLayerSpec::HasTickPrerequisite(
+			Anchor->PrimaryComponentTick,
+			BattleCamera,
+			BattleCamera->PrimaryComponentTick));
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAuthoredAnchorSmoothingTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.Authored2DSmoothsAnchorCenter",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAuthoredAnchorSmoothingTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardCountFallback = 1;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->AuthoredHandScreenOffset = FVector2D::ZeroVector;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->bEnableAnchorScreenSmoothing = true;
+	Anchor->AnchorScreenSmoothingSpeed = 1.0f;
+	Anchor->AnchorScreenSmoothingResetDistancePixels = 320.0f;
+	Anchor->ProbeAnchorSmoothingDeltaTime = 1.0f / 60.0f;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	const TArray<FWacomFirstPersonCardLayerSlotView> InitialSlots = Anchor->BuildStaticCardSlotViews();
+	Anchor->HorizontalOffset = 60.0f;
+	Anchor->RefreshAnchor(0.0f);
+	const TArray<FWacomFirstPersonCardLayerSlotView> SmoothedSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Initial slot count"), InitialSlots.Num(), 1);
+	TestEqual(TEXT("Smoothed slot count"), SmoothedSlots.Num(), 1);
+	if (InitialSlots.Num() == 1 && SmoothedSlots.Num() == 1)
+	{
+		TestEqual(TEXT("Initial center is unsmoothed"), InitialSlots[0].ScreenPosition, FVector2D(1160.0f, 310.0f));
+		TestTrue(TEXT("Smoothing is applied"), SmoothedSlots[0].bAnchorScreenSmoothed);
+		TestEqual(TEXT("Raw target records moved center"), SmoothedSlots[0].UnsmoothedAnchorWidgetPosition, FVector2D(1220.0f, 310.0f));
+		TestTrue(TEXT("Smoothed center remains between previous and target"),
+			SmoothedSlots[0].AnchorWidgetPosition.X > 1160.0f && SmoothedSlots[0].AnchorWidgetPosition.X < 1220.0f);
+		TestEqual(TEXT("Screen position uses smoothed center"), SmoothedSlots[0].ScreenPosition, SmoothedSlots[0].AnchorWidgetPosition);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAuthoredSmoothingOffsetTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.SmoothingDoesNotChangeAuthoredOffsets",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAuthoredSmoothingOffsetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardCountFallback = 5;
+	Anchor->StaticCardEdgeDropPixels = 80.0f;
+	Anchor->AuthoredCardSpacingPixels = 100.0f;
+	Anchor->AuthoredMaxHandWidthPixels = 0.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->bEnableAnchorScreenSmoothing = true;
+	Anchor->AnchorScreenSmoothingSpeed = 1.0f;
+	Anchor->ProbeAnchorSmoothingDeltaTime = 1.0f / 60.0f;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildStaticCardSlotViews();
+	Anchor->HorizontalOffset = 40.0f;
+	Anchor->RefreshAnchor(0.0f);
+	const TArray<FWacomFirstPersonCardLayerSlotView> MovedSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 5);
+	TestEqual(TEXT("Moved slot count"), MovedSlots.Num(), 5);
+	if (BaseSlots.Num() == 5 && MovedSlots.Num() == 5)
+	{
+		TestEqual(TEXT("Left offset is unchanged"), MovedSlots[0].AuthoredLayoutOffset, BaseSlots[0].AuthoredLayoutOffset);
+		TestEqual(TEXT("Center offset is unchanged"), MovedSlots[2].AuthoredLayoutOffset, BaseSlots[2].AuthoredLayoutOffset);
+		TestEqual(TEXT("Right offset is unchanged"), MovedSlots[4].AuthoredLayoutOffset, BaseSlots[4].AuthoredLayoutOffset);
+		TestEqual(TEXT("Fan angle is unchanged"), MovedSlots[0].RenderAngleDegrees, BaseSlots[0].RenderAngleDegrees);
+		TestEqual(TEXT("ZOrder is unchanged"), MovedSlots[2].ZOrder, BaseSlots[2].ZOrder);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAnchorSmoothingResetTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.LargeAnchorJumpResetsSmoothing",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAnchorSmoothingResetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardCountFallback = 1;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->bEnableAnchorScreenSmoothing = true;
+	Anchor->AnchorScreenSmoothingSpeed = 1.0f;
+	Anchor->AnchorScreenSmoothingResetDistancePixels = 80.0f;
+	Anchor->ProbeAnchorSmoothingDeltaTime = 1.0f / 60.0f;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	Anchor->BuildStaticCardSlotViews();
+	Anchor->HorizontalOffset = 200.0f;
+	Anchor->RefreshAnchor(0.0f);
+	const TArray<FWacomFirstPersonCardLayerSlotView> JumpSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Jump slot count"), JumpSlots.Num(), 1);
+	if (JumpSlots.Num() == 1)
+	{
+		TestFalse(TEXT("Large jump resets smoothing"), JumpSlots[0].bAnchorScreenSmoothed);
+		TestEqual(TEXT("Large jump uses target immediately"), JumpSlots[0].ScreenPosition, JumpSlots[0].UnsmoothedAnchorWidgetPosition);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAnchorSmoothingProjectionFailureTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.ProjectionFailureResetsSmoothingAndHidesSlots",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAnchorSmoothingProjectionFailureTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->StaticCardCountFallback = 1;
+	Anchor->bEnableAnchorScreenSmoothing = true;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->BuildStaticCardSlotViews();
+	Anchor->bProjectionSucceeds = false;
+	const TArray<FWacomFirstPersonCardLayerSlotView> FailedSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Projection failure still builds slot"), FailedSlots.Num(), 1);
+	if (FailedSlots.Num() == 1)
+	{
+		TestFalse(TEXT("Projection failure hides slot"), FailedSlots[0].bProjected);
+		TestFalse(TEXT("Projection failure is not smoothed"), FailedSlots[0].bAnchorScreenSmoothed);
+	}
+
+	Anchor->bProjectionSucceeds = true;
+	Anchor->HorizontalOffset = 40.0f;
+	Anchor->RefreshAnchor(0.0f);
+	const TArray<FWacomFirstPersonCardLayerSlotView> RecoveredSlots = Anchor->BuildStaticCardSlotViews();
+	TestEqual(TEXT("Recovered slot count"), RecoveredSlots.Num(), 1);
+	if (RecoveredSlots.Num() == 1)
+	{
+		TestFalse(TEXT("Recovered projection starts fresh after reset"), RecoveredSlots[0].bAnchorScreenSmoothed);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerLegacySkipsSmoothingTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.LegacyProjectedFan2DSkipsAnchorSmoothing",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerLegacySkipsSmoothingTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardCountFallback = 1;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->bEnableAnchorScreenSmoothing = true;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	const TArray<FWacomFirstPersonCardLayerSlotView> InitialSlots = Anchor->BuildStaticCardSlotViews();
+	Anchor->HorizontalOffset = 40.0f;
+	Anchor->RefreshAnchor(0.0f);
+	const TArray<FWacomFirstPersonCardLayerSlotView> MovedSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Initial slot count"), InitialSlots.Num(), 1);
+	TestEqual(TEXT("Moved slot count"), MovedSlots.Num(), 1);
+	if (InitialSlots.Num() == 1 && MovedSlots.Num() == 1)
+	{
+		TestFalse(TEXT("Legacy slot is not smoothed"), MovedSlots[0].bAnchorScreenSmoothed);
+		TestEqual(TEXT("Legacy slot uses projected point directly"), MovedSlots[0].AnchorWidgetPosition, MovedSlots[0].WidgetPosition);
+		TestNotEqual(TEXT("Legacy slot still moves with projected anchor"), MovedSlots[0].ScreenPosition, InitialSlots[0].ScreenPosition);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAnchorSmoothingDebugTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.DebugSummaryReportsAnchorSmoothing",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAnchorSmoothingDebugTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->bEnableAnchorScreenSmoothing = true;
+	Anchor->AnchorScreenSmoothingSpeed = 1.0f;
+	Anchor->ProbeAnchorSmoothingDeltaTime = 1.0f / 60.0f;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->BuildStaticCardSlotViews();
+	Anchor->HorizontalOffset = 40.0f;
+	Anchor->RefreshAnchor(0.0f);
+	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView(1);
+
+	TestEqual(TEXT("Debug point count"), View.ProjectedPoints.Num(), 1);
+	TestTrue(TEXT("Debug view records smoothing"), View.bAnchorScreenSmoothed);
+	if (View.ProjectedPoints.Num() == 1)
+	{
+		TestTrue(TEXT("Debug point records smoothing"), View.ProjectedPoints[0].bAnchorScreenSmoothed);
+		TestTrue(TEXT("Debug point records smoothing distance"), View.ProjectedPoints[0].AnchorScreenSmoothingDistancePixels > 0.0f);
+	}
+
+	const FString Summary = Anchor->GetDebugSummary();
+	TestTrue(TEXT("Summary reports smoothing enabled"), Summary.Contains(TEXT("AnchorScreenSmoothing=true")));
+	TestTrue(TEXT("Summary reports smoothing speed"), Summary.Contains(TEXT("AnchorScreenSmoothingSpeed=1.00")));
+	TestTrue(TEXT("Summary reports smoothed state"), Summary.Contains(TEXT("AnchorScreenSmoothed=true")));
 
 	Anchor->DestroyComponent();
 	Character->Destroy();

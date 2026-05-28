@@ -88,6 +88,12 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 	FVector2D AnchorWidgetPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D UnsmoothedAnchorWidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D SmoothedAnchorWidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D AuthoredLayoutOffset = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -100,6 +106,9 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 	float OffscreenDistancePixels = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float AnchorScreenSmoothingDistancePixels = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bProjected = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -110,6 +119,9 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bPixelSnapped = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bAnchorScreenSmoothed = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bBodyLockedLayout = true;
@@ -161,6 +173,9 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bLookOffsetAppliedToLayout = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bAnchorScreenSmoothed = false;
 };
 
 USTRUCT(BlueprintType)
@@ -226,6 +241,12 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	FVector2D AnchorWidgetPosition = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D UnsmoothedAnchorWidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D SmoothedAnchorWidgetPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D AuthoredLayoutOffset = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -250,6 +271,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	float OffscreenDistancePixels = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float AnchorScreenSmoothingDistancePixels = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bProjected = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -263,6 +287,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bIsHovered = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bAnchorScreenSmoothed = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bBodyLockedLayout = true;
@@ -348,6 +375,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1000.0", ToolTip = "SoftClamp 模式下超过离屏允许范围后逐步拉回的过渡距离，单位为 UMG 布局像素；0 表示越界后立即停在软边界。"))
 	float SoftClampBlendRangePixels = 240.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Motion Stability", meta = (ToolTip = "是否对 Authored2D 的整副手牌中心做屏幕空间平滑；用于保留空间上下变化的同时减少移动时的高频抖动。"))
+	bool bEnableAnchorScreenSmoothing = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Motion Stability", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "60.0", ToolTip = "手牌中心屏幕空间平滑速度，单位为反秒；数值越低越稳但越滞后，0 表示立即贴合。"))
+	float AnchorScreenSmoothingSpeed = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Motion Stability", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1200.0", ToolTip = "当手牌中心跳变距离超过该阈值时重置屏幕平滑，单位为 UMG 布局像素；用于切换场景、切换路线或传送时避免慢慢飘过去。"))
+	float AnchorScreenSmoothingResetDistancePixels = 320.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "是否在投影、边缘下坠、悬停上浮和等待选目标上浮后，把最终卡牌位置吸附到稳定网格；用于减少 UMG 旋转时的位置闪动。"))
 	bool bEnableCardLayerPixelSnapping = true;
@@ -476,6 +512,7 @@ public:
 #if WITH_AUTOMATION_TESTS
 	UWacomFirstPersonCardLayerWidget* GetStaticCardLayerWidgetForTest() const { return StaticCardLayerWidget; }
 	void SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId) { HoveredCardInstanceId = CardInstanceId; }
+	void ResetAnchorScreenSmoothingForTest() { ResetAnchorScreenSmoothing(); }
 #endif
 
 protected:
@@ -490,6 +527,7 @@ protected:
 		FVector2D& OutRawScreenPosition) const;
 	virtual bool GetViewportSizeForAnchor(FVector2D& OutViewportSize) const;
 	virtual float GetViewportScaleForAnchor() const;
+	virtual float GetAnchorSmoothingDeltaTimeForAnchor() const;
 	virtual bool CanCreateStaticCardLayerForAnchor(APlayerController* PlayerController) const;
 	virtual UWacomFirstPersonCardLayerWidget* CreateStaticCardLayerWidgetForAnchor(
 		APlayerController* PlayerController,
@@ -513,6 +551,16 @@ private:
 	bool bHasValidAnchor = false;
 	bool bHasInitializedAnchor = false;
 	bool bCurrentLookOffsetAppliedToLayout = false;
+	mutable FVector2D SmoothedAnchorWidgetPosition = FVector2D::ZeroVector;
+	mutable EWacomFirstPersonCardLayoutMode SmoothedAnchorLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	mutable EWacomFirstPersonCardProjectionMode SmoothedAnchorProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+	mutable EWacomFirstPersonCardViewportClampMode SmoothedAnchorViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
+	mutable EWacomFirstPersonCardAnchorMode SmoothedAnchorMode = EWacomFirstPersonCardAnchorMode::Invalid;
+	mutable FVector2D LastAnchorScreenSmoothingTargetWidgetPosition = FVector2D::ZeroVector;
+	mutable uint64 LastAnchorScreenSmoothingFrame = 0;
+	mutable bool bHasSmoothedAnchorWidgetPosition = false;
+	mutable bool bLastAnchorScreenSmoothed = false;
+	mutable float LastAnchorScreenSmoothingDistancePixels = 0.0f;
 
 	UPROPERTY(Transient)
 	TArray<FWacomCardViewData> RuntimeCardLayerData;
@@ -528,6 +576,9 @@ private:
 	APlayerController* GetOwnerPlayerController() const;
 	bool ResolveBaseAnchor(FTransform& OutBaseTransform, EWacomFirstPersonCardAnchorMode& OutMode, FName& OutFallbackReason) const;
 	FWacomCardViewData BuildStaticCardViewData(int32 CardIndex) const;
+	void ConfigureTickPrerequisites();
+	void ResetAnchorScreenSmoothing() const;
+	void ApplyAnchorScreenSmoothing(FWacomFirstPersonCardProjectedPoint& AnchorPoint) const;
 	FVector2D ApplyViewportClampToWidgetPosition(
 		FVector2D UnclampedPosition,
 		FVector2D WidgetViewportSize,

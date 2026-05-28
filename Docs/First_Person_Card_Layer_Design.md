@@ -194,9 +194,9 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ## 建议实现顺序
 
-### V0-M 当前状态：Offscreen Anchor Projection / Soft Clamp
+### V0-N 当前状态：Anchor Motion Stability
 
-当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click、first-person hover detail provider、hover 详情跟随 / ZOrder 修正、first-person card render quality 基础、V0-J 的身体锁定锚点投影、V0-L 的美术可控 2D hand layout solver，以及 V0-M 的 offscreen anchor soft clamp。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-L 后默认不再把每张卡牌都生成 3D 槽位并分别投影，而是只投影整副手牌中心点，再用稳定的 2D 参数计算每张卡的屏幕偏移、下坠、旋转和层级，避免 projected basis 动态缩放带来的拉伸和采样不稳定。V0-M 继续沿用这个方向，但不再把手牌中心强制限制在屏幕安全区域内；默认 `SoftClampToViewport` 允许锚点离开视口一段距离，超过软范围后再柔性拉回。这样抬头 / 低头时更接近空间中的第一人称手牌，而不是永远贴在屏幕边缘的 HUD。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示详情；V0-H 进一步把 first-person hover 详情拆到独立 viewport popup host，并跟随 hovered slot 的实时布局更新，避免被 first-person card layer 遮挡。V0-I 用 `BattleHUD::BattleHandPresentationMode` 取代三个 prototype bool，默认 `FirstPersonHandWithLegacyFallback`，表示战斗默认启用第一人称手牌并保留旧 `UHandPanel` 兜底；`FirstPersonHandOnly` 只在 first-person runtime hand 有效时折叠旧手牌，异常时自动恢复。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，作为基础诊断与兜底。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click、first-person hover detail provider、hover 详情跟随 / ZOrder 修正、first-person card render quality 基础、V0-J 的身体锁定锚点投影、V0-L 的美术可控 2D hand layout solver、V0-M 的 offscreen anchor soft clamp，以及 V0-N 的 anchor motion stability。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-L 后默认不再把每张卡牌都生成 3D 槽位并分别投影，而是只投影整副手牌中心点，再用稳定的 2D 参数计算每张卡的屏幕偏移、下坠、旋转和层级，避免 projected basis 动态缩放带来的拉伸和采样不稳定。V0-M 继续沿用这个方向，但不再把手牌中心强制限制在屏幕安全区域内；默认 `SoftClampToViewport` 允许锚点离开视口一段距离，超过软范围后再柔性拉回。V0-N 不改变 Run Tunnel 的 spline / distance 表现，也不锁屏；它只让 anchor tick 在 RunTunnel movement 和 Battle camera look 之后执行，并在 `Authored2D` 下对投影后的整副手牌中心做轻量 screen smoothing，保留前进下降、后退上升的空间趋势，同时压掉移动时叠加在中心点上的高频抖动。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示详情；V0-H 进一步把 first-person hover 详情拆到独立 viewport popup host，并跟随 hovered slot 的实时布局更新，避免被 first-person card layer 遮挡。V0-I 用 `BattleHUD::BattleHandPresentationMode` 取代三个 prototype bool，默认 `FirstPersonHandWithLegacyFallback`，表示战斗默认启用第一人称手牌并保留旧 `UHandPanel` 兜底；`FirstPersonHandOnly` 只在 first-person runtime hand 有效时折叠旧手牌，异常时自动恢复。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，作为基础诊断与兜底。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
@@ -206,11 +206,14 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - `LegacyProjectedFan2D` 保留 V0-L 之前的对照行为：每张卡牌继续通过 `ComputeCardTransform()` 生成 3D 槽位并分别投影，便于 PIE 对比旧的空间投影手感和排布拉扯问题。
 - `ViewportClampMode` 默认 `SoftClampToViewport`：投影成功后先保留 `UnclampedWidgetPosition`，再按视口限制模式生成最终布局坐标。`HardClampToViewport` 会按 `ProjectionPadding` 强制留在屏幕内，复现旧行为；`SoftClampToViewport` 会把 safe rect 向外扩 `SoftClampOffscreenAllowancePixels`，点在 soft rect 内不拉回，超出后按 `SoftClampBlendRangePixels` 平滑停到扩展边界；`AllowOffscreen` 完全不限制坐标，适合对照最接近 3D 空间物体的表现。
 - V0-M 不做自动旧手牌兜底：在 `FirstPersonHandOnly` 下，如果玩家把手牌锚点看出屏幕，旧 `UHandPanel` 不会自动恢复；玩家需要把视角转回，或把 `BattleHandPresentationMode` 切回 fallback / legacy 模式。
+- `bEnableAnchorScreenSmoothing` 默认开启，只作用于 `Authored2D` 的整副手牌中心：hand anchor center 投影和 viewport clamp 完成后，先平滑中心点，再叠加 authored 2D offsets、edge drop、hover lift、pending lift 和最终 pixel snap。它不逐张平滑卡牌，因此不会改变卡牌间距、下坠、扇形角度、层级或左右顺序。
+- `AnchorScreenSmoothingSpeed` 控制中心点追随速度，数值越低越稳但越滞后；`AnchorScreenSmoothingResetDistancePixels` 用于传送、切 segment、投影恢复或大幅跳变时重置 smoothing，避免手牌慢慢飘向新位置。
+- Anchor tick 在 BeginPlay 后添加 `UWacomRunTunnelMovementComponent` 和 `UWacomBattleCameraLookComponent` 作为 prerequisite，让手牌每帧读取已经更新后的 RunTunnel distance、角色 / 相机 transform 和战斗 camera base 状态。
 - `bDrawDebugProjection` 默认关闭；开启后在 HUD 上绘制 5 个非交互 debug 点，用于 PIE 验证未来手牌位置。
 - `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。
 - `FirstPersonCardViewClass` 用于指定第一人称卡牌层的卡面 Widget；正式验证建议设置为 `/Game/Wacom/UI/Card/WBP_FirstPersonCardView`。该 WBP 可以在 `WBP_CardView` 基础上加入 RetainerBox、透明边缘留白和轻微内部缩放，以降低整卡旋转采样带来的边缘锯齿。为空时只作为测试兜底回退到 `UWacomCardView`，不作为正式第一人称主手牌卡面。
 - first-person layer 的 `CanvasSlot` 使用 widget-space 布局位置，不再直接使用 raw screen pixel；debug view 同时记录 raw screen position、widget position、snapped widget position、viewport scale、layout mode、anchor widget position、authored layout offset 和 normalized hand offset。
-- V0-M 后 debug view / slot view / projected point 还会记录 `ViewportClampMode`、`UnclampedWidgetPosition`、`bOutsideViewport` 和 `OffscreenDistancePixels`，用于判断“投影成功但已经离屏”和“真正投影失败”的区别。
+- V0-N 后 debug view / slot view / projected point 还会记录 `ViewportClampMode`、`UnclampedWidgetPosition`、`bOutsideViewport`、`OffscreenDistancePixels`、`UnsmoothedAnchorWidgetPosition`、`SmoothedAnchorWidgetPosition`、`AnchorScreenSmoothingDistancePixels` 和 `bAnchorScreenSmoothed`，用于判断“投影成功但已经离屏”“真正投影失败”和“当前中心点是否经过平滑”。
 - `bEnableCardLayerPixelSnapping` 默认开启，最终位置会在 edge drop、pending lift、hover lift 后 snap 到 `CardLayerPixelSnapGrid`，默认 1.0 UMG layout unit。
 - `bClampCardLayerRenderAngle` 默认开启，slot render angle 被限制在 `MaxCardLayerRenderAngleDegrees` 内，默认 4 度；后续扇形表现优先通过位置下坠和 hover/pending 归正继续优化，而不是继续增加旋转角。
 - `BattleHUD::BattleHandPresentationMode` 控制战斗手牌入口：`LegacyHandPanel` 只使用旧 `UHandPanel`；`FirstPersonHandWithLegacyFallback` 默认写入 first-person runtime hand、启用 hover/click/detail，并保留旧手牌可见；`FirstPersonHandOnly` 在 first-person runtime hand 有效时隐藏旧手牌。
@@ -282,16 +285,22 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - `bProjected=true` 只表示世界点投影成功；坐标是否在屏幕外由 `bOutsideViewport / OffscreenDistancePixels` 诊断。真正投影失败或点在相机后方时 slot 仍隐藏。
    - `FirstPersonHandOnly` 下手牌离屏时不会自动恢复旧 `UHandPanel`，这是为了验证空间手牌表现的明确选择。
 
-12. V0-H：Hover Detail Follow + ZOrder
+12. V0-N：Anchor Motion Stability
+   - 已为 `UWacomFirstPersonCardAnchorComponent` 增加 RunTunnel movement 和 Battle camera look tick prerequisite，减少读取上一帧移动 / 相机状态造成的错位。
+   - 已在 `Authored2D` 下对投影和 viewport clamp 后的整副手牌中心做 screen smoothing；每张卡的 authored offset、下坠、fan angle、ZOrder、hover / pending lift 仍按原规则计算。
+   - 投影失败、layout / projection / clamp / anchor mode 变化，以及超过 `AnchorScreenSmoothingResetDistancePixels` 的目标跳变都会重置 smoothing，避免传送或切 segment 后慢漂。
+   - `LegacyProjectedFan2D` 不套用该 smoothing，用于对照旧的每卡投影表现。
+
+13. V0-H：Hover Detail Follow + ZOrder
    - 已完成：first-person hover 详情跟随 hovered card 实时投影位置，并显示在 first-person card layer 之上。
    - 旧 `UHandPanel` hover 详情路径不变，仍作为 fallback 和对照。
    - 后续只保留细节微调：详情面板偏移、动画、避免贴边时跳动。
 
-13. Render Quality V0-B
+14. Render Quality V0-B
    - 当前不把“降低旋转角”作为主线目标；`WBP_FirstPersonCardView` 已能承接较大角度旋转的抗锯齿需求，排布表现优先。
    - 后续只在美术反馈需要时微调扇形参数：下坠、层级、hover / pending 姿态和可选角度 clamp。
 
-14. First-person card view polish
+15. First-person card view polish
    - 已确认第一人称层应使用专用 `WBP_FirstPersonCardView`，不要继续把通用 `WBP_CardView` 直接作为长期主手牌卡面。
    - 后续 polish 重点是沉淀该 WBP 的制作规范：RetainerBox 使用边界、贴图透明留白、内部缩放、安全边框、材质动画刷新频率，以及不同 DPI / 视口尺寸下的旋转采样表现。
 

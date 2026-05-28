@@ -18,6 +18,7 @@ public:
 	bool bUseCameraTransformProjection = false;
 	FVector2D ProbeViewportSize = FVector2D(1920.0f, 1080.0f);
 	float ProbeViewportScale = 1.0f;
+	float ProbeAnchorSmoothingDeltaTime = 1.0f / 60.0f;
 	FTransform ProbeCameraTransform = FTransform(
 		FRotator::ZeroRotator,
 		FVector(100.0f, 200.0f, 300.0f),
@@ -31,6 +32,11 @@ public:
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViewsForTest() const
 	{
 		return BuildActiveCardLayerSlotViews();
+	}
+
+	void BeginPlayForTest()
+	{
+		BeginPlay();
 	}
 
 protected:
@@ -108,5 +114,10 @@ protected:
 	virtual float GetViewportScaleForAnchor() const override
 	{
 		return ProbeViewportScale > 0.0f ? ProbeViewportScale : 1.0f;
+	}
+
+	virtual float GetAnchorSmoothingDeltaTimeForAnchor() const override
+	{
+		return FMath::Max(0.0f, ProbeAnchorSmoothingDeltaTime);
 	}
 };
