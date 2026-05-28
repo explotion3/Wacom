@@ -27,6 +27,7 @@ class WACOMAPP_API UWacomFirstPersonCardLayerWidget : public UUserWidget
 public:
 	void SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass);
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
+	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
 	void ClearSlotMotionState();
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
@@ -102,6 +103,7 @@ private:
 	TSubclassOf<UWacomCardView> CardViewClass;
 
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
+	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
 	TMap<FString, EWacomFirstPersonCardSlotTransitionKind> PendingTransitionHintsByKey;
 	bool bCardLayerInteractionEnabled = false;

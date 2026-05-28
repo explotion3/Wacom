@@ -108,6 +108,7 @@ PIE 检查：
 - `FirstPersonCardAnchorComponent.bEnableCardSlotMotion` 默认保持开启；这是单张卡牌 slot 的视觉过渡，不是整副手牌中心 smoothing。Hover、pending、出牌、抽牌、Wait / EndTurn 后的手牌重排应平滑过渡；临时关闭该开关可对照旧的硬切表现。`CardSlotMotionSpeed` 越高越跟手，`CardSlotOpacitySpeed` 控制淡入淡出速度，`CardSlotMotionResetDistancePixels` 用于大跳变时直接贴合。
 - `FirstPersonCardAnchorComponent.bEnableEventAwareCardTransitions` 默认保持开启；抽牌 / Wait / EndTurn 新增卡应从下方进入，击倒获得毒牙等 `CardGained` 新增卡应从上方 / 战斗空间方向进入，打出的卡应向上离开，手牌上限弃置的卡应向下离开。临时关闭该开关应回到通用 enter / exit 偏移。
 - 进入 `TargetSelect` 后，pending 卡应平滑上浮、放大、提高层级并轻微归正；其他 first-person 手牌只轻微降透明，不下沉、不缩小。鼠标移入 pending 卡时不应再额外跳一次，详情面板保持隐藏。
+- `FirstPersonCardAnchorComponent.bEnableCardInteractionFeedback` 默认保持开启；Battle Idle 中 hover 可打 first-person 卡应轻微高亮并保持可打姿态，hover 不可打卡仍可查看详情但不应上浮 / 放大 / 提层。按下可打卡有轻微 pressed 感，释放后正常出牌或进入 TargetSelect；点击不可打卡只播放短促红色 deny / 横向 shake，不应出牌或进入 TargetSelect。
 - `FirstPersonCardAnchorComponent.bLogCardLayerMotionDiagnostics` 默认保持关闭；只有排查幽灵 Widget、outgoing 泄漏或 FPS 阶梯式下降时临时开启。开启后反复获得卡牌或触发移除动画，日志 summary 中的 `Active=` 应等于当前手牌槽位数，`RootChildren=` 不应持续增长，`Outgoing=` 只应在移除 / 投影失败淡出期间短暂出现并回落。
 - BattleHUD 默认 `BattleHandPresentationMode=FirstPersonHandWithLegacyFallback`；如需只看第一人称手牌，可切到 `FirstPersonHandOnly`。
 - 进入战斗后确认 first-person 卡牌大角度排布下没有明显锯齿、黑边或像素断裂。

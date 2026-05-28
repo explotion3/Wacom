@@ -22,6 +22,25 @@ namespace
 	const FName NoPlayerControllerReason(TEXT("NoPlayerController"));
 	const FName NoCameraManagerReason(TEXT("NoCameraManager"));
 	const FName CameraFallbackReason(TEXT("CameraFallback"));
+
+	FWacomFirstPersonCardSlotFeedbackConfig BuildSlotFeedbackConfig(
+		const UWacomFirstPersonCardAnchorComponent& Anchor)
+	{
+		FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig;
+		FeedbackConfig.bEnabled = Anchor.bEnableCardInteractionFeedback;
+		FeedbackConfig.PlayableHoverColor = Anchor.PlayableHoverFeedbackColor;
+		FeedbackConfig.PlayableHoverOpacity = Anchor.PlayableHoverFeedbackOpacity;
+		FeedbackConfig.PressedScale = Anchor.PressedFeedbackScale;
+		FeedbackConfig.PressedColor = Anchor.PressedFeedbackColor;
+		FeedbackConfig.PressedOpacity = Anchor.PressedFeedbackOpacity;
+		FeedbackConfig.ConfirmDuration = Anchor.ConfirmFeedbackDuration;
+		FeedbackConfig.ConfirmOpacity = Anchor.ConfirmFeedbackOpacity;
+		FeedbackConfig.DenyDuration = Anchor.DenyFeedbackDuration;
+		FeedbackConfig.DenyShakePixels = Anchor.DenyFeedbackShakePixels;
+		FeedbackConfig.DenyColor = Anchor.DenyFeedbackColor;
+		FeedbackConfig.DenyOpacity = Anchor.DenyFeedbackOpacity;
+		return FeedbackConfig;
+	}
 }
 
 UWacomFirstPersonCardAnchorComponent::UWacomFirstPersonCardAnchorComponent()
@@ -573,7 +592,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		const bool bIsHovered =
 			Slot.Entry.CardInstanceId.IsValid()
 			&& Slot.Entry.CardInstanceId == HoveredCardInstanceId;
-		const bool bAllowHoverTransform = bIsHovered && !bIsPendingTargeting;
+		const bool bAllowHoverTransform = bIsHovered && Slot.Entry.bIsPlayable && !bIsPendingTargeting;
 		Slot.NormalizedHandOffset = NormalizedHandOffset;
 		Slot.RenderAngleDegrees = ClampCardLayerRenderAngle(FanOffset * FanYawDegrees);
 		if (bUseAuthoredLayout && bAuthoredCenterCardsDrawOnTop)
@@ -1208,6 +1227,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 			MotionConfig.PlayedExitOffsetPixels = PlayedCardExitOffsetPixels;
 			MotionConfig.DiscardedExitOffsetPixels = DiscardedCardExitOffsetPixels;
 			StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
+			StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(*this));
 			StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
 			BindStaticCardLayerWidget(StaticCardLayerWidget);
@@ -1232,6 +1252,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		MotionConfig.PlayedExitOffsetPixels = PlayedCardExitOffsetPixels;
 		MotionConfig.DiscardedExitOffsetPixels = DiscardedCardExitOffsetPixels;
 		StaticCardLayerWidget->SetSlotMotionConfig(MotionConfig);
+		StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(*this));
 		StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 		if (RuntimeCardLayerTransitionHintSourceId == RuntimeCardLayerSourceId

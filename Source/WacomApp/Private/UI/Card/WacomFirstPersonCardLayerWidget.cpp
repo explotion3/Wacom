@@ -62,6 +62,26 @@ void UWacomFirstPersonCardLayerWidget::SetSlotMotionConfig(
 	}
 }
 
+void UWacomFirstPersonCardLayerWidget::SetSlotFeedbackConfig(
+	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig)
+{
+	SlotFeedbackConfig = InConfig;
+	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (SlotWidget)
+		{
+			SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
+		}
+	}
+	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
+	{
+		if (SlotWidget)
+		{
+			SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
+		}
+	}
+}
+
 void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 {
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
@@ -213,6 +233,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		SlotWidget->SetSlotMotionKey(SlotKey);
 		SlotWidget->SetCardViewClass(CardViewClass);
 		SlotWidget->SetSlotMotionConfig(SlotMotionConfig);
+		SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
 		SlotWidget->SetCardLayerInteractionEnabled(bCardLayerInteractionEnabled);
 		const bool bShouldPlayProjectionExit =
 			SlotMotionConfig.bEnabled
@@ -503,6 +524,7 @@ UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::CreateSl
 
 	SlotWidget->SetCardViewClass(CardViewClass);
 	SlotWidget->SetSlotMotionConfig(SlotMotionConfig);
+	SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
 	SlotWidget->SetCardLayerInteractionEnabled(bCardLayerInteractionEnabled);
 	BindSlotWidget(SlotWidget);
 	RootCanvas->AddChild(SlotWidget);

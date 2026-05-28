@@ -4,8 +4,10 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Styling/SlateBrush.h"
 #include "InputCoreTypes.h"
 #include "UI/Card/WacomCardView.h"
 
@@ -14,6 +16,16 @@ namespace
 	float ComputeInterpAlpha(float Speed, float DeltaTime)
 	{
 		return Speed <= 0.0f ? 1.0f : FMath::Clamp(DeltaTime * Speed, 0.0f, 1.0f);
+	}
+
+	float ComputePulseAlpha(float ElapsedSeconds, float DurationSeconds)
+	{
+		if (DurationSeconds <= 0.0f || ElapsedSeconds >= DurationSeconds)
+		{
+			return 0.0f;
+		}
+
+		return 1.0f - FMath::Clamp(ElapsedSeconds / DurationSeconds, 0.0f, 1.0f);
 	}
 }
 
@@ -55,6 +67,7 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	{
 		SetHoveredForFirstPersonLayer(false);
 	}
+	ClearInteractionFeedback();
 
 	CurrentSlotView = InSlotView;
 	TargetSlotView = InSlotView;
@@ -91,6 +104,12 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterOffset(
 			|| !InTargetSlotView.Entry.CardInstanceId.IsValid()))
 	{
 		SetHoveredForFirstPersonLayer(false);
+	}
+	if (CurrentSlotView.Entry.CardInstanceId != InTargetSlotView.Entry.CardInstanceId
+		|| !InTargetSlotView.bProjected
+		|| !InTargetSlotView.Entry.CardInstanceId.IsValid())
+	{
+		ClearInteractionFeedback();
 	}
 
 	const bool bCanReuseVisual =
@@ -142,6 +161,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithOffset(
 	if (!SlotMotionConfig.bEnabled || SlotMotionConfig.ExitDuration <= 0.0f || !bHasVisualSlotView)
 	{
 		SetHoveredForFirstPersonLayer(false);
+		ClearInteractionFeedback();
 		bIsExitingForFirstPersonLayer = true;
 		ExitMotionElapsedSeconds = SlotMotionConfig.ExitDuration;
 		SetVisibility(ESlateVisibility::Collapsed);
@@ -150,6 +170,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithOffset(
 	}
 
 	SetHoveredForFirstPersonLayer(false);
+	ClearInteractionFeedback();
 	CurrentSlotView = InExitTargetSlotView;
 	CurrentSlotView.bProjected = false;
 	TargetSlotView = InExitTargetSlotView;
@@ -181,6 +202,25 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotMotionConfig(
 	}
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::SetSlotFeedbackConfig(
+	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig)
+{
+	SlotFeedbackConfig = InConfig;
+	SlotFeedbackConfig.PlayableHoverOpacity = FMath::Clamp(SlotFeedbackConfig.PlayableHoverOpacity, 0.0f, 1.0f);
+	SlotFeedbackConfig.PressedScale = FMath::Max(0.01f, SlotFeedbackConfig.PressedScale);
+	SlotFeedbackConfig.PressedOpacity = FMath::Clamp(SlotFeedbackConfig.PressedOpacity, 0.0f, 1.0f);
+	SlotFeedbackConfig.ConfirmDuration = FMath::Max(0.0f, SlotFeedbackConfig.ConfirmDuration);
+	SlotFeedbackConfig.ConfirmOpacity = FMath::Clamp(SlotFeedbackConfig.ConfirmOpacity, 0.0f, 1.0f);
+	SlotFeedbackConfig.DenyDuration = FMath::Max(0.0f, SlotFeedbackConfig.DenyDuration);
+	SlotFeedbackConfig.DenyShakePixels = FMath::Max(0.0f, SlotFeedbackConfig.DenyShakePixels);
+	SlotFeedbackConfig.DenyOpacity = FMath::Clamp(SlotFeedbackConfig.DenyOpacity, 0.0f, 1.0f);
+	if (!SlotFeedbackConfig.bEnabled)
+	{
+		ClearInteractionFeedback();
+	}
+	ApplyVisualSlotView();
+}
+
 bool UWacomFirstPersonCardLayerSlotWidget::IsExitMotionFinished() const
 {
 	return bIsExitingForFirstPersonLayer
@@ -197,6 +237,7 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardLayerInteractionEnabled(bool b
 	if (!bEnabled)
 	{
 		SetHoveredForFirstPersonLayer(false);
+		ClearInteractionFeedback();
 	}
 
 	bCardLayerInteractionEnabled = bEnabled;
@@ -230,6 +271,7 @@ TSharedRef<SWidget> UWacomFirstPersonCardLayerSlotWidget::RebuildWidget()
 void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 {
 	SetHoveredForFirstPersonLayer(false);
+	ClearInteractionFeedback();
 	SetTickEnabledForMotion(false);
 	OnCardClickedNative.Clear();
 	OnCardHoveredNative.Clear();
@@ -258,20 +300,36 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	{
 		ExitMotionElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
 	}
-
-	const float MotionAlpha = ComputeInterpAlpha(SlotMotionConfig.MotionSpeed, InDeltaTime);
-	const float OpacityAlpha = ComputeInterpAlpha(SlotMotionConfig.OpacitySpeed, InDeltaTime);
-	VisualSlotView = LerpSlotView(VisualSlotView, TargetSlotView, MotionAlpha, OpacityAlpha);
-	ApplyVisualSlotView();
-
-	const bool bNearTarget =
-		FVector2D::Distance(VisualSlotView.ScreenPosition, TargetSlotView.ScreenPosition) <= 0.1f
-		&& FMath::Abs(VisualSlotView.RenderAngleDegrees - TargetSlotView.RenderAngleDegrees) <= 0.05f
-		&& FMath::Abs(VisualSlotView.RenderScale - TargetSlotView.RenderScale) <= 0.001f
-		&& FMath::Abs(VisualSlotView.RenderOpacity - TargetSlotView.RenderOpacity) <= 0.01f;
-	if (bNearTarget)
+	if (ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration)
 	{
-		VisualSlotView = TargetSlotView;
+		ConfirmFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
+	}
+	if (DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration)
+	{
+		DenyFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
+	}
+
+	bool bNearTarget = true;
+	if (!bIsExitingForFirstPersonLayer || SlotMotionConfig.bEnabled)
+	{
+		const float MotionAlpha = ComputeInterpAlpha(SlotMotionConfig.MotionSpeed, InDeltaTime);
+		const float OpacityAlpha = ComputeInterpAlpha(SlotMotionConfig.OpacitySpeed, InDeltaTime);
+		VisualSlotView = LerpSlotView(VisualSlotView, TargetSlotView, MotionAlpha, OpacityAlpha);
+		ApplyVisualSlotView();
+
+		bNearTarget =
+			FVector2D::Distance(VisualSlotView.ScreenPosition, TargetSlotView.ScreenPosition) <= 0.1f
+			&& FMath::Abs(VisualSlotView.RenderAngleDegrees - TargetSlotView.RenderAngleDegrees) <= 0.05f
+			&& FMath::Abs(VisualSlotView.RenderScale - TargetSlotView.RenderScale) <= 0.001f
+			&& FMath::Abs(VisualSlotView.RenderOpacity - TargetSlotView.RenderOpacity) <= 0.01f;
+		if (bNearTarget)
+		{
+			VisualSlotView = TargetSlotView;
+			ApplyVisualSlotView();
+		}
+	}
+	else
+	{
 		ApplyVisualSlotView();
 	}
 
@@ -279,13 +337,17 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	{
 		VisualSlotView.bProjected = false;
 		ApplyVisualSlotView();
-		SetTickEnabledForMotion(false);
+		UpdateWantsTick();
 		return;
 	}
 
 	if (bNearTarget && !bIsExitingForFirstPersonLayer)
 	{
-		SetTickEnabledForMotion(false);
+		UpdateWantsTick();
+	}
+	else
+	{
+		UpdateWantsTick();
 	}
 }
 
@@ -303,16 +365,39 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseEnter(
 void UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
 {
 	SetHoveredForFirstPersonLayer(false);
+	SetPressedForFirstPersonLayer(false);
 	Super::NativeOnMouseLeave(InMouseEvent);
+}
+
+FReply UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseButtonDown(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
+{
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CanInteractWithCurrentSlot())
+	{
+		SetPressedForFirstPersonLayer(true);
+		return FReply::Handled();
+	}
+
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
 FReply UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseButtonUp(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
-	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CanClickCurrentSlot())
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CanInteractWithCurrentSlot())
 	{
-		OnCardClickedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
+		SetPressedForFirstPersonLayer(false);
+		if (CanClickCurrentSlot())
+		{
+			TriggerConfirmFeedback();
+			OnCardClickedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
+		}
+		else
+		{
+			TriggerDenyFeedback();
+		}
 		return FReply::Handled();
 	}
 
@@ -367,6 +452,68 @@ void UWacomFirstPersonCardLayerSlotWidget::EnsureCardView()
 		CardSlot->SetHorizontalAlignment(HAlign_Fill);
 		CardSlot->SetVerticalAlignment(VAlign_Fill);
 	}
+	if (FeedbackOverlay)
+	{
+		FeedbackOverlay->RemoveFromParent();
+		if (UOverlaySlot* OverlaySlot = RootOverlay->AddChildToOverlay(FeedbackOverlay))
+		{
+			OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+			OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+		}
+	}
+	else
+	{
+		EnsureFeedbackOverlay();
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::EnsureFeedbackOverlay()
+{
+	if (FeedbackOverlay)
+	{
+		if (FeedbackOverlay->GetParent() != RootOverlay && RootOverlay)
+		{
+			FeedbackOverlay->RemoveFromParent();
+			if (UOverlaySlot* OverlaySlot = RootOverlay->AddChildToOverlay(FeedbackOverlay))
+			{
+				OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+				OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+			}
+		}
+		return;
+	}
+
+	if (!WidgetTree)
+	{
+		WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
+	}
+	if (!RootOverlay && WidgetTree && WidgetTree->RootWidget)
+	{
+		RootOverlay = Cast<UOverlay>(WidgetTree->RootWidget);
+	}
+	if (!WidgetTree || !RootOverlay)
+	{
+		return;
+	}
+
+	FeedbackOverlay = WidgetTree->ConstructWidget<UImage>(
+		UImage::StaticClass(),
+		TEXT("InteractionFeedbackOverlay"));
+	if (!FeedbackOverlay)
+	{
+		return;
+	}
+
+	FeedbackOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
+	FeedbackOverlay->SetRenderOpacity(0.0f);
+	FSlateBrush FeedbackBrush;
+	FeedbackBrush.DrawAs = ESlateBrushDrawType::Box;
+	FeedbackOverlay->SetBrush(FeedbackBrush);
+	if (UOverlaySlot* OverlaySlot = RootOverlay->AddChildToOverlay(FeedbackOverlay))
+	{
+		OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+		OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+	}
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ApplyCurrentSlotView()
@@ -376,6 +523,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyCurrentSlotView()
 	{
 		CardView->SetCardViewData(CurrentSlotView.Entry.CardViewData);
 	}
+	EnsureFeedbackOverlay();
 	UpdateVisibilityForInteractionMode();
 }
 
@@ -398,12 +546,27 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 		CanvasSlot->SetPosition(SlotView.ScreenPosition);
 		CanvasSlot->SetZOrder(CurrentSlotView.ZOrder);
 	}
+	const bool bDenyActive = SlotFeedbackConfig.bEnabled
+		&& DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
+	float DenyShakeOffset = 0.0f;
+	if (bDenyActive && SlotFeedbackConfig.DenyDuration > 0.0f)
+	{
+		const float Progress = FMath::Clamp(DenyFeedbackElapsedSeconds / SlotFeedbackConfig.DenyDuration, 0.0f, 1.0f);
+		const float ShakeAlpha = 1.0f - Progress;
+		DenyShakeOffset = FMath::Sin(Progress * PI * 6.0f) * SlotFeedbackConfig.DenyShakePixels * ShakeAlpha;
+	}
+
 	SetRenderOpacity(FMath::Clamp(SlotView.RenderOpacity, 0.0f, 1.0f));
 	SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	FWidgetTransform CardRenderTransform;
-	CardRenderTransform.Scale = FVector2D(FMath::Max(0.01f, SlotView.RenderScale));
+	const float PressedScale = (SlotFeedbackConfig.bEnabled && bIsPressedForFirstPersonLayer)
+		? SlotFeedbackConfig.PressedScale
+		: 1.0f;
+	CardRenderTransform.Translation = FVector2D(DenyShakeOffset, 0.0f);
+	CardRenderTransform.Scale = FVector2D(FMath::Max(0.01f, SlotView.RenderScale * PressedScale));
 	CardRenderTransform.Angle = SlotView.RenderAngleDegrees;
 	SetRenderTransform(CardRenderTransform);
+	ApplyFeedbackOverlay();
 	UpdateVisibilityForInteractionMode();
 }
 
@@ -412,6 +575,13 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanInteractWithCurrentSlot() const
 	return bCardLayerInteractionEnabled
 		&& CurrentSlotView.bProjected
 		&& CurrentSlotView.Entry.CardInstanceId.IsValid();
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::CanApplyPlayableHoverFeedback() const
+{
+	return CanClickCurrentSlot()
+		&& !CurrentSlotView.Entry.bIsPendingTargeting
+		&& bIsHoveredForFirstPersonLayer;
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::CanClickCurrentSlot() const
@@ -434,6 +604,18 @@ bool UWacomFirstPersonCardLayerSlotWidget::RequestHoverForTest()
 void UWacomFirstPersonCardLayerSlotWidget::RequestUnhoverForTest()
 {
 	SetHoveredForFirstPersonLayer(false);
+	SetPressedForFirstPersonLayer(false);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::RequestPressForTest()
+{
+	if (!CanInteractWithCurrentSlot())
+	{
+		return false;
+	}
+
+	SetPressedForFirstPersonLayer(true);
+	return true;
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::RequestClickForTest()
@@ -443,13 +625,44 @@ bool UWacomFirstPersonCardLayerSlotWidget::RequestClickForTest()
 		return false;
 	}
 
+	TriggerConfirmFeedback();
 	OnCardClickedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
+	return true;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::RequestMouseUpForTest()
+{
+	if (!CanInteractWithCurrentSlot())
+	{
+		return false;
+	}
+
+	SetPressedForFirstPersonLayer(false);
+	if (CanClickCurrentSlot())
+	{
+		TriggerConfirmFeedback();
+		OnCardClickedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
+	}
+	else
+	{
+		TriggerDenyFeedback();
+	}
 	return true;
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::TickSlotMotionForTest(float DeltaTime)
 {
 	NativeTick(FGeometry(), DeltaTime);
+}
+
+float UWacomFirstPersonCardLayerSlotWidget::GetFeedbackOverlayRenderOpacityForTest() const
+{
+	return FeedbackOverlay ? FeedbackOverlay->GetRenderOpacity() : 0.0f;
+}
+
+FLinearColor UWacomFirstPersonCardLayerSlotWidget::GetFeedbackOverlayColorForTest() const
+{
+	return FeedbackOverlay ? FeedbackOverlay->GetColorAndOpacity() : FLinearColor::Transparent;
 }
 #endif
 
@@ -461,6 +674,11 @@ void UWacomFirstPersonCardLayerSlotWidget::SetHoveredForFirstPersonLayer(bool bH
 	}
 
 	bIsHoveredForFirstPersonLayer = bHovered;
+	if (!bIsHoveredForFirstPersonLayer)
+	{
+		SetPressedForFirstPersonLayer(false);
+	}
+	ApplyVisualSlotView();
 	if (CurrentSlotView.Entry.CardInstanceId.IsValid())
 	{
 		if (bIsHoveredForFirstPersonLayer)
@@ -472,6 +690,91 @@ void UWacomFirstPersonCardLayerSlotWidget::SetHoveredForFirstPersonLayer(bool bH
 			OnCardUnhoveredNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
 		}
 	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::SetPressedForFirstPersonLayer(bool bPressed)
+{
+	if (bIsPressedForFirstPersonLayer == bPressed)
+	{
+		return;
+	}
+
+	bIsPressedForFirstPersonLayer = bPressed && SlotFeedbackConfig.bEnabled && CanInteractWithCurrentSlot();
+	ApplyVisualSlotView();
+	UpdateWantsTick();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::TriggerConfirmFeedback()
+{
+	if (!SlotFeedbackConfig.bEnabled || SlotFeedbackConfig.ConfirmDuration <= 0.0f)
+	{
+		return;
+	}
+
+	ConfirmFeedbackElapsedSeconds = 0.0f;
+	ApplyVisualSlotView();
+	UpdateWantsTick();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::TriggerDenyFeedback()
+{
+	if (!SlotFeedbackConfig.bEnabled || SlotFeedbackConfig.DenyDuration <= 0.0f)
+	{
+		return;
+	}
+
+	DenyFeedbackElapsedSeconds = 0.0f;
+	ApplyVisualSlotView();
+	UpdateWantsTick();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
+{
+	bIsPressedForFirstPersonLayer = false;
+	ConfirmFeedbackElapsedSeconds = SlotFeedbackConfig.ConfirmDuration;
+	DenyFeedbackElapsedSeconds = SlotFeedbackConfig.DenyDuration;
+	ApplyFeedbackOverlay();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
+{
+	EnsureFeedbackOverlay();
+	if (!FeedbackOverlay)
+	{
+		return;
+	}
+
+	FLinearColor OverlayColor = FLinearColor::Transparent;
+	float OverlayOpacity = 0.0f;
+	if (SlotFeedbackConfig.bEnabled)
+	{
+		const float DenyAlpha = ComputePulseAlpha(DenyFeedbackElapsedSeconds, SlotFeedbackConfig.DenyDuration);
+		const float ConfirmAlpha = ComputePulseAlpha(ConfirmFeedbackElapsedSeconds, SlotFeedbackConfig.ConfirmDuration);
+		if (DenyAlpha > 0.0f)
+		{
+			OverlayColor = SlotFeedbackConfig.DenyColor;
+			OverlayOpacity = SlotFeedbackConfig.DenyOpacity * DenyAlpha;
+		}
+		else if (bIsPressedForFirstPersonLayer)
+		{
+			OverlayColor = SlotFeedbackConfig.PressedColor;
+			OverlayOpacity = SlotFeedbackConfig.PressedOpacity;
+		}
+		else if (ConfirmAlpha > 0.0f)
+		{
+			OverlayColor = SlotFeedbackConfig.PressedColor;
+			OverlayOpacity = SlotFeedbackConfig.ConfirmOpacity * ConfirmAlpha;
+		}
+		else if (CanApplyPlayableHoverFeedback())
+		{
+			OverlayColor = SlotFeedbackConfig.PlayableHoverColor;
+			OverlayOpacity = SlotFeedbackConfig.PlayableHoverOpacity;
+		}
+	}
+
+	OverlayColor.A = 1.0f;
+	FeedbackOverlay->SetColorAndOpacity(OverlayColor);
+	FeedbackOverlay->SetRenderOpacity(FMath::Clamp(OverlayOpacity, 0.0f, 1.0f));
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::UpdateVisibilityForInteractionMode()
@@ -486,11 +789,30 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateVisibilityForInteractionMode()
 	{
 		CardView->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
+	if (FeedbackOverlay)
+	{
+		FeedbackOverlay->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::SetTickEnabledForMotion(bool bEnabled)
 {
 	bWantsSlotMotionTick = bEnabled;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
+{
+	const bool bFeedbackActive =
+		(SlotFeedbackConfig.bEnabled && bIsPressedForFirstPersonLayer)
+		|| ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration
+		|| DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
+	bWantsSlotMotionTick = bIsExitingForFirstPersonLayer
+		|| (bHasVisualSlotView
+			&& (FVector2D::Distance(VisualSlotView.ScreenPosition, TargetSlotView.ScreenPosition) > 0.1f
+				|| FMath::Abs(VisualSlotView.RenderAngleDegrees - TargetSlotView.RenderAngleDegrees) > 0.05f
+				|| FMath::Abs(VisualSlotView.RenderScale - TargetSlotView.RenderScale) > 0.001f
+				|| FMath::Abs(VisualSlotView.RenderOpacity - TargetSlotView.RenderOpacity) > 0.01f))
+		|| bFeedbackActive;
 }
 
 FWacomFirstPersonCardLayerSlotView UWacomFirstPersonCardLayerSlotWidget::LerpSlotView(

@@ -242,6 +242,24 @@ namespace WacomFirstPersonCardLayerSpec
 		return Config;
 	}
 
+	FWacomFirstPersonCardSlotFeedbackConfig MakeTestFeedbackConfig()
+	{
+		FWacomFirstPersonCardSlotFeedbackConfig Config;
+		Config.bEnabled = true;
+		Config.PlayableHoverColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);
+		Config.PlayableHoverOpacity = 0.2f;
+		Config.PressedScale = 0.9f;
+		Config.PressedColor = FLinearColor::White;
+		Config.PressedOpacity = 0.3f;
+		Config.ConfirmDuration = 0.1f;
+		Config.ConfirmOpacity = 0.4f;
+		Config.DenyDuration = 0.2f;
+		Config.DenyShakePixels = 8.0f;
+		Config.DenyColor = FLinearColor::Red;
+		Config.DenyOpacity = 0.5f;
+		return Config;
+	}
+
 	FWacomFirstPersonCardLayerTransitionHint MakeTransitionHint(
 		const FGuid& CardInstanceId,
 		EWacomFirstPersonCardSlotTransitionKind TransitionKind)
@@ -4177,6 +4195,365 @@ bool FWacomFirstPersonCardLayerInvalidClickNoopTest::RunTest(const FString& Para
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPlayableHoverFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.PlayableHoverAppliesHoverTransformAndTint",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPlayableHoverFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->StaticCardRenderScale = 1.0f;
+	Anchor->HoverLiftPixels = 30.0f;
+	Anchor->HoverScale = 1.1f;
+	Anchor->HoverZOrderBoost = 250;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerEntry Entry;
+	Entry.CardInstanceId = CardId;
+	Entry.CardViewData.Name = FText::FromString(TEXT("Playable"));
+	Entry.bIsPlayable = true;
+
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { Entry });
+	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+	Anchor->SetHoveredCardInstanceIdForTest(CardId);
+	const TArray<FWacomFirstPersonCardLayerSlotView> HoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 1);
+	TestEqual(TEXT("Hover slot count"), HoverSlots.Num(), 1);
+	if (BaseSlots.Num() == 1 && HoverSlots.Num() == 1)
+	{
+		TestTrue(TEXT("Playable hover marks hovered"), HoverSlots[0].bIsHovered);
+		TestTrue(TEXT("Playable hover raises card"), HoverSlots[0].ScreenPosition.Y < BaseSlots[0].ScreenPosition.Y);
+		TestEqual(TEXT("Playable hover applies scale"), HoverSlots[0].RenderScale, 1.1f);
+		TestTrue(TEXT("Playable hover boosts z-order"), HoverSlots[0].ZOrder > BaseSlots[0].ZOrder);
+	}
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (TestNotNull(TEXT("Slot widget"), SlotWidget) && HoverSlots.Num() == 1)
+	{
+		SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+		SlotWidget->SetCardLayerInteractionEnabled(true);
+		SlotWidget->SetSlotViewImmediate(HoverSlots[0]);
+		TestTrue(TEXT("Playable hover request succeeds"), SlotWidget->RequestHoverForTest());
+		TestEqual(TEXT("Playable hover tint opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.2f);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerNonPlayableHoverFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.NonPlayableHoverDoesNotApplyPlayableHoverTransform",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerNonPlayableHoverFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->StaticCardRenderScale = 1.0f;
+	Anchor->HoverLiftPixels = 30.0f;
+	Anchor->HoverScale = 1.1f;
+	Anchor->HoverZOrderBoost = 250;
+	Anchor->DisabledRenderOpacity = 0.7f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerEntry Entry;
+	Entry.CardInstanceId = CardId;
+	Entry.CardViewData.Name = FText::FromString(TEXT("Blocked"));
+	Entry.bIsPlayable = false;
+
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { Entry });
+	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+	Anchor->SetHoveredCardInstanceIdForTest(CardId);
+	const TArray<FWacomFirstPersonCardLayerSlotView> HoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 1);
+	TestEqual(TEXT("Hover slot count"), HoverSlots.Num(), 1);
+	if (BaseSlots.Num() == 1 && HoverSlots.Num() == 1)
+	{
+		TestTrue(TEXT("Non-playable hover still marks hovered"), HoverSlots[0].bIsHovered);
+		TestEqual(TEXT("Non-playable hover keeps position"), HoverSlots[0].ScreenPosition, BaseSlots[0].ScreenPosition);
+		TestEqual(TEXT("Non-playable hover keeps scale"), HoverSlots[0].RenderScale, BaseSlots[0].RenderScale);
+		TestEqual(TEXT("Non-playable hover keeps z-order"), HoverSlots[0].ZOrder, BaseSlots[0].ZOrder);
+		TestEqual(TEXT("Non-playable keeps disabled opacity"), HoverSlots[0].RenderOpacity, 0.7f);
+	}
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (TestNotNull(TEXT("Slot widget"), SlotWidget) && HoverSlots.Num() == 1)
+	{
+		SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+		SlotWidget->SetCardLayerInteractionEnabled(true);
+		SlotWidget->SetSlotViewImmediate(HoverSlots[0]);
+		TestTrue(TEXT("Non-playable hover request succeeds"), SlotWidget->RequestHoverForTest());
+		TestEqual(TEXT("Non-playable hover does not tint as playable"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPressFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.PlayablePressDoesNotBroadcastUntilMouseUp",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPressFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver Receiver;
+	SlotWidget->OnCardClickedNative.AddRaw(
+		&Receiver,
+		&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
+	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
+
+	TestTrue(TEXT("Press succeeds"), SlotWidget->RequestPressForTest());
+	TestTrue(TEXT("Pressed flag is set"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+	TestEqual(TEXT("Press does not broadcast"), Receiver.ClickCount, 0);
+	TestTrue(TEXT("Pressed scale applies"), FMath::IsNearlyEqual(SlotWidget->GetRenderTransform().Scale.X, 0.55f * 0.9f, KINDA_SMALL_NUMBER));
+	TestEqual(TEXT("Pressed overlay opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.3f);
+
+	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMouseUpConfirmFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.PlayableMouseUpBroadcastsClickAndConfirmFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMouseUpConfirmFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	const FGuid CardId = FGuid::NewGuid();
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver Receiver;
+	SlotWidget->OnCardClickedNative.AddRaw(
+		&Receiver,
+		&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
+	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId));
+
+	TestTrue(TEXT("Press succeeds"), SlotWidget->RequestPressForTest());
+	TestTrue(TEXT("Mouse up succeeds"), SlotWidget->RequestMouseUpForTest());
+	TestFalse(TEXT("Mouse up clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+	TestEqual(TEXT("Mouse up broadcasts once"), Receiver.ClickCount, 1);
+	TestEqual(TEXT("Mouse up forwards card id"), Receiver.LastCardId, CardId);
+	TestTrue(TEXT("Confirm feedback starts"), SlotWidget->IsConfirmFeedbackActiveForTest());
+	TestEqual(TEXT("Confirm overlay opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.4f);
+	SlotWidget->TickSlotMotionForTest(0.2f);
+	TestFalse(TEXT("Confirm feedback expires"), SlotWidget->IsConfirmFeedbackActiveForTest());
+
+	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDenyFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.NonPlayableClickPlaysDenyFeedbackWithoutBroadcast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDenyFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver Receiver;
+	SlotWidget->OnCardClickedNative.AddRaw(
+		&Receiver,
+		&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
+	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), false, true));
+
+	TestTrue(TEXT("Press succeeds for non-playable interactable slot"), SlotWidget->RequestPressForTest());
+	TestTrue(TEXT("Mouse up is consumed"), SlotWidget->RequestMouseUpForTest());
+	TestEqual(TEXT("Deny does not broadcast"), Receiver.ClickCount, 0);
+	TestTrue(TEXT("Deny feedback starts"), SlotWidget->IsDenyFeedbackActiveForTest());
+	TestEqual(TEXT("Deny overlay opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.5f);
+	SlotWidget->TickSlotMotionForTest(0.05f);
+	TestTrue(TEXT("Deny shake changes translation"), FMath::Abs(SlotWidget->GetRenderTransform().Translation.X) > KINDA_SMALL_NUMBER);
+	SlotWidget->TickSlotMotionForTest(0.2f);
+	TestFalse(TEXT("Deny feedback expires"), SlotWidget->IsDenyFeedbackActiveForTest());
+
+	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerFeedbackClearsTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.FeedbackClearsOnLeaveReuseExitAndInteractionDisabled",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerFeedbackClearsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
+	TestTrue(TEXT("Press starts"), SlotWidget->RequestPressForTest());
+	SlotWidget->RequestUnhoverForTest();
+	TestFalse(TEXT("Unhover clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+
+	TestTrue(TEXT("Press restarts"), SlotWidget->RequestPressForTest());
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
+	TestFalse(TEXT("Reuse clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+
+	TestTrue(TEXT("Press starts before exit"), SlotWidget->RequestPressForTest());
+	SlotWidget->BeginExitMotion(SlotWidget->GetSlotView());
+	TestFalse(TEXT("Exit clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+	TestEqual(TEXT("Exit clears overlay"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
+
+	TestTrue(TEXT("Press starts before disable"), SlotWidget->RequestPressForTest());
+	SlotWidget->SetCardLayerInteractionEnabled(false);
+	TestFalse(TEXT("Disabling interaction clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+	TestEqual(TEXT("Disabling interaction clears overlay"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerFeedbackDisabledTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.FeedbackDisabledRestoresCurrentBehavior",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerFeedbackDisabledTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver Receiver;
+	FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig = WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig();
+	FeedbackConfig.bEnabled = false;
+	SlotWidget->OnCardClickedNative.AddRaw(
+		&Receiver,
+		&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
+	SlotWidget->SetSlotFeedbackConfig(FeedbackConfig);
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
+
+	TestTrue(TEXT("Press still consumes interactable slot"), SlotWidget->RequestPressForTest());
+	TestEqual(TEXT("Feedback overlay stays hidden"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
+	TestTrue(TEXT("Click still succeeds"), SlotWidget->RequestMouseUpForTest());
+	TestEqual(TEXT("Click path still broadcasts"), Receiver.ClickCount, 1);
+	TestFalse(TEXT("Confirm feedback stays disabled"), SlotWidget->IsConfirmFeedbackActiveForTest());
+
+	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerCardOrderTest,
 	"Wacom.UI.FirstPersonCardLayer.Anchor.CardTransformsStayOrdered",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -5194,6 +5571,58 @@ bool FWacomFirstPersonCardLayerPendingHoverPriorityTest::RunTest(const FString& 
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPendingPressFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.PendingCardCanPressWithoutHoverDoubleLift",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPendingPressFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	const FGuid PendingId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView PendingSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(PendingId, true, true);
+	PendingSlot.Entry.bIsPendingTargeting = true;
+	PendingSlot.bIsHovered = true;
+	PendingSlot.RenderScale = 1.2f;
+	PendingSlot.ScreenPosition = FVector2D(100.0f, 200.0f);
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver Receiver;
+	SlotWidget->OnCardClickedNative.AddRaw(
+		&Receiver,
+		&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
+	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(PendingSlot);
+
+	TestTrue(TEXT("Pending hover request succeeds"), SlotWidget->RequestHoverForTest());
+	TestEqual(TEXT("Pending hover does not use playable hover tint"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
+	TestTrue(TEXT("Pending press succeeds"), SlotWidget->RequestPressForTest());
+	TestTrue(TEXT("Pending press applies only press scale"), FMath::IsNearlyEqual(SlotWidget->GetRenderTransform().Scale.X, 1.2f * 0.9f, KINDA_SMALL_NUMBER));
+	TestTrue(TEXT("Pending click succeeds"), SlotWidget->RequestMouseUpForTest());
+	TestEqual(TEXT("Pending click broadcasts"), Receiver.ClickCount, 1);
+	TestEqual(TEXT("Pending click forwards id"), Receiver.LastCardId, PendingId);
+
+	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
 	PC->Destroy();
 	return true;
 }
