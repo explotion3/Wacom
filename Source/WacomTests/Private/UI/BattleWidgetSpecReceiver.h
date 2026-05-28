@@ -322,29 +322,9 @@ public:
 		bEnableSceneEnemyTargetBindingPrototype = true;
 	}
 
-	void EnableFirstPersonBattleHandLayerPrototypeForTest()
+	void SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode NewMode)
 	{
-		bEnableFirstPersonBattleHandLayerPrototype = true;
-	}
-
-	void EnableFirstPersonBattleHandInteractionPrototypeForTest()
-	{
-		bEnableFirstPersonBattleHandInteractionPrototype = true;
-	}
-
-	void EnableHideLegacyHandPanelWhenFirstPersonBattleHandInteractiveForTest()
-	{
-		bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive = true;
-	}
-
-	void DisableFirstPersonBattleHandInteractionPrototypeForTest()
-	{
-		bEnableFirstPersonBattleHandInteractionPrototype = false;
-	}
-
-	void DisableFirstPersonBattleHandLayerPrototypeForTest()
-	{
-		bEnableFirstPersonBattleHandLayerPrototype = false;
+		SetBattleHandPresentationMode(NewMode);
 	}
 
 	void RefreshFromSnapshotForTest(const FBattleSnapshot& Snapshot)

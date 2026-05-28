@@ -123,6 +123,14 @@ enum class EBattleUIState : uint8
 	BattleEnd,
 };
 
+UENUM(BlueprintType)
+enum class EWacomBattleHandPresentationMode : uint8
+{
+	LegacyHandPanel,
+	FirstPersonHandWithLegacyFallback,
+	FirstPersonHandOnly,
+};
+
 UCLASS(Blueprintable)
 class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 {
@@ -153,14 +161,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "3D 手牌原型使用的单张卡牌 Actor 类。BattleHUD 只把该类交给 Presenter，不直接生成或管理单卡 Actor。"))
 	TSubclassOf<AWacomBattleCardVisualActor> Battle3DCardActorClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ToolTip = "是否启用第一人称卡牌层的战斗手牌适配。默认关闭；开启后 BattleHUD 会把当前 BattleSnapshot.Hand 转成 UWacomCardView 数据，交给玩家角色上的 FirstPersonCardAnchorComponent 投影显示。默认仍是只读展示；hover/click 由 bEnableFirstPersonBattleHandInteractionPrototype 单独控制。"))
-	bool bEnableFirstPersonBattleHandLayerPrototype = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ToolTip = "是否启用第一人称战斗手牌层 hover/click 交互原型。默认关闭；只有 bEnableFirstPersonBattleHandLayerPrototype 也开启时生效。点击只转发给 BattleHUD 现有 OnCardClickedByUser 流程，不直接提交 BattleSession 命令。"))
-	bool bEnableFirstPersonBattleHandInteractionPrototype = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ToolTip = "是否在第一人称战斗手牌层显示且交互原型开启时隐藏旧 UHandPanel。默认关闭；关闭交互、缺少 Anchor、战斗结束或清理 runtime hand 时会恢复旧手牌原始可见性。"))
-	bool bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Battle Hand Presentation", meta = (ToolTip = "战斗手牌呈现模式。LegacyHandPanel 只使用旧 UHandPanel；FirstPersonHandWithLegacyFallback 默认显示并启用第一人称手牌，同时保留旧手牌兜底；FirstPersonHandOnly 在第一人称手牌有效时隐藏旧手牌，异常时自动恢复旧手牌避免战斗不可操作。"))
+	EWacomBattleHandPresentationMode BattleHandPresentationMode = EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.StaticCardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
 	int32 FirstPersonCardDetailViewportZOrder = 9999;
@@ -261,6 +263,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	bool IsBattlePresentationBusy() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI", meta = (ToolTip = "设置战斗手牌呈现模式，并立即同步第一人称手牌、交互绑定和旧手牌可见性。"))
+	void SetBattleHandPresentationMode(EWacomBattleHandPresentationMode NewMode);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI", meta = (ToolTip = "当前 BattleHUD 使用的战斗手牌呈现模式。"))
+	EWacomBattleHandPresentationMode GetBattleHandPresentationMode() const { return BattleHandPresentationMode; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -457,6 +465,8 @@ private:
 	void ClearFirstPersonBattleHandLayer();
 	void SyncLegacyHandPanelVisibility();
 	bool ShouldHideLegacyHandPanel() const;
+	bool ShouldUseFirstPersonBattleHandLayer() const;
+	bool ShouldEnableFirstPersonBattleHandInteraction() const;
 	void CaptureLegacyHandPanelVisibilityIfNeeded();
 	void BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 	void UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);

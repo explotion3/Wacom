@@ -1387,7 +1387,7 @@ bool FWacomFirstPersonCardLayerEmptyRuntimeSourceTest::RunTest(const FString& Pa
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerBattleHUDDisabledTest,
-	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.DisabledDoesNotWriteRuntimeHand",
+	"Wacom.UI.FirstPersonCardLayer.BattleHandPresentation.LegacyModeDoesNotWriteRuntimeHand",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerBattleHUDDisabledTest::RunTest(const FString& Parameters)
@@ -1414,12 +1414,13 @@ bool FWacomFirstPersonCardLayerBattleHUDDisabledTest::RunTest(const FString& Par
 	}
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::LegacyHandPanel);
 	HUD->SetSession(Session);
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
 		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 3, true)
 	});
 	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
-	TestFalse(TEXT("Prototype switch defaults off"), Character->GetFirstPersonCardAnchorComponent()->HasRuntimeCardLayerData());
+	TestFalse(TEXT("Legacy presentation mode does not write runtime hand"), Character->GetFirstPersonCardAnchorComponent()->HasRuntimeCardLayerData());
 
 	Character->Destroy();
 	PC->Destroy();
@@ -1458,7 +1459,6 @@ bool FWacomFirstPersonCardLayerBattleHUDWritesHandTest::RunTest(const FString& P
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->SetSession(Session);
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
 	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
 	Anchor->RefreshAnchor(0.0f);
 	FHandCardSnapshot FirstSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(FirstCard, 7, true);
@@ -1535,9 +1535,7 @@ bool FWacomFirstPersonCardLayerBattleHUDClickIntentTest::RunTest(const FString& 
 	HUD->TakeWidget();
 	HUD->SetSession(Session);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
-	HUD->EnableHideLegacyHandPanelWhenFirstPersonBattleHandInteractiveForTest();
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandOnly);
 	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
 	const FGuid TargetCardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(
 		InitialSnapshot,
@@ -1556,8 +1554,8 @@ bool FWacomFirstPersonCardLayerBattleHUDClickIntentTest::RunTest(const FString& 
 
 	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
 	HUD->SyncFirstPersonBattleHandLayerForTest(InitialSnapshot);
-	TestTrue(TEXT("Interaction prototype is enabled on anchor"), Anchor->IsBattleHandInteractionPrototypeEnabled());
-	TestEqual(TEXT("Legacy hand is hidden while first-person interaction handles clicks"),
+	TestTrue(TEXT("First-person hand interaction is enabled on anchor"), Anchor->IsBattleHandInteractionPrototypeEnabled());
+	TestEqual(TEXT("FirstPersonHandOnly hides legacy hand while first-person interaction handles clicks"),
 		HUD->GetHandPanelVisibilityForTest(),
 		ESlateVisibility::Collapsed);
 
@@ -1620,8 +1618,6 @@ bool FWacomFirstPersonCardLayerBattleHUDCleanupTest::RunTest(const FString& Para
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->SetSession(Session);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
 	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
 	const FGuid TargetCardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(
 		InitialSnapshot,
@@ -1684,6 +1680,7 @@ bool FWacomFirstPersonCardLayerDetailProviderSwitchOffTest::RunTest(const FStrin
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->TakeWidget();
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::LegacyHandPanel);
 	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 2, true);
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
 	HUD->RefreshFromSnapshotForTest(Snapshot);
@@ -1691,7 +1688,7 @@ bool FWacomFirstPersonCardLayerDetailProviderSwitchOffTest::RunTest(const FStrin
 	HUD->HandleFirstPersonCardHoveredForTest(
 		CardSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId));
-	TestFalse(TEXT("First-person detail stays hidden when switches are off"), HUD->IsCardDetailPanelVisible());
+	TestFalse(TEXT("First-person detail stays hidden in legacy presentation mode"), HUD->IsCardDetailPanelVisible());
 
 	Character->Destroy();
 	PC->Destroy();
@@ -1735,8 +1732,6 @@ bool FWacomFirstPersonCardLayerDetailProviderHoverTest::RunTest(const FString& P
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->TakeWidget();
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
 	const FHandCardSnapshot FirstSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(FirstCard, 1, true);
 	const FHandCardSnapshot SecondSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(SecondCard, 2, true);
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ FirstSnapshot, SecondSnapshot });
@@ -1822,8 +1817,6 @@ bool FWacomFirstPersonCardLayerDetailProviderFollowTest::RunTest(const FString& 
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->TakeWidget();
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
 	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
 	HUD->RefreshFromSnapshotForTest(Snapshot);
@@ -1887,8 +1880,6 @@ bool FWacomFirstPersonCardLayerDetailProviderInvalidDataTest::RunTest(const FStr
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->TakeWidget();
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
 	FHandCardSnapshot ValidSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
 	FHandCardSnapshot MissingDefinitionSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
@@ -1954,8 +1945,6 @@ bool FWacomFirstPersonCardLayerDetailProviderStateClearTest::RunTest(const FStri
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->TakeWidget();
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
 	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
 	HUD->RefreshFromSnapshotForTest(Snapshot);
@@ -2017,7 +2006,8 @@ bool FWacomFirstPersonCardLayerPendingStateRefreshTest::RunTest(const FString& P
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->SetSession(Session);
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
+	TestTrue(TEXT("Default presentation mode is first-person with legacy fallback"),
+		HUD->GetBattleHandPresentationMode() == EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback);
 	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
 	FHandCardSnapshot FirstSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(FirstCard, 3, true);
 	FHandCardSnapshot SecondSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(SecondCard, 4, true);
@@ -2158,7 +2148,6 @@ bool FWacomFirstPersonCardLayerBattleHUDClearsTest::RunTest(const FString& Param
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->SetSession(Session);
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
 	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
 	const FBattleSnapshot ActiveSnapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
 		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 4, true)
@@ -2183,7 +2172,7 @@ bool FWacomFirstPersonCardLayerBattleHUDClearsTest::RunTest(const FString& Param
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerLegacyHandVisibilityTest,
-	"Wacom.UI.FirstPersonCardLayer.LegacyHandPanelVisibility.HidesOnlyWhenInteractiveRuntimeLayerActive",
+	"Wacom.UI.FirstPersonCardLayer.BattleHandPresentation.PresentationModesDriveLegacyVisibility",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerLegacyHandVisibilityTest::RunTest(const FString& Parameters)
@@ -2224,31 +2213,40 @@ bool FWacomFirstPersonCardLayerLegacyHandVisibilityTest::RunTest(const FString& 
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
 		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true)
 	});
-	HUD->EnableHideLegacyHandPanelWhenFirstPersonBattleHandInteractiveForTest();
 	HUD->RefreshFromSnapshotForTest(Snapshot);
-	TestEqual(TEXT("Hide flag alone keeps legacy hand visibility"), HUD->GetHandPanelVisibilityForTest(), InitialHandVisibility);
-
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
-	HUD->RefreshFromSnapshotForTest(Snapshot);
-	TestEqual(TEXT("Read-only first-person layer keeps legacy hand visibility"),
+	TestTrue(TEXT("Default first-person fallback writes runtime hand"),
+		Character->GetFirstPersonCardAnchorComponent()->HasRuntimeCardLayerData());
+	TestEqual(TEXT("First-person fallback keeps legacy hand visible"),
 		HUD->GetHandPanelVisibilityForTest(),
 		InitialHandVisibility);
 
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::LegacyHandPanel);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
-	TestEqual(TEXT("Interactive first-person runtime hand collapses legacy hand"),
+	TestFalse(TEXT("Legacy mode clears runtime hand"),
+		Character->GetFirstPersonCardAnchorComponent()->HasRuntimeCardLayerData());
+	TestFalse(TEXT("Legacy mode disables first-person interaction"),
+		Character->GetFirstPersonCardAnchorComponent()->IsBattleHandInteractionPrototypeEnabled());
+	TestEqual(TEXT("Legacy mode keeps legacy hand visible"),
+		HUD->GetHandPanelVisibilityForTest(),
+		InitialHandVisibility);
+
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandOnly);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	TestTrue(TEXT("FirstPersonHandOnly writes runtime hand"),
+		Character->GetFirstPersonCardAnchorComponent()->HasRuntimeCardLayerData());
+	TestEqual(TEXT("FirstPersonHandOnly collapses legacy hand"),
 		HUD->GetHandPanelVisibilityForTest(),
 		ESlateVisibility::Collapsed);
 
-	HUD->DisableFirstPersonBattleHandInteractionPrototypeForTest();
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback);
 	HUD->SyncLegacyHandPanelVisibilityForTest();
-	TestEqual(TEXT("Disabling interaction restores legacy hand visibility"),
+	TestEqual(TEXT("Returning to fallback mode restores legacy hand visibility"),
 		HUD->GetHandPanelVisibilityForTest(),
 		InitialHandVisibility);
 
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandOnly);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
-	TestEqual(TEXT("Legacy hand can collapse again"), HUD->GetHandPanelVisibilityForTest(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Legacy hand can collapse again in first-person only mode"), HUD->GetHandPanelVisibilityForTest(), ESlateVisibility::Collapsed);
 
 	HUD->ClearFirstPersonBattleHandLayerForTest();
 	TestEqual(TEXT("Clearing first-person runtime hand restores legacy hand"),
@@ -2305,9 +2303,7 @@ bool FWacomFirstPersonCardLayerLegacyHandRestoreOriginalVisibilityTest::RunTest(
 	HUD->SetHandPanelVisibilityForTest(ESlateVisibility::SelfHitTestInvisible);
 	HUD->SyncLegacyHandPanelVisibilityForTest();
 	HUD->SetSession(Session);
-	HUD->EnableHideLegacyHandPanelWhenFirstPersonBattleHandInteractiveForTest();
-	HUD->EnableFirstPersonBattleHandLayerPrototypeForTest();
-	HUD->EnableFirstPersonBattleHandInteractionPrototypeForTest();
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandOnly);
 
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
 		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true)
@@ -2317,13 +2313,66 @@ bool FWacomFirstPersonCardLayerLegacyHandRestoreOriginalVisibilityTest::RunTest(
 		HUD->GetHandPanelVisibilityForTest(),
 		ESlateVisibility::Collapsed);
 
-	HUD->DisableFirstPersonBattleHandInteractionPrototypeForTest();
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback);
 	HUD->SyncLegacyHandPanelVisibilityForTest();
 	TestEqual(TEXT("Legacy hand restores captured custom visibility"),
 		HUD->GetHandPanelVisibilityForTest(),
 		ESlateVisibility::SelfHitTestInvisible);
 
 	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerFirstPersonOnlyAnchorFallbackTest,
+	"Wacom.UI.FirstPersonCardLayer.BattleHandPresentation.FirstPersonOnlyFallsBackWhenAnchorMissing",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerFirstPersonOnlyAnchorFallbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("Battle.LegacyHand.AnchorFallback"),
+		1);
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("Card"), Card)
+		|| !TestNotNull(TEXT("Session"), Session))
+	{
+		return false;
+	}
+
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandOnly);
+	TestTrue(TEXT("Fallback HUD builds hand panel"), HUD->HasHandPanelForTest());
+	const ESlateVisibility InitialHandVisibility = HUD->GetHandPanelVisibilityForTest();
+
+	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
+		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true)
+	});
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	TestEqual(TEXT("FirstPersonHandOnly restores legacy hand when anchor is missing"),
+		HUD->GetHandPanelVisibilityForTest(),
+		InitialHandVisibility);
+	TestFalse(TEXT("Missing anchor means no first-person anchor can be resolved"),
+		HUD->ResolveFirstPersonCardAnchorForTest() != nullptr);
+
 	PC->Destroy();
 	return true;
 }

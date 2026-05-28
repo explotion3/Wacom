@@ -307,6 +307,31 @@ bool UBattleHUD::IsBattlePresentationBusy() const
 	return IsBattlePresentationQueueBusy();
 }
 
+void UBattleHUD::SetBattleHandPresentationMode(EWacomBattleHandPresentationMode NewMode)
+{
+	if (BattleHandPresentationMode == NewMode)
+	{
+		return;
+	}
+
+	BattleHandPresentationMode = NewMode;
+	if (BattleHandPresentationMode == EWacomBattleHandPresentationMode::LegacyHandPanel)
+	{
+		ClearFirstPersonBattleHandLayer();
+		return;
+	}
+
+	if (UBattleSession* S = GetSession())
+	{
+		SyncFirstPersonBattleHandLayer(S->BuildSnapshot());
+	}
+	else
+	{
+		ClearFirstPersonBattleHandLayer();
+	}
+	SyncLegacyHandPanelVisibility();
+}
+
 // ================ 状态机 ================
 
 void UBattleHUD::SetUIState(EBattleUIState NewState)
@@ -360,7 +385,7 @@ void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
 {
 	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor();
 	const bool bCanShowBattleHand =
-		bEnableFirstPersonBattleHandLayerPrototype
+		ShouldUseFirstPersonBattleHandLayer()
 		&& GetSession()
 		&& Snap.Phase != EBattlePhase::BattleEnd
 		&& UIState != EBattleUIState::BattleEnd
@@ -395,9 +420,7 @@ void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
 	}
 
 	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
-	Anchor->SetBattleHandInteractionPrototypeEnabled(
-		bEnableFirstPersonBattleHandLayerPrototype
-		&& bEnableFirstPersonBattleHandInteractionPrototype);
+	Anchor->SetBattleHandInteractionPrototypeEnabled(ShouldEnableFirstPersonBattleHandInteraction());
 	BindFirstPersonBattleHandLayerInteractions(Anchor);
 	LastFirstPersonBattleHandAnchor = Anchor;
 	SyncLegacyHandPanelVisibility();
@@ -450,13 +473,23 @@ void UBattleHUD::SyncLegacyHandPanelVisibility()
 
 bool UBattleHUD::ShouldHideLegacyHandPanel() const
 {
-	return bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive
-		&& bEnableFirstPersonBattleHandLayerPrototype
-		&& bEnableFirstPersonBattleHandInteractionPrototype
+	return BattleHandPresentationMode == EWacomBattleHandPresentationMode::FirstPersonHandOnly
+		&& ShouldEnableFirstPersonBattleHandInteraction()
 		&& bFirstPersonBattleHandLayerRuntimeActive
 		&& GetSession()
 		&& UIState != EBattleUIState::BattleEnd
 		&& LastFirstPersonBattleHandAnchor.IsValid();
+}
+
+bool UBattleHUD::ShouldUseFirstPersonBattleHandLayer() const
+{
+	return BattleHandPresentationMode == EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback
+		|| BattleHandPresentationMode == EWacomBattleHandPresentationMode::FirstPersonHandOnly;
+}
+
+bool UBattleHUD::ShouldEnableFirstPersonBattleHandInteraction() const
+{
+	return ShouldUseFirstPersonBattleHandLayer();
 }
 
 void UBattleHUD::CaptureLegacyHandPanelVisibilityIfNeeded()
@@ -506,7 +539,7 @@ void UBattleHUD::HandleFirstPersonCardLayerCardClicked(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardLayerSlotView& /*SlotView*/)
 {
-	if (!bEnableFirstPersonBattleHandLayerPrototype || !bEnableFirstPersonBattleHandInteractionPrototype)
+	if (!ShouldEnableFirstPersonBattleHandInteraction())
 	{
 		return;
 	}
@@ -517,8 +550,7 @@ void UBattleHUD::HandleFirstPersonCardLayerCardHovered(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	if (!bEnableFirstPersonBattleHandLayerPrototype
-		|| !bEnableFirstPersonBattleHandInteractionPrototype
+	if (!ShouldEnableFirstPersonBattleHandInteraction()
 		|| UIState != EBattleUIState::Idle
 		|| !CardInstanceId.IsValid()
 		|| !SlotView.bProjected)
@@ -558,8 +590,7 @@ void UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	if (!bEnableFirstPersonBattleHandLayerPrototype
-		|| !bEnableFirstPersonBattleHandInteractionPrototype
+	if (!ShouldEnableFirstPersonBattleHandInteraction()
 		|| UIState != EBattleUIState::Idle
 		|| !CardInstanceId.IsValid()
 		|| CurrentFirstPersonCardDetailSourceId != CardInstanceId

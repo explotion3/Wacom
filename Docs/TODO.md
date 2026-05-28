@@ -84,9 +84,9 @@ tags:
   - 入口：[Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
 
 - [x] **First-person card layer polish：详情面板跟随卡牌与层级修正**
-  - 状态：`Done: V0-H 已接入独立 viewport popup host，详情跟随 hovered slot 并高于 first-person card layer`
+  - 状态：`Done: V0-H 已接入独立 viewport popup host；V0-I 已用 BattleHandPresentationMode 收口第一人称手牌配置入口`
   - 归属：UI / 战斗表现
-  - 说明：旧 `UHandPanel` 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport panel，后续只保留偏移、动画和贴边稳定性微调。
+  - 说明：旧 `UHandPanel` 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport panel。战斗手牌入口由 `LegacyHandPanel / FirstPersonHandWithLegacyFallback / FirstPersonHandOnly` 三种模式控制，后续只保留偏移、动画和贴边稳定性微调。
 
 - [ ] **First-person card render quality：扇形布局微调与专用卡面规范**
   - 状态：`Deferred: RetainerBox 版 WBP_FirstPersonCardView 已解决当前旋转锯齿；不把降低旋转角作为主线`
