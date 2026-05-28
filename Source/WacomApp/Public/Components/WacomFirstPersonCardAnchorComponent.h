@@ -171,97 +171,97 @@ class WACOMAPP_API UWacomFirstPersonCardAnchorComponent : public UActorComponent
 public:
 	UWacomFirstPersonCardAnchorComponent();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "600.0", Units = "cm", ToolTip = "Distance from the selected first-person anchor to the virtual card hand plane, in Unreal centimeters."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "600.0", Units = "cm", ToolTip = "第一人称锚点到虚拟手牌平面的距离，单位为 Unreal 厘米。"))
 	float DistanceFromView = 240.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (UIMin = "-240.0", UIMax = "120.0", Units = "cm", ToolTip = "Vertical offset from the selected first-person anchor to the virtual card hand plane, in Unreal centimeters. Negative values place the cards lower in view."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (UIMin = "-240.0", UIMax = "120.0", Units = "cm", ToolTip = "虚拟手牌平面相对第一人称锚点的垂直偏移，单位为 Unreal 厘米；负值会让卡牌在画面中更低。"))
 	float VerticalOffset = -70.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (UIMin = "-240.0", UIMax = "240.0", Units = "cm", ToolTip = "Horizontal offset from the selected first-person anchor to the virtual card hand plane, in Unreal centimeters."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (UIMin = "-240.0", UIMax = "240.0", Units = "cm", ToolTip = "虚拟手牌平面相对第一人称锚点的水平偏移，单位为 Unreal 厘米。"))
 	float HorizontalOffset = 0.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "120.0", Units = "cm", ToolTip = "Distance between adjacent virtual card slots before projection, in Unreal centimeters."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "120.0", Units = "cm", ToolTip = "投影前相邻虚拟卡牌槽之间的距离，单位为 Unreal 厘米。"))
 	float CardSpacing = 36.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (UIMin = "-30.0", UIMax = "30.0", Units = "deg", ToolTip = "Per-card fan yaw around the first-person hand anchor."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (UIMin = "-30.0", UIMax = "30.0", Units = "deg", ToolTip = "每张卡牌相对第一人称手牌锚点增加的扇形偏航角，单位为度；角度越大，旋转锯齿风险越高。"))
 	float FanYawDegrees = 3.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "Fraction of shared cursor yaw offset applied to the card anchor. Lower values make cards follow the character/body more than the camera."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "共享鼠标镜头偏航偏移对卡牌锚点的影响比例；数值越低，卡牌越像跟随角色身体而不是镜头。"))
 	float LookInfluenceYaw = 0.25f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "Fraction of shared cursor pitch offset applied to the card anchor. Lower values make cards follow the character/body more than the camera."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "共享鼠标镜头俯仰偏移对卡牌锚点的影响比例；数值越低，卡牌越像跟随角色身体而不是镜头。"))
 	float LookInfluencePitch = 0.15f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "30.0", ToolTip = "Interpolation speed in inverse seconds used by the first-person card anchor. Set to 0 to snap to the resolved anchor."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "30.0", ToolTip = "第一人称卡牌锚点跟随目标位置和朝向的插值速度；设为 0 时立即贴合目标锚点。"))
 	float FollowInterpSpeed = 12.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0", ToolTip = "Screen-space padding, in pixels, used when clamping projected debug card points to the viewport."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0", ToolTip = "投影点被限制在视口内时保留的屏幕安全边距，单位为 UMG 布局像素。"))
 	float ProjectionPadding = 24.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "Snaps the final first-person card layer widget-space position to a stable grid after projection, edge drop, hover lift and pending lift. On by default to reduce UMG rotation shimmer."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "是否在投影、边缘下坠、悬停上浮和等待选目标上浮后，把最终卡牌位置吸附到稳定网格；用于减少 UMG 旋转时的位置闪动。"))
 	bool bEnableCardLayerPixelSnapping = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.01", UIMin = "0.25", UIMax = "8.0", ToolTip = "Widget-space grid size used when bEnableCardLayerPixelSnapping is enabled. 1.0 snaps to whole UMG layout units."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.01", UIMin = "0.25", UIMax = "8.0", ToolTip = "开启像素对齐时使用的 UMG 布局网格大小；1.0 表示吸附到整数 UMG 布局单位。"))
 	float CardLayerPixelSnapGrid = 1.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "Clamps first-person card layer UMG render rotation after fan angle calculation. On by default because rotated high-contrast UMG card art aliases quickly."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "是否限制第一人称卡牌层的 UMG 渲染旋转角；高对比卡面被整体旋转时容易出现锯齿。"))
 	bool bClampCardLayerRenderAngle = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "20.0", Units = "deg", ToolTip = "Maximum absolute UMG render angle for first-person card slots when bClampCardLayerRenderAngle is enabled."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "20.0", Units = "deg", ToolTip = "开启旋转限制时，每张第一人称卡牌允许的最大 UMG 渲染旋转角，单位为度。"))
 	float MaxCardLayerRenderAngleDegrees = 4.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "Draws five non-interactive HUD debug points for the first-person card anchor projection. Development-only visual aid; off by default."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "是否绘制 5 个非交互 HUD 调试点，用于验证第一人称卡牌锚点投影位置；仅开发调试使用，默认关闭。"))
 	bool bDrawDebugProjection = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Debug", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "Viewport z-order used for the first-person card anchor debug widget."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Debug", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称卡牌锚点调试 Widget 的视口层级。"))
 	int32 DebugWidgetZOrder = 9998;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ToolTip = "Draws a non-interactive HUD/UMG static card layer from the first-person card anchor. Prototype validation only; off by default."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ToolTip = "是否从第一人称卡牌锚点绘制非交互 HUD/UMG 静态预览卡牌层；仅原型验证使用，默认关闭。"))
 	bool bDrawStaticCardLayer = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ToolTip = "Widget class used for the non-interactive first-person static card layer. Empty uses the C++ default layer widget."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ToolTip = "非交互第一人称静态卡牌层使用的 Widget 类；为空时使用 C++ 默认层 Widget。"))
 	TSubclassOf<UWacomFirstPersonCardLayerWidget> StaticCardLayerWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ToolTip = "Card view class used by the non-interactive static card layer. Empty uses UWacomCardView."))
-	TSubclassOf<UWacomCardView> StaticCardViewClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|View", meta = (ToolTip = "第一人称卡牌层使用的卡面 Widget 类；正式验证建议设置为 /Game/Wacom/UI/Card/WBP_FirstPersonCardView。为空时仅使用 UWacomCardView 作为测试兜底。"))
+	TSubclassOf<UWacomCardView> FirstPersonCardViewClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ToolTip = "Optional card definitions used by the static card layer. If empty, placeholder card view data is generated so PIE can validate the layer without data asset setup."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ToolTip = "静态预览卡牌层使用的可选卡牌定义；为空时生成占位卡牌数据，便于 PIE 直接验证。"))
 	TArray<TSoftObjectPtr<UCardDefinition>> StaticPreviewCardDefinitions;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0.01", UIMin = "0.1", UIMax = "2.0", ToolTip = "UMG render scale applied to every static card in the first-person card layer."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0.01", UIMin = "0.1", UIMax = "2.0", ToolTip = "第一人称卡牌层中每张卡牌使用的 UMG 渲染缩放。"))
 	float StaticCardRenderScale = 0.55f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "260.0", ToolTip = "Screen-space vertical drop, in pixels, applied to the outermost static cards. Cards near the center stay higher, producing a fan arc."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "260.0", ToolTip = "最外侧卡牌额外下坠的屏幕距离，单位为 UMG 布局像素；越靠近中心的卡牌下坠越少，用于形成手牌弧线。"))
 	float StaticCardEdgeDropPixels = 72.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "Viewport z-order used for the first-person static card layer widget."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称静态卡牌层 Widget 的视口层级。"))
 	int32 StaticCardLayerZOrder = 9996;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0", UIMin = "0", UIMax = "12", ToolTip = "Number of placeholder cards drawn when StaticPreviewCardDefinitions is empty."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Static Layer", meta = (ClampMin = "0", UIMin = "0", UIMax = "12", ToolTip = "静态预览卡牌定义为空时绘制的占位卡牌数量。"))
 	int32 StaticCardCountFallback = 5;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "Screen-space lift, in pixels, applied to the card that is currently waiting for target selection. Only affects the non-interactive first-person card layer."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "正在等待目标选择的卡牌额外上浮距离，单位为 UMG 布局像素。"))
 	float PendingTargetingLiftPixels = 36.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "Extra render scale multiplier applied to the card that is currently waiting for target selection."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "正在等待目标选择的卡牌额外渲染缩放倍率。"))
 	float PendingTargetingScale = 1.08f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "Render scale multiplier applied to hand-anchor cards in the non-interactive first-person card layer."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "手牌锚点卡牌使用的渲染缩放倍率。"))
 	float HandAnchorScale = 0.96f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "Layer-level render opacity applied to unplayable cards. The card view disabled overlay is still driven by FWacomCardViewData::bDisabled."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "不可用卡牌在第一人称卡牌层上的整体透明度；卡面自身的 disabled overlay 仍由 FWacomCardViewData::bDisabled 控制。"))
 	float DisabledRenderOpacity = 0.78f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ToolTip = "Enables hover/click handling for the first-person battle hand layer. Prototype-only; BattleHUD controls this during battle. Off by default."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ToolTip = "是否启用第一人称战斗手牌层的 hover/click 处理；原型开关，战斗中由 BattleHUD 控制，默认关闭。"))
 	bool bEnableBattleHandInteractionPrototype = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "Screen-space lift, in pixels, applied to the hovered first-person card layer slot."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "鼠标悬停的第一人称卡牌槽额外上浮距离，单位为 UMG 布局像素。"))
 	float HoverLiftPixels = 28.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "Extra render scale multiplier applied to the hovered first-person card layer slot."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "鼠标悬停的第一人称卡牌槽额外渲染缩放倍率。"))
 	float HoverScale = 1.06f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0", UIMin = "0", UIMax = "5000", ToolTip = "Z-order boost applied to the hovered first-person card layer slot."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction Prototype", meta = (ClampMin = "0", UIMin = "0", UIMax = "5000", ToolTip = "鼠标悬停的第一人称卡牌槽额外增加的 ZOrder 层级。"))
 	int32 HoverZOrderBoost = 500;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Card Layer")

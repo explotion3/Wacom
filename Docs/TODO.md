@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-05-22
+updated: 2026-05-28
 tags:
   - wacom/todo
   - wacom/docs
@@ -84,14 +84,14 @@ tags:
   - 入口：[Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
 
 - [ ] **First-person card layer polish：详情面板跟随卡牌与层级修正**
-  - 状态：`Deferred: 等卡牌尺寸、扇形和层级调参稳定后再做`
+  - 状态：`Ready: WBP_FirstPersonCardView 入口已规范化，卡面尺寸和层级口径趋于稳定`
   - 归属：UI / 战斗表现
   - 说明：V0-F hover 详情流程已可用；后续需要让详情面板更贴近 hovered card，并提高 ZOrder，避免被其他 first-person 卡牌遮挡。
 
-- [ ] **First-person card render quality：扇形布局 V0-B 与专用卡面评估**
-  - 状态：`Ready: V0-A 已补 DPI-aware projection / pixel snapping / angle clamp`
+- [ ] **First-person card render quality：扇形布局微调与专用卡面规范**
+  - 状态：`Deferred: RetainerBox 版 WBP_FirstPersonCardView 已解决当前旋转锯齿；不把降低旋转角作为主线`
   - 归属：UI / 战斗表现
-  - 说明：如果美术仍反馈旋转卡牌边缘锯齿或细线断裂，下一步优先减少整体 UMG 旋转依赖，用边缘下坠、层级和 hover/pending 归正重做扇形表现；必要时再规划 `WBP_FirstPersonCardView`，不要回退到 3D Presenter / RenderTarget 路线。
+  - 说明：继续保留 `WBP_FirstPersonCardView` 的 RetainerBox、透明留白、内部缩放和贴图采样规范。后续只有在美术反馈需要时再微调扇形参数、下坠、层级、hover/pending 姿态或角度 clamp；不要为了抗锯齿牺牲当前手牌排布表现，也不要回退到 3D Presenter / RenderTarget 路线。
 
 - [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
   - 状态：`Blocked: Demo 范围确认`

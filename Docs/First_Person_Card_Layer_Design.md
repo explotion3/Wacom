@@ -194,13 +194,14 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ### V0-A Render Quality 当前状态：Anchor + Static Card Layer + Battle Hand Interaction + Hover Detail Provider + Legacy HandPanel Toggle
 
-当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、默认关闭的战斗手牌 adapter、默认关闭的 first-person battle hand hover/click 交互原型、first-person hover detail provider、默认关闭的 legacy `UHandPanel` 可见性切换，以及 first-person card render quality 基础。静态层使用 `UWacomCardView` 在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可选地接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 则把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示同一个 `UWacomCardDetailPanel`。V0-G 增加 `BattleHUD::bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive`，只有 first-person layer、interaction 和 runtime battle hand 都有效时才把旧手牌折叠隐藏；旧 `UHandPanel` 仍保留刷新、事件绑定和 fallback 能力。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，降低 UMG 整卡旋转时的边缘锯齿、像素断裂和动态抖动。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、默认关闭的战斗手牌 adapter、默认关闭的 first-person battle hand hover/click 交互原型、first-person hover detail provider、默认关闭的 legacy `UHandPanel` 可见性切换，以及 first-person card render quality 基础。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌，由 anchor 投影驱动屏幕位置、旋转和缩放；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可选地接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 则把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示同一个 `UWacomCardDetailPanel`。V0-G 增加 `BattleHUD::bHideLegacyHandPanelWhenFirstPersonBattleHandInteractive`，只有 first-person layer、interaction 和 runtime battle hand 都有效时才把旧手牌折叠隐藏；旧 `UHandPanel` 仍保留刷新、事件绑定和 fallback 能力。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，降低 UMG 整卡旋转时的边缘锯齿、像素断裂和动态抖动。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
 - Shared cursor look 只按配置比例影响 card anchor，默认 yaw 25%、pitch 15%。
 - `bDrawDebugProjection` 默认关闭；开启后在 HUD 上绘制 5 个非交互 debug 点，用于 PIE 验证未来手牌位置。
 - `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。
+- `FirstPersonCardViewClass` 用于指定第一人称卡牌层的卡面 Widget；正式验证建议设置为 `/Game/Wacom/UI/Card/WBP_FirstPersonCardView`。该 WBP 可以在 `WBP_CardView` 基础上加入 RetainerBox、透明边缘留白和轻微内部缩放，以降低整卡旋转采样带来的边缘锯齿。为空时只作为测试兜底回退到 `UWacomCardView`，不作为正式第一人称主手牌卡面。
 - first-person layer 的 `CanvasSlot` 使用 widget-space 投影位置，不再直接使用 raw screen pixel；debug view 同时记录 raw screen position、widget position、snapped widget position 和 viewport scale。
 - `bEnableCardLayerPixelSnapping` 默认开启，最终位置会在 edge drop、pending lift、hover lift 后 snap 到 `CardLayerPixelSnapGrid`，默认 1.0 UMG layout unit。
 - `bClampCardLayerRenderAngle` 默认开启，slot render angle 被限制在 `MaxCardLayerRenderAngleDegrees` 内，默认 4 度；后续扇形表现优先通过位置下坠和 hover/pending 归正继续优化，而不是继续增加旋转角。
@@ -248,11 +249,41 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - 不改 `WBP_CardView` 结构，不引入 RetainerBox / RenderTarget / Slate 自绘。
 
 8. Render Quality V0-B
-   - 优化扇形布局：减少整体旋转依赖，更多使用边缘下坠、层级、hover / pending 归正。
-   - 修正详情面板跟随 hovered card 和 ZOrder，避免被 first-person 卡牌遮挡。
+   - 当前不把“降低旋转角”作为主线目标；`WBP_FirstPersonCardView` 已能承接较大角度旋转的抗锯齿需求，排布表现优先。
+   - 后续只在美术反馈需要时微调扇形参数：下坠、层级、hover / pending 姿态和可选角度 clamp。
+   - 更高优先级是修正详情面板跟随 hovered card 和 ZOrder，避免被 first-person 卡牌遮挡。
 
 9. First-person card view polish
-   - 如 V0-A / V0-B 仍不能满足美术标准，再规划 `WBP_FirstPersonCardView`，为第一人称主手牌制定更粗边框、更稳透明边缘和更适合旋转的卡面规范。
+   - 已确认第一人称层应使用专用 `WBP_FirstPersonCardView`，不要继续把通用 `WBP_CardView` 直接作为长期主手牌卡面。
+   - 后续 polish 重点是沉淀该 WBP 的制作规范：RetainerBox 使用边界、贴图透明留白、内部缩放、安全边框、材质动画刷新频率，以及不同 DPI / 视口尺寸下的旋转采样表现。
+
+## `WBP_FirstPersonCardView` 制作合同
+
+推荐资产路径：`/Game/Wacom/UI/Card/WBP_FirstPersonCardView`
+
+父类：`UWacomCardView`
+
+使用入口：
+
+- 在 `BP_WacomPlayerCharacter -> FirstPersonCardAnchorComponent -> FirstPersonCardViewClass` 中设置。
+- 同一个入口同时服务静态预览层和 BattleHUD 写入的 runtime battle hand。
+- C++ 不硬编码该 WBP 路径；为空时只使用 `UWacomCardView` 作为测试 fallback，避免没有资产时崩溃。
+
+制作要求：
+
+- 以 `WBP_CardView` 为基础复制，不要改 `UWacomCardView` 的数据入口和 `SetCardViewData()` 语义。
+- 根部建议使用 `RetainerBox` 缓存卡面，再在 RetainerBox 内部把实际卡面内容轻微缩放到约 `0.99`，给旋转采样留下透明边缘。
+- 卡面基础尺寸保持 296 x 420，first-person layer 的 `StaticCardRenderScale=1.0` 时应接近美术设计尺寸。
+- 高对比边框、描边、稀疏细线和贴图边缘需要预留透明 Alpha 留白；不要让有效像素紧贴贴图边界。
+- 材质动画、流光和 disabled overlay 仍应通过 `UWacomCardView` 的现有绑定与 `SurfaceFoilOverlay` 路径工作，不在 first-person slot widget 内另开一套数据绑定。
+- Widget 本体保持只读卡面：不创建 `UCardWidget`，不提交战斗命令，不在 WBP 图里读取 `UBattleSession`。
+
+验收口径：
+
+- first-person layer 大角度扇形排布下，边缘不应出现明显锯齿、像素断裂或黑边。
+- 卡面材质动画在 HUD first-person layer 中正常刷新。
+- Hover / pending / disabled 状态由 first-person layer 的 slot transform、opacity 和 `FWacomCardViewData::bDisabled` 叠加表现，WBP 不重复实现同一套状态机。
+- 如果未来普通 HUD、背包或详情需要不同尺寸或结构，优先调整各自 WBP，不把第一人称 RetainerBox 规范反向套回通用 `WBP_CardView`。
 
 10. Play focus pose
    - 在命令 / 事件表现前增加短暂卡牌打出表现位。

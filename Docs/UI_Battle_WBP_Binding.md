@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-battle
 status: active
-updated: 2026-05-22
+updated: 2026-05-28
 tags:
   - wacom/ui
   - wacom/wbp
@@ -62,6 +62,48 @@ PIE 检查：
 - hover 后鼠标停在卡牌下沿不抖动。
 - 需要目标的卡牌被点击后，当前卡能显示选中态。
 - 进入目标选择后，卡牌详情面板会隐藏。
+
+---
+
+## WBP_FirstPersonCardView
+
+父类：`UWacomCardView`
+
+推荐资产路径：`/Game/Wacom/UI/Card/WBP_FirstPersonCardView`
+
+配置入口：`BP_WacomPlayerCharacter -> FirstPersonCardAnchorComponent -> FirstPersonCardViewClass`
+
+用途：
+
+- 第一人称卡牌层的卡面皮肤，服务静态预览和 BattleHUD runtime battle hand。
+- 解决 `WBP_CardView` 被 first-person layer 整卡旋转时的采样锯齿、细线断裂和边缘像素破坏。
+- 不替代 `WBP_CardWidget`，不承接点击、hover 命令、目标选择或战斗规则。
+
+推荐结构：
+
+```text
+WBP_FirstPersonCardView
+└─ RetainerBox
+   └─ CardContentRoot / Overlay（约 0.99 RenderScale）
+      └─ 原 WBP_CardView 卡面内容
+```
+
+WBP 合同：
+
+- 继承 `UWacomCardView`，继续只接收 `FWacomCardViewData`。
+- 根部建议包一层 `RetainerBox`；RetainerBox 内部卡面内容轻微缩放到约 `0.99`，给旋转采样预留透明边缘。
+- 卡面基础尺寸保持 296 x 420；`FirstPersonCardAnchorComponent.StaticCardRenderScale=1.0` 时应接近美术设计尺寸。
+- 高对比边框、贴图边缘和细线不要紧贴贴图边界；贴图建议预留透明 Alpha 留白。
+- 材质流光和表面装饰继续走 `UWacomCardView` / `SurfaceFoilOverlay` 路径，不在 first-person slot widget 内新增材质刷新逻辑。
+- 不创建 `UCardWidget`，不绑定按钮，不提交 `UBattleSession` 命令，不在 WBP 图里实现 hover/pending/disabled 状态机。
+- Hover、pending、disabled opacity、ZOrder 和点击意图由 `UWacomFirstPersonCardLayerSlotWidget` 与 `BattleHUD` 管理。
+
+PIE 检查：
+
+- 在 `BP_WacomPlayerCharacter` 的 `FirstPersonCardAnchorComponent` 上把 `FirstPersonCardViewClass` 设置为 `WBP_FirstPersonCardView`。
+- 开启 BattleHUD 的 first-person layer / interaction / hide legacy hand panel 原型开关。
+- 进入战斗后确认 first-person 卡牌大角度排布下没有明显锯齿、黑边或像素断裂。
+- Hover、点击无目标卡、点击目标卡进入 `TargetSelect`、pending 视觉和详情面板仍走现有 first-person layer 流程。
 
 ---
 

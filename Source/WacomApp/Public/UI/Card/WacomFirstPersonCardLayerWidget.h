@@ -14,8 +14,9 @@ class UWacomFirstPersonCardLayerSlotWidget;
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 
 /**
- * Non-interactive HUD card layer driven by first-person card anchor projection.
- * V0-B renders static UWacomCardView instances only; it does not own commands.
+ * HUD card layer driven by first-person card anchor projection.
+ * Renders UWacomCardView-compatible card face widgets, may opt into slot-level
+ * hover/click intent, and never owns battle or Run commands.
  */
 UCLASS()
 class WACOMAPP_API UWacomFirstPersonCardLayerWidget : public UUserWidget

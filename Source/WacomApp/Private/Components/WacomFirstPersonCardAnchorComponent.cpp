@@ -714,7 +714,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		if (StaticCardLayerWidget)
 		{
 			StaticCardLayerWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
-			StaticCardLayerWidget->SetCardViewClass(StaticCardViewClass);
+			StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
 			BindStaticCardLayerWidget(StaticCardLayerWidget);
 			AddStaticCardLayerWidgetToViewportForAnchor(StaticCardLayerWidget, StaticCardLayerZOrder);
@@ -723,7 +723,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 
 	if (StaticCardLayerWidget)
 	{
-		StaticCardLayerWidget->SetCardViewClass(StaticCardViewClass);
+		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 		StaticCardLayerWidget->SetStaticCardSlots(BuildActiveCardLayerSlotViews());
 	}
 }
