@@ -5022,8 +5022,11 @@ bool FWacomFirstPersonCardLayerVisualStateSlotTest::RunTest(const FString& Param
 	Anchor->StaticCardRenderScale = 0.5f;
 	Anchor->PendingTargetingLiftPixels = 40.0f;
 	Anchor->PendingTargetingScale = 1.2f;
+	Anchor->PendingTargetingZOrderBoost = 1200;
 	Anchor->HandAnchorScale = 0.9f;
 	Anchor->DisabledRenderOpacity = 0.6f;
+	Anchor->TargetSelectNonPendingOpacityMultiplier = 0.5f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
 
 	FWacomFirstPersonCardLayerEntry NormalEntry;
 	NormalEntry.CardViewData.Name = FText::FromString(TEXT("Normal"));
@@ -5045,9 +5048,10 @@ bool FWacomFirstPersonCardLayerVisualStateSlotTest::RunTest(const FString& Param
 	{
 		TestTrue(TEXT("Pending card lifts above normal card"), Slots[1].ScreenPosition.Y < Slots[0].ScreenPosition.Y);
 		TestEqual(TEXT("Pending card applies scale multiplier"), Slots[1].RenderScale, 0.5f * 1.2f);
-		TestTrue(TEXT("Pending card gets higher z-order"), Slots[1].ZOrder > Slots[2].ZOrder);
+		TestTrue(TEXT("Pending card gets configured higher z-order"), Slots[1].ZOrder >= 1200);
+		TestEqual(TEXT("Non-pending card is deemphasized during target select"), Slots[0].RenderOpacity, 0.5f);
 		TestEqual(TEXT("Disabled anchor applies anchor scale"), Slots[2].RenderScale, 0.5f * 0.9f);
-		TestEqual(TEXT("Disabled card applies layer opacity"), Slots[2].RenderOpacity, 0.6f);
+		TestEqual(TEXT("Disabled card opacity composes with target select deemphasis"), Slots[2].RenderOpacity, 0.6f * 0.5f);
 		TestTrue(TEXT("Disabled card view data stays disabled"), Slots[2].Entry.CardViewData.bDisabled);
 	}
 
@@ -5066,8 +5070,126 @@ bool FWacomFirstPersonCardLayerVisualStateSlotTest::RunTest(const FString& Param
 		}
 		if (TestNotNull(TEXT("Disabled card view exists"), Layer->GetCardViewAt(2)))
 		{
-			TestEqual(TEXT("Disabled widget opacity matches slot"), Layer->GetCardRenderOpacityAt(2), 0.6f);
+			TestEqual(TEXT("Disabled widget opacity matches slot"), Layer->GetCardRenderOpacityAt(2), 0.6f * 0.5f);
 		}
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPendingFocusAngleTest,
+	"Wacom.UI.FirstPersonCardLayer.PendingFocus.PendingCardAngleBlendsTowardZeroWhenEnabled",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPendingFocusAngleTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->FanYawDegrees = 12.0f;
+	Anchor->bClampCardLayerRenderAngle = false;
+	Anchor->bPendingTargetingStraightenAngle = false;
+	Anchor->PendingTargetingAngleBlend = 0.75f;
+
+	FWacomFirstPersonCardLayerEntry PendingEntry;
+	PendingEntry.CardViewData.Name = FText::FromString(TEXT("Pending"));
+	PendingEntry.bIsPendingTargeting = true;
+
+	FWacomFirstPersonCardLayerEntry NormalEntry;
+	NormalEntry.CardViewData.Name = FText::FromString(TEXT("Normal"));
+
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { PendingEntry, NormalEntry });
+	const TArray<FWacomFirstPersonCardLayerSlotView> UnblendedSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	Anchor->bPendingTargetingStraightenAngle = true;
+	const TArray<FWacomFirstPersonCardLayerSlotView> BlendedSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	TestEqual(TEXT("Unblended slot count"), UnblendedSlots.Num(), 2);
+	TestEqual(TEXT("Blended slot count"), BlendedSlots.Num(), 2);
+	if (UnblendedSlots.Num() == 2 && BlendedSlots.Num() == 2)
+	{
+		TestEqual(TEXT("Pending angle keeps fan angle when disabled"), UnblendedSlots[0].RenderAngleDegrees, -6.0f);
+		TestEqual(TEXT("Pending angle blends toward zero when enabled"), BlendedSlots[0].RenderAngleDegrees, -1.5f);
+		TestEqual(TEXT("Non-pending angle remains unchanged"), BlendedSlots[1].RenderAngleDegrees, UnblendedSlots[1].RenderAngleDegrees);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPendingHoverPriorityTest,
+	"Wacom.UI.FirstPersonCardLayer.PendingFocus.PendingHoverDoesNotDoubleApplyLiftOrScale",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPendingHoverPriorityTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->StaticCardRenderScale = 1.0f;
+	Anchor->PendingTargetingLiftPixels = 40.0f;
+	Anchor->PendingTargetingScale = 1.2f;
+	Anchor->PendingTargetingZOrderBoost = 1000;
+	Anchor->HoverLiftPixels = 30.0f;
+	Anchor->HoverScale = 1.1f;
+	Anchor->HoverZOrderBoost = 250;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+
+	const FGuid PendingId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerEntry PendingEntry;
+	PendingEntry.CardInstanceId = PendingId;
+	PendingEntry.CardViewData.Name = FText::FromString(TEXT("Pending"));
+	PendingEntry.bIsPendingTargeting = true;
+
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { PendingEntry });
+	const TArray<FWacomFirstPersonCardLayerSlotView> PendingSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	Anchor->SetHoveredCardInstanceIdForTest(PendingId);
+	const TArray<FWacomFirstPersonCardLayerSlotView> PendingHoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	TestEqual(TEXT("Pending slot count"), PendingSlots.Num(), 1);
+	TestEqual(TEXT("Pending hover slot count"), PendingHoverSlots.Num(), 1);
+	if (PendingSlots.Num() == 1 && PendingHoverSlots.Num() == 1)
+	{
+		TestTrue(TEXT("Pending hover still marks hovered slot"), PendingHoverSlots[0].bIsHovered);
+		TestEqual(TEXT("Pending hover does not add hover scale"), PendingHoverSlots[0].RenderScale, PendingSlots[0].RenderScale);
+		TestEqual(TEXT("Pending hover does not add hover lift"), PendingHoverSlots[0].ScreenPosition.Y, PendingSlots[0].ScreenPosition.Y);
+		TestEqual(TEXT("Pending hover does not add hover z-order"), PendingHoverSlots[0].ZOrder, PendingSlots[0].ZOrder);
 	}
 
 	Anchor->DestroyComponent();

@@ -516,6 +516,16 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 	const int32 ClampedCount = FMath::Clamp(CardEntries.Num(), 0, 32);
 	Slots.Reserve(ClampedCount);
 
+	bool bHasPendingTargetingCard = false;
+	for (int32 EntryIndex = 0; EntryIndex < ClampedCount; ++EntryIndex)
+	{
+		if (CardEntries[EntryIndex].bIsPendingTargeting)
+		{
+			bHasPendingTargetingCard = true;
+			break;
+		}
+	}
+
 	FWacomFirstPersonCardProjectedPoint AnchorPoint;
 	const bool bUseAuthoredLayout = CardLayoutMode == EWacomFirstPersonCardLayoutMode::Authored2D;
 	const bool bAuthoredAnchorProjected = !bUseAuthoredLayout
@@ -559,6 +569,11 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		const float FanOffset = bUseAuthoredLayout
 			? FanDirection * AuthoredFanMagnitude
 			: CenterOffset;
+		const bool bIsPendingTargeting = Slot.Entry.bIsPendingTargeting;
+		const bool bIsHovered =
+			Slot.Entry.CardInstanceId.IsValid()
+			&& Slot.Entry.CardInstanceId == HoveredCardInstanceId;
+		const bool bAllowHoverTransform = bIsHovered && !bIsPendingTargeting;
 		Slot.NormalizedHandOffset = NormalizedHandOffset;
 		Slot.RenderAngleDegrees = ClampCardLayerRenderAngle(FanOffset * FanYawDegrees);
 		if (bUseAuthoredLayout && bAuthoredCenterCardsDrawOnTop)
@@ -569,14 +584,29 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		{
 			Slot.RenderScale *= FMath::Max(0.01f, HandAnchorScale);
 		}
-		if (Slot.Entry.bIsPendingTargeting)
+		if (bIsPendingTargeting)
 		{
+			if (bPendingTargetingStraightenAngle)
+			{
+				const float AngleBlend = FMath::Clamp(PendingTargetingAngleBlend, 0.0f, 1.0f);
+				Slot.RenderAngleDegrees = FMath::Lerp(Slot.RenderAngleDegrees, 0.0f, AngleBlend);
+			}
 			Slot.RenderScale *= FMath::Max(0.01f, PendingTargetingScale);
-			Slot.ZOrder += 1000;
+			Slot.ZOrder += FMath::Max(0, PendingTargetingZOrderBoost);
 		}
-		if (Slot.Entry.CardInstanceId.IsValid() && Slot.Entry.CardInstanceId == HoveredCardInstanceId)
+		else if (bHasPendingTargetingCard && bEnableTargetSelectHandDeemphasis)
+		{
+			Slot.RenderOpacity = FMath::Clamp(
+				Slot.RenderOpacity * FMath::Clamp(TargetSelectNonPendingOpacityMultiplier, 0.0f, 1.0f),
+				0.0f,
+				1.0f);
+		}
+		if (bIsHovered)
 		{
 			Slot.bIsHovered = true;
+		}
+		if (bAllowHoverTransform)
+		{
 			Slot.RenderScale *= FMath::Max(0.01f, HoverScale);
 			Slot.ZOrder += FMath::Max(0, HoverZOrderBoost);
 		}
@@ -623,11 +653,11 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				Slot.bBodyLockedLayout = AnchorPoint.bBodyLockedLayout;
 				Slot.bCurrentCameraProjection = AnchorPoint.bCurrentCameraProjection;
 				Slot.bLookOffsetAppliedToLayout = AnchorPoint.bLookOffsetAppliedToLayout;
-				if (Slot.Entry.bIsPendingTargeting)
+				if (bIsPendingTargeting)
 				{
 					FinalPosition.Y -= FMath::Max(0.0f, PendingTargetingLiftPixels);
 				}
-				if (Slot.Entry.CardInstanceId.IsValid() && Slot.Entry.CardInstanceId == HoveredCardInstanceId)
+				if (bAllowHoverTransform)
 				{
 					FinalPosition.Y -= FMath::Max(0.0f, HoverLiftPixels);
 				}
@@ -660,11 +690,11 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				Slot.bCurrentCameraProjection = Point.bCurrentCameraProjection;
 				Slot.bLookOffsetAppliedToLayout = Point.bLookOffsetAppliedToLayout;
 				FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, StaticCardEdgeDropPixels);
-				if (Slot.Entry.bIsPendingTargeting)
+				if (bIsPendingTargeting)
 				{
 					FinalPosition.Y -= FMath::Max(0.0f, PendingTargetingLiftPixels);
 				}
-				if (Slot.Entry.CardInstanceId.IsValid() && Slot.Entry.CardInstanceId == HoveredCardInstanceId)
+				if (bAllowHoverTransform)
 				{
 					FinalPosition.Y -= FMath::Max(0.0f, HoverLiftPixels);
 				}
