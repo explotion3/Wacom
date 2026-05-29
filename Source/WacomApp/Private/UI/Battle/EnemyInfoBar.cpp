@@ -5,6 +5,7 @@
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
+#include "Blueprint/SlateBlueprintLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -70,6 +71,33 @@ void UEnemyInfoBar::NativeDestruct()
 	Super::NativeDestruct();
 }
 
+bool UEnemyInfoBar::TryGetPartWidgetCenterInViewport(
+	const FGuid& PartInstanceId,
+	FVector2D& OutWidgetPosition) const
+{
+	if (!PartInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	for (const TObjectPtr<UEnemyPartWidget>& Part : SpawnedParts)
+	{
+		if (!Part || Part->GetPartInstanceId() != PartInstanceId)
+		{
+			continue;
+		}
+
+		const FGeometry& Geometry = Part->GetCachedGeometry();
+		const FVector2D LocalCenter = Geometry.GetLocalSize() * 0.5f;
+		const FVector2D AbsoluteCenter = Geometry.LocalToAbsolute(LocalCenter);
+		FVector2D PixelPosition = FVector2D::ZeroVector;
+		USlateBlueprintLibrary::AbsoluteToViewport(this, AbsoluteCenter, PixelPosition, OutWidgetPosition);
+		return true;
+	}
+
+	return false;
+}
+
 UBattleHUD* UEnemyInfoBar::FindOwningBattleHUD() const
 {
 	for (UUserWidget* P = GetTypedOuter<UUserWidget>(); P; P = P->GetTypedOuter<UUserWidget>())
@@ -99,7 +127,7 @@ void UEnemyInfoBar::RegisterBattlePresentationTargets(UBattleHUD& HUD)
 			{
 				if (UEnemyPartWidget* StrongPart = WeakPart.Get())
 				{
-					StrongPart->PlayBattlePresentationCue(Cue.SourceEventType, Cue.Amount);
+					StrongPart->PlayBattlePresentationCue(Cue);
 				}
 			});
 	}

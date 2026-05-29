@@ -4,6 +4,7 @@
 
 #define LOCTEXT_NAMESPACE "WacomEnemyPart"
 #include "UI/Common/WacomProgressBar.h"
+#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
@@ -206,32 +207,37 @@ void UEnemyPartWidget::SetTargetable(bool bInTargetable)
 	BP_OnTargetableChanged(bInTargetable);
 }
 
-void UEnemyPartWidget::PlayBattlePresentationCue(EBattleEventType SourceEventType, int32 Amount)
+void UEnemyPartWidget::PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue)
 {
-	if (SourceEventType != EBattleEventType::DamageDealt
-		&& SourceEventType != EBattleEventType::EnemyPartHpEmptied)
+	if (Cue.CueKind == EWacomBattlePresentationTargetCueKind::BattleEvent
+		&& Cue.SourceEventType != EBattleEventType::DamageDealt
+		&& Cue.SourceEventType != EBattleEventType::EnemyPartHpEmptied)
 	{
 		return;
 	}
 
 	StopBattlePresentationCueTimer();
 	bBattlePresentationCueActive = true;
-	LastBattlePresentationCueType = SourceEventType;
-	LastBattlePresentationCueAmount = Amount;
+	LastBattlePresentationCueKind = Cue.CueKind;
+	LastBattlePresentationCueType = Cue.SourceEventType;
+	LastBattlePresentationCueAmount = Cue.Amount;
 	++BattlePresentationCuePlayCount;
 
 	if (FrameBorder)
 	{
-		FrameBorder->SetBrushColor(BuildPresentationCueFrameColor(SourceEventType));
+		FrameBorder->SetBrushColor(BuildPresentationCueFrameColor(Cue));
 	}
 
 	if (UWorld* World = GetWorld())
 	{
+		const float HoldSeconds = Cue.Duration > 0.0f
+			? Cue.Duration
+			: BattlePresentationCueHoldSeconds;
 		World->GetTimerManager().SetTimer(
 			BattlePresentationCueTimerHandle,
 			this,
 			&UEnemyPartWidget::ClearBattlePresentationCue,
-			BattlePresentationCueHoldSeconds,
+			HoldSeconds,
 			false);
 	}
 }
@@ -265,9 +271,14 @@ FLinearColor UEnemyPartWidget::BuildBaseFrameColor() const
 	return FLinearColor(0.2f, 0.05f, 0.05f, 0.9f); // 暗红：默认
 }
 
-FLinearColor UEnemyPartWidget::BuildPresentationCueFrameColor(EBattleEventType SourceEventType) const
+FLinearColor UEnemyPartWidget::BuildPresentationCueFrameColor(
+	const FWacomBattlePresentationTargetCue& Cue) const
 {
-	if (SourceEventType == EBattleEventType::EnemyPartHpEmptied)
+	if (Cue.CueKind == EWacomBattlePresentationTargetCueKind::TargetConfirmed)
+	{
+		return FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
+	}
+	if (Cue.SourceEventType == EBattleEventType::EnemyPartHpEmptied)
 	{
 		return FLinearColor(1.0f, 0.35f, 0.12f, 1.0f);
 	}
@@ -279,7 +290,11 @@ void UEnemyPartWidget::UpdateFrameColor()
 	if (!FrameBorder) { return; }
 	if (bBattlePresentationCueActive)
 	{
-		FrameBorder->SetBrushColor(BuildPresentationCueFrameColor(LastBattlePresentationCueType));
+		FWacomBattlePresentationTargetCue Cue;
+		Cue.CueKind = LastBattlePresentationCueKind;
+		Cue.SourceEventType = LastBattlePresentationCueType;
+		Cue.Amount = LastBattlePresentationCueAmount;
+		FrameBorder->SetBrushColor(BuildPresentationCueFrameColor(Cue));
 		return;
 	}
 	FrameBorder->SetBrushColor(BuildBaseFrameColor());

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
+#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "Snapshots/EnemySnapshot.h"
 #include "TimerManager.h"
@@ -110,17 +111,19 @@ private:
 	UFUNCTION()
 	void HandleRootButtonClicked();
 
-	void PlayBattlePresentationCue(EBattleEventType SourceEventType, int32 Amount);
+	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
 	void ClearBattlePresentationCue();
 	void StopBattlePresentationCueTimer();
 	FLinearColor BuildBaseFrameColor() const;
-	FLinearColor BuildPresentationCueFrameColor(EBattleEventType SourceEventType) const;
+	FLinearColor BuildPresentationCueFrameColor(const FWacomBattlePresentationTargetCue& Cue) const;
 	void UpdateFrameColor();
 
 	FEnemyPartSnapshot CachedSnap;
 	bool bLastDestroyed = false;
 	bool bLastTargetable = false;
 	bool bBattlePresentationCueActive = false;
+	EWacomBattlePresentationTargetCueKind LastBattlePresentationCueKind =
+		EWacomBattlePresentationTargetCueKind::BattleEvent;
 	EBattleEventType LastBattlePresentationCueType = EBattleEventType::None;
 	int32 LastBattlePresentationCueAmount = 0;
 	int32 BattlePresentationCuePlayCount = 0;

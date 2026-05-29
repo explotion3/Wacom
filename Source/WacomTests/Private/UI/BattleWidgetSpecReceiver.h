@@ -12,6 +12,7 @@
 #include "UI/Battle/EnemyPartWidget.h"
 #include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
+#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "Components/WacomBattlePresentationTargetComponent.h"
@@ -342,6 +343,11 @@ public:
 		StoreFirstPersonCardTransitionEvents(Events);
 	}
 
+	void RecordFirstPersonPlayCommitForTest(const FGuid& CardInstanceId, const FGuid& TargetPartInstanceId = FGuid())
+	{
+		RecordFirstPersonPlayCommit(CardInstanceId, TargetPartInstanceId);
+	}
+
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForTest(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const
@@ -609,6 +615,11 @@ public:
 		UBattleHUD::PlayBattlePresentationCueForTest(SourceEventType, TargetPartInstanceId, Amount);
 	}
 
+	void PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId)
+	{
+		UBattleHUD::PlayTargetConfirmedCueForTest(TargetPartInstanceId);
+	}
+
 	int32 GetBattlePresentationTargetCountForTest() const
 	{
 		return UBattleHUD::GetBattlePresentationTargetCountForTest();
@@ -690,12 +701,27 @@ class UWacomBattleEnemyPartWidgetPresentationProbe : public UEnemyPartWidget
 public:
 	void PlayCueForTest(EBattleEventType SourceEventType, int32 Amount)
 	{
-		PlayBattlePresentationCue(SourceEventType, Amount);
+		FWacomBattlePresentationTargetCue Cue;
+		Cue.SourceEventType = SourceEventType;
+		Cue.Amount = Amount;
+		PlayBattlePresentationCue(Cue);
+	}
+
+	void PlayTargetConfirmedCueForTest()
+	{
+		FWacomBattlePresentationTargetCue Cue;
+		Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
+		PlayBattlePresentationCue(Cue);
 	}
 
 	bool IsBattlePresentationCueActiveForTest() const
 	{
 		return bBattlePresentationCueActive;
+	}
+
+	EWacomBattlePresentationTargetCueKind GetLastBattlePresentationCueKindForTest() const
+	{
+		return LastBattlePresentationCueKind;
 	}
 
 	EBattleEventType GetLastBattlePresentationCueTypeForTest() const

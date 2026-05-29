@@ -151,7 +151,7 @@ bool UWacomBattlePresentationTargetComponent::RegisterWithBattleHUD(UBattleHUD* 
 		{
 			if (UWacomBattlePresentationTargetComponent* Component = WeakThis.Get())
 			{
-				Component->HandleBattlePresentationCue(Cue.SourceEventType, Cue.Amount);
+				Component->HandleBattlePresentationCue(Cue);
 			}
 		});
 
@@ -200,17 +200,19 @@ void UWacomBattlePresentationTargetComponent::NativeOnBattlePresentationCue(
 }
 
 void UWacomBattlePresentationTargetComponent::HandleBattlePresentationCue(
-	EBattleEventType SourceEventType,
-	int32 Amount)
+	const FWacomBattlePresentationTargetCue& Cue)
 {
-	LastCueType = SourceEventType;
-	LastCueAmount = Amount;
+	LastCueKind = WacomBattlePresentationTargetCueKindToName(Cue.CueKind);
+	LastCueType = Cue.SourceEventType;
+	LastCueAmount = Cue.Amount;
 	++CuePlayCount;
-	PlayVisualFeedback(SourceEventType);
-	NativeOnBattlePresentationCue(SourceEventType, Amount);
-	LogDebugStateChange(TEXT("Cue"), SourceEventType == EBattleEventType::EnemyPartHpEmptied
+	PlayVisualFeedback(Cue);
+	NativeOnBattlePresentationCue(Cue.SourceEventType, Cue.Amount);
+	LogDebugStateChange(TEXT("Cue"), Cue.CueKind == EWacomBattlePresentationTargetCueKind::TargetConfirmed
+		? TEXT("TargetConfirmed")
+		: Cue.SourceEventType == EBattleEventType::EnemyPartHpEmptied
 		? TEXT("EnemyPartHpEmptied")
-		: SourceEventType == EBattleEventType::DamageDealt
+		: Cue.SourceEventType == EBattleEventType::DamageDealt
 			? TEXT("DamageDealt")
 			: TEXT("OtherCue"));
 }
@@ -236,6 +238,7 @@ FWacomBattlePresentationTargetDebugView UWacomBattlePresentationTargetComponent:
 	}
 
 	View.LastCueType = LastCueType;
+	View.LastCueKind = LastCueKind;
 	View.LastCueAmount = LastCueAmount;
 	View.CuePlayCount = CuePlayCount;
 	View.bVisualFeedbackActive = bVisualFeedbackActive;
@@ -252,7 +255,7 @@ FString UWacomBattlePresentationTargetComponent::GetBattlePresentationTargetDebu
 {
 	const FWacomBattlePresentationTargetDebugView View = GetBattlePresentationTargetDebugView();
 	return FString::Printf(
-		TEXT("PartId=%s PartInstanceId=%s Registered=%s HUD=%s Visual=%s Click=%s BoundClick=%s Collision=%s Visibility=%s BlocksVisibility=%s LastRegistration=%s LastAutoBind=%s LastClick=%s LastCue=%s Amount=%d Count=%d VisualActive=%s TargetAffordance=%s Targetable=%s TargetDisabledReason=%s"),
+		TEXT("PartId=%s PartInstanceId=%s Registered=%s HUD=%s Visual=%s Click=%s BoundClick=%s Collision=%s Visibility=%s BlocksVisibility=%s LastRegistration=%s LastAutoBind=%s LastClick=%s LastCueKind=%s LastCue=%s Amount=%d Count=%d VisualActive=%s TargetAffordance=%s Targetable=%s TargetDisabledReason=%s"),
 		*View.PartId.ToString(),
 		*View.PartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 		View.bIsRegisteredWithBattleHUD ? TEXT("true") : TEXT("false"),
@@ -266,6 +269,7 @@ FString UWacomBattlePresentationTargetComponent::GetBattlePresentationTargetDebu
 		*View.LastRegistrationResult.ToString(),
 		*View.LastAutoBindResult.ToString(),
 		*View.LastClickResult.ToString(),
+		*View.LastCueKind.ToString(),
 		*UEnum::GetValueAsString(View.LastCueType),
 		View.LastCueAmount,
 		View.CuePlayCount,
@@ -438,11 +442,18 @@ void UWacomBattlePresentationTargetComponent::HandleClickTargetClicked(
 	RequestSceneTargetClick();
 }
 
-void UWacomBattlePresentationTargetComponent::PlayVisualFeedback(EBattleEventType SourceEventType)
+void UWacomBattlePresentationTargetComponent::PlayVisualFeedback(const FWacomBattlePresentationTargetCue& Cue)
 {
-	if (!bEnableVisualFeedback
-		|| (SourceEventType != EBattleEventType::DamageDealt
-			&& SourceEventType != EBattleEventType::EnemyPartHpEmptied))
+	if (!bEnableVisualFeedback)
+	{
+		return;
+	}
+
+	const bool bTargetConfirmed = Cue.CueKind == EWacomBattlePresentationTargetCueKind::TargetConfirmed;
+	const bool bBattleEventCue =
+		Cue.SourceEventType == EBattleEventType::DamageDealt
+		|| Cue.SourceEventType == EBattleEventType::EnemyPartHpEmptied;
+	if (!bTargetConfirmed && !bBattleEventCue)
 	{
 		return;
 	}
@@ -454,14 +465,23 @@ void UWacomBattlePresentationTargetComponent::PlayVisualFeedback(EBattleEventTyp
 
 	bVisualFeedbackActive = true;
 
-	ActiveVisualFeedbackScaleMultiplier = SourceEventType == EBattleEventType::EnemyPartHpEmptied
-		? FMath::Max(1.0f, DestroyedPulseScale)
-		: FMath::Max(1.0f, DamagePulseScale);
+	if (bTargetConfirmed)
+	{
+		ActiveVisualFeedbackScaleMultiplier = FMath::Max(1.0f, TargetConfirmPulseScale);
+	}
+	else
+	{
+		ActiveVisualFeedbackScaleMultiplier = Cue.SourceEventType == EBattleEventType::EnemyPartHpEmptied
+			? FMath::Max(1.0f, DestroyedPulseScale)
+			: FMath::Max(1.0f, DamagePulseScale);
+	}
 	ApplyCurrentVisualScale();
 
-	const float HoldSeconds = SourceEventType == EBattleEventType::EnemyPartHpEmptied
-		? FMath::Max(0.0f, DestroyedPulseSeconds)
-		: FMath::Max(0.0f, DamagePulseSeconds);
+	const float HoldSeconds = bTargetConfirmed
+		? FMath::Max(0.0f, Cue.Duration > 0.0f ? Cue.Duration : TargetConfirmPulseSeconds)
+		: Cue.SourceEventType == EBattleEventType::EnemyPartHpEmptied
+			? FMath::Max(0.0f, DestroyedPulseSeconds)
+			: FMath::Max(0.0f, DamagePulseSeconds);
 	if (HoldSeconds <= 0.0f)
 	{
 		RestoreVisualFeedback();

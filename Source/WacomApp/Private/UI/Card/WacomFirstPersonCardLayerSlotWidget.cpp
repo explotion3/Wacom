@@ -279,6 +279,9 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotFeedbackConfig(
 	SlotFeedbackConfig.DenyDuration = FMath::Max(0.0f, SlotFeedbackConfig.DenyDuration);
 	SlotFeedbackConfig.DenyShakePixels = FMath::Max(0.0f, SlotFeedbackConfig.DenyShakePixels);
 	SlotFeedbackConfig.DenyOpacity = FMath::Clamp(SlotFeedbackConfig.DenyOpacity, 0.0f, 1.0f);
+	SlotFeedbackConfig.PlayCommitDuration = FMath::Max(0.0f, SlotFeedbackConfig.PlayCommitDuration);
+	SlotFeedbackConfig.PlayCommitOpacity = FMath::Clamp(SlotFeedbackConfig.PlayCommitOpacity, 0.0f, 1.0f);
+	SlotFeedbackConfig.PlayCommitScale = FMath::Max(0.01f, SlotFeedbackConfig.PlayCommitScale);
 	if (!SlotFeedbackConfig.bEnabled)
 	{
 		ClearInteractionFeedback();
@@ -372,6 +375,10 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	if (DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration)
 	{
 		DenyFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
+	}
+	if (CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration)
+	{
+		CommitFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
 	}
 
 	bool bNearTarget = true;
@@ -627,8 +634,14 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 	const float PressedScale = (SlotFeedbackConfig.bEnabled && bIsPressedForFirstPersonLayer)
 		? SlotFeedbackConfig.PressedScale
 		: 1.0f;
+	const float CommitScale =
+		SlotFeedbackConfig.bEnabled
+		&& SlotFeedbackConfig.bEnablePlayCommitFeedback
+		&& CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration
+			? SlotFeedbackConfig.PlayCommitScale
+			: 1.0f;
 	CardRenderTransform.Translation = FVector2D(DenyShakeOffset, 0.0f);
-	CardRenderTransform.Scale = FVector2D(FMath::Max(0.01f, SlotView.RenderScale * PressedScale));
+	CardRenderTransform.Scale = FVector2D(FMath::Max(0.01f, SlotView.RenderScale * PressedScale * CommitScale));
 	CardRenderTransform.Angle = SlotView.RenderAngleDegrees;
 	SetRenderTransform(CardRenderTransform);
 	ApplyFeedbackOverlay();
@@ -793,11 +806,26 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerDenyFeedback()
 	UpdateWantsTick();
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::TriggerCommitFeedback()
+{
+	if (!SlotFeedbackConfig.bEnabled
+		|| !SlotFeedbackConfig.bEnablePlayCommitFeedback
+		|| SlotFeedbackConfig.PlayCommitDuration <= 0.0f)
+	{
+		return;
+	}
+
+	CommitFeedbackElapsedSeconds = 0.0f;
+	ApplyVisualSlotView();
+	UpdateWantsTick();
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
 {
 	bIsPressedForFirstPersonLayer = false;
 	ConfirmFeedbackElapsedSeconds = SlotFeedbackConfig.ConfirmDuration;
 	DenyFeedbackElapsedSeconds = SlotFeedbackConfig.DenyDuration;
+	CommitFeedbackElapsedSeconds = SlotFeedbackConfig.PlayCommitDuration;
 	ApplyFeedbackOverlay();
 }
 
@@ -815,6 +843,10 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
 	{
 		const float DenyAlpha = ComputePulseAlpha(DenyFeedbackElapsedSeconds, SlotFeedbackConfig.DenyDuration);
 		const float ConfirmAlpha = ComputePulseAlpha(ConfirmFeedbackElapsedSeconds, SlotFeedbackConfig.ConfirmDuration);
+		const float CommitAlpha =
+			SlotFeedbackConfig.bEnablePlayCommitFeedback
+				? ComputePulseAlpha(CommitFeedbackElapsedSeconds, SlotFeedbackConfig.PlayCommitDuration)
+				: 0.0f;
 		if (DenyAlpha > 0.0f)
 		{
 			OverlayColor = SlotFeedbackConfig.DenyColor;
@@ -824,6 +856,11 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
 		{
 			OverlayColor = SlotFeedbackConfig.PressedColor;
 			OverlayOpacity = SlotFeedbackConfig.PressedOpacity;
+		}
+		else if (CommitAlpha > 0.0f)
+		{
+			OverlayColor = SlotFeedbackConfig.PlayCommitColor;
+			OverlayOpacity = SlotFeedbackConfig.PlayCommitOpacity * CommitAlpha;
 		}
 		else if (ConfirmAlpha > 0.0f)
 		{
@@ -870,7 +907,9 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 	const bool bFeedbackActive =
 		(SlotFeedbackConfig.bEnabled && bIsPressedForFirstPersonLayer)
 		|| ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration
-		|| DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
+		|| DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration
+		|| (SlotFeedbackConfig.bEnablePlayCommitFeedback
+			&& CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration);
 	bWantsSlotMotionTick = bIsExitingForFirstPersonLayer
 		|| (bHasVisualSlotView
 			&& (FVector2D::Distance(VisualSlotView.ScreenPosition, TargetSlotView.ScreenPosition) > 0.1f

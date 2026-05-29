@@ -170,6 +170,21 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float DenyOpacity = 0.18f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnablePlayCommitFeedback = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PlayCommitDuration = 0.12f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PlayCommitOpacity = 0.16f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FLinearColor PlayCommitColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PlayCommitScale = 1.015f;
 };
 
 /**
@@ -203,6 +218,7 @@ public:
 	void BeginExitMotionWithProfile(
 		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride);
+	void TriggerCommitFeedback();
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
@@ -237,6 +253,7 @@ public:
 	bool IsPressedForFirstPersonLayerForTest() const { return bIsPressedForFirstPersonLayer; }
 	bool IsDenyFeedbackActiveForTest() const { return DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration; }
 	bool IsConfirmFeedbackActiveForTest() const { return ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration; }
+	bool IsCommitFeedbackActiveForTest() const { return CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration; }
 #endif
 
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardClickedNative;
@@ -280,6 +297,7 @@ private:
 	float ExitMotionElapsedSeconds = 0.0f;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
+	float CommitFeedbackElapsedSeconds = 999999.0f;
 	bool bCardLayerInteractionEnabled = false;
 	bool bIsHoveredForFirstPersonLayer = false;
 	bool bIsPressedForFirstPersonLayer = false;

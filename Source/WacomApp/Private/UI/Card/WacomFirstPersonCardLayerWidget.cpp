@@ -116,14 +116,20 @@ void UWacomFirstPersonCardLayerWidget::SetCardTransitionHints(
 	for (const FWacomFirstPersonCardLayerTransitionHint& Hint : InHints)
 	{
 		if (!Hint.CardInstanceId.IsValid()
-			|| Hint.TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Default)
+			|| (Hint.TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Default
+				&& !Hint.bPlayCommitFeedback))
 		{
 			continue;
 		}
 
+		FWacomFirstPersonCardLayerResolvedTransitionHint ResolvedHint;
+		ResolvedHint.TransitionKind = Hint.TransitionKind;
+		ResolvedHint.bPlayCommitFeedback = Hint.bPlayCommitFeedback;
+		ResolvedHint.bHasPlayedExitTargetWidgetPosition = Hint.bHasPlayedExitTargetWidgetPosition;
+		ResolvedHint.PlayedExitTargetWidgetPosition = Hint.PlayedExitTargetWidgetPosition;
 		PendingTransitionHintsByKey.Add(
 			Hint.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphensLower),
-			Hint.TransitionKind);
+			ResolvedHint);
 	}
 }
 
@@ -227,10 +233,10 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		{
 			++LastMotionDebugView.ReusedThisUpdate;
 		}
-		const EWacomFirstPersonCardSlotTransitionKind IncomingTransitionKind =
+		const FWacomFirstPersonCardLayerResolvedTransitionHint IncomingTransitionHint =
 			PendingTransitionHintsByKey.FindRef(SlotKey);
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile> EnterProfileOverride =
-			GetEnterProfileForTransition(IncomingTransitionKind, SlotView);
+			GetEnterProfileForTransition(IncomingTransitionHint.TransitionKind, SlotView);
 
 		SlotWidget->SetSlotMotionKey(SlotKey);
 		SlotWidget->SetCardViewClass(CardViewClass);
@@ -281,11 +287,15 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		}
 		if (SlotMotionConfig.bEnabled && SlotWidget->GetSlotView().bProjected)
 		{
-			const EWacomFirstPersonCardSlotTransitionKind OutgoingTransitionKind =
+			const FWacomFirstPersonCardLayerResolvedTransitionHint OutgoingTransitionHint =
 				PendingTransitionHintsByKey.FindRef(SlotWidget->GetSlotMotionKey());
 			const TOptional<FWacomFirstPersonCardTransitionMotionProfile> ExitProfileOverride =
-				GetExitProfileForTransition(OutgoingTransitionKind, SlotWidget->GetVisualSlotView());
+				GetExitProfileForTransition(OutgoingTransitionHint, SlotWidget->GetVisualSlotView());
 			SlotWidget->BeginExitMotionWithProfile(SlotWidget->GetSlotView(), ExitProfileOverride);
+			if (OutgoingTransitionHint.bPlayCommitFeedback)
+			{
+				SlotWidget->TriggerCommitFeedback();
+			}
 			if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(SlotWidget->Slot))
 			{
 				CanvasSlot->SetZOrder(SlotWidget->GetSlotView().ZOrder);
@@ -866,7 +876,7 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 }
 
 TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLayerWidget::GetExitProfileForTransition(
-	EWacomFirstPersonCardSlotTransitionKind TransitionKind,
+	const FWacomFirstPersonCardLayerResolvedTransitionHint& TransitionHint,
 	const FWacomFirstPersonCardLayerSlotView& VisualSlotView) const
 {
 	if (!SlotMotionConfig.bEnableEventAwareTransitions)
@@ -875,7 +885,7 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 	}
 
 	FWacomFirstPersonCardTransitionMotionProfile Profile;
-	switch (TransitionKind)
+	switch (TransitionHint.TransitionKind)
 	{
 	case EWacomFirstPersonCardSlotTransitionKind::Played:
 		Profile.OriginMode = SlotMotionConfig.PlayedExitOriginMode;
@@ -895,11 +905,29 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		return TOptional<FWacomFirstPersonCardTransitionMotionProfile>();
 	}
 
+	auto ApplyPlayedTargetBias = [&Profile, &TransitionHint, &VisualSlotView]()
+	{
+		if (!TransitionHint.bHasPlayedExitTargetWidgetPosition
+			|| TransitionHint.TransitionKind != EWacomFirstPersonCardSlotTransitionKind::Played)
+		{
+			return;
+		}
+
+		const FVector2D CurrentExitTarget = VisualSlotView.ScreenPosition + Profile.OffsetPixels;
+		const FVector2D TargetDirection = TransitionHint.PlayedExitTargetWidgetPosition - VisualSlotView.ScreenPosition;
+		if (!TargetDirection.IsNearlyZero())
+		{
+			const FVector2D BiasedExitTarget = CurrentExitTarget + TargetDirection.GetSafeNormal() * 48.0f;
+			Profile.OffsetPixels = BiasedExitTarget - VisualSlotView.ScreenPosition;
+		}
+	};
+
 	if (!SlotMotionConfig.bEnableReadableTransitionOrigins)
 	{
 		Profile.OriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
 		Profile.ScaleMultiplier = 1.0f;
 		Profile.AngleOffsetDegrees = 0.0f;
+		ApplyPlayedTargetBias();
 		return Profile;
 	}
 
@@ -920,6 +948,8 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 	default:
 		break;
 	}
+
+	ApplyPlayedTargetBias();
 
 	return Profile;
 }

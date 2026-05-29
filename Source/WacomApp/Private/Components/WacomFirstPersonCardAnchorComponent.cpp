@@ -103,6 +103,11 @@ namespace
 		float DenyFeedbackShakePixels = 8.0f;
 		FLinearColor DenyFeedbackColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
 		float DenyFeedbackOpacity = 0.18f;
+		bool bEnablePlayCommitFeedback = true;
+		float PlayCommitFeedbackDuration = 0.12f;
+		float PlayCommitFeedbackOpacity = 0.16f;
+		FLinearColor PlayCommitFeedbackColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
+		float PlayCommitFeedbackScale = 1.015f;
 		bool bUsingPreset = false;
 		bool bPresetFallback = true;
 		FString PresetName = TEXT("None");
@@ -189,6 +194,11 @@ namespace
 		Config.DenyFeedbackShakePixels = Anchor.DenyFeedbackShakePixels;
 		Config.DenyFeedbackColor = Anchor.DenyFeedbackColor;
 		Config.DenyFeedbackOpacity = Anchor.DenyFeedbackOpacity;
+		Config.bEnablePlayCommitFeedback = Anchor.bEnablePlayCommitFeedback;
+		Config.PlayCommitFeedbackDuration = Anchor.PlayCommitFeedbackDuration;
+		Config.PlayCommitFeedbackOpacity = Anchor.PlayCommitFeedbackOpacity;
+		Config.PlayCommitFeedbackColor = Anchor.PlayCommitFeedbackColor;
+		Config.PlayCommitFeedbackScale = Anchor.PlayCommitFeedbackScale;
 		return Config;
 	}
 
@@ -318,6 +328,11 @@ namespace
 		FeedbackConfig.DenyShakePixels = Config.DenyFeedbackShakePixels;
 		FeedbackConfig.DenyColor = Config.DenyFeedbackColor;
 		FeedbackConfig.DenyOpacity = Config.DenyFeedbackOpacity;
+		FeedbackConfig.bEnablePlayCommitFeedback = Config.bEnablePlayCommitFeedback;
+		FeedbackConfig.PlayCommitDuration = Config.PlayCommitFeedbackDuration;
+		FeedbackConfig.PlayCommitOpacity = Config.PlayCommitFeedbackOpacity;
+		FeedbackConfig.PlayCommitColor = Config.PlayCommitFeedbackColor;
+		FeedbackConfig.PlayCommitScale = Config.PlayCommitFeedbackScale;
 		return FeedbackConfig;
 	}
 
@@ -468,6 +483,11 @@ namespace
 		AddFloat(Config.DenyFeedbackOpacity);
 		AddFloat(Config.DenyFeedbackDuration);
 		AddFloat(Config.DenyFeedbackShakePixels);
+		AddBool(Config.bEnablePlayCommitFeedback);
+		AddFloat(Config.PlayCommitFeedbackDuration);
+		AddFloat(Config.PlayCommitFeedbackOpacity);
+		AddColor(Config.PlayCommitFeedbackColor);
+		AddFloat(Config.PlayCommitFeedbackScale);
 		Combine(GetTypeHash(Config.PresetName));
 		return Hash;
 	}
@@ -984,7 +1004,8 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionHints(
 	for (const FWacomFirstPersonCardLayerTransitionHint& Hint : Hints)
 	{
 		if (Hint.CardInstanceId.IsValid()
-			&& Hint.TransitionKind != EWacomFirstPersonCardSlotTransitionKind::Default)
+			&& (Hint.TransitionKind != EWacomFirstPersonCardSlotTransitionKind::Default
+				|| Hint.bPlayCommitFeedback))
 		{
 			RuntimeCardLayerTransitionHints.Add(Hint);
 		}

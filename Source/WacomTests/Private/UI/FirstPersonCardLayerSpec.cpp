@@ -269,14 +269,19 @@ namespace WacomFirstPersonCardLayerSpec
 		Config.PressedScale = 0.9f;
 		Config.PressedColor = FLinearColor::White;
 		Config.PressedOpacity = 0.3f;
-		Config.ConfirmDuration = 0.1f;
-		Config.ConfirmOpacity = 0.4f;
-		Config.DenyDuration = 0.2f;
-		Config.DenyShakePixels = 8.0f;
-		Config.DenyColor = FLinearColor::Red;
-		Config.DenyOpacity = 0.5f;
-		return Config;
-	}
+	Config.ConfirmDuration = 0.1f;
+	Config.ConfirmOpacity = 0.4f;
+	Config.DenyDuration = 0.2f;
+	Config.DenyShakePixels = 8.0f;
+	Config.DenyColor = FLinearColor::Red;
+	Config.DenyOpacity = 0.5f;
+	Config.bEnablePlayCommitFeedback = true;
+	Config.PlayCommitDuration = 0.12f;
+	Config.PlayCommitOpacity = 0.6f;
+	Config.PlayCommitColor = FLinearColor::Green;
+	Config.PlayCommitScale = 1.1f;
+	return Config;
+}
 
 	UWacomFirstPersonCardLayoutPreset* MakeLayoutPreset(UObject* Outer)
 	{
@@ -3560,6 +3565,294 @@ bool FWacomFirstPersonCardLayerGainedTransitionTest::RunTest(const FString& Para
 	{
 		TestEqual(TEXT("Gained card starts from gain offset"), SlotWidget->GetVisualSlotView().ScreenPosition, TargetPosition + FVector2D(0.0f, -120.0f));
 	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerNoTargetCommitTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayCommit.NoTargetCardPlayedTriggersCommitPulseAndPlayedExit",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerNoTargetCommitTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig MotionConfig = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	MotionConfig.bEnableReadableTransitionOrigins = false;
+	MotionConfig.EnterOffsetPixels = FVector2D::ZeroVector;
+	MotionConfig.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(MotionConfig);
+	Layer->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+
+	const FGuid CardId = FGuid::NewGuid();
+	const FVector2D BasePosition(100.0f, 200.0f);
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, BasePosition) });
+	Layer->TickSlotMotionForTest(1.0f);
+
+	FWacomFirstPersonCardLayerTransitionHint Hint =
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(
+			CardId,
+			EWacomFirstPersonCardSlotTransitionKind::Played);
+	Hint.bPlayCommitFeedback = true;
+	Layer->SetCardTransitionHints({ Hint });
+	Layer->SetCardSlots({});
+
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	if (TestNotNull(TEXT("Outgoing played slot"), Outgoing))
+	{
+		TestTrue(TEXT("Commit feedback starts on played outgoing"), Outgoing->IsCommitFeedbackActiveForTest());
+		TestEqual(TEXT("Commit overlay opacity"), Outgoing->GetFeedbackOverlayRenderOpacityForTest(), 0.6f);
+		Layer->TickSlotMotionForTest(0.1f);
+		TestTrue(TEXT("Played card exits upward"), Outgoing->GetVisualSlotView().ScreenPosition.Y < BasePosition.Y);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMissingTargetFallbackTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayCommit.MissingTargetWidgetFallsBackToDefaultPlayedExit",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMissingTargetFallbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig MotionConfig = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	MotionConfig.bEnableReadableTransitionOrigins = false;
+	MotionConfig.PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);
+	MotionConfig.EnterOffsetPixels = FVector2D::ZeroVector;
+	MotionConfig.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(MotionConfig);
+	Layer->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+
+	const FGuid CardId = FGuid::NewGuid();
+	const FVector2D BasePosition(100.0f, 200.0f);
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, BasePosition) });
+	Layer->TickSlotMotionForTest(1.0f);
+
+	FWacomFirstPersonCardLayerTransitionHint Hint =
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(
+			CardId,
+			EWacomFirstPersonCardSlotTransitionKind::Played);
+	Hint.bPlayCommitFeedback = true;
+	Layer->SetCardTransitionHints({ Hint });
+	Layer->SetCardSlots({});
+
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	if (TestNotNull(TEXT("Outgoing played slot"), Outgoing))
+	{
+		Layer->TickSlotMotionForTest(1.0f);
+		TestEqual(TEXT("Missing target uses default played X"), Outgoing->GetVisualSlotView().ScreenPosition.X, BasePosition.X);
+		TestEqual(TEXT("Missing target uses default played Y"), Outgoing->GetVisualSlotView().ScreenPosition.Y, BasePosition.Y - 120.0f);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCommandFailureNoCommitHintTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayCommit.CommandFailureDoesNotTriggerCommitOrTargetConfirm",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCommandFailureNoCommitHintTest::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Previous = Session->BuildSnapshot();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetSession(Session);
+	const FGuid FakeCardId = FGuid::NewGuid();
+	HUD->OnCardClickedByUser(FakeCardId);
+	HUD->StoreFirstPersonCardTransitionEventsForTest({
+		WacomFirstPersonCardLayerSpec::MakeBattleEvent(EBattleEventType::CardPlayed, FakeCardId)
+	});
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> Hints =
+		HUD->BuildFirstPersonCardTransitionHintsForTest(Previous, Session->BuildSnapshot());
+
+	TestEqual(TEXT("Failed command records no transition/commit hints"), Hints.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCommitHintOneShotTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayCommit.CommitHintIsOneShot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCommitHintOneShotTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig MotionConfig = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	MotionConfig.EnterOffsetPixels = FVector2D::ZeroVector;
+	MotionConfig.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(MotionConfig);
+	Layer->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+
+	const FGuid FirstCardId = FGuid::NewGuid();
+	const FGuid SecondCardId = FGuid::NewGuid();
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstCardId, 0, FVector2D(100.0f, 200.0f)) });
+	Layer->TickSlotMotionForTest(1.0f);
+
+	FWacomFirstPersonCardLayerTransitionHint Hint =
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(
+			FirstCardId,
+			EWacomFirstPersonCardSlotTransitionKind::Played);
+	Hint.bPlayCommitFeedback = true;
+	Layer->SetCardTransitionHints({ Hint });
+	Layer->SetCardSlots({});
+	UWacomFirstPersonCardLayerSlotWidget* FirstOutgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	TestTrue(TEXT("First outgoing gets commit"), FirstOutgoing && FirstOutgoing->IsCommitFeedbackActiveForTest());
+	Layer->TickSlotMotionForTest(0.25f);
+
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondCardId, 0, FVector2D(100.0f, 200.0f)) });
+	Layer->TickSlotMotionForTest(1.0f);
+	Layer->SetCardSlots({});
+	UWacomFirstPersonCardLayerSlotWidget* SecondOutgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	if (TestNotNull(TEXT("Second outgoing slot"), SecondOutgoing))
+	{
+		TestFalse(TEXT("Commit hint does not leak to next refresh"), SecondOutgoing->IsCommitFeedbackActiveForTest());
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerTargetBiasedCommitExitTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayCommit.TargetWidgetPositionCanBiasPlayedExit",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerTargetBiasedCommitExitTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig MotionConfig = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	MotionConfig.bEnableReadableTransitionOrigins = false;
+	MotionConfig.PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);
+	MotionConfig.EnterOffsetPixels = FVector2D::ZeroVector;
+	MotionConfig.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(MotionConfig);
+	Layer->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+
+	const FGuid CardId = FGuid::NewGuid();
+	const FVector2D BasePosition(100.0f, 200.0f);
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, BasePosition) });
+	Layer->TickSlotMotionForTest(1.0f);
+
+	FWacomFirstPersonCardLayerTransitionHint Hint =
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(
+			CardId,
+			EWacomFirstPersonCardSlotTransitionKind::Played);
+	Hint.bPlayCommitFeedback = true;
+	Hint.bHasPlayedExitTargetWidgetPosition = true;
+	Hint.PlayedExitTargetWidgetPosition = FVector2D(600.0f, 100.0f);
+	Layer->SetCardTransitionHints({ Hint });
+	Layer->SetCardSlots({});
+
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	if (TestNotNull(TEXT("Outgoing played slot"), Outgoing))
+	{
+		Layer->TickSlotMotionForTest(0.1f);
+		TestTrue(TEXT("Target bias nudges played exit toward target X"), Outgoing->GetVisualSlotView().ScreenPosition.X > BasePosition.X);
+		TestTrue(TEXT("Target-biased played card still exits upward"), Outgoing->GetVisualSlotView().ScreenPosition.Y < BasePosition.Y);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCommitFeedbackClearsTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayCommit.CommitFeedbackClearsOnReuseExitAndInteractionDisabled",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCommitFeedbackClearsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
+	SlotWidget->TriggerCommitFeedback();
+	TestTrue(TEXT("Commit feedback starts"), SlotWidget->IsCommitFeedbackActiveForTest());
+
+	SlotWidget->SetCardLayerInteractionEnabled(false);
+	TestFalse(TEXT("Interaction disabled clears commit"), SlotWidget->IsCommitFeedbackActiveForTest());
+
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->TriggerCommitFeedback();
+	TestTrue(TEXT("Commit feedback restarts"), SlotWidget->IsCommitFeedbackActiveForTest());
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
+	TestFalse(TEXT("Slot reuse clears commit"), SlotWidget->IsCommitFeedbackActiveForTest());
 
 	PC->Destroy();
 	return true;

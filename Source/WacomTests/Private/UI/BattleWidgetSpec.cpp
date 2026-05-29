@@ -18,6 +18,7 @@
 #include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
+#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "Events/BattleEvent.h"
 #include "Components/WacomBattlePresentationTargetComponent.h"
@@ -1722,11 +1723,58 @@ bool FWacomUIBattlePresentationTargetRegistryRoutesCueToRegisteredWidgetSpec::Ru
 
 	TestEqual(TEXT("Head does not receive cue"), Head->GetBattlePresentationCuePlayCountForTest(), 0);
 	TestEqual(TEXT("Body receives one cue"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
+	TestEqual(TEXT("Body cue kind is battle event"),
+		Body->GetLastBattlePresentationCueKindForTest(),
+		EWacomBattlePresentationTargetCueKind::BattleEvent);
 	TestEqual(TEXT("Tail does not receive cue"), Tail->GetBattlePresentationCuePlayCountForTest(), 0);
 	TestEqual(TEXT("Body cue amount"), Body->GetLastBattlePresentationCueAmountForTest(), 4);
 
 	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, FGuid::NewGuid(), 9);
 	TestEqual(TEXT("Unknown target does not route to body again"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTargetConfirmedRoutesToEnemyPartWidgetSpec,
+	"Wacom.UI.Battle.PlayCommit.TargetConfirmedCueRoutesToEnemyPartWidget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTargetConfirmedRoutesToEnemyPartWidgetSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
+	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
+	HUD->SetEnemyInfoBarForTest(EnemyInfo);
+	HUD->SetSession(Session);
+	EnemyInfo->SetSession(Session);
+	HUD->TakeWidget();
+	EnemyInfo->TakeWidget();
+	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
+
+	UWacomBattleEnemyPartWidgetPresentationProbe* Body =
+		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(1));
+	if (!TestNotNull(TEXT("Body probe"), Body))
+	{
+		return false;
+	}
+
+	HUD->PlayTargetConfirmedCueForTest(Body->GetPartInstanceId());
+
+	TestEqual(TEXT("Target confirm routes to body"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
+	TestEqual(TEXT("Target confirm cue kind"),
+		Body->GetLastBattlePresentationCueKindForTest(),
+		EWacomBattlePresentationTargetCueKind::TargetConfirmed);
+	TestEqual(TEXT("Target confirm is not a damage event"), Body->GetLastBattlePresentationCueTypeForTest(), EBattleEventType::None);
+	TestEqual(TEXT("Target confirm has no damage amount"), Body->GetLastBattlePresentationCueAmountForTest(), 0);
 
 	return true;
 }
@@ -1888,6 +1936,66 @@ bool FWacomUIBattlePresentationTargetComponentRegisterReceivesCueSpec::RunTest(c
 	TestEqual(TEXT("Component receives one cue"), Component->GetBattlePresentationCuePlayCount(), 1);
 	TestEqual(TEXT("Component records cue type"), Component->GetLastBattlePresentationCueType(), EBattleEventType::DamageDealt);
 	TestEqual(TEXT("Component records cue amount"), Component->GetLastBattlePresentationCueAmount(), 8);
+	TestEqual(TEXT("Component records battle-event cue kind"),
+		Component->GetBattlePresentationTargetDebugView().LastCueKind,
+		TEXT("BattleEvent"));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTargetConfirmedRoutesToScenePresentationTargetSpec,
+	"Wacom.UI.Battle.PlayCommit.TargetConfirmedCueRoutesToScenePresentationTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTargetConfirmedRoutesToScenePresentationTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Owner actor"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Owner->AddInstanceComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	UWacomBattlePresentationTargetComponentProbe* Component =
+		NewObject<UWacomBattlePresentationTargetComponentProbe>(Owner);
+	Owner->AddInstanceComponent(Component);
+	Component->RegisterComponent();
+	Component->TargetConfirmPulseScale = 1.12f;
+	Component->SetPartInstanceId(FGuid::NewGuid());
+	TestTrue(TEXT("Scene target registers"), Component->RegisterWithBattleHUD(HUD.Get()));
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->PlayTargetConfirmedCueForTest(Component->GetPartInstanceId());
+
+	TestTrue(TEXT("Target confirm activates visual feedback"), Component->IsVisualFeedbackActiveForTest());
+	TestEqual(TEXT("Target confirm scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.12f);
+	TestEqual(TEXT("Target confirm cue kind"),
+		Component->GetBattlePresentationTargetDebugView().LastCueKind,
+		TEXT("TargetConfirmed"));
+	TestEqual(TEXT("Target confirm does not masquerade as damage"),
+		Component->GetLastBattlePresentationCueType(),
+		EBattleEventType::None);
 
 	return true;
 }

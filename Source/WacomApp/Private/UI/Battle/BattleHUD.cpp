@@ -1977,6 +1977,34 @@ void UBattleHUD::StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>
 void UBattleHUD::ClearPendingFirstPersonCardTransitionEvents()
 {
 	PendingFirstPersonCardTransitionEvents.Reset();
+	PendingFirstPersonCardPlayCommitHints.Reset();
+}
+
+void UBattleHUD::RecordFirstPersonPlayCommit(
+	const FGuid& CardInstanceId,
+	const FGuid& TargetPartInstanceId)
+{
+	if (!CardInstanceId.IsValid())
+	{
+		return;
+	}
+
+	FWacomFirstPersonCardPlayCommitHint CommitHint;
+	CommitHint.CardInstanceId = CardInstanceId;
+	CommitHint.TargetPartInstanceId = TargetPartInstanceId;
+	if (TargetPartInstanceId.IsValid())
+	{
+		CommitHint.bHasTargetWidgetPosition =
+			TryGetEnemyPartWidgetCenterInViewport(TargetPartInstanceId, CommitHint.TargetWidgetPosition);
+
+		FWacomBattlePresentationTargetCue Cue;
+		Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
+		Cue.TargetPartInstanceId = TargetPartInstanceId;
+		Cue.Duration = 0.10f;
+		PlayBattlePresentationCue(Cue);
+	}
+
+	PendingFirstPersonCardPlayCommitHints.Add(CommitHint);
 }
 
 TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCardTransitionHints(
@@ -1984,7 +2012,8 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCar
 	const FBattleSnapshot& NextSnapshot) const
 {
 	TArray<FWacomFirstPersonCardLayerTransitionHint> Hints;
-	if (PendingFirstPersonCardTransitionEvents.IsEmpty())
+	if (PendingFirstPersonCardTransitionEvents.IsEmpty()
+		&& PendingFirstPersonCardPlayCommitHints.IsEmpty())
 	{
 		return Hints;
 	}
@@ -2009,7 +2038,18 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCar
 		}
 	}
 
-	auto AddHint = [&Hints](const FGuid& CardInstanceId, EWacomFirstPersonCardSlotTransitionKind TransitionKind)
+	auto FindCommitHint = [this](const FGuid& CardInstanceId) -> const FWacomFirstPersonCardPlayCommitHint*
+	{
+		return PendingFirstPersonCardPlayCommitHints.FindByPredicate(
+			[&CardInstanceId](const FWacomFirstPersonCardPlayCommitHint& CommitHint)
+			{
+				return CommitHint.CardInstanceId == CardInstanceId;
+			});
+	};
+
+	auto AddHint = [&Hints, &FindCommitHint](
+		const FGuid& CardInstanceId,
+		EWacomFirstPersonCardSlotTransitionKind TransitionKind)
 	{
 		if (!CardInstanceId.IsValid() || TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Default)
 		{
@@ -2019,6 +2059,15 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCar
 		FWacomFirstPersonCardLayerTransitionHint Hint;
 		Hint.CardInstanceId = CardInstanceId;
 		Hint.TransitionKind = TransitionKind;
+		if (TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Played)
+		{
+			if (const FWacomFirstPersonCardPlayCommitHint* CommitHint = FindCommitHint(CardInstanceId))
+			{
+				Hint.bPlayCommitFeedback = true;
+				Hint.bHasPlayedExitTargetWidgetPosition = CommitHint->bHasTargetWidgetPosition;
+				Hint.PlayedExitTargetWidgetPosition = CommitHint->TargetWidgetPosition;
+			}
+		}
 		Hints.Add(Hint);
 	};
 
@@ -2073,6 +2122,13 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCar
 	}
 
 	return Hints;
+}
+
+bool UBattleHUD::TryGetEnemyPartWidgetCenterInViewport(
+	const FGuid& PartInstanceId,
+	FVector2D& OutWidgetPosition) const
+{
+	return EnemyInfoBar && EnemyInfoBar->TryGetPartWidgetCenterInViewport(PartInstanceId, OutWidgetPosition);
 }
 
 void UBattleHUD::TrimBattleEventLogHistory()
@@ -2269,6 +2325,15 @@ void UBattleHUD::PlayBattlePresentationCueForTest(
 	Cue.SourceEventType = SourceEventType;
 	Cue.TargetPartInstanceId = TargetPartInstanceId;
 	Cue.Amount = Amount;
+	PlayBattlePresentationCue(Cue);
+}
+
+void UBattleHUD::PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId)
+{
+	FWacomBattlePresentationTargetCue Cue;
+	Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
+	Cue.TargetPartInstanceId = TargetPartInstanceId;
+	Cue.Duration = 0.10f;
 	PlayBattlePresentationCue(Cue);
 }
 

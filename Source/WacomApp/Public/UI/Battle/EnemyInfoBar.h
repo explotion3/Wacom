@@ -30,6 +30,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
 	TSubclassOf<UEnemyPartWidget> PartWidgetClass;
 
+	bool TryGetPartWidgetCenterInViewport(
+		const FGuid& PartInstanceId,
+		FVector2D& OutWidgetPosition) const;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeRefreshFromSnapshot(const struct FBattleSnapshot& Snap) override;

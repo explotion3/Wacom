@@ -14,6 +14,14 @@ class UWacomFirstPersonCardLayerSlotWidget;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 
+struct FWacomFirstPersonCardLayerResolvedTransitionHint
+{
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind = EWacomFirstPersonCardSlotTransitionKind::Default;
+	bool bPlayCommitFeedback = false;
+	bool bHasPlayedExitTargetWidgetPosition = false;
+	FVector2D PlayedExitTargetWidgetPosition = FVector2D::ZeroVector;
+};
+
 /**
  * HUD card layer driven by first-person card anchor projection.
  * Renders UWacomCardView-compatible card face widgets, may opt into slot-level
@@ -109,7 +117,7 @@ private:
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
-	TMap<FString, EWacomFirstPersonCardSlotTransitionKind> PendingTransitionHintsByKey;
+	TMap<FString, FWacomFirstPersonCardLayerResolvedTransitionHint> PendingTransitionHintsByKey;
 	bool bCardLayerInteractionEnabled = false;
 	bool bLogSlotMotionDiagnostics = false;
 #if WITH_AUTOMATION_TESTS
@@ -133,7 +141,7 @@ private:
 		EWacomFirstPersonCardSlotTransitionKind TransitionKind,
 		const FWacomFirstPersonCardLayerSlotView& TargetSlotView) const;
 	TOptional<FWacomFirstPersonCardTransitionMotionProfile> GetExitProfileForTransition(
-		EWacomFirstPersonCardSlotTransitionKind TransitionKind,
+		const FWacomFirstPersonCardLayerResolvedTransitionHint& TransitionHint,
 		const FWacomFirstPersonCardLayerSlotView& VisualSlotView) const;
 	bool ResolveViewportAnchorPosition(
 		const FVector2D& NormalizedViewportAnchor,

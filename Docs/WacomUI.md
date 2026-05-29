@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-ui
 status: active
-updated: 2026-05-28
+updated: 2026-05-29
 tags:
   - wacom/ui
   - wacom/commonui
@@ -169,7 +169,7 @@ Toast WBP 注册口径：
 `UWacomBattleEventPresentationBuilder` 把 `FBattleEvent` 转成 `FBattleEventPresentationView`。ViewData 包含 `MessageText / bShouldDisplay / VisualTone / IconKey`，但当前 Toast 和日志主要消费文字。
 
 - `FWacomBattleEventPresentationQueue` 负责把 `FBattleEvent` 按顺序调度为 TargetCue、Toast、短暂停顿和击倒弹窗 step；队列播放期间 `BattleHUD` 进入 `Resolving`，阻止继续提交战斗命令。
-- TargetCue 是 `WacomApp/Private` 内的轻量表现信号。当前 `DamageDealt / EnemyPartHpEmptied` 会经 `BattleHUD` 私有目标注册表按敌方部位实例 ID 分发；2D `EnemyInfoBar` 刷新时把当前 `EnemyPartWidget` 注册进去。场景对象可通过 `UWacomBattlePresentationTargetComponent` 手动注册 `PartInstanceId`，也可在 BattleHUD 开启 `bEnableSceneEnemyTargetBindingPrototype` 后填写稳定 `UEnemyPartDefinition::PartId`，由 snapshot 刷新和 UIState 刷新后自动绑定运行时实例 ID。组件收到命中 / 破坏 cue 时会对指定或自动发现的 `UPrimitiveComponent` 播放 V0 scale pulse，并在 timer 结束后恢复；进入 `TargetSelect` 且该部位可选时，同一 primitive 会播放持续的 V0 scale 呼吸提示，退出选择或不可选时恢复。V0-C 下战斗场景点击主路径是 `AWacomPlayerController::InputKey()` 在左键 Release 且 HUD 处于 `TargetSelect` 时执行 `GetHitResultUnderCursor(ECC_Visibility)`，从命中 Actor / Component 查找 `UWacomBattlePresentationTargetComponent`，再调用 `RequestSceneTargetClick()` 转发到 `BattleHUD->OnEnemyPartClickedByUser()`；如果 Release 先落到 BattleHUD 根层，`BattleHUD::NativeOnMouseButtonUp()` 会调用同一个 PlayerController router 作为兜底。V0-B 的 `ClickTargetComponent` / `Primitive.OnClicked` 绑定保留为兼容辅助路径。真实 hover、鼠标命中提示、材质描边和正式敌人 Actor 留后续。队列不依赖具体 Widget 或未来场景 Actor。
+- TargetCue 是 `WacomApp` 内的轻量表现信号。当前 `DamageDealt / EnemyPartHpEmptied` 会经 `BattleHUD` 私有目标注册表按敌方部位实例 ID 分发；2D `EnemyInfoBar` 刷新时把当前 `EnemyPartWidget` 注册进去。V0-W 后 TargetCue 明确区分 `BattleEvent` 与 `TargetConfirmed`：前者仍由表现队列发送，用于真实伤害 / 破坏反馈；后者只在目标卡成功提交后立即发送，用于表示“目标点击已被接受”。`TargetConfirmed` 不代表伤害已经发生，也不替代后续 `DamageDealt / EnemyPartHpEmptied` cue。场景对象可通过 `UWacomBattlePresentationTargetComponent` 手动注册 `PartInstanceId`，也可在 BattleHUD 开启 `bEnableSceneEnemyTargetBindingPrototype` 后填写稳定 `UEnemyPartDefinition::PartId`，由 snapshot 刷新和 UIState 刷新后自动绑定运行时实例 ID。组件收到目标确认 cue 时播放更轻的确认 scale pulse；收到命中 / 破坏 cue 时播放原有 damage / destroyed scale pulse，并在 timer 结束后恢复。进入 `TargetSelect` 且该部位可选时，同一 primitive 会播放持续的 V0 scale 呼吸提示，退出选择或不可选时恢复。V0-C 下战斗场景点击主路径是 `AWacomPlayerController::InputKey()` 在左键 Release 且 HUD 处于 `TargetSelect` 时执行 `GetHitResultUnderCursor(ECC_Visibility)`，从命中 Actor / Component 查找 `UWacomBattlePresentationTargetComponent`，再调用 `RequestSceneTargetClick()` 转发到 `BattleHUD->OnEnemyPartClickedByUser()`；如果 Release 先落到 BattleHUD 根层，`BattleHUD::NativeOnMouseButtonUp()` 会调用同一个 PlayerController router 作为兜底。V0-B 的 `ClickTargetComponent` / `Primitive.OnClicked` 绑定保留为兼容辅助路径。真实 hover、鼠标命中提示、材质描边和正式敌人 Actor 留后续。队列不依赖具体 Widget 或未来场景 Actor。
 - 目标注册表 V0 是单 handler 覆盖策略：同一 `PartInstanceId` 后注册者替换旧注册者；未来如果需要 2D Widget 与 3D Actor 同时表现，再升级为 priority 或 multicast。
 - 开启场景绑定原型时，`BattleHUD` 会在 `EnemyInfoBar` 因目标选择状态刷新并重新注册 2D 部位后，再同步一次场景目标。因此 V0 语义是：同一部位上，场景 target 保持为当前表现 / 点击 provider。
 - PIE 验证时，`VisualTargetComponent` 和 `ClickTargetComponent` 可以保持 `None`；组件会自动查找 Owner 上第一个 `UPrimitiveComponent`。如果在 Details 面板误创建了 `StaticMeshComponent_0` 这类嵌在组件下的对象，应清空引用或删除临时组件，避免 fallback 命中错误对象。推荐原型结构是 `Actor -> StaticMeshComponent(Cube) + UWacomBattlePresentationTargetComponent`。

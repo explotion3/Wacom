@@ -31,6 +31,7 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& Ca
 		return;
 	}
 
+	HUD.RecordFirstPersonPlayCommit(CardId, TargetPartId);
 	HUD.PendingTargetingCardId.Invalidate();
 	HUD.SetUIState(EBattleUIState::Idle);
 	AfterCommand(HUD);

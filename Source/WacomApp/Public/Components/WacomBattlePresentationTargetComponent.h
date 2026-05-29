@@ -11,6 +11,7 @@
 
 class UBattleHUD;
 class UPrimitiveComponent;
+struct FWacomBattlePresentationTargetCue;
 
 #if WITH_AUTOMATION_TESTS
 class UWacomBattlePresentationTargetComponentProbe;
@@ -53,6 +54,9 @@ struct WACOMAPP_API FWacomBattlePresentationTargetDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
 	EBattleEventType LastCueType = EBattleEventType::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
+	FName LastCueKind = TEXT("BattleEvent");
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Presentation|Debug")
 	int32 LastCueAmount = 0;
@@ -128,6 +132,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Visual", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0", Units = "s", ToolTip = "Seconds to hold the EnemyPartHpEmptied scale pulse before restoring the primitive's saved base relative scale."))
 	float DestroyedPulseSeconds = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Visual", meta = (ClampMin = "1.0", UIMin = "1.0", UIMax = "1.3", ToolTip = "目标点击成功提交后使用的轻量确认缩放倍率；只表示点击确认，不代表伤害已经发生。"))
+	float TargetConfirmPulseScale = 1.04f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Visual", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.5", Units = "s", ToolTip = "目标点击确认缩放脉冲保持时长，单位为秒；后续 DamageDealt / EnemyPartHpEmptied 仍走战斗事件表现。"))
+	float TargetConfirmPulseSeconds = 0.10f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation|Selection", meta = (ToolTip = "Enables the V0 target-selection affordance. When BattleHUD is selecting a valid enemy part target, this component plays a lightweight scale breathing hint on its visual primitive."))
 	bool bEnableTargetSelectionAffordance = true;
@@ -211,6 +221,7 @@ private:
 	TWeakObjectPtr<UPrimitiveComponent> BoundClickTarget;
 	FVector BaseVisualFeedbackScale = FVector::OneVector;
 	EBattleEventType LastCueType = EBattleEventType::None;
+	FName LastCueKind = TEXT("BattleEvent");
 	int32 LastCueAmount = 0;
 	int32 CuePlayCount = 0;
 	bool bVisualFeedbackActive = false;
@@ -231,13 +242,13 @@ private:
 	FName TargetSelectionDisabledReason = TEXT("NotAttempted");
 
 	void SetTargetSelectionAffordance(bool bTargetable, FName DisabledReason);
-	void HandleBattlePresentationCue(EBattleEventType SourceEventType, int32 Amount);
+	void HandleBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
 	void BindPIEClickTarget();
 	void UnbindPIEClickTarget();
 	void SaveAndConfigureClickTargetCollision(UPrimitiveComponent& Target);
 	void RestoreClickTargetCollision(UPrimitiveComponent& Target);
 	UPrimitiveComponent* ResolveClickTargetComponent() const;
-	void PlayVisualFeedback(EBattleEventType SourceEventType);
+	void PlayVisualFeedback(const FWacomBattlePresentationTargetCue& Cue);
 	bool EnsureManagedVisualTarget();
 	void ApplyCurrentVisualScale();
 	void RestoreManagedVisualScaleIfIdle();

@@ -132,6 +132,14 @@ enum class EWacomBattleHandPresentationMode : uint8
 	FirstPersonHandOnly,
 };
 
+struct FWacomFirstPersonCardPlayCommitHint
+{
+	FGuid CardInstanceId;
+	FGuid TargetPartInstanceId;
+	bool bHasTargetWidgetPosition = false;
+	FVector2D TargetWidgetPosition = FVector2D::ZeroVector;
+};
+
 UCLASS(Blueprintable)
 class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 {
@@ -422,6 +430,8 @@ private:
 	UPROPERTY(Transient)
 	TArray<FBattleEvent> PendingFirstPersonCardTransitionEvents;
 
+	TArray<FWacomFirstPersonCardPlayCommitHint> PendingFirstPersonCardPlayCommitHints;
+
 	TSharedPtr<FWacomBattleEventPresentationQueue> BattleEventPresentationQueue;
 	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
 
@@ -458,9 +468,11 @@ private:
 	void AppendBattleEventLogEntries(const TArray<struct FBattleEvent>& Events);
 	void StoreFirstPersonCardTransitionEvents(const TArray<struct FBattleEvent>& Events);
 	void ClearPendingFirstPersonCardTransitionEvents();
+	void RecordFirstPersonPlayCommit(const FGuid& CardInstanceId, const FGuid& TargetPartInstanceId);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
+	bool TryGetEnemyPartWidgetCenterInViewport(const FGuid& PartInstanceId, FVector2D& OutWidgetPosition) const;
 	void TrimBattleEventLogHistory();
 	void SyncBattleEventLogPanel();
 	void EnqueueBattlePresentationEvents(const TArray<struct FBattleEvent>& Events);
@@ -485,6 +497,7 @@ private:
 
 #if WITH_AUTOMATION_TESTS
 	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FGuid& TargetPartInstanceId, int32 Amount);
+	void PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId);
 	int32 GetBattlePresentationTargetCountForTest() const;
 #endif
 
