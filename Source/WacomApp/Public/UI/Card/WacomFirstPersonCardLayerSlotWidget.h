@@ -14,6 +14,27 @@ class UWacomCardView;
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 
 USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardTransitionMotionProfile
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardTransitionOriginMode OriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D OffsetPixels = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D ViewportAnchor = FVector2D(0.5f, 0.5f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float ScaleMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float AngleOffsetDegrees = 0.0f;
+};
+
+USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 {
 	GENERATED_BODY()
@@ -46,16 +67,67 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 	bool bEnableEventAwareTransitions = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnableReadableTransitionOrigins = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D DrawnEnterOffsetPixels = FVector2D(0.0f, 96.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardTransitionOriginMode DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D DrawnEnterViewportAnchor = FVector2D(0.5f, 1.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DrawnEnterScaleMultiplier = 0.96f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DrawnEnterAngleOffsetDegrees = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D GainedEnterOffsetPixels = FVector2D(0.0f, -120.0f);
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardTransitionOriginMode GainedEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D GainedEnterViewportAnchor = FVector2D(0.5f, 0.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterScaleMultiplier = 0.96f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterAngleOffsetDegrees = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardTransitionOriginMode PlayedExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D PlayedExitViewportAnchor = FVector2D(0.5f, 0.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PlayedExitScaleMultiplier = 0.96f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PlayedExitAngleOffsetDegrees = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D DiscardedExitOffsetPixels = FVector2D(0.0f, 120.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardTransitionOriginMode DiscardedExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D DiscardedExitViewportAnchor = FVector2D(0.5f, 1.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DiscardedExitScaleMultiplier = 0.96f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DiscardedExitAngleOffsetDegrees = 0.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -120,10 +192,17 @@ public:
 		const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
 		bool bTreatAsNewSlot,
 		const TOptional<FVector2D>& EnterOffsetOverride);
+	void BeginSlotMotionWithEnterProfile(
+		const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
+		bool bTreatAsNewSlot,
+		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& EnterProfileOverride);
 	void BeginExitMotion(const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView);
 	void BeginExitMotionWithOffset(
 		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
 		const TOptional<FVector2D>& ExitOffsetOverride);
+	void BeginExitMotionWithProfile(
+		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
+		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride);
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
 	void SetCardLayerInteractionEnabled(bool bEnabled);

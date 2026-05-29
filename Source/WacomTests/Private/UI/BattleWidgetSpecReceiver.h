@@ -433,6 +433,23 @@ public:
 		return ShowCardDetailForCardWidget(SourceWidget);
 	}
 
+	void SetCardDetailReadabilityPolishForTest(bool bEnabled)
+	{
+		bEnableCardDetailReadabilityPolish = bEnabled;
+	}
+
+	void SetCardDetailMotionSpeedsForTest(float FollowSpeed, float FadeInSpeed, float FadeOutSpeed)
+	{
+		CardDetailFollowSpeed = FollowSpeed;
+		CardDetailFadeInSpeed = FadeInSpeed;
+		CardDetailFadeOutSpeed = FadeOutSpeed;
+	}
+
+	void TickCardDetailMotionForTest(float DeltaTime)
+	{
+		NativeTick(FGeometry(), DeltaTime);
+	}
+
 	void HideCardDetailForTest()
 	{
 		HideCardDetailPanel();
@@ -488,6 +505,11 @@ public:
 	FVector2D GetFirstPersonCardDetailPanelPositionForTest() const
 	{
 		return LastFirstPersonCardDetailPanelPosition;
+	}
+
+	float GetFirstPersonCardDetailPanelOpacityForTest() const
+	{
+		return FirstPersonCardDetailPanel ? FirstPersonCardDetailPanel->GetRenderOpacity() : 0.0f;
 	}
 
 	int32 GetFirstPersonCardDetailViewportZOrderForTest() const

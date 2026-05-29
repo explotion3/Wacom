@@ -150,6 +150,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "战斗手牌悬浮详情面板与卡牌之间的间距，单位为 Slate 像素。面板默认显示在卡牌左侧，左侧空间不足时换到右侧。"))
 	float CardDetailPanelPadding = 12.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ToolTip = "是否启用战斗卡牌详情读牌动效。开启后旧手牌和第一人称手牌详情都会使用短延迟、淡入淡出、位置平滑和贴边稳定；关闭后恢复立即显示/隐藏。"))
+	bool bEnableCardDetailReadabilityPolish = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.4", ToolTip = "卡牌 hover 后详情出现前的停留时间，单位为秒。用于减少鼠标快速扫过手牌时的详情闪烁。"))
+	float CardDetailHoverDelaySeconds = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "60.0", ToolTip = "卡牌详情淡入速度。数值越大越快，0 表示直接贴合目标透明度。"))
+	float CardDetailFadeInSpeed = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "卡牌详情淡出速度。数值越大越快，0 表示直接隐藏。"))
+	float CardDetailFadeOutSpeed = 24.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "卡牌详情跟随 hover 锚点位置的平滑速度。数值越大越跟手，0 表示直接贴合目标位置。"))
+	float CardDetailFollowSpeed = 24.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1600.0", ToolTip = "卡牌详情目标位置跳变超过该距离时直接贴合新位置，单位为 Slate 像素。用于避免切场景、切来源或窗口变化后慢慢漂过去。"))
+	float CardDetailPositionResetDistancePixels = 420.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.5", ClampMax = "1.0", UIMin = "0.85", UIMax = "1.0", ToolTip = "卡牌详情淡入起始缩放。1 表示不缩放；小于 1 时详情会从轻微缩小状态淡入。"))
+	float CardDetailAppearStartScale = 0.97f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "240.0", ToolTip = "卡牌详情贴近视口边缘时保持当前左右摆放侧的缓冲距离，单位为 Slate 像素。用于避免锚点在边缘附近轻微移动时详情左右反复跳。"))
+	float CardDetailSideSwitchHysteresisPixels = 72.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|BattleEventLog", meta = (ClampMin = "1", UIMin = "10", UIMax = "300", ToolTip = "BattleHUD 内部保存的战斗事件日志最大条数。超过后只保留最近 N 条，并同步到日志抽屉。"))
 	int32 BattleEventLogMaxEntries = 80;
 
@@ -276,6 +300,7 @@ protected:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeRefreshFromSnapshot(const FBattleSnapshot& Snap) override;
 	virtual void NativeOnSessionChanged(class UBattleSession* OldSession, class UBattleSession* NewSession) override;
@@ -340,6 +365,37 @@ protected:
 	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;
 
 private:
+	enum class ECardDetailHost : uint8
+	{
+		None,
+		LegacyHandPanel,
+		FirstPersonViewport,
+	};
+
+	struct FCardDetailMotionState
+	{
+		ECardDetailHost PendingHost = ECardDetailHost::None;
+		ECardDetailHost ActiveHost = ECardDetailHost::None;
+		TWeakObjectPtr<UCardWidget> PendingLegacySource;
+		TWeakObjectPtr<UCardWidget> ActiveLegacySource;
+		FGuid PendingFirstPersonSourceId;
+		FGuid ActiveFirstPersonSourceId;
+		FWacomFirstPersonCardLayerSlotView PendingFirstPersonSlot;
+		FWacomFirstPersonCardLayerSlotView ActiveFirstPersonSlot;
+		bool bHasPendingFirstPersonSlot = false;
+		bool bHasActiveFirstPersonSlot = false;
+		bool bPendingShow = false;
+		bool bWantsVisible = false;
+		float PendingElapsedSeconds = 0.0f;
+		float VisualOpacity = 0.0f;
+		FVector2D TargetPosition = FVector2D::ZeroVector;
+		FVector2D VisualPosition = FVector2D::ZeroVector;
+		bool bHasTargetPosition = false;
+		bool bHasVisualPosition = false;
+		bool bResetPosition = true;
+		int32 StableSide = 0;
+	};
+
 	EBattleUIState UIState = EBattleUIState::Idle;
 
 	/** TargetSelect 状态下待确认目标的卡实例 ID。 */
@@ -375,6 +431,7 @@ private:
 	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
 	FGuid CurrentFirstPersonCardDetailSourceId;
 	FVector2D LastFirstPersonCardDetailPanelPosition = FVector2D::ZeroVector;
+	FCardDetailMotionState CardDetailMotionState;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastFirstPersonBattleHandAnchor;
 	ESlateVisibility CachedLegacyHandPanelVisibility = ESlateVisibility::Visible;
 	bool bHasLastBattleSnapshot = false;
@@ -457,6 +514,26 @@ private:
 		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void PositionFirstPersonCardDetailPanelBesideSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HideFirstPersonCardDetailPanel();
+	void TickCardDetailMotion(float DeltaTime);
+	bool BeginCardDetailMotionShow(ECardDetailHost Host);
+	void RequestCardDetailMotionShow(ECardDetailHost Host);
+	void RequestCardDetailMotionHide(ECardDetailHost Host, bool bImmediate);
+	void ForceHideCardDetailHost(ECardDetailHost Host);
+	void ForceHideAllCardDetails();
+	UWacomCardDetailPanel* GetCardDetailPanelForHost(ECardDetailHost Host) const;
+	bool UpdateCardDetailMotionTarget(ECardDetailHost Host);
+	bool ComputeLegacyCardDetailTarget(UCardWidget* SourceWidget, FVector2D& OutPosition);
+	bool ComputeFirstPersonCardDetailTarget(const FWacomFirstPersonCardLayerSlotView& SlotView, FVector2D& OutPosition);
+	FVector2D ComputeCardDetailPanelPositionBesideStable(
+		const FVector2D& AnchorPosition,
+		const FVector2D& AnchorSize,
+		const FVector2D& LayerSize,
+		const FVector2D& PanelSize,
+		float DetailPadding);
+	void ApplyCardDetailMotionVisual(ECardDetailHost Host, const FVector2D& Position, float Opacity);
+	void CollapseCardDetailHost(ECardDetailHost Host);
+	bool IsCardDetailMotionSource(ECardDetailHost Host, UCardWidget* SourceWidget) const;
+	bool IsCardDetailMotionSource(ECardDetailHost Host, const FGuid& CardInstanceId) const;
 	FVector2D GetFirstPersonCardDetailViewportSize() const;
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
 	AWacomBattle3DHandPresenter* EnsureBattle3DHandPresenter();

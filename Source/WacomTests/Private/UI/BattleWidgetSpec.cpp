@@ -4503,6 +4503,8 @@ bool FWacomUIBattleHUDCardDetailLifecycleSpec::RunTest(const FString& /*Paramete
 	CardWidget->ApplyCardSnapshot(Snap);
 
 	TestTrue(TEXT("HUD shows detail for hovered hand card"), HUD->ShowCardDetailForTest(CardWidget.Get()));
+	TestFalse(TEXT("Detail waits for hover delay before showing"), HUD->IsCardDetailPanelVisible());
+	HUD->TickCardDetailMotionForTest(0.12f);
 	TestTrue(TEXT("Detail panel is visible"), HUD->IsCardDetailPanelVisible());
 	TestEqual(TEXT("Detail panel uses card detail data"), HUD->GetCardDetailPanelNameText().ToString(), TEXT("战斗详情卡"));
 
@@ -4510,10 +4512,13 @@ bool FWacomUIBattleHUDCardDetailLifecycleSpec::RunTest(const FString& /*Paramete
 	TestFalse(TEXT("Detail panel hides explicitly"), HUD->IsCardDetailPanelVisible());
 
 	HUD->HandleCardHoveredForTest(CardWidget.Get());
+	HUD->TickCardDetailMotionForTest(0.12f);
 	TestTrue(TEXT("Hover handler shows detail"), HUD->IsCardDetailPanelVisible());
 
 	HUD->HandleCardUnhoveredForTest(CardWidget.Get());
-	TestFalse(TEXT("Unhover handler hides detail"), HUD->IsCardDetailPanelVisible());
+	TestTrue(TEXT("Unhover starts fade out while detail remains visible briefly"), HUD->IsCardDetailPanelVisible());
+	HUD->TickCardDetailMotionForTest(0.5f);
+	TestFalse(TEXT("Unhover fade eventually hides detail"), HUD->IsCardDetailPanelVisible());
 
 	return true;
 }
@@ -4555,19 +4560,64 @@ bool FWacomUIBattleHUDCardDetailSourceGuardSpec::RunTest(const FString& /*Parame
 	SecondWidget->ApplyCardSnapshot(SecondSnap);
 
 	HUD->HandleCardHoveredForTest(FirstWidget.Get());
+	HUD->TickCardDetailMotionForTest(0.12f);
 	TestTrue(TEXT("First hover shows detail"), HUD->IsCardDetailPanelVisible());
 	TestEqual(TEXT("First hover uses first card"), HUD->GetCardDetailPanelNameText().ToString(), TEXT("第一张详情卡"));
 
 	HUD->HandleCardHoveredForTest(SecondWidget.Get());
+	HUD->TickCardDetailMotionForTest(0.01f);
 	TestTrue(TEXT("Second hover keeps detail visible"), HUD->IsCardDetailPanelVisible());
 	TestEqual(TEXT("Second hover replaces detail source"), HUD->GetCardDetailPanelNameText().ToString(), TEXT("第二张详情卡"));
 
 	HUD->HandleCardUnhoveredForTest(FirstWidget.Get());
+	HUD->TickCardDetailMotionForTest(0.01f);
 	TestTrue(TEXT("Old source unhover does not hide current detail"), HUD->IsCardDetailPanelVisible());
 	TestEqual(TEXT("Old source unhover keeps second detail"), HUD->GetCardDetailPanelNameText().ToString(), TEXT("第二张详情卡"));
 
 	HUD->HandleCardUnhoveredForTest(SecondWidget.Get());
+	HUD->TickCardDetailMotionForTest(0.5f);
 	TestFalse(TEXT("Current source unhover hides detail"), HUD->IsCardDetailPanelVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailReadabilityMotionSpec,
+	"Wacom.UI.Battle.HUDCardDetailReadabilityMotion",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailReadabilityMotionSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UCardWidget> CardWidget(NewObject<UCardWidget>(HUD.Get()));
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+
+	Card->CardId = TEXT("BattleDetailMotionCard");
+	Card->DisplayName = FText::FromString(TEXT("详情动效卡"));
+
+	FHandCardSnapshot Snap;
+	Snap.InstanceId = FGuid::NewGuid();
+	Snap.Definition = Card.Get();
+	Snap.RuntimeCost = 1;
+	Snap.bIsPlayable = true;
+
+	HUD->TakeWidget();
+	CardWidget->TakeWidget();
+	CardWidget->ApplyCardSnapshot(Snap);
+
+	HUD->HandleCardHoveredForTest(CardWidget.Get());
+	TestFalse(TEXT("Initial hover waits for delay"), HUD->IsCardDetailPanelVisible());
+	HUD->TickCardDetailMotionForTest(0.05f);
+	TestFalse(TEXT("Detail is still hidden before delay finishes"), HUD->IsCardDetailPanelVisible());
+	HUD->HandleCardUnhoveredForTest(CardWidget.Get());
+	HUD->TickCardDetailMotionForTest(0.20f);
+	TestFalse(TEXT("Hover leave before delay cancels detail"), HUD->IsCardDetailPanelVisible());
+
+	HUD->SetCardDetailReadabilityPolishForTest(false);
+	HUD->HandleCardHoveredForTest(CardWidget.Get());
+	TestTrue(TEXT("Motion disabled shows immediately"), HUD->IsCardDetailPanelVisible());
+	HUD->HandleCardUnhoveredForTest(CardWidget.Get());
+	TestFalse(TEXT("Motion disabled hides immediately"), HUD->IsCardDetailPanelVisible());
 
 	return true;
 }

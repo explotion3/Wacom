@@ -194,9 +194,9 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ## 建议实现顺序
 
-### V0-T 当前状态：Hand Layout Presets / Tuning Profiles
+### V0-V 当前状态：Hover Detail / Inspect Readability Polish
 
-当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click、first-person hover detail provider、hover 详情跟随 / ZOrder 修正、first-person card render quality 基础、V0-J 的身体锁定锚点投影、V0-L 的美术可控 2D hand layout solver、V0-M 的 offscreen anchor soft clamp、V0-N 的 anchor motion stability、V0-O 的 card slot motion polish、V0-P 的 slot motion lifecycle diagnostics / self-repair、V0-Q 的 event-aware card transitions、V0-R 的 pending / TargetSelect focus polish、V0-S 的 playable / hover / press feedback polish，以及 V0-T 的 hand layout preset / tuning profile。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-L 后默认不再把每张卡牌都生成 3D 槽位并分别投影，而是只投影整副手牌中心点，再用稳定的 2D 参数计算每张卡的屏幕偏移、下坠、旋转和层级，避免 projected basis 动态缩放带来的拉伸和采样不稳定。V0-M 继续沿用这个方向，但不再把手牌中心强制限制在屏幕安全区域内；默认 `SoftClampToViewport` 允许锚点离开视口一段距离，超过软范围后再柔性拉回。V0-N 不改变 Run Tunnel 的 spline / distance 表现，也不锁屏；它只让 anchor tick 在 RunTunnel movement 和 Battle camera look 之后执行，并在 `Authored2D` 下对投影后的整副手牌中心做轻量 screen smoothing，保留前进下降、后退上升的空间趋势，同时压掉移动时叠加在中心点上的高频抖动。V0-O 在此基础上只平滑单张卡牌 slot 的视觉值：位置、角度、缩放和透明度会从上一帧视觉状态追向新目标，出牌 / 移除 / 投影失败时保留短暂 outgoing 表现，新卡从配置偏移和透明度淡入；它不改变 anchor smoothing、战斗命令出口、hover/click 语义或 `WBP_FirstPersonCardView`。V0-P 不新增表现，只让这层 slot motion 可观测、可压测、可自我修复，防止 active / outgoing / RootCanvas child 不一致导致幽灵 widget 或 FPS 阶梯式下降。V0-Q 在 snapshot diff 的基础上接入 BattleEvent 表现 hint：`CardGained` 精确匹配新卡并使用 Gained 入场，`CardsDrawn.Count` 分配给剩余新增卡并使用 Drawn 入场，`CardPlayed` / `HandLimitDiscarded` 精确匹配移除卡并使用 Played / Discarded 离场；事件只影响入场 / 离场方向，snapshot 仍是手牌变化真相。V0-R 把 TargetSelect 中的 pending 卡强化为焦点状态：pending 卡可配置上浮、放大、ZOrder boost，并可按 `PendingTargetingAngleBlend` 向 0 度轻微归正；同一副手牌存在 pending 卡时，非 pending 卡只按 `TargetSelectNonPendingOpacityMultiplier` 轻微降透明，不额外下沉或缩小。Pending 卡仍可点击，用于现有再次点击同卡取消 TargetSelect；但 hover 不再对 pending 卡额外叠加 lift / scale / ZOrder，避免进入目标选择后鼠标进出造成双重跳动。V0-S 在 slot widget 内增加 C++ 轻量 interaction feedback overlay：可打卡 hover 叠加极轻高亮，左键按下只产生 pressed scale / tint，释放可打卡仍立即广播 click intent 并触发短 confirm pulse；点击不可打卡只播放短促 deny tint / 横向 shake，不广播命令。V0-T 增加 `UWacomFirstPersonCardLayoutPreset`，把 authored layout、projection/clamp、scale/fan/edge、anchor smoothing、slot motion、event transition、hover/pending/disabled 和 interaction feedback 的表现数值收进可复用 DataAsset；组件上的现有参数继续作为 fallback，不把 preset 值写回 BP 实例。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示详情；V0-H 进一步把 first-person hover 详情拆到独立 viewport popup host，并跟随 hovered slot 的实时视觉位置更新，避免被 first-person card layer 遮挡。V0-I 用 `BattleHUD::BattleHandPresentationMode` 取代三个 prototype bool，默认 `FirstPersonHandWithLegacyFallback`，表示战斗默认启用第一人称手牌并保留旧 `UHandPanel` 兜底；`FirstPersonHandOnly` 只在 first-person runtime hand 有效时折叠旧手牌，异常时自动恢复。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，作为基础诊断与兜底。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click、first-person hover detail provider、hover 详情跟随 / ZOrder 修正、first-person card render quality 基础、V0-J 的身体锁定锚点投影、V0-L 的美术可控 2D hand layout solver、V0-M 的 offscreen anchor soft clamp、V0-N 的 anchor motion stability、V0-O 的 card slot motion polish、V0-P 的 slot motion lifecycle diagnostics / self-repair、V0-Q 的 event-aware card transitions、V0-R 的 pending / TargetSelect focus polish、V0-S 的 playable / hover / press feedback polish、V0-T 的 hand layout preset / tuning profile、V0-U 的 transition origin / card movement readability，以及 V0-V 的 hover detail / inspect readability polish。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示。V0-L 后默认不再把每张卡牌都生成 3D 槽位并分别投影，而是只投影整副手牌中心点，再用稳定的 2D 参数计算每张卡的屏幕偏移、下坠、旋转和层级，避免 projected basis 动态缩放带来的拉伸和采样不稳定。V0-M 继续沿用这个方向，但不再把手牌中心强制限制在屏幕安全区域内；默认 `SoftClampToViewport` 允许锚点离开视口一段距离，超过软范围后再柔性拉回。V0-N 不改变 Run Tunnel 的 spline / distance 表现，也不锁屏；它只让 anchor tick 在 RunTunnel movement 和 Battle camera look 之后执行，并在 `Authored2D` 下对投影后的整副手牌中心做轻量 screen smoothing，保留前进下降、后退上升的空间趋势，同时压掉移动时叠加在中心点上的高频抖动。V0-O 在此基础上只平滑单张卡牌 slot 的视觉值：位置、角度、缩放和透明度会从上一帧视觉状态追向新目标，出牌 / 移除 / 投影失败时保留短暂 outgoing 表现，新卡从配置偏移和透明度淡入；它不改变 anchor smoothing、战斗命令出口、hover/click 语义或 `WBP_FirstPersonCardView`。V0-P 不新增表现，只让这层 slot motion 可观测、可压测、可自我修复，防止 active / outgoing / RootCanvas child 不一致导致幽灵 widget 或 FPS 阶梯式下降。V0-Q 在 snapshot diff 的基础上接入 BattleEvent 表现 hint：`CardGained` 精确匹配新卡并使用 Gained 入场，`CardsDrawn.Count` 分配给剩余新增卡并使用 Drawn 入场，`CardPlayed` / `HandLimitDiscarded` 精确匹配移除卡并使用 Played / Discarded 离场；事件只影响入场 / 离场表现，snapshot 仍是手牌变化真相。V0-U 在 V0-Q 的 offset 基础上增加 `EWacomFirstPersonCardTransitionOriginMode`：Drawn / Gained 默认从 hand anchor 加偏移进入，Played / Discarded 默认保留 slot offset 离开；也可把任意转场切到 `ViewportAnchor`，用 DPI-aware widget-space 视口锚点模拟牌堆、战斗空间或弃牌区方向，并叠加轻量 scale / angle accent。V0-R 把 TargetSelect 中的 pending 卡强化为焦点状态：pending 卡可配置上浮、放大、ZOrder boost，并可按 `PendingTargetingAngleBlend` 向 0 度轻微归正；同一副手牌存在 pending 卡时，非 pending 卡只按 `TargetSelectNonPendingOpacityMultiplier` 轻微降透明，不额外下沉或缩小。Pending 卡仍可点击，用于现有再次点击同卡取消 TargetSelect；但 hover 不再对 pending 卡额外叠加 lift / scale / ZOrder，避免进入目标选择后鼠标进出造成双重跳动。V0-S 在 slot widget 内增加 C++ 轻量 interaction feedback overlay：可打卡 hover 叠加极轻高亮，左键按下只产生 pressed scale / tint，释放可打卡仍立即广播 click intent 并触发短 confirm pulse；点击不可打卡只播放短促 deny tint / 横向 shake，不广播命令。V0-T 增加 `UWacomFirstPersonCardLayoutPreset`，把 authored layout、projection/clamp、scale/fan/edge、anchor smoothing、slot motion、event transition、hover/pending/disabled 和 interaction feedback 的表现数值收进可复用 DataAsset；组件上的现有参数继续作为 fallback，不把 preset 值写回 BP 实例。V0-V 把旧 `UHandPanel` 详情和 first-person viewport 详情接到 BattleHUD 共享读牌动效：短 hover delay 减少扫过闪烁，淡入淡出和轻量 scale 改善出现 / 消失质感，位置跟随平滑和 side hysteresis 避免靠边左右反复跳；TargetSelect、命令提交、BattleEnd、Session 切换、runtime source 清理和 HUD destruct 仍强制清理详情。V0-E 增加 `UWacomFirstPersonCardLayerSlotWidget`，让卡牌 slot 可接收 hover 和左键点击，并把点击意图转发回 `BattleHUD->OnCardClickedByUser(CardInstanceId)`；V0-F 把 hover 详情从旧 `UCardWidget` 几何中解耦，改为由 `BattleHUD` 根据最近一次 battle snapshot 和 first-person slot 的屏幕锚点显示详情；V0-H 进一步把 first-person hover 详情拆到独立 viewport popup host，并跟随 hovered slot 的实时视觉位置更新，避免被 first-person card layer 遮挡。V0-I 用 `BattleHUD::BattleHandPresentationMode` 取代三个 prototype bool，默认 `FirstPersonHandWithLegacyFallback`，表示战斗默认启用第一人称手牌并保留旧 `UHandPanel` 兜底；`FirstPersonHandOnly` 只在 first-person runtime hand 有效时折叠旧手牌，异常时自动恢复。Render Quality V0-A 把投影坐标改为 DPI-aware widget-space，并默认启用像素对齐和 render angle clamp，作为基础诊断与兜底。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
@@ -212,7 +212,8 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - Anchor tick 在 BeginPlay 后添加 `UWacomRunTunnelMovementComponent` 和 `UWacomBattleCameraLookComponent` 作为 prerequisite，让手牌每帧读取已经更新后的 RunTunnel distance、角色 / 相机 transform 和战斗 camera base 状态。
 - `bEnableCardSlotMotion` 默认开启，只作用于 `UWacomFirstPersonCardLayerSlotWidget` 的视觉状态缓存：slot target 仍由 anchor layout 一次性算出，slot widget 只把 `VisualSlotView` 追向 `TargetSlotView`。`CardSlotMotionSpeed` 控制位置 / 角度 / 缩放，`CardSlotOpacitySpeed` 控制透明度，`CardSlotMotionResetDistancePixels` 用于传送、切 segment 或窗口变化时直接贴合。
 - 新 runtime battle hand 优先使用 `CardInstanceId` 作为 slot motion key；静态预览或 placeholder 没有有效 id 时使用 `StaticIndex:{Index}`。因此 snapshot 重排时同一张卡复用同一个 slot widget，新卡淡入，消失的卡进入 outgoing 列表淡出 / 下滑，到期后移除。
-- `bEnableEventAwareCardTransitions` 默认开启，只改变 first-person layer 的入场 / 离场偏移，不改变 `UHandPanel`、`BattleSession` 或命令路径。`DrawnCardEnterOffsetPixels` 默认让抽到的卡从下方进入；`GainedCardEnterOffsetPixels` 默认让战斗中获得的卡从上方 / 战斗空间方向进入；`PlayedCardExitOffsetPixels` 默认让打出的卡向上离开；`DiscardedCardExitOffsetPixels` 默认让手牌上限弃置的卡向下离开。缺少 hint、重复 key 消歧、projection 失败或 motion 关闭时回退 V0-O 通用 enter / exit 表现。
+- `bEnableEventAwareCardTransitions` 默认开启，只改变 first-person layer 的入场 / 离场表现，不改变 `UHandPanel`、`BattleSession` 或命令路径。V0-U 后 `bEnableReadableTransitionOrigins` 默认开启：每种 transition 都可配置 origin mode、viewport anchor、scale multiplier 和 angle offset；关闭后完全回到 V0-Q 的 offset-only 行为。`SlotOffset` 基于目标 slot 或当前 visual slot 加偏移；`HandAnchorOffset` 基于 `SlotView.AnchorWidgetPosition` 加偏移；`ViewportAnchor` 基于 DPI-aware widget-space viewport anchor 加偏移，取不到 viewport 时 fallback 到 `SlotOffset`。
+- 默认 transition profile：Drawn 使用 `HandAnchorOffset + DrawnCardEnterOffsetPixels`，从手牌中心下方进入；Gained 使用 `HandAnchorOffset + GainedCardEnterOffsetPixels`，从手牌中心上方 / 战斗空间方向进入；Played 使用 `SlotOffset + PlayedCardExitOffsetPixels`，从当前卡向上离开；Discarded 使用 `SlotOffset + DiscardedCardExitOffsetPixels`，从当前卡向下离开。scale / angle accent 只影响 `VisualSlotView` 的入场起点或离场终点，不修改目标 slot、slot key、ZOrder 或输入数据。
 - `BattleHUD` 会在消费 `FBattleEvent` 后暂存一批 first-person transition events，并在下一次 `NativeRefreshFromSnapshot()` 覆盖 transition previous snapshot 前生成 one-shot hints；`NativeOnUIStateChanged()` 可以刷新 pending / hover 视觉，但不会污染下一次 snapshot diff 的 previous hand。
 - Hover、pending、disabled 和 hand anchor 的目标 transform 仍由 anchor 计算；slot motion 只负责过渡，不改变点击合法性。ZOrder 立即跟随 target，避免 hover / pending 卡被过渡中的其他卡遮挡。Hover 详情收到的是动画中的 visual slot 位置，因此会跟随移动中的卡牌，而不是跳到最终目标点。
 - V0-P 后 `UWacomFirstPersonCardLayerWidget` 会记录 `FWacomFirstPersonCardLayerMotionDebugView`：输入 slot 数、active slot 数、outgoing slot 数、RootCanvas 中 slot child 数、正在 tick 的 motion slot 数、重复 key 数，以及本次刷新创建 / 复用 / 移除 / outgoing 开始结束 / 清理未追踪 child 的数量。
@@ -234,6 +235,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - Anchor 缺失、战斗结束、Session 切换、HUD destruct 或清理 runtime hand 时，旧 `UHandPanel` 会恢复原始 visibility，避免战斗不可操作。
 - 交互开启后，layer 根为 `SelfHitTestInvisible`，只让具体卡牌 slot 接收鼠标，不用全屏根控件抢输入。
 - Hover 会影响 first-person layer 自身视觉：卡牌轻微上移、放大并提高 ZOrder；同时在 Idle 状态下通过 `BattleHUD` 显示现有 `UWacomCardDetailPanel`。旧 `UHandPanel` hover 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport popup panel，默认 `FirstPersonCardDetailViewportZOrder=9999`，高于 first-person card layer。详情数据来自 BattleHUD 最近一次 `FBattleSnapshot.Hand`，定位来自 first-person slot 投影后的屏幕锚点，不需要创建或伪装 `UCardWidget`。
+- V0-V 后旧 `UHandPanel` 详情和 first-person viewport 详情共用 BattleHUD 的读牌 motion state。`bEnableCardDetailReadabilityPolish` 默认开启：初次 hover 会等待 `CardDetailHoverDelaySeconds` 后淡入，离开普通来源时淡出；已显示详情时滑到另一张卡会立即换数据和目标锚点，不重新完整延迟。详情位置按 `CardDetailFollowSpeed` 追向目标，超过 `CardDetailPositionResetDistancePixels` 会直接贴合，`CardDetailSideSwitchHysteresisPixels` 用于减少贴边时左右反复跳。关闭该开关会恢复旧的立即显示 / 隐藏 / 定位行为。
 - 可打、非 pending 卡才会获得 hover lift / scale / ZOrder；不可打卡仍可 hover 以查看 Idle 详情，但不会表现成可打姿态。Pending 卡保持 V0-R 焦点状态，hover 不额外叠加 lift / scale / ZOrder，但仍可按下并点击取消 TargetSelect。
 - first-person hover 详情会订阅 hovered slot layout update：当 hover lift、pending 状态、hand layout、Run Tunnel 推进，或当前真实相机投影让 hovered 卡牌屏幕锚点变化时，详情面板只重算位置，不重建数据。默认 `BodyLocked` 下，鼠标镜头偏移不会重算扇形 layout，但会通过当前相机投影产生合理的详情跟随。
 - 左键点击有效、已投影、可用的 slot 时，只广播 `CardInstanceId` 并由 `BattleHUD` 进入现有 `OnCardClickedByUser()` flow；不可用卡允许 hover，但点击 no-op。
@@ -318,28 +320,33 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 15. V0-Q：Event-Aware Card Transitions
    - 已增加 `EWacomFirstPersonCardSlotTransitionKind` 和 `FWacomFirstPersonCardLayerTransitionHint`。Hint 是 one-shot 表现数据，只在下一次 `SetCardSlots()` 消费，不作为手牌真相。
    - `BattleHUD` 用上一份 transition snapshot 与新 snapshot 做 hand diff；BattleEvent 只提供语义 hint。`CardGained` 优先精确匹配新增卡，剩余新增卡按 `CardsDrawn.Count` 顺序分配 Drawn，移除卡按 `CardPlayed` / `HandLimitDiscarded` 分配 Played / Discarded。
-   - `UWacomFirstPersonCardLayerWidget` 仍按 motion key 复用 active/outgoing widget；hint 只覆盖新 active slot 的 enter offset 或 outgoing slot 的 exit offset。重排但仍存在的卡不触发 enter / exit，只走平滑重排。
+   - `UWacomFirstPersonCardLayerWidget` 仍按 motion key 复用 active/outgoing widget；hint 会解析成 transition motion profile，覆盖新 active slot 的视觉入场来源或 outgoing slot 的视觉离场终点。重排但仍存在的卡不触发 enter / exit，只走平滑重排。
 
-16. V0-R：Pending / TargetSelect Focus Polish
+16. V0-U：Transition Origin / Card Movement Readability
+   - 已增加 `EWacomFirstPersonCardTransitionOriginMode` 和 readable transition origin profile。`SlotOffset` 保留 V0-Q 行为；`HandAnchorOffset` 用手牌中心锚点作为入场 / 离场基准；`ViewportAnchor` 用 widget-space viewport anchor 模拟屏幕边缘、牌堆或战斗空间方向，缺少 viewport 时回退 SlotOffset。
+   - `bEnableReadableTransitionOrigins` 默认开启；Drawn / Gained 默认从 hand anchor 加偏移进入，Played / Discarded 默认从当前 visual slot 加偏移离开。关闭该开关会回到 V0-Q 的 offset-only 行为。
+   - Scale multiplier 和 angle offset 只写入 `VisualSlotView` 起点或 outgoing target，不改变 `TargetSlotView`、战斗命令、hover/click、detail follow 或 slot lifecycle diagnostics。
+
+17. V0-R：Pending / TargetSelect Focus Polish
    - 已为 pending 卡增加配置化 `PendingTargetingZOrderBoost`、`bPendingTargetingStraightenAngle`、`PendingTargetingAngleBlend`。
    - TargetSelect 中存在 pending 卡时，非 pending 卡按 `TargetSelectNonPendingOpacityMultiplier` 轻微降透明；不可用卡透明度会与该倍率组合。
    - Pending 卡 hover 不再叠加额外 lift / scale / ZOrder，避免目标选择时 hover 抖动；详情仍只在 Idle 显示。
 
-17. V0-S：Playable / Hover / Press Feedback Polish
+18. V0-S：Playable / Hover / Press Feedback Polish
    - 已增加 `FWacomFirstPersonCardSlotFeedbackConfig`，由 anchor 传给 layer，再传给 slot widget。
    - Slot widget 内部创建 `HitTestInvisible` 的 C++ feedback overlay，承载可打 hover、pressed、confirm 和 deny 反馈，不要求修改 `WBP_FirstPersonCardView`。
    - 不可打卡 hover 不再获得可打卡上浮 / 放大 / 提层；不可打卡点击只播放 deny 反馈，不广播 click intent。
 
-18. V0-H：Hover Detail Follow + ZOrder
-   - 已完成：first-person hover 详情跟随 hovered card 实时投影位置，并显示在 first-person card layer 之上。
-   - 旧 `UHandPanel` hover 详情路径不变，仍作为 fallback 和对照。
-   - 后续只保留细节微调：详情面板偏移、动画、避免贴边时跳动。
+19. V0-V：Hover Detail / Inspect Readability Polish
+   - 已完成：旧 `UHandPanel` 详情和 first-person viewport 详情共用短 hover delay、淡入淡出、轻量 scale、位置跟随平滑和 side hysteresis。
+   - first-person 详情仍使用独立 viewport popup host，高于 first-person card layer；旧手牌详情仍留在 BattleHUD 内部 `CardDetailLayer`。
+   - 本轮不加入 inspect lock，不新增输入语义，不改变 BattleHUD 命令路径。
 
-19. Render Quality V0-B
+20. Render Quality V0-B
    - 当前不把“降低旋转角”作为主线目标；`WBP_FirstPersonCardView` 已能承接较大角度旋转的抗锯齿需求，排布表现优先。
    - 后续只在美术反馈需要时微调扇形参数：下坠、层级、hover / pending 姿态和可选角度 clamp。
 
-20. First-person card view polish
+21. First-person card view polish
    - 已确认第一人称层应使用专用 `WBP_FirstPersonCardView`，不要继续把通用 `WBP_CardView` 直接作为长期主手牌卡面。
    - 后续 polish 重点是沉淀该 WBP 的制作规范：RetainerBox 使用边界、贴图透明留白、内部缩放、安全边框、材质动画刷新频率，以及不同 DPI / 视口尺寸下的旋转采样表现。
 

@@ -92,6 +92,22 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterOffset(
 	bool bTreatAsNewSlot,
 	const TOptional<FVector2D>& EnterOffsetOverride)
 {
+	TOptional<FWacomFirstPersonCardTransitionMotionProfile> EnterProfileOverride;
+	if (EnterOffsetOverride.IsSet())
+	{
+		FWacomFirstPersonCardTransitionMotionProfile Profile;
+		Profile.OriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+		Profile.OffsetPixels = EnterOffsetOverride.GetValue();
+		EnterProfileOverride = Profile;
+	}
+	BeginSlotMotionWithEnterProfile(InTargetSlotView, bTreatAsNewSlot, EnterProfileOverride);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
+	const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
+	bool bTreatAsNewSlot,
+	const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& EnterProfileOverride)
+{
 	if (!SlotMotionConfig.bEnabled)
 	{
 		SetSlotViewImmediate(InTargetSlotView);
@@ -135,10 +151,21 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterOffset(
 		VisualSlotView = InTargetSlotView;
 		if (bTreatAsNewSlot && InTargetSlotView.bProjected)
 		{
-			const FVector2D EnterOffset = EnterOffsetOverride.Get(SlotMotionConfig.EnterOffsetPixels);
-			VisualSlotView.ScreenPosition = InTargetSlotView.ScreenPosition + EnterOffset;
+			FWacomFirstPersonCardTransitionMotionProfile DefaultEnterProfile;
+			DefaultEnterProfile.OriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+			DefaultEnterProfile.OffsetPixels = SlotMotionConfig.EnterOffsetPixels;
+			DefaultEnterProfile.ViewportAnchor = FVector2D(0.5f, 0.5f);
+			DefaultEnterProfile.ScaleMultiplier = 1.0f;
+			DefaultEnterProfile.AngleOffsetDegrees = 0.0f;
+			const FWacomFirstPersonCardTransitionMotionProfile EnterProfile =
+				EnterProfileOverride.Get(DefaultEnterProfile);
+			VisualSlotView.ScreenPosition = InTargetSlotView.ScreenPosition + EnterProfile.OffsetPixels;
 			VisualSlotView.WidgetPosition = VisualSlotView.ScreenPosition;
 			VisualSlotView.SnappedWidgetPosition = VisualSlotView.ScreenPosition;
+			VisualSlotView.RenderScale =
+				FMath::Max(0.01f, InTargetSlotView.RenderScale * FMath::Max(0.01f, EnterProfile.ScaleMultiplier));
+			VisualSlotView.RenderAngleDegrees =
+				InTargetSlotView.RenderAngleDegrees + EnterProfile.AngleOffsetDegrees;
 			VisualSlotView.RenderOpacity = FMath::Clamp(SlotMotionConfig.EnterOpacity, 0.0f, 1.0f);
 		}
 		bHasVisualSlotView = true;
@@ -158,6 +185,21 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithOffset(
 	const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
 	const TOptional<FVector2D>& ExitOffsetOverride)
 {
+	TOptional<FWacomFirstPersonCardTransitionMotionProfile> ExitProfileOverride;
+	if (ExitOffsetOverride.IsSet())
+	{
+		FWacomFirstPersonCardTransitionMotionProfile Profile;
+		Profile.OriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+		Profile.OffsetPixels = ExitOffsetOverride.GetValue();
+		ExitProfileOverride = Profile;
+	}
+	BeginExitMotionWithProfile(InExitTargetSlotView, ExitProfileOverride);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
+	const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
+	const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride)
+{
 	if (!SlotMotionConfig.bEnabled || SlotMotionConfig.ExitDuration <= 0.0f || !bHasVisualSlotView)
 	{
 		SetHoveredForFirstPersonLayer(false);
@@ -174,10 +216,21 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithOffset(
 	CurrentSlotView = InExitTargetSlotView;
 	CurrentSlotView.bProjected = false;
 	TargetSlotView = InExitTargetSlotView;
-	const FVector2D ExitOffset = ExitOffsetOverride.Get(SlotMotionConfig.ExitOffsetPixels);
-	TargetSlotView.ScreenPosition = VisualSlotView.ScreenPosition + ExitOffset;
+	FWacomFirstPersonCardTransitionMotionProfile DefaultExitProfile;
+	DefaultExitProfile.OriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+	DefaultExitProfile.OffsetPixels = SlotMotionConfig.ExitOffsetPixels;
+	DefaultExitProfile.ViewportAnchor = FVector2D(0.5f, 0.5f);
+	DefaultExitProfile.ScaleMultiplier = 1.0f;
+	DefaultExitProfile.AngleOffsetDegrees = 0.0f;
+	const FWacomFirstPersonCardTransitionMotionProfile ExitProfile =
+		ExitProfileOverride.Get(DefaultExitProfile);
+	TargetSlotView.ScreenPosition = VisualSlotView.ScreenPosition + ExitProfile.OffsetPixels;
 	TargetSlotView.WidgetPosition = TargetSlotView.ScreenPosition;
 	TargetSlotView.SnappedWidgetPosition = TargetSlotView.ScreenPosition;
+	TargetSlotView.RenderScale =
+		FMath::Max(0.01f, VisualSlotView.RenderScale * FMath::Max(0.01f, ExitProfile.ScaleMultiplier));
+	TargetSlotView.RenderAngleDegrees =
+		VisualSlotView.RenderAngleDegrees + ExitProfile.AngleOffsetDegrees;
 	TargetSlotView.RenderOpacity = 0.0f;
 	TargetSlotView.bProjected = VisualSlotView.bProjected;
 	bIsExitingForFirstPersonLayer = true;
@@ -196,6 +249,18 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotMotionConfig(
 	SlotMotionConfig.EnterOpacity = FMath::Clamp(SlotMotionConfig.EnterOpacity, 0.0f, 1.0f);
 	SlotMotionConfig.ExitDuration = FMath::Max(0.0f, SlotMotionConfig.ExitDuration);
 	SlotMotionConfig.ResetDistancePixels = FMath::Max(0.0f, SlotMotionConfig.ResetDistancePixels);
+	SlotMotionConfig.DrawnEnterViewportAnchor.X = FMath::Clamp(SlotMotionConfig.DrawnEnterViewportAnchor.X, 0.0f, 1.0f);
+	SlotMotionConfig.DrawnEnterViewportAnchor.Y = FMath::Clamp(SlotMotionConfig.DrawnEnterViewportAnchor.Y, 0.0f, 1.0f);
+	SlotMotionConfig.DrawnEnterScaleMultiplier = FMath::Max(0.01f, SlotMotionConfig.DrawnEnterScaleMultiplier);
+	SlotMotionConfig.GainedEnterViewportAnchor.X = FMath::Clamp(SlotMotionConfig.GainedEnterViewportAnchor.X, 0.0f, 1.0f);
+	SlotMotionConfig.GainedEnterViewportAnchor.Y = FMath::Clamp(SlotMotionConfig.GainedEnterViewportAnchor.Y, 0.0f, 1.0f);
+	SlotMotionConfig.GainedEnterScaleMultiplier = FMath::Max(0.01f, SlotMotionConfig.GainedEnterScaleMultiplier);
+	SlotMotionConfig.PlayedExitViewportAnchor.X = FMath::Clamp(SlotMotionConfig.PlayedExitViewportAnchor.X, 0.0f, 1.0f);
+	SlotMotionConfig.PlayedExitViewportAnchor.Y = FMath::Clamp(SlotMotionConfig.PlayedExitViewportAnchor.Y, 0.0f, 1.0f);
+	SlotMotionConfig.PlayedExitScaleMultiplier = FMath::Max(0.01f, SlotMotionConfig.PlayedExitScaleMultiplier);
+	SlotMotionConfig.DiscardedExitViewportAnchor.X = FMath::Clamp(SlotMotionConfig.DiscardedExitViewportAnchor.X, 0.0f, 1.0f);
+	SlotMotionConfig.DiscardedExitViewportAnchor.Y = FMath::Clamp(SlotMotionConfig.DiscardedExitViewportAnchor.Y, 0.0f, 1.0f);
+	SlotMotionConfig.DiscardedExitScaleMultiplier = FMath::Max(0.01f, SlotMotionConfig.DiscardedExitScaleMultiplier);
 	if (!SlotMotionConfig.bEnabled && bHasVisualSlotView)
 	{
 		SetSlotViewImmediate(TargetSlotView);

@@ -236,10 +236,27 @@ namespace WacomFirstPersonCardLayerSpec
 		Config.ExitDuration = 0.2f;
 		Config.ResetDistancePixels = 420.0f;
 		Config.bEnableEventAwareTransitions = true;
+		Config.bEnableReadableTransitionOrigins = true;
 		Config.DrawnEnterOffsetPixels = FVector2D(0.0f, 96.0f);
+		Config.DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+		Config.DrawnEnterViewportAnchor = FVector2D(0.5f, 1.0f);
+		Config.DrawnEnterScaleMultiplier = 0.96f;
+		Config.DrawnEnterAngleOffsetDegrees = 0.0f;
 		Config.GainedEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+		Config.GainedEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+		Config.GainedEnterViewportAnchor = FVector2D(0.5f, 0.0f);
+		Config.GainedEnterScaleMultiplier = 0.96f;
+		Config.GainedEnterAngleOffsetDegrees = 0.0f;
 		Config.PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);
+		Config.PlayedExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+		Config.PlayedExitViewportAnchor = FVector2D(0.5f, 0.0f);
+		Config.PlayedExitScaleMultiplier = 0.96f;
+		Config.PlayedExitAngleOffsetDegrees = 0.0f;
 		Config.DiscardedExitOffsetPixels = FVector2D(0.0f, 120.0f);
+		Config.DiscardedExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+		Config.DiscardedExitViewportAnchor = FVector2D(0.5f, 1.0f);
+		Config.DiscardedExitScaleMultiplier = 0.96f;
+		Config.DiscardedExitAngleOffsetDegrees = 0.0f;
 		return Config;
 	}
 
@@ -295,10 +312,27 @@ namespace WacomFirstPersonCardLayerSpec
 		Preset->CardSlotExitDuration = 0.31f;
 		Preset->CardSlotMotionResetDistancePixels = 222.0f;
 		Preset->bEnableEventAwareCardTransitions = true;
+		Preset->bEnableReadableTransitionOrigins = true;
 		Preset->DrawnCardEnterOffsetPixels = FVector2D(0.0f, 111.0f);
+		Preset->DrawnCardEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+		Preset->DrawnCardEnterViewportAnchor = FVector2D(0.25f, 1.0f);
+		Preset->DrawnCardEnterScaleMultiplier = 0.82f;
+		Preset->DrawnCardEnterAngleOffsetDegrees = -3.0f;
 		Preset->GainedCardEnterOffsetPixels = FVector2D(0.0f, -133.0f);
+		Preset->GainedCardEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+		Preset->GainedCardEnterViewportAnchor = FVector2D(0.5f, 0.0f);
+		Preset->GainedCardEnterScaleMultiplier = 0.84f;
+		Preset->GainedCardEnterAngleOffsetDegrees = 4.0f;
 		Preset->PlayedCardExitOffsetPixels = FVector2D(0.0f, -155.0f);
+		Preset->PlayedCardExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+		Preset->PlayedCardExitViewportAnchor = FVector2D(0.5f, 0.0f);
+		Preset->PlayedCardExitScaleMultiplier = 0.86f;
+		Preset->PlayedCardExitAngleOffsetDegrees = 5.0f;
 		Preset->DiscardedCardExitOffsetPixels = FVector2D(0.0f, 177.0f);
+		Preset->DiscardedCardExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+		Preset->DiscardedCardExitViewportAnchor = FVector2D(0.5f, 1.0f);
+		Preset->DiscardedCardExitScaleMultiplier = 0.88f;
+		Preset->DiscardedCardExitAngleOffsetDegrees = -5.0f;
 		Preset->PendingTargetingLiftPixels = 42.0f;
 		Preset->PendingTargetingScale = 1.2f;
 		Preset->PendingTargetingZOrderBoost = 1600;
@@ -1448,7 +1482,14 @@ bool FWacomFirstPersonCardLayerPresetMotionFeedbackTest::RunTest(const FString& 
 		TestEqual(TEXT("Preset motion speed"), MotionConfig.MotionSpeed, Preset->CardSlotMotionSpeed);
 		TestEqual(TEXT("Preset opacity speed"), MotionConfig.OpacitySpeed, Preset->CardSlotOpacitySpeed);
 		TestEqual(TEXT("Preset enter offset"), MotionConfig.EnterOffsetPixels, Preset->CardSlotEnterOffsetPixels);
+		TestEqual(TEXT("Preset readable origins enabled"), MotionConfig.bEnableReadableTransitionOrigins, Preset->bEnableReadableTransitionOrigins);
 		TestEqual(TEXT("Preset gained enter offset"), MotionConfig.GainedEnterOffsetPixels, Preset->GainedCardEnterOffsetPixels);
+		TestEqual(TEXT("Preset drawn origin mode"), MotionConfig.DrawnEnterOriginMode, Preset->DrawnCardEnterOriginMode);
+		TestEqual(TEXT("Preset drawn viewport anchor"), MotionConfig.DrawnEnterViewportAnchor, Preset->DrawnCardEnterViewportAnchor);
+		TestEqual(TEXT("Preset drawn scale accent"), MotionConfig.DrawnEnterScaleMultiplier, Preset->DrawnCardEnterScaleMultiplier);
+		TestEqual(TEXT("Preset drawn angle accent"), MotionConfig.DrawnEnterAngleOffsetDegrees, Preset->DrawnCardEnterAngleOffsetDegrees);
+		TestEqual(TEXT("Preset played origin mode"), MotionConfig.PlayedExitOriginMode, Preset->PlayedCardExitOriginMode);
+		TestEqual(TEXT("Preset discarded scale accent"), MotionConfig.DiscardedExitScaleMultiplier, Preset->DiscardedCardExitScaleMultiplier);
 		TestEqual(TEXT("Preset feedback enabled"), FeedbackConfig.bEnabled, Preset->bEnableCardInteractionFeedback);
 		TestEqual(TEXT("Preset hover feedback color"), FeedbackConfig.PlayableHoverColor, Preset->PlayableHoverFeedbackColor);
 		TestEqual(TEXT("Preset deny opacity"), FeedbackConfig.DenyOpacity, Preset->DenyFeedbackOpacity);
@@ -2978,7 +3019,9 @@ bool FWacomFirstPersonCardLayerMotionReuseTest::RunTest(const FString& Parameter
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig());
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
+	Layer->SetSlotMotionConfig(Config);
 	const FGuid FirstId = FGuid::NewGuid();
 	const FGuid SecondId = FGuid::NewGuid();
 	Layer->SetCardSlots({
@@ -3372,7 +3415,9 @@ bool FWacomFirstPersonCardLayerMotionStaticKeyTest::RunTest(const FString& Param
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig());
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
+	Layer->SetSlotMotionConfig(Config);
 	FWacomFirstPersonCardLayerSlotView FirstSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FGuid(), 0, FVector2D(100.0f, 200.0f));
 	FWacomFirstPersonCardLayerSlotView SecondSlot =
@@ -3412,6 +3457,7 @@ bool FWacomFirstPersonCardLayerMotionHoveredVisualPositionTest::RunTest(const FS
 	}
 
 	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
 	Config.EnterOffsetPixels = FVector2D::ZeroVector;
 	Config.EnterOpacity = 1.0f;
 	Layer->SetSlotMotionConfig(Config);
@@ -3461,7 +3507,9 @@ bool FWacomFirstPersonCardLayerDrawnTransitionTest::RunTest(const FString& Param
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig());
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
+	Layer->SetSlotMotionConfig(Config);
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D TargetPosition(100.0f, 200.0f);
 	Layer->SetCardTransitionHints({
@@ -3498,7 +3546,9 @@ bool FWacomFirstPersonCardLayerGainedTransitionTest::RunTest(const FString& Para
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig());
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
+	Layer->SetSlotMotionConfig(Config);
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D TargetPosition(120.0f, 220.0f);
 	Layer->SetCardTransitionHints({
@@ -3536,6 +3586,7 @@ bool FWacomFirstPersonCardLayerPlayedTransitionTest::RunTest(const FString& Para
 	}
 
 	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
 	Config.EnterOffsetPixels = FVector2D::ZeroVector;
 	Config.EnterOpacity = 1.0f;
 	Layer->SetSlotMotionConfig(Config);
@@ -3581,6 +3632,7 @@ bool FWacomFirstPersonCardLayerDiscardedTransitionTest::RunTest(const FString& P
 	}
 
 	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
 	Config.EnterOffsetPixels = FVector2D::ZeroVector;
 	Config.EnterOpacity = 1.0f;
 	Layer->SetSlotMotionConfig(Config);
@@ -3680,7 +3732,9 @@ bool FWacomFirstPersonCardLayerTransitionHintsOneShotTest::RunTest(const FString
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig());
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
+	Layer->SetSlotMotionConfig(Config);
 	const FGuid FirstId = FGuid::NewGuid();
 	const FGuid SecondId = FGuid::NewGuid();
 	const FVector2D TargetPosition(100.0f, 200.0f);
@@ -3698,6 +3752,407 @@ bool FWacomFirstPersonCardLayerTransitionHintsOneShotTest::RunTest(const FString
 		TestEqual(TEXT("Second unhinted card uses default enter offset"), SecondWidget->GetVisualSlotView().ScreenPosition, FVector2D(220.0f, 240.0f));
 	}
 
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerSlotOffsetOriginTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.SlotOffsetPreservesV0QBehavior",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerSlotOffsetOriginTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+	Layer->SetSlotMotionConfig(Config);
+	const FGuid CardId = FGuid::NewGuid();
+	const FVector2D TargetPosition(100.0f, 200.0f);
+	Layer->SetCardTransitionHints({
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
+	});
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, TargetPosition) });
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		TestEqual(TEXT("SlotOffset uses target plus transition offset"), SlotWidget->GetVisualSlotView().ScreenPosition, TargetPosition + Config.DrawnEnterOffsetPixels);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDrawnHandAnchorOriginTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.DrawnCardCanEnterFromHandAnchorOrigin",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDrawnHandAnchorOriginTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+	Config.DrawnEnterOffsetPixels = FVector2D(0.0f, 90.0f);
+	Layer->SetSlotMotionConfig(Config);
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(220.0f, 260.0f));
+	Slot.AnchorWidgetPosition = FVector2D(140.0f, 180.0f);
+	Layer->SetCardTransitionHints({
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
+	});
+	Layer->SetCardSlots({ Slot });
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		TestEqual(TEXT("Drawn card starts from hand anchor origin"), SlotWidget->GetVisualSlotView().ScreenPosition, Slot.AnchorWidgetPosition + Config.DrawnEnterOffsetPixels);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerGainedHandAnchorOriginTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.GainedCardCanEnterFromHandAnchorOrigin",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerGainedHandAnchorOriginTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.GainedEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+	Config.GainedEnterOffsetPixels = FVector2D(0.0f, -110.0f);
+	Layer->SetSlotMotionConfig(Config);
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(260.0f, 300.0f));
+	Slot.AnchorWidgetPosition = FVector2D(180.0f, 230.0f);
+	Layer->SetCardTransitionHints({
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Gained)
+	});
+	Layer->SetCardSlots({ Slot });
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		TestEqual(TEXT("Gained card starts from hand anchor origin"), SlotWidget->GetVisualSlotView().ScreenPosition, Slot.AnchorWidgetPosition + Config.GainedEnterOffsetPixels);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerViewportFallbackOriginTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.ViewportAnchorFallbackUsesSlotOffsetWhenViewportUnavailable",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerViewportFallbackOriginTest::RunTest(const FString& Parameters)
+{
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(GetTransientPackage());
+	if (!TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::ViewportAnchor;
+	Config.DrawnEnterOffsetPixels = FVector2D(12.0f, 34.0f);
+	Layer->SetSlotMotionConfig(Config);
+	const FGuid CardId = FGuid::NewGuid();
+	const FVector2D TargetPosition(120.0f, 220.0f);
+	Layer->SetCardTransitionHints({
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
+	});
+	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, TargetPosition) });
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		TestEqual(TEXT("Missing viewport falls back to slot offset"), SlotWidget->GetVisualSlotView().ScreenPosition, TargetPosition + Config.DrawnEnterOffsetPixels);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerViewportAnchorOriginTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.ViewportAnchorOriginUsesWidgetSpaceViewport",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerViewportAnchorOriginTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	Layer->SetViewportSizeOverrideForTest(FVector2D(1000.0f, 800.0f));
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::ViewportAnchor;
+	Config.DrawnEnterViewportAnchor = FVector2D(0.25f, 0.75f);
+	Config.DrawnEnterOffsetPixels = FVector2D(10.0f, -20.0f);
+	Layer->SetSlotMotionConfig(Config);
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardTransitionHints({
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
+	});
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(400.0f, 500.0f))
+	});
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		TestEqual(TEXT("Viewport anchor resolves in widget-space"), SlotWidget->GetVisualSlotView().ScreenPosition, FVector2D(260.0f, 580.0f));
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerTransitionAccentTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.TransitionScaleAndAngleAccentApplyOnlyToVisualState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerTransitionAccentTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+	Config.DrawnEnterScaleMultiplier = 0.8f;
+	Config.DrawnEnterAngleOffsetDegrees = 6.0f;
+	Layer->SetSlotMotionConfig(Config);
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(180.0f, 240.0f), 10.0f, 0.75f);
+	Layer->SetCardTransitionHints({
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
+	});
+	Layer->SetCardSlots({ Slot });
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		TestEqual(TEXT("Target scale unchanged"), SlotWidget->GetSlotView().RenderScale, Slot.RenderScale);
+		TestEqual(TEXT("Target angle unchanged"), SlotWidget->GetSlotView().RenderAngleDegrees, Slot.RenderAngleDegrees);
+		TestEqual(TEXT("Visual scale uses transition accent"), SlotWidget->GetVisualSlotView().RenderScale, Slot.RenderScale * Config.DrawnEnterScaleMultiplier);
+		TestEqual(TEXT("Visual angle uses transition accent"), SlotWidget->GetVisualSlotView().RenderAngleDegrees, Slot.RenderAngleDegrees + Config.DrawnEnterAngleOffsetDegrees);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPlayedDiscardedReadableOriginTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.PlayedAndDiscardedExitUseReadableOriginProfiles",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPlayedDiscardedReadableOriginTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Config.PlayedExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+	Config.PlayedExitOffsetPixels = FVector2D(0.0f, -140.0f);
+	Config.PlayedExitScaleMultiplier = 0.7f;
+	Config.DiscardedExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
+	Config.DiscardedExitOffsetPixels = FVector2D(0.0f, 140.0f);
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid PlayedId = FGuid::NewGuid();
+	const FGuid DiscardedId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView PlayedSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(PlayedId, 0, FVector2D(120.0f, 260.0f), 0.0f, 1.0f);
+	PlayedSlot.AnchorWidgetPosition = FVector2D(200.0f, 220.0f);
+	FWacomFirstPersonCardLayerSlotView DiscardedSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(DiscardedId, 1, FVector2D(240.0f, 260.0f), 0.0f, 1.0f);
+	DiscardedSlot.AnchorWidgetPosition = FVector2D(200.0f, 220.0f);
+	Layer->SetCardSlots({ PlayedSlot, DiscardedSlot });
+	Layer->TickSlotMotionForTest(1.0f);
+	Layer->SetCardTransitionHints({
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(PlayedId, EWacomFirstPersonCardSlotTransitionKind::Played),
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(DiscardedId, EWacomFirstPersonCardSlotTransitionKind::Discarded)
+	});
+	Layer->SetCardSlots({});
+
+	UWacomFirstPersonCardLayerSlotWidget* PlayedOutgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	UWacomFirstPersonCardLayerSlotWidget* DiscardedOutgoing = Layer->GetOutgoingSlotWidgetAtForTest(1);
+	if (TestNotNull(TEXT("Played outgoing"), PlayedOutgoing))
+	{
+		Layer->TickSlotMotionForTest(0.1f);
+		TestTrue(TEXT("Played readable exit moves toward hand anchor upper origin"), PlayedOutgoing->GetVisualSlotView().ScreenPosition.Y < PlayedSlot.ScreenPosition.Y);
+		TestTrue(TEXT("Played readable exit scale accent applies"), PlayedOutgoing->GetVisualSlotView().RenderScale < PlayedSlot.RenderScale);
+	}
+	if (TestNotNull(TEXT("Discarded outgoing"), DiscardedOutgoing))
+	{
+		TestTrue(TEXT("Discarded readable exit moves downward"), DiscardedOutgoing->GetVisualSlotView().ScreenPosition.Y > DiscardedSlot.ScreenPosition.Y);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerReadableOriginsDisabledTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.ReadableOriginsDisabledFallsBackToEventAwareOffsets",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerReadableOriginsDisabledTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.bEnableReadableTransitionOrigins = false;
+	Config.DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+	Config.DrawnEnterOffsetPixels = FVector2D(0.0f, 80.0f);
+	Config.DrawnEnterScaleMultiplier = 0.5f;
+	Config.DrawnEnterAngleOffsetDegrees = 12.0f;
+	Layer->SetSlotMotionConfig(Config);
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(200.0f, 240.0f), 4.0f, 0.9f);
+	Slot.AnchorWidgetPosition = FVector2D(100.0f, 120.0f);
+	Layer->SetCardTransitionHints({
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
+	});
+	Layer->SetCardSlots({ Slot });
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		TestEqual(TEXT("Readable origins disabled uses slot offset"), SlotWidget->GetVisualSlotView().ScreenPosition, Slot.ScreenPosition + Config.DrawnEnterOffsetPixels);
+		TestEqual(TEXT("Readable origins disabled ignores scale accent"), SlotWidget->GetVisualSlotView().RenderScale, Slot.RenderScale);
+		TestEqual(TEXT("Readable origins disabled ignores angle accent"), SlotWidget->GetVisualSlotView().RenderAngleDegrees, Slot.RenderAngleDegrees);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerTransitionOriginPresetTest,
+	"Wacom.UI.FirstPersonCardLayer.TransitionOrigin.LayoutPresetOverridesTransitionOriginProfiles",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerTransitionOriginPresetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* Preset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Preset"), Preset))
+	{
+		return false;
+	}
+
+	Anchor->bDrawStaticCardLayer = true;
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = Preset;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->RefreshStaticLayerForTest();
+
+	if (const UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest())
+	{
+		const FWacomFirstPersonCardSlotMotionConfig& MotionConfig = Layer->GetSlotMotionConfigForTest();
+		TestEqual(TEXT("Preset readable origins"), MotionConfig.bEnableReadableTransitionOrigins, Preset->bEnableReadableTransitionOrigins);
+		TestEqual(TEXT("Preset gained origin mode"), MotionConfig.GainedEnterOriginMode, Preset->GainedCardEnterOriginMode);
+		TestEqual(TEXT("Preset gained viewport anchor"), MotionConfig.GainedEnterViewportAnchor, Preset->GainedCardEnterViewportAnchor);
+		TestEqual(TEXT("Preset gained scale accent"), MotionConfig.GainedEnterScaleMultiplier, Preset->GainedCardEnterScaleMultiplier);
+		TestEqual(TEXT("Preset gained angle accent"), MotionConfig.GainedEnterAngleOffsetDegrees, Preset->GainedCardEnterAngleOffsetDegrees);
+		TestEqual(TEXT("Preset played exit origin"), MotionConfig.PlayedExitOriginMode, Preset->PlayedCardExitOriginMode);
+		TestEqual(TEXT("Preset played exit viewport anchor"), MotionConfig.PlayedExitViewportAnchor, Preset->PlayedCardExitViewportAnchor);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
 	PC->Destroy();
 	return true;
 }
@@ -5503,6 +5958,8 @@ bool FWacomFirstPersonCardLayerDetailProviderHoverTest::RunTest(const FString& P
 	HUD->HandleFirstPersonCardHoveredForTest(
 		FirstSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FirstSnapshot.InstanceId));
+	TestFalse(TEXT("First-person hover waits before showing detail"), HUD->IsCardDetailPanelVisible());
+	HUD->TickCardDetailMotionForTest(0.12f);
 	TestTrue(TEXT("First-person hover shows detail"), HUD->IsCardDetailPanelVisible());
 	TestFalse(TEXT("First-person hover does not use legacy detail panel"), HUD->IsLegacyCardDetailPanelVisibleForTest());
 	TestTrue(TEXT("First-person hover uses viewport detail panel"), HUD->IsFirstPersonCardDetailPanelVisibleForTest());
@@ -5516,6 +5973,7 @@ bool FWacomFirstPersonCardLayerDetailProviderHoverTest::RunTest(const FString& P
 	HUD->HandleFirstPersonCardHoveredForTest(
 		SecondSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SecondSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.01f);
 	TestTrue(TEXT("Second first-person hover keeps detail visible"), HUD->IsCardDetailPanelVisible());
 	TestEqual(TEXT("First-person detail replaces source"),
 		HUD->GetCardDetailPanelNameText().ToString(),
@@ -5524,6 +5982,7 @@ bool FWacomFirstPersonCardLayerDetailProviderHoverTest::RunTest(const FString& P
 	HUD->HandleFirstPersonCardUnhoveredForTest(
 		FirstSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FirstSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.01f);
 	TestTrue(TEXT("Old first-person source unhover does not hide current detail"), HUD->IsCardDetailPanelVisible());
 	TestEqual(TEXT("Old first-person source unhover keeps second detail"),
 		HUD->GetCardDetailPanelNameText().ToString(),
@@ -5532,6 +5991,7 @@ bool FWacomFirstPersonCardLayerDetailProviderHoverTest::RunTest(const FString& P
 	HUD->HandleFirstPersonCardUnhoveredForTest(
 		SecondSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SecondSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.5f);
 	TestFalse(TEXT("Current first-person source unhover hides detail"), HUD->IsCardDetailPanelVisible());
 	TestFalse(TEXT("First-person viewport detail is hidden on current unhover"), HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 
@@ -5575,12 +6035,14 @@ bool FWacomFirstPersonCardLayerDetailProviderFollowTest::RunTest(const FString& 
 	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
 	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
 	HUD->RefreshFromSnapshotForTest(Snapshot);
+	HUD->SetCardDetailMotionSpeedsForTest(0.0f, 18.0f, 24.0f);
 
 	FWacomFirstPersonCardLayerSlotView InitialSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId);
 	InitialSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	InitialSlot.RenderScale = 1.0f;
 	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
+	HUD->TickCardDetailMotionForTest(0.12f);
 	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
 	TestTrue(TEXT("First-person detail visible before follow update"), HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 
@@ -5588,12 +6050,14 @@ bool FWacomFirstPersonCardLayerDetailProviderFollowTest::RunTest(const FString& 
 	UpdatedSlot.ScreenPosition = FVector2D(700.0f, 600.0f);
 	UpdatedSlot.bIsHovered = true;
 	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, UpdatedSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
 	const FVector2D UpdatedPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
 	TestNotEqual(TEXT("Hovered detail position follows slot layout update"), UpdatedPosition, InitialPosition);
 
 	FWacomFirstPersonCardLayerSlotView OtherSlot = UpdatedSlot;
 	OtherSlot.ScreenPosition = FVector2D(900.0f, 600.0f);
 	HUD->HandleFirstPersonCardLayoutUpdatedForTest(FGuid::NewGuid(), OtherSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
 	TestEqual(TEXT("Mismatched layout update does not move current detail"),
 		HUD->GetFirstPersonCardDetailPanelPositionForTest(),
 		UpdatedPosition);
@@ -5607,6 +6071,122 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerDetailProviderInvalidDataTest,
 	"Wacom.UI.FirstPersonCardLayer.DetailProvider.InvalidDataNoops",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDetailProviderLargeJumpResetTest,
+	"Wacom.UI.FirstPersonCardLayer.DetailProvider.LargeDetailPositionJumpResetsFollow",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDetailProviderLargeJumpResetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称详情大跳变卡"),
+		1);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("Card"), Card))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->TakeWidget();
+	HUD->SetCardDetailMotionSpeedsForTest(1.0f, 18.0f, 24.0f);
+	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
+	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	FWacomFirstPersonCardLayerSlotView InitialSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId);
+	InitialSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	InitialSlot.RenderScale = 1.0f;
+	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
+	HUD->TickCardDetailMotionForTest(0.12f);
+	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+
+	FWacomFirstPersonCardLayerSlotView FarSlot = InitialSlot;
+	FarSlot.ScreenPosition = FVector2D(1900.0f, 600.0f);
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, FarSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
+	const FVector2D JumpedPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestTrue(TEXT("Large detail position jump resets instead of slow drifting"),
+		FVector2D::Distance(JumpedPosition, InitialPosition) > 500.0f);
+
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDetailProviderSideHysteresisTest,
+	"Wacom.UI.FirstPersonCardLayer.DetailProvider.SideHysteresisPreventsEdgeFlipFlop",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDetailProviderSideHysteresisTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称详情贴边卡"),
+		1);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("Card"), Card))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->TakeWidget();
+	HUD->SetCardDetailMotionSpeedsForTest(0.0f, 18.0f, 24.0f);
+	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
+	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	FWacomFirstPersonCardLayerSlotView InitialSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId);
+	InitialSlot.ScreenPosition = FVector2D(530.0f, 600.0f);
+	InitialSlot.RenderScale = 1.0f;
+	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
+	HUD->TickCardDetailMotionForTest(0.12f);
+	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestTrue(TEXT("Initial detail chooses left side when there is room"), InitialPosition.X < 80.0f);
+
+	FWacomFirstPersonCardLayerSlotView SlightlyLeftSlot = InitialSlot;
+	SlightlyLeftSlot.ScreenPosition = FVector2D(490.0f, 600.0f);
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, SlightlyLeftSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
+	TestTrue(TEXT("Side hysteresis keeps near-edge detail on left side"),
+		HUD->GetFirstPersonCardDetailPanelPositionForTest().X < 120.0f);
+
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
 
 bool FWacomFirstPersonCardLayerDetailProviderInvalidDataTest::RunTest(const FString& Parameters)
 {
@@ -5646,6 +6226,7 @@ bool FWacomFirstPersonCardLayerDetailProviderInvalidDataTest::RunTest(const FStr
 	HUD->HandleFirstPersonCardHoveredForTest(
 		ValidSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(ValidSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.12f);
 	TestTrue(TEXT("Valid first-person detail is visible before invalid hover"), HUD->IsCardDetailPanelVisible());
 
 	HUD->HandleFirstPersonCardHoveredForTest(
@@ -5707,6 +6288,7 @@ bool FWacomFirstPersonCardLayerDetailProviderStateClearTest::RunTest(const FStri
 	HUD->HandleFirstPersonCardHoveredForTest(
 		CardSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.12f);
 	TestTrue(TEXT("First-person detail is visible before target select"), HUD->IsCardDetailPanelVisible());
 
 	HUD->SetTargetSelectionStateForTest(CardSnapshot.InstanceId);
@@ -5717,6 +6299,7 @@ bool FWacomFirstPersonCardLayerDetailProviderStateClearTest::RunTest(const FStri
 	HUD->HandleFirstPersonCardHoveredForTest(
 		CardSnapshot.InstanceId,
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.12f);
 	TestTrue(TEXT("First-person detail can show again after returning Idle"), HUD->IsCardDetailPanelVisible());
 
 	FBattleSnapshot BattleEndSnapshot = Snapshot;
