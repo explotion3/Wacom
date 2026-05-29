@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "Snapshots/HandSnapshot.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "HandPanel.generated.h"
 
 class UCardWidget;
@@ -83,6 +84,9 @@ public:
 	FWacomHandPanelCardHoverStateChangedNative OnCardHoveredNative;
 	FWacomHandPanelCardHoverStateChangedNative OnCardUnhoveredNative;
 
+	/** 从当前悬停的手牌卡牌构建统一交互目标 handle。无悬停时返回无效 handle。 */
+	FWacomInteractionTargetHandle BuildCardTargetHandle() const;
+
 	static TArray<FHandCardVisualEntry> BuildVisualEntries(const FHandQueueSnapshot& HandSnapshot);
 
 protected:
@@ -109,6 +113,8 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<FHandCardVisualEntry> CurrentVisualEntries;
+
+	FGuid CachedHoveredCardInstanceId;
 
 	void RebuildUnifiedHorizontalRenderer(const TArray<FHandCardVisualEntry>& Entries);
 	UCardWidget* CreateAndPlaceCard(const FHandCardVisualEntry& Entry, UPanelWidget* TargetSlot, int32 CardIndex, int32 CardCount);

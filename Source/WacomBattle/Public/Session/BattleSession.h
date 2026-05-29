@@ -16,6 +16,7 @@
 class UCharacterDefinition;
 class UEnemyDefinition;
 class UCardDefinition;
+struct FWacomInteractionTargetHandle;
 
 /**
  * 一张参战卡的入战清单条目。
@@ -251,6 +252,15 @@ public:
 	 *   - bMutualDestruction：取自 BattleState.bMutualDestruction（CheckAndApplyBattleEnd 维护）
 	 */
 	FBattleResultPacket BuildResultPacket() const;
+
+	/**
+	 * 判断给定的卡牌实例能否作用到给定的统一交互目标。
+	 *
+	 * 只判断结构性兼容（TargetMode ↔ TargetKind 匹配），不校验费用、状态或回合阶段。
+	 * 拖拽系统在 drop 前调用本函数做预览，提交 PlayCard 后 Resolver 做最终校验。
+	 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
+	bool CanTargetWithCard(const FGuid& CardInstanceId, const FWacomInteractionTargetHandle& Target) const;
 
 private:
 	/** 持有 FBattleState 和 FBattleEventBus。裸指针 + 手动管理，避免 TUniquePtr 在 UHT gen.cpp 里需要完整定义。 */

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Types/WacomEnums.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomFirstPersonCardAnchorComponent.generated.h"
 
@@ -759,6 +760,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	FGuid GetHoveredCardInstanceId() const { return HoveredCardInstanceId; }
+
+	/** 从当前悬停的第一人称手牌卡牌构建统一交互目标 handle。无悬停卡时返回无效 handle。 */
+	FWacomInteractionTargetHandle BuildCardTargetHandle() const;
 
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardClicked;
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardHovered;

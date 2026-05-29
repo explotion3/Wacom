@@ -8,6 +8,7 @@
 #include "Session/BattleCommandPipeline.h"
 #include "Session/BattleInitializer.h"
 #include "Session/BattleResultPacketBuilder.h"
+#include "Resolution/BattleTargetResolver.h"
 #include "Snapshots/BattleSnapshotBuilder.h"
 
 UBattleSession::UBattleSession()
@@ -96,4 +97,14 @@ FBattleResultPacket UBattleSession::BuildResultPacket() const
 	}
 
 	return FBattleResultPacketBuilder::Build(*State);
+}
+
+bool UBattleSession::CanTargetWithCard(const FGuid& CardInstanceId, const FWacomInteractionTargetHandle& Target) const
+{
+	if (!State)
+	{
+		return false;
+	}
+
+	return FBattleTargetResolver::CanTargetWithCard(*State, CardInstanceId, Target);
 }

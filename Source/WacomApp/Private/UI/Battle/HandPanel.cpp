@@ -234,10 +234,29 @@ void UHandPanel::HandleCardClicked(FGuid CardInstanceId)
 
 void UHandPanel::HandleCardHovered(UCardWidget* SourceWidget)
 {
+	if (SourceWidget)
+	{
+		CachedHoveredCardInstanceId = SourceWidget->GetCardInstanceId();
+	}
 	OnCardHoveredNative.Broadcast(SourceWidget);
 }
 
 void UHandPanel::HandleCardUnhovered(UCardWidget* SourceWidget)
 {
+	if (SourceWidget && CachedHoveredCardInstanceId == SourceWidget->GetCardInstanceId())
+	{
+		CachedHoveredCardInstanceId.Invalidate();
+	}
 	OnCardUnhoveredNative.Broadcast(SourceWidget);
+}
+
+FWacomInteractionTargetHandle UHandPanel::BuildCardTargetHandle() const
+{
+	if (!CachedHoveredCardInstanceId.IsValid())
+	{
+		return FWacomInteractionTargetHandle();
+	}
+
+	return FWacomInteractionTargetHandle::ForCardTarget(CachedHoveredCardInstanceId,
+		const_cast<UHandPanel*>(this));
 }

@@ -1876,3 +1876,14 @@ FString UWacomFirstPersonCardAnchorComponent::AnchorModeToString(EWacomFirstPers
 		return TEXT("Invalid");
 	}
 }
+
+FWacomInteractionTargetHandle UWacomFirstPersonCardAnchorComponent::BuildCardTargetHandle() const
+{
+	if (!HoveredCardInstanceId.IsValid())
+	{
+		return FWacomInteractionTargetHandle();
+	}
+
+	return FWacomInteractionTargetHandle::ForCardTarget(HoveredCardInstanceId,
+		const_cast<UWacomFirstPersonCardAnchorComponent*>(this));
+}

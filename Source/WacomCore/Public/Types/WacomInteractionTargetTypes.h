@@ -14,7 +14,7 @@
  *   - Card：UMG 卡牌槽位（战斗手牌、背包卡牌视图）
  *   - Zone：UMG 区域槽位（背包备战区、负重区等 DropTarget）
  *
- * 当前仅实现 World 命中来源；Card / Zone 的命中来源后续接入。
+ * 当前实现 World 和 Card 命中来源；Zone 命中来源后续接入。
  */
 UENUM(BlueprintType)
 enum class EWacomInteractionTargetKind : uint8
@@ -93,6 +93,30 @@ struct WACOMCORE_API FWacomInteractionTargetHandle
 		Handle.WorldTargetId = InWorldTargetId;
 		Handle.SourceObject = InSourceObject;
 		Handle.WorldLocation = InWorldLocation;
+		Handle.ScreenPosition = InScreenPosition;
+		return Handle;
+	}
+
+	/** 构造一个 Card 类型的 handle。来源为第一人称手牌层或旧手牌面板的卡牌槽位。 */
+	static FWacomInteractionTargetHandle ForCardTarget(const FGuid& InCardInstanceId, UObject* InSourceObject,
+		const FVector2D& InScreenPosition = FVector2D::ZeroVector)
+	{
+		FWacomInteractionTargetHandle Handle;
+		Handle.TargetKind = EWacomInteractionTargetKind::Card;
+		Handle.CardInstanceId = InCardInstanceId;
+		Handle.SourceObject = InSourceObject;
+		Handle.ScreenPosition = InScreenPosition;
+		return Handle;
+	}
+
+	/** 构造一个 Zone 类型的 handle。来源为背包 DropTarget 等 UMG 区域槽位。 */
+	static FWacomInteractionTargetHandle ForZoneTarget(FName InZoneId, UObject* InSourceObject,
+		const FVector2D& InScreenPosition = FVector2D::ZeroVector)
+	{
+		FWacomInteractionTargetHandle Handle;
+		Handle.TargetKind = EWacomInteractionTargetKind::Zone;
+		Handle.ZoneId = InZoneId;
+		Handle.SourceObject = InSourceObject;
 		Handle.ScreenPosition = InScreenPosition;
 		return Handle;
 	}

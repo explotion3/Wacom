@@ -11,6 +11,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Snapshots/EnemySnapshot.h"
 #include "Types/WacomEnums.h"
+#include "Types/WacomInteractionTargetTypes.h"
 
 void FWacomBattleHUDTargetingFlow::HandleCardClicked(UBattleHUD& HUD, const FGuid& CardInstanceId)
 {
@@ -139,8 +140,18 @@ FBattleTargetSelectionView FWacomBattleHUDTargetingFlow::BuildTargetSelectionVie
 		}
 		else
 		{
-			PartView.bTargetable = true;
-			PartView.DisabledReason = NAME_None;
+			const FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForWorldTarget(
+				Part.InstanceId, nullptr);
+			if (Session->CanTargetWithCard(View.PendingCardInstanceId, Handle))
+			{
+				PartView.bTargetable = true;
+				PartView.DisabledReason = NAME_None;
+			}
+			else
+			{
+				PartView.bTargetable = false;
+				PartView.DisabledReason = FName(TEXT("NotValidTargetForCard"));
+			}
 		}
 
 		View.TargetableParts.Add(PartView);
