@@ -18,7 +18,6 @@ class UWacomCardDetailPanel;
 class AWacomBattle3DHandPresenter;
 class AWacomBattleCardVisualActor;
 class APlayerController;
-class UWacomBattlePresentationTargetComponent;
 class FWacomBattlePresentationTargetRegistry;
 struct FBattleHUDFallbackLayoutBuilder;
 struct FWacomBattleHUDCommandFlow;
@@ -202,9 +201,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FirstPersonCardView 或 WBP_CardView 的设计尺寸一致。"))
 	FVector2D FirstPersonCardDetailAnchorBaseSize = FVector2D(296.0f, 420.0f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Scene Enemy Target Prototype", meta = (ToolTip = "是否启用场景敌方目标表现绑定原型。默认关闭；开启后 BattleHUD 会按当前 BattleSnapshot 的 UEnemyPartDefinition::PartId，把场景中的 UWacomBattlePresentationTargetComponent 自动绑定到运行时 PartInstanceId。"))
-	bool bEnableSceneEnemyTargetBindingPrototype = false;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	EBattleUIState GetUIState() const { return UIState; }
@@ -559,10 +555,6 @@ private:
 	void ReleaseAllPlayerControllerInteractionEvents();
 	void ApplyFallbackPlayerControllerInteractionEvents();
 	void RestoreFallbackPlayerControllerInteractionEvents();
-	void SyncSceneEnemyPresentationTargets(const FBattleSnapshot& Snap);
-	void SyncSceneEnemyTargetSelectionAffordances();
-	void ClearSceneEnemyTargetSelectionAffordances(bool bOnlyThisHUD = true);
-	void UnregisterSceneEnemyPresentationTargets(bool bOnlyAutoBoundTargets = true);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
 	void SyncFirstPersonBattleHandLayer(
 		const FBattleSnapshot& Snap,
@@ -586,6 +578,5 @@ private:
 	friend struct FWacomBattleHUDTargetingFlow;
 	friend class FWacomBattleEventPresentationQueue;
 	friend class UEnemyInfoBar;
-	friend class UWacomBattlePresentationTargetComponent;
 	friend class UWacomBattleHUDDetailTest;
 };

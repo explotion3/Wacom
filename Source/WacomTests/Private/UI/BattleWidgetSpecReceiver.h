@@ -15,7 +15,6 @@
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
-#include "Components/WacomBattlePresentationTargetComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/BorderSlot.h"
 #include "Components/Button.h"
@@ -94,7 +93,7 @@ protected:
 	virtual bool CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const override
 	{
 		OutHUD = BattleSceneClickHUDOverride.Get();
-		return OutHUD && OutHUD->bEnableSceneEnemyTargetBindingPrototype;
+		return OutHUD != nullptr;
 	}
 
 	virtual bool BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const override
@@ -316,11 +315,6 @@ public:
 	void Enable3DHandPrototypeForTest()
 	{
 		bEnable3DHandPrototype = true;
-	}
-
-	void EnableSceneEnemyTargetBindingPrototypeForTest()
-	{
-		bEnableSceneEnemyTargetBindingPrototype = true;
 	}
 
 	void SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode NewMode)
@@ -742,51 +736,6 @@ public:
 	void ClearBattlePresentationCueForTest()
 	{
 		ClearBattlePresentationCue();
-	}
-};
-
-UCLASS()
-class UWacomBattlePresentationTargetComponentProbe : public UWacomBattlePresentationTargetComponent
-{
-	GENERATED_BODY()
-
-public:
-	void BroadcastClickForTest(UPrimitiveComponent* Primitive, FKey Button = EKeys::LeftMouseButton)
-	{
-		if (Primitive)
-		{
-			Primitive->OnClicked.Broadcast(Primitive, Button);
-		}
-	}
-
-	bool HasBoundClickTargetForTest() const
-	{
-		return BoundClickTarget.IsValid();
-	}
-
-	bool HasAcquiredPlayerControllerClickEventsForTest() const
-	{
-		return bHasAcquiredPlayerControllerClickEvents;
-	}
-
-	bool IsVisualFeedbackActiveForTest() const
-	{
-		return IsVisualFeedbackActive();
-	}
-
-	void RestoreVisualFeedbackForTest()
-	{
-		RestoreVisualFeedback();
-	}
-
-	bool IsTargetSelectionAffordanceActiveForTest() const
-	{
-		return bTargetSelectionAffordanceActive;
-	}
-
-	void AdvanceTargetSelectionAffordancePulseForTest()
-	{
-		AdvanceTargetSelectionAffordancePulse();
 	}
 };
 

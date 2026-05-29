@@ -6,7 +6,6 @@
 #include "UI/Battle/ActionPanel.h"
 #include "Actors/WacomBattle3DHandPresenter.h"
 #include "Actors/WacomBattleCardVisualActor.h"
-#include "Components/WacomBattlePresentationTargetComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
@@ -134,8 +133,6 @@ void UBattleHUD::NativeDestruct()
 {
 	ClearBattlePresentationQueue();
 	ClearFirstPersonBattleHandLayer();
-	ClearSceneEnemyTargetSelectionAffordances();
-	UnregisterSceneEnemyPresentationTargets(false);
 	DestroyBattle3DHandPresenter();
 	ClearBattlePresentationTargetRegistry();
 	ReleaseAllPlayerControllerInteractionEvents();
@@ -269,8 +266,6 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 
 	// 递归下发 Snapshot 给子 Widget
 	Super::NativeRefreshFromSnapshot(Snap);
-
-	SyncSceneEnemyPresentationTargets(Snap);
 }
 
 void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession)
@@ -281,8 +276,6 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 		ClearBattlePresentationQueue();
 		ClearFirstPersonBattleHandLayer();
 		ClearPendingFirstPersonCardTransitionEvents();
-		ClearSceneEnemyTargetSelectionAffordances();
-		UnregisterSceneEnemyPresentationTargets(false);
 		DestroyBattle3DHandPresenter();
 		ClearBattlePresentationTargetRegistry();
 		ReleaseAllPlayerControllerInteractionEvents();
@@ -415,8 +408,6 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 	if (ActionPanel)  { ActionPanel->RefreshFromSnapshot(Snap); }
 	SyncFirstPersonBattleHandLayer(Snap);
 	SyncLegacyHandPanelVisibility();
-	SyncSceneEnemyPresentationTargets(Snap);
-	SyncSceneEnemyTargetSelectionAffordances();
 }
 
 UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor() const
@@ -1776,174 +1767,6 @@ void UBattleHUD::RestoreFallbackPlayerControllerInteractionEvents()
 	bHasFallbackPlayerControllerInteractionEventState = false;
 	bFallbackSavedPlayerControllerClickEvents = false;
 	bFallbackSavedPlayerControllerMouseOverEvents = false;
-}
-
-void UBattleHUD::SyncSceneEnemyPresentationTargets(const FBattleSnapshot& Snap)
-{
-	const bool bCanAttemptAutoBind =
-		bEnableSceneEnemyTargetBindingPrototype
-		&& GetSession()
-		&& Snap.Phase != EBattlePhase::BattleEnd;
-	if (!bCanAttemptAutoBind)
-	{
-		if (bEnableSceneEnemyTargetBindingPrototype)
-		{
-			if (UWorld* World = GetWorld())
-			{
-				for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
-				{
-					UWacomBattlePresentationTargetComponent* Component = *It;
-					if (IsValid(Component) && Component->GetWorld() == World)
-					{
-						Component->MarkAutoBindResult(TEXT("BattleEndedOrNoSession"));
-					}
-				}
-			}
-		}
-		UnregisterSceneEnemyPresentationTargets();
-		ClearSceneEnemyTargetSelectionAffordances();
-		return;
-	}
-
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		UnregisterSceneEnemyPresentationTargets();
-		ClearSceneEnemyTargetSelectionAffordances();
-		return;
-	}
-
-	TMap<FName, FGuid> RuntimePartIdsByStablePartId;
-	for (const FEnemyPartSnapshot& Part : Snap.Enemy.Parts)
-	{
-		if (!Part.InstanceId.IsValid() || !Part.Definition || Part.Definition->PartId.IsNone())
-		{
-			continue;
-		}
-		RuntimePartIdsByStablePartId.Add(Part.Definition->PartId, Part.InstanceId);
-	}
-
-	for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
-	{
-		UWacomBattlePresentationTargetComponent* Component = *It;
-		if (!IsValid(Component) || Component->GetWorld() != World)
-		{
-			continue;
-		}
-		if (Component->GetPartId().IsNone())
-		{
-			Component->MarkAutoBindResult(TEXT("MissingPartId"));
-			continue;
-		}
-
-		if (const FGuid* RuntimePartId = RuntimePartIdsByStablePartId.Find(Component->GetPartId()))
-		{
-			Component->SetPartInstanceId(*RuntimePartId);
-			Component->RegisterWithBattleHUD(this);
-			Component->MarkAutoBindResult(TEXT("MatchedPartId"));
-		}
-		else
-		{
-			Component->UnregisterFromBattleHUD();
-			Component->SetPartInstanceId(FGuid());
-			Component->MarkAutoBindResult(TEXT("MissingPartInSnapshot"));
-		}
-	}
-
-	SyncSceneEnemyTargetSelectionAffordances();
-}
-
-void UBattleHUD::SyncSceneEnemyTargetSelectionAffordances()
-{
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	const FBattleTargetSelectionView TargetView = BuildTargetSelectionView();
-	TMap<FGuid, FBattleTargetablePartView> TargetablePartsById;
-	TargetablePartsById.Reserve(TargetView.TargetableParts.Num());
-	for (const FBattleTargetablePartView& PartView : TargetView.TargetableParts)
-	{
-		if (PartView.PartInstanceId.IsValid())
-		{
-			TargetablePartsById.Add(PartView.PartInstanceId, PartView);
-		}
-	}
-
-	for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
-	{
-		UWacomBattlePresentationTargetComponent* Component = *It;
-		if (!IsValid(Component) || Component->GetWorld() != World)
-		{
-			continue;
-		}
-		if (!Component->IsRegisteredWithBattleHUD() || Component->RegisteredHUD.Get() != this)
-		{
-			continue;
-		}
-
-		const FBattleTargetablePartView* PartView = TargetablePartsById.Find(Component->GetPartInstanceId());
-		if (!PartView)
-		{
-			Component->SetTargetSelectionAffordance(false, TEXT("UnknownPart"));
-			continue;
-		}
-
-		Component->SetTargetSelectionAffordance(PartView->bTargetable, PartView->DisabledReason);
-	}
-}
-
-void UBattleHUD::ClearSceneEnemyTargetSelectionAffordances(bool bOnlyThisHUD)
-{
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
-	{
-		UWacomBattlePresentationTargetComponent* Component = *It;
-		if (!IsValid(Component) || Component->GetWorld() != World)
-		{
-			continue;
-		}
-		if (bOnlyThisHUD && Component->RegisteredHUD.Get() != this)
-		{
-			continue;
-		}
-		Component->SetTargetSelectionAffordance(false, TEXT("NotTargetSelecting"));
-	}
-}
-
-void UBattleHUD::UnregisterSceneEnemyPresentationTargets(bool bOnlyAutoBoundTargets)
-{
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	for (TObjectIterator<UWacomBattlePresentationTargetComponent> It; It; ++It)
-	{
-		UWacomBattlePresentationTargetComponent* Component = *It;
-		if (!IsValid(Component) || Component->GetWorld() != World)
-		{
-			continue;
-		}
-		if (bOnlyAutoBoundTargets && Component->GetPartId().IsNone())
-		{
-			continue;
-		}
-		if (!Component->IsRegisteredWithBattleHUD() || Component->RegisteredHUD.Get() != this)
-		{
-			continue;
-		}
-		Component->SetTargetSelectionAffordance(false, TEXT("NotTargetSelecting"));
-		Component->UnregisterFromBattleHUD();
-	}
 }
 
 void UBattleHUD::ConsumeAndLogEvents()

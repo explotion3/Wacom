@@ -99,7 +99,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_OpenBackpack;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Battle Debug", meta = (ToolTip = "When enabled, battle scene target click routing writes why the left-mouse Release cursor trace did or did not forward to a UWacomBattlePresentationTargetComponent. Default is off; no on-screen debug is shown."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Battle Debug", meta = (ToolTip = "开启后，战斗场景目标点击路由会输出 cursor trace 和句柄转发日志。默认关闭，不显示屏幕调试输出。"))
 	bool bLogBattleSceneTargetClickRouting = false;
 
 	/** Console command / IA 共用入口（等同于按 B）。 */
