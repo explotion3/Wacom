@@ -9,6 +9,20 @@
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
+FWacomInteractionTargetHandle UWacomBattlePresentationTargetComponent::BuildWorldTargetHandle() const
+{
+	if (!PartInstanceId.IsValid())
+	{
+		return FWacomInteractionTargetHandle();
+	}
+
+	const AActor* Owner = GetOwner();
+	const FVector WorldLoc = Owner ? Owner->GetActorLocation() : FVector::ZeroVector;
+
+	return FWacomInteractionTargetHandle::ForWorldTarget(PartInstanceId,
+		const_cast<UWacomBattlePresentationTargetComponent*>(this), WorldLoc);
+}
+
 namespace
 {
 	FString GetObjectDebugName(const UObject* Object)

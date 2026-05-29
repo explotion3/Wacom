@@ -88,7 +88,7 @@ WacomTests
 | `WacomData` | 卡牌、敌人、角色、商店、探索事件等静态定义 | 本场战斗状态、Run 库存、Widget、输入 |
 | `WacomBattle` | 战斗生命周期、命令结算、手牌区域、卡牌效果、敌方部位行动、Snapshot/Event/ResultPacket | UI 展示、Run 探索、关卡交互 |
 | `WacomRun` | 战斗外状态、背包、压力、经验、商店、探索事件、战斗结果回传和 SaveGame schema | 单场战斗内规则细节、UI |
-| `WacomApp` | GameMode、PlayerController、世界交互、输入、UI 表现层的物理实现 | 修改 Battle / Run 状态真相 |
+| `WacomApp` | GameMode、PlayerController、世界交互、输入、UI 表现层、交互目标命中与桥接 | 修改 Battle / Run 状态真相 |
 | `WacomEditor` | 内容生成 Commandlet、Data Validation、开发辅助 | 运行时规则依赖 |
 | `WacomTests` | 自动化测试、测试 fixture | 运行时业务逻辑 |
 

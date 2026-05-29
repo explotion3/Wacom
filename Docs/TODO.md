@@ -46,6 +46,21 @@ tags:
 
 ## P1 近期实现候选
 
+- [x] **交互目标系统：统一 target handle、Provider 接口、World 命中**
+  - 状态：`Done`
+  - 归属：Core / App
+  - 说明：`WacomCore/Public/Types/WacomInteractionTargetTypes.h`（Handle + Kind）、`WacomApp/Public/Interaction/WacomInteractionTargetProvider.h`（接口）、`WacomApp/Public/Components/WacomInteractionTargetComponent.h`（通用组件）、`UWacomBattlePresentationTargetComponent` 桥接、`TryRouteBattleSceneTargetClick` 已使用 Provider 路径。Card / Zone TargetKind 的命中来源和规则层 Resolver 为后续任务。
+
+- [ ] **交互目标系统：Card / Zone 命中来源接入**
+  - 状态：`Ready: 拖拽系统接入时`
+  - 归属：App / Battle
+  - 说明：Card target（FirstPersonCardLayer slot hover）和 Zone target（背包 DropTarget）经由 UMG 层构建 `FWacomInteractionTargetHandle`，让拖拽系统拿到统一 handle。
+
+- [ ] **交互目标系统：规则层 Target Resolver**
+  - 状态：`Ready: 拖拽系统接入时`
+  - 归属：Battle / Run
+  - 说明：域层 Resolver 根据 `TargetKind` 判断当前卡能否作用到目标，替代硬编码的 TargetMode 过滤。
+
 - [ ] **接入击倒事件实际分支、奖励卡差异化和节点事件联动**
   - 状态：`Blocked: P0 击倒口径`
   - 归属：战斗 / RunEvent

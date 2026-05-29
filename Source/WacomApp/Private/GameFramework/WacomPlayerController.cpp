@@ -12,6 +12,7 @@
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Components/WacomBattlePresentationTargetComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
+#include "Interaction/WacomInteractionTargetProvider.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerCharacter.h"
@@ -20,6 +21,7 @@
 #include "Interaction/WacomWorldInteractable.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "Types/WacomEnums.h"
+#include "Types/WacomInteractionTargetTypes.h"
 
 #include "UI/Battle/BattleHUD.h"
 #include "Session/BattleSession.h"
@@ -107,6 +109,42 @@ namespace
 	UWacomBattlePresentationTargetComponent* FindBattlePresentationTargetComponent(AActor* Actor)
 	{
 		return Actor ? Actor->FindComponentByClass<UWacomBattlePresentationTargetComponent>() : nullptr;
+	}
+
+	/**
+	 * 从命中 Actor 的组件中查找首个实现了 IWacomInteractionTargetProvider 的，
+	 * 构建统一的交互目标 handle。
+	 *
+	 * 先扫描接口；无接口组件时外部仍走旧 UWacomBattlePresentationTargetComponent 路径。
+	 */
+	FWacomInteractionTargetHandle BuildInteractionTargetHandleFromHit(const FHitResult& HitResult)
+	{
+		AActor* HitActor = HitResult.GetActor();
+		if (!HitActor)
+		{
+			return FWacomInteractionTargetHandle();
+		}
+
+		TArray<UActorComponent*> Components;
+		HitActor->GetComponents(Components);
+		for (UActorComponent* Component : Components)
+		{
+			if (IWacomInteractionTargetProvider* Provider = Cast<IWacomInteractionTargetProvider>(Component))
+			{
+				FWacomInteractionTargetHandle Handle = Provider->BuildWorldTargetHandle();
+				if (Handle.IsValid())
+				{
+					Handle.ScreenPosition = FVector2D(HitResult.Location.X, HitResult.Location.Y);
+					if (HitResult.HasValidHitObjectHandle() || HitResult.Location != FVector::ZeroVector)
+					{
+						Handle.WorldLocation = HitResult.Location;
+					}
+					return Handle;
+				}
+			}
+		}
+
+		return FWacomInteractionTargetHandle();
 	}
 
 	FString GetDebugObjectName(const UObject* Object)
@@ -340,6 +378,50 @@ bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetS
 		return false;
 	}
 
+	// 优先通过 IWacomInteractionTargetProvider 接口构建统一 handle。
+	// 如果命中 Actor 上存在实现了该接口的 Component，用它代替硬编码的 BattlePresentationTargetComponent 查找。
+	{
+		const FWacomInteractionTargetHandle Handle = BuildInteractionTargetHandleFromHit(HitResult);
+		if (Handle.IsValid())
+		{
+			if (Handle.TargetKind == EWacomInteractionTargetKind::World)
+			{
+				if (UWacomBattlePresentationTargetComponent* Target =
+					FindBattlePresentationTargetComponent(HitResult.GetActor()))
+				{
+					const bool bForwarded = Target->RequestSceneTargetClick();
+					if (bLogBattleSceneTargetClickRouting)
+					{
+						UE_LOG(LogTemp, Display,
+							TEXT("[WacomBattleSceneClickRouter] RouteViaProvider forwarded=%s handle=%s target=%s inTargetSelect=%s"),
+							bForwarded ? TEXT("true") : TEXT("false"),
+							*Handle.ToString(),
+							*GetDebugObjectName(Target),
+							HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
+					}
+					return bForwarded;
+				}
+
+				if (bLogBattleSceneTargetClickRouting)
+				{
+					UE_LOG(LogTemp, Display,
+						TEXT("[WacomBattleSceneClickRouter] NoRoute reason=ProviderWorldNoBattleComponent handle=%s"),
+						*Handle.ToString());
+				}
+				return false;
+			}
+
+			if (bLogBattleSceneTargetClickRouting)
+			{
+				UE_LOG(LogTemp, Display,
+					TEXT("[WacomBattleSceneClickRouter] NoRoute reason=UnsupportedTargetKind handle=%s"),
+					*Handle.ToString());
+			}
+			return false;
+		}
+	}
+
+	// Fallback: 旧硬编码 UWacomBattlePresentationTargetComponent 查找路径（无 IWacomInteractionTargetProvider 时）。
 	if (UPrimitiveComponent* HitComponent = HitResult.GetComponent())
 	{
 		if (UWacomBattlePresentationTargetComponent* Target =

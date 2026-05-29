@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "Engine/EngineTypes.h"
 #include "Events/BattleEvent.h"
+#include "Interaction/WacomInteractionTargetProvider.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "TimerManager.h"
 #include "WacomBattlePresentationTargetComponent.generated.h"
 
@@ -93,7 +95,7 @@ struct WACOMAPP_API FWacomBattlePresentationTargetDebugView
  * an Actor/Component as a presentation target for an enemy part instance id.
  */
 UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent))
-class WACOMAPP_API UWacomBattlePresentationTargetComponent : public UActorComponent
+class WACOMAPP_API UWacomBattlePresentationTargetComponent : public UActorComponent, public IWacomInteractionTargetProvider
 {
 	GENERATED_BODY()
 
@@ -168,6 +170,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Presentation", meta = (ToolTip = "V0-A click intent bridge. Forwards this target's PartInstanceId to the registered BattleHUD. Returns true only when the intent was forwarded to a valid HUD; it does not guarantee the battle command succeeds."))
 	bool RequestSceneTargetClick();
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Presentation")
+	virtual FWacomInteractionTargetHandle BuildWorldTargetHandle() const override;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Presentation")
 	bool RegisterWithBattleHUD(UBattleHUD* InHUD);

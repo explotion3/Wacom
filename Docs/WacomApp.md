@@ -299,3 +299,54 @@ ESC 当前语义：
 - 探索时 ESC 打开暂停菜单。
 - 菜单中 ESC 关闭当前菜单。
 - 战斗时 ESC 使用同一 `IA_OpenMenu` 入口打开或关闭暂停菜单。
+
+---
+
+## §9 交互目标系统
+
+交互目标系统提供统一的"鼠标下方是什么目标"查询能力，为后续拖拽系统打地基。
+
+### 三层结构
+
+| 层 | 组件 | 模块 |
+|---|---|---|
+| 命中层（Target Provider）| `IWacomInteractionTargetProvider` + 各 Component | `WacomApp` |
+| 描述层（Target Handle）| `FWacomInteractionTargetHandle` | `WacomCore` |
+| 规则层（Target Resolver）| 域层 Resolver（后续接入）| `WacomBattle` / `WacomRun` |
+
+### 命中层
+
+- `IWacomInteractionTargetProvider`：轻量接口，Component 实现后提供 `BuildWorldTargetHandle()`。
+- `UWacomInteractionTargetComponent`：通用交互目标组件，任意 Actor 可挂载。字段：`TargetId`（FGuid）、`InteractionTargetTag`（FGameplayTag）。
+- `UWacomBattlePresentationTargetComponent`：已实现该接口，自动桥接 `PartInstanceId` 为 World target。
+- `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，优先扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；无 Provider 时 fallback 到旧硬编码 BattlePresentationTargetComponent 路径。
+
+### 描述层
+
+`FWacomInteractionTargetHandle`（`WacomCore/Public/Types/WacomInteractionTargetTypes.h`）是纯数据 struct：
+
+| 字段 | 用途 |
+|---|---|
+| `TargetKind` | None / World / Card / Zone |
+| `WorldTargetId` | World 目标的 FGuid |
+| `CardInstanceId` | Card 目标的 FGuid（命中来源待接入）|
+| `ZoneId` | Zone 目标的 FName（命中来源待接入）|
+| `SourceObject` | 命中来源 Component 弱引用 |
+| `WorldLocation` / `ScreenPosition` | 命中位置 |
+
+### 规则层
+
+规则层暂不实现。后续拖拽系统接入后，域层 Resolver 根据 `TargetKind` 和域上下文判断目标是否合法。
+
+### 当前范围
+
+- [x] World 目标：通过 `UWacomInteractionTargetComponent` 或 `UWacomBattlePresentationTargetComponent` 命中
+- [ ] Card 目标：通过 UMG slot hover 命中（后续接入）
+- [ ] Zone 目标：通过 UMG drop area 命中（后续接入）
+- [ ] 规则层 Resolver（后续接入）
+
+### 不变项
+
+- 原有 `IWacomWorldInteractable` 探索期 E 键交互不变。
+- 原有 BattleHUD target registration / TargetCue 表现不变。
+- `TryRouteBattleSceneTargetClick` 的 `protected virtual` 测试 seam 不变。
