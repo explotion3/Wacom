@@ -91,6 +91,7 @@ void UWacomBattleCameraLookComponent::DeactivateBattleCameraLook()
 	}
 
 	bBattleCameraLookActive = false;
+	ClearCursorLookOverride();
 	SetComponentTickEnabled(false);
 	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
 	{
@@ -116,6 +117,23 @@ void UWacomBattleCameraLookComponent::UpdateCursorLookOffset(float DeltaTime)
 		return;
 	}
 
+	if (bHasCursorLookOverride)
+	{
+		const float Scale = FMath::Max(0.0f, CursorLookOverrideScale);
+		const float InterpSpeed = CursorLookOverrideInterpSpeed >= 0.0f
+			? CursorLookOverrideInterpSpeed
+			: LookInterpSpeed;
+		Driver->UpdateFromNormalizedCursor(
+			CursorLookOverrideNormalized,
+			DeltaTime,
+			YawClampDegrees,
+			PitchClampDegrees,
+			LookYawScale * Scale,
+			LookPitchScale * Scale,
+			InterpSpeed);
+		return;
+	}
+
 	Driver->UpdateFromPlayerCursor(
 		PC,
 		DeltaTime,
@@ -124,6 +142,27 @@ void UWacomBattleCameraLookComponent::UpdateCursorLookOffset(float DeltaTime)
 		LookYawScale,
 		LookPitchScale,
 		LookInterpSpeed);
+}
+
+void UWacomBattleCameraLookComponent::SetCursorLookOverrideNormalized(
+	FVector2D NormalizedCursor,
+	float Scale,
+	float InterpSpeedOverride)
+{
+	CursorLookOverrideNormalized = FVector2D(
+		FMath::Clamp(NormalizedCursor.X, -1.0f, 1.0f),
+		FMath::Clamp(NormalizedCursor.Y, -1.0f, 1.0f));
+	CursorLookOverrideScale = FMath::Max(0.0f, Scale);
+	CursorLookOverrideInterpSpeed = InterpSpeedOverride;
+	bHasCursorLookOverride = true;
+}
+
+void UWacomBattleCameraLookComponent::ClearCursorLookOverride()
+{
+	bHasCursorLookOverride = false;
+	CursorLookOverrideNormalized = FVector2D::ZeroVector;
+	CursorLookOverrideScale = 1.0f;
+	CursorLookOverrideInterpSpeed = -1.0f;
 }
 
 AWacomPlayerCharacter* UWacomBattleCameraLookComponent::GetOwnerCharacter() const

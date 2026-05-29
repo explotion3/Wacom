@@ -89,6 +89,28 @@ bool FWacomInteractionTargetHandleBasicSpec::RunTest(const FString& /*Parameters
 			Handle.StableTargetId, FName(TEXT("Stable.Test.Target")));
 	}
 
+	{
+		const FGuid TestId = FGuid::NewGuid();
+		UObject* SourceObject = GetTransientPackage();
+		FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForCardTarget(
+			TestId,
+			SourceObject,
+			FVector2D(123.0f, 456.0f));
+		TestTrue(TEXT("ForCardTarget handle is valid"), Handle.IsValid());
+		TestEqual(TEXT("ForCardTarget kind is Card"),
+			Handle.TargetKind, EWacomInteractionTargetKind::Card);
+		TestEqual(TEXT("ForCardTarget preserves CardInstanceId"),
+			Handle.CardInstanceId, TestId);
+		TestTrue(TEXT("ForCardTarget preserves SourceObject"),
+			Handle.SourceObject.Get() == SourceObject);
+		TestEqual(TEXT("ForCardTarget preserves ScreenPosition"),
+			Handle.ScreenPosition, FVector2D(123.0f, 456.0f));
+		TestFalse(TEXT("ForCardTarget WorldTargetId is empty"),
+			Handle.WorldTargetId.IsValid());
+		TestEqual(TEXT("ForCardTarget ZoneId is none"),
+			Handle.ZoneId, NAME_None);
+	}
+
 	return true;
 }
 

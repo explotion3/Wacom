@@ -28,6 +28,8 @@ class FWacomBattleEventPresentationQueue;
 struct FBattleCommand;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomFirstPersonCardLayerSlotView;
+struct FWacomFirstPersonCardDragView;
+struct FWacomInteractionTargetHandle;
 struct FWacomCardDetailViewData;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
@@ -514,6 +516,7 @@ private:
 	void HideCardDetailPanel();
 	void HideCardDetailPanelForSource(UCardWidget* SourceWidget);
 	void HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId);
+	bool IsFirstPersonCardInspectDetailActiveForSource(const FGuid& CardInstanceId) const;
 	UWacomCardDetailPanel* EnsureCardDetailPanel();
 	UWacomCardDetailPanel* EnsureFirstPersonCardDetailPanel();
 	void EnsureCardDetailLayer();
@@ -574,6 +577,18 @@ private:
 	void HandleFirstPersonCardLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerHoveredCardLayoutUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void ApplyFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
+	void ClearFirstPersonCardDragCameraLookOverride();
+	bool ProbeFirstPersonCardDragTarget(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		FWacomInteractionTargetHandle& OutTargetHandle,
+		bool& bOutValidTarget) const;
+	bool ShouldShowFirstPersonDragInspectDetail(const FWacomFirstPersonCardDragView& DragView) const;
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
 	friend struct FWacomBattleHUDCommandFlow;

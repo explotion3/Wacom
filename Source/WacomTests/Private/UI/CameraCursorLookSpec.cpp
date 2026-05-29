@@ -85,6 +85,119 @@ bool FWacomCursorLookDriverClampScaleResetTest::RunTest(const FString& Parameter
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleCameraLookOverrideTest,
+	"Wacom.UI.Camera.BattleCameraLook.UsesOverrideNormalizedCursorWhenSet",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleCameraLookOverrideTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomCameraCursorLookSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleCameraLookSpecProbeComponent* BattleCamera = NewObject<UWacomBattleCameraLookSpecProbeComponent>(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Battle camera probe"), BattleCamera))
+	{
+		if (Character)
+		{
+			Character->Destroy();
+		}
+		if (PC)
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	BattleCamera->RegisterComponent();
+	PC->Possess(Character);
+	PC->SetControlRotation(FRotator(0.0f, 10.0f, 0.0f));
+	BattleCamera->YawClampDegrees = 6.0f;
+	BattleCamera->PitchClampDegrees = 4.0f;
+	BattleCamera->LookInterpSpeed = 0.0f;
+	BattleCamera->ForcedNormalizedCursor = FVector2D(-1.0f, 1.0f);
+
+	TestTrue(TEXT("Battle camera activates"), BattleCamera->ActivateBattleCameraLook());
+	BattleCamera->SetCursorLookOverrideNormalized(FVector2D(1.0f, -1.0f), 0.5f, 0.0f);
+	TestTrue(TEXT("Override state active"), BattleCamera->HasCursorLookOverrideForTest());
+	BattleCamera->TickForTest(0.016f);
+	TestEqual(TEXT("Override yaw drives control rotation"),
+		static_cast<float>(PC->GetControlRotation().Yaw),
+		10.0f + BattleCamera->YawClampDegrees * 0.5f);
+	TestEqual(TEXT("Override pitch drives control rotation"),
+		static_cast<float>(PC->GetControlRotation().Pitch),
+		BattleCamera->PitchClampDegrees * 0.5f);
+
+	BattleCamera->DeactivateBattleCameraLook();
+	BattleCamera->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleCameraLookOverrideClearTest,
+	"Wacom.UI.Camera.BattleCameraLook.FallsBackAfterOverrideClear",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleCameraLookOverrideClearTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomCameraCursorLookSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleCameraLookSpecProbeComponent* BattleCamera = NewObject<UWacomBattleCameraLookSpecProbeComponent>(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Battle camera probe"), BattleCamera))
+	{
+		if (Character)
+		{
+			Character->Destroy();
+		}
+		if (PC)
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	BattleCamera->RegisterComponent();
+	PC->Possess(Character);
+	PC->SetControlRotation(FRotator(0.0f, 20.0f, 0.0f));
+	BattleCamera->LookInterpSpeed = 0.0f;
+	BattleCamera->ForcedNormalizedCursor = FVector2D(-1.0f, 1.0f);
+
+	TestTrue(TEXT("Battle camera activates"), BattleCamera->ActivateBattleCameraLook());
+	BattleCamera->SetCursorLookOverrideNormalized(FVector2D(1.0f, -1.0f), 1.0f, 0.0f);
+	BattleCamera->ClearCursorLookOverride();
+	TestFalse(TEXT("Override state cleared"), BattleCamera->HasCursorLookOverrideForTest());
+	BattleCamera->TickForTest(0.016f);
+	TestEqual(TEXT("Fallback yaw uses probe cursor"),
+		static_cast<float>(PC->GetControlRotation().Yaw),
+		20.0f - BattleCamera->YawClampDegrees);
+	TestEqual(TEXT("Fallback pitch uses probe cursor"),
+		static_cast<float>(PC->GetControlRotation().Pitch),
+		-BattleCamera->PitchClampDegrees);
+
+	BattleCamera->DeactivateBattleCameraLook();
+	BattleCamera->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattleCameraLookActivationTest,
 	"Wacom.UI.Camera.BattleCameraLook.ActivationLifecycle",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

@@ -24,6 +24,12 @@ public:
 protected:
 	virtual void UpdateCursorLookOffset(float DeltaTime) override
 	{
+		if (HasCursorLookOverrideForTest())
+		{
+			Super::UpdateCursorLookOffset(DeltaTime);
+			return;
+		}
+
 		const AWacomPlayerCharacter* Character = Cast<AWacomPlayerCharacter>(GetOwner());
 		if (UWacomCursorLookDriverComponent* Driver = Character ? Character->GetCursorLookDriverComponent() : nullptr)
 		{

@@ -1449,7 +1449,16 @@ bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Paramete
 	TestFalse(TEXT("Idle head not targetable"), IdleView.TargetableParts[0].bTargetable);
 	TestEqual(TEXT("Idle disabled reason"), IdleView.TargetableParts[0].DisabledReason, FName(TEXT("NotTargetSelecting")));
 
-	HUD->SetTargetSelectionStateForTest(FGuid::NewGuid());
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	TestTrue(TEXT("Targeting card is in hand"), TargetCardId.IsValid());
+	if (!TargetCardId.IsValid())
+	{
+		return false;
+	}
+
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
 	const FBattleTargetSelectionView TargetView = HUD->BuildTargetSelectionView();
 	TestTrue(TEXT("Target view is selecting"), TargetView.bIsTargetSelecting);
 	TestTrue(TEXT("Target view pending card valid"), TargetView.PendingCardInstanceId.IsValid());
@@ -1671,7 +1680,17 @@ bool FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec::RunTest(const FString& /
 	TestFalse(TEXT("Idle body not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(1));
 	TestFalse(TEXT("Idle tail not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(2));
 
-	HUD->SetTargetSelectionStateForTest(FGuid::NewGuid());
+	const FBattleSnapshot TargetSelectionSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		TargetSelectionSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	TestTrue(TEXT("Targeting card is in hand"), TargetCardId.IsValid());
+	if (!TargetCardId.IsValid())
+	{
+		return false;
+	}
+
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
 	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
 
 	TestTrue(TEXT("TargetSelect head targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(0));
@@ -1724,9 +1743,9 @@ bool FWacomUIBattlePresentationTargetRegistryRoutesCueToRegisteredWidgetSpec::Ru
 
 	TestEqual(TEXT("Head does not receive cue"), Head->GetBattlePresentationCuePlayCountForTest(), 0);
 	TestEqual(TEXT("Body receives one cue"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
-	TestEqual(TEXT("Body cue kind is battle event"),
+	TestEqual(TEXT("Body cue kind is damage"),
 		Body->GetLastBattlePresentationCueKindForTest(),
-		EWacomBattlePresentationTargetCueKind::BattleEvent);
+		EWacomBattlePresentationTargetCueKind::DamageDealt);
 	TestEqual(TEXT("Tail does not receive cue"), Tail->GetBattlePresentationCuePlayCountForTest(), 0);
 	TestEqual(TEXT("Body cue amount"), Body->GetLastBattlePresentationCueAmountForTest(), 4);
 
@@ -2148,6 +2167,73 @@ bool FWacomUIBattleSceneClickIgnoresUntaggedWorldTargetSpec::RunTest(const FStri
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneProbeUsesOnlyWorldInteractionTargetSpec,
+	"Wacom.UI.Battle.InteractionTarget.SceneProbeUsesOnlyWorldInteractionTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneProbeUsesOnlyWorldInteractionTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = nullptr;
+	if (GEngine)
+	{
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			if (UWorld* Candidate = Context.World())
+			{
+				World = Candidate;
+				break;
+			}
+		}
+	}
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	PC->SetBattleSceneClickHUDForTest(HUD);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity);
+	if (!TestNotNull(TEXT("Hit actor"), Owner))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	PC->SetBattleSceneClickHitForTest(Owner);
+	FWacomInteractionTargetHandle MissingProviderHandle;
+	TestFalse(TEXT("Actor without world provider is not a drag world target"),
+		PC->ProbeBattleSceneTargetForTest(MissingProviderHandle));
+	TestFalse(TEXT("No UI fallback target is synthesized"), MissingProviderHandle.IsValid());
+
+	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
+	Owner->AddInstanceComponent(InteractionTarget);
+	InteractionTarget->RegisterComponent();
+	const FGuid PartId = FGuid::NewGuid();
+	InteractionTarget->SetTargetId(PartId);
+	InteractionTarget->SetStableTargetId(TEXT("Test.Part.Head"));
+	InteractionTarget->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
+
+	FWacomInteractionTargetHandle Handle;
+	TestTrue(TEXT("Actor with provider can be probed"), PC->ProbeBattleSceneTargetForTest(Handle));
+	TestEqual(TEXT("Probe returns world target"), Handle.TargetKind, EWacomInteractionTargetKind::World);
+	TestEqual(TEXT("Probe preserves provider target id"), Handle.WorldTargetId, PartId);
+	TestTrue(TEXT("Probe source is interaction target component"), Handle.SourceObject.Get() == InteractionTarget);
+
+	Owner->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattlePresentationTargetRegistryUnknownTargetNoopsSpec,
 	"Wacom.UI.Battle.PresentationTargetRegistry.UnknownTargetNoops",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2427,6 +2513,59 @@ bool FWacomUIBattleHUDCardDetailReadabilityMotionSpec::RunTest(const FString& /*
 	TestTrue(TEXT("Motion disabled shows immediately"), HUD->IsCardDetailPanelVisible());
 	HUD->HandleCardUnhoveredForTest(CardWidget.Get());
 	TestFalse(TEXT("Motion disabled hides immediately"), HUD->IsCardDetailPanelVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDFirstPersonInspectDetailUnhoverGuardSpec,
+	"Wacom.UI.Battle.HUDCardDetailFirstPersonInspectUnhoverGuard",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDFirstPersonInspectDetailUnhoverGuardSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	Card->CardId = TEXT("FirstPersonInspectDetailCard");
+	Card->DisplayName = FText::FromString(TEXT("读牌详情卡"));
+
+	FHandCardSnapshot Snap;
+	Snap.InstanceId = FGuid::NewGuid();
+	Snap.Definition = Card.Get();
+	Snap.RuntimeCost = 1;
+	Snap.bIsPlayable = true;
+
+	FBattleSnapshot BattleSnapshot;
+	BattleSnapshot.Phase = EBattlePhase::PlayerAction;
+	BattleSnapshot.Hand.Cards.Add(Snap);
+	BattleSnapshot.Hand.NormalCardCount = 1;
+
+	HUD->TakeWidget();
+	HUD->RefreshFromSnapshotForTest(BattleSnapshot);
+
+	FWacomFirstPersonCardLayerSlotView HoverSlot;
+	HoverSlot.Entry.CardInstanceId = Snap.InstanceId;
+	HoverSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	HoverSlot.RenderScale = 1.0f;
+	HoverSlot.RenderOpacity = 1.0f;
+	HoverSlot.bProjected = true;
+	HUD->HandleFirstPersonCardHoveredForTest(Snap.InstanceId, HoverSlot);
+	HUD->TickCardDetailMotionForTest(0.12f);
+	TestTrue(TEXT("First-person hover detail is visible"), HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+
+	FWacomFirstPersonCardLayerSlotView InspectSlot = HoverSlot;
+	InspectSlot.ScreenPosition = FVector2D(960.0f, 496.0f);
+	InspectSlot.RenderScale = 1.18f;
+	InspectSlot.GestureState = EWacomFirstPersonCardGestureState::Inspecting;
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(Snap.InstanceId, InspectSlot);
+	HUD->TickCardDetailMotionForTest(0.02f);
+
+	HUD->HandleFirstPersonCardUnhoveredForTest(Snap.InstanceId, HoverSlot);
+	HUD->TickCardDetailMotionForTest(0.5f);
+	TestTrue(TEXT("Inspect detail survives same-card hover loss"), HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+	TestEqual(TEXT("Inspect detail keeps card data"),
+		HUD->GetFirstPersonCardDetailPanelNameTextForTest().ToString(),
+		TEXT("读牌详情卡"));
 
 	return true;
 }

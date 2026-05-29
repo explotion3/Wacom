@@ -320,6 +320,7 @@ ESC 当前语义：
 - `UWacomInteractionTargetComponent`：通用交互目标组件，任意 Actor 可挂载。字段：`TargetId`（运行时 FGuid）、`InteractionTargetTag`（FGameplayTag）、`StableTargetId`（FName）。
 - `UWacomBattleEnemyPartWorldTargetBridgeComponent`：Battle 专用桥接组件。它读取稳定 `PartId`，在 HUD 刷新时解析当前 `PartInstanceId`，写回同 Actor 上的 `UWacomInteractionTargetComponent`，并注册接收 `TargetConfirmed / DamageDealt / EnemyPartHpEmptied` 表现 cue。
 - `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；只有 `TargetKind=World` 且 `TargetTag=Interaction.Target.Battle.EnemyPart` 的 handle 会被转发为 Battle enemy part 点击。
+- `UWacomFirstPersonCardLayerSlotWidget` 为当前 active、可见、非 exiting 且拥有有效 `CardInstanceId` 的 first-person slot 构建 Card target handle。它使用当前 visual slot 的 `ScreenPosition`，不要求卡牌可打；后续拖拽 resolver 再判断当前拖拽卡能否作用到该卡槽。
 
 ### 描述层
 
@@ -329,7 +330,7 @@ ESC 当前语义：
 |---|---|
 | `TargetKind` | None / World / Card / Zone |
 | `WorldTargetId` | World 目标的 FGuid |
-| `CardInstanceId` | Card 目标的 FGuid（命中来源待接入）|
+| `CardInstanceId` | Card 目标的 FGuid；first-person hand 当前由卡槽 hover / visual update 提供 |
 | `ZoneId` | Zone 目标的 FName（命中来源待接入）|
 | `TargetTag` | 目标语义标签，例如 `Interaction.Target.Battle.EnemyPart` |
 | `StableTargetId` | 稳定 authored/data ID，例如敌人 `PartId` |
@@ -343,7 +344,7 @@ Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomIntera
 ### 当前范围
 
 - [x] World 目标：通过 `UWacomInteractionTargetComponent` 命中；Battle enemy part 由 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 绑定运行时 ID
-- [ ] Card 目标：通过 UMG slot hover 命中（后续接入）
+- [x] Card 目标：first-person hand slot hover / visual update 已通过 `UWacomFirstPersonCardLayerWidget` 与 `UWacomFirstPersonCardAnchorComponent` 暴露；旧 `UCardWidget / UHandPanel` 不作为本轮维护入口
 - [ ] Zone 目标：通过 UMG drop area 命中（后续接入）
 - [x] Battle 规则层 Resolver：`UBattleSession::CanTargetWithCard`
 - [ ] Run 规则层 Resolver（后续接入）

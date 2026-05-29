@@ -108,6 +108,9 @@ namespace
 		float PlayCommitFeedbackOpacity = 0.16f;
 		FLinearColor PlayCommitFeedbackColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
 		float PlayCommitFeedbackScale = 1.015f;
+		bool bAllowCameraLookDuringCardDrag = true;
+		float CardDragCameraLookScale = 1.0f;
+		float CardDragCameraLookInterpSpeedOverride = -1.0f;
 		bool bUsingPreset = false;
 		bool bPresetFallback = true;
 		FString PresetName = TEXT("None");
@@ -199,6 +202,9 @@ namespace
 		Config.PlayCommitFeedbackOpacity = Anchor.PlayCommitFeedbackOpacity;
 		Config.PlayCommitFeedbackColor = Anchor.PlayCommitFeedbackColor;
 		Config.PlayCommitFeedbackScale = Anchor.PlayCommitFeedbackScale;
+		Config.bAllowCameraLookDuringCardDrag = Anchor.bAllowCameraLookDuringCardDrag;
+		Config.CardDragCameraLookScale = Anchor.CardDragCameraLookScale;
+		Config.CardDragCameraLookInterpSpeedOverride = Anchor.CardDragCameraLookInterpSpeedOverride;
 		return Config;
 	}
 
@@ -371,6 +377,27 @@ namespace
 		MotionConfig.DiscardedExitScaleMultiplier = Config.DiscardedCardExitScaleMultiplier;
 		MotionConfig.DiscardedExitAngleOffsetDegrees = Config.DiscardedCardExitAngleOffsetDegrees;
 		return MotionConfig;
+	}
+
+	FWacomFirstPersonCardDragConfig BuildCardDragConfig(
+		const UWacomFirstPersonCardAnchorComponent& Anchor)
+	{
+		FWacomFirstPersonCardDragConfig DragConfig;
+		DragConfig.bEnableFirstPersonCardDragCommit = Anchor.bEnableFirstPersonCardDragCommit;
+		DragConfig.bEnableClickToPlayCard = Anchor.bEnableClickToPlayCard;
+		DragConfig.CardInspectHoldDelaySeconds = Anchor.CardInspectHoldDelaySeconds;
+		DragConfig.CardDragStartThresholdPixels = Anchor.CardDragStartThresholdPixels;
+		DragConfig.NoTargetCardDragOutCommitDistancePixels = Anchor.NoTargetCardDragOutCommitDistancePixels;
+		DragConfig.NoTargetCardDragOutDirection = Anchor.NoTargetCardDragOutDirection;
+		DragConfig.CardInspectScreenPosition = Anchor.CardInspectScreenPosition;
+		DragConfig.CardInspectScale = Anchor.CardInspectScale;
+		DragConfig.bShowDetailDuringCardInspect = Anchor.bShowDetailDuringCardInspect;
+		DragConfig.bEnableAimArrow = Anchor.bEnableAimArrow;
+		DragConfig.bLogCardDragDiagnostics = Anchor.bLogCardDragDiagnostics;
+		DragConfig.bAllowCameraLookDuringCardDrag = Anchor.bAllowCameraLookDuringCardDrag;
+		DragConfig.CardDragCameraLookScale = Anchor.CardDragCameraLookScale;
+		DragConfig.CardDragCameraLookInterpSpeedOverride = Anchor.CardDragCameraLookInterpSpeedOverride;
+		return DragConfig;
 	}
 
 	uint32 BuildResolvedLayoutConfigHash(
@@ -1032,10 +1059,12 @@ void UWacomFirstPersonCardAnchorComponent::ClearRuntimeCardLayerData(FName Sourc
 	RuntimeCardLayerTransitionHints.Reset();
 	RuntimeCardLayerTransitionHintSourceId = NAME_None;
 	HoveredCardInstanceId.Invalidate();
+	HoveredCardTargetHandle = FWacomInteractionTargetHandle();
 	bHasRuntimeCardLayerData = false;
 	ResetAnchorScreenSmoothing();
 	if (StaticCardLayerWidget)
 	{
+		StaticCardLayerWidget->CancelCardDragGesture(true);
 		StaticCardLayerWidget->ClearSlotMotionState();
 	}
 }
@@ -1301,8 +1330,10 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnab
 	if (!bEnableBattleHandInteractionPrototype)
 	{
 		HoveredCardInstanceId.Invalidate();
+		HoveredCardTargetHandle = FWacomInteractionTargetHandle();
 		if (StaticCardLayerWidget)
 		{
+			StaticCardLayerWidget->CancelCardDragGesture(true);
 			StaticCardLayerWidget->ClearSlotMotionState();
 		}
 	}
@@ -1328,7 +1359,7 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		? StaticCardLayerWidget->GetSlotMotionDebugSummary()
 		: TEXT("SlotMotion Inactive");
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f %s"),
+		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s ClickToPlay=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f %s"),
 		*AnchorModeToString(CurrentMode),
 		*ProjectionModeToString(Config.ProjectionMode),
 		*LayoutModeToString(Config.CardLayoutMode),
@@ -1355,6 +1386,13 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		Config.AnchorScreenSmoothingResetDistancePixels,
 		bLastAnchorScreenSmoothed ? TEXT("true") : TEXT("false"),
 		LastAnchorScreenSmoothingDistancePixels,
+		bEnableFirstPersonCardDragCommit ? TEXT("true") : TEXT("false"),
+		bEnableClickToPlayCard ? TEXT("true") : TEXT("false"),
+		CardInspectHoldDelaySeconds,
+		CardDragStartThresholdPixels,
+		bAllowCameraLookDuringCardDrag ? TEXT("true") : TEXT("false"),
+		CardDragCameraLookScale,
+		CardDragCameraLookInterpSpeedOverride,
 		*LayerMotionSummary);
 }
 
@@ -1747,6 +1785,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 			StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 			StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
 			StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(Config));
+			StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this));
 			StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
 			BindStaticCardLayerWidget(StaticCardLayerWidget);
@@ -1760,6 +1799,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 		StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
 		StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(Config));
+		StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this));
 		StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 		if (RuntimeCardLayerTransitionHintSourceId == RuntimeCardLayerSourceId
@@ -1794,6 +1834,7 @@ void UWacomFirstPersonCardAnchorComponent::RemoveStaticCardLayer()
 	RuntimeCardLayerTransitionHints.Reset();
 	RuntimeCardLayerTransitionHintSourceId = NAME_None;
 	HoveredCardInstanceId.Invalidate();
+	HoveredCardTargetHandle = FWacomInteractionTargetHandle();
 }
 
 void UWacomFirstPersonCardAnchorComponent::BindStaticCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget)
@@ -1807,12 +1848,40 @@ void UWacomFirstPersonCardAnchorComponent::BindStaticCardLayerWidget(UWacomFirst
 	LayerWidget->OnCardHoveredNative.RemoveAll(this);
 	LayerWidget->OnCardUnhoveredNative.RemoveAll(this);
 	LayerWidget->OnHoveredCardSlotUpdatedNative.RemoveAll(this);
+	LayerWidget->OnCardTargetHoveredNative.RemoveAll(this);
+	LayerWidget->OnCardTargetUnhoveredNative.RemoveAll(this);
+	LayerWidget->OnHoveredCardTargetUpdatedNative.RemoveAll(this);
+	LayerWidget->OnCardDragStartedNative.RemoveAll(this);
+	LayerWidget->OnCardDragUpdatedNative.RemoveAll(this);
+	LayerWidget->OnCardDragReleasedNative.RemoveAll(this);
+	LayerWidget->OnCardDragCancelledNative.RemoveAll(this);
 	LayerWidget->OnCardClickedNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardClicked);
 	LayerWidget->OnCardHoveredNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardHovered);
 	LayerWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardUnhovered);
 	LayerWidget->OnHoveredCardSlotUpdatedNative.AddUObject(
 		this,
 		&UWacomFirstPersonCardAnchorComponent::HandleLayerHoveredCardSlotUpdated);
+	LayerWidget->OnCardTargetHoveredNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerCardTargetHovered);
+	LayerWidget->OnCardTargetUnhoveredNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerCardTargetUnhovered);
+	LayerWidget->OnHoveredCardTargetUpdatedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerHoveredCardTargetUpdated);
+	LayerWidget->OnCardDragStartedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerDragStarted);
+	LayerWidget->OnCardDragUpdatedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerDragUpdated);
+	LayerWidget->OnCardDragReleasedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerDragReleased);
+	LayerWidget->OnCardDragCancelledNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerDragCancelled);
 }
 
 void UWacomFirstPersonCardAnchorComponent::UnbindStaticCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget)
@@ -1826,6 +1895,13 @@ void UWacomFirstPersonCardAnchorComponent::UnbindStaticCardLayerWidget(UWacomFir
 	LayerWidget->OnCardHoveredNative.RemoveAll(this);
 	LayerWidget->OnCardUnhoveredNative.RemoveAll(this);
 	LayerWidget->OnHoveredCardSlotUpdatedNative.RemoveAll(this);
+	LayerWidget->OnCardTargetHoveredNative.RemoveAll(this);
+	LayerWidget->OnCardTargetUnhoveredNative.RemoveAll(this);
+	LayerWidget->OnHoveredCardTargetUpdatedNative.RemoveAll(this);
+	LayerWidget->OnCardDragStartedNative.RemoveAll(this);
+	LayerWidget->OnCardDragUpdatedNative.RemoveAll(this);
+	LayerWidget->OnCardDragReleasedNative.RemoveAll(this);
+	LayerWidget->OnCardDragCancelledNative.RemoveAll(this);
 }
 
 void UWacomFirstPersonCardAnchorComponent::HandleLayerCardClicked(
@@ -1850,6 +1926,7 @@ void UWacomFirstPersonCardAnchorComponent::HandleLayerCardUnhovered(
 	if (HoveredCardInstanceId == CardInstanceId)
 	{
 		HoveredCardInstanceId.Invalidate();
+		HoveredCardTargetHandle = FWacomInteractionTargetHandle();
 	}
 	OnFirstPersonCardLayerCardUnhovered.Broadcast(CardInstanceId, SlotView);
 }
@@ -1859,6 +1936,72 @@ void UWacomFirstPersonCardAnchorComponent::HandleLayerHoveredCardSlotUpdated(
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
 	OnFirstPersonCardLayerHoveredCardLayoutUpdated.Broadcast(CardInstanceId, SlotView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerCardTargetHovered(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (!CardTargetHandle.IsValid())
+	{
+		return;
+	}
+
+	HoveredCardTargetHandle = CardTargetHandle;
+	OnFirstPersonCardLayerCardTargetHovered.Broadcast(CardTargetHandle, SlotView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerCardTargetUnhovered(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (HoveredCardTargetHandle.IsValid()
+		&& HoveredCardTargetHandle.CardInstanceId == CardTargetHandle.CardInstanceId)
+	{
+		HoveredCardTargetHandle = FWacomInteractionTargetHandle();
+	}
+	OnFirstPersonCardLayerCardTargetUnhovered.Broadcast(CardTargetHandle, SlotView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerHoveredCardTargetUpdated(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (!CardTargetHandle.IsValid())
+	{
+		return;
+	}
+
+	HoveredCardTargetHandle = CardTargetHandle;
+	OnFirstPersonCardLayerHoveredCardTargetUpdated.Broadcast(CardTargetHandle, SlotView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerDragStarted(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	OnFirstPersonCardLayerDragStarted.Broadcast(CardInstanceId, DragView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerDragUpdated(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	OnFirstPersonCardLayerDragUpdated.Broadcast(CardInstanceId, DragView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerDragReleased(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	OnFirstPersonCardLayerDragReleased.Broadcast(CardInstanceId, DragView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerDragCancelled(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	OnFirstPersonCardLayerDragCancelled.Broadcast(CardInstanceId, DragView);
 }
 
 FString UWacomFirstPersonCardAnchorComponent::AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode)
@@ -1879,11 +2022,23 @@ FString UWacomFirstPersonCardAnchorComponent::AnchorModeToString(EWacomFirstPers
 
 FWacomInteractionTargetHandle UWacomFirstPersonCardAnchorComponent::BuildCardTargetHandle() const
 {
-	if (!HoveredCardInstanceId.IsValid())
-	{
-		return FWacomInteractionTargetHandle();
-	}
+	return HoveredCardTargetHandle;
+}
 
-	return FWacomInteractionTargetHandle::ForCardTarget(HoveredCardInstanceId,
-		const_cast<UWacomFirstPersonCardAnchorComponent*>(this));
+void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardDragFeedbackTarget(
+	const FWacomInteractionTargetHandle& TargetHandle,
+	bool bValidTarget)
+{
+	if (StaticCardLayerWidget)
+	{
+		StaticCardLayerWidget->SetCardDragFeedbackTarget(TargetHandle, bValidTarget);
+	}
+}
+
+void UWacomFirstPersonCardAnchorComponent::CancelFirstPersonCardDragGesture(bool bBroadcastCancel)
+{
+	if (StaticCardLayerWidget)
+	{
+		StaticCardLayerWidget->CancelCardDragGesture(bBroadcastCancel);
+	}
 }

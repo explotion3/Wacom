@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "WacomFirstPersonCardLayerSlotWidget.generated.h"
 
 class UOverlay;
@@ -12,6 +13,8 @@ class UImage;
 class UWacomCardView;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardTransitionMotionProfile
@@ -221,6 +224,9 @@ public:
 	void TriggerCommitFeedback();
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
+	void SetCardDragConfig(const FWacomFirstPersonCardDragConfig& InConfig);
+	void SetCardDragFeedbackTarget(const FWacomInteractionTargetHandle& TargetHandle, bool bValidTarget);
+	void CancelCardDragGesture(bool bBroadcastCancel);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
@@ -234,6 +240,10 @@ public:
 	bool IsExitingForFirstPersonLayer() const { return bIsExitingForFirstPersonLayer; }
 	bool IsExitMotionFinished() const;
 	bool WantsSlotMotionTick() const { return bWantsSlotMotionTick; }
+	bool CanExposeCardTarget() const;
+	FWacomInteractionTargetHandle BuildCardTargetHandle() const;
+	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const { return GestureState; }
+	FWacomFirstPersonCardDragView BuildDragView() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsHoveredForFirstPersonLayer() const { return bIsHoveredForFirstPersonLayer; }
@@ -254,11 +264,21 @@ public:
 	bool IsDenyFeedbackActiveForTest() const { return DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration; }
 	bool IsConfirmFeedbackActiveForTest() const { return ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration; }
 	bool IsCommitFeedbackActiveForTest() const { return CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration; }
+	const FWacomFirstPersonCardDragConfig& GetCardDragConfigForTest() const { return CardDragConfig; }
+	bool RequestGesturePressForTest(const FVector2D& ScreenPosition);
+	void RequestGestureMoveForTest(float DeltaTime, const FVector2D& ScreenPosition);
+	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
 #endif
 
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardClickedNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardUnhoveredNative;
+	FWacomFirstPersonCardLayerSlotTargetNative OnCardTargetHoveredNative;
+	FWacomFirstPersonCardLayerSlotTargetNative OnCardTargetUnhoveredNative;
+	FWacomFirstPersonCardLayerSlotDragNative OnCardDragStartedNative;
+	FWacomFirstPersonCardLayerSlotDragNative OnCardDragUpdatedNative;
+	FWacomFirstPersonCardLayerSlotDragNative OnCardDragReleasedNative;
+	FWacomFirstPersonCardLayerSlotDragNative OnCardDragCancelledNative;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -268,6 +288,7 @@ protected:
 	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
 private:
 	UPROPERTY(Transient)
@@ -293,7 +314,15 @@ private:
 
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
+	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FString SlotMotionKey;
+	EWacomFirstPersonCardGestureState GestureState = EWacomFirstPersonCardGestureState::Idle;
+	TOptional<FWacomFirstPersonCardLayerSlotView> GestureStartSlotView;
+	TOptional<FWacomFirstPersonCardLayerSlotView> GestureOverrideTargetSlotView;
+	FWacomInteractionTargetHandle GestureFeedbackTargetHandle;
+	FVector2D PressScreenPosition = FVector2D::ZeroVector;
+	FVector2D CurrentGestureScreenPosition = FVector2D::ZeroVector;
+	float GestureElapsedSeconds = 0.0f;
 	float ExitMotionElapsedSeconds = 0.0f;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
@@ -304,6 +333,12 @@ private:
 	bool bHasVisualSlotView = false;
 	bool bIsExitingForFirstPersonLayer = false;
 	bool bWantsSlotMotionTick = false;
+	bool bGestureTargetValid = false;
+	bool bGestureCommitArmed = false;
+	bool bSuppressClickOnRelease = false;
+	bool bHasPointerViewportPosition = false;
+	FVector2D PointerViewportPosition = FVector2D::ZeroVector;
+	FVector2D PointerNormalizedViewportPosition = FVector2D::ZeroVector;
 
 	void EnsureCardView();
 	void EnsureFeedbackOverlay();
@@ -313,6 +348,29 @@ private:
 	bool CanInteractWithCurrentSlot() const;
 	bool CanApplyPlayableHoverFeedback() const;
 	bool CanClickCurrentSlot() const;
+	bool CanStartCardDragGesture() const;
+	bool IsNoTargetDragCard() const;
+	bool IsTargetedAimCard() const;
+	FWacomFirstPersonCardLayerSlotView BuildInspectOverrideSlotView() const;
+	FWacomFirstPersonCardLayerSlotView BuildNoTargetDragOverrideSlotView() const;
+	FWacomFirstPersonCardLayerSlotView BuildAimOverrideSlotView() const;
+	const FWacomFirstPersonCardLayerSlotView& GetGestureBaseSlotView() const;
+	const FWacomFirstPersonCardLayerSlotView& GetEffectiveTargetSlotView() const;
+	bool ResolveInspectScreenPosition(FVector2D& OutScreenPosition) const;
+	bool ResolvePointerWidgetPosition(const FPointerEvent& InMouseEvent, FVector2D& OutScreenPosition) const;
+	void BeginGesturePress(const FVector2D& ScreenPosition);
+	void UpdateGesture(float DeltaTime, const FVector2D& ScreenPosition);
+	bool ReleaseGesture(const FVector2D& ScreenPosition);
+	void SetGestureState(EWacomFirstPersonCardGestureState NewState, bool bBroadcastStartOrCancel);
+	void UpdateGestureOverrideTarget();
+	void ClearGestureState(bool bBroadcastCancel);
+	float ComputeNoTargetDragOutDistance() const;
+	void UpdatePointerViewportDiagnostics(const FVector2D& WidgetPosition);
+	void ClearPointerViewportDiagnostics();
+	void BroadcastDragStarted();
+	void BroadcastDragUpdated();
+	void BroadcastDragReleased();
+	void BroadcastDragCancelled();
 	void SetHoveredForFirstPersonLayer(bool bHovered);
 	void SetPressedForFirstPersonLayer(bool bPressed);
 	void TriggerConfirmFeedback();

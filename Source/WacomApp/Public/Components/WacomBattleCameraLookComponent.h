@@ -49,6 +49,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Camera")
 	FRotator GetBaseBattleRotation() const { return BaseBattleRotation; }
 
+	void SetCursorLookOverrideNormalized(FVector2D NormalizedCursor, float Scale = 1.0f, float InterpSpeedOverride = -1.0f);
+	void ClearCursorLookOverride();
+
+#if WITH_AUTOMATION_TESTS
+	bool HasCursorLookOverrideForTest() const { return bHasCursorLookOverride; }
+	FVector2D GetCursorLookOverrideNormalizedForTest() const { return CursorLookOverrideNormalized; }
+#endif
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -63,6 +71,10 @@ private:
 	bool bSavedUseControllerRotationPitch = false;
 	bool bSavedUseControllerRotationRoll = false;
 	bool bHasSavedRotationPolicy = false;
+	bool bHasCursorLookOverride = false;
+	FVector2D CursorLookOverrideNormalized = FVector2D::ZeroVector;
+	float CursorLookOverrideScale = 1.0f;
+	float CursorLookOverrideInterpSpeed = -1.0f;
 
 	AWacomPlayerCharacter* GetOwnerCharacter() const;
 	APlayerController* GetOwnerPlayerController() const;

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "WacomFirstPersonCardLayerWidget.generated.h"
 
@@ -13,6 +14,8 @@ class UWacomCardView;
 class UWacomFirstPersonCardLayerSlotWidget;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
 
 struct FWacomFirstPersonCardLayerResolvedTransitionHint
 {
@@ -36,6 +39,9 @@ public:
 	void SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass);
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
+	void SetCardDragConfig(const FWacomFirstPersonCardDragConfig& InConfig);
+	void SetCardDragFeedbackTarget(const FWacomInteractionTargetHandle& TargetHandle, bool bValidTarget);
+	void CancelCardDragGesture(bool bBroadcastCancel);
 	void ClearSlotMotionState();
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
@@ -69,6 +75,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsCardLayerInteractionEnabled() const { return bCardLayerInteractionEnabled; }
 
+	FWacomInteractionTargetHandle BuildHoveredCardTargetHandle() const { return HoveredCardTargetHandle; }
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug")
 	FWacomFirstPersonCardLayerMotionDebugView GetSlotMotionDebugView() const { return LastMotionDebugView; }
 
@@ -83,6 +91,8 @@ public:
 	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
 	const FWacomFirstPersonCardSlotMotionConfig& GetSlotMotionConfigForTest() const { return SlotMotionConfig; }
 	const FWacomFirstPersonCardSlotFeedbackConfig& GetSlotFeedbackConfigForTest() const { return SlotFeedbackConfig; }
+	const FWacomFirstPersonCardDragConfig& GetCardDragConfigForTest() const { return CardDragConfig; }
+	const FWacomFirstPersonCardDragView& GetCurrentDragViewForTest() const { return CurrentDragView; }
 	TSubclassOf<UWacomCardView> GetCardViewClassForTest() const { return CardViewClass; }
 	void AddUntrackedSlotChildForTest();
 	void SetViewportSizeOverrideForTest(const FVector2D& WidgetViewportSize);
@@ -92,11 +102,26 @@ public:
 	FWacomFirstPersonCardLayerInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerInteractionNative OnCardUnhoveredNative;
 	FWacomFirstPersonCardLayerInteractionNative OnHoveredCardSlotUpdatedNative;
+	FWacomFirstPersonCardLayerTargetNative OnCardTargetHoveredNative;
+	FWacomFirstPersonCardLayerTargetNative OnCardTargetUnhoveredNative;
+	FWacomFirstPersonCardLayerTargetNative OnHoveredCardTargetUpdatedNative;
+	FWacomFirstPersonCardLayerDragNative OnCardDragStartedNative;
+	FWacomFirstPersonCardLayerDragNative OnCardDragUpdatedNative;
+	FWacomFirstPersonCardLayerDragNative OnCardDragReleasedNative;
+	FWacomFirstPersonCardLayerDragNative OnCardDragCancelledNative;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual int32 NativePaint(
+		const FPaintArgs& Args,
+		const FGeometry& AllottedGeometry,
+		const FSlateRect& MyCullingRect,
+		FSlateWindowElementList& OutDrawElements,
+		int32 LayerId,
+		const FWidgetStyle& InWidgetStyle,
+		bool bParentEnabled) const override;
 
 private:
 	UPROPERTY(Transient)
@@ -116,7 +141,11 @@ private:
 
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
+	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
+	FWacomInteractionTargetHandle HoveredCardTargetHandle;
+	FWacomFirstPersonCardLayerSlotView HoveredCardTargetSlotView;
+	FWacomFirstPersonCardDragView CurrentDragView;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedTransitionHint> PendingTransitionHintsByKey;
 	bool bCardLayerInteractionEnabled = false;
 	bool bLogSlotMotionDiagnostics = false;
@@ -128,6 +157,8 @@ private:
 	void ApplyLayerVisibility();
 	void BindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
 	void UnbindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
+	void ClearHoveredCardTargetState(bool bBroadcastUnhover);
+	void ClearCurrentDragState(bool bBroadcastCancel);
 	int32 RemoveOutgoingFinishedSlots();
 	int32 RemoveUntrackedSlotChildren();
 	void EnforceOutgoingSlotLimit();
@@ -149,4 +180,10 @@ private:
 	void HandleSlotClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleSlotCardTargetHovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleSlotCardTargetUnhovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleSlotDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleSlotDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleSlotDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleSlotDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 };

@@ -7,6 +7,7 @@
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "InputCoreTypes.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 
 #include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
@@ -398,6 +399,73 @@ bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetS
 		}
 		return false;
 	}
+}
+
+bool AWacomPlayerController::TryProbeBattleSceneInteractionTarget(FWacomInteractionTargetHandle& OutHandle) const
+{
+	OutHandle = FWacomInteractionTargetHandle();
+
+	UBattleHUD* HUD = nullptr;
+	if (!CanRouteBattleSceneTargetClick(HUD))
+	{
+		return false;
+	}
+
+	FHitResult HitResult;
+	if (!BuildBattleSceneClickHitResult(HitResult))
+	{
+		return false;
+	}
+
+	OutHandle = BuildInteractionTargetHandleFromHit(HitResult);
+	if (OutHandle.IsValid())
+	{
+		OutHandle.WorldLocation = HitResult.Location;
+		FVector2D ScreenPosition = FVector2D::ZeroVector;
+		if (ProjectWorldLocationToScreen(HitResult.Location, ScreenPosition))
+		{
+			const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
+			OutHandle.ScreenPosition = ScreenPosition / ViewportScale;
+		}
+	}
+	return OutHandle.IsValid();
+}
+
+bool AWacomPlayerController::TryProbeBattleSceneInteractionTargetAtWidgetPosition(
+	const FVector2D& WidgetPosition,
+	FWacomInteractionTargetHandle& OutHandle) const
+{
+	OutHandle = FWacomInteractionTargetHandle();
+
+	UBattleHUD* HUD = nullptr;
+	if (!CanRouteBattleSceneTargetClick(HUD))
+	{
+		return false;
+	}
+
+	const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
+	const FVector2D PixelPosition = WidgetPosition * ViewportScale;
+	FVector WorldOrigin = FVector::ZeroVector;
+	FVector WorldDirection = FVector::ForwardVector;
+	if (!DeprojectScreenPositionToWorld(PixelPosition.X, PixelPosition.Y, WorldOrigin, WorldDirection))
+	{
+		return false;
+	}
+
+	FHitResult HitResult;
+	const FVector TraceEnd = WorldOrigin + WorldDirection * 100000.0f;
+	if (!GetWorld() || !GetWorld()->LineTraceSingleByChannel(HitResult, WorldOrigin, TraceEnd, ECC_Visibility))
+	{
+		return false;
+	}
+
+	OutHandle = BuildInteractionTargetHandleFromHit(HitResult);
+	if (OutHandle.IsValid())
+	{
+		OutHandle.WorldLocation = HitResult.Location;
+		OutHandle.ScreenPosition = WidgetPosition;
+	}
+	return OutHandle.IsValid();
 }
 
 bool AWacomPlayerController::CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const

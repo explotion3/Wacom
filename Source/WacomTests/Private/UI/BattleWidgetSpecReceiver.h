@@ -73,6 +73,11 @@ public:
 		return TryRouteBattleSceneTargetClick();
 	}
 
+	bool ProbeBattleSceneTargetForTest(FWacomInteractionTargetHandle& OutHandle) const
+	{
+		return TryProbeBattleSceneInteractionTarget(OutHandle);
+	}
+
 	bool InputRightMousePressedForTest()
 	{
 		FInputKeyEventArgs Args;

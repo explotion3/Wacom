@@ -17,6 +17,7 @@ class UWacomRunEventDefinition;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;
+struct FWacomInteractionTargetHandle;
 
 /**
  * Wacom PlayerController。
@@ -115,6 +116,10 @@ public:
 
 	/** 战斗场景目标点击路由。由 InputKey 和 BattleHUD 鼠标兜底入口共用。 */
 	bool TryRouteBattleSceneTargetClick(bool bRequireTargetSelect = false);
+	bool TryProbeBattleSceneInteractionTarget(FWacomInteractionTargetHandle& OutHandle) const;
+	bool TryProbeBattleSceneInteractionTargetAtWidgetPosition(
+		const FVector2D& WidgetPosition,
+		FWacomInteractionTargetHandle& OutHandle) const;
 
 	/** Run tunnel spike branch click route. Active only while the possessed Wacom character tunnel prototype is active. */
 	bool TryRouteRunTunnelBranchClick();
