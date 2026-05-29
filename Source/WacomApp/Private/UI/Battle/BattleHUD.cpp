@@ -6,6 +6,7 @@
 #include "UI/Battle/ActionPanel.h"
 #include "Actors/WacomBattle3DHandPresenter.h"
 #include "Actors/WacomBattleCardVisualActor.h"
+#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
@@ -133,6 +134,7 @@ void UBattleHUD::NativeDestruct()
 {
 	ClearBattlePresentationQueue();
 	ClearFirstPersonBattleHandLayer();
+	ClearBattleEnemyPartWorldTargets();
 	DestroyBattle3DHandPresenter();
 	ClearBattlePresentationTargetRegistry();
 	ReleaseAllPlayerControllerInteractionEvents();
@@ -266,6 +268,7 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 
 	// 递归下发 Snapshot 给子 Widget
 	Super::NativeRefreshFromSnapshot(Snap);
+	SyncBattleEnemyPartWorldTargets(Snap);
 }
 
 void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession)
@@ -275,6 +278,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	{
 		ClearBattlePresentationQueue();
 		ClearFirstPersonBattleHandLayer();
+		ClearBattleEnemyPartWorldTargets();
 		ClearPendingFirstPersonCardTransitionEvents();
 		DestroyBattle3DHandPresenter();
 		ClearBattlePresentationTargetRegistry();
@@ -407,6 +411,7 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 	if (EnemyInfoBar) { EnemyInfoBar->RefreshFromSnapshot(Snap); }
 	if (ActionPanel)  { ActionPanel->RefreshFromSnapshot(Snap); }
 	SyncFirstPersonBattleHandLayer(Snap);
+	SyncBattleEnemyPartWorldTargets(Snap);
 	SyncLegacyHandPanelVisibility();
 }
 
@@ -1626,6 +1631,51 @@ void UBattleHUD::SyncBattle3DHandPresenterTargeting()
 	}
 
 	Battle3DHandPresenter->SetTargetSelectionView(BuildTargetSelectionView());
+}
+
+void UBattleHUD::SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	if (Snap.Phase == EBattlePhase::None || Snap.Phase == EBattlePhase::BattleEnd)
+	{
+		ClearBattleEnemyPartWorldTargets();
+		return;
+	}
+
+	const FBattleTargetSelectionView TargetSelectionView = BuildTargetSelectionView();
+	for (TObjectIterator<UWacomBattleEnemyPartWorldTargetBridgeComponent> It; It; ++It)
+	{
+		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = *It;
+		if (!Bridge || Bridge->GetWorld() != World)
+		{
+			continue;
+		}
+
+		Bridge->SyncFromBattleHUD(*this, Snap, TargetSelectionView);
+	}
+}
+
+void UBattleHUD::ClearBattleEnemyPartWorldTargets()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (TObjectIterator<UWacomBattleEnemyPartWorldTargetBridgeComponent> It; It; ++It)
+	{
+		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = *It;
+		if (Bridge && Bridge->GetWorld() == World)
+		{
+			Bridge->ClearBattleBinding();
+		}
+	}
 }
 
 void UBattleHUD::AcquirePlayerControllerClickEvents()

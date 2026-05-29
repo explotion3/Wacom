@@ -49,7 +49,12 @@ tags:
 - [x] **交互目标系统：统一 target handle、Provider 接口、World 命中**
   - 状态：`Done`
   - 归属：Core / App
-  - 说明：`WacomCore/Public/Types/WacomInteractionTargetTypes.h`（Handle + Kind）、`WacomApp/Public/Interaction/WacomInteractionTargetProvider.h`（接口）、`WacomApp/Public/Components/WacomInteractionTargetComponent.h`（通用组件）、`UWacomBattlePresentationTargetComponent` 桥接、`TryRouteBattleSceneTargetClick` 已使用 Provider 路径。Card / Zone TargetKind 的命中来源和规则层 Resolver 为后续任务。
+  - 说明：`WacomCore/Public/Types/WacomInteractionTargetTypes.h`（Handle + Kind + TargetTag + StableTargetId）、`WacomApp/Public/Interaction/WacomInteractionTargetProvider.h`（接口）、`WacomApp/Public/Components/WacomInteractionTargetComponent.h`（通用组件）、`UWacomBattleEnemyPartWorldTargetBridgeComponent`（Battle 敌方部位桥接）、`TryRouteBattleSceneTargetClick` 已使用 Provider 路径。Card / Zone TargetKind 的命中来源和规则层 Resolver 为后续任务。
+
+- [ ] **交互目标系统：World target 注册表替换 TObjectIterator 扫描**
+  - 状态：`Ready: 场景目标数量变多前`
+  - 归属：App
+  - 说明：当前 `BattleHUD::SyncBattleEnemyPartWorldTargets()` 和清理路径用同 World `UWacomBattleEnemyPartWorldTargetBridgeComponent` 扫描，适合 V0 验证。正式敌人 / Run 可交互 Actor 变多后，应改为组件注册 / 反注册到轻量 registry，避免全局扫描和跨系统清理范围过宽。
 
 - [ ] **交互目标系统：Card / Zone 命中来源接入**
   - 状态：`Ready: 拖拽系统接入时`

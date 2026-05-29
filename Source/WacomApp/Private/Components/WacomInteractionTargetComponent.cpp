@@ -20,7 +20,13 @@ FWacomInteractionTargetHandle UWacomInteractionTargetComponent::BuildWorldTarget
 	AActor* Owner = GetOwner();
 	const FVector WorldLoc = Owner ? Owner->GetActorLocation() : FVector::ZeroVector;
 
-	return FWacomInteractionTargetHandle::ForWorldTarget(TargetId, const_cast<UWacomInteractionTargetComponent*>(this), WorldLoc);
+	return FWacomInteractionTargetHandle::ForWorldTarget(
+		TargetId,
+		const_cast<UWacomInteractionTargetComponent*>(this),
+		WorldLoc,
+		FVector2D::ZeroVector,
+		InteractionTargetTag,
+		StableTargetId);
 }
 
 void UWacomInteractionTargetComponent::SetTargetId(const FGuid& InTargetId)
@@ -31,6 +37,11 @@ void UWacomInteractionTargetComponent::SetTargetId(const FGuid& InTargetId)
 void UWacomInteractionTargetComponent::SetInteractionTargetTag(const FGameplayTag& InTag)
 {
 	InteractionTargetTag = InTag;
+}
+
+void UWacomInteractionTargetComponent::SetStableTargetId(FName InStableTargetId)
+{
+	StableTargetId = InStableTargetId;
 }
 
 void UWacomInteractionTargetComponent::LogHandleToConsole()

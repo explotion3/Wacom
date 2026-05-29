@@ -73,6 +73,10 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Target_Adjacent_Right,   "Target.Adjacent.Right");
 	UE_DEFINE_GAMEPLAY_TAG(Target_LastShuffledCard, "Target.LastShuffledCard");
 
+	// -------- Interaction.Target --------
+	UE_DEFINE_GAMEPLAY_TAG(Interaction_Target_Battle_EnemyPart, "Interaction.Target.Battle.EnemyPart");
+	UE_DEFINE_GAMEPLAY_TAG(Interaction_Target_Run_Object,       "Interaction.Target.Run.Object");
+
 	// -------- ZoneHook --------
 	UE_DEFINE_GAMEPLAY_TAG(ZoneHook_Trigger_OnPlay,               "ZoneHook.Trigger.OnPlay");
 	UE_DEFINE_GAMEPLAY_TAG(ZoneHook_Trigger_OnPerfectReleaseHit,  "ZoneHook.Trigger.OnPerfectReleaseHit");

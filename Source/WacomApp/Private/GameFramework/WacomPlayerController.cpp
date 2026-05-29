@@ -20,6 +20,7 @@
 #include "Characters/CharacterDefinition.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
+#include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 #include "Types/WacomInteractionTargetTypes.h"
 
@@ -132,7 +133,6 @@ namespace
 				FWacomInteractionTargetHandle Handle = Provider->BuildWorldTargetHandle();
 				if (Handle.IsValid())
 				{
-					Handle.ScreenPosition = FVector2D(HitResult.Location.X, HitResult.Location.Y);
 					if (HitResult.HasValidHitObjectHandle() || HitResult.Location != FVector::ZeroVector)
 					{
 						Handle.WorldLocation = HitResult.Location;
@@ -375,6 +375,7 @@ bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetS
 	{
 		const FWacomInteractionTargetHandle Handle = BuildInteractionTargetHandleFromHit(HitResult);
 		if (Handle.IsValid() && Handle.TargetKind == EWacomInteractionTargetKind::World
+			&& Handle.TargetTag == WacomTags::Interaction_Target_Battle_EnemyPart
 			&& Handle.WorldTargetId.IsValid())
 		{
 			HUD->OnEnemyPartClickedByUser(Handle.WorldTargetId);

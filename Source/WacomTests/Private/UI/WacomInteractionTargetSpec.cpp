@@ -71,12 +71,22 @@ bool FWacomInteractionTargetHandleBasicSpec::RunTest(const FString& /*Parameters
 	}
 
 	{
+		const FGameplayTag TestTag = FGameplayTag::RequestGameplayTag(TEXT("Card.Keyword.Swift"), false);
 		FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForWorldTarget(
-			FGuid::NewGuid(), nullptr, FVector(100.0f, 200.0f, 300.0f), FVector2D(400.0f, 500.0f));
+			FGuid::NewGuid(),
+			nullptr,
+			FVector(100.0f, 200.0f, 300.0f),
+			FVector2D(400.0f, 500.0f),
+			TestTag,
+			TEXT("Stable.Test.Target"));
 		TestEqual(TEXT("ForWorldTarget preserves WorldLocation"),
 			Handle.WorldLocation, FVector(100.0f, 200.0f, 300.0f));
 		TestEqual(TEXT("ForWorldTarget preserves ScreenPosition"),
 			Handle.ScreenPosition, FVector2D(400.0f, 500.0f));
+		TestEqual(TEXT("ForWorldTarget preserves TargetTag"),
+			Handle.TargetTag, TestTag);
+		TestEqual(TEXT("ForWorldTarget preserves StableTargetId"),
+			Handle.StableTargetId, FName(TEXT("Stable.Test.Target")));
 	}
 
 	return true;
@@ -144,8 +154,17 @@ bool FWacomUIInteractionTargetComponentSpec::RunTest(const FString& /*Parameters
 	{
 		FGameplayTag TestTag = FGameplayTag::RequestGameplayTag(TEXT("Card.Keyword.Swift"), false);
 		Component->SetInteractionTargetTag(TestTag);
+		Component->SetStableTargetId(TEXT("Stable.Component.Target"));
 		TestEqual(TEXT("GetInteractionTargetTag returns set tag"),
 			Component->GetInteractionTargetTag(), TestTag);
+		TestEqual(TEXT("GetStableTargetId returns set id"),
+			Component->GetStableTargetId(), FName(TEXT("Stable.Component.Target")));
+
+		FWacomInteractionTargetHandle Handle = Component->BuildWorldTargetHandle();
+		TestEqual(TEXT("BuildWorldTargetHandle preserves target tag"),
+			Handle.TargetTag, TestTag);
+		TestEqual(TEXT("BuildWorldTargetHandle preserves stable target id"),
+			Handle.StableTargetId, FName(TEXT("Stable.Component.Target")));
 	}
 
 	return true;

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "UObject/WeakObjectPtr.h"
 #include "WacomInteractionTargetTypes.generated.h"
 
@@ -54,6 +55,14 @@ struct WACOMCORE_API FWacomInteractionTargetHandle
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
 	FName ZoneId = NAME_None;
 
+	/** 目标语义标签，用于区分 World 目标是战斗敌方部位、Run 物体或其他可交互对象。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
+	FGameplayTag TargetTag;
+
+	/** 美术/数据层稳定 ID，例如敌人部位 PartId 或 Run 物体 PersistentId。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
+	FName StableTargetId = NAME_None;
+
 	/** 命中来源对象（Actor 或 Component）。弱引用，不阻止 GC。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
 	TWeakObjectPtr<UObject> SourceObject;
@@ -77,20 +86,27 @@ struct WACOMCORE_API FWacomInteractionTargetHandle
 			: TargetKind == EWacomInteractionTargetKind::Card ? TEXT("Card")
 			: TEXT("Zone");
 
-		return FString::Printf(TEXT("FWacomInteractionTargetHandle{Kind=%s WorldTargetId=%s CardInstanceId=%s ZoneId=%s}"),
+		return FString::Printf(TEXT("FWacomInteractionTargetHandle{Kind=%s WorldTargetId=%s CardInstanceId=%s ZoneId=%s TargetTag=%s StableTargetId=%s}"),
 			KindStr,
 			*WorldTargetId.ToString(EGuidFormats::DigitsWithHyphens),
 			*CardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
-			*ZoneId.ToString());
+			*ZoneId.ToString(),
+			*TargetTag.ToString(),
+			*StableTargetId.ToString());
 	}
 
 	/** 构造一个 World 类型的 handle。 */
 	static FWacomInteractionTargetHandle ForWorldTarget(const FGuid& InWorldTargetId, UObject* InSourceObject,
-		const FVector& InWorldLocation = FVector::ZeroVector, const FVector2D& InScreenPosition = FVector2D::ZeroVector)
+		const FVector& InWorldLocation = FVector::ZeroVector,
+		const FVector2D& InScreenPosition = FVector2D::ZeroVector,
+		const FGameplayTag& InTargetTag = FGameplayTag(),
+		FName InStableTargetId = NAME_None)
 	{
 		FWacomInteractionTargetHandle Handle;
 		Handle.TargetKind = EWacomInteractionTargetKind::World;
 		Handle.WorldTargetId = InWorldTargetId;
+		Handle.TargetTag = InTargetTag;
+		Handle.StableTargetId = InStableTargetId;
 		Handle.SourceObject = InSourceObject;
 		Handle.WorldLocation = InWorldLocation;
 		Handle.ScreenPosition = InScreenPosition;

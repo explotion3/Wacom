@@ -86,6 +86,10 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Target_Adjacent_Right);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Target_LastShuffledCard);
 
+	// -------- Interaction.Target --------
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interaction_Target_Battle_EnemyPart);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interaction_Target_Run_Object);
+
 	// -------- ZoneHook --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(ZoneHook_Trigger_OnPlay);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(ZoneHook_Trigger_OnPerfectReleaseHit);

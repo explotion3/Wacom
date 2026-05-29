@@ -22,6 +22,8 @@
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "Events/BattleEvent.h"
 
+#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "Components/WacomInteractionTargetComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/Engine.h"
@@ -1774,6 +1776,373 @@ bool FWacomUIBattleTargetConfirmedRoutesToEnemyPartWidgetSpec::RunTest(const FSt
 		EWacomBattlePresentationTargetCueKind::TargetConfirmed);
 	TestEqual(TEXT("Target confirm is not a damage event"), Body->GetLastBattlePresentationCueTypeForTest(), EBattleEventType::None);
 	TestEqual(TEXT("Target confirm has no damage amount"), Body->GetLastBattlePresentationCueAmountForTest(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEnemyPartWorldTargetBridgeBindsRuntimeTargetSpec,
+	"Wacom.UI.Battle.InteractionTarget.EnemyPartWorldBridge.BindsRuntimeTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEnemyPartWorldTargetBridgeBindsRuntimeTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(1, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	USceneComponent* Root = NewObject<USceneComponent>(Owner);
+	Owner->SetRootComponent(Root);
+	Root->RegisterComponent();
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Primitive->SetupAttachment(Root);
+	Primitive->RegisterComponent();
+
+	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
+	Owner->AddInstanceComponent(InteractionTarget);
+	InteractionTarget->RegisterComponent();
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		NewObject<UWacomBattleEnemyPartWorldTargetBridgeComponent>(Owner);
+	Owner->AddInstanceComponent(Bridge);
+	Bridge->RegisterComponent();
+	Bridge->SetPartId(TEXT("Test.Part.Head"));
+	Bridge->VisualTargetComponent = Primitive;
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	TestTrue(TEXT("Bridge binds to current part"), Bridge->IsBoundToBattlePart());
+	TestEqual(TEXT("Bridge runtime id matches snapshot"), Bridge->GetPartInstanceId(), HeadInstanceId);
+	TestEqual(TEXT("Interaction target gets runtime id"), InteractionTarget->GetTargetId(), HeadInstanceId);
+	TestEqual(TEXT("Interaction target gets stable part id"), InteractionTarget->GetStableTargetId(), FName(TEXT("Test.Part.Head")));
+	TestTrue(TEXT("Interaction target gets battle enemy part tag"),
+		InteractionTarget->GetInteractionTargetTag().MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart));
+	TestEqual(TEXT("Registry keeps scene target as current handler for matching part"),
+		HUD->GetBattlePresentationTargetCountForTest(), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEnemyPartWorldTargetBridgeRoutesCueSpec,
+	"Wacom.UI.Battle.InteractionTarget.EnemyPartWorldBridge.RoutesTargetCue",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEnemyPartWorldTargetBridgeRoutesCueSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(1, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(2.0f, 2.0f, 2.0f));
+
+	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
+	Owner->AddInstanceComponent(InteractionTarget);
+	InteractionTarget->RegisterComponent();
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		NewObject<UWacomBattleEnemyPartWorldTargetBridgeComponent>(Owner);
+	Owner->AddInstanceComponent(Bridge);
+	Bridge->RegisterComponent();
+	Bridge->SetPartId(TEXT("Test.Part.Body"));
+	Bridge->VisualTargetComponent = Primitive;
+	Bridge->TargetConfirmPulseScale = 1.25f;
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	HUD->PlayTargetConfirmedCueForTest(Bridge->GetPartInstanceId());
+
+	const FWacomBattleEnemyPartWorldTargetDebugView View = Bridge->GetBattleWorldTargetDebugView();
+	TestEqual(TEXT("Bridge receives target confirm cue"), View.CuePlayCount, 1);
+	TestEqual(TEXT("Bridge records target confirm kind"), View.LastCueKind, FName(TEXT("TargetConfirmed")));
+	TestEqual(TEXT("Bridge does not mark target confirm as damage"), View.LastCueType, EBattleEventType::None);
+	TestEqual(TEXT("Target confirm scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.25f);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEnemyPartWorldTargetBridgeClearsDestroyedPartSpec,
+	"Wacom.UI.Battle.InteractionTarget.EnemyPartWorldBridge.ClearsDestroyedPart",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEnemyPartWorldTargetBridgeClearsDestroyedPartSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(1, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
+	FBattleInitParams Params;
+	Params.Character = Character;
+	Params.Enemy = Enemy;
+	Params.RandomSeed = 1;
+	Params.PreDestroyedPartIds.Add(TEXT("Test.Part.Body"));
+	TestTrue(TEXT("Session initialize"), Session->Initialize(Params).IsOk());
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
+	Owner->AddInstanceComponent(InteractionTarget);
+	InteractionTarget->RegisterComponent();
+	InteractionTarget->SetTargetId(FGuid::NewGuid());
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		NewObject<UWacomBattleEnemyPartWorldTargetBridgeComponent>(Owner);
+	Owner->AddInstanceComponent(Bridge);
+	Bridge->RegisterComponent();
+	Bridge->SetPartId(TEXT("Test.Part.Body"));
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session.Get());
+	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+
+	TestFalse(TEXT("Destroyed part does not bind"), Bridge->IsBoundToBattlePart());
+	TestFalse(TEXT("Interaction target runtime id is cleared"), InteractionTarget->GetTargetId().IsValid());
+	TestEqual(TEXT("Bridge reports destroyed bind result"),
+		Bridge->GetBattleWorldTargetDebugView().LastBindResult, FName(TEXT("PartDestroyed")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneClickRoutesTaggedInteractionTargetSpec,
+	"Wacom.UI.Battle.InteractionTarget.SceneClickRoutesTaggedEnemyPart",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneClickRoutesTaggedInteractionTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { TargetCard });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot, ECardTargetMode::SingleEnemyPart);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	TestTrue(TEXT("Fixture draws target card"), TargetCardId.IsValid());
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
+	Owner->AddInstanceComponent(InteractionTarget);
+	InteractionTarget->RegisterComponent();
+	InteractionTarget->SetTargetId(HeadInstanceId);
+	InteractionTarget->SetStableTargetId(TEXT("Test.Part.Head"));
+	InteractionTarget->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+
+	TestTrue(TEXT("Tagged world target routes"), PC->RouteBattleSceneTargetClickForTest());
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	TestEqual(TEXT("HUD returns idle after routed target"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestGreaterThan(TEXT("Playing target card advances battle snapshot"),
+		Session->BuildSnapshot().Version,
+		Snapshot.Version);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneClickIgnoresUntaggedWorldTargetSpec,
+	"Wacom.UI.Battle.InteractionTarget.SceneClickIgnoresUntaggedWorldTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneClickIgnoresUntaggedWorldTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { TargetCard });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot, ECardTargetMode::SingleEnemyPart);
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	TestTrue(TEXT("Fixture draws target card"), TargetCardId.IsValid());
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Primitive->RegisterComponent();
+
+	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
+	Owner->AddInstanceComponent(InteractionTarget);
+	InteractionTarget->RegisterComponent();
+	InteractionTarget->SetTargetId(HeadInstanceId);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestFalse(TEXT("Untagged world target does not route as battle enemy part"),
+		PC->RouteBattleSceneTargetClickForTest());
+	TestEqual(TEXT("HUD remains target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestEqual(TEXT("Snapshot version unchanged"), Session->BuildSnapshot().Version, Snapshot.Version);
 
 	return true;
 }

@@ -26,13 +26,17 @@ class WACOMAPP_API UWacomInteractionTargetComponent : public UActorComponent, pu
 public:
 	UWacomInteractionTargetComponent();
 
-	/** 当前目标的稳定标识（如敌人部位 ID 或 Run 物体 ID）。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Interaction|Target", meta = (ToolTip = "当前目标的稳定标识；战斗中填 PartInstanceId，Run 中填物体 ID。"))
+	/** 当前目标的运行时标识；战斗敌方部位由 Bridge 写入 PartInstanceId，Run 中可写物体运行时 ID。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Interaction|Target", meta = (ToolTip = "当前目标的运行时标识；战斗敌方部位由 Bridge 写入 PartInstanceId，Run 中可写物体运行时 ID。"))
 	FGuid TargetId;
 
-	/** 可选的 GameplayTag 过滤，将来用于拖拽系统筛选"只接受特定类型卡牌的目标"。当前仅存储，不消费。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Interaction|Target", meta = (ToolTip = "可选过滤标签；后续拖拽系统可据此筛选目标类型。"))
+	/** 目标语义标签；用于区分战斗敌方部位、Run 物体等 World target 类型。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Interaction|Target", meta = (ToolTip = "目标语义标签；用于区分战斗敌方部位、Run 物体等 World target 类型。"))
 	FGameplayTag InteractionTargetTag;
+
+	/** 美术/数据层稳定 ID，例如敌人部位 PartId 或 Run 物体 PersistentId。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Interaction|Target", meta = (ToolTip = "美术/数据层稳定 ID，例如敌人部位 PartId 或 Run 物体 PersistentId。"))
+	FName StableTargetId = NAME_None;
 
 	// ---- IWacomInteractionTargetProvider ----
 	virtual FWacomInteractionTargetHandle BuildWorldTargetHandle() const override;
@@ -43,11 +47,17 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Interaction|Target")
 	const FGameplayTag& GetInteractionTargetTag() const { return InteractionTargetTag; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|Interaction|Target")
+	FName GetStableTargetId() const { return StableTargetId; }
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Interaction|Target")
 	void SetTargetId(const FGuid& InTargetId);
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Interaction|Target")
 	void SetInteractionTargetTag(const FGameplayTag& InTag);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Interaction|Target")
+	void SetStableTargetId(FName InStableTargetId);
 
 	/** 调试：在 Output Log 中打印当前组件的 BuildWorldTargetHandle 结果。选中此组件后在 Details 面板点击按钮即可验证。 */
 	UFUNCTION(CallInEditor, Category = "Wacom|Interaction|Target|Debug")

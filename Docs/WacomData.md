@@ -418,6 +418,13 @@ RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventI
 | `HandZone.Both` | `HandZone_Both` | 双手区 |
 | `HandZone.Right` | `HandZone_Right` | 右手区 |
 
+### Interaction.Target
+
+| Tag | 代码名 | 说明 |
+|---|---|---|
+| `Interaction.Target.Battle.EnemyPart` | `Interaction_Target_Battle_EnemyPart` | 场景 World target 表示当前战斗敌方部位，由 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 写入通用 `UWacomInteractionTargetComponent` |
+| `Interaction.Target.Run.Object` | `Interaction_Target_Run_Object` | Run / 探索中的场景可交互对象，后续拖拽和鼠标交互 resolver 使用 |
+
 ### Effect
 
 | Tag | 代码名 | 说明 |

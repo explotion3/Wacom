@@ -317,9 +317,9 @@ ESC 当前语义：
 ### 命中层
 
 - `IWacomInteractionTargetProvider`：轻量接口，Component 实现后提供 `BuildWorldTargetHandle()`。
-- `UWacomInteractionTargetComponent`：通用交互目标组件，任意 Actor 可挂载。字段：`TargetId`（FGuid）、`InteractionTargetTag`（FGameplayTag）。
-- `UWacomBattlePresentationTargetComponent`：已实现该接口，自动桥接 `PartInstanceId` 为 World target。
-- `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，优先扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；无 Provider 时 fallback 到旧硬编码 BattlePresentationTargetComponent 路径。
+- `UWacomInteractionTargetComponent`：通用交互目标组件，任意 Actor 可挂载。字段：`TargetId`（运行时 FGuid）、`InteractionTargetTag`（FGameplayTag）、`StableTargetId`（FName）。
+- `UWacomBattleEnemyPartWorldTargetBridgeComponent`：Battle 专用桥接组件。它读取稳定 `PartId`，在 HUD 刷新时解析当前 `PartInstanceId`，写回同 Actor 上的 `UWacomInteractionTargetComponent`，并注册接收 `TargetConfirmed / DamageDealt / EnemyPartHpEmptied` 表现 cue。
+- `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；只有 `TargetKind=World` 且 `TargetTag=Interaction.Target.Battle.EnemyPart` 的 handle 会被转发为 Battle enemy part 点击。
 
 ### 描述层
 
@@ -331,19 +331,22 @@ ESC 当前语义：
 | `WorldTargetId` | World 目标的 FGuid |
 | `CardInstanceId` | Card 目标的 FGuid（命中来源待接入）|
 | `ZoneId` | Zone 目标的 FName（命中来源待接入）|
+| `TargetTag` | 目标语义标签，例如 `Interaction.Target.Battle.EnemyPart` |
+| `StableTargetId` | 稳定 authored/data ID，例如敌人 `PartId` |
 | `SourceObject` | 命中来源 Component 弱引用 |
 | `WorldLocation` / `ScreenPosition` | 命中位置 |
 
 ### 规则层
 
-规则层暂不实现。后续拖拽系统接入后，域层 Resolver 根据 `TargetKind` 和域上下文判断目标是否合法。
+Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomInteractionTargetHandle)`，当前用于 TargetSelect 可选部位视图和后续拖拽预览。Run resolver 后续接入。
 
 ### 当前范围
 
-- [x] World 目标：通过 `UWacomInteractionTargetComponent` 或 `UWacomBattlePresentationTargetComponent` 命中
+- [x] World 目标：通过 `UWacomInteractionTargetComponent` 命中；Battle enemy part 由 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 绑定运行时 ID
 - [ ] Card 目标：通过 UMG slot hover 命中（后续接入）
 - [ ] Zone 目标：通过 UMG drop area 命中（后续接入）
-- [ ] 规则层 Resolver（后续接入）
+- [x] Battle 规则层 Resolver：`UBattleSession::CanTargetWithCard`
+- [ ] Run 规则层 Resolver（后续接入）
 
 ### 不变项
 

@@ -15,6 +15,7 @@ class UCanvasPanel;
 class UCardWidget;
 class UBattleEventLogPanel;
 class UWacomCardDetailPanel;
+class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class AWacomBattle3DHandPresenter;
 class AWacomBattleCardVisualActor;
 class APlayerController;
@@ -548,6 +549,8 @@ private:
 	AWacomBattle3DHandPresenter* EnsureBattle3DHandPresenter();
 	void DestroyBattle3DHandPresenter();
 	void SyncBattle3DHandPresenterTargeting();
+	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap);
+	void ClearBattleEnemyPartWorldTargets();
 	void AcquirePlayerControllerClickEvents();
 	void ReleasePlayerControllerClickEvents();
 	void AcquirePlayerControllerMouseOverEvents();
@@ -578,5 +581,6 @@ private:
 	friend struct FWacomBattleHUDTargetingFlow;
 	friend class FWacomBattleEventPresentationQueue;
 	friend class UEnemyInfoBar;
+	friend class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 	friend class UWacomBattleHUDDetailTest;
 };
