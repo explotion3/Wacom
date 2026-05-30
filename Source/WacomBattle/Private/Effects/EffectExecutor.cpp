@@ -43,6 +43,8 @@ namespace
 			// Card Cost 修正
 			M.Add(WacomTags::Effect_Card_AddCost,            &WacomEffects::HandleCardAddCost);
 			M.Add(WacomTags::Effect_Card_ReduceCost,         &WacomEffects::HandleCardReduceCost);
+			M.Add(WacomTags::Effect_Card_DiscardSelected,    &WacomEffects::HandleCardDiscardSelected);
+			M.Add(WacomTags::Effect_Card_ExhaustSelected,    &WacomEffects::HandleCardExhaustSelected);
 
 			// Draw / Discard / Exhaust / Heal
 			M.Add(WacomTags::Effect_Draw,                    &WacomEffects::HandleDraw);

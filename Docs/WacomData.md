@@ -323,7 +323,7 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 | Builder | 产物 |
 |---|---|
 | `BuildSnakeContent()` | 蛇敌人、三部位、奖励卡 `DA_Card_PoisonFang` |
-| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡 |
+| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、卡对卡测试卡 |
 | `BuildShopContent()` | `DA_Shop_DebugSnake` |
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift` |
 
@@ -339,7 +339,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 
 | 资产 | 内容 |
 |---|---|
-| `/Game/Wacom/Data/Characters/DA_Character_BugGirl` | 虫妹角色；左右手 + 8 张 StarterDeck |
+| `/Game/Wacom/Data/Characters/DA_Character_BugGirl` | 虫妹角色；左右手 + StarterDeck（含原型测试卡） |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_LeftHand` | 固有左手牌 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_RightHand` | 固有右手牌 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie` | 朝光暮蝶，0 费伙伴，随机腾挪并按 RuntimeCost 施加中毒 |
@@ -350,6 +350,11 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag` | 虫妹的小布袋，A 类容器，`Capacity=12`，带历史兼容 `BagProvider` |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang` | 蛛茧绒囊，B 类容器，`Capacity=3`，`WeaponDamagePlus3` |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_MuseiYinchongdeng` | 暮色引虫灯，A 类容器，`Capacity=3`，带 `DeleteProvider`，默认固定在备战区 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_AddCostToSelectedHand` | `Test.AddCostToSelectedHand`，拖到另一张手牌上使目标费用 +2 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ReduceCostToSelectedHand` | `Test.ReduceCostToSelectedHand`，拖到另一张手牌上使目标费用 -1 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_DiscardSelectedHandCard` | `Test.DiscardSelectedHandCard`，拖到另一张普通手牌上使目标进入弃牌堆 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ExhaustSelectedHandCard` | `Test.ExhaustSelectedHandCard`，拖到另一张普通手牌上使目标进入消耗区 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_TargetCost3` | `Test.TargetCost3`，卡对卡测试目标，基础费用 3 |
 | `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang` | `PoisonFang`，0 费白卡，对单个敌方部位施加 1 中毒 |
 | `/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake` | 蛇敌人，包含 Head / Body / Tail 三个部位 |
 | `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head` | `Snake.Head`，HP 16，Exp 3，奖励毒牙 |
@@ -440,6 +445,8 @@ RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventI
 | `Effect.Shuffle.ToRandomZone` | `Effect_Shuffle_ToRandomZone` | 腾挪到随机区域 |
 | `Effect.Card.AddCost` | `Effect_Card_AddCost` | 对目标卡 RuntimeCostModifier 增加 |
 | `Effect.Card.ReduceCost` | `Effect_Card_ReduceCost` | 对目标卡 RuntimeCostModifier 减少 |
+| `Effect.Card.DiscardSelected` | `Effect_Card_DiscardSelected` | 将 `Target.SelectedHandCard` 指定的普通手牌移入弃牌堆 |
+| `Effect.Card.ExhaustSelected` | `Effect_Card_ExhaustSelected` | 将 `Target.SelectedHandCard` 指定的普通手牌移入消耗区 |
 | `Effect.Draw` | `Effect_Draw` | 从指定卡牌区域移动卡牌到手牌 |
 | `Effect.Discard` | `Effect_Discard` | 随机弃掉手牌中的普通卡 |
 | `Effect.ExhaustSelf` | `Effect_ExhaustSelf` | 标记本卡打出后进入消耗区 |
@@ -592,6 +599,8 @@ Magnitude 计算顺序：
 | `Effect.Shuffle.ToRandomZone` | - | Self(本卡) | - | - | - | 把本卡腾挪到随机区域 |
 | `Effect.Card.AddCost` | Modifier 增量 | Self(本卡) / LastShuffledCard / SelectedHandCard | - | - | Literal | 修改 RuntimeCostModifier |
 | `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 下限由 ComputeRuntimeCost clamp 到 0 |
+| `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆；不允许左右手锚点，Magnitude 不参与数量判定 |
+| `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗区；不允许左右手锚点，Magnitude 不参与数量判定 |
 | `Effect.Draw` | 张数 | Self / Player | CardLocation.* | - | Literal | `TargetZone` 复用为源区域 tag，默认抽牌堆 |
 | `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉手牌中普通卡，不弃锚点 |
 | `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 标记交给打出后去向阶段处理 |
@@ -627,6 +636,7 @@ Magnitude 计算顺序：
 ### Target.Self 的 EffectType 消歧
 
 - `Effect.Shuffle.ToRandomZone` / `Effect.Card.AddCost` / `Effect.Card.ReduceCost` → 指向本卡（HandCard）
+- `Effect.Card.DiscardSelected` / `Effect.Card.ExhaustSelected` 必须填写 `Target.SelectedHandCard`，不要填写 `Target.Self`
 - 其他（Damage / Heal / ApplyStatus）→ 指向玩家（Player）
 
 ---

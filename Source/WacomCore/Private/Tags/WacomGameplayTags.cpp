@@ -38,6 +38,8 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Shuffle_ToRandomZone,      "Effect.Shuffle.ToRandomZone");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_AddCost,              "Effect.Card.AddCost");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_ReduceCost,           "Effect.Card.ReduceCost");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_DiscardSelected,      "Effect.Card.DiscardSelected");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_ExhaustSelected,      "Effect.Card.ExhaustSelected");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Draw,                      "Effect.Draw");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Discard,                   "Effect.Discard");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_ExhaustSelf,               "Effect.ExhaustSelf");

@@ -38,6 +38,8 @@ namespace WacomEffects
 	// ---- Card Cost 修正 ----
 	bool HandleCardAddCost(FEffectContext& Ctx);
 	bool HandleCardReduceCost(FEffectContext& Ctx);
+	bool HandleCardDiscardSelected(FEffectContext& Ctx);
+	bool HandleCardExhaustSelected(FEffectContext& Ctx);
 
 	// ---- Draw / Discard / Exhaust ----
 	bool HandleDraw(FEffectContext& Ctx);

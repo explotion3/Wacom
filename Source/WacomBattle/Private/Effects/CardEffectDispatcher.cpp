@@ -43,6 +43,7 @@ namespace
 		{
 			// Card 语境下 Target.Self 的语义由 EffectType 决定：
 			// - Shuffle.ToRandomZone / Card.AddCost / Card.ReduceCost：指向本卡
+			// - DiscardSelected / ExhaustSelected 必须显式使用 Target.SelectedHandCard
 			// - 其他（治疗、加盾、施加状态给玩家）：指向玩家
 			const bool bPointsToSelfCard =
 				Effect.EffectType == WacomTags::Effect_Shuffle_ToRandomZone

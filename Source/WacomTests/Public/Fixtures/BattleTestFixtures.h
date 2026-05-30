@@ -44,6 +44,9 @@ public:
 	/** 指定另一张手牌为目标的 Cost 修正卡。 */
 	UCardDefinition* MakeHandCardCostModifierCard(int32 Cost, int32 Magnitude, bool bReduceCost);
 
+	/** 指定另一张普通手牌为目标的弃置 / 消耗测试卡。 */
+	UCardDefinition* MakeSelectedHandCardZoneMoveCard(int32 Cost, bool bExhaust);
+
 	/** 自定义 Keywords 的伤害卡。 */
 	UCardDefinition* MakeDamageCardWithKeywords(int32 Cost, int32 Damage, const TArray<FGameplayTag>& Keywords);
 

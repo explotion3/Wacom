@@ -56,6 +56,8 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Shuffle_ToRandomZone);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Card_AddCost);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Card_ReduceCost);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Card_DiscardSelected);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Effect_Card_ExhaustSelected);
 
 	// -------- Magnitude.Source --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Magnitude_Source_Literal);

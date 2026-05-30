@@ -87,6 +87,28 @@ namespace
 		return FBattleRules::FindCard(State, Id);
 	}
 
+	bool IsNormalHandCardTarget(const FBattleState& State, const FGuid& Id)
+	{
+		const FRuntimeCardInstance* CardInst = FBattleRules::FindCard(State, Id);
+		if (!CardInst || CardInst->Location != ECardLocation::Hand)
+		{
+			return false;
+		}
+
+		return Id != State.Cards.LeftHandInstanceId
+			&& Id != State.Cards.RightHandInstanceId;
+	}
+
+	void EmitSelectedHandCardMoved(FEffectContext& Ctx, const FGuid& MovedId)
+	{
+		FBattleEvent Ev;
+		Ev.Type = EBattleEventType::HandZoneChanged;
+		Ev.CardInstanceId = MovedId;
+		Ev.ActorInstanceId = Ctx.SourceInstanceId;
+		Ev.Tag = Ctx.EffectTag;
+		Ctx.Events->Emit(Ev);
+	}
+
 	// ================ Damage 分支 ================
 
 	void ApplyDamageToPlayer(FEffectContext& Ctx, int32 Damage)
@@ -283,6 +305,44 @@ bool HandleCardReduceCost(FEffectContext& Ctx)
 	FRuntimeCardInstance* CardInst = FindCardInstance(*Ctx.State, Ctx.TargetInstanceId);
 	if (!CardInst) { return false; }
 	CardInst->RuntimeCostModifier -= Ctx.Magnitude;
+	return true;
+}
+
+bool HandleCardDiscardSelected(FEffectContext& Ctx)
+{
+	if (Ctx.TargetKind != EEffectTargetKind::HandCard || !Ctx.TargetInstanceId.IsValid())
+	{
+		return false;
+	}
+	if (!IsNormalHandCardTarget(*Ctx.State, Ctx.TargetInstanceId))
+	{
+		return false;
+	}
+	if (!FDeckService::DiscardFromHand(*Ctx.State, Ctx.TargetInstanceId))
+	{
+		return false;
+	}
+
+	EmitSelectedHandCardMoved(Ctx, Ctx.TargetInstanceId);
+	return true;
+}
+
+bool HandleCardExhaustSelected(FEffectContext& Ctx)
+{
+	if (Ctx.TargetKind != EEffectTargetKind::HandCard || !Ctx.TargetInstanceId.IsValid())
+	{
+		return false;
+	}
+	if (!IsNormalHandCardTarget(*Ctx.State, Ctx.TargetInstanceId))
+	{
+		return false;
+	}
+	if (!FDeckService::ExhaustFromHand(*Ctx.State, Ctx.TargetInstanceId))
+	{
+		return false;
+	}
+
+	EmitSelectedHandCardMoved(Ctx, Ctx.TargetInstanceId);
 	return true;
 }
 

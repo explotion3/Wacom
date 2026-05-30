@@ -84,6 +84,17 @@ namespace
 		return E;
 	}
 
+	FCardEffect MoveSelectedHandCardZone(bool bExhaust)
+	{
+		FCardEffect E;
+		E.EffectType = bExhaust
+			? WacomTags::Effect_Card_ExhaustSelected
+			: WacomTags::Effect_Card_DiscardSelected;
+		E.Magnitude = 1;
+		E.Target = WacomTags::Target_SelectedHandCard;
+		return E;
+	}
+
 	// ---- 卡 Builder ----
 
 	UCardDefinition* BuildCard(
@@ -435,7 +446,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_Test_TargetCost3"),
 			TEXT("Test.TargetCost3"),
 			TEXT("目标卡 3费"),
-			TEXT("测试目标卡：用于验证被 Target.SelectedHandCard 精确命中后的费用刷新。"),
+			TEXT("测试目标卡：用于验证被 Target.SelectedHandCard 精确命中后的费用刷新、弃置或消耗。"),
 			/*BaseCost*/ 3,
 			WacomTags::Card_Rarity_White,
 			/*Keywords*/ {},
@@ -447,9 +458,45 @@ namespace Wacom::ContentBuilder
 			/*Passives*/ {}
 		);
 
+		// ==== V0-AE 指定手牌弃置 / 消耗测试卡 ====
+		UCardDefinition* TestDiscardSelectedHandCard = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_DiscardSelectedHandCard")),
+			TEXT("DA_Card_Test_DiscardSelectedHandCard"),
+			TEXT("Test.DiscardSelectedHandCard"),
+			TEXT("弃置目标手牌测试"),
+			TEXT("测试卡：拖到另一张普通手牌上，使目标卡进入弃牌堆。不能选择左右手。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ {},
+			ECardTargetMode::HandCard,
+			FCardPhysique{},
+			/*Effects*/ { MoveSelectedHandCardZone(/*bExhaust*/ false) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
+		UCardDefinition* TestExhaustSelectedHandCard = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_ExhaustSelectedHandCard")),
+			TEXT("DA_Card_Test_ExhaustSelectedHandCard"),
+			TEXT("Test.ExhaustSelectedHandCard"),
+			TEXT("消耗目标手牌测试"),
+			TEXT("测试卡：拖到另一张普通手牌上，使目标卡进入消耗区。不能选择左右手。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ {},
+			ECardTargetMode::HandCard,
+			FCardPhysique{},
+			/*Effects*/ { MoveSelectedHandCardZone(/*bExhaust*/ true) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
 		// 检查：任一建造失败则放弃。
 		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling || !BugGirlBag || !ZhujianRongnang || !MuseiLantern
-			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3)
+			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
+			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard)
 		{
 			return nullptr;
 		}
@@ -480,6 +527,8 @@ namespace Wacom::ContentBuilder
 			Muling,
 			TestAddCostToSelectedHand,
 			TestReduceCostToSelectedHand,
+			TestDiscardSelectedHandCard,
+			TestExhaustSelectedHandCard,
 			TestTargetCost3,
 			BugGirlBag,
 			ZhujianRongnang,

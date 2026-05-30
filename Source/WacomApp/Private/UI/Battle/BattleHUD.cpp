@@ -1136,6 +1136,13 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 			return Result;
 		}
 
+		if (CardSnapshot->Definition->TargetMode == ECardTargetMode::HandCard)
+		{
+			Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
+			Result.RejectReason = EWacomBattleCardDropRejectReason::UnsupportedCardTarget;
+			return Result;
+		}
+
 		Result.IntentKind = EWacomBattleCardDropIntentKind::ProbeCardTarget;
 		Result.RejectReason = EWacomBattleCardDropRejectReason::UnsupportedCardTarget;
 		return Result;

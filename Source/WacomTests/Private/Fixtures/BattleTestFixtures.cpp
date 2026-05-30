@@ -87,6 +87,29 @@ UCardDefinition* FWacomBattleFixture::MakeHandCardCostModifierCard(int32 Cost, i
 	return Card;
 }
 
+UCardDefinition* FWacomBattleFixture::MakeSelectedHandCardZoneMoveCard(int32 Cost, bool bExhaust)
+{
+	UCardDefinition* Card = NewTransient<UCardDefinition>();
+	Card->CardId = FName(*FString::Printf(
+		TEXT("TestSelectedHandCard_%s_C%d_%s"),
+		bExhaust ? TEXT("Exhaust") : TEXT("Discard"),
+		Cost,
+		*FGuid::NewGuid().ToString(EGuidFormats::Short)));
+	Card->BaseCost = Cost;
+	Card->TargetMode = ECardTargetMode::HandCard;
+
+	FCardEffect Effect;
+	Effect.EffectType = bExhaust
+		? WacomTags::Effect_Card_ExhaustSelected
+		: WacomTags::Effect_Card_DiscardSelected;
+	Effect.Magnitude = 1;
+	Effect.Target = WacomTags::Target_SelectedHandCard;
+	Card->Effects.Add(Effect);
+
+	Roots.Add(TStrongObjectPtr<UObject>(Card));
+	return Card;
+}
+
 UCardDefinition* FWacomBattleFixture::MakeDamageCardWithKeywords(int32 Cost, int32 Damage, const TArray<FGameplayTag>& Keywords)
 {
 	UCardDefinition* Card = MakeSimpleDamageCard(Cost, Damage);

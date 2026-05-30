@@ -76,6 +76,27 @@ namespace
 		return Card.Definition->Keywords.HasTag(Keyword)
 		    || Card.TemporaryKeywords.HasTag(Keyword);
 	}
+
+	bool UsesSelectedHandCardZoneMove(const UCardDefinition& Def)
+	{
+		for (const FCardEffect& Effect : Def.Effects)
+		{
+			if (Effect.Target == WacomTags::Target_SelectedHandCard
+				&& (Effect.EffectType == WacomTags::Effect_Card_DiscardSelected
+					|| Effect.EffectType == WacomTags::Effect_Card_ExhaustSelected))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool IsHandAnchor(const FBattleState& State, const FGuid& CardInstanceId)
+	{
+		return CardInstanceId.IsValid()
+			&& (CardInstanceId == State.Cards.LeftHandInstanceId
+				|| CardInstanceId == State.Cards.RightHandInstanceId);
+	}
 }
 
 FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
@@ -131,6 +152,10 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		if (!TargetCard || TargetCard->Location != ECardLocation::Hand)
 		{
 			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetCardInvalid"));
+		}
+		if (UsesSelectedHandCardZoneMove(*Def) && IsHandAnchor(State, Command.TargetCardInstanceId))
+		{
+			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetCardAnchorUnsupported"));
 		}
 	}
 	// 其他 TargetMode 不要求 Command 带目标字段。

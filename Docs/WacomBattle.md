@@ -89,9 +89,9 @@ WacomBattle 是**战斗内核**，负责单场战斗的唯一规则真相。
 |---|---|---|
 | `None / Self / AllEnemyParts` | 不要求额外目标 | 只检查源卡在手牌、费用合法 |
 | `SingleEnemyPart` | `TargetPartInstanceId` | 目标必须是当前战斗中未破坏的敌方部位 |
-| `HandCard` | `TargetCardInstanceId` | 目标必须是另一张当前手牌；允许普通手牌和左右手锚点，拒绝 self、无效 ID、已离开手牌的卡 |
+| `HandCard` | `TargetCardInstanceId` | 目标必须是另一张当前手牌；默认允许普通手牌和左右手锚点，拒绝 self、无效 ID、已离开手牌的卡；包含 `Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected + Target.SelectedHandCard` 的源卡只允许普通手牌，拒绝左右手锚点 |
 
-`TargetMode=HandCard` 的主动打牌会把玩家选中的目标手牌作为 `Target.SelectedHandCard` 传给主效果链。当前已验证 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可以精确作用到该目标；指定弃牌、消耗、食物卡给伙伴加属性等更复杂的卡对卡规则留后续扩展。
+`TargetMode=HandCard` 的主动打牌会把玩家选中的目标手牌作为 `Target.SelectedHandCard` 传给主效果链。当前已验证 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可以精确作用到该目标，且允许目标是普通手牌或左右手锚点；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 可以精确把选中的普通手牌移入弃牌堆 / 消耗区，但不允许目标是左右手锚点。指定丢弃 / 消耗的筛选 UI、食物卡给伙伴加属性等更复杂的卡对卡规则留后续扩展。
 
 **目录结构**：
 
@@ -384,6 +384,8 @@ WacomBattle/
 | `Effect.ExhaustSelf` | ExhaustSelfHandler | 已实现；给源卡加临时消耗关键词，出牌去向阶段进消耗区 |
 | `Effect.Card.AddCost` | CostModHandler | 已实现 |
 | `Effect.Card.ReduceCost` | CostModHandler | 已实现 |
+| `Effect.Card.DiscardSelected` | SelectedHandCardZoneMoveHandler | 已实现；要求 `Target.SelectedHandCard`，目标必须是普通手牌，成功后移入弃牌堆并发 `HandZoneChanged` |
+| `Effect.Card.ExhaustSelected` | SelectedHandCardZoneMoveHandler | 已实现；要求 `Target.SelectedHandCard`，目标必须是普通手牌，成功后移入消耗区并发 `HandZoneChanged` |
 | `Effect.GainKeyword` | GainKeywordHandler | 已实现；给目标手牌临时添加 `MetaTag` 指定关键词 |
 | `Effect.RemoveStatus` | RemoveStatusHandler | 已实现；移除目标 `MetaTag` 指定状态的若干层 |
 | `Effect.ModifyInitiative` | ModifyInitiativeHandler | 已实现；直接修改目标部位当前先机 |

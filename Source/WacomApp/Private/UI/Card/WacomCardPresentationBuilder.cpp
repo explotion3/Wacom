@@ -215,6 +215,14 @@ namespace
 		{
 			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Discard;
 		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_DiscardSelected))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Discard;
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_ExhaustSelected))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Generic;
+		}
 		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ModifyInitiative))
 		{
 			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Initiative;

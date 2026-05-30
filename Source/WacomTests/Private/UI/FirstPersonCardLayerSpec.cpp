@@ -191,6 +191,18 @@ namespace WacomFirstPersonCardLayerSpec
 		return FGuid();
 	}
 
+	FGuid FindFirstHandAnchor(const FBattleSnapshot& Snapshot)
+	{
+		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+		{
+			if (Card.bIsHandAnchor)
+			{
+				return Card.InstanceId;
+			}
+		}
+		return FGuid();
+	}
+
 	FWacomFirstPersonCardDragView MakeDropDragView(
 		const FGuid& CardInstanceId,
 		EWacomFirstPersonCardGestureState GestureState,
@@ -9274,6 +9286,127 @@ bool FWacomFirstPersonDropIntentValidHandCardTargetTest::RunTest(const FString& 
 	TestTrue(TEXT("Card target can submit"), Result.bCanSubmit);
 	TestEqual(TEXT("No reject reason"), Result.RejectReason, EWacomBattleCardDropRejectReason::None);
 	TestTrue(TEXT("Card target exposes feedback position"), Result.bHasFeedbackTargetScreenPosition);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonDropIntentSelectedZoneMoveCardTargetTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.SelectedZoneMoveCardTargetResolvesPlayCardCardTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonDropIntentSelectedZoneMoveCardTargetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceCard = Fx.MakeSelectedHandCardZoneMoveCard(/*Cost*/0, /*bExhaust*/false);
+	UCardDefinition* TargetCard = Fx.MakeNoopCard(3);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
+	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(AWacomBattleHUDLocalPlayerControllerTest::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid())
+		|| !TestTrue(TEXT("Target card exists"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+
+	FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerSpec::MakeDropDragView(
+		SourceCardId,
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	DragView.CurrentTarget = FWacomInteractionTargetHandle::ForCardTarget(
+		TargetCardId,
+		HUD,
+		FVector2D(650.0f, 600.0f));
+	const FWacomBattleCardDropResolveResult Result =
+		HUD->ResolveFirstPersonCardDropIntentForTest(SourceCardId, DragView);
+	TestEqual(TEXT("Selected zone move normal card target resolves to card play"),
+		Result.IntentKind,
+		EWacomBattleCardDropIntentKind::PlayCardCardTarget);
+	TestTrue(TEXT("Selected zone move normal card target can submit"), Result.bCanSubmit);
+	TestEqual(TEXT("No reject reason"), Result.RejectReason, EWacomBattleCardDropRejectReason::None);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonDropIntentSelectedZoneMoveHandAnchorRejectTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.SelectedZoneMoveHandAnchorRejects",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonDropIntentSelectedZoneMoveHandAnchorRejectTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceCard = Fx.MakeSelectedHandCardZoneMoveCard(/*Cost*/0, /*bExhaust*/true);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ SourceCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
+	const FGuid AnchorCardId = WacomFirstPersonCardLayerSpec::FindFirstHandAnchor(Snapshot);
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(AWacomBattleHUDLocalPlayerControllerTest::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid())
+		|| !TestTrue(TEXT("Anchor card exists"), AnchorCardId.IsValid()))
+	{
+		return false;
+	}
+
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+
+	FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerSpec::MakeDropDragView(
+		SourceCardId,
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	DragView.CurrentTarget = FWacomInteractionTargetHandle::ForCardTarget(
+		AnchorCardId,
+		HUD,
+		FVector2D(650.0f, 600.0f));
+	const FWacomBattleCardDropResolveResult Result =
+		HUD->ResolveFirstPersonCardDropIntentForTest(SourceCardId, DragView);
+	TestEqual(TEXT("Selected zone move anchor target rejects"),
+		Result.IntentKind,
+		EWacomBattleCardDropIntentKind::Reject);
+	TestFalse(TEXT("Selected zone move anchor target cannot submit"), Result.bCanSubmit);
+	TestEqual(TEXT("Anchor target records unsupported reason"),
+		Result.RejectReason,
+		EWacomBattleCardDropRejectReason::UnsupportedCardTarget);
 
 	PC->Destroy();
 	return true;

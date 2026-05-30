@@ -4,7 +4,33 @@
 
 #include "Core/BattleState.h"
 #include "Cards/CardDefinition.h"
+#include "Cards/CardEffect.h"
+#include "Tags/WacomGameplayTags.h"
 #include "Types/WacomInteractionTargetTypes.h"
+
+namespace
+{
+	bool UsesSelectedHandCardZoneMove(const UCardDefinition& Def)
+	{
+		for (const FCardEffect& Effect : Def.Effects)
+		{
+			if (Effect.Target == WacomTags::Target_SelectedHandCard
+				&& (Effect.EffectType == WacomTags::Effect_Card_DiscardSelected
+					|| Effect.EffectType == WacomTags::Effect_Card_ExhaustSelected))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool IsHandAnchor(const FBattleState& State, const FGuid& CardInstanceId)
+	{
+		return CardInstanceId.IsValid()
+			&& (CardInstanceId == State.Cards.LeftHandInstanceId
+				|| CardInstanceId == State.Cards.RightHandInstanceId);
+	}
+}
 
 bool FBattleTargetResolver::CanTargetWithCard(const FBattleState& State, const FGuid& CardInstanceId,
 	const FWacomInteractionTargetHandle& Target)
@@ -73,7 +99,18 @@ bool FBattleTargetResolver::CanTargetWithCard(const FBattleState& State, const F
 			return false;
 		}
 
-		return State.Cards.AllCards[*TargetCardIndex].Location == ECardLocation::Hand;
+		const FRuntimeCardInstance& TargetCard = State.Cards.AllCards[*TargetCardIndex];
+		if (TargetCard.Location != ECardLocation::Hand)
+		{
+			return false;
+		}
+
+		if (UsesSelectedHandCardZoneMove(*Def) && IsHandAnchor(State, Target.CardInstanceId))
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	case EWacomInteractionTargetKind::Zone:
