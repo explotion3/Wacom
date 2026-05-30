@@ -10,6 +10,7 @@ class UBattleHUD;
 struct FWacomBattleHUDCommandFlow
 {
 	static void SubmitPlayCard(UBattleHUD& HUD, const FGuid& CardId, const FGuid& TargetPartId);
+	static void SubmitPlayCardOnHandCard(UBattleHUD& HUD, const FGuid& CardId, const FGuid& TargetCardId);
 	static void SubmitWait(UBattleHUD& HUD);
 	static void SubmitEndTurn(UBattleHUD& HUD);
 	static void SubmitKnockdownChoice(UBattleHUD& HUD, EKnockdownChoice Choice);

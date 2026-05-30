@@ -104,6 +104,7 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 	const UCardDefinition* Def = Card->Definition;
 
 	FRuntimeEnemyPart* TargetPart = nullptr;
+	FRuntimeCardInstance* TargetCard = nullptr;
 	if (Def->TargetMode == ECardTargetMode::SingleEnemyPart)
 	{
 		if (!Command.TargetPartInstanceId.IsValid())
@@ -116,7 +117,23 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetInvalid"));
 		}
 	}
-	// 其他 TargetMode 不要求 Command 带 TargetPartInstanceId。
+	else if (Def->TargetMode == ECardTargetMode::HandCard)
+	{
+		if (!Command.TargetCardInstanceId.IsValid())
+		{
+			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("MissingTargetCard"));
+		}
+		if (Command.TargetCardInstanceId == Command.CardInstanceId)
+		{
+			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("SelfTargetCard"));
+		}
+		TargetCard = FBattleRules::FindCard(State, Command.TargetCardInstanceId);
+		if (!TargetCard || TargetCard->Location != ECardLocation::Hand)
+		{
+			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetCardInvalid"));
+		}
+	}
+	// 其他 TargetMode 不要求 Command 带目标字段。
 
 	// ================ 3. 费用判断 ================
 	if (!FBattleRules::IsCardCostLegal(State, *Card))
@@ -132,6 +149,7 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 
 	const FGuid CardId            = Card->InstanceId;
 	const FGuid SelectedPartId    = TargetPart ? TargetPart->InstanceId : FGuid();
+	const FGuid SelectedHandCardId = TargetCard ? TargetCard->InstanceId : FGuid();
 
 	// ================ 4. 打牌事件 ================
 	{
@@ -173,7 +191,7 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		for (const FCardEffect& Eff : Def->Effects)
 		{
 			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				SelectedPartId, CardId, MainLastShuffledCardId);
+				SelectedPartId, CardId, MainLastShuffledCardId, SelectedHandCardId);
 		}
 	}
 

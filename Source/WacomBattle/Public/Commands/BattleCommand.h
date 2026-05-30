@@ -31,7 +31,7 @@ enum class EBattleCommandType : uint8
  * 后续命令集膨胀到 6 个以上再考虑 polymorphic USTRUCT。
  *
  * 字段约定：
- * - Type == PlayCard：CardInstanceId 必填；TargetPartInstanceId 按卡牌需要填写。
+ * - Type == PlayCard：CardInstanceId 必填；TargetPartInstanceId / TargetCardInstanceId 按卡牌 TargetMode 选择其一填写。
  * - Type == Wait / EndTurn：不读取任何目标字段。
  */
 USTRUCT(BlueprintType)
@@ -50,6 +50,10 @@ struct WACOMBATTLE_API FBattleCommand
 	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
 	FGuid TargetPartInstanceId;
 
+	/** 目标手牌的运行时实例 ID。仅 TargetMode == HandCard 的 PlayCard 使用。 */
+	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
+	FGuid TargetCardInstanceId;
+
 	/** 击倒事件玩家选择。仅 KnockdownChoice 使用。 */
 	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
 	EKnockdownChoice KnockdownChoiceValue = EKnockdownChoice::None;
@@ -62,6 +66,15 @@ struct WACOMBATTLE_API FBattleCommand
 		Cmd.Type = EBattleCommandType::PlayCard;
 		Cmd.CardInstanceId = InCardInstanceId;
 		Cmd.TargetPartInstanceId = InTargetPartInstanceId;
+		return Cmd;
+	}
+
+	static FBattleCommand MakePlayCardOnHandCard(const FGuid& InCardInstanceId, const FGuid& InTargetCardInstanceId)
+	{
+		FBattleCommand Cmd;
+		Cmd.Type = EBattleCommandType::PlayCard;
+		Cmd.CardInstanceId = InCardInstanceId;
+		Cmd.TargetCardInstanceId = InTargetCardInstanceId;
 		return Cmd;
 	}
 

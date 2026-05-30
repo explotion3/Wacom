@@ -81,6 +81,18 @@ WacomBattle 是**战斗内核**，负责单场战斗的唯一规则真相。
 | `UBattleSession::BuildPendingKnockdownChoiceView()` | 输出当前击倒选择 ViewData；UI 不再解析事件 `Count` 位掩码 |
 | `UBattleSession::BuildResultPacket()` | 战斗结束后输出战后包；具体 Run 结算见 [WacomRun §8](./WacomRun.md#wacomrun-battle-settlement) |
 
+### PlayCard 目标合同
+
+`FBattleCommand` 仍是唯一战斗命令入口。`Type == PlayCard` 时，`CardInstanceId` 必填，目标字段按卡牌 `TargetMode` 填写：
+
+| TargetMode | 命令字段 | 合法性 |
+|---|---|---|
+| `None / Self / AllEnemyParts` | 不要求额外目标 | 只检查源卡在手牌、费用合法 |
+| `SingleEnemyPart` | `TargetPartInstanceId` | 目标必须是当前战斗中未破坏的敌方部位 |
+| `HandCard` | `TargetCardInstanceId` | 目标必须是另一张当前手牌；允许普通手牌和左右手锚点，拒绝 self、无效 ID、已离开手牌的卡 |
+
+`TargetMode=HandCard` 的主动打牌会把玩家选中的目标手牌作为 `Target.SelectedHandCard` 传给主效果链。当前已验证 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可以精确作用到该目标；指定弃牌、消耗、食物卡给伙伴加属性等更复杂的卡对卡规则留后续扩展。
+
 **目录结构**：
 
 ```

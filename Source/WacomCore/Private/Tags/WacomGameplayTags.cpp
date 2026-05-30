@@ -72,6 +72,7 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Target_ZoneHandCard,     "Target.ZoneHandCard");
 	UE_DEFINE_GAMEPLAY_TAG(Target_Adjacent_Right,   "Target.Adjacent.Right");
 	UE_DEFINE_GAMEPLAY_TAG(Target_LastShuffledCard, "Target.LastShuffledCard");
+	UE_DEFINE_GAMEPLAY_TAG(Target_SelectedHandCard, "Target.SelectedHandCard");
 
 	// -------- Interaction.Target --------
 	UE_DEFINE_GAMEPLAY_TAG(Interaction_Target_Battle_EnemyPart, "Interaction.Target.Battle.EnemyPart");

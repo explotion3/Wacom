@@ -85,6 +85,7 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Target_ZoneHandCard);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Target_Adjacent_Right);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Target_LastShuffledCard);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Target_SelectedHandCard);
 
 	// -------- Interaction.Target --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interaction_Target_Battle_EnemyPart);

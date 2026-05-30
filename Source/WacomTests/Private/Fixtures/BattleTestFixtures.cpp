@@ -63,6 +63,30 @@ UCardDefinition* FWacomBattleFixture::MakeNoopCard(int32 Cost)
 	return Card;
 }
 
+UCardDefinition* FWacomBattleFixture::MakeHandCardCostModifierCard(int32 Cost, int32 Magnitude, bool bReduceCost)
+{
+	UCardDefinition* Card = NewTransient<UCardDefinition>();
+	Card->CardId = FName(*FString::Printf(
+		TEXT("TestHandCardCost_%s_C%d_M%d_%s"),
+		bReduceCost ? TEXT("Reduce") : TEXT("Add"),
+		Cost,
+		Magnitude,
+		*FGuid::NewGuid().ToString(EGuidFormats::Short)));
+	Card->BaseCost = Cost;
+	Card->TargetMode = ECardTargetMode::HandCard;
+
+	FCardEffect Effect;
+	Effect.EffectType = bReduceCost
+		? WacomTags::Effect_Card_ReduceCost
+		: WacomTags::Effect_Card_AddCost;
+	Effect.Magnitude = Magnitude;
+	Effect.Target = WacomTags::Target_SelectedHandCard;
+	Card->Effects.Add(Effect);
+
+	Roots.Add(TStrongObjectPtr<UObject>(Card));
+	return Card;
+}
+
 UCardDefinition* FWacomBattleFixture::MakeDamageCardWithKeywords(int32 Cost, int32 Damage, const TArray<FGameplayTag>& Keywords)
 {
 	UCardDefinition* Card = MakeSimpleDamageCard(Cost, Damage);

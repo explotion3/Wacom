@@ -91,6 +91,7 @@ enum class EWacomBattleCardDropIntentKind : uint8
 	None UMETA(DisplayName = "None"),
 	PlayCardNoTarget UMETA(DisplayName = "PlayCardNoTarget"),
 	PlayCardWorldTarget UMETA(DisplayName = "PlayCardWorldTarget"),
+	PlayCardCardTarget UMETA(DisplayName = "PlayCardCardTarget"),
 	ProbeCardTarget UMETA(DisplayName = "ProbeCardTarget"),
 	Reject UMETA(DisplayName = "Reject"),
 };
@@ -515,6 +516,7 @@ private:
 
 	/** 内部：提交 PlayCard 命令 + 事件消费 + 刷新。 */
 	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
+	void SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId);
 
 	/** 内部：消费 Session 事件并分发给 Toast / 日志抽屉 / 击倒 dialog。 */
 	void ConsumeAndLogEvents();
@@ -617,6 +619,7 @@ private:
 	void ApplyFallbackPlayerControllerInteractionEvents();
 	void RestoreFallbackPlayerControllerInteractionEvents();
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
+	UWacomFirstPersonCardAnchorComponent* ResolveActiveFirstPersonCardAnchor() const;
 	void SyncFirstPersonBattleHandLayer(
 		const FBattleSnapshot& Snap,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints = TArray<FWacomFirstPersonCardLayerTransitionHint>());

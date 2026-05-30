@@ -73,6 +73,17 @@ namespace
 		return E;
 	}
 
+	FCardEffect ModifySelectedHandCardCost(bool bReduceCost, int32 Amount)
+	{
+		FCardEffect E;
+		E.EffectType = bReduceCost
+			? WacomTags::Effect_Card_ReduceCost
+			: WacomTags::Effect_Card_AddCost;
+		E.Magnitude = Amount;
+		E.Target = WacomTags::Target_SelectedHandCard;
+		return E;
+	}
+
 	// ---- 卡 Builder ----
 
 	UCardDefinition* BuildCard(
@@ -383,8 +394,62 @@ namespace Wacom::ContentBuilder
 			/*Passives*/ {}
 		);
 
+		// ==== V0-AD 卡对卡测试卡 ====
+		// 用于 PIE 验证：拖到另一张 first-person 手牌上，命中 Target.SelectedHandCard。
+		UCardDefinition* TestAddCostToSelectedHand = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_AddCostToSelectedHand")),
+			TEXT("DA_Card_Test_AddCostToSelectedHand"),
+			TEXT("Test.AddCostToSelectedHand"),
+			TEXT("加费测试"),
+			TEXT("测试卡：拖到另一张手牌上，使目标卡费用 +2。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ {},
+			ECardTargetMode::HandCard,
+			FCardPhysique{},
+			/*Effects*/ { ModifySelectedHandCardCost(/*bReduceCost*/ false, 2) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
+		UCardDefinition* TestReduceCostToSelectedHand = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_ReduceCostToSelectedHand")),
+			TEXT("DA_Card_Test_ReduceCostToSelectedHand"),
+			TEXT("Test.ReduceCostToSelectedHand"),
+			TEXT("减费测试"),
+			TEXT("测试卡：拖到另一张手牌上，使目标卡费用 -1。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ {},
+			ECardTargetMode::HandCard,
+			FCardPhysique{},
+			/*Effects*/ { ModifySelectedHandCardCost(/*bReduceCost*/ true, 1) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
+		UCardDefinition* TestTargetCost3 = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_TargetCost3")),
+			TEXT("DA_Card_Test_TargetCost3"),
+			TEXT("Test.TargetCost3"),
+			TEXT("目标卡 3费"),
+			TEXT("测试目标卡：用于验证被 Target.SelectedHandCard 精确命中后的费用刷新。"),
+			/*BaseCost*/ 3,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ {},
+			ECardTargetMode::None,
+			FCardPhysique{},
+			/*Effects*/ {},
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
 		// 检查：任一建造失败则放弃。
-		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling || !BugGirlBag || !ZhujianRongnang || !MuseiLantern)
+		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling || !BugGirlBag || !ZhujianRongnang || !MuseiLantern
+			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3)
 		{
 			return nullptr;
 		}
@@ -404,10 +469,22 @@ namespace Wacom::ContentBuilder
 		Char->HpPerFinger    = 2;
 		Char->LeftHandCard   = LeftHand;
 		Char->RightHandCard  = RightHand;
-		// 顺序：5 张参战伙伴卡 + 虫妹的小布袋（A 类）+ 蛛茧绒囊（B 类占位）+ 暮色引虫灯（A 类，DeleteProvider）。
+		// 顺序：5 张参战伙伴卡 + V0-AD 卡对卡测试卡 + 虫妹的小布袋（A 类）+ 蛛茧绒囊（B 类占位）+ 暮色引虫灯（A 类，DeleteProvider）。
 		// Initialize 时：非容器卡进 BattleDeck，容器卡默认进 Backpack；
 		// 暮色引虫灯按原型特例默认进 BattleDeck。
-		Char->StarterDeck    = { Zhaoguang, Fuxiao, Chifu, Shuoguang, Muling, BugGirlBag, ZhujianRongnang, MuseiLantern };
+		Char->StarterDeck    = {
+			Zhaoguang,
+			Fuxiao,
+			Chifu,
+			Shuoguang,
+			Muling,
+			TestAddCostToSelectedHand,
+			TestReduceCostToSelectedHand,
+			TestTargetCost3,
+			BugGirlBag,
+			ZhujianRongnang,
+			MuseiLantern
+		};
 		SaveAssetPackage(CharPkg, Char, CharPkgPath);
 		return Char;
 	}

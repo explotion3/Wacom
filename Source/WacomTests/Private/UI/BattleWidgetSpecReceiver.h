@@ -526,6 +526,19 @@ public:
 		HandleFirstPersonCardLayerDragReleased(CardInstanceId, DragView);
 	}
 
+	void SetFirstPersonCardAnchorForTest(UWacomFirstPersonCardAnchorComponent* Anchor)
+	{
+		if (UWacomFirstPersonCardAnchorComponent* PreviousAnchor = LastFirstPersonBattleHandAnchor.Get())
+		{
+			if (PreviousAnchor != Anchor)
+			{
+				UnbindFirstPersonBattleHandLayerInteractions(PreviousAnchor);
+			}
+		}
+		LastFirstPersonBattleHandAnchor = Anchor;
+		BindFirstPersonBattleHandLayerInteractions(Anchor);
+	}
+
 	FWacomBattleCardDropResolveResult ResolveFirstPersonCardDropIntentForTest(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView) const

@@ -231,7 +231,7 @@ public:
 		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
 			EWacomFirstPersonCardDragTargetFeedbackState::None,
 		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>());
-	void SetCardDragProbeFeedback(bool bEnabled);
+	void SetCardDragProbeFeedback(bool bEnabled, bool bValidTarget = false);
 	void CancelCardDragGesture(bool bBroadcastCancel);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
@@ -350,6 +350,7 @@ private:
 	bool bHasPointerViewportPosition = false;
 	bool bHasFeedbackTargetScreenPosition = false;
 	bool bCardDragProbeFeedback = false;
+	bool bCardDragProbeFeedbackValid = false;
 	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FVector2D PointerViewportPosition = FVector2D::ZeroVector;

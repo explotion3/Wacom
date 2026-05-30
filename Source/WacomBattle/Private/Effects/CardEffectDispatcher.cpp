@@ -34,7 +34,8 @@ namespace
 		const FCardEffect& Effect,
 		const FGuid& SelectedPartId,
 		const FGuid& SelfCardId,
-		const FGuid& LastShuffledCardId)
+		const FGuid& LastShuffledCardId,
+		const FGuid& SelectedHandCardId)
 	{
 		const FGameplayTag& Tag = Effect.Target;
 
@@ -85,6 +86,12 @@ namespace
 			Ctx.TargetInstanceId = LastShuffledCardId;
 			return;
 		}
+		if (Tag == WacomTags::Target_SelectedHandCard)
+		{
+			Ctx.TargetKind       = EEffectTargetKind::HandCard;
+			Ctx.TargetInstanceId = SelectedHandCardId;
+			return;
+		}
 
 		Ctx.TargetKind       = EEffectTargetKind::None;
 		Ctx.TargetInstanceId = FGuid();
@@ -119,7 +126,8 @@ void FCardEffectDispatcher::Execute(
 	int32 RuntimeCost,
 	const FGuid& SelectedPartId,
 	const FGuid& SelfCardId,
-	FGuid& InOutLastShuffledCardId)
+	FGuid& InOutLastShuffledCardId,
+	const FGuid& SelectedHandCardId)
 {
 	int32 FinalMag = FMagnitudeResolver::Compute(State, Effect, RuntimeCost, SelectedPartId);
 
@@ -190,7 +198,7 @@ void FCardEffectDispatcher::Execute(
 
 	FEffectContext Ctx;
 	FillCommonContext(Ctx, State, Events, Effect, FinalMag, SelfCardId, InOutLastShuffledCardId);
-	FillTargetFromCardEffect(Ctx, Effect, SelectedPartId, SelfCardId, InOutLastShuffledCardId);
+	FillTargetFromCardEffect(Ctx, Effect, SelectedPartId, SelfCardId, InOutLastShuffledCardId, SelectedHandCardId);
 
 	FEffectExecutor::Execute(Ctx);
 	InOutLastShuffledCardId = Ctx.LastShuffledCardId;

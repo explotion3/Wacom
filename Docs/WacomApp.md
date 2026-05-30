@@ -321,8 +321,8 @@ ESC 当前语义：
 - `UWacomBattleEnemyPartWorldTargetBridgeComponent`：Battle 专用桥接组件。它读取稳定 `PartId`，在 HUD 刷新时解析当前 `PartInstanceId`，写回同 Actor 上的 `UWacomInteractionTargetComponent`，并注册接收 `TargetConfirmed / DamageDealt / EnemyPartHpEmptied` 表现 cue。
 - `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；只有 `TargetKind=World` 且 `TargetTag=Interaction.Target.Battle.EnemyPart` 的 handle 会被转发为 Battle enemy part 点击。
 - `UWacomFirstPersonCardLayerSlotWidget` 为当前 active、可见、非 exiting 且拥有有效 `CardInstanceId` 的 first-person slot 构建 Card target handle。它使用当前 visual slot 的 `ScreenPosition`，不要求卡牌可打；后续拖拽 resolver 再判断当前拖拽卡能否作用到该卡槽。
-- First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈只表示 probe，不提交卡对卡规则。
-- Battle first-person drag/drop 由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析 preview 和 release 语义。当前只提交既有 `PlayCard` 命令：无目标卡 armed 提交空目标，合法 world enemy part 提交目标部位；Card target 为 probe-only，Zone / Run target 后续接入。
+- First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈区分合法 hand-card target 和 probe-only target。
+- Battle first-person drag/drop 由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析 preview 和 release 语义。当前提交既有 `PlayCard` 命令：无目标卡 armed 提交空目标，合法 world enemy part 提交目标部位，合法 `TargetMode=HandCard` 源卡提交 `TargetCardInstanceId`。不支持的 Card target 仍为 probe-only，Zone / Run target 后续接入。
 
 ### 描述层
 
@@ -341,7 +341,7 @@ ESC 当前语义：
 
 ### 规则层
 
-Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomInteractionTargetHandle)`，当前用于 TargetSelect 可选部位视图、first-person drag/drop resolver 的 world target 合法性判断，以及拖拽预览。Run resolver 后续接入。
+Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomInteractionTargetHandle)`，当前用于 TargetSelect 可选部位视图、first-person drag/drop resolver 的 world target 合法性判断、`TargetMode=HandCard` 的 Card target 合法性判断，以及拖拽预览。Run resolver 后续接入。
 
 ### 当前范围
 

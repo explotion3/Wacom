@@ -35,6 +35,7 @@ public:
 	 * @param SelfCardId               本卡 InstanceId（用于 Target.Self / ExcludeHandCardId）
 	 * @param InOutLastShuffledCardId  同一效果链共享的"上次腾挪卡 ID"。Shuffle 成功后写入，
 	 *                                 后续 Card.AddCost / Card.ReduceCost + Target.LastShuffledCard 读取。
+	 * @param SelectedHandCardId       主动 HandCard 目标模式下玩家选中的手牌（无则传 Invalid）。
 	 */
 	static void Execute(
 		FBattleState& State,
@@ -43,5 +44,6 @@ public:
 		int32 RuntimeCost,
 		const FGuid& SelectedPartId,
 		const FGuid& SelfCardId,
-		FGuid& InOutLastShuffledCardId);
+		FGuid& InOutLastShuffledCardId,
+		const FGuid& SelectedHandCardId = FGuid());
 };

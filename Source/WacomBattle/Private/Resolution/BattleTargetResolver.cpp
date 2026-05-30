@@ -22,7 +22,7 @@ bool FBattleTargetResolver::CanTargetWithCard(const FBattleState& State, const F
 
 	const FRuntimeCardInstance& Card = State.Cards.AllCards[*CardIndex];
 	const UCardDefinition* Def = Card.Definition;
-	if (!Def)
+	if (!Def || Card.Location != ECardLocation::Hand)
 	{
 		return false;
 	}
@@ -59,8 +59,22 @@ bool FBattleTargetResolver::CanTargetWithCard(const FBattleState& State, const F
 	}
 
 	case EWacomInteractionTargetKind::Card:
-		// 当前战斗规则不支持卡对卡。
-		return false;
+	{
+		if (Def->TargetMode != ECardTargetMode::HandCard
+			|| !Target.CardInstanceId.IsValid()
+			|| Target.CardInstanceId == CardInstanceId)
+		{
+			return false;
+		}
+
+		const int32* TargetCardIndex = State.Cards.CardIndexById.Find(Target.CardInstanceId);
+		if (!TargetCardIndex || !State.Cards.AllCards.IsValidIndex(*TargetCardIndex))
+		{
+			return false;
+		}
+
+		return State.Cards.AllCards[*TargetCardIndex].Location == ECardLocation::Hand;
+	}
 
 	case EWacomInteractionTargetKind::Zone:
 		// 当前战斗规则不支持区域目标。

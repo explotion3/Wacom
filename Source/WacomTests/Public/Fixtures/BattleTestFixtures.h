@@ -41,6 +41,9 @@ public:
 	/** 无效果空卡（仅占位）。用于纯测试手牌队列。 */
 	UCardDefinition* MakeNoopCard(int32 Cost);
 
+	/** 指定另一张手牌为目标的 Cost 修正卡。 */
+	UCardDefinition* MakeHandCardCostModifierCard(int32 Cost, int32 Magnitude, bool bReduceCost);
+
 	/** 自定义 Keywords 的伤害卡。 */
 	UCardDefinition* MakeDamageCardWithKeywords(int32 Cost, int32 Damage, const TArray<FGameplayTag>& Keywords);
 

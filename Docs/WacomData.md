@@ -486,6 +486,7 @@ RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventI
 | `Target.ZoneHandCard` | `Target_ZoneHandCard` | 指定区域的手牌 |
 | `Target.Adjacent.Right` | `Target_Adjacent_Right` | 相邻右方（Tag 已声明，解析未实现）|
 | `Target.LastShuffledCard` | `Target_LastShuffledCard` | 最近一次 Shuffle 的被移动卡 |
+| `Target.SelectedHandCard` | `Target_SelectedHandCard` | 主动打出 `TargetMode=HandCard` 卡牌时，玩家拖拽/选择的目标手牌 |
 
 ### ZoneHook.Trigger
 
@@ -589,7 +590,7 @@ Magnitude 计算顺序：
 | `Effect.Shuffle.Random` | - | RandomHandCard | - | - | - | 从手牌随机选一张腾挪 |
 | `Effect.Shuffle.FromBothToOther` | - | ZoneHandCard | HandZone.Both | - | - | 从双手区挑一张腾挪到左/右 |
 | `Effect.Shuffle.ToRandomZone` | - | Self(本卡) | - | - | - | 把本卡腾挪到随机区域 |
-| `Effect.Card.AddCost` | Modifier 增量 | Self(本卡) / LastShuffledCard | - | - | Literal | 修改 RuntimeCostModifier |
+| `Effect.Card.AddCost` | Modifier 增量 | Self(本卡) / LastShuffledCard / SelectedHandCard | - | - | Literal | 修改 RuntimeCostModifier |
 | `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 下限由 ComputeRuntimeCost clamp 到 0 |
 | `Effect.Draw` | 张数 | Self / Player | CardLocation.* | - | Literal | `TargetZone` 复用为源区域 tag，默认抽牌堆 |
 | `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉手牌中普通卡，不弃锚点 |
@@ -620,6 +621,7 @@ Magnitude 计算顺序：
 | `Target.RandomHandCard` | HandCard | HandZoneService 自选 | 否 |
 | `Target.ZoneHandCard` | HandCard | 按 TargetZone 过滤后自选 | **是** |
 | `Target.LastShuffledCard` | HandCard | `EffectContext::LastShuffledCardId` | 否 |
+| `Target.SelectedHandCard` | HandCard | `PlayCard` 命令的 `TargetCardInstanceId` | 否 |
 | `Target.Adjacent.Right` | EnemyPart | 未实现 | 否 |
 
 ### Target.Self 的 EffectType 消歧

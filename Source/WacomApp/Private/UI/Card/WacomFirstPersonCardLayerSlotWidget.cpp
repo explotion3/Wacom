@@ -359,14 +359,15 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragFeedbackTarget(
 	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::SetCardDragProbeFeedback(bool bEnabled)
+void UWacomFirstPersonCardLayerSlotWidget::SetCardDragProbeFeedback(bool bEnabled, bool bValidTarget)
 {
-	if (bCardDragProbeFeedback == bEnabled)
+	if (bCardDragProbeFeedback == bEnabled && bCardDragProbeFeedbackValid == bValidTarget)
 	{
 		return;
 	}
 
 	bCardDragProbeFeedback = bEnabled && CardDragConfig.bEnableDragTargetFeedback;
+	bCardDragProbeFeedbackValid = bCardDragProbeFeedback && bValidTarget;
 	ApplyVisualSlotView();
 }
 
@@ -993,6 +994,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginGesturePress(const FVector2D& Sc
 	bGestureCommitArmed = false;
 	bSuppressClickOnRelease = false;
 	GestureFeedbackTargetHandle = FWacomInteractionTargetHandle();
+	bCardDragProbeFeedback = false;
+	bCardDragProbeFeedbackValid = false;
 	GestureState = EWacomFirstPersonCardGestureState::Pressed;
 	SetPressedForFirstPersonLayer(true);
 	UpdateWantsTick();
@@ -1193,6 +1196,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearGestureState(bool bBroadcastCanc
 	bHasFeedbackTargetScreenPosition = false;
 	FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 	bCardDragProbeFeedback = false;
+	bCardDragProbeFeedbackValid = false;
 	ClearPointerViewportDiagnostics();
 	bGestureTargetValid = false;
 	bGestureCommitArmed = false;
@@ -1518,6 +1522,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
 {
 	bIsPressedForFirstPersonLayer = false;
 	bCardDragProbeFeedback = false;
+	bCardDragProbeFeedbackValid = false;
 	DragTargetFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::None;
 	bHasFeedbackTargetScreenPosition = false;
 	FeedbackTargetScreenPosition = FVector2D::ZeroVector;
@@ -1582,6 +1587,11 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
 		else if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::Invalid)
 		{
 			OverlayColor = CardDragConfig.DragInvalidTargetColor;
+			OverlayOpacity = CardDragConfig.DragTargetFeedbackOpacity;
+		}
+		else if (bCardDragProbeFeedback && bCardDragProbeFeedbackValid)
+		{
+			OverlayColor = CardDragConfig.DragValidTargetColor;
 			OverlayOpacity = CardDragConfig.DragTargetFeedbackOpacity;
 		}
 		else if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe

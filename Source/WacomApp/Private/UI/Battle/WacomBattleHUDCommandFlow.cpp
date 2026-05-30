@@ -37,6 +37,37 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& Ca
 	AfterCommand(HUD);
 }
 
+void FWacomBattleHUDCommandFlow::SubmitPlayCardOnHandCard(
+	UBattleHUD& HUD,
+	const FGuid& CardId,
+	const FGuid& TargetCardId)
+{
+	HUD.HideCardDetailPanel();
+
+	UBattleSession* Session = HUD.GetSession();
+	if (!Session)
+	{
+		return;
+	}
+	if (HUD.IsBattlePresentationQueueBusy())
+	{
+		return;
+	}
+
+	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(CardId, TargetCardId));
+	if (!Status.IsOk())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCardOnHandCard failed, code=%d detail=%s"),
+			(int32)Status.Code, *Status.Detail.ToString());
+		return;
+	}
+
+	HUD.RecordFirstPersonPlayCommit(CardId, FGuid());
+	HUD.PendingTargetingCardId.Invalidate();
+	HUD.SetUIState(EBattleUIState::Idle);
+	AfterCommand(HUD);
+}
+
 void FWacomBattleHUDCommandFlow::SubmitWait(UBattleHUD& HUD)
 {
 	HUD.HideCardDetailPanel();

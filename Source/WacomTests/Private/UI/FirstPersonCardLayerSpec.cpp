@@ -21,6 +21,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayoutPreset.h"
@@ -9157,7 +9158,7 @@ bool FWacomFirstPersonDropIntentNoTargetNotArmedTest::RunTest(const FString& Par
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonDropIntentCardTargetProbeTest,
-	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.CardTargetResolvesProbeOnlyWithoutSubmit",
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.CardTargetUnsupportedSourceRemainsProbeOnly",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonDropIntentCardTargetProbeTest::RunTest(const FString& Parameters)
@@ -9210,6 +9211,68 @@ bool FWacomFirstPersonDropIntentCardTargetProbeTest::RunTest(const FString& Para
 	TestEqual(TEXT("Card target records unsupported reason"),
 		Result.RejectReason,
 		EWacomBattleCardDropRejectReason::UnsupportedCardTarget);
+	TestTrue(TEXT("Card target exposes feedback position"), Result.bHasFeedbackTargetScreenPosition);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonDropIntentValidHandCardTargetTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.CardTargetValidHandCardResolvesPlayCardCardTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonDropIntentValidHandCardTargetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceCard = Fx.MakeHandCardCostModifierCard(/*Cost*/0, /*Magnitude*/2, /*bReduceCost*/false);
+	UCardDefinition* TargetCard = Fx.MakeNoopCard(3);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
+	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(AWacomBattleHUDLocalPlayerControllerTest::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid())
+		|| !TestTrue(TEXT("Target card exists"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+
+	FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerSpec::MakeDropDragView(
+		SourceCardId,
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	DragView.CurrentTarget = FWacomInteractionTargetHandle::ForCardTarget(
+		TargetCardId,
+		HUD,
+		FVector2D(650.0f, 600.0f));
+	const FWacomBattleCardDropResolveResult Result =
+		HUD->ResolveFirstPersonCardDropIntentForTest(SourceCardId, DragView);
+	TestEqual(TEXT("Valid hand-card target resolves to card play"),
+		Result.IntentKind,
+		EWacomBattleCardDropIntentKind::PlayCardCardTarget);
+	TestEqual(TEXT("Card target preserves target id"), Result.TargetHandle.CardInstanceId, TargetCardId);
+	TestTrue(TEXT("Card target can submit"), Result.bCanSubmit);
+	TestEqual(TEXT("No reject reason"), Result.RejectReason, EWacomBattleCardDropRejectReason::None);
 	TestTrue(TEXT("Card target exposes feedback position"), Result.bHasFeedbackTargetScreenPosition);
 
 	PC->Destroy();
@@ -9546,6 +9609,235 @@ bool FWacomFirstPersonDropIntentPreviewReleaseConsistencyTest::RunTest(const FSt
 	TestTrue(TEXT("Release submitted same intent path"),
 		Session->BuildSnapshot().Version > VersionBeforeRelease);
 
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonDropIntentReleaseOnCardTargetSubmitTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.ReleaseOnValidCardTargetSubmitsHandCardCommand",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonDropIntentReleaseOnCardTargetSubmitTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceCard = Fx.MakeHandCardCostModifierCard(/*Cost*/0, /*Magnitude*/2, /*bReduceCost*/false);
+	UCardDefinition* TargetCard = Fx.MakeNoopCard(3);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
+	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(AWacomBattleHUDLocalPlayerControllerTest::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid())
+		|| !TestTrue(TEXT("Target card exists"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+	const int32 VersionBeforeRelease = Session->BuildSnapshot().Version;
+
+	FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerSpec::MakeDropDragView(
+		SourceCardId,
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	DragView.CurrentTarget = FWacomInteractionTargetHandle::ForCardTarget(
+		TargetCardId,
+		HUD,
+		FVector2D(650.0f, 600.0f));
+	const FWacomBattleCardDropResolveResult PreviewResult =
+		HUD->ResolveFirstPersonCardDropIntentForTest(SourceCardId, DragView);
+	HUD->HandleFirstPersonCardDragReleasedForTest(SourceCardId, DragView);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+	Snapshot = Session->BuildSnapshot();
+
+	TestEqual(TEXT("Preview used card target submit intent"),
+		PreviewResult.IntentKind,
+		EWacomBattleCardDropIntentKind::PlayCardCardTarget);
+	TestTrue(TEXT("Release submitted card target path"), Snapshot.Version > VersionBeforeRelease);
+	int32 TargetRuntimeCost = INDEX_NONE;
+	for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+	{
+		if (Card.InstanceId == TargetCardId)
+		{
+			TargetRuntimeCost = Card.RuntimeCost;
+			break;
+		}
+	}
+	TestEqual(TEXT("Target card cost updated"), TargetRuntimeCost, 5);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.LayerGestureReleaseOnCardTargetSubmitsHandCardCommand",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceCard = Fx.MakeHandCardCostModifierCard(/*Cost*/0, /*Magnitude*/2, /*bReduceCost*/false);
+	UCardDefinition* TargetCard = Fx.MakeNoopCard(3);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
+	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+			AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+			FTransform::Identity);
+	AWacomPlayerCharacter* Character =
+		World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid())
+		|| !TestTrue(TEXT("Target card exists"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandOnly);
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+
+	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
+	CardEntries.Reserve(Snapshot.Hand.Cards.Num());
+	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+	{
+		FWacomFirstPersonCardLayerEntry Entry;
+		Entry.CardInstanceId = CardSnapshot.InstanceId;
+		Entry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot.Definition);
+		Entry.CardViewData.Cost = CardSnapshot.RuntimeCost;
+		Entry.CardViewData.bShowCost = CardSnapshot.Definition != nullptr;
+		Entry.CardViewData.bDisabled = !CardSnapshot.bIsPlayable;
+		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
+		Entry.TargetMode = CardSnapshot.Definition
+			? CardSnapshot.Definition->TargetMode
+			: ECardTargetMode::None;
+		Entry.Zone = CardSnapshot.Zone;
+		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
+		CardEntries.Add(MoveTemp(Entry));
+	}
+
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), CardEntries);
+	HUD->SetFirstPersonCardAnchorForTest(Anchor);
+	Anchor->RefreshAnchor(0.0f);
+	Anchor->PrimaryComponentTick.ExecuteTick(
+		0.0f,
+		LEVELTICK_All,
+		ENamedThreads::GameThread,
+		FGraphEventRef());
+	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	if (!TestNotNull(TEXT("First-person layer"), Layer))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = nullptr;
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = nullptr;
+	for (int32 Index = 0; Index < Snapshot.Hand.Cards.Num(); ++Index)
+	{
+		UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(Index);
+		if (!SlotWidget)
+		{
+			continue;
+		}
+		if (SlotWidget->GetSlotView().Entry.CardInstanceId == SourceCardId)
+		{
+			SourceWidget = SlotWidget;
+		}
+		else if (SlotWidget->GetSlotView().Entry.CardInstanceId == TargetCardId)
+		{
+			TargetWidget = SlotWidget;
+		}
+	}
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D SourcePosition = SourceWidget->GetVisualSlotView().ScreenPosition;
+	const FVector2D TargetPosition = TargetWidget->GetVisualSlotView().ScreenPosition;
+	const int32 VersionBeforeRelease = Session->BuildSnapshot().Version;
+
+	SourceWidget->RequestGesturePressForTest(SourcePosition);
+	SourceWidget->RequestGestureMoveForTest(0.01f, TargetPosition);
+	TestEqual(TEXT("Layer gesture resolves pointer card target"),
+		Layer->GetCurrentDragViewForTest().CurrentTarget.CardInstanceId,
+		TargetCardId);
+	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, Layer->GetCurrentDragViewForTest());
+	TestEqual(TEXT("HUD marks card target as valid before release"),
+		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+
+	SourceWidget->RequestGestureReleaseForTest(TargetPosition);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+	Snapshot = Session->BuildSnapshot();
+
+	TestTrue(TEXT("Layer gesture release submitted card target path"), Snapshot.Version > VersionBeforeRelease);
+	int32 TargetRuntimeCost = INDEX_NONE;
+	for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+	{
+		if (Card.InstanceId == TargetCardId)
+		{
+			TargetRuntimeCost = Card.RuntimeCost;
+			break;
+		}
+	}
+	TestEqual(TEXT("Target card cost updated through layer gesture"), TargetRuntimeCost, 5);
+	TestTrue(TEXT("Source release used confirm feedback"), SourceWidget->IsConfirmFeedbackActiveForTest());
+	TestFalse(TEXT("Source release did not play deny feedback"), SourceWidget->IsDenyFeedbackActiveForTest());
+
+	Character->Destroy();
 	PC->Destroy();
 	return true;
 }

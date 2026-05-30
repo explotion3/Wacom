@@ -140,12 +140,15 @@ void UWacomFirstPersonCardLayerWidget::SetCardDragFeedbackTarget(
 				FeedbackTargetScreenPosition);
 		}
 		const bool bProbeTarget =
-			FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
+			(FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
+				|| FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget)
 			&& TargetHandle.TargetKind == EWacomInteractionTargetKind::Card
 			&& TargetHandle.CardInstanceId.IsValid()
 			&& SlotCardId == TargetHandle.CardInstanceId
 			&& SlotCardId != CurrentDragView.CardInstanceId;
-		SlotWidget->SetCardDragProbeFeedback(bProbeTarget);
+		SlotWidget->SetCardDragProbeFeedback(
+			bProbeTarget,
+			FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget && bValidTarget);
 	}
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
 	{
@@ -1388,6 +1391,12 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragReleased(
 {
 	const FWacomFirstPersonCardDragView PreviousDragView = CurrentDragView;
 	CurrentDragView = DragView;
+	FWacomInteractionTargetHandle PreservedCardTargetHandle;
+	bool bPreservedCardTargetValid = false;
+	EWacomFirstPersonCardDragTargetFeedbackState PreservedCardTargetFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+	bool bPreservedCardTargetFeedbackPosition = false;
+	FVector2D PreservedCardTargetScreenPosition = FVector2D::ZeroVector;
 	if (PreviousDragView.CardInstanceId == CurrentDragView.CardInstanceId)
 	{
 		if (PreviousDragView.CurrentTarget.IsValid()
@@ -1407,6 +1416,15 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragReleased(
 			CurrentDragView.bHasFeedbackTargetScreenPosition = true;
 			CurrentDragView.FeedbackTargetScreenPosition = PreviousDragView.FeedbackTargetScreenPosition;
 		}
+		if (PreviousDragView.CurrentTarget.IsValid()
+			&& PreviousDragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card)
+		{
+			PreservedCardTargetHandle = PreviousDragView.CurrentTarget;
+			bPreservedCardTargetValid = PreviousDragView.bTargetValid;
+			PreservedCardTargetFeedbackState = PreviousDragView.TargetFeedbackState;
+			bPreservedCardTargetFeedbackPosition = PreviousDragView.bHasFeedbackTargetScreenPosition;
+			PreservedCardTargetScreenPosition = PreviousDragView.FeedbackTargetScreenPosition;
+		}
 	}
 	if (CurrentDragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card)
 	{
@@ -1418,6 +1436,16 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragReleased(
 		}
 		CurrentDragView.bHasFeedbackTargetScreenPosition = false;
 		CurrentDragView.FeedbackTargetScreenPosition = FVector2D::ZeroVector;
+	}
+	if (PreservedCardTargetHandle.IsValid())
+	{
+		CurrentDragView.CurrentTarget = PreservedCardTargetHandle;
+		CurrentDragView.bTargetValid = bPreservedCardTargetValid;
+		CurrentDragView.TargetFeedbackState = PreservedCardTargetFeedbackState;
+		CurrentDragView.bHasFeedbackTargetScreenPosition = bPreservedCardTargetFeedbackPosition;
+		CurrentDragView.FeedbackTargetScreenPosition = bPreservedCardTargetFeedbackPosition
+			? PreservedCardTargetScreenPosition
+			: FVector2D::ZeroVector;
 	}
 	FWacomInteractionTargetHandle PointerCardTargetHandle;
 	FWacomFirstPersonCardLayerSlotView PointerCardTargetSlotView;
@@ -1564,7 +1592,8 @@ void UWacomFirstPersonCardLayerWidget::ApplyCardProbeFeedbackForCurrentDrag()
 {
 	const bool bCardProbeActive =
 		CardDragConfig.bEnableDragTargetFeedback
-		&& CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
+		&& (CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
+			|| CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget)
 		&& CurrentDragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card
 		&& CurrentDragView.CurrentTarget.CardInstanceId.IsValid();
 
@@ -1580,7 +1609,10 @@ void UWacomFirstPersonCardLayerWidget::ApplyCardProbeFeedbackForCurrentDrag()
 			bCardProbeActive
 			&& SlotCardId == CurrentDragView.CurrentTarget.CardInstanceId
 			&& SlotCardId != CurrentDragView.CardInstanceId;
-		SlotWidget->SetCardDragProbeFeedback(bProbeTarget);
+		SlotWidget->SetCardDragProbeFeedback(
+			bProbeTarget,
+			CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
+				&& CurrentDragView.bTargetValid);
 	}
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
 	{

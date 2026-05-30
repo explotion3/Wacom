@@ -61,6 +61,39 @@ namespace
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
 	const FName FirstPersonBattleHandLayerSourceId(TEXT("BattleHand"));
 
+	const TCHAR* LexToString(EWacomBattleCardDropIntentKind IntentKind)
+	{
+		switch (IntentKind)
+		{
+		case EWacomBattleCardDropIntentKind::None: return TEXT("None");
+		case EWacomBattleCardDropIntentKind::PlayCardNoTarget: return TEXT("PlayCardNoTarget");
+		case EWacomBattleCardDropIntentKind::PlayCardWorldTarget: return TEXT("PlayCardWorldTarget");
+		case EWacomBattleCardDropIntentKind::PlayCardCardTarget: return TEXT("PlayCardCardTarget");
+		case EWacomBattleCardDropIntentKind::ProbeCardTarget: return TEXT("ProbeCardTarget");
+		case EWacomBattleCardDropIntentKind::Reject: return TEXT("Reject");
+		default: return TEXT("Unknown");
+		}
+	}
+
+	const TCHAR* LexToString(EWacomBattleCardDropRejectReason RejectReason)
+	{
+		switch (RejectReason)
+		{
+		case EWacomBattleCardDropRejectReason::None: return TEXT("None");
+		case EWacomBattleCardDropRejectReason::UIBlocked: return TEXT("UIBlocked");
+		case EWacomBattleCardDropRejectReason::MissingSession: return TEXT("MissingSession");
+		case EWacomBattleCardDropRejectReason::SourceCardInvalid: return TEXT("SourceCardInvalid");
+		case EWacomBattleCardDropRejectReason::SourceCardNotPlayable: return TEXT("SourceCardNotPlayable");
+		case EWacomBattleCardDropRejectReason::NotArmed: return TEXT("NotArmed");
+		case EWacomBattleCardDropRejectReason::MissingTarget: return TEXT("MissingTarget");
+		case EWacomBattleCardDropRejectReason::InvalidWorldTarget: return TEXT("InvalidWorldTarget");
+		case EWacomBattleCardDropRejectReason::UnsupportedCardTarget: return TEXT("UnsupportedCardTarget");
+		case EWacomBattleCardDropRejectReason::UnsupportedZoneTarget: return TEXT("UnsupportedZoneTarget");
+		case EWacomBattleCardDropRejectReason::SelfTarget: return TEXT("SelfTarget");
+		default: return TEXT("Unknown");
+		}
+	}
+
 	bool ContainsHandCardId(const FBattleSnapshot& Snapshot, const FGuid& CardInstanceId)
 	{
 		if (!CardInstanceId.IsValid())
@@ -82,10 +115,10 @@ namespace
 FString FWacomBattleCardDropResolveResult::ToDebugString() const
 {
 	return FString::Printf(
-		TEXT("CardDrop{Source=%s Intent=%d Reject=%d CanSubmit=%s Target=%s HasPos=%s Pos=%s}"),
+		TEXT("CardDrop{Source=%s Intent=%s Reject=%s CanSubmit=%s Target=%s HasPos=%s Pos=%s}"),
 		*SourceCardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
-		static_cast<int32>(IntentKind),
-		static_cast<int32>(RejectReason),
+		LexToString(IntentKind),
+		LexToString(RejectReason),
 		bCanSubmit ? TEXT("true") : TEXT("false"),
 		*TargetHandle.ToString(),
 		bHasFeedbackTargetScreenPosition ? TEXT("true") : TEXT("false"),
@@ -438,6 +471,16 @@ UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor()
 	return Character ? Character->GetFirstPersonCardAnchorComponent() : nullptr;
 }
 
+UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveActiveFirstPersonCardAnchor() const
+{
+	if (UWacomFirstPersonCardAnchorComponent* LastAnchor = LastFirstPersonBattleHandAnchor.Get())
+	{
+		return LastAnchor;
+	}
+
+	return ResolveFirstPersonCardAnchor();
+}
+
 void UBattleHUD::SyncFirstPersonBattleHandLayer(
 	const FBattleSnapshot& Snap,
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
@@ -768,12 +811,18 @@ void UBattleHUD::HandleFirstPersonCardLayerDragReleased(
 		return;
 	}
 
+	const FWacomFirstPersonCardDragView ReleaseDragView = DragView;
+	const FWacomBattleCardDropResolveResult DropResult =
+		ResolveFirstPersonCardDropIntent(CardInstanceId, ReleaseDragView);
+
 	ClearFirstPersonCardDragCameraLookOverride();
-	ClearFirstPersonCardDragTargetFeedback();
+	if (UWacomBattleEnemyPartWorldTargetBridgeComponent* PreviewBridge = CurrentFirstPersonDragPreviewBridge.Get())
+	{
+		PreviewBridge->ClearDragTargetPreviewState();
+	}
+	CurrentFirstPersonDragPreviewBridge.Reset();
 	ForceHideCardDetailHost(ECardDetailHost::FirstPersonViewport);
 
-	const FWacomBattleCardDropResolveResult DropResult =
-		ResolveFirstPersonCardDropIntent(CardInstanceId, DragView);
 	if (!DropResult.bCanSubmit)
 	{
 		return;
@@ -789,6 +838,10 @@ void UBattleHUD::HandleFirstPersonCardLayerDragReleased(
 		SubmitPlayCard(CardInstanceId, DropResult.TargetHandle.WorldTargetId);
 		return;
 
+	case EWacomBattleCardDropIntentKind::PlayCardCardTarget:
+		SubmitPlayCardOnHandCard(CardInstanceId, DropResult.TargetHandle.CardInstanceId);
+		return;
+
 	default:
 		return;
 	}
@@ -801,7 +854,7 @@ void UBattleHUD::HandleFirstPersonCardLayerDragCancelled(
 	ClearFirstPersonCardDragCameraLookOverride();
 	ClearFirstPersonCardDragTargetFeedback();
 	HideFirstPersonCardDetailPanelForSource(CardInstanceId);
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor())
+	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveFirstPersonCardAnchor())
 	{
 		Anchor->SetFirstPersonCardDragFeedbackTarget(
 			FWacomInteractionTargetHandle(),
@@ -818,7 +871,7 @@ void UBattleHUD::ApplyFirstPersonCardDragCameraLookOverride(
 		return;
 	}
 
-	const UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor();
+	const UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveFirstPersonCardAnchor();
 	if (!Anchor
 		|| !Anchor->bAllowCameraLookDuringCardDrag
 		|| Anchor->CardDragCameraLookScale <= 0.0f)
@@ -875,6 +928,7 @@ void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
 		break;
 
 	case EWacomBattleCardDropIntentKind::PlayCardWorldTarget:
+	case EWacomBattleCardDropIntentKind::PlayCardCardTarget:
 		FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget;
 		break;
 
@@ -918,7 +972,7 @@ void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
 		PreviewBridge->SetDragTargetPreviewState(FeedbackState);
 	}
 
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor())
+	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveFirstPersonCardAnchor())
 	{
 		Anchor->SetFirstPersonCardDragFeedbackTarget(
 			DropResult.TargetHandle,
@@ -936,7 +990,7 @@ void UBattleHUD::ClearFirstPersonCardDragTargetFeedback()
 		PreviewBridge->ClearDragTargetPreviewState();
 	}
 	CurrentFirstPersonDragPreviewBridge.Reset();
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor())
+	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveFirstPersonCardAnchor())
 	{
 		Anchor->SetFirstPersonCardDragFeedbackTarget(
 			FWacomInteractionTargetHandle(),
@@ -1075,6 +1129,13 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 			return Result;
 		}
 
+		if (CurrentSession->CanTargetWithCard(CardInstanceId, CandidateTarget))
+		{
+			Result.IntentKind = EWacomBattleCardDropIntentKind::PlayCardCardTarget;
+			Result.bCanSubmit = true;
+			return Result;
+		}
+
 		Result.IntentKind = EWacomBattleCardDropIntentKind::ProbeCardTarget;
 		Result.RejectReason = EWacomBattleCardDropRejectReason::UnsupportedCardTarget;
 		return Result;
@@ -1195,6 +1256,11 @@ void UBattleHUD::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
 void UBattleHUD::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)
 {
 	FWacomBattleHUDCommandFlow::SubmitPlayCard(*this, CardId, TargetPartId);
+}
+
+void UBattleHUD::SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId)
+{
+	FWacomBattleHUDCommandFlow::SubmitPlayCardOnHandCard(*this, CardId, TargetCardId);
 }
 
 void UBattleHUD::AfterCommand()
