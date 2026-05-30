@@ -519,6 +519,8 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOptionInternal(
 	}
 
 	const FName ActiveRunEventId = State.ActiveRunEventId;
+	const UWacomRunEventDefinition* ActiveRunEventDefinition = State.ActiveRunEventDefinition;
+	const FName PreviousNodeId = EventState->CurrentNodeId;
 	FRunState WorkingState = State;
 	TArray<FRunEventChoiceEffectResult> PendingEffectResults;
 	UCardDefinition* PaidCardDefinitionForResult = nullptr;
@@ -594,8 +596,20 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOptionInternal(
 		WorkingState.ActiveRunEventDefinition = nullptr;
 	}
 
+	const FName ResolvedNodeId = WorkingEventState->CurrentNodeId;
+	const FWacomRunEventNodeDefinition* ResolvedNode =
+		FindNode(ActiveRunEventDefinition, ResolvedNodeId);
+	const bool bEventClosedAfterResolve = WorkingState.ActiveRunEventId.IsNone();
+	const bool bEventCompletedAfterResolve = WorkingEventState->bCompleted;
+
 	State = MoveTemp(WorkingState);
 	Result.PaidCardDefinition = PaidCardDefinitionForResult;
+	Result.PreviousNodeId = PreviousNodeId;
+	Result.ResolvedNodeId = ResolvedNodeId;
+	Result.ResolvedNodeTitleText = ResolvedNode ? ResolvedNode->TitleText : FText::GetEmpty();
+	Result.bNodeChanged = PreviousNodeId != ResolvedNodeId;
+	Result.bEventClosedAfterResolve = bEventClosedAfterResolve;
+	Result.bEventCompletedAfterResolve = bEventCompletedAfterResolve;
 	Result.EffectResults = MoveTemp(PendingEffectResults);
 	Result.bSucceeded = true;
 	return Result;

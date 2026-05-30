@@ -336,6 +336,12 @@ bool FWacomRunEventGraphFlowSpec::RunTest(const FString& /*Parameters*/)
 	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Resolve"));
 	TestTrue(TEXT("Resolve succeeds"), Result.bSucceeded);
 	TestEqual(TEXT("Resolve records choice id"), Result.ChoiceId, FName(TEXT("Resolve")));
+	TestEqual(TEXT("Resolve records previous node"), Result.PreviousNodeId, FName(TEXT("End")));
+	TestEqual(TEXT("Resolve records final node"), Result.ResolvedNodeId, FName(TEXT("End")));
+	TestFalse(TEXT("Resolve did not change node before closing"), Result.bNodeChanged);
+	TestEqual(TEXT("Resolve records final node title"), Result.ResolvedNodeTitleText.ToString(), FString(TEXT("终点")));
+	TestTrue(TEXT("Resolve records event closed"), Result.bEventClosedAfterResolve);
+	TestTrue(TEXT("Resolve records event completed"), Result.bEventCompletedAfterResolve);
 	TestEqual(TEXT("Resolve records four effect results"), Result.EffectResults.Num(), 4);
 	if (Result.EffectResults.Num() == 4)
 	{
@@ -739,6 +745,11 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 		TestEqual(TEXT("Paid instance recorded"), PayResult.PaidCardInstanceId, FangId);
 		TestTrue(TEXT("Paid card definition recorded for presentation"),
 			PayResult.PaidCardDefinition.Get() == Fang);
+		TestEqual(TEXT("Payment records previous node"), PayResult.PreviousNodeId, FName(TEXT("Start")));
+		TestEqual(TEXT("Payment records resolved node"), PayResult.ResolvedNodeId, FName(TEXT("Start")));
+		TestFalse(TEXT("Payment without node transition does not record node changed"), PayResult.bNodeChanged);
+		TestFalse(TEXT("Payment event remains open"), PayResult.bEventClosedAfterResolve);
+		TestFalse(TEXT("Payment event not completed"), PayResult.bEventCompletedAfterResolve);
 		TestFalse(TEXT("Paid card removed"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
 		TestEqual(TEXT("Gold effect applied"), Run->GetGold(), 2);
 	}
@@ -801,9 +812,57 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 		TestFalse(TEXT("Invalid later effect fails transaction"), Result.bSucceeded);
 		TestEqual(TEXT("Rollback reason"), Result.DisabledReason, FName(TEXT("InvalidPressureType")));
 		TestNull(TEXT("Failed transaction does not record paid definition"), Result.PaidCardDefinition.Get());
+		TestEqual(TEXT("Failed transaction leaves previous node empty"), Result.PreviousNodeId, NAME_None);
+		TestEqual(TEXT("Failed transaction leaves resolved node empty"), Result.ResolvedNodeId, NAME_None);
+		TestFalse(TEXT("Failed transaction does not record node changed"), Result.bNodeChanged);
+		TestFalse(TEXT("Failed transaction does not record closed outcome"), Result.bEventClosedAfterResolve);
+		TestFalse(TEXT("Failed transaction does not record completed outcome"), Result.bEventCompletedAfterResolve);
 		TestTrue(TEXT("Paid card removal rolled back"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
 		TestTrue(TEXT("Event remains active after rollback"), Run->IsRunEventActive());
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventChoiceResultNodeTransitionSpec,
+	"Wacom.Run.Event.ChoiceResultRecordsNodeTransition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventChoiceResultNodeTransitionSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomRunEventChoiceDefinition Jump;
+	Jump.ChoiceId = TEXT("Jump");
+	Jump.NextNodeId = TEXT("After");
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(NewObject<UWacomRunEventDefinition>(Run.Get()));
+	Event->EventId = TEXT("Event.Outcome.Node");
+	Event->DisplayName = FText::FromString(TEXT("节点事件"));
+	Event->StartNodeId = TEXT("Start");
+
+	FWacomRunEventNodeDefinition Start;
+	Start.NodeId = TEXT("Start");
+	Start.TitleText = FText::FromString(TEXT("起点"));
+	Start.Choices = { Jump };
+	FWacomRunEventNodeDefinition After;
+	After.NodeId = TEXT("After");
+	After.TitleText = FText::FromString(TEXT("后续节点"));
+	Event->Nodes = { Start, After };
+
+	TestTrue(TEXT("Begin transition event"), Run->BeginRunEvent(TEXT("Event.Outcome.Node.Actor"), Event.Get()));
+	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Jump"));
+	TestTrue(TEXT("Jump result succeeds"), Result.bSucceeded);
+	TestEqual(TEXT("Previous node recorded"), Result.PreviousNodeId, FName(TEXT("Start")));
+	TestEqual(TEXT("Resolved node recorded"), Result.ResolvedNodeId, FName(TEXT("After")));
+	TestEqual(TEXT("Resolved title recorded"), Result.ResolvedNodeTitleText.ToString(), FString(TEXT("后续节点")));
+	TestTrue(TEXT("Node changed"), Result.bNodeChanged);
+	TestFalse(TEXT("Event stays open"), Result.bEventClosedAfterResolve);
+	TestFalse(TEXT("Event not completed"), Result.bEventCompletedAfterResolve);
+	TestTrue(TEXT("RunEvent remains active"), Run->IsRunEventActive());
+	TestEqual(TEXT("Snapshot is on resolved node"),
+		Run->BuildCurrentRunEventSnapshot().CurrentNodeId,
+		FName(TEXT("After")));
 
 	return true;
 }
@@ -893,6 +952,12 @@ bool FWacomRunEventTransactionRollbackSpec::RunTest(const FString& /*Parameters*
 	TestFalse(TEXT("Transaction fails on invalid pressure"), Result.bSucceeded);
 	TestEqual(TEXT("Invalid pressure reason"), Result.DisabledReason, FName(TEXT("InvalidPressureType")));
 	TestEqual(TEXT("No effect results are committed on rollback"), Result.EffectResults.Num(), 0);
+	TestEqual(TEXT("Failed transaction leaves previous node empty"), Result.PreviousNodeId, NAME_None);
+	TestEqual(TEXT("Failed transaction leaves resolved node empty"), Result.ResolvedNodeId, NAME_None);
+	TestTrue(TEXT("Failed transaction leaves resolved title empty"), Result.ResolvedNodeTitleText.IsEmpty());
+	TestFalse(TEXT("Failed transaction does not record node changed"), Result.bNodeChanged);
+	TestFalse(TEXT("Failed transaction does not record closed outcome"), Result.bEventClosedAfterResolve);
+	TestFalse(TEXT("Failed transaction does not record completed outcome"), Result.bEventCompletedAfterResolve);
 	TestEqual(TEXT("Gold rolled back"), Run->GetGold(), GoldBefore);
 	TestEqual(TEXT("Misdeed pressure rolled back"), Run->GetPressureValue(EWacomPressureType::Misdeed), MisdeedBefore);
 	TestEqual(TEXT("Total pressure rolled back"), Run->GetTotalPressure(), TotalPressureBefore);

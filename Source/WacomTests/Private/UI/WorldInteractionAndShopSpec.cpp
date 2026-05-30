@@ -106,6 +106,8 @@ namespace
 		Gold.Type = EWacomRunEventEffectType::AddGold;
 		Gold.Value = 1;
 		Pay.Effects.Add(Gold);
+		Pay.bCloseEventAfterResolve = true;
+		Pay.bMarkEventCompleted = true;
 
 		FWacomRunEventNodeDefinition Start;
 		Start.NodeId = TEXT("Start");
@@ -867,6 +869,7 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 	FRunEventChoiceResult Result;
 	Result.bSucceeded = true;
 	Result.PaidCardDefinition = Card;
+	Result.bEventClosedAfterResolve = true;
 	FRunEventChoiceEffectResult GainCard;
 	GainCard.EffectType = EWacomRunEventEffectType::GainCard;
 	GainCard.CardDefinition = Card;
@@ -897,8 +900,8 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 
 	const TArray<FWacomAppToastView> Toasts =
 		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(Result);
-	TestEqual(TEXT("Six visible toasts including appended paid card"), Toasts.Num(), 6);
-	if (Toasts.Num() == 6)
+	TestEqual(TEXT("Seven visible toasts including paid card and outcome"), Toasts.Num(), 7);
+	if (Toasts.Num() == 7)
 	{
 		TestEqual(TEXT("Card toast"), Toasts[0].MessageText.ToString(), FString(TEXT("获得卡牌：事件提示卡")));
 		TestEqual(TEXT("Gold toast"), Toasts[1].MessageText.ToString(), FString(TEXT("获得 2 金币")));
@@ -906,6 +909,32 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 		TestEqual(TEXT("Node toast"), Toasts[3].MessageText.ToString(), FString(TEXT("消耗 1 行动点")));
 		TestEqual(TEXT("Remove card toast still works"), Toasts[4].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
 		TestEqual(TEXT("Paid card toast appended"), Toasts[5].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
+		TestEqual(TEXT("Outcome toast appended"), Toasts[6].MessageText.ToString(), FString(TEXT("事件已结束")));
+	}
+
+	FRunEventChoiceResult NodeChanged;
+	NodeChanged.bSucceeded = true;
+	NodeChanged.bNodeChanged = true;
+	NodeChanged.ResolvedNodeId = TEXT("After");
+	NodeChanged.ResolvedNodeTitleText = FText::FromString(TEXT("后续节点"));
+	const TArray<FWacomAppToastView> NodeToasts =
+		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(NodeChanged);
+	TestEqual(TEXT("Node change emits one outcome toast"), NodeToasts.Num(), 1);
+	if (NodeToasts.Num() == 1)
+	{
+		TestEqual(TEXT("Node change toast text"), NodeToasts[0].MessageText.ToString(), FString(TEXT("进入：后续节点")));
+	}
+
+	FRunEventChoiceResult NodeChangedWithoutTitle;
+	NodeChangedWithoutTitle.bSucceeded = true;
+	NodeChangedWithoutTitle.bNodeChanged = true;
+	NodeChangedWithoutTitle.ResolvedNodeId = TEXT("AfterIdOnly");
+	const TArray<FWacomAppToastView> NodeIdToasts =
+		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(NodeChangedWithoutTitle);
+	TestEqual(TEXT("Node id fallback emits one outcome toast"), NodeIdToasts.Num(), 1);
+	if (NodeIdToasts.Num() == 1)
+	{
+		TestEqual(TEXT("Node id fallback toast text"), NodeIdToasts[0].MessageText.ToString(), FString(TEXT("进入：AfterIdOnly")));
 	}
 
 	FRunEventChoiceResult Blocked;
@@ -1001,6 +1030,16 @@ bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Param
 	TestTrue(TEXT("Event completed after choice"), Run->IsRunEventCompleted(TEXT("Event.UI.Screen")));
 	TestFalse(TEXT("Event no longer active after close choice"), Run->IsRunEventActive());
 	TestFalse(TEXT("Close choice deactivates event screen once flow ends"), Screen->IsActivated());
+	TestEqual(TEXT("Close choice emits event ended toast"), ToastWidget->GetVisibleToastCount(), 1);
+	{
+		const TArray<FWacomAppToastView> Toasts = FWacomUITestAccess::GetCurrentToasts(*ToastWidget);
+		if (Toasts.IsValidIndex(0))
+		{
+			TestEqual(TEXT("Close outcome toast text"),
+				Toasts[0].MessageText.ToString(),
+				FString(TEXT("事件已结束")));
+		}
+	}
 
 	return true;
 }
@@ -1101,6 +1140,7 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	TestTrue(TEXT("Other card remains"),
 		UiStorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Other));
 	TestEqual(TEXT("Choice effect applied"), Run->GetGold(), 1);
+	TestFalse(TEXT("Payment event closes after submit"), Run->IsRunEventActive());
 	{
 		const TArray<FWacomAppToastView> Toasts = FWacomUITestAccess::GetCurrentToasts(*ToastWidget);
 		const bool bHasPaidToast = Toasts.ContainsByPredicate(
@@ -1109,6 +1149,12 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 				return Toast.MessageText.ToString() == TEXT("交出卡牌：PoisonFang");
 			});
 		TestTrue(TEXT("Successful payment emits paid card toast"), bHasPaidToast);
+		const bool bHasOutcomeToast = Toasts.ContainsByPredicate(
+			[](const FWacomAppToastView& Toast)
+			{
+				return Toast.MessageText.ToString() == TEXT("事件已结束");
+			});
+		TestTrue(TEXT("Successful payment emits outcome toast"), bHasOutcomeToast);
 	}
 
 	return true;

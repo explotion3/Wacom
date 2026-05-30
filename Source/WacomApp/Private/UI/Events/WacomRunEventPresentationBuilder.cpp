@@ -252,6 +252,27 @@ TArray<FWacomAppToastView> UWacomRunEventPresentationBuilder::BuildToastViewsFro
 			TEXT("CardPaid")));
 	}
 
+	if (Result.bEventClosedAfterResolve || Result.bEventCompletedAfterResolve)
+	{
+		Views.Add(MakeToast(
+			LOCTEXT("RunEventEnded", "事件已结束"),
+			EWacomAppToastTone::System,
+			TEXT("RunEventEnded")));
+	}
+	else if (Result.bNodeChanged)
+	{
+		const FText NodeText = Result.ResolvedNodeTitleText.IsEmpty()
+			? (Result.ResolvedNodeId.IsNone() ? FText::GetEmpty() : FText::FromName(Result.ResolvedNodeId))
+			: Result.ResolvedNodeTitleText;
+		if (!NodeText.IsEmpty())
+		{
+			Views.Add(MakeToast(
+				FText::Format(LOCTEXT("RunEventEnteredNodeFmt", "进入：{0}"), NodeText),
+				EWacomAppToastTone::System,
+				TEXT("RunEventNodeChanged")));
+		}
+	}
+
 	return Views;
 }
 

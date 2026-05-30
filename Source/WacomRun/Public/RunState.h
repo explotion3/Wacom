@@ -220,6 +220,30 @@ struct WACOMRUN_API FRunEventChoiceResult
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	TObjectPtr<UCardDefinition> PaidCardDefinition = nullptr;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event",
+		meta = (ToolTip = "选项提交前的事件节点 ID。仅用于 UI / 日志展示，不作为规则输入。"))
+	FName PreviousNodeId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event",
+		meta = (ToolTip = "选项成功结算后的事件节点 ID。事件关闭时仍记录关闭前的最终节点；仅用于 UI / 日志展示。"))
+	FName ResolvedNodeId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event",
+		meta = (ToolTip = "选项成功结算后的事件节点标题。标题为空时 UI 可回退显示 ResolvedNodeId。"))
+	FText ResolvedNodeTitleText;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event",
+		meta = (ToolTip = "本次成功结算是否切换到了另一个节点。仅用于 UI / 日志展示。"))
+	bool bNodeChanged = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event",
+		meta = (ToolTip = "本次成功结算后事件是否关闭。用于展示事件结束提示，不改变关闭流程。"))
+	bool bEventClosedAfterResolve = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event",
+		meta = (ToolTip = "本次成功结算后事件是否被标记完成。用于展示事件结束提示，不作为规则输入。"))
+	bool bEventCompletedAfterResolve = false;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	TArray<FRunEventChoiceEffectResult> EffectResults;
 };
