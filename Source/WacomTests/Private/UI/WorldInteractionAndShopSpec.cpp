@@ -21,6 +21,7 @@
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "UI/Events/WacomRunEventPresentationBuilder.h"
+#include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
@@ -865,6 +866,7 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 
 	FRunEventChoiceResult Result;
 	Result.bSucceeded = true;
+	Result.PaidCardDefinition = Card;
 	FRunEventChoiceEffectResult GainCard;
 	GainCard.EffectType = EWacomRunEventEffectType::GainCard;
 	GainCard.CardDefinition = Card;
@@ -895,18 +897,20 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 
 	const TArray<FWacomAppToastView> Toasts =
 		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(Result);
-	TestEqual(TEXT("Five visible toasts"), Toasts.Num(), 5);
-	if (Toasts.Num() == 5)
+	TestEqual(TEXT("Six visible toasts including appended paid card"), Toasts.Num(), 6);
+	if (Toasts.Num() == 6)
 	{
 		TestEqual(TEXT("Card toast"), Toasts[0].MessageText.ToString(), FString(TEXT("获得卡牌：事件提示卡")));
 		TestEqual(TEXT("Gold toast"), Toasts[1].MessageText.ToString(), FString(TEXT("获得 2 金币")));
 		TestEqual(TEXT("Pressure toast"), Toasts[2].MessageText.ToString(), FString(TEXT("恶行 +3")));
 		TestEqual(TEXT("Node toast"), Toasts[3].MessageText.ToString(), FString(TEXT("消耗 1 行动点")));
-		TestEqual(TEXT("Remove card toast"), Toasts[4].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
+		TestEqual(TEXT("Remove card toast still works"), Toasts[4].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
+		TestEqual(TEXT("Paid card toast appended"), Toasts[5].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
 	}
 
 	FRunEventChoiceResult Blocked;
 	Blocked.DisabledReason = TEXT("InsufficientGold");
+	Blocked.PaidCardDefinition = Card;
 	const TArray<FWacomAppToastView> BlockedToasts =
 		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(Blocked);
 	TestEqual(TEXT("Blocked emits one toast"), BlockedToasts.Num(), 1);
@@ -915,6 +919,50 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 		TestEqual(TEXT("Blocked toast text"), BlockedToasts[0].MessageText.ToString(), FString(TEXT("金币不足")));
 		TestTrue(TEXT("Blocked toast warning"), BlockedToasts[0].Tone == EWacomAppToastTone::Warning);
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventChoiceButtonPaymentStatusSpec,
+	"Wacom.UI.Event.PaymentChoiceRowStatus",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunEventChoiceButton> Button(NewObject<UWacomRunEventChoiceButton>());
+	Button->TakeWidget();
+
+	FRunEventChoiceSnapshot PaymentChoice;
+	PaymentChoice.ChoiceId = TEXT("Pay");
+	PaymentChoice.LabelText = FText::FromString(TEXT("交出毒牙"));
+	PaymentChoice.bAvailable = true;
+	PaymentChoice.bRequiresOwnedCardPayment = true;
+	PaymentChoice.PaymentCandidateCount = 2;
+	Button->SetChoiceSnapshot(PaymentChoice);
+	TestEqual(TEXT("Payment row shows candidate count"),
+		Button->GetDisplayedPaymentStatusTextForTest().ToString(),
+		FString(TEXT("拖入卡牌支付：2 张可用")));
+	TestEqual(TEXT("Payment status visible for payment choice"),
+		Button->GetPaymentStatusVisibilityForTest(),
+		ESlateVisibility::HitTestInvisible);
+
+	PaymentChoice.bAvailable = false;
+	PaymentChoice.PaymentCandidateCount = 0;
+	PaymentChoice.PaymentDisabledReason = TEXT("MissingRequiredCard");
+	Button->SetChoiceSnapshot(PaymentChoice);
+	TestEqual(TEXT("Payment row shows missing candidate reason"),
+		Button->GetDisplayedPaymentStatusTextForTest().ToString(),
+		FString(TEXT("缺少可支付卡牌：缺少所需卡牌")));
+
+	FRunEventChoiceSnapshot NonPaymentChoice;
+	NonPaymentChoice.ChoiceId = TEXT("Leave");
+	NonPaymentChoice.LabelText = FText::FromString(TEXT("离开"));
+	NonPaymentChoice.bAvailable = true;
+	Button->SetChoiceSnapshot(NonPaymentChoice);
+	TestEqual(TEXT("Non-payment row hides payment status"),
+		Button->GetPaymentStatusVisibilityForTest(),
+		ESlateVisibility::Collapsed);
 
 	return true;
 }
@@ -988,7 +1036,13 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 		Run->BeginRunEvent(TEXT("Event.UI.Payment"), Event.Get()));
 
 	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
+	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
+	TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()));
+	TStrongObjectPtr<UWacomAppToastWidget> ToastWidget(NewObject<UWacomAppToastWidget>());
+	ToastWidget->TakeWidget();
+	FWacomUITestAccess::SetToastWidget(*ToastSubsystem, ToastWidget.Get());
 	Screen->SetRunSession(Run.Get());
+	Screen->SetToastSubsystem(ToastSubsystem.Get());
 	Screen->TakeWidget();
 	Screen->ActivateWidget();
 	Screen->RefreshEvent();
@@ -1001,6 +1055,20 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	if (Choice.PaymentCandidateInstanceIds.IsValidIndex(0))
 	{
 		TestEqual(TEXT("Candidate is fang instance"), Choice.PaymentCandidateInstanceIds[0], FangId);
+	}
+
+	TestFalse(TEXT("Clicking payment choice without drag is blocked"),
+		Screen->ChooseChoiceAt(0));
+	TestTrue(TEXT("Event remains active after blocked payment click"), Run->IsRunEventActive());
+	TestEqual(TEXT("Blocked payment click emits toast"), ToastWidget->GetVisibleToastCount(), 1);
+	{
+		const TArray<FWacomAppToastView> Toasts = FWacomUITestAccess::GetCurrentToasts(*ToastWidget);
+		if (Toasts.IsValidIndex(0))
+		{
+			TestEqual(TEXT("Blocked payment toast text"),
+				Toasts[0].MessageText.ToString(),
+				FString(TEXT("需要拖入卡牌支付")));
+		}
 	}
 
 	FWacomRunMenuCardDropResolveResult WrongDrop;
@@ -1033,6 +1101,15 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	TestTrue(TEXT("Other card remains"),
 		UiStorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Other));
 	TestEqual(TEXT("Choice effect applied"), Run->GetGold(), 1);
+	{
+		const TArray<FWacomAppToastView> Toasts = FWacomUITestAccess::GetCurrentToasts(*ToastWidget);
+		const bool bHasPaidToast = Toasts.ContainsByPredicate(
+			[](const FWacomAppToastView& Toast)
+			{
+				return Toast.MessageText.ToString() == TEXT("交出卡牌：PoisonFang");
+			});
+		TestTrue(TEXT("Successful payment emits paid card toast"), bHasPaidToast);
+	}
 
 	return true;
 }

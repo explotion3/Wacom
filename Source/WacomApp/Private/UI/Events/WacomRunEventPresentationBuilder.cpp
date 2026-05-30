@@ -243,6 +243,15 @@ TArray<FWacomAppToastView> UWacomRunEventPresentationBuilder::BuildToastViewsFro
 		}
 	}
 
+	if (Result.PaidCardDefinition)
+	{
+		Views.Add(MakeToast(
+			FText::Format(LOCTEXT("PaidCardFmt", "交出卡牌：{0}"),
+				GetRunEventCardDisplayName(Result.PaidCardDefinition.Get())),
+			EWacomAppToastTone::Warning,
+			TEXT("CardPaid")));
+	}
+
 	return Views;
 }
 

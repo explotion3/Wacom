@@ -521,6 +521,7 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOptionInternal(
 	const FName ActiveRunEventId = State.ActiveRunEventId;
 	FRunState WorkingState = State;
 	TArray<FRunEventChoiceEffectResult> PendingEffectResults;
+	UCardDefinition* PaidCardDefinitionForResult = nullptr;
 
 	if (PaidCardInstanceId.IsSet())
 	{
@@ -532,6 +533,12 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOptionInternal(
 				? FName(TEXT("PaymentRejected"))
 				: PaymentValidation.DisabledReason;
 			return Result;
+		}
+
+		FRunOwnedCardLocation PaidCardLocation;
+		if (FRunDeckRules::FindOwnedCardInstance(WorkingState, PaidCardInstanceId.GetValue(), PaidCardLocation))
+		{
+			PaidCardDefinitionForResult = PaidCardLocation.Instance.Definition;
 		}
 
 		FName PaymentRemoveDisabledReason = NAME_None;
@@ -588,6 +595,7 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOptionInternal(
 	}
 
 	State = MoveTemp(WorkingState);
+	Result.PaidCardDefinition = PaidCardDefinitionForResult;
 	Result.EffectResults = MoveTemp(PendingEffectResults);
 	Result.bSucceeded = true;
 	return Result;

@@ -218,6 +218,9 @@ struct WACOMRUN_API FRunEventChoiceResult
 	FGuid PaidCardInstanceId;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TObjectPtr<UCardDefinition> PaidCardDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	TArray<FRunEventChoiceEffectResult> EffectResults;
 };
 

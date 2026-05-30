@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-run
 status: active
-updated: 2026-05-23
+updated: 2026-05-31
 tags:
   - wacom/run
   - wacom/rules
@@ -277,7 +277,7 @@ RunEvent 选项可以配置 `CardPayment` 要求玩家拖入一张真实持有�
 
 支付选项只能通过 `ChooseRunEventOptionWithPaidCardResult(ChoiceId, PaidCardInstanceId)` 提交。普通 `ChooseRunEventOptionWithResult()` 会以 `RequiresCardPayment` 拒绝，避免点击按钮时悄悄按 Definition 删除一张卡。支付提交流程会校验 active event、choice 条件、卡实例归属、筛选命中和永久移除保护；随后在 working state 中先移除该精确 instance，再执行 choice effects、节点跳转、关闭或完成标记。任一步失败都会整体回滚。支付选项禁止同时配置 `RemoveCard` effect，避免拖卡支付后又按 Definition 再删一张。
 
-`FRunEventChoiceResult` 只表达本次选项直接效果，供 UI 和日志展示。后续规则不能依赖这个结果包反向修改 RunState。
+`FRunEventChoiceResult` 只表达本次选项直接效果，供 UI 和日志展示。V0-AR 后成功的卡牌支付结果会记录 `PaidCardDefinition`，仅用于 UI / 日志显示“交出了哪张卡”；它必须在移除 paid instance 前从当前持有卡读取，且不是后续规则输入。失败结果不写入 paid card definition。后续规则不能依赖这个结果包反向修改 RunState。
 
 当前 `RunEventStates` 只保存在 Run 内存态，不写入 SaveGame。
 

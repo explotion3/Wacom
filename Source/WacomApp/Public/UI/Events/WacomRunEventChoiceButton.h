@@ -27,6 +27,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
 	FRunEventChoiceSnapshot GetChoiceSnapshot() const { return ChoiceSnapshot; }
 
+#if WITH_AUTOMATION_TESTS
+	FText GetDisplayedPaymentStatusTextForTest() const;
+	ESlateVisibility GetPaymentStatusVisibilityForTest() const;
+#endif
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
@@ -41,9 +46,13 @@ protected:
 	TObjectPtr<UTextBlock> LabelText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> PaymentStatusText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> DisabledReasonText;
 
 private:
+	FText BuildPaymentStatusText() const;
 	void RefreshVisuals();
 
 	UPROPERTY(Transient)

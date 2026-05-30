@@ -737,6 +737,8 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 			Run->ChooseRunEventOptionWithPaidCardResult(TEXT("Pay"), FangId);
 		TestTrue(TEXT("Payment choice succeeds"), PayResult.bSucceeded);
 		TestEqual(TEXT("Paid instance recorded"), PayResult.PaidCardInstanceId, FangId);
+		TestTrue(TEXT("Paid card definition recorded for presentation"),
+			PayResult.PaidCardDefinition.Get() == Fang);
 		TestFalse(TEXT("Paid card removed"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
 		TestEqual(TEXT("Gold effect applied"), Run->GetGold(), 2);
 	}
@@ -757,6 +759,7 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 			Run->ChooseRunEventOptionWithPaidCardResult(TEXT("Pay"), OtherId);
 		TestFalse(TEXT("Wrong card rejected"), Result.bSucceeded);
 		TestEqual(TEXT("Wrong card reason"), Result.DisabledReason, FName(TEXT("PaymentCardNotAllowed")));
+		TestNull(TEXT("Failed payment does not record paid definition"), Result.PaidCardDefinition.Get());
 		TestTrue(TEXT("Other remains"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Other));
 		TestTrue(TEXT("Fang remains"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
 	}
@@ -797,6 +800,7 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 			Run->ChooseRunEventOptionWithPaidCardResult(TEXT("Pay"), FangId);
 		TestFalse(TEXT("Invalid later effect fails transaction"), Result.bSucceeded);
 		TestEqual(TEXT("Rollback reason"), Result.DisabledReason, FName(TEXT("InvalidPressureType")));
+		TestNull(TEXT("Failed transaction does not record paid definition"), Result.PaidCardDefinition.Get());
 		TestTrue(TEXT("Paid card removal rolled back"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
 		TestTrue(TEXT("Event remains active after rollback"), Run->IsRunEventActive());
 	}

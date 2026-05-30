@@ -42,6 +42,10 @@ TSharedRef<SWidget> UWacomRunEventChoiceButton::RebuildWidget()
 		LabelText = MakeEventChoiceText(WidgetTree, TEXT("LabelText"), LOCTEXT("Choice", "选项"), 18);
 		RootBox->AddChildToVerticalBox(LabelText);
 
+		PaymentStatusText = MakeEventChoiceText(WidgetTree, TEXT("PaymentStatusText"), FText::GetEmpty(), 14);
+		PaymentStatusText->SetColorAndOpacity(FSlateColor(FLinearColor(0.58f, 0.82f, 0.92f, 1.f)));
+		RootBox->AddChildToVerticalBox(PaymentStatusText);
+
 		DisabledReasonText = MakeEventChoiceText(WidgetTree, TEXT("DisabledReasonText"), FText::GetEmpty(), 14);
 		DisabledReasonText->SetColorAndOpacity(FSlateColor(FLinearColor(0.9f, 0.55f, 0.45f, 1.f)));
 		RootBox->AddChildToVerticalBox(DisabledReasonText);
@@ -65,9 +69,43 @@ void UWacomRunEventChoiceButton::SetChoiceSnapshot(const FRunEventChoiceSnapshot
 	RefreshVisuals();
 }
 
+#if WITH_AUTOMATION_TESTS
+FText UWacomRunEventChoiceButton::GetDisplayedPaymentStatusTextForTest() const
+{
+	return PaymentStatusText ? PaymentStatusText->GetText() : FText::GetEmpty();
+}
+
+ESlateVisibility UWacomRunEventChoiceButton::GetPaymentStatusVisibilityForTest() const
+{
+	return PaymentStatusText ? PaymentStatusText->GetVisibility() : ESlateVisibility::Collapsed;
+}
+#endif
+
 void UWacomRunEventChoiceButton::HandleClicked()
 {
 	OnChoiceClickedNative.Broadcast(ChoiceSnapshot.ChoiceId);
+}
+
+FText UWacomRunEventChoiceButton::BuildPaymentStatusText() const
+{
+	if (!ChoiceSnapshot.bRequiresOwnedCardPayment)
+	{
+		return FText::GetEmpty();
+	}
+	if (ChoiceSnapshot.PaymentCandidateCount > 0)
+	{
+		return FText::Format(
+			LOCTEXT("PaymentCandidateCountFmt", "拖入卡牌支付：{0} 张可用"),
+			FText::AsNumber(ChoiceSnapshot.PaymentCandidateCount));
+	}
+
+	const FName Reason = ChoiceSnapshot.PaymentDisabledReason.IsNone()
+		? ChoiceSnapshot.DisabledReason
+		: ChoiceSnapshot.PaymentDisabledReason;
+	const FText ReasonText = UWacomRunEventPresentationBuilder::FormatDisabledReason(Reason);
+	return FText::Format(
+		LOCTEXT("PaymentMissingReasonFmt", "缺少可支付卡牌：{0}"),
+		ReasonText.IsEmpty() ? UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("MissingRequiredCard")) : ReasonText);
 }
 
 void UWacomRunEventChoiceButton::RefreshVisuals()
@@ -82,6 +120,16 @@ void UWacomRunEventChoiceButton::RefreshVisuals()
 	{
 		ChoiceButton->SetIsEnabled(true);
 		ChoiceButton->SetRenderOpacity(ChoiceSnapshot.bAvailable ? 1.f : 0.62f);
+	}
+	if (PaymentStatusText)
+	{
+		PaymentStatusText->SetText(BuildPaymentStatusText());
+		PaymentStatusText->SetColorAndOpacity(ChoiceSnapshot.PaymentCandidateCount > 0
+			? FSlateColor(FLinearColor(0.58f, 0.82f, 0.92f, 1.f))
+			: FSlateColor(FLinearColor(0.9f, 0.55f, 0.45f, 1.f)));
+		PaymentStatusText->SetVisibility(ChoiceSnapshot.bRequiresOwnedCardPayment
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
 	}
 	if (DisabledReasonText)
 	{
