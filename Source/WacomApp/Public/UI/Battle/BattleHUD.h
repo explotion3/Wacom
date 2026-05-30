@@ -583,12 +583,21 @@ private:
 	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void ApplyFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
 	void ClearFirstPersonCardDragCameraLookOverride();
+	void UpdateFirstPersonCardDragTargetFeedback(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView);
+	void ClearFirstPersonCardDragTargetFeedback();
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveBattleEnemyPartWorldTargetBridge(
+		const FWacomInteractionTargetHandle& TargetHandle) const;
 	bool ProbeFirstPersonCardDragTarget(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView,
 		FWacomInteractionTargetHandle& OutTargetHandle,
 		bool& bOutValidTarget) const;
 	bool ShouldShowFirstPersonDragInspectDetail(const FWacomFirstPersonCardDragView& DragView) const;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> CurrentFirstPersonDragPreviewBridge;
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
 	friend struct FWacomBattleHUDCommandFlow;

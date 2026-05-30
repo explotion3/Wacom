@@ -8040,6 +8040,7 @@ bool FWacomFirstPersonCardLayerInspectReleaseNoSubmitTest::RunTest(const FString
 	FWacomFirstPersonCardDragConfig DragConfig;
 	DragConfig.CardInspectHoldDelaySeconds = 0.1f;
 	SlotWidget->SetCardDragConfig(DragConfig);
+	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true));
 
@@ -8050,6 +8051,7 @@ bool FWacomFirstPersonCardLayerInspectReleaseNoSubmitTest::RunTest(const FString
 	SlotWidget->RequestGestureMoveForTest(0.12f, FVector2D(500.0f, 600.0f));
 	SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 600.0f));
 	TestEqual(TEXT("Inspect release does not click"), ClickReceiver.ClickCount, 0);
+	TestFalse(TEXT("Inspect release does not play deny feedback"), SlotWidget->IsDenyFeedbackActiveForTest());
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
 	PC->Destroy();
@@ -8469,6 +8471,564 @@ bool FWacomFirstPersonCardLayerDragClearTest::RunTest(const FString& Parameters)
 	Layer->ClearSlotMotionState();
 	TestEqual(TEXT("Layer clear resets current drag"), Layer->GetCurrentDragViewForTest().GestureState, EWacomFirstPersonCardGestureState::Idle);
 
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerNoTargetCommitReadyFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.NoTargetDragArmedShowsCommitReadyFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerNoTargetCommitReadyFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.NoTargetCardDragOutCommitDistancePixels = 140.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.25f;
+	DragConfig.DragValidTargetColor = FLinearColor::Green;
+	DragConfig.DragCommitReadyScale = 1.08f;
+	SlotWidget->SetCardDragConfig(DragConfig);
+	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true));
+
+	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(500.0f, 300.0f));
+
+	TestEqual(TEXT("Armed drag exposes commit ready state"),
+		SlotWidget->GetDragTargetFeedbackStateForTest(),
+		EWacomFirstPersonCardDragTargetFeedbackState::CommitReady);
+	TestEqual(TEXT("Commit ready overlay opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.25f);
+	TestEqual(TEXT("Commit ready overlay color"), SlotWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Green);
+	TestTrue(TEXT("Commit ready scales source card"),
+		SlotWidget->GetRenderTransform().Scale.X > SlotWidget->GetVisualSlotView().RenderScale);
+
+	SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 300.0f));
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerValidWorldTargetFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.AimingValidWorldTargetShowsValidArrowAndTargetPreview",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerValidWorldTargetFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.22f;
+	DragConfig.DragValidTargetColor = FLinearColor::Green;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
+	Slot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	Layer->SetCardSlots({ Slot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+
+	const FVector2D TargetScreenPosition(700.0f, 420.0f);
+	const FWacomInteractionTargetHandle TargetHandle =
+		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC, FVector::ZeroVector, TargetScreenPosition);
+	Layer->SetCardDragFeedbackTarget(
+		TargetHandle,
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget,
+		TargetScreenPosition);
+
+	const FWacomFirstPersonCardDragView DragView = Layer->GetCurrentDragViewForTest();
+	TestEqual(TEXT("Drag view records valid world feedback"),
+		DragView.TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+	TestTrue(TEXT("Drag view has feedback target position"), DragView.bHasFeedbackTargetScreenPosition);
+	TestEqual(TEXT("Source slot gets valid overlay"), SlotWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Green);
+	TestEqual(TEXT("Source slot valid opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.22f);
+
+	SlotWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAimArrowSnapTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.AimArrowSnapsToValidWorldTargetScreenPosition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAimArrowSnapTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.bSnapAimArrowToValidWorldTarget = true;
+	DragConfig.DragAimArrowSnapBlend = 0.5f;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
+	Slot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	Layer->SetCardSlots({ Slot });
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D PointerPosition(540.0f, 590.0f);
+	const FVector2D TargetPosition(740.0f, 390.0f);
+	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SlotWidget->RequestGestureMoveForTest(0.01f, PointerPosition);
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC, FVector::ZeroVector, TargetPosition),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget,
+		TargetPosition);
+
+	TestEqual(TEXT("Arrow end lerps from pointer toward target"),
+		Layer->ResolveAimArrowEndForTest(),
+		FMath::Lerp(PointerPosition, TargetPosition, 0.5f));
+
+	SlotWidget->RequestGestureReleaseForTest(PointerPosition);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAimArrowFallbackTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.AimArrowFallsBackToPointerWithoutTargetScreenPosition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAimArrowFallbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.bSnapAimArrowToValidWorldTarget = true;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
+	Slot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	Layer->SetCardSlots({ Slot });
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D PointerPosition(540.0f, 590.0f);
+	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SlotWidget->RequestGestureMoveForTest(0.01f, PointerPosition);
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+
+	TestEqual(TEXT("Missing target position keeps arrow at pointer"),
+		Layer->ResolveAimArrowEndForTest(),
+		PointerPosition);
+
+	SlotWidget->RequestGestureReleaseForTest(PointerPosition);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAimArrowFeedbackPersistsAcrossDragUpdateTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.AimArrowFeedbackPersistsAcrossDragUpdate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAimArrowFeedbackPersistsAcrossDragUpdateTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.bSnapAimArrowToValidWorldTarget = true;
+	DragConfig.DragAimArrowSnapBlend = 0.5f;
+	DragConfig.DragValidTargetColor = FLinearColor::Green;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
+	Slot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	Layer->SetCardSlots({ Slot });
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D FirstPointerPosition(540.0f, 590.0f);
+	const FVector2D SecondPointerPosition(560.0f, 570.0f);
+	const FVector2D TargetPosition(740.0f, 390.0f);
+	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SlotWidget->RequestGestureMoveForTest(0.01f, FirstPointerPosition);
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC, FVector::ZeroVector, TargetPosition),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget,
+		TargetPosition);
+
+	SlotWidget->RequestGestureMoveForTest(0.01f, SecondPointerPosition);
+
+	TestEqual(TEXT("Valid feedback state survives next drag update"),
+		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+	TestEqual(TEXT("Arrow keeps valid color after drag update"),
+		Layer->ResolveAimArrowColorForTest(),
+		FLinearColor::Green);
+	TestEqual(TEXT("Arrow keeps snapping after drag update"),
+		Layer->ResolveAimArrowEndForTest(),
+		FMath::Lerp(SecondPointerPosition, TargetPosition, 0.5f));
+
+	SlotWidget->RequestGestureReleaseForTest(SecondPointerPosition);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCardProbeFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.CardTargetShowsProbeFeedbackWithoutSubmit",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCardProbeFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.3f;
+	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
+	DragConfig.DragCardTargetProbeScale = 1.07f;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView TargetSlot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(TargetCardId, true, true);
+	TargetSlot.Index = 1;
+	TargetSlot.ScreenPosition = FVector2D(650.0f, 600.0f);
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver ClickReceiver;
+	SourceWidget->OnCardClickedNative.AddRaw(&ClickReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
+
+	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, TargetWidget, TargetSlot.ScreenPosition),
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe,
+		TargetSlot.ScreenPosition);
+
+	TestTrue(TEXT("Target card shows probe feedback"), TargetWidget->HasCardDragProbeFeedbackForTest());
+	TestEqual(TEXT("Target card probe overlay color"), TargetWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Blue);
+	TestEqual(TEXT("Target card probe overlay opacity"), TargetWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.3f);
+	TestEqual(TEXT("Layer records card probe state"),
+		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
+
+	SourceWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	TestEqual(TEXT("Card probe release does not click-submit"), ClickReceiver.ClickCount, 0);
+
+	SourceWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDragPointerCardTargetProbeTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.DragPointerOverCardTargetShowsProbeFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDragPointerCardTargetProbeTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.3f;
+	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
+	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
+	FWacomFirstPersonCardLayerSlotView TargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(TargetCardId, true, true);
+	TargetSlot.Index = 1;
+	TargetSlot.ScreenPosition = FVector2D(650.0f, 600.0f);
+	TargetSlot.WidgetPosition = TargetSlot.ScreenPosition;
+	TargetSlot.SnappedWidgetPosition = TargetSlot.ScreenPosition;
+	TargetSlot.ZOrder = 1;
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver ClickReceiver;
+	SourceWidget->OnCardClickedNative.AddRaw(&ClickReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
+
+	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(650.0f, 600.0f));
+
+	const FWacomFirstPersonCardDragView& DragView = Layer->GetCurrentDragViewForTest();
+	TestEqual(TEXT("Pointer card target records card kind"),
+		DragView.CurrentTarget.TargetKind,
+		EWacomInteractionTargetKind::Card);
+	TestEqual(TEXT("Pointer card target records target card id"), DragView.CurrentTarget.CardInstanceId, TargetCardId);
+	TestEqual(TEXT("Pointer card target state is CardProbe"),
+		DragView.TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
+	TestEqual(TEXT("Pointer card target position uses target visual slot"),
+		DragView.FeedbackTargetScreenPosition,
+		TargetWidget->GetVisualSlotView().ScreenPosition);
+	TestTrue(TEXT("Target card shows probe feedback from drag pointer"), TargetWidget->HasCardDragProbeFeedbackForTest());
+	TestEqual(TEXT("Aim arrow uses card probe color"), Layer->ResolveAimArrowColorForTest(), FLinearColor::Blue);
+
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(320.0f, 600.0f));
+	TestFalse(TEXT("Moving away from target card clears probe feedback"), TargetWidget->HasCardDragProbeFeedbackForTest());
+	TestNotEqual(TEXT("Moving away from target card clears card probe state"),
+		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
+
+	SourceWidget->RequestGestureReleaseForTest(FVector2D(650.0f, 600.0f));
+	TestEqual(TEXT("Card probe drag release does not click-submit"), ClickReceiver.ClickCount, 0);
+
+	SourceWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDragTargetFeedbackClearTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.ReleaseCancelLayerClearClearsDragTargetFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDragTargetFeedbackClearTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView TargetSlot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(TargetCardId, true, true);
+	TargetSlot.Index = 1;
+	Layer->SetCardLayerInteractionEnabled(true);
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, TargetWidget, TargetSlot.ScreenPosition),
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe,
+		TargetSlot.ScreenPosition);
+	TestTrue(TEXT("Probe starts before clear"), TargetWidget->HasCardDragProbeFeedbackForTest());
+
+	Layer->CancelCardDragGesture(true);
+	TestFalse(TEXT("Probe clears on cancel"), TargetWidget->HasCardDragProbeFeedbackForTest());
+	TestEqual(TEXT("Current drag resets on cancel"),
+		Layer->GetCurrentDragViewForTest().GestureState,
+		EWacomFirstPersonCardGestureState::Idle);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDragTargetDebugSummaryTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.DebugSummaryReportsDragTargetFeedbackState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDragTargetDebugSummaryTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
+	Slot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	Layer->SetCardLayerInteractionEnabled(true);
+	Layer->SetCardSlots({ Slot });
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC, FVector::ZeroVector, FVector2D(700.0f, 420.0f)),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget,
+		FVector2D(700.0f, 420.0f));
+
+	const FString Summary = Layer->GetDragTargetDebugSummary();
+	TestTrue(TEXT("Summary reports drag target section"), Summary.Contains(TEXT("DragTarget")));
+	TestTrue(TEXT("Summary reports target position"), Summary.Contains(TEXT("HasTargetPos=true")));
+	TestTrue(TEXT("Summary reports valid flag"), Summary.Contains(TEXT("Valid=true")));
+
+	SlotWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
 	PC->Destroy();
 	return true;
 }

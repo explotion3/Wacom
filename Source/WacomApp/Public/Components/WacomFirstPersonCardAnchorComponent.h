@@ -88,6 +88,16 @@ enum class EWacomFirstPersonCardGestureState : uint8
 	Cancelled UMETA(DisplayName = "Cancelled")
 };
 
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardDragTargetFeedbackState : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Invalid UMETA(DisplayName = "Invalid"),
+	ValidWorldTarget UMETA(DisplayName = "Valid World Target"),
+	CardProbe UMETA(DisplayName = "Card Probe"),
+	CommitReady UMETA(DisplayName = "Commit Ready")
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardLayerTransitionHint
 {
@@ -200,6 +210,33 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float CardDragCameraLookInterpSpeedOverride = -1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	bool bEnableDragTargetFeedback = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	FLinearColor DragValidTargetColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	FLinearColor DragInvalidTargetColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	FLinearColor DragCardProbeTargetColor = FLinearColor(0.45f, 0.75f, 1.0f, 1.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float DragTargetFeedbackOpacity = 0.16f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	bool bSnapAimArrowToValidWorldTarget = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float DragAimArrowSnapBlend = 0.85f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float DragCommitReadyScale = 1.035f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float DragCardTargetProbeScale = 1.025f;
 };
 
 USTRUCT(BlueprintType)
@@ -503,6 +540,16 @@ struct WACOMAPP_API FWacomFirstPersonCardDragView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	FVector2D PointerNormalizedViewportPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	EWacomFirstPersonCardDragTargetFeedbackState TargetFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	bool bHasFeedbackTargetScreenPosition = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 };
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerAnchorDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
@@ -867,6 +914,33 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Commit", meta = (UIMin = "-1.0", UIMax = "60.0", ToolTip = "拖拽期间 BattleCameraLook 追向拖拽指针的插值速度覆盖值；小于 0 时沿用 BattleCameraLook 自身 LookInterpSpeed，0 表示立即贴合。"))
 	float CardDragCameraLookInterpSpeedOverride = -1.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ToolTip = "拖拽第一人称卡牌时是否显示释放目标反馈。开启后箭头、源卡和被指向卡槽会根据当前目标合法性显示轻量提示。"))
+	bool bEnableDragTargetFeedback = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ToolTip = "拖拽瞄准到合法 World 目标时使用的确认颜色。"))
+	FLinearColor DragValidTargetColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ToolTip = "拖拽瞄准到非法目标或空目标时使用的拒绝颜色。"))
+	FLinearColor DragInvalidTargetColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ToolTip = "拖拽指向另一张第一人称卡牌时使用的探测颜色；本轮只表示识别到 Card target，不提交卡对卡规则。"))
+	FLinearColor DragCardProbeTargetColor = FLinearColor(0.45f, 0.75f, 1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.5", ToolTip = "拖拽目标反馈叠加颜色的不透明度，范围 0 到 1。"))
+	float DragTargetFeedbackOpacity = 0.16f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ToolTip = "拖拽瞄准到合法 World 目标时，箭头终点是否轻微吸附到目标屏幕位置；拿不到目标位置时仍跟随鼠标。"))
+	bool bSnapAimArrowToValidWorldTarget = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "合法 World 目标吸附时，箭头终点从鼠标位置朝目标屏幕位置混合的比例；0 表示不吸附，1 表示完全贴到目标。"))
+	float DragAimArrowSnapBlend = 0.85f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ClampMin = "0.01", UIMin = "0.9", UIMax = "1.2", ToolTip = "无目标卡拖出达到提交阈值时源卡额外乘上的缩放倍率，用于表示松手会提交。"))
+	float DragCommitReadyScale = 1.035f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ClampMin = "0.01", UIMin = "0.9", UIMax = "1.2", ToolTip = "拖拽指向另一张第一人称卡牌时，被指向卡槽额外乘上的缩放倍率；只表示 Card target probe。"))
+	float DragCardTargetProbeScale = 1.025f;
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Card Layer")
 	void RefreshAnchor(float DeltaTime);
 
@@ -922,7 +996,12 @@ public:
 
 	/** 从当前悬停的第一人称手牌卡牌构建统一交互目标 handle。无悬停卡时返回无效 handle。 */
 	FWacomInteractionTargetHandle BuildCardTargetHandle() const;
-	void SetFirstPersonCardDragFeedbackTarget(const FWacomInteractionTargetHandle& TargetHandle, bool bValidTarget);
+	void SetFirstPersonCardDragFeedbackTarget(
+		const FWacomInteractionTargetHandle& TargetHandle,
+		bool bValidTarget,
+		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
+			EWacomFirstPersonCardDragTargetFeedbackState::None,
+		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>());
 	void CancelFirstPersonCardDragGesture(bool bBroadcastCancel);
 
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardClicked;

@@ -397,6 +397,15 @@ namespace
 		DragConfig.bAllowCameraLookDuringCardDrag = Anchor.bAllowCameraLookDuringCardDrag;
 		DragConfig.CardDragCameraLookScale = Anchor.CardDragCameraLookScale;
 		DragConfig.CardDragCameraLookInterpSpeedOverride = Anchor.CardDragCameraLookInterpSpeedOverride;
+		DragConfig.bEnableDragTargetFeedback = Anchor.bEnableDragTargetFeedback;
+		DragConfig.DragValidTargetColor = Anchor.DragValidTargetColor;
+		DragConfig.DragInvalidTargetColor = Anchor.DragInvalidTargetColor;
+		DragConfig.DragCardProbeTargetColor = Anchor.DragCardProbeTargetColor;
+		DragConfig.DragTargetFeedbackOpacity = Anchor.DragTargetFeedbackOpacity;
+		DragConfig.bSnapAimArrowToValidWorldTarget = Anchor.bSnapAimArrowToValidWorldTarget;
+		DragConfig.DragAimArrowSnapBlend = Anchor.DragAimArrowSnapBlend;
+		DragConfig.DragCommitReadyScale = Anchor.DragCommitReadyScale;
+		DragConfig.DragCardTargetProbeScale = Anchor.DragCardTargetProbeScale;
 		return DragConfig;
 	}
 
@@ -1358,8 +1367,11 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 	const FString LayerMotionSummary = StaticCardLayerWidget
 		? StaticCardLayerWidget->GetSlotMotionDebugSummary()
 		: TEXT("SlotMotion Inactive");
+	const FString DragTargetSummary = StaticCardLayerWidget
+		? StaticCardLayerWidget->GetDragTargetDebugSummary()
+		: TEXT("DragTarget Inactive");
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s ClickToPlay=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f %s"),
+		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s ClickToPlay=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f DragTargetFeedback=%s DragAimSnap=%s DragAimSnapBlend=%.2f %s %s"),
 		*AnchorModeToString(CurrentMode),
 		*ProjectionModeToString(Config.ProjectionMode),
 		*LayoutModeToString(Config.CardLayoutMode),
@@ -1393,7 +1405,11 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		bAllowCameraLookDuringCardDrag ? TEXT("true") : TEXT("false"),
 		CardDragCameraLookScale,
 		CardDragCameraLookInterpSpeedOverride,
-		*LayerMotionSummary);
+		bEnableDragTargetFeedback ? TEXT("true") : TEXT("false"),
+		bSnapAimArrowToValidWorldTarget ? TEXT("true") : TEXT("false"),
+		DragAimArrowSnapBlend,
+		*LayerMotionSummary,
+		*DragTargetSummary);
 }
 
 AWacomPlayerCharacter* UWacomFirstPersonCardAnchorComponent::GetOwnerCharacter() const
@@ -2027,11 +2043,17 @@ FWacomInteractionTargetHandle UWacomFirstPersonCardAnchorComponent::BuildCardTar
 
 void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardDragFeedbackTarget(
 	const FWacomInteractionTargetHandle& TargetHandle,
-	bool bValidTarget)
+	bool bValidTarget,
+	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
+	const TOptional<FVector2D>& FeedbackTargetScreenPosition)
 {
 	if (StaticCardLayerWidget)
 	{
-		StaticCardLayerWidget->SetCardDragFeedbackTarget(TargetHandle, bValidTarget);
+		StaticCardLayerWidget->SetCardDragFeedbackTarget(
+			TargetHandle,
+			bValidTarget,
+			FeedbackState,
+			FeedbackTargetScreenPosition);
 	}
 }
 

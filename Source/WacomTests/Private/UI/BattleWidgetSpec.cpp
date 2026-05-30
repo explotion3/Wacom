@@ -1944,6 +1944,67 @@ bool FWacomUIBattleEnemyPartWorldTargetBridgeRoutesCueSpec::RunTest(const FStrin
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEnemyPartWorldTargetBridgeDragPreviewSpec,
+	"Wacom.UI.Battle.InteractionTarget.EnemyPartWorldBridge.TracksDragPreviewState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEnemyPartWorldTargetBridgeDragPreviewSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(2.0f, 2.0f, 2.0f));
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		NewObject<UWacomBattleEnemyPartWorldTargetBridgeComponent>(Owner);
+	Owner->AddInstanceComponent(Bridge);
+	Bridge->RegisterComponent();
+	Bridge->VisualTargetComponent = Primitive;
+	Bridge->DragTargetPreviewScale = 1.15f;
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	Bridge->SetDragTargetPreviewState(EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+	FWacomBattleEnemyPartWorldTargetDebugView View = Bridge->GetBattleWorldTargetDebugView();
+	TestTrue(TEXT("Drag preview active"), View.bDragPreviewActive);
+	TestEqual(TEXT("Drag preview state recorded"),
+		View.DragPreviewState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+	TestEqual(TEXT("Drag preview scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.15f);
+	TestEqual(TEXT("Drag preview does not count as battle cue"), View.CuePlayCount, 0);
+
+	Bridge->ClearDragTargetPreviewState();
+	View = Bridge->GetBattleWorldTargetDebugView();
+	TestFalse(TEXT("Drag preview clears"), View.bDragPreviewActive);
+	TestEqual(TEXT("Drag preview state clears"),
+		View.DragPreviewState,
+		EWacomFirstPersonCardDragTargetFeedbackState::None);
+	TestEqual(TEXT("Drag preview restores base scale"), Primitive->GetRelativeScale3D(), BaseScale);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEnemyPartWorldTargetBridgeClearsDestroyedPartSpec,
 	"Wacom.UI.Battle.InteractionTarget.EnemyPartWorldBridge.ClearsDestroyedPart",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

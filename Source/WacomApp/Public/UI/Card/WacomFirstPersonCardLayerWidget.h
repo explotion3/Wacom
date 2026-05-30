@@ -40,7 +40,12 @@ public:
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
 	void SetCardDragConfig(const FWacomFirstPersonCardDragConfig& InConfig);
-	void SetCardDragFeedbackTarget(const FWacomInteractionTargetHandle& TargetHandle, bool bValidTarget);
+	void SetCardDragFeedbackTarget(
+		const FWacomInteractionTargetHandle& TargetHandle,
+		bool bValidTarget,
+		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
+			EWacomFirstPersonCardDragTargetFeedbackState::None,
+		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>());
 	void CancelCardDragGesture(bool bBroadcastCancel);
 	void ClearSlotMotionState();
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
@@ -83,6 +88,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug")
 	FString GetSlotMotionDebugSummary() const;
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug")
+	FString GetDragTargetDebugSummary() const;
+
 	void SetLogSlotMotionDiagnostics(bool bEnabled) { bLogSlotMotionDiagnostics = bEnabled; }
 
 #if WITH_AUTOMATION_TESTS
@@ -93,6 +101,8 @@ public:
 	const FWacomFirstPersonCardSlotFeedbackConfig& GetSlotFeedbackConfigForTest() const { return SlotFeedbackConfig; }
 	const FWacomFirstPersonCardDragConfig& GetCardDragConfigForTest() const { return CardDragConfig; }
 	const FWacomFirstPersonCardDragView& GetCurrentDragViewForTest() const { return CurrentDragView; }
+	FLinearColor ResolveAimArrowColorForTest() const { return ResolveAimArrowColor(); }
+	FVector2D ResolveAimArrowEndForTest() const { return ResolveAimArrowEnd(); }
 	TSubclassOf<UWacomCardView> GetCardViewClassForTest() const { return CardViewClass; }
 	void AddUntrackedSlotChildForTest();
 	void SetViewportSizeOverrideForTest(const FVector2D& WidgetViewportSize);
@@ -186,4 +196,16 @@ private:
 	void HandleSlotDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	bool TryResolveCardTargetUnderDragPointer(
+		const FWacomFirstPersonCardDragView& DragView,
+		FWacomInteractionTargetHandle& OutTargetHandle,
+		FWacomFirstPersonCardLayerSlotView& OutTargetSlotView) const;
+	void ApplyCardProbeFeedbackForCurrentDrag();
+	void ApplyDragFeedbackToCurrentDragView(
+		const FWacomInteractionTargetHandle& TargetHandle,
+		bool bValidTarget,
+		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
+		const TOptional<FVector2D>& FeedbackTargetScreenPosition);
+	FLinearColor ResolveAimArrowColor() const;
+	FVector2D ResolveAimArrowEnd() const;
 };

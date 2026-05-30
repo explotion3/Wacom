@@ -74,6 +74,7 @@ bool UWacomBattleEnemyPartWorldTargetBridgeComponent::SyncFromBattleHUD(
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearBattleBinding()
 {
 	UnregisterFromBattleHUD();
+	ClearDragTargetPreviewState();
 	PartInstanceId.Invalidate();
 	bBoundToSnapshot = false;
 	TargetDisabledReason = NAME_None;
@@ -128,6 +129,8 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDebugView()
 	View.LastCueType = LastCueType;
 	View.LastCueAmount = LastCueAmount;
 	View.CuePlayCount = CuePlayCount;
+	View.DragPreviewState = DragPreviewState;
+	View.bDragPreviewActive = bDragPreviewActive;
 	return View;
 }
 
@@ -135,7 +138,7 @@ FString UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDeb
 {
 	const FWacomBattleEnemyPartWorldTargetDebugView View = GetBattleWorldTargetDebugView();
 	return FString::Printf(
-		TEXT("BattleEnemyPartWorldTarget{Owner=%s PartId=%s PartInstanceId=%s Bound=%s Registered=%s Targetable=%s Disabled=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d}"),
+		TEXT("BattleEnemyPartWorldTarget{Owner=%s PartId=%s PartInstanceId=%s Bound=%s Registered=%s Targetable=%s Disabled=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s}"),
 		*GetNameSafe(GetOwner()),
 		*View.PartId.ToString(),
 		*View.PartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
@@ -147,7 +150,9 @@ FString UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDeb
 		*View.LastCueKind.ToString(),
 		static_cast<int32>(View.LastCueType),
 		View.LastCueAmount,
-		View.CuePlayCount);
+		View.CuePlayCount,
+		static_cast<int32>(View.DragPreviewState),
+		View.bDragPreviewActive ? TEXT("true") : TEXT("false"));
 }
 
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::LogBattleWorldTargetDebugSummary() const
@@ -160,6 +165,40 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::EndPlay(const EEndPlayReas
 	ClearBattleBinding();
 	StopFeedbackTimer();
 	Super::EndPlay(EndPlayReason);
+}
+
+void UWacomBattleEnemyPartWorldTargetBridgeComponent::SetDragTargetPreviewState(
+	EWacomFirstPersonCardDragTargetFeedbackState PreviewState)
+{
+	if (PreviewState != EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
+		&& PreviewState != EWacomFirstPersonCardDragTargetFeedbackState::Invalid)
+	{
+		ClearDragTargetPreviewState();
+		return;
+	}
+
+	DragPreviewState = PreviewState;
+	bDragPreviewActive = true;
+	BeginScaleFeedback(DragTargetPreviewScale, 0.0f);
+}
+
+void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearDragTargetPreviewState()
+{
+	if (!bDragPreviewActive && DragPreviewState == EWacomFirstPersonCardDragTargetFeedbackState::None)
+	{
+		return;
+	}
+
+	bDragPreviewActive = false;
+	DragPreviewState = EWacomFirstPersonCardDragTargetFeedbackState::None;
+	if (bTargetable)
+	{
+		BeginScaleFeedback(TargetableAffordanceScale, 0.0f);
+	}
+	else
+	{
+		RestoreBaseScaleIfNeeded();
+	}
 }
 
 UWacomInteractionTargetComponent*
@@ -276,6 +315,11 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::BeginScaleFeedback(float S
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearScaleFeedback()
 {
 	StopFeedbackTimer();
+	if (bDragPreviewActive)
+	{
+		BeginScaleFeedback(DragTargetPreviewScale, 0.0f);
+		return;
+	}
 	if (bTargetable)
 	{
 		BeginScaleFeedback(TargetableAffordanceScale, 0.0f);

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Events/BattleEvent.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "WacomBattleEnemyPartWorldTargetBridgeComponent.generated.h"
 
@@ -51,6 +52,13 @@ struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
 	int32 CuePlayCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	bool bDragPreviewActive = false;
 };
 
 /**
@@ -88,6 +96,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "TargetSelect 中可选部位的轻量提示缩放倍率。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.2"))
 	float TargetableAffordanceScale = 1.06f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "第一人称卡牌拖拽指向该部位时的轻量预览缩放倍率。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.2"))
+	float DragTargetPreviewScale = 1.08f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "默认 cue 保持时间，单位秒。", ClampMin = "0.01", ClampMax = "2.0", UIMin = "0.05", UIMax = "0.5"))
 	float CueHoldSeconds = 0.14f;
 
@@ -103,6 +114,8 @@ public:
 	bool SyncFromBattleHUD(UBattleHUD& HUD, const FBattleSnapshot& Snapshot, const FBattleTargetSelectionView& TargetSelectionView);
 	void ClearBattleBinding();
 	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
+	void SetDragTargetPreviewState(EWacomFirstPersonCardDragTargetFeedbackState PreviewState);
+	void ClearDragTargetPreviewState();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|World Target")
 	FWacomBattleEnemyPartWorldTargetDebugView GetBattleWorldTargetDebugView() const;
@@ -144,6 +157,9 @@ private:
 	bool bRegisteredWithBattleHUD = false;
 	bool bTargetable = false;
 	bool bHasCachedBaseScale = false;
+	bool bDragPreviewActive = false;
+	EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FName TargetDisabledReason = NAME_None;
 	FName LastBindResult = TEXT("NotAttempted");
 	FName LastCueKind = TEXT("None");

@@ -316,6 +316,12 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragConfig(
 	CardDragConfig.CardInspectScreenPosition.Y = FMath::Clamp(CardDragConfig.CardInspectScreenPosition.Y, 0.0f, 1.0f);
 	CardDragConfig.CardInspectScale = FMath::Max(0.01f, CardDragConfig.CardInspectScale);
 	CardDragConfig.CardDragCameraLookScale = FMath::Max(0.0f, CardDragConfig.CardDragCameraLookScale);
+	CardDragConfig.DragTargetFeedbackOpacity =
+		FMath::Clamp(CardDragConfig.DragTargetFeedbackOpacity, 0.0f, 1.0f);
+	CardDragConfig.DragAimArrowSnapBlend =
+		FMath::Clamp(CardDragConfig.DragAimArrowSnapBlend, 0.0f, 1.0f);
+	CardDragConfig.DragCommitReadyScale = FMath::Max(0.01f, CardDragConfig.DragCommitReadyScale);
+	CardDragConfig.DragCardTargetProbeScale = FMath::Max(0.01f, CardDragConfig.DragCardTargetProbeScale);
 	if (!CardDragConfig.bEnableFirstPersonCardDragCommit)
 	{
 		ClearGestureState(true);
@@ -324,7 +330,9 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragConfig(
 
 void UWacomFirstPersonCardLayerSlotWidget::SetCardDragFeedbackTarget(
 	const FWacomInteractionTargetHandle& TargetHandle,
-	bool bValidTarget)
+	bool bValidTarget,
+	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
+	const TOptional<FVector2D>& InFeedbackTargetScreenPosition)
 {
 	if (GestureState == EWacomFirstPersonCardGestureState::Idle
 		|| GestureState == EWacomFirstPersonCardGestureState::Cancelled)
@@ -334,7 +342,32 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragFeedbackTarget(
 
 	GestureFeedbackTargetHandle = TargetHandle;
 	bGestureTargetValid = TargetHandle.IsValid() && bValidTarget;
+	DragTargetFeedbackState = CardDragConfig.bEnableDragTargetFeedback
+		? FeedbackState
+		: EWacomFirstPersonCardDragTargetFeedbackState::None;
+	if (InFeedbackTargetScreenPosition.IsSet())
+	{
+		bHasFeedbackTargetScreenPosition = true;
+		FeedbackTargetScreenPosition = InFeedbackTargetScreenPosition.GetValue();
+	}
+	else
+	{
+		bHasFeedbackTargetScreenPosition = false;
+		FeedbackTargetScreenPosition = FVector2D::ZeroVector;
+	}
+	ApplyVisualSlotView();
 	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::SetCardDragProbeFeedback(bool bEnabled)
+{
+	if (bCardDragProbeFeedback == bEnabled)
+	{
+		return;
+	}
+
+	bCardDragProbeFeedback = bEnabled && CardDragConfig.bEnableDragTargetFeedback;
+	ApplyVisualSlotView();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::CancelCardDragGesture(bool bBroadcastCancel)
@@ -755,14 +788,32 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 	const float PressedScale = (SlotFeedbackConfig.bEnabled && bIsPressedForFirstPersonLayer)
 		? SlotFeedbackConfig.PressedScale
 		: 1.0f;
+	const bool bDragTargetFeedbackActive =
+		CardDragConfig.bEnableDragTargetFeedback
+		&& DragTargetFeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::None;
 	const float CommitScale =
 		SlotFeedbackConfig.bEnabled
 		&& SlotFeedbackConfig.bEnablePlayCommitFeedback
 		&& CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration
 			? SlotFeedbackConfig.PlayCommitScale
 			: 1.0f;
+	const float DragReadyScale =
+		CardDragConfig.bEnableDragTargetFeedback
+		&& DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CommitReady
+			? CardDragConfig.DragCommitReadyScale
+			: 1.0f;
+	const float CardProbeScale =
+		CardDragConfig.bEnableDragTargetFeedback && bCardDragProbeFeedback
+			? CardDragConfig.DragCardTargetProbeScale
+			: 1.0f;
 	CardRenderTransform.Translation = FVector2D(DenyShakeOffset, 0.0f);
-	CardRenderTransform.Scale = FVector2D(FMath::Max(0.01f, SlotView.RenderScale * PressedScale * CommitScale));
+	CardRenderTransform.Scale = FVector2D(FMath::Max(
+		0.01f,
+		SlotView.RenderScale
+			* (bDragTargetFeedbackActive ? 1.0f : PressedScale)
+			* CommitScale
+			* DragReadyScale
+			* CardProbeScale));
 	CardRenderTransform.Angle = SlotView.RenderAngleDegrees;
 	SetRenderTransform(CardRenderTransform);
 	ApplyFeedbackOverlay();
@@ -1008,6 +1059,11 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(float DeltaTime, const 
 				? EWacomFirstPersonCardGestureState::ArmedForCommit
 				: EWacomFirstPersonCardGestureState::DraggingNoTargetCard,
 			false);
+		DragTargetFeedbackState =
+			CardDragConfig.bEnableDragTargetFeedback && bNowArmed
+				? EWacomFirstPersonCardDragTargetFeedbackState::CommitReady
+				: EWacomFirstPersonCardDragTargetFeedbackState::None;
+		ApplyVisualSlotView();
 	}
 
 	UpdateGestureOverrideTarget();
@@ -1052,6 +1108,10 @@ bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(const FVector2D& Scree
 		|| (ReleaseState == EWacomFirstPersonCardGestureState::AimingTargetedCard && bGestureTargetValid))
 	{
 		TriggerConfirmFeedback();
+	}
+	else if (ReleaseState == EWacomFirstPersonCardGestureState::Inspecting)
+	{
+		// Releasing read/inspect mode is a neutral return to the hand, not a rejected play attempt.
 	}
 	else if (ReleaseState != EWacomFirstPersonCardGestureState::Pressed)
 	{
@@ -1129,6 +1189,10 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearGestureState(bool bBroadcastCanc
 	GestureStartSlotView.Reset();
 	GestureOverrideTargetSlotView.Reset();
 	GestureFeedbackTargetHandle = FWacomInteractionTargetHandle();
+	DragTargetFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::None;
+	bHasFeedbackTargetScreenPosition = false;
+	FeedbackTargetScreenPosition = FVector2D::ZeroVector;
+	bCardDragProbeFeedback = false;
 	ClearPointerViewportDiagnostics();
 	bGestureTargetValid = false;
 	bGestureCommitArmed = false;
@@ -1206,6 +1270,9 @@ FWacomFirstPersonCardDragView UWacomFirstPersonCardLayerSlotWidget::BuildDragVie
 	View.bHasPointerViewportPosition = bHasPointerViewportPosition;
 	View.PointerViewportPosition = PointerViewportPosition;
 	View.PointerNormalizedViewportPosition = PointerNormalizedViewportPosition;
+	View.TargetFeedbackState = DragTargetFeedbackState;
+	View.bHasFeedbackTargetScreenPosition = bHasFeedbackTargetScreenPosition;
+	View.FeedbackTargetScreenPosition = FeedbackTargetScreenPosition;
 	return View;
 }
 
@@ -1450,6 +1517,10 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerCommitFeedback()
 void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
 {
 	bIsPressedForFirstPersonLayer = false;
+	bCardDragProbeFeedback = false;
+	DragTargetFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::None;
+	bHasFeedbackTargetScreenPosition = false;
+	FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 	ConfirmFeedbackElapsedSeconds = SlotFeedbackConfig.ConfirmDuration;
 	DenyFeedbackElapsedSeconds = SlotFeedbackConfig.DenyDuration;
 	CommitFeedbackElapsedSeconds = SlotFeedbackConfig.PlayCommitDuration;
@@ -1500,6 +1571,26 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
 			OverlayOpacity = SlotFeedbackConfig.PlayableHoverOpacity;
 		}
 	}
+	if (CardDragConfig.bEnableDragTargetFeedback)
+	{
+		if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CommitReady
+			|| DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget)
+		{
+			OverlayColor = CardDragConfig.DragValidTargetColor;
+			OverlayOpacity = CardDragConfig.DragTargetFeedbackOpacity;
+		}
+		else if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::Invalid)
+		{
+			OverlayColor = CardDragConfig.DragInvalidTargetColor;
+			OverlayOpacity = CardDragConfig.DragTargetFeedbackOpacity;
+		}
+		else if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
+			|| bCardDragProbeFeedback)
+		{
+			OverlayColor = CardDragConfig.DragCardProbeTargetColor;
+			OverlayOpacity = CardDragConfig.DragTargetFeedbackOpacity;
+		}
+	}
 
 	OverlayColor.A = 1.0f;
 	FeedbackOverlay->SetColorAndOpacity(OverlayColor);
@@ -1536,7 +1627,10 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 		|| ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration
 		|| DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration
 		|| (SlotFeedbackConfig.bEnablePlayCommitFeedback
-			&& CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration);
+			&& CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration)
+		|| (CardDragConfig.bEnableDragTargetFeedback
+			&& (DragTargetFeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::None
+				|| bCardDragProbeFeedback));
 	const FWacomFirstPersonCardLayerSlotView& EffectiveTargetSlotView = GetEffectiveTargetSlotView();
 	const bool bGestureActive =
 		GestureState != EWacomFirstPersonCardGestureState::Idle

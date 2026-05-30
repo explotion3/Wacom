@@ -225,7 +225,13 @@ public:
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
 	void SetCardDragConfig(const FWacomFirstPersonCardDragConfig& InConfig);
-	void SetCardDragFeedbackTarget(const FWacomInteractionTargetHandle& TargetHandle, bool bValidTarget);
+	void SetCardDragFeedbackTarget(
+		const FWacomInteractionTargetHandle& TargetHandle,
+		bool bValidTarget,
+		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
+			EWacomFirstPersonCardDragTargetFeedbackState::None,
+		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>());
+	void SetCardDragProbeFeedback(bool bEnabled);
 	void CancelCardDragGesture(bool bBroadcastCancel);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
@@ -265,6 +271,11 @@ public:
 	bool IsConfirmFeedbackActiveForTest() const { return ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration; }
 	bool IsCommitFeedbackActiveForTest() const { return CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration; }
 	const FWacomFirstPersonCardDragConfig& GetCardDragConfigForTest() const { return CardDragConfig; }
+	EWacomFirstPersonCardDragTargetFeedbackState GetDragTargetFeedbackStateForTest() const
+	{
+		return DragTargetFeedbackState;
+	}
+	bool HasCardDragProbeFeedbackForTest() const { return bCardDragProbeFeedback; }
 	bool RequestGesturePressForTest(const FVector2D& ScreenPosition);
 	void RequestGestureMoveForTest(float DeltaTime, const FVector2D& ScreenPosition);
 	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
@@ -337,8 +348,13 @@ private:
 	bool bGestureCommitArmed = false;
 	bool bSuppressClickOnRelease = false;
 	bool bHasPointerViewportPosition = false;
+	bool bHasFeedbackTargetScreenPosition = false;
+	bool bCardDragProbeFeedback = false;
+	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FVector2D PointerViewportPosition = FVector2D::ZeroVector;
 	FVector2D PointerNormalizedViewportPosition = FVector2D::ZeroVector;
+	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 
 	void EnsureCardView();
 	void EnsureFeedbackOverlay();
