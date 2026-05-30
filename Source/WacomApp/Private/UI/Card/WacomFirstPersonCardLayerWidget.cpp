@@ -1769,6 +1769,10 @@ FLinearColor UWacomFirstPersonCardLayerWidget::ResolveAimArrowColor() const
 	{
 		LineColor = CardDragConfig.DragCardProbeTargetColor;
 	}
+	else if (CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ZoneProbe)
+	{
+		LineColor = CardDragConfig.DragCardProbeTargetColor;
+	}
 	LineColor.A = FMath::Clamp(FMath::Max(LineColor.A, 0.01f), 0.0f, 1.0f);
 	return LineColor;
 }

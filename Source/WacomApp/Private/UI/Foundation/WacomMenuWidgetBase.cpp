@@ -4,6 +4,7 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "GameFramework/WacomPlayerController.h"
 #include "Input/Events.h"
 #include "Input/CommonUIInputTypes.h"
 #include "TimerManager.h"
@@ -20,6 +21,11 @@ void UWacomMenuWidgetBase::NativeOnActivated()
 {
 	Super::NativeOnActivated();
 
+	if (AWacomPlayerController* WacomPC = ResolveOwningWacomPlayerController())
+	{
+		WacomPC->RegisterActiveGameMenuWidget(this);
+	}
+
 	// 延迟一帧聚焦：CommonUI Router 在 Push 后需要一帧完成 leaf-most 切换。
 	// 如果同帧 SetKeyboardFocus，下层 Widget 可能抢回焦点。
 	if (UWorld* World = GetWorld())
@@ -34,6 +40,80 @@ void UWacomMenuWidgetBase::NativeOnActivated()
 	{
 		FocusFirstButton();
 	}
+}
+
+bool UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(
+	FWacomRunMenuCardLeaseRequest Request,
+	FWacomRunMenuCardLeaseResult& OutResult)
+{
+	if (Request.LeaseId.IsNone())
+	{
+		Request.LeaseId = FName(*FString::Printf(
+			TEXT("%s_MenuLease"),
+			*GetName()));
+	}
+	if (Request.SourceId.IsNone())
+	{
+		Request.SourceId = FName(*FString::Printf(
+			TEXT("%s_MenuLeaseSource"),
+			*GetName()));
+	}
+
+	AWacomPlayerController* WacomPC = ResolveOwningWacomPlayerController();
+	if (!WacomPC)
+	{
+		OutResult = FWacomRunMenuCardLeaseResult();
+		OutResult.LeaseId = Request.LeaseId;
+		OutResult.SourceId = Request.SourceId;
+		OutResult.RejectReason = TEXT("MissingPlayerController");
+		OutResult.DebugSummary = FString::Printf(
+			TEXT("RunMenuCardLeaseProvider{LeaseId=%s SourceId=%s LeaseSet=false Reject=MissingPlayerController}"),
+			*Request.LeaseId.ToString(),
+			*Request.SourceId.ToString());
+		return false;
+	}
+
+	const bool bSet =
+		WacomPC->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, OutResult);
+	if (bSet)
+	{
+		OwnedRunFirstPersonCardLayerMenuLeaseId = Request.LeaseId;
+	}
+	else if (OwnedRunFirstPersonCardLayerMenuLeaseId == Request.LeaseId
+		&& OutResult.RejectReason == FName(TEXT("NoMatchingCandidates")))
+	{
+		OwnedRunFirstPersonCardLayerMenuLeaseId = NAME_None;
+	}
+	return bSet;
+}
+
+bool UWacomMenuWidgetBase::CanAcceptOwnedRunFirstPersonCardPayment_Implementation(
+	const FWacomRunMenuCardDropResolveResult& /*DropResult*/) const
+{
+	return false;
+}
+
+void UWacomMenuWidgetBase::OnOwnedRunFirstPersonCardPaymentResolved_Implementation(
+	const FWacomRunMenuCardDropResolveResult& /*DropResult*/)
+{
+}
+
+bool UWacomMenuWidgetBase::HasOwnedRunFirstPersonCardLayerMenuLease(FName LeaseId) const
+{
+	return !LeaseId.IsNone()
+		&& OwnedRunFirstPersonCardLayerMenuLeaseId == LeaseId;
+}
+
+void UWacomMenuWidgetBase::NativeOnDeactivated()
+{
+	ClearOwnedRunFirstPersonCardLayerMenuLease();
+
+	if (AWacomPlayerController* WacomPC = ResolveOwningWacomPlayerController())
+	{
+		WacomPC->UnregisterActiveGameMenuWidget(this);
+	}
+
+	Super::NativeOnDeactivated();
 }
 
 void UWacomMenuWidgetBase::FocusFirstButton()
@@ -60,6 +140,25 @@ void UWacomMenuWidgetBase::FocusFirstButton()
 		}
 	}
 	SetFocus();
+}
+
+void UWacomMenuWidgetBase::ClearOwnedRunFirstPersonCardLayerMenuLease()
+{
+	if (OwnedRunFirstPersonCardLayerMenuLeaseId.IsNone())
+	{
+		return;
+	}
+
+	if (AWacomPlayerController* WacomPC = ResolveOwningWacomPlayerController())
+	{
+		WacomPC->ClearRunFirstPersonCardLayerMenuLease(OwnedRunFirstPersonCardLayerMenuLeaseId);
+	}
+	OwnedRunFirstPersonCardLayerMenuLeaseId = NAME_None;
+}
+
+AWacomPlayerController* UWacomMenuWidgetBase::ResolveOwningWacomPlayerController() const
+{
+	return Cast<AWacomPlayerController>(GetOwningPlayer());
 }
 
 TOptional<FUIInputConfig> UWacomMenuWidgetBase::GetDesiredInputConfig() const

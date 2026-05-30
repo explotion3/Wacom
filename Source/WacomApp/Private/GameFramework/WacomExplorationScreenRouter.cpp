@@ -109,6 +109,26 @@ namespace
 			*Result.FailureReason.ToString());
 	}
 
+	void BeginGameMenuTransitionSuppression(AWacomPlayerController& PC)
+	{
+		PC.SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(true);
+	}
+
+	void EndGameMenuTransitionSuppressionOnFailure(
+		TWeakObjectPtr<AWacomPlayerController> WeakPC,
+		const FWacomAsyncWidgetPushResult& Result)
+	{
+		if (Result.bSucceeded)
+		{
+			return;
+		}
+
+		if (AWacomPlayerController* PC = WeakPC.Get())
+		{
+			PC->SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(false);
+		}
+	}
+
 	void LogShopAsyncPushResult(const FWacomAsyncWidgetPushResult& Result, FName ShopId)
 	{
 		if (Result.bSucceeded)
@@ -245,6 +265,7 @@ void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)
 	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
 		UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
+		PC.SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(false);
 		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] B: 关闭 GameMenu 顶层"));
 		return;
 	}
@@ -257,6 +278,7 @@ void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)
 
 	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
 	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
+	BeginGameMenuTransitionSuppression(PC);
 	FWacomAsyncWidgetPushRequest Request;
 	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
 	Request.WidgetTag = WacomUITags::UI_Widget_BackpackScreen.GetTag();
@@ -267,8 +289,9 @@ void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)
 	{
 		return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("OpenBackpack.AsyncPush"));
 	};
-	Request.OnComplete = [](const FWacomAsyncWidgetPushResult& Result)
+	Request.OnComplete = [WeakPC](const FWacomAsyncWidgetPushResult& Result)
 	{
+		EndGameMenuTransitionSuppressionOnFailure(WeakPC, Result);
 		LogAsyncPushResult(Result, TEXT("B: 打开背包"), TEXT("OpenBackpack: Push BackpackScreen"));
 	};
 	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
@@ -292,6 +315,7 @@ void FWacomExplorationScreenRouter::TogglePauseMenu(AWacomPlayerController& PC)
 	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
 		UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
+		PC.SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(false);
 		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] ESC: 关闭 GameMenu 顶层"));
 		return;
 	}
@@ -304,6 +328,7 @@ void FWacomExplorationScreenRouter::TogglePauseMenu(AWacomPlayerController& PC)
 
 	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
 	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
+	BeginGameMenuTransitionSuppression(PC);
 	FWacomAsyncWidgetPushRequest Request;
 	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
 	Request.WidgetTag = WacomUITags::UI_Widget_PauseMenuScreen.GetTag();
@@ -314,8 +339,9 @@ void FWacomExplorationScreenRouter::TogglePauseMenu(AWacomPlayerController& PC)
 	{
 		return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("TogglePauseMenu.AsyncPush"));
 	};
-	Request.OnComplete = [](const FWacomAsyncWidgetPushResult& Result)
+	Request.OnComplete = [WeakPC](const FWacomAsyncWidgetPushResult& Result)
 	{
+		EndGameMenuTransitionSuppressionOnFailure(WeakPC, Result);
 		LogAsyncPushResult(Result, TEXT("ESC: 打开暂停菜单"), TEXT("TogglePauseMenu: Push PauseMenuScreen"));
 	};
 	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
@@ -330,6 +356,7 @@ void FWacomExplorationScreenRouter::CloseTopGameMenu(AWacomPlayerController& PC)
 	}
 
 	UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
+	PC.SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(false);
 	DeactivateActiveGameMenuWidget(*UIManager);
 }
 
@@ -361,6 +388,7 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
 		UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
+		PC.SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(false);
 	}
 
 	if (UIManager->HasPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag()))
@@ -371,6 +399,7 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 
 	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
 	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
+	BeginGameMenuTransitionSuppression(PC);
 	FWacomAsyncWidgetPushRequest Request;
 	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
 	Request.WidgetTag = WacomUITags::UI_Widget_ShopScreen.GetTag();
@@ -397,8 +426,9 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 	{
 		RollbackShopAsyncPush(WeakPC, FailureReason);
 	};
-	Request.OnComplete = [ShopId](const FWacomAsyncWidgetPushResult& Result)
+	Request.OnComplete = [WeakPC, ShopId](const FWacomAsyncWidgetPushResult& Result)
 	{
+		EndGameMenuTransitionSuppressionOnFailure(WeakPC, Result);
 		LogShopAsyncPushResult(Result, ShopId);
 	};
 	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
@@ -433,6 +463,7 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(AWacomPlayerController& PC, FNa
 	if (DeactivateActiveGameMenuWidget(*UIManager))
 	{
 		UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag());
+		PC.SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(false);
 	}
 
 	if (UIManager->HasPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu.GetTag()))
@@ -444,6 +475,7 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(AWacomPlayerController& PC, FNa
 	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
 	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
 	TWeakObjectPtr<UWacomRunEventDefinition> WeakEventDefinition(EventDefinition);
+	BeginGameMenuTransitionSuppression(PC);
 	FWacomAsyncWidgetPushRequest Request;
 	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
 	Request.WidgetTag = WacomUITags::UI_Widget_RunEventScreen.GetTag();
@@ -470,8 +502,9 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(AWacomPlayerController& PC, FNa
 	{
 		RollbackRunEventAsyncPush(WeakPC, FailureReason);
 	};
-	Request.OnComplete = [PersistentId](const FWacomAsyncWidgetPushResult& Result)
+	Request.OnComplete = [WeakPC, PersistentId](const FWacomAsyncWidgetPushResult& Result)
 	{
+		EndGameMenuTransitionSuppressionOnFailure(WeakPC, Result);
 		LogRunEventAsyncPushResult(Result, PersistentId);
 	};
 	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));

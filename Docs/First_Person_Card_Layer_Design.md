@@ -372,11 +372,36 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - 进入 Battle、Controller EndPlay、source disabled 或 runtime clear 时清理 Run source；退出 Battle 回 Exploration 后重新刷新。
    - 本轮不做 Run drop resolver、不提交 Run 命令、不替代 `IWacomWorldInteractable + E`，只把探索期卡牌展示接入同一 first-person layer。
 
-24. Render Quality V0-B
+24. V0-AL：First-Person Card Layer Menu Context / Source Lease
+   - Exploration GameMenu 默认压制 `RunFirstPersonBattleDeck` source，避免直接 AddToViewport 的 first-person card layer 遮挡 Backpack、Pause、Shop 或 RunEvent。
+   - `UWacomMenuWidgetBase` 在激活 / 失活时通知 PlayerController 维护 active GameMenu 状态；Router 在异步菜单切换期间使用 transition suppress，防止旧菜单关闭和新菜单完成 Push 之间卡层闪出。
+   - `UWacomRunFirstPersonCardSourceComponent` 增加单一 active menu lease：显式 lease 可用独立 source id 和 entries 临时接管卡层，优先级高于 GameMenu suppress；释放后按当前菜单状态恢复为压制或默认 BattleDeck。
+   - 本轮只做 source 所有权、生命周期和 debug，不做 RunEvent 卡牌 drop 提交或 Run 规则 resolver。
+
+25. V0-AM：Run Menu Drop Target Bridge / Card Lease Probe
+   - Active menu lease 写入 first-person layer 时会临时启用卡牌 hold / drag gesture；默认 `RunFirstPersonBattleDeck` source 仍保持非交互。
+   - `UWacomRunMenuDropTargetWidget` 为 GameMenu UMG 区域构建 `FWacomInteractionTargetHandle(TargetKind=Zone)`，并提供 probe / invalid / released-probe 轻量 preview 与 debug summary。
+   - `AWacomPlayerController` 在 Exploration + active GameMenu + active menu lease 时监听 first-person drag delegate，用 drag view 的 widget-space pointer probe 最上层菜单 Zone target，再把 `ZoneProbe` / invalid feedback 写回 first-person layer。
+   - Release 命中 Zone target 只记录 probe 结果和播放中性反馈，不提交 `URunSession` 命令、不推进 RunEvent、不迁移背包 `UWacomZoneDropTarget` 既有 UMG DragDrop。
+
+26. V0-AN：Run Menu Card Lease Provider / Blueprint Candidate Source
+   - 已新增 `FWacomRunMenuCardLeaseRequest / Result`，让菜单用蓝图友好的筛选 request 申请 first-person menu lease，不再手填 `FWacomFirstPersonCardLayerEntry`。
+   - `UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeaseFromRunCards()` 只读 `URunSession::GetRunState()` 的真实持有卡实例，按 `Backpack -> BattleDeck -> BurdenZone -> SpecialZones.Cards` 构建候选 entries；不读取 `BattleDeckProjectedCards`，避免 SpecialZone 入战投影重复显示。
+   - Request 支持 `AllowedCardDefinitions / AllowedCardIds` OR 身份筛选、显式 `ExplicitCardInstanceIds` 白名单、`RequiredKeywords / BlockedKeywords` 和四个持有区 include 开关。空筛选默认拒绝，除非显式开启 `bAllowAllOwnedCardsWhenNoFilter`。
+   - `UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards()` 会为菜单自动补 LeaseId / SourceId，并在 `NativeOnDeactivated` 清理自己拥有的 lease。Release 到 menu Zone target 仍只 probe，不提交 RunEvent 规则、不移动卡。
+   - PIE 可用 `Wacom.OpenRunMenuCardLeaseTestMenu` 打开 C++ 验证菜单 `UWacomRunMenuCardLeaseTestMenu`；它默认筛 `PoisonFang` 并内置 `RunEvent.Pay.Fang` Zone target，用于验证菜单候选卡 lease + Zone probe 闭环。
+
+27. V0-AO：Run Menu Card Drop Intent Resolver / Card Payment Prototype
+   - `AWacomPlayerController::ResolveRunMenuCardDropIntent()` 统一解析 Run menu first-person drag preview 和 release：默认菜单为 `ProbeZoneTarget`，只有 owning menu lease 的菜单显式接受 payment 时才可能提交。
+   - `UWacomMenuWidgetBase` 提供 `CanAcceptOwnedRunFirstPersonCardPayment()` 和 `OnOwnedRunFirstPersonCardPaymentResolved()`；Widget 不直接改 RunState，真正提交由 PlayerController 调用 `URunSession::ValidateDestroyCardByInstance()` / `DestroyCardByInstance()`。
+   - `UWacomRunMenuDropTargetWidget` 增加 payment-ready / payment-submitted 轻量预览。Provider-backed lease 在 RunState 变化后按原 request 重建候选；最后一张候选支付后清空 lease，并在菜单仍激活时继续写入 suppressed 空 source，避免 anchor card fallback。
+   - 该 payment prototype 只表示“永久移除这张具体持有卡”，不发金币、不推进 RunEvent 选项、不迁移背包旧 UMG DragDrop。真正 RunEvent “交出毒牙后进入某个节点”留给后续 resolver。
+
+28. Render Quality V0-B
    - 当前不把“降低旋转角”作为主线目标；`WBP_FirstPersonCardView` 已能承接较大角度旋转的抗锯齿需求，排布表现优先。
    - 后续只在美术反馈需要时微调扇形参数：下坠、层级、hover / pending 姿态和可选角度 clamp。
 
-25. First-person card view polish
+28. First-person card view polish
    - 已确认第一人称层应使用专用 `WBP_FirstPersonCardView`，不要继续把通用 `WBP_CardView` 直接作为长期主手牌卡面。
    - 后续 polish 重点是沉淀该 WBP 的制作规范：RetainerBox 使用边界、贴图透明留白、内部缩放、安全边框、材质动画刷新频率，以及不同 DPI / 视口尺寸下的旋转采样表现。
 

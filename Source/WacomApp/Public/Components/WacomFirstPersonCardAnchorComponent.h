@@ -97,6 +97,7 @@ enum class EWacomFirstPersonCardDragTargetFeedbackState : uint8
 	ValidCardTarget UMETA(DisplayName = "Valid Card Target"),
 	InvalidCardTarget UMETA(DisplayName = "Invalid Card Target"),
 	CardProbe UMETA(DisplayName = "Card Probe"),
+	ZoneProbe UMETA(DisplayName = "Zone Probe"),
 	CommitReady UMETA(DisplayName = "Commit Ready")
 };
 

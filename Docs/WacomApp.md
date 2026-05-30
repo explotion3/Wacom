@@ -72,7 +72,7 @@ enum class EGameFlowState : uint8
 主要职责：
 
 - BeginPlay 创建并持有 `URunSession`。
-- 持有 `UWacomRunFirstPersonCardSourceComponent`，在 Exploration 下把 RunSession 的备战卡组写入 PlayerCharacter 的 first-person card anchor。该 bridge 只做展示和 debug，不提交 Run 规则，不启用战斗手牌交互；进入战斗或 Controller EndPlay 时清理，退出战斗回到 Exploration 后重新刷新。
+- 持有 `UWacomRunFirstPersonCardSourceComponent`，在 Exploration 下把 RunSession 的备战卡组写入 PlayerCharacter 的 first-person card anchor。该 bridge 默认只做展示和 debug，不启用战斗手牌交互；进入战斗或 Controller EndPlay 时清理，退出战斗回到 Exploration 后重新刷新。V0-AL 后 Controller 也负责 GameMenu 对该 source 的默认压制和 menu lease 转发。V0-AN 后 Controller 提供 `SetRunFirstPersonCardLayerMenuLeaseFromRunCards()` wrapper，菜单可以用 Blueprint-friendly request 从玩家真实持有卡中筛候选卡，而不是直接构造 first-person entry。V0-AO 后 Controller 还负责 Run menu card drop intent：只有 active menu lease 的 owning menu 显式接受 payment 时，释放到 Zone 才调用 `URunSession::DestroyCardByInstance()` 移除对应持有卡实例。
 - 提供 `IMC_Exploration` 与 `IMC_Battle` 的 Push / Pop helper；正式战斗进出时由 GameMode 调用这些 helper。
 - 处理 BeginPlay 初始探索 IMC 和 PIE / 切关卡后的兜底恢复。
 - 处理探索交互、暂停菜单、背包、商店、RunEvent 打开请求；PlayerController 只发起请求并持有必要上下文，背包 / 商店 / RunEvent 的 GameMenu 打开细节和外部返回清理由私有 `FWacomExplorationScreenRouter` 承接。
@@ -169,6 +169,8 @@ PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md
 - PIE 时按 Wacom UI Settings -> fallback 的优先级解析；Shop / RunEvent / PauseMenu 等未配置 settings 项时，应继续走合法 C++ fallback。
 
 探索期背包、暂停菜单、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、GameMenu 异步 Push pending、防重复打开，以及商店 / RunEvent 这类外部流程返回时的 RunSession 清理。
+
+V0-AL 后，`GameMenu` 激活时默认压制探索期 first-person BattleDeck 展示，避免直接加到 viewport 的卡层遮挡菜单；失活后恢复。Router 在异步切换菜单期间会加一层短暂 transition suppress，避免旧菜单关闭、新菜单尚未 Push 完成时卡牌闪出。V0-AN 后，未来 RunEvent “交出毒牙”这类菜单卡牌交互不应绕开该规则，也不应在蓝图中手填 `FWacomFirstPersonCardLayerEntry`，而应调用 `UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards()`。菜单只提交候选筛选 request，例如 `AllowedCardDefinitions = [DA_Card_PoisonFang]`；PlayerController / source component 从 `URunSession::GetRunState()` 的真实持有区构建 lease entries，并在菜单 deactivate 时自动清理 owned lease。V0-AO 后菜单可覆写 `CanAcceptOwnedRunFirstPersonCardPayment()` 接受指定 Zone payment；PlayerController 统一 resolver 负责 validation、提交 `DestroyCardByInstance()`、刷新 provider-backed lease，并把结果回调给菜单。
 
 商店和 RunEvent 切换必须遵守生命周期顺序：Router 先关闭已有 `GameMenu` 顶层，让旧 Screen 的 `NativeOnDeactivated` 完成 `EndShopVisit()` / `EndRunEvent()`；随后创建 async push 请求。新访问的 `BeginShopVisit()` / `BeginRunEvent()` 必须延后到 `BeforePush`，如果 Push、Cast 或 Refresh 失败，Router 必须立即调用对应 `End*` 回滚刚 Begin 的 active 访问。
 
@@ -325,10 +327,12 @@ ESC 当前语义：
 - `UWacomInteractionTargetComponent`：通用交互目标组件，任意 Actor 可挂载。字段：`TargetId`（运行时 FGuid）、`InteractionTargetTag`（FGameplayTag）、`StableTargetId`（FName）。
 - `UWacomBattleEnemyPartWorldTargetBridgeComponent`：Battle 专用桥接组件。它读取稳定 `PartId`，在 HUD 刷新时解析当前 `PartInstanceId`，写回同 Actor 上的 `UWacomInteractionTargetComponent`，并注册接收 `TargetConfirmed / DamageDealt / EnemyPartHpEmptied` 表现 cue。
 - `UWacomRunWorldInteractionTargetBridgeComponent`：Run / 探索专用桥接组件。它把手工填写的 `RunTargetStableId` 和自动/已有运行时 `TargetId` 写回同 Actor 上的 `UWacomInteractionTargetComponent`，并标记 `Interaction.Target.Run.Object`。它只提供鼠标 probe preview 和 debug，不提交 Run 规则，也不替代 `IWacomWorldInteractable + E`。
+- `UWacomRunMenuDropTargetWidget`：Run GameMenu 专用 UMG Zone target bridge。它配置 `ZoneId / StableTargetId`，构建 `FWacomInteractionTargetHandle(TargetKind=Zone)`，并提供 probe / invalid / released-probe / payment-ready / payment-submitted 的轻量 preview。该 Widget 不直接调用 `URunSession`，也不参与背包旧 `UWacomZoneDropTarget` 的 UMG DragDrop 规则提交。
 - `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；只有 `TargetKind=World` 且 `TargetTag=Interaction.Target.Battle.EnemyPart` 的 handle 会被转发为 Battle enemy part 点击。
 - `AWacomPlayerController::TryProbeRunSceneInteractionTarget()` 和 `TryProbeRunSceneInteractionTargetAtWidgetPosition()` 在 Exploration 下用同一 Provider 路径构建 handle，但只接受 `TargetTag=Interaction.Target.Run.Object`。`bEnableRunWorldTargetProbePreview` 开启时，Controller 会低频 probe 鼠标下方 Run target 并驱动 bridge 的 scale preview；失去命中、切换目标、退出 Controller 时会清理旧 preview。
+- `AWacomPlayerController::TryProbeRunMenuDropTargetAtWidgetPosition()` 在 Exploration + active GameMenu + active menu lease 的 first-person card drag 中使用。它只扫描注册过的 `UWacomRunMenuDropTargetWidget`，按后注册优先作为最上层命中，返回 Zone handle。`ResolveRunMenuCardDropIntent()` 统一解析 preview 和 release：默认是 probe-only；owning menu 接受 payment 且 `ValidateDestroyCardByInstance()` 通过时，release 才移除精确持有卡实例。
 - `UWacomFirstPersonCardLayerSlotWidget` 为当前 active、可见、非 exiting 且拥有有效 `CardInstanceId` 的 first-person slot 构建 Card target handle。它使用当前 visual slot 的 `ScreenPosition`，不要求卡牌可打；后续拖拽 resolver 再判断当前拖拽卡能否作用到该卡槽。
-- First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈区分合法 hand-card target 和 probe-only target。
+- First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈区分合法 hand-card target 和 probe-only target；Run menu Zone target 使用 `ZoneProbe` 反馈表示“当前菜单区域可被识别”，是否支付由 Run menu drop intent 决定。
 - Battle first-person drag/drop 由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析 preview 和 release 语义。当前提交既有 `PlayCard` 命令：无目标卡 armed 提交空目标，合法 world enemy part 提交目标部位，合法 `TargetMode=HandCard` 源卡提交 `TargetCardInstanceId`。UI 不区分加费、减费、弃置或消耗的具体规则；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 对左右手锚点的拒绝来自 BattleSession / PlayCardResolver 合法性。不支持的 Card target 仍为 probe-only，Zone / Run target 后续接入。V0-AG 后，resolver 预览使用 `UBattleSession::ValidateTargetWithCard()` 获取可解释拒绝原因；拖拽 `TargetMode=HandCard` 源卡时，HUD 会为整副 first-person hand 生成合法 / 非法 Card target affordance，玩家只看到轻量颜色和缩放，具体 reason 只进入 debug summary / 自动化测试。
 
 ### 描述层
@@ -340,7 +344,7 @@ ESC 当前语义：
 | `TargetKind` | None / World / Card / Zone |
 | `WorldTargetId` | World 目标的 FGuid |
 | `CardInstanceId` | Card 目标的 FGuid；first-person hand 当前由卡槽 hover / visual update 提供 |
-| `ZoneId` | Zone 目标的 FName（命中来源待接入）|
+| `ZoneId` | Zone 目标的 FName；V0-AM 起 Run menu drop target 可提供 |
 | `TargetTag` | 目标语义标签，例如 `Interaction.Target.Battle.EnemyPart` |
 | `StableTargetId` | 稳定 authored/data ID，例如敌人 `PartId` |
 | `SourceObject` | 命中来源 Component 弱引用 |
@@ -355,7 +359,7 @@ Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomIntera
 - [x] World 目标：通过 `UWacomInteractionTargetComponent` 命中；Battle enemy part 由 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 绑定运行时 ID
 - [x] Run World 目标：通过 `UWacomRunWorldInteractionTargetBridgeComponent` 标记 `Interaction.Target.Run.Object` 并提供 probe preview；规则层 resolver 后续接入
 - [x] Card 目标：first-person hand slot hover / visual update 已通过 `UWacomFirstPersonCardLayerWidget` 与 `UWacomFirstPersonCardAnchorComponent` 暴露；旧 `UCardWidget / UHandPanel` 不作为本轮维护入口
-- [ ] Zone 目标：通过 UMG drop area 命中（后续接入）
+- [x] Zone 目标：Run menu lease 下通过 `UWacomRunMenuDropTargetWidget` 命中并 probe；背包旧 DragDrop 和规则提交仍保持独立
 - [x] Battle 规则层 Resolver：`UBattleSession::CanTargetWithCard`
 - [ ] Run 规则层 Resolver（后续接入）
 

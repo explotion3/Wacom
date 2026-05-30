@@ -3,19 +3,23 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 #include "WacomPlayerController.generated.h"
 
 class UEnemyDefinition;
 class UInputMappingContext;
 class UInputAction;
+class UWacomMenuWidgetBase;
 class AWacomRunTunnelBranchTargetActor;
 class ABattleTriggerActor;
 class URunSession;
 class UBattleHUD;
 class UWacomRunEventDefinition;
-class UWacomRunFirstPersonCardSourceComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
+class UWacomRunMenuDropTargetWidget;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;
@@ -119,6 +123,10 @@ public:
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
 
+	/** Console/debug entry for the C++ Run menu card lease provider test menu. */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards|Debug")
+	void OpenRunMenuCardLeaseTestMenu();
+
 	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */
 	void PushMappingContext(UInputMappingContext* IMC, int32 Priority = 0);
 	void PopMappingContext(UInputMappingContext* IMC);
@@ -141,6 +149,32 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	void ClearRunFirstPersonCardLayer();
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	void SetRunFirstPersonCardLayerSuppressedByGameMenu(bool bSuppressed);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	bool SetRunFirstPersonCardLayerMenuLease(
+		FName LeaseId,
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	bool SetRunFirstPersonCardLayerMenuLeaseFromRunCards(
+		const FWacomRunMenuCardLeaseRequest& Request,
+		FWacomRunMenuCardLeaseResult& OutResult);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	bool ClearRunFirstPersonCardLayerMenuLease(FName LeaseId);
+
+	void RegisterActiveGameMenuWidget(UWacomMenuWidgetBase* MenuWidget);
+	void UnregisterActiveGameMenuWidget(UWacomMenuWidgetBase* MenuWidget);
+	void SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(bool bSuppressed);
+	void RegisterRunMenuDropTarget(UWacomRunMenuDropTargetWidget* DropTarget);
+	void UnregisterRunMenuDropTarget(UWacomRunMenuDropTargetWidget* DropTarget);
+	bool TryProbeRunMenuDropTargetAtWidgetPosition(
+		const FVector2D& WidgetPosition,
+		FWacomInteractionTargetHandle& OutHandle) const;
 
 	/** 战斗场景目标点击路由。由 InputKey 和 BattleHUD 鼠标兜底入口共用。 */
 	bool TryRouteBattleSceneTargetClick(bool bRequireTargetSelect = false);
@@ -219,12 +253,29 @@ protected:
 	virtual bool IsInExplorationFlow() const;
 	void UpdateRunWorldTargetProbePreview();
 	void ClearRunWorldTargetProbePreview();
+	void ClearRunMenuDropTargetProbe();
+	FString GetRunMenuDropProbeDebugSummaryForTest() const { return LastRunMenuDropProbeDebugSummary; }
+	void HandleRunFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleRunFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleRunFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleRunFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	bool ApplyRunMenuDropProbeFeedback(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		bool bReleased);
+	FWacomRunMenuCardDropResolveResult ResolveRunMenuCardDropIntent(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView) const;
+	bool SubmitResolvedRunMenuCardDropIntent(
+		FWacomRunMenuCardDropResolveResult& Result);
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
 	FText BuildCurrentInteractPrompt() const;
 
 	/** 从候选列表中挑距离玩家最近的有效交互对象。 */
 	AActor* PickClosestInteractable() const;
+
+	virtual URunSession* ResolveRunSessionForFirstPersonCardSource() const;
 
 private:
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
@@ -237,7 +288,11 @@ private:
 	void StopRunWorldTargetProbePreviewLoop();
 	UWacomRunWorldInteractionTargetBridgeComponent* ResolveRunWorldTargetBridgeFromHandle(
 		const FWacomInteractionTargetHandle& Handle) const;
-
+	void RefreshRunFirstPersonCardLayerMenuSuppression();
+	void RefreshRunFirstPersonMenuLeaseDragBinding();
+	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
+	bool ShouldHandleRunFirstPersonMenuDropProbe() const;
+	UWacomMenuWidgetBase* ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const;
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSession = nullptr;
 
@@ -254,6 +309,22 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> PreviewedRunWorldTargetBridge;
+
+	UPROPERTY(Transient)
+	TArray<TWeakObjectPtr<UWacomMenuWidgetBase>> ActiveGameMenuWidgets;
+
+	UPROPERTY(Transient)
+	TArray<TWeakObjectPtr<UWacomRunMenuDropTargetWidget>> RunMenuDropTargets;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomRunMenuDropTargetWidget> PreviewedRunMenuDropTarget;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> RunMenuProbeBoundAnchor;
+
+	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
+	bool bRunFirstPersonMenuLeaseDragBound = false;
+	FString LastRunMenuDropProbeDebugSummary;
 
 	FTimerHandle RunWorldTargetProbePreviewTimerHandle;
 };

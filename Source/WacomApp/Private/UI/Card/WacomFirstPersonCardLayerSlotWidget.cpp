@@ -1641,6 +1641,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
 			OverlayOpacity = CardDragConfig.DragTargetFeedbackOpacity;
 		}
 		else if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
+			|| DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ZoneProbe
 			|| bCardDragProbeFeedback)
 		{
 			OverlayColor = CardDragConfig.DragCardProbeTargetColor;

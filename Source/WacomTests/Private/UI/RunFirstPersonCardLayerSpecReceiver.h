@@ -19,6 +19,8 @@ public:
 	TObjectPtr<UWacomFirstPersonCardAnchorComponent> AnchorForTest = nullptr;
 
 	TArray<FWacomFirstPersonCardLayerEntry> LastWrittenEntries;
+	FName LastWrittenSourceId = NAME_None;
+	FName LastClearedSourceId = NAME_None;
 	int32 WriteCount = 0;
 	int32 ClearCount = 0;
 
@@ -30,14 +32,21 @@ protected:
 
 	virtual void WriteRuntimeCardLayerEntries(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerEntry>& Entries) override
 	{
+		Super::WriteRuntimeCardLayerEntries(Anchor, SourceId, Entries);
+		LastWrittenSourceId = SourceId;
 		LastWrittenEntries = Entries;
 		++WriteCount;
 	}
 
-	virtual void ClearRuntimeCardLayerEntries(UWacomFirstPersonCardAnchorComponent& Anchor) override
+	virtual void ClearRuntimeCardLayerEntries(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId) override
 	{
+		Super::ClearRuntimeCardLayerEntries(Anchor, SourceId);
+		LastClearedSourceId = SourceId;
 		LastWrittenEntries.Reset();
 		++ClearCount;
 	}

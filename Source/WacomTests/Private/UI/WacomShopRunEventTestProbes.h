@@ -6,6 +6,9 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Events/WacomRunEventScreen.h"
+#include "UI/Foundation/WacomMenuWidgetBase.h"
+#include "UI/Run/WacomRunMenuCardLeaseTestMenu.h"
+#include "UI/Run/WacomRunMenuDropTargetWidget.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "Engine/HitResult.h"
 #include "WacomShopRunEventTestProbes.generated.h"
@@ -13,6 +16,26 @@
 class URunSession;
 class UWacomAppToastSubsystem;
 class UPrimitiveComponent;
+
+UCLASS()
+class UWacomRunMenuDropTargetWidgetProbe : public UWacomRunMenuDropTargetWidget
+{
+	GENERATED_BODY()
+
+public:
+	bool bProbeHitForTest = false;
+
+	virtual bool ContainsWidgetPosition(FVector2D WidgetPosition) const override
+	{
+		LastWidgetPositionForTest = WidgetPosition;
+		return bProbeHitForTest && CanProbeRunMenuDropTarget();
+	}
+
+	FVector2D GetLastWidgetPositionForTest() const { return LastWidgetPositionForTest; }
+
+private:
+	mutable FVector2D LastWidgetPositionForTest = FVector2D::ZeroVector;
+};
 
 UCLASS()
 class AWacomPlayerControllerProbe : public AWacomPlayerController
@@ -66,10 +89,64 @@ public:
 		ClearRunWorldTargetProbePreview();
 	}
 
+	void RegisterRunMenuDropTargetForTest(UWacomRunMenuDropTargetWidget* Target)
+	{
+		RegisterRunMenuDropTarget(Target);
+	}
+
+	void UnregisterRunMenuDropTargetForTest(UWacomRunMenuDropTargetWidget* Target)
+	{
+		UnregisterRunMenuDropTarget(Target);
+	}
+
+	bool ProbeRunMenuDropTargetAtWidgetPositionForTest(
+		const FVector2D& WidgetPosition,
+		FWacomInteractionTargetHandle& OutHandle) const
+	{
+		return TryProbeRunMenuDropTargetAtWidgetPosition(WidgetPosition, OutHandle);
+	}
+
+	void ClearRunMenuDropTargetProbeForTest()
+	{
+		ClearRunMenuDropTargetProbe();
+	}
+
+	bool ApplyRunMenuDropProbeFeedbackForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		bool bReleased)
+	{
+		return ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, bReleased);
+	}
+
+	FString ReadRunMenuDropProbeDebugSummaryForTest() const
+	{
+		return GetRunMenuDropProbeDebugSummaryForTest();
+	}
+
+	FWacomRunMenuCardDropResolveResult ResolveRunMenuCardDropIntentForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView) const
+	{
+		return ResolveRunMenuCardDropIntent(CardInstanceId, DragView);
+	}
+
+	void SetRunSessionForTest(URunSession* InRunSession)
+	{
+		RunSessionForTest = InRunSession;
+	}
+
 protected:
 	virtual bool IsInExplorationFlow() const override
 	{
 		return bRunProbeExplorationFlowForTest;
+	}
+
+	virtual URunSession* ResolveRunSessionForFirstPersonCardSource() const override
+	{
+		return RunSessionForTest
+			? RunSessionForTest.Get()
+			: Super::ResolveRunSessionForFirstPersonCardSource();
 	}
 
 	virtual bool BuildRunSceneClickHitResult(FHitResult& OutHitResult) const override
@@ -101,6 +178,9 @@ private:
 	bool bRunProbeExplorationFlowForTest = true;
 	FHitResult RunSceneHitOverride;
 	bool bHasRunSceneHitOverride = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<URunSession> RunSessionForTest = nullptr;
 };
 
 UCLASS()
@@ -166,6 +246,81 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomAppToastSubsystem> ToastSubsystem = nullptr;
+};
+
+UCLASS()
+class UWacomMenuWidgetBaseProbe : public UWacomMenuWidgetBase
+{
+	GENERATED_BODY()
+
+public:
+	bool bAcceptOwnedRunFirstPersonCardPaymentForTest = false;
+	FName AcceptedZoneIdForTest = NAME_None;
+	FWacomRunMenuCardDropResolveResult LastPaymentResultForTest;
+
+	void SetOwningWacomPlayerControllerForTest(AWacomPlayerController* InPlayerController)
+	{
+		OwningPlayerControllerForTest = InPlayerController;
+	}
+
+	void DeactivateForTest()
+	{
+		NativeOnDeactivated();
+	}
+
+protected:
+	virtual AWacomPlayerController* ResolveOwningWacomPlayerController() const override
+	{
+		return OwningPlayerControllerForTest
+			? OwningPlayerControllerForTest.Get()
+			: Super::ResolveOwningWacomPlayerController();
+	}
+
+	virtual bool CanAcceptOwnedRunFirstPersonCardPayment_Implementation(
+		const FWacomRunMenuCardDropResolveResult& DropResult) const override
+	{
+		return bAcceptOwnedRunFirstPersonCardPaymentForTest
+			&& (AcceptedZoneIdForTest.IsNone() || DropResult.ZoneId == AcceptedZoneIdForTest);
+	}
+
+	virtual void OnOwnedRunFirstPersonCardPaymentResolved_Implementation(
+		const FWacomRunMenuCardDropResolveResult& DropResult) override
+	{
+		LastPaymentResultForTest = DropResult;
+	}
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<AWacomPlayerController> OwningPlayerControllerForTest = nullptr;
+};
+
+UCLASS()
+class UWacomRunMenuCardLeaseTestMenuProbe : public UWacomRunMenuCardLeaseTestMenu
+{
+	GENERATED_BODY()
+
+public:
+	void SetOwningWacomPlayerControllerForTest(AWacomPlayerController* InPlayerController)
+	{
+		OwningPlayerControllerForTest = InPlayerController;
+	}
+
+	void DeactivateForTest()
+	{
+		NativeOnDeactivated();
+	}
+
+protected:
+	virtual AWacomPlayerController* ResolveOwningWacomPlayerController() const override
+	{
+		return OwningPlayerControllerForTest
+			? OwningPlayerControllerForTest.Get()
+			: Super::ResolveOwningWacomPlayerController();
+	}
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<AWacomPlayerController> OwningPlayerControllerForTest = nullptr;
 };
 
 UCLASS()

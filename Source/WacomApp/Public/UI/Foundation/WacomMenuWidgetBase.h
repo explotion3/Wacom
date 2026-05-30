@@ -3,8 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "UI/Foundation/WacomActivatableWidget.h"
+#include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 #include "WacomMenuWidgetBase.generated.h"
+
+class AWacomPlayerController;
 
 /**
  * 菜单 Widget 基类。
@@ -37,15 +41,43 @@ public:
 	DECLARE_MULTICAST_DELEGATE(FOnBackRequestedNative);
 	FOnBackRequestedNative OnBackRequestedNative;
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	bool SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(
+		FWacomRunMenuCardLeaseRequest Request,
+		FWacomRunMenuCardLeaseResult& OutResult);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards")
+	FName GetOwnedRunFirstPersonCardLayerMenuLeaseId() const
+	{
+		return OwnedRunFirstPersonCardLayerMenuLeaseId;
+	}
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	bool CanAcceptOwnedRunFirstPersonCardPayment(
+		const FWacomRunMenuCardDropResolveResult& DropResult) const;
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	void OnOwnedRunFirstPersonCardPaymentResolved(
+		const FWacomRunMenuCardDropResolveResult& DropResult);
+
+	bool HasOwnedRunFirstPersonCardLayerMenuLease(FName LeaseId) const;
+
 protected:
 	virtual void NativeOnActivated() override;
+	virtual void NativeOnDeactivated() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FReply NativeHandleBackRequested();
 
 	/** 激活期间期望的输入配置：UIOnly + NoCapture（鼠标可见）。 */
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
 
+	virtual AWacomPlayerController* ResolveOwningWacomPlayerController() const;
+
 private:
 	/** 聚焦第一个 enabled 的 UButton 子控件。 */
 	void FocusFirstButton();
+	void ClearOwnedRunFirstPersonCardLayerMenuLease();
+
+	UPROPERTY(Transient)
+	FName OwnedRunFirstPersonCardLayerMenuLeaseId = NAME_None;
 };
