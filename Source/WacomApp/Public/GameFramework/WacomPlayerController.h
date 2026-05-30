@@ -14,6 +14,7 @@ class ABattleTriggerActor;
 class URunSession;
 class UBattleHUD;
 class UWacomRunEventDefinition;
+class UWacomRunFirstPersonCardSourceComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
@@ -42,6 +43,8 @@ class WACOMAPP_API AWacomPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
+	AWacomPlayerController();
+
 	/** 由 ABattleTriggerActor Overlap 时调用，转发到 GameMode。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
 	void RequestEnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger = nullptr);
@@ -123,6 +126,21 @@ public:
 	/** 当前 Run 的 Session。BeginPlay 时自动创建并 Initialize。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	URunSession* GetRunSession() const { return RunSession; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards")
+	UWacomRunFirstPersonCardSourceComponent* GetRunFirstPersonCardSourceComponent() const
+	{
+		return RunFirstPersonCardSourceComponent;
+	}
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	void SetRunFirstPersonCardLayerActive(bool bActive);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	bool RefreshRunFirstPersonCardLayer();
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	void ClearRunFirstPersonCardLayer();
 
 	/** 战斗场景目标点击路由。由 InputKey 和 BattleHUD 鼠标兜底入口共用。 */
 	bool TryRouteBattleSceneTargetClick(bool bRequireTargetSelect = false);
@@ -222,6 +240,10 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSession = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|First Person Cards",
+		meta = (AllowPrivateAccess = "true", ToolTip = "探索期第一人称卡牌 source bridge。把 RunSession 备战卡组写入 FirstPersonCardAnchor；只做展示，不提交 Run 规则。"))
+	TObjectPtr<UWacomRunFirstPersonCardSourceComponent> RunFirstPersonCardSourceComponent = nullptr;
 
 	/**
 	 * 玩家当前在范围内的世界交互对象列表。Sphere Begin/End Overlap 维护。

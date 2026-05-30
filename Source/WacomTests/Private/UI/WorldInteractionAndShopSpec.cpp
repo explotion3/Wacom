@@ -36,7 +36,7 @@
 
 namespace
 {
-	UWorld* FindAutomationWorld()
+	UWorld* FindWorldInteractionAutomationWorld()
 	{
 		if (!GEngine)
 		{
@@ -300,7 +300,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetBridgeConfiguresInteractionTargetSpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -340,7 +340,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetBridgeAutoGeneratesRuntimeIdSpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -378,7 +378,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetBridgePreservesStableIdSpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -419,7 +419,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetBridgePreviewScaleSpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -463,7 +463,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetBridgeDebugSummarySpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -504,7 +504,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetProbeBuildsHandleSpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -550,7 +550,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetProbeRejectsBattleTargetSpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -590,7 +590,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetProbeWidgetPositionSpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -636,7 +636,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunWorldTargetProbePreviewSwitchSpec::RunTest(const FString& /*Parameters*/)
 {
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;

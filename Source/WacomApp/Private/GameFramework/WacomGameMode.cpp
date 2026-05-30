@@ -140,6 +140,12 @@ void AWacomGameMode::BootstrapRunFromSave()
 	{
 		UE_LOG(LogTemp, Display,
 			TEXT("[WacomGameMode] Bootstrap: 存档系统暂停，保持新 Run"));
+		if (AWacomPlayerController* WacomPC =
+			Cast<AWacomPlayerController>(GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr))
+		{
+			WacomPC->SetRunFirstPersonCardLayerActive(true);
+			WacomPC->RefreshRunFirstPersonCardLayer();
+		}
 		return;
 	}
 
@@ -215,6 +221,12 @@ void AWacomGameMode::BootstrapRunFromSave()
 					*State.PlayerTransform.GetLocation().ToString());
 			}
 		}
+	}
+
+	if (WacomPC)
+	{
+		WacomPC->SetRunFirstPersonCardLayerActive(true);
+		WacomPC->RefreshRunFirstPersonCardLayer();
 	}
 }
 
@@ -332,6 +344,11 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] Push BattleHUD 失败"));
 		ActiveSession = nullptr;
 		return;
+	}
+
+	if (WacomPC)
+	{
+		WacomPC->ClearRunFirstPersonCardLayer();
 	}
 
 	BattleHUD->SetSession(ActiveSession);
@@ -512,6 +529,8 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	// 真胜利时 Trigger 已在前面 Destroy，EndPlay 会反注册候选，Toast 自然隐藏。
 	if (AWacomPlayerController* WPC = Cast<AWacomPlayerController>(PC))
 	{
+		WPC->SetRunFirstPersonCardLayerActive(true);
+		WPC->RefreshRunFirstPersonCardLayer();
 		WPC->RefreshInteractToast();
 	}
 

@@ -10,6 +10,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
@@ -147,6 +148,13 @@ namespace
 	}
 }
 
+AWacomPlayerController::AWacomPlayerController()
+{
+	RunFirstPersonCardSourceComponent =
+		CreateDefaultSubobject<UWacomRunFirstPersonCardSourceComponent>(
+			TEXT("RunFirstPersonCardSourceComponent"));
+}
+
 void AWacomPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -210,6 +218,12 @@ void AWacomPlayerController::BeginPlay()
 			}
 		}
 
+		if (RunFirstPersonCardSourceComponent)
+		{
+			RunFirstPersonCardSourceComponent->BindRunSession(RunSession);
+			RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerActive(true);
+		}
+
 		StartRunWorldTargetProbePreviewLoop();
 	}
 	else
@@ -221,6 +235,7 @@ void AWacomPlayerController::BeginPlay()
 
 void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	ClearRunFirstPersonCardLayer();
 	ClearRunWorldTargetProbePreview();
 	StopRunWorldTargetProbePreviewLoop();
 	Super::EndPlay(EndPlayReason);
@@ -289,6 +304,7 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 
 void AWacomPlayerController::RequestEnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger)
 {
+	ClearRunFirstPersonCardLayer();
 	if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
 	{
 		GM->EnterBattle(EnemyDef, Trigger);
@@ -308,6 +324,34 @@ void AWacomPlayerController::RequestExitBattle(uint8 Outcome)
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] RequestExitBattle 时找不到 AWacomGameMode"));
+	}
+}
+
+void AWacomPlayerController::SetRunFirstPersonCardLayerActive(bool bActive)
+{
+	if (RunFirstPersonCardSourceComponent)
+	{
+		RunFirstPersonCardSourceComponent->BindRunSession(RunSession);
+		RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerActive(bActive);
+	}
+}
+
+bool AWacomPlayerController::RefreshRunFirstPersonCardLayer()
+{
+	if (!RunFirstPersonCardSourceComponent)
+	{
+		return false;
+	}
+
+	RunFirstPersonCardSourceComponent->BindRunSession(RunSession);
+	return RunFirstPersonCardSourceComponent->RefreshRunFirstPersonCardLayer();
+}
+
+void AWacomPlayerController::ClearRunFirstPersonCardLayer()
+{
+	if (RunFirstPersonCardSourceComponent)
+	{
+		RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerActive(false);
 	}
 }
 

@@ -72,6 +72,7 @@ enum class EGameFlowState : uint8
 主要职责：
 
 - BeginPlay 创建并持有 `URunSession`。
+- 持有 `UWacomRunFirstPersonCardSourceComponent`，在 Exploration 下把 RunSession 的备战卡组写入 PlayerCharacter 的 first-person card anchor。该 bridge 只做展示和 debug，不提交 Run 规则，不启用战斗手牌交互；进入战斗或 Controller EndPlay 时清理，退出战斗回到 Exploration 后重新刷新。
 - 提供 `IMC_Exploration` 与 `IMC_Battle` 的 Push / Pop helper；正式战斗进出时由 GameMode 调用这些 helper。
 - 处理 BeginPlay 初始探索 IMC 和 PIE / 切关卡后的兜底恢复。
 - 处理探索交互、暂停菜单、背包、商店、RunEvent 打开请求；PlayerController 只发起请求并持有必要上下文，背包 / 商店 / RunEvent 的 GameMenu 打开细节和外部返回清理由私有 `FWacomExplorationScreenRouter` 承接。
@@ -255,6 +256,8 @@ GameMode 进入战斗时：
 6. Push `UBattleHUD` 到 Game 层。
 7. 记录触发战斗的 Trigger Actor，用于退出战斗时处理撤离、胜利和场景销毁。
 
+进入战斗前 / 进入战斗过程中会清理探索期 `RunFirstPersonBattleDeck` runtime source，避免 Run 备战展示和 BattleHUD runtime hand 同时占用 first-person card layer。
+
 ### ExitBattle
 
 ```text
@@ -273,6 +276,8 @@ GameMode 退出战斗时：
 6. 真胜利时标记并销毁触发战斗的 `ABattleTriggerActor`。
 7. 撤离时不销毁 Trigger，允许玩家再次按 E 重入。
 8. 非 Undetermined 战斗结束后消耗 1 节点。
+
+退出战斗回到 Exploration 后，PlayerController 会重新激活并刷新 `UWacomRunFirstPersonCardSourceComponent`，让 first-person card layer 再次显示当前 Run BattleDeck。这个刷新只读 Run snapshot，不提交任何 Run 命令。
 
 战斗结果包和 Run 结算规则见 `WacomRun.md`；战斗内规则见 `WacomBattle.md`。
 
