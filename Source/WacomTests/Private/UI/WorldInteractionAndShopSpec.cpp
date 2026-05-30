@@ -6,6 +6,11 @@
 #include "Actors/WacomRunEventTriggerActor.h"
 #include "Actors/WacomShopTriggerActor.h"
 #include "Cards/CardDefinition.h"
+#include "Components/SceneComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "Components/WacomInteractionTargetComponent.h"
+#include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "Events/RunEventDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -26,10 +31,30 @@
 #include "UI/WacomShopRunEventTestProbes.h"
 
 #include "Engine/GameInstance.h"
+#include "Engine/Engine.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace
 {
+	UWorld* FindAutomationWorld()
+	{
+		if (!GEngine)
+		{
+			return nullptr;
+		}
+
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			if (Context.WorldType == EWorldType::Game
+				|| Context.WorldType == EWorldType::PIE
+				|| Context.WorldType == EWorldType::Editor)
+			{
+				return Context.World();
+			}
+		}
+		return nullptr;
+	}
+
 	void InjectRunSession(AWacomPlayerController* PC, URunSession* Run)
 	{
 		FObjectProperty* RunSessionProperty = FindFProperty<FObjectProperty>(PC->GetClass(), TEXT("RunSession"));
@@ -59,6 +84,42 @@ namespace
 		Start.Choices = { Close };
 		Event->Nodes = { Start };
 		return Event;
+	}
+
+	AActor* SpawnTransientActor(UWorld& World)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.ObjectFlags |= RF_Transient;
+		return World.SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	}
+
+	UWacomInteractionTargetComponent* AddInteractionTargetComponent(AActor& Owner)
+	{
+		UWacomInteractionTargetComponent* Component = NewObject<UWacomInteractionTargetComponent>(&Owner);
+		Owner.AddInstanceComponent(Component);
+		Component->RegisterComponent();
+		return Component;
+	}
+
+	UWacomRunWorldInteractionTargetBridgeComponent* AddRunWorldBridgeComponent(
+		AActor& Owner,
+		FName StableId = TEXT("Run.Target.Test"))
+	{
+		UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+			NewObject<UWacomRunWorldInteractionTargetBridgeComponent>(&Owner);
+		Owner.AddInstanceComponent(Bridge);
+		Bridge->RunTargetStableId = StableId;
+		Bridge->RegisterComponent();
+		return Bridge;
+	}
+
+	UStaticMeshComponent* AddVisualComponent(AActor& Owner, const FVector& Scale = FVector::OneVector)
+	{
+		UStaticMeshComponent* Component = NewObject<UStaticMeshComponent>(&Owner);
+		Owner.AddInstanceComponent(Component);
+		Component->SetRelativeScale3D(Scale);
+		Component->RegisterComponent();
+		return Component;
 	}
 }
 
@@ -228,6 +289,406 @@ bool FWacomUIWorldInteractionBattleTriggerCompatibilitySpec::RunTest(const FStri
 
 	PC->RegisterCandidateTrigger(Trigger.Get());
 	TestNull(TEXT("Compatibility registration ignores unavailable trigger"), PC->ReadClosestInteractable());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetBridgeConfiguresInteractionTargetSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunBridgeConfiguresInteractionTargetComponent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetBridgeConfiguresInteractionTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomInteractionTargetComponent* Target = AddInteractionTargetComponent(*Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.Config"));
+
+	TestTrue(TEXT("Refresh binding succeeds"), Bridge->RefreshRunWorldTargetBinding());
+	TestTrue(TEXT("Runtime target id generated"), Target->GetTargetId().IsValid());
+	TestTrue(TEXT("Run target tag written"),
+		Target->GetInteractionTargetTag().MatchesTagExact(WacomTags::Interaction_Target_Run_Object));
+	TestEqual(TEXT("Stable id written"),
+		Target->GetStableTargetId(), FName(TEXT("Run.Target.Config")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetBridgeAutoGeneratesRuntimeIdSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunBridgeAutoGeneratesRuntimeTargetId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetBridgeAutoGeneratesRuntimeIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomInteractionTargetComponent* Target = AddInteractionTargetComponent(*Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge = AddRunWorldBridgeComponent(*Owner);
+
+	TestFalse(TEXT("Target starts without runtime id"), Target->GetTargetId().IsValid());
+	TestTrue(TEXT("Refresh binding succeeds"), Bridge->RefreshRunWorldTargetBinding());
+	TestTrue(TEXT("Bridge generated runtime id"), Bridge->GetRuntimeTargetId().IsValid());
+	TestEqual(TEXT("Generated id written to target component"),
+		Target->GetTargetId(), Bridge->GetRuntimeTargetId());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetBridgePreservesStableIdSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunBridgePreservesStableTargetId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetBridgePreservesStableIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomInteractionTargetComponent* Target = AddInteractionTargetComponent(*Owner);
+	const FGuid ExistingId = FGuid::NewGuid();
+	Target->SetTargetId(ExistingId);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.Stable"));
+
+	TestTrue(TEXT("Refresh binding succeeds"), Bridge->RefreshRunWorldTargetBinding());
+	TestEqual(TEXT("Existing runtime id preserved"), Target->GetTargetId(), ExistingId);
+	TestEqual(TEXT("Stable id preserved on bridge"),
+		Bridge->GetRunWorldTargetDebugView().RunTargetStableId,
+		FName(TEXT("Run.Target.Stable")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetBridgePreviewScaleSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunBridgePreviewScalesAndClearsVisualTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetBridgePreviewScaleSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Visual = AddVisualComponent(*Owner, FVector(2.0f, 3.0f, 4.0f));
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge = AddRunWorldBridgeComponent(*Owner);
+	Bridge->VisualTargetComponent = Visual;
+	Bridge->ProbePreviewScale = 1.10f;
+
+	Bridge->SetProbePreviewActive(true);
+	TestTrue(TEXT("Preview active"), Bridge->IsProbePreviewActive());
+	TestEqual(TEXT("Visual scaled for preview"),
+		Visual->GetRelativeScale3D(), FVector(2.2f, 3.3f, 4.4f));
+
+	Bridge->ClearProbePreview();
+	TestFalse(TEXT("Preview cleared"), Bridge->IsProbePreviewActive());
+	TestEqual(TEXT("Visual scale restored"),
+		Visual->GetRelativeScale3D(), FVector(2.0f, 3.0f, 4.0f));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetBridgeDebugSummarySpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunBridgeDebugSummaryReportsBindingAndPreview",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetBridgeDebugSummarySpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	AddInteractionTargetComponent(*Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.Debug"));
+	Bridge->RefreshRunWorldTargetBinding();
+	Bridge->SetProbePreviewActive(true);
+
+	const FString Summary = Bridge->GetRunWorldTargetDebugSummary();
+	TestTrue(TEXT("Summary includes owner"), Summary.Contains(TEXT("RunWorldInteractionTarget")));
+	TestTrue(TEXT("Summary includes stable id"), Summary.Contains(TEXT("Run.Target.Debug")));
+	TestTrue(TEXT("Summary reports configured"), Summary.Contains(TEXT("Configured=true")));
+	TestTrue(TEXT("Summary reports preview active"), Summary.Contains(TEXT("PreviewActive=true")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetProbeBuildsHandleSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunProbeBuildsHandleForRunObject",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetProbeBuildsHandleSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomInteractionTargetComponent* Target = AddInteractionTargetComponent(*Owner);
+	const FGuid TargetId = FGuid::NewGuid();
+	Target->SetTargetId(TargetId);
+	Target->SetStableTargetId(TEXT("Run.Target.Probe"));
+	Target->SetInteractionTargetTag(WacomTags::Interaction_Target_Run_Object);
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->SetRunSceneHitForTest(Owner);
+
+	FWacomInteractionTargetHandle Handle;
+	TestTrue(TEXT("Run probe finds run object"), PC->ProbeRunSceneTargetForTest(Handle));
+	TestEqual(TEXT("Run probe preserves id"), Handle.WorldTargetId, TargetId);
+	TestTrue(TEXT("Run probe preserves tag"),
+		Handle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Run_Object));
+	TestEqual(TEXT("Run probe preserves stable id"),
+		Handle.StableTargetId, FName(TEXT("Run.Target.Probe")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetProbeRejectsBattleTargetSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunProbeRejectsBattleEnemyPartTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetProbeRejectsBattleTargetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomInteractionTargetComponent* Target = AddInteractionTargetComponent(*Owner);
+	Target->SetTargetId(FGuid::NewGuid());
+	Target->SetStableTargetId(TEXT("Snake.Body"));
+	Target->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->SetRunSceneHitForTest(Owner);
+
+	FWacomInteractionTargetHandle Handle;
+	TestFalse(TEXT("Run probe rejects battle target"), PC->ProbeRunSceneTargetForTest(Handle));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetProbeWidgetPositionSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunProbeAtWidgetPositionWritesScreenPosition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetProbeWidgetPositionSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomInteractionTargetComponent* Target = AddInteractionTargetComponent(*Owner);
+	Target->SetTargetId(FGuid::NewGuid());
+	Target->SetStableTargetId(TEXT("Run.Target.WidgetProbe"));
+	Target->SetInteractionTargetTag(WacomTags::Interaction_Target_Run_Object);
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->SetRunSceneHitForTest(Owner);
+
+	FWacomInteractionTargetHandle Handle;
+	const FVector2D WidgetPosition(321.0f, 654.0f);
+	TestTrue(TEXT("Run widget-position probe finds target"),
+		PC->ProbeRunSceneTargetAtWidgetPositionForTest(WidgetPosition, Handle));
+	TestEqual(TEXT("Run widget-position probe writes screen position"),
+		Handle.ScreenPosition, WidgetPosition);
+	TestEqual(TEXT("Run widget-position probe writes hit world location"),
+		Handle.WorldLocation, FVector(321.0f, 654.0f, 0.0f));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetProbePreviewSwitchSpec,
+	"Wacom.UI.RunWorldInteractionTarget.ProbePreviewSwitchesAndClearsPreviousTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetProbePreviewSwitchSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* First = SpawnTransientActor(*World);
+	AActor* Second = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("First actor spawned"), First)
+		|| !TestNotNull(TEXT("Second actor spawned"), Second))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(First))
+		{
+			First->Destroy();
+		}
+		if (IsValid(Second))
+		{
+			Second->Destroy();
+		}
+	};
+
+	AddInteractionTargetComponent(*First);
+	UWacomRunWorldInteractionTargetBridgeComponent* FirstBridge =
+		AddRunWorldBridgeComponent(*First, TEXT("Run.Target.First"));
+	AddVisualComponent(*First);
+	FirstBridge->RefreshRunWorldTargetBinding();
+
+	AddInteractionTargetComponent(*Second);
+	UWacomRunWorldInteractionTargetBridgeComponent* SecondBridge =
+		AddRunWorldBridgeComponent(*Second, TEXT("Run.Target.Second"));
+	AddVisualComponent(*Second);
+	SecondBridge->RefreshRunWorldTargetBinding();
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->bEnableRunWorldTargetProbePreview = true;
+
+	PC->SetRunSceneHitForTest(First);
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("First target preview active"), FirstBridge->IsProbePreviewActive());
+	TestFalse(TEXT("Second target preview inactive"), SecondBridge->IsProbePreviewActive());
+
+	PC->SetRunSceneHitForTest(Second);
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestFalse(TEXT("First target preview cleared after switch"), FirstBridge->IsProbePreviewActive());
+	TestTrue(TEXT("Second target preview active after switch"), SecondBridge->IsProbePreviewActive());
+
+	PC->ClearRunSceneHitForTest();
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestFalse(TEXT("Second target preview cleared after no hit"), SecondBridge->IsProbePreviewActive());
 
 	return true;
 }

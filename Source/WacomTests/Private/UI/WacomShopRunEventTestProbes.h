@@ -4,12 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Shop/WacomShopScreen.h"
+#include "Engine/HitResult.h"
 #include "WacomShopRunEventTestProbes.generated.h"
 
 class URunSession;
 class UWacomAppToastSubsystem;
+class UPrimitiveComponent;
 
 UCLASS()
 class AWacomPlayerControllerProbe : public AWacomPlayerController
@@ -26,6 +29,78 @@ public:
 	{
 		return BuildCurrentInteractPrompt();
 	}
+
+	void SetRunSceneHitForTest(AActor* InActor, UPrimitiveComponent* InComponent = nullptr)
+	{
+		bHasRunSceneHitOverride = true;
+		RunSceneHitOverride = FHitResult();
+		RunSceneHitOverride.HitObjectHandle = FActorInstanceHandle(InActor);
+		RunSceneHitOverride.Component = InComponent;
+	}
+
+	void ClearRunSceneHitForTest()
+	{
+		bHasRunSceneHitOverride = false;
+		RunSceneHitOverride = FHitResult();
+	}
+
+	bool ProbeRunSceneTargetForTest(FWacomInteractionTargetHandle& OutHandle) const
+	{
+		return TryProbeRunSceneInteractionTarget(OutHandle);
+	}
+
+	bool ProbeRunSceneTargetAtWidgetPositionForTest(
+		const FVector2D& WidgetPosition,
+		FWacomInteractionTargetHandle& OutHandle) const
+	{
+		return TryProbeRunSceneInteractionTargetAtWidgetPosition(WidgetPosition, OutHandle);
+	}
+
+	void UpdateRunWorldTargetProbePreviewForTest()
+	{
+		UpdateRunWorldTargetProbePreview();
+	}
+
+	void ClearRunWorldTargetProbePreviewForTest()
+	{
+		ClearRunWorldTargetProbePreview();
+	}
+
+protected:
+	virtual bool IsInExplorationFlow() const override
+	{
+		return bRunProbeExplorationFlowForTest;
+	}
+
+	virtual bool BuildRunSceneClickHitResult(FHitResult& OutHitResult) const override
+	{
+		if (!bHasRunSceneHitOverride)
+		{
+			return false;
+		}
+
+		OutHitResult = RunSceneHitOverride;
+		return OutHitResult.GetActor() || OutHitResult.GetComponent();
+	}
+
+	virtual bool BuildRunSceneInteractionTargetHitResultAtWidgetPosition(
+		const FVector2D& WidgetPosition,
+		FHitResult& OutHitResult) const override
+	{
+		if (!bHasRunSceneHitOverride)
+		{
+			return false;
+		}
+
+		OutHitResult = RunSceneHitOverride;
+		OutHitResult.Location = FVector(WidgetPosition.X, WidgetPosition.Y, 0.0f);
+		return OutHitResult.GetActor() || OutHitResult.GetComponent();
+	}
+
+private:
+	bool bRunProbeExplorationFlowForTest = true;
+	FHitResult RunSceneHitOverride;
+	bool bHasRunSceneHitOverride = false;
 };
 
 UCLASS()

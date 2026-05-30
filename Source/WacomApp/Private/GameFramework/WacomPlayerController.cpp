@@ -11,7 +11,7 @@
 
 #include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
-#include "Actors/WacomRunTunnelBranchTargetActor.h"
+#include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
 #include "Interaction/WacomInteractionTargetProvider.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
@@ -209,12 +209,21 @@ void AWacomPlayerController::BeginPlay()
 				ToastSubsystem->EnsureAppToastReady();
 			}
 		}
+
+		StartRunWorldTargetProbePreviewLoop();
 	}
 	else
 	{
 		UE_LOG(LogTemp, Display,
 			TEXT("[WacomPlayerController] 非探索 GameMode，跳过 IMC_Exploration / RunSession 初始化"));
 	}
+}
+
+void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ClearRunWorldTargetProbePreview();
+	StopRunWorldTargetProbePreviewLoop();
+	Super::EndPlay(EndPlayReason);
 }
 
 void AWacomPlayerController::SetupInputComponent()
@@ -458,6 +467,79 @@ bool AWacomPlayerController::TryProbeBattleSceneInteractionTargetAtWidgetPositio
 	return OutHandle.IsValid();
 }
 
+bool AWacomPlayerController::TryProbeRunSceneInteractionTarget(FWacomInteractionTargetHandle& OutHandle) const
+{
+	OutHandle = FWacomInteractionTargetHandle();
+
+	if (!IsInExplorationFlow())
+	{
+		return false;
+	}
+
+	FHitResult HitResult;
+	if (!BuildRunSceneClickHitResult(HitResult))
+	{
+		return false;
+	}
+
+	OutHandle = BuildInteractionTargetHandleFromHit(HitResult);
+	if (OutHandle.IsValid())
+	{
+		OutHandle.WorldLocation = HitResult.Location;
+		FVector2D ScreenPosition = FVector2D::ZeroVector;
+		if (ProjectWorldLocationToScreen(HitResult.Location, ScreenPosition))
+		{
+			const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
+			OutHandle.ScreenPosition = ScreenPosition / ViewportScale;
+		}
+	}
+
+	const bool bAccepted = OutHandle.IsValid()
+		&& OutHandle.TargetKind == EWacomInteractionTargetKind::World
+		&& OutHandle.TargetTag == WacomTags::Interaction_Target_Run_Object
+		&& OutHandle.WorldTargetId.IsValid();
+	if (!bAccepted)
+	{
+		OutHandle = FWacomInteractionTargetHandle();
+	}
+	return bAccepted;
+}
+
+bool AWacomPlayerController::TryProbeRunSceneInteractionTargetAtWidgetPosition(
+	const FVector2D& WidgetPosition,
+	FWacomInteractionTargetHandle& OutHandle) const
+{
+	OutHandle = FWacomInteractionTargetHandle();
+
+	if (!IsInExplorationFlow())
+	{
+		return false;
+	}
+
+	FHitResult HitResult;
+	if (!BuildRunSceneInteractionTargetHitResultAtWidgetPosition(WidgetPosition, HitResult))
+	{
+		return false;
+	}
+
+	OutHandle = BuildInteractionTargetHandleFromHit(HitResult);
+	if (OutHandle.IsValid())
+	{
+		OutHandle.WorldLocation = HitResult.Location;
+		OutHandle.ScreenPosition = WidgetPosition;
+	}
+
+	const bool bAccepted = OutHandle.IsValid()
+		&& OutHandle.TargetKind == EWacomInteractionTargetKind::World
+		&& OutHandle.TargetTag == WacomTags::Interaction_Target_Run_Object
+		&& OutHandle.WorldTargetId.IsValid();
+	if (!bAccepted)
+	{
+		OutHandle = FWacomInteractionTargetHandle();
+	}
+	return bAccepted;
+}
+
 bool AWacomPlayerController::BuildBattleSceneInteractionTargetHitResultAtWidgetPosition(
 	const FVector2D& WidgetPosition,
 	FHitResult& OutHitResult) const
@@ -493,6 +575,28 @@ bool AWacomPlayerController::BuildBattleSceneClickHitResult(FHitResult& OutHitRe
 	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
 }
 
+bool AWacomPlayerController::BuildRunSceneClickHitResult(FHitResult& OutHitResult) const
+{
+	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
+}
+
+bool AWacomPlayerController::BuildRunSceneInteractionTargetHitResultAtWidgetPosition(
+	const FVector2D& WidgetPosition,
+	FHitResult& OutHitResult) const
+{
+	const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
+	const FVector2D PixelPosition = WidgetPosition * ViewportScale;
+	FVector WorldOrigin = FVector::ZeroVector;
+	FVector WorldDirection = FVector::ForwardVector;
+	if (!DeprojectScreenPositionToWorld(PixelPosition.X, PixelPosition.Y, WorldOrigin, WorldDirection))
+	{
+		return false;
+	}
+
+	const FVector TraceEnd = WorldOrigin + WorldDirection * 100000.0f;
+	return GetWorld() && GetWorld()->LineTraceSingleByChannel(OutHitResult, WorldOrigin, TraceEnd, ECC_Visibility);
+}
+
 bool AWacomPlayerController::TryRouteRunTunnelBranchClick()
 {
 	AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
@@ -522,6 +626,126 @@ bool AWacomPlayerController::TryRouteRunTunnelBranchClick()
 bool AWacomPlayerController::BuildRunTunnelBranchClickHitResult(FHitResult& OutHitResult) const
 {
 	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
+}
+
+bool AWacomPlayerController::IsInExplorationFlow() const
+{
+	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	return GM && GM->GetGameFlowState() == EGameFlowState::Exploration;
+}
+
+void AWacomPlayerController::StartRunWorldTargetProbePreviewLoop()
+{
+	if (!bEnableRunWorldTargetProbePreview)
+	{
+		ClearRunWorldTargetProbePreview();
+		StopRunWorldTargetProbePreviewLoop();
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		RunWorldTargetProbePreviewTimerHandle,
+		this,
+		&AWacomPlayerController::UpdateRunWorldTargetProbePreview,
+		FMath::Max(0.01f, RunWorldTargetProbePreviewIntervalSeconds),
+		true);
+}
+
+void AWacomPlayerController::StopRunWorldTargetProbePreviewLoop()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RunWorldTargetProbePreviewTimerHandle);
+	}
+	RunWorldTargetProbePreviewTimerHandle = FTimerHandle();
+}
+
+void AWacomPlayerController::UpdateRunWorldTargetProbePreview()
+{
+	if (!bEnableRunWorldTargetProbePreview || !IsInExplorationFlow())
+	{
+		ClearRunWorldTargetProbePreview();
+		return;
+	}
+
+	FWacomInteractionTargetHandle Handle;
+	UWacomRunWorldInteractionTargetBridgeComponent* NewBridge =
+		TryProbeRunSceneInteractionTarget(Handle)
+			? ResolveRunWorldTargetBridgeFromHandle(Handle)
+			: nullptr;
+
+	UWacomRunWorldInteractionTargetBridgeComponent* OldBridge = PreviewedRunWorldTargetBridge.Get();
+	if (OldBridge == NewBridge)
+	{
+		return;
+	}
+
+	if (OldBridge)
+	{
+		OldBridge->ClearProbePreview();
+	}
+
+	PreviewedRunWorldTargetBridge = NewBridge;
+	if (NewBridge)
+	{
+		NewBridge->SetProbePreviewActive(true);
+		if (bLogRunWorldTargetProbePreview)
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("[WacomRunWorldTargetProbe] Preview handle=%s bridge=%s"),
+				*Handle.ToString(),
+				*GetDebugObjectName(NewBridge));
+		}
+	}
+	else if (bLogRunWorldTargetProbePreview)
+	{
+		UE_LOG(LogTemp, Display, TEXT("[WacomRunWorldTargetProbe] Preview cleared"));
+	}
+}
+
+void AWacomPlayerController::ClearRunWorldTargetProbePreview()
+{
+	if (UWacomRunWorldInteractionTargetBridgeComponent* Bridge = PreviewedRunWorldTargetBridge.Get())
+	{
+		Bridge->ClearProbePreview();
+	}
+	PreviewedRunWorldTargetBridge.Reset();
+}
+
+UWacomRunWorldInteractionTargetBridgeComponent*
+AWacomPlayerController::ResolveRunWorldTargetBridgeFromHandle(
+	const FWacomInteractionTargetHandle& Handle) const
+{
+	UObject* SourceObject = Handle.SourceObject.Get();
+	if (!SourceObject)
+	{
+		return nullptr;
+	}
+
+	if (UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		Cast<UWacomRunWorldInteractionTargetBridgeComponent>(SourceObject))
+	{
+		return Bridge;
+	}
+
+	if (const UActorComponent* SourceComponent = Cast<UActorComponent>(SourceObject))
+	{
+		AActor* SourceOwner = SourceComponent->GetOwner();
+		return SourceOwner ? SourceOwner->FindComponentByClass<UWacomRunWorldInteractionTargetBridgeComponent>() : nullptr;
+	}
+
+	if (const AActor* SourceActor = Cast<AActor>(SourceObject))
+	{
+		return SourceActor->FindComponentByClass<UWacomRunWorldInteractionTargetBridgeComponent>();
+	}
+
+	return nullptr;
 }
 
 void AWacomPlayerController::RouteHandIndex(int32 OneBasedIndex)

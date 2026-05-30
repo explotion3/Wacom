@@ -90,6 +90,8 @@ Run 探索期的正式玩家移动模型是 Run Tunnel：鼠标可见，`W/S` �
 
 后续 Run 卡牌交互应复用 first-person card layer：卡牌仍用 HUD / UMG 渲染保证清晰和动态材质稳定，但布局由第一人称 card anchor 投影到屏幕，形成跟随玩家身体 / tunnel 前进的手牌感。Run 规则层不依赖该表现系统；设计讨论见 `Docs/First_Person_Card_Layer_Design.md`。
 
+V0-AJ 后，Run / 探索场景 Actor 可以通过 `UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent` 暴露为 `FWacomInteractionTargetHandle(TargetKind=World, TargetTag=Interaction.Target.Run.Object)`。这只提供鼠标 probe、未来拖牌目标识别、轻量 preview 和 debug；`URunSession` 暂不消费该 handle，也不会因此提交 Run 规则。探索期正式交互仍是 `IWacomWorldInteractable + E`。
+
 时段进入副作用：
 
 | 进入时段 | 副作用 |

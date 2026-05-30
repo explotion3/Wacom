@@ -13,7 +13,7 @@
 
 namespace
 {
-	const FHandCardSnapshot* FindHandCard(const FBattleSnapshot& Snapshot, const FGuid& CardId)
+	const FHandCardSnapshot* FindHandZoneMoveEventHandCard(const FBattleSnapshot& Snapshot, const FGuid& CardId)
 	{
 		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
 		{
@@ -93,7 +93,7 @@ bool FWacomBattleSelectedDiscardEmitsCardDiscardedAndRunsOnDiscardSpec::RunTest(
 
 	Snapshot = Session->BuildSnapshot();
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	TestFalse(TEXT("Target left hand"), FindHandCard(Snapshot, TargetId) != nullptr);
+	TestFalse(TEXT("Target left hand"), FindHandZoneMoveEventHandCard(Snapshot, TargetId) != nullptr);
 	TestEqual(TEXT("OnDiscard passive added shield"), Snapshot.Player.Shield, 7);
 	if (const FBattleEvent* DiscardEvent = FindEvent(Events, EBattleEventType::CardDiscarded, TargetId))
 	{
@@ -270,7 +270,7 @@ bool FWacomBattleTurnEndDiscardRunsOnDiscardWithoutHandLimitEventSpec::RunTest(c
 
 	Snapshot = Session->BuildSnapshot();
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	TestFalse(TEXT("Target left hand after turn-end discard"), FindHandCard(Snapshot, TargetId) != nullptr);
+	TestFalse(TEXT("Target left hand after turn-end discard"), FindHandZoneMoveEventHandCard(Snapshot, TargetId) != nullptr);
 	TestEqual(TEXT("Turn-end OnDiscard passive added shield"), Snapshot.Player.Shield, 4);
 	if (const FBattleEvent* DiscardEvent = FindEvent(Events, EBattleEventType::CardDiscarded, TargetId))
 	{
@@ -307,7 +307,7 @@ bool FWacomBattleExhaustSelectedEmitsCardExhaustedWithoutOnDiscardSpec::RunTest(
 	Snapshot = Session->BuildSnapshot();
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 
-	TestFalse(TEXT("Target left hand"), FindHandCard(Snapshot, TargetId) != nullptr);
+	TestFalse(TEXT("Target left hand"), FindHandZoneMoveEventHandCard(Snapshot, TargetId) != nullptr);
 	TestEqual(TEXT("OnDiscard passive did not run for exhaust"), Snapshot.Player.Shield, 0);
 	TestEqual(TEXT("No CardDiscarded for exhaust target"),
 		CountEvents(Events, EBattleEventType::CardDiscarded, TargetId), 0);
@@ -347,7 +347,7 @@ bool FWacomBattlePlayedCardDiscardDestinationDoesNotRunOnDiscardSpec::RunTest(co
 	Snapshot = Session->BuildSnapshot();
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 
-	TestFalse(TEXT("Played card left hand"), FindHandCard(Snapshot, PlayedId) != nullptr);
+	TestFalse(TEXT("Played card left hand"), FindHandZoneMoveEventHandCard(Snapshot, PlayedId) != nullptr);
 	TestEqual(TEXT("Played card destination does not trigger OnDiscard"), Snapshot.Player.Shield, 0);
 	TestEqual(TEXT("Played card destination does not emit CardDiscarded"),
 		CountEvents(Events, EBattleEventType::CardDiscarded, PlayedId), 0);

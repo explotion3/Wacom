@@ -14,6 +14,7 @@ class ABattleTriggerActor;
 class URunSession;
 class UBattleHUD;
 class UWacomRunEventDefinition;
+class UWacomRunWorldInteractionTargetBridgeComponent;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;
@@ -103,6 +104,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Battle Debug", meta = (ToolTip = "开启后，战斗场景目标点击路由会输出 cursor trace 和句柄转发日志。默认关闭，不显示屏幕调试输出。"))
 	bool bLogBattleSceneTargetClickRouting = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target", meta = (ToolTip = "开启后，探索期会低频 probe 鼠标下方的 Run World Target，并播放轻量预览。不会提交 Run 规则或替代 E 交互。"))
+	bool bEnableRunWorldTargetProbePreview = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target", meta = (ToolTip = "Run World Target 鼠标 probe 预览的刷新间隔，单位秒。", ClampMin = "0.01", ClampMax = "1.0", UIMin = "0.02", UIMax = "0.2"))
+	float RunWorldTargetProbePreviewIntervalSeconds = 0.05f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target|Debug", meta = (ToolTip = "开启后，Run World Target probe 预览切换会输出 handle 和清理日志。默认关闭。"))
+	bool bLogRunWorldTargetProbePreview = false;
+
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
 
@@ -118,6 +128,11 @@ public:
 	bool TryRouteBattleSceneTargetClick(bool bRequireTargetSelect = false);
 	bool TryProbeBattleSceneInteractionTarget(FWacomInteractionTargetHandle& OutHandle) const;
 	bool TryProbeBattleSceneInteractionTargetAtWidgetPosition(
+		const FVector2D& WidgetPosition,
+		FWacomInteractionTargetHandle& OutHandle) const;
+
+	bool TryProbeRunSceneInteractionTarget(FWacomInteractionTargetHandle& OutHandle) const;
+	bool TryProbeRunSceneInteractionTargetAtWidgetPosition(
 		const FVector2D& WidgetPosition,
 		FWacomInteractionTargetHandle& OutHandle) const;
 
@@ -155,6 +170,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupInputComponent() override;
 	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
 
@@ -177,7 +193,14 @@ protected:
 	virtual bool BuildBattleSceneInteractionTargetHitResultAtWidgetPosition(
 		const FVector2D& WidgetPosition,
 		FHitResult& OutHitResult) const;
+	virtual bool BuildRunSceneClickHitResult(FHitResult& OutHitResult) const;
+	virtual bool BuildRunSceneInteractionTargetHitResultAtWidgetPosition(
+		const FVector2D& WidgetPosition,
+		FHitResult& OutHitResult) const;
 	virtual bool BuildRunTunnelBranchClickHitResult(FHitResult& OutHitResult) const;
+	virtual bool IsInExplorationFlow() const;
+	void UpdateRunWorldTargetProbePreview();
+	void ClearRunWorldTargetProbePreview();
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
 	FText BuildCurrentInteractPrompt() const;
@@ -192,6 +215,11 @@ private:
 	/** 点击手牌 index（1-based，与按键对应）。 */
 	void RouteHandIndex(int32 OneBasedIndex);
 
+	void StartRunWorldTargetProbePreviewLoop();
+	void StopRunWorldTargetProbePreviewLoop();
+	UWacomRunWorldInteractionTargetBridgeComponent* ResolveRunWorldTargetBridgeFromHandle(
+		const FWacomInteractionTargetHandle& Handle) const;
+
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSession = nullptr;
 
@@ -201,4 +229,9 @@ private:
 	 */
 	UPROPERTY(Transient)
 	TArray<TWeakObjectPtr<AActor>> CandidateInteractables;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> PreviewedRunWorldTargetBridge;
+
+	FTimerHandle RunWorldTargetProbePreviewTimerHandle;
 };

@@ -319,7 +319,9 @@ ESC 当前语义：
 - `IWacomInteractionTargetProvider`：轻量接口，Component 实现后提供 `BuildWorldTargetHandle()`。
 - `UWacomInteractionTargetComponent`：通用交互目标组件，任意 Actor 可挂载。字段：`TargetId`（运行时 FGuid）、`InteractionTargetTag`（FGameplayTag）、`StableTargetId`（FName）。
 - `UWacomBattleEnemyPartWorldTargetBridgeComponent`：Battle 专用桥接组件。它读取稳定 `PartId`，在 HUD 刷新时解析当前 `PartInstanceId`，写回同 Actor 上的 `UWacomInteractionTargetComponent`，并注册接收 `TargetConfirmed / DamageDealt / EnemyPartHpEmptied` 表现 cue。
+- `UWacomRunWorldInteractionTargetBridgeComponent`：Run / 探索专用桥接组件。它把手工填写的 `RunTargetStableId` 和自动/已有运行时 `TargetId` 写回同 Actor 上的 `UWacomInteractionTargetComponent`，并标记 `Interaction.Target.Run.Object`。它只提供鼠标 probe preview 和 debug，不提交 Run 规则，也不替代 `IWacomWorldInteractable + E`。
 - `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；只有 `TargetKind=World` 且 `TargetTag=Interaction.Target.Battle.EnemyPart` 的 handle 会被转发为 Battle enemy part 点击。
+- `AWacomPlayerController::TryProbeRunSceneInteractionTarget()` 和 `TryProbeRunSceneInteractionTargetAtWidgetPosition()` 在 Exploration 下用同一 Provider 路径构建 handle，但只接受 `TargetTag=Interaction.Target.Run.Object`。`bEnableRunWorldTargetProbePreview` 开启时，Controller 会低频 probe 鼠标下方 Run target 并驱动 bridge 的 scale preview；失去命中、切换目标、退出 Controller 时会清理旧 preview。
 - `UWacomFirstPersonCardLayerSlotWidget` 为当前 active、可见、非 exiting 且拥有有效 `CardInstanceId` 的 first-person slot 构建 Card target handle。它使用当前 visual slot 的 `ScreenPosition`，不要求卡牌可打；后续拖拽 resolver 再判断当前拖拽卡能否作用到该卡槽。
 - First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈区分合法 hand-card target 和 probe-only target。
 - Battle first-person drag/drop 由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析 preview 和 release 语义。当前提交既有 `PlayCard` 命令：无目标卡 armed 提交空目标，合法 world enemy part 提交目标部位，合法 `TargetMode=HandCard` 源卡提交 `TargetCardInstanceId`。UI 不区分加费、减费、弃置或消耗的具体规则；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 对左右手锚点的拒绝来自 BattleSession / PlayCardResolver 合法性。不支持的 Card target 仍为 probe-only，Zone / Run target 后续接入。V0-AG 后，resolver 预览使用 `UBattleSession::ValidateTargetWithCard()` 获取可解释拒绝原因；拖拽 `TargetMode=HandCard` 源卡时，HUD 会为整副 first-person hand 生成合法 / 非法 Card target affordance，玩家只看到轻量颜色和缩放，具体 reason 只进入 debug summary / 自动化测试。
@@ -346,6 +348,7 @@ Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomIntera
 ### 当前范围
 
 - [x] World 目标：通过 `UWacomInteractionTargetComponent` 命中；Battle enemy part 由 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 绑定运行时 ID
+- [x] Run World 目标：通过 `UWacomRunWorldInteractionTargetBridgeComponent` 标记 `Interaction.Target.Run.Object` 并提供 probe preview；规则层 resolver 后续接入
 - [x] Card 目标：first-person hand slot hover / visual update 已通过 `UWacomFirstPersonCardLayerWidget` 与 `UWacomFirstPersonCardAnchorComponent` 暴露；旧 `UCardWidget / UHandPanel` 不作为本轮维护入口
 - [ ] Zone 目标：通过 UMG drop area 命中（后续接入）
 - [x] Battle 规则层 Resolver：`UBattleSession::CanTargetWithCard`
@@ -354,5 +357,6 @@ Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomIntera
 ### 不变项
 
 - 原有 `IWacomWorldInteractable` 探索期 E 键交互不变。
+- Run target probe preview 只表达“鼠标当前命中该物体”，不表达可交互、可提交或某张卡能作用。
 - 原有 BattleHUD target registration / TargetCue 表现不变。
 - `TryRouteBattleSceneTargetClick` 的 `protected virtual` 测试 seam 不变。
