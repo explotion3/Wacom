@@ -95,6 +95,15 @@ namespace
 		return E;
 	}
 
+	FWacomHandCardTargetFilter MakeHandCardTargetFilter(bool bAllowNormalHandCards, bool bAllowHandAnchors)
+	{
+		FWacomHandCardTargetFilter Filter;
+		Filter.bUseExplicitHandCardTargetFilter = true;
+		Filter.bAllowNormalHandCards = bAllowNormalHandCards;
+		Filter.bAllowHandAnchors = bAllowHandAnchors;
+		return Filter;
+	}
+
 	// ---- 卡 Builder ----
 
 	UCardDefinition* BuildCard(
@@ -111,7 +120,8 @@ namespace
 		TArray<FCardEffect> Effects,
 		TArray<FCardEffect> PerfectReleaseEffects,
 		TArray<FCardZoneHook> ZoneHooks,
-		TArray<FCardPassive> Passives)
+		TArray<FCardPassive> Passives,
+		const FWacomHandCardTargetFilter& HandCardTargetFilter = FWacomHandCardTargetFilter())
 	{
 		UPackage* Pkg = FindOrCreatePackage(PackagePath);
 		if (!Pkg) { return nullptr; }
@@ -127,6 +137,7 @@ namespace
 		Card->Keywords.Reset();
 		for (const FGameplayTag& Tag : Keywords) { Card->Keywords.AddTag(Tag); }
 		Card->TargetMode            = TargetMode;
+		Card->HandCardTargetFilter  = HandCardTargetFilter;
 		Card->Physique              = Physique;
 		Card->Effects               = MoveTemp(Effects);
 		Card->PerfectReleaseEffects = MoveTemp(PerfectReleaseEffects);
@@ -421,7 +432,8 @@ namespace Wacom::ContentBuilder
 			/*Effects*/ { ModifySelectedHandCardCost(/*bReduceCost*/ false, 2) },
 			/*PerfectRelease*/ {},
 			/*ZoneHooks*/ {},
-			/*Passives*/ {}
+			/*Passives*/ {},
+			MakeHandCardTargetFilter(/*bAllowNormalHandCards*/ true, /*bAllowHandAnchors*/ true)
 		);
 
 		UCardDefinition* TestReduceCostToSelectedHand = BuildCard(
@@ -438,7 +450,8 @@ namespace Wacom::ContentBuilder
 			/*Effects*/ { ModifySelectedHandCardCost(/*bReduceCost*/ true, 1) },
 			/*PerfectRelease*/ {},
 			/*ZoneHooks*/ {},
-			/*Passives*/ {}
+			/*Passives*/ {},
+			MakeHandCardTargetFilter(/*bAllowNormalHandCards*/ true, /*bAllowHandAnchors*/ true)
 		);
 
 		UCardDefinition* TestTargetCost3 = BuildCard(
@@ -473,7 +486,8 @@ namespace Wacom::ContentBuilder
 			/*Effects*/ { MoveSelectedHandCardZone(/*bExhaust*/ false) },
 			/*PerfectRelease*/ {},
 			/*ZoneHooks*/ {},
-			/*Passives*/ {}
+			/*Passives*/ {},
+			MakeHandCardTargetFilter(/*bAllowNormalHandCards*/ true, /*bAllowHandAnchors*/ false)
 		);
 
 		UCardDefinition* TestExhaustSelectedHandCard = BuildCard(
@@ -490,7 +504,8 @@ namespace Wacom::ContentBuilder
 			/*Effects*/ { MoveSelectedHandCardZone(/*bExhaust*/ true) },
 			/*PerfectRelease*/ {},
 			/*ZoneHooks*/ {},
-			/*Passives*/ {}
+			/*Passives*/ {},
+			MakeHandCardTargetFilter(/*bAllowNormalHandCards*/ true, /*bAllowHandAnchors*/ false)
 		);
 
 		// 检查：任一建造失败则放弃。

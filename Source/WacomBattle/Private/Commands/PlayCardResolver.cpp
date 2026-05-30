@@ -9,6 +9,7 @@
 #include "Enemy/EnemyPartActionResolver.h"
 #include "Events/BattleEventBus.h"
 #include "Passives/PassiveDispatcher.h"
+#include "Resolution/HandCardTargetEligibility.h"
 #include "Resolution/InitiativeResolver.h"
 #include "Resolution/ZoneHookResolver.h"
 #include "Runtime/RuntimeCardInstance.h"
@@ -18,7 +19,6 @@
 #include "Types/WacomEnums.h"
 
 #include "Cards/CardDefinition.h"
-#include "Cards/CardEffect.h"
 
 namespace
 {
@@ -77,25 +77,19 @@ namespace
 		    || Card.TemporaryKeywords.HasTag(Keyword);
 	}
 
-	bool UsesSelectedHandCardZoneMove(const UCardDefinition& Def)
+	FName MapHandCardEligibilityRejectToStatusDetail(
+		EWacomHandCardTargetEligibilityReject RejectReason)
 	{
-		for (const FCardEffect& Effect : Def.Effects)
+		switch (RejectReason)
 		{
-			if (Effect.Target == WacomTags::Target_SelectedHandCard
-				&& (Effect.EffectType == WacomTags::Effect_Card_DiscardSelected
-					|| Effect.EffectType == WacomTags::Effect_Card_ExhaustSelected))
-			{
-				return true;
-			}
+		case EWacomHandCardTargetEligibilityReject::NormalHandCardUnsupported:
+			return TEXT("TargetNormalHandCardUnsupported");
+		case EWacomHandCardTargetEligibilityReject::HandAnchorUnsupported:
+			return TEXT("TargetCardAnchorUnsupported");
+		case EWacomHandCardTargetEligibilityReject::None:
+		default:
+			return TEXT("TargetCardFilterUnsupported");
 		}
-		return false;
-	}
-
-	bool IsHandAnchor(const FBattleState& State, const FGuid& CardInstanceId)
-	{
-		return CardInstanceId.IsValid()
-			&& (CardInstanceId == State.Cards.LeftHandInstanceId
-				|| CardInstanceId == State.Cards.RightHandInstanceId);
 	}
 }
 
@@ -153,9 +147,13 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		{
 			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetCardInvalid"));
 		}
-		if (UsesSelectedHandCardZoneMove(*Def) && IsHandAnchor(State, Command.TargetCardInstanceId))
+		const FWacomHandCardTargetEligibility Eligibility =
+			FHandCardTargetEligibility::Validate(State, *Def, Command.TargetCardInstanceId);
+		if (!Eligibility.bCanTarget)
 		{
-			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetCardAnchorUnsupported"));
+			return FWacomStatus::Fail(
+				EWacomError::IllegalTarget,
+				MapHandCardEligibilityRejectToStatusDetail(Eligibility.RejectReason));
 		}
 	}
 	// 其他 TargetMode 不要求 Command 带目标字段。

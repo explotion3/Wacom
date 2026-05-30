@@ -20,6 +20,7 @@ enum class EWacomBattleTargetRejectReason : uint8
 	TargetCardInvalid UMETA(DisplayName = "TargetCardInvalid"),
 	TargetCardNotInHand UMETA(DisplayName = "TargetCardNotInHand"),
 	SelfTarget UMETA(DisplayName = "SelfTarget"),
+	UnsupportedNormalHandCardTarget UMETA(DisplayName = "UnsupportedNormalHandCardTarget"),
 	UnsupportedHandAnchorTarget UMETA(DisplayName = "UnsupportedHandAnchorTarget"),
 	UnsupportedZoneTarget UMETA(DisplayName = "UnsupportedZoneTarget"),
 };

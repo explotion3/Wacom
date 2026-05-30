@@ -24,6 +24,18 @@ namespace
 		return nullptr;
 	}
 
+	FGuid FindFirstHandAnchor(const FBattleSnapshot& Snapshot)
+	{
+		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+		{
+			if (Card.bIsHandAnchor)
+			{
+				return Card.InstanceId;
+			}
+		}
+		return FGuid();
+	}
+
 	int32 GetRuntimeCostInHand(const FBattleSnapshot& Snapshot, const FGuid& CardId)
 	{
 		if (const FHandCardSnapshot* Card = FindHandCard(Snapshot, CardId))
@@ -88,6 +100,31 @@ namespace
 			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
 			1);
 	}
+
+	UBattleSession* CreateExplicitFilterSession(
+		FWacomBattleFixture& Fixture,
+		UCardDefinition*& OutSourceCard,
+		UCardDefinition*& OutNormalTargetCard,
+		bool bAllowNormalHandCards,
+		bool bAllowHandAnchors)
+	{
+		OutSourceCard = Fixture.MakeHandCardCostModifierCard(/*Cost*/0, /*Magnitude*/2, /*bReduceCost*/false);
+		OutSourceCard->HandCardTargetFilter.bUseExplicitHandCardTargetFilter = true;
+		OutSourceCard->HandCardTargetFilter.bAllowNormalHandCards = bAllowNormalHandCards;
+		OutSourceCard->HandCardTargetFilter.bAllowHandAnchors = bAllowHandAnchors;
+		OutNormalTargetCard = Fixture.MakeNoopCard(/*Cost*/3);
+
+		TArray<UCardDefinition*> Deck = { OutSourceCard, OutNormalTargetCard };
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			Deck.Add(Fixture.MakeNoopCard(0));
+		}
+
+		return Fixture.CreateSession(
+			Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
+			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+			1);
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -140,6 +177,219 @@ bool FWacomBattleHandCardTargetRejectsSelfMissingOrNotInHandSpec::RunTest(const 
 	TestFalse(TEXT("Source no longer in hand"), FindHandCard(Snapshot, SourceId) != nullptr);
 	TestFalse(TEXT("Target card cannot target source once source left hand"),
 		Session->CanTargetWithCard(TargetId, FWacomInteractionTargetHandle::ForCardTarget(SourceId, Session)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleExplicitFilterAllowsNormalHandCardsSpec,
+	"Wacom.Battle.CardToCardTarget.ExplicitFilterAllowsNormalHandCards",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleExplicitFilterAllowsNormalHandCardsSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = nullptr;
+	UCardDefinition* TargetDef = nullptr;
+	UBattleSession* Session = CreateExplicitFilterSession(
+		Fx,
+		SourceDef,
+		TargetDef,
+		/*bAllowNormalHandCards*/ true,
+		/*bAllowHandAnchors*/ false);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestTrue(TEXT("Explicit filter allows normal hand card"), Result.bCanTarget);
+	TestTrue(TEXT("CanTarget mirrors explicit normal allow"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleExplicitFilterAllowsHandAnchorsSpec,
+	"Wacom.Battle.CardToCardTarget.ExplicitFilterAllowsHandAnchors",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleExplicitFilterAllowsHandAnchorsSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = nullptr;
+	UCardDefinition* TargetDef = nullptr;
+	UBattleSession* Session = CreateExplicitFilterSession(
+		Fx,
+		SourceDef,
+		TargetDef,
+		/*bAllowNormalHandCards*/ false,
+		/*bAllowHandAnchors*/ true);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid AnchorId = FindFirstHandAnchor(Snapshot);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(AnchorId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestTrue(TEXT("Explicit filter allows hand anchor"), Result.bCanTarget);
+	TestTrue(TEXT("CanTarget mirrors explicit anchor allow"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleExplicitFilterRejectsNormalHandCardsSpec,
+	"Wacom.Battle.CardToCardTarget.ExplicitFilterRejectsNormalHandCards",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleExplicitFilterRejectsNormalHandCardsSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = nullptr;
+	UCardDefinition* TargetDef = nullptr;
+	UBattleSession* Session = CreateExplicitFilterSession(
+		Fx,
+		SourceDef,
+		TargetDef,
+		/*bAllowNormalHandCards*/ false,
+		/*bAllowHandAnchors*/ true);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestFalse(TEXT("Explicit filter rejects normal hand card"), Result.bCanTarget);
+	TestEqual(TEXT("Explicit filter explains normal hand card reject"),
+		Result.RejectReason,
+		EWacomBattleTargetRejectReason::UnsupportedNormalHandCardTarget);
+	TestFalse(TEXT("Submit on rejected normal target fails"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleExplicitFilterRejectsHandAnchorsSpec,
+	"Wacom.Battle.CardToCardTarget.ExplicitFilterRejectsHandAnchors",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleExplicitFilterRejectsHandAnchorsSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = nullptr;
+	UCardDefinition* TargetDef = nullptr;
+	UBattleSession* Session = CreateExplicitFilterSession(
+		Fx,
+		SourceDef,
+		TargetDef,
+		/*bAllowNormalHandCards*/ true,
+		/*bAllowHandAnchors*/ false);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid AnchorId = FindFirstHandAnchor(Snapshot);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(AnchorId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestFalse(TEXT("Explicit filter rejects hand anchor"), Result.bCanTarget);
+	TestEqual(TEXT("Explicit filter explains hand anchor reject"),
+		Result.RejectReason,
+		EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget);
+	TestFalse(TEXT("Submit on rejected anchor target fails"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, AnchorId)).IsOk());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleImplicitFilterPreservesCostModifierAnchorBehaviorSpec,
+	"Wacom.Battle.CardToCardTarget.ImplicitFilterPreservesCostModifierAnchorBehavior",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleImplicitFilterPreservesCostModifierAnchorBehaviorSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = Fx.MakeHandCardCostModifierCard(/*Cost*/0, /*Magnitude*/2, /*bReduceCost*/false);
+	SourceDef->HandCardTargetFilter.bUseExplicitHandCardTargetFilter = false;
+	SourceDef->HandCardTargetFilter.bAllowNormalHandCards = false;
+	SourceDef->HandCardTargetFilter.bAllowHandAnchors = false;
+	UCardDefinition* LeftDef = Fx.MakeNoopCard(0);
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(LeftDef, Fx.MakeNoopCard(0), { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, LeftDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(LeftId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestTrue(TEXT("Implicit cost-modifier filter keeps anchor target valid"), Result.bCanTarget);
+	TestTrue(TEXT("Submit on implicit cost-modifier anchor target succeeds"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, LeftId)).IsOk());
+	Snapshot = Session->BuildSnapshot();
+	TestEqual(TEXT("Implicit cost-modifier still changes anchor cost"), GetRuntimeCostInHand(Snapshot, LeftId), 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleImplicitFilterPreservesSelectedDiscardExhaustAnchorRejectSpec,
+	"Wacom.Battle.CardToCardTarget.ImplicitFilterPreservesSelectedDiscardExhaustAnchorReject",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleImplicitFilterPreservesSelectedDiscardExhaustAnchorRejectSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = Fx.MakeSelectedHandCardZoneMoveCard(/*Cost*/0, /*bExhaust*/false);
+	SourceDef->HandCardTargetFilter.bUseExplicitHandCardTargetFilter = false;
+	SourceDef->HandCardTargetFilter.bAllowNormalHandCards = true;
+	SourceDef->HandCardTargetFilter.bAllowHandAnchors = true;
+	UCardDefinition* LeftDef = Fx.MakeNoopCard(0);
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(LeftDef, Fx.MakeNoopCard(0), { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, LeftDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(LeftId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestFalse(TEXT("Implicit selected zone move filter rejects anchor target"), Result.bCanTarget);
+	TestEqual(TEXT("Implicit selected zone move explains anchor reject"),
+		Result.RejectReason,
+		EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget);
+	TestFalse(TEXT("Submit on implicit selected zone move anchor target fails"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, LeftId)).IsOk());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattlePlayCardResolverMatchesValidationForHandCardFilterSpec,
+	"Wacom.Battle.CardToCardTarget.PlayCardResolverMatchesValidationForHandCardFilter",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattlePlayCardResolverMatchesValidationForHandCardFilterSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = nullptr;
+	UCardDefinition* TargetDef = nullptr;
+	UBattleSession* Session = CreateExplicitFilterSession(
+		Fx,
+		SourceDef,
+		TargetDef,
+		/*bAllowNormalHandCards*/ false,
+		/*bAllowHandAnchors*/ true);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId));
+	TestFalse(TEXT("Validation rejects normal hand-card target"), Result.bCanTarget);
+	TestEqual(TEXT("Validation reject reason is filter-specific"),
+		Result.RejectReason,
+		EWacomBattleTargetRejectReason::UnsupportedNormalHandCardTarget);
+	TestFalse(TEXT("PlayCard submit rejects same filter case"), Status.IsOk());
+	TestEqual(TEXT("PlayCard resolver reports matching filter detail"),
+		Status.Detail,
+		FName(TEXT("TargetNormalHandCardUnsupported")));
 	return true;
 }
 

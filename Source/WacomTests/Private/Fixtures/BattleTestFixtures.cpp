@@ -75,6 +75,9 @@ UCardDefinition* FWacomBattleFixture::MakeHandCardCostModifierCard(int32 Cost, i
 		*FGuid::NewGuid().ToString(EGuidFormats::Short)));
 	Card->BaseCost = Cost;
 	Card->TargetMode = ECardTargetMode::HandCard;
+	Card->HandCardTargetFilter.bUseExplicitHandCardTargetFilter = true;
+	Card->HandCardTargetFilter.bAllowNormalHandCards = true;
+	Card->HandCardTargetFilter.bAllowHandAnchors = true;
 
 	FCardEffect Effect;
 	Effect.EffectType = bReduceCost
@@ -98,6 +101,9 @@ UCardDefinition* FWacomBattleFixture::MakeSelectedHandCardZoneMoveCard(int32 Cos
 		*FGuid::NewGuid().ToString(EGuidFormats::Short)));
 	Card->BaseCost = Cost;
 	Card->TargetMode = ECardTargetMode::HandCard;
+	Card->HandCardTargetFilter.bUseExplicitHandCardTargetFilter = true;
+	Card->HandCardTargetFilter.bAllowNormalHandCards = true;
+	Card->HandCardTargetFilter.bAllowHandAnchors = false;
 
 	FCardEffect Effect;
 	Effect.EffectType = bExhaust

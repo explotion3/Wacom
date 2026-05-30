@@ -4,8 +4,7 @@
 
 #include "Core/BattleState.h"
 #include "Cards/CardDefinition.h"
-#include "Cards/CardEffect.h"
-#include "Tags/WacomGameplayTags.h"
+#include "Resolution/HandCardTargetEligibility.h"
 #include "Types/WacomInteractionTargetTypes.h"
 
 namespace
@@ -25,6 +24,7 @@ namespace
 		case EWacomBattleTargetRejectReason::TargetCardInvalid: return TEXT("TargetCardInvalid");
 		case EWacomBattleTargetRejectReason::TargetCardNotInHand: return TEXT("TargetCardNotInHand");
 		case EWacomBattleTargetRejectReason::SelfTarget: return TEXT("SelfTarget");
+		case EWacomBattleTargetRejectReason::UnsupportedNormalHandCardTarget: return TEXT("UnsupportedNormalHandCardTarget");
 		case EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget: return TEXT("UnsupportedHandAnchorTarget");
 		case EWacomBattleTargetRejectReason::UnsupportedZoneTarget: return TEXT("UnsupportedZoneTarget");
 		default: return TEXT("Unknown");
@@ -49,25 +49,19 @@ namespace
 		return Result;
 	}
 
-	bool TargetResolverUsesSelectedHandCardZoneMove(const UCardDefinition& Def)
+	EWacomBattleTargetRejectReason MapHandCardEligibilityReject(
+		EWacomHandCardTargetEligibilityReject RejectReason)
 	{
-		for (const FCardEffect& Effect : Def.Effects)
+		switch (RejectReason)
 		{
-			if (Effect.Target == WacomTags::Target_SelectedHandCard
-				&& (Effect.EffectType == WacomTags::Effect_Card_DiscardSelected
-					|| Effect.EffectType == WacomTags::Effect_Card_ExhaustSelected))
-			{
-				return true;
-			}
+		case EWacomHandCardTargetEligibilityReject::NormalHandCardUnsupported:
+			return EWacomBattleTargetRejectReason::UnsupportedNormalHandCardTarget;
+		case EWacomHandCardTargetEligibilityReject::HandAnchorUnsupported:
+			return EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget;
+		case EWacomHandCardTargetEligibilityReject::None:
+		default:
+			return EWacomBattleTargetRejectReason::None;
 		}
-		return false;
-	}
-
-	bool TargetResolverIsHandAnchor(const FBattleState& State, const FGuid& CardInstanceId)
-	{
-		return CardInstanceId.IsValid()
-			&& (CardInstanceId == State.Cards.LeftHandInstanceId
-				|| CardInstanceId == State.Cards.RightHandInstanceId);
 	}
 }
 
@@ -160,9 +154,15 @@ FWacomBattleTargetValidationResult FBattleTargetResolver::ValidateTargetWithCard
 			return MakeTargetValidationResult(false, EWacomBattleTargetRejectReason::TargetCardNotInHand, CardInstanceId, Target);
 		}
 
-		if (TargetResolverUsesSelectedHandCardZoneMove(*Def) && TargetResolverIsHandAnchor(State, Target.CardInstanceId))
+		const FWacomHandCardTargetEligibility Eligibility =
+			FHandCardTargetEligibility::Validate(State, *Def, Target.CardInstanceId);
+		if (!Eligibility.bCanTarget)
 		{
-			return MakeTargetValidationResult(false, EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget, CardInstanceId, Target);
+			return MakeTargetValidationResult(
+				false,
+				MapHandCardEligibilityReject(Eligibility.RejectReason),
+				CardInstanceId,
+				Target);
 		}
 
 		return MakeTargetValidationResult(true, EWacomBattleTargetRejectReason::None, CardInstanceId, Target);

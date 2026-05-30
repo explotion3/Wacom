@@ -71,12 +71,32 @@ class UCardDefinition : public UPrimaryDataAsset
     UPROPERTY(EditDefaultsOnly) FGameplayTagContainer Keywords;      // Card.Keyword.*
     UPROPERTY(EditDefaultsOnly) FCardPhysique      Physique;         // 身材（可选）
     UPROPERTY(EditDefaultsOnly) ECardTargetMode    TargetMode;       // None / SingleEnemyPart / AllEnemyParts / Self / HandCard
+    UPROPERTY(EditDefaultsOnly) FWacomHandCardTargetFilter HandCardTargetFilter; // HandCard 目标基础筛选
     UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> Effects;         // 主效果
     UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> PerfectReleaseEffects; // 完美释放效果
     UPROPERTY(EditDefaultsOnly) TArray<FCardZoneHook> ZoneHooks;     // 区域相关效果或修正
     UPROPERTY(EditDefaultsOnly) TArray<FCardPassive> Passives;       // 被动触发
 };
 ```
+
+### FWacomHandCardTargetFilter
+
+`HandCardTargetFilter` 只影响 `TargetMode=HandCard` 的主动打牌目标资格，UI 不直接读取它，而是通过 Battle 的 `ValidateTargetWithCard()` / drop resolver 消费结果。
+
+```cpp
+USTRUCT(BlueprintType)
+struct FWacomHandCardTargetFilter
+{
+    UPROPERTY(EditDefaultsOnly) bool bUseExplicitHandCardTargetFilter = false;
+    UPROPERTY(EditDefaultsOnly) bool bAllowNormalHandCards = true;
+    UPROPERTY(EditDefaultsOnly) bool bAllowHandAnchors = true;
+};
+```
+
+- `bUseExplicitHandCardTargetFilter=true`：卡牌直接使用这两个允许开关。
+- `bUseExplicitHandCardTargetFilter=false`：保持旧资产兼容推断。普通 `TargetMode=HandCard` 默认允许普通手牌和左右手锚点；包含 `Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected + Target.SelectedHandCard` 的卡默认只允许普通手牌。
+- self target 永远禁止，不提供配置项。
+- 现阶段只筛普通手牌 / 左右手锚点；费用、关键词、卡牌类型、伙伴 / 食物等条件后续再扩展。
 
 ### FCardPhysique
 
@@ -599,8 +619,8 @@ Magnitude 计算顺序：
 | `Effect.Shuffle.ToRandomZone` | - | Self(本卡) | - | - | - | 把本卡腾挪到随机区域 |
 | `Effect.Card.AddCost` | Modifier 增量 | Self(本卡) / LastShuffledCard / SelectedHandCard | - | - | Literal | 修改 RuntimeCostModifier |
 | `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 下限由 ComputeRuntimeCost clamp 到 0 |
-| `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆；不允许左右手锚点，Magnitude 不参与数量判定；触发目标卡 `OnDiscard` |
-| `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗区；不允许左右手锚点，Magnitude 不参与数量判定；不触发 `OnDiscard` |
+| `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆；建议显式设置 HandCardTargetFilter：允许普通手牌、拒绝左右手锚点；Magnitude 不参与数量判定；触发目标卡 `OnDiscard` |
+| `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗区；建议显式设置 HandCardTargetFilter：允许普通手牌、拒绝左右手锚点；Magnitude 不参与数量判定；不触发 `OnDiscard` |
 | `Effect.Draw` | 张数 | Self / Player | CardLocation.* | - | Literal | `TargetZone` 复用为源区域 tag，默认抽牌堆 |
 | `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉手牌中普通卡，不弃锚点 |
 | `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 标记交给打出后去向阶段处理 |
@@ -638,6 +658,12 @@ Magnitude 计算顺序：
 - `Effect.Shuffle.ToRandomZone` / `Effect.Card.AddCost` / `Effect.Card.ReduceCost` → 指向本卡（HandCard）
 - `Effect.Card.DiscardSelected` / `Effect.Card.ExhaustSelected` 必须填写 `Target.SelectedHandCard`，不要填写 `Target.Self`
 - 其他（Damage / Heal / ApplyStatus）→ 指向玩家（Player）
+
+### HandCard 目标筛选填写建议
+
+- `Effect.Card.AddCost / ReduceCost + Target.SelectedHandCard`：通常允许普通手牌和左右手锚点。
+- `Effect.Card.DiscardSelected / ExhaustSelected + Target.SelectedHandCard`：通常只允许普通手牌，拒绝左右手锚点。
+- 旧资产没有显式设置时，Battle 会按上述两类兼容推断；新测试卡和后续正式卡建议显式设置，避免效果组合变复杂后语义含混。
 
 ---
 
