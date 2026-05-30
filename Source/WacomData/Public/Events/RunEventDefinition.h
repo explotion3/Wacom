@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
 #include "RunEventDefinition.generated.h"
 
 class UCardDefinition;
@@ -99,6 +100,43 @@ struct WACOMDATA_API FWacomRunEventEffectDefinition
 	FName TargetPersistentId = NAME_None;
 };
 
+/** 选项需要玩家拖入一张已持有卡作为支付时使用的筛选合同。 */
+USTRUCT(BlueprintType)
+struct WACOMDATA_API FWacomRunEventCardPaymentDefinition
+{
+	GENERATED_BODY()
+
+	/** 是否要求玩家把一张已持有卡拖到该选项上作为支付。开启后普通点击不会提交该选项。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Card Payment",
+		meta = (ToolTip = "是否要求玩家把一张已持有卡拖到该选项上作为支付。开启后普通点击不会提交该选项。"))
+	bool bRequiresOwnedCardPayment = false;
+
+	/** 菜单 Zone 目标 ID。为空时运行时使用 RunEvent.Pay.{ChoiceId}。同一节点内必须唯一。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Card Payment",
+		meta = (ToolTip = "菜单 Zone 目标 ID。为空时运行时使用 RunEvent.Pay.{ChoiceId}。同一节点内必须唯一。"))
+	FName PaymentZoneId = NAME_None;
+
+	/** 允许支付的卡牌定义资产。与 AllowedCardIds 是 OR 关系；为空表示不按定义资产筛选。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Card Payment",
+		meta = (ToolTip = "允许支付的卡牌定义资产。与 AllowedCardIds 是 OR 关系；为空表示不按定义资产筛选。"))
+	TArray<TObjectPtr<UCardDefinition>> AllowedCardDefinitions;
+
+	/** 允许支付的 CardId 列表。与 AllowedCardDefinitions 是 OR 关系；为空表示不按 CardId 筛选。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Card Payment",
+		meta = (ToolTip = "允许支付的 CardId 列表。与 AllowedCardDefinitions 是 OR 关系；为空表示不按 CardId 筛选。"))
+	TArray<FName> AllowedCardIds;
+
+	/** 支付目标卡必须全部拥有的关键词。读取玩家持有卡实例对应定义上的 Card.Keyword。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Card Payment",
+		meta = (ToolTip = "支付目标卡必须全部拥有的关键词。读取玩家持有卡实例对应定义上的 Card.Keyword。"))
+	FGameplayTagContainer RequiredKeywords;
+
+	/** 支付目标卡不能拥有的关键词。命中任意一个即被拒绝。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Card Payment",
+		meta = (ToolTip = "支付目标卡不能拥有的关键词。命中任意一个即被拒绝。"))
+	FGameplayTagContainer BlockedKeywords;
+};
+
 /** 轻量事件图中的一个选项。 */
 USTRUCT(BlueprintType)
 struct WACOMDATA_API FWacomRunEventChoiceDefinition
@@ -119,6 +157,11 @@ struct WACOMDATA_API FWacomRunEventChoiceDefinition
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
 		meta = (ToolTip = "选项可用条件。所有条件都满足时才可选择；支持金币、节点、压力阈值、拥有卡牌和事件完成状态。"))
 	TArray<FWacomRunEventConditionDefinition> Conditions;
+
+	/** 可选卡牌支付合同。开启后该选项必须通过 first-person 菜单卡拖拽提交。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "可选卡牌支付合同。开启后该选项必须通过 first-person 菜单卡拖拽提交，不能普通点击提交。"))
+	FWacomRunEventCardPaymentDefinition CardPayment;
 
 	/** 选中后依次执行的效果。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",

@@ -126,6 +126,21 @@ struct WACOMRUN_API FRunEventChoiceSnapshot
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	FName DisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	bool bRequiresOwnedCardPayment = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName PaymentZoneId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 PaymentCandidateCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TArray<FGuid> PaymentCandidateInstanceIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName PaymentDisabledReason = NAME_None;
 };
 
 /** 当前事件 UI/测试可读取的只读快照。 */
@@ -198,6 +213,9 @@ struct WACOMRUN_API FRunEventChoiceResult
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	FName DisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FGuid PaidCardInstanceId;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	TArray<FRunEventChoiceEffectResult> EffectResults;

@@ -296,7 +296,7 @@ class UWacomRunEventDefinition : public UPrimaryDataAsset
 };
 ```
 
-Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId / LabelText / Conditions / Effects / NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted`。
+Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId / LabelText / Conditions / CardPayment / Effects / NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted`。
 
 条件字段：
 
@@ -322,17 +322,31 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 
 卡牌条件/效果使用 `CardDefinition` 字段。`HasCard / MissingCard` 会检查玩家全部拥有区：通量、备战、特殊存放区和负重区。`RemoveCard` 表示永久交出/移除一张拥有的卡，不发金币，并遵守 Run 层现有安全限制（固有卡、最后一张容量来源卡不可移除）。
 
+卡牌支付字段用于“玩家拖入某张已持有卡后才能提交该选项”：
+
+| 字段 | 用途 |
+|---|---|
+| `bRequiresOwnedCardPayment` | 开启后该选项不能普通点击提交，必须通过 first-person menu lease 卡牌拖入对应 Zone |
+| `PaymentZoneId` | 菜单 Zone 目标 ID；为空时运行时使用 `RunEvent.Pay.{ChoiceId}`；同一节点内必须唯一 |
+| `AllowedCardDefinitions` | 允许支付的卡牌定义资产 |
+| `AllowedCardIds` | 允许支付的 `UCardDefinition::CardId` |
+| `RequiredKeywords` | 支付卡必须全部拥有的 `Card.Keyword.*` |
+| `BlockedKeywords` | 支付卡命中任意一个即拒绝 |
+
+`AllowedCardDefinitions` 与 `AllowedCardIds` 是 OR 关系；显式 instance 候选由运行时 snapshot / menu lease provider 生成，不写在 DataAsset 中。空筛选非法，本轮不支持“交任意卡”。支付选项不能同时配置 `RemoveCard` effect，避免拖入精确 instance 后又按 Definition 再移除一张卡。
+
 事件状态条件/效果使用 `TargetPersistentId` 字段，填写场景事件 Actor 的 `PersistentId`，不是 `EventDefinition.EventId`。`EventCompleted / EventNotCompleted` 读取对应状态；`MarkEventCompleted` 标记指定 `PersistentId` 完成。当前选项自身仍可继续使用 `bMarkEventCompleted` 标记当前事件完成。
 
 编辑器侧已接入 `UWacomRunEventDefinitionValidator` 内容防呆。校验重点：
 - `EventId / StartNodeId` 不能为空，`StartNodeId` 必须能找到节点。
 - `NodeId` 在事件内唯一，`ChoiceId` 在同一节点内唯一，`NextNodeId` 必须能找到目标节点。
 - `HasCard / MissingCard / GainCard / RemoveCard` 必须配置 `CardDefinition`。
+- 卡牌支付选项必须有非空支付筛选，同一节点内解析后的 `PaymentZoneId` 不能重复，且不能同时配置 `RemoveCard` effect。
 - `EventCompleted / EventNotCompleted / MarkEventCompleted` 必须配置 `TargetPersistentId`。
 - `MaxPressure / AddPressure` 必须配置有效压力 ID，`ConsumeNode` 不能为负数。
 
 调试资产：
-- `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、交出已有 `毒牙`、消耗节点、调整金币/劣迹压力。
+- `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、通过 `CardPayment` 拖入已有 `毒牙`、消耗节点、调整金币/劣迹压力。
 - 金币、压力和节点数值均为原型调试值，不代表正式平衡。
 - 自动化测试 `Wacom.Data.RunEvent.DebugSnakeGiftAsset` 会验证该资产的节点、选项、条件、效果和 `毒牙` 引用，避免内容生成漂移。
 
@@ -386,7 +400,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body` | `Snake.Body`，HP 22，Exp 2，奖励毒牙 |
 | `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙 |
 | `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋 |
-| `/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、交出毒牙、金币/压力/节点效果 |
+| `/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、通过卡牌支付交出毒牙、金币/压力/节点效果 |
 
 ### Data Validation
 
@@ -409,7 +423,7 @@ Card / EnemyPart / Enemy / Character Validator 只做结构防呆，例如必填
 
 Shop Validator 只校验 `ShopId` 非空、`Offers` 非空、Offer 卡牌非空、价格非负；不校验 `DisplayName`、重复商品、价格平衡、商品池规则或生成资产路径。
 
-RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventId / StartNodeId`、Node / Choice ID、`NextNodeId`、卡牌条件 / 效果引用、事件状态目标、`ConsumeNode >= 0`。不校验标题 / 正文 / 按钮文案非空、节点可达性、选项是否至少一个、金币 / 压力数值平衡或剧情合法性。
+RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventId / StartNodeId`、Node / Choice ID、`NextNodeId`、卡牌条件 / 效果引用、卡牌支付筛选和 ZoneId、事件状态目标、`ConsumeNode >= 0`。不校验标题 / 正文 / 按钮文案非空、节点可达性、选项是否至少一个、金币 / 压力数值平衡或剧情合法性。
 
 ---
 

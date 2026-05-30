@@ -11,8 +11,16 @@ enum class EWacomRunMenuCardDropIntentKind : uint8
 {
 	None UMETA(DisplayName = "None"),
 	ProbeZoneTarget UMETA(DisplayName = "Probe Zone Target"),
-	PayOwnedCardToZone UMETA(DisplayName = "Pay Owned Card To Zone"),
+	SubmitZoneTarget UMETA(DisplayName = "Submit Zone Target"),
 	Reject UMETA(DisplayName = "Reject")
+};
+
+UENUM(BlueprintType)
+enum class EWacomRunMenuCardDropSubmitPolicy : uint8
+{
+	None UMETA(DisplayName = "None"),
+	ControllerDestroyOwnedCard UMETA(DisplayName = "Controller Destroy Owned Card"),
+	MenuHandled UMETA(DisplayName = "Menu Handled")
 };
 
 UENUM(BlueprintType)
@@ -51,6 +59,13 @@ struct WACOMAPP_API FWacomRunMenuCardDropResolveResult
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Card Drop")
 	bool bSubmitted = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Card Drop")
+	EWacomRunMenuCardDropSubmitPolicy SubmitPolicy =
+		EWacomRunMenuCardDropSubmitPolicy::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Card Drop")
+	FName SubmitReason = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Card Drop")
 	FGuid SourceCardInstanceId;

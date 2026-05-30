@@ -11,6 +11,7 @@ class UButton;
 class UTextBlock;
 class UVerticalBox;
 class UWacomAppToastSubsystem;
+class UWacomRunMenuDropTargetWidget;
 class URunSession;
 
 /** 最小可用探索事件界面。 */
@@ -31,6 +32,11 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeOnActivated() override;
 	virtual void NativeOnDeactivated() override;
+	virtual FWacomRunMenuCardDropResolveResult ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+		const FWacomRunMenuCardDropResolveResult& Candidate) const override;
+	virtual bool SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+		const FWacomRunMenuCardDropResolveResult& Resolved,
+		FWacomRunMenuCardDropResolveResult& OutSubmitted) override;
 
 	virtual URunSession* ResolveRunSession() const;
 	virtual UWacomAppToastSubsystem* ResolveToastSubsystem() const;
@@ -72,5 +78,14 @@ private:
 	UPROPERTY(Transient)
 	TArray<FRunEventChoiceSnapshot> CachedChoices;
 
+	UPROPERTY(Transient)
+	TMap<FName, FName> PaymentZoneToChoiceId;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UWacomRunMenuDropTargetWidget>> PaymentDropTargets;
+
 	bool bDidEndRunEvent = false;
+
+	void RefreshPaymentLeaseFromCachedChoices();
+	bool FindPaymentChoiceForZone(FName ZoneId, FRunEventChoiceSnapshot& OutChoice) const;
 };

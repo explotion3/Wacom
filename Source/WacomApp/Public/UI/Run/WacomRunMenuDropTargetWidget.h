@@ -17,8 +17,8 @@ enum class EWacomRunMenuDropTargetPreviewState : uint8
 	Probe UMETA(DisplayName = "Probe"),
 	Invalid UMETA(DisplayName = "Invalid"),
 	ReleasedProbe UMETA(DisplayName = "Released Probe"),
-	PaymentReady UMETA(DisplayName = "Payment Ready"),
-	PaymentSubmitted UMETA(DisplayName = "Payment Submitted")
+	SubmitReady UMETA(DisplayName = "Submit Ready"),
+	Submitted UMETA(DisplayName = "Submitted")
 };
 
 USTRUCT(BlueprintType)
@@ -91,7 +91,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Menu Drop Target|Preview", meta = (ToolTip = "拖拽指向不可用菜单 Zone target 时使用的拒绝颜色。"))
 	FLinearColor InvalidPreviewColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Menu Drop Target|Preview", meta = (ToolTip = "拖拽释放在该菜单 Zone target 上时使用的短暂确认颜色。支付原型中也用于可提交和已提交状态。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Menu Drop Target|Preview", meta = (ToolTip = "拖拽释放在该菜单 Zone target 上时使用的短暂确认颜色。也用于可提交和已提交状态。"))
 	FLinearColor ReleasedProbePreviewColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "开启后，菜单 Zone drop target 的 preview 和 debug summary 会输出简短日志。默认关闭。"))

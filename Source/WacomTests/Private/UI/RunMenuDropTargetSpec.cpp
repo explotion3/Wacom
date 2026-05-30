@@ -121,18 +121,18 @@ bool FWacomUIRunMenuDropTargetPreviewStateSpec::RunTest(const FString& /*Paramet
 		Target->GetRenderTransform().Scale,
 		FVector2D(1.1f, 1.1f));
 
-	Target->SetRunMenuDropPreviewState(EWacomRunMenuDropTargetPreviewState::PaymentReady);
-	TestEqual(TEXT("Payment-ready state is set"),
+	Target->SetRunMenuDropPreviewState(EWacomRunMenuDropTargetPreviewState::SubmitReady);
+	TestEqual(TEXT("Submit-ready state is set"),
 		Target->GetRunMenuDropPreviewState(),
-		EWacomRunMenuDropTargetPreviewState::PaymentReady);
-	TestEqual(TEXT("Payment-ready preview scales widget"),
+		EWacomRunMenuDropTargetPreviewState::SubmitReady);
+	TestEqual(TEXT("Submit-ready preview scales widget"),
 		Target->GetRenderTransform().Scale,
 		FVector2D(1.1f, 1.1f));
 
-	Target->SetRunMenuDropPreviewState(EWacomRunMenuDropTargetPreviewState::PaymentSubmitted);
-	TestEqual(TEXT("Payment-submitted state is set"),
+	Target->SetRunMenuDropPreviewState(EWacomRunMenuDropTargetPreviewState::Submitted);
+	TestEqual(TEXT("Submitted state is set"),
 		Target->GetRunMenuDropPreviewState(),
-		EWacomRunMenuDropTargetPreviewState::PaymentSubmitted);
+		EWacomRunMenuDropTargetPreviewState::Submitted);
 
 	Target->ClearRunMenuDropPreviewState();
 	TestEqual(TEXT("Preview state clears"),

@@ -392,16 +392,22 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - PIE 可用 `Wacom.OpenRunMenuCardLeaseTestMenu` 打开 C++ 验证菜单 `UWacomRunMenuCardLeaseTestMenu`；它默认筛 `PoisonFang` 并内置 `RunEvent.Pay.Fang` Zone target，用于验证菜单候选卡 lease + Zone probe 闭环。
 
 27. V0-AO：Run Menu Card Drop Intent Resolver / Card Payment Prototype
-   - `AWacomPlayerController::ResolveRunMenuCardDropIntent()` 统一解析 Run menu first-person drag preview 和 release：默认菜单为 `ProbeZoneTarget`，只有 owning menu lease 的菜单显式接受 payment 时才可能提交。
-   - `UWacomMenuWidgetBase` 提供 `CanAcceptOwnedRunFirstPersonCardPayment()` 和 `OnOwnedRunFirstPersonCardPaymentResolved()`；Widget 不直接改 RunState，真正提交由 PlayerController 调用 `URunSession::ValidateDestroyCardByInstance()` / `DestroyCardByInstance()`。
-   - `UWacomRunMenuDropTargetWidget` 增加 payment-ready / payment-submitted 轻量预览。Provider-backed lease 在 RunState 变化后按原 request 重建候选；最后一张候选支付后清空 lease，并在菜单仍激活时继续写入 suppressed 空 source，避免 anchor card fallback。
+   - `AWacomPlayerController::ResolveRunMenuCardDropIntent()` 统一解析 Run menu first-person drag preview 和 release：默认菜单为 `ProbeZoneTarget`，只有 owning menu lease 的菜单把候选解析为 `SubmitZoneTarget` 时才可能提交。
+   - V0-AQ 后 `UWacomMenuWidgetBase` 提供通用 `ResolveRunMenuFirstPersonCardDropIntent()` / `SubmitRunMenuFirstPersonCardDropIntent()`；Widget 不直接改 RunState，除非它明确返回 `MenuHandled` 并在 submit hook 中调用对应领域 API。`ControllerDestroyOwnedCard` policy 仍由 PlayerController 调用 `ValidateDestroyCardByInstance()` / `DestroyCardByInstance()`。
+   - `UWacomRunMenuDropTargetWidget` 增加 submit-ready / submitted 轻量预览。Provider-backed lease 在 RunState 变化后按原 request 重建候选；最后一张候选支付后清空 lease，并在菜单仍激活时继续写入 suppressed 空 source，避免 anchor card fallback。
    - 该 payment prototype 只表示“永久移除这张具体持有卡”，不发金币、不推进 RunEvent 选项、不迁移背包旧 UMG DragDrop。真正 RunEvent “交出毒牙后进入某个节点”留给后续 resolver。
 
-28. Render Quality V0-B
+28. V0-AP：RunEvent Card Payment Choice / Event Option Integration
+   - `FWacomRunEventChoiceDefinition::CardPayment` 允许事件选项声明“需要拖入一张玩家真实持有卡支付”。Snapshot 会暴露 payment Zone、候选 instance 列表和支付不可用原因。
+   - `UWacomRunEventScreen` 会为支付选项包一层 `UWacomRunMenuDropTargetWidget`，聚合当前节点所有候选 instance 申请 owned menu lease；没有候选时清理 lease，菜单仍保持 suppress。
+   - `UWacomMenuWidgetBase` 增加 menu-handled submit hook。RunEventScreen 接管 release 后调用 `URunSession::ChooseRunEventOptionWithPaidCardResult()`，由 RunSession 在同一事务内移除精确 instance、执行 Effects、推进节点或关闭事件；默认 V0-AO 测试菜单仍保留 prototype `DestroyCardByInstance()` 路径。
+   - 支付选项普通点击会被 `RequiresCardPayment` 拒绝，且数据校验禁止支付选项同时配置 `RemoveCard` effect。
+
+29. Render Quality V0-B
    - 当前不把“降低旋转角”作为主线目标；`WBP_FirstPersonCardView` 已能承接较大角度旋转的抗锯齿需求，排布表现优先。
    - 后续只在美术反馈需要时微调扇形参数：下坠、层级、hover / pending 姿态和可选角度 clamp。
 
-28. First-person card view polish
+30. First-person card view polish
    - 已确认第一人称层应使用专用 `WBP_FirstPersonCardView`，不要继续把通用 `WBP_CardView` 直接作为长期主手牌卡面。
    - 后续 polish 重点是沉淀该 WBP 的制作规范：RetainerBox 使用边界、贴图透明留白、内部缩放、安全边框、材质动画刷新频率，以及不同 DPI / 视口尺寸下的旋转采样表现。
 

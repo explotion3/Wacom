@@ -254,9 +254,12 @@ class UWacomMenuWidgetBaseProbe : public UWacomMenuWidgetBase
 	GENERATED_BODY()
 
 public:
-	bool bAcceptOwnedRunFirstPersonCardPaymentForTest = false;
+	bool bAcceptRunMenuFirstPersonCardDropForTest = false;
+	EWacomRunMenuCardDropSubmitPolicy SubmitPolicyForTest =
+		EWacomRunMenuCardDropSubmitPolicy::None;
+	bool bMenuSubmitSucceedsForTest = true;
 	FName AcceptedZoneIdForTest = NAME_None;
-	FWacomRunMenuCardDropResolveResult LastPaymentResultForTest;
+	FWacomRunMenuCardDropResolveResult LastDropResultForTest;
 
 	void SetOwningWacomPlayerControllerForTest(AWacomPlayerController* InPlayerController)
 	{
@@ -276,17 +279,42 @@ protected:
 			: Super::ResolveOwningWacomPlayerController();
 	}
 
-	virtual bool CanAcceptOwnedRunFirstPersonCardPayment_Implementation(
-		const FWacomRunMenuCardDropResolveResult& DropResult) const override
+	virtual FWacomRunMenuCardDropResolveResult ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+		const FWacomRunMenuCardDropResolveResult& Candidate) const override
 	{
-		return bAcceptOwnedRunFirstPersonCardPaymentForTest
-			&& (AcceptedZoneIdForTest.IsNone() || DropResult.ZoneId == AcceptedZoneIdForTest);
+		FWacomRunMenuCardDropResolveResult Result = Candidate;
+		if (!bAcceptRunMenuFirstPersonCardDropForTest
+			|| (!AcceptedZoneIdForTest.IsNone() && Result.ZoneId != AcceptedZoneIdForTest))
+		{
+			Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
+			Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuDoesNotAccept;
+			Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+			Result.bCanSubmit = false;
+			return Result;
+		}
+
+		Result.IntentKind = EWacomRunMenuCardDropIntentKind::SubmitZoneTarget;
+		Result.RejectReason = EWacomRunMenuCardDropRejectReason::None;
+		Result.SubmitPolicy = SubmitPolicyForTest;
+		Result.bCanSubmit = SubmitPolicyForTest != EWacomRunMenuCardDropSubmitPolicy::None;
+		return Result;
 	}
 
-	virtual void OnOwnedRunFirstPersonCardPaymentResolved_Implementation(
-		const FWacomRunMenuCardDropResolveResult& DropResult) override
+	virtual bool SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+		const FWacomRunMenuCardDropResolveResult& Resolved,
+		FWacomRunMenuCardDropResolveResult& OutSubmitted) override
 	{
-		LastPaymentResultForTest = DropResult;
+		OutSubmitted = Resolved;
+		OutSubmitted.bSubmitted = bMenuSubmitSucceedsForTest;
+		if (!bMenuSubmitSucceedsForTest)
+		{
+			OutSubmitted.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+			OutSubmitted.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
+			OutSubmitted.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+			OutSubmitted.bCanSubmit = false;
+		}
+		LastDropResultForTest = OutSubmitted;
+		return bMenuSubmitSucceedsForTest;
 	}
 
 private:
@@ -347,6 +375,19 @@ public:
 	FRunEventChoiceSnapshot ReadChoiceSnapshot(int32 Index) const
 	{
 		return GetCachedChoiceSnapshot(Index);
+	}
+
+	FWacomRunMenuCardDropResolveResult ResolveDropForTest(
+		const FWacomRunMenuCardDropResolveResult& Candidate) const
+	{
+		return ResolveRunMenuFirstPersonCardDropIntent_Implementation(Candidate);
+	}
+
+	bool SubmitDropForTest(
+		const FWacomRunMenuCardDropResolveResult& Resolved,
+		FWacomRunMenuCardDropResolveResult& OutSubmitted)
+	{
+		return SubmitRunMenuFirstPersonCardDropIntent_Implementation(Resolved, OutSubmitted);
 	}
 
 	bool ChooseChoiceAt(int32 Index)

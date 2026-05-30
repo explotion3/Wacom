@@ -70,7 +70,26 @@ bool FWacomRunEventScreenFlow::ChooseChoice(
 		return false;
 	}
 
-	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(ChoiceId);
+	return ApplyChoiceResult(
+		Screen,
+		Run,
+		ToastSubsystem,
+		Run->ChooseRunEventOptionWithResult(ChoiceId),
+		bDidEndRunEvent);
+}
+
+bool FWacomRunEventScreenFlow::ApplyChoiceResult(
+	UWacomRunEventScreen& Screen,
+	URunSession* Run,
+	UWacomAppToastSubsystem* ToastSubsystem,
+	const FRunEventChoiceResult& Result,
+	bool& bDidEndRunEvent)
+{
+	if (!Run)
+	{
+		return false;
+	}
+
 	ShowToasts(
 		ToastSubsystem,
 		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(Result));

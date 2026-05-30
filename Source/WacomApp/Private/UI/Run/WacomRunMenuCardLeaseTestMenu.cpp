@@ -254,7 +254,7 @@ void UWacomRunMenuCardLeaseTestMenu::NativeOnActivated()
 
 bool UWacomRunMenuCardLeaseTestMenu::RequestOwnedLeaseNow()
 {
-	LastPaymentResult = FWacomRunMenuCardDropResolveResult();
+	LastDropResult = FWacomRunMenuCardDropResolveResult();
 	const bool bSet =
 		SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(LeaseRequest, LastLeaseResult);
 	UpdateStatusText();
@@ -278,28 +278,41 @@ FString UWacomRunMenuCardLeaseTestMenu::GetLeaseTestDebugSummary() const
 		*LastLeaseResult.DebugSummary);
 }
 
-bool UWacomRunMenuCardLeaseTestMenu::CanAcceptOwnedRunFirstPersonCardPayment_Implementation(
-	const FWacomRunMenuCardDropResolveResult& DropResult) const
+FWacomRunMenuCardDropResolveResult UWacomRunMenuCardLeaseTestMenu::ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+	const FWacomRunMenuCardDropResolveResult& Candidate) const
 {
-	return DropResult.ZoneId == TestZoneId
-		&& DropResult.LeaseId == GetOwnedRunFirstPersonCardLayerMenuLeaseId();
+	FWacomRunMenuCardDropResolveResult Result = Candidate;
+	if (Result.ZoneId != TestZoneId
+		|| Result.LeaseId != GetOwnedRunFirstPersonCardLayerMenuLeaseId())
+	{
+		Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
+		Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuDoesNotAccept;
+		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		Result.bCanSubmit = false;
+		return Result;
+	}
+
+	Result.IntentKind = EWacomRunMenuCardDropIntentKind::SubmitZoneTarget;
+	Result.RejectReason = EWacomRunMenuCardDropRejectReason::None;
+	Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard;
+	Result.SubmitReason = TestZoneId;
+	Result.bCanSubmit = true;
+	return Result;
 }
 
-void UWacomRunMenuCardLeaseTestMenu::OnOwnedRunFirstPersonCardPaymentResolved_Implementation(
-	const FWacomRunMenuCardDropResolveResult& DropResult)
+bool UWacomRunMenuCardLeaseTestMenu::SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+	const FWacomRunMenuCardDropResolveResult& Resolved,
+	FWacomRunMenuCardDropResolveResult& OutSubmitted)
 {
-	LastPaymentResult = DropResult;
-	if (DropResult.bSubmitted)
-	{
-		RequestOwnedLeaseNow();
-	}
-	else
-	{
-		UpdateStatusText();
-	}
-	UE_LOG(LogTemp, Display,
-		TEXT("[WacomRunMenuCardLeaseTestMenu] Payment %s"),
-		*DropResult.DebugSummary);
+	OutSubmitted = Resolved;
+	OutSubmitted.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+	OutSubmitted.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
+	OutSubmitted.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+	OutSubmitted.bCanSubmit = false;
+	OutSubmitted.bSubmitted = false;
+	LastDropResult = OutSubmitted;
+	UpdateStatusText();
+	return false;
 }
 
 void UWacomRunMenuCardLeaseTestMenu::UpdateStatusText()
@@ -312,7 +325,7 @@ void UWacomRunMenuCardLeaseTestMenu::UpdateStatusText()
 	const FText Status = FText::Format(
 		LOCTEXT(
 			"StatusFormat",
-			"LeaseSet={0}  Reject={1}  Candidates={2}  Considered={3}\nLeaseId={4}  SourceId={5}\nZoneId={6}\nLastPayment={7}  Submitted={8}"),
+			"LeaseSet={0}  Reject={1}  Candidates={2}  Considered={3}\nLeaseId={4}  SourceId={5}\nZoneId={6}\nLastDrop={7}  Submitted={8}"),
 		LastLeaseResult.bLeaseSet ? LOCTEXT("True", "true") : LOCTEXT("False", "false"),
 		FText::FromName(LastLeaseResult.RejectReason),
 		FText::AsNumber(LastLeaseResult.CandidateCount),
@@ -320,8 +333,8 @@ void UWacomRunMenuCardLeaseTestMenu::UpdateStatusText()
 		FText::FromName(LastLeaseResult.LeaseId),
 		FText::FromName(LastLeaseResult.SourceId),
 		FText::FromName(TestZoneId),
-		FText::FromString(LastPaymentResult.DebugSummary),
-		LastPaymentResult.bSubmitted ? LOCTEXT("PaymentSubmittedTrue", "true") : LOCTEXT("PaymentSubmittedFalse", "false"));
+		FText::FromString(LastDropResult.DebugSummary),
+		LastDropResult.bSubmitted ? LOCTEXT("SubmittedTrue", "true") : LOCTEXT("SubmittedFalse", "false"));
 	StatusText->SetText(Status);
 }
 

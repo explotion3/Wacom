@@ -10,6 +10,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/ScrollBox.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -20,6 +21,7 @@
 #include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventScreenFlow.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
+#include "UI/Run/WacomRunMenuDropTargetWidget.h"
 
 namespace
 {
@@ -129,6 +131,102 @@ void UWacomRunEventScreen::NativeOnDeactivated()
 	Super::NativeOnDeactivated();
 }
 
+FWacomRunMenuCardDropResolveResult UWacomRunEventScreen::ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+	const FWacomRunMenuCardDropResolveResult& Candidate) const
+{
+	FWacomRunMenuCardDropResolveResult Result = Candidate;
+	FRunEventChoiceSnapshot Choice;
+	if (!FindPaymentChoiceForZone(Result.ZoneId, Choice))
+	{
+		Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
+		Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuDoesNotAccept;
+		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		Result.bCanSubmit = false;
+		return Result;
+	}
+
+	const URunSession* Run = ResolveRunSession();
+	if (!Run)
+	{
+		Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+		Result.RejectReason = EWacomRunMenuCardDropRejectReason::MissingSession;
+		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		Result.bCanSubmit = false;
+		return Result;
+	}
+
+	const FRunDeckOperationValidation Validation =
+		Run->ValidateRunEventOptionCardPayment(Choice.ChoiceId, Result.SourceCardInstanceId);
+	Result.RunValidationReason = Validation.DisabledReason;
+	if (!Validation.bCanExecute)
+	{
+		Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+		Result.RejectReason = EWacomRunMenuCardDropRejectReason::RunValidationFailed;
+		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		Result.bCanSubmit = false;
+		return Result;
+	}
+
+	Result.IntentKind = EWacomRunMenuCardDropIntentKind::SubmitZoneTarget;
+	Result.RejectReason = EWacomRunMenuCardDropRejectReason::None;
+	Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::MenuHandled;
+	Result.SubmitReason = Choice.ChoiceId;
+	Result.bCanSubmit = true;
+	return Result;
+}
+
+bool UWacomRunEventScreen::SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+	const FWacomRunMenuCardDropResolveResult& Resolved,
+	FWacomRunMenuCardDropResolveResult& OutSubmitted)
+{
+	OutSubmitted = Resolved;
+	FRunEventChoiceSnapshot Choice;
+	if (!FindPaymentChoiceForZone(Resolved.ZoneId, Choice))
+	{
+		OutSubmitted.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+		OutSubmitted.RejectReason = EWacomRunMenuCardDropRejectReason::MenuDoesNotAccept;
+		OutSubmitted.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		OutSubmitted.bCanSubmit = false;
+		OutSubmitted.bSubmitted = false;
+		return false;
+	}
+
+	URunSession* Run = ResolveRunSession();
+	if (!Run)
+	{
+		OutSubmitted.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+		OutSubmitted.RejectReason = EWacomRunMenuCardDropRejectReason::MissingSession;
+		OutSubmitted.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		OutSubmitted.bCanSubmit = false;
+		OutSubmitted.bSubmitted = false;
+		return false;
+	}
+
+	const FRunEventChoiceResult Result =
+		Run->ChooseRunEventOptionWithPaidCardResult(Choice.ChoiceId, Resolved.SourceCardInstanceId);
+	FWacomRunEventScreenFlow::ApplyChoiceResult(
+		*this,
+		Run,
+		ResolveToastSubsystem(),
+		Result,
+		bDidEndRunEvent);
+
+	OutSubmitted.bSubmitted = Result.bSucceeded;
+	if (!Result.bSucceeded)
+	{
+		OutSubmitted.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+		OutSubmitted.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
+		OutSubmitted.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		OutSubmitted.bCanSubmit = false;
+		if (OutSubmitted.RunValidationReason.IsNone())
+		{
+			OutSubmitted.RunValidationReason = Result.DisabledReason;
+		}
+		return false;
+	}
+	return true;
+}
+
 void UWacomRunEventScreen::RefreshEvent()
 {
 	if (URunSession* Run = ResolveRunSession())
@@ -145,6 +243,7 @@ void UWacomRunEventScreen::RefreshEvent()
 	}
 
 	RebuildChoices();
+	RefreshPaymentLeaseFromCachedChoices();
 }
 
 void UWacomRunEventScreen::SuppressEndRunEventOnNextDeactivate()
@@ -198,6 +297,8 @@ UWacomAppToastSubsystem* UWacomRunEventScreen::ResolveToastSubsystem() const
 void UWacomRunEventScreen::RebuildChoices()
 {
 	CachedChoices.Reset();
+	PaymentZoneToChoiceId.Reset();
+	PaymentDropTargets.Reset();
 	if (ChoiceList)
 	{
 		ChoiceList->ClearChildren();
@@ -236,7 +337,32 @@ void UWacomRunEventScreen::AddChoiceButton(const FRunEventChoiceSnapshot& Choice
 		UWacomRunEventChoiceButton::StaticClass());
 	ChoiceButtonWidget->SetChoiceSnapshot(Choice);
 	ChoiceButtonWidget->OnChoiceClickedNative.AddUObject(this, &UWacomRunEventScreen::HandleChoiceClicked);
-	if (UVerticalBoxSlot* ChoiceSlot = ChoiceList->AddChildToVerticalBox(ChoiceButtonWidget))
+	UWidget* ChoiceWidget = ChoiceButtonWidget;
+	if (Choice.bRequiresOwnedCardPayment && !Choice.PaymentZoneId.IsNone())
+	{
+		UWacomRunMenuDropTargetWidget* DropTarget =
+			WidgetTree->ConstructWidget<UWacomRunMenuDropTargetWidget>(
+				UWacomRunMenuDropTargetWidget::StaticClass(),
+				FName(*FString::Printf(TEXT("RunEventChoiceDrop_%s"), *Choice.ChoiceId.ToString())));
+		if (DropTarget)
+		{
+			DropTarget->ZoneId = Choice.PaymentZoneId;
+			DropTarget->StableTargetId = Choice.PaymentZoneId;
+			DropTarget->ProbePreviewScale = 1.025f;
+
+			USizeBox* ChoiceSize = WidgetTree->ConstructWidget<USizeBox>(
+				USizeBox::StaticClass(),
+				FName(*FString::Printf(TEXT("RunEventChoiceDropSize_%s"), *Choice.ChoiceId.ToString())));
+			ChoiceSize->SetMinDesiredWidth(420.0f);
+			ChoiceSize->SetContent(ChoiceButtonWidget);
+			DropTarget->SetDropContent(ChoiceSize);
+			ChoiceWidget = DropTarget;
+			PaymentZoneToChoiceId.Add(Choice.PaymentZoneId, Choice.ChoiceId);
+			PaymentDropTargets.Add(DropTarget);
+		}
+	}
+
+	if (UVerticalBoxSlot* ChoiceSlot = ChoiceList->AddChildToVerticalBox(ChoiceWidget))
 	{
 		ChoiceSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 	}
@@ -262,6 +388,61 @@ bool UWacomRunEventScreen::ChooseChoice(FName ChoiceId)
 		ChoiceId,
 		CachedChoices,
 		bDidEndRunEvent);
+}
+
+void UWacomRunEventScreen::RefreshPaymentLeaseFromCachedChoices()
+{
+	TArray<FGuid> CandidateInstanceIds;
+	for (const FRunEventChoiceSnapshot& Choice : CachedChoices)
+	{
+		if (!Choice.bRequiresOwnedCardPayment)
+		{
+			continue;
+		}
+		for (const FGuid& CandidateId : Choice.PaymentCandidateInstanceIds)
+		{
+			if (CandidateId.IsValid())
+			{
+				CandidateInstanceIds.AddUnique(CandidateId);
+			}
+		}
+	}
+	if (CandidateInstanceIds.IsEmpty())
+	{
+		ClearOwnedRunFirstPersonCardLayerMenuLease();
+		return;
+	}
+
+	FWacomRunMenuCardLeaseRequest Request;
+	Request.LeaseId = TEXT("RunEventCardPayment");
+	Request.SourceId = TEXT("RunEventCardPaymentSource");
+	Request.ExplicitCardInstanceIds = MoveTemp(CandidateInstanceIds);
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult);
+}
+
+bool UWacomRunEventScreen::FindPaymentChoiceForZone(
+	FName ZoneId,
+	FRunEventChoiceSnapshot& OutChoice) const
+{
+	if (ZoneId.IsNone())
+	{
+		return false;
+	}
+	const FName* ChoiceId = PaymentZoneToChoiceId.Find(ZoneId);
+	if (!ChoiceId)
+	{
+		return false;
+	}
+	for (const FRunEventChoiceSnapshot& Choice : CachedChoices)
+	{
+		if (Choice.ChoiceId == *ChoiceId)
+		{
+			OutChoice = Choice;
+			return true;
+		}
+	}
+	return false;
 }
 
 #undef LOCTEXT_NAMESPACE

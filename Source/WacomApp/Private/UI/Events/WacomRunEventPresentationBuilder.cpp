@@ -103,6 +103,42 @@ FText UWacomRunEventPresentationBuilder::FormatDisabledReason(FName DisabledReas
 	{
 		return LOCTEXT("EffectFailed", "事件效果执行失败");
 	}
+	if (DisabledReason == TEXT("RequiresCardPayment"))
+	{
+		return LOCTEXT("RequiresCardPayment", "需要拖入卡牌支付");
+	}
+	if (DisabledReason == TEXT("MissingPaidCard"))
+	{
+		return LOCTEXT("MissingPaidCard", "未选择支付卡牌");
+	}
+	if (DisabledReason == TEXT("PaymentCardNotAllowed"))
+	{
+		return LOCTEXT("PaymentCardNotAllowed", "这张卡不能用于支付");
+	}
+	if (DisabledReason == TEXT("MissingPaymentFilter"))
+	{
+		return LOCTEXT("MissingPaymentFilter", "卡牌支付配置错误");
+	}
+	if (DisabledReason == TEXT("MissingRequiredPaymentKeyword"))
+	{
+		return LOCTEXT("MissingRequiredPaymentKeyword", "支付卡牌缺少所需关键词");
+	}
+	if (DisabledReason == TEXT("BlockedPaymentKeyword"))
+	{
+		return LOCTEXT("BlockedPaymentKeyword", "支付卡牌带有禁止关键词");
+	}
+	if (DisabledReason == TEXT("PaymentChoiceHasRemoveCardEffect"))
+	{
+		return LOCTEXT("PaymentChoiceHasRemoveCardEffect", "卡牌支付选项配置了重复删牌效果");
+	}
+	if (DisabledReason == TEXT("PaymentNotRequired"))
+	{
+		return LOCTEXT("PaymentNotRequired", "该选项不需要卡牌支付");
+	}
+	if (DisabledReason == TEXT("CardNotOwned"))
+	{
+		return LOCTEXT("CardNotOwned", "未持有这张卡");
+	}
 	return LOCTEXT("UnknownReason", "不可选择");
 }
 

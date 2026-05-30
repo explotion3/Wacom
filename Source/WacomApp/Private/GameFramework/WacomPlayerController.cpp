@@ -124,8 +124,8 @@ namespace
 		{
 		case EWacomRunMenuCardDropIntentKind::ProbeZoneTarget:
 			return TEXT("ProbeZoneTarget");
-		case EWacomRunMenuCardDropIntentKind::PayOwnedCardToZone:
-			return TEXT("PayOwnedCardToZone");
+		case EWacomRunMenuCardDropIntentKind::SubmitZoneTarget:
+			return TEXT("SubmitZoneTarget");
 		case EWacomRunMenuCardDropIntentKind::Reject:
 			return TEXT("Reject");
 		case EWacomRunMenuCardDropIntentKind::None:
@@ -168,18 +168,34 @@ namespace
 		}
 	}
 
+	const TCHAR* ToRunMenuCardDropSubmitPolicyString(EWacomRunMenuCardDropSubmitPolicy Policy)
+	{
+		switch (Policy)
+		{
+		case EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard:
+			return TEXT("ControllerDestroyOwnedCard");
+		case EWacomRunMenuCardDropSubmitPolicy::MenuHandled:
+			return TEXT("MenuHandled");
+		case EWacomRunMenuCardDropSubmitPolicy::None:
+		default:
+			return TEXT("None");
+		}
+	}
+
 	void FinalizeRunMenuCardDropDebug(
 		FWacomRunMenuCardDropResolveResult& Result,
 		const FVector2D& PointerPosition,
 		bool bReleased)
 	{
 		Result.DebugSummary = FString::Printf(
-			TEXT("RunMenuCardDropIntent{CardId=%s LeaseId=%s LeaseSource=%s Intent=%s Reject=%s ZoneId=%s RunValidation=%s CanSubmit=%s Submitted=%s Pointer=%s Released=%s Target=%s}"),
+			TEXT("RunMenuCardDropIntent{CardId=%s LeaseId=%s LeaseSource=%s Intent=%s Reject=%s SubmitPolicy=%s SubmitReason=%s ZoneId=%s RunValidation=%s CanSubmit=%s Submitted=%s Pointer=%s Released=%s Target=%s}"),
 			*Result.SourceCardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 			*Result.LeaseId.ToString(),
 			*Result.LeaseSourceId.ToString(),
 			ToRunMenuCardDropIntentString(Result.IntentKind),
 			ToRunMenuCardDropRejectString(Result.RejectReason),
+			ToRunMenuCardDropSubmitPolicyString(Result.SubmitPolicy),
+			*Result.SubmitReason.ToString(),
 			*Result.ZoneId.ToString(),
 			*Result.RunValidationReason.ToString(),
 			Result.bCanSubmit ? TEXT("true") : TEXT("false"),
@@ -1233,11 +1249,11 @@ bool AWacomPlayerController::ApplyRunMenuDropProbeFeedback(
 	{
 		EWacomRunMenuDropTargetPreviewState PreviewState =
 			EWacomRunMenuDropTargetPreviewState::Probe;
-		if (Result.IntentKind == EWacomRunMenuCardDropIntentKind::PayOwnedCardToZone)
+		if (Result.IntentKind == EWacomRunMenuCardDropIntentKind::SubmitZoneTarget)
 		{
 			PreviewState = bReleased && Result.bSubmitted
-				? EWacomRunMenuDropTargetPreviewState::PaymentSubmitted
-				: EWacomRunMenuDropTargetPreviewState::PaymentReady;
+				? EWacomRunMenuDropTargetPreviewState::Submitted
+				: EWacomRunMenuDropTargetPreviewState::SubmitReady;
 		}
 		else if (Result.IntentKind == EWacomRunMenuCardDropIntentKind::Reject)
 		{
@@ -1269,7 +1285,7 @@ bool AWacomPlayerController::ApplyRunMenuDropProbeFeedback(
 			LastRunMenuDropProbeDebugSummary);
 	}
 	return bReleased
-		&& Result.IntentKind == EWacomRunMenuCardDropIntentKind::PayOwnedCardToZone
+		&& Result.IntentKind == EWacomRunMenuCardDropIntentKind::SubmitZoneTarget
 		&& Result.bSubmitted;
 }
 
@@ -1339,6 +1355,11 @@ FWacomRunMenuCardDropResolveResult AWacomPlayerController::ResolveRunMenuCardDro
 
 	Result.TargetHandle = TargetHandle;
 	Result.ZoneId = TargetHandle.ZoneId;
+	Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
+	Result.RejectReason = EWacomRunMenuCardDropRejectReason::None;
+	Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+	Result.bCanSubmit = false;
+	Result.bSubmitted = false;
 
 	UWacomMenuWidgetBase* OwningMenu =
 		ResolveOwningMenuForActiveRunMenuLease(Result.LeaseId);
@@ -1350,10 +1371,11 @@ FWacomRunMenuCardDropResolveResult AWacomPlayerController::ResolveRunMenuCardDro
 		return Result;
 	}
 
-	if (!OwningMenu->CanAcceptOwnedRunFirstPersonCardPayment(Result))
+	Result = OwningMenu->ResolveRunMenuFirstPersonCardDropIntent(Result);
+
+	if (Result.IntentKind != EWacomRunMenuCardDropIntentKind::SubmitZoneTarget
+		|| Result.SubmitPolicy != EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard)
 	{
-		Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
-		Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuDoesNotAccept;
 		FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
 		return Result;
 	}
@@ -1361,7 +1383,12 @@ FWacomRunMenuCardDropResolveResult AWacomPlayerController::ResolveRunMenuCardDro
 	URunSession* ResolvedRunSession = ResolveRunSessionForFirstPersonCardSource();
 	if (!ResolvedRunSession)
 	{
-		return RejectWith(EWacomRunMenuCardDropRejectReason::MissingSession);
+		Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+		Result.RejectReason = EWacomRunMenuCardDropRejectReason::MissingSession;
+		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		Result.bCanSubmit = false;
+		FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
+		return Result;
 	}
 
 	const FRunDeckOperationValidation Validation =
@@ -1373,12 +1400,15 @@ FWacomRunMenuCardDropResolveResult AWacomPlayerController::ResolveRunMenuCardDro
 		Result.RejectReason = Validation.DisabledReason == FName(TEXT("CardNotOwned"))
 			? EWacomRunMenuCardDropRejectReason::CardNotOwned
 			: EWacomRunMenuCardDropRejectReason::RunValidationFailed;
+		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+		Result.bCanSubmit = false;
 		FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
 		return Result;
 	}
 
-	Result.IntentKind = EWacomRunMenuCardDropIntentKind::PayOwnedCardToZone;
+	Result.IntentKind = EWacomRunMenuCardDropIntentKind::SubmitZoneTarget;
 	Result.RejectReason = EWacomRunMenuCardDropRejectReason::None;
+	Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard;
 	Result.bCanSubmit = true;
 	FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
 	return Result;
@@ -1387,8 +1417,46 @@ FWacomRunMenuCardDropResolveResult AWacomPlayerController::ResolveRunMenuCardDro
 bool AWacomPlayerController::SubmitResolvedRunMenuCardDropIntent(
 	FWacomRunMenuCardDropResolveResult& Result)
 {
-	if (Result.IntentKind != EWacomRunMenuCardDropIntentKind::PayOwnedCardToZone
-		|| !Result.bCanSubmit
+	if (Result.IntentKind != EWacomRunMenuCardDropIntentKind::SubmitZoneTarget
+		|| !Result.bCanSubmit)
+	{
+		Result.bSubmitted = false;
+		return false;
+	}
+
+	if (Result.SubmitPolicy == EWacomRunMenuCardDropSubmitPolicy::MenuHandled)
+	{
+		UWacomMenuWidgetBase* OwningMenu =
+			ResolveOwningMenuForActiveRunMenuLease(Result.LeaseId);
+		if (!OwningMenu)
+		{
+			Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+			Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuNotFound;
+			Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+			Result.bCanSubmit = false;
+			Result.bSubmitted = false;
+			return false;
+		}
+
+		FWacomRunMenuCardDropResolveResult SubmittedResult = Result;
+		const bool bSubmitted =
+			OwningMenu->SubmitRunMenuFirstPersonCardDropIntent(Result, SubmittedResult);
+		Result = SubmittedResult;
+		Result.bSubmitted = bSubmitted && Result.bSubmitted;
+		if (!Result.bSubmitted)
+		{
+			Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+			if (Result.RejectReason == EWacomRunMenuCardDropRejectReason::None)
+			{
+				Result.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
+			}
+			Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+			Result.bCanSubmit = false;
+		}
+		return Result.bSubmitted;
+	}
+
+	if (Result.SubmitPolicy != EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard
 		|| !ResolveRunSessionForFirstPersonCardSource())
 	{
 		Result.bSubmitted = false;
@@ -1402,13 +1470,8 @@ bool AWacomPlayerController::SubmitResolvedRunMenuCardDropIntent(
 	{
 		Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
 		Result.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
+		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
 		Result.bCanSubmit = false;
-	}
-
-	if (UWacomMenuWidgetBase* OwningMenu =
-		ResolveOwningMenuForActiveRunMenuLease(Result.LeaseId))
-	{
-		OwningMenu->OnOwnedRunFirstPersonCardPaymentResolved(Result);
 	}
 	return bDestroyed;
 }

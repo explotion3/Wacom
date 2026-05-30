@@ -293,6 +293,20 @@ namespace
 		RemoveChoice.Effects.Add(Remove);
 		return MakeSingleChoiceRunEvent(Outer, RemoveChoice);
 	}
+
+	UWacomRunEventDefinition* MakeCardPaymentRunEvent(
+		UObject* Outer,
+		UCardDefinition* PaidCard,
+		const TArray<FWacomRunEventEffectDefinition>& Effects = {})
+	{
+		FWacomRunEventChoiceDefinition Pay;
+		Pay.ChoiceId = TEXT("Pay");
+		Pay.CardPayment.bRequiresOwnedCardPayment = true;
+		Pay.CardPayment.PaymentZoneId = TEXT("RunEvent.Pay.Test");
+		Pay.CardPayment.AllowedCardDefinitions.Add(PaidCard);
+		Pay.Effects = Effects;
+		return MakeSingleChoiceRunEvent(Outer, Pay);
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -673,6 +687,118 @@ bool FWacomRunEventRemoveCardSafetySpec::RunTest(const FString& /*Parameters*/)
 		const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("RemoveCompanion"));
 		TestTrue(TEXT("Companion remove succeeds"), Result.bSucceeded);
 		TestEqual(TEXT("Bloodlust increments"), Run->GetPressureValue(EWacomPressureType::Bloodlust), 1);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventCardPaymentChoiceSpec,
+	"Wacom.Run.Event.CardPaymentChoice",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
+{
+	{
+		FWacomBattleFixture Fx;
+		UCardDefinition* Bag = MakeRunEventTestTypeAContainer(Fx, 8);
+		UCardDefinition* Fang = Fx.MakeNoopCard(0);
+		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, Fang });
+		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+		TestTrue(TEXT("Initialize payment run"), Run->Initialize(Char));
+		const FGuid FangId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Fang);
+		TestTrue(TEXT("Fang instance found"), FangId.IsValid());
+
+		FWacomRunEventEffectDefinition Gold;
+		Gold.Type = EWacomRunEventEffectType::AddGold;
+		Gold.Value = 2;
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeCardPaymentRunEvent(Run.Get(), Fang, { Gold }));
+		TestTrue(TEXT("Begin payment event"), Run->BeginRunEvent(TEXT("Event.Payment.Success"), Event.Get()));
+		FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
+		TestEqual(TEXT("One payment choice"), Snapshot.Choices.Num(), 1);
+		if (Snapshot.Choices.Num() == 1)
+		{
+			TestTrue(TEXT("Choice requires payment"), Snapshot.Choices[0].bRequiresOwnedCardPayment);
+			TestEqual(TEXT("Payment zone from definition"), Snapshot.Choices[0].PaymentZoneId, FName(TEXT("RunEvent.Pay.Test")));
+			TestEqual(TEXT("One candidate"), Snapshot.Choices[0].PaymentCandidateCount, 1);
+			TestEqual(TEXT("Candidate is exact fang"), Snapshot.Choices[0].PaymentCandidateInstanceIds[0], FangId);
+		}
+
+		const FRunEventChoiceResult ClickResult = Run->ChooseRunEventOptionWithResult(TEXT("Pay"));
+		TestFalse(TEXT("Plain click cannot submit payment choice"), ClickResult.bSucceeded);
+		TestEqual(TEXT("Plain click reason"), ClickResult.DisabledReason, FName(TEXT("RequiresCardPayment")));
+		TestTrue(TEXT("Card remains after rejected click"),
+			StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
+
+		const FRunDeckOperationValidation Validation =
+			Run->ValidateRunEventOptionCardPayment(TEXT("Pay"), FangId);
+		TestTrue(TEXT("Payment validation accepts exact card"), Validation.bCanExecute);
+		const FRunEventChoiceResult PayResult =
+			Run->ChooseRunEventOptionWithPaidCardResult(TEXT("Pay"), FangId);
+		TestTrue(TEXT("Payment choice succeeds"), PayResult.bSucceeded);
+		TestEqual(TEXT("Paid instance recorded"), PayResult.PaidCardInstanceId, FangId);
+		TestFalse(TEXT("Paid card removed"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
+		TestEqual(TEXT("Gold effect applied"), Run->GetGold(), 2);
+	}
+
+	{
+		FWacomBattleFixture Fx;
+		UCardDefinition* Bag = MakeRunEventTestTypeAContainer(Fx, 8);
+		UCardDefinition* Fang = Fx.MakeNoopCard(0);
+		UCardDefinition* Other = Fx.MakeNoopCard(0);
+		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, Fang, Other });
+		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+		TestTrue(TEXT("Initialize wrong-card run"), Run->Initialize(Char));
+		const FGuid OtherId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Other);
+		TestTrue(TEXT("Other instance found"), OtherId.IsValid());
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeCardPaymentRunEvent(Run.Get(), Fang));
+		TestTrue(TEXT("Begin wrong-card event"), Run->BeginRunEvent(TEXT("Event.Payment.WrongCard"), Event.Get()));
+		const FRunEventChoiceResult Result =
+			Run->ChooseRunEventOptionWithPaidCardResult(TEXT("Pay"), OtherId);
+		TestFalse(TEXT("Wrong card rejected"), Result.bSucceeded);
+		TestEqual(TEXT("Wrong card reason"), Result.DisabledReason, FName(TEXT("PaymentCardNotAllowed")));
+		TestTrue(TEXT("Other remains"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Other));
+		TestTrue(TEXT("Fang remains"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
+	}
+
+	{
+		FWacomBattleFixture Fx;
+		UCardDefinition* OnlyBag = MakeRunEventTestTypeAContainer(Fx, 3);
+		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { OnlyBag });
+		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+		TestTrue(TEXT("Initialize protected payment run"), Run->Initialize(Char));
+		const FGuid BagId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), OnlyBag);
+		TestTrue(TEXT("Bag instance found"), BagId.IsValid());
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeCardPaymentRunEvent(Run.Get(), OnlyBag));
+		TestTrue(TEXT("Begin protected payment event"), Run->BeginRunEvent(TEXT("Event.Payment.Protected"), Event.Get()));
+		const FRunEventChoiceResult Result =
+			Run->ChooseRunEventOptionWithPaidCardResult(TEXT("Pay"), BagId);
+		TestFalse(TEXT("Last capacity provider payment rejected"), Result.bSucceeded);
+		TestEqual(TEXT("Last capacity provider reason"), Result.DisabledReason, FName(TEXT("LastCapacityProvider")));
+		TestTrue(TEXT("Capacity provider remains"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), OnlyBag));
+	}
+
+	{
+		FWacomBattleFixture Fx;
+		UCardDefinition* Bag = MakeRunEventTestTypeAContainer(Fx, 8);
+		UCardDefinition* Fang = Fx.MakeNoopCard(0);
+		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, Fang });
+		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+		TestTrue(TEXT("Initialize rollback payment run"), Run->Initialize(Char));
+		const FGuid FangId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Fang);
+		TestTrue(TEXT("Rollback fang instance found"), FangId.IsValid());
+		FWacomRunEventEffectDefinition InvalidPressure;
+		InvalidPressure.Type = EWacomRunEventEffectType::AddPressure;
+		InvalidPressure.PressureType = TEXT("InvalidPressureType");
+		InvalidPressure.Value = 1;
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeCardPaymentRunEvent(Run.Get(), Fang, { InvalidPressure }));
+		TestTrue(TEXT("Begin rollback payment event"), Run->BeginRunEvent(TEXT("Event.Payment.Rollback"), Event.Get()));
+		const FRunEventChoiceResult Result =
+			Run->ChooseRunEventOptionWithPaidCardResult(TEXT("Pay"), FangId);
+		TestFalse(TEXT("Invalid later effect fails transaction"), Result.bSucceeded);
+		TestEqual(TEXT("Rollback reason"), Result.DisabledReason, FName(TEXT("InvalidPressureType")));
+		TestTrue(TEXT("Paid card removal rolled back"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
+		TestTrue(TEXT("Event remains active after rollback"), Run->IsRunEventActive());
 	}
 
 	return true;

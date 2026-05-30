@@ -113,12 +113,15 @@ namespace Wacom::ContentBuilder
 		PayRespect.Effects = { MakeAddGold(-1), MakeAddPressure(TEXT("Misdeed"), -1), MakeConsumeNode(1) };
 		PayRespect.NextNodeId = TEXT("End");
 
-		FWacomRunEventChoiceDefinition HandOverFang;
-		HandOverFang.ChoiceId = TEXT("HandOverFang");
-		HandOverFang.LabelText = FText::FromString(TEXT("交出毒牙"));
-		HandOverFang.Conditions = { MakeHasCard(PoisonFang) };
-		HandOverFang.Effects = { MakeRemoveCard(PoisonFang), MakeConsumeNode(1) };
-		HandOverFang.NextNodeId = TEXT("End");
+	FWacomRunEventChoiceDefinition HandOverFang;
+	HandOverFang.ChoiceId = TEXT("HandOverFang");
+	HandOverFang.LabelText = FText::FromString(TEXT("交出毒牙"));
+	HandOverFang.Conditions = { MakeHasCard(PoisonFang) };
+	HandOverFang.CardPayment.bRequiresOwnedCardPayment = true;
+	HandOverFang.CardPayment.PaymentZoneId = TEXT("RunEvent.Pay.Fang");
+	HandOverFang.CardPayment.AllowedCardDefinitions.Add(PoisonFang);
+	HandOverFang.Effects = { MakeConsumeNode(1) };
+	HandOverFang.NextNodeId = TEXT("End");
 
 		FWacomRunEventChoiceDefinition Leave;
 		Leave.ChoiceId = TEXT("Leave");

@@ -22,6 +22,39 @@ namespace
 	{
 		return FText::FromString(FString::Format(Format, { A, B }));
 	}
+
+	FName ResolvePaymentZoneId(const FWacomRunEventChoiceDefinition& Choice)
+	{
+		if (!Choice.CardPayment.PaymentZoneId.IsNone())
+		{
+			return Choice.CardPayment.PaymentZoneId;
+		}
+		if (Choice.ChoiceId.IsNone())
+		{
+			return NAME_None;
+		}
+		return FName(*FString::Printf(TEXT("RunEvent.Pay.%s"), *Choice.ChoiceId.ToString()));
+	}
+
+	bool HasValidPaymentFilter(const FWacomRunEventChoiceDefinition& Choice)
+	{
+		for (const TObjectPtr<UCardDefinition>& CardDefinition : Choice.CardPayment.AllowedCardDefinitions)
+		{
+			if (CardDefinition)
+			{
+				return true;
+			}
+		}
+		for (const FName& CardId : Choice.CardPayment.AllowedCardIds)
+		{
+			if (!CardId.IsNone())
+			{
+				return true;
+			}
+		}
+		return !Choice.CardPayment.RequiredKeywords.IsEmpty()
+			|| !Choice.CardPayment.BlockedKeywords.IsEmpty();
+	}
 }
 
 bool FWacomRunEventDefinitionValidation::Validate(
@@ -74,6 +107,7 @@ bool FWacomRunEventDefinitionValidation::Validate(
 	for (const FWacomRunEventNodeDefinition& Node : EventDefinition->Nodes)
 	{
 		TSet<FName> ChoiceIds;
+		TSet<FName> PaymentZoneIds;
 		for (const FWacomRunEventChoiceDefinition& Choice : Node.Choices)
 		{
 			if (Choice.ChoiceId.IsNone())
@@ -99,6 +133,35 @@ bool FWacomRunEventDefinitionValidation::Validate(
 					FormatValidationError(TEXT("Choice {0} 的 NextNodeId 无效：{1}。"),
 						Choice.ChoiceId.ToString(),
 						Choice.NextNodeId.ToString()));
+			}
+
+			if (Choice.CardPayment.bRequiresOwnedCardPayment)
+			{
+				const FName PaymentZoneId = ResolvePaymentZoneId(Choice);
+				if (PaymentZoneId.IsNone())
+				{
+					AddValidationError(OutErrors,
+						FormatValidationError(TEXT("Choice {0} 的卡牌支付缺少有效 PaymentZoneId。"),
+							Choice.ChoiceId.ToString()));
+				}
+				else if (PaymentZoneIds.Contains(PaymentZoneId))
+				{
+					AddValidationError(OutErrors,
+						FormatValidationError(TEXT("Node {0} 中卡牌支付 ZoneId 重复：{1}。"),
+							Node.NodeId.ToString(),
+							PaymentZoneId.ToString()));
+				}
+				else
+				{
+					PaymentZoneIds.Add(PaymentZoneId);
+				}
+
+				if (!HasValidPaymentFilter(Choice))
+				{
+					AddValidationError(OutErrors,
+						FormatValidationError(TEXT("Choice {0} 的卡牌支付筛选为空。"),
+							Choice.ChoiceId.ToString()));
+				}
 			}
 
 			for (const FWacomRunEventConditionDefinition& Condition : Choice.Conditions)
@@ -144,6 +207,14 @@ bool FWacomRunEventDefinitionValidation::Validate(
 
 			for (const FWacomRunEventEffectDefinition& Effect : Choice.Effects)
 			{
+				if (Choice.CardPayment.bRequiresOwnedCardPayment
+					&& Effect.Type == EWacomRunEventEffectType::RemoveCard)
+				{
+					AddValidationError(OutErrors,
+						FormatValidationError(TEXT("Choice {0} 是卡牌支付选项，不能同时配置 RemoveCard 效果。"),
+							Choice.ChoiceId.ToString()));
+				}
+
 				switch (Effect.Type)
 				{
 				case EWacomRunEventEffectType::None:

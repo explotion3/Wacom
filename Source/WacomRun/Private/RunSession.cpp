@@ -1419,3 +1419,23 @@ FRunEventChoiceResult URunSession::ChooseRunEventOptionWithResult(FName ChoiceId
 	}
 	return Result;
 }
+
+FRunDeckOperationValidation URunSession::ValidateRunEventOptionCardPayment(
+	FName ChoiceId,
+	FGuid PaidCardInstanceId) const
+{
+	return FRunEventExecutor::ValidateChoiceCardPayment(RunState, ChoiceId, PaidCardInstanceId);
+}
+
+FRunEventChoiceResult URunSession::ChooseRunEventOptionWithPaidCardResult(
+	FName ChoiceId,
+	FGuid PaidCardInstanceId)
+{
+	FRunEventChoiceResult Result =
+		FRunEventExecutor::ChooseOptionWithPaidCard(RunState, ChoiceId, PaidCardInstanceId);
+	if (Result.bSucceeded)
+	{
+		NotifyRunStateChanged();
+	}
+	return Result;
+}

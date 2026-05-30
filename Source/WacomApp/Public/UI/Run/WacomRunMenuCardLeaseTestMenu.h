@@ -50,10 +50,11 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeOnActivated() override;
-	virtual bool CanAcceptOwnedRunFirstPersonCardPayment_Implementation(
-		const FWacomRunMenuCardDropResolveResult& DropResult) const override;
-	virtual void OnOwnedRunFirstPersonCardPaymentResolved_Implementation(
-		const FWacomRunMenuCardDropResolveResult& DropResult) override;
+	virtual FWacomRunMenuCardDropResolveResult ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+		const FWacomRunMenuCardDropResolveResult& Candidate) const override;
+	virtual bool SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+		const FWacomRunMenuCardDropResolveResult& Resolved,
+		FWacomRunMenuCardDropResolveResult& OutSubmitted) override;
 
 private:
 	UPROPERTY(Transient)
@@ -75,7 +76,7 @@ private:
 	FWacomRunMenuCardLeaseResult LastLeaseResult;
 
 	UPROPERTY(Transient)
-	FWacomRunMenuCardDropResolveResult LastPaymentResult;
+	FWacomRunMenuCardDropResolveResult LastDropResult;
 
 	void UpdateStatusText();
 

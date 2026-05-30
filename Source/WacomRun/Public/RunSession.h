@@ -657,6 +657,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
 	FRunEventChoiceResult ChooseRunEventOptionWithResult(FName ChoiceId);
 
+	/** 校验当前 RunEvent 选项是否接受这张已持有卡作为支付；不修改 RunState。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Event")
+	FRunDeckOperationValidation ValidateRunEventOptionCardPayment(FName ChoiceId, FGuid PaidCardInstanceId) const;
+
+	/**
+	 * 选择当前节点中的卡牌支付选项，并精确支付一张已持有卡。
+	 *
+	 * 支付卡移除、Effects、节点跳转、关闭/完成标记在同一事务中执行；任一步失败都会回滚。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
+	FRunEventChoiceResult ChooseRunEventOptionWithPaidCardResult(FName ChoiceId, FGuid PaidCardInstanceId);
+
 	// ---- 战斗联动 ----
 
 	/**

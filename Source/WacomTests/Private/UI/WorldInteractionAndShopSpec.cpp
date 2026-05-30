@@ -86,6 +86,78 @@ namespace
 		return Event;
 	}
 
+	UWacomRunEventDefinition* MakeUiRunEventCardPaymentEvent(
+		UObject* Outer,
+		UCardDefinition* PaidCard)
+	{
+		UWacomRunEventDefinition* Event = NewObject<UWacomRunEventDefinition>(Outer);
+		Event->EventId = TEXT("Event.UI.Payment");
+		Event->DisplayName = FText::FromString(TEXT("支付事件"));
+		Event->StartNodeId = TEXT("Start");
+
+		FWacomRunEventChoiceDefinition Pay;
+		Pay.ChoiceId = TEXT("PayFang");
+		Pay.LabelText = FText::FromString(TEXT("交出毒牙"));
+		Pay.CardPayment.bRequiresOwnedCardPayment = true;
+		Pay.CardPayment.PaymentZoneId = TEXT("RunEvent.Pay.Fang");
+		Pay.CardPayment.AllowedCardDefinitions.Add(PaidCard);
+		FWacomRunEventEffectDefinition Gold;
+		Gold.Type = EWacomRunEventEffectType::AddGold;
+		Gold.Value = 1;
+		Pay.Effects.Add(Gold);
+
+		FWacomRunEventNodeDefinition Start;
+		Start.NodeId = TEXT("Start");
+		Start.Choices = { Pay };
+		Event->Nodes = { Start };
+		return Event;
+	}
+
+	FGuid FindUiStorageInstanceIdByDefinition(const FRunBackpackStorageSnapshot& Snapshot, const UCardDefinition* Card)
+	{
+		for (const FRunStorageCardView& View : Snapshot.Flux.ContentCards)
+		{
+			if (View.Instance.Definition.Get() == Card)
+			{
+				return View.Instance.InstanceId;
+			}
+		}
+		for (const FRunStorageCardView& View : Snapshot.BattleDeckPhysicalCards)
+		{
+			if (View.Instance.Definition.Get() == Card)
+			{
+				return View.Instance.InstanceId;
+			}
+		}
+		for (const FRunStorageCardView& View : Snapshot.BurdenCards)
+		{
+			if (View.Instance.Definition.Get() == Card)
+			{
+				return View.Instance.InstanceId;
+			}
+		}
+		for (const FRunSpecialStorageView& Special : Snapshot.SpecialZones)
+		{
+			if (Special.OwnerCard.Instance.Definition.Get() == Card)
+			{
+				return Special.OwnerCard.Instance.InstanceId;
+			}
+			for (const FRunStorageCardView& View : Special.ContentCards)
+			{
+				if (View.Instance.Definition.Get() == Card)
+				{
+					return View.Instance.InstanceId;
+				}
+			}
+		}
+		return FGuid();
+	}
+
+	bool UiStorageContainsDefinition(const FRunBackpackStorageSnapshot& Snapshot, const UCardDefinition* Card)
+	{
+		return FindUiStorageInstanceIdByDefinition(Snapshot, Card).IsValid();
+	}
+
 	AActor* SpawnTransientActor(UWorld& World)
 	{
 		FActorSpawnParameters SpawnParams;
@@ -881,6 +953,86 @@ bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Param
 	TestTrue(TEXT("Event completed after choice"), Run->IsRunEventCompleted(TEXT("Event.UI.Screen")));
 	TestFalse(TEXT("Event no longer active after close choice"), Run->IsRunEventActive());
 	TestFalse(TEXT("Close choice deactivates event screen once flow ends"), Screen->IsActivated());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventScreenCardPaymentSpec,
+	"Wacom.UI.Event.CardPaymentChoice",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = Fx.MakeNoopCard(0);
+	Fang->CardId = TEXT("PoisonFang");
+	UCardDefinition* Other = Fx.MakeNoopCard(0);
+	Other->CardId = TEXT("OtherCard");
+	UCardDefinition* Bag = Fx.MakeNoopCard(0);
+	Bag->Physique.Capacity = 8;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1),
+		Fx.MakeNoopCard(1),
+		{ Bag, Fang, Other });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	const FGuid FangId = FindUiStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Fang);
+	const FGuid OtherId = FindUiStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Other);
+	TestTrue(TEXT("Fang instance found"), FangId.IsValid());
+	TestTrue(TEXT("Other instance found"), OtherId.IsValid());
+
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(
+		MakeUiRunEventCardPaymentEvent(Run.Get(), Fang));
+	TestTrue(TEXT("Begin payment UI event"),
+		Run->BeginRunEvent(TEXT("Event.UI.Payment"), Event.Get()));
+
+	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->ActivateWidget();
+	Screen->RefreshEvent();
+
+	TestEqual(TEXT("One payment choice"), Screen->ReadChoiceCount(), 1);
+	const FRunEventChoiceSnapshot Choice = Screen->ReadChoiceSnapshot(0);
+	TestTrue(TEXT("Choice requires payment"), Choice.bRequiresOwnedCardPayment);
+	TestEqual(TEXT("Payment zone stored"), Choice.PaymentZoneId, FName(TEXT("RunEvent.Pay.Fang")));
+	TestEqual(TEXT("One candidate exposed"), Choice.PaymentCandidateCount, 1);
+	if (Choice.PaymentCandidateInstanceIds.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Candidate is fang instance"), Choice.PaymentCandidateInstanceIds[0], FangId);
+	}
+
+	FWacomRunMenuCardDropResolveResult WrongDrop;
+	WrongDrop.SourceCardInstanceId = OtherId;
+	WrongDrop.ZoneId = TEXT("RunEvent.Pay.Fang");
+	const FWacomRunMenuCardDropResolveResult WrongResult =
+		Screen->ResolveDropForTest(WrongDrop);
+	TestEqual(TEXT("Wrong candidate rejected by screen"),
+		WrongResult.IntentKind,
+		EWacomRunMenuCardDropIntentKind::Reject);
+
+	FWacomRunMenuCardDropResolveResult ValidDrop;
+	ValidDrop.SourceCardInstanceId = FangId;
+	ValidDrop.ZoneId = TEXT("RunEvent.Pay.Fang");
+	const FWacomRunMenuCardDropResolveResult ValidResult =
+		Screen->ResolveDropForTest(ValidDrop);
+	TestEqual(TEXT("Valid candidate resolves submit intent"),
+		ValidResult.IntentKind,
+		EWacomRunMenuCardDropIntentKind::SubmitZoneTarget);
+	TestEqual(TEXT("RunEventScreen handles submit"),
+		ValidResult.SubmitPolicy,
+		EWacomRunMenuCardDropSubmitPolicy::MenuHandled);
+
+	FWacomRunMenuCardDropResolveResult SubmittedResult;
+	TestTrue(TEXT("RunEventScreen submit succeeds"),
+		Screen->SubmitDropForTest(ValidResult, SubmittedResult));
+	TestTrue(TEXT("Submit result records success"), SubmittedResult.bSubmitted);
+	TestFalse(TEXT("Paid card removed by RunEvent option"),
+		UiStorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
+	TestTrue(TEXT("Other card remains"),
+		UiStorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Other));
+	TestEqual(TEXT("Choice effect applied"), Run->GetGold(), 1);
 
 	return true;
 }

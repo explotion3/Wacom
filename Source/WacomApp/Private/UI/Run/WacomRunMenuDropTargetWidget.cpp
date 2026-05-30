@@ -250,8 +250,8 @@ void UWacomRunMenuDropTargetWidget::ApplyFallbackPreview()
 		PreviewAlpha = PreviewOpacity;
 		break;
 	case EWacomRunMenuDropTargetPreviewState::ReleasedProbe:
-	case EWacomRunMenuDropTargetPreviewState::PaymentReady:
-	case EWacomRunMenuDropTargetPreviewState::PaymentSubmitted:
+	case EWacomRunMenuDropTargetPreviewState::SubmitReady:
+	case EWacomRunMenuDropTargetPreviewState::Submitted:
 		PreviewColor = ReleasedProbePreviewColor;
 		PreviewAlpha = PreviewOpacity;
 		ScaleMultiplier = ProbePreviewScale;

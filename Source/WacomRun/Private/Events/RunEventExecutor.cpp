@@ -9,6 +9,15 @@
 
 namespace
 {
+	bool ChoiceHasRemoveCardEffect(const FWacomRunEventChoiceDefinition& Choice)
+	{
+		return Choice.Effects.ContainsByPredicate(
+			[](const FWacomRunEventEffectDefinition& Effect)
+			{
+				return Effect.Type == EWacomRunEventEffectType::RemoveCard;
+			});
+	}
+
 	FName ToRunEventRemoveCardDisabledReason(FName DeckRulesReason)
 	{
 		if (DeckRulesReason == TEXT("CardNotOwned"))
@@ -28,6 +37,194 @@ namespace
 			return TEXT("MissingCard");
 		}
 		return DeckRulesReason.IsNone() ? FName(TEXT("EffectFailed")) : DeckRulesReason;
+	}
+}
+
+FName FRunEventExecutor::ResolvePaymentZoneId(const FWacomRunEventChoiceDefinition& Choice)
+{
+	if (!Choice.CardPayment.PaymentZoneId.IsNone())
+	{
+		return Choice.CardPayment.PaymentZoneId;
+	}
+	if (Choice.ChoiceId.IsNone())
+	{
+		return NAME_None;
+	}
+	return FName(*FString::Printf(TEXT("RunEvent.Pay.%s"), *Choice.ChoiceId.ToString()));
+}
+
+bool FRunEventExecutor::HasValidPaymentFilter(const FWacomRunEventChoiceDefinition& Choice)
+{
+	if (!Choice.CardPayment.bRequiresOwnedCardPayment)
+	{
+		return true;
+	}
+
+	for (const TObjectPtr<UCardDefinition>& CardDefinition : Choice.CardPayment.AllowedCardDefinitions)
+	{
+		if (CardDefinition)
+		{
+			return true;
+		}
+	}
+	for (const FName& CardId : Choice.CardPayment.AllowedCardIds)
+	{
+		if (!CardId.IsNone())
+		{
+			return true;
+		}
+	}
+	return !Choice.CardPayment.RequiredKeywords.IsEmpty()
+		|| !Choice.CardPayment.BlockedKeywords.IsEmpty();
+}
+
+bool FRunEventExecutor::DoesCardMatchPaymentFilter(
+	const FCardInstance& Instance,
+	const FWacomRunEventChoiceDefinition& Choice,
+	FName& OutDisabledReason)
+{
+	OutDisabledReason = NAME_None;
+	const UCardDefinition* Card = Instance.Definition.Get();
+	if (!Card)
+	{
+		OutDisabledReason = TEXT("MissingCard");
+		return false;
+	}
+	if (!HasValidPaymentFilter(Choice))
+	{
+		OutDisabledReason = TEXT("MissingPaymentFilter");
+		return false;
+	}
+
+	bool bHasIdentityFilter = false;
+	bool bMatchesIdentityFilter = false;
+	for (const TObjectPtr<UCardDefinition>& AllowedDefinition : Choice.CardPayment.AllowedCardDefinitions)
+	{
+		if (!AllowedDefinition)
+		{
+			continue;
+		}
+		bHasIdentityFilter = true;
+		if (AllowedDefinition.Get() == Card)
+		{
+			bMatchesIdentityFilter = true;
+			break;
+		}
+	}
+	if (!bMatchesIdentityFilter)
+	{
+		for (const FName& AllowedCardId : Choice.CardPayment.AllowedCardIds)
+		{
+			if (AllowedCardId.IsNone())
+			{
+				continue;
+			}
+			bHasIdentityFilter = true;
+			if (AllowedCardId == Card->CardId)
+			{
+				bMatchesIdentityFilter = true;
+				break;
+			}
+		}
+	}
+	if (bHasIdentityFilter && !bMatchesIdentityFilter)
+	{
+		OutDisabledReason = TEXT("PaymentCardNotAllowed");
+		return false;
+	}
+
+	if (!Choice.CardPayment.RequiredKeywords.IsEmpty()
+		&& !Card->Keywords.HasAll(Choice.CardPayment.RequiredKeywords))
+	{
+		OutDisabledReason = TEXT("MissingRequiredPaymentKeyword");
+		return false;
+	}
+	if (!Choice.CardPayment.BlockedKeywords.IsEmpty()
+		&& Card->Keywords.HasAny(Choice.CardPayment.BlockedKeywords))
+	{
+		OutDisabledReason = TEXT("BlockedPaymentKeyword");
+		return false;
+	}
+	return true;
+}
+
+void FRunEventExecutor::CollectCardPaymentCandidateInstanceIds(
+	const FRunState& State,
+	const FWacomRunEventChoiceDefinition& Choice,
+	TArray<FGuid>& OutInstanceIds,
+	FName& OutDisabledReason)
+{
+	OutInstanceIds.Reset();
+	OutDisabledReason = NAME_None;
+	if (!Choice.CardPayment.bRequiresOwnedCardPayment)
+	{
+		return;
+	}
+	if (!HasValidPaymentFilter(Choice))
+	{
+		OutDisabledReason = TEXT("MissingPaymentFilter");
+		return;
+	}
+
+	bool bSawFilterMatch = false;
+	FName FirstValidationFailure = NAME_None;
+	auto VisitInstance = [&State, &Choice, &OutInstanceIds, &OutDisabledReason, &bSawFilterMatch, &FirstValidationFailure](
+		const FCardInstance& Instance)
+	{
+		FName MatchFailure = NAME_None;
+		if (!FRunEventExecutor::DoesCardMatchPaymentFilter(Instance, Choice, MatchFailure))
+		{
+			if (OutDisabledReason.IsNone() && MatchFailure != TEXT("PaymentCardNotAllowed"))
+			{
+				OutDisabledReason = MatchFailure;
+			}
+			return;
+		}
+
+		bSawFilterMatch = true;
+		const FRunDeckOperationValidation Validation =
+			FRunDeckRules::ValidatePermanentRemoveInstance(State, Instance.InstanceId);
+		if (Validation.bCanExecute)
+		{
+			OutInstanceIds.Add(Instance.InstanceId);
+		}
+		else if (FirstValidationFailure.IsNone())
+		{
+			FirstValidationFailure = ToRunEventRemoveCardDisabledReason(Validation.DisabledReason);
+		}
+	};
+
+	for (const FCardInstance& Instance : State.Backpack)
+	{
+		VisitInstance(Instance);
+	}
+	for (const FCardInstance& Instance : State.BattleDeck)
+	{
+		VisitInstance(Instance);
+	}
+	for (const FCardInstance& Instance : State.BurdenZone)
+	{
+		VisitInstance(Instance);
+	}
+	for (const FSpecialZone& SpecialZone : State.SpecialZones)
+	{
+		for (const FCardInstance& Instance : SpecialZone.Cards)
+		{
+			VisitInstance(Instance);
+		}
+	}
+
+	if (!OutInstanceIds.IsEmpty())
+	{
+		OutDisabledReason = NAME_None;
+	}
+	else if (bSawFilterMatch && !FirstValidationFailure.IsNone())
+	{
+		OutDisabledReason = FirstValidationFailure;
+	}
+	else if (OutDisabledReason.IsNone())
+	{
+		OutDisabledReason = TEXT("MissingRequiredCard");
 	}
 }
 
@@ -140,6 +337,27 @@ FRunEventSnapshot FRunEventExecutor::BuildSnapshot(const FRunState& State)
 		ChoiceSnapshot.ChoiceId = Choice.ChoiceId;
 		ChoiceSnapshot.LabelText = Choice.LabelText;
 		ChoiceSnapshot.bAvailable = IsChoiceAvailable(State, Choice, ChoiceSnapshot.DisabledReason);
+		ChoiceSnapshot.bRequiresOwnedCardPayment = Choice.CardPayment.bRequiresOwnedCardPayment;
+		if (Choice.CardPayment.bRequiresOwnedCardPayment)
+		{
+			ChoiceSnapshot.PaymentZoneId = ResolvePaymentZoneId(Choice);
+			CollectCardPaymentCandidateInstanceIds(
+				State,
+				Choice,
+				ChoiceSnapshot.PaymentCandidateInstanceIds,
+				ChoiceSnapshot.PaymentDisabledReason);
+			ChoiceSnapshot.PaymentCandidateCount = ChoiceSnapshot.PaymentCandidateInstanceIds.Num();
+			if (ChoiceSnapshot.PaymentCandidateCount <= 0)
+			{
+				ChoiceSnapshot.bAvailable = false;
+				if (ChoiceSnapshot.DisabledReason.IsNone())
+				{
+					ChoiceSnapshot.DisabledReason = ChoiceSnapshot.PaymentDisabledReason.IsNone()
+						? FName(TEXT("MissingRequiredCard"))
+						: ChoiceSnapshot.PaymentDisabledReason;
+				}
+			}
+		}
 		Snapshot.Choices.Add(MoveTemp(ChoiceSnapshot));
 	}
 
@@ -148,8 +366,101 @@ FRunEventSnapshot FRunEventExecutor::BuildSnapshot(const FRunState& State)
 
 FRunEventChoiceResult FRunEventExecutor::ChooseOption(FRunState& State, FName ChoiceId)
 {
+	return ChooseOptionInternal(State, ChoiceId, TOptional<FGuid>());
+}
+
+FRunEventChoiceResult FRunEventExecutor::ChooseOptionWithPaidCard(
+	FRunState& State,
+	FName ChoiceId,
+	FGuid PaidCardInstanceId)
+{
+	return ChooseOptionInternal(State, ChoiceId, PaidCardInstanceId);
+}
+
+FRunDeckOperationValidation FRunEventExecutor::ValidateChoiceCardPayment(
+	const FRunState& State,
+	FName ChoiceId,
+	FGuid PaidCardInstanceId)
+{
+	FRunDeckOperationValidation Result;
+	if (!PaidCardInstanceId.IsValid())
+	{
+		Result.DisabledReason = TEXT("MissingPaidCard");
+		return Result;
+	}
+	if (State.ActiveRunEventId.IsNone() || !State.ActiveRunEventDefinition)
+	{
+		Result.DisabledReason = TEXT("NoActiveEvent");
+		return Result;
+	}
+
+	const FRunEventState* EventState = State.RunEventStates.Find(State.ActiveRunEventId);
+	if (!EventState || EventState->bCompleted)
+	{
+		Result.DisabledReason = TEXT("InvalidEventState");
+		return Result;
+	}
+
+	const FWacomRunEventNodeDefinition* Node = FindNode(State.ActiveRunEventDefinition, EventState->CurrentNodeId);
+	const FWacomRunEventChoiceDefinition* Choice = FindChoice(Node, ChoiceId);
+	if (!Choice)
+	{
+		Result.DisabledReason = TEXT("ChoiceNotFound");
+		return Result;
+	}
+	if (!Choice->CardPayment.bRequiresOwnedCardPayment)
+	{
+		Result.DisabledReason = TEXT("PaymentNotRequired");
+		return Result;
+	}
+	if (ChoiceHasRemoveCardEffect(*Choice))
+	{
+		Result.DisabledReason = TEXT("PaymentChoiceHasRemoveCardEffect");
+		return Result;
+	}
+
+	FName DisabledReason = NAME_None;
+	if (!IsChoiceAvailable(State, *Choice, DisabledReason))
+	{
+		Result.DisabledReason = DisabledReason.IsNone() ? FName(TEXT("ChoiceUnavailable")) : DisabledReason;
+		return Result;
+	}
+
+	FRunOwnedCardLocation Location;
+	if (!FRunDeckRules::FindOwnedCardInstance(State, PaidCardInstanceId, Location))
+	{
+		Result.DisabledReason = TEXT("CardNotOwned");
+		return Result;
+	}
+
+	FName MatchDisabledReason = NAME_None;
+	if (!DoesCardMatchPaymentFilter(Location.Instance, *Choice, MatchDisabledReason))
+	{
+		Result.DisabledReason = MatchDisabledReason.IsNone()
+			? FName(TEXT("PaymentCardNotAllowed"))
+			: MatchDisabledReason;
+		return Result;
+	}
+
+	Result = FRunDeckRules::ValidatePermanentRemoveInstance(State, PaidCardInstanceId);
+	if (!Result.bCanExecute)
+	{
+		Result.DisabledReason = ToRunEventRemoveCardDisabledReason(Result.DisabledReason);
+	}
+	return Result;
+}
+
+FRunEventChoiceResult FRunEventExecutor::ChooseOptionInternal(
+	FRunState& State,
+	FName ChoiceId,
+	TOptional<FGuid> PaidCardInstanceId)
+{
 	FRunEventChoiceResult Result;
 	Result.ChoiceId = ChoiceId;
+	if (PaidCardInstanceId.IsSet())
+	{
+		Result.PaidCardInstanceId = PaidCardInstanceId.GetValue();
+	}
 
 	if (State.ActiveRunEventId.IsNone() || !State.ActiveRunEventDefinition)
 	{
@@ -177,6 +488,25 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOption(FRunState& State, FName Ch
 		return Result;
 	}
 
+	if (Choice->CardPayment.bRequiresOwnedCardPayment && !PaidCardInstanceId.IsSet())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] ChooseRunEventOption: ChoiceId=%s 需要卡牌支付，普通点击拒绝"),
+			*ChoiceId.ToString());
+		Result.DisabledReason = TEXT("RequiresCardPayment");
+		return Result;
+	}
+	if (!Choice->CardPayment.bRequiresOwnedCardPayment && PaidCardInstanceId.IsSet())
+	{
+		Result.DisabledReason = TEXT("PaymentNotRequired");
+		return Result;
+	}
+	if (Choice->CardPayment.bRequiresOwnedCardPayment && ChoiceHasRemoveCardEffect(*Choice))
+	{
+		Result.DisabledReason = TEXT("PaymentChoiceHasRemoveCardEffect");
+		return Result;
+	}
+
 	FName DisabledReason = NAME_None;
 	if (!IsChoiceAvailable(State, *Choice, DisabledReason))
 	{
@@ -191,6 +521,29 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOption(FRunState& State, FName Ch
 	const FName ActiveRunEventId = State.ActiveRunEventId;
 	FRunState WorkingState = State;
 	TArray<FRunEventChoiceEffectResult> PendingEffectResults;
+
+	if (PaidCardInstanceId.IsSet())
+	{
+		const FRunDeckOperationValidation PaymentValidation =
+			ValidateChoiceCardPayment(WorkingState, ChoiceId, PaidCardInstanceId.GetValue());
+		if (!PaymentValidation.bCanExecute)
+		{
+			Result.DisabledReason = PaymentValidation.DisabledReason.IsNone()
+				? FName(TEXT("PaymentRejected"))
+				: PaymentValidation.DisabledReason;
+			return Result;
+		}
+
+		FName PaymentRemoveDisabledReason = NAME_None;
+		if (!FRunDeckRules::PermanentRemoveOwnedInstance(
+			WorkingState,
+			PaidCardInstanceId.GetValue(),
+			&PaymentRemoveDisabledReason))
+		{
+			Result.DisabledReason = ToRunEventRemoveCardDisabledReason(PaymentRemoveDisabledReason);
+			return Result;
+		}
+	}
 
 	if (!ApplyChoiceEffects(WorkingState, *Choice, &PendingEffectResults, &Result.DisabledReason))
 	{

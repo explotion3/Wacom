@@ -87,15 +87,29 @@ bool UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(
 	return bSet;
 }
 
-bool UWacomMenuWidgetBase::CanAcceptOwnedRunFirstPersonCardPayment_Implementation(
-	const FWacomRunMenuCardDropResolveResult& /*DropResult*/) const
+FWacomRunMenuCardDropResolveResult UWacomMenuWidgetBase::ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+	const FWacomRunMenuCardDropResolveResult& Candidate) const
 {
-	return false;
+	FWacomRunMenuCardDropResolveResult Result = Candidate;
+	Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
+	Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuDoesNotAccept;
+	Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+	Result.bCanSubmit = false;
+	Result.bSubmitted = false;
+	return Result;
 }
 
-void UWacomMenuWidgetBase::OnOwnedRunFirstPersonCardPaymentResolved_Implementation(
-	const FWacomRunMenuCardDropResolveResult& /*DropResult*/)
+bool UWacomMenuWidgetBase::SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+	const FWacomRunMenuCardDropResolveResult& Resolved,
+	FWacomRunMenuCardDropResolveResult& OutSubmitted)
 {
+	OutSubmitted = Resolved;
+	OutSubmitted.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
+	OutSubmitted.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
+	OutSubmitted.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
+	OutSubmitted.bCanSubmit = false;
+	OutSubmitted.bSubmitted = false;
+	return false;
 }
 
 bool UWacomMenuWidgetBase::HasOwnedRunFirstPersonCardLayerMenuLease(FName LeaseId) const

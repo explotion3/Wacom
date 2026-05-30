@@ -52,13 +52,17 @@ public:
 		return OwnedRunFirstPersonCardLayerMenuLeaseId;
 	}
 
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards")
-	bool CanAcceptOwnedRunFirstPersonCardPayment(
-		const FWacomRunMenuCardDropResolveResult& DropResult) const;
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	void ClearOwnedRunFirstPersonCardLayerMenuLease();
 
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards")
-	void OnOwnedRunFirstPersonCardPaymentResolved(
-		const FWacomRunMenuCardDropResolveResult& DropResult);
+	FWacomRunMenuCardDropResolveResult ResolveRunMenuFirstPersonCardDropIntent(
+		const FWacomRunMenuCardDropResolveResult& Candidate) const;
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	bool SubmitRunMenuFirstPersonCardDropIntent(
+		const FWacomRunMenuCardDropResolveResult& Resolved,
+		FWacomRunMenuCardDropResolveResult& OutSubmitted);
 
 	bool HasOwnedRunFirstPersonCardLayerMenuLease(FName LeaseId) const;
 
@@ -76,7 +80,6 @@ protected:
 private:
 	/** 聚焦第一个 enabled 的 UButton 子控件。 */
 	void FocusFirstButton();
-	void ClearOwnedRunFirstPersonCardLayerMenuLease();
 
 	UPROPERTY(Transient)
 	FName OwnedRunFirstPersonCardLayerMenuLeaseId = NAME_None;

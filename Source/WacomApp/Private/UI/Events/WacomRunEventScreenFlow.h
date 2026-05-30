@@ -21,4 +21,11 @@ struct FWacomRunEventScreenFlow
 		FName ChoiceId,
 		const TArray<FRunEventChoiceSnapshot>& CachedChoices,
 		bool& bDidEndRunEvent);
+
+	static bool ApplyChoiceResult(
+		UWacomRunEventScreen& Screen,
+		URunSession* Run,
+		UWacomAppToastSubsystem* ToastSubsystem,
+		const FRunEventChoiceResult& Result,
+		bool& bDidEndRunEvent);
 };

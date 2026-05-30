@@ -329,11 +329,17 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 			return Condition.Type == EWacomRunEventConditionType::HasCard
 				&& Condition.CardDefinition.Get() == PoisonFang;
 		}));
-	TestTrue(TEXT("HandOverFang removes PoisonFang"),
-		HandOverFang->Effects.ContainsByPredicate([PoisonFang](const FWacomRunEventEffectDefinition& Effect)
+	TestTrue(TEXT("HandOverFang requires card payment"),
+		HandOverFang->CardPayment.bRequiresOwnedCardPayment);
+	TestTrue(TEXT("HandOverFang payment accepts PoisonFang"),
+		HandOverFang->CardPayment.AllowedCardDefinitions.Contains(PoisonFang));
+	TestEqual(TEXT("HandOverFang payment zone"),
+		HandOverFang->CardPayment.PaymentZoneId,
+		FName(TEXT("RunEvent.Pay.Fang")));
+	TestFalse(TEXT("HandOverFang does not also remove PoisonFang by effect"),
+		HandOverFang->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
 		{
-			return Effect.Type == EWacomRunEventEffectType::RemoveCard
-				&& Effect.CardDefinition.Get() == PoisonFang;
+			return Effect.Type == EWacomRunEventEffectType::RemoveCard;
 		}));
 	TestTrue(TEXT("HandOverFang consumes one node"),
 		HandOverFang->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
