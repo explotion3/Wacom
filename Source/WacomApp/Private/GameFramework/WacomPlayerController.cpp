@@ -443,18 +443,8 @@ bool AWacomPlayerController::TryProbeBattleSceneInteractionTargetAtWidgetPositio
 		return false;
 	}
 
-	const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
-	const FVector2D PixelPosition = WidgetPosition * ViewportScale;
-	FVector WorldOrigin = FVector::ZeroVector;
-	FVector WorldDirection = FVector::ForwardVector;
-	if (!DeprojectScreenPositionToWorld(PixelPosition.X, PixelPosition.Y, WorldOrigin, WorldDirection))
-	{
-		return false;
-	}
-
 	FHitResult HitResult;
-	const FVector TraceEnd = WorldOrigin + WorldDirection * 100000.0f;
-	if (!GetWorld() || !GetWorld()->LineTraceSingleByChannel(HitResult, WorldOrigin, TraceEnd, ECC_Visibility))
+	if (!BuildBattleSceneInteractionTargetHitResultAtWidgetPosition(WidgetPosition, HitResult))
 	{
 		return false;
 	}
@@ -466,6 +456,23 @@ bool AWacomPlayerController::TryProbeBattleSceneInteractionTargetAtWidgetPositio
 		OutHandle.ScreenPosition = WidgetPosition;
 	}
 	return OutHandle.IsValid();
+}
+
+bool AWacomPlayerController::BuildBattleSceneInteractionTargetHitResultAtWidgetPosition(
+	const FVector2D& WidgetPosition,
+	FHitResult& OutHitResult) const
+{
+	const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
+	const FVector2D PixelPosition = WidgetPosition * ViewportScale;
+	FVector WorldOrigin = FVector::ZeroVector;
+	FVector WorldDirection = FVector::ForwardVector;
+	if (!DeprojectScreenPositionToWorld(PixelPosition.X, PixelPosition.Y, WorldOrigin, WorldDirection))
+	{
+		return false;
+	}
+
+	const FVector TraceEnd = WorldOrigin + WorldDirection * 100000.0f;
+	return GetWorld() && GetWorld()->LineTraceSingleByChannel(OutHitResult, WorldOrigin, TraceEnd, ECC_Visibility);
 }
 
 bool AWacomPlayerController::CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const

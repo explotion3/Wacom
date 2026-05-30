@@ -174,6 +174,9 @@ protected:
 
 	virtual bool CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const;
 	virtual bool BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const;
+	virtual bool BuildBattleSceneInteractionTargetHitResultAtWidgetPosition(
+		const FVector2D& WidgetPosition,
+		FHitResult& OutHitResult) const;
 	virtual bool BuildRunTunnelBranchClickHitResult(FHitResult& OutHitResult) const;
 
 	/** 按当前候选对象计算显示的交互提示文案。 */

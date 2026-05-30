@@ -359,7 +359,12 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - 拖拽 target probe 优先使用拖拽指针位置做 world trace，避免 UI capture 下继续读旧 OS cursor。点击路由仍保留原来的 under-cursor 路径。
    - 源卡仍使用按下时冻结的 visual slot 作为 inspect / drag / aim 基准，镜头运动不会把源卡或 aim arrow 从拖拽指针拉偏。EnemyInfoBar 仍不是 UI drop target。
 
-22. Render Quality V0-B
+22. V0-AC：Drop Intent Resolver Contract
+   - 已在 BattleHUD 内部增加 first-person card drop intent resolver。Preview 和 release 都通过同一个 `ResolveFirstPersonCardDropIntent()` 得到 `PlayCardNoTarget / PlayCardWorldTarget / ProbeCardTarget / Reject`，避免反馈和提交路径各自判断。
+   - 无目标卡 armed 后解析为现有 `SubmitPlayCard(CardId, FGuid())`；目标卡释放到合法 world enemy part 后解析为现有 `SubmitPlayCard(CardId, TargetPartId)`。合法性继续由 `UBattleSession::CanTargetWithCard()` 判定。
+   - Card target 当前解析为 `ProbeCardTarget`，只显示 probe，不提交规则；Zone、空处、同源卡、不可打卡、UI busy、BattleEnd / Resolving 或缺 Session 都解析为 reject。EnemyInfoBar 仍不是 drag / drop target。
+
+23. Render Quality V0-B
    - 当前不把“降低旋转角”作为主线目标；`WBP_FirstPersonCardView` 已能承接较大角度旋转的抗锯齿需求，排布表现优先。
    - 后续只在美术反馈需要时微调扇形参数：下坠、层级、hover / pending 姿态和可选角度 clamp。
 

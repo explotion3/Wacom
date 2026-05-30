@@ -57,12 +57,12 @@ tags:
   - 说明：当前 `BattleHUD::SyncBattleEnemyPartWorldTargets()` 和清理路径用同 World `UWacomBattleEnemyPartWorldTargetBridgeComponent` 扫描，适合 V0 验证。正式敌人 / Run 可交互 Actor 变多后，应改为组件注册 / 反注册到轻量 registry，避免全局扫描和跨系统清理范围过宽。
 
 - [ ] **交互目标系统：Card-World drag resolver / Zone 命中来源接入**
-  - 状态：`In Progress: V0-AB 已接入 drag target feedback / drop affordance`
+  - 状态：`In Progress: V0-AC 已接入 first-person Battle drop intent resolver contract`
   - 归属：App / Battle
-  - 说明：First-person hand 的 Card target 已由 `UWacomFirstPersonCardLayerSlotWidget / LayerWidget / AnchorComponent` 暴露为 `FWacomInteractionTargetHandle(TargetKind=Card)`，使用 visual slot screen position，且不要求目标卡可打。V0-Z 已把 first-person 源卡接入 hold inspect、无目标卡向上拖出释放提交、目标卡 aim arrow 和 world enemy part release 提交；V0-AA 保留 UMG mouse capture，同时用 drag pointer 驱动 BattleCameraLook override 和 widget-position world probe，避免拖拽时视角冻结或 target probe 读旧 cursor。V0-AB 增加释放前 affordance：无目标卡 armed 显示 commit-ready，合法/非法 world target 改变箭头颜色并触发场景 bridge transient preview，Card target 显示 probe 但不提交。Battle 中仍用 `UBattleSession::CanTargetWithCard()` 判定合法性。Zone target（背包 DropTarget 等）、Run 卡牌拖拽、正式 Card-Card resolver、更强 world outline/material polish 和真实飞牌轨迹仍待接入。
+  - 说明：First-person hand 的 Card target 已由 `UWacomFirstPersonCardLayerSlotWidget / LayerWidget / AnchorComponent` 暴露为 `FWacomInteractionTargetHandle(TargetKind=Card)`，使用 visual slot screen position，且不要求目标卡可打。V0-Z 已把 first-person 源卡接入 hold inspect、无目标卡向上拖出释放提交、目标卡 aim arrow 和 world enemy part release 提交；V0-AA 保留 UMG mouse capture，同时用 drag pointer 驱动 BattleCameraLook override 和 widget-position world probe，避免拖拽时视角冻结或 target probe 读旧 cursor。V0-AB 增加释放前 affordance：无目标卡 armed 显示 commit-ready，合法/非法 world target 改变箭头颜色并触发场景 bridge transient preview，Card target 显示 probe 但不提交。V0-AC 后 BattleHUD 用 `ResolveFirstPersonCardDropIntent()` 统一 preview 和 release 语义：无目标卡 armed 解析为现有空目标 PlayCard，合法 world enemy part 解析为现有目标 PlayCard，Card target 解析为 probe-only，Zone / 空处 / 同源卡 / 非法 world / UI blocked 解析为 reject。Battle 中仍用 `UBattleSession::CanTargetWithCard()` 判定 world 合法性。Zone target（背包 DropTarget 等）、Run 卡牌拖拽、正式 Card-Card resolver、更强 world outline/material polish 和真实飞牌轨迹仍待接入。
 
 - [ ] **交互目标系统：规则层 Target Resolver**
-  - 状态：`Ready: 拖拽系统接入时`
+  - 状态：`Ready: Card-to-Card / Run / Zone 规则接入时`
   - 归属：Battle / Run
   - 说明：域层 Resolver 根据 `TargetKind` 判断当前卡能否作用到目标，替代硬编码的 TargetMode 过滤。
 

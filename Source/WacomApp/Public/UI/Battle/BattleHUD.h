@@ -8,6 +8,7 @@
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 #include "Types/WacomEnums.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "BattleHUD.generated.h"
 
 class UWacomBattleWidgetBase;
@@ -29,7 +30,6 @@ struct FBattleCommand;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardDragView;
-struct FWacomInteractionTargetHandle;
 struct FWacomCardDetailViewData;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
@@ -83,6 +83,61 @@ struct WACOMAPP_API FBattleTargetSelectionView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Targeting")
 	TArray<FBattleTargetablePartView> TargetableParts;
+};
+
+UENUM(BlueprintType)
+enum class EWacomBattleCardDropIntentKind : uint8
+{
+	None UMETA(DisplayName = "None"),
+	PlayCardNoTarget UMETA(DisplayName = "PlayCardNoTarget"),
+	PlayCardWorldTarget UMETA(DisplayName = "PlayCardWorldTarget"),
+	ProbeCardTarget UMETA(DisplayName = "ProbeCardTarget"),
+	Reject UMETA(DisplayName = "Reject"),
+};
+
+UENUM(BlueprintType)
+enum class EWacomBattleCardDropRejectReason : uint8
+{
+	None UMETA(DisplayName = "None"),
+	UIBlocked UMETA(DisplayName = "UIBlocked"),
+	MissingSession UMETA(DisplayName = "MissingSession"),
+	SourceCardInvalid UMETA(DisplayName = "SourceCardInvalid"),
+	SourceCardNotPlayable UMETA(DisplayName = "SourceCardNotPlayable"),
+	NotArmed UMETA(DisplayName = "NotArmed"),
+	MissingTarget UMETA(DisplayName = "MissingTarget"),
+	InvalidWorldTarget UMETA(DisplayName = "InvalidWorldTarget"),
+	UnsupportedCardTarget UMETA(DisplayName = "UnsupportedCardTarget"),
+	UnsupportedZoneTarget UMETA(DisplayName = "UnsupportedZoneTarget"),
+	SelfTarget UMETA(DisplayName = "SelfTarget"),
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomBattleCardDropResolveResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	FGuid SourceCardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	FWacomInteractionTargetHandle TargetHandle;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	EWacomBattleCardDropIntentKind IntentKind = EWacomBattleCardDropIntentKind::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	EWacomBattleCardDropRejectReason RejectReason = EWacomBattleCardDropRejectReason::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	bool bCanSubmit = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	bool bHasFeedbackTargetScreenPosition = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
+
+	FString ToDebugString() const;
 };
 
 /**
@@ -587,6 +642,9 @@ private:
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView);
 	void ClearFirstPersonCardDragTargetFeedback();
+	FWacomBattleCardDropResolveResult ResolveFirstPersonCardDropIntent(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView) const;
 	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveBattleEnemyPartWorldTargetBridge(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 	bool ProbeFirstPersonCardDragTarget(

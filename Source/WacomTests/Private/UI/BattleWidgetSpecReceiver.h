@@ -78,6 +78,13 @@ public:
 		return TryProbeBattleSceneInteractionTarget(OutHandle);
 	}
 
+	bool ProbeBattleSceneTargetAtWidgetPositionForTest(
+		const FVector2D& WidgetPosition,
+		FWacomInteractionTargetHandle& OutHandle) const
+	{
+		return TryProbeBattleSceneInteractionTargetAtWidgetPosition(WidgetPosition, OutHandle);
+	}
+
 	bool InputRightMousePressedForTest()
 	{
 		FInputKeyEventArgs Args;
@@ -109,6 +116,20 @@ protected:
 		}
 
 		OutHitResult = BattleSceneClickHitOverride;
+		return OutHitResult.GetActor() || OutHitResult.GetComponent();
+	}
+
+	virtual bool BuildBattleSceneInteractionTargetHitResultAtWidgetPosition(
+		const FVector2D& WidgetPosition,
+		FHitResult& OutHitResult) const override
+	{
+		if (!bHasBattleSceneClickHitOverride)
+		{
+			return false;
+		}
+
+		OutHitResult = BattleSceneClickHitOverride;
+		OutHitResult.Location = FVector(WidgetPosition.X, WidgetPosition.Y, 0.0f);
 		return OutHitResult.GetActor() || OutHitResult.GetComponent();
 	}
 
@@ -489,6 +510,27 @@ public:
 		const FWacomFirstPersonCardLayerSlotView& SlotView)
 	{
 		HandleFirstPersonCardLayerHoveredCardLayoutUpdated(CardInstanceId, SlotView);
+	}
+
+	void HandleFirstPersonCardDragUpdatedForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView)
+	{
+		HandleFirstPersonCardLayerDragUpdated(CardInstanceId, DragView);
+	}
+
+	void HandleFirstPersonCardDragReleasedForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView)
+	{
+		HandleFirstPersonCardLayerDragReleased(CardInstanceId, DragView);
+	}
+
+	FWacomBattleCardDropResolveResult ResolveFirstPersonCardDropIntentForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView) const
+	{
+		return ResolveFirstPersonCardDropIntent(CardInstanceId, DragView);
 	}
 
 	bool IsLegacyCardDetailPanelVisibleForTest() const

@@ -1001,7 +1001,8 @@ public:
 		bool bValidTarget,
 		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
 			EWacomFirstPersonCardDragTargetFeedbackState::None,
-		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>());
+		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>(),
+		const FString& ResolvedIntentDebugSummary = FString());
 	void CancelFirstPersonCardDragGesture(bool bBroadcastCancel);
 
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardClicked;

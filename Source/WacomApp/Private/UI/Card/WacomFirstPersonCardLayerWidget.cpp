@@ -114,12 +114,14 @@ void UWacomFirstPersonCardLayerWidget::SetCardDragFeedbackTarget(
 	const FWacomInteractionTargetHandle& TargetHandle,
 	bool bValidTarget,
 	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
-	const TOptional<FVector2D>& FeedbackTargetScreenPosition)
+	const TOptional<FVector2D>& FeedbackTargetScreenPosition,
+	const FString& ResolvedIntentDebugSummary)
 {
 	if (!CardDragConfig.bEnableDragTargetFeedback)
 	{
 		FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::None;
 	}
+	CurrentDragResolvedIntentDebugSummary = ResolvedIntentDebugSummary;
 
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
 	{
@@ -521,7 +523,7 @@ FString UWacomFirstPersonCardLayerWidget::GetSlotMotionDebugSummary() const
 FString UWacomFirstPersonCardLayerWidget::GetDragTargetDebugSummary() const
 {
 	return FString::Printf(
-		TEXT("DragTarget{CardId=%s Gesture=%d TargetKind=%d WorldTargetId=%s CardTargetId=%s Valid=%s State=%d HasTargetPos=%s TargetPos=%s Pointer=%s}"),
+		TEXT("DragTarget{CardId=%s Gesture=%d TargetKind=%d WorldTargetId=%s CardTargetId=%s Valid=%s State=%d HasTargetPos=%s TargetPos=%s Pointer=%s Resolved=%s}"),
 		*CurrentDragView.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 		static_cast<int32>(CurrentDragView.GestureState),
 		static_cast<int32>(CurrentDragView.CurrentTarget.TargetKind),
@@ -531,7 +533,8 @@ FString UWacomFirstPersonCardLayerWidget::GetDragTargetDebugSummary() const
 		static_cast<int32>(CurrentDragView.TargetFeedbackState),
 		CurrentDragView.bHasFeedbackTargetScreenPosition ? TEXT("true") : TEXT("false"),
 		*CurrentDragView.FeedbackTargetScreenPosition.ToString(),
-		*CurrentDragView.CurrentScreenPosition.ToString());
+		*CurrentDragView.CurrentScreenPosition.ToString(),
+		*CurrentDragResolvedIntentDebugSummary);
 }
 
 #if WITH_AUTOMATION_TESTS

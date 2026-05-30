@@ -2045,7 +2045,8 @@ void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardDragFeedbackTarget(
 	const FWacomInteractionTargetHandle& TargetHandle,
 	bool bValidTarget,
 	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
-	const TOptional<FVector2D>& FeedbackTargetScreenPosition)
+	const TOptional<FVector2D>& FeedbackTargetScreenPosition,
+	const FString& ResolvedIntentDebugSummary)
 {
 	if (StaticCardLayerWidget)
 	{
@@ -2053,7 +2054,8 @@ void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardDragFeedbackTarget(
 			TargetHandle,
 			bValidTarget,
 			FeedbackState,
-			FeedbackTargetScreenPosition);
+			FeedbackTargetScreenPosition,
+			ResolvedIntentDebugSummary);
 	}
 }
 
