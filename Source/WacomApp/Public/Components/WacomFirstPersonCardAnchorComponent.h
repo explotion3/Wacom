@@ -94,8 +94,29 @@ enum class EWacomFirstPersonCardDragTargetFeedbackState : uint8
 	None UMETA(DisplayName = "None"),
 	Invalid UMETA(DisplayName = "Invalid"),
 	ValidWorldTarget UMETA(DisplayName = "Valid World Target"),
+	ValidCardTarget UMETA(DisplayName = "Valid Card Target"),
+	InvalidCardTarget UMETA(DisplayName = "Invalid Card Target"),
 	CardProbe UMETA(DisplayName = "Card Probe"),
 	CommitReady UMETA(DisplayName = "Commit Ready")
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardTargetAffordance
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	FGuid CardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	bool bCanSubmit = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	FString DebugSummary;
 };
 
 USTRUCT(BlueprintType)
@@ -237,6 +258,21 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float DragCardTargetProbeScale = 1.025f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float SelectedSourceLiftPixels = 36.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float SelectedSourceScale = 1.08f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	int32 SelectedSourceZOrderBoost = 1200;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	bool bSelectedSourceStraightenAngle = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float SelectedSourceAngleBlend = 0.75f;
 };
 
 USTRUCT(BlueprintType)
@@ -1002,7 +1038,9 @@ public:
 		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
 			EWacomFirstPersonCardDragTargetFeedbackState::None,
 		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>(),
-		const FString& ResolvedIntentDebugSummary = FString());
+		const FString& ResolvedIntentDebugSummary = FString(),
+		const TArray<FWacomFirstPersonCardTargetAffordance>& CardTargetAffordances =
+			TArray<FWacomFirstPersonCardTargetAffordance>());
 	void CancelFirstPersonCardDragGesture(bool bBroadcastCancel);
 
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardClicked;

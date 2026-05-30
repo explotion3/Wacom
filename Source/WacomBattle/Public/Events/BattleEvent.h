@@ -38,6 +38,8 @@ enum class EBattleEventType : uint8
 	TurnEnded             UMETA(DisplayName = "TurnEnded"),
 	PassiveTriggered      UMETA(DisplayName = "PassiveTriggered"),    // 被动触发通知
 	HandLimitDiscarded    UMETA(DisplayName = "HandLimitDiscarded"),  // 普通手牌上限导致弃牌
+	CardDiscarded         UMETA(DisplayName = "CardDiscarded"),       // 卡牌因弃牌规则从手牌进入弃牌堆
+	CardExhausted         UMETA(DisplayName = "CardExhausted"),       // 卡牌因消耗规则从手牌进入消耗区
 	CardGained            UMETA(DisplayName = "CardGained"),          // 战斗中获得一张新卡
 	BattleEnded           UMETA(DisplayName = "BattleEnded"),
 };
@@ -52,6 +54,18 @@ enum class EHandLimitDiscardSource : uint8
 	TurnStart               UMETA(DisplayName = "TurnStart"),
 	EffectDraw              UMETA(DisplayName = "EffectDraw"),
 	PassiveOnCompanionCount UMETA(DisplayName = "PassiveOnCompanionCount"),
+};
+
+/**
+ * 手牌卡移动原因。用于 CardDiscarded / CardExhausted 区分规则来源。
+ */
+UENUM(BlueprintType)
+enum class EHandCardZoneMoveReason : uint8
+{
+	None      UMETA(DisplayName = "None"),
+	Effect    UMETA(DisplayName = "Effect"),
+	HandLimit UMETA(DisplayName = "HandLimit"),
+	TurnEnd   UMETA(DisplayName = "TurnEnd"),
 };
 
 /**
@@ -70,6 +84,8 @@ enum class EHandLimitDiscardSource : uint8
  * - EnemyPartActed      ：ActorInstanceId = 行动部位、Tag 可承载 Intent id
  * - EnemyPartHpEmptied  ：ActorInstanceId = 被破坏部位
  * - HandLimitDiscarded  ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡（仅 EffectDraw）
+ * - CardDiscarded       ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡；Tag = 效果 tag
+ * - CardExhausted       ：CardInstanceId = 被消耗的卡；ActorInstanceId = 触发源卡；Tag = 效果 tag
  * - CardGained          ：CardInstanceId = 战斗内新卡实例；ActorInstanceId = 来源部位；CardDefinition = 新卡定义；Count = EKnockdownChoice
  * - BattleEnded         ：Count = 1 表示胜利、0 表示失败（后续换专用字段）
  */
@@ -108,6 +124,10 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 普通手牌上限弃牌的来源，仅 HandLimitDiscarded 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	EHandLimitDiscardSource HandLimitDiscardSource = EHandLimitDiscardSource::None;
+
+	/** 手牌卡移动来源，仅 CardDiscarded / CardExhausted 使用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	EHandCardZoneMoveReason HandCardZoneMoveReason = EHandCardZoneMoveReason::None;
 
 	/** 事件涉及的新卡定义。第一版仅 CardGained 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

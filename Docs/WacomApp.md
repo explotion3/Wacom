@@ -322,7 +322,7 @@ ESC 当前语义：
 - `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；只有 `TargetKind=World` 且 `TargetTag=Interaction.Target.Battle.EnemyPart` 的 handle 会被转发为 Battle enemy part 点击。
 - `UWacomFirstPersonCardLayerSlotWidget` 为当前 active、可见、非 exiting 且拥有有效 `CardInstanceId` 的 first-person slot 构建 Card target handle。它使用当前 visual slot 的 `ScreenPosition`，不要求卡牌可打；后续拖拽 resolver 再判断当前拖拽卡能否作用到该卡槽。
 - First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈区分合法 hand-card target 和 probe-only target。
-- Battle first-person drag/drop 由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析 preview 和 release 语义。当前提交既有 `PlayCard` 命令：无目标卡 armed 提交空目标，合法 world enemy part 提交目标部位，合法 `TargetMode=HandCard` 源卡提交 `TargetCardInstanceId`。UI 不区分加费、减费、弃置或消耗的具体规则；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 对左右手锚点的拒绝来自 BattleSession / PlayCardResolver 合法性。不支持的 Card target 仍为 probe-only，Zone / Run target 后续接入。
+- Battle first-person drag/drop 由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析 preview 和 release 语义。当前提交既有 `PlayCard` 命令：无目标卡 armed 提交空目标，合法 world enemy part 提交目标部位，合法 `TargetMode=HandCard` 源卡提交 `TargetCardInstanceId`。UI 不区分加费、减费、弃置或消耗的具体规则；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 对左右手锚点的拒绝来自 BattleSession / PlayCardResolver 合法性。不支持的 Card target 仍为 probe-only，Zone / Run target 后续接入。V0-AG 后，resolver 预览使用 `UBattleSession::ValidateTargetWithCard()` 获取可解释拒绝原因；拖拽 `TargetMode=HandCard` 源卡时，HUD 会为整副 first-person hand 生成合法 / 非法 Card target affordance，玩家只看到轻量颜色和缩放，具体 reason 只进入 debug summary / 自动化测试。
 
 ### 描述层
 
@@ -341,7 +341,7 @@ ESC 当前语义：
 
 ### 规则层
 
-Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomInteractionTargetHandle)`，当前用于 TargetSelect 可选部位视图、first-person drag/drop resolver 的 world target 合法性判断、`TargetMode=HandCard` 的 Card target 合法性判断，以及拖拽预览。`Target.SelectedHandCard` 的加费 / 减费允许普通手牌和左右手锚点；指定弃置 / 消耗只允许普通手牌。Run resolver 后续接入。
+Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomInteractionTargetHandle)` 和 `ValidateTargetWithCard(...)`，当前用于 TargetSelect 可选部位视图、first-person drag/drop resolver 的 world target 合法性判断、`TargetMode=HandCard` 的 Card target 合法性判断，以及拖拽预览。`CanTargetWithCard()` 只返回 bool，内部转调 validation；`ValidateTargetWithCard()` 会区分 self target、源卡不是 HandCard、目标不在手牌、selected discard/exhaust 不支持锚点、非法 world target 等原因。`Target.SelectedHandCard` 的加费 / 减费允许普通手牌和左右手锚点；指定弃置 / 消耗只允许普通手牌。Run resolver 后续接入。
 
 ### 当前范围
 

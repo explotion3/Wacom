@@ -5,6 +5,7 @@
 
 #include "Cards/CardDefinition.h"
 #include "Commands/BattleCommand.h"
+#include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Types/WacomInteractionTargetTypes.h"
@@ -378,5 +379,102 @@ bool FWacomBattleMissingTargetCardForHandCardPlayFailsSpec::RunTest(const FStrin
 	TestEqual(TEXT("Self target is illegal target"),
 		static_cast<int32>(SelfStatus.Code),
 		static_cast<int32>(EWacomError::IllegalTarget));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleValidateTargetExplainsValidHandCardTargetSpec,
+	"Wacom.Battle.CardToCardTarget.ValidateTargetWithCardExplainsValidHandCardTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleValidateTargetExplainsValidHandCardTargetSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = nullptr;
+	UCardDefinition* TargetDef = nullptr;
+	UBattleSession* Session = CreateCardToCardSession(Fx, SourceDef, TargetDef);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestTrue(TEXT("Validation accepts valid hand card target"), Result.bCanTarget);
+	TestEqual(TEXT("Validation has no reject reason"), Result.RejectReason, EWacomBattleTargetRejectReason::None);
+	TestTrue(TEXT("CanTarget mirrors validation"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleValidateTargetExplainsSelfTargetSpec,
+	"Wacom.Battle.CardToCardTarget.ValidateTargetWithCardExplainsSelfTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleValidateTargetExplainsSelfTargetSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = nullptr;
+	UCardDefinition* TargetDef = nullptr;
+	UBattleSession* Session = CreateCardToCardSession(Fx, SourceDef, TargetDef);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(SourceId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestFalse(TEXT("Validation rejects self target"), Result.bCanTarget);
+	TestEqual(TEXT("Validation explains self target"), Result.RejectReason, EWacomBattleTargetRejectReason::SelfTarget);
+	TestTrue(TEXT("CanTarget mirrors validation"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleValidateTargetExplainsUnsupportedAnchorForSelectedZoneMoveSpec,
+	"Wacom.Battle.CardToCardTarget.ValidateTargetWithCardExplainsUnsupportedAnchorForSelectedZoneMove",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleValidateTargetExplainsUnsupportedAnchorForSelectedZoneMoveSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = Fx.MakeSelectedHandCardZoneMoveCard(/*Cost*/0, /*bExhaust*/false);
+	UCardDefinition* LeftDef = Fx.MakeNoopCard(0);
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(LeftDef, Fx.MakeNoopCard(0), { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, LeftDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(LeftId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestFalse(TEXT("Validation rejects selected zone move anchor target"), Result.bCanTarget);
+	TestEqual(TEXT("Validation explains unsupported hand anchor"), Result.RejectReason, EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget);
+	TestTrue(TEXT("CanTarget mirrors validation"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleValidateTargetExplainsNonHandCardSourceSpec,
+	"Wacom.Battle.CardToCardTarget.ValidateTargetWithCardExplainsNonHandCardSource",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleValidateTargetExplainsNonHandCardSourceSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = Fx.MakeNoopCard(0);
+	UCardDefinition* TargetDef = Fx.MakeNoopCard(0);
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestFalse(TEXT("Validation rejects non-HandCard source"), Result.bCanTarget);
+	TestEqual(TEXT("Validation explains unsupported card target"), Result.RejectReason, EWacomBattleTargetRejectReason::UnsupportedCardTarget);
+	TestTrue(TEXT("CanTarget mirrors validation"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
 	return true;
 }

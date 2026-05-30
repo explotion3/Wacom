@@ -101,6 +101,8 @@ namespace
 		case EBattleEventType::BattleEnded:
 			return E.Count == 1 ? TEXT("战斗胜利") : TEXT("战斗失败");
 		case EBattleEventType::HandZoneChanged:
+		case EBattleEventType::CardDiscarded:
+		case EBattleEventType::CardExhausted:
 			return FString();  // 太频繁，不弹提示
 		case EBattleEventType::CardGained:
 			return E.CardDefinition

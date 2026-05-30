@@ -15,6 +15,7 @@ struct FRuntimeCardInstance;
  * - Passive.Trigger.AfterPlayed         — 本卡打出后触发（烁光蝶自腾挪）
  * - Passive.Trigger.OnCompanionCount    — 全局 Companion 计数达阈值触发（拂晓飞蛾回手）
  * - Passive.Trigger.OnTwilightTriggered — 暮气施加时触发；由 EffectExecutor 直接调用
+ * - Passive.Trigger.OnDiscard           — 本卡被弃掉时触发；由 HandZoneMoveEventService 调用
  *
  * 新增 Trigger 时在此类扩展。
  */
@@ -61,9 +62,9 @@ public:
 	 */
 	static void RunOnDraw(FBattleState& State, FBattleEventBus& Events, const FGuid& DrawnCardId);
 
-	/**
-	 * 某张卡被弃掉时触发该卡的 OnDiscard 被动。
-	 * 调用点：DeckService::DiscardFromHand 之后。
-	 */
+	 /**
+	  * 某张卡被弃掉时触发该卡的 OnDiscard 被动。
+	 * 调用点：HandZoneMoveEventService，在卡已经从手牌进入弃牌堆之后。
+	  */
 	static void RunOnDiscard(FBattleState& State, FBattleEventBus& Events, const FGuid& DiscardedCardId);
 };

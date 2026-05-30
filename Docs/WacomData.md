@@ -512,7 +512,7 @@ RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventI
 | `Passive.Trigger.OnTurnStart` | `Passive_Trigger_OnTurnStart` | 玩家回合开始时（Dispatcher 方法已就位，调用点未接入）|
 | `Passive.Trigger.OnTurnEnd` | `Passive_Trigger_OnTurnEnd` | 玩家回合结束时（Dispatcher 方法已就位，调用点未接入）|
 | `Passive.Trigger.OnDraw` | `Passive_Trigger_OnDraw` | 本卡被抽到手牌时（Dispatcher 方法已就位，调用点未接入）|
-| `Passive.Trigger.OnDiscard` | `Passive_Trigger_OnDiscard` | 本卡被弃掉时（Dispatcher 方法已就位，调用点未接入）|
+| `Passive.Trigger.OnDiscard` | `Passive_Trigger_OnDiscard` | 本卡被弃掉时；弃牌效果、手牌上限和回合结束弃牌会触发，打出后自然进弃牌堆不触发 |
 
 ### CardLocation
 
@@ -599,8 +599,8 @@ Magnitude 计算顺序：
 | `Effect.Shuffle.ToRandomZone` | - | Self(本卡) | - | - | - | 把本卡腾挪到随机区域 |
 | `Effect.Card.AddCost` | Modifier 增量 | Self(本卡) / LastShuffledCard / SelectedHandCard | - | - | Literal | 修改 RuntimeCostModifier |
 | `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 下限由 ComputeRuntimeCost clamp 到 0 |
-| `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆；不允许左右手锚点，Magnitude 不参与数量判定 |
-| `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗区；不允许左右手锚点，Magnitude 不参与数量判定 |
+| `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆；不允许左右手锚点，Magnitude 不参与数量判定；触发目标卡 `OnDiscard` |
+| `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗区；不允许左右手锚点，Magnitude 不参与数量判定；不触发 `OnDiscard` |
 | `Effect.Draw` | 张数 | Self / Player | CardLocation.* | - | Literal | `TargetZone` 复用为源区域 tag，默认抽牌堆 |
 | `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉手牌中普通卡，不弃锚点 |
 | `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 标记交给打出后去向阶段处理 |

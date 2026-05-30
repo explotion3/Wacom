@@ -5026,6 +5026,113 @@ bool FWacomFirstPersonCardLayerRemoveHintAssignmentTest::RunTest(const FString& 
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCardDiscardedHintAssignmentTest,
+	"Wacom.UI.FirstPersonCardLayer.EventAwareTransitions.CardDiscardedEventAssignsDiscardedExitHint",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCardDiscardedHintAssignmentTest::RunTest(const FString& Parameters)
+{
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	FHandCardSnapshot Discarded = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	const FBattleSnapshot Previous = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ Discarded });
+	const FBattleSnapshot Next = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({});
+
+	HUD->StoreFirstPersonCardTransitionEventsForTest({
+		WacomFirstPersonCardLayerSpec::MakeBattleEvent(EBattleEventType::CardDiscarded, Discarded.InstanceId)
+	});
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> Hints =
+		HUD->BuildFirstPersonCardTransitionHintsForTest(Previous, Next);
+
+	const FWacomFirstPersonCardLayerTransitionHint* Hint =
+		WacomFirstPersonCardLayerSpec::FindTransitionHint(Hints, Discarded.InstanceId);
+	TestNotNull(TEXT("CardDiscarded hint exists"), Hint);
+	if (Hint)
+	{
+		TestEqual(TEXT("CardDiscarded maps to discarded transition"),
+			Hint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Discarded);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCardExhaustedHintAssignmentTest,
+	"Wacom.UI.FirstPersonCardLayer.EventAwareTransitions.CardExhaustedEventAssignsDiscardedExitHint",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCardExhaustedHintAssignmentTest::RunTest(const FString& Parameters)
+{
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	FHandCardSnapshot Exhausted = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	const FBattleSnapshot Previous = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ Exhausted });
+	const FBattleSnapshot Next = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({});
+
+	HUD->StoreFirstPersonCardTransitionEventsForTest({
+		WacomFirstPersonCardLayerSpec::MakeBattleEvent(EBattleEventType::CardExhausted, Exhausted.InstanceId)
+	});
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> Hints =
+		HUD->BuildFirstPersonCardTransitionHintsForTest(Previous, Next);
+
+	const FWacomFirstPersonCardLayerTransitionHint* Hint =
+		WacomFirstPersonCardLayerSpec::FindTransitionHint(Hints, Exhausted.InstanceId);
+	TestNotNull(TEXT("CardExhausted hint exists"), Hint);
+	if (Hint)
+	{
+		TestEqual(TEXT("CardExhausted maps to discarded transition"),
+			Hint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Discarded);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerHandLimitCompatibilityHintAssignmentTest,
+	"Wacom.UI.FirstPersonCardLayer.EventAwareTransitions.HandLimitDiscardedCompatibilityDoesNotDuplicateExitHint",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerHandLimitCompatibilityHintAssignmentTest::RunTest(const FString& Parameters)
+{
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	FHandCardSnapshot Discarded = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	const FBattleSnapshot Previous = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ Discarded });
+	const FBattleSnapshot Next = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({});
+
+	HUD->StoreFirstPersonCardTransitionEventsForTest({
+		WacomFirstPersonCardLayerSpec::MakeBattleEvent(EBattleEventType::HandLimitDiscarded, Discarded.InstanceId),
+		WacomFirstPersonCardLayerSpec::MakeBattleEvent(EBattleEventType::CardDiscarded, Discarded.InstanceId)
+	});
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> Hints =
+		HUD->BuildFirstPersonCardTransitionHintsForTest(Previous, Next);
+
+	int32 MatchingHints = 0;
+	for (const FWacomFirstPersonCardLayerTransitionHint& Hint : Hints)
+	{
+		if (Hint.CardInstanceId != Discarded.InstanceId)
+		{
+			continue;
+		}
+		++MatchingHints;
+		TestEqual(TEXT("Compatibility hint uses discarded transition"),
+			Hint.TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Discarded);
+	}
+	TestEqual(TEXT("Compatibility events produce one exit hint"), MatchingHints, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerPoisonFangGainHintTest,
 	"Wacom.UI.FirstPersonCardLayer.EventAwareTransitions.CardGainedAssignsGainHintForPoisonFangReward",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -9070,6 +9177,170 @@ bool FWacomFirstPersonCardLayerDragTargetDebugSummaryTest::RunTest(const FString
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerValidCardTargetFeedbackTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.ValidCardTargetsUseValidCardFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerValidCardTargetFeedbackTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.3f;
+	DragConfig.DragValidTargetColor = FLinearColor::Green;
+	DragConfig.DragInvalidTargetColor = FLinearColor::Red;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid ValidTargetCardId = FGuid::NewGuid();
+	const FGuid InvalidTargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView ValidTargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(ValidTargetCardId, true, true);
+	ValidTargetSlot.Index = 1;
+	ValidTargetSlot.ScreenPosition = FVector2D(650.0f, 600.0f);
+	FWacomFirstPersonCardLayerSlotView InvalidTargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(InvalidTargetCardId, true, true);
+	InvalidTargetSlot.Index = 2;
+	InvalidTargetSlot.ScreenPosition = FVector2D(780.0f, 600.0f);
+	Layer->SetCardSlots({ SourceSlot, ValidTargetSlot, InvalidTargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* ValidTargetWidget = Layer->GetSlotWidgetAt(1);
+	UWacomFirstPersonCardLayerSlotWidget* InvalidTargetWidget = Layer->GetSlotWidgetAt(2);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Valid target slot"), ValidTargetWidget)
+		|| !TestNotNull(TEXT("Invalid target slot"), InvalidTargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+
+	TArray<FWacomFirstPersonCardTargetAffordance> Affordances;
+	FWacomFirstPersonCardTargetAffordance ValidAffordance;
+	ValidAffordance.CardInstanceId = ValidTargetCardId;
+	ValidAffordance.FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget;
+	ValidAffordance.bCanSubmit = true;
+	Affordances.Add(ValidAffordance);
+	FWacomFirstPersonCardTargetAffordance InvalidAffordance;
+	InvalidAffordance.CardInstanceId = InvalidTargetCardId;
+	InvalidAffordance.FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
+	InvalidAffordance.bCanSubmit = false;
+	Affordances.Add(InvalidAffordance);
+
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(ValidTargetCardId, ValidTargetWidget, ValidTargetSlot.ScreenPosition),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
+		ValidTargetSlot.ScreenPosition,
+		TEXT("CardDrop{Intent=PlayCardCardTarget}"),
+		Affordances);
+
+	TestEqual(TEXT("Valid target uses card valid state"),
+		ValidTargetWidget->GetDragTargetFeedbackStateForTest(),
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestEqual(TEXT("Valid target color"), ValidTargetWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Green);
+	TestEqual(TEXT("Invalid target uses card invalid state"),
+		InvalidTargetWidget->GetDragTargetFeedbackStateForTest(),
+		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
+	TestEqual(TEXT("Invalid target color"), InvalidTargetWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Red);
+	TestTrue(TEXT("Debug counts valid affordance"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceValid=1")));
+	TestTrue(TEXT("Debug counts invalid affordance"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceInvalid=1")));
+
+	SourceWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerFocusedCardTargetOverrideTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.CurrentHoveredCardTargetOverridesWithStrongerFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerFocusedCardTargetOverrideTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView TargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(TargetCardId, true, true);
+	TargetSlot.Index = 1;
+	TargetSlot.ScreenPosition = FVector2D(650.0f, 600.0f);
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+
+	FWacomFirstPersonCardTargetAffordance InvalidAffordance;
+	InvalidAffordance.CardInstanceId = TargetCardId;
+	InvalidAffordance.FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
+	TArray<FWacomFirstPersonCardTargetAffordance> Affordances;
+	Affordances.Add(InvalidAffordance);
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, TargetWidget, TargetSlot.ScreenPosition),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
+		TargetSlot.ScreenPosition,
+		TEXT("CardDrop{Intent=PlayCardCardTarget}"),
+		Affordances);
+
+	TestEqual(TEXT("Focused valid result overrides base invalid affordance"),
+		TargetWidget->GetDragTargetFeedbackStateForTest(),
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+
+	SourceWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonDropIntentNoTargetArmedTest,
 	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.NoTargetArmedResolvesPlayCardNoTarget",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -9223,6 +9494,11 @@ bool FWacomFirstPersonDropIntentCardTargetProbeTest::RunTest(const FString& Para
 	TestEqual(TEXT("Card target records unsupported reason"),
 		Result.RejectReason,
 		EWacomBattleCardDropRejectReason::UnsupportedCardTarget);
+	TestEqual(TEXT("Card target records validation reason"),
+		Result.TargetValidationRejectReason,
+		EWacomBattleTargetRejectReason::UnsupportedCardTarget);
+	TestTrue(TEXT("Card target debug includes validation"),
+		Result.ToDebugString().Contains(TEXT("ValidationReject=UnsupportedCardTarget")));
 	TestTrue(TEXT("Card target exposes feedback position"), Result.bHasFeedbackTargetScreenPosition);
 
 	PC->Destroy();
@@ -9285,6 +9561,11 @@ bool FWacomFirstPersonDropIntentValidHandCardTargetTest::RunTest(const FString& 
 	TestEqual(TEXT("Card target preserves target id"), Result.TargetHandle.CardInstanceId, TargetCardId);
 	TestTrue(TEXT("Card target can submit"), Result.bCanSubmit);
 	TestEqual(TEXT("No reject reason"), Result.RejectReason, EWacomBattleCardDropRejectReason::None);
+	TestEqual(TEXT("No validation reject reason"),
+		Result.TargetValidationRejectReason,
+		EWacomBattleTargetRejectReason::None);
+	TestTrue(TEXT("Valid card target debug includes validation"),
+		Result.ToDebugString().Contains(TEXT("ValidationReject=None")));
 	TestTrue(TEXT("Card target exposes feedback position"), Result.bHasFeedbackTargetScreenPosition);
 
 	PC->Destroy();
@@ -9407,7 +9688,161 @@ bool FWacomFirstPersonDropIntentSelectedZoneMoveHandAnchorRejectTest::RunTest(co
 	TestEqual(TEXT("Anchor target records unsupported reason"),
 		Result.RejectReason,
 		EWacomBattleCardDropRejectReason::UnsupportedCardTarget);
+	TestEqual(TEXT("Anchor target records validation reason"),
+		Result.TargetValidationRejectReason,
+		EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget);
 
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.DraggingHandCardSourceBuildsFullHandCardAffordance",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceCard = Fx.MakeSelectedHandCardZoneMoveCard(/*Cost*/0, /*bExhaust*/true);
+	UCardDefinition* NormalTargetCard = Fx.MakeNoopCard(3);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ SourceCard, NormalTargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
+	const FGuid NormalTargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, NormalTargetCard->CardId);
+	const FGuid AnchorCardId = WacomFirstPersonCardLayerSpec::FindFirstHandAnchor(Snapshot);
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+			AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+			FTransform::Identity);
+	AWacomPlayerCharacter* Character =
+		World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid())
+		|| !TestTrue(TEXT("Normal target exists"), NormalTargetCardId.IsValid())
+		|| !TestTrue(TEXT("Anchor target exists"), AnchorCardId.IsValid()))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandOnly);
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
+	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+	{
+		FWacomFirstPersonCardLayerEntry Entry;
+		Entry.CardInstanceId = CardSnapshot.InstanceId;
+		Entry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot.Definition);
+		Entry.CardViewData.Cost = CardSnapshot.RuntimeCost;
+		Entry.CardViewData.bShowCost = CardSnapshot.Definition != nullptr;
+		Entry.CardViewData.bDisabled = !CardSnapshot.bIsPlayable;
+		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
+		Entry.TargetMode = CardSnapshot.Definition
+			? CardSnapshot.Definition->TargetMode
+			: ECardTargetMode::None;
+		Entry.Zone = CardSnapshot.Zone;
+		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
+		CardEntries.Add(MoveTemp(Entry));
+	}
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), CardEntries);
+	HUD->SetFirstPersonCardAnchorForTest(Anchor);
+	Anchor->RefreshAnchor(0.0f);
+	Anchor->PrimaryComponentTick.ExecuteTick(
+		0.0f,
+		LEVELTICK_All,
+		ENamedThreads::GameThread,
+		FGraphEventRef());
+	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	if (!TestNotNull(TEXT("First-person layer"), Layer))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = nullptr;
+	UWacomFirstPersonCardLayerSlotWidget* NormalTargetWidget = nullptr;
+	UWacomFirstPersonCardLayerSlotWidget* AnchorTargetWidget = nullptr;
+	for (int32 Index = 0; Index < Layer->GetCardViewCount(); ++Index)
+	{
+		UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(Index);
+		if (!SlotWidget)
+		{
+			continue;
+		}
+		const FGuid SlotCardId = SlotWidget->GetSlotView().Entry.CardInstanceId;
+		if (SlotCardId == SourceCardId)
+		{
+			SourceWidget = SlotWidget;
+		}
+		else if (SlotCardId == NormalTargetCardId)
+		{
+			NormalTargetWidget = SlotWidget;
+		}
+		else if (SlotCardId == AnchorCardId)
+		{
+			AnchorTargetWidget = SlotWidget;
+		}
+	}
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Normal target slot"), NormalTargetWidget)
+		|| !TestNotNull(TEXT("Anchor target slot"), AnchorTargetWidget))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D SourcePosition = SourceWidget->GetVisualSlotView().ScreenPosition;
+	SourceWidget->RequestGesturePressForTest(SourcePosition);
+	SourceWidget->RequestGestureMoveForTest(0.01f, SourcePosition + FVector2D(80.0f, -20.0f));
+	TestEqual(TEXT("Aiming drag records selected-source gesture state"),
+		SourceWidget->GetGestureStateForFirstPersonLayer(),
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, Layer->GetCurrentDragViewForTest());
+
+	TestEqual(TEXT("Normal hand card shows valid affordance"),
+		NormalTargetWidget->GetDragTargetFeedbackStateForTest(),
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestEqual(TEXT("Hand anchor shows invalid affordance for selected zone move"),
+		AnchorTargetWidget->GetDragTargetFeedbackStateForTest(),
+		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
+	TestTrue(TEXT("Debug reports affordance counts"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceValid=")));
+
+	Layer->CancelCardDragGesture(true);
+	TestEqual(TEXT("Normal affordance clears on cancel"),
+		NormalTargetWidget->GetDragTargetFeedbackStateForTest(),
+		EWacomFirstPersonCardDragTargetFeedbackState::None);
+
+	Character->Destroy();
 	PC->Destroy();
 	return true;
 }
@@ -9950,7 +10385,7 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, Layer->GetCurrentDragViewForTest());
 	TestEqual(TEXT("HUD marks card target as valid before release"),
 		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
-		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
 
 	SourceWidget->RequestGestureReleaseForTest(TargetPosition);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);

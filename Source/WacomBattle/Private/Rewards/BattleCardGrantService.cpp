@@ -4,8 +4,8 @@
 
 #include "Core/BattleState.h"
 #include "Events/BattleEventBus.h"
-#include "Events/BattleEventHelpers.h"
 #include "Hand/HandZoneService.h"
+#include "Hand/HandZoneMoveEventService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Types/WacomEnums.h"
 
@@ -50,11 +50,16 @@ FBattleCardGrantResult FBattleCardGrantService::GrantCardToHand(
 		Events.Emit(Ev);
 	}
 
-	WacomBattleEvents::EmitHandLimitDiscardedEvents(
+	FHandZoneMoveEventService::ResolveDiscardedFromHand(
+		State,
 		Events,
 		Result.DiscardedByLimit,
+		EHandCardZoneMoveReason::HandLimit,
+		FGuid(),
+		FGameplayTag(),
 		EHandLimitDiscardSource::None);
 
+	if (Result.DiscardedByLimit.IsEmpty())
 	{
 		FBattleEvent Ev;
 		Ev.Type = EBattleEventType::HandZoneChanged;

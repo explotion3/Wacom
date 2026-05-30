@@ -94,6 +94,57 @@ namespace
 		}
 	}
 
+	const TCHAR* LexToString(EWacomBattleTargetRejectReason RejectReason)
+	{
+		switch (RejectReason)
+		{
+		case EWacomBattleTargetRejectReason::None: return TEXT("None");
+		case EWacomBattleTargetRejectReason::InvalidTarget: return TEXT("InvalidTarget");
+		case EWacomBattleTargetRejectReason::SourceCardInvalid: return TEXT("SourceCardInvalid");
+		case EWacomBattleTargetRejectReason::SourceCardNotInHand: return TEXT("SourceCardNotInHand");
+		case EWacomBattleTargetRejectReason::SourceCardMissingDefinition: return TEXT("SourceCardMissingDefinition");
+		case EWacomBattleTargetRejectReason::UnsupportedWorldTarget: return TEXT("UnsupportedWorldTarget");
+		case EWacomBattleTargetRejectReason::InvalidWorldTarget: return TEXT("InvalidWorldTarget");
+		case EWacomBattleTargetRejectReason::UnsupportedCardTarget: return TEXT("UnsupportedCardTarget");
+		case EWacomBattleTargetRejectReason::TargetCardInvalid: return TEXT("TargetCardInvalid");
+		case EWacomBattleTargetRejectReason::TargetCardNotInHand: return TEXT("TargetCardNotInHand");
+		case EWacomBattleTargetRejectReason::SelfTarget: return TEXT("SelfTarget");
+		case EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget: return TEXT("UnsupportedHandAnchorTarget");
+		case EWacomBattleTargetRejectReason::UnsupportedZoneTarget: return TEXT("UnsupportedZoneTarget");
+		default: return TEXT("Unknown");
+		}
+	}
+
+	EWacomBattleCardDropRejectReason MapTargetValidationRejectReason(
+		EWacomBattleTargetRejectReason RejectReason)
+	{
+		switch (RejectReason)
+		{
+		case EWacomBattleTargetRejectReason::None:
+			return EWacomBattleCardDropRejectReason::None;
+		case EWacomBattleTargetRejectReason::InvalidTarget:
+			return EWacomBattleCardDropRejectReason::MissingTarget;
+		case EWacomBattleTargetRejectReason::SourceCardInvalid:
+		case EWacomBattleTargetRejectReason::SourceCardNotInHand:
+		case EWacomBattleTargetRejectReason::SourceCardMissingDefinition:
+			return EWacomBattleCardDropRejectReason::SourceCardInvalid;
+		case EWacomBattleTargetRejectReason::UnsupportedWorldTarget:
+		case EWacomBattleTargetRejectReason::InvalidWorldTarget:
+			return EWacomBattleCardDropRejectReason::InvalidWorldTarget;
+		case EWacomBattleTargetRejectReason::UnsupportedCardTarget:
+		case EWacomBattleTargetRejectReason::TargetCardInvalid:
+		case EWacomBattleTargetRejectReason::TargetCardNotInHand:
+		case EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget:
+			return EWacomBattleCardDropRejectReason::UnsupportedCardTarget;
+		case EWacomBattleTargetRejectReason::SelfTarget:
+			return EWacomBattleCardDropRejectReason::SelfTarget;
+		case EWacomBattleTargetRejectReason::UnsupportedZoneTarget:
+			return EWacomBattleCardDropRejectReason::UnsupportedZoneTarget;
+		default:
+			return EWacomBattleCardDropRejectReason::MissingTarget;
+		}
+	}
+
 	bool ContainsHandCardId(const FBattleSnapshot& Snapshot, const FGuid& CardInstanceId)
 	{
 		if (!CardInstanceId.IsValid())
@@ -110,19 +161,22 @@ namespace
 		}
 		return false;
 	}
+
 }
 
 FString FWacomBattleCardDropResolveResult::ToDebugString() const
 {
 	return FString::Printf(
-		TEXT("CardDrop{Source=%s Intent=%s Reject=%s CanSubmit=%s Target=%s HasPos=%s Pos=%s}"),
+		TEXT("CardDrop{Source=%s Intent=%s Reject=%s CanSubmit=%s Target=%s HasPos=%s Pos=%s ValidationReject=%s Validation=%s}"),
 		*SourceCardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 		LexToString(IntentKind),
 		LexToString(RejectReason),
 		bCanSubmit ? TEXT("true") : TEXT("false"),
 		*TargetHandle.ToString(),
 		bHasFeedbackTargetScreenPosition ? TEXT("true") : TEXT("false"),
-		*FeedbackTargetScreenPosition.ToString());
+		*FeedbackTargetScreenPosition.ToString(),
+		LexToString(TargetValidationRejectReason),
+		*TargetValidationDebugSummary);
 }
 
 void UBattleHUD::NativeOnInitialized()
@@ -915,6 +969,18 @@ void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
 {
 	const FWacomBattleCardDropResolveResult DropResult =
 		ResolveFirstPersonCardDropIntent(CardInstanceId, DragView);
+	TArray<FWacomFirstPersonCardTargetAffordance> CardTargetAffordances;
+	if (DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard)
+	{
+		if (const UBattleSession* CurrentSession = GetSession())
+		{
+			const FBattleSnapshot CurrentSnapshot = CurrentSession->BuildSnapshot();
+			CardTargetAffordances = BuildFirstPersonCardTargetAffordances(
+				CardInstanceId,
+				CurrentSnapshot,
+				*CurrentSession);
+		}
+	}
 
 	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
@@ -928,8 +994,11 @@ void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
 		break;
 
 	case EWacomBattleCardDropIntentKind::PlayCardWorldTarget:
-	case EWacomBattleCardDropIntentKind::PlayCardCardTarget:
 		FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget;
+		break;
+
+	case EWacomBattleCardDropIntentKind::PlayCardCardTarget:
+		FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget;
 		break;
 
 	case EWacomBattleCardDropIntentKind::ProbeCardTarget:
@@ -937,7 +1006,11 @@ void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
 		break;
 
 	case EWacomBattleCardDropIntentKind::Reject:
-		if (DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard
+		if (DropResult.TargetHandle.TargetKind == EWacomInteractionTargetKind::Card)
+		{
+			FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
+		}
+		else if (DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard
 			|| DropResult.TargetHandle.TargetKind == EWacomInteractionTargetKind::World)
 		{
 			FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::Invalid;
@@ -979,7 +1052,8 @@ void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
 			DropResult.bCanSubmit,
 			FeedbackState,
 			FeedbackTargetPosition,
-			DropResult.ToDebugString());
+			DropResult.ToDebugString(),
+			CardTargetAffordances);
 	}
 }
 
@@ -1075,7 +1149,7 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 	}
 
 	FWacomInteractionTargetHandle CandidateTarget;
-	bool bValidTarget = false;
+	bool bIgnoredValidTarget = false;
 	bool bHasTarget = false;
 	if (DragView.CurrentTarget.IsValid()
 		&& (DragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card
@@ -1090,7 +1164,7 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 			CardInstanceId,
 			DragView,
 			CandidateTarget,
-			bValidTarget);
+			bIgnoredValidTarget);
 	}
 	Result.TargetHandle = CandidateTarget;
 	if (!CandidateTarget.ScreenPosition.IsNearlyZero())
@@ -1109,7 +1183,12 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 	switch (CandidateTarget.TargetKind)
 	{
 	case EWacomInteractionTargetKind::World:
-		if (bValidTarget && CandidateTarget.WorldTargetId.IsValid())
+	{
+		const FWacomBattleTargetValidationResult Validation =
+			CurrentSession->ValidateTargetWithCard(CardInstanceId, CandidateTarget);
+		Result.TargetValidationRejectReason = Validation.RejectReason;
+		Result.TargetValidationDebugSummary = Validation.DebugSummary;
+		if (Validation.bCanTarget && CandidateTarget.WorldTargetId.IsValid())
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::PlayCardWorldTarget;
 			Result.bCanSubmit = true;
@@ -1117,19 +1196,24 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 		else
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
-			Result.RejectReason = EWacomBattleCardDropRejectReason::InvalidWorldTarget;
+			Result.RejectReason = MapTargetValidationRejectReason(Validation.RejectReason);
 		}
 		return Result;
+	}
 
 	case EWacomInteractionTargetKind::Card:
-		if (CandidateTarget.CardInstanceId == CardInstanceId)
+	{
+		const FWacomBattleTargetValidationResult Validation =
+			CurrentSession->ValidateTargetWithCard(CardInstanceId, CandidateTarget);
+		Result.TargetValidationRejectReason = Validation.RejectReason;
+		Result.TargetValidationDebugSummary = Validation.DebugSummary;
+		if (Validation.RejectReason == EWacomBattleTargetRejectReason::SelfTarget)
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
 			Result.RejectReason = EWacomBattleCardDropRejectReason::SelfTarget;
 			return Result;
 		}
-
-		if (CurrentSession->CanTargetWithCard(CardInstanceId, CandidateTarget))
+		if (Validation.bCanTarget)
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::PlayCardCardTarget;
 			Result.bCanSubmit = true;
@@ -1139,13 +1223,15 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 		if (CardSnapshot->Definition->TargetMode == ECardTargetMode::HandCard)
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
-			Result.RejectReason = EWacomBattleCardDropRejectReason::UnsupportedCardTarget;
+			Result.RejectReason = MapTargetValidationRejectReason(Validation.RejectReason);
 			return Result;
 		}
 
 		Result.IntentKind = EWacomBattleCardDropIntentKind::ProbeCardTarget;
 		Result.RejectReason = EWacomBattleCardDropRejectReason::UnsupportedCardTarget;
+		Result.TargetValidationRejectReason = EWacomBattleTargetRejectReason::UnsupportedCardTarget;
 		return Result;
+	}
 
 	case EWacomInteractionTargetKind::Zone:
 		Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
@@ -1158,6 +1244,58 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 		Result.RejectReason = EWacomBattleCardDropRejectReason::MissingTarget;
 		return Result;
 	}
+}
+
+TArray<FWacomFirstPersonCardTargetAffordance> UBattleHUD::BuildFirstPersonCardTargetAffordances(
+	const FGuid& SourceCardId,
+	const FBattleSnapshot& Snapshot,
+	const UBattleSession& BattleSession) const
+{
+	TArray<FWacomFirstPersonCardTargetAffordance> Affordances;
+	if (!SourceCardId.IsValid())
+	{
+		return Affordances;
+	}
+
+	const FHandCardSnapshot* SourceSnapshot = nullptr;
+	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+	{
+		if (CardSnapshot.InstanceId == SourceCardId)
+		{
+			SourceSnapshot = &CardSnapshot;
+			break;
+		}
+	}
+	if (!SourceSnapshot
+		|| !SourceSnapshot->Definition
+		|| SourceSnapshot->Definition->TargetMode != ECardTargetMode::HandCard)
+	{
+		return Affordances;
+	}
+
+	Affordances.Reserve(FMath::Max(0, Snapshot.Hand.Cards.Num() - 1));
+	for (const FHandCardSnapshot& TargetCard : Snapshot.Hand.Cards)
+	{
+		if (!TargetCard.InstanceId.IsValid() || TargetCard.InstanceId == SourceCardId)
+		{
+			continue;
+		}
+
+		FWacomInteractionTargetHandle TargetHandle =
+			FWacomInteractionTargetHandle::ForCardTarget(TargetCard.InstanceId, const_cast<UBattleHUD*>(this));
+		const FWacomBattleTargetValidationResult Validation =
+			BattleSession.ValidateTargetWithCard(SourceCardId, TargetHandle);
+
+		FWacomFirstPersonCardTargetAffordance Affordance;
+		Affordance.CardInstanceId = TargetCard.InstanceId;
+		Affordance.bCanSubmit = Validation.bCanTarget;
+		Affordance.FeedbackState = Validation.bCanTarget
+			? EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget
+			: EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
+		Affordance.DebugSummary = Validation.DebugSummary;
+		Affordances.Add(MoveTemp(Affordance));
+	}
+	return Affordances;
 }
 
 UWacomBattleEnemyPartWorldTargetBridgeComponent* UBattleHUD::ResolveBattleEnemyPartWorldTargetBridge(
@@ -1206,7 +1344,7 @@ bool UBattleHUD::ProbeFirstPersonCardDragTarget(
 	}
 
 	const UBattleSession* CurrentSession = GetSession();
-	bOutValidTarget = CurrentSession && CurrentSession->CanTargetWithCard(CardInstanceId, OutTargetHandle);
+	bOutValidTarget = CurrentSession && CurrentSession->ValidateTargetWithCard(CardInstanceId, OutTargetHandle).bCanTarget;
 	return OutTargetHandle.IsValid();
 }
 
@@ -2436,6 +2574,8 @@ void UBattleHUD::StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>
 		case EBattleEventType::CardGained:
 		case EBattleEventType::CardPlayed:
 		case EBattleEventType::HandLimitDiscarded:
+		case EBattleEventType::CardDiscarded:
+		case EBattleEventType::CardExhausted:
 			PendingFirstPersonCardTransitionEvents.Add(Event);
 			break;
 		default:
@@ -2561,6 +2701,8 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCar
 			}
 			break;
 		case EBattleEventType::HandLimitDiscarded:
+		case EBattleEventType::CardDiscarded:
+		case EBattleEventType::CardExhausted:
 			if (RemovedCardIds.Contains(Event.CardInstanceId))
 			{
 				AddHint(Event.CardInstanceId, EWacomFirstPersonCardSlotTransitionKind::Discarded);

@@ -34,6 +34,10 @@ namespace
 		case EBattleEventType::KnockdownChoiceMade:       return TEXT("KnockdownChoiceMade");
 		case EBattleEventType::TurnEnded:                 return TEXT("TurnEnded");
 		case EBattleEventType::PassiveTriggered:          return TEXT("PassiveTriggered");
+		case EBattleEventType::HandLimitDiscarded:        return TEXT("HandLimitDiscarded");
+		case EBattleEventType::CardDiscarded:             return TEXT("CardDiscarded");
+		case EBattleEventType::CardExhausted:             return TEXT("CardExhausted");
+		case EBattleEventType::CardGained:                return TEXT("CardGained");
 		case EBattleEventType::BattleEnded:               return TEXT("BattleEnded");
 		default:                                          return TEXT("?");
 		}

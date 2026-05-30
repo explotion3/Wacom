@@ -47,6 +47,12 @@ public:
 	/** 指定另一张普通手牌为目标的弃置 / 消耗测试卡。 */
 	UCardDefinition* MakeSelectedHandCardZoneMoveCard(int32 Cost, bool bExhaust);
 
+	/** 随机弃掉普通手牌的测试卡。 */
+	UCardDefinition* MakeRandomDiscardCard(int32 Cost, int32 Count);
+
+	/** 被弃掉时给玩家加护盾的测试卡。 */
+	UCardDefinition* MakeOnDiscardShieldCard(int32 Cost, int32 ShieldAmount);
+
 	/** 自定义 Keywords 的伤害卡。 */
 	UCardDefinition* MakeDamageCardWithKeywords(int32 Cost, int32 Damage, const TArray<FGameplayTag>& Keywords);
 
@@ -56,6 +62,12 @@ public:
 	 * 第一条意图是 Effect.Damage(1) 打玩家，作为占位。
 	 */
 	UEnemyDefinition* MakeSinglePartEnemy(int32 Hp, int32 Initiative, int32 IntentResist);
+
+	/**
+	 * 构造一个简单"单部位敌人"，可指定第一条意图伤害。
+	 * 用于需要隔离敌方行动副作用的规则测试。
+	 */
+	UEnemyDefinition* MakeSinglePartEnemyWithIntentDamage(int32 Hp, int32 Initiative, int32 IntentResist, int32 Damage);
 
 	/**
 	 * 三部位敌人，先机分别为 [H, B, T]，HP 分别为 [HH, HB, HT]。

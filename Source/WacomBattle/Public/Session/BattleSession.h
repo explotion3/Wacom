@@ -9,6 +9,7 @@
 #include "Types/WacomResult.h"
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEvent.h"
+#include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleResultPacket.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "BattleSession.generated.h"
@@ -261,6 +262,14 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	bool CanTargetWithCard(const FGuid& CardInstanceId, const FWacomInteractionTargetHandle& Target) const;
+
+	/**
+	 * 判断给定的卡牌实例能否作用到给定目标，并返回可用于 UI/调试解释的拒绝原因。
+	 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
+	FWacomBattleTargetValidationResult ValidateTargetWithCard(
+		const FGuid& CardInstanceId,
+		const FWacomInteractionTargetHandle& Target) const;
 
 private:
 	/** 持有 FBattleState 和 FBattleEventBus。裸指针 + 手动管理，避免 TUniquePtr 在 UHT gen.cpp 里需要完整定义。 */

@@ -4,6 +4,7 @@
 
 #include "Cards/CardDefinition.h"
 #include "Cards/CardEffect.h"
+#include "Cards/CardPassive.h"
 #include "Characters/CharacterDefinition.h"
 #include "Commands/BattleCommand.h"
 #include "Enemies/EnemyDefinition.h"
@@ -110,6 +111,43 @@ UCardDefinition* FWacomBattleFixture::MakeSelectedHandCardZoneMoveCard(int32 Cos
 	return Card;
 }
 
+UCardDefinition* FWacomBattleFixture::MakeRandomDiscardCard(int32 Cost, int32 Count)
+{
+	UCardDefinition* Card = NewTransient<UCardDefinition>();
+	Card->CardId = FName(*FString::Printf(
+		TEXT("TestRandomDiscard_C%d_N%d_%s"),
+		Cost,
+		Count,
+		*FGuid::NewGuid().ToString(EGuidFormats::Short)));
+	Card->BaseCost = Cost;
+	Card->TargetMode = ECardTargetMode::None;
+
+	FCardEffect Effect;
+	Effect.EffectType = WacomTags::Effect_Discard;
+	Effect.Magnitude = Count;
+	Effect.Target = WacomTags::Target_Player;
+	Card->Effects.Add(Effect);
+
+	Roots.Add(TStrongObjectPtr<UObject>(Card));
+	return Card;
+}
+
+UCardDefinition* FWacomBattleFixture::MakeOnDiscardShieldCard(int32 Cost, int32 ShieldAmount)
+{
+	UCardDefinition* Card = MakeNoopCard(Cost);
+
+	FCardPassive Passive;
+	Passive.Trigger = WacomTags::Passive_Trigger_OnDiscard;
+
+	FCardEffect Effect;
+	Effect.EffectType = WacomTags::Status_Shield;
+	Effect.Magnitude = ShieldAmount;
+	Effect.Target = WacomTags::Target_Player;
+	Passive.Effects.Add(Effect);
+	Card->Passives.Add(Passive);
+	return Card;
+}
+
 UCardDefinition* FWacomBattleFixture::MakeDamageCardWithKeywords(int32 Cost, int32 Damage, const TArray<FGameplayTag>& Keywords)
 {
 	UCardDefinition* Card = MakeSimpleDamageCard(Cost, Damage);
@@ -122,6 +160,15 @@ UCardDefinition* FWacomBattleFixture::MakeDamageCardWithKeywords(int32 Cost, int
 
 UEnemyDefinition* FWacomBattleFixture::MakeSinglePartEnemy(int32 Hp, int32 Initiative, int32 IntentResist)
 {
+	return MakeSinglePartEnemyWithIntentDamage(Hp, Initiative, IntentResist, /*Damage*/1);
+}
+
+UEnemyDefinition* FWacomBattleFixture::MakeSinglePartEnemyWithIntentDamage(
+	int32 Hp,
+	int32 Initiative,
+	int32 IntentResist,
+	int32 Damage)
+{
 	UEnemyPartDefinition* Part = NewTransient<UEnemyPartDefinition>();
 	Part->PartId = TEXT("Test.Part.Solo");
 	Part->MaxHp  = Hp;
@@ -133,7 +180,7 @@ UEnemyDefinition* FWacomBattleFixture::MakeSinglePartEnemy(int32 Hp, int32 Initi
 	Intent.ResistanceValue = IntentResist;
 	FIntentEffect Eff;
 	Eff.EffectType = WacomTags::Effect_Damage;
-	Eff.Magnitude  = 1;
+	Eff.Magnitude  = Damage;
 	Eff.Target     = WacomTags::Target_Player;
 	Intent.Effects.Add(Eff);
 	Part->IntentSequence.Add(Intent);

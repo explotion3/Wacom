@@ -101,10 +101,21 @@ FBattleResultPacket UBattleSession::BuildResultPacket() const
 
 bool UBattleSession::CanTargetWithCard(const FGuid& CardInstanceId, const FWacomInteractionTargetHandle& Target) const
 {
+	return ValidateTargetWithCard(CardInstanceId, Target).bCanTarget;
+}
+
+FWacomBattleTargetValidationResult UBattleSession::ValidateTargetWithCard(
+	const FGuid& CardInstanceId,
+	const FWacomInteractionTargetHandle& Target) const
+{
 	if (!State)
 	{
-		return false;
+		FWacomBattleTargetValidationResult Result;
+		Result.bCanTarget = false;
+		Result.RejectReason = EWacomBattleTargetRejectReason::SourceCardInvalid;
+		Result.DebugSummary = TEXT("TargetValidation{MissingBattleState}");
+		return Result;
 	}
 
-	return FBattleTargetResolver::CanTargetWithCard(*State, CardInstanceId, Target);
+	return FBattleTargetResolver::ValidateTargetWithCard(*State, CardInstanceId, Target);
 }

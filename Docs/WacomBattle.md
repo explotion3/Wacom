@@ -149,7 +149,7 @@ WacomBattle/
 → 重新随机编排普通卡池
 → 重新插入左右手锚点
 → 超出普通手牌上限的普通卡牌移至弃牌区
-→ 发 CardsDrawn / HandLimitDiscarded / HandZoneChanged
+→ 发 CardsDrawn / HandLimitDiscarded / CardDiscarded / HandZoneChanged
 → Phase 切到 PlayerAction
 → 起始阶段结束
 ```
@@ -222,8 +222,25 @@ WacomBattle/
 - 每张因普通手牌上限进入弃牌区的卡都会产生一条 `HandLimitDiscarded` 事件；这是 UI/日志表现事件，不改变战斗规则真相
 - `HandLimitDiscarded.CardInstanceId` 是被上限弃掉的卡；`ActorInstanceId` 只在 `EffectDraw` 来源时填写触发抽牌的源卡；`HandLimitDiscardSource` 区分 `TurnStart / EffectDraw / PassiveOnCompanionCount / None`
 - 击倒奖励卡触发上限弃牌时，当前 `HandLimitDiscardSource=None`
+- `CardDiscarded` 同步记录所有真正弃牌路径；手牌上限路径会同时保留 `HandLimitDiscarded` 兼容表现事件
 - `HandZoneChanged` 仍只表示手牌区需要刷新，不承载具体哪张牌因上限被弃掉的语义
 - 击倒奖励卡进入手牌后同样立即执行普通卡手牌上限；若因此弃牌，会按逐张 `HandLimitDiscarded` 事件通知表现层
+
+### OnDiscard 与手牌区移动事件
+
+- `Passive.Trigger.OnDiscard` 表示“本卡被弃掉”，不表示“任何进入弃牌堆”
+- 会触发 `OnDiscard` 的路径：`Effect.Discard`、`Effect.Card.DiscardSelected`、普通手牌上限弃牌、回合结束非保留普通卡弃牌
+- 不会触发 `OnDiscard` 的路径：打出后自然进入弃牌堆、`Effect.Card.ExhaustSelected`、`Effect.ExhaustSelf` 导致的打出后消耗
+- 弃牌状态移动先完成，再发 `CardDiscarded`，随后触发该卡自身的 `OnDiscard` 被动，最后按批次发一次 `HandZoneChanged`
+- 消耗状态移动先完成，再发 `CardExhausted` 和一次 `HandZoneChanged`；消耗不触发 `OnDiscard`
+
+### 交互目标校验
+
+- `UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`
+- `CanTargetWithCard()` 保留为 bool 入口，内部转调 validation，确保 UI preview 和旧调用点共享同一套结构性合法性判断
+- Card target 校验会区分：同源卡目标、源卡不是 `TargetMode=HandCard`、目标 id 无效、目标不在手牌、指定弃置 / 消耗不支持左右手锚点
+- World target 校验会区分：目标 id 无效、敌方部位不存在或已破坏、源卡 target mode 不支持 world target
+- Validation 只解释“这个目标能不能被这张卡作用”，不校验费用、UI 状态、动画队列或命令提交时机；最终提交仍由 `PlayCardResolver` 再校验
 
 ### 腾挪
 
@@ -384,8 +401,8 @@ WacomBattle/
 | `Effect.ExhaustSelf` | ExhaustSelfHandler | 已实现；给源卡加临时消耗关键词，出牌去向阶段进消耗区 |
 | `Effect.Card.AddCost` | CostModHandler | 已实现 |
 | `Effect.Card.ReduceCost` | CostModHandler | 已实现 |
-| `Effect.Card.DiscardSelected` | SelectedHandCardZoneMoveHandler | 已实现；要求 `Target.SelectedHandCard`，目标必须是普通手牌，成功后移入弃牌堆并发 `HandZoneChanged` |
-| `Effect.Card.ExhaustSelected` | SelectedHandCardZoneMoveHandler | 已实现；要求 `Target.SelectedHandCard`，目标必须是普通手牌，成功后移入消耗区并发 `HandZoneChanged` |
+| `Effect.Card.DiscardSelected` | SelectedHandCardZoneMoveHandler | 已实现；要求 `Target.SelectedHandCard`，目标必须是普通手牌，成功后移入弃牌堆，发 `CardDiscarded / HandZoneChanged` 并触发目标卡 `OnDiscard` |
+| `Effect.Card.ExhaustSelected` | SelectedHandCardZoneMoveHandler | 已实现；要求 `Target.SelectedHandCard`，目标必须是普通手牌，成功后移入消耗区并发 `CardExhausted / HandZoneChanged`，不触发 `OnDiscard` |
 | `Effect.GainKeyword` | GainKeywordHandler | 已实现；给目标手牌临时添加 `MetaTag` 指定关键词 |
 | `Effect.RemoveStatus` | RemoveStatusHandler | 已实现；移除目标 `MetaTag` 指定状态的若干层 |
 | `Effect.ModifyInitiative` | ModifyInitiativeHandler | 已实现；直接修改目标部位当前先机 |
@@ -578,6 +595,8 @@ BattleState
 | `TurnEnded` | 玩家结束回合 |
 | `PassiveTriggered` | 被动触发通知；部分被动第一版只发事件不改数值 |
 | `HandLimitDiscarded` | 普通手牌上限导致某张卡弃掉 |
+| `CardDiscarded` | 卡牌因弃牌规则从手牌进入弃牌堆；可由弃牌效果、手牌上限或回合结束清手产生 |
+| `CardExhausted` | 卡牌因消耗规则从手牌进入消耗区 |
 | `CardGained` | 战斗中获得新卡 |
 | `BattleEnded` | 战斗进入结束态 |
 

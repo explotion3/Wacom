@@ -52,7 +52,6 @@ tags:
 | `Passive.Trigger.OnTurnStart` | Dispatcher 方法已就位，无调用点 | 出现回合开始触发的被动卡时，在 `BattleTurnFlow` 起始阶段加调用 |
 | `Passive.Trigger.OnTurnEnd` | Dispatcher 方法已就位，无调用点 | 出现回合结束触发的被动卡时，在 `EndTurnResolver` 加调用，并确认保留 / 弃牌时序 |
 | `Passive.Trigger.OnDraw` | Dispatcher 方法已就位，无调用点 | 出现入手触发的被动卡时，在 `DeckService::DrawCards` 和手牌编排路径加调用 |
-| `Passive.Trigger.OnDiscard` | Dispatcher 方法已就位，无调用点 | 出现弃牌触发的被动卡时，在 `DeckService::DiscardFromHand` 和回合结束弃牌路径加调用 |
 | `Passive.Trigger.OnEnemyPartDestroyed` | 未做 | GDD §6 / §3.3 后续需要破坏部位触发卡时接入 |
 | `Passive.Trigger.OnPlayerDamaged` | 未做 | 可由战内伤口阈值跨越 flag 承接；先观察是否需要独立被动 trigger |
 

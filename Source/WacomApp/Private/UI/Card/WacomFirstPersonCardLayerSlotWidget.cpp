@@ -322,6 +322,11 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragConfig(
 		FMath::Clamp(CardDragConfig.DragAimArrowSnapBlend, 0.0f, 1.0f);
 	CardDragConfig.DragCommitReadyScale = FMath::Max(0.01f, CardDragConfig.DragCommitReadyScale);
 	CardDragConfig.DragCardTargetProbeScale = FMath::Max(0.01f, CardDragConfig.DragCardTargetProbeScale);
+	CardDragConfig.SelectedSourceLiftPixels = FMath::Max(0.0f, CardDragConfig.SelectedSourceLiftPixels);
+	CardDragConfig.SelectedSourceScale = FMath::Max(0.01f, CardDragConfig.SelectedSourceScale);
+	CardDragConfig.SelectedSourceZOrderBoost = FMath::Max(0, CardDragConfig.SelectedSourceZOrderBoost);
+	CardDragConfig.SelectedSourceAngleBlend =
+		FMath::Clamp(CardDragConfig.SelectedSourceAngleBlend, 0.0f, 1.0f);
 	if (!CardDragConfig.bEnableFirstPersonCardDragCommit)
 	{
 		ClearGestureState(true);
@@ -361,13 +366,39 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragFeedbackTarget(
 
 void UWacomFirstPersonCardLayerSlotWidget::SetCardDragProbeFeedback(bool bEnabled, bool bValidTarget)
 {
-	if (bCardDragProbeFeedback == bEnabled && bCardDragProbeFeedbackValid == bValidTarget)
+	SetCardDragTargetAffordanceFeedback(
+		bEnabled
+			? (bValidTarget
+				? EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget
+				: EWacomFirstPersonCardDragTargetFeedbackState::CardProbe)
+			: EWacomFirstPersonCardDragTargetFeedbackState::None,
+		bValidTarget);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::SetCardDragTargetAffordanceFeedback(
+	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
+	bool bValidTarget)
+{
+	const bool bEnableFeedback =
+		FeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::None
+		&& CardDragConfig.bEnableDragTargetFeedback;
+	const bool bValidFeedback =
+		bEnableFeedback
+		&& (bValidTarget
+			|| FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	const EWacomFirstPersonCardDragTargetFeedbackState NextState =
+		bEnableFeedback ? FeedbackState : EWacomFirstPersonCardDragTargetFeedbackState::None;
+
+	if (DragTargetFeedbackState == NextState
+		&& bCardDragProbeFeedback == bEnableFeedback
+		&& bCardDragProbeFeedbackValid == bValidFeedback)
 	{
 		return;
 	}
 
-	bCardDragProbeFeedback = bEnabled && CardDragConfig.bEnableDragTargetFeedback;
-	bCardDragProbeFeedbackValid = bCardDragProbeFeedback && bValidTarget;
+	DragTargetFeedbackState = NextState;
+	bCardDragProbeFeedback = bEnableFeedback;
+	bCardDragProbeFeedbackValid = bValidFeedback;
 	ApplyVisualSlotView();
 }
 
@@ -804,7 +835,9 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 			? CardDragConfig.DragCommitReadyScale
 			: 1.0f;
 	const float CardProbeScale =
-		CardDragConfig.bEnableDragTargetFeedback && bCardDragProbeFeedback
+		CardDragConfig.bEnableDragTargetFeedback
+		&& bCardDragProbeFeedback
+		&& DragTargetFeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget
 			? CardDragConfig.DragCardTargetProbeScale
 			: 1.0f;
 	CardRenderTransform.Translation = FVector2D(DenyShakeOffset, 0.0f);
@@ -903,9 +936,18 @@ FWacomFirstPersonCardLayerSlotView UWacomFirstPersonCardLayerSlotWidget::BuildAi
 {
 	const FWacomFirstPersonCardLayerSlotView& BaseSlotView = GetGestureBaseSlotView();
 	FWacomFirstPersonCardLayerSlotView AimSlot = BaseSlotView;
-	AimSlot.RenderScale = FMath::Max(0.01f, BaseSlotView.RenderScale * CardDragConfig.CardInspectScale);
-	AimSlot.RenderAngleDegrees = FMath::Lerp(BaseSlotView.RenderAngleDegrees, 0.0f, 0.75f);
-	AimSlot.ZOrder = BaseSlotView.ZOrder + 1400;
+	AimSlot.ScreenPosition = BaseSlotView.ScreenPosition + FVector2D(0.0f, -CardDragConfig.SelectedSourceLiftPixels);
+	AimSlot.WidgetPosition = AimSlot.ScreenPosition;
+	AimSlot.SnappedWidgetPosition = AimSlot.ScreenPosition;
+	AimSlot.RenderScale = FMath::Max(0.01f, BaseSlotView.RenderScale * CardDragConfig.SelectedSourceScale);
+	if (CardDragConfig.bSelectedSourceStraightenAngle)
+	{
+		AimSlot.RenderAngleDegrees = FMath::Lerp(
+			BaseSlotView.RenderAngleDegrees,
+			0.0f,
+			CardDragConfig.SelectedSourceAngleBlend);
+	}
+	AimSlot.ZOrder = BaseSlotView.ZOrder + CardDragConfig.SelectedSourceZOrderBoost;
 	AimSlot.GestureState = GestureState;
 	return AimSlot;
 }
@@ -1579,15 +1621,19 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
 	if (CardDragConfig.bEnableDragTargetFeedback)
 	{
 		if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CommitReady
-			|| DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget)
+			|| DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
+			|| DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget)
 		{
 			OverlayColor = CardDragConfig.DragValidTargetColor;
 			OverlayOpacity = CardDragConfig.DragTargetFeedbackOpacity;
 		}
-		else if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::Invalid)
+		else if (DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::Invalid
+			|| DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget)
 		{
 			OverlayColor = CardDragConfig.DragInvalidTargetColor;
-			OverlayOpacity = CardDragConfig.DragTargetFeedbackOpacity;
+			OverlayOpacity = DragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget
+				? CardDragConfig.DragTargetFeedbackOpacity * 0.6f
+				: CardDragConfig.DragTargetFeedbackOpacity;
 		}
 		else if (bCardDragProbeFeedback && bCardDragProbeFeedbackValid)
 		{

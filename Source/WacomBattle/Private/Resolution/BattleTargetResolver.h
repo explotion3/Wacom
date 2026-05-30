@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Resolution/BattleTargetValidationResult.h"
 
 struct FBattleState;
 struct FWacomInteractionTargetHandle;
@@ -18,6 +19,9 @@ struct FWacomInteractionTargetHandle;
  */
 struct FBattleTargetResolver
 {
+	static FWacomBattleTargetValidationResult ValidateTargetWithCard(const FBattleState& State, const FGuid& CardInstanceId,
+		const FWacomInteractionTargetHandle& Target);
+
 	/**
 	 * 给定的卡牌实例能否作用到给定的交互目标。
 	 *

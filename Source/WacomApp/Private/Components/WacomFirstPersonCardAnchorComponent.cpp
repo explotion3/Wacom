@@ -380,7 +380,8 @@ namespace
 	}
 
 	FWacomFirstPersonCardDragConfig BuildCardDragConfig(
-		const UWacomFirstPersonCardAnchorComponent& Anchor)
+		const UWacomFirstPersonCardAnchorComponent& Anchor,
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config)
 	{
 		FWacomFirstPersonCardDragConfig DragConfig;
 		DragConfig.bEnableFirstPersonCardDragCommit = Anchor.bEnableFirstPersonCardDragCommit;
@@ -406,6 +407,11 @@ namespace
 		DragConfig.DragAimArrowSnapBlend = Anchor.DragAimArrowSnapBlend;
 		DragConfig.DragCommitReadyScale = Anchor.DragCommitReadyScale;
 		DragConfig.DragCardTargetProbeScale = Anchor.DragCardTargetProbeScale;
+		DragConfig.SelectedSourceLiftPixels = Config.PendingTargetingLiftPixels;
+		DragConfig.SelectedSourceScale = Config.PendingTargetingScale;
+		DragConfig.SelectedSourceZOrderBoost = Config.PendingTargetingZOrderBoost;
+		DragConfig.bSelectedSourceStraightenAngle = Config.bPendingTargetingStraightenAngle;
+		DragConfig.SelectedSourceAngleBlend = Config.PendingTargetingAngleBlend;
 		return DragConfig;
 	}
 
@@ -1801,7 +1807,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 			StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 			StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
 			StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(Config));
-			StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this));
+			StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this, Config));
 			StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
 			BindStaticCardLayerWidget(StaticCardLayerWidget);
@@ -1815,7 +1821,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 		StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
 		StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(Config));
-		StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this));
+		StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this, Config));
 		StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 		if (RuntimeCardLayerTransitionHintSourceId == RuntimeCardLayerSourceId
@@ -2046,7 +2052,8 @@ void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardDragFeedbackTarget(
 	bool bValidTarget,
 	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
 	const TOptional<FVector2D>& FeedbackTargetScreenPosition,
-	const FString& ResolvedIntentDebugSummary)
+	const FString& ResolvedIntentDebugSummary,
+	const TArray<FWacomFirstPersonCardTargetAffordance>& CardTargetAffordances)
 {
 	if (StaticCardLayerWidget)
 	{
@@ -2055,7 +2062,8 @@ void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardDragFeedbackTarget(
 			bValidTarget,
 			FeedbackState,
 			FeedbackTargetScreenPosition,
-			ResolvedIntentDebugSummary);
+			ResolvedIntentDebugSummary,
+			CardTargetAffordances);
 	}
 }
 

@@ -8,6 +8,7 @@
 #include "Enemy/EnemyPartActionResolver.h"
 #include "Events/BattleEventBus.h"
 #include "Hand/HandZoneService.h"
+#include "Hand/HandZoneMoveEventService.h"
 
 FWacomStatus FEndTurnResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& /*Command*/)
 {
@@ -34,12 +35,11 @@ FWacomStatus FEndTurnResolver::Resolve(FBattleState& State, FBattleEventBus& Eve
 	// ---- 2. 回合结束弃牌 ----
 	TArray<FGuid> DiscardedAtTurnEnd;
 	FHandZoneService::DiscardNonRetainedNormalCardsAtTurnEnd(State, DiscardedAtTurnEnd);
-	if (!DiscardedAtTurnEnd.IsEmpty())
-	{
-		FBattleEvent Ev;
-		Ev.Type = EBattleEventType::HandZoneChanged;
-		Events.Emit(Ev);
-	}
+	FHandZoneMoveEventService::ResolveDiscardedFromHand(
+		State,
+		Events,
+		DiscardedAtTurnEnd,
+		EHandCardZoneMoveReason::TurnEnd);
 
 	// ---- 3. "直到回合结束"类效果终止（当前无）----
 

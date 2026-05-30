@@ -7,8 +7,8 @@
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Events/BattleEventBus.h"
-#include "Events/BattleEventHelpers.h"
 #include "Hand/HandZoneService.h"
+#include "Hand/HandZoneMoveEventService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
@@ -124,17 +124,14 @@ void FPassiveDispatcher::RunOnCompanionCount(FBattleState& State, FBattleEventBu
 	{
 		TArray<FGuid> DiscardedByLimit;
 		FHandZoneService::EnforceNormalCardLimit(State, DiscardedByLimit);
-		WacomBattleEvents::EmitHandLimitDiscardedEvents(
+		FHandZoneMoveEventService::ResolveDiscardedFromHand(
+			State,
 			Events,
 			DiscardedByLimit,
+			EHandCardZoneMoveReason::HandLimit,
+			FGuid(),
+			FGameplayTag(),
 			EHandLimitDiscardSource::PassiveOnCompanionCount);
-		if (!DiscardedByLimit.IsEmpty())
-		{
-			FBattleEvent Ev;
-			Ev.Type = EBattleEventType::HandZoneChanged;
-			Ev.Count = DiscardedByLimit.Num();
-			Events.Emit(Ev);
-		}
 		State.Player.CompanionPlayedCount = 0;
 	}
 }

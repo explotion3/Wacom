@@ -232,6 +232,10 @@ public:
 			EWacomFirstPersonCardDragTargetFeedbackState::None,
 		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>());
 	void SetCardDragProbeFeedback(bool bEnabled, bool bValidTarget = false);
+	void SetCardDragTargetAffordanceFeedback(
+		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
+			EWacomFirstPersonCardDragTargetFeedbackState::None,
+		bool bValidTarget = false);
 	void CancelCardDragGesture(bool bBroadcastCancel);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
@@ -249,6 +253,10 @@ public:
 	bool CanExposeCardTarget() const;
 	FWacomInteractionTargetHandle BuildCardTargetHandle() const;
 	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const { return GestureState; }
+	EWacomFirstPersonCardDragTargetFeedbackState GetDragTargetFeedbackStateForFirstPersonLayer() const
+	{
+		return DragTargetFeedbackState;
+	}
 	FWacomFirstPersonCardDragView BuildDragView() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")

@@ -46,7 +46,9 @@ public:
 		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
 			EWacomFirstPersonCardDragTargetFeedbackState::None,
 		const TOptional<FVector2D>& FeedbackTargetScreenPosition = TOptional<FVector2D>(),
-		const FString& ResolvedIntentDebugSummary = FString());
+		const FString& ResolvedIntentDebugSummary = FString(),
+		const TArray<FWacomFirstPersonCardTargetAffordance>& CardTargetAffordances =
+			TArray<FWacomFirstPersonCardTargetAffordance>());
 	void CancelCardDragGesture(bool bBroadcastCancel);
 	void ClearSlotMotionState();
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
@@ -203,6 +205,11 @@ private:
 		FWacomInteractionTargetHandle& OutTargetHandle,
 		FWacomFirstPersonCardLayerSlotView& OutTargetSlotView) const;
 	void ApplyCardProbeFeedbackForCurrentDrag();
+	void ApplyCardTargetAffordances(
+		const FWacomInteractionTargetHandle& FocusTargetHandle,
+		EWacomFirstPersonCardDragTargetFeedbackState FocusFeedbackState,
+		bool bFocusTargetValid,
+		const TArray<FWacomFirstPersonCardTargetAffordance>& CardTargetAffordances);
 	void ApplyDragFeedbackToCurrentDragView(
 		const FWacomInteractionTargetHandle& TargetHandle,
 		bool bValidTarget,

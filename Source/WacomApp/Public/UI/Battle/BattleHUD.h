@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Events/BattleEvent.h"
+#include "Resolution/BattleTargetValidationResult.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 #include "Types/WacomEnums.h"
@@ -137,6 +138,12 @@ struct WACOMAPP_API FWacomBattleCardDropResolveResult
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
 	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	EWacomBattleTargetRejectReason TargetValidationRejectReason = EWacomBattleTargetRejectReason::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Card Drop")
+	FString TargetValidationDebugSummary;
 
 	FString ToDebugString() const;
 };
@@ -648,6 +655,10 @@ private:
 	FWacomBattleCardDropResolveResult ResolveFirstPersonCardDropIntent(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView) const;
+	TArray<FWacomFirstPersonCardTargetAffordance> BuildFirstPersonCardTargetAffordances(
+		const FGuid& SourceCardId,
+		const FBattleSnapshot& Snapshot,
+		const UBattleSession& BattleSession) const;
 	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveBattleEnemyPartWorldTargetBridge(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 	bool ProbeFirstPersonCardDragTarget(
