@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 
 class UCardDefinition;
 struct FBattleState;
@@ -12,6 +13,8 @@ enum class EWacomHandCardTargetEligibilityReject : uint8
 	None,
 	NormalHandCardUnsupported,
 	HandAnchorUnsupported,
+	MissingRequiredTargetKeyword,
+	BlockedTargetKeyword,
 };
 
 struct FWacomHandCardTargetEligibility
@@ -27,6 +30,8 @@ struct FWacomResolvedHandCardTargetFilter
 	bool bAllowHandAnchors = true;
 	bool bUsesExplicitFilter = false;
 	bool bUsesSelectedZoneMoveFallback = false;
+	FGameplayTagContainer RequiredTargetKeywords;
+	FGameplayTagContainer BlockedTargetKeywords;
 };
 
 struct FHandCardTargetEligibility

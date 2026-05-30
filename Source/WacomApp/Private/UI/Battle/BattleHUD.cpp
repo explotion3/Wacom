@@ -111,6 +111,8 @@ namespace
 		case EWacomBattleTargetRejectReason::SelfTarget: return TEXT("SelfTarget");
 		case EWacomBattleTargetRejectReason::UnsupportedNormalHandCardTarget: return TEXT("UnsupportedNormalHandCardTarget");
 		case EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget: return TEXT("UnsupportedHandAnchorTarget");
+		case EWacomBattleTargetRejectReason::MissingRequiredTargetKeyword: return TEXT("MissingRequiredTargetKeyword");
+		case EWacomBattleTargetRejectReason::BlockedTargetKeyword: return TEXT("BlockedTargetKeyword");
 		case EWacomBattleTargetRejectReason::UnsupportedZoneTarget: return TEXT("UnsupportedZoneTarget");
 		default: return TEXT("Unknown");
 		}
@@ -137,6 +139,8 @@ namespace
 		case EWacomBattleTargetRejectReason::TargetCardNotInHand:
 		case EWacomBattleTargetRejectReason::UnsupportedNormalHandCardTarget:
 		case EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget:
+		case EWacomBattleTargetRejectReason::MissingRequiredTargetKeyword:
+		case EWacomBattleTargetRejectReason::BlockedTargetKeyword:
 			return EWacomBattleCardDropRejectReason::UnsupportedCardTarget;
 		case EWacomBattleTargetRejectReason::SelfTarget:
 			return EWacomBattleCardDropRejectReason::SelfTarget;

@@ -29,6 +29,14 @@ struct WACOMDATA_API FWacomHandCardTargetFilter
 	/** 允许选择左右手锚点作为目标。单位：布尔开关，仅影响 TargetMode=HandCard 的主动打牌目标。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Target", meta = (ToolTip = "允许选择左右手锚点作为目标。仅影响 TargetMode=HandCard 的主动打牌目标。"))
 	bool bAllowHandAnchors = true;
+
+	/** 目标手牌必须全部拥有的关键词。空集合表示不要求。会同时读取卡牌定义关键词和战斗中的临时关键词。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Target", meta = (ToolTip = "目标手牌必须全部拥有的关键词。空集合表示不要求。会同时读取卡牌定义关键词和战斗中的临时关键词。"))
+	FGameplayTagContainer RequiredTargetKeywords;
+
+	/** 目标手牌不能拥有的关键词。命中任意一个即不可作为目标。会同时读取卡牌定义关键词和战斗中的临时关键词。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Target", meta = (ToolTip = "目标手牌不能拥有的关键词。命中任意一个即不可作为目标。会同时读取卡牌定义关键词和战斗中的临时关键词。"))
+	FGameplayTagContainer BlockedTargetKeywords;
 };
 
 /** 卡牌静态定义。字段说明见 Docs/WacomData.md。 */

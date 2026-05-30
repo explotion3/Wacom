@@ -90,13 +90,18 @@ struct FWacomHandCardTargetFilter
     UPROPERTY(EditDefaultsOnly) bool bUseExplicitHandCardTargetFilter = false;
     UPROPERTY(EditDefaultsOnly) bool bAllowNormalHandCards = true;
     UPROPERTY(EditDefaultsOnly) bool bAllowHandAnchors = true;
+    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer RequiredTargetKeywords;
+    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer BlockedTargetKeywords;
 };
 ```
 
 - `bUseExplicitHandCardTargetFilter=true`：卡牌直接使用这两个允许开关。
 - `bUseExplicitHandCardTargetFilter=false`：保持旧资产兼容推断。普通 `TargetMode=HandCard` 默认允许普通手牌和左右手锚点；包含 `Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected + Target.SelectedHandCard` 的卡默认只允许普通手牌。
+- `RequiredTargetKeywords`：目标有效关键词必须全部拥有；空集合表示不要求。
+- `BlockedTargetKeywords`：目标有效关键词命中任意一个即拒绝；空集合表示不阻止。
+- 目标有效关键词 = `UCardDefinition::Keywords` + 战斗内 `TemporaryKeywords`。左右手锚点如果被允许，也同样参与 keyword 条件。
 - self target 永远禁止，不提供配置项。
-- 现阶段只筛普通手牌 / 左右手锚点；费用、关键词、卡牌类型、伙伴 / 食物等条件后续再扩展。
+- 现阶段只筛普通手牌 / 左右手锚点 / keyword；费用、卡牌类型、区域、伙伴 / 食物专用属性等条件后续再扩展。
 
 ### FCardPhysique
 
@@ -663,6 +668,8 @@ Magnitude 计算顺序：
 
 - `Effect.Card.AddCost / ReduceCost + Target.SelectedHandCard`：通常允许普通手牌和左右手锚点。
 - `Effect.Card.DiscardSelected / ExhaustSelected + Target.SelectedHandCard`：通常只允许普通手牌，拒绝左右手锚点。
+- “只作用伙伴”这类卡可在 `RequiredTargetKeywords` 填 `Card.Keyword.Companion`。
+- “不能作用武器”这类卡可在 `BlockedTargetKeywords` 填 `Card.Keyword.Weapon`。
 - 旧资产没有显式设置时，Battle 会按上述两类兼容推断；新测试卡和后续正式卡建议显式设置，避免效果组合变复杂后语义含混。
 
 ---

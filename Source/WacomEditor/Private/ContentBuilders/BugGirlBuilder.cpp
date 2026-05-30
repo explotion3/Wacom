@@ -95,12 +95,24 @@ namespace
 		return E;
 	}
 
-	FWacomHandCardTargetFilter MakeHandCardTargetFilter(bool bAllowNormalHandCards, bool bAllowHandAnchors)
+	FWacomHandCardTargetFilter MakeHandCardTargetFilter(
+		bool bAllowNormalHandCards,
+		bool bAllowHandAnchors,
+		const TArray<FGameplayTag>& RequiredTargetKeywords = {},
+		const TArray<FGameplayTag>& BlockedTargetKeywords = {})
 	{
 		FWacomHandCardTargetFilter Filter;
 		Filter.bUseExplicitHandCardTargetFilter = true;
 		Filter.bAllowNormalHandCards = bAllowNormalHandCards;
 		Filter.bAllowHandAnchors = bAllowHandAnchors;
+		for (const FGameplayTag& Tag : RequiredTargetKeywords)
+		{
+			Filter.RequiredTargetKeywords.AddTag(Tag);
+		}
+		for (const FGameplayTag& Tag : BlockedTargetKeywords)
+		{
+			Filter.BlockedTargetKeywords.AddTag(Tag);
+		}
 		return Filter;
 	}
 
@@ -471,6 +483,66 @@ namespace Wacom::ContentBuilder
 			/*Passives*/ {}
 		);
 
+		UCardDefinition* TestTargetCompanion = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_TargetCompanion")),
+			TEXT("DA_Card_Test_TargetCompanion"),
+			TEXT("Test.TargetCompanion"),
+			TEXT("目标伙伴测试"),
+			TEXT("测试目标卡：带伙伴关键词，用于验证 HandCard 关键词筛选。"),
+			/*BaseCost*/ 1,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Companion },
+			ECardTargetMode::None,
+			FCardPhysique{},
+			/*Effects*/ {},
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
+		UCardDefinition* TestRequireCompanionTarget = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_RequireCompanionTarget")),
+			TEXT("DA_Card_Test_RequireCompanionTarget"),
+			TEXT("Test.RequireCompanionTarget"),
+			TEXT("只作用伙伴测试"),
+			TEXT("测试卡：只能拖到带伙伴关键词的手牌上，使目标卡费用 +1。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ {},
+			ECardTargetMode::HandCard,
+			FCardPhysique{},
+			/*Effects*/ { ModifySelectedHandCardCost(/*bReduceCost*/ false, 1) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {},
+			MakeHandCardTargetFilter(
+				/*bAllowNormalHandCards*/ true,
+				/*bAllowHandAnchors*/ true,
+				/*RequiredTargetKeywords*/ { WacomTags::Card_Keyword_Companion })
+		);
+
+		UCardDefinition* TestBlockWeaponTarget = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_BlockWeaponTarget")),
+			TEXT("DA_Card_Test_BlockWeaponTarget"),
+			TEXT("Test.BlockWeaponTarget"),
+			TEXT("不能作用武器测试"),
+			TEXT("测试卡：不能拖到带武器关键词的手牌上，其他合法手牌目标费用 +1。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ {},
+			ECardTargetMode::HandCard,
+			FCardPhysique{},
+			/*Effects*/ { ModifySelectedHandCardCost(/*bReduceCost*/ false, 1) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {},
+			MakeHandCardTargetFilter(
+				/*bAllowNormalHandCards*/ true,
+				/*bAllowHandAnchors*/ true,
+				/*RequiredTargetKeywords*/ {},
+				/*BlockedTargetKeywords*/ { WacomTags::Card_Keyword_Weapon })
+		);
+
 		// ==== V0-AE 指定手牌弃置 / 消耗测试卡 ====
 		UCardDefinition* TestDiscardSelectedHandCard = BuildCard(
 			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_DiscardSelectedHandCard")),
@@ -511,6 +583,7 @@ namespace Wacom::ContentBuilder
 		// 检查：任一建造失败则放弃。
 		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling || !BugGirlBag || !ZhujianRongnang || !MuseiLantern
 			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
+			|| !TestTargetCompanion || !TestRequireCompanionTarget || !TestBlockWeaponTarget
 			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard)
 		{
 			return nullptr;

@@ -9,6 +9,18 @@
 
 namespace
 {
+	const FRuntimeCardInstance* FindCardInstance(
+		const FBattleState& State,
+		const FGuid& CardInstanceId)
+	{
+		const int32* CardIndex = State.Cards.CardIndexById.Find(CardInstanceId);
+		if (!CardIndex || !State.Cards.AllCards.IsValidIndex(*CardIndex))
+		{
+			return nullptr;
+		}
+		return &State.Cards.AllCards[*CardIndex];
+	}
+
 	bool UsesSelectedHandCardZoneMove(const UCardDefinition& SourceDefinition)
 	{
 		for (const FCardEffect& Effect : SourceDefinition.Effects)
@@ -22,6 +34,17 @@ namespace
 		}
 		return false;
 	}
+
+	FGameplayTagContainer BuildEffectiveTargetKeywords(const FRuntimeCardInstance& TargetCard)
+	{
+		FGameplayTagContainer Keywords;
+		if (TargetCard.Definition)
+		{
+			Keywords.AppendTags(TargetCard.Definition->Keywords);
+		}
+		Keywords.AppendTags(TargetCard.TemporaryKeywords);
+		return Keywords;
+	}
 }
 
 FWacomResolvedHandCardTargetFilter FHandCardTargetEligibility::ResolveFilter(
@@ -33,6 +56,8 @@ FWacomResolvedHandCardTargetFilter FHandCardTargetEligibility::ResolveFilter(
 		Resolved.bUsesExplicitFilter = true;
 		Resolved.bAllowNormalHandCards = SourceDefinition.HandCardTargetFilter.bAllowNormalHandCards;
 		Resolved.bAllowHandAnchors = SourceDefinition.HandCardTargetFilter.bAllowHandAnchors;
+		Resolved.RequiredTargetKeywords = SourceDefinition.HandCardTargetFilter.RequiredTargetKeywords;
+		Resolved.BlockedTargetKeywords = SourceDefinition.HandCardTargetFilter.BlockedTargetKeywords;
 		return Resolved;
 	}
 
@@ -52,6 +77,7 @@ FWacomHandCardTargetEligibility FHandCardTargetEligibility::Validate(
 {
 	const FWacomResolvedHandCardTargetFilter Resolved = ResolveFilter(SourceDefinition);
 	const bool bTargetIsHandAnchor = IsHandAnchor(State, TargetCardInstanceId);
+	const FRuntimeCardInstance* TargetCard = FindCardInstance(State, TargetCardInstanceId);
 
 	FWacomHandCardTargetEligibility Result;
 	if (bTargetIsHandAnchor)
@@ -60,13 +86,46 @@ FWacomHandCardTargetEligibility FHandCardTargetEligibility::Validate(
 		Result.RejectReason = Result.bCanTarget
 			? EWacomHandCardTargetEligibilityReject::None
 			: EWacomHandCardTargetEligibilityReject::HandAnchorUnsupported;
-		return Result;
+		if (!Result.bCanTarget)
+		{
+			return Result;
+		}
+	}
+	else
+	{
+		Result.bCanTarget = Resolved.bAllowNormalHandCards;
+		Result.RejectReason = Result.bCanTarget
+			? EWacomHandCardTargetEligibilityReject::None
+			: EWacomHandCardTargetEligibilityReject::NormalHandCardUnsupported;
+		if (!Result.bCanTarget)
+		{
+			return Result;
+		}
 	}
 
-	Result.bCanTarget = Resolved.bAllowNormalHandCards;
-	Result.RejectReason = Result.bCanTarget
-		? EWacomHandCardTargetEligibilityReject::None
-		: EWacomHandCardTargetEligibilityReject::NormalHandCardUnsupported;
+	if (TargetCard)
+	{
+		const FGameplayTagContainer TargetKeywords = BuildEffectiveTargetKeywords(*TargetCard);
+		if (!Resolved.RequiredTargetKeywords.IsEmpty()
+			&& !TargetKeywords.HasAll(Resolved.RequiredTargetKeywords))
+		{
+			Result.bCanTarget = false;
+			Result.RejectReason =
+				EWacomHandCardTargetEligibilityReject::MissingRequiredTargetKeyword;
+			return Result;
+		}
+		if (!Resolved.BlockedTargetKeywords.IsEmpty()
+			&& TargetKeywords.HasAny(Resolved.BlockedTargetKeywords))
+		{
+			Result.bCanTarget = false;
+			Result.RejectReason =
+				EWacomHandCardTargetEligibilityReject::BlockedTargetKeyword;
+			return Result;
+		}
+	}
+
+	Result.bCanTarget = true;
+	Result.RejectReason = EWacomHandCardTargetEligibilityReject::None;
 	return Result;
 }
 

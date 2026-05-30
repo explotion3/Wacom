@@ -91,14 +91,16 @@ WacomBattle 是**战斗内核**，负责单场战斗的唯一规则真相。
 | `SingleEnemyPart` | `TargetPartInstanceId` | 目标必须是当前战斗中未破坏的敌方部位 |
 | `HandCard` | `TargetCardInstanceId` | 目标必须是另一张当前手牌；拒绝 self、无效 ID、已离开手牌的卡；普通手牌 / 左右手锚点资格由 `UCardDefinition::HandCardTargetFilter` 或兼容推断决定 |
 
-`TargetMode=HandCard` 的主动打牌会把玩家选中的目标手牌作为 `Target.SelectedHandCard` 传给主效果链。V0-AH 后，“哪些手牌可被选中”的基础资格收口到卡定义上的 `FWacomHandCardTargetFilter`：
+`TargetMode=HandCard` 的主动打牌会把玩家选中的目标手牌作为 `Target.SelectedHandCard` 传给主效果链。V0-AH/V0-AI 后，“哪些手牌可被选中”的基础资格收口到卡定义上的 `FWacomHandCardTargetFilter`：
 
 - 显式开启 `bUseExplicitHandCardTargetFilter` 时，`bAllowNormalHandCards / bAllowHandAnchors` 直接决定普通手牌和左右手锚点是否可选
 - 未显式开启时走兼容推断：普通 `HandCard` 默认允许普通手牌和左右手锚点；包含 `Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected + Target.SelectedHandCard` 的源卡默认只允许普通手牌
+- `RequiredTargetKeywords` 要求目标有效关键词全部命中；`BlockedTargetKeywords` 命中任意一个就拒绝。目标有效关键词 = 卡牌定义关键词 + 战斗中的临时关键词
+- 左右手锚点如果被 `bAllowHandAnchors` 允许，也同样参与 keyword 条件
 - self target 继续全局禁止，不提供卡牌字段开放
 - `ValidateTargetWithCard()` 与 `PlayCardResolver` 共用同一套 eligibility helper，保证 preview 和真正提交一致
 
-当前已验证 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可以精确作用到该目标，且测试卡显式允许普通手牌和左右手锚点；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 可以精确把选中的普通手牌移入弃牌堆 / 消耗区，测试卡显式拒绝左右手锚点。费用、关键词、卡牌类型、伙伴 / 食物等更复杂筛选留后续扩展。
+当前已验证 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可以精确作用到该目标，且测试卡显式允许普通手牌和左右手锚点；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 可以精确把选中的普通手牌移入弃牌堆 / 消耗区，测试卡显式拒绝左右手锚点。Keyword filter 已可用于“只作用伙伴”“不能作用武器”等第一版卡对卡筛选；费用、卡牌类型、区域、伙伴 / 食物专用属性等更复杂筛选留后续扩展。
 
 **目录结构**：
 
@@ -245,7 +247,7 @@ WacomBattle/
 
 - `UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`
 - `CanTargetWithCard()` 保留为 bool 入口，内部转调 validation，确保 UI preview 和旧调用点共享同一套结构性合法性判断
-- Card target 校验会区分：同源卡目标、源卡不是 `TargetMode=HandCard`、目标 id 无效、目标不在手牌、手牌目标 filter 拒绝普通手牌、手牌目标 filter 拒绝左右手锚点
+- Card target 校验会区分：同源卡目标、源卡不是 `TargetMode=HandCard`、目标 id 无效、目标不在手牌、手牌目标 filter 拒绝普通手牌、手牌目标 filter 拒绝左右手锚点、缺少 required keyword、命中 blocked keyword
 - World target 校验会区分：目标 id 无效、敌方部位不存在或已破坏、源卡 target mode 不支持 world target
 - Validation 只解释“这个目标能不能被这张卡作用”，不校验费用、UI 状态、动画队列或命令提交时机；最终提交仍由 `PlayCardResolver` 再校验
 

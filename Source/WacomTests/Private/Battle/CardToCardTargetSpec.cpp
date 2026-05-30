@@ -8,6 +8,7 @@
 #include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "Tags/WacomGameplayTags.h"
 #include "Types/WacomInteractionTargetTypes.h"
 
 namespace
@@ -124,6 +125,16 @@ namespace
 			Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
 			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
 			1);
+	}
+
+	FGameplayTagContainer MakeTagContainer(std::initializer_list<FGameplayTag> Tags)
+	{
+		FGameplayTagContainer Container;
+		for (const FGameplayTag& Tag : Tags)
+		{
+			Container.AddTag(Tag);
+		}
+		return Container;
 	}
 }
 
@@ -390,6 +401,251 @@ bool FWacomBattlePlayCardResolverMatchesValidationForHandCardFilterSpec::RunTest
 	TestEqual(TEXT("PlayCard resolver reports matching filter detail"),
 		Status.Detail,
 		FName(TEXT("TargetNormalHandCardUnsupported")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleRequiredKeywordAcceptsMatchingTargetSpec,
+	"Wacom.Battle.CardToCardTarget.RequiredKeywordAcceptsMatchingTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleRequiredKeywordAcceptsMatchingTargetSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* GrantKeywordDef = Fx.MakeHandCardCostModifierCard(
+		/*Cost*/0,
+		/*Magnitude*/0,
+		/*bReduceCost*/false);
+	GrantKeywordDef->CardId = FName(*FString::Printf(
+		TEXT("TestGrantKeyword_%s"),
+		*FGuid::NewGuid().ToString(EGuidFormats::Short)));
+	GrantKeywordDef->Effects.Reset();
+	FCardEffect GrantKeywordEffect;
+	GrantKeywordEffect.EffectType = WacomTags::Effect_GainKeyword;
+	GrantKeywordEffect.Target = WacomTags::Target_SelectedHandCard;
+	GrantKeywordEffect.TargetZone = WacomTags::Card_Keyword_Companion;
+	GrantKeywordDef->Effects.Add(GrantKeywordEffect);
+	UCardDefinition* SourceDef = Fx.MakeHandCardCostModifierCardWithTargetKeywordFilter(
+		/*Cost*/0,
+		/*Magnitude*/1,
+		/*bReduceCost*/false,
+		MakeTagContainer({ WacomTags::Card_Keyword_Companion }),
+		FGameplayTagContainer());
+	UCardDefinition* TargetDef = Fx.MakeDamageCardWithKeywords(
+		/*Cost*/3,
+		/*Damage*/1,
+		{ WacomTags::Card_Keyword_Companion });
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestTrue(TEXT("Required keyword accepts matching target"), Result.bCanTarget);
+	TestTrue(TEXT("Submit succeeds on matching required keyword target"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleRequiredKeywordRejectsMissingTargetSpec,
+	"Wacom.Battle.CardToCardTarget.RequiredKeywordRejectsMissingTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleRequiredKeywordRejectsMissingTargetSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = Fx.MakeHandCardCostModifierCardWithTargetKeywordFilter(
+		/*Cost*/0,
+		/*Magnitude*/1,
+		/*bReduceCost*/false,
+		MakeTagContainer({ WacomTags::Card_Keyword_Companion }),
+		FGameplayTagContainer());
+	UCardDefinition* TargetDef = Fx.MakeNoopCard(/*Cost*/3);
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId));
+	TestFalse(TEXT("Required keyword rejects missing target"), Result.bCanTarget);
+	TestEqual(TEXT("Required keyword reject reason"),
+		Result.RejectReason,
+		EWacomBattleTargetRejectReason::MissingRequiredTargetKeyword);
+	TestFalse(TEXT("Submit fails on missing required keyword target"), Status.IsOk());
+	TestEqual(TEXT("Submit reports missing required keyword detail"),
+		Status.Detail,
+		FName(TEXT("TargetMissingRequiredKeyword")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleBlockedKeywordRejectsMatchingTargetSpec,
+	"Wacom.Battle.CardToCardTarget.BlockedKeywordRejectsMatchingTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleBlockedKeywordRejectsMatchingTargetSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = Fx.MakeHandCardCostModifierCardWithTargetKeywordFilter(
+		/*Cost*/0,
+		/*Magnitude*/1,
+		/*bReduceCost*/false,
+		FGameplayTagContainer(),
+		MakeTagContainer({ WacomTags::Card_Keyword_Weapon }));
+	UCardDefinition* TargetDef = Fx.MakeDamageCardWithKeywords(
+		/*Cost*/3,
+		/*Damage*/1,
+		{ WacomTags::Card_Keyword_Weapon });
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId));
+	TestFalse(TEXT("Blocked keyword rejects matching target"), Result.bCanTarget);
+	TestEqual(TEXT("Blocked keyword reject reason"),
+		Result.RejectReason,
+		EWacomBattleTargetRejectReason::BlockedTargetKeyword);
+	TestFalse(TEXT("Submit fails on blocked keyword target"), Status.IsOk());
+	TestEqual(TEXT("Submit reports blocked keyword detail"),
+		Status.Detail,
+		FName(TEXT("TargetBlockedKeyword")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleBlockedKeywordAllowsNonMatchingTargetSpec,
+	"Wacom.Battle.CardToCardTarget.BlockedKeywordAllowsNonMatchingTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleBlockedKeywordAllowsNonMatchingTargetSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = Fx.MakeHandCardCostModifierCardWithTargetKeywordFilter(
+		/*Cost*/0,
+		/*Magnitude*/1,
+		/*bReduceCost*/false,
+		FGameplayTagContainer(),
+		MakeTagContainer({ WacomTags::Card_Keyword_Weapon }));
+	UCardDefinition* TargetDef = Fx.MakeNoopCard(/*Cost*/3);
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	const FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+
+	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
+	TestTrue(TEXT("Blocked keyword allows non-matching target"), Result.bCanTarget);
+	TestTrue(TEXT("Submit succeeds on non-blocked target"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleTemporaryKeywordCountsForHandCardTargetFilterSpec,
+	"Wacom.Battle.CardToCardTarget.TemporaryKeywordCountsForHandCardTargetFilter",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleTemporaryKeywordCountsForHandCardTargetFilterSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* GrantKeywordDef = Fx.MakeHandCardCostModifierCard(
+		/*Cost*/0,
+		/*Magnitude*/0,
+		/*bReduceCost*/false);
+	GrantKeywordDef->CardId = FName(*FString::Printf(
+		TEXT("TestGrantKeyword_%s"),
+		*FGuid::NewGuid().ToString(EGuidFormats::Short)));
+	GrantKeywordDef->Effects.Reset();
+	FCardEffect GrantKeywordEffect;
+	GrantKeywordEffect.EffectType = WacomTags::Effect_GainKeyword;
+	GrantKeywordEffect.Target = WacomTags::Target_SelectedHandCard;
+	GrantKeywordEffect.TargetZone = WacomTags::Card_Keyword_Companion;
+	GrantKeywordDef->Effects.Add(GrantKeywordEffect);
+	UCardDefinition* SourceDef = Fx.MakeHandCardCostModifierCardWithTargetKeywordFilter(
+		/*Cost*/0,
+		/*Magnitude*/1,
+		/*bReduceCost*/false,
+		MakeTagContainer({ WacomTags::Card_Keyword_Companion }),
+		FGameplayTagContainer());
+	UCardDefinition* TargetDef = Fx.MakeNoopCard(/*Cost*/3);
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { GrantKeywordDef, SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid GrantKeywordId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, GrantKeywordDef->CardId);
+	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
+	FWacomInteractionTargetHandle Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+	TestFalse(TEXT("Target starts without required keyword"), Session->ValidateTargetWithCard(SourceId, Target).bCanTarget);
+
+	TestTrue(TEXT("Grant keyword card can target regular hand card"),
+		Session->CanTargetWithCard(GrantKeywordId, Target));
+	TestTrue(TEXT("Grant keyword command succeeds"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(GrantKeywordId, TargetId)).IsOk());
+	Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
+	TestTrue(TEXT("Temporary keyword satisfies required target filter"),
+		Session->ValidateTargetWithCard(SourceId, Target).bCanTarget);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleHandAnchorAlsoUsesKeywordFilterWhenAllowedSpec,
+	"Wacom.Battle.CardToCardTarget.HandAnchorAlsoUsesKeywordFilterWhenAllowed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleHandAnchorAlsoUsesKeywordFilterWhenAllowedSpec::RunTest(const FString& Parameters)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceDef = Fx.MakeHandCardCostModifierCardWithTargetKeywordFilter(
+		/*Cost*/0,
+		/*Magnitude*/1,
+		/*bReduceCost*/false,
+		MakeTagContainer({ WacomTags::Card_Keyword_Hand }),
+		FGameplayTagContainer(),
+		/*bAllowNormalHandCards*/true,
+		/*bAllowHandAnchors*/true);
+	UCardDefinition* LeftDef = Fx.MakeNoopCard(0);
+	LeftDef->Keywords.AddTag(WacomTags::Card_Keyword_Hand);
+	UCardDefinition* RightDef = Fx.MakeNoopCard(0);
+	RightDef->Keywords.AddTag(WacomTags::Card_Keyword_Weapon);
+	UBattleSession* Session = Fx.CreateSession(
+		Fx.MakeCharacter(LeftDef, RightDef, { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
+	const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, LeftDef->CardId);
+	const FGuid RightId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, RightDef->CardId);
+
+	const FWacomBattleTargetValidationResult LeftResult =
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(LeftId, Session));
+	const FWacomBattleTargetValidationResult RightResult =
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(RightId, Session));
+	TestTrue(TEXT("Allowed hand anchor with required keyword is valid"), LeftResult.bCanTarget);
+	TestFalse(TEXT("Allowed hand anchor missing required keyword is invalid"), RightResult.bCanTarget);
+	TestEqual(TEXT("Anchor keyword filter reject reason"),
+		RightResult.RejectReason,
+		EWacomBattleTargetRejectReason::MissingRequiredTargetKeyword);
 	return true;
 }
 

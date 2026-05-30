@@ -44,6 +44,16 @@ public:
 	/** 指定另一张手牌为目标的 Cost 修正卡。 */
 	UCardDefinition* MakeHandCardCostModifierCard(int32 Cost, int32 Magnitude, bool bReduceCost);
 
+	/** 指定另一张手牌为目标的 Cost 修正卡，并带关键词目标筛选。 */
+	UCardDefinition* MakeHandCardCostModifierCardWithTargetKeywordFilter(
+		int32 Cost,
+		int32 Magnitude,
+		bool bReduceCost,
+		const FGameplayTagContainer& RequiredTargetKeywords,
+		const FGameplayTagContainer& BlockedTargetKeywords,
+		bool bAllowNormalHandCards = true,
+		bool bAllowHandAnchors = true);
+
 	/** 指定另一张普通手牌为目标的弃置 / 消耗测试卡。 */
 	UCardDefinition* MakeSelectedHandCardZoneMoveCard(int32 Cost, bool bExhaust);
 

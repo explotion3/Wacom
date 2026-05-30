@@ -86,6 +86,10 @@ namespace
 			return TEXT("TargetNormalHandCardUnsupported");
 		case EWacomHandCardTargetEligibilityReject::HandAnchorUnsupported:
 			return TEXT("TargetCardAnchorUnsupported");
+		case EWacomHandCardTargetEligibilityReject::MissingRequiredTargetKeyword:
+			return TEXT("TargetMissingRequiredKeyword");
+		case EWacomHandCardTargetEligibilityReject::BlockedTargetKeyword:
+			return TEXT("TargetBlockedKeyword");
 		case EWacomHandCardTargetEligibilityReject::None:
 		default:
 			return TEXT("TargetCardFilterUnsupported");

@@ -91,6 +91,24 @@ UCardDefinition* FWacomBattleFixture::MakeHandCardCostModifierCard(int32 Cost, i
 	return Card;
 }
 
+UCardDefinition* FWacomBattleFixture::MakeHandCardCostModifierCardWithTargetKeywordFilter(
+	int32 Cost,
+	int32 Magnitude,
+	bool bReduceCost,
+	const FGameplayTagContainer& RequiredTargetKeywords,
+	const FGameplayTagContainer& BlockedTargetKeywords,
+	bool bAllowNormalHandCards,
+	bool bAllowHandAnchors)
+{
+	UCardDefinition* Card = MakeHandCardCostModifierCard(Cost, Magnitude, bReduceCost);
+	Card->HandCardTargetFilter.bUseExplicitHandCardTargetFilter = true;
+	Card->HandCardTargetFilter.bAllowNormalHandCards = bAllowNormalHandCards;
+	Card->HandCardTargetFilter.bAllowHandAnchors = bAllowHandAnchors;
+	Card->HandCardTargetFilter.RequiredTargetKeywords = RequiredTargetKeywords;
+	Card->HandCardTargetFilter.BlockedTargetKeywords = BlockedTargetKeywords;
+	return Card;
+}
+
 UCardDefinition* FWacomBattleFixture::MakeSelectedHandCardZoneMoveCard(int32 Cost, bool bExhaust)
 {
 	UCardDefinition* Card = NewTransient<UCardDefinition>();
