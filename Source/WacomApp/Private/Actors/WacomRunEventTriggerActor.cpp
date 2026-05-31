@@ -10,6 +10,7 @@
 
 #include "Events/RunEventDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "RunState.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 
@@ -38,23 +39,12 @@ void AWacomRunEventTriggerActor::BeginPlay()
 			TEXT("[RunEventTriggerActor] %s: PersistentId 未配置，事件不会打开"),
 			*GetName());
 	}
-	else
+	else if (HasDuplicatePersistentIdInWorld())
 	{
-		for (TActorIterator<AWacomRunEventTriggerActor> It(GetWorld()); It; ++It)
-		{
-			AWacomRunEventTriggerActor* Other = *It;
-			if (Other && Other != this && !Other->HasAnyFlags(RF_ClassDefaultObject))
-			{
-				if (Other->PersistentId == PersistentId)
-				{
-					UE_LOG(LogTemp, Warning,
-						TEXT("[RunEventTriggerActor] PersistentId %s 与 %s 重复；两个事件会共享同一份状态"),
-						*PersistentId.ToString(),
-						*Other->GetName());
-					break;
-				}
-			}
-		}
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunEventTriggerActor] %s: PersistentId %s 与同关卡其他事件重复；两个事件会共享同一份状态"),
+			*GetName(),
+			*PersistentId.ToString());
 	}
 
 	if (TriggerSphere)
@@ -110,6 +100,97 @@ void AWacomRunEventTriggerActor::HandleEndOverlap(UPrimitiveComponent* /*Overlap
 	PC->UnregisterCandidateInteractable(this);
 }
 
+void AWacomRunEventTriggerActor::ConfigureDebugSnakeGiftSample()
+{
+	ConfigureDebugSample(
+		TEXT("Event.DebugSnakeGift.Actor"),
+		TEXT("/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift.DA_Event_DebugSnakeGift"));
+}
+
+void AWacomRunEventTriggerActor::ConfigureDebugFlagRewardSample()
+{
+	ConfigureDebugSample(
+		TEXT("Event.DebugFlagReward.Actor"),
+		TEXT("/Game/Wacom/Data/Events/DA_Event_DebugFlagReward.DA_Event_DebugFlagReward"));
+}
+
+FWacomRunEventTriggerDebugView AWacomRunEventTriggerActor::GetRunEventTriggerDebugView(
+	AWacomPlayerController* PC) const
+{
+	FWacomRunEventTriggerDebugView View;
+	View.ActorName = GetName();
+	View.PersistentId = PersistentId;
+	View.EventDefinitionName = EventDefinition ? EventDefinition->GetName() : TEXT("None");
+	View.EventId = EventDefinition ? EventDefinition->EventId : NAME_None;
+	View.StartNodeId = EventDefinition ? EventDefinition->StartNodeId : NAME_None;
+	View.bCanInteract = CanInteract_Implementation(PC);
+	View.bDuplicatePersistentIdDetected = HasDuplicatePersistentIdInWorld();
+
+	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
+	View.bHasRunSession = Run != nullptr;
+	if (!PC)
+	{
+		View.LastDebugResult = TEXT("MissingPlayerController");
+		return View;
+	}
+	if (PersistentId.IsNone())
+	{
+		View.LastDebugResult = TEXT("MissingPersistentId");
+		return View;
+	}
+	if (!EventDefinition)
+	{
+		View.LastDebugResult = TEXT("MissingEventDefinition");
+		return View;
+	}
+	if (!Run)
+	{
+		View.LastDebugResult = TEXT("MissingRunSession");
+		return View;
+	}
+
+	const FRunState& State = Run->GetRunState();
+	View.bIsActiveEvent = State.ActiveRunEventId == PersistentId;
+	View.bIsCompleted = Run->IsRunEventCompleted(PersistentId);
+	if (const FRunEventState* EventState = State.RunEventStates.Find(PersistentId))
+	{
+		View.CurrentNodeId = EventState->CurrentNodeId;
+	}
+	else
+	{
+		View.CurrentNodeId = EventDefinition->StartNodeId;
+	}
+	View.LastDebugResult = View.bDuplicatePersistentIdDetected
+		? FName(TEXT("DuplicatePersistentId"))
+		: FName(TEXT("Ok"));
+	return View;
+}
+
+FString AWacomRunEventTriggerActor::GetRunEventTriggerDebugSummary(AWacomPlayerController* PC) const
+{
+	const FWacomRunEventTriggerDebugView View = GetRunEventTriggerDebugView(PC);
+	return FString::Printf(
+		TEXT("RunEventTrigger{Actor=%s PersistentId=%s EventDef=%s EventId=%s StartNode=%s HasRun=%s CanInteract=%s Active=%s Completed=%s CurrentNode=%s Duplicate=%s Last=%s}"),
+		*View.ActorName,
+		*View.PersistentId.ToString(),
+		*View.EventDefinitionName,
+		*View.EventId.ToString(),
+		*View.StartNodeId.ToString(),
+		View.bHasRunSession ? TEXT("true") : TEXT("false"),
+		View.bCanInteract ? TEXT("true") : TEXT("false"),
+		View.bIsActiveEvent ? TEXT("true") : TEXT("false"),
+		View.bIsCompleted ? TEXT("true") : TEXT("false"),
+		*View.CurrentNodeId.ToString(),
+		View.bDuplicatePersistentIdDetected ? TEXT("true") : TEXT("false"),
+		*View.LastDebugResult.ToString());
+}
+
+void AWacomRunEventTriggerActor::LogRunEventTriggerDebugSummary(AWacomPlayerController* PC) const
+{
+	UE_LOG(LogTemp, Display, TEXT("[RunEventTriggerActor] %s"),
+		*GetRunEventTriggerDebugSummary(PC));
+}
+
 FText AWacomRunEventTriggerActor::GetInteractPromptText_Implementation(AWacomPlayerController* PC) const
 {
 	if (IsEventCompletedFor(PC))
@@ -149,6 +230,51 @@ bool AWacomRunEventTriggerActor::TryInteract_Implementation(AWacomPlayerControll
 		return false;
 	}
 	return PC->RequestOpenRunEvent(PersistentId, EventDefinition);
+}
+
+bool AWacomRunEventTriggerActor::ConfigureDebugSample(
+	FName InPersistentId,
+	const TCHAR* EventDefinitionObjectPath)
+{
+	UWacomRunEventDefinition* LoadedDefinition =
+		LoadObject<UWacomRunEventDefinition>(nullptr, EventDefinitionObjectPath);
+	if (!LoadedDefinition)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunEventTriggerActor] %s: 无法加载调试事件资产 %s，保持当前配置"),
+			*GetName(),
+			EventDefinitionObjectPath);
+		return false;
+	}
+
+	Modify();
+	PersistentId = InPersistentId;
+	EventDefinition = LoadedDefinition;
+	InteractPromptText = LOCTEXT("DefaultInteractPrompt", "按 E 查看事件");
+	CompletedPromptText = LOCTEXT("DefaultCompletedPrompt", "事件已完成");
+	CompletedToastText = LOCTEXT("DefaultCompletedToast", "该事件已完成");
+	return true;
+}
+
+bool AWacomRunEventTriggerActor::HasDuplicatePersistentIdInWorld() const
+{
+	if (PersistentId.IsNone() || !GetWorld())
+	{
+		return false;
+	}
+
+	for (TActorIterator<AWacomRunEventTriggerActor> It(GetWorld()); It; ++It)
+	{
+		const AWacomRunEventTriggerActor* Other = *It;
+		if (Other
+			&& Other != this
+			&& !Other->HasAnyFlags(RF_ClassDefaultObject)
+			&& Other->PersistentId == PersistentId)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool AWacomRunEventTriggerActor::IsEventCompletedFor(AWacomPlayerController* PC) const

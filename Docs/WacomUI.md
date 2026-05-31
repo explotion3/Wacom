@@ -318,6 +318,8 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 - 关闭事件界面时由 `FWacomRunEventScreenFlow` 调 `EndRunEvent()`；关闭型选项先由 Run 层清 active event，再 Deactivate。V0-AS 不新增常驻结果面板、不延迟关闭；关闭型事件仍即时关闭，outcome 只通过 Toast 告知。
 - 如果 Push 事件 UI 失败，Router 会调用 `RunSession->EndRunEvent()` 回滚刚 Begin 的 active event。
 - V0-AZ 后 `GetRunEventScreenDebugSummary()` 额外输出 `Preview=[ChoiceId:Available=...:First=...:Req=总数/未满足数:Pay=候选数:Consequences=数量:Outcome=...]`。`Outcome` 从 consequence snapshot 派生为 `EventEnds / NodeTransition:{NodeId} / None`，用于 PIE 排查“为什么选项看起来这样显示”，不作为规则输入。
+- V0-BB 的 `DA_Event_DebugFlagReward` 可作为不依赖卡牌支付的 choice preview 样例：初始奖励选项会显示缺少调查 flag 和金币，调查后只剩金币门槛，获得调试金币后后果列表应显示失去金币、获得毒牙、设置领取标记和进入 `Rewarded`。该样例验证的是需求 / 后果 / debug summary 表达，不新增 UI 机制或菜单 drop 逻辑。
+- V0-BC 后，PIE 验证样例时优先在 `AWacomRunEventTriggerActor` Details 使用 `ConfigureDebugSnakeGiftSample` / `ConfigureDebugFlagRewardSample`，再通过 `LogRunEventTriggerDebugSummary()` 确认 Trigger 绑定、active/current node、completed 和 duplicate 状态；Screen 内部选项状态仍看 `LogRunEventScreenDebugSummary()`。
 
 事件规则、条件、效果和 PersistentId 口径见 `WacomRun.md` / `WacomData.md`。
 

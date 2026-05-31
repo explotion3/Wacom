@@ -10,6 +10,48 @@
 class USphereComponent;
 class UWacomRunEventDefinition;
 
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomRunEventTriggerDebugView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FString ActorName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FName PersistentId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FString EventDefinitionName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FName EventId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FName StartNodeId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	bool bHasRunSession = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	bool bCanInteract = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	bool bIsActiveEvent = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	bool bIsCompleted = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FName CurrentNodeId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	bool bDuplicatePersistentIdDetected = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FName LastDebugResult = NAME_None;
+};
+
 /** 场景中的轻量 Run 事件交互触发器。 */
 UCLASS(Blueprintable)
 class WACOMAPP_API AWacomRunEventTriggerActor : public AActor, public IWacomWorldInteractable
@@ -53,6 +95,31 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
 	USphereComponent* GetTriggerSphere() const { return TriggerSphere; }
 
+	/** 将当前触发器配置为蛇巢卡牌支付调试事件样例。只修改当前 Actor 配置，不打开事件。 */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|RunEvent|Authoring",
+		meta = (ToolTip = "将当前触发器配置为 DA_Event_DebugSnakeGift 样例。只修改当前 Actor 配置，不打开事件、不修改 RunState。"))
+	void ConfigureDebugSnakeGiftSample();
+
+	/** 将当前触发器配置为 RunFlag + 金币门槛奖励调试事件样例。只修改当前 Actor 配置，不打开事件。 */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|RunEvent|Authoring",
+		meta = (ToolTip = "将当前触发器配置为 DA_Event_DebugFlagReward 样例。只修改当前 Actor 配置，不打开事件、不修改 RunState。"))
+	void ConfigureDebugFlagRewardSample();
+
+	/** 读取当前触发器和对应 RunSession 中事件状态的只读诊断信息。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "读取当前触发器和对应 RunSession 中事件状态的只读诊断信息；不会修改 RunState。"))
+	FWacomRunEventTriggerDebugView GetRunEventTriggerDebugView(AWacomPlayerController* PC) const;
+
+	/** 返回适合复制到日志或 PIE Details 面板查看的一行诊断摘要。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "返回适合复制到日志或 PIE Details 面板查看的一行诊断摘要。"))
+	FString GetRunEventTriggerDebugSummary(AWacomPlayerController* PC) const;
+
+	/** 将当前触发器诊断摘要写入日志。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "将当前触发器诊断摘要写入日志，便于 PIE 排查事件配置和运行态。"))
+	void LogRunEventTriggerDebugSummary(AWacomPlayerController* PC) const;
+
 	// ---- IWacomWorldInteractable ----
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* PC) const override;
 	virtual FVector GetInteractLocation_Implementation(AWacomPlayerController* PC) const override;
@@ -78,6 +145,8 @@ protected:
 		int32 OtherBodyIndex);
 
 private:
+	bool ConfigureDebugSample(FName InPersistentId, const TCHAR* EventDefinitionObjectPath);
+	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsEventCompletedFor(AWacomPlayerController* PC) const;
 	void ShowCompletedToast(AWacomPlayerController* PC) const;
 

@@ -61,6 +61,22 @@ namespace
 		return Effect;
 	}
 
+	FWacomRunEventEffectDefinition MakeSetRunFlag(FName FlagId)
+	{
+		FWacomRunEventEffectDefinition Effect;
+		Effect.Type = EWacomRunEventEffectType::SetRunFlag;
+		Effect.FlagId = FlagId;
+		return Effect;
+	}
+
+	FWacomRunEventEffectDefinition MakeClearRunFlag(FName FlagId)
+	{
+		FWacomRunEventEffectDefinition Effect;
+		Effect.Type = EWacomRunEventEffectType::ClearRunFlag;
+		Effect.FlagId = FlagId;
+		return Effect;
+	}
+
 	FWacomRunEventConditionDefinition MakeMinGold(int32 Amount)
 	{
 		FWacomRunEventConditionDefinition Condition;
@@ -76,19 +92,25 @@ namespace
 		Condition.CardDefinition = Card;
 		return Condition;
 	}
-}
 
-namespace Wacom::ContentBuilder
-{
-	UWacomRunEventDefinition* BuildRunEventContent()
+	FWacomRunEventConditionDefinition MakeRunFlagSet(FName FlagId)
 	{
-		UCardDefinition* PoisonFang = LoadGeneratedCard(
-			MakeObjectPath(MakePackagePath(RewardCardsRoot(), TEXT("DA_Card_PoisonFang"))));
-		if (!PoisonFang)
-		{
-			return nullptr;
-		}
+		FWacomRunEventConditionDefinition Condition;
+		Condition.Type = EWacomRunEventConditionType::RunFlagSet;
+		Condition.FlagId = FlagId;
+		return Condition;
+	}
 
+	FWacomRunEventConditionDefinition MakeRunFlagNotSet(FName FlagId)
+	{
+		FWacomRunEventConditionDefinition Condition;
+		Condition.Type = EWacomRunEventConditionType::RunFlagNotSet;
+		Condition.FlagId = FlagId;
+		return Condition;
+	}
+
+	UWacomRunEventDefinition* BuildDebugSnakeGiftEvent(UCardDefinition* PoisonFang)
+	{
 		const FString PackagePath = MakePackagePath(EventsRoot(), TEXT("DA_Event_DebugSnakeGift"));
 		UPackage* Pkg = FindOrCreatePackage(PackagePath);
 		if (!Pkg) { return nullptr; }
@@ -113,15 +135,15 @@ namespace Wacom::ContentBuilder
 		PayRespect.Effects = { MakeAddGold(-1), MakeAddPressure(TEXT("Misdeed"), -1), MakeConsumeNode(1) };
 		PayRespect.NextNodeId = TEXT("End");
 
-	FWacomRunEventChoiceDefinition HandOverFang;
-	HandOverFang.ChoiceId = TEXT("HandOverFang");
-	HandOverFang.LabelText = FText::FromString(TEXT("交出毒牙"));
-	HandOverFang.Conditions = { MakeHasCard(PoisonFang) };
-	HandOverFang.CardPayment.bRequiresOwnedCardPayment = true;
-	HandOverFang.CardPayment.PaymentZoneId = TEXT("RunEvent.Pay.Fang");
-	HandOverFang.CardPayment.AllowedCardDefinitions.Add(PoisonFang);
-	HandOverFang.Effects = { MakeConsumeNode(1) };
-	HandOverFang.NextNodeId = TEXT("End");
+		FWacomRunEventChoiceDefinition HandOverFang;
+		HandOverFang.ChoiceId = TEXT("HandOverFang");
+		HandOverFang.LabelText = FText::FromString(TEXT("交出毒牙"));
+		HandOverFang.Conditions = { MakeHasCard(PoisonFang) };
+		HandOverFang.CardPayment.bRequiresOwnedCardPayment = true;
+		HandOverFang.CardPayment.PaymentZoneId = TEXT("RunEvent.Pay.Fang");
+		HandOverFang.CardPayment.AllowedCardDefinitions.Add(PoisonFang);
+		HandOverFang.Effects = { MakeConsumeNode(1) };
+		HandOverFang.NextNodeId = TEXT("End");
 
 		FWacomRunEventChoiceDefinition Leave;
 		Leave.ChoiceId = TEXT("Leave");
@@ -150,5 +172,123 @@ namespace Wacom::ContentBuilder
 
 		SaveAssetPackage(Pkg, Event, PackagePath);
 		return Event;
+	}
+
+	UWacomRunEventDefinition* BuildDebugFlagRewardEvent(UCardDefinition* PoisonFang)
+	{
+		static const FName InspectedFlag = TEXT("DebugFlagReward.Inspected");
+		static const FName GoldGrantedFlag = TEXT("DebugFlagReward.GoldGranted");
+		static const FName RewardClaimedFlag = TEXT("DebugFlagReward.RewardClaimed");
+
+		const FString PackagePath = MakePackagePath(EventsRoot(), TEXT("DA_Event_DebugFlagReward"));
+		UPackage* Pkg = FindOrCreatePackage(PackagePath);
+		if (!Pkg) { return nullptr; }
+
+		UWacomRunEventDefinition* Event = CreateOrReplaceAsset<UWacomRunEventDefinition>(Pkg, TEXT("DA_Event_DebugFlagReward"));
+		if (!Event) { return nullptr; }
+
+		Event->EventId = TEXT("Event.DebugFlagReward");
+		Event->DisplayName = FText::FromString(TEXT("标记奖励样例"));
+		Event->StartNodeId = TEXT("Start");
+
+		FWacomRunEventChoiceDefinition InspectMark;
+		InspectMark.ChoiceId = TEXT("InspectMark");
+		InspectMark.LabelText = FText::FromString(TEXT("调查刻痕"));
+		InspectMark.Conditions = { MakeRunFlagNotSet(InspectedFlag) };
+		InspectMark.Effects = { MakeSetRunFlag(InspectedFlag) };
+
+		FWacomRunEventChoiceDefinition DebugGrantGold;
+		DebugGrantGold.ChoiceId = TEXT("DebugGrantGold");
+		DebugGrantGold.LabelText = FText::FromString(TEXT("调试：获得 3 金币"));
+		DebugGrantGold.Conditions = { MakeRunFlagNotSet(GoldGrantedFlag) };
+		DebugGrantGold.Effects = { MakeAddGold(3), MakeSetRunFlag(GoldGrantedFlag) };
+
+		FWacomRunEventChoiceDefinition ClaimGoldReward;
+		ClaimGoldReward.ChoiceId = TEXT("ClaimGoldReward");
+		ClaimGoldReward.LabelText = FText::FromString(TEXT("支付 3 金币领取毒牙"));
+		ClaimGoldReward.Conditions =
+		{
+			MakeRunFlagSet(InspectedFlag),
+			MakeRunFlagNotSet(RewardClaimedFlag),
+			MakeMinGold(3),
+		};
+		ClaimGoldReward.Effects =
+		{
+			MakeAddGold(-3),
+			MakeGainCard(PoisonFang),
+			MakeSetRunFlag(RewardClaimedFlag),
+		};
+		ClaimGoldReward.NextNodeId = TEXT("Rewarded");
+
+		FWacomRunEventChoiceDefinition Leave;
+		Leave.ChoiceId = TEXT("Leave");
+		Leave.LabelText = FText::FromString(TEXT("离开"));
+		Leave.bCloseEventAfterResolve = true;
+
+		FWacomRunEventNodeDefinition StartNode;
+		StartNode.NodeId = TEXT("Start");
+		StartNode.TitleText = FText::FromString(TEXT("标记奖励样例"));
+		StartNode.BodyText = FText::FromString(TEXT("石壁上刻着三道浅痕，像是在等待某个条件被满足。"));
+		StartNode.Choices = { InspectMark, DebugGrantGold, ClaimGoldReward, Leave };
+
+		FWacomRunEventChoiceDefinition TryClaimAgain;
+		TryClaimAgain.ChoiceId = TEXT("TryClaimAgain");
+		TryClaimAgain.LabelText = FText::FromString(TEXT("再次领取奖励"));
+		TryClaimAgain.Conditions =
+		{
+			MakeRunFlagNotSet(RewardClaimedFlag),
+			MakeMinGold(3),
+		};
+		TryClaimAgain.Effects =
+		{
+			MakeAddGold(-3),
+			MakeGainCard(PoisonFang),
+			MakeSetRunFlag(RewardClaimedFlag),
+		};
+
+		FWacomRunEventChoiceDefinition ResetFlags;
+		ResetFlags.ChoiceId = TEXT("ResetFlags");
+		ResetFlags.LabelText = FText::FromString(TEXT("调试：重置标记"));
+		ResetFlags.Conditions = { MakeRunFlagSet(RewardClaimedFlag) };
+		ResetFlags.Effects =
+		{
+			MakeClearRunFlag(InspectedFlag),
+			MakeClearRunFlag(GoldGrantedFlag),
+			MakeClearRunFlag(RewardClaimedFlag),
+		};
+		ResetFlags.NextNodeId = TEXT("Start");
+
+		FWacomRunEventChoiceDefinition Close;
+		Close.ChoiceId = TEXT("Close");
+		Close.LabelText = FText::FromString(TEXT("离开"));
+		Close.bCloseEventAfterResolve = true;
+
+		FWacomRunEventNodeDefinition RewardedNode;
+		RewardedNode.NodeId = TEXT("Rewarded");
+		RewardedNode.TitleText = FText::FromString(TEXT("奖励已领取"));
+		RewardedNode.BodyText = FText::FromString(TEXT("刻痕沉入石面，毒牙落入你的行囊。"));
+		RewardedNode.Choices = { TryClaimAgain, ResetFlags, Close };
+
+		Event->Nodes = { StartNode, RewardedNode };
+
+		SaveAssetPackage(Pkg, Event, PackagePath);
+		return Event;
+	}
+}
+
+namespace Wacom::ContentBuilder
+{
+	UWacomRunEventDefinition* BuildRunEventContent()
+	{
+		UCardDefinition* PoisonFang = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(RewardCardsRoot(), TEXT("DA_Card_PoisonFang"))));
+		if (!PoisonFang)
+		{
+			return nullptr;
+		}
+
+		UWacomRunEventDefinition* SnakeGift = BuildDebugSnakeGiftEvent(PoisonFang);
+		UWacomRunEventDefinition* FlagReward = BuildDebugFlagRewardEvent(PoisonFang);
+		return (SnakeGift && FlagReward) ? SnakeGift : nullptr;
 	}
 }

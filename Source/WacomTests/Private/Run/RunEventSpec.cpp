@@ -8,6 +8,7 @@
 #include "RunSession.h"
 #include "RunState.h"
 #include "Tags/WacomGameplayTags.h"
+#include "Validation/RunEventDefinitionValidation.h"
 
 #include "UObject/StrongObjectPtr.h"
 
@@ -306,6 +307,30 @@ namespace
 		Pay.CardPayment.AllowedCardDefinitions.Add(PaidCard);
 		Pay.Effects = Effects;
 		return MakeSingleChoiceRunEvent(Outer, Pay);
+	}
+
+	UWacomRunEventDefinition* LoadDebugFlagRewardEvent()
+	{
+		return LoadObject<UWacomRunEventDefinition>(
+			nullptr,
+			TEXT("/Game/Wacom/Data/Events/DA_Event_DebugFlagReward.DA_Event_DebugFlagReward"));
+	}
+
+	UCardDefinition* LoadPoisonFangRewardCard()
+	{
+		return LoadObject<UCardDefinition>(
+			nullptr,
+			TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+	}
+
+	const FRunEventChoiceSnapshot* FindRunEventChoiceSnapshot(
+		const FRunEventSnapshot& Snapshot,
+		FName ChoiceId)
+	{
+		return Snapshot.Choices.FindByPredicate([ChoiceId](const FRunEventChoiceSnapshot& Choice)
+		{
+			return Choice.ChoiceId == ChoiceId;
+		});
 	}
 }
 
@@ -1449,6 +1474,286 @@ bool FWacomRunEventConsumeNodeEffectEntersDuskWithPressureSpec::RunTest(const FS
 	TestTrue(TEXT("Consume from Day remaining 1 enters Dusk"), Run->GetCurrentTimePhase() == ETimePhase::Dusk);
 	TestEqual(TEXT("Dusk nodes reset"), Run->GetRemainingNodeCount(), State.InitialNodeCount_Dusk);
 	TestEqual(TEXT("Entering Dusk adds Hunger"), Run->GetPressureValue(EWacomPressureType::Hunger), 5);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventDebugFlagRewardUnlockSpec,
+	"Wacom.Run.Event.DebugFlagRewardFlowUnlocksGoldRewardAfterInspect",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventDebugFlagRewardUnlockSpec::RunTest(const FString& /*Parameters*/)
+{
+	static const FName InspectedFlag = TEXT("DebugFlagReward.Inspected");
+
+	UWacomRunEventDefinition* Event = LoadDebugFlagRewardEvent();
+	if (!TestNotNull(TEXT("DebugFlagReward event asset loads"), Event))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Begin debug flag reward event succeeds"),
+		Run->BeginRunEvent(TEXT("Event.DebugFlagReward.Actor.Unlock"), Event));
+
+	FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
+	const FRunEventChoiceSnapshot* ClaimBeforeInspect =
+		FindRunEventChoiceSnapshot(Snapshot, TEXT("ClaimGoldReward"));
+	if (!TestNotNull(TEXT("ClaimGoldReward choice exists before inspect"), ClaimBeforeInspect))
+	{
+		return false;
+	}
+	TestFalse(TEXT("ClaimGoldReward blocked before inspect"), ClaimBeforeInspect->bAvailable);
+	TestEqual(TEXT("ClaimGoldReward first reason before inspect"),
+		ClaimBeforeInspect->DisabledReason,
+		FName(TEXT("RequiredRunFlagMissing")));
+	TestEqual(TEXT("ClaimGoldReward has three requirements"), ClaimBeforeInspect->Requirements.Num(), 3);
+	TestEqual(TEXT("ClaimGoldReward has four consequences"), ClaimBeforeInspect->Consequences.Num(), 4);
+	TestTrue(TEXT("ClaimGoldReward preview includes node transition"),
+		ClaimBeforeInspect->Consequences.ContainsByPredicate([](const FRunEventChoiceConsequenceSnapshot& Consequence)
+		{
+			return Consequence.Kind == ERunEventChoiceConsequenceKind::NodeTransition
+				&& Consequence.ResolvedNodeId == TEXT("Rewarded");
+		}));
+
+	const FRunEventChoiceResult InspectResult =
+		Run->ChooseRunEventOptionWithResult(TEXT("InspectMark"));
+	TestTrue(TEXT("InspectMark succeeds"), InspectResult.bSucceeded);
+	TestTrue(TEXT("InspectMark sets inspected flag"), Run->IsRunFlagSet(InspectedFlag));
+	TestTrue(TEXT("Event remains active after inspect"), Run->IsRunEventActive());
+	TestEqual(TEXT("Inspect keeps event at start"),
+		Run->BuildCurrentRunEventSnapshot().CurrentNodeId,
+		FName(TEXT("Start")));
+
+	Snapshot = Run->BuildCurrentRunEventSnapshot();
+	const FRunEventChoiceSnapshot* ClaimAfterInspect =
+		FindRunEventChoiceSnapshot(Snapshot, TEXT("ClaimGoldReward"));
+	if (!TestNotNull(TEXT("ClaimGoldReward choice exists after inspect"), ClaimAfterInspect))
+	{
+		return false;
+	}
+	TestFalse(TEXT("ClaimGoldReward still blocked by gold after inspect"), ClaimAfterInspect->bAvailable);
+	TestEqual(TEXT("ClaimGoldReward reason after inspect"),
+		ClaimAfterInspect->DisabledReason,
+		FName(TEXT("InsufficientGold")));
+	TestTrue(TEXT("Inspected requirement is now satisfied"),
+		ClaimAfterInspect->Requirements.ContainsByPredicate([](const FRunEventChoiceRequirementSnapshot& Requirement)
+		{
+			return Requirement.Kind == ERunEventChoiceRequirementKind::RunFlagSet
+				&& Requirement.FlagId == TEXT("DebugFlagReward.Inspected")
+				&& Requirement.bSatisfied;
+		}));
+	TestTrue(TEXT("Gold requirement is still unsatisfied"),
+		ClaimAfterInspect->Requirements.ContainsByPredicate([](const FRunEventChoiceRequirementSnapshot& Requirement)
+		{
+			return Requirement.Kind == ERunEventChoiceRequirementKind::MinGold
+				&& Requirement.RequiredValue == 3
+				&& Requirement.CurrentValue == 0
+				&& !Requirement.bSatisfied;
+		}));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventDebugFlagRewardClaimSpec,
+	"Wacom.Run.Event.DebugFlagRewardClaimConsumesExactGoldAndSetsRewardFlag",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventDebugFlagRewardClaimSpec::RunTest(const FString& /*Parameters*/)
+{
+	static const FName InspectedFlag = TEXT("DebugFlagReward.Inspected");
+	static const FName GoldGrantedFlag = TEXT("DebugFlagReward.GoldGranted");
+	static const FName RewardClaimedFlag = TEXT("DebugFlagReward.RewardClaimed");
+
+	UWacomRunEventDefinition* Event = LoadDebugFlagRewardEvent();
+	UCardDefinition* PoisonFang = LoadPoisonFangRewardCard();
+	if (!TestNotNull(TEXT("DebugFlagReward event asset loads"), Event)
+		|| !TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Begin debug flag reward event succeeds"),
+		Run->BeginRunEvent(TEXT("Event.DebugFlagReward.Actor.Claim"), Event));
+
+	TestTrue(TEXT("InspectMark succeeds"),
+		Run->ChooseRunEventOptionWithResult(TEXT("InspectMark")).bSucceeded);
+	const FRunEventChoiceResult GoldResult =
+		Run->ChooseRunEventOptionWithResult(TEXT("DebugGrantGold"));
+	TestTrue(TEXT("DebugGrantGold succeeds"), GoldResult.bSucceeded);
+	TestEqual(TEXT("DebugGrantGold gives three gold"), Run->GetGold(), 3);
+	TestTrue(TEXT("Inspected flag is set"), Run->IsRunFlagSet(InspectedFlag));
+	TestTrue(TEXT("GoldGranted flag is set"), Run->IsRunFlagSet(GoldGrantedFlag));
+
+	const FRunEventSnapshot ReadySnapshot = Run->BuildCurrentRunEventSnapshot();
+	const FRunEventChoiceSnapshot* ClaimReady =
+		FindRunEventChoiceSnapshot(ReadySnapshot, TEXT("ClaimGoldReward"));
+	if (!TestNotNull(TEXT("ClaimGoldReward choice exists ready"), ClaimReady))
+	{
+		return false;
+	}
+	TestTrue(TEXT("ClaimGoldReward becomes available"), ClaimReady->bAvailable);
+	TestTrue(TEXT("ClaimGoldReward preview removes three gold"),
+		ClaimReady->Consequences.ContainsByPredicate([](const FRunEventChoiceConsequenceSnapshot& Consequence)
+		{
+			return Consequence.Kind == ERunEventChoiceConsequenceKind::Effect
+				&& Consequence.EffectType == EWacomRunEventEffectType::AddGold
+				&& Consequence.Amount == -3;
+		}));
+	TestTrue(TEXT("ClaimGoldReward preview gains PoisonFang"),
+		ClaimReady->Consequences.ContainsByPredicate([PoisonFang](const FRunEventChoiceConsequenceSnapshot& Consequence)
+		{
+			return Consequence.Kind == ERunEventChoiceConsequenceKind::Effect
+				&& Consequence.EffectType == EWacomRunEventEffectType::GainCard
+				&& Consequence.CardDefinition.Get() == PoisonFang;
+		}));
+	TestTrue(TEXT("ClaimGoldReward preview sets reward flag"),
+		ClaimReady->Consequences.ContainsByPredicate([](const FRunEventChoiceConsequenceSnapshot& Consequence)
+		{
+			return Consequence.Kind == ERunEventChoiceConsequenceKind::Effect
+				&& Consequence.EffectType == EWacomRunEventEffectType::SetRunFlag
+				&& Consequence.FlagId == TEXT("DebugFlagReward.RewardClaimed");
+		}));
+
+	const FRunEventChoiceResult ClaimResult =
+		Run->ChooseRunEventOptionWithResult(TEXT("ClaimGoldReward"));
+	TestTrue(TEXT("ClaimGoldReward succeeds"), ClaimResult.bSucceeded);
+	TestEqual(TEXT("Gold is consumed exactly"), Run->GetGold(), 0);
+	TestTrue(TEXT("Reward flag is set"), Run->IsRunFlagSet(RewardClaimedFlag));
+	TestEqual(TEXT("Claim transitions to rewarded node"),
+		Run->BuildCurrentRunEventSnapshot().CurrentNodeId,
+		FName(TEXT("Rewarded")));
+	TestTrue(TEXT("PoisonFang reward acquired"),
+		StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), PoisonFang));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventDebugFlagRewardRepeatBlockedSpec,
+	"Wacom.Run.Event.DebugFlagRewardBlocksRepeatClaimWhenRewardFlagSet",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventDebugFlagRewardRepeatBlockedSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWacomRunEventDefinition* Event = LoadDebugFlagRewardEvent();
+	UCardDefinition* PoisonFang = LoadPoisonFangRewardCard();
+	if (!TestNotNull(TEXT("DebugFlagReward event asset loads"), Event)
+		|| !TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Begin debug flag reward event succeeds"),
+		Run->BeginRunEvent(TEXT("Event.DebugFlagReward.Actor.Repeat"), Event));
+	TestTrue(TEXT("InspectMark succeeds"),
+		Run->ChooseRunEventOptionWithResult(TEXT("InspectMark")).bSucceeded);
+	TestTrue(TEXT("DebugGrantGold succeeds"),
+		Run->ChooseRunEventOptionWithResult(TEXT("DebugGrantGold")).bSucceeded);
+	TestTrue(TEXT("ClaimGoldReward succeeds"),
+		Run->ChooseRunEventOptionWithResult(TEXT("ClaimGoldReward")).bSucceeded);
+
+	Run->AddGold(3);
+	const int32 RewardCountBefore = CountStorageCardsByDefinition(Run->BuildBackpackStorageSnapshot(), PoisonFang);
+	const int32 GoldBefore = Run->GetGold();
+	FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
+	const FRunEventChoiceSnapshot* TryAgain = FindRunEventChoiceSnapshot(Snapshot, TEXT("TryClaimAgain"));
+	if (!TestNotNull(TEXT("TryClaimAgain choice exists"), TryAgain))
+	{
+		return false;
+	}
+	TestFalse(TEXT("TryClaimAgain is blocked by reward flag"), TryAgain->bAvailable);
+	TestEqual(TEXT("TryClaimAgain blocked reason"),
+		TryAgain->DisabledReason,
+		FName(TEXT("BlockedRunFlagSet")));
+
+	const FRunEventChoiceResult RepeatResult =
+		Run->ChooseRunEventOptionWithResult(TEXT("TryClaimAgain"));
+	TestFalse(TEXT("TryClaimAgain submit fails"), RepeatResult.bSucceeded);
+	TestEqual(TEXT("TryClaimAgain fail reason"),
+		RepeatResult.DisabledReason,
+		FName(TEXT("BlockedRunFlagSet")));
+	TestEqual(TEXT("Repeat does not spend gold"), Run->GetGold(), GoldBefore);
+	TestEqual(TEXT("Repeat does not grant another reward"),
+		CountStorageCardsByDefinition(Run->BuildBackpackStorageSnapshot(), PoisonFang),
+		RewardCountBefore);
+	TestEqual(TEXT("Repeat keeps rewarded node"),
+		Run->BuildCurrentRunEventSnapshot().CurrentNodeId,
+		FName(TEXT("Rewarded")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventDebugFlagRewardResetSpec,
+	"Wacom.Run.Event.DebugFlagRewardResetClearsFlagsAndReturnsToStart",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventDebugFlagRewardResetSpec::RunTest(const FString& /*Parameters*/)
+{
+	static const FName InspectedFlag = TEXT("DebugFlagReward.Inspected");
+	static const FName GoldGrantedFlag = TEXT("DebugFlagReward.GoldGranted");
+	static const FName RewardClaimedFlag = TEXT("DebugFlagReward.RewardClaimed");
+
+	UWacomRunEventDefinition* Event = LoadDebugFlagRewardEvent();
+	if (!TestNotNull(TEXT("DebugFlagReward event asset loads"), Event))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Begin debug flag reward event succeeds"),
+		Run->BeginRunEvent(TEXT("Event.DebugFlagReward.Actor.Reset"), Event));
+	TestTrue(TEXT("InspectMark succeeds"),
+		Run->ChooseRunEventOptionWithResult(TEXT("InspectMark")).bSucceeded);
+	TestTrue(TEXT("DebugGrantGold succeeds"),
+		Run->ChooseRunEventOptionWithResult(TEXT("DebugGrantGold")).bSucceeded);
+	TestTrue(TEXT("ClaimGoldReward succeeds"),
+		Run->ChooseRunEventOptionWithResult(TEXT("ClaimGoldReward")).bSucceeded);
+
+	const FRunEventChoiceResult ResetResult =
+		Run->ChooseRunEventOptionWithResult(TEXT("ResetFlags"));
+	TestTrue(TEXT("ResetFlags succeeds"), ResetResult.bSucceeded);
+	TestFalse(TEXT("Inspected flag cleared"), Run->IsRunFlagSet(InspectedFlag));
+	TestFalse(TEXT("GoldGranted flag cleared"), Run->IsRunFlagSet(GoldGrantedFlag));
+	TestFalse(TEXT("RewardClaimed flag cleared"), Run->IsRunFlagSet(RewardClaimedFlag));
+	TestEqual(TEXT("Reset returns to start"),
+		Run->BuildCurrentRunEventSnapshot().CurrentNodeId,
+		FName(TEXT("Start")));
+
+	const FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
+	const FRunEventChoiceSnapshot* InspectMark = FindRunEventChoiceSnapshot(Snapshot, TEXT("InspectMark"));
+	const FRunEventChoiceSnapshot* DebugGrantGold = FindRunEventChoiceSnapshot(Snapshot, TEXT("DebugGrantGold"));
+	const FRunEventChoiceSnapshot* ClaimGoldReward = FindRunEventChoiceSnapshot(Snapshot, TEXT("ClaimGoldReward"));
+	TestTrue(TEXT("InspectMark available after reset"), InspectMark && InspectMark->bAvailable);
+	TestTrue(TEXT("DebugGrantGold available after reset"), DebugGrantGold && DebugGrantGold->bAvailable);
+	TestFalse(TEXT("ClaimGoldReward blocked after reset"), ClaimGoldReward && ClaimGoldReward->bAvailable);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventDebugFlagRewardValidationSpec,
+	"Wacom.Run.Event.DebugFlagRewardAssetPassesValidationWithoutWarnings",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventDebugFlagRewardValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWacomRunEventDefinition* Event = LoadDebugFlagRewardEvent();
+	if (!TestNotNull(TEXT("DebugFlagReward event asset loads"), Event))
+	{
+		return false;
+	}
+
+	const FWacomRunEventDefinitionValidationReport Report =
+		FWacomRunEventDefinitionValidation::BuildReport(Event);
+	TestTrue(TEXT("DebugFlagReward asset is valid"), Report.IsValid());
+	TestEqual(TEXT("DebugFlagReward has no validation errors"), Report.Errors.Num(), 0);
+	TestEqual(TEXT("DebugFlagReward has no validation warnings"), Report.Warnings.Num(), 0);
 
 	return true;
 }

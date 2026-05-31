@@ -135,6 +135,8 @@ enum class EGameFlowState : uint8
 - `EventDefinition` 引用 `UWacomRunEventDefinition` 事件图资产。
 - 按 E 后调用 `AWacomPlayerController::RequestOpenRunEvent(PersistentId, EventDefinition)`。
 - 已完成事件不会重复打开，但可以显示弱提示，并在按 E 时通过 AppToast 提示已完成。
+- V0-BC 后，Details 面板提供 `ConfigureDebugSnakeGiftSample()` 和 `ConfigureDebugFlagRewardSample()`，用于把当前 Trigger 配成标准 Debug RunEvent 样例。按钮只写当前 Actor 的 `PersistentId / EventDefinition / prompt`，不打开事件、不修改 RunState、不生成资产。
+- V0-BC 后，Trigger 提供 `GetRunEventTriggerDebugSummary()` / `LogRunEventTriggerDebugSummary()`，可在 PIE 中查看 `PersistentId / EventId / StartNode / CurrentNode / Active / Completed / Duplicate / Last`，排查样例是否绑定正确、是否正在访问或已完成。
 
 关卡放置 Debug RunEvent 的步骤见 `WacomData.md` 中的 Debug 事件资产说明和 `WacomUI.md` 的 RunEvent UI 章节。
 

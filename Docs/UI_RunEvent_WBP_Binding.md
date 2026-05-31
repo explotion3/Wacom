@@ -125,6 +125,7 @@ WBP 合同：
 - 打开蛇巢事件，普通选项应使用自定义 choice row。
 - 持有 `PoisonFang` 时，“交出毒牙”选项外层应使用自定义 drop target；拖毒牙到该选项时显示 `SubmitReady`，释放后显示 `Submitted`、移除精确实例并显示支付 / outcome Toast。
 - 没有 `PoisonFang` 时不显示 first-person 候选卡，支付行显示缺失原因。
+- 绑定 `RequirementList / ConsequenceList` 后，可用 `DA_Event_DebugFlagReward` 检查非支付条件和后果预览：RunFlag 条件、金币门槛、失去金币、获得毒牙、设置 / 清除标记、节点跳转都应来自 presentation view，而不是 WBP 自己判断。
 - 调用 `LogRunEventScreenDebugSummary()` 应能看到 active node、choice availability / requirement / consequence / preview 摘要、`RunEvent.Pay.* -> ChoiceId` 映射、候选数量和最近 drop 结果。
 
 ## 美术接入 TODO
@@ -136,7 +137,8 @@ WBP 合同：
 - [ ] 制作 `WBP_RunEventPaymentDropTarget`，只负责支付 Zone 的 `Probe / SubmitReady / Invalid / Submitted` 视觉反馈。
 - [ ] 在 `WBP_RunEventScreen` 默认值中设置 `ChoiceButtonWidgetClass` 和 `PaymentDropTargetWidgetClass`。
 - [ ] 在 Wacom UI Settings 中注册 `UI.Widget.RunEventScreen` 到正式 `WBP_RunEventScreen`。
-- [ ] 用蛇巢事件做 PIE 验收：有毒牙、无毒牙、拖错卡、拖空处、支付成功、事件关闭后无残留候选卡。
+- [ ] 用蛇巢事件做卡牌支付 PIE 验收：有毒牙、无毒牙、拖错卡、拖空处、支付成功、事件关闭后无残留候选卡。
+- [ ] 用 `DA_Event_DebugFlagReward` 做需求 / 后果列表 PIE 验收：RunFlag、金币门槛、扣金币、获得毒牙、设置 / 清除标记和节点跳转都应显示在 choice row 上。
 
 美术接入边界：
 

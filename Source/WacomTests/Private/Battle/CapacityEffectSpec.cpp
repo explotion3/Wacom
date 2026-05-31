@@ -356,6 +356,221 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataRunEventDebugFlagRewardAssetSpec,
+	"Wacom.Data.RunEvent.DebugFlagRewardAsset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataRunEventDebugFlagRewardAssetSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FName InspectedFlag = TEXT("DebugFlagReward.Inspected");
+	const FName GoldGrantedFlag = TEXT("DebugFlagReward.GoldGranted");
+	const FName RewardClaimedFlag = TEXT("DebugFlagReward.RewardClaimed");
+
+	UWacomRunEventDefinition* Event = LoadObject<UWacomRunEventDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Events/DA_Event_DebugFlagReward.DA_Event_DebugFlagReward"));
+
+	if (!TestNotNull(TEXT("DebugFlagReward event asset loads"), Event))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("EventId"), Event->EventId, FName(TEXT("Event.DebugFlagReward")));
+	TestEqual(TEXT("DisplayName"), Event->DisplayName.ToString(), FString(TEXT("标记奖励样例")));
+	TestEqual(TEXT("StartNodeId"), Event->StartNodeId, FName(TEXT("Start")));
+
+	const FWacomRunEventNodeDefinition* StartNode = Event->Nodes.FindByPredicate(
+		[](const FWacomRunEventNodeDefinition& Node)
+		{
+			return Node.NodeId == TEXT("Start");
+		});
+	const FWacomRunEventNodeDefinition* RewardedNode = Event->Nodes.FindByPredicate(
+		[](const FWacomRunEventNodeDefinition& Node)
+		{
+			return Node.NodeId == TEXT("Rewarded");
+		});
+	if (!TestNotNull(TEXT("Start node exists"), StartNode)
+		|| !TestNotNull(TEXT("Rewarded node exists"), RewardedNode))
+	{
+		return false;
+	}
+
+	const FWacomRunEventChoiceDefinition* InspectMark = StartNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("InspectMark");
+		});
+	const FWacomRunEventChoiceDefinition* DebugGrantGold = StartNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("DebugGrantGold");
+		});
+	const FWacomRunEventChoiceDefinition* ClaimGoldReward = StartNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("ClaimGoldReward");
+		});
+	const FWacomRunEventChoiceDefinition* Leave = StartNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("Leave");
+		});
+	const FWacomRunEventChoiceDefinition* TryClaimAgain = RewardedNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("TryClaimAgain");
+		});
+	const FWacomRunEventChoiceDefinition* ResetFlags = RewardedNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("ResetFlags");
+		});
+	const FWacomRunEventChoiceDefinition* Close = RewardedNode->Choices.FindByPredicate(
+		[](const FWacomRunEventChoiceDefinition& Choice)
+		{
+			return Choice.ChoiceId == TEXT("Close");
+		});
+	if (!TestNotNull(TEXT("InspectMark choice exists"), InspectMark)
+		|| !TestNotNull(TEXT("DebugGrantGold choice exists"), DebugGrantGold)
+		|| !TestNotNull(TEXT("ClaimGoldReward choice exists"), ClaimGoldReward)
+		|| !TestNotNull(TEXT("Leave choice exists"), Leave)
+		|| !TestNotNull(TEXT("TryClaimAgain choice exists"), TryClaimAgain)
+		|| !TestNotNull(TEXT("ResetFlags choice exists"), ResetFlags)
+		|| !TestNotNull(TEXT("Close choice exists"), Close))
+	{
+		return false;
+	}
+
+	UCardDefinition* PoisonFang = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+	if (!TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("InspectMark requires missing inspected flag"),
+		InspectMark->Conditions.ContainsByPredicate([InspectedFlag](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::RunFlagNotSet
+				&& Condition.FlagId == InspectedFlag;
+		}));
+	TestTrue(TEXT("InspectMark sets inspected flag"),
+		InspectMark->Effects.ContainsByPredicate([InspectedFlag](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::SetRunFlag
+				&& Effect.FlagId == InspectedFlag;
+		}));
+
+	TestTrue(TEXT("DebugGrantGold requires missing gold-granted flag"),
+		DebugGrantGold->Conditions.ContainsByPredicate([GoldGrantedFlag](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::RunFlagNotSet
+				&& Condition.FlagId == GoldGrantedFlag;
+		}));
+	TestTrue(TEXT("DebugGrantGold adds three gold"),
+		DebugGrantGold->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::AddGold
+				&& Effect.Value == 3;
+		}));
+	TestTrue(TEXT("DebugGrantGold sets gold-granted flag"),
+		DebugGrantGold->Effects.ContainsByPredicate([GoldGrantedFlag](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::SetRunFlag
+				&& Effect.FlagId == GoldGrantedFlag;
+		}));
+
+	TestTrue(TEXT("ClaimGoldReward requires inspected flag"),
+		ClaimGoldReward->Conditions.ContainsByPredicate([InspectedFlag](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::RunFlagSet
+				&& Condition.FlagId == InspectedFlag;
+		}));
+	TestTrue(TEXT("ClaimGoldReward requires missing reward flag"),
+		ClaimGoldReward->Conditions.ContainsByPredicate([RewardClaimedFlag](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::RunFlagNotSet
+				&& Condition.FlagId == RewardClaimedFlag;
+		}));
+	TestTrue(TEXT("ClaimGoldReward requires three gold"),
+		ClaimGoldReward->Conditions.ContainsByPredicate([](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::MinGold
+				&& Condition.Value == 3;
+		}));
+	TestTrue(TEXT("ClaimGoldReward removes three gold"),
+		ClaimGoldReward->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::AddGold
+				&& Effect.Value == -3;
+		}));
+	TestTrue(TEXT("ClaimGoldReward gains PoisonFang"),
+		ClaimGoldReward->Effects.ContainsByPredicate([PoisonFang](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::GainCard
+				&& Effect.CardDefinition.Get() == PoisonFang;
+		}));
+	TestTrue(TEXT("ClaimGoldReward sets reward flag"),
+		ClaimGoldReward->Effects.ContainsByPredicate([RewardClaimedFlag](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::SetRunFlag
+				&& Effect.FlagId == RewardClaimedFlag;
+		}));
+	TestEqual(TEXT("ClaimGoldReward goes to rewarded node"),
+		ClaimGoldReward->NextNodeId,
+		FName(TEXT("Rewarded")));
+
+	TestTrue(TEXT("TryClaimAgain is blocked by claimed flag"),
+		TryClaimAgain->Conditions.ContainsByPredicate([RewardClaimedFlag](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::RunFlagNotSet
+				&& Condition.FlagId == RewardClaimedFlag;
+		}));
+	TestTrue(TEXT("TryClaimAgain still documents gold gate"),
+		TryClaimAgain->Conditions.ContainsByPredicate([](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::MinGold
+				&& Condition.Value == 3;
+		}));
+
+	TestTrue(TEXT("ResetFlags requires reward flag"),
+		ResetFlags->Conditions.ContainsByPredicate([RewardClaimedFlag](const FWacomRunEventConditionDefinition& Condition)
+		{
+			return Condition.Type == EWacomRunEventConditionType::RunFlagSet
+				&& Condition.FlagId == RewardClaimedFlag;
+		}));
+	TestTrue(TEXT("ResetFlags clears inspected flag"),
+		ResetFlags->Effects.ContainsByPredicate([InspectedFlag](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::ClearRunFlag
+				&& Effect.FlagId == InspectedFlag;
+		}));
+	TestTrue(TEXT("ResetFlags clears gold-granted flag"),
+		ResetFlags->Effects.ContainsByPredicate([GoldGrantedFlag](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::ClearRunFlag
+				&& Effect.FlagId == GoldGrantedFlag;
+		}));
+	TestTrue(TEXT("ResetFlags clears reward flag"),
+		ResetFlags->Effects.ContainsByPredicate([RewardClaimedFlag](const FWacomRunEventEffectDefinition& Effect)
+		{
+			return Effect.Type == EWacomRunEventEffectType::ClearRunFlag
+				&& Effect.FlagId == RewardClaimedFlag;
+		}));
+	TestEqual(TEXT("ResetFlags returns to start"),
+		ResetFlags->NextNodeId,
+		FName(TEXT("Start")));
+
+	TestTrue(TEXT("Leave closes event without completing"), Leave->bCloseEventAfterResolve);
+	TestFalse(TEXT("Leave does not mark completed"), Leave->bMarkEventCompleted);
+	TestTrue(TEXT("Close closes event without completing"), Close->bCloseEventAfterResolve);
+	TestFalse(TEXT("Close does not mark completed"), Close->bMarkEventCompleted);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattleCapacityEffectWeaponDamagePlus3Spec,
 	"Wacom.Battle.CapacityEffect.WeaponDamagePlus3AppliesToWeapon",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

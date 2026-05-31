@@ -116,6 +116,50 @@ namespace
 		return Event;
 	}
 
+	UWacomRunEventDefinition* MakeUiRunEventFlagRewardPreviewEvent(
+		UObject* Outer,
+		UCardDefinition* RewardCard)
+	{
+		UWacomRunEventDefinition* Event = NewObject<UWacomRunEventDefinition>(Outer);
+		Event->EventId = TEXT("Event.UI.FlagReward");
+		Event->DisplayName = FText::FromString(TEXT("标记奖励 UI 事件"));
+		Event->StartNodeId = TEXT("Start");
+
+		FWacomRunEventChoiceDefinition Claim;
+		Claim.ChoiceId = TEXT("ClaimGoldReward");
+		Claim.LabelText = FText::FromString(TEXT("支付 3 金币领取毒牙"));
+		FWacomRunEventConditionDefinition RequiresInspect;
+		RequiresInspect.Type = EWacomRunEventConditionType::RunFlagSet;
+		RequiresInspect.FlagId = TEXT("DebugFlagReward.Inspected");
+		FWacomRunEventConditionDefinition RequiresUnclaimed;
+		RequiresUnclaimed.Type = EWacomRunEventConditionType::RunFlagNotSet;
+		RequiresUnclaimed.FlagId = TEXT("DebugFlagReward.RewardClaimed");
+		FWacomRunEventConditionDefinition RequiresGold;
+		RequiresGold.Type = EWacomRunEventConditionType::MinGold;
+		RequiresGold.Value = 3;
+		Claim.Conditions = { RequiresInspect, RequiresUnclaimed, RequiresGold };
+
+		FWacomRunEventEffectDefinition LoseGold;
+		LoseGold.Type = EWacomRunEventEffectType::AddGold;
+		LoseGold.Value = -3;
+		FWacomRunEventEffectDefinition GainCard;
+		GainCard.Type = EWacomRunEventEffectType::GainCard;
+		GainCard.CardDefinition = RewardCard;
+		FWacomRunEventEffectDefinition SetRewardFlag;
+		SetRewardFlag.Type = EWacomRunEventEffectType::SetRunFlag;
+		SetRewardFlag.FlagId = TEXT("DebugFlagReward.RewardClaimed");
+		Claim.Effects = { LoseGold, GainCard, SetRewardFlag };
+		Claim.NextNodeId = TEXT("Rewarded");
+
+		FWacomRunEventNodeDefinition Start;
+		Start.NodeId = TEXT("Start");
+		Start.Choices = { Claim };
+		FWacomRunEventNodeDefinition Rewarded;
+		Rewarded.NodeId = TEXT("Rewarded");
+		Event->Nodes = { Start, Rewarded };
+		return Event;
+	}
+
 	FGuid FindUiStorageInstanceIdByDefinition(const FRunBackpackStorageSnapshot& Snapshot, const UCardDefinition* Card)
 	{
 		for (const FRunStorageCardView& View : Snapshot.Flux.ContentCards)
@@ -340,6 +384,242 @@ bool FWacomUIWorldInteractionCompletedRunEventWeakPromptSpec::RunTest(const FStr
 	TestEqual(TEXT("Completed event prompt shown"),
 		PC->ReadCurrentInteractPrompt().ToString(),
 		FString(TEXT("事件已完成")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventTriggerConfigureSnakeGiftSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerAuthoring.ConfigureDebugSnakeGiftSampleSetsIdAndDefinition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventTriggerConfigureSnakeGiftSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	Trigger->PersistentId = TEXT("Event.Old");
+	Trigger->InteractPromptText = FText::FromString(TEXT("旧提示"));
+	Trigger->CompletedPromptText = FText::FromString(TEXT("旧完成"));
+	Trigger->CompletedToastText = FText::FromString(TEXT("旧 Toast"));
+
+	Trigger->ConfigureDebugSnakeGiftSample();
+
+	TestEqual(TEXT("SnakeGift sample id"),
+		Trigger->PersistentId,
+		FName(TEXT("Event.DebugSnakeGift.Actor")));
+	TestNotNull(TEXT("SnakeGift sample definition"), Trigger->EventDefinition.Get());
+	if (Trigger->EventDefinition)
+	{
+		TestEqual(TEXT("SnakeGift sample event id"),
+			Trigger->EventDefinition->EventId,
+			FName(TEXT("Event.DebugSnakeGift")));
+		TestEqual(TEXT("SnakeGift sample start node"),
+			Trigger->EventDefinition->StartNodeId,
+			FName(TEXT("Start")));
+	}
+	TestEqual(TEXT("Default interact prompt restored"),
+		Trigger->InteractPromptText.ToString(),
+		FString(TEXT("按 E 查看事件")));
+	TestEqual(TEXT("Default completed prompt restored"),
+		Trigger->CompletedPromptText.ToString(),
+		FString(TEXT("事件已完成")));
+	TestEqual(TEXT("Default completed toast restored"),
+		Trigger->CompletedToastText.ToString(),
+		FString(TEXT("该事件已完成")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventTriggerConfigureFlagRewardSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerAuthoring.ConfigureDebugFlagRewardSampleSetsIdAndDefinition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventTriggerConfigureFlagRewardSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+
+	Trigger->ConfigureDebugFlagRewardSample();
+
+	TestEqual(TEXT("FlagReward sample id"),
+		Trigger->PersistentId,
+		FName(TEXT("Event.DebugFlagReward.Actor")));
+	TestNotNull(TEXT("FlagReward sample definition"), Trigger->EventDefinition.Get());
+	if (Trigger->EventDefinition)
+	{
+		TestEqual(TEXT("FlagReward sample event id"),
+			Trigger->EventDefinition->EventId,
+			FName(TEXT("Event.DebugFlagReward")));
+		TestEqual(TEXT("FlagReward sample start node"),
+			Trigger->EventDefinition->StartNodeId,
+			FName(TEXT("Start")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventTriggerConfigureDoesNotMutateRunStateSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerAuthoring.ConfigureSampleDoesNotMutateRunState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventTriggerConfigureDoesNotMutateRunStateSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Trigger->ConfigureDebugFlagRewardSample();
+
+	TestFalse(TEXT("Configure does not activate event"), Run->IsRunEventActive());
+	TestFalse(TEXT("Configure does not complete event"),
+		Run->IsRunEventCompleted(Trigger->PersistentId));
+	TestEqual(TEXT("Configure does not create event state"),
+		Run->GetRunState().RunEventStates.Num(),
+		0);
+	TestEqual(TEXT("Configure does not change gold"), Run->GetGold(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventTriggerDebugMissingConfigSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerDebug.RunEventTriggerDebugReportsMissingConfig",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventTriggerDebugMissingConfigSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	FWacomRunEventTriggerDebugView Debug = Trigger->GetRunEventTriggerDebugView(PC.Get());
+	TestEqual(TEXT("Missing config reports actor"), Debug.ActorName, Trigger->GetName());
+	TestFalse(TEXT("Missing config cannot interact"), Debug.bCanInteract);
+	TestTrue(TEXT("Missing config has run session"), Debug.bHasRunSession);
+	TestEqual(TEXT("Missing config result"),
+		Debug.LastDebugResult,
+		FName(TEXT("MissingPersistentId")));
+
+	Trigger->PersistentId = TEXT("Event.MissingDefinition");
+	Debug = Trigger->GetRunEventTriggerDebugView(PC.Get());
+	TestEqual(TEXT("Missing definition result"),
+		Debug.LastDebugResult,
+		FName(TEXT("MissingEventDefinition")));
+	TestTrue(TEXT("Missing definition summary is stable"),
+		Trigger->GetRunEventTriggerDebugSummary(PC.Get()).Contains(TEXT("Last=MissingEventDefinition")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventTriggerDebugConfiguredSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerDebug.RunEventTriggerDebugReportsConfiguredEventIdAndStartNode",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventTriggerDebugConfiguredSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	InjectRunSession(PC.Get(), Run.Get());
+	Trigger->ConfigureDebugFlagRewardSample();
+
+	const FWacomRunEventTriggerDebugView Debug = Trigger->GetRunEventTriggerDebugView(PC.Get());
+	TestTrue(TEXT("Configured trigger can interact"), Debug.bCanInteract);
+	TestEqual(TEXT("Configured event id"), Debug.EventId, FName(TEXT("Event.DebugFlagReward")));
+	TestEqual(TEXT("Configured start node"), Debug.StartNodeId, FName(TEXT("Start")));
+	TestEqual(TEXT("Configured current node falls back to start"),
+		Debug.CurrentNodeId,
+		FName(TEXT("Start")));
+	TestEqual(TEXT("Configured result"), Debug.LastDebugResult, FName(TEXT("Ok")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventTriggerDebugActiveNodeSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerDebug.RunEventTriggerDebugReportsActiveCurrentNode",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventTriggerDebugActiveNodeSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	InjectRunSession(PC.Get(), Run.Get());
+	Trigger->ConfigureDebugFlagRewardSample();
+
+	TestTrue(TEXT("Begin FlagReward event"),
+		Run->BeginRunEvent(Trigger->PersistentId, Trigger->EventDefinition));
+	TestTrue(TEXT("InspectMark succeeds"),
+		Run->ChooseRunEventOptionWithResult(TEXT("InspectMark")).bSucceeded);
+
+	const FWacomRunEventTriggerDebugView Debug = Trigger->GetRunEventTriggerDebugView(PC.Get());
+	TestTrue(TEXT("Debug reports active event"), Debug.bIsActiveEvent);
+	TestFalse(TEXT("Debug reports not completed"), Debug.bIsCompleted);
+	TestEqual(TEXT("Debug reports current start node"),
+		Debug.CurrentNodeId,
+		FName(TEXT("Start")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventTriggerDebugCompletedSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerDebug.RunEventTriggerDebugReportsCompletedState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventTriggerDebugCompletedSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Trigger.Get()));
+	InjectRunSession(PC.Get(), Run.Get());
+	Trigger->PersistentId = TEXT("Event.UI.DebugCompleted");
+	Trigger->EventDefinition = Event.Get();
+
+	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(Trigger->PersistentId, Event.Get()));
+	TestTrue(TEXT("Complete event succeeds"), Run->ChooseRunEventOption(TEXT("Close")));
+
+	const FWacomRunEventTriggerDebugView Debug = Trigger->GetRunEventTriggerDebugView(PC.Get());
+	TestFalse(TEXT("Completed event is not active"), Debug.bIsActiveEvent);
+	TestTrue(TEXT("Completed event reports completed"), Debug.bIsCompleted);
+	TestEqual(TEXT("Completed event current node"),
+		Debug.CurrentNodeId,
+		FName(TEXT("Start")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventTriggerDebugSummaryStableSpec,
+	"Wacom.UI.WorldInteraction.RunEventTriggerDebug.RunEventTriggerDebugSummaryIsStableForPieLogs",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventTriggerDebugSummaryStableSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	InjectRunSession(PC.Get(), Run.Get());
+	Trigger->ConfigureDebugFlagRewardSample();
+
+	const FString Summary = Trigger->GetRunEventTriggerDebugSummary(PC.Get());
+	TestTrue(TEXT("Summary reports id"),
+		Summary.Contains(TEXT("PersistentId=Event.DebugFlagReward.Actor")));
+	TestTrue(TEXT("Summary reports event id"),
+		Summary.Contains(TEXT("EventId=Event.DebugFlagReward")));
+	TestTrue(TEXT("Summary reports start node"),
+		Summary.Contains(TEXT("StartNode=Start")));
+	TestTrue(TEXT("Summary reports run session"),
+		Summary.Contains(TEXT("HasRun=true")));
+	TestTrue(TEXT("Summary reports interactable"),
+		Summary.Contains(TEXT("CanInteract=true")));
+	TestTrue(TEXT("Summary reports result"),
+		Summary.Contains(TEXT("Last=Ok")));
 
 	return true;
 }
@@ -1770,6 +2050,51 @@ bool FWacomUIRunEventScreenBlockedChoiceToastSpec::RunTest(const FString& /*Para
 	{
 		TestEqual(TEXT("Blocked toast text"), Toasts[0].MessageText.ToString(), FString(TEXT("金币不足")));
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventScreenFlagRewardPreviewSpec,
+	"Wacom.UI.Event.DebugFlagRewardPreviewSummary",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventScreenFlagRewardPreviewSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Reward = Fx.MakeNoopCard(0);
+	Reward->DisplayName = FText::FromString(TEXT("毒牙"));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(
+		MakeUiRunEventFlagRewardPreviewEvent(Run.Get(), Reward));
+	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
+
+	TestTrue(TEXT("Begin flag reward UI event"),
+		Run->BeginRunEvent(TEXT("Event.UI.FlagReward.Actor"), Event.Get()));
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->ActivateWidget();
+	Screen->RefreshEvent();
+
+	TestEqual(TEXT("One flag reward choice"), Screen->ReadChoiceCount(), 1);
+	const FRunEventChoiceSnapshot Choice = Screen->ReadChoiceSnapshot(0);
+	TestEqual(TEXT("Choice id"), Choice.ChoiceId, FName(TEXT("ClaimGoldReward")));
+	TestFalse(TEXT("Choice initially blocked"), Choice.bAvailable);
+	TestEqual(TEXT("First blocked reason is missing flag"),
+		Choice.DisabledReason,
+		FName(TEXT("RequiredRunFlagMissing")));
+	TestEqual(TEXT("Three requirements"), Choice.Requirements.Num(), 3);
+	TestEqual(TEXT("Four consequences including node transition"), Choice.Consequences.Num(), 4);
+
+	const FWacomRunEventScreenDebugView Debug = Screen->ReadRunEventScreenDebugView();
+	TestTrue(TEXT("Requirement summary reports three unsatisfied requirements"),
+		Debug.ChoiceRequirementSummary.Contains(TEXT("ClaimGoldReward:3/2")));
+	TestTrue(TEXT("Consequence summary reports four consequence facts"),
+		Debug.ChoiceConsequenceSummary.Contains(TEXT("ClaimGoldReward:4")));
+	TestTrue(TEXT("Preview summary reports flag/gold reward counts and transition"),
+		Debug.ChoicePreviewSummary.Contains(TEXT("ClaimGoldReward:Available=false:First=RequiredRunFlagMissing:Req=3/2:Pay=0:Consequences=4:Outcome=NodeTransition:Rewarded")));
+	TestTrue(TEXT("Debug summary includes flag reward preview"),
+		Screen->ReadRunEventScreenDebugSummary().Contains(TEXT("Preview=[ClaimGoldReward:Available=false:First=RequiredRunFlagMissing:Req=3/2:Pay=0:Consequences=4:Outcome=NodeTransition:Rewarded]")));
 
 	return true;
 }

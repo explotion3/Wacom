@@ -11,7 +11,7 @@ namespace Wacom::ContentBuilder
 	/**
 	 * 生成第一版调试探索事件。
 	 *
-	 * 在 /Game/Wacom/Data/Events/ 下生成 DA_Event_DebugSnakeGift。
+	 * 在 /Game/Wacom/Data/Events/ 下生成 DA_Event_DebugSnakeGift 与 DA_Event_DebugFlagReward。
 	 */
 	UWacomRunEventDefinition* BuildRunEventContent();
 }

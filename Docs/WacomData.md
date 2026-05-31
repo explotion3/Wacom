@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-05-23
+updated: 2026-05-31
 tags:
   - wacom/data
   - wacom/dataasset
@@ -49,7 +49,7 @@ Content/Wacom/
     ├── Cards/Rewards/DA_Card_PoisonFang.uasset
     ├── Characters/DA_Character_BugGirl.uasset
     ├── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
-    ├── Events/DA_Event_DebugSnakeGift.uasset
+    ├── Events/{DA_Event_DebugSnakeGift, DA_Event_DebugFlagReward}.uasset
     └── Shops/DA_Shop_DebugSnake.uasset
 ```
 
@@ -366,8 +366,11 @@ RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻�
 调试资产：
 - `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、通过 `CardPayment` 拖入已有 `毒牙`、消耗节点、调整金币/劣迹压力。
 - `HandOverFang` 是标准单卡支付样例：`AllowedCardDefinitions=DA_Card_PoisonFang`、`PaymentZoneId=RunEvent.Pay.Fang`、`NextNodeId=End`，不配置 `RemoveCard` effect。
+- `DA_Event_DebugFlagReward`：标记奖励样例，专门演示 RunFlag 与 `MinGold + AddGold(-N)` 金币门槛奖励组合。`InspectMark` 设置 `DebugFlagReward.Inspected`，`DebugGrantGold` 用于 PIE 自助获得 3 金币并设置 `DebugFlagReward.GoldGranted`，`ClaimGoldReward` 要求已调查、未领取且金币不少于 3，提交后扣 3 金币、获得 `毒牙` 并设置 `DebugFlagReward.RewardClaimed`，`ResetFlags` 清除三个 Debug flag 并回到 `Start`。
+- V0-BC 后，关卡中放置 `AWacomRunEventTriggerActor` 后可在 Details 点击 `ConfigureDebugSnakeGiftSample` 或 `ConfigureDebugFlagRewardSample` 自动绑定上述两个样例；不需要手动复制资产路径。
 - 金币、压力和节点数值均为原型调试值，不代表正式平衡。
 - 自动化测试 `Wacom.Data.RunEvent.DebugSnakeGiftAsset` 会验证该资产的节点、选项、条件、效果和 `毒牙` 引用，避免内容生成漂移。
+- 自动化测试 `Wacom.Data.RunEvent.DebugFlagRewardAsset` 会验证 FlagReward 样例的节点、选项、FlagId、`MinGold(3)`、`AddGold(-3)`、`GainCard(PoisonFang)`、重复领取阻止和 reset flags 配置。
 
 ---
 
@@ -383,7 +386,7 @@ RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻�
 | `BuildSnakeContent()` | 蛇敌人、三部位、奖励卡 `DA_Card_PoisonFang` |
 | `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、卡对卡测试卡 |
 | `BuildShopContent()` | `DA_Shop_DebugSnake` |
-| `BuildRunEventContent()` | `DA_Event_DebugSnakeGift` |
+| `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
 
 命令：
 
@@ -420,6 +423,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙 |
 | `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋 |
 | `/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、通过卡牌支付交出毒牙、金币/压力/节点效果 |
+| `/Game/Wacom/Data/Events/DA_Event_DebugFlagReward` | 标记奖励调试事件，包含 RunFlag 解锁、PIE 自助给金币、`MinGold(3) + AddGold(-3)` 领取毒牙和 reset flags |
 
 ### Data Validation
 

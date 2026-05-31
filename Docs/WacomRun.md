@@ -304,6 +304,8 @@ V0-AZ 后，编辑器校验会把会导致规则或预览失真的配置作为 e
 
 V0-AT 后编辑器 RunEvent Data Validation 会在支付相关错误中明确指出 `NodeId / ChoiceId / PaymentZoneId / NextNodeId`，便于定位资产配置问题。V0-AZ 后条件 / 效果错误也会带 `ConditionIndex / EffectIndex`，并通过 validation report 分离 `Errors / Warnings`；旧 `Validate(Event, OutErrors)` 兼容入口仍只返回阻断错误。`DA_Event_DebugSnakeGift` 是当前标准单卡支付样例：`HandOverFang` 使用 `CardPayment + AllowedCardDefinitions=PoisonFang + NextNodeId=End`，效果只保留 `ConsumeNode`，不配置 `RemoveCard`。
 
+V0-BB 后，`DA_Event_DebugFlagReward` 是标准 RunFlag + 金币门槛奖励样例，和蛇巢卡牌支付样例分开维护。该事件使用 `DebugFlagReward.Inspected / GoldGranted / RewardClaimed` 三个 RunFlag：`InspectMark` 设置调查标记，`DebugGrantGold` 用于 PIE 自助获得 3 金币，`ClaimGoldReward` 用 `RunFlagSet(Inspected) + RunFlagNotSet(RewardClaimed) + MinGold(3)` 解锁 `AddGold(-3) + GainCard(PoisonFang) + SetRunFlag(RewardClaimed)` 并跳转到 `Rewarded`，`ResetFlags` 会清掉三个 Debug flag 并回到 `Start`。它用于制作和验证 `MinGold + AddGold(-N) + 奖励 + RunFlag` 的组合，不新增 `PayGold` 规则，也不改变关闭 / 跳转流程。
+
 `FRunEventChoiceResult` 只表达本次选项直接效果和展示诊断字段，供 UI 和日志展示。V0-AR 后成功的卡牌支付结果会记录 `PaidCardDefinition`，仅用于 UI / 日志显示“交出了哪张卡”；它必须在移除 paid instance 前从当前持有卡读取，且不是后续规则输入。V0-AS 后成功结果还会记录 `PreviousNodeId / ResolvedNodeId / ResolvedNodeTitleText / bNodeChanged / bEventClosedAfterResolve / bEventCompletedAfterResolve`，用于 Toast 显示“进入某节点”或“事件已结束”。这些 outcome 字段只在事务成功提交后写入；失败或回滚结果不写入 paid card definition，也不写入成功 outcome。后续规则不能依赖这个结果包反向修改 RunState。
 
 当前 `RunEventStates` 和 `RunFlags` 只保存在 Run 内存态，不写入 SaveGame。
