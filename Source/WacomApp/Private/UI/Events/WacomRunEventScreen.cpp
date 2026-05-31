@@ -118,6 +118,17 @@ namespace
 			Result.bSubmitted ? TEXT("true") : TEXT("false"),
 			*Result.LeaseId.ToString());
 	}
+
+	template <typename WidgetType>
+	TSubclassOf<WidgetType> ResolveRunEventWidgetClass(
+		TSubclassOf<WidgetType> ConfiguredClass)
+	{
+		if (ConfiguredClass)
+		{
+			return ConfiguredClass;
+		}
+		return TSubclassOf<WidgetType>(WidgetType::StaticClass());
+	}
 }
 
 TSharedRef<SWidget> UWacomRunEventScreen::RebuildWidget()
@@ -434,6 +445,26 @@ FText UWacomRunEventScreen::GetDisplayedBodyText() const
 {
 	return BodyText ? BodyText->GetText() : FText::GetEmpty();
 }
+
+TSubclassOf<UWacomRunEventChoiceButton> UWacomRunEventScreen::GetChoiceButtonWidgetClassForTest() const
+{
+	return ResolveChoiceButtonWidgetClass();
+}
+
+UWacomRunEventChoiceButton* UWacomRunEventScreen::GetChoiceButtonWidgetForTest(int32 Index) const
+{
+	return ChoiceButtonWidgets.IsValidIndex(Index) ? ChoiceButtonWidgets[Index] : nullptr;
+}
+
+TSubclassOf<UWacomRunMenuDropTargetWidget> UWacomRunEventScreen::GetPaymentDropTargetWidgetClassForTest() const
+{
+	return ResolvePaymentDropTargetWidgetClass();
+}
+
+UWacomRunMenuDropTargetWidget* UWacomRunEventScreen::GetPaymentDropTargetForTest(int32 Index) const
+{
+	return PaymentDropTargets.IsValidIndex(Index) ? PaymentDropTargets[Index] : nullptr;
+}
 #endif
 
 URunSession* UWacomRunEventScreen::ResolveRunSession() const
@@ -451,6 +482,7 @@ UWacomAppToastSubsystem* UWacomRunEventScreen::ResolveToastSubsystem() const
 void UWacomRunEventScreen::RebuildChoices()
 {
 	CachedChoices.Reset();
+	ChoiceButtonWidgets.Reset();
 	PaymentZoneToChoiceId.Reset();
 	PaymentDropTargets.Reset();
 	if (ChoiceList)
@@ -488,26 +520,30 @@ void UWacomRunEventScreen::AddChoiceButton(const FRunEventChoiceSnapshot& Choice
 	}
 
 	UWacomRunEventChoiceButton* ChoiceButtonWidget = WidgetTree->ConstructWidget<UWacomRunEventChoiceButton>(
-		UWacomRunEventChoiceButton::StaticClass());
+		ResolveChoiceButtonWidgetClass());
+	if (!ChoiceButtonWidget)
+	{
+		return;
+	}
 	ChoiceButtonWidget->SetChoiceSnapshot(Choice);
 	ChoiceButtonWidget->OnChoiceClickedNative.AddUObject(this, &UWacomRunEventScreen::HandleChoiceClicked);
+	ChoiceButtonWidgets.Add(ChoiceButtonWidget);
 	UWidget* ChoiceWidget = ChoiceButtonWidget;
 	if (Choice.bRequiresOwnedCardPayment && !Choice.PaymentZoneId.IsNone())
 	{
 		UWacomRunMenuDropTargetWidget* DropTarget =
 			WidgetTree->ConstructWidget<UWacomRunMenuDropTargetWidget>(
-				UWacomRunMenuDropTargetWidget::StaticClass(),
+				ResolvePaymentDropTargetWidgetClass(),
 				FName(*FString::Printf(TEXT("RunEventChoiceDrop_%s"), *Choice.ChoiceId.ToString())));
 		if (DropTarget)
 		{
 			DropTarget->ZoneId = Choice.PaymentZoneId;
 			DropTarget->StableTargetId = Choice.PaymentZoneId;
-			DropTarget->ProbePreviewScale = 1.025f;
 
 			USizeBox* ChoiceSize = WidgetTree->ConstructWidget<USizeBox>(
 				USizeBox::StaticClass(),
 				FName(*FString::Printf(TEXT("RunEventChoiceDropSize_%s"), *Choice.ChoiceId.ToString())));
-			ChoiceSize->SetMinDesiredWidth(420.0f);
+			ChoiceSize->SetMinDesiredWidth(PaymentChoiceMinDesiredWidth);
 			ChoiceSize->SetContent(ChoiceButtonWidget);
 			DropTarget->SetDropContent(ChoiceSize);
 			ChoiceWidget = DropTarget;
@@ -520,6 +556,16 @@ void UWacomRunEventScreen::AddChoiceButton(const FRunEventChoiceSnapshot& Choice
 	{
 		ChoiceSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
 	}
+}
+
+TSubclassOf<UWacomRunEventChoiceButton> UWacomRunEventScreen::ResolveChoiceButtonWidgetClass() const
+{
+	return ResolveRunEventWidgetClass<UWacomRunEventChoiceButton>(ChoiceButtonWidgetClass);
+}
+
+TSubclassOf<UWacomRunMenuDropTargetWidget> UWacomRunEventScreen::ResolvePaymentDropTargetWidgetClass() const
+{
+	return ResolveRunEventWidgetClass<UWacomRunMenuDropTargetWidget>(PaymentDropTargetWidgetClass);
 }
 
 void UWacomRunEventScreen::HandleChoiceClicked(FName ChoiceId)

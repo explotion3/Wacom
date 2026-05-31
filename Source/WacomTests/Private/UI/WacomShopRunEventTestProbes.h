@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Types/WacomInteractionTargetTypes.h"
+#include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomMenuWidgetBase.h"
 #include "UI/Run/WacomRunMenuCardLeaseTestMenu.h"
@@ -35,6 +36,37 @@ public:
 
 private:
 	mutable FVector2D LastWidgetPositionForTest = FVector2D::ZeroVector;
+};
+
+UCLASS()
+class UWacomRunEventPaymentDropTargetWidgetClassProbe : public UWacomRunMenuDropTargetWidget
+{
+	GENERATED_BODY()
+
+public:
+	UWacomRunEventPaymentDropTargetWidgetClassProbe(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get())
+		: Super(ObjectInitializer)
+	{
+		ProbePreviewScale = 1.111f;
+	}
+};
+
+UCLASS()
+class UWacomRunEventChoiceButtonClassProbe : public UWacomRunEventChoiceButton
+{
+	GENERATED_BODY()
+
+public:
+	int32 SnapshotAppliedCountForTest = 0;
+	FName LastAppliedChoiceIdForTest = NAME_None;
+
+protected:
+	virtual void BP_OnRunEventChoiceSnapshotApplied_Implementation(
+		const FRunEventChoiceSnapshot& AppliedChoiceSnapshot) override
+	{
+		++SnapshotAppliedCountForTest;
+		LastAppliedChoiceIdForTest = AppliedChoiceSnapshot.ChoiceId;
+	}
 };
 
 UCLASS()
@@ -367,6 +399,21 @@ public:
 		ToastSubsystem = InToastSubsystem;
 	}
 
+	void SetChoiceButtonClassForTest(TSubclassOf<UWacomRunEventChoiceButton> InClass)
+	{
+		ChoiceButtonWidgetClass = InClass;
+	}
+
+	void SetPaymentDropTargetClassForTest(TSubclassOf<UWacomRunMenuDropTargetWidget> InClass)
+	{
+		PaymentDropTargetWidgetClass = InClass;
+	}
+
+	void SetPaymentChoiceMinDesiredWidthForTest(float InMinDesiredWidth)
+	{
+		PaymentChoiceMinDesiredWidth = InMinDesiredWidth;
+	}
+
 	int32 ReadChoiceCount() const
 	{
 		return GetChoiceCount();
@@ -375,6 +422,31 @@ public:
 	FRunEventChoiceSnapshot ReadChoiceSnapshot(int32 Index) const
 	{
 		return GetCachedChoiceSnapshot(Index);
+	}
+
+	UWacomRunEventChoiceButton* ReadChoiceButtonWidget(int32 Index) const
+	{
+		return GetChoiceButtonWidgetForTest(Index);
+	}
+
+	TSubclassOf<UWacomRunEventChoiceButton> ReadChoiceButtonWidgetClass() const
+	{
+		return GetChoiceButtonWidgetClassForTest();
+	}
+
+	TSubclassOf<UWacomRunMenuDropTargetWidget> ReadPaymentDropTargetWidgetClass() const
+	{
+		return GetPaymentDropTargetWidgetClassForTest();
+	}
+
+	UWacomRunMenuDropTargetWidget* ReadPaymentDropTarget(int32 Index) const
+	{
+		return GetPaymentDropTargetForTest(Index);
+	}
+
+	float ReadPaymentChoiceMinDesiredWidth() const
+	{
+		return GetPaymentChoiceMinDesiredWidthForTest();
 	}
 
 	FWacomRunMenuCardDropResolveResult ResolveDropForTest(

@@ -186,6 +186,7 @@ WBP 制作合约见：
 
 - `UI_Backpack_WBP_Binding.md`
 - `UI_Battle_WBP_Binding.md`
+- `UI_RunEvent_WBP_Binding.md`
 
 ---
 

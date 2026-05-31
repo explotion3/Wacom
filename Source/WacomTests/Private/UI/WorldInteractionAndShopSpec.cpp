@@ -997,6 +997,43 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventChoiceButtonSnapshotAppliedEventSpec,
+	"Wacom.UI.Event.ChoiceSnapshotAppliedBlueprintNativeEventFires",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventChoiceButtonSnapshotAppliedEventSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunEventChoiceButtonClassProbe> Button(
+		NewObject<UWacomRunEventChoiceButtonClassProbe>());
+
+	FRunEventChoiceSnapshot Choice;
+	Choice.ChoiceId = TEXT("PayBeforeConstruct");
+	Button->SetChoiceSnapshot(Choice);
+	TestEqual(TEXT("Event waits until widget is constructed"),
+		Button->SnapshotAppliedCountForTest,
+		0);
+
+	Button->TakeWidget();
+	TestEqual(TEXT("Event fires after construct for pending snapshot"),
+		Button->SnapshotAppliedCountForTest,
+		1);
+	TestEqual(TEXT("Pending snapshot choice id forwarded"),
+		Button->LastAppliedChoiceIdForTest,
+		FName(TEXT("PayBeforeConstruct")));
+
+	Choice.ChoiceId = TEXT("PayAfterConstruct");
+	Button->SetChoiceSnapshot(Choice);
+	TestEqual(TEXT("Event fires immediately after construct"),
+		Button->SnapshotAppliedCountForTest,
+		2);
+	TestEqual(TEXT("Updated snapshot choice id forwarded"),
+		Button->LastAppliedChoiceIdForTest,
+		FName(TEXT("PayAfterConstruct")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunEventScreenSnapshotAndChoiceSpec,
 	"Wacom.UI.Event.ScreenSnapshotAndChoice",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1040,6 +1077,111 @@ bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Param
 				FString(TEXT("事件已结束")));
 		}
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventScreenWbpBindingAuthoringSpec,
+	"Wacom.UI.Event.WbpBindingAuthoringSurface",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventScreenWbpBindingAuthoringSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = Fx.MakeNoopCard(0);
+	Fang->CardId = TEXT("PoisonFang");
+	UCardDefinition* Bag = Fx.MakeNoopCard(0);
+	Bag->Physique.Capacity = 8;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1),
+		Fx.MakeNoopCard(1),
+		{ Bag, Fang });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(
+		MakeUiRunEventCardPaymentEvent(Run.Get(), Fang));
+	TestTrue(TEXT("Begin payment UI event"),
+		Run->BeginRunEvent(TEXT("Event.UI.Payment.Authoring"), Event.Get()));
+
+	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->SetChoiceButtonClassForTest(UWacomRunEventChoiceButtonClassProbe::StaticClass());
+	Screen->SetPaymentDropTargetClassForTest(UWacomRunEventPaymentDropTargetWidgetClassProbe::StaticClass());
+	Screen->SetPaymentChoiceMinDesiredWidthForTest(512.0f);
+	Screen->TakeWidget();
+	Screen->ActivateWidget();
+	Screen->RefreshEvent();
+
+	TestEqual(TEXT("Configured choice class resolves"),
+		Screen->ReadChoiceButtonWidgetClass().Get(),
+		UWacomRunEventChoiceButtonClassProbe::StaticClass());
+	TestEqual(TEXT("Configured drop target class resolves"),
+		Screen->ReadPaymentDropTargetWidgetClass().Get(),
+		UWacomRunEventPaymentDropTargetWidgetClassProbe::StaticClass());
+	TestEqual(TEXT("Configured payment min width stored"),
+		Screen->ReadPaymentChoiceMinDesiredWidth(),
+		512.0f);
+
+	UWacomRunEventChoiceButton* ChoiceButton = Screen->ReadChoiceButtonWidget(0);
+	if (ChoiceButton)
+	{
+		ChoiceButton->TakeWidget();
+	}
+	TestTrue(TEXT("Dynamic choice row uses configured class"),
+		ChoiceButton && ChoiceButton->IsA(UWacomRunEventChoiceButtonClassProbe::StaticClass()));
+	const UWacomRunEventChoiceButtonClassProbe* ChoiceProbe =
+		Cast<UWacomRunEventChoiceButtonClassProbe>(ChoiceButton);
+	TestTrue(TEXT("Choice snapshot applied event fired on dynamic row"),
+		ChoiceProbe && ChoiceProbe->SnapshotAppliedCountForTest > 0);
+	if (ChoiceProbe)
+	{
+		TestEqual(TEXT("Choice snapshot apply forwards choice id"),
+			ChoiceProbe->LastAppliedChoiceIdForTest,
+			FName(TEXT("PayFang")));
+	}
+
+	const UWacomRunMenuDropTargetWidget* DropTarget = Screen->ReadPaymentDropTarget(0);
+	TestTrue(TEXT("Payment choice uses configured drop target class"),
+		DropTarget && DropTarget->IsA(UWacomRunEventPaymentDropTargetWidgetClassProbe::StaticClass()));
+	if (DropTarget)
+	{
+		TestEqual(TEXT("Payment zone id assigned by screen"),
+			DropTarget->ZoneId,
+			FName(TEXT("RunEvent.Pay.Fang")));
+		TestEqual(TEXT("Stable target id mirrors zone id"),
+			DropTarget->StableTargetId,
+			FName(TEXT("RunEvent.Pay.Fang")));
+		TestEqual(TEXT("Screen does not override drop target default preview scale"),
+			DropTarget->ProbePreviewScale,
+			1.111f);
+	}
+
+	const FWacomRunEventScreenDebugView Debug = Screen->ReadRunEventScreenDebugView();
+	TestEqual(TEXT("Custom drop target still registers one zone mapping"),
+		Debug.PaymentZoneMappingCount,
+		1);
+	TestTrue(TEXT("Custom drop target keeps zone mapping summary"),
+		Debug.PaymentZoneMappingSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventScreenWbpBindingFallbackSpec,
+	"Wacom.UI.Event.MissingConfiguredChildClassesFallbackToNative",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventScreenWbpBindingFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
+
+	TestEqual(TEXT("Missing choice class falls back to native"),
+		Screen->ReadChoiceButtonWidgetClass().Get(),
+		UWacomRunEventChoiceButton::StaticClass());
+	TestEqual(TEXT("Missing drop target class falls back to native"),
+		Screen->ReadPaymentDropTargetWidgetClass().Get(),
+		UWacomRunMenuDropTargetWidget::StaticClass());
 
 	return true;
 }

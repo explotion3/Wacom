@@ -56,17 +56,24 @@ TSharedRef<SWidget> UWacomRunEventChoiceButton::RebuildWidget()
 void UWacomRunEventChoiceButton::NativeConstruct()
 {
 	Super::NativeConstruct();
+	bHasConstructed = true;
 	if (ChoiceButton)
 	{
 		ChoiceButton->OnClicked.AddUniqueDynamic(this, &UWacomRunEventChoiceButton::HandleClicked);
 	}
 	RefreshVisuals();
+	if (bNeedsSnapshotAppliedNotifyAfterConstruct)
+	{
+		NotifyChoiceSnapshotApplied();
+	}
 }
 
 void UWacomRunEventChoiceButton::SetChoiceSnapshot(const FRunEventChoiceSnapshot& InChoice)
 {
 	ChoiceSnapshot = InChoice;
+	bHasAppliedChoiceSnapshot = true;
 	RefreshVisuals();
+	NotifyChoiceSnapshotApplied();
 }
 
 #if WITH_AUTOMATION_TESTS
@@ -84,6 +91,27 @@ ESlateVisibility UWacomRunEventChoiceButton::GetPaymentStatusVisibilityForTest()
 void UWacomRunEventChoiceButton::HandleClicked()
 {
 	OnChoiceClickedNative.Broadcast(ChoiceSnapshot.ChoiceId);
+}
+
+void UWacomRunEventChoiceButton::BP_OnRunEventChoiceSnapshotApplied_Implementation(
+	const FRunEventChoiceSnapshot& AppliedChoiceSnapshot)
+{
+}
+
+void UWacomRunEventChoiceButton::NotifyChoiceSnapshotApplied()
+{
+	if (!bHasAppliedChoiceSnapshot)
+	{
+		return;
+	}
+	if (!bHasConstructed)
+	{
+		bNeedsSnapshotAppliedNotifyAfterConstruct = true;
+		return;
+	}
+
+	bNeedsSnapshotAppliedNotifyAfterConstruct = false;
+	BP_OnRunEventChoiceSnapshotApplied(ChoiceSnapshot);
 }
 
 FText UWacomRunEventChoiceButton::BuildPaymentStatusText() const

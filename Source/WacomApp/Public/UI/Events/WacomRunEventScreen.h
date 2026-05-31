@@ -10,6 +10,7 @@
 class UButton;
 class UTextBlock;
 class UVerticalBox;
+class UWacomRunEventChoiceButton;
 class UWacomAppToastSubsystem;
 class UWacomRunMenuDropTargetWidget;
 class URunSession;
@@ -102,6 +103,18 @@ public:
 	void SuppressEndRunEventOnNextDeactivate();
 
 protected:
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Authoring",
+		meta = (AllowAbstract = "false", ToolTip = "运行时动态创建的事件选项行 Widget 类。为空或类型无效时回退到 C++ 默认 UWacomRunEventChoiceButton。"))
+	TSubclassOf<UWacomRunEventChoiceButton> ChoiceButtonWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Authoring",
+		meta = (AllowAbstract = "false", ToolTip = "需要卡牌支付的事件选项外层菜单 Zone DropTarget Widget 类。为空或类型无效时回退到 C++ 默认 UWacomRunMenuDropTargetWidget。"))
+	TSubclassOf<UWacomRunMenuDropTargetWidget> PaymentDropTargetWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Authoring",
+		meta = (ClampMin = "0.0", UIMin = "240.0", UIMax = "900.0", ToolTip = "支付选项行的最小期望宽度，单位为 Slate Unit。只影响 C++ 动态包装层，不改变支付规则。"))
+	float PaymentChoiceMinDesiredWidth = 420.0f;
+
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeOnActivated() override;
@@ -139,6 +152,11 @@ private:
 
 	int32 GetChoiceCount() const { return CachedChoices.Num(); }
 	FRunEventChoiceSnapshot GetCachedChoiceSnapshot(int32 Index) const;
+	TSubclassOf<UWacomRunEventChoiceButton> GetChoiceButtonWidgetClassForTest() const;
+	UWacomRunEventChoiceButton* GetChoiceButtonWidgetForTest(int32 Index) const;
+	TSubclassOf<UWacomRunMenuDropTargetWidget> GetPaymentDropTargetWidgetClassForTest() const;
+	UWacomRunMenuDropTargetWidget* GetPaymentDropTargetForTest(int32 Index) const;
+	float GetPaymentChoiceMinDesiredWidthForTest() const { return PaymentChoiceMinDesiredWidth; }
 	bool ChooseChoiceByIndex(int32 Index);
 	FText GetDisplayedTitleText() const;
 	FText GetDisplayedBodyText() const;
@@ -146,11 +164,16 @@ private:
 
 	void RebuildChoices();
 	void AddChoiceButton(const FRunEventChoiceSnapshot& Choice);
+	TSubclassOf<UWacomRunEventChoiceButton> ResolveChoiceButtonWidgetClass() const;
+	TSubclassOf<UWacomRunMenuDropTargetWidget> ResolvePaymentDropTargetWidgetClass() const;
 	void HandleChoiceClicked(FName ChoiceId);
 	bool ChooseChoice(FName ChoiceId);
 
 	UPROPERTY(Transient)
 	TArray<FRunEventChoiceSnapshot> CachedChoices;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UWacomRunEventChoiceButton>> ChoiceButtonWidgets;
 
 	UPROPERTY(Transient)
 	TMap<FName, FName> PaymentZoneToChoiceId;

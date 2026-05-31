@@ -39,6 +39,12 @@ protected:
 	UFUNCTION()
 	void HandleClicked();
 
+	UFUNCTION(BlueprintNativeEvent, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "当 C++ 应用新的 RunEvent 选项快照并完成默认文本刷新后触发。WBP 可在这里刷新自定义视觉，不要直接提交 Run 规则。"))
+	void BP_OnRunEventChoiceSnapshotApplied(const FRunEventChoiceSnapshot& AppliedChoiceSnapshot);
+	virtual void BP_OnRunEventChoiceSnapshotApplied_Implementation(
+		const FRunEventChoiceSnapshot& AppliedChoiceSnapshot);
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> ChoiceButton;
 
@@ -54,7 +60,12 @@ protected:
 private:
 	FText BuildPaymentStatusText() const;
 	void RefreshVisuals();
+	void NotifyChoiceSnapshotApplied();
 
 	UPROPERTY(Transient)
 	FRunEventChoiceSnapshot ChoiceSnapshot;
+
+	bool bHasAppliedChoiceSnapshot = false;
+	bool bHasConstructed = false;
+	bool bNeedsSnapshotAppliedNotifyAfterConstruct = false;
 };
