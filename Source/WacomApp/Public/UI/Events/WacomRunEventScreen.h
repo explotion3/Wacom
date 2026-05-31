@@ -14,6 +14,65 @@ class UWacomAppToastSubsystem;
 class UWacomRunMenuDropTargetWidget;
 class URunSession;
 
+/** RunEventScreen 运行时只读诊断快照。用于 PIE / 蓝图排查，不作为规则输入。 */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomRunEventScreenDebugView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前 Screen 是否能解析到 RunSession。"))
+	bool bHasRunSession = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前 RunSession 是否有激活的 RunEvent。"))
+	bool bIsEventActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前激活事件的场景 PersistentId。"))
+	FName PersistentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前激活事件的数据 EventId。"))
+	FName EventId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前事件节点 ID。"))
+	FName CurrentNodeId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前事件节点标题。"))
+	FText CurrentNodeTitleText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前 Screen 缓存的选项数量。"))
+	int32 CachedChoiceCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前 Screen 缓存的卡牌支付选项数量。"))
+	int32 PaymentChoiceCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前节点所有卡牌支付选项聚合后的候选实例数量。"))
+	int32 PaymentCandidateInstanceCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前 Screen 注册的支付 Zone 到 Choice 的映射数量。"))
+	int32 PaymentZoneMappingCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前支付 Zone 到 Choice 的映射摘要，格式为 ZoneId->ChoiceId。"))
+	FString PaymentZoneMappingSummary;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "最近一次 RunEventScreen 解析菜单卡牌 Drop Intent 的摘要。"))
+	FString LastPaymentResolveSummary;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "最近一次 RunEventScreen 提交菜单卡牌 Drop Intent 的摘要。"))
+	FString LastPaymentSubmitSummary;
+};
+
 /** 最小可用探索事件界面。 */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomRunEventScreen : public UWacomMenuWidgetBase
@@ -24,6 +83,21 @@ public:
 	/** 从当前 RunSession 拉取事件快照并重建选项。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|RunEvent")
 	void RefreshEvent();
+
+	/** 获取当前 RunEventScreen 的只读调试快照。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "获取当前 RunEventScreen 的只读调试快照，用于排查支付候选卡、Zone 映射和最近 Drop 结果。"))
+	FWacomRunEventScreenDebugView GetRunEventScreenDebugView() const;
+
+	/** 获取当前 RunEventScreen 的单行调试摘要。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "获取当前 RunEventScreen 的单行调试摘要，可直接复制到日志或自动化断言。"))
+	FString GetRunEventScreenDebugSummary() const;
+
+	/** 将当前 RunEventScreen 的单行调试摘要写入日志。 */
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "将当前 RunEventScreen 的单行调试摘要写入日志，用于 PIE 排查。"))
+	void LogRunEventScreenDebugSummary() const;
 
 	void SuppressEndRunEventOnNextDeactivate();
 
@@ -88,4 +162,10 @@ private:
 
 	void RefreshPaymentLeaseFromCachedChoices();
 	bool FindPaymentChoiceForZone(FName ZoneId, FRunEventChoiceSnapshot& OutChoice) const;
+	FString BuildPaymentZoneMappingDebugSummary() const;
+	void RecordPaymentDropResolveDebug(const FWacomRunMenuCardDropResolveResult& Result) const;
+	void RecordPaymentDropSubmitDebug(const FWacomRunMenuCardDropResolveResult& Result) const;
+
+	mutable FString LastPaymentDropResolveDebugSummary;
+	mutable FString LastPaymentDropSubmitDebugSummary;
 };

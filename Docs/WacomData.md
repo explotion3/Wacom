@@ -335,6 +335,14 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 
 `AllowedCardDefinitions` 与 `AllowedCardIds` 是 OR 关系；显式 instance 候选由运行时 snapshot / menu lease provider 生成，不写在 DataAsset 中。空筛选非法，本轮不支持“交任意卡”。支付选项不能同时配置 `RemoveCard` effect，避免拖入精确 instance 后又按 Definition 再移除一张卡。
 
+支付选项制作 checklist：
+
+- `ChoiceId` 必填；`PaymentZoneId` 为空时会解析为 `RunEvent.Pay.{ChoiceId}`，缺少 `ChoiceId` 就无法生成默认 Zone。
+- 至少配置一种筛选：`AllowedCardDefinitions`、`AllowedCardIds`、`RequiredKeywords` 或 `BlockedKeywords`。
+- 同一 Node 内解析后的 `PaymentZoneId` 必须唯一。
+- 支付选项不要配置 `RemoveCard` effect；拖卡支付已经移除玩家拖入的精确 instance。
+- 支付后剧情结果用 `NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted / Effects` 表达。
+
 事件状态条件/效果使用 `TargetPersistentId` 字段，填写场景事件 Actor 的 `PersistentId`，不是 `EventDefinition.EventId`。`EventCompleted / EventNotCompleted` 读取对应状态；`MarkEventCompleted` 标记指定 `PersistentId` 完成。当前选项自身仍可继续使用 `bMarkEventCompleted` 标记当前事件完成。
 
 编辑器侧已接入 `UWacomRunEventDefinitionValidator` 内容防呆。校验重点：
@@ -342,11 +350,13 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 - `NodeId` 在事件内唯一，`ChoiceId` 在同一节点内唯一，`NextNodeId` 必须能找到目标节点。
 - `HasCard / MissingCard / GainCard / RemoveCard` 必须配置 `CardDefinition`。
 - 卡牌支付选项必须有非空支付筛选，同一节点内解析后的 `PaymentZoneId` 不能重复，且不能同时配置 `RemoveCard` effect。
+- V0-AT 后支付相关错误会明确带出 `NodeId / ChoiceId / PaymentZoneId / NextNodeId`，用于 Validate Assets 时快速定位配置项。
 - `EventCompleted / EventNotCompleted / MarkEventCompleted` 必须配置 `TargetPersistentId`。
 - `MaxPressure / AddPressure` 必须配置有效压力 ID，`ConsumeNode` 不能为负数。
 
 调试资产：
 - `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、通过 `CardPayment` 拖入已有 `毒牙`、消耗节点、调整金币/劣迹压力。
+- `HandOverFang` 是标准单卡支付样例：`AllowedCardDefinitions=DA_Card_PoisonFang`、`PaymentZoneId=RunEvent.Pay.Fang`、`NextNodeId=End`，不配置 `RemoveCard` effect。
 - 金币、压力和节点数值均为原型调试值，不代表正式平衡。
 - 自动化测试 `Wacom.Data.RunEvent.DebugSnakeGiftAsset` 会验证该资产的节点、选项、条件、效果和 `毒牙` 引用，避免内容生成漂移。
 

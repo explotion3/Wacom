@@ -1096,6 +1096,26 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 		TestEqual(TEXT("Candidate is fang instance"), Choice.PaymentCandidateInstanceIds[0], FangId);
 	}
 
+	const FWacomRunEventScreenDebugView InitialDebug = Screen->ReadRunEventScreenDebugView();
+	TestTrue(TEXT("Debug reports run session"), InitialDebug.bHasRunSession);
+	TestTrue(TEXT("Debug reports active event"), InitialDebug.bIsEventActive);
+	TestEqual(TEXT("Debug reports active node"), InitialDebug.CurrentNodeId, FName(TEXT("Start")));
+	TestEqual(TEXT("Debug reports cached choice count"), InitialDebug.CachedChoiceCount, 1);
+	TestEqual(TEXT("Debug reports payment choice count"), InitialDebug.PaymentChoiceCount, 1);
+	TestEqual(TEXT("Debug reports candidate count"), InitialDebug.PaymentCandidateInstanceCount, 1);
+	TestEqual(TEXT("Debug reports zone mapping count"), InitialDebug.PaymentZoneMappingCount, 1);
+	TestTrue(TEXT("Debug reports payment zone mapping"),
+		InitialDebug.PaymentZoneMappingSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
+	const FString InitialDebugSummary = Screen->ReadRunEventScreenDebugSummary();
+	TestTrue(TEXT("Debug summary includes active node"),
+		InitialDebugSummary.Contains(TEXT("Node=Start")));
+	TestTrue(TEXT("Debug summary includes choice counts"),
+		InitialDebugSummary.Contains(TEXT("Choices=1"))
+		&& InitialDebugSummary.Contains(TEXT("PaymentChoices=1"))
+		&& InitialDebugSummary.Contains(TEXT("Candidates=1")));
+	TestTrue(TEXT("Debug summary includes zone map"),
+		InitialDebugSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
+
 	TestFalse(TEXT("Clicking payment choice without drag is blocked"),
 		Screen->ChooseChoiceAt(0));
 	TestTrue(TEXT("Event remains active after blocked payment click"), Run->IsRunEventActive());
@@ -1118,6 +1138,14 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	TestEqual(TEXT("Wrong candidate rejected by screen"),
 		WrongResult.IntentKind,
 		EWacomRunMenuCardDropIntentKind::Reject);
+	TestEqual(TEXT("Wrong candidate rejection keeps validation reason"),
+		WrongResult.RunValidationReason,
+		FName(TEXT("PaymentCardNotAllowed")));
+	const FString RejectedDebugSummary = Screen->ReadRunEventScreenDebugSummary();
+	TestTrue(TEXT("Debug records rejected payment resolve"),
+		RejectedDebugSummary.Contains(TEXT("LastResolve=Resolve"))
+		&& RejectedDebugSummary.Contains(TEXT("Intent=Reject"))
+		&& RejectedDebugSummary.Contains(TEXT("RunValidation=PaymentCardNotAllowed")));
 
 	FWacomRunMenuCardDropResolveResult ValidDrop;
 	ValidDrop.SourceCardInstanceId = FangId;
@@ -1130,11 +1158,25 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	TestEqual(TEXT("RunEventScreen handles submit"),
 		ValidResult.SubmitPolicy,
 		EWacomRunMenuCardDropSubmitPolicy::MenuHandled);
+	TestEqual(TEXT("RunEventScreen records submit reason"),
+		ValidResult.SubmitReason,
+		FName(TEXT("PayFang")));
+	const FString AcceptedDebugSummary = Screen->ReadRunEventScreenDebugSummary();
+	TestTrue(TEXT("Debug records accepted payment resolve"),
+		AcceptedDebugSummary.Contains(TEXT("Intent=SubmitZoneTarget"))
+		&& AcceptedDebugSummary.Contains(TEXT("SubmitPolicy=MenuHandled"))
+		&& AcceptedDebugSummary.Contains(TEXT("SubmitReason=PayFang"))
+		&& AcceptedDebugSummary.Contains(TEXT("CanSubmit=true")));
 
 	FWacomRunMenuCardDropResolveResult SubmittedResult;
 	TestTrue(TEXT("RunEventScreen submit succeeds"),
 		Screen->SubmitDropForTest(ValidResult, SubmittedResult));
 	TestTrue(TEXT("Submit result records success"), SubmittedResult.bSubmitted);
+	const FString SubmittedDebugSummary = Screen->ReadRunEventScreenDebugSummary();
+	TestTrue(TEXT("Debug records submit result"),
+		SubmittedDebugSummary.Contains(TEXT("LastSubmit=Submit"))
+		&& SubmittedDebugSummary.Contains(TEXT("Submitted=true"))
+		&& SubmittedDebugSummary.Contains(TEXT("SubmitPolicy=MenuHandled")));
 	TestFalse(TEXT("Paid card removed by RunEvent option"),
 		UiStorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Fang));
 	TestTrue(TEXT("Other card remains"),

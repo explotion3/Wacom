@@ -277,6 +277,16 @@ RunEvent 选项可以配置 `CardPayment` 要求玩家拖入一张真实持有�
 
 支付选项只能通过 `ChooseRunEventOptionWithPaidCardResult(ChoiceId, PaidCardInstanceId)` 提交。普通 `ChooseRunEventOptionWithResult()` 会以 `RequiresCardPayment` 拒绝，避免点击按钮时悄悄按 Definition 删除一张卡。支付提交流程会校验 active event、choice 条件、卡实例归属、筛选命中和永久移除保护；随后在 working state 中先移除该精确 instance，再执行 choice effects、节点跳转、关闭或完成标记。任一步失败都会整体回滚。支付选项禁止同时配置 `RemoveCard` effect，避免拖卡支付后又按 Definition 再删一张。
 
+卡牌支付选项制作 checklist：
+
+- 配置 `ChoiceId`；如果 `PaymentZoneId` 留空，运行时和编辑器校验都依赖它生成 `RunEvent.Pay.{ChoiceId}`。
+- 配置至少一种支付筛选：`AllowedCardDefinitions`、`AllowedCardIds`、`RequiredKeywords` 或 `BlockedKeywords`；空筛选非法。
+- 同一节点内每个支付选项的解析后 `PaymentZoneId` 必须唯一。
+- 不要在支付选项里同时配置 `RemoveCard` effect；拖卡支付已经会永久移除精确 instance。
+- 支付成功后的结果用 `NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted / Effects` 表达，不在 UI 或菜单里手动推进事件。
+
+V0-AT 后编辑器 RunEvent Data Validation 会在支付相关错误中明确指出 `NodeId / ChoiceId / PaymentZoneId / NextNodeId`，便于定位资产配置问题。`DA_Event_DebugSnakeGift` 是当前标准单卡支付样例：`HandOverFang` 使用 `CardPayment + AllowedCardDefinitions=PoisonFang + NextNodeId=End`，效果只保留 `ConsumeNode`，不配置 `RemoveCard`。
+
 `FRunEventChoiceResult` 只表达本次选项直接效果和展示诊断字段，供 UI 和日志展示。V0-AR 后成功的卡牌支付结果会记录 `PaidCardDefinition`，仅用于 UI / 日志显示“交出了哪张卡”；它必须在移除 paid instance 前从当前持有卡读取，且不是后续规则输入。V0-AS 后成功结果还会记录 `PreviousNodeId / ResolvedNodeId / ResolvedNodeTitleText / bNodeChanged / bEventClosedAfterResolve / bEventCompletedAfterResolve`，用于 Toast 显示“进入某节点”或“事件已结束”。这些 outcome 字段只在事务成功提交后写入；失败或回滚结果不写入 paid card definition，也不写入成功 outcome。后续规则不能依赖这个结果包反向修改 RunState。
 
 当前 `RunEventStates` 只保存在 Run 内存态，不写入 SaveGame。

@@ -410,6 +410,16 @@ public:
 		return GetDisplayedBodyText();
 	}
 
+	FWacomRunEventScreenDebugView ReadRunEventScreenDebugView() const
+	{
+		return GetRunEventScreenDebugView();
+	}
+
+	FString ReadRunEventScreenDebugSummary() const
+	{
+		return GetRunEventScreenDebugSummary();
+	}
+
 protected:
 	virtual URunSession* ResolveRunSession() const override
 	{

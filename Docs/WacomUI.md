@@ -164,6 +164,16 @@ Toast WBP 注册口径：
 - 背包删牌成功/失败：成功显示销毁卡牌和获得金币，失败显示固有卡、最后容量来源卡、未持有卡等原因。
 - RunEvent 选项结果/不可用原因：由 `UWacomRunEventPresentationBuilder` 转成中文 Toast；卡牌支付成功时会使用结果里的支付卡 Definition 追加 `交出卡牌：{CardName}`。V0-AS 后成功结果还会在效果 Toast 之后追加 outcome Toast：事件完成或关闭显示 `事件已结束`，节点切换且事件仍打开时显示 `进入：{节点标题}`。
 
+### RunEvent card payment debug
+
+V0-AT 后 `UWacomRunEventScreen` 提供只读 debug API：
+
+- `GetRunEventScreenDebugView()`：返回当前 active event/node、cached choice 数量、payment choice 数量、候选实例总数、ZoneId 到 ChoiceId 的映射摘要，以及最近一次 resolve / submit 结果摘要。
+- `GetRunEventScreenDebugSummary()`：返回同样信息的一行字符串，适合自动化断言、PIE 蓝图按钮或日志复制。
+- `LogRunEventScreenDebugSummary()`：把 summary 写入日志，便于在 PIE Details 或临时蓝图按钮里排查“为什么没有候选卡 / 为什么 Zone 不接受 / 为什么提交失败”。
+
+这些 API 只读 UI / Run snapshot 和 Screen 内部缓存，不修改 RunState、menu lease 或 drop target 状态。支付 Zone 仍通过 `ResolveRunMenuFirstPersonCardDropIntent()` / `SubmitRunMenuFirstPersonCardDropIntent()` 使用 `SubmitPolicy=MenuHandled` 提交；debug summary 只是把当前 `Intent / Reject / SubmitPolicy / SubmitReason / RunValidationReason / Submitted` 记录出来。
+
 ### 战斗事件表现队列、Toast 与日志
 
 `UWacomBattleEventPresentationBuilder` 把 `FBattleEvent` 转成 `FBattleEventPresentationView`。ViewData 包含 `MessageText / bShouldDisplay / VisualTone / IconKey`，但当前 Toast 和日志主要消费文字。

@@ -23,6 +23,21 @@ namespace
 		return FText::FromString(FString::Format(Format, { A, B }));
 	}
 
+	FText FormatValidationError(const TCHAR* Format, const FString& A, const FString& B, const FString& C)
+	{
+		return FText::FromString(FString::Format(Format, { A, B, C }));
+	}
+
+	FText FormatValidationError(
+		const TCHAR* Format,
+		const FString& A,
+		const FString& B,
+		const FString& C,
+		const FString& D)
+	{
+		return FText::FromString(FString::Format(Format, { A, B, C, D }));
+	}
+
 	FName ResolvePaymentZoneId(const FWacomRunEventChoiceDefinition& Choice)
 	{
 		if (!Choice.CardPayment.PaymentZoneId.IsNone())
@@ -107,7 +122,7 @@ bool FWacomRunEventDefinitionValidation::Validate(
 	for (const FWacomRunEventNodeDefinition& Node : EventDefinition->Nodes)
 	{
 		TSet<FName> ChoiceIds;
-		TSet<FName> PaymentZoneIds;
+		TMap<FName, FName> PaymentZoneIdsToChoiceIds;
 		for (const FWacomRunEventChoiceDefinition& Choice : Node.Choices)
 		{
 			if (Choice.ChoiceId.IsNone())
@@ -130,37 +145,54 @@ bool FWacomRunEventDefinitionValidation::Validate(
 			if (!Choice.NextNodeId.IsNone() && !NodeIds.Contains(Choice.NextNodeId))
 			{
 				AddValidationError(OutErrors,
-					FormatValidationError(TEXT("Choice {0} 的 NextNodeId 无效：{1}。"),
+					FormatValidationError(TEXT("Node {0} / Choice {1} 的 NextNodeId 无效：{2}。"),
+						Node.NodeId.ToString(),
 						Choice.ChoiceId.ToString(),
 						Choice.NextNodeId.ToString()));
 			}
 
 			if (Choice.CardPayment.bRequiresOwnedCardPayment)
 			{
+				if (Choice.ChoiceId.IsNone())
+				{
+					AddValidationError(OutErrors,
+						FormatValidationError(
+							TEXT("Node {0} 中卡牌支付 ChoiceId 不能为空：无法生成默认 PaymentZoneId RunEvent.Pay.{{ChoiceId}}，也无法提交 RunEvent 选项。"),
+							Node.NodeId.ToString()));
+				}
+
 				const FName PaymentZoneId = ResolvePaymentZoneId(Choice);
 				if (PaymentZoneId.IsNone())
 				{
 					AddValidationError(OutErrors,
-						FormatValidationError(TEXT("Choice {0} 的卡牌支付缺少有效 PaymentZoneId。"),
+						FormatValidationError(
+							TEXT("Node {0} / Choice {1} 的卡牌支付缺少有效 PaymentZoneId：PaymentZoneId 为空且 ChoiceId 无法用于生成 RunEvent.Pay.{{ChoiceId}}。"),
+							Node.NodeId.ToString(),
 							Choice.ChoiceId.ToString()));
 				}
-				else if (PaymentZoneIds.Contains(PaymentZoneId))
+				else if (const FName* ExistingChoiceId = PaymentZoneIdsToChoiceIds.Find(PaymentZoneId))
 				{
 					AddValidationError(OutErrors,
-						FormatValidationError(TEXT("Node {0} 中卡牌支付 ZoneId 重复：{1}。"),
+						FormatValidationError(
+							TEXT("Node {0} 中卡牌支付 PaymentZoneId 重复：{1}。Choice {2} 与 Choice {3} 使用同一 Zone，同一节点必须唯一。"),
 							Node.NodeId.ToString(),
-							PaymentZoneId.ToString()));
+							PaymentZoneId.ToString(),
+							ExistingChoiceId->ToString(),
+							Choice.ChoiceId.ToString()));
 				}
 				else
 				{
-					PaymentZoneIds.Add(PaymentZoneId);
+					PaymentZoneIdsToChoiceIds.Add(PaymentZoneId, Choice.ChoiceId);
 				}
 
 				if (!HasValidPaymentFilter(Choice))
 				{
 					AddValidationError(OutErrors,
-						FormatValidationError(TEXT("Choice {0} 的卡牌支付筛选为空。"),
-							Choice.ChoiceId.ToString()));
+						FormatValidationError(
+							TEXT("Node {0} / Choice {1} / PaymentZoneId {2} 的卡牌支付筛选为空：请配置 AllowedCardDefinitions、AllowedCardIds、RequiredKeywords 或 BlockedKeywords。"),
+							Node.NodeId.ToString(),
+							Choice.ChoiceId.ToString(),
+							PaymentZoneId.ToString()));
 				}
 			}
 
@@ -211,8 +243,11 @@ bool FWacomRunEventDefinitionValidation::Validate(
 					&& Effect.Type == EWacomRunEventEffectType::RemoveCard)
 				{
 					AddValidationError(OutErrors,
-						FormatValidationError(TEXT("Choice {0} 是卡牌支付选项，不能同时配置 RemoveCard 效果。"),
-							Choice.ChoiceId.ToString()));
+						FormatValidationError(
+							TEXT("Node {0} / Choice {1} / PaymentZoneId {2} 是卡牌支付选项，不能同时配置 RemoveCard 效果；拖卡支付已经会移除精确实例。"),
+							Node.NodeId.ToString(),
+							Choice.ChoiceId.ToString(),
+							ResolvePaymentZoneId(Choice).ToString()));
 				}
 
 				switch (Effect.Type)
