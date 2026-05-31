@@ -181,6 +181,7 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
 当前蛇敌人内容：
 - `DA_Card_PoisonFang`（毒牙）是第一张击倒奖励卡样例，临时效果为 0 费、对单个敌方部位施加 1 中毒。
 - 蛇头、蛇身、蛇尾当前都配置同一张毒牙，便于验证完整奖励链路；后续可替换为各部位专属奖励。
+- V0-BM 后，`AWacomRunCardPickupActor::ConfigureDebugCardPickupSample()` 也会尝试加载 `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang` 作为默认卡牌拾取样例；该按钮只配置当前场景 Actor，不生成或修改卡牌资产。
 
 ### FIntentDefinition
 

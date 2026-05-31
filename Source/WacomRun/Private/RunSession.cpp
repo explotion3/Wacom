@@ -1344,6 +1344,42 @@ bool URunSession::CollectGoldPickup(FName PersistentId, int32 GoldAmount)
 	return true;
 }
 
+bool URunSession::CollectCardPickup(FName PersistentId, UCardDefinition* CardDefinition)
+{
+	if (PersistentId.IsNone())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] CollectCardPickup: PersistentId 为空，拒绝"));
+		return false;
+	}
+	if (!CardDefinition)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] CollectCardPickup: PersistentId=%s CardDefinition 为空，拒绝"),
+			*PersistentId.ToString());
+		return false;
+	}
+	if (RunState.CollectedPickupIds.Contains(PersistentId))
+	{
+		UE_LOG(LogTemp, Verbose,
+			TEXT("[RunSession] CollectCardPickup: PersistentId=%s 已拾取，忽略重复提交"),
+			*PersistentId.ToString());
+		return false;
+	}
+	if (!AcquireCardToRunInternal(CardDefinition))
+	{
+		return false;
+	}
+
+	RunState.CollectedPickupIds.Add(PersistentId);
+	UE_LOG(LogTemp, Display,
+		TEXT("[RunSession] CollectCardPickup: PersistentId=%s Card=%s"),
+		*PersistentId.ToString(),
+		*GetNameSafe(CardDefinition));
+	NotifyRunStateChanged();
+	return true;
+}
+
 // ================ 商店购买 ================
 
 bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers)

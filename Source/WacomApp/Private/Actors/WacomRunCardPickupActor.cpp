@@ -1,25 +1,45 @@
 // Copyright Wacom. All Rights Reserved.
 
-#include "Actors/WacomRunPickupActor.h"
+#include "Actors/WacomRunCardPickupActor.h"
 
-#define LOCTEXT_NAMESPACE "WacomRunPickupActor"
+#define LOCTEXT_NAMESPACE "WacomRunCardPickupActor"
 
+#include "Cards/CardDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 
-AWacomRunPickupActor::AWacomRunPickupActor()
+namespace
+{
+	const TCHAR* DebugPoisonFangPath =
+		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang");
+}
+
+AWacomRunCardPickupActor::AWacomRunCardPickupActor()
 {
 	InteractPromptText = GetDefaultInteractPromptText();
 	HoverPromptText = GetDefaultHoverPromptText();
 	CollectedHoverPromptText = GetDefaultCollectedHoverPromptText();
 }
 
-void AWacomRunPickupActor::ConfigureDebugGoldPickupSample()
+void AWacomRunCardPickupActor::ConfigureDebugCardPickupSample()
 {
 	Modify();
-	PersistentId = BuildDebugPersistentIdFromActorName(GetName(), TEXT("Pickup.Debug."), TEXT("Gold"));
-	GoldAmount = 3;
+	PersistentId = BuildDebugPersistentIdFromActorName(
+		GetName(),
+		TEXT("Pickup.Debug.Card."),
+		TEXT("Card"));
+	if (UCardDefinition* LoadedCard = LoadObject<UCardDefinition>(nullptr, DebugPoisonFangPath))
+	{
+		CardDefinition = LoadedCard;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunCardPickupActor] %s: 无法加载调试卡牌资产 %s，保留当前 CardDefinition"),
+			*GetName(),
+			DebugPoisonFangPath);
+	}
 	TriggerRadius = 160.f;
 	bDestroyWhenCollected = true;
 	InteractPromptText = GetDefaultInteractPromptText();
@@ -28,15 +48,16 @@ void AWacomRunPickupActor::ConfigureDebugGoldPickupSample()
 	RefreshClickTargetBindingAndRuntimeTarget();
 }
 
-FWacomRunPickupDebugView AWacomRunPickupActor::GetRunPickupDebugView(
+FWacomRunCardPickupDebugView AWacomRunCardPickupActor::GetRunCardPickupDebugView(
 	AWacomPlayerController* PC) const
 {
 	const FWacomRunPickupBaseDebugView BaseView = GetRunPickupBaseDebugView(PC);
 
-	FWacomRunPickupDebugView View;
+	FWacomRunCardPickupDebugView View;
 	View.ActorName = BaseView.ActorName;
 	View.PersistentId = BaseView.PersistentId;
-	View.GoldAmount = GoldAmount;
+	View.CardDefinitionName = CardDefinition ? CardDefinition->GetName() : TEXT("None");
+	View.CardId = CardDefinition ? CardDefinition->CardId : NAME_None;
 	View.bHasRunSession = BaseView.bHasRunSession;
 	View.bCanInteract = BaseView.bCanInteract;
 	View.bIsCollected = BaseView.bIsCollected;
@@ -52,16 +73,18 @@ FWacomRunPickupDebugView AWacomRunPickupActor::GetRunPickupDebugView(
 	return View;
 }
 
-FString AWacomRunPickupActor::GetRunPickupDebugSummary(AWacomPlayerController* PC) const
+FString AWacomRunCardPickupActor::GetRunCardPickupDebugSummary(
+	AWacomPlayerController* PC) const
 {
-	const FWacomRunPickupDebugView View = GetRunPickupDebugView(PC);
+	const FWacomRunCardPickupDebugView View = GetRunCardPickupDebugView(PC);
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunPickup{Actor=%s PersistentId=%s Gold=%d HasRun=%s CanInteract=%s Collected=%s ConfigValid=%s ConfigReason=%s Duplicate=%s HasVisual=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CollectedHoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("RunCardPickup{Actor=%s PersistentId=%s Card=%s CardId=%s HasRun=%s CanInteract=%s Collected=%s ConfigValid=%s ConfigReason=%s Duplicate=%s HasVisual=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CollectedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
-		View.GoldAmount,
+		*View.CardDefinitionName,
+		*View.CardId.ToString(),
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
 		View.bIsCollected ? TEXT("true") : TEXT("false"),
@@ -77,25 +100,25 @@ FString AWacomRunPickupActor::GetRunPickupDebugSummary(AWacomPlayerController* P
 		*FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(ClickDebug));
 }
 
-void AWacomRunPickupActor::LogRunPickupDebugSummary(AWacomPlayerController* PC) const
+void AWacomRunCardPickupActor::LogRunCardPickupDebugSummary(AWacomPlayerController* PC) const
 {
-	UE_LOG(LogTemp, Display, TEXT("[RunPickupActor] %s"),
-		*GetRunPickupDebugSummary(PC));
+	UE_LOG(LogTemp, Display, TEXT("[RunCardPickupActor] %s"),
+		*GetRunCardPickupDebugSummary(PC));
 }
 
-FName AWacomRunPickupActor::GetRewardConfigWarningReason() const
+FName AWacomRunCardPickupActor::GetRewardConfigWarningReason() const
 {
-	if (GoldAmount <= 0)
+	if (!CardDefinition)
 	{
-		return TEXT("InvalidGoldAmount");
+		return TEXT("MissingCardDefinition");
 	}
 	return NAME_None;
 }
 
-bool AWacomRunPickupActor::TryCollectPickupReward(AWacomPlayerController* PC)
+bool AWacomRunCardPickupActor::TryCollectPickupReward(AWacomPlayerController* PC)
 {
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
-	if (!Run || !Run->CollectGoldPickup(PersistentId, GoldAmount))
+	if (!Run || !Run->CollectCardPickup(PersistentId, CardDefinition))
 	{
 		return false;
 	}
@@ -105,23 +128,23 @@ bool AWacomRunPickupActor::TryCollectPickupReward(AWacomPlayerController* PC)
 		if (UWacomAppToastSubsystem* ToastSubsystem =
 			GameInstance->GetSubsystem<UWacomAppToastSubsystem>())
 		{
-			ToastSubsystem->ShowGoldChanged(GoldAmount);
+			ToastSubsystem->ShowCardGained(CardDefinition);
 		}
 	}
 	return true;
 }
 
-FText AWacomRunPickupActor::GetDefaultInteractPromptText() const
+FText AWacomRunCardPickupActor::GetDefaultInteractPromptText() const
 {
-	return LOCTEXT("DefaultInteractPrompt", "按 E 拾取");
+	return LOCTEXT("DefaultInteractPrompt", "按 E 拾取卡牌");
 }
 
-FText AWacomRunPickupActor::GetDefaultHoverPromptText() const
+FText AWacomRunCardPickupActor::GetDefaultHoverPromptText() const
 {
-	return LOCTEXT("DefaultHoverPrompt", "点击拾取");
+	return LOCTEXT("DefaultHoverPrompt", "点击拾取卡牌");
 }
 
-FText AWacomRunPickupActor::GetDefaultCollectedHoverPromptText() const
+FText AWacomRunCardPickupActor::GetDefaultCollectedHoverPromptText() const
 {
 	return LOCTEXT("DefaultCollectedHoverPrompt", "已拾取");
 }

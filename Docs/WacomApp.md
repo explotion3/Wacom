@@ -151,15 +151,33 @@ enum class EGameFlowState : uint8
 
 ### RunPickupActor
 
+V0-BN 后，Run world Pickup 的世界交互壳统一在 `AWacomRunPickupActorBase`：
+
+- Base 实现 `IWacomWorldInteractable + UWacomRunWorldClickableInteractable`，并统一管理 `PersistentId / TriggerRadius / prompt / bDestroyWhenCollected`、`TriggerSphere / ClickBounds / PickupVisual / ClickInteractionTarget / ClickTargetBridge`、E 键候选注册、鼠标 click/hover 目标绑定、scale probe debug、已拾取生命周期和跨金币 / 卡牌 Pickup 的重复 `PersistentId` 诊断。
+- 具体可放置类名不变：`AWacomRunPickupActor` 仍表示金币 Pickup，`AWacomRunCardPickupActor` 仍表示固定单卡 Pickup。子类只负责奖励配置、RunSession 结算和成功 toast。
+- Base 提供 `GetRunPickupBaseDebugSummary()` / `LogRunPickupBaseDebugSummary()`，用于排查共享交互壳；子类的专用 debug summary 仍保留奖励字段。
+
 `AWacomRunPickupActor` 是 Run world 金币拾取物 V1：
 
-- 实现 `IWacomWorldInteractable + UWacomRunWorldClickableInteractable`。
 - `PersistentId` 是当前 Run 内防重复拾取的 key；`GoldAmount` 是拾取成功获得的金币数，必须大于 0。
 - 默认拥有 `TriggerSphere / ClickBounds / PickupVisual / ClickInteractionTarget / ClickTargetBridge`。`TriggerSphere` 只服务 E 键近距离候选注册；`ClickBounds` 只阻挡 `Visibility` trace、不产生 overlap；`PickupVisual` 是 C++ 占位可见球体，正式美术可在 Blueprint 或子类替换。
 - 按 E 或远距离左键命中时都调用 `URunSession::CollectGoldPickup(PersistentId, GoldAmount)`，由 Run 层同一事务增加金币并标记已拾取；重复提交不会再次加金币。
 - 成功拾取后默认 Destroy Actor；如果 `bDestroyWhenCollected=false`，则隐藏并禁用碰撞，便于调试。成功时复用 AppToast 显示金币变化。
 - 鼠标 hover 默认显示 `点击拾取`，已拾取但仍可被 debug/probe 到时显示 `CollectedHoverPromptText`，默认 `已拾取`。GameMenu active 或菜单卡牌 drag/drop 时，hover/click 不穿透。
-- 提供 `GetRunPickupDebugSummary()` / `LogRunPickupDebugSummary()`，可在 PIE 查看 `PersistentId / Gold / HasRun / CanInteract / Collected / ClickTarget / StableId / HoverPrompt / Last`；其中 click target facts 来自通用 clickable debug view。
+- V0-BL 后，Details 面板提供 `ConfigureDebugGoldPickupSample()`，用于把当前 Actor 配成标准金币拾取调试样例。按钮只写当前 Actor 的 `PersistentId / GoldAmount / TriggerRadius / prompt / lifecycle`，不修改 RunState、不生成资产。
+- 提供 `GetRunPickupDebugSummary()` / `LogRunPickupDebugSummary()`，可在 PIE 查看 `PersistentId / Gold / HasRun / CanInteract / Collected / ConfigValid / ConfigReason / Duplicate / HasVisual / ClickTarget / StableId / HoverPrompt / Last`；其中 click target facts 来自通用 clickable debug view。缺 `PersistentId`、非正 `GoldAmount`、同关卡重复 `PersistentId` 都会在 summary 或 BeginPlay warning 中暴露；重复 ID 只是制作 warning，表示这些 Pickup 会共享同一份已拾取状态。
+
+### RunCardPickupActor
+
+`AWacomRunCardPickupActor` 是 Run world 固定卡牌拾取物 V1：
+
+- PlayerController 不为它增加专用分支，仍走 Run world clickable resolver。
+- `PersistentId` 是当前 Run 内防重复拾取的 key；`CardDefinition` 是拾取成功获得的一张固定卡牌。V1 不支持掉落表、多卡、目标区域选择或拾取动画。
+- 默认拥有 `TriggerSphere / ClickBounds / PickupVisual / ClickInteractionTarget / ClickTargetBridge`，组件语义与金币 Pickup 对齐：E 键走 overlap 候选，远距离左键走 `Visibility` trace，hover 使用共享 scale probe。
+- 按 E 或远距离左键命中时都调用 `URunSession::CollectCardPickup(PersistentId, CardDefinition)`；Run 层复用获得卡牌入 Run 的语义，并与金币 Pickup 共用 `CollectedPickupIds` 防重复。
+- 成功后调用 `UWacomAppToastSubsystem::ShowCardGained(CardDefinition)`，然后按 `bDestroyWhenCollected` 决定 Destroy，或隐藏并禁用碰撞用于调试。
+- 默认文案是 `按 E 拾取卡牌`、`点击拾取卡牌`、`已拾取`。Details 面板提供 `ConfigureDebugCardPickupSample()`，按 Actor 名生成 `Pickup.Debug.Card.{ActorName}`，尝试加载 `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang`，并恢复默认 prompt / lifecycle；资产缺失时保留当前 `CardDefinition` 并 warning。
+- 提供 `GetRunCardPickupDebugSummary()` / `LogRunCardPickupDebugSummary()`，可在 PIE 查看 `PersistentId / Card / CardId / HasRun / CanInteract / Collected / ConfigValid / ConfigReason / Duplicate / HasVisual / ClickTarget / ClickStableId / HoverPrompt / Last`。缺 `PersistentId`、缺 `CardDefinition`、同关卡重复 `PersistentId` 都会在 summary 或 BeginPlay warning 中暴露；重复 ID 只是制作 warning，表示这些 Pickup 会共享同一份已拾取状态。
 
 ---
 
@@ -253,7 +271,7 @@ BattleHUD、3D 手牌和场景目标点击需要的 `bEnableClickEvents / bEnabl
 
 `AWacomPlayerController::RefreshInteractToast()` 只在 Exploration 状态显示交互提示。战斗中即使候选对象仍在列表，也不会显示交互 Toast。
 
-V0-BK 后，探索期左键释放的场景点击路由顺序是：Battle target click -> RunTunnel branch click -> Run world interactable click -> `Super::InputKey()`。Run world interactable click 只接受 `TargetKind=World + Interaction.Target.Run.Object`，并通过共享 resolver 要求命中 Actor 同时实现 `IWacomWorldInteractable` 与 `UWacomRunWorldClickableInteractable`；当前正式 opt-in 对象是 `AWacomRunEventTriggerActor`、`AWacomShopTriggerActor`、`ABattleTriggerActor` 和 `AWacomRunPickupActor`。打开 Backpack / Pause / Shop / RunEvent 等 `GameMenu` 时不会穿透点击场景目标。E 键入口不变，仍使用最近 overlap 候选。同一 Run world probe loop 还维护 hover prompt：hover 到支持目标时显示点击提示，移开后回到最近 E 键候选提示；hover prompt 和 hover debug 都走 clickable 接口，`GetRunWorldInteractableHoverDebugSummary()` 可排查当前 hover actor、stable id、prompt、completed、ClickBounds / bridge / visual 配置和拒绝原因，例如 `MissingWorldInteractableContract` 或 `MissingClickableContract`。
+V0-BK 后，探索期左键释放的场景点击路由顺序是：Battle target click -> RunTunnel branch click -> Run world interactable click -> `Super::InputKey()`。Run world interactable click 只接受 `TargetKind=World + Interaction.Target.Run.Object`，并通过共享 resolver 要求命中 Actor 同时实现 `IWacomWorldInteractable` 与 `UWacomRunWorldClickableInteractable`；当前正式 opt-in 对象是 `AWacomRunEventTriggerActor`、`AWacomShopTriggerActor`、`ABattleTriggerActor`、`AWacomRunPickupActor` 和 `AWacomRunCardPickupActor`。打开 Backpack / Pause / Shop / RunEvent 等 `GameMenu` 时不会穿透点击场景目标。E 键入口不变，仍使用最近 overlap 候选。同一 Run world probe loop 还维护 hover prompt：hover 到支持目标时显示点击提示，移开后回到最近 E 键候选提示；hover prompt 和 hover debug 都走 clickable 接口，`GetRunWorldInteractableHoverDebugSummary()` 可排查当前 hover actor、stable id、prompt、completed、ClickBounds / bridge / visual 配置和拒绝原因，例如 `MissingWorldInteractableContract` 或 `MissingClickableContract`。
 
 兼容 / 调试入口仍保留：`Wacom.Interact` 调用当前最近交互对象，`Wacom.OpenBackpack` 打开背包。正式玩家交互口径仍是 IA 输入。
 

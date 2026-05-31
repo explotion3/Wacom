@@ -573,6 +573,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pickup")
 	bool CollectGoldPickup(FName PersistentId, int32 GoldAmount);
 
+	/**
+	 * 拾取固定卡牌型世界拾取物。
+	 *
+	 * 成功时复用获得卡牌入 Run 的规则并标记 PersistentId 已拾取；重复拾取、空 ID 或空卡牌会拒绝且不广播。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pickup")
+	bool CollectCardPickup(FName PersistentId, UCardDefinition* CardDefinition);
+
 	// ---- 商店购买 ----
 
 	/**

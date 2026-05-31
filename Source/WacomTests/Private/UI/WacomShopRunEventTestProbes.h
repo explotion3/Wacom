@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomRunCardPickupActor.h"
 #include "Actors/WacomRunPickupActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
 #include "Actors/WacomShopTriggerActor.h"
@@ -352,6 +353,18 @@ private:
 
 UCLASS()
 class AWacomRunPickupClickProbe : public AWacomRunPickupActor
+{
+	GENERATED_BODY()
+
+public:
+	void SyncClickTargetForTest()
+	{
+		OnConstruction(FTransform::Identity);
+	}
+};
+
+UCLASS()
+class AWacomRunCardPickupClickProbe : public AWacomRunCardPickupActor
 {
 	GENERATED_BODY()
 
