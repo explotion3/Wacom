@@ -761,9 +761,14 @@ void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerEntries(
 	const bool bEnableMenuLeaseDragProbe =
 		!ActiveMenuLeaseId.IsNone()
 		&& SourceId == ActiveMenuLeaseSourceId;
-	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableMenuLeaseDragProbe);
+	const bool bEnableRunWorldCardDropDrag =
+		ActiveMenuLeaseId.IsNone()
+		&& SourceId == RunFirstPersonCardLayerSourceId;
+	const bool bEnableRuntimeInteraction =
+		bEnableMenuLeaseDragProbe || bEnableRunWorldCardDropDrag;
+	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableRuntimeInteraction);
 	Anchor.SetRuntimeCardLayerEntries(SourceId, Entries);
-	Anchor.SetBattleHandInteractionPrototypeEnabled(bEnableMenuLeaseDragProbe);
+	Anchor.SetBattleHandInteractionPrototypeEnabled(bEnableRuntimeInteraction);
 }
 
 void UWacomRunFirstPersonCardSourceComponent::ClearRuntimeCardLayerEntries(

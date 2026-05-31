@@ -14,6 +14,15 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "Shops/ShopDefinition.h"
 
+namespace
+{
+	bool ShouldValidateShopTriggerPlacementActor(const AWacomShopTriggerActor& Shop)
+	{
+		return !Shop.HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+			&& !Shop.IsTemplate();
+	}
+}
+
 AWacomShopTriggerActor::AWacomShopTriggerActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -61,20 +70,12 @@ void AWacomShopTriggerActor::BeginPlay()
 	}
 	else
 	{
-		for (TActorIterator<AWacomShopTriggerActor> It(GetWorld()); It; ++It)
+		if (HasDuplicatePersistentIdInWorld())
 		{
-			AWacomShopTriggerActor* Other = *It;
-			if (Other && Other != this && !Other->HasAnyFlags(RF_ClassDefaultObject))
-			{
-				if (Other->PersistentId == PersistentId)
-				{
-					UE_LOG(LogTemp, Warning,
-						TEXT("[ShopTriggerActor] PersistentId %s 与 %s 重复；两个商店会共享同一份库存状态"),
-						*PersistentId.ToString(),
-						*Other->GetName());
-					break;
-				}
-			}
+			UE_LOG(LogTemp, Warning,
+				TEXT("[ShopTriggerActor] %s: PersistentId %s 与同关卡其他商店重复；两个商店会共享同一份库存状态"),
+				*GetName(),
+				*PersistentId.ToString());
 		}
 	}
 
@@ -278,6 +279,95 @@ AWacomShopTriggerActor::GetRunWorldClickableDebugView_Implementation(
 		ClickBounds);
 }
 
+#if WITH_EDITOR
+EDataValidationResult AWacomShopTriggerActor::IsDataValid(
+	FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	if (!ShouldValidateShopTriggerPlacementActor(*this))
+	{
+		return Result;
+	}
+
+	if (PersistentId.IsNone())
+	{
+		Context.AddError(FText::Format(
+			LOCTEXT("PlacementMissingPersistentId",
+				"Shop Trigger 摆放配置错误：Actor={0} 缺少 PersistentId，运行时不会打开商店。ShopDefinition={1} OfferCount={2}。"),
+			FText::FromString(GetName()),
+			FText::FromString(ShopDefinition ? ShopDefinition->GetName() : TEXT("None")),
+			FText::AsNumber(BuildResolvedOffers().Num())));
+		Result = EDataValidationResult::Invalid;
+	}
+
+	const TArray<FRunShopOfferInput> ResolvedOffers = BuildResolvedOffers();
+	int32 UsableOfferCount = 0;
+	for (int32 Index = 0; Index < ResolvedOffers.Num(); ++Index)
+	{
+		const FRunShopOfferInput& Offer = ResolvedOffers[Index];
+		if (!Offer.CardDefinition)
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("PlacementMissingOfferCard",
+					"Shop Trigger 摆放配置错误：Actor={0} PersistentId={1} ShopDefinition={2} OfferIndex={3}/{4} 缺少 CardDefinition。"),
+				FText::FromString(GetName()),
+				FText::FromName(PersistentId),
+				FText::FromString(ShopDefinition ? ShopDefinition->GetName() : TEXT("None")),
+				FText::AsNumber(Index),
+				FText::AsNumber(ResolvedOffers.Num())));
+			Result = EDataValidationResult::Invalid;
+			continue;
+		}
+		if (Offer.Price < 0)
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("PlacementNegativeOfferPrice",
+					"Shop Trigger 摆放配置错误：Actor={0} PersistentId={1} ShopDefinition={2} OfferIndex={3}/{4} Price={5} 不能为负数。"),
+				FText::FromString(GetName()),
+				FText::FromName(PersistentId),
+				FText::FromString(ShopDefinition ? ShopDefinition->GetName() : TEXT("None")),
+				FText::AsNumber(Index),
+				FText::AsNumber(ResolvedOffers.Num()),
+				FText::AsNumber(Offer.Price)));
+			Result = EDataValidationResult::Invalid;
+			continue;
+		}
+		++UsableOfferCount;
+	}
+
+	if (UsableOfferCount <= 0)
+	{
+		Context.AddError(FText::Format(
+			LOCTEXT("PlacementMissingUsableOffers",
+				"Shop Trigger 摆放配置错误：Actor={0} PersistentId={1} ShopDefinition={2} 没有可用商品。配置 ShopDefinition 或有效的手工 Offers。OfferCount={3}。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId),
+			FText::FromString(ShopDefinition ? ShopDefinition->GetName() : TEXT("None")),
+			FText::AsNumber(ResolvedOffers.Num())));
+		Result = EDataValidationResult::Invalid;
+	}
+
+	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
+	{
+		Context.AddWarning(FText::Format(
+			LOCTEXT("PlacementDuplicatePersistentId",
+				"Shop Trigger 摆放警告：Actor={0} PersistentId={1} ShopDefinition={2} OfferCount={3} 与同关卡其他 Shop Trigger 重复；这些商店会共享同一份库存和购买状态。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId),
+			FText::FromString(ShopDefinition ? ShopDefinition->GetName() : TEXT("None")),
+			FText::AsNumber(ResolvedOffers.Num())));
+		if (Result != EDataValidationResult::Invalid)
+		{
+			Result = EDataValidationResult::Valid;
+		}
+	}
+
+	return Result == EDataValidationResult::Invalid
+		? EDataValidationResult::Invalid
+		: EDataValidationResult::Valid;
+}
+#endif
+
 void AWacomShopTriggerActor::RefreshClickTargetBinding()
 {
 	FWacomRunWorldClickableInteractableHelper::BindClickTarget(
@@ -285,6 +375,27 @@ void AWacomShopTriggerActor::RefreshClickTargetBinding()
 		ClickBounds,
 		ClickInteractionTargetComponent,
 		ClickTargetBridgeComponent);
+}
+
+bool AWacomShopTriggerActor::HasDuplicatePersistentIdInWorld() const
+{
+	if (PersistentId.IsNone() || !GetWorld())
+	{
+		return false;
+	}
+
+	for (TActorIterator<AWacomShopTriggerActor> It(GetWorld()); It; ++It)
+	{
+		const AWacomShopTriggerActor* Other = *It;
+		if (Other
+			&& Other != this
+			&& !Other->HasAnyFlags(RF_ClassDefaultObject)
+			&& Other->PersistentId == PersistentId)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 #undef LOCTEXT_NAMESPACE

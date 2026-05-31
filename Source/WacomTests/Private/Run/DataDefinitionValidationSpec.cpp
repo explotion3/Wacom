@@ -520,6 +520,7 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"),
 		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang.DA_Card_ZhujianRongnang"),
 		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_MuseiYinchongdeng.DA_Card_MuseiYinchongdeng"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey"),
 		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang")
 	};
 
@@ -565,5 +566,53 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	TestTrue(TEXT("Snake tail asset passes validation"), ValidateEnemyPartForTest(SnakeTail, Errors));
 	TestEqual(TEXT("Snake tail validation errors"), Errors.Num(), 0);
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataDebugKeyAssetLoadsSpec,
+	"Wacom.Data.DebugKeyAsset.DebugKeyAssetLoads",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataDebugKeyAssetLoadsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UCardDefinition* DebugKey = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey"));
+	if (!TestNotNull(TEXT("DebugKey asset loads"), DebugKey))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("CardId"), DebugKey->CardId, FName(TEXT("DebugKey")));
+	TestEqual(TEXT("DisplayName"), DebugKey->DisplayName.ToString(), FString(TEXT("钥匙")));
+	TestTrue(TEXT("Rarity"), DebugKey->Rarity.MatchesTagExact(WacomTags::Card_Rarity_White));
+	TestTrue(TEXT("Has Tool keyword"), DebugKey->Keywords.HasTagExact(WacomTags::Card_Keyword_Tool));
+	TestEqual(TEXT("TargetMode None"), static_cast<int32>(DebugKey->TargetMode), static_cast<int32>(ECardTargetMode::None));
+	TestEqual(TEXT("No battle effects"), DebugKey->Effects.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataDebugKeyBugGirlStarterDeckSpec,
+	"Wacom.Data.DebugKeyAsset.DebugKeyIsInBugGirlStarterDeck",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataDebugKeyBugGirlStarterDeckSpec::RunTest(const FString& /*Parameters*/)
+{
+	UCardDefinition* DebugKey = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey"));
+	UCharacterDefinition* BugGirl = LoadObject<UCharacterDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
+	if (!TestNotNull(TEXT("DebugKey asset loads"), DebugKey)
+		|| !TestNotNull(TEXT("BugGirl character asset loads"), BugGirl))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("BugGirl starter deck contains DebugKey"),
+		BugGirl->StarterDeck.Contains(DebugKey));
 	return true;
 }

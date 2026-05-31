@@ -27,6 +27,7 @@ WacomData 负责**静态定义和 DataAsset**。
 - 敌人定义（UEnemyDefinition + UEnemyPartDefinition）
 - 角色定义（UCharacterDefinition）
 - 商店定义（UShopDefinition）
+- 拾取物定义（UWacomRunPickupDefinition）
 - 探索事件定义（UWacomRunEventDefinition）
 - 意图定义（FIntentDefinition）
 - 效果结构（FCardEffect / FCardZoneHook / FCardPassive）
@@ -50,6 +51,7 @@ Content/Wacom/
     ├── Characters/DA_Character_BugGirl.uasset
     ├── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
     ├── Events/{DA_Event_DebugSnakeGift, DA_Event_DebugFlagReward}.uasset
+    ├── Pickups/{DA_Pickup_DebugGold3, DA_Pickup_DebugPoisonFang}.uasset
     └── Shops/DA_Shop_DebugSnake.uasset
 ```
 
@@ -241,9 +243,9 @@ class UCharacterDefinition : public UPrimaryDataAsset
 | `CharacterId` | `BugGirl` |
 | `LeftHandCard` | `DA_Card_LeftHand` |
 | `RightHandCard` | `DA_Card_RightHand` |
-| `StarterDeck` | `ZhaoguangMudie / FuxiaoFeie / ChifuGongyi / ShuoguangDie / Muling / BugGirlBag / ZhujianRongnang / MuseiYinchongdeng` |
+| `StarterDeck` | `ZhaoguangMudie / FuxiaoFeie / ChifuGongyi / ShuoguangDie / Muling / DebugKey / BugGirlBag / ZhujianRongnang / MuseiYinchongdeng`，以及原型卡对卡测试卡 |
 
-`StarterDeck` 中前 5 张是默认参战伙伴卡；`BugGirlBag` 和 `ZhujianRongnang` 默认进入通量 / 特殊存放相关背包区；`MuseiYinchongdeng` 是原型特例，默认固定在备战区，但它仍作为 A 类容器卡贡献通量和备战容量。
+`StarterDeck` 中前 5 张是默认参战伙伴卡；V0-BU 后 `DebugKey` 是探索期宝箱拖卡原型钥匙，默认作为非容器卡进入 BattleDeck，方便 PIE 直接在第一人称手牌中拖拽验证；`BugGirlBag` 和 `ZhujianRongnang` 默认进入通量 / 特殊存放相关背包区；`MuseiYinchongdeng` 是原型特例，默认固定在备战区，但它仍作为 A 类容器卡贡献通量和备战容量。
 
 ---
 
@@ -276,13 +278,66 @@ struct FShopOfferDefinition
 - `Offers` 不能为空；如果需要剧情空商店，后续应加显式字段表达，不用空列表伪装。
 - 每个 Offer 必须配置 `CardDefinition`。
 - `Price` 不能为负数；`0` 表示免费商品，合法。
+
+V0-BT 后，场景 `AWacomShopTriggerActor` 摆放实例也会在 Validate Map/Level 中校验当前解析出的商品来源。正式内容推荐填写 `ShopDefinition`；未填写时，手工 `Offers` 仍是兼容入口且可通过校验。`UShopDefinition.ShopId` 仍只是内容 ID，不替代场景 `PersistentId`。
 - 第一版不禁止同一张卡重复出现在多个 Offer 中，因为后续可能用于多份库存或不同价格变体。
 
 自动化测试 `Wacom.Data.Shop.DebugSnakeAssetValidation` 会验证 `DA_Shop_DebugSnake` 能通过同一套校验规则，避免商店内容生成漂移。
 
 ---
 
-## §6 UWacomRunEventDefinition 字段表
+## §6 UWacomRunPickupDefinition 字段表
+
+`UWacomRunPickupDefinition` 是 Run world Pickup 的静态奖励定义。它只描述“这个拾取物给什么奖励”，不保存世界对象是否已拾取，也不替代场景 Actor 的 `PersistentId`。
+
+```cpp
+UCLASS(BlueprintType)
+class UWacomRunPickupDefinition : public UPrimaryDataAsset
+{
+    UPROPERTY(EditDefaultsOnly) FName PickupId;
+    UPROPERTY(EditDefaultsOnly) EWacomRunPickupRewardType RewardType; // None / Gold / Card
+    UPROPERTY(EditDefaultsOnly) int32 GoldAmount = 1;
+    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> CardDefinition;
+};
+```
+
+字段口径：
+
+| 字段 | 用途 |
+|---|---|
+| `PickupId` | 静态内容 ID，只用于内容识别和 debug；不是运行时 `CollectedPickupIds` key |
+| `RewardType` | `None / Gold / Card`；`None` 是无效配置 |
+| `GoldAmount` | 仅 `RewardType=Gold` 使用，必须大于 0 |
+| `CardDefinition` | 仅 `RewardType=Card` 使用，表示固定获得一张该卡 |
+
+只读 helper：
+
+| Helper | 用途 |
+|---|---|
+| `GetRewardConfigWarningReason()` | 返回 `MissingPickupId / MissingRewardType / InvalidGoldAmount / MissingCardDefinition / None` |
+| `IsRewardConfigValid()` | `GetRewardConfigWarningReason() == None` 的布尔包装 |
+
+V0-BQ 后已有两个 Debug PickupDefinition 样例资产：
+
+| 资产 | 配置 | 用途 |
+|---|---|---|
+| `/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3` | `PickupId=Pickup.Debug.Gold3`、`RewardType=Gold`、`GoldAmount=3` | 验证数据驱动金币拾取 |
+| `/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang` | `PickupId=Pickup.Debug.PoisonFang`、`RewardType=Card`、`CardDefinition=DA_Card_PoisonFang` | 验证数据驱动固定卡牌拾取 |
+
+正式内容推荐使用 `BP_WacomRunRewardPickupActor + UWacomRunPickupDefinition`。`PickupDefinition` 可被多个场景实例复用，但每个摆放 Actor 必须配置自己的唯一 `PersistentId`；金币 / 卡牌专用 Actor 仍保留为 C++ fallback 和快速 debug 入口。
+
+V0-BS 后，`PickupDefinition` 本身仍由资产 validator 校验；关卡中摆放的 Pickup Actor 实例另由 Actor Data Validation 校验场景侧字段。`PersistentId` 缺失、奖励配置无效会让地图 validation invalid；重复 `PersistentId` 只给 warning。`BP_WacomRunRewardPickupActor` 默认资产允许空 `PersistentId / PickupDefinition`，因为这些字段属于实例配置。
+
+编辑器侧已接入 `UWacomRunPickupDefinitionValidator` 内容防呆。校验重点：
+- `PickupId` 不能为空。
+- `RewardType` 不能为 `None`。
+- `RewardType=Gold` 时 `GoldAmount` 必须大于 0。
+- `RewardType=Card` 时必须配置 `CardDefinition`。
+- V1 不对未使用字段给 warning；未激活的字段会被忽略。
+
+---
+
+## §7 UWacomRunEventDefinition 字段表
 
 `UWacomRunEventDefinition` 是轻量探索事件图 DataAsset：
 
@@ -376,7 +431,7 @@ RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻�
 ---
 
 <a id="wacomdata-content-validation"></a>
-## §7 内容生成与校验
+## §8 内容生成与校验
 
 ### Commandlet
 
@@ -385,9 +440,10 @@ RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻�
 | Builder | 产物 |
 |---|---|
 | `BuildSnakeContent()` | 蛇敌人、三部位、奖励卡 `DA_Card_PoisonFang` |
-| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、卡对卡测试卡 |
+| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、`DA_Card_DebugKey`、卡对卡测试卡 |
 | `BuildShopContent()` | `DA_Shop_DebugSnake` |
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
+| `BuildRunPickupDefinitionContent()` | `DA_Pickup_DebugGold3`、`DA_Pickup_DebugPoisonFang` |
 
 命令：
 
@@ -412,6 +468,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag` | 虫妹的小布袋，A 类容器，`Capacity=12`，带历史兼容 `BagProvider` |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang` | 蛛茧绒囊，B 类容器，`Capacity=3`，`WeaponDamagePlus3` |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_MuseiYinchongdeng` | 暮色引虫灯，A 类容器，`Capacity=3`，带 `DeleteProvider`，默认固定在备战区 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey` | `DebugKey`，显示名 `钥匙`，0 费白色工具卡，`TargetMode=None`，无战斗效果；用于 V0-BV `AWacomRunKeyChestActor` 拖卡原型 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_AddCostToSelectedHand` | `Test.AddCostToSelectedHand`，拖到另一张手牌上使目标费用 +2 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ReduceCostToSelectedHand` | `Test.ReduceCostToSelectedHand`，拖到另一张手牌上使目标费用 -1 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_DiscardSelectedHandCard` | `Test.DiscardSelectedHandCard`，拖到另一张普通手牌上使目标进入弃牌堆 |
@@ -425,6 +482,8 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋 |
 | `/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、通过卡牌支付交出毒牙、金币/压力/节点效果 |
 | `/Game/Wacom/Data/Events/DA_Event_DebugFlagReward` | 标记奖励调试事件，包含 RunFlag 解锁、PIE 自助给金币、`MinGold(3) + AddGold(-3)` 领取毒牙和 reset flags |
+| `/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
+| `/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang` | 数据驱动卡牌 PickupDefinition，固定获得 `PoisonFang` |
 
 ### Data Validation
 
@@ -438,10 +497,11 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `UWacomCharacterDefinitionValidator` | `UCharacterDefinition` | `FWacomCharacterDefinitionValidation::Validate()` |
 | `UWacomShopDefinitionValidator` | `UShopDefinition` | `FWacomShopDefinitionValidation::Validate()` |
 | `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
+| `UWacomRunPickupDefinitionValidator` | `UWacomRunPickupDefinition` | `FWacomRunPickupDefinitionValidation::Validate()` |
 
 这些 Validator 用于编辑器 Validate Assets 和自动化测试。不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
 
-当前 `UCardDefinition`、`UEnemyPartDefinition`、`UEnemyDefinition`、`UCharacterDefinition`、`UShopDefinition` 和 `UWacomRunEventDefinition` 六类 DataAsset 已接入 Editor Validator。
+当前 `UCardDefinition`、`UEnemyPartDefinition`、`UEnemyDefinition`、`UCharacterDefinition`、`UShopDefinition`、`UWacomRunEventDefinition` 和 `UWacomRunPickupDefinition` 七类 DataAsset 已接入 Editor Validator。
 
 Card / EnemyPart / Enemy / Character Validator 只做结构防呆，例如必填 ID、基础数值非负或大于 0、必填数组非空、引用非空、GameplayTag 命名空间有效、数组索引有效；Character 还校验 `StarterDeck` 不包含左右手卡。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量、固定部位数量、跨资产唯一性或生成资产路径。
 
@@ -449,9 +509,11 @@ Shop Validator 只校验 `ShopId` 非空、`Offers` 非空、Offer 卡牌非空�
 
 RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventId / StartNodeId`、Node / Choice ID、`NextNodeId`、卡牌条件 / 效果引用、卡牌支付筛选和 ZoneId、事件状态目标、RunFlag `FlagId`、`ConsumeNode >= 0`。金币门槛 / 扣费组合只做 authoring warning，不阻断资产。不校验标题 / 正文 / 按钮文案非空、节点可达性、选项是否至少一个、金币 / 压力数值平衡或剧情合法性。
 
+RunPickupDefinition Validator 只校验固定单一奖励配置：`PickupId` 非空、奖励类型非 `None`、金币数量大于 0、卡牌奖励引用非空。它不校验 DisplayName、关卡是否引用该资产、跨资产 `PickupId` 唯一性、掉落表、多奖励或数值平衡。
+
 ---
 
-## §8 GameplayTag 清单
+## §9 GameplayTag 清单
 
 所有 tag 在 `WacomCore/Public/Tags/WacomGameplayTags.h` 中声明。严禁业务代码里用字符串拼 tag。
 
@@ -608,7 +670,7 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 
 ---
 
-## §9 效果字段使用表
+## §10 效果字段使用表
 
 `FCardEffect` 的当前字段：
 
@@ -712,7 +774,7 @@ Magnitude 计算顺序：
 
 ---
 
-## §10 FEffectCondition / FCardZoneHook / FCardPassive
+## §11 FEffectCondition / FCardZoneHook / FCardPassive
 
 ### FEffectCondition
 

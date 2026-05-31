@@ -428,6 +428,25 @@ namespace Wacom::ContentBuilder
 			/*Passives*/ {}
 		);
 
+		// ==== 调试钥匙 DebugKey ====
+		// V0-BU 原型：探索期拖到调试宝箱上，走 Run world card drop receiver 事务。
+		UCardDefinition* DebugKey = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_DebugKey")),
+			TEXT("DA_Card_DebugKey"),
+			TEXT("DebugKey"),
+			TEXT("钥匙"),
+			TEXT("调试用工具卡：拖到调试宝箱上可打开宝箱。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::None,
+			FCardPhysique{},
+			/*Effects*/ {},
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
 		// ==== V0-AD 卡对卡测试卡 ====
 		// 用于 PIE 验证：拖到另一张 first-person 手牌上，命中 Target.SelectedHandCard。
 		UCardDefinition* TestAddCostToSelectedHand = BuildCard(
@@ -582,6 +601,7 @@ namespace Wacom::ContentBuilder
 
 		// 检查：任一建造失败则放弃。
 		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling || !BugGirlBag || !ZhujianRongnang || !MuseiLantern
+			|| !DebugKey
 			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
 			|| !TestTargetCompanion || !TestRequireCompanionTarget || !TestBlockWeaponTarget
 			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard)
@@ -618,6 +638,7 @@ namespace Wacom::ContentBuilder
 			TestDiscardSelectedHandCard,
 			TestExhaustSelectedHandCard,
 			TestTargetCost3,
+			DebugKey,
 			BugGirlBag,
 			ZhujianRongnang,
 			MuseiLantern

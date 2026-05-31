@@ -585,6 +585,10 @@ struct WACOMRUN_API FRunState
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup")
 	TSet<FName> CollectedPickupIds;
 
+	/** 已完成的探索期世界卡牌交互 ID。当前只在本次 Run 内存态保留，不接 SaveGame。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Interaction")
+	TSet<FName> CompletedRunWorldInteractionIds;
+
 	/** 玩家在探索地图的 Transform。仅当 bHasPlayerTransform == true 时有效。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
 	FTransform PlayerTransform = FTransform::Identity;

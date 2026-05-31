@@ -18,14 +18,9 @@ AWacomRunPickupActor::AWacomRunPickupActor()
 void AWacomRunPickupActor::ConfigureDebugGoldPickupSample()
 {
 	Modify();
-	PersistentId = BuildDebugPersistentIdFromActorName(GetName(), TEXT("Pickup.Debug."), TEXT("Gold"));
 	GoldAmount = 3;
-	TriggerRadius = 160.f;
-	bDestroyWhenCollected = true;
-	InteractPromptText = GetDefaultInteractPromptText();
-	HoverPromptText = GetDefaultHoverPromptText();
-	CollectedHoverPromptText = GetDefaultCollectedHoverPromptText();
-	RefreshClickTargetBindingAndRuntimeTarget();
+	ApplyDebugPickupAuthoringDefaults(
+		BuildDebugPersistentIdFromActorName(GetName(), TEXT("Pickup.Debug."), TEXT("Gold")));
 }
 
 FWacomRunPickupDebugView AWacomRunPickupActor::GetRunPickupDebugView(
@@ -40,6 +35,9 @@ FWacomRunPickupDebugView AWacomRunPickupActor::GetRunPickupDebugView(
 	View.bHasRunSession = BaseView.bHasRunSession;
 	View.bCanInteract = BaseView.bCanInteract;
 	View.bIsCollected = BaseView.bIsCollected;
+	View.TriggerRadius = BaseView.TriggerRadius;
+	View.ClickBoundsExtent = BaseView.ClickBoundsExtent;
+	View.VisualName = BaseView.VisualName;
 	View.bConfigValid = BaseView.bConfigValid;
 	View.ConfigWarningReason = BaseView.ConfigWarningReason;
 	View.bDuplicatePersistentIdDetected = BaseView.bDuplicatePersistentIdDetected;
@@ -58,13 +56,16 @@ FString AWacomRunPickupActor::GetRunPickupDebugSummary(AWacomPlayerController* P
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunPickup{Actor=%s PersistentId=%s Gold=%d HasRun=%s CanInteract=%s Collected=%s ConfigValid=%s ConfigReason=%s Duplicate=%s HasVisual=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CollectedHoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("RunPickup{Actor=%s PersistentId=%s Gold=%d HasRun=%s CanInteract=%s Collected=%s TriggerRadius=%.1f BoundsExtent=%s Visual=%s ConfigValid=%s ConfigReason=%s Duplicate=%s HasVisual=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CollectedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		View.GoldAmount,
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
 		View.bIsCollected ? TEXT("true") : TEXT("false"),
+		View.TriggerRadius,
+		*View.ClickBoundsExtent.ToCompactString(),
+		*View.VisualName.ToString(),
 		View.bConfigValid ? TEXT("true") : TEXT("false"),
 		*View.ConfigWarningReason.ToString(),
 		View.bDuplicatePersistentIdDetected ? TEXT("true") : TEXT("false"),

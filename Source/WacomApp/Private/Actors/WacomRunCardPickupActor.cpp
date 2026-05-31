@@ -25,10 +25,6 @@ AWacomRunCardPickupActor::AWacomRunCardPickupActor()
 void AWacomRunCardPickupActor::ConfigureDebugCardPickupSample()
 {
 	Modify();
-	PersistentId = BuildDebugPersistentIdFromActorName(
-		GetName(),
-		TEXT("Pickup.Debug.Card."),
-		TEXT("Card"));
 	if (UCardDefinition* LoadedCard = LoadObject<UCardDefinition>(nullptr, DebugPoisonFangPath))
 	{
 		CardDefinition = LoadedCard;
@@ -40,12 +36,10 @@ void AWacomRunCardPickupActor::ConfigureDebugCardPickupSample()
 			*GetName(),
 			DebugPoisonFangPath);
 	}
-	TriggerRadius = 160.f;
-	bDestroyWhenCollected = true;
-	InteractPromptText = GetDefaultInteractPromptText();
-	HoverPromptText = GetDefaultHoverPromptText();
-	CollectedHoverPromptText = GetDefaultCollectedHoverPromptText();
-	RefreshClickTargetBindingAndRuntimeTarget();
+	ApplyDebugPickupAuthoringDefaults(BuildDebugPersistentIdFromActorName(
+		GetName(),
+		TEXT("Pickup.Debug.Card."),
+		TEXT("Card")));
 }
 
 FWacomRunCardPickupDebugView AWacomRunCardPickupActor::GetRunCardPickupDebugView(
@@ -61,6 +55,9 @@ FWacomRunCardPickupDebugView AWacomRunCardPickupActor::GetRunCardPickupDebugView
 	View.bHasRunSession = BaseView.bHasRunSession;
 	View.bCanInteract = BaseView.bCanInteract;
 	View.bIsCollected = BaseView.bIsCollected;
+	View.TriggerRadius = BaseView.TriggerRadius;
+	View.ClickBoundsExtent = BaseView.ClickBoundsExtent;
+	View.VisualName = BaseView.VisualName;
 	View.bConfigValid = BaseView.bConfigValid;
 	View.ConfigWarningReason = BaseView.ConfigWarningReason;
 	View.bDuplicatePersistentIdDetected = BaseView.bDuplicatePersistentIdDetected;
@@ -80,7 +77,7 @@ FString AWacomRunCardPickupActor::GetRunCardPickupDebugSummary(
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunCardPickup{Actor=%s PersistentId=%s Card=%s CardId=%s HasRun=%s CanInteract=%s Collected=%s ConfigValid=%s ConfigReason=%s Duplicate=%s HasVisual=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CollectedHoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("RunCardPickup{Actor=%s PersistentId=%s Card=%s CardId=%s HasRun=%s CanInteract=%s Collected=%s TriggerRadius=%.1f BoundsExtent=%s Visual=%s ConfigValid=%s ConfigReason=%s Duplicate=%s HasVisual=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CollectedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.CardDefinitionName,
@@ -88,6 +85,9 @@ FString AWacomRunCardPickupActor::GetRunCardPickupDebugSummary(
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
 		View.bIsCollected ? TEXT("true") : TEXT("false"),
+		View.TriggerRadius,
+		*View.ClickBoundsExtent.ToCompactString(),
+		*View.VisualName.ToString(),
 		View.bConfigValid ? TEXT("true") : TEXT("false"),
 		*View.ConfigWarningReason.ToString(),
 		View.bDuplicatePersistentIdDetected ? TEXT("true") : TEXT("false"),

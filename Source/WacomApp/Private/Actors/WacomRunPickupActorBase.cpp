@@ -12,9 +12,112 @@
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
+#include "Pickups/RunPickupDefinition.h"
+#include "UObject/UnrealType.h"
 
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
+
+namespace
+{
+	bool ShouldValidatePickupPlacementActor(const AWacomRunPickupActorBase& Pickup)
+	{
+		return !Pickup.HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+			&& !Pickup.IsTemplate();
+	}
+
+	FString BuildPickupDefinitionValidationContext(
+		const AWacomRunPickupActorBase& Pickup)
+	{
+		const FObjectProperty* DefinitionProperty =
+			FindFProperty<FObjectProperty>(Pickup.GetClass(), TEXT("PickupDefinition"));
+		if (!DefinitionProperty)
+		{
+			return TEXT("Definition=None");
+		}
+
+		const UWacomRunPickupDefinition* Definition =
+			Cast<UWacomRunPickupDefinition>(
+				DefinitionProperty->GetObjectPropertyValue_InContainer(&Pickup));
+		if (!Definition)
+		{
+			return TEXT("Definition=None");
+		}
+
+		const UEnum* RewardTypeEnum = StaticEnum<EWacomRunPickupRewardType>();
+		const FString RewardTypeText = RewardTypeEnum
+			? RewardTypeEnum->GetNameStringByValue(static_cast<int64>(Definition->RewardType))
+			: FString::FromInt(static_cast<int32>(Definition->RewardType));
+		return FString::Printf(
+			TEXT("Definition=%s PickupId=%s RewardType=%s"),
+			*Definition->GetName(),
+			*Definition->PickupId.ToString(),
+			*RewardTypeText);
+	}
+
+	FText FormatPickupValidationError(
+		const AWacomRunPickupActorBase& Pickup,
+		FName Reason)
+	{
+		if (Reason == FName(TEXT("MissingPersistentId")))
+		{
+			return FText::Format(
+				LOCTEXT("PlacementMissingPersistentId",
+					"Run Pickup 摆放配置错误：Actor={0} 缺少 PersistentId，运行时不会结算。"),
+				FText::FromString(Pickup.GetName()));
+		}
+		if (Reason == FName(TEXT("InvalidGoldAmount")))
+		{
+			return FText::Format(
+				LOCTEXT("PlacementInvalidGoldAmount",
+					"Run Pickup 摆放配置错误：Actor={0} PersistentId={1} RewardType=Gold 金币数量必须大于 0。"),
+				FText::FromString(Pickup.GetName()),
+				FText::FromName(Pickup.PersistentId));
+		}
+		if (Reason == FName(TEXT("MissingCardDefinition")))
+		{
+			return FText::Format(
+				LOCTEXT("PlacementMissingCardDefinition",
+					"Run Pickup 摆放配置错误：Actor={0} PersistentId={1} RewardType=Card 缺少 CardDefinition。"),
+				FText::FromString(Pickup.GetName()),
+				FText::FromName(Pickup.PersistentId));
+		}
+		if (Reason == FName(TEXT("MissingPickupDefinition")))
+		{
+			return FText::Format(
+				LOCTEXT("PlacementMissingPickupDefinition",
+					"Run RewardPickup 摆放配置错误：Actor={0} PersistentId={1} Definition=None，缺少 PickupDefinition。"),
+				FText::FromString(Pickup.GetName()),
+				FText::FromName(Pickup.PersistentId));
+		}
+		if (Reason == FName(TEXT("MissingPickupId")))
+		{
+			return FText::Format(
+				LOCTEXT("PlacementMissingPickupId",
+					"Run RewardPickup 摆放配置错误：Actor={0} PersistentId={1} {2}，PickupDefinition 缺少 PickupId。"),
+				FText::FromString(Pickup.GetName()),
+				FText::FromName(Pickup.PersistentId),
+				FText::FromString(BuildPickupDefinitionValidationContext(Pickup)));
+		}
+		if (Reason == FName(TEXT("MissingRewardType")))
+		{
+			return FText::Format(
+				LOCTEXT("PlacementMissingRewardType",
+					"Run RewardPickup 摆放配置错误：Actor={0} PersistentId={1} {2}，PickupDefinition RewardType 不能为 None。"),
+				FText::FromString(Pickup.GetName()),
+				FText::FromName(Pickup.PersistentId),
+				FText::FromString(BuildPickupDefinitionValidationContext(Pickup)));
+		}
+
+		return FText::Format(
+			LOCTEXT("PlacementUnknownReason",
+				"Run Pickup 摆放配置错误：Actor={0} PersistentId={1} {2} Reason={3}。"),
+			FText::FromString(Pickup.GetName()),
+			FText::FromName(Pickup.PersistentId),
+			FText::FromString(BuildPickupDefinitionValidationContext(Pickup)),
+			FText::FromName(Reason));
+	}
+}
 
 AWacomRunPickupActorBase::AWacomRunPickupActorBase()
 {
@@ -58,7 +161,11 @@ AWacomRunPickupActorBase::AWacomRunPickupActorBase()
 void AWacomRunPickupActorBase::BeginPlay()
 {
 	Super::BeginPlay();
-	RefreshClickTargetBindingAndRuntimeTarget();
+	RefreshPickupAuthoringState();
+	if (ClickTargetBridgeComponent)
+	{
+		ClickTargetBridgeComponent->RefreshRunWorldTargetBinding();
+	}
 
 	const FName ConfigReason = BuildConfigWarningReason();
 	if (ConfigReason == FName(TEXT("MissingPersistentId")))
@@ -84,7 +191,6 @@ void AWacomRunPickupActorBase::BeginPlay()
 
 	if (TriggerSphere)
 	{
-		TriggerSphere->SetSphereRadius(TriggerRadius);
 		TriggerSphere->OnComponentBeginOverlap.AddDynamic(
 			this, &AWacomRunPickupActorBase::HandleBeginOverlap);
 		TriggerSphere->OnComponentEndOverlap.AddDynamic(
@@ -106,11 +212,7 @@ void AWacomRunPickupActorBase::BeginPlay()
 void AWacomRunPickupActorBase::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
-	RefreshClickTargetBinding();
-	if (TriggerSphere)
-	{
-		TriggerSphere->SetSphereRadius(TriggerRadius);
-	}
+	RefreshPickupAuthoringState();
 }
 
 void AWacomRunPickupActorBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -275,6 +377,9 @@ FWacomRunPickupBaseDebugView AWacomRunPickupActorBase::GetRunPickupBaseDebugView
 	View.bHasRunSession = PC && PC->GetRunSession();
 	View.bCanInteract = CanInteract_Implementation(PC);
 	View.bIsCollected = IsCollectedFor(PC);
+	View.TriggerRadius = TriggerRadius;
+	View.ClickBoundsExtent = ClickBounds ? ClickBounds->GetUnscaledBoxExtent() : FVector::ZeroVector;
+	View.VisualName = PickupVisual ? PickupVisual->GetFName() : NAME_None;
 	View.ConfigWarningReason = BuildConfigWarningReason();
 	View.bConfigValid = View.ConfigWarningReason.IsNone();
 	View.bDuplicatePersistentIdDetected = HasDuplicatePersistentIdInWorld();
@@ -323,12 +428,15 @@ FString AWacomRunPickupActorBase::GetRunPickupBaseDebugSummary(
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunPickupBase{Actor=%s PersistentId=%s HasRun=%s CanInteract=%s Collected=%s ConfigValid=%s ConfigReason=%s Duplicate=%s HasVisual=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CollectedHoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("RunPickupBase{Actor=%s PersistentId=%s HasRun=%s CanInteract=%s Collected=%s TriggerRadius=%.1f BoundsExtent=%s Visual=%s ConfigValid=%s ConfigReason=%s Duplicate=%s HasVisual=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CollectedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
 		View.bIsCollected ? TEXT("true") : TEXT("false"),
+		View.TriggerRadius,
+		*View.ClickBoundsExtent.ToCompactString(),
+		*View.VisualName.ToString(),
 		View.bConfigValid ? TEXT("true") : TEXT("false"),
 		*View.ConfigWarningReason.ToString(),
 		View.bDuplicatePersistentIdDetected ? TEXT("true") : TEXT("false"),
@@ -347,6 +455,42 @@ void AWacomRunPickupActorBase::LogRunPickupBaseDebugSummary(AWacomPlayerControll
 		*GetRunPickupBaseDebugSummary(PC));
 }
 
+#if WITH_EDITOR
+EDataValidationResult AWacomRunPickupActorBase::IsDataValid(
+	FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	if (!ShouldValidatePickupPlacementActor(*this))
+	{
+		return Result;
+	}
+
+	const FName ConfigReason = BuildConfigWarningReason();
+	if (!ConfigReason.IsNone())
+	{
+		Context.AddError(FormatPickupValidationError(*this, ConfigReason));
+		Result = EDataValidationResult::Invalid;
+	}
+
+	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
+	{
+		Context.AddWarning(FText::Format(
+			LOCTEXT("PlacementDuplicatePersistentId",
+				"Run Pickup 摆放警告：Actor={0} PersistentId={1} 与同关卡其他 Pickup 重复；这些 Pickup 会共享同一份已拾取状态。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId)));
+		if (Result != EDataValidationResult::Invalid)
+		{
+			Result = EDataValidationResult::Valid;
+		}
+	}
+
+	return Result == EDataValidationResult::Invalid
+		? EDataValidationResult::Invalid
+		: EDataValidationResult::Valid;
+}
+#endif
+
 void AWacomRunPickupActorBase::RefreshClickTargetBinding()
 {
 	FWacomRunWorldClickableInteractableHelper::BindClickTarget(
@@ -359,6 +503,37 @@ void AWacomRunPickupActorBase::RefreshClickTargetBinding()
 void AWacomRunPickupActorBase::RefreshClickTargetBindingAndRuntimeTarget()
 {
 	RefreshClickTargetBinding();
+	if (ClickTargetBridgeComponent)
+	{
+		ClickTargetBridgeComponent->RefreshRunWorldTargetBinding();
+	}
+}
+
+void AWacomRunPickupActorBase::RefreshPickupAuthoringState()
+{
+	if (TriggerSphere)
+	{
+		TriggerSphere->SetSphereRadius(TriggerRadius);
+	}
+	if (ClickBounds)
+	{
+		FWacomRunWorldClickableInteractableHelper::ConfigureClickBounds(ClickBounds);
+	}
+	RefreshClickTargetBinding();
+}
+
+void AWacomRunPickupActorBase::ApplyDebugPickupAuthoringDefaults(
+	FName InPersistentId,
+	float InTriggerRadius,
+	bool bInDestroyWhenCollected)
+{
+	PersistentId = InPersistentId;
+	TriggerRadius = InTriggerRadius;
+	bDestroyWhenCollected = bInDestroyWhenCollected;
+	InteractPromptText = GetDefaultInteractPromptText();
+	HoverPromptText = GetDefaultHoverPromptText();
+	CollectedHoverPromptText = GetDefaultCollectedHoverPromptText();
+	RefreshPickupAuthoringState();
 	if (ClickTargetBridgeComponent)
 	{
 		ClickTargetBridgeComponent->RefreshRunWorldTargetBinding();

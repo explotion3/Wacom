@@ -51,6 +51,11 @@ namespace Wacom::ContentBuilder
 		return DataRoot() / TEXT("Shops");
 	}
 
+	FString PickupsRoot()
+	{
+		return DataRoot() / TEXT("Pickups");
+	}
+
 	FString MakePackagePath(const FString& FolderPath, const TCHAR* AssetName)
 	{
 		return FolderPath / AssetName;
@@ -85,6 +90,7 @@ namespace Wacom::ContentBuilder
 
 		const FString Filename = FPackageName::LongPackageNameToFilename(
 			PackagePath, FPackageName::GetAssetPackageExtension());
+		IFileManager::Get().MakeDirectory(*FPaths::GetPath(Filename), /*Tree*/true);
 
 		FSavePackageArgs Args;
 		Args.TopLevelFlags = RF_Public | RF_Standalone;

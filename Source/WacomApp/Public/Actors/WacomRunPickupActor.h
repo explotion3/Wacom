@@ -32,6 +32,15 @@ struct WACOMAPP_API FWacomRunPickupDebugView
 	bool bIsCollected = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
+	float TriggerRadius = 0.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
+	FVector ClickBoundsExtent = FVector::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
+	FName VisualName = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
 	bool bConfigValid = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")

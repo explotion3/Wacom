@@ -7,6 +7,7 @@ public class WacomEditor : ModuleRules
 	public WacomEditor(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+		bUseUnity = false;
 
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
@@ -30,7 +31,8 @@ public class WacomEditor : ModuleRules
 			"ToolMenus",
 			"DataValidation",
 			"EnhancedInput",
-			"InputCore"
+			"InputCore",
+			"WacomApp"
 		});
 	}
 }

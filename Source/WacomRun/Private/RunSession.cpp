@@ -48,6 +48,45 @@ namespace
 		return FRunDeckRules::IsFluxContentCardDefinition(Card);
 	}
 
+	bool ContainsCardDefinition(
+		const TArray<TObjectPtr<UCardDefinition>>& Definitions,
+		const UCardDefinition* Definition)
+	{
+		return Definition
+			&& Definitions.ContainsByPredicate(
+				[Definition](const TObjectPtr<UCardDefinition>& Candidate)
+				{
+					return Candidate.Get() == Definition;
+				});
+	}
+
+	bool HasRunWorldCardInteractionFilter(const FRunWorldCardInteractionRequest& Request)
+	{
+		return Request.AllowedCardDefinitions.Num() > 0
+			|| Request.AllowedCardIds.Num() > 0
+			|| !Request.RequiredKeywords.IsEmpty()
+			|| !Request.BlockedKeywords.IsEmpty();
+	}
+
+	void FinalizeRunWorldCardInteractionValidationDebug(
+		FRunWorldCardInteractionValidation& Result,
+		const FRunWorldCardInteractionRequest& Request)
+	{
+		Result.DebugSummary = FString::Printf(
+			TEXT("RunWorldCardInteraction{PersistentId=%s SourceCard=%s SourceCardId=%s Consume=%s Gold=%d CanSubmit=%s Reason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d}"),
+			*Request.PersistentId.ToString(),
+			*Request.SourceCardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
+			*Result.SourceCardId.ToString(),
+			Request.bConsumeCardOnSuccess ? TEXT("true") : TEXT("false"),
+			Request.GoldReward,
+			Result.bCanSubmit ? TEXT("true") : TEXT("false"),
+			*Result.DisabledReason.ToString(),
+			Request.AllowedCardDefinitions.Num(),
+			Request.AllowedCardIds.Num(),
+			Request.RequiredKeywords.Num(),
+			Request.BlockedKeywords.Num());
+	}
+
 }
 
 // ================ 通知辅助 ================
@@ -1376,6 +1415,148 @@ bool URunSession::CollectCardPickup(FName PersistentId, UCardDefinition* CardDef
 		TEXT("[RunSession] CollectCardPickup: PersistentId=%s Card=%s"),
 		*PersistentId.ToString(),
 		*GetNameSafe(CardDefinition));
+	NotifyRunStateChanged();
+	return true;
+}
+
+bool URunSession::IsRunWorldInteractionCompleted(FName PersistentId) const
+{
+	if (PersistentId.IsNone())
+	{
+		return false;
+	}
+	return RunState.CompletedRunWorldInteractionIds.Contains(PersistentId);
+}
+
+FRunWorldCardInteractionValidation URunSession::ValidateRunWorldCardInteraction(
+	const FRunWorldCardInteractionRequest& Request) const
+{
+	FRunWorldCardInteractionValidation Result;
+	auto RejectWith = [&Result, &Request](FName Reason)
+	{
+		Result.bCanSubmit = false;
+		Result.DisabledReason = Reason;
+		FinalizeRunWorldCardInteractionValidationDebug(Result, Request);
+		return Result;
+	};
+
+	if (Request.PersistentId.IsNone())
+	{
+		return RejectWith(TEXT("MissingPersistentId"));
+	}
+	if (RunState.CompletedRunWorldInteractionIds.Contains(Request.PersistentId))
+	{
+		return RejectWith(TEXT("AlreadyCompleted"));
+	}
+	if (!Request.SourceCardInstanceId.IsValid())
+	{
+		return RejectWith(TEXT("MissingSourceCard"));
+	}
+	if (Request.GoldReward <= 0)
+	{
+		return RejectWith(TEXT("InvalidGoldReward"));
+	}
+	if (!HasRunWorldCardInteractionFilter(Request))
+	{
+		return RejectWith(TEXT("MissingCardFilter"));
+	}
+
+	FRunOwnedCardLocation Location;
+	if (!FRunDeckRules::FindOwnedCardInstance(
+		RunState,
+		Request.SourceCardInstanceId,
+		Location))
+	{
+		return RejectWith(TEXT("MissingSourceCard"));
+	}
+
+	UCardDefinition* SourceDefinition = Location.Instance.Definition.Get();
+	Result.SourceCardDefinition = SourceDefinition;
+	Result.SourceCardId = SourceDefinition ? SourceDefinition->CardId : NAME_None;
+	if (!SourceDefinition)
+	{
+		return RejectWith(TEXT("MissingCardDefinition"));
+	}
+
+	const bool bHasIdentityFilter =
+		Request.AllowedCardDefinitions.Num() > 0
+		|| Request.AllowedCardIds.Num() > 0;
+	if (bHasIdentityFilter)
+	{
+		const bool bMatchesDefinition =
+			ContainsCardDefinition(Request.AllowedCardDefinitions, SourceDefinition);
+		const bool bMatchesCardId =
+			Request.AllowedCardIds.Contains(SourceDefinition->CardId);
+		if (!bMatchesDefinition && !bMatchesCardId)
+		{
+			return RejectWith(TEXT("CardNotAccepted"));
+		}
+	}
+
+	if (!Request.RequiredKeywords.IsEmpty()
+		&& !SourceDefinition->Keywords.HasAllExact(Request.RequiredKeywords))
+	{
+		return RejectWith(TEXT("MissingRequiredKeyword"));
+	}
+	if (!Request.BlockedKeywords.IsEmpty()
+		&& SourceDefinition->Keywords.HasAnyExact(Request.BlockedKeywords))
+	{
+		return RejectWith(TEXT("BlockedKeyword"));
+	}
+
+	if (Request.bConsumeCardOnSuccess)
+	{
+		const FRunDeckOperationValidation DestroyValidation =
+			FRunDeckRules::ValidatePermanentRemoveInstance(
+				RunState,
+				Request.SourceCardInstanceId);
+		if (!DestroyValidation.bCanExecute)
+		{
+			return RejectWith(DestroyValidation.DisabledReason.IsNone()
+				? FName(TEXT("RunValidationFailed"))
+				: DestroyValidation.DisabledReason);
+		}
+	}
+
+	Result.bCanSubmit = true;
+	Result.DisabledReason = NAME_None;
+	FinalizeRunWorldCardInteractionValidationDebug(Result, Request);
+	return Result;
+}
+
+bool URunSession::SubmitRunWorldCardInteraction(
+	const FRunWorldCardInteractionRequest& Request)
+{
+	FRunWorldCardInteractionValidation Validation =
+		ValidateRunWorldCardInteraction(Request);
+	if (!Validation.bCanSubmit)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] SubmitRunWorldCardInteraction: 拒绝 PersistentId=%s Card=%s Reason=%s"),
+			*Request.PersistentId.ToString(),
+			*Request.SourceCardInstanceId.ToString(),
+			*Validation.DisabledReason.ToString());
+		return false;
+	}
+
+	if (Request.bConsumeCardOnSuccess
+		&& !DestroyCardByInstanceInternal(Request.SourceCardInstanceId))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] SubmitRunWorldCardInteraction: 精确销毁卡牌失败 PersistentId=%s Card=%s"),
+			*Request.PersistentId.ToString(),
+			*Request.SourceCardInstanceId.ToString());
+		return false;
+	}
+
+	RunState.Gold += Request.GoldReward;
+	RunState.CompletedRunWorldInteractionIds.Add(Request.PersistentId);
+	UE_LOG(LogTemp, Display,
+		TEXT("[RunSession] SubmitRunWorldCardInteraction: PersistentId=%s Card=%s +%d gold (total=%d)"),
+		*Request.PersistentId.ToString(),
+		*Request.SourceCardInstanceId.ToString(),
+		Request.GoldReward,
+		RunState.Gold);
 	NotifyRunStateChanged();
 	return true;
 }

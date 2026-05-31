@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomRunKeyChestActor.h"
 #include "Actors/WacomRunCardPickupActor.h"
+#include "Actors/WacomRunRewardPickupActor.h"
 #include "Actors/WacomRunPickupActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
 #include "Actors/WacomShopTriggerActor.h"
@@ -28,6 +30,7 @@
 class URunSession;
 class UWacomAppToastSubsystem;
 class UPrimitiveComponent;
+class UWacomRunWorldCardDropReceiverComponent;
 
 UCLASS()
 class UWacomRunMenuDropTargetWidgetProbe : public UWacomRunMenuDropTargetWidget
@@ -183,6 +186,33 @@ public:
 		bool bReleased)
 	{
 		return ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, bReleased);
+	}
+
+	bool ApplyRunWorldCardDropProbeFeedbackForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		bool bReleased)
+	{
+		return ApplyRunWorldCardDropProbeFeedback(CardInstanceId, DragView, bReleased);
+	}
+
+	FRunWorldCardInteractionValidation ResolveRunWorldCardDropIntentForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		FWacomInteractionTargetHandle& OutTargetHandle,
+		AActor*& OutTargetActor,
+		UWacomRunWorldInteractionTargetBridgeComponent*& OutTargetBridge,
+		UWacomRunWorldCardDropReceiverComponent*& OutReceiver,
+		FString& OutDebugSummary) const
+	{
+		return ResolveRunWorldCardDropIntent(
+			CardInstanceId,
+			DragView,
+			OutTargetHandle,
+			OutTargetActor,
+			OutTargetBridge,
+			OutReceiver,
+			OutDebugSummary);
 	}
 
 	FString ReadRunMenuDropProbeDebugSummaryForTest() const
@@ -365,6 +395,30 @@ public:
 
 UCLASS()
 class AWacomRunCardPickupClickProbe : public AWacomRunCardPickupActor
+{
+	GENERATED_BODY()
+
+public:
+	void SyncClickTargetForTest()
+	{
+		OnConstruction(FTransform::Identity);
+	}
+};
+
+UCLASS()
+class AWacomRunRewardPickupClickProbe : public AWacomRunRewardPickupActor
+{
+	GENERATED_BODY()
+
+public:
+	void SyncClickTargetForTest()
+	{
+		OnConstruction(FTransform::Identity);
+	}
+};
+
+UCLASS()
+class AWacomRunKeyChestClickProbe : public AWacomRunKeyChestActor
 {
 	GENERATED_BODY()
 

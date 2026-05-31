@@ -17,6 +17,15 @@
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 
+namespace
+{
+	bool ShouldValidateRunEventTriggerPlacementActor(const AWacomRunEventTriggerActor& Trigger)
+	{
+		return !Trigger.HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+			&& !Trigger.IsTemplate();
+	}
+}
+
 AWacomRunEventTriggerActor::AWacomRunEventTriggerActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -311,6 +320,58 @@ AWacomRunEventTriggerActor::GetRunWorldClickableDebugView_Implementation(
 		ClickTargetBridgeComponent,
 		ClickBounds);
 }
+
+#if WITH_EDITOR
+EDataValidationResult AWacomRunEventTriggerActor::IsDataValid(
+	FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	if (!ShouldValidateRunEventTriggerPlacementActor(*this))
+	{
+		return Result;
+	}
+
+	if (PersistentId.IsNone())
+	{
+		Context.AddError(FText::Format(
+			LOCTEXT("PlacementMissingPersistentId",
+				"RunEvent Trigger 摆放配置错误：Actor={0} 缺少 PersistentId，运行时不会打开事件。EventDefinition={1} EventId={2}。"),
+			FText::FromString(GetName()),
+			FText::FromString(EventDefinition ? EventDefinition->GetName() : TEXT("None")),
+			FText::FromName(EventDefinition ? EventDefinition->EventId : NAME_None)));
+		Result = EDataValidationResult::Invalid;
+	}
+
+	if (!EventDefinition)
+	{
+		Context.AddError(FText::Format(
+			LOCTEXT("PlacementMissingEventDefinition",
+				"RunEvent Trigger 摆放配置错误：Actor={0} PersistentId={1} 缺少 EventDefinition。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId)));
+		Result = EDataValidationResult::Invalid;
+	}
+
+	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
+	{
+		Context.AddWarning(FText::Format(
+			LOCTEXT("PlacementDuplicatePersistentId",
+				"RunEvent Trigger 摆放警告：Actor={0} PersistentId={1} EventDefinition={2} EventId={3} 与同关卡其他 RunEvent Trigger 重复；这些事件会共享当前节点和完成状态。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId),
+			FText::FromString(EventDefinition ? EventDefinition->GetName() : TEXT("None")),
+			FText::FromName(EventDefinition ? EventDefinition->EventId : NAME_None)));
+		if (Result != EDataValidationResult::Invalid)
+		{
+			Result = EDataValidationResult::Valid;
+		}
+	}
+
+	return Result == EDataValidationResult::Invalid
+		? EDataValidationResult::Invalid
+		: EDataValidationResult::Valid;
+}
+#endif
 
 FVector AWacomRunEventTriggerActor::GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const
 {

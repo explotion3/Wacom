@@ -16,6 +16,15 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 
+namespace
+{
+	bool ShouldValidateBattleTriggerPlacementActor(const ABattleTriggerActor& Trigger)
+	{
+		return !Trigger.HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+			&& !Trigger.IsTemplate();
+	}
+}
+
 ABattleTriggerActor::ABattleTriggerActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -65,20 +74,12 @@ void ABattleTriggerActor::BeginPlay()
 	else
 	{
 		// 关卡级 id 唯一性检查
-		for (TActorIterator<ABattleTriggerActor> It(GetWorld()); It; ++It)
+		if (HasDuplicatePersistentIdInWorld())
 		{
-			ABattleTriggerActor* Other = *It;
-			if (Other && Other != this && !Other->HasAnyFlags(RF_ClassDefaultObject))
-			{
-				if (Other->PersistentId == PersistentId)
-				{
-					UE_LOG(LogTemp, Error,
-						TEXT("[BattleTriggerActor] PersistentId %s 与 %s 重复，请为每个 Trigger 设置唯一 id"),
-						*PersistentId.ToString(),
-						*Other->GetName());
-					break;
-				}
-			}
+			UE_LOG(LogTemp, Error,
+				TEXT("[BattleTriggerActor] %s: PersistentId %s 与同关卡其他 BattleTrigger 重复，请为每个 Trigger 设置唯一 id"),
+				*GetName(),
+				*PersistentId.ToString());
 		}
 
 		// 已被销毁过：直接 Destroy
@@ -246,6 +247,56 @@ ABattleTriggerActor::GetRunWorldClickableDebugView_Implementation(
 		ClickBounds);
 }
 
+#if WITH_EDITOR
+EDataValidationResult ABattleTriggerActor::IsDataValid(
+	FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	if (!ShouldValidateBattleTriggerPlacementActor(*this))
+	{
+		return Result;
+	}
+
+	if (PersistentId.IsNone())
+	{
+		Context.AddError(FText::Format(
+			LOCTEXT("PlacementMissingPersistentId",
+				"BattleTrigger 摆放配置错误：Actor={0} 缺少 PersistentId，胜利销毁和撤离 BattleProgress 无法持久化。EnemyDef={1}。"),
+			FText::FromString(GetName()),
+			FText::FromString(EnemyDef ? EnemyDef->GetName() : TEXT("None"))));
+		Result = EDataValidationResult::Invalid;
+	}
+
+	if (!EnemyDef)
+	{
+		Context.AddError(FText::Format(
+			LOCTEXT("PlacementMissingEnemyDefinition",
+				"BattleTrigger 摆放配置错误：Actor={0} PersistentId={1} 缺少 EnemyDef，运行时不会进入战斗。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId)));
+		Result = EDataValidationResult::Invalid;
+	}
+
+	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
+	{
+		Context.AddWarning(FText::Format(
+			LOCTEXT("PlacementDuplicatePersistentId",
+				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} EnemyDef={2} 与同关卡其他 BattleTrigger 重复；这些战斗会共享销毁状态和 BattleProgress。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId),
+			FText::FromString(EnemyDef ? EnemyDef->GetName() : TEXT("None"))));
+		if (Result != EDataValidationResult::Invalid)
+		{
+			Result = EDataValidationResult::Valid;
+		}
+	}
+
+	return Result == EDataValidationResult::Invalid
+		? EDataValidationResult::Invalid
+		: EDataValidationResult::Valid;
+}
+#endif
+
 FVector ABattleTriggerActor::GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const
 {
 	return GetActorLocation();
@@ -337,6 +388,27 @@ void ABattleTriggerActor::RefreshClickTargetBinding()
 		ClickBounds,
 		ClickInteractionTargetComponent,
 		ClickTargetBridgeComponent);
+}
+
+bool ABattleTriggerActor::HasDuplicatePersistentIdInWorld() const
+{
+	if (PersistentId.IsNone() || !GetWorld())
+	{
+		return false;
+	}
+
+	for (TActorIterator<ABattleTriggerActor> It(GetWorld()); It; ++It)
+	{
+		const ABattleTriggerActor* Other = *It;
+		if (Other
+			&& Other != this
+			&& !Other->HasAnyFlags(RF_ClassDefaultObject)
+			&& Other->PersistentId == PersistentId)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool ABattleTriggerActor::IsDestroyedFor(AWacomPlayerController* PC) const

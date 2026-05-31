@@ -6,6 +6,9 @@
 #include "GameFramework/Actor.h"
 #include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomWorldInteractable.h"
+#if WITH_EDITOR
+#include "Misc/DataValidation.h"
+#endif
 #include "WacomRunPickupActorBase.generated.h"
 
 class AWacomPlayerController;
@@ -34,6 +37,15 @@ struct WACOMAPP_API FWacomRunPickupBaseDebugView
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
 	bool bIsCollected = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
+	float TriggerRadius = 0.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
+	FVector ClickBoundsExtent = FVector::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
+	FName VisualName = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Debug")
 	bool bConfigValid = false;
@@ -163,6 +175,10 @@ public:
 	virtual FWacomRunWorldClickableInteractableDebugView GetRunWorldClickableDebugView_Implementation(
 		AWacomPlayerController* PC) const override;
 
+#if WITH_EDITOR
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
@@ -184,6 +200,11 @@ protected:
 
 	void RefreshClickTargetBinding();
 	void RefreshClickTargetBindingAndRuntimeTarget();
+	void RefreshPickupAuthoringState();
+	void ApplyDebugPickupAuthoringDefaults(
+		FName InPersistentId,
+		float InTriggerRadius = 160.f,
+		bool bInDestroyWhenCollected = true);
 	FName BuildConfigWarningReason() const;
 	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsCollectedFor(AWacomPlayerController* PC) const;

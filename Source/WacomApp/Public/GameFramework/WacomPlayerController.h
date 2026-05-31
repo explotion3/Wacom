@@ -6,6 +6,7 @@
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "RunStateTypes.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 #include "WacomPlayerController.generated.h"
@@ -20,6 +21,7 @@ class URunSession;
 class UBattleHUD;
 class UWacomRunEventDefinition;
 class UWacomRunWorldInteractionTargetBridgeComponent;
+class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunMenuDropTargetWidget;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
@@ -131,6 +133,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target|Debug", meta = (ToolTip = "开启后，Run World Target hover 提示切换会输出目标、提示文案和拒绝原因。默认关闭。"))
 	bool bLogRunWorldInteractableHoverPrompt = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Card Drop", meta = (ToolTip = "开启后，探索期第一人称手牌可拖拽到实现 Run world card drop receiver 的场景目标。菜单卡牌租约仍优先处理 UI Zone。"))
+	bool bEnableRunWorldCardDrop = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Card Drop|Debug", meta = (ToolTip = "开启后，探索期拖卡到场景目标会输出预览、释放和拒绝原因。默认关闭。"))
+	bool bLogRunWorldCardDrop = false;
 
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
@@ -291,6 +299,23 @@ protected:
 		const FWacomFirstPersonCardDragView& DragView) const;
 	bool SubmitResolvedRunMenuCardDropIntent(
 		FWacomRunMenuCardDropResolveResult& Result);
+	bool ApplyRunWorldCardDropProbeFeedback(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		bool bReleased);
+	FRunWorldCardInteractionValidation ResolveRunWorldCardDropIntent(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		FWacomInteractionTargetHandle& OutTargetHandle,
+		AActor*& OutTargetActor,
+		UWacomRunWorldInteractionTargetBridgeComponent*& OutTargetBridge,
+		UWacomRunWorldCardDropReceiverComponent*& OutReceiver,
+		FString& OutDebugSummary) const;
+	bool SubmitResolvedRunWorldCardDropIntent(
+		const FGuid& CardInstanceId,
+		UWacomRunWorldCardDropReceiverComponent* Receiver,
+		FName PersistentId,
+		FRunWorldCardInteractionValidation& InOutValidation);
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
 	FText BuildCurrentInteractPrompt() const;
@@ -323,10 +348,14 @@ private:
 	void ClearRunWorldInteractableHoverPrompt(FName Reason);
 	UWacomRunWorldInteractionTargetBridgeComponent* ResolveRunWorldTargetBridgeFromHandle(
 		const FWacomInteractionTargetHandle& Handle) const;
+	UWacomRunWorldCardDropReceiverComponent* ResolveRunWorldCardDropReceiverFromHandle(
+		const FWacomInteractionTargetHandle& Handle) const;
+	void ClearRunWorldCardDropProbe();
 	void RefreshRunFirstPersonCardLayerMenuSuppression();
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
 	bool ShouldHandleRunFirstPersonMenuDropProbe() const;
+	bool ShouldHandleRunWorldCardDropProbe() const;
 	UWacomMenuWidgetBase* ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const;
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSession = nullptr;
@@ -362,11 +391,15 @@ private:
 	TWeakObjectPtr<UWacomRunMenuDropTargetWidget> PreviewedRunMenuDropTarget;
 
 	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> PreviewedRunWorldCardDropBridge;
+
+	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> RunMenuProbeBoundAnchor;
 
 	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
 	bool bRunFirstPersonMenuLeaseDragBound = false;
 	FString LastRunMenuDropProbeDebugSummary;
+	FString LastRunWorldCardDropDebugSummary;
 
 	FTimerHandle RunWorldTargetProbePreviewTimerHandle;
 };

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "RunStateTypes.generated.h"
 
 class UCardDefinition;
@@ -161,6 +162,64 @@ struct WACOMRUN_API FRunDeckOperationValidation
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Validation")
 	FName DisabledReason = NAME_None;
+};
+
+/**
+ * 探索期“拖一张已拥有卡到场景物体”事务请求。
+ *
+ * PersistentId 来自场景 Actor，是本次 Run 内防重复完成 key；SourceCardInstanceId 必须是玩家
+ * 当前真实持有区中的精确 instance。V1 只支持可选消耗这张卡、获得固定金币并标记完成。
+ */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunWorldCardInteractionRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
+	FName PersistentId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
+	FGuid SourceCardInstanceId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
+	TArray<TObjectPtr<UCardDefinition>> AllowedCardDefinitions;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
+	TArray<FName> AllowedCardIds;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
+	FGameplayTagContainer RequiredKeywords;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
+	FGameplayTagContainer BlockedKeywords;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
+	bool bConsumeCardOnSuccess = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction", meta = (ClampMin = "0", UIMin = "0"))
+	int32 GoldReward = 0;
+};
+
+/** 只读校验结果；失败路径不修改 RunState。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunWorldCardInteractionValidation
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Interaction|Validation")
+	bool bCanSubmit = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Interaction|Validation")
+	FName DisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Interaction|Validation")
+	TObjectPtr<UCardDefinition> SourceCardDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Interaction|Validation")
+	FName SourceCardId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Interaction|Validation")
+	FString DebugSummary;
 };
 
 /**

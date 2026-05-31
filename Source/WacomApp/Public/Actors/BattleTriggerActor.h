@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomWorldInteractable.h"
+#include "Misc/DataValidation.h"
 #include "BattleTriggerActor.generated.h"
 
 class USphereComponent;
@@ -156,6 +157,10 @@ public:
 	virtual FWacomRunWorldClickableInteractableDebugView GetRunWorldClickableDebugView_Implementation(
 		AWacomPlayerController* PC) const override;
 
+#if WITH_EDITOR
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
@@ -177,6 +182,7 @@ protected:
 
 private:
 	void RefreshClickTargetBinding();
+	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsDestroyedFor(AWacomPlayerController* PC) const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle",

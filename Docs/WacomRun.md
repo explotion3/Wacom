@@ -90,9 +90,9 @@ Run 探索期的正式玩家移动模型是 Run Tunnel：鼠标可见，`W/S` �
 
 后续 Run 卡牌交互应复用 first-person card layer：卡牌仍用 HUD / UMG 渲染保证清晰和动态材质稳定，但布局由第一人称 card anchor 投影到屏幕，形成跟随玩家身体 / tunnel 前进的手牌感。Run 规则层不依赖该表现系统；设计讨论见 `Docs/First_Person_Card_Layer_Design.md`。
 
-V0-AK 后，探索期可以由 `WacomApp` 的 `UWacomRunFirstPersonCardSourceComponent` 把 `URunSession::BuildBackpackStorageSnapshot()` 中的 `BattleDeckPhysicalCards` 和可选 `BattleDeckProjectedCards` 写入 `UWacomFirstPersonCardAnchorComponent` 的 runtime source `RunFirstPersonBattleDeck`。这只是 App/UI 层展示 bootstrap：entry 使用 Run card instance id 和卡面 ViewData，让玩家在探索中看到备战卡组；默认不会提交 Run 命令，不会启用战斗手牌 click / drag 交互，也不会改变 `FRunState`。V0-AL 后，普通 GameMenu 打开时会默认压制该展示，避免遮挡背包、暂停、商店或事件界面；需要菜单内卡牌交互时，由菜单显式申请 menu source lease 临时显示候选卡。V0-AM 后，active menu lease 允许第一人称卡牌进入 hold / drag probe，并可命中菜单 UMG 的 `TargetKind=Zone` drop target。V0-AN 后菜单推荐提交 `FWacomRunMenuCardLeaseRequest`，由 App 层从玩家当前真实物理持有区收集候选卡实例：`Backpack -> BattleDeck -> BurdenZone -> SpecialZones.Cards`。该 provider 不读取 `BattleDeckProjectedCards`，避免 SpecialZone 入战投影和物理卡重复；Definition/CardId 身份筛选为 OR，显式 InstanceId、RequiredKeywords、BlockedKeywords 与身份筛选共同生效。空筛选默认拒绝，除非菜单明确开启“允许所有持有卡”。V0-AO 后菜单 Zone release 可走 `ResolveRunMenuCardDropIntent()`：默认测试菜单仍可由 PlayerController 调用 `ValidateDestroyCardByInstance()` / `DestroyCardByInstance()` 永久移除具体持有卡，作为独立 prototype 验证。V0-AQ 后 RunEventScreen 使用 `MenuHandled` submit policy 接管该 release：PlayerController 只负责命中、preview 和分发，真正提交由 `URunSession::ChooseRunEventOptionWithPaidCardResult()` 在 RunEvent 事务内完成，提交成功或失败都会回填到 drop result。进入战斗时 GameMode / PlayerController 会清理该 Run source 和 lease，退出战斗回到 Exploration 后再刷新默认 BattleDeck。
+V0-AK 后，探索期可以由 `WacomApp` 的 `UWacomRunFirstPersonCardSourceComponent` 把 `URunSession::BuildBackpackStorageSnapshot()` 中的 `BattleDeckPhysicalCards` 和可选 `BattleDeckProjectedCards` 写入 `UWacomFirstPersonCardAnchorComponent` 的 runtime source `RunFirstPersonBattleDeck`。entry 使用 Run card instance id 和卡面 ViewData，让玩家在探索中看到备战卡组；Run 规则层不依赖这层表现。V0-AL 后，普通 GameMenu 打开时会默认压制该展示，避免遮挡背包、暂停、商店或事件界面；需要菜单内卡牌交互时，由菜单显式申请 menu source lease 临时显示候选卡。V0-AM 后，active menu lease 允许第一人称卡牌进入 hold / drag probe，并可命中菜单 UMG 的 `TargetKind=Zone` drop target。V0-AN 后菜单推荐提交 `FWacomRunMenuCardLeaseRequest`，由 App 层从玩家当前真实物理持有区收集候选卡实例：`Backpack -> BattleDeck -> BurdenZone -> SpecialZones.Cards`。该 provider 不读取 `BattleDeckProjectedCards`，避免 SpecialZone 入战投影和物理卡重复；Definition/CardId 身份筛选为 OR，显式 InstanceId、RequiredKeywords、BlockedKeywords 与身份筛选共同生效。空筛选默认拒绝，除非菜单明确开启“允许所有持有卡”。V0-AO 后菜单 Zone release 可走 `ResolveRunMenuCardDropIntent()`：默认测试菜单仍可由 PlayerController 调用 `ValidateDestroyCardByInstance()` / `DestroyCardByInstance()` 永久移除具体持有卡，作为独立 prototype 验证。V0-AQ 后 RunEventScreen 使用 `MenuHandled` submit policy 接管该 release：PlayerController 只负责命中、preview 和分发，真正提交由 `URunSession::ChooseRunEventOptionWithPaidCardResult()` 在 RunEvent 事务内完成，提交成功或失败都会回填到 drop result。V0-BV 后，在没有 active GameMenu / menu lease 时，探索期第一人称卡牌拖拽还可以命中 `Interaction.Target.Run.Object` 场景目标，并通过 Run world card drop receiver 提交 KeyChest prototype 事务；菜单 lease 仍优先于场景拖卡。进入战斗时 GameMode / PlayerController 会清理该 Run source 和 lease，退出战斗回到 Exploration 后再刷新默认 BattleDeck。
 
-V0-AJ 后，Run / 探索场景 Actor 可以通过 `UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent` 暴露为 `FWacomInteractionTargetHandle(TargetKind=World, TargetTag=Interaction.Target.Run.Object)`。这只提供鼠标 probe、未来拖牌目标识别、轻量 preview 和 debug；`URunSession` 暂不消费该 handle，也不会因此提交 Run 规则。探索期正式交互仍是 `IWacomWorldInteractable + E`。
+V0-AJ 后，Run / 探索场景 Actor 可以通过 `UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent` 暴露为 `FWacomInteractionTargetHandle(TargetKind=World, TargetTag=Interaction.Target.Run.Object)`。该 handle 现在服务三类入口：鼠标 hover / click 的世界交互物识别、Run world card drop 的目标识别、轻量 scale / CustomDepth preview 和 debug。规则提交仍必须回到明确领域出口：普通点击 / E 键走 `IWacomWorldInteractable::TryInteract()`，V0-BU 的拖卡到宝箱走 `URunSession::SubmitRunWorldCardInteraction()`。
 
 时段进入副作用：
 
@@ -224,6 +224,8 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 
 `UShopDefinition.ShopId` 是静态内容 ID。多个场景商店可以引用同一份 `UShopDefinition`，但只要 Actor `PersistentId` 不同，它们就是不同库存。
 
+V0-BT 后，场景 ShopTrigger 的 Validate Map/Level 按运行时口径校验商品来源：优先 `ShopDefinition.Offers`，未配置 Definition 时使用手工 `Offers` 兼容入口。缺 `PersistentId`、解析后没有可用商品、商品缺卡或负价格是 error；重复 `PersistentId` 是 warning，因为它会共享库存和购买状态。
+
 购买规则：
 
 - 打开商店不消耗节点。
@@ -312,9 +314,23 @@ V0-BM 后，Run world 卡牌拾取物使用 `URunSession::CollectCardPickup(Pers
 
 V0-BN 后，金币 / 卡牌 Pickup 的世界交互壳抽到 `AWacomRunPickupActorBase`，但 Run 规则入口不变。Base 只管理 `PersistentId`、E 键 / click / hover、视觉 probe、已拾取生命周期和跨 Pickup 类型重复 ID 诊断；金币和卡牌子类仍分别调用 `CollectGoldPickup()` 与 `CollectCardPickup()`。后续掉落表、多卡奖励或 SaveGame 不应直接塞进 Base，而应先定义新的奖励合同或持久化策略。
 
+V0-BO 后，Pickup 的制作打磨仍不改变 Run 规则：金币 / 卡牌样例配置按钮共用 `AWacomRunPickupActorBase` 的 authoring helper，只刷新当前 Actor 的 `PersistentId / TriggerRadius / prompt / bDestroyWhenCollected`、碰撞组件和 click stable id，不触碰 `FRunState`。推荐关卡摆放使用 `BP_WacomRunPickupActor` / `BP_WacomRunCardPickupActor` 作为外观默认资产；C++ 父类仍是结算和交互合同真相。
+
+V0-BP 后，正式内容可以逐步使用 `AWacomRunRewardPickupActor + UWacomRunPickupDefinition` 做数据驱动拾取物。Definition 只描述固定单一奖励：金币或一张固定卡；运行时结算仍调用现有 `CollectGoldPickup()` / `CollectCardPickup()`，所以 `CollectedPickupIds`、重复提交拒绝、金币 / 卡牌获得语义都不变。场景 Actor 的 `PersistentId` 仍是当前 Run 已拾取状态 key；`PickupDefinition.PickupId` 只是静态内容 / debug ID，不能替代 `PersistentId`。本轮不新增掉落表、多奖励、多卡、SaveGame、动画或样例 `.uasset`。
+
+V0-BQ 后，`DA_Pickup_DebugGold3` 和 `DA_Pickup_DebugPoisonFang` 是标准 PickupDefinition 样例：前者固定获得 3 金币，后者固定获得 `PoisonFang`。它们只用于制作入口和 PIE 验证，运行时仍以摆放的 `AWacomRunRewardPickupActor.PersistentId` 写入 `CollectedPickupIds`；同一 Definition 可以被多个场景 Actor 复用，只要 `PersistentId` 不同就不会共享已拾取状态。
+
+V0-BR 后，正式关卡推荐摆放 `BP_WacomRunRewardPickupActor` 并在实例上配置唯一 `PersistentId` 与 `UWacomRunPickupDefinition`。该 BP 默认不填 `PersistentId` 或 `PickupDefinition`，避免复制摆放时误共享运行时已拾取 key；运行时结算仍完全走 `CollectGoldPickup()` / `CollectCardPickup()` 和 `CollectedPickupIds`。
+
+V0-BS 后，Pickup 摆放实例接入 Actor Data Validation。金币 Pickup 缺 `PersistentId` 或 `GoldAmount <= 0`、卡牌 Pickup 缺 `CardDefinition`、RewardPickup 缺 `PickupDefinition` 或 Definition 内部奖励配置无效都会成为 Validate Map/Level error；同 World 内重复 `PersistentId` 是 warning，不阻断，因为它仍表示共享同一份已拾取状态。BP 默认资产 / CDO 仍允许空配置。
+
+V0-BU 后，探索期世界卡牌交互使用独立于 Pickup 的完成状态：`FRunState::CompletedRunWorldInteractionIds`。`URunSession::ValidateRunWorldCardInteraction()` 校验场景 `PersistentId`、精确 `SourceCardInstanceId`、Definition/CardId/RequiredKeywords/BlockedKeywords 筛选、重复完成、金币奖励和可选永久移除安全；`SubmitRunWorldCardInteraction()` 成功时可选消耗那张精确持有卡，增加固定金币奖励，写入 `CompletedRunWorldInteractionIds`，最后只广播一次。失败或重复提交不改状态、不广播。V1 原型只支持单卡筛选、可选消耗和正数金币奖励；不支持多奖励、掉落表、动画或 SaveGame。
+
+V0-BV 后旧 `AWacomDebugChestActor` 已移除，新的 `AWacomRunKeyChestActor` 是第一条使用该事务的原型场景 Actor：默认要求拖入 `DA_Card_DebugKey`，成功后消耗钥匙、获得 3 金币，并用宝箱自身 `PersistentId` 标记已打开。普通 E 键或左键点击只提示“需要钥匙 / 宝箱已打开”，不会直接结算奖励。宝箱打开状态不复用 `CollectedPickupIds`，避免“拾取物已拾取”和“世界卡牌交互已完成”语义混在一起。
+
 `FRunEventChoiceResult` 只表达本次选项直接效果和展示诊断字段，供 UI 和日志展示。V0-AR 后成功的卡牌支付结果会记录 `PaidCardDefinition`，仅用于 UI / 日志显示“交出了哪张卡”；它必须在移除 paid instance 前从当前持有卡读取，且不是后续规则输入。V0-AS 后成功结果还会记录 `PreviousNodeId / ResolvedNodeId / ResolvedNodeTitleText / bNodeChanged / bEventClosedAfterResolve / bEventCompletedAfterResolve`，用于 Toast 显示“进入某节点”或“事件已结束”。这些 outcome 字段只在事务成功提交后写入；失败或回滚结果不写入 paid card definition，也不写入成功 outcome。后续规则不能依赖这个结果包反向修改 RunState。
 
-当前 `RunEventStates`、`RunFlags` 和 `CollectedPickupIds` 只保存在 Run 内存态，不写入 SaveGame。
+当前 `RunEventStates`、`RunFlags`、`CollectedPickupIds` 和 `CompletedRunWorldInteractionIds` 只保存在 Run 内存态，不写入 SaveGame。
 
 ---
 
@@ -371,8 +387,12 @@ Outcome 分支：
 | `AWacomRunEventTriggerActor` | RunEvent 当前节点与完成状态 |
 | `AWacomRunPickupActor` | 金币拾取物已拾取状态 |
 | `AWacomRunCardPickupActor` | 卡牌拾取物已拾取状态 |
+| `AWacomRunRewardPickupActor` | 数据驱动金币 / 卡牌拾取物已拾取状态 |
+| `AWacomRunKeyChestActor` | 世界卡牌交互完成状态 |
 
 规则：
+
+- V0-BT 后，RunEvent / Shop / BattleTrigger 的关卡摆放实例也会通过 Validate Map/Level 检查 `PersistentId` 和关键配置。RunEvent 缺 `EventDefinition`、Shop 没有可用商品、BattleTrigger 缺 `EnemyDef` 会报 error；重复 `PersistentId` 报 warning，不阻断。
 
 - 参与 Run 状态的场景 Actor 必须配置非空 `PersistentId`。
 - 同一关卡内应保持唯一。
@@ -427,6 +447,7 @@ Outcome 分支：
 | `RunEventStates` | 不保存 | 事件当前节点和完成状态清空 |
 | `RunFlags` | 不保存 | 当前 Run 内存态事件标记清空 |
 | `CollectedPickupIds` | 不保存 | 世界金币 / 卡牌拾取物已拾取状态清空 |
+| `CompletedRunWorldInteractionIds` | 不保存 | 调试宝箱等世界卡牌交互完成状态清空 |
 
 因此，当前 SaveGame 不能被描述为完整 Run 存档。它只覆盖部分场景与卡牌持有状态，而且正常流程还被 GameMode 总开关禁用。
 
@@ -464,6 +485,10 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | `Source/WacomApp/Public/Actors/WacomRunPickupActorBase.h` | Run world Pickup 共享交互壳，管理 E 键 / click / hover、组件、lifecycle 和 debug |
 | `Source/WacomApp/Public/Actors/WacomRunPickupActor.h` | 金币拾取物入口，提供 `PersistentId` 和 `GoldAmount`，结算调用 `CollectGoldPickup()` |
 | `Source/WacomApp/Public/Actors/WacomRunCardPickupActor.h` | 卡牌拾取物入口，提供 `PersistentId` 和固定 `CardDefinition`，结算调用 `CollectCardPickup()` |
+| `Source/WacomApp/Public/Actors/WacomRunRewardPickupActor.h` | 数据驱动拾取物入口，读取 `UWacomRunPickupDefinition` 并调用现有金币 / 卡牌拾取结算 |
+| `Source/WacomApp/Public/Actors/WacomRunKeyChestActor.h` | 钥匙宝箱原型入口，接收拖入钥匙卡并提交 Run world card interaction |
+| `Source/WacomApp/Public/Interaction/WacomRunWorldCardDropReceiver.h` | Run world card drop 接收器合同，构建 / 校验 / 提交 `FRunWorldCardInteractionRequest` |
+| `Source/WacomData/Public/Pickups/RunPickupDefinition.h` | Pickup 静态奖励定义；`PickupId` 仅用于内容识别和 debug，不是已拾取状态 key |
 
 设计与数据侧对应文档：
 

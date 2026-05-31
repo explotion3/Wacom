@@ -3,13 +3,17 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomRunKeyChestActor.h"
 #include "Actors/WacomRunCardPickupActor.h"
+#include "Actors/WacomRunRewardPickupActor.h"
 #include "Actors/WacomRunPickupActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
 #include "Actors/WacomShopTriggerActor.h"
 #include "Cards/CardDefinition.h"
+#include "Characters/CharacterDefinition.h"
 #include "Components/SceneComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
@@ -18,8 +22,11 @@
 #include "Events/RunEventDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "GameFramework/WacomPlayerCharacter.h"
 #include "Interaction/WacomRunWorldClickableInteractable.h"
+#include "Interaction/WacomRunWorldCardDropReceiver.h"
 #include "Interaction/WacomWorldInteractable.h"
+#include "Pickups/RunPickupDefinition.h"
 #include "RunSession.h"
 #include "RunState.h"
 #include "Shops/ShopDefinition.h"
@@ -38,7 +45,9 @@
 
 #include "Engine/GameInstance.h"
 #include "Engine/Engine.h"
+#include "Misc/DataValidation.h"
 #include "UObject/StrongObjectPtr.h"
+#include "UObject/UObjectGlobals.h"
 
 namespace
 {
@@ -68,6 +77,25 @@ namespace
 		{
 			RunSessionProperty->SetObjectPropertyValue_InContainer(PC, Run);
 		}
+	}
+
+	EDataValidationResult ValidateObjectForUiTest(
+		const UObject* Object,
+		TArray<FText>& OutWarnings,
+		TArray<FText>& OutErrors)
+	{
+		OutWarnings.Reset();
+		OutErrors.Reset();
+		if (!Object)
+		{
+			OutErrors.Add(FText::FromString(TEXT("Missing object")));
+			return EDataValidationResult::Invalid;
+		}
+
+		FDataValidationContext Context;
+		const EDataValidationResult Result = Object->IsDataValid(Context);
+		Context.SplitIssues(OutWarnings, OutErrors);
+		return Result;
 	}
 
 	UWacomRunEventDefinition* MakeUiRunEvent(UObject* Outer)
@@ -119,6 +147,42 @@ namespace
 		Start.Choices = { Pay };
 		Event->Nodes = { Start };
 		return Event;
+	}
+
+	UCardDefinition* MakeUiWorldDropCard(UObject* Outer, FName CardId)
+	{
+		UCardDefinition* Card = NewObject<UCardDefinition>(Outer);
+		Card->CardId = CardId;
+		Card->DisplayName = FText::FromName(CardId);
+		Card->Rarity = WacomTags::Card_Rarity_White;
+		return Card;
+	}
+
+	UCharacterDefinition* MakeUiWorldDropCharacter(UObject* Outer, UCardDefinition* Card)
+	{
+		UCardDefinition* CapacityProvider = NewObject<UCardDefinition>(Outer);
+		CapacityProvider->CardId = TEXT("WorldDrop.Bag");
+		CapacityProvider->DisplayName = FText::FromString(TEXT("World Drop Bag"));
+		CapacityProvider->Rarity = WacomTags::Card_Rarity_White;
+		CapacityProvider->Physique.Capacity = 4;
+
+		UCharacterDefinition* Character = NewObject<UCharacterDefinition>(Outer);
+		Character->CharacterId = TEXT("WorldDrop.Character");
+		Character->DisplayName = FText::FromString(TEXT("World Drop Character"));
+		Character->FingerCount = 10;
+		Character->HpPerFinger = 2;
+		Character->StarterDeck = { Card, CapacityProvider };
+		return Character;
+	}
+
+	FWacomFirstPersonCardDragView MakeUiWorldDropDragView(const FVector2D& Position)
+	{
+		FWacomFirstPersonCardDragView DragView;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
+		DragView.CurrentScreenPosition = Position;
+		DragView.PointerViewportPosition = Position;
+		DragView.bHasPointerViewportPosition = true;
+		return DragView;
 	}
 
 	UWacomRunEventDefinition* MakeUiRunEventFlagRewardPreviewEvent(
@@ -248,6 +312,44 @@ namespace
 		}
 
 		return Count;
+	}
+
+	UWacomRunPickupDefinition* MakeUiGoldPickupDefinition(
+		UObject* Outer,
+		FName PickupId = TEXT("Pickup.Definition.UI.Gold"),
+		int32 GoldAmount = 3)
+	{
+		UWacomRunPickupDefinition* Definition = NewObject<UWacomRunPickupDefinition>(Outer);
+		Definition->PickupId = PickupId;
+		Definition->RewardType = EWacomRunPickupRewardType::Gold;
+		Definition->GoldAmount = GoldAmount;
+		return Definition;
+	}
+
+	UWacomRunPickupDefinition* MakeUiCardPickupDefinition(
+		UObject* Outer,
+		UCardDefinition* Card,
+		FName PickupId = TEXT("Pickup.Definition.UI.Card"))
+	{
+		UWacomRunPickupDefinition* Definition = NewObject<UWacomRunPickupDefinition>(Outer);
+		Definition->PickupId = PickupId;
+		Definition->RewardType = EWacomRunPickupRewardType::Card;
+		Definition->CardDefinition = Card;
+		return Definition;
+	}
+
+	UWacomRunPickupDefinition* LoadDebugGoldPickupDefinitionForUiTest()
+	{
+		return LoadObject<UWacomRunPickupDefinition>(
+			nullptr,
+			TEXT("/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3.DA_Pickup_DebugGold3"));
+	}
+
+	UWacomRunPickupDefinition* LoadDebugPoisonFangPickupDefinitionForUiTest()
+	{
+		return LoadObject<UWacomRunPickupDefinition>(
+			nullptr,
+			TEXT("/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang.DA_Pickup_DebugPoisonFang"));
 	}
 
 	AActor* SpawnTransientActor(UWorld& World)
@@ -624,6 +726,325 @@ bool FWacomUIRunPickupBaseStableIdSpec::RunTest(const FString& /*Parameters*/)
 		CardPickup->GetClickInteractionTargetComponent()->GetStableTargetId(),
 		FName(TEXT("Pickup.Base.CardStable")));
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestComponentsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestOwnsRunWorldTargetAndCardDropReceiver",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestComponentsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.Components");
+	Chest->SyncClickTargetForTest();
+	TestNotNull(TEXT("TriggerSphere"), Chest->GetTriggerSphere());
+	TestNotNull(TEXT("ClickBounds"), Chest->GetClickBounds());
+	TestNotNull(TEXT("ChestVisual"), Chest->GetChestVisual());
+	TestNotNull(TEXT("InteractionTarget"), Chest->GetClickInteractionTargetComponent());
+	TestNotNull(TEXT("Bridge"), Chest->GetClickTargetBridgeComponent());
+	TestNotNull(TEXT("Receiver"), Chest->GetCardDropReceiverComponent());
+	TestEqual(TEXT("Stable id"), Chest->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Chest.Debug.Components")));
+	TestTrue(TEXT("Target tag"),
+		Chest->GetClickInteractionTargetComponent()->GetInteractionTargetTag()
+			.MatchesTagExact(WacomTags::Interaction_Target_Run_Object));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropPreviewAcceptsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldCardDropPreviewAcceptsDebugKey",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropPreviewAcceptsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomPlayerCharacter> Pawn(NewObject<AWacomPlayerCharacter>());
+	PC->SetPawn(Pawn.Get());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.Accepts");
+	Chest->SyncClickTargetForTest();
+	Chest->GetCardDropReceiverComponent()->AllowedCardDefinitions = { Key.Get() };
+	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
+	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	FWacomInteractionTargetHandle TargetHandle;
+	AActor* TargetActor = nullptr;
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge = nullptr;
+	UWacomRunWorldCardDropReceiverComponent* Receiver = nullptr;
+	FString DebugSummary;
+	const FRunWorldCardInteractionValidation Validation =
+		PC->ResolveRunWorldCardDropIntentForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			TargetHandle,
+			TargetActor,
+			Bridge,
+			Receiver,
+			DebugSummary);
+
+	TestTrue(TEXT("Valid target"), TargetHandle.IsValid());
+	TestTrue(TEXT("Target actor"), TargetActor == Chest.Get());
+	TestEqual(TEXT("Receiver"), Receiver, Chest->GetCardDropReceiverComponent());
+	TestTrue(TEXT("Can submit"), Validation.bCanSubmit);
+	TestTrue(TEXT("Debug mentions stable id"), DebugSummary.Contains(TEXT("Chest.Debug.Accepts")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropPreviewRejectsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldCardDropPreviewRejectsWrongCard",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropPreviewRejectsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Wrong(MakeUiWorldDropCard(GetTransientPackage(), TEXT("WrongCard")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Wrong.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.Rejects");
+	Chest->SyncClickTargetForTest();
+	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
+	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	FWacomInteractionTargetHandle TargetHandle;
+	AActor* TargetActor = nullptr;
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge = nullptr;
+	UWacomRunWorldCardDropReceiverComponent* Receiver = nullptr;
+	FString DebugSummary;
+	const FRunWorldCardInteractionValidation Validation =
+		PC->ResolveRunWorldCardDropIntentForTest(
+			WrongInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			TargetHandle,
+			TargetActor,
+			Bridge,
+			Receiver,
+			DebugSummary);
+
+	TestFalse(TEXT("Cannot submit"), Validation.bCanSubmit);
+	TestEqual(TEXT("Reject reason"), Validation.DisabledReason, FName(TEXT("CardNotAccepted")));
+	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
+	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropReleaseSubmitsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseDebugKeyOnKeyChestSubmitsAndShowsGoldToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomPlayerCharacter> Pawn(NewObject<AWacomPlayerCharacter>());
+	PC->SetPawn(Pawn.Get());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.Release");
+	Chest->SyncClickTargetForTest();
+	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
+	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	TestTrue(TEXT("Release submits"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	TestEqual(TEXT("Gold +3"), Run->GetGold(), 3);
+	TestTrue(TEXT("Completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
+	TestEqual(TEXT("Key removed"), Run->GetRunState().BattleDeck.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropWrongReleaseSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseWrongCardOnKeyChestDoesNotMutateRunState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropWrongReleaseSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Wrong(MakeUiWorldDropCard(GetTransientPackage(), TEXT("WrongCard")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Wrong.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.WrongRelease");
+	Chest->SyncClickTargetForTest();
+	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
+	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	TestFalse(TEXT("Release rejected"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			WrongInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
+	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
+	TestEqual(TEXT("Card remains"), Run->GetRunState().BattleDeck.Num(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropMenuBlockedSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldCardDropIgnoredWhenGameMenuActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropMenuBlockedSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.MenuBlocked");
+	Chest->SyncClickTargetForTest();
+	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+
+	TestFalse(TEXT("World drop blocked by menu"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
+	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropMenuLeasePrioritySpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunMenuLeaseDropStillRoutesToMenuZone",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomPlayerCharacter> Pawn(NewObject<AWacomPlayerCharacter>());
+	PC->SetPawn(Pawn.Get());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.MenuLeasePriority");
+	Chest->SyncClickTargetForTest();
+	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
+	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Menu->SetOwningWacomPlayerControllerForTest(PC.Get());
+	Menu->bAcceptRunMenuFirstPersonCardDropForTest = true;
+	Menu->SubmitPolicyForTest = EWacomRunMenuCardDropSubmitPolicy::MenuHandled;
+	Menu->AcceptedZoneIdForTest = TEXT("RunMenu.Zone.Key");
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+	PC->SetRunFirstPersonMenuLeaseForTest(TEXT("Lease.MenuPriority"));
+	FWacomRunMenuCardLeaseRequest LeaseRequest;
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	LeaseRequest.LeaseId = TEXT("Lease.MenuPriority");
+	LeaseRequest.SourceId = TEXT("Test.Source");
+	LeaseRequest.bAllowAllOwnedCardsWhenNoFilter = true;
+	TestTrue(TEXT("Menu owns active lease"),
+		Menu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(LeaseRequest, LeaseResult));
+
+	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Zone(NewObject<UWacomRunMenuDropTargetWidgetProbe>());
+	Zone->ZoneId = TEXT("RunMenu.Zone.Key");
+	Zone->StableTargetId = TEXT("RunMenu.Zone.Key");
+	Zone->bProbeHitForTest = true;
+	PC->RegisterRunMenuDropTargetForTest(Zone.Get());
+
+	const bool bSubmittedToMenu =
+		PC->ApplyRunMenuDropProbeFeedbackForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true);
+
+	TestTrue(TEXT("Menu zone handles release"), bSubmittedToMenu);
+	TestTrue(TEXT("Menu submit result recorded"), Menu->LastDropResultForTest.bSubmitted);
+	TestEqual(TEXT("World gold unchanged"), Run->GetGold(), 0);
+	TestFalse(TEXT("Chest not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
+	TestEqual(TEXT("Key remains because menu handled without RunSession mutation"),
+		Run->GetRunState().BattleDeck.Num(),
+		1);
+
+	PC->UnregisterRunMenuDropTargetForTest(Zone.Get());
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropClickEKeyRegressionSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldClickAndEKeyInteractRemainUnchanged",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropClickEKeyRegressionSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	InjectRunSession(PC.Get(), Run.Get());
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.ClickE");
+	Chest->SyncClickTargetForTest();
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	TestFalse(TEXT("Left click does not open/submit chest"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
+	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
+	TestEqual(TEXT("Prompt needs key"), Chest->GetInteractPromptText_Implementation(PC.Get()).ToString(),
+		FString(TEXT("需要钥匙")));
 	return true;
 }
 
@@ -2087,6 +2508,332 @@ bool FWacomUIRunCardPickupCannotCollectTwiceSpec::RunTest(const FString& /*Param
 	TestFalse(TEXT("Second card pickup rejected"), Pickup->TryInteract_Implementation(PC.Get()));
 	TestEqual(TEXT("Card added once"),
 		CountUiStorageDefinitions(Run->BuildBackpackStorageSnapshot(), Card.Get()), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupComponentsSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.RewardPickupOwnsSharedClickableComponents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupComponentsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunRewardPickupActor> Pickup(NewObject<AWacomRunRewardPickupActor>());
+
+	TestNotNull(TEXT("Reward pickup owns trigger sphere"), Pickup->GetTriggerSphere());
+	TestNotNull(TEXT("Reward pickup owns click bounds"), Pickup->GetClickBounds());
+	TestNotNull(TEXT("Reward pickup owns visible placeholder"), Pickup->GetPickupVisual());
+	TestNotNull(TEXT("Reward pickup owns interaction target"),
+		Pickup->GetClickInteractionTargetComponent());
+	TestNotNull(TEXT("Reward pickup owns run target bridge"),
+		Pickup->GetClickTargetBridgeComponent());
+	if (Pickup->GetClickBounds())
+	{
+		TestEqual(TEXT("Click bounds blocks visibility"),
+			Pickup->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+			ECR_Block);
+		TestFalse(TEXT("Click bounds does not generate overlap"),
+			Pickup->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupDebugSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.RewardPickupDebugReportsDefinitionRewardAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupDebugSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiGoldPickupDefinition(Pickup.Get(), TEXT("Pickup.Definition.UI.Debug"), 6));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.RewardDebug");
+	Pickup->PickupDefinition = Definition.Get();
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	const FWacomRunRewardPickupDebugView View =
+		Pickup->GetRunRewardPickupDebugView(PC.Get());
+	TestEqual(TEXT("Debug pickup id"),
+		View.PickupId, FName(TEXT("Pickup.Definition.UI.Debug")));
+	TestEqual(TEXT("Debug reward type"), View.RewardType, FName(TEXT("Gold")));
+	TestEqual(TEXT("Debug gold"), View.GoldAmount, 6);
+	TestTrue(TEXT("Debug click target"), View.bClickTargetConfigured);
+	TestEqual(TEXT("Debug stable id"),
+		View.ClickTargetStableId, FName(TEXT("Pickup.UI.RewardDebug")));
+	TestTrue(TEXT("Debug config valid"), View.bConfigValid);
+
+	const FString Summary = Pickup->GetRunRewardPickupDebugSummary(PC.Get());
+	TestTrue(TEXT("Summary reports definition"), Summary.Contains(TEXT("Definition=")));
+	TestTrue(TEXT("Summary reports pickup id"),
+		Summary.Contains(TEXT("PickupId=Pickup.Definition.UI.Debug")));
+	TestTrue(TEXT("Summary reports reward type"), Summary.Contains(TEXT("RewardType=Gold")));
+	TestTrue(TEXT("Summary reports stable id"),
+		Summary.Contains(TEXT("ClickStableId=Pickup.UI.RewardDebug")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupEKeyGoldSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.EKeyRewardPickupCollectsGoldDefinition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupEKeyGoldSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiGoldPickupDefinition(Pickup.Get(), TEXT("Pickup.Definition.UI.EKeyGold"), 7));
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetPawn(Pawn.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.RewardGoldEKey");
+	Pickup->PickupDefinition = Definition.Get();
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->SyncClickTargetForTest();
+	PC->RegisterCandidateInteractable(Pickup.Get());
+
+	TestTrue(TEXT("Reward pickup is closest candidate"),
+		PC->ReadClosestInteractable() == Pickup.Get());
+	PC->TryInteractFromConsole();
+
+	TestEqual(TEXT("Definition gold added"), Run->GetGold(), 7);
+	TestTrue(TEXT("Reward pickup marked collected"),
+		Run->IsPickupCollected(Pickup->PersistentId));
+	TestFalse(TEXT("Collected reward pickup cannot interact"),
+		Pickup->CanInteract_Implementation(PC.Get()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupClickGoldSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.LeftClickRewardPickupCollectsGoldDefinitionWithoutOverlap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupClickGoldSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiGoldPickupDefinition(Pickup.Get(), TEXT("Pickup.Definition.UI.ClickGold"), 8));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.RewardGoldClick");
+	Pickup->PickupDefinition = Definition.Get();
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+
+	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
+	TestTrue(TEXT("Far reward pickup click routes"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Definition gold added"), Run->GetGold(), 8);
+	TestTrue(TEXT("Reward pickup marked collected"),
+		Run->IsPickupCollected(Pickup->PersistentId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupEKeyCardSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.EKeyRewardPickupCollectsCardDefinition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupEKeyCardSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiCardPickupDefinition(Pickup.Get(), Card.Get(), TEXT("Pickup.Definition.UI.EKeyCard")));
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetPawn(Pawn.Get());
+	Card->CardId = TEXT("Pickup.Definition.UI.EKeyCardReward");
+
+	Pickup->PersistentId = TEXT("Pickup.UI.RewardCardEKey");
+	Pickup->PickupDefinition = Definition.Get();
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->SyncClickTargetForTest();
+	PC->RegisterCandidateInteractable(Pickup.Get());
+
+	TestTrue(TEXT("Reward card pickup is closest candidate"),
+		PC->ReadClosestInteractable() == Pickup.Get());
+	PC->TryInteractFromConsole();
+
+	TestEqual(TEXT("Definition card added"),
+		CountUiStorageDefinitions(Run->BuildBackpackStorageSnapshot(), Card.Get()), 1);
+	TestTrue(TEXT("Reward card pickup marked collected"),
+		Run->IsPickupCollected(Pickup->PersistentId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupClickCardSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.LeftClickRewardPickupCollectsCardDefinitionWithoutOverlap",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupClickCardSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiCardPickupDefinition(Pickup.Get(), Card.Get(), TEXT("Pickup.Definition.UI.ClickCard")));
+	InjectRunSession(PC.Get(), Run.Get());
+	Card->CardId = TEXT("Pickup.Definition.UI.ClickCardReward");
+
+	Pickup->PersistentId = TEXT("Pickup.UI.RewardCardClick");
+	Pickup->PickupDefinition = Definition.Get();
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+
+	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
+	TestTrue(TEXT("Far reward card pickup click routes"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Definition card added"),
+		CountUiStorageDefinitions(Run->BuildBackpackStorageSnapshot(), Card.Get()), 1);
+	TestTrue(TEXT("Reward card pickup marked collected"),
+		Run->IsPickupCollected(Pickup->PersistentId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupRejectsInvalidSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.RewardPickupRejectsMissingOrInvalidDefinition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupRejectsInvalidSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> MissingDefinitionPickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> InvalidDefinitionPickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> InvalidDefinition(
+		MakeUiGoldPickupDefinition(InvalidDefinitionPickup.Get(), TEXT("Pickup.Definition.UI.Invalid"), 0));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	MissingDefinitionPickup->PersistentId = TEXT("Pickup.UI.MissingDefinition");
+	MissingDefinitionPickup->SyncClickTargetForTest();
+	TestFalse(TEXT("Missing definition cannot interact"),
+		MissingDefinitionPickup->CanInteract_Implementation(PC.Get()));
+	TestEqual(TEXT("Missing definition debug reason"),
+		MissingDefinitionPickup->GetRunRewardPickupDebugView(PC.Get()).ConfigWarningReason,
+		FName(TEXT("MissingPickupDefinition")));
+
+	InvalidDefinitionPickup->PersistentId = TEXT("Pickup.UI.InvalidDefinition");
+	InvalidDefinitionPickup->PickupDefinition = InvalidDefinition.Get();
+	InvalidDefinitionPickup->SyncClickTargetForTest();
+	TestFalse(TEXT("Invalid definition cannot interact"),
+		InvalidDefinitionPickup->CanInteract_Implementation(PC.Get()));
+	TestEqual(TEXT("Invalid definition debug reason"),
+		InvalidDefinitionPickup->GetRunRewardPickupDebugView(PC.Get()).ConfigWarningReason,
+		FName(TEXT("InvalidGoldAmount")));
+	TestFalse(TEXT("Invalid definition does not collect"),
+		InvalidDefinitionPickup->TryInteract_Implementation(PC.Get()));
+	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupCannotCollectTwiceSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.RewardPickupCannotBeCollectedTwice",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupCannotCollectTwiceSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiGoldPickupDefinition(Pickup.Get(), TEXT("Pickup.Definition.UI.NoRepeat"), 4));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.RewardNoRepeat");
+	Pickup->PickupDefinition = Definition.Get();
+	Pickup->bDestroyWhenCollected = false;
+
+	TestTrue(TEXT("First definition pickup succeeds"),
+		Pickup->TryInteract_Implementation(PC.Get()));
+	TestFalse(TEXT("Second definition pickup rejected"),
+		Pickup->TryInteract_Implementation(PC.Get()));
+	TestEqual(TEXT("Gold added once"), Run->GetGold(), 4);
+	TestTrue(TEXT("Shared collected state marked"),
+		Run->IsPickupCollected(Pickup->PersistentId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupHoverPromptAndVisualSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.RewardPickupHoverShowsDefinitionPromptAndVisualSignal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupHoverPromptAndVisualSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiCardPickupDefinition(Pickup.Get(), Card.Get(), TEXT("Pickup.Definition.UI.HoverCard")));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.RewardHover");
+	Pickup->PickupDefinition = Definition.Get();
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	Pickup->GetPickupVisual()->SetRelativeScale3D(FVector(1.25f, 1.25f, 1.25f));
+	Pickup->GetPickupVisual()->SetRenderCustomDepth(false);
+	Pickup->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.2f;
+	Pickup->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 254;
+	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestEqual(TEXT("Card definition hover prompt uses card fallback"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击拾取卡牌")));
+	TestTrue(TEXT("Reward pickup bridge preview active"),
+		Pickup->GetClickTargetBridgeComponent()->IsProbePreviewActive());
+	TestEqual(TEXT("Reward pickup visual scaled by shared probe"),
+		Pickup->GetPickupVisual()->GetRelativeScale3D(), FVector(1.5f, 1.5f, 1.5f));
+	TestTrue(TEXT("Reward pickup visual custom depth enabled"),
+		Pickup->GetPickupVisual()->bRenderCustomDepth);
+	TestEqual(TEXT("Reward pickup visual stencil applied"),
+		Pickup->GetPickupVisual()->CustomDepthStencilValue, 254);
+	TestTrue(TEXT("Hover debug reports reward pickup stable id"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(
+			TEXT("StableId=Pickup.UI.RewardHover")));
 
 	return true;
 }
@@ -4214,6 +4961,1238 @@ bool FWacomUIRunCardPickupConfigureDebugSampleRunStateSpec::RunTest(const FStrin
 		Run->IsPickupCollected(TEXT("Pickup.Existing.CardTest")), bExistingCollectedBefore);
 	TestFalse(TEXT("Configure card sample does not mark new id collected"),
 		Run->IsPickupCollected(Pickup->PersistentId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupAuthoringGoldRefreshSpec,
+	"Wacom.UI.WorldInteraction.RunPickupAuthoring.GoldPickupConfigureSampleRefreshesBoundsStableIdAndPrompts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupAuthoringGoldRefreshSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(
+		NewObject<AWacomRunPickupClickProbe>(
+			GetTransientPackage(),
+			FName(TEXT("PickupAuthoringGoldProbe"))));
+
+	Pickup->PersistentId = TEXT("Old.Authoring.Gold");
+	Pickup->GoldAmount = 99;
+	Pickup->TriggerRadius = 500.f;
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->InteractPromptText = FText::FromString(TEXT("old interact"));
+	Pickup->HoverPromptText = FText::FromString(TEXT("old hover"));
+	Pickup->CollectedHoverPromptText = FText::FromString(TEXT("old collected"));
+	if (Pickup->GetClickBounds())
+	{
+		Pickup->GetClickBounds()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Pickup->GetClickBounds()->SetCollisionResponseToAllChannels(ECR_Overlap);
+		Pickup->GetClickBounds()->SetGenerateOverlapEvents(true);
+	}
+
+	Pickup->ConfigureDebugGoldPickupSample();
+
+	TestEqual(TEXT("Sample persistent id uses actor name"),
+		Pickup->PersistentId, FName(TEXT("Pickup.Debug.PickupAuthoringGoldProbe")));
+	TestEqual(TEXT("Sample gold"), Pickup->GoldAmount, 3);
+	TestEqual(TEXT("Sample trigger radius"), Pickup->TriggerRadius, 160.f);
+	if (Pickup->GetTriggerSphere())
+	{
+		TestEqual(TEXT("Trigger sphere radius refreshed"),
+			Pickup->GetTriggerSphere()->GetUnscaledSphereRadius(), 160.f);
+	}
+	if (Pickup->GetClickBounds())
+	{
+		TestEqual(TEXT("Click bounds query only"),
+			Pickup->GetClickBounds()->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
+		TestEqual(TEXT("Click bounds blocks visibility"),
+			Pickup->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility), ECR_Block);
+		TestFalse(TEXT("Click bounds overlap remains disabled"),
+			Pickup->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+	TestTrue(TEXT("Sample destroys when collected"), Pickup->bDestroyWhenCollected);
+	TestEqual(TEXT("Sample interact prompt"),
+		Pickup->GetInteractPromptText_Implementation(nullptr).ToString(),
+		FString(TEXT("按 E 拾取")));
+	TestEqual(TEXT("Sample hover prompt"),
+		Pickup->GetHoverPromptText(nullptr).ToString(),
+		FString(TEXT("点击拾取")));
+	TestEqual(TEXT("Sample stable id on interaction target"),
+		Pickup->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Pickup.Debug.PickupAuthoringGoldProbe")));
+	TestEqual(TEXT("Sample stable id on bridge"),
+		Pickup->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Pickup.Debug.PickupAuthoringGoldProbe")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupAuthoringCardRefreshSpec,
+	"Wacom.UI.WorldInteraction.RunPickupAuthoring.CardPickupConfigureSampleRefreshesBoundsStableIdAndPrompts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupAuthoringCardRefreshSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunCardPickupClickProbe> Pickup(
+		NewObject<AWacomRunCardPickupClickProbe>(
+			GetTransientPackage(),
+			FName(TEXT("PickupAuthoringCardProbe"))));
+	TStrongObjectPtr<UCardDefinition> FallbackCard(NewObject<UCardDefinition>());
+
+	Pickup->PersistentId = TEXT("Old.Authoring.Card");
+	Pickup->CardDefinition = FallbackCard.Get();
+	Pickup->TriggerRadius = 500.f;
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->InteractPromptText = FText::FromString(TEXT("old interact"));
+	Pickup->HoverPromptText = FText::FromString(TEXT("old hover"));
+	Pickup->CollectedHoverPromptText = FText::FromString(TEXT("old collected"));
+	if (Pickup->GetClickBounds())
+	{
+		Pickup->GetClickBounds()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Pickup->GetClickBounds()->SetCollisionResponseToAllChannels(ECR_Overlap);
+		Pickup->GetClickBounds()->SetGenerateOverlapEvents(true);
+	}
+
+	Pickup->ConfigureDebugCardPickupSample();
+
+	TestEqual(TEXT("Sample persistent id uses actor name"),
+		Pickup->PersistentId, FName(TEXT("Pickup.Debug.Card.PickupAuthoringCardProbe")));
+	TestEqual(TEXT("Sample trigger radius"), Pickup->TriggerRadius, 160.f);
+	if (Pickup->GetTriggerSphere())
+	{
+		TestEqual(TEXT("Trigger sphere radius refreshed"),
+			Pickup->GetTriggerSphere()->GetUnscaledSphereRadius(), 160.f);
+	}
+	if (Pickup->GetClickBounds())
+	{
+		TestEqual(TEXT("Click bounds query only"),
+			Pickup->GetClickBounds()->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
+		TestEqual(TEXT("Click bounds blocks visibility"),
+			Pickup->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility), ECR_Block);
+		TestFalse(TEXT("Click bounds overlap remains disabled"),
+			Pickup->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+	TestTrue(TEXT("Sample destroys when collected"), Pickup->bDestroyWhenCollected);
+	TestEqual(TEXT("Sample interact prompt"),
+		Pickup->GetInteractPromptText_Implementation(nullptr).ToString(),
+		FString(TEXT("按 E 拾取卡牌")));
+	TestEqual(TEXT("Sample hover prompt"),
+		Pickup->GetHoverPromptText(nullptr).ToString(),
+		FString(TEXT("点击拾取卡牌")));
+	TestNotNull(TEXT("Sample keeps or loads a card definition"), Pickup->CardDefinition.Get());
+	TestEqual(TEXT("Sample stable id on interaction target"),
+		Pickup->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Pickup.Debug.Card.PickupAuthoringCardProbe")));
+	TestEqual(TEXT("Sample stable id on bridge"),
+		Pickup->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Pickup.Debug.Card.PickupAuthoringCardProbe")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupAuthoringGoldDebugSpec,
+	"Wacom.UI.WorldInteraction.RunPickupAuthoring.GoldPickupDebugReportsAuthoringFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupAuthoringGoldDebugSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.Authoring.GoldDebug");
+	Pickup->GoldAmount = 4;
+	Pickup->TriggerRadius = 220.f;
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	const FWacomRunPickupDebugView View = Pickup->GetRunPickupDebugView(PC.Get());
+	TestEqual(TEXT("Debug reports trigger radius"), View.TriggerRadius, 220.f);
+	TestEqual(TEXT("Debug reports default bounds extent"),
+		View.ClickBoundsExtent, FVector(60.f, 60.f, 60.f));
+	TestEqual(TEXT("Debug reports visual name"), View.VisualName, FName(TEXT("PickupVisual")));
+	TestTrue(TEXT("Debug reports click target"), View.bClickTargetConfigured);
+	TestEqual(TEXT("Debug reports stable id"),
+		View.ClickTargetStableId, FName(TEXT("Pickup.Authoring.GoldDebug")));
+	TestTrue(TEXT("Debug config valid"), View.bConfigValid);
+
+	const FString Summary = Pickup->GetRunPickupDebugSummary(PC.Get());
+	TestTrue(TEXT("Summary reports trigger radius"), Summary.Contains(TEXT("TriggerRadius=220.0")));
+	TestTrue(TEXT("Summary reports bounds extent"), Summary.Contains(TEXT("BoundsExtent=")));
+	TestTrue(TEXT("Summary reports visual name"), Summary.Contains(TEXT("Visual=PickupVisual")));
+	TestTrue(TEXT("Summary reports config reason"), Summary.Contains(TEXT("ConfigReason=None")));
+	TestTrue(TEXT("Summary reports stable id"),
+		Summary.Contains(TEXT("ClickStableId=Pickup.Authoring.GoldDebug")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupAuthoringCardDebugSpec,
+	"Wacom.UI.WorldInteraction.RunPickupAuthoring.CardPickupDebugReportsAuthoringFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupAuthoringCardDebugSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	TStrongObjectPtr<AWacomRunCardPickupClickProbe> Pickup(
+		NewObject<AWacomRunCardPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	Card->CardId = TEXT("Pickup.Authoring.CardReward");
+
+	Pickup->PersistentId = TEXT("Pickup.Authoring.CardDebug");
+	Pickup->CardDefinition = Card.Get();
+	Pickup->TriggerRadius = 240.f;
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	const FWacomRunCardPickupDebugView View = Pickup->GetRunCardPickupDebugView(PC.Get());
+	TestEqual(TEXT("Debug reports trigger radius"), View.TriggerRadius, 240.f);
+	TestEqual(TEXT("Debug reports default bounds extent"),
+		View.ClickBoundsExtent, FVector(60.f, 60.f, 60.f));
+	TestEqual(TEXT("Debug reports visual name"), View.VisualName, FName(TEXT("PickupVisual")));
+	TestTrue(TEXT("Debug reports click target"), View.bClickTargetConfigured);
+	TestEqual(TEXT("Debug reports stable id"),
+		View.ClickTargetStableId, FName(TEXT("Pickup.Authoring.CardDebug")));
+	TestEqual(TEXT("Debug reports card id"), View.CardId, FName(TEXT("Pickup.Authoring.CardReward")));
+	TestTrue(TEXT("Debug config valid"), View.bConfigValid);
+
+	const FString Summary = Pickup->GetRunCardPickupDebugSummary(PC.Get());
+	TestTrue(TEXT("Summary reports trigger radius"), Summary.Contains(TEXT("TriggerRadius=240.0")));
+	TestTrue(TEXT("Summary reports bounds extent"), Summary.Contains(TEXT("BoundsExtent=")));
+	TestTrue(TEXT("Summary reports visual name"), Summary.Contains(TEXT("Visual=PickupVisual")));
+	TestTrue(TEXT("Summary reports config reason"), Summary.Contains(TEXT("ConfigReason=None")));
+	TestTrue(TEXT("Summary reports stable id"),
+		Summary.Contains(TEXT("ClickStableId=Pickup.Authoring.CardDebug")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupAuthoringBlueprintDefaultsSpec,
+	"Wacom.UI.WorldInteraction.RunPickupAuthoring.PickupBlueprintDefaultsKeepClickableContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupAuthoringBlueprintDefaultsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UClass* GoldClass = LoadClass<AWacomRunPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunPickupActor.BP_WacomRunPickupActor_C"));
+	UClass* CardClass = LoadClass<AWacomRunCardPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunCardPickupActor.BP_WacomRunCardPickupActor_C"));
+	UClass* RewardClass = LoadClass<AWacomRunRewardPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunRewardPickupActor.BP_WacomRunRewardPickupActor_C"));
+
+	if (!TestNotNull(TEXT("Gold pickup blueprint class"), GoldClass)
+		|| !TestNotNull(TEXT("Card pickup blueprint class"), CardClass)
+		|| !TestNotNull(TEXT("Reward pickup blueprint class"), RewardClass))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Gold BP inherits gold pickup actor"),
+		GoldClass->IsChildOf(AWacomRunPickupActor::StaticClass()));
+	TestTrue(TEXT("Card BP inherits card pickup actor"),
+		CardClass->IsChildOf(AWacomRunCardPickupActor::StaticClass()));
+	TestTrue(TEXT("Reward BP inherits reward pickup actor"),
+		RewardClass->IsChildOf(AWacomRunRewardPickupActor::StaticClass()));
+
+	AWacomRunPickupActor* GoldCDO = Cast<AWacomRunPickupActor>(GoldClass->GetDefaultObject());
+	AWacomRunCardPickupActor* CardCDO =
+		Cast<AWacomRunCardPickupActor>(CardClass->GetDefaultObject());
+	AWacomRunRewardPickupActor* RewardCDO =
+		Cast<AWacomRunRewardPickupActor>(RewardClass->GetDefaultObject());
+	if (!TestNotNull(TEXT("Gold pickup BP CDO"), GoldCDO)
+		|| !TestNotNull(TEXT("Card pickup BP CDO"), CardCDO)
+		|| !TestNotNull(TEXT("Reward pickup BP CDO"), RewardCDO))
+	{
+		return false;
+	}
+
+	auto CheckPickupContract = [this](const TCHAR* Label, const AWacomRunPickupActorBase* Pickup)
+	{
+		TestTrue(FString::Printf(TEXT("%s implements world interactable"), Label),
+			Pickup->GetClass()->ImplementsInterface(UWacomWorldInteractable::StaticClass()));
+		TestTrue(FString::Printf(TEXT("%s implements clickable contract"), Label),
+			Pickup->GetClass()->ImplementsInterface(UWacomRunWorldClickableInteractable::StaticClass()));
+		TestNotNull(FString::Printf(TEXT("%s trigger sphere"), Label), Pickup->GetTriggerSphere());
+		TestNotNull(FString::Printf(TEXT("%s click bounds"), Label), Pickup->GetClickBounds());
+		TestNotNull(FString::Printf(TEXT("%s visual"), Label), Pickup->GetPickupVisual());
+		TestNotNull(FString::Printf(TEXT("%s interaction target"), Label),
+			Pickup->GetClickInteractionTargetComponent());
+		TestNotNull(FString::Printf(TEXT("%s bridge"), Label),
+			Pickup->GetClickTargetBridgeComponent());
+		if (Pickup->GetClickBounds())
+		{
+			TestEqual(FString::Printf(TEXT("%s click bounds blocks visibility"), Label),
+				Pickup->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+				ECR_Block);
+			TestFalse(FString::Printf(TEXT("%s click bounds does not overlap"), Label),
+				Pickup->GetClickBounds()->GetGenerateOverlapEvents());
+		}
+	};
+
+	CheckPickupContract(TEXT("Gold BP"), GoldCDO);
+	CheckPickupContract(TEXT("Card BP"), CardCDO);
+	CheckPickupContract(TEXT("Reward BP"), RewardCDO);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupAuthoringBlueprintInheritsSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickupAuthoring.RewardPickupBlueprintInheritsRewardPickupActor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupAuthoringBlueprintInheritsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UClass* RewardClass = LoadClass<AWacomRunRewardPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunRewardPickupActor.BP_WacomRunRewardPickupActor_C"));
+
+	if (!TestNotNull(TEXT("Reward pickup blueprint class"), RewardClass))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Reward BP inherits reward pickup actor"),
+		RewardClass->IsChildOf(AWacomRunRewardPickupActor::StaticClass()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupAuthoringBlueprintDefaultsSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickupAuthoring.RewardPickupBlueprintDefaultsKeepClickableContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupAuthoringBlueprintDefaultsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UClass* RewardClass = LoadClass<AWacomRunRewardPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunRewardPickupActor.BP_WacomRunRewardPickupActor_C"));
+
+	AWacomRunRewardPickupActor* RewardCDO = RewardClass
+		? Cast<AWacomRunRewardPickupActor>(RewardClass->GetDefaultObject())
+		: nullptr;
+	if (!TestNotNull(TEXT("Reward pickup BP CDO"), RewardCDO))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Reward BP implements world interactable"),
+		RewardCDO->GetClass()->ImplementsInterface(UWacomWorldInteractable::StaticClass()));
+	TestTrue(TEXT("Reward BP implements clickable contract"),
+		RewardCDO->GetClass()->ImplementsInterface(
+			UWacomRunWorldClickableInteractable::StaticClass()));
+	TestNotNull(TEXT("Reward BP trigger sphere"), RewardCDO->GetTriggerSphere());
+	TestNotNull(TEXT("Reward BP click bounds"), RewardCDO->GetClickBounds());
+	TestNotNull(TEXT("Reward BP visual"), RewardCDO->GetPickupVisual());
+	TestNotNull(TEXT("Reward BP interaction target"),
+		RewardCDO->GetClickInteractionTargetComponent());
+	TestNotNull(TEXT("Reward BP bridge"), RewardCDO->GetClickTargetBridgeComponent());
+	if (RewardCDO->GetClickBounds())
+	{
+		TestEqual(TEXT("Reward BP click bounds blocks visibility"),
+			RewardCDO->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+			ECR_Block);
+		TestFalse(TEXT("Reward BP click bounds does not overlap"),
+			RewardCDO->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupAuthoringBlueprintEmptyDefaultsSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickupAuthoring.RewardPickupBlueprintDoesNotBakePersistentIdOrDefinition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupAuthoringBlueprintEmptyDefaultsSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UClass* RewardClass = LoadClass<AWacomRunRewardPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunRewardPickupActor.BP_WacomRunRewardPickupActor_C"));
+
+	AWacomRunRewardPickupActor* RewardCDO = RewardClass
+		? Cast<AWacomRunRewardPickupActor>(RewardClass->GetDefaultObject())
+		: nullptr;
+	if (!TestNotNull(TEXT("Reward pickup BP CDO"), RewardCDO))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Reward BP default persistent id is empty"),
+		RewardCDO->PersistentId, NAME_None);
+	TestNull(TEXT("Reward BP does not bake pickup definition"),
+		RewardCDO->PickupDefinition.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupAuthoringBlueprintDebugButtonsSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickupAuthoring.RewardPickupBlueprintDebugButtonsStillRefreshDefinitionDefaultsAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupAuthoringBlueprintDebugButtonsSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UClass* RewardClass = LoadClass<AWacomRunRewardPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunRewardPickupActor.BP_WacomRunRewardPickupActor_C"));
+	if (!TestNotNull(TEXT("Reward pickup blueprint class"), RewardClass))
+	{
+		return false;
+	}
+
+	AWacomRunRewardPickupActor* RewardPickup = NewObject<AWacomRunRewardPickupActor>(
+		GetTransientPackage(),
+		RewardClass,
+		FName(TEXT("RewardPickupBlueprintButtonProbe")));
+	if (!TestNotNull(TEXT("Reward pickup BP instance"), RewardPickup))
+	{
+		return false;
+	}
+
+	RewardPickup->ConfigureDebugGoldDefinitionPickupSample();
+
+	TestEqual(TEXT("Sample persistent id uses BP instance name"),
+		RewardPickup->PersistentId,
+		FName(TEXT("Pickup.Debug.Definition.RewardPickupBlueprintButtonProbe")));
+	TestNotNull(TEXT("Sample loads gold pickup definition"),
+		RewardPickup->PickupDefinition.Get());
+	if (const UWacomRunPickupDefinition* Definition = RewardPickup->PickupDefinition.Get())
+	{
+		TestEqual(TEXT("Sample definition pickup id"),
+			Definition->PickupId, FName(TEXT("Pickup.Debug.Gold3")));
+		TestEqual(TEXT("Sample definition reward type"),
+			Definition->RewardType, EWacomRunPickupRewardType::Gold);
+	}
+	TestEqual(TEXT("Sample stable id on interaction target"),
+		RewardPickup->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Pickup.Debug.Definition.RewardPickupBlueprintButtonProbe")));
+	TestEqual(TEXT("Sample stable id on bridge"),
+		RewardPickup->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Pickup.Debug.Definition.RewardPickupBlueprintButtonProbe")));
+	TestEqual(TEXT("Sample hover prompt"),
+		RewardPickup->GetHoverPromptText(nullptr).ToString(),
+		FString(TEXT("点击拾取")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationIgnoresBlueprintDefaultsSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.PickupPlacementValidationIgnoresBlueprintCDODefaults",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationIgnoresBlueprintDefaultsSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UClass* RewardClass = LoadClass<AWacomRunRewardPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunRewardPickupActor.BP_WacomRunRewardPickupActor_C"));
+	AWacomRunRewardPickupActor* RewardCDO = RewardClass
+		? Cast<AWacomRunRewardPickupActor>(RewardClass->GetDefaultObject())
+		: nullptr;
+	if (!TestNotNull(TEXT("Reward pickup BP CDO"), RewardCDO))
+	{
+		return false;
+	}
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(RewardCDO, Warnings, Errors);
+	TestNotEqual(TEXT("Blueprint CDO is not invalid"), Result, EDataValidationResult::Invalid);
+	TestEqual(TEXT("Blueprint CDO has no placement errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationGoldMissingIdSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.GoldPickupPlacementMissingPersistentIdIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationGoldMissingIdSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunPickupActor> Pickup(NewObject<AWacomRunPickupActor>());
+	Pickup->GoldAmount = 3;
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Pickup.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing PersistentId invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports missing persistent id"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("PersistentId")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationGoldInvalidAmountSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.GoldPickupPlacementInvalidAmountIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationGoldInvalidAmountSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunPickupActor> Pickup(NewObject<AWacomRunPickupActor>());
+	Pickup->PersistentId = TEXT("Pickup.Validation.GoldInvalidAmount");
+	Pickup->GoldAmount = 0;
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Pickup.Get(), Warnings, Errors);
+	TestEqual(TEXT("Invalid gold amount invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports gold amount"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("金币")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationCardMissingCardSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.CardPickupPlacementMissingCardIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationCardMissingCardSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunCardPickupActor> Pickup(NewObject<AWacomRunCardPickupActor>());
+	Pickup->PersistentId = TEXT("Pickup.Validation.MissingCard");
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Pickup.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing card invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports CardDefinition"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("CardDefinition")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationRewardMissingDefinitionSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.RewardPickupPlacementMissingDefinitionIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationRewardMissingDefinitionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunRewardPickupActor> Pickup(NewObject<AWacomRunRewardPickupActor>());
+	Pickup->PersistentId = TEXT("Pickup.Validation.MissingDefinition");
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Pickup.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing definition invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports PickupDefinition"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("PickupDefinition")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationRewardInvalidDefinitionSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.RewardPickupPlacementInvalidDefinitionIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationRewardInvalidDefinitionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunRewardPickupActor> Pickup(NewObject<AWacomRunRewardPickupActor>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiGoldPickupDefinition(Pickup.Get(), TEXT("Pickup.Validation.InvalidDefinition"), 0));
+	Pickup->PersistentId = TEXT("Pickup.Validation.InvalidDefinitionActor");
+	Pickup->PickupDefinition = Definition.Get();
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Pickup.Get(), Warnings, Errors);
+	TestEqual(TEXT("Invalid definition invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports invalid definition reason"),
+		Errors.Num() > 0
+		&& (Errors[0].ToString().Contains(TEXT("金币"))
+			|| Errors[0].ToString().Contains(TEXT("大于 0"))
+			|| Errors[0].ToString().Contains(TEXT("Reason"))));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationRewardValidDefinitionSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.RewardPickupPlacementValidDefinitionPasses",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationRewardValidDefinitionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunRewardPickupActor> Pickup(NewObject<AWacomRunRewardPickupActor>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeUiGoldPickupDefinition(Pickup.Get(), TEXT("Pickup.Validation.ValidDefinition"), 3));
+	Pickup->PersistentId = TEXT("Pickup.Validation.ValidReward");
+	Pickup->PickupDefinition = Definition.Get();
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Pickup.Get(), Warnings, Errors);
+	TestEqual(TEXT("Valid reward pickup valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Valid reward pickup has no errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationDuplicateSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.PickupPlacementDuplicatePersistentIdWarnsButRemainsValid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationDuplicateSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomRunPickupActor* First = World->SpawnActor<AWacomRunPickupActor>();
+	AWacomRunCardPickupActor* Second = World->SpawnActor<AWacomRunCardPickupActor>();
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	if (!TestNotNull(TEXT("First pickup"), First)
+		|| !TestNotNull(TEXT("Second pickup"), Second))
+	{
+		return false;
+	}
+
+	First->PersistentId = TEXT("Pickup.Validation.Duplicate");
+	First->GoldAmount = 3;
+	Second->PersistentId = TEXT("Pickup.Validation.Duplicate");
+	Second->CardDefinition = Card.Get();
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(First, Warnings, Errors);
+	TestEqual(TEXT("Duplicate placement remains valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Duplicate placement has no errors"), Errors.Num(), 0);
+	TestTrue(TEXT("Duplicate placement warns"), Warnings.Num() > 0);
+
+	First->Destroy();
+	Second->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupPlacementValidationRewardBpAssetSpec,
+	"Wacom.UI.WorldInteraction.RunPickupPlacementValidation.RewardPickupBlueprintDefaultAssetRemainsValidForAuthoring",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupPlacementValidationRewardBpAssetSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UClass* RewardClass = LoadClass<AWacomRunRewardPickupActor>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunRewardPickupActor.BP_WacomRunRewardPickupActor_C"));
+	AWacomRunRewardPickupActor* RewardCDO = RewardClass
+		? Cast<AWacomRunRewardPickupActor>(RewardClass->GetDefaultObject())
+		: nullptr;
+	if (!TestNotNull(TEXT("Reward pickup BP CDO"), RewardCDO))
+	{
+		return false;
+	}
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(RewardCDO, Warnings, Errors);
+	TestNotEqual(TEXT("Reward BP asset default is not invalid"),
+		Result, EDataValidationResult::Invalid);
+	TestEqual(TEXT("Reward BP default has no validation errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationRunEventMissingIdSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.RunEventPlacementMissingPersistentIdIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationRunEventMissingIdSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	Trigger->EventDefinition = MakeUiRunEvent(Trigger.Get());
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Trigger.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing RunEvent PersistentId invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports PersistentId"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("PersistentId")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationRunEventMissingDefinitionSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.RunEventPlacementMissingDefinitionIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationRunEventMissingDefinitionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+	Trigger->PersistentId = TEXT("Event.Validation.MissingDefinition");
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Trigger.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing RunEvent definition invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports EventDefinition"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("EventDefinition")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationRunEventDuplicateSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.RunEventPlacementDuplicatePersistentIdWarnsButRemainsValid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationRunEventDuplicateSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomRunEventTriggerActor* First = World->SpawnActor<AWacomRunEventTriggerActor>();
+	AWacomRunEventTriggerActor* Second = World->SpawnActor<AWacomRunEventTriggerActor>();
+	if (!TestNotNull(TEXT("First RunEvent trigger"), First)
+		|| !TestNotNull(TEXT("Second RunEvent trigger"), Second))
+	{
+		return false;
+	}
+
+	First->PersistentId = TEXT("Event.Validation.Duplicate");
+	Second->PersistentId = TEXT("Event.Validation.Duplicate");
+	First->EventDefinition = MakeUiRunEvent(First);
+	Second->EventDefinition = MakeUiRunEvent(Second);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(First, Warnings, Errors);
+	TestEqual(TEXT("Duplicate RunEvent trigger remains valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Duplicate RunEvent trigger has no errors"), Errors.Num(), 0);
+	TestTrue(TEXT("Duplicate RunEvent trigger warns"), Warnings.Num() > 0);
+
+	First->Destroy();
+	Second->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationShopMissingIdSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.ShopPlacementMissingPersistentIdIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationShopMissingIdSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	Shop->Offers.Add({ Fx.MakeNoopCard(0), 1 });
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Shop.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing Shop PersistentId invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports PersistentId"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("PersistentId")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationShopMissingOffersSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.ShopPlacementMissingUsableOffersIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationShopMissingOffersSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	Shop->PersistentId = TEXT("Shop.Validation.MissingOffers");
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Shop.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing usable offers invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports usable offers"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("可用商品")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationShopInvalidManualOfferSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.ShopPlacementInvalidManualOfferIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationShopInvalidManualOfferSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	Shop->PersistentId = TEXT("Shop.Validation.InvalidManualOffer");
+	Shop->Offers.Add({ nullptr, 1 });
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Shop.Get(), Warnings, Errors);
+	TestEqual(TEXT("Invalid manual offer invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports offer index or card"),
+		Errors.Num() > 0
+		&& (Errors[0].ToString().Contains(TEXT("OfferIndex"))
+			|| Errors[0].ToString().Contains(TEXT("CardDefinition"))));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationShopManualOffersSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.ShopPlacementManualOffersPassWithoutDefinition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationShopManualOffersSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	Shop->PersistentId = TEXT("Shop.Validation.ManualOffers");
+	Shop->Offers.Add({ Fx.MakeNoopCard(0), 2 });
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Shop.Get(), Warnings, Errors);
+	TestEqual(TEXT("Manual offers valid without ShopDefinition"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Manual offers have no errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationShopDuplicateSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.ShopPlacementDuplicatePersistentIdWarnsButRemainsValid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationShopDuplicateSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	AWacomShopTriggerActor* First = World->SpawnActor<AWacomShopTriggerActor>();
+	AWacomShopTriggerActor* Second = World->SpawnActor<AWacomShopTriggerActor>();
+	if (!TestNotNull(TEXT("First shop trigger"), First)
+		|| !TestNotNull(TEXT("Second shop trigger"), Second))
+	{
+		return false;
+	}
+
+	First->PersistentId = TEXT("Shop.Validation.Duplicate");
+	Second->PersistentId = TEXT("Shop.Validation.Duplicate");
+	First->Offers.Add({ Fx.MakeNoopCard(0), 1 });
+	Second->Offers.Add({ Fx.MakeNoopCard(0), 1 });
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(First, Warnings, Errors);
+	TestEqual(TEXT("Duplicate shop remains valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Duplicate shop has no errors"), Errors.Num(), 0);
+	TestTrue(TEXT("Duplicate shop warns"), Warnings.Num() > 0);
+
+	First->Destroy();
+	Second->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationBattleMissingIdSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementMissingPersistentIdIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationBattleMissingIdSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Battle.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing Battle PersistentId invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports PersistentId"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("PersistentId")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationBattleMissingEnemySpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementMissingEnemyDefinitionIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationBattleMissingEnemySpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
+	Battle->PersistentId = TEXT("Battle.Validation.MissingEnemy");
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Battle.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing Battle enemy invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports EnemyDef"),
+		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("EnemyDef")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationBattleDuplicateSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementDuplicatePersistentIdWarnsButRemainsValid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationBattleDuplicateSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	ABattleTriggerActor* First = World->SpawnActor<ABattleTriggerActor>();
+	ABattleTriggerActor* Second = World->SpawnActor<ABattleTriggerActor>();
+	if (!TestNotNull(TEXT("First battle trigger"), First)
+		|| !TestNotNull(TEXT("Second battle trigger"), Second))
+	{
+		return false;
+	}
+
+	First->PersistentId = TEXT("Battle.Validation.Duplicate");
+	Second->PersistentId = TEXT("Battle.Validation.Duplicate");
+	First->EnemyDef = NewObject<UEnemyDefinition>(First);
+	Second->EnemyDef = NewObject<UEnemyDefinition>(Second);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(First, Warnings, Errors);
+	TestEqual(TEXT("Duplicate battle remains valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Duplicate battle has no errors"), Errors.Num(), 0);
+	TestTrue(TEXT("Duplicate battle warns"), Warnings.Num() > 0);
+
+	First->Destroy();
+	Second->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationBlueprintDefaultsSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.RunInteractableBlueprintDefaultsRemainValidForAuthoring",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationBlueprintDefaultsSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	struct FExpectedClass
+	{
+		const TCHAR* Label = nullptr;
+		const TCHAR* Path = nullptr;
+		UClass* BaseClass = nullptr;
+	};
+
+	const FExpectedClass Classes[] = {
+		{
+			TEXT("RunEvent BP CDO"),
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunEventTriggerActor.BP_WacomRunEventTriggerActor_C"),
+			AWacomRunEventTriggerActor::StaticClass()
+		},
+		{
+			TEXT("Shop BP CDO"),
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomShopTriggerActor.BP_WacomShopTriggerActor_C"),
+			AWacomShopTriggerActor::StaticClass()
+		},
+		{
+			TEXT("Battle BP CDO"),
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_BattleTriggerActor.BP_BattleTriggerActor_C"),
+			ABattleTriggerActor::StaticClass()
+		}
+	};
+
+	for (const FExpectedClass& Expected : Classes)
+	{
+		UClass* LoadedClass = LoadClass<AActor>(nullptr, Expected.Path);
+		if (!TestNotNull(Expected.Label, LoadedClass))
+		{
+			return false;
+		}
+		TestTrue(FString::Printf(TEXT("%s inherits expected class"), Expected.Label),
+			LoadedClass->IsChildOf(Expected.BaseClass));
+		AActor* CDO = Cast<AActor>(LoadedClass->GetDefaultObject());
+		if (!TestNotNull(FString::Printf(TEXT("%s default object"), Expected.Label), CDO))
+		{
+			return false;
+		}
+
+		TArray<FText> Warnings;
+		TArray<FText> Errors;
+		const EDataValidationResult Result =
+			ValidateObjectForUiTest(CDO, Warnings, Errors);
+		TestNotEqual(FString::Printf(TEXT("%s is not invalid"), Expected.Label),
+			Result, EDataValidationResult::Invalid);
+		TestEqual(FString::Printf(TEXT("%s has no placement errors"), Expected.Label),
+			Errors.Num(), 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupAuthoringConfigureSamplesRunStateSpec,
+	"Wacom.UI.WorldInteraction.RunPickupAuthoring.ConfigureSamplesDoNotMutateRunState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupAuthoringConfigureSamplesRunStateSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> GoldPickup(
+		NewObject<AWacomRunPickupClickProbe>(
+			GetTransientPackage(),
+			FName(TEXT("PickupAuthoringRunStateGold"))));
+	TStrongObjectPtr<AWacomRunCardPickupClickProbe> CardPickup(
+		NewObject<AWacomRunCardPickupClickProbe>(
+			GetTransientPackage(),
+			FName(TEXT("PickupAuthoringRunStateCard"))));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Run->CollectGoldPickup(TEXT("Pickup.Authoring.Existing"), 5);
+	const int32 GoldBefore = Run->GetGold();
+	const int32 BackpackBefore = Run->GetBackpack().Num();
+	const bool bExistingCollectedBefore =
+		Run->IsPickupCollected(TEXT("Pickup.Authoring.Existing"));
+
+	GoldPickup->ConfigureDebugGoldPickupSample();
+	CardPickup->ConfigureDebugCardPickupSample();
+
+	TestEqual(TEXT("Configure samples do not change gold"), Run->GetGold(), GoldBefore);
+	TestEqual(TEXT("Configure samples do not add cards"),
+		Run->GetBackpack().Num(), BackpackBefore);
+	TestEqual(TEXT("Configure samples preserve existing collected state"),
+		Run->IsPickupCollected(TEXT("Pickup.Authoring.Existing")), bExistingCollectedBefore);
+	TestFalse(TEXT("Configure gold sample does not mark new id collected"),
+		Run->IsPickupCollected(GoldPickup->PersistentId));
+	TestFalse(TEXT("Configure card sample does not mark new id collected"),
+		Run->IsPickupCollected(CardPickup->PersistentId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupConfigureGoldDefinitionSampleSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.ConfigureDebugGoldDefinitionSampleSetsDefinitionDefaultsAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupConfigureGoldDefinitionSampleSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>(
+			GetTransientPackage(),
+			FName(TEXT("RewardPickupGoldDefinitionProbe"))));
+	TStrongObjectPtr<UWacomRunPickupDefinition> OldDefinition(
+		MakeUiGoldPickupDefinition(Pickup.Get(), TEXT("Pickup.Definition.OldGold"), 99));
+
+	Pickup->PersistentId = TEXT("Old.Reward.Gold.Id");
+	Pickup->PickupDefinition = OldDefinition.Get();
+	Pickup->TriggerRadius = 500.f;
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->InteractPromptText = FText::FromString(TEXT("old interact"));
+	Pickup->HoverPromptText = FText::FromString(TEXT("old hover"));
+	Pickup->CollectedHoverPromptText = FText::FromString(TEXT("old collected"));
+	if (Pickup->GetClickBounds())
+	{
+		Pickup->GetClickBounds()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Pickup->GetClickBounds()->SetCollisionResponseToAllChannels(ECR_Overlap);
+		Pickup->GetClickBounds()->SetGenerateOverlapEvents(true);
+	}
+
+	Pickup->ConfigureDebugGoldDefinitionPickupSample();
+
+	TestEqual(TEXT("Sample persistent id uses actor name"),
+		Pickup->PersistentId,
+		FName(TEXT("Pickup.Debug.Definition.RewardPickupGoldDefinitionProbe")));
+	TestNotNull(TEXT("Sample loads gold pickup definition"),
+		Pickup->PickupDefinition.Get());
+	if (const UWacomRunPickupDefinition* Definition = Pickup->PickupDefinition.Get())
+	{
+		TestEqual(TEXT("Sample definition pickup id"),
+			Definition->PickupId, FName(TEXT("Pickup.Debug.Gold3")));
+		TestEqual(TEXT("Sample definition reward type"),
+			Definition->RewardType, EWacomRunPickupRewardType::Gold);
+		TestEqual(TEXT("Sample definition gold"), Definition->GoldAmount, 3);
+	}
+	TestEqual(TEXT("Sample trigger radius"), Pickup->TriggerRadius, 160.f);
+	if (Pickup->GetTriggerSphere())
+	{
+		TestEqual(TEXT("Trigger sphere radius refreshed"),
+			Pickup->GetTriggerSphere()->GetUnscaledSphereRadius(), 160.f);
+	}
+	if (Pickup->GetClickBounds())
+	{
+		TestEqual(TEXT("Click bounds query only"),
+			Pickup->GetClickBounds()->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
+		TestEqual(TEXT("Click bounds blocks visibility"),
+			Pickup->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility), ECR_Block);
+		TestFalse(TEXT("Click bounds overlap remains disabled"),
+			Pickup->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+	TestTrue(TEXT("Sample destroys when collected"), Pickup->bDestroyWhenCollected);
+	TestEqual(TEXT("Sample interact prompt"),
+		Pickup->GetInteractPromptText_Implementation(nullptr).ToString(),
+		FString(TEXT("按 E 拾取")));
+	TestEqual(TEXT("Sample hover prompt"),
+		Pickup->GetHoverPromptText(nullptr).ToString(),
+		FString(TEXT("点击拾取")));
+	TestEqual(TEXT("Sample stable id on interaction target"),
+		Pickup->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Pickup.Debug.Definition.RewardPickupGoldDefinitionProbe")));
+	TestEqual(TEXT("Sample stable id on bridge"),
+		Pickup->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Pickup.Debug.Definition.RewardPickupGoldDefinitionProbe")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupConfigurePoisonFangDefinitionSampleSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.ConfigureDebugPoisonFangDefinitionSampleSetsDefinitionDefaultsAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupConfigurePoisonFangDefinitionSampleSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> Pickup(
+		NewObject<AWacomRunRewardPickupClickProbe>(
+			GetTransientPackage(),
+			FName(TEXT("RewardPickupPoisonDefinitionProbe"))));
+	TStrongObjectPtr<UCardDefinition> OldCard(NewObject<UCardDefinition>());
+	TStrongObjectPtr<UWacomRunPickupDefinition> OldDefinition(
+		MakeUiCardPickupDefinition(Pickup.Get(), OldCard.Get(), TEXT("Pickup.Definition.OldCard")));
+
+	Pickup->PersistentId = TEXT("Old.Reward.Card.Id");
+	Pickup->PickupDefinition = OldDefinition.Get();
+	Pickup->TriggerRadius = 500.f;
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->InteractPromptText = FText::FromString(TEXT("old interact"));
+	Pickup->HoverPromptText = FText::FromString(TEXT("old hover"));
+	Pickup->CollectedHoverPromptText = FText::FromString(TEXT("old collected"));
+
+	Pickup->ConfigureDebugPoisonFangDefinitionPickupSample();
+
+	TestEqual(TEXT("Sample persistent id uses actor name"),
+		Pickup->PersistentId,
+		FName(TEXT("Pickup.Debug.Definition.Card.RewardPickupPoisonDefinitionProbe")));
+	TestNotNull(TEXT("Sample loads poison fang pickup definition"),
+		Pickup->PickupDefinition.Get());
+	if (const UWacomRunPickupDefinition* Definition = Pickup->PickupDefinition.Get())
+	{
+		TestEqual(TEXT("Sample definition pickup id"),
+			Definition->PickupId, FName(TEXT("Pickup.Debug.PoisonFang")));
+		TestEqual(TEXT("Sample definition reward type"),
+			Definition->RewardType, EWacomRunPickupRewardType::Card);
+		TestNotNull(TEXT("Sample definition card"),
+			Definition->CardDefinition.Get());
+		if (const UCardDefinition* Card = Definition->CardDefinition.Get())
+		{
+			TestEqual(TEXT("Sample definition card id"),
+				Card->CardId, FName(TEXT("PoisonFang")));
+		}
+	}
+
+	TestEqual(TEXT("Sample trigger radius"), Pickup->TriggerRadius, 160.f);
+	TestTrue(TEXT("Sample destroys when collected"), Pickup->bDestroyWhenCollected);
+	TestEqual(TEXT("Sample interact prompt"),
+		Pickup->GetInteractPromptText_Implementation(nullptr).ToString(),
+		FString(TEXT("按 E 拾取卡牌")));
+	TestEqual(TEXT("Sample hover prompt"),
+		Pickup->GetHoverPromptText(nullptr).ToString(),
+		FString(TEXT("点击拾取卡牌")));
+	TestEqual(TEXT("Sample stable id on interaction target"),
+		Pickup->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Pickup.Debug.Definition.Card.RewardPickupPoisonDefinitionProbe")));
+	TestEqual(TEXT("Sample stable id on bridge"),
+		Pickup->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Pickup.Debug.Definition.Card.RewardPickupPoisonDefinitionProbe")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunRewardPickupConfigureSamplesRunStateSpec,
+	"Wacom.UI.WorldInteraction.RunRewardPickup.ConfigureDebugDefinitionSamplesDoNotMutateRunState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunRewardPickupConfigureSamplesRunStateSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> GoldPickup(
+		NewObject<AWacomRunRewardPickupClickProbe>(
+			GetTransientPackage(),
+			FName(TEXT("RewardPickupAuthoringRunStateGold"))));
+	TStrongObjectPtr<AWacomRunRewardPickupClickProbe> CardPickup(
+		NewObject<AWacomRunRewardPickupClickProbe>(
+			GetTransientPackage(),
+			FName(TEXT("RewardPickupAuthoringRunStateCard"))));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Run->CollectGoldPickup(TEXT("Pickup.Reward.Authoring.Existing"), 5);
+	const int32 GoldBefore = Run->GetGold();
+	const int32 BackpackBefore = Run->GetBackpack().Num();
+	const bool bExistingCollectedBefore =
+		Run->IsPickupCollected(TEXT("Pickup.Reward.Authoring.Existing"));
+
+	GoldPickup->ConfigureDebugGoldDefinitionPickupSample();
+	CardPickup->ConfigureDebugPoisonFangDefinitionPickupSample();
+
+	TestEqual(TEXT("Configure reward samples do not change gold"), Run->GetGold(), GoldBefore);
+	TestEqual(TEXT("Configure reward samples do not add cards"),
+		Run->GetBackpack().Num(), BackpackBefore);
+	TestEqual(TEXT("Configure reward samples preserve existing collected state"),
+		Run->IsPickupCollected(TEXT("Pickup.Reward.Authoring.Existing")),
+		bExistingCollectedBefore);
+	TestFalse(TEXT("Configure reward gold sample does not mark new id collected"),
+		Run->IsPickupCollected(GoldPickup->PersistentId));
+	TestFalse(TEXT("Configure reward card sample does not mark new id collected"),
+		Run->IsPickupCollected(CardPickup->PersistentId));
 
 	return true;
 }

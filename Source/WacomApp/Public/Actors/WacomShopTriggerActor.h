@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomWorldInteractable.h"
+#include "Misc/DataValidation.h"
 #include "RunState.h"
 #include "WacomShopTriggerActor.generated.h"
 
@@ -158,6 +159,10 @@ public:
 	virtual FWacomRunWorldClickableInteractableDebugView GetRunWorldClickableDebugView_Implementation(
 		AWacomPlayerController* PC) const override;
 
+#if WITH_EDITOR
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
@@ -179,6 +184,7 @@ protected:
 
 private:
 	void RefreshClickTargetBinding();
+	bool HasDuplicatePersistentIdInWorld() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop",
 		meta = (AllowPrivateAccess = "true"))

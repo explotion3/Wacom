@@ -581,6 +581,23 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pickup")
 	bool CollectCardPickup(FName PersistentId, UCardDefinition* CardDefinition);
 
+	/** 指定探索期世界卡牌交互是否已在当前 Run 中完成。当前只保存在内存态，不接 SaveGame。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Interaction")
+	bool IsRunWorldInteractionCompleted(FName PersistentId) const;
+
+	/** 校验一张精确卡牌 instance 是否可提交到指定 Run world card interaction；不修改 RunState。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Interaction")
+	FRunWorldCardInteractionValidation ValidateRunWorldCardInteraction(
+		const FRunWorldCardInteractionRequest& Request) const;
+
+	/**
+	 * 提交探索期世界卡牌交互事务。
+	 *
+	 * 成功时可选消耗精确 SourceCardInstanceId、增加金币奖励、标记 PersistentId 已完成，并统一广播一次。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|World Interaction")
+	bool SubmitRunWorldCardInteraction(const FRunWorldCardInteractionRequest& Request);
+
 	// ---- 商店购买 ----
 
 	/**
