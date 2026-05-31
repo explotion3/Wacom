@@ -78,6 +78,18 @@ struct WACOMAPP_API FWacomRunEventScreenDebugView
 	FString ChoiceAvailabilitySummary;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前选项需求摘要，格式为 ChoiceId:RequirementCount/UnsatisfiedCount。"))
+	FString ChoiceRequirementSummary;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前选项后果预览摘要，格式为 ChoiceId:ConsequenceCount。"))
+	FString ChoiceConsequenceSummary;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前选项预览诊断摘要，格式为 ChoiceId:Available=...:First=...:Req=总数/未满足数:Pay=候选数:Consequences=数量:Outcome=...。"))
+	FString ChoicePreviewSummary;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
 		meta = (ToolTip = "最近一次 RunEventScreen 解析菜单卡牌 Drop Intent 的摘要。"))
 	FString LastPaymentResolveSummary;
 

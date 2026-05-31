@@ -637,6 +637,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Event")
 	bool IsRunEventCompleted(FName PersistentId) const;
 
+	/** 指定 Run 标记是否已设置。RunFlag 当前只在本次 Run 内存态保留，不接 SaveGame。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Event")
+	bool IsRunFlagSet(FName FlagId) const;
+
 	/** 构建当前事件的只读 UI 快照。无 active event 时返回空快照。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Event")
 	FRunEventSnapshot BuildCurrentRunEventSnapshot() const;

@@ -27,6 +27,20 @@ namespace
 		View.IconKey = IconKey;
 		return View;
 	}
+
+	FText FormatEventRequirementTarget(FName TargetPersistentId)
+	{
+		return TargetPersistentId.IsNone()
+			? LOCTEXT("UnknownEventTarget", "事件目标")
+			: FText::FromName(TargetPersistentId);
+	}
+
+	FText FormatRunFlagId(FName FlagId)
+	{
+		return FlagId.IsNone()
+			? LOCTEXT("UnknownRunFlag", "未配置标记")
+			: FText::FromName(FlagId);
+	}
 }
 
 FText UWacomRunEventPresentationBuilder::FormatDisabledReason(FName DisabledReason)
@@ -139,6 +153,18 @@ FText UWacomRunEventPresentationBuilder::FormatDisabledReason(FName DisabledReas
 	{
 		return LOCTEXT("CardNotOwned", "未持有这张卡");
 	}
+	if (DisabledReason == TEXT("MissingRunFlagId"))
+	{
+		return LOCTEXT("MissingRunFlagId", "Run 标记配置错误");
+	}
+	if (DisabledReason == TEXT("RequiredRunFlagMissing"))
+	{
+		return LOCTEXT("RequiredRunFlagMissing", "缺少所需标记");
+	}
+	if (DisabledReason == TEXT("BlockedRunFlagSet"))
+	{
+		return LOCTEXT("BlockedRunFlagSet", "已有禁止标记");
+	}
 	return LOCTEXT("UnknownReason", "不可选择");
 }
 
@@ -166,6 +192,96 @@ FWacomRunEventChoiceRequirementView UWacomRunEventPresentationBuilder::BuildChoi
 	View.bAvailable = Choice.bAvailable;
 	View.bRequiresCardPayment = Choice.bRequiresOwnedCardPayment;
 	View.PaymentCandidateCount = Choice.PaymentCandidateCount;
+
+	for (const FRunEventChoiceRequirementSnapshot& Requirement : Choice.Requirements)
+	{
+		FWacomRunEventChoiceRequirementItemView Item;
+		Item.Kind = Requirement.Kind;
+		Item.bSatisfied = Requirement.bSatisfied;
+		Item.DisabledReason = Requirement.DisabledReason;
+		Item.Tone = Requirement.bSatisfied
+			? EWacomRunEventChoiceAvailabilityTone::Ready
+			: EWacomRunEventChoiceAvailabilityTone::Blocked;
+		if (!Requirement.bSatisfied)
+		{
+			++View.UnsatisfiedRequirementCount;
+		}
+
+		switch (Requirement.Kind)
+		{
+		case ERunEventChoiceRequirementKind::MinGold:
+			Item.Text = FText::Format(
+				LOCTEXT("RequireGoldFmt", "需要金币：{0} / 当前 {1}"),
+				FText::AsNumber(Requirement.RequiredValue),
+				FText::AsNumber(Requirement.CurrentValue));
+			break;
+		case ERunEventChoiceRequirementKind::MinNodeCount:
+			Item.Text = FText::Format(
+				LOCTEXT("RequireNodeFmt", "需要行动点：{0} / 当前 {1}"),
+				FText::AsNumber(Requirement.RequiredValue),
+				FText::AsNumber(Requirement.CurrentValue));
+			break;
+		case ERunEventChoiceRequirementKind::MaxPressure:
+			Item.Text = FText::Format(
+				LOCTEXT("RequirePressureFmt", "压力不高于：{0} {1} / 当前 {2}"),
+				FormatPressureName(Requirement.PressureType),
+				FText::AsNumber(Requirement.RequiredValue),
+				FText::AsNumber(Requirement.CurrentValue));
+			break;
+		case ERunEventChoiceRequirementKind::HasCard:
+			Item.Text = FText::Format(
+				LOCTEXT("RequireHasCardFmt", "需要持有：{0}"),
+				GetRunEventCardDisplayName(Requirement.CardDefinition.Get()));
+			break;
+		case ERunEventChoiceRequirementKind::MissingCard:
+			Item.Text = FText::Format(
+				LOCTEXT("RequireMissingCardFmt", "不能持有：{0}"),
+				GetRunEventCardDisplayName(Requirement.CardDefinition.Get()));
+			break;
+		case ERunEventChoiceRequirementKind::EventCompleted:
+			Item.Text = FText::Format(
+				LOCTEXT("RequireEventCompletedFmt", "需要事件已完成：{0}"),
+				FormatEventRequirementTarget(Requirement.TargetPersistentId));
+			break;
+		case ERunEventChoiceRequirementKind::EventNotCompleted:
+			Item.Text = FText::Format(
+				LOCTEXT("RequireEventNotCompletedFmt", "需要事件未完成：{0}"),
+				FormatEventRequirementTarget(Requirement.TargetPersistentId));
+			break;
+		case ERunEventChoiceRequirementKind::RunFlagSet:
+			Item.Text = FText::Format(
+				LOCTEXT("RequireRunFlagSetFmt", "需要标记：{0}"),
+				FormatRunFlagId(Requirement.FlagId));
+			break;
+		case ERunEventChoiceRequirementKind::RunFlagNotSet:
+			Item.Text = FText::Format(
+				LOCTEXT("RequireRunFlagNotSetFmt", "不能有标记：{0}"),
+				FormatRunFlagId(Requirement.FlagId));
+			break;
+		case ERunEventChoiceRequirementKind::CardPayment:
+			Item.Text = Requirement.PaymentCandidateCount > 0
+				? FText::Format(
+					LOCTEXT("RequirePaymentCandidateFmt", "需要拖入卡牌支付：{0} 张可用"),
+					FText::AsNumber(Requirement.PaymentCandidateCount))
+				: FText::Format(
+					LOCTEXT("RequirePaymentMissingFmt", "需要拖入卡牌支付：{0}"),
+					FormatDisabledReason(Requirement.DisabledReason.IsNone()
+						? FName(TEXT("MissingRequiredCard"))
+						: Requirement.DisabledReason));
+			Item.Tone = Requirement.PaymentCandidateCount > 0
+				? EWacomRunEventChoiceAvailabilityTone::Requirement
+				: EWacomRunEventChoiceAvailabilityTone::Blocked;
+			break;
+		case ERunEventChoiceRequirementKind::None:
+		default:
+			break;
+		}
+
+		if (!Item.Text.IsEmpty())
+		{
+			View.RequirementItems.Add(MoveTemp(Item));
+		}
+	}
 
 	if (Choice.bRequiresOwnedCardPayment)
 	{
@@ -207,6 +323,131 @@ FWacomRunEventChoiceRequirementView UWacomRunEventPresentationBuilder::BuildChoi
 	else if (View.Tone == EWacomRunEventChoiceAvailabilityTone::None)
 	{
 		View.Tone = EWacomRunEventChoiceAvailabilityTone::Ready;
+	}
+
+	return View;
+}
+
+FWacomRunEventChoiceConsequenceView UWacomRunEventPresentationBuilder::BuildChoiceConsequenceView(
+	const FRunEventChoiceSnapshot& Choice)
+{
+	FWacomRunEventChoiceConsequenceView View;
+	View.ChoiceId = Choice.ChoiceId;
+
+	for (const FRunEventChoiceConsequenceSnapshot& Consequence : Choice.Consequences)
+	{
+		FWacomRunEventChoiceConsequenceItemView Item;
+		Item.Kind = Consequence.Kind;
+		Item.EffectType = Consequence.EffectType;
+		Item.Tone = EWacomRunEventChoiceAvailabilityTone::None;
+
+		switch (Consequence.Kind)
+		{
+		case ERunEventChoiceConsequenceKind::Effect:
+			switch (Consequence.EffectType)
+			{
+			case EWacomRunEventEffectType::GainCard:
+				Item.Text = FText::Format(
+					LOCTEXT("PreviewGainCardFmt", "获得卡牌：{0}"),
+					GetRunEventCardDisplayName(Consequence.CardDefinition.Get()));
+				Item.Tone = EWacomRunEventChoiceAvailabilityTone::Ready;
+				break;
+			case EWacomRunEventEffectType::AddGold:
+				if (Consequence.Amount > 0)
+				{
+					Item.Text = FText::Format(
+						LOCTEXT("PreviewGoldGainFmt", "获得金币：{0}"),
+						FText::AsNumber(Consequence.Amount));
+					Item.Tone = EWacomRunEventChoiceAvailabilityTone::Ready;
+				}
+				else if (Consequence.Amount < 0)
+				{
+					Item.Text = FText::Format(
+						LOCTEXT("PreviewGoldLossFmt", "失去金币：{0}"),
+						FText::AsNumber(FMath::Abs(Consequence.Amount)));
+					Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+				}
+				break;
+			case EWacomRunEventEffectType::AddPressure:
+				if (Consequence.Amount != 0)
+				{
+					Item.Text = Consequence.Amount > 0
+						? FText::Format(
+							LOCTEXT("PreviewPressureIncreaseFmt", "{0} +{1}"),
+							FormatPressureName(Consequence.PressureType),
+							FText::AsNumber(Consequence.Amount))
+						: FText::Format(
+							LOCTEXT("PreviewPressureReduceFmt", "{0} -{1}"),
+							FormatPressureName(Consequence.PressureType),
+							FText::AsNumber(FMath::Abs(Consequence.Amount)));
+					Item.Tone = Consequence.Amount > 0
+						? EWacomRunEventChoiceAvailabilityTone::Requirement
+						: EWacomRunEventChoiceAvailabilityTone::Ready;
+				}
+				break;
+			case EWacomRunEventEffectType::ConsumeNode:
+				if (Consequence.Amount > 0)
+				{
+					Item.Text = FText::Format(
+						LOCTEXT("PreviewConsumeNodeFmt", "消耗行动点：{0}"),
+						FText::AsNumber(Consequence.Amount));
+					Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+				}
+				break;
+			case EWacomRunEventEffectType::RemoveCard:
+				Item.Text = FText::Format(
+					LOCTEXT("PreviewRemoveCardFmt", "交出卡牌：{0}"),
+					GetRunEventCardDisplayName(Consequence.CardDefinition.Get()));
+				Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+				break;
+			case EWacomRunEventEffectType::MarkEventCompleted:
+				Item.Text = FText::Format(
+					LOCTEXT("PreviewMarkEventCompletedFmt", "完成事件：{0}"),
+					FormatEventRequirementTarget(Consequence.TargetPersistentId));
+				Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+				break;
+			case EWacomRunEventEffectType::SetRunFlag:
+				Item.Text = FText::Format(
+					LOCTEXT("PreviewSetRunFlagFmt", "设置标记：{0}"),
+					FormatRunFlagId(Consequence.FlagId));
+				Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+				break;
+			case EWacomRunEventEffectType::ClearRunFlag:
+				Item.Text = FText::Format(
+					LOCTEXT("PreviewClearRunFlagFmt", "清除标记：{0}"),
+					FormatRunFlagId(Consequence.FlagId));
+				Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+				break;
+			case EWacomRunEventEffectType::None:
+			default:
+				break;
+			}
+			break;
+		case ERunEventChoiceConsequenceKind::NodeTransition:
+		{
+			const FText NodeText = Consequence.ResolvedNodeTitleText.IsEmpty()
+				? (Consequence.ResolvedNodeId.IsNone() ? FText::GetEmpty() : FText::FromName(Consequence.ResolvedNodeId))
+				: Consequence.ResolvedNodeTitleText;
+			if (!NodeText.IsEmpty())
+			{
+				Item.Text = FText::Format(LOCTEXT("PreviewNodeTransitionFmt", "进入：{0}"), NodeText);
+				Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+			}
+			break;
+		}
+		case ERunEventChoiceConsequenceKind::EventEnds:
+			Item.Text = LOCTEXT("PreviewEventEnds", "事件将结束");
+			Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+			break;
+		case ERunEventChoiceConsequenceKind::None:
+		default:
+			break;
+		}
+
+		if (!Item.Text.IsEmpty())
+		{
+			View.ConsequenceItems.Add(MoveTemp(Item));
+		}
 	}
 
 	return View;

@@ -22,6 +22,18 @@ namespace
 		return false;
 	}
 
+	bool TextArrayContains(const TArray<FText>& Messages, const TCHAR* Needle)
+	{
+		for (const FText& Message : Messages)
+		{
+			if (Message.ToString().Contains(Needle))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	UCardDefinition* MakeRunEventValidationCard(UObject* Outer)
 	{
 		UCardDefinition* Card = NewObject<UCardDefinition>(Outer);
@@ -114,6 +126,12 @@ namespace
 	{
 		return FWacomRunEventDefinitionValidation::Validate(Event, OutErrors);
 	}
+
+	FWacomRunEventDefinitionValidationReport BuildRunEventValidationReportForTest(
+		const UWacomRunEventDefinition* Event)
+	{
+		return FWacomRunEventDefinitionValidation::BuildReport(Event);
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -127,6 +145,163 @@ bool FWacomDataRunEventValidationValidSpec::RunTest(const FString& /*Parameters*
 	TArray<FText> Errors;
 	TestTrue(TEXT("Valid RunEvent passes validation"), ValidateRunEventForTest(Event.Get(), Errors));
 	TestEqual(TEXT("No validation errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataRunEventValidationDiagnosticsSpec,
+	"Wacom.Data.RunEvent.Validation.AuthoringDiagnostics",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataRunEventValidationDiagnosticsSpec::RunTest(const FString& /*Parameters*/)
+{
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		Event->Nodes[1].Choices[0].Conditions[0].CardDefinition = nullptr;
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestFalse(TEXT("Blocking condition error makes report invalid"), Report.IsValid());
+		TestTrue(TEXT("Condition error names node choice and index"),
+			TextArrayContains(Report.Errors, TEXT("Node End"))
+			&& TextArrayContains(Report.Errors, TEXT("Choice Resolve"))
+			&& TextArrayContains(Report.Errors, TEXT("ConditionIndex 0"))
+			&& TextArrayContains(Report.Errors, TEXT("CardDefinition")));
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		Event->Nodes[1].Choices[0].Effects[0].CardDefinition = nullptr;
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestFalse(TEXT("Blocking effect error makes report invalid"), Report.IsValid());
+		TestTrue(TEXT("Effect error names node choice and index"),
+			TextArrayContains(Report.Errors, TEXT("Node End"))
+			&& TextArrayContains(Report.Errors, TEXT("Choice Resolve"))
+			&& TextArrayContains(Report.Errors, TEXT("EffectIndex 0"))
+			&& TextArrayContains(Report.Errors, TEXT("CardDefinition")));
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		FWacomRunEventEffectDefinition ZeroGold;
+		ZeroGold.Type = EWacomRunEventEffectType::AddGold;
+		ZeroGold.Value = 0;
+		FWacomRunEventEffectDefinition ZeroPressure;
+		ZeroPressure.Type = EWacomRunEventEffectType::AddPressure;
+		ZeroPressure.PressureType = TEXT("Misdeed");
+		ZeroPressure.Value = 0;
+		FWacomRunEventEffectDefinition ZeroNode;
+		ZeroNode.Type = EWacomRunEventEffectType::ConsumeNode;
+		ZeroNode.Value = 0;
+		Event->Nodes[1].Choices[0].Effects = { ZeroGold, ZeroPressure, ZeroNode };
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestTrue(TEXT("Zero amount warnings keep asset valid"), Report.IsValid());
+		TestEqual(TEXT("Three zero warnings"), Report.Warnings.Num(), 3);
+		TestTrue(TEXT("Zero warning names AddGold index"),
+			TextArrayContains(Report.Warnings, TEXT("EffectIndex 0"))
+			&& TextArrayContains(Report.Warnings, TEXT("AddGold"))
+			&& TextArrayContains(Report.Warnings, TEXT("资产仍有效")));
+		TestTrue(TEXT("Zero warning names AddPressure index"),
+			TextArrayContains(Report.Warnings, TEXT("EffectIndex 1"))
+			&& TextArrayContains(Report.Warnings, TEXT("AddPressure")));
+		TestTrue(TEXT("Zero warning names ConsumeNode index"),
+			TextArrayContains(Report.Warnings, TEXT("EffectIndex 2"))
+			&& TextArrayContains(Report.Warnings, TEXT("ConsumeNode")));
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		Event->Nodes[0].Choices[0].bCloseEventAfterResolve = true;
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestTrue(TEXT("Close with next node warning keeps asset valid"), Report.IsValid());
+		TestTrue(TEXT("Close with next node warns about outcome preview"),
+			TextArrayContains(Report.Warnings, TEXT("Node Start"))
+			&& TextArrayContains(Report.Warnings, TEXT("Choice Jump"))
+			&& TextArrayContains(Report.Warnings, TEXT("NextNodeId End"))
+			&& TextArrayContains(Report.Warnings, TEXT("事件结束预览会优先")));
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		FWacomRunEventEffectDefinition ZeroGold;
+		ZeroGold.Type = EWacomRunEventEffectType::AddGold;
+		ZeroGold.Value = 0;
+		Event->Nodes[1].Choices[0].Effects = { ZeroGold };
+		TArray<FText> Errors;
+		TestTrue(TEXT("Legacy Validate ignores warnings for validity"), ValidateRunEventForTest(Event.Get(), Errors));
+		TestEqual(TEXT("Legacy Validate returns only errors"), Errors.Num(), 0);
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		FWacomRunEventEffectDefinition ZeroGold;
+		ZeroGold.Type = EWacomRunEventEffectType::AddGold;
+		ZeroGold.Value = 0;
+		Event->Nodes[0].Choices[0].NextNodeId = TEXT("MissingNext");
+		Event->Nodes[1].Choices[0].Effects = { ZeroGold };
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestFalse(TEXT("Blocking errors still make asset invalid even with warning"), Report.IsValid());
+		TestTrue(TEXT("Invalid report keeps errors"), Report.Errors.Num() > 0);
+		TestTrue(TEXT("Invalid report can also keep warnings"), Report.Warnings.Num() > 0);
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		FWacomRunEventEffectDefinition LoseGold;
+		LoseGold.Type = EWacomRunEventEffectType::AddGold;
+		LoseGold.Value = -3;
+		Event->Nodes[1].Choices[0].Effects = { LoseGold };
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestTrue(TEXT("Negative gold without gate remains valid"), Report.IsValid());
+		TestTrue(TEXT("Negative gold without MinGold emits warning"),
+			TextArrayContains(Report.Warnings, TEXT("Choice Resolve"))
+			&& TextArrayContains(Report.Warnings, TEXT("扣金币总额 3"))
+			&& TextArrayContains(Report.Warnings, TEXT("没有 MinGold 条件"))
+			&& TextArrayContains(Report.Warnings, TEXT("clamp 到 0")));
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		FWacomRunEventConditionDefinition MinGold;
+		MinGold.Type = EWacomRunEventConditionType::MinGold;
+		MinGold.Value = 2;
+		Event->Nodes[1].Choices[0].Conditions.Add(MinGold);
+		FWacomRunEventEffectDefinition LoseGold;
+		LoseGold.Type = EWacomRunEventEffectType::AddGold;
+		LoseGold.Value = -3;
+		Event->Nodes[1].Choices[0].Effects = { LoseGold };
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestTrue(TEXT("Mismatched gold gate remains valid"), Report.IsValid());
+		TestTrue(TEXT("Mismatched gold gate emits warning"),
+			TextArrayContains(Report.Warnings, TEXT("Choice Resolve"))
+			&& TextArrayContains(Report.Warnings, TEXT("MinGold 最大值 2"))
+			&& TextArrayContains(Report.Warnings, TEXT("扣金币总额 3"))
+			&& TextArrayContains(Report.Warnings, TEXT("不一致")));
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		FWacomRunEventConditionDefinition MinGold;
+		MinGold.Type = EWacomRunEventConditionType::MinGold;
+		MinGold.Value = 3;
+		Event->Nodes[1].Choices[0].Conditions.Add(MinGold);
+		FWacomRunEventEffectDefinition LoseGold;
+		LoseGold.Type = EWacomRunEventEffectType::AddGold;
+		LoseGold.Value = -3;
+		Event->Nodes[1].Choices[0].Effects = { LoseGold };
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestTrue(TEXT("Matching gold gate remains valid"), Report.IsValid());
+		TestFalse(TEXT("Matching gold gate does not warn"),
+			TextArrayContains(Report.Warnings, TEXT("扣金币总额"))
+			|| TextArrayContains(Report.Warnings, TEXT("MinGold 最大值")));
+	}
+
 	return true;
 }
 
@@ -236,6 +411,38 @@ bool FWacomDataRunEventValidationRequiredFieldsSpec::RunTest(const FString& /*Pa
 		Event->Nodes[1].Choices[0].Effects = { ConsumeNode };
 		TestFalse(TEXT("Negative ConsumeNode fails"), ValidateRunEventForTest(Event.Get(), Errors));
 		TestTrue(TEXT("Negative ConsumeNode has error"), Errors.Num() > 0);
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		FWacomRunEventConditionDefinition RunFlagCondition;
+		RunFlagCondition.Type = EWacomRunEventConditionType::RunFlagSet;
+		RunFlagCondition.FlagId = NAME_None;
+		Event->Nodes[1].Choices[0].Conditions = { RunFlagCondition };
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestFalse(TEXT("RunFlag condition missing FlagId fails"), Report.IsValid());
+		TestTrue(TEXT("RunFlag condition error names node choice condition index"),
+			TextArrayContains(Report.Errors, TEXT("Node End"))
+			&& TextArrayContains(Report.Errors, TEXT("Choice Resolve"))
+			&& TextArrayContains(Report.Errors, TEXT("ConditionIndex 0"))
+			&& TextArrayContains(Report.Errors, TEXT("FlagId")));
+	}
+
+	{
+		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
+		FWacomRunEventEffectDefinition RunFlagEffect;
+		RunFlagEffect.Type = EWacomRunEventEffectType::SetRunFlag;
+		RunFlagEffect.FlagId = NAME_None;
+		Event->Nodes[1].Choices[0].Effects = { RunFlagEffect };
+		const FWacomRunEventDefinitionValidationReport Report =
+			BuildRunEventValidationReportForTest(Event.Get());
+		TestFalse(TEXT("RunFlag effect missing FlagId fails"), Report.IsValid());
+		TestTrue(TEXT("RunFlag effect error names node choice effect index"),
+			TextArrayContains(Report.Errors, TEXT("Node End"))
+			&& TextArrayContains(Report.Errors, TEXT("Choice Resolve"))
+			&& TextArrayContains(Report.Errors, TEXT("EffectIndex 0"))
+			&& TextArrayContains(Report.Errors, TEXT("FlagId")));
 	}
 
 	return true;

@@ -259,6 +259,7 @@ RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，�
 - 指定压力不高于阈值。
 - 拥有 / 缺少指定卡。
 - 指定 `PersistentId` 事件已完成 / 未完成。
+- 当前 Run 标记已设置 / 未设置。
 
 当前效果：
 
@@ -268,12 +269,21 @@ RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，�
 - 消耗节点并可能推进时段。
 - 从玩家任意持有区永久移除一张卡。
 - 标记指定 `PersistentId` 事件完成。
+- 设置 / 清除当前 Run 标记。
 
 选项 `Effects` 按事务执行：任一效果失败时，本次选项不提交已执行的前置效果，且不改变节点 / 时间 / 卡牌 / 金币 / 压力 / 事件 active 或 completed 状态；失败结果不返回部分 `EffectResults`。
 
 RunEvent 的移除卡搜索四个物理持有区：`Backpack`、`BattleDeck`、`BurdenZone` 和所有 `SpecialZones.Cards`。它不发金币，但遵守固有卡、最后容量来源卡和 Companion 嗜血规则。
 
+V0-BA 后，RunEvent 支持第一版 RunFlag 事件记忆：`RunFlagSet / RunFlagNotSet` 条件和 `SetRunFlag / ClearRunFlag` 效果都使用 `FlagId`。RunFlag 存在 `FRunState::RunFlags`，只表示当前 Run 内存态的 bool/set 语义；它不是 GameplayTag，不是数值变量，也不写入 SaveGame。`RunFlagSet` 缺失时失败 reason 为 `RequiredRunFlagMissing`，`RunFlagNotSet` 命中已设置标记时失败 reason 为 `BlockedRunFlagSet`，配置缺少 `FlagId` 时失败 reason 为 `MissingRunFlagId`。`SetRunFlag / ClearRunFlag` 在 RunEvent working-state 事务内执行；后续 effect 失败时会和其他前置效果一起回滚。
+
 RunEvent 选项可以配置 `CardPayment` 要求玩家拖入一张真实持有卡支付。运行时 `FRunEventChoiceSnapshot` 会给 UI 暴露 `bRequiresOwnedCardPayment`、`PaymentZoneId`、候选 `InstanceId` 列表和支付不可用原因；`PaymentZoneId` 为空时解析为 `RunEvent.Pay.{ChoiceId}`。支付筛选读取 Definition / CardId / RequiredKeywords / BlockedKeywords，空筛选非法，本轮不支持“交任意卡”。
+
+V0-AX 后，`FRunEventChoiceSnapshot::Requirements` 会按选项条件生成结构化需求快照，并为 `CardPayment` 追加支付需求项。需求项只记录规则事实：需求类型、是否满足、首个禁用原因、所需/当前数值、压力类型、卡牌 Definition、目标事件 PersistentId、RunFlag `FlagId`、支付候选数量等。`bAvailable / DisabledReason` 仍保留“首个失败原因”语义，提交校验和事务流程不因此改变；中文展示文案由 `WacomApp` presentation 生成，不写入 `WacomRun`。
+
+V0-AY 后，`FRunEventChoiceSnapshot::Consequences` 会按选项 Effects 和 outcome 生成结构化后果预览。预览采用“配置意图”口径，只记录 effect 类型、卡牌、数值、压力类型、目标事件、RunFlag `FlagId`、跳转节点和节点标题等事实；它不模拟金币 clamp、行动点跨时段、副作用压力或后续效果失败。真实结果仍以提交后的 `FRunEventChoiceResult` 和事务状态为准。卡牌支付本身不进入 consequence list，继续由支付字段和 App presentation 的支付状态行表达。
+
+V0-AZ 后，编辑器校验会把会导致规则或预览失真的配置作为 error，把“资产可运行但预览不清晰”的制作问题作为 warning。`AddGold / AddPressure / ConsumeNode` 的 `Value=0` 会给 warning，因为不会产生可见 consequence preview 或有意义的实际变化；`NextNodeId` 与关闭 / 完成事件同时配置时也会给 warning，因为事件结束预览优先，不会显示节点跳转预览。V0-BA 后，RunFlag 条件 / 效果缺少 `FlagId` 是 error；负数 `AddGold` 没有 `MinGold` 条件会给 warning，因为实际结算会 clamp 到 0；负数 `AddGold` 总扣费和最大 `MinGold` 门槛不一致也会给 warning，提示门槛和扣费可能不一致。
 
 支付选项只能通过 `ChooseRunEventOptionWithPaidCardResult(ChoiceId, PaidCardInstanceId)` 提交。普通 `ChooseRunEventOptionWithResult()` 会以 `RequiresCardPayment` 拒绝，避免点击按钮时悄悄按 Definition 删除一张卡。支付提交流程会校验 active event、choice 条件、卡实例归属、筛选命中和永久移除保护；随后在 working state 中先移除该精确 instance，再执行 choice effects、节点跳转、关闭或完成标记。任一步失败都会整体回滚。支付选项禁止同时配置 `RemoveCard` effect，避免拖卡支付后又按 Definition 再删一张。
 
@@ -285,11 +295,18 @@ RunEvent 选项可以配置 `CardPayment` 要求玩家拖入一张真实持有�
 - 不要在支付选项里同时配置 `RemoveCard` effect；拖卡支付已经会永久移除精确 instance。
 - 支付成功后的结果用 `NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted / Effects` 表达，不在 UI 或菜单里手动推进事件。
 
-V0-AT 后编辑器 RunEvent Data Validation 会在支付相关错误中明确指出 `NodeId / ChoiceId / PaymentZoneId / NextNodeId`，便于定位资产配置问题。`DA_Event_DebugSnakeGift` 是当前标准单卡支付样例：`HandOverFang` 使用 `CardPayment + AllowedCardDefinitions=PoisonFang + NextNodeId=End`，效果只保留 `ConsumeNode`，不配置 `RemoveCard`。
+金币门槛 + 扣金币 + 奖励的制作口径仍使用现有组合，不新增 `PayGold` 类型：
+
+- 用 `MinGold=N` 表示至少需要 N 金币。
+- 用 `AddGold=-N` 表示支付 N 金币；Run 规则会把金币下限 clamp 到 0。
+- 支付后的奖励继续用 `GainCard / AddPressure / SetRunFlag / MarkEventCompleted / NextNodeId` 等现有 effect 和 outcome 表达。
+- 建议 `MinGold` 最大值和负数 `AddGold` 总扣费保持一致；不一致时资产仍可运行，但会给 authoring warning，避免玩家看到的门槛和实际扣费不一致。
+
+V0-AT 后编辑器 RunEvent Data Validation 会在支付相关错误中明确指出 `NodeId / ChoiceId / PaymentZoneId / NextNodeId`，便于定位资产配置问题。V0-AZ 后条件 / 效果错误也会带 `ConditionIndex / EffectIndex`，并通过 validation report 分离 `Errors / Warnings`；旧 `Validate(Event, OutErrors)` 兼容入口仍只返回阻断错误。`DA_Event_DebugSnakeGift` 是当前标准单卡支付样例：`HandOverFang` 使用 `CardPayment + AllowedCardDefinitions=PoisonFang + NextNodeId=End`，效果只保留 `ConsumeNode`，不配置 `RemoveCard`。
 
 `FRunEventChoiceResult` 只表达本次选项直接效果和展示诊断字段，供 UI 和日志展示。V0-AR 后成功的卡牌支付结果会记录 `PaidCardDefinition`，仅用于 UI / 日志显示“交出了哪张卡”；它必须在移除 paid instance 前从当前持有卡读取，且不是后续规则输入。V0-AS 后成功结果还会记录 `PreviousNodeId / ResolvedNodeId / ResolvedNodeTitleText / bNodeChanged / bEventClosedAfterResolve / bEventCompletedAfterResolve`，用于 Toast 显示“进入某节点”或“事件已结束”。这些 outcome 字段只在事务成功提交后写入；失败或回滚结果不写入 paid card definition，也不写入成功 outcome。后续规则不能依赖这个结果包反向修改 RunState。
 
-当前 `RunEventStates` 只保存在 Run 内存态，不写入 SaveGame。
+当前 `RunEventStates` 和 `RunFlags` 只保存在 Run 内存态，不写入 SaveGame。
 
 ---
 
@@ -398,6 +415,7 @@ Outcome 分支：
 | `ShopStates` | 不保存 | 商店库存和已购买状态清空 |
 | `ActiveRunEventId`、`ActiveRunEventDefinition` | 不保存 | 无 active event |
 | `RunEventStates` | 不保存 | 事件当前节点和完成状态清空 |
+| `RunFlags` | 不保存 | 当前 Run 内存态事件标记清空 |
 
 因此，当前 SaveGame 不能被描述为完整 Run 存档。它只覆盖部分场景与卡牌持有状态，而且正常流程还被 GameMode 总开关禁用。
 

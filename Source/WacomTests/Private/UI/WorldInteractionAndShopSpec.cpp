@@ -927,6 +927,188 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 		AvailableView.Tone,
 		EWacomRunEventChoiceAvailabilityTone::Ready);
 
+	FRunEventChoiceSnapshot RequirementChoice;
+	RequirementChoice.ChoiceId = TEXT("RequirementPreview");
+	RequirementChoice.bAvailable = false;
+	RequirementChoice.DisabledReason = TEXT("InsufficientGold");
+	FRunEventChoiceRequirementSnapshot GoldRequirement;
+	GoldRequirement.Kind = ERunEventChoiceRequirementKind::MinGold;
+	GoldRequirement.bSatisfied = false;
+	GoldRequirement.DisabledReason = TEXT("InsufficientGold");
+	GoldRequirement.RequiredValue = 3;
+	GoldRequirement.CurrentValue = 1;
+	FRunEventChoiceRequirementSnapshot NodeRequirement;
+	NodeRequirement.Kind = ERunEventChoiceRequirementKind::MinNodeCount;
+	NodeRequirement.bSatisfied = true;
+	NodeRequirement.RequiredValue = 1;
+	NodeRequirement.CurrentValue = 2;
+	FRunEventChoiceRequirementSnapshot PressureRequirement;
+	PressureRequirement.Kind = ERunEventChoiceRequirementKind::MaxPressure;
+	PressureRequirement.bSatisfied = false;
+	PressureRequirement.DisabledReason = TEXT("PressureTooHigh");
+	PressureRequirement.RequiredValue = 2;
+	PressureRequirement.CurrentValue = 5;
+	PressureRequirement.PressureType = EWacomPressureType::Misdeed;
+	FRunEventChoiceRequirementSnapshot HasCardRequirement;
+	HasCardRequirement.Kind = ERunEventChoiceRequirementKind::HasCard;
+	HasCardRequirement.bSatisfied = true;
+	HasCardRequirement.CardDefinition = Card;
+	FRunEventChoiceRequirementSnapshot EventRequirement;
+	EventRequirement.Kind = ERunEventChoiceRequirementKind::EventCompleted;
+	EventRequirement.bSatisfied = false;
+	EventRequirement.DisabledReason = TEXT("RequiredEventNotCompleted");
+	EventRequirement.TargetPersistentId = TEXT("Event.Target");
+	FRunEventChoiceRequirementSnapshot RunFlagSetRequirement;
+	RunFlagSetRequirement.Kind = ERunEventChoiceRequirementKind::RunFlagSet;
+	RunFlagSetRequirement.bSatisfied = false;
+	RunFlagSetRequirement.DisabledReason = TEXT("RequiredRunFlagMissing");
+	RunFlagSetRequirement.FlagId = TEXT("SnakeGift.HasFang");
+	FRunEventChoiceRequirementSnapshot RunFlagNotSetRequirement;
+	RunFlagNotSetRequirement.Kind = ERunEventChoiceRequirementKind::RunFlagNotSet;
+	RunFlagNotSetRequirement.bSatisfied = true;
+	RunFlagNotSetRequirement.FlagId = TEXT("SnakeGift.RewardClaimed");
+	FRunEventChoiceRequirementSnapshot PaymentRequirement;
+	PaymentRequirement.Kind = ERunEventChoiceRequirementKind::CardPayment;
+	PaymentRequirement.bSatisfied = true;
+	PaymentRequirement.PaymentCandidateCount = 2;
+	RequirementChoice.Requirements = {
+		GoldRequirement,
+		NodeRequirement,
+		PressureRequirement,
+		HasCardRequirement,
+		EventRequirement,
+		RunFlagSetRequirement,
+		RunFlagNotSetRequirement,
+		PaymentRequirement };
+	const FWacomRunEventChoiceRequirementView RequirementView =
+		UWacomRunEventPresentationBuilder::BuildChoiceRequirementView(RequirementChoice);
+	TestEqual(TEXT("Requirement item count"), RequirementView.RequirementItems.Num(), 8);
+	TestEqual(TEXT("Unsatisfied requirement count"), RequirementView.UnsatisfiedRequirementCount, 4);
+	if (RequirementView.RequirementItems.Num() == 8)
+	{
+		TestEqual(TEXT("Gold requirement text"),
+			RequirementView.RequirementItems[0].Text.ToString(),
+			FString(TEXT("需要金币：3 / 当前 1")));
+		TestEqual(TEXT("Node requirement text"),
+			RequirementView.RequirementItems[1].Text.ToString(),
+			FString(TEXT("需要行动点：1 / 当前 2")));
+		TestEqual(TEXT("Pressure requirement text"),
+			RequirementView.RequirementItems[2].Text.ToString(),
+			FString(TEXT("压力不高于：恶行 2 / 当前 5")));
+		TestEqual(TEXT("Has card requirement text"),
+			RequirementView.RequirementItems[3].Text.ToString(),
+			FString(TEXT("需要持有：事件提示卡")));
+		TestEqual(TEXT("Event requirement text"),
+			RequirementView.RequirementItems[4].Text.ToString(),
+			FString(TEXT("需要事件已完成：Event.Target")));
+		TestEqual(TEXT("RunFlagSet requirement text"),
+			RequirementView.RequirementItems[5].Text.ToString(),
+			FString(TEXT("需要标记：SnakeGift.HasFang")));
+		TestEqual(TEXT("RunFlagNotSet requirement text"),
+			RequirementView.RequirementItems[6].Text.ToString(),
+			FString(TEXT("不能有标记：SnakeGift.RewardClaimed")));
+		TestEqual(TEXT("Payment requirement item text"),
+			RequirementView.RequirementItems[7].Text.ToString(),
+			FString(TEXT("需要拖入卡牌支付：2 张可用")));
+	}
+
+	FRunEventChoiceSnapshot ConsequenceChoice;
+	ConsequenceChoice.ChoiceId = TEXT("ConsequencePreview");
+	FRunEventChoiceConsequenceSnapshot GainCardConsequence;
+	GainCardConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	GainCardConsequence.EffectType = EWacomRunEventEffectType::GainCard;
+	GainCardConsequence.CardDefinition = Card;
+	FRunEventChoiceConsequenceSnapshot GoldGainConsequence;
+	GoldGainConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	GoldGainConsequence.EffectType = EWacomRunEventEffectType::AddGold;
+	GoldGainConsequence.Amount = 3;
+	FRunEventChoiceConsequenceSnapshot GoldLossConsequence;
+	GoldLossConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	GoldLossConsequence.EffectType = EWacomRunEventEffectType::AddGold;
+	GoldLossConsequence.Amount = -2;
+	FRunEventChoiceConsequenceSnapshot PressureConsequence;
+	PressureConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	PressureConsequence.EffectType = EWacomRunEventEffectType::AddPressure;
+	PressureConsequence.Amount = 5;
+	PressureConsequence.PressureType = EWacomPressureType::Misdeed;
+	FRunEventChoiceConsequenceSnapshot NodeConsequence;
+	NodeConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	NodeConsequence.EffectType = EWacomRunEventEffectType::ConsumeNode;
+	NodeConsequence.Amount = 1;
+	FRunEventChoiceConsequenceSnapshot RemoveCardConsequence;
+	RemoveCardConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	RemoveCardConsequence.EffectType = EWacomRunEventEffectType::RemoveCard;
+	RemoveCardConsequence.CardDefinition = Card;
+	FRunEventChoiceConsequenceSnapshot MarkEventConsequence;
+	MarkEventConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	MarkEventConsequence.EffectType = EWacomRunEventEffectType::MarkEventCompleted;
+	MarkEventConsequence.TargetPersistentId = TEXT("Event.Target");
+	FRunEventChoiceConsequenceSnapshot SetFlagConsequence;
+	SetFlagConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	SetFlagConsequence.EffectType = EWacomRunEventEffectType::SetRunFlag;
+	SetFlagConsequence.FlagId = TEXT("SnakeGift.HasFang");
+	FRunEventChoiceConsequenceSnapshot ClearFlagConsequence;
+	ClearFlagConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	ClearFlagConsequence.EffectType = EWacomRunEventEffectType::ClearRunFlag;
+	ClearFlagConsequence.FlagId = TEXT("SnakeGift.RewardClaimed");
+	FRunEventChoiceConsequenceSnapshot TransitionConsequence;
+	TransitionConsequence.Kind = ERunEventChoiceConsequenceKind::NodeTransition;
+	TransitionConsequence.ResolvedNodeId = TEXT("After");
+	TransitionConsequence.ResolvedNodeTitleText = FText::FromString(TEXT("后续节点"));
+	FRunEventChoiceConsequenceSnapshot EventEndsConsequence;
+	EventEndsConsequence.Kind = ERunEventChoiceConsequenceKind::EventEnds;
+	ConsequenceChoice.Consequences = {
+		GainCardConsequence,
+		GoldGainConsequence,
+		GoldLossConsequence,
+		PressureConsequence,
+		NodeConsequence,
+		RemoveCardConsequence,
+		MarkEventConsequence,
+		SetFlagConsequence,
+		ClearFlagConsequence,
+		TransitionConsequence,
+		EventEndsConsequence };
+	const FWacomRunEventChoiceConsequenceView ConsequenceView =
+		UWacomRunEventPresentationBuilder::BuildChoiceConsequenceView(ConsequenceChoice);
+	TestEqual(TEXT("Consequence item count"), ConsequenceView.ConsequenceItems.Num(), 11);
+	if (ConsequenceView.ConsequenceItems.Num() == 11)
+	{
+		TestEqual(TEXT("Gain card consequence text"),
+			ConsequenceView.ConsequenceItems[0].Text.ToString(),
+			FString(TEXT("获得卡牌：事件提示卡")));
+		TestEqual(TEXT("Gold gain consequence text"),
+			ConsequenceView.ConsequenceItems[1].Text.ToString(),
+			FString(TEXT("获得金币：3")));
+		TestEqual(TEXT("Gold loss consequence text"),
+			ConsequenceView.ConsequenceItems[2].Text.ToString(),
+			FString(TEXT("失去金币：2")));
+		TestEqual(TEXT("Pressure consequence text"),
+			ConsequenceView.ConsequenceItems[3].Text.ToString(),
+			FString(TEXT("恶行 +5")));
+		TestEqual(TEXT("Node consequence text"),
+			ConsequenceView.ConsequenceItems[4].Text.ToString(),
+			FString(TEXT("消耗行动点：1")));
+		TestEqual(TEXT("Remove card consequence text"),
+			ConsequenceView.ConsequenceItems[5].Text.ToString(),
+			FString(TEXT("交出卡牌：事件提示卡")));
+		TestEqual(TEXT("Mark event consequence text"),
+			ConsequenceView.ConsequenceItems[6].Text.ToString(),
+			FString(TEXT("完成事件：Event.Target")));
+		TestEqual(TEXT("Set flag consequence text"),
+			ConsequenceView.ConsequenceItems[7].Text.ToString(),
+			FString(TEXT("设置标记：SnakeGift.HasFang")));
+		TestEqual(TEXT("Clear flag consequence text"),
+			ConsequenceView.ConsequenceItems[8].Text.ToString(),
+			FString(TEXT("清除标记：SnakeGift.RewardClaimed")));
+		TestEqual(TEXT("Transition consequence text"),
+			ConsequenceView.ConsequenceItems[9].Text.ToString(),
+			FString(TEXT("进入：后续节点")));
+		TestEqual(TEXT("Event ends consequence text"),
+			ConsequenceView.ConsequenceItems[10].Text.ToString(),
+			FString(TEXT("事件将结束")));
+	}
+
 	FRunEventChoiceResult Result;
 	Result.bSucceeded = true;
 	Result.PaidCardDefinition = Card;
@@ -1029,6 +1211,11 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	PaymentChoice.bAvailable = true;
 	PaymentChoice.bRequiresOwnedCardPayment = true;
 	PaymentChoice.PaymentCandidateCount = 2;
+	FRunEventChoiceRequirementSnapshot PaymentRequirement;
+	PaymentRequirement.Kind = ERunEventChoiceRequirementKind::CardPayment;
+	PaymentRequirement.bSatisfied = true;
+	PaymentRequirement.PaymentCandidateCount = 2;
+	PaymentChoice.Requirements.Add(PaymentRequirement);
 	Button->SetChoiceSnapshot(PaymentChoice);
 	TestEqual(TEXT("Payment row shows candidate count"),
 		Button->GetDisplayedPaymentStatusTextForTest().ToString(),
@@ -1042,10 +1229,19 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Payment status visible for payment choice"),
 		Button->GetPaymentStatusVisibilityForTest(),
 		ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Payment requirement is not duplicated in generic list"),
+		Button->GetDisplayedRequirementItemCountForTest(),
+		0);
+	TestEqual(TEXT("Payment has no consequence by default"),
+		Button->GetDisplayedConsequenceItemCountForTest(),
+		0);
 
 	PaymentChoice.bAvailable = false;
 	PaymentChoice.PaymentCandidateCount = 0;
 	PaymentChoice.PaymentDisabledReason = TEXT("MissingRequiredCard");
+	PaymentChoice.Requirements[0].bSatisfied = false;
+	PaymentChoice.Requirements[0].PaymentCandidateCount = 0;
+	PaymentChoice.Requirements[0].DisabledReason = TEXT("MissingRequiredCard");
 	Button->SetChoiceSnapshot(PaymentChoice);
 	TestEqual(TEXT("Payment row shows missing candidate reason"),
 		Button->GetDisplayedPaymentStatusTextForTest().ToString(),
@@ -1058,15 +1254,33 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	NonPaymentChoice.ChoiceId = TEXT("Leave");
 	NonPaymentChoice.LabelText = FText::FromString(TEXT("离开"));
 	NonPaymentChoice.bAvailable = true;
+	FRunEventChoiceConsequenceSnapshot NodeConsequence;
+	NodeConsequence.Kind = ERunEventChoiceConsequenceKind::NodeTransition;
+	NodeConsequence.ResolvedNodeId = TEXT("After");
+	NodeConsequence.ResolvedNodeTitleText = FText::FromString(TEXT("后续节点"));
+	NonPaymentChoice.Consequences.Add(NodeConsequence);
 	Button->SetChoiceSnapshot(NonPaymentChoice);
 	TestEqual(TEXT("Non-payment row hides payment status"),
 		Button->GetPaymentStatusVisibilityForTest(),
 		ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Non-payment row shows consequence item"),
+		Button->GetDisplayedConsequenceItemCountForTest(),
+		1);
+	TestEqual(TEXT("Non-payment consequence item text"),
+		Button->GetDisplayedConsequenceItemTextForTest(0).ToString(),
+		FString(TEXT("进入：后续节点")));
 
 	FRunEventChoiceSnapshot BlockedNonPaymentChoice;
 	BlockedNonPaymentChoice.ChoiceId = TEXT("GoldLocked");
 	BlockedNonPaymentChoice.bAvailable = false;
 	BlockedNonPaymentChoice.DisabledReason = TEXT("InsufficientGold");
+	FRunEventChoiceRequirementSnapshot GoldRequirement;
+	GoldRequirement.Kind = ERunEventChoiceRequirementKind::MinGold;
+	GoldRequirement.bSatisfied = false;
+	GoldRequirement.DisabledReason = TEXT("InsufficientGold");
+	GoldRequirement.RequiredValue = 3;
+	GoldRequirement.CurrentValue = 1;
+	BlockedNonPaymentChoice.Requirements.Add(GoldRequirement);
 	Button->SetChoiceSnapshot(BlockedNonPaymentChoice);
 	TestEqual(TEXT("Blocked non-payment row shows disabled reason"),
 		Button->GetDisplayedDisabledReasonTextForTest().ToString(),
@@ -1074,6 +1288,59 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Blocked non-payment disabled reason visible"),
 		Button->GetDisabledReasonVisibilityForTest(),
 		ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Blocked non-payment row shows one requirement item"),
+		Button->GetDisplayedRequirementItemCountForTest(),
+		1);
+	TestEqual(TEXT("Blocked non-payment requirement item text"),
+		Button->GetDisplayedRequirementItemTextForTest(0).ToString(),
+		FString(TEXT("需要金币：3 / 当前 1")));
+
+	FRunEventChoiceSnapshot RunFlagChoice;
+	RunFlagChoice.ChoiceId = TEXT("FlagChoice");
+	RunFlagChoice.bAvailable = false;
+	RunFlagChoice.DisabledReason = TEXT("RequiredRunFlagMissing");
+	FRunEventChoiceRequirementSnapshot RunFlagRequirement;
+	RunFlagRequirement.Kind = ERunEventChoiceRequirementKind::RunFlagSet;
+	RunFlagRequirement.bSatisfied = false;
+	RunFlagRequirement.DisabledReason = TEXT("RequiredRunFlagMissing");
+	RunFlagRequirement.FlagId = TEXT("SnakeGift.HasFang");
+	FRunEventChoiceConsequenceSnapshot RunFlagConsequence;
+	RunFlagConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+	RunFlagConsequence.EffectType = EWacomRunEventEffectType::SetRunFlag;
+	RunFlagConsequence.FlagId = TEXT("SnakeGift.HasFang");
+	RunFlagChoice.Requirements.Add(RunFlagRequirement);
+	RunFlagChoice.Consequences.Add(RunFlagConsequence);
+	Button->SetChoiceSnapshot(RunFlagChoice);
+	TestEqual(TEXT("RunFlag blocked reason text"),
+		Button->GetDisplayedDisabledReasonTextForTest().ToString(),
+		FString(TEXT("不可选：缺少所需标记")));
+	TestEqual(TEXT("RunFlag requirement fallback text"),
+		Button->GetDisplayedRequirementItemTextForTest(0).ToString(),
+		FString(TEXT("需要标记：SnakeGift.HasFang")));
+	TestEqual(TEXT("RunFlag consequence fallback text"),
+		Button->GetDisplayedConsequenceItemTextForTest(0).ToString(),
+		FString(TEXT("设置标记：SnakeGift.HasFang")));
+
+	FRunEventChoiceSnapshot ZeroConsequenceChoice;
+	ZeroConsequenceChoice.ChoiceId = TEXT("ZeroConsequences");
+	ZeroConsequenceChoice.bAvailable = true;
+	FRunEventChoiceConsequenceSnapshot ZeroGold;
+	ZeroGold.Kind = ERunEventChoiceConsequenceKind::Effect;
+	ZeroGold.EffectType = EWacomRunEventEffectType::AddGold;
+	ZeroGold.Amount = 0;
+	FRunEventChoiceConsequenceSnapshot ZeroPressure;
+	ZeroPressure.Kind = ERunEventChoiceConsequenceKind::Effect;
+	ZeroPressure.EffectType = EWacomRunEventEffectType::AddPressure;
+	ZeroPressure.Amount = 0;
+	FRunEventChoiceConsequenceSnapshot ZeroNode;
+	ZeroNode.Kind = ERunEventChoiceConsequenceKind::Effect;
+	ZeroNode.EffectType = EWacomRunEventEffectType::ConsumeNode;
+	ZeroNode.Amount = 0;
+	ZeroConsequenceChoice.Consequences = { ZeroGold, ZeroPressure, ZeroNode };
+	Button->SetChoiceSnapshot(ZeroConsequenceChoice);
+	TestEqual(TEXT("Zero amount consequences remain hidden in fallback list"),
+		Button->GetDisplayedConsequenceItemCountForTest(),
+		0);
 
 	return true;
 }
@@ -1332,6 +1599,12 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	TestEqual(TEXT("Debug reports zone mapping count"), InitialDebug.PaymentZoneMappingCount, 1);
 	TestTrue(TEXT("Debug reports availability summary"),
 		InitialDebug.ChoiceAvailabilitySummary.Contains(TEXT("PayFang:Requirement:None")));
+	TestTrue(TEXT("Debug reports requirement summary"),
+		InitialDebug.ChoiceRequirementSummary.Contains(TEXT("PayFang:1/0")));
+	TestTrue(TEXT("Debug reports consequence summary"),
+		InitialDebug.ChoiceConsequenceSummary.Contains(TEXT("PayFang:2")));
+	TestTrue(TEXT("Debug reports choice preview summary"),
+		InitialDebug.ChoicePreviewSummary.Contains(TEXT("PayFang:Available=true:First=None:Req=1/0:Pay=1:Consequences=2:Outcome=EventEnds")));
 	TestTrue(TEXT("Debug reports payment zone mapping"),
 		InitialDebug.PaymentZoneMappingSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
 	const FString InitialDebugSummary = Screen->ReadRunEventScreenDebugSummary();
@@ -1345,6 +1618,12 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 		&& InitialDebugSummary.Contains(TEXT("Candidates=1")));
 	TestTrue(TEXT("Debug summary includes availability"),
 		InitialDebugSummary.Contains(TEXT("Availability=[PayFang:Requirement:None]")));
+	TestTrue(TEXT("Debug summary includes requirements"),
+		InitialDebugSummary.Contains(TEXT("Requirements=[PayFang:1/0]")));
+	TestTrue(TEXT("Debug summary includes consequences"),
+		InitialDebugSummary.Contains(TEXT("Consequences=[PayFang:2]")));
+	TestTrue(TEXT("Debug summary includes preview"),
+		InitialDebugSummary.Contains(TEXT("Preview=[PayFang:Available=true:First=None:Req=1/0:Pay=1:Consequences=2:Outcome=EventEnds]")));
 	TestTrue(TEXT("Debug summary includes zone map"),
 		InitialDebugSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
 
@@ -1475,6 +1754,13 @@ bool FWacomUIRunEventScreenBlockedChoiceToastSpec::RunTest(const FString& /*Para
 
 	TestEqual(TEXT("One blocked choice"), Screen->ReadChoiceCount(), 1);
 	TestFalse(TEXT("Choice unavailable"), Screen->ReadChoiceSnapshot(0).bAvailable);
+	{
+		const FWacomRunEventScreenDebugView Debug = Screen->ReadRunEventScreenDebugView();
+		TestTrue(TEXT("Blocked preview summary records first reason"),
+			Debug.ChoicePreviewSummary.Contains(TEXT("Locked:Available=false:First=InsufficientGold:Req=1/1:Pay=0:Consequences=0:Outcome=None")));
+		TestTrue(TEXT("Blocked debug summary includes preview"),
+			Screen->ReadRunEventScreenDebugSummary().Contains(TEXT("Preview=[Locked:Available=false:First=InsufficientGold:Req=1/1:Pay=0:Consequences=0:Outcome=None]")));
+	}
 	TestFalse(TEXT("Choosing blocked option fails"), Screen->ChooseChoiceAt(0));
 	TestTrue(TEXT("Event remains active"), Run->IsRunEventActive());
 	TestTrue(TEXT("Blocked choice keeps screen active"), Screen->IsActivated());

@@ -17,6 +17,27 @@ enum class EWacomRunEventChoiceAvailabilityTone : uint8
 	Blocked,
 };
 
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomRunEventChoiceRequirementItemView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	ERunEventChoiceRequirementKind Kind = ERunEventChoiceRequirementKind::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	FText Text;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	bool bSatisfied = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	FName DisabledReason = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	EWacomRunEventChoiceAvailabilityTone Tone = EWacomRunEventChoiceAvailabilityTone::None;
+};
+
 /** UI-only summary of why a RunEvent choice is ready, requires card payment, or is blocked. */
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomRunEventChoiceRequirementView
@@ -45,7 +66,44 @@ struct WACOMAPP_API FWacomRunEventChoiceRequirementView
 	int32 PaymentCandidateCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	int32 UnsatisfiedRequirementCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	TArray<FWacomRunEventChoiceRequirementItemView> RequirementItems;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
 	EWacomRunEventChoiceAvailabilityTone Tone = EWacomRunEventChoiceAvailabilityTone::None;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomRunEventChoiceConsequenceItemView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	ERunEventChoiceConsequenceKind Kind = ERunEventChoiceConsequenceKind::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	EWacomRunEventEffectType EffectType = EWacomRunEventEffectType::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	FText Text;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	EWacomRunEventChoiceAvailabilityTone Tone = EWacomRunEventChoiceAvailabilityTone::None;
+};
+
+/** UI-only summary of what a RunEvent choice intends to do if submitted. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomRunEventChoiceConsequenceView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	FName ChoiceId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent")
+	TArray<FWacomRunEventChoiceConsequenceItemView> ConsequenceItems;
 };
 
 /** Builds UI-only presentation data for lightweight RunEvent feedback. */
@@ -63,6 +121,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
 	static FWacomRunEventChoiceRequirementView BuildChoiceRequirementView(
+		const FRunEventChoiceSnapshot& Choice);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
+	static FWacomRunEventChoiceConsequenceView BuildChoiceConsequenceView(
 		const FRunEventChoiceSnapshot& Choice);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")

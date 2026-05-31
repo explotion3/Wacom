@@ -117,6 +117,27 @@ namespace
 		}
 	}
 
+	FString BuildRunEventChoicePreviewOutcomeDebugString(const FRunEventChoiceSnapshot& Choice)
+	{
+		for (const FRunEventChoiceConsequenceSnapshot& Consequence : Choice.Consequences)
+		{
+			if (Consequence.Kind == ERunEventChoiceConsequenceKind::EventEnds)
+			{
+				return TEXT("EventEnds");
+			}
+		}
+
+		for (const FRunEventChoiceConsequenceSnapshot& Consequence : Choice.Consequences)
+		{
+			if (Consequence.Kind == ERunEventChoiceConsequenceKind::NodeTransition)
+			{
+				return FString::Printf(TEXT("NodeTransition:%s"), *Consequence.ResolvedNodeId.ToString());
+			}
+		}
+
+		return TEXT("None");
+	}
+
 	FString BuildRunEventScreenDropResultDebugSummary(
 		const TCHAR* Prefix,
 		const FWacomRunMenuCardDropResolveResult& Result)
@@ -389,7 +410,13 @@ FWacomRunEventScreenDebugView UWacomRunEventScreen::GetRunEventScreenDebugView()
 
 	TSet<FGuid> UniqueCandidateIds;
 	TArray<FString> AvailabilityEntries;
+	TArray<FString> RequirementEntries;
+	TArray<FString> ConsequenceEntries;
+	TArray<FString> PreviewEntries;
 	AvailabilityEntries.Reserve(CachedChoices.Num());
+	RequirementEntries.Reserve(CachedChoices.Num());
+	ConsequenceEntries.Reserve(CachedChoices.Num());
+	PreviewEntries.Reserve(CachedChoices.Num());
 	for (const FRunEventChoiceSnapshot& Choice : CachedChoices)
 	{
 		const FWacomRunEventChoiceRequirementView RequirementView =
@@ -407,6 +434,25 @@ FWacomRunEventScreenDebugView UWacomRunEventScreen::GetRunEventScreenDebugView()
 			*Choice.ChoiceId.ToString(),
 			ToRunEventChoiceAvailabilityToneDebugString(RequirementView.Tone),
 			*RequirementView.PrimaryReason.ToString()));
+		RequirementEntries.Add(FString::Printf(
+			TEXT("%s:%d/%d"),
+			*Choice.ChoiceId.ToString(),
+			RequirementView.RequirementItems.Num(),
+			RequirementView.UnsatisfiedRequirementCount));
+		ConsequenceEntries.Add(FString::Printf(
+			TEXT("%s:%d"),
+			*Choice.ChoiceId.ToString(),
+			Choice.Consequences.Num()));
+		PreviewEntries.Add(FString::Printf(
+			TEXT("%s:Available=%s:First=%s:Req=%d/%d:Pay=%d:Consequences=%d:Outcome=%s"),
+			*Choice.ChoiceId.ToString(),
+			Choice.bAvailable ? TEXT("true") : TEXT("false"),
+			*RequirementView.PrimaryReason.ToString(),
+			RequirementView.RequirementItems.Num(),
+			RequirementView.UnsatisfiedRequirementCount,
+			Choice.PaymentCandidateCount,
+			Choice.Consequences.Num(),
+			*BuildRunEventChoicePreviewOutcomeDebugString(Choice)));
 
 		if (!Choice.bRequiresOwnedCardPayment)
 		{
@@ -423,7 +469,13 @@ FWacomRunEventScreenDebugView UWacomRunEventScreen::GetRunEventScreenDebugView()
 		}
 	}
 	AvailabilityEntries.Sort();
+	RequirementEntries.Sort();
+	ConsequenceEntries.Sort();
+	PreviewEntries.Sort();
 	View.ChoiceAvailabilitySummary = FString::Join(AvailabilityEntries, TEXT(","));
+	View.ChoiceRequirementSummary = FString::Join(RequirementEntries, TEXT(","));
+	View.ChoiceConsequenceSummary = FString::Join(ConsequenceEntries, TEXT(","));
+	View.ChoicePreviewSummary = FString::Join(PreviewEntries, TEXT(","));
 	View.PaymentCandidateInstanceCount = UniqueCandidateIds.Num();
 	return View;
 }
@@ -432,7 +484,7 @@ FString UWacomRunEventScreen::GetRunEventScreenDebugSummary() const
 {
 	const FWacomRunEventScreenDebugView View = GetRunEventScreenDebugView();
 	return FString::Printf(
-		TEXT("RunEventScreen{HasRunSession=%s Active=%s PersistentId=%s EventId=%s Node=%s Title=\"%s\" Choices=%d AvailableChoices=%d UnavailableChoices=%d PaymentChoices=%d Candidates=%d Zones=%d Availability=[%s] ZoneMap=[%s] LastResolve=%s LastSubmit=%s}"),
+		TEXT("RunEventScreen{HasRunSession=%s Active=%s PersistentId=%s EventId=%s Node=%s Title=\"%s\" Choices=%d AvailableChoices=%d UnavailableChoices=%d PaymentChoices=%d Candidates=%d Zones=%d Availability=[%s] Requirements=[%s] Consequences=[%s] Preview=[%s] ZoneMap=[%s] LastResolve=%s LastSubmit=%s}"),
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bIsEventActive ? TEXT("true") : TEXT("false"),
 		*View.PersistentId.ToString(),
@@ -446,6 +498,9 @@ FString UWacomRunEventScreen::GetRunEventScreenDebugSummary() const
 		View.PaymentCandidateInstanceCount,
 		View.PaymentZoneMappingCount,
 		*View.ChoiceAvailabilitySummary,
+		*View.ChoiceRequirementSummary,
+		*View.ChoiceConsequenceSummary,
+		*View.ChoicePreviewSummary,
 		*View.PaymentZoneMappingSummary,
 		View.LastPaymentResolveSummary.IsEmpty() ? TEXT("None") : *View.LastPaymentResolveSummary,
 		View.LastPaymentSubmitSummary.IsEmpty() ? TEXT("None") : *View.LastPaymentSubmitSummary);

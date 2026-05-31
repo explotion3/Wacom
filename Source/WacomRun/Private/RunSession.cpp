@@ -1400,6 +1400,11 @@ bool URunSession::IsRunEventCompleted(FName PersistentId) const
 	return FRunEventExecutor::IsEventCompleted(RunState, PersistentId);
 }
 
+bool URunSession::IsRunFlagSet(FName FlagId) const
+{
+	return !FlagId.IsNone() && RunState.RunFlags.Contains(FlagId);
+}
+
 FRunEventSnapshot URunSession::BuildCurrentRunEventSnapshot() const
 {
 	return FRunEventExecutor::BuildSnapshot(RunState);

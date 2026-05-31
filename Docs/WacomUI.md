@@ -168,7 +168,7 @@ Toast WBP 注册口径：
 
 V0-AT 后 `UWacomRunEventScreen` 提供只读 debug API：
 
-- `GetRunEventScreenDebugView()`：返回当前 active event/node、cached choice 数量、可用 / 不可用 choice 数量、payment choice 数量、候选实例总数、choice availability 摘要、ZoneId 到 ChoiceId 的映射摘要，以及最近一次 resolve / submit 结果摘要。
+- `GetRunEventScreenDebugView()`：返回当前 active event/node、cached choice 数量、可用 / 不可用 choice 数量、payment choice 数量、候选实例总数、choice availability 摘要、choice requirement count / unsatisfied count 摘要、choice consequence count 摘要、ZoneId 到 ChoiceId 的映射摘要，以及最近一次 resolve / submit 结果摘要。
 - `GetRunEventScreenDebugSummary()`：返回同样信息的一行字符串，适合自动化断言、PIE 蓝图按钮或日志复制。
 - `LogRunEventScreenDebugSummary()`：把 summary 写入日志，便于在 PIE Details 或临时蓝图按钮里排查“为什么没有候选卡 / 为什么 Zone 不接受 / 为什么提交失败”。
 
@@ -308,15 +308,16 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 - RunEvent 公开请求入口在 PlayerController；内部由 Router 先关闭已有 `GameMenu` 顶层，再调用 `RunSession->BeginRunEvent(PersistentId, EventDefinition)`。
 - Screen 刷新时读取 `BuildCurrentRunEventSnapshot()`。
-- ChoiceButton 显示 Label，并通过 `UWacomRunEventPresentationBuilder::BuildChoiceRequirementView()` 生成 UI-only requirement view。该 view 包含可用性 tone、支付候选数量、支付需求文案和普通阻塞原因；中文文案属于 `WacomApp` presentation，不写入 Run 规则 snapshot。
+- ChoiceButton 显示 Label，并通过 `UWacomRunEventPresentationBuilder::BuildChoiceRequirementView()` 生成 UI-only requirement view。该 view 包含可用性 tone、支付候选数量、支付需求文案、普通阻塞原因，以及 `RequirementItems` 条件列表；中文文案属于 `WacomApp` presentation，不写入 Run 规则 snapshot。V0-AY 后同一 choice row 还通过 `BuildChoiceConsequenceView()` 生成提交前后果预览，C++ fallback 显示在 `ConsequenceList`。
 - 普通可用选项由 `FWacomRunEventScreenFlow` 调 `ChooseRunEventOptionWithResult(ChoiceId)`，Run 层执行条件、效果、跳转和完成标记。需要卡牌支付的选项普通点击会被 Run 层以 `RequiresCardPayment` 拒绝。
-- 支付选项刷新时会创建 `UWacomRunMenuDropTargetWidget` 包住对应 choice row，ZoneId 来自 snapshot。Screen 聚合当前节点所有支付选项的候选 `InstanceId`，通过 owned menu lease 只显示这些可支付卡。`UWacomRunEventChoiceButton` 从 requirement view 写入 `PaymentStatusText`：有候选显示 `拖入卡牌支付：{N} 张可用`；没有候选显示 `缺少可支付卡牌：{Reason}`，Reason 优先来自 `PaymentDisabledReason`，再回退到 `DisabledReason`。支付缺失时不再重复显示一行普通 `DisabledReasonText`；普通非支付阻塞选项仍显示 `不可选：{Reason}`。拖卡 release 到匹配 Zone 且 `ValidateRunEventOptionCardPayment()` 通过时，Screen 接管 menu submit 并调用 `ChooseRunEventOptionWithPaidCardResult()`；该 API 在 RunSession 事务内移除精确实例、执行 Effects 并推进或关闭事件。
-- V0-AU 后 RunEvent Screen 的动态选项和支付 Zone 有正式 WBP authoring surface：顶层 `WBP_RunEventScreen` 仍通过 `UI.Widget.RunEventScreen` 注册，Screen 默认值里的 `ChoiceButtonWidgetClass` 和 `PaymentDropTargetWidgetClass` 控制运行时创建的子 Widget；为空时回退 C++ fallback。`PaymentDropTargetWidgetClass` 的 preview scale / 颜色由该 WBP 默认值决定，Screen 只写入 `ZoneId / StableTargetId` 并维护 Zone 映射。V0-AW 后 choice row 的可用性和需求展示统一来自 `FWacomRunEventChoiceRequirementView`，WBP 可在 `BP_OnRunEventChoiceSnapshotApplied` 后读取 `GetChoiceRequirementView()` 做颜色、图标或状态切换。V0-AV 暂不创建默认 WBP 资产，先把美术接入 TODO 和制作边界写入合同；在正式 WBP 缺失、未注册或加载失败时，C++ fallback 仍是完整可运行基线。制作合同见 [UI_RunEvent_WBP_Binding.md](./UI_RunEvent_WBP_Binding.md)。
+- 支付选项刷新时会创建 `UWacomRunMenuDropTargetWidget` 包住对应 choice row，ZoneId 来自 snapshot。Screen 聚合当前节点所有支付选项的候选 `InstanceId`，通过 owned menu lease 只显示这些可支付卡。`UWacomRunEventChoiceButton` 从 requirement view 写入 `PaymentStatusText`：有候选显示 `拖入卡牌支付：{N} 张可用`；没有候选显示 `缺少可支付卡牌：{Reason}`，Reason 优先来自 `PaymentDisabledReason`，再回退到 `DisabledReason`。普通条件需求写入 `RequirementList`，例如 `需要金币：3 / 当前 1`、`需要行动点：1 / 当前 2`、`压力不高于：恶行 2 / 当前 5`、`需要持有：毒牙`、`需要标记：蛇巢已调查`、`不能有标记：已领取奖励`；后果预览写入 `ConsequenceList`，例如 `获得卡牌：毒牙`、`失去金币：3`、`恶行 +5`、`消耗行动点：1`、`设置标记：蛇巢已调查`、`清除标记：已领取奖励`、`进入：后续节点`、`事件将结束`。支付需求仍只写入 `PaymentStatusText`，避免列表里重复显示。支付缺失时不再重复显示一行普通 `DisabledReasonText`；普通非支付阻塞选项仍显示 `不可选：{Reason}`。拖卡 release 到匹配 Zone 且 `ValidateRunEventOptionCardPayment()` 通过时，Screen 接管 menu submit 并调用 `ChooseRunEventOptionWithPaidCardResult()`；该 API 在 RunSession 事务内移除精确实例、执行 Effects 并推进或关闭事件。
+- V0-AU 后 RunEvent Screen 的动态选项和支付 Zone 有正式 WBP authoring surface：顶层 `WBP_RunEventScreen` 仍通过 `UI.Widget.RunEventScreen` 注册，Screen 默认值里的 `ChoiceButtonWidgetClass` 和 `PaymentDropTargetWidgetClass` 控制运行时创建的子 Widget；为空时回退 C++ fallback。`PaymentDropTargetWidgetClass` 的 preview scale / 颜色由该 WBP 默认值决定，Screen 只写入 `ZoneId / StableTargetId` 并维护 Zone 映射。V0-AW/V0-AX/V0-AY 后 choice row 的可用性、需求列表和后果预览统一来自 presentation view，WBP 可在 `BP_OnRunEventChoiceSnapshotApplied` 后读取 `GetChoiceRequirementView().RequirementItems` 与 `GetChoiceConsequenceView().ConsequenceItems` 做颜色、图标或状态切换，但不自己判断规则。V0-AV 暂不创建默认 WBP 资产，先把美术接入 TODO 和制作边界写入合同；在正式 WBP 缺失、未注册或加载失败时，C++ fallback 仍是完整可运行基线。制作合同见 [UI_RunEvent_WBP_Binding.md](./UI_RunEvent_WBP_Binding.md)。
 - Run menu Zone feedback 语义保持通用：`Probe` 表示命中但不会提交，`SubmitReady` 表示松手会由当前菜单提交，`Invalid` 表示当前卡 / Zone / 校验不合法，`Submitted` 表示提交成功。RunEvent 支付成功后 Toast 会显示交出的卡名；点击支付选项但不拖卡时仍显示 `需要拖入卡牌支付`。
 - `FWacomRunEventScreenFlow` 使用 `UWacomRunEventPresentationBuilder` 把 `FRunEventChoiceResult` 转成 AppToast；不可用选项也由该 flow 发阻塞原因 Toast。成功结果的 Toast 顺序是具体效果、支付卡牌、最后 outcome：事件关闭 / 完成显示 `事件已结束`，节点切换且事件仍打开显示 `进入：{节点标题}`，节点标题为空时回退 `ResolvedNodeId`。
 - `RemoveCard` 结果显示“交出卡牌：{CardName}”；`MarkEventCompleted` 默认不弹 Toast。
 - 关闭事件界面时由 `FWacomRunEventScreenFlow` 调 `EndRunEvent()`；关闭型选项先由 Run 层清 active event，再 Deactivate。V0-AS 不新增常驻结果面板、不延迟关闭；关闭型事件仍即时关闭，outcome 只通过 Toast 告知。
 - 如果 Push 事件 UI 失败，Router 会调用 `RunSession->EndRunEvent()` 回滚刚 Begin 的 active event。
+- V0-AZ 后 `GetRunEventScreenDebugSummary()` 额外输出 `Preview=[ChoiceId:Available=...:First=...:Req=总数/未满足数:Pay=候选数:Consequences=数量:Outcome=...]`。`Outcome` 从 consequence snapshot 派生为 `EventEnds / NodeTransition:{NodeId} / None`，用于 PIE 排查“为什么选项看起来这样显示”，不作为规则输入。
 
 事件规则、条件、效果和 PersistentId 口径见 `WacomRun.md` / `WacomData.md`。
 

@@ -20,6 +20,8 @@ enum class EWacomRunEventConditionType : uint8
 	MissingCard,
 	EventCompleted,
 	EventNotCompleted,
+	RunFlagSet,
+	RunFlagNotSet,
 };
 
 UENUM(BlueprintType)
@@ -32,6 +34,8 @@ enum class EWacomRunEventEffectType : uint8
 	ConsumeNode,
 	RemoveCard,
 	MarkEventCompleted,
+	SetRunFlag,
+	ClearRunFlag,
 };
 
 /** 轻量事件图选项条件。Run 层执行时按类型解释，DataAsset 只保存静态配置。 */
@@ -65,6 +69,11 @@ struct WACOMDATA_API FWacomRunEventConditionDefinition
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
 		meta = (ToolTip = "事件状态条件目标，仅 EventCompleted/EventNotCompleted 使用。填写场景 Actor 的 PersistentId，而不是事件定义 EventId。"))
 	FName TargetPersistentId = NAME_None;
+
+	/** Run 标记条件目标，仅 RunFlagSet/RunFlagNotSet 使用。当前只保存在本次 Run 内存态。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "Run 标记条件目标，仅 RunFlagSet/RunFlagNotSet 使用。当前只保存在本次 Run 内存态，不写入 SaveGame。"))
+	FName FlagId = NAME_None;
 };
 
 /** 轻量事件图选项效果。Run 层执行时按类型解释。 */
@@ -98,6 +107,11 @@ struct WACOMDATA_API FWacomRunEventEffectDefinition
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
 		meta = (ToolTip = "事件状态效果目标，仅 MarkEventCompleted 使用。填写要标记完成的场景 Actor PersistentId，而不是事件定义 EventId。"))
 	FName TargetPersistentId = NAME_None;
+
+	/** Run 标记效果目标，仅 SetRunFlag/ClearRunFlag 使用。当前只保存在本次 Run 内存态。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
+		meta = (ToolTip = "Run 标记效果目标，仅 SetRunFlag/ClearRunFlag 使用。当前只保存在本次 Run 内存态，不写入 SaveGame。"))
+	FName FlagId = NAME_None;
 };
 
 /** 选项需要玩家拖入一张已持有卡作为支付时使用的筛选合同。 */
@@ -155,7 +169,7 @@ struct WACOMDATA_API FWacomRunEventChoiceDefinition
 
 	/** 选项可用条件。所有条件都满足时才可选择。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
-		meta = (ToolTip = "选项可用条件。所有条件都满足时才可选择；支持金币、节点、压力阈值、拥有卡牌和事件完成状态。"))
+		meta = (ToolTip = "选项可用条件。所有条件都满足时才可选择；支持金币、节点、压力阈值、拥有卡牌、事件完成状态和 Run 标记。"))
 	TArray<FWacomRunEventConditionDefinition> Conditions;
 
 	/** 可选卡牌支付合同。开启后该选项必须通过 first-person 菜单卡拖拽提交。 */
@@ -165,7 +179,7 @@ struct WACOMDATA_API FWacomRunEventChoiceDefinition
 
 	/** 选中后依次执行的效果。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
-		meta = (ToolTip = "选中后依次执行的效果。支持获得/移除卡牌、金币变化、压力变化、消耗节点和标记事件完成。"))
+		meta = (ToolTip = "选中后依次执行的效果。支持获得/移除卡牌、金币变化、压力变化、消耗节点、标记事件完成和设置/清除 Run 标记。"))
 	TArray<FWacomRunEventEffectDefinition> Effects;
 
 	/** 执行后跳转到的 Node。为空且不关闭事件时，会留在当前 Node。 */

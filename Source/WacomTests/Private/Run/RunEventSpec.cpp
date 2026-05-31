@@ -728,6 +728,21 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 			TestEqual(TEXT("Payment zone from definition"), Snapshot.Choices[0].PaymentZoneId, FName(TEXT("RunEvent.Pay.Test")));
 			TestEqual(TEXT("One candidate"), Snapshot.Choices[0].PaymentCandidateCount, 1);
 			TestEqual(TEXT("Candidate is exact fang"), Snapshot.Choices[0].PaymentCandidateInstanceIds[0], FangId);
+			TestEqual(TEXT("Payment choice has payment requirement"), Snapshot.Choices[0].Requirements.Num(), 1);
+			if (Snapshot.Choices[0].Requirements.Num() == 1)
+			{
+				TestEqual(TEXT("Payment requirement kind"), Snapshot.Choices[0].Requirements[0].Kind, ERunEventChoiceRequirementKind::CardPayment);
+				TestTrue(TEXT("Payment requirement satisfied"), Snapshot.Choices[0].Requirements[0].bSatisfied);
+				TestEqual(TEXT("Payment requirement candidate count"), Snapshot.Choices[0].Requirements[0].PaymentCandidateCount, 1);
+				TestEqual(TEXT("Payment requirement reason none"), Snapshot.Choices[0].Requirements[0].DisabledReason, NAME_None);
+			}
+			TestEqual(TEXT("Payment choice consequence count excludes payment itself"), Snapshot.Choices[0].Consequences.Num(), 1);
+			if (Snapshot.Choices[0].Consequences.Num() == 1)
+			{
+				TestEqual(TEXT("Payment choice effect consequence"), Snapshot.Choices[0].Consequences[0].Kind, ERunEventChoiceConsequenceKind::Effect);
+				TestEqual(TEXT("Payment choice effect type"), Snapshot.Choices[0].Consequences[0].EffectType, EWacomRunEventEffectType::AddGold);
+				TestEqual(TEXT("Payment choice effect amount"), Snapshot.Choices[0].Consequences[0].Amount, 2);
+			}
 		}
 
 		const FRunEventChoiceResult ClickResult = Run->ChooseRunEventOptionWithResult(TEXT("Pay"));
@@ -863,6 +878,99 @@ bool FWacomRunEventChoiceResultNodeTransitionSpec::RunTest(const FString& /*Para
 	TestEqual(TEXT("Snapshot is on resolved node"),
 		Run->BuildCurrentRunEventSnapshot().CurrentNodeId,
 		FName(TEXT("After")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventChoiceConsequenceSnapshotSpec,
+	"Wacom.Run.Event.ChoiceSnapshotIncludesEffectConsequencePreviews",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventChoiceConsequenceSnapshotSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = Fx.MakeNoopCard(0);
+	Card->DisplayName = FText::FromString(TEXT("预览卡"));
+
+	FWacomRunEventChoiceDefinition PreviewChoice;
+	PreviewChoice.ChoiceId = TEXT("Preview");
+	FWacomRunEventEffectDefinition GainCard;
+	GainCard.Type = EWacomRunEventEffectType::GainCard;
+	GainCard.CardDefinition = Card;
+	FWacomRunEventEffectDefinition Gold;
+	Gold.Type = EWacomRunEventEffectType::AddGold;
+	Gold.Value = -3;
+	FWacomRunEventEffectDefinition Pressure;
+	Pressure.Type = EWacomRunEventEffectType::AddPressure;
+	Pressure.PressureType = TEXT("Misdeed");
+	Pressure.Value = 2;
+	FWacomRunEventEffectDefinition Node;
+	Node.Type = EWacomRunEventEffectType::ConsumeNode;
+	Node.Value = 1;
+	FWacomRunEventEffectDefinition RemoveCard;
+	RemoveCard.Type = EWacomRunEventEffectType::RemoveCard;
+	RemoveCard.CardDefinition = Card;
+	FWacomRunEventEffectDefinition MarkEvent;
+	MarkEvent.Type = EWacomRunEventEffectType::MarkEventCompleted;
+	MarkEvent.TargetPersistentId = TEXT("Event.Dependency");
+	PreviewChoice.Effects = { GainCard, Gold, Pressure, Node, RemoveCard, MarkEvent };
+	PreviewChoice.NextNodeId = TEXT("After");
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(NewObject<UWacomRunEventDefinition>(Run.Get()));
+	Event->EventId = TEXT("Event.Consequence");
+	Event->DisplayName = FText::FromString(TEXT("预览事件"));
+	Event->StartNodeId = TEXT("Start");
+
+	FWacomRunEventNodeDefinition Start;
+	Start.NodeId = TEXT("Start");
+	Start.Choices = { PreviewChoice };
+	FWacomRunEventNodeDefinition After;
+	After.NodeId = TEXT("After");
+	After.TitleText = FText::FromString(TEXT("后续节点"));
+	Event->Nodes = { Start, After };
+
+	TestTrue(TEXT("Begin consequence event succeeds"), Run->BeginRunEvent(TEXT("Event.Consequence.Actor"), Event.Get()));
+	const FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
+	TestEqual(TEXT("One choice"), Snapshot.Choices.Num(), 1);
+	if (Snapshot.Choices.Num() != 1)
+	{
+		return false;
+	}
+
+	const FRunEventChoiceSnapshot& Choice = Snapshot.Choices[0];
+	TestEqual(TEXT("Effect consequences plus node transition"), Choice.Consequences.Num(), 7);
+	if (Choice.Consequences.Num() == 7)
+	{
+		TestEqual(TEXT("Gain card consequence"), Choice.Consequences[0].EffectType, EWacomRunEventEffectType::GainCard);
+		TestEqual(TEXT("Gain card target"), Choice.Consequences[0].CardDefinition.Get(), Card);
+		TestEqual(TEXT("Gold consequence amount"), Choice.Consequences[1].Amount, -3);
+		TestEqual(TEXT("Pressure consequence type"), Choice.Consequences[2].PressureType, EWacomPressureType::Misdeed);
+		TestEqual(TEXT("Node consequence amount"), Choice.Consequences[3].Amount, 1);
+		TestEqual(TEXT("Remove card target"), Choice.Consequences[4].CardDefinition.Get(), Card);
+		TestEqual(TEXT("Mark event target"), Choice.Consequences[5].TargetPersistentId, FName(TEXT("Event.Dependency")));
+		TestEqual(TEXT("Node transition kind"), Choice.Consequences[6].Kind, ERunEventChoiceConsequenceKind::NodeTransition);
+		TestEqual(TEXT("Node transition id"), Choice.Consequences[6].ResolvedNodeId, FName(TEXT("After")));
+		TestEqual(TEXT("Node transition title"), Choice.Consequences[6].ResolvedNodeTitleText.ToString(), FString(TEXT("后续节点")));
+	}
+
+	PreviewChoice.bCloseEventAfterResolve = true;
+	Start.Choices = { PreviewChoice };
+	Event->Nodes[0] = Start;
+	const FRunEventSnapshot CloseSnapshot = Run->BuildCurrentRunEventSnapshot();
+	TestEqual(TEXT("Close choice consequences count"), CloseSnapshot.Choices[0].Consequences.Num(), 7);
+	if (CloseSnapshot.Choices[0].Consequences.Num() == 7)
+	{
+		TestEqual(TEXT("Close outcome uses event ends"), CloseSnapshot.Choices[0].Consequences[6].Kind, ERunEventChoiceConsequenceKind::EventEnds);
+	}
+
+	PreviewChoice.bCloseEventAfterResolve = false;
+	PreviewChoice.NextNodeId = TEXT("MissingNode");
+	Start.Choices = { PreviewChoice };
+	Event->Nodes[0] = Start;
+	const FRunEventSnapshot InvalidNextSnapshot = Run->BuildCurrentRunEventSnapshot();
+	TestEqual(TEXT("Invalid NextNode does not create transition preview"), InvalidNextSnapshot.Choices[0].Consequences.Num(), 6);
 
 	return true;
 }
@@ -1060,6 +1168,254 @@ bool FWacomRunEventTransactionRollbackAfterConsumeNodeSpec::RunTest(const FStrin
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventRunFlagEffectSpec,
+	"Wacom.Run.Event.RunFlagEffectSetsAndClearsFlag",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventRunFlagEffectSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FName FlagId = TEXT("SnakeGift.HasFang");
+
+	FWacomRunEventChoiceDefinition SetChoice;
+	SetChoice.ChoiceId = TEXT("SetFlag");
+	SetChoice.NextNodeId = TEXT("ClearNode");
+	FWacomRunEventEffectDefinition SetFlag;
+	SetFlag.Type = EWacomRunEventEffectType::SetRunFlag;
+	SetFlag.FlagId = FlagId;
+	SetChoice.Effects.Add(SetFlag);
+
+	FWacomRunEventChoiceDefinition ClearChoice;
+	ClearChoice.ChoiceId = TEXT("ClearFlag");
+	FWacomRunEventEffectDefinition ClearFlag;
+	ClearFlag.Type = EWacomRunEventEffectType::ClearRunFlag;
+	ClearFlag.FlagId = FlagId;
+	ClearChoice.Effects.Add(ClearFlag);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(NewObject<UWacomRunEventDefinition>(Run.Get()));
+	Event->EventId = TEXT("Event.RunFlag.Effects");
+	Event->StartNodeId = TEXT("Start");
+	FWacomRunEventNodeDefinition Start;
+	Start.NodeId = TEXT("Start");
+	Start.Choices = { SetChoice };
+	FWacomRunEventNodeDefinition ClearNode;
+	ClearNode.NodeId = TEXT("ClearNode");
+	ClearNode.Choices = { ClearChoice };
+	Event->Nodes = { Start, ClearNode };
+
+	TestTrue(TEXT("Begin flag event succeeds"), Run->BeginRunEvent(TEXT("Event.RunFlag.Effects.Actor"), Event.Get()));
+	const FRunEventChoiceResult SetResult = Run->ChooseRunEventOptionWithResult(TEXT("SetFlag"));
+	TestTrue(TEXT("Set flag choice succeeds"), SetResult.bSucceeded);
+	TestTrue(TEXT("Run flag is set"), Run->IsRunFlagSet(FlagId));
+	TestEqual(TEXT("Set effect result count"), SetResult.EffectResults.Num(), 1);
+	if (SetResult.EffectResults.Num() == 1)
+	{
+		TestEqual(TEXT("Set effect type"), SetResult.EffectResults[0].EffectType, EWacomRunEventEffectType::SetRunFlag);
+		TestEqual(TEXT("Set effect flag id"), SetResult.EffectResults[0].FlagId, FlagId);
+		TestTrue(TEXT("Set effect applied"), SetResult.EffectResults[0].bApplied);
+	}
+	TestEqual(TEXT("Event advanced to clear node"),
+		Run->BuildCurrentRunEventSnapshot().CurrentNodeId,
+		FName(TEXT("ClearNode")));
+
+	const FRunEventChoiceResult ClearResult = Run->ChooseRunEventOptionWithResult(TEXT("ClearFlag"));
+	TestTrue(TEXT("Clear flag choice succeeds"), ClearResult.bSucceeded);
+	TestFalse(TEXT("Run flag is cleared"), Run->IsRunFlagSet(FlagId));
+	TestEqual(TEXT("Clear effect result count"), ClearResult.EffectResults.Num(), 1);
+	if (ClearResult.EffectResults.Num() == 1)
+	{
+		TestEqual(TEXT("Clear effect type"), ClearResult.EffectResults[0].EffectType, EWacomRunEventEffectType::ClearRunFlag);
+		TestEqual(TEXT("Clear effect flag id"), ClearResult.EffectResults[0].FlagId, FlagId);
+		TestTrue(TEXT("Clear effect applied"), ClearResult.EffectResults[0].bApplied);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventRunFlagConditionSpec,
+	"Wacom.Run.Event.RunFlagConditionBlocksUntilSet",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventRunFlagConditionSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FName FlagId = TEXT("SnakeGift.HasFang");
+
+	FWacomRunEventChoiceDefinition RequiresFlag;
+	RequiresFlag.ChoiceId = TEXT("RequiresFlag");
+	FWacomRunEventConditionDefinition RequiresCondition;
+	RequiresCondition.Type = EWacomRunEventConditionType::RunFlagSet;
+	RequiresCondition.FlagId = FlagId;
+	RequiresFlag.Conditions.Add(RequiresCondition);
+
+	FWacomRunEventChoiceDefinition RequiresMissingFlag;
+	RequiresMissingFlag.ChoiceId = TEXT("RequiresMissingFlag");
+	FWacomRunEventConditionDefinition MissingCondition;
+	MissingCondition.Type = EWacomRunEventConditionType::RunFlagNotSet;
+	MissingCondition.FlagId = FlagId;
+	RequiresMissingFlag.Conditions.Add(MissingCondition);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(NewObject<UWacomRunEventDefinition>(Run.Get()));
+	Event->EventId = TEXT("Event.RunFlag.Conditions");
+	Event->StartNodeId = TEXT("Start");
+	FWacomRunEventNodeDefinition Start;
+	Start.NodeId = TEXT("Start");
+	Start.Choices = { RequiresFlag, RequiresMissingFlag };
+	Event->Nodes = { Start };
+
+	TestTrue(TEXT("Begin flag condition event succeeds"), Run->BeginRunEvent(TEXT("Event.RunFlag.Conditions.Actor"), Event.Get()));
+	FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
+	const FRunEventChoiceSnapshot* RequiresFlagSnapshot = Snapshot.Choices.FindByPredicate(
+		[](const FRunEventChoiceSnapshot& Choice) { return Choice.ChoiceId == TEXT("RequiresFlag"); });
+	const FRunEventChoiceSnapshot* RequiresMissingFlagSnapshot = Snapshot.Choices.FindByPredicate(
+		[](const FRunEventChoiceSnapshot& Choice) { return Choice.ChoiceId == TEXT("RequiresMissingFlag"); });
+	if (!TestNotNull(TEXT("RunFlagSet choice exists"), RequiresFlagSnapshot)
+		|| !TestNotNull(TEXT("RunFlagNotSet choice exists"), RequiresMissingFlagSnapshot))
+	{
+		return false;
+	}
+
+	TestFalse(TEXT("RunFlagSet condition blocks before flag"), RequiresFlagSnapshot->bAvailable);
+	TestEqual(TEXT("RunFlagSet disabled reason"), RequiresFlagSnapshot->DisabledReason, FName(TEXT("RequiredRunFlagMissing")));
+	TestEqual(TEXT("RunFlagSet requirement count"), RequiresFlagSnapshot->Requirements.Num(), 1);
+	if (RequiresFlagSnapshot->Requirements.Num() == 1)
+	{
+		TestEqual(TEXT("RunFlagSet requirement kind"), RequiresFlagSnapshot->Requirements[0].Kind, ERunEventChoiceRequirementKind::RunFlagSet);
+		TestEqual(TEXT("RunFlagSet requirement flag"), RequiresFlagSnapshot->Requirements[0].FlagId, FlagId);
+		TestFalse(TEXT("RunFlagSet requirement unsatisfied"), RequiresFlagSnapshot->Requirements[0].bSatisfied);
+	}
+	TestTrue(TEXT("RunFlagNotSet condition is available before flag"), RequiresMissingFlagSnapshot->bAvailable);
+
+	TestFalse(TEXT("Blocked flag choice fails"),
+		Run->ChooseRunEventOptionWithResult(TEXT("RequiresFlag")).bSucceeded);
+
+	FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get()).RunFlags.Add(FlagId);
+	TestTrue(TEXT("Run flag query sees test flag"), Run->IsRunFlagSet(FlagId));
+	Snapshot = Run->BuildCurrentRunEventSnapshot();
+	RequiresFlagSnapshot = Snapshot.Choices.FindByPredicate(
+		[](const FRunEventChoiceSnapshot& Choice) { return Choice.ChoiceId == TEXT("RequiresFlag"); });
+	RequiresMissingFlagSnapshot = Snapshot.Choices.FindByPredicate(
+		[](const FRunEventChoiceSnapshot& Choice) { return Choice.ChoiceId == TEXT("RequiresMissingFlag"); });
+
+	TestTrue(TEXT("RunFlagSet condition passes after flag"), RequiresFlagSnapshot && RequiresFlagSnapshot->bAvailable);
+	TestFalse(TEXT("RunFlagNotSet condition blocks after flag"), RequiresMissingFlagSnapshot && RequiresMissingFlagSnapshot->bAvailable);
+	if (RequiresMissingFlagSnapshot)
+	{
+		TestEqual(TEXT("RunFlagNotSet disabled reason"), RequiresMissingFlagSnapshot->DisabledReason, FName(TEXT("BlockedRunFlagSet")));
+		TestEqual(TEXT("RunFlagNotSet requirement count"), RequiresMissingFlagSnapshot->Requirements.Num(), 1);
+		if (RequiresMissingFlagSnapshot->Requirements.Num() == 1)
+		{
+			TestEqual(TEXT("RunFlagNotSet requirement kind"), RequiresMissingFlagSnapshot->Requirements[0].Kind, ERunEventChoiceRequirementKind::RunFlagNotSet);
+			TestEqual(TEXT("RunFlagNotSet requirement flag"), RequiresMissingFlagSnapshot->Requirements[0].FlagId, FlagId);
+			TestFalse(TEXT("RunFlagNotSet requirement unsatisfied"), RequiresMissingFlagSnapshot->Requirements[0].bSatisfied);
+		}
+	}
+
+	const FRunEventChoiceResult AcceptedResult =
+		Run->ChooseRunEventOptionWithResult(TEXT("RequiresFlag"));
+	TestTrue(TEXT("Flag-gated choice succeeds after flag"), AcceptedResult.bSucceeded);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventRunFlagRollbackSpec,
+	"Wacom.Run.Event.RunFlagEffectRollsBackWhenLaterEffectFails",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventRunFlagRollbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FName FlagId = TEXT("SnakeGift.TransientFlag");
+
+	FWacomRunEventChoiceDefinition Transaction;
+	Transaction.ChoiceId = TEXT("SetThenFail");
+	FWacomRunEventEffectDefinition SetFlag;
+	SetFlag.Type = EWacomRunEventEffectType::SetRunFlag;
+	SetFlag.FlagId = FlagId;
+	FWacomRunEventEffectDefinition InvalidPressure;
+	InvalidPressure.Type = EWacomRunEventEffectType::AddPressure;
+	InvalidPressure.PressureType = TEXT("InvalidPressureType");
+	InvalidPressure.Value = 1;
+	Transaction.Effects = { SetFlag, InvalidPressure };
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Transaction));
+	TestTrue(TEXT("Begin flag rollback event succeeds"), Run->BeginRunEvent(TEXT("Event.RunFlag.Rollback"), Event.Get()));
+	const FRunEventSnapshot Before = Run->BuildCurrentRunEventSnapshot();
+
+	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("SetThenFail"));
+	const FRunEventSnapshot After = Run->BuildCurrentRunEventSnapshot();
+
+	TestFalse(TEXT("Transaction fails after setting flag in working state"), Result.bSucceeded);
+	TestEqual(TEXT("Failure reason is later effect"), Result.DisabledReason, FName(TEXT("InvalidPressureType")));
+	TestEqual(TEXT("No effect results committed after flag rollback"), Result.EffectResults.Num(), 0);
+	TestFalse(TEXT("Flag set rolled back"), Run->IsRunFlagSet(FlagId));
+	TestTrue(TEXT("Event remains active after flag rollback"), Run->IsRunEventActive());
+	TestEqual(TEXT("RunFlag rollback preserves node"), After.CurrentNodeId, Before.CurrentNodeId);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunEventRunFlagSnapshotSpec,
+	"Wacom.Run.Event.ChoiceSnapshotIncludesRunFlagConsequences",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunEventRunFlagSnapshotSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FName RequiredFlagId = TEXT("SnakeGift.Required");
+	const FName BlockedFlagId = TEXT("SnakeGift.Blocked");
+
+	FWacomRunEventChoiceDefinition Preview;
+	Preview.ChoiceId = TEXT("PreviewFlags");
+	FWacomRunEventConditionDefinition RequiresFlag;
+	RequiresFlag.Type = EWacomRunEventConditionType::RunFlagSet;
+	RequiresFlag.FlagId = RequiredFlagId;
+	FWacomRunEventConditionDefinition BlocksFlag;
+	BlocksFlag.Type = EWacomRunEventConditionType::RunFlagNotSet;
+	BlocksFlag.FlagId = BlockedFlagId;
+	Preview.Conditions = { RequiresFlag, BlocksFlag };
+	FWacomRunEventEffectDefinition SetFlag;
+	SetFlag.Type = EWacomRunEventEffectType::SetRunFlag;
+	SetFlag.FlagId = RequiredFlagId;
+	FWacomRunEventEffectDefinition ClearFlag;
+	ClearFlag.Type = EWacomRunEventEffectType::ClearRunFlag;
+	ClearFlag.FlagId = BlockedFlagId;
+	Preview.Effects = { SetFlag, ClearFlag };
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Preview));
+	TestTrue(TEXT("Begin flag preview event succeeds"), Run->BeginRunEvent(TEXT("Event.RunFlag.Preview"), Event.Get()));
+	const FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
+	TestEqual(TEXT("One preview choice"), Snapshot.Choices.Num(), 1);
+	if (Snapshot.Choices.Num() != 1)
+	{
+		return false;
+	}
+
+	const FRunEventChoiceSnapshot& Choice = Snapshot.Choices[0];
+	TestEqual(TEXT("RunFlag requirement count"), Choice.Requirements.Num(), 2);
+	if (Choice.Requirements.Num() == 2)
+	{
+		TestEqual(TEXT("Required flag requirement kind"), Choice.Requirements[0].Kind, ERunEventChoiceRequirementKind::RunFlagSet);
+		TestEqual(TEXT("Required flag requirement id"), Choice.Requirements[0].FlagId, RequiredFlagId);
+		TestEqual(TEXT("Blocked flag requirement kind"), Choice.Requirements[1].Kind, ERunEventChoiceRequirementKind::RunFlagNotSet);
+		TestEqual(TEXT("Blocked flag requirement id"), Choice.Requirements[1].FlagId, BlockedFlagId);
+	}
+	TestEqual(TEXT("RunFlag consequence count"), Choice.Consequences.Num(), 2);
+	if (Choice.Consequences.Num() == 2)
+	{
+		TestEqual(TEXT("Set flag consequence type"), Choice.Consequences[0].EffectType, EWacomRunEventEffectType::SetRunFlag);
+		TestEqual(TEXT("Set flag consequence id"), Choice.Consequences[0].FlagId, RequiredFlagId);
+		TestEqual(TEXT("Clear flag consequence type"), Choice.Consequences[1].EffectType, EWacomRunEventEffectType::ClearRunFlag);
+		TestEqual(TEXT("Clear flag consequence id"), Choice.Consequences[1].FlagId, BlockedFlagId);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunEventConsumeNodeEffectEntersDuskWithPressureSpec,
 	"Wacom.Run.Event.ConsumeNodeEffectEntersDuskWithPressure",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1170,6 +1526,15 @@ bool FWacomRunEventConditionsSpec::RunTest(const FString& /*Parameters*/)
 
 	TestFalse(TEXT("Gold condition disabled"), GoldLocked->bAvailable);
 	TestEqual(TEXT("Gold disabled reason"), GoldLocked->DisabledReason, FName(TEXT("InsufficientGold")));
+	TestEqual(TEXT("Gold choice has one requirement"), GoldLocked->Requirements.Num(), 1);
+	if (GoldLocked->Requirements.Num() == 1)
+	{
+		TestEqual(TEXT("Gold requirement kind"), GoldLocked->Requirements[0].Kind, ERunEventChoiceRequirementKind::MinGold);
+		TestFalse(TEXT("Gold requirement unsatisfied"), GoldLocked->Requirements[0].bSatisfied);
+		TestEqual(TEXT("Gold requirement current value"), GoldLocked->Requirements[0].CurrentValue, 0);
+		TestEqual(TEXT("Gold requirement required value"), GoldLocked->Requirements[0].RequiredValue, 2);
+		TestEqual(TEXT("Gold requirement disabled reason"), GoldLocked->Requirements[0].DisabledReason, FName(TEXT("InsufficientGold")));
+	}
 	const int32 GoldBeforeRejectedChoice = Run->GetGold();
 	const FRunEventChoiceResult RejectedResult = Run->ChooseRunEventOptionWithResult(TEXT("GoldLocked"));
 	TestFalse(TEXT("Rejected choice result fails"), RejectedResult.bSucceeded);
@@ -1177,7 +1542,25 @@ bool FWacomRunEventConditionsSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("Rejected choice does not change gold"), Run->GetGold(), GoldBeforeRejectedChoice);
 	TestFalse(TEXT("Node condition disabled"), NodeLocked->bAvailable);
 	TestEqual(TEXT("Node disabled reason"), NodeLocked->DisabledReason, FName(TEXT("InsufficientNode")));
+	TestEqual(TEXT("Node choice has one requirement"), NodeLocked->Requirements.Num(), 1);
+	if (NodeLocked->Requirements.Num() == 1)
+	{
+		TestEqual(TEXT("Node requirement kind"), NodeLocked->Requirements[0].Kind, ERunEventChoiceRequirementKind::MinNodeCount);
+		TestFalse(TEXT("Node requirement unsatisfied"), NodeLocked->Requirements[0].bSatisfied);
+		TestEqual(TEXT("Node requirement current value"), NodeLocked->Requirements[0].CurrentValue, Run->GetRemainingNodeCount());
+		TestEqual(TEXT("Node requirement required value"), NodeLocked->Requirements[0].RequiredValue, 3);
+		TestEqual(TEXT("Node requirement disabled reason"), NodeLocked->Requirements[0].DisabledReason, FName(TEXT("InsufficientNode")));
+	}
 	TestTrue(TEXT("Pressure condition initially available"), PressureLocked->bAvailable);
+	TestEqual(TEXT("Pressure choice has one requirement"), PressureLocked->Requirements.Num(), 1);
+	if (PressureLocked->Requirements.Num() == 1)
+	{
+		TestEqual(TEXT("Pressure requirement kind"), PressureLocked->Requirements[0].Kind, ERunEventChoiceRequirementKind::MaxPressure);
+		TestTrue(TEXT("Pressure requirement initially satisfied"), PressureLocked->Requirements[0].bSatisfied);
+		TestEqual(TEXT("Pressure requirement type"), PressureLocked->Requirements[0].PressureType, EWacomPressureType::Misdeed);
+		TestEqual(TEXT("Pressure requirement current value"), PressureLocked->Requirements[0].CurrentValue, 0);
+		TestEqual(TEXT("Pressure requirement required value"), PressureLocked->Requirements[0].RequiredValue, 0);
+	}
 
 	Run->AddGold(2);
 	Run->AddPressure(EWacomPressureType::Misdeed, 1);
@@ -1191,6 +1574,13 @@ bool FWacomRunEventConditionsSpec::RunTest(const FString& /*Parameters*/)
 	if (PressureLocked)
 	{
 		TestEqual(TEXT("Pressure disabled reason"), PressureLocked->DisabledReason, FName(TEXT("PressureTooHigh")));
+		TestEqual(TEXT("Pressure requirement after pressure increase"), PressureLocked->Requirements.Num(), 1);
+		if (PressureLocked->Requirements.Num() == 1)
+		{
+			TestFalse(TEXT("Pressure requirement becomes unsatisfied"), PressureLocked->Requirements[0].bSatisfied);
+			TestEqual(TEXT("Pressure requirement current after increase"), PressureLocked->Requirements[0].CurrentValue, 1);
+			TestEqual(TEXT("Pressure requirement disabled reason"), PressureLocked->Requirements[0].DisabledReason, FName(TEXT("PressureTooHigh")));
+		}
 	}
 
 	return true;

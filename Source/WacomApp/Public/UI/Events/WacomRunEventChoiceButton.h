@@ -10,6 +10,7 @@
 
 class UButton;
 class UTextBlock;
+class UVerticalBox;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnRunEventChoiceClickedNative, FName /*ChoiceId*/);
 
@@ -31,11 +32,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
 	FWacomRunEventChoiceRequirementView GetChoiceRequirementView() const { return RequirementView; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
+	FWacomRunEventChoiceConsequenceView GetChoiceConsequenceView() const { return ConsequenceView; }
+
 #if WITH_AUTOMATION_TESTS
 	FText GetDisplayedPaymentStatusTextForTest() const;
 	ESlateVisibility GetPaymentStatusVisibilityForTest() const;
 	FText GetDisplayedDisabledReasonTextForTest() const;
 	ESlateVisibility GetDisabledReasonVisibilityForTest() const;
+	int32 GetDisplayedRequirementItemCountForTest() const;
+	FText GetDisplayedRequirementItemTextForTest(int32 Index) const;
+	int32 GetDisplayedConsequenceItemCountForTest() const;
+	FText GetDisplayedConsequenceItemTextForTest(int32 Index) const;
 #endif
 
 protected:
@@ -61,9 +69,17 @@ protected:
 	TObjectPtr<UTextBlock> PaymentStatusText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> RequirementList;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> ConsequenceList;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> DisabledReasonText;
 
 private:
+	void RefreshRequirementList();
+	void RefreshConsequenceList();
 	void RefreshVisuals();
 	void NotifyChoiceSnapshotApplied();
 
@@ -72,6 +88,9 @@ private:
 
 	UPROPERTY(Transient)
 	FWacomRunEventChoiceRequirementView RequirementView;
+
+	UPROPERTY(Transient)
+	FWacomRunEventChoiceConsequenceView ConsequenceView;
 
 	bool bHasAppliedChoiceSnapshot = false;
 	bool bHasConstructed = false;

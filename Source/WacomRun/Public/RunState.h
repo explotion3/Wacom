@@ -109,6 +109,102 @@ struct WACOMRUN_API FRunEventState
 	FName CurrentNodeId = NAME_None;
 };
 
+UENUM(BlueprintType)
+enum class ERunEventChoiceRequirementKind : uint8
+{
+	None,
+	MinGold,
+	MinNodeCount,
+	MaxPressure,
+	HasCard,
+	MissingCard,
+	EventCompleted,
+	EventNotCompleted,
+	RunFlagSet,
+	RunFlagNotSet,
+	CardPayment,
+};
+
+UENUM(BlueprintType)
+enum class ERunEventChoiceConsequenceKind : uint8
+{
+	None,
+	Effect,
+	NodeTransition,
+	EventEnds,
+};
+
+/** 单条 RunEvent 选项需求的规则快照。只记录事实，不保存 UI 文案。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunEventChoiceRequirementSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	ERunEventChoiceRequirementKind Kind = ERunEventChoiceRequirementKind::None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	bool bSatisfied = true;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName DisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 RequiredValue = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 CurrentValue = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	EWacomPressureType PressureType = EWacomPressureType::Count;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName TargetPersistentId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName FlagId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 PaymentCandidateCount = 0;
+};
+
+/** 单条 RunEvent 选项后果预览快照。只记录配置事实，不模拟事务，也不保存 UI 文案。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunEventChoiceConsequenceSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	ERunEventChoiceConsequenceKind Kind = ERunEventChoiceConsequenceKind::None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	EWacomRunEventEffectType EffectType = EWacomRunEventEffectType::None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 Amount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	EWacomPressureType PressureType = EWacomPressureType::Count;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName TargetPersistentId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName FlagId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName ResolvedNodeId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FText ResolvedNodeTitleText;
+};
+
 /** 当前事件选项的只读展示/校验快照。 */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunEventChoiceSnapshot
@@ -141,6 +237,12 @@ struct WACOMRUN_API FRunEventChoiceSnapshot
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	FName PaymentDisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TArray<FRunEventChoiceRequirementSnapshot> Requirements;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TArray<FRunEventChoiceConsequenceSnapshot> Consequences;
 };
 
 /** 当前事件 UI/测试可读取的只读快照。 */
@@ -194,6 +296,9 @@ struct WACOMRUN_API FRunEventChoiceEffectResult
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	EWacomPressureType PressureType = EWacomPressureType::Count;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	FName FlagId = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	bool bApplied = false;
@@ -471,6 +576,10 @@ struct WACOMRUN_API FRunState
 	/** 事件节点状态。Key = 场景事件 Actor 的 PersistentId；当前只在 Run 内存态保留，不接 SaveGame。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	TMap<FName, FRunEventState> RunEventStates;
+
+	/** RunEvent 使用的全局布尔标记集合；当前只在本次 Run 内存态保留，不接 SaveGame。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	TSet<FName> RunFlags;
 
 	/** 玩家在探索地图的 Transform。仅当 bHasPlayerTransform == true 时有效。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")

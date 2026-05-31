@@ -24,14 +24,20 @@ EDataValidationResult UWacomRunEventDefinitionValidator::ValidateLoadedAsset_Imp
 		return EDataValidationResult::NotValidated;
 	}
 
-	TArray<FText> Errors;
-	if (FWacomRunEventDefinitionValidation::Validate(EventDefinition, Errors))
+	const FWacomRunEventDefinitionValidationReport Report =
+		FWacomRunEventDefinitionValidation::BuildReport(EventDefinition);
+	for (const FText& Warning : Report.Warnings)
+	{
+		AssetMessage(InAssetData, EMessageSeverity::Warning, Warning);
+	}
+
+	if (Report.IsValid())
 	{
 		AssetPasses(InAsset);
 		return EDataValidationResult::Valid;
 	}
 
-	for (const FText& Error : Errors)
+	for (const FText& Error : Report.Errors)
 	{
 		AssetMessage(InAssetData, EMessageSeverity::Error, Error);
 	}

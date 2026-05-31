@@ -29,11 +29,17 @@ struct FRunEventExecutor
 	static FRunEventChoiceResult ChooseOptionWithPaidCard(FRunState& State, FName ChoiceId, FGuid PaidCardInstanceId);
 
 	static bool IsEventCompleted(const FRunState& State, FName PersistentId);
+	static bool IsRunFlagSet(const FRunState& State, FName FlagId);
 	static bool IsChoiceAvailable(const FRunState& State, const FWacomRunEventChoiceDefinition& Choice, FName& OutDisabledReason);
 	static FName ResolvePaymentZoneId(const FWacomRunEventChoiceDefinition& Choice);
 	static void CollectCardPaymentCandidateInstanceIds(const FRunState& State, const FWacomRunEventChoiceDefinition& Choice, TArray<FGuid>& OutInstanceIds, FName& OutDisabledReason);
 
 private:
+	static FRunEventChoiceRequirementSnapshot BuildRequirementSnapshotForCondition(const FRunState& State, const FWacomRunEventConditionDefinition& Condition);
+	static void BuildConsequenceSnapshotsForChoice(
+		const UWacomRunEventDefinition* EventDefinition,
+		const FWacomRunEventChoiceDefinition& Choice,
+		TArray<FRunEventChoiceConsequenceSnapshot>& OutConsequences);
 	static bool TryResolvePressureType(FName PressureTypeId, EWacomPressureType& OutType);
 	static bool ApplyChoiceEffects(FRunState& State, const FWacomRunEventChoiceDefinition& Choice, TArray<FRunEventChoiceEffectResult>* OutEffectResults, FName* OutDisabledReason);
 	static bool DoesCardMatchPaymentFilter(const FCardInstance& Instance, const FWacomRunEventChoiceDefinition& Choice, FName& OutDisabledReason);

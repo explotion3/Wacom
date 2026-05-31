@@ -302,21 +302,23 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 
 | 字段 | 用途 |
 |---|---|
-| `Type` | `None / MinGold / MinNodeCount / MaxPressure / HasCard / MissingCard / EventCompleted / EventNotCompleted`；`None` 会被忽略 |
+| `Type` | `None / MinGold / MinNodeCount / MaxPressure / HasCard / MissingCard / EventCompleted / EventNotCompleted / RunFlagSet / RunFlagNotSet`；`None` 会被忽略 |
 | `Value` | 金币、节点、压力阈值等数值条件 |
 | `PressureType` | `MaxPressure` 使用，稳定 ID：`Hunger / Wound / Fatigue / Burden / Decay / Misdeed / Bloodlust / Disability` |
 | `CardDefinition` | `HasCard / MissingCard` 使用 |
 | `TargetPersistentId` | `EventCompleted / EventNotCompleted` 使用，填写场景事件 Actor 的 `PersistentId` |
+| `FlagId` | `RunFlagSet / RunFlagNotSet` 使用；当前只保存在本次 Run 内存态，不写入 SaveGame |
 
 效果字段：
 
 | 字段 | 用途 |
 |---|---|
-| `Type` | `None / GainCard / RemoveCard / AddGold / AddPressure / ConsumeNode / MarkEventCompleted`；`None` 会被忽略 |
+| `Type` | `None / GainCard / RemoveCard / AddGold / AddPressure / ConsumeNode / MarkEventCompleted / SetRunFlag / ClearRunFlag`；`None` 会被忽略 |
 | `CardDefinition` | `GainCard / RemoveCard` 使用 |
 | `Value` | 金币变化、压力变化、消耗节点数 |
 | `PressureType` | `AddPressure` 使用 |
 | `TargetPersistentId` | `MarkEventCompleted` 使用，填写要标记完成的场景事件 Actor `PersistentId` |
+| `FlagId` | `SetRunFlag / ClearRunFlag` 使用；当前只保存在本次 Run 内存态，不写入 SaveGame |
 
 压力类型在 DataAsset 中使用稳定 `FName`，由 `WacomRun` 执行时转换为运行时枚举，避免 `WacomData` 反向依赖 `WacomRun`。
 
@@ -345,14 +347,21 @@ Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId 
 
 事件状态条件/效果使用 `TargetPersistentId` 字段，填写场景事件 Actor 的 `PersistentId`，不是 `EventDefinition.EventId`。`EventCompleted / EventNotCompleted` 读取对应状态；`MarkEventCompleted` 标记指定 `PersistentId` 完成。当前选项自身仍可继续使用 `bMarkEventCompleted` 标记当前事件完成。
 
+RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻量事件记忆，例如“已经看过某个分支”“某个事件已解锁额外选项”。`RunFlagSet` 要求 `FlagId` 已存在，`RunFlagNotSet` 要求不存在；`SetRunFlag / ClearRunFlag` 会在 RunEvent 事务内修改 `FRunState::RunFlags`。RunFlag 不是 GameplayTag，不做数值或计数，本轮不写入 SaveGame。
+
+金币支付 / 金币门槛不新增专用字段或效果类型。制作“需要金币后获得奖励”时，使用 `MinGold=N` 条件 + `AddGold=-N` 效果 + 奖励 effects。`AddGold` 运行时会把金币下限 clamp 到 0；为了让 UI preview 和真实扣费清楚，建议负数 `AddGold` 总额与最大 `MinGold` 条件值一致。
+
 编辑器侧已接入 `UWacomRunEventDefinitionValidator` 内容防呆。校验重点：
 - `EventId / StartNodeId` 不能为空，`StartNodeId` 必须能找到节点。
 - `NodeId` 在事件内唯一，`ChoiceId` 在同一节点内唯一，`NextNodeId` 必须能找到目标节点。
 - `HasCard / MissingCard / GainCard / RemoveCard` 必须配置 `CardDefinition`。
 - 卡牌支付选项必须有非空支付筛选，同一节点内解析后的 `PaymentZoneId` 不能重复，且不能同时配置 `RemoveCard` effect。
-- V0-AT 后支付相关错误会明确带出 `NodeId / ChoiceId / PaymentZoneId / NextNodeId`，用于 Validate Assets 时快速定位配置项。
+- V0-AT 后支付相关错误会明确带出 `NodeId / ChoiceId / PaymentZoneId / NextNodeId`，用于 Validate Assets 时快速定位配置项；V0-AZ 后条件 / 效果错误还会带 `ConditionIndex / EffectIndex`。
 - `EventCompleted / EventNotCompleted / MarkEventCompleted` 必须配置 `TargetPersistentId`。
+- `RunFlagSet / RunFlagNotSet / SetRunFlag / ClearRunFlag` 必须配置 `FlagId`；错误会带出 `NodeId / ChoiceId / ConditionIndex / EffectIndex`。
 - `MaxPressure / AddPressure` 必须配置有效压力 ID，`ConsumeNode` 不能为负数。
+- `AddGold / AddPressure / ConsumeNode` 的 `Value=0` 只给 warning，不阻断资产；`NextNodeId` 与关闭 / 完成事件同时配置也只给 warning，提示事件结束预览会优先。
+- 负数 `AddGold` 但没有 `MinGold` 条件只给 warning，提示实际结算会 clamp 到 0；负数 `AddGold` 总额和最大 `MinGold` 条件值不一致也只给 warning，提示门槛和扣费可能不一致。
 
 调试资产：
 - `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、通过 `CardPayment` 拖入已有 `毒牙`、消耗节点、调整金币/劣迹压力。
@@ -433,7 +442,7 @@ Card / EnemyPart / Enemy / Character Validator 只做结构防呆，例如必填
 
 Shop Validator 只校验 `ShopId` 非空、`Offers` 非空、Offer 卡牌非空、价格非负；不校验 `DisplayName`、重复商品、价格平衡、商品池规则或生成资产路径。
 
-RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventId / StartNodeId`、Node / Choice ID、`NextNodeId`、卡牌条件 / 效果引用、卡牌支付筛选和 ZoneId、事件状态目标、`ConsumeNode >= 0`。不校验标题 / 正文 / 按钮文案非空、节点可达性、选项是否至少一个、金币 / 压力数值平衡或剧情合法性。
+RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventId / StartNodeId`、Node / Choice ID、`NextNodeId`、卡牌条件 / 效果引用、卡牌支付筛选和 ZoneId、事件状态目标、RunFlag `FlagId`、`ConsumeNode >= 0`。金币门槛 / 扣费组合只做 authoring warning，不阻断资产。不校验标题 / 正文 / 按钮文案非空、节点可达性、选项是否至少一个、金币 / 压力数值平衡或剧情合法性。
 
 ---
 

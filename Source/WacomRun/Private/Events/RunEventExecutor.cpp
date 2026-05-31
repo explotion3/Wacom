@@ -305,6 +305,11 @@ bool FRunEventExecutor::IsEventCompleted(const FRunState& State, FName Persisten
 	return false;
 }
 
+bool FRunEventExecutor::IsRunFlagSet(const FRunState& State, FName FlagId)
+{
+	return !FlagId.IsNone() && State.RunFlags.Contains(FlagId);
+}
+
 FRunEventSnapshot FRunEventExecutor::BuildSnapshot(const FRunState& State)
 {
 	FRunEventSnapshot Snapshot;
@@ -336,6 +341,16 @@ FRunEventSnapshot FRunEventExecutor::BuildSnapshot(const FRunState& State)
 		FRunEventChoiceSnapshot ChoiceSnapshot;
 		ChoiceSnapshot.ChoiceId = Choice.ChoiceId;
 		ChoiceSnapshot.LabelText = Choice.LabelText;
+		BuildConsequenceSnapshotsForChoice(EventDefinition, Choice, ChoiceSnapshot.Consequences);
+		for (const FWacomRunEventConditionDefinition& Condition : Choice.Conditions)
+		{
+			FRunEventChoiceRequirementSnapshot Requirement =
+				BuildRequirementSnapshotForCondition(State, Condition);
+			if (Requirement.Kind != ERunEventChoiceRequirementKind::None)
+			{
+				ChoiceSnapshot.Requirements.Add(MoveTemp(Requirement));
+			}
+		}
 		ChoiceSnapshot.bAvailable = IsChoiceAvailable(State, Choice, ChoiceSnapshot.DisabledReason);
 		ChoiceSnapshot.bRequiresOwnedCardPayment = Choice.CardPayment.bRequiresOwnedCardPayment;
 		if (Choice.CardPayment.bRequiresOwnedCardPayment)
@@ -357,6 +372,17 @@ FRunEventSnapshot FRunEventExecutor::BuildSnapshot(const FRunState& State)
 						: ChoiceSnapshot.PaymentDisabledReason;
 				}
 			}
+
+			FRunEventChoiceRequirementSnapshot PaymentRequirement;
+			PaymentRequirement.Kind = ERunEventChoiceRequirementKind::CardPayment;
+			PaymentRequirement.bSatisfied = ChoiceSnapshot.PaymentCandidateCount > 0;
+			PaymentRequirement.DisabledReason = ChoiceSnapshot.PaymentDisabledReason;
+			if (!PaymentRequirement.bSatisfied && PaymentRequirement.DisabledReason.IsNone())
+			{
+				PaymentRequirement.DisabledReason = TEXT("MissingRequiredCard");
+			}
+			PaymentRequirement.PaymentCandidateCount = ChoiceSnapshot.PaymentCandidateCount;
+			ChoiceSnapshot.Requirements.Add(MoveTemp(PaymentRequirement));
 		}
 		Snapshot.Choices.Add(MoveTemp(ChoiceSnapshot));
 	}
@@ -628,6 +654,177 @@ bool FRunEventExecutor::TryResolvePressureType(FName PressureTypeId, EWacomPress
 	return false;
 }
 
+FRunEventChoiceRequirementSnapshot FRunEventExecutor::BuildRequirementSnapshotForCondition(
+	const FRunState& State,
+	const FWacomRunEventConditionDefinition& Condition)
+{
+	FRunEventChoiceRequirementSnapshot Requirement;
+	Requirement.RequiredValue = Condition.Value;
+	Requirement.CardDefinition = Condition.CardDefinition;
+	Requirement.TargetPersistentId = Condition.TargetPersistentId;
+	Requirement.FlagId = Condition.FlagId;
+
+	switch (Condition.Type)
+	{
+	case EWacomRunEventConditionType::None:
+		Requirement.Kind = ERunEventChoiceRequirementKind::None;
+		return Requirement;
+	case EWacomRunEventConditionType::MinGold:
+		Requirement.Kind = ERunEventChoiceRequirementKind::MinGold;
+		Requirement.CurrentValue = State.Gold;
+		Requirement.bSatisfied = State.Gold >= Condition.Value;
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("InsufficientGold"));
+		return Requirement;
+	case EWacomRunEventConditionType::MinNodeCount:
+		Requirement.Kind = ERunEventChoiceRequirementKind::MinNodeCount;
+		Requirement.CurrentValue = State.RemainingNodeCount;
+		Requirement.bSatisfied = State.RemainingNodeCount >= Condition.Value;
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("InsufficientNode"));
+		return Requirement;
+	case EWacomRunEventConditionType::MaxPressure:
+	{
+		Requirement.Kind = ERunEventChoiceRequirementKind::MaxPressure;
+		EWacomPressureType PressureType = EWacomPressureType::Count;
+		if (!TryResolvePressureType(Condition.PressureType, PressureType))
+		{
+			Requirement.bSatisfied = false;
+			Requirement.DisabledReason = TEXT("InvalidPressureType");
+			return Requirement;
+		}
+		Requirement.PressureType = PressureType;
+		Requirement.CurrentValue = State.Pressure.Get(PressureType);
+		Requirement.bSatisfied = Requirement.CurrentValue <= Condition.Value;
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("PressureTooHigh"));
+		return Requirement;
+	}
+	case EWacomRunEventConditionType::HasCard:
+		Requirement.Kind = ERunEventChoiceRequirementKind::HasCard;
+		if (!Condition.CardDefinition)
+		{
+			Requirement.bSatisfied = false;
+			Requirement.DisabledReason = TEXT("MissingCard");
+			return Requirement;
+		}
+		Requirement.bSatisfied = FRunDeckRules::DoesRunOwnCardDefinition(State, Condition.CardDefinition.Get());
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("MissingRequiredCard"));
+		return Requirement;
+	case EWacomRunEventConditionType::MissingCard:
+		Requirement.Kind = ERunEventChoiceRequirementKind::MissingCard;
+		if (!Condition.CardDefinition)
+		{
+			Requirement.bSatisfied = false;
+			Requirement.DisabledReason = TEXT("MissingCard");
+			return Requirement;
+		}
+		Requirement.bSatisfied = !FRunDeckRules::DoesRunOwnCardDefinition(State, Condition.CardDefinition.Get());
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("AlreadyHasCard"));
+		return Requirement;
+	case EWacomRunEventConditionType::EventCompleted:
+		Requirement.Kind = ERunEventChoiceRequirementKind::EventCompleted;
+		if (Condition.TargetPersistentId.IsNone())
+		{
+			Requirement.bSatisfied = false;
+			Requirement.DisabledReason = TEXT("MissingTargetPersistentId");
+			return Requirement;
+		}
+		Requirement.bSatisfied = IsEventCompleted(State, Condition.TargetPersistentId);
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("RequiredEventNotCompleted"));
+		return Requirement;
+	case EWacomRunEventConditionType::EventNotCompleted:
+		Requirement.Kind = ERunEventChoiceRequirementKind::EventNotCompleted;
+		if (Condition.TargetPersistentId.IsNone())
+		{
+			Requirement.bSatisfied = false;
+			Requirement.DisabledReason = TEXT("MissingTargetPersistentId");
+			return Requirement;
+		}
+		Requirement.bSatisfied = !IsEventCompleted(State, Condition.TargetPersistentId);
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("RequiredEventAlreadyCompleted"));
+		return Requirement;
+	case EWacomRunEventConditionType::RunFlagSet:
+		Requirement.Kind = ERunEventChoiceRequirementKind::RunFlagSet;
+		if (Condition.FlagId.IsNone())
+		{
+			Requirement.bSatisfied = false;
+			Requirement.DisabledReason = TEXT("MissingRunFlagId");
+			return Requirement;
+		}
+		Requirement.bSatisfied = IsRunFlagSet(State, Condition.FlagId);
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("RequiredRunFlagMissing"));
+		return Requirement;
+	case EWacomRunEventConditionType::RunFlagNotSet:
+		Requirement.Kind = ERunEventChoiceRequirementKind::RunFlagNotSet;
+		if (Condition.FlagId.IsNone())
+		{
+			Requirement.bSatisfied = false;
+			Requirement.DisabledReason = TEXT("MissingRunFlagId");
+			return Requirement;
+		}
+		Requirement.bSatisfied = !IsRunFlagSet(State, Condition.FlagId);
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("BlockedRunFlagSet"));
+		return Requirement;
+	default:
+		Requirement.Kind = ERunEventChoiceRequirementKind::None;
+		Requirement.bSatisfied = false;
+		Requirement.DisabledReason = TEXT("UnknownCondition");
+		return Requirement;
+	}
+}
+
+void FRunEventExecutor::BuildConsequenceSnapshotsForChoice(
+	const UWacomRunEventDefinition* EventDefinition,
+	const FWacomRunEventChoiceDefinition& Choice,
+	TArray<FRunEventChoiceConsequenceSnapshot>& OutConsequences)
+{
+	for (const FWacomRunEventEffectDefinition& Effect : Choice.Effects)
+	{
+		if (Effect.Type == EWacomRunEventEffectType::None)
+		{
+			continue;
+		}
+
+		FRunEventChoiceConsequenceSnapshot Consequence;
+		Consequence.Kind = ERunEventChoiceConsequenceKind::Effect;
+		Consequence.EffectType = Effect.Type;
+		Consequence.CardDefinition = Effect.CardDefinition;
+		Consequence.Amount = Effect.Value;
+		Consequence.TargetPersistentId = Effect.TargetPersistentId;
+		Consequence.FlagId = Effect.FlagId;
+		if (Effect.Type == EWacomRunEventEffectType::AddPressure)
+		{
+			EWacomPressureType PressureType = EWacomPressureType::Count;
+			if (TryResolvePressureType(Effect.PressureType, PressureType))
+			{
+				Consequence.PressureType = PressureType;
+			}
+		}
+		OutConsequences.Add(MoveTemp(Consequence));
+	}
+
+	if (Choice.bCloseEventAfterResolve || Choice.bMarkEventCompleted)
+	{
+		FRunEventChoiceConsequenceSnapshot Consequence;
+		Consequence.Kind = ERunEventChoiceConsequenceKind::EventEnds;
+		OutConsequences.Add(MoveTemp(Consequence));
+		return;
+	}
+
+	if (!Choice.NextNodeId.IsNone())
+	{
+		const FWacomRunEventNodeDefinition* NextNode = FindNode(EventDefinition, Choice.NextNodeId);
+		if (!NextNode)
+		{
+			return;
+		}
+
+		FRunEventChoiceConsequenceSnapshot Consequence;
+		Consequence.Kind = ERunEventChoiceConsequenceKind::NodeTransition;
+		Consequence.ResolvedNodeId = Choice.NextNodeId;
+		Consequence.ResolvedNodeTitleText = NextNode->TitleText;
+		OutConsequences.Add(MoveTemp(Consequence));
+	}
+}
+
 bool FRunEventExecutor::IsChoiceAvailable(const FRunState& State, const FWacomRunEventChoiceDefinition& Choice, FName& OutDisabledReason)
 {
 	OutDisabledReason = NAME_None;
@@ -714,6 +911,30 @@ bool FRunEventExecutor::IsChoiceAvailable(const FRunState& State, const FWacomRu
 				return false;
 			}
 			break;
+		case EWacomRunEventConditionType::RunFlagSet:
+			if (Condition.FlagId.IsNone())
+			{
+				OutDisabledReason = TEXT("MissingRunFlagId");
+				return false;
+			}
+			if (!IsRunFlagSet(State, Condition.FlagId))
+			{
+				OutDisabledReason = TEXT("RequiredRunFlagMissing");
+				return false;
+			}
+			break;
+		case EWacomRunEventConditionType::RunFlagNotSet:
+			if (Condition.FlagId.IsNone())
+			{
+				OutDisabledReason = TEXT("MissingRunFlagId");
+				return false;
+			}
+			if (IsRunFlagSet(State, Condition.FlagId))
+			{
+				OutDisabledReason = TEXT("BlockedRunFlagSet");
+				return false;
+			}
+			break;
 		default:
 			OutDisabledReason = TEXT("UnknownCondition");
 			return false;
@@ -730,6 +951,7 @@ bool FRunEventExecutor::ApplyChoiceEffects(FRunState& State, const FWacomRunEven
 		EffectResult.EffectType = Effect.Type;
 		EffectResult.CardDefinition = Effect.CardDefinition;
 		EffectResult.Amount = Effect.Value;
+		EffectResult.FlagId = Effect.FlagId;
 
 		switch (Effect.Type)
 		{
@@ -843,6 +1065,34 @@ bool FRunEventExecutor::ApplyChoiceEffects(FRunState& State, const FWacomRunEven
 			}
 			State.RunEventStates.FindOrAdd(Effect.TargetPersistentId).bCompleted = true;
 			EffectResult.ActualDelta = 1;
+			EffectResult.bApplied = true;
+			break;
+		case EWacomRunEventEffectType::SetRunFlag:
+			if (Effect.FlagId.IsNone())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplyRunEventChoiceEffects: SetRunFlag 缺少 FlagId"));
+				if (OutDisabledReason)
+				{
+					*OutDisabledReason = TEXT("MissingRunFlagId");
+				}
+				return false;
+			}
+			State.RunFlags.Add(Effect.FlagId);
+			EffectResult.ActualDelta = 1;
+			EffectResult.bApplied = true;
+			break;
+		case EWacomRunEventEffectType::ClearRunFlag:
+			if (Effect.FlagId.IsNone())
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[RunSession] ApplyRunEventChoiceEffects: ClearRunFlag 缺少 FlagId"));
+				if (OutDisabledReason)
+				{
+					*OutDisabledReason = TEXT("MissingRunFlagId");
+				}
+				return false;
+			}
+			State.RunFlags.Remove(Effect.FlagId);
+			EffectResult.ActualDelta = -1;
 			EffectResult.bApplied = true;
 			break;
 		default:
