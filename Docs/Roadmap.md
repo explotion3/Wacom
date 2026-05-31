@@ -90,7 +90,7 @@ tags:
 |---|---|---|
 | RunEvent 基础链路 | `UWacomRunEventDefinition`、RunSession 访问接口、TriggerActor、最小 EventScreen、调试资产和 Validator 已就位 | 补随机事件池、更多条件 / 效果类型、事件池按地图节点生成、正式 `WBP_RunEventScreen` |
 | RunEvent 状态持久化 | 当前内存态边界见 [TechDebt: 数据与存档债](./TechDebt.md#techdebt-data-save) | 接入 SaveGame，并定义跨地图 / 跨天状态保留口径 |
-| RunEvent 表现 | 选项结果与不可用原因已接入 AppToast，C++ fallback 可运行 | 结合正式 WBP 做布局、选项状态、奖励展示和关闭动效 |
+| RunEvent 表现 | 选项结果、不可用原因、单卡支付状态和支付 / outcome Toast 已接入；C++ fallback 可运行，V0-AU 已提供 WBP authoring surface | 后续由美术制作正式 `WBP_RunEventScreen / WBP_RunEventChoiceButton / WBP_RunEventPaymentDropTarget`，只替换外观和 preview 表现，不改 RunEvent 规则事务 |
 
 <a id="roadmap-shop"></a>
 ## 商店

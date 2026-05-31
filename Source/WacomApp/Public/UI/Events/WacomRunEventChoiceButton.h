@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "RunState.h"
+#include "UI/Events/WacomRunEventPresentationBuilder.h"
 #include "WacomRunEventChoiceButton.generated.h"
 
 class UButton;
@@ -27,9 +28,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
 	FRunEventChoiceSnapshot GetChoiceSnapshot() const { return ChoiceSnapshot; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
+	FWacomRunEventChoiceRequirementView GetChoiceRequirementView() const { return RequirementView; }
+
 #if WITH_AUTOMATION_TESTS
 	FText GetDisplayedPaymentStatusTextForTest() const;
 	ESlateVisibility GetPaymentStatusVisibilityForTest() const;
+	FText GetDisplayedDisabledReasonTextForTest() const;
+	ESlateVisibility GetDisabledReasonVisibilityForTest() const;
 #endif
 
 protected:
@@ -58,12 +64,14 @@ protected:
 	TObjectPtr<UTextBlock> DisabledReasonText;
 
 private:
-	FText BuildPaymentStatusText() const;
 	void RefreshVisuals();
 	void NotifyChoiceSnapshotApplied();
 
 	UPROPERTY(Transient)
 	FRunEventChoiceSnapshot ChoiceSnapshot;
+
+	UPROPERTY(Transient)
+	FWacomRunEventChoiceRequirementView RequirementView;
 
 	bool bHasAppliedChoiceSnapshot = false;
 	bool bHasConstructed = false;

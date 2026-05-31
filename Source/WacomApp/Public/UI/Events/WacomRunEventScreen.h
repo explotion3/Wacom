@@ -50,6 +50,14 @@ struct WACOMAPP_API FWacomRunEventScreenDebugView
 	int32 CachedChoiceCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前缓存选项中可直接点击提交的数量。"))
+	int32 AvailableChoiceCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前缓存选项中被条件或支付需求阻挡的数量。"))
+	int32 UnavailableChoiceCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
 		meta = (ToolTip = "当前 Screen 缓存的卡牌支付选项数量。"))
 	int32 PaymentChoiceCount = 0;
 
@@ -64,6 +72,10 @@ struct WACOMAPP_API FWacomRunEventScreenDebugView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
 		meta = (ToolTip = "当前支付 Zone 到 Choice 的映射摘要，格式为 ZoneId->ChoiceId。"))
 	FString PaymentZoneMappingSummary;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
+		meta = (ToolTip = "当前选项可用性摘要，格式为 ChoiceId:Tone:Reason。"))
+	FString ChoiceAvailabilitySummary;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|RunEvent|Debug",
 		meta = (ToolTip = "最近一次 RunEventScreen 解析菜单卡牌 Drop Intent 的摘要。"))

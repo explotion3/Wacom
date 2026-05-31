@@ -8,7 +8,6 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
-#include "UI/Events/WacomRunEventPresentationBuilder.h"
 
 namespace
 {
@@ -71,6 +70,7 @@ void UWacomRunEventChoiceButton::NativeConstruct()
 void UWacomRunEventChoiceButton::SetChoiceSnapshot(const FRunEventChoiceSnapshot& InChoice)
 {
 	ChoiceSnapshot = InChoice;
+	RequirementView = UWacomRunEventPresentationBuilder::BuildChoiceRequirementView(ChoiceSnapshot);
 	bHasAppliedChoiceSnapshot = true;
 	RefreshVisuals();
 	NotifyChoiceSnapshotApplied();
@@ -85,6 +85,16 @@ FText UWacomRunEventChoiceButton::GetDisplayedPaymentStatusTextForTest() const
 ESlateVisibility UWacomRunEventChoiceButton::GetPaymentStatusVisibilityForTest() const
 {
 	return PaymentStatusText ? PaymentStatusText->GetVisibility() : ESlateVisibility::Collapsed;
+}
+
+FText UWacomRunEventChoiceButton::GetDisplayedDisabledReasonTextForTest() const
+{
+	return DisabledReasonText ? DisabledReasonText->GetText() : FText::GetEmpty();
+}
+
+ESlateVisibility UWacomRunEventChoiceButton::GetDisabledReasonVisibilityForTest() const
+{
+	return DisabledReasonText ? DisabledReasonText->GetVisibility() : ESlateVisibility::Collapsed;
 }
 #endif
 
@@ -114,28 +124,6 @@ void UWacomRunEventChoiceButton::NotifyChoiceSnapshotApplied()
 	BP_OnRunEventChoiceSnapshotApplied(ChoiceSnapshot);
 }
 
-FText UWacomRunEventChoiceButton::BuildPaymentStatusText() const
-{
-	if (!ChoiceSnapshot.bRequiresOwnedCardPayment)
-	{
-		return FText::GetEmpty();
-	}
-	if (ChoiceSnapshot.PaymentCandidateCount > 0)
-	{
-		return FText::Format(
-			LOCTEXT("PaymentCandidateCountFmt", "拖入卡牌支付：{0} 张可用"),
-			FText::AsNumber(ChoiceSnapshot.PaymentCandidateCount));
-	}
-
-	const FName Reason = ChoiceSnapshot.PaymentDisabledReason.IsNone()
-		? ChoiceSnapshot.DisabledReason
-		: ChoiceSnapshot.PaymentDisabledReason;
-	const FText ReasonText = UWacomRunEventPresentationBuilder::FormatDisabledReason(Reason);
-	return FText::Format(
-		LOCTEXT("PaymentMissingReasonFmt", "缺少可支付卡牌：{0}"),
-		ReasonText.IsEmpty() ? UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("MissingRequiredCard")) : ReasonText);
-}
-
 void UWacomRunEventChoiceButton::RefreshVisuals()
 {
 	if (LabelText)
@@ -151,21 +139,18 @@ void UWacomRunEventChoiceButton::RefreshVisuals()
 	}
 	if (PaymentStatusText)
 	{
-		PaymentStatusText->SetText(BuildPaymentStatusText());
-		PaymentStatusText->SetColorAndOpacity(ChoiceSnapshot.PaymentCandidateCount > 0
+		PaymentStatusText->SetText(RequirementView.RequirementText);
+		PaymentStatusText->SetColorAndOpacity(RequirementView.PaymentCandidateCount > 0
 			? FSlateColor(FLinearColor(0.58f, 0.82f, 0.92f, 1.f))
 			: FSlateColor(FLinearColor(0.9f, 0.55f, 0.45f, 1.f)));
-		PaymentStatusText->SetVisibility(ChoiceSnapshot.bRequiresOwnedCardPayment
+		PaymentStatusText->SetVisibility(RequirementView.bRequiresCardPayment
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
 	if (DisabledReasonText)
 	{
-		DisabledReasonText->SetText(ChoiceSnapshot.DisabledReason.IsNone()
-			? FText::GetEmpty()
-			: FText::Format(LOCTEXT("DisabledReasonFmt", "不可选：{0}"),
-				UWacomRunEventPresentationBuilder::FormatDisabledReason(ChoiceSnapshot.DisabledReason)));
-		DisabledReasonText->SetVisibility(ChoiceSnapshot.bAvailable || ChoiceSnapshot.DisabledReason.IsNone()
+		DisabledReasonText->SetText(RequirementView.BlockedReasonText);
+		DisabledReasonText->SetVisibility(RequirementView.BlockedReasonText.IsEmpty()
 			? ESlateVisibility::Collapsed
 			: ESlateVisibility::HitTestInvisible);
 	}

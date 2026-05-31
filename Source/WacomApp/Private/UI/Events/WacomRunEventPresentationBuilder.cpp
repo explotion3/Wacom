@@ -158,6 +158,60 @@ FText UWacomRunEventPresentationBuilder::FormatPressureName(EWacomPressureType P
 	}
 }
 
+FWacomRunEventChoiceRequirementView UWacomRunEventPresentationBuilder::BuildChoiceRequirementView(
+	const FRunEventChoiceSnapshot& Choice)
+{
+	FWacomRunEventChoiceRequirementView View;
+	View.ChoiceId = Choice.ChoiceId;
+	View.bAvailable = Choice.bAvailable;
+	View.bRequiresCardPayment = Choice.bRequiresOwnedCardPayment;
+	View.PaymentCandidateCount = Choice.PaymentCandidateCount;
+
+	if (Choice.bRequiresOwnedCardPayment)
+	{
+		if (Choice.PaymentCandidateCount > 0)
+		{
+			View.RequirementText = FText::Format(
+				LOCTEXT("PaymentCandidateCountFmt", "拖入卡牌支付：{0} 张可用"),
+				FText::AsNumber(Choice.PaymentCandidateCount));
+			View.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+		}
+		else
+		{
+			const FName Reason = Choice.PaymentDisabledReason.IsNone()
+				? Choice.DisabledReason
+				: Choice.PaymentDisabledReason;
+			const FText ReasonText = FormatDisabledReason(Reason);
+			View.PrimaryReason = Reason.IsNone() ? FName(TEXT("MissingRequiredCard")) : Reason;
+			View.RequirementText = FText::Format(
+				LOCTEXT("PaymentMissingReasonFmt", "缺少可支付卡牌：{0}"),
+				ReasonText.IsEmpty() ? FormatDisabledReason(TEXT("MissingRequiredCard")) : ReasonText);
+			View.Tone = EWacomRunEventChoiceAvailabilityTone::Blocked;
+		}
+	}
+
+	if (!Choice.bAvailable)
+	{
+		View.PrimaryReason = !Choice.DisabledReason.IsNone()
+			? Choice.DisabledReason
+			: View.PrimaryReason;
+		if (!Choice.DisabledReason.IsNone()
+			&& (!Choice.bRequiresOwnedCardPayment || Choice.PaymentCandidateCount > 0))
+		{
+			View.BlockedReasonText = FText::Format(
+				LOCTEXT("DisabledReasonFmt", "不可选：{0}"),
+				FormatDisabledReason(Choice.DisabledReason));
+		}
+		View.Tone = EWacomRunEventChoiceAvailabilityTone::Blocked;
+	}
+	else if (View.Tone == EWacomRunEventChoiceAvailabilityTone::None)
+	{
+		View.Tone = EWacomRunEventChoiceAvailabilityTone::Ready;
+	}
+
+	return View;
+}
+
 TArray<FWacomAppToastView> UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(
 	const FRunEventChoiceResult& Result)
 {

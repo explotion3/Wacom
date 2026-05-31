@@ -57,7 +57,7 @@ WBP 合同：
 - 普通选项只创建 `ChoiceButtonWidgetClass`。
 - 需要卡牌支付的选项会创建 `PaymentDropTargetWidgetClass`，并把 choice row 包进该 Zone target。
 - Screen 只设置支付 Zone 的 `ZoneId / StableTargetId`，不覆盖 drop target WBP 的 preview scale、颜色或材质参数。
-- `LogRunEventScreenDebugSummary()` 可在 PIE 中排查 active node、候选数量、Zone 映射和最近 drop 结果。
+- `LogRunEventScreenDebugSummary()` 可在 PIE 中排查 active node、choice 可用性摘要、候选数量、Zone 映射和最近 drop 结果。
 
 ---
 
@@ -77,8 +77,9 @@ WBP 合同：
 WBP 合同：
 
 - `ChoiceButton` 只负责点击；支付选项点击不提交支付，规则层会返回“需要拖入卡牌支付”。
-- `PaymentStatusText` 由 C++ fallback 写入：有候选显示 `拖入卡牌支付：{N} 张可用`，无候选显示 `缺少可支付卡牌：{Reason}`。
-- `BP_OnRunEventChoiceSnapshotApplied` 会在 C++ 应用新 snapshot 并完成默认文本刷新后触发；WBP 可在这里刷新自定义动画、颜色或状态。
+- `PaymentStatusText / DisabledReasonText` 由 C++ fallback 根据 `FWacomRunEventChoiceRequirementView` 写入：有候选显示 `拖入卡牌支付：{N} 张可用`，无候选显示 `缺少可支付卡牌：{Reason}`，普通非支付阻塞显示 `不可选：{Reason}`。
+- 支付缺失时不要再额外展示一行普通禁用原因；C++ fallback 会折叠 `DisabledReasonText`，避免重复表达同一问题。
+- `BP_OnRunEventChoiceSnapshotApplied` 会在 C++ 应用新 snapshot 并完成默认文本刷新后触发；WBP 可在这里读取 `GetChoiceRequirementView()`，按 `Tone / PrimaryReason / PaymentCandidateCount` 刷新自定义动画、颜色、图标或状态。
 - 不要在 ChoiceButton WBP 图里直接调用 `ChooseRunEventOptionWithResult` 或 `ChooseRunEventOptionWithPaidCardResult`。
 
 ---
@@ -120,4 +121,22 @@ WBP 合同：
 - 打开蛇巢事件，普通选项应使用自定义 choice row。
 - 持有 `PoisonFang` 时，“交出毒牙”选项外层应使用自定义 drop target；拖毒牙到该选项时显示 `SubmitReady`，释放后显示 `Submitted`、移除精确实例并显示支付 / outcome Toast。
 - 没有 `PoisonFang` 时不显示 first-person 候选卡，支付行显示缺失原因。
-- 调用 `LogRunEventScreenDebugSummary()` 应能看到 active node、`RunEvent.Pay.* -> ChoiceId` 映射、候选数量和最近 drop 结果。
+- 调用 `LogRunEventScreenDebugSummary()` 应能看到 active node、choice availability 摘要、`RunEvent.Pay.* -> ChoiceId` 映射、候选数量和最近 drop 结果。
+
+## 美术接入 TODO
+
+当前 C++ fallback 是正式可运行基线，不要求立刻制作 RunEvent WBP。后续美术接入时按以下顺序推进：
+
+- [ ] 制作 `WBP_RunEventScreen`，只负责事件面板布局、标题、正文、选项列表 host 和关闭按钮外观。
+- [ ] 制作 `WBP_RunEventChoiceButton`，只负责选项行外观、支付状态文案、禁用原因和 hover / pressed / disabled 表现。
+- [ ] 制作 `WBP_RunEventPaymentDropTarget`，只负责支付 Zone 的 `Probe / SubmitReady / Invalid / Submitted` 视觉反馈。
+- [ ] 在 `WBP_RunEventScreen` 默认值中设置 `ChoiceButtonWidgetClass` 和 `PaymentDropTargetWidgetClass`。
+- [ ] 在 Wacom UI Settings 中注册 `UI.Widget.RunEventScreen` 到正式 `WBP_RunEventScreen`。
+- [ ] 用蛇巢事件做 PIE 验收：有毒牙、无毒牙、拖错卡、拖空处、支付成功、事件关闭后无残留候选卡。
+
+美术接入边界：
+
+- 不在 WBP 图里调用 `URunSession` 或 RunEvent choice API。
+- 不在 WBP 图里手写 `ZoneId`，它由 `UWacomRunEventScreen` 从 snapshot 写入。
+- 不在 WBP 图里判断卡牌是否合法；合法性来自 RunSession validation 和 menu drop intent。
+- 不改变 C++ fallback。正式 WBP 缺失、加载失败或未注册时，RunEvent 支付仍必须可用。

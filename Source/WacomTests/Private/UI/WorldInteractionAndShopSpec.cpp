@@ -866,6 +866,67 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 		UWacomRunEventPresentationBuilder::FormatPressureName(EWacomPressureType::Misdeed).ToString(),
 		FString(TEXT("恶行")));
 
+	FRunEventChoiceSnapshot PaymentReadyChoice;
+	PaymentReadyChoice.ChoiceId = TEXT("PayReady");
+	PaymentReadyChoice.bAvailable = true;
+	PaymentReadyChoice.bRequiresOwnedCardPayment = true;
+	PaymentReadyChoice.PaymentCandidateCount = 3;
+	const FWacomRunEventChoiceRequirementView PaymentReadyView =
+		UWacomRunEventPresentationBuilder::BuildChoiceRequirementView(PaymentReadyChoice);
+	TestEqual(TEXT("Payment ready requirement text"),
+		PaymentReadyView.RequirementText.ToString(),
+		FString(TEXT("拖入卡牌支付：3 张可用")));
+	TestEqual(TEXT("Payment ready tone"),
+		PaymentReadyView.Tone,
+		EWacomRunEventChoiceAvailabilityTone::Requirement);
+
+	FRunEventChoiceSnapshot PaymentMissingChoice;
+	PaymentMissingChoice.ChoiceId = TEXT("PayMissing");
+	PaymentMissingChoice.bAvailable = false;
+	PaymentMissingChoice.bRequiresOwnedCardPayment = true;
+	PaymentMissingChoice.PaymentDisabledReason = TEXT("MissingRequiredCard");
+	const FWacomRunEventChoiceRequirementView PaymentMissingView =
+		UWacomRunEventPresentationBuilder::BuildChoiceRequirementView(PaymentMissingChoice);
+	TestEqual(TEXT("Payment missing requirement text"),
+		PaymentMissingView.RequirementText.ToString(),
+		FString(TEXT("缺少可支付卡牌：缺少所需卡牌")));
+	TestTrue(TEXT("Payment missing blocked text is empty to avoid duplicate row"),
+		PaymentMissingView.BlockedReasonText.IsEmpty());
+	TestEqual(TEXT("Payment missing primary reason"),
+		PaymentMissingView.PrimaryReason,
+		FName(TEXT("MissingRequiredCard")));
+	TestEqual(TEXT("Payment missing tone"),
+		PaymentMissingView.Tone,
+		EWacomRunEventChoiceAvailabilityTone::Blocked);
+
+	FRunEventChoiceSnapshot BlockedChoice;
+	BlockedChoice.ChoiceId = TEXT("GoldLocked");
+	BlockedChoice.bAvailable = false;
+	BlockedChoice.DisabledReason = TEXT("InsufficientGold");
+	const FWacomRunEventChoiceRequirementView BlockedView =
+		UWacomRunEventPresentationBuilder::BuildChoiceRequirementView(BlockedChoice);
+	TestTrue(TEXT("Blocked non-payment has empty requirement"),
+		BlockedView.RequirementText.IsEmpty());
+	TestEqual(TEXT("Blocked reason text"),
+		BlockedView.BlockedReasonText.ToString(),
+		FString(TEXT("不可选：金币不足")));
+	TestEqual(TEXT("Blocked primary reason"),
+		BlockedView.PrimaryReason,
+		FName(TEXT("InsufficientGold")));
+
+	FRunEventChoiceSnapshot AvailableChoice;
+	AvailableChoice.ChoiceId = TEXT("Leave");
+	AvailableChoice.bAvailable = true;
+	const FWacomRunEventChoiceRequirementView AvailableView =
+		UWacomRunEventPresentationBuilder::BuildChoiceRequirementView(AvailableChoice);
+	TestTrue(TEXT("Available non-payment has no requirement text"),
+		AvailableView.RequirementText.IsEmpty());
+	TestTrue(TEXT("Available non-payment has no blocked reason text"),
+		AvailableView.BlockedReasonText.IsEmpty());
+	TestEqual(TEXT("Available non-payment tone"),
+		AvailableView.Tone,
+		EWacomRunEventChoiceAvailabilityTone::Ready);
+
 	FRunEventChoiceResult Result;
 	Result.bSucceeded = true;
 	Result.PaidCardDefinition = Card;
@@ -972,6 +1033,12 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Payment row shows candidate count"),
 		Button->GetDisplayedPaymentStatusTextForTest().ToString(),
 		FString(TEXT("拖入卡牌支付：2 张可用")));
+	TestEqual(TEXT("Payment row stores requirement candidate count"),
+		Button->GetChoiceRequirementView().PaymentCandidateCount,
+		2);
+	TestEqual(TEXT("Payment row stores requirement tone"),
+		Button->GetChoiceRequirementView().Tone,
+		EWacomRunEventChoiceAvailabilityTone::Requirement);
 	TestEqual(TEXT("Payment status visible for payment choice"),
 		Button->GetPaymentStatusVisibilityForTest(),
 		ESlateVisibility::HitTestInvisible);
@@ -983,6 +1050,9 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Payment row shows missing candidate reason"),
 		Button->GetDisplayedPaymentStatusTextForTest().ToString(),
 		FString(TEXT("缺少可支付卡牌：缺少所需卡牌")));
+	TestEqual(TEXT("Payment missing disabled reason line hidden"),
+		Button->GetDisabledReasonVisibilityForTest(),
+		ESlateVisibility::Collapsed);
 
 	FRunEventChoiceSnapshot NonPaymentChoice;
 	NonPaymentChoice.ChoiceId = TEXT("Leave");
@@ -992,6 +1062,18 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Non-payment row hides payment status"),
 		Button->GetPaymentStatusVisibilityForTest(),
 		ESlateVisibility::Collapsed);
+
+	FRunEventChoiceSnapshot BlockedNonPaymentChoice;
+	BlockedNonPaymentChoice.ChoiceId = TEXT("GoldLocked");
+	BlockedNonPaymentChoice.bAvailable = false;
+	BlockedNonPaymentChoice.DisabledReason = TEXT("InsufficientGold");
+	Button->SetChoiceSnapshot(BlockedNonPaymentChoice);
+	TestEqual(TEXT("Blocked non-payment row shows disabled reason"),
+		Button->GetDisplayedDisabledReasonTextForTest().ToString(),
+		FString(TEXT("不可选：金币不足")));
+	TestEqual(TEXT("Blocked non-payment disabled reason visible"),
+		Button->GetDisabledReasonVisibilityForTest(),
+		ESlateVisibility::HitTestInvisible);
 
 	return true;
 }
@@ -1243,9 +1325,13 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	TestTrue(TEXT("Debug reports active event"), InitialDebug.bIsEventActive);
 	TestEqual(TEXT("Debug reports active node"), InitialDebug.CurrentNodeId, FName(TEXT("Start")));
 	TestEqual(TEXT("Debug reports cached choice count"), InitialDebug.CachedChoiceCount, 1);
+	TestEqual(TEXT("Debug reports available choice count"), InitialDebug.AvailableChoiceCount, 1);
+	TestEqual(TEXT("Debug reports unavailable choice count"), InitialDebug.UnavailableChoiceCount, 0);
 	TestEqual(TEXT("Debug reports payment choice count"), InitialDebug.PaymentChoiceCount, 1);
 	TestEqual(TEXT("Debug reports candidate count"), InitialDebug.PaymentCandidateInstanceCount, 1);
 	TestEqual(TEXT("Debug reports zone mapping count"), InitialDebug.PaymentZoneMappingCount, 1);
+	TestTrue(TEXT("Debug reports availability summary"),
+		InitialDebug.ChoiceAvailabilitySummary.Contains(TEXT("PayFang:Requirement:None")));
 	TestTrue(TEXT("Debug reports payment zone mapping"),
 		InitialDebug.PaymentZoneMappingSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
 	const FString InitialDebugSummary = Screen->ReadRunEventScreenDebugSummary();
@@ -1253,8 +1339,12 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 		InitialDebugSummary.Contains(TEXT("Node=Start")));
 	TestTrue(TEXT("Debug summary includes choice counts"),
 		InitialDebugSummary.Contains(TEXT("Choices=1"))
+		&& InitialDebugSummary.Contains(TEXT("AvailableChoices=1"))
+		&& InitialDebugSummary.Contains(TEXT("UnavailableChoices=0"))
 		&& InitialDebugSummary.Contains(TEXT("PaymentChoices=1"))
 		&& InitialDebugSummary.Contains(TEXT("Candidates=1")));
+	TestTrue(TEXT("Debug summary includes availability"),
+		InitialDebugSummary.Contains(TEXT("Availability=[PayFang:Requirement:None]")));
 	TestTrue(TEXT("Debug summary includes zone map"),
 		InitialDebugSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
 

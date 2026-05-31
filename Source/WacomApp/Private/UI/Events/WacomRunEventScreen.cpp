@@ -19,6 +19,7 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "UI/Events/WacomRunEventChoiceButton.h"
+#include "UI/Events/WacomRunEventPresentationBuilder.h"
 #include "UI/Events/WacomRunEventScreenFlow.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
@@ -95,6 +96,22 @@ namespace
 		case EWacomRunMenuCardDropSubmitPolicy::MenuHandled:
 			return TEXT("MenuHandled");
 		case EWacomRunMenuCardDropSubmitPolicy::None:
+		default:
+			return TEXT("None");
+		}
+	}
+
+	const TCHAR* ToRunEventChoiceAvailabilityToneDebugString(EWacomRunEventChoiceAvailabilityTone Tone)
+	{
+		switch (Tone)
+		{
+		case EWacomRunEventChoiceAvailabilityTone::Ready:
+			return TEXT("Ready");
+		case EWacomRunEventChoiceAvailabilityTone::Requirement:
+			return TEXT("Requirement");
+		case EWacomRunEventChoiceAvailabilityTone::Blocked:
+			return TEXT("Blocked");
+		case EWacomRunEventChoiceAvailabilityTone::None:
 		default:
 			return TEXT("None");
 		}
@@ -371,8 +388,26 @@ FWacomRunEventScreenDebugView UWacomRunEventScreen::GetRunEventScreenDebugView()
 	View.LastPaymentSubmitSummary = LastPaymentDropSubmitDebugSummary;
 
 	TSet<FGuid> UniqueCandidateIds;
+	TArray<FString> AvailabilityEntries;
+	AvailabilityEntries.Reserve(CachedChoices.Num());
 	for (const FRunEventChoiceSnapshot& Choice : CachedChoices)
 	{
+		const FWacomRunEventChoiceRequirementView RequirementView =
+			UWacomRunEventPresentationBuilder::BuildChoiceRequirementView(Choice);
+		if (Choice.bAvailable)
+		{
+			++View.AvailableChoiceCount;
+		}
+		else
+		{
+			++View.UnavailableChoiceCount;
+		}
+		AvailabilityEntries.Add(FString::Printf(
+			TEXT("%s:%s:%s"),
+			*Choice.ChoiceId.ToString(),
+			ToRunEventChoiceAvailabilityToneDebugString(RequirementView.Tone),
+			*RequirementView.PrimaryReason.ToString()));
+
 		if (!Choice.bRequiresOwnedCardPayment)
 		{
 			continue;
@@ -387,6 +422,8 @@ FWacomRunEventScreenDebugView UWacomRunEventScreen::GetRunEventScreenDebugView()
 			}
 		}
 	}
+	AvailabilityEntries.Sort();
+	View.ChoiceAvailabilitySummary = FString::Join(AvailabilityEntries, TEXT(","));
 	View.PaymentCandidateInstanceCount = UniqueCandidateIds.Num();
 	return View;
 }
@@ -395,7 +432,7 @@ FString UWacomRunEventScreen::GetRunEventScreenDebugSummary() const
 {
 	const FWacomRunEventScreenDebugView View = GetRunEventScreenDebugView();
 	return FString::Printf(
-		TEXT("RunEventScreen{HasRunSession=%s Active=%s PersistentId=%s EventId=%s Node=%s Title=\"%s\" Choices=%d PaymentChoices=%d Candidates=%d Zones=%d ZoneMap=[%s] LastResolve=%s LastSubmit=%s}"),
+		TEXT("RunEventScreen{HasRunSession=%s Active=%s PersistentId=%s EventId=%s Node=%s Title=\"%s\" Choices=%d AvailableChoices=%d UnavailableChoices=%d PaymentChoices=%d Candidates=%d Zones=%d Availability=[%s] ZoneMap=[%s] LastResolve=%s LastSubmit=%s}"),
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bIsEventActive ? TEXT("true") : TEXT("false"),
 		*View.PersistentId.ToString(),
@@ -403,9 +440,12 @@ FString UWacomRunEventScreen::GetRunEventScreenDebugSummary() const
 		*View.CurrentNodeId.ToString(),
 		*View.CurrentNodeTitleText.ToString(),
 		View.CachedChoiceCount,
+		View.AvailableChoiceCount,
+		View.UnavailableChoiceCount,
 		View.PaymentChoiceCount,
 		View.PaymentCandidateInstanceCount,
 		View.PaymentZoneMappingCount,
+		*View.ChoiceAvailabilitySummary,
 		*View.PaymentZoneMappingSummary,
 		View.LastPaymentResolveSummary.IsEmpty() ? TEXT("None") : *View.LastPaymentResolveSummary,
 		View.LastPaymentSubmitSummary.IsEmpty() ? TEXT("None") : *View.LastPaymentSubmitSummary);
