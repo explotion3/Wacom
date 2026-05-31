@@ -4,7 +4,10 @@
 
 #define LOCTEXT_NAMESPACE "WacomShopTriggerActor"
 
+#include "Components/BoxComponent.h"
 #include "Components/SphereComponent.h"
+#include "Components/WacomInteractionTargetComponent.h"
+#include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 
@@ -21,12 +24,34 @@ AWacomShopTriggerActor::AWacomShopTriggerActor()
 	TriggerSphere->SetGenerateOverlapEvents(true);
 	RootComponent = TriggerSphere;
 
+	ClickBounds = CreateDefaultSubobject<UBoxComponent>(TEXT("ClickBounds"));
+	ClickBounds->SetupAttachment(RootComponent);
+	ClickBounds->SetBoxExtent(FVector(100.f, 100.f, 100.f));
+	FWacomRunWorldClickableInteractableHelper::ConfigureClickBounds(ClickBounds);
+
+	ClickInteractionTargetComponent =
+		CreateDefaultSubobject<UWacomInteractionTargetComponent>(TEXT("ClickInteractionTarget"));
+
+	ClickTargetBridgeComponent =
+		CreateDefaultSubobject<UWacomRunWorldInteractionTargetBridgeComponent>(TEXT("ClickTargetBridge"));
+	FWacomRunWorldClickableInteractableHelper::BindClickTarget(
+		PersistentId,
+		ClickBounds,
+		ClickInteractionTargetComponent,
+		ClickTargetBridgeComponent);
+
 	InteractPromptText = LOCTEXT("DefaultInteractPrompt", "按 E 交易");
+	HoverPromptText = LOCTEXT("DefaultHoverPrompt", "点击交易");
 }
 
 void AWacomShopTriggerActor::BeginPlay()
 {
 	Super::BeginPlay();
+	RefreshClickTargetBinding();
+	if (ClickTargetBridgeComponent)
+	{
+		ClickTargetBridgeComponent->RefreshRunWorldTargetBinding();
+	}
 
 	if (PersistentId.IsNone())
 	{
@@ -61,6 +86,12 @@ void AWacomShopTriggerActor::BeginPlay()
 		TriggerSphere->OnComponentEndOverlap.AddDynamic(
 			this, &AWacomShopTriggerActor::HandleEndOverlap);
 	}
+}
+
+void AWacomShopTriggerActor::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	RefreshClickTargetBinding();
 }
 
 void AWacomShopTriggerActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -113,6 +144,13 @@ FText AWacomShopTriggerActor::GetInteractPromptText_Implementation(AWacomPlayerC
 		: InteractPromptText;
 }
 
+FText AWacomShopTriggerActor::GetHoverPromptText(AWacomPlayerController* /*PC*/) const
+{
+	return HoverPromptText.IsEmpty()
+		? LOCTEXT("FallbackHoverPrompt", "点击交易")
+		: HoverPromptText;
+}
+
 FVector AWacomShopTriggerActor::GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const
 {
 	return GetActorLocation();
@@ -149,6 +187,100 @@ bool AWacomShopTriggerActor::TryInteract_Implementation(AWacomPlayerController* 
 		return false;
 	}
 	return PC->RequestOpenShop(PersistentId, BuildResolvedOffers());
+}
+
+FWacomShopTriggerDebugView AWacomShopTriggerActor::GetShopTriggerDebugView(
+	AWacomPlayerController* PC) const
+{
+	FWacomShopTriggerDebugView View;
+	View.ActorName = GetName();
+	View.PersistentId = PersistentId;
+	View.ShopDefinitionName = ShopDefinition ? ShopDefinition->GetName() : TEXT("None");
+	View.ResolvedOfferCount = BuildResolvedOffers().Num();
+	View.bCanInteract = CanInteract_Implementation(PC);
+	View.HoverPrompt = GetHoverPromptText(PC).ToString();
+
+	if (!PC)
+	{
+		View.LastDebugResult = TEXT("MissingPlayerController");
+	}
+	else if (PersistentId.IsNone())
+	{
+		View.LastDebugResult = TEXT("MissingPersistentId");
+	}
+	else
+	{
+		View.LastDebugResult = TEXT("Ok");
+	}
+
+	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
+		GetRunWorldClickableDebugView_Implementation(PC);
+	View.bClickTargetConfigured = ClickDebug.bClickTargetConfigured;
+	View.ClickTargetStableId = ClickDebug.ClickTargetStableId;
+	return View;
+}
+
+FString AWacomShopTriggerActor::GetShopTriggerDebugSummary(AWacomPlayerController* PC) const
+{
+	const FWacomShopTriggerDebugView View = GetShopTriggerDebugView(PC);
+	return FString::Printf(
+		TEXT("ShopTrigger{Actor=%s PersistentId=%s ShopDef=%s Offers=%d CanInteract=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s Last=%s}"),
+		*View.ActorName,
+		*View.PersistentId.ToString(),
+		*View.ShopDefinitionName,
+		View.ResolvedOfferCount,
+		View.bCanInteract ? TEXT("true") : TEXT("false"),
+		View.bClickTargetConfigured ? TEXT("true") : TEXT("false"),
+		*View.ClickTargetStableId.ToString(),
+		*View.HoverPrompt,
+		*View.LastDebugResult.ToString());
+}
+
+void AWacomShopTriggerActor::LogShopTriggerDebugSummary(AWacomPlayerController* PC) const
+{
+	UE_LOG(LogTemp, Display, TEXT("[ShopTriggerActor] %s"),
+		*GetShopTriggerDebugSummary(PC));
+}
+
+FText AWacomShopTriggerActor::GetRunWorldClickHoverPrompt_Implementation(
+	AWacomPlayerController* PC) const
+{
+	return GetHoverPromptText(PC);
+}
+
+FWacomRunWorldClickableInteractableDebugView
+AWacomShopTriggerActor::GetRunWorldClickableDebugView_Implementation(
+	AWacomPlayerController* PC) const
+{
+	FName LastResult = TEXT("Ok");
+	if (!PC)
+	{
+		LastResult = TEXT("MissingPlayerController");
+	}
+	else if (PersistentId.IsNone())
+	{
+		LastResult = TEXT("MissingPersistentId");
+	}
+
+	return FWacomRunWorldClickableInteractableHelper::BuildDebugView(
+		this,
+		PersistentId,
+		GetHoverPromptText(PC),
+		CanInteract_Implementation(PC),
+		/*bHasCompletionState*/false,
+		/*bIsCompleted*/false,
+		LastResult,
+		ClickInteractionTargetComponent,
+		ClickTargetBridgeComponent);
+}
+
+void AWacomShopTriggerActor::RefreshClickTargetBinding()
+{
+	FWacomRunWorldClickableInteractableHelper::BindClickTarget(
+		PersistentId,
+		ClickBounds,
+		ClickInteractionTargetComponent,
+		ClickTargetBridgeComponent);
 }
 
 #undef LOCTEXT_NAMESPACE

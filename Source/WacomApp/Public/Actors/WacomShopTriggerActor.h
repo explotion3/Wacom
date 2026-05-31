@@ -4,12 +4,49 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "RunState.h"
 #include "WacomShopTriggerActor.generated.h"
 
 class USphereComponent;
+class UBoxComponent;
 class UShopDefinition;
+class UWacomInteractionTargetComponent;
+class UWacomRunWorldInteractionTargetBridgeComponent;
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomShopTriggerDebugView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	FString ActorName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	FName PersistentId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	FString ShopDefinitionName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	int32 ResolvedOfferCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	bool bCanInteract = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	bool bClickTargetConfigured = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	FName ClickTargetStableId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	FString HoverPrompt;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	FName LastDebugResult = NAME_None;
+};
 
 /**
  * 场景中的商店交互触发器。
@@ -18,7 +55,7 @@ class UShopDefinition;
  * 本 Actor 只负责把关卡配置的 ShopId 和 Offers 传入 Run 层。
  */
 UCLASS(Blueprintable)
-class WACOMAPP_API AWacomShopTriggerActor : public AActor, public IWacomWorldInteractable
+class WACOMAPP_API AWacomShopTriggerActor : public AActor, public IWacomWorldInteractable, public IWacomRunWorldClickableInteractable
 {
 	GENERATED_BODY()
 
@@ -63,12 +100,52 @@ public:
 		meta = (ToolTip = "玩家处于商店交互范围内时显示在探索 HUD 上的提示文本。"))
 	FText InteractPromptText;
 
+	/** 鼠标指向 ClickBounds 时探索 HUD 上显示的点击提示文本。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop|Click",
+		meta = (ToolTip = "鼠标指向商店点击命中体时显示的提示文本。只影响 hover 提示；点击后仍走 IWacomWorldInteractable。"))
+	FText HoverPromptText;
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
 	USphereComponent* GetTriggerSphere() const { return TriggerSphere; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
+	UBoxComponent* GetClickBounds() const { return ClickBounds; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
+	UWacomInteractionTargetComponent* GetClickInteractionTargetComponent() const
+	{
+		return ClickInteractionTargetComponent;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
+	UWacomRunWorldInteractionTargetBridgeComponent* GetClickTargetBridgeComponent() const
+	{
+		return ClickTargetBridgeComponent;
+	}
 
 	/** 解析当前将传给 RunSession 的商品列表：优先 ShopDefinition，未配置时使用手动 Offers。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
 	TArray<FRunShopOfferInput> BuildResolvedOffers() const;
+
+	/** 返回鼠标 hover 到 ClickBounds 时应显示的提示文本。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop|Click",
+		meta = (ToolTip = "返回鼠标 hover 到 ClickBounds 时应显示的提示文本。"))
+	FText GetHoverPromptText(AWacomPlayerController* PC) const;
+
+	/** 读取当前商店触发器配置的只读诊断信息。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop|Debug",
+		meta = (ToolTip = "读取当前商店触发器配置和点击目标绑定的只读诊断信息；不会修改 RunState。"))
+	FWacomShopTriggerDebugView GetShopTriggerDebugView(AWacomPlayerController* PC) const;
+
+	/** 返回适合复制到日志或 PIE Details 面板查看的一行诊断摘要。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop|Debug",
+		meta = (ToolTip = "返回适合复制到日志或 PIE Details 面板查看的一行商店触发器诊断摘要。"))
+	FString GetShopTriggerDebugSummary(AWacomPlayerController* PC) const;
+
+	/** 将当前商店触发器诊断摘要写入日志。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Shop|Debug",
+		meta = (ToolTip = "将当前商店触发器诊断摘要写入日志，便于 PIE 排查商店配置和点击目标绑定。"))
+	void LogShopTriggerDebugSummary(AWacomPlayerController* PC) const;
 
 	// ---- IWacomWorldInteractable ----
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* PC) const override;
@@ -76,8 +153,14 @@ public:
 	virtual bool CanInteract_Implementation(AWacomPlayerController* PC) const override;
 	virtual bool TryInteract_Implementation(AWacomPlayerController* PC) override;
 
+	// ---- IWacomRunWorldClickableInteractable ----
+	virtual FText GetRunWorldClickHoverPrompt_Implementation(AWacomPlayerController* PC) const override;
+	virtual FWacomRunWorldClickableInteractableDebugView GetRunWorldClickableDebugView_Implementation(
+		AWacomPlayerController* PC) const override;
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION()
@@ -95,7 +178,21 @@ protected:
 		int32 OtherBodyIndex);
 
 private:
+	void RefreshClickTargetBinding();
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop",
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USphereComponent> TriggerSphere = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Click",
+		meta = (AllowPrivateAccess = "true", ToolTip = "鼠标点击命中体。只用于 Visibility trace，不产生 overlap；点击后仍走 IWacomWorldInteractable。"))
+	TObjectPtr<UBoxComponent> ClickBounds = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Click",
+		meta = (AllowPrivateAccess = "true", ToolTip = "Shop 触发器默认携带的通用交互目标身份组件。"))
+	TObjectPtr<UWacomInteractionTargetComponent> ClickInteractionTargetComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Click",
+		meta = (AllowPrivateAccess = "true", ToolTip = "把 Shop 触发器标记为 Run World Target，供鼠标 probe 和点击桥接识别。"))
+	TObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> ClickTargetBridgeComponent = nullptr;
 };

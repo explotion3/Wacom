@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-05-28
+updated: 2026-05-31
 tags:
   - wacom/app
   - wacom/gameflow
@@ -111,6 +111,9 @@ enum class EGameFlowState : uint8
 - 持有 `UEnemyDefinition*` 和关卡级唯一 `PersistentId`。
 - BeginPlay 时若 `PersistentId` 已在 RunState 的 destroyed trigger 记录中，则自毁。
 - 玩家按 E 后经 PlayerController 请求 GameMode 进入战斗。
+- V0-BH 后，Actor 默认自带远距离鼠标点击目标：`ClickBounds` 只阻挡 `Visibility` trace、不产生 overlap；`UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent` 自动把目标标记为 `Interaction.Target.Run.Object`，并把 `PersistentId` 同步为 stable id。初始化和 stable id 绑定由 shared click target helper 统一配置。左键释放命中时仍调用 `IWacomWorldInteractable::TryInteract()`，最终复用 `RequestEnterBattle()`，所以进入战斗流程与 E 键一致。
+- V0-BH 后，鼠标 hover 到 BattleTrigger 的 `ClickBounds` 时，ExplorationHUD 交互提示位显示 `HoverPromptText`，默认 `点击战斗`；如果当前 Run 已记录该 `PersistentId` destroyed 但 Actor 仍能被 debug/probe 到，则显示 `DestroyedHoverPromptText`，默认 `战斗已结束`。打开 `GameMenu` 或菜单卡牌 drag/drop 正在处理时，不显示 hover 且点击不穿透。
+- V0-BH 后，Trigger 提供 `GetBattleTriggerDebugSummary()` / `LogBattleTriggerDebugSummary()`，可在 PIE 查看 `PersistentId / EnemyDef / CanInteract / Destroyed / ClickTarget / StableId / HoverPrompt / Last`；其中 click target facts 来自通用 clickable debug view，排查能 E 但点不到或提示不对的问题。
 
 使用 use-key 而不是 overlap 自动触发，是为了支持撤离后玩家仍在 Sphere 内时再次按 E 重入战斗。
 
@@ -123,6 +126,9 @@ enum class EGameFlowState : uint8
 - `ShopDefinition` 提供静态商品列表；未配置时兼容旧 `Offers` 数组。
 - 按 E 后调用 `AWacomPlayerController::RequestOpenShop(PersistentId, BuildResolvedOffers())`；`BuildResolvedOffers()` 优先使用 `ShopDefinition`，旧 `Offers` 数组只是兼容兜底。
 - 不切换 GameFlowState；商店只是 `GameMenu` 层界面。
+- V0-BG 后，Actor 默认自带远距离鼠标点击目标：`ClickBounds` 只阻挡 `Visibility` trace、不产生 overlap；`UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent` 自动标记为 `Interaction.Target.Run.Object`，并把 `PersistentId` 同步为 stable id。初始化和 stable id 绑定由 shared click target helper 统一配置。左键释放命中时仍调用 `IWacomWorldInteractable::TryInteract()`，最终复用 `RequestOpenShop()`，所以库存、购买和 Router 行为与 E 键一致。
+- V0-BF 后，鼠标 hover 到 Shop 的 `ClickBounds` 时，ExplorationHUD 交互提示位显示 `HoverPromptText`，默认 `点击交易`；打开 Backpack / Pause / Shop / RunEvent 等 `GameMenu` 或菜单卡牌 drag/drop 正在处理时，不显示 hover 且点击不穿透。
+- V0-BF 后，Trigger 提供 `GetShopTriggerDebugSummary()` / `LogShopTriggerDebugSummary()`，可在 PIE 查看 `PersistentId / ShopDefinition / Offers / CanInteract / ClickTarget / StableId / HoverPrompt / Last`；V0-BG 后其中 click target facts 来自通用 clickable debug view，排查能 E 但点不到或提示不对的问题。
 
 `UShopDefinition.ShopId` 是内容 ID，不替代场景 Actor 的 `PersistentId`。
 
@@ -134,9 +140,12 @@ enum class EGameFlowState : uint8
 - `PersistentId` 是 RunEvent 当前节点和完成状态 key。
 - `EventDefinition` 引用 `UWacomRunEventDefinition` 事件图资产。
 - 按 E 后调用 `AWacomPlayerController::RequestOpenRunEvent(PersistentId, EventDefinition)`。
+- V0-BG 后，Actor 默认自带远距离鼠标点击目标：`ClickBounds` 只阻挡 `Visibility` trace、不产生 overlap；`UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent` 自动把目标标记为 `Interaction.Target.Run.Object`，并把 `PersistentId` 同步为 stable id。初始化和 stable id 绑定由 shared click target helper 统一配置。左键释放命中该目标时，PlayerController 仍调用现有 `IWacomWorldInteractable::TryInteract()`，最终复用 `RequestOpenRunEvent()`，所以缺配置、已完成、Router async push、Toast 等行为与 E 键一致。
+- V0-BE 后，鼠标 hover 到 RunEvent 的 `ClickBounds` 时，PlayerController 复用 Run world probe loop，在 ExplorationHUD 交互提示位显示 `HoverPromptText`；已完成事件显示 `CompletedHoverPromptText`。鼠标 hover 提示优先于范围内 E 键候选提示，离开 hover 后恢复 E 键提示。打开 Backpack / Pause / Shop / RunEvent 等 `GameMenu`，或菜单 first-person card drag/drop 正在处理时，hover prompt 会被清理，不穿透提示场景事件。
+- 鼠标点击不要求玩家在 `TriggerSphere` 范围内；`TriggerSphere` 仍只服务 E 键近距离候选注册。
 - 已完成事件不会重复打开，但可以显示弱提示，并在按 E 时通过 AppToast 提示已完成。
 - V0-BC 后，Details 面板提供 `ConfigureDebugSnakeGiftSample()` 和 `ConfigureDebugFlagRewardSample()`，用于把当前 Trigger 配成标准 Debug RunEvent 样例。按钮只写当前 Actor 的 `PersistentId / EventDefinition / prompt`，不打开事件、不修改 RunState、不生成资产。
-- V0-BC 后，Trigger 提供 `GetRunEventTriggerDebugSummary()` / `LogRunEventTriggerDebugSummary()`，可在 PIE 中查看 `PersistentId / EventId / StartNode / CurrentNode / Active / Completed / Duplicate / Last`，排查样例是否绑定正确、是否正在访问或已完成。
+- V0-BC 后，Trigger 提供 `GetRunEventTriggerDebugSummary()` / `LogRunEventTriggerDebugSummary()`，可在 PIE 中查看 `PersistentId / EventId / StartNode / CurrentNode / Active / Completed / Duplicate / Last`；V0-BG 后其中 click target facts 来自通用 clickable debug view，排查样例是否绑定正确、是否正在访问或已完成。
 
 关卡放置 Debug RunEvent 的步骤见 `WacomData.md` 中的 Debug 事件资产说明和 `WacomUI.md` 的 RunEvent UI 章节。
 
@@ -231,6 +240,8 @@ BattleHUD、3D 手牌和场景目标点击需要的 `bEnableClickEvents / bEnabl
 切关卡时 PlayerController 的 InputComponent 会被重建。GameMode 在 BeginPlay 后根据当前 GameFlowState 让 Coordinator 重新应用对应 profile。
 
 `AWacomPlayerController::RefreshInteractToast()` 只在 Exploration 状态显示交互提示。战斗中即使候选对象仍在列表，也不会显示交互 Toast。
+
+V0-BH 后，探索期左键释放的场景点击路由顺序是：Battle target click -> RunTunnel branch click -> Run world interactable click -> `Super::InputKey()`。Run world interactable click 只接受 `TargetKind=World + Interaction.Target.Run.Object`，且命中 Actor 必须同时实现 `IWacomWorldInteractable` 与 `UWacomRunWorldClickableInteractable`；当前 opt-in 对象是 `AWacomRunEventTriggerActor`、`AWacomShopTriggerActor` 和 `ABattleTriggerActor`。打开 Backpack / Pause / Shop / RunEvent 等 `GameMenu` 时不会穿透点击场景目标。E 键入口不变，仍使用最近 overlap 候选。同一 Run world probe loop 还维护 RunEvent / Shop / BattleTrigger hover prompt：hover 到支持目标时显示点击提示，移开后回到最近 E 键候选提示；hover prompt 和 hover debug 都走 clickable 接口，`GetRunWorldInteractableHoverDebugSummary()` 可排查当前 hover actor、stable id、prompt、completed 和拒绝原因。
 
 兼容 / 调试入口仍保留：`Wacom.Interact` 调用当前最近交互对象，`Wacom.OpenBackpack` 打开背包。正式玩家交互口径仍是 IA 输入。
 
@@ -329,10 +340,11 @@ ESC 当前语义：
 - `IWacomInteractionTargetProvider`：轻量接口，Component 实现后提供 `BuildWorldTargetHandle()`。
 - `UWacomInteractionTargetComponent`：通用交互目标组件，任意 Actor 可挂载。字段：`TargetId`（运行时 FGuid）、`InteractionTargetTag`（FGameplayTag）、`StableTargetId`（FName）。
 - `UWacomBattleEnemyPartWorldTargetBridgeComponent`：Battle 专用桥接组件。它读取稳定 `PartId`，在 HUD 刷新时解析当前 `PartInstanceId`，写回同 Actor 上的 `UWacomInteractionTargetComponent`，并注册接收 `TargetConfirmed / DamageDealt / EnemyPartHpEmptied` 表现 cue。
-- `UWacomRunWorldInteractionTargetBridgeComponent`：Run / 探索专用桥接组件。它把手工填写的 `RunTargetStableId` 和自动/已有运行时 `TargetId` 写回同 Actor 上的 `UWacomInteractionTargetComponent`，并标记 `Interaction.Target.Run.Object`。它只提供鼠标 probe preview 和 debug，不提交 Run 规则，也不替代 `IWacomWorldInteractable + E`。
+- `UWacomRunWorldInteractionTargetBridgeComponent`：Run / 探索专用桥接组件。它把手工填写的 `RunTargetStableId` 和自动/已有运行时 `TargetId` 写回同 Actor 上的 `UWacomInteractionTargetComponent`，并标记 `Interaction.Target.Run.Object`。它提供鼠标 probe preview、debug，以及 RunEvent / Shop click bridge 目标身份；规则执行仍回到 `IWacomWorldInteractable`，不直接提交 Run 规则。
+- `UWacomRunWorldClickableInteractable`：Run world click / hover 的显式 opt-in 接口。Actor 只有同时实现它和 `IWacomWorldInteractable`，PlayerController 才会把 `Interaction.Target.Run.Object` 命中转成点击交互或 hover prompt。接口提供 hover prompt 和通用 debug view；`FWacomRunWorldClickableInteractableHelper` 统一配置 `ClickBounds` collision、`PersistentId -> StableTargetId / RunTargetStableId` 绑定和 click target debug facts。
 - `UWacomRunMenuDropTargetWidget`：Run GameMenu 专用 UMG Zone target bridge。它配置 `ZoneId / StableTargetId`，构建 `FWacomInteractionTargetHandle(TargetKind=Zone)`，并提供 probe / invalid / released-probe / submit-ready / submitted 的轻量 preview。该 Widget 不直接调用 `URunSession`，也不参与背包旧 `UWacomZoneDropTarget` 的 UMG DragDrop 规则提交。
 - `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；只有 `TargetKind=World` 且 `TargetTag=Interaction.Target.Battle.EnemyPart` 的 handle 会被转发为 Battle enemy part 点击。
-- `AWacomPlayerController::TryProbeRunSceneInteractionTarget()` 和 `TryProbeRunSceneInteractionTargetAtWidgetPosition()` 在 Exploration 下用同一 Provider 路径构建 handle，但只接受 `TargetTag=Interaction.Target.Run.Object`。`bEnableRunWorldTargetProbePreview` 开启时，Controller 会低频 probe 鼠标下方 Run target 并驱动 bridge 的 scale preview；失去命中、切换目标、退出 Controller 时会清理旧 preview。
+- `AWacomPlayerController::TryProbeRunSceneInteractionTarget()` 和 `TryProbeRunSceneInteractionTargetAtWidgetPosition()` 在 Exploration 下用同一 Provider 路径构建 handle，但只接受 `TargetTag=Interaction.Target.Run.Object`。`bEnableRunWorldTargetProbePreview` 开启时，Controller 会低频 probe 鼠标下方 Run target 并驱动 bridge 的 scale preview；失去命中、切换目标、退出 Controller 时会清理旧 preview。`TryRouteRunWorldInteractableClick()` 复用该 probe，只在 Exploration、无 active GameMenu、无菜单卡牌 drag/drop 处理时，把命中的 clickable world interactable 转回现有 `TryInteract()`。hover prompt 同样复用该 loop，通过 `UWacomRunWorldClickableInteractable` 读取 RunEvent 的 `HoverPromptText / CompletedHoverPromptText` 或 Shop 的 `HoverPromptText`，写入 ExplorationHUD 的交互提示。
 - `AWacomPlayerController::TryProbeRunMenuDropTargetAtWidgetPosition()` 在 Exploration + active GameMenu + active menu lease 的 first-person card drag 中使用。它只扫描注册过的 `UWacomRunMenuDropTargetWidget`，按后注册优先作为最上层命中，返回 Zone handle。`ResolveRunMenuCardDropIntent()` 统一解析 preview 和 release：默认是 probe-only；owning menu 返回 `SubmitZoneTarget + ControllerDestroyOwnedCard` 且 `ValidateDestroyCardByInstance()` 通过时，release 才由 Controller 移除精确持有卡实例；`MenuHandled` 由菜单提交并回填结果。
 - `UWacomFirstPersonCardLayerSlotWidget` 为当前 active、可见、非 exiting 且拥有有效 `CardInstanceId` 的 first-person slot 构建 Card target handle。它使用当前 visual slot 的 `ScreenPosition`，不要求卡牌可打；后续拖拽 resolver 再判断当前拖拽卡能否作用到该卡槽。
 - First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈区分合法 hand-card target 和 probe-only target；Run menu Zone target 使用 `ZoneProbe` 反馈表示“当前菜单区域可被识别”，是否支付由 Run menu drop intent 决定。

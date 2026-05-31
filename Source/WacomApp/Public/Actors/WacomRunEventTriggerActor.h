@@ -4,11 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "WacomRunEventTriggerActor.generated.h"
 
 class USphereComponent;
+class UBoxComponent;
+class UWacomInteractionTargetComponent;
 class UWacomRunEventDefinition;
+class UWacomRunWorldInteractionTargetBridgeComponent;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomRunEventTriggerDebugView
@@ -49,12 +53,24 @@ struct WACOMAPP_API FWacomRunEventTriggerDebugView
 	bool bDuplicatePersistentIdDetected = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	bool bClickTargetConfigured = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FName ClickTargetStableId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FString HoverPrompt;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
+	FString CompletedHoverPrompt;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Debug")
 	FName LastDebugResult = NAME_None;
 };
 
 /** 场景中的轻量 Run 事件交互触发器。 */
 UCLASS(Blueprintable)
-class WACOMAPP_API AWacomRunEventTriggerActor : public AActor, public IWacomWorldInteractable
+class WACOMAPP_API AWacomRunEventTriggerActor : public AActor, public IWacomWorldInteractable, public IWacomRunWorldClickableInteractable
 {
 	GENERATED_BODY()
 
@@ -87,6 +103,16 @@ public:
 		meta = (ToolTip = "事件已完成时，玩家处于交互范围内显示的弱提示文本。按 E 不会重新打开事件，只会显示已完成提示。"))
 	FText CompletedPromptText;
 
+	/** 鼠标指向 ClickBounds 时探索 HUD 上显示的点击提示文本。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|RunEvent|Click",
+		meta = (ToolTip = "鼠标指向事件点击命中体时显示的提示文本。只影响 hover 提示；点击后仍走 IWacomWorldInteractable。"))
+	FText HoverPromptText;
+
+	/** 事件已完成时鼠标指向 ClickBounds 显示的弱点击提示文本。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|RunEvent|Click",
+		meta = (ToolTip = "事件已完成后鼠标指向事件点击命中体时显示的弱提示文本。点击不会重新打开事件。"))
+	FText CompletedHoverPromptText;
+
 	/** 事件已完成时按 E 弹出的 Toast 文本。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|RunEvent",
 		meta = (ToolTip = "事件已完成时玩家按 E 弹出的 Toast 文本，用于说明该事件不是交互失效，而是已经完成。"))
@@ -94,6 +120,26 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
 	USphereComponent* GetTriggerSphere() const { return TriggerSphere; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
+	UBoxComponent* GetClickBounds() const { return ClickBounds; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
+	UWacomInteractionTargetComponent* GetClickInteractionTargetComponent() const
+	{
+		return ClickInteractionTargetComponent;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent")
+	UWacomRunWorldInteractionTargetBridgeComponent* GetClickTargetBridgeComponent() const
+	{
+		return ClickTargetBridgeComponent;
+	}
+
+	/** 返回鼠标 hover 到 ClickBounds 时应显示的提示文本；已完成事件返回弱提示。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|RunEvent|Click",
+		meta = (ToolTip = "返回鼠标 hover 到 ClickBounds 时应显示的提示文本；已完成事件返回弱提示。"))
+	FText GetHoverPromptText(AWacomPlayerController* PC) const;
 
 	/** 将当前触发器配置为蛇巢卡牌支付调试事件样例。只修改当前 Actor 配置，不打开事件。 */
 	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|RunEvent|Authoring",
@@ -126,8 +172,14 @@ public:
 	virtual bool CanInteract_Implementation(AWacomPlayerController* PC) const override;
 	virtual bool TryInteract_Implementation(AWacomPlayerController* PC) override;
 
+	// ---- IWacomRunWorldClickableInteractable ----
+	virtual FText GetRunWorldClickHoverPrompt_Implementation(AWacomPlayerController* PC) const override;
+	virtual FWacomRunWorldClickableInteractableDebugView GetRunWorldClickableDebugView_Implementation(
+		AWacomPlayerController* PC) const override;
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION()
@@ -146,6 +198,7 @@ protected:
 
 private:
 	bool ConfigureDebugSample(FName InPersistentId, const TCHAR* EventDefinitionObjectPath);
+	void RefreshClickTargetBinding();
 	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsEventCompletedFor(AWacomPlayerController* PC) const;
 	void ShowCompletedToast(AWacomPlayerController* PC) const;
@@ -153,4 +206,16 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent",
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USphereComponent> TriggerSphere = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Click",
+		meta = (AllowPrivateAccess = "true", ToolTip = "鼠标点击命中体。只用于 Visibility trace，不产生 overlap；点击后仍走 IWacomWorldInteractable。"))
+	TObjectPtr<UBoxComponent> ClickBounds = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Click",
+		meta = (AllowPrivateAccess = "true", ToolTip = "RunEvent 触发器默认携带的通用交互目标身份组件。"))
+	TObjectPtr<UWacomInteractionTargetComponent> ClickInteractionTargetComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|RunEvent|Click",
+		meta = (AllowPrivateAccess = "true", ToolTip = "把 RunEvent 触发器标记为 Run World Target，供鼠标 probe 和点击桥接识别。"))
+	TObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> ClickTargetBridgeComponent = nullptr;
 };

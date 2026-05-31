@@ -4,7 +4,10 @@
 
 #define LOCTEXT_NAMESPACE "WacomRunEventTriggerActor"
 
+#include "Components/BoxComponent.h"
 #include "Components/SphereComponent.h"
+#include "Components/WacomInteractionTargetComponent.h"
+#include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 
@@ -24,14 +27,37 @@ AWacomRunEventTriggerActor::AWacomRunEventTriggerActor()
 	TriggerSphere->SetGenerateOverlapEvents(true);
 	RootComponent = TriggerSphere;
 
+	ClickBounds = CreateDefaultSubobject<UBoxComponent>(TEXT("ClickBounds"));
+	ClickBounds->SetupAttachment(RootComponent);
+	ClickBounds->SetBoxExtent(FVector(80.f, 80.f, 100.f));
+	FWacomRunWorldClickableInteractableHelper::ConfigureClickBounds(ClickBounds);
+
+	ClickInteractionTargetComponent =
+		CreateDefaultSubobject<UWacomInteractionTargetComponent>(TEXT("ClickInteractionTarget"));
+
+	ClickTargetBridgeComponent =
+		CreateDefaultSubobject<UWacomRunWorldInteractionTargetBridgeComponent>(TEXT("ClickTargetBridge"));
+	FWacomRunWorldClickableInteractableHelper::BindClickTarget(
+		PersistentId,
+		ClickBounds,
+		ClickInteractionTargetComponent,
+		ClickTargetBridgeComponent);
+
 	InteractPromptText = LOCTEXT("DefaultInteractPrompt", "按 E 查看事件");
 	CompletedPromptText = LOCTEXT("DefaultCompletedPrompt", "事件已完成");
+	HoverPromptText = LOCTEXT("DefaultHoverPrompt", "点击查看事件");
+	CompletedHoverPromptText = LOCTEXT("DefaultCompletedHoverPrompt", "事件已完成");
 	CompletedToastText = LOCTEXT("DefaultCompletedToast", "该事件已完成");
 }
 
 void AWacomRunEventTriggerActor::BeginPlay()
 {
 	Super::BeginPlay();
+	RefreshClickTargetBinding();
+	if (ClickTargetBridgeComponent)
+	{
+		ClickTargetBridgeComponent->RefreshRunWorldTargetBinding();
+	}
 
 	if (PersistentId.IsNone())
 	{
@@ -55,6 +81,12 @@ void AWacomRunEventTriggerActor::BeginPlay()
 		TriggerSphere->OnComponentEndOverlap.AddDynamic(
 			this, &AWacomRunEventTriggerActor::HandleEndOverlap);
 	}
+}
+
+void AWacomRunEventTriggerActor::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	RefreshClickTargetBinding();
 }
 
 void AWacomRunEventTriggerActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -125,6 +157,16 @@ FWacomRunEventTriggerDebugView AWacomRunEventTriggerActor::GetRunEventTriggerDeb
 	View.StartNodeId = EventDefinition ? EventDefinition->StartNodeId : NAME_None;
 	View.bCanInteract = CanInteract_Implementation(PC);
 	View.bDuplicatePersistentIdDetected = HasDuplicatePersistentIdInWorld();
+	View.HoverPrompt = GetHoverPromptText(PC).ToString();
+	View.CompletedHoverPrompt = CompletedHoverPromptText.IsEmpty()
+		? FString(TEXT("事件已完成"))
+		: CompletedHoverPromptText.ToString();
+	{
+		const FWacomRunWorldClickableInteractableDebugView ClickDebug =
+			GetRunWorldClickableDebugView_Implementation(PC);
+		View.bClickTargetConfigured = ClickDebug.bClickTargetConfigured;
+		View.ClickTargetStableId = ClickDebug.ClickTargetStableId;
+	}
 
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
 	View.bHasRunSession = Run != nullptr;
@@ -163,6 +205,7 @@ FWacomRunEventTriggerDebugView AWacomRunEventTriggerActor::GetRunEventTriggerDeb
 	View.LastDebugResult = View.bDuplicatePersistentIdDetected
 		? FName(TEXT("DuplicatePersistentId"))
 		: FName(TEXT("Ok"));
+
 	return View;
 }
 
@@ -170,7 +213,7 @@ FString AWacomRunEventTriggerActor::GetRunEventTriggerDebugSummary(AWacomPlayerC
 {
 	const FWacomRunEventTriggerDebugView View = GetRunEventTriggerDebugView(PC);
 	return FString::Printf(
-		TEXT("RunEventTrigger{Actor=%s PersistentId=%s EventDef=%s EventId=%s StartNode=%s HasRun=%s CanInteract=%s Active=%s Completed=%s CurrentNode=%s Duplicate=%s Last=%s}"),
+		TEXT("RunEventTrigger{Actor=%s PersistentId=%s EventDef=%s EventId=%s StartNode=%s HasRun=%s CanInteract=%s Active=%s Completed=%s CurrentNode=%s Duplicate=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CompletedHoverPrompt=%s Last=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.EventDefinitionName,
@@ -182,6 +225,10 @@ FString AWacomRunEventTriggerActor::GetRunEventTriggerDebugSummary(AWacomPlayerC
 		View.bIsCompleted ? TEXT("true") : TEXT("false"),
 		*View.CurrentNodeId.ToString(),
 		View.bDuplicatePersistentIdDetected ? TEXT("true") : TEXT("false"),
+		View.bClickTargetConfigured ? TEXT("true") : TEXT("false"),
+		*View.ClickTargetStableId.ToString(),
+		*View.HoverPrompt,
+		*View.CompletedHoverPrompt,
 		*View.LastDebugResult.ToString());
 }
 
@@ -202,6 +249,63 @@ FText AWacomRunEventTriggerActor::GetInteractPromptText_Implementation(AWacomPla
 	return InteractPromptText.IsEmpty()
 		? LOCTEXT("FallbackInteractPrompt", "按 E 查看事件")
 		: InteractPromptText;
+}
+
+FText AWacomRunEventTriggerActor::GetHoverPromptText(AWacomPlayerController* PC) const
+{
+	if (IsEventCompletedFor(PC))
+	{
+		return CompletedHoverPromptText.IsEmpty()
+			? LOCTEXT("FallbackCompletedHoverPrompt", "事件已完成")
+			: CompletedHoverPromptText;
+	}
+	return HoverPromptText.IsEmpty()
+		? LOCTEXT("FallbackHoverPrompt", "点击查看事件")
+		: HoverPromptText;
+}
+
+FText AWacomRunEventTriggerActor::GetRunWorldClickHoverPrompt_Implementation(
+	AWacomPlayerController* PC) const
+{
+	return GetHoverPromptText(PC);
+}
+
+FWacomRunWorldClickableInteractableDebugView
+AWacomRunEventTriggerActor::GetRunWorldClickableDebugView_Implementation(
+	AWacomPlayerController* PC) const
+{
+	FName LastResult = TEXT("Ok");
+	if (!PC)
+	{
+		LastResult = TEXT("MissingPlayerController");
+	}
+	else if (PersistentId.IsNone())
+	{
+		LastResult = TEXT("MissingPersistentId");
+	}
+	else if (!EventDefinition)
+	{
+		LastResult = TEXT("MissingEventDefinition");
+	}
+	else if (!PC->GetRunSession())
+	{
+		LastResult = TEXT("MissingRunSession");
+	}
+	else if (HasDuplicatePersistentIdInWorld())
+	{
+		LastResult = TEXT("DuplicatePersistentId");
+	}
+
+	return FWacomRunWorldClickableInteractableHelper::BuildDebugView(
+		this,
+		PersistentId,
+		GetHoverPromptText(PC),
+		CanInteract_Implementation(PC),
+		/*bHasCompletionState*/true,
+		IsEventCompletedFor(PC),
+		LastResult,
+		ClickInteractionTargetComponent,
+		ClickTargetBridgeComponent);
 }
 
 FVector AWacomRunEventTriggerActor::GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const
@@ -252,8 +356,20 @@ bool AWacomRunEventTriggerActor::ConfigureDebugSample(
 	EventDefinition = LoadedDefinition;
 	InteractPromptText = LOCTEXT("DefaultInteractPrompt", "按 E 查看事件");
 	CompletedPromptText = LOCTEXT("DefaultCompletedPrompt", "事件已完成");
+	HoverPromptText = LOCTEXT("DefaultHoverPrompt", "点击查看事件");
+	CompletedHoverPromptText = LOCTEXT("DefaultCompletedHoverPrompt", "事件已完成");
 	CompletedToastText = LOCTEXT("DefaultCompletedToast", "该事件已完成");
+	RefreshClickTargetBinding();
 	return true;
+}
+
+void AWacomRunEventTriggerActor::RefreshClickTargetBinding()
+{
+	FWacomRunWorldClickableInteractableHelper::BindClickTarget(
+		PersistentId,
+		ClickBounds,
+		ClickInteractionTargetComponent,
+		ClickTargetBridgeComponent);
 }
 
 bool AWacomRunEventTriggerActor::HasDuplicatePersistentIdInWorld() const

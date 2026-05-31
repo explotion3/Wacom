@@ -7,13 +7,16 @@
 #include "Actors/WacomShopTriggerActor.h"
 #include "Cards/CardDefinition.h"
 #include "Components/SceneComponent.h"
+#include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
+#include "Enemies/EnemyDefinition.h"
 #include "Events/RunEventDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "RunSession.h"
 #include "RunState.h"
@@ -300,14 +303,114 @@ bool FWacomUIWorldInteractionShopTriggerNativeContractSpec::RunTest(const FStrin
 
 	Shop->PersistentId = TEXT("Shop.Test");
 	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
+	Shop->HoverPromptText = FText::FromString(TEXT("点击商店"));
 
 	TestTrue(TEXT("Shop with id is interactable"), Shop->CanInteract_Implementation(PC.Get()));
 	TestEqual(TEXT("Shop prompt uses configured text"),
 		Shop->GetInteractPromptText_Implementation(PC.Get()).ToString(),
 		FString(TEXT("按 E 商店")));
+	TestEqual(TEXT("Shop hover prompt uses configured text"),
+		Shop->GetHoverPromptText(PC.Get()).ToString(),
+		FString(TEXT("点击商店")));
 	TestEqual(TEXT("Shop interact location is actor location"),
 		Shop->GetInteractLocation_Implementation(PC.Get()),
 		Shop->GetActorLocation());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopClickBridgeOwnsTargetComponentsSpec,
+	"Wacom.UI.WorldInteraction.ShopClickBridge.ShopTriggerOwnsClickInteractionTargetComponents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopClickBridgeOwnsTargetComponentsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+
+	TestNotNull(TEXT("Shop trigger owns click bounds"), Shop->GetClickBounds());
+	TestNotNull(TEXT("Shop trigger owns interaction target"),
+		Shop->GetClickInteractionTargetComponent());
+	TestNotNull(TEXT("Shop trigger owns run target bridge"),
+		Shop->GetClickTargetBridgeComponent());
+	if (Shop->GetClickBounds())
+	{
+		TestEqual(TEXT("Click bounds blocks visibility"),
+			Shop->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+			ECR_Block);
+		TestFalse(TEXT("Click bounds does not generate overlap"),
+			Shop->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopClickBridgeStableIdSpec,
+	"Wacom.UI.WorldInteraction.ShopClickBridge.ShopClickTargetUsesPersistentIdAsStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopClickBridgeStableIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.ClickStable");
+	Shop->SyncClickTargetForTest();
+
+	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
+		Shop->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Shop.UI.ClickStable")));
+	TestEqual(TEXT("Interaction target stable id mirrors PersistentId"),
+		Shop->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Shop.UI.ClickStable")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerClickBridgeOwnsTargetComponentsSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerClickBridge.BattleTriggerOwnsClickInteractionTargetComponents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerClickBridgeOwnsTargetComponentsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
+
+	TestNotNull(TEXT("Battle trigger owns click bounds"), Battle->GetClickBounds());
+	TestNotNull(TEXT("Battle trigger owns interaction target"),
+		Battle->GetClickInteractionTargetComponent());
+	TestNotNull(TEXT("Battle trigger owns run target bridge"),
+		Battle->GetClickTargetBridgeComponent());
+	if (Battle->GetClickBounds())
+	{
+		TestEqual(TEXT("Click bounds blocks visibility"),
+			Battle->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+			ECR_Block);
+		TestFalse(TEXT("Click bounds does not generate overlap"),
+			Battle->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerClickBridgeStableIdSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerClickBridge.BattleClickTargetUsesPersistentIdAsStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerClickBridgeStableIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.ClickStable");
+	Battle->SyncClickTargetForTest();
+
+	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
+		Battle->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Battle.UI.ClickStable")));
+	TestEqual(TEXT("Interaction target stable id mirrors PersistentId"),
+		Battle->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Battle.UI.ClickStable")));
 
 	return true;
 }
@@ -332,6 +435,8 @@ bool FWacomUIWorldInteractionRunEventTriggerNativeContractSpec::RunTest(const FS
 	Trigger->EventDefinition = Event.Get();
 	Trigger->InteractPromptText = FText::FromString(TEXT("按 E 事件"));
 	Trigger->CompletedPromptText = FText::FromString(TEXT("事件已完成"));
+	Trigger->HoverPromptText = FText::FromString(TEXT("点击事件"));
+	Trigger->CompletedHoverPromptText = FText::FromString(TEXT("事件已完成（点击）"));
 	Trigger->CompletedToastText = FText::FromString(TEXT("该事件已完成"));
 
 	TestTrue(TEXT("Event trigger with id and definition is interactable"),
@@ -339,6 +444,9 @@ bool FWacomUIWorldInteractionRunEventTriggerNativeContractSpec::RunTest(const FS
 	TestEqual(TEXT("Event prompt uses configured text"),
 		Trigger->GetInteractPromptText_Implementation(PC.Get()).ToString(),
 		FString(TEXT("按 E 事件")));
+	TestEqual(TEXT("Event hover prompt uses configured text"),
+		Trigger->GetHoverPromptText(PC.Get()).ToString(),
+		FString(TEXT("点击事件")));
 	TestEqual(TEXT("Event interact location is actor location"),
 		Trigger->GetInteractLocation_Implementation(PC.Get()),
 		Trigger->GetActorLocation());
@@ -350,6 +458,9 @@ bool FWacomUIWorldInteractionRunEventTriggerNativeContractSpec::RunTest(const FS
 	TestEqual(TEXT("Completed prompt uses weak text"),
 		Trigger->GetInteractPromptText_Implementation(PC.Get()).ToString(),
 		FString(TEXT("事件已完成")));
+	TestEqual(TEXT("Completed hover prompt uses weak text"),
+		Trigger->GetHoverPromptText(PC.Get()).ToString(),
+		FString(TEXT("事件已完成（点击）")));
 	TestFalse(TEXT("Completed event does not reopen"), Trigger->TryInteract_Implementation(PC.Get()));
 
 	return true;
@@ -399,6 +510,8 @@ bool FWacomUIRunEventTriggerConfigureSnakeGiftSpec::RunTest(const FString& /*Par
 	Trigger->PersistentId = TEXT("Event.Old");
 	Trigger->InteractPromptText = FText::FromString(TEXT("旧提示"));
 	Trigger->CompletedPromptText = FText::FromString(TEXT("旧完成"));
+	Trigger->HoverPromptText = FText::FromString(TEXT("旧点击"));
+	Trigger->CompletedHoverPromptText = FText::FromString(TEXT("旧完成点击"));
 	Trigger->CompletedToastText = FText::FromString(TEXT("旧 Toast"));
 
 	Trigger->ConfigureDebugSnakeGiftSample();
@@ -421,6 +534,12 @@ bool FWacomUIRunEventTriggerConfigureSnakeGiftSpec::RunTest(const FString& /*Par
 		FString(TEXT("按 E 查看事件")));
 	TestEqual(TEXT("Default completed prompt restored"),
 		Trigger->CompletedPromptText.ToString(),
+		FString(TEXT("事件已完成")));
+	TestEqual(TEXT("Default hover prompt restored"),
+		Trigger->HoverPromptText.ToString(),
+		FString(TEXT("点击查看事件")));
+	TestEqual(TEXT("Default completed hover prompt restored"),
+		Trigger->CompletedHoverPromptText.ToString(),
 		FString(TEXT("事件已完成")));
 	TestEqual(TEXT("Default completed toast restored"),
 		Trigger->CompletedToastText.ToString(),
@@ -618,6 +737,10 @@ bool FWacomUIRunEventTriggerDebugSummaryStableSpec::RunTest(const FString& /*Par
 		Summary.Contains(TEXT("HasRun=true")));
 	TestTrue(TEXT("Summary reports interactable"),
 		Summary.Contains(TEXT("CanInteract=true")));
+	TestTrue(TEXT("Summary reports hover prompt"),
+		Summary.Contains(TEXT("HoverPrompt=点击查看事件")));
+	TestTrue(TEXT("Summary reports completed hover prompt"),
+		Summary.Contains(TEXT("CompletedHoverPrompt=事件已完成")));
 	TestTrue(TEXT("Summary reports result"),
 		Summary.Contains(TEXT("Last=Ok")));
 
@@ -1044,6 +1167,1505 @@ bool FWacomUIRunWorldTargetProbePreviewSwitchSpec::RunTest(const FString& /*Para
 	PC->ClearRunSceneHitForTest();
 	PC->UpdateRunWorldTargetProbePreviewForTest();
 	TestFalse(TEXT("Second target preview cleared after no hit"), SecondBridge->IsProbePreviewActive());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractHelperBoundsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.ClickHelperConfiguresBoundsCollision",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractHelperBoundsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UBoxComponent> Bounds(NewObject<UBoxComponent>());
+
+	FWacomRunWorldClickableInteractableHelper::ConfigureClickBounds(Bounds.Get());
+
+	TestEqual(TEXT("Click helper enables query-only collision"),
+		Bounds->GetCollisionEnabled(),
+		ECollisionEnabled::QueryOnly);
+	TestEqual(TEXT("Click helper sets world dynamic object type"),
+		Bounds->GetCollisionObjectType(),
+		ECC_WorldDynamic);
+	TestEqual(TEXT("Click helper blocks visibility"),
+		Bounds->GetCollisionResponseToChannel(ECC_Visibility),
+		ECR_Block);
+	TestEqual(TEXT("Click helper ignores pawn"),
+		Bounds->GetCollisionResponseToChannel(ECC_Pawn),
+		ECR_Ignore);
+	TestFalse(TEXT("Click helper disables overlap generation"),
+		Bounds->GetGenerateOverlapEvents());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractHelperStableIdSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.ClickHelperBindsStableIdToBridgeAndInteractionTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractHelperStableIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AActor> Owner(NewObject<AActor>());
+	TStrongObjectPtr<UBoxComponent> Bounds(NewObject<UBoxComponent>(Owner.Get()));
+	TStrongObjectPtr<UWacomInteractionTargetComponent> Target(
+		NewObject<UWacomInteractionTargetComponent>(Owner.Get()));
+	TStrongObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> Bridge(
+		NewObject<UWacomRunWorldInteractionTargetBridgeComponent>(Owner.Get()));
+
+	FWacomRunWorldClickableInteractableHelper::BindClickTarget(
+		TEXT("Run.Click.Contract"),
+		Bounds.Get(),
+		Target.Get(),
+		Bridge.Get());
+
+	TestEqual(TEXT("Bridge stable id mirrors helper stable id"),
+		Bridge->RunTargetStableId,
+		FName(TEXT("Run.Click.Contract")));
+	TestEqual(TEXT("Interaction target stable id mirrors helper stable id"),
+		Target->GetStableTargetId(),
+		FName(TEXT("Run.Click.Contract")));
+	TestTrue(TEXT("Bridge visual target is click bounds"),
+		Bridge->VisualTargetComponent == Bounds.Get());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractRunEventImplementsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.RunEventTriggerImplementsClickableContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractRunEventImplementsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+
+	TestTrue(TEXT("RunEvent trigger implements clickable contract"),
+		Trigger->GetClass()->ImplementsInterface(UWacomRunWorldClickableInteractable::StaticClass()));
+	TestTrue(TEXT("RunEvent trigger still implements world interactable"),
+		Trigger->GetClass()->ImplementsInterface(UWacomWorldInteractable::StaticClass()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractShopImplementsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.ShopTriggerImplementsClickableContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractShopImplementsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+
+	TestTrue(TEXT("Shop trigger implements clickable contract"),
+		Shop->GetClass()->ImplementsInterface(UWacomRunWorldClickableInteractable::StaticClass()));
+	TestTrue(TEXT("Shop trigger still implements world interactable"),
+		Shop->GetClass()->ImplementsInterface(UWacomWorldInteractable::StaticClass()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractBattleImplementsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.BattleTriggerImplementsClickableContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractBattleImplementsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
+
+	TestTrue(TEXT("Battle trigger implements clickable contract"),
+		Battle->GetClass()->ImplementsInterface(UWacomRunWorldClickableInteractable::StaticClass()));
+	TestTrue(TEXT("Battle trigger still implements world interactable"),
+		Battle->GetClass()->ImplementsInterface(UWacomWorldInteractable::StaticClass()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractBattleStableIdSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.ClickHelperBindsBattleTriggerStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractBattleStableIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.ContractStable");
+	Battle->SyncClickTargetForTest();
+
+	TestEqual(TEXT("Battle bridge stable id mirrors PersistentId"),
+		Battle->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Battle.UI.ContractStable")));
+	TestEqual(TEXT("Battle target stable id mirrors PersistentId"),
+		Battle->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Battle.UI.ContractStable")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventClickBridgeOwnsTargetComponentsSpec,
+	"Wacom.UI.WorldInteraction.RunEventClickBridge.RunEventTriggerOwnsClickInteractionTargetComponents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventClickBridgeOwnsTargetComponentsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+
+	TestNotNull(TEXT("RunEvent trigger owns click bounds"), Trigger->GetClickBounds());
+	TestNotNull(TEXT("RunEvent trigger owns interaction target"),
+		Trigger->GetClickInteractionTargetComponent());
+	TestNotNull(TEXT("RunEvent trigger owns run target bridge"),
+		Trigger->GetClickTargetBridgeComponent());
+	if (Trigger->GetClickBounds())
+	{
+		TestEqual(TEXT("Click bounds blocks visibility"),
+			Trigger->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+			ECR_Block);
+		TestFalse(TEXT("Click bounds does not generate overlap"),
+			Trigger->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventClickBridgeStableIdSpec,
+	"Wacom.UI.WorldInteraction.RunEventClickBridge.RunEventClickTargetUsesPersistentIdAsStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventClickBridgeStableIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.ClickStable");
+	Trigger->SyncClickTargetForTest();
+
+	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
+		Trigger->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Event.UI.ClickStable")));
+	TestEqual(TEXT("Interaction target stable id mirrors PersistentId"),
+		Trigger->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Event.UI.ClickStable")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventClickBridgeConfigureRefreshesStableIdSpec,
+	"Wacom.UI.WorldInteraction.RunEventClickBridge.ConfigureDebugSampleRefreshesClickTargetStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventClickBridgeConfigureRefreshesStableIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunEventTriggerActor> Trigger(NewObject<AWacomRunEventTriggerActor>());
+
+	Trigger->ConfigureDebugFlagRewardSample();
+
+	TestEqual(TEXT("FlagReward sample stable id written to bridge"),
+		Trigger->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Event.DebugFlagReward.Actor")));
+	TestEqual(TEXT("FlagReward sample stable id written to target"),
+		Trigger->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Event.DebugFlagReward.Actor")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventClickBridgeRoutesToInteractSpec,
+	"Wacom.UI.WorldInteraction.RunEventClickBridge.LeftClickRunEventTargetRoutesToTryInteract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventClickBridgeRoutesToInteractSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.ClickRoute");
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+
+	TestTrue(TEXT("Click route succeeds"), PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract called once"), Trigger->TryInteractCountForTest, 1);
+	TestTrue(TEXT("TryInteract receives PC"),
+		Trigger->GetLastInteractingPlayerControllerForTest() == PC.Get());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventClickBridgeWithoutOverlapSpec,
+	"Wacom.UI.WorldInteraction.RunEventClickBridge.LeftClickRunEventTargetCanOpenWithoutOverlapCandidate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventClickBridgeWithoutOverlapSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.ClickFar");
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+
+	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
+	TestTrue(TEXT("Far click still routes"), PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract called by far click"), Trigger->TryInteractCountForTest, 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopClickBridgeRoutesToInteractSpec,
+	"Wacom.UI.WorldInteraction.ShopClickBridge.LeftClickShopTargetRoutesToTryInteract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopClickBridgeRoutesToInteractSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.ClickRoute");
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+
+	TestTrue(TEXT("Click route succeeds"), PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract called once"), Shop->TryInteractCountForTest, 1);
+	TestTrue(TEXT("TryInteract receives PC"),
+		Shop->GetLastInteractingPlayerControllerForTest() == PC.Get());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopClickBridgeWithoutOverlapSpec,
+	"Wacom.UI.WorldInteraction.ShopClickBridge.LeftClickShopTargetCanOpenWithoutOverlapCandidate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopClickBridgeWithoutOverlapSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.ClickFar");
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+
+	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
+	TestTrue(TEXT("Far click still routes"), PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract called by far click"), Shop->TryInteractCountForTest, 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerClickBridgeRoutesToInteractSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerClickBridge.LeftClickBattleTargetRoutesToTryInteract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerClickBridgeRoutesToInteractSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.ClickRoute");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+
+	TestTrue(TEXT("Battle click route succeeds"), PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract called once"), Battle->TryInteractCountForTest, 1);
+	TestTrue(TEXT("TryInteract receives PC"),
+		Battle->GetLastInteractingPlayerControllerForTest() == PC.Get());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerClickBridgeWithoutOverlapSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerClickBridge.LeftClickBattleTargetCanOpenWithoutOverlapCandidate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerClickBridgeWithoutOverlapSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.ClickFar");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+
+	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
+	TestTrue(TEXT("Far battle click still routes"), PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract called by far click"), Battle->TryInteractCountForTest, 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractRoutesClickableSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.ControllerRoutesOnlyClickableWorldInteractables",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractRoutesClickableSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.ClickableContract");
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+
+	TestTrue(TEXT("Clickable world interactable routes"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Clickable route calls TryInteract"),
+		Trigger->TryInteractCountForTest,
+		1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractRoutesBattleSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.ControllerRoutesBattleTriggerThroughClickableContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractRoutesBattleSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.ClickableContract");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+
+	TestTrue(TEXT("Battle clickable world interactable routes"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Battle clickable route calls TryInteract"),
+		Battle->TryInteractCountForTest,
+		1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractRejectsNonClickableSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.ControllerRejectsRunObjectWithoutClickableContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractRejectsNonClickableSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomRunWorldNonClickableInteractableProbe* Owner =
+		World->SpawnActor<AWacomRunWorldNonClickableInteractableProbe>(
+			AWacomRunWorldNonClickableInteractableProbe::StaticClass(),
+			FTransform::Identity);
+	if (!TestNotNull(TEXT("Non-clickable interactable spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	AddInteractionTargetComponent(*Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.WorldInteractableOnly"));
+	TestTrue(TEXT("World interactable run target configured"),
+		Bridge->RefreshRunWorldTargetBinding());
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->SetRunSceneHitForTest(Owner);
+
+	TestFalse(TEXT("World interactable without clickable contract does not route"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Rejected target does not receive TryInteract"),
+		Owner->TryInteractCountForTest,
+		0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickBridgeRejectsUnsupportedSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickBridge.LeftClickRejectsUnsupportedRunTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickBridgeRejectsUnsupportedSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	AddInteractionTargetComponent(*Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.NotRunEvent"));
+	TestTrue(TEXT("Non-RunEvent run target configured"), Bridge->RefreshRunWorldTargetBinding());
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->SetRunSceneHitForTest(Owner);
+
+	TestFalse(TEXT("Non-RunEvent run target does not route"),
+		PC->RouteRunWorldInteractableClickForTest());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopClickBridgeIgnoredOutsideExplorationSpec,
+	"Wacom.UI.WorldInteraction.ShopClickBridge.LeftClickIgnoredOutsideExploration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopClickBridgeIgnoredOutsideExplorationSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.ClickNotExploration");
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	PC->SetRunProbeExplorationFlowForTest(false);
+
+	TestFalse(TEXT("Click route ignored outside exploration"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract not called"), Shop->TryInteractCountForTest, 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerClickBridgeIgnoredOutsideExplorationSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerClickBridge.LeftClickIgnoredOutsideExploration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerClickBridgeIgnoredOutsideExplorationSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.ClickNotExploration");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	PC->SetRunProbeExplorationFlowForTest(false);
+
+	TestFalse(TEXT("Battle click route ignored outside exploration"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract not called"), Battle->TryInteractCountForTest, 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopClickBridgeIgnoredWhenGameMenuActiveSpec,
+	"Wacom.UI.WorldInteraction.ShopClickBridge.LeftClickIgnoredWhenGameMenuActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopClickBridgeIgnoredWhenGameMenuActiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.ClickMenuBlocked");
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+
+	TestFalse(TEXT("Click route ignored while menu active"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract not called while menu active"),
+		Shop->TryInteractCountForTest,
+		0);
+
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerClickBridgeIgnoredWhenGameMenuActiveSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerClickBridge.LeftClickIgnoredWhenGameMenuActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerClickBridgeIgnoredWhenGameMenuActiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.ClickMenuBlocked");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+
+	TestFalse(TEXT("Battle click route ignored while menu active"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract not called while menu active"),
+		Battle->TryInteractCountForTest,
+		0);
+
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventClickBridgeIgnoredOutsideExplorationSpec,
+	"Wacom.UI.WorldInteraction.RunEventClickBridge.LeftClickIgnoredOutsideExploration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventClickBridgeIgnoredOutsideExplorationSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.ClickNotExploration");
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	PC->SetRunProbeExplorationFlowForTest(false);
+
+	TestFalse(TEXT("Click route ignored outside exploration"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract not called"), Trigger->TryInteractCountForTest, 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventClickBridgeIgnoredWhenGameMenuActiveSpec,
+	"Wacom.UI.WorldInteraction.RunEventClickBridge.LeftClickIgnoredWhenGameMenuActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventClickBridgeIgnoredWhenGameMenuActiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.ClickMenuBlocked");
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+
+	TestFalse(TEXT("Click route ignored while menu active"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("TryInteract not called while menu active"),
+		Trigger->TryInteractCountForTest,
+		0);
+
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventClickBridgeEKeyStillUsesClosestCandidateSpec,
+	"Wacom.UI.WorldInteraction.RunEventClickBridge.EKeyInteractStillUsesClosestCandidate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventClickBridgeEKeyStillUsesClosestCandidateSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Near(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Far(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(PC.Get()));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	Near->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	Near->PersistentId = TEXT("Event.UI.EKeyNear");
+	Near->EventDefinition = Event.Get();
+	Far->SetActorLocation(FVector(500.f, 0.f, 0.f));
+	Far->PersistentId = TEXT("Event.UI.EKeyFar");
+	Far->EventDefinition = Event.Get();
+
+	PC->RegisterCandidateInteractable(Far.Get());
+	PC->RegisterCandidateInteractable(Near.Get());
+	TestTrue(TEXT("E-key nearest candidate remains the closest registered RunEvent"),
+		PC->ReadClosestInteractable() == Near.Get());
+	PC->TryInteractFromConsole();
+
+	TestEqual(TEXT("Near candidate receives E-key interact"),
+		Near->TryInteractCountForTest,
+		1);
+	TestEqual(TEXT("Far candidate not used by E-key"),
+		Far->TryInteractCountForTest,
+		0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopClickBridgeEKeyStillUsesClosestCandidateSpec,
+	"Wacom.UI.WorldInteraction.ShopClickBridge.EKeyInteractStillUsesClosestCandidate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopClickBridgeEKeyStillUsesClosestCandidateSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Near(
+		NewObject<AWacomShopTriggerClickProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Far(
+		NewObject<AWacomShopTriggerClickProbe>());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	Near->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	Near->PersistentId = TEXT("Shop.UI.EKeyNear");
+	Far->SetActorLocation(FVector(500.f, 0.f, 0.f));
+	Far->PersistentId = TEXT("Shop.UI.EKeyFar");
+
+	PC->RegisterCandidateInteractable(Far.Get());
+	PC->RegisterCandidateInteractable(Near.Get());
+	TestTrue(TEXT("E-key nearest candidate remains the closest registered Shop"),
+		PC->ReadClosestInteractable() == Near.Get());
+	PC->TryInteractFromConsole();
+
+	TestEqual(TEXT("Near shop receives E-key interact"),
+		Near->TryInteractCountForTest,
+		1);
+	TestEqual(TEXT("Far shop not used by E-key"),
+		Far->TryInteractCountForTest,
+		0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerClickBridgeEKeyStillUsesClosestCandidateSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerClickBridge.EKeyInteractStillUsesClosestCandidate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerClickBridgeEKeyStillUsesClosestCandidateSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Near(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Far(
+		NewObject<AWacomBattleTriggerClickProbe>());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	Near->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	Near->PersistentId = TEXT("Battle.UI.EKeyNear");
+	Near->EnemyDef = NewObject<UEnemyDefinition>(Near.Get());
+	Far->SetActorLocation(FVector(500.f, 0.f, 0.f));
+	Far->PersistentId = TEXT("Battle.UI.EKeyFar");
+	Far->EnemyDef = NewObject<UEnemyDefinition>(Far.Get());
+
+	PC->RegisterCandidateInteractable(Far.Get());
+	PC->RegisterCandidateInteractable(Near.Get());
+	TestTrue(TEXT("E-key nearest candidate remains the closest registered Battle trigger"),
+		PC->ReadClosestInteractable() == Near.Get());
+	PC->TryInteractFromConsole();
+
+	TestEqual(TEXT("Near battle receives E-key interact"),
+		Near->TryInteractCountForTest,
+		1);
+	TestEqual(TEXT("Far battle not used by E-key"),
+		Far->TryInteractCountForTest,
+		0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractHoverPromptSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.HoverPromptUsesClickableContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractHoverPromptSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.ContractHover");
+	Trigger->EventDefinition = MakeUiRunEvent(Trigger.Get());
+	Trigger->HoverPromptText = FText::FromString(TEXT("接口点击提示"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestEqual(TEXT("Hover prompt comes from clickable contract"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("接口点击提示")));
+	TestTrue(TEXT("Hover debug uses ok reason"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=Ok")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractSharedDebugSpec,
+	"Wacom.UI.WorldInteraction.RunWorldClickContract.SharedDebugReportsStableIdPromptAndCanInteract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractSharedDebugSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.ContractDebug");
+	Shop->HoverPromptText = FText::FromString(TEXT("共享调试商店"));
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	const FWacomRunWorldClickableInteractableDebugView Debug =
+		Shop->GetRunWorldClickableDebugView_Implementation(nullptr);
+
+	TestEqual(TEXT("Shared debug reports actor name"),
+		Debug.ActorName,
+		Shop->GetName());
+	TestEqual(TEXT("Shared debug reports stable id"),
+		Debug.StableId,
+		FName(TEXT("Shop.UI.ContractDebug")));
+	TestEqual(TEXT("Shared debug reports bridge stable id"),
+		Debug.ClickTargetStableId,
+		FName(TEXT("Shop.UI.ContractDebug")));
+	TestEqual(TEXT("Shared debug reports prompt"),
+		Debug.HoverPrompt,
+		FString(TEXT("共享调试商店")));
+	TestTrue(TEXT("Shared debug reports configured click target"),
+		Debug.bClickTargetConfigured);
+	TestFalse(TEXT("Shared debug reports cannot interact without PC"),
+		Debug.bCanInteract);
+	TestEqual(TEXT("Shared debug reports last reason"),
+		Debug.LastDebugResult,
+		FName(TEXT("MissingPlayerController")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverPromptShowsClickPromptSpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.RunEventHoverShowsClickPrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverPromptShowsClickPromptSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.Hover");
+	Trigger->HoverPromptText = FText::FromString(TEXT("点击测试事件"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Hover prompt wins current interaction prompt"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击测试事件")));
+	TestTrue(TEXT("Hover debug reports actor"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Trigger->GetName()));
+	TestTrue(TEXT("Hover debug reports stable id"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Event.UI.Hover")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverPromptCompletedSpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.CompletedRunEventHoverShowsWeakPrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverPromptCompletedSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeUiRunEvent(Trigger.Get()));
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Trigger->PersistentId = TEXT("Event.UI.HoverCompleted");
+	Trigger->EventDefinition = Event.Get();
+	Trigger->CompletedHoverPromptText = FText::FromString(TEXT("完成后点击提示"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(Trigger->PersistentId, Event.Get()));
+	TestTrue(TEXT("Complete event via option"), Run->ChooseRunEventOption(TEXT("Close")));
+
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestEqual(TEXT("Completed hover prompt shown"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("完成后点击提示")));
+	TestTrue(TEXT("Hover debug reports completed"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Completed=true")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopHoverPromptShowsClickPromptSpec,
+	"Wacom.UI.WorldInteraction.ShopHoverPrompt.ShopHoverShowsClickPrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopHoverPromptShowsClickPromptSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.Hover");
+	Shop->HoverPromptText = FText::FromString(TEXT("点击测试商店"));
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Shop hover prompt wins current interaction prompt"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击测试商店")));
+	TestTrue(TEXT("Hover debug reports shop actor"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Shop->GetName()));
+	TestTrue(TEXT("Hover debug reports shop stable id"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Shop.UI.Hover")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerHoverPromptShowsClickPromptSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.BattleHoverShowsClickPrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerHoverPromptShowsClickPromptSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.Hover");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->HoverPromptText = FText::FromString(TEXT("点击测试战斗"));
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Battle hover prompt wins current interaction prompt"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击测试战斗")));
+	TestTrue(TEXT("Hover debug reports battle actor"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Battle->GetName()));
+	TestTrue(TEXT("Hover debug reports battle stable id"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Battle.UI.Hover")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverPromptOverridesEKeySpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.HoverPromptOverridesEKeyCandidatePrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverPromptOverridesEKeySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	Shop->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	Shop->PersistentId = TEXT("Shop.HoverOverride");
+	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
+	Trigger->PersistentId = TEXT("Event.UI.HoverOverride");
+	Trigger->HoverPromptText = FText::FromString(TEXT("点击事件优先"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	PC->RegisterCandidateInteractable(Shop.Get());
+	TestEqual(TEXT("E-key prompt starts active"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("按 E 商店")));
+
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Hover prompt overrides E-key prompt"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击事件优先")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverPromptClearingRestoresEKeySpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.ClearingHoverRestoresEKeyCandidatePrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverPromptClearingRestoresEKeySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	Shop->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	Shop->PersistentId = TEXT("Shop.HoverRestore");
+	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
+	Trigger->PersistentId = TEXT("Event.UI.HoverRestore");
+	Trigger->HoverPromptText = FText::FromString(TEXT("点击事件"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	PC->RegisterCandidateInteractable(Shop.Get());
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Hover prompt active"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击事件")));
+
+	PC->ClearRunSceneHitForTest();
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("E-key prompt restored after hover clears"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("按 E 商店")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopHoverPromptOverridesEKeySpec,
+	"Wacom.UI.WorldInteraction.ShopHoverPrompt.ShopHoverOverridesEKeyCandidatePrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopHoverPromptOverridesEKeySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> EventTrigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	EventTrigger->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	EventTrigger->PersistentId = TEXT("Event.UI.ShopHoverOverride");
+	EventTrigger->EventDefinition = MakeUiRunEvent(EventTrigger.Get());
+	EventTrigger->InteractPromptText = FText::FromString(TEXT("按 E 事件"));
+	Shop->PersistentId = TEXT("Shop.UI.HoverOverride");
+	Shop->HoverPromptText = FText::FromString(TEXT("点击商店优先"));
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	PC->RegisterCandidateInteractable(EventTrigger.Get());
+	TestEqual(TEXT("E-key prompt starts active"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("按 E 事件")));
+
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Shop hover prompt overrides E-key prompt"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击商店优先")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerHoverPromptOverridesEKeySpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.BattleHoverOverridesEKeyCandidatePrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerHoverPromptOverridesEKeySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	Shop->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	Shop->PersistentId = TEXT("Shop.BattleHoverOverride");
+	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
+	Battle->PersistentId = TEXT("Battle.UI.HoverOverride");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->HoverPromptText = FText::FromString(TEXT("点击战斗优先"));
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	PC->RegisterCandidateInteractable(Shop.Get());
+	TestEqual(TEXT("E-key prompt starts active"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("按 E 商店")));
+
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Battle hover prompt overrides E-key prompt"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击战斗优先")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopHoverPromptClearingRestoresEKeySpec,
+	"Wacom.UI.WorldInteraction.ShopHoverPrompt.ClearingShopHoverRestoresEKeyCandidatePrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopHoverPromptClearingRestoresEKeySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> EventTrigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	EventTrigger->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	EventTrigger->PersistentId = TEXT("Event.UI.ShopHoverRestore");
+	EventTrigger->EventDefinition = MakeUiRunEvent(EventTrigger.Get());
+	EventTrigger->InteractPromptText = FText::FromString(TEXT("按 E 事件"));
+	Shop->PersistentId = TEXT("Shop.UI.HoverRestore");
+	Shop->HoverPromptText = FText::FromString(TEXT("点击商店"));
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	PC->RegisterCandidateInteractable(EventTrigger.Get());
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Shop hover prompt active"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击商店")));
+
+	PC->ClearRunSceneHitForTest();
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("E-key prompt restored after shop hover clears"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("按 E 事件")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerHoverPromptClearingRestoresEKeySpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.ClearingBattleHoverRestoresEKeyCandidatePrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerHoverPromptClearingRestoresEKeySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<AWacomShopTriggerActor> Shop(NewObject<AWacomShopTriggerActor>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+
+	Pawn->SetActorLocation(FVector::ZeroVector);
+	PC->SetPawn(Pawn.Get());
+	Shop->SetActorLocation(FVector(50.f, 0.f, 0.f));
+	Shop->PersistentId = TEXT("Shop.BattleHoverRestore");
+	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
+	Battle->PersistentId = TEXT("Battle.UI.HoverRestore");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->HoverPromptText = FText::FromString(TEXT("点击战斗"));
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+
+	PC->RegisterCandidateInteractable(Shop.Get());
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Battle hover prompt active"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击战斗")));
+
+	PC->ClearRunSceneHitForTest();
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("E-key prompt restored after battle hover clears"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("按 E 商店")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverPromptIgnoredOutsideExplorationSpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.HoverPromptIgnoredOutsideExploration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverPromptIgnoredOutsideExplorationSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.HoverNotExploration");
+	Trigger->HoverPromptText = FText::FromString(TEXT("不应显示"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	PC->SetRunProbeExplorationFlowForTest(false);
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("Hover prompt ignored outside exploration"),
+		PC->ReadCurrentInteractPrompt().IsEmpty());
+	TestTrue(TEXT("Hover debug records not exploration"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=NotInExploration")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopHoverPromptIgnoredOutsideExplorationSpec,
+	"Wacom.UI.WorldInteraction.ShopHoverPrompt.ShopHoverIgnoredOutsideExploration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopHoverPromptIgnoredOutsideExplorationSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.HoverNotExploration");
+	Shop->HoverPromptText = FText::FromString(TEXT("不应显示"));
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	PC->SetRunProbeExplorationFlowForTest(false);
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("Shop hover prompt ignored outside exploration"),
+		PC->ReadCurrentInteractPrompt().IsEmpty());
+	TestTrue(TEXT("Hover debug records not exploration"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=NotInExploration")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerHoverPromptIgnoredOutsideExplorationSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.BattleHoverIgnoredOutsideExploration",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerHoverPromptIgnoredOutsideExplorationSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.HoverNotExploration");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->HoverPromptText = FText::FromString(TEXT("不应显示"));
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	PC->SetRunProbeExplorationFlowForTest(false);
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("Battle hover prompt ignored outside exploration"),
+		PC->ReadCurrentInteractPrompt().IsEmpty());
+	TestTrue(TEXT("Hover debug records not exploration"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=NotInExploration")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverPromptIgnoredWhenGameMenuActiveSpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.HoverPromptIgnoredWhenGameMenuActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverPromptIgnoredWhenGameMenuActiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.HoverMenuBlocked");
+	Trigger->HoverPromptText = FText::FromString(TEXT("不应显示"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("Hover prompt ignored while menu active"),
+		PC->ReadCurrentInteractPrompt().IsEmpty());
+	TestTrue(TEXT("Hover debug records menu block"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=BlockedByMenuOrDrag"))
+		|| PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=GameMenuActive")));
+
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerHoverPromptIgnoredWhenGameMenuActiveSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.BattleHoverIgnoredWhenGameMenuActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerHoverPromptIgnoredWhenGameMenuActiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.HoverMenuBlocked");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->HoverPromptText = FText::FromString(TEXT("不应显示"));
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("Battle hover prompt ignored while menu active"),
+		PC->ReadCurrentInteractPrompt().IsEmpty());
+	TestTrue(TEXT("Hover debug records menu block"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=BlockedByMenuOrDrag"))
+		|| PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=GameMenuActive")));
+
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverPromptIgnoredDuringRunMenuDragSpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.HoverPromptIgnoredDuringRunMenuCardDrag",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverPromptIgnoredDuringRunMenuDragSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.HoverDragBlocked");
+	Trigger->HoverPromptText = FText::FromString(TEXT("不应显示"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+	PC->SetRunFirstPersonMenuLeaseForTest();
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("Hover prompt ignored while menu lease drag path is active"),
+		PC->ReadCurrentInteractPrompt().IsEmpty());
+	TestTrue(TEXT("Hover debug records drag/menu block"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=BlockedByMenuOrDrag"))
+		|| PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=GameMenuActive")));
+
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldHoverPromptRejectsUnsupportedSpec,
+	"Wacom.UI.WorldInteraction.RunWorldHoverPrompt.HoverPromptRejectsUnsupportedRunTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldHoverPromptRejectsUnsupportedSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	AddInteractionTargetComponent(*Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.HoverNotRunEvent"));
+	TestTrue(TEXT("Non-RunEvent run target configured"), Bridge->RefreshRunWorldTargetBinding());
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->SetRunSceneHitForTest(Owner);
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestTrue(TEXT("Non-RunEvent hover prompt rejected"),
+		PC->ReadCurrentInteractPrompt().IsEmpty());
+	TestTrue(TEXT("Hover debug records unsupported actor"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=UnsupportedActor")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopHoverPromptIgnoredWhenGameMenuActiveSpec,
+	"Wacom.UI.WorldInteraction.ShopHoverPrompt.ShopHoverIgnoredWhenGameMenuActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopHoverPromptIgnoredWhenGameMenuActiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.HoverMenuBlocked");
+	Shop->HoverPromptText = FText::FromString(TEXT("不应显示"));
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("Shop hover prompt ignored while menu active"),
+		PC->ReadCurrentInteractPrompt().IsEmpty());
+	TestTrue(TEXT("Hover debug records menu block"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=BlockedByMenuOrDrag"))
+		|| PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=GameMenuActive")));
+
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopHoverPromptDebugSummarySpec,
+	"Wacom.UI.WorldInteraction.ShopHoverPrompt.HoverDebugSummaryReportsShopActorPromptAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopHoverPromptDebugSummarySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.HoverDebug");
+	Shop->HoverPromptText = FText::FromString(TEXT("点击调试商店"));
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	const FString Summary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	TestTrue(TEXT("Summary reports shop actor"), Summary.Contains(Shop->GetName()));
+	TestTrue(TEXT("Summary reports shop prompt"), Summary.Contains(TEXT("Prompt=点击调试商店")));
+	TestTrue(TEXT("Summary reports shop stable id"), Summary.Contains(TEXT("StableId=Shop.UI.HoverDebug")));
+	TestTrue(TEXT("Summary reports target handle"), Summary.Contains(TEXT("Target=")));
+
+	const FString ShopSummary = Shop->GetShopTriggerDebugSummary(PC.Get());
+	TestTrue(TEXT("Shop debug reports click target"), ShopSummary.Contains(TEXT("ClickTarget=true")));
+	TestTrue(TEXT("Shop debug reports hover prompt"),
+		ShopSummary.Contains(TEXT("HoverPrompt=点击调试商店")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleTriggerHoverPromptDebugSummarySpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.HoverDebugSummaryReportsBattleActorPromptAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleTriggerHoverPromptDebugSummarySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.HoverDebug");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->HoverPromptText = FText::FromString(TEXT("点击调试战斗"));
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	const FString Summary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	TestTrue(TEXT("Summary reports battle actor"), Summary.Contains(Battle->GetName()));
+	TestTrue(TEXT("Summary reports battle prompt"), Summary.Contains(TEXT("Prompt=点击调试战斗")));
+	TestTrue(TEXT("Summary reports battle stable id"), Summary.Contains(TEXT("StableId=Battle.UI.HoverDebug")));
+	TestTrue(TEXT("Summary reports target handle"), Summary.Contains(TEXT("Target=")));
+
+	const FString BattleSummary = Battle->GetBattleTriggerDebugSummary(PC.Get());
+	TestTrue(TEXT("Battle debug reports click target"), BattleSummary.Contains(TEXT("ClickTarget=true")));
+	TestTrue(TEXT("Battle debug reports hover prompt"),
+		BattleSummary.Contains(TEXT("HoverPrompt=点击调试战斗")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverPromptDebugSummarySpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.HoverDebugSummaryReportsActorPromptAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverPromptDebugSummarySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.HoverDebug");
+	Trigger->HoverPromptText = FText::FromString(TEXT("点击调试事件"));
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	const FString Summary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	TestTrue(TEXT("Summary reports actor"), Summary.Contains(Trigger->GetName()));
+	TestTrue(TEXT("Summary reports prompt"), Summary.Contains(TEXT("Prompt=点击调试事件")));
+	TestTrue(TEXT("Summary reports stable id"), Summary.Contains(TEXT("StableId=Event.UI.HoverDebug")));
+	TestTrue(TEXT("Summary reports target handle"), Summary.Contains(TEXT("Target=")));
 
 	return true;
 }

@@ -3,7 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomRunEventTriggerActor.h"
+#include "Actors/WacomShopTriggerActor.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Interaction/WacomWorldInteractable.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventScreen.h"
@@ -85,6 +89,11 @@ public:
 		return BuildCurrentInteractPrompt();
 	}
 
+	FString ReadRunWorldInteractableHoverDebugSummaryForTest() const
+	{
+		return GetRunWorldInteractableHoverDebugSummary();
+	}
+
 	void SetRunSceneHitForTest(AActor* InActor, UPrimitiveComponent* InComponent = nullptr)
 	{
 		bHasRunSceneHitOverride = true;
@@ -97,6 +106,24 @@ public:
 	{
 		bHasRunSceneHitOverride = false;
 		RunSceneHitOverride = FHitResult();
+	}
+
+	void SetRunProbeExplorationFlowForTest(bool bInExploration)
+	{
+		bRunProbeExplorationFlowForTest = bInExploration;
+	}
+
+	bool RouteRunWorldInteractableClickForTest()
+	{
+		return TryRouteRunWorldInteractableClick();
+	}
+
+	bool InputLeftMouseReleasedForTest()
+	{
+		FInputKeyEventArgs Args;
+		Args.Key = EKeys::LeftMouseButton;
+		Args.Event = IE_Released;
+		return InputKey(Args);
 	}
 
 	bool ProbeRunSceneTargetForTest(FWacomInteractionTargetHandle& OutHandle) const
@@ -168,6 +195,15 @@ public:
 		RunSessionForTest = InRunSession;
 	}
 
+	void SetRunFirstPersonMenuLeaseForTest(FName LeaseId = TEXT("Test.MenuLease"))
+	{
+		TArray<FWacomFirstPersonCardLayerEntry> Entries;
+		FWacomFirstPersonCardLayerEntry Entry;
+		Entry.CardInstanceId = FGuid::NewGuid();
+		Entries.Add(Entry);
+		SetRunFirstPersonCardLayerMenuLease(LeaseId, TEXT("Test.Source"), Entries);
+	}
+
 protected:
 	virtual bool IsInExplorationFlow() const override
 	{
@@ -213,6 +249,131 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSessionForTest = nullptr;
+};
+
+UCLASS()
+class AWacomRunEventTriggerClickProbe : public AWacomRunEventTriggerActor
+{
+	GENERATED_BODY()
+
+public:
+	int32 TryInteractCountForTest = 0;
+	bool bInteractResultForTest = true;
+
+	void SyncClickTargetForTest()
+	{
+		OnConstruction(FTransform::Identity);
+	}
+
+	virtual bool TryInteract_Implementation(AWacomPlayerController* PC) override
+	{
+		++TryInteractCountForTest;
+		LastInteractingPlayerControllerForTest = PC;
+		return bInteractResultForTest;
+	}
+
+	AWacomPlayerController* GetLastInteractingPlayerControllerForTest() const
+	{
+		return LastInteractingPlayerControllerForTest.Get();
+	}
+
+private:
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AWacomPlayerController> LastInteractingPlayerControllerForTest;
+};
+
+UCLASS()
+class AWacomShopTriggerClickProbe : public AWacomShopTriggerActor
+{
+	GENERATED_BODY()
+
+public:
+	int32 TryInteractCountForTest = 0;
+	bool bInteractResultForTest = true;
+
+	void SyncClickTargetForTest()
+	{
+		OnConstruction(FTransform::Identity);
+	}
+
+	virtual bool TryInteract_Implementation(AWacomPlayerController* PC) override
+	{
+		++TryInteractCountForTest;
+		LastInteractingPlayerControllerForTest = PC;
+		return bInteractResultForTest;
+	}
+
+	AWacomPlayerController* GetLastInteractingPlayerControllerForTest() const
+	{
+		return LastInteractingPlayerControllerForTest.Get();
+	}
+
+private:
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AWacomPlayerController> LastInteractingPlayerControllerForTest;
+};
+
+UCLASS()
+class AWacomBattleTriggerClickProbe : public ABattleTriggerActor
+{
+	GENERATED_BODY()
+
+public:
+	int32 TryInteractCountForTest = 0;
+	bool bInteractResultForTest = true;
+
+	void SyncClickTargetForTest()
+	{
+		OnConstruction(FTransform::Identity);
+	}
+
+	virtual bool TryInteract_Implementation(AWacomPlayerController* PC) override
+	{
+		++TryInteractCountForTest;
+		LastInteractingPlayerControllerForTest = PC;
+		return bInteractResultForTest;
+	}
+
+	AWacomPlayerController* GetLastInteractingPlayerControllerForTest() const
+	{
+		return LastInteractingPlayerControllerForTest.Get();
+	}
+
+private:
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AWacomPlayerController> LastInteractingPlayerControllerForTest;
+};
+
+UCLASS()
+class AWacomRunWorldNonClickableInteractableProbe : public AActor, public IWacomWorldInteractable
+{
+	GENERATED_BODY()
+
+public:
+	int32 TryInteractCountForTest = 0;
+	bool bCanInteractForTest = true;
+	FText PromptForTest = FText::FromString(TEXT("按 E 测试"));
+
+	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* /*PC*/) const override
+	{
+		return PromptForTest;
+	}
+
+	virtual FVector GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const override
+	{
+		return GetActorLocation();
+	}
+
+	virtual bool CanInteract_Implementation(AWacomPlayerController* /*PC*/) const override
+	{
+		return bCanInteractForTest;
+	}
+
+	virtual bool TryInteract_Implementation(AWacomPlayerController* /*PC*/) override
+	{
+		++TryInteractCountForTest;
+		return true;
+	}
 };
 
 UCLASS()

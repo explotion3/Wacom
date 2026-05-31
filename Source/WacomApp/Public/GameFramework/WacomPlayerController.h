@@ -6,6 +6,7 @@
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 #include "WacomPlayerController.generated.h"
 
@@ -23,7 +24,6 @@ class UWacomRunMenuDropTargetWidget;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;
-struct FWacomInteractionTargetHandle;
 
 /**
  * Wacom PlayerController。
@@ -120,6 +120,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target|Debug", meta = (ToolTip = "开启后，Run World Target probe 预览切换会输出 handle 和清理日志。默认关闭。"))
 	bool bLogRunWorldTargetProbePreview = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target", meta = (ToolTip = "开启后，探索期鼠标左键点击实现 Run world clickable 合同的世界目标会走 IWacomWorldInteractable 交互入口。不会替代 E 键。"))
+	bool bEnableRunWorldInteractableClick = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target|Debug", meta = (ToolTip = "开启后，Run World Target 点击路由会输出命中、拒绝原因和交互结果。默认关闭。"))
+	bool bLogRunWorldInteractableClick = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target", meta = (ToolTip = "开启后，探索期鼠标 hover 到实现 Run world clickable 合同的世界目标时，会在 ExplorationHUD 交互提示位显示点击提示。"))
+	bool bEnableRunWorldInteractableHoverPrompt = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target|Debug", meta = (ToolTip = "开启后，Run World Target hover 提示切换会输出目标、提示文案和拒绝原因。默认关闭。"))
+	bool bLogRunWorldInteractableHoverPrompt = false;
+
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
 
@@ -187,6 +199,17 @@ public:
 	bool TryProbeRunSceneInteractionTargetAtWidgetPosition(
 		const FVector2D& WidgetPosition,
 		FWacomInteractionTargetHandle& OutHandle) const;
+
+	/** Exploration 下点击 Run World Target，并把实现 clickable 合同的 Actor 转发到现有 IWacomWorldInteractable 入口。 */
+	bool TryRouteRunWorldInteractableClick();
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Input|Run World Target|Debug",
+		meta = (ToolTip = "返回当前 Run world hover 提示的一行诊断摘要。只读，不修改 hover 或 RunState。"))
+	FString GetRunWorldInteractableHoverDebugSummary() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Input|Run World Target|Debug",
+		meta = (ToolTip = "把当前 Run world hover 提示诊断摘要写入日志。"))
+	void LogRunWorldInteractableHoverDebugSummary() const;
 
 	/** Run tunnel spike branch click route. Active only while the possessed Wacom character tunnel prototype is active. */
 	bool TryRouteRunTunnelBranchClick();
@@ -286,6 +309,13 @@ private:
 
 	void StartRunWorldTargetProbePreviewLoop();
 	void StopRunWorldTargetProbePreviewLoop();
+	bool CanShowRunWorldInteractableHoverPrompt() const;
+	AActor* ResolveSourceActorFromInteractionTargetHandle(
+		const FWacomInteractionTargetHandle& Handle) const;
+	void UpdateRunWorldInteractableHoverPrompt(
+		const FWacomInteractionTargetHandle& Handle,
+		AActor* InteractableActor);
+	void ClearRunWorldInteractableHoverPrompt(FName Reason);
 	UWacomRunWorldInteractionTargetBridgeComponent* ResolveRunWorldTargetBridgeFromHandle(
 		const FWacomInteractionTargetHandle& Handle) const;
 	void RefreshRunFirstPersonCardLayerMenuSuppression();
@@ -309,6 +339,13 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> PreviewedRunWorldTargetBridge;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AActor> HoveredRunWorldInteractableActor;
+
+	FWacomInteractionTargetHandle HoveredRunWorldInteractableHandle;
+	FText HoveredRunWorldInteractablePrompt;
+	FName LastRunWorldInteractableHoverReason = TEXT("None");
 
 	UPROPERTY(Transient)
 	TArray<TWeakObjectPtr<UWacomMenuWidgetBase>> ActiveGameMenuWidgets;
