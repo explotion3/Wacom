@@ -94,9 +94,25 @@ namespace
 				return Native->GetRunWorldClickableDebugView_Implementation(PC);
 			}
 		}
-		return IsRunWorldClickableInteractableActor(Actor)
-			? IWacomRunWorldClickableInteractable::Execute_GetRunWorldClickableDebugView(Actor, PC)
-			: FWacomRunWorldClickableInteractableDebugView();
+	return IsRunWorldClickableInteractableActor(Actor)
+		? IWacomRunWorldClickableInteractable::Execute_GetRunWorldClickableDebugView(Actor, PC)
+		: FWacomRunWorldClickableInteractableDebugView();
+	}
+
+	FName BuildRunWorldClickableHoverReason(
+		const FWacomRunWorldClickableInteractableDebugView& TriggerDebug)
+	{
+		if (TriggerDebug.bIsCompleted)
+		{
+			return TEXT("Completed");
+		}
+		if (TriggerDebug.bCanInteract)
+		{
+			return TEXT("Ok");
+		}
+		return TriggerDebug.RejectReason.IsNone()
+			? TriggerDebug.LastDebugResult
+			: TriggerDebug.RejectReason;
 	}
 
 	FText GetInteractPromptTextFromActor(AActor* Actor, AWacomPlayerController* PC)
@@ -976,14 +992,22 @@ bool AWacomPlayerController::TryRouteRunWorldInteractableClick()
 		return false;
 	}
 
-	AActor* TargetActor = ResolveSourceActorFromInteractionTargetHandle(Handle);
-	if (!IsRunWorldClickableInteractableActor(TargetActor) || !IsWorldInteractableActor(TargetActor))
+	AActor* TargetActor = nullptr;
+	UWacomRunWorldInteractionTargetBridgeComponent* TargetBridge = nullptr;
+	FName RejectReason = NAME_None;
+	if (!ResolveRunWorldClickableInteractableFromHandle(
+		Handle,
+		TargetActor,
+		TargetBridge,
+		RejectReason))
 	{
 		if (bLogRunWorldInteractableClick)
 		{
 			UE_LOG(LogTemp, Display,
-				TEXT("[WacomRunWorldInteractableClick] NoRoute reason=UnsupportedActor actor=%s handle=%s"),
+				TEXT("[WacomRunWorldInteractableClick] NoRoute reason=%s actor=%s bridge=%s handle=%s"),
+				*RejectReason.ToString(),
 				*GetDebugObjectName(TargetActor),
+				*GetDebugObjectName(TargetBridge),
 				*Handle.ToString());
 		}
 		return false;
@@ -1004,27 +1028,36 @@ bool AWacomPlayerController::TryRouteRunWorldInteractableClick()
 FString AWacomPlayerController::GetRunWorldInteractableHoverDebugSummary() const
 {
 	AActor* HoverActor = HoveredRunWorldInteractableActor.Get();
-	bool bCanInteract = false;
-	bool bCompleted = false;
+	FWacomRunWorldClickableInteractableDebugView TriggerDebug;
 	if (IsRunWorldClickableInteractableActor(HoverActor))
 	{
-		const FWacomRunWorldClickableInteractableDebugView TriggerDebug =
+		TriggerDebug =
 			GetRunWorldClickableDebugViewFromActor(
 				HoverActor,
 				const_cast<AWacomPlayerController*>(this));
-		bCanInteract = TriggerDebug.bCanInteract;
-		bCompleted = TriggerDebug.bIsCompleted;
+	}
+	else
+	{
+		TriggerDebug.ActorName = GetDebugObjectName(HoverActor);
+		TriggerDebug.StableId = HoveredRunWorldInteractableHandle.StableTargetId;
+		TriggerDebug.bHasStableId = !TriggerDebug.StableId.IsNone();
+		TriggerDebug.bImplementsWorldInteractable = IsWorldInteractableActor(HoverActor);
+		TriggerDebug.bImplementsClickableContract = IsRunWorldClickableInteractableActor(HoverActor);
+		TriggerDebug.HoverPrompt = HoveredRunWorldInteractablePrompt.ToString();
+		TriggerDebug.RejectReason = LastRunWorldInteractableHoverReason;
+		TriggerDebug.LastDebugResult = LastRunWorldInteractableHoverReason;
 	}
 
 	return FString::Printf(
-		TEXT("RunWorldInteractableHover{Actor=%s StableId=%s Prompt=%s CanInteract=%s Completed=%s Reason=%s Target=%s}"),
+		TEXT("RunWorldInteractableHover{Actor=%s StableId=%s Prompt=%s CanInteract=%s Completed=%s Reason=%s Target=%s Debug=%s}"),
 		*GetDebugObjectName(HoverActor),
 		*HoveredRunWorldInteractableHandle.StableTargetId.ToString(),
 		*HoveredRunWorldInteractablePrompt.ToString(),
-		bCanInteract ? TEXT("true") : TEXT("false"),
-		bCompleted ? TEXT("true") : TEXT("false"),
+		TriggerDebug.bCanInteract ? TEXT("true") : TEXT("false"),
+		TriggerDebug.bIsCompleted ? TEXT("true") : TEXT("false"),
 		*LastRunWorldInteractableHoverReason.ToString(),
-		*HoveredRunWorldInteractableHandle.ToString());
+		*HoveredRunWorldInteractableHandle.ToString(),
+		*FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(TriggerDebug));
 }
 
 void AWacomPlayerController::LogRunWorldInteractableHoverDebugSummary() const
@@ -1172,10 +1205,22 @@ void AWacomPlayerController::UpdateRunWorldTargetProbePreview()
 
 	FWacomInteractionTargetHandle Handle;
 	const bool bHasRunTarget = TryProbeRunSceneInteractionTarget(Handle);
-	UWacomRunWorldInteractionTargetBridgeComponent* NewBridge =
-		(bEnableRunWorldTargetProbePreview && bHasRunTarget)
-			? ResolveRunWorldTargetBridgeFromHandle(Handle)
-			: nullptr;
+	AActor* InteractableActor = nullptr;
+	UWacomRunWorldInteractionTargetBridgeComponent* NewBridge = nullptr;
+	FName ResolveRejectReason = bHasRunTarget
+		? FName(TEXT("NotResolved"))
+		: FName(TEXT("NoRunWorldTarget"));
+	const bool bResolvedClickable = bHasRunTarget
+		&& ResolveRunWorldClickableInteractableFromHandle(
+			Handle,
+			InteractableActor,
+			NewBridge,
+			ResolveRejectReason);
+	const bool bCanShowRunWorldHover = CanShowRunWorldInteractableHoverPrompt();
+	if (!bEnableRunWorldTargetProbePreview || !bCanShowRunWorldHover || !bResolvedClickable)
+	{
+		NewBridge = nullptr;
+	}
 
 	UWacomRunWorldInteractionTargetBridgeComponent* OldBridge = PreviewedRunWorldTargetBridge.Get();
 	if (OldBridge != NewBridge)
@@ -1208,7 +1253,7 @@ void AWacomPlayerController::UpdateRunWorldTargetProbePreview()
 		ClearRunWorldInteractableHoverPrompt(TEXT("Disabled"));
 		return;
 	}
-	if (!CanShowRunWorldInteractableHoverPrompt())
+	if (!bCanShowRunWorldHover)
 	{
 		ClearRunWorldInteractableHoverPrompt(TEXT("BlockedByMenuOrDrag"));
 		return;
@@ -1219,10 +1264,9 @@ void AWacomPlayerController::UpdateRunWorldTargetProbePreview()
 		return;
 	}
 
-	AActor* InteractableActor = ResolveSourceActorFromInteractionTargetHandle(Handle);
-	if (!IsRunWorldClickableInteractableActor(InteractableActor))
+	if (!bResolvedClickable)
 	{
-		ClearRunWorldInteractableHoverPrompt(TEXT("UnsupportedActor"));
+		ClearRunWorldInteractableHoverPrompt(ResolveRejectReason);
 		return;
 	}
 
@@ -1271,6 +1315,65 @@ AActor* AWacomPlayerController::ResolveSourceActorFromInteractionTargetHandle(
 	return Cast<AActor>(SourceObject);
 }
 
+bool AWacomPlayerController::ResolveRunWorldClickableInteractableFromHandle(
+	const FWacomInteractionTargetHandle& Handle,
+	AActor*& OutInteractableActor,
+	UWacomRunWorldInteractionTargetBridgeComponent*& OutBridge,
+	FName& OutRejectReason) const
+{
+	OutInteractableActor = nullptr;
+	OutBridge = nullptr;
+	OutRejectReason = NAME_None;
+
+	if (!Handle.IsValid())
+	{
+		OutRejectReason = TEXT("InvalidHandle");
+		return false;
+	}
+	if (Handle.TargetKind != EWacomInteractionTargetKind::World)
+	{
+		OutRejectReason = TEXT("WrongTargetKind");
+		return false;
+	}
+	if (Handle.TargetTag != WacomTags::Interaction_Target_Run_Object)
+	{
+		OutRejectReason = TEXT("WrongTargetTag");
+		return false;
+	}
+	if (!Handle.WorldTargetId.IsValid())
+	{
+		OutRejectReason = TEXT("MissingWorldTargetId");
+		return false;
+	}
+
+	OutInteractableActor = ResolveSourceActorFromInteractionTargetHandle(Handle);
+	if (!OutInteractableActor)
+	{
+		OutRejectReason = TEXT("MissingSourceActor");
+		return false;
+	}
+
+	OutBridge = ResolveRunWorldTargetBridgeFromHandle(Handle);
+	if (!IsWorldInteractableActor(OutInteractableActor))
+	{
+		OutRejectReason = TEXT("MissingWorldInteractableContract");
+		return false;
+	}
+	if (!IsRunWorldClickableInteractableActor(OutInteractableActor))
+	{
+		OutRejectReason = TEXT("MissingClickableContract");
+		return false;
+	}
+	if (!OutBridge)
+	{
+		OutRejectReason = TEXT("MissingRunWorldBridge");
+		return false;
+	}
+
+	OutRejectReason = TEXT("Ok");
+	return true;
+}
+
 void AWacomPlayerController::UpdateRunWorldInteractableHoverPrompt(
 	const FWacomInteractionTargetHandle& Handle,
 	AActor* InteractableActor)
@@ -1283,16 +1386,14 @@ void AWacomPlayerController::UpdateRunWorldInteractableHoverPrompt(
 
 	if (!IsRunWorldClickableInteractableActor(InteractableActor))
 	{
-		ClearRunWorldInteractableHoverPrompt(TEXT("UnsupportedActor"));
+		ClearRunWorldInteractableHoverPrompt(TEXT("MissingClickableContract"));
 		return;
 	}
 
 	const FText NewPrompt = GetRunWorldClickHoverPromptFromActor(InteractableActor, this);
 	const FWacomRunWorldClickableInteractableDebugView TriggerDebug =
 		GetRunWorldClickableDebugViewFromActor(InteractableActor, this);
-	const FName NewReason = TriggerDebug.bIsCompleted
-		? FName(TEXT("Completed"))
-		: (TriggerDebug.bCanInteract ? FName(TEXT("Ok")) : TriggerDebug.LastDebugResult);
+	const FName NewReason = BuildRunWorldClickableHoverReason(TriggerDebug);
 
 	const bool bChanged =
 		HoveredRunWorldInteractableActor.Get() != InteractableActor

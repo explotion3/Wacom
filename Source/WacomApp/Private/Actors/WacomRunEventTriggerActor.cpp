@@ -212,8 +212,10 @@ FWacomRunEventTriggerDebugView AWacomRunEventTriggerActor::GetRunEventTriggerDeb
 FString AWacomRunEventTriggerActor::GetRunEventTriggerDebugSummary(AWacomPlayerController* PC) const
 {
 	const FWacomRunEventTriggerDebugView View = GetRunEventTriggerDebugView(PC);
+	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
+		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunEventTrigger{Actor=%s PersistentId=%s EventDef=%s EventId=%s StartNode=%s HasRun=%s CanInteract=%s Active=%s Completed=%s CurrentNode=%s Duplicate=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CompletedHoverPrompt=%s Last=%s}"),
+		TEXT("RunEventTrigger{Actor=%s PersistentId=%s EventDef=%s EventId=%s StartNode=%s HasRun=%s CanInteract=%s Active=%s Completed=%s CurrentNode=%s Duplicate=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s CompletedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.EventDefinitionName,
@@ -229,7 +231,8 @@ FString AWacomRunEventTriggerActor::GetRunEventTriggerDebugSummary(AWacomPlayerC
 		*View.ClickTargetStableId.ToString(),
 		*View.HoverPrompt,
 		*View.CompletedHoverPrompt,
-		*View.LastDebugResult.ToString());
+		*View.LastDebugResult.ToString(),
+		*FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(ClickDebug));
 }
 
 void AWacomRunEventTriggerActor::LogRunEventTriggerDebugSummary(AWacomPlayerController* PC) const
@@ -305,7 +308,8 @@ AWacomRunEventTriggerActor::GetRunWorldClickableDebugView_Implementation(
 		IsEventCompletedFor(PC),
 		LastResult,
 		ClickInteractionTargetComponent,
-		ClickTargetBridgeComponent);
+		ClickTargetBridgeComponent,
+		ClickBounds);
 }
 
 FVector AWacomRunEventTriggerActor::GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const

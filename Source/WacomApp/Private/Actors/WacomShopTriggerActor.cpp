@@ -223,8 +223,10 @@ FWacomShopTriggerDebugView AWacomShopTriggerActor::GetShopTriggerDebugView(
 FString AWacomShopTriggerActor::GetShopTriggerDebugSummary(AWacomPlayerController* PC) const
 {
 	const FWacomShopTriggerDebugView View = GetShopTriggerDebugView(PC);
+	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
+		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("ShopTrigger{Actor=%s PersistentId=%s ShopDef=%s Offers=%d CanInteract=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s Last=%s}"),
+		TEXT("ShopTrigger{Actor=%s PersistentId=%s ShopDef=%s Offers=%d CanInteract=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.ShopDefinitionName,
@@ -233,7 +235,8 @@ FString AWacomShopTriggerActor::GetShopTriggerDebugSummary(AWacomPlayerControlle
 		View.bClickTargetConfigured ? TEXT("true") : TEXT("false"),
 		*View.ClickTargetStableId.ToString(),
 		*View.HoverPrompt,
-		*View.LastDebugResult.ToString());
+		*View.LastDebugResult.ToString(),
+		*FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(ClickDebug));
 }
 
 void AWacomShopTriggerActor::LogShopTriggerDebugSummary(AWacomPlayerController* PC) const
@@ -271,7 +274,8 @@ AWacomShopTriggerActor::GetRunWorldClickableDebugView_Implementation(
 		/*bIsCompleted*/false,
 		LastResult,
 		ClickInteractionTargetComponent,
-		ClickTargetBridgeComponent);
+		ClickTargetBridgeComponent,
+		ClickBounds);
 }
 
 void AWacomShopTriggerActor::RefreshClickTargetBinding()

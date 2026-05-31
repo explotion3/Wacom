@@ -149,6 +149,18 @@ enum class EGameFlowState : uint8
 
 关卡放置 Debug RunEvent 的步骤见 `WacomData.md` 中的 Debug 事件资产说明和 `WacomUI.md` 的 RunEvent UI 章节。
 
+### RunPickupActor
+
+`AWacomRunPickupActor` 是 Run world 金币拾取物 V1：
+
+- 实现 `IWacomWorldInteractable + UWacomRunWorldClickableInteractable`。
+- `PersistentId` 是当前 Run 内防重复拾取的 key；`GoldAmount` 是拾取成功获得的金币数，必须大于 0。
+- 默认拥有 `TriggerSphere / ClickBounds / PickupVisual / ClickInteractionTarget / ClickTargetBridge`。`TriggerSphere` 只服务 E 键近距离候选注册；`ClickBounds` 只阻挡 `Visibility` trace、不产生 overlap；`PickupVisual` 是 C++ 占位可见球体，正式美术可在 Blueprint 或子类替换。
+- 按 E 或远距离左键命中时都调用 `URunSession::CollectGoldPickup(PersistentId, GoldAmount)`，由 Run 层同一事务增加金币并标记已拾取；重复提交不会再次加金币。
+- 成功拾取后默认 Destroy Actor；如果 `bDestroyWhenCollected=false`，则隐藏并禁用碰撞，便于调试。成功时复用 AppToast 显示金币变化。
+- 鼠标 hover 默认显示 `点击拾取`，已拾取但仍可被 debug/probe 到时显示 `CollectedHoverPromptText`，默认 `已拾取`。GameMenu active 或菜单卡牌 drag/drop 时，hover/click 不穿透。
+- 提供 `GetRunPickupDebugSummary()` / `LogRunPickupDebugSummary()`，可在 PIE 查看 `PersistentId / Gold / HasRun / CanInteract / Collected / ClickTarget / StableId / HoverPrompt / Last`；其中 click target facts 来自通用 clickable debug view。
+
 ---
 
 ## §5 UI 总入口
@@ -241,7 +253,7 @@ BattleHUD、3D 手牌和场景目标点击需要的 `bEnableClickEvents / bEnabl
 
 `AWacomPlayerController::RefreshInteractToast()` 只在 Exploration 状态显示交互提示。战斗中即使候选对象仍在列表，也不会显示交互 Toast。
 
-V0-BH 后，探索期左键释放的场景点击路由顺序是：Battle target click -> RunTunnel branch click -> Run world interactable click -> `Super::InputKey()`。Run world interactable click 只接受 `TargetKind=World + Interaction.Target.Run.Object`，且命中 Actor 必须同时实现 `IWacomWorldInteractable` 与 `UWacomRunWorldClickableInteractable`；当前 opt-in 对象是 `AWacomRunEventTriggerActor`、`AWacomShopTriggerActor` 和 `ABattleTriggerActor`。打开 Backpack / Pause / Shop / RunEvent 等 `GameMenu` 时不会穿透点击场景目标。E 键入口不变，仍使用最近 overlap 候选。同一 Run world probe loop 还维护 RunEvent / Shop / BattleTrigger hover prompt：hover 到支持目标时显示点击提示，移开后回到最近 E 键候选提示；hover prompt 和 hover debug 都走 clickable 接口，`GetRunWorldInteractableHoverDebugSummary()` 可排查当前 hover actor、stable id、prompt、completed 和拒绝原因。
+V0-BK 后，探索期左键释放的场景点击路由顺序是：Battle target click -> RunTunnel branch click -> Run world interactable click -> `Super::InputKey()`。Run world interactable click 只接受 `TargetKind=World + Interaction.Target.Run.Object`，并通过共享 resolver 要求命中 Actor 同时实现 `IWacomWorldInteractable` 与 `UWacomRunWorldClickableInteractable`；当前正式 opt-in 对象是 `AWacomRunEventTriggerActor`、`AWacomShopTriggerActor`、`ABattleTriggerActor` 和 `AWacomRunPickupActor`。打开 Backpack / Pause / Shop / RunEvent 等 `GameMenu` 时不会穿透点击场景目标。E 键入口不变，仍使用最近 overlap 候选。同一 Run world probe loop 还维护 hover prompt：hover 到支持目标时显示点击提示，移开后回到最近 E 键候选提示；hover prompt 和 hover debug 都走 clickable 接口，`GetRunWorldInteractableHoverDebugSummary()` 可排查当前 hover actor、stable id、prompt、completed、ClickBounds / bridge / visual 配置和拒绝原因，例如 `MissingWorldInteractableContract` 或 `MissingClickableContract`。
 
 兼容 / 调试入口仍保留：`Wacom.Interact` 调用当前最近交互对象，`Wacom.OpenBackpack` 打开背包。正式玩家交互口径仍是 IA 输入。
 
@@ -341,10 +353,10 @@ ESC 当前语义：
 - `UWacomInteractionTargetComponent`：通用交互目标组件，任意 Actor 可挂载。字段：`TargetId`（运行时 FGuid）、`InteractionTargetTag`（FGameplayTag）、`StableTargetId`（FName）。
 - `UWacomBattleEnemyPartWorldTargetBridgeComponent`：Battle 专用桥接组件。它读取稳定 `PartId`，在 HUD 刷新时解析当前 `PartInstanceId`，写回同 Actor 上的 `UWacomInteractionTargetComponent`，并注册接收 `TargetConfirmed / DamageDealt / EnemyPartHpEmptied` 表现 cue。
 - `UWacomRunWorldInteractionTargetBridgeComponent`：Run / 探索专用桥接组件。它把手工填写的 `RunTargetStableId` 和自动/已有运行时 `TargetId` 写回同 Actor 上的 `UWacomInteractionTargetComponent`，并标记 `Interaction.Target.Run.Object`。它提供鼠标 probe preview、debug，以及 RunEvent / Shop click bridge 目标身份；规则执行仍回到 `IWacomWorldInteractable`，不直接提交 Run 规则。
-- `UWacomRunWorldClickableInteractable`：Run world click / hover 的显式 opt-in 接口。Actor 只有同时实现它和 `IWacomWorldInteractable`，PlayerController 才会把 `Interaction.Target.Run.Object` 命中转成点击交互或 hover prompt。接口提供 hover prompt 和通用 debug view；`FWacomRunWorldClickableInteractableHelper` 统一配置 `ClickBounds` collision、`PersistentId -> StableTargetId / RunTargetStableId` 绑定和 click target debug facts。
+- `UWacomRunWorldClickableInteractable`：Run world click / hover 的显式 opt-in 接口。Actor 只有同时实现它和 `IWacomWorldInteractable`，PlayerController 才会把 `Interaction.Target.Run.Object` 命中转成点击交互或 hover prompt。接口提供 hover prompt 和通用 debug view；`FWacomRunWorldClickableInteractableHelper` 统一配置 `ClickBounds` collision、`PersistentId -> StableTargetId / RunTargetStableId` 绑定，并生成 stable id、接口实现、ClickBounds、target component、bridge、visual target 和 reject reason 等通用 debug facts。
 - `UWacomRunMenuDropTargetWidget`：Run GameMenu 专用 UMG Zone target bridge。它配置 `ZoneId / StableTargetId`，构建 `FWacomInteractionTargetHandle(TargetKind=Zone)`，并提供 probe / invalid / released-probe / submit-ready / submitted 的轻量 preview。该 Widget 不直接调用 `URunSession`，也不参与背包旧 `UWacomZoneDropTarget` 的 UMG DragDrop 规则提交。
 - `AWacomPlayerController::TryRouteBattleSceneTargetClick()` 中通过 cursor trace 命中 Component 后，扫描 `IWacomInteractionTargetProvider` 接口构建统一 handle；只有 `TargetKind=World` 且 `TargetTag=Interaction.Target.Battle.EnemyPart` 的 handle 会被转发为 Battle enemy part 点击。
-- `AWacomPlayerController::TryProbeRunSceneInteractionTarget()` 和 `TryProbeRunSceneInteractionTargetAtWidgetPosition()` 在 Exploration 下用同一 Provider 路径构建 handle，但只接受 `TargetTag=Interaction.Target.Run.Object`。`bEnableRunWorldTargetProbePreview` 开启时，Controller 会低频 probe 鼠标下方 Run target 并驱动 bridge 的 scale preview；失去命中、切换目标、退出 Controller 时会清理旧 preview。`TryRouteRunWorldInteractableClick()` 复用该 probe，只在 Exploration、无 active GameMenu、无菜单卡牌 drag/drop 处理时，把命中的 clickable world interactable 转回现有 `TryInteract()`。hover prompt 同样复用该 loop，通过 `UWacomRunWorldClickableInteractable` 读取 RunEvent 的 `HoverPromptText / CompletedHoverPromptText` 或 Shop 的 `HoverPromptText`，写入 ExplorationHUD 的交互提示。
+- `AWacomPlayerController::TryProbeRunSceneInteractionTarget()` 和 `TryProbeRunSceneInteractionTargetAtWidgetPosition()` 在 Exploration 下用同一 Provider 路径构建 handle，但只接受 `TargetTag=Interaction.Target.Run.Object`。V0-BJ 后 hover、click 和 probe preview 共用 `handle -> source actor -> clickable world interactable` resolver：先校验 run object handle，再解析 `SourceObject` owner，最后要求 `IWacomWorldInteractable + UWacomRunWorldClickableInteractable + RunWorldBridge`。`bEnableRunWorldTargetProbePreview` 的视觉信号只对 resolver 通过且当前 hover gate 允许的目标生效；Controller 会低频 probe 鼠标下方 Run target，并驱动 bridge 的 scale 与 CustomDepth / stencil preview，失去命中、切换目标、打开 GameMenu、菜单卡牌 drag/drop、退出 Controller 时都会清理旧 preview。`TryRouteRunWorldInteractableClick()` 复用同一 resolver，只在 Exploration、无 active GameMenu、无菜单卡牌 drag/drop 处理时，把命中的 clickable world interactable 转回现有 `TryInteract()`。hover prompt 同样复用该 loop，通过 `UWacomRunWorldClickableInteractable` 读取文案，写入 ExplorationHUD 的交互提示。
 - `AWacomPlayerController::TryProbeRunMenuDropTargetAtWidgetPosition()` 在 Exploration + active GameMenu + active menu lease 的 first-person card drag 中使用。它只扫描注册过的 `UWacomRunMenuDropTargetWidget`，按后注册优先作为最上层命中，返回 Zone handle。`ResolveRunMenuCardDropIntent()` 统一解析 preview 和 release：默认是 probe-only；owning menu 返回 `SubmitZoneTarget + ControllerDestroyOwnedCard` 且 `ValidateDestroyCardByInstance()` 通过时，release 才由 Controller 移除精确持有卡实例；`MenuHandled` 由菜单提交并回填结果。
 - `UWacomFirstPersonCardLayerSlotWidget` 为当前 active、可见、非 exiting 且拥有有效 `CardInstanceId` 的 first-person slot 构建 Card target handle。它使用当前 visual slot 的 `ScreenPosition`，不要求卡牌可打；后续拖拽 resolver 再判断当前拖拽卡能否作用到该卡槽。
 - First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈区分合法 hand-card target 和 probe-only target；Run menu Zone target 使用 `ZoneProbe` 反馈表示“当前菜单区域可被识别”，是否支付由 Run menu drop intent 决定。
@@ -381,6 +393,6 @@ Battle 已接入 `UBattleSession::CanTargetWithCard(CardInstanceId, FWacomIntera
 ### 不变项
 
 - 原有 `IWacomWorldInteractable` 探索期 E 键交互不变。
-- Run target probe preview 只表达“鼠标当前命中该物体”，不表达可交互、可提交或某张卡能作用。
+- Run target probe preview 只表达“鼠标当前命中支持 Run world clickable 合同的世界交互物”，不表达规则可提交或某张卡能作用。当前 visual signal 是轻量 scale + CustomDepth/stencil；没有项目级 outline/post-process 时，不保证出现描边。
 - 原有 BattleHUD target registration / TargetCue 表现不变。
 - `TryRouteBattleSceneTargetClick` 的 `protected virtual` 测试 seam 不变。

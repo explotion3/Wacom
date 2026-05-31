@@ -306,9 +306,11 @@ V0-AT 后编辑器 RunEvent Data Validation 会在支付相关错误中明确指
 
 V0-BB 后，`DA_Event_DebugFlagReward` 是标准 RunFlag + 金币门槛奖励样例，和蛇巢卡牌支付样例分开维护。该事件使用 `DebugFlagReward.Inspected / GoldGranted / RewardClaimed` 三个 RunFlag：`InspectMark` 设置调查标记，`DebugGrantGold` 用于 PIE 自助获得 3 金币，`ClaimGoldReward` 用 `RunFlagSet(Inspected) + RunFlagNotSet(RewardClaimed) + MinGold(3)` 解锁 `AddGold(-3) + GainCard(PoisonFang) + SetRunFlag(RewardClaimed)` 并跳转到 `Rewarded`，`ResetFlags` 会清掉三个 Debug flag 并回到 `Start`。它用于制作和验证 `MinGold + AddGold(-N) + 奖励 + RunFlag` 的组合，不新增 `PayGold` 规则，也不改变关闭 / 跳转流程。
 
+V0-BK 后，Run world 金币拾取物使用 `URunSession::CollectGoldPickup(PersistentId, GoldAmount)` 结算。该入口要求 `PersistentId != NAME_None` 且 `GoldAmount > 0`，成功时同一事务内增加 `Gold` 并把 ID 写入 `FRunState::CollectedPickupIds`，失败或重复提交不改状态、不广播。`CollectedPickupIds` 是当前 Run 内存态，用于防止同一世界拾取物在 E 键和鼠标点击路径中被重复结算；本轮不接 SaveGame、不支持卡牌拾取、掉落表或拾取动画。
+
 `FRunEventChoiceResult` 只表达本次选项直接效果和展示诊断字段，供 UI 和日志展示。V0-AR 后成功的卡牌支付结果会记录 `PaidCardDefinition`，仅用于 UI / 日志显示“交出了哪张卡”；它必须在移除 paid instance 前从当前持有卡读取，且不是后续规则输入。V0-AS 后成功结果还会记录 `PreviousNodeId / ResolvedNodeId / ResolvedNodeTitleText / bNodeChanged / bEventClosedAfterResolve / bEventCompletedAfterResolve`，用于 Toast 显示“进入某节点”或“事件已结束”。这些 outcome 字段只在事务成功提交后写入；失败或回滚结果不写入 paid card definition，也不写入成功 outcome。后续规则不能依赖这个结果包反向修改 RunState。
 
-当前 `RunEventStates` 和 `RunFlags` 只保存在 Run 内存态，不写入 SaveGame。
+当前 `RunEventStates`、`RunFlags` 和 `CollectedPickupIds` 只保存在 Run 内存态，不写入 SaveGame。
 
 ---
 
@@ -363,6 +365,7 @@ Outcome 分支：
 | `ABattleTriggerActor` | 已销毁 Trigger、撤离 BattleProgress |
 | `AWacomShopTriggerActor` | 商店库存与已购买状态 |
 | `AWacomRunEventTriggerActor` | RunEvent 当前节点与完成状态 |
+| `AWacomRunPickupActor` | 金币拾取物已拾取状态 |
 
 规则：
 
@@ -418,6 +421,7 @@ Outcome 分支：
 | `ActiveRunEventId`、`ActiveRunEventDefinition` | 不保存 | 无 active event |
 | `RunEventStates` | 不保存 | 事件当前节点和完成状态清空 |
 | `RunFlags` | 不保存 | 当前 Run 内存态事件标记清空 |
+| `CollectedPickupIds` | 不保存 | 世界金币拾取物已拾取状态清空 |
 
 因此，当前 SaveGame 不能被描述为完整 Run 存档。它只覆盖部分场景与卡牌持有状态，而且正常流程还被 GameMode 总开关禁用。
 
@@ -452,6 +456,7 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | `Source/WacomApp/Public/Actors/BattleTriggerActor.h` | 战斗 Trigger 的 `PersistentId` |
 | `Source/WacomApp/Public/Actors/WacomShopTriggerActor.h` | 商店入口，提供 `PersistentId` 和商品来源 |
 | `Source/WacomApp/Public/Actors/WacomRunEventTriggerActor.h` | RunEvent 入口，提供 `PersistentId` 和事件定义 |
+| `Source/WacomApp/Public/Actors/WacomRunPickupActor.h` | 金币拾取物入口，提供 `PersistentId` 和 `GoldAmount`，结算调用 `CollectGoldPickup()` |
 
 设计与数据侧对应文档：
 

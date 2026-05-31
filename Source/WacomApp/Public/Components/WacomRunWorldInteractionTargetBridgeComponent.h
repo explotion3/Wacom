@@ -34,10 +34,28 @@ struct WACOMAPP_API FWacomRunWorldInteractionTargetDebugView
 	bool bHasVisualTarget = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	bool bHasRenderableVisualTarget = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	FName VisualTargetName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
 	bool bProbePreviewActive = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	bool bProbeScaleSignalEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	bool bProbeCustomDepthSignalEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	int32 ProbeCustomDepthStencilValue = 250;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
 	FName LastConfigureResult = TEXT("NotAttempted");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	FName LastPreviewResult = TEXT("NotAttempted");
 };
 
 /**
@@ -68,6 +86,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Target", meta = (ToolTip = "鼠标 probe 指向该目标时的轻量预览缩放倍率。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.2"))
 	float ProbePreviewScale = 1.06f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Target", meta = (ToolTip = "鼠标 probe 指向该目标时，是否启用轻量缩放视觉信号。"))
+	bool bEnableProbeScaleSignal = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Target", meta = (ToolTip = "鼠标 probe 指向该目标时，是否启用 CustomDepth / Stencil 视觉信号，供后续描边材质使用。"))
+	bool bEnableProbeCustomDepthSignal = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Target", meta = (ToolTip = "鼠标 probe 视觉信号写入 CustomDepth 的 stencil 值。需要项目描边材质读取时才会产生可见描边。", ClampMin = "0", ClampMax = "255", UIMin = "0", UIMax = "255"))
+	int32 ProbeCustomDepthStencilValue = 250;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "开启后，目标配置和 probe 预览状态变化会输出到日志。默认关闭。"))
 	bool bLogRunWorldTargetDebug = false;
@@ -106,8 +133,10 @@ protected:
 private:
 	UWacomInteractionTargetComponent* ResolveInteractionTargetComponent() const;
 	UPrimitiveComponent* ResolveVisualTargetComponent() const;
-	void BeginScaleFeedback(float ScaleMultiplier);
-	void RestoreBaseScaleIfNeeded();
+	UPrimitiveComponent* ResolveRenderableOwnerPrimitive() const;
+	bool IsRenderableProbeVisualTarget(const UPrimitiveComponent* Primitive) const;
+	void BeginProbeVisualFeedback(UPrimitiveComponent* Primitive);
+	void RestoreProbeVisualFeedbackIfNeeded();
 	void LogDebugState(const TCHAR* Prefix) const;
 
 	UPROPERTY(Transient)
@@ -121,6 +150,11 @@ private:
 
 	bool bInteractionTargetConfigured = false;
 	bool bHasCachedBaseScale = false;
+	bool bHasCachedCustomDepth = false;
+	bool bCachedRenderCustomDepth = false;
+	int32 CachedCustomDepthStencilValue = 0;
+	bool bCachedVisualWasRenderable = false;
 	bool bProbePreviewActive = false;
 	FName LastConfigureResult = TEXT("NotAttempted");
+	FName LastPreviewResult = TEXT("NotAttempted");
 };

@@ -312,6 +312,11 @@ private:
 	bool CanShowRunWorldInteractableHoverPrompt() const;
 	AActor* ResolveSourceActorFromInteractionTargetHandle(
 		const FWacomInteractionTargetHandle& Handle) const;
+	bool ResolveRunWorldClickableInteractableFromHandle(
+		const FWacomInteractionTargetHandle& Handle,
+		AActor*& OutInteractableActor,
+		UWacomRunWorldInteractionTargetBridgeComponent*& OutBridge,
+		FName& OutRejectReason) const;
 	void UpdateRunWorldInteractableHoverPrompt(
 		const FWacomInteractionTargetHandle& Handle,
 		AActor* InteractableActor);

@@ -24,6 +24,15 @@ struct WACOMAPP_API FWacomRunWorldClickableInteractableDebugView
 	FName StableId = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bHasStableId = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bImplementsWorldInteractable = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bImplementsClickableContract = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
 	bool bCanInteract = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
@@ -36,10 +45,34 @@ struct WACOMAPP_API FWacomRunWorldClickableInteractableDebugView
 	bool bClickTargetConfigured = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bClickBoundsConfigured = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bHasInteractionTargetComponent = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bHasBridgeComponent = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bHasVisualTarget = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bHasRenderableVisualTarget = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	FName VisualTargetName = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	bool bProbePreviewActive = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
 	FName ClickTargetStableId = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
 	FString HoverPrompt;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
+	FName RejectReason = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Click|Debug")
 	FName LastDebugResult = NAME_None;
@@ -92,5 +125,9 @@ public:
 		bool bIsCompleted,
 		FName LastDebugResult,
 		const UWacomInteractionTargetComponent* InteractionTargetComponent,
-		const UWacomRunWorldInteractionTargetBridgeComponent* BridgeComponent);
+		const UWacomRunWorldInteractionTargetBridgeComponent* BridgeComponent,
+		const UBoxComponent* ClickBounds = nullptr);
+
+	static FString BuildDebugSummary(
+		const FWacomRunWorldClickableInteractableDebugView& View);
 };

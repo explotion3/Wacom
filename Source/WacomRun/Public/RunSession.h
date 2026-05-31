@@ -561,6 +561,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Economy")
 	bool RemoveGold(int32 Amount);
 
+	/** 指定世界拾取物是否已在当前 Run 中被拾取。当前只保存在内存态，不接 SaveGame。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Pickup")
+	bool IsPickupCollected(FName PersistentId) const;
+
+	/**
+	 * 拾取金币型世界拾取物。
+	 *
+	 * 成功时同一事务内增加金币并标记 PersistentId 已拾取；重复拾取、空 ID 或非正数金币会拒绝且不广播。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pickup")
+	bool CollectGoldPickup(FName PersistentId, int32 GoldAmount);
+
 	// ---- 商店购买 ----
 
 	/**

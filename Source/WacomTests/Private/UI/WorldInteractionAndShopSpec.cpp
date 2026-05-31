@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomRunPickupActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
 #include "Actors/WacomShopTriggerActor.h"
 #include "Cards/CardDefinition.h"
@@ -411,6 +412,55 @@ bool FWacomUIBattleTriggerClickBridgeStableIdSpec::RunTest(const FString& /*Para
 	TestEqual(TEXT("Interaction target stable id mirrors PersistentId"),
 		Battle->GetClickInteractionTargetComponent()->GetStableTargetId(),
 		FName(TEXT("Battle.UI.ClickStable")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupOwnsTargetComponentsSpec,
+	"Wacom.UI.WorldInteraction.RunPickup.RunPickupOwnsClickInteractionTargetComponents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupOwnsTargetComponentsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunPickupActor> Pickup(NewObject<AWacomRunPickupActor>());
+
+	TestNotNull(TEXT("Pickup owns trigger sphere"), Pickup->GetTriggerSphere());
+	TestNotNull(TEXT("Pickup owns click bounds"), Pickup->GetClickBounds());
+	TestNotNull(TEXT("Pickup owns visible placeholder"), Pickup->GetPickupVisual());
+	TestNotNull(TEXT("Pickup owns interaction target"),
+		Pickup->GetClickInteractionTargetComponent());
+	TestNotNull(TEXT("Pickup owns run target bridge"),
+		Pickup->GetClickTargetBridgeComponent());
+	if (Pickup->GetClickBounds())
+	{
+		TestEqual(TEXT("Click bounds blocks visibility"),
+			Pickup->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+			ECR_Block);
+		TestFalse(TEXT("Click bounds does not generate overlap"),
+			Pickup->GetClickBounds()->GetGenerateOverlapEvents());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupStableIdSpec,
+	"Wacom.UI.WorldInteraction.RunPickup.RunPickupClickTargetUsesPersistentIdAsStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupStableIdSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	Pickup->PersistentId = TEXT("Pickup.UI.ClickStable");
+	Pickup->SyncClickTargetForTest();
+
+	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
+		Pickup->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Pickup.UI.ClickStable")));
+	TestEqual(TEXT("Interaction target stable id mirrors PersistentId"),
+		Pickup->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Pickup.UI.ClickStable")));
 
 	return true;
 }
@@ -935,6 +985,153 @@ bool FWacomUIRunWorldTargetBridgePreviewScaleSpec::RunTest(const FString& /*Para
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetBridgeCustomDepthSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunBridgePreviewAppliesAndRestoresCustomDepthSignal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetBridgeCustomDepthSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Visual = AddVisualComponent(*Owner);
+	Visual->SetRenderCustomDepth(false);
+	Visual->SetCustomDepthStencilValue(7);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge = AddRunWorldBridgeComponent(*Owner);
+	Bridge->VisualTargetComponent = Visual;
+	Bridge->bEnableProbeScaleSignal = false;
+	Bridge->bEnableProbeCustomDepthSignal = true;
+	Bridge->ProbeCustomDepthStencilValue = 250;
+
+	Bridge->SetProbePreviewActive(true);
+	TestTrue(TEXT("Preview active"), Bridge->IsProbePreviewActive());
+	TestTrue(TEXT("CustomDepth enabled for preview"), Visual->bRenderCustomDepth);
+	TestEqual(TEXT("Stencil value applied"), Visual->CustomDepthStencilValue, 250);
+
+	Bridge->ClearProbePreview();
+	TestFalse(TEXT("Preview cleared"), Bridge->IsProbePreviewActive());
+	TestFalse(TEXT("CustomDepth restored"), Visual->bRenderCustomDepth);
+	TestEqual(TEXT("Stencil value restored"), Visual->CustomDepthStencilValue, 7);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetBridgeVisualSwitchRestoreSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunBridgePreviewRestoresPreviousTargetWhenVisualTargetChanges",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetBridgeVisualSwitchRestoreSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* First = AddVisualComponent(*Owner, FVector(2.0f, 2.0f, 2.0f));
+	UStaticMeshComponent* Second = AddVisualComponent(*Owner, FVector(3.0f, 3.0f, 3.0f));
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge = AddRunWorldBridgeComponent(*Owner);
+	Bridge->ProbePreviewScale = 1.2f;
+	Bridge->VisualTargetComponent = First;
+
+	Bridge->SetProbePreviewActive(true);
+	TestEqual(TEXT("First target scaled"), First->GetRelativeScale3D(), FVector(2.4f, 2.4f, 2.4f));
+
+	Bridge->VisualTargetComponent = Second;
+	Bridge->SetProbePreviewActive(true);
+	TestEqual(TEXT("First target restored after switch"), First->GetRelativeScale3D(), FVector(2.0f, 2.0f, 2.0f));
+	TestEqual(TEXT("Second target scaled"), Second->GetRelativeScale3D(), FVector(3.6f, 3.6f, 3.6f));
+
+	Bridge->ClearProbePreview();
+	TestEqual(TEXT("Second target restored after clear"), Second->GetRelativeScale3D(), FVector(3.0f, 3.0f, 3.0f));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldTargetBridgePrefersRenderableSpec,
+	"Wacom.UI.RunWorldInteractionTarget.RunBridgePrefersRenderableOwnerPrimitiveOverClickBounds",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldTargetBridgePrefersRenderableSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UBoxComponent* Bounds = NewObject<UBoxComponent>(Owner);
+	Owner->AddInstanceComponent(Bounds);
+	Bounds->SetRelativeScale3D(FVector(5.0f, 5.0f, 5.0f));
+	Bounds->RegisterComponent();
+
+	UStaticMeshComponent* Visual = AddVisualComponent(*Owner, FVector(2.0f, 2.0f, 2.0f));
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge = AddRunWorldBridgeComponent(*Owner);
+	Bridge->VisualTargetComponent = Bounds;
+	Bridge->ProbePreviewScale = 1.1f;
+
+	Bridge->SetProbePreviewActive(true);
+	TestEqual(TEXT("Click bounds scale is unchanged"),
+		Bounds->GetRelativeScale3D(), FVector(5.0f, 5.0f, 5.0f));
+	TestEqual(TEXT("Renderable visual is scaled"),
+		Visual->GetRelativeScale3D(), FVector(2.2f, 2.2f, 2.2f));
+
+	const FWacomRunWorldInteractionTargetDebugView View = Bridge->GetRunWorldTargetDebugView();
+	TestTrue(TEXT("Debug reports renderable visual"), View.bHasRenderableVisualTarget);
+	TestEqual(TEXT("Debug reports visual target name"), View.VisualTargetName, Visual->GetFName());
+
+	Bridge->ClearProbePreview();
+	TestEqual(TEXT("Renderable visual restored"),
+		Visual->GetRelativeScale3D(), FVector(2.0f, 2.0f, 2.0f));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldTargetBridgeDebugSummarySpec,
 	"Wacom.UI.RunWorldInteractionTarget.RunBridgeDebugSummaryReportsBindingAndPreview",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -971,6 +1168,10 @@ bool FWacomUIRunWorldTargetBridgeDebugSummarySpec::RunTest(const FString& /*Para
 	TestTrue(TEXT("Summary includes stable id"), Summary.Contains(TEXT("Run.Target.Debug")));
 	TestTrue(TEXT("Summary reports configured"), Summary.Contains(TEXT("Configured=true")));
 	TestTrue(TEXT("Summary reports preview active"), Summary.Contains(TEXT("PreviewActive=true")));
+	TestTrue(TEXT("Summary reports scale signal"), Summary.Contains(TEXT("ScaleSignal=true")));
+	TestTrue(TEXT("Summary reports custom depth signal"), Summary.Contains(TEXT("CustomDepthSignal=true")));
+	TestTrue(TEXT("Summary reports stencil value"), Summary.Contains(TEXT("Stencil=250")));
+	TestTrue(TEXT("Summary reports preview result"), Summary.Contains(TEXT("LastPreview=Applied")));
 
 	return true;
 }
@@ -1420,6 +1621,87 @@ bool FWacomUIRunEventClickBridgeWithoutOverlapSpec::RunTest(const FString& /*Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupEKeyCollectsSpec,
+	"Wacom.UI.WorldInteraction.RunPickup.EKeyRunPickupAddsGoldAndMarksCollected",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupEKeyCollectsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetPawn(Pawn.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.EKey");
+	Pickup->GoldAmount = 4;
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->SyncClickTargetForTest();
+	PC->RegisterCandidateInteractable(Pickup.Get());
+
+	TestTrue(TEXT("E key pickup is closest candidate"), PC->ReadClosestInteractable() == Pickup.Get());
+	PC->TryInteractFromConsole();
+
+	TestEqual(TEXT("Pickup adds gold"), Run->GetGold(), 4);
+	TestTrue(TEXT("Pickup marked collected"), Run->IsPickupCollected(Pickup->PersistentId));
+	TestFalse(TEXT("Collected pickup can no longer interact"), Pickup->CanInteract_Implementation(PC.Get()));
+	TestNull(TEXT("Collected pickup unregisters E candidate"), PC->ReadClosestInteractable());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupClickCollectsWithoutOverlapSpec,
+	"Wacom.UI.WorldInteraction.RunPickup.LeftClickRunPickupAddsGoldWithoutOverlapCandidate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupClickCollectsWithoutOverlapSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.ClickFar");
+	Pickup->GoldAmount = 5;
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+
+	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
+	TestTrue(TEXT("Far pickup click routes"), PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Pickup click adds gold"), Run->GetGold(), 5);
+	TestTrue(TEXT("Pickup click marks collected"), Run->IsPickupCollected(Pickup->PersistentId));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupCannotCollectTwiceSpec,
+	"Wacom.UI.WorldInteraction.RunPickup.RunPickupCannotBeCollectedTwice",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupCannotCollectTwiceSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.NoRepeat");
+	Pickup->GoldAmount = 2;
+	Pickup->bDestroyWhenCollected = false;
+
+	TestTrue(TEXT("First pickup succeeds"), Pickup->TryInteract_Implementation(PC.Get()));
+	TestFalse(TEXT("Second pickup rejected"), Pickup->TryInteract_Implementation(PC.Get()));
+	TestEqual(TEXT("Gold added once"), Run->GetGold(), 2);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIShopClickBridgeRoutesToInteractSpec,
 	"Wacom.UI.WorldInteraction.ShopClickBridge.LeftClickShopTargetRoutesToTryInteract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1513,24 +1795,84 @@ bool FWacomUIBattleTriggerClickBridgeWithoutOverlapSpec::RunTest(const FString& 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldClickContractRoutesClickableSpec,
-	"Wacom.UI.WorldInteraction.RunWorldClickContract.ControllerRoutesOnlyClickableWorldInteractables",
+	"Wacom.UI.WorldInteraction.RunWorldGenericClickableContract.GenericClickableActorRoutesThroughSharedResolver",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunWorldClickContractRoutesClickableSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
-		NewObject<AWacomRunEventTriggerClickProbe>());
-	Trigger->PersistentId = TEXT("Event.UI.ClickableContract");
-	Trigger->SyncClickTargetForTest();
-	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
+		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
+	Target->StableIdForTest = TEXT("Run.Generic.ClickRoute");
+	Target->SyncClickTargetForTest();
+	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
 
 	TestTrue(TEXT("Clickable world interactable routes"),
 		PC->RouteRunWorldInteractableClickForTest());
 	TestEqual(TEXT("Clickable route calls TryInteract"),
-		Trigger->TryInteractCountForTest,
+		Target->TryInteractCountForTest,
 		1);
+	TestTrue(TEXT("Clickable route passes PC"),
+		Target->GetLastInteractingPlayerControllerForTest() == PC.Get());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldGenericClickableHoverSpec,
+	"Wacom.UI.WorldInteraction.RunWorldGenericClickableContract.GenericClickableHoverUsesSharedResolver",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldGenericClickableHoverSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
+		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
+	Target->StableIdForTest = TEXT("Run.Generic.Hover");
+	Target->HoverPromptForTest = FText::FromString(TEXT("点击测试通用目标"));
+	Target->SyncClickTargetForTest();
+	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestEqual(TEXT("Generic hover prompt uses clickable contract"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击测试通用目标")));
+	const FString Summary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	TestTrue(TEXT("Generic hover debug reports stable id"),
+		Summary.Contains(TEXT("StableId=Run.Generic.Hover")));
+	TestTrue(TEXT("Generic hover debug reports shared debug"),
+		Summary.Contains(TEXT("Debug=RunWorldClickable")));
+	TestTrue(TEXT("Generic hover activates bridge preview"),
+		Target->ClickTargetBridge->IsProbePreviewActive());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldClickContractRoutesPickupSpec,
+	"Wacom.UI.WorldInteraction.RunWorldGenericClickableContract.ControllerRoutesPickupThroughSharedResolver",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldClickContractRoutesPickupSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.SharedResolver");
+	Pickup->GoldAmount = 1;
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+
+	TestTrue(TEXT("Pickup clickable world interactable routes"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Pickup route applies gold"), Run->GetGold(), 1);
 
 	return true;
 }
@@ -1562,7 +1904,7 @@ bool FWacomUIRunWorldClickContractRoutesBattleSpec::RunTest(const FString& /*Par
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldClickContractRejectsNonClickableSpec,
-	"Wacom.UI.WorldInteraction.RunWorldClickContract.ControllerRejectsRunObjectWithoutClickableContract",
+	"Wacom.UI.WorldInteraction.RunWorldGenericClickableContract.ResolverRejectsRunObjectWithoutClickableContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunWorldClickContractRejectsNonClickableSpec::RunTest(const FString& /*Parameters*/)
@@ -1602,6 +1944,78 @@ bool FWacomUIRunWorldClickContractRejectsNonClickableSpec::RunTest(const FString
 		PC->RouteRunWorldInteractableClickForTest());
 	TestEqual(TEXT("Rejected target does not receive TryInteract"),
 		Owner->TryInteractCountForTest,
+		0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldGenericRejectsNoWorldInteractableSpec,
+	"Wacom.UI.WorldInteraction.RunWorldGenericClickableContract.ResolverRejectsRunObjectWithoutWorldInteractable",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldGenericRejectsNoWorldInteractableSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AActor* Owner = SpawnTransientActor(*World);
+	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	AddInteractionTargetComponent(*Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.NoWorldContract"));
+	TestTrue(TEXT("Run target configured"), Bridge->RefreshRunWorldTargetBinding());
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->SetRunSceneHitForTest(Owner);
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestFalse(TEXT("Run target without world interactable does not route"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestTrue(TEXT("Hover debug records missing world interactable contract"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(
+			TEXT("Reason=MissingWorldInteractableContract")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldGenericRejectsWrongTagSpec,
+	"Wacom.UI.WorldInteraction.RunWorldGenericClickableContract.ResolverRejectsWrongTargetTag",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldGenericRejectsWrongTagSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
+		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
+	Target->StableIdForTest = TEXT("Run.Generic.WrongTag");
+	Target->SyncClickTargetForTest();
+	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
+	Target->ClickInteractionTarget->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
+	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+
+	FWacomInteractionTargetHandle Handle;
+	TestFalse(TEXT("Wrong tag is rejected by Run scene probe"),
+		PC->ProbeRunSceneTargetForTest(Handle));
+	TestFalse(TEXT("Wrong tag target does not click route"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Wrong tag target is not interacted with"),
+		Target->TryInteractCountForTest,
 		0);
 
 	return true;
@@ -1947,40 +2361,97 @@ bool FWacomUIRunWorldClickContractHoverPromptSpec::RunTest(const FString& /*Para
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldClickContractSharedDebugSpec,
-	"Wacom.UI.WorldInteraction.RunWorldClickContract.SharedDebugReportsStableIdPromptAndCanInteract",
+	"Wacom.UI.WorldInteraction.RunWorldGenericClickableContract.GenericClickableDebugReportsStableIdVisualAndReason",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunWorldClickContractSharedDebugSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
-		NewObject<AWacomShopTriggerClickProbe>());
-	Shop->PersistentId = TEXT("Shop.UI.ContractDebug");
-	Shop->HoverPromptText = FText::FromString(TEXT("共享调试商店"));
-	Shop->SyncClickTargetForTest();
-	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
+		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
+	Target->StableIdForTest = TEXT("Run.Generic.Debug");
+	Target->HoverPromptForTest = FText::FromString(TEXT("共享调试通用目标"));
+	Target->LastDebugResultForTest = TEXT("BlockedForTest");
+	Target->SyncClickTargetForTest();
+	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
 
 	const FWacomRunWorldClickableInteractableDebugView Debug =
-		Shop->GetRunWorldClickableDebugView_Implementation(nullptr);
+		Target->GetRunWorldClickableDebugView_Implementation(nullptr);
 
 	TestEqual(TEXT("Shared debug reports actor name"),
 		Debug.ActorName,
-		Shop->GetName());
+		Target->GetName());
 	TestEqual(TEXT("Shared debug reports stable id"),
 		Debug.StableId,
-		FName(TEXT("Shop.UI.ContractDebug")));
+		FName(TEXT("Run.Generic.Debug")));
+	TestTrue(TEXT("Shared debug reports stable id present"),
+		Debug.bHasStableId);
+	TestTrue(TEXT("Shared debug reports world interactable contract"),
+		Debug.bImplementsWorldInteractable);
+	TestTrue(TEXT("Shared debug reports clickable contract"),
+		Debug.bImplementsClickableContract);
 	TestEqual(TEXT("Shared debug reports bridge stable id"),
 		Debug.ClickTargetStableId,
-		FName(TEXT("Shop.UI.ContractDebug")));
+		FName(TEXT("Run.Generic.Debug")));
 	TestEqual(TEXT("Shared debug reports prompt"),
 		Debug.HoverPrompt,
-		FString(TEXT("共享调试商店")));
+		FString(TEXT("共享调试通用目标")));
 	TestTrue(TEXT("Shared debug reports configured click target"),
 		Debug.bClickTargetConfigured);
-	TestFalse(TEXT("Shared debug reports cannot interact without PC"),
-		Debug.bCanInteract);
-	TestEqual(TEXT("Shared debug reports last reason"),
-		Debug.LastDebugResult,
-		FName(TEXT("MissingPlayerController")));
+	TestTrue(TEXT("Shared debug reports configured click bounds"),
+		Debug.bClickBoundsConfigured);
+	TestTrue(TEXT("Shared debug reports interaction target"),
+		Debug.bHasInteractionTargetComponent);
+	TestTrue(TEXT("Shared debug reports bridge"),
+		Debug.bHasBridgeComponent);
+	TestTrue(TEXT("Shared debug reports visual target"),
+		Debug.bHasVisualTarget);
+	TestTrue(TEXT("Shared debug reports renderable visual target"),
+		Debug.bHasRenderableVisualTarget);
+	TestEqual(TEXT("Shared debug reports visual target name"),
+		Debug.VisualTargetName,
+		FName(TEXT("Visual")));
+	TestEqual(TEXT("Shared debug reports reject reason"),
+		Debug.RejectReason,
+		FName(TEXT("BlockedForTest")));
+	TestTrue(TEXT("Shared debug summary includes renderable visual"),
+		FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(Debug).Contains(
+			TEXT("HasRenderableVisual=true")));
+	TestTrue(TEXT("Shared debug summary includes click bounds"),
+		FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(Debug).Contains(
+			TEXT("ClickBounds=true")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldGenericMissingRenderableSpec,
+	"Wacom.UI.WorldInteraction.RunWorldGenericClickableContract.MissingRenderableVisualReportsDebugButDoesNotBlockClick",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldGenericMissingRenderableSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
+		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
+	Target->StableIdForTest = TEXT("Run.Generic.NoVisual");
+	Target->Visual->SetVisibility(false);
+	Target->SyncClickTargetForTest();
+	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+
+	TestTrue(TEXT("Missing renderable visual does not block click route"),
+		PC->RouteRunWorldInteractableClickForTest());
+	TestEqual(TEXT("Missing renderable visual still calls TryInteract"),
+		Target->TryInteractCountForTest,
+		1);
+
+	const FWacomRunWorldClickableInteractableDebugView Debug =
+		Target->GetRunWorldClickableDebugView_Implementation(PC.Get());
+	TestFalse(TEXT("Debug reports no renderable visual"),
+		Debug.bHasRenderableVisualTarget);
+	TestTrue(TEXT("Debug summary reports no renderable visual"),
+		FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(Debug).Contains(
+			TEXT("HasRenderableVisual=false")));
 
 	return true;
 }
@@ -2009,6 +2480,39 @@ bool FWacomUIRunEventHoverPromptShowsClickPromptSpec::RunTest(const FString& /*P
 		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Trigger->GetName()));
 	TestTrue(TEXT("Hover debug reports stable id"),
 		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Event.UI.Hover")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventHoverActivatesSharedProbeVisualSpec,
+	"Wacom.UI.WorldInteraction.RunEventHoverPrompt.RunEventHoverActivatesSharedProbeVisualSignal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.VisualSignal");
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Trigger.Get());
+	Trigger->AddInstanceComponent(Visual);
+	Visual->SetRelativeScale3D(FVector(2.0f, 2.0f, 2.0f));
+	Visual->SetRenderCustomDepth(false);
+	Trigger->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
+	Trigger->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 250;
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestTrue(TEXT("RunEvent bridge preview active"),
+		Trigger->GetClickTargetBridgeComponent()->IsProbePreviewActive());
+	TestEqual(TEXT("RunEvent visual scaled by shared probe"),
+		Visual->GetRelativeScale3D(), FVector(2.2f, 2.2f, 2.2f));
+	TestTrue(TEXT("RunEvent visual custom depth enabled"), Visual->bRenderCustomDepth);
+	TestEqual(TEXT("RunEvent visual stencil applied"), Visual->CustomDepthStencilValue, 250);
 
 	return true;
 }
@@ -2076,6 +2580,102 @@ bool FWacomUIShopHoverPromptShowsClickPromptSpec::RunTest(const FString& /*Param
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopHoverActivatesSharedProbeVisualSpec,
+	"Wacom.UI.WorldInteraction.ShopHoverPrompt.ShopHoverActivatesSharedProbeVisualSignal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
+		NewObject<AWacomShopTriggerClickProbe>());
+	Shop->PersistentId = TEXT("Shop.UI.VisualSignal");
+	Shop->SyncClickTargetForTest();
+	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Shop.Get());
+	Shop->AddInstanceComponent(Visual);
+	Visual->SetRelativeScale3D(FVector(3.0f, 3.0f, 3.0f));
+	Visual->SetRenderCustomDepth(false);
+	Shop->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
+	Shop->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 251;
+	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestTrue(TEXT("Shop bridge preview active"),
+		Shop->GetClickTargetBridgeComponent()->IsProbePreviewActive());
+	TestEqual(TEXT("Shop visual scaled by shared probe"),
+		Visual->GetRelativeScale3D(), FVector(3.3f, 3.3f, 3.3f));
+	TestTrue(TEXT("Shop visual custom depth enabled"), Visual->bRenderCustomDepth);
+	TestEqual(TEXT("Shop visual stencil applied"), Visual->CustomDepthStencilValue, 251);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupHoverPromptShowsClickPromptSpec,
+	"Wacom.UI.WorldInteraction.RunPickup.RunPickupHoverShowsClickPrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupHoverPromptShowsClickPromptSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.Hover");
+	Pickup->HoverPromptText = FText::FromString(TEXT("点击测试拾取"));
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestEqual(TEXT("Pickup hover prompt wins current interaction prompt"),
+		PC->ReadCurrentInteractPrompt().ToString(),
+		FString(TEXT("点击测试拾取")));
+	TestTrue(TEXT("Hover debug reports pickup actor"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Pickup->GetName()));
+	TestTrue(TEXT("Hover debug reports pickup stable id"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Pickup.UI.Hover")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupHoverActivatesSharedProbeVisualSpec,
+	"Wacom.UI.WorldInteraction.RunPickup.RunPickupHoverActivatesSharedProbeVisualSignal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.VisualSignal");
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	Pickup->GetPickupVisual()->SetRelativeScale3D(FVector(1.5f, 1.5f, 1.5f));
+	Pickup->GetPickupVisual()->SetRenderCustomDepth(false);
+	Pickup->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
+	Pickup->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 253;
+	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestTrue(TEXT("Pickup bridge preview active"),
+		Pickup->GetClickTargetBridgeComponent()->IsProbePreviewActive());
+	TestEqual(TEXT("Pickup visual scaled by shared probe"),
+		Pickup->GetPickupVisual()->GetRelativeScale3D(), FVector(1.65f, 1.65f, 1.65f));
+	TestTrue(TEXT("Pickup visual custom depth enabled"), Pickup->GetPickupVisual()->bRenderCustomDepth);
+	TestEqual(TEXT("Pickup visual stencil applied"), Pickup->GetPickupVisual()->CustomDepthStencilValue, 253);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleTriggerHoverPromptShowsClickPromptSpec,
 	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.BattleHoverShowsClickPrompt",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2100,6 +2700,40 @@ bool FWacomUIBattleTriggerHoverPromptShowsClickPromptSpec::RunTest(const FString
 		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Battle->GetName()));
 	TestTrue(TEXT("Hover debug reports battle stable id"),
 		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Battle.UI.Hover")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHoverActivatesSharedProbeVisualSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.BattleHoverActivatesSharedProbeVisualSignal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
+		NewObject<AWacomBattleTriggerClickProbe>());
+	Battle->PersistentId = TEXT("Battle.UI.VisualSignal");
+	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->SyncClickTargetForTest();
+	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Battle.Get());
+	Battle->AddInstanceComponent(Visual);
+	Visual->SetRelativeScale3D(FVector(4.0f, 4.0f, 4.0f));
+	Visual->SetRenderCustomDepth(false);
+	Battle->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
+	Battle->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 252;
+	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestTrue(TEXT("Battle bridge preview active"),
+		Battle->GetClickTargetBridgeComponent()->IsProbePreviewActive());
+	TestEqual(TEXT("Battle visual scaled by shared probe"),
+		Visual->GetRelativeScale3D(), FVector(4.4f, 4.4f, 4.4f));
+	TestTrue(TEXT("Battle visual custom depth enabled"), Visual->bRenderCustomDepth);
+	TestEqual(TEXT("Battle visual stencil applied"), Visual->CustomDepthStencilValue, 252);
 
 	return true;
 }
@@ -2447,6 +3081,44 @@ bool FWacomUIRunEventHoverPromptIgnoredWhenGameMenuActiveSpec::RunTest(const FSt
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldProbeVisualClearsWhenGameMenuActiveSpec,
+	"Wacom.UI.WorldInteraction.RunWorldHoverPrompt.GameMenuClearsRunWorldProbeVisualSignal",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldProbeVisualClearsWhenGameMenuActiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
+		NewObject<AWacomRunEventTriggerClickProbe>());
+	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	Trigger->PersistentId = TEXT("Event.UI.VisualMenuBlocked");
+	Trigger->SyncClickTargetForTest();
+	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Trigger.Get());
+	Trigger->AddInstanceComponent(Visual);
+	Visual->SetRelativeScale3D(FVector(2.0f, 2.0f, 2.0f));
+	Visual->SetRenderCustomDepth(false);
+	Trigger->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
+	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestTrue(TEXT("Preview activates before menu"),
+		Trigger->GetClickTargetBridgeComponent()->IsProbePreviewActive());
+	TestTrue(TEXT("Visual custom depth active before menu"), Visual->bRenderCustomDepth);
+
+	PC->RegisterActiveGameMenuWidget(Menu.Get());
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+	TestFalse(TEXT("Preview clears while menu active"),
+		Trigger->GetClickTargetBridgeComponent()->IsProbePreviewActive());
+	TestEqual(TEXT("Visual scale restored while menu active"),
+		Visual->GetRelativeScale3D(), FVector(2.0f, 2.0f, 2.0f));
+	TestFalse(TEXT("Visual custom depth restored while menu active"), Visual->bRenderCustomDepth);
+
+	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleTriggerHoverPromptIgnoredWhenGameMenuActiveSpec,
 	"Wacom.UI.WorldInteraction.BattleTriggerHoverPrompt.BattleHoverIgnoredWhenGameMenuActive",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2543,8 +3215,58 @@ bool FWacomUIRunWorldHoverPromptRejectsUnsupportedSpec::RunTest(const FString& /
 
 	TestTrue(TEXT("Non-RunEvent hover prompt rejected"),
 		PC->ReadCurrentInteractPrompt().IsEmpty());
-	TestTrue(TEXT("Hover debug records unsupported actor"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=UnsupportedActor")));
+	TestTrue(TEXT("Hover debug records missing world interactable contract"),
+		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(
+			TEXT("Reason=MissingWorldInteractableContract")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldUnsupportedTargetNoVisualSignalSpec,
+	"Wacom.UI.WorldInteraction.RunWorldHoverPrompt.UnsupportedRunTargetDoesNotLeaveProbeVisualSignalActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldUnsupportedTargetNoVisualSignalSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomRunWorldNonClickableInteractableProbe* Owner =
+		World->SpawnActor<AWacomRunWorldNonClickableInteractableProbe>(
+			AWacomRunWorldNonClickableInteractableProbe::StaticClass(),
+			FTransform::Identity);
+	if (!TestNotNull(TEXT("Non-clickable interactable spawned"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	AddInteractionTargetComponent(*Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
+		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.UnsupportedVisual"));
+	UStaticMeshComponent* Visual = AddVisualComponent(*Owner, FVector(2.0f, 2.0f, 2.0f));
+	Visual->SetRenderCustomDepth(false);
+	Bridge->RefreshRunWorldTargetBinding();
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	PC->SetRunSceneHitForTest(Owner);
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	TestFalse(TEXT("Unsupported target does not keep preview active"),
+		Bridge->IsProbePreviewActive());
+	TestEqual(TEXT("Unsupported target scale is unchanged"),
+		Visual->GetRelativeScale3D(), FVector(2.0f, 2.0f, 2.0f));
+	TestFalse(TEXT("Unsupported target custom depth is unchanged"), Visual->bRenderCustomDepth);
 
 	return true;
 }
@@ -2639,6 +3361,48 @@ bool FWacomUIBattleTriggerHoverPromptDebugSummarySpec::RunTest(const FString& /*
 	TestTrue(TEXT("Battle debug reports click target"), BattleSummary.Contains(TEXT("ClickTarget=true")));
 	TestTrue(TEXT("Battle debug reports hover prompt"),
 		BattleSummary.Contains(TEXT("HoverPrompt=点击调试战斗")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunPickupDebugSummarySpec,
+	"Wacom.UI.WorldInteraction.RunPickup.RunPickupDebugSummaryReportsGoldCollectedAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunPickupDebugSummarySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+
+	Pickup->PersistentId = TEXT("Pickup.UI.Debug");
+	Pickup->GoldAmount = 7;
+	Pickup->HoverPromptText = FText::FromString(TEXT("点击调试拾取"));
+	Pickup->bDestroyWhenCollected = false;
+	Pickup->SyncClickTargetForTest();
+	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
+	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+
+	PC->UpdateRunWorldTargetProbePreviewForTest();
+
+	const FString HoverSummary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	TestTrue(TEXT("Hover summary reports pickup actor"), HoverSummary.Contains(Pickup->GetName()));
+	TestTrue(TEXT("Hover summary reports pickup prompt"), HoverSummary.Contains(TEXT("Prompt=点击调试拾取")));
+	TestTrue(TEXT("Hover summary reports pickup stable id"), HoverSummary.Contains(TEXT("StableId=Pickup.UI.Debug")));
+
+	FString PickupSummary = Pickup->GetRunPickupDebugSummary(PC.Get());
+	TestTrue(TEXT("Pickup summary reports gold amount"), PickupSummary.Contains(TEXT("Gold=7")));
+	TestTrue(TEXT("Pickup summary reports click target"), PickupSummary.Contains(TEXT("ClickTarget=true")));
+	TestTrue(TEXT("Pickup summary reports stable id"),
+		PickupSummary.Contains(TEXT("ClickStableId=Pickup.UI.Debug")));
+	TestTrue(TEXT("Pickup starts uncollected"), PickupSummary.Contains(TEXT("Collected=false")));
+
+	TestTrue(TEXT("Pickup interaction succeeds"), Pickup->TryInteract_Implementation(PC.Get()));
+	PickupSummary = Pickup->GetRunPickupDebugSummary(PC.Get());
+	TestTrue(TEXT("Pickup summary reports collected"), PickupSummary.Contains(TEXT("Collected=true")));
+	TestTrue(TEXT("Pickup summary reports collected result"), PickupSummary.Contains(TEXT("Last=Collected")));
 
 	return true;
 }

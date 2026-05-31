@@ -242,7 +242,8 @@ ABattleTriggerActor::GetRunWorldClickableDebugView_Implementation(
 		bDestroyed,
 		LastResult,
 		ClickInteractionTargetComponent,
-		ClickTargetBridgeComponent);
+		ClickTargetBridgeComponent,
+		ClickBounds);
 }
 
 FVector ABattleTriggerActor::GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const
@@ -306,8 +307,10 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 FString ABattleTriggerActor::GetBattleTriggerDebugSummary(AWacomPlayerController* PC) const
 {
 	const FWacomBattleTriggerDebugView View = GetBattleTriggerDebugView(PC);
+	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
+		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("BattleTrigger{Actor=%s PersistentId=%s EnemyDef=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s}"),
+		TEXT("BattleTrigger{Actor=%s PersistentId=%s EnemyDef=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.EnemyDefinitionName,
@@ -317,7 +320,8 @@ FString ABattleTriggerActor::GetBattleTriggerDebugSummary(AWacomPlayerController
 		*View.ClickTargetStableId.ToString(),
 		*View.HoverPrompt,
 		*View.DestroyedHoverPrompt,
-		*View.LastDebugResult.ToString());
+		*View.LastDebugResult.ToString(),
+		*FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(ClickDebug));
 }
 
 void ABattleTriggerActor::LogBattleTriggerDebugSummary(AWacomPlayerController* PC) const

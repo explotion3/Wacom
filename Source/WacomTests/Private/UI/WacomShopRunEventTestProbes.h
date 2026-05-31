@@ -4,8 +4,14 @@
 
 #include "CoreMinimal.h"
 #include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomRunPickupActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
 #include "Actors/WacomShopTriggerActor.h"
+#include "Components/BoxComponent.h"
+#include "Components/SceneComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Components/WacomInteractionTargetComponent.h"
+#include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "Types/WacomInteractionTargetTypes.h"
@@ -345,6 +351,18 @@ private:
 };
 
 UCLASS()
+class AWacomRunPickupClickProbe : public AWacomRunPickupActor
+{
+	GENERATED_BODY()
+
+public:
+	void SyncClickTargetForTest()
+	{
+		OnConstruction(FTransform::Identity);
+	}
+};
+
+UCLASS()
 class AWacomRunWorldNonClickableInteractableProbe : public AActor, public IWacomWorldInteractable
 {
 	GENERATED_BODY()
@@ -374,6 +392,119 @@ public:
 		++TryInteractCountForTest;
 		return true;
 	}
+};
+
+UCLASS()
+class AWacomGenericRunWorldClickableInteractableProbe
+	: public AActor
+	, public IWacomWorldInteractable
+	, public IWacomRunWorldClickableInteractable
+{
+	GENERATED_BODY()
+
+public:
+	AWacomGenericRunWorldClickableInteractableProbe()
+	{
+		Root = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+		SetRootComponent(Root);
+
+		ClickBounds = CreateDefaultSubobject<UBoxComponent>(TEXT("ClickBounds"));
+		ClickBounds->SetupAttachment(Root);
+		FWacomRunWorldClickableInteractableHelper::ConfigureClickBounds(ClickBounds);
+
+		Visual = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Visual"));
+		Visual->SetupAttachment(Root);
+
+		ClickInteractionTarget = CreateDefaultSubobject<UWacomInteractionTargetComponent>(
+			TEXT("ClickInteractionTarget"));
+		ClickTargetBridge = CreateDefaultSubobject<UWacomRunWorldInteractionTargetBridgeComponent>(
+			TEXT("ClickTargetBridge"));
+		SyncClickTargetForTest();
+	}
+
+	UPROPERTY()
+	TObjectPtr<USceneComponent> Root = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UBoxComponent> ClickBounds = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> Visual = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UWacomInteractionTargetComponent> ClickInteractionTarget = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> ClickTargetBridge = nullptr;
+
+	FName StableIdForTest = TEXT("Run.Generic.Clickable");
+	FText InteractPromptForTest = FText::FromString(TEXT("按 E 测试通用交互"));
+	FText HoverPromptForTest = FText::FromString(TEXT("点击通用交互"));
+	bool bCanInteractForTest = true;
+	bool bInteractResultForTest = true;
+	FName LastDebugResultForTest = TEXT("Ok");
+	int32 TryInteractCountForTest = 0;
+
+	void SyncClickTargetForTest()
+	{
+		FWacomRunWorldClickableInteractableHelper::BindClickTarget(
+			StableIdForTest,
+			ClickBounds,
+			ClickInteractionTarget,
+			ClickTargetBridge);
+	}
+
+	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* /*PC*/) const override
+	{
+		return InteractPromptForTest;
+	}
+
+	virtual FVector GetInteractLocation_Implementation(AWacomPlayerController* /*PC*/) const override
+	{
+		return GetActorLocation();
+	}
+
+	virtual bool CanInteract_Implementation(AWacomPlayerController* /*PC*/) const override
+	{
+		return bCanInteractForTest;
+	}
+
+	virtual bool TryInteract_Implementation(AWacomPlayerController* PC) override
+	{
+		++TryInteractCountForTest;
+		LastInteractingPlayerControllerForTest = PC;
+		return bInteractResultForTest;
+	}
+
+	virtual FText GetRunWorldClickHoverPrompt_Implementation(AWacomPlayerController* /*PC*/) const override
+	{
+		return HoverPromptForTest;
+	}
+
+	virtual FWacomRunWorldClickableInteractableDebugView
+	GetRunWorldClickableDebugView_Implementation(AWacomPlayerController* /*PC*/) const override
+	{
+		return FWacomRunWorldClickableInteractableHelper::BuildDebugView(
+			this,
+			StableIdForTest,
+			HoverPromptForTest,
+			bCanInteractForTest,
+			/*bHasCompletionState*/false,
+			/*bIsCompleted*/false,
+			LastDebugResultForTest,
+			ClickInteractionTarget,
+			ClickTargetBridge,
+			ClickBounds);
+	}
+
+	AWacomPlayerController* GetLastInteractingPlayerControllerForTest() const
+	{
+		return LastInteractingPlayerControllerForTest.Get();
+	}
+
+private:
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AWacomPlayerController> LastInteractingPlayerControllerForTest;
 };
 
 UCLASS()

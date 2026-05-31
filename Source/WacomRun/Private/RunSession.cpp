@@ -1300,6 +1300,50 @@ bool URunSession::RemoveGold(int32 Amount)
 	return true;
 }
 
+bool URunSession::IsPickupCollected(FName PersistentId) const
+{
+	if (PersistentId.IsNone())
+	{
+		return false;
+	}
+	return RunState.CollectedPickupIds.Contains(PersistentId);
+}
+
+bool URunSession::CollectGoldPickup(FName PersistentId, int32 GoldAmount)
+{
+	if (PersistentId.IsNone())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] CollectGoldPickup: PersistentId 为空，拒绝"));
+		return false;
+	}
+	if (GoldAmount <= 0)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] CollectGoldPickup: PersistentId=%s GoldAmount=%d 非正数，拒绝"),
+			*PersistentId.ToString(),
+			GoldAmount);
+		return false;
+	}
+	if (RunState.CollectedPickupIds.Contains(PersistentId))
+	{
+		UE_LOG(LogTemp, Verbose,
+			TEXT("[RunSession] CollectGoldPickup: PersistentId=%s 已拾取，忽略重复提交"),
+			*PersistentId.ToString());
+		return false;
+	}
+
+	RunState.Gold += GoldAmount;
+	RunState.CollectedPickupIds.Add(PersistentId);
+	UE_LOG(LogTemp, Display,
+		TEXT("[RunSession] CollectGoldPickup: PersistentId=%s +%d gold (total=%d)"),
+		*PersistentId.ToString(),
+		GoldAmount,
+		RunState.Gold);
+	NotifyRunStateChanged();
+	return true;
+}
+
 // ================ 商店购买 ================
 
 bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers)
