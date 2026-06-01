@@ -10,6 +10,7 @@
 #include "Cards/CardDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
+#include "Tags/WacomGameplayTags.h"
 
 namespace
 {
@@ -21,6 +22,12 @@ namespace
 	const FRuntimeCardInstance* FindCard(const FBattleState& State, const FGuid& InstanceId)
 	{
 		return FBattleRules::FindCard(State, InstanceId);
+	}
+
+	bool HasSwiftKeyword(const FRuntimeCardInstance& Card)
+	{
+		return (Card.Definition && Card.Definition->Keywords.HasTag(WacomTags::Card_Keyword_Swift))
+			|| Card.TemporaryKeywords.HasTag(WacomTags::Card_Keyword_Swift);
 	}
 }
 
@@ -104,6 +111,7 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		HandCard.Zone          = FHandZoneService::GetZoneOf(State, CardId);
 		HandCard.bIsHandAnchor = FHandZoneService::IsHandAnchor(State, CardId);
 		HandCard.bIsPlayable   = FBattleRules::IsCardCostLegal(State, *Card);
+		HandCard.bIsSwift      = HasSwiftKeyword(*Card);
 
 		if (CardId == State.Cards.LeftHandInstanceId)  { Out.Hand.bLeftHandPresent = true; }
 		if (CardId == State.Cards.RightHandInstanceId) { Out.Hand.bRightHandPresent = true; }

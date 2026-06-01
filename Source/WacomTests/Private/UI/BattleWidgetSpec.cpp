@@ -291,6 +291,39 @@ bool FWacomUIBattleCardWidgetPresentationSpec::RunTest(const FString& /*Paramete
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHandSnapshotReportsSwiftSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleHandSnapshotReportsSwiftForPrediction",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHandSnapshotReportsSwiftSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* SwiftCard = Fx.MakeSimpleDamageCard(1, 1);
+	SwiftCard->Keywords.AddTag(WacomTags::Card_Keyword_Swift);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ SwiftCard });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+
+	bool bFoundSwift = false;
+	for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+	{
+		if (Card.Definition == SwiftCard)
+		{
+			bFoundSwift = true;
+			TestTrue(TEXT("Snapshot reports swift keyword"), Card.bIsSwift);
+			TestEqual(TEXT("Snapshot keeps runtime cost"), Card.RuntimeCost, 1);
+		}
+	}
+	TestTrue(TEXT("Swift card appears in hand snapshot"), bFoundSwift);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCombatLogBuilderPlayCardSpec,
 	"Wacom.UI.Battle.CombatLogBuilderBuildsPlayCardBlockWithCardAndTargetNames",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2563,13 +2596,100 @@ bool FWacomUIBattleEnemyPartWorldTargetBridgeDragPreviewSpec::RunTest(const FStr
 	TestEqual(TEXT("Drag preview scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.15f);
 	TestEqual(TEXT("Drag preview does not count as battle cue"), View.CuePlayCount, 0);
 
+	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
+	PredictionInput.bHasSourceCard = true;
+	PredictionInput.SourceCardInstanceId = FGuid::NewGuid();
+	PredictionInput.SourceCardRuntimeCost = 2;
+	PredictionInput.bSourceCardSwift = true;
+	PredictionInput.bPreviewCanSubmit = true;
+	PredictionInput.PreviewRejectReason = TEXT("None");
+	Bridge->SetDragTargetPreviewState(
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget,
+		PredictionInput);
+	View = Bridge->GetBattleWorldTargetDebugView();
+	TestTrue(TEXT("Prediction input records source card"),
+		View.LastDragPredictionDebugInput.SourceCardInstanceId == PredictionInput.SourceCardInstanceId);
+	TestEqual(TEXT("Prediction input records runtime cost"),
+		View.LastDragPredictionDebugInput.SourceCardRuntimeCost,
+		2);
+	TestTrue(TEXT("Prediction input records swift flag"),
+		View.LastDragPredictionDebugInput.bSourceCardSwift);
+	TestTrue(TEXT("Prediction input records submit flag"),
+		View.LastDragPredictionDebugInput.bPreviewCanSubmit);
+	TestEqual(TEXT("Prediction input records reject reason"),
+		View.LastDragPredictionDebugInput.PreviewRejectReason,
+		FName(TEXT("None")));
+	TestTrue(TEXT("Bridge summary reports drag cost"),
+		Bridge->GetBattleWorldTargetDebugSummary().Contains(TEXT("DragCost=2")));
+
 	Bridge->ClearDragTargetPreviewState();
 	View = Bridge->GetBattleWorldTargetDebugView();
 	TestFalse(TEXT("Drag preview clears"), View.bDragPreviewActive);
 	TestEqual(TEXT("Drag preview state clears"),
 		View.DragPreviewState,
 		EWacomFirstPersonCardDragTargetFeedbackState::None);
+	TestFalse(TEXT("Prediction input clears"), View.LastDragPredictionDebugInput.bHasSourceCard);
 	TestEqual(TEXT("Drag preview restores base scale"), Primitive->GetRelativeScale3D(), BaseScale);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartBridgeRuntimeFactsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartBridgeReportsRuntimeInitiativeFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartBridgeRuntimeFactsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(1, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 7, 5, 3);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		NewObject<UWacomBattleEnemyPartWorldTargetBridgeComponent>(Owner);
+	Owner->AddInstanceComponent(Bridge);
+	Bridge->RegisterComponent();
+	Bridge->SetPartId(TEXT("Test.Part.Head"));
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+
+	const FWacomBattleEnemyPartWorldTargetDebugView View = Bridge->GetBattleWorldTargetDebugView();
+	TestTrue(TEXT("Bridge binds to runtime snapshot"), View.bBoundToSnapshot);
+	TestTrue(TEXT("Bridge reports runtime facts"), View.bHasRuntimePartFacts);
+	TestEqual(TEXT("Bridge reports current initiative"), View.CurrentInitiative, 7);
+	TestEqual(TEXT("Bridge reports intent id"), View.CurrentIntentId, FName(TEXT("Test.Part.Head")));
+	TestEqual(TEXT("Bridge reports intent initiative"), View.CurrentIntentInitiative, 7);
+	TestFalse(TEXT("Bridge reports part not destroyed"), View.bRuntimePartDestroyed);
+	TestTrue(TEXT("Bridge summary reports initiative"),
+		Bridge->GetBattleWorldTargetDebugSummary().Contains(TEXT("Initiative=7")));
 
 	return true;
 }
@@ -2854,6 +2974,11 @@ bool FWacomUIBattleSceneEnemyPartActorWorldTargetHandleSpec::RunTest(const FStri
 	TestEqual(TEXT("Bridge runtime id matches"),
 		PartActor->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
 		HeadInstanceId);
+	TestTrue(TEXT("Bridge reports runtime facts"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHasRuntimePartFacts);
+	TestEqual(TEXT("Bridge reports runtime initiative"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().CurrentInitiative,
+		5);
 	TestEqual(TEXT("Interaction target runtime id"),
 		PartActor->GetInteractionTargetComponent()->GetTargetId(),
 		HeadInstanceId);
@@ -2866,6 +2991,60 @@ bool FWacomUIBattleSceneEnemyPartActorWorldTargetHandleSpec::RunTest(const FStri
 		Handle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart));
 	TestTrue(TEXT("Handle source object"),
 		Handle.SourceObject.Get() == PartActor->GetInteractionTargetComponent());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartDebugPredictionFactsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartDebugSummaryReportsPredictionReadinessFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartDebugPredictionFactsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyPartActor* PartActor =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	if (!TestNotNull(TEXT("Part actor"), PartActor))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PartActor))
+		{
+			PartActor->Destroy();
+		}
+	};
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		PartActor->GetWorldTargetBridgeComponent();
+	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
+	PredictionInput.bHasSourceCard = true;
+	PredictionInput.SourceCardInstanceId = FGuid::NewGuid();
+	PredictionInput.SourceCardRuntimeCost = 4;
+	PredictionInput.bSourceCardSwift = false;
+	PredictionInput.bPreviewCanSubmit = false;
+	PredictionInput.PreviewRejectReason = TEXT("InvalidWorldTarget");
+	Bridge->SetDragTargetPreviewState(
+		EWacomFirstPersonCardDragTargetFeedbackState::Invalid,
+		PredictionInput);
+
+	const FString Summary = PartActor->GetBattleSceneEnemyPartDebugSummary();
+	TestTrue(TEXT("Part summary reports drag cost"), Summary.Contains(TEXT("DragCost=4")));
+	TestTrue(TEXT("Part summary reports swift flag"), Summary.Contains(TEXT("DragSwift=false")));
+	TestTrue(TEXT("Part summary reports submit flag"), Summary.Contains(TEXT("DragCanSubmit=false")));
+	TestTrue(TEXT("Part summary reports reject reason"), Summary.Contains(TEXT("DragReject=InvalidWorldTarget")));
+
 	return true;
 }
 
@@ -3020,6 +3199,89 @@ bool FWacomUIBattleSceneEnemyHostReportsAttachedPartFactsSpec::RunTest(const FSt
 	TestTrue(TEXT("Body part id included"), View.AttachedPartIds.Contains(TEXT("Test.Part.Body")));
 	TestTrue(TEXT("Host summary reports count"),
 		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("PartCount=2")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostRuntimeFactsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostAggregatesRuntimePartFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostRuntimeFactsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(1, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 7, 5, 3);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host =
+		World->SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Head =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(100.f, 0.f, 0.f)),
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Body =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(200.f, 0.f, 0.f)),
+			SpawnParams);
+	if (!TestNotNull(TEXT("Host"), Host)
+		|| !TestNotNull(TEXT("Head"), Head)
+		|| !TestNotNull(TEXT("Body"), Body))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Head))
+		{
+			Head->Destroy();
+		}
+		if (IsValid(Body))
+		{
+			Body->Destroy();
+		}
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	Head->PartId = TEXT("Test.Part.Head");
+	Body->PartId = TEXT("Test.Part.Body");
+	Head->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
+	Body->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
+	Host->RefreshAttachedPartAuthoringState();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+
+	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
+	TestEqual(TEXT("Host aggregates bound parts"), View.BoundPartActorCount, 2);
+	TestEqual(TEXT("Host aggregates runtime facts"), View.RuntimeFactsPartActorCount, 2);
+	TestEqual(TEXT("Host sums runtime initiative"), View.RuntimeInitiativeTotal, 12);
+	TestTrue(TEXT("Host summary reports runtime facts"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("RuntimeFacts=2")));
+	TestTrue(TEXT("Host summary reports initiative total"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("RuntimeInitiativeTotal=12")));
+
 	return true;
 }
 

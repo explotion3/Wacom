@@ -183,6 +183,25 @@ namespace
 		return false;
 	}
 
+	const FHandCardSnapshot* FindHandCardSnapshot(
+		const FBattleSnapshot& Snapshot,
+		const FGuid& CardInstanceId)
+	{
+		if (!CardInstanceId.IsValid())
+		{
+			return nullptr;
+		}
+
+		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+		{
+			if (CardSnapshot.InstanceId == CardInstanceId)
+			{
+				return &CardSnapshot;
+			}
+		}
+		return nullptr;
+	}
+
 }
 
 FString FWacomBattleCardDropResolveResult::ToDebugString() const
@@ -1094,7 +1113,22 @@ void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
 	}
 	if (PreviewBridge)
 	{
-		PreviewBridge->SetDragTargetPreviewState(FeedbackState);
+		FWacomBattleEnemyPartDragPredictionDebugInput PredictionDebugInput;
+		PredictionDebugInput.SourceCardInstanceId = CardInstanceId;
+		PredictionDebugInput.bPreviewCanSubmit = DropResult.bCanSubmit;
+		PredictionDebugInput.PreviewRejectReason = FName(LexToString(DropResult.RejectReason));
+		if (const UBattleSession* CurrentSession = GetSession())
+		{
+			const FBattleSnapshot CurrentSnapshot = CurrentSession->BuildSnapshot();
+			if (const FHandCardSnapshot* SourceSnapshot =
+				FindHandCardSnapshot(CurrentSnapshot, CardInstanceId))
+			{
+				PredictionDebugInput.bHasSourceCard = true;
+				PredictionDebugInput.SourceCardRuntimeCost = SourceSnapshot->RuntimeCost;
+				PredictionDebugInput.bSourceCardSwift = SourceSnapshot->bIsSwift;
+			}
+		}
+		PreviewBridge->SetDragTargetPreviewState(FeedbackState, PredictionDebugInput);
 	}
 
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveFirstPersonCardAnchor())

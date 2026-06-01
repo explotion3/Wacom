@@ -39,6 +39,10 @@ struct WACOMBATTLE_API FHandCardSnapshot
 	/** 本卡是否满足当前费用合法性（RuntimeCost <= 敌方先机总和）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	bool bIsPlayable = false;
+
+	/** 本卡当前是否拥有迅捷关键词（含战斗内临时关键词）。用于 UI 预测，不改变规则判断来源。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	bool bIsSwift = false;
 };
 
 /**

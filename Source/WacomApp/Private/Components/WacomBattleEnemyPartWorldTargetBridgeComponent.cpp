@@ -45,13 +45,22 @@ bool UWacomBattleEnemyPartWorldTargetBridgeComponent::SyncFromBattleHUD(
 	if (!MatchedPart || !MatchedPart->InstanceId.IsValid() || MatchedPart->bDestroyed)
 	{
 		LastBindResult = MatchedPart && MatchedPart->bDestroyed ? TEXT("PartDestroyed") : TEXT("NoMatchingPart");
-		ClearBattleBinding();
+		if (MatchedPart)
+		{
+			CacheRuntimePartFacts(*MatchedPart);
+			ClearBattleBindingInternal(/*bClearRuntimeFacts=*/false);
+		}
+		else
+		{
+			ClearBattleBinding();
+		}
 		return false;
 	}
 
 	PartInstanceId = MatchedPart->InstanceId;
 	bBoundToSnapshot = true;
 	LastBindResult = TEXT("MatchedPartId");
+	CacheRuntimePartFacts(*MatchedPart);
 
 	bool bNewTargetable = false;
 	FName NewDisabledReason = NAME_None;
@@ -73,12 +82,21 @@ bool UWacomBattleEnemyPartWorldTargetBridgeComponent::SyncFromBattleHUD(
 
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearBattleBinding()
 {
+	ClearBattleBindingInternal(/*bClearRuntimeFacts=*/true);
+}
+
+void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearBattleBindingInternal(bool bClearRuntimeFacts)
+{
 	UnregisterFromBattleHUD();
 	ClearDragTargetPreviewState();
 	PartInstanceId.Invalidate();
 	bBoundToSnapshot = false;
 	TargetDisabledReason = NAME_None;
 	ApplyTargetableAffordance(false);
+	if (bClearRuntimeFacts)
+	{
+		ClearRuntimePartFacts();
+	}
 
 	if (UWacomInteractionTargetComponent* TargetComponent = ResolveInteractionTargetComponent())
 	{
@@ -122,6 +140,14 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDebugView()
 	View.PartInstanceId = PartInstanceId;
 	View.bBoundToSnapshot = bBoundToSnapshot;
 	View.bRegisteredWithBattleHUD = bRegisteredWithBattleHUD;
+	View.bHasRuntimePartFacts = bHasRuntimePartFacts;
+	View.RuntimePartInstanceId = RuntimePartInstanceId;
+	View.CurrentInitiative = CurrentInitiative;
+	View.bRuntimePartDestroyed = bRuntimePartDestroyed;
+	View.CurrentIntentId = CurrentIntentId;
+	View.CurrentIntentDisplayName = CurrentIntentDisplayName;
+	View.CurrentIntentInitiative = CurrentIntentInitiative;
+	View.CurrentIntentResistanceValue = CurrentIntentResistanceValue;
 	View.bTargetable = bTargetable;
 	View.TargetDisabledReason = TargetDisabledReason;
 	View.LastBindResult = LastBindResult;
@@ -131,6 +157,7 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDebugView()
 	View.CuePlayCount = CuePlayCount;
 	View.DragPreviewState = DragPreviewState;
 	View.bDragPreviewActive = bDragPreviewActive;
+	View.LastDragPredictionDebugInput = LastDragPredictionDebugInput;
 	return View;
 }
 
@@ -138,12 +165,19 @@ FString UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDeb
 {
 	const FWacomBattleEnemyPartWorldTargetDebugView View = GetBattleWorldTargetDebugView();
 	return FString::Printf(
-		TEXT("BattleEnemyPartWorldTarget{Owner=%s PartId=%s PartInstanceId=%s Bound=%s Registered=%s Targetable=%s Disabled=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s}"),
+		TEXT("BattleEnemyPartWorldTarget{Owner=%s PartId=%s PartInstanceId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Initiative=%d Destroyed=%s Intent=%s IntentInitiative=%d IntentResistance=%d Targetable=%s Disabled=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s}"),
 		*GetNameSafe(GetOwner()),
 		*View.PartId.ToString(),
 		*View.PartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 		View.bBoundToSnapshot ? TEXT("true") : TEXT("false"),
 		View.bRegisteredWithBattleHUD ? TEXT("true") : TEXT("false"),
+		View.bHasRuntimePartFacts ? TEXT("true") : TEXT("false"),
+		*View.RuntimePartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
+		View.CurrentInitiative,
+		View.bRuntimePartDestroyed ? TEXT("true") : TEXT("false"),
+		*View.CurrentIntentId.ToString(),
+		View.CurrentIntentInitiative,
+		View.CurrentIntentResistanceValue,
 		View.bTargetable ? TEXT("true") : TEXT("false"),
 		*View.TargetDisabledReason.ToString(),
 		*View.LastBindResult.ToString(),
@@ -152,7 +186,12 @@ FString UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDeb
 		View.LastCueAmount,
 		View.CuePlayCount,
 		static_cast<int32>(View.DragPreviewState),
-		View.bDragPreviewActive ? TEXT("true") : TEXT("false"));
+		View.bDragPreviewActive ? TEXT("true") : TEXT("false"),
+		*View.LastDragPredictionDebugInput.SourceCardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
+		View.LastDragPredictionDebugInput.SourceCardRuntimeCost,
+		View.LastDragPredictionDebugInput.bSourceCardSwift ? TEXT("true") : TEXT("false"),
+		View.LastDragPredictionDebugInput.bPreviewCanSubmit ? TEXT("true") : TEXT("false"),
+		*View.LastDragPredictionDebugInput.PreviewRejectReason.ToString());
 }
 
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::LogBattleWorldTargetDebugSummary() const
@@ -168,7 +207,8 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::EndPlay(const EEndPlayReas
 }
 
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::SetDragTargetPreviewState(
-	EWacomFirstPersonCardDragTargetFeedbackState PreviewState)
+	EWacomFirstPersonCardDragTargetFeedbackState PreviewState,
+	const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionDebugInput)
 {
 	if (PreviewState != EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
 		&& PreviewState != EWacomFirstPersonCardDragTargetFeedbackState::Invalid)
@@ -178,6 +218,7 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::SetDragTargetPreviewState(
 	}
 
 	DragPreviewState = PreviewState;
+	LastDragPredictionDebugInput = PredictionDebugInput;
 	bDragPreviewActive = true;
 	BeginScaleFeedback(DragTargetPreviewScale, 0.0f);
 }
@@ -191,6 +232,7 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearDragTargetPreviewStat
 
 	bDragPreviewActive = false;
 	DragPreviewState = EWacomFirstPersonCardDragTargetFeedbackState::None;
+	LastDragPredictionDebugInput = FWacomBattleEnemyPartDragPredictionDebugInput();
 	if (bTargetable)
 	{
 		BeginScaleFeedback(TargetableAffordanceScale, 0.0f);
@@ -218,6 +260,31 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent::ResolveVisualTargetComponent() 
 
 	AActor* Owner = GetOwner();
 	return Owner ? Owner->FindComponentByClass<UPrimitiveComponent>() : nullptr;
+}
+
+void UWacomBattleEnemyPartWorldTargetBridgeComponent::CacheRuntimePartFacts(
+	const FEnemyPartSnapshot& Part)
+{
+	RuntimePartInstanceId = Part.InstanceId;
+	bHasRuntimePartFacts = Part.InstanceId.IsValid();
+	CurrentInitiative = Part.CurrentInitiative;
+	bRuntimePartDestroyed = Part.bDestroyed;
+	CurrentIntentId = Part.CurrentIntent.IntentId;
+	CurrentIntentDisplayName = Part.CurrentIntent.DisplayName;
+	CurrentIntentInitiative = Part.CurrentIntent.Initiative;
+	CurrentIntentResistanceValue = Part.CurrentIntent.ResistanceValue;
+}
+
+void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearRuntimePartFacts()
+{
+	RuntimePartInstanceId.Invalidate();
+	bHasRuntimePartFacts = false;
+	CurrentInitiative = 0;
+	bRuntimePartDestroyed = false;
+	CurrentIntentId = NAME_None;
+	CurrentIntentDisplayName = FText::GetEmpty();
+	CurrentIntentInitiative = 0;
+	CurrentIntentResistanceValue = 0;
 }
 
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::RegisterWithBattleHUD(UBattleHUD& HUD)

@@ -16,6 +16,30 @@ struct FBattleSnapshot;
 struct FBattleTargetSelectionView;
 
 USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomBattleEnemyPartDragPredictionDebugInput
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	bool bHasSourceCard = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FGuid SourceCardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	int32 SourceCardRuntimeCost = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	bool bSourceCardSwift = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	bool bPreviewCanSubmit = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FName PreviewRejectReason = NAME_None;
+};
+
+USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 {
 	GENERATED_BODY()
@@ -31,6 +55,30 @@ struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
 	bool bRegisteredWithBattleHUD = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	bool bHasRuntimePartFacts = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FGuid RuntimePartInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	int32 CurrentInitiative = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	bool bRuntimePartDestroyed = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FName CurrentIntentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FText CurrentIntentDisplayName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	int32 CurrentIntentInitiative = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	int32 CurrentIntentResistanceValue = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
 	bool bTargetable = false;
@@ -59,6 +107,9 @@ struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
 	bool bDragPreviewActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FWacomBattleEnemyPartDragPredictionDebugInput LastDragPredictionDebugInput;
 };
 
 /**
@@ -114,7 +165,10 @@ public:
 	bool SyncFromBattleHUD(UBattleHUD& HUD, const FBattleSnapshot& Snapshot, const FBattleTargetSelectionView& TargetSelectionView);
 	void ClearBattleBinding();
 	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
-	void SetDragTargetPreviewState(EWacomFirstPersonCardDragTargetFeedbackState PreviewState);
+	void SetDragTargetPreviewState(
+		EWacomFirstPersonCardDragTargetFeedbackState PreviewState,
+		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionDebugInput =
+			FWacomBattleEnemyPartDragPredictionDebugInput());
 	void ClearDragTargetPreviewState();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|World Target")
@@ -132,6 +186,9 @@ protected:
 private:
 	UWacomInteractionTargetComponent* ResolveInteractionTargetComponent() const;
 	UPrimitiveComponent* ResolveVisualTargetComponent() const;
+	void CacheRuntimePartFacts(const struct FEnemyPartSnapshot& Part);
+	void ClearRuntimePartFacts();
+	void ClearBattleBindingInternal(bool bClearRuntimeFacts);
 	void RegisterWithBattleHUD(UBattleHUD& HUD);
 	void UnregisterFromBattleHUD();
 	void ApplyTargetableAffordance(bool bInTargetable);
@@ -148,6 +205,9 @@ private:
 	FGuid PartInstanceId;
 
 	UPROPERTY(Transient)
+	FGuid RuntimePartInstanceId;
+
+	UPROPERTY(Transient)
 	FVector CachedBaseScale = FVector::OneVector;
 
 	UPROPERTY(Transient)
@@ -155,11 +215,19 @@ private:
 
 	bool bBoundToSnapshot = false;
 	bool bRegisteredWithBattleHUD = false;
+	bool bHasRuntimePartFacts = false;
+	bool bRuntimePartDestroyed = false;
 	bool bTargetable = false;
 	bool bHasCachedBaseScale = false;
 	bool bDragPreviewActive = false;
 	EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
+	FWacomBattleEnemyPartDragPredictionDebugInput LastDragPredictionDebugInput;
+	int32 CurrentInitiative = 0;
+	FName CurrentIntentId = NAME_None;
+	FText CurrentIntentDisplayName;
+	int32 CurrentIntentInitiative = 0;
+	int32 CurrentIntentResistanceValue = 0;
 	FName TargetDisabledReason = NAME_None;
 	FName LastBindResult = TEXT("NotAttempted");
 	FName LastCueKind = TEXT("None");

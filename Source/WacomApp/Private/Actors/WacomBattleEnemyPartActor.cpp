@@ -183,7 +183,7 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 {
 	const FWacomBattleSceneEnemyPartDebugView View = GetBattleSceneEnemyPartDebugView();
 	return FString::Printf(
-		TEXT("BattleSceneEnemyPart{Actor=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s}"),
+		TEXT("BattleSceneEnemyPart{Actor=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Initiative=%d Destroyed=%s Intent=%s IntentInitiative=%d IntentResistance=%d Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s}"),
 		*View.ActorName,
 		*View.PartId.ToString(),
 		*View.HitBoundsExtent.ToCompactString(),
@@ -197,6 +197,13 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 		*View.BridgeDebugView.PartId.ToString(),
 		View.BridgeDebugView.bBoundToSnapshot ? TEXT("true") : TEXT("false"),
 		View.BridgeDebugView.bRegisteredWithBattleHUD ? TEXT("true") : TEXT("false"),
+		View.BridgeDebugView.bHasRuntimePartFacts ? TEXT("true") : TEXT("false"),
+		*View.BridgeDebugView.RuntimePartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
+		View.BridgeDebugView.CurrentInitiative,
+		View.BridgeDebugView.bRuntimePartDestroyed ? TEXT("true") : TEXT("false"),
+		*View.BridgeDebugView.CurrentIntentId.ToString(),
+		View.BridgeDebugView.CurrentIntentInitiative,
+		View.BridgeDebugView.CurrentIntentResistanceValue,
 		View.BridgeDebugView.bTargetable ? TEXT("true") : TEXT("false"),
 		*View.BridgeDebugView.LastBindResult.ToString(),
 		*View.BridgeDebugView.LastCueKind.ToString(),
@@ -204,7 +211,13 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 		View.BridgeDebugView.LastCueAmount,
 		View.BridgeDebugView.CuePlayCount,
 		static_cast<int32>(View.BridgeDebugView.DragPreviewState),
-		View.BridgeDebugView.bDragPreviewActive ? TEXT("true") : TEXT("false"));
+		View.BridgeDebugView.bDragPreviewActive ? TEXT("true") : TEXT("false"),
+		*View.BridgeDebugView.LastDragPredictionDebugInput.SourceCardInstanceId.ToString(
+			EGuidFormats::DigitsWithHyphens),
+		View.BridgeDebugView.LastDragPredictionDebugInput.SourceCardRuntimeCost,
+		View.BridgeDebugView.LastDragPredictionDebugInput.bSourceCardSwift ? TEXT("true") : TEXT("false"),
+		View.BridgeDebugView.LastDragPredictionDebugInput.bPreviewCanSubmit ? TEXT("true") : TEXT("false"),
+		*View.BridgeDebugView.LastDragPredictionDebugInput.PreviewRejectReason.ToString());
 }
 
 void AWacomBattleEnemyPartActor::LogBattleSceneEnemyPartDebugSummary() const

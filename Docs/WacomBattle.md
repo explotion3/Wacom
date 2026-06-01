@@ -301,6 +301,13 @@ WacomBattle/
 - `if CardResistance > IntentResistance → 该部位进入 Status.Stunned`
 - 抵抗不改变伤害、不改变先机、不阻止先机推进
 
+### UI 先机预测口径
+
+- V0-CO 后 `FHandCardSnapshot` 暴露 `RuntimeCost` 和 `bIsSwift`，场景敌方部位 bridge debug 暴露 `FEnemyPartSnapshot.CurrentInitiative`。这些是 UI 预测的输入，不是规则来源。
+- 未来可见预测 V1 只做近似 Cost 推进：非迅捷卡显示 `CurrentInitiative -> CurrentInitiative - RuntimeCost`；迅捷卡不显示扣减。
+- 若 `RuntimeCost == CurrentInitiative`，UI 可标记先机命中 / 完美释放候选；若非迅捷卡预计结果 `<= 0`，UI 可标记部位行动风险。
+- V1 不模拟主效果、ZoneHook、破坏、中毒、改先机、抵抗最终结果或任何后续被动。最终是否合法和实际结果仍以 `UBattleSession` resolver 提交结果为准。
+
 ---
 
 ## §6 中毒
