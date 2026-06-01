@@ -2635,6 +2635,81 @@ bool FWacomUIBattleEnemyPartWorldTargetBridgeDragPreviewSpec::RunTest(const FStr
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartHoverScalePrioritySpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartHoverScaleDoesNotOverrideDragOrTargetableState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartHoverScalePrioritySpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
+	Owner->SetRootComponent(Primitive);
+	Primitive->RegisterComponent();
+	Primitive->SetRelativeScale3D(FVector(2.0f, 2.0f, 2.0f));
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		NewObject<UWacomBattleEnemyPartWorldTargetBridgeComponent>(Owner);
+	Owner->AddInstanceComponent(Bridge);
+	Bridge->RegisterComponent();
+	Bridge->VisualTargetComponent = Primitive;
+	Bridge->HoverProbeScale = 1.04f;
+	Bridge->TargetableAffordanceScale = 1.10f;
+	Bridge->DragTargetPreviewScale = 1.20f;
+
+	const FVector BaseScale = Primitive->GetRelativeScale3D();
+	const FGuid WorldTargetId = FGuid::NewGuid();
+	FWacomInteractionTargetHandle HoverHandle = FWacomInteractionTargetHandle::ForWorldTarget(
+		WorldTargetId,
+		Bridge,
+		FVector::ZeroVector,
+		FVector2D(120.0f, 80.0f),
+		WacomTags::Interaction_Target_Battle_EnemyPart,
+		TEXT("Test.Part.Head"));
+
+	Bridge->SetHoverProbeState(HoverHandle, TEXT("Hovered"));
+	TestEqual(TEXT("Hover scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.04f);
+
+	Bridge->ApplyTargetableAffordanceForTest(true);
+	TestEqual(TEXT("Targetable overrides hover scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.10f);
+
+	Bridge->SetDragTargetPreviewState(EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+	TestEqual(TEXT("Drag preview overrides targetable and hover"), Primitive->GetRelativeScale3D(), BaseScale * 1.20f);
+
+	Bridge->ClearDragTargetPreviewState();
+	TestEqual(TEXT("Clearing drag restores targetable scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.10f);
+
+	Bridge->ApplyTargetableAffordanceForTest(false);
+	TestEqual(TEXT("Clearing targetable restores hover scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.04f);
+
+	Bridge->ClearHoverProbeState(TEXT("NoTarget"));
+	TestEqual(TEXT("Clearing hover restores base scale"), Primitive->GetRelativeScale3D(), BaseScale);
+	TestEqual(TEXT("Hover clear reason recorded"),
+		Bridge->GetBattleWorldTargetDebugView().HoverReason,
+		FName(TEXT("NoTarget")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleSceneEnemyPartBridgeRuntimeFactsSpec,
 	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartBridgeReportsRuntimeInitiativeFacts",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2842,6 +2917,7 @@ bool FWacomUIBattleSceneEnemyPartActorRefreshesFacadeSpec::RunTest(const FString
 	TestEqual(TEXT("Bridge destroyed scale"), Bridge->DestroyedPulseScale, 1.41f);
 	TestEqual(TEXT("Bridge targetable scale"), Bridge->TargetableAffordanceScale, 1.07f);
 	TestEqual(TEXT("Bridge drag preview scale"), Bridge->DragTargetPreviewScale, 1.09f);
+	TestEqual(TEXT("Bridge hover scale"), Bridge->HoverProbeScale, 1.04f);
 	TestEqual(TEXT("Bridge hold seconds"), Bridge->CueHoldSeconds, 0.22f);
 
 	const FWacomBattleSceneEnemyPartDebugView DebugView =
@@ -3038,12 +3114,24 @@ bool FWacomUIBattleSceneEnemyPartDebugPredictionFactsSpec::RunTest(const FString
 	Bridge->SetDragTargetPreviewState(
 		EWacomFirstPersonCardDragTargetFeedbackState::Invalid,
 		PredictionInput);
+	const FGuid HoverWorldTargetId = FGuid::NewGuid();
+	Bridge->SetHoverProbeState(
+		FWacomInteractionTargetHandle::ForWorldTarget(
+			HoverWorldTargetId,
+			Bridge,
+			FVector::ZeroVector,
+			FVector2D(210.0f, 130.0f),
+			WacomTags::Interaction_Target_Battle_EnemyPart,
+			TEXT("Test.Part.Head")),
+		TEXT("Hovered"));
 
 	const FString Summary = PartActor->GetBattleSceneEnemyPartDebugSummary();
 	TestTrue(TEXT("Part summary reports drag cost"), Summary.Contains(TEXT("DragCost=4")));
 	TestTrue(TEXT("Part summary reports swift flag"), Summary.Contains(TEXT("DragSwift=false")));
 	TestTrue(TEXT("Part summary reports submit flag"), Summary.Contains(TEXT("DragCanSubmit=false")));
 	TestTrue(TEXT("Part summary reports reject reason"), Summary.Contains(TEXT("DragReject=InvalidWorldTarget")));
+	TestTrue(TEXT("Part summary reports hover active"), Summary.Contains(TEXT("HoverActive=true")));
+	TestTrue(TEXT("Part summary reports hover stable id"), Summary.Contains(TEXT("HoverStableId=Test.Part.Head")));
 
 	return true;
 }
@@ -3272,16 +3360,103 @@ bool FWacomUIBattleSceneEnemyHostRuntimeFactsSpec::RunTest(const FString& /*Para
 	HUD->SetWorldForTest(World);
 	HUD->SetSession(Session);
 	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+	Head->GetWorldTargetBridgeComponent()->SetHoverProbeState(
+		FWacomInteractionTargetHandle::ForWorldTarget(
+			Head->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
+			Head->GetInteractionTargetComponent(),
+			FVector::ZeroVector,
+			FVector2D(240.0f, 120.0f),
+			WacomTags::Interaction_Target_Battle_EnemyPart,
+			TEXT("Test.Part.Head")),
+		TEXT("Hovered"));
 
 	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
 	TestEqual(TEXT("Host aggregates bound parts"), View.BoundPartActorCount, 2);
 	TestEqual(TEXT("Host aggregates runtime facts"), View.RuntimeFactsPartActorCount, 2);
 	TestEqual(TEXT("Host sums runtime initiative"), View.RuntimeInitiativeTotal, 12);
+	TestEqual(TEXT("Host aggregates hovered parts"), View.HoveredPartActorCount, 1);
 	TestTrue(TEXT("Host summary reports runtime facts"),
 		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("RuntimeFacts=2")));
 	TestTrue(TEXT("Host summary reports initiative total"),
 		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("RuntimeInitiativeTotal=12")));
+	TestTrue(TEXT("Host summary reports hovered count"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("HoveredParts=1")));
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostHoveredPartCountSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostReportsHoveredPartCount",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostHoveredPartCountSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host =
+		World->SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Head =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(100.f, 0.f, 0.f)),
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Body =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(200.f, 0.f, 0.f)),
+			SpawnParams);
+	if (!TestNotNull(TEXT("Host"), Host)
+		|| !TestNotNull(TEXT("Head"), Head)
+		|| !TestNotNull(TEXT("Body"), Body))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Head))
+		{
+			Head->Destroy();
+		}
+		if (IsValid(Body))
+		{
+			Body->Destroy();
+		}
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	Head->PartId = TEXT("Test.Part.Head");
+	Body->PartId = TEXT("Test.Part.Body");
+	Head->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
+	Body->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
+	Host->RefreshAttachedPartAuthoringState();
+
+	Head->GetWorldTargetBridgeComponent()->SetHoverProbeState(
+		FWacomInteractionTargetHandle::ForWorldTarget(
+			FGuid::NewGuid(),
+			Head->GetInteractionTargetComponent(),
+			FVector::ZeroVector,
+			FVector2D(240.0f, 120.0f),
+			WacomTags::Interaction_Target_Battle_EnemyPart,
+			TEXT("Test.Part.Head")),
+		TEXT("Hovered"));
+
+	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
+	TestEqual(TEXT("Host aggregates hovered parts"), View.HoveredPartActorCount, 1);
+	TestTrue(TEXT("Host summary reports hovered count"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("HoveredParts=1")));
 	return true;
 }
 
@@ -3650,6 +3825,353 @@ bool FWacomUIBattleSceneProbeUsesOnlyWorldInteractionTargetSpec::RunTest(const F
 
 	Owner->Destroy();
 	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartHoverProbeSetsBridgeStateSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartHoverProbeSetsBridgeHoverState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartHoverProbeSetsBridgeStateSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(0, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* PartActor =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Part actor"), PartActor))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PartActor))
+		{
+			PartActor->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	PartActor->PartId = TEXT("Test.Part.Head");
+	PartActor->VisualScale = FVector(2.0f, 2.0f, 2.0f);
+	PartActor->HoverProbeScale = 1.04f;
+	PartActor->RefreshAuthoringState();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+	PC->SetBattleSceneClickHitForTest(PartActor, PartActor->GetHitBounds());
+
+	const FVector BaseScale = PartActor->GetPartVisual()->GetRelativeScale3D();
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+
+	const FWacomBattleEnemyPartWorldTargetDebugView View =
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView();
+	TestTrue(TEXT("Hover becomes active"), View.bHoverActive);
+	TestEqual(TEXT("Hover world target id"),
+		View.HoverWorldTargetId,
+		PartActor->GetWorldTargetBridgeComponent()->GetPartInstanceId());
+	TestEqual(TEXT("Hover stable id"), View.HoverStableId, FName(TEXT("Test.Part.Head")));
+	TestEqual(TEXT("Hover reason"), View.HoverReason, FName(TEXT("Hovered")));
+	TestEqual(TEXT("Hover scales visual"),
+		PartActor->GetPartVisual()->GetRelativeScale3D(),
+		BaseScale * PartActor->HoverProbeScale);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartHoverProbeClearsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartHoverProbeClearsWhenTargetChangesOrInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartHoverProbeClearsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(0, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Head =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Body =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(100.0f, 0.0f, 0.0f)),
+			SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Head"), Head)
+		|| !TestNotNull(TEXT("Body"), Body))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Head))
+		{
+			Head->Destroy();
+		}
+		if (IsValid(Body))
+		{
+			Body->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	Head->PartId = TEXT("Test.Part.Head");
+	Body->PartId = TEXT("Test.Part.Body");
+	Head->RefreshAuthoringState();
+	Body->RefreshAuthoringState();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+
+	PC->SetBattleSceneClickHitForTest(Head, Head->GetHitBounds());
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+	TestTrue(TEXT("Head hover active"),
+		Head->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
+
+	PC->SetBattleSceneClickHitForTest(Body, Body->GetHitBounds());
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+	TestFalse(TEXT("Head hover clears when target changes"),
+		Head->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
+	TestTrue(TEXT("Body hover active"),
+		Body->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
+
+	PC->ClearBattleSceneClickHitForTest();
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+	const FWacomBattleEnemyPartWorldTargetDebugView BodyView =
+		Body->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView();
+	TestFalse(TEXT("Body hover clears when target invalid"), BodyView.bHoverActive);
+	TestEqual(TEXT("Invalid probe reason recorded"), BodyView.HoverReason, FName(TEXT("NoTarget")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartHoverProbeGatedSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartHoverProbeIsGatedByBattlePhasePendingBarrierAndDrag",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartHoverProbeGatedSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid CardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::None);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* PartActor =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Part actor"), PartActor)
+		|| !TestTrue(TEXT("Card exists"), CardId.IsValid()))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PartActor))
+		{
+			PartActor->Destroy();
+		}
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	PartActor->PartId = TEXT("Test.Part.Head");
+	PartActor->RefreshAuthoringState();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+	PC->SetBattleSceneClickHitForTest(PartActor, PartActor->GetHitBounds());
+
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+	TestTrue(TEXT("Hover active before gates"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
+
+	FBattleEvent Event;
+	Event.Type = EBattleEventType::DamageDealt;
+	Event.Sequence = 1;
+	Event.ActorInstanceId = PartActor->GetWorldTargetBridgeComponent()->GetPartInstanceId();
+	Event.Amount = 1;
+	HUD->EnqueueBattlePresentationEventsForTest({ Event });
+	HUD->QueuePendingTurnBoundaryWaitForTest();
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+	TestFalse(TEXT("Pending turn boundary clears hover"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
+	TestEqual(TEXT("Pending reason recorded"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().HoverReason,
+		FName(TEXT("PendingTurnBoundary")));
+	HUD->ClearBattlePresentationQueueForTest();
+	HUD->ClearPendingTurnBoundaryCommandForTest();
+
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+	TestTrue(TEXT("Hover can resume after pending clears"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
+
+	FWacomFirstPersonCardDragView DragView;
+	DragView.CardInstanceId = CardId;
+	DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
+	DragView.bHasPointerViewportPosition = true;
+	DragView.PointerViewportPosition = FVector2D(540.0f, 590.0f);
+	HUD->HandleFirstPersonCardDragStartedForTest(CardId, DragView);
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+	TestFalse(TEXT("First-person drag clears hover"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
+	TestEqual(TEXT("Drag gate reason recorded"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().HoverReason,
+		FName(TEXT("FirstPersonDrag")));
+	HUD->HandleFirstPersonCardDragCancelledForTest(CardId, DragView);
+
+	HUD->SetUIStateForTest(EBattleUIState::BattleEnd);
+	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
+	TestFalse(TEXT("BattleEnd keeps hover cleared"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartHoverDebugSummarySpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartHoverDebugSummaryReportsStableTargetState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartHoverDebugSummarySpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyPartActor* PartActor =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	if (!TestNotNull(TEXT("Part actor"), PartActor))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PartActor))
+		{
+			PartActor->Destroy();
+		}
+	};
+
+	const FGuid HoverWorldTargetId = FGuid::NewGuid();
+	PartActor->GetWorldTargetBridgeComponent()->SetHoverProbeState(
+		FWacomInteractionTargetHandle::ForWorldTarget(
+			HoverWorldTargetId,
+			PartActor->GetInteractionTargetComponent(),
+			FVector::ZeroVector,
+			FVector2D(330.0f, 220.0f),
+			WacomTags::Interaction_Target_Battle_EnemyPart,
+			TEXT("Test.Part.Head")),
+		TEXT("Hovered"));
+
+	const FWacomBattleSceneEnemyPartDebugView View = PartActor->GetBattleSceneEnemyPartDebugView();
+	TestTrue(TEXT("Debug view reports hover active"), View.BridgeDebugView.bHoverActive);
+	TestEqual(TEXT("Debug view reports hover id"), View.BridgeDebugView.HoverWorldTargetId, HoverWorldTargetId);
+	TestEqual(TEXT("Debug view reports hover stable id"),
+		View.BridgeDebugView.HoverStableId,
+		FName(TEXT("Test.Part.Head")));
+	const FString Summary = PartActor->GetBattleSceneEnemyPartDebugSummary();
+	TestTrue(TEXT("Summary reports hover active"), Summary.Contains(TEXT("HoverActive=true")));
+	TestTrue(TEXT("Summary reports hover stable id"), Summary.Contains(TEXT("HoverStableId=Test.Part.Head")));
+	TestTrue(TEXT("Summary reports hover screen"), Summary.Contains(TEXT("HoverScreen=")));
+
 	return true;
 }
 

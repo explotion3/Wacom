@@ -119,6 +119,7 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 		WorldTargetBridgeComponent->DestroyedPulseScale = DestroyedPulseScale;
 		WorldTargetBridgeComponent->TargetableAffordanceScale = TargetableAffordanceScale;
 		WorldTargetBridgeComponent->DragTargetPreviewScale = DragTargetPreviewScale;
+		WorldTargetBridgeComponent->HoverProbeScale = HoverProbeScale;
 		WorldTargetBridgeComponent->CueHoldSeconds = CueHoldSeconds;
 	}
 }
@@ -183,7 +184,7 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 {
 	const FWacomBattleSceneEnemyPartDebugView View = GetBattleSceneEnemyPartDebugView();
 	return FString::Printf(
-		TEXT("BattleSceneEnemyPart{Actor=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Initiative=%d Destroyed=%s Intent=%s IntentInitiative=%d IntentResistance=%d Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s}"),
+		TEXT("BattleSceneEnemyPart{Actor=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Initiative=%d Destroyed=%s Intent=%s IntentInitiative=%d IntentResistance=%d Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s}"),
 		*View.ActorName,
 		*View.PartId.ToString(),
 		*View.HitBoundsExtent.ToCompactString(),
@@ -217,7 +218,12 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 		View.BridgeDebugView.LastDragPredictionDebugInput.SourceCardRuntimeCost,
 		View.BridgeDebugView.LastDragPredictionDebugInput.bSourceCardSwift ? TEXT("true") : TEXT("false"),
 		View.BridgeDebugView.LastDragPredictionDebugInput.bPreviewCanSubmit ? TEXT("true") : TEXT("false"),
-		*View.BridgeDebugView.LastDragPredictionDebugInput.PreviewRejectReason.ToString());
+		*View.BridgeDebugView.LastDragPredictionDebugInput.PreviewRejectReason.ToString(),
+		View.BridgeDebugView.bHoverActive ? TEXT("true") : TEXT("false"),
+		*View.BridgeDebugView.HoverReason.ToString(),
+		*View.BridgeDebugView.HoverStableId.ToString(),
+		*View.BridgeDebugView.HoverWorldTargetId.ToString(EGuidFormats::DigitsWithHyphens),
+		*View.BridgeDebugView.HoverScreenPosition.ToString());
 }
 
 void AWacomBattleEnemyPartActor::LogBattleSceneEnemyPartDebugSummary() const

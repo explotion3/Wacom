@@ -56,6 +56,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Types/WacomEnums.h"
+#include "Tags/WacomGameplayTags.h"
 
 namespace
 {
@@ -302,6 +303,7 @@ void UBattleHUD::NativeDestruct()
 	ClearPendingFirstPersonCardTransitionEvents();
 	ClearBattlePresentationStack();
 	ClearPendingTurnBoundaryCommand();
+	ClearBattleSceneEnemyPartHoverProbe(TEXT("HUDDestruct"));
 	Super::NativeDestruct();
 }
 
@@ -309,6 +311,7 @@ void UBattleHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	TickCardDetailMotion(InDeltaTime);
+	TickBattleSceneEnemyPartHoverProbe(InDeltaTime);
 }
 
 FReply UBattleHUD::NativeOnMouseButtonUp(
@@ -397,6 +400,7 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		ClearPendingFirstPersonCardTransitionEvents();
 		ClearBattlePresentationStack();
 		ClearPendingTurnBoundaryCommand();
+		ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
 		bHasLastBattleSnapshot = false;
 		bHasLastFirstPersonCardTransitionSnapshot = false;
 		SetUIState(EBattleUIState::BattleEnd);
@@ -429,6 +433,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 		ClearPendingTurnBoundaryCommand();
 		ClearFirstPersonBattleHandLayer();
 		ClearBattleEnemyPartWorldTargets();
+		ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
 		ClearPendingFirstPersonCardTransitionEvents();
 		DestroyBattle3DHandPresenter();
 		ClearBattlePresentationTargetRegistry();
@@ -449,6 +454,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	SyncBattleCombatLogFeed();
 	ClearBattlePresentationStack();
 	ClearPendingTurnBoundaryCommand();
+	ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
 
 	if (bEnable3DHandPrototype && NewSession)
 	{
@@ -562,6 +568,10 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 	if (NewState != EBattleUIState::Idle)
 	{
 		HideCardDetailPanel();
+	}
+	if (NewState == EBattleUIState::BattleEnd)
+	{
+		ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
 	}
 
 	// 状态变化时，让 HandPanel / EnemyInfoBar / ActionPanel 重新刷一次（高亮/启用状态）。
@@ -874,6 +884,9 @@ void UBattleHUD::HandleFirstPersonCardLayerDragStarted(
 		return;
 	}
 
+	bFirstPersonCardDragActiveForBattleSceneHover = true;
+	ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDrag"));
+
 	if (ShouldShowFirstPersonDragInspectDetail(DragView))
 	{
 		const FHandCardSnapshot* CardSnapshot = FindLastBattleHandCardSnapshot(CardInstanceId);
@@ -941,6 +954,8 @@ void UBattleHUD::HandleFirstPersonCardLayerDragReleased(
 		ResolveFirstPersonCardDropIntent(CardInstanceId, ReleaseDragView);
 
 	ClearFirstPersonCardDragCameraLookOverride();
+	bFirstPersonCardDragActiveForBattleSceneHover = false;
+	ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragReleased"));
 	if (UWacomBattleEnemyPartWorldTargetBridgeComponent* PreviewBridge = CurrentFirstPersonDragPreviewBridge.Get())
 	{
 		PreviewBridge->ClearDragTargetPreviewState();
@@ -977,6 +992,8 @@ void UBattleHUD::HandleFirstPersonCardLayerDragCancelled(
 	const FWacomFirstPersonCardDragView& /*DragView*/)
 {
 	ClearFirstPersonCardDragCameraLookOverride();
+	bFirstPersonCardDragActiveForBattleSceneHover = false;
+	ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragCancelled"));
 	ClearFirstPersonCardDragTargetFeedback();
 	HideFirstPersonCardDetailPanelForSource(CardInstanceId);
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveFirstPersonCardAnchor())
@@ -2480,6 +2497,7 @@ void UBattleHUD::SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap)
 void UBattleHUD::ClearBattleEnemyPartWorldTargets()
 {
 	ClearFirstPersonCardDragTargetFeedback();
+	ClearBattleSceneEnemyPartHoverProbe(TEXT("WorldTargetsCleared"));
 
 	UWorld* World = GetWorld();
 	if (!World)
@@ -2495,6 +2513,89 @@ void UBattleHUD::ClearBattleEnemyPartWorldTargets()
 			Bridge->ClearBattleBinding();
 		}
 	}
+}
+
+bool UBattleHUD::CanUpdateBattleSceneEnemyPartHoverProbe() const
+{
+	if (bFirstPersonCardDragActiveForBattleSceneHover
+		|| PendingTurnBoundaryCommand != ETurnBoundaryCommand::None
+		|| UIState == EBattleUIState::BattleEnd)
+	{
+		return false;
+	}
+
+	const UBattleSession* CurrentSession = GetSession();
+	if (!CurrentSession)
+	{
+		return false;
+	}
+
+	return CurrentSession->BuildSnapshot().Phase == EBattlePhase::PlayerAction;
+}
+
+void UBattleHUD::TickBattleSceneEnemyPartHoverProbe(float DeltaTime)
+{
+	if (!CanUpdateBattleSceneEnemyPartHoverProbe())
+	{
+		ClearBattleSceneEnemyPartHoverProbe(TEXT("ProbeGated"));
+		BattleSceneEnemyPartHoverProbeElapsedSeconds = 0.0f;
+		return;
+	}
+
+	BattleSceneEnemyPartHoverProbeElapsedSeconds += FMath::Max(0.0f, DeltaTime);
+	if (BattleSceneEnemyPartHoverProbeElapsedSeconds
+		< FMath::Max(0.01f, BattleSceneEnemyPartHoverProbeIntervalSeconds))
+	{
+		return;
+	}
+
+	BattleSceneEnemyPartHoverProbeElapsedSeconds = 0.0f;
+	UpdateBattleSceneEnemyPartHoverProbe();
+}
+
+void UBattleHUD::UpdateBattleSceneEnemyPartHoverProbe()
+{
+	FWacomInteractionTargetHandle TargetHandle;
+	const AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(GetOwningPlayer());
+	const bool bHasTarget =
+		WacomPC
+		&& WacomPC->TryProbeBattleSceneInteractionTarget(TargetHandle)
+		&& TargetHandle.TargetKind == EWacomInteractionTargetKind::World
+		&& TargetHandle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart)
+		&& TargetHandle.WorldTargetId.IsValid();
+
+	if (!bHasTarget)
+	{
+		ClearBattleSceneEnemyPartHoverProbe(TEXT("NoTarget"));
+		return;
+	}
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		ResolveBattleEnemyPartWorldTargetBridge(TargetHandle);
+	if (!Bridge)
+	{
+		ClearBattleSceneEnemyPartHoverProbe(TEXT("MissingBridge"));
+		return;
+	}
+
+	if (HoveredBattleEnemyPartBridge.Get() != Bridge)
+	{
+		ClearBattleSceneEnemyPartHoverProbe(TEXT("TargetChanged"));
+		HoveredBattleEnemyPartBridge = Bridge;
+	}
+
+	HoveredBattleEnemyPartHandle = TargetHandle;
+	Bridge->SetHoverProbeState(TargetHandle, TEXT("Hovered"));
+}
+
+void UBattleHUD::ClearBattleSceneEnemyPartHoverProbe(FName Reason)
+{
+	if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = HoveredBattleEnemyPartBridge.Get())
+	{
+		Bridge->ClearHoverProbeState(Reason);
+	}
+	HoveredBattleEnemyPartBridge.Reset();
+	HoveredBattleEnemyPartHandle = FWacomInteractionTargetHandle();
 }
 
 void UBattleHUD::AcquirePlayerControllerClickEvents()
@@ -3022,6 +3123,7 @@ void UBattleHUD::QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand Command)
 		return;
 	}
 
+	ClearBattleSceneEnemyPartHoverProbe(TEXT("PendingTurnBoundary"));
 	PendingTurnBoundaryCommand = Command;
 	if (UIState == EBattleUIState::TargetSelect)
 	{

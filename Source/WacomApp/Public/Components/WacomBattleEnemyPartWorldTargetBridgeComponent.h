@@ -110,6 +110,21 @@ struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
 	FWacomBattleEnemyPartDragPredictionDebugInput LastDragPredictionDebugInput;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	bool bHoverActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FName HoverReason = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FName HoverStableId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FGuid HoverWorldTargetId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FVector2D HoverScreenPosition = FVector2D::ZeroVector;
 };
 
 /**
@@ -150,6 +165,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "第一人称卡牌拖拽指向该部位时的轻量预览缩放倍率。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.2"))
 	float DragTargetPreviewScale = 1.08f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "鼠标悬停该部位时的轻量探测缩放倍率。只表示当前 hover 目标，不影响战斗规则。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.15"))
+	float HoverProbeScale = 1.04f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "默认 cue 保持时间，单位秒。", ClampMin = "0.01", ClampMax = "2.0", UIMin = "0.05", UIMax = "0.5"))
 	float CueHoldSeconds = 0.14f;
 
@@ -170,6 +188,8 @@ public:
 		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionDebugInput =
 			FWacomBattleEnemyPartDragPredictionDebugInput());
 	void ClearDragTargetPreviewState();
+	void SetHoverProbeState(const struct FWacomInteractionTargetHandle& TargetHandle, FName Reason);
+	void ClearHoverProbeState(FName Reason = NAME_None);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|World Target")
 	FWacomBattleEnemyPartWorldTargetDebugView GetBattleWorldTargetDebugView() const;
@@ -192,11 +212,18 @@ private:
 	void RegisterWithBattleHUD(UBattleHUD& HUD);
 	void UnregisterFromBattleHUD();
 	void ApplyTargetableAffordance(bool bInTargetable);
+	void ApplyPersistentScaleState();
 	void BeginScaleFeedback(float ScaleMultiplier, float HoldSeconds);
 	void ClearScaleFeedback();
 	void RestoreBaseScaleIfNeeded();
 	void StopFeedbackTimer();
 	void UpdateInteractionTargetComponent();
+
+#if WITH_AUTOMATION_TESTS
+public:
+	void ApplyTargetableAffordanceForTest(bool bInTargetable) { ApplyTargetableAffordance(bInTargetable); }
+private:
+#endif
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UBattleHUD> RegisteredBattleHUD;
@@ -220,9 +247,14 @@ private:
 	bool bTargetable = false;
 	bool bHasCachedBaseScale = false;
 	bool bDragPreviewActive = false;
+	bool bHoverProbeActive = false;
 	EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FWacomBattleEnemyPartDragPredictionDebugInput LastDragPredictionDebugInput;
+	FName HoverReason = NAME_None;
+	FName HoverStableId = NAME_None;
+	FGuid HoverWorldTargetId;
+	FVector2D HoverScreenPosition = FVector2D::ZeroVector;
 	int32 CurrentInitiative = 0;
 	FName CurrentIntentId = NAME_None;
 	FText CurrentIntentDisplayName;

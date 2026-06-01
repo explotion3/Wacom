@@ -103,6 +103,10 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 				++View.RuntimeFactsPartActorCount;
 				View.RuntimeInitiativeTotal += PartView.BridgeDebugView.CurrentInitiative;
 			}
+			if (PartView.BridgeDebugView.bHoverActive)
+			{
+				++View.HoveredPartActorCount;
+			}
 		}
 	}
 	View.UnknownPartIds = BuildUnknownAttachedPartIds();
@@ -113,7 +117,7 @@ FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const
 {
 	const FWacomBattleSceneEnemyDebugView View = GetBattleSceneEnemyDebugView();
 	return FString::Printf(
-		TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d PartIds=[%s] UnknownPartIds=[%s]}"),
+		TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PartIds=[%s] UnknownPartIds=[%s]}"),
 		*View.ActorName,
 		*View.EnemyDefinitionName.ToString(),
 		*View.EnemyId.ToString(),
@@ -122,6 +126,7 @@ FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const
 		View.UnboundPartActorCount,
 		View.RuntimeFactsPartActorCount,
 		View.RuntimeInitiativeTotal,
+		View.HoveredPartActorCount,
 		*JoinNames(View.AttachedPartIds),
 		*JoinNames(View.UnknownPartIds));
 }

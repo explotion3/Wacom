@@ -499,6 +499,11 @@ public:
 		NativeTick(FGeometry(), DeltaTime);
 	}
 
+	void TickBattleSceneEnemyPartHoverProbeForTest(float DeltaTime = 0.05f)
+	{
+		NativeTick(FGeometry(), DeltaTime);
+	}
+
 	void HideCardDetailForTest()
 	{
 		HideCardDetailPanel();
@@ -666,6 +671,30 @@ public:
 	bool HasPendingTurnBoundaryCommandForTest() const
 	{
 		return HasPendingTurnBoundaryCommand();
+	}
+
+	void QueuePendingTurnBoundaryWaitForTest()
+	{
+		QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand::Wait);
+	}
+
+	void ClearPendingTurnBoundaryCommandForTest()
+	{
+		ClearPendingTurnBoundaryCommand();
+	}
+
+	void HandleFirstPersonCardDragStartedForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView)
+	{
+		HandleFirstPersonCardLayerDragStarted(CardInstanceId, DragView);
+	}
+
+	void HandleFirstPersonCardDragCancelledForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView)
+	{
+		HandleFirstPersonCardLayerDragCancelled(CardInstanceId, DragView);
 	}
 
 	void FinishPresentationStackEntryExitForTest(int32 EntryId)

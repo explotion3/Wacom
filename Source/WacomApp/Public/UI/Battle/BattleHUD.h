@@ -527,6 +527,7 @@ private:
 	bool bLegacyHandPanelHiddenByFirstPersonLayer = false;
 	bool bFirstPersonBattleHandLayerRuntimeActive = false;
 	bool bLoggedMissingCardDetailLayer = false;
+	bool bFirstPersonCardDragActiveForBattleSceneHover = false;
 	int32 PlayerControllerClickEventAcquireCount = 0;
 	int32 PlayerControllerMouseOverEventAcquireCount = 0;
 	bool bHasFallbackPlayerControllerInteractionEventState = false;
@@ -536,6 +537,9 @@ private:
 	ETurnBoundaryCommand PendingTurnBoundaryCommand = ETurnBoundaryCommand::None;
 	TArray<int32> BattlePresentationStackExitingEntryIds;
 	TMap<int32, FTimerHandle> BattlePresentationStackExitTimerHandles;
+	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> HoveredBattleEnemyPartBridge;
+	FWacomInteractionTargetHandle HoveredBattleEnemyPartHandle;
+	float BattleSceneEnemyPartHoverProbeElapsedSeconds = 0.0f;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
@@ -648,6 +652,10 @@ private:
 	void SyncBattle3DHandPresenterTargeting();
 	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap);
 	void ClearBattleEnemyPartWorldTargets();
+	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
+	void TickBattleSceneEnemyPartHoverProbe(float DeltaTime);
+	void UpdateBattleSceneEnemyPartHoverProbe();
+	void ClearBattleSceneEnemyPartHoverProbe(FName Reason);
 	void AcquirePlayerControllerClickEvents();
 	void ReleasePlayerControllerClickEvents();
 	void AcquirePlayerControllerMouseOverEvents();
@@ -700,6 +708,9 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> CurrentFirstPersonDragPreviewBridge;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "战斗场景敌方部位 hover probe 的最小间隔，单位秒。只更新 UI 诊断和轻量缩放，不影响战斗规则。", ClampMin = "0.01", ClampMax = "0.25", UIMin = "0.01", UIMax = "0.1"))
+	float BattleSceneEnemyPartHoverProbeIntervalSeconds = 0.03f;
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
 	friend struct FWacomBattleHUDCommandFlow;

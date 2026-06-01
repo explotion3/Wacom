@@ -47,6 +47,9 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 RuntimeInitiativeTotal = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 HoveredPartActorCount = 0;
 };
 
 /**
