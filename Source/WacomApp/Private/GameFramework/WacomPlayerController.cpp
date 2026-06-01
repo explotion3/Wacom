@@ -305,10 +305,14 @@ namespace
 		const UWacomRunWorldCardDropReceiverComponent* Receiver,
 		FName ResolveReason,
 		bool bReleased,
-		bool bSubmitted)
+		bool bSubmitted,
+		FName ToastSource = NAME_None,
+		const FText& ToastText = FText::GetEmpty())
 	{
+		const TCHAR* Phase = bReleased ? TEXT("Release") : TEXT("Preview");
 		OutDebugSummary = FString::Printf(
-			TEXT("RunWorldCardDrop{Card=%s TargetActor=%s Receiver=%s StableId=%s CanSubmit=%s Reason=%s Resolve=%s Submitted=%s Released=%s Pointer=%s Target=%s Validation=%s}"),
+			TEXT("RunWorldCardDrop{Phase=%s Card=%s TargetActor=%s Receiver=%s StableId=%s CanSubmit=%s Reason=%s Resolve=%s Submitted=%s Released=%s ToastSource=%s FailureToast=%s Pointer=%s Target=%s Validation=%s}"),
+			Phase,
 			*CardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 			*GetDebugObjectName(TargetActor),
 			*GetDebugObjectName(Receiver),
@@ -318,9 +322,22 @@ namespace
 			*ResolveReason.ToString(),
 			bSubmitted ? TEXT("true") : TEXT("false"),
 			bReleased ? TEXT("true") : TEXT("false"),
+			ToastSource.IsNone() ? TEXT("None") : *ToastSource.ToString(),
+			ToastText.IsEmpty() ? TEXT("None") : *ToastText.ToString(),
 			*PointerPosition.ToString(),
 			*TargetHandle.ToString(),
 			*Validation.DebugSummary);
+	}
+
+	FText BuildRunWorldCardDropConfigWarningToast(FName Reason)
+	{
+		if (Reason.IsNone())
+		{
+			return LOCTEXT("RunWorldCardDropConfigWarning", "场景交互配置异常");
+		}
+		return FText::Format(
+			LOCTEXT("RunWorldCardDropConfigWarningWithReason", "场景交互配置异常：{0}"),
+			FText::FromName(Reason));
 	}
 }
 
@@ -1775,6 +1792,38 @@ bool AWacomPlayerController::ApplyRunWorldCardDropProbeFeedback(
 			Validation);
 	}
 
+	FText FailureToastText = FText::GetEmpty();
+	FName ToastSource = NAME_None;
+	const bool bReleasedOnRunWorldTarget =
+		bReleased && TargetHandle.IsValid();
+	if (bReleasedOnRunWorldTarget && !bSubmitted)
+	{
+		const FName FailureReason = Validation.DisabledReason.IsNone()
+			? FName(TEXT("SubmitFailed"))
+			: Validation.DisabledReason;
+		if (Receiver)
+		{
+			FailureToastText = Receiver->BuildRunWorldCardDropFailureToastText(
+				this,
+				TargetHandle.StableTargetId,
+				CardInstanceId,
+				FailureReason);
+			ToastSource = TEXT("Receiver");
+		}
+		else
+		{
+			FailureToastText = BuildRunWorldCardDropConfigWarningToast(FailureReason);
+			ToastSource = TEXT("ControllerFallback");
+		}
+		if (!FailureToastText.IsEmpty())
+		{
+			if (UWacomAppToastSubsystem* ToastSubsystem = ResolveAppToastSubsystem())
+			{
+				ToastSubsystem->ShowWarning(FailureToastText);
+			}
+		}
+	}
+
 	FinalizeRunWorldCardDropDebugSummary(
 		DebugSummary,
 		ProbePosition,
@@ -1785,7 +1834,9 @@ bool AWacomPlayerController::ApplyRunWorldCardDropProbeFeedback(
 		Receiver,
 		Validation.DisabledReason.IsNone() ? FName(TEXT("Ok")) : Validation.DisabledReason,
 		bReleased,
-		bSubmitted);
+		bSubmitted,
+		ToastSource,
+		FailureToastText);
 	LastRunWorldCardDropDebugSummary = DebugSummary;
 
 	UWacomRunWorldInteractionTargetBridgeComponent* PreviousBridge =
@@ -1847,13 +1898,9 @@ bool AWacomPlayerController::ApplyRunWorldCardDropProbeFeedback(
 	if (bSubmitted)
 	{
 		const int32 GoldReward = Receiver ? Receiver->GoldReward : 0;
-		if (UGameInstance* GameInstance = GetGameInstance())
+		if (UWacomAppToastSubsystem* ToastSubsystem = ResolveAppToastSubsystem())
 		{
-			if (UWacomAppToastSubsystem* ToastSubsystem =
-				GameInstance->GetSubsystem<UWacomAppToastSubsystem>())
-			{
-				ToastSubsystem->ShowGoldChanged(GoldReward);
-			}
+			ToastSubsystem->ShowGoldChanged(GoldReward);
 		}
 		RefreshRunFirstPersonCardLayer();
 	}
@@ -2169,6 +2216,14 @@ bool AWacomPlayerController::SubmitResolvedRunWorldCardDropIntent(
 		InOutValidation.DisabledReason = TEXT("SubmitFailed");
 	}
 	return bSubmitted;
+}
+
+UWacomAppToastSubsystem* AWacomPlayerController::ResolveAppToastSubsystem() const
+{
+	UGameInstance* GameInstance = GetGameInstance();
+	return GameInstance
+		? GameInstance->GetSubsystem<UWacomAppToastSubsystem>()
+		: nullptr;
 }
 
 UWacomRunWorldInteractionTargetBridgeComponent*

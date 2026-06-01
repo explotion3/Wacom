@@ -20,6 +20,53 @@ namespace
 			*Reason.ToString());
 		return Result;
 	}
+
+	bool IsCardRejectedReason(FName Reason)
+	{
+		return Reason == TEXT("CardNotAccepted")
+			|| Reason == TEXT("MissingRequiredKeyword")
+			|| Reason == TEXT("BlockedKeyword")
+			|| Reason == TEXT("MissingCardDefinition");
+	}
+
+	bool IsConfigReason(FName Reason)
+	{
+		return Reason == TEXT("InvalidGoldReward")
+			|| Reason == TEXT("MissingCardFilter")
+			|| Reason == TEXT("MissingPositiveCardFilter")
+			|| Reason == TEXT("MissingPersistentId")
+			|| Reason == TEXT("MissingCardDropReceiver")
+			|| Reason == TEXT("SubmitFailed")
+			|| Reason == TEXT("InvalidSubmitContext")
+			|| Reason == TEXT("MissingRunSession")
+			|| Reason == TEXT("MissingPlayerController");
+	}
+
+	bool IsSourceCardReason(FName Reason)
+	{
+		return Reason == TEXT("MissingSourceCard")
+			|| Reason == TEXT("InvalidSourceCard")
+			|| Reason == TEXT("CardNotOwned")
+			|| Reason == TEXT("Intrinsic")
+			|| Reason == TEXT("LastCapacityProvider");
+	}
+
+	FText ResolvePromptOrDefault(const FText& Prompt, const FText& DefaultPrompt)
+	{
+		return Prompt.IsEmpty() ? DefaultPrompt : Prompt;
+	}
+
+	FText FormatPromptWithReason(const FText& Prompt, FName Reason)
+	{
+		if (Reason.IsNone())
+		{
+			return Prompt;
+		}
+		return FText::Format(
+			LOCTEXT("PromptWithReason", "{0}：{1}"),
+			Prompt,
+			FText::FromName(Reason));
+	}
 }
 
 UWacomRunWorldCardDropReceiverComponent::UWacomRunWorldCardDropReceiverComponent()
@@ -28,6 +75,10 @@ UWacomRunWorldCardDropReceiverComponent::UWacomRunWorldCardDropReceiverComponent
 	PreviewPromptText = GetDefaultPreviewPromptText();
 	SuccessPromptText = GetDefaultSuccessPromptText();
 	CompletedPromptText = GetDefaultCompletedPromptText();
+	RejectedCardPromptText = GetDefaultRejectedCardPromptText();
+	ConfigWarningPromptText = GetDefaultConfigWarningPromptText();
+	SourceCardUnavailablePromptText = GetDefaultSourceCardUnavailablePromptText();
+	GenericFailurePromptText = GetDefaultGenericFailurePromptText();
 }
 
 FRunWorldCardInteractionRequest
@@ -164,6 +215,22 @@ UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebugView_Im
 	View.CompletedPrompt = (CompletedPromptText.IsEmpty()
 		? GetDefaultCompletedPromptText()
 		: CompletedPromptText).ToString();
+	View.RejectedCardPrompt =
+		ResolvePromptOrDefault(
+			RejectedCardPromptText,
+			GetDefaultRejectedCardPromptText()).ToString();
+	View.ConfigWarningPrompt =
+		ResolvePromptOrDefault(
+			ConfigWarningPromptText,
+			GetDefaultConfigWarningPromptText()).ToString();
+	View.SourceCardUnavailablePrompt =
+		ResolvePromptOrDefault(
+			SourceCardUnavailablePromptText,
+			GetDefaultSourceCardUnavailablePromptText()).ToString();
+	View.GenericFailurePrompt =
+		ResolvePromptOrDefault(
+			GenericFailurePromptText,
+			GetDefaultGenericFailurePromptText()).ToString();
 	View.RunValidationSummary = Validation.DebugSummary;
 	return View;
 }
@@ -179,7 +246,7 @@ FString UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebu
 			PersistentId,
 			SourceCardInstanceId);
 	return FString::Printf(
-		TEXT("RunWorldCardDropReceiver{Owner=%s Receiver=%s PersistentId=%s HasRun=%s Completed=%s CanSubmit=%s Reject=%s ConfigValid=%s ConfigReason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d Preview=%s Success=%s CompletedPrompt=%s Validation=%s}"),
+		TEXT("RunWorldCardDropReceiver{Owner=%s Receiver=%s PersistentId=%s HasRun=%s Completed=%s CanSubmit=%s Reject=%s ConfigValid=%s ConfigReason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d Preview=%s Success=%s CompletedPrompt=%s RejectedPrompt=%s ConfigWarningPrompt=%s SourceUnavailablePrompt=%s GenericFailurePrompt=%s Validation=%s}"),
 		*View.OwnerName,
 		*View.ReceiverName,
 		*View.PersistentId.ToString(),
@@ -199,7 +266,54 @@ FString UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebu
 		*View.PreviewPrompt,
 		*View.SuccessPrompt,
 		*View.CompletedPrompt,
+		*View.RejectedCardPrompt,
+		*View.ConfigWarningPrompt,
+		*View.SourceCardUnavailablePrompt,
+		*View.GenericFailurePrompt,
 		*View.RunValidationSummary);
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::BuildRunWorldCardDropFailureToastText(
+	AWacomPlayerController* /*PC*/,
+	FName /*PersistentId*/,
+	FGuid /*SourceCardInstanceId*/,
+	FName FailureReason) const
+{
+	if (FailureReason == TEXT("AlreadyCompleted"))
+	{
+		return ResolvePromptOrDefault(
+			CompletedPromptText,
+			GetDefaultCompletedPromptText());
+	}
+
+	if (IsCardRejectedReason(FailureReason))
+	{
+		return ResolvePromptOrDefault(
+			RejectedCardPromptText,
+			GetDefaultRejectedCardPromptText());
+	}
+
+	if (IsConfigReason(FailureReason))
+	{
+		return FormatPromptWithReason(
+			ResolvePromptOrDefault(
+				ConfigWarningPromptText,
+				GetDefaultConfigWarningPromptText()),
+			FailureReason);
+	}
+
+	if (IsSourceCardReason(FailureReason))
+	{
+		return ResolvePromptOrDefault(
+			SourceCardUnavailablePromptText,
+			GetDefaultSourceCardUnavailablePromptText());
+	}
+
+	return FormatPromptWithReason(
+		ResolvePromptOrDefault(
+			GenericFailurePromptText,
+			GetDefaultGenericFailurePromptText()),
+		FailureReason);
 }
 
 FText UWacomRunWorldCardDropReceiverComponent::GetDefaultPreviewPromptText() const
@@ -215,6 +329,26 @@ FText UWacomRunWorldCardDropReceiverComponent::GetDefaultSuccessPromptText() con
 FText UWacomRunWorldCardDropReceiverComponent::GetDefaultCompletedPromptText() const
 {
 	return LOCTEXT("DefaultCompletedPrompt", "已完成");
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::GetDefaultRejectedCardPromptText() const
+{
+	return LOCTEXT("DefaultRejectedCardPrompt", "需要正确的卡牌");
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::GetDefaultConfigWarningPromptText() const
+{
+	return LOCTEXT("DefaultConfigWarningPrompt", "场景交互配置异常");
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::GetDefaultSourceCardUnavailablePromptText() const
+{
+	return LOCTEXT("DefaultSourceCardUnavailablePrompt", "这张卡无法用于交互");
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::GetDefaultGenericFailurePromptText() const
+{
+	return LOCTEXT("DefaultGenericFailurePrompt", "无法完成场景交互");
 }
 
 #undef LOCTEXT_NAMESPACE

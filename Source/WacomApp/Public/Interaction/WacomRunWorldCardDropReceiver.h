@@ -76,6 +76,18 @@ struct WACOMAPP_API FWacomRunWorldCardDropReceiverDebugView
 	FString CompletedPrompt;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FString RejectedCardPrompt;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FString ConfigWarningPrompt;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FString SourceCardUnavailablePrompt;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FString GenericFailurePrompt;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
 	FString RunValidationSummary;
 };
 
@@ -162,6 +174,22 @@ public:
 		meta = (ToolTip = "目标已完成后拖拽指向时的调试文案。"))
 	FText CompletedPromptText;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop|Text",
+		meta = (ToolTip = "拖拽释放时卡牌不被目标接受的失败提示。用于错卡、缺少关键词、命中黑名单或源卡缺定义等情况。"))
+	FText RejectedCardPromptText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop|Text",
+		meta = (ToolTip = "拖拽释放时目标配置异常的失败提示前缀。最终 Toast 会追加具体 Reason，便于 PIE 排查。"))
+	FText ConfigWarningPromptText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop|Text",
+		meta = (ToolTip = "拖拽释放时源卡不可用的失败提示，例如卡不存在、未持有、固有卡或最后容量来源卡。"))
+	FText SourceCardUnavailablePromptText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop|Text",
+		meta = (ToolTip = "拖拽释放失败但没有更具体分类时的通用提示前缀。最终 Toast 会追加具体 Reason。"))
+	FText GenericFailurePromptText;
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Card Drop|Debug")
 	FString GetRunWorldCardDropReceiverDebugSummary(
 		AWacomPlayerController* PC,
@@ -173,6 +201,13 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Card Drop|Debug")
 	FName GetRunWorldCardDropReceiverConfigWarningReason() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Card Drop|Feedback")
+	virtual FText BuildRunWorldCardDropFailureToastText(
+		AWacomPlayerController* PC,
+		FName PersistentId,
+		FGuid SourceCardInstanceId,
+		FName FailureReason) const;
 
 	virtual FRunWorldCardInteractionRequest BuildRunWorldCardDropRequest_Implementation(
 		FName PersistentId,
@@ -198,4 +233,8 @@ protected:
 	FText GetDefaultPreviewPromptText() const;
 	FText GetDefaultSuccessPromptText() const;
 	FText GetDefaultCompletedPromptText() const;
+	FText GetDefaultRejectedCardPromptText() const;
+	FText GetDefaultConfigWarningPromptText() const;
+	FText GetDefaultSourceCardUnavailablePromptText() const;
+	FText GetDefaultGenericFailurePromptText() const;
 };

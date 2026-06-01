@@ -246,6 +246,54 @@ namespace
 		return DragView;
 	}
 
+	struct FWacomUiToastHarness
+	{
+		TStrongObjectPtr<UGameInstance> GameInstance;
+		TStrongObjectPtr<UWacomAppToastSubsystem> ToastSubsystem;
+		TStrongObjectPtr<UWacomAppToastWidget> ToastWidget;
+
+		FWacomUiToastHarness()
+			: GameInstance(NewObject<UGameInstance>())
+			, ToastSubsystem(NewObject<UWacomAppToastSubsystem>(GameInstance.Get()))
+			, ToastWidget(NewObject<UWacomAppToastWidget>())
+		{
+			ToastWidget->TakeWidget();
+			FWacomUITestAccess::SetToastWidget(*ToastSubsystem, ToastWidget.Get());
+		}
+	};
+
+	bool UiToastWidgetContainsMessage(
+		const UWacomAppToastWidget& ToastWidget,
+		const TCHAR* ExpectedText)
+	{
+		const TArray<FWacomAppToastView> Toasts =
+			FWacomUITestAccess::GetCurrentToasts(ToastWidget);
+		return Toasts.ContainsByPredicate(
+			[ExpectedText](const FWacomAppToastView& Toast)
+			{
+				return Toast.MessageText.ToString().Contains(ExpectedText);
+			});
+	}
+
+	FRunWorldCardInteractionRequest MakeUiWorldDropChestRequest(
+		const URunSession& Run,
+		UCardDefinition* Card,
+		FName PersistentId,
+		int32 GoldReward = 3,
+		bool bConsumeCard = true)
+	{
+		FRunWorldCardInteractionRequest Request;
+		Request.PersistentId = PersistentId;
+		Request.SourceCardInstanceId = Run.GetRunState().BattleDeck.Num() > 0
+			? Run.GetRunState().BattleDeck[0].InstanceId
+			: FGuid();
+		Request.AllowedCardDefinitions = { Card };
+		Request.AllowedCardIds = { Card ? Card->CardId : NAME_None };
+		Request.GoldReward = GoldReward;
+		Request.bConsumeCardOnSuccess = bConsumeCard;
+		return Request;
+	}
+
 	UWacomRunEventDefinition* MakeUiRunEventFlagRewardPreviewEvent(
 		UObject* Outer,
 		UCardDefinition* RewardCard)
@@ -1048,6 +1096,352 @@ bool FWacomUIRunWorldCardDropKeyChestReceiverDiagnosticsSpec::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropReceiverRejectedToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldCardDropReceiverBuildsFailureToastForRejectedCard",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropReceiverRejectedToastSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardDropReceiverComponent> Receiver(
+		NewObject<UWacomRunWorldCardDropReceiverComponent>());
+	Receiver->RejectedCardPromptText =
+		FText::FromString(TEXT("需要机关钥匙"));
+
+	TestEqual(TEXT("CardNotAccepted uses rejected prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("Receiver.Test"),
+			FGuid::NewGuid(),
+			TEXT("CardNotAccepted")).ToString(),
+		FString(TEXT("需要机关钥匙")));
+	TestEqual(TEXT("MissingRequiredKeyword uses rejected prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("Receiver.Test"),
+			FGuid::NewGuid(),
+			TEXT("MissingRequiredKeyword")).ToString(),
+		FString(TEXT("需要机关钥匙")));
+	TestEqual(TEXT("BlockedKeyword uses rejected prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("Receiver.Test"),
+			FGuid::NewGuid(),
+			TEXT("BlockedKeyword")).ToString(),
+		FString(TEXT("需要机关钥匙")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropReceiverCompletedConfigToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldCardDropReceiverBuildsFailureToastForCompletedAndConfigReasons",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropReceiverCompletedConfigToastSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardDropReceiverComponent> Receiver(
+		NewObject<UWacomRunWorldCardDropReceiverComponent>());
+	Receiver->CompletedPromptText =
+		FText::FromString(TEXT("机关已经启动"));
+	Receiver->ConfigWarningPromptText =
+		FText::FromString(TEXT("机关配置异常"));
+	Receiver->SourceCardUnavailablePromptText =
+		FText::FromString(TEXT("这张卡不能使用"));
+	Receiver->GenericFailurePromptText =
+		FText::FromString(TEXT("机关无法响应"));
+
+	TestEqual(TEXT("AlreadyCompleted uses completed prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("Receiver.Test"),
+			FGuid::NewGuid(),
+			TEXT("AlreadyCompleted")).ToString(),
+		FString(TEXT("机关已经启动")));
+	TestEqual(TEXT("Config reason appends reason"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("Receiver.Test"),
+			FGuid::NewGuid(),
+			TEXT("InvalidGoldReward")).ToString(),
+		FString(TEXT("机关配置异常：InvalidGoldReward")));
+	TestEqual(TEXT("Source unavailable reason uses source prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("Receiver.Test"),
+			FGuid::NewGuid(),
+			TEXT("CardNotOwned")).ToString(),
+		FString(TEXT("这张卡不能使用")));
+	TestEqual(TEXT("Unknown reason appends reason"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("Receiver.Test"),
+			FGuid::NewGuid(),
+			TEXT("UnexpectedReason")).ToString(),
+		FString(TEXT("机关无法响应：UnexpectedReason")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropReceiverFeedbackDebugSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldCardDropReceiverDebugReportsFeedbackPrompts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropReceiverFeedbackDebugSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	InjectRunSession(PC.Get(), Run.Get());
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.ReceiverFeedback");
+	Chest->SyncClickTargetForTest();
+
+	UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent();
+	if (!TestNotNull(TEXT("Receiver"), Receiver))
+	{
+		return false;
+	}
+	Receiver->RejectedCardPromptText =
+		FText::FromString(TEXT("需要测试钥匙"));
+	Receiver->ConfigWarningPromptText =
+		FText::FromString(TEXT("测试配置异常"));
+	Receiver->SourceCardUnavailablePromptText =
+		FText::FromString(TEXT("测试卡不可用"));
+	Receiver->GenericFailurePromptText =
+		FText::FromString(TEXT("测试交互失败"));
+
+	const FWacomRunWorldCardDropReceiverDebugView View =
+		Receiver->GetRunWorldCardDropReceiverDebugView_Implementation(
+			PC.Get(),
+			Chest->PersistentId,
+			FGuid());
+	const FString Summary =
+		Receiver->GetRunWorldCardDropReceiverDebugSummary(
+			PC.Get(),
+			Chest->PersistentId,
+			FGuid());
+
+	TestEqual(TEXT("Rejected prompt debug"),
+		View.RejectedCardPrompt,
+		FString(TEXT("需要测试钥匙")));
+	TestEqual(TEXT("Config warning prompt debug"),
+		View.ConfigWarningPrompt,
+		FString(TEXT("测试配置异常")));
+	TestEqual(TEXT("Source unavailable prompt debug"),
+		View.SourceCardUnavailablePrompt,
+		FString(TEXT("测试卡不可用")));
+	TestEqual(TEXT("Generic failure prompt debug"),
+		View.GenericFailurePrompt,
+		FString(TEXT("测试交互失败")));
+	TestTrue(TEXT("Summary reports rejected prompt"),
+		Summary.Contains(TEXT("RejectedPrompt=需要测试钥匙")));
+	TestTrue(TEXT("Summary reports config prompt"),
+		Summary.Contains(TEXT("ConfigWarningPrompt=测试配置异常")));
+	TestTrue(TEXT("Summary reports source prompt"),
+		Summary.Contains(TEXT("SourceUnavailablePrompt=测试卡不可用")));
+	TestTrue(TEXT("Summary reports generic prompt"),
+		Summary.Contains(TEXT("GenericFailurePrompt=测试交互失败")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestCompletedVisualSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestCompletedVisualStateUsesCompletedFacade",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestCompletedVisualSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(
+		MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(
+		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Completed.Visual");
+	Chest->VisualScale = FVector(0.6f, 0.7f, 0.8f);
+	Chest->VisualRelativeLocation = FVector(1.f, 2.f, 3.f);
+	Chest->CompletedVisualScale = FVector(0.9f, 0.4f, 0.2f);
+	Chest->CompletedVisualRelativeLocation = FVector(4.f, 5.f, -6.f);
+	Chest->SyncClickTargetForTest();
+	Chest->EnsureRunSessionBindingForTest(PC.Get());
+
+	TestEqual(TEXT("Closed visual scale"),
+		Chest->GetChestVisual()->GetRelativeScale3D(),
+		FVector(0.6f, 0.7f, 0.8f));
+	TestEqual(TEXT("Closed visual location"),
+		Chest->GetChestVisual()->GetRelativeLocation(),
+		FVector(1.f, 2.f, 3.f));
+
+	FRunWorldCardInteractionRequest Request =
+		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
+	TestTrue(TEXT("Submit opens chest"),
+		Run->SubmitRunWorldCardInteraction(Request));
+
+	TestEqual(TEXT("Completed visual scale"),
+		Chest->GetChestVisual()->GetRelativeScale3D(),
+		FVector(0.9f, 0.4f, 0.2f));
+	TestEqual(TEXT("Completed visual location"),
+		Chest->GetChestVisual()->GetRelativeLocation(),
+		FVector(4.f, 5.f, -6.f));
+	TestEqual(TEXT("Click bounds still blocks visibility"),
+		Chest->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+		ECR_Block);
+	TestFalse(TEXT("Click bounds still no overlap"),
+		Chest->GetClickBounds()->GetGenerateOverlapEvents());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestRunStateRefreshSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestRunStateChangeRefreshesCompletedVisual",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestRunStateRefreshSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(
+		MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(
+		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Completed.Refresh");
+	Chest->VisualScale = FVector(1.f, 1.f, 1.f);
+	Chest->CompletedVisualScale = FVector(0.5f, 0.5f, 0.2f);
+	Chest->SyncClickTargetForTest();
+
+	TestEqual(TEXT("Unbound closed visual"),
+		Chest->GetChestVisual()->GetRelativeScale3D(),
+		FVector(1.f, 1.f, 1.f));
+	FRunWorldCardInteractionRequest Request =
+		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
+	TestTrue(TEXT("Submit before bind"), Run->SubmitRunWorldCardInteraction(Request));
+	TestEqual(TEXT("Still closed until player entry binds"),
+		Chest->GetChestVisual()->GetRelativeScale3D(),
+		FVector(1.f, 1.f, 1.f));
+
+	Chest->GetRunKeyChestDebugView(PC.Get());
+	TestEqual(TEXT("Debug/player entry refreshes completed visual"),
+		Chest->GetChestVisual()->GetRelativeScale3D(),
+		FVector(0.5f, 0.5f, 0.2f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestCompletedPromptSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestCompletedStateKeepsHoverClickAndEKeyPrompt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestCompletedPromptSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(
+		MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(
+		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Completed.Prompt");
+	Chest->CompletedPromptText = FText::FromString(TEXT("测试宝箱已打开"));
+	Chest->SyncClickTargetForTest();
+	Chest->EnsureRunSessionBindingForTest(PC.Get());
+
+	FRunWorldCardInteractionRequest Request =
+		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
+	TestTrue(TEXT("Submit opens chest"), Run->SubmitRunWorldCardInteraction(Request));
+
+	TestTrue(TEXT("Can still interact for prompt"),
+		Chest->CanInteract_Implementation(PC.Get()));
+	TestFalse(TEXT("E key still only hints"),
+		Chest->TryInteract_Implementation(PC.Get()));
+	TestEqual(TEXT("E prompt completed"),
+		Chest->GetInteractPromptText_Implementation(PC.Get()).ToString(),
+		FString(TEXT("测试宝箱已打开")));
+	TestEqual(TEXT("Hover prompt completed"),
+		Chest->GetRunWorldClickHoverPrompt_Implementation(PC.Get()).ToString(),
+		FString(TEXT("测试宝箱已打开")));
+	TestEqual(TEXT("Click target stable id retained"),
+		Chest->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		Chest->PersistentId);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestCompletedSummarySpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestCompletedDebugSummaryReportsVisualState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestCompletedSummarySpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(
+		MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(
+		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Completed.Summary");
+	Chest->CompletedVisualScale = FVector(0.7f, 0.5f, 0.2f);
+	Chest->CompletedVisualRelativeLocation = FVector(0.f, 0.f, -11.f);
+	Chest->SyncClickTargetForTest();
+	Chest->EnsureRunSessionBindingForTest(PC.Get());
+
+	FRunWorldCardInteractionRequest Request =
+		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
+	TestTrue(TEXT("Submit opens chest"), Run->SubmitRunWorldCardInteraction(Request));
+
+	const FWacomRunKeyChestDebugView View =
+		Chest->GetRunKeyChestDebugView(PC.Get());
+	const FString Summary = Chest->GetRunKeyChestDebugSummary(PC.Get());
+	TestTrue(TEXT("View completed"), View.bCompleted);
+	TestEqual(TEXT("View visual state open"), View.VisualState, FName(TEXT("Open")));
+	TestEqual(TEXT("View completed visual scale"),
+		View.CompletedVisualScale,
+		FVector(0.7f, 0.5f, 0.2f));
+	TestEqual(TEXT("View completed visual location"),
+		View.CompletedVisualRelativeLocation,
+		FVector(0.f, 0.f, -11.f));
+	TestTrue(TEXT("Summary reports open visual state"),
+		Summary.Contains(TEXT("VisualState=Open")));
+	TestTrue(TEXT("Summary reports completed visual mesh"),
+		Summary.Contains(TEXT("CompletedVisualMesh=")));
+	TestTrue(TEXT("Summary reports completed visual scale"),
+		Summary.Contains(TEXT("CompletedVisualScale=")));
+	TestTrue(TEXT("Summary reports completed visual location"),
+		Summary.Contains(TEXT("CompletedVisualLocation=")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunKeyChestDefinitionSyncSpec,
 	"Wacom.UI.WorldInteraction.RunKeyChestDefinition.KeyChestDefinitionSyncsReceiverConfig",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1093,6 +1487,46 @@ bool FWacomUIRunKeyChestDefinitionSyncSpec::RunTest(const FString& /*Parameters*
 	TestEqual(TEXT("Definition receiver completed prompt synced"),
 		Receiver->CompletedPromptText.ToString(),
 		FString(TEXT("定义接收器已完成")));
+	TestEqual(TEXT("Definition rejected prompt synced"),
+		Receiver->RejectedCardPromptText.ToString(),
+		FString(TEXT("定义需要钥匙")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestDefinitionFailurePromptSyncSpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestDefinition.KeyChestDefinitionSyncsReceiverFailurePrompts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestDefinitionFailurePromptSyncSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	TStrongObjectPtr<UWacomRunKeyChestDefinition> Definition(
+		MakeUiKeyChestDefinition(Chest.Get(), TEXT("DefinitionKey"), 7));
+
+	Chest->PersistentId = TEXT("Chest.Definition.FailurePrompt");
+	Chest->ChestDefinition = Definition.Get();
+	Chest->InteractPromptText = FText::FromString(TEXT("Actor 需要钥匙"));
+	Chest->SyncClickTargetForTest();
+
+	UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent();
+	if (!TestNotNull(TEXT("Receiver"), Receiver))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Definition interact prompt syncs to rejected prompt"),
+		Receiver->RejectedCardPromptText.ToString(),
+		FString(TEXT("定义需要钥匙")));
+	TestEqual(TEXT("Receiver rejected toast uses definition prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			Chest->PersistentId,
+			FGuid::NewGuid(),
+			TEXT("CardNotAccepted")).ToString(),
+		FString(TEXT("定义需要钥匙")));
 	return true;
 }
 
@@ -1283,6 +1717,47 @@ bool FWacomUIRunKeyChestDefinitionConfigureSampleSpec::RunTest(
 	TestEqual(TEXT("Sample receiver gold"),
 		Chest->GetCardDropReceiverComponent()->GoldReward,
 		3);
+	TestEqual(TEXT("Sample receiver rejected prompt"),
+		Chest->GetCardDropReceiverComponent()->RejectedCardPromptText.ToString(),
+		FString(TEXT("需要钥匙")));
+	TestEqual(TEXT("Sample receiver completed prompt"),
+		Chest->GetCardDropReceiverComponent()->CompletedPromptText.ToString(),
+		FString(TEXT("宝箱已打开")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestDefinitionConfigureSampleFailurePromptSpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestDefinition.ConfigureDebugKeyChestSampleRefreshesReceiverFailurePrompts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestDefinitionConfigureSampleFailurePromptSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->Rename(TEXT("KeyChestFailurePromptSample"));
+	Chest->ConfigureDebugKeyChestSample();
+
+	UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent();
+	if (!TestNotNull(TEXT("Receiver"), Receiver))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Sample receiver rejected prompt"),
+		Receiver->RejectedCardPromptText.ToString(),
+		FString(TEXT("需要钥匙")));
+	TestEqual(TEXT("Sample receiver completed prompt"),
+		Receiver->CompletedPromptText.ToString(),
+		FString(TEXT("宝箱已打开")));
+	TestEqual(TEXT("Sample rejected toast"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			Chest->PersistentId,
+			FGuid::NewGuid(),
+			TEXT("CardNotAccepted")).ToString(),
+		FString(TEXT("需要钥匙")));
 	return true;
 }
 
@@ -1301,9 +1776,11 @@ bool FWacomUIRunWorldCardDropPreviewAcceptsSpec::RunTest(const FString& /*Parame
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomPlayerCharacter> Pawn(NewObject<AWacomPlayerCharacter>());
+	FWacomUiToastHarness ToastHarness;
 	PC->SetPawn(Pawn.Get());
 	InjectRunSession(PC.Get(), Run.Get());
 	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.Accepts");
@@ -1384,7 +1861,7 @@ bool FWacomUIRunWorldCardDropPreviewRejectsSpec::RunTest(const FString& /*Parame
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldCardDropReleaseSubmitsSpec,
-	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseDebugKeyOnKeyChestSubmitsAndShowsGoldToast",
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseDebugKeyOnKeyChestStillSubmitsShowsGoldToastAndRefreshesHand",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parameters*/)
@@ -1397,9 +1874,11 @@ bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parame
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomPlayerCharacter> Pawn(NewObject<AWacomPlayerCharacter>());
+	FWacomUiToastHarness ToastHarness;
 	PC->SetPawn(Pawn.Get());
 	InjectRunSession(PC.Get(), Run.Get());
 	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.Release");
@@ -1416,12 +1895,14 @@ bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parame
 	TestEqual(TEXT("Gold +3"), Run->GetGold(), 3);
 	TestTrue(TEXT("Completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
 	TestEqual(TEXT("Key removed"), Run->GetRunState().BattleDeck.Num(), 0);
+	TestTrue(TEXT("Gold toast emitted"),
+		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("获得 3 金币")));
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldCardDropWrongReleaseSpec,
-	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseWrongCardOnKeyChestDoesNotMutateRunState",
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseWrongCardUsesReceiverRejectedPromptAndDoesNotMutateRunState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunWorldCardDropWrongReleaseSpec::RunTest(const FString& /*Parameters*/)
@@ -1433,14 +1914,18 @@ bool FWacomUIRunWorldCardDropWrongReleaseSpec::RunTest(const FString& /*Paramete
 	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	FWacomUiToastHarness ToastHarness;
 	InjectRunSession(PC.Get(), Run.Get());
 	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.WrongRelease");
 	Chest->SyncClickTargetForTest();
 	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
 	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	Chest->GetCardDropReceiverComponent()->RejectedCardPromptText =
+		FText::FromString(TEXT("需要机关钥匙"));
 	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
 
 	TestFalse(TEXT("Release rejected"),
@@ -1451,6 +1936,255 @@ bool FWacomUIRunWorldCardDropWrongReleaseSpec::RunTest(const FString& /*Paramete
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
 	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
 	TestEqual(TEXT("Card remains"), Run->GetRunState().BattleDeck.Num(), 1);
+	TestTrue(TEXT("Receiver rejected toast emitted"),
+		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("需要机关钥匙")));
+	TestFalse(TEXT("Actor prompt was not used"),
+		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("需要钥匙")));
+	TestTrue(TEXT("Debug summary records receiver toast source"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=Receiver")));
+	TestTrue(TEXT("Debug summary records failure toast"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("FailureToast=需要机关钥匙")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropCompletedReleaseToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseCardOnCompletedKeyChestShowsCompletedToastAndDoesNotMutateRunState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropCompletedReleaseToastSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	FWacomUiToastHarness ToastHarness;
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.CompletedRelease");
+	Chest->CompletedPromptText = FText::FromString(TEXT("宝箱已打开"));
+	Chest->SyncClickTargetForTest();
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	FWacomRunSessionTestAccess::GetMutableRunState(*Run).CompletedRunWorldInteractionIds.Add(
+		Chest->PersistentId);
+
+	TestFalse(TEXT("Completed release rejected"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
+	TestEqual(TEXT("Card remains"), Run->GetRunState().BattleDeck.Num(), 1);
+	TestTrue(TEXT("Completed toast emitted"),
+		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("宝箱已打开")));
+	TestTrue(TEXT("Completed toast uses receiver path"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=Receiver")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropInvalidReceiverToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseOnInvalidKeyChestReceiverShowsConfigWarningToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropInvalidReceiverToastSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	FWacomUiToastHarness ToastHarness;
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.InvalidReceiver");
+	Chest->SyncClickTargetForTest();
+	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
+	Chest->GetCardDropReceiverComponent()->GoldReward = 0;
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	TestFalse(TEXT("Invalid receiver release rejected"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
+	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
+	TestTrue(TEXT("Config warning toast emitted"),
+		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("场景交互配置异常：InvalidGoldReward")));
+	TestTrue(TEXT("Debug summary records receiver toast source"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=Receiver")));
+	TestTrue(TEXT("Debug summary records config toast"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("FailureToast=场景交互配置异常：InvalidGoldReward")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropMissingReceiverToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseOnMissingReceiverUsesControllerConfigWarningToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropMissingReceiverToastSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	FWacomUiToastHarness ToastHarness;
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
+		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
+	Target->StableIdForTest = TEXT("Run.Generic.MissingReceiver");
+	Target->SyncClickTargetForTest();
+	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+
+	TestFalse(TEXT("Missing receiver release rejected"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
+	TestEqual(TEXT("Card remains"), Run->GetRunState().BattleDeck.Num(), 1);
+	TestTrue(TEXT("Controller config warning emitted"),
+		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("场景交互配置异常：MissingCardDropReceiver")));
+	const FString Summary = PC->ReadRunWorldCardDropDebugSummaryForTest();
+	TestTrue(TEXT("Summary records controller fallback"),
+		Summary.Contains(TEXT("ToastSource=ControllerFallback")));
+	TestTrue(TEXT("Summary records missing receiver toast"),
+		Summary.Contains(TEXT("FailureToast=场景交互配置异常：MissingCardDropReceiver")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropPreviewRejectsWithoutToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldCardDropPreviewRejectsWrongCardWithoutToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropPreviewRejectsWithoutToastSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Wrong(MakeUiWorldDropCard(GetTransientPackage(), TEXT("WrongCard")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Wrong.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	FWacomUiToastHarness ToastHarness;
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.PreviewNoToast");
+	Chest->SyncClickTargetForTest();
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	TestFalse(TEXT("Preview rejected but not submitted"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			WrongInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ false));
+	TestEqual(TEXT("Preview emits no toast"), ToastHarness.ToastWidget->GetVisibleToastCount(), 0);
+	TestTrue(TEXT("Preview debug records no failure toast"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("FailureToast=None")));
+	TestTrue(TEXT("Preview debug records no toast source"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=None")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropReleaseAwayNoToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseCardAwayFromRunWorldTargetDoesNotShowFailureToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropReleaseAwayNoToastSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	FWacomUiToastHarness ToastHarness;
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	PC->ClearRunSceneHitForTest();
+
+	TestFalse(TEXT("Release away rejected"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	TestEqual(TEXT("No target release emits no toast"), ToastHarness.ToastWidget->GetVisibleToastCount(), 0);
+	TestTrue(TEXT("Debug summary records no failure toast"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("FailureToast=None")));
+	TestTrue(TEXT("Debug summary records no toast source"),
+		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=None")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropDebugFailureToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.RunWorldCardDropDebugSummaryReportsToastSourceAndFailureToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropDebugFailureToastSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Wrong(MakeUiWorldDropCard(GetTransientPackage(), TEXT("WrongCard")));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Wrong.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	FWacomUiToastHarness ToastHarness;
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.FailureSummary");
+	Chest->InteractPromptText = FText::FromString(TEXT("需要钥匙"));
+	Chest->SyncClickTargetForTest();
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	TestFalse(TEXT("Release rejected"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			WrongInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	const FString Summary = PC->ReadRunWorldCardDropDebugSummaryForTest();
+	TestTrue(TEXT("Summary reports phase"), Summary.Contains(TEXT("Phase=Release")));
+	TestTrue(TEXT("Summary reports reason"), Summary.Contains(TEXT("Reason=CardNotAccepted")));
+	TestTrue(TEXT("Summary reports toast source"), Summary.Contains(TEXT("ToastSource=Receiver")));
+	TestTrue(TEXT("Summary reports failure toast"), Summary.Contains(TEXT("FailureToast=需要钥匙")));
+	TestTrue(TEXT("Toast emitted"),
+		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("需要钥匙")));
 	return true;
 }
 

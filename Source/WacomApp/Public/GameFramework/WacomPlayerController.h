@@ -23,6 +23,7 @@ class UWacomRunEventDefinition;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunMenuDropTargetWidget;
+class UWacomAppToastSubsystem;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;
@@ -286,6 +287,7 @@ protected:
 	void ClearRunWorldTargetProbePreview();
 	void ClearRunMenuDropTargetProbe();
 	FString GetRunMenuDropProbeDebugSummaryForTest() const { return LastRunMenuDropProbeDebugSummary; }
+	FString GetRunWorldCardDropDebugSummaryForTest() const { return LastRunWorldCardDropDebugSummary; }
 	void HandleRunFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
@@ -316,6 +318,7 @@ protected:
 		UWacomRunWorldCardDropReceiverComponent* Receiver,
 		FName PersistentId,
 		FRunWorldCardInteractionValidation& InOutValidation);
+	virtual UWacomAppToastSubsystem* ResolveAppToastSubsystem() const;
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
 	FText BuildCurrentInteractPrompt() const;

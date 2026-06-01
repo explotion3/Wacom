@@ -17,6 +17,7 @@
 class AWacomPlayerController;
 class UPrimitiveComponent;
 class UStaticMesh;
+class URunSession;
 class UWacomInteractionTargetComponent;
 class UWacomRunKeyChestDefinition;
 class UWacomRunWorldCardDropReceiverComponent;
@@ -104,6 +105,18 @@ struct WACOMAPP_API FWacomRunKeyChestDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	FVector VisualScale = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FName CompletedVisualMeshName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FVector CompletedVisualScale = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FVector CompletedVisualRelativeLocation = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FName VisualState = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	bool bHasCardDropReceiver = false;
@@ -198,6 +211,18 @@ public:
 		meta = (ToolTip = "宝箱原型可见网格相对位置。单位：厘米；只影响内部 ChestVisual。"))
 	FVector VisualRelativeLocation = FVector::ZeroVector;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Authoring|Completed",
+		meta = (ToolTip = "宝箱完成后的安全可见网格。为空时复用关闭态 VisualMesh；只影响内部 ChestVisual，不影响命中范围。"))
+	TObjectPtr<UStaticMesh> CompletedVisualMesh = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Authoring|Completed",
+		meta = (ToolTip = "宝箱完成后的相对缩放。默认比关闭态更扁；只影响内部 ChestVisual，不影响 ClickBounds 命中范围。"))
+	FVector CompletedVisualScale = FVector(0.75f, 0.55f, 0.18f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Authoring|Completed",
+		meta = (ToolTip = "宝箱完成后的相对位置。单位：厘米；默认轻微下移配合扁平 scale。"))
+	FVector CompletedVisualRelativeLocation = FVector(0.f, 0.f, -18.f);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Text",
 		meta = (ToolTip = "未打开时，玩家在 E 键范围内看到的提示文案。"))
 	FText InteractPromptText;
@@ -287,12 +312,20 @@ protected:
 		UPrimitiveComponent* OtherComp,
 		int32 OtherBodyIndex);
 
+	void EnsureRunSessionBinding(AWacomPlayerController* PC);
+
 private:
 	void RefreshAuthoringState();
+	void RefreshVisualState();
 	void RefreshClickTargetBinding();
 	void SyncReceiverFromDefinition();
+	void TryBindRunSessionFromWorld();
+	void BindRunSessionForCompletedVisual(URunSession* Run);
+	void UnbindRunSession();
+	void HandleRunStateChanged();
 	FName BuildConfigWarningReason() const;
 	bool HasDuplicatePersistentIdInWorld() const;
+	bool IsCompletedForBoundRunSession() const;
 	bool IsCompletedFor(AWacomPlayerController* PC) const;
 	FText GetHoverPromptText(AWacomPlayerController* PC) const;
 	FText ResolveInteractPromptText() const;
@@ -321,4 +354,7 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomRunWorldCardDropReceiverComponent> CardDropReceiverComponent = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<URunSession> BoundRunSession = nullptr;
 };

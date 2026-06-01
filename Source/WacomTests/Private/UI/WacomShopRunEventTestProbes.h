@@ -108,6 +108,7 @@ public:
 	{
 		bHasRunSceneHitOverride = true;
 		RunSceneHitOverride = FHitResult();
+		RunSceneHitActorOverride = InActor;
 		RunSceneHitOverride.HitObjectHandle = FActorInstanceHandle(InActor);
 		RunSceneHitOverride.Component = InComponent;
 	}
@@ -116,6 +117,7 @@ public:
 	{
 		bHasRunSceneHitOverride = false;
 		RunSceneHitOverride = FHitResult();
+		RunSceneHitActorOverride = nullptr;
 	}
 
 	void SetRunProbeExplorationFlowForTest(bool bInExploration)
@@ -220,6 +222,11 @@ public:
 		return GetRunMenuDropProbeDebugSummaryForTest();
 	}
 
+	FString ReadRunWorldCardDropDebugSummaryForTest() const
+	{
+		return GetRunWorldCardDropDebugSummaryForTest();
+	}
+
 	FWacomRunMenuCardDropResolveResult ResolveRunMenuCardDropIntentForTest(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView) const
@@ -241,6 +248,11 @@ public:
 		SetRunFirstPersonCardLayerMenuLease(LeaseId, TEXT("Test.Source"), Entries);
 	}
 
+	void SetAppToastSubsystemForTest(UWacomAppToastSubsystem* InToastSubsystem)
+	{
+		AppToastSubsystemForTest = InToastSubsystem;
+	}
+
 protected:
 	virtual bool IsInExplorationFlow() const override
 	{
@@ -254,6 +266,13 @@ protected:
 			: Super::ResolveRunSessionForFirstPersonCardSource();
 	}
 
+	virtual UWacomAppToastSubsystem* ResolveAppToastSubsystem() const override
+	{
+		return AppToastSubsystemForTest
+			? AppToastSubsystemForTest.Get()
+			: Super::ResolveAppToastSubsystem();
+	}
+
 	virtual bool BuildRunSceneClickHitResult(FHitResult& OutHitResult) const override
 	{
 		if (!bHasRunSceneHitOverride)
@@ -262,6 +281,11 @@ protected:
 		}
 
 		OutHitResult = RunSceneHitOverride;
+		if (!OutHitResult.GetActor() && RunSceneHitActorOverride.IsValid())
+		{
+			OutHitResult.HitObjectHandle =
+				FActorInstanceHandle(RunSceneHitActorOverride.Get());
+		}
 		return OutHitResult.GetActor() || OutHitResult.GetComponent();
 	}
 
@@ -275,6 +299,11 @@ protected:
 		}
 
 		OutHitResult = RunSceneHitOverride;
+		if (!OutHitResult.GetActor() && RunSceneHitActorOverride.IsValid())
+		{
+			OutHitResult.HitObjectHandle =
+				FActorInstanceHandle(RunSceneHitActorOverride.Get());
+		}
 		OutHitResult.Location = FVector(WidgetPosition.X, WidgetPosition.Y, 0.0f);
 		return OutHitResult.GetActor() || OutHitResult.GetComponent();
 	}
@@ -285,7 +314,13 @@ private:
 	bool bHasRunSceneHitOverride = false;
 
 	UPROPERTY(Transient)
+	TWeakObjectPtr<AActor> RunSceneHitActorOverride;
+
+	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSessionForTest = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomAppToastSubsystem> AppToastSubsystemForTest = nullptr;
 };
 
 UCLASS()
@@ -427,6 +462,11 @@ public:
 	{
 		OnConstruction(FTransform::Identity);
 	}
+
+	void EnsureRunSessionBindingForTest(AWacomPlayerController* PC)
+	{
+		EnsureRunSessionBinding(PC);
+	}
 };
 
 UCLASS()
@@ -519,6 +559,10 @@ public:
 			ClickBounds,
 			ClickInteractionTarget,
 			ClickTargetBridge);
+		if (ClickTargetBridge)
+		{
+			ClickTargetBridge->RefreshRunWorldTargetBinding();
+		}
 	}
 
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* /*PC*/) const override

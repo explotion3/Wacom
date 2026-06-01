@@ -83,6 +83,7 @@ void AWacomRunKeyChestActor::BeginPlay()
 {
 	Super::BeginPlay();
 	RefreshAuthoringState();
+	TryBindRunSessionFromWorld();
 	const FName ConfigReason = BuildConfigWarningReason();
 	if (!ConfigReason.IsNone())
 	{
@@ -121,6 +122,7 @@ void AWacomRunKeyChestActor::OnConstruction(const FTransform& Transform)
 
 void AWacomRunKeyChestActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	UnbindRunSession();
 	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 	{
 		if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
@@ -146,6 +148,7 @@ void AWacomRunKeyChestActor::HandleBeginOverlap(UPrimitiveComponent* /*Overlappe
 	AWacomPlayerController* PC = Pawn ? Cast<AWacomPlayerController>(Pawn->GetController()) : nullptr;
 	if (PC)
 	{
+		EnsureRunSessionBinding(PC);
 		PC->RegisterCandidateInteractable(this);
 	}
 }
@@ -173,6 +176,9 @@ void AWacomRunKeyChestActor::ConfigureDebugKeyChestSample()
 	VisualMesh = LoadObject<UStaticMesh>(nullptr, DefaultChestMeshPath);
 	VisualScale = FVector(0.75f, 0.55f, 0.45f);
 	VisualRelativeLocation = FVector::ZeroVector;
+	CompletedVisualMesh = nullptr;
+	CompletedVisualScale = FVector(0.75f, 0.55f, 0.18f);
+	CompletedVisualRelativeLocation = FVector(0.f, 0.f, -18.f);
 	InteractPromptText = GetDefaultInteractPromptText();
 	HoverPromptText = GetDefaultHoverPromptText();
 	CompletedPromptText = GetDefaultCompletedPromptText();
@@ -200,6 +206,7 @@ void AWacomRunKeyChestActor::ConfigureDebugKeyChestSample()
 		CardDropReceiverComponent->PreviewPromptText = LOCTEXT("DebugKeyPreviewPrompt", "使用钥匙打开宝箱");
 		CardDropReceiverComponent->SuccessPromptText = LOCTEXT("DebugKeySuccessPrompt", "宝箱已打开");
 		CardDropReceiverComponent->CompletedPromptText = GetDefaultCompletedPromptText();
+		CardDropReceiverComponent->RejectedCardPromptText = GetDefaultInteractPromptText();
 	}
 
 	RefreshAuthoringState();
@@ -212,6 +219,7 @@ void AWacomRunKeyChestActor::ConfigureDebugKeyChestSample()
 FText AWacomRunKeyChestActor::GetInteractPromptText_Implementation(
 	AWacomPlayerController* PC) const
 {
+	const_cast<AWacomRunKeyChestActor*>(this)->EnsureRunSessionBinding(PC);
 	return IsCompletedFor(PC)
 		? ResolveCompletedPromptText()
 		: ResolveInteractPromptText();
@@ -220,6 +228,7 @@ FText AWacomRunKeyChestActor::GetInteractPromptText_Implementation(
 FText AWacomRunKeyChestActor::GetRunWorldClickHoverPrompt_Implementation(
 	AWacomPlayerController* PC) const
 {
+	const_cast<AWacomRunKeyChestActor*>(this)->EnsureRunSessionBinding(PC);
 	return GetHoverPromptText(PC);
 }
 
@@ -237,6 +246,7 @@ bool AWacomRunKeyChestActor::CanInteract_Implementation(
 
 bool AWacomRunKeyChestActor::TryInteract_Implementation(AWacomPlayerController* PC)
 {
+	EnsureRunSessionBinding(PC);
 	ShowChestHintToast(PC);
 	return false;
 }
@@ -245,6 +255,7 @@ FWacomRunWorldClickableInteractableDebugView
 AWacomRunKeyChestActor::GetRunWorldClickableDebugView_Implementation(
 	AWacomPlayerController* PC) const
 {
+	const_cast<AWacomRunKeyChestActor*>(this)->EnsureRunSessionBinding(PC);
 	FName LastResult = TEXT("Ok");
 	if (!PC)
 	{
@@ -283,6 +294,7 @@ AWacomRunKeyChestActor::GetRunWorldClickableDebugView_Implementation(
 FWacomRunKeyChestDebugView AWacomRunKeyChestActor::GetRunKeyChestDebugView(
 	AWacomPlayerController* PC) const
 {
+	const_cast<AWacomRunKeyChestActor*>(this)->EnsureRunSessionBinding(PC);
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 
@@ -309,6 +321,12 @@ FWacomRunKeyChestDebugView AWacomRunKeyChestActor::GetRunKeyChestDebugView(
 	View.VisualName = ChestVisual ? ChestVisual->GetFName() : NAME_None;
 	View.VisualMeshName = VisualMesh ? VisualMesh->GetFName() : NAME_None;
 	View.VisualScale = ChestVisual ? ChestVisual->GetRelativeScale3D() : VisualScale;
+	View.CompletedVisualMeshName = CompletedVisualMesh
+		? CompletedVisualMesh->GetFName()
+		: (VisualMesh ? VisualMesh->GetFName() : NAME_None);
+	View.CompletedVisualScale = CompletedVisualScale;
+	View.CompletedVisualRelativeLocation = CompletedVisualRelativeLocation;
+	View.VisualState = View.bCompleted ? TEXT("Open") : TEXT("Closed");
 	View.bHasCardDropReceiver = CardDropReceiverComponent != nullptr;
 	View.InteractPrompt = GetInteractPromptText_Implementation(PC).ToString();
 	View.HoverPrompt = GetHoverPromptText(PC).ToString();
@@ -348,7 +366,7 @@ FString AWacomRunKeyChestActor::GetRunKeyChestDebugSummary(
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunKeyChest{Actor=%s PersistentId=%s Definition=%s ChestId=%s DefinitionReason=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
+		TEXT("RunKeyChest{Actor=%s PersistentId=%s Definition=%s ChestId=%s DefinitionReason=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s CompletedVisualMesh=%s CompletedVisualScale=%s CompletedVisualLocation=%s VisualState=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.DefinitionName.ToString(),
@@ -367,6 +385,10 @@ FString AWacomRunKeyChestActor::GetRunKeyChestDebugSummary(
 		*View.VisualName.ToString(),
 		*View.VisualMeshName.ToString(),
 		*View.VisualScale.ToCompactString(),
+		*View.CompletedVisualMeshName.ToString(),
+		*View.CompletedVisualScale.ToCompactString(),
+		*View.CompletedVisualRelativeLocation.ToCompactString(),
+		*View.VisualState.ToString(),
 		View.bHasCardDropReceiver ? TEXT("true") : TEXT("false"),
 		View.bReceiverCanSubmit ? TEXT("true") : TEXT("false"),
 		*View.ReceiverRejectReason.ToString(),
@@ -394,6 +416,11 @@ void AWacomRunKeyChestActor::LogRunKeyChestDebugSummary(AWacomPlayerController* 
 void AWacomRunKeyChestActor::RefreshAuthoringState()
 {
 	SyncReceiverFromDefinition();
+	if (CardDropReceiverComponent && !ChestDefinition)
+	{
+		CardDropReceiverComponent->RejectedCardPromptText = ResolveInteractPromptText();
+		CardDropReceiverComponent->CompletedPromptText = ResolveCompletedPromptText();
+	}
 	if (TriggerSphere)
 	{
 		TriggerSphere->SetSphereRadius(TriggerRadius);
@@ -405,17 +432,89 @@ void AWacomRunKeyChestActor::RefreshAuthoringState()
 	}
 	if (ChestVisual)
 	{
-		ChestVisual->SetStaticMesh(VisualMesh);
-		ChestVisual->SetRelativeScale3D(VisualScale);
-		ChestVisual->SetRelativeLocation(VisualRelativeLocation);
 		ChestVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		ChestVisual->SetGenerateOverlapEvents(false);
 	}
+	RefreshVisualState();
 	RefreshClickTargetBinding();
 	if (ClickTargetBridgeComponent)
 	{
 		ClickTargetBridgeComponent->RefreshRunWorldTargetBinding();
 	}
+}
+
+void AWacomRunKeyChestActor::RefreshVisualState()
+{
+	if (!ChestVisual)
+	{
+		return;
+	}
+
+	const bool bCompleted = IsCompletedForBoundRunSession();
+	UStaticMesh* MeshToUse = bCompleted && CompletedVisualMesh
+		? CompletedVisualMesh.Get()
+		: VisualMesh.Get();
+	ChestVisual->SetStaticMesh(MeshToUse);
+	ChestVisual->SetRelativeScale3D(bCompleted
+		? CompletedVisualScale
+		: VisualScale);
+	ChestVisual->SetRelativeLocation(bCompleted
+		? CompletedVisualRelativeLocation
+		: VisualRelativeLocation);
+	ChestVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	ChestVisual->SetGenerateOverlapEvents(false);
+}
+
+void AWacomRunKeyChestActor::TryBindRunSessionFromWorld()
+{
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	EnsureRunSessionBinding(Cast<AWacomPlayerController>(PC));
+}
+
+void AWacomRunKeyChestActor::EnsureRunSessionBinding(AWacomPlayerController* PC)
+{
+	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
+	if (Run)
+	{
+		BindRunSessionForCompletedVisual(Run);
+	}
+	else
+	{
+		RefreshVisualState();
+	}
+}
+
+void AWacomRunKeyChestActor::BindRunSessionForCompletedVisual(URunSession* Run)
+{
+	if (BoundRunSession == Run)
+	{
+		RefreshVisualState();
+		return;
+	}
+
+	UnbindRunSession();
+	BoundRunSession = Run;
+	if (BoundRunSession)
+	{
+		BoundRunSession->OnRunStateChangedNative.AddUObject(
+			this,
+			&AWacomRunKeyChestActor::HandleRunStateChanged);
+	}
+	RefreshVisualState();
+}
+
+void AWacomRunKeyChestActor::UnbindRunSession()
+{
+	if (BoundRunSession)
+	{
+		BoundRunSession->OnRunStateChangedNative.RemoveAll(this);
+	}
+	BoundRunSession = nullptr;
+}
+
+void AWacomRunKeyChestActor::HandleRunStateChanged()
+{
+	RefreshVisualState();
 }
 
 void AWacomRunKeyChestActor::SyncReceiverFromDefinition()
@@ -444,8 +543,10 @@ void AWacomRunKeyChestActor::SyncReceiverFromDefinition()
 		ChestDefinition->SuccessPromptText;
 	CardDropReceiverComponent->CompletedPromptText =
 		ChestDefinition->ReceiverCompletedPromptText.IsEmpty()
-			? ChestDefinition->CompletedPromptText
+			? ResolveCompletedPromptText()
 			: ChestDefinition->ReceiverCompletedPromptText;
+	CardDropReceiverComponent->RejectedCardPromptText =
+		ResolveInteractPromptText();
 }
 
 #if WITH_EDITOR
@@ -554,6 +655,12 @@ bool AWacomRunKeyChestActor::IsCompletedFor(AWacomPlayerController* PC) const
 {
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
 	return Run && Run->IsRunWorldInteractionCompleted(PersistentId);
+}
+
+bool AWacomRunKeyChestActor::IsCompletedForBoundRunSession() const
+{
+	return BoundRunSession
+		&& BoundRunSession->IsRunWorldInteractionCompleted(PersistentId);
 }
 
 FText AWacomRunKeyChestActor::GetHoverPromptText(AWacomPlayerController* PC) const
