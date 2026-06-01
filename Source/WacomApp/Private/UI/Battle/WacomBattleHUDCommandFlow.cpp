@@ -3,6 +3,7 @@
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
 
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleHUDEventFlow.h"
 #include "UI/Battle/WacomBattleHUDTargetingFlow.h"
 
@@ -18,10 +19,18 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& Ca
 	{
 		return;
 	}
-	if (HUD.IsBattlePresentationQueueBusy())
+	if (!HUD.CanSubmitPlayerActionCommand())
 	{
 		return;
 	}
+
+	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
+	const FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
+			PreCommandSnapshot,
+			CardId,
+			TargetPartId,
+			FGuid());
 
 	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TargetPartId));
 	if (!Status.IsOk())
@@ -34,7 +43,7 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& Ca
 	HUD.RecordFirstPersonPlayCommit(CardId, TargetPartId);
 	HUD.PendingTargetingCardId.Invalidate();
 	HUD.SetUIState(EBattleUIState::Idle);
-	AfterCommand(HUD);
+	AfterCommand(HUD, LogContext, PreCommandSnapshot);
 }
 
 void FWacomBattleHUDCommandFlow::SubmitPlayCardOnHandCard(
@@ -49,10 +58,18 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCardOnHandCard(
 	{
 		return;
 	}
-	if (HUD.IsBattlePresentationQueueBusy())
+	if (!HUD.CanSubmitPlayerActionCommand())
 	{
 		return;
 	}
+
+	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
+	const FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
+			PreCommandSnapshot,
+			CardId,
+			FGuid(),
+			TargetCardId);
 
 	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(CardId, TargetCardId));
 	if (!Status.IsOk())
@@ -65,16 +82,20 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCardOnHandCard(
 	HUD.RecordFirstPersonPlayCommit(CardId, FGuid());
 	HUD.PendingTargetingCardId.Invalidate();
 	HUD.SetUIState(EBattleUIState::Idle);
-	AfterCommand(HUD);
+	AfterCommand(HUD, LogContext, PreCommandSnapshot);
 }
 
 void FWacomBattleHUDCommandFlow::SubmitWait(UBattleHUD& HUD)
 {
 	HUD.HideCardDetailPanel();
 
-	if (HUD.UIState == EBattleUIState::BattleEnd
-		|| HUD.UIState == EBattleUIState::Resolving
-		|| HUD.IsBattlePresentationQueueBusy())
+	if (HUD.HasBattlePresentationStackEntries())
+	{
+		HUD.QueuePendingTurnBoundaryCommand(UBattleHUD::ETurnBoundaryCommand::Wait);
+		return;
+	}
+
+	if (!HUD.CanSubmitPlayerActionCommand())
 	{
 		return;
 	}
@@ -89,6 +110,10 @@ void FWacomBattleHUDCommandFlow::SubmitWait(UBattleHUD& HUD)
 	{
 		return;
 	}
+
+	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
+	const FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildWaitCommandContext(PreCommandSnapshot);
 
 	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakeWait());
 	if (!Status.IsOk())
@@ -97,16 +122,20 @@ void FWacomBattleHUDCommandFlow::SubmitWait(UBattleHUD& HUD)
 		return;
 	}
 
-	AfterCommand(HUD);
+	AfterCommand(HUD, LogContext, PreCommandSnapshot);
 }
 
 void FWacomBattleHUDCommandFlow::SubmitEndTurn(UBattleHUD& HUD)
 {
 	HUD.HideCardDetailPanel();
 
-	if (HUD.UIState == EBattleUIState::BattleEnd
-		|| HUD.UIState == EBattleUIState::Resolving
-		|| HUD.IsBattlePresentationQueueBusy())
+	if (HUD.HasBattlePresentationStackEntries())
+	{
+		HUD.QueuePendingTurnBoundaryCommand(UBattleHUD::ETurnBoundaryCommand::EndTurn);
+		return;
+	}
+
+	if (!HUD.CanSubmitPlayerActionCommand())
 	{
 		return;
 	}
@@ -121,10 +150,10 @@ void FWacomBattleHUDCommandFlow::SubmitEndTurn(UBattleHUD& HUD)
 	{
 		return;
 	}
-	if (HUD.IsBattlePresentationQueueBusy())
-	{
-		return;
-	}
+
+	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
+	const FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildEndTurnCommandContext(PreCommandSnapshot);
 
 	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakeEndTurn());
 	if (!Status.IsOk())
@@ -133,7 +162,7 @@ void FWacomBattleHUDCommandFlow::SubmitEndTurn(UBattleHUD& HUD)
 		return;
 	}
 
-	AfterCommand(HUD);
+	AfterCommand(HUD, LogContext, PreCommandSnapshot);
 }
 
 void FWacomBattleHUDCommandFlow::SubmitKnockdownChoice(UBattleHUD& HUD, EKnockdownChoice Choice)
@@ -151,6 +180,10 @@ void FWacomBattleHUDCommandFlow::SubmitKnockdownChoice(UBattleHUD& HUD, EKnockdo
 		return;
 	}
 
+	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
+	const FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildKnockdownChoiceCommandContext(PreCommandSnapshot, Choice);
+
 	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(Choice));
 	if (!Status.IsOk())
 	{
@@ -159,13 +192,29 @@ void FWacomBattleHUDCommandFlow::SubmitKnockdownChoice(UBattleHUD& HUD, EKnockdo
 		return;
 	}
 
-	AfterCommand(HUD);
+	AfterCommand(HUD, LogContext, PreCommandSnapshot);
 }
 
 void FWacomBattleHUDCommandFlow::AfterCommand(UBattleHUD& HUD)
 {
+	UBattleSession* Session = HUD.GetSession();
+	if (!Session)
+	{
+		return;
+	}
+
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FWacomBattleCombatLogCommandContext SystemContext =
+		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot);
+	AfterCommand(HUD, SystemContext, Snapshot);
+}
+
+void FWacomBattleHUDCommandFlow::AfterCommand(
+	UBattleHUD& HUD,
+	const FWacomBattleCombatLogCommandContext& LogContext,
+	const FBattleSnapshot& PreCommandSnapshot)
+{
 	HUD.HideCardDetailPanel();
-	FWacomBattleHUDEventFlow::ConsumeAndLogEvents(HUD);
 
 	UBattleSession* Session = HUD.GetSession();
 	if (!Session)
@@ -173,5 +222,11 @@ void FWacomBattleHUDCommandFlow::AfterCommand(UBattleHUD& HUD)
 		return;
 	}
 
-	HUD.RefreshFromSnapshot(Session->BuildSnapshot());
+	const FBattleSnapshot PostCommandSnapshot = Session->BuildSnapshot();
+	FWacomBattleHUDEventFlow::ConsumeAndLogEvents(
+		HUD,
+		LogContext,
+		PreCommandSnapshot,
+		PostCommandSnapshot);
+	HUD.RefreshFromSnapshot(PostCommandSnapshot);
 }

@@ -5,27 +5,26 @@
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
-#include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 
 class UBattleHUD;
 
 enum class EWacomBattlePresentationStepType : uint8
 {
 	TargetCue,
-	Toast,
 	Delay,
 	KnockdownChoiceDialog,
 	BattleEndSignal,
+	CardStackBoundary,
 };
 
 struct FWacomBattlePresentationStep
 {
-	EWacomBattlePresentationStepType Type = EWacomBattlePresentationStepType::Toast;
+	EWacomBattlePresentationStepType Type = EWacomBattlePresentationStepType::Delay;
 	int32 EventSequence = 0;
 	EBattleEventType SourceEventType = EBattleEventType::None;
 	FWacomBattlePresentationTargetCue TargetCue;
-	FBattleEventPresentationView View;
 	float Duration = 0.0f;
+	int32 PresentationStackEntryId = INDEX_NONE;
 };
 
 class FWacomBattleEventPresentationQueue
@@ -35,6 +34,7 @@ public:
 	~FWacomBattleEventPresentationQueue();
 
 	void EnqueueEvents(const TArray<FBattleEvent>& Events);
+	void EnqueueEvents(const TArray<FBattleEvent>& Events, int32 PresentationStackEntryId, float MinimumStackHoldSeconds);
 	void Clear();
 
 	bool IsBusy() const { return bProcessing || Steps.Num() > 0; }
@@ -50,7 +50,7 @@ private:
 	bool bProcessing = false;
 	bool bAdvancing = false;
 
-	void BuildStepsForEvent(const FBattleEvent& Event);
+	bool BuildStepsForEvent(const FBattleEvent& Event);
 	void ScheduleNextStep(float DelaySeconds);
 	void StopTimer();
 	void Advance();

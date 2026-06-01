@@ -8,7 +8,6 @@
 
 namespace
 {
-	constexpr float DefaultToastStepDelay = 0.35f;
 	constexpr float EnemyPartHpEmptiedExtraDelay = 0.45f;
 	constexpr float DamageTargetCueDelay = 0.18f;
 	constexpr float EnemyPartDestroyedTargetCueDelay = 0.30f;
@@ -26,14 +25,40 @@ FWacomBattleEventPresentationQueue::~FWacomBattleEventPresentationQueue()
 
 void FWacomBattleEventPresentationQueue::EnqueueEvents(const TArray<FBattleEvent>& Events)
 {
+	EnqueueEvents(Events, INDEX_NONE, 0.0f);
+}
+
+void FWacomBattleEventPresentationQueue::EnqueueEvents(
+	const TArray<FBattleEvent>& Events,
+	int32 PresentationStackEntryId,
+	float MinimumStackHoldSeconds)
+{
 	if (Events.IsEmpty())
 	{
 		return;
 	}
 
+	bool bAddedPresentationStep = false;
 	for (const FBattleEvent& Event : Events)
 	{
-		BuildStepsForEvent(Event);
+		bAddedPresentationStep |= BuildStepsForEvent(Event);
+	}
+
+	if (PresentationStackEntryId != INDEX_NONE)
+	{
+		if (!bAddedPresentationStep && MinimumStackHoldSeconds > 0.0f)
+		{
+			FWacomBattlePresentationStep HoldStep;
+			HoldStep.Type = EWacomBattlePresentationStepType::Delay;
+			HoldStep.Duration = MinimumStackHoldSeconds;
+			HoldStep.PresentationStackEntryId = PresentationStackEntryId;
+			Steps.Add(MoveTemp(HoldStep));
+		}
+
+		FWacomBattlePresentationStep BoundaryStep;
+		BoundaryStep.Type = EWacomBattlePresentationStepType::CardStackBoundary;
+		BoundaryStep.PresentationStackEntryId = PresentationStackEntryId;
+		Steps.Add(MoveTemp(BoundaryStep));
 	}
 
 	if (!bProcessing && !Steps.IsEmpty())
@@ -81,7 +106,7 @@ void FWacomBattleEventPresentationQueue::Clear()
 	bAdvancing = false;
 }
 
-void FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& Event)
+bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& Event)
 {
 	if (Event.Type == EBattleEventType::KnockdownChoiceRequested)
 	{
@@ -90,9 +115,10 @@ void FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 		Step.EventSequence = Event.Sequence;
 		Step.SourceEventType = Event.Type;
 		Steps.Add(MoveTemp(Step));
-		return;
+		return true;
 	}
 
+	bool bAddedStep = false;
 	if ((Event.Type == EBattleEventType::DamageDealt || Event.Type == EBattleEventType::EnemyPartHpEmptied)
 		&& Event.ActorInstanceId.IsValid())
 	{
@@ -107,19 +133,7 @@ void FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 			? EnemyPartDestroyedTargetCueDelay
 			: DamageTargetCueDelay;
 		Steps.Add(MoveTemp(CueStep));
-	}
-
-	const FBattleEventPresentationView View =
-		UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
-	if (View.bShouldDisplay)
-	{
-		FWacomBattlePresentationStep ToastStep;
-		ToastStep.Type = EWacomBattlePresentationStepType::Toast;
-		ToastStep.EventSequence = Event.Sequence;
-		ToastStep.SourceEventType = Event.Type;
-		ToastStep.View = View;
-		ToastStep.Duration = DefaultToastStepDelay;
-		Steps.Add(MoveTemp(ToastStep));
+		bAddedStep = true;
 	}
 
 	if (Event.Type == EBattleEventType::EnemyPartHpEmptied)
@@ -130,6 +144,7 @@ void FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 		DelayStep.SourceEventType = Event.Type;
 		DelayStep.Duration = EnemyPartHpEmptiedExtraDelay;
 		Steps.Add(MoveTemp(DelayStep));
+		bAddedStep = true;
 	}
 
 	if (Event.Type == EBattleEventType::BattleEnded)
@@ -139,7 +154,10 @@ void FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 		BattleEndStep.EventSequence = Event.Sequence;
 		BattleEndStep.SourceEventType = Event.Type;
 		Steps.Add(MoveTemp(BattleEndStep));
+		bAddedStep = true;
 	}
+
+	return bAddedStep;
 }
 
 void FWacomBattleEventPresentationQueue::ScheduleNextStep(float DelaySeconds)
@@ -215,11 +233,6 @@ void FWacomBattleEventPresentationQueue::Advance()
 		NextDelay = Step.TargetCue.Duration;
 		break;
 
-	case EWacomBattlePresentationStepType::Toast:
-		StrongHUD->EnqueueBattlePresentationToast(Step.View);
-		NextDelay = Step.Duration;
-		break;
-
 	case EWacomBattlePresentationStepType::Delay:
 		NextDelay = Step.Duration;
 		break;
@@ -231,6 +244,11 @@ void FWacomBattleEventPresentationQueue::Advance()
 
 	case EWacomBattlePresentationStepType::BattleEndSignal:
 		StrongHUD->HandleBattlePresentationBattleEndStep();
+		NextDelay = 0.0f;
+		break;
+
+	case EWacomBattlePresentationStepType::CardStackBoundary:
+		StrongHUD->BeginBattlePresentationStackEntryExit(Step.PresentationStackEntryId);
 		NextDelay = 0.0f;
 		break;
 

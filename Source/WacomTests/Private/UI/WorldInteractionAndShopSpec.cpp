@@ -182,7 +182,10 @@ namespace
 			NewObject<UWacomRunWorldCardInteractionDefinition>(Outer);
 		Definition->InteractionId = TEXT("WorldCardInteraction.UI");
 		Definition->AllowedCardIds = { AllowedCardId };
-		Definition->GoldReward = GoldReward;
+		FWacomRunWorldCardInteractionReward Reward;
+		Reward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+		Reward.GoldAmount = GoldReward;
+		Definition->Rewards = { Reward };
 		Definition->bConsumeCardOnSuccess = true;
 		Definition->PreviewPromptText =
 			FText::FromString(TEXT("通用预览交互"));
@@ -217,7 +220,10 @@ namespace
 		Receiver->AllowedCardIds = { AllowedCardId };
 		Receiver->RequiredKeywords.Reset();
 		Receiver->BlockedKeywords.Reset();
-		Receiver->GoldReward = GoldReward;
+		FWacomRunWorldCardInteractionReward Reward;
+		Reward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+		Reward.GoldAmount = GoldReward;
+		Receiver->Rewards = { Reward };
 		Receiver->bConsumeCardOnSuccess = true;
 	}
 
@@ -291,7 +297,10 @@ namespace
 			: FGuid();
 		Request.AllowedCardDefinitions = { Card };
 		Request.AllowedCardIds = { Card ? Card->CardId : NAME_None };
-		Request.GoldReward = GoldReward;
+		FWacomRunWorldCardInteractionReward Reward;
+		Reward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+		Reward.GoldAmount = GoldReward;
+		Request.Rewards = { Reward };
 		Request.bConsumeCardOnSuccess = bConsumeCard;
 		return Request;
 	}
@@ -947,7 +956,16 @@ bool FWacomUIRunWorldCardDropKeyChestConfigureSampleFacadeSpec::RunTest(const FS
 	TestEqual(TEXT("Receiver card id"),
 		Chest->GetCardDropReceiverComponent()->AllowedCardIds[0],
 		FName(TEXT("DebugKey")));
-	TestEqual(TEXT("Receiver gold"), Chest->GetCardDropReceiverComponent()->GoldReward, 3);
+	TestEqual(TEXT("Receiver reward count"), Chest->GetCardDropReceiverComponent()->Rewards.Num(), 1);
+	if (Chest->GetCardDropReceiverComponent()->Rewards.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Receiver gold reward type"),
+			Chest->GetCardDropReceiverComponent()->Rewards[0].Type,
+			EWacomRunWorldCardInteractionRewardType::Gold);
+		TestEqual(TEXT("Receiver gold reward amount"),
+			Chest->GetCardDropReceiverComponent()->Rewards[0].GoldAmount,
+			3);
+	}
 	TestTrue(TEXT("Receiver consumes card"),
 		Chest->GetCardDropReceiverComponent()->bConsumeCardOnSuccess);
 	TestEqual(TEXT("Bridge stable id"),
@@ -1052,7 +1070,10 @@ bool FWacomUIRunWorldCardDropKeyChestReceiverDiagnosticsSpec::RunTest(
 	Receiver->RequiredKeywords.AddTag(WacomTags::Card_Keyword_Tool);
 	Receiver->BlockedKeywords.Reset();
 	Receiver->BlockedKeywords.AddTag(WacomTags::Card_Keyword_Weapon);
-	Receiver->GoldReward = 3;
+	FWacomRunWorldCardInteractionReward GoldReward;
+	GoldReward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+	GoldReward.GoldAmount = 3;
+	Receiver->Rewards = { GoldReward };
 	Receiver->bConsumeCardOnSuccess = true;
 
 	const FWacomRunWorldCardDropReceiverDebugView ReceiverView =
@@ -1097,8 +1118,10 @@ bool FWacomUIRunWorldCardDropKeyChestReceiverDiagnosticsSpec::RunTest(
 		Summary.Contains(TEXT("BlockedKeywords=1")));
 	TestTrue(TEXT("Summary reports positive filter"),
 		Summary.Contains(TEXT("PositiveFilter=true")));
-	TestTrue(TEXT("Summary reports gold"),
-		Summary.Contains(TEXT("Gold=3")));
+	TestTrue(TEXT("Summary reports reward count"),
+		Summary.Contains(TEXT("RewardCount=1")));
+	TestTrue(TEXT("Summary reports gold total"),
+		Summary.Contains(TEXT("GoldTotal=3")));
 	TestTrue(TEXT("Summary reports consume"),
 		Summary.Contains(TEXT("Consume=true")));
 	return true;
@@ -1494,9 +1517,15 @@ bool FWacomUIRunWorldCardInteractionDefinitionReceiverRequestSpec::RunTest(
 	TestEqual(TEXT("Definition blocked keywords copied"),
 		Request.BlockedKeywords.Num(),
 		1);
-	TestEqual(TEXT("Definition gold copied"),
-		Request.GoldReward,
-		8);
+	TestEqual(TEXT("Definition reward count"),
+		Request.Rewards.Num(),
+		1);
+	if (Request.Rewards.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Definition gold copied"),
+			Request.Rewards[0].GoldAmount,
+			8);
+	}
 	TestFalse(TEXT("Definition consume copied"),
 		Request.bConsumeCardOnSuccess);
 	return true;
@@ -1519,7 +1548,10 @@ bool FWacomUIRunWorldCardInteractionDefinitionReceiverOverrideSpec::RunTest(
 			8));
 	Receiver->InteractionDefinition = Definition.Get();
 	Receiver->AllowedCardIds = { TEXT("ManualKey") };
-	Receiver->GoldReward = 1;
+	FWacomRunWorldCardInteractionReward ManualReward;
+	ManualReward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+	ManualReward.GoldAmount = 1;
+	Receiver->Rewards = { ManualReward };
 	Receiver->bConsumeCardOnSuccess = false;
 
 	const FRunWorldCardInteractionRequest Request =
@@ -1536,7 +1568,10 @@ bool FWacomUIRunWorldCardInteractionDefinitionReceiverOverrideSpec::RunTest(
 		Request.AllowedCardIds[0],
 		FName(TEXT("DefinitionKey")));
 	TestEqual(TEXT("Definition gold wins"),
-		Request.GoldReward,
+		Request.Rewards.IsValidIndex(0) ? Request.Rewards[0].GoldAmount : 0,
+		8);
+	TestEqual(TEXT("Debug definition gold total"),
+		View.GoldTotal,
 		8);
 	TestTrue(TEXT("Definition consume wins"),
 		Request.bConsumeCardOnSuccess);
@@ -1649,7 +1684,10 @@ bool FWacomUIRunWorldCardInteractionDefinitionReceiverFallbackSpec::RunTest(
 		NewObject<UWacomRunWorldCardDropReceiverComponent>());
 	Receiver->InteractionDefinition = nullptr;
 	Receiver->AllowedCardIds = { TEXT("ManualKey") };
-	Receiver->GoldReward = 6;
+	FWacomRunWorldCardInteractionReward ManualReward;
+	ManualReward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+	ManualReward.GoldAmount = 6;
+	Receiver->Rewards = { ManualReward };
 	Receiver->RejectedCardPromptText =
 		FText::FromString(TEXT("手填需要钥匙"));
 
@@ -1667,7 +1705,10 @@ bool FWacomUIRunWorldCardInteractionDefinitionReceiverFallbackSpec::RunTest(
 		Request.AllowedCardIds[0],
 		FName(TEXT("ManualKey")));
 	TestEqual(TEXT("Manual gold used"),
-		Request.GoldReward,
+		Request.Rewards.IsValidIndex(0) ? Request.Rewards[0].GoldAmount : 0,
+		6);
+	TestEqual(TEXT("Debug manual gold total"),
+		View.GoldTotal,
 		6);
 	TestEqual(TEXT("Debug source manual"),
 		View.ConfigSource,
@@ -1724,7 +1765,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestSyncSpec::RunTest(
 		Request.AllowedCardIds[0],
 		FName(TEXT("GenericKey")));
 	TestEqual(TEXT("Generic definition gold wins"),
-		Request.GoldReward,
+		Request.Rewards.IsValidIndex(0) ? Request.Rewards[0].GoldAmount : 0,
 		9);
 	TestFalse(TEXT("Generic definition consume wins"),
 		Request.bConsumeCardOnSuccess);
@@ -1852,7 +1893,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugAssetSpec::RunTest(
 		Request.AllowedCardIds[0],
 		FName(TEXT("DebugKey")));
 	TestEqual(TEXT("Generated definition gold drives request"),
-		Request.GoldReward,
+		Request.Rewards.IsValidIndex(0) ? Request.Rewards[0].GoldAmount : 0,
 		3);
 	TestTrue(TEXT("Generated definition consume drives request"),
 		Request.bConsumeCardOnSuccess);
@@ -1941,7 +1982,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugButtonSpec::RunTest(
 		Request.AllowedCardIds[0],
 		FName(TEXT("DebugKey")));
 	TestEqual(TEXT("Generated definition request gold"),
-		Request.GoldReward,
+		Request.Rewards.IsValidIndex(0) ? Request.Rewards[0].GoldAmount : 0,
 		3);
 	return true;
 }
@@ -1986,7 +2027,8 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestFallbackSpec::RunTest(
 	TestEqual(TEXT("Fallback receiver id count"),
 		View.ReceiverAllowedCardIdCount,
 		1);
-	TestEqual(TEXT("Fallback receiver gold"), View.ReceiverGoldReward, 4);
+	TestEqual(TEXT("Fallback receiver reward count"), View.ReceiverRewardCount, 1);
+	TestEqual(TEXT("Fallback receiver gold total"), View.ReceiverGoldTotal, 4);
 	return true;
 }
 
@@ -2013,9 +2055,15 @@ bool FWacomUIRunWorldCardInteractionDefinitionManualSampleSpec::RunTest(
 	TestEqual(TEXT("Sample receiver card id"),
 		Chest->GetCardDropReceiverComponent()->AllowedCardIds[0],
 		FName(TEXT("DebugKey")));
-	TestEqual(TEXT("Sample receiver gold"),
-		Chest->GetCardDropReceiverComponent()->GoldReward,
-		3);
+	TestEqual(TEXT("Sample receiver reward count"),
+		Chest->GetCardDropReceiverComponent()->Rewards.Num(),
+		1);
+	if (Chest->GetCardDropReceiverComponent()->Rewards.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Sample receiver gold"),
+			Chest->GetCardDropReceiverComponent()->Rewards[0].GoldAmount,
+			3);
+	}
 	TestEqual(TEXT("Sample receiver rejected prompt"),
 		Chest->GetCardDropReceiverComponent()->RejectedCardPromptText.ToString(),
 		FString(TEXT("需要钥匙")));
@@ -2085,8 +2133,8 @@ bool FWacomUIRunWorldCardDropPreviewAcceptsSpec::RunTest(const FString& /*Parame
 	Chest->PersistentId = TEXT("Chest.Debug.Accepts");
 	Chest->SyncClickTargetForTest();
 	Chest->GetCardDropReceiverComponent()->AllowedCardDefinitions = { Key.Get() };
-	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
-	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
+	Chest->GetCardDropReceiverComponent()->AllowedCardDefinitions = { Key.Get() };
 	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
 
 	FWacomInteractionTargetHandle TargetHandle;
@@ -2132,8 +2180,7 @@ bool FWacomUIRunWorldCardDropPreviewRejectsSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.Rejects");
 	Chest->SyncClickTargetForTest();
-	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
-	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
 	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
 
 	FWacomInteractionTargetHandle TargetHandle;
@@ -2182,8 +2229,7 @@ bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.Release");
 	Chest->SyncClickTargetForTest();
-	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
-	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
 	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
 
 	TestTrue(TEXT("Release submits"),
@@ -2196,6 +2242,56 @@ bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parame
 	TestEqual(TEXT("Key removed"), Run->GetRunState().BattleDeck.Num(), 0);
 	TestTrue(TEXT("Gold toast emitted"),
 		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("获得 3 金币")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropReleaseCardRewardToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.ReleaseDebugKeyOnKeyChestShowsCardRewardToast",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropReleaseCardRewardToastSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCardDefinition> RewardCard(MakeUiWorldDropCard(GetTransientPackage(), TEXT("RewardCard")));
+	RewardCard->DisplayName = FText::FromString(TEXT("奖励卡"));
+	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<AWacomPlayerCharacter> Pawn(NewObject<AWacomPlayerCharacter>());
+	FWacomUiToastHarness ToastHarness;
+	PC->SetPawn(Pawn.Get());
+	InjectRunSession(PC.Get(), Run.Get());
+	PC->SetRunSessionForTest(Run.Get());
+	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.CardRewardRelease");
+	Chest->SyncClickTargetForTest();
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
+	FWacomRunWorldCardInteractionReward CardReward;
+	CardReward.Type = EWacomRunWorldCardInteractionRewardType::Card;
+	CardReward.CardDefinition = RewardCard.Get();
+	Chest->GetCardDropReceiverComponent()->Rewards = { CardReward };
+	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+
+	TestTrue(TEXT("Release submits"),
+		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+			KeyInstanceId,
+			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
+			/*bReleased*/ true));
+	TestTrue(TEXT("Completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
+	TestTrue(TEXT("Reward card entered run"),
+		Run->GetRunState().Backpack.ContainsByPredicate(
+			[RewardCard](const FCardInstance& Instance)
+			{
+				return Instance.Definition == RewardCard.Get();
+			}));
+	TestTrue(TEXT("Card gained toast emitted"),
+		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("获得卡牌：奖励卡")));
 	return true;
 }
 
@@ -2221,8 +2317,7 @@ bool FWacomUIRunWorldCardDropWrongReleaseSpec::RunTest(const FString& /*Paramete
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.WrongRelease");
 	Chest->SyncClickTargetForTest();
-	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
-	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
 	Chest->GetCardDropReceiverComponent()->RejectedCardPromptText =
 		FText::FromString(TEXT("需要机关钥匙"));
 	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
@@ -2312,7 +2407,10 @@ bool FWacomUIRunWorldCardDropInvalidReceiverToastSpec::RunTest(const FString& /*
 	Chest->PersistentId = TEXT("Chest.Debug.InvalidReceiver");
 	Chest->SyncClickTargetForTest();
 	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
-	Chest->GetCardDropReceiverComponent()->GoldReward = 0;
+	if (Chest->GetCardDropReceiverComponent()->Rewards.IsValidIndex(0))
+	{
+		Chest->GetCardDropReceiverComponent()->Rewards[0].GoldAmount = 0;
+	}
 	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
 
 	TestFalse(TEXT("Invalid receiver release rejected"),
@@ -2546,8 +2644,7 @@ bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.MenuLeasePriority");
 	Chest->SyncClickTargetForTest();
-	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
-	Chest->GetCardDropReceiverComponent()->GoldReward = 3;
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
 	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
 
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
@@ -7252,7 +7349,6 @@ bool FWacomUIRunKeyChestPlacementValidationMissingPositiveFilterSpec::RunTest(
 		Receiver->AllowedCardIds.Reset();
 		Receiver->RequiredKeywords.Reset();
 		Receiver->BlockedKeywords.Reset();
-		Receiver->GoldReward = 3;
 	}
 
 	TArray<FText> Warnings;
@@ -7283,7 +7379,6 @@ bool FWacomUIRunKeyChestPlacementValidationBlockedOnlyFilterSpec::RunTest(
 		Receiver->RequiredKeywords.Reset();
 		Receiver->BlockedKeywords.Reset();
 		Receiver->BlockedKeywords.AddTag(WacomTags::Card_Keyword_Weapon);
-		Receiver->GoldReward = 3;
 	}
 
 	TArray<FText> Warnings;
@@ -7306,7 +7401,11 @@ bool FWacomUIRunKeyChestPlacementValidationInvalidGoldSpec::RunTest(
 {
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Validation.InvalidGold");
-	ConfigureValidKeyChestReceiverForUiTest(*Chest, TEXT("DebugKey"), 0);
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
+	if (Chest->GetCardDropReceiverComponent()->Rewards.IsValidIndex(0))
+	{
+		Chest->GetCardDropReceiverComponent()->Rewards[0].GoldAmount = 0;
+	}
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;

@@ -6,8 +6,9 @@
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Events/BattleEvent.h"
 #include "Resolution/BattleTargetValidationResult.h"
+#include "UI/Battle/BattlePresentationStackEntryWidget.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
-#include "UI/Battle/WacomBattleEventPresentationBuilder.h"
+#include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "Types/WacomEnums.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "BattleHUD.generated.h"
@@ -15,7 +16,8 @@
 class UWacomBattleWidgetBase;
 class UCanvasPanel;
 class UCardWidget;
-class UBattleEventLogPanel;
+class UBattleCombatLogFeedWidget;
+class UBattlePresentationStackWidget;
 class UWacomCardDetailPanel;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class AWacomBattle3DHandPresenter;
@@ -166,7 +168,7 @@ struct WACOMAPP_API FWacomBattleCardDropResolveResult
  *     ├── 点击 UEnemyPartWidget → 提交 PlayCard(PendingCard, PartId)，回 Idle
  *     └── 右键 / ESC → 取消，回 Idle
  *
- *   Resolving：命令已提交，等待动画/表现完成。当前同步结算时通常很短。
+ *   Resolving：保留给未来真正阻塞的战斗表现。普通事件表现队列不再进入该状态。
  *
  *   BattleEnd：战斗结束，显示胜利/失败面板。
  *
@@ -178,7 +180,8 @@ struct WACOMAPP_API FWacomBattleCardDropResolveResult
  * - DrawPileView      : UDrawPileView
  * - DiscardPileView   : UDiscardPileView
  * - EquipmentBar      : UEquipmentBar
- * - EventToast        : UEventToast
+ * - CombatLogFeed     : UBattleCombatLogFeedWidget
+ * - BattlePresentationStack : UBattlePresentationStackWidget
  */
 UENUM(BlueprintType)
 enum class EBattleUIState : uint8
@@ -247,8 +250,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "240.0", ToolTip = "卡牌详情贴近视口边缘时保持当前左右摆放侧的缓冲距离，单位为 Slate 像素。用于避免锚点在边缘附近轻微移动时详情左右反复跳。"))
 	float CardDetailSideSwitchHysteresisPixels = 72.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|BattleEventLog", meta = (ClampMin = "1", UIMin = "10", UIMax = "300", ToolTip = "BattleHUD 内部保存的战斗事件日志最大条数。超过后只保留最近 N 条，并同步到日志抽屉。"))
-	int32 BattleEventLogMaxEntries = 80;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Combat Log", meta = (ClampMin = "1", UIMin = "10", UIMax = "300", ToolTip = "BattleHUD 内部保存的玩家可读战斗记录最大命令块数量。超过后只保留最近 N 条，并同步到常驻滚动记录。"))
+	int32 BattleCombatLogMaxBlocks = 80;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Presentation Stack", meta = (ClampMin = "0.01", UIMin = "0.05", UIMax = "1.0", ToolTip = "打出的卡牌没有目标 cue 或延迟表现时，在表现栈中最短停留多久，单位为秒。用于避免无表现卡牌一闪而过。"))
+	float CardPresentationStackMinimumHoldSeconds = 0.18f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "是否启用 CardActor + WidgetComponent 的 3D 手牌原型。默认关闭；开启后 BattleHUD 会在有战斗 Session 时创建 3D 手牌 Presenter，并继续保留现有 2D HandPanel 和 hover 详情。"))
 	bool bEnable3DHandPrototype = false;
@@ -344,20 +350,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Targeting")
 	FBattleTargetSelectionView BuildTargetSelectionView() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|EventLog")
-	void ToggleBattleEventLog();
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|EventLog")
-	void SetBattleEventLogOpen(bool bOpen);
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|EventLog")
-	bool IsBattleEventLogOpen() const;
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|EventLog")
-	int32 GetBattleEventLogEntryCount() const { return BattleEventLogHistory.Num(); }
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log")
+	int32 GetBattleCombatLogBlockCount() const { return BattleCombatLogHistory.Num(); }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	bool IsBattlePresentationBusy() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	bool CanSubmitPlayerActionCommand() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	bool HasPendingTurnBoundaryCommand() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	FText GetPendingTurnBoundaryCommandText() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI", meta = (ToolTip = "设置战斗手牌呈现模式，并立即同步第一人称手牌、交互绑定和旧手牌可见性。"))
 	void SetBattleHandPresentationMode(EWacomBattleHandPresentationMode NewMode);
@@ -421,12 +427,11 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> ExhaustPileView;
 
-	/** 事件 Toast。 */
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<class UEventToast> EventToast;
+	TObjectPtr<UBattleCombatLogFeedWidget> CombatLogFeed;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UBattleEventLogPanel> EventLogPanel;
+	TObjectPtr<UBattlePresentationStackWidget> BattlePresentationStack;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> CardDetailLayer;
@@ -466,6 +471,13 @@ private:
 		int32 StableSide = 0;
 	};
 
+	enum class ETurnBoundaryCommand : uint8
+	{
+		None,
+		Wait,
+		EndTurn,
+	};
+
 	EBattleUIState UIState = EBattleUIState::Idle;
 
 	/** TargetSelect 状态下待确认目标的卡实例 ID。 */
@@ -487,7 +499,10 @@ private:
 	FBattleSnapshot LastFirstPersonCardTransitionSnapshot;
 
 	UPROPERTY(Transient)
-	TArray<FBattleEventPresentationView> BattleEventLogHistory;
+	TArray<FWacomBattleCombatLogBlockView> BattleCombatLogHistory;
+
+	UPROPERTY(Transient)
+	TArray<FWacomBattlePresentationStackEntryView> BattlePresentationStackEntries;
 
 	UPROPERTY(Transient)
 	TArray<FBattleEvent> PendingFirstPersonCardTransitionEvents;
@@ -517,6 +532,10 @@ private:
 	bool bHasFallbackPlayerControllerInteractionEventState = false;
 	bool bFallbackSavedPlayerControllerClickEvents = false;
 	bool bFallbackSavedPlayerControllerMouseOverEvents = false;
+	int32 NextBattlePresentationStackEntryId = 1;
+	ETurnBoundaryCommand PendingTurnBoundaryCommand = ETurnBoundaryCommand::None;
+	TArray<int32> BattlePresentationStackExitingEntryIds;
+	TMap<int32, FTimerHandle> BattlePresentationStackExitTimerHandles;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
@@ -525,10 +544,10 @@ private:
 	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
 	void SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId);
 
-	/** 内部：消费 Session 事件并分发给 Toast / 日志抽屉 / 击倒 dialog。 */
+	/** 内部：消费 Session 事件并分发给战斗记录 / 表现队列 / 击倒 dialog。 */
 	void ConsumeAndLogEvents();
 
-	void AppendBattleEventLogEntries(const TArray<struct FBattleEvent>& Events);
+	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
 	void StoreFirstPersonCardTransitionEvents(const TArray<struct FBattleEvent>& Events);
 	void ClearPendingFirstPersonCardTransitionEvents();
 	void RecordFirstPersonPlayCommit(const FGuid& CardInstanceId, const FGuid& TargetPartInstanceId);
@@ -536,11 +555,26 @@ private:
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
 	bool TryGetEnemyPartWidgetCenterInViewport(const FGuid& PartInstanceId, FVector2D& OutWidgetPosition) const;
-	void TrimBattleEventLogHistory();
-	void SyncBattleEventLogPanel();
-	void EnqueueBattlePresentationEvents(const TArray<struct FBattleEvent>& Events);
+	void TrimBattleCombatLogHistory();
+	void SyncBattleCombatLogFeed();
+	int32 AppendBattlePresentationStackEntry(
+		const FWacomBattleCombatLogCommandContext& CommandContext,
+		const FBattleSnapshot& PreCommandSnapshot);
+	void BeginBattlePresentationStackEntryExit(int32 EntryId);
+	void FinishBattlePresentationStackEntryExit(int32 EntryId);
+	void ClearBattlePresentationStack();
+	bool HasBattlePresentationStackEntries() const { return BattlePresentationStackEntries.Num() > 0; }
+	void SyncBattlePresentationStackWidget();
+	void EnqueueBattlePresentationEvents(
+		const TArray<struct FBattleEvent>& Events,
+		int32 PresentationStackEntryId = INDEX_NONE);
 	void ClearBattlePresentationQueue();
 	bool IsBattlePresentationQueueBusy() const;
+	void QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand Command);
+	void ClearPendingTurnBoundaryCommand();
+	void TryExecutePendingTurnBoundaryCommand();
+	void ExecuteTurnBoundaryCommandNow(ETurnBoundaryCommand Command);
+	void RefreshCommandAvailabilityWidgets();
 	TSharedPtr<FWacomBattleEventPresentationQueue> GetBattlePresentationQueueSelfKeepAlive() const;
 	FWacomBattlePresentationTargetRegistry& GetBattlePresentationTargetRegistry();
 	void ClearBattlePresentationTargetRegistry();
@@ -551,7 +585,6 @@ private:
 	void UnregisterBattlePresentationTargetsForOwner(const UObject* Owner);
 	bool IsBattlePresentationTargetRegisteredForOwner(const UObject* Owner) const;
 	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
-	void EnqueueBattlePresentationToast(const FBattleEventPresentationView& View);
 	void PushPendingKnockdownChoiceDialog();
 	void HandleBattlePresentationQueueStarted();
 	void HandleBattlePresentationQueueFinished();
@@ -563,9 +596,6 @@ private:
 	void PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId);
 	int32 GetBattlePresentationTargetCountForTest() const;
 #endif
-
-	UFUNCTION()
-	void HandleBattleEventLogButtonClicked();
 
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
 	void AfterCommand();

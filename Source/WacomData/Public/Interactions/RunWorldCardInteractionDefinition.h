@@ -9,6 +9,34 @@
 
 class UCardDefinition;
 
+UENUM(BlueprintType)
+enum class EWacomRunWorldCardInteractionRewardType : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Gold UMETA(DisplayName = "Gold"),
+	Card UMETA(DisplayName = "Card"),
+};
+
+USTRUCT(BlueprintType)
+struct WACOMDATA_API FWacomRunWorldCardInteractionReward
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Run|World Card Interaction|Reward",
+		meta = (ToolTip = "奖励类型。V1 只支持 Gold 和 Card；None 会被视为无效配置。"))
+	EWacomRunWorldCardInteractionRewardType Type =
+		EWacomRunWorldCardInteractionRewardType::None;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Run|World Card Interaction|Reward",
+		meta = (ToolTip = "金币奖励数量。仅 Type=Gold 使用；单位：金币。",
+			ClampMin = "0", UIMin = "0"))
+	int32 GoldAmount = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Run|World Card Interaction|Reward",
+		meta = (ToolTip = "卡牌奖励定义。仅 Type=Card 使用；成功后获得一张该卡牌。"))
+	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
+};
+
 /**
  * Run 世界拖卡交互的通用静态定义。
  *
@@ -46,11 +74,10 @@ public:
 		meta = (ToolTip = "提交卡不能拥有的关键词。只作为附加限制；只填黑名单不算有效配置。"))
 	FGameplayTagContainer BlockedKeywords;
 
-	/** 拖卡提交成功时获得的金币数量。V1 只支持正数金币奖励。 */
+	/** 拖卡提交成功时按顺序发放的奖励。V1 只支持金币和固定卡牌奖励。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Run|World Card Interaction|Reward",
-		meta = (ToolTip = "拖卡提交成功时获得的金币数量。V1 只支持正数金币奖励；单位：金币。",
-			ClampMin = "1", UIMin = "1"))
-	int32 GoldReward = 3;
+		meta = (ToolTip = "拖卡提交成功时按顺序发放的奖励。V1 只支持金币和固定卡牌奖励；至少需要一个有效奖励。"))
+	TArray<FWacomRunWorldCardInteractionReward> Rewards;
 
 	/** 拖卡提交成功时是否永久消耗拖拽的精确卡牌实例。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Run|World Card Interaction|Reward",

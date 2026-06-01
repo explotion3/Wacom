@@ -81,6 +81,8 @@ WacomBattle 是**战斗内核**，负责单场战斗的唯一规则真相。
 | `UBattleSession::BuildPendingKnockdownChoiceView()` | 输出当前击倒选择 ViewData；UI 不再解析事件 `Count` 位掩码 |
 | `UBattleSession::BuildResultPacket()` | 战斗结束后输出战后包；具体 Run 结算见 [WacomRun §8](./WacomRun.md#wacomrun-battle-settlement) |
 
+`SubmitCommand()` 当前是同步规则结算入口：命令成功后 `BattleState`、Snapshot 和事件列表立即更新。V0-CL 后，UI 层的战斗事件表现队列和 `BattlePresentationStack` 只是视觉播放 backlog，不参与规则结算。普通 PlayerAction 阶段可以在旧卡牌表现仍播放时继续提交 `PlayCard`；新卡牌会追加到表现栈底部，最早待完成表现的卡留在栈顶。`Wait / EndTurn` 是 UI 层回合边界屏障：如果表现栈仍有卡，HUD 先记录 pending 命令并锁住继续出牌、目标选择和 first-person drop，等栈和队列清空后重新读取 Snapshot，仍处于 `PlayerAction` 才提交对应命令。`PendingKnockdownChoice`、`BattleEnd` 和非玩家行动阶段仍会阻止普通玩家行动命令。
+
 ### PlayCard 目标合同
 
 `FBattleCommand` 仍是唯一战斗命令入口。`Type == PlayCard` 时，`CardInstanceId` 必填，目标字段按卡牌 `TargetMode` 填写：
@@ -579,7 +581,7 @@ BattleState
 
 ## §14 BattleEvent 口径
 
-`FBattleEvent` 是结算过程的记录流，供 UI 播表现、日志面板和自动化测试使用。事件不是真正规则状态；恢复、刷新和权威读取仍以 `BattleState` / `FBattleSnapshot` 为准。
+`FBattleEvent` 是结算过程的记录流，供 UI 播表现、Combat Log 和自动化测试使用。事件不是真正规则状态；恢复、刷新和权威读取仍以 `BattleState` / `FBattleSnapshot` 为准。
 
 当前事件类型：
 
@@ -611,4 +613,4 @@ BattleState
 
 `EnemyKnockdown` enum 仍保留在公共类型中，但当前击倒路径实际使用 `EnemyPartHpEmptied + KnockdownChoiceRequested + KnockdownChoiceMade`，不要把 `EnemyKnockdown` 当作活跃事件依赖。
 
-中文文案、tone、icon、战斗日志抽屉和 Toast 队列属于表现层，见 [WacomUI §3](./WacomUI.md#wacomui-toast)。
+中文文案、tone、icon、战斗 Combat Log 和 Toast 队列属于表现层，见 [WacomUI §3](./WacomUI.md#wacomui-toast)。V0-CJ 的玩家可读命令块是 `WacomApp` 对一次成功 HUD 命令后事件批次的 UI 聚合，不改变 `FBattleEvent` 协议，也不新增规则层 command batch id。

@@ -170,9 +170,9 @@ WBP 合同：
 | `DrawPileView` | `UPileCountView` | 抽牌堆数量 |
 | `DiscardPileView` | `UPileCountView` | 弃牌堆数量 |
 | `ExhaustPileView` | `UPileCountView` | 消耗区数量 |
-| `EventToast` | `UEventToast` | 战斗内即时事件提示 |
+| `CombatLogFeed` | `UBattleCombatLogFeedWidget` | 常驻可滚动玩家战斗记录 |
+| `BattlePresentationStack` | `UBattlePresentationStackWidget` | 待播放卡牌表现的小卡堆叠 |
 | `CardDetailLayer` | `CanvasPanel` | 承接战斗手牌 hover 详情面板 |
-| `EventLogPanel` | `UBattleEventLogPanel` | 战斗事件日志抽屉；不走 CommonUI Layer |
 
 WBP 合同：
 
@@ -180,10 +180,10 @@ WBP 合同：
 - 如果制作完整 BattleHUD WBP，应尽量绑定上表控件，避免只显示局部 UI。
 - `CardDetailLayer` 未绑定时，如果 HUD 根控件是 `CanvasPanel`，C++ 会创建 fallback layer。
 - 详情面板为 `HitTestInvisible`，不抢点击。
-- `EventLogPanel` 是 BattleHUD 内部子组件，不通过 `UWacomGameUIManagerSubsystem::PushContentToLayer()` 打开。
-- WBP 中可用自定义按钮调用 `BattleHUD::ToggleBattleEventLog()`。
+- `CombatLogFeed` 是 BattleHUD 内部常驻滚动记录，不通过 `UWacomGameUIManagerSubsystem::PushContentToLayer()` 打开。V0-CJ/V0-CK 后旧 `EventLogPanel` 抽屉和 `EventToast` 单条提示框都已从 BattleHUD 主路径移除；新的 BattleHUD WBP 不要再绑定 `EventLogPanel / EventToast`，也不要调用 `ToggleBattleEventLog()`。
+- `BattlePresentationStack` 是只读表现 backlog，不是规则栈。它只显示已成功提交的 `PlayCard`，最上面是下一张要完成表现并移除的小卡，最新打出的卡压在最下面。V0-CM 后 entry 只显示缩小后的完整卡面，不显示卡名、目标、数量、溢出文字或黑色底座；WBP 也不要再额外加这些文字层。小卡应通过整体缩放承载 `UWacomCardView`，避免卡面内部文字、图标或费用保持原尺寸。Widget 应保持 `HitTestInvisible`，不要把它做成可点击、可拖拽或命令入口。
 - WBP 和子控件只调用 `BattleHUD` 的玩家意图入口；出牌、等待、结束回合、目标选择、事件消费、表现队列和击倒弹窗编排由 C++ private flow helper 承担，不在 WBP 图里实现。
-- `EventToast` 只显示表现队列送来的单条提示；不要在 WBP 中自行消费 `FBattleEvent` 或直接 Push 击倒弹窗。
+- `CombatLogFeed` 应放在右侧偏上区域，承接旧日志框位置；`BattlePresentationStack` 可放在它附近但不要遮挡手牌、敌方部位或目标选择。Combat Log 显示命令块和每条事件 detail line，是没有正式动画时的主要玩家可读反馈。WBP 不要自行消费 `FBattleEvent` 或直接 Push 击倒弹窗。
 - 第一人称战斗手牌由 `BattleHUD::BattleHandPresentationMode` 控制。`LegacyHandPanel` 只使用旧 `UHandPanel`；默认 `FirstPersonHandWithLegacyFallback` 显示并启用 first-person runtime hand，同时保留旧手牌可见作为 fallback 和对照；`FirstPersonHandOnly` 在 runtime hand / anchor 有效时折叠旧手牌，异常、战斗结束或清理 runtime hand 时自动恢复旧手牌。该 layer 不创建 `UCardWidget`，点击只转发到 `BattleHUD->OnCardClickedByUser(CardInstanceId)`，不直接提交 `UBattleSession`。Hover 详情由 BattleHUD 根据最近一次 `FBattleSnapshot.Hand` 和 first-person slot 屏幕锚点显示；旧手牌详情继续使用 `CardDetailLayer`，first-person 详情使用独立 viewport popup host，默认 `FirstPersonCardDetailViewportZOrder=9999`，不依赖旧 `UCardWidget` 几何。`bEnableCardDetailReadabilityPolish` 默认开启时，两种战斗详情 host 共用短 hover delay、淡入淡出、轻量 scale、位置平滑跟随和贴边 side hysteresis；关闭后恢复旧的硬切表现。
 - 敌方目标表现由 `BattleHUD` 私有目标注册表分发 TargetCue；WBP 不直接消费 `FBattleEvent`。当前 `EnemyInfoBar` 只负责在刷新时注册当前 2D 部位 Widget，`EnemyPartWidget` 只播放命中/破坏轻反馈。场景敌人原型使用 `UWacomInteractionTargetComponent + UWacomBattleEnemyPartWorldTargetBridgeComponent`：前者提供统一 world target handle，后者填写稳定 `PartId` 并在 snapshot / UIState 刷新后绑定当前运行时 `PartInstanceId`、注册 TargetCue handler、同步可选目标提示。组件 V0 视觉反馈是对 `VisualTargetComponent` 或 Owner 首个 primitive 的短暂 scale pulse；进入 `TargetSelect` 且该部位可选时，同一 primitive 会播放持续轻量提示。主点击路径是 `AWacomPlayerController` 在左键 Release 且 HUD 处于 `TargetSelect` 时执行 Visibility cursor trace，命中后查找 `IWacomInteractionTargetProvider` 并构建 `FWacomInteractionTargetHandle`；只有 `TargetKind=World`、`TargetTag=Interaction.Target.Battle.EnemyPart` 且运行时 id 有效的 handle 会转发到 `BattleHUD->OnEnemyPartClickedByUser()`。如果 Release 先落到 BattleHUD 根层，HUD 的 `MouseButtonUp` 兜底会复用同一路由。V0 是同 `PartInstanceId` 后注册者替换旧注册者，不保证 2D/3D 同时播放；场景 bridge 会在 `EnemyInfoBar` 刷新后重新注册，保持替换 2D target 的当前语义。
 - V0-W 后 TargetCue 分为 `BattleEvent` 和 `TargetConfirmed`。`TargetConfirmed` 只表示目标点击成功提交，2D `EnemyPartWidget` 使用短促确认色，场景 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 使用较轻 scale pulse；`DamageDealt / EnemyPartHpEmptied` 仍由表现队列发送 `BattleEvent` cue，不能在 WBP 中把确认 cue 当成伤害 cue。
@@ -195,7 +195,7 @@ PIE 检查：
 - 快速从一张手牌滑到另一张时，未停留超过 delay 的卡不应弹详情；详情已显示时内容切换到新卡，不应闪关。贴近屏幕边缘时，详情不应因卡牌轻微移动而在左右两侧反复跳。
 - 第一人称战斗手牌：在 BattleHUD / WBP_BattleHUD 上查看 `BattleHandPresentationMode`。默认 `FirstPersonHandWithLegacyFallback` 下，进入战斗后 first-person layer 应显示真实手牌并可 hover/click/detail，旧 `HandPanel` 仍显示并可作为对照入口。切到 `FirstPersonHandOnly` 后，旧 `HandPanel` 应在 first-person runtime hand 有效时隐藏，只看到 first-person hand；hover 卡牌时该 layer 会轻微上移 / 放大，并在卡牌旁显示与旧手牌一致的详情面板，详情面板应位于所有 first-person 卡牌之上。`bEnableCardDetailReadabilityPolish=true` 时，first-person 和旧手牌详情都应短暂停留后淡入、离开后淡出，跟随卡牌移动时不应突兀跳动；关闭该开关可对照旧硬切。若开启 `bUseFirstPersonCardLayoutPreset`，可在 PIE 中切换 `DefaultReadable / WideFan / CompactStable` 等 `WacomFirstPersonCardLayoutPreset`，确认布局、离屏手感、smoothing、slot motion、event transition、transition origin、pending/hover 姿态和 interaction feedback 都按 preset 变化，且 `FirstPersonCardViewClass=WBP_FirstPersonCardView` 不被 preset 改动；关闭 preset 后应恢复组件上的手动参数。`FirstPersonCardAnchorComponent.ProjectionMode=BodyLocked` 且 `CardLayoutMode=Authored2D` 时，移动鼠标让 camera cursor look 偏转，整副手牌应保留第一人称空间投影变化，但每张卡的尺寸稳定，扇形排布、下坠和左右顺序由 2D 参数保持稳定。`ViewportClampMode=SoftClampToViewport` 时，抬头 / 低头应能看到手牌中心部分离开屏幕，不再被硬拉回视口边缘；超过 soft range 后不会无限飞远，而是柔性停在扩展边界附近。Run Tunnel 中按住 W / S 时，手牌前进下降、后退上升的空间反馈应保留；`bEnableAnchorScreenSmoothing=true` 时快速移动不应出现明显高频上下抖动，关闭后可对照旧表现。`bEnableCardSlotMotion=true` 时，hover 上浮 / 放大、进入 `TargetSelect` 的 pending 聚焦、出牌 / 抽牌 / Wait / EndTurn 后的手牌重排应平滑过渡；已有卡按身份滑到新位置。进入 `TargetSelect` 后，pending 卡应上浮 / 放大 / 提层 / 轻微归正，其他卡轻微降透明；hover pending 卡不应额外上跳，详情保持隐藏，再次点击同卡或取消后所有状态平滑恢复。`bEnableEventAwareCardTransitions=true` 且 `bEnableReadableTransitionOrigins=true` 时，抽牌 / Wait / EndTurn 新卡从手牌中心下方进入，击倒获得毒牙从手牌中心上方 / 战斗空间方向进入，打出的卡从当前位置向上离开，手牌上限弃置卡向下离开；重排但仍存在的卡只滑到新位置，不重新播放入场。把 Drawn / Gained / Played / Discarded 的 origin mode 临时切到 `SlotOffset` 应复现 V0-Q 的相对 slot 偏移；切到 `ViewportAnchor` 应能观察从屏幕边缘或指定视口位置进入 / 离开。反复触发击倒获得毒牙或其他即时加手牌事件时，新卡应正常显示，不应出现有空槽位但无卡面的幽灵 Widget；summary 中的 `Active=` 应等于手牌数，`RootChildren=` 不应随触发次数持续增长，`Outgoing=` 不应阶梯式累积，FPS 不应每次获得卡牌都下降一档。关闭 `bEnableEventAwareCardTransitions` 可对照通用 enter / exit；关闭 `bEnableCardSlotMotion` 可对照旧硬切。切到 `HardClampToViewport` 可对照旧的永远屏内表现；切到 `AllowOffscreen` 可让手牌完整离屏。`FirstPersonHandOnly` 下手牌离屏时旧 `HandPanel` 不自动恢复，这是当前表现验证的明确选择。调 `AuthoredCardSpacingPixels / AuthoredMaxHandWidthPixels / AuthoredHandScreenOffset / StaticCardEdgeDropPixels / FanYawDegrees / SoftClampOffscreenAllowancePixels / SoftClampBlendRangePixels / AnchorScreenSmoothingSpeed / CardSlotMotionSpeed / CardSlotOpacitySpeed / PendingTargetingAngleBlend / TargetSelectNonPendingOpacityMultiplier` 应能直接改变排布、离屏手感、移动稳定性、单卡过渡和 TargetSelect 焦点强度；使用 preset 时应优先在 preset 资产里调这些表现数值。临时切到 `LegacyProjectedFan2D` 可对照旧的每卡 3D 槽位投影表现；临时切到 `LegacyWorldProjected` 可对照旧的 look influence 路径。移出卡牌后详情消失；点击需要敌方目标的卡进入 `TargetSelect` 后详情隐藏，同一张 first-person 卡保持 pending 视觉。点击无目标卡应走现有出牌流程。切到 `LegacyHandPanel` 后，first-person battle hand 不显示/不交互，旧 `HandPanel` 恢复为唯一手牌入口。
 - 场景敌方目标原型：在关卡 Actor 上挂 `UWacomInteractionTargetComponent` 和 `UWacomBattleEnemyPartWorldTargetBridgeComponent`，在 Bridge 上填写 `PartId`（例如 `Test.Part.Head` 或正式敌人部位定义的 PartId）。Actor 上需要有阻挡 Visibility trace 的 `UPrimitiveComponent`，最小结构可以是 `DefaultSceneRoot + Cube(StaticMeshComponent) + WacomInteractionTargetComponent + WacomBattleEnemyPartWorldTargetBridgeComponent`。Bridge 默认会自动把同 Actor 上的 InteractionTarget 标记为 `Interaction.Target.Battle.EnemyPart`，并写入当前战斗的运行时 `PartInstanceId`。
-- 点击需要目标的 first-person 卡并点中场景目标后，应先看到目标确认 pulse，再看到后续伤害 / 破坏 cue。命令失败、表现队列 busy、未进入 `TargetSelect` 的普通点击、再次点击 pending 卡取消目标选择，都不应播放 target confirm。
+- 点击需要目标的 first-person 卡并点中场景目标后，应先看到目标确认 pulse，再看到后续伤害 / 破坏 cue。命令失败、未进入 `TargetSelect` 的普通点击、再次点击 pending 卡取消目标选择，都不应播放 target confirm。普通表现队列 busy 时仍可继续出牌；但玩家已请求 Wait / EndTurn 后，pending turn-boundary 会锁住继续出牌和目标选择，直到卡牌表现栈的旧卡完成 exit motion 并真正移除。
 - V0-Z / V0-AA drag 验证：轻点 first-person 可打卡仍快速出牌；按住不动超过 hold delay 应进入读牌姿态并显示详情，松开不出牌；无目标卡向上拖出超过阈值后释放提交；需要敌方部位目标的卡拖动时显示箭头，释放到合法敌方部位提交，释放到空处取消 / deny；拖动期间视角应继续轻微跟随拖拽方向，源卡和箭头终点不应因相机运动从鼠标位置拉偏；拖到另一张 first-person 卡时 debug / bridge 能识别 Card target，但本轮不提交。
 - V0-AB drag target feedback 验证：无目标卡达到拖出阈值后源卡应出现 commit-ready 反馈；有目标卡拉到合法场景敌方部位时，箭头变确认色并轻微吸附到目标位置，场景 primitive 轻量放大；拉到非法目标或空处时箭头为拒绝色且释放不提交；拉到另一张 first-person 卡时目标卡显示 CardProbe 色但释放不提交；释放到 `EnemyInfoBar` 不作为 UI drop target。
 - `VisualTargetComponent` 可以保持 `None`；Bridge 会自动使用 Owner 上第一个 `UPrimitiveComponent`。如果 Actor 有多个 mesh 或独立点击盒，显式指定 `VisualTargetComponent = Cube` 即可；点击命中不再由单独的 `ClickTargetComponent` 字段承担，而是由 PlayerController 的 Visibility trace 命中 Actor 后读取 `IWacomInteractionTargetProvider`。不要在 Details 面板里创建嵌在 Bridge 组件下的 `StaticMeshComponent_0` 临时对象；这会让引用指向错误对象并挡住自动 fallback。
@@ -269,25 +269,6 @@ WBP 合同：
 
 `BattleHUD` 会分别把 `DrawPileView / DiscardPileView / ExhaustPileView` 的 Label 和 Count 写入该控件。
 
----
-
-## WBP_EventToast
-
-父类：`UEventToast`
-
-推荐绑定：
-
-| 控件名 | 推荐类型 | 运行时职责 |
-|---|---|---|
-| `Container` | `VerticalBox` | 动态显示战斗事件 Toast 文本 |
-
-WBP 合同：
-
-- `UEventToast` 只负责显示队列和过期移除；事件文案来自 `UWacomBattleEventPresentationBuilder`。
-- `Container` 未绑定时 C++ fallback 会创建基础容器。
-
----
-
 ## WBP_EnemyInfoBar
 
 父类：`UEnemyInfoBar`
@@ -333,66 +314,71 @@ WBP 合同：
 
 ---
 
-## WBP_BattleEventLogPanel
+## WBP_BattleCombatLogFeed
 
-父类：`UBattleEventLogPanel`
+父类：`UBattleCombatLogFeedWidget`
 
-推荐资产路径：`/Game/Wacom/UI/Battle/WBP_BattleEventLogPanel`
+推荐资产路径：`/Game/Wacom/UI/Battle/WBP_BattleCombatLogFeed`
 
 推荐绑定：
 
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
-| `EntriesBox` | `PanelWidget` | C++ 动态填充日志行 |
+| `BlocksScrollBox` | `ScrollBox` | 常驻记录滚动区域 |
+| `BlocksBox` | `PanelWidget` | C++ 动态填充命令块 |
 | `TitleText` | `TextBlock` | 标题 |
-| `CloseButton` | `Button` | 点击后关闭日志抽屉 |
 
 推荐结构：
 
 ```text
-WBP_BattleEventLogPanel
+WBP_BattleCombatLogFeed
 └─ Root
    └─ VerticalBox
-      ├─ Header
-      │  ├─ TitleText
-      │  └─ CloseButton
+      ├─ TitleText
       └─ ScrollBox
-         └─ EntriesBox
+         └─ BlocksBox
 ```
 
 配置项：
 
 | 属性 | 用途 |
 |---|---|
-| `MaxEntries` | 日志面板最多保留的可显示事件数量 |
-| `bAutoScrollToLatest` | 追加事件后是否滚动到最新 |
-| `EntryWidgetClass` | 单条日志使用的 Widget 类 |
+| `MaxVisibleBlocks` | 常驻滚动记录最多保留的命令块数量 |
+| `bAutoScrollToLatest` | 追加命令块后是否滚动到最新 |
+| `BlockWidgetClass` | 单个命令块使用的 Widget 类 |
 
 WBP 合同：
 
-- `EntriesBox` 可以是 `VerticalBox`；C++ 只负责动态 AddChild。
-- 当前日志行可只显示 `MessageText`；完整 ViewData 仍保存在 Entry Widget 上。
-- 单条日志不提交战斗命令。
+- `BlocksBox` 可以是 `VerticalBox`；C++ 只负责动态 AddChild。
+- 命令块只显示 `FWacomBattleCombatLogBlockView`，不提交战斗命令。
+- 常驻记录区域需要可滚动，避免快速连续出牌后只能看到最近几条。
 
 ---
 
-## WBP_BattleEventLogEntry
+## WBP_BattleCombatLogBlock
 
-父类：`UBattleEventLogEntryWidget`
+父类：`UBattleCombatLogBlockWidget`
 
-推荐资产路径：`/Game/Wacom/UI/Battle/WBP_BattleEventLogEntry`
+推荐资产路径：`/Game/Wacom/UI/Battle/WBP_BattleCombatLogBlock`
 
 推荐绑定：
 
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
-| `MessageText` | `TextBlock` | 显示 `FBattleEventPresentationView.MessageText` |
+| `HeaderText` | `TextBlock` | 显示命令块标题 |
+| `DetailsBox` | `PanelWidget` | C++ 动态填充 detail line |
 
 WBP 合同：
 
-- `SetEventLogEntryData()` 会保存完整 `FBattleEventPresentationView` 并触发 `BP_OnEventLogEntryUpdated`。
-- WBP 可在 `BP_OnEventLogEntryUpdated` 中读取 `VisualTone / IconKey` 调整样式。
-- 单条日志只是显示组件，不提交战斗命令。
+- `SetCombatLogBlockData()` 会保存完整 `FWacomBattleCombatLogBlockView` 并触发 `BP_OnCombatLogBlockUpdated`。
+- WBP 可在 `BP_OnCombatLogBlockUpdated` 中读取 `VisualTone / IconKey` 调整样式。
+- 命令块只是显示组件，不提交战斗命令。
+
+---
+
+## Legacy Battle Event Log
+
+`UBattleEventLogPanel` 和 `UBattleEventLogEntryWidget` 暂时保留为遗留兼容类，避免旧 WBP 资产断父类。它们不再是 `WBP_BattleHUD` 推荐绑定，也不会被 C++ fallback BattleHUD 创建。新制作应使用 `CombatLogFeed + BattleCombatLogBlock`。
 
 ---
 
@@ -407,5 +393,5 @@ WBP 合同：
 - `RootButton` 与 `HoverVisualRoot` 是同级，hover 不改变根命中区域。
 - `UnifiedHandSlot` 能显示所有手牌，卡牌间距和边距可调。
 - 手牌详情显示在悬停卡牌旁边，空间不足时换边，并 clamp 到可见范围。
-- `EventLogPanel` 可打开/关闭，新增战斗事件后能追加日志行。
+- `CombatLogFeed` 可滚动，连续快速出牌后能查看本场最近命令块。
 - 目标选择时选中卡有可见反馈，敌方可选部位由当前 2D fallback 或未来部位表现承接。

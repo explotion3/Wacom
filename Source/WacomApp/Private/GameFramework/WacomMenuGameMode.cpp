@@ -6,8 +6,10 @@
 #include "CommonActivatableWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Misc/PackageName.h"
 #include "TimerManager.h"
 
+#include "Engine/World.h"
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
@@ -88,9 +90,12 @@ void AWacomMenuGameMode::RequestStartNewGame()
 {
 	UE_LOG(LogTemp, Display, TEXT("[MenuGameMode] RequestStartNewGame"));
 
+	bool bSaveCleanupAttempted = false;
+
 	// 存档系统启用时清掉旧存档；暂停时跳过。
 	if (AWacomGameMode::bSaveSystemEnabled)
 	{
+		bSaveCleanupAttempted = true;
 		if (UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, 0))
 		{
 			UGameplayStatics::DeleteGameInSlot(AWacomGameMode::SlotName_Main, 0);
@@ -101,18 +106,8 @@ void AWacomMenuGameMode::RequestStartNewGame()
 		}
 	}
 
-	// 注：TearDown 必须走到 DeactivateWidget，让 CommonUI Router 释放 UIInputConfig。
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (UWacomGameUIManagerSubsystem* UIManager = GI->GetSubsystem<UWacomGameUIManagerSubsystem>())
-		{
-			UIManager->TearDownPrimaryLayout();
-			UE_LOG(LogTemp, Display, TEXT("[MenuGameMode] PrimaryLayout torn down，准备 OpenLevel"));
-		}
-	}
-
-	// 立即 OpenLevel（GameMode 生命周期比 Widget 稳定，不需要 next-tick）
-	UGameplayStatics::OpenLevel(this, ExplorationLevelName);
+	RequestTravelToLevel(ExplorationLevelName, TEXT("StartNewGame"));
+	LastMenuTravelDebugView.bStartNewGameSaveCleanupAttempted = bSaveCleanupAttempted;
 }
 
 void AWacomMenuGameMode::RequestContinueGame()
@@ -134,13 +129,145 @@ void AWacomMenuGameMode::RequestContinueGame()
 		return;
 	}
 
+	RequestTravelToLevel(ExplorationLevelName, TEXT("ContinueGame"));
+}
+
+FName AWacomMenuGameMode::NormalizeLevelPackagePath(FName LevelName)
+{
+	const FString Value = LevelName.ToString();
+	FString PackageName;
+	FString ObjectName;
+	if (Value.Split(TEXT("."), &PackageName, &ObjectName)
+		&& !PackageName.IsEmpty()
+		&& ObjectName == FPackageName::GetShortName(PackageName))
+	{
+		return FName(*PackageName);
+	}
+	return LevelName;
+}
+
+bool AWacomMenuGameMode::IsObjectPathLevelName(FName LevelName)
+{
+	const FString Value = LevelName.ToString();
+	FString PackageName;
+	FString ObjectName;
+	return Value.Split(TEXT("."), &PackageName, &ObjectName)
+		&& !PackageName.IsEmpty()
+		&& !ObjectName.IsEmpty();
+}
+
+bool AWacomMenuGameMode::IsPackagePathLevelName(FName LevelName)
+{
+	const FString Value = LevelName.ToString();
+	return Value.StartsWith(TEXT("/Game/")) && !IsObjectPathLevelName(LevelName);
+}
+
+void AWacomMenuGameMode::RequestTravelToLevel(FName LevelName, FName Reason)
+{
+	const FName PackageLevelName = NormalizeLevelPackagePath(LevelName);
+	UWorld* World = GetWorld();
+
+	LastMenuTravelDebugView = FWacomMenuTravelDebugView();
+	LastMenuTravelDebugView.RequestedLevelName = LevelName;
+	LastMenuTravelDebugView.TravelLevelName = PackageLevelName;
+	LastMenuTravelDebugView.Reason = Reason;
+	LastMenuTravelDebugView.WorldName = GetNameSafe(World);
+	LastMenuTravelDebugView.bIsPIEWorld = World && World->WorldType == EWorldType::PIE;
+	LastMenuTravelDebugView.bRequestedObjectPath = IsObjectPathLevelName(LevelName);
+	LastMenuTravelDebugView.bTravelTargetUsesPackagePath = IsPackagePathLevelName(PackageLevelName);
+	LastMenuTravelDebugView.bActualTravelSuppressedForAutomation = bSuppressActualTravelForAutomation;
+
+	if (LastMenuTravelDebugView.bRequestedObjectPath)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[MenuGameMode] Travel target 使用了 ObjectPath，将规范化为 package path: %s -> %s"),
+			*LevelName.ToString(),
+			*PackageLevelName.ToString());
+	}
+
+	// 注：TearDown 必须走到 DeactivateWidget，让 CommonUI Router 释放 UIInputConfig。
+	LastMenuTravelDebugView.bPrimaryLayoutTeardownRequested = true;
+	LastMenuTravelDebugView.TeardownOrder = ++LastMenuTravelOrderCounter;
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UWacomGameUIManagerSubsystem* UIManager = GI->GetSubsystem<UWacomGameUIManagerSubsystem>())
 		{
 			UIManager->TearDownPrimaryLayout();
+			LastMenuTravelDebugView.bPrimaryLayoutTeardownCompleted = true;
 		}
 	}
 
-	UGameplayStatics::OpenLevel(this, ExplorationLevelName);
+	PendingTravelLevelName = PackageLevelName;
+	PendingTravelReason = Reason;
+	LastMenuTravelDebugView.bTravelScheduledForNextTick = true;
+	LastMenuTravelDebugView.ScheduleOrder = ++LastMenuTravelOrderCounter;
+
+	UE_LOG(LogTemp, Display,
+		TEXT("[MenuGameMode] ScheduleTravel Reason=%s Target=%s Requested=%s World=%s PIE=%s Teardown=%s PackagePath=%s"),
+		*Reason.ToString(),
+		*PackageLevelName.ToString(),
+		*LevelName.ToString(),
+		*LastMenuTravelDebugView.WorldName,
+		LastMenuTravelDebugView.bIsPIEWorld ? TEXT("true") : TEXT("false"),
+		LastMenuTravelDebugView.bPrimaryLayoutTeardownCompleted ? TEXT("true") : TEXT("false"),
+		LastMenuTravelDebugView.bTravelTargetUsesPackagePath ? TEXT("true") : TEXT("false"));
+
+	if (World)
+	{
+		World->GetTimerManager().SetTimerForNextTick(
+			FTimerDelegate::CreateUObject(this, &AWacomMenuGameMode::ExecutePendingTravel));
+	}
+}
+
+void AWacomMenuGameMode::ExecutePendingTravel()
+{
+	if (PendingTravelLevelName.IsNone())
+	{
+		return;
+	}
+
+	const FName LevelName = PendingTravelLevelName;
+	const FName Reason = PendingTravelReason;
+	PendingTravelLevelName = NAME_None;
+	PendingTravelReason = NAME_None;
+
+	LastMenuTravelDebugView.bTravelExecuted = true;
+	LastMenuTravelDebugView.ExecuteOrder = ++LastMenuTravelOrderCounter;
+	LastMenuTravelDebugView.bActualTravelSuppressedForAutomation = bSuppressActualTravelForAutomation;
+
+	UE_LOG(LogTemp, Display,
+		TEXT("[MenuGameMode] ExecuteTravel Reason=%s Target=%s World=%s SuppressedForAutomation=%s"),
+		*Reason.ToString(),
+		*LevelName.ToString(),
+		*GetNameSafe(GetWorld()),
+		bSuppressActualTravelForAutomation ? TEXT("true") : TEXT("false"));
+
+	if (bSuppressActualTravelForAutomation)
+	{
+		return;
+	}
+
+	UGameplayStatics::OpenLevel(this, LevelName);
+}
+
+FString AWacomMenuGameMode::GetMenuTravelDebugSummary() const
+{
+	const FWacomMenuTravelDebugView& View = LastMenuTravelDebugView;
+	return FString::Printf(
+		TEXT("Reason=%s Requested=%s Target=%s PackagePath=%d ObjectPath=%d World=%s PIE=%d TeardownRequested=%d TeardownCompleted=%d Scheduled=%d Executed=%d Suppressed=%d Order(TearDown=%d Schedule=%d Execute=%d)"),
+		*View.Reason.ToString(),
+		*View.RequestedLevelName.ToString(),
+		*View.TravelLevelName.ToString(),
+		View.bTravelTargetUsesPackagePath ? 1 : 0,
+		View.bRequestedObjectPath ? 1 : 0,
+		*View.WorldName,
+		View.bIsPIEWorld ? 1 : 0,
+		View.bPrimaryLayoutTeardownRequested ? 1 : 0,
+		View.bPrimaryLayoutTeardownCompleted ? 1 : 0,
+		View.bTravelScheduledForNextTick ? 1 : 0,
+		View.bTravelExecuted ? 1 : 0,
+		View.bActualTravelSuppressedForAutomation ? 1 : 0,
+		View.TeardownOrder,
+		View.ScheduleOrder,
+		View.ExecuteOrder);
 }

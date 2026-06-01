@@ -3,16 +3,14 @@
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 
 #include "Blueprint/WidgetTree.h"
-#include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
-#include "Components/TextBlock.h"
 #include "UI/Battle/ActionPanel.h"
-#include "UI/Battle/BattleEventLogPanel.h"
+#include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
-#include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Common/PileCountView.h"
@@ -22,7 +20,6 @@
 namespace
 {
 	const TCHAR* HandPanelPath = TEXT("/Game/Wacom/UI/Battle/WBP_HandPanel.WBP_HandPanel_C");
-	const TCHAR* BattleEventLogPanelPath = TEXT("/Game/Wacom/UI/Battle/WBP_BattleEventLogPanel.WBP_BattleEventLogPanel_C");
 
 	template <typename TWidget>
 	TWidget* ConstructWidget(UWidgetTree* WidgetTree, TObjectPtr<TWidget>* OutWidget, FName Name)
@@ -69,19 +66,6 @@ namespace
 
 		return WidgetTree
 			? WidgetTree->ConstructWidget<UHandPanel>(HandPanelClass, TEXT("HandPanel"))
-			: nullptr;
-	}
-
-	UBattleEventLogPanel* ConstructEventLogPanel(UWidgetTree* WidgetTree)
-	{
-		TSubclassOf<UBattleEventLogPanel> EventLogPanelClass = UBattleEventLogPanel::StaticClass();
-		if (UClass* LoadedEventLogPanelClass = LoadClass<UBattleEventLogPanel>(nullptr, BattleEventLogPanelPath))
-		{
-			EventLogPanelClass = LoadedEventLogPanelClass;
-		}
-
-		return WidgetTree
-			? WidgetTree->ConstructWidget<UBattleEventLogPanel>(EventLogPanelClass, TEXT("EventLogPanel"))
 			: nullptr;
 	}
 
@@ -199,44 +183,26 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 		FVector2D(1.0f, 1.0f),
 		FMargin(-200.0f, -110.0f, 80.0f, 80.0f));
 
-	if (UEventToast* EventToast = ConstructWidget(Context.WidgetTree, Context.EventToast, TEXT("EventToast")))
+	if (UBattleCombatLogFeedWidget* CombatLogFeed = ConstructWidget(Context.WidgetTree, Context.CombatLogFeed, TEXT("CombatLogFeed")))
 	{
+		CombatLogFeed->SetVisibility(ESlateVisibility::Collapsed);
 		SetCanvasSlot(
-			Root->AddChildToCanvas(EventToast),
-			FAnchors(1.0f, 0.25f),
+			Root->AddChildToCanvas(CombatLogFeed),
+			FAnchors(1.0f, 0.24f),
 			FVector2D(1.0f, 0.0f),
-			FMargin(-20.0f, 0.0f, 320.0f, 200.0f));
+			FMargin(-20.0f, 0.0f, 420.0f, 360.0f),
+			7);
 	}
 
-	UButton* EventLogButton = Context.WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("EventLogButton"));
-	UTextBlock* EventLogButtonLabel = Context.WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("EventLogButtonLabel"));
-	if (EventLogButton && EventLogButtonLabel)
+	if (UBattlePresentationStackWidget* PresentationStack = ConstructWidget(Context.WidgetTree, Context.BattlePresentationStack, TEXT("BattlePresentationStack")))
 	{
-		EventLogButtonLabel->SetText(LOCTEXT("EventLogButton", "日志"));
-		EventLogButtonLabel->SetJustification(ETextJustify::Center);
-		EventLogButton->AddChild(EventLogButtonLabel);
-		EventLogButton->OnClicked.AddDynamic(Context.Owner, &UBattleHUD::HandleBattleEventLogButtonClicked);
+		PresentationStack->SetVisibility(ESlateVisibility::Collapsed);
 		SetCanvasSlot(
-			Root->AddChildToCanvas(EventLogButton),
-			FAnchors(1.0f, 0.0f),
+			Root->AddChildToCanvas(PresentationStack),
+			FAnchors(1.0f, 0.24f),
 			FVector2D(1.0f, 0.0f),
-			FMargin(-20.0f, 20.0f, 72.0f, 34.0f),
+			FMargin(-455.0f, 12.0f, 220.0f, 260.0f),
 			8);
-	}
-
-	if (Context.EventLogPanel)
-	{
-		*Context.EventLogPanel = ConstructEventLogPanel(Context.WidgetTree);
-		if (UBattleEventLogPanel* EventLogPanel = Context.EventLogPanel->Get())
-		{
-			EventLogPanel->SetDrawerOpen(false);
-			SetCanvasSlot(
-				Root->AddChildToCanvas(EventLogPanel),
-				FAnchors(1.0f, 0.0f, 1.0f, 1.0f),
-				FVector2D(1.0f, 0.0f),
-				FMargin(0.0f, 0.0f, 520.0f, 0.0f),
-				9);
-		}
 	}
 
 	if (UCanvasPanel* CardDetailLayer = ConstructWidget(Context.WidgetTree, Context.CardDetailLayer, TEXT("CardDetailLayer")))

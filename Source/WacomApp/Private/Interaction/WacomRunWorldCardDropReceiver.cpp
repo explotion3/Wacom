@@ -33,6 +33,8 @@ namespace
 	bool IsConfigReason(FName Reason)
 	{
 		return Reason == TEXT("InvalidGoldReward")
+			|| Reason == TEXT("MissingReward")
+			|| Reason == TEXT("MissingCardDefinition")
 			|| Reason == TEXT("MissingCardFilter")
 			|| Reason == TEXT("MissingPositiveCardFilter")
 			|| Reason == TEXT("MissingPersistentId")
@@ -73,6 +75,10 @@ namespace
 UWacomRunWorldCardDropReceiverComponent::UWacomRunWorldCardDropReceiverComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	FWacomRunWorldCardInteractionReward DefaultGoldReward;
+	DefaultGoldReward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+	DefaultGoldReward.GoldAmount = 3;
+	Rewards = { DefaultGoldReward };
 	PreviewPromptText = GetDefaultPreviewPromptText();
 	SuccessPromptText = GetDefaultSuccessPromptText();
 	CompletedPromptText = GetDefaultCompletedPromptText();
@@ -95,7 +101,7 @@ UWacomRunWorldCardDropReceiverComponent::BuildRunWorldCardDropRequest_Implementa
 	Request.RequiredKeywords = ResolveRequiredKeywords();
 	Request.BlockedKeywords = ResolveBlockedKeywords();
 	Request.bConsumeCardOnSuccess = ResolveConsumeCardOnSuccess();
-	Request.GoldReward = ResolveGoldReward();
+	Request.Rewards = ResolveRewards();
 	return Request;
 }
 
@@ -169,9 +175,30 @@ FName UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverConfig
 	{
 		return InteractionDefinition->GetConfigWarningReason();
 	}
-	if (ResolveGoldReward() <= 0)
+	if (ResolveRewards().Num() <= 0)
 	{
-		return TEXT("InvalidGoldReward");
+		return TEXT("MissingReward");
+	}
+	for (const FWacomRunWorldCardInteractionReward& Reward : ResolveRewards())
+	{
+		switch (Reward.Type)
+		{
+		case EWacomRunWorldCardInteractionRewardType::Gold:
+			if (Reward.GoldAmount <= 0)
+			{
+				return TEXT("InvalidGoldReward");
+			}
+			break;
+		case EWacomRunWorldCardInteractionRewardType::Card:
+			if (!Reward.CardDefinition)
+			{
+				return TEXT("MissingCardDefinition");
+			}
+			break;
+		case EWacomRunWorldCardInteractionRewardType::None:
+		default:
+			return TEXT("MissingReward");
+		}
 	}
 	if (!HasPositiveCardFilter())
 	{
@@ -222,7 +249,9 @@ UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebugView_Im
 	View.BlockedKeywordCount = ResolveBlockedKeywords().Num();
 	View.bHasPositiveCardFilter = HasPositiveCardFilter();
 	View.bConsumeCardOnSuccess = ResolveConsumeCardOnSuccess();
-	View.GoldReward = ResolveGoldReward();
+	View.RewardCount = ResolveRewards().Num();
+	View.GoldTotal = GetRewardGoldTotal(ResolveRewards());
+	View.CardRewardCount = GetCardRewardCount(ResolveRewards());
 	View.PreviewPrompt = ResolvePreviewPromptText().ToString();
 	View.SuccessPrompt = ResolveSuccessPromptText().ToString();
 	View.CompletedPrompt = ResolveCompletedPromptText().ToString();
@@ -245,7 +274,7 @@ FString UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebu
 			PersistentId,
 			SourceCardInstanceId);
 	return FString::Printf(
-		TEXT("RunWorldCardDropReceiver{Owner=%s Receiver=%s PersistentId=%s Definition=%s InteractionId=%s DefinitionReason=%s ConfigSource=%s HasRun=%s Completed=%s CanSubmit=%s Reject=%s ConfigValid=%s ConfigReason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d Preview=%s Success=%s CompletedPrompt=%s RejectedPrompt=%s ConfigWarningPrompt=%s SourceUnavailablePrompt=%s GenericFailurePrompt=%s Validation=%s}"),
+		TEXT("RunWorldCardDropReceiver{Owner=%s Receiver=%s PersistentId=%s Definition=%s InteractionId=%s DefinitionReason=%s ConfigSource=%s HasRun=%s Completed=%s CanSubmit=%s Reject=%s ConfigValid=%s ConfigReason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s RewardCount=%d GoldTotal=%d CardRewardCount=%d Preview=%s Success=%s CompletedPrompt=%s RejectedPrompt=%s ConfigWarningPrompt=%s SourceUnavailablePrompt=%s GenericFailurePrompt=%s Validation=%s}"),
 		*View.OwnerName,
 		*View.ReceiverName,
 		*View.PersistentId.ToString(),
@@ -265,7 +294,9 @@ FString UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebu
 		View.BlockedKeywordCount,
 		View.bHasPositiveCardFilter ? TEXT("true") : TEXT("false"),
 		View.bConsumeCardOnSuccess ? TEXT("true") : TEXT("false"),
-		View.GoldReward,
+		View.RewardCount,
+		View.GoldTotal,
+		View.CardRewardCount,
 		*View.PreviewPrompt,
 		*View.SuccessPrompt,
 		*View.CompletedPrompt,
@@ -285,6 +316,14 @@ FText UWacomRunWorldCardDropReceiverComponent::BuildRunWorldCardDropFailureToast
 	if (FailureReason == TEXT("AlreadyCompleted"))
 	{
 		return ResolveCompletedPromptText();
+	}
+
+	if (IsConfigReason(FailureReason)
+		&& GetRunWorldCardDropReceiverConfigWarningReason() == FailureReason)
+	{
+		return FormatPromptWithReason(
+			ResolveConfigWarningPromptText(),
+			FailureReason);
 	}
 
 	if (IsCardRejectedReason(FailureReason))
@@ -347,11 +386,40 @@ bool UWacomRunWorldCardDropReceiverComponent::ResolveConsumeCardOnSuccess() cons
 		: bConsumeCardOnSuccess;
 }
 
-int32 UWacomRunWorldCardDropReceiverComponent::ResolveGoldReward() const
+const TArray<FWacomRunWorldCardInteractionReward>&
+UWacomRunWorldCardDropReceiverComponent::ResolveRewards() const
 {
 	return InteractionDefinition
-		? InteractionDefinition->GoldReward
-		: GoldReward;
+		? InteractionDefinition->Rewards
+		: Rewards;
+}
+
+int32 UWacomRunWorldCardDropReceiverComponent::GetRewardGoldTotal(
+	const TArray<FWacomRunWorldCardInteractionReward>& InRewards)
+{
+	int32 Total = 0;
+	for (const FWacomRunWorldCardInteractionReward& Reward : InRewards)
+	{
+		if (Reward.Type == EWacomRunWorldCardInteractionRewardType::Gold)
+		{
+			Total += Reward.GoldAmount;
+		}
+	}
+	return Total;
+}
+
+int32 UWacomRunWorldCardDropReceiverComponent::GetCardRewardCount(
+	const TArray<FWacomRunWorldCardInteractionReward>& InRewards)
+{
+	int32 Count = 0;
+	for (const FWacomRunWorldCardInteractionReward& Reward : InRewards)
+	{
+		if (Reward.Type == EWacomRunWorldCardInteractionRewardType::Card)
+		{
+			++Count;
+		}
+	}
+	return Count;
 }
 
 FText UWacomRunWorldCardDropReceiverComponent::ResolvePreviewPromptText() const

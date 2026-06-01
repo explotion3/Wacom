@@ -59,7 +59,7 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
 | 手牌线性排列 | HorizontalBox / 统一水平手牌带 | 美术阶段替换为扇形 renderer 或自定义 `UHandLayoutPanel`，继续消费 `FHandCardVisualEntry` |
 | 目标选择 2D 点击 | 点击 EnemyPartWidget，不做射线检测 | HD-2D 阶段改为 3D 部位 hover / 高亮 / 点击，继续消费 `FBattleTargetSelectionView` |
-| EventToast 纯文字 | 文案、tone、icon key 已生成，但 Toast / 日志抽屉暂不做图标和动画 | 升级为事件表现调度器，接图标、颜色、Niagara、音效和战后日志 |
+| CombatLog 纯文字 | 文案、tone、icon key 已生成，但常驻 CombatLog 暂不做图标和动画；旧 EventToast 已退出 BattleHUD 主路径 | 升级为事件表现调度器，接图标、颜色、Niagara、音效和战后日志 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | 背包 UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
 | 背包 UI 全量 RebuildAll | ViewModel 刷新后清空 WrapBox 重建 | 卡量或动画需求上升时做 instance diff，或迁 ListView / TileView |

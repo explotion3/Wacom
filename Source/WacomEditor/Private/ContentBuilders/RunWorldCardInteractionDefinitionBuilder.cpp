@@ -51,7 +51,10 @@ namespace Wacom::ContentBuilder
 		Definition->AllowedCardIds = { TEXT("DebugKey") };
 		Definition->RequiredKeywords.Reset();
 		Definition->BlockedKeywords.Reset();
-		Definition->GoldReward = 3;
+		FWacomRunWorldCardInteractionReward GoldReward;
+		GoldReward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+		GoldReward.GoldAmount = 3;
+		Definition->Rewards = { GoldReward };
 		Definition->bConsumeCardOnSuccess = true;
 		Definition->PreviewPromptText = FText::FromString(TEXT("使用钥匙打开宝箱"));
 		Definition->SuccessPromptText = FText::FromString(TEXT("宝箱已打开"));

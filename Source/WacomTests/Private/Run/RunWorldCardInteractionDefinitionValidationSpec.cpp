@@ -29,7 +29,10 @@ namespace
 		Definition->AllowedCardDefinitions.Add(
 			MakeRunWorldCardInteractionValidationCard(Definition));
 		Definition->AllowedCardIds = { TEXT("DebugKey") };
-		Definition->GoldReward = 3;
+		FWacomRunWorldCardInteractionReward GoldReward;
+		GoldReward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+		GoldReward.GoldAmount = 3;
+		Definition->Rewards = { GoldReward };
 		Definition->bConsumeCardOnSuccess = true;
 		return Definition;
 	}
@@ -145,6 +148,28 @@ bool FWacomDataRunWorldCardInteractionDefinitionValidationBlockedOnlySpec::RunTe
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataRunWorldCardInteractionDefinitionValidationMissingRewardSpec,
+	"Wacom.Data.RunWorldCardInteractionDefinition.Validation.MissingRewardReportsError",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataRunWorldCardInteractionDefinitionValidationMissingRewardSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeValidRunWorldCardInteractionDefinition(GetTransientPackage()));
+	Definition->Rewards.Reset();
+
+	TArray<FText> Errors;
+	TestFalse(TEXT("Missing reward fails"),
+		ValidateRunWorldCardInteractionDefinitionForTest(Definition.Get(), Errors));
+	TestEqual(TEXT("Helper reports missing reward"),
+		Definition->GetConfigWarningReason(),
+		FName(TEXT("MissingReward")));
+	TestTrue(TEXT("Missing reward has error"), Errors.Num() > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomDataRunWorldCardInteractionDefinitionValidationInvalidGoldSpec,
 	"Wacom.Data.RunWorldCardInteractionDefinition.Validation.InvalidGoldRewardReportsError",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -154,7 +179,10 @@ bool FWacomDataRunWorldCardInteractionDefinitionValidationInvalidGoldSpec::RunTe
 {
 	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
 		MakeValidRunWorldCardInteractionDefinition(GetTransientPackage()));
-	Definition->GoldReward = 0;
+	if (Definition->Rewards.IsValidIndex(0))
+	{
+		Definition->Rewards[0].GoldAmount = 0;
+	}
 
 	TArray<FText> Errors;
 	TestFalse(TEXT("Invalid gold reward fails"),
@@ -163,6 +191,31 @@ bool FWacomDataRunWorldCardInteractionDefinitionValidationInvalidGoldSpec::RunTe
 		Definition->GetConfigWarningReason(),
 		FName(TEXT("InvalidGoldReward")));
 	TestTrue(TEXT("Invalid gold has error"), Errors.Num() > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataRunWorldCardInteractionDefinitionValidationMissingCardRewardSpec,
+	"Wacom.Data.RunWorldCardInteractionDefinition.Validation.MissingCardDefinitionReportsError",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataRunWorldCardInteractionDefinitionValidationMissingCardRewardSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeValidRunWorldCardInteractionDefinition(GetTransientPackage()));
+	FWacomRunWorldCardInteractionReward CardReward;
+	CardReward.Type = EWacomRunWorldCardInteractionRewardType::Card;
+	CardReward.CardDefinition = nullptr;
+	Definition->Rewards = { CardReward };
+
+	TArray<FText> Errors;
+	TestFalse(TEXT("Missing card reward definition fails"),
+		ValidateRunWorldCardInteractionDefinitionForTest(Definition.Get(), Errors));
+	TestEqual(TEXT("Helper reports missing card definition"),
+		Definition->GetConfigWarningReason(),
+		FName(TEXT("MissingCardDefinition")));
+	TestTrue(TEXT("Missing card definition has error"), Errors.Num() > 0);
 	return true;
 }
 
@@ -211,9 +264,18 @@ bool FWacomDataRunWorldCardInteractionDefinitionAssetSpec::RunTest(
 			Definition->AllowedCardIds[0],
 			FName(TEXT("DebugKey")));
 	}
-	TestEqual(TEXT("Gold reward"),
-		Definition->GoldReward,
-		3);
+	TestEqual(TEXT("One reward"),
+		Definition->Rewards.Num(),
+		1);
+	if (Definition->Rewards.IsValidIndex(0))
+	{
+		TestEqual(TEXT("Gold reward type"),
+			Definition->Rewards[0].Type,
+			EWacomRunWorldCardInteractionRewardType::Gold);
+		TestEqual(TEXT("Gold reward amount"),
+			Definition->Rewards[0].GoldAmount,
+			3);
+	}
 	TestTrue(TEXT("Consumes source card"),
 		Definition->bConsumeCardOnSuccess);
 	TestEqual(TEXT("Preview prompt"),

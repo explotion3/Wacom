@@ -14,7 +14,7 @@ class UButton;
  * 按钮：
  *   - Resume：Pop 自身
  *   - Save：RunSession->SaveToSlot(Main)
- *   - Quit to Main Menu：OpenLevel(L_MainMenu)
+ *   - Quit to Main Menu：拆 UI 后在下一帧 OpenLevel(/Game/Wacom/Maps/L_MainMenu)
  *
  * Settings 按钮后续按菜单需求接入。
  */
@@ -22,6 +22,9 @@ UCLASS(Blueprintable)
 class WACOMAPP_API UWacomPauseMenuScreen : public UWacomMenuWidgetBase
 {
 	GENERATED_BODY()
+
+public:
+	static FName GetMainMenuLevelPackagePathForTravel();
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

@@ -125,7 +125,7 @@ tags:
 | 手牌布局 | `UHandPanel` 已把 Snapshot 转成 `FHandCardVisualEntry[]`，默认统一水平手牌带；支持 hover 上浮 / 缩放 / 详情 | 后续做选中突出、详情样式美术化和扇形 renderer；必要时换自定义 `UHandLayoutPanel` |
 | 战斗卡牌拖拽 | 当前是点击手牌再点敌方部位 | HD-2D 表现阶段评估拖拽到 3D 部位、悬停高亮、点击确认 |
 | 目标选择 3D 射线 | 当前点击 2D EnemyPartWidget；`BattleHUD::BuildTargetSelectionView()` 已作为只读表现桥 | HD-2D 表现时改为 3D 部位高亮 + 点击，正式 Actor / Component 继续消费同一份 ViewData |
-| EventToast / BattleEventLog | 纯文字提示与半屏日志抽屉已共用 `FBattleEventPresentationView` | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
+| CombatLog / 表现队列 | BattleHUD 使用常驻可滚动 CombatLog 命令块和事件明细；旧日志抽屉与 EventToast 已退出 HUD 主路径 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
 | 击倒事件 Dialog 美术 | C++ 硬编码 CanvasPanel + Border + Button 布局，BindWidget 锚点就位 | 美术阶段配正式 WBP |
 
 <a id="roadmap-backpack-ui"></a>

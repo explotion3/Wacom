@@ -13,6 +13,20 @@
 
 namespace
 {
+	UBattleHUD* ResolveOwningHUD(const UUserWidget* Widget)
+	{
+		for (UUserWidget* P = Widget ? Widget->GetTypedOuter<UUserWidget>() : nullptr;
+			P;
+			P = P->GetTypedOuter<UUserWidget>())
+		{
+			if (UBattleHUD* HUD = Cast<UBattleHUD>(P))
+			{
+				return HUD;
+			}
+		}
+		return nullptr;
+	}
+
 	UButton* MakeLabeledButton(UWidgetTree* Tree, const FName& BtnName, const FName& LabelName,
 	                           const FString& LabelText, FLinearColor BgColor,
 	                           TObjectPtr<UTextBlock>& OutLabel)
@@ -103,25 +117,22 @@ void UActionPanel::NativeConstruct()
 
 void UActionPanel::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
+	UBattleHUD* HUD = ResolveOwningHUD(this);
 	if (WaitValueText)
 	{
-		WaitValueText->SetText(FText::Format(
-			FText::FromString(TEXT("Wait Value: {0}")),
-			FFormatOrderedArguments{ FFormatArgumentValue(Snap.CurrentWaitValue) }));
+		WaitValueText->SetText(HUD && HUD->HasPendingTurnBoundaryCommand()
+			? HUD->GetPendingTurnBoundaryCommandText()
+			: FText::Format(
+				FText::FromString(TEXT("Wait Value: {0}")),
+				FFormatOrderedArguments{ FFormatArgumentValue(Snap.CurrentWaitValue) }));
 	}
 	UpdateButtonEnabledState();
 }
 
 void UActionPanel::UpdateButtonEnabledState()
 {
-	// 找到父 HUD，根据 UIState 启用/禁用按钮
-	UBattleHUD* HUD = nullptr;
-	for (UUserWidget* P = GetTypedOuter<UUserWidget>(); P; P = P->GetTypedOuter<UUserWidget>())
-	{
-		HUD = Cast<UBattleHUD>(P);
-		if (HUD) { break; }
-	}
-	const bool bCanAct = HUD && HUD->GetUIState() == EBattleUIState::Idle;
+	UBattleHUD* HUD = ResolveOwningHUD(this);
+	const bool bCanAct = HUD && HUD->CanSubmitPlayerActionCommand();
 
 	if (WaitButton)    { WaitButton->SetIsEnabled(bCanAct); }
 	if (EndTurnButton) { EndTurnButton->SetIsEnabled(bCanAct); }
@@ -129,24 +140,16 @@ void UActionPanel::UpdateButtonEnabledState()
 
 void UActionPanel::HandleWaitClicked()
 {
-	for (UUserWidget* P = GetTypedOuter<UUserWidget>(); P; P = P->GetTypedOuter<UUserWidget>())
+	if (UBattleHUD* HUD = ResolveOwningHUD(this))
 	{
-		if (UBattleHUD* HUD = Cast<UBattleHUD>(P))
-		{
-			HUD->OnWaitRequested();
-			return;
-		}
+		HUD->OnWaitRequested();
 	}
 }
 
 void UActionPanel::HandleEndTurnClicked()
 {
-	for (UUserWidget* P = GetTypedOuter<UUserWidget>(); P; P = P->GetTypedOuter<UUserWidget>())
+	if (UBattleHUD* HUD = ResolveOwningHUD(this))
 	{
-		if (UBattleHUD* HUD = Cast<UBattleHUD>(P))
-		{
-			HUD->OnEndTurnRequested();
-			return;
-		}
+		HUD->OnEndTurnRequested();
 	}
 }

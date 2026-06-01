@@ -77,7 +77,13 @@ struct WACOMAPP_API FWacomRunWorldCardDropReceiverDebugView
 	bool bConsumeCardOnSuccess = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
-	int32 GoldReward = 0;
+	int32 RewardCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	int32 GoldTotal = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	int32 CardRewardCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
 	FString PreviewPrompt;
@@ -151,7 +157,7 @@ public:
 	UWacomRunWorldCardDropReceiverComponent();
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop|Definition",
-		meta = (ToolTip = "通用 Run 世界拖卡交互定义。填入后优先使用 Definition 的筛选、金币、消耗和反馈文案；运行时完成状态 key 仍由目标 Actor 的 PersistentId 提供。"))
+		meta = (ToolTip = "通用 Run 世界拖卡交互定义。填入后优先使用 Definition 的筛选、奖励、消耗和反馈文案；运行时完成状态 key 仍由目标 Actor 的 PersistentId 提供。"))
 	TObjectPtr<UWacomRunWorldCardInteractionDefinition> InteractionDefinition = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop",
@@ -175,9 +181,8 @@ public:
 	bool bConsumeCardOnSuccess = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop",
-		meta = (ToolTip = "提交成功时获得的金币数量。V1 只支持正数金币奖励。",
-			ClampMin = "1", UIMin = "1"))
-	int32 GoldReward = 3;
+		meta = (ToolTip = "提交成功时按顺序发放的奖励。V1 只支持金币和固定卡牌奖励；手填 fallback 至少需要一个有效奖励。"))
+	TArray<FWacomRunWorldCardInteractionReward> Rewards;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop|Text",
 		meta = (ToolTip = "拖拽卡牌指向目标但尚未释放时的调试/预览文案。"))
@@ -226,6 +231,9 @@ public:
 		FGuid SourceCardInstanceId,
 		FName FailureReason) const;
 
+	static int32 GetRewardGoldTotal(const TArray<FWacomRunWorldCardInteractionReward>& InRewards);
+	static int32 GetCardRewardCount(const TArray<FWacomRunWorldCardInteractionReward>& InRewards);
+
 	virtual FRunWorldCardInteractionRequest BuildRunWorldCardDropRequest_Implementation(
 		FName PersistentId,
 		const FGuid& SourceCardInstanceId) const override;
@@ -252,7 +260,7 @@ protected:
 	const FGameplayTagContainer& ResolveRequiredKeywords() const;
 	const FGameplayTagContainer& ResolveBlockedKeywords() const;
 	bool ResolveConsumeCardOnSuccess() const;
-	int32 ResolveGoldReward() const;
+	const TArray<FWacomRunWorldCardInteractionReward>& ResolveRewards() const;
 	FText ResolvePreviewPromptText() const;
 	FText ResolveSuccessPromptText() const;
 	FText ResolveCompletedPromptText() const;

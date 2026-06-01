@@ -12,13 +12,18 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/BattleCombatLogBlockWidget.h"
+#include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/BattlePresentationStackEntryWidget.h"
+#include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/BattleEventLogEntryWidget.h"
 #include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/CardWidget.h"
-#include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
+#include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
+#include "UI/Card/WacomCardView.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "Events/BattleEvent.h"
 
@@ -72,14 +77,37 @@ namespace WacomBattleWidgetSpec
 			HUD.AdvanceBattlePresentationQueueForTest();
 		}
 	}
+
+	void SettleBattlePresentationQueueAndExitStack(UWacomBattleHUDDetailTest& HUD, int32 MaxSteps = 64)
+	{
+		for (int32 Iteration = 0; HUD.IsBattlePresentationBusy() && Iteration < MaxSteps; ++Iteration)
+		{
+			bool bFinishedExit = false;
+			const TArray<FWacomBattlePresentationStackEntryView> Entries = HUD.GetPresentationStackEntriesForTest();
+			for (const FWacomBattlePresentationStackEntryView& Entry : Entries)
+			{
+				if (Entry.bIsExiting)
+				{
+					HUD.FinishPresentationStackEntryExitForTest(Entry.EntryId);
+					bFinishedExit = true;
+					break;
+				}
+			}
+
+			if (!bFinishedExit)
+			{
+				HUD.AdvanceBattlePresentationQueueForTest();
+			}
+		}
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEventToastChineseTextSpec,
-	"Wacom.UI.Battle.EventToastChineseText",
+	FWacomUIBattleEventPresentationBuilderChineseTextSpec,
+	"Wacom.UI.Battle.BattleEventPresentationBuilderChineseText",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleEventToastChineseTextSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleEventPresentationBuilderChineseTextSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<UCardDefinition> PoisonFang(NewObject<UCardDefinition>());
 	PoisonFang->CardId = TEXT("PoisonFang");
@@ -99,9 +127,6 @@ bool FWacomUIBattleEventToastChineseTextSpec::RunTest(const FString& /*Parameter
 		TestEqual(TEXT("FormatEventForPlayer matches view message"),
 			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event),
 			View.MessageText.ToString());
-		TestEqual(TEXT("EventToast compatibility wrapper matches builder"),
-			UEventToast::FormatEventForPlayer(Event),
-			UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event));
 	}
 
 	{
@@ -232,6 +257,162 @@ bool FWacomUIBattleCardWidgetPresentationSpec::RunTest(const FString& /*Paramete
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogBuilderPlayCardSpec,
+	"Wacom.UI.Battle.CombatLogBuilderBuildsPlayCardBlockWithCardAndTargetNames",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogBuilderPlayCardSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> PoisonFang(NewObject<UCardDefinition>());
+	PoisonFang->CardId = TEXT("PoisonFang");
+	PoisonFang->DisplayName = FText::FromString(TEXT("毒牙"));
+
+	TStrongObjectPtr<UEnemyPartDefinition> SnakeHead(NewObject<UEnemyPartDefinition>());
+	SnakeHead->PartId = TEXT("SnakeHead");
+	SnakeHead->DisplayName = FText::FromString(TEXT("蛇头"));
+
+	const FGuid CardId = FGuid::NewGuid();
+	const FGuid TargetPartId = FGuid::NewGuid();
+
+	FBattleSnapshot Snapshot;
+	Snapshot.TurnNumber = 1;
+	FHandCardSnapshot HandCard;
+	HandCard.InstanceId = CardId;
+	HandCard.Definition = PoisonFang.Get();
+	Snapshot.Hand.Cards.Add(HandCard);
+	FEnemyPartSnapshot Part;
+	Part.InstanceId = TargetPartId;
+	Part.Definition = SnakeHead.Get();
+	Snapshot.Enemy.Parts.Add(Part);
+
+	const FWacomBattleCombatLogCommandContext Context =
+		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(Snapshot, CardId, TargetPartId, FGuid());
+
+	FBattleEvent CardPlayed;
+	CardPlayed.Type = EBattleEventType::CardPlayed;
+	CardPlayed.Sequence = 10;
+	CardPlayed.Amount = 2;
+
+	FBattleEvent Damage;
+	Damage.Type = EBattleEventType::DamageDealt;
+	Damage.Sequence = 11;
+	Damage.Amount = 7;
+
+	const FWacomBattleCombatLogBlockView Block =
+		UWacomBattleCombatLogBuilder::BuildCombatLogBlock(Context, { CardPlayed, Damage }, Snapshot, Snapshot);
+
+	TestTrue(TEXT("PlayCard combat block displays"), Block.bShouldDisplay);
+	TestEqual(TEXT("PlayCard header names card and target"),
+		Block.HeaderText.ToString(),
+		FString(TEXT("打出「毒牙」 -> 蛇头，消耗 2 先机")));
+	TestEqual(TEXT("CardPlayed is folded into header"), Block.DetailLines.Num(), 1);
+	TestEqual(TEXT("Damage appears as detail"), Block.DetailLines[0].MessageText.ToString(), FString(TEXT("造成 7 点伤害")));
+	TestEqual(TEXT("Sequence range starts at first event"), Block.FirstEventSequence, 10);
+	TestEqual(TEXT("Sequence range ends at last event"), Block.LastEventSequence, 11);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogBuilderWaitEndTurnSystemSpec,
+	"Wacom.UI.Battle.CombatLogBuilderBuildsWaitEndTurnAndSystemBlocks",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogBuilderWaitEndTurnSystemSpec::RunTest(const FString& /*Parameters*/)
+{
+	FBattleSnapshot Snapshot;
+	Snapshot.TurnNumber = 2;
+
+	{
+		FBattleEvent WaitEvent;
+		WaitEvent.Type = EBattleEventType::WaitPerformed;
+		WaitEvent.Amount = 3;
+		const FWacomBattleCombatLogBlockView Block =
+			UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+				UWacomBattleCombatLogBuilder::BuildWaitCommandContext(Snapshot),
+				{ WaitEvent },
+				Snapshot,
+				Snapshot);
+		TestEqual(TEXT("Wait header includes initiative push"), Block.HeaderText.ToString(), FString(TEXT("等待：敌方先机 -3")));
+	}
+
+	{
+		FBattleEvent TurnEnded;
+		TurnEnded.Type = EBattleEventType::TurnEnded;
+		TurnEnded.Count = 2;
+		FBattleEvent CardsDrawn;
+		CardsDrawn.Type = EBattleEventType::CardsDrawn;
+		CardsDrawn.Count = 5;
+		const FWacomBattleCombatLogBlockView Block =
+			UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+				UWacomBattleCombatLogBuilder::BuildEndTurnCommandContext(Snapshot),
+				{ TurnEnded, CardsDrawn },
+				Snapshot,
+				Snapshot);
+		TestEqual(TEXT("EndTurn header"), Block.HeaderText.ToString(), FString(TEXT("结束回合")));
+		TestEqual(TEXT("EndTurn details include turn end and draw"), Block.DetailLines.Num(), 2);
+	}
+
+	{
+		FBattleEvent Started;
+		Started.Type = EBattleEventType::BattleStarted;
+		const FWacomBattleCombatLogBlockView Block =
+			UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+				UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot),
+				{ Started },
+				Snapshot,
+				Snapshot);
+		TestEqual(TEXT("System header uses turn"), Block.HeaderText.ToString(), FString(TEXT("战斗记录 · 第 2 回合")));
+		TestEqual(TEXT("System detail includes battle start"), Block.DetailLines[0].MessageText.ToString(), FString(TEXT("战斗开始")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogBuilderMoveEventsSpec,
+	"Wacom.UI.Battle.CombatLogBuilderShowsDiscardExhaustGainButHidesHandZoneChanged",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogBuilderMoveEventsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> RewardCard(NewObject<UCardDefinition>());
+	RewardCard->CardId = TEXT("Reward");
+	RewardCard->DisplayName = FText::FromString(TEXT("毒牙"));
+
+	FBattleSnapshot Snapshot;
+
+	FBattleEvent Hidden;
+	Hidden.Type = EBattleEventType::HandZoneChanged;
+
+	FBattleEvent Discarded;
+	Discarded.Type = EBattleEventType::CardDiscarded;
+	Discarded.HandCardZoneMoveReason = EHandCardZoneMoveReason::Effect;
+
+	FBattleEvent Exhausted;
+	Exhausted.Type = EBattleEventType::CardExhausted;
+	Exhausted.HandCardZoneMoveReason = EHandCardZoneMoveReason::TurnEnd;
+
+	FBattleEvent Gained;
+	Gained.Type = EBattleEventType::CardGained;
+	Gained.CardDefinition = RewardCard.Get();
+
+	const FWacomBattleCombatLogBlockView Block =
+		UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+			UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot),
+			{ Hidden, Discarded, Exhausted, Gained },
+			Snapshot,
+			Snapshot);
+
+	TestEqual(TEXT("Hidden HandZoneChanged is omitted"), Block.DetailLines.Num(), 3);
+	TestEqual(TEXT("Discarded is combat-log visible"), Block.DetailLines[0].MessageText.ToString(), FString(TEXT("效果弃置 1 张牌")));
+	TestEqual(TEXT("Exhausted is combat-log visible"), Block.DetailLines[1].MessageText.ToString(), FString(TEXT("回合结束消耗 1 张牌")));
+	TestEqual(TEXT("Card gained remains visible"), Block.DetailLines[2].MessageText.ToString(), FString(TEXT("获得卡牌：毒牙")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEventLogPanelSpec,
 	"Wacom.UI.Battle.EventLogPanel",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -244,6 +425,9 @@ bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
 	TestNotNull(TEXT("Panel resolves an entry widget class"), Panel->EntryWidgetClass.Get());
 	TestTrue(TEXT("Panel entry widget class derives from entry base"),
 		Panel->EntryWidgetClass && Panel->EntryWidgetClass->IsChildOf(UBattleEventLogEntryWidget::StaticClass()));
+	TestNotNull(TEXT("Panel resolves a block widget class"), Panel->BlockWidgetClass.Get());
+	TestTrue(TEXT("Panel block widget class derives from block base"),
+		Panel->BlockWidgetClass && Panel->BlockWidgetClass->IsChildOf(UBattleCombatLogBlockWidget::StaticClass()));
 
 	FBattleEventPresentationView Hidden;
 	Hidden.EventType = EBattleEventType::HandZoneChanged;
@@ -271,6 +455,7 @@ bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
 	Panel->AppendEventLogEntries({ Hidden, First, Second, Third });
 
 	TestEqual(TEXT("Panel filters hidden entries and trims to max"), Panel->GetEntryCount(), 2);
+	TestEqual(TEXT("Panel mirrors legacy entries as blocks"), Panel->GetBlockCount(), 2);
 	TestEqual(TEXT("Panel keeps second entry after trim"), Panel->GetCurrentEntries()[0].MessageText.ToString(), FString(TEXT("打出卡牌，消耗 1 先机")));
 	TestEqual(TEXT("Panel keeps latest entry after trim"), Panel->GetCurrentEntries()[1].MessageText.ToString(), FString(TEXT("获得卡牌：毒牙")));
 	TestFalse(TEXT("Panel closed by default"), Panel->IsDrawerOpen());
@@ -282,6 +467,65 @@ bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
 
 	Panel->ClearEventLog();
 	TestEqual(TEXT("Panel clears entries"), Panel->GetEntryCount(), 0);
+	TestEqual(TEXT("Panel clears blocks"), Panel->GetBlockCount(), 0);
+
+	FWacomBattleCombatLogBlockView FirstBlock;
+	FirstBlock.bShouldDisplay = true;
+	FirstBlock.HeaderText = FText::FromString(TEXT("打出「毒牙」"));
+
+	FWacomBattleCombatLogBlockView SecondBlock;
+	SecondBlock.bShouldDisplay = true;
+	SecondBlock.HeaderText = FText::FromString(TEXT("等待"));
+
+	FWacomBattleCombatLogBlockView ThirdBlock;
+	ThirdBlock.bShouldDisplay = true;
+	ThirdBlock.HeaderText = FText::FromString(TEXT("结束回合"));
+
+	Panel->SetCombatLogBlocks({ FirstBlock, SecondBlock, ThirdBlock });
+
+	TestEqual(TEXT("Panel trims combat log blocks to max"), Panel->GetBlockCount(), 2);
+	TestEqual(TEXT("Panel keeps second block"), Panel->GetCurrentBlocks()[0].HeaderText.ToString(), FString(TEXT("等待")));
+	TestEqual(TEXT("Panel keeps third block"), Panel->GetCurrentBlocks()[1].HeaderText.ToString(), FString(TEXT("结束回合")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogFeedSpec,
+	"Wacom.UI.Battle.ScrollableCombatLogFeedMirrorsBlocksAndTrims",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>());
+	Feed->MaxVisibleBlocks = 2;
+	Feed->TakeWidget();
+	TestTrue(TEXT("Feed fallback owns a scroll box"), Feed->HasScrollBoxForTest());
+
+	FWacomBattleCombatLogBlockView Hidden;
+	Hidden.bShouldDisplay = false;
+	Hidden.HeaderText = FText::FromString(TEXT("隐藏"));
+
+	FWacomBattleCombatLogBlockView First;
+	First.bShouldDisplay = true;
+	First.HeaderText = FText::FromString(TEXT("打出「毒牙」"));
+
+	FWacomBattleCombatLogBlockView Second;
+	Second.bShouldDisplay = true;
+	Second.HeaderText = FText::FromString(TEXT("等待"));
+
+	FWacomBattleCombatLogBlockView Third;
+	Third.bShouldDisplay = true;
+	Third.HeaderText = FText::FromString(TEXT("结束回合"));
+
+	Feed->SetCombatLogBlocks({ Hidden, First, Second, Third });
+
+	TestEqual(TEXT("Feed filters hidden and trims"), Feed->GetVisibleBlockCount(), 2);
+	TestEqual(TEXT("Feed keeps recent second block"), Feed->GetCurrentBlocks()[0].HeaderText.ToString(), FString(TEXT("等待")));
+	TestEqual(TEXT("Feed keeps latest block"), Feed->GetCurrentBlocks()[1].HeaderText.ToString(), FString(TEXT("结束回合")));
+
+	Feed->ClearCombatLog();
+	TestEqual(TEXT("Feed clears blocks"), Feed->GetVisibleBlockCount(), 0);
 
 	return true;
 }
@@ -313,48 +557,50 @@ bool FWacomUIBattleEventLogEntryWidgetSpec::RunTest(const FString& /*Parameters*
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleHUDEventLogSpec,
-	"Wacom.UI.Battle.HUDEventLog",
+	FWacomUIBattleHUDCombatLogSpec,
+	"Wacom.UI.Battle.HUDCombatLog",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleHUDEventLogSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleHUDCombatLogSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	TStrongObjectPtr<UBattleEventLogPanel> Panel(NewObject<UBattleEventLogPanel>(HUD.Get()));
-	HUD->BattleEventLogMaxEntries = 2;
-	HUD->SetEventLogPanelForTest(Panel.Get());
-	Panel->TakeWidget();
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>(HUD.Get()));
+	HUD->BattleCombatLogMaxBlocks = 2;
+	HUD->SetCombatLogFeedForTest(Feed.Get());
+	Feed->TakeWidget();
 
-	FBattleEvent Hidden;
-	Hidden.Type = EBattleEventType::HandZoneChanged;
+	FWacomBattleCombatLogBlockView Hidden;
+	Hidden.bShouldDisplay = false;
+	Hidden.HeaderText = FText::FromString(TEXT("隐藏"));
 
-	FBattleEvent First;
-	First.Type = EBattleEventType::BattleStarted;
+	FWacomBattleCombatLogBlockView First;
+	First.bShouldDisplay = true;
+	First.HeaderText = FText::FromString(TEXT("战斗开始"));
 
-	FBattleEvent Second;
-	Second.Type = EBattleEventType::HandLimitDiscarded;
-	Second.HandLimitDiscardSource = EHandLimitDiscardSource::EffectDraw;
+	FWacomBattleCombatLogBlockView Second;
+	Second.bShouldDisplay = true;
+	Second.HeaderText = FText::FromString(TEXT("等待"));
 
-	FBattleEvent Third;
-	Third.Type = EBattleEventType::BattleEnded;
-	Third.Count = 1;
+	FWacomBattleCombatLogBlockView Third;
+	Third.bShouldDisplay = true;
+	Third.HeaderText = FText::FromString(TEXT("战斗胜利"));
 
-	HUD->AppendBattleEventLogEntriesForTest({ Hidden, First, Second, Third });
+	HUD->AppendBattleCombatLogBlockForTest(Hidden);
+	HUD->AppendBattleCombatLogBlockForTest(First);
+	HUD->AppendBattleCombatLogBlockForTest(Second);
+	HUD->AppendBattleCombatLogBlockForTest(Third);
 
-	TestEqual(TEXT("HUD history filters hidden and trims to max"), HUD->GetBattleEventLogEntryCount(), 2);
-	TestEqual(TEXT("Panel mirrors HUD history"), Panel->GetEntryCount(), 2);
-	TestEqual(TEXT("Panel latest text"), Panel->GetCurrentEntries()[1].MessageText.ToString(), FString(TEXT("战斗胜利")));
-
-	HUD->ToggleBattleEventLog();
-	TestTrue(TEXT("HUD toggles panel open"), HUD->IsBattleEventLogOpen());
-	HUD->SetBattleEventLogOpen(false);
-	TestFalse(TEXT("HUD closes panel"), HUD->IsBattleEventLogOpen());
+	TestEqual(TEXT("HUD combat log history trims to max"), HUD->GetBattleCombatLogBlockCount(), 2);
+	TestEqual(TEXT("HUD keeps recent second block"), HUD->GetBattleCombatLogHistoryForTest()[0].HeaderText.ToString(), FString(TEXT("等待")));
+	TestEqual(TEXT("HUD keeps latest block"), HUD->GetBattleCombatLogHistoryForTest()[1].HeaderText.ToString(), FString(TEXT("战斗胜利")));
+	TestEqual(TEXT("Feed mirrors combat log blocks"), Feed->GetVisibleBlockCount(), 2);
+	TestEqual(TEXT("Feed latest text"), Feed->GetCurrentBlocks()[1].HeaderText.ToString(), FString(TEXT("战斗胜利")));
 
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
 	HUD->SetSession(Session.Get());
 	HUD->SetSession(nullptr);
-	TestEqual(TEXT("Session change clears HUD history"), HUD->GetBattleEventLogEntryCount(), 0);
-	TestEqual(TEXT("Session change clears panel"), Panel->GetEntryCount(), 0);
+	TestEqual(TEXT("Session change clears HUD history"), HUD->GetBattleCombatLogBlockCount(), 0);
+	TestEqual(TEXT("Session change clears feed"), Feed->GetVisibleBlockCount(), 0);
 
 	return true;
 }
@@ -375,51 +621,149 @@ bool FWacomUIBattleHUDInitialEventsConsumedSpec::RunTest(const FString& /*Parame
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	TStrongObjectPtr<UBattleEventLogPanel> Panel(NewObject<UBattleEventLogPanel>(HUD.Get()));
-	HUD->SetEventLogPanelForTest(Panel.Get());
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>(HUD.Get()));
+	Feed->TakeWidget();
+	HUD->SetCombatLogFeedForTest(Feed.Get());
 	HUD->SetSession(Session);
 
 	TestTrue(TEXT("SetSession consumes initial visible battle events immediately"),
-		HUD->GetBattleEventLogEntryCount() > 0);
-	TestTrue(TEXT("Event log panel receives initial visible battle events"),
-		Panel->GetEntryCount() > 0);
+		HUD->GetBattleCombatLogBlockCount() > 0);
+	TestTrue(TEXT("Combat log feed receives initial visible battle events"),
+		Feed->GetVisibleBlockCount() > 0);
 
-	const TArray<FBattleEventPresentationView> InitialEntries = HUD->GetBattleEventLogHistoryForTest();
-	const bool bHasBattleStarted = InitialEntries.ContainsByPredicate(
-		[](const FBattleEventPresentationView& View)
+	const TArray<FWacomBattleCombatLogBlockView> InitialBlocks = HUD->GetBattleCombatLogHistoryForTest();
+	const bool bHasBattleStarted = InitialBlocks.ContainsByPredicate(
+		[](const FWacomBattleCombatLogBlockView& Block)
 		{
-			return View.EventType == EBattleEventType::BattleStarted;
+			return Block.DetailLines.ContainsByPredicate(
+				[](const FWacomBattleCombatLogLineView& Line)
+				{
+					return Line.SourceEventType == EBattleEventType::BattleStarted;
+				});
 		});
-	const bool bHasCardsDrawn = InitialEntries.ContainsByPredicate(
-		[](const FBattleEventPresentationView& View)
+	const bool bHasCardsDrawn = InitialBlocks.ContainsByPredicate(
+		[](const FWacomBattleCombatLogBlockView& Block)
 		{
-			return View.EventType == EBattleEventType::CardsDrawn;
+			return Block.DetailLines.ContainsByPredicate(
+				[](const FWacomBattleCombatLogLineView& Line)
+				{
+					return Line.SourceEventType == EBattleEventType::CardsDrawn;
+				});
 		});
 	TestTrue(TEXT("Initial log includes battle start"), bHasBattleStarted);
 	TestTrue(TEXT("Initial log includes opening draw"), bHasCardsDrawn);
 
-	const int32 EntryCountAfterSetSession = HUD->GetBattleEventLogEntryCount();
+	const int32 EntryCountAfterSetSession = HUD->GetBattleCombatLogBlockCount();
 	HUD->OnWaitRequested();
 
-	const TArray<FBattleEventPresentationView> EntriesAfterWait = HUD->GetBattleEventLogHistoryForTest();
-	const int32 BattleStartedCountAfterWait = EntriesAfterWait.FilterByPredicate(
-		[](const FBattleEventPresentationView& View)
+	const TArray<FWacomBattleCombatLogBlockView> BlocksAfterWait = HUD->GetBattleCombatLogHistoryForTest();
+	const int32 BattleStartedCountAfterWait = BlocksAfterWait.FilterByPredicate(
+		[](const FWacomBattleCombatLogBlockView& Block)
 		{
-			return View.EventType == EBattleEventType::BattleStarted;
+			return Block.DetailLines.ContainsByPredicate(
+				[](const FWacomBattleCombatLogLineView& Line)
+				{
+					return Line.SourceEventType == EBattleEventType::BattleStarted;
+				});
 		}).Num();
 	TestEqual(TEXT("Initial battle start is not consumed again after first command"), BattleStartedCountAfterWait, 1);
 	TestTrue(TEXT("Wait appends later command events"),
-		HUD->GetBattleEventLogEntryCount() > EntryCountAfterSetSession);
+		HUD->GetBattleCombatLogBlockCount() > EntryCountAfterSetSession);
 
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattlePresentationQueueOrdersToastSpec,
-	"Wacom.UI.Battle.PresentationQueue.OrdersToast",
+	FWacomUIBattlePresentationStackWidgetOrderSpec,
+	"Wacom.UI.Battle.BattlePresentationStackWidgetStacksOldestOnTopNewestOnBottom",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattlePresentationQueueOrdersToastSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattlePresentationStackWidgetOrderSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UBattlePresentationStackWidget> Stack(NewObject<UBattlePresentationStackWidget>());
+	Stack->MaxVisibleEntries = 3;
+	Stack->TakeWidget();
+
+	TArray<FWacomBattlePresentationStackEntryView> Entries;
+	for (int32 Index = 0; Index < 5; ++Index)
+	{
+		FWacomBattlePresentationStackEntryView Entry;
+		Entry.EntryId = Index + 1;
+		Entry.CardInstanceId = FGuid::NewGuid();
+		Entry.CardViewData.Name = FText::FromString(FString::Printf(TEXT("Card%d"), Index + 1));
+		Entries.Add(Entry);
+	}
+
+	Stack->SetPresentationStackEntries(Entries);
+	TestEqual(TEXT("Internal entries preserve oldest-to-newest order"), Stack->GetCurrentEntries()[0].EntryId, 1);
+	TestEqual(TEXT("Visible entry count trims to max"), Stack->GetVisibleEntryCount(), 3);
+	TestEqual(TEXT("All entries retained internally"), Stack->GetCurrentEntries().Num(), 5);
+	TestFalse(TEXT("Oldest visible entry does not need text fields"), Stack->GetCurrentEntries()[0].CardViewData.Name.IsEmpty());
+
+	Stack->ClearPresentationStack();
+	TestEqual(TEXT("Clear removes entries"), Stack->GetCurrentEntries().Num(), 0);
+	TestEqual(TEXT("Clear removes visible entries"), Stack->GetVisibleEntryCount(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationStackFallbackSpec,
+	"Wacom.UI.Battle.BattlePresentationStackUsesConfigurableMiniCardViewFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationStackFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UBattlePresentationStackWidget> Stack(NewObject<UBattlePresentationStackWidget>());
+	Stack->MiniCardViewClass = UWacomCardView::StaticClass();
+	Stack->TakeWidget();
+
+	FWacomBattlePresentationStackEntryView Entry;
+	Entry.EntryId = 1;
+	Entry.CardViewData.Name = FText::FromString(TEXT("毒牙"));
+	Stack->SetPresentationStackEntries({ Entry });
+
+	TestEqual(TEXT("Entry retained"), Stack->GetCurrentEntries().Num(), 1);
+	TestEqual(TEXT("Configured fallback class is preserved"), Stack->MiniCardViewClass.Get(), UWacomCardView::StaticClass());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationStackPureCardEntrySpec,
+	"Wacom.UI.Battle.BattlePresentationStackEntryIsPureScaledCard",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationStackPureCardEntrySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UBattlePresentationStackEntryWidget> EntryWidget(NewObject<UBattlePresentationStackEntryWidget>());
+	EntryWidget->SetMiniCardViewClass(UWacomCardView::StaticClass());
+	EntryWidget->TakeWidget();
+
+	FWacomBattlePresentationStackEntryView Entry;
+	Entry.EntryId = 1;
+	Entry.CardInstanceId = FGuid::NewGuid();
+	Entry.CardViewData.Name = FText::FromString(TEXT("毒牙"));
+	EntryWidget->SetPresentationStackEntryData(Entry);
+
+	TestNotNull(TEXT("Entry creates mini card view"), EntryWidget->GetMiniCardView());
+	TestTrue(TEXT("Entry uses whole-card scale host"), EntryWidget->HasMiniCardScaleHostForTest());
+	TestFalse(TEXT("Entry has no header/target text widgets"), EntryWidget->HasHeaderOrTargetTextWidgetsForTest());
+	TestEqual(TEXT("Entry remains hit-test invisible"), EntryWidget->GetVisibility(), ESlateVisibility::HitTestInvisible);
+
+	Entry.bIsExiting = true;
+	EntryWidget->SetPresentationStackEntryData(Entry);
+	EntryWidget->TickExitForTest(0.08f);
+	TestTrue(TEXT("Exit motion fades card"), EntryWidget->GetRenderOpacity() < 1.0f);
+	TestTrue(TEXT("Exit motion moves card upward"), EntryWidget->GetRenderTransform().Translation.Y < 0.0f);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationQueueIgnoresTextOnlyEventsSpec,
+	"Wacom.UI.Battle.PresentationQueue.IgnoresTextOnlyEvents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationQueueIgnoresTextOnlyEventsSpec::RunTest(const FString& /*Parameters*/)
 {
 	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -447,9 +791,6 @@ bool FWacomUIBattlePresentationQueueOrdersToastSpec::RunTest(const FString& /*Pa
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
 	HUD->SetOwningPlayerForTest(PC);
-	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
-	Toast->TakeWidget();
-	HUD->SetEventToastForTest(Toast.Get());
 
 	FBattleEvent First;
 	First.Type = EBattleEventType::BattleStarted;
@@ -463,37 +804,17 @@ bool FWacomUIBattlePresentationQueueOrdersToastSpec::RunTest(const FString& /*Pa
 	HUD->EnqueueBattlePresentationEventsForTest({ First, Second });
 
 	World->GetTimerManager().Tick(0.01f);
-	TestTrue(TEXT("Queue is busy after first step"), HUD->IsBattlePresentationBusy());
-	TArray<FString> Texts;
-	Toast->GetActiveToastTextsForTest(Texts);
-	TestEqual(TEXT("First toast appears alone"), Texts.Num(), 1);
-	if (Texts.Num() != 1)
-	{
-		return false;
-	}
-	TestEqual(TEXT("First toast text"), Texts[0], FString(TEXT("战斗开始")));
-
-	HUD->AdvanceBattlePresentationQueueForTest();
-	Toast->GetActiveToastTextsForTest(Texts);
-	TestEqual(TEXT("Second toast appears after pacing delay"), Texts.Num(), 2);
-	if (Texts.Num() != 2)
-	{
-		return false;
-	}
-	TestEqual(TEXT("Second toast text"), Texts[1], FString(TEXT("造成 3 点伤害")));
-
-	HUD->AdvanceBattlePresentationQueueForTest();
-	TestFalse(TEXT("Queue finishes after last step delay"), HUD->IsBattlePresentationBusy());
+	TestFalse(TEXT("Text-only battle events do not create presentation steps"), HUD->IsBattlePresentationBusy());
 
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattlePresentationQueueBlocksInputSpec,
-	"Wacom.UI.Battle.PresentationQueue.BlocksInput",
+	FWacomUIBattlePresentationQueueNonblockingInputSpec,
+	"Wacom.UI.Battle.PresentationQueue.NonblockingInput",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattlePresentationQueueBlocksInputSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString& /*Parameters*/)
 {
 	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -502,11 +823,13 @@ bool FWacomUIBattlePresentationQueueBlocksInputSpec::RunTest(const FString& /*Pa
 	}
 
 	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCardDefinition* NoTargetCard = Fx.MakeNoopCard(0);
 	UCharacterDefinition* Character = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
-		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+		{ TargetCard, NoTargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	FActorSpawnParameters SpawnParams;
@@ -529,40 +852,217 @@ bool FWacomUIBattlePresentationQueueBlocksInputSpec::RunTest(const FString& /*Pa
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
 	HUD->SetOwningPlayerForTest(PC);
-	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
-	Toast->TakeWidget();
-	HUD->SetEventToastForTest(Toast.Get());
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> CombatLogFeed(NewObject<UBattleCombatLogFeedWidget>(HUD.Get()));
+	CombatLogFeed->TakeWidget();
+	HUD->SetCombatLogFeedForTest(CombatLogFeed.Get());
+	TStrongObjectPtr<UBattlePresentationStackWidget> PresentationStack(NewObject<UBattlePresentationStackWidget>(HUD.Get()));
+	PresentationStack->TakeWidget();
+	HUD->SetPresentationStackForTest(PresentationStack.Get());
+	TStrongObjectPtr<UWacomActionPanelTestProbe> ActionPanel(NewObject<UWacomActionPanelTestProbe>(HUD.Get()));
+	ActionPanel->TakeWidget();
+	HUD->SetActionPanelForTest(ActionPanel.Get());
 	HUD->SetSession(Session);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	TestFalse(TEXT("Initial session presentation has settled before focused blocking check"),
 		HUD->IsBattlePresentationBusy());
 	TestEqual(TEXT("HUD returns idle after initial session presentation"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestTrue(TEXT("Action panel wait starts enabled"), ActionPanel->IsWaitButtonEnabledForTest());
+	TestTrue(TEXT("Action panel end turn starts enabled"), ActionPanel->IsEndTurnButtonEnabledForTest());
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid NoTargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::None);
+	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	if (!TestTrue(TEXT("Target card exists"), TargetCardId.IsValid())
+		|| !TestTrue(TEXT("No target card exists"), NoTargetCardId.IsValid())
+		|| !TestTrue(TEXT("Target part exists"), TargetPartId.IsValid()))
+	{
+		return false;
+	}
 
 	FBattleEvent Event;
-	Event.Type = EBattleEventType::BattleStarted;
+	Event.Type = EBattleEventType::DamageDealt;
 	Event.Sequence = 1;
+	Event.ActorInstanceId = TargetPartId;
+	Event.Amount = 1;
 	HUD->EnqueueBattlePresentationEventsForTest({ Event });
 	World->GetTimerManager().Tick(0.01f);
 
 	TestTrue(TEXT("Queue reports busy"), HUD->IsBattlePresentationBusy());
-	TestEqual(TEXT("HUD enters resolving while presenting"), HUD->GetUIState(), EBattleUIState::Resolving);
+	TestEqual(TEXT("HUD stays idle while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestTrue(TEXT("Action panel wait stays enabled while presenting"), ActionPanel->IsWaitButtonEnabledForTest());
+	TestTrue(TEXT("Action panel end turn stays enabled while presenting"), ActionPanel->IsEndTurnButtonEnabledForTest());
+
+	const int32 CombatLogCountBeforeTargetSelect = HUD->GetBattleCombatLogBlockCount();
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("Target card can enter target select while presenting"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestEqual(TEXT("Target card becomes pending while presenting"), HUD->GetPendingTargetingCardId(), TargetCardId);
+	TestEqual(TEXT("Target select alone does not append combat log"), HUD->GetBattleCombatLogBlockCount(), CombatLogCountBeforeTargetSelect);
+
+	const int32 VersionBeforeTargetSubmit = Session->BuildSnapshot().Version;
+	HUD->OnEnemyPartClickedByUser(TargetPartId);
+	TestEqual(TEXT("Target submit returns idle while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestTrue(TEXT("Target submit resolves while presenting"),
+		Session->BuildSnapshot().Version > VersionBeforeTargetSubmit);
+	TestTrue(TEXT("Presentation queue remains busy after appended card events"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("Target submit appends presentation stack entry"), HUD->GetPresentationStackEntryCountForTest(), 1);
+	TestEqual(TEXT("Oldest stack entry is target card"), HUD->GetPresentationStackEntriesForTest()[0].CardInstanceId, TargetCardId);
+	TestEqual(TEXT("Target submit appends one combat log block"),
+		HUD->GetBattleCombatLogBlockCount(),
+		CombatLogCountBeforeTargetSelect + 1);
+	TestTrue(TEXT("Target submit block uses PlayCard header"),
+		HUD->GetBattleCombatLogHistoryForTest().Last().HeaderText.ToString().Contains(TEXT("打出")));
+
+	HUD->OnCardClickedByUser(NoTargetCardId);
+	TestEqual(TEXT("No target card can submit while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestFalse(TEXT("No target submit clears pending while presenting"), HUD->GetPendingTargetingCardId().IsValid());
+	TestTrue(TEXT("Presentation queue still has appended events after no-target card"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("No-target submit appends second presentation stack entry"), HUD->GetPresentationStackEntryCountForTest(), 2);
+	TestEqual(TEXT("Second stack entry is newest card"), HUD->GetPresentationStackEntriesForTest()[1].CardInstanceId, NoTargetCardId);
+	TestEqual(TEXT("No-target submit appends one more combat log block"),
+		HUD->GetBattleCombatLogBlockCount(),
+		CombatLogCountBeforeTargetSelect + 2);
+
 	const int32 WaitValueBefore = Session->BuildSnapshot().CurrentWaitValue;
 	HUD->OnWaitRequested();
-	TestEqual(TEXT("Wait is blocked while presenting"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore);
+	TestEqual(TEXT("Wait does not resolve while presentation stack has cards"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore);
+	TestTrue(TEXT("Wait becomes pending"), HUD->HasPendingTurnBoundaryCommandForTest());
+	TestFalse(TEXT("Action panel wait disabled while pending"), ActionPanel->IsWaitButtonEnabledForTest());
+	TestFalse(TEXT("Action panel end turn disabled while pending"), ActionPanel->IsEndTurnButtonEnabledForTest());
 
-	HUD->AdvanceBattlePresentationQueueForTest();
+	const int32 VersionBeforeBlockedCard = Session->BuildSnapshot().Version;
+	HUD->OnCardClickedByUser(NoTargetCardId);
+	TestEqual(TEXT("Pending turn boundary blocks further card submits"), Session->BuildSnapshot().Version, VersionBeforeBlockedCard);
+	TestEqual(TEXT("Pending turn boundary does not append another stack entry"), HUD->GetPresentationStackEntryCountForTest(), 2);
+
+	while (HUD->IsBattlePresentationBusy() && !HUD->GetPresentationStackEntriesForTest().IsEmpty()
+		&& !HUD->GetPresentationStackEntriesForTest()[0].bIsExiting)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+	TestTrue(TEXT("Boundary marks oldest stack entry exiting"), HUD->GetPresentationStackEntriesForTest()[0].bIsExiting);
+	TestTrue(TEXT("Pending wait remains while exit motion plays"), HUD->HasPendingTurnBoundaryCommandForTest());
+	TestEqual(TEXT("Pending wait still does not mutate during exit motion"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore);
+
+	HUD->FinishPresentationStackEntryExitForTest(HUD->GetPresentationStackEntriesForTest()[0].EntryId);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueueAndExitStack(*HUD);
+	TestFalse(TEXT("Pending wait runs after stack drains"), HUD->HasPendingTurnBoundaryCommandForTest());
+	TestEqual(TEXT("Wait resolves after stack drains"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore + 1);
+	TestEqual(TEXT("Wait appends after stack drains"),
+		HUD->GetBattleCombatLogBlockCount(),
+		CombatLogCountBeforeTargetSelect + 3);
+	TestEqual(TEXT("Presentation stack drained"), HUD->GetPresentationStackEntryCountForTest(), 0);
+
+	const int32 VersionBeforeEndTurn = Session->BuildSnapshot().Version;
+	HUD->OnEndTurnRequested();
+	TestTrue(TEXT("End turn resolves immediately when stack is empty"), Session->BuildSnapshot().Version > VersionBeforeEndTurn);
+	TestEqual(TEXT("Scrollable feed mirrors combat log history"),
+		CombatLogFeed->GetVisibleBlockCount(),
+		HUD->GetBattleCombatLogBlockCount());
+
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	TestFalse(TEXT("Queue no longer busy"), HUD->IsBattlePresentationBusy());
-	TestEqual(TEXT("HUD returns idle after presentation"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestTrue(TEXT("HUD remains in a non-battle-end command state after presentation"),
+		HUD->GetUIState() == EBattleUIState::Idle || HUD->GetUIState() == EBattleUIState::BattleEnd);
 
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattlePresentationQueueDamageCueBeforeToastSpec,
-	"Wacom.UI.Battle.PresentationQueue.DamageCueBeforeToast",
+	FWacomUIBattlePresentationStackEndTurnBarrierSpec,
+	"Wacom.UI.Battle.EndTurnWhilePresentationStackPendingLocksFurtherPlayerCommandsAndRunsAfterDrain",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattlePresentationQueueDamageCueBeforeToastSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattlePresentationStackEndTurnBarrierSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	TStrongObjectPtr<UBattlePresentationStackWidget> PresentationStack(NewObject<UBattlePresentationStackWidget>(HUD.Get()));
+	PresentationStack->TakeWidget();
+	HUD->SetPresentationStackForTest(PresentationStack.Get());
+	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	if (!TestTrue(TEXT("Target card exists"), TargetCardId.IsValid())
+		|| !TestTrue(TEXT("Target part exists"), TargetPartId.IsValid()))
+	{
+		return false;
+	}
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->OnEnemyPartClickedByUser(TargetPartId);
+	TestEqual(TEXT("PlayCard appends one stack entry"), HUD->GetPresentationStackEntryCountForTest(), 1);
+	const int32 VersionBeforeEndTurn = Session->BuildSnapshot().Version;
+
+	HUD->OnEndTurnRequested();
+	TestTrue(TEXT("EndTurn becomes pending"), HUD->HasPendingTurnBoundaryCommandForTest());
+	TestEqual(TEXT("EndTurn does not mutate while stack pending"), Session->BuildSnapshot().Version, VersionBeforeEndTurn);
+
+	HUD->OnEndTurnRequested();
+	TestEqual(TEXT("Repeated EndTurn remains ignored while pending"), Session->BuildSnapshot().Version, VersionBeforeEndTurn);
+
+	while (HUD->IsBattlePresentationBusy() && !HUD->GetPresentationStackEntriesForTest().IsEmpty()
+		&& !HUD->GetPresentationStackEntriesForTest()[0].bIsExiting)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+	TestTrue(TEXT("EndTurn waits while stack entry is exiting"), HUD->HasPendingTurnBoundaryCommandForTest());
+	HUD->FinishPresentationStackEntryExitForTest(HUD->GetPresentationStackEntriesForTest()[0].EntryId);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueueAndExitStack(*HUD);
+	TestFalse(TEXT("Pending EndTurn clears after drain"), HUD->HasPendingTurnBoundaryCommandForTest());
+	TestTrue(TEXT("EndTurn runs after stack drains"), Session->BuildSnapshot().Version > VersionBeforeEndTurn);
+	TestEqual(TEXT("Presentation stack drained"), HUD->GetPresentationStackEntryCountForTest(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationQueueDamageCueSpec,
+	"Wacom.UI.Battle.PresentationQueue.DamageCue",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationQueueDamageCueSpec::RunTest(const FString& /*Parameters*/)
 {
 	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -599,16 +1099,12 @@ bool FWacomUIBattlePresentationQueueDamageCueBeforeToastSpec::RunTest(const FStr
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
 	HUD->SetOwningPlayerForTest(PC);
-	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
-	Toast->TakeWidget();
-	HUD->SetEventToastForTest(Toast.Get());
 
 	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
 	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
 	HUD->SetEnemyInfoBarForTest(EnemyInfo);
 	HUD->SetSession(Session);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	const int32 ToastCountBeforeDamageEvent = Toast->GetActiveToastTextCountForTest();
 	EnemyInfo->TakeWidget();
 	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
 
@@ -632,17 +1128,70 @@ bool FWacomUIBattlePresentationQueueDamageCueBeforeToastSpec::RunTest(const FStr
 	{
 		return false;
 	}
-	TestTrue(TEXT("Target cue plays before toast"), Part->IsBattlePresentationCueActiveForTest());
+	TestTrue(TEXT("Target cue plays for damage event"), Part->IsBattlePresentationCueActiveForTest());
 	TestEqual(TEXT("Target cue type is damage"), Part->GetLastBattlePresentationCueTypeForTest(), EBattleEventType::DamageDealt);
 	TestEqual(TEXT("Target cue carries damage amount"), Part->GetLastBattlePresentationCueAmountForTest(), 7);
-	TestEqual(TEXT("Toast waits behind target cue"),
-		Toast->GetActiveToastTextCountForTest(),
-		ToastCountBeforeDamageEvent);
 
 	HUD->AdvanceBattlePresentationQueueForTest();
-	TestEqual(TEXT("Toast appears after target cue pacing"),
-		Toast->GetActiveToastTextCountForTest(),
-		ToastCountBeforeDamageEvent + 1);
+	TestFalse(TEXT("Queue finishes after target cue pacing"), HUD->IsBattlePresentationBusy());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePresentationQueueBlocksPlayerActionOutsidePlayerPhaseSpec,
+	"Wacom.UI.Battle.PresentationQueue.BlocksPlayerActionOutsidePlayerPhase",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePresentationQueueBlocksPlayerActionOutsidePlayerPhaseSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* KillerCard = nullptr;
+	UCharacterDefinition* Character = [&Fx, &KillerCard]()
+	{
+		UCardDefinition* LeftHand = Fx.MakeNoopCard(0);
+		UCardDefinition* RightHand = Fx.MakeNoopCard(0);
+		KillerCard = Fx.MakeSimpleDamageCard(0, 100);
+		TArray<UCardDefinition*> Deck = { KillerCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) };
+		return Fx.MakeCharacter(LeftHand, RightHand, Deck);
+	}();
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetSession(Session);
+	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid KillerCardId = FWacomBattleFixture::FindHandInstanceByCardId(InitialSnapshot, KillerCard->CardId);
+	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	if (!TestTrue(TEXT("Killer card exists"), KillerCardId.IsValid())
+		|| !TestTrue(TEXT("Target part exists"), TargetPartId.IsValid()))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Submit killer card"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCard(KillerCardId, TargetPartId)).IsOk());
+	TestEqual(TEXT("Session enters pending knockdown"), Session->BuildSnapshot().Phase, EBattlePhase::PendingKnockdownChoice);
+	TestFalse(TEXT("HUD command gate blocks pending knockdown"), HUD->CanSubmitPlayerActionCommand());
+
+	const int32 VersionBeforeWait = Session->BuildSnapshot().Version;
+	HUD->OnWaitRequested();
+	TestEqual(TEXT("Wait does not resolve during pending knockdown"), Session->BuildSnapshot().Version, VersionBeforeWait);
+
+	FGuid FillerCardId;
+	for (const FHandCardSnapshot& Card : Session->BuildSnapshot().Hand.Cards)
+	{
+		if (Card.Definition && Card.Definition->TargetMode == ECardTargetMode::None)
+		{
+			FillerCardId = Card.InstanceId;
+			break;
+		}
+	}
+	TestTrue(TEXT("Filler card exists"), FillerCardId.IsValid());
+	HUD->OnCardClickedByUser(FillerCardId);
+	TestEqual(TEXT("Card click does not submit during pending knockdown"), Session->BuildSnapshot().Version, VersionBeforeWait);
 
 	return true;
 }
@@ -680,9 +1229,6 @@ bool FWacomUIBattlePresentationQueueInvalidTargetCueSkippedSpec::RunTest(const F
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
 	HUD->SetOwningPlayerForTest(PC);
-	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
-	Toast->TakeWidget();
-	HUD->SetEventToastForTest(Toast.Get());
 
 	FBattleEvent Event;
 	Event.Type = EBattleEventType::DamageDealt;
@@ -691,7 +1237,7 @@ bool FWacomUIBattlePresentationQueueInvalidTargetCueSkippedSpec::RunTest(const F
 	HUD->EnqueueBattlePresentationEventsForTest({ Event });
 
 	World->GetTimerManager().Tick(0.01f);
-	TestEqual(TEXT("Invalid target damage still shows toast immediately"), Toast->GetActiveToastTextCountForTest(), 1);
+	TestFalse(TEXT("Invalid target damage does not create presentation steps"), HUD->IsBattlePresentationBusy());
 
 	return true;
 }
@@ -737,29 +1283,28 @@ bool FWacomUIBattlePresentationQueueClearsOnSessionChangeSpec::RunTest(const FSt
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
 	HUD->SetOwningPlayerForTest(PC);
-	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
-	Toast->TakeWidget();
-	HUD->SetEventToastForTest(Toast.Get());
 	HUD->SetSession(Session);
 
 	FBattleEvent First;
-	First.Type = EBattleEventType::BattleStarted;
+	First.Type = EBattleEventType::DamageDealt;
 	First.Sequence = 1;
+	First.ActorInstanceId = FGuid::NewGuid();
+	First.Amount = 4;
 	FBattleEvent Second;
 	Second.Type = EBattleEventType::DamageDealt;
 	Second.Sequence = 2;
+	Second.ActorInstanceId = FGuid::NewGuid();
 	Second.Amount = 4;
 	HUD->EnqueueBattlePresentationEventsForTest({ First, Second });
 
 	World->GetTimerManager().Tick(0.01f);
 	TestTrue(TEXT("Queue is busy before session change"), HUD->IsBattlePresentationBusy());
-	TestEqual(TEXT("First toast appears"), Toast->GetActiveToastTextCountForTest(), 1);
 
 	HUD->SetSession(nullptr);
 	TestFalse(TEXT("Session change clears queue"), HUD->IsBattlePresentationBusy());
 
 	World->GetTimerManager().Tick(0.50f);
-	TestEqual(TEXT("Cleared queue does not play second toast"), Toast->GetActiveToastTextCountForTest(), 1);
+	TestFalse(TEXT("Cleared queue does not resume queued target cue"), HUD->IsBattlePresentationBusy());
 
 	return true;
 }
@@ -819,27 +1364,20 @@ bool FWacomUIBattlePresentationQueueBattleEndClearsQueueSafelySpec::RunTest(cons
 		HUD.Get(),
 		&UWacomBattleHUDDetailTest::ClearPresentationQueueOnBattleEndedForTest);
 
-	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
-	Toast->TakeWidget();
-	HUD->SetEventToastForTest(Toast.Get());
-
-	FBattleEvent VictoryToast;
-	VictoryToast.Type = EBattleEventType::BattleEnded;
-	VictoryToast.Sequence = 1;
-	VictoryToast.Count = 1;
+	FBattleEvent VictorySignal;
+	VictorySignal.Type = EBattleEventType::BattleEnded;
+	VictorySignal.Sequence = 1;
+	VictorySignal.Count = 1;
 
 	FBattleEvent ShouldNotPlayAfterClear;
 	ShouldNotPlayAfterClear.Type = EBattleEventType::DamageDealt;
 	ShouldNotPlayAfterClear.Sequence = 2;
+	ShouldNotPlayAfterClear.ActorInstanceId = FGuid::NewGuid();
 	ShouldNotPlayAfterClear.Amount = 9;
 
-	HUD->EnqueueBattlePresentationEventsForTest({ VictoryToast, ShouldNotPlayAfterClear });
+	HUD->EnqueueBattlePresentationEventsForTest({ VictorySignal, ShouldNotPlayAfterClear });
 
 	World->GetTimerManager().Tick(0.01f);
-	TestTrue(TEXT("BattleEnd toast starts presentation queue"), HUD->IsBattlePresentationBusy());
-	TestEqual(TEXT("Victory toast is visible before battle end signal"), Toast->GetActiveToastTextCountForTest(), 1);
-
-	HUD->AdvanceBattlePresentationQueueForTest();
 	TestTrue(TEXT("BattleEnd callback clears queue during presentation"),
 		HUD->GetBattleEndedCallbackCountForTest() > 0);
 	TestFalse(TEXT("Queue no longer busy after battle end callback clears it"), HUD->IsBattlePresentationBusy());
@@ -847,7 +1385,7 @@ bool FWacomUIBattlePresentationQueueBattleEndClearsQueueSafelySpec::RunTest(cons
 
 	HUD->AdvanceBattlePresentationQueueForTest();
 	World->GetTimerManager().Tick(1.0f);
-	TestEqual(TEXT("Cleared queue does not play trailing event"), Toast->GetActiveToastTextCountForTest(), 1);
+	TestFalse(TEXT("Cleared queue does not play trailing event"), HUD->IsBattlePresentationBusy());
 
 	return true;
 }
@@ -902,23 +1440,21 @@ bool FWacomUIBattlePresentationQueueKnockdownDialogDelayedAndGuardedSpec::RunTes
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
 	HUD->SetOwningPlayerForTest(PC);
 	HUD->SetSession(Session);
-	TStrongObjectPtr<UWacomBattleEventToastProbe> Toast(NewObject<UWacomBattleEventToastProbe>(HUD.Get()));
-	Toast->TakeWidget();
-	HUD->SetEventToastForTest(Toast.Get());
 
-	FBattleEvent IntroToast;
-	IntroToast.Type = EBattleEventType::BattleStarted;
-	IntroToast.Sequence = 1;
+	FBattleEvent IntroCue;
+	IntroCue.Type = EBattleEventType::DamageDealt;
+	IntroCue.Sequence = 1;
+	IntroCue.ActorInstanceId = HeadId;
+	IntroCue.Amount = 100;
 
 	FBattleEvent KnockdownRequest;
 	KnockdownRequest.Type = EBattleEventType::KnockdownChoiceRequested;
 	KnockdownRequest.Sequence = 2;
 
-	HUD->EnqueueBattlePresentationEventsForTest({ IntroToast, KnockdownRequest });
+	HUD->EnqueueBattlePresentationEventsForTest({ IntroCue, KnockdownRequest });
 
 	World->GetTimerManager().Tick(0.01f);
-	TestEqual(TEXT("Toast plays before modal step"), Toast->GetActiveToastTextCountForTest(), 1);
-	TestTrue(TEXT("Queue remains busy before delayed knockdown step"), HUD->IsBattlePresentationBusy());
+	TestTrue(TEXT("Target cue delays knockdown modal step"), HUD->IsBattlePresentationBusy());
 
 	HUD->AdvanceBattlePresentationQueueForTest();
 	TestFalse(TEXT("Knockdown step is consumed after the pacing delay"), HUD->IsBattlePresentationBusy());

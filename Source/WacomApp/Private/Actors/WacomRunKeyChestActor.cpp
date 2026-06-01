@@ -203,7 +203,10 @@ void AWacomRunKeyChestActor::ConfigureDebugKeyChestSample()
 		CardDropReceiverComponent->AllowedCardIds = { TEXT("DebugKey") };
 		CardDropReceiverComponent->RequiredKeywords.Reset();
 		CardDropReceiverComponent->BlockedKeywords.Reset();
-		CardDropReceiverComponent->GoldReward = 3;
+		FWacomRunWorldCardInteractionReward GoldReward;
+		GoldReward.Type = EWacomRunWorldCardInteractionRewardType::Gold;
+		GoldReward.GoldAmount = 3;
+		CardDropReceiverComponent->Rewards = { GoldReward };
 		CardDropReceiverComponent->bConsumeCardOnSuccess = true;
 		CardDropReceiverComponent->PreviewPromptText = LOCTEXT("DebugKeyPreviewPrompt", "使用钥匙打开宝箱");
 		CardDropReceiverComponent->SuccessPromptText = LOCTEXT("DebugKeySuccessPrompt", "宝箱已打开");
@@ -401,7 +404,9 @@ FWacomRunKeyChestDebugView AWacomRunKeyChestActor::GetRunKeyChestDebugView(
 		View.ReceiverBlockedKeywordCount = ReceiverDebug.BlockedKeywordCount;
 		View.bReceiverHasPositiveCardFilter = ReceiverDebug.bHasPositiveCardFilter;
 		View.bReceiverConsumeCardOnSuccess = ReceiverDebug.bConsumeCardOnSuccess;
-		View.ReceiverGoldReward = ReceiverDebug.GoldReward;
+		View.ReceiverRewardCount = ReceiverDebug.RewardCount;
+		View.ReceiverGoldTotal = ReceiverDebug.GoldTotal;
+		View.ReceiverCardRewardCount = ReceiverDebug.CardRewardCount;
 	}
 	return View;
 }
@@ -413,7 +418,7 @@ FString AWacomRunKeyChestActor::GetRunKeyChestDebugSummary(
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunKeyChest{Actor=%s PersistentId=%s Definition=%s InteractionId=%s DefinitionReason=%s DefinitionSource=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s CompletedVisualMesh=%s CompletedVisualScale=%s CompletedVisualLocation=%s VisualState=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
+		TEXT("RunKeyChest{Actor=%s PersistentId=%s Definition=%s InteractionId=%s DefinitionReason=%s DefinitionSource=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s CompletedVisualMesh=%s CompletedVisualScale=%s CompletedVisualLocation=%s VisualState=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s RewardCount=%d GoldTotal=%d CardRewardCount=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.DefinitionName.ToString(),
@@ -446,7 +451,9 @@ FString AWacomRunKeyChestActor::GetRunKeyChestDebugSummary(
 		View.ReceiverBlockedKeywordCount,
 		View.bReceiverHasPositiveCardFilter ? TEXT("true") : TEXT("false"),
 		View.bReceiverConsumeCardOnSuccess ? TEXT("true") : TEXT("false"),
-		View.ReceiverGoldReward,
+		View.ReceiverRewardCount,
+		View.ReceiverGoldTotal,
+		View.ReceiverCardRewardCount,
 		*View.InteractPrompt,
 		*View.HoverPrompt,
 		*View.CompletedPrompt,
@@ -595,9 +602,12 @@ EDataValidationResult AWacomRunKeyChestActor::IsDataValid(
 	const FName ConfigReason = BuildConfigWarningReason();
 	if (!ConfigReason.IsNone())
 	{
+		const TArray<FWacomRunWorldCardInteractionReward>* RewardSource = CardInteractionDefinition
+			? &CardInteractionDefinition->Rewards
+			: (CardDropReceiverComponent ? &CardDropReceiverComponent->Rewards : nullptr);
 		Context.AddError(FText::Format(
 			LOCTEXT("PlacementConfigInvalid",
-				"KeyChest 摆放配置错误：Actor={0} PersistentId={1} Reason={2} Definition={3} InteractionId={4} Receiver={5} AllowedDefs={6} AllowedIds={7} RequiredKeywords={8} BlockedKeywords={9} Gold={10}。"),
+				"KeyChest 摆放配置错误：Actor={0} PersistentId={1} Reason={2} Definition={3} InteractionId={4} Receiver={5} AllowedDefs={6} AllowedIds={7} RequiredKeywords={8} BlockedKeywords={9} RewardCount={10} GoldTotal={11} CardRewardCount={12}。"),
 			FText::FromString(GetName()),
 			FText::FromName(PersistentId),
 			FText::FromName(ConfigReason),
@@ -612,7 +622,15 @@ EDataValidationResult AWacomRunKeyChestActor::IsDataValid(
 			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->AllowedCardIds.Num() : 0),
 			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->RequiredKeywords.Num() : 0),
 			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->BlockedKeywords.Num() : 0),
-			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->GoldReward : 0)));
+			FText::AsNumber(RewardSource ? RewardSource->Num() : 0),
+			FText::AsNumber(RewardSource
+				? UWacomRunWorldCardDropReceiverComponent::GetRewardGoldTotal(
+					*RewardSource)
+				: 0),
+			FText::AsNumber(RewardSource
+				? UWacomRunWorldCardDropReceiverComponent::GetCardRewardCount(
+					*RewardSource)
+				: 0)));
 		Result = EDataValidationResult::Invalid;
 	}
 

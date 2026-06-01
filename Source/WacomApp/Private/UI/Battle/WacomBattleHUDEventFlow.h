@@ -6,11 +6,17 @@
 
 class UBattleHUD;
 struct FBattleEvent;
+struct FBattleSnapshot;
+struct FWacomBattleCombatLogCommandContext;
 
 struct FWacomBattleHUDEventFlow
 {
 	static void ConsumeAndLogEvents(UBattleHUD& HUD);
-	static void AppendBattleEventLogEntries(UBattleHUD& HUD, const TArray<FBattleEvent>& Events);
-	static void TrimBattleEventLogHistory(UBattleHUD& HUD);
-	static void SyncBattleEventLogPanel(UBattleHUD& HUD);
+	static void ConsumeAndLogEvents(
+		UBattleHUD& HUD,
+		const FWacomBattleCombatLogCommandContext& CommandContext,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot);
+	static void TrimBattleCombatLogHistory(UBattleHUD& HUD);
+	static void SyncBattleCombatLogFeed(UBattleHUD& HUD);
 };

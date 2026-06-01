@@ -5,12 +5,11 @@
 #include "CoreMinimal.h"
 
 class UActionPanel;
-class UBattleEventLogPanel;
-class UButton;
+class UBattleCombatLogFeedWidget;
+class UBattlePresentationStackWidget;
 class UCanvasPanel;
 class UEnemyInfoBar;
 class UEquipmentBar;
-class UEventToast;
 class UHandPanel;
 class UPlayerStatusBar;
 class UPileCountView;
@@ -32,8 +31,8 @@ struct FBattleHUDFallbackLayoutBuilderContext
 	TObjectPtr<UPileCountView>* DrawPileView = nullptr;
 	TObjectPtr<UPileCountView>* DiscardPileView = nullptr;
 	TObjectPtr<UPileCountView>* ExhaustPileView = nullptr;
-	TObjectPtr<UEventToast>* EventToast = nullptr;
-	TObjectPtr<UBattleEventLogPanel>* EventLogPanel = nullptr;
+	TObjectPtr<UBattleCombatLogFeedWidget>* CombatLogFeed = nullptr;
+	TObjectPtr<UBattlePresentationStackWidget>* BattlePresentationStack = nullptr;
 	TObjectPtr<UCanvasPanel>* CardDetailLayer = nullptr;
 };
 

@@ -6,11 +6,12 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "UI/Battle/BattleHUD.h"
-#include "UI/Battle/BattleEventLogPanel.h"
+#include "UI/Battle/ActionPanel.h"
+#include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/CardWidget.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EnemyPartWidget.h"
-#include "UI/Battle/EventToast.h"
 #include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
@@ -243,6 +244,28 @@ public:
 	FString GetFallbackZoneText() const
 	{
 		return ZoneText ? ZoneText->GetText().ToString() : FString();
+	}
+};
+
+UCLASS()
+class UWacomActionPanelTestProbe : public UActionPanel
+{
+	GENERATED_BODY()
+
+public:
+	bool IsWaitButtonEnabledForTest() const
+	{
+		return WaitButton ? WaitButton->GetIsEnabled() : false;
+	}
+
+	bool IsEndTurnButtonEnabledForTest() const
+	{
+		return EndTurnButton ? EndTurnButton->GetIsEnabled() : false;
+	}
+
+	FText GetWaitValueTextForTest() const
+	{
+		return WaitValueText ? WaitValueText->GetText() : FText::GetEmpty();
 	}
 };
 
@@ -612,29 +635,52 @@ public:
 		return EnsureCardDetailPanel() != nullptr;
 	}
 
-	void AppendBattleEventLogEntriesForTest(const TArray<FBattleEvent>& Events)
+	void SetCombatLogFeedForTest(UBattleCombatLogFeedWidget* InFeed)
 	{
-		AppendBattleEventLogEntries(Events);
+		CombatLogFeed = InFeed;
+		if (InFeed)
+		{
+			ChildBattleWidgets.AddUnique(InFeed);
+		}
 	}
 
-	void SyncBattleEventLogPanelForTest()
+	void SetPresentationStackForTest(UBattlePresentationStackWidget* InStack)
 	{
-		SyncBattleEventLogPanel();
+		BattlePresentationStack = InStack;
+		if (InStack)
+		{
+			ChildBattleWidgets.AddUnique(InStack);
+		}
 	}
 
-	void SetEventLogPanelForTest(UBattleEventLogPanel* InPanel)
+	const TArray<FWacomBattlePresentationStackEntryView>& GetPresentationStackEntriesForTest() const
 	{
-		EventLogPanel = InPanel;
+		return BattlePresentationStackEntries;
 	}
 
-	TArray<FBattleEventPresentationView> GetBattleEventLogHistoryForTest() const
+	int32 GetPresentationStackEntryCountForTest() const
 	{
-		return BattleEventLogHistory;
+		return BattlePresentationStackEntries.Num();
 	}
 
-	void SetEventToastForTest(UEventToast* InEventToast)
+	bool HasPendingTurnBoundaryCommandForTest() const
 	{
-		EventToast = InEventToast;
+		return HasPendingTurnBoundaryCommand();
+	}
+
+	void FinishPresentationStackEntryExitForTest(int32 EntryId)
+	{
+		FinishBattlePresentationStackEntryExit(EntryId);
+	}
+
+	TArray<FWacomBattleCombatLogBlockView> GetBattleCombatLogHistoryForTest() const
+	{
+		return BattleCombatLogHistory;
+	}
+
+	void AppendBattleCombatLogBlockForTest(const FWacomBattleCombatLogBlockView& Block)
+	{
+		AppendBattleCombatLogBlock(Block);
 	}
 
 	void SetEnemyInfoBarForTest(UEnemyInfoBar* InEnemyInfoBar)
@@ -643,6 +689,15 @@ public:
 		if (InEnemyInfoBar)
 		{
 			ChildBattleWidgets.AddUnique(InEnemyInfoBar);
+		}
+	}
+
+	void SetActionPanelForTest(UActionPanel* InActionPanel)
+	{
+		ActionPanel = InActionPanel;
+		if (InActionPanel)
+		{
+			ChildBattleWidgets.AddUnique(InActionPanel);
 		}
 	}
 
@@ -700,27 +755,6 @@ private:
 	TObjectPtr<UWorld> WorldOverride;
 
 	int32 BattleEndedCallbackCountForTest = 0;
-};
-
-UCLASS()
-class UWacomBattleEventToastProbe : public UEventToast
-{
-	GENERATED_BODY()
-
-public:
-	void GetActiveToastTextsForTest(TArray<FString>& OutTexts) const
-	{
-		OutTexts.Reset();
-		for (UTextBlock* Text : ActiveTexts)
-		{
-			OutTexts.Add(Text ? Text->GetText().ToString() : FString());
-		}
-	}
-
-	int32 GetActiveToastTextCountForTest() const
-	{
-		return ActiveTexts.Num();
-	}
 };
 
 UCLASS()

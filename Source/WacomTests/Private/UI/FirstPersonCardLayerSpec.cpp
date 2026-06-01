@@ -10246,7 +10246,7 @@ bool FWacomFirstPersonDropIntentZoneRejectTest::RunTest(const FString& Parameter
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonDropIntentUIBlockedTest,
-	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.UIBlockedOrMissingSessionRejects",
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.PhaseBlockedOrMissingSessionRejects",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonDropIntentUIBlockedTest::RunTest(const FString& Parameters)
@@ -10286,10 +10286,37 @@ bool FWacomFirstPersonDropIntentUIBlockedTest::RunTest(const FString& Parameters
 
 	HUD->SetSession(Session);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
-	HUD->SetUIStateForTest(EBattleUIState::Resolving);
+	HUD->SetUIStateForTest(EBattleUIState::BattleEnd);
 	FWacomBattleCardDropResolveResult UIBlocked = HUD->ResolveFirstPersonCardDropIntentForTest(CardId, DragView);
-	TestEqual(TEXT("Resolving UI rejects"), UIBlocked.IntentKind, EWacomBattleCardDropIntentKind::Reject);
-	TestEqual(TEXT("Resolving reject reason"), UIBlocked.RejectReason, EWacomBattleCardDropRejectReason::UIBlocked);
+	TestEqual(TEXT("BattleEnd UI rejects"), UIBlocked.IntentKind, EWacomBattleCardDropIntentKind::Reject);
+	TestEqual(TEXT("BattleEnd reject reason"), UIBlocked.RejectReason, EWacomBattleCardDropRejectReason::UIBlocked);
+
+	HUD->SetUIStateForTest(EBattleUIState::Idle);
+	FBattleEvent Event;
+	Event.Type = EBattleEventType::DamageDealt;
+	Event.Sequence = 1;
+	Event.ActorInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	Event.Amount = 1;
+	HUD->EnqueueBattlePresentationEventsForTest({ Event });
+	World->GetTimerManager().Tick(0.01f);
+	TestTrue(TEXT("Presentation queue is busy"), HUD->IsBattlePresentationBusy());
+	FWacomBattleCardDropResolveResult PresentationBusy = HUD->ResolveFirstPersonCardDropIntentForTest(CardId, DragView);
+	TestEqual(TEXT("Presentation busy no longer blocks drop intent"),
+		PresentationBusy.IntentKind,
+		EWacomBattleCardDropIntentKind::PlayCardNoTarget);
+	TestTrue(TEXT("Presentation busy drop can submit"), PresentationBusy.bCanSubmit);
+
+	HUD->HandleFirstPersonCardDragReleasedForTest(CardId, DragView);
+	TestTrue(TEXT("PlayCard creates presentation stack"), HUD->GetPresentationStackEntryCountForTest() > 0);
+	HUD->OnWaitRequested();
+	TestTrue(TEXT("Wait while stack pending creates turn-boundary barrier"), HUD->HasPendingTurnBoundaryCommandForTest());
+	FWacomBattleCardDropResolveResult PendingBarrier = HUD->ResolveFirstPersonCardDropIntentForTest(CardId, DragView);
+	TestEqual(TEXT("Pending turn boundary blocks first-person drop"),
+		PendingBarrier.IntentKind,
+		EWacomBattleCardDropIntentKind::Reject);
+	TestEqual(TEXT("Pending turn boundary reject reason"),
+		PendingBarrier.RejectReason,
+		EWacomBattleCardDropRejectReason::UIBlocked);
 
 	PC->Destroy();
 	return true;

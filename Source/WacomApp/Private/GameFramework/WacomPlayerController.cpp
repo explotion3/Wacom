@@ -23,6 +23,7 @@
 #include "RunSession.h"
 #include "Characters/CharacterDefinition.h"
 #include "Interaction/WacomWorldInteractable.h"
+#include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "RunStateTypes.h"
 #include "Tags/WacomGameplayTags.h"
@@ -1897,10 +1898,28 @@ bool AWacomPlayerController::ApplyRunWorldCardDropProbeFeedback(
 
 	if (bSubmitted)
 	{
-		const int32 GoldReward = Receiver ? Receiver->GoldReward : 0;
 		if (UWacomAppToastSubsystem* ToastSubsystem = ResolveAppToastSubsystem())
 		{
-			ToastSubsystem->ShowGoldChanged(GoldReward);
+			const FRunWorldCardInteractionRequest Request = Receiver
+				? Receiver->BuildRunWorldCardDropRequest_Implementation(
+					TargetHandle.StableTargetId,
+					CardInstanceId)
+				: FRunWorldCardInteractionRequest();
+			for (const FWacomRunWorldCardInteractionReward& Reward : Request.Rewards)
+			{
+				switch (Reward.Type)
+				{
+				case EWacomRunWorldCardInteractionRewardType::Gold:
+					ToastSubsystem->ShowGoldChanged(Reward.GoldAmount);
+					break;
+				case EWacomRunWorldCardInteractionRewardType::Card:
+					ToastSubsystem->ShowCardGained(Reward.CardDefinition.Get());
+					break;
+				case EWacomRunWorldCardInteractionRewardType::None:
+				default:
+					break;
+				}
+			}
 		}
 		RefreshRunFirstPersonCardLayer();
 	}

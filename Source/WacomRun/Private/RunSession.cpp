@@ -68,17 +68,47 @@ namespace
 			|| !Request.BlockedKeywords.IsEmpty();
 	}
 
+	int32 GetRunWorldCardInteractionGoldTotal(
+		const TArray<FWacomRunWorldCardInteractionReward>& Rewards)
+	{
+		int32 Total = 0;
+		for (const FWacomRunWorldCardInteractionReward& Reward : Rewards)
+		{
+			if (Reward.Type == EWacomRunWorldCardInteractionRewardType::Gold)
+			{
+				Total += Reward.GoldAmount;
+			}
+		}
+		return Total;
+	}
+
+	int32 GetRunWorldCardInteractionCardRewardCount(
+		const TArray<FWacomRunWorldCardInteractionReward>& Rewards)
+	{
+		int32 Count = 0;
+		for (const FWacomRunWorldCardInteractionReward& Reward : Rewards)
+		{
+			if (Reward.Type == EWacomRunWorldCardInteractionRewardType::Card)
+			{
+				++Count;
+			}
+		}
+		return Count;
+	}
+
 	void FinalizeRunWorldCardInteractionValidationDebug(
 		FRunWorldCardInteractionValidation& Result,
 		const FRunWorldCardInteractionRequest& Request)
 	{
 		Result.DebugSummary = FString::Printf(
-			TEXT("RunWorldCardInteraction{PersistentId=%s SourceCard=%s SourceCardId=%s Consume=%s Gold=%d CanSubmit=%s Reason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d}"),
+			TEXT("RunWorldCardInteraction{PersistentId=%s SourceCard=%s SourceCardId=%s Consume=%s RewardCount=%d GoldTotal=%d CardRewardCount=%d CanSubmit=%s Reason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d}"),
 			*Request.PersistentId.ToString(),
 			*Request.SourceCardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 			*Result.SourceCardId.ToString(),
 			Request.bConsumeCardOnSuccess ? TEXT("true") : TEXT("false"),
-			Request.GoldReward,
+			Request.Rewards.Num(),
+			GetRunWorldCardInteractionGoldTotal(Request.Rewards),
+			GetRunWorldCardInteractionCardRewardCount(Request.Rewards),
 			Result.bCanSubmit ? TEXT("true") : TEXT("false"),
 			*Result.DisabledReason.ToString(),
 			Request.AllowedCardDefinitions.Num(),
@@ -1452,9 +1482,30 @@ FRunWorldCardInteractionValidation URunSession::ValidateRunWorldCardInteraction(
 	{
 		return RejectWith(TEXT("MissingSourceCard"));
 	}
-	if (Request.GoldReward <= 0)
+	if (Request.Rewards.Num() <= 0)
 	{
-		return RejectWith(TEXT("InvalidGoldReward"));
+		return RejectWith(TEXT("MissingReward"));
+	}
+	for (const FWacomRunWorldCardInteractionReward& Reward : Request.Rewards)
+	{
+		switch (Reward.Type)
+		{
+		case EWacomRunWorldCardInteractionRewardType::Gold:
+			if (Reward.GoldAmount <= 0)
+			{
+				return RejectWith(TEXT("InvalidGoldReward"));
+			}
+			break;
+		case EWacomRunWorldCardInteractionRewardType::Card:
+			if (!Reward.CardDefinition)
+			{
+				return RejectWith(TEXT("MissingCardDefinition"));
+			}
+			break;
+		case EWacomRunWorldCardInteractionRewardType::None:
+		default:
+			return RejectWith(TEXT("MissingReward"));
+		}
 	}
 	if (!HasRunWorldCardInteractionFilter(Request))
 	{
@@ -1549,13 +1600,39 @@ bool URunSession::SubmitRunWorldCardInteraction(
 		return false;
 	}
 
-	RunState.Gold += Request.GoldReward;
+	for (const FWacomRunWorldCardInteractionReward& Reward : Request.Rewards)
+	{
+		switch (Reward.Type)
+		{
+		case EWacomRunWorldCardInteractionRewardType::Gold:
+			RunState.Gold += Reward.GoldAmount;
+			break;
+		case EWacomRunWorldCardInteractionRewardType::Card:
+			if (!AcquireCardToRunInternal(Reward.CardDefinition))
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[RunSession] SubmitRunWorldCardInteraction: 卡牌奖励发放失败 PersistentId=%s RewardCard=%s"),
+					*Request.PersistentId.ToString(),
+					*GetNameSafe(Reward.CardDefinition.Get()));
+				return false;
+			}
+			break;
+		case EWacomRunWorldCardInteractionRewardType::None:
+		default:
+			UE_LOG(LogTemp, Warning,
+				TEXT("[RunSession] SubmitRunWorldCardInteraction: 无效奖励类型 PersistentId=%s"),
+				*Request.PersistentId.ToString());
+			return false;
+		}
+	}
 	RunState.CompletedRunWorldInteractionIds.Add(Request.PersistentId);
 	UE_LOG(LogTemp, Display,
-		TEXT("[RunSession] SubmitRunWorldCardInteraction: PersistentId=%s Card=%s +%d gold (total=%d)"),
+		TEXT("[RunSession] SubmitRunWorldCardInteraction: PersistentId=%s Card=%s Rewards=%d GoldTotal=%d CardRewards=%d (gold=%d)"),
 		*Request.PersistentId.ToString(),
 		*Request.SourceCardInstanceId.ToString(),
-		Request.GoldReward,
+		Request.Rewards.Num(),
+		GetRunWorldCardInteractionGoldTotal(Request.Rewards),
+		GetRunWorldCardInteractionCardRewardCount(Request.Rewards),
 		RunState.Gold);
 	NotifyRunStateChanged();
 	return true;

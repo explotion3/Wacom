@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "RunStateTypes.generated.h"
 
 class UCardDefinition;
@@ -168,7 +169,7 @@ struct WACOMRUN_API FRunDeckOperationValidation
  * 探索期“拖一张已拥有卡到场景物体”事务请求。
  *
  * PersistentId 来自场景 Actor，是本次 Run 内防重复完成 key；SourceCardInstanceId 必须是玩家
- * 当前真实持有区中的精确 instance。V1 只支持可选消耗这张卡、获得固定金币并标记完成。
+ * 当前真实持有区中的精确 instance。V1 只支持可选消耗这张卡、按顺序发放通用奖励并标记完成。
  */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunWorldCardInteractionRequest
@@ -196,8 +197,8 @@ struct WACOMRUN_API FRunWorldCardInteractionRequest
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
 	bool bConsumeCardOnSuccess = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction", meta = (ClampMin = "0", UIMin = "0"))
-	int32 GoldReward = 0;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Interaction")
+	TArray<FWacomRunWorldCardInteractionReward> Rewards;
 };
 
 /** 只读校验结果；失败路径不修改 RunState。 */

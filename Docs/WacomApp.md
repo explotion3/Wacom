@@ -61,6 +61,13 @@ enum class EGameFlowState : uint8
 
 当前 `AWacomGameMode::bSaveSystemEnabled == false`，自动存档路径会静默 no-op。SaveGame 当前边界见 `WacomRun.md`。
 
+主菜单当前继续使用 `L_MainMenu + AWacomMenuGameMode + UWacomMainMenuScreen`，不新建 V2 地图。菜单切关统一使用 UE package path：
+
+- Exploration：`/Game/Wacom/Maps/L_Exploration`
+- MainMenu：`/Game/Wacom/Maps/L_MainMenu`
+
+不要把 travel 目标写成 `/Game/Wacom/Maps/L_Exploration.L_Exploration` 这类 ObjectPath。UE 5.7 PIE 下 ObjectPath travel 曾触发 `FPackagePath::TryFromMountedName was passed an ObjectPath` 和 `!NewPIEWorld->bIsWorldInitialized` ensure，表现为 `L_MainMenu -> 新游戏 -> L_Exploration` 卡顿、Actor 初始化不完整和输入不可用；日志同时确认 `bSaveSystemEnabled=false` 且 RunSession 是新 Run，因此该问题不归因于存档恢复。
+
 ---
 
 ## §3 PlayerController 与 PlayerCharacter
@@ -208,15 +215,15 @@ V0-BV 后，旧 `AWacomDebugChestActor` 问题原型已从 Source 移除，不�
 
 - 默认拥有 `TriggerSphere / ClickBounds / ChestVisual / ClickInteractionTarget / ClickTargetBridge / CardDropReceiver`。`ClickTargetBridge` 仍把目标标记为 `Interaction.Target.Run.Object`，所以拖卡 probe、hover preview 和普通 Run world click resolver 共用同一命中合同。
 - 它实现 `IWacomWorldInteractable + UWacomRunWorldClickableInteractable`，但普通 E 键或左键不会开箱，只显示 `需要钥匙` 或 `宝箱已打开` toast；真正结算只能来自第一人称卡牌拖拽 release 到宝箱目标。
-- V0-CF 后推荐填写 `CardInteractionDefinition`（`UWacomRunWorldCardInteractionDefinition`）作为制作配置源。Definition 会优先驱动内部 `UWacomRunWorldCardDropReceiverComponent` 的允许卡牌 Definition/CardId、Required/Blocked keywords、是否消耗卡、金币奖励和 receiver preview/success/completed/rejected/config/source/generic 文案；`InteractionDefinition.InteractionId` 只用于内容识别、debug 和 validation，不替代场景 `PersistentId`。`WacomRegenerateContent` 会生成推荐调试资产 `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3`。
-- KeyChest 配置优先级固定为 `CardInteractionDefinition` > 手填 receiver fallback。旧 KeyChest 专用 Definition 链路已删除，不再是 KeyChest 摆放或内容入口。未填写通用 Definition 时，`UWacomRunWorldCardDropReceiverComponent` 仍负责把当前拖拽卡实例、宝箱 `PersistentId`、允许卡牌 Definition/CardId、Required/Blocked keywords、是否消耗卡和金币奖励组装成 `FRunWorldCardInteractionRequest`，再调用 `URunSession::ValidateRunWorldCardInteraction()` / `SubmitRunWorldCardInteraction()`。
+- V0-CG 后推荐填写 `CardInteractionDefinition`（`UWacomRunWorldCardInteractionDefinition`）作为制作配置源。Definition 会优先驱动内部 `UWacomRunWorldCardDropReceiverComponent` 的允许卡牌 Definition/CardId、Required/Blocked keywords、是否消耗卡、reward payload 和 receiver preview/success/completed/rejected/config/source/generic 文案；`InteractionDefinition.InteractionId` 只用于内容识别、debug 和 validation，不替代场景 `PersistentId`。`WacomRegenerateContent` 会生成推荐调试资产 `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3`。
+- KeyChest 配置优先级固定为 `CardInteractionDefinition` > 手填 receiver fallback。旧 KeyChest 专用 Definition 链路已删除，不再是 KeyChest 摆放或内容入口。未填写通用 Definition 时，`UWacomRunWorldCardDropReceiverComponent` 仍负责把当前拖拽卡实例、宝箱 `PersistentId`、允许卡牌 Definition/CardId、Required/Blocked keywords、是否消耗卡和 `Rewards` 组装成 `FRunWorldCardInteractionRequest`，再调用 `URunSession::ValidateRunWorldCardInteraction()` / `SubmitRunWorldCardInteraction()`。
 - V0-BW/V0-BZ 后，宝箱的内部 `TriggerSphere / ClickBounds / ChestVisual / ClickInteractionTarget / ClickTargetBridge / CardDropReceiver` 都是实现细节，不作为可展开 Details 编辑入口使用，并继续隐藏容易触发 UE 5.7 Details 栈溢出的 Collision / BodyInstance 深层分类。关卡制作只改 Actor facade 字段：`TriggerRadius`、`ClickBoundsExtent`、`VisualMesh`、`VisualScale`、`VisualRelativeLocation`、`CompletedVisualMesh`、`CompletedVisualScale`、`CompletedVisualRelativeLocation`、文案、`PersistentId` 和 receiver 配置。完成态外观只同步内部 `ChestVisual`，不改变 `ClickBounds / TriggerSphere` 命中范围。
 - V0-BZ 后，KeyChest 会在 BeginPlay 尝试绑定当前 `URunSession::OnRunStateChangedNative`，RunState 改变后按 `CompletedRunWorldInteractionIds` 刷新关闭 / 已打开外观；如果 BeginPlay 时还拿不到 RunSession，hover、E 键、普通点击和 debug summary 入口会补绑定并刷新。宝箱已打开后仍保留 hover、左键和 E 键命中，只显示 `CompletedPromptText`，拖卡重复释放仍由 RunSession 拒绝，不再奖励金币或消耗卡。
-- V0-CB 后，Run world card drop 的 release 失败文案由目标上的 `UWacomRunWorldCardDropReceiverComponent` 提供：`AlreadyCompleted` 使用 receiver completed prompt，错卡 / 缺关键词 / 被黑名单阻挡 / 缺卡定义使用 receiver rejected prompt，配置异常使用 receiver config warning prompt + reason，源卡不可用使用 receiver source-card-unavailable prompt，其他失败使用 receiver generic failure prompt + reason。PlayerController 只负责命中、提交、展示 Toast，以及 `MissingCardDropReceiver / InvalidSubmitContext` 等没有 receiver 可询问时的通用配置异常 fallback。拖拽 preview 阶段仍只更新卡牌和目标的轻量有效 / 无效反馈，不弹 Toast；松到空处也不弹失败 Toast。成功路径仍只显示金币变化 Toast，不额外显示成功文案。
+- V0-CB 后，Run world card drop 的 release 失败文案由目标上的 `UWacomRunWorldCardDropReceiverComponent` 提供：`AlreadyCompleted` 使用 receiver completed prompt，错卡 / 缺关键词 / 被黑名单阻挡 / 缺卡定义使用 receiver rejected prompt，配置异常使用 receiver config warning prompt + reason，源卡不可用使用 receiver source-card-unavailable prompt，其他失败使用 receiver generic failure prompt + reason。PlayerController 只负责命中、提交、展示 Toast，以及 `MissingCardDropReceiver / InvalidSubmitContext` 等没有 receiver 可询问时的通用配置异常 fallback。拖拽 preview 阶段仍只更新卡牌和目标的轻量有效 / 无效反馈，不弹 Toast；松到空处也不弹失败 Toast。V0-CG 后成功路径按 reward payload 展示反馈：Gold 调 `ShowGoldChanged()`，Card 调 `ShowCardGained()`，不额外显示成功文案。
 - Details 按钮 `ConfigureDebugKeyChestSample()` 会把当前 Actor 配成标准样例，并清空 `CardInteractionDefinition` 以保持无 Definition 的快速 PIE fallback：`PersistentId=Chest.Debug.{ActorName}`，`TriggerRadius=180`，`ClickBoundsExtent=(85,65,55)`，默认 cube visual，完成态默认复用关闭态 mesh 但使用更扁的 scale 和轻微下移，接受 `/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey` 或 `CardId=DebugKey`，成功奖励 3 金币并消耗钥匙。按钮只改当前 Actor 配置、刷新 bounds / visual / receiver / click stable id，不修改 RunState、不生成资产。
 - Details 按钮 `ConfigureDebugKeyChestInteractionDefinitionSample()` 会把当前 Actor 配成同一套 safe facade 样例，并绑定 `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` 到 `CardInteractionDefinition`、刷新 receiver 和 click stable id。正式 PIE 验证优先用这个按钮或手动填写同一通用 Definition。
-- V0-CF 后，KeyChest 摆放实例接入 Validate Map/Level：缺 `PersistentId` 是 error；有 `CardInteractionDefinition` 时校验 Definition 内部 `InteractionId / 正向筛选 / GoldReward`；无 Definition 时继续校验 receiver fallback。缺 `CardDropReceiver`、`GoldReward <= 0`、无正向卡牌筛选都会成为 error；同 World 内重复 `PersistentId` 是 warning。有效筛选要求 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空；`BlockedKeywords` 只能作为附加限制。
-- `GetRunKeyChestDebugSummary()` / `LogRunKeyChestDebugSummary()` 会输出 `Definition / InteractionId / DefinitionReason / DefinitionSource / ConfigValid / ConfigReason / Duplicate / TriggerRadius / ClickBoundsExtent / VisualName / VisualMesh / VisualScale / CompletedVisualMesh / CompletedVisualScale / CompletedVisualLocation / VisualState / ClickTarget / ClickStableId / ReceiverAllowedDefs / ReceiverAllowedIds / RequiredKeywords / BlockedKeywords / PositiveFilter / Gold / Consume / Completed / Last / ReceiverDebug`，用于 PIE 排查通用 Definition、钥匙筛选、金币奖励、safe facade 是否同步、stable id、重复 ID、完成状态和当前关闭 / 已打开视觉状态。Receiver debug summary 还会输出 `Definition / InteractionId / DefinitionReason / ConfigSource` 和 rejected/config/source-unavailable/generic failure prompt facts。PlayerController 的 `LastRunWorldCardDropDebugSummary` 会记录 release 时的 `Phase / Reason / Validation / Submitted / ToastSource / FailureToast`，用于排查为什么 release 没有结算、失败文案来自 receiver 还是 Controller fallback，以及最终展示了哪条失败 Toast。
+- V0-CG 后，KeyChest 摆放实例接入 Validate Map/Level：缺 `PersistentId` 是 error；有 `CardInteractionDefinition` 时校验 Definition 内部 `InteractionId / 正向筛选 / Rewards`；无 Definition 时继续校验 receiver fallback。缺 `CardDropReceiver`、缺 reward、Gold reward 非正、Card reward 缺定义、无正向卡牌筛选都会成为 error；同 World 内重复 `PersistentId` 是 warning。有效筛选要求 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空；`BlockedKeywords` 只能作为附加限制。
+- `GetRunKeyChestDebugSummary()` / `LogRunKeyChestDebugSummary()` 会输出 `Definition / InteractionId / DefinitionReason / DefinitionSource / ConfigValid / ConfigReason / Duplicate / TriggerRadius / ClickBoundsExtent / VisualName / VisualMesh / VisualScale / CompletedVisualMesh / CompletedVisualScale / CompletedVisualLocation / VisualState / ClickTarget / ClickStableId / ReceiverAllowedDefs / ReceiverAllowedIds / RequiredKeywords / BlockedKeywords / PositiveFilter / RewardCount / GoldTotal / CardRewardCount / Consume / Completed / Last / ReceiverDebug`，用于 PIE 排查通用 Definition、钥匙筛选、奖励 payload、safe facade 是否同步、stable id、重复 ID、完成状态和当前关闭 / 已打开视觉状态。Receiver debug summary 还会输出 `Definition / InteractionId / DefinitionReason / ConfigSource`、reward 统计和 rejected/config/source-unavailable/generic failure prompt facts。PlayerController 的 `LastRunWorldCardDropDebugSummary` 会记录 release 时的 `Phase / Reason / Validation / Submitted / ToastSource / FailureToast`，用于排查为什么 release 没有结算、失败文案来自 receiver 还是 Controller fallback，以及最终展示了哪条失败 Toast。
 
 ---
 
@@ -257,7 +264,7 @@ V0-AL 后，`GameMenu` 激活时默认压制探索期 first-person BattleDeck �
 UI 行为细节见 `WacomUI.md`：
 
 - Run MVVM 和 ExplorationHUD。
-- AppToast、交互 Toast、Battle EventToast。
+- AppToast、交互 Toast、Battle Combat Log。
 - BackpackScreen、ShopScreen、RunEventScreen。
 - BattleHUD、战斗日志、手牌 hover 详情和目标选择 ViewData。
 - Card / Shop / BattleEvent PresentationBuilder。
@@ -375,7 +382,8 @@ GameMode 退出战斗时：
 - `MainMenuScreen`：New Game / Continue / Quit。
 - `PauseMenuScreen`：Resume / Save / Quit to Menu。
 - `UWacomConfirmDialog`：推入 Modal 层，用于删除卡牌、退出确认等。
-- 菜单按钮不直接 OpenLevel；切关卡委托给 GameMode 或 PlayerController。
+- 菜单按钮不直接 OpenLevel；切关卡委托给 GameMode 或 PlayerController。主菜单和暂停菜单切关前先 `TearDownPrimaryLayout()`，再在下一帧 `OpenLevel()`，避免在按钮点击 / CommonUI deactivate 链中立即切关。
+- UE travel 目标必须使用 package path，不使用带 `.AssetName` 后缀的 ObjectPath。
 
 验证入口：
 
@@ -417,7 +425,7 @@ ESC 当前语义：
 - `AWacomPlayerController::TryProbeRunMenuDropTargetAtWidgetPosition()` 在 Exploration + active GameMenu + active menu lease 的 first-person card drag 中使用。它只扫描注册过的 `UWacomRunMenuDropTargetWidget`，按后注册优先作为最上层命中，返回 Zone handle。`ResolveRunMenuCardDropIntent()` 统一解析 preview 和 release：默认是 probe-only；owning menu 返回 `SubmitZoneTarget + ControllerDestroyOwnedCard` 且 `ValidateDestroyCardByInstance()` 通过时，release 才由 Controller 移除精确持有卡实例；`MenuHandled` 由菜单提交并回填结果。
 - `UWacomFirstPersonCardLayerSlotWidget` 为当前 active、可见、非 exiting 且拥有有效 `CardInstanceId` 的 first-person slot 构建 Card target handle。它使用当前 visual slot 的 `ScreenPosition`，不要求卡牌可打；后续拖拽 resolver 再判断当前拖拽卡能否作用到该卡槽。
 - First-person drag feedback 使用同一个 `FWacomInteractionTargetHandle`。World 目标反馈只作用于场景 bridge 的 transient preview，不经过 `EnemyInfoBar` 或 BattleEvent presentation queue；Card 目标反馈区分合法 hand-card target 和 probe-only target；Run menu Zone target 使用 `ZoneProbe` 反馈表示“当前菜单区域可被识别”，是否支付由 Run menu drop intent 决定。
-- Battle first-person drag/drop 由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析 preview 和 release 语义。当前提交既有 `PlayCard` 命令：无目标卡 armed 提交空目标，合法 world enemy part 提交目标部位，合法 `TargetMode=HandCard` 源卡提交 `TargetCardInstanceId`。UI 不区分加费、减费、弃置或消耗的具体规则；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 对左右手锚点的拒绝来自 BattleSession / PlayCardResolver 合法性。不支持的 Card target 仍为 probe-only，Zone / Run target 后续接入。V0-AG 后，resolver 预览使用 `UBattleSession::ValidateTargetWithCard()` 获取可解释拒绝原因；拖拽 `TargetMode=HandCard` 源卡时，HUD 会为整副 first-person hand 生成合法 / 非法 Card target affordance，玩家只看到轻量颜色和缩放，具体 reason 只进入 debug summary / 自动化测试。
+- Battle first-person drag/drop 由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析 preview 和 release 语义。当前提交既有 `PlayCard` 命令：无目标卡 armed 提交空目标，合法 world enemy part 提交目标部位，合法 `TargetMode=HandCard` 源卡提交 `TargetCardInstanceId`。UI 不区分加费、减费、弃置或消耗的具体规则；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 对左右手锚点的拒绝来自 BattleSession / PlayCardResolver 合法性。不支持的 Card target 仍为 probe-only，Zone / Run target 后续接入。V0-AG 后，resolver 预览使用 `UBattleSession::ValidateTargetWithCard()` 获取可解释拒绝原因；拖拽 `TargetMode=HandCard` 源卡时，HUD 会为整副 first-person hand 生成合法 / 非法 Card target affordance，玩家只看到轻量颜色和缩放，具体 reason 只进入 debug summary / 自动化测试。V0-CL 后，战斗事件 presentation queue 忙碌不再作为 Battle first-person drop 的 `UIBlocked` 条件；只要 Battle Snapshot 仍处于 `PlayerAction`、没有 pending Wait / EndTurn 屏障，且源卡 / 目标合法，玩家可在旧表现播放时继续拖卡提交。若玩家已请求 Wait 或 EndTurn，HUD 会等当前卡牌表现栈清空后执行该回合边界命令，并在 pending 期间拒绝继续出牌、目标选择和 first-person drop。
 
 ### 描述层
 

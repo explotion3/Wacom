@@ -14,7 +14,7 @@ class UTextBlock;
  *
  * C++ 内置默认外观：VerticalBox 垂直排列，Wait 上，EndTurn 下。
  *
- * 按钮启用规则：仅在 HUD UIState == Idle 时可点。其余状态禁用。
+ * 按钮启用规则：由 BattleHUD 的 PlayerAction 命令 gate 决定；普通表现队列播放中仍可点。
  *
  * WBP 约定（BindWidget）：
  * - WaitButton        : UButton

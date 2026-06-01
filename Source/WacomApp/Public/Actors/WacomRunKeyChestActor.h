@@ -149,7 +149,13 @@ struct WACOMAPP_API FWacomRunKeyChestDebugView
 	bool bReceiverConsumeCardOnSuccess = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
-	int32 ReceiverGoldReward = 0;
+	int32 ReceiverRewardCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	int32 ReceiverGoldTotal = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	int32 ReceiverCardRewardCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	FString InteractPrompt;
@@ -189,7 +195,7 @@ public:
 	FName PersistentId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Definition",
-		meta = (ToolTip = "通用 Run 世界拖卡交互定义。推荐正式 KeyChest 使用它配置卡牌筛选、金币奖励、是否消耗和反馈文案；PersistentId 仍来自场景 Actor。"))
+		meta = (ToolTip = "通用 Run 世界拖卡交互定义。推荐正式 KeyChest 使用它配置卡牌筛选、奖励、是否消耗和反馈文案；PersistentId 仍来自场景 Actor。"))
 	TObjectPtr<UWacomRunWorldCardInteractionDefinition> CardInteractionDefinition = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest",

@@ -6,8 +6,8 @@
 
 #include "Events/BattleEvent.h"
 #include "Session/BattleSession.h"
-#include "UI/Battle/BattleEventLogPanel.h"
-#include "UI/Battle/WacomBattleEventPresentationBuilder.h"
+#include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/WacomBattleCombatLogBuilder.h"
 
 namespace
 {
@@ -42,6 +42,22 @@ namespace
 		default:                                          return TEXT("?");
 		}
 	}
+
+	void LogRawBattleEvents(const TArray<FBattleEvent>& Events)
+	{
+		for (const FBattleEvent& Event : Events)
+		{
+			UE_LOG(LogTemp, Verbose,
+				TEXT("[BattleHUD] [#%d] %-22s Amount=%d Count=%d Actor=%s Card=%s Tag=%s"),
+				Event.Sequence,
+				HUDEventTypeToString(Event.Type),
+				Event.Amount,
+				Event.Count,
+				*Event.ActorInstanceId.ToString(EGuidFormats::Short),
+				*Event.CardInstanceId.ToString(EGuidFormats::Short),
+				*Event.Tag.ToString());
+		}
+	}
 }
 
 void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(UBattleHUD& HUD)
@@ -53,64 +69,62 @@ void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(UBattleHUD& HUD)
 	}
 
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	for (const FBattleEvent& Event : Events)
-	{
-		UE_LOG(LogTemp, Display,
-			TEXT("[BattleHUD] [#%d] %-22s Amount=%d Count=%d Actor=%s Card=%s Tag=%s"),
-			Event.Sequence,
-			HUDEventTypeToString(Event.Type),
-			Event.Amount,
-			Event.Count,
-			*Event.ActorInstanceId.ToString(EGuidFormats::Short),
-			*Event.CardInstanceId.ToString(EGuidFormats::Short),
-			*Event.Tag.ToString());
-	}
-
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FWacomBattleCombatLogCommandContext SystemContext =
+		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot);
+	LogRawBattleEvents(Events);
 	HUD.StoreFirstPersonCardTransitionEvents(Events);
-	AppendBattleEventLogEntries(HUD, Events);
-	HUD.EnqueueBattlePresentationEvents(Events);
+	HUD.AppendBattleCombatLogBlock(
+		UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+			SystemContext,
+			Events,
+			Snapshot,
+			Snapshot));
+	HUD.EnqueueBattlePresentationEvents(Events, INDEX_NONE);
 }
 
-void FWacomBattleHUDEventFlow::AppendBattleEventLogEntries(UBattleHUD& HUD, const TArray<FBattleEvent>& Events)
+void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(
+	UBattleHUD& HUD,
+	const FWacomBattleCombatLogCommandContext& CommandContext,
+	const FBattleSnapshot& PreCommandSnapshot,
+	const FBattleSnapshot& PostCommandSnapshot)
 {
-	TArray<FBattleEventPresentationView> VisibleEntries;
-	for (const FBattleEvent& Event : Events)
-	{
-		FBattleEventPresentationView View = UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
-		if (!View.bShouldDisplay)
-		{
-			continue;
-		}
-
-		HUD.BattleEventLogHistory.Add(View);
-		VisibleEntries.Add(MoveTemp(View));
-	}
-
-	if (VisibleEntries.IsEmpty())
+	UBattleSession* Session = HUD.GetSession();
+	if (!Session)
 	{
 		return;
 	}
 
-	TrimBattleEventLogHistory(HUD);
-	SyncBattleEventLogPanel(HUD);
+	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	LogRawBattleEvents(Events);
+	HUD.StoreFirstPersonCardTransitionEvents(Events);
+	HUD.AppendBattleCombatLogBlock(
+		UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+			CommandContext,
+			Events,
+			PreCommandSnapshot,
+			PostCommandSnapshot));
+	const int32 PresentationStackEntryId =
+		CommandContext.CommandKind == EWacomBattleCombatLogCommandKind::PlayCard
+			? HUD.AppendBattlePresentationStackEntry(CommandContext, PreCommandSnapshot)
+			: INDEX_NONE;
+	HUD.EnqueueBattlePresentationEvents(Events, PresentationStackEntryId);
 }
 
-void FWacomBattleHUDEventFlow::TrimBattleEventLogHistory(UBattleHUD& HUD)
+void FWacomBattleHUDEventFlow::TrimBattleCombatLogHistory(UBattleHUD& HUD)
 {
-	const int32 SafeMaxEntries = FMath::Max(1, HUD.BattleEventLogMaxEntries);
-	if (HUD.BattleEventLogHistory.Num() > SafeMaxEntries)
+	const int32 SafeMaxEntries = FMath::Max(1, HUD.BattleCombatLogMaxBlocks);
+	if (HUD.BattleCombatLogHistory.Num() > SafeMaxEntries)
 	{
-		HUD.BattleEventLogHistory.RemoveAt(0, HUD.BattleEventLogHistory.Num() - SafeMaxEntries);
+		HUD.BattleCombatLogHistory.RemoveAt(0, HUD.BattleCombatLogHistory.Num() - SafeMaxEntries);
 	}
 }
 
-void FWacomBattleHUDEventFlow::SyncBattleEventLogPanel(UBattleHUD& HUD)
+void FWacomBattleHUDEventFlow::SyncBattleCombatLogFeed(UBattleHUD& HUD)
 {
-	if (!HUD.EventLogPanel)
+	if (HUD.CombatLogFeed)
 	{
-		return;
+		HUD.CombatLogFeed->MaxVisibleBlocks = FMath::Max(1, HUD.BattleCombatLogMaxBlocks);
+		HUD.CombatLogFeed->SetCombatLogBlocks(HUD.BattleCombatLogHistory);
 	}
-
-	HUD.EventLogPanel->MaxEntries = FMath::Max(1, HUD.BattleEventLogMaxEntries);
-	HUD.EventLogPanel->SetEventLogEntries(HUD.BattleEventLogHistory);
 }

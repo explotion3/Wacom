@@ -6,6 +6,8 @@
 #include "Types/WacomEnums.h"
 
 class UBattleHUD;
+struct FBattleSnapshot;
+struct FWacomBattleCombatLogCommandContext;
 
 struct FWacomBattleHUDCommandFlow
 {
@@ -15,4 +17,8 @@ struct FWacomBattleHUDCommandFlow
 	static void SubmitEndTurn(UBattleHUD& HUD);
 	static void SubmitKnockdownChoice(UBattleHUD& HUD, EKnockdownChoice Choice);
 	static void AfterCommand(UBattleHUD& HUD);
+	static void AfterCommand(
+		UBattleHUD& HUD,
+		const FWacomBattleCombatLogCommandContext& LogContext,
+		const FBattleSnapshot& PreCommandSnapshot);
 };

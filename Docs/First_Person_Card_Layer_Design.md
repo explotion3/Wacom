@@ -2,7 +2,7 @@
 type: design-note
 scope: wacom-ui
 status: draft
-updated: 2026-05-29
+updated: 2026-06-01
 tags:
   - wacom/ui
   - wacom/cards
@@ -230,7 +230,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - Runtime entry 保留 `CardInstanceId / Zone / bIsHandAnchor / bIsPlayable / bIsPendingTargeting / TargetMode`；`TargetMode` 只用于 first-person slot gesture 分类，不在 layer 内判断规则合法性。`UWacomCardView` 仍只显示卡面，第一人称 layer 用 render transform、opacity 和 ZOrder 表现轻量状态。
 - `bIsPendingTargeting` 的卡会作为 TargetSelect 焦点卡上移、放大、提高 ZOrder，并可按 `PendingTargetingAngleBlend` 向 0 度轻微归正；同一副手牌存在 pending 卡时，非 pending 卡只按透明度倍率轻微弱化，不改变布局或输入。Pending 卡 hover 仍会标记 hovered slot 和允许点击取消，但不会额外叠加 hover lift / scale / ZOrder。
 - `bEnableCardInteractionFeedback` 默认开启，只在 `UWacomFirstPersonCardLayerSlotWidget` 内用 C++ overlay 和 render transform 做轻量反馈。可打卡 hover 叠加 `PlayableHoverFeedbackColor / Opacity`；按下可交互卡乘 `PressedFeedbackScale` 并叠加 pressed tint；有效释放播放短 confirm pulse；不可打卡释放播放 deny tint 和横向 shake，但不广播 click intent。
-- `bEnablePlayCommitFeedback` 默认开启，只在成功提交 `PlayCard` 后由 one-shot transition hint 触发。无目标卡成功提交后，移除的卡牌 outgoing slot 会播放 commit pulse 并按 Played profile 离开；目标卡成功提交后，pending 卡同样播放 commit pulse / Played exit，并向目标部位发送 `TargetConfirmed` cue。若能取得目标部位 widget 的 DPI-aware viewport 中心，Played exit 会轻微朝目标方向偏移；取不到时回到默认 Played exit。命令失败、无 Session、表现队列 busy、取消 TargetSelect 或非目标选择点击都不会播放 commit / target confirm。
+- `bEnablePlayCommitFeedback` 默认开启，只在成功提交 `PlayCard` 后由 one-shot transition hint 触发。无目标卡成功提交后，移除的卡牌 outgoing slot 会播放 commit pulse 并按 Played profile 离开；目标卡成功提交后，pending 卡同样播放 commit pulse / Played exit，并向目标部位发送 `TargetConfirmed` cue。若能取得目标部位 widget 的 DPI-aware viewport 中心，Played exit 会轻微朝目标方向偏移；取不到时回到默认 Played exit。命令失败、无 Session、pending turn-boundary 屏障、取消 TargetSelect 或非目标选择点击都不会播放 commit / target confirm；普通表现队列 busy 但仍处于 PlayerAction 时，合法 PlayCard 仍可提交并触发反馈。
 - `TargetConfirmed` cue 与 BattleEvent cue 分开：`FWacomBattlePresentationTargetCue::CueKind=TargetConfirmed` 只播放轻量确认高亮 / scale pulse；后续真实伤害、破坏仍由表现队列按 `DamageDealt / EnemyPartHpEmptied` 发送 `BattleEvent` cue。它不是伤害提示，也不伪装成伤害。
 - Runtime battle hand 是有效外部数据源；即使手牌为空，也显示为空，不回退 placeholder，避免战斗中出现假卡。
 - `LegacyHandPanel` 模式会清理 first-person runtime source、禁用交互、解绑 delegates 并恢复旧手牌 visibility。
@@ -362,7 +362,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 22. V0-AC / V0-AD：Drop Intent Resolver + Card-to-Card Prototype
    - 已在 BattleHUD 内部增加 first-person card drop intent resolver。Preview 和 release 都通过同一个 `ResolveFirstPersonCardDropIntent()` 得到 `PlayCardNoTarget / PlayCardWorldTarget / PlayCardCardTarget / ProbeCardTarget / Reject`，避免反馈和提交路径各自判断。
    - 无目标卡 armed 后解析为现有 `SubmitPlayCard(CardId, FGuid())`；目标卡释放到合法 world enemy part 后解析为现有 `SubmitPlayCard(CardId, TargetPartId)`。合法性继续由 `UBattleSession::CanTargetWithCard()` 判定。
-   - V0-AD 后 `TargetMode=HandCard` 的源卡释放到另一张当前手牌会解析为 `PlayCardCardTarget` 并提交 `SubmitPlayCardOnHandCard(CardId, TargetCardId)`；非 HandCard 源卡的 Card target 继续解析为 `ProbeCardTarget`，只显示 probe，不提交规则。Zone、空处、同源卡、不可打卡、UI busy、BattleEnd / Resolving 或缺 Session 都解析为 reject。EnemyInfoBar 仍不是 drag / drop target。
+   - V0-AD 后 `TargetMode=HandCard` 的源卡释放到另一张当前手牌会解析为 `PlayCardCardTarget` 并提交 `SubmitPlayCardOnHandCard(CardId, TargetCardId)`；非 HandCard 源卡的 Card target 继续解析为 `ProbeCardTarget`，只显示 probe，不提交规则。Zone、空处、同源卡、不可打卡、缺 Session、BattleEnd、pending turn-boundary 或非 `PlayerAction` 阶段都解析为 reject。V0-CI 后，普通战斗事件 presentation queue 忙碌不再算 UI busy，合法拖卡可在旧表现播放中继续提交；V0-CL 后，玩家请求 Wait / EndTurn 会先等卡牌表现栈清空，pending 期间 first-person drop 返回 UIBlocked。EnemyInfoBar 仍不是 drag / drop target。
    - `FBattleCommand` 增加 `TargetCardInstanceId` 和 `MakePlayCardOnHandCard()`；新增 `Target.SelectedHandCard`，主效果链可把它解析为玩家选中的手牌。当前纵切验证 `Effect.Card.AddCost / Effect.Card.ReduceCost` 精确作用于被拖到的目标卡。
 
 23. V0-AK：Run First-Person Card Source / Exploration Bootstrap

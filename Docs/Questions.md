@@ -78,4 +78,4 @@ tags:
 |---|---|---|
 | 删牌功能可用性 | GDD §11.7 第一阶段始终允许删牌；`IsDeleteFunctionAvailable()` 接口就位但 UI 不读 | 何时切换为“需要 DeleteProvider 才可删牌”，以及 UI 是隐藏、禁用还是提示来源 |
 | AppToast 是否进入全局日志 | AppToast 当前只做战斗外即时反馈，不进 CommonUI Stack | 是否需要统一全局事件日志；哪些反馈应入日志，哪些只即时显示 |
-| 战斗事件日志保留范围 | `BattleEventLogPanel` 当前只显示本场战斗最近事件 | 是否需要战后回放、跨战斗历史或 Run 级日志 |
+| 战斗 Combat Log 保留范围 | `BattleHUD` 当前只在常驻滚动 `CombatLogFeed` 中保留本场最近命令块 | 是否需要战后回放、跨战斗历史或 Run 级日志 |

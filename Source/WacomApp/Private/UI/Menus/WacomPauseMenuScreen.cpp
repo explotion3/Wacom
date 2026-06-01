@@ -11,7 +11,9 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -21,6 +23,8 @@
 
 namespace
 {
+	const FName WacomMainMenuLevelPackagePath(TEXT("/Game/Wacom/Maps/L_MainMenu"));
+
 	UButton* MakePauseButton(UWidgetTree* Tree, FName Name, const FText& Label, UVerticalBox* Parent)
 	{
 		UButton* Btn = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
@@ -35,6 +39,11 @@ namespace
 		}
 		return Btn;
 	}
+}
+
+FName UWacomPauseMenuScreen::GetMainMenuLevelPackagePathForTravel()
+{
+	return WacomMainMenuLevelPackagePath;
 }
 
 TSharedRef<SWidget> UWacomPauseMenuScreen::RebuildWidget()
@@ -122,14 +131,41 @@ void UWacomPauseMenuScreen::HandleQuitToMenuClicked()
 		{
 			UE_LOG(LogTemp, Display, TEXT("[PauseMenu] Quit to Main Menu confirmed"));
 
+			UWorld* World = GetWorld();
+			bool bTeardownCompleted = false;
 			if (UGameInstance* GI = GetGameInstance())
 			{
 				if (UWacomGameUIManagerSubsystem* UIManager = GI->GetSubsystem<UWacomGameUIManagerSubsystem>())
 				{
 					UIManager->TearDownPrimaryLayout();
+					bTeardownCompleted = true;
 				}
 			}
-			UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/Wacom/Maps/L_MainMenu.L_MainMenu")));
+
+			UE_LOG(LogTemp, Display,
+				TEXT("[PauseMenu] ScheduleTravel Target=%s World=%s PIE=%s Teardown=%s"),
+				*WacomMainMenuLevelPackagePath.ToString(),
+				*GetNameSafe(World),
+				(World && World->WorldType == EWorldType::PIE) ? TEXT("true") : TEXT("false"),
+				bTeardownCompleted ? TEXT("true") : TEXT("false"));
+
+			if (World)
+			{
+				TWeakObjectPtr<UWorld> WeakWorld(World);
+				World->GetTimerManager().SetTimerForNextTick(
+					FTimerDelegate::CreateLambda([WeakWorld]()
+					{
+						if (!WeakWorld.IsValid())
+						{
+							return;
+						}
+
+						UE_LOG(LogTemp, Display,
+							TEXT("[PauseMenu] ExecuteTravel Target=%s"),
+							*WacomMainMenuLevelPackagePath.ToString());
+						UGameplayStatics::OpenLevel(WeakWorld.Get(), WacomMainMenuLevelPackagePath);
+					}));
+			}
 		});
 }
 

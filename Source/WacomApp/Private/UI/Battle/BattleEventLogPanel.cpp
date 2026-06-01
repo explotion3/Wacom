@@ -2,6 +2,7 @@
 
 #include "UI/Battle/BattleEventLogPanel.h"
 
+#include "UI/Battle/BattleCombatLogBlockWidget.h"
 #include "UI/Battle/BattleEventLogEntryWidget.h"
 
 #include "Blueprint/WidgetTree.h"
@@ -114,6 +115,10 @@ void UBattleEventLogPanel::NativeConstruct()
 			EntryWidgetClass = UBattleEventLogEntryWidget::StaticClass();
 		}
 	}
+	if (!BlockWidgetClass)
+	{
+		BlockWidgetClass = UBattleCombatLogBlockWidget::StaticClass();
+	}
 
 	if (CloseButton)
 	{
@@ -124,14 +129,54 @@ void UBattleEventLogPanel::NativeConstruct()
 	RebuildEntryWidgets();
 }
 
+void UBattleEventLogPanel::SetCombatLogBlocks(
+	const TArray<FWacomBattleCombatLogBlockView>& Blocks)
+{
+	CurrentBlocks.Reset();
+	CurrentEntries.Reset();
+	for (const FWacomBattleCombatLogBlockView& Block : Blocks)
+	{
+		if (Block.bShouldDisplay)
+		{
+			CurrentBlocks.Add(Block);
+		}
+	}
+	TrimToMaxEntries();
+	RebuildEntryWidgets();
+}
+
+void UBattleEventLogPanel::AppendCombatLogBlocks(
+	const TArray<FWacomBattleCombatLogBlockView>& Blocks)
+{
+	bool bAdded = false;
+	for (const FWacomBattleCombatLogBlockView& Block : Blocks)
+	{
+		if (!Block.bShouldDisplay)
+		{
+			continue;
+		}
+		CurrentBlocks.Add(Block);
+		bAdded = true;
+	}
+	if (!bAdded)
+	{
+		return;
+	}
+	CurrentEntries.Reset();
+	TrimToMaxEntries();
+	RebuildEntryWidgets();
+}
+
 void UBattleEventLogPanel::SetEventLogEntries(const TArray<FBattleEventPresentationView>& Entries)
 {
 	CurrentEntries.Reset();
+	CurrentBlocks.Reset();
 	for (const FBattleEventPresentationView& Entry : Entries)
 	{
 		if (Entry.bShouldDisplay)
 		{
 			CurrentEntries.Add(Entry);
+			CurrentBlocks.Add(UWacomBattleCombatLogBuilder::BuildLegacyEventBlock(Entry));
 		}
 	}
 	TrimToMaxEntries();
@@ -148,6 +193,7 @@ void UBattleEventLogPanel::AppendEventLogEntries(const TArray<FBattleEventPresen
 			continue;
 		}
 		CurrentEntries.Add(Entry);
+		CurrentBlocks.Add(UWacomBattleCombatLogBuilder::BuildLegacyEventBlock(Entry));
 		bAdded = true;
 	}
 	if (!bAdded)
@@ -161,6 +207,7 @@ void UBattleEventLogPanel::AppendEventLogEntries(const TArray<FBattleEventPresen
 void UBattleEventLogPanel::ClearEventLog()
 {
 	CurrentEntries.Reset();
+	CurrentBlocks.Reset();
 	RebuildEntryWidgets();
 }
 
@@ -183,6 +230,10 @@ void UBattleEventLogPanel::HandleCloseClicked()
 void UBattleEventLogPanel::TrimToMaxEntries()
 {
 	const int32 SafeMaxEntries = FMath::Max(1, MaxEntries);
+	if (CurrentBlocks.Num() > SafeMaxEntries)
+	{
+		CurrentBlocks.RemoveAt(0, CurrentBlocks.Num() - SafeMaxEntries);
+	}
 	if (CurrentEntries.Num() > SafeMaxEntries)
 	{
 		CurrentEntries.RemoveAt(0, CurrentEntries.Num() - SafeMaxEntries);
@@ -197,9 +248,19 @@ void UBattleEventLogPanel::RebuildEntryWidgets()
 	}
 
 	EntriesBox->ClearChildren();
-	for (const FBattleEventPresentationView& Entry : CurrentEntries)
+	if (!CurrentBlocks.IsEmpty())
 	{
-		AddEntryWidget(Entry);
+		for (const FWacomBattleCombatLogBlockView& Block : CurrentBlocks)
+		{
+			AddBlockWidget(Block);
+		}
+	}
+	else
+	{
+		for (const FBattleEventPresentationView& Entry : CurrentEntries)
+		{
+			AddEntryWidget(Entry);
+		}
 	}
 	if (bAutoScrollToLatest && FallbackScrollBox)
 	{
@@ -239,6 +300,28 @@ void UBattleEventLogPanel::AddEntryWidget(const FBattleEventPresentationView& En
 	}
 }
 
+void UBattleEventLogPanel::AddBlockWidget(const FWacomBattleCombatLogBlockView& Block)
+{
+	if (!WidgetTree || !EntriesBox || !Block.bShouldDisplay)
+	{
+		return;
+	}
+
+	UBattleCombatLogBlockWidget* BlockWidget = CreateBlockWidget(Block);
+	if (!BlockWidget)
+	{
+		return;
+	}
+
+	if (UPanelSlot* AddedSlot = EntriesBox->AddChild(BlockWidget))
+	{
+		if (UVerticalBoxSlot* VerticalSlot = Cast<UVerticalBoxSlot>(AddedSlot))
+		{
+			VerticalSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
+		}
+	}
+}
+
 UBattleEventLogEntryWidget* UBattleEventLogPanel::CreateEntryWidget(const FBattleEventPresentationView& Entry)
 {
 	UClass* WidgetClass = EntryWidgetClass ? EntryWidgetClass.Get() : UBattleEventLogEntryWidget::StaticClass();
@@ -250,6 +333,20 @@ UBattleEventLogEntryWidget* UBattleEventLogPanel::CreateEntryWidget(const FBattl
 		EntryWidget->SetEventLogEntryData(Entry);
 	}
 	return EntryWidget;
+}
+
+UBattleCombatLogBlockWidget* UBattleEventLogPanel::CreateBlockWidget(
+	const FWacomBattleCombatLogBlockView& Block)
+{
+	UClass* WidgetClass = BlockWidgetClass ? BlockWidgetClass.Get() : UBattleCombatLogBlockWidget::StaticClass();
+	UBattleCombatLogBlockWidget* BlockWidget = GetWorld()
+		? CreateWidget<UBattleCombatLogBlockWidget>(this, WidgetClass)
+		: NewObject<UBattleCombatLogBlockWidget>(this, WidgetClass);
+	if (BlockWidget)
+	{
+		BlockWidget->SetCombatLogBlockData(Block);
+	}
+	return BlockWidget;
 }
 
 #undef LOCTEXT_NAMESPACE

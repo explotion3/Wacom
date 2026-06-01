@@ -17,8 +17,8 @@ class UCanvasPanel;
  * 由 AWacomMenuGameMode 在 L_MainMenu 的 BeginPlay 时 Push 到 GameMenu 层。
  *
  * 三个按钮：
- *   - New Game   ：无存档直开 L_Exploration；有存档时可弹 ConfirmDialog
- *   - Continue   ：HasSaveInSlot(Main) 为 true 才启用，点击开 L_Exploration（GameMode Bootstrap 负责读档）
+ *   - New Game   ：无存档请求 AWacomMenuGameMode 切到 L_Exploration；有存档时可弹 ConfirmDialog
+ *   - Continue   ：HasSaveInSlot(Main) 为 true 才启用，请求切到 L_Exploration（GameMode Bootstrap 负责读档）
  *   - Quit Game  ：ConsoleCommand("quit")
  *
  * C++ 自建 fallback 布局；WBP 子类可 override。
@@ -29,9 +29,9 @@ class WACOMAPP_API UWacomMainMenuScreen : public UWacomMenuWidgetBase
 	GENERATED_BODY()
 
 public:
-	/** 点 New Game 后要加载的关卡名。 */
+	/** 点 New Game 后要加载的关卡 package path。实际切关由 AWacomMenuGameMode 负责。 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
-	FName ExplorationLevelName = FName(TEXT("/Game/Wacom/Maps/L_Exploration.L_Exploration"));
+	FName ExplorationLevelName = FName(TEXT("/Game/Wacom/Maps/L_Exploration"));
 
 protected:
 	virtual void NativeOnInitialized() override;

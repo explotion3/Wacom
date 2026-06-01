@@ -17,9 +17,7 @@ void FWacomBattleHUDTargetingFlow::HandleCardClicked(UBattleHUD& HUD, const FGui
 {
 	HUD.HideCardDetailPanel();
 
-	if (HUD.UIState == EBattleUIState::BattleEnd
-		|| HUD.UIState == EBattleUIState::Resolving
-		|| HUD.IsBattlePresentationQueueBusy())
+	if (!HUD.CanSubmitPlayerActionCommand())
 	{
 		return;
 	}
@@ -79,7 +77,7 @@ void FWacomBattleHUDTargetingFlow::HandleEnemyPartClicked(UBattleHUD& HUD, const
 	{
 		return;
 	}
-	if (HUD.IsBattlePresentationQueueBusy())
+	if (!HUD.CanSubmitPlayerActionCommand())
 	{
 		return;
 	}

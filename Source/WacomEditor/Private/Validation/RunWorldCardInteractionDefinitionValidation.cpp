@@ -43,7 +43,17 @@ bool FWacomRunWorldCardInteractionDefinitionValidation::Validate(
 	else if (Reason == FName(TEXT("InvalidGoldReward")))
 	{
 		AddValidationError(OutErrors,
-			LOCTEXT("InvalidGoldReward", "GoldReward 必须大于 0。"));
+			LOCTEXT("InvalidGoldReward", "Gold 奖励的 GoldAmount 必须大于 0。"));
+	}
+	else if (Reason == FName(TEXT("MissingReward")))
+	{
+		AddValidationError(OutErrors,
+			LOCTEXT("MissingReward", "Rewards 至少需要配置一个有效奖励。"));
+	}
+	else if (Reason == FName(TEXT("MissingCardDefinition")))
+	{
+		AddValidationError(OutErrors,
+			LOCTEXT("MissingCardDefinition", "Card 奖励的 CardDefinition 不能为空。"));
 	}
 
 	return OutErrors.IsEmpty();
