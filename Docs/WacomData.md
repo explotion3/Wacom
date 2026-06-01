@@ -388,7 +388,7 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 
 有效配置要求 `InteractionId` 非空、`GoldReward > 0`，并且 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空。`BlockedKeywords` 不能单独构成有效筛选，避免“除了黑名单外几乎所有卡都能触发交互”。
 
-V0-CC 后，`UWacomRunWorldCardDropReceiverComponent.InteractionDefinition` 是通用数据驱动入口；未填写 Definition 时，receiver 仍使用组件手填字段作为 fallback。正式 KeyChest 新推荐在 `BP_WacomRunKeyChestActor` 实例上配置唯一 `PersistentId` 和一个 `UWacomRunWorldCardInteractionDefinition`。旧 `UWacomRunKeyChestDefinition` 保留为兼容入口。
+V0-CE 后，`UWacomRunWorldCardDropReceiverComponent.InteractionDefinition` 是通用数据驱动入口；未填写 Definition 时，receiver 仍使用组件手填字段作为 fallback。正式 KeyChest 推荐在 `BP_WacomRunKeyChestActor` 实例上配置唯一 `PersistentId` 和一个 `UWacomRunWorldCardInteractionDefinition`。旧 `UWacomRunKeyChestDefinition` 类型、validator、builder 和生成资产暂时保留为遗留数据内容，但 `AWacomRunKeyChestActor` 不再暴露或读取 `ChestDefinition` 字段。
 
 V0-CD 后，`WacomRegenerateContent` 会生成一个通用 Debug 样例资产：
 
@@ -407,7 +407,7 @@ V0-CD 后，`WacomRegenerateContent` 会生成一个通用 Debug 样例资产：
 
 ## §7.1 UWacomRunKeyChestDefinition 字段表
 
-`UWacomRunKeyChestDefinition` 是旧 Run world KeyChest 专用静态制作定义。V0-CC 后正式 KeyChest 推荐改用通用 `UWacomRunWorldCardInteractionDefinition`；本类型保留为兼容入口，不删除现有资产。
+`UWacomRunKeyChestDefinition` 是旧 Run world KeyChest 专用静态制作定义。V0-CE 后正式 KeyChest 只推荐使用通用 `UWacomRunWorldCardInteractionDefinition`；本类型、validator、builder 和现有生成资产暂时保留为遗留内容，不再被 `AWacomRunKeyChestActor` 读取。
 
 ```cpp
 UCLASS(BlueprintType)
@@ -440,8 +440,8 @@ class UWacomRunKeyChestDefinition : public UPrimaryDataAsset
 | `BlockedKeywords` | 开箱卡不能拥有的关键词；只作为附加限制，单独配置不算有效 |
 | `GoldReward` | 成功开箱获得的金币，必须大于 0 |
 | `bConsumeCardOnSuccess` | 成功时是否永久消耗拖入的精确卡牌 instance |
-| 三段 Actor prompt | Definition 非空时优先覆盖 Actor 字段；空文本回退 Actor 字段和默认文案 |
-| 三段 receiver prompt | 同步到内部 `UWacomRunWorldCardDropReceiverComponent` 的 preview / success / completed 文案 |
+| 三段 Actor prompt | 遗留字段；当前 KeyChest Actor 不再读取 |
+| 三段 receiver prompt | 遗留字段；当前 KeyChest Actor 不再同步到 receiver |
 
 只读 helper：
 
@@ -456,9 +456,9 @@ V0-BY 后，`WacomRegenerateContent` 会生成一个 Debug KeyChestDefinition �
 
 | 资产 | 配置 | 用途 |
 |---|---|---|
-| `/Game/Wacom/Data/KeyChests/DA_KeyChest_DebugKeyGold3` | `ChestId=KeyChest.Debug.KeyGold3`、允许 `DA_Card_DebugKey / CardId=DebugKey`、`GoldReward=3`、成功消耗钥匙 | 验证数据驱动钥匙宝箱 |
+| `/Game/Wacom/Data/KeyChests/DA_KeyChest_DebugKeyGold3` | `ChestId=KeyChest.Debug.KeyGold3`、允许 `DA_Card_DebugKey / CardId=DebugKey`、`GoldReward=3`、成功消耗钥匙 | 遗留 KeyChestDefinition 内容验证，不再作为 KeyChest Actor 推荐配置 |
 
-兼容内容可继续在 `BP_WacomRunKeyChestActor` 实例上配置唯一 `PersistentId` 和一个 `UWacomRunKeyChestDefinition`；`ChestDefinition.ChestId` 可被多个实例复用，但每个场景实例必须有自己的运行态 `PersistentId`。V0-CD 后推荐改用 `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` 或同类型通用 Definition；KeyChest 配置优先级固定为 `CardInteractionDefinition` > `ChestDefinition` > 手填 receiver fallback。
+V0-CE 后，`BP_WacomRunKeyChestActor` 实例不再提供 `ChestDefinition` 字段。旧资产仍可被独立加载和校验，但不能再作为 KeyChest Actor authoring 配置源；迁移目标是 `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` 或同类型通用 Definition。KeyChest 配置优先级固定为 `CardInteractionDefinition` > 手填 receiver fallback。
 
 编辑器侧已接入 `UWacomRunKeyChestDefinitionValidator` 内容防呆。校验重点：
 - `ChestId` 不能为空。
@@ -618,7 +618,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Events/DA_Event_DebugFlagReward` | 标记奖励调试事件，包含 RunFlag 解锁、PIE 自助给金币、`MinGold(3) + AddGold(-3)` 领取毒牙和 reset flags |
 | `/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
 | `/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang` | 数据驱动卡牌 PickupDefinition，固定获得 `PoisonFang` |
-| `/Game/Wacom/Data/KeyChests/DA_KeyChest_DebugKeyGold3` | 数据驱动钥匙宝箱 Definition，接受 `DebugKey`，奖励 3 金币并消耗钥匙 |
+| `/Game/Wacom/Data/KeyChests/DA_KeyChest_DebugKeyGold3` | 遗留 KeyChestDefinition，接受 `DebugKey`，奖励 3 金币并消耗钥匙；不再作为 KeyChest Actor 推荐配置 |
 | `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` | 通用 Run 世界拖卡交互 Definition，接受 `DebugKey`，奖励 3 金币并消耗钥匙；推荐 KeyChest 调试内容 |
 
 ### Data Validation

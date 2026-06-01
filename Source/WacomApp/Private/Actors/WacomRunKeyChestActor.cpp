@@ -13,7 +13,6 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
 #include "Interactions/RunWorldCardInteractionDefinition.h"
-#include "KeyChests/RunKeyChestDefinition.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "EngineUtils.h"
@@ -174,7 +173,6 @@ void AWacomRunKeyChestActor::ConfigureDebugKeyChestSample()
 	Modify();
 	PersistentId = BuildDebugKeyChestPersistentIdFromActorName(GetName());
 	CardInteractionDefinition = nullptr;
-	ChestDefinition = nullptr;
 	TriggerRadius = 180.f;
 	ClickBoundsExtent = FVector(85.f, 65.f, 55.f);
 	VisualMesh = LoadObject<UStaticMesh>(nullptr, DefaultChestMeshPath);
@@ -234,7 +232,6 @@ void AWacomRunKeyChestActor::ConfigureDebugKeyChestInteractionDefinitionSample()
 			*GetName(),
 			DebugKeyInteractionDefinitionPath);
 	}
-	ChestDefinition = nullptr;
 	TriggerRadius = 180.f;
 	ClickBoundsExtent = FVector(85.f, 65.f, 55.f);
 	VisualMesh = LoadObject<UStaticMesh>(nullptr, DefaultChestMeshPath);
@@ -344,23 +341,18 @@ FWacomRunKeyChestDebugView AWacomRunKeyChestActor::GetRunKeyChestDebugView(
 	FWacomRunKeyChestDebugView View;
 	View.ActorName = GetName();
 	View.PersistentId = PersistentId;
-	View.CardInteractionDefinitionName = CardInteractionDefinition
+	View.DefinitionName = CardInteractionDefinition
 		? CardInteractionDefinition->GetFName()
 		: NAME_None;
 	View.InteractionId = CardInteractionDefinition
 		? CardInteractionDefinition->InteractionId
 		: NAME_None;
-	View.CardInteractionDefinitionConfigWarningReason = CardInteractionDefinition
+	View.DefinitionConfigWarningReason = CardInteractionDefinition
 		? CardInteractionDefinition->GetConfigWarningReason()
-		: NAME_None;
-	View.DefinitionName = ChestDefinition ? ChestDefinition->GetFName() : NAME_None;
-	View.ChestId = ChestDefinition ? ChestDefinition->ChestId : NAME_None;
-	View.DefinitionConfigWarningReason = ChestDefinition
-		? ChestDefinition->GetConfigWarningReason()
 		: NAME_None;
 	View.DefinitionSource = CardInteractionDefinition
 		? TEXT("CardInteractionDefinition")
-		: (ChestDefinition ? TEXT("ChestDefinition") : TEXT("ReceiverFallback"));
+		: TEXT("ReceiverFallback");
 	View.bHasRunSession = PC && PC->GetRunSession();
 	View.bCompleted = IsCompletedFor(PC);
 	View.bCanInteract = CanInteract_Implementation(PC);
@@ -421,14 +413,11 @@ FString AWacomRunKeyChestActor::GetRunKeyChestDebugSummary(
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunKeyChest{Actor=%s PersistentId=%s CardInteractionDefinition=%s InteractionId=%s CardInteractionDefinitionReason=%s LegacyDefinition=%s ChestId=%s LegacyDefinitionReason=%s DefinitionSource=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s CompletedVisualMesh=%s CompletedVisualScale=%s CompletedVisualLocation=%s VisualState=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
+		TEXT("RunKeyChest{Actor=%s PersistentId=%s Definition=%s InteractionId=%s DefinitionReason=%s DefinitionSource=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s CompletedVisualMesh=%s CompletedVisualScale=%s CompletedVisualLocation=%s VisualState=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
-		*View.CardInteractionDefinitionName.ToString(),
-		*View.InteractionId.ToString(),
-		*View.CardInteractionDefinitionConfigWarningReason.ToString(),
 		*View.DefinitionName.ToString(),
-		*View.ChestId.ToString(),
+		*View.InteractionId.ToString(),
 		*View.DefinitionConfigWarningReason.ToString(),
 		*View.DefinitionSource.ToString(),
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
@@ -476,8 +465,7 @@ void AWacomRunKeyChestActor::RefreshAuthoringState()
 {
 	SyncReceiverFromDefinition();
 	if (CardDropReceiverComponent
-		&& !CardInteractionDefinition
-		&& !ChestDefinition)
+		&& !CardInteractionDefinition)
 	{
 		CardDropReceiverComponent->RejectedCardPromptText = ResolveInteractPromptText();
 		CardDropReceiverComponent->CompletedPromptText = ResolveCompletedPromptText();
@@ -592,34 +580,6 @@ void AWacomRunKeyChestActor::SyncReceiverFromDefinition()
 	}
 
 	CardDropReceiverComponent->InteractionDefinition = nullptr;
-	if (!ChestDefinition)
-	{
-		return;
-	}
-
-	CardDropReceiverComponent->AllowedCardDefinitions =
-		ChestDefinition->AllowedCardDefinitions;
-	CardDropReceiverComponent->AllowedCardIds =
-		ChestDefinition->AllowedCardIds;
-	CardDropReceiverComponent->RequiredKeywords =
-		ChestDefinition->RequiredKeywords;
-	CardDropReceiverComponent->BlockedKeywords =
-		ChestDefinition->BlockedKeywords;
-	CardDropReceiverComponent->GoldReward =
-		ChestDefinition->GoldReward;
-	CardDropReceiverComponent->bConsumeCardOnSuccess =
-		ChestDefinition->bConsumeCardOnSuccess;
-
-	CardDropReceiverComponent->PreviewPromptText =
-		ChestDefinition->PreviewPromptText;
-	CardDropReceiverComponent->SuccessPromptText =
-		ChestDefinition->SuccessPromptText;
-	CardDropReceiverComponent->CompletedPromptText =
-		ChestDefinition->ReceiverCompletedPromptText.IsEmpty()
-			? ResolveCompletedPromptText()
-			: ChestDefinition->ReceiverCompletedPromptText;
-	CardDropReceiverComponent->RejectedCardPromptText =
-		ResolveInteractPromptText();
 }
 
 #if WITH_EDITOR
@@ -637,16 +597,16 @@ EDataValidationResult AWacomRunKeyChestActor::IsDataValid(
 	{
 		Context.AddError(FText::Format(
 			LOCTEXT("PlacementConfigInvalid",
-				"KeyChest 摆放配置错误：Actor={0} PersistentId={1} Reason={2} Definition={3} ChestId={4} Receiver={5} AllowedDefs={6} AllowedIds={7} RequiredKeywords={8} BlockedKeywords={9} Gold={10}。"),
+				"KeyChest 摆放配置错误：Actor={0} PersistentId={1} Reason={2} Definition={3} InteractionId={4} Receiver={5} AllowedDefs={6} AllowedIds={7} RequiredKeywords={8} BlockedKeywords={9} Gold={10}。"),
 			FText::FromString(GetName()),
 			FText::FromName(PersistentId),
 			FText::FromName(ConfigReason),
 			FText::FromString(CardInteractionDefinition
 				? CardInteractionDefinition->GetName()
-				: (ChestDefinition ? ChestDefinition->GetName() : TEXT("None"))),
+				: TEXT("None")),
 			FText::FromName(CardInteractionDefinition
 				? CardInteractionDefinition->InteractionId
-				: (ChestDefinition ? ChestDefinition->ChestId : NAME_None)),
+				: NAME_None),
 			FText::FromString(CardDropReceiverComponent ? CardDropReceiverComponent->GetName() : TEXT("None")),
 			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->AllowedCardDefinitions.Num() : 0),
 			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->AllowedCardIds.Num() : 0),
@@ -697,10 +657,6 @@ FName AWacomRunKeyChestActor::BuildConfigWarningReason() const
 	if (CardInteractionDefinition)
 	{
 		return CardInteractionDefinition->GetConfigWarningReason();
-	}
-	if (ChestDefinition)
-	{
-		return ChestDefinition->GetConfigWarningReason();
 	}
 	const FName ReceiverReason =
 		CardDropReceiverComponent->GetRunWorldCardDropReceiverConfigWarningReason();
@@ -759,10 +715,6 @@ FText AWacomRunKeyChestActor::ResolveInteractPromptText() const
 	{
 		return CardInteractionDefinition->RejectedCardPromptText;
 	}
-	if (ChestDefinition && !ChestDefinition->InteractPromptText.IsEmpty())
-	{
-		return ChestDefinition->InteractPromptText;
-	}
 	return InteractPromptText.IsEmpty()
 		? GetDefaultInteractPromptText()
 		: InteractPromptText;
@@ -774,10 +726,6 @@ FText AWacomRunKeyChestActor::ResolveHoverPromptText() const
 	{
 		return CardInteractionDefinition->PreviewPromptText;
 	}
-	if (ChestDefinition && !ChestDefinition->HoverPromptText.IsEmpty())
-	{
-		return ChestDefinition->HoverPromptText;
-	}
 	return HoverPromptText.IsEmpty()
 		? GetDefaultHoverPromptText()
 		: HoverPromptText;
@@ -788,10 +736,6 @@ FText AWacomRunKeyChestActor::ResolveCompletedPromptText() const
 	if (CardInteractionDefinition && !CardInteractionDefinition->CompletedPromptText.IsEmpty())
 	{
 		return CardInteractionDefinition->CompletedPromptText;
-	}
-	if (ChestDefinition && !ChestDefinition->CompletedPromptText.IsEmpty())
-	{
-		return ChestDefinition->CompletedPromptText;
 	}
 	return CompletedPromptText.IsEmpty()
 		? GetDefaultCompletedPromptText()

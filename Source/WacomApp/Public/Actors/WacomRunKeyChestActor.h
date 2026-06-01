@@ -19,7 +19,6 @@ class UPrimitiveComponent;
 class UStaticMesh;
 class URunSession;
 class UWacomInteractionTargetComponent;
-class UWacomRunKeyChestDefinition;
 class UWacomRunWorldCardInteractionDefinition;
 class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
@@ -63,19 +62,10 @@ struct WACOMAPP_API FWacomRunKeyChestDebugView
 	FName DefinitionName = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
-	FName CardInteractionDefinitionName = NAME_None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	FName InteractionId = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
-	FName CardInteractionDefinitionConfigWarningReason = NAME_None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	FName DefinitionSource = NAME_None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
-	FName ChestId = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	FName DefinitionConfigWarningReason = NAME_None;
@@ -202,10 +192,6 @@ public:
 		meta = (ToolTip = "通用 Run 世界拖卡交互定义。推荐正式 KeyChest 使用它配置卡牌筛选、金币奖励、是否消耗和反馈文案；PersistentId 仍来自场景 Actor。"))
 	TObjectPtr<UWacomRunWorldCardInteractionDefinition> CardInteractionDefinition = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Definition",
-		meta = (ToolTip = "旧 KeyChest 专用静态定义，保留为兼容入口。未填写 CardInteractionDefinition 时才会使用；PersistentId 仍来自场景 Actor。"))
-	TObjectPtr<UWacomRunKeyChestDefinition> ChestDefinition = nullptr;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest",
 		meta = (ToolTip = "玩家进入该半径后，探索期按 E 可看到宝箱提示。单位：厘米。",
 			ClampMin = "50.0", UIMin = "50.0", UIMax = "1000.0"))
@@ -284,7 +270,7 @@ public:
 	void ConfigureDebugKeyChestSample();
 
 	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Key Chest|Authoring",
-		meta = (ToolTip = "配置调试钥匙宝箱并绑定通用 DA_RunWorldCardInteraction_DebugKeyGold3：按 Actor 名生成 PersistentId，清空旧 ChestDefinition，并刷新点击 stable id；不会修改 RunState。"))
+		meta = (ToolTip = "配置调试钥匙宝箱并绑定通用 DA_RunWorldCardInteraction_DebugKeyGold3：按 Actor 名生成 PersistentId，并刷新点击 stable id；不会修改 RunState。"))
 	void ConfigureDebugKeyChestInteractionDefinitionSample();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Key Chest|Debug",
