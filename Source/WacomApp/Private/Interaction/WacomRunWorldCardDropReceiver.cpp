@@ -104,6 +104,26 @@ bool UWacomRunWorldCardDropReceiverComponent::SubmitRunWorldCardDrop_Implementat
 	return bSubmitted;
 }
 
+bool UWacomRunWorldCardDropReceiverComponent::HasPositiveCardFilter() const
+{
+	return AllowedCardDefinitions.Num() > 0
+		|| AllowedCardIds.Num() > 0
+		|| !RequiredKeywords.IsEmpty();
+}
+
+FName UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverConfigWarningReason() const
+{
+	if (GoldReward <= 0)
+	{
+		return TEXT("InvalidGoldReward");
+	}
+	if (!HasPositiveCardFilter())
+	{
+		return TEXT("MissingPositiveCardFilter");
+	}
+	return NAME_None;
+}
+
 FWacomRunWorldCardDropReceiverDebugView
 UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebugView_Implementation(
 	AWacomPlayerController* PC,
@@ -126,8 +146,13 @@ UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebugView_Im
 		&& PC->GetRunSession()->IsRunWorldInteractionCompleted(PersistentId);
 	View.bCanSubmit = Validation.bCanSubmit;
 	View.RejectReason = Validation.DisabledReason;
+	View.ConfigWarningReason = GetRunWorldCardDropReceiverConfigWarningReason();
+	View.bConfigValid = View.ConfigWarningReason.IsNone();
 	View.AllowedDefinitionCount = AllowedCardDefinitions.Num();
 	View.AllowedCardIdCount = AllowedCardIds.Num();
+	View.RequiredKeywordCount = RequiredKeywords.Num();
+	View.BlockedKeywordCount = BlockedKeywords.Num();
+	View.bHasPositiveCardFilter = HasPositiveCardFilter();
 	View.bConsumeCardOnSuccess = bConsumeCardOnSuccess;
 	View.GoldReward = GoldReward;
 	View.PreviewPrompt = (PreviewPromptText.IsEmpty()
@@ -154,7 +179,7 @@ FString UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebu
 			PersistentId,
 			SourceCardInstanceId);
 	return FString::Printf(
-		TEXT("RunWorldCardDropReceiver{Owner=%s Receiver=%s PersistentId=%s HasRun=%s Completed=%s CanSubmit=%s Reject=%s AllowedDefs=%d AllowedIds=%d Consume=%s Gold=%d Preview=%s Success=%s CompletedPrompt=%s Validation=%s}"),
+		TEXT("RunWorldCardDropReceiver{Owner=%s Receiver=%s PersistentId=%s HasRun=%s Completed=%s CanSubmit=%s Reject=%s ConfigValid=%s ConfigReason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d Preview=%s Success=%s CompletedPrompt=%s Validation=%s}"),
 		*View.OwnerName,
 		*View.ReceiverName,
 		*View.PersistentId.ToString(),
@@ -162,8 +187,13 @@ FString UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebu
 		View.bCompleted ? TEXT("true") : TEXT("false"),
 		View.bCanSubmit ? TEXT("true") : TEXT("false"),
 		*View.RejectReason.ToString(),
+		View.bConfigValid ? TEXT("true") : TEXT("false"),
+		*View.ConfigWarningReason.ToString(),
 		View.AllowedDefinitionCount,
 		View.AllowedCardIdCount,
+		View.RequiredKeywordCount,
+		View.BlockedKeywordCount,
+		View.bHasPositiveCardFilter ? TEXT("true") : TEXT("false"),
 		View.bConsumeCardOnSuccess ? TEXT("true") : TEXT("false"),
 		View.GoldReward,
 		*View.PreviewPrompt,

@@ -40,10 +40,25 @@ struct WACOMAPP_API FWacomRunWorldCardDropReceiverDebugView
 	FName RejectReason = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	bool bConfigValid = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FName ConfigWarningReason = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
 	int32 AllowedDefinitionCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
 	int32 AllowedCardIdCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	int32 RequiredKeywordCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	int32 BlockedKeywordCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	bool bHasPositiveCardFilter = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
 	bool bConsumeCardOnSuccess = true;
@@ -152,6 +167,12 @@ public:
 		AWacomPlayerController* PC,
 		FName PersistentId,
 		FGuid SourceCardInstanceId) const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Card Drop|Debug")
+	bool HasPositiveCardFilter() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Card Drop|Debug")
+	FName GetRunWorldCardDropReceiverConfigWarningReason() const;
 
 	virtual FRunWorldCardInteractionRequest BuildRunWorldCardDropRequest_Implementation(
 		FName PersistentId,

@@ -9,10 +9,14 @@
 #include "GameFramework/Actor.h"
 #include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomWorldInteractable.h"
+#if WITH_EDITOR
+#include "Misc/DataValidation.h"
+#endif
 #include "WacomRunKeyChestActor.generated.h"
 
 class AWacomPlayerController;
 class UPrimitiveComponent;
+class UStaticMesh;
 class UWacomInteractionTargetComponent;
 class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
@@ -62,10 +66,34 @@ struct WACOMAPP_API FWacomRunKeyChestDebugView
 	bool bCanInteract = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	bool bConfigValid = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FName ConfigWarningReason = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	bool bDuplicatePersistentIdDetected = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	bool bClickTargetConfigured = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	FName ClickStableId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	float TriggerRadius = 0.f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FVector ClickBoundsExtent = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FName VisualName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FName VisualMeshName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FVector VisualScale = FVector::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	bool bHasCardDropReceiver = false;
@@ -81,6 +109,15 @@ struct WACOMAPP_API FWacomRunKeyChestDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	int32 ReceiverAllowedCardIdCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	int32 ReceiverRequiredKeywordCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	int32 ReceiverBlockedKeywordCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	bool bReceiverHasPositiveCardFilter = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	bool bReceiverConsumeCardOnSuccess = true;
@@ -129,6 +166,23 @@ public:
 		meta = (ToolTip = "玩家进入该半径后，探索期按 E 可看到宝箱提示。单位：厘米。",
 			ClampMin = "50.0", UIMin = "50.0", UIMax = "1000.0"))
 	float TriggerRadius = 180.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Authoring",
+		meta = (ToolTip = "鼠标 hover、左键点击和拖卡命中的隐藏盒体半径。单位：厘米。会同步到内部 ClickBounds；不要直接编辑组件 Collision Details。",
+			ClampMin = "1.0", UIMin = "1.0"))
+	FVector ClickBoundsExtent = FVector(85.f, 65.f, 55.f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Authoring",
+		meta = (ToolTip = "宝箱原型的安全可见网格。会同步到内部 ChestVisual；留空时只保留碰撞和交互诊断。"))
+	TObjectPtr<UStaticMesh> VisualMesh = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Authoring",
+		meta = (ToolTip = "宝箱原型可见网格相对缩放。只影响内部 ChestVisual，不影响 ClickBounds 命中范围。"))
+	FVector VisualScale = FVector(0.75f, 0.55f, 0.45f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Authoring",
+		meta = (ToolTip = "宝箱原型可见网格相对位置。单位：厘米；只影响内部 ChestVisual。"))
+	FVector VisualRelativeLocation = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Text",
 		meta = (ToolTip = "未打开时，玩家在 E 键范围内看到的提示文案。"))
@@ -196,6 +250,10 @@ public:
 	virtual FWacomRunWorldClickableInteractableDebugView GetRunWorldClickableDebugView_Implementation(
 		AWacomPlayerController* PC) const override;
 
+#if WITH_EDITOR
+	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+#endif
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
@@ -218,6 +276,8 @@ protected:
 private:
 	void RefreshAuthoringState();
 	void RefreshClickTargetBinding();
+	FName BuildConfigWarningReason() const;
+	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsCompletedFor(AWacomPlayerController* PC) const;
 	FText GetHoverPromptText(AWacomPlayerController* PC) const;
 	FText GetDefaultInteractPromptText() const;

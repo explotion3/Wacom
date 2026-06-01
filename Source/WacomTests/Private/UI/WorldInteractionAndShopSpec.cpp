@@ -98,6 +98,20 @@ namespace
 		return Result;
 	}
 
+	bool UiValidationIssuesContain(
+		const TArray<FText>& Issues,
+		const TCHAR* ExpectedText)
+	{
+		for (const FText& Issue : Issues)
+		{
+			if (Issue.ToString().Contains(ExpectedText))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	UWacomRunEventDefinition* MakeUiRunEvent(UObject* Outer)
 	{
 		UWacomRunEventDefinition* Event = NewObject<UWacomRunEventDefinition>(Outer);
@@ -156,6 +170,26 @@ namespace
 		Card->DisplayName = FText::FromName(CardId);
 		Card->Rarity = WacomTags::Card_Rarity_White;
 		return Card;
+	}
+
+	void ConfigureValidKeyChestReceiverForUiTest(
+		AWacomRunKeyChestActor& Chest,
+		FName AllowedCardId = TEXT("DebugKey"),
+		int32 GoldReward = 3)
+	{
+		UWacomRunWorldCardDropReceiverComponent* Receiver =
+			Chest.GetCardDropReceiverComponent();
+		if (!Receiver)
+		{
+			return;
+		}
+
+		Receiver->AllowedCardDefinitions.Reset();
+		Receiver->AllowedCardIds = { AllowedCardId };
+		Receiver->RequiredKeywords.Reset();
+		Receiver->BlockedKeywords.Reset();
+		Receiver->GoldReward = GoldReward;
+		Receiver->bConsumeCardOnSuccess = true;
 	}
 
 	UCharacterDefinition* MakeUiWorldDropCharacter(UObject* Outer, UCardDefinition* Card)
@@ -750,6 +784,239 @@ bool FWacomUIRunWorldCardDropKeyChestComponentsSpec::RunTest(const FString& /*Pa
 	TestTrue(TEXT("Target tag"),
 		Chest->GetClickInteractionTargetComponent()->GetInteractionTargetTag()
 			.MatchesTagExact(WacomTags::Interaction_Target_Run_Object));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestFacadeSyncSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestSafeFacadeSyncsTriggerBoundsAndVisual",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestFacadeSyncSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+
+	Chest->TriggerRadius = 222.f;
+	Chest->ClickBoundsExtent = FVector(101.f, 77.f, 44.f);
+	Chest->VisualMesh = CubeMesh;
+	Chest->VisualScale = FVector(0.5f, 0.6f, 0.7f);
+	Chest->VisualRelativeLocation = FVector(4.f, 5.f, 6.f);
+	Chest->SyncClickTargetForTest();
+
+	TestEqual(TEXT("Trigger radius sync"),
+		Chest->GetTriggerSphere()->GetUnscaledSphereRadius(),
+		222.f);
+	TestEqual(TEXT("Click bounds sync"),
+		Chest->GetClickBounds()->GetUnscaledBoxExtent(),
+		FVector(101.f, 77.f, 44.f));
+	TestTrue(TEXT("Visual mesh sync"), Chest->GetChestVisual()->GetStaticMesh() == CubeMesh);
+	TestEqual(TEXT("Visual scale sync"),
+		Chest->GetChestVisual()->GetRelativeScale3D(),
+		FVector(0.5f, 0.6f, 0.7f));
+	TestEqual(TEXT("Visual location sync"),
+		Chest->GetChestVisual()->GetRelativeLocation(),
+		FVector(4.f, 5.f, 6.f));
+	TestEqual(TEXT("Visual remains no collision"),
+		Chest->GetChestVisual()->GetCollisionEnabled(),
+		ECollisionEnabled::NoCollision);
+	TestEqual(TEXT("Click bounds visibility block"),
+		Chest->GetClickBounds()->GetCollisionResponseToChannel(ECC_Visibility),
+		ECR_Block);
+	TestFalse(TEXT("Click bounds no overlap"), Chest->GetClickBounds()->GetGenerateOverlapEvents());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestConfigureSampleFacadeSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestConfigureSampleRefreshesFacadeReceiverAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestConfigureSampleFacadeSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->Rename(TEXT("KeyChestFacadeSample"));
+	Chest->TriggerRadius = 333.f;
+	Chest->ClickBoundsExtent = FVector(12.f, 13.f, 14.f);
+	Chest->VisualMesh = nullptr;
+	Chest->VisualScale = FVector(2.f, 2.f, 2.f);
+	Chest->VisualRelativeLocation = FVector(9.f, 9.f, 9.f);
+
+	Chest->ConfigureDebugKeyChestSample();
+
+	TestEqual(TEXT("Sample persistent id"), Chest->PersistentId,
+		FName(TEXT("Chest.Debug.KeyChestFacadeSample")));
+	TestEqual(TEXT("Sample trigger radius"), Chest->GetTriggerSphere()->GetUnscaledSphereRadius(), 180.f);
+	TestEqual(TEXT("Sample click bounds"),
+		Chest->GetClickBounds()->GetUnscaledBoxExtent(),
+		FVector(85.f, 65.f, 55.f));
+	TestEqual(TEXT("Sample visual scale"),
+		Chest->GetChestVisual()->GetRelativeScale3D(),
+		FVector(0.75f, 0.55f, 0.45f));
+	TestEqual(TEXT("Sample visual location"),
+		Chest->GetChestVisual()->GetRelativeLocation(),
+		FVector::ZeroVector);
+	TestNotNull(TEXT("Sample visual mesh"), Chest->GetChestVisual()->GetStaticMesh().Get());
+	TestEqual(TEXT("Receiver card id count"),
+		Chest->GetCardDropReceiverComponent()->AllowedCardIds.Num(),
+		1);
+	TestEqual(TEXT("Receiver card id"),
+		Chest->GetCardDropReceiverComponent()->AllowedCardIds[0],
+		FName(TEXT("DebugKey")));
+	TestEqual(TEXT("Receiver gold"), Chest->GetCardDropReceiverComponent()->GoldReward, 3);
+	TestTrue(TEXT("Receiver consumes card"),
+		Chest->GetCardDropReceiverComponent()->bConsumeCardOnSuccess);
+	TestEqual(TEXT("Bridge stable id"),
+		Chest->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Chest.Debug.KeyChestFacadeSample")));
+	TestEqual(TEXT("Interaction stable id"),
+		Chest->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Chest.Debug.KeyChestFacadeSample")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestDebugFacadeSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestDebugSummaryReportsFacadeFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestDebugFacadeSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	InjectRunSession(PC.Get(), Run.Get());
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.FacadeSummary");
+	Chest->TriggerRadius = 246.f;
+	Chest->ClickBoundsExtent = FVector(91.f, 92.f, 93.f);
+	Chest->VisualScale = FVector(0.9f, 0.8f, 0.7f);
+	Chest->SyncClickTargetForTest();
+
+	const FWacomRunKeyChestDebugView View = Chest->GetRunKeyChestDebugView(PC.Get());
+	const FString Summary = Chest->GetRunKeyChestDebugSummary(PC.Get());
+	TestEqual(TEXT("Debug view reports trigger radius"), View.TriggerRadius, 246.f);
+	TestEqual(TEXT("Debug view reports bounds"),
+		View.ClickBoundsExtent,
+		FVector(91.f, 92.f, 93.f));
+	TestEqual(TEXT("Debug view reports visual name"), View.VisualName, FName(TEXT("ChestVisual")));
+	TestEqual(TEXT("Debug view reports visual scale"),
+		View.VisualScale,
+		FVector(0.9f, 0.8f, 0.7f));
+	TestEqual(TEXT("Debug view reports stable id"),
+		View.ClickStableId,
+		FName(TEXT("Chest.Debug.FacadeSummary")));
+	TestTrue(TEXT("Summary reports trigger radius"), Summary.Contains(TEXT("TriggerRadius=246.0")));
+	TestTrue(TEXT("Summary reports bounds"), Summary.Contains(TEXT("ClickBoundsExtent=")));
+	TestTrue(TEXT("Summary reports visual name"), Summary.Contains(TEXT("VisualName=ChestVisual")));
+	TestTrue(TEXT("Summary reports visual mesh"), Summary.Contains(TEXT("VisualMesh=")));
+	TestTrue(TEXT("Summary reports visual scale"), Summary.Contains(TEXT("VisualScale=")));
+	TestTrue(TEXT("Summary reports stable id"),
+		Summary.Contains(TEXT("ClickStableId=Chest.Debug.FacadeSummary")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestHiddenComponentsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestInternalComponentsRemainHiddenAndNonEditable",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestHiddenComponentsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	TestFalse(TEXT("Trigger sphere not editable when inherited"),
+		Chest->GetTriggerSphere()->IsEditableWhenInherited());
+	TestFalse(TEXT("Click bounds not editable when inherited"),
+		Chest->GetClickBounds()->IsEditableWhenInherited());
+	TestFalse(TEXT("Chest visual not editable when inherited"),
+		Chest->GetChestVisual()->IsEditableWhenInherited());
+	TestFalse(TEXT("Interaction target not editable when inherited"),
+		Chest->GetClickInteractionTargetComponent()->IsEditableWhenInherited());
+	TestFalse(TEXT("Bridge not editable when inherited"),
+		Chest->GetClickTargetBridgeComponent()->IsEditableWhenInherited());
+	TestFalse(TEXT("Receiver not editable when inherited"),
+		Chest->GetCardDropReceiverComponent()->IsEditableWhenInherited());
+	TestTrue(TEXT("Click bounds hides collision category"),
+		Chest->GetClickBounds()->GetClass()->IsFunctionHidden(TEXT("SetCollisionEnabled"))
+		|| Chest->GetClickBounds()->GetClass()->HasMetaData(TEXT("HideCategories")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropKeyChestReceiverDiagnosticsSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.KeyChestDebugSummaryReportsReceiverDiagnostics",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropKeyChestReceiverDiagnosticsSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	InjectRunSession(PC.Get(), Run.Get());
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Debug.ReceiverDiagnostics");
+	Chest->SyncClickTargetForTest();
+
+	UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent();
+	if (!TestNotNull(TEXT("Receiver"), Receiver))
+	{
+		return false;
+	}
+	Receiver->AllowedCardDefinitions.Reset();
+	Receiver->AllowedCardIds = { TEXT("DebugKey") };
+	Receiver->RequiredKeywords.Reset();
+	Receiver->RequiredKeywords.AddTag(WacomTags::Card_Keyword_Tool);
+	Receiver->BlockedKeywords.Reset();
+	Receiver->BlockedKeywords.AddTag(WacomTags::Card_Keyword_Weapon);
+	Receiver->GoldReward = 3;
+	Receiver->bConsumeCardOnSuccess = true;
+
+	const FWacomRunWorldCardDropReceiverDebugView ReceiverView =
+		Receiver->GetRunWorldCardDropReceiverDebugView_Implementation(
+			PC.Get(),
+			Chest->PersistentId,
+			FGuid());
+	const FWacomRunKeyChestDebugView ChestView =
+		Chest->GetRunKeyChestDebugView(PC.Get());
+	const FString Summary = Chest->GetRunKeyChestDebugSummary(PC.Get());
+
+	TestTrue(TEXT("Receiver config valid"), ReceiverView.bConfigValid);
+	TestEqual(TEXT("Receiver config reason none"),
+		ReceiverView.ConfigWarningReason,
+		NAME_None);
+	TestTrue(TEXT("Receiver has positive filter"),
+		ReceiverView.bHasPositiveCardFilter);
+	TestEqual(TEXT("Receiver required keyword count"),
+		ReceiverView.RequiredKeywordCount,
+		1);
+	TestEqual(TEXT("Receiver blocked keyword count"),
+		ReceiverView.BlockedKeywordCount,
+		1);
+	TestTrue(TEXT("Chest config valid"), ChestView.bConfigValid);
+	TestTrue(TEXT("Chest receiver positive filter"),
+		ChestView.bReceiverHasPositiveCardFilter);
+	TestEqual(TEXT("Chest receiver required keyword count"),
+		ChestView.ReceiverRequiredKeywordCount,
+		1);
+	TestEqual(TEXT("Chest receiver blocked keyword count"),
+		ChestView.ReceiverBlockedKeywordCount,
+		1);
+	TestTrue(TEXT("Summary reports config valid"),
+		Summary.Contains(TEXT("ConfigValid=true")));
+	TestTrue(TEXT("Summary reports config reason"),
+		Summary.Contains(TEXT("ConfigReason=None")));
+	TestTrue(TEXT("Summary reports allowed ids"),
+		Summary.Contains(TEXT("ReceiverAllowedIds=1")));
+	TestTrue(TEXT("Summary reports required keywords"),
+		Summary.Contains(TEXT("RequiredKeywords=1")));
+	TestTrue(TEXT("Summary reports blocked keywords"),
+		Summary.Contains(TEXT("BlockedKeywords=1")));
+	TestTrue(TEXT("Summary reports positive filter"),
+		Summary.Contains(TEXT("PositiveFilter=true")));
+	TestTrue(TEXT("Summary reports gold"),
+		Summary.Contains(TEXT("Gold=3")));
+	TestTrue(TEXT("Summary reports consume"),
+		Summary.Contains(TEXT("Consume=true")));
 	return true;
 }
 
@@ -5618,6 +5885,217 @@ bool FWacomUIRunPickupPlacementValidationRewardBpAssetSpec::RunTest(
 	TestNotEqual(TEXT("Reward BP asset default is not invalid"),
 		Result, EDataValidationResult::Invalid);
 	TestEqual(TEXT("Reward BP default has no validation errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestPlacementValidationIgnoresBlueprintDefaultsSpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestPlacementValidation.KeyChestPlacementValidationIgnoresBlueprintCDODefaults",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestPlacementValidationIgnoresBlueprintDefaultsSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	const AWacomRunKeyChestActor* KeyChestCDO =
+		GetDefault<AWacomRunKeyChestActor>();
+	if (!TestNotNull(TEXT("KeyChest CDO"), KeyChestCDO))
+	{
+		return false;
+	}
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(KeyChestCDO, Warnings, Errors);
+	TestNotEqual(TEXT("KeyChest CDO is not invalid"),
+		Result,
+		EDataValidationResult::Invalid);
+	TestEqual(TEXT("KeyChest CDO has no placement errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestPlacementValidationMissingIdSpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestPlacementValidation.KeyChestPlacementMissingPersistentIdIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestPlacementValidationMissingIdSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Chest.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing PersistentId invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports MissingPersistentId"),
+		UiValidationIssuesContain(Errors, TEXT("MissingPersistentId"))
+		|| UiValidationIssuesContain(Errors, TEXT("PersistentId")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestPlacementValidationMissingPositiveFilterSpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestPlacementValidation.KeyChestPlacementMissingPositiveCardFilterIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestPlacementValidationMissingPositiveFilterSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Validation.MissingPositiveFilter");
+	if (UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent())
+	{
+		Receiver->AllowedCardDefinitions.Reset();
+		Receiver->AllowedCardIds.Reset();
+		Receiver->RequiredKeywords.Reset();
+		Receiver->BlockedKeywords.Reset();
+		Receiver->GoldReward = 3;
+	}
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Chest.Get(), Warnings, Errors);
+	TestEqual(TEXT("Missing positive filter invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports MissingPositiveCardFilter"),
+		UiValidationIssuesContain(Errors, TEXT("MissingPositiveCardFilter")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestPlacementValidationBlockedOnlyFilterSpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestPlacementValidation.KeyChestPlacementBlockedOnlyFilterIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestPlacementValidationBlockedOnlyFilterSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Validation.BlockedOnlyFilter");
+	if (UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent())
+	{
+		Receiver->AllowedCardDefinitions.Reset();
+		Receiver->AllowedCardIds.Reset();
+		Receiver->RequiredKeywords.Reset();
+		Receiver->BlockedKeywords.Reset();
+		Receiver->BlockedKeywords.AddTag(WacomTags::Card_Keyword_Weapon);
+		Receiver->GoldReward = 3;
+	}
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Chest.Get(), Warnings, Errors);
+	TestEqual(TEXT("Blocked-only filter invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports MissingPositiveCardFilter"),
+		UiValidationIssuesContain(Errors, TEXT("MissingPositiveCardFilter")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestPlacementValidationInvalidGoldSpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestPlacementValidation.KeyChestPlacementInvalidGoldRewardIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestPlacementValidationInvalidGoldSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Validation.InvalidGold");
+	ConfigureValidKeyChestReceiverForUiTest(*Chest, TEXT("DebugKey"), 0);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Chest.Get(), Warnings, Errors);
+	TestEqual(TEXT("Invalid gold invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports InvalidGoldReward"),
+		UiValidationIssuesContain(Errors, TEXT("InvalidGoldReward")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestPlacementValidationValidDebugKeySpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestPlacementValidation.KeyChestPlacementValidDebugKeyReceiverPasses",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestPlacementValidationValidDebugKeySpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.Validation.ValidDebugKey");
+	ConfigureValidKeyChestReceiverForUiTest(*Chest);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Chest.Get(), Warnings, Errors);
+	TestEqual(TEXT("Valid debug key receiver valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Valid debug key receiver has no errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunKeyChestPlacementValidationDuplicateSpec,
+	"Wacom.UI.WorldInteraction.RunKeyChestPlacementValidation.KeyChestPlacementDuplicatePersistentIdWarnsButRemainsValid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunKeyChestPlacementValidationDuplicateSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomRunKeyChestActor* First = World->SpawnActor<AWacomRunKeyChestActor>(
+		AWacomRunKeyChestActor::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	AWacomRunKeyChestActor* Second = World->SpawnActor<AWacomRunKeyChestActor>(
+		AWacomRunKeyChestActor::StaticClass(),
+		FTransform::Identity,
+		SpawnParams);
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(First))
+		{
+			First->Destroy();
+		}
+		if (IsValid(Second))
+		{
+			Second->Destroy();
+		}
+	};
+
+	if (!TestNotNull(TEXT("First KeyChest"), First)
+		|| !TestNotNull(TEXT("Second KeyChest"), Second))
+	{
+		return false;
+	}
+
+	First->PersistentId = TEXT("Chest.Validation.Duplicate");
+	Second->PersistentId = TEXT("Chest.Validation.Duplicate");
+	ConfigureValidKeyChestReceiverForUiTest(*First);
+	ConfigureValidKeyChestReceiverForUiTest(*Second);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(First, Warnings, Errors);
+	TestEqual(TEXT("Duplicate KeyChest remains valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Duplicate KeyChest has no errors"), Errors.Num(), 0);
+	TestTrue(TEXT("Duplicate KeyChest warns"), Warnings.Num() > 0);
+	TestTrue(TEXT("Duplicate KeyChest warning mentions id"),
+		UiValidationIssuesContain(Warnings, TEXT("Chest.Validation.Duplicate")));
 	return true;
 }
 

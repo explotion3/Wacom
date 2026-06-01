@@ -14,13 +14,22 @@
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
+#include "EngineUtils.h"
 
 #define LOCTEXT_NAMESPACE "WacomRunKeyChestActor"
 
 namespace
 {
+	const TCHAR* DefaultChestMeshPath =
+		TEXT("/Engine/BasicShapes/Cube.Cube");
 	const TCHAR* DebugKeyCardPath =
 		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey");
+
+	bool ShouldValidateKeyChestPlacementActor(const AWacomRunKeyChestActor& Chest)
+	{
+		return !Chest.HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+			&& !Chest.IsTemplate();
+	}
 }
 
 AWacomRunKeyChestActor::AWacomRunKeyChestActor()
@@ -36,7 +45,7 @@ AWacomRunKeyChestActor::AWacomRunKeyChestActor()
 
 	ClickBounds = CreateDefaultSubobject<UWacomRunKeyChestClickBoundsComponent>(TEXT("ClickBounds"));
 	ClickBounds->SetupAttachment(RootComponent);
-	ClickBounds->SetBoxExtent(FVector(85.f, 65.f, 55.f));
+	ClickBounds->SetBoxExtent(ClickBoundsExtent);
 	ClickBounds->bEditableWhenInherited = false;
 	FWacomRunWorldClickableInteractableHelper::ConfigureClickBounds(ClickBounds);
 
@@ -44,13 +53,13 @@ AWacomRunKeyChestActor::AWacomRunKeyChestActor()
 	ChestVisual->SetupAttachment(RootComponent);
 	ChestVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	ChestVisual->SetGenerateOverlapEvents(false);
-	ChestVisual->SetRelativeScale3D(FVector(0.75f, 0.55f, 0.45f));
+	ChestVisual->SetRelativeScale3D(VisualScale);
+	ChestVisual->SetRelativeLocation(VisualRelativeLocation);
 	ChestVisual->bEditableWhenInherited = false;
-	if (UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(
-		nullptr,
-		TEXT("/Engine/BasicShapes/Cube.Cube")))
+	VisualMesh = LoadObject<UStaticMesh>(nullptr, DefaultChestMeshPath);
+	if (VisualMesh)
 	{
-		ChestVisual->SetStaticMesh(CubeMesh);
+		ChestVisual->SetStaticMesh(VisualMesh);
 	}
 
 	ClickInteractionTargetComponent =
@@ -73,6 +82,21 @@ void AWacomRunKeyChestActor::BeginPlay()
 {
 	Super::BeginPlay();
 	RefreshAuthoringState();
+	const FName ConfigReason = BuildConfigWarningReason();
+	if (!ConfigReason.IsNone())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomRunKeyChestActor] %s: 配置无效 Reason=%s，拖卡开箱不会提交"),
+			*GetName(),
+			*ConfigReason.ToString());
+	}
+	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomRunKeyChestActor] %s: PersistentId %s 与同关卡其他 KeyChest 重复；这些宝箱会共享同一份完成状态"),
+			*GetName(),
+			*PersistentId.ToString());
+	}
 	if (ClickTargetBridgeComponent)
 	{
 		ClickTargetBridgeComponent->RefreshRunWorldTargetBinding();
@@ -143,6 +167,10 @@ void AWacomRunKeyChestActor::ConfigureDebugKeyChestSample()
 	Modify();
 	PersistentId = BuildDebugKeyChestPersistentIdFromActorName(GetName());
 	TriggerRadius = 180.f;
+	ClickBoundsExtent = FVector(85.f, 65.f, 55.f);
+	VisualMesh = LoadObject<UStaticMesh>(nullptr, DefaultChestMeshPath);
+	VisualScale = FVector(0.75f, 0.55f, 0.45f);
+	VisualRelativeLocation = FVector::ZeroVector;
 	InteractPromptText = GetDefaultInteractPromptText();
 	HoverPromptText = GetDefaultHoverPromptText();
 	CompletedPromptText = GetDefaultCompletedPromptText();
@@ -262,8 +290,18 @@ FWacomRunKeyChestDebugView AWacomRunKeyChestActor::GetRunKeyChestDebugView(
 	View.bHasRunSession = PC && PC->GetRunSession();
 	View.bCompleted = IsCompletedFor(PC);
 	View.bCanInteract = CanInteract_Implementation(PC);
+	View.ConfigWarningReason = BuildConfigWarningReason();
+	View.bConfigValid = View.ConfigWarningReason.IsNone();
+	View.bDuplicatePersistentIdDetected = HasDuplicatePersistentIdInWorld();
 	View.bClickTargetConfigured = ClickDebug.bClickTargetConfigured;
 	View.ClickStableId = ClickDebug.ClickTargetStableId;
+	View.TriggerRadius = TriggerRadius;
+	View.ClickBoundsExtent = ClickBounds
+		? ClickBounds->GetUnscaledBoxExtent()
+		: ClickBoundsExtent;
+	View.VisualName = ChestVisual ? ChestVisual->GetFName() : NAME_None;
+	View.VisualMeshName = VisualMesh ? VisualMesh->GetFName() : NAME_None;
+	View.VisualScale = ChestVisual ? ChestVisual->GetRelativeScale3D() : VisualScale;
 	View.bHasCardDropReceiver = CardDropReceiverComponent != nullptr;
 	View.InteractPrompt = GetInteractPromptText_Implementation(PC).ToString();
 	View.HoverPrompt = GetHoverPromptText(PC).ToString();
@@ -289,6 +327,9 @@ FWacomRunKeyChestDebugView AWacomRunKeyChestActor::GetRunKeyChestDebugView(
 		View.ReceiverRejectReason = ReceiverDebug.RejectReason;
 		View.ReceiverAllowedDefinitionCount = ReceiverDebug.AllowedDefinitionCount;
 		View.ReceiverAllowedCardIdCount = ReceiverDebug.AllowedCardIdCount;
+		View.ReceiverRequiredKeywordCount = ReceiverDebug.RequiredKeywordCount;
+		View.ReceiverBlockedKeywordCount = ReceiverDebug.BlockedKeywordCount;
+		View.bReceiverHasPositiveCardFilter = ReceiverDebug.bHasPositiveCardFilter;
 		View.bReceiverConsumeCardOnSuccess = ReceiverDebug.bConsumeCardOnSuccess;
 		View.ReceiverGoldReward = ReceiverDebug.GoldReward;
 	}
@@ -302,19 +343,30 @@ FString AWacomRunKeyChestActor::GetRunKeyChestDebugSummary(
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunKeyChest{Actor=%s PersistentId=%s HasRun=%s Completed=%s CanInteract=%s ClickTarget=%s ClickStableId=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s AllowedDefs=%d AllowedIds=%d Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
+		TEXT("RunKeyChest{Actor=%s PersistentId=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bCompleted ? TEXT("true") : TEXT("false"),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
+		View.bConfigValid ? TEXT("true") : TEXT("false"),
+		*View.ConfigWarningReason.ToString(),
+		View.bDuplicatePersistentIdDetected ? TEXT("true") : TEXT("false"),
 		View.bClickTargetConfigured ? TEXT("true") : TEXT("false"),
 		*View.ClickStableId.ToString(),
+		View.TriggerRadius,
+		*View.ClickBoundsExtent.ToCompactString(),
+		*View.VisualName.ToString(),
+		*View.VisualMeshName.ToString(),
+		*View.VisualScale.ToCompactString(),
 		View.bHasCardDropReceiver ? TEXT("true") : TEXT("false"),
 		View.bReceiverCanSubmit ? TEXT("true") : TEXT("false"),
 		*View.ReceiverRejectReason.ToString(),
 		View.ReceiverAllowedDefinitionCount,
 		View.ReceiverAllowedCardIdCount,
+		View.ReceiverRequiredKeywordCount,
+		View.ReceiverBlockedKeywordCount,
+		View.bReceiverHasPositiveCardFilter ? TEXT("true") : TEXT("false"),
 		View.bReceiverConsumeCardOnSuccess ? TEXT("true") : TEXT("false"),
 		View.ReceiverGoldReward,
 		*View.InteractPrompt,
@@ -339,7 +391,16 @@ void AWacomRunKeyChestActor::RefreshAuthoringState()
 	}
 	if (ClickBounds)
 	{
+		ClickBounds->SetBoxExtent(ClickBoundsExtent);
 		FWacomRunWorldClickableInteractableHelper::ConfigureClickBounds(ClickBounds);
+	}
+	if (ChestVisual)
+	{
+		ChestVisual->SetStaticMesh(VisualMesh);
+		ChestVisual->SetRelativeScale3D(VisualScale);
+		ChestVisual->SetRelativeLocation(VisualRelativeLocation);
+		ChestVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		ChestVisual->SetGenerateOverlapEvents(false);
 	}
 	RefreshClickTargetBinding();
 	if (ClickTargetBridgeComponent)
@@ -348,6 +409,53 @@ void AWacomRunKeyChestActor::RefreshAuthoringState()
 	}
 }
 
+#if WITH_EDITOR
+EDataValidationResult AWacomRunKeyChestActor::IsDataValid(
+	FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	if (!ShouldValidateKeyChestPlacementActor(*this))
+	{
+		return Result;
+	}
+
+	const FName ConfigReason = BuildConfigWarningReason();
+	if (!ConfigReason.IsNone())
+	{
+		Context.AddError(FText::Format(
+			LOCTEXT("PlacementConfigInvalid",
+				"KeyChest 摆放配置错误：Actor={0} PersistentId={1} Reason={2} Receiver={3} AllowedDefs={4} AllowedIds={5} RequiredKeywords={6} BlockedKeywords={7} Gold={8}。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId),
+			FText::FromName(ConfigReason),
+			FText::FromString(CardDropReceiverComponent ? CardDropReceiverComponent->GetName() : TEXT("None")),
+			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->AllowedCardDefinitions.Num() : 0),
+			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->AllowedCardIds.Num() : 0),
+			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->RequiredKeywords.Num() : 0),
+			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->BlockedKeywords.Num() : 0),
+			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->GoldReward : 0)));
+		Result = EDataValidationResult::Invalid;
+	}
+
+	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
+	{
+		Context.AddWarning(FText::Format(
+			LOCTEXT("PlacementDuplicatePersistentId",
+				"KeyChest 摆放警告：Actor={0} PersistentId={1} 与同关卡其他 KeyChest 重复；这些宝箱会共享同一份 CompletedRunWorldInteractionIds 完成状态。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId)));
+		if (Result != EDataValidationResult::Invalid)
+		{
+			Result = EDataValidationResult::Valid;
+		}
+	}
+
+	return Result == EDataValidationResult::Invalid
+		? EDataValidationResult::Invalid
+		: EDataValidationResult::Valid;
+}
+#endif
+
 void AWacomRunKeyChestActor::RefreshClickTargetBinding()
 {
 	FWacomRunWorldClickableInteractableHelper::BindClickTarget(
@@ -355,6 +463,46 @@ void AWacomRunKeyChestActor::RefreshClickTargetBinding()
 		ChestVisual ? Cast<UPrimitiveComponent>(ChestVisual) : Cast<UPrimitiveComponent>(ClickBounds),
 		ClickInteractionTargetComponent,
 		ClickTargetBridgeComponent);
+}
+
+FName AWacomRunKeyChestActor::BuildConfigWarningReason() const
+{
+	if (PersistentId.IsNone())
+	{
+		return TEXT("MissingPersistentId");
+	}
+	if (!CardDropReceiverComponent)
+	{
+		return TEXT("MissingCardDropReceiver");
+	}
+	const FName ReceiverReason =
+		CardDropReceiverComponent->GetRunWorldCardDropReceiverConfigWarningReason();
+	if (!ReceiverReason.IsNone())
+	{
+		return ReceiverReason;
+	}
+	return NAME_None;
+}
+
+bool AWacomRunKeyChestActor::HasDuplicatePersistentIdInWorld() const
+{
+	if (PersistentId.IsNone() || !GetWorld())
+	{
+		return false;
+	}
+
+	for (TActorIterator<AWacomRunKeyChestActor> It(GetWorld()); It; ++It)
+	{
+		const AWacomRunKeyChestActor* Other = *It;
+		if (Other
+			&& Other != this
+			&& !Other->HasAnyFlags(RF_ClassDefaultObject)
+			&& Other->PersistentId == PersistentId)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool AWacomRunKeyChestActor::IsCompletedFor(AWacomPlayerController* PC) const
