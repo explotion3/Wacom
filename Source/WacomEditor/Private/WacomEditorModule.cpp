@@ -12,6 +12,7 @@
 #include "Validation/WacomRunEventDefinitionValidator.h"
 #include "Validation/WacomRunKeyChestDefinitionValidator.h"
 #include "Validation/WacomRunPickupDefinitionValidator.h"
+#include "Validation/WacomRunWorldCardInteractionDefinitionValidator.h"
 #include "Validation/WacomShopDefinitionValidator.h"
 
 void FWacomEditorModule::StartupModule()
@@ -23,6 +24,7 @@ void FWacomEditorModule::StartupModule()
 	RegisterEditorValidator(NewObject<UWacomRunEventDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomRunKeyChestDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomRunPickupDefinitionValidator>(GetTransientPackage()));
+	RegisterEditorValidator(NewObject<UWacomRunWorldCardInteractionDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomShopDefinitionValidator>(GetTransientPackage()));
 }
 

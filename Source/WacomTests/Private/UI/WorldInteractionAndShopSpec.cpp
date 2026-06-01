@@ -25,6 +25,7 @@
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
+#include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "KeyChests/RunKeyChestDefinition.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "Pickups/RunPickupDefinition.h"
@@ -196,6 +197,34 @@ namespace
 			FText::FromString(TEXT("定义开箱成功"));
 		Definition->ReceiverCompletedPromptText =
 			FText::FromString(TEXT("定义接收器已完成"));
+		return Definition;
+	}
+
+	UWacomRunWorldCardInteractionDefinition* MakeUiRunWorldCardInteractionDefinition(
+		UObject* Outer,
+		FName AllowedCardId = TEXT("DebugKey"),
+		int32 GoldReward = 3)
+	{
+		UWacomRunWorldCardInteractionDefinition* Definition =
+			NewObject<UWacomRunWorldCardInteractionDefinition>(Outer);
+		Definition->InteractionId = TEXT("WorldCardInteraction.UI");
+		Definition->AllowedCardIds = { AllowedCardId };
+		Definition->GoldReward = GoldReward;
+		Definition->bConsumeCardOnSuccess = true;
+		Definition->PreviewPromptText =
+			FText::FromString(TEXT("通用预览交互"));
+		Definition->SuccessPromptText =
+			FText::FromString(TEXT("通用交互成功"));
+		Definition->CompletedPromptText =
+			FText::FromString(TEXT("通用交互已完成"));
+		Definition->RejectedCardPromptText =
+			FText::FromString(TEXT("通用需要钥匙"));
+		Definition->ConfigWarningPromptText =
+			FText::FromString(TEXT("通用配置异常"));
+		Definition->SourceCardUnavailablePromptText =
+			FText::FromString(TEXT("通用源卡不可用"));
+		Definition->GenericFailurePromptText =
+			FText::FromString(TEXT("通用交互失败"));
 		return Definition;
 	}
 
@@ -459,6 +488,13 @@ namespace
 		return LoadObject<UWacomRunPickupDefinition>(
 			nullptr,
 			TEXT("/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang.DA_Pickup_DebugPoisonFang"));
+	}
+
+	UWacomRunWorldCardInteractionDefinition* LoadDebugKeyGoldInteractionDefinitionForUiTest()
+	{
+		return LoadObject<UWacomRunWorldCardInteractionDefinition>(
+			nullptr,
+			TEXT("/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3.DA_RunWorldCardInteraction_DebugKeyGold3"));
 	}
 
 	AActor* SpawnTransientActor(UWorld& World)
@@ -1494,6 +1530,602 @@ bool FWacomUIRunKeyChestDefinitionSyncSpec::RunTest(const FString& /*Parameters*
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionReceiverRequestSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ReceiverDefinitionBuildsRunWorldCardDropRequest",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionReceiverRequestSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardDropReceiverComponent> Receiver(
+		NewObject<UWacomRunWorldCardDropReceiverComponent>());
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeUiRunWorldCardInteractionDefinition(
+			Receiver.Get(),
+			TEXT("DefinitionKey"),
+			8));
+	Definition->RequiredKeywords.AddTag(WacomTags::Card_Keyword_Tool);
+	Definition->BlockedKeywords.AddTag(WacomTags::Card_Keyword_Weapon);
+	Definition->bConsumeCardOnSuccess = false;
+	Receiver->InteractionDefinition = Definition.Get();
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FRunWorldCardInteractionRequest Request =
+		Receiver->BuildRunWorldCardDropRequest_Implementation(
+			TEXT("WorldCardDrop.Definition.Request"),
+			SourceCardId);
+
+	TestEqual(TEXT("Request persistent id"),
+		Request.PersistentId,
+		FName(TEXT("WorldCardDrop.Definition.Request")));
+	TestEqual(TEXT("Request source card id"),
+		Request.SourceCardInstanceId,
+		SourceCardId);
+	TestEqual(TEXT("Definition allowed ids copied"),
+		Request.AllowedCardIds.Num(),
+		1);
+	TestEqual(TEXT("Definition allowed id"),
+		Request.AllowedCardIds[0],
+		FName(TEXT("DefinitionKey")));
+	TestEqual(TEXT("Definition required keywords copied"),
+		Request.RequiredKeywords.Num(),
+		1);
+	TestEqual(TEXT("Definition blocked keywords copied"),
+		Request.BlockedKeywords.Num(),
+		1);
+	TestEqual(TEXT("Definition gold copied"),
+		Request.GoldReward,
+		8);
+	TestFalse(TEXT("Definition consume copied"),
+		Request.bConsumeCardOnSuccess);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionReceiverOverrideSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ReceiverDefinitionOverridesManualFields",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionReceiverOverrideSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardDropReceiverComponent> Receiver(
+		NewObject<UWacomRunWorldCardDropReceiverComponent>());
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeUiRunWorldCardInteractionDefinition(
+			Receiver.Get(),
+			TEXT("DefinitionKey"),
+			8));
+	Receiver->InteractionDefinition = Definition.Get();
+	Receiver->AllowedCardIds = { TEXT("ManualKey") };
+	Receiver->GoldReward = 1;
+	Receiver->bConsumeCardOnSuccess = false;
+
+	const FRunWorldCardInteractionRequest Request =
+		Receiver->BuildRunWorldCardDropRequest_Implementation(
+			TEXT("WorldCardDrop.Definition.Override"),
+			FGuid::NewGuid());
+	const FWacomRunWorldCardDropReceiverDebugView View =
+		Receiver->GetRunWorldCardDropReceiverDebugView_Implementation(
+			nullptr,
+			TEXT("WorldCardDrop.Definition.Override"),
+			FGuid::NewGuid());
+
+	TestEqual(TEXT("Definition allowed id wins"),
+		Request.AllowedCardIds[0],
+		FName(TEXT("DefinitionKey")));
+	TestEqual(TEXT("Definition gold wins"),
+		Request.GoldReward,
+		8);
+	TestTrue(TEXT("Definition consume wins"),
+		Request.bConsumeCardOnSuccess);
+	TestEqual(TEXT("Debug config source"),
+		View.ConfigSource,
+		FName(TEXT("Definition")));
+	TestEqual(TEXT("Debug interaction id"),
+		View.InteractionId,
+		FName(TEXT("WorldCardInteraction.UI")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionFailureToastSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ReceiverDefinitionBuildsFailureToastPrompts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionFailureToastSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardDropReceiverComponent> Receiver(
+		NewObject<UWacomRunWorldCardDropReceiverComponent>());
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeUiRunWorldCardInteractionDefinition(Receiver.Get()));
+	Receiver->InteractionDefinition = Definition.Get();
+
+	TestEqual(TEXT("Rejected reason uses definition rejected prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("WorldCardDrop.Definition.Toast"),
+			FGuid::NewGuid(),
+			TEXT("CardNotAccepted")).ToString(),
+		FString(TEXT("通用需要钥匙")));
+	TestEqual(TEXT("Completed reason uses definition completed prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("WorldCardDrop.Definition.Toast"),
+			FGuid::NewGuid(),
+			TEXT("AlreadyCompleted")).ToString(),
+		FString(TEXT("通用交互已完成")));
+	TestEqual(TEXT("Config reason uses definition config prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("WorldCardDrop.Definition.Toast"),
+			FGuid::NewGuid(),
+			TEXT("InvalidGoldReward")).ToString(),
+		FString(TEXT("通用配置异常：InvalidGoldReward")));
+	TestEqual(TEXT("Source reason uses definition source prompt"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("WorldCardDrop.Definition.Toast"),
+			FGuid::NewGuid(),
+			TEXT("CardNotOwned")).ToString(),
+		FString(TEXT("通用源卡不可用")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionReceiverDebugSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ReceiverDebugReportsDefinitionFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionReceiverDebugSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardDropReceiverComponent> Receiver(
+		NewObject<UWacomRunWorldCardDropReceiverComponent>());
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeUiRunWorldCardInteractionDefinition(Receiver.Get()));
+	Definition->Rename(TEXT("DA_TestWorldCardInteraction"));
+	Receiver->InteractionDefinition = Definition.Get();
+
+	const FWacomRunWorldCardDropReceiverDebugView View =
+		Receiver->GetRunWorldCardDropReceiverDebugView_Implementation(
+			nullptr,
+			TEXT("WorldCardDrop.Definition.Debug"),
+			FGuid::NewGuid());
+	const FString Summary = Receiver->GetRunWorldCardDropReceiverDebugSummary(
+		nullptr,
+		TEXT("WorldCardDrop.Definition.Debug"),
+		FGuid::NewGuid());
+
+	TestEqual(TEXT("Debug reports definition name"),
+		View.DefinitionName,
+		FName(TEXT("DA_TestWorldCardInteraction")));
+	TestEqual(TEXT("Debug reports interaction id"),
+		View.InteractionId,
+		FName(TEXT("WorldCardInteraction.UI")));
+	TestEqual(TEXT("Debug reports source"),
+		View.ConfigSource,
+		FName(TEXT("Definition")));
+	TestTrue(TEXT("Summary reports definition"),
+		Summary.Contains(TEXT("Definition=DA_TestWorldCardInteraction")));
+	TestTrue(TEXT("Summary reports interaction id"),
+		Summary.Contains(TEXT("InteractionId=WorldCardInteraction.UI")));
+	TestTrue(TEXT("Summary reports config source"),
+		Summary.Contains(TEXT("ConfigSource=Definition")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionReceiverFallbackSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ReceiverWithoutDefinitionStillUsesManualFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionReceiverFallbackSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunWorldCardDropReceiverComponent> Receiver(
+		NewObject<UWacomRunWorldCardDropReceiverComponent>());
+	Receiver->InteractionDefinition = nullptr;
+	Receiver->AllowedCardIds = { TEXT("ManualKey") };
+	Receiver->GoldReward = 6;
+	Receiver->RejectedCardPromptText =
+		FText::FromString(TEXT("手填需要钥匙"));
+
+	const FRunWorldCardInteractionRequest Request =
+		Receiver->BuildRunWorldCardDropRequest_Implementation(
+			TEXT("WorldCardDrop.Definition.Fallback"),
+			FGuid::NewGuid());
+	const FWacomRunWorldCardDropReceiverDebugView View =
+		Receiver->GetRunWorldCardDropReceiverDebugView_Implementation(
+			nullptr,
+			TEXT("WorldCardDrop.Definition.Fallback"),
+			FGuid::NewGuid());
+
+	TestEqual(TEXT("Manual allowed id used"),
+		Request.AllowedCardIds[0],
+		FName(TEXT("ManualKey")));
+	TestEqual(TEXT("Manual gold used"),
+		Request.GoldReward,
+		6);
+	TestEqual(TEXT("Debug source manual"),
+		View.ConfigSource,
+		FName(TEXT("Manual")));
+	TestEqual(TEXT("Manual rejected prompt used"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			TEXT("WorldCardDrop.Definition.Fallback"),
+			FGuid::NewGuid(),
+			TEXT("CardNotAccepted")).ToString(),
+		FString(TEXT("手填需要钥匙")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionKeyChestSyncSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.KeyChestCardInteractionDefinitionDrivesReceiver",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionKeyChestSyncSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeUiRunWorldCardInteractionDefinition(
+			Chest.Get(),
+			TEXT("GenericKey"),
+			9));
+	Definition->RequiredKeywords.AddTag(WacomTags::Card_Keyword_Tool);
+	Definition->BlockedKeywords.AddTag(WacomTags::Card_Keyword_Weapon);
+	Definition->bConsumeCardOnSuccess = false;
+
+	Chest->PersistentId = TEXT("Chest.GenericDefinition.Sync");
+	Chest->CardInteractionDefinition = Definition.Get();
+	ConfigureValidKeyChestReceiverForUiTest(*Chest, TEXT("OldReceiverKey"), 1);
+	Chest->SyncClickTargetForTest();
+
+	UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent();
+	if (!TestNotNull(TEXT("Receiver"), Receiver))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Receiver stores generic definition"),
+		Receiver->InteractionDefinition.Get(),
+		Definition.Get());
+	const FRunWorldCardInteractionRequest Request =
+		Receiver->BuildRunWorldCardDropRequest_Implementation(
+			Chest->PersistentId,
+			FGuid::NewGuid());
+	TestEqual(TEXT("Generic definition allowed id wins"),
+		Request.AllowedCardIds[0],
+		FName(TEXT("GenericKey")));
+	TestEqual(TEXT("Generic definition gold wins"),
+		Request.GoldReward,
+		9);
+	TestFalse(TEXT("Generic definition consume wins"),
+		Request.bConsumeCardOnSuccess);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionKeyChestPromptSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.KeyChestGenericDefinitionPromptsDriveFeedbackFallbacks",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionKeyChestPromptSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(PC.Get()));
+	InjectRunSession(PC.Get(), Run.Get());
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeUiRunWorldCardInteractionDefinition(Chest.Get()));
+
+	Chest->PersistentId = TEXT("Chest.GenericDefinition.Prompt");
+	Chest->CardInteractionDefinition = Definition.Get();
+	Chest->InteractPromptText = FText::FromString(TEXT("Actor 需要钥匙"));
+	Chest->HoverPromptText = FText::FromString(TEXT("Actor 拖入钥匙"));
+	Chest->CompletedPromptText = FText::FromString(TEXT("Actor 已打开"));
+	Chest->SyncClickTargetForTest();
+
+	const FWacomRunKeyChestDebugView View =
+		Chest->GetRunKeyChestDebugView(PC.Get());
+	TestEqual(TEXT("Generic rejected prompt drives interact"),
+		View.InteractPrompt,
+		FString(TEXT("通用需要钥匙")));
+	TestEqual(TEXT("Generic preview prompt drives hover"),
+		View.HoverPrompt,
+		FString(TEXT("通用预览交互")));
+	TestEqual(TEXT("Generic completed prompt drives completed"),
+		View.CompletedPrompt,
+		FString(TEXT("通用交互已完成")));
+	TestEqual(TEXT("Receiver rejected toast uses generic prompt"),
+		Chest->GetCardDropReceiverComponent()->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			Chest->PersistentId,
+			FGuid::NewGuid(),
+			TEXT("CardNotAccepted")).ToString(),
+		FString(TEXT("通用需要钥匙")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionKeyChestPrecedenceSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.KeyChestGenericDefinitionWinsOverLegacyChestDefinition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionKeyChestPrecedenceSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> GenericDefinition(
+		MakeUiRunWorldCardInteractionDefinition(
+			Chest.Get(),
+			TEXT("GenericKey"),
+			9));
+	TStrongObjectPtr<UWacomRunKeyChestDefinition> LegacyDefinition(
+		MakeUiKeyChestDefinition(
+			Chest.Get(),
+			TEXT("LegacyKey"),
+			2));
+	LegacyDefinition->InteractPromptText =
+		FText::FromString(TEXT("旧定义需要钥匙"));
+
+	Chest->PersistentId = TEXT("Chest.GenericDefinition.Precedence");
+	Chest->CardInteractionDefinition = GenericDefinition.Get();
+	Chest->ChestDefinition = LegacyDefinition.Get();
+	Chest->SyncClickTargetForTest();
+
+	const FRunWorldCardInteractionRequest Request =
+		Chest->GetCardDropReceiverComponent()
+			->BuildRunWorldCardDropRequest_Implementation(
+				Chest->PersistentId,
+				FGuid::NewGuid());
+	const FWacomRunKeyChestDebugView View =
+		Chest->GetRunKeyChestDebugView(nullptr);
+
+	TestEqual(TEXT("Generic allowed id wins over legacy"),
+		Request.AllowedCardIds[0],
+		FName(TEXT("GenericKey")));
+	TestEqual(TEXT("Generic gold wins over legacy"),
+		Request.GoldReward,
+		9);
+	TestEqual(TEXT("Generic prompt wins over legacy"),
+		View.InteractPrompt,
+		FString(TEXT("通用需要钥匙")));
+	TestEqual(TEXT("Definition source reports generic"),
+		View.DefinitionSource,
+		FName(TEXT("CardInteractionDefinition")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionKeyChestLegacySpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.KeyChestLegacyChestDefinitionStillWorks",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionKeyChestLegacySpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	TStrongObjectPtr<UWacomRunKeyChestDefinition> LegacyDefinition(
+		MakeUiKeyChestDefinition(
+			Chest.Get(),
+			TEXT("LegacyKey"),
+			4));
+
+	Chest->PersistentId = TEXT("Chest.GenericDefinition.Legacy");
+	Chest->CardInteractionDefinition = nullptr;
+	Chest->ChestDefinition = LegacyDefinition.Get();
+	Chest->SyncClickTargetForTest();
+
+	const FRunWorldCardInteractionRequest Request =
+		Chest->GetCardDropReceiverComponent()
+			->BuildRunWorldCardDropRequest_Implementation(
+				Chest->PersistentId,
+				FGuid::NewGuid());
+	const FWacomRunKeyChestDebugView View =
+		Chest->GetRunKeyChestDebugView(nullptr);
+
+	TestNull(TEXT("Legacy path does not bind generic receiver definition"),
+		Chest->GetCardDropReceiverComponent()->InteractionDefinition.Get());
+	TestEqual(TEXT("Legacy allowed id used"),
+		Request.AllowedCardIds[0],
+		FName(TEXT("LegacyKey")));
+	TestEqual(TEXT("Legacy gold used"),
+		Request.GoldReward,
+		4);
+	TestEqual(TEXT("Definition source reports legacy"),
+		View.DefinitionSource,
+		FName(TEXT("ChestDefinition")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionKeyChestInvalidPlacementSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.KeyChestPlacementInvalidGenericDefinitionIsInvalid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionKeyChestInvalidPlacementSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	TStrongObjectPtr<UWacomRunWorldCardInteractionDefinition> Definition(
+		MakeUiRunWorldCardInteractionDefinition(Chest.Get()));
+	Definition->AllowedCardIds.Reset();
+	Definition->AllowedCardDefinitions.Reset();
+	Definition->RequiredKeywords.Reset();
+	Definition->BlockedKeywords.AddTag(WacomTags::Card_Keyword_Weapon);
+
+	Chest->PersistentId = TEXT("Chest.GenericDefinition.InvalidPlacement");
+	Chest->CardInteractionDefinition = Definition.Get();
+	Chest->SyncClickTargetForTest();
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Chest.Get(), Warnings, Errors);
+	TestEqual(TEXT("Invalid generic definition placement fails"),
+		Result,
+		EDataValidationResult::Invalid);
+	TestTrue(TEXT("Invalid generic definition reports reason"),
+		UiValidationIssuesContain(Errors, TEXT("MissingPositiveCardFilter")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugAssetSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.KeyChestGenericDebugDefinitionAssetDrivesReceiver",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugAssetSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWacomRunWorldCardInteractionDefinition* Definition =
+		LoadDebugKeyGoldInteractionDefinitionForUiTest();
+	if (!TestNotNull(TEXT("Generated debug key interaction definition"), Definition))
+	{
+		AddError(TEXT("Run WacomRegenerateContent before this KeyChest debug asset test."));
+		return false;
+	}
+
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->PersistentId = TEXT("Chest.GenericDebugDefinition.Asset");
+	Chest->CardInteractionDefinition = Definition;
+	Chest->ChestDefinition =
+		MakeUiKeyChestDefinition(Chest.Get(), TEXT("LegacyKey"), 1);
+	ConfigureValidKeyChestReceiverForUiTest(*Chest, TEXT("ManualKey"), 2);
+	Chest->SyncClickTargetForTest();
+
+	UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent();
+	if (!TestNotNull(TEXT("Receiver"), Receiver))
+	{
+		return false;
+	}
+
+	const FRunWorldCardInteractionRequest Request =
+		Receiver->BuildRunWorldCardDropRequest_Implementation(
+			Chest->PersistentId,
+			FGuid::NewGuid());
+	const FWacomRunKeyChestDebugView View =
+		Chest->GetRunKeyChestDebugView(nullptr);
+
+	TestEqual(TEXT("Receiver stores generated generic definition"),
+		Receiver->InteractionDefinition.Get(),
+		Definition);
+	TestEqual(TEXT("Generated definition card id drives request"),
+		Request.AllowedCardIds[0],
+		FName(TEXT("DebugKey")));
+	TestEqual(TEXT("Generated definition gold drives request"),
+		Request.GoldReward,
+		3);
+	TestTrue(TEXT("Generated definition consume drives request"),
+		Request.bConsumeCardOnSuccess);
+	TestEqual(TEXT("KeyChest reports generic definition source"),
+		View.DefinitionSource,
+		FName(TEXT("CardInteractionDefinition")));
+	TestEqual(TEXT("KeyChest prompt comes from generated definition"),
+		View.InteractPrompt,
+		FString(TEXT("需要钥匙")));
+	TestEqual(TEXT("Receiver rejected toast comes from generated definition"),
+		Receiver->BuildRunWorldCardDropFailureToastText(
+			nullptr,
+			Chest->PersistentId,
+			FGuid::NewGuid(),
+			TEXT("CardNotAccepted")).ToString(),
+		FString(TEXT("需要钥匙")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugButtonSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ConfigureDebugKeyChestInteractionDefinitionSampleBindsGenericDefinitionAndStableId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugButtonSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
+		NewObject<AWacomRunKeyChestClickProbe>());
+	Chest->Rename(TEXT("KeyChestGenericDefinitionSample"));
+	Chest->PersistentId = TEXT("Old.Id");
+	Chest->CardInteractionDefinition = nullptr;
+	Chest->ChestDefinition =
+		MakeUiKeyChestDefinition(Chest.Get(), TEXT("LegacyKey"), 9);
+	Chest->TriggerRadius = 333.f;
+	Chest->ClickBoundsExtent = FVector(12.f, 13.f, 14.f);
+	Chest->VisualMesh = nullptr;
+	Chest->VisualScale = FVector(2.f, 2.f, 2.f);
+	Chest->VisualRelativeLocation = FVector(9.f, 9.f, 9.f);
+
+	Chest->ConfigureDebugKeyChestInteractionDefinitionSample();
+
+	UWacomRunWorldCardInteractionDefinition* GeneratedDefinition =
+		LoadDebugKeyGoldInteractionDefinitionForUiTest();
+	if (!TestNotNull(TEXT("Generated debug key interaction definition"), GeneratedDefinition))
+	{
+		AddError(TEXT("Run WacomRegenerateContent before this KeyChest button test."));
+		return false;
+	}
+
+	UWacomRunWorldCardDropReceiverComponent* Receiver =
+		Chest->GetCardDropReceiverComponent();
+	if (!TestNotNull(TEXT("Receiver"), Receiver))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Sample persistent id"),
+		Chest->PersistentId,
+		FName(TEXT("Chest.Debug.KeyChestGenericDefinitionSample")));
+	TestEqual(TEXT("Sample binds generic definition"),
+		Chest->CardInteractionDefinition.Get(),
+		GeneratedDefinition);
+	TestNull(TEXT("Sample clears legacy definition"),
+		Chest->ChestDefinition.Get());
+	TestEqual(TEXT("Receiver binds generic definition"),
+		Receiver->InteractionDefinition.Get(),
+		GeneratedDefinition);
+	TestEqual(TEXT("Sample trigger radius"),
+		Chest->GetTriggerSphere()->GetUnscaledSphereRadius(),
+		180.f);
+	TestEqual(TEXT("Sample click bounds"),
+		Chest->GetClickBounds()->GetUnscaledBoxExtent(),
+		FVector(85.f, 65.f, 55.f));
+	TestEqual(TEXT("Sample visual scale"),
+		Chest->GetChestVisual()->GetRelativeScale3D(),
+		FVector(0.75f, 0.55f, 0.45f));
+	TestEqual(TEXT("Bridge stable id"),
+		Chest->GetClickTargetBridgeComponent()->RunTargetStableId,
+		FName(TEXT("Chest.Debug.KeyChestGenericDefinitionSample")));
+	TestEqual(TEXT("Interaction stable id"),
+		Chest->GetClickInteractionTargetComponent()->GetStableTargetId(),
+		FName(TEXT("Chest.Debug.KeyChestGenericDefinitionSample")));
+
+	const FRunWorldCardInteractionRequest Request =
+		Receiver->BuildRunWorldCardDropRequest_Implementation(
+			Chest->PersistentId,
+			FGuid::NewGuid());
+	TestEqual(TEXT("Generated definition request card id"),
+		Request.AllowedCardIds[0],
+		FName(TEXT("DebugKey")));
+	TestEqual(TEXT("Generated definition request gold"),
+		Request.GoldReward,
+		3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunKeyChestDefinitionFailurePromptSyncSpec,
 	"Wacom.UI.WorldInteraction.RunKeyChestDefinition.KeyChestDefinitionSyncsReceiverFailurePrompts",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1703,10 +2335,14 @@ bool FWacomUIRunKeyChestDefinitionConfigureSampleSpec::RunTest(
 	TStrongObjectPtr<UWacomRunKeyChestDefinition> Definition(
 		MakeUiKeyChestDefinition(Chest.Get(), TEXT("DefinitionKey"), 9));
 	Chest->Rename(TEXT("KeyChestDefinitionSample"));
+	Chest->CardInteractionDefinition =
+		MakeUiRunWorldCardInteractionDefinition(Chest.Get());
 	Chest->ChestDefinition = Definition.Get();
 
 	Chest->ConfigureDebugKeyChestSample();
 
+	TestNull(TEXT("Sample clears generic definition"),
+		Chest->CardInteractionDefinition.Get());
 	TestNull(TEXT("Sample clears definition"), Chest->ChestDefinition.Get());
 	TestEqual(TEXT("Sample persistent id"),
 		Chest->PersistentId,

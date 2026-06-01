@@ -29,6 +29,7 @@ WacomData 负责**静态定义和 DataAsset**。
 - 商店定义（UShopDefinition）
 - 拾取物定义（UWacomRunPickupDefinition）
 - 钥匙宝箱定义（UWacomRunKeyChestDefinition）
+- 通用 Run 世界拖卡交互定义（UWacomRunWorldCardInteractionDefinition）
 - 探索事件定义（UWacomRunEventDefinition）
 - 意图定义（FIntentDefinition）
 - 效果结构（FCardEffect / FCardZoneHook / FCardPassive）
@@ -54,6 +55,7 @@ Content/Wacom/
     ├── Events/{DA_Event_DebugSnakeGift, DA_Event_DebugFlagReward}.uasset
     ├── Pickups/{DA_Pickup_DebugGold3, DA_Pickup_DebugPoisonFang}.uasset
     ├── KeyChests/DA_KeyChest_DebugKeyGold3.uasset
+    ├── Interactions/DA_RunWorldCardInteraction_DebugKeyGold3.uasset
     └── Shops/DA_Shop_DebugSnake.uasset
 ```
 
@@ -339,9 +341,73 @@ V0-BS 后，`PickupDefinition` 本身仍由资产 validator 校验；关卡中�
 
 ---
 
-## §7 UWacomRunKeyChestDefinition 字段表
+## §7 UWacomRunWorldCardInteractionDefinition 字段表
 
-`UWacomRunKeyChestDefinition` 是 Run world KeyChest 的静态制作定义。它描述“宝箱接受什么卡、奖励多少金币、是否消耗卡、显示什么提示”，不保存宝箱是否已打开，也不替代场景 Actor 的 `PersistentId`。
+`UWacomRunWorldCardInteractionDefinition` 是 Run world card drop receiver 的通用静态制作定义。它描述“场景目标接受什么卡、奖励多少金币、是否消耗卡、release 失败/完成反馈文案”，不保存目标是否已完成，也不替代场景 Actor 的 `PersistentId`。
+
+```cpp
+UCLASS(BlueprintType)
+class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
+{
+    UPROPERTY(EditDefaultsOnly) FName InteractionId;
+    UPROPERTY(EditDefaultsOnly) TArray<TObjectPtr<UCardDefinition>> AllowedCardDefinitions;
+    UPROPERTY(EditDefaultsOnly) TArray<FName> AllowedCardIds;
+    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer RequiredKeywords;
+    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer BlockedKeywords;
+    UPROPERTY(EditDefaultsOnly) int32 GoldReward = 3;
+    UPROPERTY(EditDefaultsOnly) bool bConsumeCardOnSuccess = true;
+    UPROPERTY(EditDefaultsOnly) FText PreviewPromptText;
+    UPROPERTY(EditDefaultsOnly) FText SuccessPromptText;
+    UPROPERTY(EditDefaultsOnly) FText CompletedPromptText;
+    UPROPERTY(EditDefaultsOnly) FText RejectedCardPromptText;
+    UPROPERTY(EditDefaultsOnly) FText ConfigWarningPromptText;
+    UPROPERTY(EditDefaultsOnly) FText SourceCardUnavailablePromptText;
+    UPROPERTY(EditDefaultsOnly) FText GenericFailurePromptText;
+};
+```
+
+字段口径：
+
+| 字段 | 用途 |
+|---|---|
+| `InteractionId` | 静态内容 ID，只用于内容识别、debug 和资产 validation；不是运行时 `CompletedRunWorldInteractionIds` key |
+| `AllowedCardDefinitions` | 允许提交的卡牌定义；与 `AllowedCardIds` 是 OR 关系 |
+| `AllowedCardIds` | 允许提交的 CardId；与 `AllowedCardDefinitions` 是 OR 关系 |
+| `RequiredKeywords` | 提交卡必须全部拥有的关键词；非空时也算正向筛选 |
+| `BlockedKeywords` | 提交卡不能拥有的关键词；只作为附加限制，单独配置不算有效 |
+| `GoldReward` | 成功提交获得的金币，必须大于 0 |
+| `bConsumeCardOnSuccess` | 成功时是否永久消耗拖入的精确卡牌 instance |
+| receiver prompts | 同步到 `UWacomRunWorldCardDropReceiverComponent`，用于 preview、成功诊断、已完成、错卡、配置异常、源卡不可用和通用失败反馈 |
+
+只读 helper：
+
+| Helper | 用途 |
+|---|---|
+| `GetConfigWarningReason()` | 返回 `MissingInteractionId / MissingPositiveCardFilter / InvalidGoldReward / None` |
+| `IsConfigValid()` | `GetConfigWarningReason() == None` 的布尔包装 |
+
+有效配置要求 `InteractionId` 非空、`GoldReward > 0`，并且 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空。`BlockedKeywords` 不能单独构成有效筛选，避免“除了黑名单外几乎所有卡都能触发交互”。
+
+V0-CC 后，`UWacomRunWorldCardDropReceiverComponent.InteractionDefinition` 是通用数据驱动入口；未填写 Definition 时，receiver 仍使用组件手填字段作为 fallback。正式 KeyChest 新推荐在 `BP_WacomRunKeyChestActor` 实例上配置唯一 `PersistentId` 和一个 `UWacomRunWorldCardInteractionDefinition`。旧 `UWacomRunKeyChestDefinition` 保留为兼容入口。
+
+V0-CD 后，`WacomRegenerateContent` 会生成一个通用 Debug 样例资产：
+
+| 资产 | 配置 | 用途 |
+|---|---|---|
+| `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` | `InteractionId=WorldCardInteraction.DebugKeyGold3`、允许 `DA_Card_DebugKey / CardId=DebugKey`、`GoldReward=3`、成功消耗钥匙、提供 KeyChest release feedback 文案 | 推荐给 `BP_WacomRunKeyChestActor.CardInteractionDefinition` 做 PIE 验证 |
+
+编辑器侧已接入 `UWacomRunWorldCardInteractionDefinitionValidator` 内容防呆。校验重点：
+- `InteractionId` 不能为空。
+- `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空。
+- 只填 `BlockedKeywords` 会被视为 `MissingPositiveCardFilter`。
+- `GoldReward` 必须大于 0。
+- 不校验跨资产 `InteractionId` 唯一性、引用地图、更多奖励、掉落表、动画或 SaveGame。
+
+---
+
+## §7.1 UWacomRunKeyChestDefinition 字段表
+
+`UWacomRunKeyChestDefinition` 是旧 Run world KeyChest 专用静态制作定义。V0-CC 后正式 KeyChest 推荐改用通用 `UWacomRunWorldCardInteractionDefinition`；本类型保留为兼容入口，不删除现有资产。
 
 ```cpp
 UCLASS(BlueprintType)
@@ -392,7 +458,7 @@ V0-BY 后，`WacomRegenerateContent` 会生成一个 Debug KeyChestDefinition �
 |---|---|---|
 | `/Game/Wacom/Data/KeyChests/DA_KeyChest_DebugKeyGold3` | `ChestId=KeyChest.Debug.KeyGold3`、允许 `DA_Card_DebugKey / CardId=DebugKey`、`GoldReward=3`、成功消耗钥匙 | 验证数据驱动钥匙宝箱 |
 
-正式内容推荐在 `BP_WacomRunKeyChestActor` 实例上配置唯一 `PersistentId` 和一个 `UWacomRunKeyChestDefinition`；`ChestDefinition.ChestId` 可被多个实例复用，但每个场景实例必须有自己的运行态 `PersistentId`。为兼容已有调试入口，`AWacomRunKeyChestActor` 未填写 Definition 时仍可使用手填 receiver fallback。
+兼容内容可继续在 `BP_WacomRunKeyChestActor` 实例上配置唯一 `PersistentId` 和一个 `UWacomRunKeyChestDefinition`；`ChestDefinition.ChestId` 可被多个实例复用，但每个场景实例必须有自己的运行态 `PersistentId`。V0-CD 后推荐改用 `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` 或同类型通用 Definition；KeyChest 配置优先级固定为 `CardInteractionDefinition` > `ChestDefinition` > 手填 receiver fallback。
 
 编辑器侧已接入 `UWacomRunKeyChestDefinitionValidator` 内容防呆。校验重点：
 - `ChestId` 不能为空。
@@ -511,6 +577,7 @@ RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻�
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
 | `BuildRunPickupDefinitionContent()` | `DA_Pickup_DebugGold3`、`DA_Pickup_DebugPoisonFang` |
 | `BuildRunKeyChestDefinitionContent()` | `DA_KeyChest_DebugKeyGold3` |
+| `BuildRunWorldCardInteractionDefinitionContent()` | `DA_RunWorldCardInteraction_DebugKeyGold3` |
 
 命令：
 
@@ -552,6 +619,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
 | `/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang` | 数据驱动卡牌 PickupDefinition，固定获得 `PoisonFang` |
 | `/Game/Wacom/Data/KeyChests/DA_KeyChest_DebugKeyGold3` | 数据驱动钥匙宝箱 Definition，接受 `DebugKey`，奖励 3 金币并消耗钥匙 |
+| `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` | 通用 Run 世界拖卡交互 Definition，接受 `DebugKey`，奖励 3 金币并消耗钥匙；推荐 KeyChest 调试内容 |
 
 ### Data Validation
 
@@ -566,11 +634,12 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `UWacomShopDefinitionValidator` | `UShopDefinition` | `FWacomShopDefinitionValidation::Validate()` |
 | `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
 | `UWacomRunPickupDefinitionValidator` | `UWacomRunPickupDefinition` | `FWacomRunPickupDefinitionValidation::Validate()` |
+| `UWacomRunWorldCardInteractionDefinitionValidator` | `UWacomRunWorldCardInteractionDefinition` | `FWacomRunWorldCardInteractionDefinitionValidation::Validate()` |
 | `UWacomRunKeyChestDefinitionValidator` | `UWacomRunKeyChestDefinition` | `FWacomRunKeyChestDefinitionValidation::Validate()` |
 
 这些 Validator 用于编辑器 Validate Assets 和自动化测试。不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
 
-当前 `UCardDefinition`、`UEnemyPartDefinition`、`UEnemyDefinition`、`UCharacterDefinition`、`UShopDefinition`、`UWacomRunEventDefinition`、`UWacomRunPickupDefinition` 和 `UWacomRunKeyChestDefinition` 八类 DataAsset 已接入 Editor Validator。
+当前 `UCardDefinition`、`UEnemyPartDefinition`、`UEnemyDefinition`、`UCharacterDefinition`、`UShopDefinition`、`UWacomRunEventDefinition`、`UWacomRunPickupDefinition`、`UWacomRunWorldCardInteractionDefinition` 和 `UWacomRunKeyChestDefinition` 九类 DataAsset 已接入 Editor Validator。
 
 Card / EnemyPart / Enemy / Character Validator 只做结构防呆，例如必填 ID、基础数值非负或大于 0、必填数组非空、引用非空、GameplayTag 命名空间有效、数组索引有效；Character 还校验 `StarterDeck` 不包含左右手卡。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量、固定部位数量、跨资产唯一性或生成资产路径。
 
@@ -581,6 +650,8 @@ RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventI
 RunPickupDefinition Validator 只校验固定单一奖励配置：`PickupId` 非空、奖励类型非 `None`、金币数量大于 0、卡牌奖励引用非空。它不校验 DisplayName、关卡是否引用该资产、跨资产 `PickupId` 唯一性、掉落表、多奖励或数值平衡。
 
 RunKeyChestDefinition Validator 只校验宝箱制作必要配置：`ChestId` 非空、至少一个正向卡牌筛选、金币奖励大于 0。它不校验关卡是否引用该资产、跨资产 `ChestId` 唯一性、跨地图 `PersistentId`、掉落表、多奖励、动画或 SaveGame。
+
+RunWorldCardInteractionDefinition Validator 只校验通用 receiver 制作必要配置：`InteractionId` 非空、至少一个正向卡牌筛选、金币奖励大于 0。它不校验关卡是否引用该资产、跨资产 `InteractionId` 唯一性、跨地图 `PersistentId`、掉落表、多奖励、动画或 SaveGame。
 
 ---
 

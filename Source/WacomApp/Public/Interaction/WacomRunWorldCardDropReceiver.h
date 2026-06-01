@@ -12,6 +12,7 @@
 class AWacomPlayerController;
 class UCardDefinition;
 class URunSession;
+class UWacomRunWorldCardInteractionDefinition;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomRunWorldCardDropReceiverDebugView
@@ -26,6 +27,18 @@ struct WACOMAPP_API FWacomRunWorldCardDropReceiverDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
 	FName PersistentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FName DefinitionName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FName InteractionId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FName DefinitionConfigWarningReason = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
+	FName ConfigSource = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Card Drop|Debug")
 	bool bHasRunSession = false;
@@ -137,6 +150,10 @@ class WACOMAPP_API UWacomRunWorldCardDropReceiverComponent
 public:
 	UWacomRunWorldCardDropReceiverComponent();
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop|Definition",
+		meta = (ToolTip = "通用 Run 世界拖卡交互定义。填入后优先使用 Definition 的筛选、金币、消耗和反馈文案；运行时完成状态 key 仍由目标 Actor 的 PersistentId 提供。"))
+	TObjectPtr<UWacomRunWorldCardInteractionDefinition> InteractionDefinition = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|World Card Drop",
 		meta = (ToolTip = "允许提交的卡牌定义资产。与 AllowedCardIds 是 OR 关系；为空表示不按定义筛选。"))
 	TArray<TObjectPtr<UCardDefinition>> AllowedCardDefinitions;
@@ -230,6 +247,19 @@ public:
 		const FGuid& SourceCardInstanceId) const override;
 
 protected:
+	const TArray<TObjectPtr<UCardDefinition>>& ResolveAllowedCardDefinitions() const;
+	const TArray<FName>& ResolveAllowedCardIds() const;
+	const FGameplayTagContainer& ResolveRequiredKeywords() const;
+	const FGameplayTagContainer& ResolveBlockedKeywords() const;
+	bool ResolveConsumeCardOnSuccess() const;
+	int32 ResolveGoldReward() const;
+	FText ResolvePreviewPromptText() const;
+	FText ResolveSuccessPromptText() const;
+	FText ResolveCompletedPromptText() const;
+	FText ResolveRejectedCardPromptText() const;
+	FText ResolveConfigWarningPromptText() const;
+	FText ResolveSourceCardUnavailablePromptText() const;
+	FText ResolveGenericFailurePromptText() const;
 	FText GetDefaultPreviewPromptText() const;
 	FText GetDefaultSuccessPromptText() const;
 	FText GetDefaultCompletedPromptText() const;

@@ -5,6 +5,7 @@
 #include "ContentBuilders/RunPickupBlueprintBuilder.h"
 #include "ContentBuilders/RunPickupDefinitionBuilder.h"
 #include "ContentBuilders/RunKeyChestDefinitionBuilder.h"
+#include "ContentBuilders/RunWorldCardInteractionDefinitionBuilder.h"
 #include "ContentBuilders/RunEventBuilder.h"
 #include "ContentBuilders/ShopBuilder.h"
 #include "ContentBuilders/SnakeBuilder.h"
@@ -13,6 +14,7 @@
 #include "Enemies/EnemyDefinition.h"
 #include "Events/RunEventDefinition.h"
 #include "Engine/Blueprint.h"
+#include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "KeyChests/RunKeyChestDefinition.h"
 #include "Pickups/RunPickupDefinition.h"
 #include "Shops/ShopDefinition.h"
@@ -79,11 +81,22 @@ int32 UWacomRegenerateContentCommandlet::Main(const FString& /*Params*/)
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] KeyChest definitions built"));
 
+	UWacomRunWorldCardInteractionDefinition* DebugWorldCardInteraction =
+		Wacom::ContentBuilder::BuildRunWorldCardInteractionDefinitionContent();
+	if (!DebugWorldCardInteraction)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomRegenerateContent] BuildRunWorldCardInteractionDefinitionContent failed"));
+		return 7;
+	}
+	UE_LOG(LogTemp, Display,
+		TEXT("[WacomRegenerateContent] Run world card interaction definitions built"));
+
 	UBlueprint* RewardPickupBlueprint = Wacom::ContentBuilder::BuildRunPickupBlueprintContent();
 	if (!RewardPickupBlueprint)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomRegenerateContent] BuildRunPickupBlueprintContent failed"));
-		return 7;
+		return 8;
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Pickup Blueprints built"));
 

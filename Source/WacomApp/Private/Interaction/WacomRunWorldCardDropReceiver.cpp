@@ -4,6 +4,7 @@
 
 #include "GameFramework/Actor.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "RunSession.h"
 
 #define LOCTEXT_NAMESPACE "WacomRunWorldCardDropReceiver"
@@ -89,12 +90,12 @@ UWacomRunWorldCardDropReceiverComponent::BuildRunWorldCardDropRequest_Implementa
 	FRunWorldCardInteractionRequest Request;
 	Request.PersistentId = PersistentId;
 	Request.SourceCardInstanceId = SourceCardInstanceId;
-	Request.AllowedCardDefinitions = AllowedCardDefinitions;
-	Request.AllowedCardIds = AllowedCardIds;
-	Request.RequiredKeywords = RequiredKeywords;
-	Request.BlockedKeywords = BlockedKeywords;
-	Request.bConsumeCardOnSuccess = bConsumeCardOnSuccess;
-	Request.GoldReward = GoldReward;
+	Request.AllowedCardDefinitions = ResolveAllowedCardDefinitions();
+	Request.AllowedCardIds = ResolveAllowedCardIds();
+	Request.RequiredKeywords = ResolveRequiredKeywords();
+	Request.BlockedKeywords = ResolveBlockedKeywords();
+	Request.bConsumeCardOnSuccess = ResolveConsumeCardOnSuccess();
+	Request.GoldReward = ResolveGoldReward();
 	return Request;
 }
 
@@ -157,14 +158,18 @@ bool UWacomRunWorldCardDropReceiverComponent::SubmitRunWorldCardDrop_Implementat
 
 bool UWacomRunWorldCardDropReceiverComponent::HasPositiveCardFilter() const
 {
-	return AllowedCardDefinitions.Num() > 0
-		|| AllowedCardIds.Num() > 0
-		|| !RequiredKeywords.IsEmpty();
+	return ResolveAllowedCardDefinitions().Num() > 0
+		|| ResolveAllowedCardIds().Num() > 0
+		|| !ResolveRequiredKeywords().IsEmpty();
 }
 
 FName UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverConfigWarningReason() const
 {
-	if (GoldReward <= 0)
+	if (InteractionDefinition)
+	{
+		return InteractionDefinition->GetConfigWarningReason();
+	}
+	if (ResolveGoldReward() <= 0)
 	{
 		return TEXT("InvalidGoldReward");
 	}
@@ -191,6 +196,18 @@ UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebugView_Im
 	View.ReceiverName = GetName();
 	View.OwnerName = GetNameSafe(GetOwner());
 	View.PersistentId = PersistentId;
+	View.DefinitionName = InteractionDefinition
+		? InteractionDefinition->GetFName()
+		: NAME_None;
+	View.InteractionId = InteractionDefinition
+		? InteractionDefinition->InteractionId
+		: NAME_None;
+	View.DefinitionConfigWarningReason = InteractionDefinition
+		? InteractionDefinition->GetConfigWarningReason()
+		: NAME_None;
+	View.ConfigSource = InteractionDefinition
+		? TEXT("Definition")
+		: TEXT("Manual");
 	View.bHasRunSession = PC && PC->GetRunSession();
 	View.bCompleted = PC
 		&& PC->GetRunSession()
@@ -199,38 +216,20 @@ UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebugView_Im
 	View.RejectReason = Validation.DisabledReason;
 	View.ConfigWarningReason = GetRunWorldCardDropReceiverConfigWarningReason();
 	View.bConfigValid = View.ConfigWarningReason.IsNone();
-	View.AllowedDefinitionCount = AllowedCardDefinitions.Num();
-	View.AllowedCardIdCount = AllowedCardIds.Num();
-	View.RequiredKeywordCount = RequiredKeywords.Num();
-	View.BlockedKeywordCount = BlockedKeywords.Num();
+	View.AllowedDefinitionCount = ResolveAllowedCardDefinitions().Num();
+	View.AllowedCardIdCount = ResolveAllowedCardIds().Num();
+	View.RequiredKeywordCount = ResolveRequiredKeywords().Num();
+	View.BlockedKeywordCount = ResolveBlockedKeywords().Num();
 	View.bHasPositiveCardFilter = HasPositiveCardFilter();
-	View.bConsumeCardOnSuccess = bConsumeCardOnSuccess;
-	View.GoldReward = GoldReward;
-	View.PreviewPrompt = (PreviewPromptText.IsEmpty()
-		? GetDefaultPreviewPromptText()
-		: PreviewPromptText).ToString();
-	View.SuccessPrompt = (SuccessPromptText.IsEmpty()
-		? GetDefaultSuccessPromptText()
-		: SuccessPromptText).ToString();
-	View.CompletedPrompt = (CompletedPromptText.IsEmpty()
-		? GetDefaultCompletedPromptText()
-		: CompletedPromptText).ToString();
-	View.RejectedCardPrompt =
-		ResolvePromptOrDefault(
-			RejectedCardPromptText,
-			GetDefaultRejectedCardPromptText()).ToString();
-	View.ConfigWarningPrompt =
-		ResolvePromptOrDefault(
-			ConfigWarningPromptText,
-			GetDefaultConfigWarningPromptText()).ToString();
-	View.SourceCardUnavailablePrompt =
-		ResolvePromptOrDefault(
-			SourceCardUnavailablePromptText,
-			GetDefaultSourceCardUnavailablePromptText()).ToString();
-	View.GenericFailurePrompt =
-		ResolvePromptOrDefault(
-			GenericFailurePromptText,
-			GetDefaultGenericFailurePromptText()).ToString();
+	View.bConsumeCardOnSuccess = ResolveConsumeCardOnSuccess();
+	View.GoldReward = ResolveGoldReward();
+	View.PreviewPrompt = ResolvePreviewPromptText().ToString();
+	View.SuccessPrompt = ResolveSuccessPromptText().ToString();
+	View.CompletedPrompt = ResolveCompletedPromptText().ToString();
+	View.RejectedCardPrompt = ResolveRejectedCardPromptText().ToString();
+	View.ConfigWarningPrompt = ResolveConfigWarningPromptText().ToString();
+	View.SourceCardUnavailablePrompt = ResolveSourceCardUnavailablePromptText().ToString();
+	View.GenericFailurePrompt = ResolveGenericFailurePromptText().ToString();
 	View.RunValidationSummary = Validation.DebugSummary;
 	return View;
 }
@@ -246,10 +245,14 @@ FString UWacomRunWorldCardDropReceiverComponent::GetRunWorldCardDropReceiverDebu
 			PersistentId,
 			SourceCardInstanceId);
 	return FString::Printf(
-		TEXT("RunWorldCardDropReceiver{Owner=%s Receiver=%s PersistentId=%s HasRun=%s Completed=%s CanSubmit=%s Reject=%s ConfigValid=%s ConfigReason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d Preview=%s Success=%s CompletedPrompt=%s RejectedPrompt=%s ConfigWarningPrompt=%s SourceUnavailablePrompt=%s GenericFailurePrompt=%s Validation=%s}"),
+		TEXT("RunWorldCardDropReceiver{Owner=%s Receiver=%s PersistentId=%s Definition=%s InteractionId=%s DefinitionReason=%s ConfigSource=%s HasRun=%s Completed=%s CanSubmit=%s Reject=%s ConfigValid=%s ConfigReason=%s AllowedDefs=%d AllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d Preview=%s Success=%s CompletedPrompt=%s RejectedPrompt=%s ConfigWarningPrompt=%s SourceUnavailablePrompt=%s GenericFailurePrompt=%s Validation=%s}"),
 		*View.OwnerName,
 		*View.ReceiverName,
 		*View.PersistentId.ToString(),
+		*View.DefinitionName.ToString(),
+		*View.InteractionId.ToString(),
+		*View.DefinitionConfigWarningReason.ToString(),
+		*View.ConfigSource.ToString(),
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bCompleted ? TEXT("true") : TEXT("false"),
 		View.bCanSubmit ? TEXT("true") : TEXT("false"),
@@ -281,39 +284,127 @@ FText UWacomRunWorldCardDropReceiverComponent::BuildRunWorldCardDropFailureToast
 {
 	if (FailureReason == TEXT("AlreadyCompleted"))
 	{
-		return ResolvePromptOrDefault(
-			CompletedPromptText,
-			GetDefaultCompletedPromptText());
+		return ResolveCompletedPromptText();
 	}
 
 	if (IsCardRejectedReason(FailureReason))
 	{
-		return ResolvePromptOrDefault(
-			RejectedCardPromptText,
-			GetDefaultRejectedCardPromptText());
+		return ResolveRejectedCardPromptText();
 	}
 
 	if (IsConfigReason(FailureReason))
 	{
 		return FormatPromptWithReason(
-			ResolvePromptOrDefault(
-				ConfigWarningPromptText,
-				GetDefaultConfigWarningPromptText()),
+			ResolveConfigWarningPromptText(),
 			FailureReason);
 	}
 
 	if (IsSourceCardReason(FailureReason))
 	{
-		return ResolvePromptOrDefault(
-			SourceCardUnavailablePromptText,
-			GetDefaultSourceCardUnavailablePromptText());
+		return ResolveSourceCardUnavailablePromptText();
 	}
 
 	return FormatPromptWithReason(
-		ResolvePromptOrDefault(
-			GenericFailurePromptText,
-			GetDefaultGenericFailurePromptText()),
+		ResolveGenericFailurePromptText(),
 		FailureReason);
+}
+
+const TArray<TObjectPtr<UCardDefinition>>&
+UWacomRunWorldCardDropReceiverComponent::ResolveAllowedCardDefinitions() const
+{
+	return InteractionDefinition
+		? InteractionDefinition->AllowedCardDefinitions
+		: AllowedCardDefinitions;
+}
+
+const TArray<FName>& UWacomRunWorldCardDropReceiverComponent::ResolveAllowedCardIds() const
+{
+	return InteractionDefinition
+		? InteractionDefinition->AllowedCardIds
+		: AllowedCardIds;
+}
+
+const FGameplayTagContainer&
+UWacomRunWorldCardDropReceiverComponent::ResolveRequiredKeywords() const
+{
+	return InteractionDefinition
+		? InteractionDefinition->RequiredKeywords
+		: RequiredKeywords;
+}
+
+const FGameplayTagContainer&
+UWacomRunWorldCardDropReceiverComponent::ResolveBlockedKeywords() const
+{
+	return InteractionDefinition
+		? InteractionDefinition->BlockedKeywords
+		: BlockedKeywords;
+}
+
+bool UWacomRunWorldCardDropReceiverComponent::ResolveConsumeCardOnSuccess() const
+{
+	return InteractionDefinition
+		? InteractionDefinition->bConsumeCardOnSuccess
+		: bConsumeCardOnSuccess;
+}
+
+int32 UWacomRunWorldCardDropReceiverComponent::ResolveGoldReward() const
+{
+	return InteractionDefinition
+		? InteractionDefinition->GoldReward
+		: GoldReward;
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::ResolvePreviewPromptText() const
+{
+	return ResolvePromptOrDefault(
+		InteractionDefinition ? InteractionDefinition->PreviewPromptText : PreviewPromptText,
+		GetDefaultPreviewPromptText());
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::ResolveSuccessPromptText() const
+{
+	return ResolvePromptOrDefault(
+		InteractionDefinition ? InteractionDefinition->SuccessPromptText : SuccessPromptText,
+		GetDefaultSuccessPromptText());
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::ResolveCompletedPromptText() const
+{
+	return ResolvePromptOrDefault(
+		InteractionDefinition ? InteractionDefinition->CompletedPromptText : CompletedPromptText,
+		GetDefaultCompletedPromptText());
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::ResolveRejectedCardPromptText() const
+{
+	return ResolvePromptOrDefault(
+		InteractionDefinition ? InteractionDefinition->RejectedCardPromptText : RejectedCardPromptText,
+		GetDefaultRejectedCardPromptText());
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::ResolveConfigWarningPromptText() const
+{
+	return ResolvePromptOrDefault(
+		InteractionDefinition ? InteractionDefinition->ConfigWarningPromptText : ConfigWarningPromptText,
+		GetDefaultConfigWarningPromptText());
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::ResolveSourceCardUnavailablePromptText() const
+{
+	return ResolvePromptOrDefault(
+		InteractionDefinition
+			? InteractionDefinition->SourceCardUnavailablePromptText
+			: SourceCardUnavailablePromptText,
+		GetDefaultSourceCardUnavailablePromptText());
+}
+
+FText UWacomRunWorldCardDropReceiverComponent::ResolveGenericFailurePromptText() const
+{
+	return ResolvePromptOrDefault(
+		InteractionDefinition
+			? InteractionDefinition->GenericFailurePromptText
+			: GenericFailurePromptText,
+		GetDefaultGenericFailurePromptText());
 }
 
 FText UWacomRunWorldCardDropReceiverComponent::GetDefaultPreviewPromptText() const
