@@ -56,11 +56,6 @@ namespace Wacom::ContentBuilder
 		return DataRoot() / TEXT("Pickups");
 	}
 
-	FString KeyChestsRoot()
-	{
-		return DataRoot() / TEXT("KeyChests");
-	}
-
 	FString InteractionsRoot()
 	{
 		return DataRoot() / TEXT("Interactions");

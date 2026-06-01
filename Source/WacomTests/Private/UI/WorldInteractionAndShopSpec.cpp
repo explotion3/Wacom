@@ -1947,19 +1947,19 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugButtonSpec::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunWorldCardInteractionDefinitionKeyChestNoLegacyFieldSpec,
-	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.KeyChestActorNoLongerExposesLegacyChestDefinitionField",
+	FWacomUIRunWorldCardInteractionDefinitionKeyChestAuthoringSurfaceSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.KeyChestActorExposesOnlyGenericDefinitionField",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunWorldCardInteractionDefinitionKeyChestNoLegacyFieldSpec::RunTest(
+bool FWacomUIRunWorldCardInteractionDefinitionKeyChestAuthoringSurfaceSpec::RunTest(
 	const FString& /*Parameters*/)
 {
-	FObjectProperty* LegacyProperty =
+	FObjectProperty* GenericDefinitionProperty =
 		FindFProperty<FObjectProperty>(
 			AWacomRunKeyChestActor::StaticClass(),
-			TEXT("ChestDefinition"));
-	TestNull(TEXT("KeyChest actor no longer exposes ChestDefinition"),
-		LegacyProperty);
+			TEXT("CardInteractionDefinition"));
+	TestNotNull(TEXT("KeyChest actor exposes generic card interaction definition"),
+		GenericDefinitionProperty);
 	return true;
 }
 
@@ -1999,7 +1999,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionManualSampleSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
-	Chest->Rename(TEXT("KeyChestDefinitionSample"));
+	Chest->Rename(TEXT("KeyChestManualSample"));
 	Chest->CardInteractionDefinition =
 		MakeUiRunWorldCardInteractionDefinition(Chest.Get());
 
@@ -2009,7 +2009,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionManualSampleSpec::RunTest(
 		Chest->CardInteractionDefinition.Get());
 	TestEqual(TEXT("Sample persistent id"),
 		Chest->PersistentId,
-		FName(TEXT("Chest.Debug.KeyChestDefinitionSample")));
+		FName(TEXT("Chest.Debug.KeyChestManualSample")));
 	TestEqual(TEXT("Sample receiver card id"),
 		Chest->GetCardDropReceiverComponent()->AllowedCardIds[0],
 		FName(TEXT("DebugKey")));
