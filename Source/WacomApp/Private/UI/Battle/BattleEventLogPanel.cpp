@@ -20,7 +20,7 @@
 
 namespace
 {
-	FSlateColor GetToneTextColor(EWacomBattleEventVisualTone Tone)
+	FSlateColor GetEventLogPanelToneTextColor(EWacomBattleEventVisualTone Tone)
 	{
 		switch (Tone)
 		{
@@ -284,7 +284,7 @@ void UBattleEventLogPanel::AddEntryWidget(const FBattleEventPresentationView& En
 	{
 		if (UTextBlock* FallbackText = Cast<UTextBlock>(EntryWidget->GetRootWidget()))
 		{
-			FallbackText->SetColorAndOpacity(GetToneTextColor(Entry.VisualTone));
+			FallbackText->SetColorAndOpacity(GetEventLogPanelToneTextColor(Entry.VisualTone));
 			FSlateFontInfo Font = FallbackText->GetFont();
 			Font.Size = 13;
 			FallbackText->SetFont(Font);

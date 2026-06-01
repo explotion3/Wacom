@@ -39,6 +39,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/World.h"
 #include "Engine/GameViewportClient.h"
+#include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -61,6 +62,19 @@ namespace
 	constexpr float BattlePresentationStackExitSeconds = 0.16f;
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
 	const FName FirstPersonBattleHandLayerSourceId(TEXT("BattleHand"));
+
+	bool IsScannableBattleEnemyPartWorldTargetBridge(
+		const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge,
+		const UWorld* World)
+	{
+		if (!IsValid(Bridge) || Bridge->GetWorld() != World || !Bridge->IsRegistered())
+		{
+			return false;
+		}
+
+		const AActor* Owner = Bridge->GetOwner();
+		return IsValid(Owner) && !Owner->IsActorBeingDestroyed();
+	}
 
 	const TCHAR* LexToString(EWacomBattleCardDropIntentKind IntentKind)
 	{
@@ -2420,7 +2434,7 @@ void UBattleHUD::SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap)
 	for (TObjectIterator<UWacomBattleEnemyPartWorldTargetBridgeComponent> It; It; ++It)
 	{
 		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = *It;
-		if (!Bridge || Bridge->GetWorld() != World)
+		if (!IsScannableBattleEnemyPartWorldTargetBridge(Bridge, World))
 		{
 			continue;
 		}
@@ -2442,7 +2456,7 @@ void UBattleHUD::ClearBattleEnemyPartWorldTargets()
 	for (TObjectIterator<UWacomBattleEnemyPartWorldTargetBridgeComponent> It; It; ++It)
 	{
 		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = *It;
-		if (Bridge && Bridge->GetWorld() == World)
+		if (IsScannableBattleEnemyPartWorldTargetBridge(Bridge, World))
 		{
 			Bridge->ClearBattleBinding();
 		}

@@ -61,6 +61,11 @@ tags:
   - 归属：App / UI
   - 说明：V0-CI 后普通战斗事件 presentation queue 不再阻塞 PlayCard，旧事件表现可能落后于最新 Snapshot。V0-CJ/V0-CK 后 BattleHUD 使用常驻可滚动 Battle Combat Log 补足玩家可读反馈，旧日志抽屉和旧 EventToast 单条提示框都不再挂在 HUD 主路径。V0-CL 后新增只读 BattlePresentationStack 小卡堆叠，并把 Wait / EndTurn 改成 turn-boundary barrier：stack 未清空时先 pending，期间锁住继续出牌和目标选择。V0-CM 后表现栈收成纯小卡堆，只显示整体缩放的完整卡面，不再显示卡名、目标、数量、溢出文字或黑色底座；卡牌到达 boundary 后先播放短 exit motion，再移除并释放 pending turn-boundary。后续可按体验需要加入 cue 合并、旧表现跳过、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
+- [ ] **战斗场景敌人 Actor：承接敌方部位表现与先机预测**
+  - 状态：`In Progress: V0-CN 已新增 Host + PartActor facade，预测待后续`
+  - 归属：App / UI / Battle World Target
+  - 说明：V0-CN 后推荐关卡使用 `AWacomBattleEnemyActor + AWacomBattleEnemyPartActor` 摆放战斗场景敌人：Host 只做分组 / debug / validation，PartActor 持有安全 facade、Visibility 命中体、可见体、`UWacomInteractionTargetComponent` 和 `UWacomBattleEnemyPartWorldTargetBridgeComponent`。`EnemyInfoBar` 仍作为 2D fallback 和调试入口，但长期会被场景敌人 / 部位 Actor 逐步替代。后续“hover / 拖起卡牌时显示先机推进预测”不优先做进 `EnemyInfoBar`，而应落到场景敌人部位表现上：读取 `FHandCardSnapshot.RuntimeCost` 和 `FEnemyPartSnapshot.CurrentInitiative`，显示 `当前先机 -> 预计先机`、完美释放窗口和可能触发部位行动的风险。V1 只做 Cost 推进风险预览，不模拟完整卡牌主效果、ZoneHook、破坏、改先机或中毒后的最终结果。
+
 - [ ] **交互目标系统：Card-World / Card-Card drag resolver / Zone 命中来源接入**
   - 状态：`Done: V0-CG 已把 Run world card interaction 从单 GoldReward 硬切到通用 Rewards payload；V1 支持 Gold 和 Card，KeyChest 推荐入口仍是 CardInteractionDefinition > 手填 receiver fallback。后续正式内容、动画、SaveGame、复杂筛选、掉落表和更多奖励类型仍待切片`
   - 归属：App / Battle
