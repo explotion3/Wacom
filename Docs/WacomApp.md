@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-05-31
+updated: 2026-06-01
 tags:
   - wacom/app
   - wacom/gameflow
@@ -208,11 +208,12 @@ V0-BV 后，旧 `AWacomDebugChestActor` 问题原型已从 Source 移除，不�
 
 - 默认拥有 `TriggerSphere / ClickBounds / ChestVisual / ClickInteractionTarget / ClickTargetBridge / CardDropReceiver`。`ClickTargetBridge` 仍把目标标记为 `Interaction.Target.Run.Object`，所以拖卡 probe、hover preview 和普通 Run world click resolver 共用同一命中合同。
 - 它实现 `IWacomWorldInteractable + UWacomRunWorldClickableInteractable`，但普通 E 键或左键不会开箱，只显示 `需要钥匙` 或 `宝箱已打开` toast；真正结算只能来自第一人称卡牌拖拽 release 到宝箱目标。
-- `UWacomRunWorldCardDropReceiverComponent` 负责把当前拖拽卡实例、宝箱 `PersistentId`、允许卡牌 Definition/CardId、Required/Blocked keywords、是否消耗卡和金币奖励组装成 `FRunWorldCardInteractionRequest`，再调用 `URunSession::ValidateRunWorldCardInteraction()` / `SubmitRunWorldCardInteraction()`。
+- V0-BY 后推荐填写 `ChestDefinition`（`UWacomRunKeyChestDefinition`）作为制作配置源。Definition 会优先同步内部 `UWacomRunWorldCardDropReceiverComponent` 的允许卡牌 Definition/CardId、Required/Blocked keywords、是否消耗卡、金币奖励和 receiver preview/success/completed 文案；`ChestDefinition.ChestId` 只用于内容识别、debug 和 validation，不替代场景 `PersistentId`。Commandlet 会生成 `/Game/Wacom/Data/KeyChests/DA_KeyChest_DebugKeyGold3`，它接受 `DebugKey`、奖励 3 金币并消耗钥匙，可作为 `BP_WacomRunKeyChestActor` 的标准 PIE 验证 Definition。
+- 未填写 `ChestDefinition` 时，`UWacomRunWorldCardDropReceiverComponent` 仍作为手填 fallback，负责把当前拖拽卡实例、宝箱 `PersistentId`、允许卡牌 Definition/CardId、Required/Blocked keywords、是否消耗卡和金币奖励组装成 `FRunWorldCardInteractionRequest`，再调用 `URunSession::ValidateRunWorldCardInteraction()` / `SubmitRunWorldCardInteraction()`。
 - V0-BW 后，宝箱的内部 `TriggerSphere / ClickBounds / ChestVisual / ClickInteractionTarget / ClickTargetBridge / CardDropReceiver` 都是实现细节，不作为可展开 Details 编辑入口使用，并继续隐藏容易触发 UE 5.7 Details 栈溢出的 Collision / BodyInstance 深层分类。关卡制作只改 Actor facade 字段：`TriggerRadius`、`ClickBoundsExtent`、`VisualMesh`、`VisualScale`、`VisualRelativeLocation`、文案、`PersistentId` 和 receiver 配置。
-- Details 按钮 `ConfigureDebugKeyChestSample()` 会把当前 Actor 配成标准样例：`PersistentId=Chest.Debug.{ActorName}`，`TriggerRadius=180`，`ClickBoundsExtent=(85,65,55)`，默认 cube visual，接受 `/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey` 或 `CardId=DebugKey`，成功奖励 3 金币并消耗钥匙。按钮只改当前 Actor 配置、刷新 bounds / visual / receiver / click stable id，不修改 RunState、不生成资产。
-- V0-BX 后，KeyChest 摆放实例接入 Validate Map/Level：缺 `PersistentId`、缺 `CardDropReceiver`、`GoldReward <= 0`、receiver 没有正向卡牌筛选都会成为 error；同 World 内重复 `PersistentId` 是 warning。Receiver 的有效筛选要求 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空；`BlockedKeywords` 只能作为附加限制，单独配置黑名单不算有效，避免“几乎所有卡都能开箱”。
-- `GetRunKeyChestDebugSummary()` / `LogRunKeyChestDebugSummary()` 会输出 `ConfigValid / ConfigReason / Duplicate / TriggerRadius / ClickBoundsExtent / VisualName / VisualMesh / VisualScale / ClickTarget / ClickStableId / ReceiverAllowedDefs / ReceiverAllowedIds / RequiredKeywords / BlockedKeywords / PositiveFilter / Gold / Consume / Completed / Last / ReceiverDebug`，用于 PIE 排查钥匙筛选、金币奖励、safe facade 是否同步、stable id、重复 ID 和完成状态。
+- Details 按钮 `ConfigureDebugKeyChestSample()` 会把当前 Actor 配成标准样例，并清空 `ChestDefinition` 以保持无 Definition 的快速 PIE fallback：`PersistentId=Chest.Debug.{ActorName}`，`TriggerRadius=180`，`ClickBoundsExtent=(85,65,55)`，默认 cube visual，接受 `/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey` 或 `CardId=DebugKey`，成功奖励 3 金币并消耗钥匙。按钮只改当前 Actor 配置、刷新 bounds / visual / receiver / click stable id，不修改 RunState、不生成资产。
+- V0-BX/V0-BY 后，KeyChest 摆放实例接入 Validate Map/Level：缺 `PersistentId` 是 error；有 `ChestDefinition` 时校验 Definition 内部 `ChestId / 正向筛选 / GoldReward`；无 Definition 时继续校验 receiver fallback。缺 `CardDropReceiver`、`GoldReward <= 0`、无正向卡牌筛选都会成为 error；同 World 内重复 `PersistentId` 是 warning。有效筛选要求 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空；`BlockedKeywords` 只能作为附加限制。
+- `GetRunKeyChestDebugSummary()` / `LogRunKeyChestDebugSummary()` 会输出 `Definition / ChestId / DefinitionReason / ConfigValid / ConfigReason / Duplicate / TriggerRadius / ClickBoundsExtent / VisualName / VisualMesh / VisualScale / ClickTarget / ClickStableId / ReceiverAllowedDefs / ReceiverAllowedIds / RequiredKeywords / BlockedKeywords / PositiveFilter / Gold / Consume / Completed / Last / ReceiverDebug`，用于 PIE 排查 Definition、钥匙筛选、金币奖励、safe facade 是否同步、stable id、重复 ID 和完成状态。
 
 ---
 

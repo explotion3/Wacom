@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-run
 status: active
-updated: 2026-05-31
+updated: 2026-06-01
 tags:
   - wacom/run
   - wacom/rules
@@ -326,7 +326,7 @@ V0-BS 后，Pickup 摆放实例接入 Actor Data Validation。金币 Pickup 缺 
 
 V0-BU 后，探索期世界卡牌交互使用独立于 Pickup 的完成状态：`FRunState::CompletedRunWorldInteractionIds`。`URunSession::ValidateRunWorldCardInteraction()` 校验场景 `PersistentId`、精确 `SourceCardInstanceId`、Definition/CardId/RequiredKeywords/BlockedKeywords 筛选、重复完成、金币奖励和可选永久移除安全；`SubmitRunWorldCardInteraction()` 成功时可选消耗那张精确持有卡，增加固定金币奖励，写入 `CompletedRunWorldInteractionIds`，最后只广播一次。失败或重复提交不改状态、不广播。V1 原型只支持单卡筛选、可选消耗和正数金币奖励；不支持多奖励、掉落表、动画或 SaveGame。
 
-V0-BV 后旧 `AWacomDebugChestActor` 已移除，新的 `AWacomRunKeyChestActor` 是第一条使用该事务的原型场景 Actor：默认要求拖入 `DA_Card_DebugKey`，成功后消耗钥匙、获得 3 金币，并用宝箱自身 `PersistentId` 标记已打开。普通 E 键或左键点击只提示“需要钥匙 / 宝箱已打开”，不会直接结算奖励。宝箱打开状态不复用 `CollectedPickupIds`，避免“拾取物已拾取”和“世界卡牌交互已完成”语义混在一起。V0-BW 后 KeyChest 的制作入口改为安全 facade 字段：`TriggerRadius / ClickBoundsExtent / VisualMesh / VisualScale / VisualRelativeLocation` 会同步到内部组件；内部碰撞和 receiver 组件保持隐藏，以规避 UE 5.7 Details 面板展开 Collision / BodyInstance 时的栈溢出路径。V0-BX 后 KeyChest 摆放实例接入 Actor Data Validation：缺 `PersistentId`、receiver 缺正向筛选、只填 `BlockedKeywords`、`GoldReward <= 0` 都是 Validate Map/Level error，重复 `PersistentId` 是 warning；正向筛选口径是 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 任一非空。
+V0-BV 后旧 `AWacomDebugChestActor` 已移除，新的 `AWacomRunKeyChestActor` 是第一条使用该事务的原型场景 Actor：默认要求拖入 `DA_Card_DebugKey`，成功后消耗钥匙、获得 3 金币，并用宝箱自身 `PersistentId` 标记已打开。普通 E 键或左键点击只提示“需要钥匙 / 宝箱已打开”，不会直接结算奖励。宝箱打开状态不复用 `CollectedPickupIds`，避免“拾取物已拾取”和“世界卡牌交互已完成”语义混在一起。V0-BW 后 KeyChest 的制作入口改为安全 facade 字段：`TriggerRadius / ClickBoundsExtent / VisualMesh / VisualScale / VisualRelativeLocation` 会同步到内部组件；内部碰撞和 receiver 组件保持隐藏，以规避 UE 5.7 Details 面板展开 Collision / BodyInstance 时的栈溢出路径。V0-BX 后 KeyChest 摆放实例接入 Actor Data Validation：缺 `PersistentId`、receiver 缺正向筛选、只填 `BlockedKeywords`、`GoldReward <= 0` 都是 Validate Map/Level error，重复 `PersistentId` 是 warning；正向筛选口径是 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 任一非空。V0-BY 后 KeyChest 可填写 `UWacomRunKeyChestDefinition` 作为推荐配置源：Definition 会同步 receiver 的卡牌筛选、金币、消耗和 preview/success/completed 文案，Actor 的 `PersistentId` 仍是完成状态 key，`ChestDefinition.ChestId` 只用于内容识别、debug 和 validation。`WacomRegenerateContent` 会生成 `/Game/Wacom/Data/KeyChests/DA_KeyChest_DebugKeyGold3`，可直接用于编辑器 PIE 验证；没有 Definition 时，手填 receiver fallback 继续可用。
 
 `FRunEventChoiceResult` 只表达本次选项直接效果和展示诊断字段，供 UI 和日志展示。V0-AR 后成功的卡牌支付结果会记录 `PaidCardDefinition`，仅用于 UI / 日志显示“交出了哪张卡”；它必须在移除 paid instance 前从当前持有卡读取，且不是后续规则输入。V0-AS 后成功结果还会记录 `PreviousNodeId / ResolvedNodeId / ResolvedNodeTitleText / bNodeChanged / bEventClosedAfterResolve / bEventCompletedAfterResolve`，用于 Toast 显示“进入某节点”或“事件已结束”。这些 outcome 字段只在事务成功提交后写入；失败或回滚结果不写入 paid card definition，也不写入成功 outcome。后续规则不能依赖这个结果包反向修改 RunState。
 
@@ -398,6 +398,7 @@ Outcome 分支：
 - 同一关卡内应保持唯一。
 - `NAME_None` 表示不参与对应状态记录；入口会 Warning 或拒绝。
 - 内容资产 ID 不能替代场景 PersistentId。
+- `UWacomRunKeyChestDefinition.ChestId` 和 `UWacomRunPickupDefinition.PickupId` 都只是内容 ID，不参与当前 Run 的完成 / 已拾取状态。
 
 ---
 
@@ -486,9 +487,10 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | `Source/WacomApp/Public/Actors/WacomRunPickupActor.h` | 金币拾取物入口，提供 `PersistentId` 和 `GoldAmount`，结算调用 `CollectGoldPickup()` |
 | `Source/WacomApp/Public/Actors/WacomRunCardPickupActor.h` | 卡牌拾取物入口，提供 `PersistentId` 和固定 `CardDefinition`，结算调用 `CollectCardPickup()` |
 | `Source/WacomApp/Public/Actors/WacomRunRewardPickupActor.h` | 数据驱动拾取物入口，读取 `UWacomRunPickupDefinition` 并调用现有金币 / 卡牌拾取结算 |
-| `Source/WacomApp/Public/Actors/WacomRunKeyChestActor.h` | 钥匙宝箱原型入口，接收拖入钥匙卡并提交 Run world card interaction |
+| `Source/WacomApp/Public/Actors/WacomRunKeyChestActor.h` | 钥匙宝箱原型入口，读取可选 `UWacomRunKeyChestDefinition`，接收拖入钥匙卡并提交 Run world card interaction |
 | `Source/WacomApp/Public/Interaction/WacomRunWorldCardDropReceiver.h` | Run world card drop 接收器合同，构建 / 校验 / 提交 `FRunWorldCardInteractionRequest` |
 | `Source/WacomData/Public/Pickups/RunPickupDefinition.h` | Pickup 静态奖励定义；`PickupId` 仅用于内容识别和 debug，不是已拾取状态 key |
+| `Source/WacomData/Public/KeyChests/RunKeyChestDefinition.h` | KeyChest 静态交互定义；`ChestId` 仅用于内容识别和 debug，不是完成状态 key |
 
 设计与数据侧对应文档：
 

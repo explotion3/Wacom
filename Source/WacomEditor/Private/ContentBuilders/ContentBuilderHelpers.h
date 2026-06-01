@@ -21,6 +21,7 @@ namespace Wacom::ContentBuilder
 	FString EventsRoot();
 	FString ShopsRoot();
 	FString PickupsRoot();
+	FString KeyChestsRoot();
 	FString MakePackagePath(const FString& FolderPath, const TCHAR* AssetName);
 	FString MakeObjectPath(const FString& PackagePath);
 

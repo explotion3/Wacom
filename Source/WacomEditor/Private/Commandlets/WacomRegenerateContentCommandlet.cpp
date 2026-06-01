@@ -4,6 +4,7 @@
 #include "ContentBuilders/BugGirlBuilder.h"
 #include "ContentBuilders/RunPickupBlueprintBuilder.h"
 #include "ContentBuilders/RunPickupDefinitionBuilder.h"
+#include "ContentBuilders/RunKeyChestDefinitionBuilder.h"
 #include "ContentBuilders/RunEventBuilder.h"
 #include "ContentBuilders/ShopBuilder.h"
 #include "ContentBuilders/SnakeBuilder.h"
@@ -12,6 +13,7 @@
 #include "Enemies/EnemyDefinition.h"
 #include "Events/RunEventDefinition.h"
 #include "Engine/Blueprint.h"
+#include "KeyChests/RunKeyChestDefinition.h"
 #include "Pickups/RunPickupDefinition.h"
 #include "Shops/ShopDefinition.h"
 
@@ -67,11 +69,21 @@ int32 UWacomRegenerateContentCommandlet::Main(const FString& /*Params*/)
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Pickup definitions built"));
 
+	UWacomRunKeyChestDefinition* DebugKeyChest =
+		Wacom::ContentBuilder::BuildRunKeyChestDefinitionContent();
+	if (!DebugKeyChest)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomRegenerateContent] BuildRunKeyChestDefinitionContent failed"));
+		return 6;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] KeyChest definitions built"));
+
 	UBlueprint* RewardPickupBlueprint = Wacom::ContentBuilder::BuildRunPickupBlueprintContent();
 	if (!RewardPickupBlueprint)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomRegenerateContent] BuildRunPickupBlueprintContent failed"));
-		return 6;
+		return 7;
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Pickup Blueprints built"));
 

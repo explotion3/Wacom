@@ -18,6 +18,7 @@ class AWacomPlayerController;
 class UPrimitiveComponent;
 class UStaticMesh;
 class UWacomInteractionTargetComponent;
+class UWacomRunKeyChestDefinition;
 class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 
@@ -55,6 +56,15 @@ struct WACOMAPP_API FWacomRunKeyChestDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	FName PersistentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FName DefinitionName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FName ChestId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
+	FName DefinitionConfigWarningReason = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Key Chest|Debug")
 	bool bHasRunSession = false;
@@ -161,6 +171,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest",
 		meta = (ToolTip = "宝箱在当前 Run 内的唯一 ID。拖卡成功后用它写入 CompletedRunWorldInteractionIds；None 会拒绝拖卡提交。"))
 	FName PersistentId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest|Definition",
+		meta = (ToolTip = "钥匙宝箱静态定义。填入后会优先同步卡牌筛选、金币奖励、是否消耗和提示文案；PersistentId 仍来自场景 Actor。"))
+	TObjectPtr<UWacomRunKeyChestDefinition> ChestDefinition = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Key Chest",
 		meta = (ToolTip = "玩家进入该半径后，探索期按 E 可看到宝箱提示。单位：厘米。",
@@ -276,10 +290,14 @@ protected:
 private:
 	void RefreshAuthoringState();
 	void RefreshClickTargetBinding();
+	void SyncReceiverFromDefinition();
 	FName BuildConfigWarningReason() const;
 	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsCompletedFor(AWacomPlayerController* PC) const;
 	FText GetHoverPromptText(AWacomPlayerController* PC) const;
+	FText ResolveInteractPromptText() const;
+	FText ResolveHoverPromptText() const;
+	FText ResolveCompletedPromptText() const;
 	FText GetDefaultInteractPromptText() const;
 	FText GetDefaultHoverPromptText() const;
 	FText GetDefaultCompletedPromptText() const;

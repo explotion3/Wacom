@@ -56,6 +56,11 @@ namespace Wacom::ContentBuilder
 		return DataRoot() / TEXT("Pickups");
 	}
 
+	FString KeyChestsRoot()
+	{
+		return DataRoot() / TEXT("KeyChests");
+	}
+
 	FString MakePackagePath(const FString& FolderPath, const TCHAR* AssetName)
 	{
 		return FolderPath / AssetName;

@@ -12,6 +12,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
+#include "KeyChests/RunKeyChestDefinition.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "EngineUtils.h"
@@ -166,6 +167,7 @@ void AWacomRunKeyChestActor::ConfigureDebugKeyChestSample()
 {
 	Modify();
 	PersistentId = BuildDebugKeyChestPersistentIdFromActorName(GetName());
+	ChestDefinition = nullptr;
 	TriggerRadius = 180.f;
 	ClickBoundsExtent = FVector(85.f, 65.f, 55.f);
 	VisualMesh = LoadObject<UStaticMesh>(nullptr, DefaultChestMeshPath);
@@ -211,8 +213,8 @@ FText AWacomRunKeyChestActor::GetInteractPromptText_Implementation(
 	AWacomPlayerController* PC) const
 {
 	return IsCompletedFor(PC)
-		? (CompletedPromptText.IsEmpty() ? GetDefaultCompletedPromptText() : CompletedPromptText)
-		: (InteractPromptText.IsEmpty() ? GetDefaultInteractPromptText() : InteractPromptText);
+		? ResolveCompletedPromptText()
+		: ResolveInteractPromptText();
 }
 
 FText AWacomRunKeyChestActor::GetRunWorldClickHoverPrompt_Implementation(
@@ -287,6 +289,11 @@ FWacomRunKeyChestDebugView AWacomRunKeyChestActor::GetRunKeyChestDebugView(
 	FWacomRunKeyChestDebugView View;
 	View.ActorName = GetName();
 	View.PersistentId = PersistentId;
+	View.DefinitionName = ChestDefinition ? ChestDefinition->GetFName() : NAME_None;
+	View.ChestId = ChestDefinition ? ChestDefinition->ChestId : NAME_None;
+	View.DefinitionConfigWarningReason = ChestDefinition
+		? ChestDefinition->GetConfigWarningReason()
+		: NAME_None;
 	View.bHasRunSession = PC && PC->GetRunSession();
 	View.bCompleted = IsCompletedFor(PC);
 	View.bCanInteract = CanInteract_Implementation(PC);
@@ -305,9 +312,7 @@ FWacomRunKeyChestDebugView AWacomRunKeyChestActor::GetRunKeyChestDebugView(
 	View.bHasCardDropReceiver = CardDropReceiverComponent != nullptr;
 	View.InteractPrompt = GetInteractPromptText_Implementation(PC).ToString();
 	View.HoverPrompt = GetHoverPromptText(PC).ToString();
-	View.CompletedPrompt = (CompletedPromptText.IsEmpty()
-		? GetDefaultCompletedPromptText()
-		: CompletedPromptText).ToString();
+	View.CompletedPrompt = ResolveCompletedPromptText().ToString();
 	View.ReceiverDebugSummary = CardDropReceiverComponent
 		? CardDropReceiverComponent->GetRunWorldCardDropReceiverDebugSummary(
 			PC,
@@ -343,9 +348,12 @@ FString AWacomRunKeyChestActor::GetRunKeyChestDebugSummary(
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("RunKeyChest{Actor=%s PersistentId=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
+		TEXT("RunKeyChest{Actor=%s PersistentId=%s Definition=%s ChestId=%s DefinitionReason=%s HasRun=%s Completed=%s CanInteract=%s ConfigValid=%s ConfigReason=%s Duplicate=%s ClickTarget=%s ClickStableId=%s TriggerRadius=%.1f ClickBoundsExtent=%s VisualName=%s VisualMesh=%s VisualScale=%s Receiver=%s ReceiverCanSubmit=%s ReceiverReject=%s ReceiverAllowedDefs=%d ReceiverAllowedIds=%d RequiredKeywords=%d BlockedKeywords=%d PositiveFilter=%s Consume=%s Gold=%d InteractPrompt=%s HoverPrompt=%s CompletedPrompt=%s Last=%s ClickDebug=%s ReceiverDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
+		*View.DefinitionName.ToString(),
+		*View.ChestId.ToString(),
+		*View.DefinitionConfigWarningReason.ToString(),
 		View.bHasRunSession ? TEXT("true") : TEXT("false"),
 		View.bCompleted ? TEXT("true") : TEXT("false"),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
@@ -385,6 +393,7 @@ void AWacomRunKeyChestActor::LogRunKeyChestDebugSummary(AWacomPlayerController* 
 
 void AWacomRunKeyChestActor::RefreshAuthoringState()
 {
+	SyncReceiverFromDefinition();
 	if (TriggerSphere)
 	{
 		TriggerSphere->SetSphereRadius(TriggerRadius);
@@ -409,6 +418,36 @@ void AWacomRunKeyChestActor::RefreshAuthoringState()
 	}
 }
 
+void AWacomRunKeyChestActor::SyncReceiverFromDefinition()
+{
+	if (!ChestDefinition || !CardDropReceiverComponent)
+	{
+		return;
+	}
+
+	CardDropReceiverComponent->AllowedCardDefinitions =
+		ChestDefinition->AllowedCardDefinitions;
+	CardDropReceiverComponent->AllowedCardIds =
+		ChestDefinition->AllowedCardIds;
+	CardDropReceiverComponent->RequiredKeywords =
+		ChestDefinition->RequiredKeywords;
+	CardDropReceiverComponent->BlockedKeywords =
+		ChestDefinition->BlockedKeywords;
+	CardDropReceiverComponent->GoldReward =
+		ChestDefinition->GoldReward;
+	CardDropReceiverComponent->bConsumeCardOnSuccess =
+		ChestDefinition->bConsumeCardOnSuccess;
+
+	CardDropReceiverComponent->PreviewPromptText =
+		ChestDefinition->PreviewPromptText;
+	CardDropReceiverComponent->SuccessPromptText =
+		ChestDefinition->SuccessPromptText;
+	CardDropReceiverComponent->CompletedPromptText =
+		ChestDefinition->ReceiverCompletedPromptText.IsEmpty()
+			? ChestDefinition->CompletedPromptText
+			: ChestDefinition->ReceiverCompletedPromptText;
+}
+
 #if WITH_EDITOR
 EDataValidationResult AWacomRunKeyChestActor::IsDataValid(
 	FDataValidationContext& Context) const
@@ -424,10 +463,12 @@ EDataValidationResult AWacomRunKeyChestActor::IsDataValid(
 	{
 		Context.AddError(FText::Format(
 			LOCTEXT("PlacementConfigInvalid",
-				"KeyChest 摆放配置错误：Actor={0} PersistentId={1} Reason={2} Receiver={3} AllowedDefs={4} AllowedIds={5} RequiredKeywords={6} BlockedKeywords={7} Gold={8}。"),
+				"KeyChest 摆放配置错误：Actor={0} PersistentId={1} Reason={2} Definition={3} ChestId={4} Receiver={5} AllowedDefs={6} AllowedIds={7} RequiredKeywords={8} BlockedKeywords={9} Gold={10}。"),
 			FText::FromString(GetName()),
 			FText::FromName(PersistentId),
 			FText::FromName(ConfigReason),
+			FText::FromString(ChestDefinition ? ChestDefinition->GetName() : TEXT("None")),
+			FText::FromName(ChestDefinition ? ChestDefinition->ChestId : NAME_None),
 			FText::FromString(CardDropReceiverComponent ? CardDropReceiverComponent->GetName() : TEXT("None")),
 			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->AllowedCardDefinitions.Num() : 0),
 			FText::AsNumber(CardDropReceiverComponent ? CardDropReceiverComponent->AllowedCardIds.Num() : 0),
@@ -475,6 +516,10 @@ FName AWacomRunKeyChestActor::BuildConfigWarningReason() const
 	{
 		return TEXT("MissingCardDropReceiver");
 	}
+	if (ChestDefinition)
+	{
+		return ChestDefinition->GetConfigWarningReason();
+	}
 	const FName ReceiverReason =
 		CardDropReceiverComponent->GetRunWorldCardDropReceiverConfigWarningReason();
 	if (!ReceiverReason.IsNone())
@@ -515,13 +560,42 @@ FText AWacomRunKeyChestActor::GetHoverPromptText(AWacomPlayerController* PC) con
 {
 	if (IsCompletedFor(PC))
 	{
-		return CompletedPromptText.IsEmpty()
-			? GetDefaultCompletedPromptText()
-			: CompletedPromptText;
+		return ResolveCompletedPromptText();
+	}
+	return ResolveHoverPromptText();
+}
+
+FText AWacomRunKeyChestActor::ResolveInteractPromptText() const
+{
+	if (ChestDefinition && !ChestDefinition->InteractPromptText.IsEmpty())
+	{
+		return ChestDefinition->InteractPromptText;
+	}
+	return InteractPromptText.IsEmpty()
+		? GetDefaultInteractPromptText()
+		: InteractPromptText;
+}
+
+FText AWacomRunKeyChestActor::ResolveHoverPromptText() const
+{
+	if (ChestDefinition && !ChestDefinition->HoverPromptText.IsEmpty())
+	{
+		return ChestDefinition->HoverPromptText;
 	}
 	return HoverPromptText.IsEmpty()
 		? GetDefaultHoverPromptText()
 		: HoverPromptText;
+}
+
+FText AWacomRunKeyChestActor::ResolveCompletedPromptText() const
+{
+	if (ChestDefinition && !ChestDefinition->CompletedPromptText.IsEmpty())
+	{
+		return ChestDefinition->CompletedPromptText;
+	}
+	return CompletedPromptText.IsEmpty()
+		? GetDefaultCompletedPromptText()
+		: CompletedPromptText;
 }
 
 FText AWacomRunKeyChestActor::GetDefaultInteractPromptText() const
@@ -571,8 +645,8 @@ void AWacomRunKeyChestActor::ShowChestHintToast(AWacomPlayerController* PC) cons
 	}
 
 	ToastSubsystem->ShowWarning(IsCompletedFor(PC)
-		? (CompletedPromptText.IsEmpty() ? GetDefaultCompletedPromptText() : CompletedPromptText)
-		: (InteractPromptText.IsEmpty() ? GetDefaultInteractPromptText() : InteractPromptText));
+		? ResolveCompletedPromptText()
+		: ResolveInteractPromptText());
 }
 
 #undef LOCTEXT_NAMESPACE
