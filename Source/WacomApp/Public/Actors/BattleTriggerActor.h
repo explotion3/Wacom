@@ -14,6 +14,7 @@ class UBoxComponent;
 class UEnemyDefinition;
 class UWacomInteractionTargetComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
+class AWacomBattleEnemyActor;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleTriggerDebugView
@@ -28,6 +29,21 @@ struct WACOMAPP_API FWacomBattleTriggerDebugView
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
 	FString EnemyDefinitionName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	FString SceneEnemyHostName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	FString SceneEnemyHostEnemyDefinitionName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	int32 SceneEnemyHostPartCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	bool bSceneEnemyHostConfigured = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	bool bSceneEnemyHostDefinitionMatches = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
 	bool bCanInteract = false;
@@ -85,6 +101,16 @@ public:
 	/** 本触发器对应的敌人配置。必填。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	TObjectPtr<UEnemyDefinition> EnemyDef = nullptr;
+
+	/**
+	 * 本触发器对应的场景敌人 Host。
+	 *
+	 * 进入战斗后，BattleHUD 只会绑定该 Host 下的 AWacomBattleEnemyPartActor，
+	 * 避免同关卡多组敌人部位互相串 cue / hover / drag preview。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",
+		meta = (ToolTip = "本触发器对应的场景敌人 Host。进入战斗后只绑定该 Host 下的部位 Actor；为空时保留 EnemyInfoBar fallback，但场景部位不会参与绑定。"))
+	TObjectPtr<AWacomBattleEnemyActor> SceneEnemyHost = nullptr;
 
 	/** 触发半径（cm）。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",

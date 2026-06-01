@@ -12,6 +12,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 
+#include "Actors/WacomBattleEnemyActor.h"
 #include "Enemies/EnemyDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
@@ -277,6 +278,25 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 		Result = EDataValidationResult::Invalid;
 	}
 
+	if (!SceneEnemyHost)
+	{
+		Context.AddWarning(FText::Format(
+			LOCTEXT("PlacementMissingSceneEnemyHost",
+				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} 未绑定 SceneEnemyHost；战斗仍可使用 EnemyInfoBar fallback，但场景敌人部位不会参与 hover / prediction / cue / 拖卡目标绑定。"),
+			FText::FromString(GetName()),
+			FText::FromName(PersistentId)));
+	}
+	else if (EnemyDef && SceneEnemyHost->EnemyDefinition && SceneEnemyHost->EnemyDefinition != EnemyDef)
+	{
+		Context.AddWarning(FText::Format(
+			LOCTEXT("PlacementSceneEnemyHostDefinitionMismatch",
+				"BattleTrigger 摆放警告：Actor={0} EnemyDef={1} 与 SceneEnemyHost={2} EnemyDefinition={3} 不一致；场景部位会按当前战斗 Snapshot 的 PartId 绑定，请确认制作配置。"),
+			FText::FromString(GetName()),
+			FText::FromString(EnemyDef->GetName()),
+			FText::FromString(SceneEnemyHost->GetName()),
+			FText::FromString(SceneEnemyHost->EnemyDefinition ? SceneEnemyHost->EnemyDefinition->GetName() : TEXT("None"))));
+	}
+
 	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
 	{
 		Context.AddWarning(FText::Format(
@@ -324,6 +344,19 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 	View.ActorName = GetName();
 	View.PersistentId = PersistentId;
 	View.EnemyDefinitionName = EnemyDef ? EnemyDef->GetName() : TEXT("None");
+	View.SceneEnemyHostName = SceneEnemyHost ? SceneEnemyHost->GetName() : TEXT("None");
+	View.SceneEnemyHostEnemyDefinitionName =
+		(SceneEnemyHost && SceneEnemyHost->EnemyDefinition)
+			? SceneEnemyHost->EnemyDefinition->GetName()
+			: TEXT("None");
+	View.SceneEnemyHostPartCount =
+		SceneEnemyHost ? SceneEnemyHost->GetAttachedBattleEnemyPartActors().Num() : 0;
+	View.bSceneEnemyHostConfigured = SceneEnemyHost != nullptr;
+	View.bSceneEnemyHostDefinitionMatches =
+		SceneEnemyHost
+		&& EnemyDef
+		&& SceneEnemyHost->EnemyDefinition
+		&& SceneEnemyHost->EnemyDefinition == EnemyDef;
 	View.bCanInteract = CanInteract_Implementation(PC);
 	View.bIsDestroyed = IsDestroyedFor(PC);
 	View.HoverPrompt = GetHoverPromptText(PC).ToString();
@@ -361,10 +394,15 @@ FString ABattleTriggerActor::GetBattleTriggerDebugSummary(AWacomPlayerController
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("BattleTrigger{Actor=%s PersistentId=%s EnemyDef=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("BattleTrigger{Actor=%s PersistentId=%s EnemyDef=%s SceneEnemyHost=%s SceneEnemyHostEnemyDef=%s SceneEnemyHostParts=%d SceneEnemyHostConfigured=%s SceneEnemyHostDefinitionMatches=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.EnemyDefinitionName,
+		*View.SceneEnemyHostName,
+		*View.SceneEnemyHostEnemyDefinitionName,
+		View.SceneEnemyHostPartCount,
+		View.bSceneEnemyHostConfigured ? TEXT("true") : TEXT("false"),
+		View.bSceneEnemyHostDefinitionMatches ? TEXT("true") : TEXT("false"),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
 		View.bIsDestroyed ? TEXT("true") : TEXT("false"),
 		View.bClickTargetConfigured ? TEXT("true") : TEXT("false"),

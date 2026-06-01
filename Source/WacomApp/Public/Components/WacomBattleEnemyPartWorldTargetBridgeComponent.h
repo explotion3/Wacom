@@ -4,14 +4,18 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
 #include "Events/BattleEvent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
+#include "UI/Battle/WacomBattleEnemyPartPredictionTypes.h"
+#include "UI/Battle/WacomBattleEnemyPartStatusBadgeTypes.h"
 #include "WacomBattleEnemyPartWorldTargetBridgeComponent.generated.h"
 
 class UBattleHUD;
 class UPrimitiveComponent;
 class UWacomInteractionTargetComponent;
+class UWidgetComponent;
 struct FBattleSnapshot;
 struct FBattleTargetSelectionView;
 
@@ -61,6 +65,18 @@ struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
 	FGuid RuntimePartInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FText RuntimePartDisplayName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	int32 CurrentHp = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	int32 MaxHp = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	int32 Shield = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
 	int32 CurrentInitiative = 0;
@@ -125,6 +141,54 @@ struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
 	FVector2D HoverScreenPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FWacomBattleEnemyPartPredictionView PredictionView;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FWacomBattleEnemyPartStatusBadgeView StatusBadgeView;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FName PredictionWidgetName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FName StatusBadgeWidgetName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FVector PredictionBadgeRelativeLocation = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FVector StatusBadgeRelativeLocation = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FVector2D PredictionBadgeDrawSize = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	FVector2D StatusBadgeDrawSize = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	float PredictionBadgeScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	float StatusBadgeScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	float StatusBadgeOpacity = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	float DestroyedStatusBadgeOpacity = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	float CurrentStatusBadgeAppliedOpacity = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	float PredictionBadgeZOffsetWhenVisible = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	bool bPredictionBadgeOffsetActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	int32 BadgeLayoutStaggerIndex = INDEX_NONE;
 };
 
 /**
@@ -168,6 +232,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "鼠标悬停该部位时的轻量探测缩放倍率。只表示当前 hover 目标，不影响战斗规则。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.15"))
 	float HoverProbeScale = 1.04f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "是否允许 Bridge 更新场景部位预测 Widget。只影响 UI，不影响战斗规则。"))
+	bool bEnablePredictionDisplay = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "是否允许 Bridge 更新场景部位常驻状态 Badge。只影响 UI，不影响战斗规则。"))
+	bool bEnableStatusBadgeDisplay = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "预测 Widget 的整体渲染缩放。由 PartActor facade 同步；只影响 UI。", ClampMin = "0.25", ClampMax = "2.0", UIMin = "0.6", UIMax = "1.2"))
+	float PredictionBadgeScale = 0.92f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "状态 Badge 的整体渲染缩放。由 PartActor facade 同步；只影响 UI。", ClampMin = "0.25", ClampMax = "2.0", UIMin = "0.6", UIMax = "1.2"))
+	float StatusBadgeScale = 0.86f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "普通状态 Badge 透明度。由 PartActor facade 同步；只影响 UI。", ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.35", UIMax = "1.0"))
+	float StatusBadgeOpacity = 0.92f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "破坏状态 Badge 透明度。由 PartActor facade 同步；破坏态仍显示但弱化。", ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.25", UIMax = "1.0"))
+	float DestroyedStatusBadgeOpacity = 0.58f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "预测 Widget 显示时额外向上错开的距离。由 PartActor facade 同步；只影响 UI。", ClampMin = "0.0", ClampMax = "300.0", UIMin = "0.0", UIMax = "100.0"))
+	float PredictionBadgeZOffsetWhenVisible = 42.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "默认 cue 保持时间，单位秒。", ClampMin = "0.01", ClampMax = "2.0", UIMin = "0.05", UIMax = "0.5"))
 	float CueHoldSeconds = 0.14f;
 
@@ -188,8 +273,17 @@ public:
 		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionDebugInput =
 			FWacomBattleEnemyPartDragPredictionDebugInput());
 	void ClearDragTargetPreviewState();
-	void SetHoverProbeState(const struct FWacomInteractionTargetHandle& TargetHandle, FName Reason);
+	void SetHoverProbeState(
+		const struct FWacomInteractionTargetHandle& TargetHandle,
+		FName Reason,
+		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput =
+			FWacomBattleEnemyPartDragPredictionDebugInput());
 	void ClearHoverProbeState(FName Reason = NAME_None);
+	void SetPredictionWidgetComponent(UWidgetComponent* InPredictionWidgetComponent);
+	void SetStatusBadgeWidgetComponent(UWidgetComponent* InStatusBadgeWidgetComponent);
+	void SetBadgeLayoutDebugState(int32 InStaggerIndex);
+	void ClearPredictionDisplay(FName Reason = NAME_None);
+	void ClearStatusBadgeDisplay(FName Reason = NAME_None);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|World Target")
 	FWacomBattleEnemyPartWorldTargetDebugView GetBattleWorldTargetDebugView() const;
@@ -212,6 +306,14 @@ private:
 	void RegisterWithBattleHUD(UBattleHUD& HUD);
 	void UnregisterFromBattleHUD();
 	void ApplyTargetableAffordance(bool bInTargetable);
+	void RefreshPredictionDisplay();
+	void ApplyPredictionViewToWidget();
+	void RefreshStatusBadgeDisplay();
+	void ApplyStatusBadgeViewToWidget();
+	FWacomBattleEnemyPartPredictionView BuildPredictionView(
+		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput) const;
+	FWacomBattleEnemyPartStatusBadgeView BuildStatusBadgeView() const;
+	FText BuildStatusBadgeStatusText() const;
 	void ApplyPersistentScaleState();
 	void BeginScaleFeedback(float ScaleMultiplier, float HoldSeconds);
 	void ClearScaleFeedback();
@@ -251,15 +353,29 @@ private:
 	EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FWacomBattleEnemyPartDragPredictionDebugInput LastDragPredictionDebugInput;
+	FWacomBattleEnemyPartDragPredictionDebugInput LastHoverPredictionInput;
+	FWacomBattleEnemyPartPredictionView CurrentPredictionView;
+	FWacomBattleEnemyPartStatusBadgeView CurrentStatusBadgeView;
+	TWeakObjectPtr<UWidgetComponent> PredictionWidgetComponent;
+	TWeakObjectPtr<UWidgetComponent> StatusBadgeWidgetComponent;
+	FVector PredictionBadgeBaseRelativeLocation = FVector::ZeroVector;
+	bool bHasPredictionBadgeBaseRelativeLocation = false;
 	FName HoverReason = NAME_None;
 	FName HoverStableId = NAME_None;
 	FGuid HoverWorldTargetId;
 	FVector2D HoverScreenPosition = FVector2D::ZeroVector;
+	int32 BadgeLayoutStaggerIndex = INDEX_NONE;
 	int32 CurrentInitiative = 0;
 	FName CurrentIntentId = NAME_None;
+	FText RuntimePartDisplayName;
+	int32 CurrentHp = 0;
+	int32 MaxHp = 0;
+	int32 Shield = 0;
 	FText CurrentIntentDisplayName;
 	int32 CurrentIntentInitiative = 0;
 	int32 CurrentIntentResistanceValue = 0;
+	FGameplayTagContainer RuntimeStatuses;
+	TMap<FGameplayTag, int32> RuntimeStatusStacks;
 	FName TargetDisabledReason = NAME_None;
 	FName LastBindResult = TEXT("NotAttempted");
 	FName LastCueKind = TEXT("None");

@@ -6,6 +6,7 @@
 #include "Components/SceneComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "UI/Battle/BattleHUD.h"
 
 #define LOCTEXT_NAMESPACE "WacomBattleEnemyActor"
 
@@ -29,6 +30,38 @@ namespace
 			Strings.Add(Name.ToString());
 		}
 		return FString::Join(Strings, TEXT(","));
+	}
+
+	TMap<FName, int32> BuildDefinitionPartOrder(const UEnemyDefinition* EnemyDefinition)
+	{
+		TMap<FName, int32> PartOrder;
+		if (!EnemyDefinition)
+		{
+			return PartOrder;
+		}
+
+		for (int32 Index = 0; Index < EnemyDefinition->Parts.Num(); ++Index)
+		{
+			const FEnemyPartSlot& PartSlot = EnemyDefinition->Parts[Index];
+			if (PartSlot.PartDef && !PartSlot.PartDef->PartId.IsNone())
+			{
+				PartOrder.FindOrAdd(PartSlot.PartDef->PartId, Index);
+			}
+		}
+		return PartOrder;
+	}
+
+	FString BuildPartSortKey(const AWacomBattleEnemyPartActor* PartActor)
+	{
+		if (!PartActor)
+		{
+			return FString();
+		}
+
+		const FString PartIdKey = PartActor->PartId.IsNone()
+			? FString(TEXT("~"))
+			: PartActor->PartId.ToString();
+		return FString::Printf(TEXT("%s|%s"), *PartIdKey, *PartActor->GetName());
 	}
 }
 
@@ -54,6 +87,23 @@ AWacomBattleEnemyActor::GetAttachedBattleEnemyPartActors() const
 			PartActors.Add(PartActor);
 		}
 	}
+
+	const TMap<FName, int32> DefinitionPartOrder = BuildDefinitionPartOrder(EnemyDefinition);
+	PartActors.Sort([&DefinitionPartOrder](
+		const AWacomBattleEnemyPartActor& Left,
+		const AWacomBattleEnemyPartActor& Right)
+	{
+		const int32* LeftDefinitionIndex = DefinitionPartOrder.Find(Left.PartId);
+		const int32* RightDefinitionIndex = DefinitionPartOrder.Find(Right.PartId);
+		const int32 LeftRank = LeftDefinitionIndex ? *LeftDefinitionIndex : MAX_int32;
+		const int32 RightRank = RightDefinitionIndex ? *RightDefinitionIndex : MAX_int32;
+		if (LeftRank != RightRank)
+		{
+			return LeftRank < RightRank;
+		}
+
+		return BuildPartSortKey(&Left) < BuildPartSortKey(&Right);
+	});
 	return PartActors;
 }
 
@@ -68,6 +118,36 @@ void AWacomBattleEnemyActor::RefreshAttachedPartAuthoringState() const
 	}
 }
 
+void AWacomBattleEnemyActor::RefreshAttachedPartBadgeLayout() const
+{
+	const TArray<AWacomBattleEnemyPartActor*> PartActors = GetAttachedBattleEnemyPartActors();
+	const float CenterIndex = PartActors.Num() > 0
+		? (static_cast<float>(PartActors.Num() - 1) * 0.5f)
+		: 0.0f;
+
+	for (int32 Index = 0; Index < PartActors.Num(); ++Index)
+	{
+		AWacomBattleEnemyPartActor* PartActor = PartActors[Index];
+		if (!PartActor)
+		{
+			continue;
+		}
+
+		FVector StaggerOffset = FVector::ZeroVector;
+		int32 StaggerIndex = INDEX_NONE;
+		if (bApplyAttachedPartBadgeStagger)
+		{
+			const float RelativeIndex = static_cast<float>(Index) - CenterIndex;
+			StaggerOffset = FVector(
+				0.0f,
+				RelativeIndex * BadgeStaggerHorizontalStep,
+				FMath::Abs(RelativeIndex) * BadgeStaggerVerticalStep);
+			StaggerIndex = Index;
+		}
+		PartActor->SetBadgeLayoutStagger(StaggerIndex, StaggerOffset);
+	}
+}
+
 void AWacomBattleEnemyActor::ConfigureDebugSnakeHostSample()
 {
 	EnemyDefinition = LoadObject<UEnemyDefinition>(nullptr, DebugSnakeEnemyPath);
@@ -75,10 +155,18 @@ void AWacomBattleEnemyActor::ConfigureDebugSnakeHostSample()
 
 FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebugView() const
 {
+	return GetBattleSceneEnemyDebugViewForHUD(nullptr);
+}
+
+FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebugViewForHUD(
+	const UBattleHUD* HUD) const
+{
 	FWacomBattleSceneEnemyDebugView View;
 	View.ActorName = GetName();
 	View.EnemyDefinitionName = EnemyDefinition ? FName(*EnemyDefinition->GetName()) : NAME_None;
 	View.EnemyId = EnemyDefinition ? EnemyDefinition->EnemyId : NAME_None;
+	View.bUsedByBattleHUD = HUD && HUD->GetBattleSceneEnemyHost() == this;
+	View.ActiveBattleHUDName = HUD ? HUD->GetName() : TEXT("None");
 
 	const TArray<AWacomBattleEnemyPartActor*> PartActors = GetAttachedBattleEnemyPartActors();
 	View.AttachedPartActorCount = PartActors.Num();
@@ -107,6 +195,18 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 			{
 				++View.HoveredPartActorCount;
 			}
+			if (PartView.BridgeDebugView.PredictionView.bVisible)
+			{
+				++View.PredictionVisiblePartActorCount;
+			}
+			if (PartView.BridgeDebugView.StatusBadgeView.bVisible)
+			{
+				++View.StatusBadgeVisiblePartActorCount;
+			}
+			if (PartView.BadgeLayoutStaggerIndex != INDEX_NONE)
+			{
+				++View.BadgeLayoutAppliedPartActorCount;
+			}
 		}
 	}
 	View.UnknownPartIds = BuildUnknownAttachedPartIds();
@@ -115,9 +215,14 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 
 FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const
 {
-	const FWacomBattleSceneEnemyDebugView View = GetBattleSceneEnemyDebugView();
+	return GetBattleSceneEnemyDebugSummaryForHUD(nullptr);
+}
+
+FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummaryForHUD(const UBattleHUD* HUD) const
+{
+	const FWacomBattleSceneEnemyDebugView View = GetBattleSceneEnemyDebugViewForHUD(HUD);
 	return FString::Printf(
-		TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PartIds=[%s] UnknownPartIds=[%s]}"),
+		TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d StatusBadgeVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] UnknownPartIds=[%s]}"),
 		*View.ActorName,
 		*View.EnemyDefinitionName.ToString(),
 		*View.EnemyId.ToString(),
@@ -127,6 +232,11 @@ FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const
 		View.RuntimeFactsPartActorCount,
 		View.RuntimeInitiativeTotal,
 		View.HoveredPartActorCount,
+		View.PredictionVisiblePartActorCount,
+		View.StatusBadgeVisiblePartActorCount,
+		View.BadgeLayoutAppliedPartActorCount,
+		View.bUsedByBattleHUD ? TEXT("true") : TEXT("false"),
+		*View.ActiveBattleHUDName,
 		*JoinNames(View.AttachedPartIds),
 		*JoinNames(View.UnknownPartIds));
 }

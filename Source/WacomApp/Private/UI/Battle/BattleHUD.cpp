@@ -51,6 +51,8 @@
 #include "Input/CommonUIInputSettings.h"
 
 #include "Events/BattleEvent.h"
+#include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Cards/CardDefinition.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -63,19 +65,6 @@ namespace
 	constexpr float BattlePresentationStackExitSeconds = 0.16f;
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
 	const FName FirstPersonBattleHandLayerSourceId(TEXT("BattleHand"));
-
-	bool IsScannableBattleEnemyPartWorldTargetBridge(
-		const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge,
-		const UWorld* World)
-	{
-		if (!IsValid(Bridge) || Bridge->GetWorld() != World || !Bridge->IsRegistered())
-		{
-			return false;
-		}
-
-		const AActor* Owner = Bridge->GetOwner();
-		return IsValid(Owner) && !Owner->IsActorBeingDestroyed();
-	}
 
 	const TCHAR* LexToString(EWacomBattleCardDropIntentKind IntentKind)
 	{
@@ -273,6 +262,7 @@ void UBattleHUD::NativeConstruct()
 	}
 
 	SyncLegacyHandPanelVisibility();
+	SyncEnemyInfoBarFallbackVisibility();
 }
 
 void UBattleHUD::NativeDestruct()
@@ -421,6 +411,7 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 	// 递归下发 Snapshot 给子 Widget
 	Super::NativeRefreshFromSnapshot(Snap);
 	SyncBattleEnemyPartWorldTargets(Snap);
+	SyncEnemyInfoBarFallbackVisibility();
 }
 
 void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession)
@@ -433,6 +424,8 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 		ClearPendingTurnBoundaryCommand();
 		ClearFirstPersonBattleHandLayer();
 		ClearBattleEnemyPartWorldTargets();
+		BattleSceneEnemyHost.Reset();
+		SyncEnemyInfoBarFallbackVisibility();
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
 		ClearPendingFirstPersonCardTransitionEvents();
 		DestroyBattle3DHandPresenter();
@@ -469,6 +462,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	{
 		ConsumeAndLogEvents();
 	}
+	SyncEnemyInfoBarFallbackVisibility();
 }
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
@@ -552,6 +546,32 @@ void UBattleHUD::SetBattleHandPresentationMode(EWacomBattleHandPresentationMode 
 	SyncLegacyHandPanelVisibility();
 }
 
+void UBattleHUD::SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost)
+{
+	ClearBattleEnemyPartWorldTargets();
+	BattleSceneEnemyHost = InHost;
+	if (!InHost)
+	{
+		BattleSceneEnemyHost.Reset();
+		SyncEnemyInfoBarFallbackVisibility();
+		return;
+	}
+
+	InHost->RefreshAttachedPartBadgeLayout();
+	RebuildBattleSceneEnemyPartWorldTargetRegistry();
+	if (UBattleSession* S = GetSession())
+	{
+		SyncBattleEnemyPartWorldTargets(S->BuildSnapshot());
+	}
+	SyncEnemyInfoBarFallbackVisibility();
+}
+
+bool UBattleHUD::IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(
+	const FWacomInteractionTargetHandle& TargetHandle) const
+{
+	return ResolveBattleEnemyPartWorldTargetBridge(TargetHandle) != nullptr;
+}
+
 // ================ 状态机 ================
 
 void UBattleHUD::SetUIState(EBattleUIState NewState)
@@ -597,6 +617,7 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 	SyncFirstPersonBattleHandLayer(Snap);
 	SyncBattleEnemyPartWorldTargets(Snap);
 	SyncLegacyHandPanelVisibility();
+	SyncEnemyInfoBarFallbackVisibility();
 }
 
 UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor() const
@@ -1285,6 +1306,13 @@ FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
 	{
 	case EWacomInteractionTargetKind::World:
 	{
+		if (!ResolveBattleEnemyPartWorldTargetBridge(CandidateTarget))
+		{
+			Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
+			Result.RejectReason = EWacomBattleCardDropRejectReason::InvalidWorldTarget;
+			return Result;
+		}
+
 		const FWacomBattleTargetValidationResult Validation =
 			CurrentSession->ValidateTargetWithCard(CardInstanceId, CandidateTarget);
 		Result.TargetValidationRejectReason = Validation.RejectReason;
@@ -1405,7 +1433,9 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent* UBattleHUD::ResolveBattleEnemyP
 	const UWacomInteractionTargetComponent* InteractionTarget =
 		Cast<UWacomInteractionTargetComponent>(TargetHandle.SourceObject.Get());
 	const AActor* Owner = InteractionTarget ? InteractionTarget->GetOwner() : nullptr;
-	return Owner ? Owner->FindComponentByClass<UWacomBattleEnemyPartWorldTargetBridgeComponent>() : nullptr;
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		Owner ? Owner->FindComponentByClass<UWacomBattleEnemyPartWorldTargetBridgeComponent>() : nullptr;
+	return IsBattleSceneEnemyPartBridgeInCurrentRegistry(Bridge) ? Bridge : nullptr;
 }
 
 bool UBattleHUD::ProbeFirstPersonCardDragTarget(
@@ -2467,25 +2497,78 @@ void UBattleHUD::SyncBattle3DHandPresenterTargeting()
 	Battle3DHandPresenter->SetTargetSelectionView(BuildTargetSelectionView());
 }
 
-void UBattleHUD::SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap)
+void UBattleHUD::RebuildBattleSceneEnemyPartWorldTargetRegistry()
 {
-	UWorld* World = GetWorld();
-	if (!World)
+	BattleSceneEnemyPartWorldTargetBridges.Reset();
+
+	AWacomBattleEnemyActor* Host = BattleSceneEnemyHost.Get();
+	if (!IsValid(Host))
 	{
 		return;
 	}
 
+	for (AWacomBattleEnemyPartActor* PartActor : Host->GetAttachedBattleEnemyPartActors())
+	{
+		if (!IsValid(PartActor) || PartActor->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+
+		if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+			PartActor->GetWorldTargetBridgeComponent())
+		{
+			if (Bridge->IsRegistered())
+			{
+				BattleSceneEnemyPartWorldTargetBridges.AddUnique(Bridge);
+			}
+		}
+	}
+}
+
+bool UBattleHUD::IsBattleSceneEnemyPartBridgeInCurrentRegistry(
+	const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const
+{
+	if (!IsValid(Bridge))
+	{
+		return false;
+	}
+
+	for (const TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>& RegisteredBridge :
+		BattleSceneEnemyPartWorldTargetBridges)
+	{
+		if (RegisteredBridge.Get() == Bridge)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void UBattleHUD::SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap)
+{
 	if (Snap.Phase == EBattlePhase::None || Snap.Phase == EBattlePhase::BattleEnd)
 	{
 		ClearBattleEnemyPartWorldTargets();
 		return;
 	}
 
-	const FBattleTargetSelectionView TargetSelectionView = BuildTargetSelectionView();
-	for (TObjectIterator<UWacomBattleEnemyPartWorldTargetBridgeComponent> It; It; ++It)
+	if (!BattleSceneEnemyHost.IsValid())
 	{
-		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = *It;
-		if (!IsScannableBattleEnemyPartWorldTargetBridge(Bridge, World))
+		ClearBattleEnemyPartWorldTargets();
+		return;
+	}
+
+	if (AWacomBattleEnemyActor* Host = BattleSceneEnemyHost.Get())
+	{
+		Host->RefreshAttachedPartBadgeLayout();
+	}
+	RebuildBattleSceneEnemyPartWorldTargetRegistry();
+	const FBattleTargetSelectionView TargetSelectionView = BuildTargetSelectionView();
+	for (const TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>& WeakBridge :
+		BattleSceneEnemyPartWorldTargetBridges)
+	{
+		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = WeakBridge.Get();
+		if (!IsValid(Bridge))
 		{
 			continue;
 		}
@@ -2499,20 +2582,28 @@ void UBattleHUD::ClearBattleEnemyPartWorldTargets()
 	ClearFirstPersonCardDragTargetFeedback();
 	ClearBattleSceneEnemyPartHoverProbe(TEXT("WorldTargetsCleared"));
 
-	UWorld* World = GetWorld();
-	if (!World)
+	for (const TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>& WeakBridge :
+		BattleSceneEnemyPartWorldTargetBridges)
 	{
-		return;
-	}
-
-	for (TObjectIterator<UWacomBattleEnemyPartWorldTargetBridgeComponent> It; It; ++It)
-	{
-		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = *It;
-		if (IsScannableBattleEnemyPartWorldTargetBridge(Bridge, World))
+		if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = WeakBridge.Get())
 		{
 			Bridge->ClearBattleBinding();
 		}
 	}
+	BattleSceneEnemyPartWorldTargetBridges.Reset();
+}
+
+void UBattleHUD::SyncEnemyInfoBarFallbackVisibility()
+{
+	if (!EnemyInfoBar)
+	{
+		return;
+	}
+
+	EnemyInfoBar->SetVisibility(
+		BattleSceneEnemyHost.IsValid()
+			? ESlateVisibility::Collapsed
+			: ESlateVisibility::Visible);
 }
 
 bool UBattleHUD::CanUpdateBattleSceneEnemyPartHoverProbe() const
@@ -2531,6 +2622,41 @@ bool UBattleHUD::CanUpdateBattleSceneEnemyPartHoverProbe() const
 	}
 
 	return CurrentSession->BuildSnapshot().Phase == EBattlePhase::PlayerAction;
+}
+
+FWacomBattleEnemyPartDragPredictionDebugInput
+UBattleHUD::BuildBattleSceneEnemyPartHoverPredictionInput(
+	const FWacomInteractionTargetHandle& TargetHandle) const
+{
+	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
+	if (UIState != EBattleUIState::TargetSelect || !PendingTargetingCardId.IsValid())
+	{
+		return PredictionInput;
+	}
+
+	const UBattleSession* CurrentSession = GetSession();
+	if (!CurrentSession)
+	{
+		return PredictionInput;
+	}
+
+	const FBattleSnapshot CurrentSnapshot = CurrentSession->BuildSnapshot();
+	const FHandCardSnapshot* SourceSnapshot =
+		FindHandCardSnapshot(CurrentSnapshot, PendingTargetingCardId);
+	if (!SourceSnapshot)
+	{
+		return PredictionInput;
+	}
+
+	const FWacomBattleTargetValidationResult Validation =
+		CurrentSession->ValidateTargetWithCard(PendingTargetingCardId, TargetHandle);
+	PredictionInput.bHasSourceCard = true;
+	PredictionInput.SourceCardInstanceId = PendingTargetingCardId;
+	PredictionInput.SourceCardRuntimeCost = SourceSnapshot->RuntimeCost;
+	PredictionInput.bSourceCardSwift = SourceSnapshot->bIsSwift;
+	PredictionInput.bPreviewCanSubmit = Validation.bCanTarget;
+	PredictionInput.PreviewRejectReason = FName(LexToString(Validation.RejectReason));
+	return PredictionInput;
 }
 
 void UBattleHUD::TickBattleSceneEnemyPartHoverProbe(float DeltaTime)
@@ -2585,7 +2711,10 @@ void UBattleHUD::UpdateBattleSceneEnemyPartHoverProbe()
 	}
 
 	HoveredBattleEnemyPartHandle = TargetHandle;
-	Bridge->SetHoverProbeState(TargetHandle, TEXT("Hovered"));
+	Bridge->SetHoverProbeState(
+		TargetHandle,
+		TEXT("Hovered"),
+		BuildBattleSceneEnemyPartHoverPredictionInput(TargetHandle));
 }
 
 void UBattleHUD::ClearBattleSceneEnemyPartHoverProbe(FName Reason)

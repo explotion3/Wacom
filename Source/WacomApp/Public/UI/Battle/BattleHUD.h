@@ -22,6 +22,7 @@ class UWacomCardDetailPanel;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class AWacomBattle3DHandPresenter;
 class AWacomBattleCardVisualActor;
+class AWacomBattleEnemyActor;
 class APlayerController;
 class FWacomBattlePresentationTargetRegistry;
 struct FBattleHUDFallbackLayoutBuilder;
@@ -34,6 +35,7 @@ struct FWacomBattlePresentationTargetCue;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardDragView;
 struct FWacomCardDetailViewData;
+struct FWacomBattleEnemyPartDragPredictionDebugInput;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEndedNative, EBattleOutcome);
@@ -371,6 +373,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI", meta = (ToolTip = "当前 BattleHUD 使用的战斗手牌呈现模式。"))
 	EWacomBattleHandPresentationMode GetBattleHandPresentationMode() const { return BattleHandPresentationMode; }
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "设置当前战斗绑定的场景敌人 Host。BattleHUD 只会同步该 Host 下的 PartActor world target。"))
+	void SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "当前战斗绑定的场景敌人 Host。为空时仅使用 EnemyInfoBar fallback。"))
+	AWacomBattleEnemyActor* GetBattleSceneEnemyHost() const { return BattleSceneEnemyHost.Get(); }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "给输入路由使用：判断 World target handle 是否来自当前 SceneEnemyHost 注册的部位。EnemyInfoBar 等 2D fallback 不走此检查。"))
+	bool IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(
+		const FWacomInteractionTargetHandle& TargetHandle) const;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeOnInitialized() override;
@@ -539,6 +551,8 @@ private:
 	TMap<int32, FTimerHandle> BattlePresentationStackExitTimerHandles;
 	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> HoveredBattleEnemyPartBridge;
 	FWacomInteractionTargetHandle HoveredBattleEnemyPartHandle;
+	TWeakObjectPtr<AWacomBattleEnemyActor> BattleSceneEnemyHost;
+	TArray<TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>> BattleSceneEnemyPartWorldTargetBridges;
 	float BattleSceneEnemyPartHoverProbeElapsedSeconds = 0.0f;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
@@ -599,6 +613,10 @@ private:
 	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FGuid& TargetPartInstanceId, int32 Amount);
 	void PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId);
 	int32 GetBattlePresentationTargetCountForTest() const;
+	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
+	{
+		return BattleSceneEnemyPartWorldTargetBridges.Num();
+	}
 #endif
 
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
@@ -650,9 +668,15 @@ private:
 	AWacomBattle3DHandPresenter* EnsureBattle3DHandPresenter();
 	void DestroyBattle3DHandPresenter();
 	void SyncBattle3DHandPresenterTargeting();
+	void RebuildBattleSceneEnemyPartWorldTargetRegistry();
+	bool IsBattleSceneEnemyPartBridgeInCurrentRegistry(
+		const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
 	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap);
 	void ClearBattleEnemyPartWorldTargets();
+	void SyncEnemyInfoBarFallbackVisibility();
 	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
+	FWacomBattleEnemyPartDragPredictionDebugInput BuildBattleSceneEnemyPartHoverPredictionInput(
+		const FWacomInteractionTargetHandle& TargetHandle) const;
 	void TickBattleSceneEnemyPartHoverProbe(float DeltaTime);
 	void UpdateBattleSceneEnemyPartHoverProbe();
 	void ClearBattleSceneEnemyPartHoverProbe(FName Reason);

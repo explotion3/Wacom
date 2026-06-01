@@ -3,6 +3,8 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/WacomRunTunnelSegmentActor.h"
+#include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Components/SplineComponent.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomCursorLookDriverComponent.h"
@@ -544,6 +546,70 @@ namespace WacomFirstPersonCardLayerSpec
 			LastDragView = DragView;
 		}
 	};
+
+	struct FSceneEnemyHostActors
+	{
+		AWacomBattleEnemyActor* Host = nullptr;
+		TArray<AWacomBattleEnemyPartActor*> Parts;
+	};
+
+	FSceneEnemyHostActors SpawnSceneEnemyHost(
+		UWorld& World,
+		UEnemyDefinition* EnemyDefinition,
+		const TArray<FName>& PartIds)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.ObjectFlags |= RF_Transient;
+
+		FSceneEnemyHostActors Result;
+		Result.Host = World.SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+		if (!Result.Host)
+		{
+			return Result;
+		}
+
+		Result.Host->EnemyDefinition = EnemyDefinition;
+		for (int32 Index = 0; Index < PartIds.Num(); ++Index)
+		{
+			AWacomBattleEnemyPartActor* PartActor =
+				World.SpawnActor<AWacomBattleEnemyPartActor>(
+					AWacomBattleEnemyPartActor::StaticClass(),
+					FTransform(FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f)),
+					SpawnParams);
+			if (!PartActor)
+			{
+				continue;
+			}
+
+			PartActor->PartId = PartIds[Index];
+			PartActor->AttachToActor(Result.Host, FAttachmentTransformRules::KeepWorldTransform);
+			Result.Parts.Add(PartActor);
+		}
+
+		Result.Host->RefreshAttachedPartAuthoringState();
+		return Result;
+	}
+
+	void DestroySceneEnemyHost(FSceneEnemyHostActors& Actors)
+	{
+		for (AWacomBattleEnemyPartActor* PartActor : Actors.Parts)
+		{
+			if (IsValid(PartActor))
+			{
+				PartActor->Destroy();
+			}
+		}
+		Actors.Parts.Reset();
+
+		if (IsValid(Actors.Host))
+		{
+			Actors.Host->Destroy();
+		}
+		Actors.Host = nullptr;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -10336,9 +10402,10 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 	}
 
 	FWacomBattleFixture Fx;
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 0, 0);
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeSimpleDamageCard(0, 1) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Enemy, 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::SingleEnemyPart);
 	const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -10347,32 +10414,37 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
 			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
 			FTransform::Identity);
-	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity);
+	WacomFirstPersonCardLayerSpec::FSceneEnemyHostActors SceneEnemy =
+		WacomFirstPersonCardLayerSpec::SpawnSceneEnemyHost(
+			*World,
+			Enemy,
+			{ TEXT("Test.Part.Solo") });
 	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
 	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Owner"), Owner)
+		|| !TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
+		|| !TestTrue(TEXT("Scene enemy part exists"), SceneEnemy.Parts.Num() > 0)
 		|| !TestNotNull(TEXT("HUD"), HUD)
 		|| !TestTrue(TEXT("Card exists"), CardId.IsValid())
 		|| !TestTrue(TEXT("Part exists"), PartId.IsValid()))
 	{
 		return false;
 	}
-
-	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
-	Owner->SetRootComponent(Primitive);
-	Primitive->RegisterComponent();
-	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
-	Owner->AddInstanceComponent(InteractionTarget);
-	InteractionTarget->RegisterComponent();
-	InteractionTarget->SetTargetId(PartId);
-	InteractionTarget->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
+	ON_SCOPE_EXIT
+	{
+		WacomFirstPersonCardLayerSpec::DestroySceneEnemyHost(SceneEnemy);
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
 
 	HUD->SetOwningPlayerForTest(PC);
 	HUD->SetWorldForTest(World);
 	HUD->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
 	PC->SetBattleSceneClickHUDForTest(HUD);
-	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+	PC->SetBattleSceneClickHitForTest(SceneEnemy.Parts[0], SceneEnemy.Parts[0]->GetHitBounds());
 
 	const FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerSpec::MakeDropDragView(
 		CardId,
@@ -10385,8 +10457,6 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("World target id preserved"), Result.TargetHandle.WorldTargetId, PartId);
 	TestTrue(TEXT("World target exposes feedback position"), Result.bHasFeedbackTargetScreenPosition);
 
-	Owner->Destroy();
-	PC->Destroy();
 	return true;
 }
 
@@ -10404,41 +10474,58 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 	}
 
 	FWacomBattleFixture Fx;
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 0, 0);
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeSimpleDamageCard(0, 1) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Enemy, 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::SingleEnemyPart);
+	const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
 
 	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
 		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
 			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
 			FTransform::Identity);
-	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity);
+	WacomFirstPersonCardLayerSpec::FSceneEnemyHostActors CurrentHost =
+		WacomFirstPersonCardLayerSpec::SpawnSceneEnemyHost(
+			*World,
+			Enemy,
+			{ TEXT("Test.Part.Solo") });
+	WacomFirstPersonCardLayerSpec::FSceneEnemyHostActors OtherHost =
+		WacomFirstPersonCardLayerSpec::SpawnSceneEnemyHost(
+			*World,
+			Enemy,
+			{ TEXT("Test.Part.Solo") });
 	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
 	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Owner"), Owner)
+		|| !TestNotNull(TEXT("Current host"), CurrentHost.Host)
+		|| !TestTrue(TEXT("Current host part exists"), CurrentHost.Parts.Num() > 0)
+		|| !TestNotNull(TEXT("Other host"), OtherHost.Host)
+		|| !TestTrue(TEXT("Other host part exists"), OtherHost.Parts.Num() > 0)
 		|| !TestNotNull(TEXT("HUD"), HUD)
-		|| !TestTrue(TEXT("Card exists"), CardId.IsValid()))
+		|| !TestTrue(TEXT("Card exists"), CardId.IsValid())
+		|| !TestTrue(TEXT("Part exists"), PartId.IsValid()))
 	{
 		return false;
 	}
-
-	UStaticMeshComponent* Primitive = NewObject<UStaticMeshComponent>(Owner);
-	Owner->SetRootComponent(Primitive);
-	Primitive->RegisterComponent();
-	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
-	Owner->AddInstanceComponent(InteractionTarget);
-	InteractionTarget->RegisterComponent();
-	InteractionTarget->SetTargetId(FGuid::NewGuid());
-	InteractionTarget->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
+	ON_SCOPE_EXIT
+	{
+		WacomFirstPersonCardLayerSpec::DestroySceneEnemyHost(OtherHost);
+		WacomFirstPersonCardLayerSpec::DestroySceneEnemyHost(CurrentHost);
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
 
 	HUD->SetOwningPlayerForTest(PC);
 	HUD->SetWorldForTest(World);
 	HUD->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostForTest(CurrentHost.Host);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
 	PC->SetBattleSceneClickHUDForTest(HUD);
-	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+	OtherHost.Parts[0]->GetInteractionTargetComponent()->SetTargetId(PartId);
+	PC->SetBattleSceneClickHitForTest(OtherHost.Parts[0], OtherHost.Parts[0]->GetHitBounds());
 
 	const FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerSpec::MakeDropDragView(
 		CardId,
@@ -10448,8 +10535,6 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 	TestEqual(TEXT("Invalid world reason"), Result.RejectReason, EWacomBattleCardDropRejectReason::InvalidWorldTarget);
 	TestFalse(TEXT("Invalid world target cannot submit"), Result.bCanSubmit);
 
-	Owner->Destroy();
-	PC->Destroy();
 	return true;
 }
 

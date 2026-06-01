@@ -352,6 +352,7 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	}
 
 	BattleHUD->SetSession(ActiveSession);
+	BattleHUD->SetBattleSceneEnemyHost(Trigger ? Trigger->SceneEnemyHost : nullptr);
 
 	// 订阅战斗结束广播
 	BattleEndedHandle = BattleHUD->OnBattleEndedNative.AddUObject(
@@ -445,6 +446,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	// 2) Pop HUD + 清理 Session
 	if (UIManager && BattleHUD)
 	{
+		BattleHUD->SetBattleSceneEnemyHost(nullptr);
 		UIManager->PopContentFromLayer(BattleHUD);
 	}
 	BattleHUD     = nullptr;

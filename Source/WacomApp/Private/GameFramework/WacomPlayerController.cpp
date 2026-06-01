@@ -853,6 +853,17 @@ bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetS
 			&& Handle.TargetTag == WacomTags::Interaction_Target_Battle_EnemyPart
 			&& Handle.WorldTargetId.IsValid())
 		{
+			if (!HUD || !HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(Handle))
+			{
+				if (bLogBattleSceneTargetClickRouting)
+				{
+					UE_LOG(LogTemp, Display,
+						TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NotInCurrentSceneEnemyHostRegistry handle=%s inTargetSelect=%s"),
+						*Handle.ToString(),
+						HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
+				}
+				return false;
+			}
 			HUD->OnEnemyPartClickedByUser(Handle.WorldTargetId);
 			if (bLogBattleSceneTargetClickRouting)
 			{

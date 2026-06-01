@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Actors/WacomBattleEnemyActor.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "UI/Battle/BattleHUD.h"
@@ -371,6 +372,16 @@ public:
 		SetBattleHandPresentationMode(NewMode);
 	}
 
+	void SetBattleSceneEnemyHostForTest(AWacomBattleEnemyActor* InHost)
+	{
+		SetBattleSceneEnemyHost(InHost);
+	}
+
+	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
+	{
+		return UBattleHUD::GetBattleSceneEnemyPartWorldTargetBridgeCountForTest();
+	}
+
 	void RefreshFromSnapshotForTest(const FBattleSnapshot& Snapshot)
 	{
 		RefreshFromSnapshot(Snapshot);
@@ -719,6 +730,12 @@ public:
 		{
 			ChildBattleWidgets.AddUnique(InEnemyInfoBar);
 		}
+		SyncEnemyInfoBarFallbackVisibility();
+	}
+
+	ESlateVisibility GetEnemyInfoBarVisibilityForTest() const
+	{
+		return EnemyInfoBar ? EnemyInfoBar->GetVisibility() : ESlateVisibility::Collapsed;
 	}
 
 	void SetActionPanelForTest(UActionPanel* InActionPanel)

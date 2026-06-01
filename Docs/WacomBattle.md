@@ -303,10 +303,11 @@ WacomBattle/
 
 ### UI 先机预测口径
 
-- V0-CO 后 `FHandCardSnapshot` 暴露 `RuntimeCost` 和 `bIsSwift`，场景敌方部位 bridge debug 暴露 `FEnemyPartSnapshot.CurrentInitiative`。这些是 UI 预测的输入，不是规则来源。
-- 未来可见预测 V1 只做近似 Cost 推进：非迅捷卡显示 `CurrentInitiative -> CurrentInitiative - RuntimeCost`；迅捷卡不显示扣减。
-- 若 `RuntimeCost == CurrentInitiative`，UI 可标记先机命中 / 完美释放候选；若非迅捷卡预计结果 `<= 0`，UI 可标记部位行动风险。
+- V0-CQ 后，场景 `AWacomBattleEnemyPartActor` 会通过只读预测 Widget 显示 `FEnemyPartSnapshot.CurrentInitiative` 和当前源卡的 `FHandCardSnapshot.RuntimeCost / bIsSwift`。这些是 UI 预测输入，不是规则来源。
+- 普通 hover 没有源卡时显示当前先机；TargetSelect hover 或 first-person 拖卡 preview 命中部位时，非迅捷卡显示 `CurrentInitiative -> CurrentInitiative - RuntimeCost`，迅捷卡显示先机不变。
+- 若非迅捷卡 `RuntimeCost == CurrentInitiative`，UI 标记先机命中 / 完美释放候选；若非迅捷卡预计结果 `<= 0`，UI 标记部位行动风险。
 - V1 不模拟主效果、ZoneHook、破坏、中毒、改先机、抵抗最终结果或任何后续被动。最终是否合法和实际结果仍以 `UBattleSession` resolver 提交结果为准。
+- V0-CS 后，场景 `AWacomBattleEnemyPartActor` 还会通过只读 Status Badge 常驻显示当前 `FEnemyPartSnapshot` 事实：部位名、HP/MaxHP、护盾、状态层数摘要、`CurrentInitiative`、当前意图和破坏态。Status Badge 只读 snapshot，不提交命令、不修改状态，也不参与预测计算；预测 Widget 仍只在 hover、TargetSelect hover 或 first-person 拖卡 preview 时临时显示。
 
 ---
 
