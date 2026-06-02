@@ -48,6 +48,62 @@ namespace
 		return E;
 	}
 
+	FCardEffect ShieldPlayer(int32 Amount)
+	{
+		FCardEffect E;
+		E.EffectType = WacomTags::Status_Shield;
+		E.Magnitude  = Amount;
+		E.Target     = WacomTags::Target_Player;
+		return E;
+	}
+
+	FCardEffect HealPlayer(int32 Amount)
+	{
+		FCardEffect E;
+		E.EffectType = WacomTags::Effect_Heal;
+		E.Magnitude  = Amount;
+		E.Target     = WacomTags::Target_Player;
+		return E;
+	}
+
+	FCardEffect DrawFromPile(int32 Count)
+	{
+		FCardEffect E;
+		E.EffectType = WacomTags::Effect_Draw;
+		E.Magnitude  = Count;
+		E.Target     = WacomTags::Target_Player;
+		E.TargetZone = WacomTags::CardLocation_Draw;
+		return E;
+	}
+
+	FCardEffect DiscardRandomHandCard(int32 Count)
+	{
+		FCardEffect E;
+		E.EffectType = WacomTags::Effect_Discard;
+		E.Magnitude  = Count;
+		E.Target     = WacomTags::Target_Player;
+		return E;
+	}
+
+	FCardEffect RemoveEnemyStatus(const FGameplayTag& StatusTag, int32 Stacks)
+	{
+		FCardEffect E;
+		E.EffectType = WacomTags::Effect_RemoveStatus;
+		E.Magnitude  = Stacks;
+		E.Target     = WacomTags::Target_SingleEnemyPart;
+		E.TargetZone = StatusTag;
+		return E;
+	}
+
+	FCardEffect ModifyEnemyInitiative(int32 Amount)
+	{
+		FCardEffect E;
+		E.EffectType = WacomTags::Effect_ModifyInitiative;
+		E.Magnitude  = Amount;
+		E.Target     = WacomTags::Target_SingleEnemyPart;
+		return E;
+	}
+
 	FCardEffect ShuffleRandom()
 	{
 		FCardEffect E;
@@ -158,6 +214,128 @@ namespace
 
 		SaveAssetPackage(Pkg, Card, PackagePath);
 		return Card;
+	}
+
+	TArray<UCardDefinition*> BuildBugGirlStarterPackCards()
+	{
+		const FString StarterPackRoot = BugGirlStarterPackCardsRoot();
+		TArray<UCardDefinition*> Cards;
+		Cards.Reserve(6);
+
+		FCardEffect PoisonNeedleDamage = Damage(4);
+		FCardEffect PoisonNeedleBonusDamage = Damage(5);
+		PoisonNeedleBonusDamage.Condition.ConditionType = WacomTags::Condition_Target_HasStatus;
+		PoisonNeedleBonusDamage.Condition.ParamTag = WacomTags::Status_Poison;
+		Cards.Add(BuildCard(
+			MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_PoisonNeedle")),
+			TEXT("DA_Card_Starter_PoisonNeedle"),
+			TEXT("Starter.PoisonNeedle"),
+			TEXT("毒针"),
+			TEXT("造成 4 伤害。\n如果目标有中毒，额外造成 5 伤害。"),
+			/*BaseCost*/ 1,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Weapon },
+			ECardTargetMode::SingleEnemyPart,
+			FCardPhysique{},
+			/*Effects*/ { PoisonNeedleDamage, PoisonNeedleBonusDamage },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		));
+
+		Cards.Add(BuildCard(
+			MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_ChitinWard")),
+			TEXT("DA_Card_Starter_ChitinWard"),
+			TEXT("Starter.ChitinWard"),
+			TEXT("几丁护片"),
+			TEXT("获得 5 护盾。\n恢复 2 生命。"),
+			/*BaseCost*/ 1,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::None,
+			FCardPhysique{},
+			/*Effects*/ { ShieldPlayer(5), HealPlayer(2) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		));
+
+		Cards.Add(BuildCard(
+			MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_AntennaSearch")),
+			TEXT("DA_Card_Starter_AntennaSearch"),
+			TEXT("Starter.AntennaSearch"),
+			TEXT("触须探路"),
+			TEXT("抽 2 张牌，随机弃置 1 张普通手牌。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::None,
+			FCardPhysique{},
+			/*Effects*/ { DrawFromPile(2), DiscardRandomHandCard(1) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		));
+
+		Cards.Add(BuildCard(
+			MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_MoltCut")),
+			TEXT("DA_Card_Starter_MoltCut"),
+			TEXT("Starter.MoltCut"),
+			TEXT("蜕壳切"),
+			TEXT("移除目标 1 层减速。\n目标当前先机 -2。"),
+			/*BaseCost*/ 1,
+			WacomTags::Card_Rarity_Blue,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::SingleEnemyPart,
+			FCardPhysique{},
+			/*Effects*/ { RemoveEnemyStatus(WacomTags::Status_Slow, 1), ModifyEnemyInitiative(-2) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		));
+
+		FCardPassive HuskOnDiscard;
+		HuskOnDiscard.Trigger = WacomTags::Passive_Trigger_OnDiscard;
+		HuskOnDiscard.DisplayText = FText::FromString(TEXT("被弃置时：获得 4 护盾。"));
+		HuskOnDiscard.Effects = { ShieldPlayer(4) };
+		Cards.Add(BuildCard(
+			MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_LightHusk")),
+			TEXT("DA_Card_Starter_LightHusk"),
+			TEXT("Starter.LightHusk"),
+			TEXT("轻蜕壳"),
+			TEXT("被弃置时：获得 4 护盾。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Companion },
+			ECardTargetMode::None,
+			FCardPhysique{},
+			/*Effects*/ {},
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ { HuskOnDiscard }
+		));
+
+		FCardZoneHook SilklineLeftHook;
+		SilklineLeftHook.Zone = WacomTags::HandZone_Left;
+		SilklineLeftHook.Trigger = WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit;
+		Cards.Add(BuildCard(
+			MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_SilklineFeint")),
+			TEXT("DA_Card_Starter_SilklineFeint"),
+			TEXT("Starter.SilklineFeint"),
+			TEXT("丝线佯攻"),
+			TEXT("造成 3 伤害。\n处于左手区时：完美释放不推进目标先机。"),
+			/*BaseCost*/ 1,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Weapon },
+			ECardTargetMode::SingleEnemyPart,
+			FCardPhysique{},
+			/*Effects*/ { Damage(3) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ { SilklineLeftHook },
+			/*Passives*/ {}
+		));
+
+		return Cards;
 	}
 }
 
@@ -599,12 +777,15 @@ namespace Wacom::ContentBuilder
 			MakeHandCardTargetFilter(/*bAllowNormalHandCards*/ true, /*bAllowHandAnchors*/ false)
 		);
 
+		TArray<UCardDefinition*> StarterPackCards = BuildBugGirlStarterPackCards();
+
 		// 检查：任一建造失败则放弃。
 		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling || !BugGirlBag || !ZhujianRongnang || !MuseiLantern
 			|| !DebugKey
 			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
 			|| !TestTargetCompanion || !TestRequireCompanionTarget || !TestBlockWeaponTarget
-			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard)
+			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard
+			|| StarterPackCards.Num() != 6 || StarterPackCards.Contains(nullptr))
 		{
 			return nullptr;
 		}

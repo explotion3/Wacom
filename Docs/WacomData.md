@@ -185,6 +185,7 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
 当前蛇敌人内容：
 - `DA_Card_PoisonFang`（毒牙）是第一张击倒奖励卡样例，临时效果为 0 费、对单个敌方部位施加 1 中毒。
 - 蛇头、蛇身、蛇尾当前都配置同一张毒牙，便于验证完整奖励链路；后续可替换为各部位专属奖励。
+- V0-CW 后蛇三部位的 `IntentSequence` 已扩展为矩阵内可执行的 V1 变体：玩家伤害、对玩家施加 Poison / Slow、自身加 Shield。当前仍不使用手牌目标、全体敌方部位目标或卡牌专用效果。
 - V0-BM 后，`AWacomRunCardPickupActor::ConfigureDebugCardPickupSample()` 也会尝试加载 `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang` 作为默认卡牌拾取样例；该按钮只配置当前场景 Actor，不生成或修改卡牌资产。
 
 ### FIntentDefinition
@@ -273,7 +274,7 @@ struct FShopOfferDefinition
 `UShopDefinition` 只定义静态商品内容，不保存购买状态。当前 Run 内的库存和已购买状态仍由 `AWacomShopTriggerActor.PersistentId` 作为 key 存在 `URunSession` 中。
 
 当前生成内容：
-- `DA_Shop_DebugSnake`（蛇巢调试商店）：卖 `毒牙`、`赤腹工蚁`、`朝光暮蝶`、`虫妹的小布袋`。
+- `DA_Shop_DebugSnake`（蛇巢调试商店）：卖 `毒牙`、`赤腹工蚁`、`朝光暮蝶`、`虫妹的小布袋`，以及 V0-CW starter pack 新卡 `毒针 / 几丁护片 / 触须探路 / 蜕壳切 / 轻蜕壳 / 丝线佯攻`。
 
 编辑器侧已接入 `UWacomShopDefinitionValidator` 内容防呆。校验重点：
 - `ShopId` 不能为空。
@@ -522,7 +523,7 @@ RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻�
 | Builder | 产物 |
 |---|---|
 | `BuildSnakeContent()` | 蛇敌人、三部位、奖励卡 `DA_Card_PoisonFang` |
-| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、`DA_Card_DebugKey`、卡对卡测试卡 |
+| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、`DA_Card_DebugKey`、卡对卡测试卡、V0-CW starter pack 新卡 |
 | `BuildShopContent()` | `DA_Shop_DebugSnake` |
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
 | `BuildRunPickupDefinitionContent()` | `DA_Pickup_DebugGold3`、`DA_Pickup_DebugPoisonFang` |
@@ -557,17 +558,25 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_DiscardSelectedHandCard` | `Test.DiscardSelectedHandCard`，拖到另一张普通手牌上使目标进入弃牌堆 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ExhaustSelectedHandCard` | `Test.ExhaustSelectedHandCard`，拖到另一张普通手牌上使目标进入消耗区 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_TargetCost3` | `Test.TargetCost3`，卡对卡测试目标，基础费用 3 |
+| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle` | `Starter.PoisonNeedle`，毒针，1 费武器，造成 4 伤害；目标有中毒时追加 5 伤害 |
+| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard` | `Starter.ChitinWard`，几丁护片，1 费工具，获得 5 护盾并恢复 2 生命 |
+| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch` | `Starter.AntennaSearch`，触须探路，0 费工具，抽 2 张并随机弃 1 张普通手牌 |
+| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut` | `Starter.MoltCut`，蜕壳切，1 费蓝卡工具，移除目标 1 层 Slow，并令目标当前先机 -2 |
+| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_LightHusk` | `Starter.LightHusk`，轻蜕壳，0 费伙伴，被弃置时获得 4 护盾 |
+| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_SilklineFeint` | `Starter.SilklineFeint`，丝线佯攻，1 费武器，造成 3 伤害；左手区完美释放命中时不推进目标先机 |
 | `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang` | `PoisonFang`，0 费白卡，对单个敌方部位施加 1 中毒 |
 | `/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake` | 蛇敌人，包含 Head / Body / Tail 三个部位 |
-| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head` | `Snake.Head`，HP 16，Exp 3，奖励毒牙 |
-| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body` | `Snake.Body`，HP 22，Exp 2，奖励毒牙 |
-| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙 |
-| `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋 |
+| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head` | `Snake.Head`，HP 16，Exp 3，奖励毒牙；意图覆盖 Bite / Venom / Strike / Coiled Guard |
+| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body` | `Snake.Body`，HP 22，Exp 2，奖励毒牙；意图覆盖 Constrict / Harden / Slam / Venom Mist |
+| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙；意图覆盖 Sweep / Lash / Whip / Brace / Tangle |
+| `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋，以及 V0-CW starter pack 6 张新卡 |
 | `/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、通过卡牌支付交出毒牙、金币/压力/节点效果 |
 | `/Game/Wacom/Data/Events/DA_Event_DebugFlagReward` | 标记奖励调试事件，包含 RunFlag 解锁、PIE 自助给金币、`MinGold(3) + AddGold(-3)` 领取毒牙和 reset flags |
 | `/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
 | `/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang` | 数据驱动卡牌 PickupDefinition，固定获得 `PoisonFang` |
 | `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` | 通用 Run 世界拖卡交互 Definition，接受 `DebugKey`，奖励 3 金币并消耗钥匙；推荐 KeyChest 调试内容 |
+
+V0-CX 后，`Wacom.Battle.GeneratedStarterContent` 不再只检查这些生成资产字段和 validator 结果，还会把真实 starter pack 卡、辅助卡和 `DA_Enemy_Snake` 放入 `UBattleSession` 做 runtime smoke：毒针条件伤害、几丁护片护盾/治疗、触须探路抽弃、蜕壳切移除 Slow / 改先机、轻蜕壳 OnDiscard、丝线佯攻空 `OnPerfectReleaseHit` hook，以及 Snake 玩家伤害 / 玩家 Poison / 玩家 Slow / 自身 Shield 意图都要产生对应 Snapshot/Event。
 
 ### Data Validation
 
@@ -760,6 +769,8 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 ## §11 战斗规则内容制作矩阵
 
 V0-CU 后，卡牌和敌人意图的内容制作以本矩阵和 `FWacomBattleRuleContentContract` 为准。GameplayTag 已声明不代表已经接入主流程；矩阵中未列出的 Effect / Target / Condition / Passive trigger 不应写入正式 DataAsset，编辑器校验会拦截。
+
+V0-CV 后，`Wacom.Battle.RuleContentMatrix` 已为本节当前允许的卡牌效果、敌人 Intent V1、MagnitudeSource、Condition、MagnitudeModifiers、Passive trigger 和 ZoneHook 建立 transient runtime fixture：每个代表配置先通过 validator，再提交到 `UBattleSession` 验证 Snapshot/Event。`Reserved` / `EventOnly` 条目仍只作为制作合同状态记录，不代表可写入正式 DataAsset。
 
 `FCardEffect` 的当前字段：
 

@@ -3,9 +3,13 @@
 #include "Misc/AutomationTest.h"
 
 #include "Cards/CardDefinition.h"
+#include "Cards/CardPassive.h"
+#include "Cards/CardZoneHook.h"
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Enemies/IntentDefinition.h"
+#include "Enemies/IntentEffect.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Validation/CardDefinitionValidation.h"
 #include "Validation/CharacterDefinitionValidation.h"
@@ -120,6 +124,29 @@ namespace
 			if (Error.ToString().Contains(Needle))
 			{
 				return true;
+			}
+		}
+		return false;
+	}
+
+	bool HasIntentEffect(
+		const UEnemyPartDefinition* Part,
+		const FGameplayTag& EffectType,
+		const FGameplayTag& Target)
+	{
+		if (!Part)
+		{
+			return false;
+		}
+
+		for (const FIntentDefinition& Intent : Part->IntentSequence)
+		{
+			for (const FIntentEffect& Effect : Intent.Effects)
+			{
+				if (Effect.EffectType == EffectType && Effect.Target == Target)
+				{
+					return true;
+				}
 			}
 		}
 		return false;
@@ -751,7 +778,13 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang.DA_Card_ZhujianRongnang"),
 		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_MuseiYinchongdeng.DA_Card_MuseiYinchongdeng"),
 		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey"),
-		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang")
+		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle.DA_Card_Starter_PoisonNeedle"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard.DA_Card_Starter_ChitinWard"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch.DA_Card_Starter_AntennaSearch"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut.DA_Card_Starter_MoltCut"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_LightHusk.DA_Card_Starter_LightHusk"),
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_SilklineFeint.DA_Card_Starter_SilklineFeint")
 	};
 
 	TArray<UCardDefinition*> GeneratedCards;
@@ -844,5 +877,159 @@ bool FWacomDataDebugKeyBugGirlStarterDeckSpec::RunTest(const FString& /*Paramete
 
 	TestTrue(TEXT("BugGirl starter deck contains DebugKey"),
 		BugGirl->StarterDeck.Contains(DebugKey));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataBattleStarterContentAssetValidationSpec,
+	"Wacom.Data.BattleStarterContent.StarterPackAssetValidation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UCardDefinition* PoisonNeedle = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle.DA_Card_Starter_PoisonNeedle"));
+	UCardDefinition* ChitinWard = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard.DA_Card_Starter_ChitinWard"));
+	UCardDefinition* AntennaSearch = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch.DA_Card_Starter_AntennaSearch"));
+	UCardDefinition* MoltCut = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut.DA_Card_Starter_MoltCut"));
+	UCardDefinition* LightHusk = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_LightHusk.DA_Card_Starter_LightHusk"));
+	UCardDefinition* SilklineFeint = LoadObject<UCardDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_SilklineFeint.DA_Card_Starter_SilklineFeint"));
+
+	if (!TestNotNull(TEXT("PoisonNeedle loads"), PoisonNeedle)
+		|| !TestNotNull(TEXT("ChitinWard loads"), ChitinWard)
+		|| !TestNotNull(TEXT("AntennaSearch loads"), AntennaSearch)
+		|| !TestNotNull(TEXT("MoltCut loads"), MoltCut)
+		|| !TestNotNull(TEXT("LightHusk loads"), LightHusk)
+		|| !TestNotNull(TEXT("SilklineFeint loads"), SilklineFeint))
+	{
+		return false;
+	}
+
+	TArray<FText> Errors;
+	for (const UCardDefinition* Card : { PoisonNeedle, ChitinWard, AntennaSearch, MoltCut, LightHusk, SilklineFeint })
+	{
+		Errors.Reset();
+		TestTrue(*FString::Printf(TEXT("%s passes validation"), *GetNameSafe(Card)), ValidateCardForTest(Card, Errors));
+		TestEqual(*FString::Printf(TEXT("%s validation errors"), *GetNameSafe(Card)), Errors.Num(), 0);
+	}
+
+	TestEqual(TEXT("PoisonNeedle id"), PoisonNeedle->CardId, FName(TEXT("Starter.PoisonNeedle")));
+	TestEqual(TEXT("PoisonNeedle target mode"), PoisonNeedle->TargetMode, ECardTargetMode::SingleEnemyPart);
+	TestEqual(TEXT("PoisonNeedle effects"), PoisonNeedle->Effects.Num(), 2);
+	if (PoisonNeedle->Effects.IsValidIndex(1))
+	{
+		TestEqual(TEXT("PoisonNeedle bonus condition"),
+			PoisonNeedle->Effects[1].Condition.ConditionType,
+			FGameplayTag(WacomTags::Condition_Target_HasStatus));
+		TestEqual(TEXT("PoisonNeedle bonus checks poison"),
+			PoisonNeedle->Effects[1].Condition.ParamTag,
+			FGameplayTag(WacomTags::Status_Poison));
+	}
+
+	TestEqual(TEXT("ChitinWard target mode"), ChitinWard->TargetMode, ECardTargetMode::None);
+	TestEqual(TEXT("ChitinWard effects"), ChitinWard->Effects.Num(), 2);
+	if (ChitinWard->Effects.Num() >= 2)
+	{
+		TestEqual(TEXT("ChitinWard shield"), ChitinWard->Effects[0].EffectType, FGameplayTag(WacomTags::Status_Shield));
+		TestEqual(TEXT("ChitinWard heal"), ChitinWard->Effects[1].EffectType, FGameplayTag(WacomTags::Effect_Heal));
+	}
+
+	TestEqual(TEXT("AntennaSearch effects"), AntennaSearch->Effects.Num(), 2);
+	if (AntennaSearch->Effects.Num() >= 2)
+	{
+		TestEqual(TEXT("AntennaSearch draw"), AntennaSearch->Effects[0].EffectType, FGameplayTag(WacomTags::Effect_Draw));
+		TestEqual(TEXT("AntennaSearch draw source"),
+			AntennaSearch->Effects[0].TargetZone,
+			FGameplayTag(WacomTags::CardLocation_Draw));
+		TestEqual(TEXT("AntennaSearch discard"), AntennaSearch->Effects[1].EffectType, FGameplayTag(WacomTags::Effect_Discard));
+	}
+
+	TestEqual(TEXT("MoltCut target mode"), MoltCut->TargetMode, ECardTargetMode::SingleEnemyPart);
+	TestEqual(TEXT("MoltCut effects"), MoltCut->Effects.Num(), 2);
+	if (MoltCut->Effects.Num() >= 2)
+	{
+		TestEqual(TEXT("MoltCut remove status"), MoltCut->Effects[0].EffectType, FGameplayTag(WacomTags::Effect_RemoveStatus));
+		TestEqual(TEXT("MoltCut removes slow"), MoltCut->Effects[0].TargetZone, FGameplayTag(WacomTags::Status_Slow));
+		TestEqual(TEXT("MoltCut initiative"), MoltCut->Effects[1].EffectType, FGameplayTag(WacomTags::Effect_ModifyInitiative));
+		TestEqual(TEXT("MoltCut initiative amount"), MoltCut->Effects[1].Magnitude, -2);
+	}
+
+	TestEqual(TEXT("LightHusk passives"), LightHusk->Passives.Num(), 1);
+	if (LightHusk->Passives.IsValidIndex(0))
+	{
+		TestEqual(TEXT("LightHusk OnDiscard"),
+			LightHusk->Passives[0].Trigger,
+			FGameplayTag(WacomTags::Passive_Trigger_OnDiscard));
+		TestEqual(TEXT("LightHusk passive effect count"), LightHusk->Passives[0].Effects.Num(), 1);
+	}
+
+	TestEqual(TEXT("SilklineFeint target mode"), SilklineFeint->TargetMode, ECardTargetMode::SingleEnemyPart);
+	TestEqual(TEXT("SilklineFeint zone hooks"), SilklineFeint->ZoneHooks.Num(), 1);
+	if (SilklineFeint->ZoneHooks.IsValidIndex(0))
+	{
+		TestEqual(TEXT("SilklineFeint perfect release hook"),
+			SilklineFeint->ZoneHooks[0].Trigger,
+			FGameplayTag(WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit));
+		TestEqual(TEXT("SilklineFeint hook has no extra effects"), SilklineFeint->ZoneHooks[0].ExtraEffects.Num(), 0);
+	}
+
+	UCharacterDefinition* BugGirl = LoadObject<UCharacterDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
+	if (!TestNotNull(TEXT("BugGirl character loads"), BugGirl))
+	{
+		return false;
+	}
+	TestFalse(TEXT("PoisonNeedle is not in starter deck"), BugGirl->StarterDeck.Contains(PoisonNeedle));
+	TestFalse(TEXT("ChitinWard is not in starter deck"), BugGirl->StarterDeck.Contains(ChitinWard));
+	TestFalse(TEXT("AntennaSearch is not in starter deck"), BugGirl->StarterDeck.Contains(AntennaSearch));
+	TestFalse(TEXT("MoltCut is not in starter deck"), BugGirl->StarterDeck.Contains(MoltCut));
+	TestFalse(TEXT("LightHusk is not in starter deck"), BugGirl->StarterDeck.Contains(LightHusk));
+	TestFalse(TEXT("SilklineFeint is not in starter deck"), BugGirl->StarterDeck.Contains(SilklineFeint));
+
+	UEnemyPartDefinition* SnakeHead = LoadObject<UEnemyPartDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"));
+	UEnemyPartDefinition* SnakeBody = LoadObject<UEnemyPartDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"));
+	UEnemyPartDefinition* SnakeTail = LoadObject<UEnemyPartDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"));
+	if (!TestNotNull(TEXT("SnakeHead loads"), SnakeHead)
+		|| !TestNotNull(TEXT("SnakeBody loads"), SnakeBody)
+		|| !TestNotNull(TEXT("SnakeTail loads"), SnakeTail))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Snake head intent count"), SnakeHead->IntentSequence.Num(), 4);
+	TestEqual(TEXT("Snake body intent count"), SnakeBody->IntentSequence.Num(), 4);
+	TestEqual(TEXT("Snake tail intent count"), SnakeTail->IntentSequence.Num(), 5);
+	for (const UEnemyPartDefinition* Part : { SnakeHead, SnakeBody, SnakeTail })
+	{
+		Errors.Reset();
+		TestTrue(*FString::Printf(TEXT("%s passes validation"), *GetNameSafe(Part)), ValidateEnemyPartForTest(Part, Errors));
+		TestEqual(*FString::Printf(TEXT("%s validation errors"), *GetNameSafe(Part)), Errors.Num(), 0);
+		TestTrue(*FString::Printf(TEXT("%s has player damage intent"), *Part->PartId.ToString()),
+			HasIntentEffect(Part, WacomTags::Effect_Damage, WacomTags::Target_Player));
+		TestTrue(*FString::Printf(TEXT("%s has self shield intent"), *Part->PartId.ToString()),
+			HasIntentEffect(Part, WacomTags::Status_Shield, WacomTags::Target_Self));
+		TestTrue(*FString::Printf(TEXT("%s has player status intent"), *Part->PartId.ToString()),
+			HasIntentEffect(Part, WacomTags::Effect_ApplyStatus_Poison, WacomTags::Target_Player)
+			|| HasIntentEffect(Part, WacomTags::Effect_ApplyStatus_Slow, WacomTags::Target_Player));
+	}
+
 	return true;
 }

@@ -35,6 +35,7 @@ namespace Wacom::ContentBuilder
 	{
 		const FString RewardsRoot = RewardCardsRoot();
 		const FString BugGirlRoot = BugGirlCardsRoot();
+		const FString StarterPackRoot = BugGirlStarterPackCardsRoot();
 		UCardDefinition* PoisonFang = LoadGeneratedCard(
 			MakeObjectPath(MakePackagePath(RewardsRoot, TEXT("DA_Card_PoisonFang"))));
 		UCardDefinition* ChifuGongyi = LoadGeneratedCard(
@@ -43,7 +44,20 @@ namespace Wacom::ContentBuilder
 			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_ZhaoguangMudie"))));
 		UCardDefinition* BugGirlBag = LoadGeneratedCard(
 			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_BugGirlBag"))));
-		if (!PoisonFang || !ChifuGongyi || !ZhaoguangMudie || !BugGirlBag)
+		UCardDefinition* PoisonNeedle = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_PoisonNeedle"))));
+		UCardDefinition* ChitinWard = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_ChitinWard"))));
+		UCardDefinition* AntennaSearch = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_AntennaSearch"))));
+		UCardDefinition* MoltCut = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_MoltCut"))));
+		UCardDefinition* LightHusk = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_LightHusk"))));
+		UCardDefinition* SilklineFeint = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_SilklineFeint"))));
+		if (!PoisonFang || !ChifuGongyi || !ZhaoguangMudie || !BugGirlBag
+			|| !PoisonNeedle || !ChitinWard || !AntennaSearch || !MoltCut || !LightHusk || !SilklineFeint)
 		{
 			return nullptr;
 		}
@@ -63,6 +77,12 @@ namespace Wacom::ContentBuilder
 			MakeOffer(ChifuGongyi, 2),
 			MakeOffer(ZhaoguangMudie, 2),
 			MakeOffer(BugGirlBag, 3),
+			MakeOffer(PoisonNeedle, 2),
+			MakeOffer(ChitinWard, 1),
+			MakeOffer(AntennaSearch, 2),
+			MakeOffer(MoltCut, 2),
+			MakeOffer(LightHusk, 1),
+			MakeOffer(SilklineFeint, 2),
 		};
 
 		SaveAssetPackage(Pkg, Shop, PackagePath);

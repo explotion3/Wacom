@@ -166,7 +166,7 @@ bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 
 	TestEqual(TEXT("DebugSnake ShopId"), DebugShop->ShopId, FName(TEXT("Shop.DebugSnake")));
 	TestEqual(TEXT("DebugSnake DisplayName"), DebugShop->DisplayName.ToString(), FString(TEXT("蛇巢调试商店")));
-	TestEqual(TEXT("DebugSnake offer count"), DebugShop->Offers.Num(), 4);
+	TestEqual(TEXT("DebugSnake offer count"), DebugShop->Offers.Num(), 10);
 
 	struct FExpectedOffer
 	{
@@ -179,6 +179,12 @@ bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"), 2 },
 		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"), 2 },
 		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"), 3 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle.DA_Card_Starter_PoisonNeedle"), 2 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard.DA_Card_Starter_ChitinWard"), 1 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch.DA_Card_Starter_AntennaSearch"), 2 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut.DA_Card_Starter_MoltCut"), 2 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_LightHusk.DA_Card_Starter_LightHusk"), 1 },
+		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_SilklineFeint.DA_Card_Starter_SilklineFeint"), 2 },
 	};
 
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ExpectedOffers); ++Index)

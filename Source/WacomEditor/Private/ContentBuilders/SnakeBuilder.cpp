@@ -155,6 +155,8 @@ namespace Wacom::ContentBuilder
 				           { MakePoisonOnPlayer(2) }),
 				MakeIntent(TEXT("Snake.Head.Strike"), TEXT("Strike"), 4, 8,
 				           { MakeDamage(8) }),
+				MakeIntent(TEXT("Snake.Head.CoiledGuard"), TEXT("Coiled Guard"), 2, 0,
+				           { MakeShieldSelf(4) }),
 			});
 		if (!Head) { return nullptr; }
 
@@ -174,6 +176,8 @@ namespace Wacom::ContentBuilder
 				           { MakeShieldSelf(5) }),
 				MakeIntent(TEXT("Snake.Body.Slam"),      TEXT("Slam"),      3, 5,
 				           { MakeDamage(5) }),
+				MakeIntent(TEXT("Snake.Body.VenomMist"), TEXT("Venom Mist"), 5, 0,
+				           { MakePoisonOnPlayer(1) }),
 			});
 		if (!Body) { return nullptr; }
 
@@ -193,6 +197,10 @@ namespace Wacom::ContentBuilder
 				           { MakeDamage(5) }),
 				MakeIntent(TEXT("Snake.Tail.Whip"),  TEXT("Whip"),  3, 4,
 				           { MakeDamage(4) }),
+				MakeIntent(TEXT("Snake.Tail.Brace"), TEXT("Brace"), 2, 0,
+				           { MakeShieldSelf(3) }),
+				MakeIntent(TEXT("Snake.Tail.Tangle"), TEXT("Tangle"), 4, 0,
+				           { MakeSlowOnPlayer(1) }),
 			});
 		if (!Tail) { return nullptr; }
 

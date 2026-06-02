@@ -62,9 +62,9 @@ tags:
   - 说明：V0-CI 后普通战斗事件 presentation queue 不再阻塞 PlayCard，旧事件表现可能落后于最新 Snapshot。V0-CJ/V0-CK 后 BattleHUD 使用常驻可滚动 Battle Combat Log 补足玩家可读反馈，旧日志抽屉和旧 EventToast 单条提示框都不再挂在 HUD 主路径。V0-CL 后新增只读 BattlePresentationStack 小卡堆叠，并把 Wait / EndTurn 改成 turn-boundary barrier：stack 未清空时先 pending，期间锁住继续出牌和目标选择。V0-CM 后表现栈收成纯小卡堆，只显示整体缩放的完整卡面，不再显示卡名、目标、数量、溢出文字或黑色底座；卡牌到达 boundary 后先播放短 exit motion，再移除并释放 pending turn-boundary。后续可按体验需要加入 cue 合并、旧表现跳过、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
-  - 状态：`Ready: V0-CU 已建立 Card + Enemy Authoring Matrix 和 validator 防呆`
+  - 状态：`In Progress: V0-CU 已建立 Card + Enemy Authoring Matrix 和 validator 防呆；V0-CV 已补 Wacom.Battle.RuleContentMatrix runtime fixture 回归；V0-CW 已生成矩阵背书的可购买 starter pack 新卡和 Snake intent variants；V0-CX 已补真实生成资产 runtime smoke`
   - 归属：Battle / Data / Editor
-  - 说明：V0-CU 后 `FWacomBattleRuleContentContract` 是当前战斗规则制作合同的代码来源，Card / EnemyPart validator 会拦截未接入的 EffectType、非法 Target、错误 TargetZone / MetaTag、错误 MagnitudeSource、错误 Condition 参数、reserved / event-only Passive trigger 和敌人 Intent 静默无效配置。后续可按矩阵新增正式卡包 / 敌人包；如果需要 `OnDraw`、`OnTurnStart/End`、敌人更多自我效果、改先机类意图、更多状态公式或正式暮气被动，需要先接运行时 resolver，再更新合同、文档和验证测试。
+  - 说明：V0-CU 后 `FWacomBattleRuleContentContract` 是当前战斗规则制作合同的代码来源，Card / EnemyPart validator 会拦截未接入的 EffectType、非法 Target、错误 TargetZone / MetaTag、错误 MagnitudeSource、错误 Condition 参数、reserved / event-only Passive trigger 和敌人 Intent 静默无效配置。V0-CV 后矩阵中允许的代表配置会先过 validator，再进入 `UBattleSession` 验证 Snapshot/Event，防止“校验允许但运行时静默无效”。V0-CW 后 `BuildBugGirlContent()` 会生成 `/Game/Wacom/Data/Cards/BugGirl/StarterPack/` 下 6 张 starter pack 新卡，`BuildShopContent()` 只把它们加入 `DA_Shop_DebugSnake`，不改 BugGirl 初始卡组；`BuildSnakeContent()` 扩充 Snake 三部位意图变体。V0-CX 后 `Wacom.Battle.GeneratedStarterContent` 加载真实生成 `.uasset` 做 runtime smoke，覆盖 starter pack 新卡、现有辅助卡和真实 Snake intent sequence，防止生成资产字段漂移到 resolver 无效。后续可继续做正式掉落 / 奖励池、更多敌人包、卡牌平衡和正式卡组入口；如果需要 `OnDraw`、`OnTurnStart/End`、敌人更多自我效果、改先机类意图、更多状态公式或正式暮气被动，需要先接运行时 resolver，再更新合同、文档和验证测试。
 
 - [ ] **战斗场景敌人 Actor：承接敌方部位表现与先机预测**
   - 状态：`In Progress: V0-CN 已新增 Host + PartActor facade；V0-CO 已补预测 readiness 诊断；V0-CP 已补稳定 hover target 状态；V0-CQ 已补玩家可见 Cost 推进预测；V0-CR 已把绑定收口到当前 BattleTrigger.SceneEnemyHost；V0-CS 已补 PartActor 常驻状态 Badge 并让有 Host 的战斗默认隐藏 EnemyInfoBar；V0-CT 已打磨 Badge 可读 fallback、Host 稳定错开、Prediction 显示上移和破坏态弱化`
