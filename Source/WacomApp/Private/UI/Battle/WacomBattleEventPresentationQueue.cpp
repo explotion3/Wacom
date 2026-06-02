@@ -2,7 +2,7 @@
 
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
 
-#include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 
 #include "Engine/World.h"
 
@@ -13,8 +13,9 @@ namespace
 	constexpr float EnemyPartDestroyedTargetCueDelay = 0.30f;
 }
 
-FWacomBattleEventPresentationQueue::FWacomBattleEventPresentationQueue(UBattleHUD& InHUD)
-	: HUD(&InHUD)
+FWacomBattleEventPresentationQueue::FWacomBattleEventPresentationQueue(
+	FWacomBattleHUDPresentationCoordinator& InCoordinator)
+	: Coordinator(InCoordinator)
 {
 }
 
@@ -64,13 +65,9 @@ void FWacomBattleEventPresentationQueue::EnqueueEvents(
 	if (!bProcessing && !Steps.IsEmpty())
 	{
 		bProcessing = true;
-		UBattleHUD* StrongHUD = HUD.Get();
-		if (StrongHUD)
-		{
-			StrongHUD->HandleBattlePresentationQueueStarted();
-		}
+		Coordinator.HandleQueueStarted();
 		Advance();
-		if (bProcessing && StrongHUD && !StrongHUD->GetWorld())
+		if (bProcessing && !Coordinator.GetWorld())
 		{
 			int32 SafetyCounter = 0;
 			while (bProcessing && SafetyCounter++ < 128)
@@ -96,10 +93,7 @@ void FWacomBattleEventPresentationQueue::AdvanceForTest()
 
 void FWacomBattleEventPresentationQueue::Clear()
 {
-	if (UBattleHUD* StrongHUD = HUD.Get())
-	{
-		StopTimer();
-	}
+	StopTimer();
 
 	Steps.Reset();
 	bProcessing = false;
@@ -162,14 +156,7 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 
 void FWacomBattleEventPresentationQueue::ScheduleNextStep(float DelaySeconds)
 {
-	UBattleHUD* StrongHUD = HUD.Get();
-	if (!StrongHUD)
-	{
-		Clear();
-		return;
-	}
-
-	if (UWorld* World = StrongHUD->GetWorld())
+	if (UWorld* World = Coordinator.GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(StepTimerHandle);
 		StepTimerHandle = FTimerHandle();
@@ -188,12 +175,9 @@ void FWacomBattleEventPresentationQueue::ScheduleNextStep(float DelaySeconds)
 
 void FWacomBattleEventPresentationQueue::StopTimer()
 {
-	if (UBattleHUD* StrongHUD = HUD.Get())
+	if (UWorld* World = Coordinator.GetWorld())
 	{
-		if (UWorld* World = StrongHUD->GetWorld())
-		{
-			World->GetTimerManager().ClearTimer(StepTimerHandle);
-		}
+		World->GetTimerManager().ClearTimer(StepTimerHandle);
 	}
 }
 
@@ -207,14 +191,8 @@ void FWacomBattleEventPresentationQueue::Advance()
 
 	TGuardValue<bool> AdvancingGuard(bAdvancing, true);
 
-	UBattleHUD* StrongHUD = HUD.Get();
-	if (!StrongHUD)
-	{
-		Clear();
-		return;
-	}
 	TSharedPtr<FWacomBattleEventPresentationQueue> SelfKeepAlive =
-		StrongHUD->GetBattlePresentationQueueSelfKeepAlive();
+		Coordinator.GetQueueSelfKeepAlive();
 
 	if (Steps.IsEmpty())
 	{
@@ -229,7 +207,7 @@ void FWacomBattleEventPresentationQueue::Advance()
 	switch (Step.Type)
 	{
 	case EWacomBattlePresentationStepType::TargetCue:
-		StrongHUD->PlayBattlePresentationCue(Step.TargetCue);
+		Coordinator.HandleTargetCueStep(Step.TargetCue);
 		NextDelay = Step.TargetCue.Duration;
 		break;
 
@@ -238,17 +216,17 @@ void FWacomBattleEventPresentationQueue::Advance()
 		break;
 
 	case EWacomBattlePresentationStepType::KnockdownChoiceDialog:
-		StrongHUD->PushPendingKnockdownChoiceDialog();
+		Coordinator.HandleKnockdownChoiceDialogStep();
 		NextDelay = 0.0f;
 		break;
 
 	case EWacomBattlePresentationStepType::BattleEndSignal:
-		StrongHUD->HandleBattlePresentationBattleEndStep();
+		Coordinator.HandleBattleEndStep();
 		NextDelay = 0.0f;
 		break;
 
 	case EWacomBattlePresentationStepType::CardStackBoundary:
-		StrongHUD->BeginBattlePresentationStackEntryExit(Step.PresentationStackEntryId);
+		Coordinator.HandleCardStackBoundaryStep(Step.PresentationStackEntryId);
 		NextDelay = 0.0f;
 		break;
 
@@ -285,8 +263,5 @@ void FWacomBattleEventPresentationQueue::FinishIfIdle()
 
 	bProcessing = false;
 	StopTimer();
-	if (UBattleHUD* StrongHUD = HUD.Get())
-	{
-		StrongHUD->HandleBattlePresentationQueueFinished();
-	}
+	Coordinator.HandleQueueFinished();
 }

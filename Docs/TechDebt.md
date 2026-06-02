@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-05-26
+updated: 2026-06-02
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -84,6 +84,7 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | ViewModel FieldNotify 未被 WBP 消费 | C++ 父类用 `OnRunViewModelRefreshedNative` 粗粒度多播 + 手动 SetText | 美术阶段 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 直接绑字段；全 WBP 后删粗粒度路径 |
 | `OnRunStateChangedNative` 多次广播 | 一次玩家操作可能链式触发多次 Broadcast | ViewModel 的 `UE_MVVM_SET_PROPERTY_VALUE` 已 dedupe；粗粒度订阅方必须保证刷新幂等 |
 | BackpackScreen Presenter 边界 | Presenter 已抽展示计算；DropTarget 只转发拖拽意图，命令提交和确认框统一在 Screen | 如果 Screen 继续膨胀，再抽 section view data 或命令协调对象 |
+| BattleHUD coordinator 过重 | V0-DA 已把 scene enemy Host registry / hover / prediction / badge sync 收口到私有 `FWacomBattleHUDSceneEnemyTargetCoordinator`；V0-DB 已把 presentation queue / card stack / turn-boundary barrier 收口到私有 `FWacomBattleHUDPresentationCoordinator`；V0-DC 已把 combat log history / trim / feed sync / readable log 输出收口到私有 `FWacomBattleHUDCombatLogController`；V0-DD 已把 first-person battle hand runtime sync / drag preview / drop intent / transition hint cache 收口到私有 `FWacomBattleHUDFirstPersonHandBridge`；V0-DE 已把旧手牌和 first-person 共享 card detail panel / motion / source guard / viewport-canvas 定位收口到私有 `FWacomBattleHUDCardDetailController`；V0-DF 已补 HUD public/test receiver 层合同回归，验证这些 helper 继续是 `WacomApp/Private` 非反射 C++ helper；V0-DG 已把重复 HUD 测试装配收口到 `WacomTests/Private/UI` 的 `FWacomBattleHUDTestHarness`；`UBattleHUD` 仍持有 Session 绑定、Snapshot fanout、命令入口、WBP 绑定、配置和 GC 引用 | 保留 HUD 作为战斗 UI Screen coordinator，不做全局 UI manager 或立即 MVVM；建议先暂停继续拆分，后续修改私有 helper 时优先补 HUD 合同测试并复用 harness，等 HUD 剩余职责再次明显膨胀后再切新的私有 helper |
 
 ---
 

@@ -6,8 +6,8 @@
 
 #include "Events/BattleEvent.h"
 #include "Session/BattleSession.h"
-#include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
+#include "UI/Battle/WacomBattleHUDCombatLogController.h"
 
 namespace
 {
@@ -74,12 +74,7 @@ void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(UBattleHUD& HUD)
 		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot);
 	LogRawBattleEvents(Events);
 	HUD.StoreFirstPersonCardTransitionEvents(Events);
-	HUD.AppendBattleCombatLogBlock(
-		UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
-			SystemContext,
-			Events,
-			Snapshot,
-			Snapshot));
+	HUD.GetCombatLogController().AppendBlock(SystemContext, Events, Snapshot, Snapshot);
 	HUD.EnqueueBattlePresentationEvents(Events, INDEX_NONE);
 }
 
@@ -98,33 +93,14 @@ void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 	LogRawBattleEvents(Events);
 	HUD.StoreFirstPersonCardTransitionEvents(Events);
-	HUD.AppendBattleCombatLogBlock(
-		UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
-			CommandContext,
-			Events,
-			PreCommandSnapshot,
-			PostCommandSnapshot));
+	HUD.GetCombatLogController().AppendBlock(
+		CommandContext,
+		Events,
+		PreCommandSnapshot,
+		PostCommandSnapshot);
 	const int32 PresentationStackEntryId =
 		CommandContext.CommandKind == EWacomBattleCombatLogCommandKind::PlayCard
 			? HUD.AppendBattlePresentationStackEntry(CommandContext, PreCommandSnapshot)
 			: INDEX_NONE;
 	HUD.EnqueueBattlePresentationEvents(Events, PresentationStackEntryId);
-}
-
-void FWacomBattleHUDEventFlow::TrimBattleCombatLogHistory(UBattleHUD& HUD)
-{
-	const int32 SafeMaxEntries = FMath::Max(1, HUD.BattleCombatLogMaxBlocks);
-	if (HUD.BattleCombatLogHistory.Num() > SafeMaxEntries)
-	{
-		HUD.BattleCombatLogHistory.RemoveAt(0, HUD.BattleCombatLogHistory.Num() - SafeMaxEntries);
-	}
-}
-
-void FWacomBattleHUDEventFlow::SyncBattleCombatLogFeed(UBattleHUD& HUD)
-{
-	if (HUD.CombatLogFeed)
-	{
-		HUD.CombatLogFeed->MaxVisibleBlocks = FMath::Max(1, HUD.BattleCombatLogMaxBlocks);
-		HUD.CombatLogFeed->SetCombatLogBlocks(HUD.BattleCombatLogHistory);
-	}
 }

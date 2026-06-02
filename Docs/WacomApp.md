@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-06-01
+updated: 2026-06-02
 tags:
   - wacom/app
   - wacom/gameflow
@@ -232,6 +232,17 @@ V0-BV 后，旧 `AWacomDebugChestActor` 问题原型已从 Source 移除，不�
 
 `UWacomGameInstance` 使用 `UWacomGameUIManagerSubsystem` 管理 UI 根布局。
 
+App 层 UI 所有权只负责“何时打开、关闭、切换输入和传递上下文”，具体 Widget 数据流和表现合同见 `WacomUI.md`：
+
+| Owner | App 侧职责 | 不负责 |
+|---|---|---|
+| `UWacomGameUIManagerSubsystem` | 创建 / TearDown `UWacomPrimaryGameLayout`，按 CommonUI layer Push / Pop 顶层 Widget | 不解释战斗、Run、商店或事件规则 |
+| `AWacomGameMode` | `L_Exploration` 中 Push ExplorationHUD，EnterBattle 时 Push BattleHUD，ExitBattle 时 Pop BattleHUD 并恢复探索 UI / 输入 | 不管理菜单内部按钮、列表和 Widget 布局 |
+| `AWacomMenuGameMode` | `L_MainMenu` 中 Push 主菜单，处理 New Game / Continue / Quit 的 travel helper | 不进入探索 RunSession 或战斗 UI 状态 |
+| `AWacomPlayerController` | 持有 RunSession，接收探索交互 / 菜单打开请求，路由战斗快捷键和世界目标点击 / probe | 不直接构建顶层 Screen WBP，不替子 Widget 提交规则写入 |
+| `FWacomExplorationScreenRouter` | 统一 GameMenu Screen 的异步 Push、防重复打开、旧菜单关闭和 Shop / RunEvent 访问 rollback | 不计算选项、商品或背包规则结果 |
+| `UWacomInputContextCoordinatorSubsystem` | 统一 Exploration / Battle / Menu 输入 profile、鼠标状态和 click/mouse-over lease | 不读取 Screen 内部显示状态 |
+
 `UWacomGameUIManagerSubsystem` 负责：
 
 - 创建或重建 `UWacomPrimaryGameLayout`。
@@ -257,6 +268,8 @@ PrimaryLayout 的层级用途、输入路由和 HUD active 行为由 `WacomUI.md
 - PIE 时按 Wacom UI Settings -> fallback 的优先级解析；Shop / RunEvent / PauseMenu 等未配置 settings 项时，应继续走合法 C++ fallback。
 
 探索期背包、暂停菜单、商店、RunEvent 都是 `GameMenu` 层界面。公开请求入口仍在 `AWacomPlayerController`，内部由私有 `FWacomExplorationScreenRouter` 统一处理探索状态检查、PrimaryLayout 确保、关闭已有 GameMenu 顶层、GameMenu 异步 Push pending、防重复打开，以及商店 / RunEvent 这类外部流程返回时的 RunSession 清理。
+
+Battle scene enemy Host 的所有权不属于全局 UI manager。制作入口是 `ABattleTriggerActor.SceneEnemyHost`；进入战斗时由 `AWacomGameMode::EnterBattle()` 把当前 Trigger 的 Host 传给 `UBattleHUD`。V0-DA 后，HUD 内部通过私有 `FWacomBattleHUDSceneEnemyTargetCoordinator` 同步这个 Host attached PartActor 的 bridge、hover probe、prediction/status badge 输入和 world target 过滤。V0-DB 后，战斗 presentation queue、卡牌表现栈和 Wait / EndTurn turn-boundary barrier 收口到私有 `FWacomBattleHUDPresentationCoordinator`。V0-DC 后，combat log history、trim、recent feed sync 和 readable UE_LOG 输出收口到私有 `FWacomBattleHUDCombatLogController`。V0-DD 后，first-person battle hand 的 runtime layer sync、delegate bind/unbind、拖卡 preview/release、drop intent、Card target affordance、camera look override 和 transition hint cache 收口到私有 `FWacomBattleHUDFirstPersonHandBridge`。V0-DE 后，旧手牌与 first-person hand 共用的卡牌详情面板、读牌 motion、source guard 和 viewport / canvas 定位收口到私有 `FWacomBattleHUDCardDetailController`。HUD 仍是战斗 UI 命令出口、WBP 绑定 owner、配置 owner 和 GC 引用 owner。缺 Host 的旧 Trigger 仍能进入战斗并使用 `EnemyInfoBar` fallback，但全局 UI manager 不会主动扫描或选择场景敌人。
 
 V0-AL 后，`GameMenu` 激活时默认压制探索期 first-person BattleDeck 展示，避免直接加到 viewport 的卡层遮挡菜单；失活后恢复。Router 在异步切换菜单期间会加一层短暂 transition suppress，避免旧菜单关闭、新菜单尚未 Push 完成时卡牌闪出。V0-AN 后，RunEvent “交出毒牙”这类菜单卡牌交互不应绕开该规则，也不应在蓝图中手填 `FWacomFirstPersonCardLayerEntry`，而应调用 `UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards()`。菜单只提交候选筛选 request，例如 `AllowedCardDefinitions = [DA_Card_PoisonFang]`；PlayerController / source component 从 `URunSession::GetRunState()` 的真实持有区构建 lease entries，并在菜单 deactivate 时自动清理 owned lease。V0-AQ 后菜单覆写 `ResolveRunMenuFirstPersonCardDropIntent()` / `SubmitRunMenuFirstPersonCardDropIntent()` 声明某个 Zone/card 是 probe、Controller 默认销毁，还是菜单自处理提交。PlayerController 统一 resolver 负责 preview、validation 和 release 分发；RunEventScreen 使用 `MenuHandled` policy，release 成功时由 Screen 调 `ChooseRunEventOptionWithPaidCardResult()`，把精确移卡、Effects 和节点推进留在 RunSession 事务内，并把失败写回 drop result。
 

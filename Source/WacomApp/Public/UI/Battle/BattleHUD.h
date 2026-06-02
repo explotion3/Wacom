@@ -6,7 +6,6 @@
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Events/BattleEvent.h"
 #include "Resolution/BattleTargetValidationResult.h"
-#include "UI/Battle/BattlePresentationStackEntryWidget.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "Types/WacomEnums.h"
@@ -25,13 +24,18 @@ class AWacomBattleCardVisualActor;
 class AWacomBattleEnemyActor;
 class APlayerController;
 class FWacomBattlePresentationTargetRegistry;
+class FWacomBattleHUDCardDetailController;
+class FWacomBattleHUDCombatLogController;
+class FWacomBattleHUDFirstPersonHandBridge;
+class FWacomBattleHUDSceneEnemyTargetCoordinator;
+class FWacomBattleHUDPresentationCoordinator;
 struct FBattleHUDFallbackLayoutBuilder;
 struct FWacomBattleHUDCommandFlow;
 struct FWacomBattleHUDEventFlow;
 struct FWacomBattleHUDTargetingFlow;
-class FWacomBattleEventPresentationQueue;
 struct FBattleCommand;
 struct FWacomBattlePresentationTargetCue;
+struct FWacomBattlePresentationStackEntryView;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardDragView;
 struct FWacomCardDetailViewData;
@@ -202,20 +206,14 @@ enum class EWacomBattleHandPresentationMode : uint8
 	FirstPersonHandOnly,
 };
 
-struct FWacomFirstPersonCardPlayCommitHint
-{
-	FGuid CardInstanceId;
-	FGuid TargetPartInstanceId;
-	bool bHasTargetWidgetPosition = false;
-	FVector2D TargetWidgetPosition = FVector2D::ZeroVector;
-};
-
 UCLASS(Blueprintable)
 class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 {
 	GENERATED_BODY()
 
 public:
+	virtual ~UBattleHUD() override;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板的宽高。只影响未用完整 BattleHUD WBP 覆盖布局时的默认 CanvasPanel Slot 尺寸。"))
 	FVector2D HandPanelSize = FVector2D(1700.0f, 420.0f);
 
@@ -353,7 +351,7 @@ public:
 	FBattleTargetSelectionView BuildTargetSelectionView() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log")
-	int32 GetBattleCombatLogBlockCount() const { return BattleCombatLogHistory.Num(); }
+	int32 GetBattleCombatLogBlockCount() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
 	bool IsBattlePresentationBusy() const;
@@ -377,7 +375,7 @@ public:
 	void SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "当前战斗绑定的场景敌人 Host。为空时仅使用 EnemyInfoBar fallback。"))
-	AWacomBattleEnemyActor* GetBattleSceneEnemyHost() const { return BattleSceneEnemyHost.Get(); }
+	AWacomBattleEnemyActor* GetBattleSceneEnemyHost() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "给输入路由使用：判断 World target handle 是否来自当前 SceneEnemyHost 注册的部位。EnemyInfoBar 等 2D fallback 不走此检查。"))
 	bool IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(
@@ -459,30 +457,6 @@ private:
 		FirstPersonViewport,
 	};
 
-	struct FCardDetailMotionState
-	{
-		ECardDetailHost PendingHost = ECardDetailHost::None;
-		ECardDetailHost ActiveHost = ECardDetailHost::None;
-		TWeakObjectPtr<UCardWidget> PendingLegacySource;
-		TWeakObjectPtr<UCardWidget> ActiveLegacySource;
-		FGuid PendingFirstPersonSourceId;
-		FGuid ActiveFirstPersonSourceId;
-		FWacomFirstPersonCardLayerSlotView PendingFirstPersonSlot;
-		FWacomFirstPersonCardLayerSlotView ActiveFirstPersonSlot;
-		bool bHasPendingFirstPersonSlot = false;
-		bool bHasActiveFirstPersonSlot = false;
-		bool bPendingShow = false;
-		bool bWantsVisible = false;
-		float PendingElapsedSeconds = 0.0f;
-		float VisualOpacity = 0.0f;
-		FVector2D TargetPosition = FVector2D::ZeroVector;
-		FVector2D VisualPosition = FVector2D::ZeroVector;
-		bool bHasTargetPosition = false;
-		bool bHasVisualPosition = false;
-		bool bResetPosition = true;
-		int32 StableSide = 0;
-	};
-
 	enum class ETurnBoundaryCommand : uint8
 	{
 		None,
@@ -507,53 +481,22 @@ private:
 	UPROPERTY(Transient)
 	FBattleSnapshot LastBattleSnapshot;
 
-	UPROPERTY(Transient)
-	FBattleSnapshot LastFirstPersonCardTransitionSnapshot;
-
-	UPROPERTY(Transient)
-	TArray<FWacomBattleCombatLogBlockView> BattleCombatLogHistory;
-
-	UPROPERTY(Transient)
-	TArray<FWacomBattlePresentationStackEntryView> BattlePresentationStackEntries;
-
-	UPROPERTY(Transient)
-	TArray<FBattleEvent> PendingFirstPersonCardTransitionEvents;
-
-	TArray<FWacomFirstPersonCardPlayCommitHint> PendingFirstPersonCardPlayCommitHints;
-
-	TSharedPtr<FWacomBattleEventPresentationQueue> BattleEventPresentationQueue;
 	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
 
 	UPROPERTY(Transient)
 	TObjectPtr<AWacomBattle3DHandPresenter> Battle3DHandPresenter;
 
-	TWeakObjectPtr<UCardWidget> CurrentCardDetailSource;
-	FGuid CurrentFirstPersonCardDetailSourceId;
-	FVector2D LastFirstPersonCardDetailPanelPosition = FVector2D::ZeroVector;
-	FCardDetailMotionState CardDetailMotionState;
-	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastFirstPersonBattleHandAnchor;
-	ESlateVisibility CachedLegacyHandPanelVisibility = ESlateVisibility::Visible;
 	bool bHasLastBattleSnapshot = false;
-	bool bHasLastFirstPersonCardTransitionSnapshot = false;
-	bool bHasCachedLegacyHandPanelVisibility = false;
-	bool bLegacyHandPanelHiddenByFirstPersonLayer = false;
-	bool bFirstPersonBattleHandLayerRuntimeActive = false;
-	bool bLoggedMissingCardDetailLayer = false;
-	bool bFirstPersonCardDragActiveForBattleSceneHover = false;
 	int32 PlayerControllerClickEventAcquireCount = 0;
 	int32 PlayerControllerMouseOverEventAcquireCount = 0;
 	bool bHasFallbackPlayerControllerInteractionEventState = false;
 	bool bFallbackSavedPlayerControllerClickEvents = false;
 	bool bFallbackSavedPlayerControllerMouseOverEvents = false;
-	int32 NextBattlePresentationStackEntryId = 1;
-	ETurnBoundaryCommand PendingTurnBoundaryCommand = ETurnBoundaryCommand::None;
-	TArray<int32> BattlePresentationStackExitingEntryIds;
-	TMap<int32, FTimerHandle> BattlePresentationStackExitTimerHandles;
-	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> HoveredBattleEnemyPartBridge;
-	FWacomInteractionTargetHandle HoveredBattleEnemyPartHandle;
-	TWeakObjectPtr<AWacomBattleEnemyActor> BattleSceneEnemyHost;
-	TArray<TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>> BattleSceneEnemyPartWorldTargetBridges;
-	float BattleSceneEnemyPartHoverProbeElapsedSeconds = 0.0f;
+	TSharedPtr<FWacomBattleHUDCardDetailController> CardDetailController;
+	TSharedPtr<FWacomBattleHUDCombatLogController> CombatLogController;
+	TSharedPtr<FWacomBattleHUDFirstPersonHandBridge> FirstPersonHandBridge;
+	TSharedPtr<FWacomBattleHUDPresentationCoordinator> PresentationCoordinator;
+	TSharedPtr<FWacomBattleHUDSceneEnemyTargetCoordinator> SceneEnemyTargetCoordinator;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
@@ -573,16 +516,13 @@ private:
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
 	bool TryGetEnemyPartWidgetCenterInViewport(const FGuid& PartInstanceId, FVector2D& OutWidgetPosition) const;
-	void TrimBattleCombatLogHistory();
-	void SyncBattleCombatLogFeed();
 	int32 AppendBattlePresentationStackEntry(
 		const FWacomBattleCombatLogCommandContext& CommandContext,
 		const FBattleSnapshot& PreCommandSnapshot);
 	void BeginBattlePresentationStackEntryExit(int32 EntryId);
 	void FinishBattlePresentationStackEntryExit(int32 EntryId);
 	void ClearBattlePresentationStack();
-	bool HasBattlePresentationStackEntries() const { return BattlePresentationStackEntries.Num() > 0; }
-	void SyncBattlePresentationStackWidget();
+	bool HasBattlePresentationStackEntries() const;
 	void EnqueueBattlePresentationEvents(
 		const TArray<struct FBattleEvent>& Events,
 		int32 PresentationStackEntryId = INDEX_NONE);
@@ -591,9 +531,6 @@ private:
 	void QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand Command);
 	void ClearPendingTurnBoundaryCommand();
 	void TryExecutePendingTurnBoundaryCommand();
-	void ExecuteTurnBoundaryCommandNow(ETurnBoundaryCommand Command);
-	void RefreshCommandAvailabilityWidgets();
-	TSharedPtr<FWacomBattleEventPresentationQueue> GetBattlePresentationQueueSelfKeepAlive() const;
 	FWacomBattlePresentationTargetRegistry& GetBattlePresentationTargetRegistry();
 	void ClearBattlePresentationTargetRegistry();
 	void RegisterBattlePresentationTarget(
@@ -604,19 +541,15 @@ private:
 	bool IsBattlePresentationTargetRegisteredForOwner(const UObject* Owner) const;
 	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
 	void PushPendingKnockdownChoiceDialog();
-	void HandleBattlePresentationQueueStarted();
-	void HandleBattlePresentationQueueFinished();
-	void HandleBattlePresentationBattleEndStep();
 	void AdvanceBattlePresentationQueueOnce();
 
 #if WITH_AUTOMATION_TESTS
 	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FGuid& TargetPartInstanceId, int32 Amount);
 	void PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId);
 	int32 GetBattlePresentationTargetCountForTest() const;
-	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
-	{
-		return BattleSceneEnemyPartWorldTargetBridges.Num();
-	}
+	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const;
+	const TArray<FWacomBattlePresentationStackEntryView>& GetBattlePresentationStackEntriesForTest() const;
+	const TArray<FWacomBattleCombatLogBlockView>& GetBattleCombatLogHistoryForTest() const;
 #endif
 
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
@@ -664,10 +597,26 @@ private:
 	bool IsCardDetailMotionSource(ECardDetailHost Host, UCardWidget* SourceWidget) const;
 	bool IsCardDetailMotionSource(ECardDetailHost Host, const FGuid& CardInstanceId) const;
 	FVector2D GetFirstPersonCardDetailViewportSize() const;
+	void SetFirstPersonCardDetailSource(const FGuid& CardInstanceId);
+	void ClearFirstPersonCardDetailSource();
+	bool IsCurrentFirstPersonCardDetailSource(const FGuid& CardInstanceId) const;
+	void ClearLegacyCardDetailSource();
+	void UpdateFirstPersonCardDetailSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
+	FVector2D GetLastFirstPersonCardDetailPanelPosition() const;
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
 	AWacomBattle3DHandPresenter* EnsureBattle3DHandPresenter();
 	void DestroyBattle3DHandPresenter();
 	void SyncBattle3DHandPresenterTargeting();
+	FWacomBattleHUDCardDetailController& GetCardDetailController();
+	const FWacomBattleHUDCardDetailController& GetCardDetailController() const;
+	FWacomBattleHUDCombatLogController& GetCombatLogController();
+	const FWacomBattleHUDCombatLogController& GetCombatLogController() const;
+	FWacomBattleHUDFirstPersonHandBridge& GetFirstPersonHandBridge();
+	const FWacomBattleHUDFirstPersonHandBridge& GetFirstPersonHandBridge() const;
+	FWacomBattleHUDPresentationCoordinator& GetPresentationCoordinator();
+	const FWacomBattleHUDPresentationCoordinator& GetPresentationCoordinator() const;
+	FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator();
+	const FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator() const;
 	void RebuildBattleSceneEnemyPartWorldTargetRegistry();
 	bool IsBattleSceneEnemyPartBridgeInCurrentRegistry(
 		const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
@@ -697,7 +646,6 @@ private:
 	bool ShouldHideLegacyHandPanel() const;
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;
-	void CaptureLegacyHandPanelVisibilityIfNeeded();
 	void BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 	void UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 	void HandleFirstPersonCardLayerCardClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
@@ -714,6 +662,7 @@ private:
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView);
 	void ClearFirstPersonCardDragTargetFeedback();
+	bool IsFirstPersonCardDragActiveForBattleSceneHover() const;
 	FWacomBattleCardDropResolveResult ResolveFirstPersonCardDropIntent(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView) const;
@@ -730,9 +679,6 @@ private:
 		bool& bOutValidTarget) const;
 	bool ShouldShowFirstPersonDragInspectDetail(const FWacomFirstPersonCardDragView& DragView) const;
 
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> CurrentFirstPersonDragPreviewBridge;
-
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "战斗场景敌方部位 hover probe 的最小间隔，单位秒。只更新 UI 诊断和轻量缩放，不影响战斗规则。", ClampMin = "0.01", ClampMax = "0.25", UIMin = "0.01", UIMax = "0.1"))
 	float BattleSceneEnemyPartHoverProbeIntervalSeconds = 0.03f;
 
@@ -740,7 +686,11 @@ private:
 	friend struct FWacomBattleHUDCommandFlow;
 	friend struct FWacomBattleHUDEventFlow;
 	friend struct FWacomBattleHUDTargetingFlow;
-	friend class FWacomBattleEventPresentationQueue;
+	friend class FWacomBattleHUDCardDetailController;
+	friend class FWacomBattleHUDCombatLogController;
+	friend class FWacomBattleHUDFirstPersonHandBridge;
+	friend class FWacomBattleHUDPresentationCoordinator;
+	friend class FWacomBattleHUDSceneEnemyTargetCoordinator;
 	friend class UEnemyInfoBar;
 	friend class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 	friend class UWacomBattleHUDDetailTest;

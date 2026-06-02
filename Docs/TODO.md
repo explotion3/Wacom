@@ -46,6 +46,12 @@ tags:
 
 ## P1 近期实现候选
 
+- [x] **UI Ownership / BattleHUD 私有 coordinator 拆分**
+  - 状态：`Done: V0-CZ 已整理 UI Ownership Map；V0-DA 已抽出 SceneEnemyTargetCoordinator；V0-DB 已抽出 PresentationCoordinator；V0-DC 已抽出 CombatLogController；V0-DD 已抽出 FirstPersonHandBridge；V0-DE 已抽出 CardDetailController；V0-DF 已补 BattleHUD 私有 helper 合同回归安全网；V0-DG 已把 BattleHUD 测试装配收口到 WacomTests 私有 harness`
+  - 归属：UI 架构 / App
+  - 入口：[WacomUI: UI Ownership Map](./WacomUI.md#wacomui-ui-ownership-map) / [TechDebt: UI 架构债](./TechDebt.md#techdebt-ui-architecture)
+  - 说明：当前 UI 采用 “Shell 集中 + Screen coordinator 分域负责”：`UWacomGameUIManagerSubsystem + PrimaryLayout` 只管 CommonUI 根层，`GameMode / PlayerController / ScreenRouter / InputCoordinator` 只管流程和输入，具体 Screen 负责自己的 ViewData 与玩家意图入口。`BattleHUD` 仍是战斗 UI 命令出口。V0-DA 后 scene enemy target registry / hover probe / prediction 与 status badge sync 已收口到私有 coordinator；V0-DB 后 presentation queue / card stack / turn-boundary barrier 已收口到私有 coordinator；V0-DC 后 combat log history / trim / recent feed sync / readable log 输出已收口到私有 controller；V0-DD 后 first-person battle hand runtime sync、delegate bind/unbind、drag preview/release、drop intent、Card target affordance、camera look override 和 transition hint cache 已收口到私有 bridge；V0-DE 后旧手牌和 first-person 共享 card detail panel / motion / source guard / viewport-canvas 定位已收口到私有 controller；V0-DF 后 `Wacom.UI.Battle` 通过 HUD/test receiver 合同测试锁住这些私有 helper 不泄漏成 public / Blueprint API；V0-DG 后重复 HUD 装配由 `FWacomBattleHUDTestHarness + UWacomBattleHUDDetailTest` 负责。拆分都留在 `WacomApp/Private`，测试 harness 留在 `WacomTests/Private`，不新增 Blueprint API，不改变 `UBattleSession` 或战斗规则层。建议先暂停继续拆 BattleHUD，除非 HUD 剩余职责再次明显膨胀。
+
 - [x] **交互目标系统：统一 target handle、Provider 接口、World 命中**
   - 状态：`Done`
   - 归属：Core / App
@@ -59,7 +65,7 @@ tags:
 - [ ] **战斗表现队列：快速连出后的视觉追赶 polish**
   - 状态：`Ready: V0-CL 后续表现优化`
   - 归属：App / UI
-  - 说明：V0-CI 后普通战斗事件 presentation queue 不再阻塞 PlayCard，旧事件表现可能落后于最新 Snapshot。V0-CJ/V0-CK 后 BattleHUD 使用常驻可滚动 Battle Combat Log 补足玩家可读反馈，旧日志抽屉和旧 EventToast 单条提示框都不再挂在 HUD 主路径。V0-CL 后新增只读 BattlePresentationStack 小卡堆叠，并把 Wait / EndTurn 改成 turn-boundary barrier：stack 未清空时先 pending，期间锁住继续出牌和目标选择。V0-CM 后表现栈收成纯小卡堆，只显示整体缩放的完整卡面，不再显示卡名、目标、数量、溢出文字或黑色底座；卡牌到达 boundary 后先播放短 exit motion，再移除并释放 pending turn-boundary。后续可按体验需要加入 cue 合并、旧表现跳过、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
+  - 说明：V0-CI 后普通战斗事件 presentation queue 不再阻塞 PlayCard，旧事件表现可能落后于最新 Snapshot。V0-CJ/V0-CK 后 BattleHUD 使用常驻可滚动 Battle Combat Log 补足玩家可读反馈，旧日志抽屉和旧 EventToast 单条提示框都不再挂在 HUD 主路径。V0-CL 后新增只读 BattlePresentationStack 小卡堆叠，并把 Wait / EndTurn 改成 turn-boundary barrier：stack 未清空时先 pending，期间锁住继续出牌和目标选择。V0-CM 后表现栈收成纯小卡堆，只显示整体缩放的完整卡面，不再显示卡名、目标、数量、溢出文字或黑色底座；卡牌到达 boundary 后先播放短 exit motion，再移除并释放 pending turn-boundary。V0-DB 后 presentation queue、stack 和 pending barrier 的运行时状态已收口到私有 `FWacomBattleHUDPresentationCoordinator`。后续可按体验需要加入 cue 合并、旧表现跳过、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
   - 状态：`In Progress: 已建立 authoring matrix、validator、transient runtime fixture、真实生成资产 smoke 和测试 helper 收口`
@@ -126,9 +132,9 @@ tags:
   - 入口：[Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
 
 - [x] **First-person card layer polish：详情面板跟随卡牌与层级修正**
-  - 状态：`Done: V0-H 已接入独立 viewport popup host；V0-I 已用 BattleHandPresentationMode 收口第一人称手牌配置入口；V0-V 已加入共享详情读牌 motion`
+  - 状态：`Done: V0-H 已接入独立 viewport popup host；V0-I 已用 BattleHandPresentationMode 收口第一人称手牌配置入口；V0-V 已加入共享详情读牌 motion；V0-DE 已把战斗详情 runtime state 收口到私有 CardDetailController`
   - 归属：UI / 战斗表现
-  - 说明：旧 `UHandPanel` 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport panel。两种战斗详情 host 共用 `bEnableCardDetailReadabilityPolish` 下的短 hover delay、淡入淡出、轻量 scale、位置平滑跟随和贴边 side hysteresis；TargetSelect、命令提交、BattleEnd、Session 切换和 runtime hand 清理仍强制隐藏详情。战斗手牌入口由 `LegacyHandPanel / FirstPersonHandWithLegacyFallback / FirstPersonHandOnly` 三种模式控制。
+  - 说明：旧 `UHandPanel` 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport panel。两种战斗详情 host 共用 `bEnableCardDetailReadabilityPolish` 下的短 hover delay、淡入淡出、轻量 scale、位置平滑跟随和贴边 side hysteresis；V0-DE 后 source guard、motion state、定位和 teardown 已由 `FWacomBattleHUDCardDetailController` 持有，HUD 保留 WBP 绑定、配置和 GC 引用。TargetSelect、命令提交、BattleEnd、Session 切换和 runtime hand 清理仍强制隐藏详情。战斗手牌入口由 `LegacyHandPanel / FirstPersonHandWithLegacyFallback / FirstPersonHandOnly` 三种模式控制。
 
 - [ ] **First-person card render quality：扇形布局微调与专用卡面规范**
   - 状态：`In Progress: V0-K projected basis 已回退；V0-L 默认改为 Authored2D hand layout solver；V0-M 默认允许手牌锚点 SoftClamp 离屏；V0-N 已加入 hand center screen smoothing；V0-O 已加入 card slot motion polish；V0-P 已加入 slot motion lifecycle diagnostics / self-repair；V0-Q 已加入 event-aware card transitions；V0-R 已加入 pending / TargetSelect focus polish；V0-S 已加入 playable / hover / press feedback polish；V0-T 已加入 hand layout preset / tuning profile；V0-U 已加入 transition origin / card movement readability；V0-V 已加入 hover detail / inspect readability polish；V0-W 已加入 play commit / target impact readability；V0-Z 已加入 hold inspect + card drag / aim commit；V0-AA 已加入 drag camera look continuity`

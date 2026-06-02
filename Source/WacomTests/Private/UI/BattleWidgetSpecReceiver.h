@@ -567,14 +567,6 @@ public:
 
 	void SetFirstPersonCardAnchorForTest(UWacomFirstPersonCardAnchorComponent* Anchor)
 	{
-		if (UWacomFirstPersonCardAnchorComponent* PreviousAnchor = LastFirstPersonBattleHandAnchor.Get())
-		{
-			if (PreviousAnchor != Anchor)
-			{
-				UnbindFirstPersonBattleHandLayerInteractions(PreviousAnchor);
-			}
-		}
-		LastFirstPersonBattleHandAnchor = Anchor;
 		BindFirstPersonBattleHandLayerInteractions(Anchor);
 	}
 
@@ -603,7 +595,7 @@ public:
 
 	FVector2D GetFirstPersonCardDetailPanelPositionForTest() const
 	{
-		return LastFirstPersonCardDetailPanelPosition;
+		return GetLastFirstPersonCardDetailPanelPosition();
 	}
 
 	float GetFirstPersonCardDetailPanelOpacityForTest() const
@@ -671,12 +663,12 @@ public:
 
 	const TArray<FWacomBattlePresentationStackEntryView>& GetPresentationStackEntriesForTest() const
 	{
-		return BattlePresentationStackEntries;
+		return UBattleHUD::GetBattlePresentationStackEntriesForTest();
 	}
 
 	int32 GetPresentationStackEntryCountForTest() const
 	{
-		return BattlePresentationStackEntries.Num();
+		return UBattleHUD::GetBattlePresentationStackEntriesForTest().Num();
 	}
 
 	bool HasPendingTurnBoundaryCommandForTest() const
@@ -715,7 +707,7 @@ public:
 
 	TArray<FWacomBattleCombatLogBlockView> GetBattleCombatLogHistoryForTest() const
 	{
-		return BattleCombatLogHistory;
+		return UBattleHUD::GetBattleCombatLogHistoryForTest();
 	}
 
 	void AppendBattleCombatLogBlockForTest(const FWacomBattleCombatLogBlockView& Block)

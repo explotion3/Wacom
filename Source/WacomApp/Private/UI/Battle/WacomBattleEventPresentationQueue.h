@@ -6,7 +6,7 @@
 #include "Events/BattleEvent.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
-class UBattleHUD;
+class FWacomBattleHUDPresentationCoordinator;
 
 enum class EWacomBattlePresentationStepType : uint8
 {
@@ -30,7 +30,7 @@ struct FWacomBattlePresentationStep
 class FWacomBattleEventPresentationQueue
 {
 public:
-	explicit FWacomBattleEventPresentationQueue(UBattleHUD& InHUD);
+	explicit FWacomBattleEventPresentationQueue(FWacomBattleHUDPresentationCoordinator& InCoordinator);
 	~FWacomBattleEventPresentationQueue();
 
 	void EnqueueEvents(const TArray<FBattleEvent>& Events);
@@ -44,7 +44,7 @@ public:
 #endif
 
 private:
-	TWeakObjectPtr<UBattleHUD> HUD;
+	FWacomBattleHUDPresentationCoordinator& Coordinator;
 	TArray<FWacomBattlePresentationStep> Steps;
 	FTimerHandle StepTimerHandle;
 	bool bProcessing = false;

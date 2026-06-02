@@ -17,6 +17,4 @@ struct FWacomBattleHUDEventFlow
 		const FWacomBattleCombatLogCommandContext& CommandContext,
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot);
-	static void TrimBattleCombatLogHistory(UBattleHUD& HUD);
-	static void SyncBattleCombatLogFeed(UBattleHUD& HUD);
 };

@@ -29,10 +29,12 @@
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomCardView.h"
+#include "BattleHUDTestHarness.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "Events/BattleEvent.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/HorizontalBox.h"
 #include "Components/TextBlock.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
@@ -45,7 +47,10 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/WacomPlayerCharacter.h"
 #include "InputCoreTypes.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Misc/DataValidation.h"
 #include "Misc/ScopeExit.h"
 #include "UObject/StrongObjectPtr.h"
@@ -204,6 +209,20 @@ namespace WacomBattleWidgetSpec
 			Actors.Host->Destroy();
 		}
 		Actors.Host = nullptr;
+	}
+
+	FWacomFirstPersonCardDragView MakeCommitDragView(const FGuid& CardInstanceId)
+	{
+		FWacomFirstPersonCardDragView DragView;
+		DragView.CardInstanceId = CardInstanceId;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::ArmedForCommit;
+		DragView.bCommitArmed = true;
+		DragView.PressScreenPosition = FVector2D(500.0f, 600.0f);
+		DragView.CurrentScreenPosition = FVector2D(540.0f, 590.0f);
+		DragView.PointerViewportPosition = DragView.CurrentScreenPosition;
+		DragView.PointerNormalizedViewportPosition = FVector2D(0.65f, 0.42f);
+		DragView.bHasPointerViewportPosition = true;
+		return DragView;
 	}
 }
 
@@ -970,37 +989,25 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.ObjectFlags |= RF_Transient;
-	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
-		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
-		FTransform::Identity,
-		SpawnParams);
-	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("PlayerController spawned"), Harness->PlayerController()))
 	{
 		return false;
 	}
-	ON_SCOPE_EXIT
-	{
-		if (IsValid(PC))
-		{
-			PC->Destroy();
-		}
-	};
 
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
-	HUD->SetOwningPlayerForTest(PC);
-	TStrongObjectPtr<UBattleCombatLogFeedWidget> CombatLogFeed(NewObject<UBattleCombatLogFeedWidget>(HUD.Get()));
-	CombatLogFeed->TakeWidget();
-	HUD->SetCombatLogFeedForTest(CombatLogFeed.Get());
-	TStrongObjectPtr<UBattlePresentationStackWidget> PresentationStack(NewObject<UBattlePresentationStackWidget>(HUD.Get()));
-	PresentationStack->TakeWidget();
-	HUD->SetPresentationStackForTest(PresentationStack.Get());
-	TStrongObjectPtr<UWacomActionPanelTestProbe> ActionPanel(NewObject<UWacomActionPanelTestProbe>(HUD.Get()));
-	ActionPanel->TakeWidget();
-	HUD->SetActionPanelForTest(ActionPanel.Get());
-	HUD->SetSession(Session);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UBattleCombatLogFeedWidget* CombatLogFeed = Harness->AttachCombatLogFeed();
+	Harness->AttachPresentationStack();
+	UWacomActionPanelTestProbe* ActionPanel = Harness->AttachActionPanel();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("CombatLogFeed"), CombatLogFeed)
+		|| !TestNotNull(TEXT("ActionPanel"), ActionPanel))
+	{
+		return false;
+	}
 	TestFalse(TEXT("Initial session presentation has settled before focused blocking check"),
 		HUD->IsBattlePresentationBusy());
 	TestEqual(TEXT("HUD returns idle after initial session presentation"), HUD->GetUIState(), EBattleUIState::Idle);
@@ -1087,7 +1094,7 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestEqual(TEXT("Pending wait still does not mutate during exit motion"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore);
 
 	HUD->FinishPresentationStackEntryExitForTest(HUD->GetPresentationStackEntriesForTest()[0].EntryId);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueueAndExitStack(*HUD);
+	Harness->SettlePresentationQueueAndExitStack();
 	TestFalse(TEXT("Pending wait runs after stack drains"), HUD->HasPendingTurnBoundaryCommandForTest());
 	TestEqual(TEXT("Wait resolves after stack drains"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore + 1);
 	TestEqual(TEXT("Wait appends after stack drains"),
@@ -1102,7 +1109,7 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 		CombatLogFeed->GetVisibleBlockCount(),
 		HUD->GetBattleCombatLogBlockCount());
 
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	Harness->SettlePresentationQueue();
 	TestFalse(TEXT("Queue no longer busy"), HUD->IsBattlePresentationBusy());
 	TestTrue(TEXT("HUD remains in a non-battle-end command state after presentation"),
 		HUD->GetUIState() == EBattleUIState::Idle || HUD->GetUIState() == EBattleUIState::BattleEnd);
@@ -1132,31 +1139,21 @@ bool FWacomUIBattlePresentationStackEndTurnBarrierSpec::RunTest(const FString& /
 	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.ObjectFlags |= RF_Transient;
-	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
-		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
-		FTransform::Identity,
-		SpawnParams);
-	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("PlayerController spawned"), Harness->PlayerController()))
 	{
 		return false;
 	}
-	ON_SCOPE_EXIT
-	{
-		if (IsValid(PC))
-		{
-			PC->Destroy();
-		}
-	};
 
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
-	HUD->SetOwningPlayerForTest(PC);
-	TStrongObjectPtr<UBattlePresentationStackWidget> PresentationStack(NewObject<UBattlePresentationStackWidget>(HUD.Get()));
-	PresentationStack->TakeWidget();
-	HUD->SetPresentationStackForTest(PresentationStack.Get());
-	HUD->SetSession(Session);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->AttachPresentationStack();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
 
 	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
 	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
@@ -1188,7 +1185,7 @@ bool FWacomUIBattlePresentationStackEndTurnBarrierSpec::RunTest(const FString& /
 	}
 	TestTrue(TEXT("EndTurn waits while stack entry is exiting"), HUD->HasPendingTurnBoundaryCommandForTest());
 	HUD->FinishPresentationStackEntryExitForTest(HUD->GetPresentationStackEntriesForTest()[0].EntryId);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueueAndExitStack(*HUD);
+	Harness->SettlePresentationQueueAndExitStack();
 	TestFalse(TEXT("Pending EndTurn clears after drain"), HUD->HasPendingTurnBoundaryCommandForTest());
 	TestTrue(TEXT("EndTurn runs after stack drains"), Session->BuildSnapshot().Version > VersionBeforeEndTurn);
 	TestEqual(TEXT("Presentation stack drained"), HUD->GetPresentationStackEntryCountForTest(), 0);
@@ -6150,6 +6147,501 @@ bool FWacomUIBattlePresentationTargetRegistrySessionChangeClearsTargetsSpec::Run
 	TestEqual(TEXT("Session change clears registry"), HUD->GetBattlePresentationTargetCountForTest(), 0);
 
 	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, PartId, 5);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDPrivateCoordinatorSurfaceSpec,
+	"Wacom.UI.Battle.BattleHUDPrivateCoordinatorsPreservePublicHUDContracts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDPrivateCoordinatorSurfaceSpec::RunTest(const FString& /*Parameters*/)
+{
+	static const TCHAR* PrivateHelperHeaders[] = {
+		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"),
+		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDPresentationCoordinator.h"),
+		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDCombatLogController.h"),
+		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"),
+		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDCardDetailController.h"),
+	};
+
+	for (const TCHAR* RelativeHeaderPath : PrivateHelperHeaders)
+	{
+		const FString HeaderPath = FPaths::ConvertRelativePathToFull(
+			FPaths::Combine(FPaths::ProjectDir(), RelativeHeaderPath));
+		FString HeaderText;
+		if (!TestTrue(
+				FString::Printf(TEXT("Private helper header exists: %s"), RelativeHeaderPath),
+				FPaths::FileExists(HeaderPath)))
+		{
+			continue;
+		}
+		if (!TestTrue(
+				FString::Printf(TEXT("Private helper header can be read: %s"), RelativeHeaderPath),
+				FFileHelper::LoadFileToString(HeaderText, *HeaderPath)))
+		{
+			continue;
+		}
+
+		TestFalse(
+			FString::Printf(TEXT("%s does not declare a reflected UCLASS"), RelativeHeaderPath),
+			HeaderText.Contains(TEXT("UCLASS(")));
+		TestFalse(
+			FString::Printf(TEXT("%s does not declare a reflected USTRUCT"), RelativeHeaderPath),
+			HeaderText.Contains(TEXT("USTRUCT(")));
+		TestFalse(
+			FString::Printf(TEXT("%s does not use GENERATED_BODY"), RelativeHeaderPath),
+			HeaderText.Contains(TEXT("GENERATED_BODY")));
+		TestFalse(
+			FString::Printf(TEXT("%s does not export a WacomApp public symbol"), RelativeHeaderPath),
+			HeaderText.Contains(TEXT("WACOMAPP_API FWacomBattleHUD")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDSceneEnemyCoordinatorLifecycleSpec,
+	"Wacom.UI.Battle.BattleHUDSceneEnemyCoordinatorLifecycleCleansHostState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDSceneEnemyCoordinatorLifecycleSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), Harness->HUD()))
+	{
+		return false;
+	}
+
+	FWacomBattleHUDTestSceneEnemyHost& CurrentHost =
+		Harness->AttachSceneEnemyHost(
+			Enemy,
+			{ TEXT("Test.Part.Head"), TEXT("Test.Part.Body"), TEXT("Test.Part.Tail") });
+	WacomBattleWidgetSpec::FSceneEnemyHostActors OtherHost =
+		WacomBattleWidgetSpec::SpawnSceneEnemyHost(
+			*World,
+			Enemy,
+			{ TEXT("Other.Part.Head") });
+	if (!TestNotNull(TEXT("Current scene enemy host"), CurrentHost.Host)
+		|| !TestNotNull(TEXT("Other scene enemy host"), OtherHost.Host)
+		|| !TestEqual(TEXT("Current host part count"), CurrentHost.Parts.Num(), 3)
+		|| !TestEqual(TEXT("Other host part count"), OtherHost.Parts.Num(), 1))
+	{
+		WacomBattleWidgetSpec::DestroySceneEnemyHost(OtherHost);
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		WacomBattleWidgetSpec::DestroySceneEnemyHost(OtherHost);
+	};
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostForTest(CurrentHost.Host);
+	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+	Harness->SettlePresentationQueue();
+
+	TestEqual(TEXT("HUD reports configured scene enemy host"), HUD->GetBattleSceneEnemyHost(), CurrentHost.Host);
+	TestEqual(TEXT("Coordinator exposes only current host bridges through HUD"),
+		HUD->GetBattleSceneEnemyPartWorldTargetBridgeCountForTest(),
+		3);
+
+	AWacomBattleEnemyPartActor* CurrentPart = CurrentHost.Parts[0];
+	AWacomBattleEnemyPartActor* OtherPart = OtherHost.Parts[0];
+	const FWacomInteractionTargetHandle CurrentHandle = FWacomInteractionTargetHandle::ForWorldTarget(
+		CurrentPart->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
+		CurrentPart->GetInteractionTargetComponent(),
+		FVector::ZeroVector,
+		FVector2D(640.0f, 360.0f),
+		WacomTags::Interaction_Target_Battle_EnemyPart,
+		CurrentPart->PartId);
+	const FWacomInteractionTargetHandle OtherHandle = FWacomInteractionTargetHandle::ForWorldTarget(
+		OtherPart->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
+		OtherPart->GetInteractionTargetComponent(),
+		FVector::ZeroVector,
+		FVector2D(720.0f, 360.0f),
+		WacomTags::Interaction_Target_Battle_EnemyPart,
+		OtherPart->PartId);
+
+	TestTrue(TEXT("Current host part is accepted by HUD registry"),
+		HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(CurrentHandle));
+	TestFalse(TEXT("Other host part is filtered by HUD registry"),
+		HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(OtherHandle));
+	TestTrue(TEXT("Current bridge is bound to snapshot"),
+		CurrentPart->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bBoundToSnapshot);
+	TestFalse(TEXT("Other bridge remains unbound"),
+		OtherPart->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bBoundToSnapshot);
+
+	HUD->SetSession(nullptr);
+	TestNull(TEXT("Session clear removes scene enemy host"), HUD->GetBattleSceneEnemyHost());
+	TestEqual(TEXT("Session clear removes bridge registry"),
+		HUD->GetBattleSceneEnemyPartWorldTargetBridgeCountForTest(),
+		0);
+	TestFalse(TEXT("Session clear unbinds current bridge"),
+		CurrentPart->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bBoundToSnapshot);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDPresentationCoordinatorContractSpec,
+	"Wacom.UI.Battle.BattleHUDPresentationCoordinatorPendingBarrierLifecycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDPresentationCoordinatorContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->AttachPresentationStack();
+	UWacomActionPanelTestProbe* ActionPanel = Harness->AttachActionPanel();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("ActionPanel"), ActionPanel))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	if (!TestTrue(TEXT("Target card exists"), TargetCardId.IsValid())
+		|| !TestTrue(TEXT("Target part exists"), TargetPartId.IsValid()))
+	{
+		return false;
+	}
+
+	FBattleEvent PresentationCueEvent;
+	PresentationCueEvent.Type = EBattleEventType::DamageDealt;
+	PresentationCueEvent.Sequence = 1;
+	PresentationCueEvent.ActorInstanceId = TargetPartId;
+	PresentationCueEvent.Amount = 1;
+	HUD->EnqueueBattlePresentationEventsForTest({ PresentationCueEvent });
+	if (World)
+	{
+		World->GetTimerManager().Tick(0.01f);
+	}
+	TestTrue(TEXT("Seed cue makes presentation coordinator busy through HUD"), HUD->IsBattlePresentationBusy());
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->OnEnemyPartClickedByUser(TargetPartId);
+	TestTrue(TEXT("PlayCard creates presentation stack busy state"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("Presentation stack contains played card"), HUD->GetPresentationStackEntryCountForTest(), 1);
+
+	const int32 VersionBeforeWait = Session->BuildSnapshot().Version;
+	HUD->OnWaitRequested();
+	TestTrue(TEXT("Wait is queued through HUD while stack is non-empty"),
+		HUD->HasPendingTurnBoundaryCommandForTest());
+	TestTrue(TEXT("Pending command text remains player readable"),
+		HUD->GetPendingTurnBoundaryCommandText().ToString().Contains(TEXT("等待")));
+	TestFalse(TEXT("Action panel wait is disabled while pending through coordinator"),
+		ActionPanel->IsWaitButtonEnabledForTest());
+	TestFalse(TEXT("Action panel end turn is disabled while pending through coordinator"),
+		ActionPanel->IsEndTurnButtonEnabledForTest());
+	TestEqual(TEXT("Pending wait does not mutate immediately"),
+		Session->BuildSnapshot().Version,
+		VersionBeforeWait);
+
+	while (HUD->IsBattlePresentationBusy()
+		&& !HUD->GetPresentationStackEntriesForTest().IsEmpty()
+		&& !HUD->GetPresentationStackEntriesForTest()[0].bIsExiting)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+
+	const TArray<FWacomBattlePresentationStackEntryView> EntriesAtBoundary =
+		HUD->GetPresentationStackEntriesForTest();
+	if (!EntriesAtBoundary.IsEmpty())
+	{
+		TestTrue(TEXT("Boundary marks stack entry exiting through HUD"),
+			EntriesAtBoundary[0].bIsExiting);
+		TestTrue(TEXT("Pending command survives stack exit motion"),
+			HUD->HasPendingTurnBoundaryCommandForTest());
+		HUD->FinishPresentationStackEntryExitForTest(EntriesAtBoundary[0].EntryId);
+	}
+	Harness->SettlePresentationQueueAndExitStack();
+	TestFalse(TEXT("Pending command clears after stack drains"),
+		HUD->HasPendingTurnBoundaryCommandForTest());
+	TestEqual(TEXT("Stack drains through HUD"), HUD->GetPresentationStackEntryCountForTest(), 0);
+	TestTrue(TEXT("Pending wait executes after stack drain"),
+		Session->BuildSnapshot().Version > VersionBeforeWait);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCombatLogControllerContractSpec,
+	"Wacom.UI.Battle.BattleHUDCombatLogControllerClearsAndTrimsThroughHUD",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCombatLogControllerContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(WacomBattleWidgetSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UBattleCombatLogFeedWidget* Feed = Harness->AttachCombatLogFeed();
+	if (!TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("CombatLogFeed"), Feed))
+	{
+		return false;
+	}
+	HUD->BattleCombatLogMaxBlocks = 2;
+
+	FWacomBattleCombatLogBlockView First;
+	First.bShouldDisplay = true;
+	First.HeaderText = FText::FromString(TEXT("第一块"));
+	FWacomBattleCombatLogBlockView Second;
+	Second.bShouldDisplay = true;
+	Second.HeaderText = FText::FromString(TEXT("第二块"));
+	FWacomBattleCombatLogBlockView Third;
+	Third.bShouldDisplay = true;
+	Third.HeaderText = FText::FromString(TEXT("第三块"));
+
+	HUD->AppendBattleCombatLogBlockForTest(First);
+	HUD->AppendBattleCombatLogBlockForTest(Second);
+	HUD->AppendBattleCombatLogBlockForTest(Third);
+	TestEqual(TEXT("HUD exposes trimmed combat log block count"), HUD->GetBattleCombatLogBlockCount(), 2);
+	TestEqual(TEXT("HUD history keeps recent block"),
+		HUD->GetBattleCombatLogHistoryForTest()[0].HeaderText.ToString(),
+		FString(TEXT("第二块")));
+	TestEqual(TEXT("Feed mirrors controller history through HUD"),
+		Feed->GetVisibleBlockCount(),
+		HUD->GetBattleCombatLogBlockCount());
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(Character, Fx.MakeSinglePartEnemy(20, 5, 0), 1);
+	Harness->SetSession(Session);
+	TestTrue(TEXT("SetSession appends initial system-visible combat log"),
+		HUD->GetBattleCombatLogBlockCount() > 0);
+	Harness->SetSession(nullptr);
+	TestEqual(TEXT("Session clear clears combat log through HUD"), HUD->GetBattleCombatLogBlockCount(), 0);
+	TestEqual(TEXT("Session clear syncs feed through HUD"), Feed->GetVisibleBlockCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDFirstPersonHandBridgeContractSpec,
+	"Wacom.UI.Battle.BattleHUDFirstPersonHandBridgeCleansRuntimeStateOnClear",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5, 0), 1);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("PlayerController"), Harness->PlayerController()))
+	{
+		return false;
+	}
+	AWacomPlayerCharacter* Character = Harness->AttachFirstPersonCharacter();
+	if (!TestNotNull(TEXT("Character"), Character))
+	{
+		return false;
+	}
+
+	UWacomFirstPersonCardAnchorComponent* Anchor = Harness->FirstPersonAnchor();
+	UWacomBattleCameraLookComponent* BattleCamera = Harness->BattleCameraLook();
+	if (!TestNotNull(TEXT("First-person card anchor"), Anchor)
+		|| !TestNotNull(TEXT("Battle camera look"), BattleCamera))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid CardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+	if (!TestTrue(TEXT("Target card exists"), CardId.IsValid()))
+	{
+		return false;
+	}
+
+	HUD->SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode::FirstPersonHandOnly);
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+	TestTrue(TEXT("HUD bridge writes runtime hand to anchor"), Anchor->HasRuntimeCardLayerData());
+	TestTrue(TEXT("HUD bridge enables first-person hand interaction"),
+		Anchor->IsBattleHandInteractionPrototypeEnabled());
+
+	TestTrue(TEXT("Battle camera activates for drag override"), BattleCamera->ActivateBattleCameraLook());
+	FWacomFirstPersonCardDragView DragView = WacomBattleWidgetSpec::MakeCommitDragView(CardId);
+	HUD->HandleFirstPersonCardDragStartedForTest(CardId, DragView);
+	HUD->HandleFirstPersonCardDragUpdatedForTest(CardId, DragView);
+	TestTrue(TEXT("Drag update writes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
+
+	HUD->ClearFirstPersonBattleHandLayerForTest();
+	TestFalse(TEXT("HUD bridge clear removes runtime hand"), Anchor->HasRuntimeCardLayerData());
+	TestFalse(TEXT("HUD bridge clear disables interaction"), Anchor->IsBattleHandInteractionPrototypeEnabled());
+	TestFalse(TEXT("HUD bridge clear removes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
+	TestFalse(TEXT("HUD bridge clear hides first-person detail"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+
+	const int32 VersionBeforeStaleDelegate = Session->BuildSnapshot().Version;
+	FWacomFirstPersonCardLayerSlotView SlotView;
+	SlotView.Entry.CardInstanceId = CardId;
+	Anchor->OnFirstPersonCardLayerCardClicked.Broadcast(CardId, SlotView);
+	TestEqual(TEXT("Cleared bridge unbinds anchor click delegate"),
+		Session->BuildSnapshot().Version,
+		VersionBeforeStaleDelegate);
+	TestEqual(TEXT("Cleared bridge does not set target select"),
+		HUD->GetUIState(),
+		EBattleUIState::Idle);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailControllerContractSpec,
+	"Wacom.UI.Battle.BattleHUDCardDetailControllerPreservesLegacyAndFirstPersonDetailLifecycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailControllerContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(WacomBattleWidgetSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), Harness->HUD()))
+	{
+		return false;
+	}
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	TStrongObjectPtr<UCardWidget> CardWidget(NewObject<UCardWidget>(HUD));
+	TStrongObjectPtr<UCardDefinition> LegacyCard(NewObject<UCardDefinition>());
+	LegacyCard->CardId = TEXT("Contract.Legacy.Detail");
+	LegacyCard->DisplayName = FText::FromString(TEXT("旧手牌详情合同卡"));
+
+	FHandCardSnapshot LegacySnap;
+	LegacySnap.InstanceId = FGuid::NewGuid();
+	LegacySnap.Definition = LegacyCard.Get();
+	LegacySnap.RuntimeCost = 1;
+	LegacySnap.bIsPlayable = true;
+
+	HUD->TakeWidget();
+	CardWidget->TakeWidget();
+	CardWidget->ApplyCardSnapshot(LegacySnap);
+
+	HUD->HandleCardHoveredForTest(CardWidget.Get());
+	HUD->TickCardDetailMotionForTest(0.12f);
+	TestTrue(TEXT("Legacy detail is visible through HUD wrapper"), HUD->IsCardDetailPanelVisible());
+	TestEqual(TEXT("Legacy detail name is exposed through HUD wrapper"),
+		HUD->GetCardDetailPanelNameText().ToString(),
+		FString(TEXT("旧手牌详情合同卡")));
+
+	TStrongObjectPtr<UCardDefinition> FirstPersonCard(NewObject<UCardDefinition>());
+	FirstPersonCard->CardId = TEXT("Contract.FirstPerson.Detail");
+	FirstPersonCard->DisplayName = FText::FromString(TEXT("第一人称详情合同卡"));
+	FHandCardSnapshot FirstPersonSnap;
+	FirstPersonSnap.InstanceId = FGuid::NewGuid();
+	FirstPersonSnap.Definition = FirstPersonCard.Get();
+	FirstPersonSnap.RuntimeCost = 1;
+	FirstPersonSnap.bIsPlayable = true;
+
+	FBattleSnapshot Snapshot;
+	Snapshot.Phase = EBattlePhase::PlayerAction;
+	Snapshot.Hand.Cards.Add(FirstPersonSnap);
+	Snapshot.Hand.NormalCardCount = 1;
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	FWacomFirstPersonCardLayerSlotView SlotView;
+	SlotView.Entry.CardInstanceId = FirstPersonSnap.InstanceId;
+	SlotView.ScreenPosition = FVector2D(700.0f, 520.0f);
+	SlotView.RenderScale = 1.0f;
+	SlotView.RenderOpacity = 1.0f;
+	SlotView.bProjected = true;
+	HUD->HandleFirstPersonCardHoveredForTest(FirstPersonSnap.InstanceId, SlotView);
+	HUD->TickCardDetailMotionForTest(0.12f);
+	TestFalse(TEXT("First-person detail hides legacy detail host"),
+		HUD->IsLegacyCardDetailPanelVisibleForTest());
+	TestTrue(TEXT("First-person detail is visible through HUD wrapper"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+	TestEqual(TEXT("First-person detail name is exposed through HUD wrapper"),
+		HUD->GetFirstPersonCardDetailPanelNameTextForTest().ToString(),
+		FString(TEXT("第一人称详情合同卡")));
+
+	HUD->HideCardDetailForTest();
+	TestFalse(TEXT("HUD hide clears first-person detail host"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+	TestFalse(TEXT("HUD hide leaves legacy detail hidden"),
+		HUD->IsCardDetailPanelVisible());
+
+	HUD->HandleFirstPersonCardHoveredForTest(FirstPersonSnap.InstanceId, SlotView);
+	HUD->TickCardDetailMotionForTest(0.12f);
+	TestTrue(TEXT("First-person detail can show again before BattleEnd"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+
+	FBattleSnapshot BattleEndSnapshot = Snapshot;
+	BattleEndSnapshot.Phase = EBattlePhase::BattleEnd;
+	HUD->RefreshFromSnapshotForTest(BattleEndSnapshot);
+	TestFalse(TEXT("BattleEnd refresh clears first-person detail"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+	TestFalse(TEXT("BattleEnd refresh keeps legacy detail hidden"),
+		HUD->IsCardDetailPanelVisible());
 
 	return true;
 }
