@@ -4960,6 +4960,11 @@ bool FWacomUIBattleSceneEnemyPartStatusBadgeComponentFacadeSpec::RunTest(const F
 	TestEqual(TEXT("Status badge facade draw size"),
 		StatusComponent->GetDrawSize(),
 		PartActor->StatusBadgeDrawSize);
+	TestGreaterEqual(TEXT("Default status badge height leaves room for intent"),
+		static_cast<float>(AWacomBattleEnemyPartActor::StaticClass()
+			->GetDefaultObject<AWacomBattleEnemyPartActor>()
+			->StatusBadgeDrawSize.Y),
+		112.0f);
 	TestTrue(TEXT("Status badge fallback widget class"),
 		StatusComponent->GetWidgetClass() == UWacomBattleEnemyPartStatusBadgeWidget::StaticClass());
 	TestTrue(TEXT("Bridge receives status badge component"),
@@ -4985,9 +4990,17 @@ bool FWacomUIBattleSceneEnemyPartStatusBadgeCompactLayoutSpec::RunTest(const FSt
 		Widget->WidgetTree ? Widget->WidgetTree->FindWidget(TEXT("CoreRow")) : nullptr);
 	TestNotNull(TEXT("Fallback status badge has clipped name text"),
 		Widget->WidgetTree ? Widget->WidgetTree->FindWidget(TEXT("PartNameTextBlock")) : nullptr);
+	TestNotNull(TEXT("Fallback status badge has dedicated intent text"),
+		Widget->WidgetTree ? Widget->WidgetTree->FindWidget(TEXT("IntentTextBlock")) : nullptr);
 
 	UTextBlock* NameText = Widget->WidgetTree
 		? Cast<UTextBlock>(Widget->WidgetTree->FindWidget(TEXT("PartNameTextBlock")))
+		: nullptr;
+	UHorizontalBox* CoreRow = Widget->WidgetTree
+		? Cast<UHorizontalBox>(Widget->WidgetTree->FindWidget(TEXT("CoreRow")))
+		: nullptr;
+	UTextBlock* IntentText = Widget->WidgetTree
+		? Cast<UTextBlock>(Widget->WidgetTree->FindWidget(TEXT("IntentTextBlock")))
 		: nullptr;
 	TestNotNull(TEXT("Name text exists"), NameText);
 	if (NameText)
@@ -4996,6 +5009,16 @@ bool FWacomUIBattleSceneEnemyPartStatusBadgeCompactLayoutSpec::RunTest(const FSt
 		TestEqual(TEXT("Name text clips overflow"),
 			NameText->GetClipping(),
 			EWidgetClipping::ClipToBoundsAlways);
+	}
+	TestNotNull(TEXT("Intent text exists"), IntentText);
+	if (CoreRow && IntentText)
+	{
+		TestFalse(TEXT("Intent text is not squeezed into core row"),
+			CoreRow->GetAllChildren().Contains(IntentText));
+		TestFalse(TEXT("Intent text does not wrap"), IntentText->GetAutoWrapText());
+		TestGreaterEqual(TEXT("Intent line has readable minimum width"),
+			IntentText->GetMinDesiredWidth(),
+			150.0f);
 	}
 
 	FWacomBattleEnemyPartStatusBadgeView View;

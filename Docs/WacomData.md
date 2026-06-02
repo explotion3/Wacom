@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-06-01
+updated: 2026-06-02
 tags:
   - wacom/data
   - wacom/dataasset
@@ -588,7 +588,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 
 当前 `UCardDefinition`、`UEnemyPartDefinition`、`UEnemyDefinition`、`UCharacterDefinition`、`UShopDefinition`、`UWacomRunEventDefinition`、`UWacomRunPickupDefinition` 和 `UWacomRunWorldCardInteractionDefinition` 八类 DataAsset 已接入 Editor Validator。
 
-Card / EnemyPart / Enemy / Character Validator 只做结构防呆，例如必填 ID、基础数值非负或大于 0、必填数组非空、引用非空、GameplayTag 命名空间有效、数组索引有效；Character 还校验 `StarterDeck` 不包含左右手卡。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量、固定部位数量、跨资产唯一性或生成资产路径。
+Card / EnemyPart / Enemy / Character Validator 只做结构和规则合同防呆，例如必填 ID、基础数值非负或大于 0、必填数组非空、引用非空、GameplayTag 命名空间有效、数组索引有效；Character 还校验 `StarterDeck` 不包含左右手卡。V0-CU 后 Card / EnemyPart 还会读取 `FWacomBattleRuleContentContract`，校验 EffectType、Target、TargetZone、MagnitudeSource、Condition、Passive trigger 和敌人 Intent effect 是否属于当前真正接入的战斗规则。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量、固定部位数量、跨资产唯一性或生成资产路径。
 
 Shop Validator 只校验 `ShopId` 非空、`Offers` 非空、Offer 卡牌非空、价格非负；不校验 `DisplayName`、重复商品、价格平衡、商品池规则或生成资产路径。
 
@@ -672,8 +672,8 @@ RunWorldCardInteractionDefinition Validator 只校验通用 receiver 制作必�
 |---|---|---|
 | `Magnitude.Source.Literal` | `Magnitude_Source_Literal` | FinalMagnitude = Magnitude 字段 |
 | `Magnitude.Source.RuntimeCost` | `Magnitude_Source_RuntimeCost` | FinalMagnitude = 本卡当前 RuntimeCost |
-| `Magnitude.Source.HandCount` | `Magnitude_Source_HandCount` | FinalMagnitude = 当前手牌数量 |
-| `Magnitude.Source.TargetStatusStacks` | `Magnitude_Source_TargetStatusStacks` | FinalMagnitude = 目标敌方部位上 `TargetZone` 指定 Status tag 的层数；目标或 `TargetZone` 无效时 fallback 到 `Magnitude` |
+| `Magnitude.Source.HandCount` | `Magnitude_Source_HandCount` | Reserved；resolver 已有计算入口，但当前 authoring matrix 不允许正式资产使用 |
+| `Magnitude.Source.TargetStatusStacks` | `Magnitude_Source_TargetStatusStacks` | FinalMagnitude = 目标敌方部位上 `TargetZone` 指定 Status tag 的层数；只允许数值型效果使用 |
 
 ### Condition
 
@@ -728,7 +728,7 @@ RunWorldCardInteractionDefinition Validator 只校验通用 receiver 制作必�
 
 ### CardLocation
 
-`Effect.Draw` 通过 `FCardEffect::TargetZone` 指定源区域；未设置时默认 `CardLocation.Draw`。
+`Effect.Draw` 通过 `FCardEffect::TargetZone` 指定源区域；未设置时默认 `CardLocation.Draw`。当前可制作源区域只有 Draw / Discard / Exhaust；`CardLocation.Hand` 作为 tag 保留，但不是当前 Draw authoring contract 的合法源。
 
 | Tag | 代码名 | 说明 |
 |---|---|---|
@@ -757,7 +757,9 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 
 ---
 
-## §11 效果字段使用表
+## §11 战斗规则内容制作矩阵
+
+V0-CU 后，卡牌和敌人意图的内容制作以本矩阵和 `FWacomBattleRuleContentContract` 为准。GameplayTag 已声明不代表已经接入主流程；矩阵中未列出的 Effect / Target / Condition / Passive trigger 不应写入正式 DataAsset，编辑器校验会拦截。
 
 `FCardEffect` 的当前字段：
 
@@ -795,17 +797,17 @@ Magnitude 计算顺序：
 
 `Condition` 是整条效果的执行门控；`MagnitudeModifiers` 是 FinalMagnitude 计算后的条件修正列表；`bMagnitudeFromRuntimeCost` 仅用于旧资产反序列化兼容，新资产应使用 `MagnitudeSource`。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 传 Status tag，这个参数债已记录在 [TechDebt](./TechDebt.md)。
 
-每个 EffectType 对 `FCardEffect` 字段的使用方式不同。配卡时对照本表。"-" 表示该字段对此 EffectType 无效。
+每个 EffectType 对 `FCardEffect` 字段的使用方式不同。配卡时对照本表。"-" 表示该字段对此 EffectType 无效。使用 Literal Magnitude 的正向数值效果必须填 `Magnitude > 0`；只有 `Effect.ModifyInitiative` 当前允许负数 Magnitude。
 
 | EffectType | Magnitude 语义 | Target（典型值）| TargetZone | Duration | MagnitudeSource | 备注 |
 |---|---|---|---|---|---|---|
-| `Effect.Damage` | 伤害值 | SingleEnemyPart / AllEnemyParts / Player | - | - | Literal / RuntimeCost | 部位 HP 归零立即破坏 |
+| `Effect.Damage` | 伤害值 | SingleEnemyPart / AllEnemyParts / Player | - | - | Literal / RuntimeCost / TargetStatusStacks | 部位 HP 归零立即破坏 |
 | `Effect.Heal` | 治疗量 | Self(→Player) / Player | - | - | Literal | 恢复玩家 HP，并移除治疗量 10% 的中毒层数 |
 | `Effect.ApplyStatus.Poison` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | - | Literal / RuntimeCost | 层数模型，不用 Duration |
 | `Effect.ApplyStatus.Slow` | 层数 | 同上 | - | - | Literal | 第一阶段只记录 |
 | `Effect.ApplyStatus.Freeze` | 层数 | SingleEnemyPart | - | 回合数(0=层数模型) | Literal | 按层数消耗实现 |
 | `Effect.ApplyStatus.Twilight` | 层数 | SingleEnemyPart | - | - | Literal | 第一阶段只记录 |
-| `Status.Shield` | 护盾值 | Player / Self(部位) | - | - | Literal | 直接加到 Shield 字段 |
+| `Status.Shield` | 护盾值 | Player / Self(→Player) | - | - | Literal | 直接加到 Player Shield 字段；敌方自身护盾只在 Enemy Intent 合同中使用 |
 | `Effect.Shuffle.Random` | - | RandomHandCard | - | - | - | 从手牌随机选一张腾挪 |
 | `Effect.Shuffle.FromBothToOther` | - | ZoneHandCard | HandZone.Both | - | - | 从双手区挑一张腾挪到左/右 |
 | `Effect.Shuffle.ToRandomZone` | - | Self(本卡) | - | - | - | 把本卡腾挪到随机区域 |
@@ -813,12 +815,26 @@ Magnitude 计算顺序：
 | `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 下限由 ComputeRuntimeCost clamp 到 0 |
 | `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆；建议显式设置 HandCardTargetFilter：允许普通手牌、拒绝左右手锚点；Magnitude 不参与数量判定；触发目标卡 `OnDiscard` |
 | `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗区；建议显式设置 HandCardTargetFilter：允许普通手牌、拒绝左右手锚点；Magnitude 不参与数量判定；不触发 `OnDiscard` |
-| `Effect.Draw` | 张数 | Self / Player | CardLocation.* | - | Literal | `TargetZone` 复用为源区域 tag，默认抽牌堆 |
+| `Effect.Draw` | 张数 | Self / Player | CardLocation.Draw / Discard / Exhaust | - | Literal | `TargetZone` 复用为源区域 tag，默认抽牌堆；不支持 CardLocation.Hand |
 | `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉手牌中普通卡，不弃锚点 |
 | `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 标记交给打出后去向阶段处理 |
-| `Effect.GainKeyword` | - | HandCard | KeywordTag | - | - | `TargetZone` 复用为要添加的 Keyword tag |
-| `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | StatusTag | - | Literal | `TargetZone` 复用为要移除的 Status tag |
-| `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal | 正数增加，负数减少 |
+| `Effect.GainKeyword` | - | LastShuffledCard / SelectedHandCard | Card.Keyword.* | - | - | `TargetZone` 复用为要添加的 Keyword tag；当前不要填 Target.Self |
+| `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | Status.Poison / Slow / Freeze / Twilight / Stunned | - | Literal / TargetStatusStacks | `TargetZone` 复用为要移除的 Status tag；不支持 Status.Shield |
+| `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal / TargetStatusStacks | 正数增加，负数减少 |
+
+`Magnitude.Source.RuntimeCost` 当前只允许用于 `Effect.Damage` 和 `Effect.ApplyStatus.Poison`。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 指定要读取的状态，只允许读取进入 `StatusStacks` 的状态：Poison / Slow / Freeze / Twilight / Stunned。`Status.Shield` 不在 `StatusStacks` 中，不能作为该 source 或 `Condition.Target.HasStatus` 的参数。
+
+### 敌人 Intent 效果矩阵
+
+`FIntentEffect` 字段比 `FCardEffect` 更窄，没有 `TargetZone`、`MagnitudeSource`、`Condition` 或 modifiers。敌人意图 V1 只支持下表：
+
+| EffectType | Target | Magnitude | Duration | 备注 |
+|---|---|---:|---:|---|
+| `Effect.Damage` | `Target.Player` | > 0 | 0 | 对玩家造成伤害 |
+| `Effect.ApplyStatus.Poison / Slow / Freeze / Twilight` | `Target.Player` 或 `Target.Self` | > 0 | >= 0 | Self 表示行动部位自身 |
+| `Status.Shield` | `Target.Self` | > 0 | 0 | Self 表示行动部位自身加护盾；当前敌人 Intent 不给玩家加护盾 |
+
+敌人 Intent 当前不支持 `Target.SingleEnemyPart / AllEnemyParts / SelectedHandCard / LastShuffledCard / ZoneHandCard / RandomHandCard`，也不支持伤害自身、给玩家加护盾、`Effect.Draw / Discard / ExhaustSelf / Card.* / GainKeyword / RemoveStatus / ModifyInitiative / Heal` 等卡牌或玩家专用效果。不要依赖运行时静默忽略非法目标。
 
 ### MagnitudeModifiers
 
@@ -849,7 +865,7 @@ Magnitude 计算顺序：
 
 - `Effect.Shuffle.ToRandomZone` / `Effect.Card.AddCost` / `Effect.Card.ReduceCost` → 指向本卡（HandCard）
 - `Effect.Card.DiscardSelected` / `Effect.Card.ExhaustSelected` 必须填写 `Target.SelectedHandCard`，不要填写 `Target.Self`
-- 其他（Damage / Heal / ApplyStatus）→ 指向玩家（Player）
+- 其他（Damage / Heal / ApplyStatus / Status.Shield）→ 指向玩家（Player）
 
 ### HandCard 目标筛选填写建议
 
@@ -880,7 +896,7 @@ struct FEffectCondition
 |---|---|---|---|
 | Invalid（未设置）| 永真 | - | - |
 | `Condition.Self.InZone` | 本卡当前在指定区域 | `HandZone.*` | - |
-| `Condition.Target.HasStatus` | 目标部位含指定状态 | `Status.*` | - |
+| `Condition.Target.HasStatus` | 目标部位含指定状态 | `Status.Poison / Slow / Freeze / Twilight / Stunned` | - |
 
 `bNegate = true` 把结果取反。例如"自卡不在左手区" = `InZone(Left) + bNegate=true`。
 
@@ -910,11 +926,15 @@ struct FCardPassive
 };
 ```
 
-| Trigger | 触发时机 | 使用 TriggerThreshold? | 典型卡 |
-|---|---|---|---|
-| `Passive.Trigger.AfterPlayed` | 本卡打出完成后 | 否 | 烁光蝶（自腾挪）|
-| `Passive.Trigger.OnCompanionCount` | 全局 Companion 计数达阈值 | 是 | 拂晓飞蛾（回手，阈值 3）|
-| `Passive.Trigger.OnTwilightTriggered` | 暮气施加成功时 | 否 | 暮蛉（占位）|
+| Trigger | 当前制作状态 | 使用 TriggerThreshold? | Effects 是否执行 | 典型卡 |
+|---|---|---|---|---|
+| `Passive.Trigger.AfterPlayed` | 可执行 | 否 | 是 | 烁光蝶（自腾挪）|
+| `Passive.Trigger.OnDiscard` | 可执行 | 否 | 是 | 被弃掉时触发；不含打出后自然进弃牌堆 |
+| `Passive.Trigger.OnCompanionCount` | 特殊回手触发 | 是 | 否 | 拂晓飞蛾（回手，阈值 3）|
+| `Passive.Trigger.OnTwilightTriggered` | EventOnly / 展示占位 | 否 | 否 | 暮蛉（占位）|
+| `Passive.Trigger.OnTurnStart` | Reserved | 否 | 否 | 方法存在，主流程未接入 |
+| `Passive.Trigger.OnTurnEnd` | Reserved | 否 | 否 | 方法存在，主流程未接入 |
+| `Passive.Trigger.OnDraw` | Reserved | 否 | 否 | 方法存在，主流程未接入 |
 
 **TriggerThreshold** 只用于计数类 trigger。达到阈值后触发并清零计数。其他 trigger 不读此字段。
 

@@ -112,6 +112,18 @@ namespace
 	{
 		return FWacomCharacterDefinitionValidation::Validate(Character, OutErrors);
 	}
+
+	bool ErrorsContain(const TArray<FText>& Errors, const FString& Needle)
+	{
+		for (const FText& Error : Errors)
+		{
+			if (Error.ToString().Contains(Needle))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -230,6 +242,149 @@ bool FWacomDataCardValidationRequiredFieldsSpec::RunTest(const FString& /*Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataCardValidationBattleRuleContentContractSpec,
+	"Wacom.Data.Card.Validation.BattleRuleContentContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataCardValidationBattleRuleContentContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		Card->Effects[0].EffectType = WacomTags::CardLocation_Hand;
+		TArray<FText> Errors;
+		TestFalse(TEXT("Unregistered EffectType fails"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("Unregistered effect reports rule registration"), ErrorsContain(Errors, TEXT("未注册")));
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		Card->TargetMode = ECardTargetMode::None;
+		Card->Effects[0].Target = WacomTags::Target_SingleEnemyPart;
+		TArray<FText> Errors;
+		TestFalse(TEXT("Selected enemy target without TargetMode fails"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("Invalid target reports context"), ErrorsContain(Errors, TEXT("Target")));
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		FCardEffect Effect;
+		Effect.EffectType = WacomTags::Effect_Shuffle_FromBothToOther;
+		Effect.Target = WacomTags::Target_ZoneHandCard;
+		Effect.Magnitude = 0;
+		Card->TargetMode = ECardTargetMode::None;
+		Card->Effects = { Effect };
+		TArray<FText> Errors;
+		TestFalse(TEXT("Missing TargetZone for zone shuffle fails"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("Missing TargetZone is reported"), ErrorsContain(Errors, TEXT("TargetZone")));
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		Card->Effects[0].MagnitudeSource = WacomTags::Magnitude_Source_TargetStatusStacks;
+		Card->Effects[0].TargetZone = WacomTags::Status_Shield;
+		TArray<FText> Errors;
+		TestFalse(TEXT("TargetStatusStacks cannot read Shield"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("Shield status stack issue reported"), ErrorsContain(Errors, TEXT("Status.Shield")));
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		Card->Effects[0].EffectType = WacomTags::Effect_Draw;
+		Card->Effects[0].Target = WacomTags::Target_Player;
+		Card->Effects[0].Magnitude = 0;
+		Card->Effects[0].MagnitudeSource = WacomTags::Magnitude_Source_RuntimeCost;
+		TArray<FText> Errors;
+		TestFalse(TEXT("RuntimeCost source cannot drive draw"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("RuntimeCost source mismatch reported"), ErrorsContain(Errors, TEXT("MagnitudeSource")));
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		Card->Effects[0].Magnitude = 0;
+		Card->Effects[0].MagnitudeSource = WacomTags::Magnitude_Source_HandCount;
+		TArray<FText> Errors;
+		TestFalse(TEXT("HandCount source is reserved for authoring"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("HandCount source mismatch reported"), ErrorsContain(Errors, TEXT("MagnitudeSource")));
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		Card->Effects[0].Condition.ConditionType = WacomTags::Condition_Target_HasStatus;
+		Card->Effects[0].Condition.ParamTag = WacomTags::Status_Shield;
+		TArray<FText> Errors;
+		TestFalse(TEXT("HasStatus cannot read Shield"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("Shield condition issue reported"), ErrorsContain(Errors, TEXT("Status.Shield")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataCardValidationPassiveTriggerContractSpec,
+	"Wacom.Data.Card.Validation.PassiveTriggerContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataCardValidationPassiveTriggerContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		FCardPassive Passive;
+		Passive.Trigger = WacomTags::Passive_Trigger_OnTwilightTriggered;
+		Passive.DisplayText = FText::FromString(TEXT("只展示"));
+		Card->Passives = { Passive };
+		TArray<FText> Errors;
+		TestTrue(TEXT("OnTwilight display-only passive passes"), ValidateCardForTest(Card.Get(), Errors));
+		TestEqual(TEXT("No OnTwilight display-only errors"), Errors.Num(), 0);
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		FCardPassive Passive;
+		Passive.Trigger = WacomTags::Passive_Trigger_OnTwilightTriggered;
+		Passive.Effects = { MakeValidCardEffect() };
+		Card->Passives = { Passive };
+		TArray<FText> Errors;
+		TestFalse(TEXT("OnTwilight with effects fails"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("OnTwilight effects issue reported"), ErrorsContain(Errors, TEXT("不执行 Effects")));
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		FCardPassive Passive;
+		Passive.Trigger = WacomTags::Passive_Trigger_OnTurnStart;
+		Card->Passives = { Passive };
+		TArray<FText> Errors;
+		TestFalse(TEXT("Reserved OnTurnStart fails"), ValidateCardForTest(Card.Get(), Errors));
+		TestTrue(TEXT("Reserved trigger issue reported"), ErrorsContain(Errors, TEXT("保留触发点")));
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		FCardPassive Passive;
+		Passive.Trigger = WacomTags::Passive_Trigger_OnCompanionCount;
+		Passive.TriggerThreshold = 3;
+		Passive.DisplayText = FText::FromString(TEXT("每三张伙伴回手"));
+		Card->Passives = { Passive };
+		TArray<FText> Errors;
+		TestTrue(TEXT("OnCompanionCount threshold passive passes"), ValidateCardForTest(Card.Get(), Errors));
+		TestEqual(TEXT("No OnCompanionCount errors"), Errors.Num(), 0);
+	}
+
+	{
+		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
+		FCardZoneHook Hook;
+		Hook.Zone = WacomTags::HandZone_Left;
+		Hook.Trigger = WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit;
+		Card->ZoneHooks = { Hook };
+		TArray<FText> Errors;
+		TestTrue(TEXT("Empty OnPerfectReleaseHit zone hook remains legal"), ValidateCardForTest(Card.Get(), Errors));
+		TestEqual(TEXT("No empty OnPerfectReleaseHit hook errors"), Errors.Num(), 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomDataEnemyPartValidationValidSpec,
 	"Wacom.Data.EnemyPart.Validation.ValidPart",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -329,6 +484,81 @@ bool FWacomDataEnemyPartValidationRequiredFieldsSpec::RunTest(const FString& /*P
 		TArray<FText> Errors;
 		TestFalse(TEXT("Negative IntentEffect Duration fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
 		TestTrue(TEXT("Negative IntentEffect Duration has error"), Errors.Num() > 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataEnemyPartValidationIntentRuleContentContractSpec,
+	"Wacom.Data.EnemyPart.Validation.IntentRuleContentContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataEnemyPartValidationIntentRuleContentContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
+		FIntentDefinition Intent = MakeValidIntentDefinition();
+		Intent.Effects[0].EffectType = WacomTags::Effect_Card_AddCost;
+		Intent.Effects[0].Target = WacomTags::Target_SelectedHandCard;
+		Part->IntentSequence = { Intent };
+		TArray<FText> Errors;
+		TestFalse(TEXT("Card-only effect in enemy intent fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestTrue(TEXT("Enemy intent unsupported effect reported"), ErrorsContain(Errors, TEXT("未支持")));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
+		FIntentDefinition Intent = MakeValidIntentDefinition();
+		Intent.Effects[0].Target = WacomTags::Target_SingleEnemyPart;
+		Part->IntentSequence = { Intent };
+		TArray<FText> Errors;
+		TestFalse(TEXT("Enemy intent cannot target enemy part"), ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestTrue(TEXT("Enemy intent target issue reported"), ErrorsContain(Errors, TEXT("Target")));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
+		FIntentDefinition Intent = MakeValidIntentDefinition();
+		Intent.Effects[0].EffectType = WacomTags::Status_Shield;
+		Intent.Effects[0].Magnitude = 4;
+		Intent.Effects[0].Target = WacomTags::Target_Player;
+		Part->IntentSequence = { Intent };
+		TArray<FText> Errors;
+		TestFalse(TEXT("Enemy intent shield cannot target player"), ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestTrue(TEXT("Enemy player shield target issue reported"), ErrorsContain(Errors, TEXT("Target")));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
+		FIntentDefinition Intent = MakeValidIntentDefinition();
+		Intent.Effects[0].Target = WacomTags::Target_Self;
+		Part->IntentSequence = { Intent };
+		TArray<FText> Errors;
+		TestFalse(TEXT("Enemy intent damage cannot target self"), ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestTrue(TEXT("Enemy self damage target issue reported"), ErrorsContain(Errors, TEXT("Target")));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
+		FIntentDefinition Intent = MakeValidIntentDefinition();
+		Intent.Effects[0].EffectType = WacomTags::Status_Shield;
+		Intent.Effects[0].Magnitude = 4;
+		Intent.Effects[0].Target = WacomTags::Target_Self;
+		Part->IntentSequence = { Intent };
+		TArray<FText> Errors;
+		TestTrue(TEXT("Enemy intent self shield passes"), ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestEqual(TEXT("No enemy self shield errors"), Errors.Num(), 0);
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
+		FIntentDefinition Intent = MakeValidIntentDefinition();
+		Intent.Effects[0].Magnitude = 0;
+		Part->IntentSequence = { Intent };
+		TArray<FText> Errors;
+		TestFalse(TEXT("Enemy intent positive effect magnitude must be positive"), ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestTrue(TEXT("Enemy intent magnitude issue reported"), ErrorsContain(Errors, TEXT("Magnitude")));
 	}
 
 	return true;

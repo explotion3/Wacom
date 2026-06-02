@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-battle
 status: active
-updated: 2026-05-22
+updated: 2026-06-02
 tags:
   - wacom/battle
   - wacom/rules
@@ -428,6 +428,13 @@ WacomBattle/
 | `Status.Shield` | ShieldHandler | 已实现 |
 
 效果字段、Target、Magnitude 和 GameplayTag 的静态数据契约见 [WacomData.md](./WacomData.md)。
+
+V0-CU 后，战斗内容制作口径由 `FWacomBattleRuleContentContract` 提供给编辑器校验使用。它只是当前 resolver / dispatcher 的只读 authoring matrix，不执行规则、不改变 `UBattleSession::SubmitCommand()` 同步结算，也不让 `WacomData` 依赖 `WacomBattle`。新增 Effect、Target、MagnitudeSource、Condition 或 Passive 触发点时，应同时更新运行时 resolver、`FWacomBattleRuleContentContract`、数据校验测试和 [WacomData.md](./WacomData.md) 的矩阵。
+
+重要边界：
+- GameplayTag 已声明不等于已可制作；能否进入 DataAsset 以 `FWacomBattleRuleContentContract` 和 `WacomData` authoring matrix 为准。
+- `Status.Shield` 是护盾数值入口，直接写入 `Shield` 字段，不进入 `StatusStacks`；不要用于 `Condition.Target.HasStatus` 或 `Magnitude.Source.TargetStatusStacks`。
+- 敌方 Intent V1 只允许 `Target.Player` 和 `Target.Self`，不支持手牌目标、全体敌方部位目标或卡牌专用效果。
 
 ---
 

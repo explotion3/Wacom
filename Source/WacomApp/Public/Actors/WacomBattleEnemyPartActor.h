@@ -214,7 +214,7 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
 		meta = (ToolTip = "状态 Badge 的绘制尺寸，单位：Slate 像素。", ClampMin = "1.0", UIMin = "32.0"))
-	FVector2D StatusBadgeDrawSize = FVector2D(188.f, 86.f);
+	FVector2D StatusBadgeDrawSize = FVector2D(204.f, 112.f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
 		meta = (ToolTip = "状态 Badge 的整体渲染缩放。只影响 UI 可读性，不影响命中。", ClampMin = "0.25", ClampMax = "2.0", UIMin = "0.6", UIMax = "1.2"))

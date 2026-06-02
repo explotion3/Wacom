@@ -292,7 +292,7 @@ WBP 合同：
 - Widget 应保持 `HitTestInvisible`，不要阻挡 Visibility trace、TargetSelect 点击或 first-person drag preview / release。
 - Status Badge 常驻显示当前 Host 已绑定部位，包括破坏部位；破坏态用文案或样式表达，不隐藏。
 - Prediction Badge 是独立的临时预测 Widget；不要把预测文案和状态常驻读数合并到同一个 WBP。
-- V0-CT 后 C++ fallback 是紧凑布局：部位名、HP、先机和意图为主；护盾/状态为空时不占高度。WBP 应保持类似信息密度，长中文文案应 clip 或自行缩写，不要撑大 screen-space badge。
+- V0-CT 后 C++ fallback 是可读紧凑布局：部位名、HP、先机和意图为主，其中意图独占一行，避免三部位并排时被 HP 条和先机挤出画布；护盾/状态为空时不占高度。WBP 应保持类似信息密度，长中文文案应 clip 或自行缩写，不要撑大 screen-space badge。
 - PartActor facade 上的 `StatusBadgeScale / PredictionBadgeScale / StatusBadgeOpacity / DestroyedStatusBadgeOpacity / PredictionBadgeZOffsetWhenVisible` 由 bridge 在运行时应用到 UserWidget；WBP 不应覆盖这些表现参数。
 
 ---

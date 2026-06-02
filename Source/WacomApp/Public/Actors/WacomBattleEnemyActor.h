@@ -91,11 +91,11 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Badge Layout",
 		meta = (ToolTip = "相邻部位 Badge 的横向错开距离。单位：厘米；与竖向错开一起叠加到 PartActor badge facade 位置。", ClampMin = "0.0", ClampMax = "300.0", UIMin = "0.0", UIMax = "80.0"))
-	float BadgeStaggerHorizontalStep = 20.0f;
+	float BadgeStaggerHorizontalStep = 28.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Badge Layout",
 		meta = (ToolTip = "相邻部位 Badge 的竖向错开距离。单位：厘米；与横向错开一起叠加到 PartActor badge facade 位置。", ClampMin = "0.0", ClampMax = "300.0", UIMin = "0.0", UIMax = "80.0"))
-	float BadgeStaggerVerticalStep = 14.0f;
+	float BadgeStaggerVerticalStep = 18.0f;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy",
 		meta = (ToolTip = "返回附着在当前 Host 下的战斗敌人部位 Actor。"))

@@ -3,6 +3,7 @@
 #include "Validation/EnemyPartDefinitionValidation.h"
 
 #include "Enemies/EnemyPartDefinition.h"
+#include "Rules/BattleRuleContentContract.h"
 
 #define LOCTEXT_NAMESPACE "WacomEnemyPartDefinitionValidation"
 
@@ -21,6 +22,56 @@ namespace
 	FText FormatValidationError(const TCHAR* Format, const FString& A, const FString& B)
 	{
 		return FText::FromString(FString::Format(Format, { A, B }));
+	}
+
+	void ValidateIntentEffectContract(
+		const FIntentEffect& Effect,
+		const FString& EffectLabel,
+		TArray<FText>& OutErrors)
+	{
+		if (!Effect.EffectType.IsValid())
+		{
+			AddValidationError(OutErrors,
+				FormatValidationError(TEXT("{0} 的 EffectType 无效。"), EffectLabel));
+			return;
+		}
+
+		if (!FWacomBattleRuleContentContract::IsSupportedEnemyIntentEffectType(Effect.EffectType))
+		{
+			AddValidationError(OutErrors,
+				FormatValidationError(TEXT("{0} 的 EffectType 当前敌人意图规则未支持：{1}。"),
+					EffectLabel,
+					Effect.EffectType.ToString()));
+			return;
+		}
+
+		if (!FWacomBattleRuleContentContract::IsSupportedEnemyIntentEffectTarget(Effect.EffectType, Effect.Target))
+		{
+			AddValidationError(OutErrors,
+				FormatValidationError(TEXT("{0} 的 Target 当前敌人意图规则未支持：{1}。"),
+					EffectLabel,
+					Effect.Target.ToString()));
+		}
+
+		if (Effect.Magnitude < 0
+			&& !FWacomBattleRuleContentContract::EnemyIntentEffectSupportsNegativeMagnitude(Effect.EffectType))
+		{
+			AddValidationError(OutErrors,
+				FormatValidationError(TEXT("{0} 的 Magnitude 不能为负数。"), EffectLabel));
+		}
+
+		if (FWacomBattleRuleContentContract::EffectUsesPositiveMagnitude(Effect.EffectType)
+			&& Effect.Magnitude <= 0)
+		{
+			AddValidationError(OutErrors,
+				FormatValidationError(TEXT("{0} 的 Magnitude 必须大于 0。"), EffectLabel));
+		}
+
+		if (Effect.Duration < 0)
+		{
+			AddValidationError(OutErrors,
+				FormatValidationError(TEXT("{0} 的 Duration 不能为负数。"), EffectLabel));
+		}
 	}
 }
 
@@ -81,23 +132,7 @@ bool FWacomEnemyPartDefinitionValidation::Validate(
 			const FIntentEffect& Effect = Intent.Effects[EffectIndex];
 			const FString EffectLabel = FString::Printf(TEXT("%s.Effects[%d]"), *IntentLabel, EffectIndex);
 
-			if (!Effect.EffectType.IsValid())
-			{
-				AddValidationError(OutErrors,
-					FormatValidationError(TEXT("{0} 的 EffectType 无效。"), EffectLabel));
-			}
-
-			if (Effect.Magnitude < 0)
-			{
-				AddValidationError(OutErrors,
-					FormatValidationError(TEXT("{0} 的 Magnitude 不能为负数。"), EffectLabel));
-			}
-
-			if (Effect.Duration < 0)
-			{
-				AddValidationError(OutErrors,
-					FormatValidationError(TEXT("{0} 的 Duration 不能为负数。"), EffectLabel));
-			}
+			ValidateIntentEffectContract(Effect, EffectLabel, OutErrors);
 		}
 	}
 
