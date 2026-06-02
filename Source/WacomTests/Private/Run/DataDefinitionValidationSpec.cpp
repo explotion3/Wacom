@@ -10,6 +10,7 @@
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
 #include "Enemies/IntentEffect.h"
+#include "Fixtures/GeneratedBattleContentTestAssets.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Validation/CardDefinitionValidation.h"
 #include "Validation/CharacterDefinitionValidation.h"
@@ -742,22 +743,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FString& /*Parameters*/)
 {
-	UCharacterDefinition* BugGirl = LoadObject<UCharacterDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
-	UEnemyDefinition* Snake = LoadObject<UEnemyDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake.DA_Enemy_Snake"));
-
-	UEnemyPartDefinition* SnakeHead = LoadObject<UEnemyPartDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"));
-	UEnemyPartDefinition* SnakeBody = LoadObject<UEnemyPartDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"));
-	UEnemyPartDefinition* SnakeTail = LoadObject<UEnemyPartDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"));
+	UCharacterDefinition* BugGirl = FWacomGeneratedBattleContentAssets::LoadBugGirl(*this);
+	UEnemyDefinition* Snake = FWacomGeneratedBattleContentAssets::LoadSnake(*this);
+	UEnemyPartDefinition* SnakeHead = FWacomGeneratedBattleContentAssets::LoadSnakeHead(*this);
+	UEnemyPartDefinition* SnakeBody = FWacomGeneratedBattleContentAssets::LoadSnakeBody(*this);
+	UEnemyPartDefinition* SnakeTail = FWacomGeneratedBattleContentAssets::LoadSnakeTail(*this);
 
 	bool bAllAssetsLoaded = true;
 	bAllAssetsLoaded &= TestNotNull(TEXT("BugGirl character asset loads"), BugGirl);
@@ -766,31 +756,10 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake body part asset loads"), SnakeBody);
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake tail part asset loads"), SnakeTail);
 
-	const TCHAR* CardAssetPaths[] = {
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_LeftHand.DA_Card_LeftHand"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_RightHand.DA_Card_RightHand"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_FuxiaoFeie.DA_Card_FuxiaoFeie"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ShuoguangDie.DA_Card_ShuoguangDie"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Muling.DA_Card_Muling"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang.DA_Card_ZhujianRongnang"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_MuseiYinchongdeng.DA_Card_MuseiYinchongdeng"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey"),
-		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle.DA_Card_Starter_PoisonNeedle"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard.DA_Card_Starter_ChitinWard"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch.DA_Card_Starter_AntennaSearch"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut.DA_Card_Starter_MoltCut"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_LightHusk.DA_Card_Starter_LightHusk"),
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_SilklineFeint.DA_Card_Starter_SilklineFeint")
-	};
-
 	TArray<UCardDefinition*> GeneratedCards;
-	for (const TCHAR* CardAssetPath : CardAssetPaths)
+	for (const TCHAR* CardAssetPath : FWacomGeneratedBattleContentAssets::GeneratedDefinitionCardPaths())
 	{
-		UCardDefinition* Card = LoadObject<UCardDefinition>(nullptr, CardAssetPath);
+		UCardDefinition* Card = FWacomGeneratedBattleContentAssets::LoadCardByPath(CardAssetPath, *this);
 		bAllAssetsLoaded &= TestNotNull(*FString::Printf(TEXT("%s loads"), CardAssetPath), Card);
 		GeneratedCards.Add(Card);
 	}
@@ -839,9 +808,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomDataDebugKeyAssetLoadsSpec::RunTest(const FString& /*Parameters*/)
 {
-	UCardDefinition* DebugKey = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey"));
+	UCardDefinition* DebugKey = FWacomGeneratedBattleContentAssets::LoadDebugKey(*this);
 	if (!TestNotNull(TEXT("DebugKey asset loads"), DebugKey))
 	{
 		return false;
@@ -863,12 +830,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomDataDebugKeyBugGirlStarterDeckSpec::RunTest(const FString& /*Parameters*/)
 {
-	UCardDefinition* DebugKey = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey"));
-	UCharacterDefinition* BugGirl = LoadObject<UCharacterDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
+	UCardDefinition* DebugKey = FWacomGeneratedBattleContentAssets::LoadDebugKey(*this);
+	UCharacterDefinition* BugGirl = FWacomGeneratedBattleContentAssets::LoadBugGirl(*this);
 	if (!TestNotNull(TEXT("DebugKey asset loads"), DebugKey)
 		|| !TestNotNull(TEXT("BugGirl character asset loads"), BugGirl))
 	{
@@ -887,24 +850,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /*Parameters*/)
 {
-	UCardDefinition* PoisonNeedle = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle.DA_Card_Starter_PoisonNeedle"));
-	UCardDefinition* ChitinWard = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard.DA_Card_Starter_ChitinWard"));
-	UCardDefinition* AntennaSearch = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch.DA_Card_Starter_AntennaSearch"));
-	UCardDefinition* MoltCut = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut.DA_Card_Starter_MoltCut"));
-	UCardDefinition* LightHusk = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_LightHusk.DA_Card_Starter_LightHusk"));
-	UCardDefinition* SilklineFeint = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_SilklineFeint.DA_Card_Starter_SilklineFeint"));
+	UCardDefinition* PoisonNeedle = FWacomGeneratedBattleContentAssets::LoadPoisonNeedle(*this);
+	UCardDefinition* ChitinWard = FWacomGeneratedBattleContentAssets::LoadChitinWard(*this);
+	UCardDefinition* AntennaSearch = FWacomGeneratedBattleContentAssets::LoadAntennaSearch(*this);
+	UCardDefinition* MoltCut = FWacomGeneratedBattleContentAssets::LoadMoltCut(*this);
+	UCardDefinition* LightHusk = FWacomGeneratedBattleContentAssets::LoadLightHusk(*this);
+	UCardDefinition* SilklineFeint = FWacomGeneratedBattleContentAssets::LoadSilklineFeint(*this);
 
 	if (!TestNotNull(TEXT("PoisonNeedle loads"), PoisonNeedle)
 		|| !TestNotNull(TEXT("ChitinWard loads"), ChitinWard)
@@ -984,9 +935,7 @@ bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /
 		TestEqual(TEXT("SilklineFeint hook has no extra effects"), SilklineFeint->ZoneHooks[0].ExtraEffects.Num(), 0);
 	}
 
-	UCharacterDefinition* BugGirl = LoadObject<UCharacterDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
+	UCharacterDefinition* BugGirl = FWacomGeneratedBattleContentAssets::LoadBugGirl(*this);
 	if (!TestNotNull(TEXT("BugGirl character loads"), BugGirl))
 	{
 		return false;
@@ -998,15 +947,9 @@ bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /
 	TestFalse(TEXT("LightHusk is not in starter deck"), BugGirl->StarterDeck.Contains(LightHusk));
 	TestFalse(TEXT("SilklineFeint is not in starter deck"), BugGirl->StarterDeck.Contains(SilklineFeint));
 
-	UEnemyPartDefinition* SnakeHead = LoadObject<UEnemyPartDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"));
-	UEnemyPartDefinition* SnakeBody = LoadObject<UEnemyPartDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"));
-	UEnemyPartDefinition* SnakeTail = LoadObject<UEnemyPartDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"));
+	UEnemyPartDefinition* SnakeHead = FWacomGeneratedBattleContentAssets::LoadSnakeHead(*this);
+	UEnemyPartDefinition* SnakeBody = FWacomGeneratedBattleContentAssets::LoadSnakeBody(*this);
+	UEnemyPartDefinition* SnakeTail = FWacomGeneratedBattleContentAssets::LoadSnakeTail(*this);
 	if (!TestNotNull(TEXT("SnakeHead loads"), SnakeHead)
 		|| !TestNotNull(TEXT("SnakeBody loads"), SnakeBody)
 		|| !TestNotNull(TEXT("SnakeTail loads"), SnakeTail))

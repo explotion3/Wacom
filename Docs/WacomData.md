@@ -285,7 +285,7 @@ struct FShopOfferDefinition
 V0-BT 后，场景 `AWacomShopTriggerActor` 摆放实例也会在 Validate Map/Level 中校验当前解析出的商品来源。正式内容推荐填写 `ShopDefinition`；未填写时，手工 `Offers` 仍是兼容入口且可通过校验。`UShopDefinition.ShopId` 仍只是内容 ID，不替代场景 `PersistentId`。
 - 第一版不禁止同一张卡重复出现在多个 Offer 中，因为后续可能用于多份库存或不同价格变体。
 
-自动化测试 `Wacom.Data.Shop.DebugSnakeAssetValidation` 会验证 `DA_Shop_DebugSnake` 能通过同一套校验规则，避免商店内容生成漂移。
+自动化测试 `Wacom.Data.Shop.DebugSnakeAssetValidation` 会验证 `DA_Shop_DebugSnake` 能通过同一套校验规则。`Wacom.Data.Shop.DebugSnakeAsset` 还会按 `FWacomGeneratedBattleContentAssets::DebugSnakeShopOfferExpectations()` 验证商品顺序和价格，避免商店内容生成漂移。
 
 ---
 
@@ -576,7 +576,11 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang` | 数据驱动卡牌 PickupDefinition，固定获得 `PoisonFang` |
 | `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` | 通用 Run 世界拖卡交互 Definition，接受 `DebugKey`，奖励 3 金币并消耗钥匙；推荐 KeyChest 调试内容 |
 
-V0-CX 后，`Wacom.Battle.GeneratedStarterContent` 不再只检查这些生成资产字段和 validator 结果，还会把真实 starter pack 卡、辅助卡和 `DA_Enemy_Snake` 放入 `UBattleSession` 做 runtime smoke：毒针条件伤害、几丁护片护盾/治疗、触须探路抽弃、蜕壳切移除 Slow / 改先机、轻蜕壳 OnDiscard、丝线佯攻空 `OnPerfectReleaseHit` hook，以及 Snake 玩家伤害 / 玩家 Poison / 玩家 Slow / 自身 Shield 意图都要产生对应 Snapshot/Event。
+生成内容验证链：
+- `Wacom.Data.GeneratedContent.DefinitionAssetValidation` 读取生成角色、卡牌、Snake 敌人与部位，统一跑 DataAsset validator。
+- `Wacom.Data.BattleStarterContent.StarterPackAssetValidation` 检查 starter pack 6 张新卡的核心字段、BugGirl 初始卡组排除关系，以及 Snake 三部位意图变体。
+- `Wacom.Battle.GeneratedStarterContent` 把真实 starter pack 卡、辅助卡和 `DA_Enemy_Snake` 放入 `UBattleSession` 做 runtime smoke：毒针条件伤害、几丁护片护盾/治疗、触须探路抽弃、蜕壳切移除 Slow / 改先机、轻蜕壳 OnDiscard、丝线佯攻空 `OnPerfectReleaseHit` hook，以及 Snake 玩家伤害 / 玩家 Poison / 玩家 Slow / 自身 Shield 意图都要产生对应 Snapshot/Event。
+- 这些测试通过 `FWacomGeneratedBattleContentAssets` 集中维护资产路径；该 helper 只属于 `WacomTests`，不作为内容生成、运行时加载或策划配置来源。
 
 ### Data Validation
 
@@ -768,9 +772,9 @@ Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添
 
 ## §11 战斗规则内容制作矩阵
 
-V0-CU 后，卡牌和敌人意图的内容制作以本矩阵和 `FWacomBattleRuleContentContract` 为准。GameplayTag 已声明不代表已经接入主流程；矩阵中未列出的 Effect / Target / Condition / Passive trigger 不应写入正式 DataAsset，编辑器校验会拦截。
+卡牌和敌人意图的内容制作以本矩阵和 `FWacomBattleRuleContentContract` 为准。GameplayTag 已声明不代表已经接入主流程；矩阵中未列出的 Effect / Target / Condition / Passive trigger 不应写入正式 DataAsset，编辑器校验会拦截。
 
-V0-CV 后，`Wacom.Battle.RuleContentMatrix` 已为本节当前允许的卡牌效果、敌人 Intent V1、MagnitudeSource、Condition、MagnitudeModifiers、Passive trigger 和 ZoneHook 建立 transient runtime fixture：每个代表配置先通过 validator，再提交到 `UBattleSession` 验证 Snapshot/Event。`Reserved` / `EventOnly` 条目仍只作为制作合同状态记录，不代表可写入正式 DataAsset。
+`Wacom.Battle.RuleContentMatrix` 已为本节当前允许的卡牌效果、敌人 Intent V1、MagnitudeSource、Condition、MagnitudeModifiers、Passive trigger 和 ZoneHook 建立 transient runtime fixture：每个代表配置先通过 validator，再提交到 `UBattleSession` 验证 Snapshot/Event。`Reserved` / `EventOnly` 条目仍只作为制作合同状态记录，不代表可写入正式 DataAsset。
 
 `FCardEffect` 的当前字段：
 

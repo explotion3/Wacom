@@ -12,8 +12,11 @@ class UCharacterDefinition;
 class UEnemyDefinition;
 class UEnemyPartDefinition;
 struct FBattleCommand;
+struct FBattleEvent;
 struct FBattleSnapshot;
+struct FEnemyPartSnapshot;
 struct FHandCardSnapshot;
+enum class EBattleEventType : uint8;
 enum class EHandZone : uint8;
 
 /**
@@ -102,6 +105,15 @@ public:
 	/** 找 Hand 中所属 CardId == CardDef->CardId 的第一张卡。失败返回无效 FGuid。 */
 	static FGuid FindHandInstanceByCardId(const FBattleSnapshot& Snap, FName CardId);
 
+	/** 找 Hand 中 InstanceId 匹配的卡牌快照。失败返回 nullptr。 */
+	static const FHandCardSnapshot* FindHandCardByInstanceId(const FBattleSnapshot& Snap, const FGuid& InstanceId);
+
+	/** 找 Hand 中所属 CardId 匹配的第一张卡牌快照。失败返回 nullptr。 */
+	static const FHandCardSnapshot* FindHandCardByCardId(const FBattleSnapshot& Snap, FName CardId);
+
+	/** 找 Hand 中 CardId + Zone 匹配的第一张非锚点卡。失败返回无效 FGuid。 */
+	static FGuid FindHandInstanceByCardIdInZone(const FBattleSnapshot& Snap, FName CardId, EHandZone Zone);
+
 	/** Hand 中某张卡的 index，找不到返回 INDEX_NONE。 */
 	static int32 FindHandIndex(const FBattleSnapshot& Snap, const FGuid& InstanceId);
 
@@ -113,6 +125,34 @@ public:
 
 	/** 某 Part 的 InstanceId，按 EnemyDefinition.Parts 的顺序。 */
 	static FGuid FindPartInstanceId(const FBattleSnapshot& Snap, int32 PartIndex);
+
+	/** 按 PartId 找敌方部位快照。失败返回 nullptr。 */
+	static const FEnemyPartSnapshot* FindPartByPartId(const FBattleSnapshot& Snap, FName PartId);
+
+	/** 按 PartId 找敌方部位 InstanceId。失败返回无效 FGuid。 */
+	static FGuid FindPartInstanceByPartId(const FBattleSnapshot& Snap, FName PartId);
+
+	/** 读取状态层数；不存在返回 0。 */
+	static int32 GetStatusStacks(const TMap<FGameplayTag, int32>& StatusStacks, const FGameplayTag& StatusTag);
+
+	/** 统计指定事件类型数量。 */
+	static int32 CountEvents(const TArray<FBattleEvent>& Events, EBattleEventType Type);
+
+	/** 统计指定事件类型 + Tag 数量。 */
+	static int32 CountEventsWithTag(const TArray<FBattleEvent>& Events, EBattleEventType Type, const FGameplayTag& Tag);
+
+	/** 是否存在指定类型事件，可选要求 Tag 匹配。 */
+	static bool HasEvent(const TArray<FBattleEvent>& Events, EBattleEventType Type, const FGameplayTag& Tag = FGameplayTag());
+
+	/** 是否存在指定 ActorInstanceId 的事件，可选要求 Tag 匹配。 */
+	static bool HasEventForActor(
+		const TArray<FBattleEvent>& Events,
+		EBattleEventType Type,
+		const FGuid& ActorInstanceId,
+		const FGameplayTag& Tag = FGameplayTag());
+
+	/** 汇总指定卡牌实例造成的 DamageDealt 事件 Amount。 */
+	static int32 SumDamageEventsForCard(const TArray<FBattleEvent>& Events, const FGuid& CardInstanceId);
 
 private:
 	// fixture 的每个 UObject 都挂 strong ptr 防 GC。

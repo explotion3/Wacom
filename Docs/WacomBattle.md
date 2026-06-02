@@ -429,13 +429,14 @@ WacomBattle/
 
 效果字段、Target、Magnitude 和 GameplayTag 的静态数据契约见 [WacomData.md](./WacomData.md)。
 
-V0-CU 后，战斗内容制作口径由 `FWacomBattleRuleContentContract` 提供给编辑器校验使用。它只是当前 resolver / dispatcher 的只读 authoring matrix，不执行规则、不改变 `UBattleSession::SubmitCommand()` 同步结算，也不让 `WacomData` 依赖 `WacomBattle`。新增 Effect、Target、MagnitudeSource、Condition 或 Passive 触发点时，应同时更新运行时 resolver、`FWacomBattleRuleContentContract`、数据校验测试和 [WacomData.md](./WacomData.md) 的矩阵。
+战斗内容化验证链：
+- `FWacomBattleRuleContentContract` 是当前 resolver / dispatcher 的只读 authoring matrix。它供编辑器校验读取，不执行规则、不改变 `UBattleSession::SubmitCommand()` 同步结算，也不让 `WacomData` 依赖 `WacomBattle`。
+- `Wacom.Data.Card.Validation` / `Wacom.Data.EnemyPart.Validation` 负责挡住未接入的 EffectType、非法 Target、错误 TargetZone / MetaTag、错误 MagnitudeSource、错误 Condition 参数、reserved / event-only Passive trigger 和敌人 Intent 静默无效配置。
+- `Wacom.Battle.RuleContentMatrix` 使用 transient Definition：每个代表配置先通过 validator，再提交到 `UBattleSession` 验证 Snapshot/Event。它证明“合同允许项”能被当前规则层实际执行。
+- `Wacom.Battle.GeneratedStarterContent` 使用真实生成 `.uasset`：starter pack 6 张新卡、`DA_Card_PoisonFang`、`DA_Card_FuxiaoFeie`、`DA_Card_Test_DiscardSelectedHandCard` 和 `DA_Enemy_Snake`。它证明生成资产没有字段漂移，且能在真实 Snake 战斗里产生预期 Snapshot/Event。
+- `WacomTests` 的生成内容路径集中在 `FWacomGeneratedBattleContentAssets`，Snapshot/Event 查询集中在 `FWacomBattleFixture`；测试 helper 不是运行时加载入口，也不是策划配置来源。
 
-V0-CV 后，`Wacom.Battle.RuleContentMatrix` 用 transient 测试 Definition 把 validator 允许项和真实 `UBattleSession` 结算绑在一起。覆盖范围包括当前卡牌效果、MagnitudeSource、Condition、MagnitudeModifiers、Passive trigger、ZoneHook 和敌人 Intent V1。它是矩阵的运行时回归证据，不是新规则入口；测试中若发现 validator 允许但 resolver 静默无效，应优先收紧合同或补 resolver 后再放开制作。
-
-V0-CW 后，第一批矩阵背书的真实可购内容已由 `WacomRegenerateContent` 生成：BugGirl starter pack 新卡只进入 `DA_Shop_DebugSnake`，Snake 三部位增加玩家伤害、玩家状态和自身护盾意图变体。该内容包只消费已有 resolver / dispatcher 语义，不改变 `UBattleSession`、`FBattleEvent` 或提交规则。
-
-V0-CX 后，`Wacom.Battle.GeneratedStarterContent` 会加载 V0-CW 生成的真实 `.uasset`（starter pack 6 张新卡、`DA_Card_PoisonFang`、`DA_Card_FuxiaoFeie`、`DA_Card_Test_DiscardSelectedHandCard` 和 `DA_Enemy_Snake`），用 `UBattleSession` 提交真实 `FBattleCommand` 做 play smoke。它和 V0-CV 的 transient matrix fixture 互补：V0-CV 证明合同允许项能执行，V0-CX 证明生成资产没有字段漂移，且能在真实 Snake 战斗里产生预期 Snapshot/Event。
+新增 Effect、Target、MagnitudeSource、Condition 或 Passive 触发点时，应同时更新运行时 resolver、`FWacomBattleRuleContentContract`、数据校验测试、runtime matrix fixture 和 [WacomData.md](./WacomData.md) 的矩阵。若测试发现 validator 允许但 resolver 静默无效，应优先收紧合同或补 resolver 后再放开制作。
 
 重要边界：
 - GameplayTag 已声明不等于已可制作；能否进入 DataAsset 以 `FWacomBattleRuleContentContract` 和 `WacomData` authoring matrix 为准。

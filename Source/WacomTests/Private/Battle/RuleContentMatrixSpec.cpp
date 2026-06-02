@@ -134,71 +134,6 @@ namespace
 		return !FWacomEnemyPartDefinitionValidation::Validate(Part, Errors) && Errors.Num() > 0;
 	}
 
-	int32 CountEvents(const TArray<FBattleEvent>& Events, EBattleEventType Type)
-	{
-		int32 Count = 0;
-		for (const FBattleEvent& Event : Events)
-		{
-			if (Event.Type == Type)
-			{
-				++Count;
-			}
-		}
-		return Count;
-	}
-
-	bool HasEvent(
-		const TArray<FBattleEvent>& Events,
-		EBattleEventType Type,
-		const FGameplayTag& Tag = FGameplayTag())
-	{
-		for (const FBattleEvent& Event : Events)
-		{
-			if (Event.Type != Type)
-			{
-				continue;
-			}
-			if (Tag.IsValid() && Event.Tag != Tag)
-			{
-				continue;
-			}
-			return true;
-		}
-		return false;
-	}
-
-	const FHandCardSnapshot* FindHandCard(const FBattleSnapshot& Snapshot, const FGuid& CardId)
-	{
-		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
-		{
-			if (Card.InstanceId == CardId)
-			{
-				return &Card;
-			}
-		}
-		return nullptr;
-	}
-
-	FGuid FindCardInstanceInZone(const FBattleSnapshot& Snapshot, FName CardId, EHandZone Zone)
-	{
-		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
-		{
-			if (Card.bIsHandAnchor)
-			{
-				continue;
-			}
-			if (Card.Zone != Zone)
-			{
-				continue;
-			}
-			if (Card.Definition && Card.Definition->CardId == CardId)
-			{
-				return Card.InstanceId;
-			}
-		}
-		return FGuid();
-	}
-
 	UBattleSession* CreateMatrixSession(
 		FWacomBattleFixture& Fixture,
 		UCardDefinition* LeftHand,
@@ -276,15 +211,6 @@ namespace
 		return Effect;
 	}
 
-	int32 GetStatusStacks(const TMap<FGameplayTag, int32>& Stacks, const FGameplayTag& StatusTag)
-	{
-		if (const int32* Found = Stacks.Find(StatusTag))
-		{
-			return *Found;
-		}
-		return 0;
-	}
-
 	bool PlayCardByDefinition(
 		UBattleSession* Session,
 		const FBattleSnapshot& Snapshot,
@@ -358,11 +284,11 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		PlayCardByDefinition(Session, Snapshot, Card, PartId, *this);
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot& Part = Snapshot.Enemy.Parts[0];
-		TestEqual(TEXT("Poison stacks applied"), GetStatusStacks(Part.StatusStacks, WacomTags::Status_Poison), 2);
-		TestEqual(TEXT("Slow stacks applied"), GetStatusStacks(Part.StatusStacks, WacomTags::Status_Slow), 3);
+		TestEqual(TEXT("Poison stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Poison), 2);
+		TestEqual(TEXT("Slow stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Slow), 3);
 		// Freeze skips the immediate initiative-zero action and consumes one stack during that skipped action.
-		TestEqual(TEXT("Freeze stacks applied"), GetStatusStacks(Part.StatusStacks, WacomTags::Status_Freeze), 1);
-		TestEqual(TEXT("Twilight stacks applied"), GetStatusStacks(Part.StatusStacks, WacomTags::Status_Twilight), 4);
+		TestEqual(TEXT("Freeze stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Freeze), 1);
+		TestEqual(TEXT("Twilight stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Twilight), 4);
 	}
 
 	{
@@ -379,7 +305,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		PlayCardByDefinition(Session, Snapshot, DrawCard, FGuid(), *this);
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 		Snapshot = Session->BuildSnapshot();
-		TestTrue(TEXT("Draw effect emits CardsDrawn"), HasEvent(Events, EBattleEventType::CardsDrawn));
+		TestTrue(TEXT("Draw effect emits CardsDrawn"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::CardsDrawn));
 		TestEqual(TEXT("Draw pile consumed by one"), Snapshot.PileCounts.DrawCount, FMath::Max(0, DrawBefore - 1));
 	}
 
@@ -394,7 +320,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		PlayCardByDefinition(Session, Snapshot, DiscardCard, FGuid(), *this);
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-		TestTrue(TEXT("Discard effect emits CardDiscarded"), HasEvent(Events, EBattleEventType::CardDiscarded, WacomTags::Effect_Discard));
+		TestTrue(TEXT("Discard effect emits CardDiscarded"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::CardDiscarded, WacomTags::Effect_Discard));
 	}
 
 	{
@@ -462,7 +388,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
 		PlayCardByDefinition(Session, Snapshot, ApplyRemoveCard, PartId, *this);
 		Snapshot = Session->BuildSnapshot();
-		TestEqual(TEXT("RemoveStatus removes requested stacks"), GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Slow), 1);
+		TestEqual(TEXT("RemoveStatus removes requested stacks"), FWacomBattleFixture::GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Slow), 1);
 	}
 
 	{
@@ -509,7 +435,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
 		PlayCardByDefinition(Session, Snapshot, Card, PartId, *this);
 		Snapshot = Session->BuildSnapshot();
-		TestEqual(TEXT("RuntimeCost magnitude applies poison equal to cost"), GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Poison), 3);
+		TestEqual(TEXT("RuntimeCost magnitude applies poison equal to cost"), FWacomBattleFixture::GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Poison), 3);
 	}
 
 	{
@@ -567,7 +493,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 				Enemy,
 				Seed);
 			FBattleSnapshot Snapshot = Session->BuildSnapshot();
-			const FGuid LeftId = FindCardInstanceInZone(Snapshot, LeftCard->CardId, EHandZone::Left);
+			const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardIdInZone(Snapshot, LeftCard->CardId, EHandZone::Left);
 			if (!LeftId.IsValid())
 			{
 				continue;
@@ -688,7 +614,7 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
 		PlayCardByDefinition(Session, Snapshot, TwilightCard, PartId, *this);
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-		TestTrue(TEXT("OnTwilightTriggered emits PassiveTriggered event only"), HasEvent(Events, EBattleEventType::PassiveTriggered, WacomTags::Passive_Trigger_OnTwilightTriggered));
+		TestTrue(TEXT("OnTwilightTriggered emits PassiveTriggered event only"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::PassiveTriggered, WacomTags::Passive_Trigger_OnTwilightTriggered));
 	}
 
 	return true;
@@ -730,7 +656,7 @@ bool FWacomBattleRuleContentMatrixZoneHookSpec::RunTest(const FString& /*Paramet
 				Enemy,
 				Seed);
 			FBattleSnapshot Snapshot = Session->BuildSnapshot();
-			const FGuid LeftId = FindCardInstanceInZone(Snapshot, LeftCard->CardId, EHandZone::Left);
+			const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardIdInZone(Snapshot, LeftCard->CardId, EHandZone::Left);
 			if (!LeftId.IsValid())
 			{
 				continue;
@@ -772,7 +698,7 @@ bool FWacomBattleRuleContentMatrixZoneHookSpec::RunTest(const FString& /*Paramet
 				Enemy,
 				Seed);
 			FBattleSnapshot Snapshot = Session->BuildSnapshot();
-			const FGuid LeftId = FindCardInstanceInZone(Snapshot, LeftCard->CardId, EHandZone::Left);
+			const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardIdInZone(Snapshot, LeftCard->CardId, EHandZone::Left);
 			if (!LeftId.IsValid())
 			{
 				continue;
@@ -782,9 +708,9 @@ bool FWacomBattleRuleContentMatrixZoneHookSpec::RunTest(const FString& /*Paramet
 				Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftId, PartId)).IsOk());
 			const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 			Snapshot = Session->BuildSnapshot();
-			TestTrue(TEXT("Perfect release hit event emitted"), HasEvent(Events, EBattleEventType::InitiativeHit));
+			TestTrue(TEXT("Perfect release hit event emitted"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::InitiativeHit));
 			TestEqual(TEXT("Empty OnPerfectReleaseHit hook skips initiative push"), FWacomBattleFixture::FindPartInitiative(Snapshot, 0), 5);
-			TestEqual(TEXT("No InitiativePushed event when skip hook applies"), CountEvents(Events, EBattleEventType::InitiativePushed), 0);
+			TestEqual(TEXT("No InitiativePushed event when skip hook applies"), FWacomBattleFixture::CountEvents(Events, EBattleEventType::InitiativePushed), 0);
 			bCoveredLeftZone = true;
 		}
 		TestTrue(TEXT("At least one seed placed perfect hook card in Left zone"), bCoveredLeftZone);
@@ -818,8 +744,8 @@ bool FWacomBattleRuleContentMatrixEnemyIntentSpec::RunTest(const FString& /*Para
 		TestTrue(TEXT("End turn resolves player-targeting enemy intent"), Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("Enemy intent damages player and poison ticks after action"), Snapshot.Player.CurrentHp, Snapshot.Player.MaxHp - 9);
-		TestEqual(TEXT("Enemy intent applies poison to player"), GetStatusStacks(Snapshot.Player.StatusStacks, WacomTags::Status_Poison), 2);
-		TestEqual(TEXT("Enemy intent applies slow to player"), GetStatusStacks(Snapshot.Player.StatusStacks, WacomTags::Status_Slow), 1);
+		TestEqual(TEXT("Enemy intent applies poison to player"), FWacomBattleFixture::GetStatusStacks(Snapshot.Player.StatusStacks, WacomTags::Status_Poison), 2);
+		TestEqual(TEXT("Enemy intent applies slow to player"), FWacomBattleFixture::GetStatusStacks(Snapshot.Player.StatusStacks, WacomTags::Status_Slow), 1);
 	}
 
 	{
@@ -837,7 +763,7 @@ bool FWacomBattleRuleContentMatrixEnemyIntentSpec::RunTest(const FString& /*Para
 		TestTrue(TEXT("End turn resolves self-targeting enemy intent"), Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("Enemy intent adds self shield"), Snapshot.Enemy.Parts[0].Shield, 5);
-		TestEqual(TEXT("Enemy intent applies self freeze then action refresh keeps stack"), GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Freeze), 1);
+		TestEqual(TEXT("Enemy intent applies self freeze then action refresh keeps stack"), FWacomBattleFixture::GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Freeze), 1);
 	}
 
 	return true;

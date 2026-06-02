@@ -11,6 +11,7 @@
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
 #include "Enemies/IntentEffect.h"
+#include "Events/BattleEvent.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
@@ -293,11 +294,52 @@ UBattleSession* FWacomBattleFixture::CreateSession(UCharacterDefinition* Charact
 
 FGuid FWacomBattleFixture::FindHandInstanceByCardId(const FBattleSnapshot& Snap, FName CardId)
 {
-	for (const FHandCardSnapshot& C : Snap.Hand.Cards)
+	if (const FHandCardSnapshot* Card = FindHandCardByCardId(Snap, CardId))
 	{
-		if (C.Definition && C.Definition->CardId == CardId)
+		return Card->InstanceId;
+	}
+	return FGuid();
+}
+
+const FHandCardSnapshot* FWacomBattleFixture::FindHandCardByInstanceId(const FBattleSnapshot& Snap, const FGuid& InstanceId)
+{
+	for (const FHandCardSnapshot& Card : Snap.Hand.Cards)
+	{
+		if (Card.InstanceId == InstanceId)
 		{
-			return C.InstanceId;
+			return &Card;
+		}
+	}
+	return nullptr;
+}
+
+const FHandCardSnapshot* FWacomBattleFixture::FindHandCardByCardId(const FBattleSnapshot& Snap, FName CardId)
+{
+	for (const FHandCardSnapshot& Card : Snap.Hand.Cards)
+	{
+		if (Card.Definition && Card.Definition->CardId == CardId)
+		{
+			return &Card;
+		}
+	}
+	return nullptr;
+}
+
+FGuid FWacomBattleFixture::FindHandInstanceByCardIdInZone(const FBattleSnapshot& Snap, FName CardId, EHandZone Zone)
+{
+	for (const FHandCardSnapshot& Card : Snap.Hand.Cards)
+	{
+		if (Card.bIsHandAnchor)
+		{
+			continue;
+		}
+		if (Card.Zone != Zone)
+		{
+			continue;
+		}
+		if (Card.Definition && Card.Definition->CardId == CardId)
+		{
+			return Card.InstanceId;
 		}
 	}
 	return FGuid();
@@ -325,4 +367,121 @@ int32 FWacomBattleFixture::FindPartHp(const FBattleSnapshot& Snap, int32 PartInd
 FGuid FWacomBattleFixture::FindPartInstanceId(const FBattleSnapshot& Snap, int32 PartIndex)
 {
 	return Snap.Enemy.Parts.IsValidIndex(PartIndex) ? Snap.Enemy.Parts[PartIndex].InstanceId : FGuid();
+}
+
+const FEnemyPartSnapshot* FWacomBattleFixture::FindPartByPartId(const FBattleSnapshot& Snap, FName PartId)
+{
+	for (const FEnemyPartSnapshot& Part : Snap.Enemy.Parts)
+	{
+		if (Part.Definition && Part.Definition->PartId == PartId)
+		{
+			return &Part;
+		}
+	}
+	return nullptr;
+}
+
+FGuid FWacomBattleFixture::FindPartInstanceByPartId(const FBattleSnapshot& Snap, FName PartId)
+{
+	if (const FEnemyPartSnapshot* Part = FindPartByPartId(Snap, PartId))
+	{
+		return Part->InstanceId;
+	}
+	return FGuid();
+}
+
+int32 FWacomBattleFixture::GetStatusStacks(const TMap<FGameplayTag, int32>& StatusStacks, const FGameplayTag& StatusTag)
+{
+	if (const int32* Stacks = StatusStacks.Find(StatusTag))
+	{
+		return *Stacks;
+	}
+	return 0;
+}
+
+int32 FWacomBattleFixture::CountEvents(const TArray<FBattleEvent>& Events, EBattleEventType Type)
+{
+	int32 Count = 0;
+	for (const FBattleEvent& Event : Events)
+	{
+		if (Event.Type == Type)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+int32 FWacomBattleFixture::CountEventsWithTag(
+	const TArray<FBattleEvent>& Events,
+	EBattleEventType Type,
+	const FGameplayTag& Tag)
+{
+	int32 Count = 0;
+	for (const FBattleEvent& Event : Events)
+	{
+		if (Event.Type == Type && Event.Tag == Tag)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+bool FWacomBattleFixture::HasEvent(
+	const TArray<FBattleEvent>& Events,
+	EBattleEventType Type,
+	const FGameplayTag& Tag)
+{
+	for (const FBattleEvent& Event : Events)
+	{
+		if (Event.Type != Type)
+		{
+			continue;
+		}
+		if (Tag.IsValid() && Event.Tag != Tag)
+		{
+			continue;
+		}
+		return true;
+	}
+	return false;
+}
+
+bool FWacomBattleFixture::HasEventForActor(
+	const TArray<FBattleEvent>& Events,
+	EBattleEventType Type,
+	const FGuid& ActorInstanceId,
+	const FGameplayTag& Tag)
+{
+	for (const FBattleEvent& Event : Events)
+	{
+		if (Event.Type != Type)
+		{
+			continue;
+		}
+		if (Event.ActorInstanceId != ActorInstanceId)
+		{
+			continue;
+		}
+		if (Tag.IsValid() && Event.Tag != Tag)
+		{
+			continue;
+		}
+		return true;
+	}
+	return false;
+}
+
+int32 FWacomBattleFixture::SumDamageEventsForCard(const TArray<FBattleEvent>& Events, const FGuid& CardInstanceId)
+{
+	int32 Total = 0;
+	for (const FBattleEvent& Event : Events)
+	{
+		if (Event.Type == EBattleEventType::DamageDealt && Event.CardInstanceId == CardInstanceId)
+		{
+			Total += Event.Amount;
+		}
+	}
+	return Total;
 }

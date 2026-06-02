@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Cards/CardDefinition.h"
+#include "Fixtures/GeneratedBattleContentTestAssets.h"
 #include "Shops/ShopDefinition.h"
 #include "Validation/ShopDefinitionValidation.h"
 
@@ -103,9 +104,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomDataShopDebugSnakeAssetValidationSpec::RunTest(const FString& /*Parameters*/)
 {
-	UShopDefinition* DebugShop = LoadObject<UShopDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Shops/DA_Shop_DebugSnake.DA_Shop_DebugSnake"));
+	UShopDefinition* DebugShop = FWacomGeneratedBattleContentAssets::LoadDebugSnakeShop(*this);
 
 	if (!TestNotNull(TEXT("DebugSnake shop asset loads"), DebugShop))
 	{

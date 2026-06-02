@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/GeneratedBattleContentTestAssets.h"
 #include "Misc/AutomationTest.h"
 
 #include "Commands/BattleCommand.h"
@@ -98,9 +99,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomBattleKnockdownRewardPoisonFangAssetSpec::RunTest(const FString& /*Parameters*/)
 {
-	UCardDefinition* PoisonFang = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+	UCardDefinition* PoisonFang = FWacomGeneratedBattleContentAssets::LoadPoisonFang(*this);
 
 	if (!TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
 	{
@@ -124,16 +123,9 @@ bool FWacomBattleKnockdownRewardPoisonFangAssetSpec::RunTest(const FString& /*Pa
 			FGameplayTag(WacomTags::Target_SingleEnemyPart));
 	}
 
-	const TCHAR* PartPaths[] =
+	for (const TCHAR* PartPath : FWacomGeneratedBattleContentAssets::SnakePartPaths())
 	{
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head.DA_Part_Snake_Head"),
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body.DA_Part_Snake_Body"),
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail.DA_Part_Snake_Tail"),
-	};
-
-	for (const TCHAR* PartPath : PartPaths)
-	{
-		UEnemyPartDefinition* Part = LoadObject<UEnemyPartDefinition>(nullptr, PartPath);
+		UEnemyPartDefinition* Part = FWacomGeneratedBattleContentAssets::LoadEnemyPartByPath(PartPath, *this);
 		if (!TestNotNull(FString::Printf(TEXT("Snake part asset loads: %s"), PartPath), Part))
 		{
 			return false;
@@ -155,9 +147,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 {
-	UShopDefinition* DebugShop = LoadObject<UShopDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Shops/DA_Shop_DebugSnake.DA_Shop_DebugSnake"));
+	UShopDefinition* DebugShop = FWacomGeneratedBattleContentAssets::LoadDebugSnakeShop(*this);
 
 	if (!TestNotNull(TEXT("DebugSnake shop asset loads"), DebugShop))
 	{
@@ -168,33 +158,17 @@ bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("DebugSnake DisplayName"), DebugShop->DisplayName.ToString(), FString(TEXT("蛇巢调试商店")));
 	TestEqual(TEXT("DebugSnake offer count"), DebugShop->Offers.Num(), 10);
 
-	struct FExpectedOffer
-	{
-		const TCHAR* ObjectPath;
-		int32 Price;
-	};
-	const FExpectedOffer ExpectedOffers[] =
-	{
-		{ TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"), 0 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ChifuGongyi.DA_Card_ChifuGongyi"), 2 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie.DA_Card_ZhaoguangMudie"), 2 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag.DA_Card_BugGirlBag"), 3 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle.DA_Card_Starter_PoisonNeedle"), 2 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard.DA_Card_Starter_ChitinWard"), 1 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch.DA_Card_Starter_AntennaSearch"), 2 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut.DA_Card_Starter_MoltCut"), 2 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_LightHusk.DA_Card_Starter_LightHusk"), 1 },
-		{ TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_SilklineFeint.DA_Card_Starter_SilklineFeint"), 2 },
-	};
+	const TArray<FWacomGeneratedBattleContentShopOfferExpectation> ExpectedOffers =
+		FWacomGeneratedBattleContentAssets::DebugSnakeShopOfferExpectations();
 
-	for (int32 Index = 0; Index < UE_ARRAY_COUNT(ExpectedOffers); ++Index)
+	for (int32 Index = 0; Index < ExpectedOffers.Num(); ++Index)
 	{
 		if (!DebugShop->Offers.IsValidIndex(Index))
 		{
 			return false;
 		}
 
-		UCardDefinition* ExpectedCard = LoadObject<UCardDefinition>(nullptr, ExpectedOffers[Index].ObjectPath);
+		UCardDefinition* ExpectedCard = FWacomGeneratedBattleContentAssets::LoadCardByPath(ExpectedOffers[Index].ObjectPath, *this);
 		if (!TestNotNull(FString::Printf(TEXT("Offer card asset loads %d"), Index), ExpectedCard))
 		{
 			return false;
@@ -282,9 +256,7 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 		return false;
 	}
 
-	UCardDefinition* PoisonFang = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+	UCardDefinition* PoisonFang = FWacomGeneratedBattleContentAssets::LoadPoisonFang(*this);
 	if (!TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
 	{
 		return false;
@@ -447,9 +419,7 @@ bool FWacomDataRunEventDebugFlagRewardAssetSpec::RunTest(const FString& /*Parame
 		return false;
 	}
 
-	UCardDefinition* PoisonFang = LoadObject<UCardDefinition>(
-		nullptr,
-		TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang"));
+	UCardDefinition* PoisonFang = FWacomGeneratedBattleContentAssets::LoadPoisonFang(*this);
 	if (!TestNotNull(TEXT("PoisonFang card asset loads"), PoisonFang))
 	{
 		return false;
