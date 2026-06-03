@@ -123,5 +123,11 @@ struct WACOMAPP_API FWacomCardViewData
 	bool bDisabled = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	int32 Durability = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	bool bShowDurability = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	TObjectPtr<UTexture2D> Art = nullptr;
 };

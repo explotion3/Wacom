@@ -93,6 +93,18 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Rarity", meta = (ToolTip = "稀有度 GameplayTag 对应的边框 PaperSprite。按稀有度查表替换 RarityBorder 的显示；未配置的稀有度（包括 Intrinsic）边框隐藏。"))
 	TMap<FGameplayTag, TSoftObjectPtr<UPaperSprite>> RarityBorderSprites;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> DurabilityHost;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> DurabilityDigitsHost;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Durability", meta = (ClampMin = "1", UIMin = "8", UIMax = "64", ToolTip = "耐久数字 Icon 的单个尺寸，单位为 UMG 布局像素。"))
+	FVector2D DurabilityDigitSize = FVector2D(18, 18);
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Durability", meta = (ToolTip = "数字 0-9 对应的耐久 PaperSprite。DurabilityDigitsHost 绑定时生效。"))
+	TMap<int32, TSoftObjectPtr<UPaperSprite>> DurabilityDigitIcons;
+
 private:
 	UPROPERTY(Transient)
 	FWacomCardViewData CurrentData;
@@ -105,6 +117,7 @@ private:
 
 	void ApplyCurrentDataToWidgets();
 	void UpdateCostDisplay();
+	void UpdateDurabilityDisplay();
 	void EnsureSurfaceFoilOverlay();
 	void ApplySurfaceFoilOverlay();
 	static TArray<int32> SplitIntoDigits(int32 Value);

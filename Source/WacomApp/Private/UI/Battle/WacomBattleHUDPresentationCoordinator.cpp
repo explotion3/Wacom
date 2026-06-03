@@ -33,13 +33,6 @@ FWacomBattleHUDPresentationCoordinator::~FWacomBattleHUDPresentationCoordinator(
 		BattleEventPresentationQueue->Clear();
 		BattleEventPresentationQueue.Reset();
 	}
-	if (UWorld* World = GetWorld())
-	{
-		for (TPair<int32, FTimerHandle>& Pair : BattlePresentationStackExitTimerHandles)
-		{
-			World->GetTimerManager().ClearTimer(Pair.Value);
-		}
-	}
 	BattlePresentationStackExitTimerHandles.Reset();
 	BattlePresentationStackExitingEntryIds.Reset();
 	BattlePresentationStackEntries.Reset();

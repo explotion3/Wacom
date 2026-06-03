@@ -308,6 +308,18 @@ FWacomCardViewData UWacomCardPresentationBuilder::BuildCardViewData(const UCardD
 	Data.bShowValue = Data.Value > 0;
 	Data.PhysiqueText = BuildPhysiqueText(Card);
 	Data.bShowPhysique = !Data.PhysiqueText.IsEmpty();
+	if (Card)
+	{
+		int32 Effective = Card->Physique.Durability;
+		if (Effective == 0) Effective = Card->Physique.MaxHpBonus;
+		Data.Durability = Effective;
+		Data.bShowDurability = Effective > 0;
+	}
+	else
+	{
+		Data.Durability = 0;
+		Data.bShowDurability = false;
+	}
 	Data.EffectBadges = BuildEffectBadges(Card);
 	return Data;
 }

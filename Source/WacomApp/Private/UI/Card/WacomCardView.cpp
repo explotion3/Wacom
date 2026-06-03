@@ -200,6 +200,29 @@ TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 			RaritySlot->SetVerticalAlignment(VAlign_Fill);
 		}
 
+		DurabilityHost = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("DurabilityHost"));
+		DurabilityHost->SetVisibility(ESlateVisibility::Collapsed);
+		if (UOverlaySlot* DurSlot = Stack->AddChildToOverlay(DurabilityHost))
+		{
+			DurSlot->SetHorizontalAlignment(HAlign_Right);
+			DurSlot->SetVerticalAlignment(VAlign_Top);
+		}
+		{
+			UImage* DurabilityBg = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("DurabilityBg"));
+			DurabilityBg->SetColorAndOpacity(FLinearColor(0.08f, 0.08f, 0.08f, 0.70f));
+			if (UOverlaySlot* BgSlot = Cast<UOverlay>(DurabilityHost)->AddChildToOverlay(DurabilityBg))
+			{
+				BgSlot->SetHorizontalAlignment(HAlign_Fill);
+				BgSlot->SetVerticalAlignment(VAlign_Fill);
+			}
+			DurabilityDigitsHost = WidgetTree->ConstructWidget<UWrapBox>(UWrapBox::StaticClass(), TEXT("DurabilityDigitsHost"));
+			if (UOverlaySlot* DigitsSlot = Cast<UOverlay>(DurabilityHost)->AddChildToOverlay(DurabilityDigitsHost))
+			{
+				DigitsSlot->SetHorizontalAlignment(HAlign_Center);
+				DigitsSlot->SetVerticalAlignment(VAlign_Center);
+			}
+		}
+
 		DisabledOverlay = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DisabledOverlay"));
 		DisabledOverlay->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.45f));
 		DisabledOverlay->SetVisibility(ESlateVisibility::Collapsed);
@@ -230,6 +253,7 @@ void UWacomCardView::SetCardViewData(const FWacomCardViewData& InData)
 void UWacomCardView::ApplyCurrentDataToWidgets()
 {
 	UpdateCostDisplay();
+	UpdateDurabilityDisplay();
 
 	SetOptionalNumberText(ValueText, CurrentData.Value, CurrentData.bShowValue);
 	SetOptionalText(PhysiqueText, CurrentData.bShowPhysique ? CurrentData.PhysiqueText : FText::GetEmpty());
@@ -429,6 +453,55 @@ TArray<int32> UWacomCardView::SplitIntoDigits(int32 Value)
 		Result.Add(Reversed[i]);
 	}
 	return Result;
+}
+
+void UWacomCardView::UpdateDurabilityDisplay()
+{
+	if (!DurabilityHost)
+	{
+		return;
+	}
+
+	const bool bShouldShow = CurrentData.bShowDurability
+		&& CurrentData.Durability > 0
+		&& DurabilityDigitsHost
+		&& !DurabilityDigitIcons.IsEmpty();
+
+	if (bShouldShow)
+	{
+		DurabilityDigitsHost->ClearChildren();
+		const TArray<int32> Digits = SplitIntoDigits(CurrentData.Durability);
+		for (int32 Digit : Digits)
+		{
+			TSoftObjectPtr<UPaperSprite>* IconPtr = DurabilityDigitIcons.Find(Digit);
+			if (!IconPtr || IconPtr->IsNull())
+			{
+				continue;
+			}
+
+			UPaperSprite* Sprite = IconPtr->LoadSynchronous();
+			if (!Sprite)
+			{
+				continue;
+			}
+
+			UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+			DigitImage->SetBrushResourceObject(Sprite);
+			DigitImage->SetDesiredSizeOverride(FVector2D(
+				FMath::Max(1.0f, DurabilityDigitSize.X),
+				FMath::Max(1.0f, DurabilityDigitSize.Y)));
+			DurabilityDigitsHost->AddChild(DigitImage);
+		}
+	}
+
+	if (DurabilityDigitsHost)
+	{
+		DurabilityDigitsHost->SetVisibility(
+			bShouldShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+
+	DurabilityHost->SetVisibility(
+		bShouldShow ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 }
 
 #undef LOCTEXT_NAMESPACE
