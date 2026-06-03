@@ -303,6 +303,7 @@ FWacomCardViewData UWacomCardPresentationBuilder::BuildCardViewData(const UCardD
 	Data.Description = BuildCompactDescriptionText(Card);
 	Data.Cost = Card ? Card->BaseCost : 0;
 	Data.bShowCost = Card != nullptr;
+	Data.Rarity = Card ? Card->Rarity : FGameplayTag();
 	Data.Value = GetDeleteValueFromRarity(Card);
 	Data.bShowValue = Data.Value > 0;
 	Data.PhysiqueText = BuildPhysiqueText(Card);

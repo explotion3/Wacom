@@ -214,6 +214,8 @@ namespace
 	{
 		return Tag == WacomTags::Card_Rarity_White
 			|| Tag == WacomTags::Card_Rarity_Blue
+			|| Tag == WacomTags::Card_Rarity_Yellow
+			|| Tag == WacomTags::Card_Rarity_Purple
 			|| Tag == WacomTags::Card_Rarity_Intrinsic;
 	}
 

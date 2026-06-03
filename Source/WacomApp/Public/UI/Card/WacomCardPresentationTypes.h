@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "WacomCardPresentationTypes.generated.h"
 
 class UTexture2D;
@@ -99,7 +100,9 @@ struct WACOMAPP_API FWacomCardViewData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	bool bShowCost = true;
 
-	/** Current placeholder value is delete-for-gold value: white=1, blue=2. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	FGameplayTag Rarity;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	int32 Value = 0;
 

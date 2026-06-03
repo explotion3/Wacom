@@ -638,6 +638,8 @@ RunWorldCardInteractionDefinition Validator 只校验通用 receiver 制作必�
 |---|---|---|
 | `Card.Rarity.White` | `Card_Rarity_White` | 白色 |
 | `Card.Rarity.Blue` | `Card_Rarity_Blue` | 蓝色 |
+| `Card.Rarity.Yellow` | `Card_Rarity_Yellow` | 黄色 |
+| `Card.Rarity.Purple` | `Card_Rarity_Purple` | 紫色 |
 | `Card.Rarity.Intrinsic` | `Card_Rarity_Intrinsic` | 固有 |
 
 ### HandZone

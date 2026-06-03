@@ -13,6 +13,7 @@ class UMaterialInterface;
 class UPanelWidget;
 class UTextBlock;
 class UWacomCardEffectBadgeWidget;
+class UPaperSprite;
 
 /**
  * Reusable visual-only card widget.
@@ -26,6 +27,11 @@ class UWacomCardEffectBadgeWidget;
  * - No battle command submission.
  * - No backpack MoveInstance/DeleteCardForGold calls.
  * - No drag/drop source or target behavior.
+ *
+ * Cost display supports two modes:
+ * - Text mode (default): CostText TextBlock displays FText::AsNumber(Cost)
+ * - Icon mode: CostDigitsHost panel is populated with per-digit Images from CostDigitIcons
+ *   Icon mode activates when both CostDigitsHost is bound AND CostDigitIcons is non-empty.
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomCardView : public UUserWidget
@@ -47,6 +53,12 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> CostText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> CostDigitsHost;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Digit Icons", meta = (ToolTip = "数字 0-9 对应的 PaperSprite。CostDigitsHost 绑定时生效；为空时使用文字通道。"))
+	TMap<int32, TSoftObjectPtr<UPaperSprite>> CostDigitIcons;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> ValueText;
@@ -75,6 +87,12 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> DisabledOverlay;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> RarityBorder;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Rarity", meta = (ToolTip = "稀有度 GameplayTag 对应的边框 PaperSprite。按稀有度查表替换 RarityBorder 的显示；未配置的稀有度（包括 Intrinsic）边框隐藏。"))
+	TMap<FGameplayTag, TSoftObjectPtr<UPaperSprite>> RarityBorderSprites;
+
 private:
 	UPROPERTY(Transient)
 	FWacomCardViewData CurrentData;
@@ -86,6 +104,8 @@ private:
 	TObjectPtr<UMaterialInterface> SurfaceFoilMaterial;
 
 	void ApplyCurrentDataToWidgets();
+	void UpdateCostDisplay();
 	void EnsureSurfaceFoilOverlay();
 	void ApplySurfaceFoilOverlay();
+	static TArray<int32> SplitIntoDigits(int32 Value);
 };

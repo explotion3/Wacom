@@ -19,6 +19,8 @@ namespace WacomTags
 	// -------- Card.Rarity --------
 	UE_DEFINE_GAMEPLAY_TAG(Card_Rarity_White,     "Card.Rarity.White");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Rarity_Blue,      "Card.Rarity.Blue");
+	UE_DEFINE_GAMEPLAY_TAG(Card_Rarity_Yellow,    "Card.Rarity.Yellow");
+	UE_DEFINE_GAMEPLAY_TAG(Card_Rarity_Purple,    "Card.Rarity.Purple");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Rarity_Intrinsic, "Card.Rarity.Intrinsic");
 
 	// -------- HandZone --------

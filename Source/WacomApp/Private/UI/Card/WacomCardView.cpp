@@ -16,6 +16,8 @@
 #include "Components/WrapBox.h"
 #include "Engine/Texture2D.h"
 #include "Materials/MaterialInterface.h"
+#include "PaperSprite.h"
+#include "Components/WrapBox.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
 
@@ -108,6 +110,13 @@ TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 			CostSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
 		}
 
+		CostDigitsHost = WidgetTree->ConstructWidget<UWrapBox>(UWrapBox::StaticClass(), TEXT("CostDigitsHost"));
+		CostDigitsHost->SetVisibility(ESlateVisibility::Collapsed);
+		if (UVerticalBoxSlot* DigitsSlot = Content->AddChildToVerticalBox(CostDigitsHost))
+		{
+			DigitsSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 2.f));
+		}
+
 		UHorizontalBox* HeaderStats = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("HeaderStats"));
 		if (UVerticalBoxSlot* HeaderStatsSlot = Content->AddChildToVerticalBox(HeaderStats))
 		{
@@ -183,6 +192,14 @@ TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 			DescSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
 		}
 
+		RarityBorder = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("RarityBorder"));
+		RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
+		if (UOverlaySlot* RaritySlot = Stack->AddChildToOverlay(RarityBorder))
+		{
+			RaritySlot->SetHorizontalAlignment(HAlign_Fill);
+			RaritySlot->SetVerticalAlignment(VAlign_Fill);
+		}
+
 		DisabledOverlay = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DisabledOverlay"));
 		DisabledOverlay->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.45f));
 		DisabledOverlay->SetVisibility(ESlateVisibility::Collapsed);
@@ -212,11 +229,7 @@ void UWacomCardView::SetCardViewData(const FWacomCardViewData& InData)
 
 void UWacomCardView::ApplyCurrentDataToWidgets()
 {
-	if (CostText)
-	{
-		CostText->SetText(FText::AsNumber(CurrentData.Cost));
-		CostText->SetVisibility(CurrentData.bShowCost ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	}
+	UpdateCostDisplay();
 
 	SetOptionalNumberText(ValueText, CurrentData.Value, CurrentData.bShowValue);
 	SetOptionalText(PhysiqueText, CurrentData.bShowPhysique ? CurrentData.PhysiqueText : FText::GetEmpty());
@@ -248,6 +261,35 @@ void UWacomCardView::ApplyCurrentDataToWidgets()
 		{
 			CardArt->SetBrushFromTexture(CurrentData.Art);
 			CardArt->SetColorAndOpacity(FLinearColor::White);
+		}
+	}
+
+	if (RarityBorder)
+	{
+		if (CurrentData.Rarity.IsValid())
+		{
+			TSoftObjectPtr<UPaperSprite>* SpritePtr = RarityBorderSprites.Find(CurrentData.Rarity);
+			if (SpritePtr && !SpritePtr->IsNull())
+			{
+				UPaperSprite* Sprite = SpritePtr->LoadSynchronous();
+				if (Sprite)
+				{
+					RarityBorder->SetBrushResourceObject(Sprite);
+					RarityBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
+				}
+				else
+				{
+					RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
+				}
+			}
+			else
+			{
+				RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		}
+		else
+		{
+			RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
 
@@ -309,6 +351,84 @@ void UWacomCardView::ApplySurfaceFoilOverlay()
 
 	const bool bHasFoilBrush = SurfaceFoilOverlay->GetBrush().GetResourceObject() != nullptr;
 	SurfaceFoilOverlay->SetVisibility(bHasFoilBrush ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
+void UWacomCardView::UpdateCostDisplay()
+{
+	const bool bTextOnly = !CostDigitsHost || CostDigitIcons.IsEmpty() || !CurrentData.bShowCost;
+
+	if (CostText)
+	{
+		CostText->SetText(FText::AsNumber(CurrentData.Cost));
+		CostText->SetVisibility(
+			(bTextOnly && CurrentData.bShowCost)
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Collapsed);
+	}
+
+	if (CostDigitsHost)
+	{
+		CostDigitsHost->ClearChildren();
+		CostDigitsHost->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	if (bTextOnly)
+	{
+		return;
+	}
+
+	const TArray<int32> Digits = SplitIntoDigits(CurrentData.Cost);
+	if (Digits.Num() == 0)
+	{
+		return;
+	}
+
+	for (int32 Digit : Digits)
+	{
+		TSoftObjectPtr<UPaperSprite>* IconPtr = CostDigitIcons.Find(Digit);
+		if (!IconPtr || IconPtr->IsNull())
+		{
+			continue;
+		}
+
+		UPaperSprite* Sprite = IconPtr->LoadSynchronous();
+		if (!Sprite)
+		{
+			continue;
+		}
+
+		UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		DigitImage->SetBrushResourceObject(Sprite);
+		CostDigitsHost->AddChild(DigitImage);
+	}
+
+	if (CostDigitsHost->GetChildrenCount() > 0)
+	{
+		CostDigitsHost->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+}
+
+TArray<int32> UWacomCardView::SplitIntoDigits(int32 Value)
+{
+	TArray<int32> Result;
+	if (Value <= 0)
+	{
+		Result.Add(0);
+		return Result;
+	}
+
+	TArray<int32> Reversed;
+	while (Value > 0)
+	{
+		Reversed.Add(Value % 10);
+		Value /= 10;
+	}
+
+	for (int32 i = Reversed.Num() - 1; i >= 0; --i)
+	{
+		Result.Add(Reversed[i]);
+	}
+	return Result;
 }
 
 #undef LOCTEXT_NAMESPACE

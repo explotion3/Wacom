@@ -58,7 +58,7 @@ namespace
 		return nullptr;
 	}
 
-	const TCHAR* LexToString(EWacomBattleCardDropRejectReason RejectReason)
+	const TCHAR* WacomCardDropRejectReasonToString(EWacomBattleCardDropRejectReason RejectReason)
 	{
 		switch (RejectReason)
 		{
@@ -672,7 +672,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 		FWacomBattleEnemyPartDragPredictionDebugInput PredictionDebugInput;
 		PredictionDebugInput.SourceCardInstanceId = CardInstanceId;
 		PredictionDebugInput.bPreviewCanSubmit = DropResult.bCanSubmit;
-		PredictionDebugInput.PreviewRejectReason = FName(LexToString(DropResult.RejectReason));
+		PredictionDebugInput.PreviewRejectReason = FName(WacomCardDropRejectReasonToString(DropResult.RejectReason));
 		if (const UBattleSession* CurrentSession = HUD.GetSession())
 		{
 			const FBattleSnapshot CurrentSnapshot = CurrentSession->BuildSnapshot();

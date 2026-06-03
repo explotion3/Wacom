@@ -31,6 +31,8 @@ namespace WacomTags
 	// -------- Card.Rarity --------
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Rarity_White);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Rarity_Blue);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Rarity_Yellow);
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Rarity_Purple);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Rarity_Intrinsic);
 
 	// -------- HandZone --------
