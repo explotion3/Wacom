@@ -2,7 +2,7 @@
 type: design-note
 scope: wacom-ui
 status: draft
-updated: 2026-06-01
+updated: 2026-06-03
 tags:
   - wacom/ui
   - wacom/cards
@@ -203,7 +203,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - `FirstPersonCardAnchorComponent.bUseFirstPersonCardLayoutPreset` 默认关闭。开启且 `FirstPersonCardLayoutPreset` 有效时，Anchor 会在运行时生成 resolved config 供布局、投影、motion 和反馈使用；关闭或 preset 为空时，继续使用组件实例上的参数。Preset 不覆盖 `FirstPersonCardViewClass`、静态预览卡牌、debug 开关、viewport ZOrder 或 `BattleHUD::BattleHandPresentationMode`。
 - `ProjectionMode` 默认 `BodyLocked`：卡牌槽位的 3D layout 使用 Battle base rotation / Run Tunnel spline base 作为稳定身体基准，不让 shared cursor look 参与扇形位置和世界槽位计算；随后仍通过当前玩家相机投影到 widget-space，避免手牌 HUD 化。
 - `LegacyWorldProjected` 保留旧路径：shared cursor look 会按 `LookInfluenceYaw/Pitch` 影响 card anchor / layout，然后再通过当前玩家相机投影；该模式只用于调试对照旧的漂移 / 扇形破坏问题，或后续视差实验。
-- `CardLayoutMode` 默认 `Authored2D`：只投影当前 hand anchor 中心点，每张卡牌的最终位置由 `AuthoredCardSpacingPixels / AuthoredMaxHandWidthPixels / AuthoredHandScreenOffset / StaticCardEdgeDropPixels / AuthoredCenterLiftPixels` 等 2D 参数计算。
+- `CardLayoutMode` 默认 `Authored2D`：只投影当前 hand anchor 中心点，每张卡牌的最终位置由 `AuthoredCardSpacingPixels / AuthoredMaxHandWidthPixels / AuthoredHandScreenOffset / StaticCardEdgeDropPixels / AuthoredCenterLiftPixels` 等 2D 参数计算。V0-DL 后默认开启 `bKeepAuthoredCardBodyBottomInViewport`，最终 slot 会按主体高度和 `AuthoredCardBodyBottomViewportPaddingPixels` 保证 TypeName / 类型文字所在的主体底部不被视口底边裁掉；手牌中心仍可按 SoftClamp 保留空间离屏感。
 - `LegacyProjectedFan2D` 保留 V0-L 之前的对照行为：每张卡牌继续通过 `ComputeCardTransform()` 生成 3D 槽位并分别投影，便于 PIE 对比旧的空间投影手感和排布拉扯问题。
 - `ViewportClampMode` 默认 `SoftClampToViewport`：投影成功后先保留 `UnclampedWidgetPosition`，再按视口限制模式生成最终布局坐标。`HardClampToViewport` 会按 `ProjectionPadding` 强制留在屏幕内，复现旧行为；`SoftClampToViewport` 会把 safe rect 向外扩 `SoftClampOffscreenAllowancePixels`，点在 soft rect 内不拉回，超出后按 `SoftClampBlendRangePixels` 平滑停到扩展边界；`AllowOffscreen` 完全不限制坐标，适合对照最接近 3D 空间物体的表现。
 - V0-M 不做自动旧手牌兜底：在 `FirstPersonHandOnly` 下，如果玩家把手牌锚点看出屏幕，旧 `UHandPanel` 不会自动恢复；玩家需要把视角转回，或把 `BattleHandPresentationMode` 切回 fallback / legacy 模式。
@@ -221,9 +221,9 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - outgoing slot 使用内部安全上限 `Max(LastSlots.Num() * 2, 16)`，超过时清理最旧 outgoing 并记录 invariant violation。`bLogCardLayerMotionDiagnostics` 默认关闭；开启后仅在检测到不变量修复或异常清理时输出一条简短 summary，用于 PIE 排查幽灵 widget、outgoing 泄漏和 FPS 阶梯式下降。
 - `bDrawDebugProjection` 默认关闭；开启后在 HUD 上绘制 5 个非交互 debug 点，用于 PIE 验证未来手牌位置。
 - `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。
-- `FirstPersonCardViewClass` 用于指定第一人称卡牌层的卡面 Widget；正式验证建议设置为 `/Game/Wacom/UI/Card/WBP_FirstPersonCardView`。该 WBP 可以在 `WBP_CardView` 基础上加入 RetainerBox、透明边缘留白和轻微内部缩放，以降低整卡旋转采样带来的边缘锯齿。为空时只作为测试兜底回退到 `UWacomCardView`，不作为正式第一人称主手牌卡面。
+- `FirstPersonCardViewClass` 用于指定第一人称卡牌层的卡面 Widget；正式验证建议设置为 `/Game/Wacom/UI/Card/WBP_FirstPersonCardView`。该 WBP 可以在 `WBP_CardView` 基础上加入 RetainerBox、透明 bleed 画布和轻微内部缩放，以降低整卡旋转采样带来的边缘锯齿，并完整渲染右下身材 / 耐久等主体外装饰。为空时只作为测试兜底回退到 `UWacomCardView`，不作为正式第一人称主手牌卡面。
 - first-person layer 的 `CanvasSlot` 使用 widget-space 布局位置，不再直接使用 raw screen pixel；debug view 同时记录 raw screen position、widget position、snapped widget position、viewport scale、layout mode、anchor widget position、authored layout offset 和 normalized hand offset。
-- V0-N 后 debug view / slot view / projected point 还会记录 `ViewportClampMode`、`UnclampedWidgetPosition`、`bOutsideViewport`、`OffscreenDistancePixels`、`UnsmoothedAnchorWidgetPosition`、`SmoothedAnchorWidgetPosition`、`AnchorScreenSmoothingDistancePixels` 和 `bAnchorScreenSmoothed`，用于判断“投影成功但已经离屏”“真正投影失败”和“当前中心点是否经过平滑”。
+- V0-N 后 debug view / slot view / projected point 还会记录 `ViewportClampMode`、`UnclampedWidgetPosition`、`bOutsideViewport`、`OffscreenDistancePixels`、`UnsmoothedAnchorWidgetPosition`、`SmoothedAnchorWidgetPosition`、`AnchorScreenSmoothingDistancePixels` 和 `bAnchorScreenSmoothed`，用于判断“投影成功但已经离屏”“真正投影失败”和“当前中心点是否经过平滑”。V0-DL 后 slot view 额外记录 `bBodyBottomViewportAdjusted`，用于判断某张卡是否被主体底部可读保护上推。
 - `bEnableCardLayerPixelSnapping` 默认开启，最终位置会在 edge drop、pending lift、hover lift 后 snap 到 `CardLayerPixelSnapGrid`，默认 1.0 UMG layout unit。
 - `bClampCardLayerRenderAngle` 默认开启，slot render angle 被限制在 `MaxCardLayerRenderAngleDegrees` 内，默认 4 度；后续扇形表现优先通过位置下坠和 hover/pending 归正继续优化，而不是继续增加旋转角。
 - `BattleHUD::BattleHandPresentationMode` 控制战斗手牌入口：`LegacyHandPanel` 只使用旧 `UHandPanel`；`FirstPersonHandWithLegacyFallback` 默认写入 first-person runtime hand、启用 hover/click/detail，并保留旧手牌可见；`FirstPersonHandOnly` 在 first-person runtime hand 有效时隐藏旧手牌。
@@ -426,8 +426,13 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 制作要求：
 
 - 以 `WBP_CardView` 为基础复制，不要改 `UWacomCardView` 的数据入口和 `SetCardViewData()` 语义。
-- 根部建议使用 `RetainerBox` 缓存卡面，再在 RetainerBox 内部把实际卡面内容轻微缩放到约 `0.99`，给旋转采样留下透明边缘。
-- 卡面基础尺寸保持 296 x 420，first-person layer 的 `StaticCardRenderScale=1.0` 时应接近美术设计尺寸。
+- 外层可以是大于主体的透明 bleed 画布，例如 392 x 422 或 392 x 516，用来避免 Retainer 裁掉主体外的身材 / 耐久装饰。
+- 内部必须提供名为 `CardSizeBox` 的主体 `SizeBox`，默认 296 x 420，并在 bleed 画布中尽量居中。代码使用 `CardSizeBox` 的运行时几何中心定位主体命中区，但默认命中尺寸固定为 `UWacomCardView.FixedCardBodyHitSize=296 x 420`，不会因 RetainerBox、bleed 画布或布局压缩而变小；缺少该绑定时，代码回退旧 296 x 420 主体尺寸。
+- RetainerBox 内部可以把实际卡面内容轻微缩放到约 `0.99`，给旋转采样留下透明边缘。
+- `UWacomCardView::SetCardViewData()` 会在刷新 TypeText、数字 Icon、稀有度边框、耐久等卡面数据后主动 invalidation，并请求内部 RetainerBox 重绘；`WBP_FirstPersonCardView` 不需要靠 hover / motion 来刷新 Retainer 缓存。
+- 费用数字图标只使用固定 `CostDigitImage : Image` 绑定；C++ 会直接替换该 Image 的 Brush，不动态创建费用子控件。费用为多位数、缺数字图标或未绑定该 Image 时，卡牌主体不再显示文字费用。若 Retainer 内小数字仍因整卡运动出现采样抖动，可像 TypeName 一样把 `CostDigitImage` 移到 Retainer 外并保持同名绑定。
+- first-person layer 的 `StaticCardRenderScale=1.0` 时，`CardSizeBox` 主体中心应贴合美术卡面主体；如确实需要不同主体命中尺寸，应在 CardView Class Defaults 调整 `FixedCardBodyHitSize`，不要靠压缩 `CardSizeBox` 布局实现。
+- 若鼠标靠近屏幕底部时 TypeName 像“hover 后才出现”，优先检查第一人称手牌是否贴到视口底边。默认 `bKeepAuthoredCardBodyBottomInViewport=true` 会把最终 slot 上推到主体底部安全线以内；如果关卡或 preset 故意关闭它，需要自行保证 `AuthoredHandScreenOffset / StaticCardEdgeDropPixels / StaticCardRenderScale` 不让主体底部被裁。
 - 高对比边框、描边、稀疏细线和贴图边缘需要预留透明 Alpha 留白；不要让有效像素紧贴贴图边界。
 - 材质动画、流光和 disabled overlay 仍应通过 `UWacomCardView` 的现有绑定与 `SurfaceFoilOverlay` 路径工作，不在 first-person slot widget 内另开一套数据绑定。
 - Widget 本体保持只读卡面：不创建 `UCardWidget`，不提交战斗命令，不在 WBP 图里读取 `UBattleSession`。
@@ -437,6 +442,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - first-person layer 大角度扇形排布下，边缘不应出现明显锯齿、像素断裂或黑边。
 - 卡面材质动画在 HUD first-person layer 中正常刷新。
 - Hover / pending / disabled 状态由 first-person layer 的 slot transform、opacity 和 `FWacomCardViewData::bDisabled` 叠加表现，WBP 不重复实现同一套状态机。
+- 透明 bleed 区只用于渲染，不应让玩家在固定主体命中区外触发 hover、click、drag 起手或拖拽到另一张卡的 Card target probe。
 - 如果未来普通 HUD、背包或详情需要不同尺寸或结构，优先调整各自 WBP，不把第一人称 RetainerBox 规范反向套回通用 `WBP_CardView`。
 
 14. Play focus pose

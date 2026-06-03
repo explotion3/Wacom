@@ -522,6 +522,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	bool bPixelSnapped = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bBodyBottomViewportAdjusted = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bIsHovered = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -650,6 +653,12 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Authored Layout", meta = (ToolTip = "Authored2D 模式下是否让中心卡牌默认绘制在边缘卡牌之上；悬停和等待选目标的层级提升仍会优先生效。"))
 	bool bAuthoredCenterCardsDrawOnTop = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Authored Layout", meta = (ToolTip = "Authored2D 模式下是否限制每张卡牌主体底部留在视口内。开启后手牌中心仍可柔性离屏，但最终卡牌主体不会因为贴近屏幕底部而裁掉 TypeName / 类型文字。"))
+	bool bKeepAuthoredCardBodyBottomInViewport = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Authored Layout", meta = (EditCondition = "bKeepAuthoredCardBodyBottomInViewport", ClampMin = "0.0", UIMin = "0.0", UIMax = "96.0", ToolTip = "Authored2D 卡牌主体底部与视口底边之间保留的最小距离，单位为 UMG 布局像素；用于避免第一人称手牌底部类型文字被屏幕边缘裁掉。"))
+	float AuthoredCardBodyBottomViewportPaddingPixels = 8.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "共享鼠标镜头偏航偏移对卡牌锚点的影响比例；数值越低，卡牌越像跟随角色身体而不是镜头。"))
 	float LookInfluenceYaw = 0.25f;

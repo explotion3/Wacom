@@ -25,6 +25,8 @@ public:
 	explicit FWacomBattleHUDPresentationCoordinator(UBattleHUD& InHUD);
 	~FWacomBattleHUDPresentationCoordinator();
 
+	void Shutdown();
+
 	int32 AppendStackEntry(
 		const FWacomBattleCombatLogCommandContext& CommandContext,
 		const FBattleSnapshot& PreCommandSnapshot);

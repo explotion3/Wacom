@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-06-02
+updated: 2026-06-03
 tags:
   - wacom/todo
   - wacom/docs
@@ -137,9 +137,9 @@ tags:
   - 说明：旧 `UHandPanel` 详情继续使用 BattleHUD 内部 `CardDetailLayer`；first-person hover 详情使用独立 viewport panel。两种战斗详情 host 共用 `bEnableCardDetailReadabilityPolish` 下的短 hover delay、淡入淡出、轻量 scale、位置平滑跟随和贴边 side hysteresis；V0-DE 后 source guard、motion state、定位和 teardown 已由 `FWacomBattleHUDCardDetailController` 持有，HUD 保留 WBP 绑定、配置和 GC 引用。TargetSelect、命令提交、BattleEnd、Session 切换和 runtime hand 清理仍强制隐藏详情。战斗手牌入口由 `LegacyHandPanel / FirstPersonHandWithLegacyFallback / FirstPersonHandOnly` 三种模式控制。
 
 - [ ] **First-person card render quality：扇形布局微调与专用卡面规范**
-  - 状态：`In Progress: V0-K projected basis 已回退；V0-L 默认改为 Authored2D hand layout solver；V0-M 默认允许手牌锚点 SoftClamp 离屏；V0-N 已加入 hand center screen smoothing；V0-O 已加入 card slot motion polish；V0-P 已加入 slot motion lifecycle diagnostics / self-repair；V0-Q 已加入 event-aware card transitions；V0-R 已加入 pending / TargetSelect focus polish；V0-S 已加入 playable / hover / press feedback polish；V0-T 已加入 hand layout preset / tuning profile；V0-U 已加入 transition origin / card movement readability；V0-V 已加入 hover detail / inspect readability polish；V0-W 已加入 play commit / target impact readability；V0-Z 已加入 hold inspect + card drag / aim commit；V0-AA 已加入 drag camera look continuity`
+  - 状态：`In Progress: V0-K projected basis 已回退；V0-L 默认改为 Authored2D hand layout solver；V0-M 默认允许手牌锚点 SoftClamp 离屏；V0-N 已加入 hand center screen smoothing；V0-O 已加入 card slot motion polish；V0-P 已加入 slot motion lifecycle diagnostics / self-repair；V0-Q 已加入 event-aware card transitions；V0-R 已加入 pending / TargetSelect focus polish；V0-S 已加入 playable / hover / press feedback polish；V0-T 已加入 hand layout preset / tuning profile；V0-U 已加入 transition origin / card movement readability；V0-V 已加入 hover detail / inspect readability polish；V0-W 已加入 play commit / target impact readability；V0-Z 已加入 hold inspect + card drag / aim commit；V0-AA 已加入 drag camera look continuity；V0-DJ 已将 WBP_FirstPersonCardView 透明 bleed 画布和 296x420 主体交互命中解耦；V0-DL 已加入 Authored2D 主体底部视口可读保护；Retainer TypeName 显隐问题已在干净 ds cardview2 worktree 复现，固定 visual canvas 方案因破坏扇形排布不采用；CostDigitImage 单图绑定仍无法消除 Retainer 内费用小图标运动采样抖动，后续不要再从 CostDigitsHost/动态子控件方向处理`
   - 归属：UI / 战斗表现
-  - 说明：继续保留 `WBP_FirstPersonCardView` 的 RetainerBox、透明留白、内部缩放和贴图采样规范。V0-Z 默认保留轻点出牌；hold delay 后读牌居中放大并显示详情，无目标卡向上拖出释放提交，有目标卡拉箭头到合法敌方部位释放提交，仍复用 BattleHUD / BattleSession 命令路径。后续只有在美术反馈需要时再微调扇形参数、下坠、层级、hover/pending 姿态、slot motion 速度、commit pulse、drag/aim 读牌姿态或角度 clamp；也可单独做多环境 preset / 战斗状态自动切 preset。不要为了抗锯齿牺牲当前手牌排布表现，也不要回退到 3D Presenter / RenderTarget 路线。
+  - 说明：继续保留 `WBP_FirstPersonCardView` 的 RetainerBox、透明留白、内部缩放和贴图采样规范。外层 bleed 画布可大于主体以完整渲染右下身材 / 耐久装饰，但排布、hover、click、drag 起手和 Card target probe 只按内部 `CardSizeBox` 主体命中，缺绑定时回退 296 x 420。`bKeepAuthoredCardBodyBottomInViewport` 默认保护主体底部不被视口裁掉，避免 TypeName / 类型文字只能靠 hover 上浮才露出。费用图标当前只保留 `CostDigitImage` 绑定；已确认固定 Brush 尺寸和单 Image 路径仍不能完全解决 Retainer 内小图标随整卡运动 / 旋转时的采样抖动。后续若继续处理，应优先评估把 `CostDigitImage` 像 TypeName 一样移到 Retainer 外、做更严格的像素对齐 / 采样材质，或改为专用 Slate / 材质渲染路径。V0-Z 默认保留轻点出牌；hold delay 后读牌居中放大并显示详情，无目标卡向上拖出释放提交，有目标卡拉箭头到合法敌方部位释放提交，仍复用 BattleHUD / BattleSession 命令路径。后续只有在美术反馈需要时再微调扇形参数、下坠、层级、hover/pending 姿态、slot motion 速度、commit pulse、drag/aim 读牌姿态或角度 clamp；也可单独做多环境 preset / 战斗状态自动切 preset。不要为了抗锯齿牺牲当前手牌排布表现，也不要回退到 3D Presenter / RenderTarget 路线。
 
 - [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
   - 状态：`Blocked: Demo 范围确认；V0-CH 已确认 MainMenu PIE travel 卡顿/输入异常不是存档恢复，当前 bSaveSystemEnabled=false 仍保持新 Run`

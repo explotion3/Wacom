@@ -13,18 +13,13 @@
 
 namespace
 {
-	const TCHAR* FirstPersonCardViewPath = TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C");
 	const TCHAR* CardViewPath = TEXT("/Game/Wacom/UI/Card/WBP_CardView.WBP_CardView_C");
 }
 
 UBattlePresentationStackWidget::UBattlePresentationStackWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	if (UClass* FirstPersonCardClass = LoadClass<UWacomCardView>(nullptr, FirstPersonCardViewPath))
-	{
-		MiniCardViewClass = FirstPersonCardClass;
-	}
-	else if (UClass* CardViewClass = LoadClass<UWacomCardView>(nullptr, CardViewPath))
+	if (UClass* CardViewClass = LoadClass<UWacomCardView>(nullptr, CardViewPath))
 	{
 		MiniCardViewClass = CardViewClass;
 	}
@@ -139,10 +134,6 @@ TSubclassOf<UWacomCardView> UBattlePresentationStackWidget::ResolveMiniCardViewC
 	if (MiniCardViewClass)
 	{
 		return MiniCardViewClass;
-	}
-	if (UClass* FirstPersonCardClass = LoadClass<UWacomCardView>(nullptr, FirstPersonCardViewPath))
-	{
-		return FirstPersonCardClass;
 	}
 	if (UClass* CardViewClass = LoadClass<UWacomCardView>(nullptr, CardViewPath))
 	{

@@ -43,6 +43,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (ToolTip = "Authored2D 模式下是否让中心卡牌默认绘制在边缘卡牌之上；悬停和等待选目标的层级提升仍会优先生效。"))
 	bool bAuthoredCenterCardsDrawOnTop = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (ToolTip = "Authored2D 模式下是否限制每张卡牌主体底部留在视口内。开启后手牌中心仍可柔性离屏，但最终卡牌主体不会因为贴近屏幕底部而裁掉 TypeName / 类型文字。"))
+	bool bKeepAuthoredCardBodyBottomInViewport = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (EditCondition = "bKeepAuthoredCardBodyBottomInViewport", ClampMin = "0.0", UIMin = "0.0", UIMax = "96.0", ToolTip = "Authored2D 卡牌主体底部与视口底边之间保留的最小距离，单位为 UMG 布局像素；用于避免第一人称手牌底部类型文字被屏幕边缘裁掉。"))
+	float AuthoredCardBodyBottomViewportPaddingPixels = 8.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 会锁定布局基准但仍使用当前真实相机投影；LegacyWorldProjected 保留旧的 LookInfluence 影响布局路径。"))
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 

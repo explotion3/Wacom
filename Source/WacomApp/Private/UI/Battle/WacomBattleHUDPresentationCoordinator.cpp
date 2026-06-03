@@ -30,13 +30,18 @@ FWacomBattleHUDPresentationCoordinator::~FWacomBattleHUDPresentationCoordinator(
 {
 	if (BattleEventPresentationQueue)
 	{
-		BattleEventPresentationQueue->Clear();
+		BattleEventPresentationQueue->AbandonWithoutWorldAccess();
 		BattleEventPresentationQueue.Reset();
 	}
 	BattlePresentationStackExitTimerHandles.Reset();
 	BattlePresentationStackExitingEntryIds.Reset();
 	BattlePresentationStackEntries.Reset();
 	PendingTurnBoundaryCommand = EWacomBattleHUDTurnBoundaryCommand::None;
+}
+
+void FWacomBattleHUDPresentationCoordinator::Shutdown()
+{
+	ClearQueue();
 }
 
 int32 FWacomBattleHUDPresentationCoordinator::AppendStackEntry(

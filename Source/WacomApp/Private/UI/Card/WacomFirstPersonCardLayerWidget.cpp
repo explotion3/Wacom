@@ -14,8 +14,6 @@
 namespace
 {
 	const FVector2D CardAlignment(0.5f, 0.5f);
-	const FVector2D DefaultCardTargetHitSize(296.0f, 420.0f);
-
 	bool ContainsSlotWidget(
 		const TArray<TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>>& SlotWidgets,
 		const UWacomFirstPersonCardLayerSlotWidget* Candidate)
@@ -1594,12 +1592,8 @@ bool UWacomFirstPersonCardLayerWidget::TryResolveCardTargetUnderDragPointer(
 			continue;
 		}
 
-		FVector2D HitSize = DefaultCardTargetHitSize * FMath::Max(0.01f, SlotView.RenderScale);
-		const FVector2D CachedSize = SlotWidget->GetCachedGeometry().GetLocalSize();
-		if (CachedSize.X > 1.0f && CachedSize.Y > 1.0f)
-		{
-			HitSize = CachedSize * FMath::Max(0.01f, SlotView.RenderScale);
-		}
+		const FVector2D HitSize =
+			SlotWidget->GetCardBodyHitSizeForFirstPersonLayer() * FMath::Max(0.01f, SlotView.RenderScale);
 
 		const FVector2D HalfSize = HitSize * 0.5f;
 		const FVector2D Delta = PointerPosition - SlotView.ScreenPosition;

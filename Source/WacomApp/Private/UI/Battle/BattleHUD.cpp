@@ -195,7 +195,11 @@ void UBattleHUD::NativeConstruct()
 
 void UBattleHUD::NativeDestruct()
 {
-	ClearBattlePresentationQueue();
+	if (PresentationCoordinator)
+	{
+		PresentationCoordinator->Shutdown();
+		PresentationCoordinator.Reset();
+	}
 	ClearFirstPersonBattleHandLayer();
 	ClearBattleEnemyPartWorldTargets();
 	DestroyBattle3DHandPresenter();
@@ -214,8 +218,6 @@ void UBattleHUD::NativeDestruct()
 	LastBattleSnapshot = FBattleSnapshot();
 	GetFirstPersonHandBridge().ClearTransitionSnapshot();
 	ClearPendingFirstPersonCardTransitionEvents();
-	ClearBattlePresentationStack();
-	ClearPendingTurnBoundaryCommand();
 	ClearBattleSceneEnemyPartHoverProbe(TEXT("HUDDestruct"));
 	Super::NativeDestruct();
 }
@@ -396,7 +398,7 @@ int32 UBattleHUD::GetBattleCombatLogBlockCount() const
 
 bool UBattleHUD::IsBattlePresentationBusy() const
 {
-	return GetPresentationCoordinator().IsBusy();
+	return PresentationCoordinator && PresentationCoordinator->IsBusy();
 }
 
 bool UBattleHUD::CanSubmitPlayerActionCommand() const
@@ -422,12 +424,14 @@ bool UBattleHUD::CanSubmitPlayerActionCommand() const
 
 bool UBattleHUD::HasPendingTurnBoundaryCommand() const
 {
-	return GetPresentationCoordinator().HasPendingTurnBoundaryCommand();
+	return PresentationCoordinator && PresentationCoordinator->HasPendingTurnBoundaryCommand();
 }
 
 FText UBattleHUD::GetPendingTurnBoundaryCommandText() const
 {
-	return GetPresentationCoordinator().GetPendingTurnBoundaryCommandText();
+	return PresentationCoordinator
+		? PresentationCoordinator->GetPendingTurnBoundaryCommandText()
+		: FText::GetEmpty();
 }
 
 void UBattleHUD::SetBattleHandPresentationMode(EWacomBattleHandPresentationMode NewMode)
@@ -1400,12 +1404,15 @@ void UBattleHUD::FinishBattlePresentationStackEntryExit(int32 EntryId)
 
 void UBattleHUD::ClearBattlePresentationStack()
 {
-	GetPresentationCoordinator().ClearStack();
+	if (PresentationCoordinator)
+	{
+		PresentationCoordinator->ClearStack();
+	}
 }
 
 bool UBattleHUD::HasBattlePresentationStackEntries() const
 {
-	return GetPresentationCoordinator().HasStackEntries();
+	return PresentationCoordinator && PresentationCoordinator->HasStackEntries();
 }
 
 void UBattleHUD::EnqueueBattlePresentationEvents(
@@ -1417,12 +1424,15 @@ void UBattleHUD::EnqueueBattlePresentationEvents(
 
 void UBattleHUD::ClearBattlePresentationQueue()
 {
-	GetPresentationCoordinator().ClearQueue();
+	if (PresentationCoordinator)
+	{
+		PresentationCoordinator->ClearQueue();
+	}
 }
 
 bool UBattleHUD::IsBattlePresentationQueueBusy() const
 {
-	return GetPresentationCoordinator().IsQueueBusy();
+	return PresentationCoordinator && PresentationCoordinator->IsQueueBusy();
 }
 
 void UBattleHUD::QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand Command)
@@ -1443,12 +1453,18 @@ void UBattleHUD::QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand Command)
 
 void UBattleHUD::ClearPendingTurnBoundaryCommand()
 {
-	GetPresentationCoordinator().ClearPendingTurnBoundaryCommand();
+	if (PresentationCoordinator)
+	{
+		PresentationCoordinator->ClearPendingTurnBoundaryCommand();
+	}
 }
 
 void UBattleHUD::TryExecutePendingTurnBoundaryCommand()
 {
-	GetPresentationCoordinator().TryExecutePendingTurnBoundaryCommand();
+	if (PresentationCoordinator)
+	{
+		PresentationCoordinator->TryExecutePendingTurnBoundaryCommand();
+	}
 }
 
 FWacomBattlePresentationTargetRegistry& UBattleHUD::GetBattlePresentationTargetRegistry()
@@ -1576,7 +1592,8 @@ int32 UBattleHUD::GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
 
 const TArray<FWacomBattlePresentationStackEntryView>& UBattleHUD::GetBattlePresentationStackEntriesForTest() const
 {
-	return GetPresentationCoordinator().GetStackEntries();
+	static const TArray<FWacomBattlePresentationStackEntryView> EmptyEntries;
+	return PresentationCoordinator ? PresentationCoordinator->GetStackEntries() : EmptyEntries;
 }
 
 const TArray<FWacomBattleCombatLogBlockView>& UBattleHUD::GetBattleCombatLogHistoryForTest() const

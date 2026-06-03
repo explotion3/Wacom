@@ -16,8 +16,12 @@
 #include "UI/Card/WacomCardDetailSectionWidget.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/CardViewSpecReceiver.h"
 
 #include "Cards/CardDefinition.h"
+#include "Components/Image.h"
+#include "Components/TextBlock.h"
+#include "PaperSprite.h"
 #include "RunSession.h"
 #include "Tags/WacomGameplayTags.h"
 
@@ -50,6 +54,225 @@ bool FWacomUIBackpackCardViewUnboundFallbackSpec::RunTest(const FString& /*Param
 		Data.Cost);
 	TestTrue(TEXT("Unbound CardView preserves disabled flag"),
 		CardView->GetCardViewData().bDisabled);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewSpriteIconFallbackSpec,
+	"Wacom.UI.Backpack.CardViewSpriteIconFallback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewSpriteIconFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomCardViewData CostData;
+	CostData.Name = FText::FromString(TEXT("费用回退测试"));
+	CostData.Cost = 10;
+	CostData.bShowCost = true;
+	TStrongObjectPtr<UWacomCardViewSpecProbe> CostCardView(NewObject<UWacomCardViewSpecProbe>());
+	CostCardView->SetCostDigitIconForTest(1, NewObject<UPaperSprite>(CostCardView.Get()));
+	CostCardView->TakeWidget();
+	CostCardView->SetCardViewData(CostData);
+
+	UImage* CostDigitImage = CostCardView->GetCostDigitImageForTest();
+	TestNotNull(TEXT("Fallback CardView creates CostDigitImage"), CostDigitImage);
+	if (CostDigitImage)
+	{
+		TestEqual(TEXT("Multi-digit cost hides compact single cost icon"),
+			CostDigitImage->GetVisibility(),
+			ESlateVisibility::Collapsed);
+	}
+
+	FWacomCardViewData DurabilityData = CostData;
+	DurabilityData.Durability = 10;
+	DurabilityData.bShowDurability = true;
+	TStrongObjectPtr<UWacomCardViewSpecProbe> DurabilityCardView(NewObject<UWacomCardViewSpecProbe>());
+	DurabilityCardView->SetDurabilityDigitIconForTest(1, NewObject<UPaperSprite>(DurabilityCardView.Get()));
+	DurabilityCardView->TakeWidget();
+	DurabilityCardView->SetCardViewData(DurabilityData);
+
+	UWidget* DurabilityHost = DurabilityCardView->GetDurabilityHostForTest();
+	UPanelWidget* DurabilityDigitsHost = DurabilityCardView->GetDurabilityDigitsHostForTest();
+	TestNotNull(TEXT("Fallback CardView creates DurabilityHost"), DurabilityHost);
+	TestNotNull(TEXT("Fallback CardView creates DurabilityDigitsHost"), DurabilityDigitsHost);
+	if (DurabilityHost && DurabilityDigitsHost)
+	{
+		TestEqual(TEXT("Missing durability digit sprite hides durability host"),
+			DurabilityHost->GetVisibility(),
+			ESlateVisibility::Collapsed);
+		TestEqual(TEXT("Missing durability digit sprite leaves no empty digits"),
+			DurabilityDigitsHost->GetChildrenCount(),
+			0);
+	}
+
+	FWacomCardViewData RarityData = CostData;
+	RarityData.Rarity = WacomTags::Card_Rarity_Blue;
+	TStrongObjectPtr<UWacomCardViewSpecProbe> RarityCardView(NewObject<UWacomCardViewSpecProbe>());
+	RarityCardView->TakeWidget();
+	RarityCardView->SetCardViewData(RarityData);
+	UImage* RarityBorder = RarityCardView->GetRarityBorderForTest();
+	TestNotNull(TEXT("Fallback CardView creates RarityBorder"), RarityBorder);
+	if (RarityBorder)
+	{
+		TestEqual(TEXT("Missing rarity sprite keeps border hidden"),
+			RarityBorder->GetVisibility(),
+			ESlateVisibility::Collapsed);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewSpriteIconCacheSpec,
+	"Wacom.UI.Backpack.CardViewSpriteIconCacheAvoidsPerRefreshResolve",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewSpriteIconCacheSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardViewSpecProbe> CardView(NewObject<UWacomCardViewSpecProbe>());
+	CardView->SetCostDigitIconForTest(1, NewObject<UPaperSprite>(CardView.Get()));
+	CardView->SetCostDigitSizeForTest(FVector2D(31.0f, 37.0f));
+	CardView->TakeWidget();
+
+	FWacomCardViewData Data;
+	Data.Name = FText::FromString(TEXT("缓存测试"));
+	Data.Cost = 1;
+	Data.bShowCost = true;
+	CardView->SetCardViewData(Data);
+
+	UImage* CostDigitImage = CardView->GetCostDigitImageForTest();
+	TestNotNull(TEXT("Fallback CardView creates CostDigitImage"), CostDigitImage);
+	if (!CostDigitImage)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Resolved digit icon shows bound image"),
+		CostDigitImage->GetVisibility(),
+		ESlateVisibility::HitTestInvisible);
+	const FVector2f BrushImageSize = CostDigitImage->GetBrush().GetImageSize();
+	TestEqual(TEXT("Resolved cost digit uses stable brush width"),
+		BrushImageSize.X,
+		31.0f);
+	TestEqual(TEXT("Resolved cost digit uses stable brush height"),
+		BrushImageSize.Y,
+		37.0f);
+
+	CardView->ClearCostDigitIconsForTest();
+	Data.Name = FText::FromString(TEXT("缓存测试二次刷新"));
+	CardView->SetCardViewData(Data);
+
+	TestEqual(TEXT("Second refresh still uses resolved sprite cache after source map changes"),
+		CostDigitImage->GetVisibility(),
+		ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("View data still refreshes while sprite cache stays stable"),
+		CardView->GetCardViewData().Name.ToString(),
+		FString(TEXT("缓存测试二次刷新")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewSingleCostDigitImageSpec,
+	"Wacom.UI.Backpack.CardViewSingleCostDigitImageUsesStableBoundWidget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewSingleCostDigitImageSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardViewSingleCostDigitProbe> CardView(
+		NewObject<UWacomCardViewSingleCostDigitProbe>());
+	CardView->SetCostDigitIconForTest(1, NewObject<UPaperSprite>(CardView.Get()));
+	CardView->SetCostDigitSizeForTest(FVector2D(29.0f, 41.0f));
+	CardView->TakeWidget();
+
+	FWacomCardViewData Data;
+	Data.Name = FText::FromString(TEXT("单图费用测试"));
+	Data.Cost = 1;
+	Data.bShowCost = true;
+	CardView->SetCardViewData(Data);
+
+	UImage* CostDigitImage = CardView->GetCostDigitImageForTest();
+	TestNotNull(TEXT("Single digit CardView binds CostDigitImage"), CostDigitImage);
+	if (!CostDigitImage)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Single digit icon shows bound image"),
+		CostDigitImage->GetVisibility(),
+		ESlateVisibility::HitTestInvisible);
+	const FVector2f SingleDigitBrushImageSize = CostDigitImage->GetBrush().GetImageSize();
+	TestEqual(TEXT("Single digit bound image uses stable brush width"),
+		SingleDigitBrushImageSize.X,
+		29.0f);
+	TestEqual(TEXT("Single digit bound image uses stable brush height"),
+		SingleDigitBrushImageSize.Y,
+		41.0f);
+
+	Data.Cost = 10;
+	CardView->SetCardViewData(Data);
+	TestEqual(TEXT("Multi-digit cost hides bound single digit image on compact card face"),
+		CostDigitImage->GetVisibility(),
+		ESlateVisibility::Collapsed);
+
+	Data.Cost = 2;
+	CardView->SetCardViewData(Data);
+	TestEqual(TEXT("Missing single digit sprite keeps compact cost hidden"),
+		CostDigitImage->GetVisibility(),
+		ESlateVisibility::Collapsed);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewRetainerRefreshSpec,
+	"Wacom.UI.Backpack.CardViewRefreshInvalidatesRetainerCache",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewRetainerRefreshSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardViewRetainerRefreshProbe> CardView(
+		NewObject<UWacomCardViewRetainerRefreshProbe>());
+	CardView->TakeWidget();
+
+	const int32 InitialInvalidationCount = CardView->GetRenderCacheInvalidationCountForTest();
+
+	FWacomCardViewData Data;
+	Data.Name = FText::FromString(TEXT("Retainer 刷新测试"));
+	Data.TypeText = FText::FromString(TEXT("技能"));
+	Data.Cost = 1;
+	Data.bShowCost = true;
+	CardView->SetCardViewData(Data);
+
+	TestEqual(TEXT("SetCardViewData invalidates card render cache once"),
+		CardView->GetRenderCacheInvalidationCountForTest(),
+		InitialInvalidationCount + 1);
+	TestEqual(TEXT("CardView requests render on its retainer host"),
+		CardView->GetLastRetainerRenderRequestCountForTest(),
+		1);
+	TestEqual(TEXT("View data type text is preserved for retainer-backed views"),
+		CardView->GetCardViewData().TypeText.ToString(),
+		FString(TEXT("技能")));
+
+	CardView->SetCardViewData(Data);
+	TestEqual(TEXT("Identical card data refresh does not invalidate retainer every frame"),
+		CardView->GetRenderCacheInvalidationCountForTest(),
+		InitialInvalidationCount + 1);
+	TestEqual(TEXT("Identical refresh does not request retainer render"),
+		CardView->GetLastRetainerRenderRequestCountForTest(),
+		1);
+
+	Data.TypeText = FText::FromString(TEXT("伙伴"));
+	CardView->SetCardViewData(Data);
+	TestEqual(TEXT("Second SetCardViewData also invalidates card render cache"),
+		CardView->GetRenderCacheInvalidationCountForTest(),
+		InitialInvalidationCount + 2);
+	TestEqual(TEXT("Second refresh requests retainer render again"),
+		CardView->GetLastRetainerRenderRequestCountForTest(),
+		1);
+	TestEqual(TEXT("Second type text refresh is preserved"),
+		CardView->GetCardViewData().TypeText.ToString(),
+		FString(TEXT("伙伴")));
 
 	return true;
 }

@@ -4,6 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "Components/SizeBox.h"
+#include "Blueprint/WidgetTree.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "FirstPersonCardLayerSpecReceiver.generated.h"
@@ -127,4 +131,76 @@ UCLASS()
 class UWacomFirstPersonCardLayerPresetViewClassProbe : public UWacomCardView
 {
 	GENERATED_BODY()
+};
+
+UCLASS()
+class UWacomFirstPersonCardLayerBleedCardViewProbe : public UWacomCardView
+{
+	GENERATED_BODY()
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override
+	{
+		if (!WidgetTree)
+		{
+			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_BleedProbe"));
+		}
+
+		if (!WidgetTree->RootWidget)
+		{
+			USizeBox* BleedRoot = WidgetTree->ConstructWidget<USizeBox>(
+				USizeBox::StaticClass(),
+				TEXT("BleedRoot"));
+			BleedRoot->SetWidthOverride(392.0f);
+			BleedRoot->SetHeightOverride(516.0f);
+			WidgetTree->RootWidget = BleedRoot;
+
+			UOverlay* Overlay = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("BleedOverlay"));
+			BleedRoot->AddChild(Overlay);
+
+			USizeBox* Body = WidgetTree->ConstructWidget<USizeBox>(
+				USizeBox::StaticClass(),
+				TEXT("CardSizeBox"));
+			Body->SetWidthOverride(296.0f);
+			Body->SetHeightOverride(420.0f);
+			CardSizeBox = Body;
+
+			if (UOverlaySlot* BodySlot = Overlay->AddChildToOverlay(Body))
+			{
+				BodySlot->SetHorizontalAlignment(HAlign_Center);
+				BodySlot->SetVerticalAlignment(VAlign_Center);
+			}
+		}
+
+		return Super::RebuildWidget();
+	}
+};
+
+UCLASS()
+class UWacomFirstPersonCardLayerLegacyBleedCardViewProbe : public UWacomCardView
+{
+	GENERATED_BODY()
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override
+	{
+		if (!WidgetTree)
+		{
+			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_LegacyBleedProbe"));
+		}
+
+		if (!WidgetTree->RootWidget)
+		{
+			USizeBox* BleedRoot = WidgetTree->ConstructWidget<USizeBox>(
+				USizeBox::StaticClass(),
+				TEXT("LegacyBleedRoot"));
+			BleedRoot->SetWidthOverride(392.0f);
+			BleedRoot->SetHeightOverride(516.0f);
+			WidgetTree->RootWidget = BleedRoot;
+		}
+
+		return Super::RebuildWidget();
+	}
 };

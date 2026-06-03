@@ -27,7 +27,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Presentation Stack", meta = (ClampMin = "1", UIMin = "1", UIMax = "10", ToolTip = "战斗表现栈最多显示几张小卡。内部队列仍会保留全部待播放卡牌。"))
 	int32 MaxVisibleEntries = 6;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Presentation Stack", meta = (ToolTip = "表现栈小卡使用的只读卡面 Widget。为空时优先加载 WBP_FirstPersonCardView，再回退 WBP_CardView，最后回退 UWacomCardView。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Presentation Stack", meta = (ToolTip = "表现栈小卡使用的只读卡面 Widget。为空时优先加载 WBP_CardView，最后回退 UWacomCardView。第一人称手牌专用的 WBP_FirstPersonCardView 不作为表现栈默认值。"))
 	TSubclassOf<UWacomCardView> MiniCardViewClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Presentation Stack", meta = (ClampMin = "1.0", UIMin = "48.0", UIMax = "240.0", ToolTip = "表现栈小卡宽高，单位为 Slate 像素。"))

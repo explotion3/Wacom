@@ -337,6 +337,8 @@ namespace WacomFirstPersonCardLayerSpec
 		Preset->AuthoredCenterLiftPixels = 32.0f;
 		Preset->AuthoredDropCurveExponent = 3.0f;
 		Preset->AuthoredFanCurveExponent = 2.0f;
+		Preset->bKeepAuthoredCardBodyBottomInViewport = true;
+		Preset->AuthoredCardBodyBottomViewportPaddingPixels = 13.0f;
 		Preset->StaticCardRenderScale = 0.9f;
 		Preset->StaticCardEdgeDropPixels = 96.0f;
 		Preset->FanYawDegrees = 8.0f;
@@ -835,6 +837,216 @@ bool FWacomFirstPersonCardLayerSlotNonPlayableCardTargetTest::RunTest(const FStr
 	const FWacomInteractionTargetHandle Handle = SlotWidget->BuildCardTargetHandle();
 	TestTrue(TEXT("Non-playable visible slot still exposes card target"), Handle.IsValid());
 	TestEqual(TEXT("Non-playable target preserves card id"), Handle.CardInstanceId, CardId);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBleedHoverHitBoundsTest,
+	"Wacom.UI.FirstPersonCardLayer.CardTarget.FirstPersonCardViewBleedDoesNotExpandHoverHitBounds",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBleedHoverHitBoundsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedCardViewProbe::StaticClass());
+	Layer->SetCardLayerInteractionEnabled(true);
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true)
+	});
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+	SlotWidget->SetDesiredSizeInViewport(FVector2D(392.0f, 516.0f));
+	SlotWidget->TakeWidget();
+	SlotWidget->SetLocalHitCanvasSizeOverrideForTest(FVector2D(392.0f, 516.0f));
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver Receiver;
+	SlotWidget->OnCardHoveredNative.AddRaw(
+		&Receiver,
+		&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleHovered);
+	SlotWidget->OnCardUnhoveredNative.AddRaw(
+		&Receiver,
+		&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleUnhovered);
+
+	TestFalse(TEXT("Bleed-only hover request is rejected"),
+		SlotWidget->RequestHoverAtLocalPositionForTest(FVector2D(20.0f, 20.0f)));
+	TestFalse(TEXT("Bleed-only hover does not mark slot hovered"), SlotWidget->IsHoveredForFirstPersonLayer());
+	TestEqual(TEXT("Bleed-only hover does not broadcast"), Receiver.HoverCount, 0);
+
+	TestTrue(TEXT("Card body hover request succeeds"),
+		SlotWidget->RequestHoverAtLocalPositionForTest(FVector2D(196.0f, 258.0f)));
+	TestTrue(TEXT("Card body hover marks slot hovered"), SlotWidget->IsHoveredForFirstPersonLayer());
+	TestEqual(TEXT("Card body hover broadcasts once"), Receiver.HoverCount, 1);
+
+	SlotWidget->RequestMoveAtLocalPositionForTest(FVector2D(385.0f, 500.0f));
+	TestFalse(TEXT("Moving from body to bleed clears hover"), SlotWidget->IsHoveredForFirstPersonLayer());
+	TestEqual(TEXT("Moving from body to bleed broadcasts unhover"), Receiver.UnhoverCount, 1);
+
+	SlotWidget->OnCardHoveredNative.RemoveAll(&Receiver);
+	SlotWidget->OnCardUnhoveredNative.RemoveAll(&Receiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBleedPressHitBoundsTest,
+	"Wacom.UI.FirstPersonCardLayer.CardTarget.FirstPersonCardViewBleedDoesNotStartClickOrDragOutsideCardSizeBox",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBleedPressHitBoundsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedCardViewProbe::StaticClass());
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	FWacomFirstPersonCardLayerSlotView Slot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true);
+	Slot.Entry.TargetMode = ECardTargetMode::None;
+	Layer->SetCardSlots({ Slot });
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+	SlotWidget->SetDesiredSizeInViewport(FVector2D(392.0f, 516.0f));
+	SlotWidget->TakeWidget();
+	SlotWidget->SetLocalHitCanvasSizeOverrideForTest(FVector2D(392.0f, 516.0f));
+
+	TestFalse(TEXT("Bleed-only press does not start gesture"),
+		SlotWidget->RequestPressAtLocalPositionForTest(FVector2D(20.0f, 20.0f)));
+	TestEqual(TEXT("Bleed-only press leaves gesture idle"),
+		SlotWidget->GetGestureStateForFirstPersonLayer(),
+		EWacomFirstPersonCardGestureState::Idle);
+
+	TestTrue(TEXT("Card body press starts gesture"),
+		SlotWidget->RequestPressAtLocalPositionForTest(FVector2D(196.0f, 258.0f)));
+	TestEqual(TEXT("Card body press enters pressed gesture"),
+		SlotWidget->GetGestureStateForFirstPersonLayer(),
+		EWacomFirstPersonCardGestureState::Pressed);
+	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(196.0f, 120.0f));
+	TestTrue(TEXT("Started drag can move outside body"),
+		SlotWidget->GetGestureStateForFirstPersonLayer() != EWacomFirstPersonCardGestureState::Idle);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCompressedBleedHitBoundsTest,
+	"Wacom.UI.FirstPersonCardLayer.CardTarget.FirstPersonCardViewCompressedBleedKeepsStableBodyHitBounds",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCompressedBleedHitBoundsTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UWacomFirstPersonCardLayerBleedCardViewProbe> CardView(
+		NewObject<UWacomFirstPersonCardLayerBleedCardViewProbe>());
+	if (!TestNotNull(TEXT("CardView"), CardView.Get()))
+	{
+		return false;
+	}
+
+	CardView->TakeWidget();
+
+	TestEqual(TEXT("Stable body hit size stays at design size"),
+		CardView->GetCardBodyHitSize(),
+		UWacomCardView::GetDefaultCardBodyHitSize());
+	TestTrue(TEXT("Compressed cached body still accepts stable right edge"),
+		CardView->IsLocalPositionInsideCardBodyWithBoundsForTest(
+			FVector2D(278.0f, 190.0f),
+			FVector2D(260.0f, 380.0f)));
+	TestFalse(TEXT("Compressed cached body still rejects outside stable right edge"),
+		CardView->IsLocalPositionInsideCardBodyWithBoundsForTest(
+			FVector2D(282.0f, 190.0f),
+			FVector2D(260.0f, 380.0f)));
+	TestTrue(TEXT("Compressed cached body still accepts stable top edge"),
+		CardView->IsLocalPositionInsideCardBodyWithBoundsForTest(
+			FVector2D(130.0f, -18.0f),
+			FVector2D(260.0f, 380.0f)));
+	TestFalse(TEXT("Compressed cached body still rejects above stable top edge"),
+		CardView->IsLocalPositionInsideCardBodyWithBoundsForTest(
+			FVector2D(130.0f, -22.0f),
+			FVector2D(260.0f, 380.0f)));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerFallbackHitBoundsTest,
+	"Wacom.UI.FirstPersonCardLayer.CardTarget.FirstPersonCardLayerFallsBackToLegacyHitSizeWhenCardSizeBoxMissing",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerFallbackHitBoundsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	Layer->SetCardViewClass(UWacomFirstPersonCardLayerLegacyBleedCardViewProbe::StaticClass());
+	Layer->SetCardLayerInteractionEnabled(true);
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true)
+	});
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+	SlotWidget->SetDesiredSizeInViewport(FVector2D(392.0f, 516.0f));
+	SlotWidget->TakeWidget();
+	SlotWidget->SetLocalHitCanvasSizeOverrideForTest(FVector2D(392.0f, 516.0f));
+
+	TestEqual(TEXT("Missing CardSizeBox falls back to legacy body size"),
+		SlotWidget->GetCardBodyHitSizeForFirstPersonLayer(),
+		UWacomCardView::GetDefaultCardBodyHitSize());
+	TestFalse(TEXT("Legacy fallback still rejects bleed-only local position"),
+		SlotWidget->RequestHoverAtLocalPositionForTest(FVector2D(20.0f, 20.0f)));
+	TestTrue(TEXT("Legacy fallback accepts centered card body local position"),
+		SlotWidget->RequestHoverAtLocalPositionForTest(FVector2D(196.0f, 258.0f)));
 
 	PC->Destroy();
 	return true;
@@ -1813,8 +2025,79 @@ bool FWacomFirstPersonCardLayerPresetLayoutOverrideTest::RunTest(const FString& 
 		TestEqual(TEXT("Preset edge drop applies"), Slots[0].AuthoredLayoutOffset.Y, Preset->StaticCardEdgeDropPixels + Preset->AuthoredHandScreenOffset.Y);
 		TestEqual(TEXT("Preset scale applies"), Slots[2].RenderScale, Preset->StaticCardRenderScale);
 		TestEqual(TEXT("Preset fan angle applies"), Slots.Last().RenderAngleDegrees, 16.0f);
+		TestFalse(TEXT("Preset readable bottom clamp stays inactive when slots are inside viewport"), Slots[2].bBodyBottomViewportAdjusted);
 	}
 	TestTrue(TEXT("Preset is active"), Anchor->IsUsingResolvedCardLayoutPresetForTest());
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAuthoredReadableBottomClampTest,
+	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.KeepsCardBodyBottomReadableNearViewportEdge",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAuthoredReadableBottomClampTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+	Anchor->ProbeViewportSize = FVector2D(1920.0f, 1080.0f);
+	Anchor->ProbeViewportScale = 1.0f;
+	Anchor->ProbeCameraTransform = FTransform(
+		FRotator::ZeroRotator,
+		FVector(100.0f, 200.0f, -470.0f),
+		FVector::OneVector);
+	Anchor->RefreshAnchor(0.0f);
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::AllowOffscreen;
+	Anchor->StaticCardRenderScale = 1.0f;
+	Anchor->StaticCardCountFallback = 5;
+	Anchor->StaticCardEdgeDropPixels = 72.0f;
+	Anchor->AuthoredHandScreenOffset = FVector2D::ZeroVector;
+	Anchor->bEnableAnchorScreenSmoothing = false;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	Anchor->bKeepAuthoredCardBodyBottomInViewport = true;
+	Anchor->AuthoredCardBodyBottomViewportPaddingPixels = 8.0f;
+
+	const TArray<FWacomFirstPersonCardLayerSlotView> ClampedSlots = Anchor->BuildStaticCardSlotViews();
+	Anchor->bKeepAuthoredCardBodyBottomInViewport = false;
+	const TArray<FWacomFirstPersonCardLayerSlotView> UnclampedSlots = Anchor->BuildStaticCardSlotViews();
+
+	TestEqual(TEXT("Clamped slot count"), ClampedSlots.Num(), 5);
+	TestEqual(TEXT("Unclamped slot count"), UnclampedSlots.Num(), 5);
+	if (ClampedSlots.Num() == 5 && UnclampedSlots.Num() == 5)
+	{
+		constexpr float CardBodyHalfHeight = 210.0f;
+		constexpr float ViewportBottom = 1080.0f;
+		constexpr float Padding = 8.0f;
+		TestTrue(TEXT("Unclamped edge card body can extend beyond viewport bottom"),
+			UnclampedSlots[0].ScreenPosition.Y + CardBodyHalfHeight > ViewportBottom);
+		for (const FWacomFirstPersonCardLayerSlotView& Slot : ClampedSlots)
+		{
+			TestTrue(TEXT("Readable clamp keeps card body bottom inside viewport"),
+				Slot.ScreenPosition.Y + CardBodyHalfHeight <= ViewportBottom - Padding + KINDA_SMALL_NUMBER);
+		}
+		TestTrue(TEXT("Readable clamp records adjusted edge slot"), ClampedSlots[0].bBodyBottomViewportAdjusted);
+		TestTrue(TEXT("Readable clamp records adjusted center slot"), ClampedSlots[2].bBodyBottomViewportAdjusted);
+	}
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -9129,6 +9412,83 @@ bool FWacomFirstPersonCardLayerDragPointerCardTargetProbeTest::RunTest(const FSt
 	TestEqual(TEXT("Card probe drag release does not click-submit"), ClickReceiver.ClickCount, 0);
 
 	SourceWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBleedCardTargetProbeTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.FirstPersonCardLayerCardTargetProbeIgnoresTransparentBleed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBleedCardTargetProbeTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedCardViewProbe::StaticClass());
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
+	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
+
+	FWacomFirstPersonCardLayerSlotView TargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(TargetCardId, true, true);
+	TargetSlot.Index = 1;
+	TargetSlot.ScreenPosition = FVector2D(650.0f, 600.0f);
+	TargetSlot.WidgetPosition = TargetSlot.ScreenPosition;
+	TargetSlot.SnappedWidgetPosition = TargetSlot.ScreenPosition;
+	TargetSlot.RenderScale = 1.0f;
+	TargetSlot.ZOrder = 1;
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+	TargetWidget->SetDesiredSizeInViewport(FVector2D(392.0f, 516.0f));
+	TargetWidget->TakeWidget();
+	TargetWidget->SetLocalHitCanvasSizeOverrideForTest(FVector2D(392.0f, 516.0f));
+
+	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(830.0f, 600.0f));
+	TestNotEqual(TEXT("Pointer inside bleed but outside body does not probe card target"),
+		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
+		EWacomInteractionTargetKind::Card);
+	TestFalse(TEXT("Bleed-only pointer does not light target probe"),
+		TargetWidget->HasCardDragProbeFeedbackForTest());
+
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(650.0f, 600.0f));
+	TestEqual(TEXT("Pointer inside body probes card target"),
+		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
+		EWacomInteractionTargetKind::Card);
+	TestEqual(TEXT("Body pointer records target card id"),
+		Layer->GetCurrentDragViewForTest().CurrentTarget.CardInstanceId,
+		TargetCardId);
+
 	PC->Destroy();
 	return true;
 }

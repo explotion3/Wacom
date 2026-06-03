@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-backpack
 status: active
-updated: 2026-05-22
+updated: 2026-06-03
 tags:
   - wacom/ui
   - wacom/wbp
@@ -152,9 +152,8 @@ WBP 合同：
 
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
-| `CostText` | `TextBlock` | 费用 |
+| `CostDigitImage` | `Image` | 一位数费用图标，优先用于美术数字 |
 | `ValueText` | `TextBlock` | 价值，当前用于删牌金币价值 |
-| `PhysiqueText` | `TextBlock` | 身材 / 容量摘要 |
 | `NameText` | `TextBlock` | 卡名 |
 | `TypeText` | `TextBlock` | 类型 / 词条 |
 | `CardArt` | `Image` | 卡图 |
@@ -165,12 +164,13 @@ WBP 合同：
 
 | 控件名 | 推荐类型 | 缺省行为 |
 |---|---|---|
-| `DescriptionText` | `TextBlock` | 默认小卡面建议隐藏；完整长文本由详情面板承接 |
 | `SurfaceFoilOverlay` | `Image` | 卡面弱流光覆盖层；未绑定时不显示流光 |
 
 WBP 合同：
 
 - `UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。
+- 卡牌主体只保留主要名字、类型、卡图、图片数字和少量必要徽章；完整描述、被动、长规则文本和身材说明由 `WBP_CardDetailPanel` 承接。
+- 费用图标只使用固定 `CostDigitImage`，C++ 只替换它的 Brush，不动态创建费用子控件；费用为多位数、缺数字图标或未绑定该 Image 时，卡牌主体不再显示文字费用。
 - `EffectStatsHost` 内部由 C++ 按 `EffectBadges[]` 动态创建 `UWacomCardEffectBadgeWidget`。
 - `SurfaceFoilOverlay` 推荐放在卡面内容最上层、`DisabledOverlay` 下方，Brush 使用 `/Game/DreamMaterials/Card/M_CardSurface_CosmicFoil`；它必须设为不可命中，不要挡住战斗手牌或背包拖拽。
 - 未绑定 `SurfaceFoilOverlay` 时，C++ 会在运行时尝试挂到第一个 `Overlay` 容器上作为临时覆盖层；正式 WBP 仍建议显式绑定，便于控制层级。

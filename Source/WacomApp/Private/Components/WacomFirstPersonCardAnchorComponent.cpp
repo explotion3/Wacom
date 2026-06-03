@@ -13,6 +13,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Cards/CardDefinition.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
+#include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardAnchorDebugWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayoutPreset.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
@@ -37,6 +38,8 @@ namespace
 		float AuthoredDropCurveExponent = 2.0f;
 		float AuthoredFanCurveExponent = 1.0f;
 		bool bAuthoredCenterCardsDrawOnTop = true;
+		bool bKeepAuthoredCardBodyBottomInViewport = true;
+		float AuthoredCardBodyBottomViewportPaddingPixels = 8.0f;
 		float ProjectionPadding = 24.0f;
 		float SoftClampOffscreenAllowancePixels = 260.0f;
 		float SoftClampBlendRangePixels = 240.0f;
@@ -131,6 +134,8 @@ namespace
 		Config.AuthoredDropCurveExponent = Anchor.AuthoredDropCurveExponent;
 		Config.AuthoredFanCurveExponent = Anchor.AuthoredFanCurveExponent;
 		Config.bAuthoredCenterCardsDrawOnTop = Anchor.bAuthoredCenterCardsDrawOnTop;
+		Config.bKeepAuthoredCardBodyBottomInViewport = Anchor.bKeepAuthoredCardBodyBottomInViewport;
+		Config.AuthoredCardBodyBottomViewportPaddingPixels = Anchor.AuthoredCardBodyBottomViewportPaddingPixels;
 		Config.ProjectionPadding = Anchor.ProjectionPadding;
 		Config.SoftClampOffscreenAllowancePixels = Anchor.SoftClampOffscreenAllowancePixels;
 		Config.SoftClampBlendRangePixels = Anchor.SoftClampBlendRangePixels;
@@ -247,6 +252,8 @@ namespace
 		Config.AuthoredDropCurveExponent = Preset.AuthoredDropCurveExponent;
 		Config.AuthoredFanCurveExponent = Preset.AuthoredFanCurveExponent;
 		Config.bAuthoredCenterCardsDrawOnTop = Preset.bAuthoredCenterCardsDrawOnTop;
+		Config.bKeepAuthoredCardBodyBottomInViewport = Preset.bKeepAuthoredCardBodyBottomInViewport;
+		Config.AuthoredCardBodyBottomViewportPaddingPixels = Preset.AuthoredCardBodyBottomViewportPaddingPixels;
 		Config.ProjectionPadding = Preset.ProjectionPadding;
 		Config.SoftClampOffscreenAllowancePixels = Preset.SoftClampOffscreenAllowancePixels;
 		Config.SoftClampBlendRangePixels = Preset.SoftClampBlendRangePixels;
@@ -459,6 +466,8 @@ namespace
 		AddFloat(Config.AuthoredDropCurveExponent);
 		AddFloat(Config.AuthoredFanCurveExponent);
 		AddBool(Config.bAuthoredCenterCardsDrawOnTop);
+		AddBool(Config.bKeepAuthoredCardBodyBottomInViewport);
+		AddFloat(Config.AuthoredCardBodyBottomViewportPaddingPixels);
 		AddFloat(Config.ProjectionPadding);
 		AddFloat(Config.SoftClampOffscreenAllowancePixels);
 		AddFloat(Config.SoftClampBlendRangePixels);
@@ -606,6 +615,32 @@ namespace
 			FMath::RoundToFloat(Position.Y / Grid) * Grid);
 		bOutPixelSnapped = !SnappedPosition.Equals(Position, KINDA_SMALL_NUMBER);
 		return SnappedPosition;
+	}
+
+	FVector2D KeepCardBodyBottomInsideViewportForConfig(
+		FVector2D Position,
+		FVector2D WidgetViewportSize,
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config,
+		float RenderScale)
+	{
+		if (!Config.bKeepAuthoredCardBodyBottomInViewport
+			|| WidgetViewportSize.X <= 1.0f
+			|| WidgetViewportSize.Y <= 1.0f)
+		{
+			return Position;
+		}
+
+		const float BodyHeight =
+			UWacomCardView::GetDefaultCardBodyHitSize().Y * FMath::Max(0.01f, RenderScale);
+		const float BottomPadding = FMath::Max(0.0f, Config.AuthoredCardBodyBottomViewportPaddingPixels);
+		const float MaxCenterY = WidgetViewportSize.Y - BottomPadding - (BodyHeight * 0.5f);
+		if (MaxCenterY <= 0.0f || Position.Y <= MaxCenterY)
+		{
+			return Position;
+		}
+
+		Position.Y = MaxCenterY;
+		return Position;
 	}
 
 	float ClampCardLayerRenderAngleForConfig(
@@ -1273,6 +1308,18 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				{
 					FinalPosition.Y -= FMath::Max(0.0f, Config.HoverLiftPixels);
 				}
+				const FVector2D BeforeViewportReadableClamp = FinalPosition;
+				FVector2D ViewportSize = FVector2D::ZeroVector;
+				if (GetViewportSizeForAnchor(ViewportSize) && AnchorPoint.ViewportScale > 0.0f)
+				{
+					FinalPosition = KeepCardBodyBottomInsideViewportForConfig(
+						FinalPosition,
+						ViewportSize / AnchorPoint.ViewportScale,
+						Config,
+						Slot.RenderScale);
+				}
+				Slot.bBodyBottomViewportAdjusted =
+					!FinalPosition.Equals(BeforeViewportReadableClamp, KINDA_SMALL_NUMBER);
 				bool bPixelSnapped = false;
 				Slot.WidgetPosition = FinalPosition;
 				Slot.SnappedWidgetPosition = SnapCardLayerPositionForConfig(FinalPosition, Config, bPixelSnapped);

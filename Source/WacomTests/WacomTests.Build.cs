@@ -25,7 +25,8 @@ public class WacomTests : ModuleRules
 			"CommonUI",
 			"EnhancedInput",
 			"ModelViewViewModel",
-			"FieldNotification"
+			"FieldNotification",
+			"Paper2D"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

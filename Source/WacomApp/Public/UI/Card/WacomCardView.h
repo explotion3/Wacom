@@ -11,7 +11,10 @@ class UBorder;
 class UImage;
 class UMaterialInterface;
 class UPanelWidget;
+class URetainerBox;
+class USizeBox;
 class UTextBlock;
+class UWidget;
 class UWacomCardEffectBadgeWidget;
 class UPaperSprite;
 
@@ -28,10 +31,9 @@ class UPaperSprite;
  * - No backpack MoveInstance/DeleteCardForGold calls.
  * - No drag/drop source or target behavior.
  *
- * Cost display supports two modes:
- * - Text mode (default): CostText TextBlock displays FText::AsNumber(Cost)
- * - Icon mode: CostDigitsHost panel is populated with per-digit Images from CostDigitIcons
- *   Icon mode activates when both CostDigitsHost is bound AND CostDigitIcons is non-empty.
+ * Cost display uses the art-facing single icon path:
+ * - CostDigitImage displays one digit from CostDigitIcons for 0-9 costs.
+ * - Missing, unbound, or multi-digit costs are hidden on the compact card face.
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomCardView : public UUserWidget
@@ -47,33 +49,54 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardView")
 	const FWacomCardViewData& GetCardViewData() const { return CurrentData; }
 
+	FVector2D GetCardBodyHitSize() const;
+	bool HasCardBodyHitGeometry() const;
+	bool IsScreenPositionInsideCardBody(const FVector2D& ScreenPosition) const;
+	static FVector2D GetDefaultCardBodyHitSize()
+	{
+		return FVector2D(DefaultCardBodyHitWidth, DefaultCardBodyHitHeight);
+	}
+#if WITH_AUTOMATION_TESTS
+	bool IsLocalPositionInsideCardBodyWithBoundsForTest(
+		const FVector2D& LocalPosition,
+		const FVector2D& SimulatedCardSizeBoxLocalSize) const;
+	int32 GetRenderCacheInvalidationCountForTest() const { return RenderCacheInvalidationCountForTest; }
+	int32 GetLastRetainerRenderRequestCountForTest() const { return LastRetainerRenderRequestCountForTest; }
+#endif
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> CostText;
+	static constexpr float DefaultCardBodyHitWidth = 296.f;
+	static constexpr float DefaultCardBodyHitHeight = 420.f;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UPanelWidget> CostDigitsHost;
+	TObjectPtr<UWidget> CardSizeBox;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Digit Icons", meta = (ToolTip = "数字 0-9 对应的 PaperSprite。CostDigitsHost 绑定时生效；为空时使用文字通道。"))
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Hit Testing", meta = (ToolTip = "是否使用固定卡牌主体命中尺寸。开启后 CardSizeBox 只提供主体中心定位，不会因为透明出血画布、RetainerBox 或布局压缩而改变命中范围。"))
+	bool bUseFixedCardBodyHitSize = true;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Hit Testing", meta = (EditCondition = "bUseFixedCardBodyHitSize", ClampMin = "1.0", UIMin = "120.0", UIMax = "640.0", ToolTip = "固定卡牌主体命中尺寸，单位为 UMG 布局像素。默认 296 x 420，对应当前卡牌主体设计尺寸。"))
+	FVector2D FixedCardBodyHitSize = FVector2D(DefaultCardBodyHitWidth, DefaultCardBodyHitHeight);
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> CostDigitImage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Digit Icons", meta = (ClampMin = "1", UIMin = "8", UIMax = "96", ToolTip = "费用数字 Icon 的单个尺寸，单位为 UMG 布局像素。固定尺寸可减少 PaperSprite 在第一人称卡牌移动、缩放、旋转和 Retainer 缓存时的采样抖动。"))
+	FVector2D CostDigitSize = FVector2D(42, 54);
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Digit Icons", meta = (ToolTip = "费用数字 0-9 对应的 PaperSprite。CostDigitImage 绑定且费用为一位数时生效；为空、缺数字或多位数费用时卡牌主体不显示费用文本。"))
 	TMap<int32, TSoftObjectPtr<UPaperSprite>> CostDigitIcons;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> ValueText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> PhysiqueText;
-
-	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> NameText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TypeText;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> DescriptionText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> CardArt;
@@ -109,16 +132,39 @@ private:
 	UPROPERTY(Transient)
 	FWacomCardViewData CurrentData;
 
+	UPROPERTY(Transient)
+	TMap<int32, TObjectPtr<UPaperSprite>> ResolvedCostDigitIcons;
+
+	UPROPERTY(Transient)
+	TMap<int32, TObjectPtr<UPaperSprite>> ResolvedDurabilityDigitIcons;
+
+	UPROPERTY(Transient)
+	TMap<FGameplayTag, TObjectPtr<UPaperSprite>> ResolvedRarityBorderSprites;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView")
 	TSubclassOf<UWacomCardEffectBadgeWidget> EffectBadgeWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Surface", meta = (ToolTip = "卡牌表面弱流光覆盖材质。为空时会保留 WBP 中 SurfaceFoilOverlay 自己配置的 Brush；两者都为空则隐藏覆盖层。"))
 	TObjectPtr<UMaterialInterface> SurfaceFoilMaterial;
 
+	bool bSpriteIconCachesBuilt = false;
+	bool bCardViewDataAppliedToWidgets = false;
+
+#if WITH_AUTOMATION_TESTS
+	int32 RenderCacheInvalidationCountForTest = 0;
+	int32 LastRetainerRenderRequestCountForTest = 0;
+#endif
+
 	void ApplyCurrentDataToWidgets();
 	void UpdateCostDisplay();
 	void UpdateDurabilityDisplay();
 	void EnsureSurfaceFoilOverlay();
 	void ApplySurfaceFoilOverlay();
+	void EnsureSpriteIconCachesBuilt();
+	void RebuildSpriteIconCaches();
+	void InvalidateCardViewRenderCache();
 	static TArray<int32> SplitIntoDigits(int32 Value);
+	bool IsLocalPositionInsideCardBodyBounds(
+		const FVector2D& LocalPosition,
+		const FVector2D& CardSizeBoxLocalSize) const;
 };

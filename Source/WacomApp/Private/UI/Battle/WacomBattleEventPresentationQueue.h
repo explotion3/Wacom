@@ -36,6 +36,7 @@ public:
 	void EnqueueEvents(const TArray<FBattleEvent>& Events);
 	void EnqueueEvents(const TArray<FBattleEvent>& Events, int32 PresentationStackEntryId, float MinimumStackHoldSeconds);
 	void Clear();
+	void AbandonWithoutWorldAccess();
 
 	bool IsBusy() const { return bProcessing || Steps.Num() > 0; }
 	int32 GetPendingStepCount() const { return Steps.Num(); }

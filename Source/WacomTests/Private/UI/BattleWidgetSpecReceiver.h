@@ -749,6 +749,11 @@ public:
 		ClearBattlePresentationQueue();
 	}
 
+	void NativeDestructForTest()
+	{
+		NativeDestruct();
+	}
+
 	void AdvanceBattlePresentationQueueForTest()
 	{
 		AdvanceBattlePresentationQueueOnce();

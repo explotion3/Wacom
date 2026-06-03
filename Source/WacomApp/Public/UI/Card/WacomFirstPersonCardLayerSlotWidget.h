@@ -252,6 +252,7 @@ public:
 	bool WantsSlotMotionTick() const { return bWantsSlotMotionTick; }
 	bool CanExposeCardTarget() const;
 	FWacomInteractionTargetHandle BuildCardTargetHandle() const;
+	FVector2D GetCardBodyHitSizeForFirstPersonLayer() const;
 	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const { return GestureState; }
 	EWacomFirstPersonCardDragTargetFeedbackState GetDragTargetFeedbackStateForFirstPersonLayer() const
 	{
@@ -284,6 +285,10 @@ public:
 		return DragTargetFeedbackState;
 	}
 	bool HasCardDragProbeFeedbackForTest() const { return bCardDragProbeFeedback; }
+	void SetLocalHitCanvasSizeOverrideForTest(const TOptional<FVector2D>& InSize);
+	bool RequestHoverAtLocalPositionForTest(const FVector2D& LocalPosition);
+	void RequestMoveAtLocalPositionForTest(const FVector2D& LocalPosition);
+	bool RequestPressAtLocalPositionForTest(const FVector2D& LocalPosition);
 	bool RequestGesturePressForTest(const FVector2D& ScreenPosition);
 	void RequestGestureMoveForTest(float DeltaTime, const FVector2D& ScreenPosition);
 	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
@@ -364,6 +369,9 @@ private:
 	FVector2D PointerViewportPosition = FVector2D::ZeroVector;
 	FVector2D PointerNormalizedViewportPosition = FVector2D::ZeroVector;
 	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
+#if WITH_AUTOMATION_TESTS
+	TOptional<FVector2D> LocalHitCanvasSizeOverrideForTest;
+#endif
 
 	void EnsureCardView();
 	void EnsureFeedbackOverlay();
@@ -383,6 +391,10 @@ private:
 	const FWacomFirstPersonCardLayerSlotView& GetEffectiveTargetSlotView() const;
 	bool ResolveInspectScreenPosition(FVector2D& OutScreenPosition) const;
 	bool ResolvePointerWidgetPosition(const FPointerEvent& InMouseEvent, FVector2D& OutScreenPosition) const;
+	bool IsScreenPositionInsideCardBody(const FVector2D& ScreenPosition) const;
+	bool IsLocalPositionInsideCardBody(const FVector2D& LocalPosition) const;
+	void UpdateBodyHoverFromScreenPosition(const FVector2D& ScreenPosition);
+	void UpdateBodyHoverFromLocalPosition(const FVector2D& LocalPosition);
 	void BeginGesturePress(const FVector2D& ScreenPosition);
 	void UpdateGesture(float DeltaTime, const FVector2D& ScreenPosition);
 	bool ReleaseGesture(const FVector2D& ScreenPosition);

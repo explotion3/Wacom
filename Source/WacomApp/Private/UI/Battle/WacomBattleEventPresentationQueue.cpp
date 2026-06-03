@@ -21,7 +21,7 @@ FWacomBattleEventPresentationQueue::FWacomBattleEventPresentationQueue(
 
 FWacomBattleEventPresentationQueue::~FWacomBattleEventPresentationQueue()
 {
-	Clear();
+	AbandonWithoutWorldAccess();
 }
 
 void FWacomBattleEventPresentationQueue::EnqueueEvents(const TArray<FBattleEvent>& Events)
@@ -95,6 +95,14 @@ void FWacomBattleEventPresentationQueue::Clear()
 {
 	StopTimer();
 
+	Steps.Reset();
+	bProcessing = false;
+	bAdvancing = false;
+}
+
+void FWacomBattleEventPresentationQueue::AbandonWithoutWorldAccess()
+{
+	StepTimerHandle = FTimerHandle();
 	Steps.Reset();
 	bProcessing = false;
 	bAdvancing = false;

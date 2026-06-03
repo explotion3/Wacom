@@ -870,6 +870,29 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBattlePresentationStackFallbackSpec::RunTest(const FString& /*Parameters*/)
 {
+	UClass* DefaultCardViewClass = LoadClass<UWacomCardView>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_CardView.WBP_CardView_C"));
+	UClass* FirstPersonCardViewClass = LoadClass<UWacomCardView>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C"));
+
+	TStrongObjectPtr<UBattlePresentationStackWidget> DefaultStack(NewObject<UBattlePresentationStackWidget>());
+	if (TestNotNull(TEXT("WBP_CardView loads for presentation stack default"), DefaultCardViewClass))
+	{
+		TestEqual(
+			TEXT("Presentation stack defaults to WBP_CardView"),
+			DefaultStack->MiniCardViewClass.Get(),
+			DefaultCardViewClass);
+	}
+	if (FirstPersonCardViewClass)
+	{
+		TestNotEqual(
+			TEXT("Presentation stack does not default to WBP_FirstPersonCardView"),
+			DefaultStack->MiniCardViewClass.Get(),
+			FirstPersonCardViewClass);
+	}
+
 	TStrongObjectPtr<UBattlePresentationStackWidget> Stack(NewObject<UBattlePresentationStackWidget>());
 	Stack->MiniCardViewClass = UWacomCardView::StaticClass();
 	Stack->TakeWidget();
@@ -6198,6 +6221,40 @@ bool FWacomUIBattleHUDPrivateCoordinatorSurfaceSpec::RunTest(const FString& /*Pa
 			HeaderText.Contains(TEXT("WACOMAPP_API FWacomBattleHUD")));
 	}
 
+	const FString PresentationCoordinatorSourcePath = FPaths::ConvertRelativePathToFull(
+		FPaths::Combine(
+			FPaths::ProjectDir(),
+			TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDPresentationCoordinator.cpp")));
+	FString PresentationCoordinatorSource;
+	if (TestTrue(
+			TEXT("Presentation coordinator source exists"),
+			FPaths::FileExists(PresentationCoordinatorSourcePath))
+		&& TestTrue(
+			TEXT("Presentation coordinator source can be read"),
+			FFileHelper::LoadFileToString(PresentationCoordinatorSource, *PresentationCoordinatorSourcePath)))
+	{
+		const FString DestructorSignature =
+			TEXT("FWacomBattleHUDPresentationCoordinator::~FWacomBattleHUDPresentationCoordinator()");
+		const int32 DestructorStart = PresentationCoordinatorSource.Find(DestructorSignature);
+		if (TestTrue(TEXT("Presentation coordinator destructor exists"), DestructorStart != INDEX_NONE))
+		{
+			const int32 NextMethodStart = PresentationCoordinatorSource.Find(
+				TEXT("\nvoid FWacomBattleHUDPresentationCoordinator::"),
+				ESearchCase::CaseSensitive,
+				ESearchDir::FromStart,
+				DestructorStart + DestructorSignature.Len());
+			const FString DestructorBody = NextMethodStart != INDEX_NONE
+				? PresentationCoordinatorSource.Mid(DestructorStart, NextMethodStart - DestructorStart)
+				: PresentationCoordinatorSource.Mid(DestructorStart);
+			TestFalse(
+				TEXT("Presentation coordinator destructor does not call HUD/World teardown"),
+				DestructorBody.Contains(TEXT("GetWorld(")));
+			TestFalse(
+				TEXT("Presentation coordinator destructor does not clear timer manager"),
+				DestructorBody.Contains(TEXT("GetTimerManager")));
+		}
+	}
+
 	return true;
 }
 
@@ -6403,6 +6460,77 @@ bool FWacomUIBattleHUDPresentationCoordinatorContractSpec::RunTest(const FString
 	TestEqual(TEXT("Stack drains through HUD"), HUD->GetPresentationStackEntryCountForTest(), 0);
 	TestTrue(TEXT("Pending wait executes after stack drain"),
 		Session->BuildSnapshot().Version > VersionBeforeWait);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDPresentationCoordinatorTeardownSpec,
+	"Wacom.UI.Battle.BattleHUDPresentationCoordinatorTeardownDoesNotTouchDestroyedHUD",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDPresentationCoordinatorTeardownSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->AttachPresentationStack();
+	Harness->AttachActionPanel();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	if (!TestTrue(TEXT("Target card exists"), TargetCardId.IsValid())
+		|| !TestTrue(TEXT("Target part exists"), TargetPartId.IsValid()))
+	{
+		return false;
+	}
+
+	FBattleEvent PresentationCueEvent;
+	PresentationCueEvent.Type = EBattleEventType::DamageDealt;
+	PresentationCueEvent.Sequence = 1;
+	PresentationCueEvent.ActorInstanceId = TargetPartId;
+	PresentationCueEvent.Amount = 1;
+	HUD->EnqueueBattlePresentationEventsForTest({ PresentationCueEvent });
+	TestTrue(TEXT("Presentation queue is busy before teardown"), HUD->IsBattlePresentationBusy());
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->OnEnemyPartClickedByUser(TargetPartId);
+	HUD->OnWaitRequested();
+	TestTrue(TEXT("Stack or queue is busy before teardown"), HUD->IsBattlePresentationBusy());
+	TestTrue(TEXT("Pending turn boundary exists before teardown"), HUD->HasPendingTurnBoundaryCommandForTest());
+
+	HUD->NativeDestructForTest();
+
+	TestFalse(TEXT("NativeDestruct clears presentation busy state"), HUD->IsBattlePresentationBusy());
+	TestFalse(TEXT("NativeDestruct clears pending turn boundary"), HUD->HasPendingTurnBoundaryCommandForTest());
+	TestEqual(TEXT("NativeDestruct clears stack entries"), HUD->GetPresentationStackEntryCountForTest(), 0);
 
 	return true;
 }

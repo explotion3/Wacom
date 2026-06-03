@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-battle
 status: active
-updated: 2026-05-29
+updated: 2026-06-03
 tags:
   - wacom/ui
   - wacom/wbp
@@ -83,16 +83,22 @@ PIE 检查：
 
 ```text
 WBP_FirstPersonCardView
-└─ RetainerBox
-   └─ CardContentRoot / Overlay（约 0.99 RenderScale）
-      └─ 原 WBP_CardView 卡面内容
+└─ BleedCanvas / SizeBox（例如 392 x 422 或 392 x 516，透明出血画布）
+   └─ RetainerBox
+      └─ Overlay
+         └─ CardSizeBox / SizeBox（296 x 420，居中，主体交互范围）
+            └─ 原 WBP_CardView 卡面内容
 ```
 
 WBP 合同：
 
 - 继承 `UWacomCardView`，继续只接收 `FWacomCardViewData`。
-- 根部建议包一层 `RetainerBox`；RetainerBox 内部卡面内容轻微缩放到约 `0.99`，给旋转采样预留透明边缘。
-- 卡面基础尺寸保持 296 x 420；`FirstPersonCardAnchorComponent.StaticCardRenderScale=1.0` 时应接近美术设计尺寸。
+- 外层可使用 392 x 422 或 392 x 516 这类透明 bleed 画布，保证右下身材 / 耐久等超出主体边界的装饰能被 Retainer 完整渲染。
+- 内部必须保留并命名 `CardSizeBox`，尺寸默认保持卡牌主体 296 x 420，并尽量居中放在 bleed 画布中。`UWacomFirstPersonCardLayerSlotWidget` 的 hover、click、drag 起手和 Card target probe 使用 `CardSizeBox` 几何中心 + `UWacomCardView.FixedCardBodyHitSize` 固定主体尺寸；缺失时回退旧 296 x 420 主体尺寸。
+- 透明 bleed 只负责渲染，不扩大交互范围；鼠标在固定主体命中区外不应触发 hover 或开始点击 / 拖拽。
+- `RetainerBox` 内部卡面内容可以轻微缩放到约 `0.99`，给旋转采样预留透明边缘。
+- 费用数字图标只绑定固定 `CostDigitImage : Image`，C++ 只替换它的 Brush，不动态创建费用子控件；费用为多位数、缺数字图标或未绑定该 Image 时，卡牌主体不再显示文字费用。如果 Retainer 内小数字仍有采样抖动，可以像 TypeName 一样把该 Image 放到 Retainer 外，并保持同名绑定。
+- `FirstPersonCardAnchorComponent.StaticCardRenderScale=1.0` 时，`CardSizeBox` 主体中心应接近美术卡面主体中心；如需不同主体命中尺寸，应在 CardView Class Defaults 调整 `FixedCardBodyHitSize`。
 - 高对比边框、贴图边缘和细线不要紧贴贴图边界；贴图建议预留透明 Alpha 留白。
 - 材质流光和表面装饰继续走 `UWacomCardView` / `SurfaceFoilOverlay` 路径，不在 first-person slot widget 内新增材质刷新逻辑。
 - 不创建 `UCardWidget`，不绑定按钮，不提交 `UBattleSession` 命令，不在 WBP 图里实现 hover/pending/disabled 状态机。
@@ -105,6 +111,7 @@ PIE 检查：
 - 切换不同 preset 后，手牌布局、hover、pending、slot motion、event transition、transition origin 和 interaction feedback 应立即按新 preset 更新；不应从旧配置慢慢漂过去。关闭 `bUseFirstPersonCardLayoutPreset` 后，应恢复组件 Details 面板上的手动调参。
 - `FirstPersonCardAnchorComponent.ProjectionMode` 默认保持 `BodyLocked`；该模式下鼠标移动战斗镜头时，第一人称手牌仍应有空间透视变化，但扇形 layout 不应被拉扯或重新排布。需要对照旧漂移 / 扇形破坏问题时，可临时切到 `LegacyWorldProjected`。
 - `FirstPersonCardAnchorComponent.CardLayoutMode` 默认保持 `Authored2D`；该模式下只投影整副手牌中心点，再用 2D 参数排布卡牌。需要对照旧的每卡 3D 槽位投影表现时，可临时切到 `LegacyProjectedFan2D`。
+- `FirstPersonCardAnchorComponent.bKeepAuthoredCardBodyBottomInViewport` 默认开启；它只在 `Authored2D` 最终 slot 位置上保护卡牌主体底部，避免 TypeName / 类型文字被视口底边裁掉。若故意关闭该项，应通过 `AuthoredHandScreenOffset / StaticCardEdgeDropPixels / StaticCardRenderScale` 保证底部文字仍可读。
 - `FirstPersonCardAnchorComponent.ViewportClampMode` 默认保持 `SoftClampToViewport`；抬头 / 低头时手牌中心可以部分离开屏幕，超过软范围后柔性停在扩展边界附近。临时切到 `HardClampToViewport` 可复现旧的永远屏内感觉；临时切到 `AllowOffscreen` 可验证完全允许离屏的空间感。
 - `FirstPersonCardAnchorComponent.bEnableAnchorScreenSmoothing` 默认保持开启；Run Tunnel 中按住 W / S 时，前进下降、后退上升的整体趋势应保留，但快速移动时卡牌中心不应出现明显高频上下抖动。临时关闭该开关可对照旧抖动；调低 `AnchorScreenSmoothingSpeed` 会更稳但更滞后，调高会更跟手但抖动抑制更弱。
 - `FirstPersonCardAnchorComponent.bEnableCardSlotMotion` 默认保持开启；这是单张卡牌 slot 的视觉过渡，不是整副手牌中心 smoothing。Hover、pending、出牌、抽牌、Wait / EndTurn 后的手牌重排应平滑过渡；临时关闭该开关可对照旧的硬切表现。`CardSlotMotionSpeed` 越高越跟手，`CardSlotOpacitySpeed` 控制淡入淡出速度，`CardSlotMotionResetDistancePixels` 用于大跳变时直接贴合。
@@ -181,7 +188,7 @@ WBP 合同：
 - `CardDetailLayer` 未绑定时，如果 HUD 根控件是 `CanvasPanel`，C++ 会创建 fallback layer。
 - 详情面板为 `HitTestInvisible`，不抢点击。
 - `CombatLogFeed` 是 BattleHUD 内部常驻滚动记录，不通过 `UWacomGameUIManagerSubsystem::PushContentToLayer()` 打开。V0-CJ/V0-CK 后旧 `EventLogPanel` 抽屉和 `EventToast` 单条提示框都已从 BattleHUD 主路径移除；新的 BattleHUD WBP 不要再绑定 `EventLogPanel / EventToast`，也不要调用 `ToggleBattleEventLog()`。
-- `BattlePresentationStack` 是只读表现 backlog，不是规则栈。它只显示已成功提交的 `PlayCard`，最上面是下一张要完成表现并移除的小卡，最新打出的卡压在最下面。V0-CM 后 entry 只显示缩小后的完整卡面，不显示卡名、目标、数量、溢出文字或黑色底座；WBP 也不要再额外加这些文字层。小卡应通过整体缩放承载 `UWacomCardView`，避免卡面内部文字、图标或费用保持原尺寸。Widget 应保持 `HitTestInvisible`，不要把它做成可点击、可拖拽或命令入口。
+- `BattlePresentationStack` 是只读表现 backlog，不是规则栈。它只显示已成功提交的 `PlayCard`，最上面是下一张要完成表现并移除的小卡，最新打出的卡压在最下面。V0-CM 后 entry 只显示缩小后的完整卡面，不显示卡名、目标、数量、溢出文字或黑色底座；WBP 也不要再额外加这些文字层。小卡默认使用 `WBP_CardView`，不要使用第一人称手牌专用的 `WBP_FirstPersonCardView`。小卡应通过整体缩放承载 `UWacomCardView`，避免卡面内部文字、图标或费用保持原尺寸。Widget 应保持 `HitTestInvisible`，不要把它做成可点击、可拖拽或命令入口。
 - WBP 和子控件只调用 `BattleHUD` 的玩家意图入口；出牌、等待、结束回合、目标选择、事件消费、表现队列和击倒弹窗编排由 C++ private flow helper 承担，不在 WBP 图里实现。
 - `CombatLogFeed` 应放在右侧偏上区域，承接旧日志框位置；`BattlePresentationStack` 可放在它附近但不要遮挡手牌、敌方部位或目标选择。Combat Log 显示命令块和每条事件 detail line，是没有正式动画时的主要玩家可读反馈。WBP 不要自行消费 `FBattleEvent` 或直接 Push 击倒弹窗。
 - 第一人称战斗手牌由 `BattleHUD::BattleHandPresentationMode` 控制。`LegacyHandPanel` 只使用旧 `UHandPanel`；默认 `FirstPersonHandWithLegacyFallback` 显示并启用 first-person runtime hand，同时保留旧手牌可见作为 fallback 和对照；`FirstPersonHandOnly` 在 runtime hand / anchor 有效时折叠旧手牌，异常、战斗结束或清理 runtime hand 时自动恢复旧手牌。该 layer 不创建 `UCardWidget`，点击只转发到 `BattleHUD->OnCardClickedByUser(CardInstanceId)`，不直接提交 `UBattleSession`。Hover 详情由 BattleHUD 根据最近一次 `FBattleSnapshot.Hand` 和 first-person slot 屏幕锚点显示；旧手牌详情继续使用 `CardDetailLayer`，first-person 详情使用独立 viewport popup host，默认 `FirstPersonCardDetailViewportZOrder=9999`，不依赖旧 `UCardWidget` 几何。`bEnableCardDetailReadabilityPolish` 默认开启时，两种战斗详情 host 共用短 hover delay、淡入淡出、轻量 scale、位置平滑跟随和贴边 side hysteresis；关闭后恢复旧的硬切表现。
