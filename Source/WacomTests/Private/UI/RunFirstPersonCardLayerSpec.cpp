@@ -1888,6 +1888,372 @@ bool FWacomUIRunFirstPersonEconomyRevisionSkipsDefaultSnapshotSpec::RunTest(cons
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonProviderLeaseUnchangedRevisionSkipsSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ProviderBackedLeaseRunStateChangedWithUnchangedStorageRevisionSkipsRebuildAndRewrite",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonProviderLeaseUnchangedRevisionSkipsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
+	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+
+	FWacomRunMenuCardLeaseRequest Request =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("ProviderSkipLease"));
+	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Provider lease is set"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+	const int32 WritesAfterLease = Source->WriteCount;
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	Run->OnRunStateChangedNative.Broadcast();
+	TestEqual(TEXT("Unchanged storage revision skips provider source rewrite"),
+		Source->WriteCount,
+		WritesAfterLease);
+	TestEqual(TEXT("Provider skip is reported"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("MenuLeaseProviderSkippedUnchangedRevision")));
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Provider skip count increments"),
+		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		1);
+	TestEqual(TEXT("Provider candidate rebuild is skipped"),
+		Source->GetProviderLeaseRebuildCountForTest(),
+		0);
+	TestEqual(TEXT("Provider runtime apply is skipped"),
+		Source->GetProviderLeaseApplyCountForTest(),
+		0);
+#endif
+	TestEqual(TEXT("Candidate count is preserved"),
+		Source->GetRunFirstPersonCardSourceDebugView().ActiveMenuLeaseEntryCount,
+		1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonProviderLeaseEconomyRevisionSkipsSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ProviderBackedLeaseEconomyOnlyRevisionSkipsCandidateRebuild",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonProviderLeaseEconomyRevisionSkipsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
+	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+
+	FWacomRunMenuCardLeaseRequest Request =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("ProviderEconomySkipLease"));
+	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Provider lease is set"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+	const int32 WritesAfterLease = Source->WriteCount;
+	const uint64 StorageRevisionAfterLease = Run->GetBackpackStorageSnapshotRevision();
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	Run->AddGold(1);
+	TestEqual(TEXT("Economy-only mutation does not bump storage revision"),
+		Run->GetBackpackStorageSnapshotRevision(),
+		StorageRevisionAfterLease);
+	TestEqual(TEXT("Economy-only notification skips provider rewrite"),
+		Source->WriteCount,
+		WritesAfterLease);
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Economy-only provider skip increments skip count"),
+		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		1);
+	TestEqual(TEXT("Economy-only provider skip avoids rebuild"),
+		Source->GetProviderLeaseRebuildCountForTest(),
+		0);
+#endif
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonProviderLeaseStorageRevisionRefreshesSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ProviderBackedLeaseStorageRevisionRefreshesCandidates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionRefreshesSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
+	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+
+	FWacomRunMenuCardLeaseRequest Request =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("ProviderStorageRefreshLease"));
+	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Provider lease is set"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+	const int32 WritesAfterLease = Source->WriteCount;
+	const uint64 StorageRevisionAfterLease = Run->GetBackpackStorageSnapshotRevision();
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	Run->AcquireCardToRun(Fang);
+	TestTrue(TEXT("Storage mutation bumps storage revision"),
+		Run->GetBackpackStorageSnapshotRevision() > StorageRevisionAfterLease);
+	TestEqual(TEXT("Provider source rewrites after storage revision change"),
+		Source->WriteCount,
+		WritesAfterLease + 1);
+	TestEqual(TEXT("Provider candidate count refreshes"),
+		Source->GetRunFirstPersonCardSourceDebugView().ActiveMenuLeaseEntryCount,
+		2);
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Provider rebuild happens once"),
+		Source->GetProviderLeaseRebuildCountForTest(),
+		1);
+	TestEqual(TEXT("Provider apply happens once"),
+		Source->GetProviderLeaseApplyCountForTest(),
+		1);
+	TestEqual(TEXT("Storage revision refresh does not count as skip"),
+		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		0);
+#endif
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonProviderLeaseStorageRevisionCanClearSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ProviderBackedLeaseStorageRevisionCanClearWhenNoCandidatesRemain",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionCanClearSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
+	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+
+	FWacomRunMenuCardLeaseRequest Request =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("ProviderClearLease"));
+	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
+	const FGuid PaidId =
+		WacomRunFirstPersonCardLayerSpec::FindOwnedInstanceIdByDefinition(Run->GetRunState(), Fang);
+	TestTrue(TEXT("Fang instance exists"), PaidId.IsValid());
+	Request.ExplicitCardInstanceIds.Add(PaidId);
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Provider lease is set"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	TestTrue(TEXT("Destroying the only candidate succeeds"),
+		Run->DestroyCardByInstance(PaidId));
+	TestFalse(TEXT("Provider lease clears when no candidates remain"),
+		Source->HasActiveMenuLease());
+	TestEqual(TEXT("Provider reports no candidates"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastMenuLeaseProviderResult,
+		FName(TEXT("NoMatchingCandidates")));
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Clear path still rebuilds candidates"),
+		Source->GetProviderLeaseRebuildCountForTest(),
+		1);
+	TestEqual(TEXT("Clear path does not skip"),
+		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		0);
+#endif
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonProviderLeaseRequestOrSessionResetsGateSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ProviderBackedLeaseRequestOrRunSessionSwitchResetsRevisionGate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonProviderLeaseRequestOrSessionResetsGateSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
+	UCardDefinition* Other = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Other"), TEXT("Other"), 1);
+	UCharacterDefinition* FirstCharacter = Fx.MakeCharacter(nullptr, nullptr, { Fang, Other });
+	UCharacterDefinition* SecondCharacter = Fx.MakeCharacter(nullptr, nullptr, { Other });
+
+	TStrongObjectPtr<URunSession> FirstRun(NewObject<URunSession>());
+	TStrongObjectPtr<URunSession> SecondRun(NewObject<URunSession>());
+	TestTrue(TEXT("First run initializes"), FirstRun->Initialize(FirstCharacter));
+	TestTrue(TEXT("Second run initializes"), SecondRun->Initialize(SecondCharacter));
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(FirstRun.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+
+	FWacomRunMenuCardLeaseRequest FirstRequest =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("ProviderResetLease"));
+	FirstRequest.AllowedCardIds.Add(TEXT("PoisonFang"));
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("First provider lease is set"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(FirstRequest, LeaseResult));
+	const int32 WritesAfterFirstLease = Source->WriteCount;
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	FWacomRunMenuCardLeaseRequest ChangedRequest = FirstRequest;
+	ChangedRequest.AllowedCardIds.Reset();
+	ChangedRequest.AllowedCardIds.Add(TEXT("Other"));
+	TestTrue(TEXT("Changed provider request refreshes same lease"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(ChangedRequest, LeaseResult));
+	TestEqual(TEXT("Changed provider request rewrites active lease"),
+		Source->WriteCount,
+		WritesAfterFirstLease + 1);
+	TestEqual(TEXT("Changed provider request reports other card"),
+		Source->LastWrittenEntries[0].CardViewData.Name.ToString(),
+		FString(TEXT("Other")));
+
+	Source->BindRunSession(SecondRun.Get());
+	TestEqual(TEXT("RunSession switch keeps active provider lease"),
+		Source->GetRunFirstPersonCardSourceDebugView().ActiveMenuLeaseId,
+		FirstRequest.LeaseId);
+	TestEqual(TEXT("RunSession switch refreshes provider entries from new run"),
+		Source->LastWrittenEntries[0].CardViewData.Name.ToString(),
+		FString(TEXT("Other")));
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	SecondRun->OnRunStateChangedNative.Broadcast();
+	TestEqual(TEXT("New session stored provider key allows later unchanged skip"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("MenuLeaseProviderSkippedUnchangedRevision")));
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("New session skip count increments after key is restablished"),
+		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		1);
+#endif
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonProviderLeaseManualAndSuppressionBypassSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ManualProviderLeaseSetAndSuppressionReleaseBypassRevisionGate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonProviderLeaseManualAndSuppressionBypassSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
+	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+
+	FWacomRunMenuCardLeaseRequest Request =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("ProviderManualBypassLease"));
+	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Provider lease is set"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+	const int32 WritesAfterLease = Source->WriteCount;
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	TestTrue(TEXT("Manual refresh succeeds"),
+		Source->RefreshRunFirstPersonCardLayer());
+	TestEqual(TEXT("Manual refresh rewrites provider source"),
+		Source->WriteCount,
+		WritesAfterLease + 1);
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Manual refresh rebuilds provider lease"),
+		Source->GetProviderLeaseRebuildCountForTest(),
+		1);
+	TestEqual(TEXT("Manual refresh applies provider source"),
+		Source->GetProviderLeaseApplyCountForTest(),
+		1);
+	TestEqual(TEXT("Manual refresh does not count as provider skip"),
+		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		0);
+#endif
+
+	TestTrue(TEXT("Clearing provider lease succeeds"),
+		Source->ClearRunFirstPersonCardLayerMenuLease(Request.LeaseId));
+	TestFalse(TEXT("Suppressed state remains active after lease clear"),
+		Source->HasActiveMenuLease());
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(false);
+	TestEqual(TEXT("Suppression release restores default source"),
+		Source->LastWrittenSourceId,
+		Source->RunFirstPersonCardLayerSourceId);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunFirstPersonStorageRevisionRefreshesDefaultSourceSpec,
 	"Wacom.UI.RunFirstPersonCardLayer.RunStateChangedWithStorageRevisionRefreshesDefaultSource",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

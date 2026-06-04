@@ -234,6 +234,9 @@ public:
 	int32 GetDefaultSourceRevisionSkipCountForTest() const { return DefaultSourceRevisionSkipCountForTest; }
 	int32 GetDefaultSourceSnapshotBuildCountForTest() const { return DefaultSourceSnapshotBuildCountForTest; }
 	int32 GetDefaultSourceApplyCountForTest() const { return DefaultSourceApplyCountForTest; }
+	int32 GetProviderLeaseRevisionSkipCountForTest() const { return ProviderLeaseRevisionSkipCountForTest; }
+	int32 GetProviderLeaseRebuildCountForTest() const { return ProviderLeaseRebuildCountForTest; }
+	int32 GetProviderLeaseApplyCountForTest() const { return ProviderLeaseApplyCountForTest; }
 	void ResetRunFirstPersonCardSourcePerfCountersForTest();
 #endif
 
@@ -252,14 +255,23 @@ protected:
 		FName SourceId);
 
 private:
-	bool RefreshRunFirstPersonCardLayerInternal(bool bAllowDefaultSourceRevisionSkip);
-	bool RefreshActiveMenuLease();
+	bool RefreshRunFirstPersonCardLayerInternal(
+		bool bAllowDefaultSourceRevisionSkip,
+		bool bAllowProviderLeaseRevisionSkip);
+	bool RefreshActiveMenuLease(bool bAllowRevisionSkip);
 	bool RebuildActiveMenuLeaseFromProviderRequest();
 	bool RefreshDefaultBattleDeckSource(bool bAllowRevisionSkip);
 	bool CanSkipDefaultBattleDeckSourceRefresh(
 		const UWacomFirstPersonCardAnchorComponent& Anchor) const;
 	void StoreDefaultBattleDeckSourceRefreshKey();
 	void ResetDefaultBattleDeckSourceRevisionGate();
+	bool CanSkipProviderBackedMenuLeaseRefresh(
+		const UWacomFirstPersonCardAnchorComponent& Anchor) const;
+	void StoreProviderBackedMenuLeaseRefreshKey();
+	void ResetProviderBackedMenuLeaseRevisionGate();
+	bool AreRunMenuCardLeaseRequestsEquivalent(
+		const FWacomRunMenuCardLeaseRequest& Left,
+		const FWacomRunMenuCardLeaseRequest& Right) const;
 	void ResetBattleDeckRefreshDebugCounts();
 	bool WriteSuppressedRuntimeCardLayerWithResult(FName Result);
 	bool ClearVisibleRuntimeCardLayerWithResult(FName Result);
@@ -287,13 +299,18 @@ private:
 	bool bMenuLeasePreviousClickToPlayCard = true;
 	bool bHasLastDefaultSourceRefreshKey = false;
 	bool bLastDefaultSourceIncludedProjectedCards = false;
+	bool bHasLastProviderLeaseRefreshKey = false;
 	FName ActiveMenuLeaseId = NAME_None;
 	FName ActiveMenuLeaseSourceId = NAME_None;
 	FName LastDefaultSourceId = NAME_None;
+	FName LastProviderLeaseId = NAME_None;
+	FName LastProviderLeaseSourceId = NAME_None;
 	FWacomRunMenuCardLeaseRequest ActiveMenuLeaseProviderRequest;
+	FWacomRunMenuCardLeaseRequest LastProviderLeaseRequest;
 	FName LastWrittenRuntimeSourceId = NAME_None;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> MenuLeaseClickOverrideAnchor;
 	uint64 LastDefaultSourceBackpackStorageRevision = 0;
+	uint64 LastProviderLeaseBackpackStorageRevision = 0;
 	mutable int32 LastBattleDeckPhysicalCount = 0;
 	mutable int32 LastBattleDeckProjectedCount = 0;
 	mutable int32 LastEntryCount = 0;
@@ -309,5 +326,8 @@ private:
 	int32 DefaultSourceRevisionSkipCountForTest = 0;
 	int32 DefaultSourceSnapshotBuildCountForTest = 0;
 	int32 DefaultSourceApplyCountForTest = 0;
+	int32 ProviderLeaseRevisionSkipCountForTest = 0;
+	int32 ProviderLeaseRebuildCountForTest = 0;
+	int32 ProviderLeaseApplyCountForTest = 0;
 #endif
 };
