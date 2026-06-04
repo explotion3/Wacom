@@ -255,15 +255,15 @@ bool FWacomUIRunFirstPersonRefreshWritesAnchorRuntimeSourceSpec::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunFirstPersonRunStateChangedRefreshesSpec,
-	"Wacom.UI.RunFirstPersonCardLayer.RunStateChangedRefreshesRunCardLayer",
+	FWacomUIRunFirstPersonRunStateUnchangedRevisionSkipsDefaultRewriteSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.RunStateChangedWithUnchangedStorageRevisionSkipsDefaultSourceRewrite",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunFirstPersonRunStateChangedRefreshesSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIRunFirstPersonRunStateUnchangedRevisionSkipsDefaultRewriteSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
-		Fx, TEXT("Test.StateChanged"), TEXT("State Changed Card"), 1);
+		Fx, TEXT("Test.StateChangedSkip"), TEXT("State Changed Skip Card"), 1);
 	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
@@ -278,11 +278,31 @@ bool FWacomUIRunFirstPersonRunStateChangedRefreshesSpec::RunTest(const FString& 
 	Source->BindRunSession(Run.Get());
 	Source->SetRunFirstPersonCardLayerActive(true);
 	const int32 WritesAfterActivate = Source->WriteCount;
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
 
 	Run->OnRunStateChangedNative.Broadcast();
-	TestEqual(TEXT("Active source refreshes on RunState change"),
+	TestEqual(TEXT("Unchanged storage revision skips source rewrite"),
 		Source->WriteCount,
-		WritesAfterActivate + 1);
+		WritesAfterActivate);
+	TestEqual(TEXT("Skip is reported"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("SkippedUnchangedRevision")));
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Revision skip count increments"),
+		Source->GetDefaultSourceRevisionSkipCountForTest(),
+		1);
+	TestEqual(TEXT("Skipped refresh does not rebuild snapshot"),
+		Source->GetDefaultSourceSnapshotBuildCountForTest(),
+		0);
+	TestEqual(TEXT("Skipped refresh does not apply runtime source"),
+		Source->GetDefaultSourceApplyCountForTest(),
+		0);
+#endif
+	TestEqual(TEXT("Debug keeps previous entry count"),
+		Source->GetRunFirstPersonCardSourceDebugView().EntryCount,
+		1);
 
 	Source->SetRunFirstPersonCardLayerActive(false);
 	const int32 WritesAfterDeactivate = Source->WriteCount;
@@ -1310,11 +1330,11 @@ bool FWacomUIRunFirstPersonLeaseProviderDebugReportsSpec::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunFirstPersonDefaultBattleDeckDisablesInteractionSpec,
-	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.DefaultBattleDeckSourceStillDisablesInteraction",
+	FWacomUIRunFirstPersonDefaultBattleDeckEnablesRunWorldDragSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.DefaultBattleDeckSourceEnablesRunWorldDragButNotClickToPlay",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunFirstPersonDefaultBattleDeckDisablesInteractionSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIRunFirstPersonDefaultBattleDeckEnablesRunWorldDragSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
@@ -1333,8 +1353,10 @@ bool FWacomUIRunFirstPersonDefaultBattleDeckDisablesInteractionSpec::RunTest(con
 	Source->BindRunSession(Run.Get());
 
 	Source->SetRunFirstPersonCardLayerActive(true);
-	TestFalse(TEXT("Default Run BattleDeck source remains non-interactive"),
+	TestTrue(TEXT("Default Run BattleDeck source enables run-world drag probe"),
 		Anchor->IsBattleHandInteractionPrototypeEnabled());
+	TestFalse(TEXT("Default Run BattleDeck source disables quick click-to-play"),
+		Anchor->bEnableClickToPlayCard);
 
 	return true;
 }
@@ -1810,6 +1832,212 @@ bool FWacomUIRunMenuCardDropMenuHandledFailureSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Drop target shows invalid preview"),
 		Target->GetRunMenuDropPreviewState(),
 		EWacomRunMenuDropTargetPreviewState::Invalid);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonEconomyRevisionSkipsDefaultSnapshotSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.RunStateChangedWithEconomyOnlyRevisionSkipsDefaultSourceSnapshotBuild",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonEconomyRevisionSkipsDefaultSnapshotSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.EconomySkip"), TEXT("Economy Skip Card"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	const int32 WritesAfterActivate = Source->WriteCount;
+	const uint64 StorageRevisionAfterActivate = Run->GetBackpackStorageSnapshotRevision();
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	Run->AddGold(1);
+	TestEqual(TEXT("Gold-only change does not bump storage revision"),
+		Run->GetBackpackStorageSnapshotRevision(),
+		StorageRevisionAfterActivate);
+	TestEqual(TEXT("Economy-only notification skips default source write"),
+		Source->WriteCount,
+		WritesAfterActivate);
+	TestEqual(TEXT("Economy-only notification reports revision skip"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("SkippedUnchangedRevision")));
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Economy-only skip increments skip count"),
+		Source->GetDefaultSourceRevisionSkipCountForTest(),
+		1);
+	TestEqual(TEXT("Economy-only skip does not rebuild backpack snapshot"),
+		Source->GetDefaultSourceSnapshotBuildCountForTest(),
+		0);
+#endif
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonStorageRevisionRefreshesDefaultSourceSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.RunStateChangedWithStorageRevisionRefreshesDefaultSource",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonStorageRevisionRefreshesDefaultSourceSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.StorageRefresh"), TEXT("Storage Refresh Card"), 1);
+	UCardDefinition* NewCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.StorageRefresh.New"), TEXT("Storage Refresh New Card"), 0);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 3);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	const int32 WritesAfterActivate = Source->WriteCount;
+	const uint64 StorageRevisionAfterActivate = Run->GetBackpackStorageSnapshotRevision();
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	Run->AcquireCardToRun(NewCard);
+	TestTrue(TEXT("Storage mutation bumps storage revision"),
+		Run->GetBackpackStorageSnapshotRevision() > StorageRevisionAfterActivate);
+	TestEqual(TEXT("Storage revision change refreshes default source"),
+		Source->WriteCount,
+		WritesAfterActivate + 1);
+	TestEqual(TEXT("Storage refresh reports refreshed"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("Refreshed")));
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Storage refresh rebuilds snapshot once"),
+		Source->GetDefaultSourceSnapshotBuildCountForTest(),
+		1);
+	TestEqual(TEXT("Storage refresh applies runtime source once"),
+		Source->GetDefaultSourceApplyCountForTest(),
+		1);
+	TestEqual(TEXT("Storage refresh does not count as skip"),
+		Source->GetDefaultSourceRevisionSkipCountForTest(),
+		0);
+#endif
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonRunSessionSwitchResetsRevisionGateSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.RunSessionSwitchResetsRunFirstPersonSourceRevisionGate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonRunSessionSwitchResetsRevisionGateSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* FirstCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.SessionA"), TEXT("Session A Card"), 1);
+	UCardDefinition* SecondCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.SessionB"), TEXT("Session B Card"), 2);
+	UCardDefinition* FirstPack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCardDefinition* SecondPack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* FirstCharacter = Fx.MakeCharacter(nullptr, nullptr, { FirstCard, FirstPack });
+	UCharacterDefinition* SecondCharacter = Fx.MakeCharacter(nullptr, nullptr, { SecondCard, SecondPack });
+
+	TStrongObjectPtr<URunSession> FirstRun(NewObject<URunSession>());
+	TStrongObjectPtr<URunSession> SecondRun(NewObject<URunSession>());
+	TestTrue(TEXT("First run initializes"), FirstRun->Initialize(FirstCharacter));
+	TestTrue(TEXT("Second run initializes"), SecondRun->Initialize(SecondCharacter));
+
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(FirstRun.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	const int32 WritesAfterFirstRun = Source->WriteCount;
+
+	Source->BindRunSession(SecondRun.Get());
+	TestEqual(TEXT("RunSession switch forces a new default source write"),
+		Source->WriteCount,
+		WritesAfterFirstRun + 1);
+	TestEqual(TEXT("Switched run writes one card"),
+		Source->LastWrittenEntries.Num(),
+		1);
+	TestEqual(TEXT("Switched run writes its own card"),
+		Source->LastWrittenEntries[0].CardViewData.Name.ToString(),
+		FString(TEXT("Session B Card")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonManualAndSuppressionBypassRevisionGateSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ManualRefreshAndSuppressionReleaseBypassRevisionGate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonManualAndSuppressionBypassRevisionGateSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.ManualBypass"), TEXT("Manual Bypass Card"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	const int32 WritesAfterActivate = Source->WriteCount;
+#if WITH_AUTOMATION_TESTS
+	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
+	TestTrue(TEXT("Manual refresh still succeeds"),
+		Source->RefreshRunFirstPersonCardLayer());
+	TestEqual(TEXT("Manual refresh bypasses revision skip"),
+		Source->WriteCount,
+		WritesAfterActivate + 1);
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Manual refresh rebuilds snapshot"),
+		Source->GetDefaultSourceSnapshotBuildCountForTest(),
+		1);
+	TestEqual(TEXT("Manual refresh does not count as revision skip"),
+		Source->GetDefaultSourceRevisionSkipCountForTest(),
+		0);
+#endif
+
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+	const int32 WritesWhileSuppressed = Source->WriteCount;
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(false);
+	TestEqual(TEXT("Suppression release forces default source write"),
+		Source->WriteCount,
+		WritesWhileSuppressed + 1);
+	TestEqual(TEXT("Suppression release reports refreshed"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("Refreshed")));
 
 	return true;
 }

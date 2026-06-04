@@ -180,6 +180,7 @@ void UWacomRunFirstPersonCardSourceComponent::BindRunSession(URunSession* InRunS
 	}
 
 	UnbindRunSession();
+	ResetDefaultBattleDeckSourceRevisionGate();
 	BoundRunSession = InRunSession;
 	if (BoundRunSession)
 	{
@@ -206,6 +207,7 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerActive(b
 	}
 
 	bRuntimeSourceActive = bInActive;
+	ResetDefaultBattleDeckSourceRevisionGate();
 	if (bRuntimeSourceActive)
 	{
 		RefreshRunFirstPersonCardLayer();
@@ -218,19 +220,24 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerActive(b
 
 bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayer()
 {
-	LastBattleDeckPhysicalCount = 0;
-	LastBattleDeckProjectedCount = 0;
-	LastEntryCount = 0;
-	bLastHadAnchor = false;
+	return RefreshRunFirstPersonCardLayerInternal(/*bAllowDefaultSourceRevisionSkip*/ false);
+}
 
+bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayerInternal(
+	bool bAllowDefaultSourceRevisionSkip)
+{
 	if (!bRuntimeSourceActive)
 	{
+		ResetBattleDeckRefreshDebugCounts();
+		ResetDefaultBattleDeckSourceRevisionGate();
 		LastRefreshResult = TEXT("Inactive");
 		LogDebugState(TEXT("RefreshSkipped"));
 		return false;
 	}
 	if (!bEnableRunFirstPersonCardLayer)
 	{
+		ResetBattleDeckRefreshDebugCounts();
+		ResetDefaultBattleDeckSourceRevisionGate();
 		LastRefreshResult = TEXT("Disabled");
 		ClearRunFirstPersonCardLayerWithResult(LastRefreshResult, /*bClearMenuContext*/ false);
 		LogDebugState(TEXT("RefreshSkipped"));
@@ -238,20 +245,27 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayer()
 	}
 	if (!ActiveMenuLeaseId.IsNone())
 	{
+		ResetBattleDeckRefreshDebugCounts();
+		ResetDefaultBattleDeckSourceRevisionGate();
 		return RefreshActiveMenuLease();
 	}
 	if (bSuppressedByGameMenu)
 	{
+		ResetBattleDeckRefreshDebugCounts();
+		ResetDefaultBattleDeckSourceRevisionGate();
 		return WriteSuppressedRuntimeCardLayerWithResult(TEXT("SuppressedByGameMenu"));
 	}
 
-	return RefreshDefaultBattleDeckSource();
+	return RefreshDefaultBattleDeckSource(bAllowDefaultSourceRevisionSkip);
 }
 
-bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource()
+bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource(
+	bool bAllowRevisionSkip)
 {
 	if (!BoundRunSession)
 	{
+		ResetBattleDeckRefreshDebugCounts();
+		ResetDefaultBattleDeckSourceRevisionGate();
 		LastRefreshResult = TEXT("MissingRunSession");
 		ClearRunFirstPersonCardLayerWithResult(LastRefreshResult, /*bClearMenuContext*/ false);
 		LogDebugState(TEXT("RefreshFailed"));
@@ -262,21 +276,91 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource()
 	bLastHadAnchor = Anchor != nullptr;
 	if (!Anchor)
 	{
+		ResetBattleDeckRefreshDebugCounts();
+		ResetDefaultBattleDeckSourceRevisionGate();
 		RestoreMenuLeaseInteractionOverrides();
 		LastRefreshResult = TEXT("MissingAnchor");
 		LogDebugState(TEXT("RefreshFailed"));
 		return false;
 	}
 
+	if (bAllowRevisionSkip && CanSkipDefaultBattleDeckSourceRefresh(*Anchor))
+	{
+		LastRefreshResult = TEXT("SkippedUnchangedRevision");
+#if WITH_AUTOMATION_TESTS
+		++DefaultSourceRevisionSkipCountForTest;
+#endif
+		LogDebugState(TEXT("RefreshSkipped"));
+		return true;
+	}
+
 	TArray<FWacomFirstPersonCardLayerEntry> Entries;
+#if WITH_AUTOMATION_TESTS
+	++DefaultSourceSnapshotBuildCountForTest;
+#endif
 	BuildRunFirstPersonCardEntries(*BoundRunSession, Entries);
 	LastEntryCount = Entries.Num();
 
 	WriteRuntimeCardLayerEntries(*Anchor, RunFirstPersonCardLayerSourceId, Entries);
 	LastWrittenRuntimeSourceId = RunFirstPersonCardLayerSourceId;
+	StoreDefaultBattleDeckSourceRefreshKey();
 	LastRefreshResult = TEXT("Refreshed");
+#if WITH_AUTOMATION_TESTS
+	++DefaultSourceApplyCountForTest;
+#endif
 	LogDebugState(TEXT("Refreshed"));
 	return true;
+}
+
+bool UWacomRunFirstPersonCardSourceComponent::CanSkipDefaultBattleDeckSourceRefresh(
+	const UWacomFirstPersonCardAnchorComponent& Anchor) const
+{
+	if (!BoundRunSession || !bHasLastDefaultSourceRefreshKey)
+	{
+		return false;
+	}
+	if (!Anchor.HasRuntimeCardLayerData()
+		|| Anchor.GetRuntimeCardLayerSourceId() != RunFirstPersonCardLayerSourceId)
+	{
+		return false;
+	}
+
+	return LastDefaultSourceBackpackStorageRevision
+			== BoundRunSession->GetBackpackStorageSnapshotRevision()
+		&& bLastDefaultSourceIncludedProjectedCards
+			== bIncludeProjectedRunBattleDeckCards
+		&& LastDefaultSourceId == RunFirstPersonCardLayerSourceId;
+}
+
+void UWacomRunFirstPersonCardSourceComponent::StoreDefaultBattleDeckSourceRefreshKey()
+{
+	if (!BoundRunSession)
+	{
+		ResetDefaultBattleDeckSourceRevisionGate();
+		return;
+	}
+
+	bHasLastDefaultSourceRefreshKey = true;
+	LastDefaultSourceBackpackStorageRevision =
+		BoundRunSession->GetBackpackStorageSnapshotRevision();
+	bLastDefaultSourceIncludedProjectedCards = bIncludeProjectedRunBattleDeckCards;
+	LastDefaultSourceId = RunFirstPersonCardLayerSourceId;
+}
+
+void UWacomRunFirstPersonCardSourceComponent::ResetDefaultBattleDeckSourceRevisionGate()
+{
+	bHasLastDefaultSourceRefreshKey = false;
+	LastDefaultSourceBackpackStorageRevision = 0;
+	bLastDefaultSourceIncludedProjectedCards = false;
+	LastDefaultSourceId = NAME_None;
+}
+
+void UWacomRunFirstPersonCardSourceComponent::ResetBattleDeckRefreshDebugCounts()
+{
+	LastBattleDeckPhysicalCount = 0;
+	LastBattleDeckProjectedCount = 0;
+	LastEntryCount = 0;
+	bLastHadAnchor = false;
 }
 
 void UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayer()
@@ -435,6 +519,8 @@ bool UWacomRunFirstPersonCardSourceComponent::WriteSuppressedRuntimeCardLayerWit
 
 bool UWacomRunFirstPersonCardSourceComponent::ClearVisibleRuntimeCardLayerWithResult(FName Result)
 {
+	ResetDefaultBattleDeckSourceRevisionGate();
+	ResetBattleDeckRefreshDebugCounts();
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor())
 	{
 		ClearKnownRuntimeSources(*Anchor);
@@ -477,6 +563,7 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerSuppress
 	}
 
 	bSuppressedByGameMenu = bSuppressed;
+	ResetDefaultBattleDeckSourceRevisionGate();
 	RefreshRunFirstPersonCardLayer();
 }
 
@@ -503,6 +590,7 @@ bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeas
 	ActiveMenuLeaseEntries = Entries;
 	bActiveMenuLeaseBackedByProvider = false;
 	ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
+	ResetDefaultBattleDeckSourceRevisionGate();
 	RefreshRunFirstPersonCardLayer();
 	return true;
 }
@@ -621,6 +709,7 @@ bool UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerMenuLe
 	ActiveMenuLeaseEntries.Reset();
 	bActiveMenuLeaseBackedByProvider = false;
 	ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
+	ResetDefaultBattleDeckSourceRevisionGate();
 
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor())
 	{
@@ -743,6 +832,16 @@ bool UWacomRunFirstPersonCardSourceComponent::BuildRunFirstPersonCardEntries(
 	return OutEntries.Num() > 0;
 }
 
+#if WITH_AUTOMATION_TESTS
+void UWacomRunFirstPersonCardSourceComponent::
+ResetRunFirstPersonCardSourcePerfCountersForTest()
+{
+	DefaultSourceRevisionSkipCountForTest = 0;
+	DefaultSourceSnapshotBuildCountForTest = 0;
+	DefaultSourceApplyCountForTest = 0;
+}
+#endif
+
 UWacomFirstPersonCardAnchorComponent*
 UWacomRunFirstPersonCardSourceComponent::ResolveFirstPersonCardAnchor() const
 {
@@ -845,13 +944,15 @@ void UWacomRunFirstPersonCardSourceComponent::UnbindRunSession()
 		BoundRunSession->OnRunStateChangedNative.RemoveAll(this);
 	}
 	BoundRunSession = nullptr;
+	ResetDefaultBattleDeckSourceRevisionGate();
 }
 
 void UWacomRunFirstPersonCardSourceComponent::HandleRunStateChanged()
 {
 	if (bRuntimeSourceActive)
 	{
-		RefreshRunFirstPersonCardLayer();
+		RefreshRunFirstPersonCardLayerInternal(
+			/*bAllowDefaultSourceRevisionSkip*/ true);
 	}
 }
 

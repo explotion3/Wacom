@@ -230,6 +230,13 @@ public:
 		const URunSession& Run,
 		TArray<FWacomFirstPersonCardLayerEntry>& OutEntries) const;
 
+#if WITH_AUTOMATION_TESTS
+	int32 GetDefaultSourceRevisionSkipCountForTest() const { return DefaultSourceRevisionSkipCountForTest; }
+	int32 GetDefaultSourceSnapshotBuildCountForTest() const { return DefaultSourceSnapshotBuildCountForTest; }
+	int32 GetDefaultSourceApplyCountForTest() const { return DefaultSourceApplyCountForTest; }
+	void ResetRunFirstPersonCardSourcePerfCountersForTest();
+#endif
+
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -245,9 +252,15 @@ protected:
 		FName SourceId);
 
 private:
+	bool RefreshRunFirstPersonCardLayerInternal(bool bAllowDefaultSourceRevisionSkip);
 	bool RefreshActiveMenuLease();
 	bool RebuildActiveMenuLeaseFromProviderRequest();
-	bool RefreshDefaultBattleDeckSource();
+	bool RefreshDefaultBattleDeckSource(bool bAllowRevisionSkip);
+	bool CanSkipDefaultBattleDeckSourceRefresh(
+		const UWacomFirstPersonCardAnchorComponent& Anchor) const;
+	void StoreDefaultBattleDeckSourceRefreshKey();
+	void ResetDefaultBattleDeckSourceRevisionGate();
+	void ResetBattleDeckRefreshDebugCounts();
 	bool WriteSuppressedRuntimeCardLayerWithResult(FName Result);
 	bool ClearVisibleRuntimeCardLayerWithResult(FName Result);
 	void ClearRunFirstPersonCardLayerWithResult(FName Result, bool bClearMenuContext);
@@ -272,11 +285,15 @@ private:
 	bool bActiveMenuLeaseBackedByProvider = false;
 	bool bHasMenuLeaseClickOverride = false;
 	bool bMenuLeasePreviousClickToPlayCard = true;
+	bool bHasLastDefaultSourceRefreshKey = false;
+	bool bLastDefaultSourceIncludedProjectedCards = false;
 	FName ActiveMenuLeaseId = NAME_None;
 	FName ActiveMenuLeaseSourceId = NAME_None;
+	FName LastDefaultSourceId = NAME_None;
 	FWacomRunMenuCardLeaseRequest ActiveMenuLeaseProviderRequest;
 	FName LastWrittenRuntimeSourceId = NAME_None;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> MenuLeaseClickOverrideAnchor;
+	uint64 LastDefaultSourceBackpackStorageRevision = 0;
 	mutable int32 LastBattleDeckPhysicalCount = 0;
 	mutable int32 LastBattleDeckProjectedCount = 0;
 	mutable int32 LastEntryCount = 0;
@@ -288,4 +305,9 @@ private:
 	int32 LastMenuLeaseProviderCandidateCount = 0;
 	int32 LastMenuLeaseProviderConsideredCount = 0;
 	FString LastMenuLeaseProviderDebugSummary;
+#if WITH_AUTOMATION_TESTS
+	int32 DefaultSourceRevisionSkipCountForTest = 0;
+	int32 DefaultSourceSnapshotBuildCountForTest = 0;
+	int32 DefaultSourceApplyCountForTest = 0;
+#endif
 };

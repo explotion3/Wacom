@@ -62,7 +62,7 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | CombatLog 纯文字 | 文案、tone、icon key 已生成，但常驻 CombatLog 暂不做图标和动画；旧 EventToast 已退出 BattleHUD 主路径 | 升级为事件表现调度器，接图标、颜色、Niagara、音效和战后日志 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | 背包 UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
-| 背包 / 商店长列表 | Backpack / SpecialZone / Shop 已有 RunSession revision gate + signature dirty gate + widget identity reconcile；revision 等价刷新会跳过 Snapshot 构建，signature 等价刷新会跳过列表 reconcile / offer presentation rebuild。V0-DS 后 RunSession revision bump 已收口到私有 dirty flags 入口，并由 `Wacom.Run.SnapshotRevisions` 覆盖主要 mutation drift guard；但列表仍是 WrapBox / VerticalBox，未迁虚拟列表 | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
+| 背包 / 商店长列表 | Backpack / SpecialZone / Shop 已有 RunSession revision gate + signature dirty gate + widget identity reconcile；revision 等价刷新会跳过 Snapshot 构建，signature 等价刷新会跳过列表 reconcile / offer presentation rebuild。V0-DS 后 RunSession revision bump 已收口到私有 dirty flags 入口，并由 `Wacom.Run.SnapshotRevisions` 覆盖主要 mutation drift guard；V0-DU 后探索期 first-person 默认 BattleDeck source 也用 BackpackStorage revision gate 跳过等价 Run 事件；但列表仍是 WrapBox / VerticalBox，未迁虚拟列表 | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
 | 像素风 UI 分辨率适配 | 背包卡牌等像素图控件依赖固定 SizeBox 和 `DPI Scale = 1.0`；非整数 DPI 缩放会导致像素点显示不均匀 | 后续统一设计像素安全缩放档位，并配合 WrapBox / ScrollBox 做布局重排；避免每个 widget 单独写屏幕适配 |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
 | AppToast C++ fallback 表现 | 顶层旧 WBP 路径 fallback 已移除；当前未配置 settings 时仍直接 AddToViewport，文本显示为主，保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
