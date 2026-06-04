@@ -1,0 +1,190 @@
+// Copyright Wacom. All Rights Reserved.
+
+#include "UI/FirstPersonCardLayerTestAccess.h"
+
+#if WITH_AUTOMATION_TESTS
+
+FWacomFirstPersonCardLayerAutomationTestView FWacomFirstPersonCardLayerTestAccess::View(
+	const UWacomFirstPersonCardLayerWidget& Layer)
+{
+	return Layer.GetAutomationTestViewForTest();
+}
+
+FWacomFirstPersonCardSlotAutomationTestView FWacomFirstPersonCardLayerTestAccess::View(
+	const UWacomFirstPersonCardLayerSlotWidget& Slot)
+{
+	return Slot.GetAutomationTestViewForTest();
+}
+
+FWacomFirstPersonCardAnchorAutomationTestView FWacomFirstPersonCardLayerTestAccess::View(
+	const UWacomFirstPersonCardAnchorComponent& Anchor)
+{
+	return Anchor.GetAutomationTestViewForTest();
+}
+
+FWacomRunFirstPersonCardSourceRefreshCountersForTest FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(
+	const UWacomRunFirstPersonCardSourceComponent& Source)
+{
+	return Source.GetDefaultSourceRefreshCountersForTest();
+}
+
+FWacomRunFirstPersonCardSourceRefreshCountersForTest FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(
+	const UWacomRunFirstPersonCardSourceComponent& Source)
+{
+	return Source.GetProviderLeaseRefreshCountersForTest();
+}
+
+void FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(
+	UWacomRunFirstPersonCardSourceComponent& Source)
+{
+	Source.ResetRunFirstPersonCardSourcePerfCountersForTest();
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetActiveProviderLeaseRequest(
+	UWacomRunFirstPersonCardSourceComponent& Source,
+	const FWacomRunMenuCardLeaseRequest& Request)
+{
+	Source.SetActiveProviderLeaseRequestForTest(Request);
+}
+
+UWacomFirstPersonCardLayerWidget* FWacomFirstPersonCardLayerTestAccess::StaticLayer(
+	const UWacomFirstPersonCardAnchorComponent& Anchor)
+{
+	return Anchor.GetAutomationTestViewForTest().StaticCardLayerWidget;
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	const FGuid& CardInstanceId)
+{
+	Anchor.SetHoveredCardInstanceIdForTest(CardInstanceId);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::ResetAnchorScreenSmoothing(
+	UWacomFirstPersonCardAnchorComponent& Anchor)
+{
+	Anchor.ResetAnchorScreenSmoothingForTest();
+}
+
+void FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	float DeltaTime)
+{
+	Layer.TickSlotMotionForTest(DeltaTime);
+}
+
+UWacomFirstPersonCardLayerSlotWidget* FWacomFirstPersonCardLayerTestAccess::FindSlotWidgetByKey(
+	const UWacomFirstPersonCardLayerWidget& Layer,
+	const FString& SlotKey)
+{
+	return Layer.FindSlotWidgetByKeyForTest(SlotKey);
+}
+
+UWacomFirstPersonCardLayerSlotWidget* FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(
+	const UWacomFirstPersonCardLayerWidget& Layer,
+	int32 Index)
+{
+	return Layer.GetOutgoingSlotWidgetAtForTest(Index);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::AddUntrackedSlotChild(
+	UWacomFirstPersonCardLayerWidget& Layer)
+{
+	Layer.AddUntrackedSlotChildForTest();
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetViewportSizeOverride(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FVector2D& WidgetViewportSize)
+{
+	Layer.SetViewportSizeOverrideForTest(WidgetViewportSize);
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestHover(
+	UWacomFirstPersonCardLayerSlotWidget& Slot)
+{
+	return Slot.RequestHoverForTest();
+}
+
+void FWacomFirstPersonCardLayerTestAccess::RequestUnhover(
+	UWacomFirstPersonCardLayerSlotWidget& Slot)
+{
+	Slot.RequestUnhoverForTest();
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestPress(
+	UWacomFirstPersonCardLayerSlotWidget& Slot)
+{
+	return Slot.RequestPressForTest();
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestClick(
+	UWacomFirstPersonCardLayerSlotWidget& Slot)
+{
+	return Slot.RequestClickForTest();
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(
+	UWacomFirstPersonCardLayerSlotWidget& Slot)
+{
+	return Slot.RequestMouseUpForTest();
+}
+
+void FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	float DeltaTime)
+{
+	Slot.TickSlotMotionForTest(DeltaTime);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetLocalHitCanvasSizeOverride(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const TOptional<FVector2D>& Size)
+{
+	Slot.SetLocalHitCanvasSizeOverrideForTest(Size);
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestHoverAtLocalPosition(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FVector2D& LocalPosition)
+{
+	return Slot.RequestHoverAtLocalPositionForTest(LocalPosition);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::RequestMoveAtLocalPosition(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FVector2D& LocalPosition)
+{
+	Slot.RequestMoveAtLocalPositionForTest(LocalPosition);
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestPressAtLocalPosition(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FVector2D& LocalPosition)
+{
+	return Slot.RequestPressAtLocalPositionForTest(LocalPosition);
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FVector2D& ScreenPosition)
+{
+	return Slot.RequestGesturePressForTest(ScreenPosition);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	float DeltaTime,
+	const FVector2D& ScreenPosition)
+{
+	Slot.RequestGestureMoveForTest(DeltaTime, ScreenPosition);
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FVector2D& ScreenPosition)
+{
+	return Slot.RequestGestureReleaseForTest(ScreenPosition);
+}
+
+#endif

@@ -76,7 +76,7 @@ struct WACOMAPP_API FWacomRunMenuCardLeaseResult
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
 	int32 ConsideredCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "菜单租约设置结果中的调试摘要；只用于排查候选筛选，不参与 Run 规则。"))
 	FString DebugSummary;
 };
 
@@ -85,69 +85,85 @@ struct WACOMAPP_API FWacomRunFirstPersonCardSourceDebugView
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前写入 Anchor 的 runtime source id。"))
 	FName SourceId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "组件配置是否允许探索期第一人称卡牌 source。"))
 	bool bEnabled = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "组件当前是否处于激活状态。"))
 	bool bActive = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前是否被 GameMenu 压制。"))
 	bool bSuppressedByGameMenu = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前是否存在活动菜单卡牌租约。"))
 	bool bHasActiveMenuLease = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前活动菜单卡牌租约 ID。"))
 	FName ActiveMenuLeaseId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前活动菜单卡牌租约写入的 runtime source id。"))
 	FName ActiveMenuLeaseSourceId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前活动菜单租约写入的卡牌 entry 数量。"))
 	int32 ActiveMenuLeaseEntryCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前是否绑定了 RunSession。"))
 	bool bHasRunSession = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前是否能解析第一人称卡牌 Anchor。"))
 	bool bHasAnchor = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次默认源刷新看到的 BattleDeck 物理卡数量。"))
 	int32 BattleDeckPhysicalCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次默认源刷新看到的投影入战卡数量。"))
 	int32 BattleDeckProjectedCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次写入 Anchor 的卡牌 entry 数量。"))
 	int32 EntryCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次刷新结果，用于区分 Applied / Skipped / Suppressed 等状态。"))
 	FName LastRefreshResult = TEXT("NotAttempted");
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次 provider-backed menu lease 的租约 ID。"))
 	FName LastMenuLeaseProviderLeaseId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次 provider-backed menu lease 的 source id。"))
 	FName LastMenuLeaseProviderSourceId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次 provider-backed menu lease 候选重建结果。"))
 	FName LastMenuLeaseProviderResult = TEXT("NotAttempted");
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次 provider-backed menu lease 的候选卡数量。"))
 	int32 LastMenuLeaseProviderCandidateCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次 provider-backed menu lease 检查过的卡数量。"))
 	int32 LastMenuLeaseProviderConsideredCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次 provider-backed menu lease 的调试摘要。"))
 	FString LastMenuLeaseProviderDebugSummary;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前活动菜单租约是否由 provider request 驱动。"))
 	bool bActiveMenuLeaseBackedByProvider = false;
 };
+
+#if WITH_AUTOMATION_TESTS
+struct WACOMAPP_API FWacomRunFirstPersonCardSourceRefreshCountersForTest
+{
+	int32 RevisionSkipCount = 0;
+	int32 DataBuildCount = 0;
+	int32 RuntimeApplyCount = 0;
+
+	void Reset()
+	{
+		RevisionSkipCount = 0;
+		DataBuildCount = 0;
+		RuntimeApplyCount = 0;
+	}
+};
+#endif
 
 /**
  * Exploration-only source bridge from RunSession BattleDeck cards to the
@@ -217,13 +233,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards")
 	FName GetActiveMenuLeaseSourceId() const { return ActiveMenuLeaseSourceId; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "获取探索期第一人称卡牌 source 的只读调试快照；用于 PIE / 蓝图排查，不提交 Run 规则。"))
 	FWacomRunFirstPersonCardSourceDebugView GetRunFirstPersonCardSourceDebugView() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards|Debug")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "获取探索期第一人称卡牌 source 的单行调试摘要；用于排查默认源、菜单租约和 revision gate。"))
 	FString GetRunFirstPersonCardSourceDebugSummary() const;
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Run|First Person Cards|Debug")
+	UFUNCTION(CallInEditor, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "在编辑器或 PIE 中把探索期第一人称卡牌 source 调试摘要写入 Output Log；不改变 Run 或 UI 状态。"))
 	void LogRunFirstPersonCardSourceDebugSummary() const;
 
 	bool BuildRunFirstPersonCardEntries(
@@ -231,13 +247,13 @@ public:
 		TArray<FWacomFirstPersonCardLayerEntry>& OutEntries) const;
 
 #if WITH_AUTOMATION_TESTS
-	int32 GetDefaultSourceRevisionSkipCountForTest() const { return DefaultSourceRevisionSkipCountForTest; }
-	int32 GetDefaultSourceSnapshotBuildCountForTest() const { return DefaultSourceSnapshotBuildCountForTest; }
-	int32 GetDefaultSourceApplyCountForTest() const { return DefaultSourceApplyCountForTest; }
-	int32 GetProviderLeaseRevisionSkipCountForTest() const { return ProviderLeaseRevisionSkipCountForTest; }
-	int32 GetProviderLeaseRebuildCountForTest() const { return ProviderLeaseRebuildCountForTest; }
-	int32 GetProviderLeaseApplyCountForTest() const { return ProviderLeaseApplyCountForTest; }
+	const FWacomRunFirstPersonCardSourceRefreshCountersForTest&
+	GetDefaultSourceRefreshCountersForTest() const { return DefaultSourceRefreshCountersForTest; }
+	const FWacomRunFirstPersonCardSourceRefreshCountersForTest&
+	GetProviderLeaseRefreshCountersForTest() const { return ProviderLeaseRefreshCountersForTest; }
 	void ResetRunFirstPersonCardSourcePerfCountersForTest();
+	void SetActiveProviderLeaseRequestForTest(
+		const FWacomRunMenuCardLeaseRequest& Request);
 #endif
 
 protected:
@@ -255,20 +271,64 @@ protected:
 		FName SourceId);
 
 private:
+	struct FDefaultSourceRefreshKey
+	{
+		bool bIsValid = false;
+		uint64 BackpackStorageRevision = 0;
+		FName SourceId = NAME_None;
+		bool bIncludeProjectedCards = false;
+
+		void Reset()
+		{
+			bIsValid = false;
+			BackpackStorageRevision = 0;
+			SourceId = NAME_None;
+			bIncludeProjectedCards = false;
+		}
+	};
+
+	struct FProviderLeaseRefreshKey
+	{
+		bool bIsValid = false;
+		uint64 BackpackStorageRevision = 0;
+		FName LeaseId = NAME_None;
+		FName SourceId = NAME_None;
+		FWacomRunMenuCardLeaseRequest ProviderRequest;
+
+		void Reset()
+		{
+			bIsValid = false;
+			BackpackStorageRevision = 0;
+			LeaseId = NAME_None;
+			SourceId = NAME_None;
+			ProviderRequest = FWacomRunMenuCardLeaseRequest();
+		}
+	};
+
 	bool RefreshRunFirstPersonCardLayerInternal(
 		bool bAllowDefaultSourceRevisionSkip,
 		bool bAllowProviderLeaseRevisionSkip);
 	bool RefreshActiveMenuLease(bool bAllowRevisionSkip);
 	bool RebuildActiveMenuLeaseFromProviderRequest();
 	bool RefreshDefaultBattleDeckSource(bool bAllowRevisionSkip);
-	bool CanSkipDefaultBattleDeckSourceRefresh(
+	bool TryBuildCurrentDefaultSourceRefreshKey(
+		FDefaultSourceRefreshKey& OutKey) const;
+	bool CanSkipDefaultSourceRefresh(
 		const UWacomFirstPersonCardAnchorComponent& Anchor) const;
-	void StoreDefaultBattleDeckSourceRefreshKey();
-	void ResetDefaultBattleDeckSourceRevisionGate();
-	bool CanSkipProviderBackedMenuLeaseRefresh(
+	void StoreDefaultSourceRefreshKey();
+	void ResetDefaultSourceRefreshKey();
+	bool TryBuildCurrentProviderLeaseRefreshKey(
+		FProviderLeaseRefreshKey& OutKey) const;
+	bool CanSkipProviderLeaseRefresh(
 		const UWacomFirstPersonCardAnchorComponent& Anchor) const;
-	void StoreProviderBackedMenuLeaseRefreshKey();
-	void ResetProviderBackedMenuLeaseRevisionGate();
+	void StoreProviderLeaseRefreshKey();
+	void ResetProviderLeaseRefreshKey();
+	bool AreDefaultSourceRefreshKeysEquivalent(
+		const FDefaultSourceRefreshKey& Left,
+		const FDefaultSourceRefreshKey& Right) const;
+	bool AreProviderLeaseRefreshKeysEquivalent(
+		const FProviderLeaseRefreshKey& Left,
+		const FProviderLeaseRefreshKey& Right) const;
 	bool AreRunMenuCardLeaseRequestsEquivalent(
 		const FWacomRunMenuCardLeaseRequest& Left,
 		const FWacomRunMenuCardLeaseRequest& Right) const;
@@ -297,20 +357,13 @@ private:
 	bool bActiveMenuLeaseBackedByProvider = false;
 	bool bHasMenuLeaseClickOverride = false;
 	bool bMenuLeasePreviousClickToPlayCard = true;
-	bool bHasLastDefaultSourceRefreshKey = false;
-	bool bLastDefaultSourceIncludedProjectedCards = false;
-	bool bHasLastProviderLeaseRefreshKey = false;
 	FName ActiveMenuLeaseId = NAME_None;
 	FName ActiveMenuLeaseSourceId = NAME_None;
-	FName LastDefaultSourceId = NAME_None;
-	FName LastProviderLeaseId = NAME_None;
-	FName LastProviderLeaseSourceId = NAME_None;
 	FWacomRunMenuCardLeaseRequest ActiveMenuLeaseProviderRequest;
-	FWacomRunMenuCardLeaseRequest LastProviderLeaseRequest;
 	FName LastWrittenRuntimeSourceId = NAME_None;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> MenuLeaseClickOverrideAnchor;
-	uint64 LastDefaultSourceBackpackStorageRevision = 0;
-	uint64 LastProviderLeaseBackpackStorageRevision = 0;
+	FDefaultSourceRefreshKey LastDefaultSourceRefreshKey;
+	FProviderLeaseRefreshKey LastProviderLeaseRefreshKey;
 	mutable int32 LastBattleDeckPhysicalCount = 0;
 	mutable int32 LastBattleDeckProjectedCount = 0;
 	mutable int32 LastEntryCount = 0;
@@ -323,11 +376,9 @@ private:
 	int32 LastMenuLeaseProviderConsideredCount = 0;
 	FString LastMenuLeaseProviderDebugSummary;
 #if WITH_AUTOMATION_TESTS
-	int32 DefaultSourceRevisionSkipCountForTest = 0;
-	int32 DefaultSourceSnapshotBuildCountForTest = 0;
-	int32 DefaultSourceApplyCountForTest = 0;
-	int32 ProviderLeaseRevisionSkipCountForTest = 0;
-	int32 ProviderLeaseRebuildCountForTest = 0;
-	int32 ProviderLeaseApplyCountForTest = 0;
+	FWacomRunFirstPersonCardSourceRefreshCountersForTest
+		DefaultSourceRefreshCountersForTest;
+	FWacomRunFirstPersonCardSourceRefreshCountersForTest
+		ProviderLeaseRefreshCountersForTest;
 #endif
 };

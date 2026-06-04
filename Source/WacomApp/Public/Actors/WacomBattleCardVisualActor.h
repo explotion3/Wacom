@@ -20,7 +20,7 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomBattleCardVisualActorInteractionNativ
  * The actor owns only presentation state. Battle rules still flow through
  * snapshots and HUD commands.
  */
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta = (ToolTip = "3D 手牌 prototype 的世界空间单卡视觉 Actor。仅用于 PIE / 开发验证；正式主手牌方向是 first-person card layer。"))
 class WACOMAPP_API AWacomBattleCardVisualActor : public AActor
 {
 	GENERATED_BODY()
@@ -38,19 +38,19 @@ public:
 	void SetBaseWorldTransform(const FTransform& InBaseWorldTransform);
 	void SetHoverOffset(const FVector& InHoverOffset);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand|Prototype")
 	FGuid GetCardInstanceId() const { return CachedSnapshot.InstanceId; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand|Prototype")
 	UWidgetComponent* GetCardFaceWidget() const { return CardFaceWidget; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand|Prototype")
 	UBoxComponent* GetInteractionBounds() const { return InteractionBounds; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand|Prototype")
 	bool IsHovered() const { return bIsHovered; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|3D Hand|Prototype")
 	bool IsTargetingHighlighted() const { return bIsTargetingHighlighted; }
 
 	const FHandCardSnapshot& GetCardSnapshot() const { return CachedSnapshot; }
@@ -65,19 +65,19 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|3D Hand", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|3D Hand|Prototype", meta = (AllowPrivateAccess = "true", ToolTip = "3D 手牌 prototype 的场景根组件。"))
 	TObjectPtr<USceneComponent> SceneRoot;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|3D Hand", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|3D Hand|Prototype", meta = (AllowPrivateAccess = "true", ToolTip = "3D 手牌 prototype 的世界空间点击 / hover 命中范围。"))
 	TObjectPtr<UBoxComponent> InteractionBounds;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|3D Hand", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|3D Hand|Prototype", meta = (AllowPrivateAccess = "true", ToolTip = "3D 手牌 prototype 的卡面 WidgetComponent。正式主手牌不走该 WidgetComponent 路径。"))
 	TObjectPtr<UWidgetComponent> CardFaceWidget;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|3D Hand", meta = (ToolTip = "Widget class used by the world-space card face. Defaults to WBP_CardWidget when available, otherwise UCardWidget."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|3D Hand|Prototype", meta = (ToolTip = "3D 手牌 prototype：世界空间卡面使用的 Widget 类。可回退到 WBP_CardWidget 或 UCardWidget；正式 first-person 手牌不使用该路径。"))
 	TSubclassOf<UCardWidget> CardWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|3D Hand", meta = (ClampMin = "0.01", UIMin = "1.0", UIMax = "1.2", ToolTip = "World actor scale multiplier while this card is the pending targeting card."))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|3D Hand|Prototype", meta = (ClampMin = "0.01", UIMin = "1.0", UIMax = "1.2", ToolTip = "3D 手牌 prototype：该卡是 pending target card 时使用的世界 Actor 缩放倍率。"))
 	float TargetingHighlightScale = 1.04f;
 
 private:

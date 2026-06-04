@@ -11,6 +11,7 @@
 #include "RunSession.h"
 #include "RunState.h"
 #include "Tags/WacomGameplayTags.h"
+#include "UI/FirstPersonCardLayerTestAccess.h"
 #include "UI/RunFirstPersonCardLayerSpecReceiver.h"
 #include "UI/WacomShopRunEventTestProbes.h"
 #include "UObject/StrongObjectPtr.h"
@@ -279,7 +280,7 @@ bool FWacomUIRunFirstPersonRunStateUnchangedRevisionSkipsDefaultRewriteSpec::Run
 	Source->SetRunFirstPersonCardLayerActive(true);
 	const int32 WritesAfterActivate = Source->WriteCount;
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	Run->OnRunStateChangedNative.Broadcast();
@@ -291,13 +292,13 @@ bool FWacomUIRunFirstPersonRunStateUnchangedRevisionSkipsDefaultRewriteSpec::Run
 		FName(TEXT("SkippedUnchangedRevision")));
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Revision skip count increments"),
-		Source->GetDefaultSourceRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RevisionSkipCount,
 		1);
 	TestEqual(TEXT("Skipped refresh does not rebuild snapshot"),
-		Source->GetDefaultSourceSnapshotBuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).DataBuildCount,
 		0);
 	TestEqual(TEXT("Skipped refresh does not apply runtime source"),
-		Source->GetDefaultSourceApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RuntimeApplyCount,
 		0);
 #endif
 	TestEqual(TEXT("Debug keeps previous entry count"),
@@ -783,13 +784,13 @@ bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FStrin
 	TestTrue(TEXT("Menu lease can be written"),
 		Source->SetRunFirstPersonCardLayerMenuLease(TEXT("Lease"), TEXT("LeaseSource"), { LeaseEntry }));
 	TestTrue(TEXT("Menu lease enables first-person interaction for probe"),
-		Anchor->IsBattleHandInteractionPrototypeEnabled());
+		Anchor->IsBattleHandInteractionEnabled());
 	TestFalse(TEXT("Menu lease disables quick click-to-play while probe drag is active"),
 		Anchor->bEnableClickToPlayCard);
 
 	Source->ClearRunFirstPersonCardLayerMenuLease(TEXT("Lease"));
 	TestFalse(TEXT("Suppressed default source disables interaction after lease clears"),
-		Anchor->IsBattleHandInteractionPrototypeEnabled());
+		Anchor->IsBattleHandInteractionEnabled());
 	TestTrue(TEXT("Menu lease restores the anchor click-to-play setting after clear"),
 		Anchor->bEnableClickToPlayCard);
 
@@ -1195,11 +1196,11 @@ bool FWacomUIRunFirstPersonMenuWidgetOwnedLeaseClearsSpec::RunTest(const FString
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunFirstPersonCppTestMenuRequestsOwnedLeaseSpec,
-	"Wacom.UI.RunFirstPersonCardLayer.MenuLeaseProvider.CppTestMenuRequestsOwnedLease",
+	FWacomUIRunFirstPersonPrototypeTestMenuRequestsOwnedLeaseSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.MenuLeaseProvider.PrototypeTestMenuRequestsOwnedLease",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunFirstPersonCppTestMenuRequestsOwnedLeaseSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIRunFirstPersonPrototypeTestMenuRequestsOwnedLeaseSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
@@ -1354,7 +1355,7 @@ bool FWacomUIRunFirstPersonDefaultBattleDeckEnablesRunWorldDragSpec::RunTest(con
 
 	Source->SetRunFirstPersonCardLayerActive(true);
 	TestTrue(TEXT("Default Run BattleDeck source enables run-world drag probe"),
-		Anchor->IsBattleHandInteractionPrototypeEnabled());
+		Anchor->IsBattleHandInteractionEnabled());
 	TestFalse(TEXT("Default Run BattleDeck source disables quick click-to-play"),
 		Anchor->bEnableClickToPlayCard);
 
@@ -1862,7 +1863,7 @@ bool FWacomUIRunFirstPersonEconomyRevisionSkipsDefaultSnapshotSpec::RunTest(cons
 	const int32 WritesAfterActivate = Source->WriteCount;
 	const uint64 StorageRevisionAfterActivate = Run->GetBackpackStorageSnapshotRevision();
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	Run->AddGold(1);
@@ -1877,10 +1878,82 @@ bool FWacomUIRunFirstPersonEconomyRevisionSkipsDefaultSnapshotSpec::RunTest(cons
 		FName(TEXT("SkippedUnchangedRevision")));
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Economy-only skip increments skip count"),
-		Source->GetDefaultSourceRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RevisionSkipCount,
 		1);
 	TestEqual(TEXT("Economy-only skip does not rebuild backpack snapshot"),
-		Source->GetDefaultSourceSnapshotBuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).DataBuildCount,
+		0);
+#endif
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonDefaultSourceRefreshKeyBreaksSkipSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.RunFirstPersonDefaultSourceRefreshKeyBreaksSkipWhenSourceIdOrProjectedFlagChanges",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonDefaultSourceRefreshKeyBreaksSkipSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.DefaultKey"), TEXT("Default Key Card"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	const int32 WritesAfterActivate = Source->WriteCount;
+#if WITH_AUTOMATION_TESTS
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
+#endif
+
+	Source->RunFirstPersonCardLayerSourceId = TEXT("RunFirstPersonChangedSource");
+	Run->OnRunStateChangedNative.Broadcast();
+	TestEqual(TEXT("Source id change refreshes despite unchanged storage revision"),
+		Source->WriteCount,
+		WritesAfterActivate + 1);
+	TestEqual(TEXT("Changed source id is written"),
+		Source->LastWrittenSourceId,
+		FName(TEXT("RunFirstPersonChangedSource")));
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Source id change rebuilds default data"),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).DataBuildCount,
+		1);
+	TestEqual(TEXT("Source id change applies default source"),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RuntimeApplyCount,
+		1);
+	TestEqual(TEXT("Source id change does not count as skip"),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RevisionSkipCount,
+		0);
+
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
+#endif
+
+	const int32 WritesAfterSourceChange = Source->WriteCount;
+	Source->bIncludeProjectedRunBattleDeckCards =
+		!Source->bIncludeProjectedRunBattleDeckCards;
+	Run->OnRunStateChangedNative.Broadcast();
+	TestEqual(TEXT("Projected include flag change refreshes despite unchanged storage revision"),
+		Source->WriteCount,
+		WritesAfterSourceChange + 1);
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Projected include flag change rebuilds default data"),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).DataBuildCount,
+		1);
+	TestEqual(TEXT("Projected include flag change applies default source"),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RuntimeApplyCount,
+		1);
+	TestEqual(TEXT("Projected include flag change does not count as skip"),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RevisionSkipCount,
 		0);
 #endif
 
@@ -1918,7 +1991,7 @@ bool FWacomUIRunFirstPersonProviderLeaseUnchangedRevisionSkipsSpec::RunTest(cons
 		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
 	const int32 WritesAfterLease = Source->WriteCount;
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	Run->OnRunStateChangedNative.Broadcast();
@@ -1930,18 +2003,81 @@ bool FWacomUIRunFirstPersonProviderLeaseUnchangedRevisionSkipsSpec::RunTest(cons
 		FName(TEXT("MenuLeaseProviderSkippedUnchangedRevision")));
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Provider skip count increments"),
-		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RevisionSkipCount,
 		1);
 	TestEqual(TEXT("Provider candidate rebuild is skipped"),
-		Source->GetProviderLeaseRebuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).DataBuildCount,
 		0);
 	TestEqual(TEXT("Provider runtime apply is skipped"),
-		Source->GetProviderLeaseApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RuntimeApplyCount,
 		0);
 #endif
 	TestEqual(TEXT("Candidate count is preserved"),
 		Source->GetRunFirstPersonCardSourceDebugView().ActiveMenuLeaseEntryCount,
 		1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonProviderLeaseRefreshKeyBreaksSkipSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ProviderBackedLeaseRefreshKeyBreaksSkipWhenProviderRequestChanges",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonProviderLeaseRefreshKeyBreaksSkipSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
+	UCardDefinition* Other = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Other"), TEXT("Other"), 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang, Other });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+
+	FWacomRunMenuCardLeaseRequest Request =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("ProviderRequestKeyLease"));
+	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Provider lease is set"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+	const int32 WritesAfterLease = Source->WriteCount;
+#if WITH_AUTOMATION_TESTS
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
+
+	FWacomRunMenuCardLeaseRequest ChangedRequest = Request;
+	ChangedRequest.AllowedCardIds.Reset();
+	ChangedRequest.AllowedCardIds.Add(TEXT("Other"));
+	FWacomFirstPersonCardLayerTestAccess::SetActiveProviderLeaseRequest(*Source, ChangedRequest);
+#endif
+
+	Run->OnRunStateChangedNative.Broadcast();
+	TestEqual(TEXT("Provider request change refreshes despite unchanged storage revision"),
+		Source->WriteCount,
+		WritesAfterLease + 1);
+	TestEqual(TEXT("Changed provider request reports other card"),
+		Source->LastWrittenEntries[0].CardViewData.Name.ToString(),
+		FString(TEXT("Other")));
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Provider request change rebuilds candidates"),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).DataBuildCount,
+		1);
+	TestEqual(TEXT("Provider request change applies runtime source"),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RuntimeApplyCount,
+		1);
+	TestEqual(TEXT("Provider request change does not count as skip"),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RevisionSkipCount,
+		0);
+#endif
 
 	return true;
 }
@@ -1978,7 +2114,7 @@ bool FWacomUIRunFirstPersonProviderLeaseEconomyRevisionSkipsSpec::RunTest(const 
 	const int32 WritesAfterLease = Source->WriteCount;
 	const uint64 StorageRevisionAfterLease = Run->GetBackpackStorageSnapshotRevision();
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	Run->AddGold(1);
@@ -1990,10 +2126,10 @@ bool FWacomUIRunFirstPersonProviderLeaseEconomyRevisionSkipsSpec::RunTest(const 
 		WritesAfterLease);
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Economy-only provider skip increments skip count"),
-		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RevisionSkipCount,
 		1);
 	TestEqual(TEXT("Economy-only provider skip avoids rebuild"),
-		Source->GetProviderLeaseRebuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).DataBuildCount,
 		0);
 #endif
 
@@ -2032,7 +2168,7 @@ bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionRefreshesSpec::RunTest(co
 	const int32 WritesAfterLease = Source->WriteCount;
 	const uint64 StorageRevisionAfterLease = Run->GetBackpackStorageSnapshotRevision();
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	Run->AcquireCardToRun(Fang);
@@ -2046,13 +2182,13 @@ bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionRefreshesSpec::RunTest(co
 		2);
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Provider rebuild happens once"),
-		Source->GetProviderLeaseRebuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).DataBuildCount,
 		1);
 	TestEqual(TEXT("Provider apply happens once"),
-		Source->GetProviderLeaseApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RuntimeApplyCount,
 		1);
 	TestEqual(TEXT("Storage revision refresh does not count as skip"),
-		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RevisionSkipCount,
 		0);
 #endif
 
@@ -2093,7 +2229,7 @@ bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionCanClearSpec::RunTest(con
 	TestTrue(TEXT("Provider lease is set"),
 		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	TestTrue(TEXT("Destroying the only candidate succeeds"),
@@ -2105,10 +2241,10 @@ bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionCanClearSpec::RunTest(con
 		FName(TEXT("NoMatchingCandidates")));
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Clear path still rebuilds candidates"),
-		Source->GetProviderLeaseRebuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).DataBuildCount,
 		1);
 	TestEqual(TEXT("Clear path does not skip"),
-		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RevisionSkipCount,
 		0);
 #endif
 
@@ -2151,7 +2287,7 @@ bool FWacomUIRunFirstPersonProviderLeaseRequestOrSessionResetsGateSpec::RunTest(
 		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(FirstRequest, LeaseResult));
 	const int32 WritesAfterFirstLease = Source->WriteCount;
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	FWacomRunMenuCardLeaseRequest ChangedRequest = FirstRequest;
@@ -2174,7 +2310,7 @@ bool FWacomUIRunFirstPersonProviderLeaseRequestOrSessionResetsGateSpec::RunTest(
 		Source->LastWrittenEntries[0].CardViewData.Name.ToString(),
 		FString(TEXT("Other")));
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	SecondRun->OnRunStateChangedNative.Broadcast();
@@ -2183,7 +2319,7 @@ bool FWacomUIRunFirstPersonProviderLeaseRequestOrSessionResetsGateSpec::RunTest(
 		FName(TEXT("MenuLeaseProviderSkippedUnchangedRevision")));
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("New session skip count increments after key is restablished"),
-		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RevisionSkipCount,
 		1);
 #endif
 
@@ -2221,7 +2357,7 @@ bool FWacomUIRunFirstPersonProviderLeaseManualAndSuppressionBypassSpec::RunTest(
 		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
 	const int32 WritesAfterLease = Source->WriteCount;
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	TestTrue(TEXT("Manual refresh succeeds"),
@@ -2231,13 +2367,13 @@ bool FWacomUIRunFirstPersonProviderLeaseManualAndSuppressionBypassSpec::RunTest(
 		WritesAfterLease + 1);
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Manual refresh rebuilds provider lease"),
-		Source->GetProviderLeaseRebuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).DataBuildCount,
 		1);
 	TestEqual(TEXT("Manual refresh applies provider source"),
-		Source->GetProviderLeaseApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RuntimeApplyCount,
 		1);
 	TestEqual(TEXT("Manual refresh does not count as provider skip"),
-		Source->GetProviderLeaseRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RevisionSkipCount,
 		0);
 #endif
 
@@ -2281,7 +2417,7 @@ bool FWacomUIRunFirstPersonStorageRevisionRefreshesDefaultSourceSpec::RunTest(co
 	const int32 WritesAfterActivate = Source->WriteCount;
 	const uint64 StorageRevisionAfterActivate = Run->GetBackpackStorageSnapshotRevision();
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	Run->AcquireCardToRun(NewCard);
@@ -2295,13 +2431,13 @@ bool FWacomUIRunFirstPersonStorageRevisionRefreshesDefaultSourceSpec::RunTest(co
 		FName(TEXT("Refreshed")));
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Storage refresh rebuilds snapshot once"),
-		Source->GetDefaultSourceSnapshotBuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).DataBuildCount,
 		1);
 	TestEqual(TEXT("Storage refresh applies runtime source once"),
-		Source->GetDefaultSourceApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RuntimeApplyCount,
 		1);
 	TestEqual(TEXT("Storage refresh does not count as skip"),
-		Source->GetDefaultSourceRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RevisionSkipCount,
 		0);
 #endif
 
@@ -2378,7 +2514,7 @@ bool FWacomUIRunFirstPersonManualAndSuppressionBypassRevisionGateSpec::RunTest(c
 	Source->SetRunFirstPersonCardLayerActive(true);
 	const int32 WritesAfterActivate = Source->WriteCount;
 #if WITH_AUTOMATION_TESTS
-	Source->ResetRunFirstPersonCardSourcePerfCountersForTest();
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
 #endif
 
 	TestTrue(TEXT("Manual refresh still succeeds"),
@@ -2388,10 +2524,10 @@ bool FWacomUIRunFirstPersonManualAndSuppressionBypassRevisionGateSpec::RunTest(c
 		WritesAfterActivate + 1);
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Manual refresh rebuilds snapshot"),
-		Source->GetDefaultSourceSnapshotBuildCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).DataBuildCount,
 		1);
 	TestEqual(TEXT("Manual refresh does not count as revision skip"),
-		Source->GetDefaultSourceRevisionSkipCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).RevisionSkipCount,
 		0);
 #endif
 

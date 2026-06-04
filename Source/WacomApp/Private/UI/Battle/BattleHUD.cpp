@@ -1580,25 +1580,17 @@ void UBattleHUD::PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId
 	PlayBattlePresentationCue(Cue);
 }
 
-int32 UBattleHUD::GetBattlePresentationTargetCountForTest() const
-{
-	return BattlePresentationTargetRegistry ? BattlePresentationTargetRegistry->Num() : 0;
-}
-
-int32 UBattleHUD::GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
-{
-	return GetSceneEnemyTargetCoordinator().GetRegisteredBridgeCount();
-}
-
-const TArray<FWacomBattlePresentationStackEntryView>& UBattleHUD::GetBattlePresentationStackEntriesForTest() const
+FWacomBattleHUDAutomationTestView UBattleHUD::GetAutomationTestViewForTest() const
 {
 	static const TArray<FWacomBattlePresentationStackEntryView> EmptyEntries;
-	return PresentationCoordinator ? PresentationCoordinator->GetStackEntries() : EmptyEntries;
-}
+	static const TArray<FWacomBattleCombatLogBlockView> EmptyHistory;
 
-const TArray<FWacomBattleCombatLogBlockView>& UBattleHUD::GetBattleCombatLogHistoryForTest() const
-{
-	return GetCombatLogController().GetHistory();
+	FWacomBattleHUDAutomationTestView View;
+	View.PresentationTargetCount = BattlePresentationTargetRegistry ? BattlePresentationTargetRegistry->Num() : 0;
+	View.SceneEnemyPartWorldTargetBridgeCount = GetSceneEnemyTargetCoordinator().GetRegisteredBridgeCount();
+	View.PresentationStackEntries = PresentationCoordinator ? &PresentationCoordinator->GetStackEntries() : &EmptyEntries;
+	View.CombatLogHistory = CombatLogController ? &CombatLogController->GetHistory() : &EmptyHistory;
+	return View;
 }
 #endif
 

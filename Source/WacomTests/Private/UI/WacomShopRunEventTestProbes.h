@@ -812,6 +812,7 @@ private:
 	TObjectPtr<AWacomPlayerController> OwningPlayerControllerForTest = nullptr;
 };
 
+// Keeps the public prototype menu covered without moving the class path used by the console command.
 UCLASS()
 class UWacomRunMenuCardLeaseTestMenuProbe : public UWacomRunMenuCardLeaseTestMenu
 {

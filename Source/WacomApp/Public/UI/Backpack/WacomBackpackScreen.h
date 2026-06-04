@@ -24,8 +24,18 @@ class UWacomZoneDropTarget;
 class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
 class UWacomCardDragOperation;
-struct FWacomBackpackScreenProbe;
+struct FWacomBackpackScreenTestAccess;
 struct FCardInstance;
+
+#if WITH_AUTOMATION_TESTS
+struct WACOMAPP_API FWacomBackpackScreenAutomationTestView
+{
+	int32 ListRefreshApplyCount = 0;
+	int32 ListRefreshSkipCount = 0;
+	int32 SnapshotBuildCount = 0;
+	int32 SnapshotRevisionSkipCount = 0;
+};
+#endif
 
 /**
  * 背包界面。Push 到 GameMenu 层。
@@ -64,18 +74,6 @@ public:
 		FVector2D LayerSize,
 		FVector2D PanelSize,
 		float Padding = 12.f);
-
-	/** 测试/诊断用：当前详情面板是否可见。 */
-	bool IsCardDetailPanelVisible() const;
-
-	/** 测试/诊断用：当前详情面板数据名称。 */
-	FText GetCardDetailPanelNameText() const;
-
-	/** 测试/诊断用：直接显示某张卡的详情。 */
-	bool ShowCardDetailForCardWidget(UWacomDeckCardWidget* SourceWidget);
-
-	/** 测试/诊断用：隐藏当前详情面板。 */
-	void HideCardDetailPanel();
 
 	/** DropTarget 命令出口：移动卡牌。DropTarget 只转发拖拽意图，规则提交和 Toast 由 Private command flow 处理。 */
 	bool HandleZoneDropRequested(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId);
@@ -251,22 +249,31 @@ private:
 
 	void HandleCardHovered(UWacomDeckCardWidget* SourceWidget);
 	void HandleCardUnhovered(UWacomDeckCardWidget* SourceWidget);
+	bool IsCardDetailPanelVisible() const;
+	FText GetCardDetailPanelNameText() const;
+	bool ShowCardDetailForCardWidget(UWacomDeckCardWidget* SourceWidget);
+	void HideCardDetailPanel();
 	UWacomCardDetailPanel* EnsureCardDetailPanel();
 	void PositionCardDetailPanelNear(UWacomDeckCardWidget* SourceWidget);
 	void HideCardDetailPanelIfSourceRemoved(UWacomDeckCardWidget* RemovedWidget);
 
 #if WITH_AUTOMATION_TESTS
-	friend struct FWacomBackpackScreenProbe;
+	friend struct FWacomBackpackScreenTestAccess;
 
 	UWacomDeckCardWidget* GetBattleDeckCardWidgetForTest(int32 Index) const;
 	UWacomDeckCardWidget* GetFluxContentCardWidgetForTest(int32 Index) const;
 	UWacomDeckCardWidget* GetBurdenCardWidgetForTest(int32 Index) const;
 	UWacomSpecialZoneWidget* GetSpecialZoneWidgetForTest(int32 Index) const;
 	void RebuildAllForTest() { RebuildAll(); }
-	int32 GetBackpackListRefreshApplyCountForTest() const { return BackpackListRefreshApplyCountForTest; }
-	int32 GetBackpackListRefreshSkipCountForTest() const { return BackpackListRefreshSkipCountForTest; }
-	int32 GetBackpackSnapshotBuildCountForTest() const { return BackpackSnapshotBuildCountForTest; }
-	int32 GetBackpackSnapshotRevisionSkipCountForTest() const { return BackpackSnapshotRevisionSkipCountForTest; }
+	FWacomBackpackScreenAutomationTestView GetAutomationTestViewForTest() const
+	{
+		FWacomBackpackScreenAutomationTestView View;
+		View.ListRefreshApplyCount = BackpackListRefreshApplyCountForTest;
+		View.ListRefreshSkipCount = BackpackListRefreshSkipCountForTest;
+		View.SnapshotBuildCount = BackpackSnapshotBuildCountForTest;
+		View.SnapshotRevisionSkipCount = BackpackSnapshotRevisionSkipCountForTest;
+		return View;
+	}
 
 	void SetRunSessionForTest(URunSession* InRunSession)
 	{

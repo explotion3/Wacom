@@ -26,29 +26,29 @@ struct WACOMAPP_API FWacomRunMenuDropTargetDebugView
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "菜单 drop target 的 ZoneId，只用于 PIE / 蓝图诊断。"))
 	FName ZoneId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "菜单 drop target 的稳定目标 ID。"))
 	FName StableTargetId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "当前是否允许 first-person 菜单卡牌 probe 命中。"))
 	bool bProbeEnabled = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "当前 Widget 是否可见且可交互。"))
 	bool bVisibleAndEnabled = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "当前菜单 drop target 的预览状态。"))
 	EWacomRunMenuDropTargetPreviewState PreviewState =
 		EWacomRunMenuDropTargetPreviewState::Normal;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "当前是否存在 C++ fallback 预览反馈。"))
 	bool bPreviewActive = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "最近一次 probe 使用的 Widget 坐标。"))
 	mutable FVector2D LastProbeWidgetPosition = FVector2D::ZeroVector;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "最近一次 fallback 预览应用的缩放。"))
 	FVector2D LastPreviewScale = FVector2D(1.0f, 1.0f);
 };
 
@@ -121,13 +121,13 @@ public:
 		return PreviewState;
 	}
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Menu Drop Target|Debug")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "获取菜单 drop target 的只读调试快照；用于排查 Zone target 和预览状态。"))
 	FWacomRunMenuDropTargetDebugView GetRunMenuDropTargetDebugView() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Menu Drop Target|Debug")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "获取菜单 drop target 的单行调试摘要；不提交 Run 规则或拖拽结果。"))
 	FString GetRunMenuDropTargetDebugSummary() const;
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Run|Menu Drop Target|Debug")
+	UFUNCTION(CallInEditor, Category = "Wacom|Run|Menu Drop Target|Debug", meta = (ToolTip = "在编辑器或 PIE 中把菜单 drop target 调试摘要写入 Output Log；不改变 Widget 状态。"))
 	void LogRunMenuDropTargetDebugSummary() const;
 
 protected:

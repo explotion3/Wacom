@@ -87,9 +87,9 @@ public:
 			ClampMin = "1", UIMin = "1"))
 	int32 GoldAmount = 1;
 
-	/** 将当前拾取物配置为金币拾取调试样例。只修改当前 Actor 配置，不修改 RunState。 */
-	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Pickup|Authoring",
-		meta = (ToolTip = "将当前拾取物配置为金币拾取调试样例：设置默认文案、GoldAmount=3，并按 Actor 名生成 PersistentId；不会修改 RunState。"))
+	/** 开发验证按钮：将当前拾取物配置为金币拾取调试样例。只修改当前 Actor 配置，不修改 RunState。 */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Pickup|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：将当前拾取物配置为金币拾取调试样例，设置默认文案、GoldAmount=3，并按 Actor 名生成 PersistentId；不会修改 RunState，也不是正式数据入口。"))
 	void ConfigureDebugGoldPickupSample();
 
 	/** 读取当前金币拾取物配置、收集状态和点击目标绑定的只读诊断信息。 */

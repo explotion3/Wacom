@@ -144,8 +144,9 @@ public:
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
 
-	/** Console/debug entry for the C++ Run menu card lease provider test menu. */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards|Debug")
+	/** Console/prototype entry for the C++ Run menu card lease provider test menu. */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards|Prototype",
+		meta = (ToolTip = "打开 Run first-person card lease 的开发验证 prototype 菜单。仅用于 PIE / 开发排查 owned menu lease 与 Zone drop intent，不是正式玩家菜单流程。"))
 	void OpenRunMenuCardLeaseTestMenu();
 
 	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */

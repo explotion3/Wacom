@@ -271,12 +271,12 @@ public:
 		return CardDropReceiverComponent;
 	}
 
-	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Key Chest|Authoring",
-		meta = (ToolTip = "配置调试钥匙宝箱：按 Actor 名生成 PersistentId，接受 DA_Card_DebugKey，奖励 3 金币，并刷新点击 stable id；不会修改 RunState。"))
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Key Chest|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：配置调试钥匙宝箱，按 Actor 名生成 PersistentId，接受 DA_Card_DebugKey，奖励 3 金币，并刷新点击 stable id；不会修改 RunState，也不是正式数据入口。"))
 	void ConfigureDebugKeyChestSample();
 
-	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Key Chest|Authoring",
-		meta = (ToolTip = "配置调试钥匙宝箱并绑定通用 DA_RunWorldCardInteraction_DebugKeyGold3：按 Actor 名生成 PersistentId，并刷新点击 stable id；不会修改 RunState。"))
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Key Chest|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：配置调试钥匙宝箱并绑定通用 DA_RunWorldCardInteraction_DebugKeyGold3，按 Actor 名生成 PersistentId，并刷新点击 stable id；不会修改 RunState，也不是正式数据入口。"))
 	void ConfigureDebugKeyChestInteractionDefinitionSample();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Key Chest|Debug",

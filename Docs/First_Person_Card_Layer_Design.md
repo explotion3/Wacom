@@ -90,15 +90,15 @@ UWacomFirstPersonCardAnchorComponent
 | `VerticalOffset` | 手牌在视野里有多低 |
 | `HorizontalOffset` | 可选的左右偏移 |
 | `ProjectionMode` | 投影模式；默认 `BodyLocked`，锁定身体 / tunnel / battle 基准上的 3D layout，但仍用当前真实相机投影，保留第一人称空间感 |
-| `LookInfluenceYaw` | legacy 世界投影下 cursor yaw offset 对手牌的影响比例；默认 `BodyLocked` 不使用它影响位置 |
-| `LookInfluencePitch` | legacy 世界投影下 cursor pitch offset 对手牌的影响比例；默认 `BodyLocked` 不使用它影响位置 |
+| `LookInfluenceYaw` | `LegacyWorldProjected` debug comparison 路径下 cursor yaw offset 对手牌的影响比例；默认 `BodyLocked` 不使用它影响位置 |
+| `LookInfluencePitch` | `LegacyWorldProjected` debug comparison 路径下 cursor pitch offset 对手牌的影响比例；默认 `BodyLocked` 不使用它影响位置 |
 | `FollowInterpSpeed` | 手牌跟随锚点变化的速度 |
 | `ProjectionPadding` | 投影和视口 clamp 的安全边距 |
 
 关键区别：
 
 - Run Tunnel 和 Battle camera 可以把完整 cursor look 用到实际相机上。
-- 默认 `BodyLocked` 下，卡牌槽位的 3D layout 只使用 Battle base rotation / Run Tunnel spline base 这类稳定身体基准，不使用 cursor look 重新计算扇形；投影仍使用当前真实相机，所以鼠标镜头偏转时会有合理的第一人称透视变化。`LegacyWorldProjected` 保留“layout 吃 LookInfluence + 当前相机投影”的旧行为，用于对照扇形被拉扯的问题。
+- 默认 `BodyLocked` 下，卡牌槽位的 3D layout 只使用 Battle base rotation / Run Tunnel spline base 这类稳定身体基准，不使用 cursor look 重新计算扇形；投影仍使用当前真实相机，所以鼠标镜头偏转时会有合理的第一人称透视变化。`LegacyWorldProjected` 保留“layout 吃 LookInfluence + 当前相机投影”的旧行为，用于 PIE / debug 对照扇形被拉扯的问题，不作为正式制作入口。
 
 ## Card Layer Widget
 
@@ -196,22 +196,22 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 
 ### V0-AA 当前状态：Drag Camera Look Continuity
 
-当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click、first-person hover detail provider、hover 详情跟随 / ZOrder 修正、first-person card render quality 基础、V0-J 的身体锁定锚点投影、V0-L 的美术可控 2D hand layout solver、V0-M 的 offscreen anchor soft clamp、V0-N 的 anchor motion stability、V0-O 的 card slot motion polish、V0-P 的 slot motion lifecycle diagnostics / self-repair、V0-Q 的 event-aware card transitions、V0-R 的 pending / TargetSelect focus polish、V0-S 的 playable / hover / press feedback polish、V0-T 的 hand layout preset / tuning profile、V0-U 的 transition origin / card movement readability、V0-V 的 hover detail / inspect readability polish、V0-W 的 play commit / target impact readability、V0-Z 的 hold inspect + card drag / aim commit、V0-AA 的 drag camera look continuity、V0-AB 的 drag target feedback / drop affordance、V0-AC 的 drop intent resolver contract、V0-AD 的 card-to-card resolver prototype，以及 V0-AK 的 Run first-person card source bootstrap。静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌；战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示；Run adapter 则把 `URunSession::BuildBackpackStorageSnapshot()` 的 BattleDeck 物理卡和可选投影卡写入独立 runtime source `RunFirstPersonBattleDeck`，只做探索期展示，不提交 Run 规则、不启用战斗手牌交互。V0-Z 后第一人称战斗手牌的默认快速轻点仍保留：`bEnableClickToPlayCard=true` 时，按下后在 `CardInspectHoldDelaySeconds` 内释放继续走 `BattleHUD->OnCardClickedByUser(CardInstanceId)`。按住超过 delay 且没有超过拖拽阈值时，slot 进入 `Inspecting`，源卡通过 slot motion 移到视口读牌位置并放大，BattleHUD 使用同一套 first-person detail host 显示详情；松开只恢复，不提交。无目标卡（`None / Self / AllEnemyParts`）超过 `CardDragStartThresholdPixels` 后进入拖动，向上超过 `NoTargetCardDragOutCommitDistancePixels` 后进入 `ArmedForCommit`，释放才复用现有点击出牌路径提交。需要敌方部位或手牌目标的卡进入 `AimingTargetedCard`，源卡保持选中姿态，layer 用 C++ `NativePaint` 绘制从源卡 visual slot 到鼠标的箭头；BattleHUD 每次更新用 PlayerController 的只读 world target probe 或 first-person card target bridge 构建 `FWacomInteractionTargetHandle`，再用 `UBattleSession::CanTargetWithCard()` 判断是否合法。V0-AA 后拖拽仍保留 UMG mouse capture，避免拖到卡外丢 release；但 drag view 会记录 DPI-aware widget-space 指针和归一化视口坐标，BattleHUD 会把它作为临时 cursor-look override 传给 `UWacomBattleCameraLookComponent`，所以拖拽卡牌 / 箭头跟手的同时，战斗镜头仍可随拖拽方向轻微偏转。V0-AD 后拖拽释放前会生成 `EWacomFirstPersonCardDragTargetFeedbackState`：无目标卡 armed 显示 `CommitReady`，合法 world enemy part 显示确认色并可让箭头终点轻微吸附到目标屏幕位置，非法 world / 空目标显示 `Invalid`，合法 `TargetMode=HandCard` 的 Card target 显示确认色并可提交 `TargetCardInstanceId`，不支持的 Card target 显示 `CardProbe` 但不提交规则。World 目标预览只通过场景 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 的 transient scale state 播放，不进入 BattleEvent queue，也不把 `EnemyInfoBar` 当作 UI drop target。释放到合法 world enemy part 后调用现有 `SubmitPlayCard(CardId, TargetPartId)`，成功后继续触发 V0-W commit pulse、Played exit 和 `TargetConfirmed` cue；释放到合法 hand-card target 后调用 `SubmitPlayCardOnHandCard(CardId, TargetCardId)`，只播放源卡 commit + Played exit，不发送 world target cue。V0-Z / V0-AA / V0-AB / V0-AD / V0-AK 不做真实飞牌轨迹、拖拽 ghost WBP、Run 规则提交、准星瞄准模式或旧 `UCardWidget / UHandPanel` 拖拽兼容。
+当前已经建立 `UWacomFirstPersonCardAnchorComponent`、HUD debug 投影点、默认关闭的 prototype preview 静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click、first-person hover detail provider、hover 详情跟随 / ZOrder 修正、first-person card render quality 基础、V0-J 的身体锁定锚点投影、V0-L 的美术可控 2D hand layout solver、V0-M 的 offscreen anchor soft clamp、V0-N 的 anchor motion stability、V0-O 的 card slot motion polish、V0-P 的 slot motion lifecycle diagnostics / self-repair、V0-Q 的 event-aware card transitions、V0-R 的 pending / TargetSelect focus polish、V0-S 的 playable / hover / press feedback polish、V0-T 的 hand layout preset / tuning profile、V0-U 的 transition origin / card movement readability、V0-V 的 hover detail / inspect readability polish、V0-W 的 play commit / target impact readability、V0-Z 的 hold inspect + card drag / aim commit、V0-AA 的 drag camera look continuity、V0-AB 的 drag target feedback / drop affordance、V0-AC 的 drop intent resolver contract、V0-AD 的 card-to-card resolver prototype，以及 V0-AK 的 Run first-person card source bootstrap。prototype preview 静态层使用 `UWacomCardView` 或其专用 WBP 子类在 HUD / UMG 中渲染 3-5 张非交互卡牌；它只用于 PIE / 开发验证，不是 Battle / Run runtime source。战斗 adapter 则把 `FBattleSnapshot.Hand` 转成带身份的 first-person card layer entry 后交给同一个 layer 显示；Run adapter 则把 `URunSession::BuildBackpackStorageSnapshot()` 的 BattleDeck 物理卡和可选投影卡写入独立 runtime source `RunFirstPersonBattleDeck`，只做探索期展示，不提交 Run 规则、不启用战斗手牌交互。V0-Z 后第一人称战斗手牌的默认快速轻点仍保留：`bEnableClickToPlayCard=true` 时，按下后在 `CardInspectHoldDelaySeconds` 内释放继续走 `BattleHUD->OnCardClickedByUser(CardInstanceId)`。按住超过 delay 且没有超过拖拽阈值时，slot 进入 `Inspecting`，源卡通过 slot motion 移到视口读牌位置并放大，BattleHUD 使用同一套 first-person detail host 显示详情；松开只恢复，不提交。无目标卡（`None / Self / AllEnemyParts`）超过 `CardDragStartThresholdPixels` 后进入拖动，向上超过 `NoTargetCardDragOutCommitDistancePixels` 后进入 `ArmedForCommit`，释放才复用现有点击出牌路径提交。需要敌方部位或手牌目标的卡进入 `AimingTargetedCard`，源卡保持选中姿态，layer 用 C++ `NativePaint` 绘制从源卡 visual slot 到鼠标的箭头；BattleHUD 每次更新用 PlayerController 的只读 world target probe 或 first-person card target bridge 构建 `FWacomInteractionTargetHandle`，再用 `UBattleSession::CanTargetWithCard()` 判断是否合法。V0-AA 后拖拽仍保留 UMG mouse capture，避免拖到卡外丢 release；但 drag view 会记录 DPI-aware widget-space 指针和归一化视口坐标，BattleHUD 会把它作为临时 cursor-look override 传给 `UWacomBattleCameraLookComponent`，所以拖拽卡牌 / 箭头跟手的同时，战斗镜头仍可随拖拽方向轻微偏转。V0-AD 后拖拽释放前会生成 `EWacomFirstPersonCardDragTargetFeedbackState`：无目标卡 armed 显示 `CommitReady`，合法 world enemy part 显示确认色并可让箭头终点轻微吸附到目标屏幕位置，非法 world / 空目标显示 `Invalid`，合法 `TargetMode=HandCard` 的 Card target 显示确认色并可提交 `TargetCardInstanceId`，不支持的 Card target 显示 `CardProbe` 但不提交规则。World 目标预览只通过场景 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 的 transient scale state 播放，不进入 BattleEvent queue，也不把 `EnemyInfoBar` 当作 UI drop target。释放到合法 world enemy part 后调用现有 `SubmitPlayCard(CardId, TargetPartId)`，成功后继续触发 V0-W commit pulse、Played exit 和 `TargetConfirmed` cue；释放到合法 hand-card target 后调用 `SubmitPlayCardOnHandCard(CardId, TargetCardId)`，只播放源卡 commit + Played exit，不发送 world target cue。V0-Z / V0-AA / V0-AB / V0-AD / V0-AK 不做真实飞牌轨迹、拖拽 ghost WBP、Run 规则提交、准星瞄准模式或旧 `UCardWidget / UHandPanel` 拖拽兼容。
 
 - `AWacomPlayerCharacter` 持有 `FirstPersonCardAnchorComponent`。
 - Anchor 优先使用 Battle camera base rotation，其次使用 Run Tunnel spline base transform，最后 fallback 到当前 camera transform。
-- `FirstPersonCardAnchorComponent.bUseFirstPersonCardLayoutPreset` 默认关闭。开启且 `FirstPersonCardLayoutPreset` 有效时，Anchor 会在运行时生成 resolved config 供布局、投影、motion 和反馈使用；关闭或 preset 为空时，继续使用组件实例上的参数。Preset 不覆盖 `FirstPersonCardViewClass`、静态预览卡牌、debug 开关、viewport ZOrder 或 `BattleHUD::BattleHandPresentationMode`。
+- `FirstPersonCardAnchorComponent.bUseFirstPersonCardLayoutPreset` 默认关闭。开启且 `FirstPersonCardLayoutPreset` 有效时，Anchor 会在运行时生成 resolved config 供布局、投影、motion 和反馈使用；关闭或 preset 为空时，继续使用组件实例上的参数。Preset 不覆盖 `FirstPersonCardViewClass`、prototype preview 静态预览卡牌、debug 开关、viewport ZOrder 或 `BattleHUD::BattleHandPresentationMode`。
 - `ProjectionMode` 默认 `BodyLocked`：卡牌槽位的 3D layout 使用 Battle base rotation / Run Tunnel spline base 作为稳定身体基准，不让 shared cursor look 参与扇形位置和世界槽位计算；随后仍通过当前玩家相机投影到 widget-space，避免手牌 HUD 化。
-- `LegacyWorldProjected` 保留旧路径：shared cursor look 会按 `LookInfluenceYaw/Pitch` 影响 card anchor / layout，然后再通过当前玩家相机投影；该模式只用于调试对照旧的漂移 / 扇形破坏问题，或后续视差实验。
+- `LegacyWorldProjected` 保留旧路径：shared cursor look 会按 `LookInfluenceYaw/Pitch` 影响 card anchor / layout，然后再通过当前玩家相机投影；该模式只用于 PIE / debug 对照旧的漂移 / 扇形破坏问题，或后续视差实验，不作为正式 first-person hand authoring surface。
 - `CardLayoutMode` 默认 `Authored2D`：只投影当前 hand anchor 中心点，每张卡牌的最终位置由 `AuthoredCardSpacingPixels / AuthoredMaxHandWidthPixels / AuthoredHandScreenOffset / StaticCardEdgeDropPixels / AuthoredCenterLiftPixels` 等 2D 参数计算。V0-DL 后默认开启 `bKeepAuthoredCardBodyBottomInViewport`，最终 slot 会按主体高度和 `AuthoredCardBodyBottomViewportPaddingPixels` 保证 TypeName / 类型文字所在的主体底部不被视口底边裁掉；手牌中心仍可按 SoftClamp 保留空间离屏感。
-- `LegacyProjectedFan2D` 保留 V0-L 之前的对照行为：每张卡牌继续通过 `ComputeCardTransform()` 生成 3D 槽位并分别投影，便于 PIE 对比旧的空间投影手感和排布拉扯问题。
+- `LegacyProjectedFan2D` 保留 V0-L 之前的对照行为：每张卡牌继续通过 `ComputeCardTransform()` 生成 3D 槽位并分别投影，便于 PIE / debug 对比旧的空间投影手感和排布拉扯问题，不作为正式 first-person hand authoring surface。
 - `ViewportClampMode` 默认 `SoftClampToViewport`：投影成功后先保留 `UnclampedWidgetPosition`，再按视口限制模式生成最终布局坐标。`HardClampToViewport` 会按 `ProjectionPadding` 强制留在屏幕内，复现旧行为；`SoftClampToViewport` 会把 safe rect 向外扩 `SoftClampOffscreenAllowancePixels`，点在 soft rect 内不拉回，超出后按 `SoftClampBlendRangePixels` 平滑停到扩展边界；`AllowOffscreen` 完全不限制坐标，适合对照最接近 3D 空间物体的表现。
 - V0-M 不做自动旧手牌兜底：在 `FirstPersonHandOnly` 下，如果玩家把手牌锚点看出屏幕，旧 `UHandPanel` 不会自动恢复；玩家需要把视角转回，或把 `BattleHandPresentationMode` 切回 fallback / legacy 模式。
 - `bEnableAnchorScreenSmoothing` 默认开启，只作用于 `Authored2D` 的整副手牌中心：hand anchor center 投影和 viewport clamp 完成后，先平滑中心点，再叠加 authored 2D offsets、edge drop、hover lift、pending lift 和最终 pixel snap。它不逐张平滑卡牌，因此不会改变卡牌间距、下坠、扇形角度、层级或左右顺序。
 - `AnchorScreenSmoothingSpeed` 控制中心点追随速度，数值越低越稳但越滞后；`AnchorScreenSmoothingResetDistancePixels` 用于传送、切 segment、投影恢复或大幅跳变时重置 smoothing，避免手牌慢慢飘向新位置。
 - Anchor tick 在 BeginPlay 后添加 `UWacomRunTunnelMovementComponent` 和 `UWacomBattleCameraLookComponent` 作为 prerequisite，让手牌每帧读取已经更新后的 RunTunnel distance、角色 / 相机 transform 和战斗 camera base 状态。
 - `bEnableCardSlotMotion` 默认开启，只作用于 `UWacomFirstPersonCardLayerSlotWidget` 的视觉状态缓存：slot target 仍由 anchor layout 一次性算出，slot widget 只把 `VisualSlotView` 追向 `TargetSlotView`。`CardSlotMotionSpeed` 控制位置 / 角度 / 缩放，`CardSlotOpacitySpeed` 控制透明度，`CardSlotMotionResetDistancePixels` 用于传送、切 segment 或窗口变化时直接贴合。
-- 新 runtime battle hand 优先使用 `CardInstanceId` 作为 slot motion key；静态预览或 placeholder 没有有效 id 时使用 `StaticIndex:{Index}`。因此 snapshot 重排时同一张卡复用同一个 slot widget，新卡淡入，消失的卡进入 outgoing 列表淡出 / 下滑，到期后移除。
+- 新 runtime battle hand 优先使用 `CardInstanceId` 作为 slot motion key；prototype preview 静态预览或 placeholder 没有有效 id 时使用 `StaticIndex:{Index}`。因此 snapshot 重排时同一张卡复用同一个 slot widget，新卡淡入，消失的卡进入 outgoing 列表淡出 / 下滑，到期后移除。
 - `bEnableEventAwareCardTransitions` 默认开启，只改变 first-person layer 的入场 / 离场表现，不改变 `UHandPanel`、`BattleSession` 或命令路径。V0-U 后 `bEnableReadableTransitionOrigins` 默认开启：每种 transition 都可配置 origin mode、viewport anchor、scale multiplier 和 angle offset；关闭后完全回到 V0-Q 的 offset-only 行为。`SlotOffset` 基于目标 slot 或当前 visual slot 加偏移；`HandAnchorOffset` 基于 `SlotView.AnchorWidgetPosition` 加偏移；`ViewportAnchor` 基于 DPI-aware widget-space viewport anchor 加偏移，取不到 viewport 时 fallback 到 `SlotOffset`。
 - 默认 transition profile：Drawn 使用 `HandAnchorOffset + DrawnCardEnterOffsetPixels`，从手牌中心下方进入；Gained 使用 `HandAnchorOffset + GainedCardEnterOffsetPixels`，从手牌中心上方 / 战斗空间方向进入；Played 使用 `SlotOffset + PlayedCardExitOffsetPixels`，从当前卡向上离开；Discarded 使用 `SlotOffset + DiscardedCardExitOffsetPixels`，从当前卡向下离开。scale / angle accent 只影响 `VisualSlotView` 的入场起点或离场终点，不修改目标 slot、slot key、ZOrder 或输入数据。
 - `BattleHUD` 会在消费 `FBattleEvent` 后暂存一批 first-person transition events，并在下一次 `NativeRefreshFromSnapshot()` 覆盖 transition previous snapshot 前生成 one-shot hints；`NativeOnUIStateChanged()` 可以刷新 pending / hover 视觉，但不会污染下一次 snapshot diff 的 previous hand。
@@ -220,7 +220,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - 每次 `SetCardSlots()` 后都会校验并修复 slot 生命周期不变量：active 不能复用同一个 widget，outgoing 不能包含 active widget 或 active key，RootCanvas 不能残留未追踪 slot child；重复 incoming key 会用 `#SlotIndex:{Index}` 消歧并记录，不刷战斗规则 warning。同一 key 如果在 outgoing 淡出期间重新进入手牌，会优先回收 outgoing widget 作为 active，避免同一张卡同时存在 active 和幽灵 outgoing。
 - outgoing slot 使用内部安全上限 `Max(LastSlots.Num() * 2, 16)`，超过时清理最旧 outgoing 并记录 invariant violation。`bLogCardLayerMotionDiagnostics` 默认关闭；开启后仅在检测到不变量修复或异常清理时输出一条简短 summary，用于 PIE 排查幽灵 widget、outgoing 泄漏和 FPS 阶梯式下降。
 - `bDrawDebugProjection` 默认关闭；开启后在 HUD 上绘制 5 个非交互 debug 点，用于 PIE 验证未来手牌位置。
-- `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。
+- `bDrawStaticCardLayer` 默认关闭；开启后创建 `UWacomFirstPersonCardLayerWidget`，显示配置的 `StaticPreviewCardDefinitions`，未配置时显示 placeholder 卡牌。V0-EH 后它在 Details 中归入 `Prototype Preview`，只用于 PIE / 开发验证，不是 Battle / Run runtime hand 数据源。
 - `FirstPersonCardViewClass` 用于指定第一人称卡牌层的卡面 Widget；正式验证建议设置为 `/Game/Wacom/UI/Card/WBP_FirstPersonCardView`。该 WBP 可以在 `WBP_CardView` 基础上加入 RetainerBox、透明 bleed 画布和轻微内部缩放，以降低整卡旋转采样带来的边缘锯齿，并完整渲染右下身材 / 耐久等主体外装饰。为空时只作为测试兜底回退到 `UWacomCardView`，不作为正式第一人称主手牌卡面。
 - first-person layer 的 `CanvasSlot` 使用 widget-space 布局位置，不再直接使用 raw screen pixel；debug view 同时记录 raw screen position、widget position、snapped widget position、viewport scale、layout mode、anchor widget position、authored layout offset 和 normalized hand offset。
 - V0-N 后 debug view / slot view / projected point 还会记录 `ViewportClampMode`、`UnclampedWidgetPosition`、`bOutsideViewport`、`OffscreenDistancePixels`、`UnsmoothedAnchorWidgetPosition`、`SmoothedAnchorWidgetPosition`、`AnchorScreenSmoothingDistancePixels` 和 `bAnchorScreenSmoothed`，用于判断“投影成功但已经离屏”“真正投影失败”和“当前中心点是否经过平滑”。V0-DL 后 slot view 额外记录 `bBodyBottomViewportAdjusted`，用于判断某张卡是否被主体底部可读保护上推。
@@ -245,11 +245,11 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 - Runtime source 清理、战斗结束、Session 切换、HUD destruct 或关闭开关时，会禁用交互、解绑 delegates、清理 hover 状态并移除 stale runtime hand。
 
 1. `UWacomFirstPersonCardAnchorComponent`
-   - 暴露 debug projected points 和 static card slot views。
+   - 暴露 debug projected points 和 prototype preview/static card slot views。
    - 验证 Run Tunnel 与 Battle camera 的 base transform，以及 UMG 卡面投影位置。
 
 2. `UWacomFirstPersonCardLayerWidget`
-   - 用静态 view data 或配置的卡牌定义渲染少量测试卡牌。
+   - 用 prototype preview 的静态 view data 或配置的卡牌定义渲染少量测试卡牌。
    - 由 anchor 驱动屏幕位置。
 
 3. V0-C / V0-D：Battle hand adapter + identity / visual states
@@ -280,7 +280,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 8. V0-J：Body-Anchored Current-Camera Projection
    - 已把 first-person card layer 默认投影模式切为 `BodyLocked`。
    - 战斗中用 `UWacomBattleCameraLookComponent::GetBaseBattleRotation()` 与当前相机位置生成稳定的身体锚点；Run Tunnel 中使用 active segment spline transform 和当前 distance；fallback 仍使用当前 camera transform 并记录原因。
-   - `LookInfluenceYaw/Pitch` 暂只服务 `LegacyWorldProjected`，默认身体锁定模式不让它影响卡牌世界槽位和扇形 layout。
+   - `LookInfluenceYaw/Pitch` 只服务 `LegacyWorldProjected` debug comparison 路径，默认身体锁定模式不让它影响卡牌世界槽位和扇形 layout；V0-EH 后 Details 分类也隔离到 `Projection|Legacy`。
    - Debug summary / slot view / projected point 会记录 projection mode、是否 body locked layout、是否 current camera projection、look offset 是否参与布局，以及 raw/widget/snapped position。
 
 9. V0-K：Projected Card Basis 实验已回退
@@ -292,7 +292,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - 已把默认 `CardLayoutMode` 切到 `Authored2D`。
    - `Authored2D` 只投影整副手牌中心点，再按 2D 参数排布每张卡牌：水平间距、最大宽度、整体屏幕偏移、中心上抬、边缘下坠曲线、扇形旋转曲线和中心卡层级。
    - 卡面 scale 保持稳定，只来自 `StaticCardRenderScale` 和 hover / pending / hand anchor 状态倍率，不再从投影距离或卡牌平面 basis 动态推导。
-   - `LegacyProjectedFan2D` 保留为 PIE 对照和安全 fallback，不作为默认美术调参路径。
+   - `LegacyProjectedFan2D` 保留为 PIE / debug comparison 和安全 fallback，不作为默认美术调参路径；V0-EH 后 Details 和测试 display name 都按 legacy comparison 口径标注。
 
 11. V0-M：Offscreen Anchor Projection / Soft Clamp
    - 已新增 `ViewportClampMode`：`HardClampToViewport / SoftClampToViewport / AllowOffscreen`。
@@ -389,7 +389,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
    - `UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeaseFromRunCards()` 只读 `URunSession::GetRunState()` 的真实持有卡实例，按 `Backpack -> BattleDeck -> BurdenZone -> SpecialZones.Cards` 构建候选 entries；不读取 `BattleDeckProjectedCards`，避免 SpecialZone 入战投影重复显示。
    - Request 支持 `AllowedCardDefinitions / AllowedCardIds` OR 身份筛选、显式 `ExplicitCardInstanceIds` 白名单、`RequiredKeywords / BlockedKeywords` 和四个持有区 include 开关。空筛选默认拒绝，除非显式开启 `bAllowAllOwnedCardsWhenNoFilter`。
    - `UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards()` 会为菜单自动补 LeaseId / SourceId，并在 `NativeOnDeactivated` 清理自己拥有的 lease。Release 到 menu Zone target 仍只 probe，不提交 RunEvent 规则、不移动卡。
-   - PIE 可用 `Wacom.OpenRunMenuCardLeaseTestMenu` 打开 C++ 验证菜单 `UWacomRunMenuCardLeaseTestMenu`；它默认筛 `PoisonFang` 并内置 `RunEvent.Pay.Fang` Zone target，用于验证菜单候选卡 lease + Zone probe 闭环。
+   - PIE 可用 `Wacom.OpenRunMenuCardLeaseTestMenu` 打开 C++ prototype 验证菜单 `UWacomRunMenuCardLeaseTestMenu`；V0-EA 后它明确只属于 development/prototype validation entry，不作为正式 Run menu WBP 基类或制作合同。它默认筛 `PoisonFang` 并内置 `RunEvent.Pay.Fang` Zone target，用于验证菜单候选卡 lease + Zone probe 闭环。
 
 27. V0-AO：Run Menu Card Drop Intent Resolver / Card Payment Prototype
    - `AWacomPlayerController::ResolveRunMenuCardDropIntent()` 统一解析 Run menu first-person drag preview 和 release：默认菜单为 `ProbeZoneTarget`，只有 owning menu lease 的菜单把候选解析为 `SubmitZoneTarget` 时才可能提交。
@@ -420,7 +420,7 @@ first-person card layer 落地后，3D presenter 可以继续藏在 prototype / 
 使用入口：
 
 - 在 `BP_WacomPlayerCharacter -> FirstPersonCardAnchorComponent -> FirstPersonCardViewClass` 中设置。
-- 同一个入口同时服务静态预览层和 BattleHUD 写入的 runtime battle hand。
+- 同一个入口同时服务 prototype preview 静态预览层和 BattleHUD 写入的 runtime battle hand；静态预览层不是正式 runtime source。
 - C++ 不硬编码该 WBP 路径；为空时只使用 `UWacomCardView` 作为测试 fallback，避免没有资产时崩溃。
 
 制作要求：

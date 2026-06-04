@@ -156,6 +156,16 @@ struct WACOMAPP_API FWacomBattleCardDropResolveResult
 	FString ToDebugString() const;
 };
 
+#if WITH_AUTOMATION_TESTS
+struct WACOMAPP_API FWacomBattleHUDAutomationTestView
+{
+	int32 PresentationTargetCount = 0;
+	int32 SceneEnemyPartWorldTargetBridgeCount = 0;
+	const TArray<FWacomBattlePresentationStackEntryView>* PresentationStackEntries = nullptr;
+	const TArray<FWacomBattleCombatLogBlockView>* CombatLogHistory = nullptr;
+};
+#endif
+
 /**
  * 战斗 UI 根 Widget。
  *
@@ -256,22 +266,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Presentation Stack", meta = (ClampMin = "0.01", UIMin = "0.05", UIMax = "1.0", ToolTip = "打出的卡牌没有目标 cue 或延迟表现时，在表现栈中最短停留多久，单位为秒。用于避免无表现卡牌一闪而过。"))
 	float CardPresentationStackMinimumHoldSeconds = 0.18f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "是否启用 CardActor + WidgetComponent 的 3D 手牌原型。默认关闭；开启后 BattleHUD 会在有战斗 Session 时创建 3D 手牌 Presenter，并继续保留现有 2D HandPanel 和 hover 详情。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand|Prototype", meta = (ToolTip = "是否启用 CardActor + WidgetComponent 的 3D 手牌 prototype。默认关闭；仅用于 PIE / 开发验证空间手牌可行性，不是正式主手牌入口。"))
 	bool bEnable3DHandPrototype = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "3D 手牌原型的 Presenter Actor 类。仅在 bEnable3DHandPrototype 开启且 BattleHUD 持有有效战斗 Session 时生成；负责管理 3D 手牌 Actor 的表现和点击转发。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand|Prototype", meta = (ToolTip = "3D 手牌 prototype 的 Presenter Actor 类。仅在 bEnable3DHandPrototype 开启且 BattleHUD 持有有效战斗 Session 时生成；负责管理 3D 手牌 Actor 的表现和点击转发。"))
 	TSubclassOf<AWacomBattle3DHandPresenter> Battle3DHandPresenterClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand Prototype", meta = (ToolTip = "3D 手牌原型使用的单张卡牌 Actor 类。BattleHUD 只把该类交给 Presenter，不直接生成或管理单卡 Actor。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand|Prototype", meta = (ToolTip = "3D 手牌 prototype 使用的单张卡牌 Actor 类。BattleHUD 只把该类交给 Presenter，不直接生成或管理单卡 Actor。"))
 	TSubclassOf<AWacomBattleCardVisualActor> Battle3DCardActorClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Battle Hand Presentation", meta = (ToolTip = "战斗手牌呈现模式。LegacyHandPanel 只使用旧 UHandPanel；FirstPersonHandWithLegacyFallback 默认显示并启用第一人称手牌，同时保留旧手牌兜底；FirstPersonHandOnly 在第一人称手牌有效时隐藏旧手牌，异常时自动恢复旧手牌避免战斗不可操作。"))
 	EWacomBattleHandPresentationMode BattleHandPresentationMode = EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.StaticCardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.StaticCardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
 	int32 FirstPersonCardDetailViewportZOrder = 9999;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer Prototype", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FirstPersonCardView 或 WBP_CardView 的设计尺寸一致。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FirstPersonCardView 或 WBP_CardView 的设计尺寸一致。"))
 	FVector2D FirstPersonCardDetailAnchorBaseSize = FVector2D(296.0f, 420.0f);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
@@ -546,10 +556,7 @@ private:
 #if WITH_AUTOMATION_TESTS
 	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FGuid& TargetPartInstanceId, int32 Amount);
 	void PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId);
-	int32 GetBattlePresentationTargetCountForTest() const;
-	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const;
-	const TArray<FWacomBattlePresentationStackEntryView>& GetBattlePresentationStackEntriesForTest() const;
-	const TArray<FWacomBattleCombatLogBlockView>& GetBattleCombatLogHistoryForTest() const;
+	FWacomBattleHUDAutomationTestView GetAutomationTestViewForTest() const;
 #endif
 
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */

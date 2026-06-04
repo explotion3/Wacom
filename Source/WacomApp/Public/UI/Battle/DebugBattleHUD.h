@@ -9,16 +9,16 @@
 class UCommonTextBlock;
 
 /**
- * 调试 HUD。
+ * Debug 战斗 HUD。
  *
  * 只做一件事：把 FBattleSnapshot 格式化成多行文字，显示在屏幕上。
- * 正式战斗 HUD 已就位；本类仅保留作调试/排查用。
+ * 正式战斗 HUD 已就位；本类仅保留作 PIE / 自动化 / 临时排查用。
  *
  * WBP 子类约定：
  * - SnapshotText : UCommonTextBlock（BindWidget）
  *   建议 Wrap Text Auto，放在屏幕一侧的 ScrollBox 或 VerticalBox 中。
  */
-UCLASS(Abstract, Blueprintable)
+UCLASS(Abstract, Blueprintable, meta = (ToolTip = "Debug 战斗 HUD，只把 FBattleSnapshot 显示成文本，供 PIE / 自动化 / 临时排查使用。它不是正式 BattleHUD 父类，也不承接正式 WBP 制作入口。"))
 class WACOMAPP_API UDebugBattleHUD : public UWacomBattleWidgetBase
 {
 	GENERATED_BODY()

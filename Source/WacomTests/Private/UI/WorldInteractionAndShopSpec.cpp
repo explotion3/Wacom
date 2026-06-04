@@ -1915,7 +1915,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugAssetSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugButtonSpec,
-	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ConfigureDebugKeyChestInteractionDefinitionSampleBindsGenericDefinitionAndStableId",
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.Prototype.ConfigureDebugKeyChestInteractionDefinitionSampleBindsGenericDefinitionAndStableId",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugButtonSpec::RunTest(
@@ -2034,7 +2034,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestFallbackSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldCardInteractionDefinitionManualSampleSpec,
-	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ConfigureDebugKeyChestSampleStillUsesManualFallback",
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.Prototype.ConfigureDebugKeyChestSampleStillUsesManualFallback",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunWorldCardInteractionDefinitionManualSampleSpec::RunTest(
@@ -2075,7 +2075,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionManualSampleSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunWorldCardInteractionDefinitionManualSampleFailurePromptSpec,
-	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.ConfigureDebugKeyChestSampleRefreshesReceiverFailurePrompts",
+	"Wacom.UI.WorldInteraction.RunWorldCardInteractionDefinition.Prototype.ConfigureDebugKeyChestSampleRefreshesReceiverFailurePrompts",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunWorldCardInteractionDefinitionManualSampleFailurePromptSpec::RunTest(
@@ -2931,7 +2931,7 @@ bool FWacomUIWorldInteractionCompletedRunEventWeakPromptSpec::RunTest(const FStr
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunEventTriggerConfigureSnakeGiftSpec,
-	"Wacom.UI.WorldInteraction.RunEventTriggerAuthoring.ConfigureDebugSnakeGiftSampleSetsIdAndDefinition",
+	"Wacom.UI.WorldInteraction.RunEventTriggerPrototype.ConfigureDebugSnakeGiftSampleSetsIdAndDefinition",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunEventTriggerConfigureSnakeGiftSpec::RunTest(const FString& /*Parameters*/)
@@ -2980,7 +2980,7 @@ bool FWacomUIRunEventTriggerConfigureSnakeGiftSpec::RunTest(const FString& /*Par
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunEventTriggerConfigureFlagRewardSpec,
-	"Wacom.UI.WorldInteraction.RunEventTriggerAuthoring.ConfigureDebugFlagRewardSampleSetsIdAndDefinition",
+	"Wacom.UI.WorldInteraction.RunEventTriggerPrototype.ConfigureDebugFlagRewardSampleSetsIdAndDefinition",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunEventTriggerConfigureFlagRewardSpec::RunTest(const FString& /*Parameters*/)
@@ -3008,7 +3008,7 @@ bool FWacomUIRunEventTriggerConfigureFlagRewardSpec::RunTest(const FString& /*Pa
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunEventTriggerConfigureDoesNotMutateRunStateSpec,
-	"Wacom.UI.WorldInteraction.RunEventTriggerAuthoring.ConfigureSampleDoesNotMutateRunState",
+	"Wacom.UI.WorldInteraction.RunEventTriggerPrototype.ConfigureSampleDoesNotMutateRunState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunEventTriggerConfigureDoesNotMutateRunStateSpec::RunTest(const FString& /*Parameters*/)
@@ -6367,7 +6367,7 @@ bool FWacomUIRunPickupDebugVisualAndClickTargetSpec::RunTest(const FString& /*Pa
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunPickupConfigureDebugSampleSpec,
-	"Wacom.UI.WorldInteraction.RunPickup.ConfigureDebugGoldPickupSampleSetsDefaultsAndStableId",
+	"Wacom.UI.WorldInteraction.RunPickupPrototype.ConfigureDebugGoldPickupSampleSetsDefaultsAndStableId",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunPickupConfigureDebugSampleSpec::RunTest(const FString& /*Parameters*/)
@@ -6407,7 +6407,7 @@ bool FWacomUIRunPickupConfigureDebugSampleSpec::RunTest(const FString& /*Paramet
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunPickupConfigureDebugSampleRunStateSpec,
-	"Wacom.UI.WorldInteraction.RunPickup.ConfigureDebugGoldPickupSampleDoesNotMutateRunState",
+	"Wacom.UI.WorldInteraction.RunPickupPrototype.ConfigureDebugGoldPickupSampleDoesNotMutateRunState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunPickupConfigureDebugSampleRunStateSpec::RunTest(const FString& /*Parameters*/)
@@ -6555,7 +6555,7 @@ bool FWacomUIRunCardPickupDebugSummarySpec::RunTest(const FString& /*Parameters*
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunCardPickupConfigureDebugSampleSpec,
-	"Wacom.UI.WorldInteraction.RunCardPickup.ConfigureDebugCardPickupSampleSetsDefaultsAndStableId",
+	"Wacom.UI.WorldInteraction.RunCardPickupPrototype.ConfigureDebugCardPickupSampleSetsDefaultsAndStableId",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunCardPickupConfigureDebugSampleSpec::RunTest(const FString& /*Parameters*/)
@@ -6596,7 +6596,7 @@ bool FWacomUIRunCardPickupConfigureDebugSampleSpec::RunTest(const FString& /*Par
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunCardPickupConfigureDebugSampleRunStateSpec,
-	"Wacom.UI.WorldInteraction.RunCardPickup.ConfigureDebugCardPickupSampleDoesNotMutateRunState",
+	"Wacom.UI.WorldInteraction.RunCardPickupPrototype.ConfigureDebugCardPickupSampleDoesNotMutateRunState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunCardPickupConfigureDebugSampleRunStateSpec::RunTest(const FString& /*Parameters*/)
@@ -6630,7 +6630,7 @@ bool FWacomUIRunCardPickupConfigureDebugSampleRunStateSpec::RunTest(const FStrin
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunPickupAuthoringGoldRefreshSpec,
-	"Wacom.UI.WorldInteraction.RunPickupAuthoring.GoldPickupConfigureSampleRefreshesBoundsStableIdAndPrompts",
+	"Wacom.UI.WorldInteraction.RunPickupPrototype.GoldPickupConfigureSampleRefreshesBoundsStableIdAndPrompts",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunPickupAuthoringGoldRefreshSpec::RunTest(const FString& /*Parameters*/)
@@ -6693,7 +6693,7 @@ bool FWacomUIRunPickupAuthoringGoldRefreshSpec::RunTest(const FString& /*Paramet
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunPickupAuthoringCardRefreshSpec,
-	"Wacom.UI.WorldInteraction.RunPickupAuthoring.CardPickupConfigureSampleRefreshesBoundsStableIdAndPrompts",
+	"Wacom.UI.WorldInteraction.RunPickupPrototype.CardPickupConfigureSampleRefreshesBoundsStableIdAndPrompts",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunPickupAuthoringCardRefreshSpec::RunTest(const FString& /*Parameters*/)
@@ -7854,7 +7854,7 @@ bool FWacomUIRunInteractablePlacementValidationBlueprintDefaultsSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunPickupAuthoringConfigureSamplesRunStateSpec,
-	"Wacom.UI.WorldInteraction.RunPickupAuthoring.ConfigureSamplesDoNotMutateRunState",
+	"Wacom.UI.WorldInteraction.RunPickupPrototype.ConfigureSamplesDoNotMutateRunState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunPickupAuthoringConfigureSamplesRunStateSpec::RunTest(const FString& /*Parameters*/)
@@ -7895,7 +7895,7 @@ bool FWacomUIRunPickupAuthoringConfigureSamplesRunStateSpec::RunTest(const FStri
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunRewardPickupConfigureGoldDefinitionSampleSpec,
-	"Wacom.UI.WorldInteraction.RunRewardPickup.ConfigureDebugGoldDefinitionSampleSetsDefinitionDefaultsAndStableId",
+	"Wacom.UI.WorldInteraction.RunRewardPickupPrototype.ConfigureDebugGoldDefinitionSampleSetsDefinitionDefaultsAndStableId",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunRewardPickupConfigureGoldDefinitionSampleSpec::RunTest(const FString& /*Parameters*/)
@@ -7970,7 +7970,7 @@ bool FWacomUIRunRewardPickupConfigureGoldDefinitionSampleSpec::RunTest(const FSt
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunRewardPickupConfigurePoisonFangDefinitionSampleSpec,
-	"Wacom.UI.WorldInteraction.RunRewardPickup.ConfigureDebugPoisonFangDefinitionSampleSetsDefinitionDefaultsAndStableId",
+	"Wacom.UI.WorldInteraction.RunRewardPickupPrototype.ConfigureDebugPoisonFangDefinitionSampleSetsDefinitionDefaultsAndStableId",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunRewardPickupConfigurePoisonFangDefinitionSampleSpec::RunTest(const FString& /*Parameters*/)
@@ -8033,7 +8033,7 @@ bool FWacomUIRunRewardPickupConfigurePoisonFangDefinitionSampleSpec::RunTest(con
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunRewardPickupConfigureSamplesRunStateSpec,
-	"Wacom.UI.WorldInteraction.RunRewardPickup.ConfigureDebugDefinitionSamplesDoNotMutateRunState",
+	"Wacom.UI.WorldInteraction.RunRewardPickupPrototype.ConfigureDebugDefinitionSamplesDoNotMutateRunState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunRewardPickupConfigureSamplesRunStateSpec::RunTest(const FString& /*Parameters*/)

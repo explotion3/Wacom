@@ -19,7 +19,7 @@ class WACOMAPP_API UWacomFirstPersonCardLayoutPreset : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (ToolTip = "第一人称卡牌层的手牌排布方式。Authored2D 只投影手牌中心点，再用 2D 参数排卡；LegacyProjectedFan2D 保留旧的每张卡牌 3D 槽位投影，用于对照。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (ToolTip = "第一人称卡牌层的手牌排布方式。Authored2D 是正式默认路径：只投影手牌中心点，再用 2D 参数排卡；LegacyProjectedFan2D 只保留为 PIE / debug 对照旧的每张卡牌 3D 槽位投影。"))
 	EWacomFirstPersonCardLayoutMode CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "360.0", ToolTip = "Authored2D 模式下相邻卡牌的基础水平间距，单位为 UMG 布局像素。"))
@@ -49,7 +49,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (EditCondition = "bKeepAuthoredCardBodyBottomInViewport", ClampMin = "0.0", UIMin = "0.0", UIMax = "96.0", ToolTip = "Authored2D 卡牌主体底部与视口底边之间保留的最小距离，单位为 UMG 布局像素；用于避免第一人称手牌底部类型文字被屏幕边缘裁掉。"))
 	float AuthoredCardBodyBottomViewportPaddingPixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 会锁定布局基准但仍使用当前真实相机投影；LegacyWorldProjected 保留旧的 LookInfluence 影响布局路径。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 是正式默认路径：锁定布局基准但仍使用当前真实相机投影；LegacyWorldProjected 只保留为旧 LookInfluence 漂移和视差实验的 PIE / debug 对照。"))
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0", ToolTip = "投影点被限制在视口内时保留的屏幕安全边距，单位为 UMG 布局像素。"))

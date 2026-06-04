@@ -109,8 +109,8 @@ public:
 		meta = (ToolTip = "按当前 attached PartActor 顺序刷新状态/预测 Badge 的稳定错开布局。不会自动生成子 Actor。"))
 	void RefreshAttachedPartBadgeLayout() const;
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Debug",
-		meta = (ToolTip = "绑定 Debug 蛇敌人定义。不会自动生成 Head/Body/Tail 部位 Actor。"))
+	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：绑定 Debug 蛇敌人定义。不会自动生成 Head/Body/Tail 部位 Actor，不会修改 BattleSession，也不是正式数据入口。"))
 	void ConfigureDebugSnakeHostSample();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Debug",

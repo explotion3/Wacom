@@ -2,8 +2,8 @@
 
 #include "Misc/AutomationTest.h"
 #include "UObject/StrongObjectPtr.h"
-#include "FieldNotification/FieldId.h"
-#include "FieldNotification/IFieldValueChanged.h"
+#include "FieldNotificationId.h"
+#include "INotifyFieldValueChanged.h"
 
 #include "UI/ViewModels/WacomRunViewModel.h"
 

@@ -118,14 +118,14 @@ public:
 		meta = (ToolTip = "将当前数据驱动拾取物诊断摘要写入日志，便于 PIE 排查 Definition、点击目标和已拾取状态。"))
 	void LogRunRewardPickupDebugSummary(AWacomPlayerController* PC) const;
 
-	/** Details 面板调试按钮：配置为 3 金币 PickupDefinition 样例，只修改当前 Actor 配置，不修改 RunState。 */
-	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Reward Pickup|Authoring",
-		meta = (ToolTip = "配置为 3 金币 PickupDefinition 调试样例。只修改当前 Actor 的 PersistentId、PickupDefinition、默认提示、生命周期和点击 stable id；不会修改 RunState。"))
+	/** 开发验证按钮：配置为 3 金币 PickupDefinition 样例，只修改当前 Actor 配置，不修改 RunState。 */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Reward Pickup|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：配置为 3 金币 PickupDefinition 调试样例。只修改当前 Actor 的 PersistentId、PickupDefinition、默认提示、生命周期和点击 stable id；不会修改 RunState，也不是正式数据入口。"))
 	void ConfigureDebugGoldDefinitionPickupSample();
 
-	/** Details 面板调试按钮：配置为毒牙卡牌 PickupDefinition 样例，只修改当前 Actor 配置，不修改 RunState。 */
-	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Reward Pickup|Authoring",
-		meta = (ToolTip = "配置为毒牙卡牌 PickupDefinition 调试样例。只修改当前 Actor 的 PersistentId、PickupDefinition、默认提示、生命周期和点击 stable id；不会修改 RunState。"))
+	/** 开发验证按钮：配置为毒牙卡牌 PickupDefinition 样例，只修改当前 Actor 配置，不修改 RunState。 */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Reward Pickup|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：配置为毒牙卡牌 PickupDefinition 调试样例。只修改当前 Actor 的 PersistentId、PickupDefinition、默认提示、生命周期和点击 stable id；不会修改 RunState，也不是正式数据入口。"))
 	void ConfigureDebugPoisonFangDefinitionPickupSample();
 
 protected:

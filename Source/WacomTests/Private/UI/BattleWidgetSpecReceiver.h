@@ -377,9 +377,14 @@ public:
 		SetBattleSceneEnemyHost(InHost);
 	}
 
+	FWacomBattleHUDAutomationTestView AutomationViewForTest() const
+	{
+		return GetAutomationTestViewForTest();
+	}
+
 	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
 	{
-		return UBattleHUD::GetBattleSceneEnemyPartWorldTargetBridgeCountForTest();
+		return AutomationViewForTest().SceneEnemyPartWorldTargetBridgeCount;
 	}
 
 	void RefreshFromSnapshotForTest(const FBattleSnapshot& Snapshot)
@@ -663,12 +668,19 @@ public:
 
 	const TArray<FWacomBattlePresentationStackEntryView>& GetPresentationStackEntriesForTest() const
 	{
-		return UBattleHUD::GetBattlePresentationStackEntriesForTest();
+		if (const TArray<FWacomBattlePresentationStackEntryView>* Entries =
+			AutomationViewForTest().PresentationStackEntries)
+		{
+			return *Entries;
+		}
+
+		static const TArray<FWacomBattlePresentationStackEntryView> EmptyEntries;
+		return EmptyEntries;
 	}
 
 	int32 GetPresentationStackEntryCountForTest() const
 	{
-		return UBattleHUD::GetBattlePresentationStackEntriesForTest().Num();
+		return GetPresentationStackEntriesForTest().Num();
 	}
 
 	bool HasPendingTurnBoundaryCommandForTest() const
@@ -707,7 +719,13 @@ public:
 
 	TArray<FWacomBattleCombatLogBlockView> GetBattleCombatLogHistoryForTest() const
 	{
-		return UBattleHUD::GetBattleCombatLogHistoryForTest();
+		if (const TArray<FWacomBattleCombatLogBlockView>* History =
+			AutomationViewForTest().CombatLogHistory)
+		{
+			return *History;
+		}
+
+		return TArray<FWacomBattleCombatLogBlockView>();
 	}
 
 	void AppendBattleCombatLogBlockForTest(const FWacomBattleCombatLogBlockView& Block)
@@ -774,7 +792,7 @@ public:
 
 	int32 GetBattlePresentationTargetCountForTest() const
 	{
-		return UBattleHUD::GetBattlePresentationTargetCountForTest();
+		return AutomationViewForTest().PresentationTargetCount;
 	}
 
 	UFUNCTION()

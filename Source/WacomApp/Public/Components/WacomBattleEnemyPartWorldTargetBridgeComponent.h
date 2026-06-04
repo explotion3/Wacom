@@ -24,22 +24,22 @@ struct WACOMAPP_API FWacomBattleEnemyPartDragPredictionDebugInput
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前拖卡预测是否带有源卡，只用于场景部位目标诊断。"))
 	bool bHasSourceCard = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前拖卡预测使用的源卡实例 ID。"))
 	FGuid SourceCardInstanceId;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "源卡当前运行时费用，用于排查先机预测。"))
 	int32 SourceCardRuntimeCost = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "源卡是否为迅捷卡，用于排查先机预测。"))
 	bool bSourceCardSwift = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前拖卡 preview 是否允许提交。"))
 	bool bPreviewCanSubmit = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前拖卡 preview 的拒绝原因。"))
 	FName PreviewRejectReason = NAME_None;
 };
 
@@ -48,146 +48,146 @@ struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "敌方部位稳定 PartId，对应制作数据，只用于 PIE / 蓝图诊断。"))
 	FName PartId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前战斗运行时部位实例 ID。"))
 	FGuid PartInstanceId;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "Bridge 当前是否绑定到战斗 Snapshot 中的部位。"))
 	bool bBoundToSnapshot = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "Bridge 当前是否注册到 BattleHUD 的 scene enemy target registry。"))
 	bool bRegisteredWithBattleHUD = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	bool bHasRuntimePartFacts = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FGuid RuntimePartInstanceId;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FText RuntimePartDisplayName;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 CurrentHp = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 MaxHp = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 Shield = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 CurrentInitiative = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	bool bRuntimePartDestroyed = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FName CurrentIntentId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FText CurrentIntentDisplayName;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 CurrentIntentInitiative = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 CurrentIntentResistanceValue = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	bool bTargetable = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FName TargetDisabledReason = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FName LastBindResult = TEXT("NotAttempted");
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FName LastCueKind = TEXT("None");
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	EBattleEventType LastCueType = EBattleEventType::None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 LastCueAmount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 CuePlayCount = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	bool bDragPreviewActive = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FWacomBattleEnemyPartDragPredictionDebugInput LastDragPredictionDebugInput;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	bool bHoverActive = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FName HoverReason = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FName HoverStableId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FGuid HoverWorldTargetId;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FVector2D HoverScreenPosition = FVector2D::ZeroVector;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FWacomBattleEnemyPartPredictionView PredictionView;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FWacomBattleEnemyPartStatusBadgeView StatusBadgeView;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FName PredictionWidgetName = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FName StatusBadgeWidgetName = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FVector PredictionBadgeRelativeLocation = FVector::ZeroVector;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FVector StatusBadgeRelativeLocation = FVector::ZeroVector;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FVector2D PredictionBadgeDrawSize = FVector2D::ZeroVector;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	FVector2D StatusBadgeDrawSize = FVector2D::ZeroVector;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	float PredictionBadgeScale = 1.0f;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	float StatusBadgeScale = 1.0f;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	float StatusBadgeOpacity = 1.0f;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	float DestroyedStatusBadgeOpacity = 1.0f;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	float CurrentStatusBadgeAppliedOpacity = 1.0f;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	float PredictionBadgeZOffsetWhenVisible = 0.0f;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	bool bPredictionBadgeOffsetActive = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug")
 	int32 BadgeLayoutStaggerIndex = INDEX_NONE;
 };
 
@@ -285,13 +285,13 @@ public:
 	void ClearPredictionDisplay(FName Reason = NAME_None);
 	void ClearStatusBadgeDisplay(FName Reason = NAME_None);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|World Target")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "获取当前 Battle World Target 的只读调试快照；只用于 PIE / 蓝图排查，不影响战斗规则。"))
 	FWacomBattleEnemyPartWorldTargetDebugView GetBattleWorldTargetDebugView() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|World Target|Debug")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "获取当前 Battle World Target 的单行调试摘要；用于排查部位绑定、hover、预测和 cue 状态。"))
 	FString GetBattleWorldTargetDebugSummary() const;
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Battle|World Target|Debug")
+	UFUNCTION(CallInEditor, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "在编辑器或 PIE 中把当前 Battle World Target 调试摘要写入 Output Log；不改变战斗或 UI 状态。"))
 	void LogBattleWorldTargetDebugSummary() const;
 
 protected:

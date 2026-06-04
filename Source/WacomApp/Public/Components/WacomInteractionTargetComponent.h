@@ -60,6 +60,6 @@ public:
 	void SetStableTargetId(FName InStableTargetId);
 
 	/** 调试：在 Output Log 中打印当前组件的 BuildWorldTargetHandle 结果。选中此组件后在 Details 面板点击按钮即可验证。 */
-	UFUNCTION(CallInEditor, Category = "Wacom|Interaction|Target|Debug")
+	UFUNCTION(CallInEditor, Category = "Wacom|Interaction|Target|Debug", meta = (ToolTip = "在编辑器或 PIE 中打印当前交互目标 handle；只用于验证目标身份配置，不改变运行时状态。"))
 	void LogHandleToConsole();
 };

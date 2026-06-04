@@ -1,0 +1,48 @@
+// Copyright Wacom. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+
+#if WITH_AUTOMATION_TESTS
+
+class UDragDropOperation;
+class URunSession;
+class UWacomBackpackScreen;
+class UWacomDeckCardWidget;
+class UWacomSpecialZoneWidget;
+struct FWacomBackpackScreenAutomationTestView;
+
+struct FWacomBackpackScreenTestAccess
+{
+	static UWacomBackpackScreen* Create(UObject* Outer, URunSession* RunSession);
+	static void Refresh(UWacomBackpackScreen& Screen);
+	static void SetRunSession(UWacomBackpackScreen& Screen, URunSession* RunSession);
+	static FWacomBackpackScreenAutomationTestView View(const UWacomBackpackScreen& Screen);
+
+	static UWacomDeckCardWidget* BattleDeckCard(const UWacomBackpackScreen& Screen, int32 Index);
+	static UWacomDeckCardWidget* FluxContentCard(const UWacomBackpackScreen& Screen, int32 Index);
+	static UWacomDeckCardWidget* BurdenCard(const UWacomBackpackScreen& Screen, int32 Index);
+	static UWacomSpecialZoneWidget* SpecialZone(const UWacomBackpackScreen& Screen, int32 Index);
+
+	static int32 RefreshApplyCount(const UWacomBackpackScreen& Screen);
+	static int32 RefreshSkipCount(const UWacomBackpackScreen& Screen);
+	static int32 SnapshotBuildCount(const UWacomBackpackScreen& Screen);
+	static int32 SnapshotRevisionSkipCount(const UWacomBackpackScreen& Screen);
+
+	static bool IsDetailVisible(const UWacomBackpackScreen& Screen);
+	static FText DetailNameText(const UWacomBackpackScreen& Screen);
+	static bool ShowDetailForCardWidget(UWacomBackpackScreen& Screen, UWacomDeckCardWidget* SourceWidget);
+	static void HideDetail(UWacomBackpackScreen& Screen);
+
+	static FText ZoneTitleText(const UWacomSpecialZoneWidget& Zone);
+	static bool IsBattleReadyBadgeVisible(const UWacomSpecialZoneWidget& Zone);
+	static UDragDropOperation* BuildOwnerCardDragOperation(const UWacomSpecialZoneWidget& Zone);
+	static UDragDropOperation* BuildContentCardDragOperation(const UWacomSpecialZoneWidget& Zone, int32 Index);
+	static bool RequestContentCardBattleEnabledToggle(const UWacomSpecialZoneWidget& Zone, int32 Index);
+	static UWacomDeckCardWidget* OwnerCard(const UWacomSpecialZoneWidget& Zone);
+	static UWacomDeckCardWidget* ContentCard(const UWacomSpecialZoneWidget& Zone, int32 Index);
+	static int32 ContentCardCount(const UWacomSpecialZoneWidget& Zone);
+};
+
+#endif

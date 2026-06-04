@@ -571,7 +571,7 @@ bool FWacomUIBattleCombatLogBuilderMoveEventsSpec::RunTest(const FString& /*Para
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEventLogPanelSpec,
-	"Wacom.UI.Battle.EventLogPanel",
+	"Wacom.UI.Battle.LegacyEventLogPanel",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
@@ -689,7 +689,7 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEventLogEntryWidgetSpec,
-	"Wacom.UI.Battle.EventLogEntryWidget",
+	"Wacom.UI.Battle.LegacyEventLogEntryWidget",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEventLogEntryWidgetSpec::RunTest(const FString& /*Parameters*/)
@@ -2279,7 +2279,7 @@ bool FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec::RunTest(const FString& 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUD3DHandPresenterLifecycleSpec,
-	"Wacom.UI.Battle.HUD3DHandPresenterLifecycle",
+	"Wacom.UI.Battle.Prototype.HUD3DHandPresenterLifecycle",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUD3DHandPresenterLifecycleSpec::RunTest(const FString& /*Parameters*/)
@@ -2325,12 +2325,12 @@ bool FWacomUIBattleHUD3DHandPresenterLifecycleSpec::RunTest(const FString& /*Par
 	HUD->SetSession(Session);
 	HUD->RefreshFromSnapshot(Session->BuildSnapshot());
 
-	TestTrue(TEXT("3D hand presenter is created when prototype is enabled"), HUD->HasBattle3DHandPresenterForTest());
-	TestTrue(TEXT("Prototype enables PlayerController click events"), PC->bEnableClickEvents);
-	TestTrue(TEXT("Prototype enables PlayerController mouse-over events"), PC->bEnableMouseOverEvents);
+	TestTrue(TEXT("3D hand prototype presenter is created when enabled"), HUD->HasBattle3DHandPresenterForTest());
+	TestTrue(TEXT("3D hand prototype enables PlayerController click events"), PC->bEnableClickEvents);
+	TestTrue(TEXT("3D hand prototype enables PlayerController mouse-over events"), PC->bEnableMouseOverEvents);
 
 	HUD->DestroyBattle3DHandPresenterForTest();
-	TestFalse(TEXT("3D hand presenter is destroyed explicitly"), HUD->HasBattle3DHandPresenterForTest());
+	TestFalse(TEXT("3D hand prototype presenter is destroyed explicitly"), HUD->HasBattle3DHandPresenterForTest());
 	TestFalse(TEXT("Destroy restores PlayerController click events"), PC->bEnableClickEvents);
 	TestFalse(TEXT("Destroy restores PlayerController mouse-over events"), PC->bEnableMouseOverEvents);
 
@@ -6655,7 +6655,7 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
 	TestTrue(TEXT("HUD bridge writes runtime hand to anchor"), Anchor->HasRuntimeCardLayerData());
 	TestTrue(TEXT("HUD bridge enables first-person hand interaction"),
-		Anchor->IsBattleHandInteractionPrototypeEnabled());
+		Anchor->IsBattleHandInteractionEnabled());
 
 	TestTrue(TEXT("Battle camera activates for drag override"), BattleCamera->ActivateBattleCameraLook());
 	FWacomFirstPersonCardDragView DragView = WacomBattleWidgetSpec::MakeCommitDragView(CardId);
@@ -6665,7 +6665,7 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 
 	HUD->ClearFirstPersonBattleHandLayerForTest();
 	TestFalse(TEXT("HUD bridge clear removes runtime hand"), Anchor->HasRuntimeCardLayerData());
-	TestFalse(TEXT("HUD bridge clear disables interaction"), Anchor->IsBattleHandInteractionPrototypeEnabled());
+	TestFalse(TEXT("HUD bridge clear disables interaction"), Anchor->IsBattleHandInteractionEnabled());
 	TestFalse(TEXT("HUD bridge clear removes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
 	TestFalse(TEXT("HUD bridge clear hides first-person detail"),
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());

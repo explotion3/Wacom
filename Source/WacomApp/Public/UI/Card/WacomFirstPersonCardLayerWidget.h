@@ -25,6 +25,23 @@ struct FWacomFirstPersonCardLayerResolvedTransitionHint
 	FVector2D PlayedExitTargetWidgetPosition = FVector2D::ZeroVector;
 };
 
+#if WITH_AUTOMATION_TESTS
+struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
+{
+	int32 SkippedEquivalentSlotRefreshCount = 0;
+	int32 SlotMotionConfigPropagationCount = 0;
+	int32 SlotFeedbackConfigPropagationCount = 0;
+	int32 CardDragConfigPropagationCount = 0;
+	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
+	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
+	FWacomFirstPersonCardDragConfig CardDragConfig;
+	FWacomFirstPersonCardDragView CurrentDragView;
+	FLinearColor AimArrowColor = FLinearColor::White;
+	FVector2D AimArrowEnd = FVector2D::ZeroVector;
+	TSubclassOf<UWacomCardView> CardViewClass;
+};
+#endif
+
 /**
  * HUD card layer driven by first-person card anchor projection.
  * Renders UWacomCardView-compatible card face widgets, may opt into slot-level
@@ -85,32 +102,22 @@ public:
 
 	FWacomInteractionTargetHandle BuildHoveredCardTargetHandle() const { return HoveredCardTargetHandle; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug")
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "获取第一人称卡牌层 motion/reconcile 的只读调试快照；用于排查槽位复用、离场和 dirty gate。"))
 	FWacomFirstPersonCardLayerMotionDebugView GetSlotMotionDebugView() const { return LastMotionDebugView; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug")
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "获取第一人称卡牌层 motion/reconcile 的单行调试摘要；不改变卡牌层状态。"))
 	FString GetSlotMotionDebugSummary() const;
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug")
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "获取当前拖卡目标解析的单行调试摘要；用于排查 World/Card/Zone target，不提交命令。"))
 	FString GetDragTargetDebugSummary() const;
 
 	void SetLogSlotMotionDiagnostics(bool bEnabled) { bLogSlotMotionDiagnostics = bEnabled; }
 
 #if WITH_AUTOMATION_TESTS
+	FWacomFirstPersonCardLayerAutomationTestView GetAutomationTestViewForTest() const;
 	void TickSlotMotionForTest(float DeltaTime);
 	UWacomFirstPersonCardLayerSlotWidget* FindSlotWidgetByKeyForTest(const FString& SlotKey) const;
 	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
-	const FWacomFirstPersonCardSlotMotionConfig& GetSlotMotionConfigForTest() const { return SlotMotionConfig; }
-	const FWacomFirstPersonCardSlotFeedbackConfig& GetSlotFeedbackConfigForTest() const { return SlotFeedbackConfig; }
-	const FWacomFirstPersonCardDragConfig& GetCardDragConfigForTest() const { return CardDragConfig; }
-	const FWacomFirstPersonCardDragView& GetCurrentDragViewForTest() const { return CurrentDragView; }
-	int32 GetSkippedEquivalentSlotRefreshCountForTest() const { return SkippedEquivalentSlotRefreshCountForTest; }
-	int32 GetSlotMotionConfigPropagationCountForTest() const { return SlotMotionConfigPropagationCountForTest; }
-	int32 GetSlotFeedbackConfigPropagationCountForTest() const { return SlotFeedbackConfigPropagationCountForTest; }
-	int32 GetCardDragConfigPropagationCountForTest() const { return CardDragConfigPropagationCountForTest; }
-	FLinearColor ResolveAimArrowColorForTest() const { return ResolveAimArrowColor(); }
-	FVector2D ResolveAimArrowEndForTest() const { return ResolveAimArrowEnd(); }
-	TSubclassOf<UWacomCardView> GetCardViewClassForTest() const { return CardViewClass; }
 	void AddUntrackedSlotChildForTest();
 	void SetViewportSizeOverrideForTest(const FVector2D& WidgetViewportSize);
 #endif

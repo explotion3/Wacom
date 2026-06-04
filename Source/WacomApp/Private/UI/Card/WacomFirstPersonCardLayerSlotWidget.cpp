@@ -1488,6 +1488,24 @@ void UWacomFirstPersonCardLayerSlotWidget::BroadcastDragCancelled()
 }
 
 #if WITH_AUTOMATION_TESTS
+FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget::GetAutomationTestViewForTest() const
+{
+	FWacomFirstPersonCardSlotAutomationTestView View;
+	View.FeedbackOverlayOpacity = FeedbackOverlay ? FeedbackOverlay->GetRenderOpacity() : 0.0f;
+	View.FeedbackOverlayColor = FeedbackOverlay ? FeedbackOverlay->GetColorAndOpacity() : FLinearColor::Transparent;
+	View.bPressed = bIsPressedForFirstPersonLayer;
+	View.bDenyFeedbackActive = DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
+	View.bConfirmFeedbackActive = ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration;
+	View.bCommitFeedbackActive = CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration;
+	View.bCardDragProbeFeedback = bCardDragProbeFeedback;
+	View.DragTargetFeedbackState = DragTargetFeedbackState;
+	View.CardDragConfig = CardDragConfig;
+	View.SlotMotionConfigApplyCount = SlotMotionConfigApplyCountForTest;
+	View.SlotFeedbackConfigApplyCount = SlotFeedbackConfigApplyCountForTest;
+	View.CardDragConfigApplyCount = CardDragConfigApplyCountForTest;
+	return View;
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::SetLocalHitCanvasSizeOverrideForTest(
 	const TOptional<FVector2D>& InSize)
 {
@@ -1623,16 +1641,6 @@ bool UWacomFirstPersonCardLayerSlotWidget::RequestGestureReleaseForTest(const FV
 void UWacomFirstPersonCardLayerSlotWidget::TickSlotMotionForTest(float DeltaTime)
 {
 	NativeTick(FGeometry(), DeltaTime);
-}
-
-float UWacomFirstPersonCardLayerSlotWidget::GetFeedbackOverlayRenderOpacityForTest() const
-{
-	return FeedbackOverlay ? FeedbackOverlay->GetRenderOpacity() : 0.0f;
-}
-
-FLinearColor UWacomFirstPersonCardLayerSlotWidget::GetFeedbackOverlayColorForTest() const
-{
-	return FeedbackOverlay ? FeedbackOverlay->GetColorAndOpacity() : FLinearColor::Transparent;
 }
 #endif
 

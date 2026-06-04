@@ -80,7 +80,7 @@ namespace WacomBattle3DHandSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattle3DLayoutCenteredAndOrderedSpec,
-	"Wacom.UI.Battle3D.Layout.CenteredAndOrdered",
+	"Wacom.UI.Battle3D.Prototype.Layout.CenteredAndOrdered",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattle3DLayoutCenteredAndOrderedSpec::RunTest(const FString& /*Parameters*/)
@@ -138,7 +138,7 @@ bool FWacomUIBattle3DLayoutCenteredAndOrderedSpec::RunTest(const FString& /*Para
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattle3DCardVisualApplySnapshotSpec,
-	"Wacom.UI.Battle3D.CardVisual.ApplySnapshot",
+	"Wacom.UI.Battle3D.Prototype.CardVisual.ApplySnapshot",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattle3DCardVisualApplySnapshotSpec::RunTest(const FString& /*Parameters*/)
@@ -205,7 +205,7 @@ bool FWacomUIBattle3DCardVisualApplySnapshotSpec::RunTest(const FString& /*Param
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattle3DCardVisualClickAndHoverDelegatesSpec,
-	"Wacom.UI.Battle3D.CardVisual.ClickAndHoverDelegates",
+	"Wacom.UI.Battle3D.Prototype.CardVisual.ClickAndHoverDelegates",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattle3DCardVisualClickAndHoverDelegatesSpec::RunTest(const FString& /*Parameters*/)
@@ -266,7 +266,7 @@ bool FWacomUIBattle3DCardVisualClickAndHoverDelegatesSpec::RunTest(const FString
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattle3DPresenterRefreshReusesActorsSpec,
-	"Wacom.UI.Battle3D.Presenter.RefreshReusesActors",
+	"Wacom.UI.Battle3D.Prototype.Presenter.RefreshReusesActors",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattle3DPresenterRefreshReusesActorsSpec::RunTest(const FString& /*Parameters*/)

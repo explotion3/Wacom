@@ -672,7 +672,7 @@ void UWacomFirstPersonCardAnchorComponent::BeginPlay()
 
 void UWacomFirstPersonCardAnchorComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	SetBattleHandInteractionPrototypeEnabled(false);
+	SetBattleHandInteractionEnabled(false);
 	ResetAnchorScreenSmoothing();
 	RemoveStaticCardLayer();
 	RemoveDebugWidget();
@@ -1381,7 +1381,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		: BuildStaticCardSlotViews();
 }
 
-void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnabled(bool bEnabled)
+void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionEnabled(bool bEnabled)
 {
 	if (bEnableBattleHandInteractionPrototype == bEnabled)
 	{
@@ -1405,11 +1405,20 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnab
 	}
 }
 
+void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionPrototypeEnabled(bool bEnabled)
+{
+	SetBattleHandInteractionEnabled(bEnabled);
+}
+
 #if WITH_AUTOMATION_TESTS
-bool UWacomFirstPersonCardAnchorComponent::IsUsingResolvedCardLayoutPresetForTest() const
+FWacomFirstPersonCardAnchorAutomationTestView UWacomFirstPersonCardAnchorComponent::GetAutomationTestViewForTest() const
 {
 	RefreshCardLayoutPresetRuntimeState();
-	return ResolveLayoutConfig(*this).bUsingPreset;
+	FWacomFirstPersonCardAnchorAutomationTestView View;
+	View.StaticCardLayerWidget = StaticCardLayerWidget;
+	View.bUsingResolvedCardLayoutPreset = ResolveLayoutConfig(*this).bUsingPreset;
+	View.StaticLayerConfigApplyCount = StaticLayerConfigApplyCountForTest;
+	return View;
 }
 #endif
 

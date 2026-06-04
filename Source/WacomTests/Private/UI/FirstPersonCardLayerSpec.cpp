@@ -28,6 +28,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayoutPreset.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/FirstPersonCardLayerTestAccess.h"
 #include "UI/FirstPersonCardLayerSpecReceiver.h"
 
 namespace WacomFirstPersonCardLayerSpec
@@ -876,7 +877,7 @@ bool FWacomFirstPersonCardLayerBleedHoverHitBoundsTest::RunTest(const FString& P
 	}
 	SlotWidget->SetDesiredSizeInViewport(FVector2D(392.0f, 516.0f));
 	SlotWidget->TakeWidget();
-	SlotWidget->SetLocalHitCanvasSizeOverrideForTest(FVector2D(392.0f, 516.0f));
+	FWacomFirstPersonCardLayerTestAccess::SetLocalHitCanvasSizeOverride(*SlotWidget, FVector2D(392.0f, 516.0f));
 
 	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver Receiver;
 	SlotWidget->OnCardHoveredNative.AddRaw(
@@ -887,16 +888,16 @@ bool FWacomFirstPersonCardLayerBleedHoverHitBoundsTest::RunTest(const FString& P
 		&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleUnhovered);
 
 	TestFalse(TEXT("Bleed-only hover request is rejected"),
-		SlotWidget->RequestHoverAtLocalPositionForTest(FVector2D(20.0f, 20.0f)));
+		FWacomFirstPersonCardLayerTestAccess::RequestHoverAtLocalPosition(*SlotWidget, FVector2D(20.0f, 20.0f)));
 	TestFalse(TEXT("Bleed-only hover does not mark slot hovered"), SlotWidget->IsHoveredForFirstPersonLayer());
 	TestEqual(TEXT("Bleed-only hover does not broadcast"), Receiver.HoverCount, 0);
 
 	TestTrue(TEXT("Card body hover request succeeds"),
-		SlotWidget->RequestHoverAtLocalPositionForTest(FVector2D(196.0f, 258.0f)));
+		FWacomFirstPersonCardLayerTestAccess::RequestHoverAtLocalPosition(*SlotWidget, FVector2D(196.0f, 258.0f)));
 	TestTrue(TEXT("Card body hover marks slot hovered"), SlotWidget->IsHoveredForFirstPersonLayer());
 	TestEqual(TEXT("Card body hover broadcasts once"), Receiver.HoverCount, 1);
 
-	SlotWidget->RequestMoveAtLocalPositionForTest(FVector2D(385.0f, 500.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestMoveAtLocalPosition(*SlotWidget, FVector2D(385.0f, 500.0f));
 	TestFalse(TEXT("Moving from body to bleed clears hover"), SlotWidget->IsHoveredForFirstPersonLayer());
 	TestEqual(TEXT("Moving from body to bleed broadcasts unhover"), Receiver.UnhoverCount, 1);
 
@@ -944,20 +945,20 @@ bool FWacomFirstPersonCardLayerBleedPressHitBoundsTest::RunTest(const FString& P
 	}
 	SlotWidget->SetDesiredSizeInViewport(FVector2D(392.0f, 516.0f));
 	SlotWidget->TakeWidget();
-	SlotWidget->SetLocalHitCanvasSizeOverrideForTest(FVector2D(392.0f, 516.0f));
+	FWacomFirstPersonCardLayerTestAccess::SetLocalHitCanvasSizeOverride(*SlotWidget, FVector2D(392.0f, 516.0f));
 
 	TestFalse(TEXT("Bleed-only press does not start gesture"),
-		SlotWidget->RequestPressAtLocalPositionForTest(FVector2D(20.0f, 20.0f)));
+		FWacomFirstPersonCardLayerTestAccess::RequestPressAtLocalPosition(*SlotWidget, FVector2D(20.0f, 20.0f)));
 	TestEqual(TEXT("Bleed-only press leaves gesture idle"),
 		SlotWidget->GetGestureStateForFirstPersonLayer(),
 		EWacomFirstPersonCardGestureState::Idle);
 
 	TestTrue(TEXT("Card body press starts gesture"),
-		SlotWidget->RequestPressAtLocalPositionForTest(FVector2D(196.0f, 258.0f)));
+		FWacomFirstPersonCardLayerTestAccess::RequestPressAtLocalPosition(*SlotWidget, FVector2D(196.0f, 258.0f)));
 	TestEqual(TEXT("Card body press enters pressed gesture"),
 		SlotWidget->GetGestureStateForFirstPersonLayer(),
 		EWacomFirstPersonCardGestureState::Pressed);
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(196.0f, 120.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(196.0f, 120.0f));
 	TestTrue(TEXT("Started drag can move outside body"),
 		SlotWidget->GetGestureStateForFirstPersonLayer() != EWacomFirstPersonCardGestureState::Idle);
 
@@ -1038,15 +1039,15 @@ bool FWacomFirstPersonCardLayerFallbackHitBoundsTest::RunTest(const FString& Par
 	}
 	SlotWidget->SetDesiredSizeInViewport(FVector2D(392.0f, 516.0f));
 	SlotWidget->TakeWidget();
-	SlotWidget->SetLocalHitCanvasSizeOverrideForTest(FVector2D(392.0f, 516.0f));
+	FWacomFirstPersonCardLayerTestAccess::SetLocalHitCanvasSizeOverride(*SlotWidget, FVector2D(392.0f, 516.0f));
 
 	TestEqual(TEXT("Missing CardSizeBox falls back to legacy body size"),
 		SlotWidget->GetCardBodyHitSizeForFirstPersonLayer(),
 		UWacomCardView::GetDefaultCardBodyHitSize());
 	TestFalse(TEXT("Legacy fallback still rejects bleed-only local position"),
-		SlotWidget->RequestHoverAtLocalPositionForTest(FVector2D(20.0f, 20.0f)));
+		FWacomFirstPersonCardLayerTestAccess::RequestHoverAtLocalPosition(*SlotWidget, FVector2D(20.0f, 20.0f)));
 	TestTrue(TEXT("Legacy fallback accepts centered card body local position"),
-		SlotWidget->RequestHoverAtLocalPositionForTest(FVector2D(196.0f, 258.0f)));
+		FWacomFirstPersonCardLayerTestAccess::RequestHoverAtLocalPosition(*SlotWidget, FVector2D(196.0f, 258.0f)));
 
 	PC->Destroy();
 	return true;
@@ -1134,13 +1135,13 @@ bool FWacomFirstPersonCardLayerCardTargetHoverBridgeTest::RunTest(const FString&
 		&Receiver,
 		&WacomFirstPersonCardLayerSpec::FLayerCardTargetReceiver::HandleUnhovered);
 
-	TestTrue(TEXT("Slot hover succeeds"), SlotWidget->RequestHoverForTest());
+	TestTrue(TEXT("Slot hover succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
 	TestEqual(TEXT("Card target hover broadcasts once"), Receiver.HoverCount, 1);
 	TestEqual(TEXT("Hovered target id"), Receiver.LastHandle.CardInstanceId, CardId);
 	TestEqual(TEXT("Layer stores hovered target"), Layer->BuildHoveredCardTargetHandle().CardInstanceId, CardId);
 	TestEqual(TEXT("Hovered target uses visual position"), Receiver.LastHandle.ScreenPosition, SlotWidget->GetVisualSlotView().ScreenPosition);
 
-	SlotWidget->RequestUnhoverForTest();
+	FWacomFirstPersonCardLayerTestAccess::RequestUnhover(*SlotWidget);
 	TestEqual(TEXT("Card target unhover broadcasts once"), Receiver.UnhoverCount, 1);
 	TestFalse(TEXT("Layer clears hovered target"), Layer->BuildHoveredCardTargetHandle().IsValid());
 
@@ -1180,7 +1181,7 @@ bool FWacomFirstPersonCardLayerCardTargetVisualUpdateTest::RunTest(const FString
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f));
 	BaseSlot.bIsHovered = true;
 	Layer->SetCardSlots({ BaseSlot });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	WacomFirstPersonCardLayerSpec::FLayerCardTargetReceiver Receiver;
 	Layer->OnHoveredCardTargetUpdatedNative.AddRaw(
@@ -1234,7 +1235,7 @@ bool FWacomFirstPersonCardLayerClearCardTargetStateTest::RunTest(const FString& 
 		PC->Destroy();
 		return false;
 	}
-	TestTrue(TEXT("Slot hover succeeds"), SlotWidget->RequestHoverForTest());
+	TestTrue(TEXT("Slot hover succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
 	TestTrue(TEXT("Layer has hovered card target"), Layer->BuildHoveredCardTargetHandle().IsValid());
 
 	WacomFirstPersonCardLayerSpec::FLayerCardTargetReceiver Receiver;
@@ -1300,7 +1301,7 @@ bool FWacomFirstPersonCardLayerBattlePriorityTest::RunTest(const FString& Parame
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerPartialLookTest,
-	"Wacom.UI.FirstPersonCardLayer.Anchor.LegacyPartialLookInfluence",
+	"Wacom.UI.FirstPersonCardLayer.Anchor.LegacyComparison.PartialLookInfluence",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameters)
@@ -1540,7 +1541,7 @@ bool FWacomFirstPersonCardLayerBodyLockedFanShapeTest::RunTest(const FString& Pa
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerLegacyLookProjectionTest,
-	"Wacom.UI.FirstPersonCardLayer.Projection.LegacyWorldProjectedStillAppliesLookInfluence",
+	"Wacom.UI.FirstPersonCardLayer.Projection.LegacyComparison.WorldProjectedAppliesLookInfluence",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerLegacyLookProjectionTest::RunTest(const FString& Parameters)
@@ -2069,7 +2070,7 @@ bool FWacomFirstPersonCardLayerPresetLayoutOverrideTest::RunTest(const FString& 
 		TestEqual(TEXT("Preset fan angle applies"), Slots.Last().RenderAngleDegrees, 16.0f);
 		TestFalse(TEXT("Preset readable bottom clamp stays inactive when slots are inside viewport"), Slots[2].bBodyBottomViewportAdjusted);
 	}
-	TestTrue(TEXT("Preset is active"), Anchor->IsUsingResolvedCardLayoutPresetForTest());
+	TestTrue(TEXT("Preset is active"), FWacomFirstPersonCardLayerTestAccess::View(*Anchor).bUsingResolvedCardLayoutPreset);
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -2192,7 +2193,7 @@ bool FWacomFirstPersonCardLayerPresetFallbackTest::RunTest(const FString& Parame
 		TestEqual(TEXT("Component scale is fallback"), Slots[1].RenderScale, 0.66f);
 		TestEqual(TEXT("Component angle is fallback"), Slots[2].RenderAngleDegrees, 2.0f);
 	}
-	TestFalse(TEXT("Preset disabled"), Anchor->IsUsingResolvedCardLayoutPresetForTest());
+	TestFalse(TEXT("Preset disabled"), FWacomFirstPersonCardLayerTestAccess::View(*Anchor).bUsingResolvedCardLayoutPreset);
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -2237,7 +2238,7 @@ bool FWacomFirstPersonCardLayerNullPresetFallbackTest::RunTest(const FString& Pa
 	{
 		TestEqual(TEXT("Null preset uses component spacing"), Slots[1].AuthoredLayoutOffset.X - Slots[0].AuthoredLayoutOffset.X, 72.0);
 	}
-	TestFalse(TEXT("Null preset is not active"), Anchor->IsUsingResolvedCardLayoutPresetForTest());
+	TestFalse(TEXT("Null preset is not active"), FWacomFirstPersonCardLayerTestAccess::View(*Anchor).bUsingResolvedCardLayoutPreset);
 	TestTrue(TEXT("Debug summary reports missing preset"), Anchor->GetDebugSummary().Contains(TEXT("PresetName=Missing")));
 
 	Anchor->DestroyComponent();
@@ -2277,11 +2278,11 @@ bool FWacomFirstPersonCardLayerPresetMotionFeedbackTest::RunTest(const FString& 
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	Anchor->RefreshStaticLayerForTest();
 
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	if (TestNotNull(TEXT("Static layer"), Layer))
 	{
-		const FWacomFirstPersonCardSlotMotionConfig& MotionConfig = Layer->GetSlotMotionConfigForTest();
-		const FWacomFirstPersonCardSlotFeedbackConfig& FeedbackConfig = Layer->GetSlotFeedbackConfigForTest();
+		const FWacomFirstPersonCardSlotMotionConfig MotionConfig = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotMotionConfig;
+		const FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotFeedbackConfig;
 		TestEqual(TEXT("Preset motion speed"), MotionConfig.MotionSpeed, Preset->CardSlotMotionSpeed);
 		TestEqual(TEXT("Preset opacity speed"), MotionConfig.OpacitySpeed, Preset->CardSlotOpacitySpeed);
 		TestEqual(TEXT("Preset enter offset"), MotionConfig.EnterOffsetPixels, Preset->CardSlotEnterOffsetPixels);
@@ -2338,12 +2339,12 @@ bool FWacomFirstPersonCardLayerPresetScopeTest::RunTest(const FString& Parameter
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	Anchor->RefreshStaticLayerForTest();
 
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	if (TestNotNull(TEXT("Static layer"), Layer))
 	{
 		TestEqual(
 			TEXT("Preset does not override card view class"),
-			Layer->GetCardViewClassForTest(),
+			FWacomFirstPersonCardLayerTestAccess::View(*Layer).CardViewClass,
 			TSubclassOf<UWacomCardView>(UWacomFirstPersonCardLayerPresetViewClassProbe::StaticClass()));
 	}
 	TestFalse(TEXT("Preset does not enable debug projection"), Anchor->bDrawDebugProjection);
@@ -2390,7 +2391,7 @@ bool FWacomFirstPersonCardLayerPresetSwitchResetTest::RunTest(const FString& Par
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	Anchor->RefreshStaticLayerForTest();
 
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	if (!TestNotNull(TEXT("Static layer"), Layer))
 	{
 		return false;
@@ -3050,7 +3051,7 @@ bool FWacomFirstPersonCardLayerAnchorSmoothingProjectionFailureTest::RunTest(con
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerLegacySkipsSmoothingTest,
-	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.LegacyProjectedFan2DSkipsAnchorSmoothing",
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.LegacyComparison.ProjectedFan2DSkipsAnchorSmoothing",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerLegacySkipsSmoothingTest::RunTest(const FString& Parameters)
@@ -3348,7 +3349,7 @@ bool FWacomFirstPersonCardLayerAuthoredScaleTest::RunTest(const FString& Paramet
 	Hovered.CardInstanceId = HoveredId;
 	Hovered.CardViewData.Name = FText::FromString(TEXT("Hovered"));
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { Pending, Hovered });
-	Anchor->SetHoveredCardInstanceIdForTest(HoveredId);
+	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, HoveredId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> NearSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
 	Anchor->DistanceFromView = 500.0f;
@@ -3413,7 +3414,7 @@ bool FWacomFirstPersonCardLayerAuthoredZOrderTest::RunTest(const FString& Parame
 	E.CardInstanceId = HoveredId;
 	E.CardViewData.Name = FText::FromString(TEXT("E"));
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { A, B, C, D, E });
-	Anchor->SetHoveredCardInstanceIdForTest(HoveredId);
+	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, HoveredId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> HoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
 	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 5);
@@ -3433,7 +3434,7 @@ bool FWacomFirstPersonCardLayerAuthoredZOrderTest::RunTest(const FString& Parame
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerLegacyProjectedFanTest,
-	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.LegacyProjectedFan2DPreservesExistingBehavior",
+	"Wacom.UI.FirstPersonCardLayer.Layout.LegacyComparison.ProjectedFan2DPreservesExistingBehavior",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerLegacyProjectedFanTest::RunTest(const FString& Parameters)
@@ -3697,7 +3698,7 @@ bool FWacomFirstPersonCardLayerBodyLockedVisualOffsetsTest::RunTest(const FStrin
 
 	PendingCenter.bIsPendingTargeting = true;
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { LeftEdge, PendingCenter, HoveredRightEdge });
-	Anchor->SetHoveredCardInstanceIdForTest(HoveredCardId);
+	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, HoveredCardId);
 
 	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 3);
@@ -3754,7 +3755,7 @@ bool FWacomFirstPersonCardLayerInteractionDisabledTest::RunTest(const FString& P
 	if (TestNotNull(TEXT("Slot widget"), SlotWidget))
 	{
 		TestEqual(TEXT("Interaction off keeps slot hit-test-invisible"), SlotWidget->GetVisibility(), ESlateVisibility::HitTestInvisible);
-		TestFalse(TEXT("Interaction off rejects click"), SlotWidget->RequestClickForTest());
+		TestFalse(TEXT("Interaction off rejects click"), FWacomFirstPersonCardLayerTestAccess::RequestClick(*SlotWidget));
 	}
 	TestEqual(TEXT("Interaction off does not broadcast click"), Receiver.ClickCount, 0);
 
@@ -3987,9 +3988,9 @@ bool FWacomFirstPersonCardLayerMotionInterpolatesTest::RunTest(const FString& Pa
 	Layer->SetSlotMotionConfig(Config);
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f), 0.0f, 1.0f, 1.0f) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(200.0f, 300.0f), 10.0f, 1.2f, 0.4f) });
-	Layer->TickSlotMotionForTest(0.25f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
 
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -4036,7 +4037,7 @@ bool FWacomFirstPersonCardLayerMotionHoverPendingTest::RunTest(const FString& Pa
 	FWacomFirstPersonCardLayerSlotView BaseSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 300.0f), 0.0f, 1.0f);
 	Layer->SetCardSlots({ BaseSlot });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	FWacomFirstPersonCardLayerSlotView PendingHoverSlot = BaseSlot;
 	PendingHoverSlot.ScreenPosition = FVector2D(100.0f, 240.0f);
 	PendingHoverSlot.RenderScale = 1.15f;
@@ -4053,9 +4054,9 @@ bool FWacomFirstPersonCardLayerMotionHoverPendingTest::RunTest(const FString& Pa
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (TestNotNull(TEXT("Slot widget"), SlotWidget))
 	{
-		Layer->TickSlotMotionForTest(0.25f);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
 		TestTrue(TEXT("Hover/pending lift animates"), SlotWidget->GetVisualSlotView().ScreenPosition.Y > 240.0f);
-		TestTrue(TEXT("Click still succeeds"), SlotWidget->RequestClickForTest());
+		TestTrue(TEXT("Click still succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestClick(*SlotWidget));
 		TestEqual(TEXT("Click forwards original card id"), Receiver.LastCardId, CardId);
 	}
 
@@ -4091,17 +4092,17 @@ bool FWacomFirstPersonCardLayerMotionRemovedExitTest::RunTest(const FString& Par
 	Layer->SetSlotMotionConfig(Config);
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f)) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardSlots({});
 
 	TestEqual(TEXT("Active slot removed from hand"), Layer->GetCardViewCount(), 0);
 	TestEqual(TEXT("Outgoing slot is retained"), Layer->GetOutgoingCardViewCount(), 1);
-	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
 	if (TestNotNull(TEXT("Outgoing slot"), Outgoing))
 	{
 		TestTrue(TEXT("Outgoing slot is exiting"), Outgoing->IsExitingForFirstPersonLayer());
 	}
-	Layer->TickSlotMotionForTest(0.25f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
 	TestEqual(TEXT("Outgoing slot removed after duration"), Layer->GetOutgoingCardViewCount(), 0);
 
 	PC->Destroy();
@@ -4138,7 +4139,7 @@ bool FWacomFirstPersonCardLayerMotionProjectionExitTest::RunTest(const FString& 
 	FWacomFirstPersonCardLayerSlotView VisibleSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f));
 	Layer->SetCardSlots({ VisibleSlot });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	FWacomFirstPersonCardLayerSlotView FailedSlot = VisibleSlot;
 	FailedSlot.bProjected = false;
@@ -4151,7 +4152,7 @@ bool FWacomFirstPersonCardLayerMotionProjectionExitTest::RunTest(const FString& 
 		TestTrue(TEXT("Projection failure marks slot as exiting"), SlotWidget->IsExitingForFirstPersonLayer());
 		TestTrue(TEXT("Projection failure slot remains visible during exit"), Layer->IsCardSlotVisible(0));
 	}
-	Layer->TickSlotMotionForTest(0.25f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
 	TestFalse(TEXT("Projection failure hides after exit duration"), Layer->IsCardSlotVisible(0));
 
 	PC->Destroy();
@@ -4185,7 +4186,7 @@ bool FWacomFirstPersonCardLayerMotionLargeJumpTest::RunTest(const FString& Param
 	Layer->SetSlotMotionConfig(Config);
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f)) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(400.0f, 500.0f)) });
 
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -4233,7 +4234,7 @@ bool FWacomFirstPersonCardLayerMotionStaticKeyTest::RunTest(const FString& Param
 	FirstSlot.SnappedWidgetPosition = FirstSlot.ScreenPosition;
 	Layer->SetStaticCardSlots({ FirstSlot, SecondSlot });
 	TestEqual(TEXT("Static index key reuses widget"), Layer->GetSlotWidgetAt(0), FirstWidget);
-	TestNotNull(TEXT("StaticIndex key can be found"), Layer->FindSlotWidgetByKeyForTest(TEXT("StaticIndex:0")));
+	TestNotNull(TEXT("StaticIndex key can be found"), FWacomFirstPersonCardLayerTestAccess::FindSlotWidgetByKey(*Layer, TEXT("StaticIndex:0")));
 
 	PC->Destroy();
 	return true;
@@ -4269,7 +4270,7 @@ bool FWacomFirstPersonCardLayerMotionHoveredVisualPositionTest::RunTest(const FS
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f));
 	BaseSlot.bIsHovered = true;
 	Layer->SetCardSlots({ BaseSlot });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	WacomFirstPersonCardLayerSpec::FLayerLayoutUpdateReceiver Receiver;
 	Layer->OnHoveredCardSlotUpdatedNative.AddRaw(
@@ -4398,7 +4399,7 @@ bool FWacomFirstPersonCardLayerNoTargetCommitTest::RunTest(const FString& Parame
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D BasePosition(100.0f, 200.0f);
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, BasePosition) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	FWacomFirstPersonCardLayerTransitionHint Hint =
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(
@@ -4408,12 +4409,12 @@ bool FWacomFirstPersonCardLayerNoTargetCommitTest::RunTest(const FString& Parame
 	Layer->SetCardTransitionHints({ Hint });
 	Layer->SetCardSlots({});
 
-	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
 	if (TestNotNull(TEXT("Outgoing played slot"), Outgoing))
 	{
-		TestTrue(TEXT("Commit feedback starts on played outgoing"), Outgoing->IsCommitFeedbackActiveForTest());
-		TestEqual(TEXT("Commit overlay opacity"), Outgoing->GetFeedbackOverlayRenderOpacityForTest(), 0.6f);
-		Layer->TickSlotMotionForTest(0.1f);
+		TestTrue(TEXT("Commit feedback starts on played outgoing"), FWacomFirstPersonCardLayerTestAccess::View(*Outgoing).bCommitFeedbackActive);
+		TestEqual(TEXT("Commit overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*Outgoing).FeedbackOverlayOpacity, 0.6f);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.1f);
 		TestTrue(TEXT("Played card exits upward"), Outgoing->GetVisualSlotView().ScreenPosition.Y < BasePosition.Y);
 	}
 
@@ -4452,7 +4453,7 @@ bool FWacomFirstPersonCardLayerMissingTargetFallbackTest::RunTest(const FString&
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D BasePosition(100.0f, 200.0f);
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, BasePosition) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	FWacomFirstPersonCardLayerTransitionHint Hint =
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(
@@ -4462,10 +4463,10 @@ bool FWacomFirstPersonCardLayerMissingTargetFallbackTest::RunTest(const FString&
 	Layer->SetCardTransitionHints({ Hint });
 	Layer->SetCardSlots({});
 
-	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
 	if (TestNotNull(TEXT("Outgoing played slot"), Outgoing))
 	{
-		Layer->TickSlotMotionForTest(1.0f);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 		TestEqual(TEXT("Missing target uses default played X"), Outgoing->GetVisualSlotView().ScreenPosition.X, BasePosition.X);
 		TestEqual(TEXT("Missing target uses default played Y"), Outgoing->GetVisualSlotView().ScreenPosition.Y, BasePosition.Y - 120.0f);
 	}
@@ -4533,7 +4534,7 @@ bool FWacomFirstPersonCardLayerCommitHintOneShotTest::RunTest(const FString& Par
 	const FGuid FirstCardId = FGuid::NewGuid();
 	const FGuid SecondCardId = FGuid::NewGuid();
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstCardId, 0, FVector2D(100.0f, 200.0f)) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	FWacomFirstPersonCardLayerTransitionHint Hint =
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(
@@ -4542,17 +4543,17 @@ bool FWacomFirstPersonCardLayerCommitHintOneShotTest::RunTest(const FString& Par
 	Hint.bPlayCommitFeedback = true;
 	Layer->SetCardTransitionHints({ Hint });
 	Layer->SetCardSlots({});
-	UWacomFirstPersonCardLayerSlotWidget* FirstOutgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
-	TestTrue(TEXT("First outgoing gets commit"), FirstOutgoing && FirstOutgoing->IsCommitFeedbackActiveForTest());
-	Layer->TickSlotMotionForTest(0.25f);
+	UWacomFirstPersonCardLayerSlotWidget* FirstOutgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
+	TestTrue(TEXT("First outgoing gets commit"), FirstOutgoing && FWacomFirstPersonCardLayerTestAccess::View(*FirstOutgoing).bCommitFeedbackActive);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
 
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondCardId, 0, FVector2D(100.0f, 200.0f)) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardSlots({});
-	UWacomFirstPersonCardLayerSlotWidget* SecondOutgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	UWacomFirstPersonCardLayerSlotWidget* SecondOutgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
 	if (TestNotNull(TEXT("Second outgoing slot"), SecondOutgoing))
 	{
-		TestFalse(TEXT("Commit hint does not leak to next refresh"), SecondOutgoing->IsCommitFeedbackActiveForTest());
+		TestFalse(TEXT("Commit hint does not leak to next refresh"), FWacomFirstPersonCardLayerTestAccess::View(*SecondOutgoing).bCommitFeedbackActive);
 	}
 
 	PC->Destroy();
@@ -4590,7 +4591,7 @@ bool FWacomFirstPersonCardLayerTargetBiasedCommitExitTest::RunTest(const FString
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D BasePosition(100.0f, 200.0f);
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, BasePosition) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	FWacomFirstPersonCardLayerTransitionHint Hint =
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(
@@ -4602,10 +4603,10 @@ bool FWacomFirstPersonCardLayerTargetBiasedCommitExitTest::RunTest(const FString
 	Layer->SetCardTransitionHints({ Hint });
 	Layer->SetCardSlots({});
 
-	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
 	if (TestNotNull(TEXT("Outgoing played slot"), Outgoing))
 	{
-		Layer->TickSlotMotionForTest(0.1f);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.1f);
 		TestTrue(TEXT("Target bias nudges played exit toward target X"), Outgoing->GetVisualSlotView().ScreenPosition.X > BasePosition.X);
 		TestTrue(TEXT("Target-biased played card still exits upward"), Outgoing->GetVisualSlotView().ScreenPosition.Y < BasePosition.Y);
 	}
@@ -4641,16 +4642,16 @@ bool FWacomFirstPersonCardLayerCommitFeedbackClearsTest::RunTest(const FString& 
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
 	SlotWidget->TriggerCommitFeedback();
-	TestTrue(TEXT("Commit feedback starts"), SlotWidget->IsCommitFeedbackActiveForTest());
+	TestTrue(TEXT("Commit feedback starts"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bCommitFeedbackActive);
 
 	SlotWidget->SetCardLayerInteractionEnabled(false);
-	TestFalse(TEXT("Interaction disabled clears commit"), SlotWidget->IsCommitFeedbackActiveForTest());
+	TestFalse(TEXT("Interaction disabled clears commit"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bCommitFeedbackActive);
 
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->TriggerCommitFeedback();
-	TestTrue(TEXT("Commit feedback restarts"), SlotWidget->IsCommitFeedbackActiveForTest());
+	TestTrue(TEXT("Commit feedback restarts"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bCommitFeedbackActive);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
-	TestFalse(TEXT("Slot reuse clears commit"), SlotWidget->IsCommitFeedbackActiveForTest());
+	TestFalse(TEXT("Slot reuse clears commit"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bCommitFeedbackActive);
 
 	PC->Destroy();
 	return true;
@@ -4685,16 +4686,16 @@ bool FWacomFirstPersonCardLayerPlayedTransitionTest::RunTest(const FString& Para
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D BasePosition(100.0f, 200.0f);
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, BasePosition) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardTransitionHints({
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Played)
 	});
 	Layer->SetCardSlots({});
 
-	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
 	if (TestNotNull(TEXT("Outgoing played slot"), Outgoing))
 	{
-		Layer->TickSlotMotionForTest(0.1f);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.1f);
 		TestTrue(TEXT("Played card exits upward"), Outgoing->GetVisualSlotView().ScreenPosition.Y < BasePosition.Y);
 	}
 
@@ -4731,16 +4732,16 @@ bool FWacomFirstPersonCardLayerDiscardedTransitionTest::RunTest(const FString& P
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D BasePosition(100.0f, 200.0f);
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, BasePosition) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardTransitionHints({
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Discarded)
 	});
 	Layer->SetCardSlots({});
 
-	UWacomFirstPersonCardLayerSlotWidget* Outgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
 	if (TestNotNull(TEXT("Outgoing discarded slot"), Outgoing))
 	{
-		Layer->TickSlotMotionForTest(0.1f);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.1f);
 		TestTrue(TEXT("Discarded card exits downward"), Outgoing->GetVisualSlotView().ScreenPosition.Y > BasePosition.Y);
 	}
 
@@ -4779,7 +4780,7 @@ bool FWacomFirstPersonCardLayerReorderDefaultMotionTest::RunTest(const FString& 
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstId, 0, FVector2D(100.0f, 200.0f)),
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondId, 1, FVector2D(220.0f, 200.0f))
 	});
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	UWacomFirstPersonCardLayerSlotWidget* FirstWidget = Layer->GetSlotWidgetAt(0);
 	UWacomFirstPersonCardLayerSlotWidget* SecondWidget = Layer->GetSlotWidgetAt(1);
 
@@ -5021,7 +5022,7 @@ bool FWacomFirstPersonCardLayerViewportAnchorOriginTest::RunTest(const FString& 
 		return false;
 	}
 
-	Layer->SetViewportSizeOverrideForTest(FVector2D(1000.0f, 800.0f));
+	FWacomFirstPersonCardLayerTestAccess::SetViewportSizeOverride(*Layer, FVector2D(1000.0f, 800.0f));
 	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
 	Config.DrawnEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::ViewportAnchor;
 	Config.DrawnEnterViewportAnchor = FVector2D(0.25f, 0.75f);
@@ -5128,18 +5129,18 @@ bool FWacomFirstPersonCardLayerPlayedDiscardedReadableOriginTest::RunTest(const 
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(DiscardedId, 1, FVector2D(240.0f, 260.0f), 0.0f, 1.0f);
 	DiscardedSlot.AnchorWidgetPosition = FVector2D(200.0f, 220.0f);
 	Layer->SetCardSlots({ PlayedSlot, DiscardedSlot });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardTransitionHints({
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(PlayedId, EWacomFirstPersonCardSlotTransitionKind::Played),
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(DiscardedId, EWacomFirstPersonCardSlotTransitionKind::Discarded)
 	});
 	Layer->SetCardSlots({});
 
-	UWacomFirstPersonCardLayerSlotWidget* PlayedOutgoing = Layer->GetOutgoingSlotWidgetAtForTest(0);
-	UWacomFirstPersonCardLayerSlotWidget* DiscardedOutgoing = Layer->GetOutgoingSlotWidgetAtForTest(1);
+	UWacomFirstPersonCardLayerSlotWidget* PlayedOutgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
+	UWacomFirstPersonCardLayerSlotWidget* DiscardedOutgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 1);
 	if (TestNotNull(TEXT("Played outgoing"), PlayedOutgoing))
 	{
-		Layer->TickSlotMotionForTest(0.1f);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.1f);
 		TestTrue(TEXT("Played readable exit moves toward hand anchor upper origin"), PlayedOutgoing->GetVisualSlotView().ScreenPosition.Y < PlayedSlot.ScreenPosition.Y);
 		TestTrue(TEXT("Played readable exit scale accent applies"), PlayedOutgoing->GetVisualSlotView().RenderScale < PlayedSlot.RenderScale);
 	}
@@ -5230,9 +5231,9 @@ bool FWacomFirstPersonCardLayerTransitionOriginPresetTest::RunTest(const FString
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	Anchor->RefreshStaticLayerForTest();
 
-	if (const UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest())
+	if (const UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor))
 	{
-		const FWacomFirstPersonCardSlotMotionConfig& MotionConfig = Layer->GetSlotMotionConfigForTest();
+		const FWacomFirstPersonCardSlotMotionConfig MotionConfig = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotMotionConfig;
 		TestEqual(TEXT("Preset readable origins"), MotionConfig.bEnableReadableTransitionOrigins, Preset->bEnableReadableTransitionOrigins);
 		TestEqual(TEXT("Preset gained origin mode"), MotionConfig.GainedEnterOriginMode, Preset->GainedCardEnterOriginMode);
 		TestEqual(TEXT("Preset gained viewport anchor"), MotionConfig.GainedEnterViewportAnchor, Preset->GainedCardEnterViewportAnchor);
@@ -5592,7 +5593,7 @@ bool FWacomFirstPersonCardLayerTransitionHoverDetailVisualTest::RunTest(const FS
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 300.0f));
 	BaseSlot.bIsHovered = true;
 	Layer->SetCardSlots({ BaseSlot });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	WacomFirstPersonCardLayerSpec::FLayerLayoutUpdateReceiver Receiver;
 	Layer->OnHoveredCardSlotUpdatedNative.AddRaw(
@@ -5738,12 +5739,12 @@ bool FWacomFirstPersonCardLayerEquivalentSlotRefreshSkippedTest::RunTest(const F
 	};
 	Layer->SetStaticCardSlots(Slots);
 	UWacomFirstPersonCardLayerSlotWidget* FirstWidget = Layer->GetSlotWidgetAt(0);
-	const int32 InitialSkipCount = Layer->GetSkippedEquivalentSlotRefreshCountForTest();
+	const int32 InitialSkipCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount;
 
 	Layer->SetStaticCardSlots(Slots);
 	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
 	TestEqual(TEXT("Equivalent refresh increments skip count"),
-		Layer->GetSkippedEquivalentSlotRefreshCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount,
 		InitialSkipCount + 1);
 	TestEqual(TEXT("Equivalent refresh keeps active count"), Debug.ActiveSlotCount, 2);
 	TestEqual(TEXT("Equivalent refresh creates no widgets"), Debug.CreatedThisUpdate, 0);
@@ -5784,7 +5785,7 @@ bool FWacomFirstPersonCardLayerDirtyGateMovedSlotRefreshesTest::RunTest(const FS
 	const FWacomFirstPersonCardLayerSlotView BaseSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f));
 	Layer->SetStaticCardSlots({ BaseSlot });
-	const int32 InitialSkipCount = Layer->GetSkippedEquivalentSlotRefreshCountForTest();
+	const int32 InitialSkipCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount;
 
 	FWacomFirstPersonCardLayerSlotView MovedSlot = BaseSlot;
 	MovedSlot.ScreenPosition = FVector2D(180.0f, 240.0f);
@@ -5796,7 +5797,7 @@ bool FWacomFirstPersonCardLayerDirtyGateMovedSlotRefreshesTest::RunTest(const FS
 
 	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
 	TestEqual(TEXT("Moved refresh does not skip"),
-		Layer->GetSkippedEquivalentSlotRefreshCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount,
 		InitialSkipCount);
 	TestEqual(TEXT("Moved refresh reuses widget"), Debug.ReusedThisUpdate, 1);
 	TestEqual(TEXT("Moved refresh keeps active count"), Debug.ActiveSlotCount, 1);
@@ -5838,7 +5839,7 @@ bool FWacomFirstPersonCardLayerDirtyGateChangedCardDataRefreshesTest::RunTest(co
 	BaseSlot.Entry.CardViewData.Name = FText::FromString(TEXT("Before"));
 	BaseSlot.Entry.CardViewData.Cost = 1;
 	Layer->SetStaticCardSlots({ BaseSlot });
-	const int32 InitialSkipCount = Layer->GetSkippedEquivalentSlotRefreshCountForTest();
+	const int32 InitialSkipCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount;
 
 	FWacomFirstPersonCardLayerSlotView ChangedSlot = BaseSlot;
 	ChangedSlot.Entry.CardViewData.Name = FText::FromString(TEXT("After"));
@@ -5847,7 +5848,7 @@ bool FWacomFirstPersonCardLayerDirtyGateChangedCardDataRefreshesTest::RunTest(co
 
 	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
 	TestEqual(TEXT("Card data refresh does not skip"),
-		Layer->GetSkippedEquivalentSlotRefreshCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount,
 		InitialSkipCount);
 	TestEqual(TEXT("Card data refresh reuses widget"), Debug.ReusedThisUpdate, 1);
 	TestEqual(TEXT("Card data refresh updates slot data"),
@@ -5887,8 +5888,8 @@ bool FWacomFirstPersonCardLayerDirtyGateTransitionHintsRefreshTest::RunTest(cons
 	const FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f));
 	Layer->SetStaticCardSlots({ Slot });
-	Layer->TickSlotMotionForTest(1.0f);
-	const int32 InitialSkipCount = Layer->GetSkippedEquivalentSlotRefreshCountForTest();
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	const int32 InitialSkipCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount;
 
 	Layer->SetCardTransitionHints({
 		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
@@ -5896,7 +5897,7 @@ bool FWacomFirstPersonCardLayerDirtyGateTransitionHintsRefreshTest::RunTest(cons
 	Layer->SetStaticCardSlots({ Slot });
 
 	TestEqual(TEXT("Transition hint refresh does not skip"),
-		Layer->GetSkippedEquivalentSlotRefreshCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount,
 		InitialSkipCount);
 	TestEqual(TEXT("Transition hint refresh reuses widget"), Layer->GetSlotMotionDebugView().ReusedThisUpdate, 1);
 	TestEqual(TEXT("Transition hint refresh keeps active count"), Layer->GetSlotMotionDebugView().ActiveSlotCount, 1);
@@ -5953,22 +5954,22 @@ bool FWacomFirstPersonCardLayerDirtyGateHoveredMotionUpdatesTest::RunTest(const 
 			++HoveredLayoutUpdateCount;
 			LastHoveredLayoutPosition = SlotView.ScreenPosition;
 		});
-	TestTrue(TEXT("Slot hover succeeds"), SlotWidget->RequestHoverForTest());
+	TestTrue(TEXT("Slot hover succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
 
 	FWacomFirstPersonCardLayerSlotView MovedSlot = BaseSlot;
 	MovedSlot.ScreenPosition = FVector2D(220.0f, 260.0f);
 	MovedSlot.WidgetPosition = MovedSlot.ScreenPosition;
 	MovedSlot.SnappedWidgetPosition = MovedSlot.ScreenPosition;
 	Layer->SetStaticCardSlots({ MovedSlot });
-	const int32 InitialSkipCount = Layer->GetSkippedEquivalentSlotRefreshCountForTest();
+	const int32 InitialSkipCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount;
 	const int32 InitialHoveredLayoutUpdateCount = HoveredLayoutUpdateCount;
 
 	Layer->SetStaticCardSlots({ MovedSlot });
 	TestEqual(TEXT("Equivalent moved target refresh skips full reconcile"),
-		Layer->GetSkippedEquivalentSlotRefreshCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount,
 		InitialSkipCount + 1);
 
-	Layer->TickSlotMotionForTest(0.1f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.1f);
 	TestTrue(TEXT("Hovered motion tick broadcasts layout update"),
 		HoveredLayoutUpdateCount > InitialHoveredLayoutUpdateCount);
 	TestTrue(TEXT("Hovered layout update follows motion toward target"),
@@ -6018,8 +6019,8 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	MotionConfig.DrawnEnterViewportAnchor = FVector2D(-1.0f, 2.0f);
 	MotionConfig.DrawnEnterScaleMultiplier = -3.0f;
 	Layer->SetSlotMotionConfig(MotionConfig);
-	const int32 MotionPropagationCount = Layer->GetSlotMotionConfigPropagationCountForTest();
-	const int32 SlotMotionApplyCount = SlotWidget->GetSlotMotionConfigApplyCountForTest();
+	const int32 MotionPropagationCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotMotionConfigPropagationCount;
+	const int32 SlotMotionApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount;
 	FWacomFirstPersonCardSlotMotionConfig NormalizedEquivalentMotionConfig = MotionConfig;
 	NormalizedEquivalentMotionConfig.OpacitySpeed = 0.0f;
 	NormalizedEquivalentMotionConfig.EnterOpacity = 1.0f;
@@ -6027,10 +6028,10 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	NormalizedEquivalentMotionConfig.DrawnEnterScaleMultiplier = 0.01f;
 	Layer->SetSlotMotionConfig(NormalizedEquivalentMotionConfig);
 	TestEqual(TEXT("Normalized-equivalent motion config skipped at layer"),
-		Layer->GetSlotMotionConfigPropagationCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotMotionConfigPropagationCount,
 		MotionPropagationCount);
 	TestEqual(TEXT("Normalized-equivalent motion config skipped at slot"),
-		SlotWidget->GetSlotMotionConfigApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount,
 		SlotMotionApplyCount);
 
 	FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig = WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig();
@@ -6039,8 +6040,8 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	FeedbackConfig.PressedOpacity = -1.0f;
 	FeedbackConfig.DenyShakePixels = -8.0f;
 	Layer->SetSlotFeedbackConfig(FeedbackConfig);
-	const int32 FeedbackPropagationCount = Layer->GetSlotFeedbackConfigPropagationCountForTest();
-	const int32 SlotFeedbackApplyCount = SlotWidget->GetSlotFeedbackConfigApplyCountForTest();
+	const int32 FeedbackPropagationCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotFeedbackConfigPropagationCount;
+	const int32 SlotFeedbackApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotFeedbackConfigApplyCount;
 	FWacomFirstPersonCardSlotFeedbackConfig NormalizedEquivalentFeedbackConfig = FeedbackConfig;
 	NormalizedEquivalentFeedbackConfig.PlayableHoverOpacity = 1.0f;
 	NormalizedEquivalentFeedbackConfig.PressedScale = 0.01f;
@@ -6048,10 +6049,10 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	NormalizedEquivalentFeedbackConfig.DenyShakePixels = 0.0f;
 	Layer->SetSlotFeedbackConfig(NormalizedEquivalentFeedbackConfig);
 	TestEqual(TEXT("Normalized-equivalent feedback config skipped at layer"),
-		Layer->GetSlotFeedbackConfigPropagationCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotFeedbackConfigPropagationCount,
 		FeedbackPropagationCount);
 	TestEqual(TEXT("Normalized-equivalent feedback config skipped at slot"),
-		SlotWidget->GetSlotFeedbackConfigApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotFeedbackConfigApplyCount,
 		SlotFeedbackApplyCount);
 
 	FWacomFirstPersonCardDragConfig DragConfig;
@@ -6061,8 +6062,8 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	DragConfig.DragTargetFeedbackOpacity = 3.0f;
 	DragConfig.SelectedSourceZOrderBoost = -10;
 	Layer->SetCardDragConfig(DragConfig);
-	const int32 DragPropagationCount = Layer->GetCardDragConfigPropagationCountForTest();
-	const int32 SlotDragApplyCount = SlotWidget->GetCardDragConfigApplyCountForTest();
+	const int32 DragPropagationCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CardDragConfigPropagationCount;
+	const int32 SlotDragApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).CardDragConfigApplyCount;
 	FWacomFirstPersonCardDragConfig NormalizedEquivalentDragConfig = DragConfig;
 	NormalizedEquivalentDragConfig.CardDragStartThresholdPixels = 0.0f;
 	NormalizedEquivalentDragConfig.CardInspectScreenPosition = FVector2D(0.0f, 1.0f);
@@ -6071,10 +6072,10 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	NormalizedEquivalentDragConfig.SelectedSourceZOrderBoost = 0;
 	Layer->SetCardDragConfig(NormalizedEquivalentDragConfig);
 	TestEqual(TEXT("Normalized-equivalent drag config skipped at layer"),
-		Layer->GetCardDragConfigPropagationCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CardDragConfigPropagationCount,
 		DragPropagationCount);
 	TestEqual(TEXT("Normalized-equivalent drag config skipped at slot"),
-		SlotWidget->GetCardDragConfigApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).CardDragConfigApplyCount,
 		SlotDragApplyCount);
 
 	PC->Destroy();
@@ -6118,7 +6119,7 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	MotionConfig.GainedEnterViewportAnchor = FVector2D(3.0f, -2.0f);
 	MotionConfig.GainedEnterScaleMultiplier = -5.0f;
 	SlotWidget->SetSlotMotionConfig(MotionConfig);
-	const int32 SlotMotionApplyCount = SlotWidget->GetSlotMotionConfigApplyCountForTest();
+	const int32 SlotMotionApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount;
 	FWacomFirstPersonCardSlotMotionConfig NormalizedMotionConfig = MotionConfig;
 	NormalizedMotionConfig.MotionSpeed = 0.0f;
 	NormalizedMotionConfig.EnterOpacity = 1.0f;
@@ -6126,7 +6127,7 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	NormalizedMotionConfig.GainedEnterScaleMultiplier = 0.01f;
 	Layer->SetSlotMotionConfig(NormalizedMotionConfig);
 	TestEqual(TEXT("Layer-normalized motion matches slot-normalized motion"),
-		SlotWidget->GetSlotMotionConfigApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount,
 		SlotMotionApplyCount);
 
 	FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig = WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig();
@@ -6134,14 +6135,14 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	FeedbackConfig.ConfirmOpacity = 2.0f;
 	FeedbackConfig.PlayCommitScale = -4.0f;
 	SlotWidget->SetSlotFeedbackConfig(FeedbackConfig);
-	const int32 SlotFeedbackApplyCount = SlotWidget->GetSlotFeedbackConfigApplyCountForTest();
+	const int32 SlotFeedbackApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotFeedbackConfigApplyCount;
 	FWacomFirstPersonCardSlotFeedbackConfig NormalizedFeedbackConfig = FeedbackConfig;
 	NormalizedFeedbackConfig.ConfirmDuration = 0.0f;
 	NormalizedFeedbackConfig.ConfirmOpacity = 1.0f;
 	NormalizedFeedbackConfig.PlayCommitScale = 0.01f;
 	Layer->SetSlotFeedbackConfig(NormalizedFeedbackConfig);
 	TestEqual(TEXT("Layer-normalized feedback matches slot-normalized feedback"),
-		SlotWidget->GetSlotFeedbackConfigApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotFeedbackConfigApplyCount,
 		SlotFeedbackApplyCount);
 
 	FWacomFirstPersonCardDragConfig DragConfig;
@@ -6151,7 +6152,7 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	DragConfig.SelectedSourceScale = -4.0f;
 	DragConfig.SelectedSourceAngleBlend = -0.5f;
 	SlotWidget->SetCardDragConfig(DragConfig);
-	const int32 SlotDragApplyCount = SlotWidget->GetCardDragConfigApplyCountForTest();
+	const int32 SlotDragApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).CardDragConfigApplyCount;
 	FWacomFirstPersonCardDragConfig NormalizedDragConfig = DragConfig;
 	NormalizedDragConfig.CardInspectHoldDelaySeconds = 0.0f;
 	NormalizedDragConfig.CardDragCameraLookScale = 0.0f;
@@ -6160,7 +6161,7 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	NormalizedDragConfig.SelectedSourceAngleBlend = 0.0f;
 	Layer->SetCardDragConfig(NormalizedDragConfig);
 	TestEqual(TEXT("Layer-normalized drag matches slot-normalized drag"),
-		SlotWidget->GetCardDragConfigApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).CardDragConfigApplyCount,
 		SlotDragApplyCount);
 
 	PC->Destroy();
@@ -6200,11 +6201,11 @@ bool FWacomFirstPersonCardAnchorStaticLayerConfigDirtyGateTest::RunTest(const FS
 	Anchor->RegisterComponent();
 	Anchor->bDrawStaticCardLayer = true;
 	Anchor->StaticCardCountFallback = 2;
-	Anchor->bEnableBattleHandInteractionPrototype = true;
+	Anchor->SetBattleHandInteractionEnabled(true);
 	Anchor->RefreshAnchor(1.0f / 60.0f);
 	Anchor->RefreshStaticLayerForTest();
 
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	if (!TestNotNull(TEXT("Layer"), Layer))
 	{
 		Anchor->DestroyComponent();
@@ -6213,21 +6214,21 @@ bool FWacomFirstPersonCardAnchorStaticLayerConfigDirtyGateTest::RunTest(const FS
 		return false;
 	}
 
-	const int32 InitialApplyCount = Anchor->GetStaticLayerConfigApplyCountForTest();
-	const int32 InitialSlotSkipCount = Layer->GetSkippedEquivalentSlotRefreshCountForTest();
+	const int32 InitialApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*Anchor).StaticLayerConfigApplyCount;
+	const int32 InitialSlotSkipCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount;
 	Anchor->RefreshStaticLayerForTest();
 	TestEqual(TEXT("Equivalent anchor refresh does not reapply config"),
-		Anchor->GetStaticLayerConfigApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).StaticLayerConfigApplyCount,
 		InitialApplyCount);
 	TestEqual(TEXT("Equivalent anchor refresh can skip layer slot refresh"),
-		Layer->GetSkippedEquivalentSlotRefreshCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SkippedEquivalentSlotRefreshCount,
 		InitialSlotSkipCount + 1);
 
 	Anchor->AuthoredCardSpacingPixels += 12.0f;
 	Anchor->RefreshAnchor(1.0f / 60.0f);
 	Anchor->RefreshStaticLayerForTest();
 	TestEqual(TEXT("Changed resolved config reapplies once"),
-		Anchor->GetStaticLayerConfigApplyCountForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).StaticLayerConfigApplyCount,
 		InitialApplyCount + 1);
 
 	Anchor->DestroyComponent();
@@ -6268,13 +6269,13 @@ bool FWacomFirstPersonCardLayerRemoveReaddNoGhostTest::RunTest(const FString& Pa
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstId, 0, FVector2D(100.0f, 200.0f)),
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondId, 1, FVector2D(220.0f, 200.0f))
 	});
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardSlots({
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondId, 0, FVector2D(100.0f, 200.0f))
 	});
 	TestEqual(TEXT("One active after remove"), Layer->GetSlotMotionDebugView().ActiveSlotCount, 1);
 	TestEqual(TEXT("One outgoing after remove"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 1);
-	Layer->TickSlotMotionForTest(0.25f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
 	TestEqual(TEXT("Outgoing cleaned after duration"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 0);
 
 	Layer->SetCardSlots({
@@ -6318,12 +6319,12 @@ bool FWacomFirstPersonCardLayerReaddOutgoingReclaimsWidgetTest::RunTest(const FS
 
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f)) });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	UWacomFirstPersonCardLayerSlotWidget* OriginalWidget = Layer->GetSlotWidgetAt(0);
 
 	Layer->SetCardSlots({});
 	TestEqual(TEXT("Card is outgoing after remove"), Layer->GetSlotMotionDebugView().OutgoingSlotCount, 1);
-	TestEqual(TEXT("Outgoing keeps original widget"), Layer->GetOutgoingSlotWidgetAtForTest(0), OriginalWidget);
+	TestEqual(TEXT("Outgoing keeps original widget"), FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0), OriginalWidget);
 
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(140.0f, 200.0f)) });
 
@@ -6375,7 +6376,7 @@ bool FWacomFirstPersonCardLayerHoveredInsertionStableTest::RunTest(const FString
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(OtherId, 1, FVector2D(220.0f, 200.0f))
 	});
 	UWacomFirstPersonCardLayerSlotWidget* HoveredWidget = Layer->GetSlotWidgetAt(0);
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	HoveredSlot.Index = 1;
 	HoveredSlot.ScreenPosition = FVector2D(220.0f, 180.0f);
@@ -6502,7 +6503,7 @@ bool FWacomFirstPersonCardLayerInvariantRepairTest::RunTest(const FString& Param
 
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f)) });
-	Layer->AddUntrackedSlotChildForTest();
+	FWacomFirstPersonCardLayerTestAccess::AddUntrackedSlotChild(*Layer);
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(120.0f, 200.0f)) });
 
 	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
@@ -6549,7 +6550,7 @@ bool FWacomFirstPersonCardLayerOutgoingLimitTest::RunTest(const FString& Paramet
 			FVector2D(100.0f + Index * 10.0f, 200.0f)));
 	}
 	Layer->SetCardSlots(Slots);
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	Layer->SetCardSlots({});
 
 	const FWacomFirstPersonCardLayerMotionDebugView Debug = Layer->GetSlotMotionDebugView();
@@ -6602,10 +6603,10 @@ bool FWacomFirstPersonCardLayerHoverVisualStateTest::RunTest(const FString& Para
 
 	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 1);
-	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	Anchor->SetBattleHandInteractionEnabled(true);
 	Anchor->RefreshStaticLayerForTest();
 
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer ? Layer->GetSlotWidgetAt(0) : nullptr;
 	if (TestNotNull(TEXT("Layer widget"), Layer)
 		&& TestNotNull(TEXT("Slot widget"), SlotWidget)
@@ -6619,7 +6620,7 @@ bool FWacomFirstPersonCardLayerHoverVisualStateTest::RunTest(const FString& Para
 			&Receiver,
 			&WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleUnhovered);
 
-		TestTrue(TEXT("Slot hover request succeeds"), SlotWidget->RequestHoverForTest());
+		TestTrue(TEXT("Slot hover request succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
 		TestEqual(TEXT("Anchor records hovered card"), Anchor->GetHoveredCardInstanceId(), CardInstanceId);
 		TestEqual(TEXT("Hover broadcasts once"), Receiver.HoverCount, 1);
 
@@ -6633,7 +6634,7 @@ bool FWacomFirstPersonCardLayerHoverVisualStateTest::RunTest(const FString& Para
 			TestTrue(TEXT("Hover slot is marked for layout updates"), HoverSlots[0].bIsHovered);
 		}
 
-		SlotWidget->RequestUnhoverForTest();
+		FWacomFirstPersonCardLayerTestAccess::RequestUnhover(*SlotWidget);
 		TestFalse(TEXT("Unhover clears hovered card"), Anchor->GetHoveredCardInstanceId().IsValid());
 		TestEqual(TEXT("Unhover broadcasts once"), Receiver.UnhoverCount, 1);
 		Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&Receiver);
@@ -6679,10 +6680,10 @@ bool FWacomFirstPersonCardLayerHoveredSlotLayoutUpdateTest::RunTest(const FStrin
 	Entry.CardInstanceId = CardInstanceId;
 	Entry.CardViewData.Name = FText::FromString(TEXT("Hovered layout"));
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { Entry });
-	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	Anchor->SetBattleHandInteractionEnabled(true);
 	Anchor->RefreshStaticLayerForTest();
 
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer ? Layer->GetSlotWidgetAt(0) : nullptr;
 	if (TestNotNull(TEXT("Layer widget"), Layer)
 		&& TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -6692,7 +6693,7 @@ bool FWacomFirstPersonCardLayerHoveredSlotLayoutUpdateTest::RunTest(const FStrin
 			&Receiver,
 			&WacomFirstPersonCardLayerSpec::FLayerLayoutUpdateReceiver::HandleUpdated);
 
-		TestTrue(TEXT("Slot hover succeeds"), SlotWidget->RequestHoverForTest());
+		TestTrue(TEXT("Slot hover succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
 		Anchor->RefreshStaticLayerForTest();
 		TestEqual(TEXT("Hovered layout update broadcasts"), Receiver.UpdateCount, 1);
 		TestEqual(TEXT("Hovered layout update keeps card id"), Receiver.LastCardId, CardInstanceId);
@@ -6739,10 +6740,10 @@ bool FWacomFirstPersonCardLayerAnchorCardTargetBridgeTest::RunTest(const FString
 	Entry.CardViewData.Name = FText::FromString(TEXT("Card Target"));
 	Entry.bIsPlayable = false;
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { Entry });
-	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	Anchor->SetBattleHandInteractionEnabled(true);
 	Anchor->RefreshStaticLayerForTest();
 
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer ? Layer->GetSlotWidgetAt(0) : nullptr;
 	if (TestNotNull(TEXT("Layer widget"), Layer)
 		&& TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -6755,7 +6756,7 @@ bool FWacomFirstPersonCardLayerAnchorCardTargetBridgeTest::RunTest(const FString
 			&Receiver,
 			&WacomFirstPersonCardLayerSpec::FLayerCardTargetReceiver::HandleUnhovered);
 
-		TestTrue(TEXT("Non-playable slot hover still succeeds"), SlotWidget->RequestHoverForTest());
+		TestTrue(TEXT("Non-playable slot hover still succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
 		TestEqual(TEXT("Anchor forwards target hover"), Receiver.HoverCount, 1);
 		TestEqual(TEXT("Anchor hovered target id"), Receiver.LastHandle.CardInstanceId, CardInstanceId);
 		TestEqual(TEXT("Anchor BuildCardTargetHandle returns current handle"),
@@ -6763,7 +6764,7 @@ bool FWacomFirstPersonCardLayerAnchorCardTargetBridgeTest::RunTest(const FString
 		TestTrue(TEXT("Anchor target source remains slot widget"),
 			Anchor->BuildCardTargetHandle().SourceObject.Get() == SlotWidget);
 
-		SlotWidget->RequestUnhoverForTest();
+		FWacomFirstPersonCardLayerTestAccess::RequestUnhover(*SlotWidget);
 		TestEqual(TEXT("Anchor forwards target unhover"), Receiver.UnhoverCount, 1);
 		TestFalse(TEXT("Anchor BuildCardTargetHandle clears after unhover"), Anchor->BuildCardTargetHandle().IsValid());
 
@@ -6815,7 +6816,7 @@ bool FWacomFirstPersonCardLayerClickBroadcastTest::RunTest(const FString& Parame
 	if (TestNotNull(TEXT("Slot widget"), SlotWidget))
 	{
 		TestEqual(TEXT("Interaction on makes slot visible"), SlotWidget->GetVisibility(), ESlateVisibility::Visible);
-		TestTrue(TEXT("Playable projected slot click succeeds"), SlotWidget->RequestClickForTest());
+		TestTrue(TEXT("Playable projected slot click succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestClick(*SlotWidget));
 	}
 	TestEqual(TEXT("Click broadcasts once"), Receiver.ClickCount, 1);
 	TestEqual(TEXT("Click forwards card id"), Receiver.LastCardId, CardInstanceId);
@@ -6855,13 +6856,13 @@ bool FWacomFirstPersonCardLayerInvalidClickNoopTest::RunTest(const FString& Para
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 
 	SlotWidget->SetSlotView(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid()));
-	TestFalse(TEXT("Invalid card id click noops"), SlotWidget->RequestClickForTest());
+	TestFalse(TEXT("Invalid card id click noops"), FWacomFirstPersonCardLayerTestAccess::RequestClick(*SlotWidget));
 
 	SlotWidget->SetSlotView(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, false));
-	TestFalse(TEXT("Unprojected slot click noops"), SlotWidget->RequestClickForTest());
+	TestFalse(TEXT("Unprojected slot click noops"), FWacomFirstPersonCardLayerTestAccess::RequestClick(*SlotWidget));
 
 	SlotWidget->SetSlotView(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), false, true));
-	TestFalse(TEXT("Unplayable slot click noops"), SlotWidget->RequestClickForTest());
+	TestFalse(TEXT("Unplayable slot click noops"), FWacomFirstPersonCardLayerTestAccess::RequestClick(*SlotWidget));
 	TestEqual(TEXT("Invalid clicks do not broadcast"), Receiver.ClickCount, 0);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
@@ -6906,7 +6907,7 @@ bool FWacomFirstPersonCardLayerPlayableHoverFeedbackTest::RunTest(const FString&
 
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { Entry });
 	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
-	Anchor->SetHoveredCardInstanceIdForTest(CardId);
+	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, CardId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> HoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
 	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 1);
@@ -6925,8 +6926,8 @@ bool FWacomFirstPersonCardLayerPlayableHoverFeedbackTest::RunTest(const FString&
 		SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
 		SlotWidget->SetCardLayerInteractionEnabled(true);
 		SlotWidget->SetSlotViewImmediate(HoverSlots[0]);
-		TestTrue(TEXT("Playable hover request succeeds"), SlotWidget->RequestHoverForTest());
-		TestEqual(TEXT("Playable hover tint opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.2f);
+		TestTrue(TEXT("Playable hover request succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
+		TestEqual(TEXT("Playable hover tint opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.2f);
 	}
 
 	Anchor->DestroyComponent();
@@ -6973,7 +6974,7 @@ bool FWacomFirstPersonCardLayerNonPlayableHoverFeedbackTest::RunTest(const FStri
 
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { Entry });
 	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
-	Anchor->SetHoveredCardInstanceIdForTest(CardId);
+	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, CardId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> HoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
 	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 1);
@@ -6993,8 +6994,8 @@ bool FWacomFirstPersonCardLayerNonPlayableHoverFeedbackTest::RunTest(const FStri
 		SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
 		SlotWidget->SetCardLayerInteractionEnabled(true);
 		SlotWidget->SetSlotViewImmediate(HoverSlots[0]);
-		TestTrue(TEXT("Non-playable hover request succeeds"), SlotWidget->RequestHoverForTest());
-		TestEqual(TEXT("Non-playable hover does not tint as playable"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
+		TestTrue(TEXT("Non-playable hover request succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
+		TestEqual(TEXT("Non-playable hover does not tint as playable"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
 	}
 
 	Anchor->DestroyComponent();
@@ -7034,11 +7035,11 @@ bool FWacomFirstPersonCardLayerPressFeedbackTest::RunTest(const FString& Paramet
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
 
-	TestTrue(TEXT("Press succeeds"), SlotWidget->RequestPressForTest());
-	TestTrue(TEXT("Pressed flag is set"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+	TestTrue(TEXT("Press succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
+	TestTrue(TEXT("Pressed flag is set"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
 	TestEqual(TEXT("Press does not broadcast"), Receiver.ClickCount, 0);
 	TestTrue(TEXT("Pressed scale applies"), FMath::IsNearlyEqual(SlotWidget->GetRenderTransform().Scale.X, 0.55f * 0.9f, KINDA_SMALL_NUMBER));
-	TestEqual(TEXT("Pressed overlay opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.3f);
+	TestEqual(TEXT("Pressed overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.3f);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
 	PC->Destroy();
@@ -7077,15 +7078,15 @@ bool FWacomFirstPersonCardLayerMouseUpConfirmFeedbackTest::RunTest(const FString
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId));
 
-	TestTrue(TEXT("Press succeeds"), SlotWidget->RequestPressForTest());
-	TestTrue(TEXT("Mouse up succeeds"), SlotWidget->RequestMouseUpForTest());
-	TestFalse(TEXT("Mouse up clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+	TestTrue(TEXT("Press succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
+	TestTrue(TEXT("Mouse up succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*SlotWidget));
+	TestFalse(TEXT("Mouse up clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
 	TestEqual(TEXT("Mouse up broadcasts once"), Receiver.ClickCount, 1);
 	TestEqual(TEXT("Mouse up forwards card id"), Receiver.LastCardId, CardId);
-	TestTrue(TEXT("Confirm feedback starts"), SlotWidget->IsConfirmFeedbackActiveForTest());
-	TestEqual(TEXT("Confirm overlay opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.4f);
-	SlotWidget->TickSlotMotionForTest(0.2f);
-	TestFalse(TEXT("Confirm feedback expires"), SlotWidget->IsConfirmFeedbackActiveForTest());
+	TestTrue(TEXT("Confirm feedback starts"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bConfirmFeedbackActive);
+	TestEqual(TEXT("Confirm overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.4f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.2f);
+	TestFalse(TEXT("Confirm feedback expires"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bConfirmFeedbackActive);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
 	PC->Destroy();
@@ -7123,15 +7124,15 @@ bool FWacomFirstPersonCardLayerDenyFeedbackTest::RunTest(const FString& Paramete
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), false, true));
 
-	TestTrue(TEXT("Press succeeds for non-playable interactable slot"), SlotWidget->RequestPressForTest());
-	TestTrue(TEXT("Mouse up is consumed"), SlotWidget->RequestMouseUpForTest());
+	TestTrue(TEXT("Press succeeds for non-playable interactable slot"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
+	TestTrue(TEXT("Mouse up is consumed"), FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*SlotWidget));
 	TestEqual(TEXT("Deny does not broadcast"), Receiver.ClickCount, 0);
-	TestTrue(TEXT("Deny feedback starts"), SlotWidget->IsDenyFeedbackActiveForTest());
-	TestEqual(TEXT("Deny overlay opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.5f);
-	SlotWidget->TickSlotMotionForTest(0.05f);
+	TestTrue(TEXT("Deny feedback starts"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bDenyFeedbackActive);
+	TestEqual(TEXT("Deny overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.5f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.05f);
 	TestTrue(TEXT("Deny shake changes translation"), FMath::Abs(SlotWidget->GetRenderTransform().Translation.X) > KINDA_SMALL_NUMBER);
-	SlotWidget->TickSlotMotionForTest(0.2f);
-	TestFalse(TEXT("Deny feedback expires"), SlotWidget->IsDenyFeedbackActiveForTest());
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.2f);
+	TestFalse(TEXT("Deny feedback expires"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bDenyFeedbackActive);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
 	PC->Destroy();
@@ -7161,24 +7162,24 @@ bool FWacomFirstPersonCardLayerFeedbackClearsTest::RunTest(const FString& Parame
 	SlotWidget->SetSlotFeedbackConfig(WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig());
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
-	TestTrue(TEXT("Press starts"), SlotWidget->RequestPressForTest());
-	SlotWidget->RequestUnhoverForTest();
-	TestFalse(TEXT("Unhover clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+	TestTrue(TEXT("Press starts"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
+	FWacomFirstPersonCardLayerTestAccess::RequestUnhover(*SlotWidget);
+	TestFalse(TEXT("Unhover clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
 
-	TestTrue(TEXT("Press restarts"), SlotWidget->RequestPressForTest());
+	TestTrue(TEXT("Press restarts"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
-	TestFalse(TEXT("Reuse clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
+	TestFalse(TEXT("Reuse clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
 
-	TestTrue(TEXT("Press starts before exit"), SlotWidget->RequestPressForTest());
+	TestTrue(TEXT("Press starts before exit"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
 	SlotWidget->BeginExitMotion(SlotWidget->GetSlotView());
-	TestFalse(TEXT("Exit clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
-	TestEqual(TEXT("Exit clears overlay"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
+	TestFalse(TEXT("Exit clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
+	TestEqual(TEXT("Exit clears overlay"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
 
-	TestTrue(TEXT("Press starts before disable"), SlotWidget->RequestPressForTest());
+	TestTrue(TEXT("Press starts before disable"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
 	SlotWidget->SetCardLayerInteractionEnabled(false);
-	TestFalse(TEXT("Disabling interaction clears pressed"), SlotWidget->IsPressedForFirstPersonLayerForTest());
-	TestEqual(TEXT("Disabling interaction clears overlay"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
+	TestFalse(TEXT("Disabling interaction clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
+	TestEqual(TEXT("Disabling interaction clears overlay"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
 
 	PC->Destroy();
 	return true;
@@ -7217,11 +7218,11 @@ bool FWacomFirstPersonCardLayerFeedbackDisabledTest::RunTest(const FString& Para
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
 
-	TestTrue(TEXT("Press still consumes interactable slot"), SlotWidget->RequestPressForTest());
-	TestEqual(TEXT("Feedback overlay stays hidden"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
-	TestTrue(TEXT("Click still succeeds"), SlotWidget->RequestMouseUpForTest());
+	TestTrue(TEXT("Press still consumes interactable slot"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
+	TestEqual(TEXT("Feedback overlay stays hidden"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
+	TestTrue(TEXT("Click still succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*SlotWidget));
 	TestEqual(TEXT("Click path still broadcasts"), Receiver.ClickCount, 1);
-	TestFalse(TEXT("Confirm feedback stays disabled"), SlotWidget->IsConfirmFeedbackActiveForTest());
+	TestFalse(TEXT("Confirm feedback stays disabled"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bConfirmFeedbackActive);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
 	PC->Destroy();
@@ -7561,7 +7562,7 @@ bool FWacomFirstPersonCardLayerBattleHUDClickIntentTest::RunTest(const FString& 
 
 	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
 	HUD->SyncFirstPersonBattleHandLayerForTest(InitialSnapshot);
-	TestTrue(TEXT("First-person hand interaction is enabled on anchor"), Anchor->IsBattleHandInteractionPrototypeEnabled());
+	TestTrue(TEXT("First-person hand interaction is enabled on anchor"), Anchor->IsBattleHandInteractionEnabled());
 	TestEqual(TEXT("FirstPersonHandOnly hides legacy hand while first-person interaction handles clicks"),
 		HUD->GetHandPanelVisibilityForTest(),
 		ESlateVisibility::Collapsed);
@@ -7642,7 +7643,7 @@ bool FWacomFirstPersonCardLayerBattleHUDCleanupTest::RunTest(const FString& Para
 	TestTrue(TEXT("Runtime hand source is active"), Anchor->HasRuntimeCardLayerData());
 	HUD->ClearFirstPersonBattleHandLayerForTest();
 	TestFalse(TEXT("Runtime hand source is cleared"), Anchor->HasRuntimeCardLayerData());
-	TestFalse(TEXT("Anchor interaction is disabled"), Anchor->IsBattleHandInteractionPrototypeEnabled());
+	TestFalse(TEXT("Anchor interaction is disabled"), Anchor->IsBattleHandInteractionEnabled());
 
 	Anchor->OnFirstPersonCardLayerCardClicked.Broadcast(
 		TargetCardId,
@@ -8359,7 +8360,7 @@ bool FWacomFirstPersonCardLayerPendingHoverPriorityTest::RunTest(const FString& 
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { PendingEntry });
 	const TArray<FWacomFirstPersonCardLayerSlotView> PendingSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
-	Anchor->SetHoveredCardInstanceIdForTest(PendingId);
+	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, PendingId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> PendingHoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
 	TestEqual(TEXT("Pending slot count"), PendingSlots.Num(), 1);
@@ -8417,11 +8418,11 @@ bool FWacomFirstPersonCardLayerPendingPressFeedbackTest::RunTest(const FString& 
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(PendingSlot);
 
-	TestTrue(TEXT("Pending hover request succeeds"), SlotWidget->RequestHoverForTest());
-	TestEqual(TEXT("Pending hover does not use playable hover tint"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.0f);
-	TestTrue(TEXT("Pending press succeeds"), SlotWidget->RequestPressForTest());
+	TestTrue(TEXT("Pending hover request succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
+	TestEqual(TEXT("Pending hover does not use playable hover tint"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
+	TestTrue(TEXT("Pending press succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
 	TestTrue(TEXT("Pending press applies only press scale"), FMath::IsNearlyEqual(SlotWidget->GetRenderTransform().Scale.X, 1.2f * 0.9f, KINDA_SMALL_NUMBER));
-	TestTrue(TEXT("Pending click succeeds"), SlotWidget->RequestMouseUpForTest());
+	TestTrue(TEXT("Pending click succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*SlotWidget));
 	TestEqual(TEXT("Pending click broadcasts"), Receiver.ClickCount, 1);
 	TestEqual(TEXT("Pending click forwards id"), Receiver.LastCardId, PendingId);
 
@@ -8537,7 +8538,7 @@ bool FWacomFirstPersonCardLayerLegacyHandVisibilityTest::RunTest(const FString& 
 	TestFalse(TEXT("Legacy mode clears runtime hand"),
 		Character->GetFirstPersonCardAnchorComponent()->HasRuntimeCardLayerData());
 	TestFalse(TEXT("Legacy mode disables first-person interaction"),
-		Character->GetFirstPersonCardAnchorComponent()->IsBattleHandInteractionPrototypeEnabled());
+		Character->GetFirstPersonCardAnchorComponent()->IsBattleHandInteractionEnabled());
 	TestEqual(TEXT("Legacy mode keeps legacy hand visible"),
 		HUD->GetHandPanelVisibilityForTest(),
 		InitialHandVisibility);
@@ -8717,8 +8718,8 @@ bool FWacomFirstPersonCardLayerClickBeforeHoldDelayTest::RunTest(const FString& 
 	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver Receiver;
 	SlotWidget->OnCardClickedNative.AddRaw(&Receiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
 
-	TestTrue(TEXT("Gesture press starts"), SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f)));
-	TestTrue(TEXT("Release before delay succeeds"), SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 600.0f)));
+	TestTrue(TEXT("Gesture press starts"), FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f)));
+	TestTrue(TEXT("Release before delay succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(500.0f, 600.0f)));
 	TestEqual(TEXT("Quick click broadcasts once"), Receiver.ClickCount, 1);
 	TestEqual(TEXT("Quick click card id"), Receiver.LastCardId, CardId);
 
@@ -8754,8 +8755,8 @@ bool FWacomFirstPersonCardLayerDragPointerViewportTest::RunTest(const FString& P
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true));
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(960.0f, 540.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(1440.0f, 270.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(960.0f, 540.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(1440.0f, 270.0f));
 	const FWacomFirstPersonCardDragView DragView = SlotWidget->BuildDragView();
 
 	TestTrue(TEXT("Drag view has pointer viewport position"), DragView.bHasPointerViewportPosition);
@@ -8763,7 +8764,7 @@ bool FWacomFirstPersonCardLayerDragPointerViewportTest::RunTest(const FString& P
 	TestEqual(TEXT("Pointer normalized X uses widget viewport"), static_cast<float>(DragView.PointerNormalizedViewportPosition.X), 0.5f);
 	TestEqual(TEXT("Pointer normalized Y uses widget viewport"), static_cast<float>(DragView.PointerNormalizedViewportPosition.Y), -0.5f);
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(1440.0f, 270.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(1440.0f, 270.0f));
 	PC->Destroy();
 	return true;
 }
@@ -8799,13 +8800,13 @@ bool FWacomFirstPersonCardLayerHoldInspectTest::RunTest(const FString& Parameter
 	WacomFirstPersonCardLayerSpec::FLayerDragReceiver Receiver;
 	SlotWidget->OnCardDragStartedNative.AddRaw(&Receiver, &WacomFirstPersonCardLayerSpec::FLayerDragReceiver::HandleStarted);
 
-	TestTrue(TEXT("Gesture press starts"), SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f)));
-	SlotWidget->RequestGestureMoveForTest(0.12f, FVector2D(500.0f, 600.0f));
+	TestTrue(TEXT("Gesture press starts"), FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f)));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, FVector2D(500.0f, 600.0f));
 	TestEqual(TEXT("Hold enters inspect state"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::Inspecting);
 	TestEqual(TEXT("Inspect start broadcasts"), Receiver.StartedCount, 1);
 	TestTrue(TEXT("Inspect visual scales up"), SlotWidget->GetVisualSlotView().RenderScale >= 0.55f);
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(500.0f, 600.0f));
 	TestEqual(TEXT("Release clears gesture"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::Idle);
 
 	SlotWidget->OnCardDragStartedNative.RemoveAll(&Receiver);
@@ -8848,15 +8849,15 @@ bool FWacomFirstPersonCardLayerHoldInspectKeepsPointerStableTest::RunTest(const 
 	SlotWidget->SetSlotViewImmediate(Slot);
 
 	const FVector2D PressPosition(500.0f, 600.0f);
-	TestTrue(TEXT("Gesture press starts"), SlotWidget->RequestGesturePressForTest(PressPosition));
-	SlotWidget->RequestGestureMoveForTest(0.12f, PressPosition);
+	TestTrue(TEXT("Gesture press starts"), FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, PressPosition));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, PressPosition);
 	TestEqual(TEXT("Hold enters inspect state"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::Inspecting);
-	SlotWidget->TickSlotMotionForTest(0.25f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.25f);
 	TestNotEqual(TEXT("Inspect motion moves visual slot away from source"),
 		SlotWidget->GetVisualSlotView().ScreenPosition,
 		SlotWidget->GetSlotView().ScreenPosition);
 
-	SlotWidget->RequestGestureMoveForTest(0.0f, PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.0f, PressPosition);
 	const FWacomFirstPersonCardDragView DragView = SlotWidget->BuildDragView();
 	TestEqual(TEXT("Press remains in widget-space"), DragView.PressScreenPosition, PressPosition);
 	TestEqual(TEXT("Current pointer remains in widget-space"), DragView.CurrentScreenPosition, PressPosition);
@@ -8864,7 +8865,7 @@ bool FWacomFirstPersonCardLayerHoldInspectKeepsPointerStableTest::RunTest(const 
 		SlotWidget->GetGestureStateForFirstPersonLayer(),
 		EWacomFirstPersonCardGestureState::Inspecting);
 
-	SlotWidget->RequestGestureReleaseForTest(PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, PressPosition);
 	PC->Destroy();
 	return true;
 }
@@ -8911,9 +8912,9 @@ bool FWacomFirstPersonCardLayerInspectIgnoresLargeLayoutResetTest::RunTest(const
 	SlotWidget->SetSlotViewImmediate(InitialSlot);
 
 	const FVector2D PressPosition(500.0f, 600.0f);
-	SlotWidget->RequestGesturePressForTest(PressPosition);
-	SlotWidget->RequestGestureMoveForTest(0.12f, PressPosition);
-	SlotWidget->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 1.0f);
 	const FVector2D InspectVisualPosition = SlotWidget->GetVisualSlotView().ScreenPosition;
 	TestNotEqual(TEXT("Inspect visual leaves original slot"),
 		InspectVisualPosition,
@@ -8928,7 +8929,7 @@ bool FWacomFirstPersonCardLayerInspectIgnoresLargeLayoutResetTest::RunTest(const
 		SlotWidget->GetVisualSlotView().ScreenPosition,
 		InspectVisualPosition);
 
-	SlotWidget->RequestGestureReleaseForTest(PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, PressPosition);
 	PC->Destroy();
 	return true;
 }
@@ -8982,9 +8983,9 @@ bool FWacomFirstPersonCardLayerInspectUsesVisualCanvasZOrderTest::RunTest(const 
 	}
 
 	const FVector2D PressPosition(500.0f, 600.0f);
-	TestTrue(TEXT("Gesture press starts"), SlotWidget->RequestGesturePressForTest(PressPosition));
-	SlotWidget->RequestGestureMoveForTest(0.12f, PressPosition);
-	SlotWidget->TickSlotMotionForTest(1.0f);
+	TestTrue(TEXT("Gesture press starts"), FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, PressPosition));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 1.0f);
 	const int32 InspectVisualZOrder = SlotWidget->GetVisualSlotView().ZOrder;
 	TestTrue(TEXT("Inspect visual raises z-order"), InspectVisualZOrder > Slot.ZOrder);
 
@@ -8997,7 +8998,7 @@ bool FWacomFirstPersonCardLayerInspectUsesVisualCanvasZOrderTest::RunTest(const 
 		Layer->GetCardZOrderAt(0),
 		SlotWidget->GetVisualSlotView().ZOrder);
 
-	SlotWidget->RequestGestureReleaseForTest(PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, PressPosition);
 	PC->Destroy();
 	return true;
 }
@@ -9053,12 +9054,12 @@ bool FWacomFirstPersonCardLayerInspectBroadcastsVisualMotionUpdateTest::RunTest(
 	Layer->OnCardDragUpdatedNative.AddRaw(&DragReceiver, &WacomFirstPersonCardLayerSpec::FLayerDragReceiver::HandleUpdated);
 
 	const FVector2D PressPosition(500.0f, 600.0f);
-	TestTrue(TEXT("Gesture press starts"), SlotWidget->RequestGesturePressForTest(PressPosition));
-	SlotWidget->RequestGestureMoveForTest(0.12f, PressPosition);
+	TestTrue(TEXT("Gesture press starts"), FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, PressPosition));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, PressPosition);
 	const int32 UpdatesAfterEnteringInspect = DragReceiver.UpdatedCount;
 	const FVector2D VisualPositionBeforeMotion = SlotWidget->GetVisualSlotView().ScreenPosition;
 
-	SlotWidget->TickSlotMotionForTest(0.16f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.16f);
 	TestTrue(TEXT("Inspect slot motion broadcasts visual update without pointer move"),
 		DragReceiver.UpdatedCount > UpdatesAfterEnteringInspect);
 	TestNotEqual(TEXT("Inspect visual moved while pointer stayed still"),
@@ -9072,7 +9073,7 @@ bool FWacomFirstPersonCardLayerInspectBroadcastsVisualMotionUpdateTest::RunTest(
 		PressPosition);
 
 	Layer->OnCardDragUpdatedNative.RemoveAll(&DragReceiver);
-	SlotWidget->RequestGestureReleaseForTest(PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, PressPosition);
 	PC->Destroy();
 	return true;
 }
@@ -9108,11 +9109,11 @@ bool FWacomFirstPersonCardLayerInspectReleaseNoSubmitTest::RunTest(const FString
 	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver ClickReceiver;
 	SlotWidget->OnCardClickedNative.AddRaw(&ClickReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.12f, FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(500.0f, 600.0f));
 	TestEqual(TEXT("Inspect release does not click"), ClickReceiver.ClickCount, 0);
-	TestFalse(TEXT("Inspect release does not play deny feedback"), SlotWidget->IsDenyFeedbackActiveForTest());
+	TestFalse(TEXT("Inspect release does not play deny feedback"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bDenyFeedbackActive);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
 	PC->Destroy();
@@ -9149,10 +9150,10 @@ bool FWacomFirstPersonCardLayerDragSuppressesClickTest::RunTest(const FString& P
 	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver ClickReceiver;
 	SlotWidget->OnCardClickedNative.AddRaw(&ClickReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(505.0f, 575.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(505.0f, 575.0f));
 	TestEqual(TEXT("No-target drag state"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(505.0f, 575.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(505.0f, 575.0f));
 	TestEqual(TEXT("Short drag release does not click"), ClickReceiver.ClickCount, 0);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
@@ -9188,14 +9189,14 @@ bool FWacomFirstPersonCardLayerNoTargetArmedTest::RunTest(const FString& Paramet
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true));
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(500.0f, 540.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(500.0f, 540.0f));
 	TestEqual(TEXT("Below commit distance stays dragging"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(500.0f, 480.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(500.0f, 480.0f));
 	TestEqual(TEXT("Past upward distance arms commit"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::ArmedForCommit);
 	TestTrue(TEXT("Drag view reports armed"), SlotWidget->BuildDragView().bCommitArmed);
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 480.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(500.0f, 480.0f));
 	PC->Destroy();
 	return true;
 }
@@ -9234,9 +9235,9 @@ bool FWacomFirstPersonCardLayerNoTargetDragIgnoresLiveAnchorMotionTest::RunTest(
 	InitialSlot.SnappedWidgetPosition = InitialSlot.ScreenPosition;
 	SlotWidget->SetSlotViewImmediate(InitialSlot);
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(500.0f, 540.0f));
-	SlotWidget->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(500.0f, 540.0f));
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 1.0f);
 	TestEqual(TEXT("Drag starts"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
 	TestEqual(TEXT("Initial drag follows pointer delta from frozen visual start"),
 		SlotWidget->GetVisualSlotView().ScreenPosition,
@@ -9247,13 +9248,13 @@ bool FWacomFirstPersonCardLayerNoTargetDragIgnoresLiveAnchorMotionTest::RunTest(
 	LiveMovedSlot.WidgetPosition = LiveMovedSlot.ScreenPosition;
 	LiveMovedSlot.SnappedWidgetPosition = LiveMovedSlot.ScreenPosition;
 	SlotWidget->SetSlotView(LiveMovedSlot);
-	SlotWidget->RequestGestureMoveForTest(0.0f, FVector2D(500.0f, 520.0f));
-	SlotWidget->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.0f, FVector2D(500.0f, 520.0f));
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 1.0f);
 	TestEqual(TEXT("Live slot refresh does not add anchor drift to drag visual"),
 		SlotWidget->GetVisualSlotView().ScreenPosition,
 		FVector2D(500.0f, 520.0f));
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 520.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(500.0f, 520.0f));
 	PC->Destroy();
 	return true;
 }
@@ -9298,9 +9299,9 @@ bool FWacomFirstPersonCardLayerNoTargetDragIgnoresLargeLayoutResetTest::RunTest(
 	InitialSlot.SnappedWidgetPosition = InitialSlot.ScreenPosition;
 	SlotWidget->SetSlotViewImmediate(InitialSlot);
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(500.0f, 300.0f));
-	SlotWidget->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(500.0f, 300.0f));
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 1.0f);
 	TestEqual(TEXT("Drag visual follows pointer delta before refresh"),
 		SlotWidget->GetVisualSlotView().ScreenPosition,
 		FVector2D(500.0f, 300.0f));
@@ -9314,7 +9315,7 @@ bool FWacomFirstPersonCardLayerNoTargetDragIgnoresLargeLayoutResetTest::RunTest(
 		SlotWidget->GetVisualSlotView().ScreenPosition,
 		FVector2D(500.0f, 300.0f));
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 300.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(500.0f, 300.0f));
 	PC->Destroy();
 	return true;
 }
@@ -9355,11 +9356,11 @@ bool FWacomFirstPersonCardLayerTargetedAimTest::RunTest(const FString& Parameter
 	Layer->OnCardDragStartedNative.AddRaw(&DragReceiver, &WacomFirstPersonCardLayerSpec::FLayerDragReceiver::HandleStarted);
 	Layer->OnCardDragUpdatedNative.AddRaw(&DragReceiver, &WacomFirstPersonCardLayerSpec::FLayerDragReceiver::HandleUpdated);
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
 	TestEqual(TEXT("Targeted card enters aim state"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::AimingTargetedCard);
 	TestEqual(TEXT("Layer drag started"), DragReceiver.StartedCount, 1);
-	TestEqual(TEXT("Layer current drag is aim"), Layer->GetCurrentDragViewForTest().GestureState, EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	TestEqual(TEXT("Layer current drag is aim"), FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.GestureState, EWacomFirstPersonCardGestureState::AimingTargetedCard);
 
 	Layer->OnCardDragStartedNative.RemoveAll(&DragReceiver);
 	Layer->OnCardDragUpdatedNative.RemoveAll(&DragReceiver);
@@ -9401,7 +9402,7 @@ bool FWacomFirstPersonCardLayerTargetedAimIgnoresLiveAnchorMotionTest::RunTest(c
 	InitialSlot.WidgetPosition = InitialSlot.ScreenPosition;
 	InitialSlot.SnappedWidgetPosition = InitialSlot.ScreenPosition;
 	Layer->SetCardSlots({ InitialSlot });
-	Layer->TickSlotMotionForTest(1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -9410,14 +9411,14 @@ bool FWacomFirstPersonCardLayerTargetedAimIgnoresLiveAnchorMotionTest::RunTest(c
 		return false;
 	}
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(560.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(560.0f, 590.0f));
 	TestEqual(TEXT("Aim starts"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::AimingTargetedCard);
 	TestEqual(TEXT("Aim arrow starts at frozen visual source"),
-		Layer->GetCurrentDragViewForTest().SourceSlotView.ScreenPosition,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.SourceSlotView.ScreenPosition,
 		FVector2D(500.0f, 600.0f));
 	TestEqual(TEXT("Aim arrow ends at pointer"),
-		Layer->GetCurrentDragViewForTest().CurrentScreenPosition,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentScreenPosition,
 		FVector2D(560.0f, 590.0f));
 
 	FWacomFirstPersonCardLayerSlotView LiveMovedSlot = InitialSlot;
@@ -9431,9 +9432,9 @@ bool FWacomFirstPersonCardLayerTargetedAimIgnoresLiveAnchorMotionTest::RunTest(c
 		PC->Destroy();
 		return false;
 	}
-	SlotWidget->RequestGestureMoveForTest(0.0f, FVector2D(580.0f, 570.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.0f, FVector2D(580.0f, 570.0f));
 
-	const FWacomFirstPersonCardDragView DragView = Layer->GetCurrentDragViewForTest();
+	const FWacomFirstPersonCardDragView DragView = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView;
 	TestEqual(TEXT("Live slot refresh does not move aim source"),
 		DragView.SourceSlotView.ScreenPosition,
 		FVector2D(500.0f, 600.0f));
@@ -9441,7 +9442,7 @@ bool FWacomFirstPersonCardLayerTargetedAimIgnoresLiveAnchorMotionTest::RunTest(c
 		DragView.CurrentScreenPosition,
 		FVector2D(580.0f, 570.0f));
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(580.0f, 570.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(580.0f, 570.0f));
 	PC->Destroy();
 	return true;
 }
@@ -9475,10 +9476,10 @@ bool FWacomFirstPersonCardLayerHandCardDenyTest::RunTest(const FString& Paramete
 	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver ClickReceiver;
 	SlotWidget->OnCardClickedNative.AddRaw(&ClickReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
 	TestEqual(TEXT("HandCard enters aim/probe state"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::AimingTargetedCard);
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(540.0f, 590.0f));
 	TestEqual(TEXT("HandCard drag release does not click-submit"), ClickReceiver.ClickCount, 0);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
@@ -9518,8 +9519,8 @@ bool FWacomFirstPersonCardLayerDragClearTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
 	TestEqual(TEXT("Aim state active"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::AimingTargetedCard);
 	Layer->SetCardLayerInteractionEnabled(false);
 	TestEqual(TEXT("Interaction disabled clears gesture"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::Idle);
@@ -9527,10 +9528,10 @@ bool FWacomFirstPersonCardLayerDragClearTest::RunTest(const FString& Parameters)
 	Layer->SetCardLayerInteractionEnabled(true);
 	Layer->SetCardSlots({ Slot });
 	SlotWidget = Layer->GetSlotWidgetAt(0);
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
 	Layer->ClearSlotMotionState();
-	TestEqual(TEXT("Layer clear resets current drag"), Layer->GetCurrentDragViewForTest().GestureState, EWacomFirstPersonCardGestureState::Idle);
+	TestEqual(TEXT("Layer clear resets current drag"), FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.GestureState, EWacomFirstPersonCardGestureState::Idle);
 
 	PC->Destroy();
 	return true;
@@ -9568,18 +9569,18 @@ bool FWacomFirstPersonCardLayerNoTargetCommitReadyFeedbackTest::RunTest(const FS
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true));
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(500.0f, 300.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(500.0f, 300.0f));
 
 	TestEqual(TEXT("Armed drag exposes commit ready state"),
-		SlotWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::CommitReady);
-	TestEqual(TEXT("Commit ready overlay opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.25f);
-	TestEqual(TEXT("Commit ready overlay color"), SlotWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Green);
+	TestEqual(TEXT("Commit ready overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.25f);
+	TestEqual(TEXT("Commit ready overlay color"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayColor, FLinearColor::Green);
 	TestTrue(TEXT("Commit ready scales source card"),
 		SlotWidget->GetRenderTransform().Scale.X > SlotWidget->GetVisualSlotView().RenderScale);
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(500.0f, 300.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(500.0f, 300.0f));
 	PC->Destroy();
 	return true;
 }
@@ -9624,8 +9625,8 @@ bool FWacomFirstPersonCardLayerValidWorldTargetFeedbackTest::RunTest(const FStri
 		return false;
 	}
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
 
 	const FVector2D TargetScreenPosition(700.0f, 420.0f);
 	const FWacomInteractionTargetHandle TargetHandle =
@@ -9636,15 +9637,15 @@ bool FWacomFirstPersonCardLayerValidWorldTargetFeedbackTest::RunTest(const FStri
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget,
 		TargetScreenPosition);
 
-	const FWacomFirstPersonCardDragView DragView = Layer->GetCurrentDragViewForTest();
+	const FWacomFirstPersonCardDragView DragView = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView;
 	TestEqual(TEXT("Drag view records valid world feedback"),
 		DragView.TargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
 	TestTrue(TEXT("Drag view has feedback target position"), DragView.bHasFeedbackTargetScreenPosition);
-	TestEqual(TEXT("Source slot gets valid overlay"), SlotWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Green);
-	TestEqual(TEXT("Source slot valid opacity"), SlotWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.22f);
+	TestEqual(TEXT("Source slot gets valid overlay"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayColor, FLinearColor::Green);
+	TestEqual(TEXT("Source slot valid opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.22f);
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(540.0f, 590.0f));
 	PC->Destroy();
 	return true;
 }
@@ -9689,8 +9690,8 @@ bool FWacomFirstPersonCardLayerAimArrowSnapTest::RunTest(const FString& Paramete
 
 	const FVector2D PointerPosition(540.0f, 590.0f);
 	const FVector2D TargetPosition(740.0f, 390.0f);
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, PointerPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, PointerPosition);
 	Layer->SetCardDragFeedbackTarget(
 		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC, FVector::ZeroVector, TargetPosition),
 		true,
@@ -9698,10 +9699,10 @@ bool FWacomFirstPersonCardLayerAimArrowSnapTest::RunTest(const FString& Paramete
 		TargetPosition);
 
 	TestEqual(TEXT("Arrow end lerps from pointer toward target"),
-		Layer->ResolveAimArrowEndForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).AimArrowEnd,
 		FMath::Lerp(PointerPosition, TargetPosition, 0.5f));
 
-	SlotWidget->RequestGestureReleaseForTest(PointerPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, PointerPosition);
 	PC->Destroy();
 	return true;
 }
@@ -9744,18 +9745,18 @@ bool FWacomFirstPersonCardLayerAimArrowFallbackTest::RunTest(const FString& Para
 	}
 
 	const FVector2D PointerPosition(540.0f, 590.0f);
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, PointerPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, PointerPosition);
 	Layer->SetCardDragFeedbackTarget(
 		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC),
 		true,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
 
 	TestEqual(TEXT("Missing target position keeps arrow at pointer"),
-		Layer->ResolveAimArrowEndForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).AimArrowEnd,
 		PointerPosition);
 
-	SlotWidget->RequestGestureReleaseForTest(PointerPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, PointerPosition);
 	PC->Destroy();
 	return true;
 }
@@ -9802,27 +9803,27 @@ bool FWacomFirstPersonCardLayerAimArrowFeedbackPersistsAcrossDragUpdateTest::Run
 	const FVector2D FirstPointerPosition(540.0f, 590.0f);
 	const FVector2D SecondPointerPosition(560.0f, 570.0f);
 	const FVector2D TargetPosition(740.0f, 390.0f);
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FirstPointerPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FirstPointerPosition);
 	Layer->SetCardDragFeedbackTarget(
 		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC, FVector::ZeroVector, TargetPosition),
 		true,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget,
 		TargetPosition);
 
-	SlotWidget->RequestGestureMoveForTest(0.01f, SecondPointerPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, SecondPointerPosition);
 
 	TestEqual(TEXT("Valid feedback state survives next drag update"),
-		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.TargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
 	TestEqual(TEXT("Arrow keeps valid color after drag update"),
-		Layer->ResolveAimArrowColorForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).AimArrowColor,
 		FLinearColor::Green);
 	TestEqual(TEXT("Arrow keeps snapping after drag update"),
-		Layer->ResolveAimArrowEndForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).AimArrowEnd,
 		FMath::Lerp(SecondPointerPosition, TargetPosition, 0.5f));
 
-	SlotWidget->RequestGestureReleaseForTest(SecondPointerPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, SecondPointerPosition);
 	PC->Destroy();
 	return true;
 }
@@ -9877,22 +9878,22 @@ bool FWacomFirstPersonCardLayerCardProbeFeedbackTest::RunTest(const FString& Par
 	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver ClickReceiver;
 	SourceWidget->OnCardClickedNative.AddRaw(&ClickReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
 
-	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(540.0f, 590.0f));
 	Layer->SetCardDragFeedbackTarget(
 		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, TargetWidget, TargetSlot.ScreenPosition),
 		false,
 		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe,
 		TargetSlot.ScreenPosition);
 
-	TestTrue(TEXT("Target card shows probe feedback"), TargetWidget->HasCardDragProbeFeedbackForTest());
-	TestEqual(TEXT("Target card probe overlay color"), TargetWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Blue);
-	TestEqual(TEXT("Target card probe overlay opacity"), TargetWidget->GetFeedbackOverlayRenderOpacityForTest(), 0.3f);
+	TestTrue(TEXT("Target card shows probe feedback"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
+	TestEqual(TEXT("Target card probe overlay color"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).FeedbackOverlayColor, FLinearColor::Blue);
+	TestEqual(TEXT("Target card probe overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).FeedbackOverlayOpacity, 0.3f);
 	TestEqual(TEXT("Layer records card probe state"),
-		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.TargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
 
-	SourceWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, FVector2D(540.0f, 590.0f));
 	TestEqual(TEXT("Card probe release does not click-submit"), ClickReceiver.ClickCount, 0);
 
 	SourceWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
@@ -9956,10 +9957,10 @@ bool FWacomFirstPersonCardLayerDragPointerCardTargetProbeTest::RunTest(const FSt
 	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver ClickReceiver;
 	SourceWidget->OnCardClickedNative.AddRaw(&ClickReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleClicked);
 
-	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(650.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(650.0f, 600.0f));
 
-	const FWacomFirstPersonCardDragView& DragView = Layer->GetCurrentDragViewForTest();
+	const FWacomFirstPersonCardDragView DragView = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView;
 	TestEqual(TEXT("Pointer card target records card kind"),
 		DragView.CurrentTarget.TargetKind,
 		EWacomInteractionTargetKind::Card);
@@ -9970,16 +9971,16 @@ bool FWacomFirstPersonCardLayerDragPointerCardTargetProbeTest::RunTest(const FSt
 	TestEqual(TEXT("Pointer card target position uses target visual slot"),
 		DragView.FeedbackTargetScreenPosition,
 		TargetWidget->GetVisualSlotView().ScreenPosition);
-	TestTrue(TEXT("Target card shows probe feedback from drag pointer"), TargetWidget->HasCardDragProbeFeedbackForTest());
-	TestEqual(TEXT("Aim arrow uses card probe color"), Layer->ResolveAimArrowColorForTest(), FLinearColor::Blue);
+	TestTrue(TEXT("Target card shows probe feedback from drag pointer"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
+	TestEqual(TEXT("Aim arrow uses card probe color"), FWacomFirstPersonCardLayerTestAccess::View(*Layer).AimArrowColor, FLinearColor::Blue);
 
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(320.0f, 600.0f));
-	TestFalse(TEXT("Moving away from target card clears probe feedback"), TargetWidget->HasCardDragProbeFeedbackForTest());
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(320.0f, 600.0f));
+	TestFalse(TEXT("Moving away from target card clears probe feedback"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
 	TestNotEqual(TEXT("Moving away from target card clears card probe state"),
-		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.TargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
 
-	SourceWidget->RequestGestureReleaseForTest(FVector2D(650.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, FVector2D(650.0f, 600.0f));
 	TestEqual(TEXT("Card probe drag release does not click-submit"), ClickReceiver.ClickCount, 0);
 
 	SourceWidget->OnCardClickedNative.RemoveAll(&ClickReceiver);
@@ -10042,22 +10043,22 @@ bool FWacomFirstPersonCardLayerBleedCardTargetProbeTest::RunTest(const FString& 
 	}
 	TargetWidget->SetDesiredSizeInViewport(FVector2D(392.0f, 516.0f));
 	TargetWidget->TakeWidget();
-	TargetWidget->SetLocalHitCanvasSizeOverrideForTest(FVector2D(392.0f, 516.0f));
+	FWacomFirstPersonCardLayerTestAccess::SetLocalHitCanvasSizeOverride(*TargetWidget, FVector2D(392.0f, 516.0f));
 
-	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(830.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(830.0f, 600.0f));
 	TestNotEqual(TEXT("Pointer inside bleed but outside body does not probe card target"),
-		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentTarget.TargetKind,
 		EWacomInteractionTargetKind::Card);
 	TestFalse(TEXT("Bleed-only pointer does not light target probe"),
-		TargetWidget->HasCardDragProbeFeedbackForTest());
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
 
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(650.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(650.0f, 600.0f));
 	TestEqual(TEXT("Pointer inside body probes card target"),
-		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentTarget.TargetKind,
 		EWacomInteractionTargetKind::Card);
 	TestEqual(TEXT("Body pointer records target card id"),
-		Layer->GetCurrentDragViewForTest().CurrentTarget.CardInstanceId,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentTarget.CardInstanceId,
 		TargetCardId);
 
 	PC->Destroy();
@@ -10111,20 +10112,20 @@ bool FWacomFirstPersonCardLayerRotatedCardTargetProbeTest::RunTest(const FString
 		return false;
 	}
 
-	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(760.0f, 780.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(760.0f, 780.0f));
 	TestNotEqual(TEXT("Old axis-aligned target corner does not probe rotated target"),
-		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentTarget.TargetKind,
 		EWacomInteractionTargetKind::Card);
 	TestFalse(TEXT("Rejected rotated corner does not light target probe"),
-		TargetWidget->HasCardDragProbeFeedbackForTest());
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
 
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(742.0f, 692.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(742.0f, 692.0f));
 	TestEqual(TEXT("Point inside rotated target body probes card target"),
-		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentTarget.TargetKind,
 		EWacomInteractionTargetKind::Card);
 	TestEqual(TEXT("Rotated target body records target card id"),
-		Layer->GetCurrentDragViewForTest().CurrentTarget.CardInstanceId,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentTarget.CardInstanceId,
 		TargetCardId);
 
 	PC->Destroy();
@@ -10169,19 +10170,19 @@ bool FWacomFirstPersonCardLayerDragTargetFeedbackClearTest::RunTest(const FStrin
 		return false;
 	}
 
-	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(540.0f, 590.0f));
 	Layer->SetCardDragFeedbackTarget(
 		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, TargetWidget, TargetSlot.ScreenPosition),
 		false,
 		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe,
 		TargetSlot.ScreenPosition);
-	TestTrue(TEXT("Probe starts before clear"), TargetWidget->HasCardDragProbeFeedbackForTest());
+	TestTrue(TEXT("Probe starts before clear"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
 
 	Layer->CancelCardDragGesture(true);
-	TestFalse(TEXT("Probe clears on cancel"), TargetWidget->HasCardDragProbeFeedbackForTest());
+	TestFalse(TEXT("Probe clears on cancel"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
 	TestEqual(TEXT("Current drag resets on cancel"),
-		Layer->GetCurrentDragViewForTest().GestureState,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.GestureState,
 		EWacomFirstPersonCardGestureState::Idle);
 
 	PC->Destroy();
@@ -10220,8 +10221,8 @@ bool FWacomFirstPersonCardLayerDragTargetDebugSummaryTest::RunTest(const FString
 		return false;
 	}
 
-	SlotWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SlotWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
 	Layer->SetCardDragFeedbackTarget(
 		FWacomInteractionTargetHandle::ForWorldTarget(FGuid::NewGuid(), PC, FVector::ZeroVector, FVector2D(700.0f, 420.0f)),
 		true,
@@ -10235,7 +10236,7 @@ bool FWacomFirstPersonCardLayerDragTargetDebugSummaryTest::RunTest(const FString
 	TestTrue(TEXT("Summary reports valid flag"), Summary.Contains(TEXT("Valid=true")));
 	TestTrue(TEXT("Summary reports resolved intent"), Summary.Contains(TEXT("PlayCardWorldTarget")));
 
-	SlotWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(540.0f, 590.0f));
 	PC->Destroy();
 	return true;
 }
@@ -10295,8 +10296,8 @@ bool FWacomFirstPersonCardLayerValidCardTargetFeedbackTest::RunTest(const FStrin
 		return false;
 	}
 
-	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(540.0f, 590.0f));
 
 	TArray<FWacomFirstPersonCardTargetAffordance> Affordances;
 	FWacomFirstPersonCardTargetAffordance ValidAffordance;
@@ -10319,17 +10320,17 @@ bool FWacomFirstPersonCardLayerValidCardTargetFeedbackTest::RunTest(const FStrin
 		Affordances);
 
 	TestEqual(TEXT("Valid target uses card valid state"),
-		ValidTargetWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*ValidTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
-	TestEqual(TEXT("Valid target color"), ValidTargetWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Green);
+	TestEqual(TEXT("Valid target color"), FWacomFirstPersonCardLayerTestAccess::View(*ValidTargetWidget).FeedbackOverlayColor, FLinearColor::Green);
 	TestEqual(TEXT("Invalid target uses card invalid state"),
-		InvalidTargetWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*InvalidTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
-	TestEqual(TEXT("Invalid target color"), InvalidTargetWidget->GetFeedbackOverlayColorForTest(), FLinearColor::Red);
+	TestEqual(TEXT("Invalid target color"), FWacomFirstPersonCardLayerTestAccess::View(*InvalidTargetWidget).FeedbackOverlayColor, FLinearColor::Red);
 	TestTrue(TEXT("Debug counts valid affordance"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceValid=1")));
 	TestTrue(TEXT("Debug counts invalid affordance"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceInvalid=1")));
 
-	SourceWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, FVector2D(540.0f, 590.0f));
 	PC->Destroy();
 	return true;
 }
@@ -10379,8 +10380,8 @@ bool FWacomFirstPersonCardLayerFocusedCardTargetOverrideTest::RunTest(const FStr
 		return false;
 	}
 
-	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
-	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(540.0f, 590.0f));
 
 	FWacomFirstPersonCardTargetAffordance InvalidAffordance;
 	InvalidAffordance.CardInstanceId = TargetCardId;
@@ -10396,10 +10397,10 @@ bool FWacomFirstPersonCardLayerFocusedCardTargetOverrideTest::RunTest(const FStr
 		Affordances);
 
 	TestEqual(TEXT("Focused valid result overrides base invalid affordance"),
-		TargetWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
 
-	SourceWidget->RequestGestureReleaseForTest(FVector2D(540.0f, 590.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, FVector2D(540.0f, 590.0f));
 	PC->Destroy();
 	return true;
 }
@@ -10964,7 +10965,7 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 		return false;
 	}
 
-	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	Anchor->SetBattleHandInteractionEnabled(true);
 	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
 	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
 	{
@@ -10990,7 +10991,7 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 		LEVELTICK_All,
 		ENamedThreads::GameThread,
 		FGraphEventRef());
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	if (!TestNotNull(TEXT("First-person layer"), Layer))
 	{
 		Character->Destroy();
@@ -11032,24 +11033,24 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 	}
 
 	const FVector2D SourcePosition = SourceWidget->GetVisualSlotView().ScreenPosition;
-	SourceWidget->RequestGesturePressForTest(SourcePosition);
-	SourceWidget->RequestGestureMoveForTest(0.01f, SourcePosition + FVector2D(80.0f, -20.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourcePosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, SourcePosition + FVector2D(80.0f, -20.0f));
 	TestEqual(TEXT("Aiming drag records selected-source gesture state"),
 		SourceWidget->GetGestureStateForFirstPersonLayer(),
 		EWacomFirstPersonCardGestureState::AimingTargetedCard);
-	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, Layer->GetCurrentDragViewForTest());
+	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView);
 
 	TestEqual(TEXT("Normal hand card shows valid affordance"),
-		NormalTargetWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*NormalTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
 	TestEqual(TEXT("Hand anchor shows invalid affordance for selected zone move"),
-		AnchorTargetWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*AnchorTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
 	TestTrue(TEXT("Debug reports affordance counts"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceValid=")));
 
 	Layer->CancelCardDragGesture(true);
 	TestEqual(TEXT("Normal affordance clears on cancel"),
-		NormalTargetWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*NormalTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::None);
 
 	Character->Destroy();
@@ -11126,7 +11127,7 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 		return false;
 	}
 
-	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	Anchor->SetBattleHandInteractionEnabled(true);
 	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
 	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
 	{
@@ -11152,7 +11153,7 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 		LEVELTICK_All,
 		ENamedThreads::GameThread,
 		FGraphEventRef());
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	if (!TestNotNull(TEXT("First-person layer"), Layer))
 	{
 		Character->Destroy();
@@ -11194,15 +11195,15 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 	}
 
 	const FVector2D SourcePosition = SourceWidget->GetVisualSlotView().ScreenPosition;
-	SourceWidget->RequestGesturePressForTest(SourcePosition);
-	SourceWidget->RequestGestureMoveForTest(0.01f, SourcePosition + FVector2D(80.0f, -20.0f));
-	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, Layer->GetCurrentDragViewForTest());
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourcePosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, SourcePosition + FVector2D(80.0f, -20.0f));
+	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView);
 
 	TestEqual(TEXT("Keyword-allowed card shows valid card feedback"),
-		CompanionTargetWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*CompanionTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
 	TestEqual(TEXT("Keyword-rejected card shows invalid card feedback"),
-		PlainTargetWidget->GetDragTargetFeedbackStateForTest(),
+		FWacomFirstPersonCardLayerTestAccess::View(*PlainTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
 
 	Layer->CancelCardDragGesture(true);
@@ -11740,7 +11741,7 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		return false;
 	}
 
-	Anchor->SetBattleHandInteractionPrototypeEnabled(true);
+	Anchor->SetBattleHandInteractionEnabled(true);
 	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), CardEntries);
 	HUD->SetFirstPersonCardAnchorForTest(Anchor);
 	Anchor->RefreshAnchor(0.0f);
@@ -11749,7 +11750,7 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		LEVELTICK_All,
 		ENamedThreads::GameThread,
 		FGraphEventRef());
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetStaticCardLayerWidgetForTest();
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::StaticLayer(*Anchor);
 	if (!TestNotNull(TEXT("First-person layer"), Layer))
 	{
 		Character->Destroy();
@@ -11787,17 +11788,17 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 	const FVector2D TargetPosition = TargetWidget->GetVisualSlotView().ScreenPosition;
 	const int32 VersionBeforeRelease = Session->BuildSnapshot().Version;
 
-	SourceWidget->RequestGesturePressForTest(SourcePosition);
-	SourceWidget->RequestGestureMoveForTest(0.01f, TargetPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourcePosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, TargetPosition);
 	TestEqual(TEXT("Layer gesture resolves pointer card target"),
-		Layer->GetCurrentDragViewForTest().CurrentTarget.CardInstanceId,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentTarget.CardInstanceId,
 		TargetCardId);
-	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, Layer->GetCurrentDragViewForTest());
+	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView);
 	TestEqual(TEXT("HUD marks card target as valid before release"),
-		Layer->GetCurrentDragViewForTest().TargetFeedbackState,
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.TargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
 
-	SourceWidget->RequestGestureReleaseForTest(TargetPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, TargetPosition);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
 	Snapshot = Session->BuildSnapshot();
 
@@ -11812,8 +11813,8 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		}
 	}
 	TestEqual(TEXT("Target card cost updated through layer gesture"), TargetRuntimeCost, 5);
-	TestTrue(TEXT("Source release used confirm feedback"), SourceWidget->IsConfirmFeedbackActiveForTest());
-	TestFalse(TEXT("Source release did not play deny feedback"), SourceWidget->IsDenyFeedbackActiveForTest());
+	TestTrue(TEXT("Source release used confirm feedback"), FWacomFirstPersonCardLayerTestAccess::View(*SourceWidget).bConfirmFeedbackActive);
+	TestFalse(TEXT("Source release did not play deny feedback"), FWacomFirstPersonCardLayerTestAccess::View(*SourceWidget).bDenyFeedbackActive);
 
 	Character->Destroy();
 	PC->Destroy();

@@ -190,6 +190,25 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 	float PlayCommitScale = 1.015f;
 };
 
+#if WITH_AUTOMATION_TESTS
+struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
+{
+	float FeedbackOverlayOpacity = 0.0f;
+	FLinearColor FeedbackOverlayColor = FLinearColor::Transparent;
+	bool bPressed = false;
+	bool bDenyFeedbackActive = false;
+	bool bConfirmFeedbackActive = false;
+	bool bCommitFeedbackActive = false;
+	bool bCardDragProbeFeedback = false;
+	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+	FWacomFirstPersonCardDragConfig CardDragConfig;
+	int32 SlotMotionConfigApplyCount = 0;
+	int32 SlotFeedbackConfigApplyCount = 0;
+	int32 CardDragConfigApplyCount = 0;
+};
+#endif
+
 /**
  * Single visual card slot inside the first-person card layer.
  *
@@ -268,24 +287,13 @@ public:
 	bool IsCardLayerInteractionEnabled() const { return bCardLayerInteractionEnabled; }
 
 #if WITH_AUTOMATION_TESTS
+	FWacomFirstPersonCardSlotAutomationTestView GetAutomationTestViewForTest() const;
 	bool RequestHoverForTest();
 	void RequestUnhoverForTest();
 	bool RequestPressForTest();
 	bool RequestClickForTest();
 	bool RequestMouseUpForTest();
 	void TickSlotMotionForTest(float DeltaTime);
-	float GetFeedbackOverlayRenderOpacityForTest() const;
-	FLinearColor GetFeedbackOverlayColorForTest() const;
-	bool IsPressedForFirstPersonLayerForTest() const { return bIsPressedForFirstPersonLayer; }
-	bool IsDenyFeedbackActiveForTest() const { return DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration; }
-	bool IsConfirmFeedbackActiveForTest() const { return ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration; }
-	bool IsCommitFeedbackActiveForTest() const { return CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration; }
-	const FWacomFirstPersonCardDragConfig& GetCardDragConfigForTest() const { return CardDragConfig; }
-	EWacomFirstPersonCardDragTargetFeedbackState GetDragTargetFeedbackStateForTest() const
-	{
-		return DragTargetFeedbackState;
-	}
-	bool HasCardDragProbeFeedbackForTest() const { return bCardDragProbeFeedback; }
 	void SetLocalHitCanvasSizeOverrideForTest(const TOptional<FVector2D>& InSize);
 	bool RequestHoverAtLocalPositionForTest(const FVector2D& LocalPosition);
 	void RequestMoveAtLocalPositionForTest(const FVector2D& LocalPosition);
@@ -293,9 +301,6 @@ public:
 	bool RequestGesturePressForTest(const FVector2D& ScreenPosition);
 	void RequestGestureMoveForTest(float DeltaTime, const FVector2D& ScreenPosition);
 	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
-	int32 GetSlotMotionConfigApplyCountForTest() const { return SlotMotionConfigApplyCountForTest; }
-	int32 GetSlotFeedbackConfigApplyCountForTest() const { return SlotFeedbackConfigApplyCountForTest; }
-	int32 GetCardDragConfigApplyCountForTest() const { return CardDragConfigApplyCountForTest; }
 #endif
 
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardClickedNative;

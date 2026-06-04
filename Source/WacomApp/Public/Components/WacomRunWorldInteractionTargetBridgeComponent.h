@@ -15,46 +15,46 @@ struct WACOMAPP_API FWacomRunWorldInteractionTargetDebugView
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "当前 Run World Target 的稳定 ID，只用于 PIE / 蓝图诊断，不参与规则结算。"))
 	FName RunTargetStableId = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "当前 Run World Target 的运行时 ID，只用于验证通用交互 handle。"))
 	FGuid RuntimeTargetId;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "当前写入通用交互目标的 GameplayTag，用于排查 target 类型。"))
 	FGameplayTag TargetTag;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "Owner 上是否能解析到 WacomInteractionTargetComponent。"))
 	bool bHasInteractionTargetComponent = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "通用交互目标组件是否已由本 Bridge 成功配置。"))
 	bool bInteractionTargetConfigured = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "当前是否能解析到 probe 预览使用的目标组件。"))
 	bool bHasVisualTarget = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "当前预览目标是否是可渲染 Primitive，用于排查 CustomDepth / 缩放反馈。"))
 	bool bHasRenderableVisualTarget = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "当前预览目标组件名称，用于在 PIE 中核对绑定。"))
 	FName VisualTargetName = NAME_None;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "鼠标 probe 预览是否处于激活状态。"))
 	bool bProbePreviewActive = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "probe 预览缩放反馈是否开启。"))
 	bool bProbeScaleSignalEnabled = true;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "probe 预览 CustomDepth / Stencil 反馈是否开启。"))
 	bool bProbeCustomDepthSignalEnabled = true;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "probe 预览写入 CustomDepth 的 stencil 值。"))
 	int32 ProbeCustomDepthStencilValue = 250;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "最近一次配置通用交互目标的结果。"))
 	FName LastConfigureResult = TEXT("NotAttempted");
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "最近一次 probe 预览状态变化的结果。"))
 	FName LastPreviewResult = TEXT("NotAttempted");
 };
 
@@ -117,13 +117,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Target")
 	bool IsProbePreviewActive() const { return bProbePreviewActive; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Target")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "获取当前 Run World Target 的只读调试快照；只用于 PIE / 蓝图排查，不影响规则。"))
 	FWacomRunWorldInteractionTargetDebugView GetRunWorldTargetDebugView() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|World Target|Debug")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "获取当前 Run World Target 的单行调试摘要；只用于复制日志或自动化排查。"))
 	FString GetRunWorldTargetDebugSummary() const;
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Run|World Target|Debug")
+	UFUNCTION(CallInEditor, Category = "Wacom|Run|World Target|Debug", meta = (ToolTip = "在编辑器或 PIE 中把当前 Run World Target 调试摘要写入 Output Log；不改变运行时状态。"))
 	void LogRunWorldTargetDebugSummary() const;
 
 protected:

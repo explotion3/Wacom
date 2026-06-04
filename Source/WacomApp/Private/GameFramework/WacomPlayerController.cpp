@@ -2586,7 +2586,7 @@ void AWacomPlayerController::OpenRunMenuCardLeaseTestMenu()
 	if (PushedWidget)
 	{
 		UE_LOG(LogTemp, Display,
-			TEXT("[Wacom.OpenRunMenuCardLeaseTestMenu] 打开 C++ lease provider 验证菜单"));
+			TEXT("[Wacom.OpenRunMenuCardLeaseTestMenu] 打开 C++ lease provider 开发验证 prototype 菜单"));
 	}
 }
 
@@ -2635,7 +2635,7 @@ static FAutoConsoleCommandWithWorld GWacomInteractCmd(
 
 static FAutoConsoleCommandWithWorld GWacomOpenRunMenuCardLeaseTestMenuCmd(
 	TEXT("Wacom.OpenRunMenuCardLeaseTestMenu"),
-	TEXT("打开 C++ Run menu card lease provider 验证菜单。"),
+	TEXT("打开 C++ Run menu card lease provider 开发验证 / prototype 菜单；仅用于 PIE 排查 owned menu lease 与 Zone drop intent，不是正式玩家菜单。"),
 	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
 	{
 		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))

@@ -12,20 +12,17 @@ struct FBattleEventPresentationView;
 struct FBattleEvent;
 
 /**
- * 战斗事件 Toast。
+ * Legacy 战斗事件 Toast。
  *
- * 由 UBattleHUD 在每次命令完成后调 EnqueueEvents 塞入一批事件。
- * 本 Widget 把每条事件格式化成一行文字显示在一个 VerticalBox 里。
- * 每条消息默认 3 秒后淡出。超过最大条数时最旧的会被立即移除。
+ * 该 Widget 只为旧 WBP / PIE 对照保留。当前正式 BattleHUD 主路径使用
+ * CombatLogFeed + BattleCombatLogBlock，不再由 BattleHUD 创建旧 EventToast。
  *
- * 当前用 NativeTick 做倒计时；后续可切到 UMG Animation。
- *
- * C++ 默认外观：半透明黑底竖向列表，每行一个 TextBlock。
+ * C++ fallback 外观：半透明黑底竖向列表，每行一个 TextBlock。
  *
  * WBP 约定（可选）：
  * - Container : UVerticalBox   （BindWidgetOptional）
  */
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta = (ToolTip = "Legacy 战斗事件 Toast，只为旧 WBP 或 PIE 对照保留。新的 BattleHUD 制作应使用 CombatLogFeed + BattleCombatLogBlock，不要重新绑定 EventToast。"))
 class WACOMAPP_API UEventToast : public UWacomBattleWidgetBase
 {
 	GENERATED_BODY()
@@ -43,11 +40,11 @@ public:
 	static FString FormatEventForPlayer(const FBattleEvent& Event);
 
 	/** 每条消息的显示时长（秒）。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Legacy Event Log|Compatibility", meta = (ToolTip = "Legacy EventToast 单条消息的显示时长，单位秒。只影响旧 Toast 兼容组件，不影响当前正式 CombatLogFeed。"))
 	float MessageLifetime = 3.0f;
 
 	/** 最多同时显示多少条。超过时最旧的立即移除。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Legacy Event Log|Compatibility", meta = (ToolTip = "Legacy EventToast 最多同时显示的消息条数。只用于旧 WBP / PIE 对照，不是新的 BattleHUD 日志配置。"))
 	int32 MaxVisibleMessages = 5;
 
 protected:

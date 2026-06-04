@@ -90,9 +90,9 @@ public:
 		meta = (ToolTip = "拾取成功后获得的固定卡牌定义。V1 只支持一张固定卡，不支持掉落表或多卡。"))
 	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
 
-	/** 将当前拾取物配置为毒牙卡牌拾取调试样例。只修改当前 Actor 配置，不修改 RunState。 */
-	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Card Pickup|Authoring",
-		meta = (ToolTip = "将当前拾取物配置为毒牙卡牌拾取调试样例：设置默认文案，并按 Actor 名生成 PersistentId；不会修改 RunState。"))
+	/** 开发验证按钮：将当前拾取物配置为毒牙卡牌拾取调试样例。只修改当前 Actor 配置，不修改 RunState。 */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|Run|Card Pickup|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：将当前拾取物配置为毒牙卡牌拾取调试样例，设置默认文案，并按 Actor 名生成 PersistentId；不会修改 RunState，也不是正式数据入口。"))
 	void ConfigureDebugCardPickupSample();
 
 	/** 读取当前卡牌拾取物配置、收集状态和点击目标绑定的只读诊断信息。 */

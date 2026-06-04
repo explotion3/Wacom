@@ -18,7 +18,7 @@ class UWacomRunMenuDropTargetWidget;
  * built-in Zone drop target. Release on the configured zone pays the exact
  * owned card instance through the Run menu card drop intent prototype.
  */
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta = (ToolTip = "PIE / 开发验证用 prototype 菜单：只用于验证 owned first-person menu lease 与 Zone drop intent 闭环，不作为正式 Run 菜单基类或 WBP 制作入口。"))
 class WACOMAPP_API UWacomRunMenuCardLeaseTestMenu : public UWacomMenuWidgetBase
 {
 	GENERATED_BODY()
@@ -26,25 +26,28 @@ class WACOMAPP_API UWacomRunMenuCardLeaseTestMenu : public UWacomMenuWidgetBase
 public:
 	UWacomRunMenuCardLeaseTestMenu(const FObjectInitializer& ObjectInitializer);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Lease Test", meta = (ToolTip = "打开菜单时自动申请 owned first-person card menu lease。关闭后菜单基类会自动清理 lease。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Prototype", meta = (ToolTip = "开发验证开关：打开该 prototype 菜单时自动申请 owned first-person card menu lease。关闭后菜单基类会自动清理 lease。"))
 	bool bRequestLeaseOnActivate = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Lease Test", meta = (ToolTip = "菜单内置 Zone drop target 的 ZoneId，用于验证 V0-AM 的 Zone probe。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Prototype", meta = (ToolTip = "prototype 菜单内置 Zone drop target 的 ZoneId，用于 PIE 验证 V0-AM 的 Zone probe。"))
 	FName TestZoneId = TEXT("RunEvent.Pay.Fang");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Lease Test", meta = (ToolTip = "菜单内置 Zone drop target 的稳定目标 ID。为空时使用 ZoneId。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Prototype", meta = (ToolTip = "prototype 菜单内置 Zone drop target 的稳定目标 ID。为空时使用 ZoneId。"))
 	FName TestStableTargetId = TEXT("RunEvent.Pay.Fang");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Lease Test", meta = (ToolTip = "默认 lease request。若 LeaseId 或 SourceId 为空，菜单基类会自动生成。AllowedCardDefinitions / CardIds / Keywords 用于筛玩家真实持有卡。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Prototype", meta = (ToolTip = "prototype 菜单默认 lease request。若 LeaseId 或 SourceId 为空，菜单基类会自动生成。AllowedCardDefinitions / CardIds / Keywords 用于筛玩家真实持有卡。"))
 	FWacomRunMenuCardLeaseRequest LeaseRequest;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Lease Test")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards|Prototype",
+		meta = (ToolTip = "开发验证入口：立即为该 prototype 菜单申请 owned first-person card menu lease。正式菜单应使用 UWacomMenuWidgetBase 的 owned lease 接口。"))
 	bool RequestOwnedLeaseNow();
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Lease Test")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards|Prototype",
+		meta = (ToolTip = "返回该 prototype 菜单最近一次 lease 申请结果，仅用于 PIE 验证。"))
 	FWacomRunMenuCardLeaseResult GetLastLeaseResult() const { return LastLeaseResult; }
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Lease Test")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards|Debug",
+		meta = (ToolTip = "返回该 prototype lease 菜单的一行诊断摘要，只用于日志、自动化或 PIE 排查，不影响 Run 规则或运行时表现。"))
 	FString GetLeaseTestDebugSummary() const;
 
 protected:

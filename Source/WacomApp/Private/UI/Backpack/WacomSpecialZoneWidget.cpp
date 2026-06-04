@@ -107,34 +107,41 @@ void UWacomSpecialZoneWidget::SetSpecialZoneView(
 	RebuildFromCurrentView();
 }
 
-FText UWacomSpecialZoneWidget::GetZoneTitleText() const
+#if WITH_AUTOMATION_TESTS
+FText UWacomSpecialZoneWidget::GetZoneTitleTextForTest() const
 {
 	return TitleText ? TitleText->GetText() : FText::GetEmpty();
 }
 
-bool UWacomSpecialZoneWidget::IsBattleReadyBadgeVisible() const
+bool UWacomSpecialZoneWidget::IsBattleReadyBadgeVisibleForTest() const
 {
 	return BattleReadyBadge && BattleReadyBadge->GetVisibility() != ESlateVisibility::Collapsed;
 }
 
-UDragDropOperation* UWacomSpecialZoneWidget::BuildOwnerCardDragOperation() const
+UDragDropOperation* UWacomSpecialZoneWidget::BuildOwnerCardDragOperationForTest() const
 {
 	return OwnerCardWidget ? OwnerCardWidget->BuildDragOperation() : nullptr;
 }
 
-UDragDropOperation* UWacomSpecialZoneWidget::BuildContentCardDragOperation(int32 Index) const
+UDragDropOperation* UWacomSpecialZoneWidget::BuildContentCardDragOperationForTest(int32 Index) const
 {
 	return ContentCardWidgets.IsValidIndex(Index) && ContentCardWidgets[Index]
 		? ContentCardWidgets[Index]->BuildDragOperation()
 		: nullptr;
 }
 
-bool UWacomSpecialZoneWidget::RequestContentCardBattleEnabledToggle(int32 Index) const
+bool UWacomSpecialZoneWidget::RequestContentCardBattleEnabledToggleForTest(int32 Index) const
 {
 	return ContentCardWidgets.IsValidIndex(Index) && ContentCardWidgets[Index]
 		? ContentCardWidgets[Index]->RequestBattleEnabledToggle()
 		: false;
 }
+
+UWacomDeckCardWidget* UWacomSpecialZoneWidget::GetContentCardWidgetForTest(int32 Index) const
+{
+	return ContentCardWidgets.IsValidIndex(Index) ? ContentCardWidgets[Index] : nullptr;
+}
+#endif
 
 FGuid UWacomSpecialZoneWidget::GetOwnerCardInstanceId() const
 {
@@ -159,13 +166,6 @@ bool UWacomSpecialZoneWidget::ContainsCardWidget(const UWacomDeckCardWidget* Wid
 			return Candidate.Get() == Widget;
 		});
 }
-
-#if WITH_AUTOMATION_TESTS
-UWacomDeckCardWidget* UWacomSpecialZoneWidget::GetContentCardWidgetForTest(int32 Index) const
-{
-	return ContentCardWidgets.IsValidIndex(Index) ? ContentCardWidgets[Index] : nullptr;
-}
-#endif
 
 TSharedRef<SWidget> UWacomSpecialZoneWidget::RebuildWidget()
 {

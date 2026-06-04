@@ -265,13 +265,16 @@ public:
 		meta = (ToolTip = "当前 Host 布局错开偏移。会叠加到 Prediction / Status Badge 的 facade 相对位置。"))
 	FVector GetBadgeLayoutStaggerOffset() const { return BadgeLayoutStaggerOffset; }
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Debug")
+	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：配置为 Debug 蛇敌人 Head 部位样例。只修改当前 Actor facade 字段，不会修改 BattleSession，也不是正式数据入口。"))
 	void ConfigureDebugSnakeHeadSample();
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Debug")
+	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：配置为 Debug 蛇敌人 Body 部位样例。只修改当前 Actor facade 字段，不会修改 BattleSession，也不是正式数据入口。"))
 	void ConfigureDebugSnakeBodySample();
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Debug")
+	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：配置为 Debug 蛇敌人 Tail 部位样例。只修改当前 Actor facade 字段，不会修改 BattleSession，也不是正式数据入口。"))
 	void ConfigureDebugSnakeTailSample();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Debug",

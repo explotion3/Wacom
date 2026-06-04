@@ -142,14 +142,14 @@ public:
 		meta = (ToolTip = "返回鼠标 hover 到 ClickBounds 时应显示的提示文本；已完成事件返回弱提示。"))
 	FText GetHoverPromptText(AWacomPlayerController* PC) const;
 
-	/** 将当前触发器配置为蛇巢卡牌支付调试事件样例。只修改当前 Actor 配置，不打开事件。 */
-	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|RunEvent|Authoring",
-		meta = (ToolTip = "将当前触发器配置为 DA_Event_DebugSnakeGift 样例。只修改当前 Actor 配置，不打开事件、不修改 RunState。"))
+	/** 开发验证按钮：将当前触发器配置为蛇巢卡牌支付调试事件样例。只修改当前 Actor 配置，不打开事件。 */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|RunEvent|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：将当前触发器配置为 DA_Event_DebugSnakeGift 样例。只修改当前 Actor 配置，不打开事件、不修改 RunState，也不是正式数据入口。"))
 	void ConfigureDebugSnakeGiftSample();
 
-	/** 将当前触发器配置为 RunFlag + 金币门槛奖励调试事件样例。只修改当前 Actor 配置，不打开事件。 */
-	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|RunEvent|Authoring",
-		meta = (ToolTip = "将当前触发器配置为 DA_Event_DebugFlagReward 样例。只修改当前 Actor 配置，不打开事件、不修改 RunState。"))
+	/** 开发验证按钮：将当前触发器配置为 RunFlag + 金币门槛奖励调试事件样例。只修改当前 Actor 配置，不打开事件。 */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Wacom|RunEvent|Prototype",
+		meta = (ToolTip = "仅用于 PIE / 开发验证：将当前触发器配置为 DA_Event_DebugFlagReward 样例。只修改当前 Actor 配置，不打开事件、不修改 RunState，也不是正式数据入口。"))
 	void ConfigureDebugFlagRewardSample();
 
 	/** 读取当前触发器和对应 RunSession 中事件状态的只读诊断信息。 */

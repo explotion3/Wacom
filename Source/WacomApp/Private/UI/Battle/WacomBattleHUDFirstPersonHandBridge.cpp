@@ -183,7 +183,7 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 
 	Anchor->SetRuntimeCardLayerTransitionHints(FirstPersonBattleHandLayerSourceId, TransitionHints);
 	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
-	Anchor->SetBattleHandInteractionPrototypeEnabled(ShouldEnableFirstPersonBattleHandInteraction());
+	Anchor->SetBattleHandInteractionEnabled(ShouldEnableFirstPersonBattleHandInteraction());
 	BindLayerInteractions(Anchor);
 	LastAnchor = Anchor;
 	SyncLegacyHandPanelVisibility();
@@ -194,14 +194,14 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer()
 	bFirstPersonBattleHandLayerRuntimeActive = false;
 	if (UWacomFirstPersonCardAnchorComponent* PreviousAnchor = LastAnchor.Get())
 	{
-		PreviousAnchor->SetBattleHandInteractionPrototypeEnabled(false);
+		PreviousAnchor->SetBattleHandInteractionEnabled(false);
 		PreviousAnchor->CancelFirstPersonCardDragGesture(true);
 		UnbindLayerInteractions(PreviousAnchor);
 		PreviousAnchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
 	}
 	if (UWacomFirstPersonCardAnchorComponent* CurrentAnchor = ResolveAnchor())
 	{
-		CurrentAnchor->SetBattleHandInteractionPrototypeEnabled(false);
+		CurrentAnchor->SetBattleHandInteractionEnabled(false);
 		CurrentAnchor->CancelFirstPersonCardDragGesture(true);
 		UnbindLayerInteractions(CurrentAnchor);
 		CurrentAnchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);

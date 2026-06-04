@@ -743,6 +743,23 @@ FString UWacomFirstPersonCardLayerWidget::GetDragTargetDebugSummary() const
 }
 
 #if WITH_AUTOMATION_TESTS
+FWacomFirstPersonCardLayerAutomationTestView UWacomFirstPersonCardLayerWidget::GetAutomationTestViewForTest() const
+{
+	FWacomFirstPersonCardLayerAutomationTestView View;
+	View.SkippedEquivalentSlotRefreshCount = SkippedEquivalentSlotRefreshCountForTest;
+	View.SlotMotionConfigPropagationCount = SlotMotionConfigPropagationCountForTest;
+	View.SlotFeedbackConfigPropagationCount = SlotFeedbackConfigPropagationCountForTest;
+	View.CardDragConfigPropagationCount = CardDragConfigPropagationCountForTest;
+	View.SlotMotionConfig = SlotMotionConfig;
+	View.SlotFeedbackConfig = SlotFeedbackConfig;
+	View.CardDragConfig = CardDragConfig;
+	View.CurrentDragView = CurrentDragView;
+	View.AimArrowColor = ResolveAimArrowColor();
+	View.AimArrowEnd = ResolveAimArrowEnd();
+	View.CardViewClass = CardViewClass;
+	return View;
+}
+
 void UWacomFirstPersonCardLayerWidget::TickSlotMotionForTest(float DeltaTime)
 {
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
