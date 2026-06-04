@@ -73,7 +73,7 @@ namespace
 		return Offer;
 	}
 
-	FGuid FindStorageInstanceIdByDefinition(
+	FGuid FindRevisionStorageInstanceIdByDefinition(
 		const FRunBackpackStorageSnapshot& Snapshot,
 		const UCardDefinition* Card)
 	{
@@ -160,7 +160,7 @@ namespace
 		return Reward;
 	}
 
-	UWacomRunEventDefinition* MakeSingleChoiceRunEvent(
+	UWacomRunEventDefinition* MakeRevisionSingleChoiceRunEvent(
 		UObject* Outer,
 		const FWacomRunEventChoiceDefinition& Choice)
 	{
@@ -217,7 +217,7 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 	TestEqual(TEXT("AcquireCardToRun leaves shop"), AfterAcquire.Shop, BeforeAcquire.Shop);
 	TestEqual(TEXT("AcquireCardToRun leaves economy"), AfterAcquire.Economy, BeforeAcquire.Economy);
 
-	const FGuid NormalId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Normal);
+	const FGuid NormalId = FindRevisionStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Normal);
 	TestTrue(TEXT("Normal instance exists"), NormalId.IsValid());
 	const FRunUiRevisionSnapshot BeforeMove = CaptureRunUiRevisions(*Run);
 	TestTrue(TEXT("Move to backpack succeeds"), Run->MoveInstance(NormalId, EZoneKind::Backpack, FGuid()));
@@ -241,7 +241,7 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 	const FGuid OwnerId = SpecialRun->GetBackpack().IsValidIndex(0)
 		? SpecialRun->GetBackpack()[0].InstanceId
 		: FGuid();
-	const FGuid ContentId = FindStorageInstanceIdByDefinition(
+	const FGuid ContentId = FindRevisionStorageInstanceIdByDefinition(
 		SpecialRun->BuildBackpackStorageSnapshot(),
 		SpecialContent);
 	TestTrue(TEXT("Owner id valid"), OwnerId.IsValid());
@@ -364,7 +364,7 @@ bool FWacomRunSnapshotRevisionsEconomyMutationPathsSpec::RunTest(const FString& 
 	AddGold.Type = EWacomRunEventEffectType::AddGold;
 	AddGold.Value = 3;
 	Choice.Effects = { AddGold };
-	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Choice));
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeRevisionSingleChoiceRunEvent(Run.Get(), Choice));
 	const FRunUiRevisionSnapshot BeforeEvent = CaptureRunUiRevisions(*Run);
 	const FRunEventChoiceResult Result =
 		RunSingleChoiceEvent(*Run, Event.Get(), TEXT("Revision.Event.AddGold"));
@@ -465,9 +465,9 @@ bool FWacomRunSnapshotRevisionsRunEventMutationPathsSpec::RunTest(const FString&
 	PayChoice.ChoiceId = TEXT("Pay");
 	PayChoice.CardPayment.bRequiresOwnedCardPayment = true;
 	PayChoice.CardPayment.AllowedCardDefinitions = { PaidCard };
-	TStrongObjectPtr<UWacomRunEventDefinition> PayEvent(MakeSingleChoiceRunEvent(Run.Get(), PayChoice));
+	TStrongObjectPtr<UWacomRunEventDefinition> PayEvent(MakeRevisionSingleChoiceRunEvent(Run.Get(), PayChoice));
 	TestTrue(TEXT("Begin pay event"), Run->BeginRunEvent(TEXT("Revision.Event.Pay"), PayEvent.Get()));
-	const FGuid PaidId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), PaidCard);
+	const FGuid PaidId = FindRevisionStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), PaidCard);
 	TestTrue(TEXT("Paid card id valid"), PaidId.IsValid());
 	const FRunUiRevisionSnapshot BeforePay = CaptureRunUiRevisions(*Run);
 	const FRunEventChoiceResult PayResult = Run->ChooseRunEventOptionWithPaidCardResult(TEXT("Pay"), PaidId);
@@ -484,7 +484,7 @@ bool FWacomRunSnapshotRevisionsRunEventMutationPathsSpec::RunTest(const FString&
 	GainCard.Type = EWacomRunEventEffectType::GainCard;
 	GainCard.CardDefinition = RewardCard;
 	GainChoice.Effects = { GainCard };
-	TStrongObjectPtr<UWacomRunEventDefinition> GainEvent(MakeSingleChoiceRunEvent(Run.Get(), GainChoice));
+	TStrongObjectPtr<UWacomRunEventDefinition> GainEvent(MakeRevisionSingleChoiceRunEvent(Run.Get(), GainChoice));
 	const FRunUiRevisionSnapshot BeforeGain = CaptureRunUiRevisions(*Run);
 	const FRunEventChoiceResult GainResult =
 		RunSingleChoiceEvent(*Run, GainEvent.Get(), TEXT("Revision.Event.Gain"));
@@ -501,7 +501,7 @@ bool FWacomRunSnapshotRevisionsRunEventMutationPathsSpec::RunTest(const FString&
 	RemoveCard.Type = EWacomRunEventEffectType::RemoveCard;
 	RemoveCard.CardDefinition = RemovedCard;
 	RemoveChoice.Effects = { RemoveCard };
-	TStrongObjectPtr<UWacomRunEventDefinition> RemoveEvent(MakeSingleChoiceRunEvent(Run.Get(), RemoveChoice));
+	TStrongObjectPtr<UWacomRunEventDefinition> RemoveEvent(MakeRevisionSingleChoiceRunEvent(Run.Get(), RemoveChoice));
 	const FRunUiRevisionSnapshot BeforeRemove = CaptureRunUiRevisions(*Run);
 	const FRunEventChoiceResult RemoveResult =
 		RunSingleChoiceEvent(*Run, RemoveEvent.Get(), TEXT("Revision.Event.Remove"));
@@ -518,7 +518,7 @@ bool FWacomRunSnapshotRevisionsRunEventMutationPathsSpec::RunTest(const FString&
 	AddGold.Type = EWacomRunEventEffectType::AddGold;
 	AddGold.Value = 2;
 	GoldChoice.Effects = { AddGold };
-	TStrongObjectPtr<UWacomRunEventDefinition> GoldEvent(MakeSingleChoiceRunEvent(Run.Get(), GoldChoice));
+	TStrongObjectPtr<UWacomRunEventDefinition> GoldEvent(MakeRevisionSingleChoiceRunEvent(Run.Get(), GoldChoice));
 	const FRunUiRevisionSnapshot BeforeGold = CaptureRunUiRevisions(*Run);
 	const FRunEventChoiceResult GoldResult =
 		RunSingleChoiceEvent(*Run, GoldEvent.Get(), TEXT("Revision.Event.Gold"));
@@ -546,7 +546,7 @@ bool FWacomRunSnapshotRevisionsRunEventMutationPathsSpec::RunTest(const FString&
 	ClearFlag.FlagId = TEXT("Revision.Flag");
 	NonSnapshotChoice.Effects = { AddPressure, ConsumeNode, SetFlag, ClearFlag };
 	TStrongObjectPtr<UWacomRunEventDefinition> NonSnapshotEvent(
-		MakeSingleChoiceRunEvent(Run.Get(), NonSnapshotChoice));
+		MakeRevisionSingleChoiceRunEvent(Run.Get(), NonSnapshotChoice));
 	const FRunUiRevisionSnapshot BeforeNonSnapshot = CaptureRunUiRevisions(*Run);
 	const FRunEventChoiceResult NonSnapshotResult =
 		RunSingleChoiceEvent(*Run, NonSnapshotEvent.Get(), TEXT("Revision.Event.NonSnapshot"));
@@ -604,7 +604,7 @@ bool FWacomRunSnapshotRevisionsNonSnapshotMutationsSpec::RunTest(const FString& 
 	CloseChoice.ChoiceId = TEXT("Resolve");
 	CloseChoice.bCloseEventAfterResolve = true;
 	CloseChoice.bMarkEventCompleted = true;
-	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), CloseChoice));
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeRevisionSingleChoiceRunEvent(Run.Get(), CloseChoice));
 	Before = CaptureRunUiRevisions(*Run);
 	TestTrue(TEXT("BeginRunEvent succeeds"), Run->BeginRunEvent(TEXT("Revision.Event.OpenClose"), Event.Get()));
 	After = CaptureRunUiRevisions(*Run);

@@ -289,7 +289,7 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 - 列表数据来自 `RunSession->BuildBackpackStorageSnapshot()`；`URunSession::GetBackpackStorageSnapshotRevision()` 未变化时直接跳过 Snapshot 构建。
 - 顶部金币、容量等标量来自 Run ViewModel。
-- 操作成功后不做领域状态局部 patch，Screen 仍通过 `RebuildAll()` 统一拉取最新事实；列表刷新链是 `RunSession revision gate -> Snapshot -> signature dirty gate -> identity reconcile -> CardView dirty apply`。revision 等价时只刷新顶部轻量标量，跳过 Snapshot 构建；revision 变化但列表签名等价时跳过列表 reconcile；签名变化时各列表区域按稳定身份增量复用 widget，不再 `ClearChildren()` 重建全部卡牌。RunSession revision 维护由 Run 层私有 dirty flags 入口和 `Wacom.Run.SnapshotRevisions` 测试保护，UI 不自己推断哪些 Run mutation 影响列表事实。
+- 操作成功后不做领域状态局部 patch，Screen 仍通过 `RebuildAll()` 统一拉取最新事实；列表刷新链是 `coalesced Run event -> RunSession revision gate -> Snapshot -> signature dirty gate -> identity reconcile -> CardView dirty apply`。revision 等价时只刷新顶部轻量标量，跳过 Snapshot 构建；revision 变化但列表签名等价时跳过列表 reconcile；签名变化时各列表区域按稳定身份增量复用 widget，不再 `ClearChildren()` 重建全部卡牌。RunSession revision 维护由 Run 层私有 dirty flags 入口和 `Wacom.Run.SnapshotRevisions` 测试保护；组合事务广播次数由 `Wacom.Run.NotificationCoalescing` 保护，UI 不自己推断哪些 Run mutation 影响列表事实。
 - `RebuildAll()` 已拆为顶部、备战区、通量区、特殊区和负重区刷新函数；备战、通量、负重按 `InstanceId + 来源区 + 复用角色` 复用 `UWacomDeckCardWidget`，特殊存放区按 owner `InstanceId` 复用 `UWacomSpecialZoneWidget`。
 - 复用卡牌 widget 前会清理投影角标、右键 toggle 和拖拽透明度等残留；当前详情面板只在 hover source 被移除或失效时隐藏。
 
@@ -313,7 +313,7 @@ C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时
 
 - 商店公开请求入口在 PlayerController；内部由 Router 先关闭已有 `GameMenu` 顶层，再调用 `RunSession->BeginShopVisit(PersistentId, Offers)`。
 - Screen 激活时订阅当前 `URunSession::OnRunStateChangedNative`，Run 状态变化会请求刷新；购买后的显式 `RefreshShop()` 仍保留为保底路径。
-- Screen 刷新链是 `shop revision gate -> cached / rebuilt shop Snapshot -> economy-aware offer signature -> row identity reconcile`。`GetShopSnapshotRevision()` 未变化时复用缓存的 `FRunShopSnapshot`，避免重复 `BuildCurrentShopSnapshot()`；金币变化只更新 `CurrentGold / GetEconomySnapshotRevision()` 相关展示，不重建商店 Snapshot。Shop / Economy revision 的影响面由 RunSession 事务层声明，Screen 只消费 revision 和 cached snapshot。
+- Screen 刷新链是 `coalesced Run event -> shop revision gate -> cached / rebuilt shop Snapshot -> economy-aware offer signature -> row identity reconcile`。`GetShopSnapshotRevision()` 未变化时复用缓存的 `FRunShopSnapshot`，避免重复 `BuildCurrentShopSnapshot()`；金币变化只更新 `CurrentGold / GetEconomySnapshotRevision()` 相关展示，不重建商店 Snapshot。Shop / Economy revision 的影响面由 RunSession 事务层声明，Screen 只消费 revision 和 cached snapshot。
 - 签名变化时，`UWacomShopPresentationBuilder` 把 `FRunShopOffer + 当前金币` 转成 `FWacomShopOfferPresentationView`；签名等价时跳过 presentation rebuild 和 row reconcile，保留已缓存的 offer view 供购买入口使用。
 - Offer 行按 `OfferId` 增量复用；购买状态、金币可购买性或商品顺序变化会更新对应 `UWacomShopOfferRowWidget` 的 ViewData，不重复绑定购买委托。
 - Offer 行只渲染 ViewData 并广播购买请求，不直接解析 `CardDefinition` 或判断金币。

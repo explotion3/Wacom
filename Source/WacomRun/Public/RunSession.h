@@ -46,9 +46,8 @@ public:
 	 * 设计：
 	 *   - **原生委托**（不是 Dynamic），UI 用 AddUObject + RemoveAll 注册/反注册
 	 *   - **粗粒度**：不区分变更字段，订阅方按需读 RunState 全量
-	 *   - **节流由调用方负责**：RunSession 不 dedupe。一次玩家操作可能链式触发多次写
-	 *     （例如 AddCardToBackpack → RecomputeBurden 各一次），订阅方收到多个事件应保证
-	 *     刷新逻辑幂等
+	 *   - **组合事务合并**：RunSession 内部的玩家级组合操作会在事务末尾合并广播一次；
+	 *     订阅方仍应保证刷新逻辑幂等
 	 *   - **不 Push 数据**：参数为空，订阅方自己读 GetRunState() / Get* 接口
 	 *
 	 * 替代 Tick 拉数据。订阅生命周期管理见 ue5-ui-umg-slate skill 失效绑定章节。
@@ -813,6 +812,8 @@ private:
 	friend struct FWacomRunSessionTestAccess;
 #endif
 
+	struct FScopedRunStateNotificationBatch;
+
 	void MarkRunUiSnapshotsDirty(uint8 DirtyFlags);
 
 	/**
@@ -833,6 +834,10 @@ private:
 	 * 内部辅助不发，避免一次操作多次广播的尾部串。
 	 */
 	void NotifyRunStateChanged();
+
+	void BroadcastRunStateChangedImmediately();
+	void BeginRunStateNotificationBatch();
+	void EndRunStateNotificationBatch();
 
 	/**
 	 * 私有路径：RecomputeBurden 的"不广播"版本。
@@ -903,6 +908,9 @@ private:
 	uint64 BackpackStorageSnapshotRevision = 0;
 	uint64 ShopSnapshotRevision = 0;
 	uint64 EconomySnapshotRevision = 0;
+
+	int32 RunStateNotificationDeferralDepth = 0;
+	bool bRunStateNotificationPending = false;
 };
 
 #if WITH_AUTOMATION_TESTS

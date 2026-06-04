@@ -28,12 +28,12 @@ namespace
 		});
 	}
 
-	bool AreFloatsEquivalent(float A, float B)
+	bool AreFirstPersonSlotFloatsEquivalent(float A, float B)
 	{
 		return FMath::IsNearlyEqual(A, B, SlotRefreshFloatTolerance);
 	}
 
-	bool AreVectorsEquivalent(const FVector2D& A, const FVector2D& B)
+	bool AreFirstPersonSlotVectorsEquivalent(const FVector2D& A, const FVector2D& B)
 	{
 		return A.Equals(B, SlotRefreshFloatTolerance);
 	}
@@ -43,7 +43,7 @@ namespace
 		return A.EqualTo(B);
 	}
 
-	bool AreEffectBadgesEquivalent(
+	bool AreFirstPersonEffectBadgesEquivalent(
 		const TArray<FWacomCardViewEffectBadge>& A,
 		const TArray<FWacomCardViewEffectBadge>& B)
 	{
@@ -63,7 +63,7 @@ namespace
 		return true;
 	}
 
-	bool AreCardViewDataEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
+	bool AreFirstPersonCardViewDataEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
 	{
 		return AreTextsEquivalent(A.Name, B.Name)
 			&& AreTextsEquivalent(A.TypeText, B.TypeText)
@@ -75,7 +75,7 @@ namespace
 			&& A.bShowValue == B.bShowValue
 			&& AreTextsEquivalent(A.PhysiqueText, B.PhysiqueText)
 			&& A.bShowPhysique == B.bShowPhysique
-			&& AreEffectBadgesEquivalent(A.EffectBadges, B.EffectBadges)
+			&& AreFirstPersonEffectBadgesEquivalent(A.EffectBadges, B.EffectBadges)
 			&& A.bDisabled == B.bDisabled
 			&& A.Durability == B.Durability
 			&& A.bShowDurability == B.bShowDurability
@@ -87,7 +87,7 @@ namespace
 		const FWacomFirstPersonCardLayerEntry& B)
 	{
 		return A.CardInstanceId == B.CardInstanceId
-			&& AreCardViewDataEquivalent(A.CardViewData, B.CardViewData)
+			&& AreFirstPersonCardViewDataEquivalent(A.CardViewData, B.CardViewData)
 			&& A.Zone == B.Zone
 			&& A.bIsHandAnchor == B.bIsHandAnchor
 			&& A.bIsPlayable == B.bIsPlayable
@@ -585,26 +585,26 @@ bool UWacomFirstPersonCardLayerWidget::AreSlotViewsEquivalentForRefresh(
 {
 	return A.Index == B.Index
 		&& AreLayerEntriesEquivalent(A.Entry, B.Entry)
-		&& AreVectorsEquivalent(A.ScreenPosition, B.ScreenPosition)
-		&& AreVectorsEquivalent(A.RawScreenPosition, B.RawScreenPosition)
-		&& AreVectorsEquivalent(A.WidgetPosition, B.WidgetPosition)
-		&& AreVectorsEquivalent(A.UnclampedWidgetPosition, B.UnclampedWidgetPosition)
-		&& AreVectorsEquivalent(A.SnappedWidgetPosition, B.SnappedWidgetPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.ScreenPosition, B.ScreenPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.RawScreenPosition, B.RawScreenPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.WidgetPosition, B.WidgetPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.UnclampedWidgetPosition, B.UnclampedWidgetPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.SnappedWidgetPosition, B.SnappedWidgetPosition)
 		&& A.ProjectionMode == B.ProjectionMode
 		&& A.LayoutMode == B.LayoutMode
 		&& A.ViewportClampMode == B.ViewportClampMode
-		&& AreVectorsEquivalent(A.AnchorWidgetPosition, B.AnchorWidgetPosition)
-		&& AreVectorsEquivalent(A.UnsmoothedAnchorWidgetPosition, B.UnsmoothedAnchorWidgetPosition)
-		&& AreVectorsEquivalent(A.SmoothedAnchorWidgetPosition, B.SmoothedAnchorWidgetPosition)
-		&& AreVectorsEquivalent(A.AuthoredLayoutOffset, B.AuthoredLayoutOffset)
-		&& AreFloatsEquivalent(A.NormalizedHandOffset, B.NormalizedHandOffset)
-		&& AreFloatsEquivalent(A.RenderAngleDegrees, B.RenderAngleDegrees)
-		&& AreFloatsEquivalent(A.RenderScale, B.RenderScale)
-		&& AreFloatsEquivalent(A.RenderOpacity, B.RenderOpacity)
+		&& AreFirstPersonSlotVectorsEquivalent(A.AnchorWidgetPosition, B.AnchorWidgetPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.UnsmoothedAnchorWidgetPosition, B.UnsmoothedAnchorWidgetPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.SmoothedAnchorWidgetPosition, B.SmoothedAnchorWidgetPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.AuthoredLayoutOffset, B.AuthoredLayoutOffset)
+		&& AreFirstPersonSlotFloatsEquivalent(A.NormalizedHandOffset, B.NormalizedHandOffset)
+		&& AreFirstPersonSlotFloatsEquivalent(A.RenderAngleDegrees, B.RenderAngleDegrees)
+		&& AreFirstPersonSlotFloatsEquivalent(A.RenderScale, B.RenderScale)
+		&& AreFirstPersonSlotFloatsEquivalent(A.RenderOpacity, B.RenderOpacity)
 		&& A.ZOrder == B.ZOrder
-		&& AreFloatsEquivalent(A.ViewportScale, B.ViewportScale)
-		&& AreFloatsEquivalent(A.OffscreenDistancePixels, B.OffscreenDistancePixels)
-		&& AreFloatsEquivalent(A.AnchorScreenSmoothingDistancePixels, B.AnchorScreenSmoothingDistancePixels)
+		&& AreFirstPersonSlotFloatsEquivalent(A.ViewportScale, B.ViewportScale)
+		&& AreFirstPersonSlotFloatsEquivalent(A.OffscreenDistancePixels, B.OffscreenDistancePixels)
+		&& AreFirstPersonSlotFloatsEquivalent(A.AnchorScreenSmoothingDistancePixels, B.AnchorScreenSmoothingDistancePixels)
 		&& A.bProjected == B.bProjected
 		&& A.bClamped == B.bClamped
 		&& A.bOutsideViewport == B.bOutsideViewport

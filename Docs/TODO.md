@@ -112,7 +112,7 @@ tags:
   - 状态：`Ready: 美术 / WBP 工作`
   - 归属：UI / Run
   - 入口：[Roadmap: 背包 UI](./Roadmap.md#roadmap-backpack-ui)
-  - 说明：Backpack / SpecialZone / Shop 的稳定刷新已收口为 `RunSession revision gate + signature dirty gate + identity reconcile`，revision 等价时不再构建昂贵 Snapshot，signature 等价时不再重建列表。V0-DS 后 RunSession revision bump 统一走私有 dirty flags 入口，并由 `Wacom.Run.SnapshotRevisions` 覆盖获得卡、移动 / 删除、SpecialZone 投影、拾取、世界交互、战斗奖励、金币、商店和 RunEvent mutation，降低后续新增 Run 事务时忘记 bump 的风险。正式 WBP、拖拽表现、Shop 卡面预览和卡量明显上升后的虚拟列表仍是后续切片。
+  - 说明：Backpack / SpecialZone / Shop 的稳定刷新已收口为 `coalesced Run event + RunSession revision gate + signature dirty gate + identity reconcile`，revision 等价时不再构建昂贵 Snapshot，signature 等价时不再重建列表。V0-DS 后 RunSession revision bump 统一走私有 dirty flags 入口，并由 `Wacom.Run.SnapshotRevisions` 覆盖获得卡、移动 / 删除、SpecialZone 投影、拾取、世界交互、战斗奖励、金币、商店和 RunEvent mutation；V0-DT 后组合 Run 事务由 `Wacom.Run.NotificationCoalescing` 锁住玩家级操作最多唤醒 UI 一次。正式 WBP、拖拽表现、Shop 卡面预览和卡量明显上升后的虚拟列表仍是后续切片。
 
 - [ ] **RunEvent 正式 WBP 外观接入**
   - 状态：`Ready: 美术 / WBP 工作`

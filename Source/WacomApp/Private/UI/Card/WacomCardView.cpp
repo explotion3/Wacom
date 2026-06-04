@@ -49,12 +49,12 @@ namespace
 		DigitImage.SetBrush(DigitBrush);
 	}
 
-	bool AreTextViewsEquivalent(const FText& A, const FText& B)
+	bool AreCardViewTextViewsEquivalent(const FText& A, const FText& B)
 	{
 		return A.EqualTo(B);
 	}
 
-	bool AreEffectBadgesEquivalent(
+	bool AreCardViewEffectBadgesEquivalent(
 		const TArray<FWacomCardViewEffectBadge>& A,
 		const TArray<FWacomCardViewEffectBadge>& B)
 	{
@@ -67,7 +67,7 @@ namespace
 		{
 			if (A[Index].Kind != B[Index].Kind
 				|| A[Index].Value != B[Index].Value
-				|| !AreTextViewsEquivalent(A[Index].DisplayText, B[Index].DisplayText))
+				|| !AreCardViewTextViewsEquivalent(A[Index].DisplayText, B[Index].DisplayText))
 			{
 				return false;
 			}
@@ -75,19 +75,19 @@ namespace
 		return true;
 	}
 
-	bool AreCardViewDataEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
+	bool AreCardViewDataFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
 	{
-		return AreTextViewsEquivalent(A.Name, B.Name)
-			&& AreTextViewsEquivalent(A.TypeText, B.TypeText)
-			&& AreTextViewsEquivalent(A.Description, B.Description)
+		return AreCardViewTextViewsEquivalent(A.Name, B.Name)
+			&& AreCardViewTextViewsEquivalent(A.TypeText, B.TypeText)
+			&& AreCardViewTextViewsEquivalent(A.Description, B.Description)
 			&& A.Cost == B.Cost
 			&& A.bShowCost == B.bShowCost
 			&& A.Rarity == B.Rarity
 			&& A.Value == B.Value
 			&& A.bShowValue == B.bShowValue
-			&& AreTextViewsEquivalent(A.PhysiqueText, B.PhysiqueText)
+			&& AreCardViewTextViewsEquivalent(A.PhysiqueText, B.PhysiqueText)
 			&& A.bShowPhysique == B.bShowPhysique
-			&& AreEffectBadgesEquivalent(A.EffectBadges, B.EffectBadges)
+			&& AreCardViewEffectBadgesEquivalent(A.EffectBadges, B.EffectBadges)
 			&& A.bDisabled == B.bDisabled
 			&& A.Durability == B.Durability
 			&& A.bShowDurability == B.bShowDurability
@@ -96,8 +96,8 @@ namespace
 
 	bool AreTextDisplayFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
 	{
-		return AreTextViewsEquivalent(A.Name, B.Name)
-			&& AreTextViewsEquivalent(A.TypeText, B.TypeText)
+		return AreCardViewTextViewsEquivalent(A.Name, B.Name)
+			&& AreCardViewTextViewsEquivalent(A.TypeText, B.TypeText)
 			&& A.Value == B.Value
 			&& A.bShowValue == B.bShowValue;
 	}
@@ -415,7 +415,7 @@ void UWacomCardView::NativeConstruct()
 
 void UWacomCardView::SetCardViewData(const FWacomCardViewData& InData)
 {
-	if (bCardViewDataAppliedToWidgets && AreCardViewDataEquivalent(CurrentData, InData))
+	if (bCardViewDataAppliedToWidgets && AreCardViewDataFieldsEquivalent(CurrentData, InData))
 	{
 		return;
 	}
@@ -446,7 +446,7 @@ void UWacomCardView::ApplyCurrentDataToWidgets()
 		UpdateTextDisplays();
 		bUpdatedAnyDisplay = true;
 	}
-	if (bForceFullApply || !AreEffectBadgesEquivalent(LastAppliedData.EffectBadges, CurrentData.EffectBadges))
+	if (bForceFullApply || !AreCardViewEffectBadgesEquivalent(LastAppliedData.EffectBadges, CurrentData.EffectBadges))
 	{
 		UpdateEffectBadgeDisplays();
 		bUpdatedAnyDisplay = true;

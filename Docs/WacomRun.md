@@ -250,10 +250,10 @@ V0-BT 后，场景 ShopTrigger 的 Validate Map/Level 按运行时口径校验�
 
 维护约定：
 
-- 修改 `RunState` 后仍保留 `NotifyRunStateChanged()` 粗粒度广播。
+- 修改 `RunState` 后仍保留 `NotifyRunStateChanged()` 粗粒度广播；V0-DT 后战斗结算、商店关闭和 RunEvent 选择这类组合事务会先合并内部通知，再在事务末尾广播一次。
 - 会改变 Backpack / Shop / Economy UI Snapshot 事实的事务，必须在广播前通过 `RunSession.cpp` 私有 dirty flags 入口标记对应 revision。
 - RunEvent 和 Run world card interaction 的影响面由局部 helper 从成功 result / reward / consume fact 统一推导，避免在多个 if 分支里重复写 bump 条件。
-- `Wacom.Run.SnapshotRevisions` 是 drift guard。新增 Run mutation 后，优先把“应该 bump / 不该 bump”的事实补进该组测试。
+- `Wacom.Run.SnapshotRevisions` 是 revision drift guard；`Wacom.Run.NotificationCoalescing` 是组合事务广播次数 guard。新增 Run mutation 后，优先把“应该 bump / 不该 bump”和“玩家级操作是否只广播一次”的事实补进对应测试。
 
 | 事务 / 路径 | BackpackStorage | Shop | Economy |
 |---|---:|---:|---:|

@@ -198,11 +198,62 @@ namespace
 
 // ================ 通知辅助 ================
 
+struct URunSession::FScopedRunStateNotificationBatch
+{
+	explicit FScopedRunStateNotificationBatch(URunSession& InRun)
+		: Run(InRun)
+	{
+		Run.BeginRunStateNotificationBatch();
+	}
+
+	~FScopedRunStateNotificationBatch()
+	{
+		Run.EndRunStateNotificationBatch();
+	}
+
+	URunSession& Run;
+};
+
 void URunSession::NotifyRunStateChanged()
+{
+	if (RunStateNotificationDeferralDepth > 0)
+	{
+		bRunStateNotificationPending = true;
+		return;
+	}
+
+	BroadcastRunStateChangedImmediately();
+}
+
+void URunSession::BroadcastRunStateChangedImmediately()
 {
 	// OnRunStateChangedNative 是原生委托，订阅方用 AddUObject + RemoveAll(this) 管理生命周期。
 	// 当前粗粒度广播不区分变更字段，订阅方按需读 RunState 全量。
 	OnRunStateChangedNative.Broadcast();
+}
+
+void URunSession::BeginRunStateNotificationBatch()
+{
+	++RunStateNotificationDeferralDepth;
+}
+
+void URunSession::EndRunStateNotificationBatch()
+{
+	if (RunStateNotificationDeferralDepth <= 0)
+	{
+		ensureMsgf(false, TEXT("URunSession notification batch ended without matching begin."));
+		RunStateNotificationDeferralDepth = 0;
+		return;
+	}
+
+	--RunStateNotificationDeferralDepth;
+	if (RunStateNotificationDeferralDepth > 0 || !bRunStateNotificationPending)
+	{
+		return;
+	}
+
+	bRunStateNotificationPending = false;
+	BroadcastRunStateChangedImmediately();
 }
 
 void URunSession::MarkRunUiSnapshotsDirty(uint8 DirtyFlags)
@@ -412,6 +463,8 @@ void URunSession::OnBattleFinished(const FBattleResultPacket& Packet, UEnemyDefi
 
 void URunSession::OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet, UEnemyDefinition* EnemyDef, FName TriggerPersistentId)
 {
+	FScopedRunStateNotificationBatch NotificationBatch(*this);
+
 	const bool bResolved = FRunBattleSettlementResolver::Resolve(
 		RunState,
 		Packet,
@@ -1783,6 +1836,8 @@ void URunSession::EndShopVisit()
 		return;
 	}
 
+	FScopedRunStateNotificationBatch NotificationBatch(*this);
+
 	if (FRunShopTransaction::EndVisit(RunState))
 	{
 		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Shop));
@@ -1892,6 +1947,7 @@ bool URunSession::ChooseRunEventOption(FName ChoiceId)
 
 FRunEventChoiceResult URunSession::ChooseRunEventOptionWithResult(FName ChoiceId)
 {
+	FScopedRunStateNotificationBatch NotificationBatch(*this);
 	FRunEventChoiceResult Result = FRunEventExecutor::ChooseOption(RunState, ChoiceId);
 	if (Result.bSucceeded)
 	{
@@ -1912,6 +1968,7 @@ FRunEventChoiceResult URunSession::ChooseRunEventOptionWithPaidCardResult(
 	FName ChoiceId,
 	FGuid PaidCardInstanceId)
 {
+	FScopedRunStateNotificationBatch NotificationBatch(*this);
 	FRunEventChoiceResult Result =
 		FRunEventExecutor::ChooseOptionWithPaidCard(RunState, ChoiceId, PaidCardInstanceId);
 	if (Result.bSucceeded)
