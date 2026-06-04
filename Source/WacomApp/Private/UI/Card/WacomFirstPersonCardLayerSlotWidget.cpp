@@ -440,6 +440,41 @@ FVector2D UWacomFirstPersonCardLayerSlotWidget::GetCardBodyHitSizeForFirstPerson
 	return CardView ? CardView->GetCardBodyHitSize() : UWacomCardView::GetDefaultCardBodyHitSize();
 }
 
+bool UWacomFirstPersonCardLayerSlotWidget::IsWidgetPositionInsideCardBodyForFirstPersonLayer(
+	const FVector2D& WidgetPosition) const
+{
+	if (WidgetPosition.ContainsNaN())
+	{
+		return false;
+	}
+
+	FVector2D BodySize = GetCardBodyHitSizeForFirstPersonLayer();
+	if (BodySize.X <= 1.0f || BodySize.Y <= 1.0f)
+	{
+		BodySize = UWacomCardView::GetDefaultCardBodyHitSize();
+	}
+	if (BodySize.X <= 1.0f || BodySize.Y <= 1.0f)
+	{
+		return false;
+	}
+
+	const FWacomFirstPersonCardLayerSlotView& HitSlotView = bHasVisualSlotView
+		? VisualSlotView
+		: CurrentSlotView;
+	const float RenderScale = FMath::Max(0.01f, HitSlotView.RenderScale);
+	FVector2D LocalDelta = (WidgetPosition - HitSlotView.ScreenPosition) / RenderScale;
+	const float InverseAngleRadians = FMath::DegreesToRadians(-HitSlotView.RenderAngleDegrees);
+	const float CosAngle = FMath::Cos(InverseAngleRadians);
+	const float SinAngle = FMath::Sin(InverseAngleRadians);
+	LocalDelta = FVector2D(
+		LocalDelta.X * CosAngle - LocalDelta.Y * SinAngle,
+		LocalDelta.X * SinAngle + LocalDelta.Y * CosAngle);
+
+	const FVector2D HalfBodySize = BodySize * 0.5f;
+	return FMath::Abs(LocalDelta.X) <= HalfBodySize.X
+		&& FMath::Abs(LocalDelta.Y) <= HalfBodySize.Y;
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::SetCardLayerInteractionEnabled(bool bEnabled)
 {
 	if (bCardLayerInteractionEnabled == bEnabled)
@@ -1023,11 +1058,24 @@ bool UWacomFirstPersonCardLayerSlotWidget::ResolvePointerWidgetPosition(
 	const FPointerEvent& InMouseEvent,
 	FVector2D& OutScreenPosition) const
 {
+	if (!ResolveAbsoluteScreenPositionToWidgetPosition(InMouseEvent.GetScreenSpacePosition(), OutScreenPosition))
+	{
+		return false;
+	}
+
+	const_cast<UWacomFirstPersonCardLayerSlotWidget*>(this)->UpdatePointerViewportDiagnostics(OutScreenPosition);
+	return true;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::ResolveAbsoluteScreenPositionToWidgetPosition(
+	const FVector2D& AbsoluteScreenPosition,
+	FVector2D& OutWidgetPosition) const
+{
 	FVector2D PixelPosition = FVector2D::ZeroVector;
 	FVector2D ViewportPosition = FVector2D::ZeroVector;
 	USlateBlueprintLibrary::AbsoluteToViewport(
 		this,
-		InMouseEvent.GetScreenSpacePosition(),
+		AbsoluteScreenPosition,
 		PixelPosition,
 		ViewportPosition);
 
@@ -1036,25 +1084,24 @@ bool UWacomFirstPersonCardLayerSlotWidget::ResolvePointerWidgetPosition(
 		return false;
 	}
 
-	OutScreenPosition = ViewportPosition;
-	const_cast<UWacomFirstPersonCardLayerSlotWidget*>(this)->UpdatePointerViewportDiagnostics(ViewportPosition);
+	OutWidgetPosition = ViewportPosition;
 	return true;
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::IsScreenPositionInsideCardBody(const FVector2D& ScreenPosition) const
 {
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+	if (ResolveAbsoluteScreenPositionToWidgetPosition(ScreenPosition, WidgetPosition))
+	{
+		return IsWidgetPositionInsideCardBodyForFirstPersonLayer(WidgetPosition);
+	}
+
 	if (CardView && CardView->HasCardBodyHitGeometry())
 	{
 		return CardView->IsScreenPositionInsideCardBody(ScreenPosition);
 	}
 
 	const FGeometry& SlotGeometry = GetCachedGeometry();
-	const FVector2D SlotSize = SlotGeometry.GetLocalSize();
-	if (SlotSize.X <= 1.0f || SlotSize.Y <= 1.0f)
-	{
-		return false;
-	}
-
 	return IsLocalPositionInsideCardBody(SlotGeometry.AbsoluteToLocal(ScreenPosition));
 }
 

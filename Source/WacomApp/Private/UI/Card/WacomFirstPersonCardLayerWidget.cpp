@@ -1592,12 +1592,8 @@ bool UWacomFirstPersonCardLayerWidget::TryResolveCardTargetUnderDragPointer(
 			continue;
 		}
 
-		const FVector2D HitSize =
-			SlotWidget->GetCardBodyHitSizeForFirstPersonLayer() * FMath::Max(0.01f, SlotView.RenderScale);
-
-		const FVector2D HalfSize = HitSize * 0.5f;
 		const FVector2D Delta = PointerPosition - SlotView.ScreenPosition;
-		if (FMath::Abs(Delta.X) > HalfSize.X || FMath::Abs(Delta.Y) > HalfSize.Y)
+		if (!SlotWidget->IsWidgetPositionInsideCardBodyForFirstPersonLayer(PointerPosition))
 		{
 			continue;
 		}

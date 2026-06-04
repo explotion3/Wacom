@@ -337,6 +337,88 @@ namespace
 
 		return Cards;
 	}
+
+	TArray<UCardDefinition*> BuildBugGirlBadgeDisplayTestCards()
+	{
+		const FString BadgeDisplayRoot = BugGirlBadgeDisplayTestCardsRoot();
+		TArray<UCardDefinition*> Cards;
+		Cards.Reserve(4);
+
+		Cards.Add(BuildCard(
+			MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeDamagePoison")),
+			TEXT("DA_Card_Test_BadgeDamagePoison"),
+			TEXT("Test.Badge.DamagePoison"),
+			TEXT("徽章伤毒测试"),
+			TEXT("测试卡面徽章：造成 300 伤害并施加 7 中毒。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::SingleEnemyPart,
+			FCardPhysique{},
+			/*Effects*/ { Damage(300), ApplyStatus(WacomTags::Effect_ApplyStatus_Poison, 7, 0) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		));
+
+		Cards.Add(BuildCard(
+			MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeShieldHeal")),
+			TEXT("DA_Card_Test_BadgeShieldHeal"),
+			TEXT("Test.Badge.ShieldHeal"),
+			TEXT("徽章盾疗测试"),
+			TEXT("测试卡面徽章：获得 12 护盾并恢复 8 生命。"),
+			/*BaseCost*/ 0,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::None,
+			FCardPhysique{},
+			/*Effects*/ { ShieldPlayer(12), HealPlayer(8) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		));
+
+		Cards.Add(BuildCard(
+			MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeDamageShieldHeal")),
+			TEXT("DA_Card_Test_BadgeDamageShieldHeal"),
+			TEXT("Test.Badge.DamageShieldHeal"),
+			TEXT("徽章伤盾疗测试"),
+			TEXT("测试卡面徽章：造成 25 伤害，获得 30 护盾，恢复 5 生命。"),
+			/*BaseCost*/ 1,
+			WacomTags::Card_Rarity_Blue,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::SingleEnemyPart,
+			FCardPhysique{},
+			/*Effects*/ { Damage(25), ShieldPlayer(30), HealPlayer(5) },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		));
+
+		Cards.Add(BuildCard(
+			MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeAllRuntimeSupported")),
+			TEXT("DA_Card_Test_BadgeAllRuntimeSupported"),
+			TEXT("Test.Badge.AllRuntimeSupported"),
+			TEXT("徽章四项测试"),
+			TEXT("测试卡面徽章：造成 1 伤害，施加 2 中毒，获得 3 护盾，恢复 4 生命。灼烧徽章仅有美术位，规则未接入。"),
+			/*BaseCost*/ 2,
+			WacomTags::Card_Rarity_Blue,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::SingleEnemyPart,
+			FCardPhysique{},
+			/*Effects*/ {
+				Damage(1),
+				ApplyStatus(WacomTags::Effect_ApplyStatus_Poison, 2, 0),
+				ShieldPlayer(3),
+				HealPlayer(4)
+			},
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		));
+
+		return Cards;
+	}
 }
 
 namespace Wacom::ContentBuilder
@@ -778,6 +860,7 @@ namespace Wacom::ContentBuilder
 		);
 
 		TArray<UCardDefinition*> StarterPackCards = BuildBugGirlStarterPackCards();
+		TArray<UCardDefinition*> BadgeDisplayTestCards = BuildBugGirlBadgeDisplayTestCards();
 
 		// 检查：任一建造失败则放弃。
 		if (!LeftHand || !RightHand || !Zhaoguang || !Fuxiao || !Chifu || !Shuoguang || !Muling || !BugGirlBag || !ZhujianRongnang || !MuseiLantern
@@ -785,7 +868,8 @@ namespace Wacom::ContentBuilder
 			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
 			|| !TestTargetCompanion || !TestRequireCompanionTarget || !TestBlockWeaponTarget
 			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard
-			|| StarterPackCards.Num() != 6 || StarterPackCards.Contains(nullptr))
+			|| StarterPackCards.Num() != 6 || StarterPackCards.Contains(nullptr)
+			|| BadgeDisplayTestCards.Num() != 4 || BadgeDisplayTestCards.Contains(nullptr))
 		{
 			return nullptr;
 		}
@@ -805,7 +889,8 @@ namespace Wacom::ContentBuilder
 		Char->HpPerFinger    = 2;
 		Char->LeftHandCard   = LeftHand;
 		Char->RightHandCard  = RightHand;
-		// 顺序：5 张参战伙伴卡 + V0-AD 卡对卡测试卡 + 虫妹的小布袋（A 类）+ 蛛茧绒囊（B 类占位）+ 暮色引虫灯（A 类，DeleteProvider）。
+		// 顺序：5 张参战伙伴卡 + 虫妹的小布袋（A 类）+ 蛛茧绒囊（B 类占位）+ 暮色引虫灯（A 类，DeleteProvider）。
+		// DebugKey、卡对卡测试卡和卡面徽章测试卡只进入 DebugSnake 商店，避免污染正式起始牌组。
 		// Initialize 时：非容器卡进 BattleDeck，容器卡默认进 Backpack；
 		// 暮色引虫灯按原型特例默认进 BattleDeck。
 		Char->StarterDeck    = {
@@ -814,12 +899,6 @@ namespace Wacom::ContentBuilder
 			Chifu,
 			Shuoguang,
 			Muling,
-			TestAddCostToSelectedHand,
-			TestReduceCostToSelectedHand,
-			TestDiscardSelectedHandCard,
-			TestExhaustSelectedHandCard,
-			TestTargetCost3,
-			DebugKey,
 			BugGirlBag,
 			ZhujianRongnang,
 			MuseiLantern

@@ -93,6 +93,21 @@ namespace
 			&& A.bShowDurability == B.bShowDurability
 			&& A.Art == B.Art;
 	}
+
+	bool ShouldRenderCardFaceEffectBadge(EWacomCardViewEffectBadgeKind Kind)
+	{
+		switch (Kind)
+		{
+		case EWacomCardViewEffectBadgeKind::Damage:
+		case EWacomCardViewEffectBadgeKind::Poison:
+		case EWacomCardViewEffectBadgeKind::Burn:
+		case EWacomCardViewEffectBadgeKind::Heal:
+		case EWacomCardViewEffectBadgeKind::Shield:
+			return true;
+		default:
+			return false;
+		}
+	}
 }
 
 UWacomCardView::UWacomCardView(const FObjectInitializer& ObjectInitializer)
@@ -363,24 +378,7 @@ void UWacomCardView::ApplyCurrentDataToWidgets()
 	SetOptionalText(ValueText, CurrentData.bShowValue ? FText::AsNumber(CurrentData.Value) : FText::GetEmpty());
 	SetOptionalText(NameText, CurrentData.Name);
 	SetOptionalText(TypeText, CurrentData.TypeText);
-	if (EffectStatsHost)
-	{
-		EffectStatsHost->ClearChildren();
-		UClass* BadgeClass = EffectBadgeWidgetClass
-			? EffectBadgeWidgetClass.Get()
-			: UWacomCardEffectBadgeWidget::StaticClass();
-		for (const FWacomCardViewEffectBadge& Badge : CurrentData.EffectBadges)
-		{
-			UWacomCardEffectBadgeWidget* BadgeWidget = CreateWidget<UWacomCardEffectBadgeWidget>(this, BadgeClass);
-			if (!BadgeWidget)
-			{
-				continue;
-			}
-			BadgeWidget->SetEffectBadgeData(Badge);
-			EffectStatsHost->AddChild(BadgeWidget);
-		}
-		EffectStatsHost->SetVisibility(CurrentData.EffectBadges.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-	}
+	UpdateEffectBadgeDisplays();
 
 	if (CardArt)
 	{
@@ -418,6 +416,97 @@ void UWacomCardView::ApplyCurrentDataToWidgets()
 
 	bCardViewDataAppliedToWidgets = true;
 	InvalidateCardViewRenderCache();
+}
+
+void UWacomCardView::UpdateEffectBadgeDisplays()
+{
+	TArray<UPanelWidget*> BadgeSlots;
+	BadgeSlots.Reserve(4);
+	BadgeSlots.Add(EffectBadgeSlot1);
+	BadgeSlots.Add(EffectBadgeSlot2);
+	BadgeSlots.Add(EffectBadgeSlot3);
+	BadgeSlots.Add(EffectBadgeSlot4);
+
+	const bool bUseFixedSlots = BadgeSlots.ContainsByPredicate([](const UPanelWidget* CandidateSlot)
+	{
+		return CandidateSlot != nullptr;
+	});
+
+	TArray<FWacomCardViewEffectBadge> RenderableBadges;
+	RenderableBadges.Reserve(CurrentData.EffectBadges.Num());
+	for (const FWacomCardViewEffectBadge& Badge : CurrentData.EffectBadges)
+	{
+		if (ShouldRenderCardFaceEffectBadge(Badge.Kind))
+		{
+			RenderableBadges.Add(Badge);
+		}
+	}
+
+	UClass* BadgeClass = EffectBadgeWidgetClass
+		? EffectBadgeWidgetClass.Get()
+		: UWacomCardEffectBadgeWidget::StaticClass();
+
+	if (bUseFixedSlots)
+	{
+		if (EffectStatsHost)
+		{
+			EffectStatsHost->ClearChildren();
+			EffectStatsHost->SetVisibility(ESlateVisibility::Collapsed);
+		}
+
+		for (UPanelWidget* BadgeSlot : BadgeSlots)
+		{
+			if (!BadgeSlot)
+			{
+				continue;
+			}
+
+			BadgeSlot->ClearChildren();
+			BadgeSlot->SetVisibility(ESlateVisibility::Collapsed);
+		}
+
+		int32 BadgeIndex = 0;
+		for (UPanelWidget* BadgeSlot : BadgeSlots)
+		{
+			if (!BadgeSlot)
+			{
+				continue;
+			}
+
+			if (!RenderableBadges.IsValidIndex(BadgeIndex))
+			{
+				break;
+			}
+
+			UWacomCardEffectBadgeWidget* BadgeWidget = CreateWidget<UWacomCardEffectBadgeWidget>(this, BadgeClass);
+			if (!BadgeWidget)
+			{
+				continue;
+			}
+
+			BadgeWidget->SetEffectBadgeData(RenderableBadges[BadgeIndex]);
+			BadgeSlot->AddChild(BadgeWidget);
+			BadgeSlot->SetVisibility(ESlateVisibility::HitTestInvisible);
+			++BadgeIndex;
+		}
+		return;
+	}
+
+	if (EffectStatsHost)
+	{
+		EffectStatsHost->ClearChildren();
+		for (const FWacomCardViewEffectBadge& Badge : RenderableBadges)
+		{
+			UWacomCardEffectBadgeWidget* BadgeWidget = CreateWidget<UWacomCardEffectBadgeWidget>(this, BadgeClass);
+			if (!BadgeWidget)
+			{
+				continue;
+			}
+			BadgeWidget->SetEffectBadgeData(Badge);
+			EffectStatsHost->AddChild(BadgeWidget);
+		}
+		EffectStatsHost->SetVisibility(RenderableBadges.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomCardView::EnsureSurfaceFoilOverlay()

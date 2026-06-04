@@ -156,6 +156,8 @@ namespace
 			return FText::Format(LOCTEXT("HealBadgeFmt", "疗{0}"), FText::AsNumber(Value));
 		case EWacomCardViewEffectBadgeKind::Poison:
 			return FText::Format(LOCTEXT("PoisonBadgeFmt", "毒{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Burn:
+			return FText::Format(LOCTEXT("BurnBadgeFmt", "灼{0}"), FText::AsNumber(Value));
 		case EWacomCardViewEffectBadgeKind::Slow:
 			return FText::Format(LOCTEXT("SlowBadgeFmt", "缓{0}"), FText::AsNumber(Value));
 		case EWacomCardViewEffectBadgeKind::Freeze:
@@ -170,8 +172,25 @@ namespace
 			return FText::Format(LOCTEXT("InitiativeBadgeFmt", "机{0}"), FText::AsNumber(Value));
 		case EWacomCardViewEffectBadgeKind::Cost:
 			return FText::Format(LOCTEXT("CostBadgeFmt", "费{0}"), FText::AsNumber(Value));
+		case EWacomCardViewEffectBadgeKind::Shield:
+			return FText::Format(LOCTEXT("ShieldBadgeFmt", "盾{0}"), FText::AsNumber(Value));
 		default:
 			return FText::AsNumber(Value);
+		}
+	}
+
+	bool IsArtBackedCardFaceEffectBadgeKind(EWacomCardViewEffectBadgeKind Kind)
+	{
+		switch (Kind)
+		{
+		case EWacomCardViewEffectBadgeKind::Damage:
+		case EWacomCardViewEffectBadgeKind::Poison:
+		case EWacomCardViewEffectBadgeKind::Burn:
+		case EWacomCardViewEffectBadgeKind::Heal:
+		case EWacomCardViewEffectBadgeKind::Shield:
+			return true;
+		default:
+			return false;
 		}
 	}
 
@@ -191,48 +210,20 @@ namespace
 		{
 			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Heal;
 		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Status_Shield))
+		{
+			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Shield;
+		}
 		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Poison))
 		{
 			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Poison;
 		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Slow))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Slow;
-		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Freeze))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Freeze;
-		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Twilight))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Twilight;
-		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Draw))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Draw;
-		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Discard))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Discard;
-		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_DiscardSelected))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Discard;
-		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_ExhaustSelected))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Generic;
-		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ModifyInitiative))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Initiative;
-		}
-		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_AddCost)
-			|| Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_ReduceCost))
-		{
-			OutBadge.Kind = EWacomCardViewEffectBadgeKind::Cost;
-		}
 		else
+		{
+			return false;
+		}
+
+		if (!IsArtBackedCardFaceEffectBadgeKind(OutBadge.Kind))
 		{
 			return false;
 		}

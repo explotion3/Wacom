@@ -108,6 +108,18 @@ protected:
 	TObjectPtr<UPanelWidget> EffectStatsHost;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> EffectBadgeSlot1;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> EffectBadgeSlot2;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> EffectBadgeSlot3;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> EffectBadgeSlot4;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> DisabledOverlay;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -156,6 +168,7 @@ private:
 #endif
 
 	void ApplyCurrentDataToWidgets();
+	void UpdateEffectBadgeDisplays();
 	void UpdateCostDisplay();
 	void UpdateDurabilityDisplay();
 	void EnsureSurfaceFoilOverlay();

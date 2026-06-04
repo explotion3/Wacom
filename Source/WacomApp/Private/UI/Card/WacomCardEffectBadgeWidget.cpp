@@ -3,13 +3,12 @@
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
 
 #include "Blueprint/WidgetTree.h"
-#include "Components/Border.h"
 #include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
-#include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-
-#define LOCTEXT_NAMESPACE "WacomCardEffectBadge"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "PaperSprite.h"
 
 TSharedRef<SWidget> UWacomCardEffectBadgeWidget::RebuildWidget()
 {
@@ -20,32 +19,24 @@ TSharedRef<SWidget> UWacomCardEffectBadgeWidget::RebuildWidget()
 			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_EffectBadge"));
 		}
 
-		BadgeBody = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("BadgeBody"));
-		BadgeBody->SetPadding(FMargin(6.f, 4.f));
-		WidgetTree->RootWidget = BadgeBody;
+		UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("BadgeRoot"));
+		WidgetTree->RootWidget = Root;
 
-		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("BadgeRow"));
-		BadgeBody->AddChild(Row);
-
-		IconImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("IconImage"));
-		IconImage->SetDesiredSizeOverride(FVector2D(12.f, 12.f));
-		Row->AddChild(IconImage);
-
-		UVerticalBox* TextColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("TextColumn"));
-		Row->AddChild(TextColumn);
-
-		ValueText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("ValueText"));
-		ValueText->SetJustification(ETextJustify::Center);
-		TextColumn->AddChildToVerticalBox(ValueText);
-
-		LabelText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("LabelText"));
-		LabelText->SetJustification(ETextJustify::Center);
+		BadgeFrameImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("BadgeFrameImage"));
+		BadgeFrameImage->SetVisibility(ESlateVisibility::Collapsed);
+		if (UOverlaySlot* FrameSlot = Root->AddChildToOverlay(BadgeFrameImage))
 		{
-			FSlateFontInfo Font = LabelText->GetFont();
-			Font.Size = 9;
-			LabelText->SetFont(Font);
+			FrameSlot->SetHorizontalAlignment(HAlign_Fill);
+			FrameSlot->SetVerticalAlignment(VAlign_Fill);
 		}
-		TextColumn->AddChildToVerticalBox(LabelText);
+
+		DigitHost = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("DigitHost"));
+		DigitHost->SetVisibility(ESlateVisibility::Collapsed);
+		if (UOverlaySlot* DigitSlot = Root->AddChildToOverlay(DigitHost))
+		{
+			DigitSlot->SetHorizontalAlignment(HAlign_Center);
+			DigitSlot->SetVerticalAlignment(VAlign_Center);
+		}
 	}
 
 	return Super::RebuildWidget();
@@ -65,88 +56,158 @@ void UWacomCardEffectBadgeWidget::SetEffectBadgeData(const FWacomCardViewEffectB
 
 FText UWacomCardEffectBadgeWidget::GetValueText() const
 {
-	return ValueText ? ValueText->GetText() : FText::AsNumber(CurrentData.Value);
-}
-
-FText UWacomCardEffectBadgeWidget::GetLabelText() const
-{
-	return LabelText ? LabelText->GetText() : BuildLabelText(CurrentData.Kind);
+	return FText::AsNumber(CurrentData.Value);
 }
 
 void UWacomCardEffectBadgeWidget::ApplyCurrentDataToWidgets()
 {
-	if (BadgeBody)
-	{
-		BadgeBody->SetBrushColor(BuildBadgeColor(CurrentData.Kind));
-	}
-
-	if (IconImage)
-	{
-		IconImage->SetColorAndOpacity(FLinearColor::White);
-		IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
-
-	if (ValueText)
-	{
-		ValueText->SetText(FText::AsNumber(CurrentData.Value));
-		ValueText->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
-
-	if (LabelText)
-	{
-		LabelText->SetText(BuildLabelText(CurrentData.Kind));
-		LabelText->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
+	EnsureSpriteCachesBuilt();
+	UpdateFrameImage();
+	UpdateDigitImages();
 }
 
-FText UWacomCardEffectBadgeWidget::BuildLabelText(EWacomCardViewEffectBadgeKind Kind)
+void UWacomCardEffectBadgeWidget::EnsureSpriteCachesBuilt()
 {
-	switch (Kind)
+	if (bSpriteCachesBuilt)
 	{
-	case EWacomCardViewEffectBadgeKind::Damage:
-		return LOCTEXT("DamageLabel", "伤害");
-	case EWacomCardViewEffectBadgeKind::Heal:
-		return LOCTEXT("HealLabel", "治疗");
-	case EWacomCardViewEffectBadgeKind::Poison:
-		return LOCTEXT("PoisonLabel", "中毒");
-	case EWacomCardViewEffectBadgeKind::Slow:
-		return LOCTEXT("SlowLabel", "减速");
-	case EWacomCardViewEffectBadgeKind::Freeze:
-		return LOCTEXT("FreezeLabel", "冻结");
-	case EWacomCardViewEffectBadgeKind::Twilight:
-		return LOCTEXT("TwilightLabel", "暮气");
-	case EWacomCardViewEffectBadgeKind::Draw:
-		return LOCTEXT("DrawLabel", "抽牌");
-	case EWacomCardViewEffectBadgeKind::Discard:
-		return LOCTEXT("DiscardLabel", "弃牌");
-	case EWacomCardViewEffectBadgeKind::Initiative:
-		return LOCTEXT("InitiativeLabel", "先机");
-	case EWacomCardViewEffectBadgeKind::Cost:
-		return LOCTEXT("CostLabel", "费用");
-	default:
-		return LOCTEXT("GenericLabel", "效果");
+		return;
 	}
+
+	RebuildSpriteCaches();
 }
 
-FLinearColor UWacomCardEffectBadgeWidget::BuildBadgeColor(EWacomCardViewEffectBadgeKind Kind)
+void UWacomCardEffectBadgeWidget::RebuildSpriteCaches()
 {
-	switch (Kind)
+	ResolvedBadgeFrameSprites.Reset();
+	ResolvedDigitSprites.Reset();
+
+	for (const TPair<EWacomCardViewEffectBadgeKind, TSoftObjectPtr<UPaperSprite>>& Pair : BadgeFrameSprites)
 	{
-	case EWacomCardViewEffectBadgeKind::Damage:
-		return FLinearColor(0.72f, 0.12f, 0.08f, 0.92f);
-	case EWacomCardViewEffectBadgeKind::Heal:
-		return FLinearColor(0.12f, 0.55f, 0.22f, 0.92f);
-	case EWacomCardViewEffectBadgeKind::Poison:
-		return FLinearColor(0.25f, 0.55f, 0.18f, 0.92f);
-	case EWacomCardViewEffectBadgeKind::Slow:
-		return FLinearColor(0.70f, 0.45f, 0.12f, 0.92f);
-	case EWacomCardViewEffectBadgeKind::Freeze:
-		return FLinearColor(0.16f, 0.45f, 0.75f, 0.92f);
-	case EWacomCardViewEffectBadgeKind::Twilight:
-		return FLinearColor(0.42f, 0.24f, 0.70f, 0.92f);
-	default:
-		return FLinearColor(0.18f, 0.18f, 0.18f, 0.92f);
+		if (!Pair.Value.IsNull())
+		{
+			if (UPaperSprite* Sprite = Pair.Value.LoadSynchronous())
+			{
+				ResolvedBadgeFrameSprites.Add(Pair.Key, Sprite);
+			}
+		}
 	}
+
+	for (const TPair<int32, TSoftObjectPtr<UPaperSprite>>& Pair : DigitSprites)
+	{
+		if (!Pair.Value.IsNull())
+		{
+			if (UPaperSprite* Sprite = Pair.Value.LoadSynchronous())
+			{
+				ResolvedDigitSprites.Add(Pair.Key, Sprite);
+			}
+		}
+	}
+
+	bSpriteCachesBuilt = true;
 }
 
-#undef LOCTEXT_NAMESPACE
+void UWacomCardEffectBadgeWidget::UpdateFrameImage()
+{
+	if (!BadgeFrameImage)
+	{
+		return;
+	}
+
+	if (UPaperSprite* Sprite = ResolvedBadgeFrameSprites.FindRef(CurrentData.Kind))
+	{
+		SetSpriteBrush(*BadgeFrameImage, *Sprite, BadgeFrameDrawSize);
+		BadgeFrameImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		return;
+	}
+
+	BadgeFrameImage->SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UWacomCardEffectBadgeWidget::UpdateDigitImages()
+{
+	if (!DigitHost)
+	{
+		return;
+	}
+
+	DigitHost->ClearChildren();
+	DigitHost->SetVisibility(ESlateVisibility::Collapsed);
+
+	if (!WidgetTree || ResolvedDigitSprites.IsEmpty())
+	{
+		return;
+	}
+
+	const TArray<int32> Digits = SplitIntoDigits(CurrentData.Value);
+	if (Digits.IsEmpty())
+	{
+		return;
+	}
+
+	for (int32 Index = 0; Index < Digits.Num(); ++Index)
+	{
+		const int32 Digit = Digits[Index];
+		UPaperSprite* Sprite = ResolvedDigitSprites.FindRef(Digit);
+		if (!Sprite)
+		{
+			DigitHost->ClearChildren();
+			return;
+		}
+
+		UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		SetSpriteBrush(*DigitImage, *Sprite, DigitDrawSize);
+		DigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (UPanelSlot* AddedDigitSlot = DigitHost->AddChild(DigitImage))
+		{
+			if (UHorizontalBoxSlot* HorizontalSlot = Cast<UHorizontalBoxSlot>(AddedDigitSlot))
+			{
+				const bool bInteriorDigit = Index > 0 && Index < Digits.Num() - 1;
+				HorizontalSlot->SetPadding(bInteriorDigit ? InteriorDigitPadding : FMargin());
+			}
+		}
+	}
+
+	DigitHost->SetVisibility(
+		DigitHost->GetChildrenCount() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
+TArray<int32> UWacomCardEffectBadgeWidget::SplitIntoDigits(int32 Value) const
+{
+	TArray<int32> Result;
+	if (Value <= 0)
+	{
+		Result.Add(0);
+	}
+	else
+	{
+		TArray<int32> Reversed;
+		while (Value > 0)
+		{
+			Reversed.Add(Value % 10);
+			Value /= 10;
+		}
+
+		for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index)
+		{
+			Result.Add(Reversed[Index]);
+		}
+	}
+
+	const int32 DesiredDigitCount = FMath::Max(1, MinimumDigitCount);
+	while (Result.Num() < DesiredDigitCount)
+	{
+		Result.Insert(0, 0);
+	}
+
+	return Result;
+}
+
+void UWacomCardEffectBadgeWidget::SetSpriteBrush(UImage& Image, UPaperSprite& Sprite, const FVector2D& DesiredSize)
+{
+	FSlateBrush Brush = Image.GetBrush();
+	Brush.SetResourceObject(&Sprite);
+	Brush.SetImageSize(FVector2f(
+		FMath::Max(1.0f, DesiredSize.X),
+		FMath::Max(1.0f, DesiredSize.Y)));
+	Image.SetBrush(Brush);
+}

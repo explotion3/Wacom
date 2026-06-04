@@ -37,7 +37,18 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static const TCHAR* ZhujianRongnangPath();
 	static const TCHAR* MuseiYinchongdengPath();
 	static const TCHAR* DebugKeyPath();
+	static const TCHAR* AddCostToSelectedHandCardPath();
+	static const TCHAR* ReduceCostToSelectedHandCardPath();
+	static const TCHAR* TargetCost3CardPath();
+	static const TCHAR* TargetCompanionCardPath();
+	static const TCHAR* RequireCompanionTargetCardPath();
+	static const TCHAR* BlockWeaponTargetCardPath();
 	static const TCHAR* DiscardSelectedHandCardPath();
+	static const TCHAR* ExhaustSelectedHandCardPath();
+	static const TCHAR* BadgeDamagePoisonCardPath();
+	static const TCHAR* BadgeShieldHealCardPath();
+	static const TCHAR* BadgeDamageShieldHealCardPath();
+	static const TCHAR* BadgeAllRuntimeSupportedCardPath();
 	static const TCHAR* PoisonFangPath();
 	static const TCHAR* PoisonNeedlePath();
 	static const TCHAR* ChitinWardPath();
@@ -52,6 +63,8 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static const TCHAR* DebugSnakeShopPath();
 
 	static TArray<const TCHAR*> StarterPackCardPaths();
+	static TArray<const TCHAR*> DebugAndTestCardPaths();
+	static TArray<const TCHAR*> BadgeDisplayTestCardPaths();
 	static TArray<const TCHAR*> GeneratedDefinitionCardPaths();
 	static TArray<const TCHAR*> SnakePartPaths();
 	static TArray<FWacomGeneratedBattleContentShopOfferExpectation> DebugSnakeShopOfferExpectations();
@@ -65,7 +78,18 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static UCardDefinition* LoadChifuGongyi(FAutomationTestBase& Test);
 	static UCardDefinition* LoadBugGirlBag(FAutomationTestBase& Test);
 	static UCardDefinition* LoadDebugKey(FAutomationTestBase& Test);
+	static UCardDefinition* LoadAddCostToSelectedHandCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadReduceCostToSelectedHandCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadTargetCost3Card(FAutomationTestBase& Test);
+	static UCardDefinition* LoadTargetCompanionCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadRequireCompanionTargetCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadBlockWeaponTargetCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadDiscardSelectedHandCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadExhaustSelectedHandCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadBadgeDamagePoisonCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadBadgeShieldHealCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadBadgeDamageShieldHealCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadBadgeAllRuntimeSupportedCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadPoisonFang(FAutomationTestBase& Test);
 	static UCardDefinition* LoadPoisonNeedle(FAutomationTestBase& Test);
 	static UCardDefinition* LoadChitinWard(FAutomationTestBase& Test);

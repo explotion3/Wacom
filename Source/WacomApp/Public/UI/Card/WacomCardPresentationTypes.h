@@ -42,13 +42,15 @@ enum class EWacomCardViewEffectBadgeKind : uint8
 	Damage UMETA(DisplayName = "Damage"),
 	Heal UMETA(DisplayName = "Heal"),
 	Poison UMETA(DisplayName = "Poison"),
+	Burn UMETA(DisplayName = "Burn"),
 	Slow UMETA(DisplayName = "Slow"),
 	Freeze UMETA(DisplayName = "Freeze"),
 	Twilight UMETA(DisplayName = "Twilight"),
 	Draw UMETA(DisplayName = "Draw"),
 	Discard UMETA(DisplayName = "Discard"),
 	Initiative UMETA(DisplayName = "Initiative"),
-	Cost UMETA(DisplayName = "Cost")
+	Cost UMETA(DisplayName = "Cost"),
+	Shield UMETA(DisplayName = "Shield")
 };
 
 /**

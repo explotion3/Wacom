@@ -81,9 +81,64 @@ const TCHAR* FWacomGeneratedBattleContentAssets::DebugKeyPath()
 	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey.DA_Card_DebugKey");
 }
 
+const TCHAR* FWacomGeneratedBattleContentAssets::AddCostToSelectedHandCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_AddCostToSelectedHand.DA_Card_Test_AddCostToSelectedHand");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::ReduceCostToSelectedHandCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ReduceCostToSelectedHand.DA_Card_Test_ReduceCostToSelectedHand");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::TargetCost3CardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_TargetCost3.DA_Card_Test_TargetCost3");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::TargetCompanionCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_TargetCompanion.DA_Card_Test_TargetCompanion");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::RequireCompanionTargetCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_RequireCompanionTarget.DA_Card_Test_RequireCompanionTarget");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::BlockWeaponTargetCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_BlockWeaponTarget.DA_Card_Test_BlockWeaponTarget");
+}
+
 const TCHAR* FWacomGeneratedBattleContentAssets::DiscardSelectedHandCardPath()
 {
 	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_DiscardSelectedHandCard.DA_Card_Test_DiscardSelectedHandCard");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::ExhaustSelectedHandCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ExhaustSelectedHandCard.DA_Card_Test_ExhaustSelectedHandCard");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::BadgeDamagePoisonCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeDamagePoison.DA_Card_Test_BadgeDamagePoison");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::BadgeShieldHealCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeShieldHeal.DA_Card_Test_BadgeShieldHeal");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::BadgeDamageShieldHealCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeDamageShieldHeal.DA_Card_Test_BadgeDamageShieldHeal");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::BadgeAllRuntimeSupportedCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeAllRuntimeSupported.DA_Card_Test_BadgeAllRuntimeSupported");
 }
 
 const TCHAR* FWacomGeneratedBattleContentAssets::PoisonFangPath()
@@ -158,6 +213,31 @@ TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::StarterPackCardPaths()
 	};
 }
 
+TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::DebugAndTestCardPaths()
+{
+	return {
+		DebugKeyPath(),
+		AddCostToSelectedHandCardPath(),
+		ReduceCostToSelectedHandCardPath(),
+		TargetCost3CardPath(),
+		TargetCompanionCardPath(),
+		RequireCompanionTargetCardPath(),
+		BlockWeaponTargetCardPath(),
+		DiscardSelectedHandCardPath(),
+		ExhaustSelectedHandCardPath()
+	};
+}
+
+TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::BadgeDisplayTestCardPaths()
+{
+	return {
+		BadgeDamagePoisonCardPath(),
+		BadgeShieldHealCardPath(),
+		BadgeDamageShieldHealCardPath(),
+		BadgeAllRuntimeSupportedCardPath()
+	};
+}
+
 TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::GeneratedDefinitionCardPaths()
 {
 	return {
@@ -171,14 +251,26 @@ TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::GeneratedDefinitionCard
 		BugGirlBagPath(),
 		ZhujianRongnangPath(),
 		MuseiYinchongdengPath(),
-		DebugKeyPath(),
 		PoisonFangPath(),
 		PoisonNeedlePath(),
 		ChitinWardPath(),
 		AntennaSearchPath(),
 		MoltCutPath(),
 		LightHuskPath(),
-		SilklineFeintPath()
+		SilklineFeintPath(),
+		DebugKeyPath(),
+		AddCostToSelectedHandCardPath(),
+		ReduceCostToSelectedHandCardPath(),
+		TargetCost3CardPath(),
+		TargetCompanionCardPath(),
+		RequireCompanionTargetCardPath(),
+		BlockWeaponTargetCardPath(),
+		DiscardSelectedHandCardPath(),
+		ExhaustSelectedHandCardPath(),
+		BadgeDamagePoisonCardPath(),
+		BadgeShieldHealCardPath(),
+		BadgeDamageShieldHealCardPath(),
+		BadgeAllRuntimeSupportedCardPath()
 	};
 }
 
@@ -203,7 +295,20 @@ TArray<FWacomGeneratedBattleContentShopOfferExpectation> FWacomGeneratedBattleCo
 		{ AntennaSearchPath(), 2 },
 		{ MoltCutPath(), 2 },
 		{ LightHuskPath(), 1 },
-		{ SilklineFeintPath(), 2 }
+		{ SilklineFeintPath(), 2 },
+		{ DebugKeyPath(), 0 },
+		{ AddCostToSelectedHandCardPath(), 0 },
+		{ ReduceCostToSelectedHandCardPath(), 0 },
+		{ TargetCost3CardPath(), 0 },
+		{ TargetCompanionCardPath(), 0 },
+		{ RequireCompanionTargetCardPath(), 0 },
+		{ BlockWeaponTargetCardPath(), 0 },
+		{ DiscardSelectedHandCardPath(), 0 },
+		{ ExhaustSelectedHandCardPath(), 0 },
+		{ BadgeDamagePoisonCardPath(), 0 },
+		{ BadgeShieldHealCardPath(), 0 },
+		{ BadgeDamageShieldHealCardPath(), 0 },
+		{ BadgeAllRuntimeSupportedCardPath(), 0 }
 	};
 }
 
@@ -252,9 +357,64 @@ UCardDefinition* FWacomGeneratedBattleContentAssets::LoadDebugKey(FAutomationTes
 	return LoadCardByPath(DebugKeyPath(), Test);
 }
 
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadAddCostToSelectedHandCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(AddCostToSelectedHandCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadReduceCostToSelectedHandCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(ReduceCostToSelectedHandCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadTargetCost3Card(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(TargetCost3CardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadTargetCompanionCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(TargetCompanionCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadRequireCompanionTargetCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(RequireCompanionTargetCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadBlockWeaponTargetCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(BlockWeaponTargetCardPath(), Test);
+}
+
 UCardDefinition* FWacomGeneratedBattleContentAssets::LoadDiscardSelectedHandCard(FAutomationTestBase& Test)
 {
 	return LoadCardByPath(DiscardSelectedHandCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadExhaustSelectedHandCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(ExhaustSelectedHandCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadBadgeDamagePoisonCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(BadgeDamagePoisonCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadBadgeShieldHealCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(BadgeShieldHealCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadBadgeDamageShieldHealCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(BadgeDamageShieldHealCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadBadgeAllRuntimeSupportedCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(BadgeAllRuntimeSupportedCardPath(), Test);
 }
 
 UCardDefinition* FWacomGeneratedBattleContentAssets::LoadPoisonFang(FAutomationTestBase& Test)

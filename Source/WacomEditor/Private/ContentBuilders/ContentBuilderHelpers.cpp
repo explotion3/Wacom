@@ -31,6 +31,11 @@ namespace Wacom::ContentBuilder
 		return BugGirlCardsRoot() / TEXT("StarterPack");
 	}
 
+	FString BugGirlBadgeDisplayTestCardsRoot()
+	{
+		return BugGirlCardsRoot() / TEXT("BadgeDisplayTests");
+	}
+
 	FString RewardCardsRoot()
 	{
 		return CardsRoot() / TEXT("Rewards");

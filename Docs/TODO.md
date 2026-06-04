@@ -68,9 +68,9 @@ tags:
   - 说明：V0-CI 后普通战斗事件 presentation queue 不再阻塞 PlayCard，旧事件表现可能落后于最新 Snapshot。V0-CJ/V0-CK 后 BattleHUD 使用常驻可滚动 Battle Combat Log 补足玩家可读反馈，旧日志抽屉和旧 EventToast 单条提示框都不再挂在 HUD 主路径。V0-CL 后新增只读 BattlePresentationStack 小卡堆叠，并把 Wait / EndTurn 改成 turn-boundary barrier：stack 未清空时先 pending，期间锁住继续出牌和目标选择。V0-CM 后表现栈收成纯小卡堆，只显示整体缩放的完整卡面，不再显示卡名、目标、数量、溢出文字或黑色底座；卡牌到达 boundary 后先播放短 exit motion，再移除并释放 pending turn-boundary。V0-DB 后 presentation queue、stack 和 pending barrier 的运行时状态已收口到私有 `FWacomBattleHUDPresentationCoordinator`。后续可按体验需要加入 cue 合并、旧表现跳过、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
-  - 状态：`In Progress: 已建立 authoring matrix、validator、transient runtime fixture、真实生成资产 smoke 和测试 helper 收口`
+  - 状态：`In Progress: 已建立 authoring matrix、validator、transient runtime fixture、真实生成资产 smoke 和测试 helper 收口；测试 / 调试卡已统一移入 DebugSnake 0 金币商店`
   - 归属：Battle / Data / Editor
-  - 说明：当前制作合同来源是 `FWacomBattleRuleContentContract`，Data validator 负责拦截未接入配置；`Wacom.Battle.RuleContentMatrix` 证明矩阵允许项能进入 `UBattleSession` 结算；`Wacom.Battle.GeneratedStarterContent` 证明真实生成资产没有字段漂移。生成内容测试路径集中在 `FWacomGeneratedBattleContentAssets`，Snapshot/Event 查询集中在 `FWacomBattleFixture`。后续可继续做正式掉落 / 奖励池、更多敌人包、卡牌平衡和正式卡组入口；如果需要 `OnDraw`、`OnTurnStart/End`、敌人更多自我效果、改先机类意图、更多状态公式或正式暮气被动，需要先接运行时 resolver，再更新合同、文档和验证测试。
+  - 说明：当前制作合同来源是 `FWacomBattleRuleContentContract`，Data validator 负责拦截未接入配置；`Wacom.Battle.RuleContentMatrix` 证明矩阵允许项能进入 `UBattleSession` 结算；`Wacom.Battle.GeneratedStarterContent` 证明真实生成资产没有字段漂移。生成内容测试路径集中在 `FWacomGeneratedBattleContentAssets`，Snapshot/Event 查询集中在 `FWacomBattleFixture`。BugGirl 初始牌组只保留正式起始内容，`DebugKey`、卡对卡测试卡和卡面徽章测试卡统一通过 `DA_Shop_DebugSnake` 0 金币购买。当前卡面徽章测试卡覆盖 Damage / Poison / Shield / Heal；Burn 仅有 UI 美术预留位，没有 `Status.Burn` / `Effect.ApplyStatus.Burn` 规则 tag，后续要先接规则合同和 resolver 再生成正式 Burn 内容。后续可继续做正式掉落 / 奖励池、更多敌人包、卡牌平衡和正式卡组入口；如果需要 `OnDraw`、`OnTurnStart/End`、敌人更多自我效果、改先机类意图、更多状态公式或正式暮气被动，需要先接运行时 resolver，再更新合同、文档和验证测试。
 
 - [ ] **战斗场景敌人 Actor：承接敌方部位表现与先机预测**
   - 状态：`In Progress: V0-CN 已新增 Host + PartActor facade；V0-CO 已补预测 readiness 诊断；V0-CP 已补稳定 hover target 状态；V0-CQ 已补玩家可见 Cost 推进预测；V0-CR 已把绑定收口到当前 BattleTrigger.SceneEnemyHost；V0-CS 已补 PartActor 常驻状态 Badge 并让有 Host 的战斗默认隐藏 EnemyInfoBar；V0-CT 已打磨 Badge 可读 fallback、Host 稳定错开、Prediction 显示上移和破坏态弱化`

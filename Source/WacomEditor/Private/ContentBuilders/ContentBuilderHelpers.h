@@ -16,6 +16,7 @@ namespace Wacom::ContentBuilder
 	FString CardsRoot();
 	FString BugGirlCardsRoot();
 	FString BugGirlStarterPackCardsRoot();
+	FString BugGirlBadgeDisplayTestCardsRoot();
 	FString RewardCardsRoot();
 	FString CharactersRoot();
 	FString SnakeEnemiesRoot();

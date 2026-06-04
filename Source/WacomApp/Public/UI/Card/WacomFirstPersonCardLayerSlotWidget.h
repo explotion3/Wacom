@@ -253,6 +253,7 @@ public:
 	bool CanExposeCardTarget() const;
 	FWacomInteractionTargetHandle BuildCardTargetHandle() const;
 	FVector2D GetCardBodyHitSizeForFirstPersonLayer() const;
+	bool IsWidgetPositionInsideCardBodyForFirstPersonLayer(const FVector2D& WidgetPosition) const;
 	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const { return GestureState; }
 	EWacomFirstPersonCardDragTargetFeedbackState GetDragTargetFeedbackStateForFirstPersonLayer() const
 	{
@@ -390,6 +391,7 @@ private:
 	const FWacomFirstPersonCardLayerSlotView& GetGestureBaseSlotView() const;
 	const FWacomFirstPersonCardLayerSlotView& GetEffectiveTargetSlotView() const;
 	bool ResolveInspectScreenPosition(FVector2D& OutScreenPosition) const;
+	bool ResolveAbsoluteScreenPositionToWidgetPosition(const FVector2D& AbsoluteScreenPosition, FVector2D& OutWidgetPosition) const;
 	bool ResolvePointerWidgetPosition(const FPointerEvent& InMouseEvent, FVector2D& OutScreenPosition) const;
 	bool IsScreenPositionInsideCardBody(const FVector2D& ScreenPosition) const;
 	bool IsLocalPositionInsideCardBody(const FVector2D& LocalPosition) const;

@@ -1053,6 +1053,48 @@ bool FWacomFirstPersonCardLayerFallbackHitBoundsTest::RunTest(const FString& Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerRotatedBodyHitBoundsTest,
+	"Wacom.UI.FirstPersonCardLayer.CardTarget.FirstPersonCardViewBodyHitBoundsFollowFanRotation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerRotatedBodyHitBoundsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardLayerInteractionEnabled(true);
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(500.0f, 600.0f), 45.0f, 1.0f)
+	});
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	TestFalse(TEXT("Old axis-aligned corner no longer hits rotated body"),
+		SlotWidget->IsWidgetPositionInsideCardBodyForFirstPersonLayer(FVector2D(610.0f, 780.0f)));
+	TestTrue(TEXT("Point inside rotated visual body hits"),
+		SlotWidget->IsWidgetPositionInsideCardBodyForFirstPersonLayer(FVector2D(592.0f, 692.0f)));
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerCardTargetHoverBridgeTest,
 	"Wacom.UI.FirstPersonCardLayer.CardTarget.LayerBroadcastsCardTargetHoverAndUnhover",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -9486,6 +9528,73 @@ bool FWacomFirstPersonCardLayerBleedCardTargetProbeTest::RunTest(const FString& 
 		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
 		EWacomInteractionTargetKind::Card);
 	TestEqual(TEXT("Body pointer records target card id"),
+		Layer->GetCurrentDragViewForTest().CurrentTarget.CardInstanceId,
+		TargetCardId);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerRotatedCardTargetProbeTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.CardTargetProbeUsesRotatedBodyHitBounds",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerRotatedCardTargetProbeTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
+	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
+
+	FWacomFirstPersonCardLayerSlotView TargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 45.0f, 1.0f);
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	SourceWidget->RequestGesturePressForTest(FVector2D(500.0f, 600.0f));
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(760.0f, 780.0f));
+	TestNotEqual(TEXT("Old axis-aligned target corner does not probe rotated target"),
+		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
+		EWacomInteractionTargetKind::Card);
+	TestFalse(TEXT("Rejected rotated corner does not light target probe"),
+		TargetWidget->HasCardDragProbeFeedbackForTest());
+
+	SourceWidget->RequestGestureMoveForTest(0.01f, FVector2D(742.0f, 692.0f));
+	TestEqual(TEXT("Point inside rotated target body probes card target"),
+		Layer->GetCurrentDragViewForTest().CurrentTarget.TargetKind,
+		EWacomInteractionTargetKind::Card);
+	TestEqual(TEXT("Rotated target body records target card id"),
 		Layer->GetCurrentDragViewForTest().CurrentTarget.CardInstanceId,
 		TargetCardId);
 

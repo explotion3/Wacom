@@ -11,7 +11,10 @@
 #include "Enemies/IntentDefinition.h"
 #include "Enemies/IntentEffect.h"
 #include "Fixtures/GeneratedBattleContentTestAssets.h"
+#include "Shops/ShopDefinition.h"
 #include "Tags/WacomGameplayTags.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
+#include "UI/Card/WacomCardPresentationTypes.h"
 #include "Validation/CardDefinitionValidation.h"
 #include "Validation/CharacterDefinitionValidation.h"
 #include "Validation/EnemyDefinitionValidation.h"
@@ -151,6 +154,32 @@ namespace
 			}
 		}
 		return false;
+	}
+
+	bool ContainsOffer(const UShopDefinition* Shop, const UCardDefinition* Card, int32 ExpectedPrice)
+	{
+		return Shop && Card && Shop->Offers.ContainsByPredicate(
+			[Card, ExpectedPrice](const FShopOfferDefinition& Offer)
+			{
+				return Offer.CardDefinition.Get() == Card && Offer.Price == ExpectedPrice;
+			});
+	}
+
+	bool AssertBadge(
+		FAutomationTestBase& Test,
+		const TArray<FWacomCardViewEffectBadge>& Badges,
+		int32 Index,
+		EWacomCardViewEffectBadgeKind ExpectedKind,
+		int32 ExpectedValue)
+	{
+		if (!Test.TestTrue(FString::Printf(TEXT("Badge index %d exists"), Index), Badges.IsValidIndex(Index)))
+		{
+			return false;
+		}
+
+		Test.TestTrue(FString::Printf(TEXT("Badge %d kind"), Index), Badges[Index].Kind == ExpectedKind);
+		Test.TestEqual(FString::Printf(TEXT("Badge %d value"), Index), Badges[Index].Value, ExpectedValue);
+		return true;
 	}
 }
 
@@ -825,21 +854,25 @@ bool FWacomDataDebugKeyAssetLoadsSpec::RunTest(const FString& /*Parameters*/)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomDataDebugKeyBugGirlStarterDeckSpec,
-	"Wacom.Data.DebugKeyAsset.DebugKeyIsInBugGirlStarterDeck",
+	"Wacom.Data.DebugKeyAsset.DebugKeyIsInDebugSnakeShopNotBugGirlStarterDeck",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomDataDebugKeyBugGirlStarterDeckSpec::RunTest(const FString& /*Parameters*/)
 {
 	UCardDefinition* DebugKey = FWacomGeneratedBattleContentAssets::LoadDebugKey(*this);
 	UCharacterDefinition* BugGirl = FWacomGeneratedBattleContentAssets::LoadBugGirl(*this);
+	UShopDefinition* DebugShop = FWacomGeneratedBattleContentAssets::LoadDebugSnakeShop(*this);
 	if (!TestNotNull(TEXT("DebugKey asset loads"), DebugKey)
-		|| !TestNotNull(TEXT("BugGirl character asset loads"), BugGirl))
+		|| !TestNotNull(TEXT("BugGirl character asset loads"), BugGirl)
+		|| !TestNotNull(TEXT("DebugSnake shop asset loads"), DebugShop))
 	{
 		return false;
 	}
 
-	TestTrue(TEXT("BugGirl starter deck contains DebugKey"),
+	TestFalse(TEXT("BugGirl starter deck does not contain DebugKey"),
 		BugGirl->StarterDeck.Contains(DebugKey));
+	TestTrue(TEXT("DebugSnake shop sells DebugKey for free"),
+		ContainsOffer(DebugShop, DebugKey, 0));
 	return true;
 }
 
@@ -946,6 +979,26 @@ bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /
 	TestFalse(TEXT("MoltCut is not in starter deck"), BugGirl->StarterDeck.Contains(MoltCut));
 	TestFalse(TEXT("LightHusk is not in starter deck"), BugGirl->StarterDeck.Contains(LightHusk));
 	TestFalse(TEXT("SilklineFeint is not in starter deck"), BugGirl->StarterDeck.Contains(SilklineFeint));
+	for (const TCHAR* TestCardPath : FWacomGeneratedBattleContentAssets::DebugAndTestCardPaths())
+	{
+		UCardDefinition* TestCard = FWacomGeneratedBattleContentAssets::LoadCardByPath(TestCardPath, *this);
+		if (!TestNotNull(FString::Printf(TEXT("Debug/test card loads: %s"), TestCardPath), TestCard))
+		{
+			return false;
+		}
+		TestFalse(FString::Printf(TEXT("BugGirl starter deck excludes debug/test card: %s"), TestCardPath),
+			BugGirl->StarterDeck.Contains(TestCard));
+	}
+	for (const TCHAR* BadgeCardPath : FWacomGeneratedBattleContentAssets::BadgeDisplayTestCardPaths())
+	{
+		UCardDefinition* BadgeCard = FWacomGeneratedBattleContentAssets::LoadCardByPath(BadgeCardPath, *this);
+		if (!TestNotNull(FString::Printf(TEXT("Badge display test card loads: %s"), BadgeCardPath), BadgeCard))
+		{
+			return false;
+		}
+		TestFalse(FString::Printf(TEXT("BugGirl starter deck excludes badge display test card: %s"), BadgeCardPath),
+			BugGirl->StarterDeck.Contains(BadgeCard));
+	}
 
 	UEnemyPartDefinition* SnakeHead = FWacomGeneratedBattleContentAssets::LoadSnakeHead(*this);
 	UEnemyPartDefinition* SnakeBody = FWacomGeneratedBattleContentAssets::LoadSnakeBody(*this);
@@ -972,6 +1025,72 @@ bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /
 		TestTrue(*FString::Printf(TEXT("%s has player status intent"), *Part->PartId.ToString()),
 			HasIntentEffect(Part, WacomTags::Effect_ApplyStatus_Poison, WacomTags::Target_Player)
 			|| HasIntentEffect(Part, WacomTags::Effect_ApplyStatus_Slow, WacomTags::Target_Player));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataBattleStarterContentBadgeDisplayAssetValidationSpec,
+	"Wacom.Data.BattleStarterContent.BadgeDisplayTestCardAssetValidation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataBattleStarterContentBadgeDisplayAssetValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UCardDefinition* BadgeDamagePoison = FWacomGeneratedBattleContentAssets::LoadBadgeDamagePoisonCard(*this);
+	UCardDefinition* BadgeShieldHeal = FWacomGeneratedBattleContentAssets::LoadBadgeShieldHealCard(*this);
+	UCardDefinition* BadgeDamageShieldHeal = FWacomGeneratedBattleContentAssets::LoadBadgeDamageShieldHealCard(*this);
+	UCardDefinition* BadgeAllRuntimeSupported = FWacomGeneratedBattleContentAssets::LoadBadgeAllRuntimeSupportedCard(*this);
+	UShopDefinition* DebugShop = FWacomGeneratedBattleContentAssets::LoadDebugSnakeShop(*this);
+	if (!TestNotNull(TEXT("BadgeDamagePoison loads"), BadgeDamagePoison)
+		|| !TestNotNull(TEXT("BadgeShieldHeal loads"), BadgeShieldHeal)
+		|| !TestNotNull(TEXT("BadgeDamageShieldHeal loads"), BadgeDamageShieldHeal)
+		|| !TestNotNull(TEXT("BadgeAllRuntimeSupported loads"), BadgeAllRuntimeSupported)
+		|| !TestNotNull(TEXT("DebugSnake shop loads"), DebugShop))
+	{
+		return false;
+	}
+
+	TArray<FText> Errors;
+	for (const UCardDefinition* Card : { BadgeDamagePoison, BadgeShieldHeal, BadgeDamageShieldHeal, BadgeAllRuntimeSupported })
+	{
+		Errors.Reset();
+		TestTrue(*FString::Printf(TEXT("%s passes validation"), *GetNameSafe(Card)), ValidateCardForTest(Card, Errors));
+		TestEqual(*FString::Printf(TEXT("%s validation errors"), *GetNameSafe(Card)), Errors.Num(), 0);
+		TestTrue(*FString::Printf(TEXT("%s is sold free in DebugSnake shop"), *GetNameSafe(Card)),
+			ContainsOffer(DebugShop, Card, 0));
+	}
+
+	{
+		const TArray<FWacomCardViewEffectBadge> Badges =
+			UWacomCardPresentationBuilder::BuildCardViewData(BadgeDamagePoison).EffectBadges;
+		TestEqual(TEXT("DamagePoison badge count"), Badges.Num(), 2);
+		AssertBadge(*this, Badges, 0, EWacomCardViewEffectBadgeKind::Damage, 300);
+		AssertBadge(*this, Badges, 1, EWacomCardViewEffectBadgeKind::Poison, 7);
+	}
+	{
+		const TArray<FWacomCardViewEffectBadge> Badges =
+			UWacomCardPresentationBuilder::BuildCardViewData(BadgeShieldHeal).EffectBadges;
+		TestEqual(TEXT("ShieldHeal badge count"), Badges.Num(), 2);
+		AssertBadge(*this, Badges, 0, EWacomCardViewEffectBadgeKind::Shield, 12);
+		AssertBadge(*this, Badges, 1, EWacomCardViewEffectBadgeKind::Heal, 8);
+	}
+	{
+		const TArray<FWacomCardViewEffectBadge> Badges =
+			UWacomCardPresentationBuilder::BuildCardViewData(BadgeDamageShieldHeal).EffectBadges;
+		TestEqual(TEXT("DamageShieldHeal badge count"), Badges.Num(), 3);
+		AssertBadge(*this, Badges, 0, EWacomCardViewEffectBadgeKind::Damage, 25);
+		AssertBadge(*this, Badges, 1, EWacomCardViewEffectBadgeKind::Shield, 30);
+		AssertBadge(*this, Badges, 2, EWacomCardViewEffectBadgeKind::Heal, 5);
+	}
+	{
+		const TArray<FWacomCardViewEffectBadge> Badges =
+			UWacomCardPresentationBuilder::BuildCardViewData(BadgeAllRuntimeSupported).EffectBadges;
+		TestEqual(TEXT("AllRuntimeSupported badge count"), Badges.Num(), 4);
+		AssertBadge(*this, Badges, 0, EWacomCardViewEffectBadgeKind::Damage, 1);
+		AssertBadge(*this, Badges, 1, EWacomCardViewEffectBadgeKind::Poison, 2);
+		AssertBadge(*this, Badges, 2, EWacomCardViewEffectBadgeKind::Shield, 3);
+		AssertBadge(*this, Badges, 3, EWacomCardViewEffectBadgeKind::Heal, 4);
 	}
 
 	return true;

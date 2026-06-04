@@ -48,6 +48,7 @@ WacomData 负责**静态定义和 DataAsset**。
 Content/Wacom/
 └── Data/
     ├── Cards/BugGirl/DA_Card_*.uasset
+    ├── Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_Badge*.uasset
     ├── Cards/Rewards/DA_Card_PoisonFang.uasset
     ├── Characters/DA_Character_BugGirl.uasset
     ├── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
@@ -246,9 +247,9 @@ class UCharacterDefinition : public UPrimaryDataAsset
 | `CharacterId` | `BugGirl` |
 | `LeftHandCard` | `DA_Card_LeftHand` |
 | `RightHandCard` | `DA_Card_RightHand` |
-| `StarterDeck` | `ZhaoguangMudie / FuxiaoFeie / ChifuGongyi / ShuoguangDie / Muling / DebugKey / BugGirlBag / ZhujianRongnang / MuseiYinchongdeng`，以及原型卡对卡测试卡 |
+| `StarterDeck` | `ZhaoguangMudie / FuxiaoFeie / ChifuGongyi / ShuoguangDie / Muling / BugGirlBag / ZhujianRongnang / MuseiYinchongdeng` |
 
-`StarterDeck` 中前 5 张是默认参战伙伴卡；V0-BU 后 `DebugKey` 是探索期宝箱拖卡原型钥匙，默认作为非容器卡进入 BattleDeck，方便 PIE 直接在第一人称手牌中拖拽验证；`BugGirlBag` 和 `ZhujianRongnang` 默认进入通量 / 特殊存放相关背包区；`MuseiYinchongdeng` 是原型特例，默认固定在备战区，但它仍作为 A 类容器卡贡献通量和备战容量。
+`StarterDeck` 中前 5 张是默认参战伙伴卡；`BugGirlBag` 和 `ZhujianRongnang` 默认进入通量 / 特殊存放相关背包区；`MuseiYinchongdeng` 是原型特例，默认固定在备战区，但它仍作为 A 类容器卡贡献通量和备战容量。本轮后 `DebugKey`、卡对卡测试卡和卡面徽章测试卡不再进入虫妹初始卡组；这些测试资产统一放进 `DA_Shop_DebugSnake` 以 0 金币出售，PIE 需要验证时从调试商店购买。后续新增测试卡也应走调试商店，不要污染正式 StarterDeck。
 
 ---
 
@@ -275,6 +276,7 @@ struct FShopOfferDefinition
 
 当前生成内容：
 - `DA_Shop_DebugSnake`（蛇巢调试商店）：卖 `毒牙`、`赤腹工蚁`、`朝光暮蝶`、`虫妹的小布袋`，以及 V0-CW starter pack 新卡 `毒针 / 几丁护片 / 触须探路 / 蜕壳切 / 轻蜕壳 / 丝线佯攻`。
+- 同一商店还以 0 金币出售测试 / 调试卡：`DebugKey`、卡对卡加费 / 减费 / 弃置 / 消耗 / 关键词筛选测试卡，以及 `BadgeDisplayTests` 下的卡面效果徽章显示测试卡。测试卡统一走 DebugSnake 商店入口，不进入 `BugGirl.StarterDeck`。
 
 编辑器侧已接入 `UWacomShopDefinitionValidator` 内容防呆。校验重点：
 - `ShopId` 不能为空。
@@ -523,8 +525,8 @@ RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻�
 | Builder | 产物 |
 |---|---|
 | `BuildSnakeContent()` | 蛇敌人、三部位、奖励卡 `DA_Card_PoisonFang` |
-| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、`DA_Card_DebugKey`、卡对卡测试卡、V0-CW starter pack 新卡 |
-| `BuildShopContent()` | `DA_Shop_DebugSnake` |
+| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、`DA_Card_DebugKey`、卡对卡测试卡、V0-CW starter pack 新卡、卡面徽章显示测试卡 |
+| `BuildShopContent()` | `DA_Shop_DebugSnake`；正式调试商品保留原价，测试 / 调试卡统一 0 金币 |
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
 | `BuildRunPickupDefinitionContent()` | `DA_Pickup_DebugGold3`、`DA_Pickup_DebugPoisonFang` |
 | `BuildRunWorldCardInteractionDefinitionContent()` | `DA_RunWorldCardInteraction_DebugKeyGold3` |
@@ -541,7 +543,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 
 | 资产 | 内容 |
 |---|---|
-| `/Game/Wacom/Data/Characters/DA_Character_BugGirl` | 虫妹角色；左右手 + StarterDeck（含原型测试卡） |
+| `/Game/Wacom/Data/Characters/DA_Character_BugGirl` | 虫妹角色；左右手 + 正式 StarterDeck。测试 / 调试卡不在初始牌组中 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_LeftHand` | 固有左手牌 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_RightHand` | 固有右手牌 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie` | 朝光暮蝶，0 费伙伴，随机腾挪并按 RuntimeCost 施加中毒 |
@@ -558,6 +560,13 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_DiscardSelectedHandCard` | `Test.DiscardSelectedHandCard`，拖到另一张普通手牌上使目标进入弃牌堆 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ExhaustSelectedHandCard` | `Test.ExhaustSelectedHandCard`，拖到另一张普通手牌上使目标进入消耗区 |
 | `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_TargetCost3` | `Test.TargetCost3`，卡对卡测试目标，基础费用 3 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_TargetCompanion` | `Test.TargetCompanion`，带伙伴关键词的卡对卡测试目标 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_RequireCompanionTarget` | `Test.RequireCompanionTarget`，只能作用到伙伴关键词手牌的加费测试卡 |
+| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_BlockWeaponTarget` | `Test.BlockWeaponTarget`，不能作用到武器关键词手牌的加费测试卡 |
+| `/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeDamagePoison` | `Test.Badge.DamagePoison`，卡面徽章显示测试：伤害 + 中毒 |
+| `/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeShieldHeal` | `Test.Badge.ShieldHeal`，卡面徽章显示测试：护盾 + 回复 |
+| `/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeDamageShieldHeal` | `Test.Badge.DamageShieldHeal`，卡面徽章显示测试：伤害 + 护盾 + 回复 |
+| `/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeAllRuntimeSupported` | `Test.Badge.AllRuntimeSupported`，卡面徽章显示测试：伤害 + 中毒 + 护盾 + 回复四项 |
 | `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle` | `Starter.PoisonNeedle`，毒针，1 费武器，造成 4 伤害；目标有中毒时追加 5 伤害 |
 | `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard` | `Starter.ChitinWard`，几丁护片，1 费工具，获得 5 护盾并恢复 2 生命 |
 | `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch` | `Starter.AntennaSearch`，触须探路，0 费工具，抽 2 张并随机弃 1 张普通手牌 |
@@ -569,7 +578,7 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 | `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head` | `Snake.Head`，HP 16，Exp 3，奖励毒牙；意图覆盖 Bite / Venom / Strike / Coiled Guard |
 | `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body` | `Snake.Body`，HP 22，Exp 2，奖励毒牙；意图覆盖 Constrict / Harden / Slam / Venom Mist |
 | `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙；意图覆盖 Sweep / Lash / Whip / Brace / Tangle |
-| `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋，以及 V0-CW starter pack 6 张新卡 |
+| `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋、V0-CW starter pack 6 张新卡，以及 0 金币测试 / 调试卡 |
 | `/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、通过卡牌支付交出毒牙、金币/压力/节点效果 |
 | `/Game/Wacom/Data/Events/DA_Event_DebugFlagReward` | 标记奖励调试事件，包含 RunFlag 解锁、PIE 自助给金币、`MinGold(3) + AddGold(-3)` 领取毒牙和 reset flags |
 | `/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
@@ -578,7 +587,8 @@ Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后
 
 生成内容验证链：
 - `Wacom.Data.GeneratedContent.DefinitionAssetValidation` 读取生成角色、卡牌、Snake 敌人与部位，统一跑 DataAsset validator。
-- `Wacom.Data.BattleStarterContent.StarterPackAssetValidation` 检查 starter pack 6 张新卡的核心字段、BugGirl 初始卡组排除关系，以及 Snake 三部位意图变体。
+- `Wacom.Data.BattleStarterContent.StarterPackAssetValidation` 检查 starter pack 6 张新卡的核心字段、BugGirl 初始卡组排除关系、测试卡不进入 StarterDeck，以及 Snake 三部位意图变体。
+- `Wacom.Data.BattleStarterContent.BadgeDisplayTestCardAssetValidation` 检查卡面徽章测试卡能通过 Data validator、在 DebugSnake 商店 0 金币出售，并能通过 `UWacomCardPresentationBuilder` 生成预期的 Damage / Poison / Shield / Heal 徽章数据。灼烧徽章当前只有 UI 美术位和枚举，没有 `Status.Burn` / `Effect.ApplyStatus.Burn` 战斗规则 tag，因此不生成 Burn 测试卡。
 - `Wacom.Battle.GeneratedStarterContent` 把真实 starter pack 卡、辅助卡和 `DA_Enemy_Snake` 放入 `UBattleSession` 做 runtime smoke：毒针条件伤害、几丁护片护盾/治疗、触须探路抽弃、蜕壳切移除 Slow / 改先机、轻蜕壳 OnDiscard、丝线佯攻空 `OnPerfectReleaseHit` hook，以及 Snake 玩家伤害 / 玩家 Poison / 玩家 Slow / 自身 Shield 意图都要产生对应 Snapshot/Event。
 - 这些测试通过 `FWacomGeneratedBattleContentAssets` 集中维护资产路径；该 helper 只属于 `WacomTests`，不作为内容生成、运行时加载或策划配置来源。
 
@@ -680,6 +690,8 @@ RunWorldCardInteractionDefinition Validator 只校验通用 receiver 制作必�
 | `Effect.GainKeyword` | `Effect_GainKeyword` | 给目标手牌临时添加关键词 |
 | `Effect.RemoveStatus` | `Effect_RemoveStatus` | 移除目标指定状态层数 |
 | `Effect.ModifyInitiative` | `Effect_ModifyInitiative` | 修改目标敌方部位当前先机 |
+
+当前没有 `Effect.ApplyStatus.Burn` / `Status.Burn` GameplayTag，也没有对应 resolver / validator 合同。`EWacomCardViewEffectBadgeKind::Burn` 和 `WBP_CardEffectBadge` 的灼烧底图只是 UI 美术预留位，不能作为正式 DataAsset 配置依据。
 
 ### Magnitude.Source
 

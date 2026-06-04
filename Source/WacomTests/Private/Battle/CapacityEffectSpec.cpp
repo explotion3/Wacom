@@ -156,10 +156,10 @@ bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 
 	TestEqual(TEXT("DebugSnake ShopId"), DebugShop->ShopId, FName(TEXT("Shop.DebugSnake")));
 	TestEqual(TEXT("DebugSnake DisplayName"), DebugShop->DisplayName.ToString(), FString(TEXT("蛇巢调试商店")));
-	TestEqual(TEXT("DebugSnake offer count"), DebugShop->Offers.Num(), 10);
 
 	const TArray<FWacomGeneratedBattleContentShopOfferExpectation> ExpectedOffers =
 		FWacomGeneratedBattleContentAssets::DebugSnakeShopOfferExpectations();
+	TestEqual(TEXT("DebugSnake offer count"), DebugShop->Offers.Num(), ExpectedOffers.Num());
 
 	for (int32 Index = 0; Index < ExpectedOffers.Num(); ++Index)
 	{

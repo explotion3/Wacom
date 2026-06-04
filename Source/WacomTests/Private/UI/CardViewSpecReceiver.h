@@ -5,14 +5,40 @@
 #include "CoreMinimal.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Image.h"
+#include "Components/Overlay.h"
 #include "Components/RetainerBox.h"
 #include "Components/SizeBox.h"
 #include "PaperSprite.h"
+#include "UI/Card/WacomCardEffectBadgeWidget.h"
 #include "UI/Card/WacomCardView.h"
 #include "CardViewSpecReceiver.generated.h"
 
 class UImage;
 class UPanelWidget;
+
+UCLASS()
+class UWacomCardEffectBadgeSpecProbe : public UWacomCardEffectBadgeWidget
+{
+	GENERATED_BODY()
+
+public:
+	void SetDigitSpriteForTest(int32 Digit, UPaperSprite* Sprite)
+	{
+		DigitSprites.Add(Digit, TSoftObjectPtr<UPaperSprite>(Sprite));
+	}
+
+	void SetMinimumDigitCountForTest(int32 Count)
+	{
+		MinimumDigitCount = Count;
+	}
+
+	void SetInteriorDigitPaddingForTest(const FMargin& InPadding)
+	{
+		InteriorDigitPadding = InPadding;
+	}
+
+	UPanelWidget* GetDigitHostForTest() const { return DigitHost; }
+};
 
 UCLASS()
 class UWacomCardViewSpecProbe : public UWacomCardView
@@ -49,6 +75,68 @@ public:
 	UWidget* GetDurabilityHostForTest() const { return DurabilityHost; }
 	UPanelWidget* GetDurabilityDigitsHostForTest() const { return DurabilityDigitsHost; }
 	UImage* GetRarityBorderForTest() const { return RarityBorder; }
+	UPanelWidget* GetEffectStatsHostForTest() const { return EffectStatsHost; }
+	UPanelWidget* GetEffectBadgeSlotForTest(int32 Index) const
+	{
+		switch (Index)
+		{
+		case 0: return EffectBadgeSlot1;
+		case 1: return EffectBadgeSlot2;
+		case 2: return EffectBadgeSlot3;
+		case 3: return EffectBadgeSlot4;
+		default: return nullptr;
+		}
+	}
+};
+
+UCLASS()
+class UWacomCardViewEffectBadgeSlotProbe : public UWacomCardViewSpecProbe
+{
+	GENERATED_BODY()
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override
+	{
+		if (!WidgetTree)
+		{
+			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_EffectBadgeSlotProbe"));
+		}
+
+		if (!WidgetTree->RootWidget)
+		{
+			UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("CardViewRoot"));
+			WidgetTree->RootWidget = Root;
+
+			EffectStatsHost = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("EffectStatsHost"));
+			Root->AddChild(EffectStatsHost);
+
+			EffectBadgeSlot1 = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("EffectBadgeSlot1"));
+			Root->AddChild(EffectBadgeSlot1);
+
+			EffectBadgeSlot2 = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("EffectBadgeSlot2"));
+			Root->AddChild(EffectBadgeSlot2);
+
+			EffectBadgeSlot3 = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("EffectBadgeSlot3"));
+			Root->AddChild(EffectBadgeSlot3);
+
+			EffectBadgeSlot4 = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("EffectBadgeSlot4"));
+			Root->AddChild(EffectBadgeSlot4);
+		}
+
+		return Super::RebuildWidget();
+	}
 };
 
 UCLASS()

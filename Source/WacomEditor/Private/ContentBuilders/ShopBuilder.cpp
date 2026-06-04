@@ -36,6 +36,7 @@ namespace Wacom::ContentBuilder
 		const FString RewardsRoot = RewardCardsRoot();
 		const FString BugGirlRoot = BugGirlCardsRoot();
 		const FString StarterPackRoot = BugGirlStarterPackCardsRoot();
+		const FString BadgeDisplayRoot = BugGirlBadgeDisplayTestCardsRoot();
 		UCardDefinition* PoisonFang = LoadGeneratedCard(
 			MakeObjectPath(MakePackagePath(RewardsRoot, TEXT("DA_Card_PoisonFang"))));
 		UCardDefinition* ChifuGongyi = LoadGeneratedCard(
@@ -56,8 +57,39 @@ namespace Wacom::ContentBuilder
 			MakeObjectPath(MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_LightHusk"))));
 		UCardDefinition* SilklineFeint = LoadGeneratedCard(
 			MakeObjectPath(MakePackagePath(StarterPackRoot, TEXT("DA_Card_Starter_SilklineFeint"))));
+		UCardDefinition* DebugKey = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_DebugKey"))));
+		UCardDefinition* TestAddCostToSelectedHand = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_AddCostToSelectedHand"))));
+		UCardDefinition* TestReduceCostToSelectedHand = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_ReduceCostToSelectedHand"))));
+		UCardDefinition* TestTargetCost3 = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_TargetCost3"))));
+		UCardDefinition* TestTargetCompanion = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_TargetCompanion"))));
+		UCardDefinition* TestRequireCompanionTarget = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_RequireCompanionTarget"))));
+		UCardDefinition* TestBlockWeaponTarget = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_BlockWeaponTarget"))));
+		UCardDefinition* TestDiscardSelectedHandCard = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_DiscardSelectedHandCard"))));
+		UCardDefinition* TestExhaustSelectedHandCard = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_ExhaustSelectedHandCard"))));
+		UCardDefinition* BadgeDamagePoison = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeDamagePoison"))));
+		UCardDefinition* BadgeShieldHeal = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeShieldHeal"))));
+		UCardDefinition* BadgeDamageShieldHeal = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeDamageShieldHeal"))));
+		UCardDefinition* BadgeAllRuntimeSupported = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeAllRuntimeSupported"))));
 		if (!PoisonFang || !ChifuGongyi || !ZhaoguangMudie || !BugGirlBag
-			|| !PoisonNeedle || !ChitinWard || !AntennaSearch || !MoltCut || !LightHusk || !SilklineFeint)
+			|| !PoisonNeedle || !ChitinWard || !AntennaSearch || !MoltCut || !LightHusk || !SilklineFeint
+			|| !DebugKey
+			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
+			|| !TestTargetCompanion || !TestRequireCompanionTarget || !TestBlockWeaponTarget
+			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard
+			|| !BadgeDamagePoison || !BadgeShieldHeal || !BadgeDamageShieldHeal || !BadgeAllRuntimeSupported)
 		{
 			return nullptr;
 		}
@@ -83,6 +115,19 @@ namespace Wacom::ContentBuilder
 			MakeOffer(MoltCut, 2),
 			MakeOffer(LightHusk, 1),
 			MakeOffer(SilklineFeint, 2),
+			MakeOffer(DebugKey, 0),
+			MakeOffer(TestAddCostToSelectedHand, 0),
+			MakeOffer(TestReduceCostToSelectedHand, 0),
+			MakeOffer(TestTargetCost3, 0),
+			MakeOffer(TestTargetCompanion, 0),
+			MakeOffer(TestRequireCompanionTarget, 0),
+			MakeOffer(TestBlockWeaponTarget, 0),
+			MakeOffer(TestDiscardSelectedHandCard, 0),
+			MakeOffer(TestExhaustSelectedHandCard, 0),
+			MakeOffer(BadgeDamagePoison, 0),
+			MakeOffer(BadgeShieldHeal, 0),
+			MakeOffer(BadgeDamageShieldHeal, 0),
+			MakeOffer(BadgeAllRuntimeSupported, 0),
 		};
 
 		SaveAssetPackage(Pkg, Shop, PackagePath);

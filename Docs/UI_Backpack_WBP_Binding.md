@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-backpack
 status: active
-updated: 2026-06-03
+updated: 2026-06-04
 tags:
   - wacom/ui
   - wacom/wbp
@@ -157,7 +157,10 @@ WBP 合同：
 | `NameText` | `TextBlock` | 卡名 |
 | `TypeText` | `TextBlock` | 类型 / 词条 |
 | `CardArt` | `Image` | 卡图 |
-| `EffectStatsHost` | `PanelWidget` | C++ 动态填充效果数值徽章 |
+| `EffectBadgeSlot1` | `Overlay` | 第 1 个效果数值徽章固定插槽 |
+| `EffectBadgeSlot2` | `Overlay` | 第 2 个效果数值徽章固定插槽 |
+| `EffectBadgeSlot3` | `Overlay` | 第 3 个效果数值徽章固定插槽 |
+| `EffectBadgeSlot4` | `Overlay` | 第 4 个效果数值徽章固定插槽 |
 | `DisabledOverlay` | `Border` | 禁用遮罩 |
 
 可选绑定：
@@ -165,13 +168,16 @@ WBP 合同：
 | 控件名 | 推荐类型 | 缺省行为 |
 |---|---|---|
 | `SurfaceFoilOverlay` | `Image` | 卡面弱流光覆盖层；未绑定时不显示流光 |
+| `EffectStatsHost` | `PanelWidget` | 旧版流式效果徽章 fallback；未绑定任意 `EffectBadgeSlot*` 时才使用 |
 
 WBP 合同：
 
 - `UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。
 - 卡牌主体只保留主要名字、类型、卡图、图片数字和少量必要徽章；完整描述、被动、长规则文本和身材说明由 `WBP_CardDetailPanel` 承接。
 - 费用图标只使用固定 `CostDigitImage`，C++ 只替换它的 Brush，不动态创建费用子控件；费用为多位数、缺数字图标或未绑定该 Image 时，卡牌主体不再显示文字费用。
-- `EffectStatsHost` 内部由 C++ 按 `EffectBadges[]` 动态创建 `UWacomCardEffectBadgeWidget`。
+- `EffectBadgeSlot1-4` 内部由 C++ 按 `EffectBadges[]` 顺序动态创建 `UWacomCardEffectBadgeWidget`；这些 slot 不是按类型固定位置，而是按当前可显示徽章顺序依次填充。
+- 只要绑定了任意 `EffectBadgeSlot*`，`UWacomCardView` 就进入固定插槽模式：清空并隐藏旧 `EffectStatsHost`，空 slot 折叠，超过 4 个的徽章不显示。
+- 当前只显示美术已配置的五类：伤害、中毒、灼烧、回复、护盾。Slow / Freeze / Twilight / Draw / Discard / Initiative / Cost 等效果仍应放在详情面板文本中表达，不在卡牌主体左下角显示图标。
 - `SurfaceFoilOverlay` 推荐放在卡面内容最上层、`DisabledOverlay` 下方，Brush 使用 `/Game/DreamMaterials/Card/M_CardSurface_CosmicFoil`；它必须设为不可命中，不要挡住战斗手牌或背包拖拽。
 - 未绑定 `SurfaceFoilOverlay` 时，C++ 会在运行时尝试挂到第一个 `Overlay` 容器上作为临时覆盖层；正式 WBP 仍建议显式绑定，便于控制层级。
 - 未绑定部分控件不会崩溃，但对应信息不会显示。
@@ -222,14 +228,17 @@ WBP 合同：
 
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
-| `BadgeBody` | `Border` | 徽章底板 |
-| `IconImage` | `Image` | 效果图标，贴图由 WBP 自己配置 |
-| `ValueText` | `TextBlock` | 效果数值 |
-| `LabelText` | `TextBlock` | fallback 标签 |
+| `BadgeFrameImage` | `Image` | 按效果类型显示伤害 / 中毒 / 灼烧 / 回复 / 护盾等徽章底图 |
+| `DigitHost` | `HorizontalBox` | C++ 按数值动态填充图片数字 |
 
 WBP 合同：
 
 - `UWacomCardEffectBadgeWidget` 只显示单个 `FWacomCardViewEffectBadge`。
+- 正式卡牌主体不再使用 TextBlock 显示效果数值；`DigitHost` 应放在 `BadgeFrameImage` 上方，保持 `HitTestInvisible`。
+- `BadgeFrameSprites` 和 `DigitSprites` 在该 Widget Class Defaults 中配置；缺少底图时只隐藏底图，缺少任意数字图时隐藏数字。
+- 图片数字默认至少显示 3 位，个位数会补零成 `001`；中间数字使用 `InteriorDigitPadding`，默认左右各 1px。
+- 黄色“额外生命值”美术图标当前对应 `Status.Shield` 护盾效果；`MaxHpBonus` 仍只属于身材 / 血量上限路径，不进入 `EffectStatsHost`。
+- `EWacomCardViewEffectBadgeKind` 里保留的其他枚举值是后续扩展 / debug 余量；`WBP_CardEffectBadge` 目前只需要配置上述五类底图。
 - 该 Widget 不提交战斗、背包或 Run 命令。
 
 ---
