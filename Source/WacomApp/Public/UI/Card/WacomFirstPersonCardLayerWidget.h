@@ -104,6 +104,10 @@ public:
 	const FWacomFirstPersonCardSlotFeedbackConfig& GetSlotFeedbackConfigForTest() const { return SlotFeedbackConfig; }
 	const FWacomFirstPersonCardDragConfig& GetCardDragConfigForTest() const { return CardDragConfig; }
 	const FWacomFirstPersonCardDragView& GetCurrentDragViewForTest() const { return CurrentDragView; }
+	int32 GetSkippedEquivalentSlotRefreshCountForTest() const { return SkippedEquivalentSlotRefreshCountForTest; }
+	int32 GetSlotMotionConfigPropagationCountForTest() const { return SlotMotionConfigPropagationCountForTest; }
+	int32 GetSlotFeedbackConfigPropagationCountForTest() const { return SlotFeedbackConfigPropagationCountForTest; }
+	int32 GetCardDragConfigPropagationCountForTest() const { return CardDragConfigPropagationCountForTest; }
 	FLinearColor ResolveAimArrowColorForTest() const { return ResolveAimArrowColor(); }
 	FVector2D ResolveAimArrowEndForTest() const { return ResolveAimArrowEnd(); }
 	TSubclassOf<UWacomCardView> GetCardViewClassForTest() const { return CardViewClass; }
@@ -165,6 +169,10 @@ private:
 	bool bLogSlotMotionDiagnostics = false;
 #if WITH_AUTOMATION_TESTS
 	TOptional<FVector2D> WidgetViewportSizeOverrideForTest;
+	int32 SkippedEquivalentSlotRefreshCountForTest = 0;
+	int32 SlotMotionConfigPropagationCountForTest = 0;
+	int32 SlotFeedbackConfigPropagationCountForTest = 0;
+	int32 CardDragConfigPropagationCountForTest = 0;
 #endif
 
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
@@ -182,6 +190,10 @@ private:
 	int32 CountMotionTickSlots() const;
 	void ReportSlotMotionDiagnosticsIfNeeded();
 	FString MakeSlotMotionKey(const FWacomFirstPersonCardLayerSlotView& SlotView) const;
+	bool CanSkipEquivalentSlotRefresh(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots) const;
+	bool AreSlotViewsEquivalentForRefresh(
+		const FWacomFirstPersonCardLayerSlotView& A,
+		const FWacomFirstPersonCardLayerSlotView& B) const;
 	TOptional<FWacomFirstPersonCardTransitionMotionProfile> GetEnterProfileForTransition(
 		EWacomFirstPersonCardSlotTransitionKind TransitionKind,
 		const FWacomFirstPersonCardLayerSlotView& TargetSlotView) const;
@@ -194,6 +206,9 @@ private:
 	void HandleSlotClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleSlotVisualSlotUpdated(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotCardTargetHovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotCardTargetUnhovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);

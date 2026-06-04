@@ -1073,6 +1073,7 @@ public:
 	void SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId) { HoveredCardInstanceId = CardInstanceId; }
 	void ResetAnchorScreenSmoothingForTest() { ResetAnchorScreenSmoothing(); }
 	bool IsUsingResolvedCardLayoutPresetForTest() const;
+	int32 GetStaticLayerConfigApplyCountForTest() const { return StaticLayerConfigApplyCountForTest; }
 #endif
 
 protected:
@@ -1127,6 +1128,14 @@ private:
 	mutable bool bHasLoggedResolvedCardLayoutPreset = false;
 	mutable bool bHasResolvedCardLayoutConfigHash = false;
 	mutable uint32 LastResolvedCardLayoutConfigHash = 0;
+	bool bHasAppliedStaticLayerConfig = false;
+	uint32 LastAppliedStaticLayerConfigHash = 0;
+	TWeakObjectPtr<UClass> LastAppliedStaticLayerCardViewClass;
+	bool bLastAppliedStaticLayerLogDiagnostics = false;
+	bool bLastAppliedStaticLayerInteractionEnabled = false;
+#if WITH_AUTOMATION_TESTS
+	int32 StaticLayerConfigApplyCountForTest = 0;
+#endif
 
 	UPROPERTY(Transient)
 	TArray<FWacomCardViewData> RuntimeCardLayerData;

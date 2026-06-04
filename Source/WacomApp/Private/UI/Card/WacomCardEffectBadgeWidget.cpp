@@ -10,6 +10,23 @@
 #include "Components/OverlaySlot.h"
 #include "PaperSprite.h"
 
+namespace
+{
+	bool AreTextViewsEquivalent(const FText& A, const FText& B)
+	{
+		return A.EqualTo(B);
+	}
+
+	bool AreEffectBadgeDataEquivalent(
+		const FWacomCardViewEffectBadge& A,
+		const FWacomCardViewEffectBadge& B)
+	{
+		return A.Kind == B.Kind
+			&& A.Value == B.Value
+			&& AreTextViewsEquivalent(A.DisplayText, B.DisplayText);
+	}
+}
+
 TSharedRef<SWidget> UWacomCardEffectBadgeWidget::RebuildWidget()
 {
 	if (!WidgetTree || !WidgetTree->RootWidget)
@@ -45,11 +62,17 @@ TSharedRef<SWidget> UWacomCardEffectBadgeWidget::RebuildWidget()
 void UWacomCardEffectBadgeWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	bHasAppliedData = false;
 	ApplyCurrentDataToWidgets();
 }
 
 void UWacomCardEffectBadgeWidget::SetEffectBadgeData(const FWacomCardViewEffectBadge& InData)
 {
+	if (bHasAppliedData && AreEffectBadgeDataEquivalent(CurrentData, InData))
+	{
+		return;
+	}
+
 	CurrentData = InData;
 	ApplyCurrentDataToWidgets();
 }
@@ -61,9 +84,14 @@ FText UWacomCardEffectBadgeWidget::GetValueText() const
 
 void UWacomCardEffectBadgeWidget::ApplyCurrentDataToWidgets()
 {
+#if WITH_AUTOMATION_TESTS
+	++ApplyCountForTest;
+#endif
+
 	EnsureSpriteCachesBuilt();
 	UpdateFrameImage();
 	UpdateDigitImages();
+	bHasAppliedData = true;
 }
 
 void UWacomCardEffectBadgeWidget::EnsureSpriteCachesBuilt()
@@ -125,39 +153,61 @@ void UWacomCardEffectBadgeWidget::UpdateFrameImage()
 
 void UWacomCardEffectBadgeWidget::UpdateDigitImages()
 {
+#if WITH_AUTOMATION_TESTS
+	++DigitImageUpdateCountForTest;
+#endif
+
 	if (!DigitHost)
 	{
 		return;
 	}
 
-	DigitHost->ClearChildren();
 	DigitHost->SetVisibility(ESlateVisibility::Collapsed);
 
 	if (!WidgetTree || ResolvedDigitSprites.IsEmpty())
 	{
+		while (DigitHost->GetChildrenCount() > 0)
+		{
+			DigitHost->RemoveChildAt(DigitHost->GetChildrenCount() - 1);
+		}
 		return;
 	}
 
 	const TArray<int32> Digits = SplitIntoDigits(CurrentData.Value);
 	if (Digits.IsEmpty())
 	{
+		while (DigitHost->GetChildrenCount() > 0)
+		{
+			DigitHost->RemoveChildAt(DigitHost->GetChildrenCount() - 1);
+		}
 		return;
 	}
 
+	bool bDigitsComplete = true;
 	for (int32 Index = 0; Index < Digits.Num(); ++Index)
 	{
 		const int32 Digit = Digits[Index];
 		UPaperSprite* Sprite = ResolvedDigitSprites.FindRef(Digit);
 		if (!Sprite)
 		{
-			DigitHost->ClearChildren();
-			return;
+			bDigitsComplete = false;
+			break;
 		}
 
-		UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+		UImage* DigitImage = Cast<UImage>(DigitHost->GetChildAt(Index));
+		if (!DigitImage)
+		{
+			DigitImage = EnsureDigitImage(Index);
+		}
+		if (!DigitImage)
+		{
+			bDigitsComplete = false;
+			break;
+		}
+
 		SetSpriteBrush(*DigitImage, *Sprite, DigitDrawSize);
 		DigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
-		if (UPanelSlot* AddedDigitSlot = DigitHost->AddChild(DigitImage))
+		if (UPanelSlot* AddedDigitSlot = DigitImage->Slot)
 		{
 			if (UHorizontalBoxSlot* HorizontalSlot = Cast<UHorizontalBoxSlot>(AddedDigitSlot))
 			{
@@ -167,8 +217,36 @@ void UWacomCardEffectBadgeWidget::UpdateDigitImages()
 		}
 	}
 
+	if (bDigitsComplete)
+	{
+		while (DigitHost->GetChildrenCount() > Digits.Num())
+		{
+			DigitHost->RemoveChildAt(DigitHost->GetChildrenCount() - 1);
+		}
+	}
+	else
+	{
+		while (DigitHost->GetChildrenCount() > 0)
+		{
+			DigitHost->RemoveChildAt(DigitHost->GetChildrenCount() - 1);
+		}
+		return;
+	}
+
 	DigitHost->SetVisibility(
 		DigitHost->GetChildrenCount() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
+UImage* UWacomCardEffectBadgeWidget::EnsureDigitImage(int32 Index)
+{
+	if (!WidgetTree || !DigitHost)
+	{
+		return nullptr;
+	}
+
+	UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+	DigitHost->AddChild(DigitImage);
+	return DigitImage;
 }
 
 TArray<int32> UWacomCardEffectBadgeWidget::SplitIntoDigits(int32 Value) const

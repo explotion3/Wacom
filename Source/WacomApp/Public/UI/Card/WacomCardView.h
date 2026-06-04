@@ -62,6 +62,13 @@ public:
 		const FVector2D& SimulatedCardSizeBoxLocalSize) const;
 	int32 GetRenderCacheInvalidationCountForTest() const { return RenderCacheInvalidationCountForTest; }
 	int32 GetLastRetainerRenderRequestCountForTest() const { return LastRetainerRenderRequestCountForTest; }
+	int32 GetTextDisplayUpdateCountForTest() const { return TextDisplayUpdateCountForTest; }
+	int32 GetCostDisplayUpdateCountForTest() const { return CostDisplayUpdateCountForTest; }
+	int32 GetDurabilityDisplayUpdateCountForTest() const { return DurabilityDisplayUpdateCountForTest; }
+	int32 GetRarityDisplayUpdateCountForTest() const { return RarityDisplayUpdateCountForTest; }
+	int32 GetArtDisplayUpdateCountForTest() const { return ArtDisplayUpdateCountForTest; }
+	int32 GetDisabledDisplayUpdateCountForTest() const { return DisabledDisplayUpdateCountForTest; }
+	int32 GetEffectBadgeDisplayUpdateCountForTest() const { return EffectBadgeDisplayUpdateCountForTest; }
 #endif
 
 protected:
@@ -145,6 +152,9 @@ private:
 	FWacomCardViewData CurrentData;
 
 	UPROPERTY(Transient)
+	FWacomCardViewData LastAppliedData;
+
+	UPROPERTY(Transient)
 	TMap<int32, TObjectPtr<UPaperSprite>> ResolvedCostDigitIcons;
 
 	UPROPERTY(Transient)
@@ -161,16 +171,29 @@ private:
 
 	bool bSpriteIconCachesBuilt = false;
 	bool bCardViewDataAppliedToWidgets = false;
+	bool bHasLastAppliedData = false;
 
 #if WITH_AUTOMATION_TESTS
 	int32 RenderCacheInvalidationCountForTest = 0;
 	int32 LastRetainerRenderRequestCountForTest = 0;
+	int32 TextDisplayUpdateCountForTest = 0;
+	int32 CostDisplayUpdateCountForTest = 0;
+	int32 DurabilityDisplayUpdateCountForTest = 0;
+	int32 RarityDisplayUpdateCountForTest = 0;
+	int32 ArtDisplayUpdateCountForTest = 0;
+	int32 DisabledDisplayUpdateCountForTest = 0;
+	int32 EffectBadgeDisplayUpdateCountForTest = 0;
 #endif
 
 	void ApplyCurrentDataToWidgets();
 	void UpdateEffectBadgeDisplays();
 	void UpdateCostDisplay();
 	void UpdateDurabilityDisplay();
+	UImage* EnsureDurabilityDigitImage(UPanelWidget& Host);
+	void UpdateTextDisplays();
+	void UpdateArtDisplay();
+	void UpdateRarityBorderDisplay();
+	void UpdateDisabledDisplay();
 	void EnsureSurfaceFoilOverlay();
 	void ApplySurfaceFoilOverlay();
 	void EnsureSpriteIconCachesBuilt();

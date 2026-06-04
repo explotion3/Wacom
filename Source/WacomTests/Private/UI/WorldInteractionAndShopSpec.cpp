@@ -9298,6 +9298,394 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopScreenRefreshReusesOfferRowsSpec,
+	"Wacom.UI.Shop.ShopScreenRefreshReusesOfferRowsForEquivalentSnapshot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopScreenRefreshReusesOfferRowsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* FirstCard = Fx.MakeNoopCard(0);
+	FirstCard->CardId = TEXT("Shop.Reuse.First");
+	FirstCard->DisplayName = FText::FromString(TEXT("复用一"));
+	UCardDefinition* SecondCard = Fx.MakeNoopCard(0);
+	SecondCard->CardId = TEXT("Shop.Reuse.Second");
+	SecondCard->DisplayName = FText::FromString(TEXT("复用二"));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->AddGold(10);
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ FirstCard, 1 });
+	Offers.Add({ SecondCard, 1 });
+	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Reuse"), Offers));
+
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->RefreshShop();
+
+	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
+	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	TestNotNull(TEXT("First row"), FirstRow);
+	TestNotNull(TEXT("Second row"), SecondRow);
+
+	Screen->RefreshShop();
+	TestEqual(TEXT("First row reused"), Screen->ReadOfferRowWidget(0), FirstRow);
+	TestEqual(TEXT("Second row reused"), Screen->ReadOfferRowWidget(1), SecondRow);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopScreenRefreshDirtyGateSkipsEquivalentOfferReconcileSpec,
+	"Wacom.UI.Shop.ShopScreenRefreshDirtyGateSkipsEquivalentOfferReconcile",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopScreenRefreshDirtyGateSkipsEquivalentOfferReconcileSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* FirstCard = Fx.MakeNoopCard(0);
+	FirstCard->CardId = TEXT("Shop.Dirty.Skip.First");
+	FirstCard->DisplayName = FText::FromString(TEXT("跳过一"));
+	UCardDefinition* SecondCard = Fx.MakeNoopCard(0);
+	SecondCard->CardId = TEXT("Shop.Dirty.Skip.Second");
+	SecondCard->DisplayName = FText::FromString(TEXT("跳过二"));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->AddGold(10);
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ FirstCard, 1 });
+	Offers.Add({ SecondCard, 1 });
+	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Dirty.Skip"), Offers));
+
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->RefreshShop();
+	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
+	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	TestNotNull(TEXT("First row"), FirstRow);
+	TestNotNull(TEXT("Second row"), SecondRow);
+	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
+	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
+	const int32 BaselineSnapshotBuildCount = Screen->ReadShopSnapshotBuildCount();
+	const int32 BaselineSnapshotSkipCount = Screen->ReadShopSnapshotRevisionSkipCount();
+	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
+	TestTrue(TEXT("Initial refresh builds shop snapshot"), BaselineSnapshotBuildCount >= 1);
+
+	Screen->RefreshShop();
+	TestEqual(TEXT("Equivalent refresh skips shop snapshot"), Screen->ReadShopSnapshotRevisionSkipCount(), BaselineSnapshotSkipCount + 1);
+	TestEqual(TEXT("Equivalent refresh does not build shop snapshot"), Screen->ReadShopSnapshotBuildCount(), BaselineSnapshotBuildCount);
+	TestEqual(TEXT("Equivalent refresh then skips offer reconcile"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount + 1);
+	TestEqual(TEXT("Equivalent refresh does not apply again"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount);
+	TestEqual(TEXT("Skipped refresh keeps first row"), Screen->ReadOfferRowWidget(0), FirstRow);
+	TestEqual(TEXT("Skipped refresh keeps second row"), Screen->ReadOfferRowWidget(1), SecondRow);
+	TestEqual(TEXT("Cached offer views stay available after skip"), Screen->ReadOfferCount(), 2);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopScreenRefreshUpdatesOfferStatusWithoutRecreatingRowsSpec,
+	"Wacom.UI.Shop.ShopScreenRefreshUpdatesOfferStatusWithoutRecreatingRows",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopScreenRefreshUpdatesOfferStatusWithoutRecreatingRowsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* FirstCard = Fx.MakeNoopCard(0);
+	FirstCard->CardId = TEXT("Shop.Update.First");
+	FirstCard->DisplayName = FText::FromString(TEXT("更新一"));
+	UCardDefinition* SecondCard = Fx.MakeNoopCard(0);
+	SecondCard->CardId = TEXT("Shop.Update.Second");
+	SecondCard->DisplayName = FText::FromString(TEXT("更新二"));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->AddGold(2);
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ FirstCard, 1 });
+	Offers.Add({ SecondCard, 2 });
+	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Update"), Offers));
+
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->RefreshShop();
+
+	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
+	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	TestNotNull(TEXT("First row"), FirstRow);
+	TestNotNull(TEXT("Second row"), SecondRow);
+	TestTrue(TEXT("Purchase first offer succeeds"), Screen->PurchaseOfferAt(0));
+
+	TestEqual(TEXT("Purchased row reused"), Screen->ReadOfferRowWidget(0), FirstRow);
+	TestEqual(TEXT("Second row reused after status change"), Screen->ReadOfferRowWidget(1), SecondRow);
+	TestTrue(TEXT("First row stored purchased state"), FirstRow && FirstRow->GetOfferPresentationView().bPurchased);
+	TestEqual(TEXT("Second row now insufficient"),
+		SecondRow ? SecondRow->GetOfferPresentationView().DisabledReason : NAME_None,
+		FName(TEXT("InsufficientGold")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopScreenRefreshDirtyGateRefreshesWhenGoldChangesSpec,
+	"Wacom.UI.Shop.ShopScreenRefreshDirtyGateRefreshesWhenGoldChanges",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopScreenRefreshDirtyGateRefreshesWhenGoldChangesSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = Fx.MakeNoopCard(0);
+	Card->CardId = TEXT("Shop.Dirty.Gold.Card");
+	Card->DisplayName = FText::FromString(TEXT("金币刷新"));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ Card, 2 });
+	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Dirty.Gold"), Offers));
+
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->RefreshShop();
+	UWacomShopOfferRowWidget* Row = Screen->ReadOfferRowWidget(0);
+	TestNotNull(TEXT("Initial row"), Row);
+	TestFalse(TEXT("Offer initially blocked by gold"), Screen->ReadOfferPresentationView(0).bCanPurchase);
+	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
+	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
+	const int32 BaselineSnapshotBuildCount = Screen->ReadShopSnapshotBuildCount();
+	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
+
+	Run->AddGold(2);
+	Screen->RefreshShop();
+	TestEqual(TEXT("Gold change reuses cached shop snapshot"), Screen->ReadShopSnapshotBuildCount(), BaselineSnapshotBuildCount);
+	TestEqual(TEXT("Gold change applies offer reconcile"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
+	TestEqual(TEXT("Manual fallback after gold event skips offer reconcile"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount + 1);
+	TestEqual(TEXT("Gold change reuses row"), Screen->ReadOfferRowWidget(0), Row);
+	TestTrue(TEXT("Offer becomes purchasable after gold refresh"), Screen->ReadOfferPresentationView(0).bCanPurchase);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopScreenRefreshDirtyGateRefreshesWhenOfferPurchasedSpec,
+	"Wacom.UI.Shop.ShopScreenRefreshDirtyGateRefreshesWhenOfferPurchased",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopScreenRefreshDirtyGateRefreshesWhenOfferPurchasedSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = Fx.MakeNoopCard(0);
+	Card->CardId = TEXT("Shop.Dirty.Purchase.Card");
+	Card->DisplayName = FText::FromString(TEXT("购买刷新"));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->AddGold(3);
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ Card, 1 });
+	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Dirty.Purchase"), Offers));
+
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->RefreshShop();
+	UWacomShopOfferRowWidget* Row = Screen->ReadOfferRowWidget(0);
+	TestNotNull(TEXT("Initial row"), Row);
+	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
+	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
+	const int32 BaselineSnapshotBuildCount = Screen->ReadShopSnapshotBuildCount();
+	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
+
+	TestTrue(TEXT("Purchase offer succeeds"), Screen->PurchaseOfferAt(0));
+	TestEqual(TEXT("Purchase builds changed shop snapshot once"), Screen->ReadShopSnapshotBuildCount(), BaselineSnapshotBuildCount + 1);
+	TestEqual(TEXT("Purchase applies offer reconcile"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
+	TestEqual(TEXT("Purchase fallback refresh skips offer reconcile"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount + 1);
+	TestEqual(TEXT("Purchase reuses row"), Screen->ReadOfferRowWidget(0), Row);
+	TestTrue(TEXT("Offer view marks purchased"), Screen->ReadOfferPresentationView(0).bPurchased);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopScreenRunEventRefreshUpdatesPurchasedOfferSpec,
+	"Wacom.UI.Shop.ShopScreenRunStateEventRefreshUpdatesPurchasedOffer",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopScreenRunEventRefreshUpdatesPurchasedOfferSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = Fx.MakeNoopCard(0);
+	Card->CardId = TEXT("Shop.Event.Purchase.Card");
+	Card->DisplayName = FText::FromString(TEXT("事件刷新购买"));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->AddGold(3);
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ Card, 1 });
+	TestTrue(TEXT("Begin shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Event.Purchase"), Offers));
+
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->ActivateWidget();
+	Screen->RefreshShop();
+	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
+	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
+	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
+	const FGuid OfferId = Screen->ReadOfferPresentationView(0).OfferId;
+	TestTrue(TEXT("Offer id valid"), OfferId.IsValid());
+
+	TestTrue(TEXT("Run purchase succeeds"), Run->PurchaseShopOffer(OfferId));
+	TestEqual(TEXT("Run event refresh applies purchased state once"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
+	TestEqual(TEXT("Run event refresh does not skip before manual fallback"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount);
+	TestTrue(TEXT("Purchased offer visible after run event"), Screen->ReadOfferPresentationView(0).bPurchased);
+
+	Screen->RefreshShop();
+	TestEqual(TEXT("Manual fallback after event is cheap skip"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
+	TestEqual(TEXT("Manual fallback after event skips offer reconcile"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount + 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopScreenRefreshRemovesMissingOfferRowsSpec,
+	"Wacom.UI.Shop.ShopScreenRefreshRemovesMissingOfferRowsAndPreservesOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopScreenRefreshRemovesMissingOfferRowsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* FirstCard = Fx.MakeNoopCard(0);
+	FirstCard->CardId = TEXT("Shop.Remove.First");
+	FirstCard->DisplayName = FText::FromString(TEXT("移除一"));
+	UCardDefinition* SecondCard = Fx.MakeNoopCard(0);
+	SecondCard->CardId = TEXT("Shop.Remove.Second");
+	SecondCard->DisplayName = FText::FromString(TEXT("移除二"));
+	UCardDefinition* ThirdCard = Fx.MakeNoopCard(0);
+	ThirdCard->CardId = TEXT("Shop.Remove.Third");
+	ThirdCard->DisplayName = FText::FromString(TEXT("移除三"));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->AddGold(10);
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ FirstCard, 1 });
+	Offers.Add({ SecondCard, 1 });
+	TestTrue(TEXT("Begin initial shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Remove"), Offers));
+
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->RefreshShop();
+	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
+	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	TestNotNull(TEXT("First row"), FirstRow);
+	TestNotNull(TEXT("Second row"), SecondRow);
+
+	const FRunShopSnapshot InitialSnapshot = Run->BuildCurrentShopSnapshot();
+	TestTrue(TEXT("Initial snapshot has two offers"), InitialSnapshot.Offers.Num() == 2);
+	if (InitialSnapshot.Offers.Num() < 2)
+	{
+		return false;
+	}
+
+	FRunShopOffer ThirdOffer;
+	ThirdOffer.OfferId = FGuid::NewGuid();
+	ThirdOffer.CardDefinition = ThirdCard;
+	ThirdOffer.Price = 1;
+
+	FRunShopSnapshot ReplacementSnapshot;
+	ReplacementSnapshot.ShopId = InitialSnapshot.ShopId;
+	ReplacementSnapshot.bIsActive = true;
+	ReplacementSnapshot.Offers.Add(InitialSnapshot.Offers[1]);
+	ReplacementSnapshot.Offers.Add(ThirdOffer);
+	Screen->SetShopSnapshotOverride(ReplacementSnapshot);
+	Screen->RefreshShop();
+
+	TestEqual(TEXT("Second offer row reused at new first position"), Screen->ReadOfferRowWidget(0), SecondRow);
+	TestNotEqual(TEXT("Removed first row not reused for new third offer"), Screen->ReadOfferRowWidget(1), FirstRow);
+	TestEqual(TEXT("Offer order keeps second card first"),
+		Screen->ReadOfferPresentationView(0).CardDefinition.Get(),
+		SecondCard);
+	TestEqual(TEXT("Offer order keeps third card second"),
+		Screen->ReadOfferPresentationView(1).CardDefinition.Get(),
+		ThirdCard);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIShopScreenRefreshDirtyGateRefreshesWhenOfferIdentityOrOrderChangesSpec,
+	"Wacom.UI.Shop.ShopScreenRefreshDirtyGateRefreshesWhenOfferIdentityOrOrderChanges",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIShopScreenRefreshDirtyGateRefreshesWhenOfferIdentityOrOrderChangesSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* FirstCard = Fx.MakeNoopCard(0);
+	FirstCard->CardId = TEXT("Shop.Dirty.Order.First");
+	FirstCard->DisplayName = FText::FromString(TEXT("顺序一"));
+	UCardDefinition* SecondCard = Fx.MakeNoopCard(0);
+	SecondCard->CardId = TEXT("Shop.Dirty.Order.Second");
+	SecondCard->DisplayName = FText::FromString(TEXT("顺序二"));
+	UCardDefinition* ThirdCard = Fx.MakeNoopCard(0);
+	ThirdCard->CardId = TEXT("Shop.Dirty.Order.Third");
+	ThirdCard->DisplayName = FText::FromString(TEXT("顺序三"));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->AddGold(10);
+	TArray<FRunShopOfferInput> Offers;
+	Offers.Add({ FirstCard, 1 });
+	Offers.Add({ SecondCard, 1 });
+	TestTrue(TEXT("Begin initial shop succeeds"), Run->BeginShopVisit(TEXT("Shop.Dirty.Order"), Offers));
+
+	TStrongObjectPtr<UWacomShopScreenProbe> Screen(NewObject<UWacomShopScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->RefreshShop();
+	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
+	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	TestNotNull(TEXT("First row"), FirstRow);
+	TestNotNull(TEXT("Second row"), SecondRow);
+	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
+	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
+	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
+
+	const FRunShopSnapshot InitialSnapshot = Run->BuildCurrentShopSnapshot();
+	TestTrue(TEXT("Initial snapshot has two offers"), InitialSnapshot.Offers.Num() == 2);
+	if (InitialSnapshot.Offers.Num() < 2)
+	{
+		return false;
+	}
+
+	FRunShopOffer ThirdOffer;
+	ThirdOffer.OfferId = FGuid::NewGuid();
+	ThirdOffer.CardDefinition = ThirdCard;
+	ThirdOffer.Price = 1;
+
+	FRunShopSnapshot ReplacementSnapshot;
+	ReplacementSnapshot.ShopId = InitialSnapshot.ShopId;
+	ReplacementSnapshot.bIsActive = true;
+	ReplacementSnapshot.Offers.Add(InitialSnapshot.Offers[1]);
+	ReplacementSnapshot.Offers.Add(ThirdOffer);
+	Screen->SetShopSnapshotOverride(ReplacementSnapshot);
+	Screen->RefreshShop();
+
+	TestEqual(TEXT("Offer identity/order change applies offer reconcile"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
+	TestEqual(TEXT("Offer identity/order change does not skip"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount);
+	TestEqual(TEXT("Second row reused at new first position"), Screen->ReadOfferRowWidget(0), SecondRow);
+	TestNotEqual(TEXT("Removed first row not reused for new third offer"), Screen->ReadOfferRowWidget(1), FirstRow);
+	TestEqual(TEXT("Offer order keeps second card first"),
+		Screen->ReadOfferPresentationView(0).CardDefinition.Get(),
+		SecondCard);
+	TestEqual(TEXT("Offer order keeps third card second"),
+		Screen->ReadOfferPresentationView(1).CardDefinition.Get(),
+		ThirdCard);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIShopTriggerDefinitionOffersSpec,
 	"Wacom.UI.Shop.TriggerDefinitionOffers",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

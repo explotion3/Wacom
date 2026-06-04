@@ -12,7 +12,9 @@ class UTextBlock;
 class UVerticalBox;
 class URunSession;
 class UWacomAppToastSubsystem;
+class UWacomShopOfferRowWidget;
 struct FRunShopOffer;
+struct FRunShopSnapshot;
 
 /**
  * 最小可用商店界面。
@@ -35,11 +37,13 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeOnActivated() override;
 	virtual void NativeOnDeactivated() override;
 
 	virtual URunSession* ResolveRunSession() const;
 	virtual UWacomAppToastSubsystem* ResolveToastSubsystem() const;
+	virtual FRunShopSnapshot BuildShopSnapshot() const;
 
 	UFUNCTION()
 	void HandleCloseClicked();
@@ -66,21 +70,49 @@ private:
 	FText GetDisplayedGoldText() const;
 	int32 GetCachedOfferCount() const { return CachedOfferIds.Num(); }
 	FWacomShopOfferPresentationView GetCachedOfferView(int32 Index) const;
+	UWacomShopOfferRowWidget* GetOfferRowWidgetForTest(int32 Index) const;
 	bool PurchaseOfferByIndex(int32 Index);
 	static FText BuildPurchaseFailureToastText(FName DisabledReason);
+	int32 GetShopOfferRefreshApplyCountForTest() const { return ShopOfferRefreshApplyCountForTest; }
+	int32 GetShopOfferRefreshSkipCountForTest() const { return ShopOfferRefreshSkipCountForTest; }
+	int32 GetShopSnapshotBuildCountForTest() const { return ShopSnapshotBuildCountForTest; }
+	int32 GetShopSnapshotRevisionSkipCountForTest() const { return ShopSnapshotRevisionSkipCountForTest; }
 #endif
 
-	void RebuildOfferRows();
-	void AddOfferRow(const FWacomShopOfferPresentationView& OfferView);
+	void RebuildOfferRows(const FRunShopSnapshot& Snapshot, int32 CurrentGold);
 	UFUNCTION()
 	bool PurchaseOffer(FGuid OfferId);
 	void HandleOfferPurchaseRequested(FGuid OfferId);
+	void HandleRunStateChanged();
+	void TrySubscribeRunSession();
+	void UnsubscribeRunSession();
+	void ResetShopOfferRefreshDirtyGate();
 
 	UPROPERTY(Transient)
 	TArray<FGuid> CachedOfferIds;
 
 	UPROPERTY(Transient)
 	TArray<FWacomShopOfferPresentationView> CachedOfferViews;
+
+	UPROPERTY(Transient)
+	FRunShopSnapshot CachedShopSnapshot;
+
+	TWeakObjectPtr<URunSession> SubscribedRunSession;
+
+	uint32 LastShopOfferRefreshSignature = 0;
+	bool bHasLastShopOfferRefreshSignature = false;
+	uint64 LastShopSnapshotRevision = 0;
+	bool bHasLastShopSnapshotRevision = false;
+	uint64 LastShopEconomyRevision = 0;
+	bool bHasLastShopEconomyRevision = false;
+	TWeakObjectPtr<URunSession> LastShopRefreshRunSession;
+
+#if WITH_AUTOMATION_TESTS
+	int32 ShopOfferRefreshApplyCountForTest = 0;
+	int32 ShopOfferRefreshSkipCountForTest = 0;
+	int32 ShopSnapshotBuildCountForTest = 0;
+	int32 ShopSnapshotRevisionSkipCountForTest = 0;
+#endif
 
 	bool bDidEndShopVisit = false;
 };

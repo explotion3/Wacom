@@ -32,6 +32,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardView")
 	FText GetValueText() const;
 
+#if WITH_AUTOMATION_TESTS
+	int32 GetApplyCountForTest() const { return ApplyCountForTest; }
+	int32 GetDigitImageUpdateCountForTest() const { return DigitImageUpdateCountForTest; }
+#endif
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
@@ -71,12 +76,19 @@ private:
 	TMap<int32, TObjectPtr<UPaperSprite>> ResolvedDigitSprites;
 
 	bool bSpriteCachesBuilt = false;
+	bool bHasAppliedData = false;
+
+#if WITH_AUTOMATION_TESTS
+	int32 ApplyCountForTest = 0;
+	int32 DigitImageUpdateCountForTest = 0;
+#endif
 
 	void ApplyCurrentDataToWidgets();
 	void EnsureSpriteCachesBuilt();
 	void RebuildSpriteCaches();
 	void UpdateFrameImage();
 	void UpdateDigitImages();
+	UImage* EnsureDigitImage(int32 Index);
 	TArray<int32> SplitIntoDigits(int32 Value) const;
 	static void SetSpriteBrush(UImage& Image, UPaperSprite& Sprite, const FVector2D& DesiredSize);
 };

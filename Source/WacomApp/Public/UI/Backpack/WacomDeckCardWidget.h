@@ -14,6 +14,14 @@ class UCardDefinition;
 class UDragDropOperation;
 class UWacomCardView;
 
+enum class EWacomBackpackDeckCardListReuseRole : uint8
+{
+	PhysicalList,
+	BattleDeckProjected,
+	SpecialOwner,
+	SpecialContent
+};
+
 /**
  * 单张卡的 UI 表示（背包系统用）。
  *
@@ -39,6 +47,22 @@ public:
 
 	/** 获取关联卡定义。 */
 	UCardDefinition* GetCard() const { return Card; }
+
+	/** 当前显示的运行时卡牌实例身份。用于父列表做增量复用，不暴露给蓝图。 */
+	FGuid GetCardInstanceId() const { return InstanceId; }
+
+	/** 当前卡牌的物理来源区。用于父列表做增量复用，不暴露给蓝图。 */
+	EZoneKind GetFromZone() const { return FromZone; }
+
+	/** 当前卡牌的特殊区 owner，仅 SpecialZone 来源有效。 */
+	FGuid GetFromZoneOwnerInstanceId() const { return FromZoneOwnerInstanceId; }
+
+	/** 父列表复用本 widget 前调用，清理投影角标、右键开关、拖拽透明度等视图残留。 */
+	void PrepareForBackpackListReuse();
+
+	/** 父列表记录的增量复用角色，不进入蓝图合同。 */
+	void SetBackpackListReuseRole(EWacomBackpackDeckCardListReuseRole InRole) { BackpackListReuseRole = InRole; }
+	EWacomBackpackDeckCardListReuseRole GetBackpackListReuseRole() const { return BackpackListReuseRole; }
 
 	/** SpecialZone 中已选择入战的视觉标记。 */
 	void SetBattleEnabledBadgeVisible(bool bVisible);
@@ -127,6 +151,7 @@ private:
 	bool bRightClickToggleEnabled = false;
 	bool bCardInteractionEnabled = true;
 	bool bDragVisualMode = false;
+	EWacomBackpackDeckCardListReuseRole BackpackListReuseRole = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 	FText ProjectedFromBadgeText;
 
 	UFUNCTION()

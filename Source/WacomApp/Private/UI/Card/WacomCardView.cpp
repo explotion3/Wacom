@@ -94,6 +94,60 @@ namespace
 			&& A.Art == B.Art;
 	}
 
+	bool AreTextDisplayFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
+	{
+		return AreTextViewsEquivalent(A.Name, B.Name)
+			&& AreTextViewsEquivalent(A.TypeText, B.TypeText)
+			&& A.Value == B.Value
+			&& A.bShowValue == B.bShowValue;
+	}
+
+	bool AreCostDisplayFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
+	{
+		return A.Cost == B.Cost
+			&& A.bShowCost == B.bShowCost;
+	}
+
+	bool AreDurabilityDisplayFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
+	{
+		return A.Durability == B.Durability
+			&& A.bShowDurability == B.bShowDurability;
+	}
+
+	UWacomCardEffectBadgeWidget* FindReusableBadgeWidget(UPanelWidget& Host)
+	{
+		for (int32 ChildIndex = 0; ChildIndex < Host.GetChildrenCount(); ++ChildIndex)
+		{
+			if (UWacomCardEffectBadgeWidget* BadgeWidget =
+				Cast<UWacomCardEffectBadgeWidget>(Host.GetChildAt(ChildIndex)))
+			{
+				return BadgeWidget;
+			}
+		}
+		return nullptr;
+	}
+
+	UWacomCardEffectBadgeWidget* EnsureBadgeWidget(
+		UWacomCardView& Owner,
+		UPanelWidget& Host,
+		UClass& BadgeClass)
+	{
+		if (UWacomCardEffectBadgeWidget* ExistingWidget = FindReusableBadgeWidget(Host))
+		{
+			return ExistingWidget;
+		}
+
+		UWacomCardEffectBadgeWidget* BadgeWidget =
+			CreateWidget<UWacomCardEffectBadgeWidget>(&Owner, &BadgeClass);
+		if (!BadgeWidget)
+		{
+			return nullptr;
+		}
+
+		Host.AddChild(BadgeWidget);
+		return BadgeWidget;
+	}
+
 	bool ShouldRenderCardFaceEffectBadge(EWacomCardViewEffectBadgeKind Kind)
 	{
 		switch (Kind)
@@ -355,6 +409,7 @@ void UWacomCardView::NativeConstruct()
 	Super::NativeConstruct();
 	EnsureSurfaceFoilOverlay();
 	ApplySurfaceFoilOverlay();
+	bCardViewDataAppliedToWidgets = false;
 	ApplyCurrentDataToWidgets();
 }
 
@@ -372,54 +427,62 @@ void UWacomCardView::SetCardViewData(const FWacomCardViewData& InData)
 void UWacomCardView::ApplyCurrentDataToWidgets()
 {
 	EnsureSpriteIconCachesBuilt();
-	UpdateCostDisplay();
-	UpdateDurabilityDisplay();
 
-	SetOptionalText(ValueText, CurrentData.bShowValue ? FText::AsNumber(CurrentData.Value) : FText::GetEmpty());
-	SetOptionalText(NameText, CurrentData.Name);
-	SetOptionalText(TypeText, CurrentData.TypeText);
-	UpdateEffectBadgeDisplays();
+	const bool bForceFullApply = !bHasLastAppliedData || !bCardViewDataAppliedToWidgets;
+	bool bUpdatedAnyDisplay = false;
 
-	if (CardArt)
+	if (bForceFullApply || !AreCostDisplayFieldsEquivalent(LastAppliedData, CurrentData))
 	{
-		if (CurrentData.Art)
-		{
-			CardArt->SetBrushFromTexture(CurrentData.Art);
-			CardArt->SetColorAndOpacity(FLinearColor::White);
-		}
+		UpdateCostDisplay();
+		bUpdatedAnyDisplay = true;
 	}
-
-	if (RarityBorder)
+	if (bForceFullApply || !AreDurabilityDisplayFieldsEquivalent(LastAppliedData, CurrentData))
 	{
-		if (CurrentData.Rarity.IsValid())
-		{
-			if (UPaperSprite* Sprite = ResolvedRarityBorderSprites.FindRef(CurrentData.Rarity))
-			{
-				RarityBorder->SetBrushResourceObject(Sprite);
-				RarityBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
-			}
-			else
-			{
-				RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
-			}
-		}
-		else
-		{
-			RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
-		}
+		UpdateDurabilityDisplay();
+		bUpdatedAnyDisplay = true;
 	}
-
-	if (DisabledOverlay)
+	if (bForceFullApply || !AreTextDisplayFieldsEquivalent(LastAppliedData, CurrentData))
 	{
-		DisabledOverlay->SetVisibility(CurrentData.bDisabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		UpdateTextDisplays();
+		bUpdatedAnyDisplay = true;
+	}
+	if (bForceFullApply || !AreEffectBadgesEquivalent(LastAppliedData.EffectBadges, CurrentData.EffectBadges))
+	{
+		UpdateEffectBadgeDisplays();
+		bUpdatedAnyDisplay = true;
+	}
+	if (bForceFullApply || LastAppliedData.Art != CurrentData.Art)
+	{
+		UpdateArtDisplay();
+		bUpdatedAnyDisplay = true;
+	}
+	if (bForceFullApply || LastAppliedData.Rarity != CurrentData.Rarity)
+	{
+		UpdateRarityBorderDisplay();
+		bUpdatedAnyDisplay = true;
+	}
+	if (bForceFullApply || LastAppliedData.bDisabled != CurrentData.bDisabled)
+	{
+		UpdateDisabledDisplay();
+		bUpdatedAnyDisplay = true;
 	}
 
 	bCardViewDataAppliedToWidgets = true;
-	InvalidateCardViewRenderCache();
+	LastAppliedData = CurrentData;
+	bHasLastAppliedData = true;
+
+	if (bUpdatedAnyDisplay)
+	{
+		InvalidateCardViewRenderCache();
+	}
 }
 
 void UWacomCardView::UpdateEffectBadgeDisplays()
 {
+#if WITH_AUTOMATION_TESTS
+	++EffectBadgeDisplayUpdateCountForTest;
+#endif
+
 	TArray<UPanelWidget*> BadgeSlots;
 	BadgeSlots.Reserve(4);
 	BadgeSlots.Add(EffectBadgeSlot1);
@@ -461,7 +524,6 @@ void UWacomCardView::UpdateEffectBadgeDisplays()
 				continue;
 			}
 
-			BadgeSlot->ClearChildren();
 			BadgeSlot->SetVisibility(ESlateVisibility::Collapsed);
 		}
 
@@ -478,14 +540,13 @@ void UWacomCardView::UpdateEffectBadgeDisplays()
 				break;
 			}
 
-			UWacomCardEffectBadgeWidget* BadgeWidget = CreateWidget<UWacomCardEffectBadgeWidget>(this, BadgeClass);
+			UWacomCardEffectBadgeWidget* BadgeWidget = EnsureBadgeWidget(*this, *BadgeSlot, *BadgeClass);
 			if (!BadgeWidget)
 			{
 				continue;
 			}
 
 			BadgeWidget->SetEffectBadgeData(RenderableBadges[BadgeIndex]);
-			BadgeSlot->AddChild(BadgeWidget);
 			BadgeSlot->SetVisibility(ESlateVisibility::HitTestInvisible);
 			++BadgeIndex;
 		}
@@ -494,19 +555,32 @@ void UWacomCardView::UpdateEffectBadgeDisplays()
 
 	if (EffectStatsHost)
 	{
-		EffectStatsHost->ClearChildren();
-		for (const FWacomCardViewEffectBadge& Badge : RenderableBadges)
+		while (EffectStatsHost->GetChildrenCount() > RenderableBadges.Num())
 		{
-			UWacomCardEffectBadgeWidget* BadgeWidget = CreateWidget<UWacomCardEffectBadgeWidget>(this, BadgeClass);
+			EffectStatsHost->RemoveChildAt(EffectStatsHost->GetChildrenCount() - 1);
+		}
+
+		for (int32 BadgeIndex = 0; BadgeIndex < RenderableBadges.Num(); ++BadgeIndex)
+		{
+			UWacomCardEffectBadgeWidget* BadgeWidget =
+				Cast<UWacomCardEffectBadgeWidget>(EffectStatsHost->GetChildAt(BadgeIndex));
+			if (!BadgeWidget)
+			{
+				BadgeWidget = CreateWidget<UWacomCardEffectBadgeWidget>(this, BadgeClass);
+				if (BadgeWidget)
+				{
+					EffectStatsHost->AddChild(BadgeWidget);
+				}
+			}
 			if (!BadgeWidget)
 			{
 				continue;
 			}
-			BadgeWidget->SetEffectBadgeData(Badge);
-			EffectStatsHost->AddChild(BadgeWidget);
+			BadgeWidget->SetEffectBadgeData(RenderableBadges[BadgeIndex]);
 		}
 		EffectStatsHost->SetVisibility(RenderableBadges.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
+
 }
 
 void UWacomCardView::EnsureSurfaceFoilOverlay()
@@ -565,6 +639,10 @@ void UWacomCardView::ApplySurfaceFoilOverlay()
 
 void UWacomCardView::UpdateCostDisplay()
 {
+#if WITH_AUTOMATION_TESTS
+	++CostDisplayUpdateCountForTest;
+#endif
+
 	EnsureSpriteIconCachesBuilt();
 
 	if (CostDigitImage)
@@ -592,6 +670,7 @@ void UWacomCardView::UpdateCostDisplay()
 		}
 		return;
 	}
+
 }
 
 TArray<int32> UWacomCardView::SplitIntoDigits(int32 Value)
@@ -619,6 +698,10 @@ TArray<int32> UWacomCardView::SplitIntoDigits(int32 Value)
 
 void UWacomCardView::UpdateDurabilityDisplay()
 {
+#if WITH_AUTOMATION_TESTS
+	++DurabilityDisplayUpdateCountForTest;
+#endif
+
 	EnsureSpriteIconCachesBuilt();
 
 	if (!DurabilityHost)
@@ -628,10 +711,10 @@ void UWacomCardView::UpdateDurabilityDisplay()
 
 	if (DurabilityDigitsHost)
 	{
-		DurabilityDigitsHost->ClearChildren();
 		DurabilityDigitsHost->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
+	bool bRenderedDurabilityDigits = false;
 	const bool bCanBuildIconDigits = CurrentData.bShowDurability
 		&& CurrentData.Durability > 0
 		&& DurabilityDigitsHost
@@ -641,30 +724,131 @@ void UWacomCardView::UpdateDurabilityDisplay()
 	if (bCanBuildIconDigits)
 	{
 		const TArray<int32> Digits = SplitIntoDigits(CurrentData.Durability);
-		for (int32 Digit : Digits)
+		bool bDigitsComplete = true;
+		for (int32 Index = 0; Index < Digits.Num(); ++Index)
 		{
+			const int32 Digit = Digits[Index];
 			UPaperSprite* Sprite = ResolvedDurabilityDigitIcons.FindRef(Digit);
 			if (!Sprite)
 			{
-				DurabilityDigitsHost->ClearChildren();
+				bDigitsComplete = false;
 				break;
 			}
 
-			UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+			UImage* DigitImage = Cast<UImage>(DurabilityDigitsHost->GetChildAt(Index));
+			if (!DigitImage)
+			{
+				DigitImage = EnsureDurabilityDigitImage(*DurabilityDigitsHost);
+			}
+			if (!DigitImage)
+			{
+				bDigitsComplete = false;
+				break;
+			}
 			SetDigitImageBrush(*DigitImage, *Sprite, DurabilityDigitSize);
-			DurabilityDigitsHost->AddChild(DigitImage);
+			DigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+
+		if (bDigitsComplete)
+		{
+			while (DurabilityDigitsHost->GetChildrenCount() > Digits.Num())
+			{
+				DurabilityDigitsHost->RemoveChildAt(DurabilityDigitsHost->GetChildrenCount() - 1);
+			}
+			bRenderedDurabilityDigits = Digits.Num() > 0;
+		}
+		else
+		{
+			while (DurabilityDigitsHost->GetChildrenCount() > 0)
+			{
+				DurabilityDigitsHost->RemoveChildAt(DurabilityDigitsHost->GetChildrenCount() - 1);
+			}
 		}
 	}
 
-	const bool bHasDurabilityDigits = DurabilityDigitsHost && DurabilityDigitsHost->GetChildrenCount() > 0;
 	if (DurabilityDigitsHost)
 	{
 		DurabilityDigitsHost->SetVisibility(
-			bHasDurabilityDigits ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+			bRenderedDurabilityDigits ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 
 	DurabilityHost->SetVisibility(
-		bHasDurabilityDigits ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		bRenderedDurabilityDigits ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
+UImage* UWacomCardView::EnsureDurabilityDigitImage(UPanelWidget& Host)
+{
+	if (!WidgetTree)
+	{
+		return nullptr;
+	}
+
+	UImage* DigitImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+	Host.AddChild(DigitImage);
+	return DigitImage;
+}
+
+void UWacomCardView::UpdateTextDisplays()
+{
+	SetOptionalText(ValueText, CurrentData.bShowValue ? FText::AsNumber(CurrentData.Value) : FText::GetEmpty());
+	SetOptionalText(NameText, CurrentData.Name);
+	SetOptionalText(TypeText, CurrentData.TypeText);
+
+#if WITH_AUTOMATION_TESTS
+	++TextDisplayUpdateCountForTest;
+#endif
+}
+
+void UWacomCardView::UpdateArtDisplay()
+{
+	if (CardArt && CurrentData.Art)
+	{
+		CardArt->SetBrushFromTexture(CurrentData.Art);
+		CardArt->SetColorAndOpacity(FLinearColor::White);
+	}
+
+#if WITH_AUTOMATION_TESTS
+	++ArtDisplayUpdateCountForTest;
+#endif
+}
+
+void UWacomCardView::UpdateRarityBorderDisplay()
+{
+	if (RarityBorder)
+	{
+		if (CurrentData.Rarity.IsValid())
+		{
+			if (UPaperSprite* Sprite = ResolvedRarityBorderSprites.FindRef(CurrentData.Rarity))
+			{
+				RarityBorder->SetBrushResourceObject(Sprite);
+				RarityBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+			else
+			{
+				RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		}
+		else
+		{
+			RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+
+#if WITH_AUTOMATION_TESTS
+	++RarityDisplayUpdateCountForTest;
+#endif
+}
+
+void UWacomCardView::UpdateDisabledDisplay()
+{
+	if (DisabledOverlay)
+	{
+		DisabledOverlay->SetVisibility(CurrentData.bDisabled ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	}
+
+#if WITH_AUTOMATION_TESTS
+	++DisabledDisplayUpdateCountForTest;
+#endif
 }
 
 void UWacomCardView::EnsureSpriteIconCachesBuilt()

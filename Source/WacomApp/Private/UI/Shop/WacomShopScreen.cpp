@@ -9,11 +9,13 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/PanelWidget.h"
 #include "Components/ScrollBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 
+#include "Cards/CardDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "RunState.h"
@@ -24,6 +26,33 @@
 
 namespace
 {
+	uint32 HashGuidForShopRefresh(uint32 Hash, const FGuid& Value)
+	{
+		Hash = HashCombine(Hash, Value.A);
+		Hash = HashCombine(Hash, Value.B);
+		Hash = HashCombine(Hash, Value.C);
+		Hash = HashCombine(Hash, Value.D);
+		return Hash;
+	}
+
+	uint32 BuildShopOfferRefreshSignature(const FRunShopSnapshot& Snapshot, int32 CurrentGold)
+	{
+		uint32 Hash = 2166136261u;
+		Hash = HashCombine(Hash, GetTypeHash(Snapshot.ShopId));
+		Hash = HashCombine(Hash, Snapshot.bIsActive ? 1u : 0u);
+		Hash = HashCombine(Hash, Snapshot.bHasPurchaseThisVisit ? 1u : 0u);
+		Hash = HashCombine(Hash, static_cast<uint32>(CurrentGold));
+		Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.Offers.Num()));
+		for (const FRunShopOffer& Offer : Snapshot.Offers)
+		{
+			Hash = HashGuidForShopRefresh(Hash, Offer.OfferId);
+			Hash = HashCombine(Hash, GetTypeHash(Offer.CardDefinition ? Offer.CardDefinition->CardId : NAME_None));
+			Hash = HashCombine(Hash, static_cast<uint32>(Offer.Price));
+			Hash = HashCombine(Hash, Offer.bPurchased ? 1u : 0u);
+		}
+		return Hash;
+	}
+
 	UTextBlock* MakeShopText(UWidgetTree* Tree, FName Name, const FText& Text, int32 FontSize)
 	{
 		UTextBlock* Block = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
@@ -41,6 +70,7 @@ TSharedRef<SWidget> UWacomShopScreen::RebuildWidget()
 {
 	if (!WidgetTree || !WidgetTree->RootWidget)
 	{
+		ResetShopOfferRefreshDirtyGate();
 		if (!WidgetTree)
 		{
 			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
@@ -117,42 +147,86 @@ void UWacomShopScreen::NativeConstruct()
 		CloseButton->OnClicked.AddUniqueDynamic(this, &UWacomShopScreen::HandleCloseClicked);
 	}
 
+	TrySubscribeRunSession();
 	RefreshShop();
+}
+
+void UWacomShopScreen::NativeDestruct()
+{
+	UnsubscribeRunSession();
+	Super::NativeDestruct();
 }
 
 void UWacomShopScreen::NativeOnActivated()
 {
 	Super::NativeOnActivated();
 	bDidEndShopVisit = false;
+	TrySubscribeRunSession();
 	RefreshShop();
 }
 
 void UWacomShopScreen::NativeOnDeactivated()
 {
+	UnsubscribeRunSession();
 	FWacomShopScreenFlow::EndShopVisitOnDeactivate(ResolveRunSession(), bDidEndShopVisit);
 	Super::NativeOnDeactivated();
 }
 
 void UWacomShopScreen::RefreshShop()
 {
-	if (URunSession* Run = ResolveRunSession())
+	TrySubscribeRunSession();
+	URunSession* Run = ResolveRunSession();
+	if (LastShopRefreshRunSession.Get() != Run)
 	{
-		const FRunShopSnapshot Snapshot = Run->BuildCurrentShopSnapshot();
-		if (TitleText)
-		{
-			TitleText->SetText(Snapshot.ShopId.IsNone()
-				? LOCTEXT("Title", "商店")
-				: FText::Format(LOCTEXT("TitleWithId", "商店：{0}"), FText::FromName(Snapshot.ShopId)));
-		}
-		if (GoldText)
-		{
-			GoldText->SetText(FText::Format(
-				LOCTEXT("GoldFmt", "金币：{0}"),
-				FText::AsNumber(Run->GetGold())));
-		}
+		LastShopRefreshRunSession = Run;
+		CachedShopSnapshot = FRunShopSnapshot();
+		ResetShopOfferRefreshDirtyGate();
 	}
 
-	RebuildOfferRows();
+	FRunShopSnapshot Snapshot;
+	const int32 CurrentGold = Run ? Run->GetGold() : 0;
+	if (Run)
+	{
+		const uint64 ShopRevision = Run->GetShopSnapshotRevision();
+		if (bHasLastShopSnapshotRevision && LastShopSnapshotRevision == ShopRevision)
+		{
+#if WITH_AUTOMATION_TESTS
+			++ShopSnapshotRevisionSkipCountForTest;
+#endif
+			Snapshot = CachedShopSnapshot;
+		}
+		else
+		{
+			LastShopSnapshotRevision = ShopRevision;
+			bHasLastShopSnapshotRevision = true;
+#if WITH_AUTOMATION_TESTS
+			++ShopSnapshotBuildCountForTest;
+#endif
+			Snapshot = BuildShopSnapshot();
+			CachedShopSnapshot = Snapshot;
+		}
+	}
+	else
+	{
+		Snapshot = FRunShopSnapshot();
+		CachedShopSnapshot = Snapshot;
+		ResetShopOfferRefreshDirtyGate();
+	}
+
+	if (TitleText)
+	{
+		TitleText->SetText(Snapshot.ShopId.IsNone()
+			? LOCTEXT("Title", "商店")
+			: FText::Format(LOCTEXT("TitleWithId", "商店：{0}"), FText::FromName(Snapshot.ShopId)));
+	}
+	if (GoldText)
+	{
+		GoldText->SetText(FText::Format(
+			LOCTEXT("GoldFmt", "金币：{0}"),
+			FText::AsNumber(CurrentGold)));
+	}
+
+	RebuildOfferRows(Snapshot, CurrentGold);
 }
 
 void UWacomShopScreen::SuppressEndShopVisitOnNextDeactivate()
@@ -191,7 +265,44 @@ FText UWacomShopScreen::GetDisplayedGoldText() const
 {
 	return GoldText ? GoldText->GetText() : FText::GetEmpty();
 }
+
+UWacomShopOfferRowWidget* UWacomShopScreen::GetOfferRowWidgetForTest(int32 Index) const
+{
+	return OfferList && Index >= 0 && OfferList->GetChildrenCount() > Index
+		? Cast<UWacomShopOfferRowWidget>(OfferList->GetChildAt(Index))
+		: nullptr;
+}
 #endif
+
+void UWacomShopScreen::TrySubscribeRunSession()
+{
+	URunSession* Run = ResolveRunSession();
+	if (SubscribedRunSession.Get() == Run)
+	{
+		return;
+	}
+
+	UnsubscribeRunSession();
+	if (Run)
+	{
+		Run->OnRunStateChangedNative.AddUObject(this, &UWacomShopScreen::HandleRunStateChanged);
+		SubscribedRunSession = Run;
+	}
+}
+
+void UWacomShopScreen::UnsubscribeRunSession()
+{
+	if (URunSession* Run = SubscribedRunSession.Get())
+	{
+		Run->OnRunStateChangedNative.RemoveAll(this);
+	}
+	SubscribedRunSession.Reset();
+}
+
+void UWacomShopScreen::HandleRunStateChanged()
+{
+	RefreshShop();
+}
 
 URunSession* UWacomShopScreen::ResolveRunSession() const
 {
@@ -199,17 +310,17 @@ URunSession* UWacomShopScreen::ResolveRunSession() const
 	return WacomPC ? WacomPC->GetRunSession() : nullptr;
 }
 
-void UWacomShopScreen::RebuildOfferRows()
+FRunShopSnapshot UWacomShopScreen::BuildShopSnapshot() const
 {
-	CachedOfferIds.Reset();
-	CachedOfferViews.Reset();
-	if (OfferList)
+	if (URunSession* Run = ResolveRunSession())
 	{
-		OfferList->ClearChildren();
+		return Run->BuildCurrentShopSnapshot();
 	}
+	return FRunShopSnapshot();
+}
 
-	URunSession* Run = ResolveRunSession();
-	const FRunShopSnapshot Snapshot = Run ? Run->BuildCurrentShopSnapshot() : FRunShopSnapshot();
+void UWacomShopScreen::RebuildOfferRows(const FRunShopSnapshot& Snapshot, int32 CurrentGold)
+{
 	if (EmptyText)
 	{
 		EmptyText->SetVisibility(Snapshot.Offers.Num() == 0
@@ -219,35 +330,121 @@ void UWacomShopScreen::RebuildOfferRows()
 
 	if (!OfferList)
 	{
+		CachedOfferIds.Reset();
+		CachedOfferViews.Reset();
 		return;
 	}
 
-	const int32 CurrentGold = Run ? Run->GetGold() : 0;
+	if (URunSession* Run = ResolveRunSession())
+	{
+		const uint64 EconomyRevision = Run->GetEconomySnapshotRevision();
+		if (!bHasLastShopEconomyRevision || LastShopEconomyRevision != EconomyRevision)
+		{
+			bHasLastShopEconomyRevision = true;
+			LastShopEconomyRevision = EconomyRevision;
+		}
+	}
+	else
+	{
+		bHasLastShopEconomyRevision = false;
+		LastShopEconomyRevision = 0;
+	}
+
+	const uint32 RefreshSignature = BuildShopOfferRefreshSignature(Snapshot, CurrentGold);
+	if (bHasLastShopOfferRefreshSignature && LastShopOfferRefreshSignature == RefreshSignature)
+	{
+#if WITH_AUTOMATION_TESTS
+		++ShopOfferRefreshSkipCountForTest;
+#endif
+		return;
+	}
+
+	LastShopOfferRefreshSignature = RefreshSignature;
+	bHasLastShopOfferRefreshSignature = true;
+#if WITH_AUTOMATION_TESTS
+	++ShopOfferRefreshApplyCountForTest;
+#endif
+
+	TMap<FGuid, UWacomShopOfferRowWidget*> ExistingRowsByOfferId;
+	for (int32 ChildIndex = 0; ChildIndex < OfferList->GetChildrenCount(); ++ChildIndex)
+	{
+		UWacomShopOfferRowWidget* ExistingRow = Cast<UWacomShopOfferRowWidget>(OfferList->GetChildAt(ChildIndex));
+		if (!ExistingRow)
+		{
+			continue;
+		}
+
+		const FGuid ExistingOfferId = ExistingRow->GetOfferPresentationView().OfferId;
+		if (ExistingOfferId.IsValid())
+		{
+			ExistingRowsByOfferId.Add(ExistingOfferId, ExistingRow);
+		}
+	}
+
 	const TArray<FWacomShopOfferPresentationView> OfferViews =
 		UWacomShopPresentationBuilder::BuildOfferPresentationViews(Snapshot, CurrentGold);
+	CachedOfferIds.Reset();
 	CachedOfferViews = OfferViews;
-	for (const FWacomShopOfferPresentationView& OfferView : OfferViews)
+	TSet<UWacomShopOfferRowWidget*> UsedRows;
+	for (int32 DesiredIndex = 0; DesiredIndex < OfferViews.Num(); ++DesiredIndex)
 	{
+		const FWacomShopOfferPresentationView& OfferView = OfferViews[DesiredIndex];
 		CachedOfferIds.Add(OfferView.OfferId);
-		AddOfferRow(OfferView);
+		UWacomShopOfferRowWidget* RowWidget = ExistingRowsByOfferId.FindRef(OfferView.OfferId);
+		if (!RowWidget)
+		{
+			if (!WidgetTree)
+			{
+				continue;
+			}
+
+			RowWidget = WidgetTree->ConstructWidget<UWacomShopOfferRowWidget>(
+				UWacomShopOfferRowWidget::StaticClass());
+			if (RowWidget)
+			{
+				RowWidget->OnPurchaseRequestedNative.AddUObject(this, &UWacomShopScreen::HandleOfferPurchaseRequested);
+			}
+		}
+		if (!RowWidget)
+		{
+			continue;
+		}
+
+		RowWidget->SetOfferPresentationView(OfferView);
+		UsedRows.Add(RowWidget);
+		if (RowWidget->GetParent() == OfferList)
+		{
+			OfferList->ShiftChild(DesiredIndex, RowWidget);
+			if (UVerticalBoxSlot* RowSlot = Cast<UVerticalBoxSlot>(RowWidget->Slot))
+			{
+				RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+			}
+		}
+		else if (UVerticalBoxSlot* RowSlot = OfferList->AddChildToVerticalBox(RowWidget))
+		{
+			RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
+			OfferList->ShiftChild(DesiredIndex, RowWidget);
+		}
+	}
+
+	for (const TPair<FGuid, UWacomShopOfferRowWidget*>& ExistingPair : ExistingRowsByOfferId)
+	{
+		if (ExistingPair.Value && !UsedRows.Contains(ExistingPair.Value))
+		{
+			ExistingPair.Value->RemoveFromParent();
+		}
 	}
 }
 
-void UWacomShopScreen::AddOfferRow(const FWacomShopOfferPresentationView& OfferView)
+void UWacomShopScreen::ResetShopOfferRefreshDirtyGate()
 {
-	if (!WidgetTree || !OfferList)
-	{
-		return;
-	}
-
-	UWacomShopOfferRowWidget* RowWidget = WidgetTree->ConstructWidget<UWacomShopOfferRowWidget>(
-		UWacomShopOfferRowWidget::StaticClass());
-	RowWidget->SetOfferPresentationView(OfferView);
-	RowWidget->OnPurchaseRequestedNative.AddUObject(this, &UWacomShopScreen::HandleOfferPurchaseRequested);
-	if (UVerticalBoxSlot* RowSlot = OfferList->AddChildToVerticalBox(RowWidget))
-	{
-		RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	}
+	LastShopOfferRefreshSignature = 0;
+	bHasLastShopOfferRefreshSignature = false;
+	LastShopSnapshotRevision = 0;
+	bHasLastShopSnapshotRevision = false;
+	LastShopEconomyRevision = 0;
+	bHasLastShopEconomyRevision = false;
+	CachedShopSnapshot = FRunShopSnapshot();
 }
 
 void UWacomShopScreen::HandleOfferPurchaseRequested(FGuid OfferId)

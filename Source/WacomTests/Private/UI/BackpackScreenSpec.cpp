@@ -19,15 +19,127 @@
 #include "UI/CardViewSpecReceiver.h"
 
 #include "Cards/CardDefinition.h"
+#include "Characters/CharacterDefinition.h"
 #include "Components/Image.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
+#include "Engine/Texture2D.h"
 #include "PaperSprite.h"
 #include "RunSession.h"
 #include "Tags/WacomGameplayTags.h"
 
 #include "UObject/StrongObjectPtr.h"
+
+struct FWacomBackpackScreenProbe
+{
+	static UWacomBackpackScreen* Create(UObject* Outer, URunSession* RunSession)
+	{
+		UWacomBackpackScreen* Screen = NewObject<UWacomBackpackScreen>(Outer);
+		Screen->SetRunSessionForTest(RunSession);
+		Screen->TakeWidget();
+		Screen->RebuildAllForTest();
+		return Screen;
+	}
+
+	static void Refresh(UWacomBackpackScreen& Screen)
+	{
+		Screen.RebuildAllForTest();
+	}
+
+	static void SetRunSession(UWacomBackpackScreen& Screen, URunSession* RunSession)
+	{
+		Screen.SetRunSessionForTest(RunSession);
+	}
+
+	static UWacomDeckCardWidget* BattleDeckCard(const UWacomBackpackScreen& Screen, int32 Index)
+	{
+		return Screen.GetBattleDeckCardWidgetForTest(Index);
+	}
+
+	static UWacomDeckCardWidget* FluxContentCard(const UWacomBackpackScreen& Screen, int32 Index)
+	{
+		return Screen.GetFluxContentCardWidgetForTest(Index);
+	}
+
+	static UWacomSpecialZoneWidget* SpecialZone(const UWacomBackpackScreen& Screen, int32 Index)
+	{
+		return Screen.GetSpecialZoneWidgetForTest(Index);
+	}
+
+	static int32 RefreshApplyCount(const UWacomBackpackScreen& Screen)
+	{
+		return Screen.GetBackpackListRefreshApplyCountForTest();
+	}
+
+	static int32 RefreshSkipCount(const UWacomBackpackScreen& Screen)
+	{
+		return Screen.GetBackpackListRefreshSkipCountForTest();
+	}
+
+	static int32 SnapshotBuildCount(const UWacomBackpackScreen& Screen)
+	{
+		return Screen.GetBackpackSnapshotBuildCountForTest();
+	}
+
+	static int32 SnapshotRevisionSkipCount(const UWacomBackpackScreen& Screen)
+	{
+		return Screen.GetBackpackSnapshotRevisionSkipCountForTest();
+	}
+};
+
+namespace
+{
+
+	FWacomCardViewEffectBadge MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind Kind, int32 Value)
+	{
+		FWacomCardViewEffectBadge Badge;
+		Badge.Kind = Kind;
+		Badge.Value = Value;
+		return Badge;
+	}
+
+	const UWacomCardEffectBadgeWidget* GetSingleSlotBadgeForTest(const UPanelWidget* Slot)
+	{
+		if (!Slot || Slot->GetChildrenCount() != 1)
+		{
+			return nullptr;
+		}
+
+		return Cast<UWacomCardEffectBadgeWidget>(Slot->GetChildAt(0));
+	}
+
+	UCardDefinition* MakeBackpackUiCardForTest(UObject* Outer, FName CardId, int32 Capacity = 0, bool bTypeB = false)
+	{
+		UCardDefinition* Card = NewObject<UCardDefinition>(Outer);
+		Card->CardId = CardId;
+		Card->DisplayName = FText::FromName(CardId);
+		Card->BaseCost = 1;
+		Card->Physique.Capacity = Capacity;
+		if (bTypeB)
+		{
+			Card->Physique.CapacityEffect = WacomTags::Card_CapacityEffect_WeaponDamagePlus3;
+		}
+		return Card;
+	}
+
+	UCharacterDefinition* MakeBackpackUiCharacterForTest(UObject* Outer, const TArray<UCardDefinition*>& StarterDeck)
+	{
+		UCharacterDefinition* Character = NewObject<UCharacterDefinition>(Outer);
+		Character->CharacterId = TEXT("Backpack.UI.Character");
+		Character->DisplayName = FText::FromString(TEXT("背包 UI 测试角色"));
+		for (UCardDefinition* Card : StarterDeck)
+		{
+			Character->StarterDeck.Add(Card);
+		}
+		return Character;
+	}
+
+	UWacomBackpackScreen* MakeBackpackUiScreenForTest(UObject* Outer, URunSession* Run)
+	{
+		return FWacomBackpackScreenProbe::Create(Outer, Run);
+	}
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackCardViewUnboundFallbackSpec,
@@ -227,6 +339,55 @@ bool FWacomUIBackpackCardViewSingleCostDigitImageSpec::RunTest(const FString& /*
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewDurabilityDigitsReuseSpec,
+	"Wacom.UI.Backpack.CardViewDurabilityDigitsReuseImagesAcrossRefresh",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewDurabilityDigitsReuseSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardViewSpecProbe> CardView(NewObject<UWacomCardViewSpecProbe>());
+	UPaperSprite* OneSprite = NewObject<UPaperSprite>(CardView.Get());
+	UPaperSprite* TwoSprite = NewObject<UPaperSprite>(CardView.Get());
+	UPaperSprite* ThreeSprite = NewObject<UPaperSprite>(CardView.Get());
+	CardView->SetDurabilityDigitIconForTest(1, OneSprite);
+	CardView->SetDurabilityDigitIconForTest(2, TwoSprite);
+	CardView->SetDurabilityDigitIconForTest(3, ThreeSprite);
+	CardView->TakeWidget();
+
+	FWacomCardViewData Data;
+	Data.Name = FText::FromString(TEXT("耐久复用测试"));
+	Data.Durability = 12;
+	Data.bShowDurability = true;
+	CardView->SetCardViewData(Data);
+
+	UPanelWidget* DigitsHost = CardView->GetDurabilityDigitsHostForTest();
+	TestNotNull(TEXT("DurabilityDigitsHost exists"), DigitsHost);
+	if (!DigitsHost || DigitsHost->GetChildrenCount() < 2)
+	{
+		return false;
+	}
+
+	UWidget* FirstDigit = DigitsHost->GetChildAt(0);
+	UWidget* SecondDigit = DigitsHost->GetChildAt(1);
+	Data.Durability = 13;
+	CardView->SetCardViewData(Data);
+
+	TestEqual(TEXT("Durability digit count remains two"), DigitsHost->GetChildrenCount(), 2);
+	TestTrue(TEXT("First durability digit image is reused"), DigitsHost->GetChildAt(0) == FirstDigit);
+	TestTrue(TEXT("Second durability digit image is reused"), DigitsHost->GetChildAt(1) == SecondDigit);
+	const UImage* ReusedSecondDigit = Cast<UImage>(DigitsHost->GetChildAt(1));
+	TestTrue(TEXT("Second reused digit gets new sprite"),
+		ReusedSecondDigit && ReusedSecondDigit->GetBrush().GetResourceObject() == ThreeSprite);
+
+	Data.Durability = 1;
+	CardView->SetCardViewData(Data);
+	TestEqual(TEXT("Durability host trims extra digit image"), DigitsHost->GetChildrenCount(), 1);
+	TestTrue(TEXT("First durability digit survives trim"), DigitsHost->GetChildAt(0) == FirstDigit);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackCardViewRetainerRefreshSpec,
 	"Wacom.UI.Backpack.CardViewRefreshInvalidatesRetainerCache",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -275,6 +436,107 @@ bool FWacomUIBackpackCardViewRetainerRefreshSpec::RunTest(const FString& /*Param
 	TestEqual(TEXT("Second type text refresh is preserved"),
 		CardView->GetCardViewData().TypeText.ToString(),
 		FString(TEXT("伙伴")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewEquivalentDataDirtyGateSpec,
+	"Wacom.UI.Backpack.CardViewSetCardViewDataSkipsEquivalentApplyAndRenderInvalidation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewEquivalentDataDirtyGateSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardViewSpecProbe> CardView(NewObject<UWacomCardViewSpecProbe>());
+	CardView->SetCostDigitIconForTest(1, NewObject<UPaperSprite>(CardView.Get()));
+	CardView->TakeWidget();
+
+	FWacomCardViewData Data;
+	Data.Name = FText::FromString(TEXT("等价刷新测试"));
+	Data.TypeText = FText::FromString(TEXT("技能"));
+	Data.Cost = 1;
+	Data.bShowCost = true;
+	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Damage, 7));
+
+	CardView->SetCardViewData(Data);
+	const int32 InitialInvalidationCount = CardView->GetRenderCacheInvalidationCountForTest();
+	const int32 InitialTextUpdateCount = CardView->GetTextDisplayUpdateCountForTest();
+	const int32 InitialCostUpdateCount = CardView->GetCostDisplayUpdateCountForTest();
+	const int32 InitialBadgeUpdateCount = CardView->GetEffectBadgeDisplayUpdateCountForTest();
+
+	CardView->SetCardViewData(Data);
+
+	TestEqual(TEXT("Equivalent card data skips render invalidation"),
+		CardView->GetRenderCacheInvalidationCountForTest(),
+		InitialInvalidationCount);
+	TestEqual(TEXT("Equivalent card data skips text update"),
+		CardView->GetTextDisplayUpdateCountForTest(),
+		InitialTextUpdateCount);
+	TestEqual(TEXT("Equivalent card data skips cost update"),
+		CardView->GetCostDisplayUpdateCountForTest(),
+		InitialCostUpdateCount);
+	TestEqual(TEXT("Equivalent card data skips badge update"),
+		CardView->GetEffectBadgeDisplayUpdateCountForTest(),
+		InitialBadgeUpdateCount);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewSectionDirtyGateSpec,
+	"Wacom.UI.Backpack.CardViewDataDirtyGateRefreshesOnlyChangedSections",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewSectionDirtyGateSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardViewSpecProbe> CardView(NewObject<UWacomCardViewSpecProbe>());
+	CardView->SetCostDigitIconForTest(1, NewObject<UPaperSprite>(CardView.Get()));
+	CardView->SetCostDigitIconForTest(2, NewObject<UPaperSprite>(CardView.Get()));
+	CardView->SetDurabilityDigitIconForTest(3, NewObject<UPaperSprite>(CardView.Get()));
+	CardView->SetRarityBorderSpriteForTest(WacomTags::Card_Rarity_Blue, NewObject<UPaperSprite>(CardView.Get()));
+	CardView->TakeWidget();
+
+	FWacomCardViewData Data;
+	Data.Name = FText::FromString(TEXT("分区刷新测试"));
+	Data.TypeText = FText::FromString(TEXT("技能"));
+	Data.Cost = 1;
+	Data.bShowCost = true;
+	Data.Rarity = WacomTags::Card_Rarity_Blue;
+	Data.Durability = 3;
+	Data.bShowDurability = true;
+	Data.bDisabled = false;
+	Data.Art = NewObject<UTexture2D>(CardView.Get());
+	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Damage, 7));
+	CardView->SetCardViewData(Data);
+
+	const int32 BaseInvalidation = CardView->GetRenderCacheInvalidationCountForTest();
+	const int32 BaseText = CardView->GetTextDisplayUpdateCountForTest();
+	const int32 BaseCost = CardView->GetCostDisplayUpdateCountForTest();
+	const int32 BaseDurability = CardView->GetDurabilityDisplayUpdateCountForTest();
+	const int32 BaseRarity = CardView->GetRarityDisplayUpdateCountForTest();
+	const int32 BaseArt = CardView->GetArtDisplayUpdateCountForTest();
+	const int32 BaseDisabled = CardView->GetDisabledDisplayUpdateCountForTest();
+	const int32 BaseBadges = CardView->GetEffectBadgeDisplayUpdateCountForTest();
+
+	FWacomCardViewData CostChanged = Data;
+	CostChanged.Cost = 2;
+	CardView->SetCardViewData(CostChanged);
+
+	TestEqual(TEXT("Cost change invalidates once"), CardView->GetRenderCacheInvalidationCountForTest(), BaseInvalidation + 1);
+	TestEqual(TEXT("Cost section refreshed"), CardView->GetCostDisplayUpdateCountForTest(), BaseCost + 1);
+	TestEqual(TEXT("Text section not refreshed by cost only"), CardView->GetTextDisplayUpdateCountForTest(), BaseText);
+	TestEqual(TEXT("Durability section not refreshed by cost only"), CardView->GetDurabilityDisplayUpdateCountForTest(), BaseDurability);
+	TestEqual(TEXT("Rarity section not refreshed by cost only"), CardView->GetRarityDisplayUpdateCountForTest(), BaseRarity);
+	TestEqual(TEXT("Art section not refreshed by cost only"), CardView->GetArtDisplayUpdateCountForTest(), BaseArt);
+	TestEqual(TEXT("Disabled section not refreshed by cost only"), CardView->GetDisabledDisplayUpdateCountForTest(), BaseDisabled);
+	TestEqual(TEXT("Badge section not refreshed by cost only"), CardView->GetEffectBadgeDisplayUpdateCountForTest(), BaseBadges);
+
+	FWacomCardViewData BadgeChanged = CostChanged;
+	BadgeChanged.EffectBadges[0].Value = 8;
+	CardView->SetCardViewData(BadgeChanged);
+	TestEqual(TEXT("Badge change invalidates once more"), CardView->GetRenderCacheInvalidationCountForTest(), BaseInvalidation + 2);
+	TestEqual(TEXT("Badge section refreshed"), CardView->GetEffectBadgeDisplayUpdateCountForTest(), BaseBadges + 1);
+	TestEqual(TEXT("Cost section not refreshed by badge only"), CardView->GetCostDisplayUpdateCountForTest(), BaseCost + 1);
 
 	return true;
 }
@@ -386,27 +648,6 @@ bool FWacomUIBackpackCardViewEffectStatsHostFiltersUnsupportedKindsSpec::RunTest
 	return true;
 }
 
-namespace
-{
-	FWacomCardViewEffectBadge MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind Kind, int32 Value)
-	{
-		FWacomCardViewEffectBadge Badge;
-		Badge.Kind = Kind;
-		Badge.Value = Value;
-		return Badge;
-	}
-
-	const UWacomCardEffectBadgeWidget* GetSingleSlotBadgeForTest(const UPanelWidget* Slot)
-	{
-		if (!Slot || Slot->GetChildrenCount() != 1)
-		{
-			return nullptr;
-		}
-
-		return Cast<UWacomCardEffectBadgeWidget>(Slot->GetChildAt(0));
-	}
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackCardViewEffectBadgeSlotsFillSequentiallySpec,
 	"Wacom.UI.Backpack.CardViewEffectBadgeSlotsFillSequentially",
@@ -493,9 +734,8 @@ bool FWacomUIBackpackCardViewEffectBadgeSlotsHideEmptyAndOverflowSpec::RunTest(c
 		}
 
 		const bool bExpectedOccupied = SlotIndex < 2;
-		TestEqual(FString::Printf(TEXT("Slot %d child count after short refresh"), SlotIndex + 1),
-			Slot->GetChildrenCount(),
-			bExpectedOccupied ? 1 : 0);
+		TestTrue(FString::Printf(TEXT("Slot %d keeps at most one reusable badge child after short refresh"), SlotIndex + 1),
+			Slot->GetChildrenCount() <= 1);
 		TestEqual(FString::Printf(TEXT("Slot %d visibility after short refresh"), SlotIndex + 1),
 			Slot->GetVisibility(),
 			bExpectedOccupied ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
@@ -535,6 +775,114 @@ bool FWacomUIBackpackCardViewEffectBadgeSlotsIgnoreUnsupportedKindsSpec::RunTest
 			Slot->GetVisibility(),
 			ESlateVisibility::Collapsed);
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewEffectBadgeSlotsReuseSpec,
+	"Wacom.UI.Backpack.CardViewEffectBadgeSlotsReuseWidgetsAcrossRefresh",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewEffectBadgeSlotsReuseSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardViewEffectBadgeSlotProbe> CardView(NewObject<UWacomCardViewEffectBadgeSlotProbe>());
+	CardView->TakeWidget();
+
+	FWacomCardViewData Data;
+	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Damage, 7));
+	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Shield, 5));
+	CardView->SetCardViewData(Data);
+
+	const UWacomCardEffectBadgeWidget* FirstSlotInitial =
+		GetSingleSlotBadgeForTest(CardView->GetEffectBadgeSlotForTest(0));
+	const UWacomCardEffectBadgeWidget* SecondSlotInitial =
+		GetSingleSlotBadgeForTest(CardView->GetEffectBadgeSlotForTest(1));
+	TestNotNull(TEXT("Initial first slot badge"), FirstSlotInitial);
+	TestNotNull(TEXT("Initial second slot badge"), SecondSlotInitial);
+	if (!FirstSlotInitial || !SecondSlotInitial)
+	{
+		return false;
+	}
+
+	Data.EffectBadges[0].Value = 8;
+	Data.EffectBadges[1].Value = 6;
+	CardView->SetCardViewData(Data);
+
+	TestTrue(TEXT("First slot reuses badge widget"),
+		GetSingleSlotBadgeForTest(CardView->GetEffectBadgeSlotForTest(0)) == FirstSlotInitial);
+	TestTrue(TEXT("Second slot reuses badge widget"),
+		GetSingleSlotBadgeForTest(CardView->GetEffectBadgeSlotForTest(1)) == SecondSlotInitial);
+	TestEqual(TEXT("Reused first slot badge gets updated value"),
+		FirstSlotInitial->GetEffectBadgeData().Value,
+		8);
+
+	Data.EffectBadges.SetNum(1);
+	CardView->SetCardViewData(Data);
+	UPanelWidget* SecondSlot = CardView->GetEffectBadgeSlotForTest(1);
+	TestNotNull(TEXT("Second slot still exists"), SecondSlot);
+	if (SecondSlot)
+	{
+		TestEqual(TEXT("Second slot collapses when no badge is assigned"),
+			SecondSlot->GetVisibility(),
+			ESlateVisibility::Collapsed);
+		TestTrue(TEXT("Second slot may retain one reusable hidden child"),
+			SecondSlot->GetChildrenCount() <= 1);
+	}
+
+	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Shield, 9));
+	CardView->SetCardViewData(Data);
+	TestTrue(TEXT("Second slot reuses hidden badge when occupied again"),
+		GetSingleSlotBadgeForTest(CardView->GetEffectBadgeSlotForTest(1)) == SecondSlotInitial);
+	TestEqual(TEXT("Reused hidden badge receives new value"),
+		SecondSlotInitial->GetEffectBadgeData().Value,
+		9);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardViewEffectStatsHostReuseSpec,
+	"Wacom.UI.Backpack.CardViewEffectStatsHostFallbackReusesWidgetsAcrossRefresh",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardViewEffectStatsHostReuseSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardViewSpecProbe> CardView(NewObject<UWacomCardViewSpecProbe>());
+	CardView->TakeWidget();
+
+	FWacomCardViewData Data;
+	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Damage, 7));
+	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Shield, 5));
+	CardView->SetCardViewData(Data);
+
+	UPanelWidget* Host = CardView->GetEffectStatsHostForTest();
+	TestNotNull(TEXT("Fallback EffectStatsHost exists"), Host);
+	if (!Host || Host->GetChildrenCount() < 2)
+	{
+		return false;
+	}
+
+	UWacomCardEffectBadgeWidget* FirstBadge = Cast<UWacomCardEffectBadgeWidget>(Host->GetChildAt(0));
+	UWacomCardEffectBadgeWidget* SecondBadge = Cast<UWacomCardEffectBadgeWidget>(Host->GetChildAt(1));
+	TestNotNull(TEXT("First fallback badge"), FirstBadge);
+	TestNotNull(TEXT("Second fallback badge"), SecondBadge);
+	if (!FirstBadge || !SecondBadge)
+	{
+		return false;
+	}
+
+	Data.EffectBadges[0].Value = 8;
+	Data.EffectBadges[1].Value = 6;
+	CardView->SetCardViewData(Data);
+	TestTrue(TEXT("First fallback badge is reused"), Host->GetChildAt(0) == FirstBadge);
+	TestTrue(TEXT("Second fallback badge is reused"), Host->GetChildAt(1) == SecondBadge);
+	TestEqual(TEXT("Fallback reused badge gets updated data"), FirstBadge->GetEffectBadgeData().Value, 8);
+
+	Data.EffectBadges.SetNum(1);
+	CardView->SetCardViewData(Data);
+	TestEqual(TEXT("Fallback host trims extra badge widgets"), Host->GetChildrenCount(), 1);
+	TestTrue(TEXT("Fallback first badge remains reused after trim"), Host->GetChildAt(0) == FirstBadge);
 
 	return true;
 }
@@ -615,6 +963,60 @@ bool FWacomUIBackpackCardEffectBadgeWidgetThreeDigitSpec::RunTest(const FString&
 			TestEqual(TEXT("Middle digit right padding"), Padding.Right, 1.0f);
 		}
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardEffectBadgeDigitReuseSpec,
+	"Wacom.UI.Backpack.CardEffectBadgeDigitImagesReuseAcrossValueRefresh",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardEffectBadgeDigitReuseSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomCardEffectBadgeSpecProbe> BadgeWidget(NewObject<UWacomCardEffectBadgeSpecProbe>());
+	UPaperSprite* ZeroSprite = NewObject<UPaperSprite>(BadgeWidget.Get());
+	UPaperSprite* OneSprite = NewObject<UPaperSprite>(BadgeWidget.Get());
+	UPaperSprite* TwoSprite = NewObject<UPaperSprite>(BadgeWidget.Get());
+	UPaperSprite* ThreeSprite = NewObject<UPaperSprite>(BadgeWidget.Get());
+	BadgeWidget->SetDigitSpriteForTest(0, ZeroSprite);
+	BadgeWidget->SetDigitSpriteForTest(1, OneSprite);
+	BadgeWidget->SetDigitSpriteForTest(2, TwoSprite);
+	BadgeWidget->SetDigitSpriteForTest(3, ThreeSprite);
+	BadgeWidget->SetMinimumDigitCountForTest(3);
+	BadgeWidget->TakeWidget();
+
+	FWacomCardViewEffectBadge Badge;
+	Badge.Kind = EWacomCardViewEffectBadgeKind::Damage;
+	Badge.Value = 12;
+	BadgeWidget->SetEffectBadgeData(Badge);
+
+	UPanelWidget* DigitHost = BadgeWidget->GetDigitHostForTest();
+	TestNotNull(TEXT("Effect badge DigitHost exists"), DigitHost);
+	if (!DigitHost || DigitHost->GetChildrenCount() < 3)
+	{
+		return false;
+	}
+
+	UWidget* FirstDigit = DigitHost->GetChildAt(0);
+	UWidget* SecondDigit = DigitHost->GetChildAt(1);
+	UWidget* ThirdDigit = DigitHost->GetChildAt(2);
+	const int32 ApplyCount = BadgeWidget->GetApplyCountForTest();
+	const int32 DigitUpdateCount = BadgeWidget->GetDigitImageUpdateCountForTest();
+
+	BadgeWidget->SetEffectBadgeData(Badge);
+	TestEqual(TEXT("Equivalent badge data skips apply"), BadgeWidget->GetApplyCountForTest(), ApplyCount);
+	TestEqual(TEXT("Equivalent badge data skips digit update"), BadgeWidget->GetDigitImageUpdateCountForTest(), DigitUpdateCount);
+
+	Badge.Value = 13;
+	BadgeWidget->SetEffectBadgeData(Badge);
+	TestEqual(TEXT("Effect badge keeps three digit images"), DigitHost->GetChildrenCount(), 3);
+	TestTrue(TEXT("First effect digit image reused"), DigitHost->GetChildAt(0) == FirstDigit);
+	TestTrue(TEXT("Second effect digit image reused"), DigitHost->GetChildAt(1) == SecondDigit);
+	TestTrue(TEXT("Third effect digit image reused"), DigitHost->GetChildAt(2) == ThirdDigit);
+	const UImage* ReusedThirdDigit = Cast<UImage>(DigitHost->GetChildAt(2));
+	TestTrue(TEXT("Third reused digit gets updated sprite"),
+		ReusedThirdDigit && ReusedThirdDigit->GetBrush().GetResourceObject() == ThreeSprite);
 
 	return true;
 }
@@ -1245,6 +1647,383 @@ bool FWacomUIBackpackStorageCardViewPayloadSpec::RunTest(const FString& /*Parame
 
 	Widget->SetProjectedFromBadgeText(FText::FromString(TEXT("来自 蛛茧绒囊")));
 	TestTrue(TEXT("Projected badge still available for snapshot projection cards"), Widget->IsProjectedFromBadgeVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenRefreshReusesCardWidgetsSpec,
+	"Wacom.UI.Backpack.BackpackScreenRefreshReusesCardWidgetsForEquivalentSnapshot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenRefreshReusesCardWidgetsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Capacity"), 4);
+	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Battle"));
+	UCardDefinition* FluxCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Flux"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	Run->AddCardToBackpack(FluxCard);
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0);
+	UWacomDeckCardWidget* InitialFlux = FWacomBackpackScreenProbe::FluxContentCard(*Screen, 0);
+	TestNotNull(TEXT("Initial battle widget"), InitialBattle);
+	TestNotNull(TEXT("Initial flux widget"), InitialFlux);
+
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestEqual(TEXT("Equivalent refresh reuses battle widget"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0), InitialBattle);
+	TestEqual(TEXT("Equivalent refresh reuses flux widget"), FWacomBackpackScreenProbe::FluxContentCard(*Screen, 0), InitialFlux);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenRefreshDirtyGateSkipsEquivalentListReconcileSpec,
+	"Wacom.UI.Backpack.BackpackScreenRefreshDirtyGateSkipsEquivalentListReconcile",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenRefreshDirtyGateSkipsEquivalentListReconcileSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Capacity"), 4);
+	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Battle"));
+	UCardDefinition* FluxCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Flux"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	Run->AddCardToBackpack(FluxCard);
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0);
+	UWacomDeckCardWidget* InitialFlux = FWacomBackpackScreenProbe::FluxContentCard(*Screen, 0);
+	TestNotNull(TEXT("Initial battle widget"), InitialBattle);
+	TestNotNull(TEXT("Initial flux widget"), InitialFlux);
+	const int32 BaselineApplyCount = FWacomBackpackScreenProbe::RefreshApplyCount(*Screen);
+	const int32 BaselineSkipCount = FWacomBackpackScreenProbe::RefreshSkipCount(*Screen);
+	const int32 BaselineSnapshotBuildCount = FWacomBackpackScreenProbe::SnapshotBuildCount(*Screen);
+	const int32 BaselineSnapshotSkipCount = FWacomBackpackScreenProbe::SnapshotRevisionSkipCount(*Screen);
+	TestTrue(TEXT("Initial refresh applies list reconcile"), BaselineApplyCount >= 1);
+	TestTrue(TEXT("Initial refresh builds storage snapshot"), BaselineSnapshotBuildCount >= 1);
+
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestEqual(TEXT("Equivalent revision refresh skips snapshot"), FWacomBackpackScreenProbe::SnapshotRevisionSkipCount(*Screen), BaselineSnapshotSkipCount + 1);
+	TestEqual(TEXT("Equivalent revision refresh does not build snapshot"), FWacomBackpackScreenProbe::SnapshotBuildCount(*Screen), BaselineSnapshotBuildCount);
+	TestEqual(TEXT("Equivalent revision refresh does not reach signature skip"), FWacomBackpackScreenProbe::RefreshSkipCount(*Screen), BaselineSkipCount);
+	TestEqual(TEXT("Equivalent refresh does not apply again"), FWacomBackpackScreenProbe::RefreshApplyCount(*Screen), BaselineApplyCount);
+	TestEqual(TEXT("Skipped refresh keeps battle widget"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0), InitialBattle);
+	TestEqual(TEXT("Skipped refresh keeps flux widget"), FWacomBackpackScreenProbe::FluxContentCard(*Screen, 0), InitialFlux);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenRefreshCreatesAndRemovesOnlyChangedCardWidgetsSpec,
+	"Wacom.UI.Backpack.BackpackScreenRefreshCreatesAndRemovesOnlyChangedCardWidgets",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenRefreshCreatesAndRemovesOnlyChangedCardWidgetsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Capacity"), 4);
+	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Battle"));
+	UCardDefinition* NewFluxCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.NewFlux"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0);
+	UWacomDeckCardWidget* InitialFlux = FWacomBackpackScreenProbe::FluxContentCard(*Screen, 0);
+	TestNotNull(TEXT("Initial battle widget"), InitialBattle);
+	TestNotNull(TEXT("Initial capacity card is visible as flux content"), InitialFlux);
+
+	Run->AddCardToBackpack(NewFluxCard);
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestEqual(TEXT("Existing battle widget stays reused"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0), InitialBattle);
+	TestEqual(TEXT("Existing flux widget stays reused"), FWacomBackpackScreenProbe::FluxContentCard(*Screen, 0), InitialFlux);
+	TestNotNull(TEXT("New flux widget created"), FWacomBackpackScreenProbe::FluxContentCard(*Screen, 1));
+
+	const FGuid BattleInstanceId = Run->GetBattleDeck().IsValidIndex(0)
+		? Run->GetBattleDeck()[0].InstanceId
+		: FGuid();
+	TestTrue(TEXT("Battle instance valid"), BattleInstanceId.IsValid());
+	TestTrue(TEXT("Move battle card to backpack"), Run->MoveInstance(BattleInstanceId, EZoneKind::Backpack, FGuid()));
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestTrue(TEXT("Moved battle widget no longer remains in battle list"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0) != InitialBattle);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenRefreshDirtyGateRefreshesMovedCardsSpec,
+	"Wacom.UI.Backpack.BackpackScreenRefreshDirtyGateRefreshesMovedCards",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenRefreshDirtyGateRefreshesMovedCardsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Move.Capacity"), 4);
+	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Move.Battle"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0);
+	TestNotNull(TEXT("Initial battle widget"), InitialBattle);
+	const int32 BaselineApplyCount = FWacomBackpackScreenProbe::RefreshApplyCount(*Screen);
+	const int32 BaselineSkipCount = FWacomBackpackScreenProbe::RefreshSkipCount(*Screen);
+	const int32 BaselineSnapshotBuildCount = FWacomBackpackScreenProbe::SnapshotBuildCount(*Screen);
+	TestTrue(TEXT("Initial refresh applies list reconcile"), BaselineApplyCount >= 1);
+	TestTrue(TEXT("Initial refresh builds storage snapshot"), BaselineSnapshotBuildCount >= 1);
+
+	const FGuid BattleInstanceId = Run->GetBattleDeck().IsValidIndex(0)
+		? Run->GetBattleDeck()[0].InstanceId
+		: FGuid();
+	TestTrue(TEXT("Move battle card to backpack"), Run->MoveInstance(BattleInstanceId, EZoneKind::Backpack, FGuid()));
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+
+	TestEqual(TEXT("Moved card refresh builds new storage snapshot"), FWacomBackpackScreenProbe::SnapshotBuildCount(*Screen), BaselineSnapshotBuildCount + 1);
+	TestEqual(TEXT("Moved card refresh applies list reconcile"), FWacomBackpackScreenProbe::RefreshApplyCount(*Screen), BaselineApplyCount + 1);
+	TestEqual(TEXT("Moved card refresh does not skip"), FWacomBackpackScreenProbe::RefreshSkipCount(*Screen), BaselineSkipCount);
+	TestTrue(TEXT("Moved battle widget no longer remains in battle list"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0) != InitialBattle);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenProjectedDuplicateCardsDoNotShareWidgetSpec,
+	"Wacom.UI.Backpack.BackpackScreenProjectedAndPhysicalDuplicateCardsDoNotShareWidget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenProjectedDuplicateCardsDoNotShareWidgetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* TypeB = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.TypeB"), 3, true);
+	UCardDefinition* Content = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Content"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { TypeB, Content });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	const FGuid OwnerId = Run->GetBackpack().IsValidIndex(0) ? Run->GetBackpack()[0].InstanceId : FGuid();
+	const FGuid ContentId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
+	TestTrue(TEXT("Owner id valid"), OwnerId.IsValid());
+	TestTrue(TEXT("Content id valid"), ContentId.IsValid());
+	TestTrue(TEXT("Move content to special"), Run->MoveInstance(ContentId, EZoneKind::SpecialZone, OwnerId));
+	TestTrue(TEXT("Move owner to battle"), Run->MoveInstance(OwnerId, EZoneKind::BattleDeck, FGuid()));
+	TestTrue(TEXT("Enable content projection"), Run->SetSpecialZoneCardBattleEnabled(ContentId, true));
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	UWacomDeckCardWidget* PhysicalOwnerWidget = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0);
+	UWacomDeckCardWidget* ProjectedContentWidget = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 1);
+	UWacomSpecialZoneWidget* SpecialZoneWidget = FWacomBackpackScreenProbe::SpecialZone(*Screen, 0);
+	TestNotNull(TEXT("Physical owner widget"), PhysicalOwnerWidget);
+	TestNotNull(TEXT("Projected content widget"), ProjectedContentWidget);
+	TestNotNull(TEXT("Special zone widget"), SpecialZoneWidget);
+	if (!SpecialZoneWidget)
+	{
+		return false;
+	}
+	UWacomDeckCardWidget* SpecialContentWidget = SpecialZoneWidget->GetContentCardWidgetForTest(0);
+	TestNotNull(TEXT("Special content widget"), SpecialContentWidget);
+	TestNotEqual(TEXT("Projected card does not share widget with special content"), ProjectedContentWidget, SpecialContentWidget);
+	TestEqual(TEXT("Projected widget is marked projected"),
+		ProjectedContentWidget ? ProjectedContentWidget->GetBackpackListReuseRole() : EWacomBackpackDeckCardListReuseRole::PhysicalList,
+		EWacomBackpackDeckCardListReuseRole::BattleDeckProjected);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenRefreshDirtyGateRefreshesProjectedAndSpecialZoneStateSpec,
+	"Wacom.UI.Backpack.BackpackScreenRefreshDirtyGateRefreshesProjectedAndSpecialZoneState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenRefreshDirtyGateRefreshesProjectedAndSpecialZoneStateSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* TypeB = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.TypeB"), 3, true);
+	UCardDefinition* Content = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Content"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { TypeB, Content });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	const FGuid OwnerId = Run->GetBackpack().IsValidIndex(0) ? Run->GetBackpack()[0].InstanceId : FGuid();
+	const FGuid ContentId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
+	TestTrue(TEXT("Move content to special"), Run->MoveInstance(ContentId, EZoneKind::SpecialZone, OwnerId));
+	TestTrue(TEXT("Move owner to battle"), Run->MoveInstance(OwnerId, EZoneKind::BattleDeck, FGuid()));
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	const int32 BaselineApplyCount = FWacomBackpackScreenProbe::RefreshApplyCount(*Screen);
+	const int32 BaselineSkipCount = FWacomBackpackScreenProbe::RefreshSkipCount(*Screen);
+	const int32 BaselineSnapshotBuildCount = FWacomBackpackScreenProbe::SnapshotBuildCount(*Screen);
+	TestTrue(TEXT("Initial refresh applies list reconcile"), BaselineApplyCount >= 1);
+	TestNull(TEXT("No projected content before enable"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 1));
+	UWacomSpecialZoneWidget* InitialZone = FWacomBackpackScreenProbe::SpecialZone(*Screen, 0);
+	TestNotNull(TEXT("Initial special zone"), InitialZone);
+
+	TestTrue(TEXT("Enable content projection"), Run->SetSpecialZoneCardBattleEnabled(ContentId, true));
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+
+	TestEqual(TEXT("Projection change builds new storage snapshot"), FWacomBackpackScreenProbe::SnapshotBuildCount(*Screen), BaselineSnapshotBuildCount + 1);
+	TestEqual(TEXT("Projection change applies list reconcile"), FWacomBackpackScreenProbe::RefreshApplyCount(*Screen), BaselineApplyCount + 1);
+	TestEqual(TEXT("Projection change does not skip"), FWacomBackpackScreenProbe::RefreshSkipCount(*Screen), BaselineSkipCount);
+	TestNotNull(TEXT("Projected content appears"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 1));
+	TestEqual(TEXT("Special zone widget reused while state refreshes"), FWacomBackpackScreenProbe::SpecialZone(*Screen, 0), InitialZone);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenReusableCardWidgetsResetStateSpec,
+	"Wacom.UI.Backpack.BackpackScreenReusableCardWidgetsResetProjectedBadgeAndToggleState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenReusableCardWidgetsResetStateSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* TypeB = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.TypeB"), 3, true);
+	UCardDefinition* Content = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Content"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { TypeB, Content });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	const FGuid OwnerId = Run->GetBackpack().IsValidIndex(0) ? Run->GetBackpack()[0].InstanceId : FGuid();
+	const FGuid ContentId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
+	TestTrue(TEXT("Move content to special"), Run->MoveInstance(ContentId, EZoneKind::SpecialZone, OwnerId));
+	TestTrue(TEXT("Move owner to battle"), Run->MoveInstance(OwnerId, EZoneKind::BattleDeck, FGuid()));
+	TestTrue(TEXT("Enable content projection"), Run->SetSpecialZoneCardBattleEnabled(ContentId, true));
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	UWacomDeckCardWidget* ProjectedWidget = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 1);
+	TestNotNull(TEXT("Projected widget exists"), ProjectedWidget);
+	if (!ProjectedWidget)
+	{
+		return false;
+	}
+	TestTrue(TEXT("Projected badge visible before disabling"), ProjectedWidget->IsProjectedFromBadgeVisible());
+
+	TestTrue(TEXT("Disable content projection"), Run->SetSpecialZoneCardBattleEnabled(ContentId, false));
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestNull(TEXT("Projected widget removed from battle list"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 1));
+
+	UWacomSpecialZoneWidget* SpecialZoneWidget = FWacomBackpackScreenProbe::SpecialZone(*Screen, 0);
+	UWacomDeckCardWidget* SpecialContentWidget = SpecialZoneWidget ? SpecialZoneWidget->GetContentCardWidgetForTest(0) : nullptr;
+	TestNotNull(TEXT("Special content widget remains"), SpecialContentWidget);
+	if (SpecialContentWidget)
+	{
+		TestFalse(TEXT("Special content has no projected badge after refresh"), SpecialContentWidget->IsProjectedFromBadgeVisible());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackSpecialZoneRefreshReusesWidgetsSpec,
+	"Wacom.UI.Backpack.BackpackSpecialZoneRefreshReusesZoneOwnerAndContentWidgets",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackSpecialZoneRefreshReusesWidgetsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* TypeB = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.TypeB"), 3, true);
+	UCardDefinition* Content = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Content"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { TypeB, Content });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	const FGuid OwnerId = Run->GetBackpack().IsValidIndex(0) ? Run->GetBackpack()[0].InstanceId : FGuid();
+	const FGuid ContentId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
+	TestTrue(TEXT("Move content to special"), Run->MoveInstance(ContentId, EZoneKind::SpecialZone, OwnerId));
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	UWacomSpecialZoneWidget* InitialZone = FWacomBackpackScreenProbe::SpecialZone(*Screen, 0);
+	UWacomDeckCardWidget* InitialOwner = InitialZone ? InitialZone->GetOwnerCardWidgetForTest() : nullptr;
+	UWacomDeckCardWidget* InitialContent = InitialZone ? InitialZone->GetContentCardWidgetForTest(0) : nullptr;
+	TestNotNull(TEXT("Initial zone"), InitialZone);
+	TestNotNull(TEXT("Initial owner"), InitialOwner);
+	TestNotNull(TEXT("Initial content"), InitialContent);
+
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	UWacomSpecialZoneWidget* RefreshedZone = FWacomBackpackScreenProbe::SpecialZone(*Screen, 0);
+	TestEqual(TEXT("Special zone widget reused"), RefreshedZone, InitialZone);
+	TestEqual(TEXT("Owner card widget reused"), RefreshedZone ? RefreshedZone->GetOwnerCardWidgetForTest() : nullptr, InitialOwner);
+	TestEqual(TEXT("Content card widget reused"), RefreshedZone ? RefreshedZone->GetContentCardWidgetForTest(0) : nullptr, InitialContent);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenRemovesHoveredSourceAndHidesDetailSpec,
+	"Wacom.UI.Backpack.BackpackScreenRemovesHoveredSourceAndHidesDetail",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenRemovesHoveredSourceAndHidesDetailSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Capacity"), 4);
+	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Battle"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	UWacomDeckCardWidget* BattleWidget = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0);
+	TestNotNull(TEXT("Battle widget"), BattleWidget);
+	if (!BattleWidget)
+	{
+		return false;
+	}
+	TestTrue(TEXT("Show detail for battle widget"), Screen->ShowCardDetailForCardWidget(BattleWidget));
+	TestTrue(TEXT("Detail visible before remove"), Screen->IsCardDetailPanelVisible());
+
+	const FGuid BattleId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
+	TestTrue(TEXT("Move battle card to backpack"), Run->MoveInstance(BattleId, EZoneKind::Backpack, FGuid()));
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestFalse(TEXT("Detail hidden after hovered source removed"), Screen->IsCardDetailPanelVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackScreenRefreshDirtyGateResetsAfterMissingRunOrWidgetRebuildSpec,
+	"Wacom.UI.Backpack.BackpackScreenRefreshDirtyGateResetsAfterMissingRunOrWidgetRebuild",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackScreenRefreshDirtyGateResetsAfterMissingRunOrWidgetRebuildSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Reset.Capacity"), 4);
+	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Reset.Battle"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
+	const int32 BaselineApplyCount = FWacomBackpackScreenProbe::RefreshApplyCount(*Screen);
+	const int32 BaselineSkipCount = FWacomBackpackScreenProbe::RefreshSkipCount(*Screen);
+	const int32 BaselineSnapshotBuildCount = FWacomBackpackScreenProbe::SnapshotBuildCount(*Screen);
+	const int32 BaselineSnapshotSkipCount = FWacomBackpackScreenProbe::SnapshotRevisionSkipCount(*Screen);
+	TestTrue(TEXT("Initial refresh applies list reconcile"), BaselineApplyCount >= 1);
+	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0);
+	TestNotNull(TEXT("Initial battle widget"), InitialBattle);
+
+	FWacomBackpackScreenProbe::SetRunSession(*Screen, nullptr);
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestNull(TEXT("Missing run clears battle list"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0));
+
+	FWacomBackpackScreenProbe::SetRunSession(*Screen, Run.Get());
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestEqual(TEXT("Restored run builds snapshot after dirty gate reset"), FWacomBackpackScreenProbe::SnapshotBuildCount(*Screen), BaselineSnapshotBuildCount + 1);
+	TestEqual(TEXT("Restored run applies after dirty gate reset"), FWacomBackpackScreenProbe::RefreshApplyCount(*Screen), BaselineApplyCount + 1);
+	TestNotNull(TEXT("Restored run rebuilds battle list"), FWacomBackpackScreenProbe::BattleDeckCard(*Screen, 0));
+
+	FWacomBackpackScreenProbe::Refresh(*Screen);
+	TestEqual(TEXT("Equivalent restored refresh skips snapshot"), FWacomBackpackScreenProbe::SnapshotRevisionSkipCount(*Screen), BaselineSnapshotSkipCount + 1);
+	TestEqual(TEXT("Equivalent restored refresh does not reach signature skip"), FWacomBackpackScreenProbe::RefreshSkipCount(*Screen), BaselineSkipCount);
 
 	return true;
 }

@@ -54,6 +54,18 @@ public:
 	/** 测试/诊断用：请求内容卡右键入战 toggle。 */
 	bool RequestContentCardBattleEnabledToggle(int32 Index) const;
 
+	/** 当前 SpecialZone owner instance id。用于父列表做增量复用，不暴露给蓝图。 */
+	FGuid GetOwnerCardInstanceId() const;
+
+	/** 当前区块是否持有该卡 widget。用于父 BackpackScreen 判断详情 source 是否已被移除。 */
+	bool ContainsCardWidget(const UWacomDeckCardWidget* Widget) const;
+
+#if WITH_AUTOMATION_TESTS
+	UWacomDeckCardWidget* GetOwnerCardWidgetForTest() const { return OwnerCardWidget; }
+	UWacomDeckCardWidget* GetContentCardWidgetForTest(int32 Index) const;
+	int32 GetContentCardWidgetCountForTest() const { return ContentCardWidgets.Num(); }
+#endif
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 

@@ -13,6 +13,7 @@
 #include "Styling/SlateBrush.h"
 #include "InputCoreTypes.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
 
 namespace
 {
@@ -258,24 +259,16 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
 void UWacomFirstPersonCardLayerSlotWidget::SetSlotMotionConfig(
 	const FWacomFirstPersonCardSlotMotionConfig& InConfig)
 {
-	SlotMotionConfig = InConfig;
-	SlotMotionConfig.MotionSpeed = FMath::Max(0.0f, SlotMotionConfig.MotionSpeed);
-	SlotMotionConfig.OpacitySpeed = FMath::Max(0.0f, SlotMotionConfig.OpacitySpeed);
-	SlotMotionConfig.EnterOpacity = FMath::Clamp(SlotMotionConfig.EnterOpacity, 0.0f, 1.0f);
-	SlotMotionConfig.ExitDuration = FMath::Max(0.0f, SlotMotionConfig.ExitDuration);
-	SlotMotionConfig.ResetDistancePixels = FMath::Max(0.0f, SlotMotionConfig.ResetDistancePixels);
-	SlotMotionConfig.DrawnEnterViewportAnchor.X = FMath::Clamp(SlotMotionConfig.DrawnEnterViewportAnchor.X, 0.0f, 1.0f);
-	SlotMotionConfig.DrawnEnterViewportAnchor.Y = FMath::Clamp(SlotMotionConfig.DrawnEnterViewportAnchor.Y, 0.0f, 1.0f);
-	SlotMotionConfig.DrawnEnterScaleMultiplier = FMath::Max(0.01f, SlotMotionConfig.DrawnEnterScaleMultiplier);
-	SlotMotionConfig.GainedEnterViewportAnchor.X = FMath::Clamp(SlotMotionConfig.GainedEnterViewportAnchor.X, 0.0f, 1.0f);
-	SlotMotionConfig.GainedEnterViewportAnchor.Y = FMath::Clamp(SlotMotionConfig.GainedEnterViewportAnchor.Y, 0.0f, 1.0f);
-	SlotMotionConfig.GainedEnterScaleMultiplier = FMath::Max(0.01f, SlotMotionConfig.GainedEnterScaleMultiplier);
-	SlotMotionConfig.PlayedExitViewportAnchor.X = FMath::Clamp(SlotMotionConfig.PlayedExitViewportAnchor.X, 0.0f, 1.0f);
-	SlotMotionConfig.PlayedExitViewportAnchor.Y = FMath::Clamp(SlotMotionConfig.PlayedExitViewportAnchor.Y, 0.0f, 1.0f);
-	SlotMotionConfig.PlayedExitScaleMultiplier = FMath::Max(0.01f, SlotMotionConfig.PlayedExitScaleMultiplier);
-	SlotMotionConfig.DiscardedExitViewportAnchor.X = FMath::Clamp(SlotMotionConfig.DiscardedExitViewportAnchor.X, 0.0f, 1.0f);
-	SlotMotionConfig.DiscardedExitViewportAnchor.Y = FMath::Clamp(SlotMotionConfig.DiscardedExitViewportAnchor.Y, 0.0f, 1.0f);
-	SlotMotionConfig.DiscardedExitScaleMultiplier = FMath::Max(0.01f, SlotMotionConfig.DiscardedExitScaleMultiplier);
+	const FWacomFirstPersonCardSlotMotionConfig NewConfig = NormalizeSlotMotionConfig(InConfig);
+	if (AreSlotMotionConfigsEquivalent(SlotMotionConfig, NewConfig))
+	{
+		return;
+	}
+
+	SlotMotionConfig = NewConfig;
+#if WITH_AUTOMATION_TESTS
+	++SlotMotionConfigApplyCountForTest;
+#endif
 	if (!SlotMotionConfig.bEnabled && bHasVisualSlotView)
 	{
 		SetSlotViewImmediate(TargetSlotView);
@@ -285,18 +278,16 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotMotionConfig(
 void UWacomFirstPersonCardLayerSlotWidget::SetSlotFeedbackConfig(
 	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig)
 {
-	SlotFeedbackConfig = InConfig;
-	SlotFeedbackConfig.PlayableHoverOpacity = FMath::Clamp(SlotFeedbackConfig.PlayableHoverOpacity, 0.0f, 1.0f);
-	SlotFeedbackConfig.PressedScale = FMath::Max(0.01f, SlotFeedbackConfig.PressedScale);
-	SlotFeedbackConfig.PressedOpacity = FMath::Clamp(SlotFeedbackConfig.PressedOpacity, 0.0f, 1.0f);
-	SlotFeedbackConfig.ConfirmDuration = FMath::Max(0.0f, SlotFeedbackConfig.ConfirmDuration);
-	SlotFeedbackConfig.ConfirmOpacity = FMath::Clamp(SlotFeedbackConfig.ConfirmOpacity, 0.0f, 1.0f);
-	SlotFeedbackConfig.DenyDuration = FMath::Max(0.0f, SlotFeedbackConfig.DenyDuration);
-	SlotFeedbackConfig.DenyShakePixels = FMath::Max(0.0f, SlotFeedbackConfig.DenyShakePixels);
-	SlotFeedbackConfig.DenyOpacity = FMath::Clamp(SlotFeedbackConfig.DenyOpacity, 0.0f, 1.0f);
-	SlotFeedbackConfig.PlayCommitDuration = FMath::Max(0.0f, SlotFeedbackConfig.PlayCommitDuration);
-	SlotFeedbackConfig.PlayCommitOpacity = FMath::Clamp(SlotFeedbackConfig.PlayCommitOpacity, 0.0f, 1.0f);
-	SlotFeedbackConfig.PlayCommitScale = FMath::Max(0.01f, SlotFeedbackConfig.PlayCommitScale);
+	const FWacomFirstPersonCardSlotFeedbackConfig NewConfig = NormalizeSlotFeedbackConfig(InConfig);
+	if (AreSlotFeedbackConfigsEquivalent(SlotFeedbackConfig, NewConfig))
+	{
+		return;
+	}
+
+	SlotFeedbackConfig = NewConfig;
+#if WITH_AUTOMATION_TESTS
+	++SlotFeedbackConfigApplyCountForTest;
+#endif
 	if (!SlotFeedbackConfig.bEnabled)
 	{
 		ClearInteractionFeedback();
@@ -307,26 +298,16 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotFeedbackConfig(
 void UWacomFirstPersonCardLayerSlotWidget::SetCardDragConfig(
 	const FWacomFirstPersonCardDragConfig& InConfig)
 {
-	CardDragConfig = InConfig;
-	CardDragConfig.CardInspectHoldDelaySeconds = FMath::Max(0.0f, CardDragConfig.CardInspectHoldDelaySeconds);
-	CardDragConfig.CardDragStartThresholdPixels = FMath::Max(0.0f, CardDragConfig.CardDragStartThresholdPixels);
-	CardDragConfig.NoTargetCardDragOutCommitDistancePixels =
-		FMath::Max(0.0f, CardDragConfig.NoTargetCardDragOutCommitDistancePixels);
-	CardDragConfig.CardInspectScreenPosition.X = FMath::Clamp(CardDragConfig.CardInspectScreenPosition.X, 0.0f, 1.0f);
-	CardDragConfig.CardInspectScreenPosition.Y = FMath::Clamp(CardDragConfig.CardInspectScreenPosition.Y, 0.0f, 1.0f);
-	CardDragConfig.CardInspectScale = FMath::Max(0.01f, CardDragConfig.CardInspectScale);
-	CardDragConfig.CardDragCameraLookScale = FMath::Max(0.0f, CardDragConfig.CardDragCameraLookScale);
-	CardDragConfig.DragTargetFeedbackOpacity =
-		FMath::Clamp(CardDragConfig.DragTargetFeedbackOpacity, 0.0f, 1.0f);
-	CardDragConfig.DragAimArrowSnapBlend =
-		FMath::Clamp(CardDragConfig.DragAimArrowSnapBlend, 0.0f, 1.0f);
-	CardDragConfig.DragCommitReadyScale = FMath::Max(0.01f, CardDragConfig.DragCommitReadyScale);
-	CardDragConfig.DragCardTargetProbeScale = FMath::Max(0.01f, CardDragConfig.DragCardTargetProbeScale);
-	CardDragConfig.SelectedSourceLiftPixels = FMath::Max(0.0f, CardDragConfig.SelectedSourceLiftPixels);
-	CardDragConfig.SelectedSourceScale = FMath::Max(0.01f, CardDragConfig.SelectedSourceScale);
-	CardDragConfig.SelectedSourceZOrderBoost = FMath::Max(0, CardDragConfig.SelectedSourceZOrderBoost);
-	CardDragConfig.SelectedSourceAngleBlend =
-		FMath::Clamp(CardDragConfig.SelectedSourceAngleBlend, 0.0f, 1.0f);
+	const FWacomFirstPersonCardDragConfig NewConfig = NormalizeCardDragConfig(InConfig);
+	if (AreCardDragConfigsEquivalent(CardDragConfig, NewConfig))
+	{
+		return;
+	}
+
+	CardDragConfig = NewConfig;
+#if WITH_AUTOMATION_TESTS
+	++CardDragConfigApplyCountForTest;
+#endif
 	if (!CardDragConfig.bEnableFirstPersonCardDragCommit)
 	{
 		ClearGestureState(true);
@@ -526,6 +507,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	OnCardClickedNative.Clear();
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
+	OnCardVisualSlotUpdatedNative.Clear();
 	OnCardTargetHoveredNative.Clear();
 	OnCardTargetUnhoveredNative.Clear();
 	OnCardDragStartedNative.Clear();
@@ -627,6 +609,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	{
 		UpdateWantsTick();
 	}
+	BroadcastVisualSlotUpdatedIfNeeded(PreviousVisualSlotView, VisualSlotView);
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseEnter(
@@ -909,6 +892,32 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 	SetRenderTransform(CardRenderTransform);
 	ApplyFeedbackOverlay();
 	UpdateVisibilityForInteractionMode();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BroadcastVisualSlotUpdatedIfNeeded(
+	const FWacomFirstPersonCardLayerSlotView& PreviousVisualSlotView,
+	const FWacomFirstPersonCardLayerSlotView& CurrentVisualSlotView)
+{
+	if (!bIsHoveredForFirstPersonLayer || !CurrentSlotView.Entry.CardInstanceId.IsValid())
+	{
+		return;
+	}
+
+	const bool bVisualChanged =
+		FVector2D::Distance(PreviousVisualSlotView.ScreenPosition, CurrentVisualSlotView.ScreenPosition) > 0.1f
+		|| FMath::Abs(PreviousVisualSlotView.RenderAngleDegrees - CurrentVisualSlotView.RenderAngleDegrees) > 0.05f
+		|| FMath::Abs(PreviousVisualSlotView.RenderScale - CurrentVisualSlotView.RenderScale) > 0.001f
+		|| FMath::Abs(PreviousVisualSlotView.RenderOpacity - CurrentVisualSlotView.RenderOpacity) > 0.01f
+		|| PreviousVisualSlotView.ZOrder != CurrentVisualSlotView.ZOrder
+		|| PreviousVisualSlotView.bProjected != CurrentVisualSlotView.bProjected;
+	if (!bVisualChanged)
+	{
+		return;
+	}
+
+	FWacomFirstPersonCardLayerSlotView UpdatedSlotView = CurrentVisualSlotView;
+	UpdatedSlotView.bIsHovered = true;
+	OnCardVisualSlotUpdatedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, UpdatedSlotView);
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::CanInteractWithCurrentSlot() const

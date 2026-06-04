@@ -1850,6 +1850,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 		{
 			RefreshCardLayoutPresetRuntimeState();
 			const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
+			const uint32 ConfigHash = BuildResolvedLayoutConfigHash(Config);
 			StaticCardLayerWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 			StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
 			StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
@@ -1857,6 +1858,14 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 			StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this, Config));
 			StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
 			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
+			bHasAppliedStaticLayerConfig = true;
+			LastAppliedStaticLayerConfigHash = ConfigHash;
+			LastAppliedStaticLayerCardViewClass = FirstPersonCardViewClass.Get();
+			bLastAppliedStaticLayerLogDiagnostics = bLogCardLayerMotionDiagnostics;
+			bLastAppliedStaticLayerInteractionEnabled = bEnableBattleHandInteractionPrototype;
+#if WITH_AUTOMATION_TESTS
+			++StaticLayerConfigApplyCountForTest;
+#endif
 			BindStaticCardLayerWidget(StaticCardLayerWidget);
 			AddStaticCardLayerWidgetToViewportForAnchor(StaticCardLayerWidget, StaticCardLayerZOrder);
 		}
@@ -1866,11 +1875,30 @@ void UWacomFirstPersonCardAnchorComponent::UpdateStaticCardLayer()
 	{
 		RefreshCardLayoutPresetRuntimeState();
 		const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
-		StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
-		StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(Config));
-		StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this, Config));
-		StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
-		StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
+		const uint32 ConfigHash = BuildResolvedLayoutConfigHash(Config);
+		const bool bConfigChanged =
+			!bHasAppliedStaticLayerConfig
+			|| LastAppliedStaticLayerConfigHash != ConfigHash
+			|| LastAppliedStaticLayerCardViewClass.Get() != FirstPersonCardViewClass.Get()
+			|| bLastAppliedStaticLayerLogDiagnostics != bLogCardLayerMotionDiagnostics
+			|| bLastAppliedStaticLayerInteractionEnabled != bEnableBattleHandInteractionPrototype;
+		if (bConfigChanged)
+		{
+			StaticCardLayerWidget->SetSlotMotionConfig(BuildSlotMotionConfig(Config));
+			StaticCardLayerWidget->SetSlotFeedbackConfig(BuildSlotFeedbackConfig(Config));
+			StaticCardLayerWidget->SetCardDragConfig(BuildCardDragConfig(*this, Config));
+			StaticCardLayerWidget->SetLogSlotMotionDiagnostics(bLogCardLayerMotionDiagnostics);
+			StaticCardLayerWidget->SetCardViewClass(FirstPersonCardViewClass);
+			StaticCardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteractionPrototype);
+			bHasAppliedStaticLayerConfig = true;
+			LastAppliedStaticLayerConfigHash = ConfigHash;
+			LastAppliedStaticLayerCardViewClass = FirstPersonCardViewClass.Get();
+			bLastAppliedStaticLayerLogDiagnostics = bLogCardLayerMotionDiagnostics;
+			bLastAppliedStaticLayerInteractionEnabled = bEnableBattleHandInteractionPrototype;
+#if WITH_AUTOMATION_TESTS
+			++StaticLayerConfigApplyCountForTest;
+#endif
+		}
 		if (RuntimeCardLayerTransitionHintSourceId == RuntimeCardLayerSourceId
 			&& RuntimeCardLayerTransitionHints.Num() > 0)
 		{
@@ -1900,6 +1928,11 @@ void UWacomFirstPersonCardAnchorComponent::RemoveStaticCardLayer()
 		StaticCardLayerWidget->RemoveFromParent();
 		StaticCardLayerWidget = nullptr;
 	}
+	bHasAppliedStaticLayerConfig = false;
+	LastAppliedStaticLayerConfigHash = 0;
+	LastAppliedStaticLayerCardViewClass.Reset();
+	bLastAppliedStaticLayerLogDiagnostics = false;
+	bLastAppliedStaticLayerInteractionEnabled = false;
 	RuntimeCardLayerTransitionHints.Reset();
 	RuntimeCardLayerTransitionHintSourceId = NAME_None;
 	HoveredCardInstanceId.Invalidate();

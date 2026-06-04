@@ -293,11 +293,15 @@ public:
 	bool RequestGesturePressForTest(const FVector2D& ScreenPosition);
 	void RequestGestureMoveForTest(float DeltaTime, const FVector2D& ScreenPosition);
 	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
+	int32 GetSlotMotionConfigApplyCountForTest() const { return SlotMotionConfigApplyCountForTest; }
+	int32 GetSlotFeedbackConfigApplyCountForTest() const { return SlotFeedbackConfigApplyCountForTest; }
+	int32 GetCardDragConfigApplyCountForTest() const { return CardDragConfigApplyCountForTest; }
 #endif
 
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardClickedNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardUnhoveredNative;
+	FWacomFirstPersonCardLayerSlotInteractionNative OnCardVisualSlotUpdatedNative;
 	FWacomFirstPersonCardLayerSlotTargetNative OnCardTargetHoveredNative;
 	FWacomFirstPersonCardLayerSlotTargetNative OnCardTargetUnhoveredNative;
 	FWacomFirstPersonCardLayerSlotDragNative OnCardDragStartedNative;
@@ -372,6 +376,9 @@ private:
 	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 #if WITH_AUTOMATION_TESTS
 	TOptional<FVector2D> LocalHitCanvasSizeOverrideForTest;
+	int32 SlotMotionConfigApplyCountForTest = 0;
+	int32 SlotFeedbackConfigApplyCountForTest = 0;
+	int32 CardDragConfigApplyCountForTest = 0;
 #endif
 
 	void EnsureCardView();
@@ -379,6 +386,9 @@ private:
 	void ApplyCurrentSlotView();
 	void ApplyVisualSlotView();
 	void ApplySlotViewToWidget(const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void BroadcastVisualSlotUpdatedIfNeeded(
+		const FWacomFirstPersonCardLayerSlotView& PreviousVisualSlotView,
+		const FWacomFirstPersonCardLayerSlotView& CurrentVisualSlotView);
 	bool CanInteractWithCurrentSlot() const;
 	bool CanApplyPlayableHoverFeedback() const;
 	bool CanClickCurrentSlot() const;

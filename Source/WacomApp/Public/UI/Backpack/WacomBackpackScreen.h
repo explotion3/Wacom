@@ -24,6 +24,7 @@ class UWacomZoneDropTarget;
 class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
 class UWacomCardDragOperation;
+struct FWacomBackpackScreenProbe;
 struct FCardInstance;
 
 /**
@@ -94,6 +95,9 @@ protected:
 
 	/** Provider 广播回调。 */
 	void HandleViewModelRefreshed();
+
+	/** 可测试覆写：生产路径仍从 OwningPlayer 拿当前 RunSession。 */
+	virtual URunSession* ResolveRunSession() const;
 
 	/** 订阅 Provider（如果还没订阅）+ 刷新一次。 */
 	void TrySubscribeAndRefresh();
@@ -204,6 +208,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
 
+	TWeakObjectPtr<UWacomDeckCardWidget> CardDetailSourceWidget;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomBackpackZoneSectionWidget> BattleDeckZoneSection;
 
@@ -241,9 +247,48 @@ private:
 	void RebuildFluxContentCards(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildSpecialZones(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildBurdenZone(const FRunBackpackStorageSnapshot& Snapshot);
+	void ResetBackpackRefreshDirtyGate();
 
 	void HandleCardHovered(UWacomDeckCardWidget* SourceWidget);
 	void HandleCardUnhovered(UWacomDeckCardWidget* SourceWidget);
 	UWacomCardDetailPanel* EnsureCardDetailPanel();
 	void PositionCardDetailPanelNear(UWacomDeckCardWidget* SourceWidget);
+	void HideCardDetailPanelIfSourceRemoved(UWacomDeckCardWidget* RemovedWidget);
+
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomBackpackScreenProbe;
+
+	UWacomDeckCardWidget* GetBattleDeckCardWidgetForTest(int32 Index) const;
+	UWacomDeckCardWidget* GetFluxContentCardWidgetForTest(int32 Index) const;
+	UWacomDeckCardWidget* GetBurdenCardWidgetForTest(int32 Index) const;
+	UWacomSpecialZoneWidget* GetSpecialZoneWidgetForTest(int32 Index) const;
+	void RebuildAllForTest() { RebuildAll(); }
+	int32 GetBackpackListRefreshApplyCountForTest() const { return BackpackListRefreshApplyCountForTest; }
+	int32 GetBackpackListRefreshSkipCountForTest() const { return BackpackListRefreshSkipCountForTest; }
+	int32 GetBackpackSnapshotBuildCountForTest() const { return BackpackSnapshotBuildCountForTest; }
+	int32 GetBackpackSnapshotRevisionSkipCountForTest() const { return BackpackSnapshotRevisionSkipCountForTest; }
+
+	void SetRunSessionForTest(URunSession* InRunSession)
+	{
+		if (RunSessionOverrideForTest != InRunSession)
+		{
+			RunSessionOverrideForTest = InRunSession;
+			ResetBackpackRefreshDirtyGate();
+		}
+	}
+#endif
+
+	uint32 LastBackpackStorageRefreshSignature = 0;
+	bool bHasLastBackpackStorageRefreshSignature = false;
+	uint64 LastBackpackStorageSnapshotRevision = 0;
+	bool bHasLastBackpackStorageSnapshotRevision = false;
+	TWeakObjectPtr<URunSession> LastBackpackStorageRunSession;
+
+#if WITH_AUTOMATION_TESTS
+	int32 BackpackListRefreshApplyCountForTest = 0;
+	int32 BackpackListRefreshSkipCountForTest = 0;
+	int32 BackpackSnapshotBuildCountForTest = 0;
+	int32 BackpackSnapshotRevisionSkipCountForTest = 0;
+	URunSession* RunSessionOverrideForTest = nullptr;
+#endif
 };

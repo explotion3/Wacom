@@ -25,6 +25,7 @@
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "Engine/HitResult.h"
+#include "RunState.h"
 #include "WacomShopRunEventTestProbes.generated.h"
 
 class URunSession;
@@ -626,12 +627,31 @@ class UWacomShopScreenProbe : public UWacomShopScreen
 public:
 	void SetRunSession(URunSession* InRunSession)
 	{
-		RunSession = InRunSession;
+		if (RunSession != InRunSession)
+		{
+			UnsubscribeRunSession();
+			RunSession = InRunSession;
+			ResetShopOfferRefreshDirtyGate();
+		}
 	}
 
 	void SetToastSubsystem(UWacomAppToastSubsystem* InToastSubsystem)
 	{
 		ToastSubsystem = InToastSubsystem;
+	}
+
+	void SetShopSnapshotOverride(FRunShopSnapshot InSnapshot)
+	{
+		bUseShopSnapshotOverride = true;
+		ShopSnapshotOverride = MoveTemp(InSnapshot);
+		ResetShopOfferRefreshDirtyGate();
+	}
+
+	void ClearShopSnapshotOverride()
+	{
+		bUseShopSnapshotOverride = false;
+		ShopSnapshotOverride = FRunShopSnapshot();
+		ResetShopOfferRefreshDirtyGate();
 	}
 
 	FText ReadGoldText() const
@@ -647,6 +667,31 @@ public:
 	FWacomShopOfferPresentationView ReadOfferPresentationView(int32 Index) const
 	{
 		return GetCachedOfferView(Index);
+	}
+
+	UWacomShopOfferRowWidget* ReadOfferRowWidget(int32 Index) const
+	{
+		return GetOfferRowWidgetForTest(Index);
+	}
+
+	int32 ReadOfferRefreshApplyCount() const
+	{
+		return GetShopOfferRefreshApplyCountForTest();
+	}
+
+	int32 ReadOfferRefreshSkipCount() const
+	{
+		return GetShopOfferRefreshSkipCountForTest();
+	}
+
+	int32 ReadShopSnapshotBuildCount() const
+	{
+		return GetShopSnapshotBuildCountForTest();
+	}
+
+	int32 ReadShopSnapshotRevisionSkipCount() const
+	{
+		return GetShopSnapshotRevisionSkipCountForTest();
 	}
 
 	bool PurchaseOfferAt(int32 Index)
@@ -675,12 +720,22 @@ protected:
 		return ToastSubsystem ? ToastSubsystem.Get() : UWacomShopScreen::ResolveToastSubsystem();
 	}
 
+	virtual FRunShopSnapshot BuildShopSnapshot() const override
+	{
+		return bUseShopSnapshotOverride ? ShopSnapshotOverride : UWacomShopScreen::BuildShopSnapshot();
+	}
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSession = nullptr;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomAppToastSubsystem> ToastSubsystem = nullptr;
+
+	bool bUseShopSnapshotOverride = false;
+
+	UPROPERTY(Transient)
+	FRunShopSnapshot ShopSnapshotOverride;
 };
 
 UCLASS()

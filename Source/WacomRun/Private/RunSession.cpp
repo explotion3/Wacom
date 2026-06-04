@@ -22,6 +22,42 @@
 
 namespace
 {
+	enum class ERunUiSnapshotDirtyFlag : uint8
+	{
+		None = 0,
+		BackpackStorage = 1 << 0,
+		Shop = 1 << 1,
+		Economy = 1 << 2,
+	};
+
+	uint8 MakeRunUiSnapshotDirtyFlags()
+	{
+		return static_cast<uint8>(ERunUiSnapshotDirtyFlag::None);
+	}
+
+	uint8 MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag Flag)
+	{
+		return static_cast<uint8>(Flag);
+	}
+
+	uint8 MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag A, ERunUiSnapshotDirtyFlag B)
+	{
+		return static_cast<uint8>(A) | static_cast<uint8>(B);
+	}
+
+	uint8 MakeRunUiSnapshotDirtyFlags(
+		ERunUiSnapshotDirtyFlag A,
+		ERunUiSnapshotDirtyFlag B,
+		ERunUiSnapshotDirtyFlag C)
+	{
+		return static_cast<uint8>(A) | static_cast<uint8>(B) | static_cast<uint8>(C);
+	}
+
+	bool HasRunUiSnapshotDirtyFlag(uint8 DirtyFlags, ERunUiSnapshotDirtyFlag Flag)
+	{
+		return (DirtyFlags & static_cast<uint8>(Flag)) != 0;
+	}
+
 	/**
 	 * Definition 级旧 API 在 instance 模型下统一匹配第一个同定义实例。
 	 * Card == nullptr 视为找不到，调用方自行决定返回 false 或记录日志。
@@ -117,6 +153,47 @@ namespace
 			Request.BlockedKeywords.Num());
 	}
 
+	uint8 GetRunWorldCardInteractionDirtyFlags(
+		const FRunWorldCardInteractionRequest& Request)
+	{
+		uint8 DirtyFlags = MakeRunUiSnapshotDirtyFlags();
+		if (Request.bConsumeCardOnSuccess || GetRunWorldCardInteractionCardRewardCount(Request.Rewards) > 0)
+		{
+			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage);
+		}
+		if (GetRunWorldCardInteractionGoldTotal(Request.Rewards) > 0)
+		{
+			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy);
+		}
+		return DirtyFlags;
+	}
+
+	uint8 GetRunEventChoiceResultDirtyFlags(const FRunEventChoiceResult& Result)
+	{
+		uint8 DirtyFlags = MakeRunUiSnapshotDirtyFlags();
+		if (Result.PaidCardInstanceId.IsValid())
+		{
+			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage);
+		}
+		for (const FRunEventChoiceEffectResult& EffectResult : Result.EffectResults)
+		{
+			if (!EffectResult.bApplied)
+			{
+				continue;
+			}
+			if (EffectResult.EffectType == EWacomRunEventEffectType::GainCard
+				|| EffectResult.EffectType == EWacomRunEventEffectType::RemoveCard)
+			{
+				DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage);
+			}
+			else if (EffectResult.EffectType == EWacomRunEventEffectType::AddGold)
+			{
+				DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy);
+			}
+		}
+		return DirtyFlags;
+	}
+
 }
 
 // ================ 通知辅助 ================
@@ -126,6 +203,22 @@ void URunSession::NotifyRunStateChanged()
 	// OnRunStateChangedNative 是原生委托，订阅方用 AddUObject + RemoveAll(this) 管理生命周期。
 	// 当前粗粒度广播不区分变更字段，订阅方按需读 RunState 全量。
 	OnRunStateChangedNative.Broadcast();
+}
+
+void URunSession::MarkRunUiSnapshotsDirty(uint8 DirtyFlags)
+{
+	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlag::BackpackStorage))
+	{
+		++BackpackStorageSnapshotRevision;
+	}
+	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlag::Shop))
+	{
+		++ShopSnapshotRevision;
+	}
+	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlag::Economy))
+	{
+		++EconomySnapshotRevision;
+	}
 }
 
 void URunSession::EnsureSpecialZoneEntryFor(const FCardInstance& Inst)
@@ -216,6 +309,11 @@ bool URunSession::Initialize(UCharacterDefinition* InCharacter)
 		RunState.BattleDeck.Num(),
 		GetFluxCapacity(),
 		RunState.RemainingNodeCount);
+	MarkRunUiSnapshotsDirty(
+		MakeRunUiSnapshotDirtyFlags(
+			ERunUiSnapshotDirtyFlag::BackpackStorage,
+			ERunUiSnapshotDirtyFlag::Shop,
+			ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -385,6 +483,11 @@ bool URunSession::ApplySaveGameToRunState(UWacomSaveGame* SaveGame)
 	{
 		return false;
 	}
+	MarkRunUiSnapshotsDirty(
+		MakeRunUiSnapshotDirtyFlags(
+			ERunUiSnapshotDirtyFlag::BackpackStorage,
+			ERunUiSnapshotDirtyFlag::Shop,
+			ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -562,6 +665,7 @@ void URunSession::RecomputeBurden()
 	// Public 入口：内部完成容量重算，末尾统一广播一次。
 	// 其他 public 入口会调用 RecomputeBurdenInternal，避免重复广播。
 	RecomputeBurdenInternal();
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 	NotifyRunStateChanged();
 }
 
@@ -696,6 +800,7 @@ bool URunSession::SetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnable
 			if (Inst.InstanceId == InstanceId)
 			{
 				Inst.bBattleEnabledInSpecialZone = bEnabled;
+				MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 				NotifyRunStateChanged();
 				return true;
 			}
@@ -1052,6 +1157,7 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 	{
 		RecomputeBurdenInternal();
 	}
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1080,6 +1186,7 @@ void URunSession::AddCardToBackpack(UCardDefinition* Card)
 	// 容器卡新加入时贡献新容量，可能让超容卡变得不再超容；非容器卡新加入则可能造成超容。
 	// 任何情况都重算一次。走不广播的私有路径，本函数尾部统一 NotifyRunStateChanged 一次。
 	RecomputeBurdenInternal();
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 	NotifyRunStateChanged();
 }
 
@@ -1087,6 +1194,7 @@ void URunSession::AcquireCardToRun(UCardDefinition* Card)
 {
 	if (AcquireCardToRunInternal(Card))
 	{
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 		NotifyRunStateChanged();
 	}
 }
@@ -1118,6 +1226,7 @@ bool URunSession::DestroyCardFromBackpack(UCardDefinition* Card)
 	const bool bOk = DestroyCardFromBackpackInternal(Card);
 	if (bOk)
 	{
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 		NotifyRunStateChanged();
 	}
 	return bOk;
@@ -1142,6 +1251,7 @@ bool URunSession::DestroyCardByInstance(FGuid InstanceId)
 	const bool bOk = DestroyCardByInstanceInternal(InstanceId);
 	if (bOk)
 	{
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 		NotifyRunStateChanged();
 	}
 	return bOk;
@@ -1192,6 +1302,10 @@ bool URunSession::DeleteCardForGold(UCardDefinition* Card)
 	UE_LOG(LogTemp, Display,
 		TEXT("[RunSession] DeleteCardForGold: %s → +%d gold (total=%d)"),
 		*GetNameSafe(Card), GoldReward, RunState.Gold);
+	MarkRunUiSnapshotsDirty(
+		MakeRunUiSnapshotDirtyFlags(
+			ERunUiSnapshotDirtyFlag::BackpackStorage,
+			ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1225,6 +1339,10 @@ bool URunSession::DeleteCardForGoldByInstance(FGuid InstanceId)
 	UE_LOG(LogTemp, Display,
 		TEXT("[RunSession] DeleteCardForGoldByInstance: %s → +%d gold (total=%d)"),
 		*InstanceId.ToString(), GoldReward, RunState.Gold);
+	MarkRunUiSnapshotsDirty(
+		MakeRunUiSnapshotDirtyFlags(
+			ERunUiSnapshotDirtyFlag::BackpackStorage,
+			ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1295,6 +1413,7 @@ bool URunSession::AddCardToBattleDeck(UCardDefinition* Card)
 	// 普通卡转移会让 Backpack 卡数下降，可能让 Burden 减少。
 	// 走不广播的私有路径，本函数尾部统一 NotifyRunStateChanged 一次。
 	RecomputeBurdenInternal();
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 	NotifyRunStateChanged();
 
 	return true;
@@ -1334,6 +1453,7 @@ bool URunSession::RemoveCardFromBattleDeck(UCardDefinition* Card)
 	// 卡数从备战区移到背包，可能让背包超容。
 	// 走不广播的私有路径，本函数尾部统一 NotifyRunStateChanged 一次。
 	RecomputeBurdenInternal();
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 	NotifyRunStateChanged();
 
 	return true;
@@ -1348,6 +1468,7 @@ void URunSession::AddGold(int32 Amount)
 		return;
 	}
 	RunState.Gold += Amount;
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 }
 
@@ -1365,6 +1486,7 @@ bool URunSession::RemoveGold(int32 Amount)
 		return false;
 	}
 	RunState.Gold -= Amount;
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1409,6 +1531,7 @@ bool URunSession::CollectGoldPickup(FName PersistentId, int32 GoldAmount)
 		*PersistentId.ToString(),
 		GoldAmount,
 		RunState.Gold);
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1445,6 +1568,7 @@ bool URunSession::CollectCardPickup(FName PersistentId, UCardDefinition* CardDef
 		TEXT("[RunSession] CollectCardPickup: PersistentId=%s Card=%s"),
 		*PersistentId.ToString(),
 		*GetNameSafe(CardDefinition));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1634,6 +1758,7 @@ bool URunSession::SubmitRunWorldCardInteraction(
 		GetRunWorldCardInteractionGoldTotal(Request.Rewards),
 		GetRunWorldCardInteractionCardRewardCount(Request.Rewards),
 		RunState.Gold);
+	MarkRunUiSnapshotsDirty(GetRunWorldCardInteractionDirtyFlags(Request));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1644,6 +1769,7 @@ bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>&
 {
 	if (FRunShopTransaction::BeginVisit(RunState, ShopId, Offers))
 	{
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Shop));
 		NotifyRunStateChanged();
 		return true;
 	}
@@ -1659,10 +1785,12 @@ void URunSession::EndShopVisit()
 
 	if (FRunShopTransaction::EndVisit(RunState))
 	{
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Shop));
 		ConsumeNode(1);
 	}
 	else
 	{
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Shop));
 		NotifyRunStateChanged();
 	}
 }
@@ -1686,6 +1814,11 @@ bool URunSession::PurchaseShopOffer(FGuid OfferId)
 		return false;
 	}
 
+	MarkRunUiSnapshotsDirty(
+		MakeRunUiSnapshotDirtyFlags(
+			ERunUiSnapshotDirtyFlag::BackpackStorage,
+			ERunUiSnapshotDirtyFlag::Shop,
+			ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1705,6 +1838,10 @@ bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
 		return false;
 	}
 
+	MarkRunUiSnapshotsDirty(
+		MakeRunUiSnapshotDirtyFlags(
+			ERunUiSnapshotDirtyFlag::BackpackStorage,
+			ERunUiSnapshotDirtyFlag::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1758,6 +1895,7 @@ FRunEventChoiceResult URunSession::ChooseRunEventOptionWithResult(FName ChoiceId
 	FRunEventChoiceResult Result = FRunEventExecutor::ChooseOption(RunState, ChoiceId);
 	if (Result.bSucceeded)
 	{
+		MarkRunUiSnapshotsDirty(GetRunEventChoiceResultDirtyFlags(Result));
 		NotifyRunStateChanged();
 	}
 	return Result;
@@ -1778,6 +1916,7 @@ FRunEventChoiceResult URunSession::ChooseRunEventOptionWithPaidCardResult(
 		FRunEventExecutor::ChooseOptionWithPaidCard(RunState, ChoiceId, PaidCardInstanceId);
 	if (Result.bSucceeded)
 	{
+		MarkRunUiSnapshotsDirty(GetRunEventChoiceResultDirtyFlags(Result));
 		NotifyRunStateChanged();
 	}
 	return Result;

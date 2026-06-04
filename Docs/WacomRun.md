@@ -238,6 +238,40 @@ V0-BT 后，场景 ShopTrigger 的 Validate Map/Level 按运行时口径校验�
 
 ---
 
+## §6.1 Run UI Snapshot Revisions
+
+`URunSession` 提供三类 C++ 只读 transient revision，给 App 层 UI 做刷新门控：
+
+- `GetBackpackStorageSnapshotRevision()`：背包物理持有区、SpecialZone、入战投影、容量 / 负重等背包显示事实变化时递增。
+- `GetShopSnapshotRevision()`：active shop、商品库存 / 顺序 / 身份、购买状态和本次访问购买标记变化时递增。
+- `GetEconomySnapshotRevision()`：金币变化时递增。
+
+这些 revision 不写入 `FRunState` / SaveGame，不暴露 Blueprint API，也不替代规则校验。它们只用于 `UWacomBackpackScreen` / `UWacomShopScreen` 在事件驱动刷新时跳过昂贵 Snapshot 构建；revision 变化后 UI 仍会继续走各自的 signature dirty gate 和 widget identity reconcile。
+
+维护约定：
+
+- 修改 `RunState` 后仍保留 `NotifyRunStateChanged()` 粗粒度广播。
+- 会改变 Backpack / Shop / Economy UI Snapshot 事实的事务，必须在广播前通过 `RunSession.cpp` 私有 dirty flags 入口标记对应 revision。
+- RunEvent 和 Run world card interaction 的影响面由局部 helper 从成功 result / reward / consume fact 统一推导，避免在多个 if 分支里重复写 bump 条件。
+- `Wacom.Run.SnapshotRevisions` 是 drift guard。新增 Run mutation 后，优先把“应该 bump / 不该 bump”的事实补进该组测试。
+
+| 事务 / 路径 | BackpackStorage | Shop | Economy |
+|---|---:|---:|---:|
+| Initialize / ResetRunState / ApplySaveGameToRunState | 是 | 是 | 是 |
+| RecomputeBurden、MoveInstance、AddCardToBackpack / AcquireCardToRun、DestroyCard、Add / Remove BattleDeck | 是 | 否 | 否 |
+| SpecialZone 入战投影开关 | 是 | 否 | 否 |
+| CollectCardPickup、Run world card reward、Run world consume source card、Battle gained card | 是 | 否 | 否 |
+| DeleteCardForGold / PurchaseCardFromShop | 是 | 否 | 是 |
+| AddGold / RemoveGold / CollectGoldPickup / Run world gold reward | 否 | 否 | 是 |
+| BeginShopVisit / EndShopVisit | 否 | 是 | 否 |
+| PurchaseShopOffer | 是 | 是 | 是 |
+| RunEvent paid card、GainCard、RemoveCard | 是 | 否 | 否 |
+| RunEvent AddGold | 否 | 否 | 是 |
+| RunEvent AddPressure、ConsumeNode、MarkEventCompleted、SetRunFlag / ClearRunFlag、open / close event | 否 | 否 | 否 |
+| 压力、时段、触发器销毁、Battle pressure / exp / defeated enemy / progress only | 否 | 否 | 否 |
+
+---
+
 ## §7 探索 RunEvent 规则
 
 RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，运行态以场景事件 Actor 的 `PersistentId` 为 key。

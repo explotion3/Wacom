@@ -37,6 +37,15 @@ void UWacomDeckCardWidget::SetCard(const FCardInstance& Inst, EZoneKind InFromZo
 	RefreshContentFromCard();
 }
 
+void UWacomDeckCardWidget::PrepareForBackpackListReuse()
+{
+	bDragVisualMode = false;
+	SetRenderOpacity(WacomDeckCardNormalOpacity);
+	SetProjectedFromBadgeText(FText::GetEmpty());
+	SetRightClickToggleEnabled(false);
+	ApplyDragSourceVisualState(false);
+}
+
 void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)
 {
 	bCardInteractionEnabled = bEnabled;

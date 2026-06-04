@@ -83,6 +83,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	const FRunState& GetRunState() const { return RunState; }
 
+	/** Transient C++-only UI refresh revisions; not serialized and not exposed to Blueprint. */
+	uint64 GetBackpackStorageSnapshotRevision() const { return BackpackStorageSnapshotRevision; }
+	uint64 GetShopSnapshotRevision() const { return ShopSnapshotRevision; }
+	uint64 GetEconomySnapshotRevision() const { return EconomySnapshotRevision; }
+
 	/** 是否仍在 Run 中（bRunActive == true）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	bool IsRunActive() const { return RunState.bRunActive; }
@@ -808,6 +813,8 @@ private:
 	friend struct FWacomRunSessionTestAccess;
 #endif
 
+	void MarkRunUiSnapshotsDirty(uint8 DirtyFlags);
+
 	/**
 	 * 当 ExperienceCurrent ≥ ExperienceCapacity 时入账技能（可多次）。
 	 * 当前用占位 tag `SkillSlot.Placeholder`，不挂效果。
@@ -819,6 +826,8 @@ private:
 	 *
 	 * 调用约定：每个修改 RunState 字段的 public 入口在末尾调用一次。
 	 * 失败/拒绝路径（提前 return）不调用。
+	 * 会改变 Backpack / Shop / Economy UI Snapshot 事实的事务，必须先调用
+	 * MarkRunUiSnapshotsDirty(...) 标记对应 transient revision。
 	 *
 	 * 内部互调（例如 AddCardToBackpack 调 RecomputeBurden）由外层入口统一发，
 	 * 内部辅助不发，避免一次操作多次广播的尾部串。
@@ -890,6 +899,10 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|Run", Transient)
 	FRunState RunState;
+
+	uint64 BackpackStorageSnapshotRevision = 0;
+	uint64 ShopSnapshotRevision = 0;
+	uint64 EconomySnapshotRevision = 0;
 };
 
 #if WITH_AUTOMATION_TESTS
