@@ -71,6 +71,13 @@ public:
 
 	bool HandleMoveInput(const FVector2D& Input);
 	bool HandleLookInput(const FVector2D& Input);
+	void SetCursorLookOverrideNormalized(FVector2D NormalizedCursor, float Scale = 1.0f, float InterpSpeedOverride = -1.0f);
+	void ClearCursorLookOverride();
+
+#if WITH_AUTOMATION_TESTS
+	bool HasCursorLookOverrideForTest() const { return bHasCursorLookOverride; }
+	FVector2D GetCursorLookOverrideNormalizedForTest() const { return CursorLookOverrideNormalized; }
+#endif
 
 protected:
 	virtual void BeginPlay() override;
@@ -85,6 +92,10 @@ private:
 	float MoveAxis = 0.0f;
 	bool bRunTunnelActive = false;
 	bool bRunTunnelSuspended = false;
+	bool bHasCursorLookOverride = false;
+	FVector2D CursorLookOverrideNormalized = FVector2D::ZeroVector;
+	float CursorLookOverrideScale = 1.0f;
+	float CursorLookOverrideInterpSpeed = -1.0f;
 
 	AWacomPlayerCharacter* GetOwnerCharacter() const;
 	APlayerController* GetOwnerPlayerController() const;

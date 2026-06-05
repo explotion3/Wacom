@@ -201,6 +201,14 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bConfirmFeedbackActive = false;
 	bool bCommitFeedbackActive = false;
 	bool bCardDragProbeFeedback = false;
+	bool bCardDragTargetAffordanceFeedback = false;
+	bool bCardDragTargetFocusActive = false;
+	EWacomFirstPersonCardDragTargetFeedbackState CardDragTargetAffordanceFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+	EWacomFirstPersonCardDragTargetFeedbackState CardDragTargetFocusFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+	EWacomFirstPersonCardDragTargetFeedbackState DirectDragTargetFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
@@ -256,6 +264,11 @@ public:
 		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
 			EWacomFirstPersonCardDragTargetFeedbackState::None,
 		bool bValidTarget = false);
+	void SetCardDragTargetFocusFeedback(
+		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
+			EWacomFirstPersonCardDragTargetFeedbackState::None,
+		bool bValidTarget = false);
+	void ClearCardDragTargetFeedback();
 	void CancelCardDragGesture(bool bBroadcastCancel);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
@@ -278,7 +291,11 @@ public:
 	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const { return GestureState; }
 	EWacomFirstPersonCardDragTargetFeedbackState GetDragTargetFeedbackStateForFirstPersonLayer() const
 	{
-		return DragTargetFeedbackState;
+		return ResolveEffectiveDragTargetFeedbackState();
+	}
+	EWacomFirstPersonCardDragTargetFeedbackState GetCardDragTargetAffordanceFeedbackStateForFirstPersonLayer() const
+	{
+		return CardDragTargetAffordanceFeedbackState;
 	}
 	FWacomFirstPersonCardDragView BuildDragView() const;
 	void SetHoveredFromFirstPersonLayer(bool bHovered);
@@ -381,6 +398,14 @@ private:
 	bool bHasFeedbackTargetScreenPosition = false;
 	bool bCardDragProbeFeedback = false;
 	bool bCardDragProbeFeedbackValid = false;
+	bool bCardDragTargetAffordanceFeedback = false;
+	bool bCardDragTargetAffordanceFeedbackValid = false;
+	EWacomFirstPersonCardDragTargetFeedbackState CardDragTargetAffordanceFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+	EWacomFirstPersonCardDragTargetFeedbackState CardDragTargetFocusFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
+	EWacomFirstPersonCardDragTargetFeedbackState DirectDragTargetFeedbackState =
+		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FVector2D PointerViewportPosition = FVector2D::ZeroVector;
@@ -398,6 +423,7 @@ private:
 	void ApplyCurrentSlotView();
 	void ApplyVisualSlotView();
 	void ApplySlotViewToWidget(const FWacomFirstPersonCardLayerSlotView& SlotView);
+	EWacomFirstPersonCardDragTargetFeedbackState ResolveEffectiveDragTargetFeedbackState() const;
 	void BroadcastVisualSlotUpdatedIfNeeded(
 		const FWacomFirstPersonCardLayerSlotView& PreviousVisualSlotView,
 		const FWacomFirstPersonCardLayerSlotView& CurrentVisualSlotView);

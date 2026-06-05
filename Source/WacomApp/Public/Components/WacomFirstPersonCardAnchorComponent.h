@@ -236,6 +236,15 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float CardDragCameraLookInterpSpeedOverride = -1.0f;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
+	bool bAllowCameraLookDuringCardPointer = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
+	float CardPointerCameraLookScale = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
+	float CardPointerCameraLookInterpSpeedOverride = -1.0f;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	bool bEnableDragTargetFeedback = true;
 
@@ -262,6 +271,15 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float DragCardTargetProbeScale = 1.025f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float DragCardTargetFocusLiftPixels = 18.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	float DragCardTargetFocusScale = 1.045f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	int32 DragCardTargetFocusZOrderBoost = 650;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float SelectedSourceLiftPixels = 36.0f;
@@ -616,7 +634,30 @@ struct WACOMAPP_API FWacomFirstPersonCardDragView
 	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 };
 
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardPointerView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
+	FGuid CardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
+	FWacomFirstPersonCardLayerSlotView SlotView;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
+	bool bHasPointerViewportPosition = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
+	FVector2D PointerViewportPosition = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
+	FVector2D PointerNormalizedViewportPosition = FVector2D::ZeroVector;
+};
+
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerAnchorDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FWacomFirstPersonCardLayerAnchorPointerNative, const FWacomFirstPersonCardPointerView&);
+DECLARE_MULTICAST_DELEGATE(FWacomFirstPersonCardLayerAnchorPointerExitNative);
 
 /**
  * Computes the first-person virtual card hand anchor used by future HUD-rendered
@@ -990,14 +1031,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "是否输出第一人称卡牌拖拽/瞄准诊断日志；默认关闭，仅用于排查手势状态，不改变拖拽语义。"))
 	bool bLogCardDragDiagnostics = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Commit", meta = (ToolTip = "拖拽第一人称卡牌时是否继续让战斗镜头根据拖拽指针轻微偏转。开启后保留 UI 鼠标捕获，但 BattleCameraLook 会使用拖拽指针作为临时 cursor look 输入。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Commit", meta = (ToolTip = "拖拽第一人称卡牌时是否继续让当前第一人称镜头根据拖拽指针轻微偏转。开启后保留 UI 鼠标捕获，Battle 使用 BattleCameraLook，探索使用 RunTunnel cursor look 作为临时输入。"))
 	bool bAllowCameraLookDuringCardDrag = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Commit", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2.0", ToolTip = "拖拽期间传给 BattleCameraLook 的 cursor look 强度倍率；1 表示沿用战斗镜头自身 LookYawScale / LookPitchScale，0 表示拖拽期间不推动镜头偏转。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Commit", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2.0", ToolTip = "拖拽期间传给当前 first-person cursor look 的强度倍率；1 表示沿用当前镜头自身 LookYawScale / LookPitchScale，0 表示拖拽期间不推动镜头偏转。"))
 	float CardDragCameraLookScale = 1.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Commit", meta = (UIMin = "-1.0", UIMax = "60.0", ToolTip = "拖拽期间 BattleCameraLook 追向拖拽指针的插值速度覆盖值；小于 0 时沿用 BattleCameraLook 自身 LookInterpSpeed，0 表示立即贴合。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Commit", meta = (UIMin = "-1.0", UIMax = "60.0", ToolTip = "拖拽期间当前 first-person cursor look 追向拖拽指针的插值速度覆盖值；小于 0 时沿用当前镜头自身 LookInterpSpeed，0 表示立即贴合。"))
 	float CardDragCameraLookInterpSpeedOverride = -1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Pointer Camera Look", meta = (ToolTip = "鼠标悬浮或拖拽第一人称卡牌时，是否继续让当前第一人称镜头根据卡牌指针位置偏转。开启后即使 UMG 处理 mouse move，Battle / Run 也会收到临时 cursor look 输入。"))
+	bool bAllowCameraLookDuringCardPointer = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Pointer Camera Look", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2.0", ToolTip = "悬浮或拖拽第一人称卡牌期间传给当前 first-person cursor look 的强度倍率；1 表示沿用当前镜头自身 LookYawScale / LookPitchScale，0 表示不推动镜头偏转。"))
+	float CardPointerCameraLookScale = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Pointer Camera Look", meta = (UIMin = "-1.0", UIMax = "60.0", ToolTip = "悬浮或拖拽第一人称卡牌期间当前 first-person cursor look 追向卡牌指针的插值速度覆盖值；小于 0 时沿用当前镜头自身 LookInterpSpeed，0 表示立即贴合。"))
+	float CardPointerCameraLookInterpSpeedOverride = -1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ToolTip = "拖拽第一人称卡牌时是否显示释放目标反馈。开启后箭头、源卡和被指向卡槽会根据当前目标合法性显示轻量提示。"))
 	bool bEnableDragTargetFeedback = true;
@@ -1025,6 +1075,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ClampMin = "0.01", UIMin = "0.9", UIMax = "1.2", ToolTip = "拖拽指向另一张第一人称卡牌时，被指向卡槽额外乘上的缩放倍率；只表示 Card target probe。"))
 	float DragCardTargetProbeScale = 1.025f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "48.0", ToolTip = "拖拽指向另一张第一人称卡牌时，被指向卡槽额外上浮距离，单位为 UMG 布局像素；只影响拖拽目标 focus 视觉，不触发普通 hover。"))
+	float DragCardTargetFocusLiftPixels = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ClampMin = "0.01", UIMin = "1.0", UIMax = "1.12", ToolTip = "拖拽指向另一张第一人称卡牌时，被指向卡槽额外乘上的 focus 缩放倍率；不改变稳定命中范围。"))
+	float DragCardTargetFocusScale = 1.045f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Drag Target Feedback", meta = (ClampMin = "0", UIMin = "0", UIMax = "1400", ToolTip = "拖拽指向另一张第一人称卡牌时，被指向卡槽额外增加的 ZOrder 层级；用于确保目标卡显示在相邻手牌之上。"))
+	int32 DragCardTargetFocusZOrderBoost = 650;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Card Layer")
 	void RefreshAnchor(float DeltaTime);
@@ -1107,6 +1166,8 @@ public:
 	FWacomFirstPersonCardLayerAnchorDragNative OnFirstPersonCardLayerDragUpdated;
 	FWacomFirstPersonCardLayerAnchorDragNative OnFirstPersonCardLayerDragReleased;
 	FWacomFirstPersonCardLayerAnchorDragNative OnFirstPersonCardLayerDragCancelled;
+	FWacomFirstPersonCardLayerAnchorPointerNative OnFirstPersonCardLayerPointerMoved;
+	FWacomFirstPersonCardLayerAnchorPointerExitNative OnFirstPersonCardLayerPointerLeft;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "获取第一人称卡牌 Anchor 的单行调试摘要；用于排查 anchor、投影、runtime source 和手势状态。"))
 	FString GetDebugSummary() const;
@@ -1223,6 +1284,8 @@ private:
 	void HandleLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandleLayerPointerLeft();
 	static FString AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode);
 	static FString ProjectionModeToString(EWacomFirstPersonCardProjectionMode Mode);
 	static FString LayoutModeToString(EWacomFirstPersonCardLayoutMode Mode);

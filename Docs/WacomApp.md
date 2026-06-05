@@ -110,7 +110,7 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 
 PlayerController 上的 `PushMappingContext / PopMappingContext` helper 仍保留为兼容 / 调试入口；正式流程由 coordinator 管理。PlayerController BeginPlay、MenuGameMode BeginPlay 和 GameMode BeginPlay 都会初始化或重设 coordinator，防止 PIE 复用 Controller 时输入状态停留在上一关。
 
-Run Tunnel 是探索期默认移动模型，不再有正式普通 FPS FreeLook 探索 profile。进入战斗时 `UWacomRunTunnelMovementComponent` 只 `Suspend`，保留当前 Segment / Distance；战斗结束后先停用 Battle camera look，再让 coordinator 回到 `Exploration`，Run Tunnel `Resume` 后继续沿原 tunnel path 移动。
+Run Tunnel 是探索期默认移动模型，不再有正式普通 FPS FreeLook 探索 profile。进入战斗时 `UWacomRunTunnelMovementComponent` 只 `Suspend`，保留当前 Segment / Distance；战斗结束后先停用 Battle camera look，再让 coordinator 回到 `Exploration`，Run Tunnel `Resume` 后继续沿原 tunnel path 移动。探索期 hover 或拖动 first-person 卡牌时，UMG 仍可处理 / 捕获鼠标；PlayerController 会把卡牌指针的归一化视口坐标临时写入 Run Tunnel cursor look override，让鼠标在卡牌上移动时视角也继续跟随。pointer leave、release、cancel 或清理卡层时恢复普通 cursor look。
 
 当前 IA 口径：
 
@@ -203,6 +203,8 @@ GameMode 退出战斗时：
 8. 非 Undetermined 战斗结束后消耗 1 节点。
 
 退出战斗回到 Exploration 后，PlayerController 会重新激活并刷新 `UWacomRunFirstPersonCardSourceComponent`，让 first-person card layer 再次显示当前 Run BattleDeck。这个刷新只读 Run snapshot，不提交 Run 命令。
+
+`UBattleHUD::NativeDestruct()` 可能在 Run first-person source 恢复之后才执行。BattleHUD 清理 first-person hand 时只允许清自己写入的 `BattleHand` runtime source；如果 Anchor 已经显示 `RunFirstPersonBattleDeck` 或 menu lease，只能解绑 BattleHUD delegate 和清战斗预览，不能关闭 Anchor 的 first-person card interaction。否则会出现回到 Exploration 后卡牌仍可见但无法拖拽 / 使用。
 
 战斗结果包和 Run 结算规则见 [WacomRun.md](./WacomRun.md)；战斗内规则见 [WacomBattle.md](./WacomBattle.md)。
 

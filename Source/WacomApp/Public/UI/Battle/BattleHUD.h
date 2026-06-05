@@ -664,6 +664,8 @@ private:
 	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandleFirstPersonCardLayerPointerLeft();
 	void ApplyFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
 	void ClearFirstPersonCardDragCameraLookOverride();
 	void UpdateFirstPersonCardDragTargetFeedback(

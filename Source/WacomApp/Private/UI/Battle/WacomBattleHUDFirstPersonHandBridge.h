@@ -63,11 +63,15 @@ public:
 	void HandleDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandlePointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandlePointerLeft();
 
 	void ApplyDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
 	void ClearDragCameraLookOverride();
+	void ApplyPointerCameraLookOverride(const FWacomFirstPersonCardPointerView& PointerView);
+	void ClearPointerCameraLookOverride();
 	void UpdateDragTargetFeedback(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
-	void ClearDragTargetFeedback();
+	void ClearDragTargetFeedback(bool bClearFirstPersonCardLayerFeedback = true);
 
 	FWacomBattleCardDropResolveResult ResolveDropIntent(
 		const FGuid& CardInstanceId,

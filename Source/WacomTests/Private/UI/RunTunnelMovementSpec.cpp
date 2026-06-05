@@ -190,6 +190,70 @@ bool FWacomRunTunnelMovementInactiveInputTest::RunTest(const FString& Parameters
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunTunnelMovementCursorLookOverrideTest,
+	"Wacom.UI.RunTunnel.CursorLookOverrideUsesDragPointerAndClears",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunTunnelMovementCursorLookOverrideTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomRunTunnelMovementSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomRunTunnelMovementCharacterProbe* Character =
+		World->SpawnActor<AWacomRunTunnelMovementCharacterProbe>(
+			AWacomRunTunnelMovementCharacterProbe::StaticClass(),
+			FTransform::Identity);
+	AWacomRunTunnelSegmentActor* Segment = WacomRunTunnelMovementSpec::SpawnTestSegment(
+		*World,
+		FVector::ZeroVector,
+		FVector(1000.0f, 0.0f, 0.0f));
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Segment"), Segment))
+	{
+		return false;
+	}
+
+	UWacomRunTunnelMovementComponent* TunnelComponent =
+		Character->GetRunTunnelMovementComponent();
+	UWacomCursorLookDriverComponent* Driver =
+		Character->GetCursorLookDriverComponent();
+	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent)
+		|| !TestNotNull(TEXT("Cursor look driver"), Driver))
+	{
+		return false;
+	}
+
+	TunnelComponent->YawClampDegrees = 10.0f;
+	TunnelComponent->PitchClampDegrees = 6.0f;
+	TunnelComponent->LookYawScale = 1.0f;
+	TunnelComponent->LookPitchScale = 1.0f;
+	TunnelComponent->LookInterpSpeed = 0.0f;
+	TestTrue(TEXT("Tunnel activates"), TunnelComponent->ActivateRunTunnel(Segment, 0.0f));
+
+	TunnelComponent->SetCursorLookOverrideNormalized(FVector2D(0.75f, -0.5f), 0.5f, 0.0f);
+	TestTrue(TEXT("Override state active"), TunnelComponent->HasCursorLookOverrideForTest());
+	TestEqual(
+		TEXT("Override normalized cursor stored"),
+		TunnelComponent->GetCursorLookOverrideNormalizedForTest(),
+		FVector2D(0.75f, -0.5f));
+
+	Character->HandleLookInputForTest(FVector2D::ZeroVector);
+	const FRotator LookOffset = Driver->GetCurrentLookOffset();
+	TestEqual(TEXT("Override drives yaw through scale"), LookOffset.Yaw, 3.75);
+	TestEqual(TEXT("Override drives pitch through scale"), LookOffset.Pitch, 1.5);
+
+	TunnelComponent->ClearCursorLookOverride();
+	TestFalse(TEXT("Override state cleared"), TunnelComponent->HasCursorLookOverrideForTest());
+
+	Segment->Destroy();
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunTunnelMovementSuspendResumeTest,
 	"Wacom.UI.RunTunnel.SuspendResumePreservesSegment",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

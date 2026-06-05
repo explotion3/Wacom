@@ -94,6 +94,7 @@ void UWacomRunTunnelMovementComponent::DeactivateRunTunnel()
 
 	bRunTunnelActive = false;
 	bRunTunnelSuspended = false;
+	ClearCursorLookOverride();
 	ActiveSegment.Reset();
 	DistanceAlongSpline = 0.0f;
 	MoveAxis = 0.0f;
@@ -114,6 +115,7 @@ bool UWacomRunTunnelMovementComponent::SuspendRunTunnel()
 
 	bRunTunnelSuspended = true;
 	MoveAxis = 0.0f;
+	ClearCursorLookOverride();
 	SetComponentTickEnabled(false);
 	return true;
 }
@@ -148,6 +150,7 @@ bool UWacomRunTunnelMovementComponent::SwitchToSegment(
 	ActiveSegment = TargetSegment;
 	DistanceAlongSpline = TargetSegment->GetClampedDistance(StartDistance);
 	MoveAxis = 0.0f;
+	ClearCursorLookOverride();
 	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
 	{
 		Driver->ResetLookOffset();
@@ -181,6 +184,27 @@ bool UWacomRunTunnelMovementComponent::HandleLookInput(const FVector2D& Input)
 
 	UpdateCursorLook(0.0f);
 	return true;
+}
+
+void UWacomRunTunnelMovementComponent::SetCursorLookOverrideNormalized(
+	FVector2D NormalizedCursor,
+	float Scale,
+	float InterpSpeedOverride)
+{
+	CursorLookOverrideNormalized = FVector2D(
+		FMath::Clamp(NormalizedCursor.X, -1.0f, 1.0f),
+		FMath::Clamp(NormalizedCursor.Y, -1.0f, 1.0f));
+	CursorLookOverrideScale = FMath::Max(0.0f, Scale);
+	CursorLookOverrideInterpSpeed = InterpSpeedOverride;
+	bHasCursorLookOverride = true;
+}
+
+void UWacomRunTunnelMovementComponent::ClearCursorLookOverride()
+{
+	bHasCursorLookOverride = false;
+	CursorLookOverrideNormalized = FVector2D::ZeroVector;
+	CursorLookOverrideScale = 1.0f;
+	CursorLookOverrideInterpSpeed = -1.0f;
 }
 
 AWacomPlayerCharacter* UWacomRunTunnelMovementComponent::GetOwnerCharacter() const
@@ -225,6 +249,23 @@ void UWacomRunTunnelMovementComponent::UpdateCursorLook(float DeltaTime)
 	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
 	if (!Driver)
 	{
+		return;
+	}
+
+	if (bHasCursorLookOverride)
+	{
+		const float Scale = FMath::Max(0.0f, CursorLookOverrideScale);
+		const float InterpSpeed = CursorLookOverrideInterpSpeed >= 0.0f
+			? CursorLookOverrideInterpSpeed
+			: LookInterpSpeed;
+		Driver->UpdateFromNormalizedCursor(
+			CursorLookOverrideNormalized,
+			DeltaTime,
+			YawClampDegrees,
+			PitchClampDegrees,
+			LookYawScale * Scale,
+			LookPitchScale * Scale,
+			InterpSpeed);
 		return;
 	}
 

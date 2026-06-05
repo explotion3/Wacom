@@ -400,6 +400,9 @@ namespace WacomFirstPersonCardLayerSpec
 		Preset->HoverLiftPixels = 46.0f;
 		Preset->HoverScale = 1.18f;
 		Preset->HoverZOrderBoost = 900;
+		Preset->DragCardTargetFocusLiftPixels = 22.0f;
+		Preset->DragCardTargetFocusScale = 1.08f;
+		Preset->DragCardTargetFocusZOrderBoost = 777;
 		Preset->bEnableCardInteractionFeedback = true;
 		Preset->PlayableHoverFeedbackColor = FLinearColor::Green;
 		Preset->PlayableHoverFeedbackOpacity = 0.3f;
@@ -2453,6 +2456,10 @@ bool FWacomFirstPersonCardLayerPresetMotionFeedbackTest::RunTest(const FString& 
 		TestEqual(TEXT("Preset feedback enabled"), FeedbackConfig.bEnabled, Preset->bEnableCardInteractionFeedback);
 		TestEqual(TEXT("Preset hover feedback color"), FeedbackConfig.PlayableHoverColor, Preset->PlayableHoverFeedbackColor);
 		TestEqual(TEXT("Preset deny opacity"), FeedbackConfig.DenyOpacity, Preset->DenyFeedbackOpacity);
+		const FWacomFirstPersonCardDragConfig DragConfig = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CardDragConfig;
+		TestEqual(TEXT("Preset card target focus lift"), DragConfig.DragCardTargetFocusLiftPixels, Preset->DragCardTargetFocusLiftPixels);
+		TestEqual(TEXT("Preset card target focus scale"), DragConfig.DragCardTargetFocusScale, Preset->DragCardTargetFocusScale);
+		TestEqual(TEXT("Preset card target focus z-order"), DragConfig.DragCardTargetFocusZOrderBoost, Preset->DragCardTargetFocusZOrderBoost);
 	}
 
 	Anchor->DestroyComponent();
@@ -6415,6 +6422,9 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	DragConfig.CardInspectScreenPosition = FVector2D(-2.0f, 4.0f);
 	DragConfig.CardInspectScale = -1.0f;
 	DragConfig.DragTargetFeedbackOpacity = 3.0f;
+	DragConfig.DragCardTargetFocusLiftPixels = -8.0f;
+	DragConfig.DragCardTargetFocusScale = -2.0f;
+	DragConfig.DragCardTargetFocusZOrderBoost = -12;
 	DragConfig.SelectedSourceZOrderBoost = -10;
 	Layer->SetCardDragConfig(DragConfig);
 	const int32 DragPropagationCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CardDragConfigPropagationCount;
@@ -6424,6 +6434,9 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	NormalizedEquivalentDragConfig.CardInspectScreenPosition = FVector2D(0.0f, 1.0f);
 	NormalizedEquivalentDragConfig.CardInspectScale = 0.01f;
 	NormalizedEquivalentDragConfig.DragTargetFeedbackOpacity = 1.0f;
+	NormalizedEquivalentDragConfig.DragCardTargetFocusLiftPixels = 0.0f;
+	NormalizedEquivalentDragConfig.DragCardTargetFocusScale = 0.01f;
+	NormalizedEquivalentDragConfig.DragCardTargetFocusZOrderBoost = 0;
 	NormalizedEquivalentDragConfig.SelectedSourceZOrderBoost = 0;
 	Layer->SetCardDragConfig(NormalizedEquivalentDragConfig);
 	TestEqual(TEXT("Normalized-equivalent drag config skipped at layer"),
@@ -6504,6 +6517,9 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	DragConfig.CardInspectHoldDelaySeconds = -1.0f;
 	DragConfig.CardDragCameraLookScale = -2.0f;
 	DragConfig.DragAimArrowSnapBlend = 3.0f;
+	DragConfig.DragCardTargetFocusLiftPixels = -8.0f;
+	DragConfig.DragCardTargetFocusScale = -2.0f;
+	DragConfig.DragCardTargetFocusZOrderBoost = -12;
 	DragConfig.SelectedSourceScale = -4.0f;
 	DragConfig.SelectedSourceAngleBlend = -0.5f;
 	SlotWidget->SetCardDragConfig(DragConfig);
@@ -6512,6 +6528,9 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	NormalizedDragConfig.CardInspectHoldDelaySeconds = 0.0f;
 	NormalizedDragConfig.CardDragCameraLookScale = 0.0f;
 	NormalizedDragConfig.DragAimArrowSnapBlend = 1.0f;
+	NormalizedDragConfig.DragCardTargetFocusLiftPixels = 0.0f;
+	NormalizedDragConfig.DragCardTargetFocusScale = 0.01f;
+	NormalizedDragConfig.DragCardTargetFocusZOrderBoost = 0;
 	NormalizedDragConfig.SelectedSourceScale = 0.01f;
 	NormalizedDragConfig.SelectedSourceAngleBlend = 0.0f;
 	Layer->SetCardDragConfig(NormalizedDragConfig);
@@ -8839,6 +8858,109 @@ bool FWacomFirstPersonCardLayerBattleHUDClearsTest::RunTest(const FString& Param
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerBattleHUDLateCleanupKeepsRunSourceTest,
+	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.LateCleanupDoesNotDisableRunRuntimeSource",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerBattleHUDLateCleanupKeepsRunSourceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(
+		APlayerController::StaticClass(),
+		FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
+		AWacomPlayerCharacter::StaticClass(),
+		FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	UCardDefinition* BattleCard = WacomFirstPersonCardLayerSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("Battle.LateCleanup.Battle"),
+		1);
+	UCardDefinition* RunCard = WacomFirstPersonCardLayerSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("Battle.LateCleanup.Run"),
+		0);
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("BattleCard"), BattleCard)
+		|| !TestNotNull(TEXT("RunCard"), RunCard)
+		|| !TestNotNull(TEXT("Session"), Session))
+	{
+		if (Character)
+		{
+			Character->Destroy();
+		}
+		if (PC)
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->SetSession(Session);
+	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
+	if (!TestNotNull(TEXT("Anchor"), Anchor))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	const FHandCardSnapshot BattleSnapshot =
+		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(BattleCard, 1, true);
+	HUD->SyncFirstPersonBattleHandLayerForTest(
+		WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ BattleSnapshot }));
+	TestEqual(TEXT("Battle source owns runtime hand before Run restore"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		FName(TEXT("BattleHand")));
+	TestTrue(TEXT("Battle source enables interaction before Run restore"),
+		Anchor->IsBattleHandInteractionEnabled());
+
+	FWacomFirstPersonCardLayerEntry RunEntry;
+	RunEntry.CardInstanceId = FGuid::NewGuid();
+	RunEntry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(RunCard);
+	RunEntry.bIsPlayable = true;
+	RunEntry.CardViewData.bDisabled = false;
+	Anchor->SetRuntimeCardLayerEntries(TEXT("RunFirstPersonBattleDeck"), { RunEntry });
+	Anchor->SetBattleHandInteractionEnabled(true);
+	TestEqual(TEXT("Run source takes over before late BattleHUD cleanup"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		FName(TEXT("RunFirstPersonBattleDeck")));
+
+	HUD->ClearFirstPersonBattleHandLayerForTest();
+	TestEqual(TEXT("Late BattleHUD cleanup keeps Run source ownership"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		FName(TEXT("RunFirstPersonBattleDeck")));
+	TestTrue(TEXT("Late BattleHUD cleanup keeps Run source data"),
+		Anchor->HasRuntimeCardLayerData());
+	TestEqual(TEXT("Late BattleHUD cleanup keeps Run source entry"),
+		Anchor->GetRuntimeCardLayerEntries().Num(),
+		1);
+	TestTrue(TEXT("Late BattleHUD cleanup keeps Run interaction enabled"),
+		Anchor->IsBattleHandInteractionEnabled());
+
+	Anchor->OnFirstPersonCardLayerCardClicked.Broadcast(
+		BattleSnapshot.InstanceId,
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(BattleSnapshot.InstanceId));
+	TestEqual(TEXT("Late cleanup still unbinds BattleHUD delegates"),
+		HUD->GetUIState(),
+		EBattleUIState::Idle);
+
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerLegacyHandVisibilityTest,
 	"Wacom.UI.FirstPersonCardLayer.BattleHandPresentation.PresentationModesDriveLegacyVisibility",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -9120,6 +9242,68 @@ bool FWacomFirstPersonCardLayerDragPointerViewportTest::RunTest(const FString& P
 	TestEqual(TEXT("Pointer normalized Y uses widget viewport"), static_cast<float>(DragView.PointerNormalizedViewportPosition.Y), -0.5f);
 
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(1440.0f, 270.0f));
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerHoverPointerViewportTest,
+	"Wacom.UI.FirstPersonCardLayer.CardPointerCameraLook.HoverReportsPointerViewportPosition",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerHoverPointerViewportTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
+	Slot.ScreenPosition = FVector2D(750.0f, 250.0f);
+	Slot.InputHitCenter = Slot.ScreenPosition;
+	Slot.InputHitScale = 1.0f;
+	Slot.InputHitAngleDegrees = 0.0f;
+	Slot.InputHitOrder = 0;
+	Layer->SetCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetViewportSizeOverride(*Layer, FVector2D(1000.0f, 1000.0f));
+	Layer->SetCardSlots({ Slot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	const bool bHandled =
+		FWacomFirstPersonCardLayerTestAccess::HandleSlotPointerEnteredAtWidgetPosition(
+			*Layer,
+			*SlotWidget,
+			FVector2D(750.0f, 250.0f));
+	const FWacomFirstPersonCardLayerAutomationTestView LayerView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer);
+	TestTrue(TEXT("Hover pointer handled by layer"), bHandled);
+	TestTrue(TEXT("Layer stores current pointer view"), LayerView.bHasCurrentPointerView);
+	TestEqual(TEXT("Pointer card id"), LayerView.CurrentPointerView.CardInstanceId, CardId);
+	TestTrue(TEXT("Pointer has viewport position"), LayerView.CurrentPointerView.bHasPointerViewportPosition);
+	TestEqual(TEXT("Pointer viewport position"), LayerView.CurrentPointerView.PointerViewportPosition, FVector2D(750.0f, 250.0f));
+	TestEqual(TEXT("Pointer normalized viewport position"), LayerView.CurrentPointerView.PointerNormalizedViewportPosition, FVector2D(0.5f, -0.5f));
+
+	Layer->SetCardSlots(TArray<FWacomFirstPersonCardLayerSlotView>());
+	const FWacomFirstPersonCardLayerAutomationTestView ClearedView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer);
+	TestFalse(TEXT("Removing hovered card clears pointer view"), ClearedView.bHasCurrentPointerView);
+
 	PC->Destroy();
 	return true;
 }
@@ -10344,6 +10528,327 @@ bool FWacomFirstPersonCardLayerDragPointerCardTargetProbeTest::RunTest(const FSt
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCardTargetValidFeedbackPersistenceTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.CardTargetValidFeedbackPersistsOnSamePointerTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCardTargetValidFeedbackPersistenceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardInspectHoldDelaySeconds = 0.0f;
+	DragConfig.CardDragStartThresholdPixels = 1.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.3f;
+	DragConfig.DragValidTargetColor = FLinearColor::Green;
+	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView TargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourceSlot.ScreenPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, TargetSlot.ScreenPosition);
+	TestEqual(TEXT("Initial pointer target waits for HUD card validation"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
+
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, TargetWidget, TargetSlot.ScreenPosition),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
+		TargetSlot.ScreenPosition,
+		TEXT("CardDrop{Intent=PlayCardCardTarget}"));
+	TestEqual(TEXT("HUD valid card target is stored"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, TargetSlot.ScreenPosition + FVector2D(4.0f, 0.0f));
+	const FWacomFirstPersonCardDragView DragView = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView;
+	TestEqual(TEXT("Same pointer card target keeps valid state"),
+		DragView.TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestTrue(TEXT("Same pointer card target keeps valid flag"), DragView.bTargetValid);
+	TestEqual(TEXT("Same pointer card target keeps target id"), DragView.CurrentTarget.CardInstanceId, TargetCardId);
+	TestEqual(TEXT("Target widget stays valid after next pointer move"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).DragTargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestEqual(TEXT("Target widget focus stays valid after next pointer move"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).CardDragTargetFocusFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestTrue(TEXT("Target widget keeps focus after next pointer move"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
+	TestEqual(TEXT("Target widget keeps valid overlay"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).FeedbackOverlayColor,
+		FLinearColor::Green);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, TargetSlot.ScreenPosition);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCardTargetSwitchResetsToProbeTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.SwitchingCardTargetReturnsToCardProbe",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCardTargetSwitchResetsToProbeTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardInspectHoldDelaySeconds = 0.0f;
+	DragConfig.CardDragStartThresholdPixels = 1.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.3f;
+	DragConfig.DragValidTargetColor = FLinearColor::Green;
+	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid FirstTargetCardId = FGuid::NewGuid();
+	const FGuid SecondTargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView FirstTargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstTargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
+	FWacomFirstPersonCardLayerSlotView SecondTargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondTargetCardId, 2, FVector2D(820.0f, 600.0f), 0.0f, 1.0f);
+	Layer->SetCardSlots({ SourceSlot, FirstTargetSlot, SecondTargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* FirstTargetWidget = Layer->GetSlotWidgetAt(1);
+	UWacomFirstPersonCardLayerSlotWidget* SecondTargetWidget = Layer->GetSlotWidgetAt(2);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("First target slot"), FirstTargetWidget)
+		|| !TestNotNull(TEXT("Second target slot"), SecondTargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourceSlot.ScreenPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FirstTargetSlot.ScreenPosition);
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(FirstTargetCardId, FirstTargetWidget, FirstTargetSlot.ScreenPosition),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
+		FirstTargetSlot.ScreenPosition,
+		TEXT("CardDrop{Intent=PlayCardCardTarget}"));
+	TestEqual(TEXT("First target starts valid"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, SecondTargetSlot.ScreenPosition);
+	const FWacomFirstPersonCardDragView DragView = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView;
+	TestEqual(TEXT("New pointer card target records second target"), DragView.CurrentTarget.CardInstanceId, SecondTargetCardId);
+	TestEqual(TEXT("New pointer card target returns to probe"),
+		DragView.TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
+	TestFalse(TEXT("New pointer card target waits for HUD validity"), DragView.bTargetValid);
+	TestEqual(TEXT("Old target feedback clears without affordance"),
+		FWacomFirstPersonCardLayerTestAccess::View(*FirstTargetWidget).DragTargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::None);
+	TestFalse(TEXT("Old target focus clears"),
+		FWacomFirstPersonCardLayerTestAccess::View(*FirstTargetWidget).bCardDragTargetFocusActive);
+	TestEqual(TEXT("New target shows probe"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SecondTargetWidget).DragTargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
+	TestTrue(TEXT("New target gains focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SecondTargetWidget).bCardDragTargetFocusActive);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, SecondTargetSlot.ScreenPosition);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAllValidAffordanceUniqueFocusTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.AllValidAffordancesKeepUniquePointerFocus",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAllValidAffordanceUniqueFocusTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardInspectHoldDelaySeconds = 0.0f;
+	DragConfig.CardDragStartThresholdPixels = 1.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.3f;
+	DragConfig.DragValidTargetColor = FLinearColor::Green;
+	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
+	DragConfig.DragCardTargetFocusLiftPixels = 18.0f;
+	DragConfig.DragCardTargetFocusScale = 1.045f;
+	DragConfig.DragCardTargetFocusZOrderBoost = 650;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid FirstTargetCardId = FGuid::NewGuid();
+	const FGuid SecondTargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView FirstTargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstTargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
+	FWacomFirstPersonCardLayerSlotView SecondTargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondTargetCardId, 2, FVector2D(820.0f, 600.0f), 0.0f, 1.0f);
+	Layer->SetCardSlots({ SourceSlot, FirstTargetSlot, SecondTargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* FirstTargetWidget = Layer->GetSlotWidgetAt(1);
+	UWacomFirstPersonCardLayerSlotWidget* SecondTargetWidget = Layer->GetSlotWidgetAt(2);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("First target slot"), FirstTargetWidget)
+		|| !TestNotNull(TEXT("Second target slot"), SecondTargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D FirstBaseTranslation = FirstTargetWidget->GetRenderTransform().Translation;
+	const FVector2D FirstBaseScale = FirstTargetWidget->GetRenderTransform().Scale;
+	const int32 FirstBaseZOrder = Layer->GetCardZOrderAt(1);
+	const FVector2D SecondBaseTranslation = SecondTargetWidget->GetRenderTransform().Translation;
+	const FVector2D SecondBaseScale = SecondTargetWidget->GetRenderTransform().Scale;
+	const int32 SecondBaseZOrder = Layer->GetCardZOrderAt(2);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourceSlot.ScreenPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FirstTargetSlot.ScreenPosition);
+
+	TArray<FWacomFirstPersonCardTargetAffordance> Affordances;
+	FWacomFirstPersonCardTargetAffordance FirstAffordance;
+	FirstAffordance.CardInstanceId = FirstTargetCardId;
+	FirstAffordance.FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget;
+	FirstAffordance.bCanSubmit = true;
+	Affordances.Add(FirstAffordance);
+	FWacomFirstPersonCardTargetAffordance SecondAffordance;
+	SecondAffordance.CardInstanceId = SecondTargetCardId;
+	SecondAffordance.FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget;
+	SecondAffordance.bCanSubmit = true;
+	Affordances.Add(SecondAffordance);
+
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(FirstTargetCardId, FirstTargetWidget, FirstTargetSlot.ScreenPosition),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
+		FirstTargetSlot.ScreenPosition,
+		TEXT("CardDrop{Intent=PlayCardCardTarget}"),
+		Affordances);
+
+	const FWacomFirstPersonCardSlotAutomationTestView FirstView =
+		FWacomFirstPersonCardLayerTestAccess::View(*FirstTargetWidget);
+	const FWacomFirstPersonCardSlotAutomationTestView SecondView =
+		FWacomFirstPersonCardLayerTestAccess::View(*SecondTargetWidget);
+	TestTrue(TEXT("First target keeps valid affordance"), FirstView.bCardDragTargetAffordanceFeedback);
+	TestTrue(TEXT("Second target keeps valid affordance"), SecondView.bCardDragTargetAffordanceFeedback);
+	TestEqual(TEXT("First target affordance state"), FirstView.CardDragTargetAffordanceFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestEqual(TEXT("Second target affordance state"), SecondView.CardDragTargetAffordanceFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestTrue(TEXT("Pointer target gets focus"), FirstView.bCardDragTargetFocusActive);
+	TestFalse(TEXT("Other valid affordance does not get focus"), SecondView.bCardDragTargetFocusActive);
+	TestEqual(TEXT("Both targets show valid overlay"), FirstView.FeedbackOverlayColor, FLinearColor::Green);
+	TestEqual(TEXT("Other affordance shows valid overlay"), SecondView.FeedbackOverlayColor, FLinearColor::Green);
+	TestTrue(TEXT("Focused target applies lift"),
+		FMath::IsNearlyEqual(
+			FirstTargetWidget->GetRenderTransform().Translation.Y,
+			FirstBaseTranslation.Y - DragConfig.DragCardTargetFocusLiftPixels));
+	TestTrue(TEXT("Focused target applies scale"),
+		FMath::IsNearlyEqual(
+			FirstTargetWidget->GetRenderTransform().Scale.X,
+			FirstBaseScale.X * DragConfig.DragCardTargetFocusScale));
+	TestEqual(TEXT("Focused target raises z-order"),
+		Layer->GetCardZOrderAt(1),
+		FirstBaseZOrder + DragConfig.DragCardTargetFocusZOrderBoost);
+	TestTrue(TEXT("Other target keeps base translation"),
+		FMath::IsNearlyEqual(SecondTargetWidget->GetRenderTransform().Translation.Y, SecondBaseTranslation.Y));
+	TestTrue(TEXT("Other target keeps base scale"),
+		FMath::IsNearlyEqual(SecondTargetWidget->GetRenderTransform().Scale.X, SecondBaseScale.X));
+	TestEqual(TEXT("Other target keeps base z-order"), Layer->GetCardZOrderAt(2), SecondBaseZOrder);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, SecondTargetSlot.ScreenPosition);
+	const FWacomFirstPersonCardSlotAutomationTestView FirstAfterMove =
+		FWacomFirstPersonCardLayerTestAccess::View(*FirstTargetWidget);
+	const FWacomFirstPersonCardSlotAutomationTestView SecondAfterMove =
+		FWacomFirstPersonCardLayerTestAccess::View(*SecondTargetWidget);
+	TestTrue(TEXT("Old target keeps affordance after pointer leaves"), FirstAfterMove.bCardDragTargetAffordanceFeedback);
+	TestFalse(TEXT("Old target loses focus after pointer leaves"), FirstAfterMove.bCardDragTargetFocusActive);
+	TestTrue(TEXT("New pointer target keeps affordance"), SecondAfterMove.bCardDragTargetAffordanceFeedback);
+	TestTrue(TEXT("New pointer target gains focus"), SecondAfterMove.bCardDragTargetFocusActive);
+	TestEqual(TEXT("New target waits for HUD validation with probe focus"),
+		SecondAfterMove.CardDragTargetFocusFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(320.0f, 600.0f));
+	TestTrue(TEXT("Affordance remains after pointer leaves card body"),
+		FWacomFirstPersonCardLayerTestAccess::View(*FirstTargetWidget).bCardDragTargetAffordanceFeedback);
+	TestFalse(TEXT("Focus clears after pointer leaves card body"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SecondTargetWidget).bCardDragTargetFocusActive);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, FVector2D(320.0f, 600.0f));
+	TestFalse(TEXT("Release clears first affordance"),
+		FWacomFirstPersonCardLayerTestAccess::View(*FirstTargetWidget).bCardDragTargetAffordanceFeedback);
+	TestFalse(TEXT("Release clears second affordance"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SecondTargetWidget).bCardDragTargetAffordanceFeedback);
+	TestFalse(TEXT("Release clears focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SecondTargetWidget).bCardDragTargetFocusActive);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerBleedCardTargetProbeTest,
 	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.FirstPersonCardLayerCardTargetProbeIgnoresTransparentBleed",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -10533,13 +11038,310 @@ bool FWacomFirstPersonCardLayerDragTargetFeedbackClearTest::RunTest(const FStrin
 		EWacomFirstPersonCardDragTargetFeedbackState::CardProbe,
 		TargetSlot.ScreenPosition);
 	TestTrue(TEXT("Probe starts before clear"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
+	TestTrue(TEXT("Focus starts before clear"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
 
 	Layer->CancelCardDragGesture(true);
 	TestFalse(TEXT("Probe clears on cancel"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragProbeFeedback);
+	TestFalse(TEXT("Focus clears on cancel"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
 	TestEqual(TEXT("Current drag resets on cancel"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.GestureState,
 		EWacomFirstPersonCardGestureState::Idle);
 
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCardTargetFocusVisualTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.CardTargetFocusUsesIndependentVisualsWithoutHover",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCardTargetFocusVisualTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardInspectHoldDelaySeconds = 0.0f;
+	DragConfig.CardDragStartThresholdPixels = 1.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.3f;
+	DragConfig.DragCardTargetProbeScale = 1.02f;
+	DragConfig.DragCardTargetFocusLiftPixels = 18.0f;
+	DragConfig.DragCardTargetFocusScale = 1.045f;
+	DragConfig.DragCardTargetFocusZOrderBoost = 650;
+	DragConfig.DragValidTargetColor = FLinearColor::Green;
+	DragConfig.DragInvalidTargetColor = FLinearColor::Red;
+	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView TargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver HoverReceiver;
+	Layer->OnCardHoveredNative.AddRaw(&HoverReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleHovered);
+	Layer->OnCardUnhoveredNative.AddRaw(&HoverReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleUnhovered);
+
+	const FVector2D BaseTranslation = TargetWidget->GetRenderTransform().Translation;
+	const FVector2D BaseScale = TargetWidget->GetRenderTransform().Scale;
+	const int32 BaseZOrder = Layer->GetCardZOrderAt(1);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourceSlot.ScreenPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, TargetSlot.ScreenPosition);
+
+	TestEqual(TEXT("Drag target focus does not broadcast hover"), HoverReceiver.HoverCount, 0);
+	TestFalse(TEXT("Target card is not ordinary hovered"), TargetWidget->IsHoveredForFirstPersonLayer());
+	TestFalse(TEXT("Layer does not mark hover id during drag focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).HoveredCardInstanceId.IsValid());
+	TestTrue(TEXT("Probe target focus is active"), FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
+	TestTrue(TEXT("Probe target applies focus lift"),
+		FMath::IsNearlyEqual(
+			TargetWidget->GetRenderTransform().Translation.Y,
+			BaseTranslation.Y - DragConfig.DragCardTargetFocusLiftPixels));
+	TestTrue(TEXT("Probe target applies focus scale"),
+		FMath::IsNearlyEqual(
+			TargetWidget->GetRenderTransform().Scale.X,
+			BaseScale.X * DragConfig.DragCardTargetFocusScale));
+	TestEqual(TEXT("Probe target raises canvas z-order"),
+		Layer->GetCardZOrderAt(1),
+		BaseZOrder + DragConfig.DragCardTargetFocusZOrderBoost);
+	TestEqual(TEXT("Probe target overlay color"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).FeedbackOverlayColor,
+		FLinearColor::Blue);
+
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, TargetWidget, TargetSlot.ScreenPosition),
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget,
+		TargetSlot.ScreenPosition,
+		TEXT("CardDrop{Intent=PlayCardCardTarget Reject=InvalidTarget}"));
+	TestTrue(TEXT("Invalid card target focus remains active"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
+	TestTrue(TEXT("Invalid target keeps focus lift"),
+		FMath::IsNearlyEqual(
+			TargetWidget->GetRenderTransform().Translation.Y,
+			BaseTranslation.Y - DragConfig.DragCardTargetFocusLiftPixels));
+	TestTrue(TEXT("Invalid target applies focus scale without probe scale"),
+		FMath::IsNearlyEqual(
+			TargetWidget->GetRenderTransform().Scale.X,
+			BaseScale.X * DragConfig.DragCardTargetFocusScale));
+	TestEqual(TEXT("Invalid target keeps raised z-order"),
+		Layer->GetCardZOrderAt(1),
+		BaseZOrder + DragConfig.DragCardTargetFocusZOrderBoost);
+	TestEqual(TEXT("Invalid target overlay color"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).FeedbackOverlayColor,
+		FLinearColor::Red);
+	TestEqual(TEXT("Drag target focus still does not broadcast hover"), HoverReceiver.HoverCount, 0);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, TargetSlot.ScreenPosition);
+	TestFalse(TEXT("Release clears target focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
+	TestTrue(TEXT("Release restores target translation"),
+		FMath::IsNearlyEqual(TargetWidget->GetRenderTransform().Translation.Y, BaseTranslation.Y));
+	TestTrue(TEXT("Release restores target scale"),
+		FMath::IsNearlyEqual(TargetWidget->GetRenderTransform().Scale.X, BaseScale.X));
+	TestEqual(TEXT("Release restores target z-order"), Layer->GetCardZOrderAt(1), BaseZOrder);
+
+	Layer->OnCardHoveredNative.RemoveAll(&HoverReceiver);
+	Layer->OnCardUnhoveredNative.RemoveAll(&HoverReceiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDragTargetSuppressesOrdinaryHoverTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.DragCardTargetSuppressesOrdinaryHoverAnimations",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDragTargetSuppressesOrdinaryHoverTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardInspectHoldDelaySeconds = 0.0f;
+	DragConfig.CardDragStartThresholdPixels = 1.0f;
+	DragConfig.DragTargetFeedbackOpacity = 0.3f;
+	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
+	DragConfig.DragCardTargetFocusScale = 1.045f;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView TargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver HoverReceiver;
+	Layer->OnCardHoveredNative.AddRaw(&HoverReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleHovered);
+	Layer->OnCardUnhoveredNative.AddRaw(&HoverReceiver, &WacomFirstPersonCardLayerSpec::FLayerInteractionReceiver::HandleUnhovered);
+
+	TestTrue(TEXT("Source can ordinary hover before drag"),
+		FWacomFirstPersonCardLayerTestAccess::ResolveHoveredCardAtWidgetPosition(*Layer, SourceSlot.ScreenPosition) == SourceCardId);
+	TestTrue(TEXT("Source starts ordinary hovered"), SourceWidget->IsHoveredForFirstPersonLayer());
+	TestEqual(TEXT("Initial hover broadcasts once"), HoverReceiver.HoverCount, 1);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourceSlot.ScreenPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, TargetSlot.ScreenPosition);
+	TestFalse(TEXT("Drag start clears source ordinary hover"), SourceWidget->IsHoveredForFirstPersonLayer());
+	TestFalse(TEXT("Drag start clears layer hover id"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).HoveredCardInstanceId.IsValid());
+	TestEqual(TEXT("Clearing source hover broadcasts unhover"), HoverReceiver.UnhoverCount, 1);
+	TestTrue(TEXT("Target focus is active from card probe"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
+
+	const int32 HoverCountAfterDragProbe = HoverReceiver.HoverCount;
+	TestTrue(TEXT("Pointer enter on target during drag routes to active gesture"),
+		FWacomFirstPersonCardLayerTestAccess::HandleSlotPointerEnteredAtWidgetPosition(
+			*Layer,
+			*TargetWidget,
+			TargetSlot.ScreenPosition));
+	TestFalse(TEXT("Target does not become ordinary hovered during drag"), TargetWidget->IsHoveredForFirstPersonLayer());
+	TestFalse(TEXT("Layer still has no ordinary hover id during drag"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).HoveredCardInstanceId.IsValid());
+	TestEqual(TEXT("Target pointer enter during drag does not broadcast hover"),
+		HoverReceiver.HoverCount,
+		HoverCountAfterDragProbe);
+	TestTrue(TEXT("Target keeps drag focus without ordinary hover"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, TargetSlot.ScreenPosition);
+	TestFalse(TEXT("Release does not immediately hover target"), TargetWidget->IsHoveredForFirstPersonLayer());
+	TestFalse(TEXT("Release keeps ordinary hover id clear until next pointer move"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).HoveredCardInstanceId.IsValid());
+
+	Layer->OnCardHoveredNative.RemoveAll(&HoverReceiver);
+	Layer->OnCardUnhoveredNative.RemoveAll(&HoverReceiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerCardTargetFocusClearsWhenLeavingBodyTest,
+	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.CardTargetFocusClearsWhenPointerLeavesBody",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerCardTargetFocusClearsWhenLeavingBodyTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardInspectHoldDelaySeconds = 0.0f;
+	DragConfig.CardDragStartThresholdPixels = 1.0f;
+	DragConfig.DragCardTargetFocusLiftPixels = 18.0f;
+	DragConfig.DragCardTargetFocusScale = 1.045f;
+	DragConfig.DragCardTargetFocusZOrderBoost = 650;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid SourceCardId = FGuid::NewGuid();
+	const FGuid TargetCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView SourceSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
+	SourceSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	FWacomFirstPersonCardLayerSlotView TargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
+	Layer->SetCardSlots({ SourceSlot, TargetSlot });
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = Layer->GetSlotWidgetAt(0);
+	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = Layer->GetSlotWidgetAt(1);
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Target slot"), TargetWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D BaseTranslation = TargetWidget->GetRenderTransform().Translation;
+	const FVector2D BaseScale = TargetWidget->GetRenderTransform().Scale;
+	const int32 BaseZOrder = Layer->GetCardZOrderAt(1);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourceSlot.ScreenPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, TargetSlot.ScreenPosition);
+	Layer->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, TargetWidget, TargetSlot.ScreenPosition),
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
+		TargetSlot.ScreenPosition,
+		TEXT("CardDrop{Intent=PlayCardCardTarget}"));
+	TestTrue(TEXT("Target focus starts active"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, FVector2D(1200.0f, 600.0f));
+	TestEqual(TEXT("Leaving card body clears card target kind"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.CurrentTarget.TargetKind,
+		EWacomInteractionTargetKind::None);
+	TestEqual(TEXT("Leaving card body clears feedback state"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView.TargetFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::None);
+	TestFalse(TEXT("Leaving card body clears target focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
+	TestTrue(TEXT("Leaving card body restores target translation"),
+		FMath::IsNearlyEqual(TargetWidget->GetRenderTransform().Translation.Y, BaseTranslation.Y));
+	TestTrue(TEXT("Leaving card body restores target scale"),
+		FMath::IsNearlyEqual(TargetWidget->GetRenderTransform().Scale.X, BaseScale.X));
+	TestEqual(TEXT("Leaving card body restores target z-order"), Layer->GetCardZOrderAt(1), BaseZOrder);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, FVector2D(1200.0f, 600.0f));
 	PC->Destroy();
 	return true;
 }
@@ -10677,10 +11479,20 @@ bool FWacomFirstPersonCardLayerValidCardTargetFeedbackTest::RunTest(const FStrin
 	TestEqual(TEXT("Valid target uses card valid state"),
 		FWacomFirstPersonCardLayerTestAccess::View(*ValidTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestEqual(TEXT("Valid target records affordance state"),
+		FWacomFirstPersonCardLayerTestAccess::View(*ValidTargetWidget).CardDragTargetAffordanceFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestTrue(TEXT("Focused valid target receives focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*ValidTargetWidget).bCardDragTargetFocusActive);
 	TestEqual(TEXT("Valid target color"), FWacomFirstPersonCardLayerTestAccess::View(*ValidTargetWidget).FeedbackOverlayColor, FLinearColor::Green);
 	TestEqual(TEXT("Invalid target uses card invalid state"),
 		FWacomFirstPersonCardLayerTestAccess::View(*InvalidTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
+	TestEqual(TEXT("Invalid target records affordance state"),
+		FWacomFirstPersonCardLayerTestAccess::View(*InvalidTargetWidget).CardDragTargetAffordanceFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
+	TestFalse(TEXT("Non-pointer invalid affordance does not receive focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*InvalidTargetWidget).bCardDragTargetFocusActive);
 	TestEqual(TEXT("Invalid target color"), FWacomFirstPersonCardLayerTestAccess::View(*InvalidTargetWidget).FeedbackOverlayColor, FLinearColor::Red);
 	TestTrue(TEXT("Debug counts valid affordance"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceValid=1")));
 	TestTrue(TEXT("Debug counts invalid affordance"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceInvalid=1")));
@@ -10754,6 +11566,14 @@ bool FWacomFirstPersonCardLayerFocusedCardTargetOverrideTest::RunTest(const FStr
 	TestEqual(TEXT("Focused valid result overrides base invalid affordance"),
 		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestEqual(TEXT("Base invalid affordance is preserved separately"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).CardDragTargetAffordanceFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
+	TestEqual(TEXT("Focused valid result is stored separately"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).CardDragTargetFocusFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestTrue(TEXT("Focused target receives focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*TargetWidget).bCardDragTargetFocusActive);
 
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SourceWidget, FVector2D(540.0f, 590.0f));
 	PC->Destroy();
@@ -11398,9 +12218,19 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 	TestEqual(TEXT("Normal hand card shows valid affordance"),
 		FWacomFirstPersonCardLayerTestAccess::View(*NormalTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestEqual(TEXT("Normal hand card records affordance state"),
+		FWacomFirstPersonCardLayerTestAccess::View(*NormalTargetWidget).CardDragTargetAffordanceFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
+	TestFalse(TEXT("Normal hand card affordance is not pointer focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*NormalTargetWidget).bCardDragTargetFocusActive);
 	TestEqual(TEXT("Hand anchor shows invalid affordance for selected zone move"),
 		FWacomFirstPersonCardLayerTestAccess::View(*AnchorTargetWidget).DragTargetFeedbackState,
 		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
+	TestEqual(TEXT("Hand anchor records affordance state"),
+		FWacomFirstPersonCardLayerTestAccess::View(*AnchorTargetWidget).CardDragTargetAffordanceFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
+	TestFalse(TEXT("Hand anchor affordance is not pointer focus"),
+		FWacomFirstPersonCardLayerTestAccess::View(*AnchorTargetWidget).bCardDragTargetFocusActive);
 	TestTrue(TEXT("Debug reports affordance counts"), Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceValid=")));
 
 	Layer->CancelCardDragGesture(true);

@@ -6716,6 +6716,19 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 		Anchor->IsBattleHandInteractionEnabled());
 
 	TestTrue(TEXT("Battle camera activates for drag override"), BattleCamera->ActivateBattleCameraLook());
+	FWacomFirstPersonCardPointerView PointerView;
+	PointerView.CardInstanceId = CardId;
+	PointerView.bHasPointerViewportPosition = true;
+	PointerView.PointerNormalizedViewportPosition = FVector2D(0.35f, -0.45f);
+	HUD->HandleFirstPersonCardPointerMovedForTest(PointerView);
+	TestTrue(TEXT("Hover pointer writes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
+	TestEqual(
+		TEXT("Hover pointer override stores normalized pointer"),
+		BattleCamera->GetCursorLookOverrideNormalizedForTest(),
+		FVector2D(0.35f, -0.45f));
+	HUD->HandleFirstPersonCardPointerLeftForTest();
+	TestFalse(TEXT("Hover pointer leave clears camera look override"), BattleCamera->HasCursorLookOverrideForTest());
+
 	FWacomFirstPersonCardDragView DragView = WacomBattleWidgetSpec::MakeCommitDragView(CardId);
 	HUD->HandleFirstPersonCardDragStartedForTest(CardId, DragView);
 	HUD->HandleFirstPersonCardDragUpdatedForTest(CardId, DragView);

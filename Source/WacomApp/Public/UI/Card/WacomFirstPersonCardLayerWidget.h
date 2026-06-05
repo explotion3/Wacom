@@ -16,6 +16,8 @@ class UWacomFirstPersonCardLayerSlotWidget;
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FWacomFirstPersonCardLayerPointerNative, const FWacomFirstPersonCardPointerView&);
+DECLARE_MULTICAST_DELEGATE(FWacomFirstPersonCardLayerPointerExitNative);
 
 struct FWacomFirstPersonCardLayerResolvedTransitionHint
 {
@@ -36,6 +38,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardDragView CurrentDragView;
+	FWacomFirstPersonCardPointerView CurrentPointerView;
+	bool bHasCurrentPointerView = false;
+	FGuid HoveredCardInstanceId;
 	FLinearColor AimArrowColor = FLinearColor::White;
 	FVector2D AimArrowEnd = FVector2D::ZeroVector;
 	TSubclassOf<UWacomCardView> CardViewClass;
@@ -121,6 +126,9 @@ public:
 	void AddUntrackedSlotChildForTest();
 	void SetViewportSizeOverrideForTest(const FVector2D& WidgetViewportSize);
 	FGuid ResolveHoveredCardAtWidgetPositionForTest(const FVector2D& WidgetPosition);
+	bool HandleSlotPointerEnteredAtWidgetPositionForTest(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
 	bool RequestPressAtWidgetPositionForTest(const FVector2D& WidgetPosition);
 	bool RequestReleaseAtWidgetPositionForTest(const FVector2D& WidgetPosition);
 #endif
@@ -136,6 +144,8 @@ public:
 	FWacomFirstPersonCardLayerDragNative OnCardDragUpdatedNative;
 	FWacomFirstPersonCardLayerDragNative OnCardDragReleasedNative;
 	FWacomFirstPersonCardLayerDragNative OnCardDragCancelledNative;
+	FWacomFirstPersonCardLayerPointerNative OnCardPointerMovedNative;
+	FWacomFirstPersonCardLayerPointerExitNative OnCardPointerLeftNative;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -176,6 +186,8 @@ private:
 	TWeakObjectPtr<UWacomFirstPersonCardLayerSlotWidget> HoveredSlotWidget;
 	TWeakObjectPtr<UWacomFirstPersonCardLayerSlotWidget> PressedSlotWidget;
 	FWacomFirstPersonCardDragView CurrentDragView;
+	FWacomFirstPersonCardPointerView CurrentPointerView;
+	bool bHasCurrentPointerView = false;
 	FString CurrentDragResolvedIntentDebugSummary;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedTransitionHint> PendingTransitionHintsByKey;
 	bool bCardLayerInteractionEnabled = false;
@@ -196,6 +208,7 @@ private:
 	void UnbindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
 	void ClearHoveredCardTargetState(bool bBroadcastUnhover);
 	void ClearCurrentDragState(bool bBroadcastCancel);
+	bool ShouldSuppressOrdinaryHoverForDrag() const;
 	int32 RemoveOutgoingFinishedSlots();
 	int32 RemoveUntrackedSlotChildren();
 	void EnforceOutgoingSlotLimit();
@@ -218,6 +231,10 @@ private:
 	bool ResolveViewportAnchorPosition(
 		const FVector2D& NormalizedViewportAnchor,
 		FVector2D& OutWidgetPosition) const;
+	bool ResolvePointerViewportPosition(
+		const FVector2D& WidgetPosition,
+		FVector2D& OutPointerViewportPosition,
+		FVector2D& OutPointerNormalizedViewportPosition) const;
 	void HandleSlotClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
@@ -240,6 +257,8 @@ private:
 	bool HandleSlotPointerPressed(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
 	bool HandleSlotPointerReleased(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
 	bool ResolveAbsoluteScreenPositionToWidgetPosition(const FVector2D& AbsoluteScreenPosition, FVector2D& OutWidgetPosition) const;
+	bool BroadcastCardPointerMovedFromWidgetPosition(const FVector2D& WidgetPosition);
+	void ClearCardPointerView(bool bBroadcastPointerLeft);
 	UWacomFirstPersonCardLayerSlotWidget* ResolveInteractiveSlotUnderPointer(
 		const FVector2D& WidgetPosition,
 		const FGuid& ExcludedCardInstanceId,
@@ -247,6 +266,7 @@ private:
 		bool bUseHoverHysteresis,
 		FWacomFirstPersonCardLayerSlotView* OutResolvedSlotView = nullptr) const;
 	bool UpdateHoveredSlotFromWidgetPosition(const FVector2D& WidgetPosition);
+	bool RoutePointerToActiveGestureSlot(const FVector2D& WidgetPosition);
 	void ClearHoveredSlotState(bool bBroadcastUnhover);
 	UWacomFirstPersonCardLayerSlotWidget* FindActiveGestureSlot() const;
 	bool TryResolveCardTargetUnderDragPointer(

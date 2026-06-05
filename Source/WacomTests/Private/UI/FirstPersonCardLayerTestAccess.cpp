@@ -107,6 +107,14 @@ FGuid FWacomFirstPersonCardLayerTestAccess::ResolveHoveredCardAtWidgetPosition(
 	return Layer.ResolveHoveredCardAtWidgetPositionForTest(WidgetPosition);
 }
 
+bool FWacomFirstPersonCardLayerTestAccess::HandleSlotPointerEnteredAtWidgetPosition(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& WidgetPosition)
+{
+	return Layer.HandleSlotPointerEnteredAtWidgetPositionForTest(SourceSlot, WidgetPosition);
+}
+
 bool FWacomFirstPersonCardLayerTestAccess::RequestPressAtWidgetPosition(
 	UWacomFirstPersonCardLayerWidget& Layer,
 	const FVector2D& WidgetPosition)

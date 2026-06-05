@@ -140,6 +140,69 @@ void FWacomPlayerControllerRunInteractionTestAccess::ClearRunMenuDropTargetProbe
 	}
 }
 
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+	AWacomPlayerControllerProbe* PC,
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerDragStartedForTest(CardInstanceId, DragView);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragUpdated(
+	AWacomPlayerControllerProbe* PC,
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerDragUpdatedForTest(CardInstanceId, DragView);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragReleased(
+	AWacomPlayerControllerProbe* PC,
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerDragReleasedForTest(CardInstanceId, DragView);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragCancelled(
+	AWacomPlayerControllerProbe* PC,
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerDragCancelledForTest(CardInstanceId, DragView);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerPointerMoved(
+	AWacomPlayerControllerProbe* PC,
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerPointerMovedForTest(PointerView);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerPointerLeft(
+	AWacomPlayerControllerProbe* PC)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerPointerLeftForTest();
+	}
+}
+
 bool FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(
 	AWacomPlayerControllerProbe* PC,
 	const FGuid& CardInstanceId,

@@ -194,6 +194,45 @@ private:
 		ClearRunMenuDropTargetProbe();
 	}
 
+	void HandleRunFirstPersonCardLayerDragStartedForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView)
+	{
+		HandleRunFirstPersonCardLayerDragStarted(CardInstanceId, DragView);
+	}
+
+	void HandleRunFirstPersonCardLayerDragUpdatedForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView)
+	{
+		HandleRunFirstPersonCardLayerDragUpdated(CardInstanceId, DragView);
+	}
+
+	void HandleRunFirstPersonCardLayerDragReleasedForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView)
+	{
+		HandleRunFirstPersonCardLayerDragReleased(CardInstanceId, DragView);
+	}
+
+	void HandleRunFirstPersonCardLayerDragCancelledForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView)
+	{
+		HandleRunFirstPersonCardLayerDragCancelled(CardInstanceId, DragView);
+	}
+
+	void HandleRunFirstPersonCardLayerPointerMovedForTest(
+		const FWacomFirstPersonCardPointerView& PointerView)
+	{
+		HandleRunFirstPersonCardLayerPointerMoved(PointerView);
+	}
+
+	void HandleRunFirstPersonCardLayerPointerLeftForTest()
+	{
+		HandleRunFirstPersonCardLayerPointerLeft();
+	}
+
 	bool ApplyRunMenuDropProbeFeedbackForTest(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView,

@@ -54,6 +54,26 @@ struct FWacomPlayerControllerRunInteractionTestAccess
 		const FVector2D& WidgetPosition,
 		FWacomInteractionTargetHandle& OutHandle);
 	static void ClearRunMenuDropTargetProbe(AWacomPlayerControllerProbe* PC);
+	static void HandleRunFirstPersonCardLayerDragStarted(
+		AWacomPlayerControllerProbe* PC,
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView);
+	static void HandleRunFirstPersonCardLayerDragUpdated(
+		AWacomPlayerControllerProbe* PC,
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView);
+	static void HandleRunFirstPersonCardLayerDragReleased(
+		AWacomPlayerControllerProbe* PC,
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView);
+	static void HandleRunFirstPersonCardLayerDragCancelled(
+		AWacomPlayerControllerProbe* PC,
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView);
+	static void HandleRunFirstPersonCardLayerPointerMoved(
+		AWacomPlayerControllerProbe* PC,
+		const FWacomFirstPersonCardPointerView& PointerView);
+	static void HandleRunFirstPersonCardLayerPointerLeft(AWacomPlayerControllerProbe* PC);
 	static bool ApplyRunMenuDropProbeFeedback(
 		AWacomPlayerControllerProbe* PC,
 		const FGuid& CardInstanceId,

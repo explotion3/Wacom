@@ -576,6 +576,17 @@ public:
 		HandleFirstPersonCardLayerDragReleased(CardInstanceId, DragView);
 	}
 
+	void HandleFirstPersonCardPointerMovedForTest(
+		const FWacomFirstPersonCardPointerView& PointerView)
+	{
+		HandleFirstPersonCardLayerPointerMoved(PointerView);
+	}
+
+	void HandleFirstPersonCardPointerLeftForTest()
+	{
+		HandleFirstPersonCardLayerPointerLeft();
+	}
+
 	void SetFirstPersonCardAnchorForTest(UWacomFirstPersonCardAnchorComponent* Anchor)
 	{
 		BindFirstPersonBattleHandLayerInteractions(Anchor);

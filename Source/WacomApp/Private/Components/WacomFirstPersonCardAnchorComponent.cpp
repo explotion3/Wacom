@@ -98,6 +98,9 @@ namespace
 		float HoverScale = 1.06f;
 		int32 HoverZOrderBoost = 500;
 		float HoverHitHysteresisPixels = 16.0f;
+		float DragCardTargetFocusLiftPixels = 18.0f;
+		float DragCardTargetFocusScale = 1.045f;
+		int32 DragCardTargetFocusZOrderBoost = 650;
 		bool bEnableCardInteractionFeedback = true;
 		FLinearColor PlayableHoverFeedbackColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);
 		float PlayableHoverFeedbackOpacity = 0.06f;
@@ -118,6 +121,9 @@ namespace
 		bool bAllowCameraLookDuringCardDrag = true;
 		float CardDragCameraLookScale = 1.0f;
 		float CardDragCameraLookInterpSpeedOverride = -1.0f;
+		bool bAllowCameraLookDuringCardPointer = true;
+		float CardPointerCameraLookScale = 1.0f;
+		float CardPointerCameraLookInterpSpeedOverride = -1.0f;
 		bool bUsingPreset = false;
 		bool bPresetFallback = true;
 		FString PresetName = TEXT("None");
@@ -198,6 +204,9 @@ namespace
 		Config.HoverScale = Anchor.HoverScale;
 		Config.HoverZOrderBoost = Anchor.HoverZOrderBoost;
 		Config.HoverHitHysteresisPixels = Anchor.HoverHitHysteresisPixels;
+		Config.DragCardTargetFocusLiftPixels = Anchor.DragCardTargetFocusLiftPixels;
+		Config.DragCardTargetFocusScale = Anchor.DragCardTargetFocusScale;
+		Config.DragCardTargetFocusZOrderBoost = Anchor.DragCardTargetFocusZOrderBoost;
 		Config.bEnableCardInteractionFeedback = Anchor.bEnableCardInteractionFeedback;
 		Config.PlayableHoverFeedbackColor = Anchor.PlayableHoverFeedbackColor;
 		Config.PlayableHoverFeedbackOpacity = Anchor.PlayableHoverFeedbackOpacity;
@@ -218,6 +227,9 @@ namespace
 		Config.bAllowCameraLookDuringCardDrag = Anchor.bAllowCameraLookDuringCardDrag;
 		Config.CardDragCameraLookScale = Anchor.CardDragCameraLookScale;
 		Config.CardDragCameraLookInterpSpeedOverride = Anchor.CardDragCameraLookInterpSpeedOverride;
+		Config.bAllowCameraLookDuringCardPointer = Anchor.bAllowCameraLookDuringCardPointer;
+		Config.CardPointerCameraLookScale = Anchor.CardPointerCameraLookScale;
+		Config.CardPointerCameraLookInterpSpeedOverride = Anchor.CardPointerCameraLookInterpSpeedOverride;
 		return Config;
 	}
 
@@ -320,6 +332,9 @@ namespace
 		Config.HoverScale = Preset.HoverScale;
 		Config.HoverZOrderBoost = Preset.HoverZOrderBoost;
 		Config.HoverHitHysteresisPixels = Preset.HoverHitHysteresisPixels;
+		Config.DragCardTargetFocusLiftPixels = Preset.DragCardTargetFocusLiftPixels;
+		Config.DragCardTargetFocusScale = Preset.DragCardTargetFocusScale;
+		Config.DragCardTargetFocusZOrderBoost = Preset.DragCardTargetFocusZOrderBoost;
 		Config.bEnableCardInteractionFeedback = Preset.bEnableCardInteractionFeedback;
 		Config.PlayableHoverFeedbackColor = Preset.PlayableHoverFeedbackColor;
 		Config.PlayableHoverFeedbackOpacity = Preset.PlayableHoverFeedbackOpacity;
@@ -332,6 +347,9 @@ namespace
 		Config.DenyFeedbackShakePixels = Preset.DenyFeedbackShakePixels;
 		Config.DenyFeedbackColor = Preset.DenyFeedbackColor;
 		Config.DenyFeedbackOpacity = Preset.DenyFeedbackOpacity;
+		Config.bAllowCameraLookDuringCardPointer = Preset.bAllowCameraLookDuringCardPointer;
+		Config.CardPointerCameraLookScale = Preset.CardPointerCameraLookScale;
+		Config.CardPointerCameraLookInterpSpeedOverride = Preset.CardPointerCameraLookInterpSpeedOverride;
 		Config.bUsingPreset = true;
 		Config.bPresetFallback = false;
 		Config.PresetName = Preset.GetName();
@@ -418,6 +436,9 @@ namespace
 		DragConfig.bAllowCameraLookDuringCardDrag = Anchor.bAllowCameraLookDuringCardDrag;
 		DragConfig.CardDragCameraLookScale = Anchor.CardDragCameraLookScale;
 		DragConfig.CardDragCameraLookInterpSpeedOverride = Anchor.CardDragCameraLookInterpSpeedOverride;
+		DragConfig.bAllowCameraLookDuringCardPointer = Config.bAllowCameraLookDuringCardPointer;
+		DragConfig.CardPointerCameraLookScale = Config.CardPointerCameraLookScale;
+		DragConfig.CardPointerCameraLookInterpSpeedOverride = Config.CardPointerCameraLookInterpSpeedOverride;
 		DragConfig.bEnableDragTargetFeedback = Anchor.bEnableDragTargetFeedback;
 		DragConfig.DragValidTargetColor = Anchor.DragValidTargetColor;
 		DragConfig.DragInvalidTargetColor = Anchor.DragInvalidTargetColor;
@@ -427,6 +448,9 @@ namespace
 		DragConfig.DragAimArrowSnapBlend = Anchor.DragAimArrowSnapBlend;
 		DragConfig.DragCommitReadyScale = Anchor.DragCommitReadyScale;
 		DragConfig.DragCardTargetProbeScale = Anchor.DragCardTargetProbeScale;
+		DragConfig.DragCardTargetFocusLiftPixels = Config.DragCardTargetFocusLiftPixels;
+		DragConfig.DragCardTargetFocusScale = Config.DragCardTargetFocusScale;
+		DragConfig.DragCardTargetFocusZOrderBoost = Config.DragCardTargetFocusZOrderBoost;
 		DragConfig.SelectedSourceLiftPixels = Config.PendingTargetingLiftPixels;
 		DragConfig.SelectedSourceScale = Config.PendingTargetingScale;
 		DragConfig.SelectedSourceZOrderBoost = Config.PendingTargetingZOrderBoost;
@@ -539,6 +563,9 @@ namespace
 		AddFloat(Config.HoverScale);
 		AddInt(Config.HoverZOrderBoost);
 		AddFloat(Config.HoverHitHysteresisPixels);
+		AddFloat(Config.DragCardTargetFocusLiftPixels);
+		AddFloat(Config.DragCardTargetFocusScale);
+		AddInt(Config.DragCardTargetFocusZOrderBoost);
 		AddBool(Config.bEnableCardInteractionFeedback);
 		AddColor(Config.PlayableHoverFeedbackColor);
 		AddFloat(Config.PlayableHoverFeedbackOpacity);
@@ -556,6 +583,12 @@ namespace
 		AddFloat(Config.PlayCommitFeedbackOpacity);
 		AddColor(Config.PlayCommitFeedbackColor);
 		AddFloat(Config.PlayCommitFeedbackScale);
+		AddBool(Config.bAllowCameraLookDuringCardDrag);
+		AddFloat(Config.CardDragCameraLookScale);
+		AddFloat(Config.CardDragCameraLookInterpSpeedOverride);
+		AddBool(Config.bAllowCameraLookDuringCardPointer);
+		AddFloat(Config.CardPointerCameraLookScale);
+		AddFloat(Config.CardPointerCameraLookInterpSpeedOverride);
 		Combine(GetTypeHash(Config.PresetName));
 		return Hash;
 	}
@@ -1488,7 +1521,7 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		? StaticCardLayerWidget->GetDragTargetDebugSummary()
 		: TEXT("DragTarget Inactive");
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s ClickToPlay=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f DragTargetFeedback=%s DragAimSnap=%s DragAimSnapBlend=%.2f %s %s"),
+		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s ClickToPlay=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f PointerCameraLook=%s PointerCameraLookScale=%.2f PointerCameraLookInterpOverride=%.2f DragTargetFeedback=%s DragAimSnap=%s DragAimSnapBlend=%.2f %s %s"),
 		*AnchorModeToString(CurrentMode),
 		*ProjectionModeToString(Config.ProjectionMode),
 		*LayoutModeToString(Config.CardLayoutMode),
@@ -1522,6 +1555,9 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		bAllowCameraLookDuringCardDrag ? TEXT("true") : TEXT("false"),
 		CardDragCameraLookScale,
 		CardDragCameraLookInterpSpeedOverride,
+		Config.bAllowCameraLookDuringCardPointer ? TEXT("true") : TEXT("false"),
+		Config.CardPointerCameraLookScale,
+		Config.CardPointerCameraLookInterpSpeedOverride,
 		bEnableDragTargetFeedback ? TEXT("true") : TEXT("false"),
 		bSnapAimArrowToValidWorldTarget ? TEXT("true") : TEXT("false"),
 		DragAimArrowSnapBlend,
@@ -2021,6 +2057,8 @@ void UWacomFirstPersonCardAnchorComponent::BindStaticCardLayerWidget(UWacomFirst
 	LayerWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	LayerWidget->OnCardDragReleasedNative.RemoveAll(this);
 	LayerWidget->OnCardDragCancelledNative.RemoveAll(this);
+	LayerWidget->OnCardPointerMovedNative.RemoveAll(this);
+	LayerWidget->OnCardPointerLeftNative.RemoveAll(this);
 	LayerWidget->OnCardClickedNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardClicked);
 	LayerWidget->OnCardHoveredNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardHovered);
 	LayerWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomFirstPersonCardAnchorComponent::HandleLayerCardUnhovered);
@@ -2048,6 +2086,12 @@ void UWacomFirstPersonCardAnchorComponent::BindStaticCardLayerWidget(UWacomFirst
 	LayerWidget->OnCardDragCancelledNative.AddUObject(
 		this,
 		&UWacomFirstPersonCardAnchorComponent::HandleLayerDragCancelled);
+	LayerWidget->OnCardPointerMovedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerPointerMoved);
+	LayerWidget->OnCardPointerLeftNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleLayerPointerLeft);
 }
 
 void UWacomFirstPersonCardAnchorComponent::UnbindStaticCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget)
@@ -2068,6 +2112,8 @@ void UWacomFirstPersonCardAnchorComponent::UnbindStaticCardLayerWidget(UWacomFir
 	LayerWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	LayerWidget->OnCardDragReleasedNative.RemoveAll(this);
 	LayerWidget->OnCardDragCancelledNative.RemoveAll(this);
+	LayerWidget->OnCardPointerMovedNative.RemoveAll(this);
+	LayerWidget->OnCardPointerLeftNative.RemoveAll(this);
 }
 
 void UWacomFirstPersonCardAnchorComponent::HandleLayerCardClicked(
@@ -2168,6 +2214,17 @@ void UWacomFirstPersonCardAnchorComponent::HandleLayerDragCancelled(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	OnFirstPersonCardLayerDragCancelled.Broadcast(CardInstanceId, DragView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerPointerMoved(
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	OnFirstPersonCardLayerPointerMoved.Broadcast(PointerView);
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleLayerPointerLeft()
+{
+	OnFirstPersonCardLayerPointerLeft.Broadcast();
 }
 
 FString UWacomFirstPersonCardAnchorComponent::AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode)

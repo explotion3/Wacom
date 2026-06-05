@@ -192,22 +192,39 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 void FWacomBattleHUDFirstPersonHandBridge::ClearLayer()
 {
 	bFirstPersonBattleHandLayerRuntimeActive = false;
-	if (UWacomFirstPersonCardAnchorComponent* PreviousAnchor = LastAnchor.Get())
+
+	auto ClearBattleHandLayerOwnership = [this](UWacomFirstPersonCardAnchorComponent* Anchor)
 	{
-		PreviousAnchor->SetBattleHandInteractionEnabled(false);
-		PreviousAnchor->CancelFirstPersonCardDragGesture(true);
-		UnbindLayerInteractions(PreviousAnchor);
-		PreviousAnchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
-	}
-	if (UWacomFirstPersonCardAnchorComponent* CurrentAnchor = ResolveAnchor())
+		if (!Anchor)
+		{
+			return;
+		}
+
+		const bool bOwnsBattleHandLayer =
+			Anchor->GetRuntimeCardLayerSourceId() == FirstPersonBattleHandLayerSourceId;
+		if (bOwnsBattleHandLayer)
+		{
+			Anchor->SetBattleHandInteractionEnabled(false);
+			Anchor->CancelFirstPersonCardDragGesture(true);
+		}
+
+		UnbindLayerInteractions(Anchor);
+		if (bOwnsBattleHandLayer)
+		{
+			Anchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
+		}
+	};
+
+	UWacomFirstPersonCardAnchorComponent* PreviousAnchor = LastAnchor.Get();
+	UWacomFirstPersonCardAnchorComponent* CurrentAnchor = ResolveAnchor();
+	ClearBattleHandLayerOwnership(PreviousAnchor);
+	if (CurrentAnchor != PreviousAnchor)
 	{
-		CurrentAnchor->SetBattleHandInteractionEnabled(false);
-		CurrentAnchor->CancelFirstPersonCardDragGesture(true);
-		UnbindLayerInteractions(CurrentAnchor);
-		CurrentAnchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
+		ClearBattleHandLayerOwnership(CurrentAnchor);
 	}
 	ClearDragCameraLookOverride();
-	ClearDragTargetFeedback();
+	ClearDragTargetFeedback(/*bClearFirstPersonCardLayerFeedback*/ false);
+	bFirstPersonCardDragActiveForBattleSceneHover = false;
 	LastAnchor.Reset();
 	HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
 	ClearPendingTransitionEvents();
@@ -294,6 +311,8 @@ void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPers
 	Anchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragReleased.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerCardClicked.AddUObject(
 		&HUD,
 		&UBattleHUD::HandleFirstPersonCardLayerCardClicked);
@@ -318,6 +337,12 @@ void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPers
 	Anchor->OnFirstPersonCardLayerDragCancelled.AddUObject(
 		&HUD,
 		&UBattleHUD::HandleFirstPersonCardLayerDragCancelled);
+	Anchor->OnFirstPersonCardLayerPointerMoved.AddUObject(
+		&HUD,
+		&UBattleHUD::HandleFirstPersonCardLayerPointerMoved);
+	Anchor->OnFirstPersonCardLayerPointerLeft.AddUObject(
+		&HUD,
+		&UBattleHUD::HandleFirstPersonCardLayerPointerLeft);
 	LastAnchor = Anchor;
 }
 
@@ -336,6 +361,8 @@ void FWacomBattleHUDFirstPersonHandBridge::UnbindLayerInteractions(UWacomFirstPe
 	Anchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragReleased.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&HUD);
 	if (LastAnchor.Get() == Anchor)
 	{
 		LastAnchor.Reset();
@@ -544,6 +571,27 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragCancelled(
 	}
 }
 
+void FWacomBattleHUDFirstPersonHandBridge::HandlePointerMoved(
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	if (bFirstPersonCardDragActiveForBattleSceneHover)
+	{
+		return;
+	}
+
+	ApplyPointerCameraLookOverride(PointerView);
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::HandlePointerLeft()
+{
+	if (bFirstPersonCardDragActiveForBattleSceneHover)
+	{
+		return;
+	}
+
+	ClearPointerCameraLookOverride();
+}
+
 void FWacomBattleHUDFirstPersonHandBridge::ApplyDragCameraLookOverride(
 	const FWacomFirstPersonCardDragView& DragView)
 {
@@ -581,6 +629,47 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyDragCameraLookOverride(
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::ClearDragCameraLookOverride()
+{
+	ClearPointerCameraLookOverride();
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ApplyPointerCameraLookOverride(
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	if (!PointerView.bHasPointerViewportPosition)
+	{
+		return;
+	}
+
+	const UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor();
+	if (!Anchor
+		|| !Anchor->bAllowCameraLookDuringCardPointer
+		|| Anchor->CardPointerCameraLookScale <= 0.0f)
+	{
+		ClearPointerCameraLookOverride();
+		return;
+	}
+
+	AWacomPlayerCharacter* Character = nullptr;
+	if (const APlayerController* PC = HUD.GetOwningPlayer())
+	{
+		Character = Cast<AWacomPlayerCharacter>(PC->GetPawn());
+	}
+	UWacomBattleCameraLookComponent* BattleCamera = Character
+		? Character->GetBattleCameraLookComponent()
+		: nullptr;
+	if (!BattleCamera || !BattleCamera->IsBattleCameraLookActive())
+	{
+		return;
+	}
+
+	BattleCamera->SetCursorLookOverrideNormalized(
+		PointerView.PointerNormalizedViewportPosition,
+		Anchor->CardPointerCameraLookScale,
+		Anchor->CardPointerCameraLookInterpSpeedOverride);
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ClearPointerCameraLookOverride()
 {
 	const APlayerController* PC = HUD.GetOwningPlayer();
 	AWacomPlayerCharacter* Character = PC ? Cast<AWacomPlayerCharacter>(PC->GetPawn()) : nullptr;
@@ -699,13 +788,18 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	}
 }
 
-void FWacomBattleHUDFirstPersonHandBridge::ClearDragTargetFeedback()
+void FWacomBattleHUDFirstPersonHandBridge::ClearDragTargetFeedback(bool bClearFirstPersonCardLayerFeedback)
 {
 	if (UWacomBattleEnemyPartWorldTargetBridgeComponent* PreviewBridge = CurrentDragPreviewBridge.Get())
 	{
 		PreviewBridge->ClearDragTargetPreviewState();
 	}
 	CurrentDragPreviewBridge.Reset();
+	if (!bClearFirstPersonCardLayerFeedback)
+	{
+		return;
+	}
+
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor())
 	{
 		Anchor->SetFirstPersonCardDragFeedbackTarget(

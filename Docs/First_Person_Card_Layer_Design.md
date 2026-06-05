@@ -81,6 +81,8 @@ Runtime source 优先级：
 
 进入战斗时，GameMode / PlayerController 会清理探索期 Run source 和 active menu lease。退出战斗回到 Exploration 后，PlayerController 重新激活 Run first-person source 并刷新当前 BattleDeck 展示。
 
+BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。清理或 `NativeDestruct` 可能晚于 Run source 重新激活，因此 BattleHUD 解绑自身 delegate 时必须检查 Anchor 当前 `RuntimeCardLayerSourceId`：只有仍为 `BattleHand` 时才关闭 first-person card interaction、取消拖拽和清 runtime data；如果已经被 `RunFirstPersonBattleDeck` 或 menu lease 接管，只能解绑 BattleHUD delegate 和清战斗 world preview，不得改写 Run source 的交互状态。
+
 打开 Backpack / Pause / Shop / RunEvent 等 GameMenu 时，默认压制 Run default source，避免卡层遮挡菜单。菜单需要卡牌交互时，应显式申请 owned menu lease。
 
 ## §5 Slot Motion 与 Transition
@@ -119,13 +121,21 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 
 需要敌方部位目标的卡 release 到合法 world enemy part 后，BattleHUD 调用现有 play-card world target 路径。需要手牌目标的卡 release 到合法 first-person card target 后，BattleHUD 提交 hand-card target。UI 手势层只提交 target identity，不判断加费、减费、弃置或消耗规则。
 
-拖拽过程中保留 UMG mouse capture，drag view 记录 DPI-aware widget-space 指针和归一化视口坐标。BattleHUD 可用该位置驱动 Battle camera look 临时 override，让拖拽时镜头仍按拖拽指针轻微偏转。
+悬浮和拖拽期间，卡牌层都会记录 DPI-aware widget-space 指针和归一化视口坐标。普通 hover 的 mouse move 被 UMG 处理后，`UWacomFirstPersonCardLayerWidget` 会广播 `FWacomFirstPersonCardPointerView`，由 BattleHUD 写入 Battle camera look 临时 override，探索 / Run 则由 `AWacomPlayerController` 写入 Run Tunnel cursor look override。因此鼠标在悬浮放大的卡牌上移动时，镜头仍会跟随当前指针，不会等离开卡牌后突然跳到新位置。
+
+拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。拖拽镜头旧参数 `bAllowCameraLookDuringCardDrag`、`CardDragCameraLookScale`、`CardDragCameraLookInterpSpeedOverride` 继续只控制 drag override，保持既有资产兼容；hover / pointer 通用路径使用 `bAllowCameraLookDuringCardPointer`、`CardPointerCameraLookScale`、`CardPointerCameraLookInterpSpeedOverride`，也可由 `UWacomFirstPersonCardLayoutPreset` 覆盖。拖拽 active 时会清空并压制普通 pointer view，避免 hover override 与 drag override 抢同一个 camera look 状态。
 
 Hover 输入命中与 hover 视觉几何分离。Anchor 构建 slot view 时会先写入稳定输入几何：`InputHitCenter`、`InputHitScale`、`InputHitAngleDegrees`、`InputHitOrder`，再应用 hover / pending 的视觉 lift、scale 和 ZOrder。悬浮卡仍然可以放大、抬升并绘制在上层，但鼠标命中哪张牌由 `UWacomFirstPersonCardLayerWidget` 使用基础几何统一解析，不再由被 Slate 命中的单个 slot 自行决定。
 
 稳定命中 resolver 只考虑 projected、非 exiting、有效 `CardInstanceId` 且可交互的 active slot。透明 bleed 不参与命中，命中范围仍只使用 `UWacomCardView.FixedCardBodyHitSize` 对应的 card body bounds。多张基础 body 重叠时，不按 hover 后 ZOrder 抢输入，而是按手牌左右顺序的相邻中心线分界选择；当前 hover 卡在分界线附近享有 `HoverHitHysteresisPixels` 滞后区，越过滞后区后才切到相邻卡。
 
 Hover、click / press 起手、drag 起手和拖拽中的 card target probe 复用同一个稳定命中 resolver。这样即使视觉上放大的悬浮卡覆盖了右侧卡，鼠标移动到右侧卡的基础区域时也能自然切到右侧卡；拖拽探测手牌目标时会排除源卡，并继续保留现有 CardTarget probe / valid / invalid feedback 语义。
+
+拖拽到手牌目标时，稳定命中 resolver 只负责解析目标 `CardInstanceId` 和目标 slot identity，不负责判断目标是否合法。BattleHUD 继续通过 `UBattleSession::ValidateTargetWithCard()` 校验，并把 `CardProbe`、`ValidCardTarget` 或 `InvalidCardTarget` 下发回 first-person card layer。同一拖拽目标上的 `ValidCardTarget / InvalidCardTarget` 会持续保留；只有指针切到另一张目标卡、离开 card body，或当前状态还没有 HUD 校验结果时，layer 才回到本地 `CardProbe` 等待下一次校验。
+
+Card target 选中反馈拆成候选 affordance 和当前 focus 两层，不复用普通 hover。Affordance 表示一张手牌是否可作为当前源卡的目标，只负责绿色 / 红色 overlay，可多张同时存在；focus 表示拖拽指针当前命中的唯一目标卡，才应用 focus lift、scale 和 ZOrder boost。`CardProbe / ValidCardTarget / InvalidCardTarget` 都可作为 focus 状态，并继续用 overlay 颜色区分 probe、valid、invalid；该状态不调用普通 hover，不广播 hover / detail delegate，不写 `HoveredCardInstanceId`，也不影响 hover 稳定命中。像“加费测试”这类允许普通手牌和左右手锚点的 HandCard 目标卡，会显示全手牌合法候选全绿，但只有指针压中的那张卡获得唯一 focus。拖拽进入 active 状态后会清空并压制普通 hover，pointer enter / move 只更新拖拽手势和 CardTarget probe；release / cancel 当帧不会立即恢复 ordinary hover，避免目标卡 focus 与 hover lerp 叠加造成双重放大或双重缩小。`bEnableDragTargetFeedback` 只控制 probe / focus / overlay 的显示；关闭后拖拽目标 identity 仍可被解析并交给 HUD / Battle 规则处理。
+
+Drag-target focus 默认参数为 `DragCardTargetFocusLiftPixels = 18`、`DragCardTargetFocusScale = 1.045`、`DragCardTargetFocusZOrderBoost = 650`。推荐调参范围：lift `0-48` UMG 布局像素、scale `1.0-1.12`、ZOrder boost `0-1400`。这些都是表现层参数，不改变手牌顺序、牌堆、出牌结算或 HandCard target validation。
 
 ## §7 Target / Drop 边界
 

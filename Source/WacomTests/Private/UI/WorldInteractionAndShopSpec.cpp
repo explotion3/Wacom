@@ -8,6 +8,7 @@
 #include "Actors/WacomRunRewardPickupActor.h"
 #include "Actors/WacomRunPickupActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
+#include "Actors/WacomRunTunnelSegmentActor.h"
 #include "Actors/WacomShopTriggerActor.h"
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
@@ -17,7 +18,9 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
+#include "Components/WacomRunTunnelMovementComponent.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
+#include "Components/SplineComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Events/RunEventDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
@@ -138,6 +141,30 @@ namespace
 		Start.Choices = { Close };
 		Event->Nodes = { Start };
 		return Event;
+	}
+
+	AWacomRunTunnelSegmentActor* SpawnUiRunTunnelSegment(
+		UWorld& World,
+		const FVector& Start,
+		const FVector& End)
+	{
+		AWacomRunTunnelSegmentActor* Segment =
+			World.SpawnActor<AWacomRunTunnelSegmentActor>(
+				AWacomRunTunnelSegmentActor::StaticClass(),
+				FTransform::Identity);
+		if (!Segment || !Segment->GetPathSpline())
+		{
+			return Segment;
+		}
+
+		USplineComponent* Spline = Segment->GetPathSpline();
+		Spline->ClearSplinePoints(false);
+		Spline->AddSplinePoint(Start, ESplineCoordinateSpace::World, false);
+		Spline->AddSplinePoint(End, ESplineCoordinateSpace::World, false);
+		Spline->SetSplinePointType(0, ESplinePointType::Linear, false);
+		Spline->SetSplinePointType(1, ESplinePointType::Linear, false);
+		Spline->UpdateSpline();
+		return Segment;
 	}
 
 	UWacomRunEventDefinition* MakeUiRunEventCardPaymentEvent(
@@ -2625,6 +2652,121 @@ bool FWacomUIRunWorldCardDropMenuBlockedSpec::RunTest(const FString& /*Parameter
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
 	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunWorldCardDropDragCameraLookOverrideSpec,
+	"Wacom.UI.WorldInteraction.RunWorldCardDrop.DragUsesRunTunnelCameraLookOverride",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunWorldCardDropDragCameraLookOverrideSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindWorldInteractionAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UCardDefinition> Key(
+		MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
+	TStrongObjectPtr<UCharacterDefinition> CharacterDef(
+		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(CharacterDef.Get()));
+	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+
+	AWacomPlayerCharacter* Pawn = World->SpawnActor<AWacomPlayerCharacter>(
+		AWacomPlayerCharacter::StaticClass(),
+		FTransform::Identity);
+	AWacomRunTunnelSegmentActor* Segment =
+		SpawnUiRunTunnelSegment(
+			*World,
+			FVector::ZeroVector,
+			FVector(1000.0f, 0.0f, 0.0f));
+	if (!TestNotNull(TEXT("Pawn"), Pawn)
+		|| !TestNotNull(TEXT("Segment"), Segment))
+	{
+		return false;
+	}
+	PC->SetPawn(Pawn);
+
+	UWacomRunTunnelMovementComponent* Tunnel =
+		Pawn->GetRunTunnelMovementComponent();
+	if (!TestNotNull(TEXT("Run tunnel"), Tunnel))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Run tunnel activates"), Tunnel->ActivateRunTunnel(Segment, 0.0f));
+
+	FWacomFirstPersonCardPointerView PointerView;
+	PointerView.CardInstanceId = KeyInstanceId;
+	PointerView.bHasPointerViewportPosition = true;
+	PointerView.PointerNormalizedViewportPosition = FVector2D(0.25f, -0.35f);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerPointerMoved(
+		PC.Get(),
+		PointerView);
+	TestTrue(TEXT("Hover pointer writes run tunnel camera look override"),
+		Tunnel->HasCursorLookOverrideForTest());
+	TestEqual(
+		TEXT("Hover pointer override stores normalized pointer"),
+		Tunnel->GetCursorLookOverrideNormalizedForTest(),
+		FVector2D(0.25f, -0.35f));
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerPointerLeft(PC.Get());
+	TestFalse(TEXT("Hover pointer leave clears run tunnel camera look override"),
+		Tunnel->HasCursorLookOverrideForTest());
+
+	FWacomFirstPersonCardDragView DragView =
+		MakeUiWorldDropDragView(FVector2D(100.0f, 100.0f));
+	DragView.PointerNormalizedViewportPosition = FVector2D(0.6f, -0.25f);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+		PC.Get(),
+		KeyInstanceId,
+		DragView);
+	TestTrue(TEXT("Drag start writes run tunnel camera look override"),
+		Tunnel->HasCursorLookOverrideForTest());
+	TestEqual(
+		TEXT("Drag override stores normalized pointer"),
+		Tunnel->GetCursorLookOverrideNormalizedForTest(),
+		FVector2D(0.6f, -0.25f));
+
+	DragView.PointerNormalizedViewportPosition = FVector2D(-0.4f, 0.5f);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragUpdated(
+		PC.Get(),
+		KeyInstanceId,
+		DragView);
+	TestEqual(
+		TEXT("Drag update refreshes normalized pointer"),
+		Tunnel->GetCursorLookOverrideNormalizedForTest(),
+		FVector2D(-0.4f, 0.5f));
+
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragReleased(
+		PC.Get(),
+		KeyInstanceId,
+		DragView);
+	TestFalse(TEXT("Drag release clears run tunnel camera look override"),
+		Tunnel->HasCursorLookOverrideForTest());
+
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+		PC.Get(),
+		KeyInstanceId,
+		DragView);
+	TestTrue(TEXT("Second drag start writes override"),
+		Tunnel->HasCursorLookOverrideForTest());
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragCancelled(
+		PC.Get(),
+		KeyInstanceId,
+		DragView);
+	TestFalse(TEXT("Drag cancel clears run tunnel camera look override"),
+		Tunnel->HasCursorLookOverrideForTest());
+
+	Segment->Destroy();
+	Pawn->Destroy();
 	return true;
 }
 

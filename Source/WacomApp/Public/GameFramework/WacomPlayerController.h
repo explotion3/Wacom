@@ -24,6 +24,7 @@ class UWacomRunWorldInteractionTargetBridgeComponent;
 class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
+class UWacomRunTunnelMovementComponent;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;
@@ -293,6 +294,11 @@ protected:
 	void HandleRunFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleRunFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandleRunFirstPersonCardLayerPointerLeft();
+	void ApplyRunFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
+	void ApplyRunFirstPersonCardPointerCameraLookOverride(const FWacomFirstPersonCardPointerView& PointerView);
+	void ClearRunFirstPersonCardDragCameraLookOverride();
 	bool ApplyRunMenuDropProbeFeedback(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView,
@@ -358,6 +364,7 @@ private:
 	void RefreshRunFirstPersonCardLayerMenuSuppression();
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
+	UWacomRunTunnelMovementComponent* ResolveRunTunnelMovementForCardDragLook() const;
 	bool ShouldHandleRunFirstPersonMenuDropProbe() const;
 	bool ShouldHandleRunWorldCardDropProbe() const;
 	UWacomMenuWidgetBase* ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const;
@@ -402,6 +409,7 @@ private:
 
 	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
 	bool bRunFirstPersonMenuLeaseDragBound = false;
+	bool bRunFirstPersonCardDragActiveForCameraLook = false;
 	FString LastRunMenuDropProbeDebugSummary;
 	FString LastRunWorldCardDropDebugSummary;
 

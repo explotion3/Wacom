@@ -235,6 +235,24 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Visual States", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "64.0", ToolTip = "第一人称手牌父层命中解析的悬停滞后距离，单位为 UMG 布局像素；用于避免鼠标在重叠卡牌分界线附近来回抖动。"))
 	float HoverHitHysteresisPixels = 16.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Visual States", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "48.0", ToolTip = "拖拽指向另一张第一人称卡牌时，被指向卡槽额外上浮距离，单位为 UMG 布局像素；只影响拖拽目标 focus 视觉，不触发普通 hover。"))
+	float DragCardTargetFocusLiftPixels = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Visual States", meta = (ClampMin = "0.01", UIMin = "1.0", UIMax = "1.12", ToolTip = "拖拽指向另一张第一人称卡牌时，被指向卡槽额外乘上的 focus 缩放倍率；不改变稳定命中范围。"))
+	float DragCardTargetFocusScale = 1.045f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Visual States", meta = (ClampMin = "0", UIMin = "0", UIMax = "1400", ToolTip = "拖拽指向另一张第一人称卡牌时，被指向卡槽额外增加的 ZOrder 层级；用于确保目标卡显示在相邻手牌之上。"))
+	int32 DragCardTargetFocusZOrderBoost = 650;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Pointer Camera Look", meta = (ToolTip = "鼠标悬浮或拖拽第一人称卡牌时，是否继续让当前第一人称镜头根据卡牌指针位置偏转。只影响 Battle / Run 的表现层镜头输入，不改变卡牌规则。"))
+	bool bAllowCameraLookDuringCardPointer = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Pointer Camera Look", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2.0", ToolTip = "悬浮或拖拽第一人称卡牌期间传给当前 first-person cursor look 的强度倍率；1 表示沿用当前镜头自身 LookYawScale / LookPitchScale。"))
+	float CardPointerCameraLookScale = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Pointer Camera Look", meta = (UIMin = "-1.0", UIMax = "60.0", ToolTip = "悬浮或拖拽第一人称卡牌期间当前 first-person cursor look 追向卡牌指针的插值速度覆盖值；小于 0 时沿用当前镜头自身 LookInterpSpeed，0 表示立即贴合。"))
+	float CardPointerCameraLookInterpSpeedOverride = -1.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Interaction Feedback", meta = (ToolTip = "是否启用第一人称手牌的轻量交互反馈；只影响 hover、按下、确认和不可用点击的 UMG 表现。"))
 	bool bEnableCardInteractionFeedback = true;
 

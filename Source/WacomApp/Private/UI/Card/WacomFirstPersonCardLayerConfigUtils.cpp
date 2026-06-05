@@ -139,12 +139,16 @@ FWacomFirstPersonCardDragConfig NormalizeCardDragConfig(
 	Config.CardInspectScreenPosition.Y = FMath::Clamp(Config.CardInspectScreenPosition.Y, 0.0f, 1.0f);
 	Config.CardInspectScale = FMath::Max(0.01f, Config.CardInspectScale);
 	Config.CardDragCameraLookScale = FMath::Max(0.0f, Config.CardDragCameraLookScale);
+	Config.CardPointerCameraLookScale = FMath::Max(0.0f, Config.CardPointerCameraLookScale);
 	Config.DragTargetFeedbackOpacity =
 		FMath::Clamp(Config.DragTargetFeedbackOpacity, 0.0f, 1.0f);
 	Config.DragAimArrowSnapBlend =
 		FMath::Clamp(Config.DragAimArrowSnapBlend, 0.0f, 1.0f);
 	Config.DragCommitReadyScale = FMath::Max(0.01f, Config.DragCommitReadyScale);
 	Config.DragCardTargetProbeScale = FMath::Max(0.01f, Config.DragCardTargetProbeScale);
+	Config.DragCardTargetFocusLiftPixels = FMath::Max(0.0f, Config.DragCardTargetFocusLiftPixels);
+	Config.DragCardTargetFocusScale = FMath::Max(0.01f, Config.DragCardTargetFocusScale);
+	Config.DragCardTargetFocusZOrderBoost = FMath::Max(0, Config.DragCardTargetFocusZOrderBoost);
 	Config.SelectedSourceLiftPixels = FMath::Max(0.0f, Config.SelectedSourceLiftPixels);
 	Config.SelectedSourceScale = FMath::Max(0.01f, Config.SelectedSourceScale);
 	Config.SelectedSourceZOrderBoost = FMath::Max(0, Config.SelectedSourceZOrderBoost);
@@ -172,6 +176,9 @@ bool AreCardDragConfigsEquivalent(
 		&& A.bAllowCameraLookDuringCardDrag == B.bAllowCameraLookDuringCardDrag
 		&& AreFloatsEquivalent(A.CardDragCameraLookScale, B.CardDragCameraLookScale)
 		&& AreFloatsEquivalent(A.CardDragCameraLookInterpSpeedOverride, B.CardDragCameraLookInterpSpeedOverride)
+		&& A.bAllowCameraLookDuringCardPointer == B.bAllowCameraLookDuringCardPointer
+		&& AreFloatsEquivalent(A.CardPointerCameraLookScale, B.CardPointerCameraLookScale)
+		&& AreFloatsEquivalent(A.CardPointerCameraLookInterpSpeedOverride, B.CardPointerCameraLookInterpSpeedOverride)
 		&& A.bEnableDragTargetFeedback == B.bEnableDragTargetFeedback
 		&& AreColorsEquivalent(A.DragValidTargetColor, B.DragValidTargetColor)
 		&& AreColorsEquivalent(A.DragInvalidTargetColor, B.DragInvalidTargetColor)
@@ -181,6 +188,9 @@ bool AreCardDragConfigsEquivalent(
 		&& AreFloatsEquivalent(A.DragAimArrowSnapBlend, B.DragAimArrowSnapBlend)
 		&& AreFloatsEquivalent(A.DragCommitReadyScale, B.DragCommitReadyScale)
 		&& AreFloatsEquivalent(A.DragCardTargetProbeScale, B.DragCardTargetProbeScale)
+		&& AreFloatsEquivalent(A.DragCardTargetFocusLiftPixels, B.DragCardTargetFocusLiftPixels)
+		&& AreFloatsEquivalent(A.DragCardTargetFocusScale, B.DragCardTargetFocusScale)
+		&& A.DragCardTargetFocusZOrderBoost == B.DragCardTargetFocusZOrderBoost
 		&& AreFloatsEquivalent(A.SelectedSourceLiftPixels, B.SelectedSourceLiftPixels)
 		&& AreFloatsEquivalent(A.SelectedSourceScale, B.SelectedSourceScale)
 		&& A.SelectedSourceZOrderBoost == B.SelectedSourceZOrderBoost

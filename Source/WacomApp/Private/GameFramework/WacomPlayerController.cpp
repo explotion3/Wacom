@@ -554,6 +554,7 @@ bool AWacomPlayerController::RefreshRunFirstPersonCardLayer()
 
 void AWacomPlayerController::ClearRunFirstPersonCardLayer()
 {
+	ClearRunFirstPersonCardDragCameraLookOverride();
 	ClearRunMenuDropTargetProbe();
 	ClearRunWorldCardDropProbe();
 	ClearRunWorldInteractableHoverPrompt(TEXT("FirstPersonLayerCleared"));
@@ -1542,8 +1543,12 @@ void AWacomPlayerController::RefreshRunFirstPersonMenuLeaseDragBinding()
 		BoundAnchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(this);
 		BoundAnchor->OnFirstPersonCardLayerDragReleased.RemoveAll(this);
 		BoundAnchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(this);
+		BoundAnchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(this);
+		BoundAnchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(this);
+		ClearRunFirstPersonCardDragCameraLookOverride();
 		RunMenuProbeBoundAnchor.Reset();
 		bRunFirstPersonMenuLeaseDragBound = false;
+		bRunFirstPersonCardDragActiveForCameraLook = false;
 	}
 
 	if (bShouldBind && Anchor && RunMenuProbeBoundAnchor.Get() != Anchor)
@@ -1552,6 +1557,8 @@ void AWacomPlayerController::RefreshRunFirstPersonMenuLeaseDragBinding()
 		Anchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(this);
 		Anchor->OnFirstPersonCardLayerDragReleased.RemoveAll(this);
 		Anchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(this);
+		Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(this);
+		Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(this);
 		Anchor->OnFirstPersonCardLayerDragStarted.AddUObject(
 			this,
 			&AWacomPlayerController::HandleRunFirstPersonCardLayerDragStarted);
@@ -1564,6 +1571,12 @@ void AWacomPlayerController::RefreshRunFirstPersonMenuLeaseDragBinding()
 		Anchor->OnFirstPersonCardLayerDragCancelled.AddUObject(
 			this,
 			&AWacomPlayerController::HandleRunFirstPersonCardLayerDragCancelled);
+		Anchor->OnFirstPersonCardLayerPointerMoved.AddUObject(
+			this,
+			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerMoved);
+		Anchor->OnFirstPersonCardLayerPointerLeft.AddUObject(
+			this,
+			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerLeft);
 		RunMenuProbeBoundAnchor = Anchor;
 		bRunFirstPersonMenuLeaseDragBound = true;
 	}
@@ -1574,6 +1587,13 @@ AWacomPlayerController::ResolveFirstPersonCardAnchorForRunMenuProbe() const
 {
 	const AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
 	return WacomCharacter ? WacomCharacter->GetFirstPersonCardAnchorComponent() : nullptr;
+}
+
+UWacomRunTunnelMovementComponent*
+AWacomPlayerController::ResolveRunTunnelMovementForCardDragLook() const
+{
+	const AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
+	return WacomCharacter ? WacomCharacter->GetRunTunnelMovementComponent() : nullptr;
 }
 
 bool AWacomPlayerController::ShouldHandleRunFirstPersonMenuDropProbe() const
@@ -1634,6 +1654,8 @@ void AWacomPlayerController::HandleRunFirstPersonCardLayerDragStarted(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
+	bRunFirstPersonCardDragActiveForCameraLook = true;
+	ApplyRunFirstPersonCardDragCameraLookOverride(DragView);
 	if (ShouldHandleRunFirstPersonMenuDropProbe())
 	{
 		ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, /*bReleased*/ false);
@@ -1646,6 +1668,7 @@ void AWacomPlayerController::HandleRunFirstPersonCardLayerDragUpdated(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
+	ApplyRunFirstPersonCardDragCameraLookOverride(DragView);
 	if (ShouldHandleRunFirstPersonMenuDropProbe())
 	{
 		ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, /*bReleased*/ false);
@@ -1658,6 +1681,8 @@ void AWacomPlayerController::HandleRunFirstPersonCardLayerDragReleased(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
+	bRunFirstPersonCardDragActiveForCameraLook = false;
+	ClearRunFirstPersonCardDragCameraLookOverride();
 	if (ShouldHandleRunFirstPersonMenuDropProbe())
 	{
 		const bool bKeepReleasePreview =
@@ -1676,8 +1701,106 @@ void AWacomPlayerController::HandleRunFirstPersonCardLayerDragCancelled(
 	const FGuid& /*CardInstanceId*/,
 	const FWacomFirstPersonCardDragView& /*DragView*/)
 {
+	bRunFirstPersonCardDragActiveForCameraLook = false;
+	ClearRunFirstPersonCardDragCameraLookOverride();
 	ClearRunMenuDropTargetProbe();
 	ClearRunWorldCardDropProbe();
+}
+
+void AWacomPlayerController::HandleRunFirstPersonCardLayerPointerMoved(
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	if (bRunFirstPersonCardDragActiveForCameraLook)
+	{
+		return;
+	}
+
+	ApplyRunFirstPersonCardPointerCameraLookOverride(PointerView);
+}
+
+void AWacomPlayerController::HandleRunFirstPersonCardLayerPointerLeft()
+{
+	if (bRunFirstPersonCardDragActiveForCameraLook)
+	{
+		return;
+	}
+
+	ClearRunFirstPersonCardDragCameraLookOverride();
+}
+
+void AWacomPlayerController::ApplyRunFirstPersonCardDragCameraLookOverride(
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	if (!IsInExplorationFlow() || !DragView.bHasPointerViewportPosition)
+	{
+		return;
+	}
+
+	const UWacomFirstPersonCardAnchorComponent* Anchor =
+		ResolveFirstPersonCardAnchorForRunMenuProbe();
+	if (!Anchor
+		|| !Anchor->bAllowCameraLookDuringCardDrag
+		|| Anchor->CardDragCameraLookScale <= 0.0f)
+	{
+		ClearRunFirstPersonCardDragCameraLookOverride();
+		return;
+	}
+
+	UWacomRunTunnelMovementComponent* RunTunnel =
+		ResolveRunTunnelMovementForCardDragLook();
+	if (!RunTunnel
+		|| !RunTunnel->IsRunTunnelActive()
+		|| RunTunnel->IsRunTunnelSuspended())
+	{
+		return;
+	}
+
+	RunTunnel->SetCursorLookOverrideNormalized(
+		DragView.PointerNormalizedViewportPosition,
+		Anchor->CardDragCameraLookScale,
+		Anchor->CardDragCameraLookInterpSpeedOverride);
+}
+
+void AWacomPlayerController::ApplyRunFirstPersonCardPointerCameraLookOverride(
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	if (!IsInExplorationFlow() || !PointerView.bHasPointerViewportPosition)
+	{
+		return;
+	}
+
+	const UWacomFirstPersonCardAnchorComponent* Anchor =
+		ResolveFirstPersonCardAnchorForRunMenuProbe();
+	if (!Anchor
+		|| !Anchor->bAllowCameraLookDuringCardPointer
+		|| Anchor->CardPointerCameraLookScale <= 0.0f)
+	{
+		ClearRunFirstPersonCardDragCameraLookOverride();
+		return;
+	}
+
+	UWacomRunTunnelMovementComponent* RunTunnel =
+		ResolveRunTunnelMovementForCardDragLook();
+	if (!RunTunnel
+		|| !RunTunnel->IsRunTunnelActive()
+		|| RunTunnel->IsRunTunnelSuspended())
+	{
+		return;
+	}
+
+	RunTunnel->SetCursorLookOverrideNormalized(
+		PointerView.PointerNormalizedViewportPosition,
+		Anchor->CardPointerCameraLookScale,
+		Anchor->CardPointerCameraLookInterpSpeedOverride);
+}
+
+void AWacomPlayerController::ClearRunFirstPersonCardDragCameraLookOverride()
+{
+	if (UWacomRunTunnelMovementComponent* RunTunnel =
+		ResolveRunTunnelMovementForCardDragLook())
+	{
+		RunTunnel->ClearCursorLookOverride();
+	}
 }
 
 bool AWacomPlayerController::ApplyRunMenuDropProbeFeedback(

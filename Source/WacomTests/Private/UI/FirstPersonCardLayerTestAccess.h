@@ -49,6 +49,10 @@ struct FWacomFirstPersonCardLayerTestAccess
 	static FGuid ResolveHoveredCardAtWidgetPosition(
 		UWacomFirstPersonCardLayerWidget& Layer,
 		const FVector2D& WidgetPosition);
+	static bool HandleSlotPointerEnteredAtWidgetPosition(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
 	static bool RequestPressAtWidgetPosition(
 		UWacomFirstPersonCardLayerWidget& Layer,
 		const FVector2D& WidgetPosition);

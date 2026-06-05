@@ -647,6 +647,17 @@ void UBattleHUD::HandleFirstPersonCardLayerDragCancelled(
 	GetFirstPersonHandBridge().HandleDragCancelled(CardInstanceId, DragView);
 }
 
+void UBattleHUD::HandleFirstPersonCardLayerPointerMoved(
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	GetFirstPersonHandBridge().HandlePointerMoved(PointerView);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerPointerLeft()
+{
+	GetFirstPersonHandBridge().HandlePointerLeft();
+}
+
 void UBattleHUD::ApplyFirstPersonCardDragCameraLookOverride(
 	const FWacomFirstPersonCardDragView& DragView)
 {
