@@ -38,7 +38,7 @@ tags:
 | 能力 | 入口 / 依赖 | 触发实现条件 |
 |---|---|---|
 | `Effect.CopyCard` 复制手牌临时副本 | 未做 | 出现需要复制机制的卡 |
-| `Magnitude.Source.DiscardCount` | 未做 | 出现按弃牌堆数量调整数值的卡 |
+| `Magnitude.Source.DiscardCount` | 未做；应读取真实弃牌堆数量，不包含本回合使用牌堆 | 出现按弃牌堆数量调整数值的卡 |
 | `Magnitude.Source.DestroyedPartCount` | 未做 | 出现按破坏部位数加伤的卡 |
 | `Target.AllHandCards` | 未做 | 出现“对所有手牌生效”的卡 |
 | `Target.Adjacent.Left` | 未做 | 出现按左相邻位置定位的卡 |

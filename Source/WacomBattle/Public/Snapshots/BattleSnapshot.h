@@ -45,9 +45,11 @@ struct WACOMBATTLE_API FPileCountsSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 DrawCount = 0;
 
+	/** 本回合使用牌堆数量。它不参与同回合洗牌，回合结束后自然进入弃牌堆。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 PlayedCount = 0;
 
+	/** 真实弃牌堆数量，不包含 PlayedCount；HUD 可把两者组合成 "2+3" 这类显示文本。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 DiscardCount = 0;
 

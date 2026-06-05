@@ -193,8 +193,9 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  * - HandPanel         : UHandPanel
  * - EnemyInfoBar      : UEnemyInfoBar
  * - ActionPanel       : UActionPanel
- * - DrawPileView      : UDrawPileView
- * - DiscardPileView   : UDiscardPileView
+ * - DrawPileView      : UPileCountView
+ * - DiscardPileView   : UPileCountView
+ * - ExhaustPileView   : UPileCountView
  * - EquipmentBar      : UEquipmentBar
  * - CombatLogFeed     : UBattleCombatLogFeedWidget
  * - BattlePresentationStack : UBattlePresentationStackWidget
@@ -439,7 +440,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> DrawPileView;
 
-	/** 弃牌堆计数。 */
+	/** 弃牌堆计数显示。PlayedCount > 0 时显示为 "弃牌堆数+本回合使用牌堆数"。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> DiscardPileView;
 

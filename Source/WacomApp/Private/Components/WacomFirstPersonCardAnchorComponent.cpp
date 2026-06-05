@@ -49,6 +49,10 @@ namespace
 		float MaxCardLayerRenderAngleDegrees = 4.0f;
 		float StaticCardRenderScale = 0.55f;
 		float StaticCardEdgeDropPixels = 72.0f;
+		bool bScaleEdgeDropByHandCount = true;
+		float ShortHandEdgeDropPixels = 64.0f;
+		int32 EdgeDropScaleMinCardCount = 5;
+		int32 EdgeDropScaleMaxCardCount = 12;
 		bool bEnableAnchorScreenSmoothing = true;
 		float AnchorScreenSmoothingSpeed = 18.0f;
 		float AnchorScreenSmoothingResetDistancePixels = 320.0f;
@@ -89,7 +93,6 @@ namespace
 		float PendingTargetingAngleBlend = 0.75f;
 		bool bEnableTargetSelectHandDeemphasis = true;
 		float TargetSelectNonPendingOpacityMultiplier = 0.88f;
-		float HandAnchorScale = 0.96f;
 		float DisabledRenderOpacity = 0.78f;
 		float HoverLiftPixels = 28.0f;
 		float HoverScale = 1.06f;
@@ -145,6 +148,10 @@ namespace
 		Config.MaxCardLayerRenderAngleDegrees = Anchor.MaxCardLayerRenderAngleDegrees;
 		Config.StaticCardRenderScale = Anchor.StaticCardRenderScale;
 		Config.StaticCardEdgeDropPixels = Anchor.StaticCardEdgeDropPixels;
+		Config.bScaleEdgeDropByHandCount = Anchor.bScaleEdgeDropByHandCount;
+		Config.ShortHandEdgeDropPixels = Anchor.ShortHandEdgeDropPixels;
+		Config.EdgeDropScaleMinCardCount = Anchor.EdgeDropScaleMinCardCount;
+		Config.EdgeDropScaleMaxCardCount = Anchor.EdgeDropScaleMaxCardCount;
 		Config.bEnableAnchorScreenSmoothing = Anchor.bEnableAnchorScreenSmoothing;
 		Config.AnchorScreenSmoothingSpeed = Anchor.AnchorScreenSmoothingSpeed;
 		Config.AnchorScreenSmoothingResetDistancePixels = Anchor.AnchorScreenSmoothingResetDistancePixels;
@@ -185,7 +192,6 @@ namespace
 		Config.PendingTargetingAngleBlend = Anchor.PendingTargetingAngleBlend;
 		Config.bEnableTargetSelectHandDeemphasis = Anchor.bEnableTargetSelectHandDeemphasis;
 		Config.TargetSelectNonPendingOpacityMultiplier = Anchor.TargetSelectNonPendingOpacityMultiplier;
-		Config.HandAnchorScale = Anchor.HandAnchorScale;
 		Config.DisabledRenderOpacity = Anchor.DisabledRenderOpacity;
 		Config.HoverLiftPixels = Anchor.HoverLiftPixels;
 		Config.HoverScale = Anchor.HoverScale;
@@ -263,6 +269,10 @@ namespace
 		Config.MaxCardLayerRenderAngleDegrees = Preset.MaxCardLayerRenderAngleDegrees;
 		Config.StaticCardRenderScale = Preset.StaticCardRenderScale;
 		Config.StaticCardEdgeDropPixels = Preset.StaticCardEdgeDropPixels;
+		Config.bScaleEdgeDropByHandCount = Preset.bScaleEdgeDropByHandCount;
+		Config.ShortHandEdgeDropPixels = Preset.ShortHandEdgeDropPixels;
+		Config.EdgeDropScaleMinCardCount = Preset.EdgeDropScaleMinCardCount;
+		Config.EdgeDropScaleMaxCardCount = Preset.EdgeDropScaleMaxCardCount;
 		Config.bEnableAnchorScreenSmoothing = Preset.bEnableAnchorScreenSmoothing;
 		Config.AnchorScreenSmoothingSpeed = Preset.AnchorScreenSmoothingSpeed;
 		Config.AnchorScreenSmoothingResetDistancePixels = Preset.AnchorScreenSmoothingResetDistancePixels;
@@ -303,7 +313,6 @@ namespace
 		Config.PendingTargetingAngleBlend = Preset.PendingTargetingAngleBlend;
 		Config.bEnableTargetSelectHandDeemphasis = Preset.bEnableTargetSelectHandDeemphasis;
 		Config.TargetSelectNonPendingOpacityMultiplier = Preset.TargetSelectNonPendingOpacityMultiplier;
-		Config.HandAnchorScale = Preset.HandAnchorScale;
 		Config.DisabledRenderOpacity = Preset.DisabledRenderOpacity;
 		Config.HoverLiftPixels = Preset.HoverLiftPixels;
 		Config.HoverScale = Preset.HoverScale;
@@ -477,6 +486,10 @@ namespace
 		AddFloat(Config.MaxCardLayerRenderAngleDegrees);
 		AddFloat(Config.StaticCardRenderScale);
 		AddFloat(Config.StaticCardEdgeDropPixels);
+		AddBool(Config.bScaleEdgeDropByHandCount);
+		AddFloat(Config.ShortHandEdgeDropPixels);
+		AddInt(Config.EdgeDropScaleMinCardCount);
+		AddInt(Config.EdgeDropScaleMaxCardCount);
 		AddBool(Config.bEnableAnchorScreenSmoothing);
 		AddFloat(Config.AnchorScreenSmoothingSpeed);
 		AddFloat(Config.AnchorScreenSmoothingResetDistancePixels);
@@ -517,7 +530,6 @@ namespace
 		AddFloat(Config.PendingTargetingAngleBlend);
 		AddBool(Config.bEnableTargetSelectHandDeemphasis);
 		AddFloat(Config.TargetSelectNonPendingOpacityMultiplier);
-		AddFloat(Config.HandAnchorScale);
 		AddFloat(Config.DisabledRenderOpacity);
 		AddFloat(Config.HoverLiftPixels);
 		AddFloat(Config.HoverScale);
@@ -641,6 +653,29 @@ namespace
 
 		Position.Y = MaxCenterY;
 		return Position;
+	}
+
+	float ResolveEdgeDropPixelsForHandCount(
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config,
+		int32 CardCount)
+	{
+		const float MaxEdgeDrop = FMath::Max(0.0f, Config.StaticCardEdgeDropPixels);
+		if (!Config.bScaleEdgeDropByHandCount)
+		{
+			return MaxEdgeDrop;
+		}
+
+		const float ShortHandEdgeDrop = FMath::Clamp(Config.ShortHandEdgeDropPixels, 0.0f, MaxEdgeDrop);
+		const int32 MinCardCount = FMath::Max(1, Config.EdgeDropScaleMinCardCount);
+		const int32 MaxCardCount = FMath::Max(MinCardCount + 1, Config.EdgeDropScaleMaxCardCount);
+		const float Alpha = FMath::SmoothStep(
+			0.0f,
+			1.0f,
+			FMath::Clamp(
+				static_cast<float>(CardCount - MinCardCount) / static_cast<float>(MaxCardCount - MinCardCount),
+				0.0f,
+				1.0f));
+		return FMath::Lerp(ShortHandEdgeDrop, MaxEdgeDrop, Alpha);
 	}
 
 	float ClampCardLayerRenderAngleForConfig(
@@ -1162,6 +1197,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 
 	const int32 ClampedCount = FMath::Clamp(CardEntries.Num(), 0, 32);
 	Slots.Reserve(ClampedCount);
+	const float EffectiveEdgeDropPixels = ResolveEdgeDropPixelsForHandCount(Config, ClampedCount);
 
 	bool bHasPendingTargetingCard = false;
 	for (int32 EntryIndex = 0; EntryIndex < ClampedCount; ++EntryIndex)
@@ -1227,10 +1263,6 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		{
 			Slot.ZOrder = FMath::RoundToInt((1.0f - NormalizedEdgeDistance) * 100.0f);
 		}
-		if (Slot.Entry.bIsHandAnchor)
-		{
-			Slot.RenderScale *= FMath::Max(0.01f, Config.HandAnchorScale);
-		}
 		if (bIsPendingTargeting)
 		{
 			if (Config.bPendingTargetingStraightenAngle)
@@ -1288,7 +1320,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				const float XOffset = CenterOffset * FMath::Max(0.0f, Config.AuthoredCardSpacingPixels) * WidthScale;
 				const float DropMagnitude =
 					FMath::Pow(NormalizedEdgeDistance, FMath::Max(0.01f, Config.AuthoredDropCurveExponent))
-					* FMath::Max(0.0f, Config.StaticCardEdgeDropPixels);
+					* EffectiveEdgeDropPixels;
 				const float CenterLiftMagnitude =
 					(1.0f - NormalizedEdgeDistance) * Config.AuthoredCenterLiftPixels;
 
@@ -1348,7 +1380,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				Slot.bBodyLockedLayout = Point.bBodyLockedLayout;
 				Slot.bCurrentCameraProjection = Point.bCurrentCameraProjection;
 				Slot.bLookOffsetAppliedToLayout = Point.bLookOffsetAppliedToLayout;
-				FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * FMath::Max(0.0f, Config.StaticCardEdgeDropPixels);
+				FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * EffectiveEdgeDropPixels;
 				if (bIsPendingTargeting)
 				{
 					FinalPosition.Y -= FMath::Max(0.0f, Config.PendingTargetingLiftPixels);

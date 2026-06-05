@@ -831,6 +831,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Prototype Preview", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "260.0", ToolTip = "prototype preview / Authored2D 排布中最外侧卡牌额外下坠的屏幕距离，单位为 UMG 布局像素；越靠近中心的卡牌下坠越少。"))
 	float StaticCardEdgeDropPixels = 72.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Prototype Preview", meta = (ToolTip = "是否按当前手牌数量缩放最外侧卡牌下坠；开启后少牌使用较小下坠，大手牌逐渐过渡到 StaticCardEdgeDropPixels。"))
+	bool bScaleEdgeDropByHandCount = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Prototype Preview", meta = (EditCondition = "bScaleEdgeDropByHandCount", ClampMin = "0.0", UIMin = "0.0", UIMax = "260.0", ToolTip = "按手牌数量缩放边缘下坠时，小手牌使用的最外侧卡牌下坠距离，单位为 UMG 布局像素。"))
+	float ShortHandEdgeDropPixels = 64.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Prototype Preview", meta = (EditCondition = "bScaleEdgeDropByHandCount", ClampMin = "1", UIMin = "1", UIMax = "16", ToolTip = "手牌数量小于等于该值时，边缘下坠使用 ShortHandEdgeDropPixels。"))
+	int32 EdgeDropScaleMinCardCount = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Prototype Preview", meta = (EditCondition = "bScaleEdgeDropByHandCount", ClampMin = "1", UIMin = "1", UIMax = "32", ToolTip = "手牌数量大于等于该值时，边缘下坠使用 StaticCardEdgeDropPixels；中间数量平滑过渡。"))
+	int32 EdgeDropScaleMaxCardCount = 12;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Prototype Preview", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称静态预览卡牌层 Widget 的视口层级；仅影响 PIE / 开发验证预览。"))
 	int32 StaticCardLayerZOrder = 9996;
 
@@ -858,7 +870,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "TargetSelect 中非 pending 手牌的透明度倍率；会与不可用卡透明度相乘，范围 0 到 1。"))
 	float TargetSelectNonPendingOpacityMultiplier = 0.88f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "手牌锚点卡牌使用的渲染缩放倍率。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "已废弃：左右手锚点牌现在按普通卡牌表现，不再使用单独缩放；字段仅保留旧资产兼容。"))
 	float HandAnchorScale = 0.96f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "不可用卡牌在第一人称卡牌层上的整体透明度；卡面自身的 disabled overlay 仍由 FWacomCardViewData::bDisabled 控制。"))

@@ -137,7 +137,7 @@ BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命�
 | 控件 | 分类 | 语义 |
 |---|---|---|
 | `UPlayerStatusBar` | `Wacom|Battle|Player Status|Authoring` | 显示玩家 HP / Shield / San Snapshot |
-| `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用“标签 + 数量”显示控件 |
+| `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用“标签 + 数量”显示控件；BattleHUD 的弃牌堆格可显示 `弃牌堆数+本回合使用牌堆数` |
 | `UWacomProgressBar` | `Wacom|Common UI|Progress Bar` | 通用数值进度条显示控件 |
 
 BattleHUD 自身配置分类：

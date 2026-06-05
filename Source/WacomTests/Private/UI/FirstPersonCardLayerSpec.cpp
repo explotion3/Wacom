@@ -344,6 +344,10 @@ namespace WacomFirstPersonCardLayerSpec
 		Preset->AuthoredCardBodyBottomViewportPaddingPixels = 13.0f;
 		Preset->StaticCardRenderScale = 0.9f;
 		Preset->StaticCardEdgeDropPixels = 96.0f;
+		Preset->bScaleEdgeDropByHandCount = true;
+		Preset->ShortHandEdgeDropPixels = 48.0f;
+		Preset->EdgeDropScaleMinCardCount = 5;
+		Preset->EdgeDropScaleMaxCardCount = 12;
 		Preset->FanYawDegrees = 8.0f;
 		Preset->bClampCardLayerRenderAngle = true;
 		Preset->MaxCardLayerRenderAngleDegrees = 20.0f;
@@ -2071,7 +2075,7 @@ bool FWacomFirstPersonCardLayerPresetLayoutOverrideTest::RunTest(const FString& 
 	{
 		TestEqual(TEXT("Preset spacing applies"), Slots[3].AuthoredLayoutOffset.X - Slots[2].AuthoredLayoutOffset.X, 160.0);
 		TestEqual(TEXT("Preset hand width clamps spacing"), Slots.Last().AuthoredLayoutOffset.X - Slots[0].AuthoredLayoutOffset.X, 640.0);
-		TestEqual(TEXT("Preset edge drop applies"), Slots[0].AuthoredLayoutOffset.Y, Preset->StaticCardEdgeDropPixels + Preset->AuthoredHandScreenOffset.Y);
+		TestEqual(TEXT("Preset short-hand edge drop applies"), Slots[0].AuthoredLayoutOffset.Y, Preset->ShortHandEdgeDropPixels + Preset->AuthoredHandScreenOffset.Y);
 		TestEqual(TEXT("Preset scale applies"), Slots[2].RenderScale, Preset->StaticCardRenderScale);
 		TestEqual(TEXT("Preset fan angle applies"), Slots.Last().RenderAngleDegrees, 16.0f);
 		TestFalse(TEXT("Preset readable bottom clamp stays inactive when slots are inside viewport"), Slots[2].bBodyBottomViewportAdjusted);
@@ -2120,6 +2124,7 @@ bool FWacomFirstPersonCardLayerAuthoredReadableBottomClampTest::RunTest(const FS
 	Anchor->StaticCardRenderScale = 1.0f;
 	Anchor->StaticCardCountFallback = 5;
 	Anchor->StaticCardEdgeDropPixels = 72.0f;
+	Anchor->ShortHandEdgeDropPixels = 72.0f;
 	Anchor->AuthoredHandScreenOffset = FVector2D::ZeroVector;
 	Anchor->bEnableAnchorScreenSmoothing = false;
 	Anchor->bEnableCardLayerPixelSnapping = false;
@@ -3215,6 +3220,204 @@ bool FWacomFirstPersonCardLayerAuthoredSpacingTest::RunTest(const FString& Param
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAuthoredEdgeDropHandCountScaleTest,
+	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.EdgeDropScalesByHandCount",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAuthoredEdgeDropHandCountScaleTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	auto BuildRuntimeSlots = [Anchor](int32 CardCount)
+	{
+		TArray<FWacomFirstPersonCardLayerEntry> Entries;
+		Entries.SetNum(CardCount);
+		Anchor->SetRuntimeCardLayerEntries(TEXT("EdgeDropScale"), Entries);
+		return Anchor->BuildActiveCardLayerSlotViewsForTest();
+	};
+
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->AuthoredCardSpacingPixels = 80.0f;
+	Anchor->AuthoredMaxHandWidthPixels = 0.0f;
+	Anchor->AuthoredHandScreenOffset = FVector2D::ZeroVector;
+	Anchor->AuthoredCenterLiftPixels = 0.0f;
+	Anchor->AuthoredDropCurveExponent = 1.0f;
+	Anchor->StaticCardEdgeDropPixels = 110.0f;
+	Anchor->ShortHandEdgeDropPixels = 64.0f;
+	Anchor->EdgeDropScaleMinCardCount = 5;
+	Anchor->EdgeDropScaleMaxCardCount = 12;
+	Anchor->bScaleEdgeDropByHandCount = true;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	const TArray<FWacomFirstPersonCardLayerSlotView> FiveSlots = BuildRuntimeSlots(5);
+	const TArray<FWacomFirstPersonCardLayerSlotView> EightSlots = BuildRuntimeSlots(8);
+	const TArray<FWacomFirstPersonCardLayerSlotView> TwelveSlots = BuildRuntimeSlots(12);
+
+	TestEqual(TEXT("Five-card slot count"), FiveSlots.Num(), 5);
+	TestEqual(TEXT("Eight-card slot count"), EightSlots.Num(), 8);
+	TestEqual(TEXT("Twelve-card slot count"), TwelveSlots.Num(), 12);
+	if (FiveSlots.Num() == 5 && EightSlots.Num() == 8 && TwelveSlots.Num() == 12)
+	{
+		const float EightAlpha = FMath::SmoothStep(0.0f, 1.0f, 3.0f / 7.0f);
+		const float ExpectedEightDrop = FMath::Lerp(64.0f, 110.0f, EightAlpha);
+		TestTrue(TEXT("Five-card edge uses short-hand drop"),
+			FMath::IsNearlyEqual(FiveSlots[0].AuthoredLayoutOffset.Y, 64.0f, 0.001f));
+		TestTrue(TEXT("Eight-card edge uses smooth interpolated drop"),
+			FMath::IsNearlyEqual(EightSlots[0].AuthoredLayoutOffset.Y, ExpectedEightDrop, 0.001f));
+		TestTrue(TEXT("Twelve-card edge uses max drop"),
+			FMath::IsNearlyEqual(TwelveSlots[0].AuthoredLayoutOffset.Y, 110.0f, 0.001f));
+		TestTrue(TEXT("Interpolated drop is between short and max"),
+			EightSlots[0].AuthoredLayoutOffset.Y > FiveSlots[0].AuthoredLayoutOffset.Y
+			&& EightSlots[0].AuthoredLayoutOffset.Y < TwelveSlots[0].AuthoredLayoutOffset.Y);
+	}
+
+	Anchor->bScaleEdgeDropByHandCount = false;
+	const TArray<FWacomFirstPersonCardLayerSlotView> UnscaledFiveSlots = BuildRuntimeSlots(5);
+	TestEqual(TEXT("Unscaled five-card slot count"), UnscaledFiveSlots.Num(), 5);
+	if (UnscaledFiveSlots.Num() == 5)
+	{
+		TestTrue(TEXT("Disabled scaling keeps full edge drop"),
+			FMath::IsNearlyEqual(UnscaledFiveSlots[0].AuthoredLayoutOffset.Y, 110.0f, 0.001f));
+	}
+
+	Anchor->bScaleEdgeDropByHandCount = true;
+	Anchor->StaticCardEdgeDropPixels = 0.0f;
+	Anchor->ShortHandEdgeDropPixels = 64.0f;
+	const TArray<FWacomFirstPersonCardLayerSlotView> ZeroMaxFiveSlots = BuildRuntimeSlots(5);
+	TestEqual(TEXT("Zero max five-card slot count"), ZeroMaxFiveSlots.Num(), 5);
+	if (ZeroMaxFiveSlots.Num() == 5)
+	{
+		TestTrue(TEXT("Zero max edge drop still disables drop"),
+			FMath::IsNearlyEqual(ZeroMaxFiveSlots[0].AuthoredLayoutOffset.Y, 0.0f, 0.001f));
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAuthoredHandAnchorNormalLayoutTest,
+	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.HandAnchorsUseNormalCardLayout",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAuthoredHandAnchorNormalLayoutTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardLayerEntry LeftAnchor;
+	LeftAnchor.CardViewData.Name = FText::FromString(TEXT("Left Anchor"));
+	LeftAnchor.bIsHandAnchor = true;
+
+	FWacomFirstPersonCardLayerEntry NormalA;
+	NormalA.CardViewData.Name = FText::FromString(TEXT("Normal A"));
+
+	FWacomFirstPersonCardLayerEntry NormalB;
+	NormalB.CardViewData.Name = FText::FromString(TEXT("Normal B"));
+
+	FWacomFirstPersonCardLayerEntry NormalC;
+	NormalC.CardViewData.Name = FText::FromString(TEXT("Normal C"));
+
+	FWacomFirstPersonCardLayerEntry RightAnchor;
+	RightAnchor.CardViewData.Name = FText::FromString(TEXT("Right Anchor"));
+	RightAnchor.bIsHandAnchor = true;
+
+	FWacomFirstPersonCardLayerEntry RightNormal;
+	RightNormal.CardViewData.Name = FText::FromString(TEXT("Right Normal"));
+
+	FWacomFirstPersonCardLayerEntry LeftNormal;
+	LeftNormal.CardViewData.Name = FText::FromString(TEXT("Left Normal"));
+
+	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
+	Anchor->ProjectionPadding = 0.0f;
+	Anchor->AuthoredCardSpacingPixels = 80.0f;
+	Anchor->AuthoredMaxHandWidthPixels = 0.0f;
+	Anchor->AuthoredHandScreenOffset = FVector2D::ZeroVector;
+	Anchor->AuthoredCenterLiftPixels = 0.0f;
+	Anchor->AuthoredDropCurveExponent = 1.0f;
+	Anchor->StaticCardEdgeDropPixels = 100.0f;
+	Anchor->ShortHandEdgeDropPixels = 100.0f;
+	Anchor->StaticCardRenderScale = 0.5f;
+	Anchor->HandAnchorScale = 0.25f;
+	Anchor->bEnableCardLayerPixelSnapping = false;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { LeftAnchor, NormalA, NormalB, NormalC, RightAnchor });
+	const TArray<FWacomFirstPersonCardLayerSlotView> AnchorEdgeSlots =
+		Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleHand"), { LeftNormal, NormalA, NormalB, NormalC, RightNormal });
+	const TArray<FWacomFirstPersonCardLayerSlotView> NormalEdgeSlots =
+		Anchor->BuildActiveCardLayerSlotViewsForTest();
+
+	TestEqual(TEXT("Anchor-edge slot count"), AnchorEdgeSlots.Num(), 5);
+	TestEqual(TEXT("Normal-edge slot count"), NormalEdgeSlots.Num(), 5);
+	if (AnchorEdgeSlots.Num() == 5 && NormalEdgeSlots.Num() == 5)
+	{
+		TestTrue(TEXT("Left hand anchor keeps anchor identity"), AnchorEdgeSlots[0].Entry.bIsHandAnchor);
+		TestTrue(TEXT("Right hand anchor keeps anchor identity"), AnchorEdgeSlots[4].Entry.bIsHandAnchor);
+		TestFalse(TEXT("Comparison left card is normal"), NormalEdgeSlots[0].Entry.bIsHandAnchor);
+		TestFalse(TEXT("Comparison right card is normal"), NormalEdgeSlots[4].Entry.bIsHandAnchor);
+		TestTrue(TEXT("Left hand anchor uses normal edge drop"),
+			FMath::IsNearlyEqual(AnchorEdgeSlots[0].AuthoredLayoutOffset.Y, 100.0f, 0.001f));
+		TestTrue(TEXT("Right hand anchor uses normal edge drop"),
+			FMath::IsNearlyEqual(AnchorEdgeSlots[4].AuthoredLayoutOffset.Y, 100.0f, 0.001f));
+		TestTrue(TEXT("Normal edge card applies same edge drop"),
+			FMath::IsNearlyEqual(NormalEdgeSlots[4].AuthoredLayoutOffset.Y, 100.0f, 0.001f));
+		TestEqual(TEXT("Left hand anchor matches normal slot position"),
+			AnchorEdgeSlots[0].AuthoredLayoutOffset,
+			NormalEdgeSlots[0].AuthoredLayoutOffset);
+		TestEqual(TEXT("Right hand anchor matches normal slot position"),
+			AnchorEdgeSlots[4].AuthoredLayoutOffset,
+			NormalEdgeSlots[4].AuthoredLayoutOffset);
+		TestEqual(TEXT("Left hand anchor uses normal render scale"), AnchorEdgeSlots[0].RenderScale, 0.5f);
+		TestEqual(TEXT("Right hand anchor uses normal render scale"), AnchorEdgeSlots[4].RenderScale, 0.5f);
+		TestEqual(TEXT("Left hand anchor matches normal render angle"),
+			AnchorEdgeSlots[0].RenderAngleDegrees,
+			NormalEdgeSlots[0].RenderAngleDegrees);
+		TestEqual(TEXT("Right hand anchor matches normal render angle"),
+			AnchorEdgeSlots[4].RenderAngleDegrees,
+			NormalEdgeSlots[4].RenderAngleDegrees);
+	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerAuthoredCurveTest,
 	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.Authored2DEdgeDropAndCenterLift",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -3243,6 +3446,7 @@ bool FWacomFirstPersonCardLayerAuthoredCurveTest::RunTest(const FString& Paramet
 	Anchor->AuthoredCardSpacingPixels = 100.0f;
 	Anchor->AuthoredMaxHandWidthPixels = 0.0f;
 	Anchor->StaticCardEdgeDropPixels = 80.0f;
+	Anchor->ShortHandEdgeDropPixels = 80.0f;
 	Anchor->AuthoredCenterLiftPixels = 20.0f;
 	Anchor->AuthoredDropCurveExponent = 2.0f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
@@ -8237,7 +8441,7 @@ bool FWacomFirstPersonCardLayerVisualStateSlotTest::RunTest(const FString& Param
 		TestEqual(TEXT("Pending card applies scale multiplier"), Slots[1].RenderScale, 0.5f * 1.2f);
 		TestTrue(TEXT("Pending card gets configured higher z-order"), Slots[1].ZOrder >= 1200);
 		TestEqual(TEXT("Non-pending card is deemphasized during target select"), Slots[0].RenderOpacity, 0.5f);
-		TestEqual(TEXT("Disabled anchor applies anchor scale"), Slots[2].RenderScale, 0.5f * 0.9f);
+		TestEqual(TEXT("Disabled anchor keeps normal card scale"), Slots[2].RenderScale, 0.5f);
 		TestEqual(TEXT("Disabled card opacity composes with target select deemphasis"), Slots[2].RenderOpacity, 0.6f * 0.5f);
 		TestTrue(TEXT("Disabled card view data stays disabled"), Slots[2].Entry.CardViewData.bDisabled);
 	}

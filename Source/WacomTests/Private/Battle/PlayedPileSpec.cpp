@@ -13,7 +13,7 @@
 
 namespace
 {
-	UCardDefinition* MakeDrawCard(FWacomBattleFixture& Fx, int32 DrawCount)
+	UCardDefinition* MakePlayedPileDrawCard(FWacomBattleFixture& Fx, int32 DrawCount)
 	{
 		UCardDefinition* Card = Fx.MakeNoopCard(/*Cost*/0);
 
@@ -99,7 +99,7 @@ bool FWacomBattlePlayedPileExcludedFromSameTurnReshuffleSpec::RunTest(const FStr
 	UCardDefinition* FirstPlayedCard = Fx.MakeNoopCard(/*Cost*/0);
 	UCardDefinition* DiscardSource = Fx.MakeSelectedHandCardZoneMoveCard(/*Cost*/0, /*bExhaust*/false);
 	UCardDefinition* DiscardTarget = Fx.MakeNoopCard(/*Cost*/0);
-	UCardDefinition* DrawCard = MakeDrawCard(Fx, /*DrawCount*/20);
+	UCardDefinition* DrawCard = MakePlayedPileDrawCard(Fx, /*DrawCount*/20);
 
 	TArray<UCardDefinition*> Deck = {
 		FirstPlayedCard,
