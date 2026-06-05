@@ -120,6 +120,9 @@ public:
 	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
 	void AddUntrackedSlotChildForTest();
 	void SetViewportSizeOverrideForTest(const FVector2D& WidgetViewportSize);
+	FGuid ResolveHoveredCardAtWidgetPositionForTest(const FVector2D& WidgetPosition);
+	bool RequestPressAtWidgetPositionForTest(const FVector2D& WidgetPosition);
+	bool RequestReleaseAtWidgetPositionForTest(const FVector2D& WidgetPosition);
 #endif
 
 	FWacomFirstPersonCardLayerInteractionNative OnCardClickedNative;
@@ -167,8 +170,11 @@ private:
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
+	FGuid HoveredCardInstanceId;
 	FWacomInteractionTargetHandle HoveredCardTargetHandle;
 	FWacomFirstPersonCardLayerSlotView HoveredCardTargetSlotView;
+	TWeakObjectPtr<UWacomFirstPersonCardLayerSlotWidget> HoveredSlotWidget;
+	TWeakObjectPtr<UWacomFirstPersonCardLayerSlotWidget> PressedSlotWidget;
 	FWacomFirstPersonCardDragView CurrentDragView;
 	FString CurrentDragResolvedIntentDebugSummary;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedTransitionHint> PendingTransitionHintsByKey;
@@ -181,6 +187,8 @@ private:
 	int32 SlotFeedbackConfigPropagationCountForTest = 0;
 	int32 CardDragConfigPropagationCountForTest = 0;
 #endif
+
+	friend class UWacomFirstPersonCardLayerSlotWidget;
 
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
 	void ApplyLayerVisibility();
@@ -216,12 +224,31 @@ private:
 	void HandleSlotVisualSlotUpdated(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleSlotCardTargetHovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleSlotCardTargetUnhovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleSlotCardTargetHovered(
+		const FWacomInteractionTargetHandle& CardTargetHandle,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleSlotCardTargetUnhovered(
+		const FWacomInteractionTargetHandle& CardTargetHandle,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	bool HandleSlotPointerEntered(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
+	void HandleSlotPointerLeft(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
+	bool HandleSlotPointerMoved(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
+	bool HandleSlotPointerPressed(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
+	bool HandleSlotPointerReleased(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
+	bool ResolveAbsoluteScreenPositionToWidgetPosition(const FVector2D& AbsoluteScreenPosition, FVector2D& OutWidgetPosition) const;
+	UWacomFirstPersonCardLayerSlotWidget* ResolveInteractiveSlotUnderPointer(
+		const FVector2D& WidgetPosition,
+		const FGuid& ExcludedCardInstanceId,
+		bool bRequirePlayable,
+		bool bUseHoverHysteresis,
+		FWacomFirstPersonCardLayerSlotView* OutResolvedSlotView = nullptr) const;
+	bool UpdateHoveredSlotFromWidgetPosition(const FVector2D& WidgetPosition);
+	void ClearHoveredSlotState(bool bBroadcastUnhover);
+	UWacomFirstPersonCardLayerSlotWidget* FindActiveGestureSlot() const;
 	bool TryResolveCardTargetUnderDragPointer(
 		const FWacomFirstPersonCardDragView& DragView,
 		FWacomInteractionTargetHandle& OutTargetHandle,

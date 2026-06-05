@@ -3,6 +3,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/SlateBlueprintLibrary.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
@@ -93,6 +94,49 @@ namespace
 			&& A.bIsPlayable == B.bIsPlayable
 			&& A.bIsPendingTargeting == B.bIsPendingTargeting
 			&& A.TargetMode == B.TargetMode;
+	}
+
+	FVector2D ResolveInputHitCenter(const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		return SlotView.InputHitCenter.IsNearlyZero() ? SlotView.ScreenPosition : SlotView.InputHitCenter;
+	}
+
+	float ResolveInputHitScale(const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		return FMath::Max(0.01f, SlotView.InputHitScale > 0.0f ? SlotView.InputHitScale : SlotView.RenderScale);
+	}
+
+	float ResolveInputHitAngleDegrees(const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		return SlotView.InputHitAngleDegrees;
+	}
+
+	int32 ResolveInputHitOrder(const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		return SlotView.InputHitOrder != INDEX_NONE ? SlotView.InputHitOrder : SlotView.Index;
+	}
+
+	bool IsWidgetPositionInsideStableCardBody(
+		const FWacomFirstPersonCardLayerSlotView& SlotView,
+		const FVector2D& BodySize,
+		const FVector2D& WidgetPosition)
+	{
+		if (WidgetPosition.ContainsNaN() || BodySize.X <= 1.0f || BodySize.Y <= 1.0f)
+		{
+			return false;
+		}
+
+		FVector2D LocalDelta = (WidgetPosition - ResolveInputHitCenter(SlotView)) / ResolveInputHitScale(SlotView);
+		const float InverseAngleRadians = FMath::DegreesToRadians(-ResolveInputHitAngleDegrees(SlotView));
+		const float CosAngle = FMath::Cos(InverseAngleRadians);
+		const float SinAngle = FMath::Sin(InverseAngleRadians);
+		LocalDelta = FVector2D(
+			LocalDelta.X * CosAngle - LocalDelta.Y * SinAngle,
+			LocalDelta.X * SinAngle + LocalDelta.Y * CosAngle);
+
+		const FVector2D HalfBodySize = BodySize * 0.5f;
+		return FMath::Abs(LocalDelta.X) <= HalfBodySize.X
+			&& FMath::Abs(LocalDelta.Y) <= HalfBodySize.Y;
 	}
 }
 
@@ -434,6 +478,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
 		SlotWidget->SetCardDragConfig(CardDragConfig);
 		SlotWidget->SetCardLayerInteractionEnabled(bCardLayerInteractionEnabled);
+		SlotWidget->SetOwningFirstPersonCardLayer(this);
 		const bool bShouldPlayProjectionExit =
 			SlotMotionConfig.bEnabled
 			&& !bIsNewSlotWidget
@@ -525,6 +570,30 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 			ClearHoveredCardTargetState(true);
 		}
 	}
+	if (HoveredCardInstanceId.IsValid())
+	{
+		UWacomFirstPersonCardLayerSlotWidget* ActiveHoveredSlot = nullptr;
+		for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+		{
+			if (SlotWidget
+				&& SlotWidget->GetSlotView().Entry.CardInstanceId == HoveredCardInstanceId
+				&& !SlotWidget->IsExitingForFirstPersonLayer()
+				&& SlotWidget->GetSlotView().bProjected)
+			{
+				ActiveHoveredSlot = SlotWidget.Get();
+				break;
+			}
+		}
+		if (ActiveHoveredSlot)
+		{
+			HoveredSlotWidget = ActiveHoveredSlot;
+			ActiveHoveredSlot->SetHoveredFromFirstPersonLayer(true);
+		}
+		else
+		{
+			ClearHoveredSlotState(true);
+		}
+	}
 	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
 	RepairSlotMotionInvariants();
 	EnforceOutgoingSlotLimit();
@@ -586,6 +655,10 @@ bool UWacomFirstPersonCardLayerWidget::AreSlotViewsEquivalentForRefresh(
 	return A.Index == B.Index
 		&& AreLayerEntriesEquivalent(A.Entry, B.Entry)
 		&& AreFirstPersonSlotVectorsEquivalent(A.ScreenPosition, B.ScreenPosition)
+		&& AreFirstPersonSlotVectorsEquivalent(A.InputHitCenter, B.InputHitCenter)
+		&& AreFirstPersonSlotFloatsEquivalent(A.InputHitScale, B.InputHitScale)
+		&& AreFirstPersonSlotFloatsEquivalent(A.InputHitAngleDegrees, B.InputHitAngleDegrees)
+		&& A.InputHitOrder == B.InputHitOrder
 		&& AreFirstPersonSlotVectorsEquivalent(A.RawScreenPosition, B.RawScreenPosition)
 		&& AreFirstPersonSlotVectorsEquivalent(A.WidgetPosition, B.WidgetPosition)
 		&& AreFirstPersonSlotVectorsEquivalent(A.UnclampedWidgetPosition, B.UnclampedWidgetPosition)
@@ -636,7 +709,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardLayerInteractionEnabled(bool bEnab
 	}
 	if (!bCardLayerInteractionEnabled)
 	{
-		ClearHoveredCardTargetState(true);
+		ClearHoveredSlotState(true);
 		ClearCurrentDragState(true);
 	}
 }
@@ -823,6 +896,48 @@ void UWacomFirstPersonCardLayerWidget::SetViewportSizeOverrideForTest(const FVec
 {
 	WidgetViewportSizeOverrideForTest = WidgetViewportSize;
 }
+
+FGuid UWacomFirstPersonCardLayerWidget::ResolveHoveredCardAtWidgetPositionForTest(
+	const FVector2D& WidgetPosition)
+{
+	UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	return HoveredCardInstanceId;
+}
+
+bool UWacomFirstPersonCardLayerWidget::RequestPressAtWidgetPositionForTest(
+	const FVector2D& WidgetPosition)
+{
+	FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
+	UWacomFirstPersonCardLayerSlotWidget* TargetSlot = ResolveInteractiveSlotUnderPointer(
+		WidgetPosition,
+		FGuid(),
+		false,
+		false,
+		&ResolvedSlotView);
+	if (!TargetSlot)
+	{
+		return false;
+	}
+
+	UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	PressedSlotWidget = TargetSlot;
+	return TargetSlot->BeginGesturePressFromFirstPersonLayer(WidgetPosition);
+}
+
+bool UWacomFirstPersonCardLayerWidget::RequestReleaseAtWidgetPositionForTest(
+	const FVector2D& WidgetPosition)
+{
+	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	if (!GestureSlot)
+	{
+		return false;
+	}
+
+	const bool bReleased = GestureSlot->ReleaseGestureFromFirstPersonLayer(WidgetPosition);
+	PressedSlotWidget.Reset();
+	UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	return bReleased;
+}
 #endif
 
 TSharedRef<SWidget> UWacomFirstPersonCardLayerWidget::RebuildWidget()
@@ -850,6 +965,7 @@ TSharedRef<SWidget> UWacomFirstPersonCardLayerWidget::RebuildWidget()
 
 void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 {
+	ClearHoveredSlotState(false);
 	ClearHoveredCardTargetState(false);
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
 	{
@@ -874,6 +990,9 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	OnHoveredCardTargetUpdatedNative.Clear();
 	SlotWidgets.Reset();
 	OutgoingSlotWidgets.Reset();
+	HoveredSlotWidget.Reset();
+	HoveredCardInstanceId.Invalidate();
+	PressedSlotWidget.Reset();
 	HoveredCardTargetHandle = FWacomInteractionTargetHandle();
 	HoveredCardTargetSlotView = FWacomFirstPersonCardLayerSlotView();
 	CurrentDragView = FWacomFirstPersonCardDragView();
@@ -993,6 +1112,7 @@ UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::CreateSl
 	SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
 	SlotWidget->SetCardDragConfig(CardDragConfig);
 	SlotWidget->SetCardLayerInteractionEnabled(bCardLayerInteractionEnabled);
+	SlotWidget->SetOwningFirstPersonCardLayer(this);
 	BindSlotWidget(SlotWidget);
 	RootCanvas->AddChild(SlotWidget);
 	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(SlotWidget->Slot))
@@ -1032,14 +1152,19 @@ void UWacomFirstPersonCardLayerWidget::BindSlotWidget(UWacomFirstPersonCardLayer
 	SlotWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	SlotWidget->OnCardDragReleasedNative.RemoveAll(this);
 	SlotWidget->OnCardDragCancelledNative.RemoveAll(this);
+	SlotWidget->SetOwningFirstPersonCardLayer(this);
 	SlotWidget->OnCardClickedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotClicked);
 	SlotWidget->OnCardHoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotHovered);
 	SlotWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotUnhovered);
 	SlotWidget->OnCardVisualSlotUpdatedNative.AddUObject(
 		this,
 		&UWacomFirstPersonCardLayerWidget::HandleSlotVisualSlotUpdated);
-	SlotWidget->OnCardTargetHoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotCardTargetHovered);
-	SlotWidget->OnCardTargetUnhoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotCardTargetUnhovered);
+	SlotWidget->OnCardTargetHoveredNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardLayerWidget::HandleSlotCardTargetHovered);
+	SlotWidget->OnCardTargetUnhoveredNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardLayerWidget::HandleSlotCardTargetUnhovered);
 	SlotWidget->OnCardDragStartedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragStarted);
 	SlotWidget->OnCardDragUpdatedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragUpdated);
 	SlotWidget->OnCardDragReleasedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragReleased);
@@ -1063,6 +1188,7 @@ void UWacomFirstPersonCardLayerWidget::UnbindSlotWidget(UWacomFirstPersonCardLay
 	SlotWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	SlotWidget->OnCardDragReleasedNative.RemoveAll(this);
 	SlotWidget->OnCardDragCancelledNative.RemoveAll(this);
+	SlotWidget->SetOwningFirstPersonCardLayer(nullptr);
 }
 
 void UWacomFirstPersonCardLayerWidget::ClearHoveredCardTargetState(bool bBroadcastUnhover)
@@ -1083,6 +1209,30 @@ void UWacomFirstPersonCardLayerWidget::ClearHoveredCardTargetState(bool bBroadca
 	}
 }
 
+void UWacomFirstPersonCardLayerWidget::ClearHoveredSlotState(bool bBroadcastUnhover)
+{
+	UWacomFirstPersonCardLayerSlotWidget* PreviousSlotWidget = HoveredSlotWidget.Get();
+	if (!PreviousSlotWidget)
+	{
+		HoveredSlotWidget.Reset();
+		HoveredCardInstanceId.Invalidate();
+		ClearHoveredCardTargetState(bBroadcastUnhover);
+		return;
+	}
+
+	FWacomFirstPersonCardLayerSlotView PreviousSlotView = PreviousSlotWidget->GetVisualSlotView();
+	PreviousSlotView.bIsHovered = false;
+	const FGuid PreviousCardId = PreviousSlotWidget->GetSlotView().Entry.CardInstanceId;
+	HoveredSlotWidget.Reset();
+	HoveredCardInstanceId.Invalidate();
+	PreviousSlotWidget->SetHoveredFromFirstPersonLayer(false);
+	if (bBroadcastUnhover && PreviousCardId.IsValid())
+	{
+		OnCardUnhoveredNative.Broadcast(PreviousCardId, PreviousSlotView);
+	}
+	ClearHoveredCardTargetState(bBroadcastUnhover);
+}
+
 void UWacomFirstPersonCardLayerWidget::ClearCurrentDragState(bool bBroadcastCancel)
 {
 	const bool bHadDrag = CurrentDragView.CardInstanceId.IsValid()
@@ -1092,6 +1242,7 @@ void UWacomFirstPersonCardLayerWidget::ClearCurrentDragState(bool bBroadcastCanc
 	FWacomFirstPersonCardDragView PreviousDragView = CurrentDragView;
 	CurrentDragView = FWacomFirstPersonCardDragView();
 	CurrentDragResolvedIntentDebugSummary.Reset();
+	PressedSlotWidget.Reset();
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
 	{
 		if (SlotWidget)
@@ -1487,6 +1638,20 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotHovered(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
+	if (!CardInstanceId.IsValid())
+	{
+		return;
+	}
+
+	HoveredCardInstanceId = CardInstanceId;
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (SlotWidget && SlotWidget->GetSlotView().Entry.CardInstanceId == CardInstanceId)
+		{
+			HoveredSlotWidget = SlotWidget.Get();
+			break;
+		}
+	}
 	OnCardHoveredNative.Broadcast(CardInstanceId, SlotView);
 }
 
@@ -1494,6 +1659,17 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotUnhovered(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
+	if (HoveredCardInstanceId == CardInstanceId)
+	{
+		HoveredCardInstanceId.Invalidate();
+	}
+	if (UWacomFirstPersonCardLayerSlotWidget* HoveredSlot = HoveredSlotWidget.Get())
+	{
+		if (HoveredSlot->GetSlotView().Entry.CardInstanceId == CardInstanceId)
+		{
+			HoveredSlotWidget.Reset();
+		}
+	}
 	OnCardUnhoveredNative.Broadcast(CardInstanceId, SlotView);
 }
 
@@ -1535,6 +1711,330 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotCardTargetUnhovered(
 		HoveredCardTargetSlotView = FWacomFirstPersonCardLayerSlotView();
 	}
 	OnCardTargetUnhoveredNative.Broadcast(CardTargetHandle, SlotView);
+}
+
+bool UWacomFirstPersonCardLayerWidget::ResolveAbsoluteScreenPositionToWidgetPosition(
+	const FVector2D& AbsoluteScreenPosition,
+	FVector2D& OutWidgetPosition) const
+{
+	FVector2D PixelPosition = FVector2D::ZeroVector;
+	FVector2D ViewportPosition = FVector2D::ZeroVector;
+	USlateBlueprintLibrary::AbsoluteToViewport(
+		this,
+		AbsoluteScreenPosition,
+		PixelPosition,
+		ViewportPosition);
+
+	if (ViewportPosition.ContainsNaN())
+	{
+		return false;
+	}
+
+	OutWidgetPosition = ViewportPosition;
+	return true;
+}
+
+UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::ResolveInteractiveSlotUnderPointer(
+	const FVector2D& WidgetPosition,
+	const FGuid& ExcludedCardInstanceId,
+	bool bRequirePlayable,
+	bool bUseHoverHysteresis,
+	FWacomFirstPersonCardLayerSlotView* OutResolvedSlotView) const
+{
+	if (!bCardLayerInteractionEnabled || WidgetPosition.ContainsNaN())
+	{
+		return nullptr;
+	}
+
+	struct FHitCandidate
+	{
+		UWacomFirstPersonCardLayerSlotWidget* SlotWidget = nullptr;
+		FWacomFirstPersonCardLayerSlotView SlotView;
+		int32 Order = INDEX_NONE;
+		float CenterX = 0.0f;
+		float DistanceSquared = 0.0f;
+	};
+
+	TArray<FHitCandidate> Candidates;
+	Candidates.Reserve(SlotWidgets.Num());
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (!SlotWidget
+			|| SlotWidget->IsExitingForFirstPersonLayer()
+			|| !SlotWidget->IsCardLayerInteractionEnabled())
+		{
+			continue;
+		}
+
+		const FWacomFirstPersonCardLayerSlotView& SlotView = SlotWidget->GetSlotView();
+		const FGuid SlotCardId = SlotView.Entry.CardInstanceId;
+		if (!SlotCardId.IsValid()
+			|| SlotCardId == ExcludedCardInstanceId
+			|| !SlotView.bProjected
+			|| (bRequirePlayable && !SlotView.Entry.bIsPlayable))
+		{
+			continue;
+		}
+
+		const FVector2D BodySize = SlotWidget->GetCardBodyHitSizeForFirstPersonLayer();
+		if (!IsWidgetPositionInsideStableCardBody(SlotView, BodySize, WidgetPosition))
+		{
+			continue;
+		}
+
+		FHitCandidate Candidate;
+		Candidate.SlotWidget = SlotWidget.Get();
+		Candidate.SlotView = SlotView;
+		Candidate.Order = ResolveInputHitOrder(SlotView);
+		Candidate.CenterX = ResolveInputHitCenter(SlotView).X;
+		Candidate.DistanceSquared = (WidgetPosition - ResolveInputHitCenter(SlotView)).SizeSquared();
+		Candidates.Add(Candidate);
+	}
+
+	if (Candidates.Num() == 0)
+	{
+		return nullptr;
+	}
+
+	Candidates.Sort([](const FHitCandidate& A, const FHitCandidate& B)
+	{
+		if (A.Order != B.Order)
+		{
+			return A.Order < B.Order;
+		}
+		return A.CenterX < B.CenterX;
+	});
+
+	if (bUseHoverHysteresis)
+	{
+		if (UWacomFirstPersonCardLayerSlotWidget* CurrentHoveredSlot = HoveredSlotWidget.Get())
+		{
+			const int32 CurrentIndex = Candidates.IndexOfByPredicate(
+				[CurrentHoveredSlot](const FHitCandidate& Candidate)
+				{
+					return Candidate.SlotWidget == CurrentHoveredSlot;
+				});
+			if (CurrentIndex != INDEX_NONE)
+			{
+				const float HysteresisPixels = FMath::Max(0.0f, CardDragConfig.HoverHitHysteresisPixels);
+				const float CurrentCenterX = Candidates[CurrentIndex].CenterX;
+				const bool bMaySwitchLeft =
+					CurrentIndex > 0
+					&& WidgetPosition.X < ((Candidates[CurrentIndex - 1].CenterX + CurrentCenterX) * 0.5f) - HysteresisPixels;
+				const bool bMaySwitchRight =
+					CurrentIndex + 1 < Candidates.Num()
+					&& WidgetPosition.X > ((Candidates[CurrentIndex + 1].CenterX + CurrentCenterX) * 0.5f) + HysteresisPixels;
+				if (!bMaySwitchLeft && !bMaySwitchRight)
+				{
+					if (OutResolvedSlotView)
+					{
+						*OutResolvedSlotView = Candidates[CurrentIndex].SlotView;
+					}
+					return CurrentHoveredSlot;
+				}
+			}
+		}
+	}
+
+	int32 BestIndex = 0;
+	for (int32 Index = 1; Index < Candidates.Num(); ++Index)
+	{
+		const float PreviousBoundary = (Candidates[Index - 1].CenterX + Candidates[Index].CenterX) * 0.5f;
+		if (WidgetPosition.X >= PreviousBoundary)
+		{
+			BestIndex = Index;
+		}
+	}
+
+	if (OutResolvedSlotView)
+	{
+		*OutResolvedSlotView = Candidates[BestIndex].SlotView;
+	}
+	return Candidates[BestIndex].SlotWidget;
+}
+
+bool UWacomFirstPersonCardLayerWidget::UpdateHoveredSlotFromWidgetPosition(const FVector2D& WidgetPosition)
+{
+	FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
+	UWacomFirstPersonCardLayerSlotWidget* NewHoveredSlot = ResolveInteractiveSlotUnderPointer(
+		WidgetPosition,
+		FGuid(),
+		false,
+		true,
+		&ResolvedSlotView);
+	UWacomFirstPersonCardLayerSlotWidget* PreviousHoveredSlot = HoveredSlotWidget.Get();
+	if (PreviousHoveredSlot == NewHoveredSlot)
+	{
+		return NewHoveredSlot != nullptr;
+	}
+
+	if (PreviousHoveredSlot)
+	{
+		FWacomFirstPersonCardLayerSlotView PreviousSlotView = PreviousHoveredSlot->GetVisualSlotView();
+		PreviousSlotView.bIsHovered = false;
+		const FGuid PreviousCardId = PreviousHoveredSlot->GetSlotView().Entry.CardInstanceId;
+		PreviousHoveredSlot->SetHoveredFromFirstPersonLayer(false);
+		if (PreviousCardId.IsValid())
+		{
+			OnCardUnhoveredNative.Broadcast(PreviousCardId, PreviousSlotView);
+		}
+		ClearHoveredCardTargetState(true);
+	}
+
+	HoveredSlotWidget = NewHoveredSlot;
+	if (!NewHoveredSlot)
+	{
+		HoveredCardInstanceId.Invalidate();
+		return false;
+	}
+
+	NewHoveredSlot->SetHoveredFromFirstPersonLayer(true);
+	FWacomFirstPersonCardLayerSlotView HoveredVisualSlotView = NewHoveredSlot->GetVisualSlotView();
+	HoveredVisualSlotView.bIsHovered = true;
+	const FGuid NewCardId = NewHoveredSlot->GetSlotView().Entry.CardInstanceId;
+	if (NewCardId.IsValid())
+	{
+		HoveredCardInstanceId = NewCardId;
+		OnCardHoveredNative.Broadcast(NewCardId, HoveredVisualSlotView);
+		const FWacomInteractionTargetHandle CardTargetHandle = NewHoveredSlot->BuildCardTargetHandle();
+		if (CardTargetHandle.IsValid())
+		{
+			HoveredCardTargetHandle = CardTargetHandle;
+			HoveredCardTargetSlotView = HoveredVisualSlotView;
+			OnCardTargetHoveredNative.Broadcast(CardTargetHandle, HoveredVisualSlotView);
+		}
+	}
+	return true;
+}
+
+UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::FindActiveGestureSlot() const
+{
+	if (UWacomFirstPersonCardLayerSlotWidget* PressedSlot = PressedSlotWidget.Get())
+	{
+		if (PressedSlot->GetGestureStateForFirstPersonLayer() != EWacomFirstPersonCardGestureState::Idle
+			&& PressedSlot->GetGestureStateForFirstPersonLayer() != EWacomFirstPersonCardGestureState::Cancelled)
+		{
+			return PressedSlot;
+		}
+	}
+
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (SlotWidget
+			&& SlotWidget->GetGestureStateForFirstPersonLayer() != EWacomFirstPersonCardGestureState::Idle
+			&& SlotWidget->GetGestureStateForFirstPersonLayer() != EWacomFirstPersonCardGestureState::Cancelled)
+		{
+			return SlotWidget.Get();
+		}
+	}
+	return nullptr;
+}
+
+bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerEntered(
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& ScreenPosition)
+{
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+	if (!ResolveAbsoluteScreenPositionToWidgetPosition(ScreenPosition, WidgetPosition))
+	{
+		WidgetPosition = SourceSlot.GetSlotView().ScreenPosition;
+	}
+	return UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+}
+
+void UWacomFirstPersonCardLayerWidget::HandleSlotPointerLeft(
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& ScreenPosition)
+{
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+	if (ResolveAbsoluteScreenPositionToWidgetPosition(ScreenPosition, WidgetPosition))
+	{
+		if (UpdateHoveredSlotFromWidgetPosition(WidgetPosition))
+		{
+			return;
+		}
+	}
+
+	if (HoveredSlotWidget.Get() == &SourceSlot || !HoveredSlotWidget.IsValid())
+	{
+		ClearHoveredSlotState(true);
+	}
+}
+
+bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerMoved(
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& ScreenPosition)
+{
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+	if (!ResolveAbsoluteScreenPositionToWidgetPosition(ScreenPosition, WidgetPosition))
+	{
+		WidgetPosition = SourceSlot.GetSlotView().ScreenPosition;
+	}
+	if (UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot())
+	{
+		GestureSlot->UpdateGestureFromFirstPersonLayer(0.0f, WidgetPosition);
+		return true;
+	}
+	return UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+}
+
+bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerPressed(
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& ScreenPosition)
+{
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+	if (!ResolveAbsoluteScreenPositionToWidgetPosition(ScreenPosition, WidgetPosition))
+	{
+		WidgetPosition = SourceSlot.GetSlotView().ScreenPosition;
+	}
+
+	FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
+	UWacomFirstPersonCardLayerSlotWidget* TargetSlot = ResolveInteractiveSlotUnderPointer(
+		WidgetPosition,
+		FGuid(),
+		false,
+		false,
+		&ResolvedSlotView);
+	if (!TargetSlot)
+	{
+		return false;
+	}
+
+	UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	PressedSlotWidget = TargetSlot;
+	return TargetSlot->BeginGesturePressFromFirstPersonLayer(WidgetPosition);
+}
+
+bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerReleased(
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& ScreenPosition)
+{
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+	if (!ResolveAbsoluteScreenPositionToWidgetPosition(ScreenPosition, WidgetPosition))
+	{
+		WidgetPosition = SourceSlot.GetSlotView().ScreenPosition;
+	}
+
+	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	if (!GestureSlot)
+	{
+		FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
+		GestureSlot = ResolveInteractiveSlotUnderPointer(
+			WidgetPosition,
+			FGuid(),
+			false,
+			false,
+			&ResolvedSlotView);
+	}
+	if (!GestureSlot)
+	{
+		return false;
+	}
+
+	const bool bReleased = GestureSlot->ReleaseGestureFromFirstPersonLayer(WidgetPosition);
+	PressedSlotWidget.Reset();
+	UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	return bReleased;
 }
 
 void UWacomFirstPersonCardLayerWidget::HandleSlotDragStarted(
@@ -1788,53 +2288,19 @@ bool UWacomFirstPersonCardLayerWidget::TryResolveCardTargetUnderDragPointer(
 		return false;
 	}
 
-	UWacomFirstPersonCardLayerSlotWidget* BestSlotWidget = nullptr;
 	FWacomFirstPersonCardLayerSlotView BestSlotView;
-	float BestZOrder = TNumericLimits<float>::Lowest();
-	float BestDistanceSquared = TNumericLimits<float>::Max();
-
-	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
-	{
-		if (!SlotWidget
-			|| SlotWidget->IsExitingForFirstPersonLayer()
-			|| !SlotWidget->CanExposeCardTarget())
-		{
-			continue;
-		}
-
-		const FWacomFirstPersonCardLayerSlotView& SlotView = SlotWidget->GetVisualSlotView();
-		if (SlotView.Entry.CardInstanceId == DragView.CardInstanceId
-			|| !SlotView.Entry.CardInstanceId.IsValid()
-			|| !SlotView.bProjected)
-		{
-			continue;
-		}
-
-		const FVector2D Delta = PointerPosition - SlotView.ScreenPosition;
-		if (!SlotWidget->IsWidgetPositionInsideCardBodyForFirstPersonLayer(PointerPosition))
-		{
-			continue;
-		}
-
-		const float SlotZOrder = static_cast<float>(SlotView.ZOrder);
-		const float DistanceSquared = Delta.SizeSquared();
-		if (!BestSlotWidget
-			|| SlotZOrder > BestZOrder
-			|| (FMath::IsNearlyEqual(SlotZOrder, BestZOrder) && DistanceSquared < BestDistanceSquared))
-		{
-			BestSlotWidget = SlotWidget.Get();
-			BestSlotView = SlotView;
-			BestZOrder = SlotZOrder;
-			BestDistanceSquared = DistanceSquared;
-		}
-	}
-
-	if (!BestSlotWidget)
+	UWacomFirstPersonCardLayerSlotWidget* BestSlotWidget = ResolveInteractiveSlotUnderPointer(
+		PointerPosition,
+		DragView.CardInstanceId,
+		false,
+		false,
+		&BestSlotView);
+	if (!BestSlotWidget || !BestSlotWidget->CanExposeCardTarget())
 	{
 		return false;
 	}
 
-	OutTargetSlotView = BestSlotView;
+	OutTargetSlotView = BestSlotWidget->GetVisualSlotView();
 	OutTargetHandle = BestSlotWidget->BuildCardTargetHandle();
 	return OutTargetHandle.IsValid();
 }

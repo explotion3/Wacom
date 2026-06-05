@@ -257,6 +257,10 @@ namespace WacomFirstPersonCardLayerSpec
 		Slot.ScreenPosition = Position;
 		Slot.WidgetPosition = Position;
 		Slot.SnappedWidgetPosition = Position;
+		Slot.InputHitCenter = Position;
+		Slot.InputHitScale = Scale;
+		Slot.InputHitAngleDegrees = Angle;
+		Slot.InputHitOrder = Index;
 		Slot.RenderAngleDegrees = Angle;
 		Slot.RenderScale = Scale;
 		Slot.RenderOpacity = Opacity;
@@ -1157,6 +1161,147 @@ bool FWacomFirstPersonCardLayerCardTargetHoverBridgeTest::RunTest(const FString&
 
 	Layer->OnCardTargetHoveredNative.RemoveAll(&Receiver);
 	Layer->OnCardTargetUnhoveredNative.RemoveAll(&Receiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerStableHoverHitTargetTest,
+	"Wacom.UI.FirstPersonCardLayer.CardTarget.StableHoverHitUsesBaseGeometryWhenHoveredCardOverlapsNeighbor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerStableHoverHitTargetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid LeftId = FGuid::NewGuid();
+	const FGuid RightId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Left =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(LeftId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.6f);
+	FWacomFirstPersonCardLayerSlotView Right =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(RightId, 1, FVector2D(620.0f, 600.0f), 0.0f, 1.0f);
+	Left.InputHitScale = 1.0f;
+	Left.ZOrder = 500;
+	Left.bIsHovered = true;
+	Right.ZOrder = 1;
+	Layer->SetCardLayerInteractionEnabled(true);
+	Layer->SetCardSlots({ Left, Right });
+
+	TestEqual(
+		TEXT("Pointer right of base midpoint resolves right card even when left visual overlaps"),
+		FWacomFirstPersonCardLayerTestAccess::ResolveHoveredCardAtWidgetPosition(*Layer, FVector2D(622.0f, 600.0f)),
+		RightId);
+	TestFalse(TEXT("Left slot is no longer hovered"), Layer->GetSlotWidgetAt(0)->IsHoveredForFirstPersonLayer());
+	TestTrue(TEXT("Right slot becomes hovered"), Layer->GetSlotWidgetAt(1)->IsHoveredForFirstPersonLayer());
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerStableHoverBoundaryTest,
+	"Wacom.UI.FirstPersonCardLayer.CardTarget.StableHoverHitUsesNeighborBoundaryAndHysteresis",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerStableHoverBoundaryTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.HoverHitHysteresisPixels = 16.0f;
+	Layer->SetCardDragConfig(DragConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid LeftId = FGuid::NewGuid();
+	const FGuid RightId = FGuid::NewGuid();
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(LeftId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f),
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(RightId, 1, FVector2D(620.0f, 600.0f), 0.0f, 1.0f)
+	});
+
+	TestEqual(
+		TEXT("Pointer left of midpoint resolves left card"),
+		FWacomFirstPersonCardLayerTestAccess::ResolveHoveredCardAtWidgetPosition(*Layer, FVector2D(552.0f, 600.0f)),
+		LeftId);
+	TestEqual(
+		TEXT("Pointer inside hysteresis keeps current left hover"),
+		FWacomFirstPersonCardLayerTestAccess::ResolveHoveredCardAtWidgetPosition(*Layer, FVector2D(570.0f, 600.0f)),
+		LeftId);
+	TestEqual(
+		TEXT("Pointer beyond hysteresis switches to right card"),
+		FWacomFirstPersonCardLayerTestAccess::ResolveHoveredCardAtWidgetPosition(*Layer, FVector2D(578.0f, 600.0f)),
+		RightId);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerStablePressTargetTest,
+	"Wacom.UI.FirstPersonCardLayer.CardTarget.StablePressUsesResolvedBaseGeometryTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerStablePressTargetTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	const FGuid LeftId = FGuid::NewGuid();
+	const FGuid RightId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Left =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(LeftId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.6f);
+	FWacomFirstPersonCardLayerSlotView Right =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(RightId, 1, FVector2D(620.0f, 600.0f), 0.0f, 1.0f);
+	Left.InputHitScale = 1.0f;
+	Left.ZOrder = 500;
+	Right.ZOrder = 1;
+	Layer->SetCardLayerInteractionEnabled(true);
+	Layer->SetCardSlots({ Left, Right });
+
+	TestTrue(
+		TEXT("Press over right base geometry succeeds"),
+		FWacomFirstPersonCardLayerTestAccess::RequestPressAtWidgetPosition(*Layer, FVector2D(622.0f, 600.0f)));
+	TestEqual(
+		TEXT("Left slot remains idle"),
+		Layer->GetSlotWidgetAt(0)->GetGestureStateForFirstPersonLayer(),
+		EWacomFirstPersonCardGestureState::Idle);
+	TestEqual(
+		TEXT("Right slot receives pressed gesture"),
+		Layer->GetSlotWidgetAt(1)->GetGestureStateForFirstPersonLayer(),
+		EWacomFirstPersonCardGestureState::Pressed);
+
 	PC->Destroy();
 	return true;
 }

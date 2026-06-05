@@ -14,6 +14,7 @@
 #include "InputCoreTypes.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
+#include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 
 namespace
 {
@@ -54,6 +55,12 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardViewClass(TSubclassOf<UWacomCa
 	}
 	EnsureCardView();
 	ApplyCurrentSlotView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::SetOwningFirstPersonCardLayer(
+	UWacomFirstPersonCardLayerWidget* InLayer)
+{
+	OwningFirstPersonCardLayer = InLayer;
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::SetSlotView(const FWacomFirstPersonCardLayerSlotView& InSlotView)
@@ -617,7 +624,14 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseEnter(
 	const FPointerEvent& InMouseEvent)
 {
 	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
-	UpdateBodyHoverFromScreenPosition(InMouseEvent.GetScreenSpacePosition());
+	if (UWacomFirstPersonCardLayerWidget* Layer = OwningFirstPersonCardLayer.Get())
+	{
+		Layer->HandleSlotPointerEntered(*this, InMouseEvent.GetScreenSpacePosition());
+	}
+	else
+	{
+		UpdateBodyHoverFromScreenPosition(InMouseEvent.GetScreenSpacePosition());
+	}
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseLeave(const FPointerEvent& InMouseEvent)
@@ -627,7 +641,14 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseLeave(const FPointerEven
 	{
 		SetPressedForFirstPersonLayer(false);
 	}
-	SetHoveredForFirstPersonLayer(false);
+	if (UWacomFirstPersonCardLayerWidget* Layer = OwningFirstPersonCardLayer.Get())
+	{
+		Layer->HandleSlotPointerLeft(*this, InMouseEvent.GetScreenSpacePosition());
+	}
+	else
+	{
+		SetHoveredForFirstPersonLayer(false);
+	}
 	Super::NativeOnMouseLeave(InMouseEvent);
 }
 
@@ -637,6 +658,12 @@ FReply UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseButtonDown(
 {
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CanInteractWithCurrentSlot())
 	{
+		if (UWacomFirstPersonCardLayerWidget* Layer = OwningFirstPersonCardLayer.Get())
+		{
+			return Layer->HandleSlotPointerPressed(*this, InMouseEvent.GetScreenSpacePosition())
+				? FReply::Handled().CaptureMouse(TakeWidget())
+				: Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+		}
 		FVector2D PointerWidgetPosition = FVector2D::ZeroVector;
 		if (!ResolvePointerWidgetPosition(InMouseEvent, PointerWidgetPosition))
 		{
@@ -661,6 +688,12 @@ FReply UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseButtonUp(
 {
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CanInteractWithCurrentSlot())
 	{
+		if (UWacomFirstPersonCardLayerWidget* Layer = OwningFirstPersonCardLayer.Get())
+		{
+			return Layer->HandleSlotPointerReleased(*this, InMouseEvent.GetScreenSpacePosition())
+				? FReply::Handled().ReleaseMouseCapture()
+				: Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
+		}
 		FVector2D PointerWidgetPosition = CurrentGestureScreenPosition;
 		ResolvePointerWidgetPosition(InMouseEvent, PointerWidgetPosition);
 		if (GestureState == EWacomFirstPersonCardGestureState::Idle
@@ -697,8 +730,14 @@ FReply UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseMove(
 		return FReply::Handled();
 	}
 
-	UpdateBodyHoverFromScreenPosition(InMouseEvent.GetScreenSpacePosition());
+	if (UWacomFirstPersonCardLayerWidget* Layer = OwningFirstPersonCardLayer.Get())
+	{
+		return Layer->HandleSlotPointerMoved(*this, InMouseEvent.GetScreenSpacePosition())
+			? FReply::Handled()
+			: Super::NativeOnMouseMove(InGeometry, InMouseEvent);
+	}
 
+	UpdateBodyHoverFromScreenPosition(InMouseEvent.GetScreenSpacePosition());
 	return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
 }
 
@@ -1453,6 +1492,34 @@ FWacomFirstPersonCardDragView UWacomFirstPersonCardLayerSlotWidget::BuildDragVie
 	return View;
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::SetHoveredFromFirstPersonLayer(bool bHovered)
+{
+	SetHoveredForFirstPersonLayer(bHovered, false);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::BeginGesturePressFromFirstPersonLayer(const FVector2D& WidgetPosition)
+{
+	if (!CanInteractWithCurrentSlot())
+	{
+		return false;
+	}
+
+	BeginGesturePress(WidgetPosition);
+	return true;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::UpdateGestureFromFirstPersonLayer(
+	float DeltaTime,
+	const FVector2D& WidgetPosition)
+{
+	UpdateGesture(DeltaTime, WidgetPosition);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGestureFromFirstPersonLayer(const FVector2D& WidgetPosition)
+{
+	return ReleaseGesture(WidgetPosition);
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::BroadcastDragStarted()
 {
 	if (CurrentSlotView.Entry.CardInstanceId.IsValid())
@@ -1644,7 +1711,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TickSlotMotionForTest(float DeltaTime
 }
 #endif
 
-void UWacomFirstPersonCardLayerSlotWidget::SetHoveredForFirstPersonLayer(bool bHovered)
+void UWacomFirstPersonCardLayerSlotWidget::SetHoveredForFirstPersonLayer(bool bHovered, bool bBroadcast)
 {
 	if (bIsHoveredForFirstPersonLayer == bHovered)
 	{
@@ -1663,6 +1730,10 @@ void UWacomFirstPersonCardLayerSlotWidget::SetHoveredForFirstPersonLayer(bool bH
 		}
 	}
 	ApplyVisualSlotView();
+	if (!bBroadcast)
+	{
+		return;
+	}
 	if (CurrentSlotView.Entry.CardInstanceId.IsValid())
 	{
 		if (bIsHoveredForFirstPersonLayer)

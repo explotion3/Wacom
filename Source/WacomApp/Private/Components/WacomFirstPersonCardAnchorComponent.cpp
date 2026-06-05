@@ -97,6 +97,7 @@ namespace
 		float HoverLiftPixels = 28.0f;
 		float HoverScale = 1.06f;
 		int32 HoverZOrderBoost = 500;
+		float HoverHitHysteresisPixels = 16.0f;
 		bool bEnableCardInteractionFeedback = true;
 		FLinearColor PlayableHoverFeedbackColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);
 		float PlayableHoverFeedbackOpacity = 0.06f;
@@ -196,6 +197,7 @@ namespace
 		Config.HoverLiftPixels = Anchor.HoverLiftPixels;
 		Config.HoverScale = Anchor.HoverScale;
 		Config.HoverZOrderBoost = Anchor.HoverZOrderBoost;
+		Config.HoverHitHysteresisPixels = Anchor.HoverHitHysteresisPixels;
 		Config.bEnableCardInteractionFeedback = Anchor.bEnableCardInteractionFeedback;
 		Config.PlayableHoverFeedbackColor = Anchor.PlayableHoverFeedbackColor;
 		Config.PlayableHoverFeedbackOpacity = Anchor.PlayableHoverFeedbackOpacity;
@@ -317,6 +319,7 @@ namespace
 		Config.HoverLiftPixels = Preset.HoverLiftPixels;
 		Config.HoverScale = Preset.HoverScale;
 		Config.HoverZOrderBoost = Preset.HoverZOrderBoost;
+		Config.HoverHitHysteresisPixels = Preset.HoverHitHysteresisPixels;
 		Config.bEnableCardInteractionFeedback = Preset.bEnableCardInteractionFeedback;
 		Config.PlayableHoverFeedbackColor = Preset.PlayableHoverFeedbackColor;
 		Config.PlayableHoverFeedbackOpacity = Preset.PlayableHoverFeedbackOpacity;
@@ -404,6 +407,7 @@ namespace
 		DragConfig.bEnableClickToPlayCard = Anchor.bEnableClickToPlayCard;
 		DragConfig.CardInspectHoldDelaySeconds = Anchor.CardInspectHoldDelaySeconds;
 		DragConfig.CardDragStartThresholdPixels = Anchor.CardDragStartThresholdPixels;
+		DragConfig.HoverHitHysteresisPixels = Config.HoverHitHysteresisPixels;
 		DragConfig.NoTargetCardDragOutCommitDistancePixels = Anchor.NoTargetCardDragOutCommitDistancePixels;
 		DragConfig.NoTargetCardDragOutDirection = Anchor.NoTargetCardDragOutDirection;
 		DragConfig.CardInspectScreenPosition = Anchor.CardInspectScreenPosition;
@@ -534,6 +538,7 @@ namespace
 		AddFloat(Config.HoverLiftPixels);
 		AddFloat(Config.HoverScale);
 		AddInt(Config.HoverZOrderBoost);
+		AddFloat(Config.HoverHitHysteresisPixels);
 		AddBool(Config.bEnableCardInteractionFeedback);
 		AddColor(Config.PlayableHoverFeedbackColor);
 		AddFloat(Config.PlayableHoverFeedbackOpacity);
@@ -1263,6 +1268,9 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		{
 			Slot.ZOrder = FMath::RoundToInt((1.0f - NormalizedEdgeDistance) * 100.0f);
 		}
+		Slot.InputHitScale = Slot.RenderScale;
+		Slot.InputHitAngleDegrees = Slot.RenderAngleDegrees;
+		Slot.InputHitOrder = Index;
 		if (bIsPendingTargeting)
 		{
 			if (Config.bPendingTargetingStraightenAngle)
@@ -1332,6 +1340,18 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				Slot.bBodyLockedLayout = AnchorPoint.bBodyLockedLayout;
 				Slot.bCurrentCameraProjection = AnchorPoint.bCurrentCameraProjection;
 				Slot.bLookOffsetAppliedToLayout = AnchorPoint.bLookOffsetAppliedToLayout;
+				FVector2D ViewportSize = FVector2D::ZeroVector;
+				FVector2D InputHitPosition = FinalPosition;
+				if (GetViewportSizeForAnchor(ViewportSize) && AnchorPoint.ViewportScale > 0.0f)
+				{
+					InputHitPosition = KeepCardBodyBottomInsideViewportForConfig(
+						InputHitPosition,
+						ViewportSize / AnchorPoint.ViewportScale,
+						Config,
+						Slot.InputHitScale);
+				}
+				bool bInputHitPixelSnapped = false;
+				Slot.InputHitCenter = SnapCardLayerPositionForConfig(InputHitPosition, Config, bInputHitPixelSnapped);
 				if (bIsPendingTargeting)
 				{
 					FinalPosition.Y -= FMath::Max(0.0f, Config.PendingTargetingLiftPixels);
@@ -1341,7 +1361,6 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 					FinalPosition.Y -= FMath::Max(0.0f, Config.HoverLiftPixels);
 				}
 				const FVector2D BeforeViewportReadableClamp = FinalPosition;
-				FVector2D ViewportSize = FVector2D::ZeroVector;
 				if (GetViewportSizeForAnchor(ViewportSize) && AnchorPoint.ViewportScale > 0.0f)
 				{
 					FinalPosition = KeepCardBodyBottomInsideViewportForConfig(
@@ -1381,6 +1400,10 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 				Slot.bCurrentCameraProjection = Point.bCurrentCameraProjection;
 				Slot.bLookOffsetAppliedToLayout = Point.bLookOffsetAppliedToLayout;
 				FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * EffectiveEdgeDropPixels;
+				{
+					bool bInputHitPixelSnapped = false;
+					Slot.InputHitCenter = SnapCardLayerPositionForConfig(FinalPosition, Config, bInputHitPixelSnapped);
+				}
 				if (bIsPendingTargeting)
 				{
 					FinalPosition.Y -= FMath::Max(0.0f, Config.PendingTargetingLiftPixels);

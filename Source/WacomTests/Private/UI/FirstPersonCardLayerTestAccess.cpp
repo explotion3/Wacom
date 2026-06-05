@@ -100,6 +100,27 @@ void FWacomFirstPersonCardLayerTestAccess::SetViewportSizeOverride(
 	Layer.SetViewportSizeOverrideForTest(WidgetViewportSize);
 }
 
+FGuid FWacomFirstPersonCardLayerTestAccess::ResolveHoveredCardAtWidgetPosition(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FVector2D& WidgetPosition)
+{
+	return Layer.ResolveHoveredCardAtWidgetPositionForTest(WidgetPosition);
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestPressAtWidgetPosition(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FVector2D& WidgetPosition)
+{
+	return Layer.RequestPressAtWidgetPositionForTest(WidgetPosition);
+}
+
+bool FWacomFirstPersonCardLayerTestAccess::RequestReleaseAtWidgetPosition(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FVector2D& WidgetPosition)
+{
+	return Layer.RequestReleaseAtWidgetPositionForTest(WidgetPosition);
+}
+
 bool FWacomFirstPersonCardLayerTestAccess::RequestHover(
 	UWacomFirstPersonCardLayerSlotWidget& Slot)
 {

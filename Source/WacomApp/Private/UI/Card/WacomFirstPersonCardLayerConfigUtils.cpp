@@ -132,6 +132,7 @@ FWacomFirstPersonCardDragConfig NormalizeCardDragConfig(
 	FWacomFirstPersonCardDragConfig Config = InConfig;
 	Config.CardInspectHoldDelaySeconds = FMath::Max(0.0f, Config.CardInspectHoldDelaySeconds);
 	Config.CardDragStartThresholdPixels = FMath::Max(0.0f, Config.CardDragStartThresholdPixels);
+	Config.HoverHitHysteresisPixels = FMath::Max(0.0f, Config.HoverHitHysteresisPixels);
 	Config.NoTargetCardDragOutCommitDistancePixels =
 		FMath::Max(0.0f, Config.NoTargetCardDragOutCommitDistancePixels);
 	Config.CardInspectScreenPosition.X = FMath::Clamp(Config.CardInspectScreenPosition.X, 0.0f, 1.0f);
@@ -160,6 +161,7 @@ bool AreCardDragConfigsEquivalent(
 		&& A.bEnableClickToPlayCard == B.bEnableClickToPlayCard
 		&& AreFloatsEquivalent(A.CardInspectHoldDelaySeconds, B.CardInspectHoldDelaySeconds)
 		&& AreFloatsEquivalent(A.CardDragStartThresholdPixels, B.CardDragStartThresholdPixels)
+		&& AreFloatsEquivalent(A.HoverHitHysteresisPixels, B.HoverHitHysteresisPixels)
 		&& AreFloatsEquivalent(A.NoTargetCardDragOutCommitDistancePixels, B.NoTargetCardDragOutCommitDistancePixels)
 		&& A.NoTargetCardDragOutDirection == B.NoTargetCardDragOutDirection
 		&& AreVectorsEquivalent(A.CardInspectScreenPosition, B.CardInspectScreenPosition)

@@ -46,6 +46,15 @@ struct FWacomFirstPersonCardLayerTestAccess
 	static void SetViewportSizeOverride(
 		UWacomFirstPersonCardLayerWidget& Layer,
 		const FVector2D& WidgetViewportSize);
+	static FGuid ResolveHoveredCardAtWidgetPosition(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FVector2D& WidgetPosition);
+	static bool RequestPressAtWidgetPosition(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FVector2D& WidgetPosition);
+	static bool RequestReleaseAtWidgetPosition(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FVector2D& WidgetPosition);
 
 	static bool RequestHover(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static void RequestUnhover(UWacomFirstPersonCardLayerSlotWidget& Slot);

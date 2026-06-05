@@ -11,6 +11,7 @@
 class UOverlay;
 class UImage;
 class UWacomCardView;
+class UWacomFirstPersonCardLayerWidget;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
@@ -265,6 +266,7 @@ public:
 	const FWacomFirstPersonCardLayerSlotView& GetVisualSlotView() const { return VisualSlotView; }
 	const FString& GetSlotMotionKey() const { return SlotMotionKey; }
 	void SetSlotMotionKey(const FString& InKey) { SlotMotionKey = InKey; }
+	void SetOwningFirstPersonCardLayer(UWacomFirstPersonCardLayerWidget* InLayer);
 
 	bool IsExitingForFirstPersonLayer() const { return bIsExitingForFirstPersonLayer; }
 	bool IsExitMotionFinished() const;
@@ -279,6 +281,10 @@ public:
 		return DragTargetFeedbackState;
 	}
 	FWacomFirstPersonCardDragView BuildDragView() const;
+	void SetHoveredFromFirstPersonLayer(bool bHovered);
+	bool BeginGesturePressFromFirstPersonLayer(const FVector2D& WidgetPosition);
+	void UpdateGestureFromFirstPersonLayer(float DeltaTime, const FVector2D& WidgetPosition);
+	bool ReleaseGestureFromFirstPersonLayer(const FVector2D& WidgetPosition);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsHoveredForFirstPersonLayer() const { return bIsHoveredForFirstPersonLayer; }
@@ -346,6 +352,7 @@ private:
 	UPROPERTY(Transient)
 	FWacomFirstPersonCardLayerSlotView VisualSlotView;
 
+	TWeakObjectPtr<UWacomFirstPersonCardLayerWidget> OwningFirstPersonCardLayer;
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
@@ -425,7 +432,7 @@ private:
 	void BroadcastDragUpdated();
 	void BroadcastDragReleased();
 	void BroadcastDragCancelled();
-	void SetHoveredForFirstPersonLayer(bool bHovered);
+	void SetHoveredForFirstPersonLayer(bool bHovered, bool bBroadcast = true);
 	void SetPressedForFirstPersonLayer(bool bPressed);
 	void TriggerConfirmFeedback();
 	void TriggerDenyFeedback();
