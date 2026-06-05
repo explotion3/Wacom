@@ -17,6 +17,7 @@
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Common/PileCountView.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/BorderSlot.h"
 #include "Components/Button.h"
@@ -27,6 +28,8 @@
 #include "Input/Events.h"
 #include "InputCoreTypes.h"
 #include "BattleWidgetSpecReceiver.generated.h"
+
+struct FWacomBattleSceneTargetClickTestAccess;
 
 UCLASS()
 class AWacomBattleHUDLocalPlayerControllerTest : public APlayerController
@@ -50,6 +53,9 @@ public:
 	{
 		return true;
 	}
+
+private:
+	friend struct FWacomBattleSceneTargetClickTestAccess;
 
 	void SetBattleSceneClickHUDForTest(UBattleHUD* InHUD)
 	{
@@ -755,6 +761,31 @@ public:
 		{
 			ChildBattleWidgets.AddUnique(InActionPanel);
 		}
+	}
+
+	void CreatePileViewsForTest()
+	{
+		DrawPileView = NewObject<UPileCountView>(this);
+		DiscardPileView = NewObject<UPileCountView>(this);
+		ExhaustPileView = NewObject<UPileCountView>(this);
+		if (DrawPileView) { DrawPileView->TakeWidget(); }
+		if (DiscardPileView) { DiscardPileView->TakeWidget(); }
+		if (ExhaustPileView) { ExhaustPileView->TakeWidget(); }
+	}
+
+	UPileCountView* GetDrawPileViewForTest() const
+	{
+		return DrawPileView;
+	}
+
+	UPileCountView* GetDiscardPileViewForTest() const
+	{
+		return DiscardPileView;
+	}
+
+	UPileCountView* GetExhaustPileViewForTest() const
+	{
+		return ExhaustPileView;
 	}
 
 	void EnqueueBattlePresentationEventsForTest(const TArray<FBattleEvent>& Events)

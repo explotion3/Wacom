@@ -37,37 +37,37 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FWacomBattleCardHoverStateChangedNative, UCa
  * - ZoneText   : UTextBlock (可选；显示 Left/Both/Right 分区)
  * - FrameBorder: UBorder    (用于 Playable/Targeting 色变)
  */
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta = (ToolTip = "Legacy 2D 战斗手牌中的单卡交互外壳。它服务旧 UHandPanel fallback / 对照路径，不是 first-person hand 卡面，也不直接提交 BattleSession 命令。"))
 class WACOMAPP_API UCardWidget : public UWacomBattleWidgetBase
 {
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Hover", meta = (ToolTip = "是否启用战斗手牌的悬停反馈。关闭后鼠标悬停不会改变卡牌 Render Transform。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ToolTip = "是否启用 legacy 2D 手牌单卡悬停反馈。关闭后鼠标悬停不会改变卡牌 Render Transform。"))
 	bool bEnableHoverFeedback = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Hover", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "120.0", ToolTip = "鼠标悬停时卡牌向上抬起的距离，单位为 Slate 像素。只影响 Render Transform，不改变手牌布局占位。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "120.0", ToolTip = "legacy 2D 手牌鼠标悬停时卡牌向上抬起的距离，单位为 Slate 像素。只影响 Render Transform，不改变手牌布局占位。"))
 	float HoverLift = 28.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Hover", meta = (ClampMin = "0.01", UIMin = "1.0", UIMax = "1.3", ToolTip = "鼠标悬停时卡牌的渲染缩放倍率。只影响视觉显示，不改变 WBP_CardWidget 的实际布局尺寸。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ClampMin = "0.01", UIMin = "1.0", UIMax = "1.3", ToolTip = "legacy 2D 手牌鼠标悬停时卡牌的渲染缩放倍率。只影响视觉显示，不改变 WBP_CardWidget 的实际布局尺寸。"))
 	float HoverScale = 1.06f;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ToolTip = "把战斗手牌快照应用到 legacy 2D 单卡 Widget。只刷新 UI，不提交 BattleSession 命令。"))
 	void ApplyCardSnapshot(const FHandCardSnapshot& InSnap);
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ToolTip = "设置 legacy 2D 手牌的目标选择高亮。只影响该 Widget 的显示状态。"))
 	void SetTargetingHighlight(bool bTargeting);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ToolTip = "当前 legacy 2D 单卡对应的卡牌实例 ID。"))
 	FGuid GetCardInstanceId() const { return CachedSnap.InstanceId; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ToolTip = "当前 legacy 2D 单卡缓存的手牌快照。只用于显示或调试读取。"))
 	const FHandCardSnapshot& GetCardSnapshot() const { return CachedSnap; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ToolTip = "当前 legacy 2D 单卡使用的 CardView 数据。只用于显示或调试读取。"))
 	const FWacomCardViewData& GetCurrentCardViewData() const { return CurrentCardViewData; }
 
-	UPROPERTY(BlueprintAssignable, Category = "Wacom|Battle|UI")
+	UPROPERTY(BlueprintAssignable, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", meta = (ToolTip = "legacy 2D 单卡被点击时广播给 UHandPanel / BattleHUD 的事件。监听方负责提交玩家意图。"))
 	FWacomCardWidgetClicked OnCardClicked;
 
 	FWacomBattleCardHoverStateChangedNative OnCardHoveredNative;
@@ -81,16 +81,16 @@ protected:
 	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 
-	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On Data Applied")
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", DisplayName = "On Data Applied", meta = (ToolTip = "legacy 2D 单卡快照已应用后的 WBP 表现事件。只用于更新样式，不应提交 BattleSession 命令。"))
 	void BP_OnDataApplied(const FHandCardSnapshot& Snap);
 
-	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On Playable Changed")
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", DisplayName = "On Playable Changed", meta = (ToolTip = "legacy 2D 单卡可打状态变化后的 WBP 表现事件。只用于更新样式。"))
 	void BP_OnPlayableChanged(bool bPlayable);
 
-	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On Targeting Highlight Changed")
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", DisplayName = "On Targeting Highlight Changed", meta = (ToolTip = "legacy 2D 单卡目标选择高亮变化后的 WBP 表现事件。只用于更新样式。"))
 	void BP_OnTargetingHighlightChanged(bool bTargeting);
 
-	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On Hover Changed")
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|Legacy 2D Hand|Fallback", DisplayName = "On Hover Changed", meta = (ToolTip = "legacy 2D 单卡悬停状态变化后的 WBP 表现事件。只用于更新样式。"))
 	void BP_OnHoverChanged(bool bHovered);
 
 	UPROPERTY(meta = (BindWidgetOptional))

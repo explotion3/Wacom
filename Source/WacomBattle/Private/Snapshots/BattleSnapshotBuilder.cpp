@@ -122,6 +122,7 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 
 	// ---- Pile counts ----
 	Out.PileCounts.DrawCount    = State.Cards.DrawPile.Num();
+	Out.PileCounts.PlayedCount  = State.Cards.PlayedPile.Num();
 	Out.PileCounts.DiscardCount = State.Cards.DiscardPile.Num();
 	Out.PileCounts.ExhaustCount = State.Cards.ExhaustPile.Num();
 

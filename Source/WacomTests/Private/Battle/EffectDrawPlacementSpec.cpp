@@ -158,8 +158,10 @@ bool FWacomBattleEffectDrawImmediatelyEnforcesHandLimitSpec::RunTest(const FStri
 		Snap = Session->BuildSnapshot();
 		TestEqual(FString::Printf(TEXT("Seed=%d normal count remains limited immediately"), Seed),
 			Snap.Hand.NormalCardCount, Snap.Hand.NormalCardLimit);
-		TestTrue(FString::Printf(TEXT("Seed=%d extra card discarded by limit plus played card discard"), Seed),
-			Snap.PileCounts.DiscardCount >= DiscardBefore + 2);
+		TestTrue(FString::Printf(TEXT("Seed=%d extra card discarded by limit"), Seed),
+			Snap.PileCounts.DiscardCount >= DiscardBefore + 1);
+		TestEqual(FString::Printf(TEXT("Seed=%d played draw card waits in played pile"), Seed),
+			Snap.PileCounts.PlayedCount, 1);
 		TestEqual(FString::Printf(TEXT("Seed=%d played draw card leaves hand"), Seed),
 			FWacomBattleFixture::FindHandIndex(Snap, DrawCardId), INDEX_NONE);
 

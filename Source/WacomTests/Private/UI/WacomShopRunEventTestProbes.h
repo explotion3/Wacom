@@ -32,6 +32,10 @@ class URunSession;
 class UWacomAppToastSubsystem;
 class UPrimitiveComponent;
 class UWacomRunWorldCardDropReceiverComponent;
+struct FWacomPlayerControllerRunInteractionTestAccess;
+struct FWacomRunEventChoiceButtonProbeTestAccess;
+struct FWacomRunMenuDropTargetWidgetTestAccess;
+struct FWacomRunWorldInteractionActorTestAccess;
 
 UCLASS()
 class UWacomRunMenuDropTargetWidgetProbe : public UWacomRunMenuDropTargetWidget
@@ -39,17 +43,19 @@ class UWacomRunMenuDropTargetWidgetProbe : public UWacomRunMenuDropTargetWidget
 	GENERATED_BODY()
 
 public:
-	bool bProbeHitForTest = false;
-
 	virtual bool ContainsWidgetPosition(FVector2D WidgetPosition) const override
 	{
 		LastWidgetPositionForTest = WidgetPosition;
 		return bProbeHitForTest && CanProbeRunMenuDropTarget();
 	}
 
+private:
+	friend struct FWacomRunMenuDropTargetWidgetTestAccess;
+
+	bool bProbeHitForTest = false;
+
 	FVector2D GetLastWidgetPositionForTest() const { return LastWidgetPositionForTest; }
 
-private:
 	mutable FVector2D LastWidgetPositionForTest = FVector2D::ZeroVector;
 };
 
@@ -71,10 +77,6 @@ class UWacomRunEventChoiceButtonClassProbe : public UWacomRunEventChoiceButton
 {
 	GENERATED_BODY()
 
-public:
-	int32 SnapshotAppliedCountForTest = 0;
-	FName LastAppliedChoiceIdForTest = NAME_None;
-
 protected:
 	virtual void BP_OnRunEventChoiceSnapshotApplied_Implementation(
 		const FRunEventChoiceSnapshot& AppliedChoiceSnapshot) override
@@ -82,6 +84,12 @@ protected:
 		++SnapshotAppliedCountForTest;
 		LastAppliedChoiceIdForTest = AppliedChoiceSnapshot.ChoiceId;
 	}
+
+private:
+	friend struct FWacomRunEventChoiceButtonProbeTestAccess;
+
+	int32 SnapshotAppliedCountForTest = 0;
+	FName LastAppliedChoiceIdForTest = NAME_None;
 };
 
 UCLASS()
@@ -90,6 +98,9 @@ class AWacomPlayerControllerProbe : public AWacomPlayerController
 	GENERATED_BODY()
 
 public:
+	friend struct FWacomPlayerControllerRunInteractionTestAccess;
+
+private:
 	AActor* ReadClosestInteractable() const
 	{
 		return PickClosestInteractable();
@@ -329,7 +340,9 @@ class AWacomRunEventTriggerClickProbe : public AWacomRunEventTriggerActor
 {
 	GENERATED_BODY()
 
-public:
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
 	int32 TryInteractCountForTest = 0;
 	bool bInteractResultForTest = true;
 
@@ -345,12 +358,12 @@ public:
 		return bInteractResultForTest;
 	}
 
+private:
 	AWacomPlayerController* GetLastInteractingPlayerControllerForTest() const
 	{
 		return LastInteractingPlayerControllerForTest.Get();
 	}
 
-private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<AWacomPlayerController> LastInteractingPlayerControllerForTest;
 };
@@ -360,7 +373,9 @@ class AWacomShopTriggerClickProbe : public AWacomShopTriggerActor
 {
 	GENERATED_BODY()
 
-public:
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
 	int32 TryInteractCountForTest = 0;
 	bool bInteractResultForTest = true;
 
@@ -391,7 +406,9 @@ class AWacomBattleTriggerClickProbe : public ABattleTriggerActor
 {
 	GENERATED_BODY()
 
-public:
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
 	int32 TryInteractCountForTest = 0;
 	bool bInteractResultForTest = true;
 
@@ -422,7 +439,9 @@ class AWacomRunPickupClickProbe : public AWacomRunPickupActor
 {
 	GENERATED_BODY()
 
-public:
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
 	void SyncClickTargetForTest()
 	{
 		OnConstruction(FTransform::Identity);
@@ -434,7 +453,9 @@ class AWacomRunCardPickupClickProbe : public AWacomRunCardPickupActor
 {
 	GENERATED_BODY()
 
-public:
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
 	void SyncClickTargetForTest()
 	{
 		OnConstruction(FTransform::Identity);
@@ -446,7 +467,9 @@ class AWacomRunRewardPickupClickProbe : public AWacomRunRewardPickupActor
 {
 	GENERATED_BODY()
 
-public:
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
 	void SyncClickTargetForTest()
 	{
 		OnConstruction(FTransform::Identity);
@@ -458,7 +481,9 @@ class AWacomRunKeyChestClickProbe : public AWacomRunKeyChestActor
 {
 	GENERATED_BODY()
 
-public:
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
 	void SyncClickTargetForTest()
 	{
 		OnConstruction(FTransform::Identity);
@@ -476,10 +501,6 @@ class AWacomRunWorldNonClickableInteractableProbe : public AActor, public IWacom
 	GENERATED_BODY()
 
 public:
-	int32 TryInteractCountForTest = 0;
-	bool bCanInteractForTest = true;
-	FText PromptForTest = FText::FromString(TEXT("按 E 测试"));
-
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* /*PC*/) const override
 	{
 		return PromptForTest;
@@ -500,6 +521,13 @@ public:
 		++TryInteractCountForTest;
 		return true;
 	}
+
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
+	int32 TryInteractCountForTest = 0;
+	bool bCanInteractForTest = true;
+	FText PromptForTest = FText::FromString(TEXT("按 E 测试"));
 };
 
 UCLASS()
@@ -545,6 +573,9 @@ public:
 	UPROPERTY()
 	TObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> ClickTargetBridge = nullptr;
 
+private:
+	friend struct FWacomRunWorldInteractionActorTestAccess;
+
 	FName StableIdForTest = TEXT("Run.Generic.Clickable");
 	FText InteractPromptForTest = FText::FromString(TEXT("按 E 测试通用交互"));
 	FText HoverPromptForTest = FText::FromString(TEXT("点击通用交互"));
@@ -566,6 +597,7 @@ public:
 		}
 	}
 
+public:
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* /*PC*/) const override
 	{
 		return InteractPromptForTest;
@@ -654,59 +686,9 @@ public:
 		ResetShopOfferRefreshDirtyGate();
 	}
 
-	FText ReadGoldText() const
-	{
-		return GetDisplayedGoldText();
-	}
-
-	int32 ReadOfferCount() const
-	{
-		return GetCachedOfferCount();
-	}
-
-	FWacomShopOfferPresentationView ReadOfferPresentationView(int32 Index) const
-	{
-		return GetCachedOfferView(Index);
-	}
-
-	UWacomShopOfferRowWidget* ReadOfferRowWidget(int32 Index) const
-	{
-		return GetOfferRowWidgetForTest(Index);
-	}
-
-	int32 ReadOfferRefreshApplyCount() const
-	{
-		return GetShopOfferRefreshApplyCountForTest();
-	}
-
-	int32 ReadOfferRefreshSkipCount() const
-	{
-		return GetShopOfferRefreshSkipCountForTest();
-	}
-
-	int32 ReadShopSnapshotBuildCount() const
-	{
-		return GetShopSnapshotBuildCountForTest();
-	}
-
-	int32 ReadShopSnapshotRevisionSkipCount() const
-	{
-		return GetShopSnapshotRevisionSkipCountForTest();
-	}
-
-	bool PurchaseOfferAt(int32 Index)
-	{
-		return PurchaseOfferByIndex(Index);
-	}
-
 	void SuppressEndOnNextDeactivateForTest()
 	{
 		SuppressEndShopVisitOnNextDeactivate();
-	}
-
-	static FText FormatPurchaseFailureToast(FName DisabledReason)
-	{
-		return BuildPurchaseFailureToastText(DisabledReason);
 	}
 
 protected:
@@ -873,82 +855,9 @@ public:
 		PaymentChoiceMinDesiredWidth = InMinDesiredWidth;
 	}
 
-	int32 ReadChoiceCount() const
-	{
-		return GetChoiceCount();
-	}
-
-	FRunEventChoiceSnapshot ReadChoiceSnapshot(int32 Index) const
-	{
-		return GetCachedChoiceSnapshot(Index);
-	}
-
-	UWacomRunEventChoiceButton* ReadChoiceButtonWidget(int32 Index) const
-	{
-		return GetChoiceButtonWidgetForTest(Index);
-	}
-
-	TSubclassOf<UWacomRunEventChoiceButton> ReadChoiceButtonWidgetClass() const
-	{
-		return GetChoiceButtonWidgetClassForTest();
-	}
-
-	TSubclassOf<UWacomRunMenuDropTargetWidget> ReadPaymentDropTargetWidgetClass() const
-	{
-		return GetPaymentDropTargetWidgetClassForTest();
-	}
-
-	UWacomRunMenuDropTargetWidget* ReadPaymentDropTarget(int32 Index) const
-	{
-		return GetPaymentDropTargetForTest(Index);
-	}
-
-	float ReadPaymentChoiceMinDesiredWidth() const
-	{
-		return GetPaymentChoiceMinDesiredWidthForTest();
-	}
-
-	FWacomRunMenuCardDropResolveResult ResolveDropForTest(
-		const FWacomRunMenuCardDropResolveResult& Candidate) const
-	{
-		return ResolveRunMenuFirstPersonCardDropIntent_Implementation(Candidate);
-	}
-
-	bool SubmitDropForTest(
-		const FWacomRunMenuCardDropResolveResult& Resolved,
-		FWacomRunMenuCardDropResolveResult& OutSubmitted)
-	{
-		return SubmitRunMenuFirstPersonCardDropIntent_Implementation(Resolved, OutSubmitted);
-	}
-
-	bool ChooseChoiceAt(int32 Index)
-	{
-		return ChooseChoiceByIndex(Index);
-	}
-
 	void SuppressEndOnNextDeactivateForTest()
 	{
 		SuppressEndRunEventOnNextDeactivate();
-	}
-
-	FText ReadTitleText() const
-	{
-		return GetDisplayedTitleText();
-	}
-
-	FText ReadBodyText() const
-	{
-		return GetDisplayedBodyText();
-	}
-
-	FWacomRunEventScreenDebugView ReadRunEventScreenDebugView() const
-	{
-		return GetRunEventScreenDebugView();
-	}
-
-	FString ReadRunEventScreenDebugSummary() const
-	{
-		return GetRunEventScreenDebugSummary();
 	}
 
 protected:

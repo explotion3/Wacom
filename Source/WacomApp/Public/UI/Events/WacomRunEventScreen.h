@@ -15,6 +15,19 @@ class UWacomAppToastSubsystem;
 class UWacomRunMenuDropTargetWidget;
 class URunSession;
 
+#if WITH_AUTOMATION_TESTS
+struct FWacomRunEventScreenAutomationTestView
+{
+	FText DisplayedTitleText;
+	FText DisplayedBodyText;
+	int32 ChoiceCount = 0;
+	int32 PaymentDropTargetCount = 0;
+	TSubclassOf<UWacomRunEventChoiceButton> ChoiceButtonWidgetClass;
+	TSubclassOf<UWacomRunMenuDropTargetWidget> PaymentDropTargetWidgetClass;
+	float PaymentChoiceMinDesiredWidth = 0.0f;
+};
+#endif
+
 /** RunEventScreen 运行时只读诊断快照。用于 PIE / 蓝图排查，不作为规则输入。 */
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomRunEventScreenDebugView
@@ -173,17 +186,26 @@ protected:
 private:
 #if WITH_AUTOMATION_TESTS
 	friend class UWacomRunEventScreenProbe;
+	friend struct FWacomShopRunEventTestAccess;
 
-	int32 GetChoiceCount() const { return CachedChoices.Num(); }
 	FRunEventChoiceSnapshot GetCachedChoiceSnapshot(int32 Index) const;
-	TSubclassOf<UWacomRunEventChoiceButton> GetChoiceButtonWidgetClassForTest() const;
 	UWacomRunEventChoiceButton* GetChoiceButtonWidgetForTest(int32 Index) const;
-	TSubclassOf<UWacomRunMenuDropTargetWidget> GetPaymentDropTargetWidgetClassForTest() const;
 	UWacomRunMenuDropTargetWidget* GetPaymentDropTargetForTest(int32 Index) const;
-	float GetPaymentChoiceMinDesiredWidthForTest() const { return PaymentChoiceMinDesiredWidth; }
 	bool ChooseChoiceByIndex(int32 Index);
 	FText GetDisplayedTitleText() const;
 	FText GetDisplayedBodyText() const;
+	FWacomRunEventScreenAutomationTestView GetAutomationTestViewForTest() const
+	{
+		FWacomRunEventScreenAutomationTestView View;
+		View.DisplayedTitleText = GetDisplayedTitleText();
+		View.DisplayedBodyText = GetDisplayedBodyText();
+		View.ChoiceCount = CachedChoices.Num();
+		View.PaymentDropTargetCount = PaymentDropTargets.Num();
+		View.ChoiceButtonWidgetClass = ResolveChoiceButtonWidgetClass();
+		View.PaymentDropTargetWidgetClass = ResolvePaymentDropTargetWidgetClass();
+		View.PaymentChoiceMinDesiredWidth = PaymentChoiceMinDesiredWidth;
+		return View;
+	}
 #endif
 
 	void RebuildChoices();

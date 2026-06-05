@@ -23,14 +23,14 @@ class UCanvasPanel;
  *
  * C++ 自建 fallback 布局；WBP 子类可 override。
  */
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta = (ToolTip = "L_MainMenu 的顶层主菜单 Screen。显示 New Game / Continue / Quit，玩家意图委托给 AWacomMenuGameMode / controller 流程处理。"))
 class WACOMAPP_API UWacomMainMenuScreen : public UWacomMenuWidgetBase
 {
 	GENERATED_BODY()
 
 public:
 	/** 点 New Game 后要加载的关卡 package path。实际切关由 AWacomMenuGameMode 负责。 */
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Main Menu|Authoring", meta = (ToolTip = "点 New Game 后请求加载的关卡 package path。必须使用 /Game/... 包路径，不使用带 .AssetName 的 ObjectPath；实际 travel 由 AWacomMenuGameMode 执行。"))
 	FName ExplorationLevelName = FName(TEXT("/Game/Wacom/Maps/L_Exploration"));
 
 protected:

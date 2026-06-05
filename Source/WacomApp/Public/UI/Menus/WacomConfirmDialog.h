@@ -23,7 +23,7 @@ class UTextBlock;
  *   - 委托用原生 TFunction，不用 Dynamic（调用方不需要 UFUNCTION）
  *   - 一次性使用：Pop 后不复用实例
  */
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta = (ToolTip = "Modal layer 的二按钮确认对话框。Confirm / Cancel 回调由调用方解释，本类只处理 UI 显示、返回键取消和关闭流程。"))
 class WACOMAPP_API UWacomConfirmDialog : public UWacomMenuWidgetBase
 {
 	GENERATED_BODY()

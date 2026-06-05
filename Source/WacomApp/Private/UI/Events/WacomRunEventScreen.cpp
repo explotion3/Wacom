@@ -541,19 +541,9 @@ FText UWacomRunEventScreen::GetDisplayedBodyText() const
 	return BodyText ? BodyText->GetText() : FText::GetEmpty();
 }
 
-TSubclassOf<UWacomRunEventChoiceButton> UWacomRunEventScreen::GetChoiceButtonWidgetClassForTest() const
-{
-	return ResolveChoiceButtonWidgetClass();
-}
-
 UWacomRunEventChoiceButton* UWacomRunEventScreen::GetChoiceButtonWidgetForTest(int32 Index) const
 {
 	return ChoiceButtonWidgets.IsValidIndex(Index) ? ChoiceButtonWidgets[Index] : nullptr;
-}
-
-TSubclassOf<UWacomRunMenuDropTargetWidget> UWacomRunEventScreen::GetPaymentDropTargetWidgetClassForTest() const
-{
-	return ResolvePaymentDropTargetWidgetClass();
 }
 
 UWacomRunMenuDropTargetWidget* UWacomRunEventScreen::GetPaymentDropTargetForTest(int32 Index) const

@@ -60,6 +60,7 @@ void FDeckService::ReshuffleDiscardIntoDraw(FBattleState& State)
 	}
 
 	// 把弃牌堆整体搬进 DrawPile，更新 Location，再对整个 DrawPile 洗一次。
+	// PlayedPile 不参与本次洗牌；本回合自然打出的牌要等回合结束才进弃牌堆。
 	State.Cards.DrawPile.Append(State.Cards.DiscardPile);
 	State.Cards.DiscardPile.Reset();
 
@@ -69,6 +70,35 @@ void FDeckService::ReshuffleDiscardIntoDraw(FBattleState& State)
 	}
 
 	ShuffleDrawPile(State);
+}
+
+void FDeckService::MovePlayedPileToDiscard(FBattleState& State)
+{
+	if (State.Cards.PlayedPile.IsEmpty())
+	{
+		return;
+	}
+
+	State.Cards.DiscardPile.Append(State.Cards.PlayedPile);
+	State.Cards.PlayedPile.Reset();
+
+	for (const FGuid& Id : State.Cards.DiscardPile)
+	{
+		SetCardLocation(State, Id, ECardLocation::Discard);
+	}
+}
+
+bool FDeckService::MoveFromHandToPlayedPile(FBattleState& State, const FGuid& CardInstanceId)
+{
+	const int32 Idx = State.Cards.Hand.IndexOfByKey(CardInstanceId);
+	if (Idx == INDEX_NONE)
+	{
+		return false;
+	}
+	State.Cards.Hand.RemoveAt(Idx);
+	State.Cards.PlayedPile.Add(CardInstanceId);
+	SetCardLocation(State, CardInstanceId, ECardLocation::Played);
+	return true;
 }
 
 bool FDeckService::DiscardFromHand(FBattleState& State, const FGuid& CardInstanceId)

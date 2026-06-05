@@ -2,6 +2,8 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "UI/PlayerControllerRunInteractionTestAccess.h"
+#include "UI/RunMenuDropTargetWidgetTestAccess.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
 #include "UI/WacomShopRunEventTestProbes.h"
 #include "UObject/StrongObjectPtr.h"
@@ -80,21 +82,21 @@ bool FWacomUIRunMenuTopmostDropTargetSpec::RunTest(const FString& /*Parameters*/
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 
 	Bottom->ZoneId = TEXT("Zone.Bottom");
-	Bottom->bProbeHitForTest = true;
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Bottom.Get(), true);
 	Top->ZoneId = TEXT("Zone.Top");
-	Top->bProbeHitForTest = true;
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Top.Get(), true);
 
-	PC->RegisterRunMenuDropTargetForTest(Bottom.Get());
-	PC->RegisterRunMenuDropTargetForTest(Top.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Bottom.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Top.Get());
 
 	FWacomInteractionTargetHandle Handle;
 	TestTrue(TEXT("Probe finds a target"),
-		PC->ProbeRunMenuDropTargetAtWidgetPositionForTest(FVector2D(32.0f, 64.0f), Handle));
+		FWacomPlayerControllerRunInteractionTestAccess::ProbeRunMenuDropTargetAtWidgetPosition(PC.Get(), FVector2D(32.0f, 64.0f), Handle));
 	TestEqual(TEXT("Last registered target wins as topmost"),
 		Handle.ZoneId,
 		FName(TEXT("Zone.Top")));
 	TestEqual(TEXT("Probe position passed through"),
-		Top->GetLastWidgetPositionForTest(),
+		FWacomRunMenuDropTargetWidgetTestAccess::LastWidgetPosition(Top.Get()),
 		FVector2D(32.0f, 64.0f));
 
 	return true;

@@ -2,971 +2,370 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-06-02
+updated: 2026-06-05
 tags:
   - wacom/data
   - wacom/dataasset
-  - wacom/gameplay-tags
-  - wacom/validation
 ---
 
 # WacomData 模块文档
 
 > [!info] 本文职责
-> 本文是 WacomData 模块的静态数据契约入口。加 DataAsset 字段、GameplayTag 或内容生成规则时先改本文，再改代码。
+> 本文是 WacomData 模块的静态 DataAsset 契约入口。它只记录数据类型、字段语义和模块边界；内容生成、资产校验和制作矩阵见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)，Gameplay tag 字典见 [WacomGameplayTags.md](./WacomGameplayTags.md)。
 
-> [!note] 相关入口
-> 运行时规则见 [[WacomBattle]] / [[WacomRun]]，UI 展示见 [[WacomUI]]，编辑器校验实现位于 `WacomEditor`。
+> [!warning] 边界
+> `WacomData` 只定义静态内容。战斗结算见 [WacomBattle.md](./WacomBattle.md)，Run 状态和事务见 [WacomRun.md](./WacomRun.md)，世界交互 authoring 见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)，UI 表现见 [WacomUI.md](./WacomUI.md)。
 
 ## §1 模块职责
 
-WacomData 负责**静态定义和 DataAsset**。
+`WacomData` 负责卡牌、敌人、角色、商店、拾取物、Run world card interaction 和 RunEvent 等静态定义。它可以描述“内容是什么”，不能保存“当前 Run / 当前战斗发生了什么”。
 
-**负责**：
-- 卡牌定义（UCardDefinition）
-- 敌人定义（UEnemyDefinition + UEnemyPartDefinition）
-- 角色定义（UCharacterDefinition）
-- 商店定义（UShopDefinition）
-- 拾取物定义（UWacomRunPickupDefinition）
-- 通用 Run 世界拖卡交互定义（UWacomRunWorldCardInteractionDefinition）
-- 探索事件定义（UWacomRunEventDefinition）
-- 意图定义（FIntentDefinition）
-- 效果结构（FCardEffect / FCardZoneHook / FCardPassive）
-- 条件结构（FEffectCondition）
+**负责：**
+- `UCardDefinition`、`UEnemyDefinition`、`UEnemyPartDefinition`、`UCharacterDefinition`
+- `UShopDefinition`
+- `UWacomRunPickupDefinition`
+- `UWacomRunWorldCardInteractionDefinition`
+- `UWacomRunEventDefinition`
+- `FIntentDefinition`、`FCardEffect`、`FCardZoneHook`、`FCardPassive`、`FEffectCondition`
 
-**不负责**：
-- 运行时实例（属于 WacomBattle）
-- 战斗逻辑
-- Run 状态、库存、事件进度和存档
-- UI 展示、WBP 绑定和 Presentation ViewData
-- 编辑器 Validator 注册与 Commandlet 执行
+**不负责：**
+- `UBattleSession`、`FBattleState`、运行时卡牌实例或战斗命令
+- `URunSession`、`FRunState`、库存、事件进度、金币、存档和事务回滚
+- Actor 摆放实例的 `PersistentId`、Details authoring facade 或地图校验
+- UI ViewData、WBP 绑定、Widget 生命周期或输入路由
+- Editor-only 内容生成、资产 Validator 注册和 commandlet 执行
 
-**依赖方向**：`WacomCore ← WacomData ← WacomBattle`。`WacomData` 只能依赖 `WacomCore`，不能反向依赖 `WacomBattle / WacomRun / WacomApp / WacomEditor`。
+依赖方向：
 
-**资产位置**：
-```
-Content/Wacom/
-└── Data/
-    ├── Cards/BugGirl/DA_Card_*.uasset
-    ├── Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_Badge*.uasset
-    ├── Cards/Rewards/DA_Card_PoisonFang.uasset
-    ├── Characters/DA_Character_BugGirl.uasset
-    ├── Enemies/Snake/{DA_Enemy_Snake, DA_Part_Snake_Head/Body/Tail}.uasset
-    ├── Events/{DA_Event_DebugSnakeGift, DA_Event_DebugFlagReward}.uasset
-    ├── Pickups/{DA_Pickup_DebugGold3, DA_Pickup_DebugPoisonFang}.uasset
-    ├── Interactions/DA_RunWorldCardInteraction_DebugKeyGold3.uasset
-    └── Shops/DA_Shop_DebugSnake.uasset
+```text
+WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
+                         ^
+                         WacomEditor / WacomTests 只在编辑器和测试侧读取数据合同
 ```
 
-完整内容目录口径见 `Docs/Content_Organization.md`。
+`WacomData` 只能依赖 `WacomCore`。不要让它反向 include `WacomBattle / WacomRun / WacomApp / WacomEditor`。
 
----
+## §2 资产类型地图
 
-## §2 UCardDefinition 字段表
+| 类型 | 位置 / 主要头文件 | 静态语义 | 运行时 owner |
+|---|---|---|---|
+| `UCardDefinition` | `Source/WacomData/Public/Cards` | 卡牌 ID、文案、费用、关键词、目标模式、效果、被动和身材 | Battle 创建 runtime card；Run 保存玩家持有卡牌实例 |
+| `UEnemyDefinition` | `Source/WacomData/Public/Enemies` | 敌人由哪些部位组成，以及部位顺序 | Battle 初始化敌人 runtime state |
+| `UEnemyPartDefinition` | `Source/WacomData/Public/Enemies` | 部位 HP、意图循环、经验、击倒奖励卡 | Battle 执行部位行动和击倒选择 |
+| `UCharacterDefinition` | `Source/WacomData/Public/Characters` | 角色基础 HP、左右手固有卡、初始牌组 | Run 初始化角色和玩家卡池；Battle 读取入战卡组 |
+| `UShopDefinition` | `Source/WacomData/Public/Shops` | 固定商品列表和价格 | RunSession 按场景 shop visit 保存购买状态 |
+| `UWacomRunPickupDefinition` | `Source/WacomData/Public/Pickups` | 数据驱动拾取物奖励配置 | RunSession 使用场景 `PersistentId` 防重复拾取 |
+| `UWacomRunWorldCardInteractionDefinition` | `Source/WacomData/Public/Interactions` | Run world card drop 的卡牌筛选、奖励和反馈文案 | RunSession 提交事务，Actor receiver 读取制作定义 |
+| `UWacomRunEventDefinition` | `Source/WacomData/Public/Events` | 探索事件图、节点、选项、条件和效果 | RunSession 执行事件事务和回滚 |
+
+静态内容默认位于 `/Game/Wacom/Data`，完整目录约定见 [Content_Organization.md](./Content_Organization.md)。生成内容清单和 commandlet 口径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)。
+
+## §3 Card Definition
+
+`UCardDefinition` 是卡牌静态规则与显示文本的来源。它不保存 runtime cost modifier、当前位置、临时关键词或是否已被消耗。
 
 ```cpp
 UCLASS(BlueprintType)
 class UCardDefinition : public UPrimaryDataAsset
 {
-    UPROPERTY(EditDefaultsOnly) FName              CardId;           // 唯一 ID
-    UPROPERTY(EditDefaultsOnly) FText              DisplayName;      // 显示名
-    UPROPERTY(EditDefaultsOnly) FText              Description;      // 显示文本
-    UPROPERTY(EditDefaultsOnly) int32              BaseCost = 0;     // 基础 Cost
-    UPROPERTY(EditDefaultsOnly) FGameplayTag       Rarity;           // Card.Rarity.*
-    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer Keywords;      // Card.Keyword.*
-    UPROPERTY(EditDefaultsOnly) FCardPhysique      Physique;         // 身材（可选）
-    UPROPERTY(EditDefaultsOnly) ECardTargetMode    TargetMode;       // None / SingleEnemyPart / AllEnemyParts / Self / HandCard
-    UPROPERTY(EditDefaultsOnly) FWacomHandCardTargetFilter HandCardTargetFilter; // HandCard 目标基础筛选
-    UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> Effects;         // 主效果
-    UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> PerfectReleaseEffects; // 完美释放效果
-    UPROPERTY(EditDefaultsOnly) TArray<FCardZoneHook> ZoneHooks;     // 区域相关效果或修正
-    UPROPERTY(EditDefaultsOnly) TArray<FCardPassive> Passives;       // 被动触发
+    FName CardId;
+    FText DisplayName;
+    FText Description;
+    int32 BaseCost = 0;
+    FGameplayTag Rarity;
+    FGameplayTagContainer Keywords;
+    FCardPhysique Physique;
+    ECardTargetMode TargetMode;
+    FWacomHandCardTargetFilter HandCardTargetFilter;
+    TArray<FCardEffect> Effects;
+    TArray<FCardEffect> PerfectReleaseEffects;
+    TArray<FCardZoneHook> ZoneHooks;
+    TArray<FCardPassive> Passives;
 };
 ```
 
-### FWacomHandCardTargetFilter
+字段口径：
 
-`HandCardTargetFilter` 只影响 `TargetMode=HandCard` 的主动打牌目标资格，UI 不直接读取它，而是通过 Battle 的 `ValidateTargetWithCard()` / drop resolver 消费结果。
+| 字段 | 语义 |
+|---|---|
+| `CardId` | 内容稳定 ID；用于 debug、测试和运行时实例引用来源，不是 UObject path |
+| `DisplayName / Description` | UI 展示文本；规则不从描述文本解析效果 |
+| `BaseCost` | 基础费用；Battle 会叠加 runtime modifier 后 clamp |
+| `Rarity / Keywords` | 静态标签；标签定义见 [WacomGameplayTags.md](./WacomGameplayTags.md) |
+| `Physique` | 入战 HP、容量和后续耐久相关静态字段 |
+| `TargetMode` | 玩家打出时是否需要敌方部位、玩家自身、手牌或无目标 |
+| `HandCardTargetFilter` | 仅 `TargetMode=HandCard` 的目标手牌资格过滤 |
+| `Effects / PerfectReleaseEffects` | 主效果与完美释放效果；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) |
+| `ZoneHooks / Passives` | 区域触发和被动触发静态配置；执行时机由 Battle 决定 |
+
+`FWacomHandCardTargetFilter` 只影响玩家主动打出 `TargetMode=HandCard` 时的目标资格。UI 不直接解释它，而是读取 Battle validation / drop intent 的结果。
 
 ```cpp
 USTRUCT(BlueprintType)
 struct FWacomHandCardTargetFilter
 {
-    UPROPERTY(EditDefaultsOnly) bool bUseExplicitHandCardTargetFilter = false;
-    UPROPERTY(EditDefaultsOnly) bool bAllowNormalHandCards = true;
-    UPROPERTY(EditDefaultsOnly) bool bAllowHandAnchors = true;
-    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer RequiredTargetKeywords;
-    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer BlockedTargetKeywords;
+    bool bUseExplicitHandCardTargetFilter = false;
+    bool bAllowNormalHandCards = true;
+    bool bAllowHandAnchors = true;
+    FGameplayTagContainer RequiredTargetKeywords;
+    FGameplayTagContainer BlockedTargetKeywords;
 };
 ```
 
-- `bUseExplicitHandCardTargetFilter=true`：卡牌直接使用这两个允许开关。
-- `bUseExplicitHandCardTargetFilter=false`：保持旧资产兼容推断。普通 `TargetMode=HandCard` 默认允许普通手牌和左右手锚点；包含 `Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected + Target.SelectedHandCard` 的卡默认只允许普通手牌。
-- `RequiredTargetKeywords`：目标有效关键词必须全部拥有；空集合表示不要求。
-- `BlockedTargetKeywords`：目标有效关键词命中任意一个即拒绝；空集合表示不阻止。
-- 目标有效关键词 = `UCardDefinition::Keywords` + 战斗内 `TemporaryKeywords`。左右手锚点如果被允许，也同样参与 keyword 条件。
-- self target 永远禁止，不提供配置项。
-- 现阶段只筛普通手牌 / 左右手锚点 / keyword；费用、卡牌类型、区域、伙伴 / 食物专用属性等条件后续再扩展。
+- 显式 filter 优先；未显式设置时，Battle 按当前兼容推断处理普通手牌和左右手锚点。
+- `RequiredTargetKeywords` 必须全部满足；`BlockedTargetKeywords` 命中任意一个即拒绝。
+- 目标有效关键词 = 卡牌定义关键词 + 战斗内临时关键词。允许锚点时，左右手锚点同样参与关键词条件。
+- self target 永远禁止。费用、卡牌类型、伙伴 / 食物等更细条件还不是当前字段合同。
 
-### FCardPhysique
+`FCardPhysique` 是卡牌身体 / 容量数据：
 
 ```cpp
 USTRUCT(BlueprintType)
 struct FCardPhysique
 {
-    UPROPERTY(EditDefaultsOnly) int32 MaxHpBonus = 0;     // 入战生命值上限加成（仅带 Companion 关键词的卡计入）
-    UPROPERTY(EditDefaultsOnly) int32 Durability = 0;     // 0 = 无耐久限制（第一阶段不使用）
-    UPROPERTY(EditDefaultsOnly) int32 Capacity = 0;       // GDD §11.2：容量字段
-                                                          //   0：普通卡，不贡献存放空间
-                                                          //   >0：容器卡，进入背包时贡献容量
-    UPROPERTY(EditDefaultsOnly) FGameplayTag CapacityEffect; // 空=A类容器；有效=B类容器，开 SpecialZone
+    int32 MaxHpBonus = 0;
+    int32 Durability = 0;
+    int32 Capacity = 0;
+    FGameplayTag CapacityEffect;
 };
 ```
 
-`CapacityEffect` 使用 `Card.CapacityEffect.*` 命名空间。当前数据语义：
-- 空 tag：A 类容器，容量计入通量容量和备战容量；物理位于 Backpack 时作为通量内容卡显示。
-- 有效 tag：B 类容器，容量不计入通量容量，但计入备战容量；每张 B 类主卡独立展开一个 SpecialZone。
-- `Card.CapacityEffect.WeaponDamagePlus3`：B 类容器效果。SpecialZone 内已选择入战且带 `Card.Keyword.Weapon` 的卡，伤害结算 +3。
+- `MaxHpBonus` 只对带 `Card.Keyword.Companion` 的入战卡计入玩家战内 MaxHp。
+- `Durability` 字段保留，当前规则层未读取；耐久系统接入后再由 Battle / Run resolver 消费。
+- `Capacity=0` 表示普通卡；`Capacity>0` 表示容器卡。
+- `CapacityEffect` 为空表示 A 类容器；有效 tag 表示 B 类容器并展开 SpecialZone。当前已接入的具体效果见 [WacomGameplayTags.md](./WacomGameplayTags.md#cardcapacityeffect)。
 
-容器运行时规则见 [WacomRun.md](./WacomRun.md)，入战后的容量效果结算见 [WacomBattle.md](./WacomBattle.md)。
-
----
+容器在 Run 层的容量与背包规则见 [WacomRun.md](./WacomRun.md)，容量效果入战结算见 [WacomBattle.md](./WacomBattle.md)。
 
 <a id="wacomdata-enemy-part"></a>
-## §3 UEnemyDefinition + UEnemyPartDefinition 字段表
+## §4 Enemy Definition
 
-### UEnemyDefinition
+`UEnemyDefinition` 只描述敌人的部位组成；部位自身数据在 `UEnemyPartDefinition`。
 
 ```cpp
 UCLASS(BlueprintType)
 class UEnemyDefinition : public UPrimaryDataAsset
 {
-    UPROPERTY(EditDefaultsOnly) FName            EnemyId;
-    UPROPERTY(EditDefaultsOnly) FText            DisplayName;
-    UPROPERTY(EditDefaultsOnly) TArray<FEnemyPartSlot> Parts; // 顺序即部位顺序
+    FName EnemyId;
+    FText DisplayName;
+    TArray<FEnemyPartSlot> Parts;
 };
 
 USTRUCT(BlueprintType)
 struct FEnemyPartSlot
 {
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UEnemyPartDefinition> PartDef;
+    TObjectPtr<UEnemyPartDefinition> PartDef;
 };
 ```
 
-### UEnemyPartDefinition
+`UEnemyPartDefinition` 是敌方部位的静态规则入口：
 
 ```cpp
 UCLASS(BlueprintType)
 class UEnemyPartDefinition : public UPrimaryDataAsset
 {
-    UPROPERTY(EditDefaultsOnly) FName             PartId;          // 如 Snake.Head
-    UPROPERTY(EditDefaultsOnly) FText             DisplayName;
-    UPROPERTY(EditDefaultsOnly) int32             MaxHp = 0;
-    UPROPERTY(EditDefaultsOnly) TArray<FIntentDefinition> IntentSequence; // 循环执行
-    UPROPERTY(EditDefaultsOnly) int32             InitialIntentIndex = 0;
-    UPROPERTY(EditDefaultsOnly) int32             ExperienceReward = 0;  // GDD §3.3 部位被破坏给予玩家的经验值
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> KnockdownRewardCard = nullptr; // 击倒后 Aid/Destroy 获得的奖励卡
+    FName PartId;
+    FText DisplayName;
+    int32 MaxHp = 0;
+    TArray<FIntentDefinition> IntentSequence;
+    int32 InitialIntentIndex = 0;
+    int32 ExperienceReward = 0;
+    TObjectPtr<UCardDefinition> KnockdownRewardCard = nullptr;
 };
 ```
 
-蛇默认部位配置：
+| 字段 | 语义 |
+|---|---|
+| `PartId` | 部位 authored id，例如 `Snake.Head`；SceneEnemy PartActor authoring 会用稳定 PartId 绑定运行时部位 |
+| `MaxHp` | 部位初始生命上限 |
+| `IntentSequence / InitialIntentIndex` | 敌人行动循环和起始意图 |
+| `ExperienceReward` | 部位破坏后给玩家的经验记账 |
+| `KnockdownRewardCard` | Aid / Destroy 击倒选择共用的奖励卡定义；战斗内创建 runtime card，战后由 Run 入包 |
 
-| 部位 | MaxHp | ExperienceReward | KnockdownRewardCard |
-|---|---:|---:|---|
-| `Snake.Head` | 16 | 3 | `DA_Card_PoisonFang` |
-| `Snake.Body` | 22 | 2 | `DA_Card_PoisonFang` |
-| `Snake.Tail` | 10 | 2 | `DA_Card_PoisonFang` |
-
-`KnockdownRewardCard` 是"万物成卡"第一版部位奖励配置：
-- 字段含义：该部位被击倒后，Aid / Destroy 共用的奖励卡定义。
-- 运行时行为：Battle 在选择 Aid / Destroy 时创建战斗内 runtime card 并写入战后包，见 [WacomBattle §12](./WacomBattle.md#wacombattle-result)。
-- 战后入包：Run 在 Victory（含撤离）时结算 `GainedCards[]`，见 [WacomRun §8](./WacomRun.md#wacomrun-battle-settlement)。
-- 不同分支不同奖励表留到后续扩展。
-
-当前蛇敌人内容：
-- `DA_Card_PoisonFang`（毒牙）是第一张击倒奖励卡样例，临时效果为 0 费、对单个敌方部位施加 1 中毒。
-- 蛇头、蛇身、蛇尾当前都配置同一张毒牙，便于验证完整奖励链路；后续可替换为各部位专属奖励。
-- V0-CW 后蛇三部位的 `IntentSequence` 已扩展为矩阵内可执行的 V1 变体：玩家伤害、对玩家施加 Poison / Slow、自身加 Shield。当前仍不使用手牌目标、全体敌方部位目标或卡牌专用效果。
-- V0-BM 后，`AWacomRunCardPickupActor::ConfigureDebugCardPickupSample()` 也会尝试加载 `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang` 作为默认卡牌拾取样例；该按钮只配置当前场景 Actor，不生成或修改卡牌资产。
-
-### FIntentDefinition
+`FIntentDefinition` 和 `FIntentEffect` 是敌方意图的静态效果描述。当前敌人意图字段比卡牌效果更窄；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
 
 ```cpp
 USTRUCT(BlueprintType)
 struct FIntentDefinition
 {
-    UPROPERTY(EditDefaultsOnly) FName                   IntentId;
-    UPROPERTY(EditDefaultsOnly) FText                   DisplayName;
-    UPROPERTY(EditDefaultsOnly) int32                   Initiative = 0;       // 本意图的先机值
-    UPROPERTY(EditDefaultsOnly) int32                   ResistanceValue = 0;  // 抵抗比较用值
-    UPROPERTY(EditDefaultsOnly) TArray<FIntentEffect>   Effects;              // 行动时产生的效果
+    FName IntentId;
+    FText DisplayName;
+    int32 Initiative = 0;
+    int32 ResistanceValue = 0;
+    TArray<FIntentEffect> Effects;
 };
 
 USTRUCT(BlueprintType)
 struct FIntentEffect
 {
-    UPROPERTY(EditDefaultsOnly) FGameplayTag EffectType;   // 复用 Effect.*
-    UPROPERTY(EditDefaultsOnly) int32        Magnitude = 0;
-    UPROPERTY(EditDefaultsOnly) FGameplayTag Target;       // Target.Self 或 Target.Player
-    UPROPERTY(EditDefaultsOnly) int32        Duration = 0;
+    FGameplayTag EffectType;
+    int32 Magnitude = 0;
+    FGameplayTag Target;
+    int32 Duration = 0;
 };
 ```
 
----
+## §5 Character Definition
 
-## §4 UCharacterDefinition 字段表
+`UCharacterDefinition` 是角色静态入口。Run 初始化时读取它创建玩家初始卡池和角色基准数据。
 
 ```cpp
 UCLASS(BlueprintType)
 class UCharacterDefinition : public UPrimaryDataAsset
 {
-    UPROPERTY(EditDefaultsOnly) FName CharacterId;
-    UPROPERTY(EditDefaultsOnly) FText DisplayName;
-
-    // HP 上限规则（GDD §3.1 / §3.4）：
-    //   PlayerBaseMaxHp = FingerCount × HpPerFinger
-    //   战内 MaxHp = PlayerBaseMaxHp + Σ(备战卡组中带 Companion 关键词的卡的 MaxHpBonus)
-    UPROPERTY(EditDefaultsOnly) int32 FingerCount = 10;
-    UPROPERTY(EditDefaultsOnly) int32 HpPerFinger = 2;
-    int32 GetBasePlayerMaxHp() const;     // 返回 FingerCount * HpPerFinger
-
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> LeftHandCard;
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> RightHandCard;
-    UPROPERTY(EditDefaultsOnly) TArray<TObjectPtr<UCardDefinition>> StarterDeck; // 不含左右手
+    FName CharacterId;
+    FText DisplayName;
+    int32 FingerCount = 10;
+    int32 HpPerFinger = 2;
+    TObjectPtr<UCardDefinition> LeftHandCard;
+    TObjectPtr<UCardDefinition> RightHandCard;
+    TArray<TObjectPtr<UCardDefinition>> StarterDeck;
 };
 ```
 
-虫妹 `FingerCount = 10`，`HpPerFinger = 2`，本体 HP = 20。
-算上初始卡组带 Companion 的卡 `1+1+1+6+23 = 32`，战斗开始时最大 HP = `20 + 32 = 52`。
-非 Companion 卡（武器/工具/中立）即便填了 `MaxHpBonus` 也不计入战内 MaxHp。
+- `GetBasePlayerMaxHp()` 返回 `FingerCount * HpPerFinger`。
+- `LeftHandCard / RightHandCard` 是固有左右手卡，不放进 `StarterDeck`。
+- `StarterDeck` 只放正式初始牌。测试卡、debug key 和 badge 显示测试卡不进入初始牌组；需要 PIE 验证时通过调试商店获得。
+- 战内 MaxHp = 角色基础 HP + 备战卡组中 Companion 卡的 `Physique.MaxHpBonus` 总和。
 
-当前生成的虫妹角色内容：
+## §6 Shop Definition
 
-| 字段 | 当前值 |
-|---|---|
-| `CharacterId` | `BugGirl` |
-| `LeftHandCard` | `DA_Card_LeftHand` |
-| `RightHandCard` | `DA_Card_RightHand` |
-| `StarterDeck` | `ZhaoguangMudie / FuxiaoFeie / ChifuGongyi / ShuoguangDie / Muling / BugGirlBag / ZhujianRongnang / MuseiYinchongdeng` |
-
-`StarterDeck` 中前 5 张是默认参战伙伴卡；`BugGirlBag` 和 `ZhujianRongnang` 默认进入通量 / 特殊存放相关背包区；`MuseiYinchongdeng` 是原型特例，默认固定在备战区，但它仍作为 A 类容器卡贡献通量和备战容量。本轮后 `DebugKey`、卡对卡测试卡和卡面徽章测试卡不再进入虫妹初始卡组；这些测试资产统一放进 `DA_Shop_DebugSnake` 以 0 金币出售，PIE 需要验证时从调试商店购买。后续新增测试卡也应走调试商店，不要污染正式 StarterDeck。
-
----
-
-## §5 UShopDefinition 字段表
+`UShopDefinition` 只定义静态商品内容，不保存已购买状态。
 
 ```cpp
 UCLASS(BlueprintType)
 class UShopDefinition : public UPrimaryDataAsset
 {
-    UPROPERTY(EditDefaultsOnly) FName ShopId;          // 内容 ID，不是运行时库存 key
-    UPROPERTY(EditDefaultsOnly) FText DisplayName;     // 商店显示名
-    UPROPERTY(EditDefaultsOnly) TArray<FShopOfferDefinition> Offers;
+    FName ShopId;
+    FText DisplayName;
+    TArray<FShopOfferDefinition> Offers;
 };
 
 USTRUCT(BlueprintType)
 struct FShopOfferDefinition
 {
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> CardDefinition;
-    UPROPERTY(EditDefaultsOnly) int32 Price = 0;       // 金币价格，0 表示免费
+    TObjectPtr<UCardDefinition> CardDefinition;
+    int32 Price = 0;
 };
 ```
 
-`UShopDefinition` 只定义静态商品内容，不保存购买状态。当前 Run 内的库存和已购买状态仍由 `AWacomShopTriggerActor.PersistentId` 作为 key 存在 `URunSession` 中。
+- `ShopId` 是内容 ID，不替代场景 `AWacomShopTriggerActor.PersistentId`。
+- `Offers` 不能为空；剧情空商店后续需要显式字段表达。
+- `Price=0` 是合法免费商品；负数无效。
+- RunSession 使用场景 `PersistentId` 保存本次 Run 内的购买状态和库存访问。
 
-当前生成内容：
-- `DA_Shop_DebugSnake`（蛇巢调试商店）：卖 `毒牙`、`赤腹工蚁`、`朝光暮蝶`、`虫妹的小布袋`，以及 V0-CW starter pack 新卡 `毒针 / 几丁护片 / 触须探路 / 蜕壳切 / 轻蜕壳 / 丝线佯攻`。
-- 同一商店还以 0 金币出售测试 / 调试卡：`DebugKey`、卡对卡加费 / 减费 / 弃置 / 消耗 / 关键词筛选测试卡，以及 `BadgeDisplayTests` 下的卡面效果徽章显示测试卡。测试卡统一走 DebugSnake 商店入口，不进入 `BugGirl.StarterDeck`。
+## §7 Pickup Definition
 
-编辑器侧已接入 `UWacomShopDefinitionValidator` 内容防呆。校验重点：
-- `ShopId` 不能为空。
-- `Offers` 不能为空；如果需要剧情空商店，后续应加显式字段表达，不用空列表伪装。
-- 每个 Offer 必须配置 `CardDefinition`。
-- `Price` 不能为负数；`0` 表示免费商品，合法。
-
-V0-BT 后，场景 `AWacomShopTriggerActor` 摆放实例也会在 Validate Map/Level 中校验当前解析出的商品来源。正式内容推荐填写 `ShopDefinition`；未填写时，手工 `Offers` 仍是兼容入口且可通过校验。`UShopDefinition.ShopId` 仍只是内容 ID，不替代场景 `PersistentId`。
-- 第一版不禁止同一张卡重复出现在多个 Offer 中，因为后续可能用于多份库存或不同价格变体。
-
-自动化测试 `Wacom.Data.Shop.DebugSnakeAssetValidation` 会验证 `DA_Shop_DebugSnake` 能通过同一套校验规则。`Wacom.Data.Shop.DebugSnakeAsset` 还会按 `FWacomGeneratedBattleContentAssets::DebugSnakeShopOfferExpectations()` 验证商品顺序和价格，避免商店内容生成漂移。
-
----
-
-## §6 UWacomRunPickupDefinition 字段表
-
-`UWacomRunPickupDefinition` 是 Run world Pickup 的静态奖励定义。它只描述“这个拾取物给什么奖励”，不保存世界对象是否已拾取，也不替代场景 Actor 的 `PersistentId`。
+`UWacomRunPickupDefinition` 是 Run world Pickup 的数据驱动奖励定义。它描述“这个拾取物给什么”，不保存“这个场景实例是否已拾取”。
 
 ```cpp
 UCLASS(BlueprintType)
 class UWacomRunPickupDefinition : public UPrimaryDataAsset
 {
-    UPROPERTY(EditDefaultsOnly) FName PickupId;
-    UPROPERTY(EditDefaultsOnly) EWacomRunPickupRewardType RewardType; // None / Gold / Card
-    UPROPERTY(EditDefaultsOnly) int32 GoldAmount = 1;
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> CardDefinition;
+    FName PickupId;
+    EWacomRunPickupRewardType RewardType;
+    int32 GoldAmount = 1;
+    TObjectPtr<UCardDefinition> CardDefinition;
 };
 ```
 
-字段口径：
-
-| 字段 | 用途 |
+| 字段 | 语义 |
 |---|---|
-| `PickupId` | 静态内容 ID，只用于内容识别和 debug；不是运行时 `CollectedPickupIds` key |
+| `PickupId` | 静态内容 ID，只用于内容识别和 debug；不是 `CollectedPickupIds` key |
 | `RewardType` | `None / Gold / Card`；`None` 是无效配置 |
 | `GoldAmount` | 仅 `RewardType=Gold` 使用，必须大于 0 |
-| `CardDefinition` | 仅 `RewardType=Card` 使用，表示固定获得一张该卡 |
+| `CardDefinition` | 仅 `RewardType=Card` 使用，表示固定获得一张卡 |
 
-只读 helper：
+正式摆放推荐 `BP_WacomRunRewardPickupActor + UWacomRunPickupDefinition`。每个场景实例仍必须有自己的唯一 `PersistentId`。
 
-| Helper | 用途 |
-|---|---|
-| `GetRewardConfigWarningReason()` | 返回 `MissingPickupId / MissingRewardType / InvalidGoldAmount / MissingCardDefinition / None` |
-| `IsRewardConfigValid()` | `GetRewardConfigWarningReason() == None` 的布尔包装 |
+## §8 Run World Card Interaction Definition
 
-V0-BQ 后已有两个 Debug PickupDefinition 样例资产：
-
-| 资产 | 配置 | 用途 |
-|---|---|---|
-| `/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3` | `PickupId=Pickup.Debug.Gold3`、`RewardType=Gold`、`GoldAmount=3` | 验证数据驱动金币拾取 |
-| `/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang` | `PickupId=Pickup.Debug.PoisonFang`、`RewardType=Card`、`CardDefinition=DA_Card_PoisonFang` | 验证数据驱动固定卡牌拾取 |
-
-正式内容推荐使用 `BP_WacomRunRewardPickupActor + UWacomRunPickupDefinition`。`PickupDefinition` 可被多个场景实例复用，但每个摆放 Actor 必须配置自己的唯一 `PersistentId`；金币 / 卡牌专用 Actor 仍保留为 C++ fallback 和快速 debug 入口。
-
-V0-BS 后，`PickupDefinition` 本身仍由资产 validator 校验；关卡中摆放的 Pickup Actor 实例另由 Actor Data Validation 校验场景侧字段。`PersistentId` 缺失、奖励配置无效会让地图 validation invalid；重复 `PersistentId` 只给 warning。`BP_WacomRunRewardPickupActor` 默认资产允许空 `PersistentId / PickupDefinition`，因为这些字段属于实例配置。
-
-编辑器侧已接入 `UWacomRunPickupDefinitionValidator` 内容防呆。校验重点：
-- `PickupId` 不能为空。
-- `RewardType` 不能为 `None`。
-- `RewardType=Gold` 时 `GoldAmount` 必须大于 0。
-- `RewardType=Card` 时必须配置 `CardDefinition`。
-- V1 不对未使用字段给 warning；未激活的字段会被忽略。
-
----
-
-## §7 UWacomRunWorldCardInteractionDefinition 字段表
-
-`UWacomRunWorldCardInteractionDefinition` 是 Run world card drop receiver 的通用静态制作定义。它描述“场景目标接受什么卡、奖励多少金币、是否消耗卡、release 失败/完成反馈文案”，不保存目标是否已完成，也不替代场景 Actor 的 `PersistentId`。
+`UWacomRunWorldCardInteractionDefinition` 是 Run world card drop receiver 的通用静态制作定义。它描述目标接受什么卡、给什么奖励、是否消耗卡和失败 / 完成反馈文案；不保存目标是否已完成。
 
 ```cpp
-UENUM(BlueprintType)
-enum class EWacomRunWorldCardInteractionRewardType : uint8
-{
-    None,
-    Gold,
-    Card,
-};
-
 USTRUCT(BlueprintType)
 struct FWacomRunWorldCardInteractionReward
 {
-    UPROPERTY(EditDefaultsOnly) EWacomRunWorldCardInteractionRewardType Type;
-    UPROPERTY(EditDefaultsOnly) int32 GoldAmount;
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UCardDefinition> CardDefinition;
+    EWacomRunWorldCardInteractionRewardType Type;
+    int32 GoldAmount;
+    TObjectPtr<UCardDefinition> CardDefinition;
 };
 
 UCLASS(BlueprintType)
 class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 {
-    UPROPERTY(EditDefaultsOnly) FName InteractionId;
-    UPROPERTY(EditDefaultsOnly) TArray<TObjectPtr<UCardDefinition>> AllowedCardDefinitions;
-    UPROPERTY(EditDefaultsOnly) TArray<FName> AllowedCardIds;
-    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer RequiredKeywords;
-    UPROPERTY(EditDefaultsOnly) FGameplayTagContainer BlockedKeywords;
-    UPROPERTY(EditDefaultsOnly) TArray<FWacomRunWorldCardInteractionReward> Rewards;
-    UPROPERTY(EditDefaultsOnly) bool bConsumeCardOnSuccess = true;
-    UPROPERTY(EditDefaultsOnly) FText PreviewPromptText;
-    UPROPERTY(EditDefaultsOnly) FText SuccessPromptText;
-    UPROPERTY(EditDefaultsOnly) FText CompletedPromptText;
-    UPROPERTY(EditDefaultsOnly) FText RejectedCardPromptText;
-    UPROPERTY(EditDefaultsOnly) FText ConfigWarningPromptText;
-    UPROPERTY(EditDefaultsOnly) FText SourceCardUnavailablePromptText;
-    UPROPERTY(EditDefaultsOnly) FText GenericFailurePromptText;
+    FName InteractionId;
+    TArray<TObjectPtr<UCardDefinition>> AllowedCardDefinitions;
+    TArray<FName> AllowedCardIds;
+    FGameplayTagContainer RequiredKeywords;
+    FGameplayTagContainer BlockedKeywords;
+    TArray<FWacomRunWorldCardInteractionReward> Rewards;
+    bool bConsumeCardOnSuccess = true;
+    FText PreviewPromptText;
+    FText SuccessPromptText;
+    FText CompletedPromptText;
+    FText RejectedCardPromptText;
+    FText ConfigWarningPromptText;
+    FText SourceCardUnavailablePromptText;
+    FText GenericFailurePromptText;
 };
 ```
+
+- `InteractionId` 是内容 ID，不替代场景 `PersistentId` 和 `CompletedRunWorldInteractionIds` key。
+- 正向筛选必须至少包含 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 中一种；单独配置 `BlockedKeywords` 无效。
+- `Rewards` 当前支持 Gold 和 Card；成功时按顺序发放。
+- `bConsumeCardOnSuccess` 控制成功后是否永久移除源卡。
+- Prompt 文本只服务 App 表现反馈，不影响 RunSession 事务判定。
+
+运行时提交流程和 Actor authoring 见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#4-run-world-card-drop)。
+
+## §9 RunEvent Definition
+
+`UWacomRunEventDefinition` 是探索事件图的静态定义。RunSession 打开事件时读取当前节点，选择选项时在 working-state 事务中校验条件、应用效果、推进节点或关闭事件。
+
+核心结构：
+
+| 类型 | 语义 |
+|---|---|
+| `UWacomRunEventDefinition` | `EventId`、标题、起始节点和节点数组 |
+| `FWacomRunEventNodeDefinition` | 节点 ID、标题、正文、选项列表 |
+| `FWacomRunEventChoiceDefinition` | 选项 ID、按钮文本、条件、效果、下一节点和关闭 / 完成语义 |
+| `FWacomRunEventConditionDefinition` | 选项可用条件，例如金币、卡牌、RunFlag、事件完成状态 |
+| `FWacomRunEventEffectDefinition` | 选项提交后的效果，例如金币、卡牌、压力、RunFlag、节点消耗 |
+| `FWacomRunEventCardPaymentDefinition` | 单卡支付筛选和 payment zone authoring |
 
 字段口径：
 
-| 字段 | 用途 |
+- `EventId / NodeId / ChoiceId` 是内容 ID，用于事件图和 debug，不替代场景 `PersistentId`。
+- RunFlag 使用 `FName FlagId`，不是 Gameplay tag，不做数值或计数。
+- 压力类型在 DataAsset 中使用稳定 `FName`，RunSession 执行时转换为运行时压力 ID。
+- `CardPayment` 当前是单卡支付合同。支付 UI、drop target 和 menu lease 见 [WacomUI.md](./WacomUI.md) 与 [WacomWorldInteraction.md](./WacomWorldInteraction.md#6-run-menu-zone-target)。
+- 条件和效果的阻断 / warning 口径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#asset-validation)。
+
+## §10 Battle Effect Structs
+
+卡牌、意图、ZoneHook 和 Passive 使用 Gameplay tag 表达效果类型、目标、条件、区域和触发点。tag 字典见 [WacomGameplayTags.md](./WacomGameplayTags.md)，但 tag 已声明不代表可写入正式资产；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
+
+核心结构：
+
+| 类型 | 静态语义 |
 |---|---|
-| `InteractionId` | 静态内容 ID，只用于内容识别、debug 和资产 validation；不是运行时 `CompletedRunWorldInteractionIds` key |
-| `AllowedCardDefinitions` | 允许提交的卡牌定义；与 `AllowedCardIds` 是 OR 关系 |
-| `AllowedCardIds` | 允许提交的 CardId；与 `AllowedCardDefinitions` 是 OR 关系 |
-| `RequiredKeywords` | 提交卡必须全部拥有的关键词；非空时也算正向筛选 |
-| `BlockedKeywords` | 提交卡不能拥有的关键词；只作为附加限制，单独配置不算有效 |
-| `Rewards` | 成功提交时按顺序发放的奖励数组。V1 只支持 `Gold` 和 `Card`；`Gold.GoldAmount > 0`，`Card.CardDefinition` 必填 |
-| `bConsumeCardOnSuccess` | 成功时是否永久消耗拖入的精确卡牌 instance |
-| receiver prompts | 同步到 `UWacomRunWorldCardDropReceiverComponent`，用于 preview、成功诊断、已完成、错卡、配置异常、源卡不可用和通用失败反馈 |
+| `FCardEffect` | 卡牌效果条目：EffectType、Magnitude、Target、TargetZone、Duration、MagnitudeSource、Condition、MagnitudeModifiers |
+| `FIntentEffect` | 敌人意图效果条目：EffectType、Magnitude、Target、Duration |
+| `FEffectCondition` | 效果或 passive 的条件门控 |
+| `FCardZoneHook` | 指定手牌区和触发点的额外效果 |
+| `FCardPassive` | 被动触发点、展示文案、效果、条件和阈值 |
 
-只读 helper：
+`WacomData` 只定义字段。Battle resolver、dispatcher、validation matrix 和 transient runtime fixture 共同决定这些字段当前是否真正可执行。
 
-| Helper | 用途 |
-|---|---|
-| `GetConfigWarningReason()` | 返回 `MissingInteractionId / MissingPositiveCardFilter / MissingReward / InvalidGoldReward / MissingCardDefinition / None` |
-| `IsConfigValid()` | `GetConfigWarningReason() == None` 的布尔包装 |
+## §11 修改数据合同时的检查点
 
-有效配置要求 `InteractionId` 非空、至少一个有效 reward，并且 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空。`BlockedKeywords` 不能单独构成有效筛选，避免“除了黑名单外几乎所有卡都能触发交互”。
+修改 DataAsset 字段或新增静态数据能力时，先确认：
 
-V0-CF 后，`UWacomRunWorldCardDropReceiverComponent.InteractionDefinition` 是通用数据驱动入口；未填写 Definition 时，receiver 仍使用组件手填字段作为 fallback。正式 KeyChest 推荐在 `BP_WacomRunKeyChestActor` 实例上配置唯一 `PersistentId` 和一个 `UWacomRunWorldCardInteractionDefinition`。旧 KeyChest 专用 Definition 类型、validator、builder 和生成资产已退休删除，不再作为内容或制作入口存在。
+- 是否只是静态定义，还是需要 Battle / Run runtime state 新字段。
+- 是否需要新增 Gameplay tag；若需要，先在 `WacomCore/Public/Tags/WacomGameplayTags.h` 声明，再更新 [WacomGameplayTags.md](./WacomGameplayTags.md)。
+- 是否需要更新 battle content authoring matrix、validator、生成内容 smoke 或 runtime resolver；这些入口见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)。
+- 是否影响 Actor authoring / map validation；世界交互侧见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
+- 是否影响 UI ViewData 或 WBP 绑定；UI 侧见 [WacomUI.md](./WacomUI.md) 和 Binding 文档。
 
-V0-CD 后，`WacomRegenerateContent` 会生成一个通用 Debug 样例资产：
-
-| 资产 | 配置 | 用途 |
-|---|---|---|
-| `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` | `InteractionId=WorldCardInteraction.DebugKeyGold3`、允许 `DA_Card_DebugKey / CardId=DebugKey`、`Rewards=[Gold 3]`、成功消耗钥匙、提供 KeyChest release feedback 文案 | 推荐给 `BP_WacomRunKeyChestActor.CardInteractionDefinition` 做 PIE 验证 |
-
-编辑器侧已接入 `UWacomRunWorldCardInteractionDefinitionValidator` 内容防呆。校验重点：
-- `InteractionId` 不能为空。
-- `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空。
-- 只填 `BlockedKeywords` 会被视为 `MissingPositiveCardFilter`。
-- `Rewards` 至少需要一个有效项；`Gold` 奖励要求 `GoldAmount > 0`，`Card` 奖励要求 `CardDefinition` 非空。
-- 不校验跨资产 `InteractionId` 唯一性、引用地图、掉落表、动画或 SaveGame。
-
----
-
-## §8 UWacomRunEventDefinition 字段表
-
-`UWacomRunEventDefinition` 是轻量探索事件图 DataAsset：
-
-```cpp
-UCLASS(BlueprintType)
-class UWacomRunEventDefinition : public UPrimaryDataAsset
-{
-    UPROPERTY(EditDefaultsOnly) FName EventId;
-    UPROPERTY(EditDefaultsOnly) FText DisplayName;
-    UPROPERTY(EditDefaultsOnly) FName StartNodeId;
-    UPROPERTY(EditDefaultsOnly) TArray<FWacomRunEventNodeDefinition> Nodes;
-};
-```
-
-Node 包含 `NodeId / TitleText / BodyText / Choices`。Choice 包含 `ChoiceId / LabelText / Conditions / CardPayment / Effects / NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted`。
-
-条件字段：
-
-| 字段 | 用途 |
-|---|---|
-| `Type` | `None / MinGold / MinNodeCount / MaxPressure / HasCard / MissingCard / EventCompleted / EventNotCompleted / RunFlagSet / RunFlagNotSet`；`None` 会被忽略 |
-| `Value` | 金币、节点、压力阈值等数值条件 |
-| `PressureType` | `MaxPressure` 使用，稳定 ID：`Hunger / Wound / Fatigue / Burden / Decay / Misdeed / Bloodlust / Disability` |
-| `CardDefinition` | `HasCard / MissingCard` 使用 |
-| `TargetPersistentId` | `EventCompleted / EventNotCompleted` 使用，填写场景事件 Actor 的 `PersistentId` |
-| `FlagId` | `RunFlagSet / RunFlagNotSet` 使用；当前只保存在本次 Run 内存态，不写入 SaveGame |
-
-效果字段：
-
-| 字段 | 用途 |
-|---|---|
-| `Type` | `None / GainCard / RemoveCard / AddGold / AddPressure / ConsumeNode / MarkEventCompleted / SetRunFlag / ClearRunFlag`；`None` 会被忽略 |
-| `CardDefinition` | `GainCard / RemoveCard` 使用 |
-| `Value` | 金币变化、压力变化、消耗节点数 |
-| `PressureType` | `AddPressure` 使用 |
-| `TargetPersistentId` | `MarkEventCompleted` 使用，填写要标记完成的场景事件 Actor `PersistentId` |
-| `FlagId` | `SetRunFlag / ClearRunFlag` 使用；当前只保存在本次 Run 内存态，不写入 SaveGame |
-
-压力类型在 DataAsset 中使用稳定 `FName`，由 `WacomRun` 执行时转换为运行时枚举，避免 `WacomData` 反向依赖 `WacomRun`。
-
-卡牌条件/效果使用 `CardDefinition` 字段。`HasCard / MissingCard` 会检查玩家全部拥有区：通量、备战、特殊存放区和负重区。`RemoveCard` 表示永久交出/移除一张拥有的卡，不发金币，并遵守 Run 层现有安全限制（固有卡、最后一张容量来源卡不可移除）。
-
-卡牌支付字段用于“玩家拖入某张已持有卡后才能提交该选项”：
-
-| 字段 | 用途 |
-|---|---|
-| `bRequiresOwnedCardPayment` | 开启后该选项不能普通点击提交，必须通过 first-person menu lease 卡牌拖入对应 Zone |
-| `PaymentZoneId` | 菜单 Zone 目标 ID；为空时运行时使用 `RunEvent.Pay.{ChoiceId}`；同一节点内必须唯一 |
-| `AllowedCardDefinitions` | 允许支付的卡牌定义资产 |
-| `AllowedCardIds` | 允许支付的 `UCardDefinition::CardId` |
-| `RequiredKeywords` | 支付卡必须全部拥有的 `Card.Keyword.*` |
-| `BlockedKeywords` | 支付卡命中任意一个即拒绝 |
-
-`AllowedCardDefinitions` 与 `AllowedCardIds` 是 OR 关系；显式 instance 候选由运行时 snapshot / menu lease provider 生成，不写在 DataAsset 中。空筛选非法，本轮不支持“交任意卡”。支付选项不能同时配置 `RemoveCard` effect，避免拖入精确 instance 后又按 Definition 再移除一张卡。
-
-支付选项制作 checklist：
-
-- `ChoiceId` 必填；`PaymentZoneId` 为空时会解析为 `RunEvent.Pay.{ChoiceId}`，缺少 `ChoiceId` 就无法生成默认 Zone。
-- 至少配置一种筛选：`AllowedCardDefinitions`、`AllowedCardIds`、`RequiredKeywords` 或 `BlockedKeywords`。
-- 同一 Node 内解析后的 `PaymentZoneId` 必须唯一。
-- 支付选项不要配置 `RemoveCard` effect；拖卡支付已经移除玩家拖入的精确 instance。
-- 支付后剧情结果用 `NextNodeId / bCloseEventAfterResolve / bMarkEventCompleted / Effects` 表达。
-
-事件状态条件/效果使用 `TargetPersistentId` 字段，填写场景事件 Actor 的 `PersistentId`，不是 `EventDefinition.EventId`。`EventCompleted / EventNotCompleted` 读取对应状态；`MarkEventCompleted` 标记指定 `PersistentId` 完成。当前选项自身仍可继续使用 `bMarkEventCompleted` 标记当前事件完成。
-
-RunFlag 条件/效果使用 `FlagId` 字段，适合表达当前 Run 内的轻量事件记忆，例如“已经看过某个分支”“某个事件已解锁额外选项”。`RunFlagSet` 要求 `FlagId` 已存在，`RunFlagNotSet` 要求不存在；`SetRunFlag / ClearRunFlag` 会在 RunEvent 事务内修改 `FRunState::RunFlags`。RunFlag 不是 GameplayTag，不做数值或计数，本轮不写入 SaveGame。
-
-金币支付 / 金币门槛不新增专用字段或效果类型。制作“需要金币后获得奖励”时，使用 `MinGold=N` 条件 + `AddGold=-N` 效果 + 奖励 effects。`AddGold` 运行时会把金币下限 clamp 到 0；为了让 UI preview 和真实扣费清楚，建议负数 `AddGold` 总额与最大 `MinGold` 条件值一致。
-
-编辑器侧已接入 `UWacomRunEventDefinitionValidator` 内容防呆。校验重点：
-- `EventId / StartNodeId` 不能为空，`StartNodeId` 必须能找到节点。
-- `NodeId` 在事件内唯一，`ChoiceId` 在同一节点内唯一，`NextNodeId` 必须能找到目标节点。
-- `HasCard / MissingCard / GainCard / RemoveCard` 必须配置 `CardDefinition`。
-- 卡牌支付选项必须有非空支付筛选，同一节点内解析后的 `PaymentZoneId` 不能重复，且不能同时配置 `RemoveCard` effect。
-- V0-AT 后支付相关错误会明确带出 `NodeId / ChoiceId / PaymentZoneId / NextNodeId`，用于 Validate Assets 时快速定位配置项；V0-AZ 后条件 / 效果错误还会带 `ConditionIndex / EffectIndex`。
-- `EventCompleted / EventNotCompleted / MarkEventCompleted` 必须配置 `TargetPersistentId`。
-- `RunFlagSet / RunFlagNotSet / SetRunFlag / ClearRunFlag` 必须配置 `FlagId`；错误会带出 `NodeId / ChoiceId / ConditionIndex / EffectIndex`。
-- `MaxPressure / AddPressure` 必须配置有效压力 ID，`ConsumeNode` 不能为负数。
-- `AddGold / AddPressure / ConsumeNode` 的 `Value=0` 只给 warning，不阻断资产；`NextNodeId` 与关闭 / 完成事件同时配置也只给 warning，提示事件结束预览会优先。
-- 负数 `AddGold` 但没有 `MinGold` 条件只给 warning，提示实际结算会 clamp 到 0；负数 `AddGold` 总额和最大 `MinGold` 条件值不一致也只给 warning，提示门槛和扣费可能不一致。
-
-调试资产：
-- `DA_Event_DebugSnakeGift`：蛇巢遗物事件，可获得 `毒牙`、通过 `CardPayment` 拖入已有 `毒牙`、消耗节点、调整金币/劣迹压力。
-- `HandOverFang` 是标准单卡支付样例：`AllowedCardDefinitions=DA_Card_PoisonFang`、`PaymentZoneId=RunEvent.Pay.Fang`、`NextNodeId=End`，不配置 `RemoveCard` effect。
-- `DA_Event_DebugFlagReward`：标记奖励样例，专门演示 RunFlag 与 `MinGold + AddGold(-N)` 金币门槛奖励组合。`InspectMark` 设置 `DebugFlagReward.Inspected`，`DebugGrantGold` 用于 PIE 自助获得 3 金币并设置 `DebugFlagReward.GoldGranted`，`ClaimGoldReward` 要求已调查、未领取且金币不少于 3，提交后扣 3 金币、获得 `毒牙` 并设置 `DebugFlagReward.RewardClaimed`，`ResetFlags` 清除三个 Debug flag 并回到 `Start`。
-- V0-BC 后，关卡中放置 `AWacomRunEventTriggerActor` 后可在 Details 点击 `ConfigureDebugSnakeGiftSample` 或 `ConfigureDebugFlagRewardSample` 自动绑定上述两个样例；不需要手动复制资产路径。
-- 金币、压力和节点数值均为原型调试值，不代表正式平衡。
-- 自动化测试 `Wacom.Data.RunEvent.DebugSnakeGiftAsset` 会验证该资产的节点、选项、条件、效果和 `毒牙` 引用，避免内容生成漂移。
-- 自动化测试 `Wacom.Data.RunEvent.DebugFlagRewardAsset` 会验证 FlagReward 样例的节点、选项、FlagId、`MinGold(3)`、`AddGold(-3)`、`GainCard(PoisonFang)`、重复领取阻止和 reset flags 配置。
-
----
-
-<a id="wacomdata-content-validation"></a>
-## §9 内容生成与校验
-
-### Commandlet
-
-`UWacomRegenerateContentCommandlet` 位于 `Source/WacomEditor/Private/Commandlets/WacomRegenerateContentCommandlet.cpp`，用于重建当前原型 DataAsset。它依次调用：
-
-| Builder | 产物 |
-|---|---|
-| `BuildSnakeContent()` | 蛇敌人、三部位、奖励卡 `DA_Card_PoisonFang` |
-| `BuildBugGirlContent()` | 虫妹角色、左右手、5 张伙伴初始牌、3 张容器 / 功能卡、`DA_Card_DebugKey`、卡对卡测试卡、V0-CW starter pack 新卡、卡面徽章显示测试卡 |
-| `BuildShopContent()` | `DA_Shop_DebugSnake`；正式调试商品保留原价，测试 / 调试卡统一 0 金币 |
-| `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
-| `BuildRunPickupDefinitionContent()` | `DA_Pickup_DebugGold3`、`DA_Pickup_DebugPoisonFang` |
-| `BuildRunWorldCardInteractionDefinitionContent()` | `DA_RunWorldCardInteraction_DebugKeyGold3` |
-
-命令：
-
-```powershell
-& 'E:\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomRegenerateContent -NoSplash -Unattended
-```
-
-Commandlet 是内容生成辅助，不是运行时规则入口。改 Builder 后应运行它落盘资产，并跑对应 `Wacom.Data.*` 资产验证测试。
-
-### 当前生成内容
-
-| 资产 | 内容 |
-|---|---|
-| `/Game/Wacom/Data/Characters/DA_Character_BugGirl` | 虫妹角色；左右手 + 正式 StarterDeck。测试 / 调试卡不在初始牌组中 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_LeftHand` | 固有左手牌 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_RightHand` | 固有右手牌 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhaoguangMudie` | 朝光暮蝶，0 费伙伴，随机腾挪并按 RuntimeCost 施加中毒 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_FuxiaoFeie` | 拂晓飞蛾，0 费伙伴，施加 1 减速，3 次伙伴计数后回手 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ChifuGongyi` | 赤腹工蚁，0 费伙伴，保留，腾挪双手区卡 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ShuoguangDie` | 烁光蝶，1 费伙伴武器，连击，造成 7 伤害，打出后自腾挪 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Muling` | 暮蛉，5 费伙伴，冻结 1 回合，暮气触发被动占位 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_BugGirlBag` | 虫妹的小布袋，A 类容器，`Capacity=12`，带历史兼容 `BagProvider` |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_ZhujianRongnang` | 蛛茧绒囊，B 类容器，`Capacity=3`，`WeaponDamagePlus3` |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_MuseiYinchongdeng` | 暮色引虫灯，A 类容器，`Capacity=3`，带 `DeleteProvider`，默认固定在备战区 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_DebugKey` | `DebugKey`，显示名 `钥匙`，0 费白色工具卡，`TargetMode=None`，无战斗效果；用于 V0-BV `AWacomRunKeyChestActor` 拖卡原型 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_AddCostToSelectedHand` | `Test.AddCostToSelectedHand`，拖到另一张手牌上使目标费用 +2 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ReduceCostToSelectedHand` | `Test.ReduceCostToSelectedHand`，拖到另一张手牌上使目标费用 -1 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_DiscardSelectedHandCard` | `Test.DiscardSelectedHandCard`，拖到另一张普通手牌上使目标进入弃牌堆 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ExhaustSelectedHandCard` | `Test.ExhaustSelectedHandCard`，拖到另一张普通手牌上使目标进入消耗区 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_TargetCost3` | `Test.TargetCost3`，卡对卡测试目标，基础费用 3 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_TargetCompanion` | `Test.TargetCompanion`，带伙伴关键词的卡对卡测试目标 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_RequireCompanionTarget` | `Test.RequireCompanionTarget`，只能作用到伙伴关键词手牌的加费测试卡 |
-| `/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_BlockWeaponTarget` | `Test.BlockWeaponTarget`，不能作用到武器关键词手牌的加费测试卡 |
-| `/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeDamagePoison` | `Test.Badge.DamagePoison`，卡面徽章显示测试：伤害 + 中毒 |
-| `/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeShieldHeal` | `Test.Badge.ShieldHeal`，卡面徽章显示测试：护盾 + 回复 |
-| `/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeDamageShieldHeal` | `Test.Badge.DamageShieldHeal`，卡面徽章显示测试：伤害 + 护盾 + 回复 |
-| `/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeAllRuntimeSupported` | `Test.Badge.AllRuntimeSupported`，卡面徽章显示测试：伤害 + 中毒 + 护盾 + 回复四项 |
-| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle` | `Starter.PoisonNeedle`，毒针，1 费武器，造成 4 伤害；目标有中毒时追加 5 伤害 |
-| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard` | `Starter.ChitinWard`，几丁护片，1 费工具，获得 5 护盾并恢复 2 生命 |
-| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_AntennaSearch` | `Starter.AntennaSearch`，触须探路，0 费工具，抽 2 张并随机弃 1 张普通手牌 |
-| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut` | `Starter.MoltCut`，蜕壳切，1 费蓝卡工具，移除目标 1 层 Slow，并令目标当前先机 -2 |
-| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_LightHusk` | `Starter.LightHusk`，轻蜕壳，0 费伙伴，被弃置时获得 4 护盾 |
-| `/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_SilklineFeint` | `Starter.SilklineFeint`，丝线佯攻，1 费武器，造成 3 伤害；左手区完美释放命中时不推进目标先机 |
-| `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang` | `PoisonFang`，0 费白卡，对单个敌方部位施加 1 中毒 |
-| `/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake` | 蛇敌人，包含 Head / Body / Tail 三个部位 |
-| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Head` | `Snake.Head`，HP 16，Exp 3，奖励毒牙；意图覆盖 Bite / Venom / Strike / Coiled Guard |
-| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Body` | `Snake.Body`，HP 22，Exp 2，奖励毒牙；意图覆盖 Constrict / Harden / Slam / Venom Mist |
-| `/Game/Wacom/Data/Enemies/Snake/DA_Part_Snake_Tail` | `Snake.Tail`，HP 10，Exp 2，奖励毒牙；意图覆盖 Sweep / Lash / Whip / Brace / Tangle |
-| `/Game/Wacom/Data/Shops/DA_Shop_DebugSnake` | 调试商店，固定卖毒牙、赤腹工蚁、朝光暮蝶、小布袋、V0-CW starter pack 6 张新卡，以及 0 金币测试 / 调试卡 |
-| `/Game/Wacom/Data/Events/DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件，包含获得毒牙、通过卡牌支付交出毒牙、金币/压力/节点效果 |
-| `/Game/Wacom/Data/Events/DA_Event_DebugFlagReward` | 标记奖励调试事件，包含 RunFlag 解锁、PIE 自助给金币、`MinGold(3) + AddGold(-3)` 领取毒牙和 reset flags |
-| `/Game/Wacom/Data/Pickups/DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
-| `/Game/Wacom/Data/Pickups/DA_Pickup_DebugPoisonFang` | 数据驱动卡牌 PickupDefinition，固定获得 `PoisonFang` |
-| `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3` | 通用 Run 世界拖卡交互 Definition，接受 `DebugKey`，奖励 3 金币并消耗钥匙；推荐 KeyChest 调试内容 |
-
-生成内容验证链：
-- `Wacom.Data.GeneratedContent.DefinitionAssetValidation` 读取生成角色、卡牌、Snake 敌人与部位，统一跑 DataAsset validator。
-- `Wacom.Data.BattleStarterContent.StarterPackAssetValidation` 检查 starter pack 6 张新卡的核心字段、BugGirl 初始卡组排除关系、测试卡不进入 StarterDeck，以及 Snake 三部位意图变体。
-- `Wacom.Data.BattleStarterContent.BadgeDisplayTestCardAssetValidation` 检查卡面徽章测试卡能通过 Data validator、在 DebugSnake 商店 0 金币出售，并能通过 `UWacomCardPresentationBuilder` 生成预期的 Damage / Poison / Shield / Heal 徽章数据。灼烧徽章当前只有 UI 美术位和枚举，没有 `Status.Burn` / `Effect.ApplyStatus.Burn` 战斗规则 tag，因此不生成 Burn 测试卡。
-- `Wacom.Battle.GeneratedStarterContent` 把真实 starter pack 卡、辅助卡和 `DA_Enemy_Snake` 放入 `UBattleSession` 做 runtime smoke：毒针条件伤害、几丁护片护盾/治疗、触须探路抽弃、蜕壳切移除 Slow / 改先机、轻蜕壳 OnDiscard、丝线佯攻空 `OnPerfectReleaseHit` hook，以及 Snake 玩家伤害 / 玩家 Poison / 玩家 Slow / 自身 Shield 意图都要产生对应 Snapshot/Event。
-- 这些测试通过 `FWacomGeneratedBattleContentAssets` 集中维护资产路径；该 helper 只属于 `WacomTests`，不作为内容生成、运行时加载或策划配置来源。
-
-### Data Validation
-
-编辑器侧 Validator 位于 `WacomEditor`，通过 `FWacomEditorModule::StartupModule()` 注册到 `UEditorValidatorSubsystem`。
-
-| Validator | 校验对象 | 共享校验函数 |
-|---|---|---|
-| `UWacomCardDefinitionValidator` | `UCardDefinition` | `FWacomCardDefinitionValidation::Validate()` |
-| `UWacomEnemyPartDefinitionValidator` | `UEnemyPartDefinition` | `FWacomEnemyPartDefinitionValidation::Validate()` |
-| `UWacomEnemyDefinitionValidator` | `UEnemyDefinition` | `FWacomEnemyDefinitionValidation::Validate()` |
-| `UWacomCharacterDefinitionValidator` | `UCharacterDefinition` | `FWacomCharacterDefinitionValidation::Validate()` |
-| `UWacomShopDefinitionValidator` | `UShopDefinition` | `FWacomShopDefinitionValidation::Validate()` |
-| `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
-| `UWacomRunPickupDefinitionValidator` | `UWacomRunPickupDefinition` | `FWacomRunPickupDefinitionValidation::Validate()` |
-| `UWacomRunWorldCardInteractionDefinitionValidator` | `UWacomRunWorldCardInteractionDefinition` | `FWacomRunWorldCardInteractionDefinitionValidation::Validate()` |
-
-这些 Validator 用于编辑器 Validate Assets 和自动化测试。不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
-
-当前 `UCardDefinition`、`UEnemyPartDefinition`、`UEnemyDefinition`、`UCharacterDefinition`、`UShopDefinition`、`UWacomRunEventDefinition`、`UWacomRunPickupDefinition` 和 `UWacomRunWorldCardInteractionDefinition` 八类 DataAsset 已接入 Editor Validator。
-
-Card / EnemyPart / Enemy / Character Validator 只做结构和规则合同防呆，例如必填 ID、基础数值非负或大于 0、必填数组非空、引用非空、GameplayTag 命名空间有效、数组索引有效；Character 还校验 `StarterDeck` 不包含左右手卡。V0-CU 后 Card / EnemyPart 还会读取 `FWacomBattleRuleContentContract`，校验 EffectType、Target、TargetZone、MagnitudeSource、Condition、Passive trigger 和敌人 Intent effect 是否属于当前真正接入的战斗规则。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量、固定部位数量、跨资产唯一性或生成资产路径。
-
-Shop Validator 只校验 `ShopId` 非空、`Offers` 非空、Offer 卡牌非空、价格非负；不校验 `DisplayName`、重复商品、价格平衡、商品池规则或生成资产路径。
-
-RunEvent Validator 只校验事件图结构、必填引用和压力 ID：`EventId / StartNodeId`、Node / Choice ID、`NextNodeId`、卡牌条件 / 效果引用、卡牌支付筛选和 ZoneId、事件状态目标、RunFlag `FlagId`、`ConsumeNode >= 0`。金币门槛 / 扣费组合只做 authoring warning，不阻断资产。不校验标题 / 正文 / 按钮文案非空、节点可达性、选项是否至少一个、金币 / 压力数值平衡或剧情合法性。
-
-RunPickupDefinition Validator 只校验固定单一奖励配置：`PickupId` 非空、奖励类型非 `None`、金币数量大于 0、卡牌奖励引用非空。它不校验 DisplayName、关卡是否引用该资产、跨资产 `PickupId` 唯一性、掉落表、多奖励或数值平衡。
-
-RunWorldCardInteractionDefinition Validator 只校验通用 receiver 制作必要配置：`InteractionId` 非空、至少一个正向卡牌筛选、至少一个有效 `Rewards` 项；Gold reward 要求 `GoldAmount > 0`，Card reward 要求 `CardDefinition` 非空。它不校验关卡是否引用该资产、跨资产 `InteractionId` 唯一性、跨地图 `PersistentId`、掉落表、更多奖励类型、动画或 SaveGame。
-
----
-
-## §10 GameplayTag 清单
-
-所有 tag 在 `WacomCore/Public/Tags/WacomGameplayTags.h` 中声明。严禁业务代码里用字符串拼 tag。
-
-### Card.Keyword
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Card.Keyword.Swift` | `Card_Keyword_Swift` | 迅捷 |
-| `Card.Keyword.Retain` | `Card_Keyword_Retain` | 保留 |
-| `Card.Keyword.Combo` | `Card_Keyword_Combo` | 连击 |
-| `Card.Keyword.Companion` | `Card_Keyword_Companion` | 伙伴 |
-| `Card.Keyword.Weapon` | `Card_Keyword_Weapon` | 武器 |
-| `Card.Keyword.Tool` | `Card_Keyword_Tool` | 工具 |
-| `Card.Keyword.Hand` | `Card_Keyword_Hand` | 手（左右手专属）|
-| `Card.Keyword.Exhaust` | `Card_Keyword_Exhaust` | 临时关键词：本卡打出后进消耗区 |
-| `Card.Keyword.BagProvider` | `Card_Keyword_BagProvider` | 历史 / 兼容关键词。当前背包 UI 可用性、容量和最后容量来源保护都以玩家持有区是否存在 `Physique.Capacity > 0` 的容器卡为真相；`DA_Card_BugGirlBag` 仍带此关键词作为内容标记 |
-| `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌能力提供者。`URunSession::IsDeleteFunctionAvailable()` 会读取玩家持有区是否存在该 tag；第一阶段背包 UI 和 `DeleteCardForGold` 不强制读取该判定 |
-
-### Card.Rarity
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Card.Rarity.White` | `Card_Rarity_White` | 白色 |
-| `Card.Rarity.Blue` | `Card_Rarity_Blue` | 蓝色 |
-| `Card.Rarity.Yellow` | `Card_Rarity_Yellow` | 黄色 |
-| `Card.Rarity.Purple` | `Card_Rarity_Purple` | 紫色 |
-| `Card.Rarity.Intrinsic` | `Card_Rarity_Intrinsic` | 固有 |
-
-### HandZone
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `HandZone.Left` | `HandZone_Left` | 左手区 |
-| `HandZone.Both` | `HandZone_Both` | 双手区 |
-| `HandZone.Right` | `HandZone_Right` | 右手区 |
-
-### Interaction.Target
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Interaction.Target.Battle.EnemyPart` | `Interaction_Target_Battle_EnemyPart` | 场景 World target 表示当前战斗敌方部位，由 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 写入通用 `UWacomInteractionTargetComponent` |
-| `Interaction.Target.Run.Object` | `Interaction_Target_Run_Object` | Run / 探索中的场景可交互对象，后续拖拽和鼠标交互 resolver 使用 |
-
-### Effect
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Effect.Damage` | `Effect_Damage` | 伤害 |
-| `Effect.Heal` | `Effect_Heal` | 治疗玩家 HP，并移除治疗量 10% 的中毒层数（向下取整）|
-| `Effect.ApplyStatus.Poison` | `Effect_ApplyStatus_Poison` | 施加中毒 |
-| `Effect.ApplyStatus.Slow` | `Effect_ApplyStatus_Slow` | 施加减速 |
-| `Effect.ApplyStatus.Freeze` | `Effect_ApplyStatus_Freeze` | 施加冻结 |
-| `Effect.ApplyStatus.Twilight` | `Effect_ApplyStatus_Twilight` | 施加暮气 |
-| `Effect.Shuffle.Random` | `Effect_Shuffle_Random` | 随机腾挪 |
-| `Effect.Shuffle.FromBothToOther` | `Effect_Shuffle_FromBothToOther` | 从双手区腾挪到其他区域 |
-| `Effect.Shuffle.ToRandomZone` | `Effect_Shuffle_ToRandomZone` | 腾挪到随机区域 |
-| `Effect.Card.AddCost` | `Effect_Card_AddCost` | 对目标卡 RuntimeCostModifier 增加 |
-| `Effect.Card.ReduceCost` | `Effect_Card_ReduceCost` | 对目标卡 RuntimeCostModifier 减少 |
-| `Effect.Card.DiscardSelected` | `Effect_Card_DiscardSelected` | 将 `Target.SelectedHandCard` 指定的普通手牌移入弃牌堆 |
-| `Effect.Card.ExhaustSelected` | `Effect_Card_ExhaustSelected` | 将 `Target.SelectedHandCard` 指定的普通手牌移入消耗区 |
-| `Effect.Draw` | `Effect_Draw` | 从指定卡牌区域移动卡牌到手牌 |
-| `Effect.Discard` | `Effect_Discard` | 随机弃掉手牌中的普通卡 |
-| `Effect.ExhaustSelf` | `Effect_ExhaustSelf` | 标记本卡打出后进入消耗区 |
-| `Effect.GainKeyword` | `Effect_GainKeyword` | 给目标手牌临时添加关键词 |
-| `Effect.RemoveStatus` | `Effect_RemoveStatus` | 移除目标指定状态层数 |
-| `Effect.ModifyInitiative` | `Effect_ModifyInitiative` | 修改目标敌方部位当前先机 |
-
-当前没有 `Effect.ApplyStatus.Burn` / `Status.Burn` GameplayTag，也没有对应 resolver / validator 合同。`EWacomCardViewEffectBadgeKind::Burn` 和 `WBP_CardEffectBadge` 的灼烧底图只是 UI 美术预留位，不能作为正式 DataAsset 配置依据。
-
-### Magnitude.Source
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Magnitude.Source.Literal` | `Magnitude_Source_Literal` | FinalMagnitude = Magnitude 字段 |
-| `Magnitude.Source.RuntimeCost` | `Magnitude_Source_RuntimeCost` | FinalMagnitude = 本卡当前 RuntimeCost |
-| `Magnitude.Source.HandCount` | `Magnitude_Source_HandCount` | Reserved；resolver 已有计算入口，但当前 authoring matrix 不允许正式资产使用 |
-| `Magnitude.Source.TargetStatusStacks` | `Magnitude_Source_TargetStatusStacks` | FinalMagnitude = 目标敌方部位上 `TargetZone` 指定 Status tag 的层数；只允许数值型效果使用 |
-
-### Condition
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Condition.Self.InZone` | `Condition_Self_InZone` | 本卡当前在指定区域 |
-| `Condition.Target.HasStatus` | `Condition_Target_HasStatus` | 目标部位含指定状态 |
-
-### Status
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Status.Poison` | `Status_Poison` | 中毒 |
-| `Status.Slow` | `Status_Slow` | 减速 |
-| `Status.Freeze` | `Status_Freeze` | 冻结 |
-| `Status.Twilight` | `Status_Twilight` | 暮气 |
-| `Status.Stunned` | `Status_Stunned` | 晕厥 |
-| `Status.Shield` | `Status_Shield` | 护盾 |
-
-### Target
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Target.Self` | `Target_Self` | 自身（Player 或本卡，视 EffectType）|
-| `Target.Player` | `Target_Player` | 玩家 |
-| `Target.SingleEnemyPart` | `Target_SingleEnemyPart` | 单个敌方部位 |
-| `Target.AllEnemyParts` | `Target_AllEnemyParts` | 所有敌方部位 |
-| `Target.RandomHandCard` | `Target_RandomHandCard` | 手牌中随机一张 |
-| `Target.ZoneHandCard` | `Target_ZoneHandCard` | 指定区域的手牌 |
-| `Target.Adjacent.Right` | `Target_Adjacent_Right` | 相邻右方（Tag 已声明，解析未实现）|
-| `Target.LastShuffledCard` | `Target_LastShuffledCard` | 最近一次 Shuffle 的被移动卡 |
-| `Target.SelectedHandCard` | `Target_SelectedHandCard` | 主动打出 `TargetMode=HandCard` 卡牌时，玩家拖拽/选择的目标手牌 |
-
-### ZoneHook.Trigger
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `ZoneHook.Trigger.OnPlay` | `ZoneHook_Trigger_OnPlay` | 本卡打出时 |
-| `ZoneHook.Trigger.OnPerfectReleaseHit` | `ZoneHook_Trigger_OnPerfectReleaseHit` | 完美释放命中时 |
-
-### Passive.Trigger
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Passive.Trigger.AfterPlayed` | `Passive_Trigger_AfterPlayed` | 本卡打出完成后 |
-| `Passive.Trigger.OnCompanionCount` | `Passive_Trigger_OnCompanionCount` | 全局 Companion 计数达阈值 |
-| `Passive.Trigger.OnTwilightTriggered` | `Passive_Trigger_OnTwilightTriggered` | 暮气施加成功时 |
-| `Passive.Trigger.OnTurnStart` | `Passive_Trigger_OnTurnStart` | 玩家回合开始时（Dispatcher 方法已就位，调用点未接入）|
-| `Passive.Trigger.OnTurnEnd` | `Passive_Trigger_OnTurnEnd` | 玩家回合结束时（Dispatcher 方法已就位，调用点未接入）|
-| `Passive.Trigger.OnDraw` | `Passive_Trigger_OnDraw` | 本卡被抽到手牌时（Dispatcher 方法已就位，调用点未接入）|
-| `Passive.Trigger.OnDiscard` | `Passive_Trigger_OnDiscard` | 本卡被弃掉时；弃牌效果、手牌上限和回合结束弃牌会触发，打出后自然进弃牌堆不触发 |
-
-### CardLocation
-
-`Effect.Draw` 通过 `FCardEffect::TargetZone` 指定源区域；未设置时默认 `CardLocation.Draw`。当前可制作源区域只有 Draw / Discard / Exhaust；`CardLocation.Hand` 作为 tag 保留，但不是当前 Draw authoring contract 的合法源。
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `CardLocation.Draw` | `CardLocation_Draw` | 抽牌堆 |
-| `CardLocation.Discard` | `CardLocation_Discard` | 弃牌堆 |
-| `CardLocation.Exhaust` | `CardLocation_Exhaust` | 消耗区 |
-| `CardLocation.Hand` | `CardLocation_Hand` | 手牌 |
-
-### SkillSlot
-
-Run 层角色技能池的占位 tag。等技能列表正式定义后按角色添加 `SkillSlot.*`。
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `SkillSlot.Placeholder` | `SkillSlot_Placeholder` | 占位（满 10 经验入账一个；不挂效果）|
-
-### Card.CapacityEffect
-
-容器卡的容量效果分类（GDD §11.2）。`FCardPhysique::CapacityEffect` 字段的取值，
-空 tag = A 类容器卡（无容量效果），有效 tag = B 类容器卡（特殊存放区按效果应用）。
-
-| Tag | 代码名 | 说明 |
-|---|---|---|
-| `Card.CapacityEffect.Placeholder` | `Card_CapacityEffect_Placeholder` | 占位 tag，早期 B 类骨架使用（已不再分配给具体卡）。具体卡定义后逐步替换为下列具体效果 tag。 |
-| `Card.CapacityEffect.WeaponDamagePlus3` | `Card_CapacityEffect_WeaponDamagePlus3` | 蛛茧绒囊容量效果。SpecialZone 内 `bBattleEnabledInSpecialZone == true` 且带 `Card.Keyword.Weapon` 关键词的入战 instance，其 `Effect.Damage` 最终结算 +3。 |
-
----
-
-## §11 战斗规则内容制作矩阵
-
-卡牌和敌人意图的内容制作以本矩阵和 `FWacomBattleRuleContentContract` 为准。GameplayTag 已声明不代表已经接入主流程；矩阵中未列出的 Effect / Target / Condition / Passive trigger 不应写入正式 DataAsset，编辑器校验会拦截。
-
-`Wacom.Battle.RuleContentMatrix` 已为本节当前允许的卡牌效果、敌人 Intent V1、MagnitudeSource、Condition、MagnitudeModifiers、Passive trigger 和 ZoneHook 建立 transient runtime fixture：每个代表配置先通过 validator，再提交到 `UBattleSession` 验证 Snapshot/Event。`Reserved` / `EventOnly` 条目仍只作为制作合同状态记录，不代表可写入正式 DataAsset。
-
-`FCardEffect` 的当前字段：
-
-```cpp
-USTRUCT(BlueprintType)
-struct FCardEffect
-{
-    FGameplayTag EffectType;
-    int32 Magnitude = 0;
-    FGameplayTag Target;
-    FGameplayTag TargetZone;
-    int32 Duration = 0;
-    FGameplayTag MagnitudeSource;
-    FEffectCondition Condition;
-    TArray<FMagnitudeModifier> MagnitudeModifiers;
-
-    // deprecated：兼容旧资产，运行时在 MagnitudeSource 为空时才回退读取。
-    bool bMagnitudeFromRuntimeCost = false;
-};
-
-USTRUCT(BlueprintType)
-struct FMagnitudeModifier
-{
-    FEffectCondition Condition;
-    EMagnitudeModOp Op = EMagnitudeModOp::Add;
-    int32 Value = 0;
-};
-```
-
-Magnitude 计算顺序：
-1. `MagnitudeSource` 有效时按 source handler 计算。
-2. `MagnitudeSource` 为空且 `bMagnitudeFromRuntimeCost=true` 时，用当前 RuntimeCost 兼容旧资产。
-3. 否则用 `Magnitude` 字段。
-4. 之后按数组顺序应用 `MagnitudeModifiers`。
-
-`Condition` 是整条效果的执行门控；`MagnitudeModifiers` 是 FinalMagnitude 计算后的条件修正列表；`bMagnitudeFromRuntimeCost` 仅用于旧资产反序列化兼容，新资产应使用 `MagnitudeSource`。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 传 Status tag，这个参数债已记录在 [TechDebt](./TechDebt.md)。
-
-每个 EffectType 对 `FCardEffect` 字段的使用方式不同。配卡时对照本表。"-" 表示该字段对此 EffectType 无效。使用 Literal Magnitude 的正向数值效果必须填 `Magnitude > 0`；只有 `Effect.ModifyInitiative` 当前允许负数 Magnitude。
-
-| EffectType | Magnitude 语义 | Target（典型值）| TargetZone | Duration | MagnitudeSource | 备注 |
-|---|---|---|---|---|---|---|
-| `Effect.Damage` | 伤害值 | SingleEnemyPart / AllEnemyParts / Player | - | - | Literal / RuntimeCost / TargetStatusStacks | 部位 HP 归零立即破坏 |
-| `Effect.Heal` | 治疗量 | Self(→Player) / Player | - | - | Literal | 恢复玩家 HP，并移除治疗量 10% 的中毒层数 |
-| `Effect.ApplyStatus.Poison` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | - | Literal / RuntimeCost | 层数模型，不用 Duration |
-| `Effect.ApplyStatus.Slow` | 层数 | 同上 | - | - | Literal | 第一阶段只记录 |
-| `Effect.ApplyStatus.Freeze` | 层数 | SingleEnemyPart | - | 回合数(0=层数模型) | Literal | 按层数消耗实现 |
-| `Effect.ApplyStatus.Twilight` | 层数 | SingleEnemyPart | - | - | Literal | 第一阶段只记录 |
-| `Status.Shield` | 护盾值 | Player / Self(→Player) | - | - | Literal | 直接加到 Player Shield 字段；敌方自身护盾只在 Enemy Intent 合同中使用 |
-| `Effect.Shuffle.Random` | - | RandomHandCard | - | - | - | 从手牌随机选一张腾挪 |
-| `Effect.Shuffle.FromBothToOther` | - | ZoneHandCard | HandZone.Both | - | - | 从双手区挑一张腾挪到左/右 |
-| `Effect.Shuffle.ToRandomZone` | - | Self(本卡) | - | - | - | 把本卡腾挪到随机区域 |
-| `Effect.Card.AddCost` | Modifier 增量 | Self(本卡) / LastShuffledCard / SelectedHandCard | - | - | Literal | 修改 RuntimeCostModifier |
-| `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 下限由 ComputeRuntimeCost clamp 到 0 |
-| `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆；建议显式设置 HandCardTargetFilter：允许普通手牌、拒绝左右手锚点；Magnitude 不参与数量判定；触发目标卡 `OnDiscard` |
-| `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗区；建议显式设置 HandCardTargetFilter：允许普通手牌、拒绝左右手锚点；Magnitude 不参与数量判定；不触发 `OnDiscard` |
-| `Effect.Draw` | 张数 | Self / Player | CardLocation.Draw / Discard / Exhaust | - | Literal | `TargetZone` 复用为源区域 tag，默认抽牌堆；不支持 CardLocation.Hand |
-| `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉手牌中普通卡，不弃锚点 |
-| `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 标记交给打出后去向阶段处理 |
-| `Effect.GainKeyword` | - | LastShuffledCard / SelectedHandCard | Card.Keyword.* | - | - | `TargetZone` 复用为要添加的 Keyword tag；当前不要填 Target.Self |
-| `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | Status.Poison / Slow / Freeze / Twilight / Stunned | - | Literal / TargetStatusStacks | `TargetZone` 复用为要移除的 Status tag；不支持 Status.Shield |
-| `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal / TargetStatusStacks | 正数增加，负数减少 |
-
-`Magnitude.Source.RuntimeCost` 当前只允许用于 `Effect.Damage` 和 `Effect.ApplyStatus.Poison`。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 指定要读取的状态，只允许读取进入 `StatusStacks` 的状态：Poison / Slow / Freeze / Twilight / Stunned。`Status.Shield` 不在 `StatusStacks` 中，不能作为该 source 或 `Condition.Target.HasStatus` 的参数。
-
-### 敌人 Intent 效果矩阵
-
-`FIntentEffect` 字段比 `FCardEffect` 更窄，没有 `TargetZone`、`MagnitudeSource`、`Condition` 或 modifiers。敌人意图 V1 只支持下表：
-
-| EffectType | Target | Magnitude | Duration | 备注 |
-|---|---|---:|---:|---|
-| `Effect.Damage` | `Target.Player` | > 0 | 0 | 对玩家造成伤害 |
-| `Effect.ApplyStatus.Poison / Slow / Freeze / Twilight` | `Target.Player` 或 `Target.Self` | > 0 | >= 0 | Self 表示行动部位自身 |
-| `Status.Shield` | `Target.Self` | > 0 | 0 | Self 表示行动部位自身加护盾；当前敌人 Intent 不给玩家加护盾 |
-
-敌人 Intent 当前不支持 `Target.SingleEnemyPart / AllEnemyParts / SelectedHandCard / LastShuffledCard / ZoneHandCard / RandomHandCard`，也不支持伤害自身、给玩家加护盾、`Effect.Draw / Discard / ExhaustSelf / Card.* / GainKeyword / RemoveStatus / ModifyInitiative / Heal` 等卡牌或玩家专用效果。不要依赖运行时静默忽略非法目标。
-
-### MagnitudeModifiers
-
-`FCardEffect::MagnitudeModifiers` 是条件数值修正列表。每条包含 `Condition / Op / Value`：
-
-| Op | 语义 |
-|---|---|
-| `Add` | `FinalMagnitude += Value` |
-| `Multiply` | `FinalMagnitude *= Value` |
-
-多条修正按数组顺序依次应用。条件结构沿用 `FEffectCondition`。
-
-### Target 字段速查表
-
-| Target | 解析为 | TargetInstanceId 来源 | 是否需要 TargetZone |
-|---|---|---|---|
-| `Target.Self` | Player 或本卡（视 EffectType）| 本卡 InstanceId 或 Invalid | 否 |
-| `Target.Player` | Player | Invalid | 否 |
-| `Target.SingleEnemyPart` | EnemyPart | 调用方选中的部位 | 否 |
-| `Target.AllEnemyParts` | EnemyPart（循环展开）| 自动遍历存活部位 | 否 |
-| `Target.RandomHandCard` | HandCard | HandZoneService 自选 | 否 |
-| `Target.ZoneHandCard` | HandCard | 按 TargetZone 过滤后自选 | **是** |
-| `Target.LastShuffledCard` | HandCard | `EffectContext::LastShuffledCardId` | 否 |
-| `Target.SelectedHandCard` | HandCard | `PlayCard` 命令的 `TargetCardInstanceId` | 否 |
-| `Target.Adjacent.Right` | EnemyPart | 未实现 | 否 |
-
-### Target.Self 的 EffectType 消歧
-
-- `Effect.Shuffle.ToRandomZone` / `Effect.Card.AddCost` / `Effect.Card.ReduceCost` → 指向本卡（HandCard）
-- `Effect.Card.DiscardSelected` / `Effect.Card.ExhaustSelected` 必须填写 `Target.SelectedHandCard`，不要填写 `Target.Self`
-- 其他（Damage / Heal / ApplyStatus / Status.Shield）→ 指向玩家（Player）
-
-### HandCard 目标筛选填写建议
-
-- `Effect.Card.AddCost / ReduceCost + Target.SelectedHandCard`：通常允许普通手牌和左右手锚点。
-- `Effect.Card.DiscardSelected / ExhaustSelected + Target.SelectedHandCard`：通常只允许普通手牌，拒绝左右手锚点。
-- “只作用伙伴”这类卡可在 `RequiredTargetKeywords` 填 `Card.Keyword.Companion`。
-- “不能作用武器”这类卡可在 `BlockedTargetKeywords` 填 `Card.Keyword.Weapon`。
-- 旧资产没有显式设置时，Battle 会按上述两类兼容推断；新测试卡和后续正式卡建议显式设置，避免效果组合变复杂后语义含混。
-
----
-
-## §12 FEffectCondition / FCardZoneHook / FCardPassive
-
-### FEffectCondition
-
-```cpp
-USTRUCT(BlueprintType)
-struct FEffectCondition
-{
-    UPROPERTY(EditDefaultsOnly) FGameplayTag ConditionType;  // Condition.*，未设置 = 永真
-    UPROPERTY(EditDefaultsOnly) FGameplayTag ParamTag;       // 辅助 tag（Zone / Status / Keyword）
-    UPROPERTY(EditDefaultsOnly) int32        ParamInt = 0;   // 辅助数值（阈值）
-    UPROPERTY(EditDefaultsOnly) bool         bNegate = false;// 结果取反
-};
-```
-
-| ConditionType | 语义 | ParamTag | ParamInt |
-|---|---|---|---|
-| Invalid（未设置）| 永真 | - | - |
-| `Condition.Self.InZone` | 本卡当前在指定区域 | `HandZone.*` | - |
-| `Condition.Target.HasStatus` | 目标部位含指定状态 | `Status.Poison / Slow / Freeze / Twilight / Stunned` | - |
-
-`bNegate = true` 把结果取反。例如"自卡不在左手区" = `InZone(Left) + bNegate=true`。
-
-### FCardZoneHook
-
-```cpp
-USTRUCT(BlueprintType)
-struct FCardZoneHook
-{
-    UPROPERTY(EditDefaultsOnly) FGameplayTag Zone;         // HandZone.Left / Both / Right
-    UPROPERTY(EditDefaultsOnly) FGameplayTag Trigger;      // ZoneHook.Trigger.*
-    UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> ExtraEffects;
-};
-```
-
-### FCardPassive
-
-```cpp
-USTRUCT(BlueprintType)
-struct FCardPassive
-{
-    UPROPERTY(EditDefaultsOnly) FGameplayTag     Trigger;            // Passive.Trigger.*
-    UPROPERTY(EditDefaultsOnly) FText            DisplayText;        // UI 详情展示文本，不参与规则
-    UPROPERTY(EditDefaultsOnly) TArray<FCardEffect> Effects;          // 触发后执行
-    UPROPERTY(EditDefaultsOnly) FEffectCondition Condition;          // 触发门控，未设置则永真
-    UPROPERTY(EditDefaultsOnly) int32            TriggerThreshold = 0;// 仅计数类 trigger 使用
-};
-```
-
-| Trigger | 当前制作状态 | 使用 TriggerThreshold? | Effects 是否执行 | 典型卡 |
-|---|---|---|---|---|
-| `Passive.Trigger.AfterPlayed` | 可执行 | 否 | 是 | 烁光蝶（自腾挪）|
-| `Passive.Trigger.OnDiscard` | 可执行 | 否 | 是 | 被弃掉时触发；不含打出后自然进弃牌堆 |
-| `Passive.Trigger.OnCompanionCount` | 特殊回手触发 | 是 | 否 | 拂晓飞蛾（回手，阈值 3）|
-| `Passive.Trigger.OnTwilightTriggered` | EventOnly / 展示占位 | 否 | 否 | 暮蛉（占位）|
-| `Passive.Trigger.OnTurnStart` | Reserved | 否 | 否 | 方法存在，主流程未接入 |
-| `Passive.Trigger.OnTurnEnd` | Reserved | 否 | 否 | 方法存在，主流程未接入 |
-| `Passive.Trigger.OnDraw` | Reserved | 否 | 否 | 方法存在，主流程未接入 |
-
-**TriggerThreshold** 只用于计数类 trigger。达到阈值后触发并清零计数。其他 trigger 不读此字段。
-
-**DisplayText** 只用于卡牌详情面板的“被动”区块展示。战斗规则不读取该字段，仍以
-`Trigger / Effects / Condition / TriggerThreshold` 为准。若为空，UI 可以根据规则字段生成
-fallback 文本，避免旧资产无说明。
+不要为了一个资产临时需求让 `WacomData` 依赖高层模块。需要运行时语义时，在对应领域模块实现，并让 DataAsset 只保存静态配置。

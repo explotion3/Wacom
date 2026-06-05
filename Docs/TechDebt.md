@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-06-04
+updated: 2026-06-05
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -11,10 +11,10 @@ tags:
 # TechDebt
 
 > [!info] 本文职责
-> 本文记录已经存在的临时写法、兼容路径、临时决定和正式替代方案。短期任务看 [[TODO]]，未来功能方向看 [[Roadmap]]，会改变规则口径的问题放 [[Questions]]。
+> 本文记录当前仍存在的临时写法、兼容路径、临时决定和正式替代方案。短期任务看 [`TODO.md`](TODO.md)，未来功能方向看 [`Roadmap.md`](Roadmap.md)，会改变规则口径的问题放 [`Questions.md`](Questions.md)。
 
 > [!warning] 使用约束
-> 这里不是功能愿望池。只有当前实现里已经存在的临时方案、兼容入口或技术债才放这里。
+> 这里不是功能愿望池，也不保存实现流水账。公开面和文档重构历史见 [Wacom_Public_Surface_And_Docs_History.md](./DevLog/Wacom_Public_Surface_And_Docs_History.md)；当前规则真相仍以领域文档为准。
 
 ## 规则层技术债
 
@@ -27,7 +27,7 @@ tags:
 | 回合结束保留 / 弃牌时序 | `EndTurnResolver` 中放在敌方行动之前 | 若规则明确放在敌方行动之后，需要调整 resolver 时序 |
 | `Magnitude.Source.TargetStatusStacks` 参数 | 借用 `FCardEffect::TargetZone` 传 Status Tag | 给 `FCardEffect` 或 `FEffectContext` 加专用 `FilterTag` 字段 |
 | `Effect.GainKeyword` / `Effect.RemoveStatus` 参数 | 借用 `FEffectContext::MetaTag` 或 `TargetZone` 传 Keyword / Status Tag | 同上，收口到专用 `FilterTag` 字段 |
-| `IsDeleteFunctionAvailable` | 接口就位，但第一阶段 `DeleteCardForGold` 和背包 UI 不读；GDD §11.7 当前始终允许删牌 | 等 GDD 切换为“按需可用”后，Run 校验和 UI 显隐统一接入 |
+| `IsDeleteFunctionAvailable` | 接口已存在，但当前 Run 删牌事务和背包 UI 仍按始终可删的简化口径工作 | 等删牌可用性口径确认后，Run 校验和 UI 显隐统一接入 |
 | 手牌锚点左右归属 | `FHandCardSnapshot` 不带左右手角色，UI 用遍历顺序启发式 | 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
 
 ---
@@ -40,16 +40,16 @@ tags:
 | 存档系统暂停 | `bSaveSystemEnabled = false`；底层 SaveGame / RunState 拷贝和迁移机制保留 | Demo 完善后恢复 Bootstrap 读盘、PauseMenu Save、MainMenu Continue |
 | RunEvent 状态 | `RunEventStates` 当前只保存在 Run 内存态 | 接入 SaveGame，并定义状态生命周期 |
 | Shop 状态 | `ShopStates` 当前只保存在 Run 内存态 | 接入 SaveGame，并定义库存刷新与跨日保留规则 |
-| 金币存档 | `Gold` 当前作为 Run 内资源，存档第一阶段不持久化 | 恢复存档系统时确认是否入档 |
+| 金币存档 | `Gold` 当前作为 Run 内资源，不写入 SaveGame | 恢复存档系统时确认是否入档 |
 | `BattleState` 非反射 | 裸 struct + pImpl，GC 引用靠 Session 的 `ReferencedAssets` | 若需存档 / 网络，升级为 USTRUCT 或 UObject |
-| SaveGame 迁移 | 版本迁移 switch 已有 v0 → v2 模型 | 每次升版本加新 case，永远不改已存在 case |
+| SaveGame 迁移 | 版本迁移 switch 已有 v0 到 v2 模型 | 每次升版本加新 case，永远不改已存在 case |
 
 ---
 
 <a id="techdebt-ui"></a>
 ## UI 层技术债
 
-UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的临时写法。
+UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md`，Battle UI 见 `WacomBattleUI.md`，first-person card layer 见 `First_Person_Card_Layer_Design.md`。本节只记录仍需替换或收口的临时写法。
 
 | 项 | 临时做法 / 当前决定 | 正式方案 / 处理方向 |
 |---|---|---|
@@ -57,16 +57,16 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | 战斗 UI 不做 ViewModel | BattleHUD 持有 `UBattleSession*`，子 widget 读 `FBattleSnapshot` | UI 复杂度上升或外部 widget 需要战斗状态时，再抽 `UWacomBattleViewModel` |
 | C++ 硬编码默认布局 | Widget 类 `Blueprintable` 非 Abstract，带 C++ fallback 布局；BattleHUD / BackpackScreen 的 fallback 构建已抽到私有 helper | 美术阶段用 WBP 替换视觉，C++ 保留协议和兜底 |
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
-| 手牌线性排列 | HorizontalBox / 统一水平手牌带 | 美术阶段替换为扇形 renderer 或自定义 `UHandLayoutPanel`，继续消费 `FHandCardVisualEntry` |
-| 目标选择 2D 点击 | 点击 EnemyPartWidget，不做射线检测 | HD-2D 阶段改为 3D 部位 hover / 高亮 / 点击，继续消费 `FBattleTargetSelectionView` |
-| CombatLog 纯文字 | 文案、tone、icon key 已生成，但常驻 CombatLog 暂不做图标和动画；旧 EventToast / BattleEventLogPanel 已退出 BattleHUD 主路径，并在 V0-EI 后作为 legacy compatibility surface 隔离 | 升级为事件表现调度器，接图标、颜色、Niagara、音效和战后日志；真正删除旧类需单独做资产影响切片 |
+| Legacy 2D hand fallback | `UHandPanel / UCardWidget` 仍作为旧水平手牌 fallback / 对照入口保留 | 美术阶段替换为 first-person card layer 或其他正式 renderer，继续消费中性的 `FHandCardVisualEntry` |
+| Enemy 2D fallback | `EnemyInfoBar / EnemyPartWidget` 仍作为缺 `SceneEnemyHost` 时的 2D fallback / debug | HD-2D 阶段改为场景 PartActor hover / 高亮 / 点击，继续消费 `FBattleTargetSelectionView` |
+| CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 builder 只作为 compatibility 入口保留 | 升级为事件表现调度器；真正删除旧类、单事件 builder 或旧 event view 需单独做资产影响切片 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
-| 背包 UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
-| 背包 / 商店长列表 | Backpack / SpecialZone / Shop 已有 RunSession revision gate + signature dirty gate + widget identity reconcile；revision 等价刷新会跳过 Snapshot 构建，signature 等价刷新会跳过列表 reconcile / offer presentation rebuild。V0-DS 后 RunSession revision bump 已收口到私有 dirty flags 入口，并由 `Wacom.Run.SnapshotRevisions` 覆盖主要 mutation drift guard；V0-DU/V0-DV 后探索期 first-person 默认 BattleDeck source 和 provider-backed menu lease 也用 BackpackStorage revision gate 跳过等价 Run 事件，V0-DW 后 gate key / counter 规则已由组件私有 helper 和 drift guard 测试统一维护；但列表仍是 WrapBox / VerticalBox，未迁虚拟列表 | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
-| 像素风 UI 分辨率适配 | 背包卡牌等像素图控件依赖固定 SizeBox 和 `DPI Scale = 1.0`；非整数 DPI 缩放会导致像素点显示不均匀 | 后续统一设计像素安全缩放档位，并配合 WrapBox / ScrollBox 做布局重排；避免每个 widget 单独写屏幕适配 |
+| Backpack UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
+| Backpack / Shop 长列表 | Backpack / SpecialZone / Shop 已有 revision gate、signature dirty gate 和 identity reconcile，但列表仍是 WrapBox / VerticalBox | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
+| 像素风 UI 分辨率适配 | 背包卡牌等像素图控件依赖固定 SizeBox 和 `DPI Scale = 1.0`；非整数 DPI 缩放会导致像素点显示不均匀 | 统一设计像素安全缩放档位，并配合 WrapBox / ScrollBox 做布局重排 |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
-| AppToast C++ fallback 表现 | 顶层旧 WBP 路径 fallback 已移除；当前未配置 settings 时仍直接 AddToViewport，文本显示为主，保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
-| PrimaryLayout 固定路径 fallback | 顶层旧路径 fallback 已收窄；PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |
+| AppToast C++ fallback 表现 | 未配置 settings 时仍直接 AddToViewport，文本显示为主，保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
+| PrimaryLayout 固定路径 fallback | PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |
 
 <a id="techdebt-run-session"></a>
 ## RunSession 结构债
@@ -82,26 +82,23 @@ UI 当前事实入口见 `WacomUI.md`；本节只记录仍需替换或收口的�
 | 项 | 临时做法 / 当前决定 | 正式方案 / 处理方向 |
 |---|---|---|
 | ViewModel FieldNotify 未被 WBP 消费 | C++ 父类用 `OnRunViewModelRefreshedNative` 粗粒度多播 + 手动 SetText | 美术阶段 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 直接绑字段；全 WBP 后删粗粒度路径 |
-| `OnRunStateChangedNative` 粗粒度广播 | V0-DT 后战斗结算、商店关闭、RunEvent 选择等组合事务已用 RunSession 私有 batch 合并成事务末尾一次广播；普通 public mutation 仍保持成功后一次广播 | 订阅方仍按粗粒度事件幂等刷新；新增组合 Run mutation 时补 `Wacom.Run.NotificationCoalescing` 测试，避免重新出现一次玩家操作多次唤醒 UI |
+| `OnRunStateChangedNative` 粗粒度广播 | 组合事务已收口为事务末尾一次广播；普通 public mutation 仍保持成功后一次广播 | 订阅方仍按粗粒度事件幂等刷新；新增组合 Run mutation 时补 `Wacom.Run.NotificationCoalescing` 测试 |
 | BackpackScreen Presenter 边界 | Presenter 已抽展示计算；DropTarget 只转发拖拽意图，命令提交和确认框统一在 Screen | 如果 Screen 继续膨胀，再抽 section view data 或命令协调对象 |
-| BattleHUD coordinator 过重 | V0-DA 已把 scene enemy Host registry / hover / prediction / badge sync 收口到私有 `FWacomBattleHUDSceneEnemyTargetCoordinator`；V0-DB 已把 presentation queue / card stack / turn-boundary barrier 收口到私有 `FWacomBattleHUDPresentationCoordinator`；V0-DC 已把 combat log history / trim / feed sync / readable log 输出收口到私有 `FWacomBattleHUDCombatLogController`；V0-DD 已把 first-person battle hand runtime sync / drag preview / drop intent / transition hint cache 收口到私有 `FWacomBattleHUDFirstPersonHandBridge`；V0-DE 已把旧手牌和 first-person 共享 card detail panel / motion / source guard / viewport-canvas 定位收口到私有 `FWacomBattleHUDCardDetailController`；V0-DF 已补 HUD public/test receiver 层合同回归，验证这些 helper 继续是 `WacomApp/Private` 非反射 C++ helper；V0-DG 已把重复 HUD 测试装配收口到 `WacomTests/Private/UI` 的 `FWacomBattleHUDTestHarness`；`UBattleHUD` 仍持有 Session 绑定、Snapshot fanout、命令入口、WBP 绑定、配置和 GC 引用 | 保留 HUD 作为战斗 UI Screen coordinator，不做全局 UI manager 或立即 MVVM；建议先暂停继续拆分，后续修改私有 helper 时优先补 HUD 合同测试并复用 harness，等 HUD 剩余职责再次明显膨胀后再切新的私有 helper |
-| WacomApp Public UI API surface | V0-DY 已只读审计 `Source/WacomApp/Public/UI` 与 `Source/WacomApp/Public/Components` 的反射和 Blueprint 公开面；V0-DZ 已把 UI/Components 中 `DebugView`、`DebugSummary`、日志开关和 `CallInEditor` 调试入口归到 `Wacom|...|Debug` 并补中文 ToolTip；V0-EA 已把 `UWacomRunMenuCardLeaseTestMenu` 标成 development/prototype-only 验证入口；V0-EB 已把 first-person layer / slot / anchor / Run source 的自动化测试访问收口到少数 `WITH_AUTOMATION_TESTS` test view 和 `WacomTests/Private` access wrapper；V0-EC 已把 Backpack / BattleHUD 的非 Blueprint 测试/诊断 helper 收口到 test view + `WacomTests/Private` access / receiver；V0-ED 已把 `Source/WacomApp/Public/Actors` 中 `ConfigureDebug...Sample` 统一归到 `Wacom|...|Prototype`，并保留 Authoring / Debug 的正式分区；V0-EE 已同步 `Docs/WacomApp.md` 和自动化测试 display name，避免 Prototype 样例入口继续被旧 Authoring 命名误导；V0-EF 已把正式 first-person battle hand interaction 的编辑器分类和新 C++ 调用口径从 Prototype 收口到 Interaction，同时保留旧成员兼容；V0-EG 已把旧 Battle 3D hand public surface 隔离到 `3D Hand|Prototype`；V0-EH 已把 first-person anchor 的 legacy projection/layout、LookInfluence 和静态预览层隔离成 legacy comparison / prototype preview 口径；V0-EI 已把旧 Battle event log drawer / entry / EventToast 公开面归到 legacy compatibility，并标清 DebugBattleHUD 的 debug-only 身份 | 详见下方 `WacomApp Public UI API surface（V0-DY / V0-DZ / V0-EA / V0-EB / V0-EC / V0-ED / V0-EE / V0-EF / V0-EG / V0-EH / V0-EI）`；后续按更小的测试 hook / prototype 移除候选小步收口，先不碰正式 WBP authoring surface |
+| BattleHUD coordinator 过重 | HUD 私有 helper 已承接 scene enemy target、presentation、combat log、first-person hand 和 card detail；HUD 仍持有 Session 绑定、Snapshot fanout、命令入口、WBP 绑定、配置和 GC 引用 | 保留 HUD 作为战斗 UI Screen coordinator；后续修改私有 helper 时优先补 HUD 合同测试并复用 harness |
+| WacomApp Public UI API surface | 公开面已完成多轮分类和测试访问收口；当前剩余债务是 prototype / test-only surface、Blueprint-visible 制作面保守保留和资产审计前不删除 | 历史见 [Wacom_Public_Surface_And_Docs_History.md](./DevLog/Wacom_Public_Surface_And_Docs_History.md)；继续按小切片评估，不用“无 C++ 调用”作为删除依据 |
 
 <a id="techdebt-wacomapp-public-ui-api-surface"></a>
-### WacomApp Public UI API surface（V0-DY / V0-DZ / V0-EA / V0-EB / V0-EC / V0-ED / V0-EE / V0-EF / V0-EG / V0-EH / V0-EI）
+### WacomApp Public UI API surface 当前剩余债务
 
-V0-DY 只做公开面审计和后续 backlog，不删除、不重命名、不移动任何 public / Blueprint API。Blueprint-visible 项即使没有 C++ 调用方，也可能被 `.uasset` 或 WBP 引用；真正 trim 前必须先确认资产使用并跑相关 UI 自动化。
+当前原则：
 
-- **正式 WBP 制作合同**：优先保留 `BindWidget`、`EditDefaultsOnly` 配置、`BlueprintImplementableEvent`、必要 `BlueprintCallable` 和展示 builder 的 `BlueprintPure` 入口。当前主要分布在 `BattleHUD`、Backpack、RunEvent、Shop、CardView、first-person card layer、menu drop target、world target bridge、CombatLog / Presentation builder 等公开头文件。
-- **C++ public 但不应直接 Blueprint 化的入口**：`WacomBackpackScreen`、`BattleHUD` 等 Screen coordinator 上存在若干诊断、详情显示、测试辅助或内部协调 helper。后续可逐个评估改为 protected/private、test receiver/probe 或窄 `WITH_AUTOMATION_TESTS` hook。
-- **测试 / 诊断入口**：V0-EB 后 `WacomFirstPersonCardAnchorComponent`、`WacomFirstPersonCardLayerWidget`、`WacomFirstPersonCardLayerSlotWidget` 的散落只读 counter / config getter 已合并为非反射 automation test view；`WacomTests` 通过 `FWacomFirstPersonCardLayerTestAccess` 读取 layer / slot / anchor view、驱动手势和访问 Run first-person source counter。V0-EC 后 Backpack 测试通过 `FWacomBackpackScreenTestAccess` 访问 screen / SpecialZone 测试 seam，BattleHUD 通过 `FWacomBattleHUDAutomationTestView` 和 `UWacomBattleHUDDetailTest` 聚合 presentation / combat log / scene enemy bridge 只读诊断。生产头里仍保留必要的行为驱动 seam，但测试不再直接依赖一堆散 getter 名称。V0-DZ 已整理 UI/Components 的 Blueprint-visible debug metadata；V0-ED 已整理 Actor 的 DebugView / DebugSummary / Log 分类，Debug 分类只保留只读诊断和日志入口。
-- **原型 / 兼容入口**：V0-EA 已把 `UWacomRunMenuCardLeaseTestMenu` 的 Class ToolTip、Prototype Category、PlayerController 打开入口和控制台 help text 都标成 development/prototype-only；它仍保留 public 路径、控制台命令和测试 probe 继承关系，只用于 PIE 验证 owned menu lease + Zone drop intent。V0-ED 后 `AWacomRunPickupActor`、`AWacomRunCardPickupActor`、`AWacomRunRewardPickupActor`、`AWacomRunEventTriggerActor`、`AWacomRunKeyChestActor`、`AWacomBattleEnemyActor`、`AWacomBattleEnemyPartActor` 的 `ConfigureDebug...Sample` Details 按钮也统一归到 `Wacom|...|Prototype`；V0-EE 已把对应 `WacomApp.md` 描述和自动化测试 display name 同步为 Prototype 口径。这些按钮仍可用于 PIE / 开发验证，但不是正式数据入口。V0-EF 后 `UWacomFirstPersonCardAnchorComponent` 的正式交互调用口径是 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()`；旧 `BattleHandInteractionPrototype` C++ wrapper 和 UPROPERTY 名仅为资产 / C++ 兼容保留，真正字段重命名需另起 CoreRedirect / 资产审计切片。V0-EG 后 `AWacomBattle3DHandPresenter / AWacomBattleCardVisualActor / BattleHUD` 的 3D hand 配置都归入 `Wacom|...|3D Hand|Prototype`，只保留为历史实验和 PIE 对照入口；真正删除、迁到开发插件或移除测试另起切片。V0-EH 后 `LegacyWorldProjected / LegacyProjectedFan2D / LookInfluenceYaw/Pitch` 只作为 first-person anchor legacy comparison 入口保留，`bDrawStaticCardLayer` 相关配置归入 prototype preview，正式 hand authoring surface 保持 `BodyLocked + Authored2D + SoftClampToViewport`。V0-EI 后 `UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` 只作为旧 WBP / PIE 对照 legacy compatibility surface 保留，正式 BattleHUD 制作入口是 `CombatLogFeed + BattleCombatLogBlock`；`UDebugBattleHUD` 只作为文本诊断 HUD 保留。fallback layout 等其他过渡路径仍需后续判断是否还能进入正式制作流。
-- **暂不删除候选**：debug `CallInEditor`、DebugSummary、prototype test menu、Screen 上非 Blueprint 的 public diagnostic helper、未被 C++ 调用但 Blueprint-visible 的制作配置都只列入候选；没有资产审计前不作为删除依据。
+- 正式 WBP 制作合同优先保留：`BindWidget`、`EditDefaultsOnly` 配置、`BlueprintImplementableEvent`、必要 `BlueprintCallable` 和展示 builder 的 `BlueprintPure` 入口。
+- C++ public 但不应直接 Blueprint 化的诊断、详情显示、测试辅助或内部协调 helper，后续按资产影响和测试覆盖逐个评估。
+- `UWacomRunMenuCardLeaseTestMenu`、Actor `ConfigureDebug...Sample`、Battle 3D hand、first-person legacy comparison / prototype preview 等只作为 prototype / compatibility / debug 入口保留。
+- 剩余根 `Wacom|UI|3D Hand|Prototype` 是旧 Battle 3D hand prototype 例外；真正删除、迁到开发插件或移除测试另起切片。
+- Blueprint-visible 项即使没有 C++ 调用方，也可能被 WBP 或 `.uasset` 引用；没有资产审计前不作为删除依据。
 
-建议后续拆成低风险实施轮：
-
-1. 后续如需真正删除 `UWacomRunMenuCardLeaseTestMenu`、迁到测试模块、开发插件或移除 PlayerController / 控制台入口，另起资产和测试影响明确的单独切片。
-2. 若继续收口公开面，优先从更小的 prototype / test-only helper 影响面开始，不用“无 C++ 调用”作为删除依据。
+历史整理记录见 [Wacom_Public_Surface_And_Docs_History.md](./DevLog/Wacom_Public_Surface_And_Docs_History.md)。
 
 ---
 
@@ -118,14 +115,14 @@ V0-DY 只做公开面审计和后续 backlog，不删除、不重命名、不移
 
 这些条目已写入正式领域文档，后续不要再作为 TODO 重复追踪：
 
-- 中毒穿透护盾，见 `WacomBattle.md §6`
-- 中毒触发时机，见 `WacomBattle.md §6`
-- 晕厥层数模型，见 `WacomBattle.md §11`
+- 中毒穿透护盾，见 `WacomBattle.md §7`
+- 中毒触发时机，见 `WacomBattle.md §7`
+- 晕厥层数模型，见 `WacomBattle.md §9`
 - BattleHUD 创建职责已迁移到 `UWacomGameUIManagerSubsystem`
-- Enhanced Input 已扩展为 `IMC_Exploration` / `IMC_Battle`，由流程 Push / Pop 切换
+- Enhanced Input 入口已由 `UWacomInputContextCoordinatorSubsystem` 统一承接
 - 背包容量、A / B 容器、SpecialZone、负重区规则已在 `WacomRun.md §5` 正式化
-- RunEvent、Shop、AppToast 的第一版链路已在 `WacomRun.md`、`WacomApp.md`、`WacomUI.md`、`WacomData.md` 正式化
+- RunEvent、Shop、AppToast 的基础链路已在 `WacomRun.md`、`WacomApp.md`、`WacomUI.md`、`WacomUIFoundation.md` 和 Data 专题文档正式化
 - 顶层 Backpack / Shop / RunEvent 的 `PlayerController` ScreenClass 配置路径已移除，统一走 Wacom UI Settings -> C++ fallback
-- Shop / RunEvent / AppToast 的旧固定 WBP 路径 fallback 已移除；PrimaryLayout 是本轮保留的唯一固定路径 fallback
+- Shop / RunEvent / AppToast 的旧固定 WBP 路径 fallback 已移除；PrimaryLayout 是保留的唯一固定路径 fallback
 - `UWacomCardView::BuildFromCardDefinition / BuildDetailFromCardDefinition` legacy static API 已清理，新代码统一使用 `UWacomCardPresentationBuilder`
 - Run Definition 级 deck wrappers 已取消 Blueprint 暴露；C++ 兼容入口暂留，见 RunSession 结构债

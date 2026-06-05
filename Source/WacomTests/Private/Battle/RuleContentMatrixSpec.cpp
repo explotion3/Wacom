@@ -574,6 +574,8 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		FWacomBattleFixture Fixture;
 		UCardDefinition* Companion = MakeNoopMatrixCard(Outer, TEXT("Matrix.CompanionPlayer"));
 		Companion->Keywords.AddTag(WacomTags::Card_Keyword_Companion);
+		UCardDefinition* ReturnSource = MakeHandTargetCard(Outer, TEXT("Matrix.CompanionReturnSource"),
+			MakeEffect(WacomTags::Effect_Card_DiscardSelected, 1, WacomTags::Target_SelectedHandCard));
 		UCardDefinition* ReturnCard = MakeNoopMatrixCard(Outer, TEXT("Matrix.CompanionReturn"));
 		FCardPassive Passive;
 		Passive.Trigger = WacomTags::Passive_Trigger_OnCompanionCount;
@@ -581,13 +583,16 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		Passive.DisplayText = FText::FromString(TEXT("每打一张伙伴回手"));
 		ReturnCard->Passives.Add(Passive);
 		ValidateCardForMatrix(Companion, *this);
+		ValidateCardForMatrix(ReturnSource, *this);
 		ValidateCardForMatrix(ReturnCard, *this);
 		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
-		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Companion, ReturnCard }, Enemy);
+		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Companion, ReturnSource, ReturnCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
+		const FGuid ReturnSourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ReturnSource->CardId);
 		const FGuid ReturnId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ReturnCard->CardId);
 		const FGuid CompanionId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Companion->CardId);
-		TestTrue(TEXT("First play return card to discard"), Session->SubmitCommand(FBattleCommand::MakePlayCard(ReturnId)).IsOk());
+		TestTrue(TEXT("First discard return card by effect"),
+			Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(ReturnSourceId, ReturnId)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("OnCompanionCount effects did not run while moving source out"), Snapshot.Player.Shield, 0);
 		TestTrue(TEXT("Play companion to trigger return"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CompanionId)).IsOk());

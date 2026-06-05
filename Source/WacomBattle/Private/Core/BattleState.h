@@ -39,7 +39,7 @@ struct FPlayerState
 };
 
 /**
- * 卡牌容器。一场战斗内所有卡 + 六个定位容器。
+ * 卡牌容器。一场战斗内所有卡 + 七个定位容器。
  *
  * AllCards 持有所有卡的权威实例。DrawPile/Hand/... 只存 InstanceId，
  * 真实的 FRuntimeCardInstance::Location 字段和容器归属保持一致。
@@ -55,8 +55,9 @@ struct FCardContainers
 
 	TArray<FGuid> DrawPile;                 // 抽牌堆
 	TArray<FGuid> Hand;                     // 手牌队列（从左到右）
-	TArray<FGuid> DiscardPile;              // 弃牌区
-	TArray<FGuid> ExhaustPile;              // 消耗区
+	TArray<FGuid> PlayedPile;               // 本回合使用牌堆
+	TArray<FGuid> DiscardPile;              // 弃牌堆
+	TArray<FGuid> ExhaustPile;              // 消耗牌堆
 	TArray<FGuid> Limbo;                    // 本回合离手但不入任何区域的左右手
 
 	/** 左手/右手运行时实例 ID。整场战斗不变。 */

@@ -2,478 +2,114 @@
 type: presentation-contract
 scope: wacom-ui
 status: active
-updated: 2026-06-03
+updated: 2026-06-05
 tags:
   - wacom/ui
-  - wacom/commonui
-  - wacom/mvvm
   - wacom/wbp
 ---
 
 # WacomUI 文档
 
 > [!info] 本文职责
-> 本文是 Wacom UI 表现层的当前事实入口。[[WacomApp]] 只记录 App / GameMode / 输入 / 世界交互总控；具体 UI 数据流、Widget 职责、Toast、Screen 和 WBP 承接口径放在这里。
+> 本文是 Wacom UI 表现层总入口。它记录 UI 数据流、ownership、测试访问原则和专题导航；CommonUI shell、BattleHUD、first-person hand 等细节放到专题文档。
 
 > [!warning] 阅读边界
-> 本文记录 UI 数据流和表现合同，不定义战斗、Run、卡牌或资产规则。
+> 本文不定义战斗、Run、卡牌或资产规则。规则真相见 [WacomBattle.md](./WacomBattle.md)、[WacomRun.md](./WacomRun.md)、[WacomData.md](./WacomData.md)；内容生成 / 校验见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)，GameplayTag 见 [WacomGameplayTags.md](./WacomGameplayTags.md)。App 编排和输入流程见 [WacomApp.md](./WacomApp.md)，世界交互和 target handle 见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 
 <a id="wacomui-ui-ownership-map"></a>
 ## §1 UI 总原则
 
-UI 不直接修改战斗或 Run 状态。UI 读取 Snapshot、ViewData 或 ViewModel，然后把玩家意图提交给上层控制者：
+UI 不直接修改战斗或 Run 状态。Widget 读取 Snapshot、ViewData 或 ViewModel，然后把玩家意图提交给 Screen、HUD、PlayerController 或领域 Session 的明确入口。
 
-| 领域                      | 数据来源                                                             | 命令出口                                                                                                                                                             |
-| ----------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ExplorationHUD          | `UWacomRunViewModelProvider -> UWacomRunViewModel`               | 无；只读显示探索状态和交互提示                                                                                                                                                  |
-| Run Screen / 菜单类 Widget | Run Snapshot / ViewModel / Presentation ViewData                 | `URunSession` 写 API，通常经 PlayerController / Screen 调用                                                                                                             |
-| 背包                      | `URunSession` storage revision gate -> `BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图，私有 `FWacomBackpackCommandFlow` 编排 `MoveInstance / DeleteCardForGoldByInstance / SetSpecialZoneCardBattleEnabled`、Toast 和 Confirm |
-| 商店                      | `URunSession` shop/economy revision gate -> cached / rebuilt `BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 `FWacomShopScreenFlow` 编排 `PurchaseShopOffer / EndShopVisit` 和 Toast                                                              |
-| 探索事件                    | `URunSession::BuildCurrentRunEventSnapshot()`                    | `UWacomRunEventScreen` 接收 UI 意图，私有 `FWacomRunEventScreenFlow` 编排 `ChooseRunEventOptionWithResult / EndRunEvent` 和 Toast                                          |
-| 战斗                      | `FBattleSnapshot`、`FBattleEvent`、BattleSession ViewData          | `UBattleHUD` 接收玩家意图，私有 BattleHUD flow helper 编排命令提交、目标选择、事件日志和击倒弹窗                                                                                               |
+| 领域 | 数据来源 | 命令出口 |
+|---|---|---|
+| ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 只读显示探索状态和交互提示 |
+| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图，私有 command flow 调用 RunSession、Toast 和 Confirm |
+| Shop | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 flow 编排购买、关闭访问和 Toast |
+| RunEvent | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 flow 编排选项提交、支付、关闭和 Toast |
+| Battle | `FBattleSnapshot`、`FBattleEvent`、Battle ViewData | `UBattleHUD` 是唯一战斗 UI 命令出口 |
 
-Widget 可以有 C++ fallback 布局，但 C++ 的职责是协议、生命周期和兜底显示；正式视觉由 WBP 承接。
-复杂 Widget 的流程逻辑应收口到 `WacomApp/Private` 的 command flow / coordinator helper。Screen 负责 View、CommonUI 生命周期、绑定和重建；helper 负责命令编排、确认弹窗、Toast 和关闭访问等副作用。
+Widget 可以有 C++ fallback 布局，但 C++ 的职责是协议、生命周期和兜底显示；正式视觉由 WBP 承接。复杂流程应收口到 `WacomApp/Private` 的 flow / coordinator helper，Screen 保持 View 所有权和玩家意图入口。
 
-### UI Ownership Map
+## §2 专题入口
 
-Wacom UI 当前采用“Shell 集中 + Screen coordinator 分域负责”的结构，不新增全局大 UI manager，也不让被动 Widget 直接改规则状态。
+| 专题 | 当前事实入口 | 关注点 |
+|---|---|---|
+| UI Foundation | [WacomUIFoundation.md](./WacomUIFoundation.md) | CommonUI shell、PrimaryLayout、UI Settings、Widget registry、Modal、MainMenu、Run MVVM、AppToast |
+| Battle UI | [WacomBattleUI.md](./WacomBattleUI.md) | BattleHUD、命令出口、HUD state、targeting、presentation flow、Combat Log、legacy / fallback UI |
+| First-person card layer | [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) | 第一人称手牌 authoring / runtime contract、Battle/Run source、hover/drag/drop、WBP_FirstPersonCardView |
+| World interaction | [WacomWorldInteraction.md](./WacomWorldInteraction.md) | Run world target、Battle scene target、Run menu zone target、target handle |
+| WBP 绑定 | [UI_Backpack_WBP_Binding.md](./UI_Backpack_WBP_Binding.md)、[UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md)、[UI_RunEvent_WBP_Binding.md](./UI_RunEvent_WBP_Binding.md) | 父类、资产路径、BindWidget 槽位和 PIE 检查 |
+
+## §3 Ownership Map
+
+Wacom UI 采用“Shell 集中 + Screen coordinator 分域负责”的结构，不新增全局大 UI manager，也不让被动 Widget 直接写规则状态。
 
 | 层级 | Owner | 职责 | 边界 |
 |---|---|---|---|
-| UI Shell | `UWacomGameUIManagerSubsystem + UWacomPrimaryGameLayout` | 创建 / 重建根布局，按 `Game / GameMenu / Modal / Overlay` Push / Pop CommonUI Widget | 不解释战斗、Run 或菜单业务规则 |
+| UI Shell | `UWacomGameUIManagerSubsystem + UWacomPrimaryGameLayout` | 创建 / 重建根布局，按 Game / GameMenu / Modal / Overlay 管理 CommonUI stack | 不解释战斗、Run 或菜单业务规则 |
 | 顶层配置 | `UWacomUIDeveloperSettings` | 注册 PrimaryLayout、AppToast 和 `UI.Widget.*` 顶层 WBP 覆盖 | 不作为运行时状态来源 |
-| App 流程 | `AWacomGameMode / AWacomMenuGameMode / AWacomPlayerController` | 进入 / 退出战斗，主菜单 travel，探索交互，战斗快捷键和世界目标输入路由 | 不把 Screen 内部布局和显示细节写进流程类 |
-| GameMenu 路由 | `FWacomExplorationScreenRouter` | 统一背包、暂停菜单、商店、RunEvent 的 GameMenu 打开、关闭、异步 Push 和访问 rollback | 不提交背包 / 商店 / RunEvent 的具体规则效果 |
-| 输入上下文 | `UWacomInputContextCoordinatorSubsystem` | 统一 CommonUI input config、鼠标显隐 / capture、Enhanced Input MappingContext 和 click/mouse-over lease | 不读取具体 Widget 业务状态 |
-| Screen coordinator | `UBattleHUD / UWacomBackpackScreen / UWacomShopScreen / UWacomRunEventScreen` | 持有 Screen 生命周期、WBP 绑定、ViewData 刷新和玩家意图入口，并调用私有 flow/helper | 不让子 Widget 直接写领域状态 |
-| Passive Widget | 卡牌、列表项、Badge、Panel、Button 等子 Widget | 只读 Snapshot / ViewData / ViewModel，显示状态并通过委托上报玩家意图 | 不直接调用 `UBattleSession` 或 `URunSession` 写 API |
-| 例外路径 | `UWacomAppToastSubsystem` | 战斗外即时反馈，目前直接持有 Toast Widget 并 `AddToViewport` | 已记录为临时路径；暂不进入 CommonUI Stack |
+| App 流程 | `AWacomGameMode / AWacomMenuGameMode / AWacomPlayerController` | 进入 / 退出战斗，主菜单 travel，探索交互，目标输入路由 | 不把 Screen 内部布局写进流程类 |
+| GameMenu 路由 | `FWacomExplorationScreenRouter` | 统一背包、暂停菜单、商店、RunEvent 的打开、关闭、异步 Push 和访问 rollback | 不提交具体 Run 规则效果 |
+| 输入上下文 | `UWacomInputContextCoordinatorSubsystem` | 统一 CommonUI input config、鼠标显隐 / capture、Enhanced Input profile 和 click / mouse-over lease | 不读取具体 Widget 业务状态 |
+| Screen coordinator | `UBattleHUD / UWacomBackpackScreen / UWacomShopScreen / UWacomRunEventScreen` | 持有 Screen 生命周期、WBP 绑定、ViewData 刷新和玩家意图入口 | 子 Widget 不直接写领域状态 |
+| Passive Widget | 卡牌、列表项、Badge、Panel、Button 等 | 显示 ViewData 并通过委托上报玩家意图 | 不直接调用 `UBattleSession` 或 `URunSession` 写 API |
 
-### Public Widget API 与测试口
+## §4 Public Widget API 与测试口
 
-复杂 Widget 的 public 头只保留 WBP 绑定、运行时生命周期和真实玩家意图入口。不要为了自动化测试在 `WacomApp/Public` 暴露 callable 的 `ForTest`、`ForAutomationTest`、`OverrideForTest`，也不要新增 Blueprint 可见测试 `UFUNCTION`。测试不应把未来 WBP、CommonUI 生命周期或 MVVM 重构锁死在当前 C++ fallback 结构上。
+复杂 Widget 的 public 头只保留 WBP 绑定、运行时生命周期和真实玩家意图入口。不要为了自动化测试在 `WacomApp/Public` 暴露 callable 的 `ForTest`、`ForAutomationTest`、`OverrideForTest`，也不要新增 Blueprint 可见测试 `UFUNCTION`。
 
-需要测试复杂 Widget 行为时按以下优先级处理：
+测试复杂 Widget 行为时按以下优先级处理：
 
 1. 在 `WacomTests` 中写 tests-only probe subclass，通过真实激活、刷新和玩家意图入口观察结果。
 2. 如果运行时代码本身需要可扩展点，提炼 protected production seam；它必须对生产行为有清晰语义。
-3. 只有前两者不适合时，才使用 automation-only private friend / test-access；这类入口不能是 `UFUNCTION` 或 Blueprint API，并应尽量放在 `WacomApp/Private` 或测试模块内。
+3. 只有前两者不适合时，才使用 automation-only private friend / test-access；这类入口不能是 `UFUNCTION` 或 Blueprint API。
 
-BattleHUD 的私有 helper / coordinator 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.h` 中的 `FWacomBattleHUDTestHarness` 搭配 `UWacomBattleHUDDetailTest` 装配 HUD、PlayerController、CombatLogFeed、PresentationStack、ActionPanel、first-person character 和 scene enemy Host。Harness 只属于 `WacomTests/Private`，不 include `WacomApp/Private` 的 coordinator / controller header，也不作为生产 API 或 Blueprint 合同。
+当前测试访问口径：
 
-V0-EB 后 first-person card layer / slot / anchor / Run source 的自动化测试访问通过 `WacomApp` public header 中少数 `WITH_AUTOMATION_TESTS` 非反射 test view，加上 `WacomTests/Private/UI/FirstPersonCardLayerTestAccess.h` 的私有 access wrapper 完成。生产头里仍保留必要的手势驱动 seam，但 `WacomTests` 不应再直接依赖 layer / slot / anchor 上散落的只读 counter / config getter；后续新增 first-person 回归优先扩展 wrapper 或 test view，而不是继续扩散 `ForTest` getter。
-
-V0-EC 后 Backpack / BattleHUD 的非 Blueprint 测试访问也按同一口径收口：Backpack 测试通过 `WacomTests/Private/UI/BackpackScreenTestAccess.h` 读取列表 widget、详情状态、SpecialZone 测试动作和 refresh counter view；BattleHUD 只读诊断通过 `FWacomBattleHUDAutomationTestView` 聚合，现有 `UWacomBattleHUDDetailTest` / `FWacomBattleHUDTestHarness` 继续作为测试入口。不要再把 Screen coordinator 的详情 helper、列表计数或 presentation/log 只读 getter扩散成普通 public C++ API。
-
----
-
-## §2 CommonUI 层级
-
-`UWacomGameUIManagerSubsystem` 持有 `UWacomPrimaryGameLayout`。PrimaryLayout 跟随当前 PlayerController 创建，切关卡时 TearDown 并重建。
-
-默认布局资产路径：
-
-- `/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C`
-- 父类：`UWacomPrimaryGameLayout`
-
-### 顶层 UI 类解析
-
-Wacom UI Settings 使用 `UWacomUIDeveloperSettings` 作为项目级软类注册表。顶层 UI 类解析优先级为：
-
-```text
-Wacom UI Settings
--> C++ fallback
-```
-
-`AWacomPlayerController` 不再提供顶层 ScreenClass 覆盖入口。需要替换顶层界面时，在 `Edit > Project Settings > Wacom UI Settings` 注册对应类。
-
-细节：
-
-| 入口 | 优先级 |
+| 区域 | 访问方式 |
 |---|---|
-| PrimaryLayout | `Wacom UI Settings.PrimaryLayoutClass` -> `/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C`；PrimaryLayout 不走 C++ fallback，解析失败则不创建根布局 |
-| BackpackScreen | `UI.Widget.BackpackScreen` settings 注册 -> `UWacomBackpackScreen` C++ fallback |
-| PauseMenuScreen | `UI.Widget.PauseMenuScreen` settings 注册 -> `UWacomPauseMenuScreen` C++ fallback |
-| ShopScreen | `UI.Widget.ShopScreen` settings 注册 -> `UWacomShopScreen` C++ fallback |
-| RunEventScreen | `UI.Widget.RunEventScreen` settings 注册 -> `UWacomRunEventScreen` C++ fallback |
-| AppToast | `Wacom UI Settings.AppToastWidgetClass` -> `UWacomAppToastWidget` C++ fallback |
+| BattleHUD | `FWacomBattleHUDTestHarness`、`UWacomBattleHUDDetailTest` 和 BattleHUD automation test view |
+| First-person card layer | production 非反射 test view + `FWacomFirstPersonCardLayerTestAccess` |
+| Backpack | `FWacomBackpackScreenTestAccess` |
+| CardView / EffectBadge | automation test view + `FWacomCardViewTestAccess` |
+| Shop / RunEvent | automation test view + `FWacomShopRunEventTestAccess` |
+| PlayerController / world probe | `FWacomPlayerControllerRunInteractionTestAccess`、`FWacomBattleSceneTargetClickTestAccess`、Run world / menu drop / choice button probe wrapper |
 
-V2-B 状态：
+## §5 Run UI 摘要
 
-- `BackpackScreen` / `PauseMenuScreen`：Router 通过 `UWacomGameUIManagerSubsystem::PushRegisteredWidgetToLayerAsync()` 打开；settings 软类未加载时走异步加载，缺失或失败时回到 C++ fallback。GameMenu 已有异步 pending 时，重复打开请求会被忽略。
-- `ShopScreen` / `RunEventScreen`：同样通过 async push 打开；`BeginShopVisit()` / `BeginRunEvent()` 只在异步类解析完成、stale guard 通过且即将 Push 前执行。Push、Cast 或 Refresh 失败时立即 `EndShopVisit()` / `EndRunEvent()` rollback。
-- `PrimaryLayout`：仍同步创建；settings 失败后只尝试固定 `WBP_PrimaryGameLayout` 路径 fallback。
-- `AppToast`：仍同步解析并直接 `AddToViewport`，不进入 CommonUI async push。
+Run UI 只显示 RunSession 的当前事实和 presentation view，不直接改 RunState。
 
-### Wacom UI Settings 配置校验
-
-Wacom UI Settings 是顶层 UI WBP 的唯一项目级覆盖入口，不要求本轮配置所有顶层 WBP。未配置或配置加载失败时，仍按上表回退：PrimaryLayout 只允许固定路径 fallback / null；其余顶层界面回到对应 C++ fallback。其中 Shop / RunEvent / PauseMenu 等 `WidgetClasses` 缺失属于合法 fallback，不是错误。
-
-编辑器 Data Validation 应检查以下错误：
-
-- `PrimaryLayoutClass` 非空时，必须继承 `UWacomPrimaryGameLayout`。
-- `AppToastWidgetClass` 非空时，必须继承 `UWacomAppToastWidget`。
-- `WidgetClasses` 的 tag 必须属于 `UI.Widget.*` 命名空间。
-- `WidgetClasses` 的 class 必须继承 `UWacomActivatableWidget`。
-- `WidgetClasses` 中重复 tag 是错误。
-- `WidgetClasses` 中空 class 是错误；如果希望使用 fallback，应删除该条目而不是保留空 class。
-
-`WBP_PrimaryGameLayout` 必须绑定 4 个 `UCommonActivatableWidgetStack`：
-
-| 控件名 | 对应 Layer | 用途 |
+| Screen / Widget | 层级 | 当前职责 |
 |---|---|---|
-| `GameLayerStack` | `UI.Layer.Game` | 探索 HUD、BattleHUD |
-| `GameMenuLayerStack` | `UI.Layer.GameMenu` | 主菜单、暂停菜单、背包、商店、探索事件 |
-| `ModalLayerStack` | `UI.Layer.Modal` | 确认弹窗等阻塞式弹窗 |
-| `OverlayLayerStack` | `UI.Layer.Overlay` | CommonUI 内 overlay 入口；当前 AppToast 不走该 Stack |
+| `UWacomExplorationHUD` | Game | 显示探索时段、剩余节点、交互提示；读取 Run ViewModel |
+| `UWacomBackpackScreen` | GameMenu | 展示背包、备战区、负重区和 SpecialZone；拖拽或按钮意图经 Screen flow 进入 RunSession |
+| `UWacomShopScreen` | GameMenu | 展示当前商店 snapshot、金币、商品状态；购买和关闭访问经 Screen flow 提交 |
+| `UWacomRunEventScreen` | GameMenu | 展示当前事件节点、选项、支付需求和后果预览；选项提交和卡牌支付经 Screen flow 提交 |
+| `UWacomMenuWidgetBase` | GameMenu base | 处理 CommonUI activation、Back 请求和可选 first-person card menu lease |
 
-| Layer | 用途 |
-|---|---|
-| `Game` | `UWacomExplorationHUD`、`UBattleHUD` |
-| `GameMenu` | 主菜单、暂停菜单、背包、商店、探索事件 |
-| `Modal` | `UWacomConfirmDialog` |
-| `Overlay` | CommonUI 内的 Overlay 层；当前 AppToast 不走该 Stack |
+Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。
 
-Game 层同一时间只应有一个主要 HUD 处于 active 状态：
+## §6 卡牌展示与 Builder
 
-```text
-探索 BeginPlay -> Push ExplorationHUD 到 Game 层
-EnterBattle -> Push BattleHUD 到 Game 层，ExplorationHUD 进入非 active 状态
-ExitBattle -> Pop BattleHUD，ExplorationHUD 重新 active 并补刷新
-```
-
-CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入；战斗 HUD 和探索 HUD 仍声明自身期望的 UI input config，但底层 gameplay profile 由 `UWacomInputContextCoordinatorSubsystem` 统一应用。探索期固定使用 Run Tunnel 输入模型：Coordinator 切到 `All + NoCapture`、显示鼠标并保持探索 IMC；普通隐藏鼠标 FPS FreeLook 不再是正式玩家路径。`UWacomMenuWidgetBase` 负责 Menu 模式下的返回键口径：ESC 和 Gamepad FaceButton Right 触发 Back 请求，默认广播 `OnBackRequestedNative` 后 `DeactivateWidget()`；子类只在语义不同（例如 ConfirmDialog 把 Back 当 Cancel）时覆盖。
-
----
-
-<a id="wacomui-toast"></a>
-## §3 Toast 与反馈
-
-两类即时 Toast 和一类战斗记录分工不同，不互相合并：
-
-| 类型 | 出口 | 用途 |
-|---|---|---|
-| 交互提示 | `UWacomExplorationHUD::SetInteractToastVisible` | 范围内 E 键提示，或 Run world clickable 目标鼠标 hover 点击提示 |
-| 战斗记录 | `UBattleCombatLogFeedWidget + UWacomBattleCombatLogBuilder` | 战斗内玩家可读命令块和事件明细 |
-| AppToast | `UWacomAppToastSubsystem` | 战斗外获得卡牌、金币变化、背包移动/删牌、商店、RunEvent 反馈 |
-
-### AppToast
-
-`UWacomAppToastSubsystem` 是战斗外通用反馈出口。它持有唯一 `UWacomAppToastWidget`，直接 `AddToViewport(ZOrder=10000)`，不进入 CommonUI Stack。
-
-Toast WBP 注册口径：
-
-- 父类：`UWacomAppToastWidget`
-- 在 `Edit > Project Settings > Wacom UI Settings` 的 `AppToastWidgetClass` 注册正式 WBP。
-- 未注册、软类加载失败或类型不匹配时，回退 `UWacomAppToastWidget` C++ fallback；不再按旧固定 WBP 路径尝试加载。
-- 可选绑定：`Container : VerticalBox`
-
-当前生命周期：
-
-- 探索局开始时 PlayerController 会预热；首次 Toast 也会懒加载兜底。
-- 无消息时 Widget `Collapsed`；入队后 `HitTestInvisible`；消息播完后只隐藏，不销毁。
-- Widget `SetIsFocusable(false)`，`GetDesiredInputConfig()` 返回空，不改变探索或菜单输入。
-- `UWacomAppToastSubsystem` 跨关卡跟随 GameInstance 存活，但缓存 Widget 只在属于当前 World 和当前本地 PlayerController 时复用；若发现旧 World、旧 PlayerController 或无效 Owner，会先 `RemoveFromParent()` 并清空引用，再用当前本地 PlayerController 重建。自动化测试注入的无真实 World/PC transient widget 属于测试 override，可继续复用。
-- Subsystem `Deinitialize()` 会移除并清空缓存 Widget，避免退出 GameInstance 后残留 viewport widget。
-- `FWacomAppToastView` 保留 `MessageText / Tone / IconKey / LifetimeOverride`；C++ fallback 第一版只显示文字。
-
-当前接入：
-
-- 商店购买成功：`获得卡牌：{CardName}`。
-- 商店购买失败：按 Offer ViewData 的 `DisabledReason` 显示“金币不足 / 该商品已购买 / 商品不可购买”。
-- 背包移动成功/失败：成功显示移动到目标区，失败显示通量满、备战满、特殊区满等原因。
-- 背包删牌成功/失败：成功显示销毁卡牌和获得金币，失败显示固有卡、最后容量来源卡、未持有卡等原因。
-- RunEvent 选项结果/不可用原因：由 `UWacomRunEventPresentationBuilder` 转成中文 Toast；卡牌支付成功时会使用结果里的支付卡 Definition 追加 `交出卡牌：{CardName}`。V0-AS 后成功结果还会在效果 Toast 之后追加 outcome Toast：事件完成或关闭显示 `事件已结束`，节点切换且事件仍打开时显示 `进入：{节点标题}`。
-- Run world card drop release 失败：V0-CB 后，拖卡 release 命中过 KeyChest 等 Run world card drop target 但未提交时，PlayerController 会优先调用目标 `UWacomRunWorldCardDropReceiverComponent::BuildRunWorldCardDropFailureToastText()` 生成 AppToast 文案。已完成使用 receiver completed prompt，错卡 / 缺关键词 / 被黑名单阻挡 / 缺卡定义使用 receiver rejected prompt，配置异常使用 receiver config warning prompt + reason，源卡不可用使用 receiver source-card-unavailable prompt，未知失败使用 receiver generic failure prompt + reason。没有 receiver 的目标只保留 Controller 通用配置异常 fallback。preview 阶段不发 Toast，松到空处也不发失败 Toast；V0-CG 后成功按 reward payload 显示反馈，Gold reward 显示金币变化 Toast，Card reward 显示获得卡牌 Toast。
-
-### RunEvent card payment debug
-
-V0-AT 后 `UWacomRunEventScreen` 提供只读 debug API：
-
-- `GetRunEventScreenDebugView()`：返回当前 active event/node、cached choice 数量、可用 / 不可用 choice 数量、payment choice 数量、候选实例总数、choice availability 摘要、choice requirement count / unsatisfied count 摘要、choice consequence count 摘要、ZoneId 到 ChoiceId 的映射摘要，以及最近一次 resolve / submit 结果摘要。
-- `GetRunEventScreenDebugSummary()`：返回同样信息的一行字符串，适合自动化断言、PIE 蓝图按钮或日志复制。
-- `LogRunEventScreenDebugSummary()`：把 summary 写入日志，便于在 PIE Details 或临时蓝图按钮里排查“为什么没有候选卡 / 为什么 Zone 不接受 / 为什么提交失败”。
-
-这些 API 只读 UI / Run snapshot 和 Screen 内部缓存，不修改 RunState、menu lease 或 drop target 状态。支付 Zone 仍通过 `ResolveRunMenuFirstPersonCardDropIntent()` / `SubmitRunMenuFirstPersonCardDropIntent()` 使用 `SubmitPolicy=MenuHandled` 提交；debug summary 只是把当前 `Intent / Reject / SubmitPolicy / SubmitReason / RunValidationReason / Submitted` 记录出来。
-
-### 战斗事件表现队列与 Combat Log
-
-战斗反馈分四层：`FWacomBattleHUDPresentationCoordinator + FWacomBattleEventPresentationQueue` 负责 TargetCue / 短暂停顿 / modal / 战斗结束 signal / card stack boundary 调度；`BattlePresentationStack` 显示已提交但表现仍在追赶的卡牌小堆叠；`Battle Combat Log` 负责玩家可读的持久战斗记录；raw `UE_LOG` 只做开发诊断。`UWacomBattleEventPresentationBuilder` 仍把单条 `FBattleEvent` 转成兼容文案、tone 和 icon；V0-CJ 后玩家日志主要使用 `UWacomBattleCombatLogBuilder` 生成命令块，V0-CK 后 BattleHUD 不再创建旧 `EventToast` 单条提示框。
-
-- V0-DB 后，presentation queue、card stack、小卡 exit timer 和 `Wait / EndTurn` turn-boundary barrier 的运行时状态由私有 `FWacomBattleHUDPresentationCoordinator` 持有；`UBattleHUD` 仍保留 WBP 绑定、配置值和 public 玩家意图入口。`FWacomBattleEventPresentationQueue` 只负责把 `FBattleEvent` 按顺序调度为 TargetCue、短暂停顿、击倒弹窗、战斗结束 signal 和 UI-only card stack boundary。纯文字事件不再生成旧 Toast step；它们只进入 Combat Log。V0-CI 后普通事件表现队列不再让 `BattleHUD` 进入 `Resolving`；V0-CL 后 PlayerAction 阶段仍可在队列忙碌时继续 `PlayCard`，新卡牌事件追加到正在播放的队列后面。`Wait / EndTurn` 不再直接穿过卡牌表现栈：如果 stack 非空，ActionPanel 显示 pending 文案并禁用按钮，coordinator 等 stack 和队列清空后再提交等待或结束回合。命令门禁仍以 `BattleSession` Snapshot phase 为准，`PendingKnockdownChoice`、`BattleEnd` 和非玩家行动阶段阻止普通玩家行动命令。
-- `UBattlePresentationStackWidget` 是只读纯小卡堆叠，默认小卡使用 `/Game/Wacom/UI/Card/WBP_CardView`，失败时回退 `UWacomCardView`。`WBP_FirstPersonCardView` 是第一人称手牌专用卡面，不作为表现栈默认值。内部数组顺序是最早打出到最新打出；渲染时最早待完成表现的卡在最上面，最新打出的卡在最下面。V1 只展示 `PlayCard`，最多显示最接近播放的 6 张，完整队列仍由 HUD 保存；V0-CM 后不显示卡名、目标、数量、溢出文字或黑色底座。小卡通过 `ScaleBox + SizeBox` 承载完整 `UWacomCardView`，保证文字、图标、费用和插画作为整张卡一起缩放。它是 `HitTestInvisible`，不复用可交互 `UCardWidget` 或 first-person slot widget。`CardStackBoundary` 到达时先把最旧 entry 标记为 exiting，播放约 0.16 秒淡出、上移和轻微缩小，exit 完成后才真正移除；pending `Wait / EndTurn` 也要等该 exit 完成后再提交。
-- `UWacomBattleCombatLogBuilder` 把一次成功 `SubmitCommand()` 后消费到的事件批次聚合成 `FWacomBattleCombatLogBlockView`。`BattleHUD` 在提交前读取 snapshot 构造命令 context，用于补足卡牌名、目标名、回合和击倒选择；提交后读取最新 snapshot 并消费事件，生成 `打出「卡牌」 -> 目标`、`等待`、`结束回合` 或 `击倒选择` 这类玩家可读命令块。规则层不新增 batch id；当前 UI 事实是一次成功 HUD 命令后的 `ConsumeEvents()` 批次就是一个 combat log block。初始 `SetSession()` 消费到的 `BattleStarted / TurnStarted / CardsDrawn` 会生成 System block。
-- V0-DC 后，combat log history、trim、recent feed sync 和 `[BattleCombatLog] ...` readable UE_LOG 输出由私有 `FWacomBattleHUDCombatLogController` 持有和执行；`FWacomBattleHUDEventFlow` 只负责从 `UBattleSession::ConsumeEvents()` 取事件批次，并把事件继续 fanout 给 first-person transition cache、combat log controller 和 presentation coordinator。
-- `UBattleCombatLogFeedWidget` 是 BattleHUD 内部常驻滚动记录，默认承接本场最近 80 个玩家可读命令块和每条事件 detail line，用于没有正式动画时给连续出牌提供即时反馈。V0-CJ 的旧半屏日志抽屉不再挂在 BattleHUD 主路径；V0-CK 后旧 `EventToast` 也不再由 BattleHUD 创建。`UBattleEventLogPanel` / `UBattleEventLogEntryWidget` / `UEventToast` 类暂留为遗留兼容组件，新的 HUD 制作不要再绑定 `EventLogPanel / EventToast` 或调用 `ToggleBattleEventLog()`。V0-EI 后这些旧类的 Blueprint / Details 分类统一到 `Wacom|Battle|Legacy Event Log|Compatibility`；`UDebugBattleHUD` 只作为 `Wacom|Battle|Debug` 文本诊断 HUD 保留，不是正式 BattleHUD 父类。
-- TargetCue 是 `WacomApp` 内的轻量表现信号。当前 `DamageDealt / EnemyPartHpEmptied` 会经 `BattleHUD` 私有目标注册表按敌方部位实例 ID 分发；2D `EnemyInfoBar` 刷新时把当前 `EnemyPartWidget` 注册进去。V0-W 后 TargetCue 明确区分 `BattleEvent` 与 `TargetConfirmed`：前者仍由表现队列发送，用于真实伤害 / 破坏反馈；后者只在目标卡成功提交后立即发送，用于表示“目标点击已被接受”。`TargetConfirmed` 不代表伤害已经发生，也不替代后续 `DamageDealt / EnemyPartHpEmptied` cue。V0-CN 后场景敌人推荐使用 `AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`：Host 只做分组、debug 和制作校验；每个 PartActor 独立提供 Visibility 命中体、可见体、只读预测 Widget、只读状态 Badge、`UWacomInteractionTargetComponent` 和 `UWacomBattleEnemyPartWorldTargetBridgeComponent`。V0-CR 后 `ABattleTriggerActor.SceneEnemyHost` 是当前战斗的显式场景敌人绑定入口；`BattleHUD` 只同步当前 Host 下 attached PartActor 的 bridge，非当前 Host 的部位不会参与 hover、prediction、TargetCue、TargetSelect click 或 first-person drag release。Bridge 用稳定 `UEnemyPartDefinition::PartId` 在 snapshot / UIState 刷新后绑定当前运行时 `PartInstanceId`，并接收目标确认、伤害、破坏 cue。V0-CQ 后 Bridge 会把 runtime part facts、hover target 和拖卡 / TargetSelect 源卡输入整理成 `FWacomBattleEnemyPartPredictionView` 推给 PartActor 上方的 screen-space `UWacomBattleEnemyPartPredictionWidget`：普通 hover 显示当前先机，拖卡或 TargetSelect hover 显示 Cost 推进近似、完美释放候选和行动风险；非法目标显示拒绝 reason，不显示误导性 delta。V0-CS 后 Bridge 同时把当前 snapshot 的部位名、HP/MaxHP、护盾、先机、意图、状态摘要和破坏态整理成 `FWacomBattleEnemyPartStatusBadgeView`，推给 PartActor 的 screen-space `UWacomBattleEnemyPartStatusBadgeWidget`；状态 Badge 常驻显示当前 Host 已绑定部位，预测 Badge 只在 hover、TargetSelect hover 或拖卡 preview 时临时显示，两者互不抢显隐。V0-CT 后 Host 会按 attached PartActor 顺序给 Badge 加稳定轻量错开，PartActor facade 可调 draw size、scale、opacity 和相对位置；Prediction 显示时额外上移，破坏态 Status Badge 只降低透明度但不隐藏。hover 仍只播放轻量 scale，拖卡 preview、TargetSelect 可选提示和 cue pulse 都优先于 hover；BattleEnd、PendingKnockdown、pending Wait/EndTurn、first-person drag、目标失效、Session 切换或 HUD 销毁会清空 hover 和预测。Bridge 收到目标确认 cue 时播放较轻 scale pulse；收到命中 / 破坏 cue 时播放 damage / destroyed scale pulse，并在 timer 结束后恢复到当前最高优先级持续状态。进入 `TargetSelect` 且该部位可选时，同一 PartActor 可见体会播放持续的轻量提示，退出选择或不可选时恢复。战斗场景点击主路径仍是 `AWacomPlayerController::InputKey()` 在左键 Release 且 HUD 处于 `TargetSelect` 时执行 `GetHitResultUnderCursor(ECC_Visibility)`，从命中 Actor 的组件中查找 `IWacomInteractionTargetProvider`；只有 `TargetKind=World`、`TargetTag=Interaction.Target.Battle.EnemyPart` 且属于当前 Host registry 的 handle 会转发到 `BattleHUD->OnEnemyPartClickedByUser()`。如果 Release 先落到 BattleHUD 根层，`BattleHUD::NativeOnMouseButtonUp()` 会调用同一个 PlayerController router 作为兜底。材质描边和正式敌人美术仍是后续表现 polish。
-- 目标注册表 V0 是单 handler 覆盖策略：同一 `PartInstanceId` 后注册者替换旧注册者；当前 Host 的场景 PartActor 与 `EnemyInfoBar` fallback 仍共享这套 cue registry。未来如果需要 2D Widget 与 3D Actor 同时表现，再升级为 priority 或 multicast。
-- `BattleHUD` 的 scene enemy world target registry 只保存当前 `SceneEnemyHost` 下的 bridge。V0-CS 后当前 Host 有效时默认折叠 `EnemyInfoBar`，场景 PartActor 的 Status Badge 成为主要敌方状态阅读入口；缺 Host 时不会绑定任何场景 PartActor，旧 Trigger 仍显示 `EnemyInfoBar` fallback/debug 进入战斗和查看部位信息。
-- PIE 验证时推荐结构是 `ABattleTriggerActor -> SceneEnemyHost = AWacomBattleEnemyActor`，Host 下附着多个 `AWacomBattleEnemyPartActor`，每个 PartActor 填写 `PartId`（例如 `Snake.Head / Snake.Body / Snake.Tail`）、`HitBoundsExtent` 和可见体 facade。PartActor 内部会把 `PartVisual` 设为 bridge 的 `VisualTargetComponent`，并把 `HitBounds` 配成 Visibility-only 命中体；不要展开内部组件 Collision Details。旧的手挂 `StaticMeshComponent + WacomInteractionTargetComponent + WacomBattleEnemyPartWorldTargetBridgeComponent` 仍可用于排障，但不再走正常 Host registry 绑定。
-- 当前 PIE 场景点击由 `AWacomPlayerController` 显式 cursor trace router 处理；路由只在左键 Release 且 HUD 已进入 `TargetSelect` 时消费。BattleHUD 根层 `MouseButtonUp` 兜底也复用同一路由，覆盖单击有效阶段落在 MouseUp 的 PIE 情况。目标 Actor 通过 `UWacomInteractionTargetComponent` 暴露统一 handle，Battle enemy part bridge 负责把稳定 `PartId` 绑定成运行时 `PartInstanceId`；选择需要敌方部位目标的卡牌进入 `TargetSelect` 后，单击匹配、阻挡 Visibility 且来自当前 Host registry 的场景 primitive 应直接完成目标选择，不再需要关卡蓝图临时 trace 或 `Primitive.OnClicked`。命中另一组 Host 的部位会被 HUD 过滤为无效 world target。
-- 场景目标排障优先看 PartActor 的 `GetBattleSceneEnemyPartDebugSummary()` / `LogBattleSceneEnemyPartDebugSummary()`：确认 `PartId`、`HitBounds`、`InteractionConfigured=true`、bridge 的 `Bound=true / Registered=true / Targetable=true / LastBind=MatchedPartId`，以及 V0-CQ/V0-CS/V0-CT display facts：`RuntimeFacts=true / Hp / MaxHp / Shield / Initiative / Intent / StatusText / StatusBadgeVisible / StatusBadgeLocation / StatusBadgeDrawSize / StatusBadgeScale / CurrentStatusBadgeOpacity / DragCost / DragSwift / DragCanSubmit / DragReject / HoverActive / HoverReason / HoverStableId / HoverWorldTargetId / PredictionVisible / PredictionMode / PredictedInitiative / PredictionBadgeLocation / PredictionBadgeScale / PredictionBadgeOffsetActive / PerfectCandidate / ActionRisk / PredictionReject / BadgeStaggerIndex`。Host 可用 `GetBattleSceneEnemyDebugSummary()` 检查 attached part 数量、`EnemyDefinition`、未知 `PartId`、`BoundParts / UnboundParts / RuntimeFacts / RuntimeInitiativeTotal / HoveredParts / PredictionVisibleParts / StatusBadgeVisibleParts / BadgeLayoutAppliedParts / UsedByBattleHUD / ActiveBattleHUDName`。Trigger 可用 `GetBattleTriggerDebugSummary()` 检查 `SceneEnemyHost / SceneEnemyHostEnemyDef / SceneEnemyHostParts / SceneEnemyHostDefinitionMatches`。PlayerController 上的 `bLogBattleSceneTargetClickRouting` 默认关闭，临时打开后只输出 trace 和 handle 路由状态。
-- Actor Details 分类约定：`Wacom|...|Authoring` 用于正式关卡制作 facade 字段和同步按钮；`Wacom|...|Prototype` 只放 `ConfigureDebug...Sample` 这类 PIE / 开发验证样例配置按钮，不是正式数据入口；`Wacom|...|Debug` 用于只读 DebugView、DebugSummary 和日志输出入口。
-- Run / 探索场景目标 V0-AJ 使用 `UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent`。Bridge 填写 `RunTargetStableId`，自动生成或复用运行时 `TargetId`，并把通用 target 标记为 `Interaction.Target.Run.Object`。V0-BI 后 PlayerController 的 Run probe 只会对当前可 hover 的 clickable world interactable 驱动视觉信号：Bridge 优先高亮显式可渲染 `VisualTargetComponent`，如果显式目标是 `ClickBounds / TriggerSphere` 这类 shape，则扫描 Owner 上第一个非 shape primitive；没有可渲染目标时回退并在 debug 中报告。Preview 应用轻量 scale 和 CustomDepth / stencil，并在清理时恢复原始 scale、custom depth 和 stencil。该 preview 是表现和诊断；没有项目级 outline/post-process 时，CustomDepth 信号不保证产生可见描边。V0-BK 后 Run world click / hover / preview 共用 clickable resolver：Actor 必须显式实现 `UWacomRunWorldClickableInteractable` 并同时实现 `IWacomWorldInteractable`，且命中的 run object handle 能解析到同 Actor 的 RunWorldBridge。`AWacomRunEventTriggerActor`、`AWacomShopTriggerActor`、`ABattleTriggerActor`、`AWacomRunPickupActor`、`AWacomRunCardPickupActor`、`AWacomRunRewardPickupActor` 和 V0-BV 原型 `AWacomRunKeyChestActor` 是当前 opt-in 对象；后续通用交互物复用同一结构，不需要给 PlayerController 增加类型分支。Pickup 三类 Actor 都复用 `AWacomRunPickupActorBase` 的组件、stable id 绑定、hover、lifecycle 和 shared debug。左键释放命中时会复用同一 Run probe，并经 `IWacomWorldInteractable::TryInteract()` 打开 RunEvent / Shop、进入 Battle、拾取金币、拾取固定卡牌或提交 Definition 奖励；KeyChest 的普通点击只提示，不开箱。E 键最近候选路径仍保留，且点击不要求玩家在 overlap 范围内。V0-BV 的宝箱拖卡也使用同一个 run object handle，但提交路径是 `UWacomRunWorldCardDropReceiverComponent -> URunSession::SubmitRunWorldCardInteraction()`，不是 `TryInteract()`。V0-CB 后 release 失败文案也收口在 receiver contract；KeyChest 只是第一个使用者，后续门、机关、祭坛、NPC 等 Run world card drop receiver 应通过 receiver 的 rejected/config/source/generic prompt 字段提供反馈，而不是改 PlayerController 类型分支。V0-BZ 后 KeyChest 完成态仍保留 run object 命中和 scale probe，视觉切换到 completed facade 后只用于确认“已打开”状态。
-- V0-BK 后 RunEvent / Shop / BattleTrigger / RunPickup hover 都复用该 probe loop，V0-BM 后 RunCardPickup 也复用同一路径，V0-BP 后 RunRewardPickup 继续复用，V0-BV 后 RunKeyChest 也复用；hover prompt 统一通过 clickable 接口读取。鼠标指向支持目标时，`UWacomExplorationHUD::SetInteractToastVisible()` 显示点击文案；RunEvent 已完成时显示 `CompletedHoverPromptText`，Shop 默认显示 `点击交易`，BattleTrigger 默认显示 `点击战斗`，RunPickup 默认显示 `点击拾取`，RunCardPickup 默认显示 `点击拾取卡牌`，RunRewardPickup 会按 Definition 奖励类型在金币 / 卡牌默认文案之间兜底，RunKeyChest 默认显示 `拖入钥匙` 或已完成弱提示 `宝箱已打开`。hover 文案优先于 E 键候选提示，离开 hover 后恢复原提示。左键释放路由顺序为 Battle target click -> RunTunnel branch click -> Run world interactable click；GameMenu active 或菜单 first-person card drag/drop 正在处理时，Run world click 和 hover prompt 都不会穿透到场景。
-- Run target PIE 验证最小结构：`Actor -> Primitive(阻挡 Visibility) + WacomInteractionTargetComponent + WacomRunWorldInteractionTargetBridgeComponent`，若要进入鼠标 hover / click，还必须实现 `IWacomWorldInteractable + UWacomRunWorldClickableInteractable` 并提供 `ClickBounds`。鼠标指向支持 clickable 合同的目标时，可见 primitive 应有轻量缩放；若关卡已有 CustomDepth outline 管线，stencil 信号可用于描边。Details 面板调用 `GetRunWorldTargetDebugSummary()` / `LogRunWorldTargetDebugSummary()` 或对应 Actor 的 clickable debug summary，应看到 `TargetTag=Interaction.Target.Run.Object`、有效 runtime id、stable id、`VisualTarget`、`HasRenderableVisual`、`ClickBounds`、`ClickTarget`、`ScaleSignal`、`CustomDepthSignal`、`Stencil`、preview 状态和 resolver reject reason。V0-BN 后金币 / 卡牌 Pickup 可先用 `LogRunPickupBaseDebugSummary()` 检查共享交互壳，再分别用 `LogRunPickupDebugSummary()` 或 `LogRunCardPickupDebugSummary()` 检查 `GoldAmount` / `CardId` 等奖励配置；V0-BO 后这些 summary 也会报告 `TriggerRadius / BoundsExtent / Visual / ConfigReason`，方便确认 Details 按钮和 BP 默认外观是否刷新到组件层；V0-BR 后正式数据驱动摆放推荐使用 `BP_WacomRunRewardPickupActor + UWacomRunPickupDefinition`，BP 实例可用 `ConfigureDebugGoldDefinitionPickupSample()` / `ConfigureDebugPoisonFangDefinitionPickupSample()` 快速绑定 Debug Definition，再用 `LogRunRewardPickupDebugSummary()` 检查 `Definition / PickupId / RewardType / GoldAmount / CardId` 和同一套 click/visual facts。V0-BW 后 KeyChest 验证应编辑 Actor facade 字段 `TriggerRadius / ClickBoundsExtent / VisualMesh / VisualScale / VisualRelativeLocation`，不要展开内部 `TriggerSphere / ClickBounds / ChestVisual` 的 Collision Details；V0-CF 后推荐在 BP 实例上填写 `CardInteractionDefinition`（通用 `UWacomRunWorldCardInteractionDefinition`），优先使用 `/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3`；旧 KeyChest 专用 Definition 链路已删除。Details 可用 `ConfigureDebugKeyChestInteractionDefinitionSample()` 快速绑定通用 Debug Definition，`ConfigureDebugKeyChestSample()` 保留为无 Definition receiver fallback；V0-BZ 后还可配置 `CompletedVisualMesh / CompletedVisualScale / CompletedVisualRelativeLocation` 表达已打开外观，再用 `LogRunKeyChestDebugSummary()` 检查 `Definition / InteractionId / DefinitionReason / DefinitionSource / ConfigValid / ConfigReason / Duplicate / ReceiverAllowedDefs / ReceiverAllowedIds / RequiredKeywords / BlockedKeywords / PositiveFilter / RewardCount / GoldTotal / CardRewardCount / Consume / CompletedVisualMesh / CompletedVisualScale / CompletedVisualLocation / VisualState`。Validate Map/Level 会把缺 ID、通用 Definition 无效、无 Definition fallback 无正向筛选、只填黑名单、缺 reward、金币 reward 非正或卡牌 reward 缺定义报告为 error。V0-BS 后提交地图前应跑 Validate Map/Level：Pickup 摆放实例缺 ID / 奖励配置会报 error，重复 `PersistentId` 只报 warning，BP 默认资产空配置不会被判 invalid。V0-BT 后 RunEvent / Shop / BattleTrigger 摆放实例也接入制作安全网：缺 ID 或关键配置是 error，重复 `PersistentId` 是 warning；推荐 BP 默认资产仍可保持空配置。
-- `FWacomBattleHUDCombatLogController` 保存本场 combat log block history；Session 切换时清空 history/feed，BattleEnd 后仍保留本场日志可读。UI-only presentation stack 和 pending turn-boundary 命令由 `FWacomBattleHUDPresentationCoordinator` 保存；切换 Session、BattleEnd 或清空表现队列时同步清空表现栈和 pending turn-boundary 命令。
-- `KnockdownChoiceRequested` 不再当帧直接 Push modal；它由表现队列延后到前序事件播放后再打开。
-- `HandZoneChanged` 不进入 combat log；`CardDiscarded / CardExhausted` 会显示为弃牌 / 消耗 detail line。
-
-### First-person Card target bridge
-
-V0-Y 后 first-person hand 的卡槽也接入统一 `FWacomInteractionTargetHandle` 合同。V0-AD 后 Card target 不再只做 probe：`TargetMode=HandCard` 的源卡拖到另一张 first-person 手牌上释放时，BattleHUD drop resolver 会解析为 `PlayCardCardTarget`，提交 `PlayCard` 的 `TargetCardInstanceId`，用于 `Target.SelectedHandCard` 效果。非 `HandCard` 源卡拖到卡牌上仍保持 probe / deny，不提交战斗规则。
-
-- `UWacomFirstPersonCardLayerSlotWidget` 对 active、可见、非 exiting 且有有效 `CardInstanceId` 的 slot 构建 `TargetKind=Card` 的 handle。
-- `ScreenPosition` 使用当前 `VisualSlotView.ScreenPosition`，所以 slot motion、hover、pending 和重排动画中暴露的是玩家实际看到的位置。
-- Card target 不要求目标卡 `bIsPlayable=true`。不可打卡仍可成为指定手牌效果的目标；是否合法由 Battle / Run resolver 判断。
-- `UWacomFirstPersonCardLayerWidget` 和 `UWacomFirstPersonCardAnchorComponent` 转发 hover、unhover 和 hovered visual update 的 card target 事件；V0-Z 的 drag view 会把当前 card target 带给 BattleHUD。Battle 中 `UBattleSession::ValidateTargetWithCard()` 当前支持 `TargetKind=Card + TargetMode=HandCard`，并拒绝 self、无效卡、不在手牌的卡，以及被 `UCardDefinition::HandCardTargetFilter` 禁止的普通手牌 / 左右手锚点 / keyword 条件。`CanTargetWithCard()` 只保留为 bool 包装。
-- outgoing、投影失败、关闭 first-person interaction、runtime source 清理和 layer clear 都会清理 hovered card target，避免后续拖拽系统拿到幽灵目标。
-
-### Run first-person card source
-
-V0-AK 后探索期有一个独立的 first-person card source：`UWacomRunFirstPersonCardSourceComponent`。它由 `AWacomPlayerController` 持有，并绑定当前 `URunSession::OnRunStateChangedNative`。V0-DU/V0-DV 后自动刷新链是 `coalesced Run event -> BackpackStorage revision gate -> source rebuild -> Anchor runtime source`：默认 BattleDeck source 只有 `GetBackpackStorageSnapshotRevision()`、`bIncludeProjectedRunBattleDeckCards` 或 `RunFirstPersonCardLayerSourceId` 变化时才读取 `URunSession::BuildBackpackStorageSnapshot()`；provider-backed active menu lease 只有 BackpackStorage revision、lease id/source id 或 provider request 变化时才重建候选并重写 runtime source。V0-DW 后这些 revision gate 规则由组件私有 refresh key helper 统一维护，测试只验证 key facts 和 counter view，不直接依赖散落字段。手动刷新、激活、RunSession 绑定 / 切换、菜单压制释放仍强制刷新，避免 UI 状态变化被 revision gate 吃掉。
-
-- 该 source 默认只做探索期可读展示和诊断。Run 卡牌 entry 使用真实 `FCardInstance.InstanceId` 和 `UWacomCardPresentationBuilder` 生成的卡面 ViewData；只有 active menu lease 或 V0-BU 的 Run world card drop receiver 命中时，PlayerController 才会把 release 分发为对应 Run 事务。
-- 为了视觉可读性，entry 保持 `bIsPlayable=true` 且 `CardViewData.bDisabled=false`；默认 source 写入后会启用 first-person drag probe 给 Run world card drop 使用，但会关闭 quick click-to-play，且不走 BattleHUD 出牌路径。
-- V0-AL 后，探索期 `GameMenu` 默认会压制 Run BattleDeck source：Backpack、Pause、Shop、RunEvent 打开时清理当前 `RunFirstPersonBattleDeck` 显示，关闭后恢复并刷新最新 Run BattleDeck。这个压制由 `UWacomMenuWidgetBase` 激活 / 失活通知 PlayerController 维护，所以 Widget 自己 `DeactivateWidget()` 也能恢复，不依赖单一路由入口。
-- 需要卡牌参与菜单交互的界面可以通过 PlayerController / source component 显式申请 menu lease。V0-AN 后推荐菜单使用 `UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards()`，提交 `FWacomRunMenuCardLeaseRequest`，由系统从玩家当前真实持有卡实例构建 `FWacomFirstPersonCardLayerEntry`；不要在蓝图中手拼 entry。Request 可按 Definition、CardId、显式 InstanceId、RequiredKeywords、BlockedKeywords 和 include zone 开关筛选，空筛选默认拒绝，除非显式开启 `bAllowAllOwnedCardsWhenNoFilter`。候选来源是 `FRunState.Backpack -> BattleDeck -> BurdenZone -> SpecialZones.Cards`，不读取 `BattleDeckProjectedCards`，避免 SpecialZone 入战投影重复显示。Active menu lease 优先于 GameMenu suppress，用自己的 runtime source id 显示候选卡；同一时间只允许一个 lease，清理 lease 后回到“仍在菜单则压制、菜单已关闭则恢复 BattleDeck”的规则。菜单基类拥有的 lease 会在 `NativeOnDeactivated` 自动清理。
-- 开发验证可在 PIE Exploration 下执行控制台命令 `Wacom.OpenRunMenuCardLeaseTestMenu` 打开 C++ prototype 验证菜单 `UWacomRunMenuCardLeaseTestMenu`。V0-EA 后该菜单在 Blueprint 分类和 ToolTip 中明确为 development/prototype-only：只用于验证 owned menu lease + Zone drop intent 闭环，不是正式 Run 菜单基类或 WBP 制作入口。该菜单默认用 `AllowedCardIds=PoisonFang` 申请 owned menu lease，并内置 `ZoneId=RunEvent.Pay.Fang` 的 `UWacomRunMenuDropTargetWidget`；释放到该区域会通过 V0-AO drop intent prototype 支付这张具体持有卡实例。
-- V0-AM 后，active menu lease source 会临时启用 first-person card hold / drag 手势，但只由 PlayerController 做菜单 drop probe，不走 BattleHUD 出牌路径。菜单中的 `UWacomRunMenuDropTargetWidget` 暴露 `FWacomInteractionTargetHandle(TargetKind=Zone)`；拖拽更新时 Controller 用 drag view 的 DPI-aware widget position 命中最上层可见 / enabled drop target，驱动目标区域 probe preview，并把 `ZoneProbe` feedback 写回 first-person layer。V0-AO 后 preview 和 release 统一走 `ResolveRunMenuCardDropIntent()`：默认菜单仍是 probe-only；owning menu 通过通用 drop intent hook 返回 `SubmitZoneTarget` 时，release 才可能提交。`ControllerDestroyOwnedCard` policy 由 PlayerController 调 `URunSession::DestroyCardByInstance(SourceCardInstanceId)` 永久移除那张玩家真实持有卡，不给金币；`MenuHandled` policy 由菜单自己提交领域事务并回填提交结果。V0-BU 后，只有在没有 active GameMenu / menu lease 时，Run first-person source 才会尝试场景 `RunWorldCardDrop` resolver；所以 RunEvent 支付 Zone、测试菜单 Zone 和后续菜单交互都优先于宝箱这类场景拖卡目标。
-- V0-AQ 后，`UWacomMenuWidgetBase` 提供 `ResolveRunMenuFirstPersonCardDropIntent()` 和 `SubmitRunMenuFirstPersonCardDropIntent()` 蓝图 hook。默认实现只返回 `ProbeZoneTarget`；菜单可以返回 `SubmitZoneTarget + ControllerDestroyOwnedCard` 让 Controller 执行 prototype destroy，也可以返回 `SubmitZoneTarget + MenuHandled` 自己调用领域 API 并把 `bSubmitted / RejectReason / RunValidationReason` 写回结果。V0-AP 的 `UWacomRunEventScreen` 使用 `MenuHandled`，调用 `ChooseRunEventOptionWithPaidCardResult()` 在 RunEvent 事务中移除精确 instance、执行 Effects 并推进节点。V0-AR 后支付选项行会显示候选数量或缺失原因，合法拖入时 Zone 使用 `SubmitReady`，成功提交后使用 `Submitted`，并通过 AppToast 告知交出的具体卡。V0-AS 后同一次成功结果还会继续显示节点 / 事件 outcome Toast，例如 `事件已结束` 或 `进入：{节点标题}`。提交后 provider-backed lease 会按原 request 从最新 RunState 重建候选；没有剩余候选时清空 lease，并在菜单仍打开时保持 GameMenu suppress，避免回到 anchor card fallback。
-- 进入战斗、Controller EndPlay、source disabled 或 runtime clear 时会清理 `RunFirstPersonBattleDeck` 和 active menu lease，并取消可能残留的 first-person drag gesture。退出战斗回 Exploration 后重新刷新当前 Run BattleDeck。
-- Debug 可在组件上调用 `GetRunFirstPersonCardSourceDebugSummary()` 或 `LogRunFirstPersonCardSourceDebugSummary()`，关注 `Enabled / Active / SuppressedByGameMenu / HasLease / LeaseId / LeaseSource / HasRun / HasAnchor / Physical / Projected / Entries / Last`，以及 provider 的 `LeaseId / SourceId / Result / Candidates / Considered / Debug`。
-
-当前 Run first-person source 已有两条探索期拖卡入口，但范围都很窄：有 active menu lease 时优先走 Run menu Zone resolver；没有 active GameMenu / menu lease 时，V0-BV prototype 可以把真实持有卡拖到带 `UWacomRunWorldCardDropReceiverComponent` 的 Run world target。第一条正式用于 RunEvent 卡牌支付，RunEventScreen 自动为支付选项创建 Zone target、申请候选卡 lease，并在 release 时提交 paid-choice 事务。第二条目前服务 `AWacomRunKeyChestActor`：合法 release 会消耗精确钥匙 instance、按 `Rewards` 发放金币或卡牌奖励并标记宝箱已完成；V0-CA 后，release 到宝箱但失败时会给玩家明确 AppToast，例如错卡显示 `需要钥匙`，已打开显示 `宝箱已打开`，配置异常显示 warning，而拖拽 preview 和松到空处不会弹提示。V0-CG 后正式推荐通过通用 `UWacomRunWorldCardInteractionDefinition` 配置可接受卡牌、reward payload、消耗和 release feedback 文案；`WacomRegenerateContent` 会生成 `DA_RunWorldCardInteraction_DebugKeyGold3` 给 KeyChest PIE 验证，旧 KeyChest 专用 Definition 链路已删除。没有 Definition 时 receiver fallback 继续用于快速 PIE 样例。正向筛选仍要求 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空，`BlockedKeywords` 只作为附加限制。它不替代 `IWacomWorldInteractable + E`，也不迁移背包既有 `UWacomZoneDropTarget` UMG DragDrop；旧 `AWacomDebugChestActor` 已移除，Shop / Backpack 等菜单的 first-person card selection、动画和 SaveGame 仍是后续方向。
-
----
-
-## §4 Run UI 与 MVVM
-
-Run 域 Widget 使用 ViewModel + Provider 订阅模型，避免 Widget 直接订阅业务层。
-
-```text
-RunSession 写状态
-  -> OnRunStateChangedNative
-  -> UWacomRunViewModelProvider 读取 RunState
-  -> UWacomRunViewModel FieldNotify 字段更新
-  -> OnRunViewModelRefreshedNative
-  -> Widget 读取 ViewModel 并刷新
-```
-
-当前状态：
-
-- `UWacomRunViewModelProvider` 是 GameInstance Subsystem。
-- `UWacomRunViewModel` 是纯数据，不持有 Session 指针。
-- C++ Widget 订阅 Provider 的粗粒度多播并手动 SetText。
-- FieldNotify 字段已就位，但 WBP ViewBinding 尚未消费。
-- Widget 在 `NativeOnActivated` 补订阅和补刷新，处理 CommonUI Reactivate。
-
-`UWacomExplorationHUD` 位于 Game 层，显示时段、节点、天数、手指、经验、压力分项和交互 Toast。战斗中 BattleHUD 压到 Game 层顶端；战斗结束后 ExplorationHUD Reactivate 并补刷新。
-
----
-
-## §5 背包 UI
-
-`UWacomBackpackScreen` 位于 `GameMenu` 层。它负责 View 所有权、CommonUI 生命周期、WBP 绑定、拖拽入口、详情面板生命周期和列表刷新；规则真相仍在 `URunSession`。
-C++ fallback 布局由私有 `FBackpackFallbackLayoutBuilder` 搭建，运行时 DropTarget / WrapBox / 详情层由私有 `FBackpackRuntimeZoneBuilder` 创建；移动 / 删除 / 入战开关的命令编排收口到私有 `FWacomBackpackCommandFlow`。WBP 绑定字段和玩家意图入口仍保留在 `UWacomBackpackScreen`。
-
-背包 UI 对玩家已拥有卡只提交 `InstanceId`。卡牌 Definition 可用于展示、卡名 fallback 和资产语义说明，但不能作为 UI 删除或移动某张已拥有卡的身份。
-
-当前结构：
-
-| 区域 | 当前职责 |
-|---|---|
-| 删牌区 | `UWacomDeleteZoneDropTarget` 只做预览和转发删牌意图；预览、确认前校验和确认后提交都使用卡牌 `InstanceId`；Definition 只用于卡名 fallback |
-| 备战区 | `UWacomZoneDropTarget` 显示 `BattleDeck` 和已入战 SpecialZone 投影卡，只做预览和转发移动意图 |
-| 通量内容区 | 显示物理位于 `Backpack` 的通量内容，A 类容器也作为内容卡显示 |
-| 特殊存放区 | 每张 B 主卡对应一个 `UWacomSpecialZoneWidget` |
-| 负重区 | 仅 `BurdenCount > 0` 时显示卡牌；卡牌可拖出，但区域背景不接收 drop |
-
-数据和刷新：
-
-- 列表数据来自 `RunSession->BuildBackpackStorageSnapshot()`；`URunSession::GetBackpackStorageSnapshotRevision()` 未变化时直接跳过 Snapshot 构建。
-- 顶部金币、容量等标量来自 Run ViewModel。
-- 操作成功后不做领域状态局部 patch，Screen 仍通过 `RebuildAll()` 统一拉取最新事实；列表刷新链是 `coalesced Run event -> RunSession revision gate -> Snapshot -> signature dirty gate -> identity reconcile -> CardView dirty apply`。revision 等价时只刷新顶部轻量标量，跳过 Snapshot 构建；revision 变化但列表签名等价时跳过列表 reconcile；签名变化时各列表区域按稳定身份增量复用 widget，不再 `ClearChildren()` 重建全部卡牌。RunSession revision 维护由 Run 层私有 dirty flags 入口和 `Wacom.Run.SnapshotRevisions` 测试保护；组合事务广播次数由 `Wacom.Run.NotificationCoalescing` 保护，UI 不自己推断哪些 Run mutation 影响列表事实。
-- `RebuildAll()` 已拆为顶部、备战区、通量区、特殊区和负重区刷新函数；备战、通量、负重按 `InstanceId + 来源区 + 复用角色` 复用 `UWacomDeckCardWidget`，特殊存放区按 owner `InstanceId` 复用 `UWacomSpecialZoneWidget`。
-- 复用卡牌 widget 前会清理投影角标、右键 toggle 和拖拽透明度等残留；当前详情面板只在 hover source 被移除或失效时隐藏。
-
-交互：
-
-- DropTarget 只读 RunSession 做 hover 预览校验；drop 时把 `UWacomCardDragOperation` 转发给 `UWacomBackpackScreen`，再由 `FWacomBackpackCommandFlow` 处理实际命令。
-- 普通 drop 由 `FWacomBackpackCommandFlow` 先调用 `ValidateMoveInstance()`，再调用 `MoveInstance()`，并统一发 AppToast。
-- Delete drop 由 `FWacomBackpackCommandFlow` 先调用 `ValidateDeleteCardForGoldByInstance()`；失败直接 AppToast，成功才弹 ConfirmDialog，确认后提交 `DeleteCardForGoldByInstance()`。
-- SpecialZone 内容卡右键入战请求由 `UWacomSpecialZoneWidget` 转发给 `UWacomBackpackScreen`，再由 `FWacomBackpackCommandFlow` 调 `SetSpecialZoneCardBattleEnabled()`。
-- 卡牌 hover 详情由 `UWacomBackpackScreen` 管理，数据来自 `UWacomBackpackScreenPresenter` 和 `UWacomCardPresentationBuilder`。
-
-背包 WBP 制作细节见 `UI_Backpack_WBP_Binding.md`。未来正式 WBP、拖拽 polish、虚拟列表等计划见 `Roadmap.md` 和 `TechDebt.md`。
-
----
-
-## §6 商店 UI
-
-`UWacomShopScreen` 位于 `GameMenu` 层。商店打开不切换 `EGameFlowState`。Screen 负责 View 所有权、CommonUI 生命周期、商品列表刷新和按钮绑定；购买、关闭访问和 Toast 副作用收口到私有 `FWacomShopScreenFlow`。
-
-当前流程：
-
-- 商店公开请求入口在 PlayerController；内部由 Router 先关闭已有 `GameMenu` 顶层，再调用 `RunSession->BeginShopVisit(PersistentId, Offers)`。
-- Screen 激活时订阅当前 `URunSession::OnRunStateChangedNative`，Run 状态变化会请求刷新；购买后的显式 `RefreshShop()` 仍保留为保底路径。
-- Screen 刷新链是 `coalesced Run event -> shop revision gate -> cached / rebuilt shop Snapshot -> economy-aware offer signature -> row identity reconcile`。`GetShopSnapshotRevision()` 未变化时复用缓存的 `FRunShopSnapshot`，避免重复 `BuildCurrentShopSnapshot()`；金币变化只更新 `CurrentGold / GetEconomySnapshotRevision()` 相关展示，不重建商店 Snapshot。Shop / Economy revision 的影响面由 RunSession 事务层声明，Screen 只消费 revision 和 cached snapshot。
-- 签名变化时，`UWacomShopPresentationBuilder` 把 `FRunShopOffer + 当前金币` 转成 `FWacomShopOfferPresentationView`；签名等价时跳过 presentation rebuild 和 row reconcile，保留已缓存的 offer view 供购买入口使用。
-- Offer 行按 `OfferId` 增量复用；购买状态、金币可购买性或商品顺序变化会更新对应 `UWacomShopOfferRowWidget` 的 ViewData，不重复绑定购买委托。
-- Offer 行只渲染 ViewData 并广播购买请求，不直接解析 `CardDefinition` 或判断金币。
-- 点击购买由 `FWacomShopScreenFlow` 调 `PurchaseShopOffer(OfferId)`，成功 / 失败后统一发 AppToast，Screen 再刷新商品列表和金币。
-- `NativeOnDeactivated` 的关闭访问路径由 `FWacomShopScreenFlow` 调 `EndShopVisit()`，每次 Screen 激活周期只结束一次；本次访问买过任意商品时 Run 层关闭时消耗 1 节点。
-- 如果 Push 商店 UI 失败，Router 会调用 `RunSession->EndShopVisit()` 回滚刚 Begin 的 active shop。
-
-正式商店视觉和 hover 详情属于后续表现项；商品规则、库存和节点消耗见 `WacomRun.md`。
-
----
-
-## §7 RunEvent UI
-
-`UWacomRunEventScreen` 位于 `GameMenu` 层，用于展示轻量事件图当前 Node。Screen 负责 View 所有权、CommonUI 生命周期、选项列表重建和按钮绑定；选项执行、事件关闭和 Toast 副作用收口到私有 `FWacomRunEventScreenFlow`。
-
-当前流程：
-
-- RunEvent 公开请求入口在 PlayerController；内部由 Router 先关闭已有 `GameMenu` 顶层，再调用 `RunSession->BeginRunEvent(PersistentId, EventDefinition)`。
-- Screen 刷新时读取 `BuildCurrentRunEventSnapshot()`。
-- ChoiceButton 显示 Label，并通过 `UWacomRunEventPresentationBuilder::BuildChoiceRequirementView()` 生成 UI-only requirement view。该 view 包含可用性 tone、支付候选数量、支付需求文案、普通阻塞原因，以及 `RequirementItems` 条件列表；中文文案属于 `WacomApp` presentation，不写入 Run 规则 snapshot。V0-AY 后同一 choice row 还通过 `BuildChoiceConsequenceView()` 生成提交前后果预览，C++ fallback 显示在 `ConsequenceList`。
-- 普通可用选项由 `FWacomRunEventScreenFlow` 调 `ChooseRunEventOptionWithResult(ChoiceId)`，Run 层执行条件、效果、跳转和完成标记。需要卡牌支付的选项普通点击会被 Run 层以 `RequiresCardPayment` 拒绝。
-- 支付选项刷新时会创建 `UWacomRunMenuDropTargetWidget` 包住对应 choice row，ZoneId 来自 snapshot。Screen 聚合当前节点所有支付选项的候选 `InstanceId`，通过 owned menu lease 只显示这些可支付卡。`UWacomRunEventChoiceButton` 从 requirement view 写入 `PaymentStatusText`：有候选显示 `拖入卡牌支付：{N} 张可用`；没有候选显示 `缺少可支付卡牌：{Reason}`，Reason 优先来自 `PaymentDisabledReason`，再回退到 `DisabledReason`。普通条件需求写入 `RequirementList`，例如 `需要金币：3 / 当前 1`、`需要行动点：1 / 当前 2`、`压力不高于：恶行 2 / 当前 5`、`需要持有：毒牙`、`需要标记：蛇巢已调查`、`不能有标记：已领取奖励`；后果预览写入 `ConsequenceList`，例如 `获得卡牌：毒牙`、`失去金币：3`、`恶行 +5`、`消耗行动点：1`、`设置标记：蛇巢已调查`、`清除标记：已领取奖励`、`进入：后续节点`、`事件将结束`。支付需求仍只写入 `PaymentStatusText`，避免列表里重复显示。支付缺失时不再重复显示一行普通 `DisabledReasonText`；普通非支付阻塞选项仍显示 `不可选：{Reason}`。拖卡 release 到匹配 Zone 且 `ValidateRunEventOptionCardPayment()` 通过时，Screen 接管 menu submit 并调用 `ChooseRunEventOptionWithPaidCardResult()`；该 API 在 RunSession 事务内移除精确实例、执行 Effects 并推进或关闭事件。
-- V0-AU 后 RunEvent Screen 的动态选项和支付 Zone 有正式 WBP authoring surface：顶层 `WBP_RunEventScreen` 仍通过 `UI.Widget.RunEventScreen` 注册，Screen 默认值里的 `ChoiceButtonWidgetClass` 和 `PaymentDropTargetWidgetClass` 控制运行时创建的子 Widget；为空时回退 C++ fallback。`PaymentDropTargetWidgetClass` 的 preview scale / 颜色由该 WBP 默认值决定，Screen 只写入 `ZoneId / StableTargetId` 并维护 Zone 映射。V0-AW/V0-AX/V0-AY 后 choice row 的可用性、需求列表和后果预览统一来自 presentation view，WBP 可在 `BP_OnRunEventChoiceSnapshotApplied` 后读取 `GetChoiceRequirementView().RequirementItems` 与 `GetChoiceConsequenceView().ConsequenceItems` 做颜色、图标或状态切换，但不自己判断规则。V0-AV 暂不创建默认 WBP 资产，先把美术接入 TODO 和制作边界写入合同；在正式 WBP 缺失、未注册或加载失败时，C++ fallback 仍是完整可运行基线。制作合同见 [UI_RunEvent_WBP_Binding.md](./UI_RunEvent_WBP_Binding.md)。
-- Run menu Zone feedback 语义保持通用：`Probe` 表示命中但不会提交，`SubmitReady` 表示松手会由当前菜单提交，`Invalid` 表示当前卡 / Zone / 校验不合法，`Submitted` 表示提交成功。RunEvent 支付成功后 Toast 会显示交出的卡名；点击支付选项但不拖卡时仍显示 `需要拖入卡牌支付`。
-- `FWacomRunEventScreenFlow` 使用 `UWacomRunEventPresentationBuilder` 把 `FRunEventChoiceResult` 转成 AppToast；不可用选项也由该 flow 发阻塞原因 Toast。成功结果的 Toast 顺序是具体效果、支付卡牌、最后 outcome：事件关闭 / 完成显示 `事件已结束`，节点切换且事件仍打开显示 `进入：{节点标题}`，节点标题为空时回退 `ResolvedNodeId`。
-- `RemoveCard` 结果显示“交出卡牌：{CardName}”；`MarkEventCompleted` 默认不弹 Toast。
-- 关闭事件界面时由 `FWacomRunEventScreenFlow` 调 `EndRunEvent()`；关闭型选项先由 Run 层清 active event，再 Deactivate。V0-AS 不新增常驻结果面板、不延迟关闭；关闭型事件仍即时关闭，outcome 只通过 Toast 告知。
-- 如果 Push 事件 UI 失败，Router 会调用 `RunSession->EndRunEvent()` 回滚刚 Begin 的 active event。
-- V0-AZ 后 `GetRunEventScreenDebugSummary()` 额外输出 `Preview=[ChoiceId:Available=...:First=...:Req=总数/未满足数:Pay=候选数:Consequences=数量:Outcome=...]`。`Outcome` 从 consequence snapshot 派生为 `EventEnds / NodeTransition:{NodeId} / None`，用于 PIE 排查“为什么选项看起来这样显示”，不作为规则输入。
-- V0-BB 的 `DA_Event_DebugFlagReward` 可作为不依赖卡牌支付的 choice preview 样例：初始奖励选项会显示缺少调查 flag 和金币，调查后只剩金币门槛，获得调试金币后后果列表应显示失去金币、获得毒牙、设置领取标记和进入 `Rewarded`。该样例验证的是需求 / 后果 / debug summary 表达，不新增 UI 机制或菜单 drop 逻辑。
-- V0-BC 后，PIE 验证样例时优先在 `AWacomRunEventTriggerActor` Details 的 `Wacom|RunEvent|Prototype` 分类使用 `ConfigureDebugSnakeGiftSample` / `ConfigureDebugFlagRewardSample`，再通过 `LogRunEventTriggerDebugSummary()` 确认 Trigger 绑定、active/current node、completed 和 duplicate 状态；Screen 内部选项状态仍看 `LogRunEventScreenDebugSummary()`。
-
-事件规则、条件、效果和 PersistentId 口径见 `WacomRun.md` / `WacomData.md`。
-
----
-
-<a id="wacomui-battle-ui"></a>
-## §8 战斗 UI
-
-战斗 UI 使用 Snapshot + Controller 推送模型，不走 Run MVVM。`UBattleHUD` 保留 WBP 绑定、生命周期、Snapshot 刷新和玩家意图入口；命令提交、目标选择、事件消费 / 日志 / 击倒弹窗编排，以及表现、场景敌人、first-person hand 和卡牌详情运行时状态，收口到 `WacomApp/Private/UI/Battle` 的 BattleHUD flow / coordinator / controller helper。
-
-规则合法性和状态变更见 [WacomBattle.md](./WacomBattle.md)，战后结算见 [WacomRun §8](./WacomRun.md#wacomrun-battle-settlement)，WBP 制作合约见 [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md)。
-
-理由：
-
-- `BattleHUD` 战斗开始 Push、结束 Pop，生命周期短。
-- 子 Widget 都在同一棵树里，由 `BattleHUD` 统一递归刷新。
-- `FBattleSnapshot` 是值类型快照，适合一次性读当前战斗状态。
-- 动态手牌和敌方部位列表由 HUD / Panel 直接重建更简单。
-- C++ fallback BattleHUD 布局由私有 `FBattleHUDFallbackLayoutBuilder` 搭建；WBP 绑定字段、命令入口和刷新流程仍保留在 `UBattleHUD`。
-- `FWacomBattleHUDCommandFlow / TargetingFlow / EventFlow` 和 BattleHUD 私有 coordinator / controller 只在 `WacomApp/Private` 内部使用，不新增 Blueprint 或跨模块 public API。
-
-### BattleHUD 职责拆分计划
-
-`BattleHUD` 仍是战斗 UI 的 Screen coordinator，但 V0-CZ 后将它的职责按后续可拆切片记录清楚。拆分目标是减轻 HUD 内部密度，不改变 `UBattleSession`、`FBattleEvent`、WBP 绑定合同或玩家意图 public 入口。
-
-| 归属 | 当前职责 | 后续方向 |
-|---|---|---|
-| `UBattleHUD` 保留 | WBP 绑定、CommonUI 生命周期、`SetSession()`、Snapshot fanout、玩家意图 public 入口、BattleEnd 广播 | 继续作为唯一战斗 UI 命令出口，不新增全局 Battle UI manager |
-| 已拆私有 helper | `FWacomBattleHUDCommandFlow`、`FWacomBattleHUDTargetingFlow`、`FWacomBattleHUDEventFlow`、`FBattleHUDFallbackLayoutBuilder`、`FWacomBattleHUDSceneEnemyTargetCoordinator`、`FWacomBattleHUDPresentationCoordinator`、`FWacomBattleHUDCombatLogController`、`FWacomBattleHUDFirstPersonHandBridge`、`FWacomBattleHUDCardDetailController` | 维持在 `WacomApp/Private`，不暴露 Blueprint API |
-| Scene enemy target/probe coordinator | V0-DA 后，当前 Host registry、scene part bridge 同步、hover probe、prediction/status badge 输入和 world target handle 过滤已收口到 `FWacomBattleHUDSceneEnemyTargetCoordinator` | HUD 仍持有 public Host API，并从 `BattleTrigger -> GameMode -> HUD` 接收 Host；`FWacomBattlePresentationTargetRegistry` 暂留 HUD 周边服务 TargetCue / EnemyInfoBar fallback |
-| Presentation coordinator | V0-DB 后，表现队列、card stack、pending Wait / EndTurn barrier 和表现结束回调已收口到 `FWacomBattleHUDPresentationCoordinator` | HUD 仍保留 `BattlePresentationStack` WBP 绑定、`CardPresentationStackMinimumHoldSeconds` 配置和 public 查询；presentation 只做 UI 视觉队列 |
-| Combat log controller | V0-DC 后，命令块 history、trim、recent feed sync 和 readable UE_LOG 输出已收口到 `FWacomBattleHUDCombatLogController`；`UWacomBattleCombatLogBuilder` 仍是文案和 ViewData 来源 | HUD 仍保留 `CombatLogFeed` WBP 绑定、`BattleCombatLogMaxBlocks` 配置和测试查询入口；EventFlow 只做事件消费与 fanout |
-| First-person battle hand bridge | V0-DD 后，first-person battle hand 的 runtime layer sync、delegate bind/unbind、legacy hand 可见性协调、drag preview/release、drop intent 解析、Card target affordance、camera look override、transition hint cache 和 play commit hint 已收口到 `FWacomBattleHUDFirstPersonHandBridge` | 手势 / anchor 继续由组件和 layer 负责；HUD 保留 `BattleHandPresentationMode`、WBP 绑定和玩家命令入口 |
-| Card detail controller | V0-DE 后，旧手牌与 first-person hand 共用的详情面板、source guard、viewport / canvas 定位、读牌 motion、fade / follow / side hysteresis 和 panel teardown 已收口到 `FWacomBattleHUDCardDetailController` | HUD 仍保留 `CardDetailLayer`、`CardDetailPanelClass`、详情调参 UPROPERTY、`CardDetailPanel / FirstPersonCardDetailPanel` UPROPERTY 引用和 public static 定位 helper |
-| 拆分安全网 | V0-DF 后，`Wacom.UI.Battle` 通过 HUD / test receiver 入口覆盖 scene enemy、presentation、combat log、first-person hand 和 card detail 私有 helper 合同，并检查这些 helper 继续停留在 `WacomApp/Private` 的非反射 C++ 类型；V0-DG 后重复 HUD 测试装配收口到 `FWacomBattleHUDTestHarness + UWacomBattleHUDDetailTest` | 后续修改 BattleHUD 私有 helper 时优先补 HUD 合同测试；测试不直接 include 私有 helper header，也不继续给生产 HUD 扩测试专用 API |
-| Battle ViewModel | 当前不做；战斗 UI 使用 `FBattleSnapshot` 推送 | 只有外部 Widget 也需要长期订阅战斗状态时，再评估 `UWacomBattleViewModel` |
-
-命令出口：
-
-- 子 Widget 只发委托，不直接调 `Session->SubmitCommand()`。
-- `UBattleHUD` 是战斗 UI 命令出口：PlayCard、Wait、EndTurn、KnockdownChoice 仍经它的 public 玩家意图入口进入；具体 `Session->SubmitCommand()` 和命令后收尾由 private command flow 执行。
-- TargetSelect 是 HUD 持有的 UI 状态，目标选择 flow 负责状态转换和 `FBattleTargetSelectionView` 构建。
-- Dialog 点击后回到 `BattleHUD->OnKnockdownChoiceSelected()`，Dialog 不直接改战斗状态。
-
-目标选择：
-
-- 点击需要敌方部位目标的手牌时，`BattleHUD` 进入 `TargetSelect` 并记录 `PendingTargetingCardId`。
-- 再次点击同一张牌会取消目标选择。
-- `BattleHUD::BuildTargetSelectionView()` 输出 UI-only 只读 ViewData，当前只区分是否选目标和部位是否破坏；最终合法性仍由 BattleSession / PlayCardResolver 校验。
-- 当前 2D `EnemyInfoBar / EnemyPartWidget` 消费该 ViewData；`EnemyInfoBar` 同时把部位 Widget 注册到 `BattleHUD` 私有目标注册表，用于接收 TargetCue 并播放轻量命中/破坏反馈。场景侧推荐 `ABattleTriggerActor.SceneEnemyHost + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`：每个 PartActor 填写稳定 `PartId` 并在 snapshot 刷新、目标选择 UIState 刷新后绑定当前运行时实例 ID；但只有当前 Trigger Host registry 内的 PartActor 会被 HUD 同步。Bridge 的 V0 视觉反馈包含命中/破坏短暂 scale pulse、TargetSelect 可选目标的持续轻量提示、V0-CQ 的先机预测、V0-CS 的常驻 HP/先机/意图/状态 Badge，以及 V0-CT 的紧凑 Badge 布局、Host 稳定错开、Prediction 显示上移和破坏态透明度弱化；不改材质或规则状态。左键 Release 由 PlayerController 的 Visibility cursor trace router 转发为 HUD 目标选择意图，BattleHUD 根层 `MouseButtonUp` 兜底复用同一路由，命中非当前 Host 部位会被过滤为无效 world target。有 `SceneEnemyHost` 时 `EnemyInfoBar` 默认隐藏；缺 Host 时仍保留为 fallback/debug。
-
-手牌与详情：
-
-- `UHandPanel` 把 `FHandQueueSnapshot` 转成 `FHandCardVisualEntry[]`，默认统一水平手牌带。
-- `UCardWidget` 是战斗手牌交互外壳；`UWacomCardView` 只负责卡面显示。
-- Hover 反馈移动 `HoverVisualRoot` 视觉层，不移动根命中区域，不改变布局占位。
-- Hover 详情由 `UCardWidget` 上报、`UHandPanel` 转发、`BattleHUD` wrapper 进入私有 `FWacomBattleHUDCardDetailController`；详情默认显示在卡牌左侧，空间不足时放右侧。
-- `BattleHUD.bEnableCardDetailReadabilityPolish` 默认开启后，旧手牌详情和 first-person viewport 详情共用一套读牌 motion：初次 hover 短延迟后淡入，普通 unhover 淡出，已显示时切到另一张卡立即换数据和目标锚点，位置平滑跟随并用 side hysteresis 减少贴边左右跳。V0-DE 后这套 source guard、motion state、viewport / canvas 定位和 teardown 由私有 card detail controller 持有；关闭该开关可恢复立即显示 / 隐藏。
-- 进入目标选择、提交命令、刷新 Snapshot、切换 Session 或战斗结束时强制隐藏详情，不等待淡出。
-
-### First-person card layer direction
-
-Wacom 的正式卡牌表现方向不是把 `UCardWidget` 长期塞进 `WidgetComponent / RenderTarget`。主手牌应保持 HUD / UMG 渲染，以保证文本清晰、材质动画、hover 详情、拖拽和响应式布局稳定；但布局不再是传统固定 HUD，而是由 first-person card anchor 计算虚拟手牌平面，再投影为 UMG render transform。这样卡牌会像跟随玩家身体 / tunnel 前进的第一人称手牌，而不是死贴镜头的屏幕按钮。
-
-当前已实现 `UWacomFirstPersonCardAnchorComponent`、默认关闭的 HUD debug projection、默认关闭的 prototype preview 静态卡牌层、正式的战斗手牌呈现模式、first-person battle hand hover/click/drag、first-person hover detail provider、first-person hover 详情跟随 / ZOrder 修正、Render Quality V0-A、默认 `BodyLocked` 的身体锁定锚点投影、默认 `Authored2D` 的美术可控手牌布局、默认 `SoftClampToViewport` 的离屏锚点柔性限制、`Authored2D` hand center screen smoothing、默认开启的 card slot motion polish、slot motion robustness / perf diagnostics、event-aware card transitions、transition origin / movement readability、TargetSelect pending focus polish、playable / hover / press feedback polish、layout preset / tuning profile、hover detail / inspect readability polish、hold inspect + drag / aim commit、drag camera look continuity、drop intent resolver contract，以及 Run exploration card source bootstrap / menu lease / menu Zone drop target / RunEvent card payment choice / KeyChest card-to-world prototype。prototype preview 静态层使用 `UWacomCardView` 或 `FirstPersonCardViewClass` 指定的专用卡面 WBP 渲染配置的测试卡牌或 placeholder 卡牌，只用于 PIE / 开发验证，不是 Battle / Run runtime hand 数据源；战斗 hand adapter 由 `BattleHUD::BattleHandPresentationMode` 控制，非 `LegacyHandPanel` 时会把 `FBattleSnapshot.Hand.Cards` 按顺序转成 `FWacomFirstPersonCardLayerEntry`，覆盖同一个 first-person card layer 显示。V0-DD 后，战斗 hand adapter 的运行时同步、事件绑定、拖卡 preview/release、Card target affordance、transition hint cache 和旧手牌可见性协调都在 HUD 私有 `FWacomBattleHUDFirstPersonHandBridge` 中执行；V0-DE 后，旧手牌和 first-person 共享详情的读牌 motion、定位和 source guard 在 HUD 私有 `FWacomBattleHUDCardDetailController` 中执行。V0-EF 后 first-person battle hand interaction 是正式入口，公开调用使用 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()`；旧 `Prototype` C++ / UPROPERTY 名称仅为兼容保留，不再作为新代码口径。HUD 仍是命令出口和 WBP 绑定 owner。探索期 adapter 由 `UWacomRunFirstPersonCardSourceComponent` 控制，把 Run BattleDeck 的物理卡和可选投影卡写入 source `RunFirstPersonBattleDeck`；GameMenu 可用 menu lease 显式接管该 layer 显示候选持有卡，release 到菜单 Zone 后由 owning menu 决定是 probe、prototype destroy，还是 RunEvent 事务提交；没有菜单 lease 时，release 到合法 Run world card drop receiver 可提交 KeyChest 事务。Entry 保留 `InstanceId / Zone / HandAnchor / Playable / PendingTargeting / TargetMode`，用于轻量视觉状态、手势分类和后续交互身份。
-
-V0-DM 后 first-person hand 的高频刷新采用保守 dirty gate：`UWacomFirstPersonCardAnchorComponent` 仍每帧计算 anchor 和目标 slot，保证相机、身体锁定、Run Tunnel 和 Battle hand 状态继续实时跟随；但 resolved layout config、CardView class、diagnostic flag 和 interaction flag 只有变化时才重新下发到 layer。`UWacomFirstPersonCardLayerWidget` 在输入 slot 与上一帧完全等价、没有 pending transition hint、没有 outgoing slot、没有 lifecycle repair 需求时跳过完整 reconcile；slot motion 仍由 `UWacomFirstPersonCardLayerSlotWidget` 独立 tick，抽牌、获得、打出、弃置、hover、pending、拖卡、卡数据或位置变化都会继续走原刷新路径。V0-DN 后 motion、feedback 和 drag config 的 normalize / equality 规则已收口到 `WacomApp/Private/UI/Card` 私有 helper，Layer 与 Slot 共用同一套配置早退口径，避免后续调参字段漂移。
-
-第一人称战斗手牌层不创建 `UCardWidget`，不做拖拽或直接出牌命令，不删除 `UHandPanel`，也不改变战斗命令出口。`BattleHUD::BattleHandPresentationMode` 是唯一配置入口：`LegacyHandPanel` 只使用旧手牌；默认 `FirstPersonHandWithLegacyFallback` 显示并启用 first-person hand，同时保留旧 `UHandPanel` 可见作为 fallback 和对照；`FirstPersonHandOnly` 在 first-person runtime hand 有效时折叠旧手牌，缺少 anchor、战斗结束、Session 切换或清理 runtime hand 时恢复旧手牌原始可见性。`FirstPersonCardAnchorComponent.ProjectionMode` 默认正式 `BodyLocked`，战斗中使用 Battle base rotation、Run Tunnel 中使用 spline base 锁定手牌中心锚点，不让 cursor look 重新计算 anchor；投影仍使用当前真实相机，因此镜头偏转时会有第一人称空间变化。`FirstPersonCardAnchorComponent.CardLayoutMode` 默认正式 `Authored2D`：只投影整副手牌中心点，每张卡牌的位置、下坠、扇形角度和层级由 2D 参数计算；`bKeepAuthoredCardBodyBottomInViewport` 默认开启，最终 slot 会按卡牌主体高度和 `AuthoredCardBodyBottomViewportPaddingPixels` 保证 TypeName / 类型文字所在的主体底部不被视口底边裁掉；`ViewportClampMode` 默认 `SoftClampToViewport`，投影成功的手牌中心可以离开视口安全区一段距离，超过 `SoftClampOffscreenAllowancePixels` 后再按 `SoftClampBlendRangePixels` 柔性拉回。`bEnableAnchorScreenSmoothing` 默认开启，只在 `Authored2D` 下平滑整副手牌中心，不平滑单张卡牌；它保留 Run Tunnel 前进下降、后退上升的空间趋势，但减少移动时中心点高频上下抖动。`bEnableCardSlotMotion` 默认开启，是第二层单卡视觉过渡：`UWacomFirstPersonCardLayerWidget` 用 `CardInstanceId` 或 `StaticIndex:{Index}` 复用 slot widget，`UWacomFirstPersonCardLayerSlotWidget` 再把视觉位置、角度、缩放和透明度追向 anchor 计算出的目标 slot；新卡按 `CardSlotEnterOffsetPixels / CardSlotEnterOpacity` 淡入，移除或投影失败的可见卡按 `CardSlotExitOffsetPixels / CardSlotExitDuration` 短暂淡出，目标大跳变超过 `CardSlotMotionResetDistancePixels` 时直接贴合。`bEnableEventAwareCardTransitions` 默认开启时，BattleEvent 只作为表现 hint 改变入场 / 离场表现；`bEnableReadableTransitionOrigins` 默认开启时，Drawn / Gained 可从手牌中心锚点进入，Played / Discarded 可从当前视觉卡槽离开，也可配置为 DPI-aware widget-space 的 `ViewportAnchor`，用于模拟牌堆、战斗空间或弃牌区方向。关闭 readable origins 会回到 V0-Q 的 offset-only 行为；snapshot diff 仍是手牌变化真相，事件缺失时回退通用 enter / exit。TargetSelect 中 pending 卡是手牌焦点：它上浮、放大、提高层级，并可按 `PendingTargetingAngleBlend` 向 0 度轻微归正；同一副手牌存在 pending 卡时，其他卡只轻微降透明，不下沉、不缩小。Pending 卡仍可点击取消 TargetSelect，但 hover 不再额外叠加 lift / scale / ZOrder，避免选中态抖动。`bEnableCardInteractionFeedback` 默认开启时，slot widget 用 C++ feedback overlay 表现可打 hover、pressed、confirm 和 deny 反馈；可打、非 pending 卡才获得 hover lift / scale / ZOrder，不可打卡仍可 hover 查看 Idle 详情但不会表现成可打姿态，点击不可打卡只播放 deny tint / 横向 shake，不广播 click intent。V0-P 后 layer 会维护 `FWacomFirstPersonCardLayerMotionDebugView`，统计 active / outgoing / RootCanvas child / ticking slot 和本次刷新创建、复用、移除、异常修复数量；刷新后会修复 active/outgoing 重叠、RootCanvas 未追踪 slot child、重复 key 和 outgoing 超限。同一 `CardInstanceId` 如果在 outgoing 淡出期间重新进入手牌，会回收原 outgoing widget 作为 active，避免形成幽灵 widget。`bLogCardLayerMotionDiagnostics` 默认关闭，只有手动排查时开启，且只在检测到不变量修复时输出简短 summary。`AnchorScreenSmoothingSpeed` 控制整副手牌中心跟手程度，`AnchorScreenSmoothingResetDistancePixels` 控制中心大跳变时直接贴合新位置；`CardSlotMotionSpeed / CardSlotOpacitySpeed` 控制单卡重排、hover、pending、抽牌、获得卡、出牌和弃置刷新时的过渡。`HardClampToViewport` 可复现旧的永远屏内行为，`AllowOffscreen` 可用于验证最接近 3D 空间物体的离屏表现。`FirstPersonHandOnly` 下手牌离屏不会自动恢复旧手牌入口，玩家需要转回视角或切换 presentation mode。`LegacyProjectedFan2D` 保留旧的每卡 3D 槽位投影表现，用于 PIE / debug comparison，不作为正式布局调参路径。`LegacyWorldProjected` 保留旧的 LookInfluence 影响 anchor + 当前相机投影路径，用于 PIE / debug comparison 和视差实验；`LookInfluenceYaw/Pitch` 只服务该 legacy 路径。V0-EH 后这些 legacy projection/layout 和 prototype preview 静态层的 Details 分类、ToolTip 与测试 display name 已隔离到 legacy / prototype 口径，正式 first-person hand authoring surface 仍是 `BodyLocked + Authored2D + SoftClampToViewport`。Hover 会改变 first-person layer 自身的 UMG transform / ZOrder，并在 Idle 状态下通过 `BattleHUD` wrapper 显示现有 `UWacomCardDetailPanel`；旧手牌详情使用 BattleHUD 内部 `CardDetailLayer`，first-person 详情使用独立 viewport popup host，默认层级 9999，高于 first-person card layer。两种战斗详情 host 共用 `FWacomBattleHUDCardDetailController` 的读牌 motion：短 hover delay、淡入淡出、轻量 scale、位置平滑跟随和贴边 side hysteresis；TargetSelect、命令提交、BattleEnd、Session 切换和 runtime source 清理仍强制隐藏。详情数据来自 BattleHUD 最近一次 `FBattleSnapshot.Hand`，定位来自 first-person slot 的视觉屏幕锚点，并在 hovered slot 布局位置变化时实时跟随。左键释放可用卡只把有效 `CardInstanceId` 转发给 `BattleHUD->OnCardClickedByUser()`，后续合法性、TargetSelect 和命令提交仍走 BattleHUD 现有 flow。Runtime battle hand 数据源优先级高于 prototype preview 静态预览，且空手牌也显示为空，不回退 placeholder。当前视觉状态只使用 UMG transform、opacity、C++ feedback overlay 和已有 disabled overlay，不可用卡降低 layer 透明度，手牌锚点卡轻微缩放。
-
-V0-Z 后战斗 first-person 左键交互分三类：轻点在 hold delay 内释放，继续走 `OnCardClickedByUser()`；hold 不动进入 `Inspecting`，源卡移动到视口中间附近放大，BattleHUD 显示 first-person detail，释放不提交；拖动超过阈值后，无目标卡向上拖出并释放提交，有目标卡进入 `AimingTargetedCard` 并用 C++ arrow 指向鼠标，释放到合法 world enemy part 时调用现有 `SubmitPlayCard(CardId, TargetPartId)`。V0-AA 后拖拽仍保留 UMG mouse capture，但 drag view 会记录当前拖拽指针的 DPI-aware widget-space 位置和归一化视口位置；BattleHUD 用该位置驱动 `UWacomBattleCameraLookComponent` 的临时 cursor-look override，让拖拽时镜头仍能轻微偏转。拖拽过程中 World target 优先由 `AWacomPlayerController::TryProbeBattleSceneInteractionTargetAtWidgetPosition()` 按拖拽指针反投射构建 handle，不调用 click router；普通点击路由继续使用 under-cursor 路径。V0-AE 后 preview 和 release 都由 `BattleHUD::ResolveFirstPersonCardDropIntent()` 统一解析：无目标卡 armed 为 `PlayCardNoTarget`，合法 world enemy part 为 `PlayCardWorldTarget`，合法 hand-card target 为 `PlayCardCardTarget`，不支持的 Card target 为 `ProbeCardTarget`，Zone、空处、同源卡、非法 world、不可打卡或 UI blocked 为 `Reject`。UI 手势层只提交 `TargetCardInstanceId`，不直接判断加费、减费、弃置或消耗；V0-AH/V0-AI 后普通手牌 / 左右手锚点 / keyword 资格来自 `UCardDefinition::HandCardTargetFilter`，并由 `UBattleSession::ValidateTargetWithCard()` 和 `PlayCardResolver` 共同校验。V0-AF 后 Battle 规则层会发 `CardDiscarded / CardExhausted` 作为“某张手牌离开手牌区”的具体事件；first-person transition cache 会把这两类事件映射为现有 `Discarded` 离场表现，手牌上限路径同时保留 `HandLimitDiscarded` 兼容事件但不会生成重复离场 hint。V0-AB 的箭头颜色、commit-ready、CardProbe / valid card target 和 world preview 都读取该 resolver 结果；场景 world preview 只发给命中的 `UWacomBattleEnemyPartWorldTargetBridgeComponent`，`EnemyInfoBar` 不作为拖拽 UI target。V0-AG/V0-AI 后，`TargetMode=HandCard` 源卡进入 `AimingTargetedCard` 时会对整副 first-person hand 做 resolver validation 扫描：被 filter / resolver 允许的卡目标显示确认色和轻量放大，被拒绝的卡目标显示低透明拒绝 tint；当前指向的卡会覆盖基础 affordance。非 HandCard 源卡不做全手牌扫描，当前命中的卡仍只显示 probe。源卡本身获得 selected-source 姿态，复用 pending 的上浮 / 放大 / 层级 / 归正参数，但 HUD 不进入旧 `TargetSelect`。探索期 Run first-person source 复用同一套 hold / drag 手势，但不走 BattleHUD 出牌；它只在菜单 Zone 或 Run world card drop receiver 上提交对应 Run 事务。
-
-V0-T 后，`UWacomFirstPersonCardLayoutPreset` 是 first-person hand 表现调参的可复用 DataAsset，位于 `WacomApp`，不属于 `WacomData` 规则数据。`FirstPersonCardAnchorComponent.bUseFirstPersonCardLayoutPreset` 默认关闭；开启且 `FirstPersonCardLayoutPreset` 有效时，Anchor 会运行时解析出一份配置供 authored layout、projection/clamp、scale/fan/edge、anchor smoothing、slot motion、transition origin、event transitions、hover/pending/disabled 和 interaction feedback 使用。关闭 preset 或 preset 为空时，继续使用组件实例上的原有参数。Preset 不把值写回组件 UPROPERTY，也不覆盖 `FirstPersonCardViewClass`、静态预览卡牌、debug 开关、viewport ZOrder 或 `BattleHUD::BattleHandPresentationMode`。
-
-Render Quality V0-A 的目标是处理 `WBP_CardView` 作为 HUD/UMG first-person 卡牌被整体旋转时出现的边缘锯齿、细线断裂和动态抖动。问题来自 UMG 整卡屏幕空间旋转采样，不是旧 3D Presenter 的 RenderTarget 或场景光照问题。V0-K 曾尝试让 UMG 卡牌角度和缩放来自虚拟 3D 卡牌平面的 projected basis，但动态 projected scale 在 PIE 中带来像素拉伸和新的卡面质量问题，已回退，不作为当前主线。当前 first-person layer 使用 `BodyLocked + Authored2D + SoftClampToViewport + AnchorScreenSmoothing + SlotMotion`：空间感来自整副手牌中心 anchor 的当前相机投影，卡牌排布来自美术可控 2D solver，卡面 scale 保持稳定，只来自 `StaticCardRenderScale` 和 hover / pending / hand anchor 状态倍率；手牌中心允许部分离开屏幕，不再被强制硬锁在视口内，并且 Run Tunnel 移动中的中心点高频抖动会被轻量平滑。单卡 slot motion 只柔化 snapshot / hover / pending / 重排变化，不参与抗锯齿采样，也不替代 anchor center smoothing；V0-P 的 motion diagnostics 只观察和修复 slot widget 生命周期，不改变视觉目标。最终 `CanvasSlot` 位置经过默认开启的 pixel snapping；slot render angle 仍支持 clamp，但不把“降低旋转角”作为当前主线目标。Debug view 会记录 projection mode、layout mode、viewport clamp mode、是否 body locked layout、是否 current camera projection、look offset 是否参与布局、raw screen position、unclamped/widget/snapped widget position、viewport scale、offscreen distance、anchor widget position、authored layout offset、normalized hand offset、unsmoothed / smoothed anchor widget position、smoothing distance，以及 layer motion 的 active/outgoing/root child/ticking slot 统计，便于 PIE 对比不同窗口尺寸下的布局稳定性和反复获得卡牌时的 widget 生命周期稳定性。项目已经为第一人称层预留 `FirstPersonCardViewClass`，正式验证推荐绑定 `/Game/Wacom/UI/Card/WBP_FirstPersonCardView`，让通用 `WBP_CardView` 继续服务普通 HUD / 背包 / 详情场景；专用 WBP 可以承载 RetainerBox、透明 bleed 画布和内部缩放等第一人称旋转采样优化。
-
-`WBP_FirstPersonCardView` 的父类仍是 `UWacomCardView`。它是第一人称主手牌的卡面皮肤，不是新的交互控件：不要创建 `UCardWidget`，不要在 WBP 图里提交命令，也不要绕过 `UWacomCardPresentationBuilder`。外层可以使用 392 x 422 或 392 x 516 这类透明 bleed 画布和 RetainerBox 来完整渲染主体外的身材 / 耐久装饰；内部必须保留名为 `CardSizeBox` 的主体框并尽量居中。first-person layer 的 hover、click、drag 起手和 Card target probe 使用当前可视 slot 的中心、缩放、扇形旋转角，以及 `UWacomCardView.FixedCardBodyHitSize` 固定主体尺寸做旋转矩形命中，默认 296 x 420，不会因 bleed 画布或布局压缩而变小；缺失 `CardSizeBox` 时回退旧 296 x 420 主体尺寸。WBP 只负责卡面显示质量，透明 bleed 不扩大玩家交互范围。
-
-详细设计见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
-
-### 3D hand prototype
-
-`CardActor + WidgetComponent` 的 3D 手牌目前只是原型入口，默认关闭。V0-EG 后它的 Details / Blueprint 分类统一为 `Wacom|Battle|3D Hand|Prototype` 或 `Wacom|UI|3D Hand|Prototype`，只用于 PIE / 开发验证 HD-2D 场景中的空间手牌可行性，不替换现有 2D `UHandPanel`，也不改变 BattleHUD 的命令出口。
-
-原型边界：
-
-- `BattleHUD` 仍是战斗 UI 命令出口；3D 手牌只把点击、悬停等玩家意图回传给 `BattleHUD`，不直接调 `BattleSession->SubmitCommand()`。
-- 3D Presenter / CardActor 只读消费 `FBattleSnapshot` / `FHandCardSnapshot`，用 `InstanceId` 维护视觉对象身份；不能回写战斗状态。
-- `WidgetComponent` 内继续承载 `UCardWidget` / 卡面展示协议，仅作为过渡实验，避免短期原型重复解释卡牌数据。
-- 3D 手牌不替代当前 `UHandPanel` 和 2D hover 详情；开启原型时两者可以并存，便于对照和回退。
-- 本原型不继续作为正式主手牌路线扩展。RenderTarget 裁剪、世界渲染影响、UI 材质动画刷新和大手牌可读性等问题，应通过 first-person card layer 方向解决，而不是继续给 `AWacomBattle3DHandPresenter` 加补丁。真正删除、迁到开发插件或移除测试需另起资产影响明确的切片。
-
-战斗 WBP 制作细节见 `UI_Battle_WBP_Binding.md`。扇形手牌、拖拽出牌、3D 目标选择等属于后续表现项。
-
----
-
-## §9 卡牌展示与 Builder
-
-`UWacomCardPresentationBuilder` 是卡牌 UI 展示数据统一入口：
-
-- 从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData`、`FWacomCardViewEffectBadge`。
-- 负责中文词条、费用、价值、身材/容量、效果徽章、被动 fallback 文本等展示推导。
-- 只服务 UI 表现，不参与战斗或 Run 规则结算。
+`UWacomCardPresentationBuilder` 是卡牌 UI 展示数据统一入口。它从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData` 和效果徽章 view，只服务 UI 表现，不参与 Battle 或 Run 结算。
 
 当前复用方：
 
-- 背包卡牌和拖拽预览。
-- 背包、战斗手牌与第一人称战斗手牌 hover 详情面板。
-- 战斗手牌卡面，额外用 `FHandCardSnapshot.RuntimeCost` 覆盖费用显示。
+- 背包卡牌、拖拽预览和卡牌详情。
+- 战斗旧手牌、first-person hand、Presentation Stack 小卡和 Combat Log detail。
 - 商店商品 ViewData。
 
-`UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。卡牌展示数据统一由 `UWacomCardPresentationBuilder` 生成；不要在 CardView 上恢复 Definition 级 legacy static API。V0-DO 后 `SetCardViewData()` 仍保留整包等价早退，`ApplyCurrentDataToWidgets()` 进一步按 cost、durability、rarity、art、text、disabled 和 effect badges 分区 dirty 刷新；只有实际 UI 区域更新时才 invalidation / 请求 Retainer render。PaperSprite 解析仍是 widget 实例级 cache，不回到每次刷新同步加载。固定 `EffectBadgeSlot1-4` 与 legacy `EffectStatsHost` 都复用已有 `UWacomCardEffectBadgeWidget`，徽章数字和耐久数字也复用已有 `UImage`，避免 first-person hand / 背包大量稳定刷新时反复重建子控件。
+`UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。卡牌详情由 `UWacomCardDetailPanel` 显示 `FWacomCardDetailViewData`；战斗旧手牌详情和 first-person 详情共用 BattleHUD 内部 card detail controller。
 
-`UWacomCardDetailPanel` 只显示 `FWacomCardDetailViewData`。当前详情数据来自 DisplayName、Description 和 Passives；任务、变化等字段等待卡牌数据结构正式扩展。战斗 HUD 内部已把详情显示入口从 `UCardWidget` 几何中解耦；旧手牌详情使用 HUD 内部 `CardDetailLayer`，first-person slot 详情使用独立 viewport popup host，但两者共用同一套详情数据构建、边界 clamp 和读牌 motion 逻辑。V0-DE 后，BattleHUD 的详情 runtime state 已收口到私有 `FWacomBattleHUDCardDetailController`，HUD 只保留 WBP 绑定、调参 UPROPERTY、GC 引用和 wrapper 入口。
+## §7 WBP 绑定文档分工
 
----
+Binding 文档只记录 WBP 制作合约，不写规则真相。
 
-## §10 WBP 绑定文档分工
+| 文档 | 职责 |
+|---|---|
+| [UI_Backpack_WBP_Binding.md](./UI_Backpack_WBP_Binding.md) | 背包、局部 Zone、SpecialZone、DeckCard、CardView、CardDetail、EffectBadge 的父类、路径、绑定槽位和 PIE 检查 |
+| [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md) | BattleHUD、手牌、CombatLogFeed、PresentationStack、敌方 fallback UI 和 first-person card view 的 WBP 绑定协议 |
+| [UI_RunEvent_WBP_Binding.md](./UI_RunEvent_WBP_Binding.md) | RunEventScreen、ChoiceButton、PaymentDropTarget 的父类、路径、绑定槽位和 PIE 检查 |
 
-Binding 文档只记录 WBP 制作合约：
-
-| 文档                           | 职责                                                                                  |
-| ---------------------------- | ----------------------------------------------------------------------------------- |
-| `UI_Backpack_WBP_Binding.md` | 背包、局部 Zone、SpecialZone、DeckCard、CardView、CardDetail、EffectBadge 的父类、路径、绑定槽位和 PIE 检查 |
-| `UI_Battle_WBP_Binding.md`   | 战斗手牌、HandPanel、BattleHUD、CombatLogFeed、Enemy fallback UI 的父类、路径、绑定槽位和 PIE 检查       |
-
-规则真相不写在 Binding 文档里。若 WBP 制作时需要知道为什么这么做，应回到 `WacomUI.md`、`WacomRun.md` 或 `WacomBattle.md`。
+需要知道“为什么这样做”时，回到本文和对应专题文档；需要知道“绑定哪个槽位”时，读 Binding 文档。

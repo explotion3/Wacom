@@ -846,7 +846,7 @@ namespace Wacom::ContentBuilder
 			TEXT("DA_Card_Test_ExhaustSelectedHandCard"),
 			TEXT("Test.ExhaustSelectedHandCard"),
 			TEXT("消耗目标手牌测试"),
-			TEXT("测试卡：拖到另一张普通手牌上，使目标卡进入消耗区。不能选择左右手。"),
+			TEXT("测试卡：拖到另一张普通手牌上，使目标卡进入消耗牌堆。不能选择左右手。"),
 			/*BaseCost*/ 0,
 			WacomTags::Card_Rarity_White,
 			/*Keywords*/ {},

@@ -371,6 +371,7 @@ bool FWacomBattleDiscardHooksRunAfterCardIsAlreadyInDiscardPileSpec::RunTest(con
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Before, SourceDef->CardId);
 	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Before, TargetDef->CardId);
 	const int32 DiscardBefore = Before.PileCounts.DiscardCount;
+	const int32 PlayedBefore = Before.PileCounts.PlayedCount;
 	Session->ConsumeEvents();
 
 	TestTrue(TEXT("Submit selected discard"),
@@ -378,7 +379,8 @@ bool FWacomBattleDiscardHooksRunAfterCardIsAlreadyInDiscardPileSpec::RunTest(con
 	const FBattleSnapshot After = Session->BuildSnapshot();
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 
-	TestEqual(TEXT("Discard pile contains source and target"), After.PileCounts.DiscardCount, DiscardBefore + 2);
+	TestEqual(TEXT("Played pile contains source"), After.PileCounts.PlayedCount, PlayedBefore + 1);
+	TestEqual(TEXT("Discard pile contains selected target"), After.PileCounts.DiscardCount, DiscardBefore + 1);
 	TestEqual(TEXT("OnDiscard passive observed post-move state"), After.Player.Shield, 7);
 	if (const FBattleEvent* DiscardEvent = FindEvent(Events, EBattleEventType::CardDiscarded, TargetId))
 	{

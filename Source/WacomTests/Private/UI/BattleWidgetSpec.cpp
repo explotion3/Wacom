@@ -29,7 +29,9 @@
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/Common/PileCountView.h"
 #include "BattleHUDTestHarness.h"
+#include "UI/BattleSceneTargetClickTestAccess.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "Events/BattleEvent.h"
 
@@ -228,7 +230,7 @@ namespace WacomBattleWidgetSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEventPresentationBuilderChineseTextSpec,
-	"Wacom.UI.Battle.BattleEventPresentationBuilderChineseText",
+	"Wacom.UI.Battle.EventPresentationCompatibilityChineseText",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEventPresentationBuilderChineseTextSpec::RunTest(const FString& /*Parameters*/)
@@ -337,7 +339,7 @@ bool FWacomUIBattleEventPresentationBuilderChineseTextSpec::RunTest(const FStrin
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCardWidgetPresentationSpec,
-	"Wacom.UI.Battle.CardWidgetPresentation",
+	"Wacom.UI.Battle.Legacy2DHand.CardWidgetPresentation",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleCardWidgetPresentationSpec::RunTest(const FString& /*Parameters*/)
@@ -376,6 +378,61 @@ bool FWacomUIBattleCardWidgetPresentationSpec::RunTest(const FString& /*Paramete
 	TestEqual(TEXT("Runtime cost refreshes"), Widget->GetCurrentCardViewData().Cost, 2);
 	TestFalse(TEXT("Playable card clears disabled flag"), Widget->GetCurrentCardViewData().bDisabled);
 	TestTrue(TEXT("Playable card enables root button"), Widget->IsRootButtonEnabledForTest());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDPileCountDisplaySpec,
+	"Wacom.UI.Battle.HUDPileCountDisplaysPlayedPileWithDiscardPile",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDPileCountDisplaySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->CreatePileViewsForTest();
+	UPileCountView* DrawPileView = HUD->GetDrawPileViewForTest();
+	UPileCountView* DiscardPileView = HUD->GetDiscardPileViewForTest();
+	UPileCountView* ExhaustPileView = HUD->GetExhaustPileViewForTest();
+	if (!TestNotNull(TEXT("Draw pile view"), DrawPileView)
+		|| !TestNotNull(TEXT("Discard pile view"), DiscardPileView)
+		|| !TestNotNull(TEXT("Exhaust pile view"), ExhaustPileView))
+	{
+		return false;
+	}
+
+	FBattleSnapshot Snapshot;
+	Snapshot.Phase = EBattlePhase::PlayerAction;
+	Snapshot.PileCounts.DrawCount = 4;
+	Snapshot.PileCounts.DiscardCount = 2;
+	Snapshot.PileCounts.PlayedCount = 3;
+	Snapshot.PileCounts.ExhaustCount = 1;
+
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	TestEqual(TEXT("Draw pile display remains numeric"),
+		DrawPileView->GetCountDisplayText().ToString(),
+		FString(TEXT("4")));
+	TestEqual(TEXT("Discard pile keeps numeric discard count"),
+		DiscardPileView->GetCount(),
+		2);
+	TestEqual(TEXT("Discard pile combines discard and played counts"),
+		DiscardPileView->GetCountDisplayText().ToString(),
+		FString(TEXT("2+3")));
+	TestEqual(TEXT("Exhaust pile display remains numeric"),
+		ExhaustPileView->GetCountDisplayText().ToString(),
+		FString(TEXT("1")));
+
+	Snapshot.PileCounts.DiscardCount = 5;
+	Snapshot.PileCounts.PlayedCount = 0;
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	TestEqual(TEXT("Discard pile returns to numeric display without played cards"),
+		DiscardPileView->GetCountDisplayText().ToString(),
+		FString(TEXT("5")));
+	TestEqual(TEXT("Discard pile numeric cache refreshes"),
+		DiscardPileView->GetCount(),
+		5);
 
 	return true;
 }
@@ -1636,7 +1693,7 @@ bool FWacomUIBattlePresentationQueueKnockdownDialogDelayedAndGuardedSpec::RunTes
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCardWidgetClickAndHighlightSpec,
-	"Wacom.UI.Battle.CardWidgetClickAndHighlight",
+	"Wacom.UI.Battle.Legacy2DHand.CardWidgetClickAndHighlight",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleCardWidgetClickAndHighlightSpec::RunTest(const FString& /*Parameters*/)
@@ -1667,7 +1724,7 @@ bool FWacomUIBattleCardWidgetClickAndHighlightSpec::RunTest(const FString& /*Par
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCardWidgetHoverFeedbackSpec,
-	"Wacom.UI.Battle.CardWidgetHoverFeedback",
+	"Wacom.UI.Battle.Legacy2DHand.CardWidgetHoverFeedback",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleCardWidgetHoverFeedbackSpec::RunTest(const FString& /*Parameters*/)
@@ -1744,7 +1801,7 @@ bool FWacomUIBattleCardWidgetHoverFeedbackSpec::RunTest(const FString& /*Paramet
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCardWidgetHoverFeedbackLegacyFallbackSpec,
-	"Wacom.UI.Battle.CardWidgetHoverFeedbackLegacyFallback",
+	"Wacom.UI.Battle.Legacy2DHand.CardWidgetHoverFeedbackFallback",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleCardWidgetHoverFeedbackLegacyFallbackSpec::RunTest(const FString& /*Parameters*/)
@@ -1777,7 +1834,7 @@ bool FWacomUIBattleCardWidgetHoverFeedbackLegacyFallbackSpec::RunTest(const FStr
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCardWidgetZoneTextSpec,
-	"Wacom.UI.Battle.CardWidgetZoneText",
+	"Wacom.UI.Battle.Legacy2DHand.CardWidgetZoneText",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleCardWidgetZoneTextSpec::RunTest(const FString& /*Parameters*/)
@@ -1812,7 +1869,7 @@ bool FWacomUIBattleCardWidgetZoneTextSpec::RunTest(const FString& /*Parameters*/
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCardWidgetMissingRootButtonSpec,
-	"Wacom.UI.Battle.CardWidgetMissingRootButton",
+	"Wacom.UI.Battle.Legacy2DHand.CardWidgetMissingRootButton",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleCardWidgetMissingRootButtonSpec::RunTest(const FString& /*Parameters*/)
@@ -1887,7 +1944,7 @@ bool FWacomUIBattleKnockdownChoiceDialogViewSpec::RunTest(const FString& /*Param
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHandPanelVisualEntryBuildSpec,
-	"Wacom.UI.Battle.HandPanelVisualEntryBuild",
+	"Wacom.UI.Battle.HandPresentation.HandPanelVisualEntryBuild",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHandPanelVisualEntryBuildSpec::RunTest(const FString& /*Parameters*/)
@@ -1924,7 +1981,7 @@ bool FWacomUIBattleHandPanelVisualEntryBuildSpec::RunTest(const FString& /*Param
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHandPanelUnifiedHorizontalRendererSpec,
-	"Wacom.UI.Battle.HandPanelUnifiedHorizontalRenderer",
+	"Wacom.UI.Battle.Legacy2DHand.HandPanelUnifiedHorizontalRenderer",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHandPanelUnifiedHorizontalRendererSpec::RunTest(const FString& /*Parameters*/)
@@ -1982,7 +2039,7 @@ bool FWacomUIBattleHandPanelUnifiedHorizontalRendererSpec::RunTest(const FString
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHandPanelHoverForwardingSpec,
-	"Wacom.UI.Battle.HandPanelHoverForwarding",
+	"Wacom.UI.Battle.Legacy2DHand.HandPanelHoverForwarding",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHandPanelHoverForwardingSpec::RunTest(const FString& /*Parameters*/)
@@ -2025,7 +2082,7 @@ bool FWacomUIBattleHandPanelHoverForwardingSpec::RunTest(const FString& /*Parame
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHandPanelLayoutDefaultsSpec,
-	"Wacom.UI.Battle.HandPanelLayoutDefaults",
+	"Wacom.UI.Battle.Legacy2DHand.HandPanelLayoutDefaults",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHandPanelLayoutDefaultsSpec::RunTest(const FString& /*Parameters*/)
@@ -2042,7 +2099,7 @@ bool FWacomUIBattleHandPanelLayoutDefaultsSpec::RunTest(const FString& /*Paramet
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDHandPanelLayoutDefaultsSpec,
-	"Wacom.UI.Battle.HUDHandPanelLayoutDefaults",
+	"Wacom.UI.Battle.BattleHUD.FallbackLayout.Legacy2DHandPanelDefaults",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDHandPanelLayoutDefaultsSpec::RunTest(const FString& /*Parameters*/)
@@ -2061,7 +2118,7 @@ bool FWacomUIBattleHUDHandPanelLayoutDefaultsSpec::RunTest(const FString& /*Para
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailPositionSpec,
-	"Wacom.UI.Battle.HUDCardDetailPosition",
+	"Wacom.UI.Battle.BattleHUD.CardDetail.Position",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDCardDetailPositionSpec::RunTest(const FString& /*Parameters*/)
@@ -2106,7 +2163,7 @@ bool FWacomUIBattleHUDCardDetailPositionSpec::RunTest(const FString& /*Parameter
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDTargetSelectionViewSpec,
-	"Wacom.UI.Battle.HUDTargetSelectionView",
+	"Wacom.UI.Battle.BattleHUD.CommandFlow.TargetSelectionView",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Parameters*/)
@@ -2173,7 +2230,7 @@ bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Paramete
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardClickFlowSpec,
-	"Wacom.UI.Battle.HUDCardClickFlow",
+	"Wacom.UI.Battle.BattleHUD.CommandFlow.CardClick",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDCardClickFlowSpec::RunTest(const FString& /*Parameters*/)
@@ -2221,7 +2278,7 @@ bool FWacomUIBattleHUDCardClickFlowSpec::RunTest(const FString& /*Parameters*/)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec,
-	"Wacom.UI.Battle.HUDWaitEndTurnCancelTargetSelect",
+	"Wacom.UI.Battle.BattleHUD.CommandFlow.WaitEndTurnCancelTargetSelect",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec::RunTest(const FString& /*Parameters*/)
@@ -2339,7 +2396,7 @@ bool FWacomUIBattleHUD3DHandPresenterLifecycleSpec::RunTest(const FString& /*Par
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec,
-	"Wacom.UI.Battle.EnemyInfoBarUsesTargetSelectionView",
+	"Wacom.UI.Battle.Enemy2DFallback.EnemyInfoBarUsesTargetSelectionView",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec::RunTest(const FString& /*Parameters*/)
@@ -4343,9 +4400,9 @@ bool FWacomUIBattleHUDIgnoresUnrelatedSceneEnemyPartsSpec::RunTest(const FString
 	HUD->SetBattleSceneEnemyHostForTest(CurrentHost.Host);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
 	OtherHost.Parts[0]->GetInteractionTargetComponent()->SetTargetId(FWacomBattleFixture::FindPartInstanceId(Snapshot, 1));
-	PC->SetBattleSceneClickHitForTest(OtherHost.Parts[0], OtherHost.Parts[0]->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, OtherHost.Parts[0], OtherHost.Parts[0]->GetHitBounds());
 
 	FWacomFirstPersonCardDragView DragView;
 	DragView.CardInstanceId = CardId;
@@ -4367,7 +4424,7 @@ bool FWacomUIBattleHUDIgnoresUnrelatedSceneEnemyPartsSpec::RunTest(const FString
 	HUD->SetTargetSelectionStateForTest(CardId);
 	const int32 VersionBeforeClick = Session->BuildSnapshot().Version;
 	TestFalse(TEXT("Unrelated part click is not routed"),
-		PC->RouteBattleSceneTargetClickForTest());
+		FWacomBattleSceneTargetClickTestAccess::RouteClick(PC));
 	TestEqual(TEXT("Unrelated part click does not submit"),
 		Session->BuildSnapshot().Version,
 		VersionBeforeClick);
@@ -4529,7 +4586,7 @@ bool FWacomUIBattleCurrentHostRegistryRoutesFeedbackSpec::RunTest(const FString&
 	HUD->SetBattleSceneEnemyHostForTest(CurrentHost.Host);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
 
 	HUD->PlayTargetConfirmedCueForTest(CurrentPart->GetWorldTargetBridgeComponent()->GetPartInstanceId());
 	TestEqual(TEXT("Current host cue routed"),
@@ -4539,7 +4596,7 @@ bool FWacomUIBattleCurrentHostRegistryRoutesFeedbackSpec::RunTest(const FString&
 		OtherPart->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().CuePlayCount,
 		0);
 
-	PC->SetBattleSceneClickHitForTest(CurrentPart, CurrentPart->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, CurrentPart, CurrentPart->GetHitBounds());
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 	TestTrue(TEXT("Current host hover activates"),
 		CurrentPart->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
@@ -4849,7 +4906,7 @@ bool FWacomUIBattleSceneEnemyPartStatusBadgeSeparatePredictionSpec::RunTest(cons
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDSceneEnemyHostHidesEnemyInfoBarSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleHUDHidesEnemyInfoBarWhenSceneEnemyHostConfigured",
+	"Wacom.UI.Battle.Enemy2DFallback.BattleHUDHidesEnemyInfoBarWhenSceneEnemyHostConfigured",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDSceneEnemyHostHidesEnemyInfoBarSpec::RunTest(const FString& /*Parameters*/)
@@ -4897,7 +4954,7 @@ bool FWacomUIBattleHUDSceneEnemyHostHidesEnemyInfoBarSpec::RunTest(const FString
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDSceneEnemyHostMissingKeepsEnemyInfoBarSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleHUDKeepsEnemyInfoBarFallbackWhenSceneEnemyHostMissing",
+	"Wacom.UI.Battle.Enemy2DFallback.BattleHUDKeepsEnemyInfoBarWhenSceneEnemyHostMissing",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDSceneEnemyHostMissingKeepsEnemyInfoBarSpec::RunTest(const FString& /*Parameters*/)
@@ -5402,13 +5459,13 @@ bool FWacomUIBattleSceneClickRoutesTaggedInteractionTargetSpec::RunTest(const FS
 	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
-	PC->SetBattleSceneClickHitForTest(SceneEnemy.Parts[0], SceneEnemy.Parts[0]->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, SceneEnemy.Parts[0], SceneEnemy.Parts[0]->GetHitBounds());
 
 	HUD->OnCardClickedByUser(TargetCardId);
 	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 
-	TestTrue(TEXT("Tagged world target routes"), PC->RouteBattleSceneTargetClickForTest());
+	TestTrue(TEXT("Tagged world target routes"), FWacomBattleSceneTargetClickTestAccess::RouteClick(PC));
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	TestEqual(TEXT("HUD returns idle after routed target"), HUD->GetUIState(), EBattleUIState::Idle);
 	TestGreaterThan(TEXT("Playing target card advances battle snapshot"),
@@ -5481,13 +5538,13 @@ bool FWacomUIBattleSceneClickIgnoresUntaggedWorldTargetSpec::RunTest(const FStri
 	HUD->SetSession(Session);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
-	PC->SetBattleSceneClickHitForTest(Owner, Primitive);
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, Owner, Primitive);
 
 	HUD->OnCardClickedByUser(TargetCardId);
 	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 	TestFalse(TEXT("Untagged world target does not route as battle enemy part"),
-		PC->RouteBattleSceneTargetClickForTest());
+		FWacomBattleSceneTargetClickTestAccess::RouteClick(PC));
 	TestEqual(TEXT("HUD remains target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 	TestEqual(TEXT("Snapshot version unchanged"), Session->BuildSnapshot().Version, Snapshot.Version);
 
@@ -5528,7 +5585,7 @@ bool FWacomUIBattleSceneProbeUsesOnlyWorldInteractionTargetSpec::RunTest(const F
 		return false;
 	}
 
-	PC->SetBattleSceneClickHUDForTest(HUD);
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
 	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity);
 	if (!TestNotNull(TEXT("Hit actor"), Owner))
 	{
@@ -5536,10 +5593,10 @@ bool FWacomUIBattleSceneProbeUsesOnlyWorldInteractionTargetSpec::RunTest(const F
 		return false;
 	}
 
-	PC->SetBattleSceneClickHitForTest(Owner);
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, Owner);
 	FWacomInteractionTargetHandle MissingProviderHandle;
 	TestFalse(TEXT("Actor without world provider is not a drag world target"),
-		PC->ProbeBattleSceneTargetForTest(MissingProviderHandle));
+		FWacomBattleSceneTargetClickTestAccess::ProbeTarget(PC, MissingProviderHandle));
 	TestFalse(TEXT("No UI fallback target is synthesized"), MissingProviderHandle.IsValid());
 
 	UWacomInteractionTargetComponent* InteractionTarget = NewObject<UWacomInteractionTargetComponent>(Owner);
@@ -5551,7 +5608,8 @@ bool FWacomUIBattleSceneProbeUsesOnlyWorldInteractionTargetSpec::RunTest(const F
 	InteractionTarget->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
 
 	FWacomInteractionTargetHandle Handle;
-	TestTrue(TEXT("Actor with provider can be probed"), PC->ProbeBattleSceneTargetForTest(Handle));
+	TestTrue(TEXT("Actor with provider can be probed"),
+		FWacomBattleSceneTargetClickTestAccess::ProbeTarget(PC, Handle));
 	TestEqual(TEXT("Probe returns world target"), Handle.TargetKind, EWacomInteractionTargetKind::World);
 	TestEqual(TEXT("Probe preserves provider target id"), Handle.WorldTargetId, PartId);
 	TestTrue(TEXT("Probe source is interaction target component"), Handle.SourceObject.Get() == InteractionTarget);
@@ -5623,8 +5681,8 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeSetsBridgeStateSpec::RunTest(const FS
 	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
-	PC->SetBattleSceneClickHitForTest(PartActor, PartActor->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, PartActor, PartActor->GetHitBounds());
 
 	const FVector BaseScale = PartActor->GetPartVisual()->GetRelativeScale3D();
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
@@ -5713,8 +5771,8 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeTargetSelectPredictionSpec::RunTest(c
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	HUD->SetTargetSelectionStateForTest(TargetCardId);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
-	PC->SetBattleSceneClickHitForTest(PartActor, PartActor->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, PartActor, PartActor->GetHitBounds());
 
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 
@@ -5795,8 +5853,8 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeTargetSelectInvalidPredictionSpec::Ru
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
 	HUD->SetTargetSelectionStateForTest(CardId);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
-	PC->SetBattleSceneClickHitForTest(PartActor, PartActor->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, PartActor, PartActor->GetHitBounds());
 
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 
@@ -5872,21 +5930,21 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeClearsSpec::RunTest(const FString& /*
 	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
 
-	PC->SetBattleSceneClickHitForTest(Head, Head->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, Head, Head->GetHitBounds());
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 	TestTrue(TEXT("Head hover active"),
 		Head->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
 
-	PC->SetBattleSceneClickHitForTest(Body, Body->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, Body, Body->GetHitBounds());
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 	TestFalse(TEXT("Head hover clears when target changes"),
 		Head->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
 	TestTrue(TEXT("Body hover active"),
 		Body->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHoverActive);
 
-	PC->ClearBattleSceneClickHitForTest();
+	FWacomBattleSceneTargetClickTestAccess::ClearHit(PC);
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 	const FWacomBattleEnemyPartWorldTargetDebugView BodyView =
 		Body->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView();
@@ -5956,8 +6014,8 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeGatedSpec::RunTest(const FString& /*P
 	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD.Get());
-	PC->SetBattleSceneClickHitForTest(PartActor, PartActor->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, PartActor, PartActor->GetHitBounds());
 
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 	TestTrue(TEXT("Hover active before gates"),
@@ -6596,7 +6654,7 @@ bool FWacomUIBattleHUDCombatLogControllerContractSpec::RunTest(const FString& /*
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDFirstPersonHandBridgeContractSpec,
-	"Wacom.UI.Battle.BattleHUDFirstPersonHandBridgeCleansRuntimeStateOnClear",
+	"Wacom.UI.Battle.BattleHUD.HandPresentation.FirstPersonBridgeCleansRuntimeStateOnClear",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& /*Parameters*/)
@@ -6686,7 +6744,7 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailControllerContractSpec,
-	"Wacom.UI.Battle.BattleHUDCardDetailControllerPreservesLegacyAndFirstPersonDetailLifecycle",
+	"Wacom.UI.Battle.BattleHUD.CardDetail.ControllerPreservesLegacyAndFirstPersonDetailLifecycle",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDCardDetailControllerContractSpec::RunTest(const FString& /*Parameters*/)
@@ -6776,7 +6834,7 @@ bool FWacomUIBattleHUDCardDetailControllerContractSpec::RunTest(const FString& /
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEnemyPartWidgetPresentationCueRestoresSpec,
-	"Wacom.UI.Battle.EnemyPartWidgetPresentationCueRestores",
+	"Wacom.UI.Battle.Enemy2DFallback.EnemyPartWidgetPresentationCueRestores",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEnemyPartWidgetPresentationCueRestoresSpec::RunTest(const FString& /*Parameters*/)
@@ -6803,7 +6861,7 @@ bool FWacomUIBattleEnemyPartWidgetPresentationCueRestoresSpec::RunTest(const FSt
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailLifecycleSpec,
-	"Wacom.UI.Battle.HUDCardDetailLifecycle",
+	"Wacom.UI.Battle.BattleHUD.CardDetail.Lifecycle",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDCardDetailLifecycleSpec::RunTest(const FString& /*Parameters*/)
@@ -6849,7 +6907,7 @@ bool FWacomUIBattleHUDCardDetailLifecycleSpec::RunTest(const FString& /*Paramete
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailSourceGuardSpec,
-	"Wacom.UI.Battle.HUDCardDetailSourceGuard",
+	"Wacom.UI.Battle.BattleHUD.CardDetail.SourceGuard",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDCardDetailSourceGuardSpec::RunTest(const FString& /*Parameters*/)
@@ -6907,7 +6965,7 @@ bool FWacomUIBattleHUDCardDetailSourceGuardSpec::RunTest(const FString& /*Parame
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailReadabilityMotionSpec,
-	"Wacom.UI.Battle.HUDCardDetailReadabilityMotion",
+	"Wacom.UI.Battle.BattleHUD.CardDetail.ReadabilityMotion",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDCardDetailReadabilityMotionSpec::RunTest(const FString& /*Parameters*/)
@@ -6948,7 +7006,7 @@ bool FWacomUIBattleHUDCardDetailReadabilityMotionSpec::RunTest(const FString& /*
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDFirstPersonInspectDetailUnhoverGuardSpec,
-	"Wacom.UI.Battle.HUDCardDetailFirstPersonInspectUnhoverGuard",
+	"Wacom.UI.Battle.BattleHUD.CardDetail.FirstPersonInspectUnhoverGuard",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDFirstPersonInspectDetailUnhoverGuardSpec::RunTest(const FString& /*Parameters*/)

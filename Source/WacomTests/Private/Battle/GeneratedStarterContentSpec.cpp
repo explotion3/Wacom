@@ -268,8 +268,11 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		TestTrue(TEXT("AntennaSearch emits random discard event"),
 			FWacomBattleFixture::CountEvents(Events, EBattleEventType::CardDiscarded) >= 1);
 		TestEqual(TEXT("AntennaSearch net draw pile consumption"), DrawBefore - Snapshot.PileCounts.DrawCount, 2);
-		TestTrue(TEXT("AntennaSearch discard pile increases by played card and random discard"),
-			Snapshot.PileCounts.DiscardCount >= DiscardBefore + 2);
+		TestTrue(TEXT("AntennaSearch discard pile increases by random discard"),
+			Snapshot.PileCounts.DiscardCount >= DiscardBefore + 1);
+		TestEqual(TEXT("AntennaSearch waits in played pile"),
+			Snapshot.PileCounts.PlayedCount,
+			1);
 	}
 
 	{

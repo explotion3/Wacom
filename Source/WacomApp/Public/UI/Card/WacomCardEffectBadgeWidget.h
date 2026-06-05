@@ -11,6 +11,14 @@ class UImage;
 class UPanelWidget;
 class UPaperSprite;
 
+#if WITH_AUTOMATION_TESTS
+struct FWacomCardEffectBadgeAutomationTestView
+{
+	int32 ApplyCount = 0;
+	int32 DigitImageUpdateCount = 0;
+};
+#endif
+
 /**
  * Visual-only numeric effect badge for card faces.
  *
@@ -33,8 +41,13 @@ public:
 	FText GetValueText() const;
 
 #if WITH_AUTOMATION_TESTS
-	int32 GetApplyCountForTest() const { return ApplyCountForTest; }
-	int32 GetDigitImageUpdateCountForTest() const { return DigitImageUpdateCountForTest; }
+	FWacomCardEffectBadgeAutomationTestView GetAutomationTestViewForTest() const
+	{
+		FWacomCardEffectBadgeAutomationTestView View;
+		View.ApplyCount = ApplyCountForTest;
+		View.DigitImageUpdateCount = DigitImageUpdateCountForTest;
+		return View;
+	}
 #endif
 
 protected:

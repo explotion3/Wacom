@@ -118,6 +118,18 @@ namespace
 		}
 	}
 
+	FText BuildDiscardPileCountDisplayText(const FPileCountsSnapshot& PileCounts)
+	{
+		if (PileCounts.PlayedCount <= 0)
+		{
+			return FText::AsNumber(PileCounts.DiscardCount);
+		}
+
+		return FText::Format(
+			LOCTEXT("DiscardPileWithPlayedCountFormat", "{0}+{1}"),
+			FText::AsNumber(PileCounts.DiscardCount),
+			FText::AsNumber(PileCounts.PlayedCount));
+	}
 }
 
 FString FWacomBattleCardDropResolveResult::ToDebugString() const
@@ -323,7 +335,11 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 
 	// 手动刷新 PileCountView（它们不是 BattleWidget，不走递归）
 	if (DrawPileView)    { DrawPileView->SetCount(Snap.PileCounts.DrawCount); }
-	if (DiscardPileView) { DiscardPileView->SetCount(Snap.PileCounts.DiscardCount); }
+	if (DiscardPileView)
+	{
+		DiscardPileView->SetCount(Snap.PileCounts.DiscardCount);
+		DiscardPileView->SetCountDisplayText(BuildDiscardPileCountDisplayText(Snap.PileCounts));
+	}
 	if (ExhaustPileView) { ExhaustPileView->SetCount(Snap.PileCounts.ExhaustCount); }
 
 	// 递归下发 Snapshot 给子 Widget

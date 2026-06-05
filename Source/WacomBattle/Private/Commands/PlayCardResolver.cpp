@@ -5,6 +5,7 @@
 
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
+#include "Deck/DeckService.h"
 #include "Effects/CardEffectDispatcher.h"
 #include "Enemy/EnemyPartActionResolver.h"
 #include "Events/BattleEventBus.h"
@@ -28,7 +29,7 @@ namespace
 	 * 当前覆盖：
 	 * - 左/右手锚点：进入 Limbo（本回合离开手牌但不入任何区域）
 	 * - Combo：回原位置（当前位置即原位置）
-	 * - 其它：进入弃牌区
+	 * - 其它：进入本回合使用牌堆
 	 *
 	 * 保留不进弃牌是回合结束时的行为，不是打出后去向。
 	 */
@@ -43,31 +44,33 @@ namespace
 			return;
 		}
 
-		if (HandIdx != INDEX_NONE)
-		{
-			State.Cards.Hand.RemoveAt(HandIdx);
-		}
-
 		if (bIsAnchor)
 		{
+			if (HandIdx != INDEX_NONE)
+			{
+				State.Cards.Hand.RemoveAt(HandIdx);
+			}
 			State.Cards.Limbo.Add(CardInstanceId);
 			FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Limbo);
 			return;
 		}
 
-		// ExhaustSelf：如果本卡有临时 Exhaust 关键词，进消耗区而不是弃牌堆。
+		// ExhaustSelf：如果本卡有临时 Exhaust 关键词，进消耗牌堆而不是弃牌堆。
 		if (FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardInstanceId))
 		{
 			if (Card->TemporaryKeywords.HasTagExact(WacomTags::Card_Keyword_Exhaust))
 			{
+				if (HandIdx != INDEX_NONE)
+				{
+					State.Cards.Hand.RemoveAt(HandIdx);
+				}
 				State.Cards.ExhaustPile.Add(CardInstanceId);
 				FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Exhaust);
 				return;
 			}
 		}
 
-		State.Cards.DiscardPile.Add(CardInstanceId);
-		FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Discard);
+		FDeckService::MoveFromHandToPlayedPile(State, CardInstanceId);
 	}
 
 	bool HasKeyword(const FRuntimeCardInstance& Card, const FGameplayTag& Keyword)

@@ -18,6 +18,7 @@
 #include "UI/Card/WacomCardDetailSectionWidget.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/CardViewTestAccess.h"
 #include "UI/CardViewSpecReceiver.h"
 
 #include "Cards/CardDefinition.h"
@@ -343,7 +344,7 @@ bool FWacomUIBackpackCardViewRetainerRefreshSpec::RunTest(const FString& /*Param
 		NewObject<UWacomCardViewRetainerRefreshProbe>());
 	CardView->TakeWidget();
 
-	const int32 InitialInvalidationCount = CardView->GetRenderCacheInvalidationCountForTest();
+	const FWacomCardViewAutomationTestView InitialView = FWacomCardViewTestAccess::View(*CardView);
 
 	FWacomCardViewData Data;
 	Data.Name = FText::FromString(TEXT("Retainer 刷新测试"));
@@ -353,10 +354,10 @@ bool FWacomUIBackpackCardViewRetainerRefreshSpec::RunTest(const FString& /*Param
 	CardView->SetCardViewData(Data);
 
 	TestEqual(TEXT("SetCardViewData invalidates card render cache once"),
-		CardView->GetRenderCacheInvalidationCountForTest(),
-		InitialInvalidationCount + 1);
+		FWacomCardViewTestAccess::View(*CardView).RenderCacheInvalidationCount,
+		InitialView.RenderCacheInvalidationCount + 1);
 	TestEqual(TEXT("CardView requests render on its retainer host"),
-		CardView->GetLastRetainerRenderRequestCountForTest(),
+		FWacomCardViewTestAccess::View(*CardView).LastRetainerRenderRequestCount,
 		1);
 	TestEqual(TEXT("View data type text is preserved for retainer-backed views"),
 		CardView->GetCardViewData().TypeText.ToString(),
@@ -364,19 +365,19 @@ bool FWacomUIBackpackCardViewRetainerRefreshSpec::RunTest(const FString& /*Param
 
 	CardView->SetCardViewData(Data);
 	TestEqual(TEXT("Identical card data refresh does not invalidate retainer every frame"),
-		CardView->GetRenderCacheInvalidationCountForTest(),
-		InitialInvalidationCount + 1);
+		FWacomCardViewTestAccess::View(*CardView).RenderCacheInvalidationCount,
+		InitialView.RenderCacheInvalidationCount + 1);
 	TestEqual(TEXT("Identical refresh does not request retainer render"),
-		CardView->GetLastRetainerRenderRequestCountForTest(),
+		FWacomCardViewTestAccess::View(*CardView).LastRetainerRenderRequestCount,
 		1);
 
 	Data.TypeText = FText::FromString(TEXT("伙伴"));
 	CardView->SetCardViewData(Data);
 	TestEqual(TEXT("Second SetCardViewData also invalidates card render cache"),
-		CardView->GetRenderCacheInvalidationCountForTest(),
-		InitialInvalidationCount + 2);
+		FWacomCardViewTestAccess::View(*CardView).RenderCacheInvalidationCount,
+		InitialView.RenderCacheInvalidationCount + 2);
 	TestEqual(TEXT("Second refresh requests retainer render again"),
-		CardView->GetLastRetainerRenderRequestCountForTest(),
+		FWacomCardViewTestAccess::View(*CardView).LastRetainerRenderRequestCount,
 		1);
 	TestEqual(TEXT("Second type text refresh is preserved"),
 		CardView->GetCardViewData().TypeText.ToString(),
@@ -404,25 +405,22 @@ bool FWacomUIBackpackCardViewEquivalentDataDirtyGateSpec::RunTest(const FString&
 	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Damage, 7));
 
 	CardView->SetCardViewData(Data);
-	const int32 InitialInvalidationCount = CardView->GetRenderCacheInvalidationCountForTest();
-	const int32 InitialTextUpdateCount = CardView->GetTextDisplayUpdateCountForTest();
-	const int32 InitialCostUpdateCount = CardView->GetCostDisplayUpdateCountForTest();
-	const int32 InitialBadgeUpdateCount = CardView->GetEffectBadgeDisplayUpdateCountForTest();
+	const FWacomCardViewAutomationTestView InitialView = FWacomCardViewTestAccess::View(*CardView);
 
 	CardView->SetCardViewData(Data);
 
 	TestEqual(TEXT("Equivalent card data skips render invalidation"),
-		CardView->GetRenderCacheInvalidationCountForTest(),
-		InitialInvalidationCount);
+		FWacomCardViewTestAccess::View(*CardView).RenderCacheInvalidationCount,
+		InitialView.RenderCacheInvalidationCount);
 	TestEqual(TEXT("Equivalent card data skips text update"),
-		CardView->GetTextDisplayUpdateCountForTest(),
-		InitialTextUpdateCount);
+		FWacomCardViewTestAccess::View(*CardView).TextDisplayUpdateCount,
+		InitialView.TextDisplayUpdateCount);
 	TestEqual(TEXT("Equivalent card data skips cost update"),
-		CardView->GetCostDisplayUpdateCountForTest(),
-		InitialCostUpdateCount);
+		FWacomCardViewTestAccess::View(*CardView).CostDisplayUpdateCount,
+		InitialView.CostDisplayUpdateCount);
 	TestEqual(TEXT("Equivalent card data skips badge update"),
-		CardView->GetEffectBadgeDisplayUpdateCountForTest(),
-		InitialBadgeUpdateCount);
+		FWacomCardViewTestAccess::View(*CardView).EffectBadgeDisplayUpdateCount,
+		InitialView.EffectBadgeDisplayUpdateCount);
 
 	return true;
 }
@@ -454,34 +452,29 @@ bool FWacomUIBackpackCardViewSectionDirtyGateSpec::RunTest(const FString& /*Para
 	Data.EffectBadges.Add(MakeCardViewEffectBadgeForTest(EWacomCardViewEffectBadgeKind::Damage, 7));
 	CardView->SetCardViewData(Data);
 
-	const int32 BaseInvalidation = CardView->GetRenderCacheInvalidationCountForTest();
-	const int32 BaseText = CardView->GetTextDisplayUpdateCountForTest();
-	const int32 BaseCost = CardView->GetCostDisplayUpdateCountForTest();
-	const int32 BaseDurability = CardView->GetDurabilityDisplayUpdateCountForTest();
-	const int32 BaseRarity = CardView->GetRarityDisplayUpdateCountForTest();
-	const int32 BaseArt = CardView->GetArtDisplayUpdateCountForTest();
-	const int32 BaseDisabled = CardView->GetDisabledDisplayUpdateCountForTest();
-	const int32 BaseBadges = CardView->GetEffectBadgeDisplayUpdateCountForTest();
+	const FWacomCardViewAutomationTestView BaseView = FWacomCardViewTestAccess::View(*CardView);
 
 	FWacomCardViewData CostChanged = Data;
 	CostChanged.Cost = 2;
 	CardView->SetCardViewData(CostChanged);
 
-	TestEqual(TEXT("Cost change invalidates once"), CardView->GetRenderCacheInvalidationCountForTest(), BaseInvalidation + 1);
-	TestEqual(TEXT("Cost section refreshed"), CardView->GetCostDisplayUpdateCountForTest(), BaseCost + 1);
-	TestEqual(TEXT("Text section not refreshed by cost only"), CardView->GetTextDisplayUpdateCountForTest(), BaseText);
-	TestEqual(TEXT("Durability section not refreshed by cost only"), CardView->GetDurabilityDisplayUpdateCountForTest(), BaseDurability);
-	TestEqual(TEXT("Rarity section not refreshed by cost only"), CardView->GetRarityDisplayUpdateCountForTest(), BaseRarity);
-	TestEqual(TEXT("Art section not refreshed by cost only"), CardView->GetArtDisplayUpdateCountForTest(), BaseArt);
-	TestEqual(TEXT("Disabled section not refreshed by cost only"), CardView->GetDisabledDisplayUpdateCountForTest(), BaseDisabled);
-	TestEqual(TEXT("Badge section not refreshed by cost only"), CardView->GetEffectBadgeDisplayUpdateCountForTest(), BaseBadges);
+	const FWacomCardViewAutomationTestView CostChangedView = FWacomCardViewTestAccess::View(*CardView);
+	TestEqual(TEXT("Cost change invalidates once"), CostChangedView.RenderCacheInvalidationCount, BaseView.RenderCacheInvalidationCount + 1);
+	TestEqual(TEXT("Cost section refreshed"), CostChangedView.CostDisplayUpdateCount, BaseView.CostDisplayUpdateCount + 1);
+	TestEqual(TEXT("Text section not refreshed by cost only"), CostChangedView.TextDisplayUpdateCount, BaseView.TextDisplayUpdateCount);
+	TestEqual(TEXT("Durability section not refreshed by cost only"), CostChangedView.DurabilityDisplayUpdateCount, BaseView.DurabilityDisplayUpdateCount);
+	TestEqual(TEXT("Rarity section not refreshed by cost only"), CostChangedView.RarityDisplayUpdateCount, BaseView.RarityDisplayUpdateCount);
+	TestEqual(TEXT("Art section not refreshed by cost only"), CostChangedView.ArtDisplayUpdateCount, BaseView.ArtDisplayUpdateCount);
+	TestEqual(TEXT("Disabled section not refreshed by cost only"), CostChangedView.DisabledDisplayUpdateCount, BaseView.DisabledDisplayUpdateCount);
+	TestEqual(TEXT("Badge section not refreshed by cost only"), CostChangedView.EffectBadgeDisplayUpdateCount, BaseView.EffectBadgeDisplayUpdateCount);
 
 	FWacomCardViewData BadgeChanged = CostChanged;
 	BadgeChanged.EffectBadges[0].Value = 8;
 	CardView->SetCardViewData(BadgeChanged);
-	TestEqual(TEXT("Badge change invalidates once more"), CardView->GetRenderCacheInvalidationCountForTest(), BaseInvalidation + 2);
-	TestEqual(TEXT("Badge section refreshed"), CardView->GetEffectBadgeDisplayUpdateCountForTest(), BaseBadges + 1);
-	TestEqual(TEXT("Cost section not refreshed by badge only"), CardView->GetCostDisplayUpdateCountForTest(), BaseCost + 1);
+	const FWacomCardViewAutomationTestView BadgeChangedView = FWacomCardViewTestAccess::View(*CardView);
+	TestEqual(TEXT("Badge change invalidates once more"), BadgeChangedView.RenderCacheInvalidationCount, BaseView.RenderCacheInvalidationCount + 2);
+	TestEqual(TEXT("Badge section refreshed"), BadgeChangedView.EffectBadgeDisplayUpdateCount, BaseView.EffectBadgeDisplayUpdateCount + 1);
+	TestEqual(TEXT("Cost section not refreshed by badge only"), BadgeChangedView.CostDisplayUpdateCount, BaseView.CostDisplayUpdateCount + 1);
 
 	return true;
 }
@@ -946,12 +939,15 @@ bool FWacomUIBackpackCardEffectBadgeDigitReuseSpec::RunTest(const FString& /*Par
 	UWidget* FirstDigit = DigitHost->GetChildAt(0);
 	UWidget* SecondDigit = DigitHost->GetChildAt(1);
 	UWidget* ThirdDigit = DigitHost->GetChildAt(2);
-	const int32 ApplyCount = BadgeWidget->GetApplyCountForTest();
-	const int32 DigitUpdateCount = BadgeWidget->GetDigitImageUpdateCountForTest();
+	const FWacomCardEffectBadgeAutomationTestView InitialView = FWacomCardViewTestAccess::View(*BadgeWidget);
 
 	BadgeWidget->SetEffectBadgeData(Badge);
-	TestEqual(TEXT("Equivalent badge data skips apply"), BadgeWidget->GetApplyCountForTest(), ApplyCount);
-	TestEqual(TEXT("Equivalent badge data skips digit update"), BadgeWidget->GetDigitImageUpdateCountForTest(), DigitUpdateCount);
+	TestEqual(TEXT("Equivalent badge data skips apply"),
+		FWacomCardViewTestAccess::View(*BadgeWidget).ApplyCount,
+		InitialView.ApplyCount);
+	TestEqual(TEXT("Equivalent badge data skips digit update"),
+		FWacomCardViewTestAccess::View(*BadgeWidget).DigitImageUpdateCount,
+		InitialView.DigitImageUpdateCount);
 
 	Badge.Value = 13;
 	BadgeWidget->SetEffectBadgeData(Badge);

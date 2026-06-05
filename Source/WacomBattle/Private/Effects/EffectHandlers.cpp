@@ -359,7 +359,7 @@ bool HandleDraw(FEffectContext& Ctx)
 	//   MetaTag（= Effect.TargetZone）= 源区域 Tag
 	//     空 / CardLocation.Draw = 抽牌堆（默认）
 	//     CardLocation.Discard   = 弃牌堆
-	//     CardLocation.Exhaust   = 消耗区
+	//     CardLocation.Exhaust   = 消耗牌堆
 	//
 	// 筛选关键词：第一版不支持（需要给 FEffectContext 加 FilterTag 字段）。
 	// 等策划给出具体需要筛选的卡牌时再扩展。
@@ -416,7 +416,7 @@ bool HandleDraw(FEffectContext& Ctx)
 		return DrawnIds.Num() > 0;
 	}
 
-	// 从弃牌堆 / 消耗区：随机选 Magnitude 张移到手牌
+	// 从弃牌堆 / 消耗牌堆：随机选 Magnitude 张移到手牌
 	if (!SourcePile || SourcePile->IsEmpty()) { return false; }
 
 	TArray<FGuid> MovedIds;

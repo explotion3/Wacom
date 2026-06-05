@@ -26,7 +26,7 @@ class UBattleSession;
  *
  * 子 Widget 的 Session 由父 Widget 在 SetSession 时递推设置。
  */
-UCLASS(Abstract, Blueprintable)
+UCLASS(Abstract, Blueprintable, meta = (ToolTip = "Battle UI 基类。负责 UBattleSession 引用、Snapshot fanout 和 WBP 表现刷新钩子；不是玩家命令提交入口，命令仍由 BattleHUD 统一处理。"))
 class WACOMAPP_API UWacomBattleWidgetBase : public UWacomActivatableWidget
 {
 	GENERATED_BODY()
@@ -38,10 +38,10 @@ public:
 	 * 设置本 Widget 持有的 Session 引用。
 	 * 子类 override NativeOnSessionChanged 做初始化工作（比如订阅事件）。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Widget Session", meta = (ToolTip = "设置该 Battle Widget 当前使用的 UBattleSession。通常由 GameMode、BattleHUD 或父 Battle Widget 注入；子 Widget 不应直接用它提交战斗命令。"))
 	void SetSession(UBattleSession* InSession);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Widget Session", meta = (ToolTip = "当前注入到该 Battle Widget 的 UBattleSession。只用于读取上下文或构建表现，不应绕过 BattleHUD 提交玩家命令。"))
 	UBattleSession* GetSession() const { return Session; }
 
 	// ---- Snapshot 刷新 ----
@@ -58,7 +58,7 @@ public:
 	 * 在 C++ NativeRefreshFromSnapshot 之后调用。
 	 * 子 WBP 可以 override 这个事件做 UMG 动画触发、特效播放等。
 	 */
-	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On Refreshed From Snapshot")
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|Snapshot Refresh", DisplayName = "On Refreshed From Snapshot", meta = (ToolTip = "Snapshot 刷新后的 WBP 表现钩子。在 C++ NativeRefreshFromSnapshot 之后调用，只用于动画、样式和显示补充，不应修改 BattleSession。"))
 	void BP_OnRefreshedFromSnapshot(const FBattleSnapshot& Snap);
 
 protected:

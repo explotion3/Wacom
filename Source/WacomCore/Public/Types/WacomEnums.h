@@ -92,7 +92,8 @@ enum class ECardLocation : uint8
 	Unknown  UMETA(DisplayName = "Unknown"),
 	Draw     UMETA(DisplayName = "Draw"),      // 抽牌堆
 	Hand     UMETA(DisplayName = "Hand"),      // 手牌队列
-	Discard  UMETA(DisplayName = "Discard"),   // 弃牌区
-	Exhaust  UMETA(DisplayName = "Exhaust"),   // 消耗区
+	Played   UMETA(DisplayName = "Played"),    // 本回合使用牌堆
+	Discard  UMETA(DisplayName = "Discard"),   // 弃牌堆
+	Exhaust  UMETA(DisplayName = "Exhaust"),   // 消耗牌堆
 	Limbo    UMETA(DisplayName = "Limbo"),     // 左右手本回合离开手牌但不入任何区域
 };

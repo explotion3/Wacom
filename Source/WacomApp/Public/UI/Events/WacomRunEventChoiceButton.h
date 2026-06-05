@@ -12,6 +12,18 @@ class UButton;
 class UTextBlock;
 class UVerticalBox;
 
+#if WITH_AUTOMATION_TESTS
+struct FWacomRunEventChoiceButtonAutomationTestView
+{
+	FText PaymentStatusText;
+	ESlateVisibility PaymentStatusVisibility = ESlateVisibility::Collapsed;
+	FText DisabledReasonText;
+	ESlateVisibility DisabledReasonVisibility = ESlateVisibility::Collapsed;
+	TArray<FText> RequirementItemTexts;
+	TArray<FText> ConsequenceItemTexts;
+};
+#endif
+
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnRunEventChoiceClickedNative, FName /*ChoiceId*/);
 
 /** 最小事件选项按钮。WBP 可继承替换视觉，逻辑仍只广播 ChoiceId。 */
@@ -36,14 +48,7 @@ public:
 	FWacomRunEventChoiceConsequenceView GetChoiceConsequenceView() const { return ConsequenceView; }
 
 #if WITH_AUTOMATION_TESTS
-	FText GetDisplayedPaymentStatusTextForTest() const;
-	ESlateVisibility GetPaymentStatusVisibilityForTest() const;
-	FText GetDisplayedDisabledReasonTextForTest() const;
-	ESlateVisibility GetDisabledReasonVisibilityForTest() const;
-	int32 GetDisplayedRequirementItemCountForTest() const;
-	FText GetDisplayedRequirementItemTextForTest(int32 Index) const;
-	int32 GetDisplayedConsequenceItemCountForTest() const;
-	FText GetDisplayedConsequenceItemTextForTest(int32 Index) const;
+	FWacomRunEventChoiceButtonAutomationTestView GetAutomationTestViewForTest() const;
 #endif
 
 protected:

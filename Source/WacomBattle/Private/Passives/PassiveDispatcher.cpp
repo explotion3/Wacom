@@ -37,6 +37,7 @@ namespace
 		case ECardLocation::Discard: State.Cards.DiscardPile.RemoveSingle(CardId); break;
 		case ECardLocation::Exhaust: State.Cards.ExhaustPile.RemoveSingle(CardId); break;
 		case ECardLocation::Limbo:   State.Cards.Limbo.RemoveSingle(CardId);       break;
+		case ECardLocation::Played:  return false;
 		default: break;  // Unknown / Hand 不处理
 		}
 

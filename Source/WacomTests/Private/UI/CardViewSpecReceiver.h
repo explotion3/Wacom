@@ -38,8 +38,6 @@ public:
 	}
 
 	UPanelWidget* GetDigitHostForTest() const { return DigitHost; }
-	int32 GetApplyCountForTest() const { return UWacomCardEffectBadgeWidget::GetApplyCountForTest(); }
-	int32 GetDigitImageUpdateCountForTest() const { return UWacomCardEffectBadgeWidget::GetDigitImageUpdateCountForTest(); }
 };
 
 UCLASS()
@@ -78,13 +76,6 @@ public:
 	UPanelWidget* GetDurabilityDigitsHostForTest() const { return DurabilityDigitsHost; }
 	UImage* GetRarityBorderForTest() const { return RarityBorder; }
 	UPanelWidget* GetEffectStatsHostForTest() const { return EffectStatsHost; }
-	int32 GetTextDisplayUpdateCountForTest() const { return UWacomCardView::GetTextDisplayUpdateCountForTest(); }
-	int32 GetCostDisplayUpdateCountForTest() const { return UWacomCardView::GetCostDisplayUpdateCountForTest(); }
-	int32 GetDurabilityDisplayUpdateCountForTest() const { return UWacomCardView::GetDurabilityDisplayUpdateCountForTest(); }
-	int32 GetRarityDisplayUpdateCountForTest() const { return UWacomCardView::GetRarityDisplayUpdateCountForTest(); }
-	int32 GetArtDisplayUpdateCountForTest() const { return UWacomCardView::GetArtDisplayUpdateCountForTest(); }
-	int32 GetDisabledDisplayUpdateCountForTest() const { return UWacomCardView::GetDisabledDisplayUpdateCountForTest(); }
-	int32 GetEffectBadgeDisplayUpdateCountForTest() const { return UWacomCardView::GetEffectBadgeDisplayUpdateCountForTest(); }
 	UPanelWidget* GetEffectBadgeSlotForTest(int32 Index) const
 	{
 		switch (Index)

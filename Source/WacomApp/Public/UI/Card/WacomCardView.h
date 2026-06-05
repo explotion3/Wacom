@@ -18,6 +18,21 @@ class UWidget;
 class UWacomCardEffectBadgeWidget;
 class UPaperSprite;
 
+#if WITH_AUTOMATION_TESTS
+struct FWacomCardViewAutomationTestView
+{
+	int32 RenderCacheInvalidationCount = 0;
+	int32 LastRetainerRenderRequestCount = 0;
+	int32 TextDisplayUpdateCount = 0;
+	int32 CostDisplayUpdateCount = 0;
+	int32 DurabilityDisplayUpdateCount = 0;
+	int32 RarityDisplayUpdateCount = 0;
+	int32 ArtDisplayUpdateCount = 0;
+	int32 DisabledDisplayUpdateCount = 0;
+	int32 EffectBadgeDisplayUpdateCount = 0;
+};
+#endif
+
 /**
  * Reusable visual-only card widget.
  *
@@ -60,15 +75,20 @@ public:
 	bool IsLocalPositionInsideCardBodyWithBoundsForTest(
 		const FVector2D& LocalPosition,
 		const FVector2D& SimulatedCardSizeBoxLocalSize) const;
-	int32 GetRenderCacheInvalidationCountForTest() const { return RenderCacheInvalidationCountForTest; }
-	int32 GetLastRetainerRenderRequestCountForTest() const { return LastRetainerRenderRequestCountForTest; }
-	int32 GetTextDisplayUpdateCountForTest() const { return TextDisplayUpdateCountForTest; }
-	int32 GetCostDisplayUpdateCountForTest() const { return CostDisplayUpdateCountForTest; }
-	int32 GetDurabilityDisplayUpdateCountForTest() const { return DurabilityDisplayUpdateCountForTest; }
-	int32 GetRarityDisplayUpdateCountForTest() const { return RarityDisplayUpdateCountForTest; }
-	int32 GetArtDisplayUpdateCountForTest() const { return ArtDisplayUpdateCountForTest; }
-	int32 GetDisabledDisplayUpdateCountForTest() const { return DisabledDisplayUpdateCountForTest; }
-	int32 GetEffectBadgeDisplayUpdateCountForTest() const { return EffectBadgeDisplayUpdateCountForTest; }
+	FWacomCardViewAutomationTestView GetAutomationTestViewForTest() const
+	{
+		FWacomCardViewAutomationTestView View;
+		View.RenderCacheInvalidationCount = RenderCacheInvalidationCountForTest;
+		View.LastRetainerRenderRequestCount = LastRetainerRenderRequestCountForTest;
+		View.TextDisplayUpdateCount = TextDisplayUpdateCountForTest;
+		View.CostDisplayUpdateCount = CostDisplayUpdateCountForTest;
+		View.DurabilityDisplayUpdateCount = DurabilityDisplayUpdateCountForTest;
+		View.RarityDisplayUpdateCount = RarityDisplayUpdateCountForTest;
+		View.ArtDisplayUpdateCount = ArtDisplayUpdateCountForTest;
+		View.DisabledDisplayUpdateCount = DisabledDisplayUpdateCountForTest;
+		View.EffectBadgeDisplayUpdateCount = EffectBadgeDisplayUpdateCountForTest;
+		return View;
+	}
 #endif
 
 protected:

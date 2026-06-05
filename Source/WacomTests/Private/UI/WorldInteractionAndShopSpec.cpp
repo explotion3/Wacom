@@ -41,6 +41,11 @@
 #include "UI/Shop/WacomShopOfferRowWidget.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "UI/Shop/WacomShopScreen.h"
+#include "UI/PlayerControllerRunInteractionTestAccess.h"
+#include "UI/RunEventChoiceButtonProbeTestAccess.h"
+#include "UI/RunMenuDropTargetWidgetTestAccess.h"
+#include "UI/RunWorldInteractionActorTestAccess.h"
+#include "UI/ShopRunEventTestAccess.h"
 #include "UI/WacomUITestAccess.h"
 #include "UI/WacomShopRunEventTestProbes.h"
 
@@ -545,15 +550,15 @@ bool FWacomUIWorldInteractionClosestPromptSpec::RunTest(const FString& /*Paramet
 	PC->RegisterCandidateInteractable(Near.Get());
 	PC->RegisterCandidateInteractable(Disabled.Get());
 
-	TestTrue(TEXT("Closest available interactable wins"), PC->ReadClosestInteractable() == Near.Get());
+	TestTrue(TEXT("Closest available interactable wins"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Near.Get());
 	TestEqual(TEXT("Prompt comes from closest available interactable"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("按 E 交易")));
 
 	PC->UnregisterCandidateInteractable(Near.Get());
-	TestTrue(TEXT("After unregister, far candidate wins"), PC->ReadClosestInteractable() == Far.Get());
+	TestTrue(TEXT("After unregister, far candidate wins"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Far.Get());
 	TestEqual(TEXT("Disabled candidate still ignored"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("按 E 战斗")));
 
 	return true;
@@ -626,7 +631,7 @@ bool FWacomUIShopClickBridgeStableIdSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
 		NewObject<AWacomShopTriggerClickProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.ClickStable");
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 
 	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
 		Shop->GetClickTargetBridgeComponent()->RunTargetStableId,
@@ -674,7 +679,7 @@ bool FWacomUIBattleTriggerClickBridgeStableIdSpec::RunTest(const FString& /*Para
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickStable");
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 
 	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
 		Battle->GetClickTargetBridgeComponent()->RunTargetStableId,
@@ -723,7 +728,7 @@ bool FWacomUIRunPickupStableIdSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<AWacomRunPickupClickProbe> Pickup(NewObject<AWacomRunPickupClickProbe>());
 	Pickup->PersistentId = TEXT("Pickup.UI.ClickStable");
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 
 	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
 		Pickup->GetClickTargetBridgeComponent()->RunTargetStableId,
@@ -773,7 +778,7 @@ bool FWacomUIRunCardPickupStableIdSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<AWacomRunCardPickupClickProbe> Pickup(
 		NewObject<AWacomRunCardPickupClickProbe>());
 	Pickup->PersistentId = TEXT("Pickup.Card.UI.ClickStable");
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 
 	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
 		Pickup->GetClickTargetBridgeComponent()->RunTargetStableId,
@@ -837,8 +842,8 @@ bool FWacomUIRunPickupBaseStableIdSpec::RunTest(const FString& /*Parameters*/)
 
 	GoldPickup->PersistentId = TEXT("Pickup.Base.GoldStable");
 	CardPickup->PersistentId = TEXT("Pickup.Base.CardStable");
-	GoldPickup->SyncClickTargetForTest();
-	CardPickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(GoldPickup.Get());
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(CardPickup.Get());
 
 	TestEqual(TEXT("Gold bridge stable id"),
 		GoldPickup->GetClickTargetBridgeComponent()->RunTargetStableId,
@@ -865,7 +870,7 @@ bool FWacomUIRunWorldCardDropKeyChestComponentsSpec::RunTest(const FString& /*Pa
 {
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.Components");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	TestNotNull(TEXT("TriggerSphere"), Chest->GetTriggerSphere());
 	TestNotNull(TEXT("ClickBounds"), Chest->GetClickBounds());
 	TestNotNull(TEXT("ChestVisual"), Chest->GetChestVisual());
@@ -895,7 +900,7 @@ bool FWacomUIRunWorldCardDropKeyChestFacadeSyncSpec::RunTest(const FString& /*Pa
 	Chest->VisualMesh = CubeMesh;
 	Chest->VisualScale = FVector(0.5f, 0.6f, 0.7f);
 	Chest->VisualRelativeLocation = FVector(4.f, 5.f, 6.f);
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	TestEqual(TEXT("Trigger radius sync"),
 		Chest->GetTriggerSphere()->GetUnscaledSphereRadius(),
@@ -992,7 +997,7 @@ bool FWacomUIRunWorldCardDropKeyChestDebugFacadeSpec::RunTest(const FString& /*P
 	Chest->TriggerRadius = 246.f;
 	Chest->ClickBoundsExtent = FVector(91.f, 92.f, 93.f);
 	Chest->VisualScale = FVector(0.9f, 0.8f, 0.7f);
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	const FWacomRunKeyChestDebugView View = Chest->GetRunKeyChestDebugView(PC.Get());
 	const FString Summary = Chest->GetRunKeyChestDebugSummary(PC.Get());
@@ -1056,7 +1061,7 @@ bool FWacomUIRunWorldCardDropKeyChestReceiverDiagnosticsSpec::RunTest(
 	InjectRunSession(PC.Get(), Run.Get());
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.ReceiverDiagnostics");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	UWacomRunWorldCardDropReceiverComponent* Receiver =
 		Chest->GetCardDropReceiverComponent();
@@ -1227,7 +1232,7 @@ bool FWacomUIRunWorldCardDropReceiverFeedbackDebugSpec::RunTest(
 	InjectRunSession(PC.Get(), Run.Get());
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.ReceiverFeedback");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	UWacomRunWorldCardDropReceiverComponent* Receiver =
 		Chest->GetCardDropReceiverComponent();
@@ -1295,7 +1300,7 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedVisualSpec::RunTest(
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
 		NewObject<AWacomRunKeyChestClickProbe>());
@@ -1304,8 +1309,8 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedVisualSpec::RunTest(
 	Chest->VisualRelativeLocation = FVector(1.f, 2.f, 3.f);
 	Chest->CompletedVisualScale = FVector(0.9f, 0.4f, 0.2f);
 	Chest->CompletedVisualRelativeLocation = FVector(4.f, 5.f, -6.f);
-	Chest->SyncClickTargetForTest();
-	Chest->EnsureRunSessionBindingForTest(PC.Get());
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
+	FWacomRunWorldInteractionActorTestAccess::EnsureRunSessionBinding(Chest.Get(), PC.Get());
 
 	TestEqual(TEXT("Closed visual scale"),
 		Chest->GetChestVisual()->GetRelativeScale3D(),
@@ -1350,14 +1355,14 @@ bool FWacomUIRunWorldCardDropKeyChestRunStateRefreshSpec::RunTest(
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
 		NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Completed.Refresh");
 	Chest->VisualScale = FVector(1.f, 1.f, 1.f);
 	Chest->CompletedVisualScale = FVector(0.5f, 0.5f, 0.2f);
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	TestEqual(TEXT("Unbound closed visual"),
 		Chest->GetChestVisual()->GetRelativeScale3D(),
@@ -1393,13 +1398,13 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedPromptSpec::RunTest(
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
 		NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Completed.Prompt");
 	Chest->CompletedPromptText = FText::FromString(TEXT("测试宝箱已打开"));
-	Chest->SyncClickTargetForTest();
-	Chest->EnsureRunSessionBindingForTest(PC.Get());
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
+	FWacomRunWorldInteractionActorTestAccess::EnsureRunSessionBinding(Chest.Get(), PC.Get());
 
 	FRunWorldCardInteractionRequest Request =
 		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
@@ -1438,14 +1443,14 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedSummarySpec::RunTest(
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(
 		NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Completed.Summary");
 	Chest->CompletedVisualScale = FVector(0.7f, 0.5f, 0.2f);
 	Chest->CompletedVisualRelativeLocation = FVector(0.f, 0.f, -11.f);
-	Chest->SyncClickTargetForTest();
-	Chest->EnsureRunSessionBindingForTest(PC.Get());
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
+	FWacomRunWorldInteractionActorTestAccess::EnsureRunSessionBinding(Chest.Get(), PC.Get());
 
 	FRunWorldCardInteractionRequest Request =
 		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
@@ -1745,7 +1750,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestSyncSpec::RunTest(
 	Chest->PersistentId = TEXT("Chest.GenericDefinition.Sync");
 	Chest->CardInteractionDefinition = Definition.Get();
 	ConfigureValidKeyChestReceiverForUiTest(*Chest, TEXT("OldReceiverKey"), 1);
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	UWacomRunWorldCardDropReceiverComponent* Receiver =
 		Chest->GetCardDropReceiverComponent();
@@ -1793,7 +1798,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestPromptSpec::RunTest(
 	Chest->InteractPromptText = FText::FromString(TEXT("Actor 需要钥匙"));
 	Chest->HoverPromptText = FText::FromString(TEXT("Actor 拖入钥匙"));
 	Chest->CompletedPromptText = FText::FromString(TEXT("Actor 已打开"));
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	const FWacomRunKeyChestDebugView View =
 		Chest->GetRunKeyChestDebugView(PC.Get());
@@ -1835,7 +1840,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestInvalidPlacementSpec::RunT
 
 	Chest->PersistentId = TEXT("Chest.GenericDefinition.InvalidPlacement");
 	Chest->CardInteractionDefinition = Definition.Get();
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;
@@ -1870,7 +1875,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestDebugAssetSpec::RunTest(
 	Chest->PersistentId = TEXT("Chest.GenericDebugDefinition.Asset");
 	Chest->CardInteractionDefinition = Definition;
 	ConfigureValidKeyChestReceiverForUiTest(*Chest, TEXT("ManualKey"), 2);
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	UWacomRunWorldCardDropReceiverComponent* Receiver =
 		Chest->GetCardDropReceiverComponent();
@@ -2015,7 +2020,7 @@ bool FWacomUIRunWorldCardInteractionDefinitionKeyChestFallbackSpec::RunTest(
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Definition.Fallback");
 	ConfigureValidKeyChestReceiverForUiTest(*Chest, TEXT("FallbackKey"), 4);
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 
 	const FWacomRunKeyChestDebugView View =
 		Chest->GetRunKeyChestDebugView(nullptr);
@@ -2126,16 +2131,16 @@ bool FWacomUIRunWorldCardDropPreviewAcceptsSpec::RunTest(const FString& /*Parame
 	FWacomUiToastHarness ToastHarness;
 	PC->SetPawn(Pawn.Get());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.Accepts");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	Chest->GetCardDropReceiverComponent()->AllowedCardDefinitions = { Key.Get() };
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
 	Chest->GetCardDropReceiverComponent()->AllowedCardDefinitions = { Key.Get() };
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	FWacomInteractionTargetHandle TargetHandle;
 	AActor* TargetActor = nullptr;
@@ -2143,7 +2148,7 @@ bool FWacomUIRunWorldCardDropPreviewAcceptsSpec::RunTest(const FString& /*Parame
 	UWacomRunWorldCardDropReceiverComponent* Receiver = nullptr;
 	FString DebugSummary;
 	const FRunWorldCardInteractionValidation Validation =
-		PC->ResolveRunWorldCardDropIntentForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ResolveRunWorldCardDropIntent(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			TargetHandle,
@@ -2175,13 +2180,13 @@ bool FWacomUIRunWorldCardDropPreviewRejectsSpec::RunTest(const FString& /*Parame
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.Rejects");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	FWacomInteractionTargetHandle TargetHandle;
 	AActor* TargetActor = nullptr;
@@ -2189,7 +2194,7 @@ bool FWacomUIRunWorldCardDropPreviewRejectsSpec::RunTest(const FString& /*Parame
 	UWacomRunWorldCardDropReceiverComponent* Receiver = nullptr;
 	FString DebugSummary;
 	const FRunWorldCardInteractionValidation Validation =
-		PC->ResolveRunWorldCardDropIntentForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ResolveRunWorldCardDropIntent(PC.Get(),
 			WrongInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			TargetHandle,
@@ -2223,17 +2228,17 @@ bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parame
 	FWacomUiToastHarness ToastHarness;
 	PC->SetPawn(Pawn.Get());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.Release");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	TestTrue(TEXT("Release submits"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
@@ -2265,21 +2270,21 @@ bool FWacomUIRunWorldCardDropReleaseCardRewardToastSpec::RunTest(const FString& 
 	FWacomUiToastHarness ToastHarness;
 	PC->SetPawn(Pawn.Get());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.CardRewardRelease");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
 	FWacomRunWorldCardInteractionReward CardReward;
 	CardReward.Type = EWacomRunWorldCardInteractionRewardType::Card;
 	CardReward.CardDefinition = RewardCard.Get();
 	Chest->GetCardDropReceiverComponent()->Rewards = { CardReward };
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	TestTrue(TEXT("Release submits"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
@@ -2311,19 +2316,19 @@ bool FWacomUIRunWorldCardDropWrongReleaseSpec::RunTest(const FString& /*Paramete
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomUiToastHarness ToastHarness;
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.WrongRelease");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
 	Chest->GetCardDropReceiverComponent()->RejectedCardPromptText =
 		FText::FromString(TEXT("需要机关钥匙"));
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	TestFalse(TEXT("Release rejected"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			WrongInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
@@ -2335,9 +2340,9 @@ bool FWacomUIRunWorldCardDropWrongReleaseSpec::RunTest(const FString& /*Paramete
 	TestFalse(TEXT("Actor prompt was not used"),
 		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("需要钥匙")));
 	TestTrue(TEXT("Debug summary records receiver toast source"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=Receiver")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("ToastSource=Receiver")));
 	TestTrue(TEXT("Debug summary records failure toast"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("FailureToast=需要机关钥匙")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("FailureToast=需要机关钥匙")));
 	return true;
 }
 
@@ -2357,21 +2362,21 @@ bool FWacomUIRunWorldCardDropCompletedReleaseToastSpec::RunTest(const FString& /
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomUiToastHarness ToastHarness;
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.CompletedRelease");
 	Chest->CompletedPromptText = FText::FromString(TEXT("宝箱已打开"));
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	FWacomRunSessionTestAccess::GetMutableRunState(*Run).CompletedRunWorldInteractionIds.Add(
 		Chest->PersistentId);
 
 	TestFalse(TEXT("Completed release rejected"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
@@ -2380,7 +2385,7 @@ bool FWacomUIRunWorldCardDropCompletedReleaseToastSpec::RunTest(const FString& /
 	TestTrue(TEXT("Completed toast emitted"),
 		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("宝箱已打开")));
 	TestTrue(TEXT("Completed toast uses receiver path"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=Receiver")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("ToastSource=Receiver")));
 	return true;
 }
 
@@ -2400,21 +2405,21 @@ bool FWacomUIRunWorldCardDropInvalidReceiverToastSpec::RunTest(const FString& /*
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomUiToastHarness ToastHarness;
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.InvalidReceiver");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
 	if (Chest->GetCardDropReceiverComponent()->Rewards.IsValidIndex(0))
 	{
 		Chest->GetCardDropReceiverComponent()->Rewards[0].GoldAmount = 0;
 	}
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	TestFalse(TEXT("Invalid receiver release rejected"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
@@ -2423,9 +2428,9 @@ bool FWacomUIRunWorldCardDropInvalidReceiverToastSpec::RunTest(const FString& /*
 	TestTrue(TEXT("Config warning toast emitted"),
 		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("场景交互配置异常：InvalidGoldReward")));
 	TestTrue(TEXT("Debug summary records receiver toast source"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=Receiver")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("ToastSource=Receiver")));
 	TestTrue(TEXT("Debug summary records config toast"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("FailureToast=场景交互配置异常：InvalidGoldReward")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("FailureToast=场景交互配置异常：InvalidGoldReward")));
 	return true;
 }
 
@@ -2446,17 +2451,19 @@ bool FWacomUIRunWorldCardDropMissingReceiverToastSpec::RunTest(
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomUiToastHarness ToastHarness;
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
 		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
-	Target->StableIdForTest = TEXT("Run.Generic.MissingReceiver");
-	Target->SyncClickTargetForTest();
-	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(
+		Target.Get(),
+		TEXT("Run.Generic.MissingReceiver"));
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Target.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Target.Get(), Target->ClickBounds);
 
 	TestFalse(TEXT("Missing receiver release rejected"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
@@ -2464,7 +2471,7 @@ bool FWacomUIRunWorldCardDropMissingReceiverToastSpec::RunTest(
 	TestEqual(TEXT("Card remains"), Run->GetRunState().BattleDeck.Num(), 1);
 	TestTrue(TEXT("Controller config warning emitted"),
 		UiToastWidgetContainsMessage(*ToastHarness.ToastWidget, TEXT("场景交互配置异常：MissingCardDropReceiver")));
-	const FString Summary = PC->ReadRunWorldCardDropDebugSummaryForTest();
+	const FString Summary = FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get());
 	TestTrue(TEXT("Summary records controller fallback"),
 		Summary.Contains(TEXT("ToastSource=ControllerFallback")));
 	TestTrue(TEXT("Summary records missing receiver toast"),
@@ -2488,25 +2495,25 @@ bool FWacomUIRunWorldCardDropPreviewRejectsWithoutToastSpec::RunTest(const FStri
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomUiToastHarness ToastHarness;
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.PreviewNoToast");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	TestFalse(TEXT("Preview rejected but not submitted"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			WrongInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ false));
 	TestEqual(TEXT("Preview emits no toast"), ToastHarness.ToastWidget->GetVisibleToastCount(), 0);
 	TestTrue(TEXT("Preview debug records no failure toast"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("FailureToast=None")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("FailureToast=None")));
 	TestTrue(TEXT("Preview debug records no toast source"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=None")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("ToastSource=None")));
 	return true;
 }
 
@@ -2526,21 +2533,21 @@ bool FWacomUIRunWorldCardDropReleaseAwayNoToastSpec::RunTest(const FString& /*Pa
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomUiToastHarness ToastHarness;
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
-	PC->ClearRunSceneHitForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::ClearRunSceneHit(PC.Get());
 
 	TestFalse(TEXT("Release away rejected"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
 	TestEqual(TEXT("No target release emits no toast"), ToastHarness.ToastWidget->GetVisibleToastCount(), 0);
 	TestTrue(TEXT("Debug summary records no failure toast"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("FailureToast=None")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("FailureToast=None")));
 	TestTrue(TEXT("Debug summary records no toast source"),
-		PC->ReadRunWorldCardDropDebugSummaryForTest().Contains(TEXT("ToastSource=None")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).Contains(TEXT("ToastSource=None")));
 	return true;
 }
 
@@ -2560,22 +2567,22 @@ bool FWacomUIRunWorldCardDropDebugFailureToastSpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomUiToastHarness ToastHarness;
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
-	PC->SetAppToastSubsystemForTest(ToastHarness.ToastSubsystem.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetAppToastSubsystem(PC.Get(), ToastHarness.ToastSubsystem.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.FailureSummary");
 	Chest->InteractPromptText = FText::FromString(TEXT("需要钥匙"));
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	TestFalse(TEXT("Release rejected"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			WrongInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
-	const FString Summary = PC->ReadRunWorldCardDropDebugSummaryForTest();
+	const FString Summary = FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get());
 	TestTrue(TEXT("Summary reports phase"), Summary.Contains(TEXT("Phase=Release")));
 	TestTrue(TEXT("Summary reports reason"), Summary.Contains(TEXT("Reason=CardNotAccepted")));
 	TestTrue(TEXT("Summary reports toast source"), Summary.Contains(TEXT("ToastSource=Receiver")));
@@ -2600,18 +2607,18 @@ bool FWacomUIRunWorldCardDropMenuBlockedSpec::RunTest(const FString& /*Parameter
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.MenuBlocked");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	Chest->GetCardDropReceiverComponent()->AllowedCardIds = { TEXT("DebugKey") };
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
 
 	TestFalse(TEXT("World drop blocked by menu"),
-		PC->ApplyRunWorldCardDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true));
@@ -2638,14 +2645,14 @@ bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<AWacomPlayerCharacter> Pawn(NewObject<AWacomPlayerCharacter>());
 	PC->SetPawn(Pawn.Get());
 	InjectRunSession(PC.Get(), Run.Get());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.MenuLeasePriority");
-	Chest->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Menu->SetOwningWacomPlayerControllerForTest(PC.Get());
@@ -2653,7 +2660,7 @@ bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Par
 	Menu->SubmitPolicyForTest = EWacomRunMenuCardDropSubmitPolicy::MenuHandled;
 	Menu->AcceptedZoneIdForTest = TEXT("RunMenu.Zone.Key");
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
-	PC->SetRunFirstPersonMenuLeaseForTest(TEXT("Lease.MenuPriority"));
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunFirstPersonMenuLease(PC.Get(), TEXT("Lease.MenuPriority"));
 	FWacomRunMenuCardLeaseRequest LeaseRequest;
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	LeaseRequest.LeaseId = TEXT("Lease.MenuPriority");
@@ -2665,11 +2672,11 @@ bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Zone(NewObject<UWacomRunMenuDropTargetWidgetProbe>());
 	Zone->ZoneId = TEXT("RunMenu.Zone.Key");
 	Zone->StableTargetId = TEXT("RunMenu.Zone.Key");
-	Zone->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Zone.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Zone.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Zone.Get());
 
 	const bool bSubmittedToMenu =
-		PC->ApplyRunMenuDropProbeFeedbackForTest(
+		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
 			MakeUiWorldDropDragView(FVector2D(100.f, 100.f)),
 			/*bReleased*/ true);
@@ -2682,7 +2689,7 @@ bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Par
 		Run->GetRunState().BattleDeck.Num(),
 		1);
 
-	PC->UnregisterRunMenuDropTargetForTest(Zone.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::UnregisterRunMenuDropTarget(PC.Get(), Zone.Get());
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
 	return true;
 }
@@ -2699,11 +2706,11 @@ bool FWacomUIRunWorldCardDropClickEKeyRegressionSpec::RunTest(const FString& /*P
 	InjectRunSession(PC.Get(), Run.Get());
 	TStrongObjectPtr<AWacomRunKeyChestClickProbe> Chest(NewObject<AWacomRunKeyChestClickProbe>());
 	Chest->PersistentId = TEXT("Chest.Debug.ClickE");
-	Chest->SyncClickTargetForTest();
-	PC->SetRunSceneHitForTest(Chest.Get(), Chest->GetClickBounds());
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Chest.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
 	TestFalse(TEXT("Left click does not open/submit chest"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
 	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Chest->PersistentId));
 	TestEqual(TEXT("Prompt needs key"), Chest->GetInteractPromptText_Implementation(PC.Get()).ToString(),
@@ -2756,11 +2763,11 @@ bool FWacomUIRunPickupBaseCrossTypeDuplicateSpec::RunTest(const FString& /*Param
 	GoldPickup->PersistentId = TEXT("Pickup.Base.CrossDuplicate");
 	GoldPickup->GoldAmount = 2;
 	GoldPickup->bDestroyWhenCollected = false;
-	GoldPickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(GoldPickup);
 	CardPickup->PersistentId = TEXT("Pickup.Base.CrossDuplicate");
 	CardPickup->CardDefinition = Card.Get();
 	CardPickup->bDestroyWhenCollected = false;
-	CardPickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(CardPickup);
 
 	TestTrue(TEXT("Gold sees card duplicate"),
 		GoldPickup->GetRunPickupBaseDebugView(PC.Get()).bDuplicatePersistentIdDetected);
@@ -2791,7 +2798,7 @@ bool FWacomUIRunPickupBaseSharedDebugSpec::RunTest(const FString& /*Parameters*/
 	Pickup->GoldAmount = 1;
 	Pickup->HoverPromptText = FText::FromString(TEXT("点击共享调试"));
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	FWacomRunPickupBaseDebugView View = Pickup->GetRunPickupBaseDebugView(PC.Get());
@@ -2921,9 +2928,9 @@ bool FWacomUIWorldInteractionCompletedRunEventWeakPromptSpec::RunTest(const FStr
 	TestTrue(TEXT("Complete event via option"), Run->ChooseRunEventOption(TEXT("Close")));
 
 	PC->RegisterCandidateInteractable(Trigger.Get());
-	TestTrue(TEXT("Completed event remains closest candidate"), PC->ReadClosestInteractable() == Trigger.Get());
+	TestTrue(TEXT("Completed event remains closest candidate"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Trigger.Get());
 	TestEqual(TEXT("Completed event prompt shown"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("事件已完成")));
 
 	return true;
@@ -3196,7 +3203,7 @@ bool FWacomUIWorldInteractionBattleTriggerCompatibilitySpec::RunTest(const FStri
 		Trigger->CanInteract_Implementation(PC.Get()));
 
 	PC->RegisterCandidateTrigger(Trigger.Get());
-	TestNull(TEXT("Compatibility registration ignores unavailable trigger"), PC->ReadClosestInteractable());
+	TestNull(TEXT("Compatibility registration ignores unavailable trigger"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
 
 	return true;
 }
@@ -3589,10 +3596,10 @@ bool FWacomUIRunWorldTargetProbeBuildsHandleSpec::RunTest(const FString& /*Param
 	Target->SetInteractionTargetTag(WacomTags::Interaction_Target_Run_Object);
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSceneHitForTest(Owner);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Owner);
 
 	FWacomInteractionTargetHandle Handle;
-	TestTrue(TEXT("Run probe finds run object"), PC->ProbeRunSceneTargetForTest(Handle));
+	TestTrue(TEXT("Run probe finds run object"), FWacomPlayerControllerRunInteractionTestAccess::ProbeRunSceneTarget(PC.Get(), Handle));
 	TestEqual(TEXT("Run probe preserves id"), Handle.WorldTargetId, TargetId);
 	TestTrue(TEXT("Run probe preserves tag"),
 		Handle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Run_Object));
@@ -3634,10 +3641,10 @@ bool FWacomUIRunWorldTargetProbeRejectsBattleTargetSpec::RunTest(const FString& 
 	Target->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSceneHitForTest(Owner);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Owner);
 
 	FWacomInteractionTargetHandle Handle;
-	TestFalse(TEXT("Run probe rejects battle target"), PC->ProbeRunSceneTargetForTest(Handle));
+	TestFalse(TEXT("Run probe rejects battle target"), FWacomPlayerControllerRunInteractionTestAccess::ProbeRunSceneTarget(PC.Get(), Handle));
 
 	return true;
 }
@@ -3674,12 +3681,12 @@ bool FWacomUIRunWorldTargetProbeWidgetPositionSpec::RunTest(const FString& /*Par
 	Target->SetInteractionTargetTag(WacomTags::Interaction_Target_Run_Object);
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSceneHitForTest(Owner);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Owner);
 
 	FWacomInteractionTargetHandle Handle;
 	const FVector2D WidgetPosition(321.0f, 654.0f);
 	TestTrue(TEXT("Run widget-position probe finds target"),
-		PC->ProbeRunSceneTargetAtWidgetPositionForTest(WidgetPosition, Handle));
+		FWacomPlayerControllerRunInteractionTestAccess::ProbeRunSceneTargetAtWidgetPosition(PC.Get(), WidgetPosition, Handle));
 	TestEqual(TEXT("Run widget-position probe writes screen position"),
 		Handle.ScreenPosition, WidgetPosition);
 	TestEqual(TEXT("Run widget-position probe writes hit world location"),
@@ -3735,18 +3742,18 @@ bool FWacomUIRunWorldTargetProbePreviewSwitchSpec::RunTest(const FString& /*Para
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	PC->bEnableRunWorldTargetProbePreview = true;
 
-	PC->SetRunSceneHitForTest(First);
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), First);
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("First target preview active"), FirstBridge->IsProbePreviewActive());
 	TestFalse(TEXT("Second target preview inactive"), SecondBridge->IsProbePreviewActive());
 
-	PC->SetRunSceneHitForTest(Second);
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Second);
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestFalse(TEXT("First target preview cleared after switch"), FirstBridge->IsProbePreviewActive());
 	TestTrue(TEXT("Second target preview active after switch"), SecondBridge->IsProbePreviewActive());
 
-	PC->ClearRunSceneHitForTest();
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::ClearRunSceneHit(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestFalse(TEXT("Second target preview cleared after no hit"), SecondBridge->IsProbePreviewActive());
 
 	return true;
@@ -3874,7 +3881,7 @@ bool FWacomUIRunWorldClickContractBattleStableIdSpec::RunTest(const FString& /*P
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ContractStable");
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 
 	TestEqual(TEXT("Battle bridge stable id mirrors PersistentId"),
 		Battle->GetClickTargetBridgeComponent()->RunTargetStableId,
@@ -3922,7 +3929,7 @@ bool FWacomUIRunEventClickBridgeStableIdSpec::RunTest(const FString& /*Parameter
 	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.ClickStable");
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 
 	TestEqual(TEXT("Bridge stable id mirrors PersistentId"),
 		Trigger->GetClickTargetBridgeComponent()->RunTargetStableId,
@@ -3966,14 +3973,16 @@ bool FWacomUIRunEventClickBridgeRoutesToInteractSpec::RunTest(const FString& /*P
 	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.ClickRoute");
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 
-	TestTrue(TEXT("Click route succeeds"), PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract called once"), Trigger->TryInteractCountForTest, 1);
+	TestTrue(TEXT("Click route succeeds"), FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract called once"),
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Trigger.Get()),
+		1);
 	TestTrue(TEXT("TryInteract receives PC"),
-		Trigger->GetLastInteractingPlayerControllerForTest() == PC.Get());
+		FWacomRunWorldInteractionActorTestAccess::LastInteractingPlayerController(Trigger.Get()) == PC.Get());
 
 	return true;
 }
@@ -3989,13 +3998,15 @@ bool FWacomUIRunEventClickBridgeWithoutOverlapSpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.ClickFar");
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 
-	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
-	TestTrue(TEXT("Far click still routes"), PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract called by far click"), Trigger->TryInteractCountForTest, 1);
+	TestNull(TEXT("No E-key candidate registered"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
+	TestTrue(TEXT("Far click still routes"), FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract called by far click"),
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Trigger.Get()),
+		1);
 
 	return true;
 }
@@ -4017,16 +4028,16 @@ bool FWacomUIRunPickupEKeyCollectsSpec::RunTest(const FString& /*Parameters*/)
 	Pickup->PersistentId = TEXT("Pickup.UI.EKey");
 	Pickup->GoldAmount = 4;
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	PC->RegisterCandidateInteractable(Pickup.Get());
 
-	TestTrue(TEXT("E key pickup is closest candidate"), PC->ReadClosestInteractable() == Pickup.Get());
+	TestTrue(TEXT("E key pickup is closest candidate"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Pickup.Get());
 	PC->TryInteractFromConsole();
 
 	TestEqual(TEXT("Pickup adds gold"), Run->GetGold(), 4);
 	TestTrue(TEXT("Pickup marked collected"), Run->IsPickupCollected(Pickup->PersistentId));
 	TestFalse(TEXT("Collected pickup can no longer interact"), Pickup->CanInteract_Implementation(PC.Get()));
-	TestNull(TEXT("Collected pickup unregisters E candidate"), PC->ReadClosestInteractable());
+	TestNull(TEXT("Collected pickup unregisters E candidate"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
 
 	return true;
 }
@@ -4046,12 +4057,12 @@ bool FWacomUIRunPickupClickCollectsWithoutOverlapSpec::RunTest(const FString& /*
 	Pickup->PersistentId = TEXT("Pickup.UI.ClickFar");
 	Pickup->GoldAmount = 5;
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
-	TestTrue(TEXT("Far pickup click routes"), PC->RouteRunWorldInteractableClickForTest());
+	TestNull(TEXT("No E-key candidate registered"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
+	TestTrue(TEXT("Far pickup click routes"), FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Pickup click adds gold"), Run->GetGold(), 5);
 	TestTrue(TEXT("Pickup click marks collected"), Run->IsPickupCollected(Pickup->PersistentId));
 
@@ -4101,10 +4112,10 @@ bool FWacomUIRunCardPickupEKeyCollectsSpec::RunTest(const FString& /*Parameters*
 	Pickup->PersistentId = TEXT("Pickup.Card.UI.EKey");
 	Pickup->CardDefinition = Card.Get();
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	PC->RegisterCandidateInteractable(Pickup.Get());
 
-	TestTrue(TEXT("E key card pickup is closest candidate"), PC->ReadClosestInteractable() == Pickup.Get());
+	TestTrue(TEXT("E key card pickup is closest candidate"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Pickup.Get());
 	PC->TryInteractFromConsole();
 
 	TestEqual(TEXT("Card pickup adds expected card"),
@@ -4112,7 +4123,7 @@ bool FWacomUIRunCardPickupEKeyCollectsSpec::RunTest(const FString& /*Parameters*
 	TestTrue(TEXT("Card pickup marked collected"), Run->IsPickupCollected(Pickup->PersistentId));
 	TestFalse(TEXT("Collected card pickup can no longer interact"),
 		Pickup->CanInteract_Implementation(PC.Get()));
-	TestNull(TEXT("Collected card pickup unregisters E candidate"), PC->ReadClosestInteractable());
+	TestNull(TEXT("Collected card pickup unregisters E candidate"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
 
 	return true;
 }
@@ -4135,12 +4146,12 @@ bool FWacomUIRunCardPickupClickCollectsWithoutOverlapSpec::RunTest(const FString
 	Pickup->PersistentId = TEXT("Pickup.Card.UI.ClickFar");
 	Pickup->CardDefinition = Card.Get();
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
-	TestTrue(TEXT("Far card pickup click routes"), PC->RouteRunWorldInteractableClickForTest());
+	TestNull(TEXT("No E-key candidate registered"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
+	TestTrue(TEXT("Far card pickup click routes"), FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Card pickup click adds card"),
 		CountUiStorageDefinitions(Run->BuildBackpackStorageSnapshot(), Card.Get()), 1);
 	TestTrue(TEXT("Card pickup click marks collected"), Run->IsPickupCollected(Pickup->PersistentId));
@@ -4220,7 +4231,7 @@ bool FWacomUIRunRewardPickupDebugSpec::RunTest(const FString& /*Parameters*/)
 
 	Pickup->PersistentId = TEXT("Pickup.UI.RewardDebug");
 	Pickup->PickupDefinition = Definition.Get();
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	const FWacomRunRewardPickupDebugView View =
@@ -4265,11 +4276,11 @@ bool FWacomUIRunRewardPickupEKeyGoldSpec::RunTest(const FString& /*Parameters*/)
 	Pickup->PersistentId = TEXT("Pickup.UI.RewardGoldEKey");
 	Pickup->PickupDefinition = Definition.Get();
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	PC->RegisterCandidateInteractable(Pickup.Get());
 
 	TestTrue(TEXT("Reward pickup is closest candidate"),
-		PC->ReadClosestInteractable() == Pickup.Get());
+		FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Pickup.Get());
 	PC->TryInteractFromConsole();
 
 	TestEqual(TEXT("Definition gold added"), Run->GetGold(), 7);
@@ -4299,13 +4310,13 @@ bool FWacomUIRunRewardPickupClickGoldSpec::RunTest(const FString& /*Parameters*/
 	Pickup->PersistentId = TEXT("Pickup.UI.RewardGoldClick");
 	Pickup->PickupDefinition = Definition.Get();
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
+	TestNull(TEXT("No E-key candidate registered"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
 	TestTrue(TEXT("Far reward pickup click routes"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Definition gold added"), Run->GetGold(), 8);
 	TestTrue(TEXT("Reward pickup marked collected"),
 		Run->IsPickupCollected(Pickup->PersistentId));
@@ -4335,11 +4346,11 @@ bool FWacomUIRunRewardPickupEKeyCardSpec::RunTest(const FString& /*Parameters*/)
 	Pickup->PersistentId = TEXT("Pickup.UI.RewardCardEKey");
 	Pickup->PickupDefinition = Definition.Get();
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	PC->RegisterCandidateInteractable(Pickup.Get());
 
 	TestTrue(TEXT("Reward card pickup is closest candidate"),
-		PC->ReadClosestInteractable() == Pickup.Get());
+		FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Pickup.Get());
 	PC->TryInteractFromConsole();
 
 	TestEqual(TEXT("Definition card added"),
@@ -4370,13 +4381,13 @@ bool FWacomUIRunRewardPickupClickCardSpec::RunTest(const FString& /*Parameters*/
 	Pickup->PersistentId = TEXT("Pickup.UI.RewardCardClick");
 	Pickup->PickupDefinition = Definition.Get();
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
+	TestNull(TEXT("No E-key candidate registered"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
 	TestTrue(TEXT("Far reward card pickup click routes"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Definition card added"),
 		CountUiStorageDefinitions(Run->BuildBackpackStorageSnapshot(), Card.Get()), 1);
 	TestTrue(TEXT("Reward card pickup marked collected"),
@@ -4403,7 +4414,7 @@ bool FWacomUIRunRewardPickupRejectsInvalidSpec::RunTest(const FString& /*Paramet
 	InjectRunSession(PC.Get(), Run.Get());
 
 	MissingDefinitionPickup->PersistentId = TEXT("Pickup.UI.MissingDefinition");
-	MissingDefinitionPickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(MissingDefinitionPickup.Get());
 	TestFalse(TEXT("Missing definition cannot interact"),
 		MissingDefinitionPickup->CanInteract_Implementation(PC.Get()));
 	TestEqual(TEXT("Missing definition debug reason"),
@@ -4412,7 +4423,7 @@ bool FWacomUIRunRewardPickupRejectsInvalidSpec::RunTest(const FString& /*Paramet
 
 	InvalidDefinitionPickup->PersistentId = TEXT("Pickup.UI.InvalidDefinition");
 	InvalidDefinitionPickup->PickupDefinition = InvalidDefinition.Get();
-	InvalidDefinitionPickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(InvalidDefinitionPickup.Get());
 	TestFalse(TEXT("Invalid definition cannot interact"),
 		InvalidDefinitionPickup->CanInteract_Implementation(PC.Get()));
 	TestEqual(TEXT("Invalid definition debug reason"),
@@ -4473,18 +4484,18 @@ bool FWacomUIRunRewardPickupHoverPromptAndVisualSpec::RunTest(const FString& /*P
 
 	Pickup->PersistentId = TEXT("Pickup.UI.RewardHover");
 	Pickup->PickupDefinition = Definition.Get();
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	Pickup->GetPickupVisual()->SetRelativeScale3D(FVector(1.25f, 1.25f, 1.25f));
 	Pickup->GetPickupVisual()->SetRenderCustomDepth(false);
 	Pickup->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.2f;
 	Pickup->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 254;
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestEqual(TEXT("Card definition hover prompt uses card fallback"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击拾取卡牌")));
 	TestTrue(TEXT("Reward pickup bridge preview active"),
 		Pickup->GetClickTargetBridgeComponent()->IsProbePreviewActive());
@@ -4495,7 +4506,7 @@ bool FWacomUIRunRewardPickupHoverPromptAndVisualSpec::RunTest(const FString& /*P
 	TestEqual(TEXT("Reward pickup visual stencil applied"),
 		Pickup->GetPickupVisual()->CustomDepthStencilValue, 254);
 	TestTrue(TEXT("Hover debug reports reward pickup stable id"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(
 			TEXT("StableId=Pickup.UI.RewardHover")));
 
 	return true;
@@ -4512,14 +4523,16 @@ bool FWacomUIShopClickBridgeRoutesToInteractSpec::RunTest(const FString& /*Param
 	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
 		NewObject<AWacomShopTriggerClickProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.ClickRoute");
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
 
-	TestTrue(TEXT("Click route succeeds"), PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract called once"), Shop->TryInteractCountForTest, 1);
+	TestTrue(TEXT("Click route succeeds"), FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract called once"),
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Shop.Get()),
+		1);
 	TestTrue(TEXT("TryInteract receives PC"),
-		Shop->GetLastInteractingPlayerControllerForTest() == PC.Get());
+		FWacomRunWorldInteractionActorTestAccess::LastInteractingPlayerController(Shop.Get()) == PC.Get());
 
 	return true;
 }
@@ -4535,13 +4548,15 @@ bool FWacomUIShopClickBridgeWithoutOverlapSpec::RunTest(const FString& /*Paramet
 	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
 		NewObject<AWacomShopTriggerClickProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.ClickFar");
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
 
-	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
-	TestTrue(TEXT("Far click still routes"), PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract called by far click"), Shop->TryInteractCountForTest, 1);
+	TestNull(TEXT("No E-key candidate registered"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
+	TestTrue(TEXT("Far click still routes"), FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract called by far click"),
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Shop.Get()),
+		1);
 
 	return true;
 }
@@ -4558,14 +4573,16 @@ bool FWacomUIBattleTriggerClickBridgeRoutesToInteractSpec::RunTest(const FString
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickRoute");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
 
-	TestTrue(TEXT("Battle click route succeeds"), PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract called once"), Battle->TryInteractCountForTest, 1);
+	TestTrue(TEXT("Battle click route succeeds"), FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract called once"),
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Battle.Get()),
+		1);
 	TestTrue(TEXT("TryInteract receives PC"),
-		Battle->GetLastInteractingPlayerControllerForTest() == PC.Get());
+		FWacomRunWorldInteractionActorTestAccess::LastInteractingPlayerController(Battle.Get()) == PC.Get());
 
 	return true;
 }
@@ -4582,13 +4599,15 @@ bool FWacomUIBattleTriggerClickBridgeWithoutOverlapSpec::RunTest(const FString& 
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickFar");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
 
-	TestNull(TEXT("No E-key candidate registered"), PC->ReadClosestInteractable());
-	TestTrue(TEXT("Far battle click still routes"), PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract called by far click"), Battle->TryInteractCountForTest, 1);
+	TestNull(TEXT("No E-key candidate registered"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
+	TestTrue(TEXT("Far battle click still routes"), FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract called by far click"),
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Battle.Get()),
+		1);
 
 	return true;
 }
@@ -4603,18 +4622,20 @@ bool FWacomUIRunWorldClickContractRoutesClickableSpec::RunTest(const FString& /*
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
 		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
-	Target->StableIdForTest = TEXT("Run.Generic.ClickRoute");
-	Target->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(
+		Target.Get(),
+		TEXT("Run.Generic.ClickRoute"));
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Target.Get());
 	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Target.Get(), Target->ClickBounds);
 
 	TestTrue(TEXT("Clickable world interactable routes"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Clickable route calls TryInteract"),
-		Target->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Target.Get()),
 		1);
 	TestTrue(TEXT("Clickable route passes PC"),
-		Target->GetLastInteractingPlayerControllerForTest() == PC.Get());
+		FWacomRunWorldInteractionActorTestAccess::LastInteractingPlayerController(Target.Get()) == PC.Get());
 
 	return true;
 }
@@ -4629,18 +4650,22 @@ bool FWacomUIRunWorldGenericClickableHoverSpec::RunTest(const FString& /*Paramet
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
 		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
-	Target->StableIdForTest = TEXT("Run.Generic.Hover");
-	Target->HoverPromptForTest = FText::FromString(TEXT("点击测试通用目标"));
-	Target->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(
+		Target.Get(),
+		TEXT("Run.Generic.Hover"));
+	FWacomRunWorldInteractionActorTestAccess::SetGenericHoverPrompt(
+		Target.Get(),
+		FText::FromString(TEXT("点击测试通用目标")));
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Target.Get());
 	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Target.Get(), Target->ClickBounds);
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestEqual(TEXT("Generic hover prompt uses clickable contract"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击测试通用目标")));
-	const FString Summary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	const FString Summary = FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get());
 	TestTrue(TEXT("Generic hover debug reports stable id"),
 		Summary.Contains(TEXT("StableId=Run.Generic.Hover")));
 	TestTrue(TEXT("Generic hover debug reports shared debug"),
@@ -4666,12 +4691,12 @@ bool FWacomUIRunWorldClickContractRoutesPickupSpec::RunTest(const FString& /*Par
 	Pickup->PersistentId = TEXT("Pickup.UI.SharedResolver");
 	Pickup->GoldAmount = 1;
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
 	TestTrue(TEXT("Pickup clickable world interactable routes"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Pickup route applies gold"), Run->GetGold(), 1);
 
 	return true;
@@ -4689,14 +4714,14 @@ bool FWacomUIRunWorldClickContractRoutesBattleSpec::RunTest(const FString& /*Par
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickableContract");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
 
 	TestTrue(TEXT("Battle clickable world interactable routes"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Battle clickable route calls TryInteract"),
-		Battle->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Battle.Get()),
 		1);
 
 	return true;
@@ -4738,12 +4763,12 @@ bool FWacomUIRunWorldClickContractRejectsNonClickableSpec::RunTest(const FString
 		Bridge->RefreshRunWorldTargetBinding());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSceneHitForTest(Owner);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Owner);
 
 	TestFalse(TEXT("World interactable without clickable contract does not route"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Rejected target does not receive TryInteract"),
-		Owner->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Owner),
 		0);
 
 	return true;
@@ -4781,13 +4806,13 @@ bool FWacomUIRunWorldGenericRejectsNoWorldInteractableSpec::RunTest(const FStrin
 	TestTrue(TEXT("Run target configured"), Bridge->RefreshRunWorldTargetBinding());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSceneHitForTest(Owner);
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Owner);
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestFalse(TEXT("Run target without world interactable does not route"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestTrue(TEXT("Hover debug records missing world interactable contract"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(
 			TEXT("Reason=MissingWorldInteractableContract")));
 
 	return true;
@@ -4803,19 +4828,21 @@ bool FWacomUIRunWorldGenericRejectsWrongTagSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
 		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
-	Target->StableIdForTest = TEXT("Run.Generic.WrongTag");
-	Target->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(
+		Target.Get(),
+		TEXT("Run.Generic.WrongTag"));
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Target.Get());
 	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
 	Target->ClickInteractionTarget->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
-	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Target.Get(), Target->ClickBounds);
 
 	FWacomInteractionTargetHandle Handle;
 	TestFalse(TEXT("Wrong tag is rejected by Run scene probe"),
-		PC->ProbeRunSceneTargetForTest(Handle));
+		FWacomPlayerControllerRunInteractionTestAccess::ProbeRunSceneTarget(PC.Get(), Handle));
 	TestFalse(TEXT("Wrong tag target does not click route"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Wrong tag target is not interacted with"),
-		Target->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Target.Get()),
 		0);
 
 	return true;
@@ -4853,10 +4880,10 @@ bool FWacomUIRunWorldClickBridgeRejectsUnsupportedSpec::RunTest(const FString& /
 	TestTrue(TEXT("Non-RunEvent run target configured"), Bridge->RefreshRunWorldTargetBinding());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSceneHitForTest(Owner);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Owner);
 
 	TestFalse(TEXT("Non-RunEvent run target does not route"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 
 	return true;
 }
@@ -4872,14 +4899,14 @@ bool FWacomUIShopClickBridgeIgnoredOutsideExplorationSpec::RunTest(const FString
 	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
 		NewObject<AWacomShopTriggerClickProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.ClickNotExploration");
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
-	PC->SetRunProbeExplorationFlowForTest(false);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunProbeExplorationFlow(PC.Get(), false);
 
 	TestFalse(TEXT("Click route ignored outside exploration"),
-		PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract not called"), Shop->TryInteractCountForTest, 0);
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract not called"), FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Shop.Get()), 0);
 
 	return true;
 }
@@ -4896,14 +4923,14 @@ bool FWacomUIBattleTriggerClickBridgeIgnoredOutsideExplorationSpec::RunTest(cons
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickNotExploration");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
-	PC->SetRunProbeExplorationFlowForTest(false);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunProbeExplorationFlow(PC.Get(), false);
 
 	TestFalse(TEXT("Battle click route ignored outside exploration"),
-		PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract not called"), Battle->TryInteractCountForTest, 0);
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract not called"), FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Battle.Get()), 0);
 
 	return true;
 }
@@ -4920,15 +4947,15 @@ bool FWacomUIShopClickBridgeIgnoredWhenGameMenuActiveSpec::RunTest(const FString
 		NewObject<AWacomShopTriggerClickProbe>());
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.ClickMenuBlocked");
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
 
 	TestFalse(TEXT("Click route ignored while menu active"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("TryInteract not called while menu active"),
-		Shop->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Shop.Get()),
 		0);
 
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
@@ -4948,15 +4975,15 @@ bool FWacomUIBattleTriggerClickBridgeIgnoredWhenGameMenuActiveSpec::RunTest(cons
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickMenuBlocked");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
 
 	TestFalse(TEXT("Battle click route ignored while menu active"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("TryInteract not called while menu active"),
-		Battle->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Battle.Get()),
 		0);
 
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
@@ -4974,14 +5001,14 @@ bool FWacomUIRunEventClickBridgeIgnoredOutsideExplorationSpec::RunTest(const FSt
 	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.ClickNotExploration");
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
-	PC->SetRunProbeExplorationFlowForTest(false);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunProbeExplorationFlow(PC.Get(), false);
 
 	TestFalse(TEXT("Click route ignored outside exploration"),
-		PC->RouteRunWorldInteractableClickForTest());
-	TestEqual(TEXT("TryInteract not called"), Trigger->TryInteractCountForTest, 0);
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
+	TestEqual(TEXT("TryInteract not called"), FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Trigger.Get()), 0);
 
 	return true;
 }
@@ -4998,15 +5025,15 @@ bool FWacomUIRunEventClickBridgeIgnoredWhenGameMenuActiveSpec::RunTest(const FSt
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.ClickMenuBlocked");
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
 
 	TestFalse(TEXT("Click route ignored while menu active"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("TryInteract not called while menu active"),
-		Trigger->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Trigger.Get()),
 		0);
 
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
@@ -5042,14 +5069,14 @@ bool FWacomUIRunEventClickBridgeEKeyStillUsesClosestCandidateSpec::RunTest(const
 	PC->RegisterCandidateInteractable(Far.Get());
 	PC->RegisterCandidateInteractable(Near.Get());
 	TestTrue(TEXT("E-key nearest candidate remains the closest registered RunEvent"),
-		PC->ReadClosestInteractable() == Near.Get());
+		FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Near.Get());
 	PC->TryInteractFromConsole();
 
 	TestEqual(TEXT("Near candidate receives E-key interact"),
-		Near->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Near.Get()),
 		1);
 	TestEqual(TEXT("Far candidate not used by E-key"),
-		Far->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Far.Get()),
 		0);
 
 	return true;
@@ -5079,14 +5106,14 @@ bool FWacomUIShopClickBridgeEKeyStillUsesClosestCandidateSpec::RunTest(const FSt
 	PC->RegisterCandidateInteractable(Far.Get());
 	PC->RegisterCandidateInteractable(Near.Get());
 	TestTrue(TEXT("E-key nearest candidate remains the closest registered Shop"),
-		PC->ReadClosestInteractable() == Near.Get());
+		FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Near.Get());
 	PC->TryInteractFromConsole();
 
 	TestEqual(TEXT("Near shop receives E-key interact"),
-		Near->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Near.Get()),
 		1);
 	TestEqual(TEXT("Far shop not used by E-key"),
-		Far->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Far.Get()),
 		0);
 
 	return true;
@@ -5118,14 +5145,14 @@ bool FWacomUIBattleTriggerClickBridgeEKeyStillUsesClosestCandidateSpec::RunTest(
 	PC->RegisterCandidateInteractable(Far.Get());
 	PC->RegisterCandidateInteractable(Near.Get());
 	TestTrue(TEXT("E-key nearest candidate remains the closest registered Battle trigger"),
-		PC->ReadClosestInteractable() == Near.Get());
+		FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()) == Near.Get());
 	PC->TryInteractFromConsole();
 
 	TestEqual(TEXT("Near battle receives E-key interact"),
-		Near->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Near.Get()),
 		1);
 	TestEqual(TEXT("Far battle not used by E-key"),
-		Far->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Far.Get()),
 		0);
 
 	return true;
@@ -5144,17 +5171,17 @@ bool FWacomUIRunWorldClickContractHoverPromptSpec::RunTest(const FString& /*Para
 	Trigger->PersistentId = TEXT("Event.UI.ContractHover");
 	Trigger->EventDefinition = MakeUiRunEvent(Trigger.Get());
 	Trigger->HoverPromptText = FText::FromString(TEXT("接口点击提示"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestEqual(TEXT("Hover prompt comes from clickable contract"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("接口点击提示")));
 	TestTrue(TEXT("Hover debug uses ok reason"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=Ok")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=Ok")));
 
 	return true;
 }
@@ -5168,10 +5195,16 @@ bool FWacomUIRunWorldClickContractSharedDebugSpec::RunTest(const FString& /*Para
 {
 	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
 		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
-	Target->StableIdForTest = TEXT("Run.Generic.Debug");
-	Target->HoverPromptForTest = FText::FromString(TEXT("共享调试通用目标"));
-	Target->LastDebugResultForTest = TEXT("BlockedForTest");
-	Target->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(
+		Target.Get(),
+		TEXT("Run.Generic.Debug"));
+	FWacomRunWorldInteractionActorTestAccess::SetGenericHoverPrompt(
+		Target.Get(),
+		FText::FromString(TEXT("共享调试通用目标")));
+	FWacomRunWorldInteractionActorTestAccess::SetGenericDebugResult(
+		Target.Get(),
+		TEXT("BlockedForTest"));
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Target.Get());
 	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
 
 	const FWacomRunWorldClickableInteractableDebugView Debug =
@@ -5233,16 +5266,18 @@ bool FWacomUIRunWorldGenericMissingRenderableSpec::RunTest(const FString& /*Para
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomGenericRunWorldClickableInteractableProbe> Target(
 		NewObject<AWacomGenericRunWorldClickableInteractableProbe>());
-	Target->StableIdForTest = TEXT("Run.Generic.NoVisual");
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(
+		Target.Get(),
+		TEXT("Run.Generic.NoVisual"));
 	Target->Visual->SetVisibility(false);
-	Target->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Target.Get());
 	Target->ClickTargetBridge->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Target.Get(), Target->ClickBounds);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Target.Get(), Target->ClickBounds);
 
 	TestTrue(TEXT("Missing renderable visual does not block click route"),
-		PC->RouteRunWorldInteractableClickForTest());
+		FWacomPlayerControllerRunInteractionTestAccess::RouteRunWorldInteractableClick(PC.Get()));
 	TestEqual(TEXT("Missing renderable visual still calls TryInteract"),
-		Target->TryInteractCountForTest,
+		FWacomRunWorldInteractionActorTestAccess::TryInteractCount(Target.Get()),
 		1);
 
 	const FWacomRunWorldClickableInteractableDebugView Debug =
@@ -5268,18 +5303,18 @@ bool FWacomUIRunEventHoverPromptShowsClickPromptSpec::RunTest(const FString& /*P
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.Hover");
 	Trigger->HoverPromptText = FText::FromString(TEXT("点击测试事件"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Hover prompt wins current interaction prompt"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击测试事件")));
 	TestTrue(TEXT("Hover debug reports actor"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Trigger->GetName()));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(Trigger->GetName()));
 	TestTrue(TEXT("Hover debug reports stable id"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Event.UI.Hover")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("StableId=Event.UI.Hover")));
 
 	return true;
 }
@@ -5295,7 +5330,7 @@ bool FWacomUIRunEventHoverActivatesSharedProbeVisualSpec::RunTest(const FString&
 	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.VisualSignal");
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Trigger.Get());
 	Trigger->AddInstanceComponent(Visual);
@@ -5303,9 +5338,9 @@ bool FWacomUIRunEventHoverActivatesSharedProbeVisualSpec::RunTest(const FString&
 	Visual->SetRenderCustomDepth(false);
 	Trigger->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
 	Trigger->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 250;
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestTrue(TEXT("RunEvent bridge preview active"),
 		Trigger->GetClickTargetBridgeComponent()->IsProbePreviewActive());
@@ -5334,19 +5369,19 @@ bool FWacomUIRunEventHoverPromptCompletedSpec::RunTest(const FString& /*Paramete
 	Trigger->PersistentId = TEXT("Event.UI.HoverCompleted");
 	Trigger->EventDefinition = Event.Get();
 	Trigger->CompletedHoverPromptText = FText::FromString(TEXT("完成后点击提示"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(Trigger->PersistentId, Event.Get()));
 	TestTrue(TEXT("Complete event via option"), Run->ChooseRunEventOption(TEXT("Close")));
 
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestEqual(TEXT("Completed hover prompt shown"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("完成后点击提示")));
 	TestTrue(TEXT("Hover debug reports completed"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Completed=true")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Completed=true")));
 
 	return true;
 }
@@ -5363,18 +5398,18 @@ bool FWacomUIShopHoverPromptShowsClickPromptSpec::RunTest(const FString& /*Param
 		NewObject<AWacomShopTriggerClickProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.Hover");
 	Shop->HoverPromptText = FText::FromString(TEXT("点击测试商店"));
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Shop hover prompt wins current interaction prompt"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击测试商店")));
 	TestTrue(TEXT("Hover debug reports shop actor"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Shop->GetName()));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(Shop->GetName()));
 	TestTrue(TEXT("Hover debug reports shop stable id"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Shop.UI.Hover")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("StableId=Shop.UI.Hover")));
 
 	return true;
 }
@@ -5390,7 +5425,7 @@ bool FWacomUIShopHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /*P
 	TStrongObjectPtr<AWacomShopTriggerClickProbe> Shop(
 		NewObject<AWacomShopTriggerClickProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.VisualSignal");
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Shop.Get());
 	Shop->AddInstanceComponent(Visual);
@@ -5398,9 +5433,9 @@ bool FWacomUIShopHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /*P
 	Visual->SetRenderCustomDepth(false);
 	Shop->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
 	Shop->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 251;
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestTrue(TEXT("Shop bridge preview active"),
 		Shop->GetClickTargetBridgeComponent()->IsProbePreviewActive());
@@ -5426,18 +5461,18 @@ bool FWacomUIRunPickupHoverPromptShowsClickPromptSpec::RunTest(const FString& /*
 
 	Pickup->PersistentId = TEXT("Pickup.UI.Hover");
 	Pickup->HoverPromptText = FText::FromString(TEXT("点击测试拾取"));
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Pickup hover prompt wins current interaction prompt"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击测试拾取")));
 	TestTrue(TEXT("Hover debug reports pickup actor"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Pickup->GetName()));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(Pickup->GetName()));
 	TestTrue(TEXT("Hover debug reports pickup stable id"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Pickup.UI.Hover")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("StableId=Pickup.UI.Hover")));
 
 	return true;
 }
@@ -5455,15 +5490,15 @@ bool FWacomUIRunPickupHoverActivatesSharedProbeVisualSpec::RunTest(const FString
 	InjectRunSession(PC.Get(), Run.Get());
 
 	Pickup->PersistentId = TEXT("Pickup.UI.VisualSignal");
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	Pickup->GetPickupVisual()->SetRelativeScale3D(FVector(1.5f, 1.5f, 1.5f));
 	Pickup->GetPickupVisual()->SetRenderCustomDepth(false);
 	Pickup->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
 	Pickup->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 253;
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestTrue(TEXT("Pickup bridge preview active"),
 		Pickup->GetClickTargetBridgeComponent()->IsProbePreviewActive());
@@ -5488,18 +5523,18 @@ bool FWacomUIBattleTriggerHoverPromptShowsClickPromptSpec::RunTest(const FString
 	Battle->PersistentId = TEXT("Battle.UI.Hover");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("点击测试战斗"));
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Battle hover prompt wins current interaction prompt"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击测试战斗")));
 	TestTrue(TEXT("Hover debug reports battle actor"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(Battle->GetName()));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(Battle->GetName()));
 	TestTrue(TEXT("Hover debug reports battle stable id"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("StableId=Battle.UI.Hover")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("StableId=Battle.UI.Hover")));
 
 	return true;
 }
@@ -5516,7 +5551,7 @@ bool FWacomUIBattleHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.VisualSignal");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Battle.Get());
 	Battle->AddInstanceComponent(Visual);
@@ -5524,9 +5559,9 @@ bool FWacomUIBattleHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /
 	Visual->SetRenderCustomDepth(false);
 	Battle->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
 	Battle->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 252;
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestTrue(TEXT("Battle bridge preview active"),
 		Battle->GetClickTargetBridgeComponent()->IsProbePreviewActive());
@@ -5558,18 +5593,18 @@ bool FWacomUIRunEventHoverPromptOverridesEKeySpec::RunTest(const FString& /*Para
 	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
 	Trigger->PersistentId = TEXT("Event.UI.HoverOverride");
 	Trigger->HoverPromptText = FText::FromString(TEXT("点击事件优先"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	PC->RegisterCandidateInteractable(Shop.Get());
 	TestEqual(TEXT("E-key prompt starts active"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("按 E 商店")));
 
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Hover prompt overrides E-key prompt"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击事件优先")));
 
 	return true;
@@ -5595,20 +5630,20 @@ bool FWacomUIRunEventHoverPromptClearingRestoresEKeySpec::RunTest(const FString&
 	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
 	Trigger->PersistentId = TEXT("Event.UI.HoverRestore");
 	Trigger->HoverPromptText = FText::FromString(TEXT("点击事件"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	PC->RegisterCandidateInteractable(Shop.Get());
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Hover prompt active"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击事件")));
 
-	PC->ClearRunSceneHitForTest();
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::ClearRunSceneHit(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("E-key prompt restored after hover clears"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("按 E 商店")));
 
 	return true;
@@ -5636,18 +5671,18 @@ bool FWacomUIShopHoverPromptOverridesEKeySpec::RunTest(const FString& /*Paramete
 	EventTrigger->InteractPromptText = FText::FromString(TEXT("按 E 事件"));
 	Shop->PersistentId = TEXT("Shop.UI.HoverOverride");
 	Shop->HoverPromptText = FText::FromString(TEXT("点击商店优先"));
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	PC->RegisterCandidateInteractable(EventTrigger.Get());
 	TestEqual(TEXT("E-key prompt starts active"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("按 E 事件")));
 
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Shop hover prompt overrides E-key prompt"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击商店优先")));
 
 	return true;
@@ -5674,18 +5709,18 @@ bool FWacomUIBattleTriggerHoverPromptOverridesEKeySpec::RunTest(const FString& /
 	Battle->PersistentId = TEXT("Battle.UI.HoverOverride");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("点击战斗优先"));
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	PC->RegisterCandidateInteractable(Shop.Get());
 	TestEqual(TEXT("E-key prompt starts active"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("按 E 商店")));
 
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Battle hover prompt overrides E-key prompt"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击战斗优先")));
 
 	return true;
@@ -5713,20 +5748,20 @@ bool FWacomUIShopHoverPromptClearingRestoresEKeySpec::RunTest(const FString& /*P
 	EventTrigger->InteractPromptText = FText::FromString(TEXT("按 E 事件"));
 	Shop->PersistentId = TEXT("Shop.UI.HoverRestore");
 	Shop->HoverPromptText = FText::FromString(TEXT("点击商店"));
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	PC->RegisterCandidateInteractable(EventTrigger.Get());
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Shop hover prompt active"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击商店")));
 
-	PC->ClearRunSceneHitForTest();
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::ClearRunSceneHit(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("E-key prompt restored after shop hover clears"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("按 E 事件")));
 
 	return true;
@@ -5753,20 +5788,20 @@ bool FWacomUIBattleTriggerHoverPromptClearingRestoresEKeySpec::RunTest(const FSt
 	Battle->PersistentId = TEXT("Battle.UI.HoverRestore");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("点击战斗"));
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	PC->RegisterCandidateInteractable(Shop.Get());
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("Battle hover prompt active"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击战斗")));
 
-	PC->ClearRunSceneHitForTest();
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::ClearRunSceneHit(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestEqual(TEXT("E-key prompt restored after battle hover clears"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("按 E 商店")));
 
 	return true;
@@ -5784,16 +5819,16 @@ bool FWacomUIRunEventHoverPromptIgnoredOutsideExplorationSpec::RunTest(const FSt
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.HoverNotExploration");
 	Trigger->HoverPromptText = FText::FromString(TEXT("不应显示"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
-	PC->SetRunProbeExplorationFlowForTest(false);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunProbeExplorationFlow(PC.Get(), false);
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("Hover prompt ignored outside exploration"),
-		PC->ReadCurrentInteractPrompt().IsEmpty());
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).IsEmpty());
 	TestTrue(TEXT("Hover debug records not exploration"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=NotInExploration")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=NotInExploration")));
 
 	return true;
 }
@@ -5810,16 +5845,16 @@ bool FWacomUIShopHoverPromptIgnoredOutsideExplorationSpec::RunTest(const FString
 		NewObject<AWacomShopTriggerClickProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.HoverNotExploration");
 	Shop->HoverPromptText = FText::FromString(TEXT("不应显示"));
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
-	PC->SetRunProbeExplorationFlowForTest(false);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunProbeExplorationFlow(PC.Get(), false);
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("Shop hover prompt ignored outside exploration"),
-		PC->ReadCurrentInteractPrompt().IsEmpty());
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).IsEmpty());
 	TestTrue(TEXT("Hover debug records not exploration"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=NotInExploration")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=NotInExploration")));
 
 	return true;
 }
@@ -5837,16 +5872,16 @@ bool FWacomUIBattleTriggerHoverPromptIgnoredOutsideExplorationSpec::RunTest(cons
 	Battle->PersistentId = TEXT("Battle.UI.HoverNotExploration");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("不应显示"));
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
-	PC->SetRunProbeExplorationFlowForTest(false);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunProbeExplorationFlow(PC.Get(), false);
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("Battle hover prompt ignored outside exploration"),
-		PC->ReadCurrentInteractPrompt().IsEmpty());
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).IsEmpty());
 	TestTrue(TEXT("Hover debug records not exploration"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=NotInExploration")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=NotInExploration")));
 
 	return true;
 }
@@ -5864,17 +5899,17 @@ bool FWacomUIRunEventHoverPromptIgnoredWhenGameMenuActiveSpec::RunTest(const FSt
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.HoverMenuBlocked");
 	Trigger->HoverPromptText = FText::FromString(TEXT("不应显示"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("Hover prompt ignored while menu active"),
-		PC->ReadCurrentInteractPrompt().IsEmpty());
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).IsEmpty());
 	TestTrue(TEXT("Hover debug records menu block"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=BlockedByMenuOrDrag"))
-		|| PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=GameMenuActive")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=BlockedByMenuOrDrag"))
+		|| FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=GameMenuActive")));
 
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
 	return true;
@@ -5892,22 +5927,22 @@ bool FWacomUIRunWorldProbeVisualClearsWhenGameMenuActiveSpec::RunTest(const FStr
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.VisualMenuBlocked");
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Trigger.Get());
 	Trigger->AddInstanceComponent(Visual);
 	Visual->SetRelativeScale3D(FVector(2.0f, 2.0f, 2.0f));
 	Visual->SetRenderCustomDepth(false);
 	Trigger->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.1f;
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("Preview activates before menu"),
 		Trigger->GetClickTargetBridgeComponent()->IsProbePreviewActive());
 	TestTrue(TEXT("Visual custom depth active before menu"), Visual->bRenderCustomDepth);
 
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestFalse(TEXT("Preview clears while menu active"),
 		Trigger->GetClickTargetBridgeComponent()->IsProbePreviewActive());
 	TestEqual(TEXT("Visual scale restored while menu active"),
@@ -5932,17 +5967,17 @@ bool FWacomUIBattleTriggerHoverPromptIgnoredWhenGameMenuActiveSpec::RunTest(cons
 	Battle->PersistentId = TEXT("Battle.UI.HoverMenuBlocked");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("不应显示"));
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("Battle hover prompt ignored while menu active"),
-		PC->ReadCurrentInteractPrompt().IsEmpty());
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).IsEmpty());
 	TestTrue(TEXT("Hover debug records menu block"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=BlockedByMenuOrDrag"))
-		|| PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=GameMenuActive")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=BlockedByMenuOrDrag"))
+		|| FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=GameMenuActive")));
 
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
 	return true;
@@ -5961,18 +5996,18 @@ bool FWacomUIRunEventHoverPromptIgnoredDuringRunMenuDragSpec::RunTest(const FStr
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.HoverDragBlocked");
 	Trigger->HoverPromptText = FText::FromString(TEXT("不应显示"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
-	PC->SetRunFirstPersonMenuLeaseForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunFirstPersonMenuLease(PC.Get());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("Hover prompt ignored while menu lease drag path is active"),
-		PC->ReadCurrentInteractPrompt().IsEmpty());
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).IsEmpty());
 	TestTrue(TEXT("Hover debug records drag/menu block"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=BlockedByMenuOrDrag"))
-		|| PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=GameMenuActive")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=BlockedByMenuOrDrag"))
+		|| FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=GameMenuActive")));
 
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
 	return true;
@@ -6010,13 +6045,13 @@ bool FWacomUIRunWorldHoverPromptRejectsUnsupportedSpec::RunTest(const FString& /
 	TestTrue(TEXT("Non-RunEvent run target configured"), Bridge->RefreshRunWorldTargetBinding());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSceneHitForTest(Owner);
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Owner);
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestTrue(TEXT("Non-RunEvent hover prompt rejected"),
-		PC->ReadCurrentInteractPrompt().IsEmpty());
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).IsEmpty());
 	TestTrue(TEXT("Hover debug records missing world interactable contract"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(
 			TEXT("Reason=MissingWorldInteractableContract")));
 
 	return true;
@@ -6059,8 +6094,8 @@ bool FWacomUIRunWorldUnsupportedTargetNoVisualSignalSpec::RunTest(const FString&
 	Bridge->RefreshRunWorldTargetBinding();
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSceneHitForTest(Owner);
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Owner);
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestFalse(TEXT("Unsupported target does not keep preview active"),
 		Bridge->IsProbePreviewActive());
@@ -6084,17 +6119,17 @@ bool FWacomUIShopHoverPromptIgnoredWhenGameMenuActiveSpec::RunTest(const FString
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.HoverMenuBlocked");
 	Shop->HoverPromptText = FText::FromString(TEXT("不应显示"));
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("Shop hover prompt ignored while menu active"),
-		PC->ReadCurrentInteractPrompt().IsEmpty());
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).IsEmpty());
 	TestTrue(TEXT("Hover debug records menu block"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=BlockedByMenuOrDrag"))
-		|| PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(TEXT("Reason=GameMenuActive")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=BlockedByMenuOrDrag"))
+		|| FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(TEXT("Reason=GameMenuActive")));
 
 	PC->UnregisterActiveGameMenuWidget(Menu.Get());
 	return true;
@@ -6112,13 +6147,13 @@ bool FWacomUIShopHoverPromptDebugSummarySpec::RunTest(const FString& /*Parameter
 		NewObject<AWacomShopTriggerClickProbe>());
 	Shop->PersistentId = TEXT("Shop.UI.HoverDebug");
 	Shop->HoverPromptText = FText::FromString(TEXT("点击调试商店"));
-	Shop->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Shop.Get());
 	Shop->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Shop.Get(), Shop->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Shop.Get(), Shop->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
-	const FString Summary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	const FString Summary = FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get());
 	TestTrue(TEXT("Summary reports shop actor"), Summary.Contains(Shop->GetName()));
 	TestTrue(TEXT("Summary reports shop prompt"), Summary.Contains(TEXT("Prompt=点击调试商店")));
 	TestTrue(TEXT("Summary reports shop stable id"), Summary.Contains(TEXT("StableId=Shop.UI.HoverDebug")));
@@ -6145,13 +6180,13 @@ bool FWacomUIBattleTriggerHoverPromptDebugSummarySpec::RunTest(const FString& /*
 	Battle->PersistentId = TEXT("Battle.UI.HoverDebug");
 	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("点击调试战斗"));
-	Battle->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Battle.Get(), Battle->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
-	const FString Summary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	const FString Summary = FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get());
 	TestTrue(TEXT("Summary reports battle actor"), Summary.Contains(Battle->GetName()));
 	TestTrue(TEXT("Summary reports battle prompt"), Summary.Contains(TEXT("Prompt=点击调试战斗")));
 	TestTrue(TEXT("Summary reports battle stable id"), Summary.Contains(TEXT("StableId=Battle.UI.HoverDebug")));
@@ -6181,13 +6216,13 @@ bool FWacomUIRunPickupDebugSummarySpec::RunTest(const FString& /*Parameters*/)
 	Pickup->GoldAmount = 7;
 	Pickup->HoverPromptText = FText::FromString(TEXT("点击调试拾取"));
 	Pickup->bDestroyWhenCollected = false;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
-	const FString HoverSummary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	const FString HoverSummary = FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get());
 	TestTrue(TEXT("Hover summary reports pickup actor"), HoverSummary.Contains(Pickup->GetName()));
 	TestTrue(TEXT("Hover summary reports pickup prompt"), HoverSummary.Contains(TEXT("Prompt=点击调试拾取")));
 	TestTrue(TEXT("Hover summary reports pickup stable id"), HoverSummary.Contains(TEXT("StableId=Pickup.UI.Debug")));
@@ -6221,7 +6256,7 @@ bool FWacomUIRunPickupDebugMissingPersistentIdSpec::RunTest(const FString& /*Par
 
 	Pickup->PersistentId = NAME_None;
 	Pickup->GoldAmount = 3;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 
 	const FWacomRunPickupDebugView View = Pickup->GetRunPickupDebugView(PC.Get());
 	TestFalse(TEXT("Missing id config is invalid"), View.bConfigValid);
@@ -6251,7 +6286,7 @@ bool FWacomUIRunPickupDebugInvalidGoldSpec::RunTest(const FString& /*Parameters*
 
 	Pickup->PersistentId = TEXT("Pickup.UI.InvalidGold");
 	Pickup->GoldAmount = 0;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 
 	const FWacomRunPickupDebugView View = Pickup->GetRunPickupDebugView(PC.Get());
 	TestFalse(TEXT("Invalid gold config is invalid"), View.bConfigValid);
@@ -6310,11 +6345,11 @@ bool FWacomUIRunPickupDuplicatePersistentIdSpec::RunTest(const FString& /*Parame
 	First->PersistentId = TEXT("Pickup.UI.Duplicate");
 	First->GoldAmount = 2;
 	First->bDestroyWhenCollected = false;
-	First->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(First);
 	Second->PersistentId = TEXT("Pickup.UI.Duplicate");
 	Second->GoldAmount = 2;
 	Second->bDestroyWhenCollected = false;
-	Second->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Second);
 
 	const FWacomRunPickupDebugView FirstView = First->GetRunPickupDebugView(PC.Get());
 	TestTrue(TEXT("Duplicate id detected"), FirstView.bDuplicatePersistentIdDetected);
@@ -6348,7 +6383,7 @@ bool FWacomUIRunPickupDebugVisualAndClickTargetSpec::RunTest(const FString& /*Pa
 
 	Pickup->PersistentId = TEXT("Pickup.UI.VisualDebug");
 	Pickup->GoldAmount = 1;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	const FWacomRunPickupDebugView View = Pickup->GetRunPickupDebugView(PC.Get());
@@ -6452,18 +6487,18 @@ bool FWacomUIRunCardPickupHoverPromptAndVisualSpec::RunTest(const FString& /*Par
 	Pickup->PersistentId = TEXT("Pickup.Card.UI.Hover");
 	Pickup->CardDefinition = Card.Get();
 	Pickup->HoverPromptText = FText::FromString(TEXT("点击测试卡牌拾取"));
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	Pickup->GetPickupVisual()->SetRelativeScale3D(FVector(1.25f, 1.25f, 1.25f));
 	Pickup->GetPickupVisual()->SetRenderCustomDepth(false);
 	Pickup->GetClickTargetBridgeComponent()->ProbePreviewScale = 1.2f;
 	Pickup->GetClickTargetBridgeComponent()->ProbeCustomDepthStencilValue = 252;
-	PC->SetRunSceneHitForTest(Pickup.Get(), Pickup->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Pickup.Get(), Pickup->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
 	TestEqual(TEXT("Card pickup hover prompt wins current interaction prompt"),
-		PC->ReadCurrentInteractPrompt().ToString(),
+		FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(PC.Get()).ToString(),
 		FString(TEXT("点击测试卡牌拾取")));
 	TestTrue(TEXT("Card pickup bridge preview active"),
 		Pickup->GetClickTargetBridgeComponent()->IsProbePreviewActive());
@@ -6474,7 +6509,7 @@ bool FWacomUIRunCardPickupHoverPromptAndVisualSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Card pickup visual stencil applied"),
 		Pickup->GetPickupVisual()->CustomDepthStencilValue, 252);
 	TestTrue(TEXT("Hover debug reports card pickup stable id"),
-		PC->ReadRunWorldInteractableHoverDebugSummaryForTest().Contains(
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get()).Contains(
 			TEXT("StableId=Pickup.Card.UI.Hover")));
 
 	return true;
@@ -6526,12 +6561,12 @@ bool FWacomUIRunCardPickupDebugSummarySpec::RunTest(const FString& /*Parameters*
 	First->PersistentId = TEXT("Pickup.Card.UI.Debug");
 	First->CardDefinition = Card.Get();
 	First->bDestroyWhenCollected = false;
-	First->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(First);
 	First->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	Second->PersistentId = TEXT("Pickup.Card.UI.Debug");
 	Second->CardDefinition = Card.Get();
 	Second->bDestroyWhenCollected = false;
-	Second->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Second);
 
 	const FWacomRunCardPickupDebugView View = First->GetRunCardPickupDebugView(PC.Get());
 	TestTrue(TEXT("Card pickup config valid"), View.bConfigValid);
@@ -6770,7 +6805,7 @@ bool FWacomUIRunPickupAuthoringGoldDebugSpec::RunTest(const FString& /*Parameter
 	Pickup->PersistentId = TEXT("Pickup.Authoring.GoldDebug");
 	Pickup->GoldAmount = 4;
 	Pickup->TriggerRadius = 220.f;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	const FWacomRunPickupDebugView View = Pickup->GetRunPickupDebugView(PC.Get());
@@ -6812,7 +6847,7 @@ bool FWacomUIRunPickupAuthoringCardDebugSpec::RunTest(const FString& /*Parameter
 	Pickup->PersistentId = TEXT("Pickup.Authoring.CardDebug");
 	Pickup->CardDefinition = Card.Get();
 	Pickup->TriggerRadius = 240.f;
-	Pickup->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Pickup.Get());
 	Pickup->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 
 	const FWacomRunCardPickupDebugView View = Pickup->GetRunCardPickupDebugView(PC.Get());
@@ -8085,13 +8120,13 @@ bool FWacomUIRunEventHoverPromptDebugSummarySpec::RunTest(const FString& /*Param
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	Trigger->PersistentId = TEXT("Event.UI.HoverDebug");
 	Trigger->HoverPromptText = FText::FromString(TEXT("点击调试事件"));
-	Trigger->SyncClickTargetForTest();
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());
 	Trigger->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
-	PC->SetRunSceneHitForTest(Trigger.Get(), Trigger->GetClickBounds());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Trigger.Get(), Trigger->GetClickBounds());
 
-	PC->UpdateRunWorldTargetProbePreviewForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 
-	const FString Summary = PC->ReadRunWorldInteractableHoverDebugSummaryForTest();
+	const FString Summary = FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(PC.Get());
 	TestTrue(TEXT("Summary reports actor"), Summary.Contains(Trigger->GetName()));
 	TestTrue(TEXT("Summary reports prompt"), Summary.Contains(TEXT("Prompt=点击调试事件")));
 	TestTrue(TEXT("Summary reports stable id"), Summary.Contains(TEXT("StableId=Event.UI.HoverDebug")));
@@ -8549,8 +8584,10 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	PaymentRequirement.PaymentCandidateCount = 2;
 	PaymentChoice.Requirements.Add(PaymentRequirement);
 	Button->SetChoiceSnapshot(PaymentChoice);
+	FWacomRunEventChoiceButtonAutomationTestView ButtonView =
+		FWacomShopRunEventTestAccess::View(*Button);
 	TestEqual(TEXT("Payment row shows candidate count"),
-		Button->GetDisplayedPaymentStatusTextForTest().ToString(),
+		ButtonView.PaymentStatusText.ToString(),
 		FString(TEXT("拖入卡牌支付：2 张可用")));
 	TestEqual(TEXT("Payment row stores requirement candidate count"),
 		Button->GetChoiceRequirementView().PaymentCandidateCount,
@@ -8559,13 +8596,13 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 		Button->GetChoiceRequirementView().Tone,
 		EWacomRunEventChoiceAvailabilityTone::Requirement);
 	TestEqual(TEXT("Payment status visible for payment choice"),
-		Button->GetPaymentStatusVisibilityForTest(),
+		ButtonView.PaymentStatusVisibility,
 		ESlateVisibility::HitTestInvisible);
 	TestEqual(TEXT("Payment requirement is not duplicated in generic list"),
-		Button->GetDisplayedRequirementItemCountForTest(),
+		ButtonView.RequirementItemTexts.Num(),
 		0);
 	TestEqual(TEXT("Payment has no consequence by default"),
-		Button->GetDisplayedConsequenceItemCountForTest(),
+		ButtonView.ConsequenceItemTexts.Num(),
 		0);
 
 	PaymentChoice.bAvailable = false;
@@ -8575,11 +8612,12 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	PaymentChoice.Requirements[0].PaymentCandidateCount = 0;
 	PaymentChoice.Requirements[0].DisabledReason = TEXT("MissingRequiredCard");
 	Button->SetChoiceSnapshot(PaymentChoice);
+	ButtonView = FWacomShopRunEventTestAccess::View(*Button);
 	TestEqual(TEXT("Payment row shows missing candidate reason"),
-		Button->GetDisplayedPaymentStatusTextForTest().ToString(),
+		ButtonView.PaymentStatusText.ToString(),
 		FString(TEXT("缺少可支付卡牌：缺少所需卡牌")));
 	TestEqual(TEXT("Payment missing disabled reason line hidden"),
-		Button->GetDisabledReasonVisibilityForTest(),
+		ButtonView.DisabledReasonVisibility,
 		ESlateVisibility::Collapsed);
 
 	FRunEventChoiceSnapshot NonPaymentChoice;
@@ -8592,14 +8630,15 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	NodeConsequence.ResolvedNodeTitleText = FText::FromString(TEXT("后续节点"));
 	NonPaymentChoice.Consequences.Add(NodeConsequence);
 	Button->SetChoiceSnapshot(NonPaymentChoice);
+	ButtonView = FWacomShopRunEventTestAccess::View(*Button);
 	TestEqual(TEXT("Non-payment row hides payment status"),
-		Button->GetPaymentStatusVisibilityForTest(),
+		ButtonView.PaymentStatusVisibility,
 		ESlateVisibility::Collapsed);
 	TestEqual(TEXT("Non-payment row shows consequence item"),
-		Button->GetDisplayedConsequenceItemCountForTest(),
+		ButtonView.ConsequenceItemTexts.Num(),
 		1);
 	TestEqual(TEXT("Non-payment consequence item text"),
-		Button->GetDisplayedConsequenceItemTextForTest(0).ToString(),
+		FWacomShopRunEventTestAccess::ConsequenceItemText(*Button, 0).ToString(),
 		FString(TEXT("进入：后续节点")));
 
 	FRunEventChoiceSnapshot BlockedNonPaymentChoice;
@@ -8614,17 +8653,18 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	GoldRequirement.CurrentValue = 1;
 	BlockedNonPaymentChoice.Requirements.Add(GoldRequirement);
 	Button->SetChoiceSnapshot(BlockedNonPaymentChoice);
+	ButtonView = FWacomShopRunEventTestAccess::View(*Button);
 	TestEqual(TEXT("Blocked non-payment row shows disabled reason"),
-		Button->GetDisplayedDisabledReasonTextForTest().ToString(),
+		ButtonView.DisabledReasonText.ToString(),
 		FString(TEXT("不可选：金币不足")));
 	TestEqual(TEXT("Blocked non-payment disabled reason visible"),
-		Button->GetDisabledReasonVisibilityForTest(),
+		ButtonView.DisabledReasonVisibility,
 		ESlateVisibility::HitTestInvisible);
 	TestEqual(TEXT("Blocked non-payment row shows one requirement item"),
-		Button->GetDisplayedRequirementItemCountForTest(),
+		ButtonView.RequirementItemTexts.Num(),
 		1);
 	TestEqual(TEXT("Blocked non-payment requirement item text"),
-		Button->GetDisplayedRequirementItemTextForTest(0).ToString(),
+		FWacomShopRunEventTestAccess::RequirementItemText(*Button, 0).ToString(),
 		FString(TEXT("需要金币：3 / 当前 1")));
 
 	FRunEventChoiceSnapshot RunFlagChoice;
@@ -8643,14 +8683,15 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	RunFlagChoice.Requirements.Add(RunFlagRequirement);
 	RunFlagChoice.Consequences.Add(RunFlagConsequence);
 	Button->SetChoiceSnapshot(RunFlagChoice);
+	ButtonView = FWacomShopRunEventTestAccess::View(*Button);
 	TestEqual(TEXT("RunFlag blocked reason text"),
-		Button->GetDisplayedDisabledReasonTextForTest().ToString(),
+		ButtonView.DisabledReasonText.ToString(),
 		FString(TEXT("不可选：缺少所需标记")));
 	TestEqual(TEXT("RunFlag requirement fallback text"),
-		Button->GetDisplayedRequirementItemTextForTest(0).ToString(),
+		FWacomShopRunEventTestAccess::RequirementItemText(*Button, 0).ToString(),
 		FString(TEXT("需要标记：SnakeGift.HasFang")));
 	TestEqual(TEXT("RunFlag consequence fallback text"),
-		Button->GetDisplayedConsequenceItemTextForTest(0).ToString(),
+		FWacomShopRunEventTestAccess::ConsequenceItemText(*Button, 0).ToString(),
 		FString(TEXT("设置标记：SnakeGift.HasFang")));
 
 	FRunEventChoiceSnapshot ZeroConsequenceChoice;
@@ -8670,8 +8711,9 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	ZeroNode.Amount = 0;
 	ZeroConsequenceChoice.Consequences = { ZeroGold, ZeroPressure, ZeroNode };
 	Button->SetChoiceSnapshot(ZeroConsequenceChoice);
+	ButtonView = FWacomShopRunEventTestAccess::View(*Button);
 	TestEqual(TEXT("Zero amount consequences remain hidden in fallback list"),
-		Button->GetDisplayedConsequenceItemCountForTest(),
+		ButtonView.ConsequenceItemTexts.Num(),
 		0);
 
 	return true;
@@ -8691,24 +8733,24 @@ bool FWacomUIRunEventChoiceButtonSnapshotAppliedEventSpec::RunTest(const FString
 	Choice.ChoiceId = TEXT("PayBeforeConstruct");
 	Button->SetChoiceSnapshot(Choice);
 	TestEqual(TEXT("Event waits until widget is constructed"),
-		Button->SnapshotAppliedCountForTest,
+		FWacomRunEventChoiceButtonProbeTestAccess::SnapshotAppliedCount(Button.Get()),
 		0);
 
 	Button->TakeWidget();
 	TestEqual(TEXT("Event fires after construct for pending snapshot"),
-		Button->SnapshotAppliedCountForTest,
+		FWacomRunEventChoiceButtonProbeTestAccess::SnapshotAppliedCount(Button.Get()),
 		1);
 	TestEqual(TEXT("Pending snapshot choice id forwarded"),
-		Button->LastAppliedChoiceIdForTest,
+		FWacomRunEventChoiceButtonProbeTestAccess::LastAppliedChoiceId(Button.Get()),
 		FName(TEXT("PayBeforeConstruct")));
 
 	Choice.ChoiceId = TEXT("PayAfterConstruct");
 	Button->SetChoiceSnapshot(Choice);
 	TestEqual(TEXT("Event fires immediately after construct"),
-		Button->SnapshotAppliedCountForTest,
+		FWacomRunEventChoiceButtonProbeTestAccess::SnapshotAppliedCount(Button.Get()),
 		2);
 	TestEqual(TEXT("Updated snapshot choice id forwarded"),
-		Button->LastAppliedChoiceIdForTest,
+		FWacomRunEventChoiceButtonProbeTestAccess::LastAppliedChoiceId(Button.Get()),
 		FName(TEXT("PayAfterConstruct")));
 
 	return true;
@@ -8738,13 +8780,14 @@ bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Param
 	Screen->RefreshEvent();
 	TestTrue(TEXT("Event screen activates without world stack"), Screen->IsActivated());
 
-	TestEqual(TEXT("Screen title from snapshot"), Screen->ReadTitleText().ToString(), FString(TEXT("UI标题")));
-	TestEqual(TEXT("Screen body from snapshot"), Screen->ReadBodyText().ToString(), FString(TEXT("UI正文")));
-	TestEqual(TEXT("One choice row"), Screen->ReadChoiceCount(), 1);
+	FWacomRunEventScreenAutomationTestView ScreenView = FWacomShopRunEventTestAccess::View(*Screen);
+	TestEqual(TEXT("Screen title from snapshot"), ScreenView.DisplayedTitleText.ToString(), FString(TEXT("UI标题")));
+	TestEqual(TEXT("Screen body from snapshot"), ScreenView.DisplayedBodyText.ToString(), FString(TEXT("UI正文")));
+	TestEqual(TEXT("One choice row"), ScreenView.ChoiceCount, 1);
 	TestEqual(TEXT("Choice label stored"),
-		Screen->ReadChoiceSnapshot(0).LabelText.ToString(),
+		FWacomShopRunEventTestAccess::ChoiceSnapshot(*Screen, 0).LabelText.ToString(),
 		FString(TEXT("关闭事件")));
-	TestTrue(TEXT("Choose close succeeds"), Screen->ChooseChoiceAt(0));
+	TestTrue(TEXT("Choose close succeeds"), FWacomShopRunEventTestAccess::ChooseChoiceAt(*Screen, 0));
 	TestTrue(TEXT("Event completed after choice"), Run->IsRunEventCompleted(TEXT("Event.UI.Screen")));
 	TestFalse(TEXT("Event no longer active after close choice"), Run->IsRunEventActive());
 	TestFalse(TEXT("Close choice deactivates event screen once flow ends"), Screen->IsActivated());
@@ -8794,17 +8837,19 @@ bool FWacomUIRunEventScreenWbpBindingAuthoringSpec::RunTest(const FString& /*Par
 	Screen->ActivateWidget();
 	Screen->RefreshEvent();
 
+	const FWacomRunEventScreenAutomationTestView ScreenView =
+		FWacomShopRunEventTestAccess::View(*Screen);
 	TestEqual(TEXT("Configured choice class resolves"),
-		Screen->ReadChoiceButtonWidgetClass().Get(),
+		ScreenView.ChoiceButtonWidgetClass.Get(),
 		UWacomRunEventChoiceButtonClassProbe::StaticClass());
 	TestEqual(TEXT("Configured drop target class resolves"),
-		Screen->ReadPaymentDropTargetWidgetClass().Get(),
+		ScreenView.PaymentDropTargetWidgetClass.Get(),
 		UWacomRunEventPaymentDropTargetWidgetClassProbe::StaticClass());
 	TestEqual(TEXT("Configured payment min width stored"),
-		Screen->ReadPaymentChoiceMinDesiredWidth(),
+		ScreenView.PaymentChoiceMinDesiredWidth,
 		512.0f);
 
-	UWacomRunEventChoiceButton* ChoiceButton = Screen->ReadChoiceButtonWidget(0);
+	UWacomRunEventChoiceButton* ChoiceButton = FWacomShopRunEventTestAccess::ChoiceButton(*Screen, 0);
 	if (ChoiceButton)
 	{
 		ChoiceButton->TakeWidget();
@@ -8814,15 +8859,16 @@ bool FWacomUIRunEventScreenWbpBindingAuthoringSpec::RunTest(const FString& /*Par
 	const UWacomRunEventChoiceButtonClassProbe* ChoiceProbe =
 		Cast<UWacomRunEventChoiceButtonClassProbe>(ChoiceButton);
 	TestTrue(TEXT("Choice snapshot applied event fired on dynamic row"),
-		ChoiceProbe && ChoiceProbe->SnapshotAppliedCountForTest > 0);
+		FWacomRunEventChoiceButtonProbeTestAccess::HasAppliedSnapshot(ChoiceProbe));
 	if (ChoiceProbe)
 	{
 		TestEqual(TEXT("Choice snapshot apply forwards choice id"),
-			ChoiceProbe->LastAppliedChoiceIdForTest,
+			FWacomRunEventChoiceButtonProbeTestAccess::LastAppliedChoiceId(ChoiceProbe),
 			FName(TEXT("PayFang")));
 	}
 
-	const UWacomRunMenuDropTargetWidget* DropTarget = Screen->ReadPaymentDropTarget(0);
+	const UWacomRunMenuDropTargetWidget* DropTarget =
+		FWacomShopRunEventTestAccess::PaymentDropTarget(*Screen, 0);
 	TestTrue(TEXT("Payment choice uses configured drop target class"),
 		DropTarget && DropTarget->IsA(UWacomRunEventPaymentDropTargetWidgetClassProbe::StaticClass()));
 	if (DropTarget)
@@ -8838,7 +8884,7 @@ bool FWacomUIRunEventScreenWbpBindingAuthoringSpec::RunTest(const FString& /*Par
 			1.111f);
 	}
 
-	const FWacomRunEventScreenDebugView Debug = Screen->ReadRunEventScreenDebugView();
+	const FWacomRunEventScreenDebugView Debug = FWacomShopRunEventTestAccess::DebugView(*Screen);
 	TestEqual(TEXT("Custom drop target still registers one zone mapping"),
 		Debug.PaymentZoneMappingCount,
 		1);
@@ -8857,11 +8903,13 @@ bool FWacomUIRunEventScreenWbpBindingFallbackSpec::RunTest(const FString& /*Para
 {
 	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
 
+	const FWacomRunEventScreenAutomationTestView ScreenView =
+		FWacomShopRunEventTestAccess::View(*Screen);
 	TestEqual(TEXT("Missing choice class falls back to native"),
-		Screen->ReadChoiceButtonWidgetClass().Get(),
+		ScreenView.ChoiceButtonWidgetClass.Get(),
 		UWacomRunEventChoiceButton::StaticClass());
 	TestEqual(TEXT("Missing drop target class falls back to native"),
-		Screen->ReadPaymentDropTargetWidgetClass().Get(),
+		ScreenView.PaymentDropTargetWidgetClass.Get(),
 		UWacomRunMenuDropTargetWidget::StaticClass());
 
 	return true;
@@ -8909,8 +8957,8 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	Screen->ActivateWidget();
 	Screen->RefreshEvent();
 
-	TestEqual(TEXT("One payment choice"), Screen->ReadChoiceCount(), 1);
-	const FRunEventChoiceSnapshot Choice = Screen->ReadChoiceSnapshot(0);
+	TestEqual(TEXT("One payment choice"), FWacomShopRunEventTestAccess::View(*Screen).ChoiceCount, 1);
+	const FRunEventChoiceSnapshot Choice = FWacomShopRunEventTestAccess::ChoiceSnapshot(*Screen, 0);
 	TestTrue(TEXT("Choice requires payment"), Choice.bRequiresOwnedCardPayment);
 	TestEqual(TEXT("Payment zone stored"), Choice.PaymentZoneId, FName(TEXT("RunEvent.Pay.Fang")));
 	TestEqual(TEXT("One candidate exposed"), Choice.PaymentCandidateCount, 1);
@@ -8919,7 +8967,7 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 		TestEqual(TEXT("Candidate is fang instance"), Choice.PaymentCandidateInstanceIds[0], FangId);
 	}
 
-	const FWacomRunEventScreenDebugView InitialDebug = Screen->ReadRunEventScreenDebugView();
+	const FWacomRunEventScreenDebugView InitialDebug = FWacomShopRunEventTestAccess::DebugView(*Screen);
 	TestTrue(TEXT("Debug reports run session"), InitialDebug.bHasRunSession);
 	TestTrue(TEXT("Debug reports active event"), InitialDebug.bIsEventActive);
 	TestEqual(TEXT("Debug reports active node"), InitialDebug.CurrentNodeId, FName(TEXT("Start")));
@@ -8939,7 +8987,7 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 		InitialDebug.ChoicePreviewSummary.Contains(TEXT("PayFang:Available=true:First=None:Req=1/0:Pay=1:Consequences=2:Outcome=EventEnds")));
 	TestTrue(TEXT("Debug reports payment zone mapping"),
 		InitialDebug.PaymentZoneMappingSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
-	const FString InitialDebugSummary = Screen->ReadRunEventScreenDebugSummary();
+	const FString InitialDebugSummary = FWacomShopRunEventTestAccess::DebugSummary(*Screen);
 	TestTrue(TEXT("Debug summary includes active node"),
 		InitialDebugSummary.Contains(TEXT("Node=Start")));
 	TestTrue(TEXT("Debug summary includes choice counts"),
@@ -8960,7 +9008,7 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 		InitialDebugSummary.Contains(TEXT("RunEvent.Pay.Fang->PayFang")));
 
 	TestFalse(TEXT("Clicking payment choice without drag is blocked"),
-		Screen->ChooseChoiceAt(0));
+		FWacomShopRunEventTestAccess::ChooseChoiceAt(*Screen, 0));
 	TestTrue(TEXT("Event remains active after blocked payment click"), Run->IsRunEventActive());
 	TestEqual(TEXT("Blocked payment click emits toast"), ToastWidget->GetVisibleToastCount(), 1);
 	{
@@ -8977,14 +9025,14 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	WrongDrop.SourceCardInstanceId = OtherId;
 	WrongDrop.ZoneId = TEXT("RunEvent.Pay.Fang");
 	const FWacomRunMenuCardDropResolveResult WrongResult =
-		Screen->ResolveDropForTest(WrongDrop);
+		FWacomShopRunEventTestAccess::ResolveDrop(*Screen, WrongDrop);
 	TestEqual(TEXT("Wrong candidate rejected by screen"),
 		WrongResult.IntentKind,
 		EWacomRunMenuCardDropIntentKind::Reject);
 	TestEqual(TEXT("Wrong candidate rejection keeps validation reason"),
 		WrongResult.RunValidationReason,
 		FName(TEXT("PaymentCardNotAllowed")));
-	const FString RejectedDebugSummary = Screen->ReadRunEventScreenDebugSummary();
+	const FString RejectedDebugSummary = FWacomShopRunEventTestAccess::DebugSummary(*Screen);
 	TestTrue(TEXT("Debug records rejected payment resolve"),
 		RejectedDebugSummary.Contains(TEXT("LastResolve=Resolve"))
 		&& RejectedDebugSummary.Contains(TEXT("Intent=Reject"))
@@ -8994,7 +9042,7 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	ValidDrop.SourceCardInstanceId = FangId;
 	ValidDrop.ZoneId = TEXT("RunEvent.Pay.Fang");
 	const FWacomRunMenuCardDropResolveResult ValidResult =
-		Screen->ResolveDropForTest(ValidDrop);
+		FWacomShopRunEventTestAccess::ResolveDrop(*Screen, ValidDrop);
 	TestEqual(TEXT("Valid candidate resolves submit intent"),
 		ValidResult.IntentKind,
 		EWacomRunMenuCardDropIntentKind::SubmitZoneTarget);
@@ -9004,7 +9052,7 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 	TestEqual(TEXT("RunEventScreen records submit reason"),
 		ValidResult.SubmitReason,
 		FName(TEXT("PayFang")));
-	const FString AcceptedDebugSummary = Screen->ReadRunEventScreenDebugSummary();
+	const FString AcceptedDebugSummary = FWacomShopRunEventTestAccess::DebugSummary(*Screen);
 	TestTrue(TEXT("Debug records accepted payment resolve"),
 		AcceptedDebugSummary.Contains(TEXT("Intent=SubmitZoneTarget"))
 		&& AcceptedDebugSummary.Contains(TEXT("SubmitPolicy=MenuHandled"))
@@ -9013,9 +9061,9 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 
 	FWacomRunMenuCardDropResolveResult SubmittedResult;
 	TestTrue(TEXT("RunEventScreen submit succeeds"),
-		Screen->SubmitDropForTest(ValidResult, SubmittedResult));
+		FWacomShopRunEventTestAccess::SubmitDrop(*Screen, ValidResult, SubmittedResult));
 	TestTrue(TEXT("Submit result records success"), SubmittedResult.bSubmitted);
-	const FString SubmittedDebugSummary = Screen->ReadRunEventScreenDebugSummary();
+	const FString SubmittedDebugSummary = FWacomShopRunEventTestAccess::DebugSummary(*Screen);
 	TestTrue(TEXT("Debug records submit result"),
 		SubmittedDebugSummary.Contains(TEXT("LastSubmit=Submit"))
 		&& SubmittedDebugSummary.Contains(TEXT("Submitted=true"))
@@ -9084,16 +9132,18 @@ bool FWacomUIRunEventScreenBlockedChoiceToastSpec::RunTest(const FString& /*Para
 	Screen->RefreshEvent();
 	TestTrue(TEXT("Blocked event screen remains active before choice"), Screen->IsActivated());
 
-	TestEqual(TEXT("One blocked choice"), Screen->ReadChoiceCount(), 1);
-	TestFalse(TEXT("Choice unavailable"), Screen->ReadChoiceSnapshot(0).bAvailable);
+	TestEqual(TEXT("One blocked choice"), FWacomShopRunEventTestAccess::View(*Screen).ChoiceCount, 1);
+	TestFalse(TEXT("Choice unavailable"),
+		FWacomShopRunEventTestAccess::ChoiceSnapshot(*Screen, 0).bAvailable);
 	{
-		const FWacomRunEventScreenDebugView Debug = Screen->ReadRunEventScreenDebugView();
+		const FWacomRunEventScreenDebugView Debug = FWacomShopRunEventTestAccess::DebugView(*Screen);
 		TestTrue(TEXT("Blocked preview summary records first reason"),
 			Debug.ChoicePreviewSummary.Contains(TEXT("Locked:Available=false:First=InsufficientGold:Req=1/1:Pay=0:Consequences=0:Outcome=None")));
 		TestTrue(TEXT("Blocked debug summary includes preview"),
-			Screen->ReadRunEventScreenDebugSummary().Contains(TEXT("Preview=[Locked:Available=false:First=InsufficientGold:Req=1/1:Pay=0:Consequences=0:Outcome=None]")));
+			FWacomShopRunEventTestAccess::DebugSummary(*Screen).Contains(TEXT("Preview=[Locked:Available=false:First=InsufficientGold:Req=1/1:Pay=0:Consequences=0:Outcome=None]")));
 	}
-	TestFalse(TEXT("Choosing blocked option fails"), Screen->ChooseChoiceAt(0));
+	TestFalse(TEXT("Choosing blocked option fails"),
+		FWacomShopRunEventTestAccess::ChooseChoiceAt(*Screen, 0));
 	TestTrue(TEXT("Event remains active"), Run->IsRunEventActive());
 	TestTrue(TEXT("Blocked choice keeps screen active"), Screen->IsActivated());
 	TestEqual(TEXT("Blocked choice emits toast"), ToastWidget->GetVisibleToastCount(), 1);
@@ -9128,8 +9178,8 @@ bool FWacomUIRunEventScreenFlagRewardPreviewSpec::RunTest(const FString& /*Param
 	Screen->ActivateWidget();
 	Screen->RefreshEvent();
 
-	TestEqual(TEXT("One flag reward choice"), Screen->ReadChoiceCount(), 1);
-	const FRunEventChoiceSnapshot Choice = Screen->ReadChoiceSnapshot(0);
+	TestEqual(TEXT("One flag reward choice"), FWacomShopRunEventTestAccess::View(*Screen).ChoiceCount, 1);
+	const FRunEventChoiceSnapshot Choice = FWacomShopRunEventTestAccess::ChoiceSnapshot(*Screen, 0);
 	TestEqual(TEXT("Choice id"), Choice.ChoiceId, FName(TEXT("ClaimGoldReward")));
 	TestFalse(TEXT("Choice initially blocked"), Choice.bAvailable);
 	TestEqual(TEXT("First blocked reason is missing flag"),
@@ -9138,7 +9188,7 @@ bool FWacomUIRunEventScreenFlagRewardPreviewSpec::RunTest(const FString& /*Param
 	TestEqual(TEXT("Three requirements"), Choice.Requirements.Num(), 3);
 	TestEqual(TEXT("Four consequences including node transition"), Choice.Consequences.Num(), 4);
 
-	const FWacomRunEventScreenDebugView Debug = Screen->ReadRunEventScreenDebugView();
+	const FWacomRunEventScreenDebugView Debug = FWacomShopRunEventTestAccess::DebugView(*Screen);
 	TestTrue(TEXT("Requirement summary reports three unsatisfied requirements"),
 		Debug.ChoiceRequirementSummary.Contains(TEXT("ClaimGoldReward:3/2")));
 	TestTrue(TEXT("Consequence summary reports four consequence facts"),
@@ -9146,7 +9196,7 @@ bool FWacomUIRunEventScreenFlagRewardPreviewSpec::RunTest(const FString& /*Param
 	TestTrue(TEXT("Preview summary reports flag/gold reward counts and transition"),
 		Debug.ChoicePreviewSummary.Contains(TEXT("ClaimGoldReward:Available=false:First=RequiredRunFlagMissing:Req=3/2:Pay=0:Consequences=4:Outcome=NodeTransition:Rewarded")));
 	TestTrue(TEXT("Debug summary includes flag reward preview"),
-		Screen->ReadRunEventScreenDebugSummary().Contains(TEXT("Preview=[ClaimGoldReward:Available=false:First=RequiredRunFlagMissing:Req=3/2:Pay=0:Consequences=4:Outcome=NodeTransition:Rewarded]")));
+		FWacomShopRunEventTestAccess::DebugSummary(*Screen).Contains(TEXT("Preview=[ClaimGoldReward:Available=false:First=RequiredRunFlagMissing:Req=3/2:Pay=0:Consequences=4:Outcome=NodeTransition:Rewarded]")));
 
 	return true;
 }
@@ -9159,16 +9209,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUIShopPurchaseFailureToastTextSpec::RunTest(const FString& /*Parameters*/)
 {
 	TestEqual(TEXT("Insufficient gold toast"),
-		UWacomShopScreenProbe::FormatPurchaseFailureToast(TEXT("InsufficientGold")).ToString(),
+		FWacomShopRunEventTestAccess::FormatPurchaseFailureToast(TEXT("InsufficientGold")).ToString(),
 		FString(TEXT("金币不足")));
 	TestEqual(TEXT("Purchased toast"),
-		UWacomShopScreenProbe::FormatPurchaseFailureToast(TEXT("Purchased")).ToString(),
+		FWacomShopRunEventTestAccess::FormatPurchaseFailureToast(TEXT("Purchased")).ToString(),
 		FString(TEXT("该商品已购买")));
 	TestEqual(TEXT("Missing card toast"),
-		UWacomShopScreenProbe::FormatPurchaseFailureToast(TEXT("MissingCard")).ToString(),
+		FWacomShopRunEventTestAccess::FormatPurchaseFailureToast(TEXT("MissingCard")).ToString(),
 		FString(TEXT("商品不可购买")));
 	TestEqual(TEXT("Fallback purchase failure toast"),
-		UWacomShopScreenProbe::FormatPurchaseFailureToast(NAME_None).ToString(),
+		FWacomShopRunEventTestAccess::FormatPurchaseFailureToast(NAME_None).ToString(),
 		FString(TEXT("购买失败")));
 
 	return true;
@@ -9249,11 +9299,13 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 	Screen->RefreshShop();
 	TestTrue(TEXT("Shop screen activates without world stack"), Screen->IsActivated());
 
-	TestEqual(TEXT("Two offer rows"), Screen->ReadOfferCount(), 2);
-	TestTrue(TEXT("First offer starts purchasable"), Screen->ReadOfferPresentationView(0).bCanPurchase);
-	TestTrue(TEXT("Second offer starts purchasable"), Screen->ReadOfferPresentationView(1).bCanPurchase);
-	TestTrue(TEXT("Gold text reflects run gold"), Screen->ReadGoldText().ToString().Contains(TEXT("5")));
-	TestTrue(TEXT("Purchase first offer succeeds"), Screen->PurchaseOfferAt(0));
+	TestEqual(TEXT("Two offer rows"), FWacomShopRunEventTestAccess::View(*Screen).CachedOfferCount, 2);
+	TestTrue(TEXT("First offer starts purchasable"), FWacomShopRunEventTestAccess::OfferView(*Screen, 0).bCanPurchase);
+	TestTrue(TEXT("Second offer starts purchasable"), FWacomShopRunEventTestAccess::OfferView(*Screen, 1).bCanPurchase);
+	TestTrue(TEXT("Gold text reflects run gold"),
+		FWacomShopRunEventTestAccess::View(*Screen).DisplayedGoldText.ToString().Contains(TEXT("5")));
+	TestTrue(TEXT("Purchase first offer succeeds"),
+		FWacomShopRunEventTestAccess::PurchaseOfferAt(*Screen, 0));
 	TestEqual(TEXT("Gold after purchase"), Run->GetGold(), 2);
 	TestEqual(TEXT("Purchase success emits one app toast"), ToastWidget->GetVisibleToastCount(), 1);
 	const TArray<FWacomAppToastView> PurchaseToasts = FWacomUITestAccess::GetCurrentToasts(*ToastWidget);
@@ -9266,13 +9318,15 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 		TestTrue(TEXT("Purchase success toast is positive"), Toast.Tone == EWacomAppToastTone::Positive);
 		TestEqual(TEXT("Purchase success toast icon"), Toast.IconKey, FName(TEXT("CardGained")));
 	}
-	TestFalse(TEXT("Purchased offer disabled after refresh"), Screen->ReadOfferPresentationView(0).bCanPurchase);
+	TestFalse(TEXT("Purchased offer disabled after refresh"),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 0).bCanPurchase);
 	TestEqual(TEXT("Purchased offer action after refresh"),
-		Screen->ReadOfferPresentationView(0).ActionText.ToString(),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 0).ActionText.ToString(),
 		FString(TEXT("已购买")));
-	TestFalse(TEXT("Second offer disabled after gold drops"), Screen->ReadOfferPresentationView(1).bCanPurchase);
+	TestFalse(TEXT("Second offer disabled after gold drops"),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 1).bCanPurchase);
 	TestEqual(TEXT("Second offer becomes insufficient"),
-		Screen->ReadOfferPresentationView(1).DisabledReason,
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 1).DisabledReason,
 		FName(TEXT("InsufficientGold")));
 	const FRunBackpackStorageSnapshot StorageSnapshot = Run->BuildBackpackStorageSnapshot();
 	TestTrue(TEXT("Purchased card enters run storage"),
@@ -9324,14 +9378,14 @@ bool FWacomUIShopScreenRefreshReusesOfferRowsSpec::RunTest(const FString& /*Para
 	Screen->TakeWidget();
 	Screen->RefreshShop();
 
-	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
-	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	UWacomShopOfferRowWidget* FirstRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 0);
+	UWacomShopOfferRowWidget* SecondRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 1);
 	TestNotNull(TEXT("First row"), FirstRow);
 	TestNotNull(TEXT("Second row"), SecondRow);
 
 	Screen->RefreshShop();
-	TestEqual(TEXT("First row reused"), Screen->ReadOfferRowWidget(0), FirstRow);
-	TestEqual(TEXT("Second row reused"), Screen->ReadOfferRowWidget(1), SecondRow);
+	TestEqual(TEXT("First row reused"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 0), FirstRow);
+	TestEqual(TEXT("Second row reused"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 1), SecondRow);
 
 	return true;
 }
@@ -9362,25 +9416,29 @@ bool FWacomUIShopScreenRefreshDirtyGateSkipsEquivalentOfferReconcileSpec::RunTes
 	Screen->SetRunSession(Run.Get());
 	Screen->TakeWidget();
 	Screen->RefreshShop();
-	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
-	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	UWacomShopOfferRowWidget* FirstRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 0);
+	UWacomShopOfferRowWidget* SecondRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 1);
 	TestNotNull(TEXT("First row"), FirstRow);
 	TestNotNull(TEXT("Second row"), SecondRow);
-	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
-	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
-	const int32 BaselineSnapshotBuildCount = Screen->ReadShopSnapshotBuildCount();
-	const int32 BaselineSnapshotSkipCount = Screen->ReadShopSnapshotRevisionSkipCount();
+	const FWacomShopScreenAutomationTestView BaselineView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	const int32 BaselineApplyCount = BaselineView.OfferRefreshApplyCount;
+	const int32 BaselineSkipCount = BaselineView.OfferRefreshSkipCount;
+	const int32 BaselineSnapshotBuildCount = BaselineView.SnapshotBuildCount;
+	const int32 BaselineSnapshotSkipCount = BaselineView.SnapshotRevisionSkipCount;
 	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
 	TestTrue(TEXT("Initial refresh builds shop snapshot"), BaselineSnapshotBuildCount >= 1);
 
 	Screen->RefreshShop();
-	TestEqual(TEXT("Equivalent refresh skips shop snapshot"), Screen->ReadShopSnapshotRevisionSkipCount(), BaselineSnapshotSkipCount + 1);
-	TestEqual(TEXT("Equivalent refresh does not build shop snapshot"), Screen->ReadShopSnapshotBuildCount(), BaselineSnapshotBuildCount);
-	TestEqual(TEXT("Equivalent refresh then skips offer reconcile"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount + 1);
-	TestEqual(TEXT("Equivalent refresh does not apply again"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount);
-	TestEqual(TEXT("Skipped refresh keeps first row"), Screen->ReadOfferRowWidget(0), FirstRow);
-	TestEqual(TEXT("Skipped refresh keeps second row"), Screen->ReadOfferRowWidget(1), SecondRow);
-	TestEqual(TEXT("Cached offer views stay available after skip"), Screen->ReadOfferCount(), 2);
+	const FWacomShopScreenAutomationTestView SkippedView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	TestEqual(TEXT("Equivalent refresh skips shop snapshot"), SkippedView.SnapshotRevisionSkipCount, BaselineSnapshotSkipCount + 1);
+	TestEqual(TEXT("Equivalent refresh does not build shop snapshot"), SkippedView.SnapshotBuildCount, BaselineSnapshotBuildCount);
+	TestEqual(TEXT("Equivalent refresh then skips offer reconcile"), SkippedView.OfferRefreshSkipCount, BaselineSkipCount + 1);
+	TestEqual(TEXT("Equivalent refresh does not apply again"), SkippedView.OfferRefreshApplyCount, BaselineApplyCount);
+	TestEqual(TEXT("Skipped refresh keeps first row"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 0), FirstRow);
+	TestEqual(TEXT("Skipped refresh keeps second row"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 1), SecondRow);
+	TestEqual(TEXT("Cached offer views stay available after skip"), SkippedView.CachedOfferCount, 2);
 
 	return true;
 }
@@ -9412,14 +9470,15 @@ bool FWacomUIShopScreenRefreshUpdatesOfferStatusWithoutRecreatingRowsSpec::RunTe
 	Screen->TakeWidget();
 	Screen->RefreshShop();
 
-	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
-	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	UWacomShopOfferRowWidget* FirstRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 0);
+	UWacomShopOfferRowWidget* SecondRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 1);
 	TestNotNull(TEXT("First row"), FirstRow);
 	TestNotNull(TEXT("Second row"), SecondRow);
-	TestTrue(TEXT("Purchase first offer succeeds"), Screen->PurchaseOfferAt(0));
+	TestTrue(TEXT("Purchase first offer succeeds"),
+		FWacomShopRunEventTestAccess::PurchaseOfferAt(*Screen, 0));
 
-	TestEqual(TEXT("Purchased row reused"), Screen->ReadOfferRowWidget(0), FirstRow);
-	TestEqual(TEXT("Second row reused after status change"), Screen->ReadOfferRowWidget(1), SecondRow);
+	TestEqual(TEXT("Purchased row reused"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 0), FirstRow);
+	TestEqual(TEXT("Second row reused after status change"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 1), SecondRow);
 	TestTrue(TEXT("First row stored purchased state"), FirstRow && FirstRow->GetOfferPresentationView().bPurchased);
 	TestEqual(TEXT("Second row now insufficient"),
 		SecondRow ? SecondRow->GetOfferPresentationView().DisabledReason : NAME_None,
@@ -9449,21 +9508,27 @@ bool FWacomUIShopScreenRefreshDirtyGateRefreshesWhenGoldChangesSpec::RunTest(con
 	Screen->SetRunSession(Run.Get());
 	Screen->TakeWidget();
 	Screen->RefreshShop();
-	UWacomShopOfferRowWidget* Row = Screen->ReadOfferRowWidget(0);
+	UWacomShopOfferRowWidget* Row = FWacomShopRunEventTestAccess::OfferRow(*Screen, 0);
 	TestNotNull(TEXT("Initial row"), Row);
-	TestFalse(TEXT("Offer initially blocked by gold"), Screen->ReadOfferPresentationView(0).bCanPurchase);
-	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
-	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
-	const int32 BaselineSnapshotBuildCount = Screen->ReadShopSnapshotBuildCount();
+	TestFalse(TEXT("Offer initially blocked by gold"),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 0).bCanPurchase);
+	const FWacomShopScreenAutomationTestView BaselineView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	const int32 BaselineApplyCount = BaselineView.OfferRefreshApplyCount;
+	const int32 BaselineSkipCount = BaselineView.OfferRefreshSkipCount;
+	const int32 BaselineSnapshotBuildCount = BaselineView.SnapshotBuildCount;
 	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
 
 	Run->AddGold(2);
 	Screen->RefreshShop();
-	TestEqual(TEXT("Gold change reuses cached shop snapshot"), Screen->ReadShopSnapshotBuildCount(), BaselineSnapshotBuildCount);
-	TestEqual(TEXT("Gold change applies offer reconcile"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
-	TestEqual(TEXT("Manual fallback after gold event skips offer reconcile"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount + 1);
-	TestEqual(TEXT("Gold change reuses row"), Screen->ReadOfferRowWidget(0), Row);
-	TestTrue(TEXT("Offer becomes purchasable after gold refresh"), Screen->ReadOfferPresentationView(0).bCanPurchase);
+	const FWacomShopScreenAutomationTestView GoldChangedView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	TestEqual(TEXT("Gold change reuses cached shop snapshot"), GoldChangedView.SnapshotBuildCount, BaselineSnapshotBuildCount);
+	TestEqual(TEXT("Gold change applies offer reconcile"), GoldChangedView.OfferRefreshApplyCount, BaselineApplyCount + 1);
+	TestEqual(TEXT("Manual fallback after gold event skips offer reconcile"), GoldChangedView.OfferRefreshSkipCount, BaselineSkipCount + 1);
+	TestEqual(TEXT("Gold change reuses row"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 0), Row);
+	TestTrue(TEXT("Offer becomes purchasable after gold refresh"),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 0).bCanPurchase);
 
 	return true;
 }
@@ -9490,19 +9555,25 @@ bool FWacomUIShopScreenRefreshDirtyGateRefreshesWhenOfferPurchasedSpec::RunTest(
 	Screen->SetRunSession(Run.Get());
 	Screen->TakeWidget();
 	Screen->RefreshShop();
-	UWacomShopOfferRowWidget* Row = Screen->ReadOfferRowWidget(0);
+	UWacomShopOfferRowWidget* Row = FWacomShopRunEventTestAccess::OfferRow(*Screen, 0);
 	TestNotNull(TEXT("Initial row"), Row);
-	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
-	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
-	const int32 BaselineSnapshotBuildCount = Screen->ReadShopSnapshotBuildCount();
+	const FWacomShopScreenAutomationTestView BaselineView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	const int32 BaselineApplyCount = BaselineView.OfferRefreshApplyCount;
+	const int32 BaselineSkipCount = BaselineView.OfferRefreshSkipCount;
+	const int32 BaselineSnapshotBuildCount = BaselineView.SnapshotBuildCount;
 	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
 
-	TestTrue(TEXT("Purchase offer succeeds"), Screen->PurchaseOfferAt(0));
-	TestEqual(TEXT("Purchase builds changed shop snapshot once"), Screen->ReadShopSnapshotBuildCount(), BaselineSnapshotBuildCount + 1);
-	TestEqual(TEXT("Purchase applies offer reconcile"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
-	TestEqual(TEXT("Purchase fallback refresh skips offer reconcile"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount + 1);
-	TestEqual(TEXT("Purchase reuses row"), Screen->ReadOfferRowWidget(0), Row);
-	TestTrue(TEXT("Offer view marks purchased"), Screen->ReadOfferPresentationView(0).bPurchased);
+	TestTrue(TEXT("Purchase offer succeeds"),
+		FWacomShopRunEventTestAccess::PurchaseOfferAt(*Screen, 0));
+	const FWacomShopScreenAutomationTestView PurchasedView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	TestEqual(TEXT("Purchase builds changed shop snapshot once"), PurchasedView.SnapshotBuildCount, BaselineSnapshotBuildCount + 1);
+	TestEqual(TEXT("Purchase applies offer reconcile"), PurchasedView.OfferRefreshApplyCount, BaselineApplyCount + 1);
+	TestEqual(TEXT("Purchase fallback refresh skips offer reconcile"), PurchasedView.OfferRefreshSkipCount, BaselineSkipCount + 1);
+	TestEqual(TEXT("Purchase reuses row"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 0), Row);
+	TestTrue(TEXT("Offer view marks purchased"),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 0).bPurchased);
 
 	return true;
 }
@@ -9530,20 +9601,26 @@ bool FWacomUIShopScreenRunEventRefreshUpdatesPurchasedOfferSpec::RunTest(const F
 	Screen->TakeWidget();
 	Screen->ActivateWidget();
 	Screen->RefreshShop();
-	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
-	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
+	const FWacomShopScreenAutomationTestView BaselineView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	const int32 BaselineApplyCount = BaselineView.OfferRefreshApplyCount;
+	const int32 BaselineSkipCount = BaselineView.OfferRefreshSkipCount;
 	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
-	const FGuid OfferId = Screen->ReadOfferPresentationView(0).OfferId;
+	const FGuid OfferId = FWacomShopRunEventTestAccess::OfferView(*Screen, 0).OfferId;
 	TestTrue(TEXT("Offer id valid"), OfferId.IsValid());
 
 	TestTrue(TEXT("Run purchase succeeds"), Run->PurchaseShopOffer(OfferId));
-	TestEqual(TEXT("Run event refresh applies purchased state once"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
-	TestEqual(TEXT("Run event refresh does not skip before manual fallback"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount);
-	TestTrue(TEXT("Purchased offer visible after run event"), Screen->ReadOfferPresentationView(0).bPurchased);
+	FWacomShopScreenAutomationTestView EventRefreshView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	TestEqual(TEXT("Run event refresh applies purchased state once"), EventRefreshView.OfferRefreshApplyCount, BaselineApplyCount + 1);
+	TestEqual(TEXT("Run event refresh does not skip before manual fallback"), EventRefreshView.OfferRefreshSkipCount, BaselineSkipCount);
+	TestTrue(TEXT("Purchased offer visible after run event"),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 0).bPurchased);
 
 	Screen->RefreshShop();
-	TestEqual(TEXT("Manual fallback after event is cheap skip"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
-	TestEqual(TEXT("Manual fallback after event skips offer reconcile"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount + 1);
+	EventRefreshView = FWacomShopRunEventTestAccess::View(*Screen);
+	TestEqual(TEXT("Manual fallback after event is cheap skip"), EventRefreshView.OfferRefreshApplyCount, BaselineApplyCount + 1);
+	TestEqual(TEXT("Manual fallback after event skips offer reconcile"), EventRefreshView.OfferRefreshSkipCount, BaselineSkipCount + 1);
 
 	return true;
 }
@@ -9577,8 +9654,8 @@ bool FWacomUIShopScreenRefreshRemovesMissingOfferRowsSpec::RunTest(const FString
 	Screen->SetRunSession(Run.Get());
 	Screen->TakeWidget();
 	Screen->RefreshShop();
-	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
-	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	UWacomShopOfferRowWidget* FirstRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 0);
+	UWacomShopOfferRowWidget* SecondRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 1);
 	TestNotNull(TEXT("First row"), FirstRow);
 	TestNotNull(TEXT("Second row"), SecondRow);
 
@@ -9602,13 +9679,17 @@ bool FWacomUIShopScreenRefreshRemovesMissingOfferRowsSpec::RunTest(const FString
 	Screen->SetShopSnapshotOverride(ReplacementSnapshot);
 	Screen->RefreshShop();
 
-	TestEqual(TEXT("Second offer row reused at new first position"), Screen->ReadOfferRowWidget(0), SecondRow);
-	TestNotEqual(TEXT("Removed first row not reused for new third offer"), Screen->ReadOfferRowWidget(1), FirstRow);
+	TestEqual(TEXT("Second offer row reused at new first position"),
+		FWacomShopRunEventTestAccess::OfferRow(*Screen, 0),
+		SecondRow);
+	TestNotEqual(TEXT("Removed first row not reused for new third offer"),
+		FWacomShopRunEventTestAccess::OfferRow(*Screen, 1),
+		FirstRow);
 	TestEqual(TEXT("Offer order keeps second card first"),
-		Screen->ReadOfferPresentationView(0).CardDefinition.Get(),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 0).CardDefinition.Get(),
 		SecondCard);
 	TestEqual(TEXT("Offer order keeps third card second"),
-		Screen->ReadOfferPresentationView(1).CardDefinition.Get(),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 1).CardDefinition.Get(),
 		ThirdCard);
 
 	return true;
@@ -9643,12 +9724,14 @@ bool FWacomUIShopScreenRefreshDirtyGateRefreshesWhenOfferIdentityOrOrderChangesS
 	Screen->SetRunSession(Run.Get());
 	Screen->TakeWidget();
 	Screen->RefreshShop();
-	UWacomShopOfferRowWidget* FirstRow = Screen->ReadOfferRowWidget(0);
-	UWacomShopOfferRowWidget* SecondRow = Screen->ReadOfferRowWidget(1);
+	UWacomShopOfferRowWidget* FirstRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 0);
+	UWacomShopOfferRowWidget* SecondRow = FWacomShopRunEventTestAccess::OfferRow(*Screen, 1);
 	TestNotNull(TEXT("First row"), FirstRow);
 	TestNotNull(TEXT("Second row"), SecondRow);
-	const int32 BaselineApplyCount = Screen->ReadOfferRefreshApplyCount();
-	const int32 BaselineSkipCount = Screen->ReadOfferRefreshSkipCount();
+	const FWacomShopScreenAutomationTestView BaselineView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	const int32 BaselineApplyCount = BaselineView.OfferRefreshApplyCount;
+	const int32 BaselineSkipCount = BaselineView.OfferRefreshSkipCount;
 	TestTrue(TEXT("Initial refresh applies offer reconcile"), BaselineApplyCount >= 1);
 
 	const FRunShopSnapshot InitialSnapshot = Run->BuildCurrentShopSnapshot();
@@ -9671,15 +9754,17 @@ bool FWacomUIShopScreenRefreshDirtyGateRefreshesWhenOfferIdentityOrOrderChangesS
 	Screen->SetShopSnapshotOverride(ReplacementSnapshot);
 	Screen->RefreshShop();
 
-	TestEqual(TEXT("Offer identity/order change applies offer reconcile"), Screen->ReadOfferRefreshApplyCount(), BaselineApplyCount + 1);
-	TestEqual(TEXT("Offer identity/order change does not skip"), Screen->ReadOfferRefreshSkipCount(), BaselineSkipCount);
-	TestEqual(TEXT("Second row reused at new first position"), Screen->ReadOfferRowWidget(0), SecondRow);
-	TestNotEqual(TEXT("Removed first row not reused for new third offer"), Screen->ReadOfferRowWidget(1), FirstRow);
+	const FWacomShopScreenAutomationTestView ReorderedView =
+		FWacomShopRunEventTestAccess::View(*Screen);
+	TestEqual(TEXT("Offer identity/order change applies offer reconcile"), ReorderedView.OfferRefreshApplyCount, BaselineApplyCount + 1);
+	TestEqual(TEXT("Offer identity/order change does not skip"), ReorderedView.OfferRefreshSkipCount, BaselineSkipCount);
+	TestEqual(TEXT("Second row reused at new first position"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 0), SecondRow);
+	TestNotEqual(TEXT("Removed first row not reused for new third offer"), FWacomShopRunEventTestAccess::OfferRow(*Screen, 1), FirstRow);
 	TestEqual(TEXT("Offer order keeps second card first"),
-		Screen->ReadOfferPresentationView(0).CardDefinition.Get(),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 0).CardDefinition.Get(),
 		SecondCard);
 	TestEqual(TEXT("Offer order keeps third card second"),
-		Screen->ReadOfferPresentationView(1).CardDefinition.Get(),
+		FWacomShopRunEventTestAccess::OfferView(*Screen, 1).CardDefinition.Get(),
 		ThirdCard);
 
 	return true;

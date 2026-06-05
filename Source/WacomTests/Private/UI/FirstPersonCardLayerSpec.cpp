@@ -22,12 +22,14 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
+#include "UI/BattleSceneTargetClickTestAccess.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayoutPreset.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/CardViewTestAccess.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
 #include "UI/FirstPersonCardLayerSpecReceiver.h"
 
@@ -986,19 +988,23 @@ bool FWacomFirstPersonCardLayerCompressedBleedHitBoundsTest::RunTest(const FStri
 		CardView->GetCardBodyHitSize(),
 		UWacomCardView::GetDefaultCardBodyHitSize());
 	TestTrue(TEXT("Compressed cached body still accepts stable right edge"),
-		CardView->IsLocalPositionInsideCardBodyWithBoundsForTest(
+		FWacomCardViewTestAccess::IsLocalPositionInsideCardBodyWithBounds(
+			*CardView,
 			FVector2D(278.0f, 190.0f),
 			FVector2D(260.0f, 380.0f)));
 	TestFalse(TEXT("Compressed cached body still rejects outside stable right edge"),
-		CardView->IsLocalPositionInsideCardBodyWithBoundsForTest(
+		FWacomCardViewTestAccess::IsLocalPositionInsideCardBodyWithBounds(
+			*CardView,
 			FVector2D(282.0f, 190.0f),
 			FVector2D(260.0f, 380.0f)));
 	TestTrue(TEXT("Compressed cached body still accepts stable top edge"),
-		CardView->IsLocalPositionInsideCardBodyWithBoundsForTest(
+		FWacomCardViewTestAccess::IsLocalPositionInsideCardBodyWithBounds(
+			*CardView,
 			FVector2D(130.0f, -18.0f),
 			FVector2D(260.0f, 380.0f)));
 	TestFalse(TEXT("Compressed cached body still rejects above stable top edge"),
-		CardView->IsLocalPositionInsideCardBodyWithBoundsForTest(
+		FWacomCardViewTestAccess::IsLocalPositionInsideCardBodyWithBounds(
+			*CardView,
 			FVector2D(130.0f, -22.0f),
 			FVector2D(260.0f, 380.0f)));
 
@@ -11442,8 +11448,8 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 	HUD->SetSession(Session);
 	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD);
-	PC->SetBattleSceneClickHitForTest(SceneEnemy.Parts[0], SceneEnemy.Parts[0]->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, SceneEnemy.Parts[0], SceneEnemy.Parts[0]->GetHitBounds());
 
 	const FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerSpec::MakeDropDragView(
 		CardId,
@@ -11522,9 +11528,9 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 	HUD->SetSession(Session);
 	HUD->SetBattleSceneEnemyHostForTest(CurrentHost.Host);
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
-	PC->SetBattleSceneClickHUDForTest(HUD);
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
 	OtherHost.Parts[0]->GetInteractionTargetComponent()->SetTargetId(PartId);
-	PC->SetBattleSceneClickHitForTest(OtherHost.Parts[0], OtherHost.Parts[0]->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, OtherHost.Parts[0], OtherHost.Parts[0]->GetHitBounds());
 
 	const FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerSpec::MakeDropDragView(
 		CardId,

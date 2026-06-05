@@ -12,6 +12,8 @@
 #include "RunState.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
+#include "UI/PlayerControllerRunInteractionTestAccess.h"
+#include "UI/RunMenuDropTargetWidgetTestAccess.h"
 #include "UI/RunFirstPersonCardLayerSpecReceiver.h"
 #include "UI/WacomShopRunEventTestProbes.h"
 #include "UObject/StrongObjectPtr.h"
@@ -1170,7 +1172,7 @@ bool FWacomUIRunFirstPersonMenuWidgetOwnedLeaseClearsSpec::RunTest(const FString
 	State.Backpack = { WacomRunFirstPersonCardLayerSpec::MakeRunCardInstance(Fang) };
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	TStrongObjectPtr<AWacomPlayerCharacter> CharacterPawn(NewObject<AWacomPlayerCharacter>());
 	PC->SetPawn(CharacterPawn.Get());
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -1214,7 +1216,7 @@ bool FWacomUIRunFirstPersonPrototypeTestMenuRequestsOwnedLeaseSpec::RunTest(cons
 	State.Backpack = { WacomRunFirstPersonCardLayerSpec::MakeRunCardInstance(Fang) };
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	TStrongObjectPtr<AWacomPlayerCharacter> CharacterPawn(NewObject<AWacomPlayerCharacter>());
 	PC->SetPawn(CharacterPawn.Get());
 
@@ -1373,12 +1375,12 @@ bool FWacomUIRunFirstPersonDragUpdateOverMenuZoneReportsTargetSpec::RunTest(cons
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomInteractionTargetHandle Handle;
 	TestTrue(TEXT("Menu zone is probed"),
-		PC->ProbeRunMenuDropTargetAtWidgetPositionForTest(FVector2D(100.0f, 200.0f), Handle));
+		FWacomPlayerControllerRunInteractionTestAccess::ProbeRunMenuDropTargetAtWidgetPosition(PC.Get(), FVector2D(100.0f, 200.0f), Handle));
 	TestEqual(TEXT("Zone target id is reported"),
 		Handle.ZoneId,
 		FName(TEXT("RunEvent.Pay.Fang")));
@@ -1402,8 +1404,8 @@ bool FWacomUIRunFirstPersonDragReleaseOnMenuZoneProbeOnlySpec::RunTest(const FSt
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	TStrongObjectPtr<UWacomShopScreenProbe> ActiveMenu(NewObject<UWacomShopScreenProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomFirstPersonCardLayerEntry LeaseEntry;
 	LeaseEntry.CardInstanceId = FGuid::NewGuid();
@@ -1421,9 +1423,9 @@ bool FWacomUIRunFirstPersonDragReleaseOnMenuZoneProbeOnlySpec::RunTest(const FSt
 	DragView.bHasPointerViewportPosition = true;
 
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
-	PC->ApplyRunMenuDropProbeFeedbackForTest(LeaseEntry.CardInstanceId, DragView, /*bReleased*/ true);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), LeaseEntry.CardInstanceId, DragView, /*bReleased*/ true);
 
-	const FString Debug = PC->ReadRunMenuDropProbeDebugSummaryForTest();
+	const FString Debug = FWacomPlayerControllerRunInteractionTestAccess::RunMenuDropProbeDebugSummary(PC.Get());
 	TestTrue(TEXT("Release is probe-only"),
 		Debug.Contains(TEXT("Intent=ProbeZoneTarget")));
 	TestTrue(TEXT("Debug includes zone id"),
@@ -1450,8 +1452,8 @@ bool FWacomUIRunFirstPersonMenuDropProbeClearSpec::RunTest(const FString& /*Para
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	TStrongObjectPtr<UWacomShopScreenProbe> ActiveMenu(NewObject<UWacomShopScreenProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Clear.Zone");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomFirstPersonCardLayerEntry LeaseEntry;
 	LeaseEntry.CardInstanceId = FGuid::NewGuid();
@@ -1468,18 +1470,18 @@ bool FWacomUIRunFirstPersonMenuDropProbeClearSpec::RunTest(const FString& /*Para
 	DragView.CurrentScreenPosition = FVector2D(100.0f, 200.0f);
 	DragView.PointerViewportPosition = FVector2D(100.0f, 200.0f);
 	DragView.bHasPointerViewportPosition = true;
-	PC->ApplyRunMenuDropProbeFeedbackForTest(LeaseEntry.CardInstanceId, DragView, /*bReleased*/ false);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), LeaseEntry.CardInstanceId, DragView, /*bReleased*/ false);
 	TestEqual(TEXT("Probe preview is active before clear"),
 		Target->GetRunMenuDropPreviewState(),
 		EWacomRunMenuDropTargetPreviewState::Probe);
 
-	PC->ClearRunMenuDropTargetProbeForTest();
+	FWacomPlayerControllerRunInteractionTestAccess::ClearRunMenuDropTargetProbe(PC.Get());
 
 	TestEqual(TEXT("Preview clears"),
 		Target->GetRunMenuDropPreviewState(),
 		EWacomRunMenuDropTargetPreviewState::Normal);
 	TestTrue(TEXT("Debug reports clear"),
-		PC->ReadRunMenuDropProbeDebugSummaryForTest().Contains(TEXT("Cleared")));
+		FWacomPlayerControllerRunInteractionTestAccess::RunMenuDropProbeDebugSummary(PC.Get()).Contains(TEXT("Cleared")));
 
 	return true;
 }
@@ -1497,8 +1499,8 @@ bool FWacomUIRunMenuCardDropRejectsWithoutLeaseSpec::RunTest(const FString& /*Pa
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
 	ActiveMenu->SetOwningWacomPlayerControllerForTest(PC.Get());
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	FWacomFirstPersonCardDragView DragView;
@@ -1509,7 +1511,7 @@ bool FWacomUIRunMenuCardDropRejectsWithoutLeaseSpec::RunTest(const FString& /*Pa
 	DragView.bHasPointerViewportPosition = true;
 
 	const FWacomRunMenuCardDropResolveResult Result =
-		PC->ResolveRunMenuCardDropIntentForTest(DragView.CardInstanceId, DragView);
+		FWacomPlayerControllerRunInteractionTestAccess::ResolveRunMenuCardDropIntent(PC.Get(), DragView.CardInstanceId, DragView);
 	TestEqual(TEXT("Intent rejects without lease"),
 		Result.IntentKind,
 		EWacomRunMenuCardDropIntentKind::Reject);
@@ -1535,7 +1537,7 @@ bool FWacomUIRunMenuCardDropProbeOnlySpec::RunTest(const FString& /*Parameters*/
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -1543,8 +1545,8 @@ bool FWacomUIRunMenuCardDropProbeOnlySpec::RunTest(const FString& /*Parameters*/
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomRunMenuCardLeaseRequest Request = WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("RunEventLease"));
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
@@ -1563,7 +1565,7 @@ bool FWacomUIRunMenuCardDropProbeOnlySpec::RunTest(const FString& /*Parameters*/
 	DragView.bHasPointerViewportPosition = true;
 
 	const FWacomRunMenuCardDropResolveResult Result =
-		PC->ResolveRunMenuCardDropIntentForTest(DragView.CardInstanceId, DragView);
+		FWacomPlayerControllerRunInteractionTestAccess::ResolveRunMenuCardDropIntent(PC.Get(), DragView.CardInstanceId, DragView);
 	TestEqual(TEXT("Intent remains probe-only"),
 		Result.IntentKind,
 		EWacomRunMenuCardDropIntentKind::ProbeZoneTarget);
@@ -1590,7 +1592,7 @@ bool FWacomUIRunMenuCardDropAcceptedZoneSpec::RunTest(const FString& /*Parameter
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -1602,8 +1604,8 @@ bool FWacomUIRunMenuCardDropAcceptedZoneSpec::RunTest(const FString& /*Parameter
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomRunMenuCardLeaseRequest Request = WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("RunEventLease"));
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
@@ -1622,7 +1624,7 @@ bool FWacomUIRunMenuCardDropAcceptedZoneSpec::RunTest(const FString& /*Parameter
 	DragView.bHasPointerViewportPosition = true;
 
 	const FWacomRunMenuCardDropResolveResult Result =
-		PC->ResolveRunMenuCardDropIntentForTest(DragView.CardInstanceId, DragView);
+		FWacomPlayerControllerRunInteractionTestAccess::ResolveRunMenuCardDropIntent(PC.Get(), DragView.CardInstanceId, DragView);
 	TestEqual(TEXT("Accepted zone resolves submit intent"),
 		Result.IntentKind,
 		EWacomRunMenuCardDropIntentKind::SubmitZoneTarget);
@@ -1652,7 +1654,7 @@ bool FWacomUIRunMenuCardDropReleaseDestroysSpec::RunTest(const FString& /*Parame
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -1664,8 +1666,8 @@ bool FWacomUIRunMenuCardDropReleaseDestroysSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomRunMenuCardLeaseRequest Request = WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("RunEventLease"));
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
@@ -1684,7 +1686,7 @@ bool FWacomUIRunMenuCardDropReleaseDestroysSpec::RunTest(const FString& /*Parame
 	DragView.PointerViewportPosition = FVector2D(100.0f, 200.0f);
 	DragView.bHasPointerViewportPosition = true;
 
-	PC->ApplyRunMenuDropProbeFeedbackForTest(PaidId, DragView, /*bReleased*/ true);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), PaidId, DragView, /*bReleased*/ true);
 
 	FCardInstance Found;
 	EZoneKind FoundZone = EZoneKind::Backpack;
@@ -1713,7 +1715,7 @@ bool FWacomUIRunMenuCardDropMenuHandledDoesNotDefaultDestroySpec::RunTest(const 
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -1725,8 +1727,8 @@ bool FWacomUIRunMenuCardDropMenuHandledDoesNotDefaultDestroySpec::RunTest(const 
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomRunMenuCardLeaseRequest Request = WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("RunEventLease"));
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
@@ -1746,7 +1748,7 @@ bool FWacomUIRunMenuCardDropMenuHandledDoesNotDefaultDestroySpec::RunTest(const 
 	DragView.bHasPointerViewportPosition = true;
 
 	FWacomRunMenuCardDropResolveResult Result =
-		PC->ResolveRunMenuCardDropIntentForTest(PaidId, DragView);
+		FWacomPlayerControllerRunInteractionTestAccess::ResolveRunMenuCardDropIntent(PC.Get(), PaidId, DragView);
 	TestEqual(TEXT("Menu-handled drop resolves submit intent"),
 		Result.IntentKind,
 		EWacomRunMenuCardDropIntentKind::SubmitZoneTarget);
@@ -1754,7 +1756,7 @@ bool FWacomUIRunMenuCardDropMenuHandledDoesNotDefaultDestroySpec::RunTest(const 
 		Result.SubmitPolicy,
 		EWacomRunMenuCardDropSubmitPolicy::MenuHandled);
 
-	PC->ApplyRunMenuDropProbeFeedbackForTest(PaidId, DragView, /*bReleased*/ true);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), PaidId, DragView, /*bReleased*/ true);
 
 	FCardInstance Found;
 	EZoneKind FoundZone = EZoneKind::Backpack;
@@ -1785,7 +1787,7 @@ bool FWacomUIRunMenuCardDropMenuHandledFailureSpec::RunTest(const FString& /*Par
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -1798,8 +1800,8 @@ bool FWacomUIRunMenuCardDropMenuHandledFailureSpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomRunMenuCardLeaseRequest Request = WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("RunEventLease"));
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
@@ -1818,7 +1820,7 @@ bool FWacomUIRunMenuCardDropMenuHandledFailureSpec::RunTest(const FString& /*Par
 	DragView.PointerViewportPosition = FVector2D(100.0f, 200.0f);
 	DragView.bHasPointerViewportPosition = true;
 
-	PC->ApplyRunMenuDropProbeFeedbackForTest(PaidId, DragView, /*bReleased*/ true);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), PaidId, DragView, /*bReleased*/ true);
 
 	FCardInstance Found;
 	EZoneKind FoundZone = EZoneKind::Backpack;
@@ -2559,7 +2561,7 @@ bool FWacomUIRunMenuCardDropValidationFailsSpec::RunTest(const FString& /*Parame
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -2571,8 +2573,8 @@ bool FWacomUIRunMenuCardDropValidationFailsSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	const FGuid PaidId =
 		WacomRunFirstPersonCardLayerSpec::FindOwnedInstanceIdByDefinition(Run->GetRunState(), Fang);
@@ -2596,7 +2598,7 @@ bool FWacomUIRunMenuCardDropValidationFailsSpec::RunTest(const FString& /*Parame
 	DragView.bHasPointerViewportPosition = true;
 
 	const FWacomRunMenuCardDropResolveResult Result =
-		PC->ResolveRunMenuCardDropIntentForTest(PaidId, DragView);
+		FWacomPlayerControllerRunInteractionTestAccess::ResolveRunMenuCardDropIntent(PC.Get(), PaidId, DragView);
 	TestEqual(TEXT("Missing owned card rejects"),
 		Result.IntentKind,
 		EWacomRunMenuCardDropIntentKind::Reject);
@@ -2629,7 +2631,7 @@ bool FWacomUIRunMenuCardDropRefreshesLeaseSpec::RunTest(const FString& /*Paramet
 	};
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -2641,8 +2643,8 @@ bool FWacomUIRunMenuCardDropRefreshesLeaseSpec::RunTest(const FString& /*Paramet
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomRunMenuCardLeaseRequest Request = WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("RunEventLease"));
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
@@ -2663,7 +2665,7 @@ bool FWacomUIRunMenuCardDropRefreshesLeaseSpec::RunTest(const FString& /*Paramet
 	DragView.CurrentScreenPosition = FVector2D(100.0f, 200.0f);
 	DragView.PointerViewportPosition = FVector2D(100.0f, 200.0f);
 	DragView.bHasPointerViewportPosition = true;
-	PC->ApplyRunMenuDropProbeFeedbackForTest(PaidId, DragView, /*bReleased*/ true);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), PaidId, DragView, /*bReleased*/ true);
 
 	TestTrue(TEXT("Provider-backed lease remains active"),
 		Source && Source->HasActiveMenuLease());
@@ -2689,7 +2691,7 @@ bool FWacomUIRunMenuCardDropNoCandidatesClearsLeaseSpec::RunTest(const FString& 
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	PC->SetRunSessionForTest(Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
 	PC->SetRunFirstPersonCardLayerActive(true);
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> ActiveMenu(NewObject<UWacomMenuWidgetBaseProbe>(PC.Get()));
@@ -2701,8 +2703,8 @@ bool FWacomUIRunMenuCardDropNoCandidatesClearsLeaseSpec::RunTest(const FString& 
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
-	Target->bProbeHitForTest = true;
-	PC->RegisterRunMenuDropTargetForTest(Target.Get());
+	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
+	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
 
 	FWacomRunMenuCardLeaseRequest Request = WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("RunEventLease"));
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
@@ -2721,7 +2723,7 @@ bool FWacomUIRunMenuCardDropNoCandidatesClearsLeaseSpec::RunTest(const FString& 
 	DragView.CurrentScreenPosition = FVector2D(100.0f, 200.0f);
 	DragView.PointerViewportPosition = FVector2D(100.0f, 200.0f);
 	DragView.bHasPointerViewportPosition = true;
-	PC->ApplyRunMenuDropProbeFeedbackForTest(PaidId, DragView, /*bReleased*/ true);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), PaidId, DragView, /*bReleased*/ true);
 
 	UWacomRunFirstPersonCardSourceComponent* Source = PC->GetRunFirstPersonCardSourceComponent();
 	TestTrue(TEXT("Source exists"), Source != nullptr);

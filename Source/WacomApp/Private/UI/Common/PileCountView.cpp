@@ -72,7 +72,14 @@ void UPileCountView::SetLabel(FText InLabel)
 void UPileCountView::SetCount(int32 InCount)
 {
 	Count = InCount;
-	if (CountText) { CountText->SetText(FText::AsNumber(Count)); }
+	CountDisplayText = FText::AsNumber(Count);
+	if (CountText) { CountText->SetText(CountDisplayText); }
+}
+
+void UPileCountView::SetCountDisplayText(FText InText)
+{
+	CountDisplayText = InText;
+	if (CountText) { CountText->SetText(GetCountDisplayText()); }
 }
 
 void UPileCountView::SetFrameColor(FLinearColor Color)
@@ -83,5 +90,5 @@ void UPileCountView::SetFrameColor(FLinearColor Color)
 void UPileCountView::RefreshDisplay()
 {
 	if (LabelText) { LabelText->SetText(CachedLabel.IsEmpty() ? DefaultLabel : CachedLabel); }
-	if (CountText) { CountText->SetText(FText::AsNumber(Count)); }
+	if (CountText) { CountText->SetText(GetCountDisplayText()); }
 }

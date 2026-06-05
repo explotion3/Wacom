@@ -19,7 +19,7 @@ class UBattleHUD;
  * WBP 约定：
  * - PartsContainer : UPanelWidget (BindWidget)
  */
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta = (ToolTip = "Legacy 2D 敌方部位信息条。缺少 SceneEnemyHost / PartActor 时作为 fallback/debug 使用，不是 HD-2D 场景敌人的正式制作入口。"))
 class WACOMAPP_API UEnemyInfoBar : public UWacomBattleWidgetBase
 {
 	GENERATED_BODY()
@@ -27,7 +27,7 @@ class WACOMAPP_API UEnemyInfoBar : public UWacomBattleWidgetBase
 public:
 	UEnemyInfoBar();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Enemy 2D Fallback|Compatibility", meta = (ToolTip = "legacy 2D 敌方部位 fallback 使用的单部位 Widget 类。正式场景敌人应优先使用 SceneEnemyHost + PartActor。"))
 	TSubclassOf<UEnemyPartWidget> PartWidgetClass;
 
 	bool TryGetPartWidgetCenterInViewport(

@@ -224,46 +224,46 @@ class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 public:
 	virtual ~UBattleHUD() override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板的宽高。只影响未用完整 BattleHUD WBP 覆盖布局时的默认 CanvasPanel Slot 尺寸。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|HUD Fallback Layout|Compatibility", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板的宽高。只影响未用完整 BattleHUD WBP 覆盖布局时的默认 CanvasPanel Slot 尺寸，不是正式 WBP 布局制作入口。"))
 	FVector2D HandPanelSize = FVector2D(1700.0f, 420.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Layout", meta = (UIMin = "-400.0", UIMax = "400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板相对屏幕底部的上移距离。正数会让手牌面板离底部更远。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|HUD Fallback Layout|Compatibility", meta = (UIMin = "-400.0", UIMax = "400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板相对屏幕底部的上移距离。正数会让手牌面板离底部更远；只服务 fallback Canvas slot。"))
 	float HandPanelBottomOffset = 10.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "战斗手牌悬浮详情面板的估算宽高，单位为 Slate 像素。用于 CanvasPanel Slot 尺寸和边界 clamp；实际样式仍由 WBP_CardDetailPanel 决定。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "战斗手牌悬浮详情面板的估算宽高，单位为 Slate 像素。用于 CanvasPanel Slot 尺寸和边界 clamp；实际样式仍由 WBP_CardDetailPanel 决定。"))
 	FVector2D CardDetailPanelEstimatedSize = FVector2D(360.0f, 420.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "战斗手牌悬浮详情面板与卡牌之间的间距，单位为 Slate 像素。面板默认显示在卡牌左侧，左侧空间不足时换到右侧。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "战斗手牌悬浮详情面板与卡牌之间的间距，单位为 Slate 像素。面板默认显示在卡牌左侧，左侧空间不足时换到右侧。"))
 	float CardDetailPanelPadding = 12.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ToolTip = "是否启用战斗卡牌详情读牌动效。开启后旧手牌和第一人称手牌详情都会使用短延迟、淡入淡出、位置平滑和贴边稳定；关闭后恢复立即显示/隐藏。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ToolTip = "是否启用战斗卡牌详情读牌动效。开启后旧手牌和第一人称手牌详情都会使用短延迟、淡入淡出、位置平滑和贴边稳定；关闭后恢复立即显示/隐藏。"))
 	bool bEnableCardDetailReadabilityPolish = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.4", ToolTip = "卡牌 hover 后详情出现前的停留时间，单位为秒。用于减少鼠标快速扫过手牌时的详情闪烁。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.4", ToolTip = "卡牌 hover 后详情出现前的停留时间，单位为秒。用于减少鼠标快速扫过手牌时的详情闪烁。"))
 	float CardDetailHoverDelaySeconds = 0.10f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "60.0", ToolTip = "卡牌详情淡入速度。数值越大越快，0 表示直接贴合目标透明度。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "60.0", ToolTip = "卡牌详情淡入速度。数值越大越快，0 表示直接贴合目标透明度。"))
 	float CardDetailFadeInSpeed = 18.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "卡牌详情淡出速度。数值越大越快，0 表示直接隐藏。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "卡牌详情淡出速度。数值越大越快，0 表示直接隐藏。"))
 	float CardDetailFadeOutSpeed = 24.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "卡牌详情跟随 hover 锚点位置的平滑速度。数值越大越跟手，0 表示直接贴合目标位置。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "卡牌详情跟随 hover 锚点位置的平滑速度。数值越大越跟手，0 表示直接贴合目标位置。"))
 	float CardDetailFollowSpeed = 24.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1600.0", ToolTip = "卡牌详情目标位置跳变超过该距离时直接贴合新位置，单位为 Slate 像素。用于避免切场景、切来源或窗口变化后慢慢漂过去。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1600.0", ToolTip = "卡牌详情目标位置跳变超过该距离时直接贴合新位置，单位为 Slate 像素。用于避免切场景、切来源或窗口变化后慢慢漂过去。"))
 	float CardDetailPositionResetDistancePixels = 420.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.5", ClampMax = "1.0", UIMin = "0.85", UIMax = "1.0", ToolTip = "卡牌详情淡入起始缩放。1 表示不缩放；小于 1 时详情会从轻微缩小状态淡入。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ClampMin = "0.5", ClampMax = "1.0", UIMin = "0.85", UIMax = "1.0", ToolTip = "卡牌详情淡入起始缩放。1 表示不缩放；小于 1 时详情会从轻微缩小状态淡入。"))
 	float CardDetailAppearStartScale = 0.97f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|CardDetail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "240.0", ToolTip = "卡牌详情贴近视口边缘时保持当前左右摆放侧的缓冲距离，单位为 Slate 像素。用于避免锚点在边缘附近轻微移动时详情左右反复跳。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "240.0", ToolTip = "卡牌详情贴近视口边缘时保持当前左右摆放侧的缓冲距离，单位为 Slate 像素。用于避免锚点在边缘附近轻微移动时详情左右反复跳。"))
 	float CardDetailSideSwitchHysteresisPixels = 72.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Combat Log", meta = (ClampMin = "1", UIMin = "10", UIMax = "300", ToolTip = "BattleHUD 内部保存的玩家可读战斗记录最大命令块数量。超过后只保留最近 N 条，并同步到常驻滚动记录。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Combat Log|Authoring", meta = (ClampMin = "1", UIMin = "10", UIMax = "300", ToolTip = "BattleHUD 内部保存的玩家可读战斗记录最大命令块数量。超过后只保留最近 N 条，并同步到常驻滚动记录。"))
 	int32 BattleCombatLogMaxBlocks = 80;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Presentation Stack", meta = (ClampMin = "0.01", UIMin = "0.05", UIMax = "1.0", ToolTip = "打出的卡牌没有目标 cue 或延迟表现时，在表现栈中最短停留多久，单位为秒。用于避免无表现卡牌一闪而过。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation Stack|Authoring", meta = (ClampMin = "0.01", UIMin = "0.05", UIMax = "1.0", ToolTip = "打出的卡牌没有目标 cue 或延迟表现时，在表现栈中最短停留多久，单位为秒。用于避免无表现卡牌一闪而过。"))
 	float CardPresentationStackMinimumHoldSeconds = 0.18f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand|Prototype", meta = (ToolTip = "是否启用 CardActor + WidgetComponent 的 3D 手牌 prototype。默认关闭；仅用于 PIE / 开发验证空间手牌可行性，不是正式主手牌入口。"))
@@ -275,16 +275,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand|Prototype", meta = (ToolTip = "3D 手牌 prototype 使用的单张卡牌 Actor 类。BattleHUD 只把该类交给 Presenter，不直接生成或管理单卡 Actor。"))
 	TSubclassOf<AWacomBattleCardVisualActor> Battle3DCardActorClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|Battle Hand Presentation", meta = (ToolTip = "战斗手牌呈现模式。LegacyHandPanel 只使用旧 UHandPanel；FirstPersonHandWithLegacyFallback 默认显示并启用第一人称手牌，同时保留旧手牌兜底；FirstPersonHandOnly 在第一人称手牌有效时隐藏旧手牌，异常时自动恢复旧手牌避免战斗不可操作。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Hand Presentation|Authoring", meta = (ToolTip = "战斗手牌呈现模式。LegacyHandPanel 只使用旧 UHandPanel；FirstPersonHandWithLegacyFallback 默认显示并启用第一人称手牌，同时保留旧手牌兜底；FirstPersonHandOnly 在第一人称手牌有效时隐藏旧手牌，异常时自动恢复旧手牌避免战斗不可操作。"))
 	EWacomBattleHandPresentationMode BattleHandPresentationMode = EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.StaticCardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.StaticCardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
 	int32 FirstPersonCardDetailViewportZOrder = 9999;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|First Person Card Layer", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FirstPersonCardView 或 WBP_CardView 的设计尺寸一致。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FirstPersonCardView 或 WBP_CardView 的设计尺寸一致。"))
 	FVector2D FirstPersonCardDetailAnchorBaseSize = FVector2D(296.0f, 420.0f);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|HUD State", meta = (ToolTip = "当前 BattleHUD UI 状态。只读查询，不修改战斗或 UI 流程。"))
 	EBattleUIState GetUIState() const { return UIState; }
 
 	static FVector2D ComputeCardDetailPanelPositionBeside(
@@ -294,10 +294,10 @@ public:
 		const FVector2D& PanelSize,
 		float Padding);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Card Detail", meta = (ToolTip = "当前战斗卡牌详情面板是否可见。只读查询。"))
 	bool IsCardDetailPanelVisible() const;
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Card Detail", meta = (ToolTip = "当前战斗卡牌详情面板显示的卡名文本。只读查询。"))
 	FText GetCardDetailPanelNameText() const;
 
 	// ---- 子 Widget 交互入口 ----
@@ -309,26 +309,26 @@ public:
 	 * - TargetMode == SingleEnemyPart：进入 TargetSelect 状态
 	 * - 其他：当前不支持，忽略
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "玩家点击手牌后的 BattleHUD 命令入口。子 Widget 只上报意图，BattleHUD 负责状态机判断并提交合法 BattleSession 命令。"))
 	void OnCardClickedByUser(const FGuid& CardInstanceId);
 
 	/**
 	 * TargetSelect 状态下玩家点击了某个敌方部位。
 	 * 提交 PlayCard(PendingCardId, PartId)，回到 Idle。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "玩家在 TargetSelect 中点击敌方部位后的 BattleHUD 命令入口。Widget / 场景 target 只上报意图，BattleHUD 负责校验并提交 BattleSession 命令。"))
 	void OnEnemyPartClickedByUser(const FGuid& PartInstanceId);
 
 	/** 等待按钮点击。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "玩家点击 Wait 后的 BattleHUD 命令入口。BattleHUD 会按表现栈和战斗阶段决定立即提交或进入 pending。"))
 	void OnWaitRequested();
 
 	/** 结束回合按钮点击。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "玩家点击 EndTurn 后的 BattleHUD 命令入口。BattleHUD 会按表现栈和战斗阶段决定立即提交或进入 pending。"))
 	void OnEndTurnRequested();
 
 	/** 取消目标选择（ESC、右键、再次点同一张牌等）。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "取消当前目标选择 UI 状态。只影响 HUD 选择流程，不直接修改 BattleSession。"))
 	void CancelTargetSelect();
 
 	/**
@@ -337,7 +337,7 @@ public:
 	 * 让 HUD 在提交后统一调 AfterCommand（事件消费 + Snapshot 刷新 + BattleEnd 广播）。
 	 * 与 OnWaitRequested / OnEndTurnRequested 对称。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "击倒选择 dialog 的 BattleHUD 命令入口。Dialog 不直接提交 BattleSession，统一由 HUD 做命令后刷新和事件消费。"))
 	void OnKnockdownChoiceSelected(EKnockdownChoice Choice);
 
 	/**
@@ -349,11 +349,11 @@ public:
 	// ---- 状态机查询（供子 Widget 做视觉反馈）----
 
 	/** 当前是否正在选目标。UI 可据此高亮可选敌方部位。 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Targeting", meta = (ToolTip = "当前 BattleHUD 是否正在等待玩家选择目标。UI / 场景表现只读消费。"))
 	bool IsInTargetSelect() const { return UIState == EBattleUIState::TargetSelect; }
 
 	/** 当前等待目标的卡 ID。IsInTargetSelect == false 时返回 invalid。 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Targeting", meta = (ToolTip = "当前等待目标的卡牌实例 ID；不在 TargetSelect 时返回 invalid。"))
 	FGuid GetPendingTargetingCardId() const { return PendingTargetingCardId; }
 
 	/** 构建当前目标选择表现视图。UI/场景表现只读消费，不修改战斗状态。 */
@@ -363,22 +363,22 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log")
 	int32 GetBattleCombatLogBlockCount() const;
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "当前 BattleHUD 表现队列或表现栈是否仍在播放。只读查询，不提交命令。"))
 	bool IsBattlePresentationBusy() const;
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "当前 BattleHUD 是否允许提交普通玩家行动命令。只读查询，包含战斗阶段、击倒选择和表现 pending gate。"))
 	bool CanSubmitPlayerActionCommand() const;
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "是否存在等待表现栈清空后再提交的 Wait / EndTurn 命令。"))
 	bool HasPendingTurnBoundaryCommand() const;
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI")
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "当前 pending Wait / EndTurn 命令的 UI 文案。没有 pending 命令时返回空文本。"))
 	FText GetPendingTurnBoundaryCommandText() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|UI", meta = (ToolTip = "设置战斗手牌呈现模式，并立即同步第一人称手牌、交互绑定和旧手牌可见性。"))
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Hand Presentation", meta = (ToolTip = "设置战斗手牌呈现模式，并立即同步第一人称手牌、交互绑定和旧手牌可见性。"))
 	void SetBattleHandPresentationMode(EWacomBattleHandPresentationMode NewMode);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|UI", meta = (ToolTip = "当前 BattleHUD 使用的战斗手牌呈现模式。"))
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Hand Presentation", meta = (ToolTip = "当前 BattleHUD 使用的战斗手牌呈现模式。"))
 	EWacomBattleHandPresentationMode GetBattleHandPresentationMode() const { return BattleHandPresentationMode; }
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "设置当前战斗绑定的场景敌人 Host。BattleHUD 只会同步该 Host 下的 PartActor world target。"))
@@ -410,7 +410,7 @@ protected:
 	 */
 	virtual void NativeOnUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
 
-	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|UI", DisplayName = "On UI State Changed")
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|HUD State", DisplayName = "On UI State Changed", meta = (ToolTip = "BattleHUD UI 状态切换后的 WBP 表现事件。只用于刷新表现，不应直接修改 BattleSession。"))
 	void BP_OnUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
 
 	// ---- BindWidget ----
@@ -443,7 +443,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> DiscardPileView;
 
-	/** 消耗区计数。 */
+	/** 消耗牌堆计数。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> ExhaustPileView;
 
@@ -456,7 +456,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> CardDetailLayer;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI|CardDetail")
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ToolTip = "战斗卡牌详情面板 Widget 类。旧 2D 手牌和第一人称手牌详情共用该显示面板。"))
 	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;
 
 private:

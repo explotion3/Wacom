@@ -16,6 +16,18 @@ class UWacomShopOfferRowWidget;
 struct FRunShopOffer;
 struct FRunShopSnapshot;
 
+#if WITH_AUTOMATION_TESTS
+struct FWacomShopScreenAutomationTestView
+{
+	FText DisplayedGoldText;
+	int32 CachedOfferCount = 0;
+	int32 OfferRefreshApplyCount = 0;
+	int32 OfferRefreshSkipCount = 0;
+	int32 SnapshotBuildCount = 0;
+	int32 SnapshotRevisionSkipCount = 0;
+};
+#endif
+
 /**
  * 最小可用商店界面。
  *
@@ -66,17 +78,24 @@ protected:
 private:
 #if WITH_AUTOMATION_TESTS
 	friend class UWacomShopScreenProbe;
+	friend struct FWacomShopRunEventTestAccess;
 
 	FText GetDisplayedGoldText() const;
-	int32 GetCachedOfferCount() const { return CachedOfferIds.Num(); }
 	FWacomShopOfferPresentationView GetCachedOfferView(int32 Index) const;
 	UWacomShopOfferRowWidget* GetOfferRowWidgetForTest(int32 Index) const;
 	bool PurchaseOfferByIndex(int32 Index);
 	static FText BuildPurchaseFailureToastText(FName DisabledReason);
-	int32 GetShopOfferRefreshApplyCountForTest() const { return ShopOfferRefreshApplyCountForTest; }
-	int32 GetShopOfferRefreshSkipCountForTest() const { return ShopOfferRefreshSkipCountForTest; }
-	int32 GetShopSnapshotBuildCountForTest() const { return ShopSnapshotBuildCountForTest; }
-	int32 GetShopSnapshotRevisionSkipCountForTest() const { return ShopSnapshotRevisionSkipCountForTest; }
+	FWacomShopScreenAutomationTestView GetAutomationTestViewForTest() const
+	{
+		FWacomShopScreenAutomationTestView View;
+		View.DisplayedGoldText = GetDisplayedGoldText();
+		View.CachedOfferCount = CachedOfferIds.Num();
+		View.OfferRefreshApplyCount = ShopOfferRefreshApplyCountForTest;
+		View.OfferRefreshSkipCount = ShopOfferRefreshSkipCountForTest;
+		View.SnapshotBuildCount = ShopSnapshotBuildCountForTest;
+		View.SnapshotRevisionSkipCount = ShopSnapshotRevisionSkipCountForTest;
+		return View;
+	}
 #endif
 
 	void RebuildOfferRows(const FRunShopSnapshot& Snapshot, int32 CurrentGold);

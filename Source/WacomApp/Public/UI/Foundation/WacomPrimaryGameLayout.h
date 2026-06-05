@@ -22,14 +22,14 @@ class UCommonActivatableWidget;
  * - ModalLayerStack : UCommonActivatableWidgetStack
  * - OverlayLayerStack : UCommonActivatableWidgetStack
  */
-UCLASS(Abstract, Blueprintable)
+UCLASS(Abstract, Blueprintable, meta = (ToolTip = "Wacom CommonUI 根布局 WBP 合同。WBP 需要提供固定 Layer Stack 绑定，本类只负责按 Layer Tag 推入 Widget。"))
 class WACOMAPP_API UWacomPrimaryGameLayout : public UCommonUserWidget
 {
 	GENERATED_BODY()
 
 public:
 	/** 根据 Layer Tag 把一个 Widget 类实例化并 Push 到对应 Stack。返回实例。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|UI Foundation|Primary Layout", meta = (ToolTip = "根据 Layer Tag 把 Widget 类实例化并推入对应 CommonUI Stack。只处理 UI 层级，不提交业务命令。"))
 	UCommonActivatableWidget* PushWidgetToLayer(const FGameplayTag& LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass);
 
 	/** 根据 Layer Tag 找到对应 Stack。 */

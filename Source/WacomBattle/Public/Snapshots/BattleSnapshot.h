@@ -46,6 +46,9 @@ struct WACOMBATTLE_API FPileCountsSnapshot
 	int32 DrawCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	int32 PlayedCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 DiscardCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")

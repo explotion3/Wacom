@@ -91,54 +91,35 @@ void UWacomRunEventChoiceButton::SetChoiceSnapshot(const FRunEventChoiceSnapshot
 }
 
 #if WITH_AUTOMATION_TESTS
-FText UWacomRunEventChoiceButton::GetDisplayedPaymentStatusTextForTest() const
+FWacomRunEventChoiceButtonAutomationTestView UWacomRunEventChoiceButton::GetAutomationTestViewForTest() const
 {
-	return PaymentStatusText ? PaymentStatusText->GetText() : FText::GetEmpty();
-}
+	FWacomRunEventChoiceButtonAutomationTestView View;
+	View.PaymentStatusText = PaymentStatusText ? PaymentStatusText->GetText() : FText::GetEmpty();
+	View.PaymentStatusVisibility = PaymentStatusText
+		? PaymentStatusText->GetVisibility()
+		: ESlateVisibility::Collapsed;
+	View.DisabledReasonText = DisabledReasonText ? DisabledReasonText->GetText() : FText::GetEmpty();
+	View.DisabledReasonVisibility = DisabledReasonText
+		? DisabledReasonText->GetVisibility()
+		: ESlateVisibility::Collapsed;
 
-ESlateVisibility UWacomRunEventChoiceButton::GetPaymentStatusVisibilityForTest() const
-{
-	return PaymentStatusText ? PaymentStatusText->GetVisibility() : ESlateVisibility::Collapsed;
-}
-
-FText UWacomRunEventChoiceButton::GetDisplayedDisabledReasonTextForTest() const
-{
-	return DisabledReasonText ? DisabledReasonText->GetText() : FText::GetEmpty();
-}
-
-ESlateVisibility UWacomRunEventChoiceButton::GetDisabledReasonVisibilityForTest() const
-{
-	return DisabledReasonText ? DisabledReasonText->GetVisibility() : ESlateVisibility::Collapsed;
-}
-
-int32 UWacomRunEventChoiceButton::GetDisplayedRequirementItemCountForTest() const
-{
-	return RequirementList ? RequirementList->GetChildrenCount() : 0;
-}
-
-FText UWacomRunEventChoiceButton::GetDisplayedRequirementItemTextForTest(int32 Index) const
-{
-	if (!RequirementList || !RequirementList->GetChildAt(Index))
+	const int32 RequirementCount = RequirementList ? RequirementList->GetChildrenCount() : 0;
+	View.RequirementItemTexts.Reserve(RequirementCount);
+	for (int32 Index = 0; Index < RequirementCount; ++Index)
 	{
-		return FText::GetEmpty();
+		const UTextBlock* TextBlock = Cast<UTextBlock>(RequirementList->GetChildAt(Index));
+		View.RequirementItemTexts.Add(TextBlock ? TextBlock->GetText() : FText::GetEmpty());
 	}
-	const UTextBlock* TextBlock = Cast<UTextBlock>(RequirementList->GetChildAt(Index));
-	return TextBlock ? TextBlock->GetText() : FText::GetEmpty();
-}
 
-int32 UWacomRunEventChoiceButton::GetDisplayedConsequenceItemCountForTest() const
-{
-	return ConsequenceList ? ConsequenceList->GetChildrenCount() : 0;
-}
-
-FText UWacomRunEventChoiceButton::GetDisplayedConsequenceItemTextForTest(int32 Index) const
-{
-	if (!ConsequenceList || !ConsequenceList->GetChildAt(Index))
+	const int32 ConsequenceCount = ConsequenceList ? ConsequenceList->GetChildrenCount() : 0;
+	View.ConsequenceItemTexts.Reserve(ConsequenceCount);
+	for (int32 Index = 0; Index < ConsequenceCount; ++Index)
 	{
-		return FText::GetEmpty();
+		const UTextBlock* TextBlock = Cast<UTextBlock>(ConsequenceList->GetChildAt(Index));
+		View.ConsequenceItemTexts.Add(TextBlock ? TextBlock->GetText() : FText::GetEmpty());
 	}
-	const UTextBlock* TextBlock = Cast<UTextBlock>(ConsequenceList->GetChildAt(Index));
-	return TextBlock ? TextBlock->GetText() : FText::GetEmpty();
+
+	return View;
 }
 #endif
 

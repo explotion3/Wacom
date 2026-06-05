@@ -711,6 +711,7 @@ bool FWacomBattleSelectedHandCardDiscardSpec::RunTest(const FString& Parameters)
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
 	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
 	const int32 DiscardBefore = Snapshot.PileCounts.DiscardCount;
+	const int32 PlayedBefore = Snapshot.PileCounts.PlayedCount;
 	const int32 ExhaustBefore = Snapshot.PileCounts.ExhaustCount;
 
 	TestTrue(TEXT("Can target normal hand card"),
@@ -721,7 +722,8 @@ bool FWacomBattleSelectedHandCardDiscardSpec::RunTest(const FString& Parameters)
 
 	TestFalse(TEXT("Target left hand"), FindHandCard(Snapshot, TargetId) != nullptr);
 	TestFalse(TEXT("Source left hand"), FindHandCard(Snapshot, SourceId) != nullptr);
-	TestEqual(TEXT("Discard pile gained source and target"), Snapshot.PileCounts.DiscardCount, DiscardBefore + 2);
+	TestEqual(TEXT("Played pile gained source"), Snapshot.PileCounts.PlayedCount, PlayedBefore + 1);
+	TestEqual(TEXT("Discard pile gained target"), Snapshot.PileCounts.DiscardCount, DiscardBefore + 1);
 	TestEqual(TEXT("Exhaust pile unchanged"), Snapshot.PileCounts.ExhaustCount, ExhaustBefore);
 	TestTrue(TEXT("HandZoneChanged emitted for selected target"),
 		HasBattleEvent(Session, EBattleEventType::HandZoneChanged, TargetId));
@@ -743,6 +745,7 @@ bool FWacomBattleSelectedHandCardExhaustSpec::RunTest(const FString& Parameters)
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
 	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
 	const int32 DiscardBefore = Snapshot.PileCounts.DiscardCount;
+	const int32 PlayedBefore = Snapshot.PileCounts.PlayedCount;
 	const int32 ExhaustBefore = Snapshot.PileCounts.ExhaustCount;
 
 	TestTrue(TEXT("Can target normal hand card"),
@@ -753,7 +756,8 @@ bool FWacomBattleSelectedHandCardExhaustSpec::RunTest(const FString& Parameters)
 
 	TestFalse(TEXT("Target left hand"), FindHandCard(Snapshot, TargetId) != nullptr);
 	TestFalse(TEXT("Source left hand"), FindHandCard(Snapshot, SourceId) != nullptr);
-	TestEqual(TEXT("Discard pile gained source only"), Snapshot.PileCounts.DiscardCount, DiscardBefore + 1);
+	TestEqual(TEXT("Played pile gained source"), Snapshot.PileCounts.PlayedCount, PlayedBefore + 1);
+	TestEqual(TEXT("Discard pile unchanged"), Snapshot.PileCounts.DiscardCount, DiscardBefore);
 	TestEqual(TEXT("Exhaust pile gained target"), Snapshot.PileCounts.ExhaustCount, ExhaustBefore + 1);
 	TestTrue(TEXT("HandZoneChanged emitted for selected target"),
 		HasBattleEvent(Session, EBattleEventType::HandZoneChanged, TargetId));

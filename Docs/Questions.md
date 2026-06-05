@@ -2,7 +2,7 @@
 type: question-index
 scope: wacom-open-decisions
 status: active
-updated: 2026-05-22
+updated: 2026-06-05
 tags:
   - wacom/questions
   - wacom/docs
@@ -11,10 +11,10 @@ tags:
 # Questions
 
 > [!info] 本文职责
-> 本文记录会影响规则、策划口径或长期架构的待确认问题。短期任务看 [[TODO]]，未来方向看 [[Roadmap]]，已有技术债看 [[TechDebt]]。
+> 本文只记录会影响规则、策划口径或长期架构的未决问题。当前规则事实看领域文档，短期任务看 [`TODO.md`](TODO.md)，未来方向看 [`Roadmap.md`](Roadmap.md)，已有技术债看 [`TechDebt.md`](TechDebt.md)。
 
 > [!warning] 执行约束
-> 实现前必须先在对应领域文档中收口；不要把这里的问题静默写死到代码里。
+> 本文不是规则真相、未来愿望池或短期任务清单。实现前必须先在对应领域文档中收口；不要把这里的问题静默写死到代码里。
 
 <a id="questions-status"></a>
 ## 状态与触发时机
@@ -27,17 +27,18 @@ tags:
 | 暮气归属 | 当前作为状态层数挂在目标上 | 暮气归属玩家、卡牌、敌人意图，还是可多处归属 |
 | 暮气数值公式 | 暂无数值效果 | 暮气如何改变伤害、中毒、先机、Cost 或其他效果 |
 | 暮蛉被动修改对象 | `OnTwilightTriggered` 当前只发事件，不改 Magnitude | 是修改一张中毒卡牌、下一次中毒效果、所有中毒效果，还是按其他选择规则 |
-| 冻结与迅捷 / Cost / 完美释放 | 冻结第一阶段共享“跳过意图 + 消耗 1 层”分支 | 冻结是否影响先机推进、完美释放判定、迅捷跳过先机推进等交互 |
+| 冻结与迅捷 / Cost / 完美释放 | 当前冻结的敌方部位处理见 [WacomBattle.md](./WacomBattle.md) | 冻结是否影响先机推进、完美释放判定、迅捷跳过先机推进等交互 |
 
 ---
 
+<a id="questions-hand"></a>
 ## 手牌、区域与抽牌
 
 | 问题 | 当前事实 / 约束 | 需要确认 |
 |---|---|---|
 | 手牌满时拂晓飞蛾回手 | 当前随机插入手牌后立即执行普通卡上限，超限卡进弃牌区 | 是否改为“手牌满时不触发”或“保证回手牌不被上限弃掉” |
-| 右手牌永久删除 | 第一阶段未建模左右手永久缺失字段 | 是否完全对称处理右手永久删除后的区域、击倒分支和 UI 可用性 |
-| 左右手都永久删除 | 第一阶段未建模 | 是否只剩普通手牌区，双手区和左右手区全部失效 |
+| 右手牌永久删除 | 当前规则未建模左右手永久缺失字段；手牌锚点事实见 [WacomBattle.md](./WacomBattle.md) | 是否完全对称处理右手永久删除后的区域、击倒分支和 UI 可用性 |
+| 左右手都永久删除 | 当前规则未建模左右手永久缺失字段；手牌锚点事实见 [WacomBattle.md](./WacomBattle.md) | 是否只剩普通手牌区，双手区和左右手区全部失效 |
 | `Effect.Shuffle.ToRandomZone` 锚点缺失回退 | 当前腾挪可用区域随锚点存在性缩减 | 指向缺失区域时应失败、随机插入可用区域，还是降级到普通手牌区 |
 | 是否需要正式 `DrawToZone` | `Effect.Draw` 当前从 Draw / Discard / Exhaust 入手后随机插入当前手牌 | 是否新增直接抽到指定 `HandZone.*` 的效果，还是保持 `Draw + Shuffle` 组合 |
 | `DrawToZone` 指向不存在区域 | 依赖上一个问题 | 如果目标是不存在的 `HandZone.Both`、Left 或 Right，应失败、随机插入，还是降级到可用区域 |
@@ -51,8 +52,8 @@ tags:
 | 问题 | 当前事实 / 约束 | 需要确认 |
 |---|---|---|
 | 击倒事件正式触发条件 | 部位 HP 归零时已有击倒事件框架；撤离只在仍有存活部位时可选 | 未来是否还受敌人类型、阶段、节点、剧情状态或特殊状态影响 |
-| Aid / Destroy / Withdraw 具体效果 | 框架和 UI 已有；Run 层第一阶段只记日志 | Aid 是否给左手 buff，Destroy 是否永久强化 / 破坏部位，Withdraw 是否触发特殊节点或地图回路 |
-| Aid / Destroy 奖励差异 | 第一版 Aid / Destroy 共用 `KnockdownRewardCard` | 是否按分支、部位、敌人或节点事件使用不同奖励表 |
+| Aid / Destroy / Withdraw 具体效果 | 击倒框架、UI 和战后包事实见 [WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md) | Aid 是否给左手 buff，Destroy 是否永久强化 / 破坏部位，Withdraw 是否触发特殊节点或地图回路 |
+| Aid / Destroy 奖励差异 | 当前 `KnockdownRewardCard` 奖励口径见 [WacomData.md](./WacomData.md) / [WacomBattle.md](./WacomBattle.md) | 是否按分支、部位、敌人或节点事件使用不同奖励表 |
 | 最后存活部位击倒 | 当前最后部位不可选 Withdraw | 是否所有敌人都保持该规则，还是部分 Boss / 事件敌人有例外 |
 | 背包容量不足时的战斗奖励 | 当前 Victory 后 `AcquireCardToRun()` 加入 Run，再由负重 / 容量重算兜底 | 是否正式接受“溢出进负重区”，还是需要奖励选择、丢弃、邮寄或临时缓存 |
 | 战内玩家受扣血事件 | 现有高 / 低 HP 阈值 flag 回传 Run 压力 | 是否还需要 `Passive.Trigger.OnPlayerDamaged` 表达每次受伤触发 |
@@ -66,16 +67,17 @@ tags:
 |---|---|---|
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
-| 地图节点消耗统一口径 | 战斗、商店、RunEvent 已各自有第一版节点消耗规则 | 地图系统接入后，是否统一由地图节点服务扣减和记录 |
+| 地图节点消耗统一口径 | 当前战斗、商店、RunEvent 节点消耗事实见 [WacomRun.md](./WacomRun.md) | 地图系统接入后，是否统一由地图节点服务扣减和记录 |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |
 | Shop 库存生命周期 | 当前按场景 `PersistentId` 在内存态保留 | 是否跨存档、跨日、跨地图保留；随机库存何时刷新 |
 
 ---
 
+<a id="questions-ui"></a>
 ## UI 与功能可用性口径
 
 | 问题 | 当前事实 / 约束 | 需要确认 |
 |---|---|---|
-| 删牌功能可用性 | GDD §11.7 第一阶段始终允许删牌；`IsDeleteFunctionAvailable()` 接口就位但 UI 不读 | 何时切换为“需要 DeleteProvider 才可删牌”，以及 UI 是隐藏、禁用还是提示来源 |
+| 删牌功能可用性 | 当前删牌规则、接口和 UI 技术债见 [WacomRun.md](./WacomRun.md) / [WacomUI.md](./WacomUI.md) / [TechDebt.md](./TechDebt.md) | 何时切换为“需要 DeleteProvider 才可删牌”，以及 UI 是隐藏、禁用还是提示来源 |
 | AppToast 是否进入全局日志 | AppToast 当前只做战斗外即时反馈，不进 CommonUI Stack | 是否需要统一全局事件日志；哪些反馈应入日志，哪些只即时显示 |
 | 战斗 Combat Log 保留范围 | `BattleHUD` 当前只在常驻滚动 `CombatLogFeed` 中保留本场最近命令块 | 是否需要战后回放、跨战斗历史或 Run 级日志 |

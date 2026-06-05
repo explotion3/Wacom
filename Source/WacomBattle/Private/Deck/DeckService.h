@@ -8,7 +8,7 @@ struct FBattleState;
 enum class ECardLocation : uint8;
 
 /**
- * 抽牌堆 / 弃牌堆 / 消耗区的原子操作。
+ * 抽牌堆 / 本回合使用牌堆 / 弃牌堆 / 消耗牌堆的原子操作。
  *
  * 仅 WacomBattle/Private 使用。所有 API 都直接操作 FBattleState。
  * 禁止在这里做"卡牌能不能抽"类的规则判断——那是 TurnFlow / Resolver 的职责。
@@ -35,9 +35,22 @@ public:
 
 	/**
 	 * 把弃牌堆洗回抽牌堆。弃牌堆清空。
+	 * 不包含本回合使用牌堆；打出的牌必须等回合结束后才进入弃牌堆。
 	 * 使用 BattleState.Rng 做随机。
 	 */
 	static void ReshuffleDiscardIntoDraw(FBattleState& State);
+
+	/**
+	 * 把本回合使用牌堆整体转入弃牌堆。PlayedPile 清空。
+	 * 不发 CardDiscarded / OnDiscard 事件；自然打出不属于真正弃牌。
+	 */
+	static void MovePlayedPileToDiscard(FBattleState& State);
+
+	/**
+	 * 把一张普通打出的卡从手牌移到本回合使用牌堆。
+	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
+	 */
+	static bool MoveFromHandToPlayedPile(FBattleState& State, const FGuid& CardInstanceId);
 
 	/**
 	 * 对当前 DrawPile 执行一次 Fisher-Yates 洗牌。
@@ -49,13 +62,13 @@ public:
 	static void ShuffleDrawPile(FBattleState& State);
 
 	/**
-	 * 把一张卡从手牌移到弃牌区。
+	 * 把一张卡从手牌移到弃牌堆。
 	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
 	 */
 	static bool DiscardFromHand(FBattleState& State, const FGuid& CardInstanceId);
 
 	/**
-	 * 把一张卡从手牌移到消耗区。
+	 * 把一张卡从手牌移到消耗牌堆。
 	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
 	 */
 	static bool ExhaustFromHand(FBattleState& State, const FGuid& CardInstanceId);

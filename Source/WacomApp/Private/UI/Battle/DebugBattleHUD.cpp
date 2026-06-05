@@ -78,8 +78,11 @@ void UDebugBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		Msg += LINE_TERMINATOR;
 	}
 
-	Msg += FString::Printf(TEXT("Pile: Draw=%d  Discard=%d  Exhaust=%d"),
-		Snap.PileCounts.DrawCount, Snap.PileCounts.DiscardCount, Snap.PileCounts.ExhaustCount);
+	Msg += FString::Printf(TEXT("Pile: Draw=%d  Discard=%d  Played=%d  Exhaust=%d"),
+		Snap.PileCounts.DrawCount,
+		Snap.PileCounts.DiscardCount,
+		Snap.PileCounts.PlayedCount,
+		Snap.PileCounts.ExhaustCount);
 
 	SnapshotText->SetText(FText::FromString(Msg));
 }

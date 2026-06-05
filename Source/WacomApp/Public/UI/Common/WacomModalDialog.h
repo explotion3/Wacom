@@ -15,16 +15,16 @@ class UWacomButtonBase;
 /**
  * 对话框按钮描述。用于 Show() 配置。
  */
-USTRUCT(BlueprintType)
+USTRUCT(BlueprintType, meta = (ToolTip = "通用 Modal layer 对话框按钮描述。只配置按钮文案和按钮 Widget 类，不提交 Battle / Run / travel 命令。"))
 struct WACOMAPP_API FWacomDialogButton
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Common UI|Modal Dialog", meta = (ToolTip = "按钮显示文案。只用于 Modal Dialog UI 显示，业务含义由调用方在关闭回调中解释。"))
 	FText Label;
 
 	/** 按钮的 Widget 类。由 WBP 子类决定。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Common UI|Modal Dialog", meta = (ToolTip = "按钮使用的 Widget 类。只影响 Modal Dialog 的按钮外观和 CommonUI 点击入口。"))
 	TSubclassOf<UWacomButtonBase> ButtonClass;
 };
 
@@ -58,7 +58,7 @@ DECLARE_DYNAMIC_DELEGATE_OneParam(FWacomModalDialogClosedDynamic, int32, Clicked
  * 动态生成的按钮会被 Add 到 ButtonContainer。子类在 WBP 里也可以放一些
  * 默认按钮，但通常留空由 Show() 填充。
  */
-UCLASS(Abstract, Blueprintable)
+UCLASS(Abstract, Blueprintable, meta = (ToolTip = "通用 Modal layer 对话框基类。负责标题、正文、按钮生成和关闭回调；不直接提交 Battle / Run / travel 命令。"))
 class WACOMAPP_API UWacomModalDialog : public UWacomActivatableWidget
 {
 	GENERATED_BODY()
@@ -71,7 +71,7 @@ public:
 	 * - DialogClass 是具体 WBP 类（决定外观）。
 	 * - Buttons 为空时退化为一个 "OK" 按钮。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|UI", meta = (WorldContext = "WorldContextObject"))
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Common UI|Modal Dialog", meta = (WorldContext = "WorldContextObject", ToolTip = "配置并 Push 一个 Modal Dialog 到 Modal layer。业务结果由调用方在 OnClosed 回调中处理，本函数只负责 UI 创建和显示。"))
 	static UWacomModalDialog* Show(
 		UObject* WorldContextObject,
 		TSubclassOf<UWacomModalDialog> DialogClass,
@@ -81,7 +81,7 @@ public:
 		FWacomModalDialogClosedDynamic OnClosed);
 
 	/** 程序性关闭（比如战斗流程强制取消）。回调会收到 INDEX_NONE。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|UI")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Common UI|Modal Dialog", meta = (ToolTip = "程序性关闭当前 Modal Dialog，并以 INDEX_NONE 通知关闭回调。只关闭 UI，不解释业务结果。"))
 	void CloseDialog();
 
 protected:

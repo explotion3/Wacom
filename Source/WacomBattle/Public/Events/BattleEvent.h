@@ -39,7 +39,7 @@ enum class EBattleEventType : uint8
 	PassiveTriggered      UMETA(DisplayName = "PassiveTriggered"),    // 被动触发通知
 	HandLimitDiscarded    UMETA(DisplayName = "HandLimitDiscarded"),  // 普通手牌上限导致弃牌
 	CardDiscarded         UMETA(DisplayName = "CardDiscarded"),       // 卡牌因弃牌规则从手牌进入弃牌堆
-	CardExhausted         UMETA(DisplayName = "CardExhausted"),       // 卡牌因消耗规则从手牌进入消耗区
+	CardExhausted         UMETA(DisplayName = "CardExhausted"),       // 卡牌因消耗规则从手牌进入消耗牌堆
 	CardGained            UMETA(DisplayName = "CardGained"),          // 战斗中获得一张新卡
 	BattleEnded           UMETA(DisplayName = "BattleEnded"),
 };

@@ -178,7 +178,7 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 		Root,
 		Context.ExhaustPileView,
 		TEXT("ExhaustPileView"),
-		LOCTEXT("ExhaustPile", "消耗区"),
+		LOCTEXT("ExhaustPile", "消耗牌堆"),
 		FAnchors(1.0f, 1.0f),
 		FVector2D(1.0f, 1.0f),
 		FMargin(-200.0f, -110.0f, 80.0f, 80.0f));

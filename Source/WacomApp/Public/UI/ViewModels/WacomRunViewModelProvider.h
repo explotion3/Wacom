@@ -29,13 +29,13 @@ class APlayerController;
  *   - 订阅 RunSession 应当只发生一次，不能每个 widget 各订一次
  *   - GameInstance Subsystem 跨关卡持久（RunSession 也是）
  */
-UCLASS()
+UCLASS(meta = (ToolTip = "Run MVVM Global ViewModel provider。负责创建并同步 UWacomRunViewModel，供 WBP 只读绑定；不提交 Run 规则命令。"))
 class WACOMAPP_API UWacomRunViewModelProvider : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintPure, Category = "Wacom|UI|MVVM")
+	UFUNCTION(BlueprintPure, Category = "Wacom|UI Foundation|MVVM", meta = (ToolTip = "返回全局 Run ViewModel 实例，供 WBP / UI 只读绑定或读取显示状态。RunSession 同步由 provider 内部维护。"))
 	UWacomRunViewModel* GetRunViewModel() const { return RunViewModel; }
 
 	/**
