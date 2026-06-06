@@ -479,7 +479,7 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 	{
 		Context.AddWarning(FText::Format(
 			LOCTEXT("PlacementMissingSceneEnemyHost",
-				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} 未绑定 SceneEnemyHost / SceneEnemyHostSlots；战斗仍可使用 EnemyInfoBar fallback，但场景敌人部位不会参与 hover / prediction / cue / 拖卡目标绑定。"),
+				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} 未绑定 SceneEnemyHost / SceneEnemyHostSlots；场景敌人部位不会参与 hover / prediction / cue / 拖卡目标绑定。"),
 			FText::FromString(GetName()),
 			FText::FromName(PersistentId)));
 	}

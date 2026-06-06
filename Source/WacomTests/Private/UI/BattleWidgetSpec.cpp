@@ -1374,6 +1374,20 @@ bool FWacomUIBattlePresentationQueueDamageCueSpec::RunTest(const FString& /*Para
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(Session->BuildSnapshot(), 0);
 
+	WacomBattleWidgetSpec::FSceneEnemyHostActors SceneEnemy =
+		WacomBattleWidgetSpec::SpawnSceneEnemyHost(*World, Enemy, { TEXT("Test.Part.Solo") });
+	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
+		|| !TestTrue(TEXT("Scene enemy has one part"), SceneEnemy.Parts.Num() == 1)
+		|| !TestNotNull(TEXT("Scene enemy part"), SceneEnemy.Parts.IsValidIndex(0) ? SceneEnemy.Parts[0] : nullptr))
+	{
+		WacomBattleWidgetSpec::DestroySceneEnemyHost(SceneEnemy);
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		WacomBattleWidgetSpec::DestroySceneEnemyHost(SceneEnemy);
+	};
+
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.ObjectFlags |= RF_Transient;
 	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
@@ -1394,18 +1408,15 @@ bool FWacomUIBattlePresentationQueueDamageCueSpec::RunTest(const FString& /*Para
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
 	HUD->SetOwningPlayerForTest(PC);
-
-	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
-	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
-	HUD->SetEnemyInfoBarForTest(EnemyInfo);
+	HUD->SetWorldForTest(World);
 	HUD->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
+	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
 	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-	EnemyInfo->TakeWidget();
-	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
 
-	UWacomBattleEnemyPartWidgetPresentationProbe* Part =
-		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(0));
-	if (!TestNotNull(TEXT("Spawned presentation probe"), Part))
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		SceneEnemy.Parts[0]->GetWorldTargetBridgeComponent();
+	if (!TestNotNull(TEXT("Scene part bridge"), Bridge))
 	{
 		return false;
 	}
@@ -1418,14 +1429,11 @@ bool FWacomUIBattlePresentationQueueDamageCueSpec::RunTest(const FString& /*Para
 	HUD->EnqueueBattlePresentationEventsForTest({ Event });
 
 	World->GetTimerManager().Tick(0.01f);
-	Part = Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(0));
-	if (!TestNotNull(TEXT("Current presentation probe after queue refresh"), Part))
-	{
-		return false;
-	}
-	TestTrue(TEXT("Target cue plays for damage event"), Part->IsBattlePresentationCueActiveForTest());
-	TestEqual(TEXT("Target cue type is damage"), Part->GetLastBattlePresentationCueTypeForTest(), EBattleEventType::DamageDealt);
-	TestEqual(TEXT("Target cue carries damage amount"), Part->GetLastBattlePresentationCueAmountForTest(), 7);
+	const FWacomBattleEnemyPartWorldTargetDebugView View = Bridge->GetBattleWorldTargetDebugView();
+	TestEqual(TEXT("Target cue plays for damage event"), View.CuePlayCount, 1);
+	TestEqual(TEXT("Target cue kind is damage"), View.LastCueKind, FName(TEXT("DamageDealt")));
+	TestEqual(TEXT("Target cue type is damage"), View.LastCueType, EBattleEventType::DamageDealt);
+	TestEqual(TEXT("Target cue carries damage amount"), View.LastCueAmount, 7);
 
 	HUD->AdvanceBattlePresentationQueueForTest();
 	TestFalse(TEXT("Queue finishes after target cue pacing"), HUD->IsBattlePresentationBusy());
@@ -2046,162 +2054,6 @@ bool FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec::RunTest(const FString& 
 		TestTrue(TEXT("EndTurn command still resolves"),
 			Session->BuildSnapshot().Version > SnapshotBefore.Version);
 	}
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec,
-	"Wacom.UI.Battle.Enemy2DFallback.EnemyInfoBarUsesTargetSelectionView",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleFixture Fx;
-	UCardDefinition* LeftHand = Fx.MakeNoopCard(0);
-	UCardDefinition* RightHand = Fx.MakeNoopCard(0);
-	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(1, 1);
-	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, { TargetCard });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
-
-	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
-	FBattleInitParams Params;
-	Params.Character = Character;
-	Params.Enemy = Enemy;
-	Params.RandomSeed = 1;
-	Params.PreDestroyedPartIds.Add(TEXT("Test.Part.Body"));
-	TestTrue(TEXT("Session initialize"), Session->Initialize(Params).IsOk());
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
-	HUD->SetSession(Session.Get());
-	EnemyInfo->SetSession(Session.Get());
-	HUD->TakeWidget();
-	EnemyInfo->TakeWidget();
-
-	HUD->ClearTargetSelectionStateForTest();
-	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
-
-	TestEqual(TEXT("EnemyInfoBar spawns three part widgets"), EnemyInfo->GetSpawnedPartCountForTest(), 3);
-	TestFalse(TEXT("Idle head not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(0));
-	TestFalse(TEXT("Idle body not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(1));
-	TestFalse(TEXT("Idle tail not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(2));
-
-	const FBattleSnapshot TargetSelectionSnapshot = Session->BuildSnapshot();
-	const FGuid TargetCardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
-		TargetSelectionSnapshot,
-		ECardTargetMode::SingleEnemyPart);
-	TestTrue(TEXT("Targeting card is in hand"), TargetCardId.IsValid());
-	if (!TargetCardId.IsValid())
-	{
-		return false;
-	}
-
-	HUD->SetTargetSelectionStateForTest(TargetCardId);
-	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
-
-	TestTrue(TEXT("TargetSelect head targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(0));
-	TestFalse(TEXT("TargetSelect destroyed body not targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(1));
-	TestTrue(TEXT("TargetSelect tail targetable"), EnemyInfo->IsSpawnedPartTargetableForTest(2));
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattlePresentationTargetRegistryRoutesCueToRegisteredWidgetSpec,
-	"Wacom.UI.Battle.PresentationTargetRegistry.RoutesCueToRegisteredWidget",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattlePresentationTargetRegistryRoutesCueToRegisteredWidgetSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
-	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
-	HUD->SetEnemyInfoBarForTest(EnemyInfo);
-	HUD->SetSession(Session);
-	EnemyInfo->SetSession(Session);
-	HUD->TakeWidget();
-	EnemyInfo->TakeWidget();
-	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
-
-	UWacomBattleEnemyPartWidgetPresentationProbe* Head =
-		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(0));
-	UWacomBattleEnemyPartWidgetPresentationProbe* Body =
-		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(1));
-	UWacomBattleEnemyPartWidgetPresentationProbe* Tail =
-		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(2));
-	if (!TestNotNull(TEXT("Head probe"), Head)
-		|| !TestNotNull(TEXT("Body probe"), Body)
-		|| !TestNotNull(TEXT("Tail probe"), Tail))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Registry contains current parts"), HUD->GetBattlePresentationTargetCountForTest(), 3);
-	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, Body->GetPartInstanceId(), 4);
-
-	TestEqual(TEXT("Head does not receive cue"), Head->GetBattlePresentationCuePlayCountForTest(), 0);
-	TestEqual(TEXT("Body receives one cue"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
-	TestEqual(TEXT("Body cue kind is damage"),
-		Body->GetLastBattlePresentationCueKindForTest(),
-		EWacomBattlePresentationTargetCueKind::DamageDealt);
-	TestEqual(TEXT("Tail does not receive cue"), Tail->GetBattlePresentationCuePlayCountForTest(), 0);
-	TestEqual(TEXT("Body cue amount"), Body->GetLastBattlePresentationCueAmountForTest(), 4);
-
-	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, FGuid::NewGuid(), 9);
-	TestEqual(TEXT("Unknown target does not route to body again"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleTargetConfirmedRoutesToEnemyPartWidgetSpec,
-	"Wacom.UI.Battle.PlayCommit.TargetConfirmedCueRoutesToEnemyPartWidget",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleTargetConfirmedRoutesToEnemyPartWidgetSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
-	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
-	HUD->SetEnemyInfoBarForTest(EnemyInfo);
-	HUD->SetSession(Session);
-	EnemyInfo->SetSession(Session);
-	HUD->TakeWidget();
-	EnemyInfo->TakeWidget();
-	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
-
-	UWacomBattleEnemyPartWidgetPresentationProbe* Body =
-		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(1));
-	if (!TestNotNull(TEXT("Body probe"), Body))
-	{
-		return false;
-	}
-
-	HUD->PlayTargetConfirmedCueForTest(Body->GetPartInstanceId());
-
-	TestEqual(TEXT("Target confirm routes to body"), Body->GetBattlePresentationCuePlayCountForTest(), 1);
-	TestEqual(TEXT("Target confirm cue kind"),
-		Body->GetLastBattlePresentationCueKindForTest(),
-		EWacomBattlePresentationTargetCueKind::TargetConfirmed);
-	TestEqual(TEXT("Target confirm is not a damage event"), Body->GetLastBattlePresentationCueTypeForTest(), EBattleEventType::None);
-	TestEqual(TEXT("Target confirm has no damage amount"), Body->GetLastBattlePresentationCueAmountForTest(), 0);
 
 	return true;
 }
@@ -5345,7 +5197,7 @@ bool FWacomUIBattleHUDIgnoresUnrelatedSceneEnemyPartsSpec::RunTest(const FString
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleTriggerSceneEnemyHostMissingWarningSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyTargetRegistry.SceneEnemyHostMissingKeepsEnemyInfoBarFallbackAndReportsWarning",
+	"Wacom.UI.Battle.BattleSceneEnemyTargetRegistry.SceneEnemyHostMissingReportsWarningAndLeavesRegistryEmpty",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleTriggerSceneEnemyHostMissingWarningSpec::RunTest(const FString& /*Parameters*/)
@@ -5907,82 +5759,6 @@ bool FWacomUIBattleSceneEnemyPartStatusBadgeSeparatePredictionSpec::RunTest(cons
 	TestNotEqual(TEXT("Status and prediction use separate widget components"),
 		PartActor->GetStatusBadgeWidgetComponent(),
 		PartActor->GetPredictionWidgetComponent());
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleHUDSceneEnemyHostHidesEnemyInfoBarSpec,
-	"Wacom.UI.Battle.Enemy2DFallback.BattleHUDHidesEnemyInfoBarWhenSceneEnemyHostConfigured",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleHUDSceneEnemyHostHidesEnemyInfoBarSpec::RunTest(const FString& /*Parameters*/)
-{
-	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-
-	WacomBattleWidgetSpec::FSceneEnemyHostActors SceneEnemy =
-		WacomBattleWidgetSpec::SpawnSceneEnemyHost(
-			*World,
-			Enemy,
-			{ TEXT("Test.Part.Head") });
-	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		WacomBattleWidgetSpec::DestroySceneEnemyHost(SceneEnemy);
-	};
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
-	HUD->SetEnemyInfoBarForTest(EnemyInfo);
-	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
-	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
-
-	TestEqual(TEXT("EnemyInfoBar hidden when scene enemy host is configured"),
-		HUD->GetEnemyInfoBarVisibilityForTest(),
-		ESlateVisibility::Collapsed);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleHUDSceneEnemyHostMissingKeepsEnemyInfoBarSpec,
-	"Wacom.UI.Battle.Enemy2DFallback.BattleHUDKeepsEnemyInfoBarWhenSceneEnemyHostMissing",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleHUDSceneEnemyHostMissingKeepsEnemyInfoBarSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
-	HUD->SetEnemyInfoBarForTest(EnemyInfo);
-	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostForTest(nullptr);
-	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
-
-	TestEqual(TEXT("EnemyInfoBar remains fallback when scene enemy host is missing"),
-		HUD->GetEnemyInfoBarVisibilityForTest(),
-		ESlateVisibility::Visible);
 	return true;
 }
 
@@ -7143,102 +6919,6 @@ bool FWacomUIBattlePresentationTargetRegistryUnknownTargetNoopsSpec::RunTest(con
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattlePresentationTargetRegistryRefreshDoesNotAccumulateTargetsSpec,
-	"Wacom.UI.Battle.PresentationTargetRegistry.RefreshDoesNotAccumulateTargets",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattlePresentationTargetRegistryRefreshDoesNotAccumulateTargetsSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
-	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
-	HUD->SetEnemyInfoBarForTest(EnemyInfo);
-	HUD->SetSession(Session);
-	EnemyInfo->SetSession(Session);
-	HUD->TakeWidget();
-	EnemyInfo->TakeWidget();
-
-	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
-	TestEqual(TEXT("Registry contains current parts after first refresh"), HUD->GetBattlePresentationTargetCountForTest(), 3);
-
-	UWacomBattleEnemyPartWidgetPresentationProbe* FirstBody =
-		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(1));
-	if (!TestNotNull(TEXT("First body probe"), FirstBody))
-	{
-		return false;
-	}
-
-	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
-	TestEqual(TEXT("Registry still contains one entry per current part after second refresh"),
-		HUD->GetBattlePresentationTargetCountForTest(),
-		3);
-
-	UWacomBattleEnemyPartWidgetPresentationProbe* CurrentBody =
-		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(1));
-	if (!TestNotNull(TEXT("Current body probe"), CurrentBody))
-	{
-		return false;
-	}
-	TestNotEqual(TEXT("Refresh rebuilt body widget"), CurrentBody, FirstBody);
-
-	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, CurrentBody->GetPartInstanceId(), 6);
-	TestEqual(TEXT("Old body widget does not receive stale cue"), FirstBody->GetBattlePresentationCuePlayCountForTest(), 0);
-	TestEqual(TEXT("Current body receives cue"), CurrentBody->GetBattlePresentationCuePlayCountForTest(), 1);
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattlePresentationTargetRegistrySessionChangeClearsTargetsSpec,
-	"Wacom.UI.Battle.PresentationTargetRegistry.SessionChangeClearsTargets",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattlePresentationTargetRegistrySessionChangeClearsTargetsSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	UWacomBattleEnemyInfoBarTest* EnemyInfo = NewObject<UWacomBattleEnemyInfoBarTest>(HUD.Get());
-	EnemyInfo->PartWidgetClass = UWacomBattleEnemyPartWidgetPresentationProbe::StaticClass();
-	HUD->SetEnemyInfoBarForTest(EnemyInfo);
-	HUD->SetSession(Session);
-	EnemyInfo->SetSession(Session);
-	HUD->TakeWidget();
-	EnemyInfo->TakeWidget();
-	EnemyInfo->RefreshFromSnapshot(Session->BuildSnapshot());
-
-	UWacomBattleEnemyPartWidgetPresentationProbe* Part =
-		Cast<UWacomBattleEnemyPartWidgetPresentationProbe>(EnemyInfo->GetSpawnedPartForTest(0));
-	if (!TestNotNull(TEXT("Part probe"), Part))
-	{
-		return false;
-	}
-	const FGuid PartId = Part->GetPartInstanceId();
-
-	TestEqual(TEXT("Registry contains current part"), HUD->GetBattlePresentationTargetCountForTest(), 1);
-	HUD->SetSession(nullptr);
-	TestEqual(TEXT("Session change clears registry"), HUD->GetBattlePresentationTargetCountForTest(), 0);
-
-	HUD->PlayBattlePresentationCueForTest(EBattleEventType::DamageDealt, PartId, 5);
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDPrivateCoordinatorSurfaceSpec,
 	"Wacom.UI.Battle.BattleHUDPrivateCoordinatorsPreservePublicHUDContracts",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -7822,33 +7502,6 @@ bool FWacomUIBattleHUDCardDetailControllerContractSpec::RunTest(const FString& /
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 	TestFalse(TEXT("BattleEnd refresh reports no visible detail"),
 		HUD->IsCardDetailPanelVisible());
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEnemyPartWidgetPresentationCueRestoresSpec,
-	"Wacom.UI.Battle.Enemy2DFallback.EnemyPartWidgetPresentationCueRestores",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleEnemyPartWidgetPresentationCueRestoresSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<UWacomBattleEnemyPartWidgetPresentationProbe> Part(
-		NewObject<UWacomBattleEnemyPartWidgetPresentationProbe>());
-	Part->TakeWidget();
-
-	FEnemyPartSnapshot Snapshot;
-	Snapshot.InstanceId = FGuid::NewGuid();
-	Snapshot.MaxHp = 12;
-	Snapshot.CurrentHp = 8;
-	Part->ApplyPartSnapshot(Snapshot);
-
-	Part->PlayCueForTest(EBattleEventType::EnemyPartHpEmptied, 0);
-	TestTrue(TEXT("Presentation cue becomes active"), Part->IsBattlePresentationCueActiveForTest());
-	TestEqual(TEXT("Destroyed cue type recorded"), Part->GetLastBattlePresentationCueTypeForTest(), EBattleEventType::EnemyPartHpEmptied);
-
-	Part->ClearBattlePresentationCueForTest();
-	TestFalse(TEXT("Presentation cue clears back to base frame"), Part->IsBattlePresentationCueActiveForTest());
 
 	return true;
 }

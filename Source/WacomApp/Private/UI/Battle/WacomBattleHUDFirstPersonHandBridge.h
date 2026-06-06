@@ -92,9 +92,6 @@ private:
 	struct FPlayCommitHint
 	{
 		FGuid CardInstanceId;
-		FGuid TargetPartInstanceId;
-		bool bHasTargetWidgetPosition = false;
-		FVector2D TargetWidgetPosition = FVector2D::ZeroVector;
 	};
 
 	UBattleHUD& HUD;

@@ -10,9 +10,6 @@
 #include "UI/Battle/ActionPanel.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/EnemyInfoBar.h"
-#include "UI/Battle/EnemyPartWidget.h"
-#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Common/PileCountView.h"
@@ -507,21 +504,6 @@ public:
 		AppendBattleCombatLogBlock(Block);
 	}
 
-	void SetEnemyInfoBarForTest(UEnemyInfoBar* InEnemyInfoBar)
-	{
-		EnemyInfoBar = InEnemyInfoBar;
-		if (InEnemyInfoBar)
-		{
-			ChildBattleWidgets.AddUnique(InEnemyInfoBar);
-		}
-		SyncEnemyInfoBarFallbackVisibility();
-	}
-
-	ESlateVisibility GetEnemyInfoBarVisibilityForTest() const
-	{
-		return EnemyInfoBar ? EnemyInfoBar->GetVisibility() : ESlateVisibility::Collapsed;
-	}
-
 	void SetActionPanelForTest(UActionPanel* InActionPanel)
 	{
 		ActionPanel = InActionPanel;
@@ -615,82 +597,6 @@ private:
 	TObjectPtr<UWorld> WorldOverride;
 
 	int32 BattleEndedCallbackCountForTest = 0;
-};
-
-UCLASS()
-class UWacomBattleEnemyInfoBarTest : public UEnemyInfoBar
-{
-	GENERATED_BODY()
-
-public:
-	int32 GetSpawnedPartCountForTest() const
-	{
-		return SpawnedParts.Num();
-	}
-
-	bool IsSpawnedPartTargetableForTest(int32 Index) const
-	{
-		return SpawnedParts.IsValidIndex(Index) && SpawnedParts[Index]
-			? SpawnedParts[Index]->IsTargetable()
-			: false;
-	}
-
-	UEnemyPartWidget* GetSpawnedPartForTest(int32 Index) const
-	{
-		return SpawnedParts.IsValidIndex(Index) ? SpawnedParts[Index] : nullptr;
-	}
-};
-
-UCLASS()
-class UWacomBattleEnemyPartWidgetPresentationProbe : public UEnemyPartWidget
-{
-	GENERATED_BODY()
-
-public:
-	void PlayCueForTest(EBattleEventType SourceEventType, int32 Amount)
-	{
-		FWacomBattlePresentationTargetCue Cue;
-		Cue.SourceEventType = SourceEventType;
-		Cue.Amount = Amount;
-		PlayBattlePresentationCue(Cue);
-	}
-
-	void PlayTargetConfirmedCueForTest()
-	{
-		FWacomBattlePresentationTargetCue Cue;
-		Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
-		PlayBattlePresentationCue(Cue);
-	}
-
-	bool IsBattlePresentationCueActiveForTest() const
-	{
-		return bBattlePresentationCueActive;
-	}
-
-	EWacomBattlePresentationTargetCueKind GetLastBattlePresentationCueKindForTest() const
-	{
-		return LastBattlePresentationCueKind;
-	}
-
-	EBattleEventType GetLastBattlePresentationCueTypeForTest() const
-	{
-		return LastBattlePresentationCueType;
-	}
-
-	int32 GetLastBattlePresentationCueAmountForTest() const
-	{
-		return LastBattlePresentationCueAmount;
-	}
-
-	int32 GetBattlePresentationCuePlayCountForTest() const
-	{
-		return BattlePresentationCuePlayCount;
-	}
-
-	void ClearBattlePresentationCueForTest()
-	{
-		ClearBattlePresentationCue();
-	}
 };
 
 UCLASS()

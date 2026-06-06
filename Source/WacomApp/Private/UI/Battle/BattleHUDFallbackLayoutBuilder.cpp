@@ -9,7 +9,6 @@
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Common/PileCountView.h"
@@ -86,15 +85,6 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 	if (!Root)
 	{
 		return;
-	}
-
-	if (UEnemyInfoBar* EnemyInfoBar = ConstructWidget(Context.WidgetTree, Context.EnemyInfoBar, TEXT("EnemyInfoBar")))
-	{
-		SetCanvasSlot(
-			Root->AddChildToCanvas(EnemyInfoBar),
-			FAnchors(0.5f, 0.0f),
-			FVector2D(0.5f, 0.0f),
-			FMargin(0.0f, 20.0f, 720.0f, 130.0f));
 	}
 
 	if (UPlayerStatusBar* PlayerStatusBar = ConstructWidget(Context.WidgetTree, Context.PlayerStatusBar, TEXT("PlayerStatusBar")))

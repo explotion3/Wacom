@@ -96,9 +96,8 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 |---|---|---|
 | Legacy event log | `UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` | 旧 WBP / PIE 对照保留；正式日志走 CombatLogFeed + CombatLogBlock |
 | Debug text HUD | `UDebugBattleHUD` | Snapshot 文本诊断 HUD，不是正式 BattleHUD 父类 |
-| Enemy 2D fallback | `UEnemyInfoBar / UEnemyPartWidget` | 缺 `SceneEnemyHost` 时的 2D fallback/debug |
 
-旧 2D hand 的 `UHandPanel / UCardWidget / WBP_HandPanel / WBP_CardWidget` 已删除。正式战斗手牌主线是 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
+旧 2D hand 的 `UHandPanel / UCardWidget / WBP_HandPanel / WBP_CardWidget` 已删除。旧敌方 2D fallback 的 `UEnemyInfoBar / UEnemyPartWidget` 也已删除；缺少 `SceneEnemyHost` 时不会再显示 2D 敌人条，只会缺少场景敌人 hover / prediction / cue / 拖卡目标绑定。正式战斗手牌主线是 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
 ## §6 Scene Enemy UI
 
@@ -127,11 +126,11 @@ Host 蓝图视口中的 `SnakeHeadPart / SnakeBodyPart / SnakeTailPart` 是 `Chi
 - `TargetConfirmed`、`DamageDealt`、`EnemyPartHpEmptied` cue。
 - 只读预测 Widget 和常驻状态 Badge 的 view。
 
-有 SceneEnemyHost 时，BattleHUD 默认隐藏旧 `EnemyInfoBar`；缺 Host 时，`EnemyInfoBar / EnemyPartWidget` 继续作为 2D fallback/debug。点击、hover、drag target handle 的详细合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
+BattleHUD 不再构建或绑定敌方 2D fallback；点击、hover、drag target handle 全部通过当前 SceneEnemyHost registry 中的 PartActor / WorldTargetBridge 完成。缺 Host 时，敌方规则仍可运行，但场景敌人目标表现与世界命中不可用。点击、hover、drag target handle 的详细合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 
 ## §7 First-person Battle Hand
 
-BattleHUD 战斗手牌运行时只使用 first-person card layer。`UBattleHUD` 不再公开 `BattleHandPresentationMode`，也不再绑定、创建、隐藏或恢复旧 2D hand。C++ fallback BattleHUD 只构建状态、敌方 fallback、ActionPanel、牌堆、CombatLogFeed 和 PresentationStack，不再构建 legacy 2D hand。
+BattleHUD 战斗手牌运行时只使用 first-person card layer。`UBattleHUD` 不再公开 `BattleHandPresentationMode`，也不再绑定、创建、隐藏或恢复旧 2D hand。C++ fallback BattleHUD 只构建状态、ActionPanel、牌堆、CombatLogFeed 和 PresentationStack，不再构建 legacy 2D hand 或敌方 2D fallback。
 
 First-person hand 不在 slot widget 内提交规则。轻点、hold inspect、drag/aim、world target release 和 hand-card target release 都经 BattleHUD bridge / command flow 进入 BattleSession。完整合同见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 

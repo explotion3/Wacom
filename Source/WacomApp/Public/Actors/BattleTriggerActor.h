@@ -159,7 +159,7 @@ public:
 	 * 避免同关卡多组敌人部位互相串 cue / hover / drag preview。
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",
-		meta = (ToolTip = "本触发器对应的场景敌人 Host。进入战斗后只绑定该 Host 下的部位 Actor；为空时保留 EnemyInfoBar fallback，但场景部位不会参与绑定。"))
+		meta = (ToolTip = "本触发器对应的场景敌人 Host。进入战斗后只绑定该 Host 下的部位 Actor；为空时不会创建场景敌人目标绑定。"))
 	TObjectPtr<AWacomBattleEnemyActor> SceneEnemyHost = nullptr;
 
 	/**

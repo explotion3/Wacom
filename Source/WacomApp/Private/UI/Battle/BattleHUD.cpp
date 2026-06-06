@@ -6,7 +6,6 @@
 #include "UI/Battle/ActionPanel.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
-#include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
@@ -170,7 +169,6 @@ void UBattleHUD::NativeConstruct()
 	// 登记子 BattleWidget，让基类 SetSession / RefreshFromSnapshot 能递归到它们。
 	ChildBattleWidgets.Reset();
 	if (PlayerStatusBar) { ChildBattleWidgets.Add(PlayerStatusBar); }
-	if (EnemyInfoBar)    { ChildBattleWidgets.Add(EnemyInfoBar); }
 	if (ActionPanel)     { ChildBattleWidgets.Add(ActionPanel); }
 	if (EquipmentBar)    { ChildBattleWidgets.Add(EquipmentBar); }
 	if (CombatLogFeed)   { ChildBattleWidgets.Add(CombatLogFeed); }
@@ -186,8 +184,6 @@ void UBattleHUD::NativeConstruct()
 		}
 		RefreshFromSnapshot(S->BuildSnapshot());
 	}
-
-	SyncEnemyInfoBarFallbackVisibility();
 }
 
 void UBattleHUD::NativeDestruct()
@@ -247,7 +243,6 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 		FBattleHUDFallbackLayoutBuilder::Build(FBattleHUDFallbackLayoutBuilderContext{
 			this,
 			WidgetTree,
-			&EnemyInfoBar,
 			&PlayerStatusBar,
 			&ActionPanel,
 			&EquipmentBar,
@@ -302,7 +297,6 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 	// 递归下发 Snapshot 给子 Widget
 	Super::NativeRefreshFromSnapshot(Snap);
 	SyncBattleEnemyPartWorldTargets(Snap);
-	SyncEnemyInfoBarFallbackVisibility();
 }
 
 void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession)
@@ -315,7 +309,6 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 		ClearPendingTurnBoundaryCommand();
 		ClearFirstPersonBattleHandLayer();
 		SetBattleSceneEnemyHost(nullptr);
-		SyncEnemyInfoBarFallbackVisibility();
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
 		ClearPendingFirstPersonCardTransitionEvents();
 		ClearBattlePresentationTargetRegistry();
@@ -339,7 +332,6 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	{
 		ConsumeAndLogEvents();
 	}
-	SyncEnemyInfoBarFallbackVisibility();
 }
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
@@ -399,13 +391,11 @@ FText UBattleHUD::GetPendingTurnBoundaryCommandText() const
 void UBattleHUD::SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost)
 {
 	GetSceneEnemyTargetCoordinator().SetSceneEnemyHost(InHost);
-	SyncEnemyInfoBarFallbackVisibility();
 }
 
 void UBattleHUD::SetBattleSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts)
 {
 	GetSceneEnemyTargetCoordinator().SetSceneEnemyHosts(InHosts);
-	SyncEnemyInfoBarFallbackVisibility();
 }
 
 AWacomBattleEnemyActor* UBattleHUD::GetBattleSceneEnemyHost() const
@@ -446,7 +436,7 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
 	}
 
-	// 状态变化时，让 first-person hand / EnemyInfoBar / ActionPanel 重新刷一次（高亮/启用状态）。
+	// 状态变化时，让 first-person hand / ActionPanel 重新刷一次（高亮/启用状态）。
 	UBattleSession* S = GetSession();
 	if (!S) { return; }
 	const FBattleSnapshot Snap = S->BuildSnapshot();
@@ -461,11 +451,9 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 		LastBattleSnapshot = Snap;
 		bHasLastBattleSnapshot = true;
 	}
-	if (EnemyInfoBar) { EnemyInfoBar->RefreshFromSnapshot(Snap); }
 	if (ActionPanel)  { ActionPanel->RefreshFromSnapshot(Snap); }
 	SyncFirstPersonBattleHandLayer(Snap);
 	SyncBattleEnemyPartWorldTargets(Snap);
-	SyncEnemyInfoBarFallbackVisibility();
 }
 
 UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor() const
@@ -929,19 +917,6 @@ void UBattleHUD::ClearBattleEnemyPartWorldTargets()
 	GetSceneEnemyTargetCoordinator().ClearWorldTargets();
 }
 
-void UBattleHUD::SyncEnemyInfoBarFallbackVisibility()
-{
-	if (!EnemyInfoBar)
-	{
-		return;
-	}
-
-	EnemyInfoBar->SetVisibility(
-		GetSceneEnemyTargetCoordinator().HasSceneEnemyHost()
-			? ESlateVisibility::Collapsed
-			: ESlateVisibility::Visible);
-}
-
 bool UBattleHUD::CanUpdateBattleSceneEnemyPartHoverProbe() const
 {
 	return GetSceneEnemyTargetCoordinator().CanUpdateHoverProbe();
@@ -1001,13 +976,6 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCar
 	const FBattleSnapshot& NextSnapshot) const
 {
 	return GetFirstPersonHandBridge().BuildTransitionHints(PreviousSnapshot, NextSnapshot);
-}
-
-bool UBattleHUD::TryGetEnemyPartWidgetCenterInViewport(
-	const FGuid& PartInstanceId,
-	FVector2D& OutWidgetPosition) const
-{
-	return EnemyInfoBar && EnemyInfoBar->TryGetPartWidgetCenterInViewport(PartInstanceId, OutWidgetPosition);
 }
 
 int32 UBattleHUD::AppendBattlePresentationStackEntry(

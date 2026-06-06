@@ -72,8 +72,8 @@ struct WACOMAPP_API FBattleTargetablePartView
 /**
  * 当前 BattleHUD 目标选择状态的只读表现桥。
  *
- * 临时 UEnemyPartWidget 和未来 HD-2D/PaperZD 敌方部位表现都应读取本视图，
- * 再把点击意图回传到 BattleHUD，而不是各自解析 HUD 内部状态。
+ * HD-2D/PaperZD 敌方部位表现读取本视图，再把点击意图回传到 BattleHUD，
+ * 而不是各自解析 HUD 内部状态。
  */
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FBattleTargetSelectionView
@@ -177,7 +177,7 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  *     └── 点击 EndTurn 按钮 → 提交 EndTurn，回 Idle
  *
  *   TargetSelect
- *     ├── 点击 UEnemyPartWidget → 提交 PlayCard(PendingCard, PartId)，回 Idle
+ *     ├── 点击场景敌人 PartActor world target → 提交 PlayCard(PendingCard, PartId)，回 Idle
  *     └── 右键 / ESC → 取消，回 Idle
  *
  *   Resolving：保留给未来真正阻塞的战斗表现。普通事件表现队列不再进入该状态。
@@ -186,7 +186,6 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  *
  * WBP 子类约定（BindWidget 大部分可选）：
  * - PlayerStatusBar   : UPlayerStatusBar
- * - EnemyInfoBar      : UEnemyInfoBar
  * - ActionPanel       : UActionPanel
  * - DrawPileView      : UPileCountView
  * - DiscardPileView   : UPileCountView
@@ -351,13 +350,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "设置当前战斗绑定的场景敌人 Host 列表。用于 Encounter 多敌人；BattleHUD 只会同步这些 Host 下的 PartActor world target。"))
 	void SetBattleSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "当前战斗绑定的场景敌人 Host。为空时仅使用 EnemyInfoBar fallback。"))
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "当前战斗绑定的场景敌人 Host。为空时表示本战斗没有可绑定的场景敌人目标。"))
 	AWacomBattleEnemyActor* GetBattleSceneEnemyHost() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "给调试和制作校验使用：判断指定 SceneEnemyHost 是否属于当前 BattleHUD 的场景敌人 registry。"))
 	bool IsBattleSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const;
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "给输入路由使用：判断 World target handle 是否来自当前 SceneEnemyHost 注册的部位。EnemyInfoBar 等 2D fallback 不走此检查。"))
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "给输入路由使用：判断 World target handle 是否来自当前 SceneEnemyHost 注册的部位。"))
 	bool IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 
@@ -388,10 +387,6 @@ protected:
 	/** 玩家状态条。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPlayerStatusBar> PlayerStatusBar;
-
-	/** 敌人信息条。 */
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<class UEnemyInfoBar> EnemyInfoBar;
 
 	/** 操作面板。 */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -476,7 +471,6 @@ private:
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
-	bool TryGetEnemyPartWidgetCenterInViewport(const FGuid& PartInstanceId, FVector2D& OutWidgetPosition) const;
 	int32 AppendBattlePresentationStackEntry(
 		const FWacomBattleCombatLogCommandContext& CommandContext,
 		const FBattleSnapshot& PreCommandSnapshot);
@@ -553,7 +547,6 @@ private:
 		const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
 	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap);
 	void ClearBattleEnemyPartWorldTargets();
-	void SyncEnemyInfoBarFallbackVisibility();
 	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
 	FWacomBattleEnemyPartDragPredictionDebugInput BuildBattleSceneEnemyPartHoverPredictionInput(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
@@ -615,7 +608,6 @@ private:
 	friend class FWacomBattleHUDFirstPersonHandBridge;
 	friend class FWacomBattleHUDPresentationCoordinator;
 	friend class FWacomBattleHUDSceneEnemyTargetCoordinator;
-	friend class UEnemyInfoBar;
 	friend class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 	friend class UWacomBattleHUDDetailTest;
 };

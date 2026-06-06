@@ -11,7 +11,6 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/BattleHUD.h"
-#include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
@@ -1068,12 +1067,8 @@ void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(
 
 	FPlayCommitHint CommitHint;
 	CommitHint.CardInstanceId = CardInstanceId;
-	CommitHint.TargetPartInstanceId = TargetPartInstanceId;
 	if (TargetPartInstanceId.IsValid())
 	{
-		CommitHint.bHasTargetWidgetPosition =
-			HUD.TryGetEnemyPartWidgetCenterInViewport(TargetPartInstanceId, CommitHint.TargetWidgetPosition);
-
 		FWacomBattlePresentationTargetCue Cue;
 		Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
 		Cue.TargetPartInstanceId = TargetPartInstanceId;
@@ -1141,8 +1136,6 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> FWacomBattleHUDFirstPersonHandB
 			if (const FPlayCommitHint* CommitHint = FindCommitHint(CardInstanceId))
 			{
 				Hint.bPlayCommitFeedback = true;
-				Hint.bHasPlayedExitTargetWidgetPosition = CommitHint->bHasTargetWidgetPosition;
-				Hint.PlayedExitTargetWidgetPosition = CommitHint->TargetWidgetPosition;
 			}
 		}
 		Hints.Add(Hint);

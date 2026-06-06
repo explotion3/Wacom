@@ -113,7 +113,7 @@ Battle scene enemy 视觉绑定正式入口是 `ABattleTriggerActor.SceneEnemyHo
 - `SortOrder` 映射到生成组件的 `TranslucentSortPriority`，`Tint.A` 作为透明度；缺少当前模式对应资源的层不会生成组件，但会进入 debug / validation。Bridge 的反馈缩放优先作用到 `VisualLayersRoot`，因此 hover、drag preview、伤害和确认 cue 会缩放整个部位视觉组。
 - `PartSlots` 只保留为旧场景兼容入口：当 Host 没有任何子 PartActor 时才使用，并把 `Slot.PartId / Slot.PartSlotId` 同步到旧 PartActor。
 - slot 顺序只影响 Host registry 和 badge stagger 表现，不改变 `UBattleSession` 的规则部位顺序。
-- 有 Host 时默认隐藏旧 `EnemyInfoBar`；缺 Host 时仍保留 2D enemy fallback/debug。
+- BattleHUD 不再保留敌方 2D fallback；缺 Host 时不会注册场景敌人目标，敌方 hover / prediction / cue / 拖卡目标绑定不可用。
 
 Debug 蛇 Host 样例流程：创建一个 `AWacomBattleEnemyActor` Host 蓝图，在 Host 蓝图视口中放置三个 `AWacomBattleEnemyPartActor` 子 Actor / ChildActorComponent，命名建议包含 `Head / Body / Tail`；然后在 Host 上执行 `ConfigureDebugSnakeHostSample()`。该入口会绑定 `DA_Enemy_Snake`，扫描运行时子 Actor 和蓝图 ChildActorComponent 的子 Actor 模板，把已有三个部位配置为 `Snake.Head / Snake.Body / Snake.Tail`，局部槽位为 `Head / Body / Tail`，并写入示例相对位置和 badge stagger。它不会自动生成缺失部位 Actor，也不会修改 `BattleSession` 或创建正式美术资产；缺失部位会继续通过 debug view / validation 暴露。Host debug summary 不是常驻 Details 字段；在 Host Details 中执行 `LogBattleSceneEnemyDebugSummary()` 后，到 Output Log 搜索 `[WacomBattleEnemyActor]` 查看一行摘要。
 
@@ -168,5 +168,5 @@ Battle 已接入 `UBattleSession::CanTargetWithCard()` 和 `ValidateTargetWithCa
 
 - Debug summary / debug view / log 入口只用于 PIE 排查，不作为正式规则入口。
 - Actor `ConfigureDebug...Sample` 按 `Wacom|...|Prototype` 分类保留，只用于开发验证样例配置。
-- `EnemyInfoBar / EnemyPartWidget`、legacy event log 等 compatibility / fallback UI 不作为新的 world interaction 制作主线；旧 2D hand 已删除，正式手牌走 first-person card layer。
+- Legacy event log 等 compatibility UI 不作为新的 world interaction 制作主线；旧 2D hand 和旧敌方 2D fallback 已删除，正式手牌走 first-person card layer，正式敌方目标走 SceneEnemyHost / PartActor / WorldTargetBridge。
 - `TryRouteBattleSceneTargetClick` 等 protected test seam 保留给自动化测试；测试侧应通过 `WacomTests/Private` access wrapper 使用，不扩散生产 public API。
