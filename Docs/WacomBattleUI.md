@@ -106,7 +106,9 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 
 Trigger 显式 `SceneEnemyHostSlots.EnemySlotId` 必须填写且不重复，并应对应 `EncounterDefinition.EnemySlots[].EnemySlotId`。Host 刷新时会优先扫描自身蓝图 / 子 Actor 层级下的 PartActor，并向这些部位注入当前 Host 的 `EnemySlotId`。每个 PartActor 仍必须配置 `PartId`，对应 `UEnemyPartDefinition::PartId`，用于静态内容、debug 和旧单敌人 fallback；`PartSlotId` 是 Host 内局部槽位身份，空时兼容回退到 `PartId`。Bridge 绑定 Snapshot 时优先匹配 `EncounterId + EnemySlotId + PartSlotId`，first-person world drop 会把 slot identity 放进 target handle，Battle validation / PlayCard resolver 再解析到当前运行时部位。`PartSlots` 只保留为旧场景兼容入口：当 Host 没有任何子 PartActor 时才使用，并把 `Slot.PartId / Slot.PartSlotId` 同步到旧 PartActor。部位顺序只影响 registry / badge stagger 表现，不改变 BattleSession 规则部位顺序。
 
-PartActor 是单个规则部位的表现容器。`HitBounds` 是唯一 hover、点击和拖卡命中范围；`VisualLayers` 是 PaperSprite 表现层数组，只负责多张 2D 图的相对位置、旋转、缩放、排序、颜色和显隐。`VisualLayers` 非空时旧 `PartVisual` 原型网格隐藏；为空时继续显示 `VisualMesh / PartVisual` 作为旧地图兼容 fallback。Bridge 的反馈目标默认是 `VisualLayersRoot`，所以 TargetConfirmed、Damage、Destroyed、hover 和 drag preview 会缩放整组视觉层，而不是某一张 sprite。
+PartActor 是单个规则部位的表现容器。`HitBounds` 是唯一 hover、点击和拖卡命中范围；`VisualLayers` 是 2D 表现层数组，只负责多张图的相对位置、旋转、缩放、排序、颜色、显隐和轻量序列帧播放。每层用 `LayerMode` 选择 `StaticSprite` 或 `Flipbook`：静态层生成 `UPaperSpriteComponent`，Flipbook 层生成 `UPaperFlipbookComponent`，并可配置 `FlipbookPlayRate`、是否循环、初始播放时间和是否自动播放。`VisualLayers` 非空时旧 `PartVisual` 原型网格隐藏；为空时继续显示 `VisualMesh / PartVisual` 作为旧地图兼容 fallback。Bridge 的反馈目标默认是 `VisualLayersRoot`，所以 TargetConfirmed、Damage、Destroyed、hover 和 drag preview 会缩放整组视觉层，而不是某一张 sprite。
+
+`VisualLayers` 是表现层合同，不接管动画状态机。推荐用 `StaticSprite` 做主体、阴影、前景遮挡，用 `Flipbook` 做尾巴摆动、眼睛眨动、局部 idle 这类简单循环；更复杂的攻击 / 受击 / 死亡状态机后续再由 PaperZD 或专门 Animator 组件承接。缺少当前 `LayerMode` 对应资源的层不会生成组件，但会进入 validation warning 和 debug summary；`SortOrder` 映射到生成组件的 `TranslucentSortPriority`，数值越大越靠前。`HitBounds` 仍是唯一命中范围，sprite/flipbook 的尺寸和透明区域不改变目标身份或 BattleSession 规则。
 
 蛇 Host prefab 的第一版正式口径是：创建 `AWacomBattleEnemyActor` 蓝图 prefab，推荐路径 `/Game/Wacom/Core/Enemy/BP_SnakeHost_Debug`，Host `EnemyDefinition=/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake`、`EnemySlotId=Enemy`；在 Host 蓝图视口内放置三个 ChildActorComponent，Child Actor Class 都是 `AWacomBattleEnemyPartActor`。`SnakeHeadPart` 相对位置 `(96,-6,16)`，子 Actor 模板配置 `PartId=Snake.Head`、`PartSlotId=Head`、`HitBoundsExtent=(42,38,42)`、`VisualScale=(0.42,0.38,0.42)`；`SnakeBodyPart` 相对位置 `(0,0,0)`，配置 `PartId=Snake.Body`、`PartSlotId=Body`、`HitBoundsExtent=(62,46,42)`、`VisualScale=(0.62,0.46,0.42)`；`SnakeTailPart` 相对位置 `(-92,16,-8)`，配置 `PartId=Snake.Tail`、`PartSlotId=Tail`、`HitBoundsExtent=(48,34,34)`、`VisualScale=(0.48,0.34,0.34)`。`EnemySlotId` 由 Host / Trigger 注入，不在 PartActor 模板里手填。
 
@@ -115,6 +117,8 @@ Host validation 会同时检查 `PartId` 与 `PartSlotId`：`PartId` 必须对�
 Trigger 正式单蛇配置使用生成资产 `DA_Encounter_SnakeSingle`：`PersistentId` 填关卡唯一值，`EncounterDefinition=DA_Encounter_SnakeSingle`，`EnemyDef` 只保留为空或作为旧地图 fallback；`SceneEnemyHostSlots[0].EnemySlotId=Enemy`，`SceneEnemyHostSlots[0].SceneEnemyHost` 指向关卡里的 Snake Host 实例。旧 `SceneEnemyHost + EnemyDef` 单敌人配置仍可调试，但不是新制作主线。
 
 `ConfigureDebugSnakeHostSample()` 仍只作为当前蛇敌人 prefab 制作的开发辅助入口：先在 Host 蓝图中放好 Head / Body / Tail 三个 PartActor，再执行该函数。Host 会扫描运行时子 Actor 和蓝图 ChildActorComponent 的子 Actor 模板，尝试写入上述蛇样例配置。它不自动创建缺失部位，也不创建正式 sprite 资产；正式美术仍通过各 PartActor 的 `VisualLayers` 配置。Host 的一行诊断可在 Details 中执行 `LogBattleSceneEnemyDebugSummary()`，然后到 Output Log 查看 `[WacomBattleEnemyActor] BattleSceneEnemy{...}`。
+
+Host 蓝图视口中的 `SnakeHeadPart / SnakeBodyPart / SnakeTailPart` 是 `ChildActorComponent`；关卡 Outliner 会在 Host 实例下显示它们生成出来的 `WacomBattleEnemyPartActor...` 子 Actor，这是正常现象。运行时和摆放校验优先使用这些已生成的真实子 Actor；只有蓝图模板 / CDO 等没有生成实例的场景才读取 ChildActor 模板，避免同一组 Head / Body / Tail 被重复计入 Host registry。
 
 每个 PartActor 通过 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 接收：
 

@@ -84,7 +84,9 @@ namespace
 		return Slot.PartSlotId.IsNone() ? Slot.PartId : Slot.PartSlotId;
 	}
 
-	AWacomBattleEnemyPartActor* ResolveChildActorComponentPartActor(UChildActorComponent* ChildActorComponent)
+	AWacomBattleEnemyPartActor* ResolveChildActorComponentPartActor(
+		UChildActorComponent* ChildActorComponent,
+		bool bAllowTemplateFallback)
 	{
 		if (!ChildActorComponent)
 		{
@@ -97,15 +99,22 @@ namespace
 			return PartActor;
 		}
 
-		return Cast<AWacomBattleEnemyPartActor>(ChildActorComponent->GetChildActorTemplate());
+		return bAllowTemplateFallback
+			? Cast<AWacomBattleEnemyPartActor>(ChildActorComponent->GetChildActorTemplate())
+			: nullptr;
 	}
 
-	void CollectChildActorComponents(
+	void CollectInstanceChildActorComponents(
 		const AWacomBattleEnemyActor& Host,
 		TArray<UChildActorComponent*>& OutChildActorComponents)
 	{
 		Host.GetComponents<UChildActorComponent>(OutChildActorComponents);
+	}
 
+	void CollectBlueprintTemplateChildActorComponents(
+		const AWacomBattleEnemyActor& Host,
+		TArray<UChildActorComponent*>& OutChildActorComponents)
+	{
 		UBlueprintGeneratedClass* BlueprintClass = Cast<UBlueprintGeneratedClass>(Host.GetClass());
 		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)
 		{
@@ -126,6 +135,24 @@ namespace
 				OutChildActorComponents.AddUnique(ChildActorComponent);
 			}
 		}
+	}
+
+	void CollectChildActorComponentsForPartDiscovery(
+		const AWacomBattleEnemyActor& Host,
+		TArray<UChildActorComponent*>& OutChildActorComponents,
+		bool& bOutAllowTemplateFallback)
+	{
+		OutChildActorComponents.Reset();
+
+		CollectInstanceChildActorComponents(Host, OutChildActorComponents);
+		if (OutChildActorComponents.Num() > 0)
+		{
+			bOutAllowTemplateFallback = Host.IsTemplate();
+			return;
+		}
+
+		CollectBlueprintTemplateChildActorComponents(Host, OutChildActorComponents);
+		bOutAllowTemplateFallback = true;
 	}
 
 	void MarkObjectEditedForDebugSnakeSample(UObject* Object)
@@ -206,10 +233,15 @@ namespace
 		const AWacomBattleEnemyPartActor& PartActor)
 	{
 		TArray<UChildActorComponent*> ChildActorComponents;
-		CollectChildActorComponents(Host, ChildActorComponents);
+		CollectInstanceChildActorComponents(Host, ChildActorComponents);
+		if (ChildActorComponents.Num() == 0)
+		{
+			CollectBlueprintTemplateChildActorComponents(Host, ChildActorComponents);
+		}
 		for (UChildActorComponent* ChildActorComponent : ChildActorComponents)
 		{
-			if (ResolveChildActorComponentPartActor(ChildActorComponent) == &PartActor)
+			if (ResolveChildActorComponentPartActor(ChildActorComponent, /*bAllowTemplateFallback*/true)
+				== &PartActor)
 			{
 				return ChildActorComponent;
 			}
@@ -272,7 +304,8 @@ AWacomBattleEnemyActor::BuildAttachedBattleEnemyPartActors() const
 	}
 
 	TArray<UChildActorComponent*> ChildActorComponents;
-	CollectChildActorComponents(*this, ChildActorComponents);
+	bool bAllowTemplateFallback = false;
+	CollectChildActorComponentsForPartDiscovery(*this, ChildActorComponents, bAllowTemplateFallback);
 	for (UChildActorComponent* ChildActorComponent : ChildActorComponents)
 	{
 		if (!ChildActorComponent)
@@ -280,7 +313,8 @@ AWacomBattleEnemyActor::BuildAttachedBattleEnemyPartActors() const
 			continue;
 		}
 
-		if (AWacomBattleEnemyPartActor* PartActor = ResolveChildActorComponentPartActor(ChildActorComponent))
+		if (AWacomBattleEnemyPartActor* PartActor =
+			ResolveChildActorComponentPartActor(ChildActorComponent, bAllowTemplateFallback))
 		{
 			PartActors.AddUnique(PartActor);
 		}

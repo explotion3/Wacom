@@ -16,6 +16,8 @@
 class UStaticMesh;
 class UUserWidget;
 class UWidgetComponent;
+class UPaperFlipbook;
+class UPaperFlipbookComponent;
 class UPaperSprite;
 class UPaperSpriteComponent;
 class UWacomBattleEnemyPartPredictionWidget;
@@ -38,6 +40,13 @@ class WACOMAPP_API UWacomBattleEnemyPartVisualComponent : public UStaticMeshComp
 	GENERATED_BODY()
 };
 
+UENUM(BlueprintType)
+enum class EWacomBattleEnemyPartVisualLayerMode : uint8
+{
+	StaticSprite,
+	Flipbook,
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleEnemyPartVisualLayer
 {
@@ -48,8 +57,32 @@ struct WACOMAPP_API FWacomBattleEnemyPartVisualLayer
 	FName LayerId = NAME_None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
-		meta = (ToolTip = "该视觉层使用的 PaperSprite。留空时不生成组件，但会进入 debug / validation。"))
+		meta = (ToolTip = "视觉层类型。StaticSprite 使用单张 PaperSprite；Flipbook 使用 PaperFlipbook 播放序列帧。只影响表现，不影响命中或战斗规则。"))
+	EWacomBattleEnemyPartVisualLayerMode LayerMode = EWacomBattleEnemyPartVisualLayerMode::StaticSprite;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
+		meta = (ToolTip = "StaticSprite 层使用的 PaperSprite。LayerMode=StaticSprite 且留空时不生成组件，但会进入 debug / validation。"))
 	TObjectPtr<UPaperSprite> Sprite = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
+		meta = (ToolTip = "Flipbook 层使用的 PaperFlipbook。LayerMode=Flipbook 且留空时不生成组件，但会进入 debug / validation。"))
+	TObjectPtr<UPaperFlipbook> Flipbook = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
+		meta = (ToolTip = "Flipbook 层播放倍率。只影响视觉播放速度；1 表示原速。", ClampMin = "0.0", ClampMax = "8.0", UIMin = "0.0", UIMax = "3.0"))
+	float FlipbookPlayRate = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
+		meta = (ToolTip = "Flipbook 层是否循环播放。只影响视觉表现。"))
+	bool bLoopFlipbook = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
+		meta = (ToolTip = "Flipbook 层初始播放时间，单位秒。用于让多层动画错帧。", ClampMin = "0.0", UIMin = "0.0"))
+	float FlipbookStartTimeSeconds = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
+		meta = (ToolTip = "Flipbook 层是否在生成后立即播放。关闭时停在初始播放时间。"))
+	bool bAutoPlayFlipbook = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
 		meta = (ToolTip = "视觉层相对 VisualLayersRoot 的位置。单位：厘米；只影响显示，不影响 HitBounds。"))
@@ -127,7 +160,22 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	TArray<FName> DuplicateVisualLayerIds;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 GeneratedStaticVisualLayerComponentCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 GeneratedFlipbookVisualLayerComponentCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 MissingVisualLayerAssetCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 MissingVisualLayerSpriteCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 MissingVisualLayerFlipbookCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	TArray<FName> VisualLayerAssetNames;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FName FeedbackTargetName = NAME_None;
@@ -228,7 +276,7 @@ public:
 	FVector VisualRelativeLocation = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual",
-		meta = (ToolTip = "部位 2D 视觉层。非空时使用 PaperSprite 视觉层并隐藏旧 PartVisual 原型网格；视觉层不影响 HitBounds、目标身份或战斗规则。"))
+		meta = (ToolTip = "部位 2D 视觉层。非空时按 LayerMode 生成 PaperSprite / PaperFlipbook 表现层并隐藏旧 PartVisual 原型网格；视觉层不影响 HitBounds、目标身份或战斗规则。"))
 	TArray<FWacomBattleEnemyPartVisualLayer> VisualLayers;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
@@ -340,7 +388,7 @@ public:
 	void RefreshAuthoringState();
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Visual",
-		meta = (ToolTip = "按 VisualLayers 重新生成 PaperSprite 视觉层。只影响显示，不影响 HitBounds、目标身份或战斗规则。"))
+		meta = (ToolTip = "按 VisualLayers 重新生成 PaperSprite / PaperFlipbook 视觉层。只影响显示，不影响 HitBounds、目标身份或战斗规则。"))
 	void RefreshVisualLayers();
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
@@ -411,7 +459,9 @@ private:
 		const FVector& InVisualScale,
 		const FVector& InVisualRelativeLocation);
 	TArray<FName> BuildDuplicateVisualLayerIds() const;
+	int32 CountMissingVisualLayerAssets() const;
 	int32 CountMissingVisualLayerSprites() const;
+	int32 CountMissingVisualLayerFlipbooks() const;
 	FVector GetAppliedPredictionBadgeRelativeLocation() const;
 	FVector GetAppliedStatusBadgeRelativeLocation() const;
 
@@ -429,6 +479,9 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UPaperSpriteComponent>> GeneratedVisualLayerComponents;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UPaperFlipbookComponent>> GeneratedFlipbookVisualLayerComponents;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
 		meta = (AllowPrivateAccess = "true", ToolTip = "部位默认携带的通用交互目标身份组件。"))

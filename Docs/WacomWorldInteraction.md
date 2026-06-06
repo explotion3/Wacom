@@ -107,9 +107,10 @@ Battle scene enemy 视觉绑定正式入口是 `ABattleTriggerActor.SceneEnemyHo
 - 每个 PartActor 必须配置稳定 `PartId`，用于静态内容、debug 和旧单敌人 fallback；运行时由 HUD 解析并写回当前 `PartInstanceId`。
 - 旧单 Host fallback 下，Host 的 `EnemySlotId` 默认 `Enemy`，如 Trigger 配置了 Encounter 则使用第一个有效 Encounter enemy slot。显式 slots 下不做空值兜底，空 `EnemySlotId` 是摆放错误。
 - PartActor 的 `PartSlotId` 是 Host 内局部槽位 ID，空时兼容回退到 `PartId`。Bridge 绑定 Snapshot 时优先用 `EncounterId + EnemySlotId + PartSlotId`，旧单敌人场景才回退 `PartId`。
-- PartActor 同时是“规则部位 + 命中盒 + 视觉层容器”：`HitBounds` 决定 hover、点击和拖卡命中；`VisualLayers` 只生成表现用 PaperSprite 层，不改变目标身份、透明区域命中或 `BattleSession` 规则。
-- `VisualLayers` 非空时，PartActor 会在 `VisualLayersRoot` 下按层生成 `UPaperSpriteComponent`，并隐藏旧 `PartVisual` 原型网格；`VisualLayers` 为空时继续使用 `VisualMesh / PartVisual` 兼容旧地图和测试。
-- `SortOrder` 映射到 sprite `TranslucentSortPriority`，`Tint.A` 作为透明度；缺 Sprite 的层不会生成组件，但会进入 debug / validation。Bridge 的反馈缩放优先作用到 `VisualLayersRoot`，因此 hover、drag preview、伤害和确认 cue 会缩放整个部位视觉组。
+- PartActor 同时是“规则部位 + 命中盒 + 视觉层容器”：`HitBounds` 决定 hover、点击和拖卡命中；`VisualLayers` 只生成表现用 2D 层，不改变目标身份、透明区域命中或 `BattleSession` 规则。
+- `VisualLayers` 非空时，PartActor 会在 `VisualLayersRoot` 下按层生成 `UPaperSpriteComponent` 或 `UPaperFlipbookComponent`，并隐藏旧 `PartVisual` 原型网格；`VisualLayers` 为空时继续使用 `VisualMesh / PartVisual` 兼容旧地图和测试。
+- 每个视觉层通过 `LayerMode` 选择 `StaticSprite` 或 `Flipbook`。静态层使用 `Sprite`；Flipbook 层使用 `Flipbook`，并可配置 `FlipbookPlayRate`、是否循环、初始播放时间和是否自动播放。简单 idle / 局部摆动推荐先用 Flipbook；复杂动画状态机后续再接 PaperZD / Animator，不进入 Battle 规则层。
+- `SortOrder` 映射到生成组件的 `TranslucentSortPriority`，`Tint.A` 作为透明度；缺少当前模式对应资源的层不会生成组件，但会进入 debug / validation。Bridge 的反馈缩放优先作用到 `VisualLayersRoot`，因此 hover、drag preview、伤害和确认 cue 会缩放整个部位视觉组。
 - `PartSlots` 只保留为旧场景兼容入口：当 Host 没有任何子 PartActor 时才使用，并把 `Slot.PartId / Slot.PartSlotId` 同步到旧 PartActor。
 - slot 顺序只影响 Host registry 和 badge stagger 表现，不改变 `UBattleSession` 的规则部位顺序。
 - 有 Host 时默认隐藏旧 `EnemyInfoBar`；缺 Host 时仍保留 2D enemy fallback/debug。

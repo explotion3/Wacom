@@ -54,6 +54,8 @@
 #include "Misc/Paths.h"
 #include "Misc/DataValidation.h"
 #include "Misc/ScopeExit.h"
+#include "PaperFlipbook.h"
+#include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
 #include "PaperSpriteComponent.h"
 #include "UObject/StrongObjectPtr.h"
@@ -74,6 +76,19 @@ namespace WacomBattleWidgetSpec
 		}
 
 		return GWorld;
+	}
+
+	UPaperFlipbook* MakeOneFrameFlipbookForTest(UObject* Outer)
+	{
+		UPaperSprite* FrameSprite = NewObject<UPaperSprite>(Outer);
+		UPaperFlipbook* Flipbook = NewObject<UPaperFlipbook>(Outer);
+		FScopedFlipbookMutator Mutator(Flipbook);
+		Mutator.FramesPerSecond = 12.0f;
+		FPaperFlipbookKeyFrame KeyFrame;
+		KeyFrame.Sprite = FrameSprite;
+		KeyFrame.FrameRun = 1;
+		Mutator.KeyFrames.Add(KeyFrame);
+		return Flipbook;
 	}
 
 	FGuid FindFirstHandCardByTargetMode(const FBattleSnapshot& Snapshot, ECardTargetMode TargetMode)
@@ -3203,7 +3218,7 @@ bool FWacomUIBattleSceneEnemyPartActorVisibilityAndVisualSpec::RunTest(const FSt
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleSceneEnemyPartVisualLayersSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartVisualLayersGeneratePaperSprites",
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartVisualLayersGeneratePaperSpritesAndFlipbooks",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleSceneEnemyPartVisualLayersSpec::RunTest(const FString& /*Parameters*/)
@@ -3235,6 +3250,7 @@ bool FWacomUIBattleSceneEnemyPartVisualLayersSpec::RunTest(const FString& /*Para
 
 	UPaperSprite* BackSprite = NewObject<UPaperSprite>(PartActor);
 	UPaperSprite* FrontSprite = NewObject<UPaperSprite>(PartActor);
+	UPaperFlipbook* IdleFlipbook = WacomBattleWidgetSpec::MakeOneFrameFlipbookForTest(PartActor);
 	FWacomBattleEnemyPartVisualLayer BackLayer;
 	BackLayer.LayerId = TEXT("Back");
 	BackLayer.Sprite = BackSprite;
@@ -3254,12 +3270,32 @@ bool FWacomUIBattleSceneEnemyPartVisualLayersSpec::RunTest(const FString& /*Para
 	FrontLayer.bVisible = false;
 	FWacomBattleEnemyPartVisualLayer MissingSpriteLayer;
 	MissingSpriteLayer.LayerId = TEXT("MissingSprite");
-	PartActor->VisualLayers = { BackLayer, MissingSpriteLayer, FrontLayer };
+	FWacomBattleEnemyPartVisualLayer IdleLayer;
+	IdleLayer.LayerId = TEXT("Idle");
+	IdleLayer.LayerMode = EWacomBattleEnemyPartVisualLayerMode::Flipbook;
+	IdleLayer.Flipbook = IdleFlipbook;
+	IdleLayer.RelativeLocation = FVector(7.0f, 8.0f, 9.0f);
+	IdleLayer.RelativeRotation = FRotator(0.0f, -20.0f, 0.0f);
+	IdleLayer.RelativeScale3D = FVector(1.4f, 1.5f, 1.6f);
+	IdleLayer.SortOrder = 4;
+	IdleLayer.Tint = FLinearColor(0.4f, 1.0f, 0.6f, 0.8f);
+	IdleLayer.bVisible = true;
+	IdleLayer.FlipbookPlayRate = 1.5f;
+	IdleLayer.bLoopFlipbook = false;
+	IdleLayer.FlipbookStartTimeSeconds = 0.05f;
+	IdleLayer.bAutoPlayFlipbook = true;
+	FWacomBattleEnemyPartVisualLayer MissingFlipbookLayer;
+	MissingFlipbookLayer.LayerId = TEXT("MissingFlipbook");
+	MissingFlipbookLayer.LayerMode = EWacomBattleEnemyPartVisualLayerMode::Flipbook;
+	PartActor->VisualLayers = { BackLayer, MissingSpriteLayer, FrontLayer, IdleLayer, MissingFlipbookLayer };
 	PartActor->RefreshAuthoringState();
 
 	TArray<UPaperSpriteComponent*> SpriteComponents;
 	PartActor->GetComponents<UPaperSpriteComponent>(SpriteComponents);
-	TestEqual(TEXT("Only layers with sprites generate components"), SpriteComponents.Num(), 2);
+	TArray<UPaperFlipbookComponent*> FlipbookComponents;
+	PartActor->GetComponents<UPaperFlipbookComponent>(FlipbookComponents);
+	TestEqual(TEXT("Only static layers with sprites generate sprite components"), SpriteComponents.Num(), 2);
+	TestEqual(TEXT("Only flipbook layers with flipbooks generate flipbook components"), FlipbookComponents.Num(), 1);
 	TestFalse(TEXT("Legacy visual hidden when layers exist"),
 		PartActor->GetPartVisual()->IsVisible());
 	TestTrue(TEXT("Visual layers root exists"), PartActor->GetVisualLayersRoot() != nullptr);
@@ -3268,6 +3304,7 @@ bool FWacomUIBattleSceneEnemyPartVisualLayersSpec::RunTest(const FString& /*Para
 
 	UPaperSpriteComponent* BackComponent = nullptr;
 	UPaperSpriteComponent* FrontComponent = nullptr;
+	UPaperFlipbookComponent* IdleComponent = nullptr;
 	for (UPaperSpriteComponent* Component : SpriteComponents)
 	{
 		if (Component && Component->GetSprite() == BackSprite)
@@ -3279,9 +3316,17 @@ bool FWacomUIBattleSceneEnemyPartVisualLayersSpec::RunTest(const FString& /*Para
 			FrontComponent = Component;
 		}
 	}
+	for (UPaperFlipbookComponent* Component : FlipbookComponents)
+	{
+		if (Component && Component->GetFlipbook() == IdleFlipbook)
+		{
+			IdleComponent = Component;
+		}
+	}
 
 	if (!TestNotNull(TEXT("Back sprite component"), BackComponent)
-		|| !TestNotNull(TEXT("Front sprite component"), FrontComponent))
+		|| !TestNotNull(TEXT("Front sprite component"), FrontComponent)
+		|| !TestNotNull(TEXT("Idle flipbook component"), IdleComponent))
 	{
 		return false;
 	}
@@ -3296,16 +3341,38 @@ bool FWacomUIBattleSceneEnemyPartVisualLayersSpec::RunTest(const FString& /*Para
 	TestFalse(TEXT("Back no overlaps"), BackComponent->GetGenerateOverlapEvents());
 	TestEqual(TEXT("Front sort priority"), FrontComponent->TranslucencySortPriority, FrontLayer.SortOrder);
 	TestFalse(TEXT("Front visibility follows layer"), FrontComponent->IsVisible());
+	TestEqual(TEXT("Idle flipbook location"), IdleComponent->GetRelativeLocation(), IdleLayer.RelativeLocation);
+	TestEqual(TEXT("Idle flipbook rotation"), IdleComponent->GetRelativeRotation(), IdleLayer.RelativeRotation);
+	TestEqual(TEXT("Idle flipbook scale"), IdleComponent->GetRelativeScale3D(), IdleLayer.RelativeScale3D);
+	TestEqual(TEXT("Idle flipbook sort priority"), IdleComponent->TranslucencySortPriority, IdleLayer.SortOrder);
+	TestEqual(TEXT("Idle flipbook tint"), IdleComponent->GetSpriteColor(), IdleLayer.Tint);
+	TestTrue(TEXT("Idle flipbook visible"), IdleComponent->IsVisible());
+	TestEqual(TEXT("Idle flipbook no collision"), IdleComponent->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+	TestFalse(TEXT("Idle flipbook no overlaps"), IdleComponent->GetGenerateOverlapEvents());
+	TestEqual(TEXT("Idle flipbook play rate"), IdleComponent->GetPlayRate(), IdleLayer.FlipbookPlayRate);
+	TestFalse(TEXT("Idle flipbook looping follows layer"), IdleComponent->IsLooping());
+	TestTrue(TEXT("Idle flipbook starts playing"), IdleComponent->IsPlaying());
 
 	const FWacomBattleSceneEnemyPartDebugView View = PartActor->GetBattleSceneEnemyPartDebugView();
 	TestTrue(TEXT("Debug reports visual layers"), View.bUsingVisualLayers);
-	TestEqual(TEXT("Debug layer count"), View.VisualLayerCount, 3);
-	TestEqual(TEXT("Debug generated component count"), View.GeneratedVisualLayerComponentCount, 2);
+	TestEqual(TEXT("Debug layer count"), View.VisualLayerCount, 5);
+	TestEqual(TEXT("Debug generated component count"), View.GeneratedVisualLayerComponentCount, 3);
+	TestEqual(TEXT("Debug generated static component count"), View.GeneratedStaticVisualLayerComponentCount, 2);
+	TestEqual(TEXT("Debug generated flipbook component count"), View.GeneratedFlipbookVisualLayerComponentCount, 1);
+	TestEqual(TEXT("Debug missing asset count"), View.MissingVisualLayerAssetCount, 2);
 	TestEqual(TEXT("Debug missing sprite count"), View.MissingVisualLayerSpriteCount, 1);
+	TestEqual(TEXT("Debug missing flipbook count"), View.MissingVisualLayerFlipbookCount, 1);
 	TestTrue(TEXT("Debug layer ids contain back"), View.VisualLayerIds.Contains(TEXT("Back")));
+	TestTrue(TEXT("Debug layer ids contain idle"), View.VisualLayerIds.Contains(TEXT("Idle")));
+	TestTrue(TEXT("Debug visual asset names contain idle flipbook"),
+		View.VisualLayerAssetNames.Contains(FName(*IdleFlipbook->GetName())));
 	TestEqual(TEXT("Debug feedback target"), View.FeedbackTargetName, FName(TEXT("VisualLayersRoot")));
 	TestTrue(TEXT("Summary reports visual layer count"),
-		PartActor->GetBattleSceneEnemyPartDebugSummary().Contains(TEXT("VisualLayerCount=3")));
+		PartActor->GetBattleSceneEnemyPartDebugSummary().Contains(TEXT("VisualLayerCount=5")));
+	TestTrue(TEXT("Summary reports flipbook component count"),
+		PartActor->GetBattleSceneEnemyPartDebugSummary().Contains(TEXT("GeneratedFlipbookVisualLayerComponents=1")));
+	TestTrue(TEXT("Summary reports visual layer ids"),
+		PartActor->GetBattleSceneEnemyPartDebugSummary().Contains(TEXT("VisualLayerIds=Back|MissingSprite|Front|Idle|MissingFlipbook")));
 	return true;
 }
 
@@ -3356,11 +3423,32 @@ bool FWacomUIBattleSceneEnemyPartVisualLayersRefreshSpec::RunTest(const FString&
 	PartActor->GetComponents<UPaperSpriteComponent>(SpriteComponents);
 	TestEqual(TEXT("Repeated refresh does not keep stale components"), SpriteComponents.Num(), 1);
 
+	FWacomBattleEnemyPartVisualLayer FlipbookLayer;
+	FlipbookLayer.LayerId = TEXT("FlipbookOnly");
+	FlipbookLayer.LayerMode = EWacomBattleEnemyPartVisualLayerMode::Flipbook;
+	FlipbookLayer.Flipbook = WacomBattleWidgetSpec::MakeOneFrameFlipbookForTest(PartActor);
+	PartActor->VisualLayers = { FlipbookLayer };
+	PartActor->RefreshAuthoringState();
+	SpriteComponents.Reset();
+	PartActor->GetComponents<UPaperSpriteComponent>(SpriteComponents);
+	TArray<UPaperFlipbookComponent*> FlipbookComponents;
+	PartActor->GetComponents<UPaperFlipbookComponent>(FlipbookComponents);
+	TestEqual(TEXT("Switching to flipbook removes stale sprite components"), SpriteComponents.Num(), 0);
+	TestEqual(TEXT("One flipbook layer component generated"), FlipbookComponents.Num(), 1);
+
+	PartActor->RefreshAuthoringState();
+	FlipbookComponents.Reset();
+	PartActor->GetComponents<UPaperFlipbookComponent>(FlipbookComponents);
+	TestEqual(TEXT("Repeated refresh does not keep stale flipbook components"), FlipbookComponents.Num(), 1);
+
 	PartActor->VisualLayers.Reset();
 	PartActor->RefreshAuthoringState();
 	SpriteComponents.Reset();
 	PartActor->GetComponents<UPaperSpriteComponent>(SpriteComponents);
+	FlipbookComponents.Reset();
+	PartActor->GetComponents<UPaperFlipbookComponent>(FlipbookComponents);
 	TestEqual(TEXT("Clearing layers removes generated components"), SpriteComponents.Num(), 0);
+	TestEqual(TEXT("Clearing layers removes generated flipbook components"), FlipbookComponents.Num(), 0);
 	TestTrue(TEXT("Legacy visual restored"), PartActor->GetPartVisual()->IsVisible());
 	return true;
 }
@@ -3440,9 +3528,25 @@ bool FWacomUIBattleSceneEnemyPartVisualLayerValidationSpec::RunTest(const FStrin
 	TestEqual(TEXT("Missing visual layer sprite is warning only"), Result, EDataValidationResult::Valid);
 	TestEqual(TEXT("Missing sprite has no errors"), Errors.Num(), 0);
 	TestTrue(TEXT("Missing sprite warning mentions Sprite"),
-		WacomBattleWidgetSpec::ValidationIssuesContain(Warnings, TEXT("Sprite")));
+		WacomBattleWidgetSpec::ValidationIssuesContain(Warnings, TEXT("StaticSprite")));
+	TestEqual(TEXT("Debug counts missing visual asset"),
+		PartActor->GetBattleSceneEnemyPartDebugView().MissingVisualLayerAssetCount,
+		1);
 	TestEqual(TEXT("Debug counts missing sprite"),
 		PartActor->GetBattleSceneEnemyPartDebugView().MissingVisualLayerSpriteCount,
+		1);
+
+	FWacomBattleEnemyPartVisualLayer MissingFlipbookLayer;
+	MissingFlipbookLayer.LayerId = TEXT("MissingFlipbook");
+	MissingFlipbookLayer.LayerMode = EWacomBattleEnemyPartVisualLayerMode::Flipbook;
+	PartActor->VisualLayers = { MissingFlipbookLayer };
+	Result = WacomBattleWidgetSpec::ValidateObjectForTest(PartActor, Warnings, Errors);
+	TestEqual(TEXT("Missing visual layer flipbook is warning only"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Missing flipbook has no errors"), Errors.Num(), 0);
+	TestTrue(TEXT("Missing flipbook warning mentions Flipbook"),
+		WacomBattleWidgetSpec::ValidationIssuesContain(Warnings, TEXT("Flipbook")));
+	TestEqual(TEXT("Debug counts missing flipbook"),
+		PartActor->GetBattleSceneEnemyPartDebugView().MissingVisualLayerFlipbookCount,
 		1);
 
 	PartActor->VisualLayers.Reset();
@@ -3904,6 +4008,90 @@ bool FWacomUIBattleSceneEnemyHostChildActorComponentPrefabPathSpec::RunTest(cons
 	TestEqual(TEXT("Host injects enemy slot into child actor component part"),
 		Head->GetBattleSceneEnemyPartDebugView().EnemySlotId,
 		FName(TEXT("SnakeB")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostChildActorComponentInstanceDoesNotDoubleCountTemplateSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostChildActorComponentsPreferInstancesOverTemplates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostChildActorComponentInstanceDoesNotDoubleCountTemplateSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host =
+		World->SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	if (!TestNotNull(TEXT("Host"), Host))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	Host->EnemySlotId = TEXT("Enemy");
+
+	UChildActorComponent* HeadComponent = NewObject<UChildActorComponent>(Host, TEXT("SnakeHeadPart"));
+	UChildActorComponent* BodyComponent = NewObject<UChildActorComponent>(Host, TEXT("SnakeBodyPart"));
+	UChildActorComponent* TailComponent = NewObject<UChildActorComponent>(Host, TEXT("SnakeTailPart"));
+	if (!TestNotNull(TEXT("Head child component"), HeadComponent)
+		|| !TestNotNull(TEXT("Body child component"), BodyComponent)
+		|| !TestNotNull(TEXT("Tail child component"), TailComponent))
+	{
+		return false;
+	}
+
+	for (UChildActorComponent* ChildComponent : { HeadComponent, BodyComponent, TailComponent })
+	{
+		ChildComponent->SetupAttachment(Host->GetRootComponent());
+		Host->AddInstanceComponent(ChildComponent);
+		ChildComponent->RegisterComponent();
+		ChildComponent->SetChildActorClass(AWacomBattleEnemyPartActor::StaticClass());
+	}
+
+	AWacomBattleEnemyPartActor* Head = Cast<AWacomBattleEnemyPartActor>(HeadComponent->GetChildActor());
+	AWacomBattleEnemyPartActor* Body = Cast<AWacomBattleEnemyPartActor>(BodyComponent->GetChildActor());
+	AWacomBattleEnemyPartActor* Tail = Cast<AWacomBattleEnemyPartActor>(TailComponent->GetChildActor());
+	if (!TestNotNull(TEXT("Head child actor"), Head)
+		|| !TestNotNull(TEXT("Body child actor"), Body)
+		|| !TestNotNull(TEXT("Tail child actor"), Tail))
+	{
+		return false;
+	}
+
+	Head->PartId = TEXT("Snake.Head");
+	Head->PartSlotId = TEXT("Head");
+	Body->PartId = TEXT("Snake.Body");
+	Body->PartSlotId = TEXT("Body");
+	Tail->PartId = TEXT("Snake.Tail");
+	Tail->PartSlotId = TEXT("Tail");
+
+	Host->RefreshBattleEnemyPartAuthoringState();
+	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
+	TestEqual(TEXT("Only live child actor instances are counted"), View.AttachedPartActorCount, 3);
+	TestEqual(TEXT("No duplicate slot ids from child actor templates"), View.DuplicatePartSlotIds.Num(), 0);
+	TestTrue(TEXT("Head slot included once"), View.AttachedPartSlotIds.Contains(TEXT("Head")));
+	TestTrue(TEXT("Body slot included once"), View.AttachedPartSlotIds.Contains(TEXT("Body")));
+	TestTrue(TEXT("Tail slot included once"), View.AttachedPartSlotIds.Contains(TEXT("Tail")));
+	TestTrue(TEXT("Stable scene targets use live child actors"),
+		View.StableSceneTargetIds.Contains(TEXT("Enemy.Head"))
+		&& View.StableSceneTargetIds.Contains(TEXT("Enemy.Body"))
+		&& View.StableSceneTargetIds.Contains(TEXT("Enemy.Tail")));
 	return true;
 }
 

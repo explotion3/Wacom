@@ -6,6 +6,8 @@
 #include "Components/WidgetComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Engine/StaticMesh.h"
+#include "PaperFlipbook.h"
+#include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
 #include "PaperSpriteComponent.h"
 #include "Tags/WacomGameplayTags.h"
@@ -42,6 +44,53 @@ namespace
 			? FString::Printf(TEXT("Layer%d"), LayerIndex)
 			: LayerId.ToString();
 		return FString::Printf(TEXT("VisualLayer_%02d_%s"), LayerIndex, *LayerName);
+	}
+
+	bool VisualLayerHasAsset(const FWacomBattleEnemyPartVisualLayer& Layer)
+	{
+		switch (Layer.LayerMode)
+		{
+		case EWacomBattleEnemyPartVisualLayerMode::Flipbook:
+			return Layer.Flipbook != nullptr;
+		case EWacomBattleEnemyPartVisualLayerMode::StaticSprite:
+		default:
+			return Layer.Sprite != nullptr;
+		}
+	}
+
+	FName GetVisualLayerAssetName(const FWacomBattleEnemyPartVisualLayer& Layer)
+	{
+		switch (Layer.LayerMode)
+		{
+		case EWacomBattleEnemyPartVisualLayerMode::Flipbook:
+			return Layer.Flipbook ? FName(*Layer.Flipbook->GetName()) : NAME_None;
+		case EWacomBattleEnemyPartVisualLayerMode::StaticSprite:
+		default:
+			return Layer.Sprite ? FName(*Layer.Sprite->GetName()) : NAME_None;
+		}
+	}
+
+	const TCHAR* GetVisualLayerModeDebugName(EWacomBattleEnemyPartVisualLayerMode LayerMode)
+	{
+		switch (LayerMode)
+		{
+		case EWacomBattleEnemyPartVisualLayerMode::Flipbook:
+			return TEXT("Flipbook");
+		case EWacomBattleEnemyPartVisualLayerMode::StaticSprite:
+		default:
+			return TEXT("StaticSprite");
+		}
+	}
+
+	FString JoinNamesForDebug(const TArray<FName>& Names)
+	{
+		TArray<FString> NameStrings;
+		NameStrings.Reserve(Names.Num());
+		for (const FName& Name : Names)
+		{
+			NameStrings.Add(Name.ToString());
+		}
+		return FString::Join(NameStrings, TEXT("|"));
 	}
 }
 
@@ -218,6 +267,14 @@ void AWacomBattleEnemyPartActor::RefreshVisualLayers()
 		}
 	}
 	GeneratedVisualLayerComponents.Reset();
+	for (UPaperFlipbookComponent* FlipbookComponent : GeneratedFlipbookVisualLayerComponents)
+	{
+		if (FlipbookComponent)
+		{
+			FlipbookComponent->DestroyComponent();
+		}
+	}
+	GeneratedFlipbookVisualLayerComponents.Reset();
 
 	if (VisualLayers.Num() == 0)
 	{
@@ -236,38 +293,76 @@ void AWacomBattleEnemyPartActor::RefreshVisualLayers()
 	for (int32 LayerIndex = 0; LayerIndex < VisualLayers.Num(); ++LayerIndex)
 	{
 		const FWacomBattleEnemyPartVisualLayer& Layer = VisualLayers[LayerIndex];
-		if (!Layer.Sprite)
+		if (!VisualLayerHasAsset(Layer))
 		{
 			continue;
 		}
 
 		const FName ComponentName(*BuildVisualLayerComponentName(Layer.LayerId, LayerIndex));
-		UPaperSpriteComponent* SpriteComponent =
-			NewObject<UPaperSpriteComponent>(this, ComponentName, RF_Transactional | RF_Transient);
-		if (!SpriteComponent)
-		{
-			continue;
-		}
-
 		USceneComponent* AttachParent = VisualLayersRoot.Get();
 		if (!AttachParent)
 		{
 			AttachParent = RootComponent;
 		}
-		SpriteComponent->SetupAttachment(AttachParent);
-		SpriteComponent->SetSprite(Layer.Sprite);
-		SpriteComponent->SetRelativeLocation(Layer.RelativeLocation);
-		SpriteComponent->SetRelativeRotation(Layer.RelativeRotation);
-		SpriteComponent->SetRelativeScale3D(Layer.RelativeScale3D);
-		SpriteComponent->SetSpriteColor(Layer.Tint);
-		SpriteComponent->SetTranslucentSortPriority(Layer.SortOrder);
-		SpriteComponent->SetVisibility(Layer.bVisible, true);
-		SpriteComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		SpriteComponent->SetGenerateOverlapEvents(false);
-		SpriteComponent->bEditableWhenInherited = false;
-		SpriteComponent->RegisterComponent();
-		AddInstanceComponent(SpriteComponent);
-		GeneratedVisualLayerComponents.Add(SpriteComponent);
+		if (Layer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::Flipbook)
+		{
+			UPaperFlipbookComponent* FlipbookComponent =
+				NewObject<UPaperFlipbookComponent>(this, ComponentName, RF_Transactional | RF_Transient);
+			if (!FlipbookComponent)
+			{
+				continue;
+			}
+
+			FlipbookComponent->SetupAttachment(AttachParent);
+			FlipbookComponent->SetFlipbook(Layer.Flipbook);
+			FlipbookComponent->SetRelativeLocation(Layer.RelativeLocation);
+			FlipbookComponent->SetRelativeRotation(Layer.RelativeRotation);
+			FlipbookComponent->SetRelativeScale3D(Layer.RelativeScale3D);
+			FlipbookComponent->SetSpriteColor(Layer.Tint);
+			FlipbookComponent->SetTranslucentSortPriority(Layer.SortOrder);
+			FlipbookComponent->SetVisibility(Layer.bVisible, true);
+			FlipbookComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			FlipbookComponent->SetGenerateOverlapEvents(false);
+			FlipbookComponent->SetLooping(Layer.bLoopFlipbook);
+			FlipbookComponent->SetPlayRate(Layer.FlipbookPlayRate);
+			FlipbookComponent->SetPlaybackPosition(Layer.FlipbookStartTimeSeconds, false);
+			if (Layer.bAutoPlayFlipbook && Layer.FlipbookPlayRate > 0.0f)
+			{
+				FlipbookComponent->Play();
+			}
+			else
+			{
+				FlipbookComponent->Stop();
+			}
+			FlipbookComponent->bEditableWhenInherited = false;
+			FlipbookComponent->RegisterComponent();
+			AddInstanceComponent(FlipbookComponent);
+			GeneratedFlipbookVisualLayerComponents.Add(FlipbookComponent);
+		}
+		else
+		{
+			UPaperSpriteComponent* SpriteComponent =
+				NewObject<UPaperSpriteComponent>(this, ComponentName, RF_Transactional | RF_Transient);
+			if (!SpriteComponent)
+			{
+				continue;
+			}
+
+			SpriteComponent->SetupAttachment(AttachParent);
+			SpriteComponent->SetSprite(Layer.Sprite);
+			SpriteComponent->SetRelativeLocation(Layer.RelativeLocation);
+			SpriteComponent->SetRelativeRotation(Layer.RelativeRotation);
+			SpriteComponent->SetRelativeScale3D(Layer.RelativeScale3D);
+			SpriteComponent->SetSpriteColor(Layer.Tint);
+			SpriteComponent->SetTranslucentSortPriority(Layer.SortOrder);
+			SpriteComponent->SetVisibility(Layer.bVisible, true);
+			SpriteComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			SpriteComponent->SetGenerateOverlapEvents(false);
+			SpriteComponent->bEditableWhenInherited = false;
+			SpriteComponent->RegisterComponent();
+			AddInstanceComponent(SpriteComponent);
+			GeneratedVisualLayerComponents.Add(SpriteComponent);
+		}
 	}
 }
 
@@ -367,14 +462,21 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 	View.VisualRelativeLocation = PartVisual ? PartVisual->GetRelativeLocation() : FVector::ZeroVector;
 	View.bUsingVisualLayers = VisualLayers.Num() > 0;
 	View.VisualLayerCount = VisualLayers.Num();
-	View.GeneratedVisualLayerComponentCount = GeneratedVisualLayerComponents.Num();
+	View.GeneratedStaticVisualLayerComponentCount = GeneratedVisualLayerComponents.Num();
+	View.GeneratedFlipbookVisualLayerComponentCount = GeneratedFlipbookVisualLayerComponents.Num();
+	View.GeneratedVisualLayerComponentCount =
+		View.GeneratedStaticVisualLayerComponentCount + View.GeneratedFlipbookVisualLayerComponentCount;
 	View.VisualLayerIds.Reserve(VisualLayers.Num());
+	View.VisualLayerAssetNames.Reserve(VisualLayers.Num());
 	for (const FWacomBattleEnemyPartVisualLayer& Layer : VisualLayers)
 	{
 		View.VisualLayerIds.Add(Layer.LayerId);
+		View.VisualLayerAssetNames.Add(GetVisualLayerAssetName(Layer));
 	}
 	View.DuplicateVisualLayerIds = BuildDuplicateVisualLayerIds();
+	View.MissingVisualLayerAssetCount = CountMissingVisualLayerAssets();
 	View.MissingVisualLayerSpriteCount = CountMissingVisualLayerSprites();
+	View.MissingVisualLayerFlipbookCount = CountMissingVisualLayerFlipbooks();
 	View.FeedbackTargetName = VisualLayersRoot ? FName(*VisualLayersRoot->GetName()) : NAME_None;
 	View.PredictionWidgetName = PredictionWidgetComponent
 		? FName(*PredictionWidgetComponent->GetName())
@@ -421,7 +523,7 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 {
 	const FWacomBattleSceneEnemyPartDebugView View = GetBattleSceneEnemyPartDebugView();
 	return FString::Printf(
-		TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d MissingVisualLayerSprites=%d FeedbackTarget=%s PredictionWidget=%s StatusBadgeWidget=%s PredictionBadgeLocation=%s StatusBadgeLocation=%s PredictionBadgeDrawSize=%s StatusBadgeDrawSize=%s PredictionBadgeScale=%.2f StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s CurrentStatusBadgeOpacity=%.2f}"),
+		TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s FeedbackTarget=%s PredictionWidget=%s StatusBadgeWidget=%s PredictionBadgeLocation=%s StatusBadgeLocation=%s PredictionBadgeDrawSize=%s StatusBadgeDrawSize=%s PredictionBadgeScale=%.2f StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s CurrentStatusBadgeOpacity=%.2f}"),
 		*View.ActorName,
 		*View.EnemySlotId.ToString(),
 		*View.PartSlotId.ToString(),
@@ -435,7 +537,13 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 		View.bUsingVisualLayers ? TEXT("true") : TEXT("false"),
 		View.VisualLayerCount,
 		View.GeneratedVisualLayerComponentCount,
+		View.GeneratedStaticVisualLayerComponentCount,
+		View.GeneratedFlipbookVisualLayerComponentCount,
+		View.MissingVisualLayerAssetCount,
 		View.MissingVisualLayerSpriteCount,
+		View.MissingVisualLayerFlipbookCount,
+		*JoinNamesForDebug(View.VisualLayerIds),
+		*JoinNamesForDebug(View.VisualLayerAssetNames),
 		*View.FeedbackTargetName.ToString(),
 		*View.PredictionWidgetName.ToString(),
 		*View.StatusBadgeWidgetName.ToString(),
@@ -574,13 +682,14 @@ EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 			Result = EDataValidationResult::Invalid;
 		}
 
-		if (!Layer.Sprite)
+		if (!VisualLayerHasAsset(Layer))
 		{
 			Context.AddWarning(FText::Format(
-				LOCTEXT("PlacementVisualLayerMissingSprite",
-					"BattleEnemyPart 摆放警告：Actor={0} VisualLayers[{1}] 缺少 Sprite；该层不会生成可见组件。"),
+				LOCTEXT("PlacementVisualLayerMissingAsset",
+					"BattleEnemyPart 摆放警告：Actor={0} VisualLayers[{1}] Mode={2} 缺少对应视觉资源；该层不会生成可见组件。"),
 				FText::FromString(GetName()),
-				FText::AsNumber(LayerIndex)));
+				FText::AsNumber(LayerIndex),
+				FText::FromString(GetVisualLayerModeDebugName(Layer.LayerMode))));
 		}
 	}
 
@@ -646,12 +755,38 @@ TArray<FName> AWacomBattleEnemyPartActor::BuildDuplicateVisualLayerIds() const
 	return Result;
 }
 
+int32 AWacomBattleEnemyPartActor::CountMissingVisualLayerAssets() const
+{
+	int32 Count = 0;
+	for (const FWacomBattleEnemyPartVisualLayer& Layer : VisualLayers)
+	{
+		if (!VisualLayerHasAsset(Layer))
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
 int32 AWacomBattleEnemyPartActor::CountMissingVisualLayerSprites() const
 {
 	int32 Count = 0;
 	for (const FWacomBattleEnemyPartVisualLayer& Layer : VisualLayers)
 	{
-		if (!Layer.Sprite)
+		if (Layer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::StaticSprite && !Layer.Sprite)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+int32 AWacomBattleEnemyPartActor::CountMissingVisualLayerFlipbooks() const
+{
+	int32 Count = 0;
+	for (const FWacomBattleEnemyPartVisualLayer& Layer : VisualLayers)
+	{
+		if (Layer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::Flipbook && !Layer.Flipbook)
 		{
 			++Count;
 		}
