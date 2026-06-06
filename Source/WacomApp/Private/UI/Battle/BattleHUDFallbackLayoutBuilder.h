@@ -7,10 +7,8 @@
 class UActionPanel;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
-class UCanvasPanel;
 class UEnemyInfoBar;
 class UEquipmentBar;
-class UHandPanel;
 class UPlayerStatusBar;
 class UPileCountView;
 class UWidgetTree;
@@ -20,12 +18,9 @@ struct FBattleHUDFallbackLayoutBuilderContext
 {
 	UBattleHUD* Owner = nullptr;
 	UWidgetTree* WidgetTree = nullptr;
-	FVector2D HandPanelSize = FVector2D::ZeroVector;
-	float HandPanelBottomOffset = 0.0f;
 
 	TObjectPtr<UEnemyInfoBar>* EnemyInfoBar = nullptr;
 	TObjectPtr<UPlayerStatusBar>* PlayerStatusBar = nullptr;
-	TObjectPtr<UHandPanel>* HandPanel = nullptr;
 	TObjectPtr<UActionPanel>* ActionPanel = nullptr;
 	TObjectPtr<UEquipmentBar>* EquipmentBar = nullptr;
 	TObjectPtr<UPileCountView>* DrawPileView = nullptr;
@@ -33,7 +28,6 @@ struct FBattleHUDFallbackLayoutBuilderContext
 	TObjectPtr<UPileCountView>* ExhaustPileView = nullptr;
 	TObjectPtr<UBattleCombatLogFeedWidget>* CombatLogFeed = nullptr;
 	TObjectPtr<UBattlePresentationStackWidget>* BattlePresentationStack = nullptr;
-	TObjectPtr<UCanvasPanel>* CardDetailLayer = nullptr;
 };
 
 /**

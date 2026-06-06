@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-battle
 status: active
-updated: 2026-06-05
+updated: 2026-06-06
 tags:
   - wacom/ui
   - wacom/wbp
@@ -37,7 +37,6 @@ tags:
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
 | `PlayerStatusBar` | `UPlayerStatusBar` | Optional | 玩家 HP / Shield / San 显示 |
-| `HandPanel` | `UHandPanel` | Optional | legacy 2D hand fallback / 对照 |
 | `EnemyInfoBar` | `UEnemyInfoBar` | Optional | legacy 2D enemy fallback / debug |
 | `ActionPanel` | `UActionPanel` | Optional | Wait / EndTurn 按钮和等待值 |
 | `EquipmentBar` | `UEquipmentBar` | Optional | 装备条占位 |
@@ -46,11 +45,11 @@ tags:
 | `ExhaustPileView` | `UPileCountView` | Optional | 消耗牌堆数量 |
 | `CombatLogFeed` | `UBattleCombatLogFeedWidget` | Optional | 正式常驻玩家战斗记录 |
 | `BattlePresentationStack` | `UBattlePresentationStackWidget` | Optional | 已提交卡牌的只读表现 backlog |
-| `CardDetailLayer` | `CanvasPanel` | Optional | legacy 2D hand hover 详情 host |
 
 WBP 不应做：
 
 - 不绑定或调用旧 `EventLogPanel / EventToast` 作为主 HUD 路径。
+- 不绑定旧 `HandPanel` 或 `CardDetailLayer` 作为 BattleHUD runtime 路径。
 - 不直接 Push 击倒弹窗、直接消费 `FBattleEvent`、提交 Battle 规则命令或维护表现队列。
 - 不把 `BattlePresentationStack` 做成可点击、可拖拽或规则栈。
 - 不用 `EnemyInfoBar` 承接新的 HD-2D 场景敌人制作；正式场景敌人走 `SceneEnemyHost + PartActor`。
@@ -59,11 +58,12 @@ WBP 不应做：
 
 - 玩家状态、牌堆数量、ActionPanel 和 CombatLogFeed 在 Snapshot 刷新后显示。
 - `CombatLogFeed` 可滚动，连续出牌后能查看最近命令块。
-- `CardDetailLayer` 不阻挡手牌、按钮或敌方目标点击。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
 - 有 `SceneEnemyHost` 的战斗默认不依赖 `EnemyInfoBar` 阅读敌方状态。
 
 当前 `FBattleSnapshot.PileCounts` 额外公开 `PlayedCount`（本回合使用牌堆数量）。本轮 WBP 合同不要求新增 `PlayedPileView`，正式 HUD 仍只绑定并显示抽牌堆、弃牌堆和消耗牌堆三项；`UBattleHUD` 会把 `DiscardCount` 与 `PlayedCount` 合并显示在 `DiscardPileView` 上，`PlayedCount > 0` 时显示为类似 `2+3` 的复合数量。
+
+BattleHUD 战斗手牌由 first-person card layer 提供，不再通过 WBP_BattleHUD 绑定 `UHandPanel`。战斗卡牌详情由 BattleHUD 创建 viewport-level `UWacomCardDetailPanel`，不再需要 BattleHUD WBP 提供 `CardDetailLayer`。
 
 ## WBP_FirstPersonCardView
 
@@ -116,7 +116,7 @@ WBP 合同：
 
 推荐资产路径：`/Game/Wacom/UI/Battle/WBP_CardWidget`
 
-用途：旧 `UHandPanel` 的单卡外壳，只服务 legacy 2D hand fallback / 对照路径。正式 first-person hand 卡面使用 `WBP_FirstPersonCardView`。
+用途：旧 `UHandPanel` 的单卡外壳，只服务 legacy 2D hand standalone / 对照路径。正式 BattleHUD 和 first-person hand 卡面使用 `WBP_FirstPersonCardView`。
 
 推荐绑定：
 
@@ -145,7 +145,7 @@ WBP 不应做：
 
 推荐资产路径：`/Game/Wacom/UI/Battle/WBP_HandPanel`
 
-用途：legacy 2D hand fallback / 对照入口。默认 `FirstPersonHandWithLegacyFallback` 可保留它作为兜底显示；正式手牌主线是 first-person card layer。
+用途：legacy 2D hand standalone / 对照入口。BattleHUD runtime / fallback 不再绑定或创建它；正式手牌主线是 first-person card layer。
 
 推荐绑定：
 
@@ -399,4 +399,4 @@ WBP 不应做：
 - `WBP_FirstPersonCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHost` 的战斗中，Status Badge 可读，`EnemyInfoBar` 只作为 fallback/debug。
-- legacy `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget` 仍可用于旧 fallback 路径，但不作为新制作主线。
+- legacy `WBP_CardWidget / WBP_HandPanel` 仅作为旧独立对照资产保留，不再用于 BattleHUD runtime / fallback；`WBP_EnemyInfoBar / WBP_EnemyPartWidget` 仍可用于敌方 2D fallback/debug，但不作为新制作主线。

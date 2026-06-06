@@ -10,9 +10,7 @@
 #include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/HandPanel.h"
 #include "UI/Battle/PlayerStatusBar.h"
-#include "UI/Battle/CardWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/WacomBattlePresentationTargetRegistry.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
@@ -33,7 +31,6 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
-#include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -172,20 +169,11 @@ void UBattleHUD::NativeConstruct()
 	// 登记子 BattleWidget，让基类 SetSession / RefreshFromSnapshot 能递归到它们。
 	ChildBattleWidgets.Reset();
 	if (PlayerStatusBar) { ChildBattleWidgets.Add(PlayerStatusBar); }
-	if (HandPanel)       { ChildBattleWidgets.Add(HandPanel); }
 	if (EnemyInfoBar)    { ChildBattleWidgets.Add(EnemyInfoBar); }
 	if (ActionPanel)     { ChildBattleWidgets.Add(ActionPanel); }
 	if (EquipmentBar)    { ChildBattleWidgets.Add(EquipmentBar); }
 	if (CombatLogFeed)   { ChildBattleWidgets.Add(CombatLogFeed); }
 	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
-
-	if (HandPanel)
-	{
-		HandPanel->OnCardHoveredNative.RemoveAll(this);
-		HandPanel->OnCardUnhoveredNative.RemoveAll(this);
-		HandPanel->OnCardHoveredNative.AddUObject(this, &UBattleHUD::HandleHandCardHovered);
-		HandPanel->OnCardUnhoveredNative.AddUObject(this, &UBattleHUD::HandleHandCardUnhovered);
-	}
 
 	// 如果 Session 在 RebuildWidget 之前就被 SetSession 过了，
 	// 子 Widget 还没拿到 Session。这里补一次。
@@ -198,7 +186,6 @@ void UBattleHUD::NativeConstruct()
 		RefreshFromSnapshot(S->BuildSnapshot());
 	}
 
-	SyncLegacyHandPanelVisibility();
 	SyncEnemyInfoBarFallbackVisibility();
 }
 
@@ -212,14 +199,7 @@ void UBattleHUD::NativeDestruct()
 	ClearFirstPersonBattleHandLayer();
 	ClearBattleEnemyPartWorldTargets();
 	ClearBattlePresentationTargetRegistry();
-	if (HandPanel)
-	{
-		SyncLegacyHandPanelVisibility();
-		HandPanel->OnCardHoveredNative.RemoveAll(this);
-		HandPanel->OnCardUnhoveredNative.RemoveAll(this);
-	}
 	HideCardDetailPanel();
-	CardDetailPanel = nullptr;
 	GetCardDetailController().RemoveFirstPersonPanelFromViewport();
 	bHasLastBattleSnapshot = false;
 	LastBattleSnapshot = FBattleSnapshot();
@@ -266,19 +246,15 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 		FBattleHUDFallbackLayoutBuilder::Build(FBattleHUDFallbackLayoutBuilderContext{
 			this,
 			WidgetTree,
-			HandPanelSize,
-			HandPanelBottomOffset,
 			&EnemyInfoBar,
 			&PlayerStatusBar,
-			&HandPanel,
 			&ActionPanel,
 			&EquipmentBar,
 			&DrawPileView,
 			&DiscardPileView,
 			&ExhaustPileView,
 			&CombatLogFeed,
-			&BattlePresentationStack,
-			&CardDetailLayer});
+			&BattlePresentationStack});
 	}
 	return Super::RebuildWidget();
 }
@@ -294,7 +270,6 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 	GetFirstPersonHandBridge().SetTransitionSnapshot(Snap);
 
 	SyncFirstPersonBattleHandLayer(Snap, FirstPersonTransitionHints);
-	SyncLegacyHandPanelVisibility();
 
 	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
 	if (Snap.Phase == EBattlePhase::BattleEnd)
@@ -306,7 +281,6 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		bHasLastBattleSnapshot = false;
 		GetFirstPersonHandBridge().ClearTransitionSnapshot();
 		SetUIState(EBattleUIState::BattleEnd);
-		SyncLegacyHandPanelVisibility();
 
 		if (!bHasBroadcastBattleEnd)
 		{
@@ -421,31 +395,6 @@ FText UBattleHUD::GetPendingTurnBoundaryCommandText() const
 		: FText::GetEmpty();
 }
 
-void UBattleHUD::SetBattleHandPresentationMode(EWacomBattleHandPresentationMode NewMode)
-{
-	if (BattleHandPresentationMode == NewMode)
-	{
-		return;
-	}
-
-	BattleHandPresentationMode = NewMode;
-	if (BattleHandPresentationMode == EWacomBattleHandPresentationMode::LegacyHandPanel)
-	{
-		ClearFirstPersonBattleHandLayer();
-		return;
-	}
-
-	if (UBattleSession* S = GetSession())
-	{
-		SyncFirstPersonBattleHandLayer(S->BuildSnapshot());
-	}
-	else
-	{
-		ClearFirstPersonBattleHandLayer();
-	}
-	SyncLegacyHandPanelVisibility();
-}
-
 void UBattleHUD::SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost)
 {
 	GetSceneEnemyTargetCoordinator().SetSceneEnemyHost(InHost);
@@ -485,7 +434,7 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
 	}
 
-	// 状态变化时，让 HandPanel / EnemyInfoBar / ActionPanel 重新刷一次（高亮/启用状态）。
+	// 状态变化时，让 first-person hand / EnemyInfoBar / ActionPanel 重新刷一次（高亮/启用状态）。
 	UBattleSession* S = GetSession();
 	if (!S) { return; }
 	const FBattleSnapshot Snap = S->BuildSnapshot();
@@ -500,12 +449,10 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 		LastBattleSnapshot = Snap;
 		bHasLastBattleSnapshot = true;
 	}
-	if (HandPanel)    { HandPanel->RefreshFromSnapshot(Snap); }
 	if (EnemyInfoBar) { EnemyInfoBar->RefreshFromSnapshot(Snap); }
 	if (ActionPanel)  { ActionPanel->RefreshFromSnapshot(Snap); }
 	SyncFirstPersonBattleHandLayer(Snap);
 	SyncBattleEnemyPartWorldTargets(Snap);
-	SyncLegacyHandPanelVisibility();
 	SyncEnemyInfoBarFallbackVisibility();
 }
 
@@ -529,16 +476,6 @@ void UBattleHUD::SyncFirstPersonBattleHandLayer(
 void UBattleHUD::ClearFirstPersonBattleHandLayer()
 {
 	GetFirstPersonHandBridge().ClearLayer();
-}
-
-void UBattleHUD::SyncLegacyHandPanelVisibility()
-{
-	GetFirstPersonHandBridge().SyncLegacyHandPanelVisibility();
-}
-
-bool UBattleHUD::ShouldHideLegacyHandPanel() const
-{
-	return GetFirstPersonHandBridge().ShouldHideLegacyHandPanel();
 }
 
 bool UBattleHUD::ShouldUseFirstPersonBattleHandLayer() const
@@ -772,37 +709,9 @@ FText UBattleHUD::GetCardDetailPanelNameText() const
 	return GetCardDetailController().GetNameText();
 }
 
-void UBattleHUD::HandleHandCardHovered(UCardWidget* SourceWidget)
-{
-	GetCardDetailController().HandleHandCardHovered(SourceWidget);
-}
-
-void UBattleHUD::HandleHandCardUnhovered(UCardWidget* SourceWidget)
-{
-	GetCardDetailController().HandleHandCardUnhovered(SourceWidget);
-}
-
-bool UBattleHUD::ShowCardDetailForCardWidget(UCardWidget* SourceWidget)
-{
-	return GetCardDetailController().ShowForCardWidget(SourceWidget);
-}
-
-bool UBattleHUD::ShowCardDetailAtAnchor(
-	const FWacomCardDetailViewData& DetailData,
-	const FVector2D& AnchorPosition,
-	const FVector2D& AnchorSize)
-{
-	return GetCardDetailController().ShowAtAnchor(DetailData, AnchorPosition, AnchorSize);
-}
-
 void UBattleHUD::HideCardDetailPanel()
 {
 	GetCardDetailController().HideAll();
-}
-
-void UBattleHUD::HideCardDetailPanelForSource(UCardWidget* SourceWidget)
-{
-	GetCardDetailController().HideLegacyForSource(SourceWidget);
 }
 
 void UBattleHUD::HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId)
@@ -815,29 +724,9 @@ bool UBattleHUD::IsFirstPersonCardInspectDetailActiveForSource(const FGuid& Card
 	return GetCardDetailController().IsFirstPersonInspectDetailActiveForSource(CardInstanceId);
 }
 
-UWacomCardDetailPanel* UBattleHUD::EnsureCardDetailPanel()
-{
-	return GetCardDetailController().EnsureLegacyPanel();
-}
-
 UWacomCardDetailPanel* UBattleHUD::EnsureFirstPersonCardDetailPanel()
 {
 	return GetCardDetailController().EnsureFirstPersonPanel();
-}
-
-void UBattleHUD::EnsureCardDetailLayer()
-{
-	GetCardDetailController().EnsureLayer();
-}
-
-void UBattleHUD::PositionCardDetailPanelNear(UCardWidget* SourceWidget)
-{
-	GetCardDetailController().PositionLegacyNear(SourceWidget);
-}
-
-void UBattleHUD::PositionCardDetailPanelBesideAnchor(const FVector2D& AnchorPosition, const FVector2D& AnchorSize)
-{
-	GetCardDetailController().PositionLegacyBesideAnchor(AnchorPosition, AnchorSize);
 }
 
 bool UBattleHUD::ShowFirstPersonCardDetailAtSlot(
@@ -863,44 +752,9 @@ void UBattleHUD::TickCardDetailMotion(float DeltaTime)
 	GetCardDetailController().TickMotion(DeltaTime);
 }
 
-bool UBattleHUD::BeginCardDetailMotionShow(ECardDetailHost Host)
-{
-	return GetCardDetailController().BeginMotionShow(Host);
-}
-
-void UBattleHUD::RequestCardDetailMotionShow(ECardDetailHost Host)
-{
-	GetCardDetailController().RequestMotionShow(Host);
-}
-
-void UBattleHUD::RequestCardDetailMotionHide(ECardDetailHost Host, bool bImmediate)
-{
-	GetCardDetailController().RequestMotionHide(Host, bImmediate);
-}
-
 void UBattleHUD::ForceHideCardDetailHost(ECardDetailHost Host)
 {
 	GetCardDetailController().ForceHideHost(Host);
-}
-
-void UBattleHUD::ForceHideAllCardDetails()
-{
-	GetCardDetailController().ForceHideAll();
-}
-
-UWacomCardDetailPanel* UBattleHUD::GetCardDetailPanelForHost(ECardDetailHost Host) const
-{
-	return GetCardDetailController().GetPanelForHost(Host);
-}
-
-bool UBattleHUD::UpdateCardDetailMotionTarget(ECardDetailHost Host)
-{
-	return GetCardDetailController().UpdateMotionTarget(Host);
-}
-
-bool UBattleHUD::ComputeLegacyCardDetailTarget(UCardWidget* SourceWidget, FVector2D& OutPosition)
-{
-	return GetCardDetailController().ComputeLegacyTarget(SourceWidget, OutPosition);
 }
 
 bool UBattleHUD::ComputeFirstPersonCardDetailTarget(
@@ -925,26 +779,6 @@ FVector2D UBattleHUD::ComputeCardDetailPanelPositionBesideStable(
 		DetailPadding);
 }
 
-void UBattleHUD::ApplyCardDetailMotionVisual(ECardDetailHost Host, const FVector2D& Position, float Opacity)
-{
-	GetCardDetailController().ApplyMotionVisual(Host, Position, Opacity);
-}
-
-void UBattleHUD::CollapseCardDetailHost(ECardDetailHost Host)
-{
-	GetCardDetailController().CollapseHost(Host);
-}
-
-bool UBattleHUD::IsCardDetailMotionSource(ECardDetailHost Host, UCardWidget* SourceWidget) const
-{
-	return GetCardDetailController().IsMotionSource(Host, SourceWidget);
-}
-
-bool UBattleHUD::IsCardDetailMotionSource(ECardDetailHost Host, const FGuid& CardInstanceId) const
-{
-	return GetCardDetailController().IsMotionSource(Host, CardInstanceId);
-}
-
 FVector2D UBattleHUD::GetFirstPersonCardDetailViewportSize() const
 {
 	return GetCardDetailController().GetFirstPersonViewportSize();
@@ -963,11 +797,6 @@ void UBattleHUD::ClearFirstPersonCardDetailSource()
 bool UBattleHUD::IsCurrentFirstPersonCardDetailSource(const FGuid& CardInstanceId) const
 {
 	return GetCardDetailController().IsCurrentFirstPersonSource(CardInstanceId);
-}
-
-void UBattleHUD::ClearLegacyCardDetailSource()
-{
-	GetCardDetailController().ClearLegacySource();
 }
 
 void UBattleHUD::UpdateFirstPersonCardDetailSlot(const FWacomFirstPersonCardLayerSlotView& SlotView)

@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-06-05
+updated: 2026-06-06
 tags:
   - wacom/ui
   - wacom/cards
@@ -41,8 +41,8 @@ Battle / Run snapshot
 | `UWacomFirstPersonCardLayerWidget` | 按 entries reconcile slot widget，维护 active / outgoing slot，绘制 drag arrow 和 layer-level feedback | 不读取 Battle / Run 规则状态 |
 | `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomCardView`，处理 hover / press / inspect / drag gesture 和 visual slot motion | 不直接调用 BattleSession 或 RunSession |
 | `UWacomRunFirstPersonCardSourceComponent` | 探索期把 Run BattleDeck / menu lease 写入 anchor runtime source | 不提交 Run 规则 |
-| `FWacomBattleHUDFirstPersonHandBridge` | BattleHUD 内部同步 battle hand、transition hints、drag preview / release 和旧手牌可见性 | 不暴露 Blueprint API |
-| `FWacomBattleHUDCardDetailController` | 旧手牌和 first-person 共用详情数据、motion、定位和 teardown | 不改变卡牌规则 |
+| `FWacomBattleHUDFirstPersonHandBridge` | BattleHUD 内部同步 battle hand、transition hints、drag preview / release | 不暴露 Blueprint API |
+| `FWacomBattleHUDCardDetailController` | first-person viewport 详情数据、motion、定位和 teardown | 不改变卡牌规则 |
 
 ## §3 Authoring 默认
 
@@ -60,7 +60,7 @@ ViewportClampMode = SoftClampToViewport
 
 `SoftClampToViewport` 允许手牌中心部分离开视口，超过 soft allowance 后再柔性拉回，保留空间感。`HardClampToViewport` 用于复现旧的始终屏内行为，`AllowOffscreen` 用于验证最接近空间物体的表现。
 
-`UWacomFirstPersonCardLayoutPreset` 是 first-person hand 表现调参 DataAsset，位于 `WacomApp`，不是 `WacomData` 规则数据。Preset 运行时生成 resolved config，不把值写回组件 UPROPERTY，也不覆盖 `FirstPersonCardViewClass`、prototype preview、debug 开关、viewport ZOrder 或 `BattleHUD::BattleHandPresentationMode`。
+`UWacomFirstPersonCardLayoutPreset` 是 first-person hand 表现调参 DataAsset，位于 `WacomApp`，不是 `WacomData` 规则数据。Preset 运行时生成 resolved config，不把值写回组件 UPROPERTY，也不覆盖 `FirstPersonCardViewClass`、prototype preview、debug 开关或 viewport ZOrder。
 
 边缘下坠是纯表现参数，不影响战斗规则、手牌数量或卡牌状态。`StaticCardEdgeDropPixels` 表示大手牌时最外侧卡牌的最大下坠；默认开启 `bScaleEdgeDropByHandCount` 后，5 张及以下使用 `ShortHandEdgeDropPixels`，12 张及以上使用 `StaticCardEdgeDropPixels`，中间数量用 SmoothStep 平滑过渡。左右手锚点牌在规则上承担手牌区域切分语义，但在 first-person hand 表现层仍按普通卡牌参与下坠、缩放、扇形角度和层级计算。推荐起点是 `ShortHandEdgeDropPixels = 64`、`StaticCardEdgeDropPixels = 110`、`EdgeDropScaleMinCardCount = 5`、`EdgeDropScaleMaxCardCount = 12`。
 
@@ -80,6 +80,8 @@ Runtime source 优先级：
 进入战斗时，GameMode / PlayerController 会清理探索期 Run source 和 active menu lease。退出战斗回到 Exploration 后，PlayerController 重新激活 Run first-person source 并刷新当前 BattleDeck 展示。
 
 BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。清理或 `NativeDestruct` 可能晚于 Run source 重新激活，因此 BattleHUD 解绑自身 delegate 时必须检查 Anchor 当前 `RuntimeCardLayerSourceId`：只有仍为 `BattleHand` 时才关闭 first-person card interaction、取消拖拽和清 runtime data；如果已经被 `RunFirstPersonBattleDeck` 或 menu lease 接管，只能解绑 BattleHUD delegate 和清战斗 world preview，不得改写 Run source 的交互状态。
+
+BattleHUD runtime 战斗手牌不再有 legacy `UHandPanel` 可见性恢复路径。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过恢复旧 2D hand 兜底。
 
 打开 Backpack / Pause / Shop / RunEvent 等 GameMenu 时，默认压制 Run default source，避免卡层遮挡菜单。菜单需要卡牌交互时，应显式申请 owned menu lease。
 
@@ -159,7 +161,7 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 | `LookInfluenceYaw / LookInfluencePitch` | 只服务 `LegacyWorldProjected` |
 | Static preview layer | Prototype preview，只用于 PIE / 开发验证，不是 Battle / Run runtime source |
 | `BattleHandInteractionPrototype` 旧命名 | 兼容层；新调用口径是 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()` |
-| `UHandPanel / UCardWidget` | Legacy 2D hand fallback / 对照 |
+| `UHandPanel / UCardWidget` | Legacy 2D hand standalone / 对照；BattleHUD runtime / fallback 已断开 |
 
 不要给 legacy projection 或 static preview 继续添加新的正式主手牌功能。真正删除旧字段、enum value 或资产引用需要单独做资产影响切片。
 

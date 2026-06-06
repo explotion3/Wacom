@@ -3,15 +3,10 @@
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 
 #include "Blueprint/WidgetLayoutLibrary.h"
-#include "Blueprint/WidgetTree.h"
-#include "Components/CanvasPanel.h"
-#include "Components/CanvasPanelSlot.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
-#include "UI/Battle/CardWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
-#include "UI/Card/WacomCardPresentationBuilder.h"
 
 FWacomBattleHUDCardDetailController::FWacomBattleHUDCardDetailController(UBattleHUD& InHUD)
 	: HUD(InHUD)
@@ -20,12 +15,8 @@ FWacomBattleHUDCardDetailController::FWacomBattleHUDCardDetailController(UBattle
 
 bool FWacomBattleHUDCardDetailController::IsVisible() const
 {
-	const bool bLegacyVisible =
-		HUD.CardDetailPanel && HUD.CardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
-	const bool bFirstPersonVisible =
-		HUD.FirstPersonCardDetailPanel
+	return HUD.FirstPersonCardDetailPanel
 		&& HUD.FirstPersonCardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
-	return bLegacyVisible || bFirstPersonVisible;
 }
 
 FText FWacomBattleHUDCardDetailController::GetNameText() const
@@ -35,95 +26,12 @@ FText FWacomBattleHUDCardDetailController::GetNameText() const
 	{
 		return HUD.FirstPersonCardDetailPanel->GetNameText();
 	}
-	return HUD.CardDetailPanel ? HUD.CardDetailPanel->GetNameText() : FText::GetEmpty();
-}
-
-void FWacomBattleHUDCardDetailController::HandleHandCardHovered(UCardWidget* SourceWidget)
-{
-	ShowForCardWidget(SourceWidget);
-}
-
-void FWacomBattleHUDCardDetailController::HandleHandCardUnhovered(UCardWidget* SourceWidget)
-{
-	HideLegacyForSource(SourceWidget);
-}
-
-bool FWacomBattleHUDCardDetailController::ShowForCardWidget(UCardWidget* SourceWidget)
-{
-	if (!SourceWidget || !SourceWidget->GetCardSnapshot().Definition || HUD.UIState != EBattleUIState::Idle)
-	{
-		HideAll();
-		return false;
-	}
-
-	EnsureLayer();
-	if (!HUD.CardDetailLayer)
-	{
-		return false;
-	}
-
-	const FGeometry& LayerGeometry = HUD.CardDetailLayer->GetCachedGeometry();
-	const FGeometry& SourceGeometry = SourceWidget->GetCachedGeometry();
-	const FVector2D AnchorPosition = LayerGeometry.AbsoluteToLocal(SourceGeometry.GetAbsolutePosition());
-	const FVector2D AnchorSize = SourceGeometry.GetLocalSize();
-	CurrentLegacySource = SourceWidget;
-	if (ShowAtAnchor(
-		UWacomCardPresentationBuilder::BuildCardDetailViewData(SourceWidget->GetCardSnapshot().Definition),
-		AnchorPosition,
-		AnchorSize))
-	{
-		CurrentFirstPersonSourceId.Invalidate();
-		ForceHideHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
-		return true;
-	}
-	CurrentLegacySource.Reset();
-	return false;
-}
-
-bool FWacomBattleHUDCardDetailController::ShowAtAnchor(
-	const FWacomCardDetailViewData& DetailData,
-	const FVector2D& AnchorPosition,
-	const FVector2D& AnchorSize)
-{
-	UWacomCardDetailPanel* Panel = EnsureLegacyPanel();
-	if (!Panel)
-	{
-		return false;
-	}
-
-	Panel->SetCardDetailData(DetailData);
-	PositionLegacyBesideAnchor(AnchorPosition, AnchorSize);
-	if (!HUD.bEnableCardDetailReadabilityPolish)
-	{
-		Panel->SetRenderOpacity(1.0f);
-		Panel->SetRenderTransform(FWidgetTransform());
-		Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
-		return true;
-	}
-
-	Panel->SetIsEnabled(true);
-	if (!BeginMotionShow(UBattleHUD::ECardDetailHost::LegacyHandPanel))
-	{
-		ForceHideHost(UBattleHUD::ECardDetailHost::LegacyHandPanel);
-		return false;
-	}
-	return true;
+	return FText::GetEmpty();
 }
 
 void FWacomBattleHUDCardDetailController::HideAll()
 {
 	ForceHideAll();
-}
-
-void FWacomBattleHUDCardDetailController::HideLegacyForSource(UCardWidget* SourceWidget)
-{
-	if (!IsMotionSource(UBattleHUD::ECardDetailHost::LegacyHandPanel, SourceWidget))
-	{
-		return;
-	}
-	RequestMotionHide(
-		UBattleHUD::ECardDetailHost::LegacyHandPanel,
-		!HUD.bEnableCardDetailReadabilityPolish);
 }
 
 void FWacomBattleHUDCardDetailController::HideFirstPersonForSource(const FGuid& CardInstanceId)
@@ -150,56 +58,6 @@ bool FWacomBattleHUDCardDetailController::IsFirstPersonInspectDetailActiveForSou
 	}
 
 	return MotionState.ActiveFirstPersonSlot.GestureState == EWacomFirstPersonCardGestureState::Inspecting;
-}
-
-UWacomCardDetailPanel* FWacomBattleHUDCardDetailController::EnsureLegacyPanel()
-{
-	EnsureLayer();
-	if (!HUD.CardDetailLayer)
-	{
-		return nullptr;
-	}
-
-	if (HUD.CardDetailPanel)
-	{
-		return HUD.CardDetailPanel;
-	}
-
-	UClass* PanelClass = HUD.CardDetailPanelClass
-		? HUD.CardDetailPanelClass.Get()
-		: UWacomCardDetailPanel::StaticClass();
-	if (APlayerController* OwningPlayer = HUD.GetOwningPlayer();
-		OwningPlayer && OwningPlayer->IsLocalController() && OwningPlayer->GetLocalPlayer())
-	{
-		HUD.CardDetailPanel = CreateWidget<UWacomCardDetailPanel>(OwningPlayer, PanelClass);
-	}
-	if (!HUD.CardDetailPanel)
-	{
-		if (UWorld* World = HUD.GetWorld())
-		{
-			HUD.CardDetailPanel = CreateWidget<UWacomCardDetailPanel>(World, PanelClass);
-		}
-	}
-	if (!HUD.CardDetailPanel)
-	{
-		HUD.CardDetailPanel = NewObject<UWacomCardDetailPanel>(&HUD, PanelClass);
-	}
-	if (!HUD.CardDetailPanel)
-	{
-		return nullptr;
-	}
-
-	HUD.CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
-	HUD.CardDetailPanel->SetIsEnabled(true);
-	HUD.CardDetailPanel->SetRenderOpacity(1.0f);
-	HUD.CardDetailPanel->SetRenderTransform(FWidgetTransform());
-	if (UCanvasPanelSlot* DetailSlot = HUD.CardDetailLayer->AddChildToCanvas(HUD.CardDetailPanel))
-	{
-		DetailSlot->SetAutoSize(false);
-		DetailSlot->SetSize(HUD.CardDetailPanelEstimatedSize);
-		DetailSlot->SetZOrder(1);
-	}
-	return HUD.CardDetailPanel;
 }
 
 UWacomCardDetailPanel* FWacomBattleHUDCardDetailController::EnsureFirstPersonPanel()
@@ -239,93 +97,6 @@ UWacomCardDetailPanel* FWacomBattleHUDCardDetailController::EnsureFirstPersonPan
 	HUD.FirstPersonCardDetailPanel->SetRenderTransform(FWidgetTransform());
 	HUD.FirstPersonCardDetailPanel->AddToViewport(HUD.FirstPersonCardDetailViewportZOrder);
 	return HUD.FirstPersonCardDetailPanel;
-}
-
-void FWacomBattleHUDCardDetailController::EnsureLayer()
-{
-	if (HUD.CardDetailLayer)
-	{
-		return;
-	}
-
-	if (UCanvasPanel* RootCanvas = HUD.WidgetTree ? Cast<UCanvasPanel>(HUD.WidgetTree->RootWidget) : nullptr)
-	{
-		HUD.CardDetailLayer = HUD.WidgetTree->ConstructWidget<UCanvasPanel>(
-			UCanvasPanel::StaticClass(),
-			TEXT("CardDetailLayer_Runtime"));
-		HUD.CardDetailLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
-		if (UCanvasPanelSlot* DetailLayerSlot = RootCanvas->AddChildToCanvas(HUD.CardDetailLayer))
-		{
-			DetailLayerSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
-			DetailLayerSlot->SetOffsets(FMargin(0.0f));
-			DetailLayerSlot->SetAutoSize(false);
-			DetailLayerSlot->SetZOrder(10);
-		}
-	}
-	else
-	{
-		if (!bLoggedMissingCardDetailLayer)
-		{
-			UE_LOG(
-				LogTemp,
-				Warning,
-				TEXT("[BattleHUD] CardDetailLayer 未绑定，且 RootWidget 不是 CanvasPanel，战斗手牌悬浮详情不会显示"));
-			bLoggedMissingCardDetailLayer = true;
-		}
-	}
-}
-
-void FWacomBattleHUDCardDetailController::PositionLegacyNear(UCardWidget* SourceWidget)
-{
-	if (!SourceWidget || !HUD.CardDetailLayer || !HUD.CardDetailPanel)
-	{
-		return;
-	}
-
-	const FGeometry& LayerGeometry = HUD.CardDetailLayer->GetCachedGeometry();
-	const FGeometry& SourceGeometry = SourceWidget->GetCachedGeometry();
-	const FVector2D AnchorPosition = LayerGeometry.AbsoluteToLocal(SourceGeometry.GetAbsolutePosition());
-	const FVector2D AnchorSize = SourceGeometry.GetLocalSize();
-	PositionLegacyBesideAnchor(AnchorPosition, AnchorSize);
-}
-
-void FWacomBattleHUDCardDetailController::PositionLegacyBesideAnchor(
-	const FVector2D& AnchorPosition,
-	const FVector2D& AnchorSize)
-{
-	if (!HUD.CardDetailLayer || !HUD.CardDetailPanel)
-	{
-		return;
-	}
-
-	const FGeometry& LayerGeometry = HUD.CardDetailLayer->GetCachedGeometry();
-	const FVector2D LayerSize = LayerGeometry.GetLocalSize();
-	const FVector2D Position = HUD.bEnableCardDetailReadabilityPolish
-		? ComputeStablePosition(
-			AnchorPosition,
-			AnchorSize,
-			LayerSize,
-			HUD.CardDetailPanelEstimatedSize,
-			HUD.CardDetailPanelPadding)
-		: UBattleHUD::ComputeCardDetailPanelPositionBeside(
-			AnchorPosition,
-			AnchorSize,
-			LayerSize,
-			HUD.CardDetailPanelEstimatedSize,
-			HUD.CardDetailPanelPadding);
-
-	if (HUD.bEnableCardDetailReadabilityPolish)
-	{
-		MotionState.TargetPosition = Position;
-		MotionState.bHasTargetPosition = true;
-		return;
-	}
-
-	if (UCanvasPanelSlot* DetailSlot = Cast<UCanvasPanelSlot>(HUD.CardDetailPanel->Slot))
-	{
-		DetailSlot->SetPosition(Position);
-		DetailSlot->SetSize(HUD.CardDetailPanelEstimatedSize);
-	}
 }
 
 bool FWacomBattleHUDCardDetailController::ShowFirstPersonAtSlot(
@@ -521,13 +292,7 @@ bool FWacomBattleHUDCardDetailController::BeginMotionShow(UBattleHUD::ECardDetai
 	State.bHasTargetPosition = false;
 	switch (Host)
 	{
-	case UBattleHUD::ECardDetailHost::LegacyHandPanel:
-		State.ActiveLegacySource = CurrentLegacySource;
-		State.ActiveFirstPersonSourceId.Invalidate();
-		State.bHasActiveFirstPersonSlot = false;
-		break;
 	case UBattleHUD::ECardDetailHost::FirstPersonViewport:
-		State.ActiveLegacySource.Reset();
 		State.ActiveFirstPersonSourceId = CurrentFirstPersonSourceId;
 		break;
 	default:
@@ -603,17 +368,10 @@ void FWacomBattleHUDCardDetailController::RequestMotionHide(
 	State.bPendingShow = false;
 	State.PendingElapsedSeconds = 0.0f;
 	State.bWantsVisible = false;
-	switch (Host)
+	if (Host == UBattleHUD::ECardDetailHost::FirstPersonViewport)
 	{
-	case UBattleHUD::ECardDetailHost::LegacyHandPanel:
-		CurrentLegacySource.Reset();
-		break;
-	case UBattleHUD::ECardDetailHost::FirstPersonViewport:
 		CurrentFirstPersonSourceId.Invalidate();
 		LastFirstPersonCardDetailPanelPosition = FVector2D::ZeroVector;
-		break;
-	default:
-		break;
 	}
 }
 
@@ -624,11 +382,7 @@ void FWacomBattleHUDCardDetailController::ForceHideHost(UBattleHUD::ECardDetailH
 	{
 		MotionState = FCardDetailMotionState();
 	}
-	if (Host == UBattleHUD::ECardDetailHost::LegacyHandPanel)
-	{
-		CurrentLegacySource.Reset();
-	}
-	else if (Host == UBattleHUD::ECardDetailHost::FirstPersonViewport)
+	if (Host == UBattleHUD::ECardDetailHost::FirstPersonViewport)
 	{
 		CurrentFirstPersonSourceId.Invalidate();
 		LastFirstPersonCardDetailPanelPosition = FVector2D::ZeroVector;
@@ -637,10 +391,8 @@ void FWacomBattleHUDCardDetailController::ForceHideHost(UBattleHUD::ECardDetailH
 
 void FWacomBattleHUDCardDetailController::ForceHideAll()
 {
-	CollapseHost(UBattleHUD::ECardDetailHost::LegacyHandPanel);
 	CollapseHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
 	MotionState = FCardDetailMotionState();
-	CurrentLegacySource.Reset();
 	CurrentFirstPersonSourceId.Invalidate();
 	LastFirstPersonCardDetailPanelPosition = FVector2D::ZeroVector;
 }
@@ -650,8 +402,6 @@ UWacomCardDetailPanel* FWacomBattleHUDCardDetailController::GetPanelForHost(
 {
 	switch (Host)
 	{
-	case UBattleHUD::ECardDetailHost::LegacyHandPanel:
-		return HUD.CardDetailPanel;
 	case UBattleHUD::ECardDetailHost::FirstPersonViewport:
 		return HUD.FirstPersonCardDetailPanel;
 	default:
@@ -663,17 +413,6 @@ bool FWacomBattleHUDCardDetailController::UpdateMotionTarget(UBattleHUD::ECardDe
 {
 	switch (Host)
 	{
-	case UBattleHUD::ECardDetailHost::LegacyHandPanel:
-	{
-		FVector2D Position = FVector2D::ZeroVector;
-		if (!ComputeLegacyTarget(MotionState.ActiveLegacySource.Get(), Position))
-		{
-			return false;
-		}
-		MotionState.TargetPosition = Position;
-		MotionState.bHasTargetPosition = true;
-		return true;
-	}
 	case UBattleHUD::ECardDetailHost::FirstPersonViewport:
 	{
 		if (!MotionState.bHasActiveFirstPersonSlot)
@@ -692,32 +431,6 @@ bool FWacomBattleHUDCardDetailController::UpdateMotionTarget(UBattleHUD::ECardDe
 	default:
 		return false;
 	}
-}
-
-bool FWacomBattleHUDCardDetailController::ComputeLegacyTarget(UCardWidget* SourceWidget, FVector2D& OutPosition)
-{
-	if (!SourceWidget || !HUD.CardDetailLayer || !HUD.CardDetailPanel)
-	{
-		return false;
-	}
-
-	const FGeometry& LayerGeometry = HUD.CardDetailLayer->GetCachedGeometry();
-	const FGeometry& SourceGeometry = SourceWidget->GetCachedGeometry();
-	FVector2D LayerSize = LayerGeometry.GetLocalSize();
-	if (LayerSize.X <= 0.0f || LayerSize.Y <= 0.0f)
-	{
-		LayerSize = GetFirstPersonViewportSize();
-	}
-
-	const FVector2D AnchorPosition = LayerGeometry.AbsoluteToLocal(SourceGeometry.GetAbsolutePosition());
-	const FVector2D AnchorSize = SourceGeometry.GetLocalSize();
-	OutPosition = ComputeStablePosition(
-		AnchorPosition,
-		AnchorSize,
-		LayerSize,
-		HUD.CardDetailPanelEstimatedSize,
-		HUD.CardDetailPanelPadding);
-	return true;
 }
 
 bool FWacomBattleHUDCardDetailController::ComputeFirstPersonTarget(
@@ -804,15 +517,7 @@ void FWacomBattleHUDCardDetailController::ApplyMotionVisual(
 	Panel->SetRenderTransform(Transform);
 	Panel->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 
-	if (Host == UBattleHUD::ECardDetailHost::LegacyHandPanel)
-	{
-		if (UCanvasPanelSlot* DetailSlot = Cast<UCanvasPanelSlot>(Panel->Slot))
-		{
-			DetailSlot->SetPosition(Position);
-			DetailSlot->SetSize(HUD.CardDetailPanelEstimatedSize);
-		}
-	}
-	else if (Host == UBattleHUD::ECardDetailHost::FirstPersonViewport)
+	if (Host == UBattleHUD::ECardDetailHost::FirstPersonViewport)
 	{
 		Panel->SetDesiredSizeInViewport(HUD.CardDetailPanelEstimatedSize);
 		Panel->SetAlignmentInViewport(FVector2D::ZeroVector);
@@ -829,18 +534,6 @@ void FWacomBattleHUDCardDetailController::CollapseHost(UBattleHUD::ECardDetailHo
 		Panel->SetRenderOpacity(0.0f);
 		Panel->SetRenderTransform(FWidgetTransform());
 	}
-}
-
-bool FWacomBattleHUDCardDetailController::IsMotionSource(
-	UBattleHUD::ECardDetailHost Host,
-	UCardWidget* SourceWidget) const
-{
-	if (!SourceWidget || Host != UBattleHUD::ECardDetailHost::LegacyHandPanel)
-	{
-		return false;
-	}
-	return CurrentLegacySource.Get() == SourceWidget
-		|| MotionState.ActiveLegacySource.Get() == SourceWidget;
 }
 
 bool FWacomBattleHUDCardDetailController::IsMotionSource(
@@ -904,11 +597,6 @@ void FWacomBattleHUDCardDetailController::ClearFirstPersonSource()
 bool FWacomBattleHUDCardDetailController::IsCurrentFirstPersonSource(const FGuid& CardInstanceId) const
 {
 	return CardInstanceId.IsValid() && CurrentFirstPersonSourceId == CardInstanceId;
-}
-
-void FWacomBattleHUDCardDetailController::ClearLegacySource()
-{
-	CurrentLegacySource.Reset();
 }
 
 void FWacomBattleHUDCardDetailController::UpdateFirstPersonSlot(

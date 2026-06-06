@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-06-05
+updated: 2026-06-06
 tags:
   - wacom/ui
   - wacom/battle
@@ -32,7 +32,7 @@ tags:
 | 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier |
 | Combat Log | `FWacomBattleHUDCombatLogController` | history、trim、feed sync、readable log |
 | First-person hand | `FWacomBattleHUDFirstPersonHandBridge` | runtime hand、drag preview/release、transition hint |
-| Card Detail | `FWacomBattleHUDCardDetailController` | 旧手牌和 first-person 共用详情 motion / source guard |
+| Card Detail | `FWacomBattleHUDCardDetailController` | first-person viewport 详情 motion / source guard |
 
 ## §2 命令与 HUD State
 
@@ -54,7 +54,6 @@ HUD 状态入口：
 | `Wacom|Battle|HUD State` | `GetUIState`、`BP_OnUIStateChanged` |
 | `Wacom|Battle|Targeting` | TargetSelect 查询、pending card、target selection view |
 | `Wacom|Battle|Presentation Flow` | presentation busy、command gate、pending turn-boundary 查询 |
-| `Wacom|Battle|Hand Presentation` | hand presentation mode setter / getter |
 
 `UWacomBattleWidgetBase` 是 Battle UI 基类，只负责 `UBattleSession` 引用、Snapshot fanout 和 WBP 表现刷新钩子。`SetSession / GetSession` 属于 `Wacom|Battle|Widget Session`，`BP_OnRefreshedFromSnapshot` 属于 `Wacom|Battle|Snapshot Refresh`。
 
@@ -97,7 +96,7 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 |---|---|---|
 | Legacy event log | `UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` | 旧 WBP / PIE 对照保留；正式日志走 CombatLogFeed + CombatLogBlock |
 | Debug text HUD | `UDebugBattleHUD` | Snapshot 文本诊断 HUD，不是正式 BattleHUD 父类 |
-| Legacy 2D hand | `UHandPanel / UCardWidget` | 旧水平手牌 fallback / 对照，不是 first-person hand 主线 |
+| Legacy 2D hand | `UHandPanel / UCardWidget` | 旧水平手牌独立类和资产保留；BattleHUD runtime / fallback 不再绑定或创建 |
 | Enemy 2D fallback | `UEnemyInfoBar / UEnemyPartWidget` | 缺 `SceneEnemyHost` 时的 2D fallback/debug |
 
 `FHandCardVisualEntry` 保持中性 hand snapshot 到 UI visual entry 的桥，不标成 legacy。正式手牌主线是 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
@@ -117,15 +116,11 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 
 ## §7 First-person Battle Hand
 
-BattleHUD 通过 `BattleHandPresentationMode` 控制战斗手牌：
-
-| 模式 | 行为 |
-|---|---|
-| `LegacyHandPanel` | 只使用旧 `UHandPanel` |
-| `FirstPersonHandWithLegacyFallback` | 默认显示并启用 first-person hand，同时保留旧手牌可见作为 fallback 和对照 |
-| `FirstPersonHandOnly` | first-person runtime hand 有效时隐藏旧手牌，异常、战斗结束或清理 runtime hand 时恢复 |
+BattleHUD 战斗手牌运行时只使用 first-person card layer。`UBattleHUD` 不再公开 `BattleHandPresentationMode`，也不再绑定、创建、隐藏或恢复旧 `UHandPanel`。C++ fallback BattleHUD 只构建状态、敌方 fallback、ActionPanel、牌堆、CombatLogFeed 和 PresentationStack，不再构建 legacy 2D hand。
 
 First-person hand 不创建 `UCardWidget`，不在 slot widget 内提交规则。轻点、hold inspect、drag/aim、world target release 和 hand-card target release 都经 BattleHUD bridge / command flow 进入 BattleSession。完整合同见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
+
+`UHandPanel / UCardWidget / WBP_HandPanel / WBP_CardWidget` 暂时作为 legacy standalone / 对照资产保留，等待第二轮资产影响审计和删除；它们不再是 BattleHUD runtime 或 fallback 路径。
 
 `FirstPersonCardDetailViewportZOrder / FirstPersonCardDetailAnchorBaseSize` 属于 `Wacom|Battle|First Person Card Layer|Authoring`。旧 `BattleHandInteractionPrototype` 命名只作为兼容层保留，新 C++ 调用使用 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()`。
 
@@ -146,7 +141,6 @@ BattleHUD 自身配置分类：
 | fallback canvas layout | `Wacom|Battle|HUD Fallback Layout|Compatibility` |
 | card detail authoring | `Wacom|Battle|Card Detail|Authoring` |
 | card detail motion | `Wacom|Battle|Card Detail|Motion` |
-| hand presentation | `Wacom|Battle|Hand Presentation|Authoring` |
 | combat log max blocks | `Wacom|Battle|Combat Log|Authoring` |
 | presentation stack hold | `Wacom|Battle|Presentation Stack|Authoring` |
 

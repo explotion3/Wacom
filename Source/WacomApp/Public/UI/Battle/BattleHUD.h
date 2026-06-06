@@ -13,8 +13,6 @@
 #include "BattleHUD.generated.h"
 
 class UWacomBattleWidgetBase;
-class UCanvasPanel;
-class UCardWidget;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UWacomCardDetailPanel;
@@ -172,7 +170,7 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  *
  * 交互流程：
  *   Idle
- *     ├── 点击 UCardWidget → HUD 判断 TargetMode
+ *     ├── 点击 first-person hand 卡牌 → HUD 判断 TargetMode
  *     │     ├── None / Self → 直接提交 PlayCard（空目标），回 Idle
  *     │     └── SingleEnemyPart → 切 TargetSelect，记录 Pending 卡
  *     ├── 点击 Wait 按钮 → 提交 Wait，回 Idle
@@ -188,7 +186,6 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  *
  * WBP 子类约定（BindWidget 大部分可选）：
  * - PlayerStatusBar   : UPlayerStatusBar
- * - HandPanel         : UHandPanel
  * - EnemyInfoBar      : UEnemyInfoBar
  * - ActionPanel       : UActionPanel
  * - DrawPileView      : UPileCountView
@@ -207,14 +204,6 @@ enum class EBattleUIState : uint8
 	BattleEnd,
 };
 
-UENUM(BlueprintType)
-enum class EWacomBattleHandPresentationMode : uint8
-{
-	LegacyHandPanel,
-	FirstPersonHandWithLegacyFallback,
-	FirstPersonHandOnly,
-};
-
 UCLASS(Blueprintable)
 class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 {
@@ -223,19 +212,13 @@ class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 public:
 	virtual ~UBattleHUD() override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|HUD Fallback Layout|Compatibility", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "2400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板的宽高。只影响未用完整 BattleHUD WBP 覆盖布局时的默认 CanvasPanel Slot 尺寸，不是正式 WBP 布局制作入口。"))
-	FVector2D HandPanelSize = FVector2D(1700.0f, 420.0f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|HUD Fallback Layout|Compatibility", meta = (UIMin = "-400.0", UIMax = "400.0", ToolTip = "C++ fallback BattleHUD 中手牌面板相对屏幕底部的上移距离。正数会让手牌面板离底部更远；只服务 fallback Canvas slot。"))
-	float HandPanelBottomOffset = 10.0f;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "战斗手牌悬浮详情面板的估算宽高，单位为 Slate 像素。用于 CanvasPanel Slot 尺寸和边界 clamp；实际样式仍由 WBP_CardDetailPanel 决定。"))
 	FVector2D CardDetailPanelEstimatedSize = FVector2D(360.0f, 420.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "战斗手牌悬浮详情面板与卡牌之间的间距，单位为 Slate 像素。面板默认显示在卡牌左侧，左侧空间不足时换到右侧。"))
 	float CardDetailPanelPadding = 12.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ToolTip = "是否启用战斗卡牌详情读牌动效。开启后旧手牌和第一人称手牌详情都会使用短延迟、淡入淡出、位置平滑和贴边稳定；关闭后恢复立即显示/隐藏。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ToolTip = "是否启用战斗卡牌详情读牌动效。开启后第一人称手牌详情会使用短延迟、淡入淡出、位置平滑和贴边稳定；关闭后恢复立即显示/隐藏。"))
 	bool bEnableCardDetailReadabilityPolish = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Motion", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.4", ToolTip = "卡牌 hover 后详情出现前的停留时间，单位为秒。用于减少鼠标快速扫过手牌时的详情闪烁。"))
@@ -264,9 +247,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation Stack|Authoring", meta = (ClampMin = "0.01", UIMin = "0.05", UIMax = "1.0", ToolTip = "打出的卡牌没有目标 cue 或延迟表现时，在表现栈中最短停留多久，单位为秒。用于避免无表现卡牌一闪而过。"))
 	float CardPresentationStackMinimumHoldSeconds = 0.18f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Hand Presentation|Authoring", meta = (ToolTip = "战斗手牌呈现模式。LegacyHandPanel 只使用旧 UHandPanel；FirstPersonHandWithLegacyFallback 默认显示并启用第一人称手牌，同时保留旧手牌兜底；FirstPersonHandOnly 在第一人称手牌有效时隐藏旧手牌，异常时自动恢复旧手牌避免战斗不可操作。"))
-	EWacomBattleHandPresentationMode BattleHandPresentationMode = EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.StaticCardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
 	int32 FirstPersonCardDetailViewportZOrder = 9999;
@@ -365,12 +345,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "当前 pending Wait / EndTurn 命令的 UI 文案。没有 pending 命令时返回空文本。"))
 	FText GetPendingTurnBoundaryCommandText() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Hand Presentation", meta = (ToolTip = "设置战斗手牌呈现模式，并立即同步第一人称手牌、交互绑定和旧手牌可见性。"))
-	void SetBattleHandPresentationMode(EWacomBattleHandPresentationMode NewMode);
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Hand Presentation", meta = (ToolTip = "当前 BattleHUD 使用的战斗手牌呈现模式。"))
-	EWacomBattleHandPresentationMode GetBattleHandPresentationMode() const { return BattleHandPresentationMode; }
-
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "设置当前战斗绑定的场景敌人 Host。BattleHUD 只会同步该 Host 下的 PartActor world target。"))
 	void SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost);
 
@@ -409,10 +383,6 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPlayerStatusBar> PlayerStatusBar;
 
-	/** 手牌面板。 */
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<class UHandPanel> HandPanel;
-
 	/** 敌人信息条。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UEnemyInfoBar> EnemyInfoBar;
@@ -443,17 +413,13 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBattlePresentationStackWidget> BattlePresentationStack;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UCanvasPanel> CardDetailLayer;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ToolTip = "战斗卡牌详情面板 Widget 类。旧 2D 手牌和第一人称手牌详情共用该显示面板。"))
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ToolTip = "战斗第一人称手牌详情面板 Widget 类。"))
 	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;
 
 private:
 	enum class ECardDetailHost : uint8
 	{
 		None,
-		LegacyHandPanel,
 		FirstPersonViewport,
 	};
 
@@ -471,9 +437,6 @@ private:
 
 	/** 战斗结束回调是否已广播过。保证只广播一次。 */
 	bool bHasBroadcastBattleEnd = false;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> FirstPersonCardDetailPanel;
@@ -544,36 +507,17 @@ private:
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
 	void AfterCommand();
 
-	void HandleHandCardHovered(UCardWidget* SourceWidget);
-	void HandleHandCardUnhovered(UCardWidget* SourceWidget);
-	bool ShowCardDetailForCardWidget(UCardWidget* SourceWidget);
-	bool ShowCardDetailAtAnchor(
-		const FWacomCardDetailViewData& DetailData,
-		const FVector2D& AnchorPosition,
-		const FVector2D& AnchorSize);
 	void HideCardDetailPanel();
-	void HideCardDetailPanelForSource(UCardWidget* SourceWidget);
 	void HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId);
 	bool IsFirstPersonCardInspectDetailActiveForSource(const FGuid& CardInstanceId) const;
-	UWacomCardDetailPanel* EnsureCardDetailPanel();
 	UWacomCardDetailPanel* EnsureFirstPersonCardDetailPanel();
-	void EnsureCardDetailLayer();
-	void PositionCardDetailPanelNear(UCardWidget* SourceWidget);
-	void PositionCardDetailPanelBesideAnchor(const FVector2D& AnchorPosition, const FVector2D& AnchorSize);
 	bool ShowFirstPersonCardDetailAtSlot(
 		const FWacomCardDetailViewData& DetailData,
 		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void PositionFirstPersonCardDetailPanelBesideSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HideFirstPersonCardDetailPanel();
 	void TickCardDetailMotion(float DeltaTime);
-	bool BeginCardDetailMotionShow(ECardDetailHost Host);
-	void RequestCardDetailMotionShow(ECardDetailHost Host);
-	void RequestCardDetailMotionHide(ECardDetailHost Host, bool bImmediate);
 	void ForceHideCardDetailHost(ECardDetailHost Host);
-	void ForceHideAllCardDetails();
-	UWacomCardDetailPanel* GetCardDetailPanelForHost(ECardDetailHost Host) const;
-	bool UpdateCardDetailMotionTarget(ECardDetailHost Host);
-	bool ComputeLegacyCardDetailTarget(UCardWidget* SourceWidget, FVector2D& OutPosition);
 	bool ComputeFirstPersonCardDetailTarget(const FWacomFirstPersonCardLayerSlotView& SlotView, FVector2D& OutPosition);
 	FVector2D ComputeCardDetailPanelPositionBesideStable(
 		const FVector2D& AnchorPosition,
@@ -581,15 +525,10 @@ private:
 		const FVector2D& LayerSize,
 		const FVector2D& PanelSize,
 		float DetailPadding);
-	void ApplyCardDetailMotionVisual(ECardDetailHost Host, const FVector2D& Position, float Opacity);
-	void CollapseCardDetailHost(ECardDetailHost Host);
-	bool IsCardDetailMotionSource(ECardDetailHost Host, UCardWidget* SourceWidget) const;
-	bool IsCardDetailMotionSource(ECardDetailHost Host, const FGuid& CardInstanceId) const;
 	FVector2D GetFirstPersonCardDetailViewportSize() const;
 	void SetFirstPersonCardDetailSource(const FGuid& CardInstanceId);
 	void ClearFirstPersonCardDetailSource();
 	bool IsCurrentFirstPersonCardDetailSource(const FGuid& CardInstanceId) const;
-	void ClearLegacyCardDetailSource();
 	void UpdateFirstPersonCardDetailSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
 	FVector2D GetLastFirstPersonCardDetailPanelPosition() const;
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
@@ -621,8 +560,6 @@ private:
 		const FBattleSnapshot& Snap,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints = TArray<FWacomFirstPersonCardLayerTransitionHint>());
 	void ClearFirstPersonBattleHandLayer();
-	void SyncLegacyHandPanelVisibility();
-	bool ShouldHideLegacyHandPanel() const;
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;
 	void BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);

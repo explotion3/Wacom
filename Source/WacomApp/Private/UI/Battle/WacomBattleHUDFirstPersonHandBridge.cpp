@@ -12,7 +12,6 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/EnemyInfoBar.h"
-#include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 
@@ -186,7 +185,6 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 	Anchor->SetBattleHandInteractionEnabled(ShouldEnableFirstPersonBattleHandInteraction());
 	BindLayerInteractions(Anchor);
 	LastAnchor = Anchor;
-	SyncLegacyHandPanelVisibility();
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::ClearLayer()
@@ -228,64 +226,16 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer()
 	LastAnchor.Reset();
 	HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
 	ClearPendingTransitionEvents();
-	SyncLegacyHandPanelVisibility();
-}
-
-void FWacomBattleHUDFirstPersonHandBridge::SyncLegacyHandPanelVisibility()
-{
-	if (!HUD.HandPanel)
-	{
-		return;
-	}
-
-	if (ShouldHideLegacyHandPanel())
-	{
-		if (!bLegacyHandPanelHiddenByFirstPersonLayer)
-		{
-			CaptureLegacyHandPanelVisibilityIfNeeded();
-		}
-		HUD.HandPanel->SetVisibility(ESlateVisibility::Collapsed);
-		bLegacyHandPanelHiddenByFirstPersonLayer = true;
-		return;
-	}
-
-	if (bLegacyHandPanelHiddenByFirstPersonLayer && bHasCachedLegacyHandPanelVisibility)
-	{
-		HUD.HandPanel->SetVisibility(CachedLegacyHandPanelVisibility);
-	}
-	bLegacyHandPanelHiddenByFirstPersonLayer = false;
-}
-
-bool FWacomBattleHUDFirstPersonHandBridge::ShouldHideLegacyHandPanel() const
-{
-	return HUD.BattleHandPresentationMode == EWacomBattleHandPresentationMode::FirstPersonHandOnly
-		&& ShouldEnableFirstPersonBattleHandInteraction()
-		&& bFirstPersonBattleHandLayerRuntimeActive
-		&& HUD.GetSession()
-		&& HUD.UIState != EBattleUIState::BattleEnd
-		&& LastAnchor.IsValid();
 }
 
 bool FWacomBattleHUDFirstPersonHandBridge::ShouldUseFirstPersonBattleHandLayer() const
 {
-	return HUD.BattleHandPresentationMode == EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback
-		|| HUD.BattleHandPresentationMode == EWacomBattleHandPresentationMode::FirstPersonHandOnly;
+	return true;
 }
 
 bool FWacomBattleHUDFirstPersonHandBridge::ShouldEnableFirstPersonBattleHandInteraction() const
 {
 	return ShouldUseFirstPersonBattleHandLayer();
-}
-
-void FWacomBattleHUDFirstPersonHandBridge::CaptureLegacyHandPanelVisibilityIfNeeded()
-{
-	if (!HUD.HandPanel)
-	{
-		return;
-	}
-
-	CachedLegacyHandPanelVisibility = HUD.HandPanel->GetVisibility();
-	bHasCachedLegacyHandPanelVisibility = true;
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
@@ -405,8 +355,6 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleCardHovered(
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(CardSnapshot->Definition),
 		SlotView))
 	{
-		HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::LegacyHandPanel);
-		HUD.ClearLegacyCardDetailSource();
 	}
 	else
 	{
@@ -464,8 +412,6 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragStarted(
 				UWacomCardPresentationBuilder::BuildCardDetailViewData(CardSnapshot->Definition),
 				DragView.SourceSlotView))
 			{
-				HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::LegacyHandPanel);
-				HUD.ClearLegacyCardDetailSource();
 			}
 		}
 	}

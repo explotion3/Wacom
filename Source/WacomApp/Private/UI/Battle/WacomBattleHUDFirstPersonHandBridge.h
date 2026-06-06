@@ -27,9 +27,7 @@ public:
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints =
 			TArray<FWacomFirstPersonCardLayerTransitionHint>());
 	void ClearLayer();
-	void SyncLegacyHandPanelVisibility();
 
-	bool ShouldHideLegacyHandPanel() const;
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;
 	bool IsFirstPersonCardDragActiveForBattleSceneHover() const
@@ -105,13 +103,9 @@ private:
 	TArray<FPlayCommitHint> PendingPlayCommitHints;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
 	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> CurrentDragPreviewBridge;
-	ESlateVisibility CachedLegacyHandPanelVisibility = ESlateVisibility::Visible;
 	bool bHasTransitionSnapshot = false;
-	bool bHasCachedLegacyHandPanelVisibility = false;
-	bool bLegacyHandPanelHiddenByFirstPersonLayer = false;
 	bool bFirstPersonBattleHandLayerRuntimeActive = false;
 	bool bFirstPersonCardDragActiveForBattleSceneHover = false;
 
-	void CaptureLegacyHandPanelVisibilityIfNeeded();
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
 };

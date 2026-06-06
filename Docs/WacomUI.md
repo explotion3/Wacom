@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-ui
 status: active
-updated: 2026-06-05
+updated: 2026-06-06
 tags:
   - wacom/ui
   - wacom/wbp
@@ -97,10 +97,10 @@ Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.
 当前复用方：
 
 - 背包卡牌、拖拽预览和卡牌详情。
-- 战斗旧手牌、first-person hand、Presentation Stack 小卡和 Combat Log detail。
+- 战斗 first-person hand、Presentation Stack 小卡和 Combat Log detail；旧 `UHandPanel / UCardWidget` 只作为 legacy standalone / 对照资产保留。
 - 商店商品 ViewData。
 
-`UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。卡牌详情由 `UWacomCardDetailPanel` 显示 `FWacomCardDetailViewData`；战斗旧手牌详情和 first-person 详情共用 BattleHUD 内部 card detail controller。
+`UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。卡牌详情由 `UWacomCardDetailPanel` 显示 `FWacomCardDetailViewData`；BattleHUD 内部 card detail controller 只服务 first-person viewport 详情。
 
 ## §7 WBP 绑定文档分工
 

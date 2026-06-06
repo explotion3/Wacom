@@ -11,7 +11,6 @@
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EquipmentBar.h"
-#include "UI/Battle/HandPanel.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Common/PileCountView.h"
 
@@ -19,8 +18,6 @@
 
 namespace
 {
-	const TCHAR* HandPanelPath = TEXT("/Game/Wacom/UI/Battle/WBP_HandPanel.WBP_HandPanel_C");
-
 	template <typename TWidget>
 	TWidget* ConstructWidget(UWidgetTree* WidgetTree, TObjectPtr<TWidget>* OutWidget, FName Name)
 	{
@@ -54,19 +51,6 @@ namespace
 		{
 			Slot->SetZOrder(ZOrder);
 		}
-	}
-
-	UHandPanel* ConstructHandPanel(UWidgetTree* WidgetTree)
-	{
-		TSubclassOf<UHandPanel> HandPanelClass = UHandPanel::StaticClass();
-		if (UClass* LoadedHandPanelClass = LoadClass<UHandPanel>(nullptr, HandPanelPath))
-		{
-			HandPanelClass = LoadedHandPanelClass;
-		}
-
-		return WidgetTree
-			? WidgetTree->ConstructWidget<UHandPanel>(HandPanelClass, TEXT("HandPanel"))
-			: nullptr;
 	}
 
 	void AddPileView(
@@ -120,19 +104,6 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 			FAnchors(0.0f, 1.0f),
 			FVector2D(0.0f, 1.0f),
 			FMargin(20.0f, -140.0f, 220.0f, 120.0f));
-	}
-
-	if (Context.HandPanel)
-	{
-		*Context.HandPanel = ConstructHandPanel(Context.WidgetTree);
-		if (UHandPanel* HandPanel = Context.HandPanel->Get())
-		{
-			SetCanvasSlot(
-				Root->AddChildToCanvas(HandPanel),
-				FAnchors(0.5f, 1.0f),
-				FVector2D(0.5f, 1.0f),
-				FMargin(0.0f, -Context.HandPanelBottomOffset, Context.HandPanelSize.X, Context.HandPanelSize.Y));
-		}
 	}
 
 	if (UActionPanel* ActionPanel = ConstructWidget(Context.WidgetTree, Context.ActionPanel, TEXT("ActionPanel")))
@@ -203,17 +174,6 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 			FVector2D(1.0f, 0.0f),
 			FMargin(-455.0f, 12.0f, 220.0f, 260.0f),
 			8);
-	}
-
-	if (UCanvasPanel* CardDetailLayer = ConstructWidget(Context.WidgetTree, Context.CardDetailLayer, TEXT("CardDetailLayer")))
-	{
-		CardDetailLayer->SetVisibility(ESlateVisibility::HitTestInvisible);
-		SetCanvasSlot(
-			Root->AddChildToCanvas(CardDetailLayer),
-			FAnchors(0.0f, 0.0f, 1.0f, 1.0f),
-			FVector2D(0.0f, 0.0f),
-			FMargin(0.0f),
-			10);
 	}
 }
 

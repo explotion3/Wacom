@@ -368,11 +368,6 @@ public:
 		WorldOverride = InWorld;
 	}
 
-	void SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode NewMode)
-	{
-		SetBattleHandPresentationMode(NewMode);
-	}
-
 	void SetBattleSceneEnemyHostForTest(AWacomBattleEnemyActor* InHost)
 	{
 		SetBattleSceneEnemyHost(InHost);
@@ -425,29 +420,6 @@ public:
 		ClearFirstPersonBattleHandLayer();
 	}
 
-	void SyncLegacyHandPanelVisibilityForTest()
-	{
-		SyncLegacyHandPanelVisibility();
-	}
-
-	bool HasHandPanelForTest() const
-	{
-		return HandPanel != nullptr;
-	}
-
-	ESlateVisibility GetHandPanelVisibilityForTest() const
-	{
-		return HandPanel ? HandPanel->GetVisibility() : ESlateVisibility::Collapsed;
-	}
-
-	void SetHandPanelVisibilityForTest(ESlateVisibility InVisibility)
-	{
-		if (HandPanel)
-		{
-			HandPanel->SetVisibility(InVisibility);
-		}
-	}
-
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForTest() const
 	{
 		return ResolveFirstPersonCardAnchor();
@@ -484,11 +456,6 @@ public:
 		return NativeOnMouseButtonUp(FGeometry(), MouseEvent);
 	}
 
-	bool ShowCardDetailForTest(UCardWidget* SourceWidget)
-	{
-		return ShowCardDetailForCardWidget(SourceWidget);
-	}
-
 	void SetCardDetailReadabilityPolishForTest(bool bEnabled)
 	{
 		bEnableCardDetailReadabilityPolish = bEnabled;
@@ -514,16 +481,6 @@ public:
 	void HideCardDetailForTest()
 	{
 		HideCardDetailPanel();
-	}
-
-	void HandleCardHoveredForTest(UCardWidget* SourceWidget)
-	{
-		HandleHandCardHovered(SourceWidget);
-	}
-
-	void HandleCardUnhoveredForTest(UCardWidget* SourceWidget)
-	{
-		HandleHandCardUnhovered(SourceWidget);
 	}
 
 	void HandleFirstPersonCardHoveredForTest(
@@ -584,11 +541,6 @@ public:
 		return ResolveFirstPersonCardDropIntent(CardInstanceId, DragView);
 	}
 
-	bool IsLegacyCardDetailPanelVisibleForTest() const
-	{
-		return CardDetailPanel && CardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
-	}
-
 	bool IsFirstPersonCardDetailPanelVisibleForTest() const
 	{
 		return FirstPersonCardDetailPanel
@@ -638,16 +590,6 @@ public:
 	bool HasLastBattleHandCardForTest(const FGuid& CardInstanceId) const
 	{
 		return FindLastBattleHandCardSnapshot(CardInstanceId) != nullptr;
-	}
-
-	bool HasCardDetailLayerForTest() const
-	{
-		return CardDetailLayer != nullptr;
-	}
-
-	bool EnsureCardDetailPanelForTest()
-	{
-		return EnsureCardDetailPanel() != nullptr;
 	}
 
 	void SetCombatLogFeedForTest(UBattleCombatLogFeedWidget* InFeed)
