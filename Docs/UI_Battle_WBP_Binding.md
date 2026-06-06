@@ -99,7 +99,7 @@ WBP 合同：
 - 外层可使用透明 bleed 画布，保证超出主体边界的装饰被 Retainer 完整渲染。
 - `CardSizeBox` 默认保持 296 x 420，并居中放在 bleed 画布中；缺失时运行时回退旧主体尺寸。
 - 透明 bleed 只负责渲染，不扩大 hover、click、drag 起手或 Card target probe 范围。
-- 不创建 `UCardWidget`，不绑定按钮，不在 WBP 图里实现 hover / pending / disabled 状态机。
+- 不绑定按钮，不在 WBP 图里实现 hover / pending / disabled 状态机。
 - 材质流光和表面装饰继续走 `UWacomCardView` 路径，不在 first-person slot widget 内新增材质刷新逻辑。
 
 最小 PIE 验收：
@@ -107,62 +107,6 @@ WBP 合同：
 - Battle 中 first-person hand 使用该卡面，旋转时边缘没有明显黑边、断线或主体裁切。
 - 鼠标在主体范围外、bleed 范围内不触发 hover 或拖拽起手。
 - 费用图标、卡名、类型、效果徽章和耐久显示仍跟普通 CardView 数据一致。
-
-## Legacy 2D Hand WBP
-
-### WBP_CardWidget
-
-父类：`UCardWidget`
-
-推荐资产路径：`/Game/Wacom/UI/Battle/WBP_CardWidget`
-
-用途：旧 `UHandPanel` 的单卡外壳，只服务 legacy 2D hand standalone / 对照路径。正式 BattleHUD 和 first-person hand 卡面使用 `WBP_FirstPersonCardView`。
-
-推荐绑定：
-
-| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
-|---|---|---|---|
-| `RootButton` | `Button` | Optional but needed for click | 覆盖整张手牌，接收点击 |
-| `HoverVisualRoot` | `Widget` / `Overlay` | Optional | hover 时移动的视觉根层 |
-| `FrameBorder` | `Border` | Optional | 可用状态与目标选择高亮 |
-| `CardView` | `UWacomCardView` | Optional | 通用卡面显示 |
-| `ZoneText` | `TextBlock` | Optional | 分区标签 |
-
-WBP 不应做：
-
-- 不直接提交 `UBattleSession` 命令。
-- 不把整张 root 做 hover 位移，避免命中区域跟着移动。
-- 不把它当作新的 first-person hand 交互控件。
-
-最小 PIE 验收：
-
-- legacy 2D hand 中卡牌可 hover，鼠标停在下沿不抖动。
-- 需要目标的卡牌进入目标选择后能显示选中态。
-
-### WBP_HandPanel
-
-父类：`UHandPanel`
-
-推荐资产路径：`/Game/Wacom/UI/Battle/WBP_HandPanel`
-
-用途：legacy 2D hand standalone / 对照入口。BattleHUD runtime / fallback 不再绑定或创建它；正式手牌主线是 first-person card layer。
-
-推荐绑定：
-
-| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
-|---|---|---|---|
-| `UnifiedHandSlot` | `PanelWidget` | Optional | C++ 按 `FHandCardVisualEntry.VisualIndex` 填充手牌 |
-
-WBP 不应做：
-
-- 不直接执行出牌命令。
-- 不缩放卡牌尺寸；卡牌尺寸由 `WBP_CardWidget` 控制。
-- 不作为新手牌功能的制作主线。
-
-最小 PIE 验收：
-
-- `UnifiedHandSlot` 能显示所有 legacy hand 卡牌。
-- `CardWidgetClass / AnchorCardWidgetClass / CardSpacing / HandContentPadding` 能影响 fallback 手加载和布局。
 
 ## Combat Log WBP
 
@@ -399,4 +343,4 @@ WBP 不应做：
 - `WBP_FirstPersonCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHost` 的战斗中，Status Badge 可读，`EnemyInfoBar` 只作为 fallback/debug。
-- legacy `WBP_CardWidget / WBP_HandPanel` 仅作为旧独立对照资产保留，不再用于 BattleHUD runtime / fallback；`WBP_EnemyInfoBar / WBP_EnemyPartWidget` 仍可用于敌方 2D fallback/debug，但不作为新制作主线。
+- 旧 `WBP_CardWidget / WBP_HandPanel` 已删除；`WBP_EnemyInfoBar / WBP_EnemyPartWidget` 仍可用于敌方 2D fallback/debug，但不作为新制作主线。

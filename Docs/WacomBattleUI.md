@@ -96,10 +96,9 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 |---|---|---|
 | Legacy event log | `UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` | 旧 WBP / PIE 对照保留；正式日志走 CombatLogFeed + CombatLogBlock |
 | Debug text HUD | `UDebugBattleHUD` | Snapshot 文本诊断 HUD，不是正式 BattleHUD 父类 |
-| Legacy 2D hand | `UHandPanel / UCardWidget` | 旧水平手牌独立类和资产保留；BattleHUD runtime / fallback 不再绑定或创建 |
 | Enemy 2D fallback | `UEnemyInfoBar / UEnemyPartWidget` | 缺 `SceneEnemyHost` 时的 2D fallback/debug |
 
-`FHandCardVisualEntry` 保持中性 hand snapshot 到 UI visual entry 的桥，不标成 legacy。正式手牌主线是 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
+旧 2D hand 的 `UHandPanel / UCardWidget / WBP_HandPanel / WBP_CardWidget` 已删除。正式战斗手牌主线是 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
 ## §6 Scene Enemy UI
 
@@ -116,11 +115,9 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 
 ## §7 First-person Battle Hand
 
-BattleHUD 战斗手牌运行时只使用 first-person card layer。`UBattleHUD` 不再公开 `BattleHandPresentationMode`，也不再绑定、创建、隐藏或恢复旧 `UHandPanel`。C++ fallback BattleHUD 只构建状态、敌方 fallback、ActionPanel、牌堆、CombatLogFeed 和 PresentationStack，不再构建 legacy 2D hand。
+BattleHUD 战斗手牌运行时只使用 first-person card layer。`UBattleHUD` 不再公开 `BattleHandPresentationMode`，也不再绑定、创建、隐藏或恢复旧 2D hand。C++ fallback BattleHUD 只构建状态、敌方 fallback、ActionPanel、牌堆、CombatLogFeed 和 PresentationStack，不再构建 legacy 2D hand。
 
-First-person hand 不创建 `UCardWidget`，不在 slot widget 内提交规则。轻点、hold inspect、drag/aim、world target release 和 hand-card target release 都经 BattleHUD bridge / command flow 进入 BattleSession。完整合同见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
-
-`UHandPanel / UCardWidget / WBP_HandPanel / WBP_CardWidget` 暂时作为 legacy standalone / 对照资产保留，等待第二轮资产影响审计和删除；它们不再是 BattleHUD runtime 或 fallback 路径。
+First-person hand 不在 slot widget 内提交规则。轻点、hold inspect、drag/aim、world target release 和 hand-card target release 都经 BattleHUD bridge / command flow 进入 BattleSession。完整合同见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
 `FirstPersonCardDetailViewportZOrder / FirstPersonCardDetailAnchorBaseSize` 属于 `Wacom|Battle|First Person Card Layer|Authoring`。旧 `BattleHandInteractionPrototype` 命名只作为兼容层保留，新 C++ 调用使用 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()`。
 

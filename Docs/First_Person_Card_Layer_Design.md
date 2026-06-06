@@ -81,7 +81,7 @@ Runtime source 优先级：
 
 BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。清理或 `NativeDestruct` 可能晚于 Run source 重新激活，因此 BattleHUD 解绑自身 delegate 时必须检查 Anchor 当前 `RuntimeCardLayerSourceId`：只有仍为 `BattleHand` 时才关闭 first-person card interaction、取消拖拽和清 runtime data；如果已经被 `RunFirstPersonBattleDeck` 或 menu lease 接管，只能解绑 BattleHUD delegate 和清战斗 world preview，不得改写 Run source 的交互状态。
 
-BattleHUD runtime 战斗手牌不再有 legacy `UHandPanel` 可见性恢复路径。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过恢复旧 2D hand 兜底。
+BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
 
 打开 Backpack / Pause / Shop / RunEvent 等 GameMenu 时，默认压制 Run default source，避免卡层遮挡菜单。菜单需要卡牌交互时，应显式申请 owned menu lease。
 
@@ -106,7 +106,7 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 
 ## §6 Battle 交互
 
-第一人称战斗手牌不创建 `UCardWidget`，不恢复旧 `UHandPanel` 的拖拽语义，也不直接提交 `UBattleSession`。
+第一人称战斗手牌不恢复旧 2D hand 的拖拽语义，也不直接提交 `UBattleSession`。
 
 当前交互：
 
@@ -161,7 +161,6 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 | `LookInfluenceYaw / LookInfluencePitch` | 只服务 `LegacyWorldProjected` |
 | Static preview layer | Prototype preview，只用于 PIE / 开发验证，不是 Battle / Run runtime source |
 | `BattleHandInteractionPrototype` 旧命名 | 兼容层；新调用口径是 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()` |
-| `UHandPanel / UCardWidget` | Legacy 2D hand standalone / 对照；BattleHUD runtime / fallback 已断开 |
 
 不要给 legacy projection 或 static preview 继续添加新的正式主手牌功能。真正删除旧字段、enum value 或资产引用需要单独做资产影响切片。
 
@@ -186,7 +185,7 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 - RetainerBox 内部可轻微缩放，给旋转采样留下透明边缘。
 - 费用图标使用固定 `CostDigitImage : Image` 绑定；多位数、缺图标或未绑定时不显示文字费用 fallback。
 - 材质流光和 disabled overlay 继续走 `UWacomCardView` 现有绑定，不在 slot widget 内新增数据绑定。
-- WBP 只负责卡面显示质量，不创建 `UCardWidget`，不提交战斗命令，不读取 `UBattleSession`。
+- WBP 只负责卡面显示质量，不提交战斗命令，不读取 `UBattleSession`。
 
 验收口径：
 

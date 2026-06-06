@@ -10,18 +10,14 @@
 #include "UI/Battle/ActionPanel.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/CardWidget.h"
 #include "UI/Battle/EnemyInfoBar.h"
 #include "UI/Battle/EnemyPartWidget.h"
-#include "UI/Battle/HandPanel.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Common/PileCountView.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
-#include "Components/BorderSlot.h"
 #include "Components/Button.h"
-#include "Components/HorizontalBoxSlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
@@ -150,111 +146,6 @@ private:
 };
 
 UCLASS()
-class UWacomBattleCardWidgetClickReceiver : public UObject
-{
-	GENERATED_BODY()
-
-public:
-	int32 ClickCount = 0;
-	FGuid LastClickedId;
-
-	UFUNCTION()
-	void HandleClicked(FGuid CardInstanceId)
-	{
-		++ClickCount;
-		LastClickedId = CardInstanceId;
-	}
-
-	int32 HoverCount = 0;
-	int32 UnhoverCount = 0;
-	TObjectPtr<UCardWidget> LastHoveredWidget = nullptr;
-	TObjectPtr<UCardWidget> LastUnhoveredWidget = nullptr;
-
-	void HandleHovered(UCardWidget* SourceWidget)
-	{
-		++HoverCount;
-		LastHoveredWidget = SourceWidget;
-	}
-
-	void HandleUnhovered(UCardWidget* SourceWidget)
-	{
-		++UnhoverCount;
-		LastUnhoveredWidget = SourceWidget;
-	}
-};
-
-UCLASS()
-class UWacomBattleCardWidgetTestProbe : public UCardWidget
-{
-	GENERATED_BODY()
-
-public:
-	bool IsRootButtonEnabledForTest() const
-	{
-		return IsRootButtonInteractable();
-	}
-
-	bool RequestClickForTest()
-	{
-		return TryClickRootButton();
-	}
-
-	void RequestHoverForTest()
-	{
-		RequestHover();
-	}
-
-	void RequestUnhoverForTest()
-	{
-		RequestUnhover();
-	}
-
-	bool IsHoveredForTest() const
-	{
-		return IsHoverActive();
-	}
-
-	FWidgetTransform GetRenderTransformForTest() const
-	{
-		return GetRenderTransform();
-	}
-
-	FVector2D GetRenderTransformPivotForTest() const
-	{
-		return GetRenderTransformPivot();
-	}
-
-	FWidgetTransform GetHoverVisualRenderTransformForTest() const
-	{
-		const UWidget* Target = GetHoverTransformTarget();
-		return Target ? Target->GetRenderTransform() : FWidgetTransform();
-	}
-
-	FVector2D GetHoverVisualRenderTransformPivotForTest() const
-	{
-		const UWidget* Target = GetHoverTransformTarget();
-		return Target ? Target->GetRenderTransformPivot() : FVector2D(0.5f, 0.5f);
-	}
-};
-
-UCLASS()
-class UWacomBattleCardWidgetNoCardViewTest : public UWacomBattleCardWidgetTestProbe
-{
-	GENERATED_BODY()
-
-public:
-	void DisableCardViewForTest()
-	{
-		CardView = nullptr;
-	}
-
-	FString GetFallbackZoneText() const
-	{
-		return ZoneText ? ZoneText->GetText().ToString() : FString();
-	}
-};
-
-UCLASS()
 class UWacomActionPanelTestProbe : public UActionPanel
 {
 	GENERATED_BODY()
@@ -273,72 +164,6 @@ public:
 	FText GetWaitValueTextForTest() const
 	{
 		return WaitValueText ? WaitValueText->GetText() : FText::GetEmpty();
-	}
-};
-
-UCLASS()
-class UWacomBattleCardWidgetHoverVisualRootTest : public UWacomBattleCardWidgetTestProbe
-{
-	GENERATED_BODY()
-
-public:
-	void DisableHoverVisualRootForTest()
-	{
-		HoverVisualRoot = nullptr;
-	}
-
-	bool HasHoverVisualRootForTest() const
-	{
-		return HoverVisualRoot != nullptr;
-	}
-};
-
-UCLASS()
-class UWacomBattleHandPanelLayoutTest : public UHandPanel
-{
-	GENERATED_BODY()
-
-public:
-	FMargin GetCardSlotPaddingForTest(int32 ChildIndex) const
-	{
-		if (!UnifiedHandSlot || !UnifiedHandSlot->GetChildAt(ChildIndex))
-		{
-			return FMargin();
-		}
-
-		const UWidget* Child = UnifiedHandSlot->GetChildAt(ChildIndex);
-		const UHorizontalBoxSlot* HorizontalSlot = Child ? Cast<UHorizontalBoxSlot>(Child->Slot) : nullptr;
-		return HorizontalSlot ? HorizontalSlot->GetPadding() : FMargin();
-	}
-
-	EVerticalAlignment GetCardSlotVerticalAlignmentForTest(int32 ChildIndex) const
-	{
-		if (!UnifiedHandSlot || !UnifiedHandSlot->GetChildAt(ChildIndex))
-		{
-			return VAlign_Fill;
-		}
-
-		const UWidget* Child = UnifiedHandSlot->GetChildAt(ChildIndex);
-		const UHorizontalBoxSlot* HorizontalSlot = Child ? Cast<UHorizontalBoxSlot>(Child->Slot) : nullptr;
-		return HorizontalSlot ? HorizontalSlot->GetVerticalAlignment() : VAlign_Fill;
-	}
-
-	EHorizontalAlignment GetUnifiedSlotHorizontalAlignmentForTest() const
-	{
-		if (const UHorizontalBoxSlot* HorizontalSlot = UnifiedHandSlot ? Cast<UHorizontalBoxSlot>(UnifiedHandSlot->Slot) : nullptr)
-		{
-			return HorizontalSlot->GetHorizontalAlignment();
-		}
-		if (const UBorderSlot* BorderSlot = UnifiedHandSlot ? Cast<UBorderSlot>(UnifiedHandSlot->Slot) : nullptr)
-		{
-			return BorderSlot->GetHorizontalAlignment();
-		}
-		return HAlign_Fill;
-	}
-
-	UWacomBattleCardWidgetTestProbe* GetSpawnedCardProbeForTest(int32 Index) const
-	{
-		return Cast<UWacomBattleCardWidgetTestProbe>(GetSpawnedCardAt(Index));
 	}
 };
 
