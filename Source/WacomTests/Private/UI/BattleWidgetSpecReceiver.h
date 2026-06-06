@@ -368,11 +368,6 @@ public:
 		WorldOverride = InWorld;
 	}
 
-	void Enable3DHandPrototypeForTest()
-	{
-		bEnable3DHandPrototype = true;
-	}
-
 	void SetBattleHandPresentationModeForTest(EWacomBattleHandPresentationMode NewMode)
 	{
 		SetBattleHandPresentationMode(NewMode);
@@ -456,16 +451,6 @@ public:
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForTest() const
 	{
 		return ResolveFirstPersonCardAnchor();
-	}
-
-	void DestroyBattle3DHandPresenterForTest()
-	{
-		DestroyBattle3DHandPresenter();
-	}
-
-	bool HasBattle3DHandPresenterForTest() const
-	{
-		return Battle3DHandPresenter.Get() != nullptr;
 	}
 
 	void SetTargetSelectionStateForTest(const FGuid& PendingCardId)

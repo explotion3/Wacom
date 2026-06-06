@@ -99,7 +99,6 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 | Debug text HUD | `UDebugBattleHUD` | Snapshot 文本诊断 HUD，不是正式 BattleHUD 父类 |
 | Legacy 2D hand | `UHandPanel / UCardWidget` | 旧水平手牌 fallback / 对照，不是 first-person hand 主线 |
 | Enemy 2D fallback | `UEnemyInfoBar / UEnemyPartWidget` | 缺 `SceneEnemyHost` 时的 2D fallback/debug |
-| 3D hand prototype | `AWacomBattle3DHandPresenter / AWacomBattleCardVisualActor` | `CardActor + WidgetComponent` 历史实验，默认关闭 |
 
 `FHandCardVisualEntry` 保持中性 hand snapshot 到 UI visual entry 的桥，不标成 legacy。正式手牌主线是 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
@@ -150,7 +149,6 @@ BattleHUD 自身配置分类：
 | hand presentation | `Wacom|Battle|Hand Presentation|Authoring` |
 | combat log max blocks | `Wacom|Battle|Combat Log|Authoring` |
 | presentation stack hold | `Wacom|Battle|Presentation Stack|Authoring` |
-| 3D hand prototype | `Wacom|UI|3D Hand|Prototype` |
 
 ## §9 Battle UI 测试入口
 
@@ -161,5 +159,4 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 推荐自动化前缀：
 
 - `Wacom.UI.Battle`
-- `Wacom.UI.Battle3D` 只覆盖 3D hand prototype
 - `Wacom.UI.FirstPersonCardLayer` 覆盖 first-person card layer 专题行为

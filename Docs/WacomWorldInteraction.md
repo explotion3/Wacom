@@ -147,5 +147,5 @@ Battle 已接入 `UBattleSession::CanTargetWithCard()` 和 `ValidateTargetWithCa
 
 - Debug summary / debug view / log 入口只用于 PIE 排查，不作为正式规则入口。
 - Actor `ConfigureDebug...Sample` 按 `Wacom|...|Prototype` 分类保留，只用于开发验证样例配置。
-- 旧 `UHandPanel / UCardWidget`、`EnemyInfoBar / EnemyPartWidget`、legacy event log、3D hand prototype 等 compatibility / fallback UI 不作为新的 world interaction 制作主线。
+- 旧 `UHandPanel / UCardWidget`、`EnemyInfoBar / EnemyPartWidget`、legacy event log 等 compatibility / fallback UI 不作为新的 world interaction 制作主线。
 - `TryRouteBattleSceneTargetClick` 等 protected test seam 保留给自动化测试；测试侧应通过 `WacomTests/Private` access wrapper 使用，不扩散生产 public API。

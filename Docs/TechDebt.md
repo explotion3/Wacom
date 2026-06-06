@@ -94,8 +94,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 
 - 正式 WBP 制作合同优先保留：`BindWidget`、`EditDefaultsOnly` 配置、`BlueprintImplementableEvent`、必要 `BlueprintCallable` 和展示 builder 的 `BlueprintPure` 入口。
 - C++ public 但不应直接 Blueprint 化的诊断、详情显示、测试辅助或内部协调 helper，后续按资产影响和测试覆盖逐个评估。
-- `UWacomRunMenuCardLeaseTestMenu`、Actor `ConfigureDebug...Sample`、Battle 3D hand、first-person legacy comparison / prototype preview 等只作为 prototype / compatibility / debug 入口保留。
-- 剩余根 `Wacom|UI|3D Hand|Prototype` 是旧 Battle 3D hand prototype 例外；真正删除、迁到开发插件或移除测试另起切片。
+- `UWacomRunMenuCardLeaseTestMenu`、Actor `ConfigureDebug...Sample`、first-person legacy comparison / prototype preview 等只作为 prototype / compatibility / debug 入口保留。
 - Blueprint-visible 项即使没有 C++ 调用方，也可能被 WBP 或 `.uasset` 引用；没有资产审计前不作为删除依据。
 
 历史整理记录见 [Wacom_Public_Surface_And_Docs_History.md](./DevLog/Wacom_Public_Surface_And_Docs_History.md)。
@@ -126,3 +125,4 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Shop / RunEvent / AppToast 的旧固定 WBP 路径 fallback 已移除；PrimaryLayout 是保留的唯一固定路径 fallback
 - `UWacomCardView::BuildFromCardDefinition / BuildDetailFromCardDefinition` legacy static API 已清理，新代码统一使用 `UWacomCardPresentationBuilder`
 - Run Definition 级 deck wrappers 已取消 Blueprint 暴露；C++ 兼容入口暂留，见 RunSession 结构债
+- Battle 世界空间手牌 prototype public surface 已从 runtime / tests 中移除；正式战斗手牌主线为 first-person card layer。

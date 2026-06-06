@@ -2335,66 +2335,6 @@ bool FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec::RunTest(const FString& 
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleHUD3DHandPresenterLifecycleSpec,
-	"Wacom.UI.Battle.Prototype.HUD3DHandPresenterLifecycle",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleHUD3DHandPresenterLifecycleSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleFixture Fx;
-	UCardDefinition* LeftHand = Fx.MakeNoopCard(0);
-	UCardDefinition* RightHand = Fx.MakeNoopCard(0);
-	UCardDefinition* DeckCard = Fx.MakeNoopCard(0);
-	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, { DeckCard });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-
-	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.ObjectFlags |= RF_Transient;
-	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
-		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
-		FTransform::Identity,
-		SpawnParams);
-	if (!TestNotNull(TEXT("PlayerController spawned"), PC))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		if (IsValid(PC))
-		{
-			PC->Destroy();
-		}
-	};
-
-	PC->bEnableClickEvents = false;
-	PC->bEnableMouseOverEvents = false;
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
-	HUD->SetOwningPlayerForTest(PC);
-	HUD->Enable3DHandPrototypeForTest();
-	HUD->SetSession(Session);
-	HUD->RefreshFromSnapshot(Session->BuildSnapshot());
-
-	TestTrue(TEXT("3D hand prototype presenter is created when enabled"), HUD->HasBattle3DHandPresenterForTest());
-	TestTrue(TEXT("3D hand prototype enables PlayerController click events"), PC->bEnableClickEvents);
-	TestTrue(TEXT("3D hand prototype enables PlayerController mouse-over events"), PC->bEnableMouseOverEvents);
-
-	HUD->DestroyBattle3DHandPresenterForTest();
-	TestFalse(TEXT("3D hand prototype presenter is destroyed explicitly"), HUD->HasBattle3DHandPresenterForTest());
-	TestFalse(TEXT("Destroy restores PlayerController click events"), PC->bEnableClickEvents);
-	TestFalse(TEXT("Destroy restores PlayerController mouse-over events"), PC->bEnableMouseOverEvents);
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEnemyInfoBarTargetSelectionViewSpec,
 	"Wacom.UI.Battle.Enemy2DFallback.EnemyInfoBarUsesTargetSelectionView",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

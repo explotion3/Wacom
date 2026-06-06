@@ -19,8 +19,6 @@ class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UWacomCardDetailPanel;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
-class AWacomBattle3DHandPresenter;
-class AWacomBattleCardVisualActor;
 class AWacomBattleEnemyActor;
 class APlayerController;
 class FWacomBattlePresentationTargetRegistry;
@@ -267,15 +265,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation Stack|Authoring", meta = (ClampMin = "0.01", UIMin = "0.05", UIMax = "1.0", ToolTip = "打出的卡牌没有目标 cue 或延迟表现时，在表现栈中最短停留多久，单位为秒。用于避免无表现卡牌一闪而过。"))
 	float CardPresentationStackMinimumHoldSeconds = 0.18f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand|Prototype", meta = (ToolTip = "是否启用 CardActor + WidgetComponent 的 3D 手牌 prototype。默认关闭；仅用于 PIE / 开发验证空间手牌可行性，不是正式主手牌入口。"))
-	bool bEnable3DHandPrototype = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand|Prototype", meta = (ToolTip = "3D 手牌 prototype 的 Presenter Actor 类。仅在 bEnable3DHandPrototype 开启且 BattleHUD 持有有效战斗 Session 时生成；负责管理 3D 手牌 Actor 的表现和点击转发。"))
-	TSubclassOf<AWacomBattle3DHandPresenter> Battle3DHandPresenterClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|UI|3D Hand|Prototype", meta = (ToolTip = "3D 手牌 prototype 使用的单张卡牌 Actor 类。BattleHUD 只把该类交给 Presenter，不直接生成或管理单卡 Actor。"))
-	TSubclassOf<AWacomBattleCardVisualActor> Battle3DCardActorClass;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Hand Presentation|Authoring", meta = (ToolTip = "战斗手牌呈现模式。LegacyHandPanel 只使用旧 UHandPanel；FirstPersonHandWithLegacyFallback 默认显示并启用第一人称手牌，同时保留旧手牌兜底；FirstPersonHandOnly 在第一人称手牌有效时隐藏旧手牌，异常时自动恢复旧手牌避免战斗不可操作。"))
 	EWacomBattleHandPresentationMode BattleHandPresentationMode = EWacomBattleHandPresentationMode::FirstPersonHandWithLegacyFallback;
 
@@ -494,15 +483,7 @@ private:
 
 	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
 
-	UPROPERTY(Transient)
-	TObjectPtr<AWacomBattle3DHandPresenter> Battle3DHandPresenter;
-
 	bool bHasLastBattleSnapshot = false;
-	int32 PlayerControllerClickEventAcquireCount = 0;
-	int32 PlayerControllerMouseOverEventAcquireCount = 0;
-	bool bHasFallbackPlayerControllerInteractionEventState = false;
-	bool bFallbackSavedPlayerControllerClickEvents = false;
-	bool bFallbackSavedPlayerControllerMouseOverEvents = false;
 	TSharedPtr<FWacomBattleHUDCardDetailController> CardDetailController;
 	TSharedPtr<FWacomBattleHUDCombatLogController> CombatLogController;
 	TSharedPtr<FWacomBattleHUDFirstPersonHandBridge> FirstPersonHandBridge;
@@ -612,9 +593,6 @@ private:
 	void UpdateFirstPersonCardDetailSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
 	FVector2D GetLastFirstPersonCardDetailPanelPosition() const;
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
-	AWacomBattle3DHandPresenter* EnsureBattle3DHandPresenter();
-	void DestroyBattle3DHandPresenter();
-	void SyncBattle3DHandPresenterTargeting();
 	FWacomBattleHUDCardDetailController& GetCardDetailController();
 	const FWacomBattleHUDCardDetailController& GetCardDetailController() const;
 	FWacomBattleHUDCombatLogController& GetCombatLogController();
@@ -637,13 +615,6 @@ private:
 	void TickBattleSceneEnemyPartHoverProbe(float DeltaTime);
 	void UpdateBattleSceneEnemyPartHoverProbe();
 	void ClearBattleSceneEnemyPartHoverProbe(FName Reason);
-	void AcquirePlayerControllerClickEvents();
-	void ReleasePlayerControllerClickEvents();
-	void AcquirePlayerControllerMouseOverEvents();
-	void ReleasePlayerControllerMouseOverEvents();
-	void ReleaseAllPlayerControllerInteractionEvents();
-	void ApplyFallbackPlayerControllerInteractionEvents();
-	void RestoreFallbackPlayerControllerInteractionEvents();
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
 	UWacomFirstPersonCardAnchorComponent* ResolveActiveFirstPersonCardAnchor() const;
 	void SyncFirstPersonBattleHandLayer(

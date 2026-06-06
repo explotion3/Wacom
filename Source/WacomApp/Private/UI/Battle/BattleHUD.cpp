@@ -4,8 +4,6 @@
 
 #define LOCTEXT_NAMESPACE "WacomBattleHUD"
 #include "UI/Battle/ActionPanel.h"
-#include "Actors/WacomBattle3DHandPresenter.h"
-#include "Actors/WacomBattleCardVisualActor.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "UI/Battle/EnemyInfoBar.h"
@@ -45,7 +43,6 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
-#include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "InputCoreTypes.h"
 
 #include "Input/UIActionBindingHandle.h"
@@ -214,9 +211,7 @@ void UBattleHUD::NativeDestruct()
 	}
 	ClearFirstPersonBattleHandLayer();
 	ClearBattleEnemyPartWorldTargets();
-	DestroyBattle3DHandPresenter();
 	ClearBattlePresentationTargetRegistry();
-	ReleaseAllPlayerControllerInteractionEvents();
 	if (HandPanel)
 	{
 		SyncLegacyHandPanelVisibility();
@@ -298,19 +293,6 @@ void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 	bHasLastBattleSnapshot = true;
 	GetFirstPersonHandBridge().SetTransitionSnapshot(Snap);
 
-	if (bEnable3DHandPrototype)
-	{
-		if (AWacomBattle3DHandPresenter* Presenter = EnsureBattle3DHandPresenter())
-		{
-			Presenter->RefreshFromSnapshot(Snap);
-			SyncBattle3DHandPresenterTargeting();
-		}
-	}
-	else
-	{
-		DestroyBattle3DHandPresenter();
-	}
-
 	SyncFirstPersonBattleHandLayer(Snap, FirstPersonTransitionHints);
 	SyncLegacyHandPanelVisibility();
 
@@ -361,9 +343,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 		SyncEnemyInfoBarFallbackVisibility();
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
 		ClearPendingFirstPersonCardTransitionEvents();
-		DestroyBattle3DHandPresenter();
 		ClearBattlePresentationTargetRegistry();
-		ReleaseAllPlayerControllerInteractionEvents();
 	}
 
 	// 新 Session 接入时，重置状态机到 Idle。
@@ -379,15 +359,6 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	ClearBattlePresentationStack();
 	ClearPendingTurnBoundaryCommand();
 	ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
-
-	if (bEnable3DHandPrototype && NewSession)
-	{
-		EnsureBattle3DHandPresenter();
-	}
-	else
-	{
-		DestroyBattle3DHandPresenter();
-	}
 
 	if (NewSession)
 	{
@@ -516,7 +487,6 @@ void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUISt
 
 	// 状态变化时，让 HandPanel / EnemyInfoBar / ActionPanel 重新刷一次（高亮/启用状态）。
 	UBattleSession* S = GetSession();
-	SyncBattle3DHandPresenterTargeting();
 	if (!S) { return; }
 	const FBattleSnapshot Snap = S->BuildSnapshot();
 	if (Snap.Phase == EBattlePhase::BattleEnd)
@@ -1027,78 +997,6 @@ const FHandCardSnapshot* UBattleHUD::FindLastBattleHandCardSnapshot(const FGuid&
 	return nullptr;
 }
 
-AWacomBattle3DHandPresenter* UBattleHUD::EnsureBattle3DHandPresenter()
-{
-	if (!bEnable3DHandPrototype || !GetSession())
-	{
-		DestroyBattle3DHandPresenter();
-		return nullptr;
-	}
-
-	if (IsValid(Battle3DHandPresenter))
-	{
-		return Battle3DHandPresenter;
-	}
-
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return nullptr;
-	}
-
-	TSubclassOf<AWacomBattle3DHandPresenter> PresenterClass = Battle3DHandPresenterClass;
-	if (!PresenterClass)
-	{
-		PresenterClass = AWacomBattle3DHandPresenter::StaticClass();
-	}
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.Owner = GetOwningPlayer();
-	SpawnParams.ObjectFlags |= RF_Transient;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-	AWacomBattle3DHandPresenter* Presenter = World->SpawnActor<AWacomBattle3DHandPresenter>(
-		PresenterClass.Get(),
-		FTransform::Identity,
-		SpawnParams);
-	if (!Presenter)
-	{
-		return nullptr;
-	}
-
-	Battle3DHandPresenter = Presenter;
-	AcquirePlayerControllerClickEvents();
-	AcquirePlayerControllerMouseOverEvents();
-	Presenter->SetOwningBattleHUD(this);
-	if (Battle3DCardActorClass)
-	{
-		Presenter->CardActorClass = Battle3DCardActorClass;
-	}
-	SyncBattle3DHandPresenterTargeting();
-	return Presenter;
-}
-
-void UBattleHUD::DestroyBattle3DHandPresenter()
-{
-	if (IsValid(Battle3DHandPresenter))
-	{
-		Battle3DHandPresenter->Destroy();
-	}
-	Battle3DHandPresenter = nullptr;
-	ReleasePlayerControllerClickEvents();
-	ReleasePlayerControllerMouseOverEvents();
-}
-
-void UBattleHUD::SyncBattle3DHandPresenterTargeting()
-{
-	if (!bEnable3DHandPrototype || !IsValid(Battle3DHandPresenter))
-	{
-		return;
-	}
-
-	Battle3DHandPresenter->SetTargetSelectionView(BuildTargetSelectionView());
-}
-
 FWacomBattleHUDCardDetailController& UBattleHUD::GetCardDetailController()
 {
 	if (!CardDetailController)
@@ -1228,147 +1126,6 @@ void UBattleHUD::UpdateBattleSceneEnemyPartHoverProbe()
 void UBattleHUD::ClearBattleSceneEnemyPartHoverProbe(FName Reason)
 {
 	GetSceneEnemyTargetCoordinator().ClearHoverProbe(Reason);
-}
-
-void UBattleHUD::AcquirePlayerControllerClickEvents()
-{
-	APlayerController* PC = GetOwningPlayer();
-	ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
-	UWacomInputContextCoordinatorSubsystem* InputCoordinator =
-		LP ? LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>() : nullptr;
-	if (!InputCoordinator)
-	{
-		++PlayerControllerClickEventAcquireCount;
-		ApplyFallbackPlayerControllerInteractionEvents();
-		return;
-	}
-	InputCoordinator->InitializeForPlayerController(PC);
-	InputCoordinator->AcquirePlayerControllerInteractionEvents(this, /*bClickEvents*/ true, /*bMouseOverEvents*/ false);
-	++PlayerControllerClickEventAcquireCount;
-}
-
-void UBattleHUD::ReleasePlayerControllerClickEvents()
-{
-	if (PlayerControllerClickEventAcquireCount <= 0)
-	{
-		return;
-	}
-
-	APlayerController* PC = GetOwningPlayer();
-	ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
-	UWacomInputContextCoordinatorSubsystem* InputCoordinator =
-		LP ? LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>() : nullptr;
-	if (InputCoordinator)
-	{
-		InputCoordinator->ReleasePlayerControllerInteractionEvents(this, /*bClickEvents*/ true, /*bMouseOverEvents*/ false);
-	}
-	--PlayerControllerClickEventAcquireCount;
-	if (!InputCoordinator)
-	{
-		RestoreFallbackPlayerControllerInteractionEvents();
-	}
-}
-
-void UBattleHUD::AcquirePlayerControllerMouseOverEvents()
-{
-	APlayerController* PC = GetOwningPlayer();
-	ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
-	UWacomInputContextCoordinatorSubsystem* InputCoordinator =
-		LP ? LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>() : nullptr;
-	if (!InputCoordinator)
-	{
-		++PlayerControllerMouseOverEventAcquireCount;
-		ApplyFallbackPlayerControllerInteractionEvents();
-		return;
-	}
-	InputCoordinator->InitializeForPlayerController(PC);
-	InputCoordinator->AcquirePlayerControllerInteractionEvents(this, /*bClickEvents*/ false, /*bMouseOverEvents*/ true);
-	++PlayerControllerMouseOverEventAcquireCount;
-}
-
-void UBattleHUD::ReleasePlayerControllerMouseOverEvents()
-{
-	if (PlayerControllerMouseOverEventAcquireCount <= 0)
-	{
-		return;
-	}
-
-	APlayerController* PC = GetOwningPlayer();
-	ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
-	UWacomInputContextCoordinatorSubsystem* InputCoordinator =
-		LP ? LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>() : nullptr;
-	if (InputCoordinator)
-	{
-		InputCoordinator->ReleasePlayerControllerInteractionEvents(this, /*bClickEvents*/ false, /*bMouseOverEvents*/ true);
-	}
-	--PlayerControllerMouseOverEventAcquireCount;
-	if (!InputCoordinator)
-	{
-		RestoreFallbackPlayerControllerInteractionEvents();
-	}
-}
-
-void UBattleHUD::ReleaseAllPlayerControllerInteractionEvents()
-{
-	APlayerController* PC = GetOwningPlayer();
-	ULocalPlayer* LP = PC ? PC->GetLocalPlayer() : nullptr;
-	if (UWacomInputContextCoordinatorSubsystem* InputCoordinator =
-		LP ? LP->GetSubsystem<UWacomInputContextCoordinatorSubsystem>() : nullptr)
-	{
-		InputCoordinator->ReleasePlayerControllerInteractionEvents(this);
-	}
-	PlayerControllerClickEventAcquireCount = 0;
-	PlayerControllerMouseOverEventAcquireCount = 0;
-	RestoreFallbackPlayerControllerInteractionEvents();
-}
-
-void UBattleHUD::ApplyFallbackPlayerControllerInteractionEvents()
-{
-	APlayerController* PC = GetOwningPlayer();
-	if (!PC)
-	{
-		return;
-	}
-
-	if (!bHasFallbackPlayerControllerInteractionEventState)
-	{
-		bFallbackSavedPlayerControllerClickEvents = PC->bEnableClickEvents;
-		bFallbackSavedPlayerControllerMouseOverEvents = PC->bEnableMouseOverEvents;
-		bHasFallbackPlayerControllerInteractionEventState = true;
-	}
-
-	PC->bEnableClickEvents = bFallbackSavedPlayerControllerClickEvents || PlayerControllerClickEventAcquireCount > 0;
-	PC->bEnableMouseOverEvents = bFallbackSavedPlayerControllerMouseOverEvents || PlayerControllerMouseOverEventAcquireCount > 0;
-}
-
-void UBattleHUD::RestoreFallbackPlayerControllerInteractionEvents()
-{
-	if (!bHasFallbackPlayerControllerInteractionEventState)
-	{
-		return;
-	}
-
-	APlayerController* PC = GetOwningPlayer();
-	if (!PC)
-	{
-		bHasFallbackPlayerControllerInteractionEventState = false;
-		bFallbackSavedPlayerControllerClickEvents = false;
-		bFallbackSavedPlayerControllerMouseOverEvents = false;
-		return;
-	}
-
-	if (PlayerControllerClickEventAcquireCount > 0 || PlayerControllerMouseOverEventAcquireCount > 0)
-	{
-		PC->bEnableClickEvents = bFallbackSavedPlayerControllerClickEvents || PlayerControllerClickEventAcquireCount > 0;
-		PC->bEnableMouseOverEvents = bFallbackSavedPlayerControllerMouseOverEvents || PlayerControllerMouseOverEventAcquireCount > 0;
-		return;
-	}
-
-	PC->bEnableClickEvents = bFallbackSavedPlayerControllerClickEvents;
-	PC->bEnableMouseOverEvents = bFallbackSavedPlayerControllerMouseOverEvents;
-	bHasFallbackPlayerControllerInteractionEventState = false;
-	bFallbackSavedPlayerControllerClickEvents = false;
-	bFallbackSavedPlayerControllerMouseOverEvents = false;
 }
 
 void UBattleHUD::ConsumeAndLogEvents()

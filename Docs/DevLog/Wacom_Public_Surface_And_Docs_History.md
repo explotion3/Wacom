@@ -29,7 +29,7 @@ tags:
 | V0-ED | `Source/WacomApp/Public/Actors` 中 `ConfigureDebug...Sample` 统一归到 `Wacom|...|Prototype`，并保留 Authoring / Debug 的正式分区。 |
 | V0-EE | `Docs/WacomApp.md` 和自动化测试 display name 同步为 Prototype 口径，避免 Prototype 样例入口继续被旧 Authoring 命名误导。 |
 | V0-EF | 正式 first-person battle hand interaction 的编辑器分类和新 C++ 调用口径从 Prototype 收口到 Interaction，同时保留旧成员兼容。 |
-| V0-EG | 旧 Battle 3D hand public surface 隔离到 `3D Hand|Prototype`，只保留为历史实验和 PIE 对照入口。 |
+| V0-EG | 旧 Battle 世界空间手牌 public surface 曾隔离到 prototype 分类；后续已从 runtime / tests 移除，正式主线回到 first-person card layer。 |
 | V0-EH | First-person anchor 的 legacy projection / layout、LookInfluence 和静态预览层隔离成 legacy comparison / prototype preview 口径。 |
 | V0-EI | 旧 Battle event log drawer / entry / EventToast 公开面归到 legacy compatibility，并标清 DebugBattleHUD 的 debug-only 身份。 |
 | V0-EJ | 单条 Battle event presentation builder 标成 compatibility，正式 Combat Log builder 口径补清楚。 |

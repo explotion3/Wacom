@@ -33,8 +33,6 @@ Battle / Run snapshot
 
 卡牌仍由 UMG 渲染，因此保留 HUD 级别清晰度、材质动画和 WBP 可迭代性。第一人称感来自 anchor 投影、身体 / tunnel / battle base rotation、soft clamp、hand center smoothing 和 slot motion，而不是把常驻手牌做成 `WidgetComponent`。
 
-`AWacomBattle3DHandPresenter + AWacomBattleCardVisualActor` 保留为 3D hand prototype / 对照入口。它们不作为正式手牌制作主线，也不应继续承接新的主手牌功能。
-
 ## §2 核心对象
 
 | 类型 | 职责 | 不负责 |
@@ -161,10 +159,9 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 | `LookInfluenceYaw / LookInfluencePitch` | 只服务 `LegacyWorldProjected` |
 | Static preview layer | Prototype preview，只用于 PIE / 开发验证，不是 Battle / Run runtime source |
 | `BattleHandInteractionPrototype` 旧命名 | 兼容层；新调用口径是 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()` |
-| 3D hand presenter / card actor | Prototype，默认关闭，不作为正式手牌制作入口 |
 | `UHandPanel / UCardWidget` | Legacy 2D hand fallback / 对照 |
 
-不要给 legacy projection、static preview 或 3D hand prototype 继续添加新的正式主手牌功能。真正删除旧字段、enum value、资产引用或 prototype 类需要单独做资产影响切片。
+不要给 legacy projection 或 static preview 继续添加新的正式主手牌功能。真正删除旧字段、enum value 或资产引用需要单独做资产影响切片。
 
 ## §9 `WBP_FirstPersonCardView` 制作合同
 
