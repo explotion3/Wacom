@@ -215,9 +215,15 @@ namespace Wacom::ContentBuilder
 		Enemy->EnemyId      = TEXT("Snake");
 		Enemy->DisplayName  = FText::FromString(TEXT("Snake"));
 
-		FEnemyPartSlot SlotHead; SlotHead.PartDef = Head;
-		FEnemyPartSlot SlotBody; SlotBody.PartDef = Body;
-		FEnemyPartSlot SlotTail; SlotTail.PartDef = Tail;
+		FEnemyPartSlot SlotHead;
+		SlotHead.PartSlotId = TEXT("Head");
+		SlotHead.PartDef = Head;
+		FEnemyPartSlot SlotBody;
+		SlotBody.PartSlotId = TEXT("Body");
+		SlotBody.PartDef = Body;
+		FEnemyPartSlot SlotTail;
+		SlotTail.PartSlotId = TEXT("Tail");
+		SlotTail.PartDef = Tail;
 		Enemy->Parts = { SlotHead, SlotBody, SlotTail };
 
 		SaveAssetPackage(EnemyPkg, Enemy, EnemyPkgPath);

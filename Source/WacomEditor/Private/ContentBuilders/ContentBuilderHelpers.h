@@ -21,6 +21,7 @@ namespace Wacom::ContentBuilder
 	FString CharactersRoot();
 	FString SnakeEnemiesRoot();
 	FString EventsRoot();
+	FString EncountersRoot();
 	FString ShopsRoot();
 	FString PickupsRoot();
 	FString InteractionsRoot();

@@ -2,7 +2,7 @@
 type: content-guideline
 scope: wacom-content
 status: active
-updated: 2026-05-27
+updated: 2026-06-07
 tags:
   - wacom/content
   - wacom/assets
@@ -35,6 +35,7 @@ tags:
 /Game/Wacom/Data/Cards/Rewards
 /Game/Wacom/Data/Characters
 /Game/Wacom/Data/Enemies/Snake
+/Game/Wacom/Data/Encounters
 /Game/Wacom/Data/Events
 /Game/Wacom/Data/Shops
 ```

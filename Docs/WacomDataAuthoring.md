@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-06-05
+updated: 2026-06-07
 tags:
   - wacom/data
   - wacom/authoring
@@ -27,7 +27,7 @@ tags:
 | Battle authoring matrix | 说明当前可写入 DataAsset 并能被 resolver 执行的规则组合 | 自动开放所有已声明 Gameplay tag |
 | 自动化测试 | 防止生成资产、validator 和 runtime resolver 漂移 | 正式内容设计审核 |
 
-静态 Definition 的 `ShopId / EventId / PickupId / InteractionId` 是内容识别 ID。场景运行时状态使用 Actor `PersistentId`，不要用静态 ID 替代。
+静态 Definition 的 `EncounterDefinitionId / ShopId / EventId / PickupId / InteractionId` 是内容识别 ID。场景运行时状态使用 Actor `PersistentId`，不要用静态 ID 替代。
 
 ## §2 内容生成 Commandlet
 
@@ -42,6 +42,7 @@ Builder 当前职责：
 | Builder | 产物 |
 |---|---|
 | `BuildSnakeContent()` | 蛇敌人、三部位、奖励卡 `DA_Card_PoisonFang` |
+| `BuildEncounterContent()` | `DA_Encounter_SnakeSingle`，正式单蛇战斗入口样例 |
 | `BuildBugGirlContent()` | 虫妹角色、左右手、伙伴初始牌、容器 / 功能卡、starter pack、debug key、卡对卡测试卡、badge 测试卡 |
 | `BuildShopContent()` | `DA_Shop_DebugSnake`，正式调试商品保留原价，测试 / 调试卡统一 0 金币 |
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
@@ -71,6 +72,7 @@ Builder 当前职责：
 |---|---|
 | `DA_Enemy_Snake` | 蛇敌人，包含 Head / Body / Tail 三个部位 |
 | 蛇部位 | Head / Body / Tail 配置 HP、经验、毒牙奖励和 V1 意图变体 |
+| `DA_Encounter_SnakeSingle` | 正式单蛇 Encounter 样例，`EncounterDefinitionId=Encounter.Snake.Single`，`EnemySlots[0]=Enemy -> DA_Enemy_Snake` |
 | `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡和 badge 测试卡 |
 | `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力 / 节点效果 |
 | `DA_Event_DebugFlagReward` | RunFlag 与 `MinGold + AddGold(-N)` 组合样例 |
@@ -91,6 +93,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 | `UWacomEnemyPartDefinitionValidator` | `UEnemyPartDefinition` | `FWacomEnemyPartDefinitionValidation::Validate()` |
 | `UWacomEnemyDefinitionValidator` | `UEnemyDefinition` | `FWacomEnemyDefinitionValidation::Validate()` |
 | `UWacomCharacterDefinitionValidator` | `UCharacterDefinition` | `FWacomCharacterDefinitionValidation::Validate()` |
+| `UWacomEncounterDefinitionValidator` | `UEncounterDefinition` | `FWacomEncounterDefinitionValidation::Validate()` |
 | `UWacomShopDefinitionValidator` | `UShopDefinition` | `FWacomShopDefinitionValidation::Validate()` |
 | `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
 | `UWacomRunPickupDefinitionValidator` | `UWacomRunPickupDefinition` | `FWacomRunPickupDefinitionValidation::Validate()` |
@@ -112,7 +115,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 | 测试入口 | 目的 |
 |---|---|
-| `Wacom.Data.GeneratedContent.DefinitionAssetValidation` | 读取生成角色、卡牌、Snake 敌人与部位，并统一跑 DataAsset validator |
+| `Wacom.Data.GeneratedContent.DefinitionAssetValidation` | 读取生成角色、卡牌、Snake 敌人与部位、单蛇 Encounter，并统一跑 DataAsset validator |
 | `Wacom.Data.BattleStarterContent.StarterPackAssetValidation` | 检查 starter pack 核心字段、BugGirl 初始牌组排除关系、测试卡不进入 StarterDeck 和 Snake 意图变体 |
 | `Wacom.Data.BattleStarterContent.BadgeDisplayTestCardAssetValidation` | 检查 badge 测试卡、DebugSnake 商店 0 金币出售和 CardPresentationBuilder badge view |
 | `Wacom.Data.Shop.DebugSnakeAssetValidation` | 验证 DebugSnake 商店能通过 validator |

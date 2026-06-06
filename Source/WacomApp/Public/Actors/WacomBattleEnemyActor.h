@@ -76,7 +76,13 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 	TArray<FName> UnknownPartIds;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	TArray<FName> UnknownPartSlotIds;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	TArray<FName> MissingDefinitionPartIds;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	TArray<FName> MissingDefinitionPartSlotIds;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	TArray<FName> DuplicateSlotPartIds;
@@ -216,9 +222,13 @@ private:
 	void SyncExplicitPartSlotsToActors() const;
 	void SyncHostIdentityToPartActors() const;
 	TSet<FName> BuildDefinitionPartIdSet() const;
+	TSet<FName> BuildDefinitionPartSlotIdSet() const;
 	TArray<FName> BuildConfiguredPartIds() const;
+	TArray<FName> BuildConfiguredPartSlotIds() const;
 	TArray<FName> BuildUnknownPartIds() const;
+	TArray<FName> BuildUnknownPartSlotIds() const;
 	TArray<FName> BuildMissingDefinitionPartIds() const;
+	TArray<FName> BuildMissingDefinitionPartSlotIds() const;
 	TArray<FName> BuildDuplicateSlotPartIds() const;
 	TArray<FName> BuildDuplicateConfiguredPartSlotIds() const;
 	int32 CountNullSlotActors() const;

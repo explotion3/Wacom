@@ -56,6 +56,11 @@ namespace Wacom::ContentBuilder
 		return DataRoot() / TEXT("Events");
 	}
 
+	FString EncountersRoot()
+	{
+		return DataRoot() / TEXT("Encounters");
+	}
+
 	FString ShopsRoot()
 	{
 		return DataRoot() / TEXT("Shops");

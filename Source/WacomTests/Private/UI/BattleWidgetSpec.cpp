@@ -150,6 +150,39 @@ namespace WacomBattleWidgetSpec
 		return false;
 	}
 
+	struct FSlotIdentityEnemyDefinitionFixture
+	{
+		TStrongObjectPtr<UEnemyDefinition> Enemy;
+		TArray<TStrongObjectPtr<UEnemyPartDefinition>> Parts;
+	};
+
+	FSlotIdentityEnemyDefinitionFixture MakeSlotIdentityEnemyDefinition()
+	{
+		FSlotIdentityEnemyDefinitionFixture Result;
+		Result.Enemy.Reset(NewObject<UEnemyDefinition>(GetTransientPackage(), NAME_None, RF_Transient));
+		Result.Enemy->EnemyId = TEXT("Test.Enemy.SlotIdentity");
+
+		const TArray<TPair<FName, FName>> PartSpecs = {
+			{ TEXT("Snake.Head"), TEXT("Head") },
+			{ TEXT("Snake.Body"), TEXT("Body") },
+			{ TEXT("Snake.Tail"), TEXT("Tail") }
+		};
+		for (const TPair<FName, FName>& PartSpec : PartSpecs)
+		{
+			UEnemyPartDefinition* Part =
+				NewObject<UEnemyPartDefinition>(GetTransientPackage(), NAME_None, RF_Transient);
+			Part->PartId = PartSpec.Key;
+			Part->MaxHp = 20;
+			Result.Parts.Add(TStrongObjectPtr<UEnemyPartDefinition>(Part));
+
+			FEnemyPartSlot Slot;
+			Slot.PartSlotId = PartSpec.Value;
+			Slot.PartDef = Part;
+			Result.Enemy->Parts.Add(Slot);
+		}
+		return Result;
+	}
+
 	struct FSceneEnemyHostActors
 	{
 		AWacomBattleEnemyActor* Host = nullptr;
@@ -4476,6 +4509,181 @@ bool FWacomUIBattleSceneEnemyHostMissingDefinitionPartValidationSpec::RunTest(co
 	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
 	TestTrue(TEXT("Debug missing body"), View.MissingDefinitionPartIds.Contains(TEXT("Test.Part.Body")));
 	TestTrue(TEXT("Debug missing tail"), View.MissingDefinitionPartIds.Contains(TEXT("Test.Part.Tail")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostPartSlotIdentityValidationSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostValidatesPartSlotIdentityContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostPartSlotIdentityValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	WacomBattleWidgetSpec::FSlotIdentityEnemyDefinitionFixture EnemyFixture =
+		WacomBattleWidgetSpec::MakeSlotIdentityEnemyDefinition();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host =
+		World->SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Head =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(100.f, 0.f, 0.f)),
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Body =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(200.f, 0.f, 0.f)),
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Tail =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(300.f, 0.f, 0.f)),
+			SpawnParams);
+	if (!TestNotNull(TEXT("Host"), Host)
+		|| !TestNotNull(TEXT("Head"), Head)
+		|| !TestNotNull(TEXT("Body"), Body)
+		|| !TestNotNull(TEXT("Tail"), Tail))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Tail))
+		{
+			Tail->Destroy();
+		}
+		if (IsValid(Body))
+		{
+			Body->Destroy();
+		}
+		if (IsValid(Head))
+		{
+			Head->Destroy();
+		}
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	Host->EnemyDefinition = EnemyFixture.Enemy.Get();
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Snake.Head"), TEXT("Head"), Head);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Snake.Body"), TEXT("Body"), Body);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Snake.Tail"), TEXT("Tail"), Tail);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		WacomBattleWidgetSpec::ValidateObjectForTest(Host, Warnings, Errors);
+	TestEqual(TEXT("Slot identity host validates cleanly"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("No slot identity validation errors"), Errors.Num(), 0);
+	TestEqual(TEXT("No slot identity validation warnings"), Warnings.Num(), 0);
+	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
+	TestEqual(TEXT("No unknown part slot ids"), View.UnknownPartSlotIds.Num(), 0);
+	TestEqual(TEXT("No missing definition part slot ids"), View.MissingDefinitionPartSlotIds.Num(), 0);
+	TestTrue(TEXT("Summary reports authored part slots"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("PartSlotIds=[Head,Body,Tail]")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostPartSlotMismatchValidationSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostWarnsWhenPartIdsMatchButPartSlotIdsMismatch",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostPartSlotMismatchValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	WacomBattleWidgetSpec::FSlotIdentityEnemyDefinitionFixture EnemyFixture =
+		WacomBattleWidgetSpec::MakeSlotIdentityEnemyDefinition();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host =
+		World->SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Head =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(100.f, 0.f, 0.f)),
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Body =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(200.f, 0.f, 0.f)),
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Tail =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(300.f, 0.f, 0.f)),
+			SpawnParams);
+	if (!TestNotNull(TEXT("Host"), Host)
+		|| !TestNotNull(TEXT("Head"), Head)
+		|| !TestNotNull(TEXT("Body"), Body)
+		|| !TestNotNull(TEXT("Tail"), Tail))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Tail))
+		{
+			Tail->Destroy();
+		}
+		if (IsValid(Body))
+		{
+			Body->Destroy();
+		}
+		if (IsValid(Head))
+		{
+			Head->Destroy();
+		}
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	Host->EnemyDefinition = EnemyFixture.Enemy.Get();
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Snake.Head"), TEXT("Snake.Head"), Head);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Snake.Body"), TEXT("Snake.Body"), Body);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Snake.Tail"), TEXT("Snake.Tail"), Tail);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		WacomBattleWidgetSpec::ValidateObjectForTest(Host, Warnings, Errors);
+	TestEqual(TEXT("Part slot mismatch stays warning-level"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("No part slot mismatch validation errors"), Errors.Num(), 0);
+	TestTrue(TEXT("Warning mentions unknown authored slot"),
+		WacomBattleWidgetSpec::ValidationIssuesContain(Warnings, TEXT("Snake.Head")));
+	TestTrue(TEXT("Warning mentions missing definition slot"),
+		WacomBattleWidgetSpec::ValidationIssuesContain(Warnings, TEXT("Head")));
+	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
+	TestEqual(TEXT("Part ids still match definition"), View.UnknownPartIds.Num(), 0);
+	TestEqual(TEXT("No definition part id missing"), View.MissingDefinitionPartIds.Num(), 0);
+	TestTrue(TEXT("Debug unknown authored part slot"), View.UnknownPartSlotIds.Contains(TEXT("Snake.Head")));
+	TestTrue(TEXT("Debug missing definition part slot"), View.MissingDefinitionPartSlotIds.Contains(TEXT("Head")));
+	TestTrue(TEXT("Summary reports missing slot ids"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("MissingDefinitionPartSlotIds=[Head,Body,Tail]")));
 	return true;
 }
 

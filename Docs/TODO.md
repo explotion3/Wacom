@@ -79,7 +79,7 @@ tags:
   - 状态：`In Progress: 表现 polish`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：PartActor 已支持多 PaperSprite 视觉层，Host 已提供 Debug 蛇样例配置入口；后续集中在正式蛇 Host 蓝图 prefab 资产、正式 sprite 美术样式、材质描边、贴近部位 tooltip、风险动效和 Status Badge 美术替换。
+  - 说明：PartActor 已支持多 PaperSprite 视觉层，Host 已提供 Debug 蛇样例配置入口，`DA_Encounter_SnakeSingle` 已作为正式单蛇 Encounter 样例；后续集中在正式蛇 Host 蓝图 prefab 美术保存、正式 sprite 样式、材质描边、贴近部位 tooltip、风险动效和 Status Badge 美术替换。
 
 - [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
 	- 状态：`Done: Trigger 已接线`

@@ -9,6 +9,7 @@ class UCardDefinition;
 class UCharacterDefinition;
 class UEnemyDefinition;
 class UEnemyPartDefinition;
+class UEncounterDefinition;
 class UShopDefinition;
 
 struct FWacomGeneratedBattleContentShopOfferExpectation
@@ -60,6 +61,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static const TCHAR* SnakeHeadPath();
 	static const TCHAR* SnakeBodyPath();
 	static const TCHAR* SnakeTailPath();
+	static const TCHAR* SnakeSingleEncounterPath();
 	static const TCHAR* DebugSnakeShopPath();
 
 	static TArray<const TCHAR*> StarterPackCardPaths();
@@ -106,6 +108,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static UEnemyPartDefinition* LoadSnakeBody(FAutomationTestBase& Test);
 	static UEnemyPartDefinition* LoadSnakeTail(FAutomationTestBase& Test);
 	static TArray<UEnemyPartDefinition*> LoadSnakeParts(FAutomationTestBase& Test);
+	static UEncounterDefinition* LoadSnakeSingleEncounter(FAutomationTestBase& Test);
 
 	static UShopDefinition* LoadDebugSnakeShop(FAutomationTestBase& Test);
 };

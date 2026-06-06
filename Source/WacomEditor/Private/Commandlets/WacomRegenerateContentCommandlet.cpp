@@ -2,6 +2,7 @@
 
 #include "Commandlets/WacomRegenerateContentCommandlet.h"
 #include "ContentBuilders/BugGirlBuilder.h"
+#include "ContentBuilders/EncounterBuilder.h"
 #include "ContentBuilders/RunPickupBlueprintBuilder.h"
 #include "ContentBuilders/RunPickupDefinitionBuilder.h"
 #include "ContentBuilders/RunWorldCardInteractionDefinitionBuilder.h"
@@ -10,6 +11,7 @@
 #include "ContentBuilders/SnakeBuilder.h"
 
 #include "Characters/CharacterDefinition.h"
+#include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Events/RunEventDefinition.h"
 #include "Engine/Blueprint.h"
@@ -36,6 +38,14 @@ int32 UWacomRegenerateContentCommandlet::Main(const FString& /*Params*/)
 		return 1;
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Snake built"));
+
+	UEncounterDefinition* SnakeEncounter = Wacom::ContentBuilder::BuildEncounterContent(Snake);
+	if (!SnakeEncounter)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomRegenerateContent] BuildEncounterContent failed"));
+		return 8;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Encounters built"));
 
 	UCharacterDefinition* BugGirl = Wacom::ContentBuilder::BuildBugGirlContent();
 	if (!BugGirl)

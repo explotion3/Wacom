@@ -6,6 +6,7 @@
 #include "Cards/CardPassive.h"
 #include "Cards/CardZoneHook.h"
 #include "Characters/CharacterDefinition.h"
+#include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
@@ -19,6 +20,7 @@
 #include "Validation/CharacterDefinitionValidation.h"
 #include "Validation/EnemyDefinitionValidation.h"
 #include "Validation/EnemyPartDefinitionValidation.h"
+#include "Validation/EncounterDefinitionValidation.h"
 
 #include "UObject/StrongObjectPtr.h"
 
@@ -119,6 +121,11 @@ namespace
 	bool ValidateCharacterForTest(const UCharacterDefinition* Character, TArray<FText>& OutErrors)
 	{
 		return FWacomCharacterDefinitionValidation::Validate(Character, OutErrors);
+	}
+
+	bool ValidateEncounterForTest(const UEncounterDefinition* Encounter, TArray<FText>& OutErrors)
+	{
+		return FWacomEncounterDefinitionValidation::Validate(Encounter, OutErrors);
 	}
 
 	bool ErrorsContain(const TArray<FText>& Errors, const FString& Needle)
@@ -777,6 +784,8 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	UEnemyPartDefinition* SnakeHead = FWacomGeneratedBattleContentAssets::LoadSnakeHead(*this);
 	UEnemyPartDefinition* SnakeBody = FWacomGeneratedBattleContentAssets::LoadSnakeBody(*this);
 	UEnemyPartDefinition* SnakeTail = FWacomGeneratedBattleContentAssets::LoadSnakeTail(*this);
+	UEncounterDefinition* SnakeSingleEncounter =
+		FWacomGeneratedBattleContentAssets::LoadSnakeSingleEncounter(*this);
 
 	bool bAllAssetsLoaded = true;
 	bAllAssetsLoaded &= TestNotNull(TEXT("BugGirl character asset loads"), BugGirl);
@@ -784,6 +793,7 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake head part asset loads"), SnakeHead);
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake body part asset loads"), SnakeBody);
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake tail part asset loads"), SnakeTail);
+	bAllAssetsLoaded &= TestNotNull(TEXT("Snake single encounter asset loads"), SnakeSingleEncounter);
 
 	TArray<UCardDefinition*> GeneratedCards;
 	for (const TCHAR* CardAssetPath : FWacomGeneratedBattleContentAssets::GeneratedDefinitionCardPaths())
@@ -814,6 +824,12 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	Errors.Reset();
 	TestTrue(TEXT("Snake enemy asset passes validation"), ValidateEnemyForTest(Snake, Errors));
 	TestEqual(TEXT("Snake enemy validation errors"), Errors.Num(), 0);
+	if (Snake && Snake->Parts.Num() == 3)
+	{
+		TestEqual(TEXT("Snake head slot id"), Snake->Parts[0].PartSlotId, FName(TEXT("Head")));
+		TestEqual(TEXT("Snake body slot id"), Snake->Parts[1].PartSlotId, FName(TEXT("Body")));
+		TestEqual(TEXT("Snake tail slot id"), Snake->Parts[2].PartSlotId, FName(TEXT("Tail")));
+	}
 
 	Errors.Reset();
 	TestTrue(TEXT("Snake head asset passes validation"), ValidateEnemyPartForTest(SnakeHead, Errors));
@@ -826,6 +842,22 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	Errors.Reset();
 	TestTrue(TEXT("Snake tail asset passes validation"), ValidateEnemyPartForTest(SnakeTail, Errors));
 	TestEqual(TEXT("Snake tail validation errors"), Errors.Num(), 0);
+
+	Errors.Reset();
+	TestTrue(TEXT("Snake single encounter asset passes validation"),
+		ValidateEncounterForTest(SnakeSingleEncounter, Errors));
+	TestEqual(TEXT("Snake single encounter validation errors"), Errors.Num(), 0);
+	if (SnakeSingleEncounter && SnakeSingleEncounter->EnemySlots.Num() == 1)
+	{
+		TestEqual(TEXT("Snake encounter id"),
+			SnakeSingleEncounter->EncounterDefinitionId,
+			FName(TEXT("Encounter.Snake.Single")));
+		TestEqual(TEXT("Snake encounter enemy slot"),
+			SnakeSingleEncounter->EnemySlots[0].EnemySlotId,
+			FName(TEXT("Enemy")));
+		TestTrue(TEXT("Snake encounter references Snake enemy"),
+			SnakeSingleEncounter->EnemySlots[0].EnemyDefinition.Get() == Snake);
+	}
 
 	return true;
 }

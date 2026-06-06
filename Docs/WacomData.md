@@ -240,7 +240,9 @@ struct FEncounterEnemySlot
 | `EnemySlotId` | Encounter 内稳定敌人槽 ID；后续映射到 Battle `EnemySlotId`，参与多敌人部位身份 |
 | `EnemyDefinition` | 敌人槽使用的静态敌人定义；不同槽可以引用同一个敌人定义 |
 
-当前 `UEncounterDefinition` 仍只是静态数据合同，不保存运行态进度。正式场景入口由 `ABattleTriggerActor.EncounterDefinition` 引用它；进入战斗时 App 层把 `EnemySlots` 转换为 `FBattleInitParams.EnemySlots`。Battle 仍只消费 `FBattleInitParams`，Run 仍用场景 Trigger 的 `PersistentId` 作为撤离重入进度 key，不直接持有 Encounter 资产。
+当前 `UEncounterDefinition` 是静态数据合同，不保存运行态进度。正式场景入口由 `ABattleTriggerActor.EncounterDefinition` 引用它；进入战斗时 App 层把 `EnemySlots` 转换为 `FBattleInitParams.EnemySlots`。Battle 仍只消费 `FBattleInitParams`，Run 仍用场景 Trigger 的 `PersistentId` 作为撤离重入进度 key，不直接持有 Encounter 资产。
+
+当前生成内容包含 `DA_Encounter_SnakeSingle`：`EncounterDefinitionId=Encounter.Snake.Single`，单个 `EnemySlotId=Enemy` 引用 `DA_Enemy_Snake`。这是正式单蛇入口样例；关卡 Trigger 应优先引用该 Encounter，再用 `SceneEnemyHostSlots[Enemy]` 绑定场景中的 Snake Host prefab。
 
 ## §6 Character Definition
 
