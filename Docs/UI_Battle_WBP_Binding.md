@@ -52,14 +52,14 @@ WBP 不应做：
 - 不绑定旧 `HandPanel` 或 `CardDetailLayer` 作为 BattleHUD runtime 路径。
 - 不直接 Push 击倒弹窗、直接消费 `FBattleEvent`、提交 Battle 规则命令或维护表现队列。
 - 不把 `BattlePresentationStack` 做成可点击、可拖拽或规则栈。
-- 不用 `EnemyInfoBar` 承接新的 HD-2D 场景敌人制作；正式场景敌人走 `SceneEnemyHost + AWacomBattleEnemyActor.PartSlots + PartActor`。
+- 不用 `EnemyInfoBar` 承接新的 HD-2D 场景敌人制作；正式场景敌人走 `SceneEnemyHostSlots + AWacomBattleEnemyActor` prefab，并由 Host 蓝图/子 Actor 自动扫描 PartActor。旧 `SceneEnemyHost` 只作为单敌人 fallback。
 
 最小 PIE 验收：
 
 - 玩家状态、牌堆数量、ActionPanel 和 CombatLogFeed 在 Snapshot 刷新后显示。
 - `CombatLogFeed` 可滚动，连续出牌后能查看最近命令块。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
-- 有 `SceneEnemyHost` 的战斗默认不依赖 `EnemyInfoBar` 阅读敌方状态。
+- 有 `SceneEnemyHostSlots` 或旧 `SceneEnemyHost` 的战斗默认不依赖 `EnemyInfoBar` 阅读敌方状态。
 
 当前 `FBattleSnapshot.PileCounts` 额外公开 `PlayedCount`（本回合使用牌堆数量）。本轮 WBP 合同不要求新增 `PlayedPileView`，正式 HUD 仍只绑定并显示抽牌堆、弃牌堆和消耗牌堆三项；`UBattleHUD` 会把 `DiscardCount` 与 `PlayedCount` 合并显示在 `DiscardPileView` 上，`PlayedCount > 0` 时显示为类似 `2+3` 的复合数量。
 
@@ -292,7 +292,7 @@ WBP 不应做：
 
 父类：`UEnemyInfoBar`
 
-用途：legacy 2D enemy fallback / debug。正式敌方场景表现优先使用 `SceneEnemyHost + AWacomBattleEnemyActor.PartSlots + AWacomBattleEnemyPartActor`；有 `SceneEnemyHost` 时 BattleHUD 默认隐藏该 fallback。
+用途：legacy 2D enemy fallback / debug。正式敌方场景表现优先使用 `SceneEnemyHostSlots + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor` prefab 路径；有 `SceneEnemyHostSlots` 或旧 `SceneEnemyHost` 时 BattleHUD 默认隐藏该 fallback。
 
 推荐绑定：
 
@@ -342,5 +342,5 @@ WBP 不应做：
 - `WaitButton / EndTurnButton` 可点击并由 HUD 状态控制可用性。
 - `WBP_FirstPersonCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
-- 有 `SceneEnemyHost` 的战斗中，Host `PartSlots` 绑定的 PartActor Status Badge 可读，`EnemyInfoBar` 只作为 fallback/debug。
+- 有 `SceneEnemyHostSlots` 或旧 `SceneEnemyHost` 的战斗中，Host prefab 扫描到的 PartActor Status Badge 可读，`EnemyInfoBar` 只作为 fallback/debug。
 - 旧 `WBP_CardWidget / WBP_HandPanel` 已删除；`WBP_EnemyInfoBar / WBP_EnemyPartWidget` 仍可用于敌方 2D fallback/debug，但不作为新制作主线。

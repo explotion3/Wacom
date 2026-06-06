@@ -33,7 +33,7 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 	{
 		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoCharacter"));
 	}
-	if (!Params.Enemy)
+	if (!Params.Enemy && Params.EnemySlots.IsEmpty())
 	{
 		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoEnemy"));
 	}

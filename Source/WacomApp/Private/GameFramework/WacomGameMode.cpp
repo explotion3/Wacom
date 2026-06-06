@@ -7,6 +7,7 @@
 #include "EngineUtils.h"
 
 #include "Characters/CharacterDefinition.h"
+#include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Session/BattleSession.h"
 
@@ -25,6 +26,31 @@
 
 const FString AWacomGameMode::SlotName_Main = TEXT("Main");
 const FString AWacomGameMode::SlotName_Auto = TEXT("Auto");
+
+namespace
+{
+	int32 CountBattleEnemySlotParts(const TArray<FBattleEnemySlotInit>& EnemySlots)
+	{
+		int32 Count = 0;
+		for (const FBattleEnemySlotInit& Slot : EnemySlots)
+		{
+			if (Slot.Enemy)
+			{
+				Count += Slot.Enemy->Parts.Num();
+			}
+		}
+		return Count;
+	}
+
+	int32 CountBattleInitEnemyParts(const FBattleInitParams& Params)
+	{
+		if (Params.EnemySlots.Num() > 0)
+		{
+			return CountBattleEnemySlotParts(Params.EnemySlots);
+		}
+		return Params.Enemy ? Params.Enemy->Parts.Num() : 0;
+	}
+}
 
 AWacomGameMode::AWacomGameMode()
 {
@@ -271,9 +297,10 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 		UE_LOG(LogTemp, Warning, TEXT("[WacomGameMode] EnterBattle 被重复调用，忽略"));
 		return;
 	}
-	if (!EnemyDef)
+	UEnemyDefinition* ResolvedEnemyDef = Trigger ? Trigger->ResolveBattleEnemyDefinition() : EnemyDef;
+	if (!ResolvedEnemyDef)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomGameMode] EnterBattle 缺少 EnemyDef，忽略"));
+		UE_LOG(LogTemp, Warning, TEXT("[WacomGameMode] EnterBattle 缺少有效 EnemyDef / EncounterDefinition，忽略"));
 		return;
 	}
 	if (!DefaultCharacter)
@@ -309,18 +336,35 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 
 	// 1) 创建 BattleSession + Initialize
 	ActiveSession = NewObject<UBattleSession>(this);
+	int32 EnterBattleEnemySlotCount = 0;
 	{
 		FBattleInitParams Params;
 
 		// 优先从 RunSession 构造（含角色 / 种子 / 撤离持久化的破坏部位）；
 		// 若 Run 未就绪则回退到 GameMode 字段。
 		const FName TriggerPersistentId = Trigger ? Trigger->PersistentId : NAME_None;
-		if (!Run || !Run->BuildInitParamsForBattle(EnemyDef, TriggerPersistentId, Params))
+		if (!Run || !Run->BuildInitParamsForBattle(ResolvedEnemyDef, TriggerPersistentId, Params))
 		{
 			Params.Character  = DefaultCharacter;
-			Params.Enemy      = EnemyDef;
+			Params.Enemy      = ResolvedEnemyDef;
+			Params.EncounterId = TriggerPersistentId.IsNone()
+				? FName(TEXT("Encounter"))
+				: TriggerPersistentId;
 			Params.RandomSeed = DefaultRandomSeed;
 		}
+
+		if (Trigger)
+		{
+			TArray<FBattleEnemySlotInit> EncounterEnemySlots;
+			Trigger->BuildBattleEnemySlots(EncounterEnemySlots);
+			if (EncounterEnemySlots.Num() > 0)
+			{
+				Params.Enemy = ResolvedEnemyDef;
+				Params.EnemySlots = MoveTemp(EncounterEnemySlots);
+			}
+		}
+		PendingBattleTotalPartCount = CountBattleInitEnemyParts(Params);
+		EnterBattleEnemySlotCount = Params.EnemySlots.Num() > 0 ? Params.EnemySlots.Num() : 1;
 
 		const FWacomStatus Status = ActiveSession->Initialize(Params);
 		if (!Status.IsOk())
@@ -352,7 +396,12 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	}
 
 	BattleHUD->SetSession(ActiveSession);
-	BattleHUD->SetBattleSceneEnemyHost(Trigger ? Trigger->SceneEnemyHost : nullptr);
+	TArray<AWacomBattleEnemyActor*> SceneEnemyHosts;
+	if (Trigger)
+	{
+		Trigger->BuildBattleSceneEnemyHosts(SceneEnemyHosts);
+	}
+	BattleHUD->SetBattleSceneEnemyHosts(SceneEnemyHosts);
 
 	// 订阅战斗结束广播
 	BattleEndedHandle = BattleHUD->OnBattleEndedNative.AddUObject(
@@ -385,7 +434,7 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	// 5) 记录状态
 	CurrentState        = EGameFlowState::Battle;
 	PendingTrigger      = Trigger;
-	PendingEnemyDefForRun = EnemyDef;
+	PendingEnemyDefForRun = ResolvedEnemyDef;
 
 	// 战斗期间 Toast 应隐藏（即便候选列表非空）。
 	if (AWacomPlayerController* WPC = Cast<AWacomPlayerController>(PC))
@@ -396,8 +445,9 @@ void AWacomGameMode::EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor
 	// 让 HUD 立即刷出初始 Snapshot
 	BattleHUD->RefreshFromSnapshot(ActiveSession->BuildSnapshot());
 
-	UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] EnterBattle 完成：EnemyDef=%s"),
-		*GetNameSafe(EnemyDef));
+	UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] EnterBattle 完成：EnemyDef=%s EncounterSlots=%d"),
+		*GetNameSafe(ResolvedEnemyDef),
+		EnterBattleEnemySlotCount);
 }
 
 void AWacomGameMode::HandleBattleEnded(EBattleOutcome Outcome)
@@ -489,8 +539,11 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		// 若异常路径产生"撤离但所有部位都已毁"，也按胜利清理，避免留下空血敌人反复重入。
 		// 正常规则层会在最后一个存活部位被击倒时禁用撤离。
 		// 失败 / 未定场景也不销毁。
-		const bool bAllPartsDestroyed = PendingEnemyDefForRun
-			&& Packet.DestroyedPartIds.Num() >= PendingEnemyDefForRun->Parts.Num();
+		const int32 DestroyedPartCount = Packet.DestroyedParts.Num() > 0
+			? Packet.DestroyedParts.Num()
+			: Packet.DestroyedPartIds.Num();
+		const bool bAllPartsDestroyed = PendingBattleTotalPartCount > 0
+			&& DestroyedPartCount >= PendingBattleTotalPartCount;
 		const bool bRealVictory = (Packet.Outcome == EBattleOutcome::Victory)
 			&& (!Packet.bWithdrawn || bAllPartsDestroyed);
 
@@ -522,6 +575,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		}
 	}
 	PendingEnemyDefForRun = nullptr;
+	PendingBattleTotalPartCount = 0;
 
 	// 5) 状态复位
 	CurrentState = EGameFlowState::Exploration;

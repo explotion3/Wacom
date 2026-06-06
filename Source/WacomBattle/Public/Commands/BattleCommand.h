@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Types/WacomEnums.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "BattleCommand.generated.h"
 
 /**
@@ -50,6 +51,14 @@ struct WACOMBATTLE_API FBattleCommand
 	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
 	FGuid TargetPartInstanceId;
 
+	/** 目标敌人槽位 ID。TargetPartInstanceId 为空时可用于解析目标部位。 */
+	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
+	FName TargetEnemySlotId = NAME_None;
+
+	/** 目标部位槽位 ID。TargetPartInstanceId 为空时可用于解析目标部位。 */
+	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
+	FName TargetPartSlotId = NAME_None;
+
 	/** 目标手牌的运行时实例 ID。仅 TargetMode == HandCard 的 PlayCard 使用。 */
 	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
 	FGuid TargetCardInstanceId;
@@ -66,6 +75,19 @@ struct WACOMBATTLE_API FBattleCommand
 		Cmd.Type = EBattleCommandType::PlayCard;
 		Cmd.CardInstanceId = InCardInstanceId;
 		Cmd.TargetPartInstanceId = InTargetPartInstanceId;
+		return Cmd;
+	}
+
+	static FBattleCommand MakePlayCardOnPartSlot(
+		const FGuid& InCardInstanceId,
+		FName InTargetEnemySlotId,
+		FName InTargetPartSlotId)
+	{
+		FBattleCommand Cmd;
+		Cmd.Type = EBattleCommandType::PlayCard;
+		Cmd.CardInstanceId = InCardInstanceId;
+		Cmd.TargetEnemySlotId = InTargetEnemySlotId;
+		Cmd.TargetPartSlotId = InTargetPartSlotId;
 		return Cmd;
 	}
 

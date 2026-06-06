@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 
 #include "BattleTargetValidationResult.generated.h"
 
@@ -25,6 +26,7 @@ enum class EWacomBattleTargetRejectReason : uint8
 	MissingRequiredTargetKeyword UMETA(DisplayName = "MissingRequiredTargetKeyword"),
 	BlockedTargetKeyword UMETA(DisplayName = "BlockedTargetKeyword"),
 	UnsupportedZoneTarget UMETA(DisplayName = "UnsupportedZoneTarget"),
+	TargetIdentityMismatch UMETA(DisplayName = "TargetIdentityMismatch"),
 };
 
 USTRUCT(BlueprintType)
@@ -37,6 +39,12 @@ struct WACOMBATTLE_API FWacomBattleTargetValidationResult
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Target")
 	EWacomBattleTargetRejectReason RejectReason = EWacomBattleTargetRejectReason::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Target")
+	FGuid ResolvedPartInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Target")
+	FBattlePartSlotIdentity ResolvedPartIdentity;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Target")
 	FString DebugSummary;

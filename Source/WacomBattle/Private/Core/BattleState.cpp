@@ -23,6 +23,7 @@ void FBattleState::RecordPartDestroyed(FRuntimeEnemyPart& Part, FBattleEventBus&
 	{
 		FKnockdownExpGain Gain;
 		Gain.PartId    = PartId;
+		Gain.Identity  = Part.Identity;
 		Gain.ExpAmount = ExpAmount;
 		PendingKnockdownExpGains.Add(Gain);
 	}
@@ -32,11 +33,13 @@ void FBattleState::RecordPartDestroyed(FRuntimeEnemyPart& Part, FBattleEventBus&
 	{
 		DestroyedPartIds.Add(PartId);
 	}
+	DestroyedParts.AddUnique(Part.Identity);
 
 	// 4) 入队等玩家三选一
 	FPendingKnockdownEvent Event;
 	Event.PartInstanceId = Part.InstanceId;
 	Event.PartId         = PartId;
+	Event.Identity       = Part.Identity;
 
 	// 击倒事件的左/右手分支是事件选项，不依赖左右手锚点当前是否仍在手牌区。
 	Event.bLeftHandAvailable  = true;

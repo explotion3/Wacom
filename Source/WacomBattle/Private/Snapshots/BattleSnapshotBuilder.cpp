@@ -14,6 +14,46 @@
 
 namespace
 {
+	FEnemyPartSnapshot BuildEnemyPartSnapshot(const FRuntimeEnemyPart& Part)
+	{
+		FEnemyPartSnapshot PartSnap;
+		PartSnap.InstanceId        = Part.InstanceId;
+		PartSnap.Definition        = Part.Definition;
+		PartSnap.Identity          = Part.Identity;
+		PartSnap.EncounterId       = Part.Identity.GetEffectiveEncounterId();
+		PartSnap.EnemySlotId       = Part.Identity.GetEffectiveEnemySlotId();
+		PartSnap.PartSlotId        = Part.Identity.GetEffectivePartSlotId();
+		PartSnap.PartDefinitionId  = Part.Identity.PartDefinitionId;
+		PartSnap.CurrentHp         = Part.CurrentHp;
+		PartSnap.MaxHp             = Part.Definition ? Part.Definition->MaxHp : 0;
+		PartSnap.CurrentInitiative = Part.CurrentInitiative;
+		PartSnap.Shield            = Part.Shield;
+		PartSnap.bDestroyed        = Part.bDestroyed;
+		PartSnap.Statuses          = Part.Statuses;
+		PartSnap.StatusStacks      = Part.StatusStacks;
+
+		if (Part.Definition && Part.Definition->IntentSequence.IsValidIndex(Part.CurrentIntentIndex))
+		{
+			const FIntentDefinition& IntentDef = Part.Definition->IntentSequence[Part.CurrentIntentIndex];
+			PartSnap.CurrentIntent.IntentId        = IntentDef.IntentId;
+			PartSnap.CurrentIntent.DisplayName     = IntentDef.DisplayName;
+			PartSnap.CurrentIntent.Initiative      = IntentDef.Initiative;
+			PartSnap.CurrentIntent.ResistanceValue = IntentDef.ResistanceValue;
+		}
+
+		return PartSnap;
+	}
+
+	void AddPartToEnemySnapshot(FEnemySnapshot& EnemySnap, const FEnemyPartSnapshot& PartSnap)
+	{
+		if (!PartSnap.bDestroyed)
+		{
+			EnemySnap.InitiativeSum += PartSnap.CurrentInitiative;
+			EnemySnap.bAllPartsDestroyed = false;
+		}
+		EnemySnap.Parts.Add(PartSnap);
+	}
+
 	int32 ComputeRuntimeCost(const FRuntimeCardInstance& Card)
 	{
 		return FBattleRules::ComputeRuntimeCost(Card);
@@ -40,6 +80,7 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 	Out.CurrentWaitValue = State.CurrentWaitValue;
 	Out.CompanionPlayedCount = State.Player.CompanionPlayedCount;
 	Out.Outcome          = State.Outcome;
+	Out.EncounterId      = State.Enemy.EncounterId;
 
 	// ---- Player ----
 	Out.Player.CurrentHp = State.Player.CurrentHp;
@@ -48,46 +89,32 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 	Out.Player.Statuses  = State.Player.Statuses;
 	Out.Player.StatusStacks = State.Player.StatusStacks;
 
-	// ---- Enemy ----
-	Out.Enemy.Definition = State.Enemy.Definition;
-	Out.Enemy.Parts.Reserve(State.Enemy.Parts.Num());
-
-	int32 InitiativeSum = 0;
-	bool bAllDestroyed  = !State.Enemy.Parts.IsEmpty();
-
-	for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
+	// ---- Enemies ----
+	Out.Enemies.Reserve(State.Enemy.EnemySlots.Num());
+	for (const FEnemySlotState& EnemySlot : State.Enemy.EnemySlots)
 	{
-		FEnemyPartSnapshot PartSnap;
-		PartSnap.InstanceId        = Part.InstanceId;
-		PartSnap.Definition        = Part.Definition;
-		PartSnap.CurrentHp         = Part.CurrentHp;
-		PartSnap.MaxHp             = Part.Definition ? Part.Definition->MaxHp : 0;
-		PartSnap.CurrentInitiative = Part.CurrentInitiative;
-		PartSnap.Shield            = Part.Shield;
-		PartSnap.bDestroyed        = Part.bDestroyed;
-		PartSnap.Statuses          = Part.Statuses;
-		PartSnap.StatusStacks      = Part.StatusStacks;
+		FEnemySnapshot EnemySnap;
+		EnemySnap.Definition = EnemySlot.Definition;
+		EnemySnap.EncounterId = EnemySlot.EncounterId;
+		EnemySnap.EnemySlotId = EnemySlot.EnemySlotId;
+		EnemySnap.Parts.Reserve(EnemySlot.PartInstanceIds.Num());
+		EnemySnap.bAllPartsDestroyed = !EnemySlot.PartInstanceIds.IsEmpty();
 
-		// CurrentIntent：从 IntentSequence[CurrentIntentIndex] 读取。
-		if (Part.Definition && Part.Definition->IntentSequence.IsValidIndex(Part.CurrentIntentIndex))
+		for (const FGuid& PartInstanceId : EnemySlot.PartInstanceIds)
 		{
-			const FIntentDefinition& IntentDef = Part.Definition->IntentSequence[Part.CurrentIntentIndex];
-			PartSnap.CurrentIntent.IntentId        = IntentDef.IntentId;
-			PartSnap.CurrentIntent.DisplayName     = IntentDef.DisplayName;
-			PartSnap.CurrentIntent.Initiative      = IntentDef.Initiative;
-			PartSnap.CurrentIntent.ResistanceValue = IntentDef.ResistanceValue;
+			if (const FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(State, PartInstanceId))
+			{
+				AddPartToEnemySnapshot(EnemySnap, BuildEnemyPartSnapshot(*Part));
+			}
 		}
 
-		if (!Part.bDestroyed)
-		{
-			InitiativeSum += Part.CurrentInitiative;
-			bAllDestroyed = false;
-		}
-
-		Out.Enemy.Parts.Add(MoveTemp(PartSnap));
+		Out.Enemies.Add(MoveTemp(EnemySnap));
 	}
-	Out.Enemy.InitiativeSum      = InitiativeSum;
-	Out.Enemy.bAllPartsDestroyed = bAllDestroyed;
+
+	if (Out.Enemies.Num() > 0)
+	{
+		Out.Enemy = Out.Enemies[0];
+	}
 
 	// ---- Hand ----
 	Out.Hand.Cards.Reserve(State.Cards.Hand.Num());

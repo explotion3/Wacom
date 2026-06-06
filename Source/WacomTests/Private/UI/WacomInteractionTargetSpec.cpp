@@ -90,6 +90,27 @@ bool FWacomInteractionTargetHandleBasicSpec::RunTest(const FString& /*Parameters
 	}
 
 	{
+		FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForWorldTarget(
+			FGuid::NewGuid(),
+			nullptr,
+			FVector::ZeroVector,
+			FVector2D::ZeroVector,
+			FGameplayTag(),
+			TEXT("Stable.Battle.Part"),
+			TEXT("Encounter.A"),
+			TEXT("Enemy.Left"),
+			TEXT("Head"));
+		TestEqual(TEXT("ForWorldTarget preserves EncounterId"),
+			Handle.EncounterId, FName(TEXT("Encounter.A")));
+		TestEqual(TEXT("ForWorldTarget preserves EnemySlotId"),
+			Handle.EnemySlotId, FName(TEXT("Enemy.Left")));
+		TestEqual(TEXT("ForWorldTarget preserves PartSlotId"),
+			Handle.PartSlotId, FName(TEXT("Head")));
+		TestTrue(TEXT("Handle reports complete battle part slot identity"),
+			Handle.HasBattlePartSlotIdentity());
+	}
+
+	{
 		const FGuid TestId = FGuid::NewGuid();
 		UObject* SourceObject = GetTransientPackage();
 		FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForCardTarget(
@@ -187,6 +208,17 @@ bool FWacomUIInteractionTargetComponentSpec::RunTest(const FString& /*Parameters
 			Handle.TargetTag, TestTag);
 		TestEqual(TEXT("BuildWorldTargetHandle preserves stable target id"),
 			Handle.StableTargetId, FName(TEXT("Stable.Component.Target")));
+	}
+
+	{
+		Component->SetBattlePartSlotIdentity(TEXT("Encounter.B"), TEXT("Enemy.Right"), TEXT("Core"));
+		FWacomInteractionTargetHandle Handle = Component->BuildWorldTargetHandle();
+		TestEqual(TEXT("BuildWorldTargetHandle preserves encounter id"),
+			Handle.EncounterId, FName(TEXT("Encounter.B")));
+		TestEqual(TEXT("BuildWorldTargetHandle preserves enemy slot id"),
+			Handle.EnemySlotId, FName(TEXT("Enemy.Right")));
+		TestEqual(TEXT("BuildWorldTargetHandle preserves part slot id"),
+			Handle.PartSlotId, FName(TEXT("Core")));
 	}
 
 	return true;

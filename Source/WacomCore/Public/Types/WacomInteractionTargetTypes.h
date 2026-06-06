@@ -63,6 +63,18 @@ struct WACOMCORE_API FWacomInteractionTargetHandle
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
 	FName StableTargetId = NAME_None;
 
+	/** Battle Encounter 稳定 ID。仅 Battle enemy part world target 使用；其它目标保持 None。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
+	FName EncounterId = NAME_None;
+
+	/** Battle Encounter 内敌人槽位 ID。仅 Battle enemy part world target 使用；其它目标保持 None。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
+	FName EnemySlotId = NAME_None;
+
+	/** Battle 敌人内局部部位槽位 ID。仅 Battle enemy part world target 使用；其它目标保持 None。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
+	FName PartSlotId = NAME_None;
+
 	/** 命中来源对象（Actor 或 Component）。弱引用，不阻止 GC。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Interaction|Target")
 	TWeakObjectPtr<UObject> SourceObject;
@@ -78,6 +90,12 @@ struct WACOMCORE_API FWacomInteractionTargetHandle
 	/** 当 TargetKind != None 时为有效 handle。 */
 	bool IsValid() const { return TargetKind != EWacomInteractionTargetKind::None; }
 
+	/** 是否携带完整 Battle 部位槽位身份。 */
+	bool HasBattlePartSlotIdentity() const
+	{
+		return !EncounterId.IsNone() && !EnemySlotId.IsNone() && !PartSlotId.IsNone();
+	}
+
 	/** 调试用字符串摘要。 */
 	FString ToString() const
 	{
@@ -86,13 +104,16 @@ struct WACOMCORE_API FWacomInteractionTargetHandle
 			: TargetKind == EWacomInteractionTargetKind::Card ? TEXT("Card")
 			: TEXT("Zone");
 
-		return FString::Printf(TEXT("FWacomInteractionTargetHandle{Kind=%s WorldTargetId=%s CardInstanceId=%s ZoneId=%s TargetTag=%s StableTargetId=%s}"),
+		return FString::Printf(TEXT("FWacomInteractionTargetHandle{Kind=%s WorldTargetId=%s CardInstanceId=%s ZoneId=%s TargetTag=%s StableTargetId=%s EncounterId=%s EnemySlotId=%s PartSlotId=%s}"),
 			KindStr,
 			*WorldTargetId.ToString(EGuidFormats::DigitsWithHyphens),
 			*CardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 			*ZoneId.ToString(),
 			*TargetTag.ToString(),
-			*StableTargetId.ToString());
+			*StableTargetId.ToString(),
+			*EncounterId.ToString(),
+			*EnemySlotId.ToString(),
+			*PartSlotId.ToString());
 	}
 
 	/** 构造一个 World 类型的 handle。 */
@@ -100,13 +121,19 @@ struct WACOMCORE_API FWacomInteractionTargetHandle
 		const FVector& InWorldLocation = FVector::ZeroVector,
 		const FVector2D& InScreenPosition = FVector2D::ZeroVector,
 		const FGameplayTag& InTargetTag = FGameplayTag(),
-		FName InStableTargetId = NAME_None)
+		FName InStableTargetId = NAME_None,
+		FName InEncounterId = NAME_None,
+		FName InEnemySlotId = NAME_None,
+		FName InPartSlotId = NAME_None)
 	{
 		FWacomInteractionTargetHandle Handle;
 		Handle.TargetKind = EWacomInteractionTargetKind::World;
 		Handle.WorldTargetId = InWorldTargetId;
 		Handle.TargetTag = InTargetTag;
 		Handle.StableTargetId = InStableTargetId;
+		Handle.EncounterId = InEncounterId;
+		Handle.EnemySlotId = InEnemySlotId;
+		Handle.PartSlotId = InPartSlotId;
 		Handle.SourceObject = InSourceObject;
 		Handle.WorldLocation = InWorldLocation;
 		Handle.ScreenPosition = InScreenPosition;

@@ -18,6 +18,10 @@ struct WACOMDATA_API FEnemyPartSlot
 {
 	GENERATED_BODY()
 
+	/** 敌人内局部部位槽位 ID。为空时兼容回退到 PartDef->PartId。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy")
+	FName PartSlotId = NAME_None;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<UEnemyPartDefinition> PartDef = nullptr;
 };

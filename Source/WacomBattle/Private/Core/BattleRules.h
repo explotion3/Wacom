@@ -33,6 +33,8 @@ public:
 
 	static FRuntimeEnemyPart* FindEnemyPart(FBattleState& State, const FGuid& PartInstanceId);
 	static const FRuntimeEnemyPart* FindEnemyPart(const FBattleState& State, const FGuid& PartInstanceId);
+	static FRuntimeEnemyPart* FindEnemyPartBySlot(FBattleState& State, FName EnemySlotId, FName PartSlotId);
+	static const FRuntimeEnemyPart* FindEnemyPartBySlot(const FBattleState& State, FName EnemySlotId, FName PartSlotId);
 	static FRuntimeCardInstance* FindCard(FBattleState& State, const FGuid& CardInstanceId);
 	static const FRuntimeCardInstance* FindCard(const FBattleState& State, const FGuid& CardInstanceId);
 

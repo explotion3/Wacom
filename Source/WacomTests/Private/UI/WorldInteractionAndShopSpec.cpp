@@ -21,7 +21,9 @@
 #include "Components/WacomRunTunnelMovementComponent.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "Components/SplineComponent.h"
+#include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Events/RunEventDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -141,6 +143,35 @@ namespace
 		Start.Choices = { Close };
 		Event->Nodes = { Start };
 		return Event;
+	}
+
+	UEnemyDefinition* MakeUiBattleTriggerEnemyDefinition(UObject* Outer)
+	{
+		UEnemyDefinition* Enemy = NewObject<UEnemyDefinition>(Outer);
+		Enemy->EnemyId = TEXT("Enemy.UI.BattleTrigger");
+
+		UEnemyPartDefinition* Part = NewObject<UEnemyPartDefinition>(Enemy);
+		Part->PartId = TEXT("Enemy.UI.BattleTrigger.Part");
+		Part->MaxHp = 10;
+
+		FEnemyPartSlot Slot;
+		Slot.PartDef = Part;
+		Enemy->Parts = { Slot };
+		return Enemy;
+	}
+
+	UEncounterDefinition* MakeUiBattleTriggerEncounterDefinition(
+		UObject* Outer,
+		UEnemyDefinition* EnemyDefinition)
+	{
+		UEncounterDefinition* Encounter = NewObject<UEncounterDefinition>(Outer);
+		Encounter->EncounterDefinitionId = TEXT("Encounter.UI.BattleTrigger");
+
+		FEncounterEnemySlot Slot;
+		Slot.EnemySlotId = TEXT("Enemy");
+		Slot.EnemyDefinition = EnemyDefinition;
+		Encounter->EnemySlots = { Slot };
+		return Encounter;
 	}
 
 	AWacomRunTunnelSegmentActor* SpawnUiRunTunnelSegment(
@@ -7895,7 +7926,7 @@ bool FWacomUIRunInteractablePlacementValidationBattleMissingIdSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	Battle->EnemyDef = MakeUiBattleTriggerEnemyDefinition(Battle.Get());
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;
@@ -7923,8 +7954,33 @@ bool FWacomUIRunInteractablePlacementValidationBattleMissingEnemySpec::RunTest(
 	const EDataValidationResult Result =
 		ValidateObjectForUiTest(Battle.Get(), Warnings, Errors);
 	TestEqual(TEXT("Missing Battle enemy invalid"), Result, EDataValidationResult::Invalid);
-	TestTrue(TEXT("Reports EnemyDef"),
-		Errors.Num() > 0 && Errors[0].ToString().Contains(TEXT("EnemyDef")));
+	TestTrue(TEXT("Reports missing battle definition"),
+		Errors.Num() > 0
+		&& Errors[0].ToString().Contains(TEXT("EncounterDefinition"))
+		&& Errors[0].ToString().Contains(TEXT("EnemyDef")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationBattleEncounterWithoutEnemyDefSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementEncounterDefinitionPassesWithoutEnemyDef",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationBattleEncounterWithoutEnemyDefSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
+	Battle->PersistentId = TEXT("Battle.Validation.EncounterOnly");
+	Battle->EncounterDefinition = MakeUiBattleTriggerEncounterDefinition(
+		Battle.Get(),
+		MakeUiBattleTriggerEnemyDefinition(Battle.Get()));
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Battle.Get(), Warnings, Errors);
+	TestEqual(TEXT("Encounter-only battle trigger remains valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Encounter-only battle trigger has no errors"), Errors.Num(), 0);
 	return true;
 }
 
@@ -7952,8 +8008,8 @@ bool FWacomUIRunInteractablePlacementValidationBattleDuplicateSpec::RunTest(
 
 	First->PersistentId = TEXT("Battle.Validation.Duplicate");
 	Second->PersistentId = TEXT("Battle.Validation.Duplicate");
-	First->EnemyDef = NewObject<UEnemyDefinition>(First);
-	Second->EnemyDef = NewObject<UEnemyDefinition>(Second);
+	First->EnemyDef = MakeUiBattleTriggerEnemyDefinition(First);
+	Second->EnemyDef = MakeUiBattleTriggerEnemyDefinition(Second);
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;

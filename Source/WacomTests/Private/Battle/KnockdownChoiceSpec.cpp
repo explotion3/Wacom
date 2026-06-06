@@ -32,7 +32,7 @@
  *   - 最后一个存活部位击倒后 Withdraw 不可选
  *   - 一次行动多部位破坏 → 逐个弹 dialog
  *   - RunSession 撤离写 BattleProgress；真胜利清 BattleProgress
- *   - 第二次进同一战斗 PreDestroyedPartIds 应用为预破坏
+ *   - 第二次进同一战斗 PreDestroyedParts 应用为预破坏
  */
 
 namespace
@@ -588,37 +588,113 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 	// 第一场战斗：撤离前击倒 Head
 	{
 		FBattleInitParams Params;
-		Params.Character = Char;
-		Params.Enemy     = Enemy;
-		// 第一次进入 → 没有 BattleProgress，PreDestroyedPartIds 应为空
+		const FName TriggerId(TEXT("TestTrigger"));
+		const bool bBuildOk = Run->BuildInitParamsForBattle(Enemy, TriggerId, Params);
+		TestTrue(TEXT("Initial BuildInitParams"), bBuildOk);
+		TestEqual(TEXT("Initial EncounterId uses TriggerPersistentId"), Params.EncounterId, TriggerId);
+		TestEqual(TEXT("Initial PreDestroyedParts empty"), Params.PreDestroyedParts.Num(), 0);
+		if (!bBuildOk)
+		{
+			return false;
+		}
 
-		UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
+		TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
+		const FWacomStatus InitStatus = Session->Initialize(Params);
+		TestTrue(TEXT("Initial battle initializes"), InitStatus.IsOk());
+		if (!InitStatus.IsOk())
+		{
+			return false;
+		}
 
-		const FBattleSnapshot Snap0 = S->BuildSnapshot();
-		const FGuid Head    = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
-		const FGuid KillerId= FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
+		const FBattleSnapshot Snap0 = Session->BuildSnapshot();
+		const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
+		const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
-		S->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
-		S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+		Session->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
+		Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
 
-		const FBattleResultPacket Packet = S->BuildResultPacket();
-		Run->OnBattleFinishedFromTrigger(Packet, Enemy, FName(TEXT("TestTrigger")));
+		const FBattleResultPacket Packet = Session->BuildResultPacket();
+		Run->OnBattleFinishedFromTrigger(Packet, Enemy, TriggerId);
 
 		// BattleProgress 应该有 TestTrigger 的进度
 		TestTrue(TEXT("BattleProgress 含 TestTrigger"),
 			Run->GetRunState().BattleProgress.Contains(FName(TEXT("TestTrigger"))));
-		TestEqual(TEXT("DestroyedPartIds 1 项"),
+		TestEqual(TEXT("DestroyedParts 1 项"),
+			Run->GetRunState().BattleProgress[FName(TEXT("TestTrigger"))].DestroyedParts.Num(), 1);
+		TestEqual(TEXT("DestroyedPartIds legacy 投影 1 项"),
 			Run->GetRunState().BattleProgress[FName(TEXT("TestTrigger"))].DestroyedPartIds.Num(), 1);
 	}
 
-	// 第二场战斗（重入同一 Trigger）：BuildInitParamsForBattle 应灌入 PreDestroyedPartIds
+	// 第二场战斗（重入同一 Trigger）：BuildInitParamsForBattle 应灌入 PreDestroyedParts
 	{
 		FBattleInitParams Params;
 		const bool bOk = Run->BuildInitParamsForBattle(Enemy, FName(TEXT("TestTrigger")), Params);
 		TestTrue(TEXT("BuildInitParams"), bOk);
-		TestEqual(TEXT("PreDestroyedPartIds 1 项"), Params.PreDestroyedPartIds.Num(), 1);
+		TestEqual(TEXT("EncounterId uses TriggerPersistentId"), Params.EncounterId, FName(TEXT("TestTrigger")));
+		TestEqual(TEXT("PreDestroyedParts 1 项"), Params.PreDestroyedParts.Num(), 1);
+		TestEqual(TEXT("Run path no longer fills legacy PreDestroyedPartIds"), Params.PreDestroyedPartIds.Num(), 0);
+		if (Params.PreDestroyedParts.Num() == 1)
+		{
+			TestEqual(TEXT("PreDestroyedParts encounter"), Params.PreDestroyedParts[0].GetEffectiveEncounterId(), FName(TEXT("TestTrigger")));
+			TestEqual(TEXT("PreDestroyedParts enemy slot"), Params.PreDestroyedParts[0].GetEffectiveEnemySlotId(), FName(TEXT("Enemy")));
+			TestEqual(TEXT("PreDestroyedParts part slot"), Params.PreDestroyedParts[0].GetEffectivePartSlotId(), FName(TEXT("Test.Part.Head")));
+		}
 	}
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceLegacyBattleProgressProjectsToDefaultEnemySlotSpec,
+	"Wacom.Battle.Knockdown.LegacyBattleProgressProjectsToDefaultEnemySlot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceLegacyBattleProgressProjectsToDefaultEnemySlotSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Char = MakeStandardChar(Fx);
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+
+	{
+		FBattleProgressSnapshot LegacyProgress;
+		LegacyProgress.DestroyedPartIds.Add(FName(TEXT("Test.Part.Body")));
+		FRunState& RunState = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
+		RunState.BattleProgress.Add(FName(TEXT("LegacyTrigger")), LegacyProgress);
+	}
+
+	FBattleInitParams Params;
+	const bool bOk = Run->BuildInitParamsForBattle(Enemy, FName(TEXT("LegacyTrigger")), Params);
+	TestTrue(TEXT("BuildInitParams"), bOk);
+	TestEqual(TEXT("EncounterId uses trigger id"), Params.EncounterId, FName(TEXT("LegacyTrigger")));
+	TestEqual(TEXT("Legacy progress becomes PreDestroyedParts"), Params.PreDestroyedParts.Num(), 1);
+	TestEqual(TEXT("Legacy PreDestroyedPartIds remains empty on Run path"), Params.PreDestroyedPartIds.Num(), 0);
+	if (Params.PreDestroyedParts.Num() == 1)
+	{
+		const FBattlePartSlotIdentity& Identity = Params.PreDestroyedParts[0];
+		TestEqual(TEXT("Legacy identity encounter"), Identity.GetEffectiveEncounterId(), FName(TEXT("LegacyTrigger")));
+		TestEqual(TEXT("Legacy identity enemy slot"), Identity.GetEffectiveEnemySlotId(), FName(TEXT("Enemy")));
+		TestEqual(TEXT("Legacy identity part slot"), Identity.GetEffectivePartSlotId(), FName(TEXT("Test.Part.Body")));
+		TestEqual(TEXT("Legacy identity part definition"), Identity.PartDefinitionId, FName(TEXT("Test.Part.Body")));
+	}
+
+	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
+	const FWacomStatus Status = Session->Initialize(Params);
+	TestTrue(TEXT("Initialize succeeds"), Status.IsOk());
+	if (!Status.IsOk())
+	{
+		return false;
+	}
+
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	TestTrue(TEXT("Body snapshot exists"), Snapshot.Enemy.Parts.IsValidIndex(1));
+	if (Snapshot.Enemy.Parts.IsValidIndex(1))
+	{
+		TestTrue(TEXT("Body is pre-destroyed from legacy progress"), Snapshot.Enemy.Parts[1].bDestroyed);
+		TestEqual(TEXT("Body HP is zero"), Snapshot.Enemy.Parts[1].CurrentHp, 0);
+	}
 	return true;
 }
 

@@ -42,6 +42,7 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 	{
 		FKnockdownChoice Choice_;
 		Choice_.PartId = Head.PartId;
+		Choice_.Identity = Head.Identity;
 		Choice_.Choice = Choice;
 		State.PendingKnockdownChoices.Add(Choice_);
 	}
@@ -94,6 +95,7 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 			FBattleGainedCard GainedCard;
 			GainedCard.Definition = RewardCard;
 			GainedCard.SourcePartId = Head.PartId;
+			GainedCard.SourceIdentity = Head.Identity;
 			GainedCard.SourceChoice = Choice;
 			State.PendingGainedCards.Add(GainedCard);
 		}

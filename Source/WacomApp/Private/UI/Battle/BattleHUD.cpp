@@ -108,6 +108,7 @@ namespace
 		case EWacomBattleTargetRejectReason::MissingRequiredTargetKeyword: return TEXT("MissingRequiredTargetKeyword");
 		case EWacomBattleTargetRejectReason::BlockedTargetKeyword: return TEXT("BlockedTargetKeyword");
 		case EWacomBattleTargetRejectReason::UnsupportedZoneTarget: return TEXT("UnsupportedZoneTarget");
+		case EWacomBattleTargetRejectReason::TargetIdentityMismatch: return TEXT("TargetIdentityMismatch");
 		default: return TEXT("Unknown");
 		}
 	}
@@ -401,9 +402,20 @@ void UBattleHUD::SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost)
 	SyncEnemyInfoBarFallbackVisibility();
 }
 
+void UBattleHUD::SetBattleSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts)
+{
+	GetSceneEnemyTargetCoordinator().SetSceneEnemyHosts(InHosts);
+	SyncEnemyInfoBarFallbackVisibility();
+}
+
 AWacomBattleEnemyActor* UBattleHUD::GetBattleSceneEnemyHost() const
 {
 	return GetSceneEnemyTargetCoordinator().GetSceneEnemyHost();
+}
+
+bool UBattleHUD::IsBattleSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const
+{
+	return GetSceneEnemyTargetCoordinator().IsSceneEnemyHostInCurrentRegistry(Host);
 }
 
 bool UBattleHUD::IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(

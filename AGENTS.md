@@ -115,6 +115,13 @@
 
 每个可运行切片完成后至少编译一次。涉及规则、存档、背包、UI 流程时补充或更新自动化测试，并优先运行相关命名空间而不是默认全量 `Wacom`。
 
+测试补充口径保持简单：
+
+- 必须当场补测试：战斗规则、Run 状态、存档 schema、数据校验、公共 contract、已经复现过的 bug、容易回归的生命周期问题。
+- 可以不补或只跑现有测试：纯文档、命名整理、低风险 UI 文案/布局、debug summary 小改、没有改变行为的重构。
+- 可以阶段性集中补测试：大 UI/Actor 制作模块还在快速成型时，先保留清晰验收清单，等 2-4 个相关切片稳定后再集中写一组更高质量的 contract/integration tests。
+- 不要继续塞进巨型测试文件：像 `BattleWidgetSpec.cpp` 这种已经太大了，后续应该拆成更小的 spec 文件，比如 `BattleSceneEnemyActorSpec.cpp`、`BattleHUDSceneTargetSpec.cpp`、`BattlePresentationSpec.cpp`。
+
 ```powershell
 & 'E:\UE_5.7\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
 ```

@@ -348,8 +348,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "设置当前战斗绑定的场景敌人 Host。BattleHUD 只会同步该 Host 下的 PartActor world target。"))
 	void SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost);
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "设置当前战斗绑定的场景敌人 Host 列表。用于 Encounter 多敌人；BattleHUD 只会同步这些 Host 下的 PartActor world target。"))
+	void SetBattleSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts);
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "当前战斗绑定的场景敌人 Host。为空时仅使用 EnemyInfoBar fallback。"))
 	AWacomBattleEnemyActor* GetBattleSceneEnemyHost() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "给调试和制作校验使用：判断指定 SceneEnemyHost 是否属于当前 BattleHUD 的场景敌人 registry。"))
+	bool IsBattleSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "给输入路由使用：判断 World target handle 是否来自当前 SceneEnemyHost 注册的部位。EnemyInfoBar 等 2D fallback 不走此检查。"))
 	bool IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(

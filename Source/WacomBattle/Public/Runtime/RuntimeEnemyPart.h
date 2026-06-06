@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "Runtime/RuntimeStatus.h"
 #include "RuntimeEnemyPart.generated.h"
 
@@ -24,6 +25,9 @@ struct WACOMBATTLE_API FRuntimeEnemyPart
 
 	UPROPERTY()
 	TObjectPtr<const UEnemyPartDefinition> Definition = nullptr;
+
+	UPROPERTY()
+	FBattlePartSlotIdentity Identity;
 
 	UPROPERTY()
 	int32 CurrentHp = 0;

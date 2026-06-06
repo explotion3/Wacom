@@ -49,6 +49,47 @@ const FRuntimeEnemyPart* FBattleRules::FindEnemyPart(const FBattleState& State, 
 	return nullptr;
 }
 
+FRuntimeEnemyPart* FBattleRules::FindEnemyPartBySlot(FBattleState& State, FName EnemySlotId, FName PartSlotId)
+{
+	const FName EffectiveEnemySlotId = EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : EnemySlotId;
+	if (PartSlotId.IsNone())
+	{
+		return nullptr;
+	}
+
+	for (FRuntimeEnemyPart& Part : State.Enemy.Parts)
+	{
+		if (Part.Identity.GetEffectiveEnemySlotId() == EffectiveEnemySlotId
+			&& Part.Identity.GetEffectivePartSlotId() == PartSlotId)
+		{
+			return &Part;
+		}
+	}
+	return nullptr;
+}
+
+const FRuntimeEnemyPart* FBattleRules::FindEnemyPartBySlot(
+	const FBattleState& State,
+	FName EnemySlotId,
+	FName PartSlotId)
+{
+	const FName EffectiveEnemySlotId = EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : EnemySlotId;
+	if (PartSlotId.IsNone())
+	{
+		return nullptr;
+	}
+
+	for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
+	{
+		if (Part.Identity.GetEffectiveEnemySlotId() == EffectiveEnemySlotId
+			&& Part.Identity.GetEffectivePartSlotId() == PartSlotId)
+		{
+			return &Part;
+		}
+	}
+	return nullptr;
+}
+
 FRuntimeCardInstance* FBattleRules::FindCard(FBattleState& State, const FGuid& CardInstanceId)
 {
 	if (const int32* Idx = State.Cards.CardIndexById.Find(CardInstanceId))

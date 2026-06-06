@@ -65,6 +65,15 @@ struct FCardContainers
 	FGuid RightHandInstanceId;
 };
 
+/** Encounter 内的一个敌人槽运行时投影。 */
+struct FEnemySlotState
+{
+	FName EncounterId = TEXT("Encounter");
+	FName EnemySlotId = TEXT("Enemy");
+	TObjectPtr<const UEnemyDefinition> Definition = nullptr;
+	TArray<FGuid> PartInstanceIds;
+};
+
 /**
  * 敌人运行时状态。
  *
@@ -72,7 +81,12 @@ struct FCardContainers
  */
 struct FEnemyState
 {
+	FName EncounterId = TEXT("Encounter");
+
+	/** 兼容旧单敌人读取：指向 EnemySlots[0].Definition。 */
 	TObjectPtr<const UEnemyDefinition> Definition = nullptr;
+
+	TArray<FEnemySlotState> EnemySlots;
 	TArray<FRuntimeEnemyPart> Parts;        // 按部位顺序
 	TMap<FGuid, int32> PartIndexById;       // InstanceId → Parts 索引，O(1) 查找
 };
@@ -160,6 +174,7 @@ struct FBattleState
 	{
 		FGuid PartInstanceId;
 		FName PartId = NAME_None;
+		FBattlePartSlotIdentity Identity;
 		bool bLeftHandAvailable = true;
 		bool bRightHandAvailable = true;
 	};
@@ -190,6 +205,7 @@ struct FBattleState
 	 * 写入的列表是"截至当前所有破坏过的部位"，覆盖式更新 BattleProgress。
 	 */
 	TArray<FName> DestroyedPartIds;
+	TArray<FBattlePartSlotIdentity> DestroyedParts;
 
 	// ---- 分组字段 ----
 	FPlayerState    Player;

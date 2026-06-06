@@ -80,6 +80,64 @@ namespace
 		    || Card.TemporaryKeywords.HasTag(Keyword);
 	}
 
+	FRuntimeEnemyPart* ResolveTargetPart(FBattleState& State, const FBattleCommand& Command, FName& OutRejectDetail)
+	{
+		OutRejectDetail = NAME_None;
+
+		FRuntimeEnemyPart* PartByInstance = nullptr;
+		if (Command.TargetPartInstanceId.IsValid())
+		{
+			PartByInstance = FBattleRules::FindEnemyPart(State, Command.TargetPartInstanceId);
+			if (!PartByInstance)
+			{
+				OutRejectDetail = TEXT("TargetInvalid");
+				return nullptr;
+			}
+		}
+
+		const bool bHasAnySlotField = !Command.TargetEnemySlotId.IsNone() || !Command.TargetPartSlotId.IsNone();
+		const bool bHasCompleteSlotIdentity =
+			!Command.TargetEnemySlotId.IsNone() && !Command.TargetPartSlotId.IsNone();
+		FRuntimeEnemyPart* PartBySlot = nullptr;
+		if (bHasCompleteSlotIdentity)
+		{
+			PartBySlot = FBattleRules::FindEnemyPartBySlot(
+				State,
+				Command.TargetEnemySlotId,
+				Command.TargetPartSlotId);
+			if (!PartBySlot)
+			{
+				OutRejectDetail = TEXT("TargetSlotInvalid");
+				return nullptr;
+			}
+		}
+		else if (bHasAnySlotField)
+		{
+			OutRejectDetail = TEXT("MissingTargetSlotIdentity");
+			return nullptr;
+		}
+
+		if (PartByInstance && PartBySlot && PartByInstance->InstanceId != PartBySlot->InstanceId)
+		{
+			OutRejectDetail = TEXT("TargetIdentityMismatch");
+			return nullptr;
+		}
+
+		FRuntimeEnemyPart* ResolvedPart = PartByInstance ? PartByInstance : PartBySlot;
+		if (!ResolvedPart)
+		{
+			OutRejectDetail = TEXT("MissingTarget");
+			return nullptr;
+		}
+		if (ResolvedPart->bDestroyed)
+		{
+			OutRejectDetail = TEXT("TargetInvalid");
+			return nullptr;
+		}
+
+		return ResolvedPart;
+	}
+
 	FName MapHandCardEligibilityRejectToStatusDetail(
 		EWacomHandCardTargetEligibilityReject RejectReason)
 	{
@@ -129,14 +187,12 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 	FRuntimeCardInstance* TargetCard = nullptr;
 	if (Def->TargetMode == ECardTargetMode::SingleEnemyPart)
 	{
-		if (!Command.TargetPartInstanceId.IsValid())
+		FName RejectDetail = NAME_None;
+		TargetPart = ResolveTargetPart(State, Command, RejectDetail);
+		if (!TargetPart)
 		{
-			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("MissingTarget"));
-		}
-		TargetPart = FBattleRules::FindEnemyPart(State, Command.TargetPartInstanceId);
-		if (!TargetPart || TargetPart->bDestroyed)
-		{
-			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetInvalid"));
+			return FWacomStatus::Fail(EWacomError::IllegalTarget,
+				RejectDetail.IsNone() ? FName(TEXT("TargetInvalid")) : RejectDetail);
 		}
 	}
 	else if (Def->TargetMode == ECardTargetMode::HandCard)

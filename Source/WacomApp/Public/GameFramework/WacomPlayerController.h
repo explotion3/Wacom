@@ -53,7 +53,7 @@ class WACOMAPP_API AWacomPlayerController : public APlayerController
 public:
 	AWacomPlayerController();
 
-	/** 由 ABattleTriggerActor Overlap 时调用，转发到 GameMode。 */
+	/** 由 ABattleTriggerActor 交互时调用，转发到 GameMode。Trigger 可携带 EncounterDefinition。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
 	void RequestEnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger = nullptr);
 

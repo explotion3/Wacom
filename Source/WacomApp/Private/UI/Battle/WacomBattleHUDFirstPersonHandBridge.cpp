@@ -12,6 +12,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/EnemyInfoBar.h"
+#include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 
@@ -91,6 +92,7 @@ namespace
 			return EWacomBattleCardDropRejectReason::SourceCardInvalid;
 		case EWacomBattleTargetRejectReason::UnsupportedWorldTarget:
 		case EWacomBattleTargetRejectReason::InvalidWorldTarget:
+		case EWacomBattleTargetRejectReason::TargetIdentityMismatch:
 			return EWacomBattleCardDropRejectReason::InvalidWorldTarget;
 		case EWacomBattleTargetRejectReason::UnsupportedCardTarget:
 		case EWacomBattleTargetRejectReason::TargetCardInvalid:
@@ -487,7 +489,7 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragReleased(
 		return;
 
 	case EWacomBattleCardDropIntentKind::PlayCardWorldTarget:
-		HUD.SubmitPlayCard(CardInstanceId, DropResult.TargetHandle.WorldTargetId);
+		FWacomBattleHUDCommandFlow::SubmitPlayCardOnWorldTarget(HUD, CardInstanceId, DropResult.TargetHandle);
 		return;
 
 	case EWacomBattleCardDropIntentKind::PlayCardCardTarget:

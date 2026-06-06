@@ -7,14 +7,32 @@
 #include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "Misc/DataValidation.h"
+#include "Session/BattleSession.h"
 #include "BattleTriggerActor.generated.h"
 
 class USphereComponent;
 class UBoxComponent;
 class UEnemyDefinition;
+class UEncounterDefinition;
 class UWacomInteractionTargetComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class AWacomBattleEnemyActor;
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomBattleSceneEnemyHostSlot
+{
+	GENERATED_BODY()
+
+	/** Encounter 内敌人槽位 ID。对应 UEncounterDefinition.EnemySlots[].EnemySlotId。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy",
+		meta = (ToolTip = "Encounter 内敌人槽位 ID。对应 UEncounterDefinition.EnemySlots[].EnemySlotId，用于把规则敌人槽映射到场景 Host。"))
+	FName EnemySlotId = TEXT("Enemy");
+
+	/** 该敌人槽对应的场景敌人 Host。负责其部位命中、Badge、预测和 cue 表现。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy",
+		meta = (ToolTip = "该敌人槽对应的场景敌人 Host。Host 下的部位 Actor 会按 EnemySlotId + PartSlotId 绑定当前战斗 Snapshot。"))
+	TObjectPtr<AWacomBattleEnemyActor> SceneEnemyHost = nullptr;
+};
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleTriggerDebugView
@@ -31,6 +49,18 @@ struct WACOMAPP_API FWacomBattleTriggerDebugView
 	FString EnemyDefinitionName;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	FString EncounterDefinitionName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	FName EncounterDefinitionId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	int32 EncounterEnemySlotCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	bool bUsingEncounterDefinition = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
 	FString SceneEnemyHostName;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
@@ -38,6 +68,15 @@ struct WACOMAPP_API FWacomBattleTriggerDebugView
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
 	int32 SceneEnemyHostPartCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	int32 SceneEnemyHostSlotCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	int32 SceneEnemyHostCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	TArray<FName> SceneEnemyHostSlotIds;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
 	bool bSceneEnemyHostConfigured = false;
@@ -98,8 +137,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Persistence")
 	FName PersistentId;
 
-	/** 本触发器对应的敌人配置。必填。 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	/**
+	 * 本触发器对应的 Encounter 静态配置。
+	 *
+	 * 配置后优先使用 EncounterDefinition.EnemySlots 构造战斗敌人槽；
+	 * EnemyDef 只作为旧地图 fallback。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",
+		meta = (ToolTip = "本触发器对应的 Encounter 静态配置。配置后优先使用 EncounterDefinition.EnemySlots 构造战斗敌人槽；EnemyDef 只作为旧地图 fallback。"))
+	TObjectPtr<UEncounterDefinition> EncounterDefinition = nullptr;
+
+	/** 旧单敌人配置。EncounterDefinition 为空时作为 fallback 使用。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",
+		meta = (ToolTip = "旧单敌人配置。EncounterDefinition 为空时作为 fallback 使用，旧地图可继续工作。"))
 	TObjectPtr<UEnemyDefinition> EnemyDef = nullptr;
 
 	/**
@@ -111,6 +161,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",
 		meta = (ToolTip = "本触发器对应的场景敌人 Host。进入战斗后只绑定该 Host 下的部位 Actor；为空时保留 EnemyInfoBar fallback，但场景部位不会参与绑定。"))
 	TObjectPtr<AWacomBattleEnemyActor> SceneEnemyHost = nullptr;
+
+	/**
+	 * Encounter 多敌人场景 Host 映射。
+	 *
+	 * 配置后优先按 EnemySlotId 把规则敌人槽映射到对应 SceneEnemyHost；
+	 * 为空时继续使用旧 SceneEnemyHost 单敌人 fallback。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",
+		meta = (ToolTip = "Encounter 多敌人场景 Host 映射。配置后优先按 EnemySlotId 把规则敌人槽映射到对应 SceneEnemyHost；为空时继续使用旧 SceneEnemyHost 单敌人 fallback。"))
+	TArray<FWacomBattleSceneEnemyHostSlot> SceneEnemyHostSlots;
 
 	/** 触发半径（cm）。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle",
@@ -172,6 +232,17 @@ public:
 		meta = (ToolTip = "将当前战斗触发器诊断摘要写入日志，便于 PIE 排查战斗配置和点击目标绑定。"))
 	void LogBattleTriggerDebugSummary(AWacomPlayerController* PC) const;
 
+	/** 返回本 Trigger 启动战斗时使用的兼容主敌人定义。Encounter 有效时返回第一个有效敌人槽。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle",
+		meta = (ToolTip = "返回本 Trigger 启动战斗时使用的兼容主敌人定义。Encounter 有效时返回第一个有效敌人槽；否则返回旧 EnemyDef。"))
+	UEnemyDefinition* ResolveBattleEnemyDefinition() const;
+
+	/** 将 EncounterDefinition.EnemySlots 转换为 Battle init enemy slots；Encounter 为空时输出空数组。 */
+	void BuildBattleEnemySlots(TArray<FBattleEnemySlotInit>& OutEnemySlots) const;
+
+	/** 返回本 Trigger 进入战斗时应绑定到 BattleHUD 的场景敌人 Host 列表；多 Host slots 优先，旧 SceneEnemyHost fallback。 */
+	void BuildBattleSceneEnemyHosts(TArray<AWacomBattleEnemyActor*>& OutSceneEnemyHosts) const;
+
 	// ---- IWacomWorldInteractable ----
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* PC) const override;
 	virtual FVector GetInteractLocation_Implementation(AWacomPlayerController* PC) const override;
@@ -208,6 +279,7 @@ protected:
 
 private:
 	void RefreshClickTargetBinding();
+	bool HasConfiguredBattleDefinition() const;
 	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsDestroyedFor(AWacomPlayerController* PC) const;
 

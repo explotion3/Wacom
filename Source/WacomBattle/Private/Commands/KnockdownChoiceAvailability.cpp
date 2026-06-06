@@ -44,6 +44,7 @@ FKnockdownChoiceView FKnockdownChoiceAvailability::BuildView(const FBattleState&
 	View.bHasPendingChoice = true;
 	View.PartInstanceId = Event.PartInstanceId;
 	View.PartId = Event.PartId;
+	View.Identity = Event.Identity;
 
 	for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
 	{

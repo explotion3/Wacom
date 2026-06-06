@@ -8,10 +8,12 @@
 class UBattleHUD;
 struct FBattleSnapshot;
 struct FWacomBattleCombatLogCommandContext;
+struct FWacomInteractionTargetHandle;
 
 struct FWacomBattleHUDCommandFlow
 {
 	static void SubmitPlayCard(UBattleHUD& HUD, const FGuid& CardId, const FGuid& TargetPartId);
+	static void SubmitPlayCardOnWorldTarget(UBattleHUD& HUD, const FGuid& CardId, const FWacomInteractionTargetHandle& TargetHandle);
 	static void SubmitPlayCardOnHandCard(UBattleHUD& HUD, const FGuid& CardId, const FGuid& TargetCardId);
 	static void SubmitWait(UBattleHUD& HUD);
 	static void SubmitEndTurn(UBattleHUD& HUD);

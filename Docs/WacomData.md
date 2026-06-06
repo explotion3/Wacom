@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-06-05
+updated: 2026-06-06
 tags:
   - wacom/data
   - wacom/dataasset
@@ -18,10 +18,11 @@ tags:
 
 ## §1 模块职责
 
-`WacomData` 负责卡牌、敌人、角色、商店、拾取物、Run world card interaction 和 RunEvent 等静态定义。它可以描述“内容是什么”，不能保存“当前 Run / 当前战斗发生了什么”。
+`WacomData` 负责卡牌、敌人、Encounter、角色、商店、拾取物、Run world card interaction 和 RunEvent 等静态定义。它可以描述“内容是什么”，不能保存“当前 Run / 当前战斗发生了什么”。
 
 **负责：**
 - `UCardDefinition`、`UEnemyDefinition`、`UEnemyPartDefinition`、`UCharacterDefinition`
+- `UEncounterDefinition`
 - `UShopDefinition`
 - `UWacomRunPickupDefinition`
 - `UWacomRunWorldCardInteractionDefinition`
@@ -52,6 +53,7 @@ WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 | `UCardDefinition` | `Source/WacomData/Public/Cards` | 卡牌 ID、文案、费用、关键词、目标模式、效果、被动和身材 | Battle 创建 runtime card；Run 保存玩家持有卡牌实例 |
 | `UEnemyDefinition` | `Source/WacomData/Public/Enemies` | 敌人由哪些部位组成，以及部位顺序 | Battle 初始化敌人 runtime state |
 | `UEnemyPartDefinition` | `Source/WacomData/Public/Enemies` | 部位 HP、意图循环、经验、击倒奖励卡 | Battle 执行部位行动和击倒选择 |
+| `UEncounterDefinition` | `Source/WacomData/Public/Encounters` | 单场战斗包含哪些敌人槽，以及敌人槽顺序 | App 的 BattleTrigger 进入战斗前转换为 Battle init params |
 | `UCharacterDefinition` | `Source/WacomData/Public/Characters` | 角色基础 HP、左右手固有卡、初始牌组 | Run 初始化角色和玩家卡池；Battle 读取入战卡组 |
 | `UShopDefinition` | `Source/WacomData/Public/Shops` | 固定商品列表和价格 | RunSession 按场景 shop visit 保存购买状态 |
 | `UWacomRunPickupDefinition` | `Source/WacomData/Public/Pickups` | 数据驱动拾取物奖励配置 | RunSession 使用场景 `PersistentId` 防重复拾取 |
@@ -154,9 +156,12 @@ class UEnemyDefinition : public UPrimaryDataAsset
 USTRUCT(BlueprintType)
 struct FEnemyPartSlot
 {
+    FName PartSlotId;
     TObjectPtr<UEnemyPartDefinition> PartDef;
 };
 ```
+
+`FEnemyPartSlot.PartSlotId` 是敌人定义内的局部部位槽 ID；为空时兼容回退到部位定义 `PartId`。Encounter / Battle 的完整部位身份后续会由 `EncounterId + EnemySlotId + PartSlotId` 组成。
 
 `UEnemyPartDefinition` 是敌方部位的静态规则入口：
 
@@ -205,7 +210,39 @@ struct FIntentEffect
 };
 ```
 
-## §5 Character Definition
+<a id="wacomdata-encounter-definition"></a>
+## §5 Encounter Definition
+
+`UEncounterDefinition` 是单场战斗静态敌人组合入口。它只描述“这场战斗有哪些敌人槽”，不保存场景 Actor、运行时进度、视觉 prefab、奖励、阵型、位置或存档状态。
+
+```cpp
+UCLASS(BlueprintType)
+class UEncounterDefinition : public UPrimaryDataAsset
+{
+    FName EncounterDefinitionId;
+    FText DisplayName;
+    TArray<FEncounterEnemySlot> EnemySlots;
+};
+
+USTRUCT(BlueprintType)
+struct FEncounterEnemySlot
+{
+    FName EnemySlotId;
+    TObjectPtr<UEnemyDefinition> EnemyDefinition;
+};
+```
+
+| 字段 | 语义 |
+|---|---|
+| `EncounterDefinitionId` | Encounter 内容稳定 ID；用于内容识别、debug 和后续运行时映射，不从资产名自动回退 |
+| `DisplayName` | UI 展示名，可为空；规则层不从文本解析行为 |
+| `EnemySlots` | Encounter 敌人槽列表；数组顺序表示战斗敌人槽顺序，不表示场景摆放位置 |
+| `EnemySlotId` | Encounter 内稳定敌人槽 ID；后续映射到 Battle `EnemySlotId`，参与多敌人部位身份 |
+| `EnemyDefinition` | 敌人槽使用的静态敌人定义；不同槽可以引用同一个敌人定义 |
+
+当前 `UEncounterDefinition` 仍只是静态数据合同，不保存运行态进度。正式场景入口由 `ABattleTriggerActor.EncounterDefinition` 引用它；进入战斗时 App 层把 `EnemySlots` 转换为 `FBattleInitParams.EnemySlots`。Battle 仍只消费 `FBattleInitParams`，Run 仍用场景 Trigger 的 `PersistentId` 作为撤离重入进度 key，不直接持有 Encounter 资产。
+
+## §6 Character Definition
 
 `UCharacterDefinition` 是角色静态入口。Run 初始化时读取它创建玩家初始卡池和角色基准数据。
 
@@ -228,7 +265,7 @@ class UCharacterDefinition : public UPrimaryDataAsset
 - `StarterDeck` 只放正式初始牌。测试卡、debug key 和 badge 显示测试卡不进入初始牌组；需要 PIE 验证时通过调试商店获得。
 - 战内 MaxHp = 角色基础 HP + 备战卡组中 Companion 卡的 `Physique.MaxHpBonus` 总和。
 
-## §6 Shop Definition
+## §7 Shop Definition
 
 `UShopDefinition` 只定义静态商品内容，不保存已购买状态。
 
@@ -254,7 +291,7 @@ struct FShopOfferDefinition
 - `Price=0` 是合法免费商品；负数无效。
 - RunSession 使用场景 `PersistentId` 保存本次 Run 内的购买状态和库存访问。
 
-## §7 Pickup Definition
+## §8 Pickup Definition
 
 `UWacomRunPickupDefinition` 是 Run world Pickup 的数据驱动奖励定义。它描述“这个拾取物给什么”，不保存“这个场景实例是否已拾取”。
 
@@ -278,7 +315,7 @@ class UWacomRunPickupDefinition : public UPrimaryDataAsset
 
 正式摆放推荐 `BP_WacomRunRewardPickupActor + UWacomRunPickupDefinition`。每个场景实例仍必须有自己的唯一 `PersistentId`。
 
-## §8 Run World Card Interaction Definition
+## §9 Run World Card Interaction Definition
 
 `UWacomRunWorldCardInteractionDefinition` 是 Run world card drop receiver 的通用静态制作定义。它描述目标接受什么卡、给什么奖励、是否消耗卡和失败 / 完成反馈文案；不保存目标是否已完成。
 
@@ -319,7 +356,7 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 
 运行时提交流程和 Actor authoring 见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#4-run-world-card-drop)。
 
-## §9 RunEvent Definition
+## §10 RunEvent Definition
 
 `UWacomRunEventDefinition` 是探索事件图的静态定义。RunSession 打开事件时读取当前节点，选择选项时在 working-state 事务中校验条件、应用效果、推进节点或关闭事件。
 
@@ -342,7 +379,7 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 - `CardPayment` 当前是单卡支付合同。支付 UI、drop target 和 menu lease 见 [WacomUI.md](./WacomUI.md) 与 [WacomWorldInteraction.md](./WacomWorldInteraction.md#6-run-menu-zone-target)。
 - 条件和效果的阻断 / warning 口径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#asset-validation)。
 
-## §10 Battle Effect Structs
+## §11 Battle Effect Structs
 
 卡牌、意图、ZoneHook 和 Passive 使用 Gameplay tag 表达效果类型、目标、条件、区域和触发点。tag 字典见 [WacomGameplayTags.md](./WacomGameplayTags.md)，但 tag 已声明不代表可写入正式资产；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
 
@@ -358,7 +395,7 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 
 `WacomData` 只定义字段。Battle resolver、dispatcher、validation matrix 和 transient runtime fixture 共同决定这些字段当前是否真正可执行。
 
-## §11 修改数据合同时的检查点
+## §12 修改数据合同时的检查点
 
 修改 DataAsset 字段或新增静态数据能力时，先确认：
 

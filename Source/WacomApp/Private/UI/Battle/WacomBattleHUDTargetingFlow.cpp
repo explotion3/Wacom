@@ -139,7 +139,15 @@ FBattleTargetSelectionView FWacomBattleHUDTargetingFlow::BuildTargetSelectionVie
 		else
 		{
 			const FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForWorldTarget(
-				Part.InstanceId, nullptr);
+				Part.InstanceId,
+				nullptr,
+				FVector::ZeroVector,
+				FVector2D::ZeroVector,
+				FGameplayTag(),
+				Part.Definition ? Part.Definition->PartId : NAME_None,
+				Part.EncounterId,
+				Part.EnemySlotId,
+				Part.PartSlotId);
 			if (Session->CanTargetWithCard(View.PendingCardInstanceId, Handle))
 			{
 				PartView.bTargetable = true;

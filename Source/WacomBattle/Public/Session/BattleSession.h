@@ -10,6 +10,7 @@
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEvent.h"
 #include "Resolution/BattleTargetValidationResult.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "Session/BattleResultPacket.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "BattleSession.generated.h"
@@ -46,6 +47,23 @@ struct WACOMBATTLE_API FBattleDeckEntry
 
 struct FBattleState;
 struct FBattleEventBus;
+
+/**
+ * Encounter 内的单个敌人槽。
+ *
+ * 旧单敌人路径仍可只填 FBattleInitParams::Enemy；多敌人路径填 EnemySlots。
+ */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattleEnemySlotInit
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Encounter")
+	FName EnemySlotId = TEXT("Enemy");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Encounter")
+	TObjectPtr<const UEnemyDefinition> Enemy = nullptr;
+};
 
 /**
  * 击倒事件单个选项的只读展示/校验视图。
@@ -91,6 +109,9 @@ struct WACOMBATTLE_API FKnockdownChoiceView
 	FName PartId = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FBattlePartSlotIdentity Identity;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
 	FText PartName;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
@@ -126,6 +147,16 @@ struct WACOMBATTLE_API FBattleInitParams
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	TObjectPtr<const UEnemyDefinition> Enemy = nullptr;
+
+	/** Encounter 稳定 ID。Run 路径默认使用 Trigger PersistentId；空时回退为 Encounter。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Encounter")
+	FName EncounterId = TEXT("Encounter");
+
+	/**
+	 * 多敌人入口。非空时按数组顺序创建敌人槽；为空时兼容使用 Enemy 作为默认 Enemy 槽。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Encounter")
+	TArray<FBattleEnemySlotInit> EnemySlots;
 
 	/** 0 表示基于时间。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
@@ -184,6 +215,12 @@ struct WACOMBATTLE_API FBattleInitParams
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	TArray<FName> PreDestroyedPartIds;
+
+	/**
+	 * 预先破坏的完整部位身份列表。非空时优先使用；旧 PreDestroyedPartIds 会映射到默认 Enemy 槽。
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Encounter")
+	TArray<FBattlePartSlotIdentity> PreDestroyedParts;
 };
 
 /**

@@ -8,7 +8,9 @@
 #include "UI/Battle/WacomBattleHUDTargetingFlow.h"
 
 #include "Commands/BattleCommand.h"
+#include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
+#include "Types/WacomInteractionTargetTypes.h"
 
 void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& CardId, const FGuid& TargetPartId)
 {
@@ -41,6 +43,62 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& Ca
 	}
 
 	HUD.RecordFirstPersonPlayCommit(CardId, TargetPartId);
+	HUD.PendingTargetingCardId.Invalidate();
+	HUD.SetUIState(EBattleUIState::Idle);
+	AfterCommand(HUD, LogContext, PreCommandSnapshot);
+}
+
+void FWacomBattleHUDCommandFlow::SubmitPlayCardOnWorldTarget(
+	UBattleHUD& HUD,
+	const FGuid& CardId,
+	const FWacomInteractionTargetHandle& TargetHandle)
+{
+	HUD.HideCardDetailPanel();
+
+	UBattleSession* Session = HUD.GetSession();
+	if (!Session)
+	{
+		return;
+	}
+	if (!HUD.CanSubmitPlayerActionCommand())
+	{
+		return;
+	}
+
+	const FWacomBattleTargetValidationResult Validation =
+		Session->ValidateTargetWithCard(CardId, TargetHandle);
+	if (!Validation.bCanTarget)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[BattleHUD] PlayCard world target rejected by validation: %s"),
+			*Validation.DebugSummary);
+		return;
+	}
+
+	const FGuid ResolvedPartId = Validation.ResolvedPartInstanceId.IsValid()
+		? Validation.ResolvedPartInstanceId
+		: TargetHandle.WorldTargetId;
+	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
+	const FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
+			PreCommandSnapshot,
+			CardId,
+			ResolvedPartId,
+			FGuid());
+
+	FBattleCommand Command = FBattleCommand::MakePlayCard(CardId, TargetHandle.WorldTargetId);
+	Command.TargetEnemySlotId = TargetHandle.EnemySlotId;
+	Command.TargetPartSlotId = TargetHandle.PartSlotId;
+
+	const FWacomStatus Status = Session->SubmitCommand(Command);
+	if (!Status.IsOk())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCardOnWorldTarget failed, code=%d detail=%s"),
+			(int32)Status.Code, *Status.Detail.ToString());
+		return;
+	}
+
+	HUD.RecordFirstPersonPlayCommit(CardId, ResolvedPartId);
 	HUD.PendingTargetingCardId.Invalidate();
 	HUD.SetUIState(EBattleUIState::Idle);
 	AfterCommand(HUD, LogContext, PreCommandSnapshot);

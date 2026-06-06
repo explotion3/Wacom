@@ -3,6 +3,7 @@
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 
 #include "Components/PrimitiveComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Enemies/EnemyPartDefinition.h"
@@ -27,6 +28,16 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::SetPartId(FName InPartId)
 	PartId = InPartId;
 }
 
+void UWacomBattleEnemyPartWorldTargetBridgeComponent::SetBattlePartSlotIdentity(
+	FName InEncounterId,
+	FName InEnemySlotId,
+	FName InPartSlotId)
+{
+	EncounterId = InEncounterId;
+	EnemySlotId = InEnemySlotId;
+	PartSlotId = InPartSlotId;
+}
+
 bool UWacomBattleEnemyPartWorldTargetBridgeComponent::SyncFromBattleHUD(
 	UBattleHUD& HUD,
 	const FBattleSnapshot& Snapshot,
@@ -40,12 +51,50 @@ bool UWacomBattleEnemyPartWorldTargetBridgeComponent::SyncFromBattleHUD(
 	}
 
 	const FEnemyPartSnapshot* MatchedPart = nullptr;
-	for (const FEnemyPartSnapshot& Part : Snapshot.Enemy.Parts)
+	const FName EffectiveEncounterId = EncounterId.IsNone() ? Snapshot.EncounterId : EncounterId;
+	const FName EffectiveEnemySlotId = EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : EnemySlotId;
+	const FName EffectivePartSlotId = PartSlotId.IsNone() ? PartId : PartSlotId;
+	const bool bUseExplicitSlotBinding =
+		!EncounterId.IsNone()
+		|| EffectiveEnemySlotId != FName(TEXT("Enemy"))
+		|| (!EffectivePartSlotId.IsNone() && EffectivePartSlotId != PartId);
+	if (bUseExplicitSlotBinding && !EffectivePartSlotId.IsNone())
 	{
-		if (Part.Definition && Part.Definition->PartId == PartId)
+		for (const FEnemySnapshot& EnemySnapshot : Snapshot.Enemies)
 		{
-			MatchedPart = &Part;
-			break;
+			if (EnemySnapshot.EncounterId != EffectiveEncounterId)
+			{
+				continue;
+			}
+			if (EnemySnapshot.EnemySlotId != EffectiveEnemySlotId)
+			{
+				continue;
+			}
+
+			for (const FEnemyPartSnapshot& Part : EnemySnapshot.Parts)
+			{
+				if (Part.PartSlotId == EffectivePartSlotId)
+				{
+					MatchedPart = &Part;
+					break;
+				}
+			}
+			if (MatchedPart)
+			{
+				break;
+			}
+		}
+	}
+
+	if (!MatchedPart)
+	{
+		for (const FEnemyPartSnapshot& Part : Snapshot.Enemy.Parts)
+		{
+			if (Part.Definition && Part.Definition->PartId == PartId)
+			{
+				MatchedPart = &Part;
+				break;
+			}
 		}
 	}
 
@@ -65,8 +114,13 @@ bool UWacomBattleEnemyPartWorldTargetBridgeComponent::SyncFromBattleHUD(
 	}
 
 	PartInstanceId = MatchedPart->InstanceId;
+	BoundEncounterId = MatchedPart->EncounterId;
+	BoundEnemySlotId = MatchedPart->EnemySlotId;
+	BoundPartSlotId = MatchedPart->PartSlotId;
 	bBoundToSnapshot = true;
-	LastBindResult = TEXT("MatchedPartId");
+	LastBindResult = MatchedPart->PartSlotId == EffectivePartSlotId && MatchedPart->EnemySlotId == EffectiveEnemySlotId
+		? TEXT("MatchedPartSlot")
+		: TEXT("MatchedPartId");
 	CacheRuntimePartFacts(*MatchedPart);
 
 	bool bNewTargetable = false;
@@ -98,6 +152,9 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearBattleBindingInternal
 	ClearDragTargetPreviewState();
 	ClearHoverProbeState(TEXT("BindingCleared"));
 	PartInstanceId.Invalidate();
+	BoundEncounterId = NAME_None;
+	BoundEnemySlotId = NAME_None;
+	BoundPartSlotId = NAME_None;
 	bBoundToSnapshot = false;
 	TargetDisabledReason = NAME_None;
 	ApplyTargetableAffordance(false);
@@ -109,6 +166,7 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::ClearBattleBindingInternal
 	if (UWacomInteractionTargetComponent* TargetComponent = ResolveInteractionTargetComponent())
 	{
 		TargetComponent->SetTargetId(FGuid());
+		TargetComponent->SetBattlePartSlotIdentity(NAME_None, NAME_None, NAME_None);
 	}
 }
 
@@ -145,6 +203,9 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDebugView()
 {
 	FWacomBattleEnemyPartWorldTargetDebugView View;
 	View.PartId = PartId;
+	View.EncounterId = BoundEncounterId;
+	View.EnemySlotId = BoundEnemySlotId;
+	View.PartSlotId = BoundPartSlotId;
 	View.PartInstanceId = PartInstanceId;
 	View.bBoundToSnapshot = bBoundToSnapshot;
 	View.bRegisteredWithBattleHUD = bRegisteredWithBattleHUD;
@@ -206,9 +267,12 @@ FString UWacomBattleEnemyPartWorldTargetBridgeComponent::GetBattleWorldTargetDeb
 {
 	const FWacomBattleEnemyPartWorldTargetDebugView View = GetBattleWorldTargetDebugView();
 	return FString::Printf(
-		TEXT("BattleEnemyPartWorldTarget{Owner=%s PartId=%s PartInstanceId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s StatusBadgeWidget=%s StatusBadgeLocation=%s StatusBadgeDrawSize=%s StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f CurrentStatusBadgeOpacity=%.2f PredictionWidget=%s PredictionBadgeLocation=%s PredictionBadgeDrawSize=%s PredictionBadgeScale=%.2f PredictionBadgeZOffset=%.1f PredictionBadgeOffsetActive=%s BadgeStaggerIndex=%d Targetable=%s Disabled=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s}"),
+		TEXT("BattleEnemyPartWorldTarget{Owner=%s PartId=%s EncounterId=%s EnemySlotId=%s PartSlotId=%s PartInstanceId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s StatusBadgeWidget=%s StatusBadgeLocation=%s StatusBadgeDrawSize=%s StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f CurrentStatusBadgeOpacity=%.2f PredictionWidget=%s PredictionBadgeLocation=%s PredictionBadgeDrawSize=%s PredictionBadgeScale=%.2f PredictionBadgeZOffset=%.1f PredictionBadgeOffsetActive=%s BadgeStaggerIndex=%d Targetable=%s Disabled=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s}"),
 		*GetNameSafe(GetOwner()),
 		*View.PartId.ToString(),
+		*View.EncounterId.ToString(),
+		*View.EnemySlotId.ToString(),
+		*View.PartSlotId.ToString(),
 		*View.PartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
 		View.bBoundToSnapshot ? TEXT("true") : TEXT("false"),
 		View.bRegisteredWithBattleHUD ? TEXT("true") : TEXT("false"),
@@ -407,6 +471,17 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent::ResolveVisualTargetComponent() 
 
 	AActor* Owner = GetOwner();
 	return Owner ? Owner->FindComponentByClass<UPrimitiveComponent>() : nullptr;
+}
+
+USceneComponent*
+UWacomBattleEnemyPartWorldTargetBridgeComponent::ResolveFeedbackTargetComponent() const
+{
+	if (FeedbackTargetComponent)
+	{
+		return FeedbackTargetComponent;
+	}
+
+	return ResolveVisualTargetComponent();
 }
 
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::CacheRuntimePartFacts(
@@ -761,20 +836,20 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::ApplyPersistentScaleState(
 
 void UWacomBattleEnemyPartWorldTargetBridgeComponent::BeginScaleFeedback(float ScaleMultiplier, float HoldSeconds)
 {
-	UPrimitiveComponent* Primitive = ResolveVisualTargetComponent();
-	if (!Primitive)
+	USceneComponent* FeedbackTarget = ResolveFeedbackTargetComponent();
+	if (!FeedbackTarget)
 	{
 		return;
 	}
 
-	if (!bHasCachedBaseScale || CachedVisualTarget.Get() != Primitive)
+	if (!bHasCachedBaseScale || CachedFeedbackTarget.Get() != FeedbackTarget)
 	{
-		CachedVisualTarget = Primitive;
-		CachedBaseScale = Primitive->GetRelativeScale3D();
+		CachedFeedbackTarget = FeedbackTarget;
+		CachedBaseScale = FeedbackTarget->GetRelativeScale3D();
 		bHasCachedBaseScale = true;
 	}
 
-	Primitive->SetRelativeScale3D(CachedBaseScale * FMath::Max(1.0f, ScaleMultiplier));
+	FeedbackTarget->SetRelativeScale3D(CachedBaseScale * FMath::Max(1.0f, ScaleMultiplier));
 
 	if (HoldSeconds > 0.0f)
 	{
@@ -803,9 +878,9 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::RestoreBaseScaleIfNeeded()
 	StopFeedbackTimer();
 	if (bHasCachedBaseScale)
 	{
-		if (UPrimitiveComponent* Primitive = CachedVisualTarget.Get())
+		if (USceneComponent* FeedbackTarget = CachedFeedbackTarget.Get())
 		{
-			Primitive->SetRelativeScale3D(CachedBaseScale);
+			FeedbackTarget->SetRelativeScale3D(CachedBaseScale);
 		}
 	}
 }
@@ -830,6 +905,10 @@ void UWacomBattleEnemyPartWorldTargetBridgeComponent::UpdateInteractionTargetCom
 	{
 		TargetComponent->SetTargetId(PartInstanceId);
 		TargetComponent->SetStableTargetId(PartId);
+		TargetComponent->SetBattlePartSlotIdentity(
+			BoundEncounterId,
+			BoundEnemySlotId,
+			BoundPartSlotId);
 		TargetComponent->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
 	}
 }

@@ -79,6 +79,31 @@ namespace
 		return Card && Card->CardId == FName(TEXT("MuseiYinchongdeng"));
 	}
 
+	FName GetRunBattleEncounterId(FName TriggerPersistentId)
+	{
+		return TriggerPersistentId.IsNone() ? FName(TEXT("Encounter")) : TriggerPersistentId;
+	}
+
+	void AppendLegacyDestroyedPartIdsAsDefaultEnemySlot(
+		const TArray<FName>& DestroyedPartIds,
+		FName EncounterId,
+		TArray<FBattlePartSlotIdentity>& OutDestroyedParts)
+	{
+		for (const FName& PartId : DestroyedPartIds)
+		{
+			if (PartId.IsNone())
+			{
+				continue;
+			}
+
+			OutDestroyedParts.AddUnique(FBattlePartSlotIdentity::Make(
+				EncounterId,
+				FName(TEXT("Enemy")),
+				PartId,
+				PartId));
+		}
+	}
+
 	bool IsFluxContentCardDefinition(const UCardDefinition* Card)
 	{
 		return FRunDeckRules::IsFluxContentCardDefinition(Card);
@@ -397,6 +422,7 @@ bool URunSession::BuildInitParamsForBattle(UEnemyDefinition* EnemyDef, FName Tri
 
 	OutParams.Character  = RunState.Character;
 	OutParams.Enemy      = EnemyDef;
+	OutParams.EncounterId = GetRunBattleEncounterId(TriggerPersistentId);
 	OutParams.RandomSeed = RunState.BattleSeed;
 
 	// 阈值常量从 RunState 灌入战内，而不是战内硬编码。
@@ -446,11 +472,22 @@ bool URunSession::BuildInitParamsForBattle(UEnemyDefinition* EnemyDef, FName Tri
 
 	// 撤离重入：灌入持久化破坏部位（如果该 Trigger 上次撤离时有记录）。
 	OutParams.PreDestroyedPartIds.Reset();
+	OutParams.PreDestroyedParts.Reset();
 	if (!TriggerPersistentId.IsNone())
 	{
 		if (const FBattleProgressSnapshot* Progress = RunState.BattleProgress.Find(TriggerPersistentId))
 		{
-			OutParams.PreDestroyedPartIds = Progress->DestroyedPartIds;
+			if (Progress->DestroyedParts.Num() > 0)
+			{
+				OutParams.PreDestroyedParts = Progress->DestroyedParts;
+			}
+			else
+			{
+				AppendLegacyDestroyedPartIdsAsDefaultEnemySlot(
+					Progress->DestroyedPartIds,
+					OutParams.EncounterId,
+					OutParams.PreDestroyedParts);
+			}
 		}
 	}
 	return true;

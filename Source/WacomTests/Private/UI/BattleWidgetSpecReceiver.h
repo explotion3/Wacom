@@ -198,6 +198,11 @@ public:
 		SetBattleSceneEnemyHost(InHost);
 	}
 
+	void SetBattleSceneEnemyHostsForTest(const TArray<AWacomBattleEnemyActor*>& InHosts)
+	{
+		SetBattleSceneEnemyHosts(InHosts);
+	}
+
 	FWacomBattleHUDAutomationTestView AutomationViewForTest() const
 	{
 		return GetAutomationTestViewForTest();

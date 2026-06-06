@@ -26,7 +26,10 @@ FWacomInteractionTargetHandle UWacomInteractionTargetComponent::BuildWorldTarget
 		WorldLoc,
 		FVector2D::ZeroVector,
 		InteractionTargetTag,
-		StableTargetId);
+		StableTargetId,
+		EncounterId,
+		EnemySlotId,
+		PartSlotId);
 }
 
 void UWacomInteractionTargetComponent::SetTargetId(const FGuid& InTargetId)
@@ -42,6 +45,16 @@ void UWacomInteractionTargetComponent::SetInteractionTargetTag(const FGameplayTa
 void UWacomInteractionTargetComponent::SetStableTargetId(FName InStableTargetId)
 {
 	StableTargetId = InStableTargetId;
+}
+
+void UWacomInteractionTargetComponent::SetBattlePartSlotIdentity(
+	FName InEncounterId,
+	FName InEnemySlotId,
+	FName InPartSlotId)
+{
+	EncounterId = InEncounterId;
+	EnemySlotId = InEnemySlotId;
+	PartSlotId = InPartSlotId;
 }
 
 void UWacomInteractionTargetComponent::LogHandleToConsole()

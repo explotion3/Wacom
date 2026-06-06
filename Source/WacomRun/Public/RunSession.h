@@ -726,8 +726,10 @@ public:
 	 *   - Params.RandomSeed = RunState.BattleSeed
 	 *   - Params.BattleDeckOverride = RunState.BattleDeck
 	 *   - Params.HighHpThreshold / LowHpThreshold = RunState 字段
-	 *   - **Params.PreDestroyedPartIds**：若 TriggerPersistentId 非空且 RunState.BattleProgress
-	 *     中有该 Trigger 的进度，灌入已破坏的部位列表。
+	 *   - Params.EncounterId = TriggerPersistentId（为空时使用默认 Encounter）
+	 *   - **Params.PreDestroyedParts**：若 TriggerPersistentId 非空且 RunState.BattleProgress
+	 *     中有该 Trigger 的进度，灌入已破坏的完整部位身份。
+	 *     旧 DestroyedPartIds 进度会转换到默认 Enemy 槽作为兼容。
 	 *
 	 * @param EnemyDef               敌人定义
 	 * @param TriggerPersistentId    触发战斗的 Trigger 的持久化 ID。NAME_None 表示没有持久化进度（如纯测试）

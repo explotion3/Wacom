@@ -91,8 +91,16 @@ struct WACOMBATTLE_API FBattleSnapshot
 	int32 CompanionPlayedCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FName EncounterId = TEXT("Encounter");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	FPlayerSnapshot Player;
 
+	/** 多敌人 Encounter 槽位快照。按初始化 EnemySlots 顺序排列。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	TArray<FEnemySnapshot> Enemies;
+
+	/** 兼容旧单敌人 UI / 测试：始终镜像 Enemies[0]。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	FEnemySnapshot Enemy;
 

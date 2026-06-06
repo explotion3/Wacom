@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "EnemySnapshot.generated.h"
 
 class UEnemyDefinition;
@@ -46,6 +47,21 @@ struct WACOMBATTLE_API FEnemyPartSnapshot
 	TObjectPtr<const UEnemyPartDefinition> Definition = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FBattlePartSlotIdentity Identity;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FName EncounterId = TEXT("Encounter");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FName EnemySlotId = TEXT("Enemy");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FName PartSlotId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FName PartDefinitionId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 CurrentHp = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
@@ -82,6 +98,12 @@ struct WACOMBATTLE_API FEnemySnapshot
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	TObjectPtr<const UEnemyDefinition> Definition = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FName EncounterId = TEXT("Encounter");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FName EnemySlotId = TEXT("Enemy");
 
 	/** 按部位定义顺序排列。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")

@@ -2,9 +2,12 @@
 
 #include "Actors/WacomBattleEnemyPartActor.h"
 
+#include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Engine/StaticMesh.h"
+#include "PaperSprite.h"
+#include "PaperSpriteComponent.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartStatusBadgeWidget.h"
@@ -25,6 +28,21 @@ namespace
 	{
 		return Extent.X <= 0.0f || Extent.Y <= 0.0f || Extent.Z <= 0.0f;
 	}
+
+	bool HasAnyZeroScaleAxis(const FVector& Scale)
+	{
+		return FMath::IsNearlyZero(Scale.X)
+			|| FMath::IsNearlyZero(Scale.Y)
+			|| FMath::IsNearlyZero(Scale.Z);
+	}
+
+	FString BuildVisualLayerComponentName(FName LayerId, int32 LayerIndex)
+	{
+		const FString LayerName = LayerId.IsNone()
+			? FString::Printf(TEXT("Layer%d"), LayerIndex)
+			: LayerId.ToString();
+		return FString::Printf(TEXT("VisualLayer_%02d_%s"), LayerIndex, *LayerName);
+	}
 }
 
 AWacomBattleEnemyPartActor::AWacomBattleEnemyPartActor()
@@ -41,8 +59,15 @@ AWacomBattleEnemyPartActor::AWacomBattleEnemyPartActor()
 	HitBounds->bEditableWhenInherited = false;
 	RootComponent = HitBounds;
 
+	VisualLayersRoot = CreateDefaultSubobject<USceneComponent>(TEXT("VisualLayersRoot"));
+	VisualLayersRoot->SetupAttachment(RootComponent);
+	VisualLayersRoot->SetRelativeLocation(FVector::ZeroVector);
+	VisualLayersRoot->SetRelativeRotation(FRotator::ZeroRotator);
+	VisualLayersRoot->SetRelativeScale3D(FVector::OneVector);
+	VisualLayersRoot->bEditableWhenInherited = false;
+
 	PartVisual = CreateDefaultSubobject<UWacomBattleEnemyPartVisualComponent>(TEXT("PartVisual"));
-	PartVisual->SetupAttachment(RootComponent);
+	PartVisual->SetupAttachment(VisualLayersRoot);
 	PartVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	PartVisual->SetGenerateOverlapEvents(false);
 	PartVisual->SetRelativeScale3D(VisualScale);
@@ -95,6 +120,8 @@ void AWacomBattleEnemyPartActor::OnConstruction(const FTransform& Transform)
 
 void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 {
+	const FName EffectivePartId = GetEffectivePartDefinitionId();
+
 	if (HitBounds)
 	{
 		HitBounds->SetBoxExtent(HitBoundsExtent);
@@ -112,18 +139,26 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 		PartVisual->SetRelativeLocation(VisualRelativeLocation);
 		PartVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		PartVisual->SetGenerateOverlapEvents(false);
+		PartVisual->SetVisibility(VisualLayers.Num() == 0, true);
 	}
+
+	RefreshVisualLayers();
 
 	if (InteractionTargetComponent)
 	{
-		InteractionTargetComponent->SetStableTargetId(PartId);
+		InteractionTargetComponent->SetStableTargetId(EffectivePartId);
 		InteractionTargetComponent->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
 	}
 
 	if (WorldTargetBridgeComponent)
 	{
-		WorldTargetBridgeComponent->SetPartId(PartId);
+		WorldTargetBridgeComponent->SetPartId(EffectivePartId);
+		WorldTargetBridgeComponent->SetBattlePartSlotIdentity(
+			NAME_None,
+			EnemySlotId,
+			GetEffectivePartSlotId());
 		WorldTargetBridgeComponent->VisualTargetComponent = PartVisual;
+		WorldTargetBridgeComponent->FeedbackTargetComponent = VisualLayersRoot;
 		WorldTargetBridgeComponent->bAutoConfigureInteractionTarget = true;
 		WorldTargetBridgeComponent->bEnablePredictionDisplay = bEnablePredictionWidget;
 		WorldTargetBridgeComponent->bEnableStatusBadgeDisplay = bEnableStatusBadgeWidget;
@@ -173,6 +208,108 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 	}
 }
 
+void AWacomBattleEnemyPartActor::RefreshVisualLayers()
+{
+	for (UPaperSpriteComponent* SpriteComponent : GeneratedVisualLayerComponents)
+	{
+		if (SpriteComponent)
+		{
+			SpriteComponent->DestroyComponent();
+		}
+	}
+	GeneratedVisualLayerComponents.Reset();
+
+	if (VisualLayers.Num() == 0)
+	{
+		if (PartVisual)
+		{
+			PartVisual->SetVisibility(true, true);
+		}
+		return;
+	}
+
+	if (PartVisual)
+	{
+		PartVisual->SetVisibility(false, true);
+	}
+
+	for (int32 LayerIndex = 0; LayerIndex < VisualLayers.Num(); ++LayerIndex)
+	{
+		const FWacomBattleEnemyPartVisualLayer& Layer = VisualLayers[LayerIndex];
+		if (!Layer.Sprite)
+		{
+			continue;
+		}
+
+		const FName ComponentName(*BuildVisualLayerComponentName(Layer.LayerId, LayerIndex));
+		UPaperSpriteComponent* SpriteComponent =
+			NewObject<UPaperSpriteComponent>(this, ComponentName, RF_Transactional | RF_Transient);
+		if (!SpriteComponent)
+		{
+			continue;
+		}
+
+		USceneComponent* AttachParent = VisualLayersRoot.Get();
+		if (!AttachParent)
+		{
+			AttachParent = RootComponent;
+		}
+		SpriteComponent->SetupAttachment(AttachParent);
+		SpriteComponent->SetSprite(Layer.Sprite);
+		SpriteComponent->SetRelativeLocation(Layer.RelativeLocation);
+		SpriteComponent->SetRelativeRotation(Layer.RelativeRotation);
+		SpriteComponent->SetRelativeScale3D(Layer.RelativeScale3D);
+		SpriteComponent->SetSpriteColor(Layer.Tint);
+		SpriteComponent->SetTranslucentSortPriority(Layer.SortOrder);
+		SpriteComponent->SetVisibility(Layer.bVisible, true);
+		SpriteComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		SpriteComponent->SetGenerateOverlapEvents(false);
+		SpriteComponent->bEditableWhenInherited = false;
+		SpriteComponent->RegisterComponent();
+		AddInstanceComponent(SpriteComponent);
+		GeneratedVisualLayerComponents.Add(SpriteComponent);
+	}
+}
+
+void AWacomBattleEnemyPartActor::SetEnemySlotId(FName InEnemySlotId)
+{
+	if (EnemySlotId == InEnemySlotId)
+	{
+		return;
+	}
+
+	EnemySlotId = InEnemySlotId;
+	RefreshAuthoringState();
+}
+
+FName AWacomBattleEnemyPartActor::GetEffectivePartSlotId() const
+{
+	return PartSlotId.IsNone() ? PartId : PartSlotId;
+}
+
+FName AWacomBattleEnemyPartActor::GetEffectivePartDefinitionId() const
+{
+	return PartId;
+}
+
+FName AWacomBattleEnemyPartActor::GetStableSceneTargetId() const
+{
+	const FName EffectivePartSlotId = GetEffectivePartSlotId();
+	if (EffectivePartSlotId.IsNone())
+	{
+		return NAME_None;
+	}
+	if (EnemySlotId.IsNone())
+	{
+		return EffectivePartSlotId;
+	}
+
+	return FName(*FString::Printf(
+		TEXT("%s.%s"),
+		*EnemySlotId.ToString(),
+		*EffectivePartSlotId.ToString()));
+}
+
 void AWacomBattleEnemyPartActor::SetBadgeLayoutStagger(
 	int32 InStaggerIndex,
 	const FVector& InStaggerOffset)
@@ -186,6 +323,7 @@ void AWacomBattleEnemyPartActor::ConfigureDebugSnakeHeadSample()
 {
 	ConfigureDebugSnakeSample(
 		TEXT("Snake.Head"),
+		TEXT("Head"),
 		FVector(42.f, 38.f, 42.f),
 		FVector(0.42f, 0.38f, 0.42f),
 		FVector(0.f, 0.f, 0.f));
@@ -195,6 +333,7 @@ void AWacomBattleEnemyPartActor::ConfigureDebugSnakeBodySample()
 {
 	ConfigureDebugSnakeSample(
 		TEXT("Snake.Body"),
+		TEXT("Body"),
 		FVector(62.f, 46.f, 42.f),
 		FVector(0.62f, 0.46f, 0.42f),
 		FVector(0.f, 0.f, 0.f));
@@ -204,6 +343,7 @@ void AWacomBattleEnemyPartActor::ConfigureDebugSnakeTailSample()
 {
 	ConfigureDebugSnakeSample(
 		TEXT("Snake.Tail"),
+		TEXT("Tail"),
 		FVector(48.f, 34.f, 34.f),
 		FVector(0.48f, 0.34f, 0.34f),
 		FVector(0.f, 0.f, 0.f));
@@ -214,7 +354,10 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 {
 	FWacomBattleSceneEnemyPartDebugView View;
 	View.ActorName = GetName();
-	View.PartId = PartId;
+	View.PartId = GetEffectivePartDefinitionId();
+	View.PartSlotId = GetEffectivePartSlotId();
+	View.EnemySlotId = EnemySlotId;
+	View.StableSceneTargetId = GetStableSceneTargetId();
 	View.HitBoundsExtent = HitBounds ? HitBounds->GetUnscaledBoxExtent() : FVector::ZeroVector;
 	View.VisualName = PartVisual ? FName(*PartVisual->GetName()) : NAME_None;
 	View.VisualMeshName = (PartVisual && PartVisual->GetStaticMesh())
@@ -222,6 +365,17 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 		: NAME_None;
 	View.VisualScale = PartVisual ? PartVisual->GetRelativeScale3D() : FVector::ZeroVector;
 	View.VisualRelativeLocation = PartVisual ? PartVisual->GetRelativeLocation() : FVector::ZeroVector;
+	View.bUsingVisualLayers = VisualLayers.Num() > 0;
+	View.VisualLayerCount = VisualLayers.Num();
+	View.GeneratedVisualLayerComponentCount = GeneratedVisualLayerComponents.Num();
+	View.VisualLayerIds.Reserve(VisualLayers.Num());
+	for (const FWacomBattleEnemyPartVisualLayer& Layer : VisualLayers)
+	{
+		View.VisualLayerIds.Add(Layer.LayerId);
+	}
+	View.DuplicateVisualLayerIds = BuildDuplicateVisualLayerIds();
+	View.MissingVisualLayerSpriteCount = CountMissingVisualLayerSprites();
+	View.FeedbackTargetName = VisualLayersRoot ? FName(*VisualLayersRoot->GetName()) : NAME_None;
 	View.PredictionWidgetName = PredictionWidgetComponent
 		? FName(*PredictionWidgetComponent->GetName())
 		: NAME_None;
@@ -252,7 +406,7 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 		View.bInteractionTargetConfigured =
 			InteractionTargetComponent->GetInteractionTargetTag().MatchesTagExact(
 				WacomTags::Interaction_Target_Battle_EnemyPart)
-			&& InteractionTargetComponent->GetStableTargetId() == PartId;
+			&& InteractionTargetComponent->GetStableTargetId() == GetEffectivePartDefinitionId();
 		View.InteractionTargetId = InteractionTargetComponent->GetTargetId();
 		View.InteractionTargetStableId = InteractionTargetComponent->GetStableTargetId();
 	}
@@ -267,14 +421,22 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 {
 	const FWacomBattleSceneEnemyPartDebugView View = GetBattleSceneEnemyPartDebugView();
 	return FString::Printf(
-		TEXT("BattleSceneEnemyPart{Actor=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s PredictionWidget=%s StatusBadgeWidget=%s PredictionBadgeLocation=%s StatusBadgeLocation=%s PredictionBadgeDrawSize=%s StatusBadgeDrawSize=%s PredictionBadgeScale=%.2f StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s CurrentStatusBadgeOpacity=%.2f}"),
+		TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d MissingVisualLayerSprites=%d FeedbackTarget=%s PredictionWidget=%s StatusBadgeWidget=%s PredictionBadgeLocation=%s StatusBadgeLocation=%s PredictionBadgeDrawSize=%s StatusBadgeDrawSize=%s PredictionBadgeScale=%.2f StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s CurrentStatusBadgeOpacity=%.2f}"),
 		*View.ActorName,
+		*View.EnemySlotId.ToString(),
+		*View.PartSlotId.ToString(),
+		*View.StableSceneTargetId.ToString(),
 		*View.PartId.ToString(),
 		*View.HitBoundsExtent.ToCompactString(),
 		*View.VisualName.ToString(),
 		*View.VisualMeshName.ToString(),
 		*View.VisualScale.ToCompactString(),
 		*View.VisualRelativeLocation.ToCompactString(),
+		View.bUsingVisualLayers ? TEXT("true") : TEXT("false"),
+		View.VisualLayerCount,
+		View.GeneratedVisualLayerComponentCount,
+		View.MissingVisualLayerSpriteCount,
+		*View.FeedbackTargetName.ToString(),
 		*View.PredictionWidgetName.ToString(),
 		*View.StatusBadgeWidgetName.ToString(),
 		*View.PredictionBadgeRelativeLocation.ToCompactString(),
@@ -354,11 +516,11 @@ EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 			: EDataValidationResult::Valid;
 	}
 
-	if (PartId.IsNone())
+	if (PartId.IsNone() || GetEffectivePartSlotId().IsNone())
 	{
 		Context.AddError(FText::Format(
 			LOCTEXT("PlacementMissingPartId",
-				"BattleEnemyPart 摆放配置错误：Actor={0} 缺少 PartId。"),
+				"BattleEnemyPart 摆放配置错误：Actor={0} 缺少 PartId 或 PartSlotId。"),
 			FText::FromString(GetName())));
 		Result = EDataValidationResult::Invalid;
 	}
@@ -369,9 +531,65 @@ EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 			LOCTEXT("PlacementInvalidHitBounds",
 				"BattleEnemyPart 摆放配置错误：Actor={0} PartId={1} HitBoundsExtent 必须全部大于 0，当前为 {2}。"),
 			FText::FromString(GetName()),
-			FText::FromName(PartId),
+			FText::FromName(GetEffectivePartDefinitionId()),
 			FText::FromString(HitBoundsExtent.ToCompactString())));
 		Result = EDataValidationResult::Invalid;
+	}
+
+	TSet<FName> UsedLayerIds;
+	for (int32 LayerIndex = 0; LayerIndex < VisualLayers.Num(); ++LayerIndex)
+	{
+		const FWacomBattleEnemyPartVisualLayer& Layer = VisualLayers[LayerIndex];
+		if (Layer.LayerId.IsNone())
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("PlacementVisualLayerMissingId",
+					"BattleEnemyPart 摆放配置错误：Actor={0} VisualLayers[{1}] 缺少 LayerId。"),
+				FText::FromString(GetName()),
+				FText::AsNumber(LayerIndex)));
+			Result = EDataValidationResult::Invalid;
+		}
+		else if (UsedLayerIds.Contains(Layer.LayerId))
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("PlacementVisualLayerDuplicateId",
+					"BattleEnemyPart 摆放配置错误：Actor={0} VisualLayers 中 LayerId={1} 重复。"),
+				FText::FromString(GetName()),
+				FText::FromName(Layer.LayerId)));
+			Result = EDataValidationResult::Invalid;
+		}
+		else
+		{
+			UsedLayerIds.Add(Layer.LayerId);
+		}
+
+		if (HasAnyZeroScaleAxis(Layer.RelativeScale3D))
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("PlacementVisualLayerInvalidScale",
+					"BattleEnemyPart 摆放配置错误：Actor={0} VisualLayers[{1}] RelativeScale3D 任一轴不能为 0，当前为 {2}。"),
+				FText::FromString(GetName()),
+				FText::AsNumber(LayerIndex),
+				FText::FromString(Layer.RelativeScale3D.ToCompactString())));
+			Result = EDataValidationResult::Invalid;
+		}
+
+		if (!Layer.Sprite)
+		{
+			Context.AddWarning(FText::Format(
+				LOCTEXT("PlacementVisualLayerMissingSprite",
+					"BattleEnemyPart 摆放警告：Actor={0} VisualLayers[{1}] 缺少 Sprite；该层不会生成可见组件。"),
+				FText::FromString(GetName()),
+				FText::AsNumber(LayerIndex)));
+		}
+	}
+
+	if (VisualLayers.Num() == 0 && !VisualMesh)
+	{
+		Context.AddWarning(FText::Format(
+			LOCTEXT("PlacementMissingVisualResource",
+				"BattleEnemyPart 摆放警告：Actor={0} 没有 VisualLayers，也没有旧 VisualMesh；该部位只有命中体和调试信息可见。"),
+			FText::FromString(GetName())));
 	}
 
 	return Result == EDataValidationResult::Invalid
@@ -382,11 +600,13 @@ EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 
 void AWacomBattleEnemyPartActor::ConfigureDebugSnakeSample(
 	FName InPartId,
+	FName InPartSlotId,
 	const FVector& InHitBoundsExtent,
 	const FVector& InVisualScale,
 	const FVector& InVisualRelativeLocation)
 {
 	PartId = InPartId;
+	PartSlotId = InPartSlotId.IsNone() ? InPartId : InPartSlotId;
 	HitBoundsExtent = InHitBoundsExtent;
 	VisualScale = InVisualScale;
 	VisualRelativeLocation = InVisualRelativeLocation;
@@ -395,6 +615,48 @@ void AWacomBattleEnemyPartActor::ConfigureDebugSnakeSample(
 		VisualMesh = LoadObject<UStaticMesh>(nullptr, DefaultPartMeshPath);
 	}
 	RefreshAuthoringState();
+}
+
+TArray<FName> AWacomBattleEnemyPartActor::BuildDuplicateVisualLayerIds() const
+{
+	TSet<FName> Seen;
+	TSet<FName> Duplicates;
+	for (const FWacomBattleEnemyPartVisualLayer& Layer : VisualLayers)
+	{
+		if (Layer.LayerId.IsNone())
+		{
+			continue;
+		}
+
+		if (Seen.Contains(Layer.LayerId))
+		{
+			Duplicates.Add(Layer.LayerId);
+		}
+		else
+		{
+			Seen.Add(Layer.LayerId);
+		}
+	}
+
+	TArray<FName> Result = Duplicates.Array();
+	Result.Sort([](const FName& Left, const FName& Right)
+	{
+		return Left.LexicalLess(Right);
+	});
+	return Result;
+}
+
+int32 AWacomBattleEnemyPartActor::CountMissingVisualLayerSprites() const
+{
+	int32 Count = 0;
+	for (const FWacomBattleEnemyPartVisualLayer& Layer : VisualLayers)
+	{
+		if (!Layer.Sprite)
+		{
+			++Count;
+		}
+	}
+	return Count;
 }
 
 FVector AWacomBattleEnemyPartActor::GetAppliedPredictionBadgeRelativeLocation() const

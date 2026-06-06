@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-06-05
+updated: 2026-06-07
 tags:
   - wacom/todo
   - wacom/docs
@@ -79,7 +79,19 @@ tags:
   - 状态：`In Progress: 表现 polish`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：后续集中在材质描边、贴近部位 tooltip、正式美术样式、风险动效和 Status Badge 美术替换。
+  - 说明：PartActor 已支持多 PaperSprite 视觉层，Host 已提供 Debug 蛇样例配置入口；后续集中在正式蛇 Host 蓝图 prefab 资产、正式 sprite 美术样式、材质描边、贴近部位 tooltip、风险动效和 Status Badge 美术替换。
+
+- [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
+	- 状态：`Done: Trigger 已接线`
+	- 归属：Data / Run / App / Battle
+	- 入口：[WacomData.md](./WacomData.md#wacomdata-encounter-definition) / [WacomRun.md](./WacomRun.md#wacomrun-battle-settlement)
+	- 说明：`ABattleTriggerActor.EncounterDefinition` 已优先转换为 `FBattleInitParams.EnemySlots`；运行态 `EncounterId` 仍用 Trigger `PersistentId`，`EnemyDef` 保留为旧单敌人 fallback。
+
+- [x] **BattleTrigger 多 SceneEnemyHost 映射：EnemySlotId -> Host registry**
+	- 状态：`Done: Trigger 已接线`
+	- 归属：App / Battle World Target
+	- 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md#5-battle-scene-target) / [WacomBattleUI.md](./WacomBattleUI.md#6-scene-enemy-ui)
+	- 说明：`ABattleTriggerActor.SceneEnemyHostSlots` 已优先按 `EnemySlotId` 绑定多 Host；旧 `SceneEnemyHost` 保留为单敌人 fallback。后续敌人方向集中到正式蛇 Host 蓝图 prefab 资产、正式美术样式和制作工具。
 
 - [ ] **交互目标系统：Card-World / Card-Card drag resolver / Zone 命中来源接入**
   - 状态：`Ready: 剩余正式内容`

@@ -17,20 +17,25 @@ class UWacomRunEventDefinition;
 /**
  * 单个战斗节点（Trigger）的进度快照。
  *
- * 撤离时 Run 层用 packet.DestroyedPartIds 写入 RunState.BattleProgress；
- * 下次进入同一 Trigger 时，BuildInitParamsForBattle 把 DestroyedPartIds
- * 灌进 BattleInitParams.PreDestroyedPartIds，BattleSession 应用为
+ * 撤离时 Run 层用 packet.DestroyedParts 写入 RunState.BattleProgress；
+ * 下次进入同一 Trigger 时，BuildInitParamsForBattle 把 DestroyedParts
+ * 灌进 BattleInitParams.PreDestroyedParts，BattleSession 应用为
  * Part.bDestroyed = true（不发经验、不入击倒队列）。
  *
  * 战斗胜利时清理对应 Trigger 的进度。
  *
- * 当前只记录"破坏部位列表"。如果后续需要保存中间血量、部位状态层数等，再扩字段。
+ * DestroyedPartIds 是旧单敌人投影，保留给 debug / 兼容读取；完整身份以 DestroyedParts 为准。
+ * 如果后续需要保存中间血量、部位状态层数等，再扩字段。
  */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FBattleProgressSnapshot
 {
 	GENERATED_BODY()
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Battle")
+	TArray<FBattlePartSlotIdentity> DestroyedParts;
+
+	/** Legacy 单敌人投影：只保留 PartId，不能区分多敌人同名部位。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Battle")
 	TArray<FName> DestroyedPartIds;
 };

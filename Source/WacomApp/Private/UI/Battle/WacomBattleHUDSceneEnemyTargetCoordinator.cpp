@@ -36,6 +36,7 @@ namespace
 		case EWacomBattleTargetRejectReason::MissingRequiredTargetKeyword: return TEXT("MissingRequiredTargetKeyword");
 		case EWacomBattleTargetRejectReason::BlockedTargetKeyword: return TEXT("BlockedTargetKeyword");
 		case EWacomBattleTargetRejectReason::UnsupportedZoneTarget: return TEXT("UnsupportedZoneTarget");
+		case EWacomBattleTargetRejectReason::TargetIdentityMismatch: return TEXT("TargetIdentityMismatch");
 		default: return TEXT("Unknown");
 		}
 	}
@@ -67,20 +68,82 @@ FWacomBattleHUDSceneEnemyTargetCoordinator::FWacomBattleHUDSceneEnemyTargetCoord
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHost(AWacomBattleEnemyActor* InHost)
 {
-	ClearWorldTargets();
-	SceneEnemyHost = InHost;
-	if (!InHost)
+	TArray<AWacomBattleEnemyActor*> Hosts;
+	if (InHost)
 	{
-		SceneEnemyHost.Reset();
+		Hosts.Add(InHost);
+	}
+	SetSceneEnemyHosts(Hosts);
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHosts(
+	const TArray<AWacomBattleEnemyActor*>& InHosts)
+{
+	ClearWorldTargets();
+	SceneEnemyHost.Reset();
+	SceneEnemyHosts.Reset();
+
+	for (AWacomBattleEnemyActor* Host : InHosts)
+	{
+		if (!IsValid(Host) || Host->IsActorBeingDestroyed())
+		{
+			continue;
+		}
+
+		if (!SceneEnemyHost.IsValid())
+		{
+			SceneEnemyHost = Host;
+		}
+		SceneEnemyHosts.AddUnique(Host);
+	}
+
+	if (SceneEnemyHosts.Num() == 0)
+	{
 		return;
 	}
 
-	InHost->RefreshAttachedPartBadgeLayout();
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
+	{
+		if (AWacomBattleEnemyActor* Host = WeakHost.Get())
+		{
+			Host->RefreshAttachedPartBadgeLayout();
+		}
+	}
 	RebuildRegistry();
 	if (UBattleSession* Session = HUD.GetSession())
 	{
 		SyncWorldTargets(Session->BuildSnapshot());
 	}
+}
+
+bool FWacomBattleHUDSceneEnemyTargetCoordinator::HasSceneEnemyHost() const
+{
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
+	{
+		if (WeakHost.IsValid())
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsSceneEnemyHostInCurrentRegistry(
+	const AWacomBattleEnemyActor* Host) const
+{
+	if (!IsValid(Host))
+	{
+		return false;
+	}
+
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
+	{
+		if (WeakHost.Get() == Host)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsWorldTargetInCurrentRegistry(
@@ -124,25 +187,28 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 {
 	SceneEnemyPartWorldTargetBridges.Reset();
 
-	AWacomBattleEnemyActor* Host = SceneEnemyHost.Get();
-	if (!IsValid(Host))
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
 	{
-		return;
-	}
-
-	for (AWacomBattleEnemyPartActor* PartActor : Host->GetBattleEnemyPartActors())
-	{
-		if (!IsValid(PartActor) || PartActor->IsActorBeingDestroyed())
+		AWacomBattleEnemyActor* Host = WeakHost.Get();
+		if (!IsValid(Host) || Host->IsActorBeingDestroyed())
 		{
 			continue;
 		}
 
-		if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
-			PartActor->GetWorldTargetBridgeComponent())
+		for (AWacomBattleEnemyPartActor* PartActor : Host->GetBattleEnemyPartActors())
 		{
-			if (Bridge->IsRegistered())
+			if (!IsValid(PartActor) || PartActor->IsActorBeingDestroyed())
 			{
-				SceneEnemyPartWorldTargetBridges.AddUnique(Bridge);
+				continue;
+			}
+
+			if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+				PartActor->GetWorldTargetBridgeComponent())
+			{
+				if (Bridge->IsRegistered())
+				{
+					SceneEnemyPartWorldTargetBridges.AddUnique(Bridge);
+				}
 			}
 		}
 	}
@@ -156,15 +222,18 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 		return;
 	}
 
-	if (!SceneEnemyHost.IsValid())
+	if (!HasSceneEnemyHost())
 	{
 		ClearWorldTargets();
 		return;
 	}
 
-	if (AWacomBattleEnemyActor* Host = SceneEnemyHost.Get())
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
 	{
-		Host->RefreshAttachedPartBadgeLayout();
+		if (AWacomBattleEnemyActor* Host = WeakHost.Get())
+		{
+			Host->RefreshAttachedPartBadgeLayout();
+		}
 	}
 	RebuildRegistry();
 	const FBattleTargetSelectionView TargetSelectionView = HUD.BuildTargetSelectionView();
@@ -195,6 +264,8 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
 		}
 	}
 	SceneEnemyPartWorldTargetBridges.Reset();
+	SceneEnemyHost.Reset();
+	SceneEnemyHosts.Reset();
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::TickHoverProbe(float DeltaTime)

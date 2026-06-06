@@ -4,9 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Types/WacomEnums.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "BattleResultPacket.generated.h"
 
 class UCardDefinition;
+class UEnemyDefinition;
 
 /**
  * 单个被破坏部位给予玩家的经验值记账。
@@ -22,6 +24,9 @@ struct WACOMBATTLE_API FKnockdownExpGain
 	/** 来源部位 ID（来自 UEnemyPartDefinition::PartId）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	FName PartId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FBattlePartSlotIdentity Identity;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	int32 ExpAmount = 0;
@@ -40,6 +45,9 @@ struct WACOMBATTLE_API FKnockdownChoice
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	FName PartId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FBattlePartSlotIdentity Identity;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	EKnockdownChoice Choice = EKnockdownChoice::None;
@@ -63,7 +71,29 @@ struct WACOMBATTLE_API FBattleGainedCard
 	FName SourcePartId = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FBattlePartSlotIdentity SourceIdentity;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	EKnockdownChoice SourceChoice = EKnockdownChoice::None;
+};
+
+/** 单个敌人槽的战后结果投影。 */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattleEnemyResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FName EncounterId = TEXT("Encounter");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FName EnemySlotId = TEXT("Enemy");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TObjectPtr<const UEnemyDefinition> Definition = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TArray<FBattlePartSlotIdentity> DestroyedParts;
 };
 
 /**
@@ -90,6 +120,9 @@ struct WACOMBATTLE_API FBattleResultPacket
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	EBattleOutcome Outcome = EBattleOutcome::Undetermined;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FName EncounterId = TEXT("Encounter");
 
 	/** 战内首次跨过 HighHpThreshold（默认 0.5）。Run 层 +1% 伤口。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
@@ -139,6 +172,14 @@ struct WACOMBATTLE_API FBattleResultPacket
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FBattleGainedCard> GainedCards;
+
+	/** 本场战斗中所有被破坏的完整部位身份。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TArray<FBattlePartSlotIdentity> DestroyedParts;
+
+	/** 按敌人槽汇总的战后结果。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TArray<FBattleEnemyResult> EnemyResults;
 
 	/**
 	 * 本场战斗中所有被破坏的部位 ID。

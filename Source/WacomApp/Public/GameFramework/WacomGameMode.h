@@ -146,6 +146,9 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UEnemyDefinition> PendingEnemyDefForRun = nullptr;
 
+	/** 本场战斗初始化后的总部位数，用于多敌人 Encounter 下判断撤离是否实际全灭。 */
+	int32 PendingBattleTotalPartCount = 0;
+
 	/** HUD::OnBattleEndedNative 的订阅句柄，ExitBattle 时反注册。 */
 	FDelegateHandle BattleEndedHandle;
 };

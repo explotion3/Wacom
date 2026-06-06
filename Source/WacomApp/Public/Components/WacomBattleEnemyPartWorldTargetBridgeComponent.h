@@ -14,6 +14,7 @@
 
 class UBattleHUD;
 class UPrimitiveComponent;
+class USceneComponent;
 class UWacomInteractionTargetComponent;
 class UWidgetComponent;
 struct FBattleSnapshot;
@@ -50,6 +51,15 @@ struct WACOMAPP_API FWacomBattleEnemyPartWorldTargetDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "敌方部位稳定 PartId，对应制作数据，只用于 PIE / 蓝图诊断。"))
 	FName PartId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前绑定的 Battle Encounter ID。"))
+	FName EncounterId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前绑定的敌人槽位 ID。"))
+	FName EnemySlotId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前绑定的部位槽位 ID。"))
+	FName PartSlotId = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|World Target|Debug", meta = (ToolTip = "当前战斗运行时部位实例 ID。"))
 	FGuid PartInstanceId;
@@ -208,8 +218,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "稳定敌方部位 ID，对应 UEnemyPartDefinition::PartId。进入战斗后 Bridge 会把它解析成当前运行时 PartInstanceId。"))
 	FName PartId = NAME_None;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target",
+		meta = (ToolTip = "Battle Encounter 稳定 ID。为空时绑定 Snapshot 中的 EncounterId；旧单敌人场景可保持为空。"))
+	FName EncounterId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target",
+		meta = (ToolTip = "敌人槽位 ID。为空时旧单敌人场景回退 PartId 绑定；多敌人场景必须由 Host 注入。"))
+	FName EnemySlotId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target",
+		meta = (ToolTip = "敌人内局部部位槽位 ID。为空时回退 PartId；多敌人场景应填写 Head、Body 等槽位。"))
+	FName PartSlotId = NAME_None;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "用于播放确认、伤害、破坏和可选目标提示的 Primitive；为空时自动使用 Owner 上第一个 PrimitiveComponent。"))
 	TObjectPtr<UPrimitiveComponent> VisualTargetComponent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "用于播放确认、伤害、破坏和可选目标提示的场景组件。优先于 VisualTargetComponent；适合把多个 2D 视觉层作为一组缩放。"))
+	TObjectPtr<USceneComponent> FeedbackTargetComponent;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|World Target", meta = (ToolTip = "是否在同步时自动把同 Actor 上的 WacomInteractionTargetComponent 标记为 Battle EnemyPart target。"))
 	bool bAutoConfigureInteractionTarget = true;
@@ -259,6 +284,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|World Target")
 	void SetPartId(FName InPartId);
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|World Target")
+	void SetBattlePartSlotIdentity(FName InEncounterId, FName InEnemySlotId, FName InPartSlotId);
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|World Target")
 	FGuid GetPartInstanceId() const { return PartInstanceId; }
 
@@ -299,6 +327,7 @@ protected:
 
 private:
 	UWacomInteractionTargetComponent* ResolveInteractionTargetComponent() const;
+	USceneComponent* ResolveFeedbackTargetComponent() const;
 	UPrimitiveComponent* ResolveVisualTargetComponent() const;
 	void CacheRuntimePartFacts(const struct FEnemyPartSnapshot& Part);
 	void ClearRuntimePartFacts();
@@ -334,13 +363,22 @@ private:
 	FGuid PartInstanceId;
 
 	UPROPERTY(Transient)
+	FName BoundEncounterId = NAME_None;
+
+	UPROPERTY(Transient)
+	FName BoundEnemySlotId = NAME_None;
+
+	UPROPERTY(Transient)
+	FName BoundPartSlotId = NAME_None;
+
+	UPROPERTY(Transient)
 	FGuid RuntimePartInstanceId;
 
 	UPROPERTY(Transient)
 	FVector CachedBaseScale = FVector::OneVector;
 
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UPrimitiveComponent> CachedVisualTarget;
+	TWeakObjectPtr<USceneComponent> CachedFeedbackTarget;
 
 	bool bBoundToSnapshot = false;
 	bool bRegisteredWithBattleHUD = false;

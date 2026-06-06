@@ -17,8 +17,10 @@ public:
 	explicit FWacomBattleHUDSceneEnemyTargetCoordinator(UBattleHUD& InHUD);
 
 	void SetSceneEnemyHost(AWacomBattleEnemyActor* InHost);
+	void SetSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts);
 	AWacomBattleEnemyActor* GetSceneEnemyHost() const { return SceneEnemyHost.Get(); }
-	bool HasSceneEnemyHost() const { return SceneEnemyHost.IsValid(); }
+	bool HasSceneEnemyHost() const;
+	bool IsSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const;
 
 	bool IsWorldTargetInCurrentRegistry(const FWacomInteractionTargetHandle& TargetHandle) const;
 	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveWorldTargetBridge(
@@ -41,6 +43,7 @@ public:
 private:
 	UBattleHUD& HUD;
 	TWeakObjectPtr<AWacomBattleEnemyActor> SceneEnemyHost;
+	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> SceneEnemyHosts;
 	TArray<TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>> SceneEnemyPartWorldTargetBridges;
 	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> HoveredBridge;
 	FWacomInteractionTargetHandle HoveredHandle;

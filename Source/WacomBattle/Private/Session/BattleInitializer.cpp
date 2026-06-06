@@ -21,6 +21,16 @@
 
 namespace
 {
+	FName GetEffectiveEncounterId(FName EncounterId)
+	{
+		return EncounterId.IsNone() ? FName(TEXT("Encounter")) : EncounterId;
+	}
+
+	FName GetEffectiveEnemySlotId(FName EnemySlotId)
+	{
+		return EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : EnemySlotId;
+	}
+
 	FGuid CreateCardInstance(
 		FBattleState& State,
 		TArray<TObjectPtr<const UObject>>& ReferencedAssets,
@@ -52,6 +62,23 @@ namespace
 			}
 		}
 		return Card.InstanceId;
+	}
+
+	bool IsPartPreDestroyed(
+		const FBattlePartSlotIdentity& Identity,
+		const TArray<FBattlePartSlotIdentity>& PreDestroyedParts,
+		const TArray<FName>& LegacyPreDestroyedPartIds)
+	{
+		for (const FBattlePartSlotIdentity& PreDestroyedIdentity : PreDestroyedParts)
+		{
+			if (Identity.MatchesRuntimeSlot(PreDestroyedIdentity))
+			{
+				return true;
+			}
+		}
+
+		return Identity.GetEffectiveEnemySlotId() == FName(TEXT("Enemy"))
+			&& LegacyPreDestroyedPartIds.Contains(Identity.PartDefinitionId);
 	}
 }
 
@@ -152,31 +179,94 @@ FWacomStatus FBattleInitializer::Initialize(
 	FDeckService::ShuffleDrawPile(State);
 
 	// ---- 敌人 ----
-	State.Enemy.Definition = Params.Enemy;
-	ReferencedAssets.Add(Params.Enemy);
+	const FName EncounterId = GetEffectiveEncounterId(Params.EncounterId);
+	State.Enemy.EncounterId = EncounterId;
 
-	for (const FEnemyPartSlot& Slot : Params.Enemy->Parts)
+	TArray<FBattleEnemySlotInit> EnemySlots = Params.EnemySlots;
+	if (EnemySlots.IsEmpty() && Params.Enemy)
 	{
-		if (!Slot.PartDef) { continue; }
-		FRuntimeEnemyPart Part;
-		Part.InstanceId         = FGuid::NewGuid();
-		Part.Definition         = Slot.PartDef;
-		Part.CurrentHp          = Slot.PartDef->MaxHp;
-		Part.CurrentIntentIndex = Slot.PartDef->InitialIntentIndex;
-		// 从初始意图读取先机值。若 IntentSequence 为空，保持 0。
-		if (Slot.PartDef->IntentSequence.IsValidIndex(Part.CurrentIntentIndex))
+		FBattleEnemySlotInit DefaultSlot;
+		DefaultSlot.EnemySlotId = FName(TEXT("Enemy"));
+		DefaultSlot.Enemy = Params.Enemy;
+		EnemySlots.Add(DefaultSlot);
+	}
+
+	TSet<FName> UsedEnemySlotIds;
+	for (const FBattleEnemySlotInit& EnemySlotInput : EnemySlots)
+	{
+		if (!EnemySlotInput.Enemy)
 		{
-			Part.CurrentInitiative = Slot.PartDef->IntentSequence[Part.CurrentIntentIndex].Initiative;
-		}
-		else
-		{
-			Part.CurrentInitiative = 0;
+			continue;
 		}
 
-		const int32 NewIdx = State.Enemy.Parts.Add(Part);
-		State.Enemy.PartIndexById.Add(Part.InstanceId, NewIdx);
+		const FName EnemySlotId = GetEffectiveEnemySlotId(EnemySlotInput.EnemySlotId);
+		if (UsedEnemySlotIds.Contains(EnemySlotId))
+		{
+			return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("DuplicateEnemySlotId"));
+		}
+		UsedEnemySlotIds.Add(EnemySlotId);
 
-		ReferencedAssets.Add(Slot.PartDef);
+		FEnemySlotState RuntimeEnemySlot;
+		RuntimeEnemySlot.EncounterId = EncounterId;
+		RuntimeEnemySlot.EnemySlotId = EnemySlotId;
+		RuntimeEnemySlot.Definition = EnemySlotInput.Enemy;
+		ReferencedAssets.Add(EnemySlotInput.Enemy);
+
+		if (!State.Enemy.Definition)
+		{
+			State.Enemy.Definition = EnemySlotInput.Enemy;
+		}
+
+		TSet<FName> UsedPartSlotIds;
+		for (const FEnemyPartSlot& Slot : EnemySlotInput.Enemy->Parts)
+		{
+			if (!Slot.PartDef) { continue; }
+
+			const FName PartDefinitionId = Slot.PartDef->PartId;
+			const FName PartSlotId = Slot.PartSlotId.IsNone() ? PartDefinitionId : Slot.PartSlotId;
+			if (PartSlotId.IsNone())
+			{
+				return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("MissingPartSlotId"));
+			}
+			if (UsedPartSlotIds.Contains(PartSlotId))
+			{
+				return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("DuplicatePartSlotId"));
+			}
+			UsedPartSlotIds.Add(PartSlotId);
+
+			FRuntimeEnemyPart Part;
+			Part.InstanceId         = FGuid::NewGuid();
+			Part.Definition         = Slot.PartDef;
+			Part.Identity           = FBattlePartSlotIdentity::Make(
+				EncounterId,
+				EnemySlotId,
+				PartSlotId,
+				PartDefinitionId);
+			Part.CurrentHp          = Slot.PartDef->MaxHp;
+			Part.CurrentIntentIndex = Slot.PartDef->InitialIntentIndex;
+			// 从初始意图读取先机值。若 IntentSequence 为空，保持 0。
+			if (Slot.PartDef->IntentSequence.IsValidIndex(Part.CurrentIntentIndex))
+			{
+				Part.CurrentInitiative = Slot.PartDef->IntentSequence[Part.CurrentIntentIndex].Initiative;
+			}
+			else
+			{
+				Part.CurrentInitiative = 0;
+			}
+
+			const int32 NewIdx = State.Enemy.Parts.Add(Part);
+			State.Enemy.PartIndexById.Add(Part.InstanceId, NewIdx);
+			RuntimeEnemySlot.PartInstanceIds.Add(Part.InstanceId);
+
+			ReferencedAssets.Add(Slot.PartDef);
+		}
+
+		State.Enemy.EnemySlots.Add(MoveTemp(RuntimeEnemySlot));
+	}
+
+	if (State.Enemy.EnemySlots.IsEmpty())
+	{
+		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoEnemy"));
 	}
 
 	// ---- 应用预先破坏部位（撤离重入）----
@@ -184,21 +274,22 @@ FWacomStatus FBattleInitializer::Initialize(
 	// 不发 EnemyPartHpEmptied 事件、不入 PendingKnockdownEvents、不发 KnockdownExpGain
 	// （已经在上一次撤离时处理过了，避免重复弹 dialog 和刷经验）。
 	// 但加进 DestroyedPartIds，让本场撤离/胜利时仍能完整持久化。
-	if (Params.PreDestroyedPartIds.Num() > 0)
+	if (Params.PreDestroyedParts.Num() > 0 || Params.PreDestroyedPartIds.Num() > 0)
 	{
 		for (FRuntimeEnemyPart& P : State.Enemy.Parts)
 		{
 			if (!P.Definition) { continue; }
-			if (Params.PreDestroyedPartIds.Contains(P.Definition->PartId))
+			if (IsPartPreDestroyed(P.Identity, Params.PreDestroyedParts, Params.PreDestroyedPartIds))
 			{
 				P.bDestroyed        = true;
 				P.CurrentHp         = 0;
 				P.CurrentInitiative = 0;
 				State.DestroyedPartIds.AddUnique(P.Definition->PartId);
+				State.DestroyedParts.AddUnique(P.Identity);
 
 				UE_LOG(LogTemp, Display,
 					TEXT("[BattleSession] Initialize: 应用预先破坏部位 %s（来自 RunState.BattleProgress）"),
-					*P.Definition->PartId.ToString());
+					*P.Identity.ToDebugString());
 			}
 		}
 	}

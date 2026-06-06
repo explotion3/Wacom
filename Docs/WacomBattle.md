@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-battle
 status: active
-updated: 2026-06-05
+updated: 2026-06-06
 tags:
   - wacom/battle
   - wacom/rules
@@ -66,6 +66,8 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 
 普通玩家命令在 `PlayerAction` 阶段提交。`PendingKnockdownChoice`、`BattleEnd` 和非玩家行动阶段会阻止普通 `PlayCard / Wait / EndTurn`。
 
+当前 Battle 初始化仍直接消费 `FBattleInitParams.EnemySlots`。`UEncounterDefinition` 是 WacomData 层的静态 Encounter 合同，不由 BattleSession 直接读取；`ABattleTriggerActor` 在进入战斗前把 Encounter 敌人槽转换成 `FBattleInitParams.EnemySlots`。运行态 `EncounterId` 由场景 Trigger 的 `PersistentId` 提供，而不是 Encounter 资产 ID。
+
 ## §3 PlayCard 与目标合同
 
 `FBattleCommand::Type == PlayCard` 时，`CardInstanceId` 必填。目标字段由卡牌 `TargetMode` 决定：
@@ -73,7 +75,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | TargetMode | 命令字段 | 合法性 |
 |---|---|---|
 | `None / Self / AllEnemyParts` | 不要求额外目标 | 检查源卡在手牌、费用合法 |
-| `SingleEnemyPart` | `TargetPartInstanceId` | 目标必须是当前战斗中未破坏的敌方部位 |
+| `SingleEnemyPart` | `TargetPartInstanceId` 或 `TargetEnemySlotId + TargetPartSlotId` | 目标必须是当前战斗中未破坏的敌方部位；两套身份同时提供时必须解析到同一运行时部位 |
 | `HandCard` | `TargetCardInstanceId` | 目标必须是另一张当前手牌；拒绝 self、无效 ID、已离开手牌的卡 |
 
 `TargetMode=HandCard` 会把玩家选中的目标手牌作为 `Target.SelectedHandCard` 传给主效果链。基础资格由 `UCardDefinition::HandCardTargetFilter` 决定：
@@ -89,7 +91,9 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 
 `UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`。`CanTargetWithCard()` 保留为 bool 兼容入口，内部转调同一套 validation。
 
-Validation 只解释“这个目标能不能被这张卡作用”。它不校验费用、UI 状态、动画队列或命令提交时机；最终提交仍由 `PlayCardResolver` 再校验。
+Battle world target 优先按 `TargetPartInstanceId`（runtime id）定位；当 runtime id 为空时，可用 `TargetEnemySlotId + TargetPartSlotId` 或 handle 上的 `EnemySlotId + PartSlotId` 定位。同一命令 / handle 同时携带 runtime id 与 slot identity 时，两者必须指向同一部位，否则返回 `TargetIdentityMismatch` / `TargetIdentityMismatch` detail。`EncounterId` 用于解释 handle 是否属于当前 battle session，不参与跨 session 查找。
+
+Validation 只解释“这个目标能不能被这张卡作用”。它不校验费用、UI 状态、动画队列或命令提交时机；最终提交仍由 `PlayCardResolver` 再校验。`FWacomBattleTargetValidationResult` 会回填 `ResolvedPartInstanceId` 和 `ResolvedPartIdentity`，供 first-person drag preview、debug summary 和提交流使用。
 
 ## §4 战斗流程
 
