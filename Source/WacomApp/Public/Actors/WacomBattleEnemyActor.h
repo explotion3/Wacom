@@ -14,6 +14,22 @@ class UEnemyDefinition;
 class USceneComponent;
 
 USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomBattleSceneEnemyPartSlot
+{
+	GENERATED_BODY()
+
+	/** 稳定敌方部位 ID，对应 UEnemyPartDefinition::PartId。此字段是 Host 显式绑定的权威值。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy",
+		meta = (ToolTip = "稳定敌方部位 ID，对应 UEnemyPartDefinition::PartId。Host 刷新时会同步到 PartActor。"))
+	FName PartId = NAME_None;
+
+	/** 该部位对应的场景 Actor。负责命中、Badge、预测和 cue 表现。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy",
+		meta = (ToolTip = "该部位对应的场景 Actor。负责命中、Badge、预测和 cue 表现。"))
+	TObjectPtr<AWacomBattleEnemyPartActor> PartActor = nullptr;
+};
+
+USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 {
 	GENERATED_BODY()
@@ -31,10 +47,25 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 	int32 AttachedPartActorCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 PartSlotCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bUsingExplicitPartSlots = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 NullSlotActorCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	TArray<FName> AttachedPartIds;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	TArray<FName> UnknownPartIds;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	TArray<FName> MissingDefinitionPartIds;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	TArray<FName> DuplicateSlotPartIds;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 BoundPartActorCount = 0;
@@ -85,8 +116,12 @@ public:
 		meta = (ToolTip = "可选敌人定义。当前只用于制作校验和 debug，不作为运行时多敌人选择器。"))
 	TObjectPtr<UEnemyDefinition> EnemyDefinition = nullptr;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy",
+		meta = (ToolTip = "正式场景敌人部位绑定列表。非空时 Host 只使用这里声明的部位 Actor；为空时才兼容扫描 attached PartActor。"))
+	TArray<FWacomBattleSceneEnemyPartSlot> PartSlots;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Badge Layout",
-		meta = (ToolTip = "是否按 attached PartActor 顺序给状态/预测 Badge 加稳定错开，降低部位靠近时的重叠。只影响 UI 表现。"))
+		meta = (ToolTip = "是否按 Host 部位顺序给状态/预测 Badge 加稳定错开，降低部位靠近时的重叠。只影响 UI 表现。"))
 	bool bApplyAttachedPartBadgeStagger = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Badge Layout",
@@ -98,15 +133,23 @@ public:
 	float BadgeStaggerVerticalStep = 18.0f;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy",
-		meta = (ToolTip = "返回附着在当前 Host 下的战斗敌人部位 Actor。"))
+		meta = (ToolTip = "返回当前 Host 的战斗敌人部位 Actor。PartSlots 非空时使用显式 slots；为空时兼容扫描 attached PartActor。"))
+	TArray<AWacomBattleEnemyPartActor*> GetBattleEnemyPartActors() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Compatibility",
+		meta = (ToolTip = "兼容旧调用名：返回当前 Host 的战斗敌人部位 Actor。新制作请使用 GetBattleEnemyPartActors。"))
 	TArray<AWacomBattleEnemyPartActor*> GetAttachedBattleEnemyPartActors() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "刷新附着在当前 Host 下的部位 Actor facade。不会自动生成子 Actor。"))
+		meta = (ToolTip = "刷新当前 Host 部位 Actor facade。PartSlots 非空时会把 Slot.PartId 同步到 PartActor。不会自动生成子 Actor。"))
+	void RefreshBattleEnemyPartAuthoringState() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring|Compatibility",
+		meta = (ToolTip = "兼容旧调用名：刷新当前 Host 部位 Actor facade。新制作请使用 RefreshBattleEnemyPartAuthoringState。"))
 	void RefreshAttachedPartAuthoringState() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "按当前 attached PartActor 顺序刷新状态/预测 Badge 的稳定错开布局。不会自动生成子 Actor。"))
+		meta = (ToolTip = "按当前 Host 部位顺序刷新状态/预测 Badge 的稳定错开布局。不会自动生成子 Actor。"))
 	void RefreshAttachedPartBadgeLayout() const;
 
 	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Prototype",
@@ -138,8 +181,15 @@ public:
 #endif
 
 private:
+	bool HasExplicitPartSlots() const { return PartSlots.Num() > 0; }
+	TArray<AWacomBattleEnemyPartActor*> BuildAttachedBattleEnemyPartActors() const;
+	void SyncExplicitPartSlotsToActors() const;
 	TSet<FName> BuildDefinitionPartIdSet() const;
-	TArray<FName> BuildUnknownAttachedPartIds() const;
+	TArray<FName> BuildConfiguredPartIds() const;
+	TArray<FName> BuildUnknownPartIds() const;
+	TArray<FName> BuildMissingDefinitionPartIds() const;
+	TArray<FName> BuildDuplicateSlotPartIds() const;
+	int32 CountNullSlotActors() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 根节点。部位 Actor 可附着到本 Actor 下进行分组。"))

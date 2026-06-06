@@ -96,11 +96,14 @@ KeyChest 是当前第一条 Run world card interaction 验证入口。普通 E �
 
 ## §5 Battle Scene Target
 
-Battle scene enemy 推荐入口是 `ABattleTriggerActor.SceneEnemyHost + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`：
+Battle scene enemy 正式入口是 `ABattleTriggerActor.SceneEnemyHost + AWacomBattleEnemyActor.PartSlots + AWacomBattleEnemyPartActor`：
 
 - Trigger 进入战斗时把显式 `SceneEnemyHost` 传给 `UBattleHUD`。
-- HUD 只同步当前 Host 下 attached PartActor 的 bridge；同关卡其他 Host 的部位不参与当前战斗。
+- Host 通过 `PartSlots` 显式声明本场景敌人的部位 Actor；`Slot.PartId` 是绑定权威值，会同步到 `PartActor.PartId`。
+- HUD 只同步当前 Host registry 中的 PartActor bridge；同关卡其他 Host 的同名 `PartId` 部位不参与当前战斗。
+- `PartSlots` 为空时才兼容扫描 attached PartActor；attached 扫描只是旧地图 fallback，不是新制作主线。
 - 每个 PartActor 用稳定 `PartId` 作为 authoring id，运行时由 HUD 解析并写回当前 `PartInstanceId`。
+- slot 顺序只影响 Host registry 和 badge stagger 表现，不改变 `UBattleSession` 的规则部位顺序。
 - 有 Host 时默认隐藏旧 `EnemyInfoBar`；缺 Host 时仍保留 2D enemy fallback/debug。
 
 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 接收 hover probe、TargetSelect pending card、first-person drag preview、TargetConfirmed、DamageDealt、EnemyPartHpEmptied 等表现 cue。它只更新表现 / debug，不修改 BattleSession。

@@ -170,12 +170,14 @@ FWacomBattleHUDTestSceneEnemyHost& FWacomBattleHUDTestHarness::AttachSceneEnemyH
 			continue;
 		}
 
-		PartActor->PartId = PartIds[Index];
-		PartActor->AttachToActor(CurrentSceneEnemyHost.Host, FAttachmentTransformRules::KeepWorldTransform);
 		CurrentSceneEnemyHost.Parts.Add(PartActor);
+		FWacomBattleSceneEnemyPartSlot Slot;
+		Slot.PartId = PartIds[Index];
+		Slot.PartActor = PartActor;
+		CurrentSceneEnemyHost.Host->PartSlots.Add(Slot);
 	}
 
-	CurrentSceneEnemyHost.Host->RefreshAttachedPartAuthoringState();
+	CurrentSceneEnemyHost.Host->RefreshBattleEnemyPartAuthoringState();
 	return CurrentSceneEnemyHost;
 }
 

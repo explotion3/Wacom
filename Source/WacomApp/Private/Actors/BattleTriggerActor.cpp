@@ -350,7 +350,7 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 			? SceneEnemyHost->EnemyDefinition->GetName()
 			: TEXT("None");
 	View.SceneEnemyHostPartCount =
-		SceneEnemyHost ? SceneEnemyHost->GetAttachedBattleEnemyPartActors().Num() : 0;
+		SceneEnemyHost ? SceneEnemyHost->GetBattleEnemyPartActors().Num() : 0;
 	View.bSceneEnemyHostConfigured = SceneEnemyHost != nullptr;
 	View.bSceneEnemyHostDefinitionMatches =
 		SceneEnemyHost

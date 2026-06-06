@@ -19,9 +19,6 @@ class WACOMAPP_API UWacomFirstPersonCardLayoutPreset : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (ToolTip = "第一人称卡牌层的手牌排布方式。Authored2D 是正式默认路径：只投影手牌中心点，再用 2D 参数排卡；LegacyProjectedFan2D 只保留为 PIE / debug 对照旧的每张卡牌 3D 槽位投影。"))
-	EWacomFirstPersonCardLayoutMode CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "360.0", ToolTip = "Authored2D 模式下相邻卡牌的基础水平间距，单位为 UMG 布局像素。"))
 	float AuthoredCardSpacingPixels = 120.0f;
 

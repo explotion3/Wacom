@@ -305,7 +305,6 @@ private:
 		const FVector& InVisualRelativeLocation);
 	FVector GetAppliedPredictionBadgeRelativeLocation() const;
 	FVector GetAppliedStatusBadgeRelativeLocation() const;
-	bool HasDuplicatePartIdInWorld() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
 		meta = (AllowPrivateAccess = "true", ToolTip = "部位鼠标点击和拖卡命中的 Visibility 盒体。不要直接编辑 Collision Details，请改 Actor facade 字段。"))

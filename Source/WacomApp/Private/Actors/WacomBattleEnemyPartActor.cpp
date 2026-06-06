@@ -5,7 +5,6 @@
 #include "Components/WidgetComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Engine/StaticMesh.h"
-#include "EngineUtils.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartStatusBadgeWidget.h"
@@ -86,13 +85,6 @@ void AWacomBattleEnemyPartActor::BeginPlay()
 {
 	Super::BeginPlay();
 	RefreshAuthoringState();
-	if (!PartId.IsNone() && HasDuplicatePartIdInWorld())
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[WacomBattleEnemyPartActor] %s: PartId %s 与同关卡其他 BattleEnemyPart 重复；当前单敌人战斗会共享同一 runtime part 绑定。"),
-			*GetName(),
-			*PartId.ToString());
-	}
 }
 
 void AWacomBattleEnemyPartActor::OnConstruction(const FTransform& Transform)
@@ -382,19 +374,6 @@ EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 		Result = EDataValidationResult::Invalid;
 	}
 
-	if (!PartId.IsNone() && HasDuplicatePartIdInWorld())
-	{
-		Context.AddWarning(FText::Format(
-			LOCTEXT("PlacementDuplicatePartId",
-				"BattleEnemyPart 摆放警告：Actor={0} PartId={1} 与同关卡其他 BattleEnemyPart 重复；当前单敌人战斗会共享同一 runtime part 绑定。"),
-			FText::FromString(GetName()),
-			FText::FromName(PartId)));
-		if (Result != EDataValidationResult::Invalid)
-		{
-			Result = EDataValidationResult::Valid;
-		}
-	}
-
 	return Result == EDataValidationResult::Invalid
 		? EDataValidationResult::Invalid
 		: EDataValidationResult::Valid;
@@ -426,36 +405,6 @@ FVector AWacomBattleEnemyPartActor::GetAppliedPredictionBadgeRelativeLocation() 
 FVector AWacomBattleEnemyPartActor::GetAppliedStatusBadgeRelativeLocation() const
 {
 	return StatusBadgeRelativeLocation + BadgeLayoutStaggerOffset;
-}
-
-bool AWacomBattleEnemyPartActor::HasDuplicatePartIdInWorld() const
-{
-	if (PartId.IsNone())
-	{
-		return false;
-	}
-
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return false;
-	}
-
-	for (TActorIterator<AWacomBattleEnemyPartActor> It(World); It; ++It)
-	{
-		const AWacomBattleEnemyPartActor* Other = *It;
-		if (!Other || Other == this)
-		{
-			continue;
-		}
-		if (!Other->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
-			&& !Other->IsTemplate()
-			&& Other->PartId == PartId)
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 #undef LOCTEXT_NAMESPACE

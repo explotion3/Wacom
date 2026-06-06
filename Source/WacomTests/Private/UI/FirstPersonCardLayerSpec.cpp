@@ -335,7 +335,6 @@ namespace WacomFirstPersonCardLayerSpec
 			return nullptr;
 		}
 
-		Preset->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 		Preset->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 		Preset->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 		Preset->AuthoredCardSpacingPixels = 160.0f;
@@ -600,12 +599,14 @@ namespace WacomFirstPersonCardLayerSpec
 				continue;
 			}
 
-			PartActor->PartId = PartIds[Index];
-			PartActor->AttachToActor(Result.Host, FAttachmentTransformRules::KeepWorldTransform);
 			Result.Parts.Add(PartActor);
+			FWacomBattleSceneEnemyPartSlot Slot;
+			Slot.PartId = PartIds[Index];
+			Slot.PartActor = PartActor;
+			Result.Host->PartSlots.Add(Slot);
 		}
 
-		Result.Host->RefreshAttachedPartAuthoringState();
+		Result.Host->RefreshBattleEnemyPartAuthoringState();
 		return Result;
 	}
 
@@ -1533,7 +1534,6 @@ bool FWacomFirstPersonCardLayerBodyLockedWorldLayoutTest::RunTest(const FString&
 	Anchor->StaticCardCountFallback = 5;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
 	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	const FTransform InitialLeft = Anchor->ComputeCardTransform(5, 0);
@@ -1607,7 +1607,6 @@ bool FWacomFirstPersonCardLayerBodyLockedCurrentCameraProjectionTest::RunTest(co
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
 	Anchor->bUseCameraTransformProjection = true;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
 	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	Anchor->ProbeCameraTransform = FTransform(
@@ -1724,7 +1723,6 @@ bool FWacomFirstPersonCardLayerLegacyLookProjectionTest::RunTest(const FString& 
 	Anchor->StaticCardCountFallback = 5;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
 	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	const FTransform InitialCenterTransform = Anchor->ComputeCardTransform(5, 2);
@@ -1876,7 +1874,6 @@ bool FWacomFirstPersonCardLayerWidgetProjectionTest::RunTest(const FString& Para
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->ProbeViewportScale = 2.0f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
 	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
@@ -1925,7 +1922,6 @@ bool FWacomFirstPersonCardLayerPixelSnappingTest::RunTest(const FString& Paramet
 	Anchor->CardLayerPixelSnapGrid = 1.0f;
 	Anchor->StaticCardCountFallback = 1;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
 	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
@@ -1974,7 +1970,6 @@ bool FWacomFirstPersonCardLayerPixelSnappingDisabledTest::RunTest(const FString&
 	Anchor->bEnableCardLayerPixelSnapping = false;
 	Anchor->StaticCardCountFallback = 1;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
 	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
@@ -2106,7 +2101,6 @@ bool FWacomFirstPersonCardLayerDebugProjectionQualityTest::RunTest(const FString
 	Anchor->ProbeViewportScale = 2.0f;
 	Anchor->bEnableCardLayerPixelSnapping = true;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
 	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
@@ -2120,7 +2114,6 @@ bool FWacomFirstPersonCardLayerDebugProjectionQualityTest::RunTest(const FString
 		TestEqual(TEXT("Debug widget position"), Point.WidgetPosition, FVector2D(580.0f, 155.0f));
 		TestEqual(TEXT("Debug snapped position"), Point.SnappedWidgetPosition, FVector2D(580.0f, 155.0f));
 		TestEqual(TEXT("Debug viewport scale"), Point.ViewportScale, 2.0f);
-		TestEqual(TEXT("Debug point records layout mode"), Point.LayoutMode, EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D);
 	}
 
 	const FString Summary = Anchor->GetDebugSummary();
@@ -2128,7 +2121,6 @@ bool FWacomFirstPersonCardLayerDebugProjectionQualityTest::RunTest(const FString
 	TestTrue(TEXT("Summary reports angle clamp"), Summary.Contains(TEXT("AngleClamp=true")));
 	TestTrue(TEXT("Summary reports viewport scale"), Summary.Contains(TEXT("ViewportScale=2.00")));
 	TestTrue(TEXT("Summary reports projection mode"), Summary.Contains(TEXT("ProjectionMode=LegacyWorldProjected")));
-	TestTrue(TEXT("Summary reports layout mode"), Summary.Contains(TEXT("LayoutMode=LegacyProjectedFan2D")));
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -2267,7 +2259,6 @@ bool FWacomFirstPersonCardLayerAuthoredReadableBottomClampTest::RunTest(const FS
 		FVector(100.0f, 200.0f, -470.0f),
 		FVector::OneVector);
 	Anchor->RefreshAnchor(0.0f);
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::AllowOffscreen;
 	Anchor->StaticCardRenderScale = 1.0f;
 	Anchor->StaticCardCountFallback = 5;
@@ -2840,7 +2831,6 @@ bool FWacomFirstPersonCardLayerAuthoredSoftClampedAnchorTest::RunTest(const FStr
 	Anchor->ProjectionPadding = 24.0f;
 	Anchor->SoftClampOffscreenAllowancePixels = 260.0f;
 	Anchor->SoftClampBlendRangePixels = 240.0f;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->StaticCardCountFallback = 1;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
 	Anchor->AuthoredHandScreenOffset = FVector2D::ZeroVector;
@@ -2888,7 +2878,6 @@ bool FWacomFirstPersonCardLayerAuthoredProjectionTest::RunTest(const FString& Pa
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->StaticCardCountFallback = 5;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
@@ -2905,7 +2894,6 @@ bool FWacomFirstPersonCardLayerAuthoredProjectionTest::RunTest(const FString& Pa
 	TestEqual(TEXT("Changed spacing slot count"), ChangedLegacySpacingSlots.Num(), 5);
 	if (InitialSlots.Num() == 5 && ChangedLegacySpacingSlots.Num() == 5)
 	{
-		TestEqual(TEXT("Authored layout mode is recorded"), InitialSlots[2].LayoutMode, EWacomFirstPersonCardLayoutMode::Authored2D);
 		TestEqual(TEXT("Left slot uses projected hand center"), InitialSlots[0].AnchorWidgetPosition, InitialSlots[2].AnchorWidgetPosition);
 		TestEqual(TEXT("Right slot uses projected hand center"), InitialSlots[4].AnchorWidgetPosition, InitialSlots[2].AnchorWidgetPosition);
 		TestEqual(TEXT("Old 3D CardSpacing does not affect authored screen position"), ChangedLegacySpacingSlots[4].ScreenPosition, InitialSlots[4].ScreenPosition);
@@ -3014,7 +3002,6 @@ bool FWacomFirstPersonCardLayerAuthoredAnchorSmoothingTest::RunTest(const FStrin
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->StaticCardCountFallback = 1;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
@@ -3072,7 +3059,6 @@ bool FWacomFirstPersonCardLayerAuthoredSmoothingOffsetTest::RunTest(const FStrin
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->StaticCardCountFallback = 5;
 	Anchor->StaticCardEdgeDropPixels = 80.0f;
@@ -3129,7 +3115,6 @@ bool FWacomFirstPersonCardLayerAnchorSmoothingResetTest::RunTest(const FString& 
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->StaticCardCountFallback = 1;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
@@ -3181,7 +3166,6 @@ bool FWacomFirstPersonCardLayerAnchorSmoothingProjectionFailureTest::RunTest(con
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->StaticCardCountFallback = 1;
 	Anchor->bEnableAnchorScreenSmoothing = true;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
@@ -3213,56 +3197,6 @@ bool FWacomFirstPersonCardLayerAnchorSmoothingProjectionFailureTest::RunTest(con
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerLegacySkipsSmoothingTest,
-	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.LegacyComparison.ProjectedFan2DSkipsAnchorSmoothing",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerLegacySkipsSmoothingTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
-	{
-		return false;
-	}
-
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
-	Anchor->ProjectionPadding = 0.0f;
-	Anchor->StaticCardCountFallback = 1;
-	Anchor->StaticCardEdgeDropPixels = 0.0f;
-	Anchor->bEnableCardLayerPixelSnapping = false;
-	Anchor->bEnableAnchorScreenSmoothing = true;
-	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	const TArray<FWacomFirstPersonCardLayerSlotView> InitialSlots = Anchor->BuildStaticCardSlotViews();
-	Anchor->HorizontalOffset = 40.0f;
-	Anchor->RefreshAnchor(0.0f);
-	const TArray<FWacomFirstPersonCardLayerSlotView> MovedSlots = Anchor->BuildStaticCardSlotViews();
-
-	TestEqual(TEXT("Initial slot count"), InitialSlots.Num(), 1);
-	TestEqual(TEXT("Moved slot count"), MovedSlots.Num(), 1);
-	if (InitialSlots.Num() == 1 && MovedSlots.Num() == 1)
-	{
-		TestFalse(TEXT("Legacy slot is not smoothed"), MovedSlots[0].bAnchorScreenSmoothed);
-		TestEqual(TEXT("Legacy slot uses projected point directly"), MovedSlots[0].AnchorWidgetPosition, MovedSlots[0].WidgetPosition);
-		TestNotEqual(TEXT("Legacy slot still moves with projected anchor"), MovedSlots[0].ScreenPosition, InitialSlots[0].ScreenPosition);
-	}
-
-	Anchor->DestroyComponent();
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerAnchorSmoothingDebugTest,
 	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.DebugSummaryReportsAnchorSmoothing",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -3285,7 +3219,6 @@ bool FWacomFirstPersonCardLayerAnchorSmoothingDebugTest::RunTest(const FString& 
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->StaticCardEdgeDropPixels = 0.0f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
@@ -3340,7 +3273,6 @@ bool FWacomFirstPersonCardLayerAuthoredSpacingTest::RunTest(const FString& Param
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->StaticCardCountFallback = 7;
 	Anchor->AuthoredCardSpacingPixels = 160.0f;
@@ -3402,7 +3334,6 @@ bool FWacomFirstPersonCardLayerAuthoredEdgeDropHandCountScaleTest::RunTest(const
 		return Anchor->BuildActiveCardLayerSlotViewsForTest();
 	};
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->AuthoredCardSpacingPixels = 80.0f;
 	Anchor->AuthoredMaxHandWidthPixels = 0.0f;
@@ -3511,7 +3442,6 @@ bool FWacomFirstPersonCardLayerAuthoredHandAnchorNormalLayoutTest::RunTest(const
 	FWacomFirstPersonCardLayerEntry LeftNormal;
 	LeftNormal.CardViewData.Name = FText::FromString(TEXT("Left Normal"));
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->AuthoredCardSpacingPixels = 80.0f;
 	Anchor->AuthoredMaxHandWidthPixels = 0.0f;
@@ -3592,7 +3522,6 @@ bool FWacomFirstPersonCardLayerAuthoredCurveTest::RunTest(const FString& Paramet
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->StaticCardCountFallback = 5;
 	Anchor->AuthoredCardSpacingPixels = 100.0f;
@@ -3648,7 +3577,6 @@ bool FWacomFirstPersonCardLayerAuthoredFanAngleTest::RunTest(const FString& Para
 		return false;
 	}
 
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->FanYawDegrees = 6.0f;
 	Anchor->AuthoredFanCurveExponent = 2.0f;
 	Anchor->MaxCardLayerRenderAngleDegrees = 4.0f;
@@ -3698,7 +3626,6 @@ bool FWacomFirstPersonCardLayerAuthoredScaleTest::RunTest(const FString& Paramet
 	}
 
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->StaticCardRenderScale = 1.0f;
 	Anchor->PendingTargetingScale = 1.2f;
 	Anchor->HoverScale = 1.1f;
@@ -3758,7 +3685,6 @@ bool FWacomFirstPersonCardLayerAuthoredZOrderTest::RunTest(const FString& Parame
 	}
 
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->StaticCardCountFallback = 5;
 	Anchor->HoverZOrderBoost = 500;
 
@@ -3795,55 +3721,6 @@ bool FWacomFirstPersonCardLayerAuthoredZOrderTest::RunTest(const FString& Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerLegacyProjectedFanTest,
-	"Wacom.UI.FirstPersonCardLayer.Layout.LegacyComparison.ProjectedFan2DPreservesExistingBehavior",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerLegacyProjectedFanTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
-	{
-		return false;
-	}
-
-	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	Anchor->ProjectionPadding = 0.0f;
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
-	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
-	Anchor->StaticCardEdgeDropPixels = 0.0f;
-	Anchor->bEnableCardLayerPixelSnapping = false;
-	Anchor->CardSpacing = 36.0f;
-	const TArray<FWacomFirstPersonCardLayerSlotView> InitialSlots = Anchor->BuildStaticCardSlotViews();
-	Anchor->CardSpacing = 72.0f;
-	const TArray<FWacomFirstPersonCardLayerSlotView> ChangedSlots = Anchor->BuildStaticCardSlotViews();
-
-	TestEqual(TEXT("Initial slot count"), InitialSlots.Num(), 5);
-	TestEqual(TEXT("Changed slot count"), ChangedSlots.Num(), 5);
-	if (InitialSlots.Num() == 5 && ChangedSlots.Num() == 5)
-	{
-		TestEqual(TEXT("Legacy layout mode is recorded"), InitialSlots[2].LayoutMode, EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D);
-		TestNotEqual(TEXT("Legacy mode still uses per-card 3D spacing"), ChangedSlots[4].ScreenPosition, InitialSlots[4].ScreenPosition);
-		TestEqual(TEXT("Legacy point anchor is its own projected card point"), InitialSlots[4].AnchorWidgetPosition, InitialSlots[4].WidgetPosition);
-	}
-
-	Anchor->DestroyComponent();
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerAuthoredDebugTest,
 	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.DebugViewMatchesAuthoredLayout",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -3867,7 +3744,6 @@ bool FWacomFirstPersonCardLayerAuthoredDebugTest::RunTest(const FString& Paramet
 	}
 
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	Anchor->CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	Anchor->ProjectionPadding = 0.0f;
 	Anchor->StaticCardCountFallback = 5;
 	Anchor->StaticCardEdgeDropPixels = 40.0f;
@@ -3877,16 +3753,12 @@ bool FWacomFirstPersonCardLayerAuthoredDebugTest::RunTest(const FString& Paramet
 
 	TestEqual(TEXT("Slot count"), Slots.Num(), 5);
 	TestEqual(TEXT("Debug point count"), View.ProjectedPoints.Num(), 5);
-	TestEqual(TEXT("Debug view records authored layout"), View.LayoutMode, EWacomFirstPersonCardLayoutMode::Authored2D);
 	if (Slots.Num() == 5 && View.ProjectedPoints.Num() == 5)
 	{
 		TestEqual(TEXT("Debug point matches authored slot position"), View.ProjectedPoints[3].ScreenPosition, Slots[3].ScreenPosition);
 		TestEqual(TEXT("Debug point matches authored offset"), View.ProjectedPoints[3].AuthoredLayoutOffset, Slots[3].AuthoredLayoutOffset);
 		TestEqual(TEXT("Debug point records normalized offset"), View.ProjectedPoints[3].NormalizedHandOffset, Slots[3].NormalizedHandOffset);
 	}
-
-	const FString Summary = Anchor->GetDebugSummary();
-	TestTrue(TEXT("Summary reports layout mode"), Summary.Contains(TEXT("LayoutMode=Authored2D")));
 
 	Anchor->DestroyComponent();
 	Character->Destroy();

@@ -27,7 +27,7 @@ class WACOMAPP_API UEnemyInfoBar : public UWacomBattleWidgetBase
 public:
 	UEnemyInfoBar();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Enemy 2D Fallback|Compatibility", meta = (ToolTip = "legacy 2D 敌方部位 fallback 使用的单部位 Widget 类。正式场景敌人应优先使用 SceneEnemyHost + PartActor。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Enemy 2D Fallback|Compatibility", meta = (ToolTip = "legacy 2D 敌方部位 fallback 使用的单部位 Widget 类。正式场景敌人应优先使用 SceneEnemyHost + Host.PartSlots + PartActor。"))
 	TSubclassOf<UEnemyPartWidget> PartWidgetClass;
 
 	bool TryGetPartWidgetCenterInViewport(

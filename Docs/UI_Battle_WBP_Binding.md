@@ -52,7 +52,7 @@ WBP 不应做：
 - 不绑定旧 `HandPanel` 或 `CardDetailLayer` 作为 BattleHUD runtime 路径。
 - 不直接 Push 击倒弹窗、直接消费 `FBattleEvent`、提交 Battle 规则命令或维护表现队列。
 - 不把 `BattlePresentationStack` 做成可点击、可拖拽或规则栈。
-- 不用 `EnemyInfoBar` 承接新的 HD-2D 场景敌人制作；正式场景敌人走 `SceneEnemyHost + PartActor`。
+- 不用 `EnemyInfoBar` 承接新的 HD-2D 场景敌人制作；正式场景敌人走 `SceneEnemyHost + AWacomBattleEnemyActor.PartSlots + PartActor`。
 
 最小 PIE 验收：
 
@@ -292,7 +292,7 @@ WBP 不应做：
 
 父类：`UEnemyInfoBar`
 
-用途：legacy 2D enemy fallback / debug。正式敌方场景表现优先使用 `SceneEnemyHost + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`；有 `SceneEnemyHost` 时 BattleHUD 默认隐藏该 fallback。
+用途：legacy 2D enemy fallback / debug。正式敌方场景表现优先使用 `SceneEnemyHost + AWacomBattleEnemyActor.PartSlots + AWacomBattleEnemyPartActor`；有 `SceneEnemyHost` 时 BattleHUD 默认隐藏该 fallback。
 
 推荐绑定：
 
@@ -342,5 +342,5 @@ WBP 不应做：
 - `WaitButton / EndTurnButton` 可点击并由 HUD 状态控制可用性。
 - `WBP_FirstPersonCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
-- 有 `SceneEnemyHost` 的战斗中，Status Badge 可读，`EnemyInfoBar` 只作为 fallback/debug。
+- 有 `SceneEnemyHost` 的战斗中，Host `PartSlots` 绑定的 PartActor Status Badge 可读，`EnemyInfoBar` 只作为 fallback/debug。
 - 旧 `WBP_CardWidget / WBP_HandPanel` 已删除；`WBP_EnemyInfoBar / WBP_EnemyPartWidget` 仍可用于敌方 2D fallback/debug，但不作为新制作主线。

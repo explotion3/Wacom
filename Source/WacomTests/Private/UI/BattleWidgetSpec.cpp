@@ -153,6 +153,22 @@ namespace WacomBattleWidgetSpec
 		TArray<AWacomBattleEnemyPartActor*> Parts;
 	};
 
+	void AddExplicitPartSlot(
+		AWacomBattleEnemyActor* Host,
+		FName PartId,
+		AWacomBattleEnemyPartActor* PartActor)
+	{
+		if (!Host)
+		{
+			return;
+		}
+
+		FWacomBattleSceneEnemyPartSlot Slot;
+		Slot.PartId = PartId;
+		Slot.PartActor = PartActor;
+		Host->PartSlots.Add(Slot);
+	}
+
 	FSceneEnemyHostActors SpawnSceneEnemyHost(
 		UWorld& World,
 		UEnemyDefinition* EnemyDefinition,
@@ -184,12 +200,11 @@ namespace WacomBattleWidgetSpec
 				continue;
 			}
 
-			PartActor->PartId = PartIds[Index];
-			PartActor->AttachToActor(Result.Host, FAttachmentTransformRules::KeepWorldTransform);
 			Result.Parts.Add(PartActor);
+			AddExplicitPartSlot(Result.Host, PartIds[Index], PartActor);
 		}
 
-		Result.Host->RefreshAttachedPartAuthoringState();
+		Result.Host->RefreshBattleEnemyPartAuthoringState();
 		return Result;
 	}
 
@@ -3314,11 +3329,11 @@ bool FWacomUIBattleSceneEnemyPartActorHiddenComponentsSpec::RunTest(const FStrin
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyHostReportsAttachedPartFactsSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostReportsAttachedPartFacts",
+	FWacomUIBattleSceneEnemyHostReportsExplicitPartSlotFactsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostReportsExplicitPartSlotFacts",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleSceneEnemyHostReportsAttachedPartFactsSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleSceneEnemyHostReportsExplicitPartSlotFactsSpec::RunTest(const FString& /*Parameters*/)
 {
 	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -3365,18 +3380,78 @@ bool FWacomUIBattleSceneEnemyHostReportsAttachedPartFactsSpec::RunTest(const FSt
 		}
 	};
 
-	Head->PartId = TEXT("Test.Part.Head");
-	Body->PartId = TEXT("Test.Part.Body");
-	Head->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
-	Body->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Head"), Head);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Body"), Body);
 
-	Host->RefreshAttachedPartAuthoringState();
+	Host->RefreshBattleEnemyPartAuthoringState();
 	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
-	TestEqual(TEXT("Attached part count"), View.AttachedPartActorCount, 2);
+	TestTrue(TEXT("Host uses explicit slots"), View.bUsingExplicitPartSlots);
+	TestEqual(TEXT("Part slot count"), View.PartSlotCount, 2);
+	TestEqual(TEXT("Part actor count"), View.AttachedPartActorCount, 2);
+	TestEqual(TEXT("Slot syncs head PartId"), Head->PartId, FName(TEXT("Test.Part.Head")));
+	TestEqual(TEXT("Slot syncs body PartId"), Body->PartId, FName(TEXT("Test.Part.Body")));
 	TestTrue(TEXT("Head part id included"), View.AttachedPartIds.Contains(TEXT("Test.Part.Head")));
 	TestTrue(TEXT("Body part id included"), View.AttachedPartIds.Contains(TEXT("Test.Part.Body")));
 	TestTrue(TEXT("Host summary reports count"),
 		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("PartCount=2")));
+	TestTrue(TEXT("Host summary reports explicit slots"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("ExplicitSlots=true")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostAttachedFallbackSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostAttachedFallbackBindsWhenPartSlotsEmpty",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostAttachedFallbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host =
+		World->SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Head =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(100.f, 0.f, 0.f)),
+			SpawnParams);
+	if (!TestNotNull(TEXT("Host"), Host)
+		|| !TestNotNull(TEXT("Head"), Head))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Head))
+		{
+			Head->Destroy();
+		}
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	Head->PartId = TEXT("Test.Part.Head");
+	Head->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
+
+	Host->RefreshAttachedPartAuthoringState();
+	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
+	TestFalse(TEXT("Host reports fallback mode"), View.bUsingExplicitPartSlots);
+	TestEqual(TEXT("No explicit slots"), View.PartSlotCount, 0);
+	TestEqual(TEXT("Attached fallback part count"), View.AttachedPartActorCount, 1);
+	TestTrue(TEXT("Fallback part id included"), View.AttachedPartIds.Contains(TEXT("Test.Part.Head")));
+	TestTrue(TEXT("Host summary reports fallback mode"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("ExplicitSlots=false")));
 	return true;
 }
 
@@ -3440,11 +3515,9 @@ bool FWacomUIBattleSceneEnemyHostRuntimeFactsSpec::RunTest(const FString& /*Para
 		}
 	};
 
-	Head->PartId = TEXT("Test.Part.Head");
-	Body->PartId = TEXT("Test.Part.Body");
-	Head->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
-	Body->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
-	Host->RefreshAttachedPartAuthoringState();
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Head"), Head);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Body"), Body);
+	Host->RefreshBattleEnemyPartAuthoringState();
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
 	HUD->SetWorldForTest(World);
@@ -3528,11 +3601,9 @@ bool FWacomUIBattleSceneEnemyHostHoveredPartCountSpec::RunTest(const FString& /*
 		}
 	};
 
-	Head->PartId = TEXT("Test.Part.Head");
-	Body->PartId = TEXT("Test.Part.Body");
-	Head->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
-	Body->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
-	Host->RefreshAttachedPartAuthoringState();
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Head"), Head);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Body"), Body);
+	Host->RefreshBattleEnemyPartAuthoringState();
 
 	Head->GetWorldTargetBridgeComponent()->SetHoverProbeState(
 		FWacomInteractionTargetHandle::ForWorldTarget(
@@ -3601,9 +3672,8 @@ bool FWacomUIBattleSceneEnemyHostPredictionVisibleCountSpec::RunTest(const FStri
 		}
 	};
 
-	Head->PartId = TEXT("Test.Part.Head");
-	Head->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
-	Host->RefreshAttachedPartAuthoringState();
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Head"), Head);
+	Host->RefreshBattleEnemyPartAuthoringState();
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
 	HUD->SetWorldForTest(World);
@@ -3673,8 +3743,7 @@ bool FWacomUIBattleSceneEnemyHostDefinitionUnknownPartValidationSpec::RunTest(co
 	};
 
 	Host->EnemyDefinition = Enemy;
-	Part->PartId = TEXT("Test.Part.Unknown");
-	Part->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Unknown"), Part);
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;
@@ -3686,15 +3755,78 @@ bool FWacomUIBattleSceneEnemyHostDefinitionUnknownPartValidationSpec::RunTest(co
 		WacomBattleWidgetSpec::ValidationIssuesContain(Warnings, TEXT("Test.Part.Unknown")));
 	TestTrue(TEXT("Debug unknown part id"),
 		Host->GetBattleSceneEnemyDebugView().UnknownPartIds.Contains(TEXT("Test.Part.Unknown")));
+	TestTrue(TEXT("Debug missing definition part id"),
+		Host->GetBattleSceneEnemyDebugView().MissingDefinitionPartIds.Num() > 0);
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartDuplicatePartIdValidationSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartDuplicatePartIdWarnsButDoesNotInvalidate",
+	FWacomUIBattleSceneEnemyHostMissingDefinitionPartValidationSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostWarnsOnMissingDefinitionPartId",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleSceneEnemyPartDuplicatePartIdValidationSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleSceneEnemyHostMissingDefinitionPartValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host =
+		World->SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Head =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(100.f, 0.f, 0.f)),
+			SpawnParams);
+	if (!TestNotNull(TEXT("Host"), Host) || !TestNotNull(TEXT("Head"), Head))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Head))
+		{
+			Head->Destroy();
+		}
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	Host->EnemyDefinition = Enemy;
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Head"), Head);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		WacomBattleWidgetSpec::ValidateObjectForTest(Host, Warnings, Errors);
+	TestEqual(TEXT("Missing definition part warning keeps host valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("No missing definition validation errors"), Errors.Num(), 0);
+	TestTrue(TEXT("Warning mentions missing body"),
+		WacomBattleWidgetSpec::ValidationIssuesContain(Warnings, TEXT("Test.Part.Body")));
+	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
+	TestTrue(TEXT("Debug missing body"), View.MissingDefinitionPartIds.Contains(TEXT("Test.Part.Body")));
+	TestTrue(TEXT("Debug missing tail"), View.MissingDefinitionPartIds.Contains(TEXT("Test.Part.Tail")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartDuplicatePartIdAcrossHostsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartDuplicatePartIdAcrossHostsIsValid",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartDuplicatePartIdAcrossHostsSpec::RunTest(const FString& /*Parameters*/)
 {
 	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -3737,10 +3869,77 @@ bool FWacomUIBattleSceneEnemyPartDuplicatePartIdValidationSpec::RunTest(const FS
 	TArray<FText> Errors;
 	const EDataValidationResult Result =
 		WacomBattleWidgetSpec::ValidateObjectForTest(First, Warnings, Errors);
-	TestEqual(TEXT("Duplicate part id keeps actor valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Duplicate world part id keeps actor valid"), Result, EDataValidationResult::Valid);
 	TestEqual(TEXT("No duplicate validation errors"), Errors.Num(), 0);
-	TestTrue(TEXT("Duplicate warning"),
+	TestFalse(TEXT("No duplicate warning at PartActor level"),
 		WacomBattleWidgetSpec::ValidationIssuesContain(Warnings, TEXT("重复")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostDuplicateSlotPartIdValidationSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostDuplicateSlotPartIdInvalidates",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostDuplicateSlotPartIdValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host =
+		World->SpawnActor<AWacomBattleEnemyActor>(
+			AWacomBattleEnemyActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	AWacomBattleEnemyPartActor* First =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(100.f, 0.f, 0.f)),
+			SpawnParams);
+	AWacomBattleEnemyPartActor* Second =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform(FVector(200.f, 0.f, 0.f)),
+			SpawnParams);
+	if (!TestNotNull(TEXT("Host"), Host)
+		|| !TestNotNull(TEXT("First"), First)
+		|| !TestNotNull(TEXT("Second"), Second))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Second))
+		{
+			Second->Destroy();
+		}
+		if (IsValid(First))
+		{
+			First->Destroy();
+		}
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Head"), First);
+	WacomBattleWidgetSpec::AddExplicitPartSlot(Host, TEXT("Test.Part.Head"), Second);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		WacomBattleWidgetSpec::ValidateObjectForTest(Host, Warnings, Errors);
+	TestEqual(TEXT("Duplicate slot part id invalidates host"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Duplicate slot id error"),
+		WacomBattleWidgetSpec::ValidationIssuesContain(Errors, TEXT("Test.Part.Head")));
+	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
+	TestTrue(TEXT("Debug duplicate slot id"), View.DuplicateSlotPartIds.Contains(TEXT("Test.Part.Head")));
 	return true;
 }
 
@@ -3803,7 +4002,7 @@ bool FWacomUIBattleTriggerSceneEnemyHostRegistrySpec::RunTest(const FString& /*P
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDSyncsOnlyCurrentHostSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyTargetRegistry.HUDSyncsOnlyCurrentHostAttachedPartActors",
+	"Wacom.UI.Battle.BattleSceneEnemyTargetRegistry.HUDSyncsOnlyCurrentHostExplicitPartSlots",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDSyncsOnlyCurrentHostSpec::RunTest(const FString& /*Parameters*/)
@@ -3830,7 +4029,7 @@ bool FWacomUIBattleHUDSyncsOnlyCurrentHostSpec::RunTest(const FString& /*Paramet
 		WacomBattleWidgetSpec::SpawnSceneEnemyHost(
 			*World,
 			Enemy,
-			{ TEXT("Test.Part.Tail") });
+			{ TEXT("Test.Part.Head") });
 	if (!TestNotNull(TEXT("Current host"), CurrentHost.Host)
 		|| !TestNotNull(TEXT("Other host"), OtherHost.Host))
 	{
@@ -4795,7 +4994,7 @@ bool FWacomUIBattleSceneEnemyPartDestroyedBadgeDimSpec::RunTest(const FString& /
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleSceneEnemyHostBadgeStaggerSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostAppliesStableBadgeStaggerToAttachedParts",
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostAppliesStableBadgeStaggerToPartSlots",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleSceneEnemyHostBadgeStaggerSpec::RunTest(const FString& /*Parameters*/)

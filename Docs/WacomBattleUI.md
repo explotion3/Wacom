@@ -102,7 +102,9 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 
 ## §6 Scene Enemy UI
 
-场景敌人推荐入口是 `ABattleTriggerActor.SceneEnemyHost + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`。进入战斗时 GameMode 把当前 Trigger 的 Host 传给 BattleHUD，HUD 只同步该 Host 下 attached PartActor 的 bridge。
+场景敌人正式入口是 `ABattleTriggerActor.SceneEnemyHost + AWacomBattleEnemyActor.PartSlots + AWacomBattleEnemyPartActor`。进入战斗时 GameMode 把当前 Trigger 的 Host 传给 BattleHUD，HUD 只同步该 Host registry 中的 PartActor bridge。
+
+`PartSlots` 是 Host 绑定合同：`Slot.PartId` 对应 `UEnemyPartDefinition::PartId`，是权威 authored id；Host 刷新时会同步到 `PartActor.PartId`、`InteractionTarget` 和 `WorldTargetBridge`。`PartSlots` 为空时保留 attached PartActor 扫描作为旧地图 fallback，但新制作不再依赖 attached 层级表达战斗语义。slot 顺序只影响 registry / badge stagger 表现，不改变 BattleSession 规则部位顺序。
 
 每个 PartActor 通过 `UWacomBattleEnemyPartWorldTargetBridgeComponent` 接收：
 

@@ -28,7 +28,6 @@ namespace
 	struct FWacomFirstPersonCardResolvedLayoutConfig
 	{
 		EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
-		EWacomFirstPersonCardLayoutMode CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 		EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 		float FanYawDegrees = 3.0f;
 		float AuthoredCardSpacingPixels = 120.0f;
@@ -134,7 +133,6 @@ namespace
 	{
 		FWacomFirstPersonCardResolvedLayoutConfig Config;
 		Config.ProjectionMode = Anchor.ProjectionMode;
-		Config.CardLayoutMode = Anchor.CardLayoutMode;
 		Config.ViewportClampMode = Anchor.ViewportClampMode;
 		Config.FanYawDegrees = Anchor.FanYawDegrees;
 		Config.AuthoredCardSpacingPixels = Anchor.AuthoredCardSpacingPixels;
@@ -262,7 +260,6 @@ namespace
 		FWacomFirstPersonCardResolvedLayoutConfig& Config)
 	{
 		Config.ProjectionMode = Preset.ProjectionMode;
-		Config.CardLayoutMode = Preset.CardLayoutMode;
 		Config.ViewportClampMode = Preset.ViewportClampMode;
 		Config.FanYawDegrees = Preset.FanYawDegrees;
 		Config.AuthoredCardSpacingPixels = Preset.AuthoredCardSpacingPixels;
@@ -493,7 +490,6 @@ namespace
 		};
 
 		AddInt(static_cast<int32>(Config.ProjectionMode));
-		AddInt(static_cast<int32>(Config.CardLayoutMode));
 		AddInt(static_cast<int32>(Config.ViewportClampMode));
 		AddFloat(Config.FanYawDegrees);
 		AddFloat(Config.AuthoredCardSpacingPixels);
@@ -869,7 +865,6 @@ bool UWacomFirstPersonCardAnchorComponent::ProjectCardTransformToScreen(
 	OutProjectedPoint.Index = PointIndex;
 	OutProjectedPoint.WorldLocation = CardTransform.GetLocation();
 	OutProjectedPoint.ProjectionMode = Config.ProjectionMode;
-	OutProjectedPoint.LayoutMode = Config.CardLayoutMode;
 	OutProjectedPoint.bBodyLockedLayout = Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
 	OutProjectedPoint.bCurrentCameraProjection = true;
 	OutProjectedPoint.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
@@ -1044,7 +1039,6 @@ FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFi
 	View.Mode = CurrentMode;
 	View.AnchorTransform = CurrentAnchorTransform;
 	View.ProjectionMode = Config.ProjectionMode;
-	View.LayoutMode = Config.CardLayoutMode;
 	View.ViewportClampMode = Config.ViewportClampMode;
 	View.LookOffsetUsed = CurrentLookOffsetUsed;
 	View.LastFallbackReason = LastFallbackReason;
@@ -1064,52 +1058,40 @@ FWacomFirstPersonCardAnchorDebugView UWacomFirstPersonCardAnchorComponent::GetFi
 
 	const int32 ClampedCount = FMath::Clamp(NumDebugCards, 0, 32);
 	View.ProjectedPoints.Reserve(ClampedCount);
-	if (Config.CardLayoutMode == EWacomFirstPersonCardLayoutMode::Authored2D)
-	{
-		TArray<FWacomFirstPersonCardLayerEntry> DebugEntries;
-		DebugEntries.SetNum(ClampedCount);
-		const TArray<FWacomFirstPersonCardLayerSlotView> DebugSlots = BuildCardSlotViewsFromEntries(DebugEntries);
-		for (const FWacomFirstPersonCardLayerSlotView& Slot : DebugSlots)
-		{
-			FWacomFirstPersonCardProjectedPoint Point;
-			Point.Index = Slot.Index;
-			Point.WorldLocation = CurrentAnchorTransform.GetLocation();
-			Point.RawScreenPosition = Slot.RawScreenPosition;
-			Point.WidgetPosition = Slot.WidgetPosition;
-			Point.UnclampedWidgetPosition = Slot.UnclampedWidgetPosition;
-			Point.SnappedWidgetPosition = Slot.SnappedWidgetPosition;
-			Point.ScreenPosition = Slot.ScreenPosition;
-			Point.ProjectionMode = Slot.ProjectionMode;
-			Point.LayoutMode = Slot.LayoutMode;
-			Point.ViewportClampMode = Slot.ViewportClampMode;
-			Point.AnchorWidgetPosition = Slot.AnchorWidgetPosition;
-			Point.UnsmoothedAnchorWidgetPosition = Slot.UnsmoothedAnchorWidgetPosition;
-			Point.SmoothedAnchorWidgetPosition = Slot.SmoothedAnchorWidgetPosition;
-			Point.AuthoredLayoutOffset = Slot.AuthoredLayoutOffset;
-			Point.NormalizedHandOffset = Slot.NormalizedHandOffset;
-			Point.ViewportScale = Slot.ViewportScale;
-			Point.OffscreenDistancePixels = Slot.OffscreenDistancePixels;
-			Point.AnchorScreenSmoothingDistancePixels = Slot.AnchorScreenSmoothingDistancePixels;
-			Point.bProjected = Slot.bProjected;
-			Point.bClamped = Slot.bClamped;
-			Point.bOutsideViewport = Slot.bOutsideViewport;
-			Point.bPixelSnapped = Slot.bPixelSnapped;
-			Point.bAnchorScreenSmoothed = Slot.bAnchorScreenSmoothed;
-			Point.bBodyLockedLayout = Slot.bBodyLockedLayout;
-			Point.bCurrentCameraProjection = Slot.bCurrentCameraProjection;
-			Point.bLookOffsetAppliedToLayout = Slot.bLookOffsetAppliedToLayout;
-			View.ProjectedPoints.Add(Point);
-		}
-		View.bAnchorScreenSmoothed = bLastAnchorScreenSmoothed;
-		return View;
-	}
-
-	for (int32 Index = 0; Index < ClampedCount; ++Index)
+	TArray<FWacomFirstPersonCardLayerEntry> DebugEntries;
+	DebugEntries.SetNum(ClampedCount);
+	const TArray<FWacomFirstPersonCardLayerSlotView> DebugSlots = BuildCardSlotViewsFromEntries(DebugEntries);
+	for (const FWacomFirstPersonCardLayerSlotView& Slot : DebugSlots)
 	{
 		FWacomFirstPersonCardProjectedPoint Point;
-		ProjectCardTransformToScreen(ComputeCardTransform(ClampedCount, Index), Point, Index);
+		Point.Index = Slot.Index;
+		Point.WorldLocation = CurrentAnchorTransform.GetLocation();
+		Point.RawScreenPosition = Slot.RawScreenPosition;
+		Point.WidgetPosition = Slot.WidgetPosition;
+		Point.UnclampedWidgetPosition = Slot.UnclampedWidgetPosition;
+		Point.SnappedWidgetPosition = Slot.SnappedWidgetPosition;
+		Point.ScreenPosition = Slot.ScreenPosition;
+		Point.ProjectionMode = Slot.ProjectionMode;
+		Point.ViewportClampMode = Slot.ViewportClampMode;
+		Point.AnchorWidgetPosition = Slot.AnchorWidgetPosition;
+		Point.UnsmoothedAnchorWidgetPosition = Slot.UnsmoothedAnchorWidgetPosition;
+		Point.SmoothedAnchorWidgetPosition = Slot.SmoothedAnchorWidgetPosition;
+		Point.AuthoredLayoutOffset = Slot.AuthoredLayoutOffset;
+		Point.NormalizedHandOffset = Slot.NormalizedHandOffset;
+		Point.ViewportScale = Slot.ViewportScale;
+		Point.OffscreenDistancePixels = Slot.OffscreenDistancePixels;
+		Point.AnchorScreenSmoothingDistancePixels = Slot.AnchorScreenSmoothingDistancePixels;
+		Point.bProjected = Slot.bProjected;
+		Point.bClamped = Slot.bClamped;
+		Point.bOutsideViewport = Slot.bOutsideViewport;
+		Point.bPixelSnapped = Slot.bPixelSnapped;
+		Point.bAnchorScreenSmoothed = Slot.bAnchorScreenSmoothed;
+		Point.bBodyLockedLayout = Slot.bBodyLockedLayout;
+		Point.bCurrentCameraProjection = Slot.bCurrentCameraProjection;
+		Point.bLookOffsetAppliedToLayout = Slot.bLookOffsetAppliedToLayout;
 		View.ProjectedPoints.Add(Point);
 	}
+	View.bAnchorScreenSmoothed = bLastAnchorScreenSmoothed;
 	return View;
 }
 
@@ -1248,14 +1230,12 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 	}
 
 	FWacomFirstPersonCardProjectedPoint AnchorPoint;
-	const bool bUseAuthoredLayout = Config.CardLayoutMode == EWacomFirstPersonCardLayoutMode::Authored2D;
-	const bool bAuthoredAnchorProjected = !bUseAuthoredLayout
-		|| ProjectCardTransformToScreen(CurrentAnchorTransform, AnchorPoint, INDEX_NONE);
-	if (bUseAuthoredLayout && bAuthoredAnchorProjected)
+	const bool bAnchorProjected = ProjectCardTransformToScreen(CurrentAnchorTransform, AnchorPoint, INDEX_NONE);
+	if (bAnchorProjected)
 	{
 		ApplyAnchorScreenSmoothing(AnchorPoint);
 	}
-	else if (bUseAuthoredLayout)
+	else
 	{
 		ResetAnchorScreenSmoothing();
 	}
@@ -1273,7 +1253,6 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 			: FMath::Clamp(Config.DisabledRenderOpacity, 0.0f, 1.0f);
 		Slot.ZOrder = Index;
 		Slot.ProjectionMode = Config.ProjectionMode;
-		Slot.LayoutMode = Config.CardLayoutMode;
 		Slot.ViewportClampMode = Config.ViewportClampMode;
 		Slot.bBodyLockedLayout = Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
 		Slot.bCurrentCameraProjection = true;
@@ -1287,9 +1266,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		const float FanCurveExponent = FMath::Max(0.01f, Config.AuthoredFanCurveExponent);
 		const float FanDirection = CenterOffset < 0.0f ? -1.0f : 1.0f;
 		const float AuthoredFanMagnitude = FMath::Pow(NormalizedEdgeDistance, FanCurveExponent) * MaxAbsCenterOffset;
-		const float FanOffset = bUseAuthoredLayout
-			? FanDirection * AuthoredFanMagnitude
-			: CenterOffset;
+		const float FanOffset = FanDirection * AuthoredFanMagnitude;
 		const bool bIsPendingTargeting = Slot.Entry.bIsPendingTargeting;
 		const bool bIsHovered =
 			Slot.Entry.CardInstanceId.IsValid()
@@ -1297,7 +1274,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		const bool bAllowHoverTransform = bIsHovered && Slot.Entry.bIsPlayable && !bIsPendingTargeting;
 		Slot.NormalizedHandOffset = NormalizedHandOffset;
 		Slot.RenderAngleDegrees = ClampCardLayerRenderAngleForConfig(FanOffset * Config.FanYawDegrees, Config);
-		if (bUseAuthoredLayout && Config.bAuthoredCenterCardsDrawOnTop)
+		if (Config.bAuthoredCenterCardsDrawOnTop)
 		{
 			Slot.ZOrder = FMath::RoundToInt((1.0f - NormalizedEdgeDistance) * 100.0f);
 		}
@@ -1331,130 +1308,83 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 			Slot.ZOrder += FMath::Max(0, Config.HoverZOrderBoost);
 		}
 
-		if (bUseAuthoredLayout)
-		{
-			Slot.RawScreenPosition = AnchorPoint.RawScreenPosition;
-			Slot.UnclampedWidgetPosition = AnchorPoint.UnclampedWidgetPosition;
-			Slot.ViewportScale = AnchorPoint.ViewportScale;
-			Slot.ProjectionMode = AnchorPoint.ProjectionMode;
-			Slot.ViewportClampMode = AnchorPoint.ViewportClampMode;
-			Slot.AnchorWidgetPosition = AnchorPoint.WidgetPosition;
-			Slot.UnsmoothedAnchorWidgetPosition = AnchorPoint.UnsmoothedAnchorWidgetPosition;
-			Slot.SmoothedAnchorWidgetPosition = AnchorPoint.SmoothedAnchorWidgetPosition;
-			Slot.OffscreenDistancePixels = AnchorPoint.OffscreenDistancePixels;
-			Slot.AnchorScreenSmoothingDistancePixels = AnchorPoint.AnchorScreenSmoothingDistancePixels;
-			Slot.bBodyLockedLayout = Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
-			Slot.bCurrentCameraProjection = true;
-			Slot.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
-			Slot.bClamped = AnchorPoint.bClamped;
-			Slot.bOutsideViewport = AnchorPoint.bOutsideViewport;
-			Slot.bAnchorScreenSmoothed = AnchorPoint.bAnchorScreenSmoothed;
-			Slot.bProjected = false;
+		Slot.RawScreenPosition = AnchorPoint.RawScreenPosition;
+		Slot.UnclampedWidgetPosition = AnchorPoint.UnclampedWidgetPosition;
+		Slot.ViewportScale = AnchorPoint.ViewportScale;
+		Slot.ProjectionMode = AnchorPoint.ProjectionMode;
+		Slot.ViewportClampMode = AnchorPoint.ViewportClampMode;
+		Slot.AnchorWidgetPosition = AnchorPoint.WidgetPosition;
+		Slot.UnsmoothedAnchorWidgetPosition = AnchorPoint.UnsmoothedAnchorWidgetPosition;
+		Slot.SmoothedAnchorWidgetPosition = AnchorPoint.SmoothedAnchorWidgetPosition;
+		Slot.OffscreenDistancePixels = AnchorPoint.OffscreenDistancePixels;
+		Slot.AnchorScreenSmoothingDistancePixels = AnchorPoint.AnchorScreenSmoothingDistancePixels;
+		Slot.bBodyLockedLayout = Config.ProjectionMode == EWacomFirstPersonCardProjectionMode::BodyLocked;
+		Slot.bCurrentCameraProjection = true;
+		Slot.bLookOffsetAppliedToLayout = bCurrentLookOffsetAppliedToLayout;
+		Slot.bClamped = AnchorPoint.bClamped;
+		Slot.bOutsideViewport = AnchorPoint.bOutsideViewport;
+		Slot.bAnchorScreenSmoothed = AnchorPoint.bAnchorScreenSmoothed;
+		Slot.bProjected = false;
 
-			if (bAuthoredAnchorProjected)
-			{
-				const float NaturalHandWidth = FMath::Max(0, ClampedCount - 1) * FMath::Max(0.0f, Config.AuthoredCardSpacingPixels);
-				const float MaxHandWidth = FMath::Max(0.0f, Config.AuthoredMaxHandWidthPixels);
-				const float WidthScale = (MaxHandWidth > 0.0f && NaturalHandWidth > MaxHandWidth)
-					? MaxHandWidth / NaturalHandWidth
-					: 1.0f;
-				const float XOffset = CenterOffset * FMath::Max(0.0f, Config.AuthoredCardSpacingPixels) * WidthScale;
-				const float DropMagnitude =
-					FMath::Pow(NormalizedEdgeDistance, FMath::Max(0.01f, Config.AuthoredDropCurveExponent))
-					* EffectiveEdgeDropPixels;
-				const float CenterLiftMagnitude =
-					(1.0f - NormalizedEdgeDistance) * Config.AuthoredCenterLiftPixels;
-
-				FVector2D FinalPosition =
-					AnchorPoint.WidgetPosition
-					+ Config.AuthoredHandScreenOffset
-					+ FVector2D(XOffset, DropMagnitude - CenterLiftMagnitude);
-				Slot.AuthoredLayoutOffset = FinalPosition - AnchorPoint.WidgetPosition;
-				Slot.bBodyLockedLayout = AnchorPoint.bBodyLockedLayout;
-				Slot.bCurrentCameraProjection = AnchorPoint.bCurrentCameraProjection;
-				Slot.bLookOffsetAppliedToLayout = AnchorPoint.bLookOffsetAppliedToLayout;
-				FVector2D ViewportSize = FVector2D::ZeroVector;
-				FVector2D InputHitPosition = FinalPosition;
-				if (GetViewportSizeForAnchor(ViewportSize) && AnchorPoint.ViewportScale > 0.0f)
-				{
-					InputHitPosition = KeepCardBodyBottomInsideViewportForConfig(
-						InputHitPosition,
-						ViewportSize / AnchorPoint.ViewportScale,
-						Config,
-						Slot.InputHitScale);
-				}
-				bool bInputHitPixelSnapped = false;
-				Slot.InputHitCenter = SnapCardLayerPositionForConfig(InputHitPosition, Config, bInputHitPixelSnapped);
-				if (bIsPendingTargeting)
-				{
-					FinalPosition.Y -= FMath::Max(0.0f, Config.PendingTargetingLiftPixels);
-				}
-				if (bAllowHoverTransform)
-				{
-					FinalPosition.Y -= FMath::Max(0.0f, Config.HoverLiftPixels);
-				}
-				const FVector2D BeforeViewportReadableClamp = FinalPosition;
-				if (GetViewportSizeForAnchor(ViewportSize) && AnchorPoint.ViewportScale > 0.0f)
-				{
-					FinalPosition = KeepCardBodyBottomInsideViewportForConfig(
-						FinalPosition,
-						ViewportSize / AnchorPoint.ViewportScale,
-						Config,
-						Slot.RenderScale);
-				}
-				Slot.bBodyBottomViewportAdjusted =
-					!FinalPosition.Equals(BeforeViewportReadableClamp, KINDA_SMALL_NUMBER);
-				bool bPixelSnapped = false;
-				Slot.WidgetPosition = FinalPosition;
-				Slot.SnappedWidgetPosition = SnapCardLayerPositionForConfig(FinalPosition, Config, bPixelSnapped);
-				Slot.ScreenPosition = Slot.SnappedWidgetPosition;
-				Slot.bPixelSnapped = bPixelSnapped;
-				Slot.bProjected = AnchorPoint.bProjected;
-			}
-		}
-		else
+		if (bAnchorProjected)
 		{
-			FWacomFirstPersonCardProjectedPoint Point;
-			if (ProjectCardTransformToScreen(ComputeCardTransform(ClampedCount, Index), Point, Index))
+			const float NaturalHandWidth = FMath::Max(0, ClampedCount - 1) * FMath::Max(0.0f, Config.AuthoredCardSpacingPixels);
+			const float MaxHandWidth = FMath::Max(0.0f, Config.AuthoredMaxHandWidthPixels);
+			const float WidthScale = (MaxHandWidth > 0.0f && NaturalHandWidth > MaxHandWidth)
+				? MaxHandWidth / NaturalHandWidth
+				: 1.0f;
+			const float XOffset = CenterOffset * FMath::Max(0.0f, Config.AuthoredCardSpacingPixels) * WidthScale;
+			const float DropMagnitude =
+				FMath::Pow(NormalizedEdgeDistance, FMath::Max(0.01f, Config.AuthoredDropCurveExponent))
+				* EffectiveEdgeDropPixels;
+			const float CenterLiftMagnitude =
+				(1.0f - NormalizedEdgeDistance) * Config.AuthoredCenterLiftPixels;
+
+			FVector2D FinalPosition =
+				AnchorPoint.WidgetPosition
+				+ Config.AuthoredHandScreenOffset
+				+ FVector2D(XOffset, DropMagnitude - CenterLiftMagnitude);
+			Slot.AuthoredLayoutOffset = FinalPosition - AnchorPoint.WidgetPosition;
+			Slot.bBodyLockedLayout = AnchorPoint.bBodyLockedLayout;
+			Slot.bCurrentCameraProjection = AnchorPoint.bCurrentCameraProjection;
+			Slot.bLookOffsetAppliedToLayout = AnchorPoint.bLookOffsetAppliedToLayout;
+			FVector2D ViewportSize = FVector2D::ZeroVector;
+			FVector2D InputHitPosition = FinalPosition;
+			if (GetViewportSizeForAnchor(ViewportSize) && AnchorPoint.ViewportScale > 0.0f)
 			{
-				FVector2D FinalPosition = Point.WidgetPosition;
-				Slot.RawScreenPosition = Point.RawScreenPosition;
-				Slot.UnclampedWidgetPosition = Point.UnclampedWidgetPosition;
-				Slot.ViewportScale = Point.ViewportScale;
-				Slot.ProjectionMode = Point.ProjectionMode;
-				Slot.LayoutMode = EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D;
-				Slot.ViewportClampMode = Point.ViewportClampMode;
-				Slot.AnchorWidgetPosition = Point.WidgetPosition;
-				Slot.UnsmoothedAnchorWidgetPosition = Point.WidgetPosition;
-				Slot.SmoothedAnchorWidgetPosition = Point.WidgetPosition;
-				Slot.OffscreenDistancePixels = Point.OffscreenDistancePixels;
-				Slot.AnchorScreenSmoothingDistancePixels = 0.0f;
-				Slot.bBodyLockedLayout = Point.bBodyLockedLayout;
-				Slot.bCurrentCameraProjection = Point.bCurrentCameraProjection;
-				Slot.bLookOffsetAppliedToLayout = Point.bLookOffsetAppliedToLayout;
-				FinalPosition.Y += FMath::Square(NormalizedEdgeDistance) * EffectiveEdgeDropPixels;
-				{
-					bool bInputHitPixelSnapped = false;
-					Slot.InputHitCenter = SnapCardLayerPositionForConfig(FinalPosition, Config, bInputHitPixelSnapped);
-				}
-				if (bIsPendingTargeting)
-				{
-					FinalPosition.Y -= FMath::Max(0.0f, Config.PendingTargetingLiftPixels);
-				}
-				if (bAllowHoverTransform)
-				{
-					FinalPosition.Y -= FMath::Max(0.0f, Config.HoverLiftPixels);
-				}
-				bool bPixelSnapped = false;
-				Slot.WidgetPosition = FinalPosition;
-				Slot.SnappedWidgetPosition = SnapCardLayerPositionForConfig(FinalPosition, Config, bPixelSnapped);
-				Slot.ScreenPosition = Slot.SnappedWidgetPosition;
-				Slot.bPixelSnapped = bPixelSnapped;
-				Slot.bProjected = Point.bProjected;
-				Slot.bClamped = Point.bClamped;
-				Slot.bOutsideViewport = Point.bOutsideViewport;
-				Slot.bAnchorScreenSmoothed = false;
+				InputHitPosition = KeepCardBodyBottomInsideViewportForConfig(
+					InputHitPosition,
+					ViewportSize / AnchorPoint.ViewportScale,
+					Config,
+					Slot.InputHitScale);
 			}
+			bool bInputHitPixelSnapped = false;
+			Slot.InputHitCenter = SnapCardLayerPositionForConfig(InputHitPosition, Config, bInputHitPixelSnapped);
+			if (bIsPendingTargeting)
+			{
+				FinalPosition.Y -= FMath::Max(0.0f, Config.PendingTargetingLiftPixels);
+			}
+			if (bAllowHoverTransform)
+			{
+				FinalPosition.Y -= FMath::Max(0.0f, Config.HoverLiftPixels);
+			}
+			const FVector2D BeforeViewportReadableClamp = FinalPosition;
+			if (GetViewportSizeForAnchor(ViewportSize) && AnchorPoint.ViewportScale > 0.0f)
+			{
+				FinalPosition = KeepCardBodyBottomInsideViewportForConfig(
+					FinalPosition,
+					ViewportSize / AnchorPoint.ViewportScale,
+					Config,
+					Slot.RenderScale);
+			}
+			Slot.bBodyBottomViewportAdjusted =
+				!FinalPosition.Equals(BeforeViewportReadableClamp, KINDA_SMALL_NUMBER);
+			bool bPixelSnapped = false;
+			Slot.WidgetPosition = FinalPosition;
+			Slot.SnappedWidgetPosition = SnapCardLayerPositionForConfig(FinalPosition, Config, bPixelSnapped);
+			Slot.ScreenPosition = Slot.SnappedWidgetPosition;
+			Slot.bPixelSnapped = bPixelSnapped;
+			Slot.bProjected = AnchorPoint.bProjected;
 		}
 
 		Slots.Add(Slot);
@@ -1521,10 +1451,9 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		? StaticCardLayerWidget->GetDragTargetDebugSummary()
 		: TEXT("DragTarget Inactive");
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s LayoutMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s ClickToPlay=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f PointerCameraLook=%s PointerCameraLookScale=%.2f PointerCameraLookInterpOverride=%.2f DragTargetFeedback=%s DragAimSnap=%s DragAimSnapBlend=%.2f %s %s"),
+		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s ViewportClampMode=%s PresetEnabled=%s PresetActive=%s PresetName=%s PresetFallback=%s BodyLockedLayout=%s CurrentCameraProjection=true LookUsedForLayout=%s Valid=%s Anchor=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s ClickToPlay=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f PointerCameraLook=%s PointerCameraLookScale=%.2f PointerCameraLookInterpOverride=%.2f DragTargetFeedback=%s DragAimSnap=%s DragAimSnapBlend=%.2f %s %s"),
 		*AnchorModeToString(CurrentMode),
 		*ProjectionModeToString(Config.ProjectionMode),
-		*LayoutModeToString(Config.CardLayoutMode),
 		*ViewportClampModeToString(Config.ViewportClampMode),
 		bUseFirstPersonCardLayoutPreset ? TEXT("true") : TEXT("false"),
 		Config.bUsingPreset ? TEXT("true") : TEXT("false"),
@@ -1750,7 +1679,6 @@ void UWacomFirstPersonCardAnchorComponent::ResetAnchorScreenSmoothing() const
 	SmoothedAnchorWidgetPosition = FVector2D::ZeroVector;
 	LastAnchorScreenSmoothingTargetWidgetPosition = FVector2D::ZeroVector;
 	LastAnchorScreenSmoothingFrame = 0;
-	SmoothedAnchorLayoutMode = Config.CardLayoutMode;
 	SmoothedAnchorProjectionMode = Config.ProjectionMode;
 	SmoothedAnchorViewportClampMode = Config.ViewportClampMode;
 	SmoothedAnchorMode = CurrentMode;
@@ -1768,13 +1696,11 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	LastAnchorScreenSmoothingDistancePixels = 0.0f;
 
 	if (!AnchorPoint.bProjected
-		|| Config.CardLayoutMode != EWacomFirstPersonCardLayoutMode::Authored2D
 		|| !Config.bEnableAnchorScreenSmoothing
 		|| Config.AnchorScreenSmoothingSpeed <= 0.0f)
 	{
 		SmoothedAnchorWidgetPosition = AnchorPoint.WidgetPosition;
 		bHasSmoothedAnchorWidgetPosition = AnchorPoint.bProjected;
-		SmoothedAnchorLayoutMode = Config.CardLayoutMode;
 		SmoothedAnchorProjectionMode = Config.ProjectionMode;
 		SmoothedAnchorViewportClampMode = Config.ViewportClampMode;
 		SmoothedAnchorMode = CurrentMode;
@@ -1782,8 +1708,7 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	}
 
 	const bool bModeChanged =
-		SmoothedAnchorLayoutMode != Config.CardLayoutMode
-		|| SmoothedAnchorProjectionMode != Config.ProjectionMode
+		SmoothedAnchorProjectionMode != Config.ProjectionMode
 		|| SmoothedAnchorViewportClampMode != Config.ViewportClampMode
 		|| SmoothedAnchorMode != CurrentMode;
 	const bool bSameFrameTarget =
@@ -1804,7 +1729,6 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	{
 		SmoothedAnchorWidgetPosition = AnchorPoint.WidgetPosition;
 		bHasSmoothedAnchorWidgetPosition = true;
-		SmoothedAnchorLayoutMode = Config.CardLayoutMode;
 		SmoothedAnchorProjectionMode = Config.ProjectionMode;
 		SmoothedAnchorViewportClampMode = Config.ViewportClampMode;
 		SmoothedAnchorMode = CurrentMode;
@@ -1842,7 +1766,6 @@ void UWacomFirstPersonCardAnchorComponent::ApplyAnchorScreenSmoothing(
 	AnchorPoint.bAnchorScreenSmoothed = SmoothedDistance > KINDA_SMALL_NUMBER;
 	bLastAnchorScreenSmoothed = AnchorPoint.bAnchorScreenSmoothed;
 	LastAnchorScreenSmoothingDistancePixels = SmoothedDistance;
-	SmoothedAnchorLayoutMode = Config.CardLayoutMode;
 	SmoothedAnchorProjectionMode = Config.ProjectionMode;
 	SmoothedAnchorViewportClampMode = Config.ViewportClampMode;
 	SmoothedAnchorMode = CurrentMode;
@@ -1892,18 +1815,6 @@ FString UWacomFirstPersonCardAnchorComponent::ProjectionModeToString(EWacomFirst
 	case EWacomFirstPersonCardProjectionMode::BodyLocked:
 	default:
 		return TEXT("BodyLocked");
-	}
-}
-
-FString UWacomFirstPersonCardAnchorComponent::LayoutModeToString(EWacomFirstPersonCardLayoutMode Mode)
-{
-	switch (Mode)
-	{
-	case EWacomFirstPersonCardLayoutMode::LegacyProjectedFan2D:
-		return TEXT("LegacyProjectedFan2D");
-	case EWacomFirstPersonCardLayoutMode::Authored2D:
-	default:
-		return TEXT("Authored2D");
 	}
 }
 

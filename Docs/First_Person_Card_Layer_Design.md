@@ -50,13 +50,13 @@ Battle / Run snapshot
 
 ```text
 ProjectionMode = BodyLocked
-CardLayoutMode = Authored2D
+Layout = fixed Authored2D
 ViewportClampMode = SoftClampToViewport
 ```
 
 `BodyLocked` 使用 Battle base rotation 或 Run Tunnel spline base 作为稳定身体基准，不让 cursor look 重新计算卡牌世界槽位。投影仍使用当前真实相机，因此鼠标移动镜头时仍有合理第一人称空间变化。
 
-`Authored2D` 只投影整副手牌中心点。每张卡的位置、下坠、扇形角度、层级和主体底部可读保护由 2D 参数计算，避免每张卡分别世界投影导致尺寸和扇形拉扯。
+第一人称手牌运行时固定使用 `Authored2D`：只投影整副手牌中心点。每张卡的位置、下坠、扇形角度、层级和主体底部可读保护由 2D 参数计算，避免每张卡分别世界投影导致尺寸和扇形拉扯。旧的 `LegacyProjectedFan2D` 每卡 3D 槽位分别投影路径已清理，不再作为 PIE / debug comparison 入口。
 
 `SoftClampToViewport` 允许手牌中心部分离开视口，超过 soft allowance 后再柔性拉回，保留空间感。`HardClampToViewport` 用于复现旧的始终屏内行为，`AllowOffscreen` 用于验证最接近空间物体的表现。
 
@@ -157,12 +157,11 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 | 入口 | 当前口径 |
 |---|---|
 | `LegacyWorldProjected` | 旧 cursor look 影响 anchor + 当前相机投影路径，只用于 PIE / debug comparison 或视差实验 |
-| `LegacyProjectedFan2D` | 旧每卡 3D 槽位分别投影路径，只用于 PIE / debug comparison |
 | `LookInfluenceYaw / LookInfluencePitch` | 只服务 `LegacyWorldProjected` |
 | Static preview layer | Prototype preview，只用于 PIE / 开发验证，不是 Battle / Run runtime source |
 | `BattleHandInteractionPrototype` 旧命名 | 兼容层；新调用口径是 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()` |
 
-不要给 legacy projection 或 static preview 继续添加新的正式主手牌功能。真正删除旧字段、enum value 或资产引用需要单独做资产影响切片。
+不要给 legacy projection 或 static preview 继续添加新的正式主手牌功能。旧 layout enum / runtime 分支已删除；后续如果要清理 `LegacyWorldProjected` 或相关资产引用，需要单独做资产影响切片。
 
 ## §9 `WBP_FirstPersonCardView` 制作合同
 

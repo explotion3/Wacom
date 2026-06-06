@@ -725,7 +725,6 @@ bool UWacomFirstPersonCardLayerWidget::AreSlotViewsEquivalentForRefresh(
 		&& AreFirstPersonSlotVectorsEquivalent(A.UnclampedWidgetPosition, B.UnclampedWidgetPosition)
 		&& AreFirstPersonSlotVectorsEquivalent(A.SnappedWidgetPosition, B.SnappedWidgetPosition)
 		&& A.ProjectionMode == B.ProjectionMode
-		&& A.LayoutMode == B.LayoutMode
 		&& A.ViewportClampMode == B.ViewportClampMode
 		&& AreFirstPersonSlotVectorsEquivalent(A.AnchorWidgetPosition, B.AnchorWidgetPosition)
 		&& AreFirstPersonSlotVectorsEquivalent(A.UnsmoothedAnchorWidgetPosition, B.UnsmoothedAnchorWidgetPosition)

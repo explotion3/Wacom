@@ -38,13 +38,6 @@ enum class EWacomFirstPersonCardProjectionMode : uint8
 };
 
 UENUM(BlueprintType)
-enum class EWacomFirstPersonCardLayoutMode : uint8
-{
-	Authored2D UMETA(DisplayName = "Authored 2D", ToolTip = "正式默认布局：只投影整副手牌中心点，再用美术可控的 2D 参数排列每张卡牌。"),
-	LegacyProjectedFan2D UMETA(DisplayName = "Legacy Projected Fan 2D (Debug Comparison)", ToolTip = "旧布局调试对照：每张卡牌先生成 3D 槽位，再分别投影到 UMG；仅用于 PIE 对比旧空间投影手感和排布拉扯问题。")
-};
-
-UENUM(BlueprintType)
 enum class EWacomFirstPersonCardViewportClampMode : uint8
 {
 	HardClampToViewport UMETA(DisplayName = "Hard Clamp To Viewport", ToolTip = "硬限制到视口安全区域内，复现旧行为。"),
@@ -336,9 +329,6 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	EWacomFirstPersonCardLayoutMode LayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -409,9 +399,6 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	EWacomFirstPersonCardLayoutMode LayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
 	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
@@ -508,9 +495,6 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	EWacomFirstPersonCardLayoutMode LayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
@@ -694,9 +678,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Preset", meta = (ToolTip = "是否输出当前解析到的第一人称手牌表现预设状态；默认关闭，仅用于排查 preset 是否生效或是否回退到组件参数。"))
 	bool bLogResolvedCardLayoutPreset = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Layout", meta = (ToolTip = "第一人称卡牌层的手牌排布方式。Authored2D 是正式默认路径：只投影手牌中心点，再用 2D 参数排卡；LegacyProjectedFan2D 只保留为 PIE / debug 对照旧的每张卡牌 3D 槽位投影。"))
-	EWacomFirstPersonCardLayoutMode CardLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Authored Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "360.0", ToolTip = "Authored2D 模式下相邻卡牌的基础水平间距，单位为 UMG 布局像素。"))
 	float AuthoredCardSpacingPixels = 120.0f;
@@ -1215,7 +1196,6 @@ private:
 	bool bHasInitializedAnchor = false;
 	bool bCurrentLookOffsetAppliedToLayout = false;
 	mutable FVector2D SmoothedAnchorWidgetPosition = FVector2D::ZeroVector;
-	mutable EWacomFirstPersonCardLayoutMode SmoothedAnchorLayoutMode = EWacomFirstPersonCardLayoutMode::Authored2D;
 	mutable EWacomFirstPersonCardProjectionMode SmoothedAnchorProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 	mutable EWacomFirstPersonCardViewportClampMode SmoothedAnchorViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 	mutable EWacomFirstPersonCardAnchorMode SmoothedAnchorMode = EWacomFirstPersonCardAnchorMode::Invalid;
@@ -1288,6 +1268,5 @@ private:
 	void HandleLayerPointerLeft();
 	static FString AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode);
 	static FString ProjectionModeToString(EWacomFirstPersonCardProjectionMode Mode);
-	static FString LayoutModeToString(EWacomFirstPersonCardLayoutMode Mode);
 	static FString ViewportClampModeToString(EWacomFirstPersonCardViewportClampMode Mode);
 };

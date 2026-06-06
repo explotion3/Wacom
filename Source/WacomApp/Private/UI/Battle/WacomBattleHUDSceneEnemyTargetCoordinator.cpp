@@ -130,7 +130,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 		return;
 	}
 
-	for (AWacomBattleEnemyPartActor* PartActor : Host->GetAttachedBattleEnemyPartActors())
+	for (AWacomBattleEnemyPartActor* PartActor : Host->GetBattleEnemyPartActors())
 	{
 		if (!IsValid(PartActor) || PartActor->IsActorBeingDestroyed())
 		{
