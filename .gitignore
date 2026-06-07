@@ -35,6 +35,9 @@ Docs/.obsidian/
 # Local code intelligence indexes
 .codegraph/
 
+# Local planning artifacts
+specs/
+
 # OS files
 Thumbs.db
 Desktop.ini
