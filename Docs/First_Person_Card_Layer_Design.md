@@ -46,7 +46,7 @@ Battle / Run snapshot
 
 ## §3 Authoring 默认
 
-正式 first-person hand authoring surface 是：
+默认 first-person hand authoring surface 是：
 
 ```text
 ProjectionMode = BodyLocked
@@ -56,11 +56,21 @@ ViewportClampMode = SoftClampToViewport
 
 `BodyLocked` 使用 Battle base rotation 或 Run Tunnel spline base 作为稳定身体基准，不让 cursor look 重新计算卡牌世界槽位。投影仍使用当前真实相机，因此鼠标移动镜头时仍有合理第一人称空间变化。
 
+`Look Responsive Projected` 是保留的次级投影风格。它会把 `UWacomCursorLookDriverComponent` 的当前鼠标镜头偏移按 `LookInfluenceYaw / LookInfluencePitch` 混入手牌锚点，再使用当前真实相机投影。这样 look 同时影响 anchor 计算和相机投影，适合需要更强跟随感、空间漂移或视差感的手牌表现；代价是稳定性和可读性弱于 `BodyLocked`，需要按具体场景单独调参。C++ 枚举值仍叫 `LegacyWorldProjected`，只是为了蓝图 / 资产序列化兼容。
+
 第一人称手牌运行时固定使用 `Authored2D`：只投影整副手牌中心点。每张卡的位置、下坠、扇形角度、层级和主体底部可读保护由 2D 参数计算，避免每张卡分别世界投影导致尺寸和扇形拉扯。旧的 `LegacyProjectedFan2D` 每卡 3D 槽位分别投影路径已清理，不再作为 PIE / debug comparison 入口。
 
 `SoftClampToViewport` 允许手牌中心部分离开视口，超过 soft allowance 后再柔性拉回，保留空间感。`HardClampToViewport` 用于复现旧的始终屏内行为，`AllowOffscreen` 用于验证最接近空间物体的表现。
 
 `UWacomFirstPersonCardLayoutPreset` 是 first-person hand 表现调参 DataAsset，位于 `WacomApp`，不是 `WacomData` 规则数据。Preset 运行时生成 resolved config，不把值写回组件 UPROPERTY，也不覆盖 `FirstPersonCardViewClass`、prototype preview、debug 开关或 viewport ZOrder。
+
+`UWacomFirstPersonCardAnchorComponent.FirstPersonCardLayoutPreset` 是组件默认 / fallback preset。Battle 和 Run 可以在各自 source 激活时声明 source-owned runtime preset override：`UBattleHUD.BattleFirstPersonCardLayoutPreset` 用于战斗手牌，`UWacomRunFirstPersonCardSourceComponent.RunFirstPersonCardLayoutPreset` 用于探索默认源和菜单租约。Runtime override 只在 `RuntimeCardLayerSourceId` 与 override `SourceId` 相同时参与 resolved config；例如 BattleHand 清理晚于 Run source 重启时，Battle 残留 preset 不会继续驱动 Run hand，也不会误清 Run 的 preset。
+
+`UWacomFirstPersonCardLayoutPreset` 已接入 Editor DataValidation。会导致布局不可见、数学异常或范围非法的值会报 Invalid，例如非正缩放、非法 viewport anchor、像素吸附网格小于等于 0、edge drop 数量范围反向。能运行但调参风险较高的值只报 Warning，例如 BodyLocked 下配置了 LookInfluence、Look Responsive influence 偏高、scale / edge drop / fan angle 过大，或启用 smoothing / slot motion 但速度为 0。
+
+`LookInfluenceYaw / LookInfluencePitch` 也属于 first-person hand 表现参数，可由 `UWacomFirstPersonCardLayoutPreset` 覆盖。推荐制作起点：战斗默认使用 `BodyLocked`；探索、特殊检查或希望手牌有更强空间跟随感的场景可使用 `Look Responsive Projected`。`LookInfluenceYaw` 建议先在 `0.05-0.35` 内调，`LookInfluencePitch` 建议先在 `0.03-0.20` 内调；如果手牌在移动鼠标时过度漂移、读牌不稳或与镜头响应产生二次晃动，优先降低这两个值，再调整 clamp / smoothing。
+
+Anchor debug view 会同时报告 `ResolvedLayoutPresetName`、`bUsingRuntimeLayoutPresetOverride`、`RuntimeLayoutPresetOverrideSourceId`、`RawCursorLookOffset`、`AppliedAnchorLookOffset`、`LookInfluenceYaw`、`LookInfluencePitch` 和 `bLookResponsiveProjection`。排查时可以用它区分“鼠标确实产生了 look offset”与“该 offset 是否被当前 ProjectionMode / Preset 应用到 hand anchor”，以及当前 resolved preset 来自组件默认值还是当前 runtime source 的 override。Automation view 仍会暴露当前存储的 override owner / asset；它可能是等待原 owner 清理的残留值，不代表 resolved config 正在使用它。
 
 边缘下坠是纯表现参数，不影响战斗规则、手牌数量或卡牌状态。`StaticCardEdgeDropPixels` 表示大手牌时最外侧卡牌的最大下坠；默认开启 `bScaleEdgeDropByHandCount` 后，5 张及以下使用 `ShortHandEdgeDropPixels`，12 张及以上使用 `StaticCardEdgeDropPixels`，中间数量用 SmoothStep 平滑过渡。左右手锚点牌在规则上承担手牌区域切分语义，但在 first-person hand 表现层仍按普通卡牌参与下坠、缩放、扇形角度和层级计算。推荐起点是 `ShortHandEdgeDropPixels = 64`、`StaticCardEdgeDropPixels = 110`、`EdgeDropScaleMinCardCount = 5`、`EdgeDropScaleMaxCardCount = 12`。
 
@@ -80,6 +90,14 @@ Runtime source 优先级：
 进入战斗时，GameMode / PlayerController 会清理探索期 Run source 和 active menu lease。退出战斗回到 Exploration 后，PlayerController 重新激活 Run first-person source 并刷新当前 BattleDeck 展示。
 
 BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。清理或 `NativeDestruct` 可能晚于 Run source 重新激活，因此 BattleHUD 解绑自身 delegate 时必须检查 Anchor 当前 `RuntimeCardLayerSourceId`：只有仍为 `BattleHand` 时才关闭 first-person card interaction、取消拖拽和清 runtime data；如果已经被 `RunFirstPersonBattleDeck` 或 menu lease 接管，只能解绑 BattleHUD delegate 和清战斗 world preview，不得改写 Run source 的交互状态。
+
+Layout preset ownership 与 runtime card data ownership 使用同一套 source 语义，但互相独立：BattleHand 同步时可设置 `BattleFirstPersonCardLayoutPreset`，Run default source / Run menu lease 同步时可设置 `RunFirstPersonCardLayoutPreset`，GameMenu suppression 空 source 不占用 preset。清理时只有 matching `SourceId` 能清自己的 preset override，避免 Battle / Run 生命周期交错时出现 preset 被旧 source 误清。
+
+推荐配置：
+
+- Battle hand preset：稳定 `BodyLocked`，优先保证读牌、拖拽目标和战斗反馈稳定。
+- Run preset：可选 `Look Responsive Projected`，使用较低 `LookInfluenceYaw / LookInfluencePitch` 做探索期视差。
+- Run menu lease：当前跟随 Run preset；如果后续菜单需要更平面的读卡风格，再单独引入 menu lease preset 字段。
 
 BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
 
@@ -152,16 +170,19 @@ Battle enemy world target 只来自当前 SceneEnemyHost registry 中的 PartAct
 
 Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCard resolver 判定。Run world drop 合法性由 receiver 和 `URunSession::ValidateRunWorldCardInteraction()` 判定。Run menu Zone drop 默认 probe-only，只有 owning menu 明确接管时才提交。
 
-## §8 Legacy / Prototype Quarantine
+## §8 Projection Styles / Prototype Boundaries
 
 | 入口 | 当前口径 |
 |---|---|
-| `LegacyWorldProjected` | 旧 cursor look 影响 anchor + 当前相机投影路径，只用于 PIE / debug comparison 或视差实验 |
-| `LookInfluenceYaw / LookInfluencePitch` | 只服务 `LegacyWorldProjected` |
+| `BodyLocked` | 稳定默认投影风格：cursor look 不参与 hand anchor 计算，只通过当前真实相机影响最终投影 |
+| `Look Responsive Projected` | 保留的视差投影风格：cursor look 先参与 hand anchor 计算，再通过当前真实相机投影；内部兼容枚举名仍为 `LegacyWorldProjected` |
+| `LookInfluenceYaw / LookInfluencePitch` | 只服务 `Look Responsive Projected`，控制 cursor look 对 hand anchor 的影响比例 |
 | Static preview layer | Prototype preview，只用于 PIE / 开发验证，不是 Battle / Run runtime source |
-| `BattleHandInteractionPrototype` 旧命名 | 兼容层；新调用口径是 `SetBattleHandInteractionEnabled()` / `IsBattleHandInteractionEnabled()` |
+| Battle hand interaction | 使用 `bEnableBattleHandInteraction`、`SetBattleHandInteractionEnabled()`、`IsBattleHandInteractionEnabled()` |
 
-不要给 legacy projection 或 static preview 继续添加新的正式主手牌功能。旧 layout enum / runtime 分支已删除；后续如果要清理 `LegacyWorldProjected` 或相关资产引用，需要单独做资产影响切片。
+`LegacyWorldProjected` 的枚举名因蓝图 / 资产序列化兼容暂时保留，但制作语义不是待删除 fallback。后续如果要进一步整理，可以单独做一刀把编辑器文案、文档和资产制作指南继续朝 `LookResponsiveProjected` 命名靠拢；是否真正重命名 C++ 枚举值需要先评估资产迁移成本。
+
+不要把 Static preview layer 当作 Battle / Run runtime source，也不要恢复旧 `LegacyProjectedFan2D` 每卡 3D 槽位分别投影路径。当前两个投影风格都共享 `Authored2D` 手牌布局，区别只在整副手牌中心 anchor 是否吃 cursor look。
 
 ## §9 `WBP_FirstPersonCardView` 制作合同
 

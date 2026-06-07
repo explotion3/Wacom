@@ -11,7 +11,18 @@
 
 class AWacomBattleEnemyPartActor;
 class UEnemyDefinition;
+class UPaperFlipbook;
+class UPaperFlipbookComponent;
+class UPaperSprite;
+class UPaperSpriteComponent;
 class USceneComponent;
+
+UENUM(BlueprintType)
+enum class EWacomBattleEnemyHostVisualMode : uint8
+{
+	StaticSprite UMETA(DisplayName = "Static Sprite"),
+	Flipbook UMETA(DisplayName = "Flipbook"),
+};
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
@@ -29,6 +40,36 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FName EnemySlotId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前 Host 整体视觉模式：StaticSprite、Flipbook 或 None。整体视觉只影响显示，不参与 HitBounds 命中。"))
+	FName HostVisualMode = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前 Host 是否有可见整体视觉资源。普通小怪可以用它承载整只敌人的显示。"))
+	bool bUsingHostVisual = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName HostVisualAssetName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 GeneratedHostVisualComponentCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前已注册到 World 的 Host 整体视觉组件数量。用于排查蓝图视口正常但 PIE 未显示的问题。"))
+	int32 RegisteredHostVisualComponentCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前可见的 Host 整体视觉组件数量。组件已生成但不可见时优先检查 bHostVisualVisible、资源和运行时刷新。"))
+	int32 VisibleHostVisualComponentCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "Host 制作诊断状态：Ready、MissingEnemyDefinition、NoPartActors、DuplicatePartSlotIds、PartSlotMismatch 或 PartDefinitionMismatch。"))
+	FName AuthoringState = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前 Host 制作配置是否完整可用。Ready 时为 true；仍不代表 BattleSession 已绑定运行时 Snapshot。"))
+	bool bAuthoringReady = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 AttachedPartActorCount = 0;
@@ -91,8 +132,8 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 /**
  * Battle 场景敌人 Host。
  *
- * Host 只负责分组、debug 和制作校验；实际命中和表现由子级
- * AWacomBattleEnemyPartActor 负责。当前 BattleSession 仍是单敌人规则层。
+ * Host 是敌人整体 prefab 根 Actor：负责 EnemyDefinition 校验、EnemySlotId 注入、
+ * 子 PartActor 扫描和 debug；实际命中和视觉表现由子级 AWacomBattleEnemyPartActor 负责。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API AWacomBattleEnemyActor : public AActor
@@ -102,31 +143,167 @@ class WACOMAPP_API AWacomBattleEnemyActor : public AActor
 public:
 	AWacomBattleEnemyActor();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy",
-		meta = (ToolTip = "可选敌人定义。当前只用于制作校验和 debug，不作为运行时多敌人选择器。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Identity",
+		meta = (ToolTip = "Host 对应的敌人定义。用于校验子 PartActor 的 PartId / PartSlotId 是否对应 EnemyDefinition.Parts；运行时敌人列表仍由 BattleTrigger.EncounterDefinition 提供。"))
 	TObjectPtr<UEnemyDefinition> EnemyDefinition = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy",
-		meta = (ToolTip = "敌人槽位 ID。当前单敌人默认 Enemy；未来多敌人 Encounter 会注入 SnakeA、CrabB 等稳定敌人槽位。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Identity",
+		meta = (ToolTip = "Host 默认敌人槽位 ID。单敌人通常为 Enemy；关卡 BattleTrigger.SceneEnemyHostSlots 会在进入战斗前按 Encounter enemy slot 注入或覆盖它。"))
 	FName EnemySlotId = TEXT("Enemy");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Badge Layout",
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual",
+		meta = (ToolTip = "Host 整体视觉类型。普通小怪推荐在 Host 上放一张整体 Sprite 或 Flipbook；部位命中仍由子 PartActor.HitBounds 决定。"))
+	EWacomBattleEnemyHostVisualMode HostVisualMode = EWacomBattleEnemyHostVisualMode::StaticSprite;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual",
+		meta = (ToolTip = "Host 整体静态 PaperSprite。HostVisualMode=StaticSprite 时使用；只影响显示，不影响命中或战斗规则。"))
+	TObjectPtr<UPaperSprite> HostSprite = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual",
+		meta = (ToolTip = "Host 整体 PaperFlipbook。HostVisualMode=Flipbook 时使用；适合普通小怪整体 idle。只影响显示，不影响命中或战斗规则。"))
+	TObjectPtr<UPaperFlipbook> HostFlipbook = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Flipbook",
+		meta = (ToolTip = "Host 整体 Flipbook 播放倍率。1 表示原速；只影响显示。", ClampMin = "0.0", ClampMax = "8.0", UIMin = "0.0", UIMax = "3.0"))
+	float HostFlipbookPlayRate = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Flipbook",
+		meta = (ToolTip = "Host 整体 Flipbook 是否循环播放。只影响显示。"))
+	bool bLoopHostFlipbook = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Flipbook",
+		meta = (ToolTip = "Host 整体 Flipbook 初始播放时间，单位秒。", ClampMin = "0.0", UIMin = "0.0"))
+	float HostFlipbookStartTimeSeconds = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Flipbook",
+		meta = (ToolTip = "Host 整体 Flipbook 是否生成后立即播放。关闭时停在初始播放时间。"))
+	bool bAutoPlayHostFlipbook = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Transform",
+		meta = (ToolTip = "Host 整体视觉相对 HostVisualRoot 的位置。单位：厘米；只影响显示，不影响子 PartActor.HitBounds。"))
+	FVector HostVisualRelativeLocation = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Transform",
+		meta = (ToolTip = "Host 整体视觉相对 HostVisualRoot 的旋转。只影响显示，不影响命中。"))
+	FRotator HostVisualRelativeRotation = FRotator::ZeroRotator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Transform",
+		meta = (ToolTip = "Host 整体视觉相对缩放。只影响显示，不影响命中。"))
+	FVector HostVisualRelativeScale3D = FVector::OneVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Rendering",
+		meta = (ToolTip = "Host 整体视觉半透明排序优先级。数值越大越靠前。", UIMin = "-100", UIMax = "100"))
+	int32 HostVisualSortOrder = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Rendering",
+		meta = (ToolTip = "Host 整体视觉颜色和透明度。Alpha 会作为 sprite / flipbook 透明度。"))
+	FLinearColor HostVisualTint = FLinearColor::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Rendering",
+		meta = (ToolTip = "是否显示 Host 整体视觉。关闭时保留配置，但不会让子 PartActor 进入 HitOnly 视觉模式。"))
+	bool bHostVisualVisible = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Badge Layout",
 		meta = (ToolTip = "是否按 Host 部位顺序给状态/预测 Badge 加稳定错开，降低部位靠近时的重叠。只影响 UI 表现。"))
 	bool bApplyAttachedPartBadgeStagger = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Badge Layout",
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Badge Layout",
 		meta = (ToolTip = "相邻部位 Badge 的横向错开距离。单位：厘米；与竖向错开一起叠加到 PartActor badge facade 位置。", ClampMin = "0.0", ClampMax = "300.0", UIMin = "0.0", UIMax = "80.0"))
 	float BadgeStaggerHorizontalStep = 28.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Badge Layout",
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Badge Layout",
 		meta = (ToolTip = "相邻部位 Badge 的竖向错开距离。单位：厘米；与横向错开一起叠加到 PartActor badge facade 位置。", ClampMin = "0.0", ClampMax = "300.0", UIMin = "0.0", UIMax = "80.0"))
 	float BadgeStaggerVerticalStep = 18.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "Details 只读制作状态缓存。Ready 表示 Host 的 EnemyDefinition、子 PartActor、PartId 和 PartSlotId 当前对齐。"))
+	FName AuthoringState = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "Details 只读制作状态缓存。true 表示当前 Host 制作配置完整；不代表已经被 BattleHUD 绑定到运行时 Snapshot。"))
+	bool bAuthoringReady = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 Host 整体视觉模式：StaticSprite、Flipbook 或 None。"))
+	FName AuthoringHostVisualMode = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 Host 是否有可见整体视觉资源。普通小怪用它承载整只敌人的显示。"))
+	bool bAuthoringUsingHostVisual = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 Host 整体视觉资源名。"))
+	FName AuthoringHostVisualAssetName = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前实际生成的 Host PaperSprite / PaperFlipbook 视觉组件数量。"))
+	int32 AuthoringGeneratedHostVisualComponentCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前已注册到 World 的 Host 整体视觉组件数量。PIE 中为 0 时通常表示运行时未刷新或组件未成功注册。"))
+	int32 AuthoringRegisteredHostVisualComponentCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前可见的 Host 整体视觉组件数量。已生成但为 0 时检查可见性、资源和运行时刷新。"))
+	int32 AuthoringVisibleHostVisualComponentCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 Host 能扫描到的 BattleEnemyPartActor 数量。"))
+	int32 AuthoringPartActorCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 Host 子 PartActor 的 PartId 列表。"))
+	TArray<FName> AuthoringPartIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 Host 子 PartActor 的 PartSlotId 列表。"))
+	TArray<FName> AuthoringPartSlotIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 Host 子 PartActor 组合出的稳定场景目标 ID 列表，例如 Enemy.Head。"))
+	TArray<FName> AuthoringStableSceneTargetIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "PartActor 中存在、但 EnemyDefinition.Parts 未声明的 PartSlotId。"))
+	TArray<FName> AuthoringUnknownPartSlotIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "EnemyDefinition.Parts 声明、但没有映射到 Host 子 PartActor 的 PartSlotId。"))
+	TArray<FName> AuthoringMissingDefinitionPartSlotIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "Host 子 PartActor 中重复的 PartSlotId。重复时场景目标绑定不可靠。"))
+	TArray<FName> AuthoringDuplicatePartSlotIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (MultiLine = "true", ToolTip = "当前 Host 的一行诊断摘要缓存。手动执行刷新按钮或修改 Details 后会更新。"))
+	FString AuthoringDebugSummary;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy",
 		meta = (ToolTip = "返回当前 Host 的战斗敌人部位 Actor。正式路径扫描 Host 蓝图/子 Actor；不会自动生成部位。"))
 	TArray<AWacomBattleEnemyPartActor*> GetBattleEnemyPartActors() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Presentation",
+		meta = (ToolTip = "返回 Host 整体视觉根节点。整体视觉只负责显示，不负责命中。"))
+	USceneComponent* GetHostVisualRoot() const { return HostVisualRoot; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Presentation",
+		meta = (ToolTip = "返回当前生成的 Host 静态 Sprite 组件；没有或模式不匹配时为空。"))
+	UPaperSpriteComponent* GetGeneratedHostSpriteVisualComponent() const { return GeneratedHostSpriteVisualComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Presentation",
+		meta = (ToolTip = "返回当前生成的 Host Flipbook 组件；没有或模式不匹配时为空。"))
+	UPaperFlipbookComponent* GetGeneratedHostFlipbookVisualComponent() const { return GeneratedHostFlipbookVisualComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Presentation",
+		meta = (ToolTip = "当前 Host 是否配置了可生成的整体视觉资源。"))
+	bool HasHostVisualResource() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Presentation",
+		meta = (ToolTip = "当前 Host 是否有可见整体视觉资源。只有为 true 时，子 PartActor 会被视为可走 HitOnly 视觉模式。"))
+	bool IsHostVisualActive() const;
+
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "刷新当前 Host 子部位 Actor facade。会扫描子部位并注入 EnemySlotId；不会自动生成子 Actor。"))
 	void RefreshBattleEnemyPartAuthoringState() const;
 
@@ -134,12 +311,12 @@ public:
 		meta = (ToolTip = "返回当前 Host 的有效敌人槽位 ID。为空时回退为 Enemy。"))
 	FName GetEffectiveEnemySlotId() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "按当前 Host 部位顺序刷新状态/预测 Badge 的稳定错开布局。不会自动生成子 Actor。"))
 	void RefreshAttachedPartBadgeLayout() const;
 
-	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Prototype",
-		meta = (ToolTip = "仅用于 PIE / 开发验证：把当前 Host 下已有 Head/Body/Tail PartActor 配置为 Debug 蛇样例。不会自动生成部位 Actor，不会修改 BattleSession，也不是正式数据入口。"))
+	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Debug Sample",
+		meta = (ToolTip = "开发样例按钮：把当前 Host 下已有 Head/Body/Tail PartActor 配置为 Debug 蛇样例。不会自动生成部位 Actor，不会创建正式 sprite 资产，也不会修改 BattleSession。"))
 	void ConfigureDebugSnakeHostSample();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Debug",
@@ -164,12 +341,22 @@ public:
 
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
 
 protected:
+	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 
 private:
+	void RefreshAuthoringStatusPreview();
+	void RefreshHostVisual();
+	FName GetHostVisualModeDebugName() const;
+	FName GetHostVisualAssetName() const;
+	int32 GetGeneratedHostVisualComponentCount() const;
+	int32 GetRegisteredHostVisualComponentCount() const;
+	int32 GetVisibleHostVisualComponentCount() const;
+	void SyncDefinitionIdentityToPartActors() const;
 	TArray<AWacomBattleEnemyPartActor*> BuildAttachedBattleEnemyPartActors() const;
 	void SyncHostIdentityToPartActors() const;
 	TSet<FName> BuildDefinitionPartIdSet() const;
@@ -182,7 +369,17 @@ private:
 	TArray<FName> BuildMissingDefinitionPartSlotIds() const;
 	TArray<FName> BuildDuplicateConfiguredPartSlotIds() const;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy",
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 根节点。部位 Actor 可附着到本 Actor 下进行分组。"))
 	TObjectPtr<USceneComponent> SceneRoot = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
+		meta = (AllowPrivateAccess = "true", ToolTip = "Host 整体视觉根节点。普通小怪整体图挂在这里；不参与命中。"))
+	TObjectPtr<USceneComponent> HostVisualRoot = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPaperSpriteComponent> GeneratedHostSpriteVisualComponent = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPaperFlipbookComponent> GeneratedHostFlipbookVisualComponent = nullptr;
 };

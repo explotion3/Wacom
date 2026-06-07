@@ -46,7 +46,7 @@ struct WACOMAPP_API FWacomBattleTriggerDebugView
 	FName PersistentId = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
-	FString FirstEncounterEnemyDefinitionName;
+	FString FirstEnemySlotDefinitionName;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
 	FString EncounterDefinitionName;
@@ -268,7 +268,7 @@ protected:
 
 private:
 	void RefreshClickTargetBinding();
-	const UEnemyDefinition* ResolveFirstEncounterEnemyDefinition() const;
+	const UEnemyDefinition* ResolveFirstValidEnemySlotDefinition() const;
 	bool HasConfiguredBattleDefinition() const;
 	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsDestroyedFor(AWacomPlayerController* PC) const;

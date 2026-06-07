@@ -2,6 +2,7 @@
 
 #include "Actors/WacomBattleEnemyPartActor.h"
 
+#include "Actors/WacomBattleEnemyActor.h"
 #include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
@@ -92,6 +93,66 @@ namespace
 		}
 		return FString::Join(NameStrings, TEXT("|"));
 	}
+
+	FName BuildVisualAuthoringModeName(
+		const TArray<FWacomBattleEnemyPartVisualLayer>& VisualLayers,
+		const UStaticMesh* VisualMesh,
+		bool bHostVisualContextActive)
+	{
+		if (VisualLayers.Num() > 0)
+		{
+			return TEXT("VisualLayers");
+		}
+		if (bHostVisualContextActive)
+		{
+			return TEXT("HitOnly");
+		}
+		if (VisualMesh)
+		{
+			return TEXT("LegacyPrototype");
+		}
+		return TEXT("None");
+	}
+
+	FName BuildPartAuthoringStateName(
+		FName PartId,
+		FName PartSlotId,
+		const FVector& HitBoundsExtent,
+		FName VisualAuthoringMode)
+	{
+		if (PartId.IsNone() || PartSlotId.IsNone())
+		{
+			return TEXT("MissingIdentity");
+		}
+		if (HasAnyNonPositiveExtent(HitBoundsExtent))
+		{
+			return TEXT("InvalidHitBounds");
+		}
+		if (VisualAuthoringMode == FName(TEXT("VisualLayers")))
+		{
+			return TEXT("UsingVisualLayers");
+		}
+		if (VisualAuthoringMode == FName(TEXT("HitOnly")))
+		{
+			return TEXT("HitOnly");
+		}
+		if (VisualAuthoringMode == FName(TEXT("LegacyPrototype")))
+		{
+			return TEXT("UsingLegacyPrototype");
+		}
+		return TEXT("MissingVisualResource");
+	}
+
+	bool HasHostVisualContext(const AWacomBattleEnemyPartActor& PartActor)
+	{
+		if (PartActor.IsHostVisualContextActive())
+		{
+			return true;
+		}
+
+		const AWacomBattleEnemyActor* Host = Cast<AWacomBattleEnemyActor>(PartActor.GetAttachParentActor());
+		return Host && Host->IsHostVisualActive();
+	}
 }
 
 AWacomBattleEnemyPartActor::AWacomBattleEnemyPartActor()
@@ -170,6 +231,7 @@ void AWacomBattleEnemyPartActor::OnConstruction(const FTransform& Transform)
 void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 {
 	const FName EffectivePartId = GetEffectivePartDefinitionId();
+	const bool bHitOnlyVisualMode = bHostVisualContextActive && VisualLayers.Num() == 0;
 
 	if (HitBounds)
 	{
@@ -188,7 +250,7 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 		PartVisual->SetRelativeLocation(VisualRelativeLocation);
 		PartVisual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		PartVisual->SetGenerateOverlapEvents(false);
-		PartVisual->SetVisibility(VisualLayers.Num() == 0, true);
+		PartVisual->SetVisibility(VisualLayers.Num() == 0 && !bHitOnlyVisualMode, true);
 	}
 
 	RefreshVisualLayers();
@@ -255,6 +317,8 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 		WorldTargetBridgeComponent->SetStatusBadgeWidgetComponent(StatusBadgeWidgetComponent);
 		WorldTargetBridgeComponent->SetBadgeLayoutDebugState(BadgeLayoutStaggerIndex);
 	}
+
+	RefreshAuthoringStatusPreview();
 }
 
 void AWacomBattleEnemyPartActor::RefreshVisualLayers()
@@ -280,7 +344,7 @@ void AWacomBattleEnemyPartActor::RefreshVisualLayers()
 	{
 		if (PartVisual)
 		{
-			PartVisual->SetVisibility(true, true);
+			PartVisual->SetVisibility(!bHostVisualContextActive, true);
 		}
 		return;
 	}
@@ -288,6 +352,12 @@ void AWacomBattleEnemyPartActor::RefreshVisualLayers()
 	if (PartVisual)
 	{
 		PartVisual->SetVisibility(false, true);
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
 	}
 
 	for (int32 LayerIndex = 0; LayerIndex < VisualLayers.Num(); ++LayerIndex)
@@ -335,8 +405,8 @@ void AWacomBattleEnemyPartActor::RefreshVisualLayers()
 				FlipbookComponent->Stop();
 			}
 			FlipbookComponent->bEditableWhenInherited = false;
-			FlipbookComponent->RegisterComponent();
 			AddInstanceComponent(FlipbookComponent);
+			FlipbookComponent->RegisterComponentWithWorld(World);
 			GeneratedFlipbookVisualLayerComponents.Add(FlipbookComponent);
 		}
 		else
@@ -359,8 +429,8 @@ void AWacomBattleEnemyPartActor::RefreshVisualLayers()
 			SpriteComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			SpriteComponent->SetGenerateOverlapEvents(false);
 			SpriteComponent->bEditableWhenInherited = false;
-			SpriteComponent->RegisterComponent();
 			AddInstanceComponent(SpriteComponent);
+			SpriteComponent->RegisterComponentWithWorld(World);
 			GeneratedVisualLayerComponents.Add(SpriteComponent);
 		}
 	}
@@ -374,6 +444,17 @@ void AWacomBattleEnemyPartActor::SetEnemySlotId(FName InEnemySlotId)
 	}
 
 	EnemySlotId = InEnemySlotId;
+	RefreshAuthoringState();
+}
+
+void AWacomBattleEnemyPartActor::SetHostVisualContext(bool bInHostVisualActive)
+{
+	if (bHostVisualContextActive == bInHostVisualActive)
+	{
+		return;
+	}
+
+	bHostVisualContextActive = bInHostVisualActive;
 	RefreshAuthoringState();
 }
 
@@ -453,6 +534,20 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 	View.PartSlotId = GetEffectivePartSlotId();
 	View.EnemySlotId = EnemySlotId;
 	View.StableSceneTargetId = GetStableSceneTargetId();
+	View.VisualAuthoringMode = BuildVisualAuthoringModeName(
+		VisualLayers,
+		VisualMesh,
+		bHostVisualContextActive);
+	View.AuthoringState = BuildPartAuthoringStateName(
+		View.PartId,
+		View.PartSlotId,
+		HitBoundsExtent,
+		View.VisualAuthoringMode);
+	View.bUsingHostVisual = bHostVisualContextActive;
+	View.bHitOnlyVisual = View.VisualAuthoringMode == FName(TEXT("HitOnly"));
+	View.bAuthoringReady =
+		View.AuthoringState != FName(TEXT("MissingIdentity"))
+		&& View.AuthoringState != FName(TEXT("InvalidHitBounds"));
 	View.HitBoundsExtent = HitBounds ? HitBounds->GetUnscaledBoxExtent() : FVector::ZeroVector;
 	View.VisualName = PartVisual ? FName(*PartVisual->GetName()) : NAME_None;
 	View.VisualMeshName = (PartVisual && PartVisual->GetStaticMesh())
@@ -466,6 +561,32 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 	View.GeneratedFlipbookVisualLayerComponentCount = GeneratedFlipbookVisualLayerComponents.Num();
 	View.GeneratedVisualLayerComponentCount =
 		View.GeneratedStaticVisualLayerComponentCount + View.GeneratedFlipbookVisualLayerComponentCount;
+	for (const UPaperSpriteComponent* SpriteComponent : GeneratedVisualLayerComponents)
+	{
+		if (SpriteComponent && SpriteComponent->IsRegistered())
+		{
+			++View.RegisteredStaticVisualLayerComponentCount;
+		}
+		if (SpriteComponent && SpriteComponent->IsVisible())
+		{
+			++View.VisibleStaticVisualLayerComponentCount;
+		}
+	}
+	for (const UPaperFlipbookComponent* FlipbookComponent : GeneratedFlipbookVisualLayerComponents)
+	{
+		if (FlipbookComponent && FlipbookComponent->IsRegistered())
+		{
+			++View.RegisteredFlipbookVisualLayerComponentCount;
+		}
+		if (FlipbookComponent && FlipbookComponent->IsVisible())
+		{
+			++View.VisibleFlipbookVisualLayerComponentCount;
+		}
+	}
+	View.RegisteredVisualLayerComponentCount =
+		View.RegisteredStaticVisualLayerComponentCount + View.RegisteredFlipbookVisualLayerComponentCount;
+	View.VisibleVisualLayerComponentCount =
+		View.VisibleStaticVisualLayerComponentCount + View.VisibleFlipbookVisualLayerComponentCount;
 	View.VisualLayerIds.Reserve(VisualLayers.Num());
 	View.VisualLayerAssetNames.Reserve(VisualLayers.Num());
 	for (const FWacomBattleEnemyPartVisualLayer& Layer : VisualLayers)
@@ -523,12 +644,17 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 {
 	const FWacomBattleSceneEnemyPartDebugView View = GetBattleSceneEnemyPartDebugView();
 	return FString::Printf(
-		TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s FeedbackTarget=%s PredictionWidget=%s StatusBadgeWidget=%s PredictionBadgeLocation=%s StatusBadgeLocation=%s PredictionBadgeDrawSize=%s StatusBadgeDrawSize=%s PredictionBadgeScale=%.2f StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s CurrentStatusBadgeOpacity=%.2f}"),
+		TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s AuthoringState=%s AuthoringReady=%s VisualAuthoringMode=%s UsingHostVisual=%s HitOnlyVisual=%s HitBounds=%s Visual=%s VisualMesh=%s VisualScale=%s VisualLocation=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d RegisteredVisualLayerComponents=%d RegisteredStaticVisualLayerComponents=%d RegisteredFlipbookVisualLayerComponents=%d VisibleVisualLayerComponents=%d VisibleStaticVisualLayerComponents=%d VisibleFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s FeedbackTarget=%s PredictionWidget=%s StatusBadgeWidget=%s PredictionBadgeLocation=%s StatusBadgeLocation=%s PredictionBadgeDrawSize=%s StatusBadgeDrawSize=%s PredictionBadgeScale=%.2f StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s CurrentStatusBadgeOpacity=%.2f}"),
 		*View.ActorName,
 		*View.EnemySlotId.ToString(),
 		*View.PartSlotId.ToString(),
 		*View.StableSceneTargetId.ToString(),
 		*View.PartId.ToString(),
+		*View.AuthoringState.ToString(),
+		View.bAuthoringReady ? TEXT("true") : TEXT("false"),
+		*View.VisualAuthoringMode.ToString(),
+		View.bUsingHostVisual ? TEXT("true") : TEXT("false"),
+		View.bHitOnlyVisual ? TEXT("true") : TEXT("false"),
 		*View.HitBoundsExtent.ToCompactString(),
 		*View.VisualName.ToString(),
 		*View.VisualMeshName.ToString(),
@@ -539,6 +665,12 @@ FString AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugSummary() const
 		View.GeneratedVisualLayerComponentCount,
 		View.GeneratedStaticVisualLayerComponentCount,
 		View.GeneratedFlipbookVisualLayerComponentCount,
+		View.RegisteredVisualLayerComponentCount,
+		View.RegisteredStaticVisualLayerComponentCount,
+		View.RegisteredFlipbookVisualLayerComponentCount,
+		View.VisibleVisualLayerComponentCount,
+		View.VisibleStaticVisualLayerComponentCount,
+		View.VisibleFlipbookVisualLayerComponentCount,
 		View.MissingVisualLayerAssetCount,
 		View.MissingVisualLayerSpriteCount,
 		View.MissingVisualLayerFlipbookCount,
@@ -612,7 +744,32 @@ void AWacomBattleEnemyPartActor::LogBattleSceneEnemyPartDebugSummary() const
 		*GetBattleSceneEnemyPartDebugSummary());
 }
 
+void AWacomBattleEnemyPartActor::RefreshAuthoringStatusPreview()
+{
+	const FWacomBattleSceneEnemyPartDebugView View = GetBattleSceneEnemyPartDebugView();
+	AuthoringState = View.AuthoringState;
+	bAuthoringReady = View.bAuthoringReady;
+	VisualAuthoringMode = View.VisualAuthoringMode;
+	bAuthoringUsingHostVisual = View.bUsingHostVisual;
+	bAuthoringHitOnlyVisual = View.bHitOnlyVisual;
+	AuthoringStableSceneTargetId = View.StableSceneTargetId;
+	AuthoringVisualLayerCount = View.VisualLayerCount;
+	AuthoringGeneratedVisualLayerComponentCount = View.GeneratedVisualLayerComponentCount;
+	AuthoringRegisteredVisualLayerComponentCount = View.RegisteredVisualLayerComponentCount;
+	AuthoringVisibleVisualLayerComponentCount = View.VisibleVisualLayerComponentCount;
+	AuthoringMissingVisualLayerAssetCount = View.MissingVisualLayerAssetCount;
+	AuthoringDuplicateVisualLayerIds = View.DuplicateVisualLayerIds;
+	AuthoringFeedbackTargetName = View.FeedbackTargetName;
+	AuthoringDebugSummary = GetBattleSceneEnemyPartDebugSummary();
+}
+
 #if WITH_EDITOR
+void AWacomBattleEnemyPartActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	RefreshAuthoringState();
+}
+
 EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 	FDataValidationContext& Context) const
 {
@@ -693,7 +850,7 @@ EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 		}
 	}
 
-	if (VisualLayers.Num() == 0 && !VisualMesh)
+	if (VisualLayers.Num() == 0 && !VisualMesh && !HasHostVisualContext(*this))
 	{
 		Context.AddWarning(FText::Format(
 			LOCTEXT("PlacementMissingVisualResource",

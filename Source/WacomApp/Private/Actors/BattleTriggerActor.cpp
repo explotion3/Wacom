@@ -275,8 +275,8 @@ void ABattleTriggerActor::HandleEndOverlap(UPrimitiveComponent* /*OverlappedComp
 void ABattleTriggerActor::TryActivate(AWacomPlayerController* PC)
 {
 	if (!PC) { return; }
-	const UEnemyDefinition* FirstEncounterEnemyDefinition = ResolveFirstEncounterEnemyDefinition();
-	if (!FirstEncounterEnemyDefinition)
+	const UEnemyDefinition* FirstEnemySlotDefinition = ResolveFirstValidEnemySlotDefinition();
+	if (!FirstEnemySlotDefinition)
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("[BattleTriggerActor] %s: TryActivate 时 EncounterDefinition 无有效敌人"), *GetName());
@@ -284,9 +284,9 @@ void ABattleTriggerActor::TryActivate(AWacomPlayerController* PC)
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[BattleTriggerActor] %s 触发战斗：FirstEncounterEnemy=%s EncounterDefinition=%s"),
+		TEXT("[BattleTriggerActor] %s 触发战斗：FirstEnemySlotDefinition=%s EncounterDefinition=%s"),
 		*GetName(),
-		*GetNameSafe(FirstEncounterEnemyDefinition),
+		*GetNameSafe(FirstEnemySlotDefinition),
 		*GetNameSafe(EncounterDefinition));
 
 	PC->RequestEnterBattle(this);
@@ -621,13 +621,13 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 
 	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
 	{
-		const UEnemyDefinition* FirstEncounterEnemyDefinition = ResolveFirstEncounterEnemyDefinition();
+		const UEnemyDefinition* FirstEnemySlotDefinition = ResolveFirstValidEnemySlotDefinition();
 		Context.AddWarning(FText::Format(
 			LOCTEXT("PlacementDuplicatePersistentId",
-				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} FirstEncounterEnemy={2} 与同关卡其他 BattleTrigger 重复；这些战斗会共享销毁状态和 BattleProgress。"),
+				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} FirstEnemySlotDefinition={2} 与同关卡其他 BattleTrigger 重复；这些战斗会共享销毁状态和 BattleProgress。"),
 			FText::FromString(GetName()),
 			FText::FromName(PersistentId),
-			FText::FromString(FirstEncounterEnemyDefinition ? FirstEncounterEnemyDefinition->GetName() : TEXT("None"))));
+			FText::FromString(FirstEnemySlotDefinition ? FirstEnemySlotDefinition->GetName() : TEXT("None"))));
 		if (Result != EDataValidationResult::Invalid)
 		{
 			Result = EDataValidationResult::Valid;
@@ -666,8 +666,8 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 	FWacomBattleTriggerDebugView View;
 	View.ActorName = GetName();
 	View.PersistentId = PersistentId;
-	const UEnemyDefinition* FirstEncounterEnemyDefinition = ResolveFirstEncounterEnemyDefinition();
-	View.FirstEncounterEnemyDefinitionName = FirstEncounterEnemyDefinition ? FirstEncounterEnemyDefinition->GetName() : TEXT("None");
+	const UEnemyDefinition* FirstEnemySlotDefinition = ResolveFirstValidEnemySlotDefinition();
+	View.FirstEnemySlotDefinitionName = FirstEnemySlotDefinition ? FirstEnemySlotDefinition->GetName() : TEXT("None");
 	View.EncounterDefinitionName = EncounterDefinition ? EncounterDefinition->GetName() : TEXT("None");
 	View.EncounterDefinitionId =
 		EncounterDefinition ? EncounterDefinition->EncounterDefinitionId : NAME_None;
@@ -763,10 +763,10 @@ FString ABattleTriggerActor::GetBattleTriggerDebugSummary(AWacomPlayerController
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("BattleTrigger{Actor=%s PersistentId=%s FirstEncounterEnemy=%s EncounterDefinition=%s EncounterDefinitionId=%s EncounterSlots=%d UsingEncounter=%s FirstSceneEnemyHost=%s SceneEnemyHostEnemyDef=%s SceneEnemyHostSlots=%d SceneEnemyHostCount=%d SceneEnemyHostSlotIds=[%s] MissingSceneEnemyHostSlotIds=[%s] ExtraSceneEnemyHostSlotIds=[%s] SceneEnemyHostParts=%d SceneEnemyHostConfigured=%s SceneEnemyHostDefinitionMatches=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("BattleTrigger{Actor=%s PersistentId=%s FirstEnemySlotDefinition=%s EncounterDefinition=%s EncounterDefinitionId=%s EncounterSlots=%d UsingEncounter=%s FirstSceneEnemyHost=%s SceneEnemyHostEnemyDef=%s SceneEnemyHostSlots=%d SceneEnemyHostCount=%d SceneEnemyHostSlotIds=[%s] MissingSceneEnemyHostSlotIds=[%s] ExtraSceneEnemyHostSlotIds=[%s] SceneEnemyHostParts=%d SceneEnemyHostConfigured=%s SceneEnemyHostDefinitionMatches=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
-		*View.FirstEncounterEnemyDefinitionName,
+		*View.FirstEnemySlotDefinitionName,
 		*View.EncounterDefinitionName,
 		*View.EncounterDefinitionId.ToString(),
 		View.EncounterEnemySlotCount,
@@ -797,13 +797,13 @@ void ABattleTriggerActor::LogBattleTriggerDebugSummary(AWacomPlayerController* P
 		*GetBattleTriggerDebugSummary(PC));
 }
 
-const UEnemyDefinition* ABattleTriggerActor::ResolveFirstEncounterEnemyDefinition() const
+const UEnemyDefinition* ABattleTriggerActor::ResolveFirstValidEnemySlotDefinition() const
 {
 	if (EncounterDefinition)
 	{
 		for (const FEncounterEnemySlot& Slot : EncounterDefinition->EnemySlots)
 		{
-			if (Slot.EnemyDefinition)
+			if (!Slot.EnemySlotId.IsNone() && Slot.EnemyDefinition)
 			{
 				return Slot.EnemyDefinition;
 			}
@@ -824,7 +824,7 @@ void ABattleTriggerActor::BuildBattleEnemySlots(TArray<FBattleEnemySlotInit>& Ou
 	OutEnemySlots.Reserve(EncounterDefinition->EnemySlots.Num());
 	for (const FEncounterEnemySlot& Slot : EncounterDefinition->EnemySlots)
 	{
-		if (!Slot.EnemyDefinition)
+		if (Slot.EnemySlotId.IsNone() || !Slot.EnemyDefinition)
 		{
 			continue;
 		}

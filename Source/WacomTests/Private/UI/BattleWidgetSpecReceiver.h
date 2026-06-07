@@ -195,6 +195,11 @@ public:
 		SetBattleSceneEnemyHosts(InHosts);
 	}
 
+	void SetBattleFirstPersonCardLayoutPresetForTest(UWacomFirstPersonCardLayoutPreset* Preset)
+	{
+		BattleFirstPersonCardLayoutPreset = Preset;
+	}
+
 	FWacomBattleHUDAutomationTestView AutomationViewForTest() const
 	{
 		return GetAutomationTestViewForTest();

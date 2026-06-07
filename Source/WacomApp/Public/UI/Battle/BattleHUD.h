@@ -16,6 +16,7 @@ class UWacomBattleWidgetBase;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UWacomCardDetailPanel;
+class UWacomFirstPersonCardLayoutPreset;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class AWacomBattleEnemyActor;
 class APlayerController;
@@ -410,6 +411,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ToolTip = "战斗第一人称手牌详情面板 Widget 类。"))
 	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ToolTip = "战斗第一人称手牌表现 preset。为空时使用玩家 FirstPersonCardAnchor 组件默认 preset；只影响战斗手牌 UI 表现，不影响 BattleSession 规则。"))
+	TObjectPtr<UWacomFirstPersonCardLayoutPreset> BattleFirstPersonCardLayoutPreset = nullptr;
 
 private:
 	enum class ECardDetailHost : uint8

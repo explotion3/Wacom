@@ -33,8 +33,8 @@ enum class EWacomFirstPersonCardAnchorMode : uint8
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardProjectionMode : uint8
 {
-	BodyLocked UMETA(DisplayName = "Body Locked Layout", ToolTip = "正式默认投影：卡牌 3D 布局锁在身体、战斗基准或 Run Tunnel spline 上，但仍使用当前真实相机投影。"),
-	LegacyWorldProjected UMETA(DisplayName = "Legacy World Projected (Debug Comparison)", ToolTip = "旧投影调试对照路径：共享鼠标镜头偏移会参与卡牌布局，然后再使用当前真实相机投影；仅用于 PIE 排查旧漂移 / 视差实验，不作为正式手牌制作入口。")
+	BodyLocked UMETA(DisplayName = "Body Locked Layout", ToolTip = "稳定默认投影：手牌锚点锁在身体、战斗基准或 Run Tunnel spline 上；鼠标镜头偏移只通过当前真实相机影响最终投影。"),
+	LegacyWorldProjected UMETA(DisplayName = "Look Responsive Projected", ToolTip = "Look Responsive 投影风格：共享鼠标镜头偏移会先参与手牌锚点计算，然后再使用当前真实相机投影；适合需要更强跟随感或空间视差的手牌表现。")
 };
 
 UENUM(BlueprintType)
@@ -295,6 +295,8 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorAutomationTestView
 {
 	UWacomFirstPersonCardLayerWidget* StaticCardLayerWidget = nullptr;
 	bool bUsingResolvedCardLayoutPreset = false;
+	FName RuntimeCardLayoutPresetOverrideSourceId = NAME_None;
+	const UWacomFirstPersonCardLayoutPreset* RuntimeCardLayoutPresetOverride = nullptr;
 	int32 StaticLayerConfigApplyCount = 0;
 };
 #endif
@@ -403,8 +405,32 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
 	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 resolved config 使用的表现 preset 名称；可能来自组件默认 preset 或 runtime source override。"))
+	FString ResolvedLayoutPresetName = TEXT("None");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前是否由 runtime source 覆盖 first-person card layout preset。"))
+	bool bUsingRuntimeLayoutPresetOverride = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 runtime layout preset override 的 source id。"))
+	FName RuntimeLayoutPresetOverrideSourceId = NAME_None;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
 	FRotator LookOffsetUsed = FRotator::ZeroRotator;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "CursorLookDriver 当前提供的原始鼠标镜头偏移；BodyLocked 下仍可有值，但不会参与手牌锚点。"))
+	FRotator RawCursorLookOffset = FRotator::ZeroRotator;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "Look Responsive 投影中实际应用到手牌锚点的偏移，等价于 LookOffsetUsed。"))
+	FRotator AppliedAnchorLookOffset = FRotator::ZeroRotator;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 ProjectionMode 是否为 Look Responsive 投影风格。"))
+	bool bLookResponsiveProjection = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 resolved config 中鼠标镜头偏航偏移对手牌锚点的影响比例。"))
+	float LookInfluenceYaw = 0.25f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 resolved config 中鼠标镜头俯仰偏移对手牌锚点的影响比例。"))
+	float LookInfluencePitch = 0.15f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
 	TArray<FWacomFirstPersonCardProjectedPoint> ProjectedPoints;
@@ -679,6 +705,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Preset", meta = (ToolTip = "是否输出当前解析到的第一人称手牌表现预设状态；默认关闭，仅用于排查 preset 是否生效或是否回退到组件参数。"))
 	bool bLogResolvedCardLayoutPreset = false;
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Card Layer|Preset", meta = (ToolTip = "设置当前 runtime source 对第一人称手牌表现 preset 的覆盖。SourceId 必须稳定；Preset 为空等同清理该 source 的覆盖并回到组件默认 preset。"))
+	void SetRuntimeCardLayoutPresetOverride(
+		FName SourceId,
+		UWacomFirstPersonCardLayoutPreset* Preset);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Card Layer|Preset", meta = (ToolTip = "清理当前 runtime source 对第一人称手牌表现 preset 的覆盖。只有 SourceId 与当前覆盖 owner 一致时才会清理，避免 Battle / Run source 互相误清。"))
+	void ClearRuntimeCardLayoutPresetOverride(FName SourceId);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Preset")
+	FName GetRuntimeCardLayoutPresetOverrideSourceId() const { return RuntimeCardLayoutPresetOverrideSourceId; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Preset")
+	UWacomFirstPersonCardLayoutPreset* GetRuntimeCardLayoutPresetOverride() const { return RuntimeCardLayoutPresetOverride; }
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Authored Layout", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "360.0", ToolTip = "Authored2D 模式下相邻卡牌的基础水平间距，单位为 UMG 布局像素。"))
 	float AuthoredCardSpacingPixels = 120.0f;
 
@@ -706,16 +746,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Authored Layout", meta = (EditCondition = "bKeepAuthoredCardBodyBottomInViewport", ClampMin = "0.0", UIMin = "0.0", UIMax = "96.0", ToolTip = "Authored2D 卡牌主体底部与视口底边之间保留的最小距离，单位为 UMG 布局像素；用于避免第一人称手牌底部类型文字被屏幕边缘裁掉。"))
 	float AuthoredCardBodyBottomViewportPaddingPixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection|Legacy", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "LegacyWorldProjected 旧投影对照路径中，共享鼠标镜头偏航偏移对卡牌锚点的影响比例；正式默认 BodyLocked 不使用该值影响手牌位置。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection|Look Responsive", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "Look Responsive Projected 中，共享鼠标镜头偏航偏移对手牌锚点的影响比例；BodyLocked 不使用该值影响手牌锚点。"))
 	float LookInfluenceYaw = 0.25f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection|Legacy", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "LegacyWorldProjected 旧投影对照路径中，共享鼠标镜头俯仰偏移对卡牌锚点的影响比例；正式默认 BodyLocked 不使用该值影响手牌位置。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection|Look Responsive", meta = (UIMin = "0.0", UIMax = "1.0", ToolTip = "Look Responsive Projected 中，共享鼠标镜头俯仰偏移对手牌锚点的影响比例；BodyLocked 不使用该值影响手牌锚点。"))
 	float LookInfluencePitch = 0.15f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Look", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "30.0", ToolTip = "第一人称卡牌锚点跟随目标位置和朝向的插值速度；设为 0 时立即贴合目标锚点。"))
 	float FollowInterpSpeed = 12.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 是正式默认路径：把卡牌 3D 布局锁在战斗基准朝向或 Run Tunnel spline 基准朝向上，但仍使用当前真实相机投影；LegacyWorldProjected 只保留为旧 LookInfluence 漂移和视差实验的 PIE / debug 对照。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 是稳定默认风格：锁定布局基准但仍使用当前真实相机投影；Look Responsive Projected 会让鼠标镜头偏移参与手牌锚点计算以获得更强跟随感和视差。"))
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0", ToolTip = "投影点被限制在视口内时保留的屏幕安全边距，单位为 UMG 布局像素。"))
@@ -913,8 +953,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Visual States", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "不可用卡牌在第一人称卡牌层上的整体透明度；卡面自身的 disabled overlay 仍由 FWacomCardViewData::bDisabled 控制。"))
 	float DisabledRenderOpacity = 0.78f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction", meta = (DisplayName = "Enable Battle Hand Interaction", ToolTip = "是否启用第一人称战斗手牌层的 hover/click/drag 处理；这是正式 first-person 手牌交互开关，战斗中由 BattleHUD 控制，默认关闭。变量名中的 Prototype 仅作为旧资产兼容保留。"))
-	bool bEnableBattleHandInteractionPrototype = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction", meta = (ToolTip = "是否启用第一人称战斗手牌层的 hover/click/drag 处理；战斗中由 BattleHUD 控制，默认关闭。"))
+	bool bEnableBattleHandInteraction = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Card Layer|Interaction", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "鼠标悬停的第一人称卡牌槽额外上浮距离，单位为 UMG 布局像素。"))
 	float HoverLiftPixels = 28.0f;
@@ -1109,16 +1149,12 @@ public:
 	const TArray<FWacomFirstPersonCardLayerEntry>& GetRuntimeCardLayerEntries() const { return RuntimeCardLayerEntries; }
 
 	void SetBattleHandInteractionEnabled(bool bEnabled);
-	void SetBattleHandInteractionPrototypeEnabled(bool bEnabled);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsStaticCardLayerWidgetActive() const { return StaticCardLayerWidget != nullptr; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Interaction")
-	bool IsBattleHandInteractionEnabled() const { return bEnableBattleHandInteractionPrototype; }
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer|Interaction")
-	bool IsBattleHandInteractionPrototypeEnabled() const { return IsBattleHandInteractionEnabled(); }
+	bool IsBattleHandInteractionEnabled() const { return bEnableBattleHandInteraction; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	FGuid GetHoveredCardInstanceId() const { return HoveredCardInstanceId; }
@@ -1188,9 +1224,14 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomFirstPersonCardLayerWidget> StaticCardLayerWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomFirstPersonCardLayoutPreset> RuntimeCardLayoutPresetOverride = nullptr;
+
 	FTransform CurrentAnchorTransform = FTransform::Identity;
 	EWacomFirstPersonCardAnchorMode CurrentMode = EWacomFirstPersonCardAnchorMode::Invalid;
 	FRotator CurrentLookOffsetUsed = FRotator::ZeroRotator;
+	FRotator CurrentRawCursorLookOffset = FRotator::ZeroRotator;
+	FName RuntimeCardLayoutPresetOverrideSourceId = NAME_None;
 	FName LastFallbackReason = NAME_None;
 	bool bHasValidAnchor = false;
 	bool bHasInitializedAnchor = false;
@@ -1205,6 +1246,8 @@ private:
 	mutable bool bLastAnchorScreenSmoothed = false;
 	mutable float LastAnchorScreenSmoothingDistancePixels = 0.0f;
 	mutable TWeakObjectPtr<const UWacomFirstPersonCardLayoutPreset> LastResolvedCardLayoutPreset;
+	mutable TWeakObjectPtr<const UWacomFirstPersonCardLayoutPreset> LastRuntimeCardLayoutPresetOverride;
+	mutable FName LastRuntimeCardLayoutPresetOverrideSourceId = NAME_None;
 	mutable bool bLastResolvedCardLayoutPresetEnabled = false;
 	mutable bool bLastResolvedCardLayoutPresetFallback = true;
 	mutable bool bHasLoggedResolvedCardLayoutPreset = false;

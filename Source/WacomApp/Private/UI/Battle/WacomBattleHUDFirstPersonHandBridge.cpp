@@ -182,6 +182,16 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 	}
 
 	Anchor->SetRuntimeCardLayerTransitionHints(FirstPersonBattleHandLayerSourceId, TransitionHints);
+	if (HUD.BattleFirstPersonCardLayoutPreset)
+	{
+		Anchor->SetRuntimeCardLayoutPresetOverride(
+			FirstPersonBattleHandLayerSourceId,
+			HUD.BattleFirstPersonCardLayoutPreset);
+	}
+	else
+	{
+		Anchor->ClearRuntimeCardLayoutPresetOverride(FirstPersonBattleHandLayerSourceId);
+	}
 	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
 	Anchor->SetBattleHandInteractionEnabled(ShouldEnableFirstPersonBattleHandInteraction());
 	BindLayerInteractions(Anchor);
@@ -212,6 +222,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer()
 		{
 			Anchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
 		}
+		Anchor->ClearRuntimeCardLayoutPresetOverride(FirstPersonBattleHandLayerSourceId);
 	};
 
 	UWacomFirstPersonCardAnchorComponent* PreviousAnchor = LastAnchor.Get();

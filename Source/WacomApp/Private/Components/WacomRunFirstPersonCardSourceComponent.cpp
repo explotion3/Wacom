@@ -332,6 +332,7 @@ bool UWacomRunFirstPersonCardSourceComponent::TryBuildCurrentDefaultSourceRefres
 	OutKey.BackpackStorageRevision =
 		BoundRunSession->GetBackpackStorageSnapshotRevision();
 	OutKey.SourceId = RunFirstPersonCardLayerSourceId;
+	OutKey.LayoutPreset = RunFirstPersonCardLayoutPreset.Get();
 	OutKey.bIncludeProjectedCards = bIncludeProjectedRunBattleDeckCards;
 	return true;
 }
@@ -385,6 +386,7 @@ bool UWacomRunFirstPersonCardSourceComponent::TryBuildCurrentProviderLeaseRefres
 		BoundRunSession->GetBackpackStorageSnapshotRevision();
 	OutKey.LeaseId = ActiveMenuLeaseId;
 	OutKey.SourceId = ActiveMenuLeaseSourceId;
+	OutKey.LayoutPreset = RunFirstPersonCardLayoutPreset.Get();
 	OutKey.ProviderRequest = ActiveMenuLeaseProviderRequest;
 	return true;
 }
@@ -430,6 +432,7 @@ bool UWacomRunFirstPersonCardSourceComponent::AreDefaultSourceRefreshKeysEquival
 		&& Right.bIsValid
 		&& Left.BackpackStorageRevision == Right.BackpackStorageRevision
 		&& Left.SourceId == Right.SourceId
+		&& Left.LayoutPreset == Right.LayoutPreset
 		&& Left.bIncludeProjectedCards == Right.bIncludeProjectedCards;
 }
 
@@ -442,6 +445,7 @@ bool UWacomRunFirstPersonCardSourceComponent::AreProviderLeaseRefreshKeysEquival
 		&& Left.BackpackStorageRevision == Right.BackpackStorageRevision
 		&& Left.LeaseId == Right.LeaseId
 		&& Left.SourceId == Right.SourceId
+		&& Left.LayoutPreset == Right.LayoutPreset
 		&& AreRunMenuCardLeaseRequestsEquivalent(
 			Left.ProviderRequest,
 			Right.ProviderRequest);
@@ -1012,6 +1016,14 @@ void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerEntries(
 	const bool bEnableRuntimeInteraction =
 		bEnableMenuLeaseDragProbe || bEnableRunWorldCardDropDrag;
 	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableRuntimeInteraction);
+	if (SourceId == RunFirstPersonCardLayerSuppressedSourceId || !RunFirstPersonCardLayoutPreset)
+	{
+		Anchor.ClearRuntimeCardLayoutPresetOverride(SourceId);
+	}
+	else
+	{
+		Anchor.SetRuntimeCardLayoutPresetOverride(SourceId, RunFirstPersonCardLayoutPreset);
+	}
 	Anchor.SetRuntimeCardLayerEntries(SourceId, Entries);
 	Anchor.SetBattleHandInteractionEnabled(bEnableRuntimeInteraction);
 }
@@ -1026,6 +1038,7 @@ void UWacomRunFirstPersonCardSourceComponent::ClearRuntimeCardLayerEntries(
 		Anchor.CancelFirstPersonCardDragGesture(true);
 		RestoreMenuLeaseInteractionOverrides();
 	}
+	Anchor.ClearRuntimeCardLayoutPresetOverride(SourceId);
 	Anchor.ClearRuntimeCardLayerData(SourceId);
 }
 

@@ -336,6 +336,8 @@ namespace WacomFirstPersonCardLayerSpec
 		}
 
 		Preset->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+		Preset->LookInfluenceYaw = 0.35f;
+		Preset->LookInfluencePitch = 0.2f;
 		Preset->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 		Preset->AuthoredCardSpacingPixels = 160.0f;
 		Preset->AuthoredMaxHandWidthPixels = 640.0f;
@@ -1458,7 +1460,7 @@ bool FWacomFirstPersonCardLayerBattlePriorityTest::RunTest(const FString& Parame
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerPartialLookTest,
-	"Wacom.UI.FirstPersonCardLayer.Anchor.LegacyComparison.PartialLookInfluence",
+	"Wacom.UI.FirstPersonCardLayer.Anchor.LookResponsive.PartialLookInfluence",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameters)
@@ -1497,7 +1499,14 @@ bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameter
 	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
 	TestEqual(TEXT("Yaw uses partial cursor influence"), View.LookOffsetUsed.Yaw, 5.0);
 	TestEqual(TEXT("Pitch uses partial cursor influence"), View.LookOffsetUsed.Pitch, 5.0);
-	TestTrue(TEXT("Legacy projection reports look used for layout"), View.bLookOffsetAppliedToLayout);
+	TestEqual(TEXT("Debug raw cursor yaw is preserved"), View.RawCursorLookOffset.Yaw, 20.0);
+	TestEqual(TEXT("Debug raw cursor pitch is preserved"), View.RawCursorLookOffset.Pitch, 10.0);
+	TestEqual(TEXT("Debug applied anchor yaw matches used offset"), View.AppliedAnchorLookOffset.Yaw, 5.0);
+	TestEqual(TEXT("Debug applied anchor pitch matches used offset"), View.AppliedAnchorLookOffset.Pitch, 5.0);
+	TestEqual(TEXT("Debug yaw influence is resolved"), View.LookInfluenceYaw, 0.25f);
+	TestEqual(TEXT("Debug pitch influence is resolved"), View.LookInfluencePitch, 0.5f);
+	TestTrue(TEXT("Look responsive projection reports look used for layout"), View.bLookOffsetAppliedToLayout);
+	TestTrue(TEXT("Debug reports look responsive projection"), View.bLookResponsiveProjection);
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -1570,6 +1579,7 @@ bool FWacomFirstPersonCardLayerBodyLockedWorldLayoutTest::RunTest(const FString&
 	TestTrue(TEXT("Debug reports body locked layout"), View.bBodyLockedLayout);
 	TestTrue(TEXT("Debug reports current camera projection"), View.bCurrentCameraProjection);
 	TestFalse(TEXT("Debug reports look is not used for layout"), View.bLookOffsetAppliedToLayout);
+	TestFalse(TEXT("Debug reports body locked is not look responsive"), View.bLookResponsiveProjection);
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -1695,11 +1705,11 @@ bool FWacomFirstPersonCardLayerBodyLockedFanShapeTest::RunTest(const FString& Pa
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerLegacyLookProjectionTest,
-	"Wacom.UI.FirstPersonCardLayer.Projection.LegacyComparison.WorldProjectedAppliesLookInfluence",
+	FWacomFirstPersonCardLayerLookResponsiveProjectionTest,
+	"Wacom.UI.FirstPersonCardLayer.Projection.LookResponsive.WorldProjectedAppliesLookInfluence",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerLegacyLookProjectionTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonCardLayerLookResponsiveProjectionTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -1737,14 +1747,74 @@ bool FWacomFirstPersonCardLayerLegacyLookProjectionTest::RunTest(const FString& 
 
 	TestEqual(TEXT("Initial slot count"), InitialSlots.Num(), 5);
 	TestEqual(TEXT("Look slot count"), LookSlots.Num(), 5);
-	TestFalse(TEXT("Legacy look influence changes center world location"), LookCenterTransform.GetLocation().Equals(InitialCenterTransform.GetLocation(), KINDA_SMALL_NUMBER));
+	TestFalse(TEXT("Look responsive influence changes center world location"), LookCenterTransform.GetLocation().Equals(InitialCenterTransform.GetLocation(), KINDA_SMALL_NUMBER));
 	if (InitialSlots.Num() == 5 && LookSlots.Num() == 5)
 	{
-		TestNotEqual(TEXT("Legacy world-projected center card can move with look"), LookSlots[2].ScreenPosition, InitialSlots[2].ScreenPosition);
-		TestTrue(TEXT("Legacy projection reports look used for layout"), LookSlots[2].bLookOffsetAppliedToLayout);
-		TestFalse(TEXT("Legacy body locked layout flag is false"), LookSlots[2].bBodyLockedLayout);
-		TestTrue(TEXT("Legacy still uses current camera projection"), LookSlots[2].bCurrentCameraProjection);
+		TestNotEqual(TEXT("Look responsive projected center card can move with look"), LookSlots[2].ScreenPosition, InitialSlots[2].ScreenPosition);
+		TestTrue(TEXT("Look responsive projection reports look used for layout"), LookSlots[2].bLookOffsetAppliedToLayout);
+		TestFalse(TEXT("Look responsive body locked layout flag is false"), LookSlots[2].bBodyLockedLayout);
+		TestTrue(TEXT("Look responsive still uses current camera projection"), LookSlots[2].bCurrentCameraProjection);
 	}
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerPresetLookInfluenceTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.PresetOverridesLookResponsiveInfluence",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerPresetLookInfluenceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* Preset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Preset"), Preset))
+	{
+		return false;
+	}
+
+	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+	Anchor->LookInfluenceYaw = 0.05f;
+	Anchor->LookInfluencePitch = 0.05f;
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = Preset;
+	Preset->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
+	Preset->LookInfluenceYaw = 0.4f;
+	Preset->LookInfluencePitch = 0.25f;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	Character->GetCursorLookDriverComponent()->UpdateFromNormalizedCursor(
+		FVector2D(1.0f, -1.0f),
+		0.0f,
+		20.0f,
+		12.0f);
+	Anchor->RefreshAnchor(0.0f);
+
+	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
+	TestEqual(TEXT("Preset projection mode applies"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::LegacyWorldProjected);
+	TestTrue(TEXT("Preset enables look responsive projection"), View.bLookResponsiveProjection);
+	TestEqual(TEXT("Raw cursor yaw is reported"), View.RawCursorLookOffset.Yaw, 20.0);
+	TestEqual(TEXT("Raw cursor pitch is reported"), View.RawCursorLookOffset.Pitch, 12.0);
+	TestEqual(TEXT("Preset yaw influence is resolved"), View.LookInfluenceYaw, 0.4f);
+	TestEqual(TEXT("Preset pitch influence is resolved"), View.LookInfluencePitch, 0.25f);
+	TestEqual(TEXT("Preset yaw influence drives applied offset"), View.AppliedAnchorLookOffset.Yaw, 8.0);
+	TestEqual(TEXT("Preset pitch influence drives applied offset"), View.AppliedAnchorLookOffset.Pitch, 3.0);
+	TestEqual(TEXT("LookOffsetUsed mirrors applied offset"), View.LookOffsetUsed, View.AppliedAnchorLookOffset);
+	TestTrue(TEXT("Preset look responsive uses look for layout"), View.bLookOffsetAppliedToLayout);
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -2118,7 +2188,7 @@ bool FWacomFirstPersonCardLayerDebugProjectionQualityTest::RunTest(const FString
 	TestTrue(TEXT("Summary reports pixel snap"), Summary.Contains(TEXT("PixelSnap=true")));
 	TestTrue(TEXT("Summary reports angle clamp"), Summary.Contains(TEXT("AngleClamp=true")));
 	TestTrue(TEXT("Summary reports viewport scale"), Summary.Contains(TEXT("ViewportScale=2.00")));
-	TestTrue(TEXT("Summary reports projection mode"), Summary.Contains(TEXT("ProjectionMode=LegacyWorldProjected")));
+	TestTrue(TEXT("Summary reports projection mode"), Summary.Contains(TEXT("ProjectionMode=LookResponsiveProjected")));
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -2219,6 +2289,112 @@ bool FWacomFirstPersonCardLayerPresetLayoutOverrideTest::RunTest(const FString& 
 		TestFalse(TEXT("Preset readable bottom clamp stays inactive when slots are inside viewport"), Slots[2].bBodyBottomViewportAdjusted);
 	}
 	TestTrue(TEXT("Preset is active"), FWacomFirstPersonCardLayerTestAccess::View(*Anchor).bUsingResolvedCardLayoutPreset);
+
+	Anchor->DestroyComponent();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerRuntimePresetOverrideOwnershipTest,
+	"Wacom.UI.FirstPersonCardLayer.LayoutPreset.RuntimeSourceOverrideWinsAndIsOwnerGuarded",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerRuntimePresetOverrideOwnershipTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayoutPreset* DefaultPreset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	UWacomFirstPersonCardLayoutPreset* RuntimePreset = WacomFirstPersonCardLayerSpec::MakeLayoutPreset(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("DefaultPreset"), DefaultPreset)
+		|| !TestNotNull(TEXT("RuntimePreset"), RuntimePreset))
+	{
+		return false;
+	}
+
+	DefaultPreset->AuthoredCardSpacingPixels = 130.0f;
+	RuntimePreset->AuthoredCardSpacingPixels = 210.0f;
+	RuntimePreset->AuthoredMaxHandWidthPixels = 0.0f;
+	Anchor->AuthoredCardSpacingPixels = 70.0f;
+	Anchor->bUseFirstPersonCardLayoutPreset = true;
+	Anchor->FirstPersonCardLayoutPreset = DefaultPreset;
+	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
+
+	TArray<FWacomFirstPersonCardLayerEntry> Entries;
+	Entries.SetNum(3);
+	Anchor->SetRuntimeCardLayerEntries(TEXT("RunSource"), Entries);
+	Anchor->SetRuntimeCardLayoutPresetOverride(TEXT("RunSource"), RuntimePreset);
+
+	TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+	if (Slots.Num() == 3)
+	{
+		TestEqual(TEXT("Runtime preset overrides default preset spacing"),
+			static_cast<float>(Slots[2].AuthoredLayoutOffset.X - Slots[1].AuthoredLayoutOffset.X),
+			210.0f);
+	}
+	FWacomFirstPersonCardAnchorDebugView Debug = Anchor->GetFirstPersonCardAnchorDebugView();
+	TestTrue(TEXT("Debug reports runtime preset override"), Debug.bUsingRuntimeLayoutPresetOverride);
+	TestEqual(TEXT("Debug reports runtime preset owner"), Debug.RuntimeLayoutPresetOverrideSourceId, FName(TEXT("RunSource")));
+	TestEqual(TEXT("Debug reports runtime preset name"), Debug.ResolvedLayoutPresetName, RuntimePreset->GetName());
+	const FWacomFirstPersonCardAnchorAutomationTestView AutomationView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
+	TestEqual(TEXT("Automation view reports runtime preset owner"),
+		AutomationView.RuntimeCardLayoutPresetOverrideSourceId,
+		FName(TEXT("RunSource")));
+	TestTrue(TEXT("Automation view reports runtime preset asset"),
+		AutomationView.RuntimeCardLayoutPresetOverride == RuntimePreset);
+
+	Anchor->ClearRuntimeCardLayoutPresetOverride(TEXT("BattleSource"));
+	Debug = Anchor->GetFirstPersonCardAnchorDebugView();
+	TestTrue(TEXT("Wrong source cannot clear runtime preset override"), Debug.bUsingRuntimeLayoutPresetOverride);
+	TestEqual(TEXT("Wrong source keeps runtime preset owner"), Debug.RuntimeLayoutPresetOverrideSourceId, FName(TEXT("RunSource")));
+
+	Anchor->ClearRuntimeCardLayoutPresetOverride(TEXT("RunSource"));
+	Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+	if (Slots.Num() == 3)
+	{
+		TestEqual(TEXT("Clearing owner returns to component default preset spacing"),
+			static_cast<float>(Slots[2].AuthoredLayoutOffset.X - Slots[1].AuthoredLayoutOffset.X),
+			130.0f);
+	}
+	Debug = Anchor->GetFirstPersonCardAnchorDebugView();
+	TestFalse(TEXT("Runtime preset override cleared"), Debug.bUsingRuntimeLayoutPresetOverride);
+	TestEqual(TEXT("Debug returns to default preset name"), Debug.ResolvedLayoutPresetName, DefaultPreset->GetName());
+
+	Anchor->SetRuntimeCardLayoutPresetOverride(TEXT("RunSource"), RuntimePreset);
+	Anchor->SetRuntimeCardLayoutPresetOverride(TEXT("RunSource"), nullptr);
+	TestFalse(TEXT("Null preset clears same source override"),
+		Anchor->GetFirstPersonCardAnchorDebugView().bUsingRuntimeLayoutPresetOverride);
+
+	Anchor->SetRuntimeCardLayerEntries(TEXT("BattleSource"), Entries);
+	Anchor->SetRuntimeCardLayoutPresetOverride(TEXT("BattleSource"), RuntimePreset);
+	Anchor->SetRuntimeCardLayerEntries(TEXT("RunSource"), Entries);
+	Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
+	if (Slots.Num() == 3)
+	{
+		TestEqual(TEXT("Stale non-owner runtime preset does not drive new source spacing"),
+			static_cast<float>(Slots[2].AuthoredLayoutOffset.X - Slots[1].AuthoredLayoutOffset.X),
+			130.0f);
+	}
+	Debug = Anchor->GetFirstPersonCardAnchorDebugView();
+	TestFalse(TEXT("Debug hides stale non-owner runtime preset override"), Debug.bUsingRuntimeLayoutPresetOverride);
+	TestEqual(TEXT("Debug reports default preset while stale override is stored"), Debug.ResolvedLayoutPresetName, DefaultPreset->GetName());
+	TestEqual(TEXT("Stored stale override owner remains available for owner clear"),
+		Anchor->GetRuntimeCardLayoutPresetOverrideSourceId(),
+		FName(TEXT("BattleSource")));
+	TestTrue(TEXT("Stored stale override asset remains available for owner clear"),
+		Anchor->GetRuntimeCardLayoutPresetOverride() == RuntimePreset);
 
 	Anchor->DestroyComponent();
 	Character->Destroy();

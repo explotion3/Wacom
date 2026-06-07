@@ -46,8 +46,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Authored Layout", meta = (EditCondition = "bKeepAuthoredCardBodyBottomInViewport", ClampMin = "0.0", UIMin = "0.0", UIMax = "96.0", ToolTip = "Authored2D 卡牌主体底部与视口底边之间保留的最小距离，单位为 UMG 布局像素；用于避免第一人称手牌底部类型文字被屏幕边缘裁掉。"))
 	float AuthoredCardBodyBottomViewportPaddingPixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 是正式默认路径：锁定布局基准但仍使用当前真实相机投影；LegacyWorldProjected 只保留为旧 LookInfluence 漂移和视差实验的 PIE / debug 对照。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 是战斗推荐默认风格：锁定布局基准但仍使用当前真实相机投影；Look Responsive Projected 会让鼠标镜头偏移参与手牌锚点计算，适合探索期或需要更强视差的表现。"))
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection|Look Responsive", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.5", ToolTip = "Look Responsive Projected 中，共享鼠标镜头偏航偏移对手牌锚点的影响比例；BodyLocked 不使用该值影响手牌锚点。推荐先在 0.05-0.35 内调。"))
+	float LookInfluenceYaw = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection|Look Responsive", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.35", ToolTip = "Look Responsive Projected 中，共享鼠标镜头俯仰偏移对手牌锚点的影响比例；BodyLocked 不使用该值影响手牌锚点。推荐先在 0.03-0.20 内调。"))
+	float LookInfluencePitch = 0.15f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "200.0", ToolTip = "投影点被限制在视口内时保留的屏幕安全边距，单位为 UMG 布局像素。"))
 	float ProjectionPadding = 24.0f;
@@ -73,7 +79,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Projection", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "20.0", Units = "deg", ToolTip = "开启旋转限制时，每张第一人称卡牌允许的最大 UMG 渲染旋转角，单位为度。"))
 	float MaxCardLayerRenderAngleDegrees = 4.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Scale And Fan", meta = (ClampMin = "0.01", UIMin = "0.1", UIMax = "2.0", ToolTip = "第一人称卡牌层中每张卡牌使用的 UMG 渲染缩放。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Scale And Fan", meta = (ClampMin = "0.01", UIMin = "0.1", UIMax = "1.2", ToolTip = "第一人称卡牌层中每张卡牌使用的 UMG 渲染缩放；过大会遮挡视野或让重叠命中更拥挤。"))
 	float StaticCardRenderScale = 0.55f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Scale And Fan", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "260.0", ToolTip = "最外侧卡牌额外下坠的屏幕距离，单位为 UMG 布局像素；越靠近中心的卡牌下坠越少。"))
@@ -91,7 +97,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Scale And Fan", meta = (EditCondition = "bScaleEdgeDropByHandCount", ClampMin = "1", UIMin = "1", UIMax = "32", ToolTip = "手牌数量大于等于该值时，边缘下坠使用 StaticCardEdgeDropPixels；中间数量平滑过渡。"))
 	int32 EdgeDropScaleMaxCardCount = 12;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Scale And Fan", meta = (UIMin = "-30.0", UIMax = "30.0", Units = "deg", ToolTip = "每张卡牌相对手牌中心增加的扇形旋转角，单位为度；角度越大，旋转锯齿风险越高。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Scale And Fan", meta = (UIMin = "-12.0", UIMax = "12.0", Units = "deg", ToolTip = "每张卡牌相对手牌中心增加的扇形旋转角，单位为度；角度越大，旋转锯齿和遮挡风险越高。"))
 	float FanYawDegrees = 3.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Preset|Motion Stability", meta = (ToolTip = "是否对 Authored2D 的整副手牌中心做屏幕空间平滑；用于保留空间上下变化的同时减少移动时的高频抖动。"))

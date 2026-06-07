@@ -341,11 +341,11 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	// 1) 创建 BattleSession + Initialize
 	ActiveSession = NewObject<UBattleSession>(this);
 	int32 EnterBattleEnemySlotCount = 0;
-	const UEnemyDefinition* FirstEncounterEnemyDefinition = nullptr;
+	const UEnemyDefinition* FirstEnemySlotDefinition = nullptr;
 	{
 		FBattleInitParams Params;
 
-		FirstEncounterEnemyDefinition = EncounterEnemySlots[0].Enemy;
+		FirstEnemySlotDefinition = EncounterEnemySlots[0].Enemy;
 
 		// 优先从 RunSession 构造（含角色 / 种子 / 撤离持久化的破坏部位）；
 		// 若 Run 未就绪则回退到 GameMode 字段。
@@ -439,8 +439,8 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	// 让 HUD 立即刷出初始 Snapshot
 	BattleHUD->RefreshFromSnapshot(ActiveSession->BuildSnapshot());
 
-	UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] EnterBattle 完成：FirstEncounterEnemy=%s EncounterSlots=%d"),
-		*GetNameSafe(FirstEncounterEnemyDefinition),
+	UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] EnterBattle 完成：FirstEnemySlotDefinition=%s EncounterSlots=%d"),
+		*GetNameSafe(FirstEnemySlotDefinition),
 		EnterBattleEnemySlotCount);
 }
 

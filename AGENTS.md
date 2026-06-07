@@ -31,6 +31,11 @@
 - 探索“某个系统怎么工作、某个函数被谁调用、修改会影响哪里、从 A 怎么流到 B”时，优先使用 CodeGraph：`codegraph_context`、`codegraph_callers`、`codegraph_callees`、`codegraph_impact`、`codegraph_trace`。
 - 查项目文件结构时优先使用 `codegraph_files` 或 `rg --files`，少做全仓库目录扫描；新增文件或刚改过的文件以 live 文件系统为准。
 - CodeGraph 用于快速建立结构认知；真正修改前仍要读取 live 文件内容，以当前工作区文件为准，避免索引延迟或动态调用导致误判。
+- 为避免 Windows 弹出命令框，CodeGraph MCP 已关闭 file watcher / auto-sync。不要每次调用 CodeGraph 前都同步；只有在修改代码后还需要让 CodeGraph 反映新结构时，才手动运行：
+
+```powershell
+& 'C:\Users\ahhh\AppData\Local\codegraph\current\node.exe' --liftoff-only 'C:\Users\ahhh\AppData\Local\codegraph\current\lib\dist\bin\codegraph.js' sync 'D:\UE_Project\5.7\Wacom'
+```
 
 ### Spec Kit 使用
 
