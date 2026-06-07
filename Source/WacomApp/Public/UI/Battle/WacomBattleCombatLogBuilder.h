@@ -139,9 +139,6 @@ public:
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log|Legacy Compatibility", meta = (ToolTip = "Legacy 兼容入口：把单条 EventPresentationView 镜像成 CombatLogBlock，只服务旧 BattleEventLogPanel，不是新的 BattleHUD 主日志路径。"))
-	static FWacomBattleCombatLogBlockView BuildLegacyEventBlock(const FBattleEventPresentationView& EventView);
-
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "把 Combat Log 命令块格式化为 readable UE_LOG 字符串。只用于日志输出，不影响 UI 或规则。"))
 	static FString FormatCombatLogBlockForLog(const FWacomBattleCombatLogBlockView& Block);
 };

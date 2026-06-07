@@ -23,7 +23,7 @@ tags:
 - WBP 只做显示、布局、动画和轻量表现 hook；玩家命令只回传给 `UBattleHUD` 或对应父类入口。
 - WBP 不直接调用 `UBattleSession`，不消费或修改 `BattleState`，不自行解析 `FBattleEvent` 作为规则状态。
 - `BindWidgetOptional` 缺失不会崩溃，但对应区域不会显示或刷新；required binding 缺失会导致父类构造失败或控件不可用。
-- 正式 BattleHUD 新制作应使用 `CombatLogFeed + BattleCombatLogBlock`；旧 `EventLogPanel / EventToast` 不再作为主 HUD 绑定。
+- 正式 BattleHUD 新制作应使用 `CombatLogFeed + BattleCombatLogBlock`；旧 `EventLogPanel / EventToast` 已删除，不再作为主 HUD 绑定。
 - Scene enemy authoring、PartActor debug summary 和 target handle 细节只在 [WacomWorldInteraction.md](./WacomWorldInteraction.md) 维护。
 
 ## WBP_BattleHUD
@@ -47,7 +47,7 @@ tags:
 
 WBP 不应做：
 
-- 不绑定或调用旧 `EventLogPanel / EventToast` 作为主 HUD 路径。
+- 不绑定或调用旧 `EventLogPanel / EventToast`；这些旧类已删除。
 - 不绑定旧 `HandPanel` 或 `CardDetailLayer` 作为 BattleHUD runtime 路径。
 - 不直接 Push 击倒弹窗、直接消费 `FBattleEvent`、提交 Battle 规则命令或维护表现队列。
 - 不把 `BattlePresentationStack` 做成可点击、可拖拽或规则栈。
@@ -286,12 +286,6 @@ WBP 不应做：
 - Badge 常驻显示当前 Host 已绑定部位，包括破坏部位。
 - 长中文文案不会撑大 screen-space badge 到遮挡其他部位。
 
-## Legacy Battle Event Log
-
-`UBattleEventLogPanel`、`UBattleEventLogEntryWidget` 和 `UEventToast` 只作为遗留兼容类保留，避免旧 WBP 资产断父类或手动 PIE 对照入口失效。
-
-新 `WBP_BattleHUD` 不应绑定 `EventLogPanel / EventToast`，也不应调用 `ToggleBattleEventLog()`。正式玩家日志链路是 `UWacomBattleCombatLogBuilder -> UBattleCombatLogFeedWidget -> UBattleCombatLogBlockWidget`。
-
 ## PIE Smoke Checklist
 
 - `WBP_BattleHUD` 能显示玩家状态、ActionPanel、牌堆数量、CombatLogFeed 和 PresentationStack。
@@ -300,4 +294,4 @@ WBP 不应做：
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHostSlots` 的战斗中，Host prefab 扫描到的 PartActor Status Badge 可读。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。
-- 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget` 已删除，不再作为 BattleHUD 制作入口。
+- 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget / EventLogPanel / EventToast` 已删除，不再作为 BattleHUD 制作入口。

@@ -16,12 +16,9 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleHUD.h"
-#include "UI/Battle/BattleCombatLogBlockWidget.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackEntryWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/BattleEventLogEntryWidget.h"
-#include "UI/Battle/BattleEventLogPanel.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartStatusBadgeWidget.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
@@ -390,7 +387,7 @@ namespace WacomBattleWidgetSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEventPresentationBuilderChineseTextSpec,
-	"Wacom.UI.Battle.EventPresentationCompatibilityChineseText",
+	"Wacom.UI.Battle.EventPresentationChineseText",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEventPresentationBuilderChineseTextSpec::RunTest(const FString& /*Parameters*/)
@@ -745,84 +742,6 @@ bool FWacomUIBattleCombatLogBuilderMoveEventsSpec::RunTest(const FString& /*Para
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEventLogPanelSpec,
-	"Wacom.UI.Battle.LegacyEventLogPanel",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleEventLogPanelSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<UBattleEventLogPanel> Panel(NewObject<UBattleEventLogPanel>());
-	Panel->MaxEntries = 2;
-	Panel->TakeWidget();
-	TestNotNull(TEXT("Panel resolves an entry widget class"), Panel->EntryWidgetClass.Get());
-	TestTrue(TEXT("Panel entry widget class derives from entry base"),
-		Panel->EntryWidgetClass && Panel->EntryWidgetClass->IsChildOf(UBattleEventLogEntryWidget::StaticClass()));
-	TestNotNull(TEXT("Panel resolves a block widget class"), Panel->BlockWidgetClass.Get());
-	TestTrue(TEXT("Panel block widget class derives from block base"),
-		Panel->BlockWidgetClass && Panel->BlockWidgetClass->IsChildOf(UBattleCombatLogBlockWidget::StaticClass()));
-
-	FBattleEventPresentationView Hidden;
-	Hidden.EventType = EBattleEventType::HandZoneChanged;
-	Hidden.bShouldDisplay = false;
-
-	FBattleEventPresentationView First;
-	First.EventType = EBattleEventType::BattleStarted;
-	First.bShouldDisplay = true;
-	First.MessageText = FText::FromString(TEXT("战斗开始"));
-	First.VisualTone = EWacomBattleEventVisualTone::System;
-	First.IconKey = TEXT("BattleStarted");
-
-	FBattleEventPresentationView Second = First;
-	Second.EventType = EBattleEventType::CardPlayed;
-	Second.MessageText = FText::FromString(TEXT("打出卡牌，消耗 1 先机"));
-	Second.VisualTone = EWacomBattleEventVisualTone::Neutral;
-	Second.IconKey = TEXT("CardPlayed");
-
-	FBattleEventPresentationView Third = First;
-	Third.EventType = EBattleEventType::CardGained;
-	Third.MessageText = FText::FromString(TEXT("获得卡牌：毒牙"));
-	Third.VisualTone = EWacomBattleEventVisualTone::Positive;
-	Third.IconKey = TEXT("CardGained");
-
-	Panel->AppendEventLogEntries({ Hidden, First, Second, Third });
-
-	TestEqual(TEXT("Panel filters hidden entries and trims to max"), Panel->GetEntryCount(), 2);
-	TestEqual(TEXT("Panel mirrors legacy entries as blocks"), Panel->GetBlockCount(), 2);
-	TestEqual(TEXT("Panel keeps second entry after trim"), Panel->GetCurrentEntries()[0].MessageText.ToString(), FString(TEXT("打出卡牌，消耗 1 先机")));
-	TestEqual(TEXT("Panel keeps latest entry after trim"), Panel->GetCurrentEntries()[1].MessageText.ToString(), FString(TEXT("获得卡牌：毒牙")));
-	TestFalse(TEXT("Panel closed by default"), Panel->IsDrawerOpen());
-
-	Panel->ToggleDrawerOpen();
-	TestTrue(TEXT("Panel opens"), Panel->IsDrawerOpen());
-	Panel->ToggleDrawerOpen();
-	TestFalse(TEXT("Panel closes"), Panel->IsDrawerOpen());
-
-	Panel->ClearEventLog();
-	TestEqual(TEXT("Panel clears entries"), Panel->GetEntryCount(), 0);
-	TestEqual(TEXT("Panel clears blocks"), Panel->GetBlockCount(), 0);
-
-	FWacomBattleCombatLogBlockView FirstBlock;
-	FirstBlock.bShouldDisplay = true;
-	FirstBlock.HeaderText = FText::FromString(TEXT("打出「毒牙」"));
-
-	FWacomBattleCombatLogBlockView SecondBlock;
-	SecondBlock.bShouldDisplay = true;
-	SecondBlock.HeaderText = FText::FromString(TEXT("等待"));
-
-	FWacomBattleCombatLogBlockView ThirdBlock;
-	ThirdBlock.bShouldDisplay = true;
-	ThirdBlock.HeaderText = FText::FromString(TEXT("结束回合"));
-
-	Panel->SetCombatLogBlocks({ FirstBlock, SecondBlock, ThirdBlock });
-
-	TestEqual(TEXT("Panel trims combat log blocks to max"), Panel->GetBlockCount(), 2);
-	TestEqual(TEXT("Panel keeps second block"), Panel->GetCurrentBlocks()[0].HeaderText.ToString(), FString(TEXT("等待")));
-	TestEqual(TEXT("Panel keeps third block"), Panel->GetCurrentBlocks()[1].HeaderText.ToString(), FString(TEXT("结束回合")));
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCombatLogFeedSpec,
 	"Wacom.UI.Battle.ScrollableCombatLogFeedMirrorsBlocksAndTrims",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -858,32 +777,6 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 
 	Feed->ClearCombatLog();
 	TestEqual(TEXT("Feed clears blocks"), Feed->GetVisibleBlockCount(), 0);
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEventLogEntryWidgetSpec,
-	"Wacom.UI.Battle.LegacyEventLogEntryWidget",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleEventLogEntryWidgetSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<UBattleEventLogEntryWidget> EntryWidget(NewObject<UBattleEventLogEntryWidget>());
-	EntryWidget->TakeWidget();
-
-	FBattleEventPresentationView Entry;
-	Entry.EventType = EBattleEventType::CardGained;
-	Entry.bShouldDisplay = true;
-	Entry.MessageText = FText::FromString(TEXT("获得卡牌：毒牙"));
-	Entry.VisualTone = EWacomBattleEventVisualTone::Positive;
-	Entry.IconKey = TEXT("CardGained");
-
-	EntryWidget->SetEventLogEntryData(Entry);
-
-	TestEqual(TEXT("Entry widget stores message"), EntryWidget->GetCurrentEntry().MessageText.ToString(), FString(TEXT("获得卡牌：毒牙")));
-	TestEqual(TEXT("Entry widget stores tone"), EntryWidget->GetCurrentEntry().VisualTone, EWacomBattleEventVisualTone::Positive);
-	TestEqual(TEXT("Entry widget stores icon key"), EntryWidget->GetCurrentEntry().IconKey, FName(TEXT("CardGained")));
 
 	return true;
 }

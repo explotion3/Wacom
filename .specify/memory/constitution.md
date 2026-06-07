@@ -35,6 +35,13 @@ MUST say which docs will be updated. If a generated artifact conflicts with
 `AGENTS.md` or an active domain doc, the Wacom document wins and this
 constitution or the generated artifact MUST be corrected.
 
+Feature artifacts under `specs/` are temporary planning records, not durable
+project truth. When a feature is implemented, any finalized rule behavior,
+asset semantics, UI binding contract, authoring workflow, validation expectation,
+or technical debt MUST be migrated back into the relevant `Docs/` file,
+`Docs/TODO.md`, or `Docs/TechDebt.md`. Long-term facts MUST NOT live only in a
+feature spec, plan, or task list.
+
 Rationale: Wacom already has a docs-first rule system. Spec Kit is a planning
 helper, not a replacement for project truth.
 

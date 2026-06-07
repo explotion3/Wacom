@@ -12,7 +12,7 @@ tags:
 # Wacom Battle UI 文档
 
 > [!info] 本文职责
-> 本文记录 Battle UI 当前事实：BattleHUD 命令出口、HUD state、targeting、presentation flow、Combat Log、Presentation Stack、兼容 event presentation、legacy / fallback UI、共享状态控件和测试入口。
+> 本文记录 Battle UI 当前事实：BattleHUD 命令出口、HUD state、targeting、presentation flow、Combat Log、Presentation Stack、event presentation helper、fallback UI、共享状态控件和测试入口。
 
 > [!warning] 边界
 > 本文只记录 UI 表现和命令出口。战斗规则真相见 [WacomBattle.md](./WacomBattle.md)，场景 target authoring 见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)，WBP 槽位见 [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md)。
@@ -78,17 +78,16 @@ HUD 状态入口：
 
 Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary；ActionPanel 显示 pending 文案并禁用按钮，coordinator 等 stack 和 queue 清空后再提交等待或结束回合。
 
-## §4 Event Presentation Compatibility
+## §4 Event Presentation Helper
 
-`UWacomBattleEventPresentationBuilder`、`FBattleEventPresentationView` 和 `EWacomBattleEventVisualTone` 是 UI-only 单事件展示词汇。它们仍被 Combat Log detail line 和 legacy 组件复用，但新的 BattleHUD WBP 不应直接消费 raw `FBattleEvent`。
+`UWacomBattleEventPresentationBuilder`、`FBattleEventPresentationView` 和 `EWacomBattleEventVisualTone` 是 UI-only 单事件展示词汇。它们被 Combat Log detail line 复用，用于生成玩家可读中文文案、tone 和 icon；新的 BattleHUD WBP 不应直接消费 raw `FBattleEvent`。
 
 分类口径：
 
 | 类型 | 分类 | 语义 |
 |---|---|---|
-| `BuildEventPresentationView / FormatEventForPlayer` | `Wacom|Battle|Event Presentation|Compatibility` | 单条事件兼容文案 |
+| `BuildEventPresentationView / FormatEventForPlayer` | `Wacom|Battle|Event Presentation` | 单条事件展示文案 |
 | `FormatCardName / FormatStatusName / FormatKnockdownChoice / FormatHandLimitDiscardSource` | shared text helper | 只生成 UI 文案，不写规则状态 |
-| `BuildLegacyEventBlock()` | `Wacom|Battle|Combat Log|Legacy Compatibility` | 旧 event log panel 把单条事件镜像成 block |
 
 ## §5 Legacy / Fallback UI
 
@@ -96,10 +95,9 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 
 | 区域 | 类型 | 当前口径 |
 |---|---|---|
-| Legacy event log | `UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` | 旧 WBP / PIE 对照保留；正式日志走 CombatLogFeed + CombatLogBlock |
 | Debug text HUD | `UDebugBattleHUD` | Snapshot 文本诊断 HUD，不是正式 BattleHUD 父类 |
 
-旧 2D hand 的 `UHandPanel / UCardWidget / WBP_HandPanel / WBP_CardWidget` 已删除。旧敌方 2D fallback 的 `UEnemyInfoBar / UEnemyPartWidget` 也已删除；缺少 `SceneEnemyHost` 时不会再显示 2D 敌人条，只会缺少场景敌人 hover / prediction / cue / 拖卡目标绑定。正式战斗手牌主线是 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
+旧 Battle event log drawer / entry / toast 的 `UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` 已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。旧 2D hand 的 `UHandPanel / UCardWidget / WBP_HandPanel / WBP_CardWidget` 已删除。旧敌方 2D fallback 的 `UEnemyInfoBar / UEnemyPartWidget` 也已删除；缺少 `SceneEnemyHost` 时不会再显示 2D 敌人条，只会缺少场景敌人 hover / prediction / cue / 拖卡目标绑定。正式战斗手牌主线是 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
 ## §6 Scene Enemy UI
 

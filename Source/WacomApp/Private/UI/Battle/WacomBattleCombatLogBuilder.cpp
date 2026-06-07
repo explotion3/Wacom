@@ -320,20 +320,6 @@ FWacomBattleCombatLogBlockView UWacomBattleCombatLogBuilder::BuildCombatLogBlock
 	return Block;
 }
 
-FWacomBattleCombatLogBlockView UWacomBattleCombatLogBuilder::BuildLegacyEventBlock(
-	const FBattleEventPresentationView& EventView)
-{
-	FWacomBattleCombatLogBlockView Block;
-	Block.CommandKind = EWacomBattleCombatLogCommandKind::Unknown;
-	Block.HeaderText = EventView.MessageText;
-	Block.FirstEventSequence = 0;
-	Block.LastEventSequence = 0;
-	Block.bShouldDisplay = EventView.bShouldDisplay && !EventView.MessageText.IsEmpty();
-	Block.VisualTone = EventView.VisualTone;
-	Block.IconKey = EventView.IconKey;
-	return Block;
-}
-
 FString UWacomBattleCombatLogBuilder::FormatCombatLogBlockForLog(
 	const FWacomBattleCombatLogBlockView& Block)
 {

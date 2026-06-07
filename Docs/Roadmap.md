@@ -125,7 +125,7 @@ tags:
 | 手牌布局 | BattleHUD 已统一使用 first-person card layer；旧 2D hand 已删除 | 继续调 first-person hand 的扇形、层级、命中、读牌和拖拽手感 |
 | 战斗卡牌拖拽 | first-person card layer 已支持拖拽到敌方部位和手牌目标 | HD-2D 表现阶段继续完善场景部位高亮、悬停反馈和目标确认表现 |
 | 目标选择 3D 射线 | 旧 2D EnemyPartWidget 已删除；当前点击、hover、drag preview 走 SceneEnemyHost / PartActor / WorldTargetBridge | 继续完善场景部位高亮、点击反馈、材质描边、tooltip、命中手感和正式动画 |
-| CombatLog / 表现队列 | BattleHUD 使用常驻可滚动 CombatLog 命令块和事件明细；旧日志抽屉与 EventToast 已退出 HUD 主路径 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
+| CombatLog / 表现队列 | BattleHUD 使用常驻可滚动 CombatLog 命令块和事件明细；旧日志抽屉与 EventToast 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
 | 击倒事件 Dialog 美术 | C++ 硬编码 CanvasPanel + Border + Button 布局，BindWidget 锚点就位 | 美术阶段配正式 WBP |
 
 <a id="roadmap-backpack-ui"></a>

@@ -58,7 +58,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | C++ 硬编码默认布局 | Widget 类 `Blueprintable` 非 Abstract，带 C++ fallback 布局；BattleHUD / BackpackScreen 的 fallback 构建已抽到私有 helper | 美术阶段用 WBP 替换视觉，C++ 保留协议和兜底 |
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
 | 场景敌人表现 polish | 旧 `EnemyInfoBar / EnemyPartWidget` 已删除，正式目标表现走 `SceneEnemyHost + PartActor + WorldTargetBridge` | 继续补正式 sprite/flipbook 美术、材质描边、tooltip、风险动效和 PaperZD/Animator 状态机 |
-| CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 builder 只作为 compatibility 入口保留 | 升级为事件表现调度器；真正删除旧类、单事件 builder 或旧 event view 需单独做资产影响切片 |
+| CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 legacy bridge 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | Backpack UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
 | Backpack / Shop 长列表 | Backpack / SpecialZone / Shop 已有 revision gate、signature dirty gate 和 identity reconcile，但列表仍是 WrapBox / VerticalBox | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
@@ -126,3 +126,4 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Run Definition 级 deck wrappers 已取消 Blueprint 暴露；C++ 兼容入口暂留，见 RunSession 结构债
 - Battle 世界空间手牌 prototype public surface 已从 runtime / tests 中移除；正式战斗手牌主线为 first-person card layer。
 - Legacy 2D battle hand 已清理：`UHandPanel / UCardWidget`、`WBP_HandPanel / WBP_CardWidget` 和独立 legacy hand 测试已删除；BattleHUD 运行时只走 first-person card layer。
+- Legacy battle event log 已清理：`UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` 和 `BuildLegacyEventBlock()` 已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。
