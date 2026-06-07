@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomRunKeyChestActor.h"
 #include "Actors/WacomRunCardPickupActor.h"
 #include "Actors/WacomRunRewardPickupActor.h"
@@ -172,6 +173,57 @@ namespace
 		Slot.EnemyDefinition = EnemyDefinition;
 		Encounter->EnemySlots = { Slot };
 		return Encounter;
+	}
+
+	UEncounterDefinition* MakeUiBattleTriggerTwoEnemyEncounterDefinition(
+		UObject* Outer,
+		UEnemyDefinition* EnemyDefinition)
+	{
+		UEncounterDefinition* Encounter = NewObject<UEncounterDefinition>(Outer);
+		Encounter->EncounterDefinitionId = TEXT("Encounter.UI.BattleTrigger.TwoEnemy");
+
+		FEncounterEnemySlot EnemySlot;
+		EnemySlot.EnemySlotId = TEXT("Enemy");
+		EnemySlot.EnemyDefinition = EnemyDefinition;
+		FEncounterEnemySlot SupportSlot;
+		SupportSlot.EnemySlotId = TEXT("Support");
+		SupportSlot.EnemyDefinition = EnemyDefinition;
+		Encounter->EnemySlots = { EnemySlot, SupportSlot };
+		return Encounter;
+	}
+
+	AWacomBattleEnemyActor* MakeUiBattleSceneEnemyHost(
+		UObject* Outer,
+		UEnemyDefinition* EnemyDefinition)
+	{
+		AWacomBattleEnemyActor* Host = NewObject<AWacomBattleEnemyActor>(
+			Outer ? Outer : GetTransientPackage(),
+			NAME_None,
+			RF_Transient);
+		Host->EnemyDefinition = EnemyDefinition;
+		return Host;
+	}
+
+	void ConfigureUiBattleTriggerMainPath(
+		ABattleTriggerActor* Battle,
+		const FName EnemySlotId = TEXT("Enemy"))
+	{
+		if (!Battle)
+		{
+			return;
+		}
+
+		UEnemyDefinition* EnemyDefinition = MakeUiBattleTriggerEnemyDefinition(Battle);
+		Battle->EncounterDefinition = MakeUiBattleTriggerEncounterDefinition(Battle, EnemyDefinition);
+		if (Battle->EncounterDefinition && Battle->EncounterDefinition->EnemySlots.Num() > 0)
+		{
+			Battle->EncounterDefinition->EnemySlots[0].EnemySlotId = EnemySlotId;
+		}
+
+		FWacomBattleSceneEnemyHostSlot HostSlot;
+		HostSlot.EnemySlotId = EnemySlotId;
+		HostSlot.SceneEnemyHost = MakeUiBattleSceneEnemyHost(Battle, EnemyDefinition);
+		Battle->SceneEnemyHostSlots = { HostSlot };
 	}
 
 	AWacomRunTunnelSegmentActor* SpawnUiRunTunnelSegment(
@@ -4745,7 +4797,7 @@ bool FWacomUIBattleTriggerClickBridgeRoutesToInteractSpec::RunTest(const FString
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickRoute");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
@@ -4771,7 +4823,7 @@ bool FWacomUIBattleTriggerClickBridgeWithoutOverlapSpec::RunTest(const FString& 
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickFar");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
@@ -4886,7 +4938,7 @@ bool FWacomUIRunWorldClickContractRoutesBattleSpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickableContract");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
@@ -5095,7 +5147,7 @@ bool FWacomUIBattleTriggerClickBridgeIgnoredOutsideExplorationSpec::RunTest(cons
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickNotExploration");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
@@ -5147,7 +5199,7 @@ bool FWacomUIBattleTriggerClickBridgeIgnoredWhenGameMenuActiveSpec::RunTest(cons
 		NewObject<AWacomBattleTriggerClickProbe>());
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.ClickMenuBlocked");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Battle.Get(), Battle->GetClickBounds());
@@ -5310,10 +5362,10 @@ bool FWacomUIBattleTriggerClickBridgeEKeyStillUsesClosestCandidateSpec::RunTest(
 	PC->SetPawn(Pawn.Get());
 	Near->SetActorLocation(FVector(50.f, 0.f, 0.f));
 	Near->PersistentId = TEXT("Battle.UI.EKeyNear");
-	Near->EnemyDef = NewObject<UEnemyDefinition>(Near.Get());
+	ConfigureUiBattleTriggerMainPath(Near.Get());
 	Far->SetActorLocation(FVector(500.f, 0.f, 0.f));
 	Far->PersistentId = TEXT("Battle.UI.EKeyFar");
-	Far->EnemyDef = NewObject<UEnemyDefinition>(Far.Get());
+	ConfigureUiBattleTriggerMainPath(Far.Get());
 
 	PC->RegisterCandidateInteractable(Far.Get());
 	PC->RegisterCandidateInteractable(Near.Get());
@@ -5694,7 +5746,7 @@ bool FWacomUIBattleTriggerHoverPromptShowsClickPromptSpec::RunTest(const FString
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.Hover");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("点击测试战斗"));
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
@@ -5723,7 +5775,7 @@ bool FWacomUIBattleHoverActivatesSharedProbeVisualSpec::RunTest(const FString& /
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.VisualSignal");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
 	UStaticMeshComponent* Visual = NewObject<UStaticMeshComponent>(Battle.Get());
@@ -5880,7 +5932,7 @@ bool FWacomUIBattleTriggerHoverPromptOverridesEKeySpec::RunTest(const FString& /
 	Shop->PersistentId = TEXT("Shop.BattleHoverOverride");
 	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
 	Battle->PersistentId = TEXT("Battle.UI.HoverOverride");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("点击战斗优先"));
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
@@ -5959,7 +6011,7 @@ bool FWacomUIBattleTriggerHoverPromptClearingRestoresEKeySpec::RunTest(const FSt
 	Shop->PersistentId = TEXT("Shop.BattleHoverRestore");
 	Shop->InteractPromptText = FText::FromString(TEXT("按 E 商店"));
 	Battle->PersistentId = TEXT("Battle.UI.HoverRestore");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("点击战斗"));
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
@@ -6043,7 +6095,7 @@ bool FWacomUIBattleTriggerHoverPromptIgnoredOutsideExplorationSpec::RunTest(cons
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.HoverNotExploration");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("不应显示"));
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
@@ -6138,7 +6190,7 @@ bool FWacomUIBattleTriggerHoverPromptIgnoredWhenGameMenuActiveSpec::RunTest(cons
 		NewObject<AWacomBattleTriggerClickProbe>());
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.HoverMenuBlocked");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("不应显示"));
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
@@ -6351,7 +6403,7 @@ bool FWacomUIBattleTriggerHoverPromptDebugSummarySpec::RunTest(const FString& /*
 	TStrongObjectPtr<AWacomBattleTriggerClickProbe> Battle(
 		NewObject<AWacomBattleTriggerClickProbe>());
 	Battle->PersistentId = TEXT("Battle.UI.HoverDebug");
-	Battle->EnemyDef = NewObject<UEnemyDefinition>(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 	Battle->HoverPromptText = FText::FromString(TEXT("点击调试战斗"));
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Battle.Get());
 	Battle->GetClickTargetBridgeComponent()->RefreshRunWorldTargetBinding();
@@ -7926,7 +7978,7 @@ bool FWacomUIRunInteractablePlacementValidationBattleMissingIdSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
-	Battle->EnemyDef = MakeUiBattleTriggerEnemyDefinition(Battle.Get());
+	ConfigureUiBattleTriggerMainPath(Battle.Get());
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;
@@ -7939,38 +7991,63 @@ bool FWacomUIRunInteractablePlacementValidationBattleMissingIdSpec::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunInteractablePlacementValidationBattleMissingEnemySpec,
-	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementMissingEnemyDefinitionIsInvalid",
+	FWacomUIRunInteractablePlacementValidationBattleMissingEncounterSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementMissingEncounterDefinitionIsInvalid",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunInteractablePlacementValidationBattleMissingEnemySpec::RunTest(
+bool FWacomUIRunInteractablePlacementValidationBattleMissingEncounterSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
-	Battle->PersistentId = TEXT("Battle.Validation.MissingEnemy");
+	Battle->PersistentId = TEXT("Battle.Validation.MissingEncounter");
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;
 	const EDataValidationResult Result =
 		ValidateObjectForUiTest(Battle.Get(), Warnings, Errors);
-	TestEqual(TEXT("Missing Battle enemy invalid"), Result, EDataValidationResult::Invalid);
+	TestEqual(TEXT("Missing Battle Encounter invalid"), Result, EDataValidationResult::Invalid);
 	TestTrue(TEXT("Reports missing battle definition"),
 		Errors.Num() > 0
-		&& Errors[0].ToString().Contains(TEXT("EncounterDefinition"))
-		&& Errors[0].ToString().Contains(TEXT("EnemyDef")));
+		&& Errors[0].ToString().Contains(TEXT("EncounterDefinition")));
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunInteractablePlacementValidationBattleEncounterWithoutEnemyDefSpec,
-	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementEncounterDefinitionPassesWithoutEnemyDef",
+	FWacomUIRunInteractablePlacementValidationBattleEncounterWithHostSlotsSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementEncounterDefinitionWithHostSlotsIsValid",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunInteractablePlacementValidationBattleEncounterWithoutEnemyDefSpec::RunTest(
+bool FWacomUIRunInteractablePlacementValidationBattleEncounterWithHostSlotsSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
 	Battle->PersistentId = TEXT("Battle.Validation.EncounterOnly");
+	UEnemyDefinition* EnemyDefinition = MakeUiBattleTriggerEnemyDefinition(Battle.Get());
+	Battle->EncounterDefinition = MakeUiBattleTriggerEncounterDefinition(Battle.Get(), EnemyDefinition);
+	FWacomBattleSceneEnemyHostSlot HostSlot;
+	HostSlot.EnemySlotId = TEXT("Enemy");
+	HostSlot.SceneEnemyHost = MakeUiBattleSceneEnemyHost(Battle.Get(), EnemyDefinition);
+	Battle->SceneEnemyHostSlots = { HostSlot };
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Battle.Get(), Warnings, Errors);
+	TestEqual(TEXT("Encounter battle trigger with host slots remains valid"), Result, EDataValidationResult::Valid);
+	TestEqual(TEXT("Encounter battle trigger with host slots has no errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationBattleEncounterMissingHostSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementEncounterDefinitionRequiresSceneEnemyHost",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationBattleEncounterMissingHostSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
+	Battle->PersistentId = TEXT("Battle.Validation.EncounterMissingHost");
 	Battle->EncounterDefinition = MakeUiBattleTriggerEncounterDefinition(
 		Battle.Get(),
 		MakeUiBattleTriggerEnemyDefinition(Battle.Get()));
@@ -7979,8 +8056,50 @@ bool FWacomUIRunInteractablePlacementValidationBattleEncounterWithoutEnemyDefSpe
 	TArray<FText> Errors;
 	const EDataValidationResult Result =
 		ValidateObjectForUiTest(Battle.Get(), Warnings, Errors);
-	TestEqual(TEXT("Encounter-only battle trigger remains valid"), Result, EDataValidationResult::Valid);
-	TestEqual(TEXT("Encounter-only battle trigger has no errors"), Errors.Num(), 0);
+	TestEqual(TEXT("Encounter battle trigger without scene host invalid"), Result, EDataValidationResult::Invalid);
+	TestTrue(TEXT("Reports missing scene host"),
+		UiValidationIssuesContain(Errors, TEXT("SceneEnemyHost")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunInteractablePlacementValidationBattleEncounterSyncSlotsSpec,
+	"Wacom.UI.WorldInteraction.RunInteractablePlacementValidation.BattleTriggerPlacementCanSyncSceneEnemyHostSlotsFromEncounter",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunInteractablePlacementValidationBattleEncounterSyncSlotsSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Battle(NewObject<ABattleTriggerActor>());
+	Battle->PersistentId = TEXT("Battle.Validation.EncounterSyncSlots");
+	UEnemyDefinition* EnemyDefinition = MakeUiBattleTriggerEnemyDefinition(Battle.Get());
+	Battle->EncounterDefinition =
+		MakeUiBattleTriggerTwoEnemyEncounterDefinition(Battle.Get(), EnemyDefinition);
+
+	Battle->SyncSceneEnemyHostSlotsFromEncounter();
+	TestEqual(TEXT("Sync creates one scene host slot per Encounter enemy"),
+		Battle->SceneEnemyHostSlots.Num(),
+		2);
+	TestEqual(TEXT("Sync keeps first Encounter enemy slot order"),
+		Battle->SceneEnemyHostSlots[0].EnemySlotId,
+		FName(TEXT("Enemy")));
+	TestEqual(TEXT("Sync keeps second Encounter enemy slot order"),
+		Battle->SceneEnemyHostSlots[1].EnemySlotId,
+		FName(TEXT("Support")));
+
+	Battle->SceneEnemyHostSlots[0].SceneEnemyHost =
+		MakeUiBattleSceneEnemyHost(Battle.Get(), EnemyDefinition);
+	Battle->SceneEnemyHostSlots[1].SceneEnemyHost =
+		MakeUiBattleSceneEnemyHost(Battle.Get(), EnemyDefinition);
+
+	TArray<FText> Warnings;
+	TArray<FText> Errors;
+	const EDataValidationResult Result =
+		ValidateObjectForUiTest(Battle.Get(), Warnings, Errors);
+	TestEqual(TEXT("Synced Encounter battle trigger remains valid"),
+		Result,
+		EDataValidationResult::Valid);
+	TestEqual(TEXT("Synced Encounter battle trigger has no errors"), Errors.Num(), 0);
 	return true;
 }
 
@@ -8008,8 +8127,8 @@ bool FWacomUIRunInteractablePlacementValidationBattleDuplicateSpec::RunTest(
 
 	First->PersistentId = TEXT("Battle.Validation.Duplicate");
 	Second->PersistentId = TEXT("Battle.Validation.Duplicate");
-	First->EnemyDef = MakeUiBattleTriggerEnemyDefinition(First);
-	Second->EnemyDef = MakeUiBattleTriggerEnemyDefinition(Second);
+	ConfigureUiBattleTriggerMainPath(First);
+	ConfigureUiBattleTriggerMainPath(Second);
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;

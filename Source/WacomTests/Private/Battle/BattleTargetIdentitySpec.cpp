@@ -344,7 +344,6 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 
 		Run->OnBattleFinishedFromTrigger(
 			Packet,
-			Fixture.RightEnemy.Get(),
 			FName(TEXT("ProgressTrigger")));
 	}
 
@@ -360,7 +359,7 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 
 	FBattleInitParams ReentryParams;
 	const bool bBuildOk =
-		Run->BuildInitParamsForBattle(Fixture.RightEnemy.Get(), FName(TEXT("ProgressTrigger")), ReentryParams);
+		Run->BuildInitParamsForBattle(FName(TEXT("ProgressTrigger")), ReentryParams);
 	TestTrue(TEXT("Run builds reentry params"), bBuildOk);
 	TestEqual(TEXT("Run reentry EncounterId uses trigger id"),
 		ReentryParams.EncounterId,
@@ -368,7 +367,6 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 	TestEqual(TEXT("Run reentry fills PreDestroyedParts"), ReentryParams.PreDestroyedParts.Num(), 1);
 	TestEqual(TEXT("Run reentry leaves legacy PreDestroyedPartIds empty"), ReentryParams.PreDestroyedPartIds.Num(), 0);
 
-	ReentryParams.Enemy = nullptr;
 	ReentryParams.EnemySlots.Reset();
 	AppendTwoEnemySlots(ReentryParams, Fixture);
 

@@ -66,21 +66,10 @@ FWacomBattleHUDSceneEnemyTargetCoordinator::FWacomBattleHUDSceneEnemyTargetCoord
 {
 }
 
-void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHost(AWacomBattleEnemyActor* InHost)
-{
-	TArray<AWacomBattleEnemyActor*> Hosts;
-	if (InHost)
-	{
-		Hosts.Add(InHost);
-	}
-	SetSceneEnemyHosts(Hosts);
-}
-
 void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHosts(
 	const TArray<AWacomBattleEnemyActor*>& InHosts)
 {
 	ClearWorldTargets();
-	SceneEnemyHost.Reset();
 	SceneEnemyHosts.Reset();
 
 	for (AWacomBattleEnemyActor* Host : InHosts)
@@ -90,10 +79,6 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHosts(
 			continue;
 		}
 
-		if (!SceneEnemyHost.IsValid())
-		{
-			SceneEnemyHost = Host;
-		}
 		SceneEnemyHosts.AddUnique(Host);
 	}
 
@@ -264,7 +249,6 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
 		}
 	}
 	SceneEnemyPartWorldTargetBridges.Reset();
-	SceneEnemyHost.Reset();
 	SceneEnemyHosts.Reset();
 }
 

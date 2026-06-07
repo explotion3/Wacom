@@ -600,10 +600,8 @@ namespace WacomFirstPersonCardLayerSpec
 			}
 
 			Result.Parts.Add(PartActor);
-			FWacomBattleSceneEnemyPartSlot Slot;
-			Slot.PartId = PartIds[Index];
-			Slot.PartActor = PartActor;
-			Result.Host->PartSlots.Add(Slot);
+			PartActor->PartId = PartIds[Index];
+			PartActor->AttachToActor(Result.Host, FAttachmentTransformRules::KeepWorldTransform);
 		}
 
 		Result.Host->RefreshBattleEnemyPartAuthoringState();
@@ -12192,7 +12190,7 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 	HUD->SetOwningPlayerForTest(PC);
 	HUD->SetWorldForTest(World);
 	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostForTest(SceneEnemy.Host);
+	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, SceneEnemy.Parts[0], SceneEnemy.Parts[0]->GetHitBounds());
@@ -12272,7 +12270,7 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 	HUD->SetOwningPlayerForTest(PC);
 	HUD->SetWorldForTest(World);
 	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostForTest(CurrentHost.Host);
+	HUD->SetBattleSceneEnemyHostsForTest({ CurrentHost.Host });
 	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
 	OtherHost.Parts[0]->GetInteractionTargetComponent()->SetTargetId(PartId);

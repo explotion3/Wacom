@@ -7,7 +7,6 @@
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Deck/RunDeckRules.h"
-#include "Enemies/EnemyDefinition.h"
 #include "Events/RunEventExecutor.h"
 #include "Events/RunEventDefinition.h"
 #include "Save/RunSaveGameSerializer.h"
@@ -310,7 +309,6 @@ bool URunSession::Initialize(UCharacterDefinition* InCharacter)
 	RunState.Character   = InCharacter;
 	RunState.BattleSeed  = 0;
 	RunState.bRunActive  = true;
-	RunState.DefeatedEnemies.Reset();
 	RunState.DestroyedTriggerIds.Reset();
 	RunState.PlayerTransform   = FTransform::Identity;
 	RunState.bHasPlayerTransform = false;
@@ -402,26 +400,20 @@ void URunSession::ResetRunState()
 
 // ================ 战斗联动 ================
 
-bool URunSession::BuildInitParamsForBattle(UEnemyDefinition* EnemyDef, FBattleInitParams& OutParams) const
+bool URunSession::BuildInitParamsForBattle(FBattleInitParams& OutParams) const
 {
-	return BuildInitParamsForBattle(EnemyDef, NAME_None, OutParams);
+	return BuildInitParamsForBattle(NAME_None, OutParams);
 }
 
-bool URunSession::BuildInitParamsForBattle(UEnemyDefinition* EnemyDef, FName TriggerPersistentId, FBattleInitParams& OutParams) const
+bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const
 {
 	if (!RunState.Character)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[RunSession] BuildInitParamsForBattle: RunState.Character 为空"));
 		return false;
 	}
-	if (!EnemyDef)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[RunSession] BuildInitParamsForBattle: EnemyDef 为空"));
-		return false;
-	}
 
 	OutParams.Character  = RunState.Character;
-	OutParams.Enemy      = EnemyDef;
 	OutParams.EncounterId = GetRunBattleEncounterId(TriggerPersistentId);
 	OutParams.RandomSeed = RunState.BattleSeed;
 
@@ -493,19 +485,18 @@ bool URunSession::BuildInitParamsForBattle(UEnemyDefinition* EnemyDef, FName Tri
 	return true;
 }
 
-void URunSession::OnBattleFinished(const FBattleResultPacket& Packet, UEnemyDefinition* EnemyDef)
+void URunSession::OnBattleFinished(const FBattleResultPacket& Packet)
 {
-	OnBattleFinishedFromTrigger(Packet, EnemyDef, NAME_None);
+	OnBattleFinishedFromTrigger(Packet, NAME_None);
 }
 
-void URunSession::OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet, UEnemyDefinition* EnemyDef, FName TriggerPersistentId)
+void URunSession::OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet, FName TriggerPersistentId)
 {
 	FScopedRunStateNotificationBatch NotificationBatch(*this);
 
 	const bool bResolved = FRunBattleSettlementResolver::Resolve(
 		RunState,
 		Packet,
-		EnemyDef,
 		TriggerPersistentId,
 		FRunBattleSettlementResolver::FCallbacks{
 			[this](EWacomPressureType Type, int32 Delta)
@@ -628,10 +619,9 @@ bool URunSession::LoadFromSlot(const FString& SlotName)
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[RunSession] LoadFromSlot(%s) OK: Character=%s, Defeated=%d, Triggers=%d, HasPlayerTransform=%d"),
+		TEXT("[RunSession] LoadFromSlot(%s) OK: Character=%s, Triggers=%d, HasPlayerTransform=%d"),
 		*SlotName,
 		*GetNameSafe(RunState.Character),
-		RunState.DefeatedEnemies.Num(),
 		RunState.DestroyedTriggerIds.Num(),
 		RunState.bHasPlayerTransform ? 1 : 0);
 	return true;

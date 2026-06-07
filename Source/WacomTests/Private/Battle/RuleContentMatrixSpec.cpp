@@ -283,7 +283,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
 		PlayCardByDefinition(Session, Snapshot, Card, PartId, *this);
 		Snapshot = Session->BuildSnapshot();
-		const FEnemyPartSnapshot& Part = Snapshot.Enemy.Parts[0];
+		const FEnemyPartSnapshot& Part = *FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 		TestEqual(TEXT("Poison stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Poison), 2);
 		TestEqual(TEXT("Slow stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Slow), 3);
 		// Freeze skips the immediate initiative-zero action and consumes one stack during that skipped action.
@@ -388,7 +388,9 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
 		PlayCardByDefinition(Session, Snapshot, ApplyRemoveCard, PartId, *this);
 		Snapshot = Session->BuildSnapshot();
-		TestEqual(TEXT("RemoveStatus removes requested stacks"), FWacomBattleFixture::GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Slow), 1);
+		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
+		TestNotNull(TEXT("Primary part exists"), Part);
+		TestEqual(TEXT("RemoveStatus removes requested stacks"), FWacomBattleFixture::GetStatusStacks(Part ? Part->StatusStacks : TMap<FGameplayTag, int32>(), WacomTags::Status_Slow), 1);
 	}
 
 	{
@@ -435,7 +437,9 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
 		PlayCardByDefinition(Session, Snapshot, Card, PartId, *this);
 		Snapshot = Session->BuildSnapshot();
-		TestEqual(TEXT("RuntimeCost magnitude applies poison equal to cost"), FWacomBattleFixture::GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Poison), 3);
+		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
+		TestNotNull(TEXT("Primary part exists"), Part);
+		TestEqual(TEXT("RuntimeCost magnitude applies poison equal to cost"), FWacomBattleFixture::GetStatusStacks(Part ? Part->StatusStacks : TMap<FGameplayTag, int32>(), WacomTags::Status_Poison), 3);
 	}
 
 	{
@@ -767,8 +771,10 @@ bool FWacomBattleRuleContentMatrixEnemyIntentSpec::RunTest(const FString& /*Para
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		TestTrue(TEXT("End turn resolves self-targeting enemy intent"), Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		Snapshot = Session->BuildSnapshot();
-		TestEqual(TEXT("Enemy intent adds self shield"), Snapshot.Enemy.Parts[0].Shield, 5);
-		TestEqual(TEXT("Enemy intent applies self freeze then action refresh keeps stack"), FWacomBattleFixture::GetStatusStacks(Snapshot.Enemy.Parts[0].StatusStacks, WacomTags::Status_Freeze), 1);
+		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
+		TestNotNull(TEXT("Primary part exists"), Part);
+		TestEqual(TEXT("Enemy intent adds self shield"), Part ? Part->Shield : -1, 5);
+		TestEqual(TEXT("Enemy intent applies self freeze then action refresh keeps stack"), FWacomBattleFixture::GetStatusStacks(Part ? Part->StatusStacks : TMap<FGameplayTag, int32>(), WacomTags::Status_Freeze), 1);
 	}
 
 	return true;

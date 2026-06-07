@@ -56,20 +56,69 @@ namespace
 		return nullptr;
 	}
 
-	FName ResolveFallbackSceneEnemyHostSlotId(const UEncounterDefinition* Encounter)
+	void CollectValidEncounterEnemySlotIdsInOrder(
+		const UEncounterDefinition* Encounter,
+		TArray<FName>& OutEnemySlotIds)
 	{
-		if (Encounter)
+		OutEnemySlotIds.Reset();
+		if (!Encounter)
 		{
-			for (const FEncounterEnemySlot& Slot : Encounter->EnemySlots)
+			return;
+		}
+
+		TSet<FName> UsedIds;
+		for (const FEncounterEnemySlot& Slot : Encounter->EnemySlots)
+		{
+			if (Slot.EnemySlotId.IsNone() || !Slot.EnemyDefinition || UsedIds.Contains(Slot.EnemySlotId))
 			{
-				if (!Slot.EnemySlotId.IsNone() && Slot.EnemyDefinition)
-				{
-					return Slot.EnemySlotId;
-				}
+				continue;
+			}
+
+			UsedIds.Add(Slot.EnemySlotId);
+			OutEnemySlotIds.Add(Slot.EnemySlotId);
+		}
+	}
+
+	void CollectSceneEnemyHostSlotDiff(
+		const UEncounterDefinition* Encounter,
+		const TArray<FWacomBattleSceneEnemyHostSlot>& SceneEnemyHostSlots,
+		TArray<FName>& OutMissingSlotIds,
+		TArray<FName>& OutExtraSlotIds)
+	{
+		OutMissingSlotIds.Reset();
+		OutExtraSlotIds.Reset();
+		if (!Encounter)
+		{
+			return;
+		}
+
+		TArray<FName> EncounterSlotIds;
+		CollectValidEncounterEnemySlotIdsInOrder(Encounter, EncounterSlotIds);
+		TSet<FName> EncounterSlotIdSet(EncounterSlotIds);
+		TSet<FName> UsedSceneSlotIds;
+		for (const FWacomBattleSceneEnemyHostSlot& Slot : SceneEnemyHostSlots)
+		{
+			if (Slot.EnemySlotId.IsNone())
+			{
+				continue;
+			}
+
+			UsedSceneSlotIds.Add(Slot.EnemySlotId);
+			if (!EncounterSlotIdSet.Contains(Slot.EnemySlotId))
+			{
+				OutExtraSlotIds.AddUnique(Slot.EnemySlotId);
 			}
 		}
-		return FName(TEXT("Enemy"));
+
+		for (const FName& EncounterSlotId : EncounterSlotIds)
+		{
+			if (!UsedSceneSlotIds.Contains(EncounterSlotId))
+			{
+				OutMissingSlotIds.Add(EncounterSlotId);
+			}
+		}
 	}
+
 }
 
 ABattleTriggerActor::ABattleTriggerActor()
@@ -162,7 +211,7 @@ void ABattleTriggerActor::BeginPlay()
 	if (!HasConfiguredBattleDefinition())
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("[BattleTriggerActor] %s: EncounterDefinition / EnemyDef 均未配置或无有效敌人槽，触发将被忽略"),
+			TEXT("[BattleTriggerActor] %s: EncounterDefinition 未配置或无有效敌人槽，触发将被忽略"),
 			*GetName());
 	}
 }
@@ -226,21 +275,21 @@ void ABattleTriggerActor::HandleEndOverlap(UPrimitiveComponent* /*OverlappedComp
 void ABattleTriggerActor::TryActivate(AWacomPlayerController* PC)
 {
 	if (!PC) { return; }
-	UEnemyDefinition* ResolvedEnemyDef = ResolveBattleEnemyDefinition();
-	if (!ResolvedEnemyDef)
+	UEnemyDefinition* ResolvedPrimaryEnemyDefinition = ResolveBattleEnemyDefinition();
+	if (!ResolvedPrimaryEnemyDefinition)
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("[BattleTriggerActor] %s: TryActivate 时 EncounterDefinition / EnemyDef 无有效敌人"), *GetName());
+			TEXT("[BattleTriggerActor] %s: TryActivate 时 EncounterDefinition 无有效敌人"), *GetName());
 		return;
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[BattleTriggerActor] %s 触发战斗：EnemyDef=%s EncounterDefinition=%s"),
+		TEXT("[BattleTriggerActor] %s 触发战斗：PrimaryEnemy=%s EncounterDefinition=%s"),
 		*GetName(),
-		*GetNameSafe(ResolvedEnemyDef),
+		*GetNameSafe(ResolvedPrimaryEnemyDefinition),
 		*GetNameSafe(EncounterDefinition));
 
-	PC->RequestEnterBattle(ResolvedEnemyDef, this);
+	PC->RequestEnterBattle(this);
 }
 
 FText ABattleTriggerActor::GetInteractPromptText_Implementation(AWacomPlayerController* /*PC*/) const
@@ -265,6 +314,70 @@ FText ABattleTriggerActor::GetRunWorldClickHoverPrompt_Implementation(
 	AWacomPlayerController* PC) const
 {
 	return GetHoverPromptText(PC);
+}
+
+void ABattleTriggerActor::SyncSceneEnemyHostSlotsFromEncounter()
+{
+	if (!EncounterDefinition)
+	{
+		return;
+	}
+
+	TArray<FName> EncounterSlotIds;
+	CollectValidEncounterEnemySlotIdsInOrder(EncounterDefinition, EncounterSlotIds);
+	if (EncounterSlotIds.IsEmpty())
+	{
+		return;
+	}
+
+	Modify();
+
+	TMap<FName, AWacomBattleEnemyActor*> ExistingHostsBySlotId;
+	TArray<FWacomBattleSceneEnemyHostSlot> ExtraSlots;
+	TSet<FName> EncounterSlotIdSet(EncounterSlotIds);
+	TSet<FName> UsedExistingSlotIds;
+	for (const FWacomBattleSceneEnemyHostSlot& Slot : SceneEnemyHostSlots)
+	{
+		if (Slot.EnemySlotId.IsNone())
+		{
+			ExtraSlots.Add(Slot);
+			continue;
+		}
+
+		if (EncounterSlotIdSet.Contains(Slot.EnemySlotId))
+		{
+			if (!UsedExistingSlotIds.Contains(Slot.EnemySlotId))
+			{
+				ExistingHostsBySlotId.Add(Slot.EnemySlotId, Slot.SceneEnemyHost);
+				UsedExistingSlotIds.Add(Slot.EnemySlotId);
+			}
+			else
+			{
+				ExtraSlots.Add(Slot);
+			}
+			continue;
+		}
+
+		ExtraSlots.Add(Slot);
+	}
+
+	TArray<FWacomBattleSceneEnemyHostSlot> SyncedSlots;
+	SyncedSlots.Reserve(EncounterSlotIds.Num() + ExtraSlots.Num());
+	for (const FName& EncounterSlotId : EncounterSlotIds)
+	{
+		FWacomBattleSceneEnemyHostSlot SyncedSlot;
+		SyncedSlot.EnemySlotId = EncounterSlotId;
+		if (AWacomBattleEnemyActor** ExistingHost = ExistingHostsBySlotId.Find(EncounterSlotId))
+		{
+			SyncedSlot.SceneEnemyHost = *ExistingHost;
+		}
+		SyncedSlots.Add(SyncedSlot);
+	}
+	SyncedSlots.Append(ExtraSlots);
+	SceneEnemyHostSlots = MoveTemp(SyncedSlots);
+
+	TArray<AWacomBattleEnemyActor*> SceneHosts;
+	BuildBattleSceneEnemyHosts(SceneHosts);
 }
 
 FWacomRunWorldClickableInteractableDebugView
@@ -313,10 +426,9 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 	{
 		Context.AddError(FText::Format(
 			LOCTEXT("PlacementMissingPersistentId",
-				"BattleTrigger 摆放配置错误：Actor={0} 缺少 PersistentId，胜利销毁和撤离 BattleProgress 无法持久化。EncounterDefinition={1} EnemyDef={2}。"),
+				"BattleTrigger 摆放配置错误：Actor={0} 缺少 PersistentId，胜利销毁和撤离 BattleProgress 无法持久化。EncounterDefinition={1}。"),
 			FText::FromString(GetName()),
-			FText::FromString(EncounterDefinition ? EncounterDefinition->GetName() : TEXT("None")),
-			FText::FromString(EnemyDef ? EnemyDef->GetName() : TEXT("None"))));
+			FText::FromString(EncounterDefinition ? EncounterDefinition->GetName() : TEXT("None"))));
 		Result = EDataValidationResult::Invalid;
 	}
 
@@ -324,7 +436,7 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 	{
 		Context.AddError(FText::Format(
 			LOCTEXT("PlacementMissingEnemyDefinition",
-				"BattleTrigger 摆放配置错误：Actor={0} PersistentId={1} 缺少 EncounterDefinition 或 EnemyDef，运行时不会进入战斗。"),
+				"BattleTrigger 摆放配置错误：Actor={0} PersistentId={1} 缺少有效 EncounterDefinition，运行时不会进入战斗。"),
 			FText::FromString(GetName()),
 			FText::FromName(PersistentId)));
 		Result = EDataValidationResult::Invalid;
@@ -382,6 +494,14 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 			}
 		}
 	}
+
+	TArray<FName> MissingSceneEnemyHostSlotIds;
+	TArray<FName> ExtraSceneEnemyHostSlotIds;
+	CollectSceneEnemyHostSlotDiff(
+		EncounterDefinition,
+		SceneEnemyHostSlots,
+		MissingSceneEnemyHostSlotIds,
+		ExtraSceneEnemyHostSlotIds);
 
 	if (SceneEnemyHostSlots.Num() > 0)
 	{
@@ -444,15 +564,13 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 					FindEncounterEnemySlotById(EncounterDefinition, Slot.EnemySlotId);
 				if (!EncounterSlot)
 				{
-					Context.AddWarning(FText::Format(
+					Context.AddError(FText::Format(
 						LOCTEXT("PlacementSceneEnemyHostSlotUnknownEncounterSlot",
-							"BattleTrigger 摆放警告：Actor={0} SceneEnemyHostSlots EnemySlotId={1} 不在 EncounterDefinition={2} 中；该 Host 运行时可能无法绑定任何部位。"),
+							"BattleTrigger 摆放配置错误：Actor={0} SceneEnemyHostSlots EnemySlotId={1} 不在 EncounterDefinition={2} 中；该 Host 无法绑定正式 Encounter 敌人槽。"),
 						FText::FromString(GetName()),
 						FText::FromName(Slot.EnemySlotId),
 						FText::FromString(EncounterDefinition->GetName())));
-					Result = Result == EDataValidationResult::Invalid
-						? EDataValidationResult::Invalid
-						: EDataValidationResult::Valid;
+					Result = EDataValidationResult::Invalid;
 				}
 				else if (EncounterSlot->EnemyDefinition
 					&& Slot.SceneEnemyHost->EnemyDefinition
@@ -475,40 +593,37 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 			}
 		}
 	}
-	else if (!SceneEnemyHost)
-	{
-		Context.AddWarning(FText::Format(
-			LOCTEXT("PlacementMissingSceneEnemyHost",
-				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} 未绑定 SceneEnemyHost / SceneEnemyHostSlots；场景敌人部位不会参与 hover / prediction / cue / 拖卡目标绑定。"),
-			FText::FromString(GetName()),
-			FText::FromName(PersistentId)));
-	}
-	else if (UEnemyDefinition* ResolvedEnemyDef = ResolveBattleEnemyDefinition();
-		ResolvedEnemyDef && SceneEnemyHost && SceneEnemyHost->EnemyDefinition && SceneEnemyHost->EnemyDefinition != ResolvedEnemyDef)
-	{
-		Context.AddWarning(FText::Format(
-			LOCTEXT("PlacementSceneEnemyHostDefinitionMismatch",
-				"BattleTrigger 摆放警告：Actor={0} EnemyDef={1} 与 SceneEnemyHost={2} EnemyDefinition={3} 不一致；场景部位会按当前战斗 Snapshot 的 PartId 绑定，请确认制作配置。"),
-			FText::FromString(GetName()),
-			FText::FromString(ResolvedEnemyDef->GetName()),
-			FText::FromString(SceneEnemyHost->GetName()),
-			FText::FromString(SceneEnemyHost->EnemyDefinition ? SceneEnemyHost->EnemyDefinition->GetName() : TEXT("None"))));
-	}
 
-	if (EncounterDefinition && SceneEnemyHostSlots.Num() == 0 && SceneEnemyHost && EncounterDefinition->EnemySlots.Num() > 1)
+	if (EncounterDefinition)
 	{
-		Context.AddWarning(FText::Format(
-			LOCTEXT("PlacementMultiEnemyEncounterUsesLegacySingleHost",
-				"BattleTrigger 摆放警告：Actor={0} 使用多敌人 EncounterDefinition={1}，但只配置了旧 SceneEnemyHost；建议改用 SceneEnemyHostSlots 为每个 EnemySlotId 绑定独立 Host。"),
-			FText::FromString(GetName()),
-			FText::FromString(EncounterDefinition->GetName())));
+		for (const FName& MissingSlotId : MissingSceneEnemyHostSlotIds)
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("PlacementSceneEnemyHostSlotMissingEncounterSlot",
+					"BattleTrigger 摆放配置错误：Actor={0} EncounterDefinition={1} 中的 EnemySlotId={2} 未映射到 SceneEnemyHostSlots；该敌人槽没有场景 Host。"),
+				FText::FromString(GetName()),
+				FText::FromString(EncounterDefinition->GetName()),
+				FText::FromName(MissingSlotId)));
+			Result = EDataValidationResult::Invalid;
+		}
+
+		if (SceneEnemyHostSlots.IsEmpty())
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("PlacementEncounterMissingSceneEnemyHost",
+					"BattleTrigger 摆放配置错误：Actor={0} PersistentId={1} 使用 EncounterDefinition={2}，但未绑定 SceneEnemyHostSlots；该战斗没有场景敌人目标。"),
+				FText::FromString(GetName()),
+				FText::FromName(PersistentId),
+				FText::FromString(EncounterDefinition->GetName())));
+			Result = EDataValidationResult::Invalid;
+		}
 	}
 
 	if (!PersistentId.IsNone() && HasDuplicatePersistentIdInWorld())
 	{
 		Context.AddWarning(FText::Format(
 			LOCTEXT("PlacementDuplicatePersistentId",
-				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} EnemyDef={2} 与同关卡其他 BattleTrigger 重复；这些战斗会共享销毁状态和 BattleProgress。"),
+				"BattleTrigger 摆放警告：Actor={0} PersistentId={1} PrimaryEnemy={2} 与同关卡其他 BattleTrigger 重复；这些战斗会共享销毁状态和 BattleProgress。"),
 			FText::FromString(GetName()),
 			FText::FromName(PersistentId),
 			FText::FromString(ResolveBattleEnemyDefinition() ? ResolveBattleEnemyDefinition()->GetName() : TEXT("None"))));
@@ -550,8 +665,8 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 	FWacomBattleTriggerDebugView View;
 	View.ActorName = GetName();
 	View.PersistentId = PersistentId;
-	UEnemyDefinition* ResolvedEnemyDef = ResolveBattleEnemyDefinition();
-	View.EnemyDefinitionName = ResolvedEnemyDef ? ResolvedEnemyDef->GetName() : TEXT("None");
+	UEnemyDefinition* ResolvedPrimaryEnemyDefinition = ResolveBattleEnemyDefinition();
+	View.PrimaryEnemyDefinitionName = ResolvedPrimaryEnemyDefinition ? ResolvedPrimaryEnemyDefinition->GetName() : TEXT("None");
 	View.EncounterDefinitionName = EncounterDefinition ? EncounterDefinition->GetName() : TEXT("None");
 	View.EncounterDefinitionId =
 		EncounterDefinition ? EncounterDefinition->EncounterDefinitionId : NAME_None;
@@ -567,15 +682,16 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 	{
 		View.SceneEnemyHostSlotIds.Add(Slot.EnemySlotId);
 	}
-	if (SceneEnemyHostSlots.Num() == 0 && SceneEnemyHost)
-	{
-		View.SceneEnemyHostSlotIds.Add(ResolveFallbackSceneEnemyHostSlotId(EncounterDefinition));
-	}
-	AWacomBattleEnemyActor* PrimarySceneHost = SceneHosts.Num() > 0 ? SceneHosts[0] : nullptr;
-	View.SceneEnemyHostName = PrimarySceneHost ? PrimarySceneHost->GetName() : TEXT("None");
+	CollectSceneEnemyHostSlotDiff(
+		EncounterDefinition,
+		SceneEnemyHostSlots,
+		View.MissingSceneEnemyHostSlotIds,
+		View.ExtraSceneEnemyHostSlotIds);
+	AWacomBattleEnemyActor* FirstSceneHost = SceneHosts.Num() > 0 ? SceneHosts[0] : nullptr;
+	View.FirstSceneEnemyHostName = FirstSceneHost ? FirstSceneHost->GetName() : TEXT("None");
 	View.SceneEnemyHostEnemyDefinitionName =
-		(PrimarySceneHost && PrimarySceneHost->EnemyDefinition)
-			? PrimarySceneHost->EnemyDefinition->GetName()
+		(FirstSceneHost && FirstSceneHost->EnemyDefinition)
+			? FirstSceneHost->EnemyDefinition->GetName()
 			: TEXT("None");
 	for (AWacomBattleEnemyActor* Host : SceneHosts)
 	{
@@ -608,14 +724,6 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 				break;
 			}
 		}
-	}
-	else
-	{
-		View.bSceneEnemyHostDefinitionMatches =
-			PrimarySceneHost
-			&& ResolvedEnemyDef
-			&& PrimarySceneHost->EnemyDefinition
-			&& PrimarySceneHost->EnemyDefinition == ResolvedEnemyDef;
 	}
 	View.bCanInteract = CanInteract_Implementation(PC);
 	View.bIsDestroyed = IsDestroyedFor(PC);
@@ -654,19 +762,21 @@ FString ABattleTriggerActor::GetBattleTriggerDebugSummary(AWacomPlayerController
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("BattleTrigger{Actor=%s PersistentId=%s EnemyDef=%s EncounterDefinition=%s EncounterDefinitionId=%s EncounterSlots=%d UsingEncounter=%s SceneEnemyHost=%s SceneEnemyHostEnemyDef=%s SceneEnemyHostSlots=%d SceneEnemyHostCount=%d SceneEnemyHostSlotIds=[%s] SceneEnemyHostParts=%d SceneEnemyHostConfigured=%s SceneEnemyHostDefinitionMatches=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("BattleTrigger{Actor=%s PersistentId=%s PrimaryEnemy=%s EncounterDefinition=%s EncounterDefinitionId=%s EncounterSlots=%d UsingEncounter=%s FirstSceneEnemyHost=%s SceneEnemyHostEnemyDef=%s SceneEnemyHostSlots=%d SceneEnemyHostCount=%d SceneEnemyHostSlotIds=[%s] MissingSceneEnemyHostSlotIds=[%s] ExtraSceneEnemyHostSlotIds=[%s] SceneEnemyHostParts=%d SceneEnemyHostConfigured=%s SceneEnemyHostDefinitionMatches=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
-		*View.EnemyDefinitionName,
+		*View.PrimaryEnemyDefinitionName,
 		*View.EncounterDefinitionName,
 		*View.EncounterDefinitionId.ToString(),
 		View.EncounterEnemySlotCount,
 		View.bUsingEncounterDefinition ? TEXT("true") : TEXT("false"),
-		*View.SceneEnemyHostName,
+		*View.FirstSceneEnemyHostName,
 		*View.SceneEnemyHostEnemyDefinitionName,
 		View.SceneEnemyHostSlotCount,
 		View.SceneEnemyHostCount,
 		*JoinTriggerNames(View.SceneEnemyHostSlotIds),
+		*JoinTriggerNames(View.MissingSceneEnemyHostSlotIds),
+		*JoinTriggerNames(View.ExtraSceneEnemyHostSlotIds),
 		View.SceneEnemyHostPartCount,
 		View.bSceneEnemyHostConfigured ? TEXT("true") : TEXT("false"),
 		View.bSceneEnemyHostDefinitionMatches ? TEXT("true") : TEXT("false"),
@@ -699,7 +809,7 @@ UEnemyDefinition* ABattleTriggerActor::ResolveBattleEnemyDefinition() const
 		}
 		return nullptr;
 	}
-	return EnemyDef;
+	return nullptr;
 }
 
 void ABattleTriggerActor::BuildBattleEnemySlots(TArray<FBattleEnemySlotInit>& OutEnemySlots) const
@@ -751,13 +861,6 @@ void ABattleTriggerActor::BuildBattleSceneEnemyHosts(
 			OutSceneEnemyHosts.AddUnique(Host);
 		}
 		return;
-	}
-
-	if (SceneEnemyHost)
-	{
-		SceneEnemyHost->EnemySlotId = ResolveFallbackSceneEnemyHostSlotId(EncounterDefinition);
-		SceneEnemyHost->RefreshBattleEnemyPartAuthoringState();
-		OutSceneEnemyHosts.Add(SceneEnemyHost);
 	}
 }
 

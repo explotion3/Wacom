@@ -88,11 +88,18 @@ bool UWacomBattleEnemyPartWorldTargetBridgeComponent::SyncFromBattleHUD(
 
 	if (!MatchedPart)
 	{
-		for (const FEnemyPartSnapshot& Part : Snapshot.Enemy.Parts)
+		for (const FEnemySnapshot& EnemySnapshot : Snapshot.Enemies)
 		{
-			if (Part.Definition && Part.Definition->PartId == PartId)
+			for (const FEnemyPartSnapshot& Part : EnemySnapshot.Parts)
 			{
-				MatchedPart = &Part;
+				if (Part.Definition && Part.Definition->PartId == PartId)
+				{
+					MatchedPart = &Part;
+					break;
+				}
+			}
+			if (MatchedPart)
+			{
 				break;
 			}
 		}

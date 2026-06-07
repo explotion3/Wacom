@@ -65,7 +65,7 @@ bool FWacomRunExperienceVictoryGrantsExpSpec::RunTest(const FString& /*Parameter
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.A"), 3));
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.B"), 2));
 
-	Run->OnBattleFinished(Packet, nullptr);
+	Run->OnBattleFinished(Packet);
 	TestEqual(TEXT("Experience accumulates 3+2=5"),
 		Run->GetExperienceCurrent(), 5);
 
@@ -87,7 +87,7 @@ bool FWacomRunExperienceDefeatDoesNotGrantSpec::RunTest(const FString& /*Paramet
 	Packet.Outcome = EBattleOutcome::Defeat;
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.A"), 5));
 
-	Run->OnBattleFinished(Packet, nullptr);
+	Run->OnBattleFinished(Packet);
 	TestEqual(TEXT("Defeat does not grant experience"),
 		Run->GetExperienceCurrent(), 0);
 	TestFalse(TEXT("bRunActive=false after Defeat"), Run->IsRunActive());
@@ -112,7 +112,7 @@ bool FWacomRunExperienceMutualDestructionGrantsSpec::RunTest(const FString& /*Pa
 	Packet.bMutualDestruction = true;
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.A"), 4));
 
-	Run->OnBattleFinished(Packet, nullptr);
+	Run->OnBattleFinished(Packet);
 	TestEqual(TEXT("Mutual destruction still grants experience"),
 		Run->GetExperienceCurrent(), 4);
 	TestTrue(TEXT("bRunActive remains true after mutual destruction"),
@@ -141,7 +141,7 @@ bool FWacomRunExperienceFullGrantsSkillSpec::RunTest(const FString& /*Parameters
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.B"), Cap));
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.C"), 3));
 
-	Run->OnBattleFinished(Packet, nullptr);
+	Run->OnBattleFinished(Packet);
 
 	TestEqual(TEXT("2 skills granted from 2 caps"),
 		Run->GetAcquiredSkillCount(), 2);
@@ -168,7 +168,7 @@ bool FWacomRunExperienceZeroRewardRecordsButGrantsZeroSpec::RunTest(const FStrin
 	Packet.Outcome = EBattleOutcome::Victory;
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.NoExp"), 0));
 
-	Run->OnBattleFinished(Packet, nullptr);
+	Run->OnBattleFinished(Packet);
 	TestEqual(TEXT("Zero exp parts grant nothing"),
 		Run->GetExperienceCurrent(), 0);
 	TestEqual(TEXT("No skill granted"),

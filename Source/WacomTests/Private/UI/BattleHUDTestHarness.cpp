@@ -171,10 +171,8 @@ FWacomBattleHUDTestSceneEnemyHost& FWacomBattleHUDTestHarness::AttachSceneEnemyH
 		}
 
 		CurrentSceneEnemyHost.Parts.Add(PartActor);
-		FWacomBattleSceneEnemyPartSlot Slot;
-		Slot.PartId = PartIds[Index];
-		Slot.PartActor = PartActor;
-		CurrentSceneEnemyHost.Host->PartSlots.Add(Slot);
+		PartActor->PartId = PartIds[Index];
+		PartActor->AttachToActor(CurrentSceneEnemyHost.Host, FAttachmentTransformRules::KeepWorldTransform);
 	}
 
 	CurrentSceneEnemyHost.Host->RefreshBattleEnemyPartAuthoringState();

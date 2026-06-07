@@ -8,7 +8,6 @@
 #include "GameFramework/WacomGameFlowTypes.h"
 #include "WacomGameMode.generated.h"
 
-class UEnemyDefinition;
 class UCharacterDefinition;
 class UBattleSession;
 class UWacomBattleWidgetBase;
@@ -101,10 +100,10 @@ public:
 
 	/**
 	 * 进入战斗。由 AWacomPlayerController::RequestEnterBattle 转发。
-	 * 传入的 Trigger 在真胜利后被 Destroy（可为空）；撤离时保留以支持重入。
+	 * Trigger 必须提供 EncounterDefinition；真胜利后被 Destroy，撤离时保留以支持重入。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
-	void EnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger = nullptr);
+	void EnterBattle(ABattleTriggerActor* Trigger);
 
 	/**
 	 * 退出战斗。战斗 UI 检测到 Phase == BattleEnd 时自动广播触发。
@@ -141,10 +140,6 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<ABattleTriggerActor> PendingTrigger = nullptr;
-
-	/** 本场战斗的敌人定义，ExitBattle 时传给 RunSession::OnBattleFinished。 */
-	UPROPERTY(Transient)
-	TObjectPtr<UEnemyDefinition> PendingEnemyDefForRun = nullptr;
 
 	/** 本场战斗初始化后的总部位数，用于多敌人 Encounter 下判断撤离是否实际全灭。 */
 	int32 PendingBattleTotalPartCount = 0;

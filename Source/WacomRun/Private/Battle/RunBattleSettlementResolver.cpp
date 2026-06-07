@@ -3,13 +3,11 @@
 #include "Battle/RunBattleSettlementResolver.h"
 
 #include "Cards/CardDefinition.h"
-#include "Enemies/EnemyDefinition.h"
 #include "RunState.h"
 
 bool FRunBattleSettlementResolver::Resolve(
 	FRunState& State,
 	const FBattleResultPacket& Packet,
-	UEnemyDefinition* EnemyDef,
 	FName TriggerPersistentId,
 	const FCallbacks& Callbacks)
 {
@@ -19,7 +17,7 @@ bool FRunBattleSettlementResolver::Resolve(
 	case EBattleOutcome::Victory:
 		if (Packet.bWithdrawn)
 		{
-			// 撤离：敌人不进 DefeatedEnemies、节点不算完成。
+			// 撤离：节点不算完成。
 			// 持久化破坏部位列表，下次进入同一战斗 Trigger 时维持破坏态。
 			if (!TriggerPersistentId.IsNone())
 			{
@@ -32,26 +30,20 @@ bool FRunBattleSettlementResolver::Resolve(
 				? Packet.DestroyedParts.Num()
 				: Packet.DestroyedPartIds.Num();
 			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Battle withdrawn from %s (Trigger=%s, %d parts persisted destroyed)"),
-				*GetNameSafe(EnemyDef),
+				TEXT("[RunSession] Battle withdrawn (Trigger=%s, %d parts persisted destroyed)"),
 				*TriggerPersistentId.ToString(),
 				PersistedDestroyedPartCount);
 		}
 		else
 		{
-			// 真胜利：进 DefeatedEnemies + 清理该 Trigger 的进度（一次性完成）
-			if (EnemyDef)
-			{
-				State.DefeatedEnemies.AddUnique(EnemyDef);
-			}
+			// 真胜利：清理该 Trigger 的撤离进度；永久完成状态由 GameMode.MarkTriggerDestroyed 写入。
 			if (!TriggerPersistentId.IsNone())
 			{
 				State.BattleProgress.Remove(TriggerPersistentId);
 			}
 			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Battle victory against %s (%d total defeated)"),
-				*GetNameSafe(EnemyDef),
-				State.DefeatedEnemies.Num());
+				TEXT("[RunSession] Battle victory (Trigger=%s)"),
+				*TriggerPersistentId.ToString());
 		}
 		break;
 

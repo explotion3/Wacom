@@ -66,7 +66,9 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 
 普通玩家命令在 `PlayerAction` 阶段提交。`PendingKnockdownChoice`、`BattleEnd` 和非玩家行动阶段会阻止普通 `PlayCard / Wait / EndTurn`。
 
-当前 Battle 初始化仍直接消费 `FBattleInitParams.EnemySlots`。`UEncounterDefinition` 是 WacomData 层的静态 Encounter 合同，不由 BattleSession 直接读取；`ABattleTriggerActor` 在进入战斗前把 Encounter 敌人槽转换成 `FBattleInitParams.EnemySlots`。运行态 `EncounterId` 由场景 Trigger 的 `PersistentId` 提供，而不是 Encounter 资产 ID。
+Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`UEncounterDefinition` 是 WacomData 层的静态 Encounter 合同，不由 BattleSession 直接读取；`ABattleTriggerActor` 在进入战斗前把 Encounter 敌人槽转换成 `FBattleInitParams.EnemySlots`。运行态 `EncounterId` 由场景 Trigger 的 `PersistentId` 提供，而不是 Encounter 资产 ID。
+
+`FBattleSnapshot.Enemies` 是敌人快照的唯一 public 入口。它按初始化 `EnemySlots` 顺序输出 `FEnemySnapshot`，每个 enemy 下再输出 `Parts`。不再提供 `FBattleSnapshot.Enemy` 或“第一个敌人”别名；UI、日志、场景目标绑定和新测试都应遍历 `Enemies`，或在明确单敌人 fixture 中显式读取 `Enemies[0]`。敌方部位长期身份以 `EncounterId + EnemySlotId + PartSlotId` 为准，`PartDefinitionId / PartId` 只保留静态内容和 debug 语义。
 
 ## §3 PlayCard 与目标合同
 

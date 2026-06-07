@@ -5,7 +5,6 @@
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Deck/RunDeckRules.h"
-#include "Enemies/EnemyDefinition.h"
 #include "RunState.h"
 #include "WacomSaveGame.h"
 
@@ -103,16 +102,6 @@ UWacomSaveGame* FRunSaveGameSerializer::BuildSaveGameFromRunState(const FRunStat
 
 	Save->BattleSeed = State.BattleSeed;
 	Save->bRunActive = State.bRunActive;
-
-	Save->DefeatedEnemyAssetPaths.Reset();
-	Save->DefeatedEnemyAssetPaths.Reserve(State.DefeatedEnemies.Num());
-	for (UEnemyDefinition* Enemy : State.DefeatedEnemies)
-	{
-		if (Enemy)
-		{
-			Save->DefeatedEnemyAssetPaths.Add(FSoftObjectPath(Enemy));
-		}
-	}
 
 	Save->DestroyedTriggerIds = State.DestroyedTriggerIds.Array();
 	Save->PlayerTransform = State.PlayerTransform;
@@ -243,22 +232,6 @@ bool FRunSaveGameSerializer::TryApplySaveGameToRunState(UWacomSaveGame* SaveGame
 	TempState.bRunActive = SaveGame->bRunActive;
 	TempState.PlayerTransform = SaveGame->PlayerTransform;
 	TempState.bHasPlayerTransform = SaveGame->bHasPlayerTransform;
-
-	TempState.DefeatedEnemies.Reset();
-	TempState.DefeatedEnemies.Reserve(SaveGame->DefeatedEnemyAssetPaths.Num());
-	for (const FSoftObjectPath& Path : SaveGame->DefeatedEnemyAssetPaths)
-	{
-		if (UEnemyDefinition* Enemy = Cast<UEnemyDefinition>(Path.TryLoad()))
-		{
-			TempState.DefeatedEnemies.Add(Enemy);
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[RunSession] DefeatedEnemy 加载失败，跳过: %s"),
-				*Path.ToString());
-		}
-	}
 
 	TempState.DestroyedTriggerIds.Reset();
 	for (const FName& Id : SaveGame->DestroyedTriggerIds)

@@ -28,7 +28,7 @@ enum class EBattlePhase : uint8
  * 部位被击倒时玩家三选一：
  *   - Aid（援助）：左手分支，不消耗左手牌
  *   - Destroy（破坏）：右手分支，不消耗右手牌
- *   - Withdraw（撤离）：直接结束战斗。Outcome 设 Victory，敌人不进 DefeatedEnemies
+ *   - Withdraw（撤离）：直接结束战斗。Outcome 设 Victory，不销毁触发战斗的场景 Trigger
  *
  * 具体奖励、撤离与战后包规则见 Docs/WacomBattle.md / Docs/WacomRun.md。
  */

@@ -119,7 +119,7 @@ bool FWacomBattlePoisonTickOnCardPlaySpec::RunTest(const FString& /*Parameters*/
 	TestEqual(TEXT("PartInitiative untouched by poison"), FWacomBattleFixture::FindPartInitiative(Snap, 0), 19);
 
 	// 层数不减
-	const FEnemyPartSnapshot& PartSnap = Snap.Enemy.Parts[0];
+	const FEnemyPartSnapshot& PartSnap = *FWacomBattleFixture::GetEnemyPartSnapshot(Snap, 0);
 	const int32* PoisonStacks = PartSnap.StatusStacks.Find(WacomTags::Status_Poison);
 	TestTrue (TEXT("PoisonStacks present"), PoisonStacks != nullptr);
 	TestEqual(TEXT("PoisonStacks == 3"),    PoisonStacks ? *PoisonStacks : -1, 3);
@@ -275,7 +275,7 @@ bool FWacomBattlePoisonStacksUnchangedSpec::RunTest(const FString& /*Parameters*
 	TestEqual(TEXT("PartHp after tick2"), FWacomBattleFixture::FindPartHp(Snap, 0), 44);
 
 	// 两次结算后层数仍 = 3。
-	const FEnemyPartSnapshot& PartSnap = Snap.Enemy.Parts[0];
+	const FEnemyPartSnapshot& PartSnap = *FWacomBattleFixture::GetEnemyPartSnapshot(Snap, 0);
 	const int32* PoisonStacks = PartSnap.StatusStacks.Find(WacomTags::Status_Poison);
 	TestTrue (TEXT("Stacks present"),      PoisonStacks != nullptr);
 	TestEqual(TEXT("Stacks still 3"),      PoisonStacks ? *PoisonStacks : -1, 3);

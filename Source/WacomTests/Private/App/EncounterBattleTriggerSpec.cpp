@@ -74,10 +74,6 @@ bool FWacomAppEncounterTriggerBuildsBattleEnemySlotsSpec::RunTest(const FString&
 	TStrongObjectPtr<ABattleTriggerActor> Trigger(NewObject<ABattleTriggerActor>());
 	Trigger->PersistentId = TEXT("Trigger.EncounterRuntime");
 
-	UEnemyDefinition* LegacyEnemy = MakeEncounterTriggerEnemy(
-		Trigger.Get(),
-		TEXT("Enemy.Legacy"),
-		TEXT("Part.Legacy"));
 	UEnemyDefinition* LeftEnemy = MakeEncounterTriggerEnemy(
 		Trigger.Get(),
 		TEXT("Enemy.Left"),
@@ -87,7 +83,6 @@ bool FWacomAppEncounterTriggerBuildsBattleEnemySlotsSpec::RunTest(const FString&
 		TEXT("Enemy.Right"),
 		TEXT("Part.Shared"));
 
-	Trigger->EnemyDef = LegacyEnemy;
 	Trigger->EncounterDefinition = MakeTwoSlotEncounter(Trigger.Get(), LeftEnemy, RightEnemy);
 
 	TArray<FBattleEnemySlotInit> EnemySlots;
@@ -102,7 +97,6 @@ bool FWacomAppEncounterTriggerBuildsBattleEnemySlotsSpec::RunTest(const FString&
 
 	FBattleInitParams Params;
 	Params.Character = MakeEncounterTriggerCharacter(Trigger.Get());
-	Params.Enemy = Trigger->ResolveBattleEnemyDefinition();
 	Params.EncounterId = Trigger->PersistentId;
 	Params.EnemySlots = EnemySlots;
 
@@ -123,30 +117,25 @@ bool FWacomAppEncounterTriggerBuildsBattleEnemySlotsSpec::RunTest(const FString&
 	{
 		TestEqual(TEXT("Left slot preserved"), Snapshot.Enemies[0].EnemySlotId, FName(TEXT("LeftEnemy")));
 		TestEqual(TEXT("Right slot preserved"), Snapshot.Enemies[1].EnemySlotId, FName(TEXT("RightEnemy")));
-		TestTrue(TEXT("Legacy enemy not used for Encounter slot"),
+		TestTrue(TEXT("First Encounter enemy is used for battle slot"),
 			Snapshot.Enemies[0].Definition.Get() == LeftEnemy);
 	}
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomAppEncounterTriggerFallsBackToLegacyEnemySpec,
-	"Wacom.App.BattleTrigger.EncounterDefinition.FallsBackToLegacyEnemy",
+	FWacomAppEncounterTriggerRequiresEncounterDefinitionSpec,
+	"Wacom.App.BattleTrigger.EncounterDefinition.RequiresEncounterDefinition",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomAppEncounterTriggerFallsBackToLegacyEnemySpec::RunTest(const FString& /*Parameters*/)
+bool FWacomAppEncounterTriggerRequiresEncounterDefinitionSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<ABattleTriggerActor> Trigger(NewObject<ABattleTriggerActor>());
-	UEnemyDefinition* LegacyEnemy = MakeEncounterTriggerEnemy(
-		Trigger.Get(),
-		TEXT("Enemy.LegacyFallback"),
-		TEXT("Part.LegacyFallback"));
-	Trigger->EnemyDef = LegacyEnemy;
 
 	TArray<FBattleEnemySlotInit> EnemySlots;
 	Trigger->BuildBattleEnemySlots(EnemySlots);
-	TestEqual(TEXT("No Encounter slots exported"), EnemySlots.Num(), 0);
-	TestTrue(TEXT("Resolved battle enemy falls back to legacy EnemyDef"),
-		Trigger->ResolveBattleEnemyDefinition() == LegacyEnemy);
+	TestEqual(TEXT("No battle slots exported without Encounter"), EnemySlots.Num(), 0);
+	TestNull(TEXT("Resolved battle enemy requires EncounterDefinition"),
+		Trigger->ResolveBattleEnemyDefinition());
 	return true;
 }

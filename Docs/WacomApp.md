@@ -168,8 +168,8 @@ WacomApp 负责调用 UI shell，但不在本文定义具体 UI 视觉和刷新�
 
 ```text
 BattleTrigger E键/点击
--> PlayerController.RequestEnterBattle(EnemyDef, TriggerActor)
--> GameMode.EnterBattle()
+-> PlayerController.RequestEnterBattle(TriggerActor)
+-> GameMode.EnterBattle(TriggerActor)
 ```
 
 GameMode 进入战斗时：
@@ -177,11 +177,11 @@ GameMode 进入战斗时：
 1. 设置 `EGameFlowState::Battle`。
 2. 清理探索期 Run first-person BattleDeck source 和 active menu lease。
 3. Suspend PlayerCharacter 的 Run Tunnel 探索移动，并启用 Battle camera look。
-4. 由 RunSession 构造 Battle init params。
+4. 由 Trigger 的 `EncounterDefinition` 构造敌人槽，并由 RunSession 补齐撤离重入进度。
 5. 创建 / 初始化 `UBattleSession`。
 6. 通过 UIManager Push `UBattleHUD` 到 Game 层。
 7. 将 input coordinator 切到 `Battle` profile。
-8. 记录触发战斗的 Trigger Actor 和可选 SceneEnemyHost，用于退出战斗和 BattleHUD 场景目标过滤。
+8. 记录触发战斗的 Trigger Actor，并把 Trigger 的 `SceneEnemyHostSlots` 映射传给 BattleHUD 场景目标 registry。
 
 ### ExitBattle
 

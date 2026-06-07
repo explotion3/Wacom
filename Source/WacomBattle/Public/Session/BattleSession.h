@@ -50,8 +50,6 @@ struct FBattleEventBus;
 
 /**
  * Encounter 内的单个敌人槽。
- *
- * 旧单敌人路径仍可只填 FBattleInitParams::Enemy；多敌人路径填 EnemySlots。
  */
 USTRUCT(BlueprintType)
 struct WACOMBATTLE_API FBattleEnemySlotInit
@@ -127,7 +125,7 @@ struct WACOMBATTLE_API FKnockdownChoiceView
 /**
  * 战斗初始化参数。
  *
- * Character 和 Enemy 都是 DataAsset。RandomSeed 为 0 时使用基于时间的 seed。
+ * Character 和 EnemySlots 中的 Enemy 都是 DataAsset。RandomSeed 为 0 时使用基于时间的 seed。
  * 测试可注入固定 seed 以得到可复现序列。
  *
  * 备战卡组来源（按优先级从高到低）：
@@ -145,16 +143,11 @@ struct WACOMBATTLE_API FBattleInitParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	TObjectPtr<const UCharacterDefinition> Character = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
-	TObjectPtr<const UEnemyDefinition> Enemy = nullptr;
-
 	/** Encounter 稳定 ID。Run 路径默认使用 Trigger PersistentId；空时回退为 Encounter。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Encounter")
 	FName EncounterId = TEXT("Encounter");
 
-	/**
-	 * 多敌人入口。非空时按数组顺序创建敌人槽；为空时兼容使用 Enemy 作为默认 Enemy 槽。
-	 */
+	/** 敌人入口。按数组顺序创建敌人槽；必须至少有一个有效 Enemy。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Encounter")
 	TArray<FBattleEnemySlotInit> EnemySlots;
 
@@ -234,7 +227,7 @@ struct WACOMBATTLE_API FBattleInitParams
  * UBattleSession 不写任何规则。规则在 Resolver / Executor / Service。
  *
  * GC 约束：FBattleState 是非反射结构，其中的 TObjectPtr 不会被 GC 追踪。
- * Session 在 Initialize 时把关键 UObject 引用（Character/Enemy/Parts/Cards 的 Def）
+ * Session 在 Initialize 时把关键 UObject 引用（Character/EnemySlots/Parts/Cards 的 Def）
  * 镜像到 UPROPERTY 容器 ReferencedAssets，保证引用在 Session 存活期间不被 GC。
  */
 UCLASS(BlueprintType)

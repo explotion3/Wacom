@@ -112,8 +112,11 @@ bool FWacomBattleSessionPreDestroyedPartsDoNotRequestKnockdownSpec::RunTest(cons
 
 	FBattleInitParams Params;
 	Params.Character = Character;
-	Params.Enemy = Enemy;
 	Params.RandomSeed = 1;
+	FBattleEnemySlotInit EnemySlot;
+	EnemySlot.EnemySlotId = TEXT("Enemy");
+	EnemySlot.Enemy = Enemy;
+	Params.EnemySlots.Add(EnemySlot);
 	Params.PreDestroyedPartIds.Add(FName(TEXT("Test.Part.Head")));
 
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
@@ -131,11 +134,12 @@ bool FWacomBattleSessionPreDestroyedPartsDoNotRequestKnockdownSpec::RunTest(cons
 	TestEqual(TEXT("Battle starts in PlayerAction"), Session->GetPhase(), EBattlePhase::PlayerAction);
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	TestTrue(TEXT("Head snapshot exists"), Snapshot.Enemy.Parts.IsValidIndex(0));
-	if (Snapshot.Enemy.Parts.IsValidIndex(0))
+	const FEnemyPartSnapshot* HeadSnapshot = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
+	TestNotNull(TEXT("Head snapshot exists"), HeadSnapshot);
+	if (HeadSnapshot)
 	{
-		TestTrue(TEXT("Head is destroyed in snapshot"), Snapshot.Enemy.Parts[0].bDestroyed);
-		TestEqual(TEXT("Head HP is zero in snapshot"), Snapshot.Enemy.Parts[0].CurrentHp, 0);
+		TestTrue(TEXT("Head is destroyed in snapshot"), HeadSnapshot->bDestroyed);
+		TestEqual(TEXT("Head HP is zero in snapshot"), HeadSnapshot->CurrentHp, 0);
 	}
 
 	const FBattleResultPacket Packet = Session->BuildResultPacket();

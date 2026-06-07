@@ -7,7 +7,6 @@
 #include "Session/BattleResultPacket.h"
 
 class UCardDefinition;
-class UEnemyDefinition;
 struct FRunState;
 
 /**
@@ -29,7 +28,6 @@ struct FRunBattleSettlementResolver
 	static bool Resolve(
 		FRunState& State,
 		const FBattleResultPacket& Packet,
-		UEnemyDefinition* EnemyDef,
 		FName TriggerPersistentId,
 		const FCallbacks& Callbacks);
 };

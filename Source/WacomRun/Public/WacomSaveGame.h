@@ -83,8 +83,9 @@ public:
 	 * 版本演进：
 	 *   v0 → v1: 保留位（首版默认结构，初始迁移占位）
 	 *   v1 → v2: 引入 Backpack/BattleDeck/BurdenZone/SpecialZones instance 列表
+	 *   v2 → v3: 移除 DefeatedEnemyAssetPaths；战斗入口完成状态只使用 DestroyedTriggerIds
 	 */
-	static constexpr int32 CurrentSaveVersion = 2;
+	static constexpr int32 CurrentSaveVersion = 3;
 
 	/**
 	 * 防止有人未同步修改 MigrateIfNeeded 迁移链就升 / 降版本号。
@@ -92,7 +93,7 @@ public:
 	 *   - 同步把这里的硬编码值与 MigrateIfNeeded 的 case 链一起改；
 	 *   - 要么不改（编译失败提醒下一位作者去看 MigrateIfNeeded）。
 	 */
-	static_assert(CurrentSaveVersion == 2,
+	static_assert(CurrentSaveVersion == 3,
 		"CurrentSaveVersion 升级必须同步更新 MigrateIfNeeded 的 case 链与本断言。");
 
 	/**
@@ -128,10 +129,6 @@ public:
 
 	UPROPERTY(SaveGame)
 	int32 BattleSeed = 0;
-
-	/** 已击败敌人资产路径列表。 */
-	UPROPERTY(SaveGame)
-	TArray<FSoftObjectPath> DefeatedEnemyAssetPaths;
 
 	UPROPERTY(SaveGame)
 	bool bRunActive = true;

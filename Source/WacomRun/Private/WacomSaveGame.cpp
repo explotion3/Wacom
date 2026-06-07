@@ -47,10 +47,11 @@ bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 		SaveGame->SaveVersion = 2;
 		[[fallthrough]];
 
-	// case 2:
-	//     // v2 → v3：未来加新字段时在这里追加。
-	//     SaveGame->SaveVersion = 3;
-	//     [[fallthrough]];
+	case 2:
+		// v2 -> v3：移除 DefeatedEnemyAssetPaths。
+		// 战斗入口完成状态由 DestroyedTriggerIds 表达；无需从旧敌人资产列表迁移。
+		SaveGame->SaveVersion = 3;
+		[[fallthrough]];
 
 	// case CurrentSaveVersion - 1: // 实际会是具体数字
 	//     SaveGame->SaveVersion = CurrentSaveVersion;

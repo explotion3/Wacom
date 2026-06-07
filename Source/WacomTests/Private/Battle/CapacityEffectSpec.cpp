@@ -34,8 +34,11 @@ namespace
 		TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
 		FBattleInitParams Params;
 		Params.Character = Character;
-		Params.Enemy = Enemy;
 		Params.RandomSeed = 11;
+		FBattleEnemySlotInit EnemySlot;
+		EnemySlot.EnemySlotId = TEXT("Enemy");
+		EnemySlot.Enemy = Enemy;
+		Params.EnemySlots.Add(EnemySlot);
 
 		FBattleDeckEntry Entry;
 		Entry.Definition = Card;

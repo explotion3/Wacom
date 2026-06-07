@@ -14,6 +14,7 @@ class UEnemyPartDefinition;
 struct FBattleCommand;
 struct FBattleEvent;
 struct FBattleSnapshot;
+struct FEnemySnapshot;
 struct FEnemyPartSnapshot;
 struct FHandCardSnapshot;
 enum class EBattleEventType : uint8;
@@ -116,6 +117,18 @@ public:
 
 	/** Hand 中某张卡的 index，找不到返回 INDEX_NONE。 */
 	static int32 FindHandIndex(const FBattleSnapshot& Snap, const FGuid& InstanceId);
+
+	/** 按 Snapshot.Enemies 数组索引读取敌人槽；找不到返回 nullptr。 */
+	static const FEnemySnapshot* GetEnemySnapshot(const FBattleSnapshot& Snap, int32 EnemyIndex = 0);
+
+	/** 按 Snapshot.Enemies[EnemyIndex].Parts[PartIndex] 读取部位；找不到返回 nullptr。 */
+	static const FEnemyPartSnapshot* GetEnemyPartSnapshot(
+		const FBattleSnapshot& Snap,
+		int32 EnemyIndex,
+		int32 PartIndex);
+
+	/** 默认单敌人测试读取第一个敌人槽中的第 N 个部位；找不到返回 nullptr。 */
+	static const FEnemyPartSnapshot* GetEnemyPartSnapshot(const FBattleSnapshot& Snap, int32 PartIndex);
 
 	/** 某 Part 的 CurrentInitiative。找不到返回 INT32_MIN。 */
 	static int32 FindPartInitiative(const FBattleSnapshot& Snap, int32 PartIndex);

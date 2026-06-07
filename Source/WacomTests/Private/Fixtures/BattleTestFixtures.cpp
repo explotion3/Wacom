@@ -282,8 +282,11 @@ UBattleSession* FWacomBattleFixture::CreateSession(UCharacterDefinition* Charact
 
 	FBattleInitParams P;
 	P.Character  = Character;
-	P.Enemy      = Enemy;
 	P.RandomSeed = Seed;
+	FBattleEnemySlotInit EnemySlot;
+	EnemySlot.EnemySlotId = TEXT("Enemy");
+	EnemySlot.Enemy = Enemy;
+	P.EnemySlots.Add(EnemySlot);
 
 	const FWacomStatus Status = Session->Initialize(P);
 	checkf(Status.IsOk(), TEXT("BattleFixture::CreateSession Initialize failed: %d"), (int32)Status.Code);
@@ -354,28 +357,53 @@ int32 FWacomBattleFixture::FindHandIndex(const FBattleSnapshot& Snap, const FGui
 	return INDEX_NONE;
 }
 
+const FEnemySnapshot* FWacomBattleFixture::GetEnemySnapshot(const FBattleSnapshot& Snap, int32 EnemyIndex)
+{
+	return Snap.Enemies.IsValidIndex(EnemyIndex) ? &Snap.Enemies[EnemyIndex] : nullptr;
+}
+
+const FEnemyPartSnapshot* FWacomBattleFixture::GetEnemyPartSnapshot(
+	const FBattleSnapshot& Snap,
+	int32 EnemyIndex,
+	int32 PartIndex)
+{
+	const FEnemySnapshot* Enemy = GetEnemySnapshot(Snap, EnemyIndex);
+	return Enemy && Enemy->Parts.IsValidIndex(PartIndex) ? &Enemy->Parts[PartIndex] : nullptr;
+}
+
+const FEnemyPartSnapshot* FWacomBattleFixture::GetEnemyPartSnapshot(const FBattleSnapshot& Snap, int32 PartIndex)
+{
+	return GetEnemyPartSnapshot(Snap, 0, PartIndex);
+}
+
 int32 FWacomBattleFixture::FindPartInitiative(const FBattleSnapshot& Snap, int32 PartIndex)
 {
-	return Snap.Enemy.Parts.IsValidIndex(PartIndex) ? Snap.Enemy.Parts[PartIndex].CurrentInitiative : INT32_MIN;
+	const FEnemyPartSnapshot* Part = GetEnemyPartSnapshot(Snap, PartIndex);
+	return Part ? Part->CurrentInitiative : INT32_MIN;
 }
 
 int32 FWacomBattleFixture::FindPartHp(const FBattleSnapshot& Snap, int32 PartIndex)
 {
-	return Snap.Enemy.Parts.IsValidIndex(PartIndex) ? Snap.Enemy.Parts[PartIndex].CurrentHp : INT32_MIN;
+	const FEnemyPartSnapshot* Part = GetEnemyPartSnapshot(Snap, PartIndex);
+	return Part ? Part->CurrentHp : INT32_MIN;
 }
 
 FGuid FWacomBattleFixture::FindPartInstanceId(const FBattleSnapshot& Snap, int32 PartIndex)
 {
-	return Snap.Enemy.Parts.IsValidIndex(PartIndex) ? Snap.Enemy.Parts[PartIndex].InstanceId : FGuid();
+	const FEnemyPartSnapshot* Part = GetEnemyPartSnapshot(Snap, PartIndex);
+	return Part ? Part->InstanceId : FGuid();
 }
 
 const FEnemyPartSnapshot* FWacomBattleFixture::FindPartByPartId(const FBattleSnapshot& Snap, FName PartId)
 {
-	for (const FEnemyPartSnapshot& Part : Snap.Enemy.Parts)
+	for (const FEnemySnapshot& Enemy : Snap.Enemies)
 	{
-		if (Part.Definition && Part.Definition->PartId == PartId)
+		for (const FEnemyPartSnapshot& Part : Enemy.Parts)
 		{
-			return &Part;
+			if (Part.Definition && Part.Definition->PartId == PartId)
+			{
+				return &Part;
+			}
 		}
 	}
 	return nullptr;

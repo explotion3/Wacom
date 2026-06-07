@@ -182,21 +182,12 @@ FWacomStatus FBattleInitializer::Initialize(
 	const FName EncounterId = GetEffectiveEncounterId(Params.EncounterId);
 	State.Enemy.EncounterId = EncounterId;
 
-	TArray<FBattleEnemySlotInit> EnemySlots = Params.EnemySlots;
-	if (EnemySlots.IsEmpty() && Params.Enemy)
-	{
-		FBattleEnemySlotInit DefaultSlot;
-		DefaultSlot.EnemySlotId = FName(TEXT("Enemy"));
-		DefaultSlot.Enemy = Params.Enemy;
-		EnemySlots.Add(DefaultSlot);
-	}
-
 	TSet<FName> UsedEnemySlotIds;
-	for (const FBattleEnemySlotInit& EnemySlotInput : EnemySlots)
+	for (const FBattleEnemySlotInit& EnemySlotInput : Params.EnemySlots)
 	{
 		if (!EnemySlotInput.Enemy)
 		{
-			continue;
+			return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("MissingEnemySlotDefinition"));
 		}
 
 		const FName EnemySlotId = GetEffectiveEnemySlotId(EnemySlotInput.EnemySlotId);
@@ -211,11 +202,6 @@ FWacomStatus FBattleInitializer::Initialize(
 		RuntimeEnemySlot.EnemySlotId = EnemySlotId;
 		RuntimeEnemySlot.Definition = EnemySlotInput.Enemy;
 		ReferencedAssets.Add(EnemySlotInput.Enemy);
-
-		if (!State.Enemy.Definition)
-		{
-			State.Enemy.Definition = EnemySlotInput.Enemy;
-		}
 
 		TSet<FName> UsedPartSlotIds;
 		for (const FEnemyPartSlot& Slot : EnemySlotInput.Enemy->Parts)

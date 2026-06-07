@@ -1413,9 +1413,8 @@ bool FWacomRunDeckBuildInitParamsUsesBattleDeckSpec::RunTest(const FString& /*Pa
 	// BattleDeck 应当只有 1 张（Normal）
 	TestEqual(TEXT("BattleDeck size=1"), Run->GetBattleDeck().Num(), 1);
 
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 1, 0);
 	FBattleInitParams Params;
-	const bool bOk = Run->BuildInitParamsForBattle(Enemy, Params);
+	const bool bOk = Run->BuildInitParamsForBattle(Params);
 	TestTrue(TEXT("BuildInitParams succeeded"), bOk);
 
 	TestEqual(TEXT("BattleDeckEntries has 1 card"),
@@ -1844,9 +1843,8 @@ bool FWacomRunDeckBuildInitParamsIncludesEnabledSpecialZoneSpec::RunTest(const F
 	TestTrue(TEXT("Move weapon into B SpecialZone"), Run->MoveInstance(WeaponId, EZoneKind::SpecialZone, BOwnerId));
 	TestTrue(TEXT("Enable weapon in SpecialZone"), Run->SetSpecialZoneCardBattleEnabled(WeaponId, true));
 
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/20, /*Initiative*/10, /*IntentResist*/0);
 	FBattleInitParams Params;
-	TestTrue(TEXT("BuildInitParamsForBattle"), Run->BuildInitParamsForBattle(Enemy, Params));
+	TestTrue(TEXT("BuildInitParamsForBattle"), Run->BuildInitParamsForBattle(Params));
 
 	int32 SpecialZoneEntries = 0;
 	for (const FBattleDeckEntry& Entry : Params.BattleDeckEntries)
@@ -1889,8 +1887,6 @@ bool FWacomRunDeckBuildInitParamsSpecialZoneEntryScenariosSpec::RunTest(const FS
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ TypeA, TypeB, Normal });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 5, 0);
-
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
 
@@ -1902,14 +1898,14 @@ bool FWacomRunDeckBuildInitParamsSpecialZoneEntryScenariosSpec::RunTest(const FS
 	TestTrue(TEXT("Move B owner to BattleDeck"), Run->MoveInstance(BOwnerId, EZoneKind::BattleDeck, FGuid()));
 
 	FBattleInitParams Params;
-	TestTrue(TEXT("Build params flag=false"), Run->BuildInitParamsForBattle(Enemy, Params));
+	TestTrue(TEXT("Build params flag=false"), Run->BuildInitParamsForBattle(Params));
 	TestEqual(TEXT("flag=false weapon not included"), Params.BattleDeckEntries.Num(), 2);
 
 	TestTrue(TEXT("Enable weapon"), Run->SetSpecialZoneCardBattleEnabled(WeaponId, true));
 	TestTrue(TEXT("Move B owner back to Backpack"), Run->MoveInstance(BOwnerId, EZoneKind::Backpack, FGuid()));
 
 	Params = FBattleInitParams();
-	TestTrue(TEXT("Build params owner in Backpack"), Run->BuildInitParamsForBattle(Enemy, Params));
+	TestTrue(TEXT("Build params owner in Backpack"), Run->BuildInitParamsForBattle(Params));
 	TestEqual(TEXT("owner in Backpack weapon not included"), Params.BattleDeckEntries.Num(), 1);
 
 	return true;

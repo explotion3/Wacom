@@ -79,11 +79,6 @@ namespace
 		return FString::Printf(TEXT("%s|%s"), *PartIdKey, *PartActor->GetName());
 	}
 
-	FName BuildPartSlotIdFromExplicitSlot(const FWacomBattleSceneEnemyPartSlot& Slot)
-	{
-		return Slot.PartSlotId.IsNone() ? Slot.PartId : Slot.PartSlotId;
-	}
-
 	AWacomBattleEnemyPartActor* ResolveChildActorComponentPartActor(
 		UChildActorComponent* ChildActorComponent,
 		bool bAllowTemplateFallback)
@@ -183,25 +178,48 @@ namespace
 		return Specs;
 	}
 
-	bool DebugSnakePartNameMatches(const AWacomBattleEnemyPartActor& PartActor, FName PartSlotId)
+	UChildActorComponent* FindChildActorComponentForPart(
+		const AWacomBattleEnemyActor& Host,
+		const AWacomBattleEnemyPartActor& PartActor);
+
+	bool NameContainsPartSlotId(const FString& Name, FName PartSlotId)
 	{
 		if (PartSlotId.IsNone())
 		{
 			return false;
 		}
 
-		const FString ActorName = PartActor.GetName();
 		const FString SlotName = PartSlotId.ToString();
-		return ActorName.Contains(SlotName, ESearchCase::IgnoreCase);
+		return Name.Contains(SlotName, ESearchCase::IgnoreCase);
+	}
+
+	bool DebugSnakePartNameMatches(
+		const AWacomBattleEnemyActor& Host,
+		const AWacomBattleEnemyPartActor& PartActor,
+		FName PartSlotId)
+	{
+		if (NameContainsPartSlotId(PartActor.GetName(), PartSlotId))
+		{
+			return true;
+		}
+
+		if (const UChildActorComponent* ChildActorComponent =
+			FindChildActorComponentForPart(Host, PartActor))
+		{
+			return NameContainsPartSlotId(ChildActorComponent->GetName(), PartSlotId);
+		}
+
+		return false;
 	}
 
 	bool DebugSnakePartMatchesSpec(
+		const AWacomBattleEnemyActor& Host,
 		const AWacomBattleEnemyPartActor& PartActor,
 		const FDebugSnakeHostPartSpec& Spec)
 	{
 		return PartActor.GetEffectivePartDefinitionId() == Spec.PartId
 			|| PartActor.GetEffectivePartSlotId() == Spec.PartSlotId
-			|| DebugSnakePartNameMatches(PartActor, Spec.PartSlotId);
+			|| DebugSnakePartNameMatches(Host, PartActor, Spec.PartSlotId);
 	}
 
 	void ConfigureDebugSnakePartActor(
@@ -339,62 +357,10 @@ AWacomBattleEnemyActor::BuildAttachedBattleEnemyPartActors() const
 	return PartActors;
 }
 
-bool AWacomBattleEnemyActor::HasAttachedBattleEnemyPartActors() const
-{
-	return BuildAttachedBattleEnemyPartActors().Num() > 0;
-}
-
-TArray<AWacomBattleEnemyPartActor*>
-AWacomBattleEnemyActor::BuildExplicitPartSlotActors() const
-{
-	TArray<AWacomBattleEnemyPartActor*> PartActors;
-	PartActors.Reserve(PartSlots.Num());
-	for (const FWacomBattleSceneEnemyPartSlot& Slot : PartSlots)
-	{
-		if (Slot.PartActor)
-		{
-			PartActors.Add(Slot.PartActor);
-		}
-	}
-	return PartActors;
-}
-
 TArray<AWacomBattleEnemyPartActor*>
 AWacomBattleEnemyActor::GetBattleEnemyPartActors() const
 {
-	TArray<AWacomBattleEnemyPartActor*> AttachedPartActors = BuildAttachedBattleEnemyPartActors();
-	if (AttachedPartActors.Num() > 0)
-	{
-		return AttachedPartActors;
-	}
-
-	return BuildExplicitPartSlotActors();
-}
-
-TArray<AWacomBattleEnemyPartActor*>
-AWacomBattleEnemyActor::GetAttachedBattleEnemyPartActors() const
-{
-	return GetBattleEnemyPartActors();
-}
-
-void AWacomBattleEnemyActor::SyncExplicitPartSlotsToActors() const
-{
-	if (HasAttachedBattleEnemyPartActors() || !HasExplicitPartSlots())
-	{
-		return;
-	}
-
-	for (const FWacomBattleSceneEnemyPartSlot& Slot : PartSlots)
-	{
-		AWacomBattleEnemyPartActor* PartActor = Slot.PartActor;
-		if (!PartActor)
-		{
-			continue;
-		}
-
-		PartActor->PartId = Slot.PartId;
-		PartActor->PartSlotId = BuildPartSlotIdFromExplicitSlot(Slot);
-	}
+	return BuildAttachedBattleEnemyPartActors();
 }
 
 void AWacomBattleEnemyActor::SyncHostIdentityToPartActors() const
@@ -411,7 +377,6 @@ void AWacomBattleEnemyActor::SyncHostIdentityToPartActors() const
 
 void AWacomBattleEnemyActor::RefreshBattleEnemyPartAuthoringState() const
 {
-	SyncExplicitPartSlotsToActors();
 	SyncHostIdentityToPartActors();
 	for (AWacomBattleEnemyPartActor* PartActor : GetBattleEnemyPartActors())
 	{
@@ -420,11 +385,6 @@ void AWacomBattleEnemyActor::RefreshBattleEnemyPartAuthoringState() const
 			PartActor->RefreshAuthoringState();
 		}
 	}
-}
-
-void AWacomBattleEnemyActor::RefreshAttachedPartAuthoringState() const
-{
-	RefreshBattleEnemyPartAuthoringState();
 }
 
 void AWacomBattleEnemyActor::RefreshAttachedPartBadgeLayout() const
@@ -468,7 +428,6 @@ void AWacomBattleEnemyActor::ConfigureDebugSnakeHostSample()
 	BadgeStaggerHorizontalStep = 28.0f;
 	BadgeStaggerVerticalStep = 18.0f;
 
-	const bool bUsingCompatibilitySlots = !HasAttachedBattleEnemyPartActors() && HasExplicitPartSlots();
 	const TArray<FDebugSnakeHostPartSpec>& Specs = GetDebugSnakeHostPartSpecs();
 	TArray<AWacomBattleEnemyPartActor*> CandidatePartActors = GetBattleEnemyPartActors();
 	TArray<AWacomBattleEnemyPartActor*> AssignedPartActors;
@@ -485,7 +444,7 @@ void AWacomBattleEnemyActor::ConfigureDebugSnakeHostSample()
 				continue;
 			}
 
-			if (DebugSnakePartMatchesSpec(*PartActor, Spec))
+			if (DebugSnakePartMatchesSpec(*this, *PartActor, Spec))
 			{
 				AssignedPartActors[SpecIndex] = PartActor;
 				UsedPartActors.Add(PartActor);
@@ -525,19 +484,6 @@ void AWacomBattleEnemyActor::ConfigureDebugSnakeHostSample()
 		ConfigureDebugSnakePartActor(*PartActor, Spec);
 		ApplyDebugSnakePartRelativeLocation(*this, *PartActor, Spec);
 
-		if (bUsingCompatibilitySlots)
-		{
-			for (FWacomBattleSceneEnemyPartSlot& Slot : PartSlots)
-			{
-				if (Slot.PartActor == PartActor)
-				{
-					MarkObjectEditedForDebugSnakeSample(this);
-					Slot.PartId = Spec.PartId;
-					Slot.PartSlotId = Spec.PartSlotId;
-					break;
-				}
-			}
-		}
 	}
 
 	RefreshAttachedPartBadgeLayout();
@@ -558,9 +504,6 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 	View.EnemySlotId = GetEffectiveEnemySlotId();
 	View.bUsedByBattleHUD = HUD && HUD->IsBattleSceneEnemyHostInCurrentRegistry(this);
 	View.ActiveBattleHUDName = HUD ? HUD->GetName() : TEXT("None");
-	View.PartSlotCount = PartSlots.Num();
-	View.bUsingExplicitPartSlots = !HasAttachedBattleEnemyPartActors() && HasExplicitPartSlots();
-	View.NullSlotActorCount = CountNullSlotActors();
 
 	const TArray<AWacomBattleEnemyPartActor*> PartActors = GetBattleEnemyPartActors();
 	View.AttachedPartActorCount = PartActors.Num();
@@ -609,7 +552,6 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 	View.UnknownPartSlotIds = BuildUnknownPartSlotIds();
 	View.MissingDefinitionPartIds = BuildMissingDefinitionPartIds();
 	View.MissingDefinitionPartSlotIds = BuildMissingDefinitionPartSlotIds();
-	View.DuplicateSlotPartIds = BuildDuplicateSlotPartIds();
 	View.DuplicatePartSlotIds = BuildDuplicateConfiguredPartSlotIds();
 	return View;
 }
@@ -623,15 +565,12 @@ FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummaryForHUD(const UBat
 {
 	const FWacomBattleSceneEnemyDebugView View = GetBattleSceneEnemyDebugViewForHUD(HUD);
 	return FString::Printf(
-		TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s PartCount=%d PartSlots=%d ExplicitSlots=%s NullSlotActors=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d StatusBadgeVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicateSlotPartIds=[%s] DuplicatePartSlotIds=[%s]}"),
+		TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d StatusBadgeVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s]}"),
 		*View.ActorName,
 		*View.EnemyDefinitionName.ToString(),
 		*View.EnemyId.ToString(),
 		*View.EnemySlotId.ToString(),
 		View.AttachedPartActorCount,
-		View.PartSlotCount,
-		View.bUsingExplicitPartSlots ? TEXT("true") : TEXT("false"),
-		View.NullSlotActorCount,
 		View.BoundPartActorCount,
 		View.UnboundPartActorCount,
 		View.RuntimeFactsPartActorCount,
@@ -649,7 +588,6 @@ FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummaryForHUD(const UBat
 		*JoinNames(View.UnknownPartSlotIds),
 		*JoinNames(View.MissingDefinitionPartIds),
 		*JoinNames(View.MissingDefinitionPartSlotIds),
-		*JoinNames(View.DuplicateSlotPartIds),
 		*JoinNames(View.DuplicatePartSlotIds));
 }
 
@@ -681,58 +619,6 @@ EDataValidationResult AWacomBattleEnemyActor::IsDataValid(FDataValidationContext
 		Result = Result == EDataValidationResult::Invalid
 			? EDataValidationResult::Invalid
 			: EDataValidationResult::Valid;
-	}
-
-	if (!HasAttachedBattleEnemyPartActors() && HasExplicitPartSlots())
-	{
-		TSet<AWacomBattleEnemyPartActor*> SeenPartActors;
-		for (int32 SlotIndex = 0; SlotIndex < PartSlots.Num(); ++SlotIndex)
-		{
-			const FWacomBattleSceneEnemyPartSlot& Slot = PartSlots[SlotIndex];
-			if (Slot.PartId.IsNone())
-			{
-				Context.AddError(FText::Format(
-					LOCTEXT("PlacementSlotMissingPartId",
-						"BattleEnemy Host 摆放配置错误：Actor={0} PartSlots[{1}] 缺少 PartId。"),
-					FText::FromString(GetName()),
-					FText::AsNumber(SlotIndex)));
-				Result = EDataValidationResult::Invalid;
-			}
-			if (!Slot.PartActor)
-			{
-				Context.AddError(FText::Format(
-					LOCTEXT("PlacementSlotMissingPartActor",
-						"BattleEnemy Host 摆放配置错误：Actor={0} PartSlots[{1}] 缺少 PartActor。"),
-					FText::FromString(GetName()),
-					FText::AsNumber(SlotIndex)));
-				Result = EDataValidationResult::Invalid;
-			}
-			else if (SeenPartActors.Contains(Slot.PartActor))
-			{
-				Context.AddError(FText::Format(
-					LOCTEXT("PlacementDuplicateSlotPartActor",
-						"BattleEnemy Host 摆放配置错误：Actor={0} PartSlots[{1}] 重复引用 PartActor={2}。"),
-					FText::FromString(GetName()),
-					FText::AsNumber(SlotIndex),
-					FText::FromString(Slot.PartActor->GetName())));
-				Result = EDataValidationResult::Invalid;
-			}
-			else
-			{
-				SeenPartActors.Add(Slot.PartActor);
-			}
-		}
-
-		const TArray<FName> DuplicateSlotPartIds = BuildDuplicateSlotPartIds();
-		if (DuplicateSlotPartIds.Num() > 0)
-		{
-			Context.AddError(FText::Format(
-				LOCTEXT("PlacementDuplicateSlotPartIds",
-					"BattleEnemy Host 摆放配置错误：Actor={0} PartSlots 中有重复 PartId：{1}。"),
-				FText::FromString(GetName()),
-				FText::FromString(JoinNames(DuplicateSlotPartIds))));
-			Result = EDataValidationResult::Invalid;
-		}
 	}
 
 	const TArray<FName> DuplicatePartSlotIds = BuildDuplicateConfiguredPartSlotIds();
@@ -848,19 +734,6 @@ TSet<FName> AWacomBattleEnemyActor::BuildDefinitionPartSlotIdSet() const
 TArray<FName> AWacomBattleEnemyActor::BuildConfiguredPartIds() const
 {
 	TArray<FName> PartIds;
-	if (!HasAttachedBattleEnemyPartActors() && HasExplicitPartSlots())
-	{
-		PartIds.Reserve(PartSlots.Num());
-		for (const FWacomBattleSceneEnemyPartSlot& Slot : PartSlots)
-		{
-			if (!Slot.PartId.IsNone())
-			{
-				PartIds.AddUnique(Slot.PartId);
-			}
-		}
-		return PartIds;
-	}
-
 	for (const AWacomBattleEnemyPartActor* PartActor : BuildAttachedBattleEnemyPartActors())
 	{
 		if (PartActor && !PartActor->GetEffectivePartDefinitionId().IsNone())
@@ -874,20 +747,6 @@ TArray<FName> AWacomBattleEnemyActor::BuildConfiguredPartIds() const
 TArray<FName> AWacomBattleEnemyActor::BuildConfiguredPartSlotIds() const
 {
 	TArray<FName> PartSlotIds;
-	if (!HasAttachedBattleEnemyPartActors() && HasExplicitPartSlots())
-	{
-		PartSlotIds.Reserve(PartSlots.Num());
-		for (const FWacomBattleSceneEnemyPartSlot& Slot : PartSlots)
-		{
-			const FName PartSlotId = BuildPartSlotIdFromExplicitSlot(Slot);
-			if (!PartSlotId.IsNone())
-			{
-				PartSlotIds.AddUnique(PartSlotId);
-			}
-		}
-		return PartSlotIds;
-	}
-
 	for (const AWacomBattleEnemyPartActor* PartActor : BuildAttachedBattleEnemyPartActors())
 	{
 		if (PartActor && !PartActor->GetEffectivePartSlotId().IsNone())
@@ -985,60 +844,10 @@ TArray<FName> AWacomBattleEnemyActor::BuildMissingDefinitionPartSlotIds() const
 	return MissingPartSlotIds;
 }
 
-TArray<FName> AWacomBattleEnemyActor::BuildDuplicateSlotPartIds() const
-{
-	TArray<FName> DuplicatePartIds;
-	if (HasAttachedBattleEnemyPartActors() || !HasExplicitPartSlots())
-	{
-		return DuplicatePartIds;
-	}
-
-	TSet<FName> SeenPartIds;
-	for (const FWacomBattleSceneEnemyPartSlot& Slot : PartSlots)
-	{
-		if (Slot.PartId.IsNone())
-		{
-			continue;
-		}
-
-		if (SeenPartIds.Contains(Slot.PartId))
-		{
-			DuplicatePartIds.AddUnique(Slot.PartId);
-		}
-		else
-		{
-			SeenPartIds.Add(Slot.PartId);
-		}
-	}
-	return DuplicatePartIds;
-}
-
 TArray<FName> AWacomBattleEnemyActor::BuildDuplicateConfiguredPartSlotIds() const
 {
 	TArray<FName> DuplicatePartSlotIds;
 	TSet<FName> SeenPartSlotIds;
-
-	if (!HasAttachedBattleEnemyPartActors() && HasExplicitPartSlots())
-	{
-		for (const FWacomBattleSceneEnemyPartSlot& Slot : PartSlots)
-		{
-			const FName PartSlotId = BuildPartSlotIdFromExplicitSlot(Slot);
-			if (PartSlotId.IsNone())
-			{
-				continue;
-			}
-
-			if (SeenPartSlotIds.Contains(PartSlotId))
-			{
-				DuplicatePartSlotIds.AddUnique(PartSlotId);
-			}
-			else
-			{
-				SeenPartSlotIds.Add(PartSlotId);
-			}
-		}
-		return DuplicatePartSlotIds;
-	}
 
 	for (const AWacomBattleEnemyPartActor* PartActor : BuildAttachedBattleEnemyPartActors())
 	{
@@ -1063,19 +872,6 @@ TArray<FName> AWacomBattleEnemyActor::BuildDuplicateConfiguredPartSlotIds() cons
 		}
 	}
 	return DuplicatePartSlotIds;
-}
-
-int32 AWacomBattleEnemyActor::CountNullSlotActors() const
-{
-	int32 Count = 0;
-	for (const FWacomBattleSceneEnemyPartSlot& Slot : PartSlots)
-	{
-		if (!Slot.PartActor)
-		{
-			++Count;
-		}
-	}
-	return Count;
 }
 
 #undef LOCTEXT_NAMESPACE

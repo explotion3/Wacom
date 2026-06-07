@@ -100,10 +100,6 @@ struct WACOMBATTLE_API FBattleSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	TArray<FEnemySnapshot> Enemies;
 
-	/** 兼容旧单敌人 UI / 测试：始终镜像 Enemies[0]。 */
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
-	FEnemySnapshot Enemy;
-
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	FHandQueueSnapshot Hand;
 

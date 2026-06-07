@@ -111,11 +111,6 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		Out.Enemies.Add(MoveTemp(EnemySnap));
 	}
 
-	if (Out.Enemies.Num() > 0)
-	{
-		Out.Enemy = Out.Enemies[0];
-	}
-
 	// ---- Hand ----
 	Out.Hand.Cards.Reserve(State.Cards.Hand.Num());
 	Out.Hand.bLeftHandPresent  = false;

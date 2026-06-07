@@ -83,9 +83,6 @@ struct FEnemyState
 {
 	FName EncounterId = TEXT("Encounter");
 
-	/** 兼容旧单敌人读取：指向 EnemySlots[0].Definition。 */
-	TObjectPtr<const UEnemyDefinition> Definition = nullptr;
-
 	TArray<FEnemySlotState> EnemySlots;
 	TArray<FRuntimeEnemyPart> Parts;        // 按部位顺序
 	TMap<FGuid, int32> PartIndexById;       // InstanceId → Parts 索引，O(1) 查找

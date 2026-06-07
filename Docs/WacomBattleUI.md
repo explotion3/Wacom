@@ -23,6 +23,8 @@ tags:
 
 `UBattleHUD` 不直接实现战斗规则。玩家命令、目标选择、事件消费、日志、击倒弹窗、表现队列、场景敌人、first-person hand 和卡牌详情运行时状态，分别收口到 `WacomApp/Private/UI/Battle` 的 flow / coordinator / controller helper。
 
+BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`。Targeting flow、Combat Log、Debug HUD 和 SceneEnemyHost bridge 都按 enemy slot 遍历部位；不再存在 `Snapshot.Enemy` 第一敌人兼容别名，也不再暴露“Primary scene enemy host”作为 HUD 绑定入口。
+
 | 区域 | 当前 owner | 边界 |
 |---|---|---|
 | 命令提交 | `FWacomBattleHUDCommandFlow` | 把玩家意图转为 BattleSession command，不写规则细节 |
@@ -101,9 +103,9 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 
 ## §6 Scene Enemy UI
 
-场景敌人视觉绑定正式入口是 `ABattleTriggerActor.SceneEnemyHostSlots + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`；规则敌人列表由 `ABattleTriggerActor.EncounterDefinition` 转换成 `FBattleInitParams.EnemySlots`。新制作应把敌人做成 Host 蓝图 prefab：在 Host 蓝图视口中通过子 Actor / ChildActorComponent 摆放 `AWacomBattleEnemyPartActor`，然后在 Trigger 的 `SceneEnemyHostSlots` 中按 `EnemySlotId` 绑定对应 Host。进入战斗时 GameMode 把当前 Trigger 的 Host 列表传给 BattleHUD，HUD 只同步当前 Host registry 中扫描到的 PartActor bridge。旧 `SceneEnemyHost` 只作为单敌人 fallback。
+场景敌人视觉绑定正式入口是 `ABattleTriggerActor.SceneEnemyHostSlots + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`；规则敌人列表由 `ABattleTriggerActor.EncounterDefinition` 转换成 `FBattleInitParams.EnemySlots`。新制作应把敌人做成 Host 蓝图 prefab：在 Host 蓝图视口中通过子 Actor / ChildActorComponent 摆放 `AWacomBattleEnemyPartActor`，然后在 Trigger 选好 `EncounterDefinition` 后执行 `SyncSceneEnemyHostSlotsFromEncounter()`，再在生成的 `SceneEnemyHostSlots` 中按 `EnemySlotId` 绑定对应 Host。进入战斗时 GameMode 把当前 Trigger 的 Host 列表传给 BattleHUD，HUD 只同步当前 Host registry 中扫描到的 PartActor bridge。HUD registry 是 Host 列表，不维护“主 Host”兼容缓存；调试摘要最多显示列表中的第一个 Host 名称用于排查。
 
-Trigger 显式 `SceneEnemyHostSlots.EnemySlotId` 必须填写且不重复，并应对应 `EncounterDefinition.EnemySlots[].EnemySlotId`。Host 刷新时会优先扫描自身蓝图 / 子 Actor 层级下的 PartActor，并向这些部位注入当前 Host 的 `EnemySlotId`。每个 PartActor 仍必须配置 `PartId`，对应 `UEnemyPartDefinition::PartId`，用于静态内容、debug 和旧单敌人 fallback；`PartSlotId` 是 Host 内局部槽位身份，空时兼容回退到 `PartId`。Bridge 绑定 Snapshot 时优先匹配 `EncounterId + EnemySlotId + PartSlotId`，first-person world drop 会把 slot identity 放进 target handle，Battle validation / PlayCard resolver 再解析到当前运行时部位。`PartSlots` 只保留为旧场景兼容入口：当 Host 没有任何子 PartActor 时才使用，并把 `Slot.PartId / Slot.PartSlotId` 同步到旧 PartActor。部位顺序只影响 registry / badge stagger 表现，不改变 BattleSession 规则部位顺序。
+Trigger 显式 `SceneEnemyHostSlots.EnemySlotId` 必须填写且不重复，并对应 `EncounterDefinition.EnemySlots[].EnemySlotId`。配置 `EncounterDefinition` 的正式 Trigger 必须用 `SceneEnemyHostSlots` 覆盖每个有效 EnemySlotId；缺 Host、漏映射或多余 EnemySlotId 都是编辑器验证错误。同步按钮会补齐并排序 Encounter 中的 slot，保留已填写 Host 引用，多余 slot 不自动删除而是留给人工确认。Trigger debug view / summary 会报告 `MissingSceneEnemyHostSlotIds` 和 `ExtraSceneEnemyHostSlotIds`。Host 刷新时只扫描自身蓝图 / 子 Actor 层级下的 PartActor，并向这些部位注入当前 Host 的 `EnemySlotId`。每个 PartActor 仍必须配置 `PartId`，对应 `UEnemyPartDefinition::PartId`，用于静态内容和 debug；`PartSlotId` 是 Host 内局部槽位身份，空时兼容回退到 `PartId`。Bridge 绑定 Snapshot 时优先匹配 `EncounterId + EnemySlotId + PartSlotId`，first-person world drop 会把 slot identity 放进 target handle，Battle validation / PlayCard resolver 再解析到当前运行时部位。子 PartActor 顺序只影响 registry / badge stagger 表现，不改变 BattleSession 规则部位顺序。
 
 PartActor 是单个规则部位的表现容器。`HitBounds` 是唯一 hover、点击和拖卡命中范围；`VisualLayers` 是 2D 表现层数组，只负责多张图的相对位置、旋转、缩放、排序、颜色、显隐和轻量序列帧播放。每层用 `LayerMode` 选择 `StaticSprite` 或 `Flipbook`：静态层生成 `UPaperSpriteComponent`，Flipbook 层生成 `UPaperFlipbookComponent`，并可配置 `FlipbookPlayRate`、是否循环、初始播放时间和是否自动播放。`VisualLayers` 非空时旧 `PartVisual` 原型网格隐藏；为空时继续显示 `VisualMesh / PartVisual` 作为旧地图兼容 fallback。Bridge 的反馈目标默认是 `VisualLayersRoot`，所以 TargetConfirmed、Damage、Destroyed、hover 和 drag preview 会缩放整组视觉层，而不是某一张 sprite。
 
@@ -113,7 +115,7 @@ PartActor 是单个规则部位的表现容器。`HitBounds` 是唯一 hover、�
 
 Host validation 会同时检查 `PartId` 与 `PartSlotId`：`PartId` 必须对应 `UEnemyPartDefinition::PartId`，`PartSlotId` 必须对应 `UEnemyDefinition.Parts[].PartSlotId`。蛇的正式绑定身份是 `Enemy + Head/Body/Tail`，不是 `Enemy + Snake.Head/Snake.Body/Snake.Tail`；如果 `PartId` 对但 `PartSlotId` 填成完整 PartId，Validate Map 会给出 `UnknownPartSlotIds / MissingDefinitionPartSlotIds` warning，战斗中该部位可能无法按 slot identity 绑定。
 
-Trigger 正式单蛇配置使用生成资产 `DA_Encounter_SnakeSingle`：`PersistentId` 填关卡唯一值，`EncounterDefinition=DA_Encounter_SnakeSingle`，`EnemyDef` 只保留为空或作为旧地图 fallback；`SceneEnemyHostSlots[0].EnemySlotId=Enemy`，`SceneEnemyHostSlots[0].SceneEnemyHost` 指向关卡里的 Snake Host 实例。旧 `SceneEnemyHost + EnemyDef` 单敌人配置仍可调试，但不是新制作主线。
+Trigger 正式单蛇配置使用生成资产 `DA_Encounter_SnakeSingle`：`PersistentId` 填关卡唯一值，`EncounterDefinition=DA_Encounter_SnakeSingle`；执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 `SceneEnemyHostSlots[0].EnemySlotId=Enemy`，再把 `SceneEnemyHostSlots[0].SceneEnemyHost` 指向关卡里的 Snake Host 实例。`EncounterDefinition` 正式入口不能缺 Host 映射。
 
 `ConfigureDebugSnakeHostSample()` 仍只作为当前蛇敌人 prefab 制作的开发辅助入口：先在 Host 蓝图中放好 Head / Body / Tail 三个 PartActor，再执行该函数。Host 会扫描运行时子 Actor 和蓝图 ChildActorComponent 的子 Actor 模板，尝试写入上述蛇样例配置。它不自动创建缺失部位，也不创建正式 sprite 资产；正式美术仍通过各 PartActor 的 `VisualLayers` 配置。Host 的一行诊断可在 Details 中执行 `LogBattleSceneEnemyDebugSummary()`，然后到 Output Log 查看 `[WacomBattleEnemyActor] BattleSceneEnemy{...}`。
 
@@ -126,7 +128,7 @@ Host 蓝图视口中的 `SnakeHeadPart / SnakeBodyPart / SnakeTailPart` 是 `Chi
 - `TargetConfirmed`、`DamageDealt`、`EnemyPartHpEmptied` cue。
 - 只读预测 Widget 和常驻状态 Badge 的 view。
 
-BattleHUD 不再构建或绑定敌方 2D fallback；点击、hover、drag target handle 全部通过当前 SceneEnemyHost registry 中的 PartActor / WorldTargetBridge 完成。缺 Host 时，敌方规则仍可运行，但场景敌人目标表现与世界命中不可用。点击、hover、drag target handle 的详细合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
+BattleHUD 不再构建或绑定敌方 2D fallback；点击、hover、drag target handle 全部通过当前 SceneEnemyHost registry 中的 PartActor / WorldTargetBridge 完成。`EncounterDefinition` 正式入口缺 Host 会被编辑器验证阻止。点击、hover、drag target handle 的详细合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 
 ## §7 First-person Battle Hand
 

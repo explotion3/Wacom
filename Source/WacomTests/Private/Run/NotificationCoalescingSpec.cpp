@@ -239,7 +239,7 @@ bool FWacomRunNotificationBattleSettlementCoalescesSpec::RunTest(const FString& 
 	Packet.GainedCards.Add(GainedCard);
 
 	const FNotificationRevisionSnapshot Before = CaptureNotificationRevisions(*Run);
-	Run->OnBattleFinishedFromTrigger(Packet, NewObject<UEnemyDefinition>(), TEXT("Notification.Battle.Trigger"));
+	Run->OnBattleFinishedFromTrigger(Packet, TEXT("Notification.Battle.Trigger"));
 	const FNotificationRevisionSnapshot After = CaptureNotificationRevisions(*Run);
 
 	TestEqual(TEXT("Composite battle settlement broadcasts once"), BroadcastCount, 1);
@@ -277,7 +277,7 @@ bool FWacomRunNotificationBattleUndeterminedSpec::RunTest(const FString& /*Param
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Undetermined;
 	const FNotificationRevisionSnapshot Before = CaptureNotificationRevisions(*Run);
-	Run->OnBattleFinishedFromTrigger(Packet, NewObject<UEnemyDefinition>(), TEXT("Notification.Battle.Undetermined"));
+	Run->OnBattleFinishedFromTrigger(Packet, TEXT("Notification.Battle.Undetermined"));
 	const FNotificationRevisionSnapshot After = CaptureNotificationRevisions(*Run);
 
 	TestEqual(TEXT("Undetermined battle does not broadcast"), BroadcastCount, 0);

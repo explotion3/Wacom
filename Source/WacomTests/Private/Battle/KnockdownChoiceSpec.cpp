@@ -52,6 +52,16 @@ namespace
 		return Fx.MakeCharacter(LH, RH, Deck);
 	}
 
+	void ApplySingleEnemySlot(FBattleInitParams& Params, UEnemyDefinition* Enemy)
+	{
+		Params.EnemySlots.Reset();
+
+		FBattleEnemySlotInit Slot;
+		Slot.EnemySlotId = TEXT("Enemy");
+		Slot.Enemy = Enemy;
+		Params.EnemySlots.Add(Slot);
+	}
+
 	bool HandContainsDefinition(const FBattleSnapshot& Snap, const UCardDefinition* Definition)
 	{
 		for (const FHandCardSnapshot& Card : Snap.Hand.Cards)
@@ -584,12 +594,13 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 	// 用 RunSession 接收战斗结果，模拟完整闭环
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
+	FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get()).BattleSeed = 1;
 
 	// 第一场战斗：撤离前击倒 Head
 	{
 		FBattleInitParams Params;
 		const FName TriggerId(TEXT("TestTrigger"));
-		const bool bBuildOk = Run->BuildInitParamsForBattle(Enemy, TriggerId, Params);
+		const bool bBuildOk = Run->BuildInitParamsForBattle(TriggerId, Params);
 		TestTrue(TEXT("Initial BuildInitParams"), bBuildOk);
 		TestEqual(TEXT("Initial EncounterId uses TriggerPersistentId"), Params.EncounterId, TriggerId);
 		TestEqual(TEXT("Initial PreDestroyedParts empty"), Params.PreDestroyedParts.Num(), 0);
@@ -597,6 +608,7 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 		{
 			return false;
 		}
+		ApplySingleEnemySlot(Params, Enemy);
 
 		TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
 		const FWacomStatus InitStatus = Session->Initialize(Params);
@@ -610,25 +622,36 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 		const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
 		const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head));
-		Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+		TestTrue(TEXT("Killer card is in opening hand"), KillerId.IsValid());
+		TestTrue(TEXT("Play killer"), Session->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, Head)).IsOk());
+		TestTrue(TEXT("Phase pending knockdown after head destroyed"),
+			Session->GetPhase() == EBattlePhase::PendingKnockdownChoice);
+		TestTrue(TEXT("Choose withdraw"), Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw)).IsOk());
 
 		const FBattleResultPacket Packet = Session->BuildResultPacket();
-		Run->OnBattleFinishedFromTrigger(Packet, Enemy, TriggerId);
+		TestTrue(TEXT("Packet outcome is Victory after withdraw"),
+			Packet.Outcome == EBattleOutcome::Victory);
+		TestTrue(TEXT("Packet is withdrawn"), Packet.bWithdrawn);
+		Run->OnBattleFinishedFromTrigger(Packet, TriggerId);
 
 		// BattleProgress 应该有 TestTrigger 的进度
-		TestTrue(TEXT("BattleProgress 含 TestTrigger"),
-			Run->GetRunState().BattleProgress.Contains(FName(TEXT("TestTrigger"))));
+		const FBattleProgressSnapshot* Progress =
+			Run->GetRunState().BattleProgress.Find(FName(TEXT("TestTrigger")));
+		TestNotNull(TEXT("BattleProgress 含 TestTrigger"), Progress);
+		if (!Progress)
+		{
+			return false;
+		}
 		TestEqual(TEXT("DestroyedParts 1 项"),
-			Run->GetRunState().BattleProgress[FName(TEXT("TestTrigger"))].DestroyedParts.Num(), 1);
+			Progress->DestroyedParts.Num(), 1);
 		TestEqual(TEXT("DestroyedPartIds legacy 投影 1 项"),
-			Run->GetRunState().BattleProgress[FName(TEXT("TestTrigger"))].DestroyedPartIds.Num(), 1);
+			Progress->DestroyedPartIds.Num(), 1);
 	}
 
 	// 第二场战斗（重入同一 Trigger）：BuildInitParamsForBattle 应灌入 PreDestroyedParts
 	{
 		FBattleInitParams Params;
-		const bool bOk = Run->BuildInitParamsForBattle(Enemy, FName(TEXT("TestTrigger")), Params);
+		const bool bOk = Run->BuildInitParamsForBattle(FName(TEXT("TestTrigger")), Params);
 		TestTrue(TEXT("BuildInitParams"), bOk);
 		TestEqual(TEXT("EncounterId uses TriggerPersistentId"), Params.EncounterId, FName(TEXT("TestTrigger")));
 		TestEqual(TEXT("PreDestroyedParts 1 项"), Params.PreDestroyedParts.Num(), 1);
@@ -666,7 +689,7 @@ bool FWacomKnockdownChoiceLegacyBattleProgressProjectsToDefaultEnemySlotSpec::Ru
 	}
 
 	FBattleInitParams Params;
-	const bool bOk = Run->BuildInitParamsForBattle(Enemy, FName(TEXT("LegacyTrigger")), Params);
+	const bool bOk = Run->BuildInitParamsForBattle(FName(TEXT("LegacyTrigger")), Params);
 	TestTrue(TEXT("BuildInitParams"), bOk);
 	TestEqual(TEXT("EncounterId uses trigger id"), Params.EncounterId, FName(TEXT("LegacyTrigger")));
 	TestEqual(TEXT("Legacy progress becomes PreDestroyedParts"), Params.PreDestroyedParts.Num(), 1);
@@ -681,6 +704,7 @@ bool FWacomKnockdownChoiceLegacyBattleProgressProjectsToDefaultEnemySlotSpec::Ru
 	}
 
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
+	ApplySingleEnemySlot(Params, Enemy);
 	const FWacomStatus Status = Session->Initialize(Params);
 	TestTrue(TEXT("Initialize succeeds"), Status.IsOk());
 	if (!Status.IsOk())
@@ -689,11 +713,12 @@ bool FWacomKnockdownChoiceLegacyBattleProgressProjectsToDefaultEnemySlotSpec::Ru
 	}
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	TestTrue(TEXT("Body snapshot exists"), Snapshot.Enemy.Parts.IsValidIndex(1));
-	if (Snapshot.Enemy.Parts.IsValidIndex(1))
+	const FEnemyPartSnapshot* BodySnapshot = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 1);
+	TestNotNull(TEXT("Body snapshot exists"), BodySnapshot);
+	if (BodySnapshot)
 	{
-		TestTrue(TEXT("Body is pre-destroyed from legacy progress"), Snapshot.Enemy.Parts[1].bDestroyed);
-		TestEqual(TEXT("Body HP is zero"), Snapshot.Enemy.Parts[1].CurrentHp, 0);
+		TestTrue(TEXT("Body is pre-destroyed from legacy progress"), BodySnapshot->bDestroyed);
+		TestEqual(TEXT("Body HP is zero"), BodySnapshot->CurrentHp, 0);
 	}
 	return true;
 }
@@ -734,7 +759,7 @@ bool FWacomKnockdownChoiceVictoryClearsProgressSpec::RunTest(const FString& /*Pa
 	const FBattleResultPacket Packet = S->BuildResultPacket();
 	TestFalse(TEXT("非撤离"), Packet.bWithdrawn);
 
-	Run->OnBattleFinishedFromTrigger(Packet, Enemy, FName(TEXT("TestTrigger")));
+	Run->OnBattleFinishedFromTrigger(Packet, FName(TEXT("TestTrigger")));
 	TestFalse(TEXT("真胜利后 BattleProgress 清理"),
 		Run->GetRunState().BattleProgress.Contains(FName(TEXT("TestTrigger"))));
 

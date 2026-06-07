@@ -344,14 +344,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "当前 pending Wait / EndTurn 命令的 UI 文案。没有 pending 命令时返回空文本。"))
 	FText GetPendingTurnBoundaryCommandText() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "设置当前战斗绑定的场景敌人 Host。BattleHUD 只会同步该 Host 下的 PartActor world target。"))
-	void SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost);
-
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "设置当前战斗绑定的场景敌人 Host 列表。用于 Encounter 多敌人；BattleHUD 只会同步这些 Host 下的 PartActor world target。"))
 	void SetBattleSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts);
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "当前战斗绑定的场景敌人 Host。为空时表示本战斗没有可绑定的场景敌人目标。"))
-	AWacomBattleEnemyActor* GetBattleSceneEnemyHost() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy", meta = (ToolTip = "给调试和制作校验使用：判断指定 SceneEnemyHost 是否属于当前 BattleHUD 的场景敌人 registry。"))
 	bool IsBattleSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const;

@@ -11,7 +11,6 @@
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 #include "WacomPlayerController.generated.h"
 
-class UEnemyDefinition;
 class UInputMappingContext;
 class UInputAction;
 class UWacomMenuWidgetBase;
@@ -53,9 +52,9 @@ class WACOMAPP_API AWacomPlayerController : public APlayerController
 public:
 	AWacomPlayerController();
 
-	/** 由 ABattleTriggerActor 交互时调用，转发到 GameMode。Trigger 可携带 EncounterDefinition。 */
+	/** 由 ABattleTriggerActor 交互时调用，转发到 GameMode。Trigger 必须携带 EncounterDefinition。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
-	void RequestEnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger = nullptr);
+	void RequestEnterBattle(ABattleTriggerActor* Trigger);
 
 	/** 由战斗 UI 在 BattleEnd 时调用，转发到 GameMode。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")

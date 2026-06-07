@@ -11,7 +11,6 @@
 
 class UCharacterDefinition;
 class UCardDefinition;
-class UEnemyDefinition;
 class UWacomRunEventDefinition;
 
 /**
@@ -547,10 +546,6 @@ struct WACOMRUN_API FRunState
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run")
 	int32 BattleSeed = 0;
-
-	/** 已击败的敌人 Definition 列表。 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
-	TArray<TObjectPtr<UEnemyDefinition>> DefeatedEnemies;
 
 	/**
 	 * 当前 Run 是否仍在进行。

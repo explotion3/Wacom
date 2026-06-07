@@ -30,7 +30,7 @@ tags:
 WacomCore / WacomData / WacomBattle <- WacomRun <- WacomApp
 ```
 
-Run 层可以引用卡牌、角色、敌人和战斗回传结构；不能依赖 Widget、PlayerController、Actor facade、WBP 绑定或场景表现细节。
+Run 层可以引用卡牌、角色和战斗回传结构；不能依赖 Widget、PlayerController、Actor facade、WBP 绑定或场景表现细节。敌人侧初始化由 App / BattleTrigger 从 Encounter 数据转换到 `FBattleInitParams.EnemySlots`，RunSession 不读取也不接收 `UEnemyDefinition`。
 
 ## §2 Run 生命周期、失败与经验
 
@@ -350,8 +350,8 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 
 关键输入：
 
-- 角色、敌人和战斗随机种子。
-- 当前 Run 路径仍直接接收兼容主敌人定义；`ABattleTriggerActor` 如配置 `UEncounterDefinition`，由 App 层在进入战斗前把 Encounter enemy slots 转换为 `FBattleInitParams.EnemySlots`。`URunSession::BuildInitParamsForBattle()` 不直接读取 Encounter 资产。
+- 角色和战斗随机种子。
+- `URunSession::BuildInitParamsForBattle()` 不读取、不接收、不写入敌人定义，也不直接读取 Encounter 资产。敌人规则槽位由 App 层从 `ABattleTriggerActor.EncounterDefinition` 转换为 `FBattleInitParams.EnemySlots`；Battle 初始化以 `EnemySlots` 作为唯一敌人入口。
 - HP 压力阈值 `HighHpThreshold / LowHpThreshold`。
 - `BattleDeck` 中的物理卡。
 - SpecialZone 中勾选入战的卡：只有 B 主卡位于 `BattleDeck`，且主卡有 `CapacityEffect`，其 SpecialZone 内 `bBattleEnabledInSpecialZone == true` 的卡才会入战，并携带主卡容量效果。
@@ -359,14 +359,14 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 
 运行态 `EncounterId` 仍来自场景 Trigger 的 `PersistentId`，不要用 `EncounterDefinitionId` 替代撤离重入进度 key。同一个 Encounter 资产可被多个 Trigger 复用；只要 Trigger `PersistentId` 不同，它们的 `BattleProgress` 就彼此独立。
 
-战斗结束时，GameMode 先处理战斗 UI 和场景 Trigger，再调用 `OnBattleFinishedFromTrigger(Packet, EnemyDef, TriggerPersistentId)` 做 Run 结算。
+战斗结束时，GameMode 先处理战斗 UI 和场景 Trigger，再调用 `OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)` 做 Run 结算。
 
 Outcome 分支：
 
 | 结果 | Run 处理 |
 |---|---|
-| Victory 且 `bWithdrawn == true` | 撤离；敌人不进 `DefeatedEnemies`；写 `BattleProgress[TriggerId].DestroyedParts`，并保留 `DestroyedPartIds` legacy 投影 |
-| Victory 且未撤离 | 真胜利；敌人进 `DefeatedEnemies`；清理 `BattleProgress[TriggerId]` |
+| Victory 且 `bWithdrawn == true` | 撤离；不销毁 Trigger；写 `BattleProgress[TriggerId].DestroyedParts`，并保留 `DestroyedPartIds` legacy 投影 |
+| Victory 且未撤离 | 真胜利；清理 `BattleProgress[TriggerId]`；场景完成状态由 GameMode 调 `MarkTriggerDestroyed(TriggerId)` 写入 `DestroyedTriggerIds` |
 | Defeat | `bRunActive = false` |
 | Undetermined | 不做战外结算并返回 |
 
@@ -416,17 +416,16 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 
 当前 `AWacomGameMode::bSaveSystemEnabled == false`。正常游戏流程不读盘、不写盘；战斗结束和退出时的自动存档会静默 no-op。
 
-下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v2 的实际字段拷贝结果。
+下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v3 的实际字段拷贝结果。
 
-### v2 磁盘会保存
+### v3 磁盘会保存
 
 | SaveGame 字段 | 来源 / 说明 |
 |---|---|
-| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 2 |
+| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 3 |
 | `CharacterAssetPath` | 当前角色资产路径 |
 | `BattleSeed` | 战斗随机种子 |
 | `bRunActive` | Run 活跃状态 |
-| `DefeatedEnemyAssetPaths` | 已击败敌人资产路径 |
 | `DestroyedTriggerIds` | 已永久销毁的战斗 Trigger |
 | `PlayerTransform`、`bHasPlayerTransform` | 探索 Pawn 位置 |
 | `Backpack` | 卡牌 instance 列表 |
@@ -438,11 +437,11 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 
 若旧档迁移到 v2 后四个 instance 数组全空，读档会按 Character 的 StarterDeck 重新生成 instance；新 GUID 会替代旧运行态身份。
 
-v2 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。
+v3 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。v3 已移除旧 `DefeatedEnemyAssetPaths`；战斗入口完成状态只以 `DestroyedTriggerIds` 表达。
 
 ### 当前仍是内存态
 
-| RunState 字段 / 系统 | SaveGame v2 状态 | 读档后的实际结果 |
+| RunState 字段 / 系统 | SaveGame v3 状态 | 读档后的实际结果 |
 |---|---|---|
 | `FingerCount`、`HpPerFinger` | 不保存 | 使用 `FRunState` 默认值，不从 SaveGame 还原 |
 | `Pressure`、`TheftCount` | 不保存 | 压力全为 0，偷窃计数为 0 |

@@ -308,7 +308,7 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 		ClearBattlePresentationStack();
 		ClearPendingTurnBoundaryCommand();
 		ClearFirstPersonBattleHandLayer();
-		SetBattleSceneEnemyHost(nullptr);
+		SetBattleSceneEnemyHosts({});
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
 		ClearPendingFirstPersonCardTransitionEvents();
 		ClearBattlePresentationTargetRegistry();
@@ -388,19 +388,9 @@ FText UBattleHUD::GetPendingTurnBoundaryCommandText() const
 		: FText::GetEmpty();
 }
 
-void UBattleHUD::SetBattleSceneEnemyHost(AWacomBattleEnemyActor* InHost)
-{
-	GetSceneEnemyTargetCoordinator().SetSceneEnemyHost(InHost);
-}
-
 void UBattleHUD::SetBattleSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts)
 {
 	GetSceneEnemyTargetCoordinator().SetSceneEnemyHosts(InHosts);
-}
-
-AWacomBattleEnemyActor* UBattleHUD::GetBattleSceneEnemyHost() const
-{
-	return GetSceneEnemyTargetCoordinator().GetSceneEnemyHost();
 }
 
 bool UBattleHUD::IsBattleSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const

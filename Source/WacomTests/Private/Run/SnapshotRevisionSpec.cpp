@@ -298,7 +298,7 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 	GainedCard.Definition = BattleReward;
 	Packet.GainedCards.Add(GainedCard);
 	const FRunUiRevisionSnapshot BeforeBattle = CaptureRunUiRevisions(*BattleRun);
-	BattleRun->OnBattleFinishedFromTrigger(Packet, NewObject<UEnemyDefinition>(), TEXT("Revision.Battle.Trigger"));
+	BattleRun->OnBattleFinishedFromTrigger(Packet, TEXT("Revision.Battle.Trigger"));
 	const FRunUiRevisionSnapshot AfterBattle = CaptureRunUiRevisions(*BattleRun);
 	TestTrue(TEXT("Battle gained card bumps backpack"),
 		AfterBattle.BackpackStorage > BeforeBattle.BackpackStorage);

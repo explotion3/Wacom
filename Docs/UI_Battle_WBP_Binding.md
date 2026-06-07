@@ -51,14 +51,15 @@ WBP 不应做：
 - 不绑定旧 `HandPanel` 或 `CardDetailLayer` 作为 BattleHUD runtime 路径。
 - 不直接 Push 击倒弹窗、直接消费 `FBattleEvent`、提交 Battle 规则命令或维护表现队列。
 - 不把 `BattlePresentationStack` 做成可点击、可拖拽或规则栈。
-- 不绑定敌方 2D fallback widget。正式场景敌人走 `SceneEnemyHostSlots + AWacomBattleEnemyActor` prefab，并由 Host 蓝图/子 Actor 自动扫描 PartActor。旧 `SceneEnemyHost` 只作为单敌人 fallback。
+- 不绑定敌方 2D fallback widget。正式场景敌人走 `SceneEnemyHostSlots + AWacomBattleEnemyActor` prefab，并由 Host 蓝图/子 Actor 自动扫描 PartActor。配置 `EncounterDefinition` 的 Trigger 必须执行 `SyncSceneEnemyHostSlotsFromEncounter()` 并用 `SceneEnemyHostSlots` 覆盖每个 EnemySlotId。
+- 不读取或假设 `Snapshot.Enemy`。敌人快照只在 `FBattleSnapshot.Enemies` 中，BattleHUD C++ 会把目标选择、日志和场景 bridge 同步到所有 enemy slot；WBP 不应自行维护第一敌人的兼容显示。
 
 最小 PIE 验收：
 
 - 玩家状态、牌堆数量、ActionPanel 和 CombatLogFeed 在 Snapshot 刷新后显示。
 - `CombatLogFeed` 可滚动，连续出牌后能查看最近命令块。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
-- 有 `SceneEnemyHostSlots` 或旧 `SceneEnemyHost` 的战斗通过 Host prefab 扫描到的 PartActor Status Badge 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback。
+- 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 扫描到的 PartActor Status Badge 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
 
 当前 `FBattleSnapshot.PileCounts` 额外公开 `PlayedCount`（本回合使用牌堆数量）。本轮 WBP 合同不要求新增 `PlayedPileView`，正式 HUD 仍只绑定并显示抽牌堆、弃牌堆和消耗牌堆三项；`UBattleHUD` 会把 `DiscardCount` 与 `PlayedCount` 合并显示在 `DiscardPileView` 上，`PlayedCount > 0` 时显示为类似 `2+3` 的复合数量。
 
@@ -297,5 +298,6 @@ WBP 不应做：
 - `WaitButton / EndTurnButton` 可点击并由 HUD 状态控制可用性。
 - `WBP_FirstPersonCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
-- 有 `SceneEnemyHostSlots` 或旧 `SceneEnemyHost` 的战斗中，Host prefab 扫描到的 PartActor Status Badge 可读。
+- 有 `SceneEnemyHostSlots` 的战斗中，Host prefab 扫描到的 PartActor Status Badge 可读。
+- `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。
 - 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget` 已删除，不再作为 BattleHUD 制作入口。

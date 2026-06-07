@@ -85,13 +85,13 @@ tags:
 	- 状态：`Done: Trigger 已接线`
 	- 归属：Data / Run / App / Battle
 	- 入口：[WacomData.md](./WacomData.md#wacomdata-encounter-definition) / [WacomRun.md](./WacomRun.md#wacomrun-battle-settlement)
-	- 说明：`ABattleTriggerActor.EncounterDefinition` 已优先转换为 `FBattleInitParams.EnemySlots`；运行态 `EncounterId` 仍用 Trigger `PersistentId`，`EnemyDef` 保留为旧单敌人 fallback。
+	- 说明：`ABattleTriggerActor.EncounterDefinition` 已转换为 `FBattleInitParams.EnemySlots`；运行态 `EncounterId` 仍用 Trigger `PersistentId`。旧单敌人 Trigger 入口已删除。
 
 - [x] **BattleTrigger 多 SceneEnemyHost 映射：EnemySlotId -> Host registry**
 	- 状态：`Done: Trigger 已接线`
 	- 归属：App / Battle World Target
 	- 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md#5-battle-scene-target) / [WacomBattleUI.md](./WacomBattleUI.md#6-scene-enemy-ui)
-	- 说明：`ABattleTriggerActor.SceneEnemyHostSlots` 已优先按 `EnemySlotId` 绑定多 Host；旧 `SceneEnemyHost` 保留为单敌人 fallback。后续敌人方向集中到正式蛇 Host 蓝图 prefab 资产、正式美术样式和制作工具。
+	- 说明：`ABattleTriggerActor.SceneEnemyHostSlots` 已按 `EnemySlotId` 绑定多 Host；旧单 `SceneEnemyHost` Trigger 入口已删除。后续敌人方向集中到正式蛇 Host 蓝图 prefab 资产、正式美术样式和制作工具。
 
 - [ ] **交互目标系统：Card-World / Card-Card drag resolver / Zone 命中来源接入**
   - 状态：`Ready: 剩余正式内容`

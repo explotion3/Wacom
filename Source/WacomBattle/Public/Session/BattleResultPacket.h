@@ -111,7 +111,7 @@ struct WACOMBATTLE_API FBattleEnemyResult
  *   - DestroyedPartIds：本场战斗中被破坏的部位 ID 列表，撤离时持久化
  *
  * 由 UBattleSession::BuildResultPacket() 构造，
- * 由 URunSession::OnBattleFinished(Packet, EnemyDef) 消费。
+ * 由 URunSession::OnBattleFinished(Packet) 消费。
  */
 USTRUCT(BlueprintType)
 struct WACOMBATTLE_API FBattleResultPacket

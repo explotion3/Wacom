@@ -53,7 +53,7 @@ bool FWacomBattlePartDestroyedSpec::RunTest(const FString& /*Parameters*/)
 	Snap = S->BuildSnapshot();
 
 	TestEqual(TEXT("HeadHp == 0"),       FWacomBattleFixture::FindPartHp(Snap, 0), 0);
-	TestTrue (TEXT("HeadDestroyed"),     Snap.Enemy.Parts[0].bDestroyed);
+	TestTrue (TEXT("HeadDestroyed"),     FWacomBattleFixture::GetEnemyPartSnapshot(Snap, 0)->bDestroyed);
 	TestEqual(TEXT("HeadInit == 0"),     FWacomBattleFixture::FindPartInitiative(Snap, 0), 0);
 	TestEqual(TEXT("BodyInit == 6"),     FWacomBattleFixture::FindPartInitiative(Snap, 1), 6);
 	TestEqual(TEXT("TailInit == 6"),     FWacomBattleFixture::FindPartInitiative(Snap, 2), 6);
@@ -76,6 +76,8 @@ bool FWacomBattlePartDestroyedSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("TailInit 5"),       FWacomBattleFixture::FindPartInitiative(Snap, 2), 5);
 
 	// 敌人总先机应排除破坏部位
-	TestEqual(TEXT("InitiativeSum excludes destroyed"), Snap.Enemy.InitiativeSum, 10);
+	const FEnemySnapshot* EnemySnapshot = FWacomBattleFixture::GetEnemySnapshot(Snap, 0);
+	TestNotNull(TEXT("Enemy snapshot exists"), EnemySnapshot);
+	TestEqual(TEXT("InitiativeSum excludes destroyed"), EnemySnapshot ? EnemySnapshot->InitiativeSum : -1, 10);
 	return true;
 }

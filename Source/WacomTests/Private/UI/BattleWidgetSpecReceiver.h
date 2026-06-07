@@ -190,11 +190,6 @@ public:
 		WorldOverride = InWorld;
 	}
 
-	void SetBattleSceneEnemyHostForTest(AWacomBattleEnemyActor* InHost)
-	{
-		SetBattleSceneEnemyHost(InHost);
-	}
-
 	void SetBattleSceneEnemyHostsForTest(const TArray<AWacomBattleEnemyActor*>& InHosts)
 	{
 		SetBattleSceneEnemyHosts(InHosts);

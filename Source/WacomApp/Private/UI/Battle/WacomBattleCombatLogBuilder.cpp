@@ -56,11 +56,14 @@ namespace
 			return nullptr;
 		}
 
-		for (const FEnemyPartSnapshot& Part : Snapshot.Enemy.Parts)
+		for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
 		{
-			if (Part.InstanceId == PartInstanceId)
+			for (const FEnemyPartSnapshot& Part : Enemy.Parts)
 			{
-				return &Part;
+				if (Part.InstanceId == PartInstanceId)
+				{
+					return &Part;
+				}
 			}
 		}
 		return nullptr;

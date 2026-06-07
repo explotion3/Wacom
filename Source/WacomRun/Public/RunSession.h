@@ -11,7 +11,6 @@
 #include "RunSession.generated.h"
 
 class UCharacterDefinition;
-class UEnemyDefinition;
 class UCardDefinition;
 class UWacomRunEventDefinition;
 class UWacomSaveGame;
@@ -722,30 +721,31 @@ public:
 	 *
 	 * 行为：
 	 *   - Params.Character = RunState.Character（共享同一份 Character DataAsset）
-	 *   - Params.Enemy = EnemyDef
 	 *   - Params.RandomSeed = RunState.BattleSeed
-	 *   - Params.BattleDeckOverride = RunState.BattleDeck
+	 *   - Params.BattleDeckEntries = RunState.BattleDeck + 已启用入战的 SpecialZone 卡
 	 *   - Params.HighHpThreshold / LowHpThreshold = RunState 字段
 	 *   - Params.EncounterId = TriggerPersistentId（为空时使用默认 Encounter）
 	 *   - **Params.PreDestroyedParts**：若 TriggerPersistentId 非空且 RunState.BattleProgress
 	 *     中有该 Trigger 的进度，灌入已破坏的完整部位身份。
 	 *     旧 DestroyedPartIds 进度会转换到默认 Enemy 槽作为兼容。
 	 *
-	 * @param EnemyDef               敌人定义
+	 * RunSession 不读取、不接收、不写入敌人定义。调用方（当前为 GameMode / BattleTrigger）
+	 * 负责把 EncounterDefinition 转成 Params.EnemySlots。
+	 *
 	 * @param TriggerPersistentId    触发战斗的 Trigger 的持久化 ID。NAME_None 表示没有持久化进度（如纯测试）
 	 * @param OutParams              输出参数
 	 */
-	bool BuildInitParamsForBattle(UEnemyDefinition* EnemyDef, FName TriggerPersistentId, FBattleInitParams& OutParams) const;
+	bool BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const;
 
 	/** 兼容老调用点（无 TriggerPersistentId）。等同于 TriggerPersistentId = NAME_None。 */
-	bool BuildInitParamsForBattle(UEnemyDefinition* EnemyDef, FBattleInitParams& OutParams) const;
+	bool BuildInitParamsForBattle(FBattleInitParams& OutParams) const;
 
 	/**
 	 * 一场战斗结束时由 GameMode::ExitBattle 调用。
 	 *
 	 * 战斗结果回传处理：
 	 *   - Outcome 处理：
-	 *       Victory：把 EnemyDef 加入 DefeatedEnemies
+	 *       Victory：清理对应 Trigger 的 BattleProgress；场景完成由 MarkTriggerDestroyed 记录
 	 *       Defeat ：标记 bRunActive = false
 	 *       Undetermined：不改变状态（用于异常或玩家取消）
 	 *   - 战斗结束疲劳压力 +1%（不分胜败）
@@ -758,7 +758,7 @@ public:
 	 *   - 仅累计伤口压力
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run")
-	void OnBattleFinished(const FBattleResultPacket& Packet, UEnemyDefinition* EnemyDef);
+	void OnBattleFinished(const FBattleResultPacket& Packet);
 
 	/**
 	 * OnBattleFinished 扩展版：传入触发战斗的 Trigger 持久化 ID，让 Run 层能：
@@ -766,11 +766,10 @@ public:
 	 *   - 真胜利时清 RunState.BattleProgress[TriggerId]
 	 *
 	 * @param Packet                 战斗回传包
-	 * @param EnemyDef               敌人定义
 	 * @param TriggerPersistentId    Trigger 持久化 ID。NAME_None 表示无 Trigger（如纯测试或调试战斗）
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run")
-	void OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet, UEnemyDefinition* EnemyDef, FName TriggerPersistentId);
+	void OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet, FName TriggerPersistentId);
 
 	/** 场景：标记一个触发器已被永久销毁。 */
 	void MarkTriggerDestroyed(FName PersistentId);

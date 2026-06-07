@@ -503,13 +503,13 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 
 // ================ 战斗状态切换转发 ================
 
-void AWacomPlayerController::RequestEnterBattle(UEnemyDefinition* EnemyDef, ABattleTriggerActor* Trigger)
+void AWacomPlayerController::RequestEnterBattle(ABattleTriggerActor* Trigger)
 {
 	ClearRunMenuDropTargetProbe();
 	ClearRunFirstPersonCardLayer();
 	if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
 	{
-		GM->EnterBattle(EnemyDef, Trigger);
+		GM->EnterBattle(Trigger);
 	}
 	else
 	{

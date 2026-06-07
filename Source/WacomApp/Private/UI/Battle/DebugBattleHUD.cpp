@@ -48,19 +48,29 @@ void UDebugBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		Snap.Player.CurrentHp, Snap.Player.MaxHp, Snap.Player.Shield);
 	Msg += LINE_TERMINATOR;
 
-	Msg += FString::Printf(TEXT("Enemy InitSum=%d  AllDestroyed=%d"),
-		Snap.Enemy.InitiativeSum, (int32)Snap.Enemy.bAllPartsDestroyed);
+	Msg += FString::Printf(TEXT("Enemies: %d"), Snap.Enemies.Num());
 	Msg += LINE_TERMINATOR;
 
-	for (int32 i = 0; i < Snap.Enemy.Parts.Num(); ++i)
+	for (int32 EnemyIndex = 0; EnemyIndex < Snap.Enemies.Num(); ++EnemyIndex)
 	{
-		const auto& P = Snap.Enemy.Parts[i];
-		Msg += FString::Printf(TEXT("  Part[%d] HP %d/%d  Init %d  Shield %d  Destroyed=%d  Intent=%s Init=%d Resist=%d"),
-			i, P.CurrentHp, P.MaxHp, P.CurrentInitiative, P.Shield, (int32)P.bDestroyed,
-			*P.CurrentIntent.DisplayName.ToString(),
-			P.CurrentIntent.Initiative,
-			P.CurrentIntent.ResistanceValue);
+		const FEnemySnapshot& Enemy = Snap.Enemies[EnemyIndex];
+		Msg += FString::Printf(TEXT("Enemy[%d:%s] InitSum=%d  AllDestroyed=%d"),
+			EnemyIndex,
+			*Enemy.EnemySlotId.ToString(),
+			Enemy.InitiativeSum,
+			(int32)Enemy.bAllPartsDestroyed);
 		Msg += LINE_TERMINATOR;
+
+		for (int32 PartIndex = 0; PartIndex < Enemy.Parts.Num(); ++PartIndex)
+		{
+			const auto& P = Enemy.Parts[PartIndex];
+			Msg += FString::Printf(TEXT("  Part[%d] HP %d/%d  Init %d  Shield %d  Destroyed=%d  Intent=%s Init=%d Resist=%d"),
+				PartIndex, P.CurrentHp, P.MaxHp, P.CurrentInitiative, P.Shield, (int32)P.bDestroyed,
+				*P.CurrentIntent.DisplayName.ToString(),
+				P.CurrentIntent.Initiative,
+				P.CurrentIntent.ResistanceValue);
+			Msg += LINE_TERMINATOR;
+		}
 	}
 
 	Msg += FString::Printf(TEXT("Hand: %d cards (Normal=%d/%d, L=%d R=%d)"),

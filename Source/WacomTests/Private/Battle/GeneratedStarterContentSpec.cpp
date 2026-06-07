@@ -588,11 +588,18 @@ bool FWacomBattleGeneratedSnakeIntentVariantsSpec::RunTest(const FString& /*Para
 			|| FWacomBattleFixture::GetStatusStacks(After.Player.StatusStacks, WacomTags::Status_Poison) > 0;
 		bSawPlayerSlow = bSawPlayerSlow
 			|| FWacomBattleFixture::GetStatusStacks(After.Player.StatusStacks, WacomTags::Status_Slow) > 0;
-		for (const FEnemyPartSnapshot& Part : After.Enemy.Parts)
+		for (const FEnemySnapshot& EnemySnapshot : After.Enemies)
 		{
-			if (Part.Shield > 0)
+			for (const FEnemyPartSnapshot& Part : EnemySnapshot.Parts)
 			{
-				bSawEnemyShield = true;
+				if (Part.Shield > 0)
+				{
+					bSawEnemyShield = true;
+					break;
+				}
+			}
+			if (bSawEnemyShield)
+			{
 				break;
 			}
 		}

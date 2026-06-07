@@ -113,54 +113,62 @@ FBattleTargetSelectionView FWacomBattleHUDTargetingFlow::BuildTargetSelectionVie
 	}
 
 	const FBattleSnapshot Snap = Session->BuildSnapshot();
-	View.TargetableParts.Reserve(Snap.Enemy.Parts.Num());
-	for (const FEnemyPartSnapshot& Part : Snap.Enemy.Parts)
+	int32 TargetablePartCapacity = 0;
+	for (const FEnemySnapshot& Enemy : Snap.Enemies)
 	{
-		FBattleTargetablePartView PartView;
-		PartView.PartInstanceId = Part.InstanceId;
-		if (Part.Definition)
+		TargetablePartCapacity += Enemy.Parts.Num();
+	}
+	View.TargetableParts.Reserve(TargetablePartCapacity);
+	for (const FEnemySnapshot& Enemy : Snap.Enemies)
+	{
+		for (const FEnemyPartSnapshot& Part : Enemy.Parts)
 		{
-			PartView.PartId = Part.Definition->PartId;
-			PartView.PartName = Part.Definition->DisplayName.IsEmpty()
-				? FText::FromName(Part.Definition->PartId)
-				: Part.Definition->DisplayName;
-		}
-
-		if (!View.bIsTargetSelecting)
-		{
-			PartView.bTargetable = false;
-			PartView.DisabledReason = FName(TEXT("NotTargetSelecting"));
-		}
-		else if (Part.bDestroyed)
-		{
-			PartView.bTargetable = false;
-			PartView.DisabledReason = FName(TEXT("PartDestroyed"));
-		}
-		else
-		{
-			const FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForWorldTarget(
-				Part.InstanceId,
-				nullptr,
-				FVector::ZeroVector,
-				FVector2D::ZeroVector,
-				FGameplayTag(),
-				Part.Definition ? Part.Definition->PartId : NAME_None,
-				Part.EncounterId,
-				Part.EnemySlotId,
-				Part.PartSlotId);
-			if (Session->CanTargetWithCard(View.PendingCardInstanceId, Handle))
+			FBattleTargetablePartView PartView;
+			PartView.PartInstanceId = Part.InstanceId;
+			if (Part.Definition)
 			{
-				PartView.bTargetable = true;
-				PartView.DisabledReason = NAME_None;
+				PartView.PartId = Part.Definition->PartId;
+				PartView.PartName = Part.Definition->DisplayName.IsEmpty()
+					? FText::FromName(Part.Definition->PartId)
+					: Part.Definition->DisplayName;
+			}
+
+			if (!View.bIsTargetSelecting)
+			{
+				PartView.bTargetable = false;
+				PartView.DisabledReason = FName(TEXT("NotTargetSelecting"));
+			}
+			else if (Part.bDestroyed)
+			{
+				PartView.bTargetable = false;
+				PartView.DisabledReason = FName(TEXT("PartDestroyed"));
 			}
 			else
 			{
-				PartView.bTargetable = false;
-				PartView.DisabledReason = FName(TEXT("NotValidTargetForCard"));
+				const FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForWorldTarget(
+					Part.InstanceId,
+					nullptr,
+					FVector::ZeroVector,
+					FVector2D::ZeroVector,
+					FGameplayTag(),
+					Part.Definition ? Part.Definition->PartId : NAME_None,
+					Part.EncounterId,
+					Part.EnemySlotId,
+					Part.PartSlotId);
+				if (Session->CanTargetWithCard(View.PendingCardInstanceId, Handle))
+				{
+					PartView.bTargetable = true;
+					PartView.DisabledReason = NAME_None;
+				}
+				else
+				{
+					PartView.bTargetable = false;
+					PartView.DisabledReason = FName(TEXT("NotValidTargetForCard"));
+				}
 			}
-		}
 
-		View.TargetableParts.Add(PartView);
+			View.TargetableParts.Add(PartView);
+		}
 	}
 
 	return View;
