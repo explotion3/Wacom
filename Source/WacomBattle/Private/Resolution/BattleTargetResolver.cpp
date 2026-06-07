@@ -258,9 +258,3 @@ FWacomBattleTargetValidationResult FBattleTargetResolver::ValidateTargetWithCard
 		return MakeTargetValidationResult(false, EWacomBattleTargetRejectReason::InvalidTarget, CardInstanceId, Target);
 	}
 }
-
-bool FBattleTargetResolver::CanTargetWithCard(const FBattleState& State, const FGuid& CardInstanceId,
-	const FWacomInteractionTargetHandle& Target)
-{
-	return ValidateTargetWithCard(State, CardInstanceId, Target).bCanTarget;
-}

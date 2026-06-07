@@ -285,16 +285,10 @@ public:
 	FBattleResultPacket BuildResultPacket() const;
 
 	/**
-	 * 判断给定的卡牌实例能否作用到给定的统一交互目标。
-	 *
-	 * 只判断结构性兼容（TargetMode ↔ TargetKind 匹配），不校验费用、状态或回合阶段。
-	 * 拖拽系统在 drop 前调用本函数做预览，提交 PlayCard 后 Resolver 做最终校验。
-	 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
-	bool CanTargetWithCard(const FGuid& CardInstanceId, const FWacomInteractionTargetHandle& Target) const;
-
-	/**
 	 * 判断给定的卡牌实例能否作用到给定目标，并返回可用于 UI/调试解释的拒绝原因。
+	 *
+	 * 只判断结构性兼容（TargetMode ↔ TargetKind 匹配）和目标基础资格，不校验费用、状态或回合阶段。
+	 * 拖拽系统在 drop 前调用本函数做预览，提交 PlayCard 后 Resolver 做最终校验。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	FWacomBattleTargetValidationResult ValidateTargetWithCard(

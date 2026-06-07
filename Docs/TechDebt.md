@@ -73,7 +73,6 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | 项 | 临时做法 / 当前决定 | 正式方案 / 处理方向 |
 |---|---|---|
 | `URunSession` 仍承担多个领域流程 | 背包 / 负重 / 永久移除规则、RunEvent 执行、商店事务、战斗回传结算、SaveGame 字段拷贝均已抽到私有 helper；`RunSession.cpp` 仍保留 public 命令协调、slot IO、时间 / 压力等基础入口 | 暂不继续拆；后续若时间 / 压力或 slot IO 继续膨胀，再按低风险切片拆私有 helper |
-| Definition 级 deck wrappers | `AddCardToBattleDeck()` / `RemoveCardFromBattleDeck()` 等 Definition 级入口不再 Blueprint 暴露，但 C++ 兼容入口和资产语义桥仍保留 | 后续确认 C++ 调用点迁到 InstanceId 或显式资产语义 helper 后，再删除兼容 wrapper |
 
 <a id="techdebt-ui-architecture"></a>
 ## UI 架构债
@@ -123,7 +122,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - 顶层 Backpack / Shop / RunEvent 的 `PlayerController` ScreenClass 配置路径已移除，统一走 Wacom UI Settings -> C++ fallback
 - Shop / RunEvent / AppToast 的旧固定 WBP 路径 fallback 已移除；PrimaryLayout 是保留的唯一固定路径 fallback
 - `UWacomCardView::BuildFromCardDefinition / BuildDetailFromCardDefinition` legacy static API 已清理，新代码统一使用 `UWacomCardPresentationBuilder`
-- Run Definition 级 deck wrappers 已取消 Blueprint 暴露；C++ 兼容入口暂留，见 RunSession 结构债
+- Run Definition 级 deck wrappers 已清理；已拥有卡操作统一走 `InstanceId`，Definition 只保留获取 / 奖励 / RunEvent 资产语义。
 - Battle 世界空间手牌 prototype public surface 已从 runtime / tests 中移除；正式战斗手牌主线为 first-person card layer。
 - Legacy 2D battle hand 已清理：`UHandPanel / UCardWidget`、`WBP_HandPanel / WBP_CardWidget` 和独立 legacy hand 测试已删除；BattleHUD 运行时只走 first-person card layer。
 - Legacy battle event log 已清理：`UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` 和 `BuildLegacyEventBlock()` 已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。

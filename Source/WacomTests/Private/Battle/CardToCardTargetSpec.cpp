@@ -156,7 +156,7 @@ bool FWacomBattleHandCardTargetAcceptsAnotherHandCardSpec::RunTest(const FString
 	TestTrue(TEXT("Source exists"), SourceId.IsValid());
 	TestTrue(TEXT("Target exists"), TargetId.IsValid());
 	TestTrue(TEXT("Other hand card can be targeted"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session)).bCanTarget);
 	return true;
 }
 
@@ -178,16 +178,16 @@ bool FWacomBattleHandCardTargetRejectsSelfMissingOrNotInHandSpec::RunTest(const 
 	TestTrue(TEXT("Target exists"), TargetId.IsValid());
 
 	TestFalse(TEXT("Self target rejects"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(SourceId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(SourceId, Session)).bCanTarget);
 	TestFalse(TEXT("Missing target rejects"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(FGuid::NewGuid(), Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(FGuid::NewGuid(), Session)).bCanTarget);
 
 	TestTrue(TEXT("Play source to move it out of hand"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	TestFalse(TEXT("Source no longer in hand"), FindHandCard(Snapshot, SourceId) != nullptr);
 	TestFalse(TEXT("Target card cannot target source once source left hand"),
-		Session->CanTargetWithCard(TargetId, FWacomInteractionTargetHandle::ForCardTarget(SourceId, Session)));
+		Session->ValidateTargetWithCard(TargetId, FWacomInteractionTargetHandle::ForCardTarget(SourceId, Session)).bCanTarget);
 	return true;
 }
 
@@ -214,7 +214,6 @@ bool FWacomBattleExplicitFilterAllowsNormalHandCardsSpec::RunTest(const FString&
 
 	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
 	TestTrue(TEXT("Explicit filter allows normal hand card"), Result.bCanTarget);
-	TestTrue(TEXT("CanTarget mirrors explicit normal allow"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
 	return true;
 }
 
@@ -241,7 +240,6 @@ bool FWacomBattleExplicitFilterAllowsHandAnchorsSpec::RunTest(const FString& Par
 
 	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
 	TestTrue(TEXT("Explicit filter allows hand anchor"), Result.bCanTarget);
-	TestTrue(TEXT("CanTarget mirrors explicit anchor allow"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
 	return true;
 }
 
@@ -599,7 +597,7 @@ bool FWacomBattleTemporaryKeywordCountsForHandCardTargetFilterSpec::RunTest(cons
 	TestFalse(TEXT("Target starts without required keyword"), Session->ValidateTargetWithCard(SourceId, Target).bCanTarget);
 
 	TestTrue(TEXT("Grant keyword card can target regular hand card"),
-		Session->CanTargetWithCard(GrantKeywordId, Target));
+		Session->ValidateTargetWithCard(GrantKeywordId, Target).bCanTarget);
 	TestTrue(TEXT("Grant keyword command succeeds"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(GrantKeywordId, TargetId)).IsOk());
 	Target = FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session);
@@ -715,7 +713,7 @@ bool FWacomBattleSelectedHandCardDiscardSpec::RunTest(const FString& Parameters)
 	const int32 ExhaustBefore = Snapshot.PileCounts.ExhaustCount;
 
 	TestTrue(TEXT("Can target normal hand card"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session)).bCanTarget);
 	TestTrue(TEXT("Play discard selected hand card"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
@@ -749,7 +747,7 @@ bool FWacomBattleSelectedHandCardExhaustSpec::RunTest(const FString& Parameters)
 	const int32 ExhaustBefore = Snapshot.PileCounts.ExhaustCount;
 
 	TestTrue(TEXT("Can target normal hand card"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session)).bCanTarget);
 	TestTrue(TEXT("Play exhaust selected hand card"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
@@ -786,9 +784,9 @@ bool FWacomBattleSelectedHandCardZoneMoveRejectsAnchorsSpec::RunTest(const FStri
 	const FGuid RightId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, RightDef->CardId);
 
 	TestFalse(TEXT("Selected discard rejects left anchor"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(LeftId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(LeftId, Session)).bCanTarget);
 	TestFalse(TEXT("Selected discard rejects right anchor"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(RightId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(RightId, Session)).bCanTarget);
 	TestFalse(TEXT("Submit on left anchor fails"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, LeftId)).IsOk());
 	TestFalse(TEXT("Submit on right anchor fails"),
@@ -819,9 +817,9 @@ bool FWacomBattleSelectedHandCardZoneMoveRejectsInvalidTargetsSpec::RunTest(cons
 	const FGuid MissingId = FGuid::NewGuid();
 
 	TestFalse(TEXT("Selected zone move rejects self target"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(SourceId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(SourceId, Session)).bCanTarget);
 	TestFalse(TEXT("Selected zone move rejects missing target"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(MissingId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(MissingId, Session)).bCanTarget);
 	TestFalse(TEXT("Submit missing target fails"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, MissingId)).IsOk());
 
@@ -830,7 +828,7 @@ bool FWacomBattleSelectedHandCardZoneMoveRejectsInvalidTargetsSpec::RunTest(cons
 	Snapshot = Session->BuildSnapshot();
 	TestFalse(TEXT("Moved target no longer in hand"), FindHandCard(Snapshot, TargetId) != nullptr);
 	TestFalse(TEXT("Selected zone move rejects not-in-hand target"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(TargetId, Session)).bCanTarget);
 	TestFalse(TEXT("Submit not-in-hand target fails"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 	return true;
@@ -856,7 +854,7 @@ bool FWacomBattleCostModifierStillAllowsHandAnchorTargetsSpec::RunTest(const FSt
 	const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, LeftDef->CardId);
 
 	TestTrue(TEXT("Cost modifier still accepts anchor target"),
-		Session->CanTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(LeftId, Session)));
+		Session->ValidateTargetWithCard(SourceId, FWacomInteractionTargetHandle::ForCardTarget(LeftId, Session)).bCanTarget);
 	TestTrue(TEXT("Cost modifier can submit on anchor target"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, LeftId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
@@ -911,7 +909,6 @@ bool FWacomBattleValidateTargetExplainsValidHandCardTargetSpec::RunTest(const FS
 	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
 	TestTrue(TEXT("Validation accepts valid hand card target"), Result.bCanTarget);
 	TestEqual(TEXT("Validation has no reject reason"), Result.RejectReason, EWacomBattleTargetRejectReason::None);
-	TestTrue(TEXT("CanTarget mirrors validation"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
 	return true;
 }
 
@@ -933,7 +930,6 @@ bool FWacomBattleValidateTargetExplainsSelfTargetSpec::RunTest(const FString& Pa
 	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
 	TestFalse(TEXT("Validation rejects self target"), Result.bCanTarget);
 	TestEqual(TEXT("Validation explains self target"), Result.RejectReason, EWacomBattleTargetRejectReason::SelfTarget);
-	TestTrue(TEXT("CanTarget mirrors validation"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
 	return true;
 }
 
@@ -959,7 +955,6 @@ bool FWacomBattleValidateTargetExplainsUnsupportedAnchorForSelectedZoneMoveSpec:
 	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
 	TestFalse(TEXT("Validation rejects selected zone move anchor target"), Result.bCanTarget);
 	TestEqual(TEXT("Validation explains unsupported hand anchor"), Result.RejectReason, EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget);
-	TestTrue(TEXT("CanTarget mirrors validation"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
 	return true;
 }
 
@@ -985,6 +980,5 @@ bool FWacomBattleValidateTargetExplainsNonHandCardSourceSpec::RunTest(const FStr
 	const FWacomBattleTargetValidationResult Result = Session->ValidateTargetWithCard(SourceId, Target);
 	TestFalse(TEXT("Validation rejects non-HandCard source"), Result.bCanTarget);
 	TestEqual(TEXT("Validation explains unsupported card target"), Result.RejectReason, EWacomBattleTargetRejectReason::UnsupportedCardTarget);
-	TestTrue(TEXT("CanTarget mirrors validation"), Session->CanTargetWithCard(SourceId, Target) == Result.bCanTarget);
 	return true;
 }

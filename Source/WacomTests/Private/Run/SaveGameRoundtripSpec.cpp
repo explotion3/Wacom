@@ -378,8 +378,8 @@ bool FWacomRunSaveGameV2InstanceZoneRoundtripSpec::RunTest(const FString& /*Para
 	TestTrue(TEXT("Initialize source"), Source->Initialize(Char));
 
 	const FGuid BOwnerId = Source->GetRunState().SpecialZones[0].OwnerInstanceId;
-	Source->AddCardToBackpack(BackpackOnly);
-	Source->AddCardToBackpack(SpecialStored);
+	Source->AcquireCardToRun(BackpackOnly);
+	Source->AcquireCardToRun(SpecialStored);
 	const FGuid SpecialId = Source->GetBackpack().Last().InstanceId;
 	TestTrue(TEXT("Move stored card to SpecialZone"), Source->MoveInstance(SpecialId, EZoneKind::SpecialZone, BOwnerId));
 	TestTrue(TEXT("Enable stored card"), Source->SetSpecialZoneCardBattleEnabled(SpecialId, true));

@@ -133,11 +133,9 @@ Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCard
 
 同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`；失败路径不修改 RunState。
 
-玩家已拥有卡的操作以 `InstanceId` 为主。UI、蓝图玩家操作和交互层必须使用 `DestroyCardByInstance()`、`ValidateDestroyCardByInstance()`、`DeleteCardForGoldByInstance()`、`MoveInstance()` 等入口，不能用 Definition 指代某张已拥有卡。
+玩家已拥有卡的操作以 `InstanceId` 为主。UI、蓝图玩家操作和交互层必须使用 `DestroyCardByInstance()`、`ValidateDestroyCardByInstance()`、`DeleteCardForGoldByInstance()`、`MoveInstance()` 等入口，不能用 Definition 指代某张已拥有卡。`URunSession` 不再提供 `AddCardToBattleDeck()`、`RemoveCardFromBattleDeck()`、`DestroyCardFromBackpack()`、`DeleteCardForGold()` 这类 Definition 级已拥有卡 wrapper。
 
-旧 Definition 级入口 `DestroyCardFromBackpack()`、`DeleteCardForGold()`、`AddCardToBattleDeck()`、`RemoveCardFromBattleDeck()` 只作为 C++ 兼容入口和资产语义桥保留，不再 Blueprint 暴露。它们会在对应来源范围内删除或移动第一张匹配 Definition 的 instance。
-
-RunEvent / DataAsset 仍可用 Definition 表达“获得一张某种卡”或“交出一张某种卡”，因为这是资产语义，不指向玩家当前拥有的某个具体实例。
+Definition 仍然用于资产语义：`AcquireCardToRun()` / 战斗奖励 / 商店购买 / 世界拾取表达“获得一张某种卡”；RunEvent / DataAsset 可以表达“交出一张某种卡”，由 RunEvent 执行路径在运行态选择一张匹配 instance。玩家直接操作某张已拥有卡时必须先解析到 `InstanceId`。
 
 ### 容器分类
 
@@ -193,7 +191,7 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 - 销毁 B 主卡时，它的 SpecialZone 内卡退回 Backpack；装不下则进 BurdenZone。
 - 移除非容量卡后允许从负重区回填；移除容量来源卡后不做回填，只处理容量缩小导致的超容。
 
-删牌换金币当前是简易数值：白卡 +1，蓝卡 +2。UI 拖拽删除使用 `InstanceId`；RunEvent 等资产语义仍可用 Definition 级入口表达“移除一张匹配卡”。金币是 Run 内资源，但当前不写入 SaveGame。
+删牌换金币当前是简易数值：白卡 +1，蓝卡 +2。UI 拖拽删除使用 `DeleteCardForGoldByInstance()`；RunEvent 等资产语义仍可用 Definition 表达“移除一张匹配卡”，但不通过 `URunSession` 公开 deck wrapper。金币是 Run 内资源，但当前不写入 SaveGame。
 
 ## §6 商店事务
 
@@ -331,10 +329,10 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 | 事务 / 路径 | BackpackStorage | Shop | Economy |
 |---|---:|---:|---:|
 | Initialize / ResetRunState / ApplySaveGameToRunState | 是 | 是 | 是 |
-| RecomputeBurden、MoveInstance、AcquireCardToRun、DestroyCard、BattleDeck 增删 | 是 | 否 | 否 |
+| RecomputeBurden、MoveInstance、AcquireCardToRun、DestroyCardByInstance、BattleDeck 移动 | 是 | 否 | 否 |
 | SpecialZone 入战投影开关 | 是 | 否 | 否 |
 | CollectCardPickup、Run world card reward、Run world consume source card、Battle gained card | 是 | 否 | 否 |
-| DeleteCardForGold / PurchaseCardFromShop | 是 | 否 | 是 |
+| DeleteCardForGoldByInstance / PurchaseCardFromShop | 是 | 否 | 是 |
 | AddGold / RemoveGold / CollectGoldPickup / Run world gold reward | 否 | 否 | 是 |
 | BeginShopVisit / EndShopVisit | 否 | 是 | 否 |
 | PurchaseShopOffer | 是 | 是 | 是 |

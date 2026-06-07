@@ -92,8 +92,6 @@ bool FWacomAppEncounterTriggerBuildsBattleEnemySlotsSpec::RunTest(const FString&
 	TestTrue(TEXT("First slot enemy"), EnemySlots[0].Enemy.Get() == LeftEnemy);
 	TestEqual(TEXT("Second slot id"), EnemySlots[1].EnemySlotId, FName(TEXT("RightEnemy")));
 	TestTrue(TEXT("Second slot enemy"), EnemySlots[1].Enemy.Get() == RightEnemy);
-	TestTrue(TEXT("Resolved battle enemy uses first Encounter slot"),
-		Trigger->ResolveBattleEnemyDefinition() == LeftEnemy);
 
 	FBattleInitParams Params;
 	Params.Character = MakeEncounterTriggerCharacter(Trigger.Get());
@@ -135,7 +133,5 @@ bool FWacomAppEncounterTriggerRequiresEncounterDefinitionSpec::RunTest(const FSt
 	TArray<FBattleEnemySlotInit> EnemySlots;
 	Trigger->BuildBattleEnemySlots(EnemySlots);
 	TestEqual(TEXT("No battle slots exported without Encounter"), EnemySlots.Num(), 0);
-	TestNull(TEXT("Resolved battle enemy requires EncounterDefinition"),
-		Trigger->ResolveBattleEnemyDefinition());
 	return true;
 }

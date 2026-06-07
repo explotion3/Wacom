@@ -23,16 +23,16 @@
  *   - GetBattleDeckCapacity 公式：Σ(玩家拥有的所有容器卡 Capacity)
  *   - IsBackpackUiAvailable：玩家持有区至少一张容器卡
  *   - Initialize Stage 4.1 a2：非容器卡进 BattleDeck，容器卡只进 Backpack
- *   - AddCardToBackpack 自动 RecomputeBurden
- *   - DestroyCardFromBackpack：
+ *   - AcquireCardToRun 自动 RecomputeBurden
+ *   - DestroyCardByInstance：
  *       Intrinsic 拒绝
  *       最后一张容量来源卡拒绝
  *       同一卡多份 → 只销毁一份
  *       Companion 卡 → 嗜血 +1
  *       按 Backpack → BattleDeck → BurdenZone → SpecialZones 优先级移除一张
  *   - DestroyCardByInstance：按 InstanceId 精确销毁已拥有卡，不发金币
- *   - DeleteCardForGold：白=1 / 蓝=2
- *   - AddCardToBattleDeck / RemoveCardFromBattleDeck 边界规则
+ *   - DeleteCardForGoldByInstance：白=1 / 蓝=2
+ *   - MoveInstance 进出 BattleDeck 边界规则
  *   - BuildInitParamsForBattle 用 BattleDeck 而不是 StarterDeck
  *   - 金币 AddGold / RemoveGold
  */
@@ -166,6 +166,8 @@ namespace
 		return Count;
 	}
 
+	FGuid FindFirstOwnedInstanceIdByDefinitionInZone(const FRunState& State, const UCardDefinition* Card, EZoneKind Zone);
+
 	FGuid FindFirstBackpackInstanceIdByDefinition(const FRunState& State, const UCardDefinition* Card)
 	{
 		for (const FCardInstance& Inst : State.Backpack)
@@ -176,6 +178,106 @@ namespace
 			}
 		}
 		return FGuid();
+	}
+
+	FGuid FindFirstBattleDeckInstanceIdByDefinition(const FRunState& State, const UCardDefinition* Card)
+	{
+		for (const FCardInstance& Inst : State.BattleDeck)
+		{
+			if (Inst.Definition == Card)
+			{
+				return Inst.InstanceId;
+			}
+		}
+		return FGuid();
+	}
+
+	FGuid FindFirstOwnedInstanceIdByDefinition(const FRunState& State, const UCardDefinition* Card)
+	{
+		if (const FGuid BackpackId = FindFirstOwnedInstanceIdByDefinitionInZone(State, Card, EZoneKind::Backpack);
+			BackpackId.IsValid())
+		{
+			return BackpackId;
+		}
+		if (const FGuid BattleDeckId = FindFirstOwnedInstanceIdByDefinitionInZone(State, Card, EZoneKind::BattleDeck);
+			BattleDeckId.IsValid())
+		{
+			return BattleDeckId;
+		}
+		if (const FGuid BurdenId = FindFirstOwnedInstanceIdByDefinitionInZone(State, Card, EZoneKind::BurdenZone);
+			BurdenId.IsValid())
+		{
+			return BurdenId;
+		}
+		return FindFirstOwnedInstanceIdByDefinitionInZone(State, Card, EZoneKind::SpecialZone);
+	}
+
+	bool BackpackContainsDefinition(const FRunState& State, const UCardDefinition* Card)
+	{
+		return FindFirstBackpackInstanceIdByDefinition(State, Card).IsValid();
+	}
+
+	bool BattleDeckContainsDefinition(const FRunState& State, const UCardDefinition* Card)
+	{
+		return FindFirstBattleDeckInstanceIdByDefinition(State, Card).IsValid();
+	}
+
+	URunSession* ResolveRunSessionForTest(URunSession* Run)
+	{
+		return Run;
+	}
+
+	URunSession* ResolveRunSessionForTest(const TStrongObjectPtr<URunSession>& Run)
+	{
+		return Run.Get();
+	}
+
+	template <typename TRun>
+	bool MoveFirstBackpackDefinitionToBattleDeck(const TRun& RunHandle, const UCardDefinition* Card)
+	{
+		URunSession* Run = ResolveRunSessionForTest(RunHandle);
+		if (!Run)
+		{
+			return false;
+		}
+		const FGuid InstanceId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Card);
+		return InstanceId.IsValid() && Run->MoveInstance(InstanceId, EZoneKind::BattleDeck, FGuid());
+	}
+
+	template <typename TRun>
+	bool MoveFirstBattleDeckDefinitionToBackpack(const TRun& RunHandle, const UCardDefinition* Card)
+	{
+		URunSession* Run = ResolveRunSessionForTest(RunHandle);
+		if (!Run)
+		{
+			return false;
+		}
+		const FGuid InstanceId = FindFirstBattleDeckInstanceIdByDefinition(Run->GetRunState(), Card);
+		return InstanceId.IsValid() && Run->MoveInstance(InstanceId, EZoneKind::Backpack, FGuid());
+	}
+
+	template <typename TRun>
+	bool DestroyFirstOwnedDefinition(const TRun& RunHandle, const UCardDefinition* Card)
+	{
+		URunSession* Run = ResolveRunSessionForTest(RunHandle);
+		if (!Run)
+		{
+			return false;
+		}
+		const FGuid InstanceId = FindFirstOwnedInstanceIdByDefinition(Run->GetRunState(), Card);
+		return InstanceId.IsValid() && Run->DestroyCardByInstance(InstanceId);
+	}
+
+	template <typename TRun>
+	bool DeleteFirstOwnedDefinitionForGold(const TRun& RunHandle, const UCardDefinition* Card)
+	{
+		URunSession* Run = ResolveRunSessionForTest(RunHandle);
+		if (!Run)
+		{
+			return false;
+		}
+		const FGuid InstanceId = FindFirstOwnedInstanceIdByDefinition(Run->GetRunState(), Card);
+		return InstanceId.IsValid() && Run->DeleteCardForGoldByInstance(InstanceId);
 	}
 
 	FGuid FindFirstOwnedInstanceIdByDefinitionInZone(const FRunState& State, const UCardDefinition* Card, EZoneKind Zone)
@@ -327,7 +429,7 @@ bool FWacomRunDeckCapacitySumSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("FluxCapacity=10+3=13"), Run->GetFluxCapacity(), 13);
 
 	// 把 Bag2 加进 BattleDeck（虽然它是容器卡，第一阶段允许玩家手动加入备战）
-	TestTrue(TEXT("Add Bag2 to BattleDeck"), Run->AddCardToBattleDeck(Bag2));
+	TestTrue(TEXT("Add Bag2 to BattleDeck"), MoveFirstBackpackDefinitionToBattleDeck(Run, Bag2));
 
 	// 容量公式：Σ(背包 + 备战) = 仍然 13（容器卡换位置不影响公式）
 	TestEqual(TEXT("FluxCapacity unchanged after move"), Run->GetFluxCapacity(), 13);
@@ -376,14 +478,14 @@ bool FWacomRunDeckBackpackUiAvailabilitySpec::RunTest(const FString& /*Parameter
 	return true;
 }
 
-// ================ AddCardToBackpack ================
+// ================ AcquireCardToRun ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunDeckAddCardToBackpackTriggersBurdenSpec,
-	"Wacom.Run.Deck.AddCardToBackpackRecomputesBurden",
+	FWacomRunDeckAcquireCardToRunTriggersBurdenSpec,
+	"Wacom.Run.Deck.AcquireCardToRunRecomputesBurden",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunDeckAddCardToBackpackTriggersBurdenSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomRunDeckAcquireCardToRunTriggersBurdenSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 
@@ -404,19 +506,19 @@ bool FWacomRunDeckAddCardToBackpackTriggersBurdenSpec::RunTest(const FString& /*
 		Run->GetPressureValue(EWacomPressureType::Burden), 0);
 
 	// 加普通卡到 Backpack → Backpack=2，刚好 = Capacity，Burden=0
-	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
+	Run->AcquireCardToRun(Fx.MakeNoopCard(0));
 	TestEqual(TEXT("Burden=0 at capacity"),
 		Run->GetPressureValue(EWacomPressureType::Burden), 0);
 
 	// 再加一张 → Backpack=3，超容 1 → Burden = 1*2/2 = 1
-	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
+	Run->AcquireCardToRun(Fx.MakeNoopCard(0));
 	TestEqual(TEXT("Burden=1 over by 1"),
 		Run->GetPressureValue(EWacomPressureType::Burden), 1);
 
 	return true;
 }
 
-// ================ DestroyCardFromBackpack ================
+// ================ DestroyCardByInstance ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunDeckDestroyIntrinsicRejectedSpec,
@@ -437,7 +539,7 @@ bool FWacomRunDeckDestroyIntrinsicRejectedSpec::RunTest(const FString& /*Paramet
 
 	const int32 BefSize = Run->GetBackpack().Num();
 	TestFalse(TEXT("Destroy Intrinsic rejected"),
-		Run->DestroyCardFromBackpack(IntrinsicCard));
+		DestroyFirstOwnedDefinition(Run, IntrinsicCard));
 	TestEqual(TEXT("Backpack size unchanged"),
 		Run->GetBackpack().Num(), BefSize);
 
@@ -461,7 +563,7 @@ bool FWacomRunDeckDestroyLastCapacityProviderRejectedSpec::RunTest(const FString
 	Run->Initialize(Char);
 
 	TestFalse(TEXT("Destroy last capacity provider rejected"),
-		Run->DestroyCardFromBackpack(OnlyBag));
+		DestroyFirstOwnedDefinition(Run, OnlyBag));
 	TestTrue(TEXT("UI still available"),
 		Run->IsBackpackUiAvailable());
 
@@ -486,7 +588,7 @@ bool FWacomRunDeckDestroyOneOfTwoCapacityProvidersAllowedSpec::RunTest(const FSt
 	Run->Initialize(Char);
 
 	TestTrue(TEXT("Destroy Bag1 allowed (Bag2 still provides capacity)"),
-		Run->DestroyCardFromBackpack(Bag1));
+		DestroyFirstOwnedDefinition(Run, Bag1));
 	TestTrue(TEXT("UI still available"), Run->IsBackpackUiAvailable());
 	TestEqual(TEXT("FluxCapacity=8 only Bag2 capacity"),
 		Run->GetFluxCapacity(), 8);
@@ -515,18 +617,20 @@ bool FWacomRunDeckDestroyBugGirlBagAllowedWhenLanternProvidesCapacitySpec::RunTe
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	TestTrue(TEXT("Lantern starts in BattleDeck"), Run->IsCardInBattleDeck(Lantern));
-	TestTrue(TEXT("Bag starts in Backpack"), Run->IsCardInBackpack(Bag));
+	TestTrue(TEXT("Lantern starts in BattleDeck"), BattleDeckContainsDefinition(Run->GetRunState(), Lantern));
+	TestTrue(TEXT("Bag starts in Backpack"), BackpackContainsDefinition(Run->GetRunState(), Bag));
 	TestEqual(TEXT("Initial flux capacity includes bag and lantern"), Run->GetFluxCapacity(), 7);
 	TestEqual(TEXT("Initial battle capacity includes bag and lantern"), Run->GetBattleDeckCapacity(), 7);
 
+	const FGuid BagId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Bag);
+	TestTrue(TEXT("Bag instance valid"), BagId.IsValid());
 	TestTrue(TEXT("Delete validation allows Bag while Lantern provides capacity"),
-		Run->ValidateDeleteCardForGold(Bag).bCanExecute);
+		Run->ValidateDeleteCardForGoldByInstance(BagId).bCanExecute);
 	TestTrue(TEXT("Destroy Bag succeeds"),
-		Run->DestroyCardFromBackpack(Bag));
+		DestroyFirstOwnedDefinition(Run, Bag));
 
-	TestFalse(TEXT("Bag removed"), Run->IsCardInBackpack(Bag));
-	TestTrue(TEXT("Lantern remains in BattleDeck"), Run->IsCardInBattleDeck(Lantern));
+	TestFalse(TEXT("Bag removed"), BackpackContainsDefinition(Run->GetRunState(), Bag));
+	TestTrue(TEXT("Lantern remains in BattleDeck"), BattleDeckContainsDefinition(Run->GetRunState(), Lantern));
 	TestTrue(TEXT("Backpack UI remains available from Lantern capacity"), Run->IsBackpackUiAvailable());
 	TestEqual(TEXT("Flux capacity now only Lantern"), Run->GetFluxCapacity(), 3);
 	TestEqual(TEXT("Battle capacity now only Lantern"), Run->GetBattleDeckCapacity(), 3);
@@ -558,16 +662,16 @@ bool FWacomRunDeckDestroyBugGirlBagOverflowUsesBurdenOnlyWhenFluxFullSpec::RunTe
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
-	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
-	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
+	Run->AcquireCardToRun(Fx.MakeNoopCard(0));
+	Run->AcquireCardToRun(Fx.MakeNoopCard(0));
+	Run->AcquireCardToRun(Fx.MakeNoopCard(0));
 	TestEqual(TEXT("Pre-delete Backpack has Bag plus three flux cards"), Run->GetBackpack().Num(), 4);
 
 	TestTrue(TEXT("Destroy Bag succeeds with Lantern still providing capacity"),
-		Run->DestroyCardFromBackpack(Bag));
+		DestroyFirstOwnedDefinition(Run, Bag));
 
-	TestFalse(TEXT("Bag removed"), Run->IsCardInBackpack(Bag));
-	TestTrue(TEXT("Lantern remains in BattleDeck"), Run->IsCardInBattleDeck(Lantern));
+	TestFalse(TEXT("Bag removed"), BackpackContainsDefinition(Run->GetRunState(), Bag));
+	TestTrue(TEXT("Lantern remains in BattleDeck"), BattleDeckContainsDefinition(Run->GetRunState(), Lantern));
 	TestEqual(TEXT("Flux capacity now only Lantern"), Run->GetFluxCapacity(), 3);
 	TestEqual(TEXT("Backpack remains at full flux capacity"), Run->GetBackpack().Num(), 3);
 	TestEqual(TEXT("BattleDeck overflow reaches burden only after flux is full"), Run->GetRunState().BurdenZone.Num(), 1);
@@ -597,7 +701,7 @@ bool FWacomRunDeckDestroyCompanionAddsBloodlustSpec::RunTest(const FString& /*Pa
 		Run->GetPressureValue(EWacomPressureType::Bloodlust), 0);
 
 	TestTrue(TEXT("Destroy Companion succeeded"),
-		Run->DestroyCardFromBackpack(Companion));
+		DestroyFirstOwnedDefinition(Run, Companion));
 	TestEqual(TEXT("Bloodlust +1 from Companion destruction"),
 		Run->GetPressureValue(EWacomPressureType::Bloodlust), 1);
 
@@ -623,18 +727,18 @@ bool FWacomRunDeckDestroyAlsoRemovesFromBattleDeckSpec::RunTest(const FString& /
 	Run->Initialize(Char);
 
 	TestTrue(TEXT("Card initially in BattleDeck (a2 rule)"),
-		Run->IsCardInBattleDeck(Card));
+		BattleDeckContainsDefinition(Run->GetRunState(), Card));
 	TestFalse(TEXT("Card not in Backpack (互斥)"),
-		Run->IsCardInBackpack(Card));
+		BackpackContainsDefinition(Run->GetRunState(), Card));
 
-	// DestroyCardFromBackpack 应当能从 BattleDeck 中销毁（玩家拥有即可）
+	// DestroyCardByInstance 应当能从 BattleDeck 中销毁（玩家拥有即可）
 	TestTrue(TEXT("Destroy succeeded"),
-		Run->DestroyCardFromBackpack(Card));
+		DestroyFirstOwnedDefinition(Run, Card));
 
 	TestFalse(TEXT("Card no longer in BattleDeck"),
-		Run->IsCardInBattleDeck(Card));
+		BattleDeckContainsDefinition(Run->GetRunState(), Card));
 	TestFalse(TEXT("Card not in Backpack"),
-		Run->IsCardInBackpack(Card));
+		BackpackContainsDefinition(Run->GetRunState(), Card));
 
 	return true;
 }
@@ -664,7 +768,7 @@ bool FWacomRunDeckDestroyCardFromAllOwnedZonesSpec::RunTest(const FString& /*Par
 
 		if (TargetZone != EZoneKind::BattleDeck)
 		{
-			Run->AddCardToBackpack(OutTarget);
+			Run->AcquireCardToRun(OutTarget);
 		}
 
 		if (TargetZone == EZoneKind::BurdenZone)
@@ -706,66 +810,14 @@ bool FWacomRunDeckDestroyCardFromAllOwnedZonesSpec::RunTest(const FString& /*Par
 			++BroadcastCount;
 		});
 
-		TestTrue(TEXT("Delete validation sees target in owned zone"), Run->ValidateDeleteCardForGold(Target).bCanExecute);
-		TestTrue(TEXT("Destroy from owned zone succeeds"), Run->DestroyCardFromBackpack(Target));
+		TestTrue(TEXT("Delete validation sees target in owned zone"),
+			Run->ValidateDeleteCardForGoldByInstance(RemovedId).bCanExecute);
+		TestTrue(TEXT("Destroy from owned zone succeeds"), DestroyFirstOwnedDefinition(Run, Target));
 		TestFalse(TEXT("Removed instance is gone"), OwnedCardsContainInstance(Run->GetRunState(), RemovedId));
 		TestFalse(TEXT("Target definition gone"), OwnedCardsContainDefinition(Run->GetRunState(), Target));
 		TestEqual(TEXT("Destroy broadcasts once"), BroadcastCount, 1);
 		TestEqual(TEXT("Destroy does not add gold"), Run->GetGold(), 0);
 	}
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunDeckPermanentRemoveDefinitionPrioritySpec,
-	"Wacom.Run.Deck.PermanentRemoveDefinitionPriority",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomRunDeckPermanentRemoveDefinitionPrioritySpec::RunTest(const FString& /*Parameters*/)
-{
-	// Legacy Definition-level destroy compatibility: remove the first matching instance by fixed zone priority.
-	FWacomBattleFixture Fx;
-
-	UCardDefinition* Target = MakeTypeAContainerCard(Fx, 1);
-	UCardDefinition* Bag = MakeBagCard(Fx, 12);
-	UCardDefinition* TypeB = MakeTypeBContainerCard(Fx, 3);
-	UCharacterDefinition* Char = Fx.MakeCharacter(
-		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ Bag, TypeB });
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
-
-	Run->AddCardToBackpack(Target);
-	Run->AddCardToBackpack(Target);
-	Run->AddCardToBackpack(Target);
-	Run->AddCardToBackpack(Target);
-	const FGuid BattleDeckTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
-	TestTrue(TEXT("BattleDeck target id valid"), BattleDeckTargetId.IsValid());
-	TestTrue(TEXT("Move target to battle deck"), Run->MoveInstance(BattleDeckTargetId, EZoneKind::BattleDeck, FGuid()));
-	const FGuid SpecialTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
-	TestTrue(TEXT("Special target id valid"), SpecialTargetId.IsValid());
-	TestTrue(TEXT("Move target to special"), Run->MoveInstance(SpecialTargetId, EZoneKind::SpecialZone, Run->GetRunState().SpecialZones[0].OwnerInstanceId));
-	const FGuid BurdenTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
-	TestTrue(TEXT("Burden target id valid"), BurdenTargetId.IsValid());
-	TestTrue(TEXT("Move target to burden"), Run->MoveInstance(BurdenTargetId, EZoneKind::BurdenZone, FGuid()));
-
-	const TArray<FGuid> ExpectedOrder = {
-		FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::Backpack),
-		FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::BattleDeck),
-		FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::BurdenZone),
-		FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::SpecialZone),
-	};
-
-	for (const FGuid ExpectedRemovedId : ExpectedOrder)
-	{
-		TestTrue(TEXT("Expected priority id valid"), ExpectedRemovedId.IsValid());
-		TestTrue(TEXT("Destroy next priority instance"), Run->DestroyCardFromBackpack(Target));
-		TestFalse(TEXT("Expected priority instance removed"), OwnedCardsContainInstance(Run->GetRunState(), ExpectedRemovedId));
-	}
-
-	TestEqual(TEXT("All target instances removed"), CountOwnedCardsByDefinition(Run->GetRunState(), Target), 0);
-	TestFalse(TEXT("Further target removal rejected"), Run->DestroyCardFromBackpack(Target));
 
 	return true;
 }
@@ -787,7 +839,7 @@ bool FWacomRunDeckDestroyCardByInstanceRemovesExactInstanceSpec::RunTest(const F
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	TestTrue(TEXT("Move first shared card to Backpack"), Run->RemoveCardFromBattleDeck(SharedCard));
+	TestTrue(TEXT("Move first shared card to Backpack"), MoveFirstBattleDeckDefinitionToBackpack(Run, SharedCard));
 	const FGuid FirstId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), SharedCard, EZoneKind::Backpack);
 	const FGuid SecondId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), SharedCard, EZoneKind::BattleDeck);
 	TestTrue(TEXT("First same-definition id valid"), FirstId.IsValid());
@@ -896,12 +948,12 @@ bool FWacomRunDeckDestroyBMainInstanceClearsOnlyMatchingSpecialZoneSpec::RunTest
 	const FGuid FirstOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
 	const FGuid SecondOwnerId = Run->GetRunState().SpecialZones[1].OwnerInstanceId;
 
-	Run->AddCardToBackpack(FirstContent);
+	Run->AcquireCardToRun(FirstContent);
 	const FGuid FirstContentId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), FirstContent);
 	TestTrue(TEXT("Move first content to first SpecialZone"),
 		Run->MoveInstance(FirstContentId, EZoneKind::SpecialZone, FirstOwnerId));
 
-	Run->AddCardToBackpack(SecondContent);
+	Run->AcquireCardToRun(SecondContent);
 	const FGuid SecondContentId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), SecondContent);
 	TestTrue(TEXT("Move second content to second SpecialZone"),
 		Run->MoveInstance(SecondContentId, EZoneKind::SpecialZone, SecondOwnerId));
@@ -958,11 +1010,11 @@ bool FWacomRunDeckDeleteCardForGoldByRaritySpec::RunTest(const FString& /*Parame
 	TestEqual(TEXT("Init gold=0"), Run->GetGold(), 0);
 
 	TestTrue(TEXT("Delete white card succeeded"),
-		Run->DeleteCardForGold(WhiteCard));
+		DeleteFirstOwnedDefinitionForGold(Run, WhiteCard));
 	TestEqual(TEXT("White card → +1 gold"), Run->GetGold(), 1);
 
 	TestTrue(TEXT("Delete blue card succeeded"),
-		Run->DeleteCardForGold(BlueCard));
+		DeleteFirstOwnedDefinitionForGold(Run, BlueCard));
 	TestEqual(TEXT("Blue card → +2 gold (total 3)"), Run->GetGold(), 3);
 
 	return true;
@@ -987,12 +1039,12 @@ bool FWacomRunDeckDeleteCardForGoldFromBurdenAndSpecialZoneSpec::RunTest(const F
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	Run->AddCardToBackpack(WhiteCard);
+	Run->AcquireCardToRun(WhiteCard);
 	const FGuid WhiteId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), WhiteCard);
 	TestTrue(TEXT("White id valid"), WhiteId.IsValid());
 	TestTrue(TEXT("Move white to burden"), Run->MoveInstance(WhiteId, EZoneKind::BurdenZone, FGuid()));
 
-	Run->AddCardToBackpack(BlueCard);
+	Run->AcquireCardToRun(BlueCard);
 	const FGuid BlueId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), BlueCard);
 	TestTrue(TEXT("Blue id valid"), BlueId.IsValid());
 	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
@@ -1004,12 +1056,12 @@ bool FWacomRunDeckDeleteCardForGoldFromBurdenAndSpecialZoneSpec::RunTest(const F
 		++BroadcastCount;
 	});
 
-	TestTrue(TEXT("Delete white from burden succeeds"), Run->DeleteCardForGold(WhiteCard));
+	TestTrue(TEXT("Delete white from burden succeeds"), DeleteFirstOwnedDefinitionForGold(Run, WhiteCard));
 	TestEqual(TEXT("White from burden gives 1 gold"), Run->GetGold(), 1);
 	TestFalse(TEXT("White removed from all owned zones"), OwnedCardsContainDefinition(Run->GetRunState(), WhiteCard));
 	TestEqual(TEXT("White delete broadcasts once"), BroadcastCount, 1);
 
-	TestTrue(TEXT("Delete blue from special succeeds"), Run->DeleteCardForGold(BlueCard));
+	TestTrue(TEXT("Delete blue from special succeeds"), DeleteFirstOwnedDefinitionForGold(Run, BlueCard));
 	TestEqual(TEXT("Blue from special gives 2 more gold"), Run->GetGold(), 3);
 	TestFalse(TEXT("Blue removed from all owned zones"), OwnedCardsContainDefinition(Run->GetRunState(), BlueCard));
 	TestEqual(TEXT("Blue delete broadcasts once"), BroadcastCount, 2);
@@ -1036,19 +1088,20 @@ bool FWacomRunDeckDeleteCardForGoldValidationSpec::RunTest(const FString& /*Para
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
+	const FGuid WhiteId = FindFirstOwnedInstanceIdByDefinition(Run->GetRunState(), WhiteCard);
+	const FGuid IntrinsicId = FindFirstOwnedInstanceIdByDefinition(Run->GetRunState(), IntrinsicCard);
+	const FGuid OnlyBagId = FindFirstOwnedInstanceIdByDefinition(Run->GetRunState(), OnlyBag);
 	TestTrue(TEXT("White card can be deleted"),
-		Run->ValidateDeleteCardForGold(WhiteCard).bCanExecute);
+		Run->ValidateDeleteCardForGoldByInstance(WhiteId).bCanExecute);
 	TestEqual(TEXT("Null delete reason"),
-		Run->ValidateDeleteCardForGold(nullptr).DisabledReason,
-		FName(TEXT("MissingCard")));
-	TestEqual(TEXT("Missing card delete reason"),
-		Run->ValidateDeleteCardForGold(MissingCard).DisabledReason,
+		Run->ValidateDeleteCardForGoldByInstance(FGuid()).DisabledReason,
 		FName(TEXT("CardNotOwned")));
+	TestFalse(TEXT("Missing card not owned"), OwnedCardsContainDefinition(Run->GetRunState(), MissingCard));
 	TestEqual(TEXT("Intrinsic delete reason"),
-		Run->ValidateDeleteCardForGold(IntrinsicCard).DisabledReason,
+		Run->ValidateDeleteCardForGoldByInstance(IntrinsicId).DisabledReason,
 		FName(TEXT("Intrinsic")));
 	TestEqual(TEXT("Last capacity provider delete reason"),
-		Run->ValidateDeleteCardForGold(OnlyBag).DisabledReason,
+		Run->ValidateDeleteCardForGoldByInstance(OnlyBagId).DisabledReason,
 		FName(TEXT("LastCapacityProvider")));
 
 	return true;
@@ -1071,7 +1124,7 @@ bool FWacomRunDeckDeleteCardForGoldByInstanceRemovesOnlyRequestedIdSpec::RunTest
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	TestTrue(TEXT("Move first shared card to backpack"), Run->RemoveCardFromBattleDeck(SharedCard));
+	TestTrue(TEXT("Move first shared card to backpack"), MoveFirstBattleDeckDefinitionToBackpack(Run, SharedCard));
 	const FGuid FirstId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), SharedCard, EZoneKind::Backpack);
 	const FGuid SecondId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), SharedCard, EZoneKind::BattleDeck);
 	TestTrue(TEXT("First same-definition id valid"), FirstId.IsValid());
@@ -1176,12 +1229,12 @@ bool FWacomRunDeckDeleteBMainInstanceClearsOnlyMatchingSpecialZoneSpec::RunTest(
 	const FGuid FirstOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
 	const FGuid SecondOwnerId = Run->GetRunState().SpecialZones[1].OwnerInstanceId;
 
-	Run->AddCardToBackpack(FirstContent);
+	Run->AcquireCardToRun(FirstContent);
 	const FGuid FirstContentId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), FirstContent);
 	TestTrue(TEXT("Move first content to first SpecialZone"),
 		Run->MoveInstance(FirstContentId, EZoneKind::SpecialZone, FirstOwnerId));
 
-	Run->AddCardToBackpack(SecondContent);
+	Run->AcquireCardToRun(SecondContent);
 	const FGuid SecondContentId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), SecondContent);
 	TestTrue(TEXT("Move second content to second SpecialZone"),
 		Run->MoveInstance(SecondContentId, EZoneKind::SpecialZone, SecondOwnerId));
@@ -1210,56 +1263,7 @@ bool FWacomRunDeckDeleteBMainInstanceClearsOnlyMatchingSpecialZoneSpec::RunTest(
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunDeckDeleteCardForGoldDefinitionKeepsLegacyPrioritySpec,
-	"Wacom.Run.Deck.DeleteCardForGold.DefinitionKeepsLegacyPriority",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomRunDeckDeleteCardForGoldDefinitionKeepsLegacyPrioritySpec::RunTest(const FString& /*Parameters*/)
-{
-	// Legacy Definition-level delete-for-gold compatibility: remove the first matching instance by fixed zone priority.
-	FWacomBattleFixture Fx;
-
-	UCardDefinition* Target = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
-	UCardDefinition* Bag = MakeBagCard(Fx, 12);
-	UCardDefinition* TypeB = MakeTypeBContainerCard(Fx, 3);
-	UCharacterDefinition* Char = Fx.MakeCharacter(
-		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ Bag, TypeB, Target });
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
-
-	Run->AddCardToBackpack(Target);
-	Run->AddCardToBackpack(Target);
-	Run->AddCardToBackpack(Target);
-
-	const FGuid SpecialTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
-	TestTrue(TEXT("Move one target to SpecialZone"),
-		Run->MoveInstance(SpecialTargetId, EZoneKind::SpecialZone, Run->GetRunState().SpecialZones[0].OwnerInstanceId));
-	const FGuid BurdenTargetId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Target);
-	TestTrue(TEXT("Move one target to BurdenZone"),
-		Run->MoveInstance(BurdenTargetId, EZoneKind::BurdenZone, FGuid()));
-
-	const FGuid BackpackTargetId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::Backpack);
-	const FGuid BattleDeckTargetId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), Target, EZoneKind::BattleDeck);
-	TestTrue(TEXT("Backpack target id valid"), BackpackTargetId.IsValid());
-	TestTrue(TEXT("BattleDeck target id valid"), BattleDeckTargetId.IsValid());
-
-	TestTrue(TEXT("Legacy Definition delete removes first priority match"),
-		Run->DeleteCardForGold(Target));
-	TestFalse(TEXT("Backpack priority instance removed first"),
-		OwnedCardsContainInstance(Run->GetRunState(), BackpackTargetId));
-	TestTrue(TEXT("BattleDeck same-definition instance remains"),
-		OwnedCardsContainInstance(Run->GetRunState(), BattleDeckTargetId));
-	TestTrue(TEXT("Burden same-definition instance remains"),
-		OwnedCardsContainInstance(Run->GetRunState(), BurdenTargetId));
-	TestTrue(TEXT("Special same-definition instance remains"),
-		OwnedCardsContainInstance(Run->GetRunState(), SpecialTargetId));
-
-	return true;
-}
-
-// ================ AddCardToBattleDeck ================
+// ================ MoveInstance To BattleDeck ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunDeckAddToBattleDeckRequiresBackpackSpec,
@@ -1280,21 +1284,21 @@ bool FWacomRunDeckAddToBattleDeckRequiresBackpackSpec::RunTest(const FString& /*
 
 	// OutOfBackpack 不在 backpack → 拒绝
 	TestFalse(TEXT("AddToBattleDeck rejected: not in backpack"),
-		Run->AddCardToBattleDeck(OutOfBackpack));
+		MoveFirstBackpackDefinitionToBattleDeck(Run, OutOfBackpack));
 
 	// Bag 在 backpack 且不在 BattleDeck（容器卡默认只进 Backpack）→ 加进去
 	TestTrue(TEXT("Bag initially in Backpack"),
-		Run->IsCardInBackpack(Bag));
+		BackpackContainsDefinition(Run->GetRunState(), Bag));
 	TestFalse(TEXT("Bag NOT initially in BattleDeck"),
-		Run->IsCardInBattleDeck(Bag));
+		BattleDeckContainsDefinition(Run->GetRunState(), Bag));
 
 	TestTrue(TEXT("AddToBattleDeck Bag succeeds"),
-		Run->AddCardToBattleDeck(Bag));
+		MoveFirstBackpackDefinitionToBattleDeck(Run, Bag));
 	TestTrue(TEXT("Bag now in BattleDeck"),
-		Run->IsCardInBattleDeck(Bag));
+		BattleDeckContainsDefinition(Run->GetRunState(), Bag));
 	// 移到 BattleDeck 后从 Backpack 移除（互斥）
 	TestFalse(TEXT("Bag no longer in Backpack after move"),
-		Run->IsCardInBackpack(Bag));
+		BackpackContainsDefinition(Run->GetRunState(), Bag));
 
 	return true;
 }
@@ -1324,19 +1328,19 @@ bool FWacomRunDeckAddToBattleDeckRespectsCapacitySpec::RunTest(const FString& /*
 
 	// 试图把 Bag 加入 → 拒绝（已达容量）
 	TestFalse(TEXT("Cannot add Bag (battle deck full)"),
-		Run->AddCardToBattleDeck(Bag));
+		MoveFirstBackpackDefinitionToBattleDeck(Run, Bag));
 
 	return true;
 }
 
-// ================ RemoveCardFromBattleDeck ================
+// ================ MoveInstance From BattleDeck ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunDeckRemoveFromBattleDeckIntrinsicRejectedSpec,
-	"Wacom.Run.Deck.RemoveFromBattleDeckIntrinsicRejected",
+	FWacomRunDeckMoveIntrinsicFromBattleDeckUsesInstancePathSpec,
+	"Wacom.Run.Deck.MoveIntrinsicFromBattleDeckUsesInstancePath",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunDeckRemoveFromBattleDeckIntrinsicRejectedSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomRunDeckMoveIntrinsicFromBattleDeckUsesInstancePathSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 
@@ -1350,12 +1354,14 @@ bool FWacomRunDeckRemoveFromBattleDeckIntrinsicRejectedSpec::RunTest(const FStri
 
 	// IntrinsicNormal 非容器卡 → 默认进 BattleDeck
 	TestTrue(TEXT("IntrinsicNormal initially in BattleDeck"),
-		Run->IsCardInBattleDeck(IntrinsicNormal));
+		BattleDeckContainsDefinition(Run->GetRunState(), IntrinsicNormal));
 
-	TestFalse(TEXT("Remove Intrinsic from BattleDeck rejected"),
-		Run->RemoveCardFromBattleDeck(IntrinsicNormal));
-	TestTrue(TEXT("Intrinsic still in BattleDeck"),
-		Run->IsCardInBattleDeck(IntrinsicNormal));
+	TestTrue(TEXT("Move Intrinsic from BattleDeck by instance succeeds"),
+		MoveFirstBattleDeckDefinitionToBackpack(Run, IntrinsicNormal));
+	TestFalse(TEXT("Intrinsic no longer in BattleDeck"),
+		BattleDeckContainsDefinition(Run->GetRunState(), IntrinsicNormal));
+	TestTrue(TEXT("Intrinsic moved to Backpack"),
+		BackpackContainsDefinition(Run->GetRunState(), IntrinsicNormal));
 
 	return true;
 }
@@ -1378,15 +1384,15 @@ bool FWacomRunDeckRemoveFromBattleDeckSucceedsSpec::RunTest(const FString& /*Par
 	Run->Initialize(Char);
 
 	TestTrue(TEXT("Card initially in BattleDeck"),
-		Run->IsCardInBattleDeck(Card));
+		BattleDeckContainsDefinition(Run->GetRunState(), Card));
 
 	TestTrue(TEXT("Remove succeeds"),
-		Run->RemoveCardFromBattleDeck(Card));
+		MoveFirstBattleDeckDefinitionToBackpack(Run, Card));
 	TestFalse(TEXT("Card no longer in BattleDeck"),
-		Run->IsCardInBattleDeck(Card));
+		BattleDeckContainsDefinition(Run->GetRunState(), Card));
 	// 但仍在 Backpack（备战移除不影响背包）
 	TestTrue(TEXT("Card still in Backpack"),
-		Run->IsCardInBackpack(Card));
+		BackpackContainsDefinition(Run->GetRunState(), Card));
 
 	return true;
 }
@@ -1696,9 +1702,9 @@ bool FWacomRunDeckZoneBroadcastCountSpec::RunTest(const FString& /*Parameters*/)
 		++BroadcastCount;
 	});
 
-	Run->AddCardToBackpack(Fx.MakeNoopCard(0));
-	TestEqual(TEXT("AddCardToBackpack emits once"), BroadcastCount, 1);
-	TestEqual(TEXT("AddCardToBackpack writes Burden pressure once"), Run->GetPressureValue(EWacomPressureType::Burden), 1);
+	Run->AcquireCardToRun(Fx.MakeNoopCard(0));
+	TestEqual(TEXT("AcquireCardToRun emits once"), BroadcastCount, 1);
+	TestEqual(TEXT("AcquireCardToRun writes Burden pressure once"), Run->GetPressureValue(EWacomPressureType::Burden), 1);
 
 	Run->RecomputeBurden();
 	TestEqual(TEXT("Public RecomputeBurden emits once"), BroadcastCount, 2);
@@ -1730,7 +1736,7 @@ bool FWacomRunDeckSpecialZoneFlagResetSpec::RunTest(const FString& /*Parameters*
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
-	Run->AddCardToBackpack(Stored);
+	Run->AcquireCardToRun(Stored);
 
 	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
 	const FGuid StoredId = Run->GetBackpack().Last().InstanceId;
@@ -1774,7 +1780,7 @@ bool FWacomRunDeckSetSpecialZoneFlagOnlySpec::RunTest(const FString& /*Parameter
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
-	Run->AddCardToBackpack(Stored);
+	Run->AcquireCardToRun(Stored);
 
 	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
 	const FGuid StoredId = Run->GetBackpack().Last().InstanceId;
@@ -1836,7 +1842,7 @@ bool FWacomRunDeckBuildInitParamsIncludesEnabledSpecialZoneSpec::RunTest(const F
 	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
 
 	const FGuid BOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
-	Run->AddCardToBackpack(Weapon);
+	Run->AcquireCardToRun(Weapon);
 	const FGuid WeaponId = Run->GetBackpack().Last().InstanceId;
 
 	TestTrue(TEXT("Move B master to BattleDeck"), Run->MoveInstance(BOwnerId, EZoneKind::BattleDeck, FGuid()));
@@ -1891,7 +1897,7 @@ bool FWacomRunDeckBuildInitParamsSpecialZoneEntryScenariosSpec::RunTest(const FS
 	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
 
 	const FGuid BOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
-	Run->AddCardToBackpack(Weapon);
+	Run->AcquireCardToRun(Weapon);
 	const FGuid WeaponId = Run->GetBackpack().Last().InstanceId;
 	TestTrue(TEXT("Move weapon into SpecialZone"), Run->MoveInstance(WeaponId, EZoneKind::SpecialZone, BOwnerId));
 
@@ -1936,7 +1942,7 @@ bool FWacomRunDeckBContainerMoveKeepsSpecialZoneSpec::RunTest(const FString& /*P
 	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
 
 	const FGuid BOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
-	Run->AddCardToBackpack(Stored);
+	Run->AcquireCardToRun(Stored);
 	const FGuid StoredId = Run->GetBackpack().Last().InstanceId;
 	TestTrue(TEXT("Move stored card into SpecialZone"), Run->MoveInstance(StoredId, EZoneKind::SpecialZone, BOwnerId));
 	TestTrue(TEXT("Enable stored card"), Run->SetSpecialZoneCardBattleEnabled(StoredId, true));
@@ -2076,7 +2082,7 @@ bool FWacomRunDeckShopOfferPurchaseSpec::RunTest(const FString& /*Parameters*/)
 
 	TestTrue(TEXT("Purchase offer A succeeds"), Run->PurchaseShopOffer(OfferAId));
 	TestEqual(TEXT("Gold reduced by A price"), Run->GetGold(), 7);
-	TestTrue(TEXT("Purchased card A enters backpack"), Run->IsCardInBackpack(ShopCardA));
+	TestTrue(TEXT("Purchased card A enters backpack"), BackpackContainsDefinition(Run->GetRunState(), ShopCardA));
 	TestEqual(TEXT("Backpack gained one card"), Run->GetBackpack().Num(), StartBackpackCount + 1);
 	TestEqual(TEXT("Purchase does not consume node before close"), Run->GetRemainingNodeCount(), StartNodes);
 
@@ -2087,7 +2093,7 @@ bool FWacomRunDeckShopOfferPurchaseSpec::RunTest(const FString& /*Parameters*/)
 
 	TestTrue(TEXT("Purchase offer B succeeds"), Run->PurchaseShopOffer(OfferBId));
 	TestEqual(TEXT("Gold reduced by B price"), Run->GetGold(), 5);
-	TestTrue(TEXT("Purchased card B enters backpack"), Run->IsCardInBackpack(ShopCardB));
+	TestTrue(TEXT("Purchased card B enters backpack"), BackpackContainsDefinition(Run->GetRunState(), ShopCardB));
 	TestEqual(TEXT("Backpack gained two cards"), Run->GetBackpack().Num(), StartBackpackCount + 2);
 	TestEqual(TEXT("Second purchase still does not consume node before close"), Run->GetRemainingNodeCount(), StartNodes);
 
@@ -2324,7 +2330,7 @@ bool FWacomRunDeckSpecialZoneCapacityForOwnerSpec::RunTest(const FString& /*Para
 	TestEqual(TEXT("Zero GUID -> 0"),
 		Run->GetSpecialZoneCapacityFor(FGuid()), 0);
 
-	TestTrue(TEXT("Move owner to BattleDeck"), Run->AddCardToBattleDeck(TypeB4));
+	TestTrue(TEXT("Move owner to BattleDeck"), MoveFirstBackpackDefinitionToBattleDeck(Run, TypeB4));
 	TestEqual(TEXT("Capacity stable after owner moves to BattleDeck"),
 		Run->GetSpecialZoneCapacityFor(Owner4), 3);
 
@@ -2362,7 +2368,7 @@ bool FWacomRunDeckFluxCapacityOnlyCountsTypeASpec::RunTest(const FString& /*Para
 	TestEqual(TEXT("BattleDeckCapacity counts TypeA and TypeB"), Run->GetBattleDeckCapacity(), 13);
 
 	// 容器卡换到 BattleDeck 后两个公式都稳定
-	TestTrue(TEXT("Add TypeB to BattleDeck"), Run->AddCardToBattleDeck(TypeB));
+	TestTrue(TEXT("Add TypeB to BattleDeck"), MoveFirstBackpackDefinitionToBattleDeck(Run, TypeB));
 	TestEqual(TEXT("FluxCapacity stable"), Run->GetFluxCapacity(), 10);
 	TestEqual(TEXT("BattleDeckCapacity stable"), Run->GetBattleDeckCapacity(), 13);
 
@@ -2456,7 +2462,7 @@ bool FWacomRunDeckBackpackStorageSnapshotSpec::RunTest(const FString& /*Paramete
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
-	Run->AddCardToBackpack(FluxContent);
+	Run->AcquireCardToRun(FluxContent);
 
 	auto FindBackpackInstanceId = [RunPtr = Run.Get()](const UCardDefinition* Definition)
 	{
@@ -2507,7 +2513,7 @@ bool FWacomRunDeckBackpackStorageSnapshotSpec::RunTest(const FString& /*Paramete
 		TestFalse(TEXT("Initial A container not physical BattleDeck"), TypeAView->bIsPhysicalInBattleDeck);
 	}
 
-	TestTrue(TEXT("Move A container to BattleDeck"), Run->AddCardToBattleDeck(TypeAMain));
+	TestTrue(TEXT("Move A container to BattleDeck"), MoveFirstBackpackDefinitionToBattleDeck(Run, TypeAMain));
 	FRunBackpackStorageSnapshot Snap = Run->BuildBackpackStorageSnapshot();
 	TestFalse(TEXT("Moved A container no longer appears in Flux.ContentCards"),
 		HasDefinition(Snap.Flux.ContentCards, TypeAMain));
@@ -2529,7 +2535,7 @@ bool FWacomRunDeckBackpackStorageSnapshotSpec::RunTest(const FString& /*Paramete
 		return false;
 	}
 
-	Run->AddCardToBackpack(SpecialContent);
+	Run->AcquireCardToRun(SpecialContent);
 	const FGuid SpecialContentId = FindBackpackInstanceId(SpecialContent);
 	const FGuid SpecialContainerId = FindBackpackInstanceId(SpecialContainerContent);
 	const FGuid BurdenContainerId = FindBackpackInstanceId(BurdenContainer);
@@ -2544,7 +2550,7 @@ bool FWacomRunDeckBackpackStorageSnapshotSpec::RunTest(const FString& /*Paramete
 		Run->MoveInstance(SpecialContentId, EZoneKind::SpecialZone, BMasterId));
 	TestTrue(TEXT("Move container into SpecialZone as content"),
 		Run->MoveInstance(SpecialContainerId, EZoneKind::SpecialZone, BMasterId));
-	TestTrue(TEXT("Move B master to BattleDeck"), Run->AddCardToBattleDeck(TypeBMaster));
+	TestTrue(TEXT("Move B master to BattleDeck"), MoveFirstBackpackDefinitionToBattleDeck(Run, TypeBMaster));
 	TestTrue(TEXT("Enable SpecialZone card for battle projection"),
 		Run->SetSpecialZoneCardBattleEnabled(SpecialContentId, true));
 	TestTrue(TEXT("Move container into BurdenZone"),
@@ -2648,7 +2654,7 @@ bool FWacomRunDeckCollectTypeBContainersSpec::RunTest(const FString& /*Parameter
 
 	// 把 TypeB1 移到 BattleDeck，仍应被枚举到（owner instance 在 Backpack ∪ BattleDeck 都接受）。
 	// 此操作不改变 SpecialZones 数组顺序（B 主卡跨 zone 移动只改主卡所在父 zone，不动 entry）。
-	TestTrue(TEXT("Add TypeB1 to BattleDeck"), Run->AddCardToBattleDeck(TypeB1));
+	TestTrue(TEXT("Add TypeB1 to BattleDeck"), MoveFirstBackpackDefinitionToBattleDeck(Run, TypeB1));
 	Run->CollectTypeBContainers(Owners);
 	TestEqual(TEXT("Still two after move"), Owners.Num(), 2);
 	if (Owners.Num() == 2)
@@ -2818,8 +2824,8 @@ bool FWacomRunDeckMuseiLanternStartsInBattleDeckSpec::RunTest(const FString& /*P
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	Run->Initialize(Char);
 
-	TestFalse(TEXT("Lantern not initially in Backpack"), Run->IsCardInBackpack(Lantern));
-	TestTrue(TEXT("Lantern initially in BattleDeck"), Run->IsCardInBattleDeck(Lantern));
+	TestFalse(TEXT("Lantern not initially in Backpack"), BackpackContainsDefinition(Run->GetRunState(), Lantern));
+	TestTrue(TEXT("Lantern initially in BattleDeck"), BattleDeckContainsDefinition(Run->GetRunState(), Lantern));
 	TestEqual(TEXT("Lantern capacity contributes FluxCapacity"), Run->GetFluxCapacity(), 3);
 	TestTrue(TEXT("Delete provider available from BattleDeck"), Run->IsDeleteFunctionAvailable());
 
@@ -2849,7 +2855,7 @@ bool FWacomRunDeckDeleteFunctionLostAfterDestroySpec::RunTest(const FString& /*P
 	TestTrue(TEXT("Initially available"), Run->IsDeleteFunctionAvailable());
 
 	// 销毁 Lantern → 删牌功能消失
-	TestTrue(TEXT("Destroy Lantern OK"), Run->DestroyCardFromBackpack(Lantern));
+	TestTrue(TEXT("Destroy Lantern OK"), DestroyFirstOwnedDefinition(Run, Lantern));
 	TestFalse(TEXT("After destroy, no longer available"), Run->IsDeleteFunctionAvailable());
 
 	return true;
@@ -3015,7 +3021,7 @@ bool FWacomRunDeckPropertyInstanceIdUniqueSpec::RunTest(const FString& /*Paramet
 	// Feature: backpack-special-zone-stage-4-5, Property 1: InstanceId 全局唯一且非零
 	// Validates: Requirements 1.3, 1.5, 7.2
 	//
-	// 对任意 Initialize / AddCardToBackpack 操作序列产生的 fresh URunSession，
+	// 对任意 Initialize / AcquireCardToRun 操作序列产生的 fresh URunSession，
 	// Backpack ∪ BattleDeck ∪ BurdenZone ∪ ⋃ SpecialZones.Cards 中所有 InstanceId
 	// 必须两两互异且不含 FGuid()（zero GUID）。
 	//
@@ -3049,14 +3055,14 @@ bool FWacomRunDeckPropertyInstanceIdUniqueSpec::RunTest(const FString& /*Paramet
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 		Run->Initialize(Char);
 
-		// ---- 操作序列：0..15 次随机 AddCardToBackpack（含 nullptr 混入，验证 R1.5）----
+		// ---- 操作序列：0..15 次随机 AcquireCardToRun（含 nullptr 混入，验证 R1.5）----
 		const int32 NumAdds = Rng.RandRange(0, 15);
 		for (int32 i = 0; i < NumAdds; ++i)
 		{
 			UCardDefinition* Card = (Rng.RandRange(0, 9) == 0)
 				? nullptr
 				: MakePbtCard(Fx, Rng);
-			Run->AddCardToBackpack(Card);
+			Run->AcquireCardToRun(Card);
 		}
 
 		// ---- 断言：Backpack ∪ BattleDeck 的 InstanceId 集合两两互异 + 非 zero GUID ----
@@ -3625,27 +3631,26 @@ bool FWacomRunDeckPropertyFindInstanceConsistencySpec::RunTest(const FString& /*
 }
 
 
-// ================ Stage 4.5.0 Property 4: 按 Definition 操作选第一个匹配 instance ================
+// ================ Stage 4.5.0 Property 4: 测试辅助按 Definition 定位第一个匹配 instance ================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunDeckPropertyDefinitionFirstMatchSpec,
-	"Wacom.Run.Deck.PropertyDefinitionFirstMatch",
+	FWacomRunDeckPropertyInstanceHelperFirstMatchSpec,
+	"Wacom.Run.Deck.PropertyInstanceHelperFirstMatch",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomRunDeckPropertyInstanceHelperFirstMatchSpec::RunTest(const FString& /*Parameters*/)
 {
-	// Feature: backpack-special-zone-stage-4-5, Property 4: 按 Definition 操作选第一个匹配 instance
+	// Feature: backpack-special-zone-stage-4-5, Property 4: 测试辅助按 Definition 定位第一个匹配 instance
 	// Validates: Requirements 1.9, 1.10
 	//
 	// 对任意 URunSession 状态，含同一 Definition 多个 instance（数组下标分散）时：
-	//   - IsCardInBackpack(Card) / IsCardInBattleDeck(Card) 当且仅当对应 zone 内
+	//   - BackpackContainsDefinition(Card) / BattleDeckContainsDefinition(Card) 当且仅当对应 zone 内
 	//     存在至少一张 instance.Definition == Card 时返回 true；
 	//     未持有的 Definition 在两区都返回 false。
-	//   - AddCardToBattleDeck(Card) / RemoveCardFromBattleDeck(Card) /
-	//     DestroyCardFromBackpack(Card) 在源 zone 内按下标升序选取第一个
-	//     Definition 匹配的 instance 操作；其它同 Definition 的 instance 与
-	//     另一区的同 Definition instance 全部保留（InstanceId 与数组顺序不变）。
-	//   - DestroyCardFromBackpack 的源 zone 优先级：Backpack → BattleDeck → BurdenZone → SpecialZones。
+	//   - 测试辅助先按 Definition 找到源 zone 内下标最小的 instance，再提交正式
+	//     MoveInstance / DestroyCardByInstance 入口；其它同 Definition 的 instance 与另一区的
+	//     同 Definition instance 全部保留（InstanceId 与数组顺序不变）。
+	//   - 这个 property 不声明 public Definition 级 deck API；玩家已拥有卡正式入口仍是 InstanceId。
 
 	const int32 NumIterations = 150;     // ≥ 100，按 design §Testing Strategy
 	const int32 BaseSeed      = 0xDEFCA11;
@@ -3685,19 +3690,19 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 
 		// ---- 生成器 ----
 		// CardX：本次迭代被测的 target Definition。无 Intrinsic / 无 BagProvider / 无 Companion，
-		// 避免触发 DestroyCardFromBackpack 的拒绝路径（GDD §11.8 / Companion +1 嗜血副作用）。
+		// 避免触发 DestroyCardByInstance 的拒绝路径（GDD §11.8 / Companion +1 嗜血副作用）。
 		UCardDefinition* CardX = Fx.MakeNoopCard(0);
 		// CardY：从未加入 Run 的 Definition，用于断言 IsCardIn* 返回 false（"未持有"路径）。
 		UCardDefinition* CardY = Fx.MakeNoopCard(0);
 
-		// Bag 兜底两件事：a) 提供 BattleDeckCapacity > 0 让 AddCardToBattleDeck 有空位；
-		// b) 让 DestroyCardFromBackpack 不会因"最后一张容量来源卡"被拒（CardX 不是容器）。
+		// Bag 兜底两件事：a) 提供 BattleDeckCapacity > 0 让 MoveInstance 有空位；
+		// b) 让 DestroyCardByInstance 不会因"最后一张容量来源卡"被拒（CardX 不是容器）。
 		// Capacity=12 远大于本测试构造的 BattleDeck 数量上限。
 		UCardDefinition* Bag = MakeBagCard(Fx, /*Capacity*/ 12);
 
 		// 多 instance 同 Definition 的关键：StarterDeck 含 BackpackInitial 张 CardX。
 		// CardX 是非容器卡 → Initialize a2 把它们全分到 BattleDeck；后续用
-		// RemoveCardFromBattleDeck 把若干张拉回 Backpack，让 Backpack / BattleDeck
+		// MoveInstance 把若干张拉回 Backpack，让 Backpack / BattleDeck
 		// 同时含若干张 CardX 实例（同 Definition，不同 InstanceId）。
 		const int32 BackpackInitial  = Rng.RandRange(3, 5);
 		const int32 BattleDeckTarget = Rng.RandRange(2, 4);
@@ -3718,7 +3723,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 		const int32 PullToBackpack = FMath::Max(0, BackpackInitial - BattleDeckTarget);
 		for (int32 i = 0; i < PullToBackpack; ++i)
 		{
-			const bool bOk = Run->RemoveCardFromBattleDeck(CardX);
+			const bool bOk = MoveFirstBattleDeckDefinitionToBackpack(Run, CardX);
 			if (!bOk) { break; }
 		}
 
@@ -3734,44 +3739,44 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			return false;
 		}
 
-		// ---------- 1) 谓词：IsCardInBackpack / IsCardInBattleDeck（R1.9）----------
+		// ---------- 1) 谓词：BackpackContainsDefinition / BattleDeckContainsDefinition（R1.9）----------
 		const bool bExpectedInBp = (BpXCount0 > 0);
 		const bool bExpectedInBd = (BdXCount0 > 0);
-		if (Run->IsCardInBackpack(CardX) != bExpectedInBp)
+		if (BackpackContainsDefinition(Run->GetRunState(), CardX) != bExpectedInBp)
 		{
 			AddError(FString::Printf(
-				TEXT("Property 4 FAILED: IsCardInBackpack(CardX)=%d 与期望(%d)不一致。")
+				TEXT("Property 4 FAILED: BackpackContainsDefinition(CardX)=%d 与期望(%d)不一致。")
 				TEXT("Counterexample: Seed=%d Iter=%d BpXCount=%d BdXCount=%d"),
-				(int32)Run->IsCardInBackpack(CardX), (int32)bExpectedInBp,
+				(int32)BackpackContainsDefinition(Run->GetRunState(), CardX), (int32)bExpectedInBp,
 				Seed, Iter, BpXCount0, BdXCount0));
 			return false;
 		}
-		if (Run->IsCardInBattleDeck(CardX) != bExpectedInBd)
+		if (BattleDeckContainsDefinition(Run->GetRunState(), CardX) != bExpectedInBd)
 		{
 			AddError(FString::Printf(
-				TEXT("Property 4 FAILED: IsCardInBattleDeck(CardX)=%d 与期望(%d)不一致。")
+				TEXT("Property 4 FAILED: BattleDeckContainsDefinition(CardX)=%d 与期望(%d)不一致。")
 				TEXT("Counterexample: Seed=%d Iter=%d BpXCount=%d BdXCount=%d"),
-				(int32)Run->IsCardInBattleDeck(CardX), (int32)bExpectedInBd,
+				(int32)BattleDeckContainsDefinition(Run->GetRunState(), CardX), (int32)bExpectedInBd,
 				Seed, Iter, BpXCount0, BdXCount0));
 			return false;
 		}
 		// CardY 从未加入 Run → 两区都返回 false（"未持有 Definition" 路径）
-		if (Run->IsCardInBackpack(CardY))
+		if (BackpackContainsDefinition(Run->GetRunState(), CardY))
 		{
 			AddError(FString::Printf(
-				TEXT("Property 4 FAILED: IsCardInBackpack(CardY) 期望 false 但返回 true。")
+				TEXT("Property 4 FAILED: BackpackContainsDefinition(CardY) 期望 false 但返回 true。")
 				TEXT("Counterexample: Seed=%d Iter=%d"), Seed, Iter));
 			return false;
 		}
-		if (Run->IsCardInBattleDeck(CardY))
+		if (BattleDeckContainsDefinition(Run->GetRunState(), CardY))
 		{
 			AddError(FString::Printf(
-				TEXT("Property 4 FAILED: IsCardInBattleDeck(CardY) 期望 false 但返回 true。")
+				TEXT("Property 4 FAILED: BattleDeckContainsDefinition(CardY) 期望 false 但返回 true。")
 				TEXT("Counterexample: Seed=%d Iter=%d"), Seed, Iter));
 			return false;
 		}
 
-		// ---------- 2) AddCardToBattleDeck(CardX)：移动 Backpack 内 CardX 第一张（R1.10）----------
+		// ---------- 2) MoveInstance：移动 Backpack 内 CardX 第一张到 BattleDeck（R1.10）----------
 		if (BpXCount0 >= 1
 			&& Run->GetBattleDeck().Num() < Run->GetBattleDeckCapacity())
 		{
@@ -3780,11 +3785,11 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			const TArray<FGuid> BdIdsPre = CollectIdsByDefinition(Run->GetBattleDeck(), CardX);
 			const FGuid ExpectedMovedId  = BpIdsPre[0];   // R1.10：第一个匹配 instance
 
-			const bool bOk = Run->AddCardToBattleDeck(CardX);
+			const bool bOk = MoveFirstBackpackDefinitionToBattleDeck(Run, CardX);
 			if (!bOk)
 			{
 				AddError(FString::Printf(
-					TEXT("Property 4 FAILED: AddCardToBattleDeck(CardX) 期望成功但返回 false。")
+					TEXT("Property 4 FAILED: MoveInstance Backpack->BattleDeck 期望成功但返回 false。")
 					TEXT("Counterexample: Seed=%d Iter=%d BpXCount=%d BdNum=%d Capacity=%d"),
 					Seed, Iter, BpXCount0,
 					Run->GetBattleDeck().Num(), Run->GetBattleDeckCapacity()));
@@ -3795,7 +3800,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			if (PileContainsId(Run->GetBackpack(), ExpectedMovedId))
 			{
 				AddError(FString::Printf(
-					TEXT("Property 4 FAILED: AddCardToBattleDeck 后 Backpack 仍含 ExpectedMovedId=%s。")
+					TEXT("Property 4 FAILED: MoveInstance Backpack->BattleDeck 后 Backpack 仍含 ExpectedMovedId=%s。")
 					TEXT("Counterexample: Seed=%d Iter=%d"),
 					*ExpectedMovedId.ToString(EGuidFormats::DigitsWithHyphens), Seed, Iter));
 				return false;
@@ -3804,7 +3809,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			if (!PileContainsId(Run->GetBattleDeck(), ExpectedMovedId))
 			{
 				AddError(FString::Printf(
-					TEXT("Property 4 FAILED: AddCardToBattleDeck 后 BattleDeck 不含 ExpectedMovedId=%s。")
+					TEXT("Property 4 FAILED: MoveInstance Backpack->BattleDeck 后 BattleDeck 不含 ExpectedMovedId=%s。")
 					TEXT("Counterexample: Seed=%d Iter=%d"),
 					*ExpectedMovedId.ToString(EGuidFormats::DigitsWithHyphens), Seed, Iter));
 				return false;
@@ -3815,7 +3820,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 				if (!PileContainsId(Run->GetBackpack(), BpIdsPre[i]))
 				{
 					AddError(FString::Printf(
-						TEXT("Property 4 FAILED: AddCardToBattleDeck 误碰 Backpack 内 InstanceId=%s。")
+						TEXT("Property 4 FAILED: MoveInstance Backpack->BattleDeck 误碰 Backpack 内 InstanceId=%s。")
 						TEXT("Counterexample: Seed=%d Iter=%d ExpectedMovedId=%s"),
 						*BpIdsPre[i].ToString(EGuidFormats::DigitsWithHyphens),
 						Seed, Iter,
@@ -3829,7 +3834,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 				if (!PileContainsId(Run->GetBattleDeck(), Id))
 				{
 					AddError(FString::Printf(
-						TEXT("Property 4 FAILED: AddCardToBattleDeck 后原 BattleDeck-CardX InstanceId=%s 丢失。")
+						TEXT("Property 4 FAILED: MoveInstance Backpack->BattleDeck 后原 BattleDeck-CardX InstanceId=%s 丢失。")
 						TEXT("Counterexample: Seed=%d Iter=%d"),
 						*Id.ToString(EGuidFormats::DigitsWithHyphens), Seed, Iter));
 					return false;
@@ -3837,18 +3842,18 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			}
 		}
 
-		// ---------- 3) RemoveCardFromBattleDeck(CardX)：移动 BattleDeck 内 CardX 第一张回 Backpack（R1.10）----------
+		// ---------- 3) MoveInstance：移动 BattleDeck 内 CardX 第一张回 Backpack（R1.10）----------
 		if (CountByDefinition(Run->GetBattleDeck(), CardX) >= 1)
 		{
 			const TArray<FGuid> BpIdsPre = CollectIdsByDefinition(Run->GetBackpack(),   CardX);
 			const TArray<FGuid> BdIdsPre = CollectIdsByDefinition(Run->GetBattleDeck(), CardX);
 			const FGuid ExpectedMovedId  = BdIdsPre[0];   // R1.10：BattleDeck 第一个匹配 instance
 
-			const bool bOk = Run->RemoveCardFromBattleDeck(CardX);
+			const bool bOk = MoveFirstBattleDeckDefinitionToBackpack(Run, CardX);
 			if (!bOk)
 			{
 				AddError(FString::Printf(
-					TEXT("Property 4 FAILED: RemoveCardFromBattleDeck(CardX) 期望成功但返回 false。")
+					TEXT("Property 4 FAILED: MoveInstance BattleDeck->Backpack 期望成功但返回 false。")
 					TEXT("Counterexample: Seed=%d Iter=%d BdXCount=%d"),
 					Seed, Iter, BdIdsPre.Num()));
 				return false;
@@ -3857,7 +3862,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			if (PileContainsId(Run->GetBattleDeck(), ExpectedMovedId))
 			{
 				AddError(FString::Printf(
-					TEXT("Property 4 FAILED: RemoveCardFromBattleDeck 后 BattleDeck 仍含 ExpectedMovedId=%s。")
+					TEXT("Property 4 FAILED: MoveInstance BattleDeck->Backpack 后 BattleDeck 仍含 ExpectedMovedId=%s。")
 					TEXT("Counterexample: Seed=%d Iter=%d"),
 					*ExpectedMovedId.ToString(EGuidFormats::DigitsWithHyphens), Seed, Iter));
 				return false;
@@ -3865,7 +3870,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			if (!PileContainsId(Run->GetBackpack(), ExpectedMovedId))
 			{
 				AddError(FString::Printf(
-					TEXT("Property 4 FAILED: RemoveCardFromBattleDeck 后 Backpack 不含 ExpectedMovedId=%s。")
+					TEXT("Property 4 FAILED: MoveInstance BattleDeck->Backpack 后 Backpack 不含 ExpectedMovedId=%s。")
 					TEXT("Counterexample: Seed=%d Iter=%d"),
 					*ExpectedMovedId.ToString(EGuidFormats::DigitsWithHyphens), Seed, Iter));
 				return false;
@@ -3876,7 +3881,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 				if (!PileContainsId(Run->GetBattleDeck(), BdIdsPre[i]))
 				{
 					AddError(FString::Printf(
-						TEXT("Property 4 FAILED: RemoveCardFromBattleDeck 误碰 BattleDeck 内 InstanceId=%s。")
+						TEXT("Property 4 FAILED: MoveInstance BattleDeck->Backpack 误碰 BattleDeck 内 InstanceId=%s。")
 						TEXT("Counterexample: Seed=%d Iter=%d ExpectedMovedId=%s"),
 						*BdIdsPre[i].ToString(EGuidFormats::DigitsWithHyphens),
 						Seed, Iter,
@@ -3890,7 +3895,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 				if (!PileContainsId(Run->GetBackpack(), Id))
 				{
 					AddError(FString::Printf(
-						TEXT("Property 4 FAILED: RemoveCardFromBattleDeck 后原 Backpack-CardX InstanceId=%s 丢失。")
+						TEXT("Property 4 FAILED: MoveInstance BattleDeck->Backpack 后原 Backpack-CardX InstanceId=%s 丢失。")
 						TEXT("Counterexample: Seed=%d Iter=%d"),
 						*Id.ToString(EGuidFormats::DigitsWithHyphens), Seed, Iter));
 					return false;
@@ -3898,8 +3903,8 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			}
 		}
 
-		// ---------- 4) DestroyCardFromBackpack(CardX)：Backpack → BattleDeck 优先（R1.10）----------
-		// 本 property 只构造 Backpack/BattleDeck；四区优先级由 DestroyCardFromAllOwnedZones/PermanentRemoveDefinitionPriority 覆盖。
+		// ---------- 4) DestroyCardByInstance(CardX)：Backpack → BattleDeck 优先（R1.10）----------
+		// 本 property 只构造 Backpack/BattleDeck；四区销毁入口由 DestroyCardFromAllOwnedZones 覆盖。
 		const TArray<FGuid> BpIdsPreD = CollectIdsByDefinition(Run->GetBackpack(),   CardX);
 		const TArray<FGuid> BdIdsPreD = CollectIdsByDefinition(Run->GetBattleDeck(), CardX);
 		if (BpIdsPreD.Num() > 0 || BdIdsPreD.Num() > 0)
@@ -3907,11 +3912,11 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 			const bool  bFromBackpack       = (BpIdsPreD.Num() > 0);
 			const FGuid ExpectedDestroyedId = bFromBackpack ? BpIdsPreD[0] : BdIdsPreD[0];
 
-			const bool bOk = Run->DestroyCardFromBackpack(CardX);
+			const bool bOk = DestroyFirstOwnedDefinition(Run, CardX);
 			if (!bOk)
 			{
 				AddError(FString::Printf(
-					TEXT("Property 4 FAILED: DestroyCardFromBackpack(CardX) 期望成功但返回 false。")
+					TEXT("Property 4 FAILED: DestroyCardByInstance(CardX) 期望成功但返回 false。")
 					TEXT("Counterexample: Seed=%d Iter=%d BpXCount=%d BdXCount=%d"),
 					Seed, Iter, BpIdsPreD.Num(), BdIdsPreD.Num()));
 				return false;
@@ -3922,7 +3927,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 				|| PileContainsId(Run->GetBattleDeck(), ExpectedDestroyedId))
 			{
 				AddError(FString::Printf(
-					TEXT("Property 4 FAILED: DestroyCardFromBackpack 后 ExpectedDestroyedId=%s 仍存在。")
+					TEXT("Property 4 FAILED: DestroyCardByInstance 后 ExpectedDestroyedId=%s 仍存在。")
 					TEXT("Counterexample: Seed=%d Iter=%d FromBackpack=%d"),
 					*ExpectedDestroyedId.ToString(EGuidFormats::DigitsWithHyphens),
 					Seed, Iter, (int32)bFromBackpack));
@@ -3939,7 +3944,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 				if (!bStillThere)
 				{
 					AddError(FString::Printf(
-						TEXT("Property 4 FAILED: DestroyCardFromBackpack 误碰源 zone 内 InstanceId=%s。")
+						TEXT("Property 4 FAILED: DestroyCardByInstance 误碰源 zone 内 InstanceId=%s。")
 						TEXT("Counterexample: Seed=%d Iter=%d FromBackpack=%d"),
 						*Id.ToString(EGuidFormats::DigitsWithHyphens),
 						Seed, Iter, (int32)bFromBackpack));
@@ -3956,7 +3961,7 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 				if (!bStillThere)
 				{
 					AddError(FString::Printf(
-						TEXT("Property 4 FAILED: DestroyCardFromBackpack 误碰另一区 InstanceId=%s。")
+						TEXT("Property 4 FAILED: DestroyCardByInstance 误碰另一区 InstanceId=%s。")
 						TEXT("Counterexample: Seed=%d Iter=%d FromBackpack=%d"),
 						*Id.ToString(EGuidFormats::DigitsWithHyphens),
 						Seed, Iter, (int32)bFromBackpack));
@@ -3968,8 +3973,6 @@ bool FWacomRunDeckPropertyDefinitionFirstMatchSpec::RunTest(const FString& /*Par
 
 	return true;
 }
-
-
 // ================ Stage 4.5.0 EXAMPLE / EDGE_CASE: 4.5.0 结构与 fallback ================
 //
 // Task 3.7：覆盖默认构造结构、fallback 路径与 R1.14 ensureMsgf 兜底文档。
@@ -4096,7 +4099,7 @@ bool FWacomRunDeckZeroGuidEnsureMsgfDocumentationSpec::RunTest(const FString& /*
 	// 因此不在此处直接驱动该路径。
 	//
 	// 替代做法：sanity 校验 R1.14 的"前置条件"——`FGuid::NewGuid()` 永远输出 valid GUID。
-	// 该前置条件失效会立即在 Initialize / AddCardToBackpack 路径上触发 ensureMsgf。
+	// 该前置条件失效会立即在 Initialize / AcquireCardToRun 路径上触发 ensureMsgf。
 	for (int32 i = 0; i < 100; ++i)
 	{
 		const FGuid Id = FGuid::NewGuid();
@@ -4123,8 +4126,8 @@ bool FWacomRunDeckPropertyBContainerSpecialZoneBijectionSpec::RunTest(const FStr
 	// Feature: backpack-special-zone-stage-4-5, Property 5: B 主卡 ↔ SpecialZone 双射不变量
 	// Validates: Requirements 2.2, 2.3, 3.5, 3.6, 5.6
 	//
-	// 对任意 zone-modifying op 序列（AddCardToBackpack / AddCardToBattleDeck /
-	// RemoveCardFromBattleDeck / DestroyCardFromBackpack / MoveInstance），
+	// 对任意 zone-modifying op 序列（AcquireCardToRun / MoveInstance Backpack->BattleDeck /
+	// MoveInstance BattleDeck->Backpack / DestroyCardByInstance / MoveInstance），
 	// 在 Initialize 之后以及每次 op 之后必须满足以下三条不变量：
 	//
 	//   (A) Forward 双射：∀ Inst ∈ Backpack ∪ BattleDeck，若
@@ -4316,38 +4319,38 @@ bool FWacomRunDeckPropertyBContainerSpecialZoneBijectionSpec::RunTest(const FStr
 			{
 			case 0:
 			{
-				// AddCardToBackpack(随机生成的卡，含 ~10% nullptr 触发 R1.5 拒绝路径)
+				// AcquireCardToRun(随机生成的卡，含 ~10% nullptr 触发 R1.5 拒绝路径)
 				UCardDefinition* Card = (Rng.RandRange(0, 9) == 0)
 					? nullptr
 					: MakePbtCard(Fx, Rng);
-				Run->AddCardToBackpack(Card);
+				Run->AcquireCardToRun(Card);
 				break;
 			}
 			case 1:
 			{
-				// AddCardToBattleDeck(从 Backpack 随机选 Definition；Backpack 空则跳过)
+				// MoveInstance Backpack->BattleDeck(从 Backpack 随机选 Definition；Backpack 空则跳过)
 				const TArray<FCardInstance>& Bp = Run->GetBackpack();
 				if (Bp.Num() > 0)
 				{
 					const int32 PickIdx = Rng.RandRange(0, Bp.Num() - 1);
-					Run->AddCardToBattleDeck(Bp[PickIdx].Definition);
+					MoveFirstBackpackDefinitionToBattleDeck(Run, Bp[PickIdx].Definition);
 				}
 				break;
 			}
 			case 2:
 			{
-				// RemoveCardFromBattleDeck(从 BattleDeck 随机选 Definition；空则跳过)
+				// MoveInstance BattleDeck->Backpack(从 BattleDeck 随机选 Definition；空则跳过)
 				const TArray<FCardInstance>& Bd = Run->GetBattleDeck();
 				if (Bd.Num() > 0)
 				{
 					const int32 PickIdx = Rng.RandRange(0, Bd.Num() - 1);
-					Run->RemoveCardFromBattleDeck(Bd[PickIdx].Definition);
+					MoveFirstBattleDeckDefinitionToBackpack(Run, Bd[PickIdx].Definition);
 				}
 				break;
 			}
 			case 3:
 			{
-				// DestroyCardFromBackpack(从 Backpack ∪ BattleDeck 随机选 Definition；
+				// DestroyCardByInstance(从 Backpack ∪ BattleDeck 随机选 Definition；
 				//   GDD §11.8 拒绝条件由 RunSession 内部处理，不影响 invariant)
 				const int32 BpN = Run->GetBackpack().Num();
 				const int32 BdN = Run->GetBattleDeck().Num();
@@ -4358,7 +4361,7 @@ bool FWacomRunDeckPropertyBContainerSpecialZoneBijectionSpec::RunTest(const FStr
 					UCardDefinition* Card = (Pick < BpN)
 						? Run->GetBackpack()[Pick].Definition
 						: Run->GetBattleDeck()[Pick - BpN].Definition;
-					Run->DestroyCardFromBackpack(Card);
+					DestroyFirstOwnedDefinition(Run, Card);
 				}
 				break;
 			}
@@ -4433,7 +4436,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 	// Feature: backpack-special-zone-stage-4-5, Property 6: B 主卡销毁内含卡退回流
 	// Validates: Requirements 2.4 (兼带 R8.6 验证：每张退回 instance 强制 bBattleEnabledInSpecialZone=false)
 	//
-	// 对任意 URunSession 状态，若 DestroyCardFromBackpack(BMain) 被接受
+	// 对任意 URunSession 状态，若 DestroyCardByInstance(BMain) 被接受
 	// （BMain 非 Intrinsic、非最后一张容量来源卡）且 BMain 是 B 类容器卡且
 	// 其 SpecialZone 非空，调用之后必须满足以下四条不变量：
 	//
@@ -4449,16 +4452,16 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 	//     1 张 B 主卡（非 Intrinsic 白色，Capacity=BCap ∈ [2,5]，CapacityEffect=Placeholder
 	//     占位 tag）+ ACap 张非容器卡（默认进 BattleDeck，把 BattleDeck 一次性灌满到
 	//     B 主卡销毁后的 BattleDeckCap=ACap）；
-	//   - 用 AddCardToBackpack 加 S ∈ [1, min(BCap-1, ACap-2)] 张非容器卡到 Backpack，
+	//   - 用 AcquireCardToRun 加 S ∈ [1, min(BCap-1, ACap-2)] 张非容器卡到 Backpack，
 	//     再用 MoveInstance 逐张移到 BMaster 的 SpecialZone（按 add 顺序灌入 SZ.Cards）；
 	//   - 随机对 SZ.Cards 中的子集调 SetSpecialZoneCardBattleEnabled(true)，覆盖 (D)
 	//     从 true → false 的清零路径（与从未设置 true 的默认 false 路径区分）；
-	//   - 用 AddCardToBackpack 再加 F ∈ [0, ACap-2] 张非容器卡到 Backpack，
+	//   - 用 AcquireCardToRun 再加 F ∈ [0, ACap-2] 张非容器卡到 Backpack，
 	//     使 Backpack 进入"未满 / 接近满"的混合分布以覆盖 (B) 的两条分支：
 	//       a) 1+F+S ≤ ACap：全部 S 张退回 Backpack，BurdenZone 收 0 张；
 	//       b) 1+F+S > ACap：前 K=ACap-1-F 张退回 Backpack，剩余 S-K 张退回 BurdenZone。
 	//
-	// 测试构造保证 RecomputeBurden 在 DestroyCardFromBackpackInternal 末尾的调用
+	// 测试构造保证 RecomputeBurden 在 DestroyCardByInstanceInternal 末尾的调用
 	// 是 no-op（BattleDeck 已满到 B 主卡销毁后的 BattleDeckCap=ACap、Backpack 退回后恰好不超 FluxCap=ACap；
 	// 小布袋自己也占 1 个通量内容格，
 	// 销毁后没有其他 SpecialZone 可承接 refill），从而后置状态严格等于步骤 6 退回循环
@@ -4526,7 +4529,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 		for (int32 i = 0; i < S; ++i)
 		{
 			UCardDefinition* NCard = Fx.MakeNoopCard(0);
-			Run->AddCardToBackpack(NCard);
+			Run->AcquireCardToRun(NCard);
 			// 取最新追加到 Backpack 末尾的 InstanceId
 			const FGuid NewId = Run->GetBackpack().Last().InstanceId;
 			const bool bMoved = Run->MoveInstance(NewId, EZoneKind::SpecialZone, BMasterId);
@@ -4555,7 +4558,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 		const int32 F = Rng.RandRange(0, ACap - 2);
 		for (int32 i = 0; i < F; ++i)
 		{
-			Run->AddCardToBackpack(Fx.MakeNoopCard(0));
+			Run->AcquireCardToRun(Fx.MakeNoopCard(0));
 		}
 
 		// ---- 快照 ----
@@ -4605,12 +4608,12 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 			return false;
 		}
 
-		// ---- 调 DestroyCardFromBackpack ----
-		const bool bDestroyed = Run->DestroyCardFromBackpack(BMasterDef);
+		// ---- 调 DestroyCardByInstance ----
+		const bool bDestroyed = DestroyFirstOwnedDefinition(Run, BMasterDef);
 		if (!bDestroyed)
 		{
 			AddError(FString::Printf(
-				TEXT("Property 6 FAILED (Precondition): DestroyCardFromBackpack(BMaster) returned false. ")
+				TEXT("Property 6 FAILED (Precondition): DestroyCardByInstance(BMaster) returned false. ")
 				TEXT("Counterexample: Seed=%d Iter=%d ACap=%d BCap=%d S=%d F=%d ")
 				TEXT("BackpackOrigSize=%d BattleDeck.Num=%d"),
 				Seed, Iter, ACap, BCap, S, F,
@@ -4679,7 +4682,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 		// 期望 Backpack.Num = (BackpackOrigSize - 1) + K
 		// 期望 BurdenZone.Num = (BurdenZoneBefore.Num) + (S - K)
 		// 由于本测试构造确保销毁前 BurdenZone 为空（Initialize 后 BurdenZone 始终空，
-		// AddCardToBackpack/MoveInstance 都不会让 BurdenZone 非空因 Backpack 总未超 FluxCap），
+		// AcquireCardToRun/MoveInstance 都不会让 BurdenZone 非空因 Backpack 总未超 FluxCap），
 		// 期望 BurdenZoneBefore.Num == 0；不显式断言 0 让该不变量留给 Property 5/8。
 		const int32 ExpectedBackpackSize = (BackpackOrigSize - 1) + K;
 		const int32 ExpectedBurdenSize   = BurdenZoneBefore.Num() + (S - K);
@@ -4781,4 +4784,3 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 
 	return true;
 }
-

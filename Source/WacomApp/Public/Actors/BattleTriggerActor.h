@@ -46,7 +46,7 @@ struct WACOMAPP_API FWacomBattleTriggerDebugView
 	FName PersistentId = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
-	FString PrimaryEnemyDefinitionName;
+	FString FirstEncounterEnemyDefinitionName;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
 	FString EncounterDefinitionName;
@@ -226,11 +226,6 @@ public:
 		meta = (ToolTip = "将当前战斗触发器诊断摘要写入日志，便于 PIE 排查战斗配置和点击目标绑定。"))
 	void LogBattleTriggerDebugSummary(AWacomPlayerController* PC) const;
 
-	/** 返回本 Trigger 启动战斗时使用的主敌人定义。来自 Encounter 的第一个有效敌人槽。 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle",
-		meta = (ToolTip = "返回本 Trigger 启动战斗时使用的主敌人定义。来自 EncounterDefinition 的第一个有效敌人槽；没有有效 Encounter 时返回空。"))
-	UEnemyDefinition* ResolveBattleEnemyDefinition() const;
-
 	/** 将 EncounterDefinition.EnemySlots 转换为 Battle init enemy slots。 */
 	void BuildBattleEnemySlots(TArray<FBattleEnemySlotInit>& OutEnemySlots) const;
 
@@ -273,6 +268,7 @@ protected:
 
 private:
 	void RefreshClickTargetBinding();
+	const UEnemyDefinition* ResolveFirstEncounterEnemyDefinition() const;
 	bool HasConfiguredBattleDefinition() const;
 	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsDestroyedFor(AWacomPlayerController* PC) const;

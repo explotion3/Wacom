@@ -57,20 +57,6 @@ namespace
 		return (DirtyFlags & static_cast<uint8>(Flag)) != 0;
 	}
 
-	/**
-	 * Definition 级旧 API 在 instance 模型下统一匹配第一个同定义实例。
-	 * Card == nullptr 视为找不到，调用方自行决定返回 false 或记录日志。
-	 */
-	int32 FindFirstIndexByDefinition(const TArray<FCardInstance>& Pile, const UCardDefinition* Card)
-	{
-		if (!Card) { return INDEX_NONE; }
-		for (int32 i = 0; i < Pile.Num(); ++i)
-		{
-			if (Pile[i].Definition == Card) { return i; }
-		}
-		return INDEX_NONE;
-	}
-
 	bool ShouldStarterCardStartInBattleDeck(const UCardDefinition* Card)
 	{
 		// 原型内容规则：暮色引虫灯默认进入备战区，但仍作为 A 类容器贡献通量容量。
@@ -1090,18 +1076,6 @@ bool URunSession::IsDeleteFunctionAvailable() const
 	return false;
 }
 
-bool URunSession::IsCardInBackpack(const UCardDefinition* Card) const
-{
-	// Card == nullptr 返回 false；否则按 Definition 在 Backpack 内查任意一张。
-	return FindFirstIndexByDefinition(RunState.Backpack, Card) != INDEX_NONE;
-}
-
-bool URunSession::IsCardInBattleDeck(const UCardDefinition* Card) const
-{
-	// Card == nullptr 返回 false；否则按 Definition 在 BattleDeck 内查任意一张。
-	return FindFirstIndexByDefinition(RunState.BattleDeck, Card) != INDEX_NONE;
-}
-
 bool URunSession::FindInstance(FGuid InstanceId, FCardInstance& OutInstance, EZoneKind& OutZone, FGuid& OutZoneOwnerInstanceId) const
 {
 	return FRunDeckRules::FindInstance(RunState, InstanceId, OutInstance, OutZone, OutZoneOwnerInstanceId);
@@ -1247,29 +1221,6 @@ FRunDeckOperationValidation URunSession::ValidateMoveInstance(FGuid InstanceId, 
 	return FRunDeckRules::ValidateMoveInstance(RunState, InstanceId, ToZone, ToZoneOwnerInstanceId);
 }
 
-void URunSession::AddCardToBackpack(UCardDefinition* Card)
-{
-	if (!Card)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] AddCardToBackpack: Card 为空，拒绝"));
-		return;
-	}
-	FCardInstance Inst;
-	Inst.Definition = Card;
-	Inst.InstanceId = FGuid::NewGuid();
-	ensureMsgf(Inst.InstanceId.IsValid(),
-		TEXT("[RunSession] AddCardToBackpack: FGuid::NewGuid() 生成了 zero GUID"));
-	RunState.Backpack.Add(Inst);
-	// B 主卡新加入背包时幂等追加 SpecialZones entry。
-	EnsureSpecialZoneEntryFor(Inst);
-	// 容器卡新加入时贡献新容量，可能让超容卡变得不再超容；非容器卡新加入则可能造成超容。
-	// 任何情况都重算一次。走不广播的私有路径，本函数尾部统一 NotifyRunStateChanged 一次。
-	RecomputeBurdenInternal();
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
-	NotifyRunStateChanged();
-}
-
 void URunSession::AcquireCardToRun(UCardDefinition* Card)
 {
 	if (AcquireCardToRunInternal(Card))
@@ -1299,33 +1250,6 @@ bool URunSession::AcquireCardToRunInternal(UCardDefinition* Card)
 	return true;
 }
 
-bool URunSession::DestroyCardFromBackpack(UCardDefinition* Card)
-{
-	// Public 入口：委托 Internal 完成 zone 修改、压力和退回流，末尾广播一次。
-	// DeleteCardForGold 调 Internal 后自行结算金币并广播。
-	const bool bOk = DestroyCardFromBackpackInternal(Card);
-	if (bOk)
-	{
-		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
-		NotifyRunStateChanged();
-	}
-	return bOk;
-}
-
-bool URunSession::DestroyCardFromBackpackInternal(UCardDefinition* Card)
-{
-	FName DisabledReason = NAME_None;
-	if (!FRunDeckRules::PermanentRemoveOwnedCard(RunState, Card, &DisabledReason))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] DestroyCardFromBackpack: 拒绝 Card=%s Reason=%s"),
-			*GetNameSafe(Card), *DisabledReason.ToString());
-		return false;
-	}
-
-	return true;
-}
-
 bool URunSession::DestroyCardByInstance(FGuid InstanceId)
 {
 	const bool bOk = DestroyCardByInstanceInternal(InstanceId);
@@ -1348,45 +1272,6 @@ bool URunSession::DestroyCardByInstanceInternal(FGuid InstanceId)
 		return false;
 	}
 
-	return true;
-}
-
-bool URunSession::DeleteCardForGold(UCardDefinition* Card)
-{
-	const FRunDeckOperationValidation Validation = ValidateDeleteCardForGold(Card);
-	if (!Validation.bCanExecute)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] DeleteCardForGold: 拒绝 Card=%s Reason=%s"),
-			*GetNameSafe(Card), *Validation.DisabledReason.ToString());
-		return false;
-	}
-
-	// 委托 DestroyCardFromBackpackInternal 完成 instance 选择和销毁；本函数只追加金币结算。
-	// Internal 不广播，这里直接写 Gold 后统一广播一次。
-
-	// 在销毁前算，因为销毁后 Card 可能不再被引用。
-	const int32 GoldReward = GetDeleteGoldRewardForCard(Card);
-
-	if (!DestroyCardFromBackpackInternal(Card))
-	{
-		// Internal 已记 Warning 日志；失败路径不广播。
-		return false;
-	}
-
-	if (GoldReward > 0)
-	{
-		// 直接写 Gold 字段而非调 AddGold(...)：避开 AddGold 内部 NotifyRunStateChanged。
-		RunState.Gold += GoldReward;
-	}
-	UE_LOG(LogTemp, Display,
-		TEXT("[RunSession] DeleteCardForGold: %s → +%d gold (total=%d)"),
-		*GetNameSafe(Card), GoldReward, RunState.Gold);
-	MarkRunUiSnapshotsDirty(
-		MakeRunUiSnapshotDirtyFlags(
-			ERunUiSnapshotDirtyFlag::BackpackStorage,
-			ERunUiSnapshotDirtyFlag::Economy));
-	NotifyRunStateChanged();
 	return true;
 }
 
@@ -1442,11 +1327,6 @@ int32 URunSession::GetDeleteGoldRewardForInstance(FGuid InstanceId) const
 	return FRunDeckRules::GetDeleteGoldRewardForCard(Location.Instance.Definition);
 }
 
-FRunDeckOperationValidation URunSession::ValidateDeleteCardForGold(UCardDefinition* Card) const
-{
-	return FRunDeckRules::ValidatePermanentRemoveCard(RunState, Card);
-}
-
 FRunDeckOperationValidation URunSession::ValidateDestroyCardByInstance(FGuid InstanceId) const
 {
 	return FRunDeckRules::ValidatePermanentRemoveInstance(RunState, InstanceId);
@@ -1455,88 +1335,6 @@ FRunDeckOperationValidation URunSession::ValidateDestroyCardByInstance(FGuid Ins
 FRunDeckOperationValidation URunSession::ValidateDeleteCardForGoldByInstance(FGuid InstanceId) const
 {
 	return FRunDeckRules::ValidatePermanentRemoveInstance(RunState, InstanceId);
-}
-
-bool URunSession::AddCardToBattleDeck(UCardDefinition* Card)
-{
-	if (!Card)
-	{
-		return false;
-	}
-
-	// 1) 必须在背包中，按 Definition 匹配第一个 instance。
-	const int32 BackpackIdx = FindFirstIndexByDefinition(RunState.Backpack, Card);
-	if (BackpackIdx == INDEX_NONE)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] AddCardToBattleDeck: %s 不在背包中，拒绝"),
-			*GetNameSafe(Card));
-		return false;
-	}
-
-	// 2) 容量上限（备战区）
-	const int32 Capacity = GetBattleDeckCapacity();
-	if (RunState.BattleDeck.Num() >= Capacity)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] AddCardToBattleDeck: 备战区已达容量上限 %d"), Capacity);
-		return false;
-	}
-
-	// 3) 移动一张：Backpack -> BattleDeck。
-	//    保留 InstanceId / bBattleEnabledInSpecialZone，维持 instance 整体迁移契约。
-	const FCardInstance Moved = RunState.Backpack[BackpackIdx];
-	RunState.Backpack.RemoveAt(BackpackIdx);
-	RunState.BattleDeck.Add(Moved);
-
-	// 容器卡转移会触发"通量区可见空格变化"，但 FluxCapacity 公式 Σ(全部) 不变；
-	// 普通卡转移会让 Backpack 卡数下降，可能让 Burden 减少。
-	// 走不广播的私有路径，本函数尾部统一 NotifyRunStateChanged 一次。
-	RecomputeBurdenInternal();
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
-	NotifyRunStateChanged();
-
-	return true;
-}
-
-bool URunSession::RemoveCardFromBattleDeck(UCardDefinition* Card)
-{
-	if (!Card)
-	{
-		return false;
-	}
-
-	// Intrinsic 拒绝
-	if (IsIntrinsicCard(Card))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] RemoveCardFromBattleDeck: %s 是 Intrinsic，拒绝从备战区移除"),
-			*GetNameSafe(Card));
-		return false;
-	}
-
-	// 按 Definition 匹配第一个 instance。
-	const int32 Idx = FindFirstIndexByDefinition(RunState.BattleDeck, Card);
-	if (Idx == INDEX_NONE)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] RemoveCardFromBattleDeck: %s 不在备战区"),
-			*GetNameSafe(Card));
-		return false;
-	}
-
-	// 移动一张：BattleDeck -> Backpack。
-	const FCardInstance Moved = RunState.BattleDeck[Idx];
-	RunState.BattleDeck.RemoveAt(Idx);
-	RunState.Backpack.Add(Moved);
-
-	// 卡数从备战区移到背包，可能让背包超容。
-	// 走不广播的私有路径，本函数尾部统一 NotifyRunStateChanged 一次。
-	RecomputeBurdenInternal();
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
-	NotifyRunStateChanged();
-
-	return true;
 }
 
 // ================ §11.7 / 经济：金币 ================

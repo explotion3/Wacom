@@ -118,6 +118,18 @@ namespace
 		return Event;
 	}
 
+	FGuid FindFirstBattleDeckInstanceIdByDefinition(const FRunBackpackStorageSnapshot& Snapshot, const UCardDefinition* Card)
+	{
+		for (const FRunStorageCardView& View : Snapshot.BattleDeckPhysicalCards)
+		{
+			if (View.Instance.Definition == Card)
+			{
+				return View.Instance.InstanceId;
+			}
+		}
+		return FGuid();
+	}
+
 	bool StorageContainsDefinition(const FRunBackpackStorageSnapshot& Snapshot, const UCardDefinition* Card)
 	{
 		for (const FRunStorageCardView& View : Snapshot.Flux.ContentCards)
@@ -420,9 +432,13 @@ bool FWacomRunEventCardAndEventStateConditionsSpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
 
-	TestTrue(TEXT("Move backpack card out of battle deck"), Run->RemoveCardFromBattleDeck(BackpackCard));
-	Run->AddCardToBackpack(BurdenCard);
 	FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
+	const FGuid BackpackCardId = FindFirstBattleDeckInstanceIdByDefinition(Snapshot, BackpackCard);
+	TestTrue(TEXT("Backpack card starts in battle deck"), BackpackCardId.IsValid());
+	TestTrue(TEXT("Move backpack card out of battle deck"),
+		Run->MoveInstance(BackpackCardId, EZoneKind::Backpack, FGuid()));
+	Run->AcquireCardToRun(BurdenCard);
+	Snapshot = Run->BuildBackpackStorageSnapshot();
 	const FGuid BurdenInstanceId = FindStorageInstanceIdByDefinition(Snapshot, BurdenCard);
 	TestTrue(TEXT("Burden card instance found before move"), BurdenInstanceId.IsValid());
 	TestTrue(TEXT("Move card to burden"), Run->MoveInstance(BurdenInstanceId, EZoneKind::BurdenZone, FGuid()));
@@ -430,7 +446,7 @@ bool FWacomRunEventCardAndEventStateConditionsSpec::RunTest(const FString& /*Par
 	Snapshot = Run->BuildBackpackStorageSnapshot();
 	TestTrue(TEXT("Has special owner"), Snapshot.SpecialZones.Num() > 0);
 	const FGuid SpecialOwnerId = Snapshot.SpecialZones[0].OwnerCard.Instance.InstanceId;
-	Run->AddCardToBackpack(SpecialCard);
+	Run->AcquireCardToRun(SpecialCard);
 	Snapshot = Run->BuildBackpackStorageSnapshot();
 	const FGuid SpecialCardId = FindStorageInstanceIdByDefinition(Snapshot, SpecialCard);
 	TestTrue(TEXT("Special card instance found before move"), SpecialCardId.IsValid());
@@ -525,7 +541,11 @@ bool FWacomRunEventRemoveCardEffectSpec::RunTest(const FString& /*Parameters*/)
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, BackpackCard });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 		TestTrue(TEXT("Initialize backpack remove"), Run->Initialize(Char));
-		TestTrue(TEXT("Move card to backpack"), Run->RemoveCardFromBattleDeck(BackpackCard));
+		FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
+		const FGuid BackpackCardId = FindFirstBattleDeckInstanceIdByDefinition(Snapshot, BackpackCard);
+		TestTrue(TEXT("Backpack card starts in battle deck"), BackpackCardId.IsValid());
+		TestTrue(TEXT("Move card to backpack"),
+			Run->MoveInstance(BackpackCardId, EZoneKind::Backpack, FGuid()));
 		EZoneKind Zone = EZoneKind::BattleDeck;
 		TestTrue(TEXT("Backpack card zone found"), FindStorageZoneByDefinition(Run->BuildBackpackStorageSnapshot(), BackpackCard, Zone));
 		TestEqual(TEXT("Backpack card starts in backpack"), Zone, EZoneKind::Backpack);
@@ -565,7 +585,7 @@ bool FWacomRunEventRemoveCardEffectSpec::RunTest(const FString& /*Parameters*/)
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 		TestTrue(TEXT("Initialize burden remove"), Run->Initialize(Char));
-		Run->AddCardToBackpack(BurdenCard);
+		Run->AcquireCardToRun(BurdenCard);
 		FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
 		const FGuid BurdenInstanceId = FindStorageInstanceIdByDefinition(Snapshot, BurdenCard);
 		TestTrue(TEXT("Burden card instance found"), BurdenInstanceId.IsValid());
@@ -590,7 +610,7 @@ bool FWacomRunEventRemoveCardEffectSpec::RunTest(const FString& /*Parameters*/)
 		FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
 		TestTrue(TEXT("Has special owner"), Snapshot.SpecialZones.Num() > 0);
 		const FGuid SpecialOwnerId = Snapshot.SpecialZones[0].OwnerCard.Instance.InstanceId;
-		Run->AddCardToBackpack(SpecialCard);
+		Run->AcquireCardToRun(SpecialCard);
 		Snapshot = Run->BuildBackpackStorageSnapshot();
 		const FGuid SpecialCardId = FindStorageInstanceIdByDefinition(Snapshot, SpecialCard);
 		TestTrue(TEXT("Special card instance found"), SpecialCardId.IsValid());

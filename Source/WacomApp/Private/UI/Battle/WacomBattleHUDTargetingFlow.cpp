@@ -155,7 +155,7 @@ FBattleTargetSelectionView FWacomBattleHUDTargetingFlow::BuildTargetSelectionVie
 					Part.EncounterId,
 					Part.EnemySlotId,
 					Part.PartSlotId);
-				if (Session->CanTargetWithCard(View.PendingCardInstanceId, Handle))
+				if (Session->ValidateTargetWithCard(View.PendingCardInstanceId, Handle).bCanTarget)
 				{
 					PartView.bTargetable = true;
 					PartView.DisabledReason = NAME_None;

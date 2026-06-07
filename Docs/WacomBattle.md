@@ -91,7 +91,7 @@ Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`U
 
 当前 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可精确作用到目标手牌；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 可把选中的普通手牌移入弃牌堆 / 消耗牌堆。费用、卡牌类型、区域、伙伴 / 食物专用属性等更复杂筛选属于后续扩展方向。
 
-`UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`。`CanTargetWithCard()` 保留为 bool 兼容入口，内部转调同一套 validation。
+`UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`。调用方读取 `bCanTarget` 判断是否可选，并可使用 `RejectReason / DebugSummary / ResolvedPartIdentity` 做 UI 反馈和排查；不再保留 bool-only 兼容入口。
 
 Battle world target 优先按 `TargetPartInstanceId`（runtime id）定位；当 runtime id 为空时，可用 `TargetEnemySlotId + TargetPartSlotId` 或 handle 上的 `EnemySlotId + PartSlotId` 定位。同一命令 / handle 同时携带 runtime id 与 slot identity 时，两者必须指向同一部位，否则返回 `TargetIdentityMismatch` / `TargetIdentityMismatch` detail。`EncounterId` 用于解释 handle 是否属于当前 battle session，不参与跨 session 查找。
 

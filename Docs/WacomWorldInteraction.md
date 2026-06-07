@@ -161,7 +161,7 @@ PlayerController 只在 Exploration + active GameMenu + active menu lease 的 fi
 | `SourceObject` | 命中来源 Component 弱引用 |
 | `WorldLocation / ScreenPosition` | 命中位置 |
 
-Battle 已接入 `UBattleSession::CanTargetWithCard()` 和 `ValidateTargetWithCard()`，用于 TargetSelect、first-person drag/drop world target 和 hand-card target validation。
+Battle 已接入 `UBattleSession::ValidateTargetWithCard()`，用于 TargetSelect、first-person drag/drop world target 和 hand-card target validation。UI 只读取 validation result，不直接解析 BattleState。
 
 通用 Run target resolver 尚未独立抽象；当前 Run world / Run menu drop 由 App resolver 识别 target，再进入明确的 RunSession 事务或 owning menu submit policy。
 

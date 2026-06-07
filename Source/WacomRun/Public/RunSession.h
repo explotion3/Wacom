@@ -184,7 +184,7 @@ public:
 	 *   超出"通量内容容量"的卡数 n → Burden = n*(n+1)/2
 	 *   通量内容容量 = Σ(玩家拥有的所有 A 类容器卡 Capacity)
 	 *
-	 * 由 AddCardToBackpack / DestroyCardFromBackpack 等改拥有卡数量的方法
+	 * 由 AcquireCardToRun / DestroyCardByInstance / MoveInstance 等改拥有卡数量的方法
 	 * 自动调用，UI 一般不需要手动调。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pressure")
@@ -404,12 +404,6 @@ public:
 	const TArray<FCardInstance>& GetBackpack() const { return RunState.Backpack; }
 	const TArray<FCardInstance>& GetBattleDeck() const { return RunState.BattleDeck; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
-	bool IsCardInBackpack(const UCardDefinition* Card) const;
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
-	bool IsCardInBattleDeck(const UCardDefinition* Card) const;
-
 	/**
 	 * 全表查找入口。
 	 *
@@ -457,12 +451,6 @@ public:
 	FRunDeckOperationValidation ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const;
 
 	/**
-	 * 兼容旧入口：按 Definition 创建一张新 instance 并加入背包。
-	 * 新逻辑应使用 AcquireCardToRun；本函数仅保留给旧 C++ 调用点兼容。
-	 */
-	void AddCardToBackpack(UCardDefinition* Card);
-
-	/**
 	 * 战外获得一张卡的统一入口。
 	 *
 	 * 当前实现等价于加入背包并重算负重；后续战斗奖励、节点事件、商店购买、
@@ -470,21 +458,6 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	void AcquireCardToRun(UCardDefinition* Card);
-
-	/**
-	 * 兼容旧入口：按 Definition 永久销毁第一张匹配的已拥有 instance。
-	 * 新逻辑应使用 DestroyCardByInstance；RunEvent/DataAsset 可继续用 Definition 语义表达“移除一张匹配卡”。
-	 *
-	 * 行为：
-	 *   - 若 Card 是 Intrinsic → 拒绝
-	 *   - 若 Card 是最后一张容量来源卡（销毁后玩家无容器卡 Capacity）→ 拒绝
-	 *   - 从玩家拥有的所有物理持有区中移除一张
-	 *   - 若 Card 带 Companion 关键词 → 嗜血 +1%
-	 *   - RecomputeBurden
-	 *
-	 * 返回 true=销毁成功；false=拒绝。
-	 */
-	bool DestroyCardFromBackpack(UCardDefinition* Card);
 
 	/**
 	 * 按 InstanceId 精确永久销毁一张已拥有卡，不发金币。
@@ -500,16 +473,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	FRunDeckOperationValidation ValidateDestroyCardByInstance(FGuid InstanceId) const;
 
-	/**
-	 * 兼容旧入口：按 Definition 选择第一张匹配的已拥有 instance，销毁后按稀有度发金币。
-	 * UI / 玩家操作应使用 ByInstance 入口。
-	 *
-	 * 当前原型数值：白=1 / 蓝=2。固有 / 最后容量来源卡拒绝。
-	 *
-	 * 返回 true=成功销毁并发金币；false=拒绝（同 DestroyCardFromBackpack）。
-	 */
-	bool DeleteCardForGold(UCardDefinition* Card);
-
 	/** 删牌区入口：按 instance 精确销毁一张卡并按稀有度发金币。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool DeleteCardForGoldByInstance(FGuid InstanceId);
@@ -522,35 +485,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	int32 GetDeleteGoldRewardForInstance(FGuid InstanceId) const;
 
-	/** 兼容旧校验入口：按 Definition 校验第一张匹配的已拥有 instance；UI / 玩家操作应使用 ByInstance。 */
-	FRunDeckOperationValidation ValidateDeleteCardForGold(UCardDefinition* Card) const;
-
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	FRunDeckOperationValidation ValidateDeleteCardForGoldByInstance(FGuid InstanceId) const;
-
-	// ---- 备战卡组操作 ----
-
-	/**
-	 * 兼容旧入口：按 Definition 把背包中第一张匹配的 instance 加入备战卡组。
-	 * 新逻辑应使用 MoveInstance。
-	 *
-	 * 拒绝条件：
-	 *   - Card 不在 Backpack 中（必须先在背包）
-	 *   - BattleDeck 已达容量上限（GetBattleDeckCapacity）
-	 *
-	 * 注意：同一 Card Definition 在 Backpack 中有多张时允许多次加入 BattleDeck。
-	 */
-	bool AddCardToBattleDeck(UCardDefinition* Card);
-
-	/**
-	 * 兼容旧入口：按 Definition 把备战区中第一张匹配的 instance 移回背包。
-	 * 新逻辑应使用 MoveInstance。
-	 *
-	 * 拒绝条件：
-	 *   - Card 是 Intrinsic
-	 *   - Card 不在 BattleDeck 中
-	 */
-	bool RemoveCardFromBattleDeck(UCardDefinition* Card);
 
 	// ---- 经济：金币 ----
 
@@ -831,7 +767,7 @@ private:
 	 * 会改变 Backpack / Shop / Economy UI Snapshot 事实的事务，必须先调用
 	 * MarkRunUiSnapshotsDirty(...) 标记对应 transient revision。
 	 *
-	 * 内部互调（例如 AddCardToBackpack 调 RecomputeBurden）由外层入口统一发，
+	 * 内部互调（例如 AcquireCardToRun 调 RecomputeBurden）由外层入口统一发，
 	 * 内部辅助不发，避免一次操作多次广播的尾部串。
 	 */
 	void NotifyRunStateChanged();
@@ -848,9 +784,9 @@ private:
 	 * public `SetPressure` 内部的 NotifyRunStateChanged 调用），且本函数不在末尾广播。
 	 *
 	 * 调用约定：
-	 *   - 由其他 public 入口（Initialize / AddCardToBackpack / DestroyCardFromBackpack /
-	 *     AddCardToBattleDeck / RemoveCardFromBattleDeck）内部链式调用，避免该 public 入口
-	 *     在尾部 NotifyRunStateChanged 之外多发一次广播。
+	 *   - 由其他 public 入口（Initialize / AcquireCardToRun / DestroyCardByInstance /
+	 *     MoveInstance）内部链式调用，避免该 public 入口在尾部
+	 *     NotifyRunStateChanged 之外多发一次广播。
 	 *   - 直接被外部蓝图 / 测试调用的 `RecomputeBurden()` 是公开入口，内部先调本函数再
 	 *     `NotifyRunStateChanged()` 一次。
 	 */
@@ -858,21 +794,6 @@ private:
 
 	/** 私有路径：AcquireCardToRun 的"不广播"版本，供复合 Run 操作统一尾部广播。 */
 	bool AcquireCardToRunInternal(UCardDefinition* Card);
-
-	/**
-	 * 私有路径：DestroyCardFromBackpack 的"不广播"版本。
-	 *
-	 * 行为与 public `DestroyCardFromBackpack` 完全一致（同样的 Intrinsic / 最后容量来源卡
-	 * 拒绝、Companion 嗜血累加、B 主卡 SpecialZone 退回流、负重重算），区别仅在尾部
-	 * 不发 NotifyRunStateChanged。
-	 *
-	 * 调用约定：
-	 *   - 由 DeleteCardForGold 在 Internal 流程中调用，避免该 public 入口在尾部
-	 *     NotifyRunStateChanged 之外多发一次广播（Destroy + AddGold + tail Notify
-	 *     原本会发三次广播）。
-	 *   - public DestroyCardFromBackpack 内部先调本函数再 NotifyRunStateChanged 一次。
-	 */
-	bool DestroyCardFromBackpackInternal(UCardDefinition* Card);
 
 	/** 私有路径：DestroyCardByInstance 的"不广播"版本。 */
 	bool DestroyCardByInstanceInternal(FGuid InstanceId);
@@ -889,9 +810,9 @@ private:
 	 *
 	 * 调用点：
 	 *   - `Initialize` 把 StarterDeck 灌入两区时；
-	 *   - `AddCardToBackpack` 新加 B 主卡时；
+	 *   - `AcquireCardToRun` 新加 B 主卡时；
 	 *   - `MoveInstance` 把 B 主卡 instance 跨入 Backpack/BattleDeck 成功后（防御性保底，
-	 *     正常路径上 entry 在 Initialize / AddCardToBackpack 阶段已创建）。
+	 *     正常路径上 entry 在 Initialize / AcquireCardToRun 阶段已创建）。
 	 *
 	 * 不在本函数内广播 OnRunStateChangedNative：调用方公共入口在末尾统一广播一次。
 	 */

@@ -1606,7 +1606,7 @@ bool FWacomUIBackpackScreenRefreshReusesCardWidgetsSpec::RunTest(const FString& 
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
-	Run->AddCardToBackpack(FluxCard);
+	Run->AcquireCardToRun(FluxCard);
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
 	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenTestAccess::BattleDeckCard(*Screen, 0);
@@ -1635,7 +1635,7 @@ bool FWacomUIBackpackScreenRefreshDirtyGateSkipsEquivalentListReconcileSpec::Run
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
-	Run->AddCardToBackpack(FluxCard);
+	Run->AcquireCardToRun(FluxCard);
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
 	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenTestAccess::BattleDeckCard(*Screen, 0);
@@ -1681,7 +1681,7 @@ bool FWacomUIBackpackScreenRefreshCreatesAndRemovesOnlyChangedCardWidgetsSpec::R
 	TestNotNull(TEXT("Initial battle widget"), InitialBattle);
 	TestNotNull(TEXT("Initial capacity card is visible as flux content"), InitialFlux);
 
-	Run->AddCardToBackpack(NewFluxCard);
+	Run->AcquireCardToRun(NewFluxCard);
 	FWacomBackpackScreenTestAccess::Refresh(*Screen);
 	TestEqual(TEXT("Existing battle widget stays reused"), FWacomBackpackScreenTestAccess::BattleDeckCard(*Screen, 0), InitialBattle);
 	TestEqual(TEXT("Existing flux widget stays reused"), FWacomBackpackScreenTestAccess::FluxContentCard(*Screen, 0), InitialFlux);

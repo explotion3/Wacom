@@ -99,11 +99,6 @@ FBattleResultPacket UBattleSession::BuildResultPacket() const
 	return FBattleResultPacketBuilder::Build(*State);
 }
 
-bool UBattleSession::CanTargetWithCard(const FGuid& CardInstanceId, const FWacomInteractionTargetHandle& Target) const
-{
-	return ValidateTargetWithCard(CardInstanceId, Target).bCanTarget;
-}
-
 FWacomBattleTargetValidationResult UBattleSession::ValidateTargetWithCard(
 	const FGuid& CardInstanceId,
 	const FWacomInteractionTargetHandle& Target) const

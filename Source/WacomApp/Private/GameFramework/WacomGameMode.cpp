@@ -299,12 +299,14 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		return;
 	}
 
-	UEnemyDefinition* ResolvedPrimaryEnemyDefinition = Trigger->ResolveBattleEnemyDefinition();
-	if (!ResolvedPrimaryEnemyDefinition)
+	TArray<FBattleEnemySlotInit> EncounterEnemySlots;
+	Trigger->BuildBattleEnemySlots(EncounterEnemySlots);
+	if (EncounterEnemySlots.Num() == 0)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[WacomGameMode] EnterBattle 缺少有效 EncounterDefinition，忽略"));
 		return;
 	}
+
 	if (!DefaultCharacter)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] EnterBattle: DefaultCharacter 未配置"));
@@ -339,19 +341,11 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	// 1) 创建 BattleSession + Initialize
 	ActiveSession = NewObject<UBattleSession>(this);
 	int32 EnterBattleEnemySlotCount = 0;
+	const UEnemyDefinition* FirstEncounterEnemyDefinition = nullptr;
 	{
 		FBattleInitParams Params;
 
-		TArray<FBattleEnemySlotInit> EncounterEnemySlots;
-		Trigger->BuildBattleEnemySlots(EncounterEnemySlots);
-		if (EncounterEnemySlots.Num() == 0)
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[WacomGameMode] EnterBattle: Trigger=%s EncounterDefinition 无有效 EnemySlots"),
-				*GetNameSafe(Trigger));
-			ActiveSession = nullptr;
-			return;
-		}
+		FirstEncounterEnemyDefinition = EncounterEnemySlots[0].Enemy;
 
 		// 优先从 RunSession 构造（含角色 / 种子 / 撤离持久化的破坏部位）；
 		// 若 Run 未就绪则回退到 GameMode 字段。
@@ -445,8 +439,8 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	// 让 HUD 立即刷出初始 Snapshot
 	BattleHUD->RefreshFromSnapshot(ActiveSession->BuildSnapshot());
 
-	UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] EnterBattle 完成：PrimaryEnemy=%s EncounterSlots=%d"),
-		*GetNameSafe(ResolvedPrimaryEnemyDefinition),
+	UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] EnterBattle 完成：FirstEncounterEnemy=%s EncounterSlots=%d"),
+		*GetNameSafe(FirstEncounterEnemyDefinition),
 		EnterBattleEnemySlotCount);
 }
 
