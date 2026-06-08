@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 
 #include "BattleTargetValidationResult.generated.h"
@@ -45,6 +46,9 @@ struct WACOMBATTLE_API FWacomBattleTargetValidationResult
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Target")
 	FBattlePartSlotIdentity ResolvedPartIdentity;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Target")
+	FBattleEnemyPartKey ResolvedPartKey;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Target")
 	FString DebugSummary;

@@ -4,10 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "UI/Battle/BattleHUD.h"
 
 class UBattleHUD;
 class UBattleSession;
+class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class UWacomFirstPersonCardAnchorComponent;
 struct FBattleEvent;
@@ -40,7 +42,7 @@ public:
 
 	void StoreTransitionEvents(const TArray<FBattleEvent>& Events);
 	void ClearPendingTransitionEvents();
-	void RecordPlayCommit(const FGuid& CardInstanceId, const FGuid& TargetPartInstanceId);
+void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
@@ -99,7 +101,7 @@ private:
 	TArray<FBattleEvent> PendingTransitionEvents;
 	TArray<FPlayCommitHint> PendingPlayCommitHints;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
-	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> CurrentDragPreviewBridge;
+	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> CurrentDragPreviewPresentation;
 	bool bHasTransitionSnapshot = false;
 	bool bFirstPersonBattleHandLayerRuntimeActive = false;
 	bool bFirstPersonCardDragActiveForBattleSceneHover = false;

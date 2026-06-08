@@ -69,26 +69,6 @@ namespace
 		return TriggerPersistentId.IsNone() ? FName(TEXT("Encounter")) : TriggerPersistentId;
 	}
 
-	void AppendLegacyDestroyedPartIdsAsDefaultEnemySlot(
-		const TArray<FName>& DestroyedPartIds,
-		FName EncounterId,
-		TArray<FBattlePartSlotIdentity>& OutDestroyedParts)
-	{
-		for (const FName& PartId : DestroyedPartIds)
-		{
-			if (PartId.IsNone())
-			{
-				continue;
-			}
-
-			OutDestroyedParts.AddUnique(FBattlePartSlotIdentity::Make(
-				EncounterId,
-				FName(TEXT("Enemy")),
-				PartId,
-				PartId));
-		}
-	}
-
 	bool IsFluxContentCardDefinition(const UCardDefinition* Card)
 	{
 		return FRunDeckRules::IsFluxContentCardDefinition(Card);
@@ -449,22 +429,26 @@ bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleIni
 	}
 
 	// 撤离重入：灌入持久化破坏部位（如果该 Trigger 上次撤离时有记录）。
-	OutParams.PreDestroyedPartIds.Reset();
 	OutParams.PreDestroyedParts.Reset();
 	if (!TriggerPersistentId.IsNone())
 	{
 		if (const FBattleProgressSnapshot* Progress = RunState.BattleProgress.Find(TriggerPersistentId))
 		{
-			if (Progress->DestroyedParts.Num() > 0)
+			if (Progress->DestroyedPartKeys.Num() > 0)
+			{
+				OutParams.PreDestroyedParts.Reserve(Progress->DestroyedPartKeys.Num());
+				for (const FBattleEnemyPartKey& DestroyedPartKey : Progress->DestroyedPartKeys)
+				{
+					if (DestroyedPartKey.IsValidKey())
+					{
+						OutParams.PreDestroyedParts.AddUnique(
+							FBattlePartSlotIdentity::FromEnemyPartKey(DestroyedPartKey));
+					}
+				}
+			}
+			else if (Progress->DestroyedParts.Num() > 0)
 			{
 				OutParams.PreDestroyedParts = Progress->DestroyedParts;
-			}
-			else
-			{
-				AppendLegacyDestroyedPartIdsAsDefaultEnemySlot(
-					Progress->DestroyedPartIds,
-					OutParams.EncounterId,
-					OutParams.PreDestroyedParts);
 			}
 		}
 	}

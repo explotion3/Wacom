@@ -43,6 +43,7 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 		FKnockdownChoice Choice_;
 		Choice_.PartId = Head.PartId;
 		Choice_.Identity = Head.Identity;
+		Choice_.PartKey = Head.Identity.ToEnemyPartKey();
 		Choice_.Choice = Choice;
 		State.PendingKnockdownChoices.Add(Choice_);
 	}
@@ -52,6 +53,7 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::KnockdownChoiceMade;
 		Ev.ActorInstanceId = Head.PartInstanceId;
+		Ev.ActorEnemyPartKey = Head.Identity.ToEnemyPartKey();
 		Ev.Count           = static_cast<int32>(Choice);
 		Events.Emit(Ev);
 	}
@@ -90,12 +92,14 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 				Events,
 				RewardCard,
 				Head.PartInstanceId,
+				Head.Identity.ToEnemyPartKey(),
 				Choice);
 
 			FBattleGainedCard GainedCard;
 			GainedCard.Definition = RewardCard;
 			GainedCard.SourcePartId = Head.PartId;
 			GainedCard.SourceIdentity = Head.Identity;
+			GainedCard.SourcePartKey = Head.Identity.ToEnemyPartKey();
 			GainedCard.SourceChoice = Choice;
 			State.PendingGainedCards.Add(GainedCard);
 		}

@@ -121,7 +121,7 @@ for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 		for (int32 i = 0; i < 3; ++i)
 		{
 			TestTrue(FString::Printf(TEXT("Seed=%d PlayComp%d"), Seed, i),
-				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i], FGuid())).IsOk());
+				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
 		}
 
 		// After 3rd play, Fuxiao should be in hand.
@@ -200,7 +200,7 @@ for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 		for (int32 i = 0; i < 3; ++i)
 		{
 			TestTrue(TEXT("PlayComp"),
-				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i], FGuid())).IsOk());
+				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
 		}
 
 		Snap = S->BuildSnapshot();
@@ -212,7 +212,7 @@ for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 		for (int32 i = 3; i < 5; ++i)
 		{
 			TestTrue(TEXT("PlayComp post-trigger"),
-				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i], FGuid())).IsOk());
+				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
 		}
 
 		Snap = S->BuildSnapshot();
@@ -300,7 +300,7 @@ bool FWacomBattleCompanionCountHandLimitDiscardEventSpec::RunTest(const FString&
 		for (int32 i = 0; i < 3; ++i)
 		{
 			TestTrue(TEXT("Play companion for limit event"),
-				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i], FGuid())).IsOk());
+				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
 		}
 
 		Snap = S->BuildSnapshot();

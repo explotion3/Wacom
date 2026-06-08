@@ -156,6 +156,7 @@ namespace
 		Part->MaxHp = 10;
 
 		FEnemyPartSlot Slot;
+		Slot.PartSlotId = TEXT("Core");
 		Slot.PartDef = Part;
 		Enemy->Parts = { Slot };
 		return Enemy;
@@ -3393,11 +3394,11 @@ bool FWacomUIRunEventTriggerDebugSummaryStableSpec::RunTest(const FString& /*Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIWorldInteractionBattleTriggerCompatibilitySpec,
-	"Wacom.UI.WorldInteraction.BattleTriggerCompatibility",
+	FWacomUIWorldInteractionBattleTriggerUnavailableSpec,
+	"Wacom.UI.WorldInteraction.BattleTriggerUnavailable",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIWorldInteractionBattleTriggerCompatibilitySpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIWorldInteractionBattleTriggerUnavailableSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<APawn> Pawn(NewObject<APawn>());
@@ -3411,7 +3412,7 @@ bool FWacomUIWorldInteractionBattleTriggerCompatibilitySpec::RunTest(const FStri
 		Trigger->CanInteract_Implementation(PC.Get()));
 
 	PC->RegisterCandidateTrigger(Trigger.Get());
-	TestNull(TEXT("Compatibility registration ignores unavailable trigger"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
+	TestNull(TEXT("Unavailable trigger registration ignores trigger"), FWacomPlayerControllerRunInteractionTestAccess::ClosestInteractable(PC.Get()));
 
 	return true;
 }
@@ -3739,8 +3740,11 @@ bool FWacomUIRunWorldTargetBridgeDebugSummarySpec::RunTest(const FString& /*Para
 		return false;
 	}
 
-	AActor* Owner = SpawnTransientActor(*World);
-	if (!TestNotNull(TEXT("Owner actor spawned"), Owner))
+	AWacomGenericRunWorldClickableInteractableProbe* Owner =
+		World->SpawnActor<AWacomGenericRunWorldClickableInteractableProbe>(
+			AWacomGenericRunWorldClickableInteractableProbe::StaticClass(),
+			FTransform::Identity);
+	if (!TestNotNull(TEXT("Clickable owner spawned"), Owner))
 	{
 		return false;
 	}
@@ -3752,9 +3756,9 @@ bool FWacomUIRunWorldTargetBridgeDebugSummarySpec::RunTest(const FString& /*Para
 		}
 	};
 
-	AddInteractionTargetComponent(*Owner);
-	UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
-		AddRunWorldBridgeComponent(*Owner, TEXT("Run.Target.Debug"));
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(Owner, TEXT("Run.Target.Debug"));
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Owner);
+	UWacomRunWorldInteractionTargetBridgeComponent* Bridge = Owner->ClickTargetBridge;
 	Bridge->RefreshRunWorldTargetBinding();
 	Bridge->SetProbePreviewActive(true);
 
@@ -3916,8 +3920,14 @@ bool FWacomUIRunWorldTargetProbePreviewSwitchSpec::RunTest(const FString& /*Para
 		return false;
 	}
 
-	AActor* First = SpawnTransientActor(*World);
-	AActor* Second = SpawnTransientActor(*World);
+	AWacomGenericRunWorldClickableInteractableProbe* First =
+		World->SpawnActor<AWacomGenericRunWorldClickableInteractableProbe>(
+			AWacomGenericRunWorldClickableInteractableProbe::StaticClass(),
+			FTransform::Identity);
+	AWacomGenericRunWorldClickableInteractableProbe* Second =
+		World->SpawnActor<AWacomGenericRunWorldClickableInteractableProbe>(
+			AWacomGenericRunWorldClickableInteractableProbe::StaticClass(),
+			FTransform::Identity);
 	if (!TestNotNull(TEXT("First actor spawned"), First)
 		|| !TestNotNull(TEXT("Second actor spawned"), Second))
 	{
@@ -3935,27 +3945,25 @@ bool FWacomUIRunWorldTargetProbePreviewSwitchSpec::RunTest(const FString& /*Para
 		}
 	};
 
-	AddInteractionTargetComponent(*First);
-	UWacomRunWorldInteractionTargetBridgeComponent* FirstBridge =
-		AddRunWorldBridgeComponent(*First, TEXT("Run.Target.First"));
-	AddVisualComponent(*First);
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(First, TEXT("Run.Target.First"));
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(First);
+	UWacomRunWorldInteractionTargetBridgeComponent* FirstBridge = First->ClickTargetBridge;
 	FirstBridge->RefreshRunWorldTargetBinding();
 
-	AddInteractionTargetComponent(*Second);
-	UWacomRunWorldInteractionTargetBridgeComponent* SecondBridge =
-		AddRunWorldBridgeComponent(*Second, TEXT("Run.Target.Second"));
-	AddVisualComponent(*Second);
+	FWacomRunWorldInteractionActorTestAccess::SetGenericStableId(Second, TEXT("Run.Target.Second"));
+	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Second);
+	UWacomRunWorldInteractionTargetBridgeComponent* SecondBridge = Second->ClickTargetBridge;
 	SecondBridge->RefreshRunWorldTargetBinding();
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	PC->bEnableRunWorldTargetProbePreview = true;
 
-	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), First);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), First, First->ClickBounds);
 	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestTrue(TEXT("First target preview active"), FirstBridge->IsProbePreviewActive());
 	TestFalse(TEXT("Second target preview inactive"), SecondBridge->IsProbePreviewActive());
 
-	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Second);
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Second, Second->ClickBounds);
 	FWacomPlayerControllerRunInteractionTestAccess::UpdateRunWorldTargetProbePreview(PC.Get());
 	TestFalse(TEXT("First target preview cleared after switch"), FirstBridge->IsProbePreviewActive());
 	TestTrue(TEXT("Second target preview active after switch"), SecondBridge->IsProbePreviewActive());

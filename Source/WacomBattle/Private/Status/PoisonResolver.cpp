@@ -47,6 +47,7 @@ void FPoisonResolver::ResolvePoisonForAllHosts(FBattleState& State, FBattleEvent
 			FBattleEvent Ev;
 			Ev.Type            = EBattleEventType::DamageDealt;
 			Ev.ActorInstanceId = Part.InstanceId;
+			Ev.ActorEnemyPartKey = Part.Identity.ToEnemyPartKey();
 			Ev.Amount          = Dmg;
 			Ev.Tag             = WacomTags::Status_Poison;
 			Events.Emit(Ev);
@@ -57,7 +58,7 @@ void FPoisonResolver::ResolvePoisonForAllHosts(FBattleState& State, FBattleEvent
 			Part.bDestroyed       = true;
 			Part.CurrentInitiative = 0;
 
-			// 统一处理：发事件 + 经验 + DestroyedPartIds + 击倒事件队列。
+			// 统一处理：发事件 + 经验 + DestroyedParts + 击倒事件队列。
 			State.RecordPartDestroyed(Part, Events);
 		}
 	}

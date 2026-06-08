@@ -122,14 +122,14 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 
 	bool bAddedStep = false;
 	if ((Event.Type == EBattleEventType::DamageDealt || Event.Type == EBattleEventType::EnemyPartHpEmptied)
-		&& Event.ActorInstanceId.IsValid())
+		&& Event.ActorEnemyPartKey.IsValidKey())
 	{
 		FWacomBattlePresentationStep CueStep;
 		CueStep.Type = EWacomBattlePresentationStepType::TargetCue;
 		CueStep.EventSequence = Event.Sequence;
 		CueStep.SourceEventType = Event.Type;
 		CueStep.TargetCue.SourceEventType = Event.Type;
-		CueStep.TargetCue.TargetPartInstanceId = Event.ActorInstanceId;
+		CueStep.TargetCue.TargetPartKey = FBattlePartSlotIdentity::FromEnemyPartKey(Event.ActorEnemyPartKey);
 		CueStep.TargetCue.Amount = Event.Amount;
 		CueStep.TargetCue.Duration = Event.Type == EBattleEventType::EnemyPartHpEmptied
 			? EnemyPartDestroyedTargetCueDelay

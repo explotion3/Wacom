@@ -4,6 +4,7 @@
 
 #include "Engine/Engine.h"
 #include "GameFramework/Actor.h"
+#include "Tags/WacomGameplayTags.h"
 
 UWacomInteractionTargetComponent::UWacomInteractionTargetComponent()
 {
@@ -12,7 +13,12 @@ UWacomInteractionTargetComponent::UWacomInteractionTargetComponent()
 
 FWacomInteractionTargetHandle UWacomInteractionTargetComponent::BuildWorldTargetHandle() const
 {
-	if (!TargetId.IsValid())
+	const bool bHasBattlePartSlotIdentity =
+		!EncounterId.IsNone() && !EnemySlotId.IsNone() && !PartSlotId.IsNone();
+	const bool bCanBuildKeyOnlyBattlePartHandle =
+		InteractionTargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart)
+		&& bHasBattlePartSlotIdentity;
+	if (!TargetId.IsValid() && !bCanBuildKeyOnlyBattlePartHandle)
 	{
 		return FWacomInteractionTargetHandle();
 	}
@@ -64,7 +70,7 @@ void UWacomInteractionTargetComponent::LogHandleToConsole()
 	if (!Handle.IsValid())
 	{
 		UE_LOG(LogTemp, Display,
-			TEXT("[WacomInteractionTarget] %s :: TargetId 无效，BuildWorldTargetHandle 返回无效 handle。请先设置 TargetId。"),
+			TEXT("[WacomInteractionTarget] %s :: TargetId 无效且没有完整 Battle 部位 Key，BuildWorldTargetHandle 返回无效 handle。请设置 TargetId 或 EncounterId/EnemySlotId/PartSlotId。"),
 			*GetNameSafe(GetOwner()));
 		return;
 	}

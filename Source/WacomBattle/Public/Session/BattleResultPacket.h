@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Types/WacomEnums.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "BattleResultPacket.generated.h"
 
@@ -29,6 +30,9 @@ struct WACOMBATTLE_API FKnockdownExpGain
 	FBattlePartSlotIdentity Identity;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FBattleEnemyPartKey PartKey;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	int32 ExpAmount = 0;
 };
 
@@ -48,6 +52,9 @@ struct WACOMBATTLE_API FKnockdownChoice
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	FBattlePartSlotIdentity Identity;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FBattleEnemyPartKey PartKey;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	EKnockdownChoice Choice = EKnockdownChoice::None;
@@ -74,6 +81,9 @@ struct WACOMBATTLE_API FBattleGainedCard
 	FBattlePartSlotIdentity SourceIdentity;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FBattleEnemyPartKey SourcePartKey;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	EKnockdownChoice SourceChoice = EKnockdownChoice::None;
 };
 
@@ -94,6 +104,9 @@ struct WACOMBATTLE_API FBattleEnemyResult
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FBattlePartSlotIdentity> DestroyedParts;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TArray<FBattleEnemyPartKey> DestroyedPartKeys;
 };
 
 /**
@@ -108,7 +121,7 @@ struct WACOMBATTLE_API FBattleEnemyResult
  *   - KnockdownExpGains：战内被破坏部位的经验奖励列表
  *   - KnockdownChoices：玩家在击倒事件中的选择列表
  *   - GainedCards：战斗中获得、战后归入 Run 的卡牌列表
- *   - DestroyedPartIds：本场战斗中被破坏的部位 ID 列表，撤离时持久化
+ *   - DestroyedPartKeys：本场战斗中被破坏的稳定部位 key 列表，撤离时持久化
  *
  * 由 UBattleSession::BuildResultPacket() 构造，
  * 由 URunSession::OnBattleFinished(Packet) 消费。
@@ -142,7 +155,7 @@ struct WACOMBATTLE_API FBattleResultPacket
 	/**
 	 * 撤离。Outcome=Victory 但 Run 层不计敌人为已击败、
 	 * 战斗节点不变"已完成"。下次进入同一战斗节点仍触发战斗，
-	 * 但已破坏的部位（见 DestroyedPartIds）维持破坏态。
+	 * 但已破坏的部位（见 DestroyedPartKeys）维持破坏态。
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	bool bWithdrawn = false;
@@ -173,20 +186,16 @@ struct WACOMBATTLE_API FBattleResultPacket
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FBattleGainedCard> GainedCards;
 
-	/** 本场战斗中所有被破坏的完整部位身份。 */
+	/** 本场战斗中所有被破坏的完整部位身份（内部 identity 投影）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FBattlePartSlotIdentity> DestroyedParts;
+
+	/** 本场战斗中所有被破坏的稳定公开部位 key。Run 撤离重入优先读取该字段。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TArray<FBattleEnemyPartKey> DestroyedPartKeys;
 
 	/** 按敌人槽汇总的战后结果。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FBattleEnemyResult> EnemyResults;
 
-	/**
-	 * 本场战斗中所有被破坏的部位 ID。
-	 *
-	 * 撤离时由 Run 层写入 RunState.BattleProgress，下次进入同一 Trigger
-	 * 时持久化破坏状态。胜利时 Run 层会清理对应 Trigger 的进度。
-	 */
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
-	TArray<FName> DestroyedPartIds;
 };

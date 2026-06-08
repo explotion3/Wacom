@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "BattleEvent.generated.h"
 
 class UCardDefinition;
@@ -31,6 +32,8 @@ enum class EBattleEventType : uint8
 	InitiativePushed      UMETA(DisplayName = "InitiativePushed"),     // 打牌推进先机后的统一扣减
 	WaitPerformed         UMETA(DisplayName = "WaitPerformed"),
 	EnemyPartActed        UMETA(DisplayName = "EnemyPartActed"),
+	EnemyIntentSelected   UMETA(DisplayName = "EnemyIntentSelected"),
+	EnemyPhaseChanged     UMETA(DisplayName = "EnemyPhaseChanged"),
 	EnemyPartHpEmptied    UMETA(DisplayName = "EnemyPartHpEmptied"),   // 部位被破坏
 	EnemyKnockdown        UMETA(DisplayName = "EnemyKnockdown"),       // 击倒事件记录
 	KnockdownChoiceRequested UMETA(DisplayName = "KnockdownChoiceRequested"), // 等待玩家三选一
@@ -75,18 +78,20 @@ enum class EHandCardZoneMoveReason : uint8
  *
  * 字段使用约定（非穷举）：
  * - CardsDrawn          ：Count = 抽牌数
- * - CardPlayed          ：CardInstanceId、ActorInstanceId = 目标部位 InstanceId
- * - InitiativeHit       ：ActorInstanceId = 被命中部位、Amount = 本次 RuntimeCost
- * - DamageDealt         ：ActorInstanceId = 受伤害单位、Amount = 实际扣血量
- * - StatusApplied       ：ActorInstanceId、Tag = Status.*、Amount = 层数
+ * - CardPlayed          ：CardInstanceId、ActorEnemyPartKey = 目标部位稳定 key
+ * - InitiativeHit       ：ActorEnemyPartKey = 被命中部位、Amount = 本次 RuntimeCost
+ * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；玩家目标时 key 为空
+ * - StatusApplied       ：ActorEnemyPartKey、Tag = Status.*、Amount = 层数；玩家目标时 key 为空
  * - InitiativePushed    ：Amount = 扣减量（RuntimeCost）
  * - WaitPerformed       ：Amount = 本次等待值
- * - EnemyPartActed      ：ActorInstanceId = 行动部位、Tag 可承载 Intent id
- * - EnemyPartHpEmptied  ：ActorInstanceId = 被破坏部位
+ * - EnemyPartActed      ：ActorEnemyPartKey = 行动部位、IntentId = 本次执行的意图
+ * - EnemyIntentSelected ：ActorEnemyPartKey = 行动部位、IntentId / IntentSetId / EnemyPhaseId = 新选中意图上下文
+ * - EnemyPhaseChanged   ：ActorEnemyPartKey = 触发部位、EnemyPhaseId = 新 phase
+ * - EnemyPartHpEmptied  ：ActorEnemyPartKey = 被破坏部位
  * - HandLimitDiscarded  ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡（仅 EffectDraw）
  * - CardDiscarded       ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡；Tag = 效果 tag
  * - CardExhausted       ：CardInstanceId = 被消耗的卡；ActorInstanceId = 触发源卡；Tag = 效果 tag
- * - CardGained          ：CardInstanceId = 战斗内新卡实例；ActorInstanceId = 来源部位；CardDefinition = 新卡定义；Count = EKnockdownChoice
+ * - CardGained          ：CardInstanceId = 战斗内新卡实例；ActorEnemyPartKey = 来源部位；CardDefinition = 新卡定义；Count = EKnockdownChoice
  * - BattleEnded         ：Count = 1 表示胜利、0 表示失败（后续换专用字段）
  */
 USTRUCT(BlueprintType)
@@ -105,6 +110,10 @@ struct WACOMBATTLE_API FBattleEvent
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	FGuid ActorInstanceId;
 
+	/** 与事件相关的敌方部位稳定 key。玩家目标或非敌方事件时为空。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	FBattleEnemyPartKey ActorEnemyPartKey;
+
 	/** 若事件涉及一张卡，这是该卡的运行时实例 ID。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	FGuid CardInstanceId;
@@ -112,6 +121,15 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 通用标签字段。按 Type 语义使用（状态 tag、意图 id、效果 tag 等）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	FGameplayTag Tag;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	FName IntentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	FName IntentSetId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	FName EnemyPhaseId = NAME_None;
 
 	/** 通用数值字段：伤害、层数、等待值、RuntimeCost 等。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

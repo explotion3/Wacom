@@ -4,6 +4,7 @@
 
 #include "Cards/CardDefinition.h"
 #include "Components/WacomBattleCameraLookComponent.h"
+#include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -480,11 +481,11 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragReleased(
 	ClearDragCameraLookOverride();
 	bFirstPersonCardDragActiveForBattleSceneHover = false;
 	HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragReleased"));
-	if (UWacomBattleEnemyPartWorldTargetBridgeComponent* PreviewBridge = CurrentDragPreviewBridge.Get())
+	if (UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = CurrentDragPreviewPresentation.Get())
 	{
-		PreviewBridge->ClearDragTargetPreviewState();
+		PreviewPresentation->ClearDragTargetPreviewState();
 	}
-	CurrentDragPreviewBridge.Reset();
+	CurrentDragPreviewPresentation.Reset();
 	HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
 
 	if (!DropResult.bCanSubmit)
@@ -659,7 +660,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	TOptional<FVector2D> FeedbackTargetPosition;
-	UWacomBattleEnemyPartWorldTargetBridgeComponent* PreviewBridge = nullptr;
+	UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = nullptr;
 
 	switch (DropResult.IntentKind)
 	{
@@ -702,19 +703,19 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	}
 	if (DropResult.TargetHandle.TargetKind == EWacomInteractionTargetKind::World)
 	{
-		PreviewBridge = HUD.ResolveBattleEnemyPartWorldTargetBridge(DropResult.TargetHandle);
+		PreviewPresentation = HUD.ResolveBattleEnemyPartWorldTargetPresentation(DropResult.TargetHandle);
 	}
 
-	if (CurrentDragPreviewBridge.Get() != PreviewBridge)
+	if (CurrentDragPreviewPresentation.Get() != PreviewPresentation)
 	{
-		if (UWacomBattleEnemyPartWorldTargetBridgeComponent* PreviousBridge =
-			CurrentDragPreviewBridge.Get())
+		if (UWacomBattleEnemyPartPresentationComponent* PreviousPresentation =
+			CurrentDragPreviewPresentation.Get())
 		{
-			PreviousBridge->ClearDragTargetPreviewState();
+			PreviousPresentation->ClearDragTargetPreviewState();
 		}
-		CurrentDragPreviewBridge = PreviewBridge;
+		CurrentDragPreviewPresentation = PreviewPresentation;
 	}
-	if (PreviewBridge)
+	if (PreviewPresentation)
 	{
 		FWacomBattleEnemyPartDragPredictionDebugInput PredictionDebugInput;
 		PredictionDebugInput.SourceCardInstanceId = CardInstanceId;
@@ -731,7 +732,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 				PredictionDebugInput.bSourceCardSwift = SourceSnapshot->bIsSwift;
 			}
 		}
-		PreviewBridge->SetDragTargetPreviewState(FeedbackState, PredictionDebugInput);
+		PreviewPresentation->SetDragTargetPreviewState(FeedbackState, PredictionDebugInput);
 	}
 
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor())
@@ -748,11 +749,11 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 
 void FWacomBattleHUDFirstPersonHandBridge::ClearDragTargetFeedback(bool bClearFirstPersonCardLayerFeedback)
 {
-	if (UWacomBattleEnemyPartWorldTargetBridgeComponent* PreviewBridge = CurrentDragPreviewBridge.Get())
+	if (UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = CurrentDragPreviewPresentation.Get())
 	{
-		PreviewBridge->ClearDragTargetPreviewState();
+		PreviewPresentation->ClearDragTargetPreviewState();
 	}
-	CurrentDragPreviewBridge.Reset();
+	CurrentDragPreviewPresentation.Reset();
 	if (!bClearFirstPersonCardLayerFeedback)
 	{
 		return;
@@ -880,7 +881,7 @@ FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveD
 			CurrentSession->ValidateTargetWithCard(CardInstanceId, CandidateTarget);
 		Result.TargetValidationRejectReason = Validation.RejectReason;
 		Result.TargetValidationDebugSummary = Validation.DebugSummary;
-		if (Validation.bCanTarget && CandidateTarget.WorldTargetId.IsValid())
+		if (Validation.bCanTarget && Validation.ResolvedPartKey.IsValidKey())
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::PlayCardWorldTarget;
 			Result.bCanSubmit = true;
@@ -1069,7 +1070,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearPendingTransitionEvents()
 
 void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(
 	const FGuid& CardInstanceId,
-	const FGuid& TargetPartInstanceId)
+	const FBattlePartSlotIdentity& TargetPartKey)
 {
 	if (!CardInstanceId.IsValid())
 	{
@@ -1078,11 +1079,11 @@ void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(
 
 	FPlayCommitHint CommitHint;
 	CommitHint.CardInstanceId = CardInstanceId;
-	if (TargetPartInstanceId.IsValid())
+	if (TargetPartKey.IsValidSlot())
 	{
 		FWacomBattlePresentationTargetCue Cue;
 		Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
-		Cue.TargetPartInstanceId = TargetPartInstanceId;
+		Cue.TargetPartKey = TargetPartKey;
 		Cue.Duration = 0.10f;
 		HUD.PlayBattlePresentationCue(Cue);
 	}

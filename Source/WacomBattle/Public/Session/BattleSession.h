@@ -197,20 +197,11 @@ struct WACOMBATTLE_API FBattleInitParams
 	float LowHpThreshold = 0.2f;
 
 	/**
-	 * 预先破坏的部位 ID 列表，用于撤离重入。
+	 * 预先破坏的完整部位身份列表。Run 路径只填该字段。
 	 *
 	 * Initialize 时按此 list 把对应 RuntimeEnemyPart 设为 bDestroyed=true / HP=0 /
 	 * Initiative=0。**不入 PendingKnockdownEvents 队列**（已经记过账了），
 	 * **不发 KnockdownExpGain**（避免反复撤离刷经验）。
-	 *
-	 * 来源：URunSession::BuildInitParamsForBattle 读 RunState.BattleProgress
-	 * 中该 Trigger 对应的进度。
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
-	TArray<FName> PreDestroyedPartIds;
-
-	/**
-	 * 预先破坏的完整部位身份列表。非空时优先使用；旧 PreDestroyedPartIds 会映射到默认 Enemy 槽。
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Encounter")
 	TArray<FBattlePartSlotIdentity> PreDestroyedParts;

@@ -77,7 +77,7 @@ bool FWacomBattleEffectDrawInsertsCardsAtRandomSpec::RunTest(const FString& /*Pa
 		TestTrue(FString::Printf(TEXT("Seed=%d has draw pile card"), Seed), DrawPileBefore > 0);
 
 		TestTrue(TEXT("Play draw card"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId, FGuid())).IsOk());
+			Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
 
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 
@@ -152,7 +152,7 @@ bool FWacomBattleEffectDrawImmediatelyEnforcesHandLimitSpec::RunTest(const FStri
 		const int32 DiscardBefore = Snap.PileCounts.DiscardCount;
 
 		TestTrue(TEXT("Play draw card"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId, FGuid())).IsOk());
+			Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 
 		Snap = Session->BuildSnapshot();

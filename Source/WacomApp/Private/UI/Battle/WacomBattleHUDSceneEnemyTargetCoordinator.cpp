@@ -4,8 +4,8 @@
 
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartActor.h"
+#include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
-#include "Components/WacomInteractionTargetComponent.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Resolution/BattleTargetValidationResult.h"
@@ -141,12 +141,48 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent*
 FWacomBattleHUDSceneEnemyTargetCoordinator::ResolveWorldTargetBridge(
 	const FWacomInteractionTargetHandle& TargetHandle) const
 {
-	const UWacomInteractionTargetComponent* InteractionTarget =
-		Cast<UWacomInteractionTargetComponent>(TargetHandle.SourceObject.Get());
-	const AActor* Owner = InteractionTarget ? InteractionTarget->GetOwner() : nullptr;
-	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
-		Owner ? Owner->FindComponentByClass<UWacomBattleEnemyPartWorldTargetBridgeComponent>() : nullptr;
-	return IsBridgeInCurrentRegistry(Bridge) ? Bridge : nullptr;
+	if (!TargetHandle.HasBattlePartSlotIdentity())
+	{
+		return nullptr;
+	}
+
+	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
+	{
+		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get();
+		if (!IsValid(Bridge) || !Bridge->IsBoundToBattlePart())
+		{
+			continue;
+		}
+
+		if (Bridge->GetBoundEncounterId() == TargetHandle.EncounterId
+			&& Bridge->GetBoundEnemySlotId() == TargetHandle.EnemySlotId
+			&& Bridge->GetBoundPartSlotId() == TargetHandle.PartSlotId)
+		{
+			return Bridge;
+		}
+	}
+
+	return nullptr;
+}
+
+UWacomBattleEnemyPartPresentationComponent*
+FWacomBattleHUDSceneEnemyTargetCoordinator::ResolveWorldTargetPresentation(
+	const FWacomInteractionTargetHandle& TargetHandle) const
+{
+	const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = ResolveWorldTargetBridge(TargetHandle);
+	if (!Bridge)
+	{
+		return nullptr;
+	}
+
+	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
+	{
+		if (Entry.Bridge.Get() == Bridge)
+		{
+			return Entry.Presentation.Get();
+		}
+	}
+	return nullptr;
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsBridgeInCurrentRegistry(
@@ -157,10 +193,9 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsBridgeInCurrentRegistry(
 		return false;
 	}
 
-	for (const TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>& RegisteredBridge :
-		SceneEnemyPartWorldTargetBridges)
+	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
 	{
-		if (RegisteredBridge.Get() == Bridge)
+		if (Entry.Bridge.Get() == Bridge)
 		{
 			return true;
 		}
@@ -170,7 +205,18 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsBridgeInCurrentRegistry(
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 {
-	SceneEnemyPartWorldTargetBridges.Reset();
+	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
+	{
+		if (UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get())
+		{
+			HUD.UnregisterBattlePresentationTargetsForOwner(Presentation);
+		}
+		if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get())
+		{
+			Bridge->SetBattleHUDSceneRegistryState(false);
+		}
+	}
+	SceneEnemyPartWorldTargets.Reset();
 
 	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
 	{
@@ -192,7 +238,11 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 			{
 				if (Bridge->IsRegistered())
 				{
-					SceneEnemyPartWorldTargetBridges.AddUnique(Bridge);
+					FSceneEnemyPartWorldTargetEntry Entry;
+					Entry.Bridge = Bridge;
+					Entry.Presentation = PartActor->GetPresentationComponent();
+					SceneEnemyPartWorldTargets.Add(Entry);
+					Bridge->SetBattleHUDSceneRegistryState(true);
 				}
 			}
 		}
@@ -222,16 +272,81 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 	}
 	RebuildRegistry();
 	const FBattleTargetSelectionView TargetSelectionView = HUD.BuildTargetSelectionView();
-	for (const TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>& WeakBridge :
-		SceneEnemyPartWorldTargetBridges)
+	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
 	{
-		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = WeakBridge.Get();
+		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get();
 		if (!IsValid(Bridge))
 		{
 			continue;
 		}
 
-		Bridge->SyncFromBattleHUD(HUD, Snapshot, TargetSelectionView);
+		if (AWacomBattleEnemyPartActor* PartActor = Cast<AWacomBattleEnemyPartActor>(Bridge->GetOwner()))
+		{
+			Bridge->SetBattlePartSlotIdentity(
+				Snapshot.EncounterId,
+				PartActor->EnemySlotId,
+				PartActor->GetEffectivePartSlotId());
+		}
+		FEnemyPartSnapshot MatchedPart;
+		const bool bBound = Bridge->SyncFromBattleSnapshot(Snapshot, &MatchedPart);
+		UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get();
+		bool bNewTargetable = false;
+		FName NewDisabledReason = NAME_None;
+		if (bBound)
+		{
+			for (const FBattleTargetablePartView& PartView : TargetSelectionView.TargetableParts)
+			{
+				if (PartView.PartInstanceId == Bridge->GetPartInstanceId())
+				{
+					bNewTargetable = PartView.bTargetable;
+					NewDisabledReason = PartView.DisabledReason;
+					break;
+				}
+			}
+		}
+		Bridge->SetBattleTargetableState(bNewTargetable, NewDisabledReason);
+
+		if (!Presentation)
+		{
+			continue;
+		}
+		HUD.UnregisterBattlePresentationTargetsForOwner(Presentation);
+
+		if (bBound)
+		{
+			Presentation->CacheRuntimePartFacts(Bridge->PartId, MatchedPart);
+		}
+		else
+		{
+			if (MatchedPart.InstanceId.IsValid())
+			{
+				Presentation->CacheRuntimePartFacts(Bridge->PartId, MatchedPart);
+			}
+			else
+			{
+				Presentation->ClearRuntimePartFacts();
+			}
+			Presentation->ClearDragTargetPreviewState();
+			Presentation->ClearHoverProbeState(TEXT("BindingCleared"));
+			Presentation->SetTargetableAffordance(false);
+			continue;
+		}
+		Presentation->SetTargetableAffordance(bNewTargetable);
+
+		TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> WeakPresentation = Presentation;
+		HUD.RegisterBattlePresentationTarget(
+			FBattlePartSlotIdentity(
+				Bridge->GetBoundEncounterId(),
+				Bridge->GetBoundEnemySlotId(),
+				Bridge->GetBoundPartSlotId()),
+			Presentation,
+			[WeakPresentation](const FWacomBattlePresentationTargetCue& Cue)
+			{
+				if (UWacomBattleEnemyPartPresentationComponent* StrongPresentation = WeakPresentation.Get())
+				{
+					StrongPresentation->PlayBattlePresentationCue(Cue);
+				}
+			});
 	}
 }
 
@@ -240,15 +355,23 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
 	HUD.ClearFirstPersonCardDragTargetFeedback();
 	ClearHoverProbe(TEXT("WorldTargetsCleared"));
 
-	for (const TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>& WeakBridge :
-		SceneEnemyPartWorldTargetBridges)
+	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
 	{
-		if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = WeakBridge.Get())
+		if (UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get())
+		{
+			HUD.UnregisterBattlePresentationTargetsForOwner(Presentation);
+			Presentation->ClearDragTargetPreviewState();
+			Presentation->ClearHoverProbeState(TEXT("WorldTargetsCleared"));
+			Presentation->SetTargetableAffordance(false);
+			Presentation->ClearRuntimePartFacts();
+		}
+
+		if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get())
 		{
 			Bridge->ClearBattleBinding();
 		}
 	}
-	SceneEnemyPartWorldTargetBridges.Reset();
+	SceneEnemyPartWorldTargets.Reset();
 	SceneEnemyHosts.Reset();
 }
 
@@ -274,11 +397,11 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::TickHoverProbe(float DeltaTime)
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearHoverProbe(FName Reason)
 {
-	if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = HoveredBridge.Get())
+	if (UWacomBattleEnemyPartPresentationComponent* Presentation = HoveredPresentation.Get())
 	{
-		Bridge->ClearHoverProbeState(Reason);
+		Presentation->ClearHoverProbeState(Reason);
 	}
-	HoveredBridge.Reset();
+	HoveredPresentation.Reset();
 	HoveredHandle = FWacomInteractionTargetHandle();
 }
 
@@ -309,7 +432,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::UpdateHoverProbe()
 		&& WacomPC->TryProbeBattleSceneInteractionTarget(TargetHandle)
 		&& TargetHandle.TargetKind == EWacomInteractionTargetKind::World
 		&& TargetHandle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart)
-		&& TargetHandle.WorldTargetId.IsValid();
+		&& TargetHandle.HasBattlePartSlotIdentity();
 
 	if (!bHasTarget)
 	{
@@ -325,14 +448,22 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::UpdateHoverProbe()
 		return;
 	}
 
-	if (HoveredBridge.Get() != Bridge)
+	UWacomBattleEnemyPartPresentationComponent* Presentation =
+		ResolveWorldTargetPresentation(TargetHandle);
+	if (!Presentation)
+	{
+		ClearHoverProbe(TEXT("MissingPresentation"));
+		return;
+	}
+
+	if (HoveredPresentation.Get() != Presentation)
 	{
 		ClearHoverProbe(TEXT("TargetChanged"));
-		HoveredBridge = Bridge;
+		HoveredPresentation = Presentation;
 	}
 
 	HoveredHandle = TargetHandle;
-	Bridge->SetHoverProbeState(
+	Presentation->SetHoverProbeState(
 		TargetHandle,
 		TEXT("Hovered"),
 		BuildHoverPredictionInput(TargetHandle));

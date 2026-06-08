@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Types/WacomEnums.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
@@ -86,6 +87,7 @@ struct FEnemyState
 	TArray<FEnemySlotState> EnemySlots;
 	TArray<FRuntimeEnemyPart> Parts;        // 按部位顺序
 	TMap<FGuid, int32> PartIndexById;       // InstanceId → Parts 索引，O(1) 查找
+	TMap<FBattleEnemyPartKey, int32> PartIndexByKey; // Stable key → Parts 索引，O(1) 查找
 };
 
 /**
@@ -192,16 +194,6 @@ struct FBattleState
 	 */
 	TArray<FBattleGainedCard> PendingGainedCards;
 
-	/**
-	 * 本场战斗中所有被破坏的部位 ID。
-	 *
-	 * 撤离时由 Run 层用 packet.DestroyedPartIds 写入 RunState.BattleProgress；
-	 * 胜利时清理 BattleProgress。
-	 *
-	 * **包含**预先破坏的部位（持久化的）+ 本场新破坏的部位——这样撤离时
-	 * 写入的列表是"截至当前所有破坏过的部位"，覆盖式更新 BattleProgress。
-	 */
-	TArray<FName> DestroyedPartIds;
 	TArray<FBattlePartSlotIdentity> DestroyedParts;
 
 	// ---- 分组字段 ----
@@ -240,11 +232,11 @@ struct FBattleState
 	 * 本函数：
 	 *   1. 发 EnemyPartHpEmptied 事件
 	 *   2. 记 KnockdownExpGain 经验
-	 *   3. 加入 DestroyedPartIds（撤离时持久化用）
+	 *   3. 加入 DestroyedParts（撤离时持久化用）
 	 *   4. push PendingKnockdownEvent 队列（等玩家三选一）
 	 *
 	 * 不调用本函数的场景：
-	 *   - Initialize 时按 PreDestroyedPartIds 设的预先破坏部位（已经处理过经验和选择，不重复）
+	 *   - Initialize 时按 PreDestroyedParts 设的预先破坏部位（已经处理过经验和选择，不重复）
 	 *
 	 * @param Part           被破坏的部位（已置 bDestroyed=true / CurrentHp=0）
 	 * @param Events         事件总线

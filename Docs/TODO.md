@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-06-07
+updated: 2026-06-08
 tags:
   - wacom/todo
   - wacom/docs
@@ -48,6 +48,12 @@ tags:
 
 ## P1 近期实现候选
 
+- [x] **敌人系统重构：稳定身份、行为数据化、场景表现拆分**
+  - 状态：`Done: 主链路已落地`
+  - 归属：Data / Battle / Run / App / Editor
+  - 入口：`specs/002-enemy-system-refactor/`
+  - 说明：稳定 enemy key、Run 撤离重入进度、command / snapshot / event / result packet、行为数据化、Encounter 接线、SceneEnemyHost registry、Host 整体视觉、PartActor hit-only / VisualLayers 和 BattleHUD 场景目标主链路已落地。长期事实已回写到 `Docs/WacomBattle.md`、`Docs/WacomData.md`、`Docs/WacomRun.md`、`Docs/WacomWorldInteraction.md`、`Docs/WacomBattleUI.md` 和 `Docs/WacomDataAuthoring.md`；`specs/002-enemy-system-refactor/` 只保留为阶段性规划和最终搜索 / 验证清单。
+
 - [x] **UI Ownership / BattleHUD 私有 coordinator 拆分**
   - 状态：`Done`
   - 归属：UI 架构 / App
@@ -75,11 +81,11 @@ tags:
   - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / [WacomBattle.md](./WacomBattle.md)
   - 说明：继续做正式掉落 / 奖励池、更多敌人包、卡牌平衡和正式卡组入口；新增规则能力前先接 resolver、合同、文档和验证。
 
-- [ ] **战斗场景敌人 Actor：承接敌方部位表现与先机预测**
-  - 状态：`In Progress: 表现 polish`
+- [ ] **战斗场景敌人表现 polish：正式美术、描边、tooltip 和动画状态机**
+  - 状态：`Ready: 美术 / 表现 polish`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：PartActor 已支持多 StaticSprite / Flipbook 视觉层，Host 已提供 Debug 蛇样例配置入口，`DA_Encounter_SnakeSingle` 已作为正式单蛇 Encounter 样例；后续集中在正式蛇 Host 蓝图 prefab 美术保存、正式 sprite/flipbook 样式、材质描边、贴近部位 tooltip、风险动效、PaperZD/Animator 状态机和 Status Badge 美术替换。
+  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。后续只追踪正式蛇 Host prefab 美术保存、正式 sprite/flipbook 样式、材质描边、贴近部位 tooltip、风险动效、PaperZD / Animator 状态机和 Status Badge 美术替换。
 
 - [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
 	- 状态：`Done: Trigger 已接线`

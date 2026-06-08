@@ -8,19 +8,19 @@
 class FWacomBattlePresentationTargetRegistry
 {
 public:
-	void Register(const FGuid& PartInstanceId, UObject* Owner,
+	void Register(const FBattlePartSlotIdentity& TargetPartKey, UObject* Owner,
 		TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler)
 	{
 		for (int32 i = Handlers.Num() - 1; i >= 0; --i)
 		{
-			if (Handlers[i].PartInstanceId == PartInstanceId)
+			if (Handlers[i].TargetPartKey == TargetPartKey)
 			{
 				Handlers.RemoveAt(i);
 			}
 		}
 
 		FEntry& Entry = Handlers.AddDefaulted_GetRef();
-		Entry.PartInstanceId = PartInstanceId;
+		Entry.TargetPartKey = TargetPartKey;
 		Entry.Owner = Owner;
 		Entry.Handler = MoveTemp(Handler);
 	}
@@ -52,7 +52,7 @@ public:
 	{
 		for (const FEntry& Entry : Handlers)
 		{
-			if (Entry.PartInstanceId == Cue.TargetPartInstanceId && Entry.Handler)
+			if (Entry.TargetPartKey == Cue.TargetPartKey && Entry.Handler)
 			{
 				Entry.Handler(Cue);
 				break;
@@ -67,7 +67,7 @@ public:
 private:
 	struct FEntry
 	{
-		FGuid PartInstanceId;
+		FBattlePartSlotIdentity TargetPartKey;
 		TWeakObjectPtr<UObject> Owner;
 		TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler;
 	};

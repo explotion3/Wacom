@@ -9,6 +9,7 @@
 #include "Cards/EffectCondition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Commands/BattleCommand.h"
+#include "Enemies/EnemyBehaviorDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
@@ -21,7 +22,7 @@
 #include "Types/WacomEnums.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Validation/CardDefinitionValidation.h"
-#include "Validation/EnemyPartDefinitionValidation.h"
+#include "Validation/EnemyBehaviorDefinitionValidation.h"
 
 namespace
 {
@@ -105,20 +106,23 @@ namespace
 		return bValid;
 	}
 
-	bool ValidateEnemyPartForMatrix(UEnemyPartDefinition* Part, FAutomationTestBase& Test)
+	bool ValidateEnemyBehaviorForMatrix(
+		UEnemyBehaviorDefinition* Behavior,
+		UEnemyDefinition* Enemy,
+		FAutomationTestBase& Test)
 	{
 		TArray<FText> Errors;
-		const bool bValid = FWacomEnemyPartDefinitionValidation::Validate(Part, Errors);
+		const bool bValid = FWacomEnemyBehaviorDefinitionValidation::Validate(Behavior, Errors, Enemy);
 		if (!bValid)
 		{
 			for (const FText& Error : Errors)
 			{
 				Test.AddError(FString::Printf(TEXT("%s failed validation: %s"),
-					*Part->PartId.ToString(),
+					*GetNameSafe(Behavior),
 					*Error.ToString()));
 			}
 		}
-		Test.TestTrue(FString::Printf(TEXT("%s passes enemy part validation"), *Part->PartId.ToString()), bValid);
+		Test.TestTrue(FString::Printf(TEXT("%s passes enemy behavior validation"), *GetNameSafe(Behavior)), bValid);
 		return bValid;
 	}
 
@@ -128,10 +132,10 @@ namespace
 		return !FWacomCardDefinitionValidation::Validate(Card, Errors) && Errors.Num() > 0;
 	}
 
-	bool ValidateEnemyPartRejected(UEnemyPartDefinition* Part)
+	bool ValidateEnemyBehaviorRejected(UEnemyBehaviorDefinition* Behavior, UEnemyDefinition* Enemy)
 	{
 		TArray<FText> Errors;
-		return !FWacomEnemyPartDefinitionValidation::Validate(Part, Errors) && Errors.Num() > 0;
+		return !FWacomEnemyBehaviorDefinitionValidation::Validate(Behavior, Errors, Enemy) && Errors.Num() > 0;
 	}
 
 	UBattleSession* CreateMatrixSession(
@@ -179,22 +183,39 @@ namespace
 		Part->PartId = FName(*FString::Printf(TEXT("Matrix.Part.%s"), *FGuid::NewGuid().ToString(EGuidFormats::Short)));
 		Part->DisplayName = FText::FromName(Part->PartId);
 		Part->MaxHp = Hp;
-		Part->InitialIntentIndex = 0;
 		Part->ExperienceReward = 1;
 
-		FIntentDefinition Intent;
-		Intent.IntentId = FName(*FString::Printf(TEXT("Matrix.Intent.%s"), *FGuid::NewGuid().ToString(EGuidFormats::Short)));
-		Intent.DisplayName = FText::FromName(Intent.IntentId);
-		Intent.Initiative = Initiative;
-		Intent.ResistanceValue = ResistanceValue;
-		Intent.Effects = Effects;
-		Part->IntentSequence.Add(Intent);
+		UEnemyBehaviorDefinition* Behavior = NewMatrixObject<UEnemyBehaviorDefinition>(Outer);
+		Behavior->BehaviorId = FName(*FString::Printf(TEXT("Matrix.Behavior.%s"), *FGuid::NewGuid().ToString(EGuidFormats::Short)));
+		Behavior->InitialPhaseId = TEXT("Default");
+
+		FWacomEnemyBehaviorIntent IntentEntry;
+		IntentEntry.Intent.IntentId = FName(*FString::Printf(TEXT("Matrix.Intent.%s"), *FGuid::NewGuid().ToString(EGuidFormats::Short)));
+		IntentEntry.Intent.DisplayName = FText::FromName(IntentEntry.Intent.IntentId);
+		IntentEntry.Intent.Initiative = Initiative;
+		IntentEntry.Intent.ResistanceValue = ResistanceValue;
+		IntentEntry.Intent.Effects = Effects;
+
+		FWacomEnemyIntentSetDefinition IntentSet;
+		IntentSet.IntentSetId = TEXT("Matrix.IntentSet.Core");
+		IntentSet.AppliesToPartSlotId = Part->PartId;
+		IntentSet.SelectorMode = EWacomEnemyIntentSelectorMode::Sequence;
+		IntentSet.Intents = { IntentEntry };
+
+		FWacomEnemyPhaseDefinition Phase;
+		Phase.PhaseId = TEXT("Default");
+		Phase.IntentSets = { IntentSet };
+		Behavior->Phases = { Phase };
 
 		UEnemyDefinition* Enemy = NewMatrixObject<UEnemyDefinition>(Outer);
 		Enemy->EnemyId = FName(*FString::Printf(TEXT("Matrix.Enemy.%s"), *FGuid::NewGuid().ToString(EGuidFormats::Short)));
 		Enemy->DisplayName = FText::FromName(Enemy->EnemyId);
+		Enemy->DefaultBehavior = Behavior;
+		Enemy->DefaultPhaseId = TEXT("Default");
 		FEnemyPartSlot Slot;
+		Slot.PartSlotId = Part->PartId;
 		Slot.PartDef = Part;
+		Slot.InitialIntentSetId = TEXT("Matrix.IntentSet.Core");
 		Enemy->Parts.Add(Slot);
 		return Enemy;
 	}
@@ -224,7 +245,8 @@ namespace
 		{
 			return false;
 		}
-		const bool bOk = Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TargetPartId)).IsOk();
+		const bool bOk = Session->SubmitCommand(
+			FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, CardId, TargetPartId)).IsOk();
 		Test.TestTrue(FString::Printf(TEXT("%s play command succeeds"), *Card->CardId.ToString()), bOk);
 		return bOk;
 	}
@@ -507,7 +529,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 			Snapshot = Session->BuildSnapshot();
 			const int32 HpAfterPoison = FWacomBattleFixture::FindPartHp(Snapshot, 0);
 			TestTrue(TEXT("Play left-zone modifier card"),
-				Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftId, PartId)).IsOk());
+				Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, LeftId, PartId)).IsOk());
 			Snapshot = Session->BuildSnapshot();
 			TestEqual(TEXT("Condition modifiers run in order with Self.InZone and Target.HasStatus"), FWacomBattleFixture::FindPartHp(Snapshot, 0), HpAfterPoison - 11);
 			bCoveredLeftZone = true;
@@ -714,7 +736,7 @@ bool FWacomBattleRuleContentMatrixZoneHookSpec::RunTest(const FString& /*Paramet
 			}
 			const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
 			TestTrue(TEXT("Play left-zone perfect-release hook card"),
-				Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftId, PartId)).IsOk());
+				Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, LeftId, PartId)).IsOk());
 			const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 			Snapshot = Session->BuildSnapshot();
 			TestTrue(TEXT("Perfect release hit event emitted"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::InitiativeHit));
@@ -834,27 +856,62 @@ bool FWacomBattleRuleContentMatrixReservedRejectedSpec::RunTest(const FString& /
 	}
 
 	{
+		UEnemyDefinition* Enemy = NewMatrixObject<UEnemyDefinition>(Outer);
+		Enemy->EnemyId = TEXT("Matrix.Enemy.Reject");
+
 		UEnemyPartDefinition* Part = NewMatrixObject<UEnemyPartDefinition>(Outer);
 		Part->PartId = TEXT("Matrix.EnemyPart.Reject");
 		Part->DisplayName = FText::FromName(Part->PartId);
 		Part->MaxHp = 10;
-		Part->InitialIntentIndex = 0;
-		FIntentDefinition Intent;
-		Intent.IntentId = TEXT("Matrix.Intent.Reject");
-		Intent.Initiative = 1;
-		Intent.ResistanceValue = 0;
-		Intent.Effects.Add(MakeIntentEffect(WacomTags::Effect_Draw, 1, WacomTags::Target_Player));
-		Part->IntentSequence.Add(Intent);
-		TestTrue(TEXT("Enemy intent cannot use card-only draw effect"), ValidateEnemyPartRejected(Part));
 
-		Part->IntentSequence[0].Effects[0] = MakeIntentEffect(WacomTags::Effect_Card_AddCost, 1, WacomTags::Target_SelectedHandCard);
-		TestTrue(TEXT("Enemy intent cannot use hand-card target effect"), ValidateEnemyPartRejected(Part));
+		FEnemyPartSlot Slot;
+		Slot.PartSlotId = TEXT("Core");
+		Slot.PartDef = Part;
+		Enemy->Parts = { Slot };
 
-		Part->IntentSequence[0].Effects[0] = MakeIntentEffect(WacomTags::Effect_Damage, 1, WacomTags::Target_AllEnemyParts);
-		TestTrue(TEXT("Enemy intent cannot target all enemy parts"), ValidateEnemyPartRejected(Part));
+		auto MakeRejectedBehavior = [Outer](const FIntentEffect& Effect) -> UEnemyBehaviorDefinition*
+		{
+			UEnemyBehaviorDefinition* Behavior = NewMatrixObject<UEnemyBehaviorDefinition>(Outer);
+			Behavior->BehaviorId = FName(*FString::Printf(TEXT("Matrix.Behavior.Reject.%s"), *FGuid::NewGuid().ToString(EGuidFormats::Short)));
+			Behavior->InitialPhaseId = TEXT("Default");
 
-		Part->IntentSequence[0].Effects[0] = MakeIntentEffect(WacomTags::CardLocation_Hand, 1, WacomTags::Target_Player);
-		TestTrue(TEXT("Enemy intent cannot use unknown effect"), ValidateEnemyPartRejected(Part));
+			FWacomEnemyBehaviorIntent IntentEntry;
+			IntentEntry.Intent.IntentId = TEXT("Matrix.Intent.Reject");
+			IntentEntry.Intent.Initiative = 1;
+			IntentEntry.Intent.ResistanceValue = 0;
+			IntentEntry.Intent.Effects = { Effect };
+
+			FWacomEnemyIntentSetDefinition IntentSet;
+			IntentSet.IntentSetId = TEXT("Core.Main");
+			IntentSet.AppliesToPartSlotId = TEXT("Core");
+			IntentSet.Intents = { IntentEntry };
+
+			FWacomEnemyPhaseDefinition Phase;
+			Phase.PhaseId = TEXT("Default");
+			Phase.IntentSets = { IntentSet };
+			Behavior->Phases = { Phase };
+			return Behavior;
+		};
+
+		TestTrue(TEXT("Enemy intent cannot use card-only draw effect"),
+			ValidateEnemyBehaviorRejected(
+				MakeRejectedBehavior(MakeIntentEffect(WacomTags::Effect_Draw, 1, WacomTags::Target_Player)),
+				Enemy));
+
+		TestTrue(TEXT("Enemy intent cannot use hand-card target effect"),
+			ValidateEnemyBehaviorRejected(
+				MakeRejectedBehavior(MakeIntentEffect(WacomTags::Effect_Card_AddCost, 1, WacomTags::Target_SelectedHandCard)),
+				Enemy));
+
+		TestTrue(TEXT("Enemy intent cannot target all enemy parts"),
+			ValidateEnemyBehaviorRejected(
+				MakeRejectedBehavior(MakeIntentEffect(WacomTags::Effect_Damage, 1, WacomTags::Target_AllEnemyParts)),
+				Enemy));
+
+		TestTrue(TEXT("Enemy intent cannot use unknown effect"),
+			ValidateEnemyBehaviorRejected(
+				MakeRejectedBehavior(MakeIntentEffect(WacomTags::CardLocation_Hand, 1, WacomTags::Target_Player)),
+				Enemy));
 	}
 
 	return true;

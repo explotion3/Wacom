@@ -28,6 +28,8 @@ namespace
 		case EBattleEventType::InitiativePushed:          return TEXT("InitiativePushed");
 		case EBattleEventType::WaitPerformed:             return TEXT("WaitPerformed");
 		case EBattleEventType::EnemyPartActed:            return TEXT("EnemyPartActed");
+		case EBattleEventType::EnemyIntentSelected:       return TEXT("EnemyIntentSelected");
+		case EBattleEventType::EnemyPhaseChanged:         return TEXT("EnemyPhaseChanged");
 		case EBattleEventType::EnemyPartHpEmptied:        return TEXT("EnemyPartHpEmptied");
 		case EBattleEventType::EnemyKnockdown:            return TEXT("EnemyKnockdown");
 		case EBattleEventType::KnockdownChoiceRequested:  return TEXT("KnockdownChoiceRequested");

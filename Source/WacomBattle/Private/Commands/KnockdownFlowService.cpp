@@ -28,6 +28,7 @@ FBattleEvent FKnockdownFlowService::BuildCurrentChoiceRequestedEvent(const FBatt
 	const FBattleState::FPendingKnockdownEvent& Head = State.PendingKnockdownEvents[0];
 	Event.Type = EBattleEventType::KnockdownChoiceRequested;
 	Event.ActorInstanceId = Head.PartInstanceId;
+	Event.ActorEnemyPartKey = Head.Identity.ToEnemyPartKey();
 	Event.Count = FKnockdownChoiceAvailability::BuildLegacyEventMask(
 		FKnockdownChoiceAvailability::BuildView(State));
 	return Event;

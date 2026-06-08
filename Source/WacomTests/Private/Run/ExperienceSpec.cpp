@@ -222,7 +222,7 @@ bool FWacomRunExperiencePartDestroyedRecordedInPacketSpec::RunTest(const FString
 
 	const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snap0, /*PartIndex*/0);
 
-	const FBattleCommand Cmd = FBattleCommand::MakePlayCard(KillerId, PartId);
+	const FBattleCommand Cmd = FWacomBattleFixture::MakePlayCardOnPartInstance(Snap0, KillerId, PartId);
 	const FWacomStatus Status = S->SubmitCommand(Cmd);
 	TestTrue(TEXT("PlayCard success"), Status.IsOk());
 

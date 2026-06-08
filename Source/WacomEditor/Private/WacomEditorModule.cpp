@@ -8,6 +8,7 @@
 #include "Validation/WacomCardDefinitionValidator.h"
 #include "Validation/WacomCharacterDefinitionValidator.h"
 #include "Validation/WacomEncounterDefinitionValidator.h"
+#include "Validation/WacomEnemyBehaviorDefinitionValidator.h"
 #include "Validation/WacomEnemyDefinitionValidator.h"
 #include "Validation/WacomEnemyPartDefinitionValidator.h"
 #include "Validation/WacomFirstPersonCardLayoutPresetValidator.h"
@@ -20,6 +21,7 @@ void FWacomEditorModule::StartupModule()
 {
 	RegisterEditorValidator(NewObject<UWacomCardDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEncounterDefinitionValidator>(GetTransientPackage()));
+	RegisterEditorValidator(NewObject<UWacomEnemyBehaviorDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEnemyDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEnemyPartDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomFirstPersonCardLayoutPresetValidator>(GetTransientPackage()));

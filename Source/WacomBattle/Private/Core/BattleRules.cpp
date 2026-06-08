@@ -49,45 +49,40 @@ const FRuntimeEnemyPart* FBattleRules::FindEnemyPart(const FBattleState& State, 
 	return nullptr;
 }
 
-FRuntimeEnemyPart* FBattleRules::FindEnemyPartBySlot(FBattleState& State, FName EnemySlotId, FName PartSlotId)
+FRuntimeEnemyPart* FBattleRules::FindEnemyPartByKey(FBattleState& State, const FBattleEnemyPartKey& PartKey)
 {
-	const FName EffectiveEnemySlotId = EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : EnemySlotId;
-	if (PartSlotId.IsNone())
+	if (!PartKey.IsValidKey())
 	{
 		return nullptr;
 	}
 
-	for (FRuntimeEnemyPart& Part : State.Enemy.Parts)
+	if (const int32* Idx = State.Enemy.PartIndexByKey.Find(PartKey))
 	{
-		if (Part.Identity.GetEffectiveEnemySlotId() == EffectiveEnemySlotId
-			&& Part.Identity.GetEffectivePartSlotId() == PartSlotId)
-		{
-			return &Part;
-		}
+		return State.Enemy.Parts.IsValidIndex(*Idx) ? &State.Enemy.Parts[*Idx] : nullptr;
 	}
 	return nullptr;
 }
 
-const FRuntimeEnemyPart* FBattleRules::FindEnemyPartBySlot(
+const FRuntimeEnemyPart* FBattleRules::FindEnemyPartByKey(
 	const FBattleState& State,
-	FName EnemySlotId,
-	FName PartSlotId)
+	const FBattleEnemyPartKey& PartKey)
 {
-	const FName EffectiveEnemySlotId = EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : EnemySlotId;
-	if (PartSlotId.IsNone())
+	if (!PartKey.IsValidKey())
 	{
 		return nullptr;
 	}
 
-	for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
+	if (const int32* Idx = State.Enemy.PartIndexByKey.Find(PartKey))
 	{
-		if (Part.Identity.GetEffectiveEnemySlotId() == EffectiveEnemySlotId
-			&& Part.Identity.GetEffectivePartSlotId() == PartSlotId)
-		{
-			return &Part;
-		}
+		return State.Enemy.Parts.IsValidIndex(*Idx) ? &State.Enemy.Parts[*Idx] : nullptr;
 	}
 	return nullptr;
+}
+
+FBattleEnemyPartKey FBattleRules::FindEnemyPartKey(const FBattleState& State, const FGuid& PartInstanceId)
+{
+	const FRuntimeEnemyPart* Part = FindEnemyPart(State, PartInstanceId);
+	return Part ? Part->Identity.ToEnemyPartKey() : FBattleEnemyPartKey();
 }
 
 FRuntimeCardInstance* FBattleRules::FindCard(FBattleState& State, const FGuid& CardInstanceId)

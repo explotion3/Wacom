@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "WacomBattlePresentationTargetCue.generated.h"
 
 /** 战斗表现目标 cue 的类型。 */
@@ -26,7 +27,7 @@ struct WACOMAPP_API FWacomBattlePresentationTargetCue
 	EWacomBattlePresentationTargetCueKind CueKind = EWacomBattlePresentationTargetCueKind::DamageDealt;
 
 	UPROPERTY()
-	FGuid TargetPartInstanceId;
+	FBattlePartSlotIdentity TargetPartKey;
 
 	UPROPERTY()
 	EBattleEventType SourceEventType = EBattleEventType::None;

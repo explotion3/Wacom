@@ -22,13 +22,12 @@ bool FRunBattleSettlementResolver::Resolve(
 			if (!TriggerPersistentId.IsNone())
 			{
 				FBattleProgressSnapshot Snapshot;
+				Snapshot.DestroyedPartKeys = Packet.DestroyedPartKeys;
 				Snapshot.DestroyedParts = Packet.DestroyedParts;
-				Snapshot.DestroyedPartIds = Packet.DestroyedPartIds;
 				State.BattleProgress.Add(TriggerPersistentId, MoveTemp(Snapshot));
 			}
-			const int32 PersistedDestroyedPartCount = Packet.DestroyedParts.Num() > 0
-				? Packet.DestroyedParts.Num()
-				: Packet.DestroyedPartIds.Num();
+			const int32 PersistedDestroyedPartCount =
+				Packet.DestroyedPartKeys.Num() > 0 ? Packet.DestroyedPartKeys.Num() : Packet.DestroyedParts.Num();
 			UE_LOG(LogTemp, Display,
 				TEXT("[RunSession] Battle withdrawn (Trigger=%s, %d parts persisted destroyed)"),
 				*TriggerPersistentId.ToString(),

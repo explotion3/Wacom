@@ -229,7 +229,7 @@ public:
 	/** 将 EncounterDefinition.EnemySlots 转换为 Battle init enemy slots。 */
 	void BuildBattleEnemySlots(TArray<FBattleEnemySlotInit>& OutEnemySlots) const;
 
-	/** 返回本 Trigger 进入战斗时应绑定到 BattleHUD 的场景敌人 Host 列表。 */
+	/** 返回本 Trigger 进入战斗时应绑定到 BattleHUD 的场景敌人 Host 列表，顺序跟随 EncounterDefinition.EnemySlots。 */
 	void BuildBattleSceneEnemyHosts(TArray<AWacomBattleEnemyActor*>& OutSceneEnemyHosts) const;
 
 	// ---- IWacomWorldInteractable ----

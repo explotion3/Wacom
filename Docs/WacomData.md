@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-06-06
+updated: 2026-06-08
 tags:
   - wacom/data
   - wacom/dataasset
@@ -22,6 +22,7 @@ tags:
 
 **负责：**
 - `UCardDefinition`、`UEnemyDefinition`、`UEnemyPartDefinition`、`UCharacterDefinition`
+- `UEnemyBehaviorDefinition`
 - `UEncounterDefinition`
 - `UShopDefinition`
 - `UWacomRunPickupDefinition`
@@ -51,8 +52,9 @@ WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 | 类型 | 位置 / 主要头文件 | 静态语义 | 运行时 owner |
 |---|---|---|---|
 | `UCardDefinition` | `Source/WacomData/Public/Cards` | 卡牌 ID、文案、费用、关键词、目标模式、效果、被动和身材 | Battle 创建 runtime card；Run 保存玩家持有卡牌实例 |
-| `UEnemyDefinition` | `Source/WacomData/Public/Enemies` | 敌人由哪些部位组成，以及部位顺序 | Battle 初始化敌人 runtime state |
-| `UEnemyPartDefinition` | `Source/WacomData/Public/Enemies` | 部位 HP、意图循环、经验、击倒奖励卡 | Battle 执行部位行动和击倒选择 |
+| `UEnemyDefinition` | `Source/WacomData/Public/Enemies` | 敌人由哪些部位组成、默认行为资产和部位行为绑定 | Battle 初始化敌人 runtime state |
+| `UEnemyPartDefinition` | `Source/WacomData/Public/Enemies` | 部位 HP、经验、击倒奖励卡 | Battle 执行部位行动和击倒选择 |
+| `UEnemyBehaviorDefinition` | `Source/WacomData/Public/Enemies` | 敌人 phase、intent set、selector rule 和意图候选 | Battle 刷新并执行敌方部位当前意图 |
 | `UEncounterDefinition` | `Source/WacomData/Public/Encounters` | 单场战斗包含哪些敌人槽，以及敌人槽顺序 | App 的 BattleTrigger 进入战斗前转换为 Battle init params |
 | `UCharacterDefinition` | `Source/WacomData/Public/Characters` | 角色基础 HP、左右手固有卡、初始牌组 | Run 初始化角色和玩家卡池；Battle 读取入战卡组 |
 | `UShopDefinition` | `Source/WacomData/Public/Shops` | 固定商品列表和价格 | RunSession 按场景 shop visit 保存购买状态 |
@@ -142,7 +144,7 @@ struct FCardPhysique
 <a id="wacomdata-enemy-part"></a>
 ## §4 Enemy Definition
 
-`UEnemyDefinition` 只描述敌人的部位组成；部位自身数据在 `UEnemyPartDefinition`。
+`UEnemyDefinition` 描述敌人的部位组成和默认行为资产；部位 HP / 奖励等静态数值在 `UEnemyPartDefinition`，意图选择主合同在 `UEnemyBehaviorDefinition`。
 
 ```cpp
 UCLASS(BlueprintType)
@@ -150,6 +152,8 @@ class UEnemyDefinition : public UPrimaryDataAsset
 {
     FName EnemyId;
     FText DisplayName;
+    TObjectPtr<UEnemyBehaviorDefinition> DefaultBehavior;
+    FName DefaultPhaseId;
     TArray<FEnemyPartSlot> Parts;
 };
 
@@ -158,12 +162,22 @@ struct FEnemyPartSlot
 {
     FName PartSlotId;
     TObjectPtr<UEnemyPartDefinition> PartDef;
+    TObjectPtr<UEnemyBehaviorDefinition> BehaviorOverride;
+    FName InitialIntentSetId;
 };
 ```
 
-`FEnemyPartSlot.PartSlotId` 是敌人定义内的局部部位槽 ID；为空时兼容回退到部位定义 `PartId`。Encounter / Battle 的完整部位身份后续会由 `EncounterId + EnemySlotId + PartSlotId` 组成。
+| 字段 | 语义 |
+|---|---|
+| `EnemyId` | 敌人 authored id，例如 `Enemy.Snake`。 |
+| `DefaultBehavior` | 敌人默认行为资产；正式敌人必须提供可用 `UEnemyBehaviorDefinition`。 |
+| `DefaultPhaseId` | 初始 phase；为空时使用 `DefaultBehavior.InitialPhaseId`。 |
+| `Parts[].PartSlotId` | 敌人定义内的局部部位槽 ID，必须显式填写；Battle 运行时 key 使用 `EncounterId + EnemySlotId + PartSlotId`。 |
+| `Parts[].PartDef` | 部位静态定义，提供 HP、经验和击倒奖励。 |
+| `Parts[].BehaviorOverride` | 单部位行为覆盖；为空时使用 `DefaultBehavior`。 |
+| `Parts[].InitialIntentSetId` | 该部位初始 intent set；为空时按 `AppliesToPartSlotId == PartSlotId` 匹配，找不到再使用空 `AppliesToPartSlotId` 的 fallback set。 |
 
-`UEnemyPartDefinition` 是敌方部位的静态规则入口：
+`PartDef->PartId` 是可复用部位定义 ID，例如 `Snake.Head`，只保留为内容定义、编辑器校验和 debug 语义；运行时目标匹配不再使用 `PartId`。
 
 ```cpp
 UCLASS(BlueprintType)
@@ -172,8 +186,6 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
     FName PartId;
     FText DisplayName;
     int32 MaxHp = 0;
-    TArray<FIntentDefinition> IntentSequence;
-    int32 InitialIntentIndex = 0;
     int32 ExperienceReward = 0;
     TObjectPtr<UCardDefinition> KnockdownRewardCard = nullptr;
 };
@@ -181,13 +193,52 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
 
 | 字段 | 语义 |
 |---|---|
-| `PartId` | 部位 authored id，例如 `Snake.Head`；SceneEnemy PartActor authoring 会用稳定 PartId 绑定运行时部位 |
-| `MaxHp` | 部位初始生命上限 |
-| `IntentSequence / InitialIntentIndex` | 敌人行动循环和起始意图 |
-| `ExperienceReward` | 部位破坏后给玩家的经验记账 |
-| `KnockdownRewardCard` | Aid / Destroy 击倒选择共用的奖励卡定义；战斗内创建 runtime card，战后由 Run 入包 |
+| `PartId` | 部位 authored id，例如 `Snake.Head`；SceneEnemy PartActor authoring 用它校验静态部位定义。 |
+| `MaxHp` | 部位初始生命上限。 |
+| `ExperienceReward` | 部位破坏后给玩家的经验记账。 |
+| `KnockdownRewardCard` | Aid / Destroy 击倒选择共用的奖励卡定义；Battle 内创建 card，战后由 Run 接收。 |
 
-`FIntentDefinition` 和 `FIntentEffect` 是敌方意图的静态效果描述。当前敌人意图字段比卡牌效果更窄；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
+`UEnemyBehaviorDefinition` 是敌人行为的静态主合同：
+
+```cpp
+UCLASS(BlueprintType)
+class UEnemyBehaviorDefinition : public UPrimaryDataAsset
+{
+    FName BehaviorId;
+    FName InitialPhaseId;
+    TArray<FWacomEnemyPhaseDefinition> Phases;
+};
+
+USTRUCT(BlueprintType)
+struct FWacomEnemyPhaseDefinition
+{
+    FName PhaseId;
+    TArray<FWacomEnemyIntentSetDefinition> IntentSets;
+};
+
+USTRUCT(BlueprintType)
+struct FWacomEnemyIntentSetDefinition
+{
+    FName IntentSetId;
+    FName AppliesToPartSlotId;
+    EWacomEnemyIntentSelectorMode SelectorMode;
+    TArray<FWacomEnemyBehaviorIntent> Intents;
+    TArray<FWacomEnemyIntentSelectorRule> SelectorRules;
+    FName FallbackIntentId;
+};
+```
+
+`SelectorMode` 当前支持：
+
+| Mode | 语义 |
+|---|---|
+| `Sequence` | 按 authored intent 顺序选择下一条可用意图，会跳过 rule / cooldown 阻塞的候选。 |
+| `Weighted` | 在有效 rule 中按权重使用战斗 RNG 确定性选择。 |
+| `PriorityFirst` | 选择有效 rule 中 `Priority` 最高者；并列时沿 authored 顺序。 |
+
+Selector condition 当前支持 `Always`、自身 HP 阈值、同单位任意部位 HP 阈值、部位已破坏、当前 phase、自身状态、玩家状态和冷却可用。冷却以“后续选择次数”为单位，不是回合数。
+
+`FIntentDefinition` 和 `FIntentEffect` 是敌方意图的静态效果描述，只通过 `UEnemyBehaviorDefinition` 进入 Battle 运行时。当前敌人意图字段比卡牌效果更窄；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
 
 ```cpp
 USTRUCT(BlueprintType)
@@ -209,7 +260,6 @@ struct FIntentEffect
     int32 Duration = 0;
 };
 ```
-
 <a id="wacomdata-encounter-definition"></a>
 ## §5 Encounter Definition
 
@@ -242,7 +292,7 @@ struct FEncounterEnemySlot
 
 当前 `UEncounterDefinition` 是静态数据合同，不保存运行态进度。正式场景入口由 `ABattleTriggerActor.EncounterDefinition` 引用它；进入战斗时 App 层把 `EnemySlots` 转换为 `FBattleInitParams.EnemySlots`。Battle 仍只消费 `FBattleInitParams`，Run 仍用场景 Trigger 的 `PersistentId` 作为撤离重入进度 key，不直接持有 Encounter 资产。
 
-当前生成内容包含 `DA_Encounter_SnakeSingle`：`EncounterDefinitionId=Encounter.Snake.Single`，单个 `EnemySlotId=Enemy` 引用 `DA_Enemy_Snake`。这是正式单蛇入口样例；关卡 Trigger 应优先引用该 Encounter，再用 `SceneEnemyHostSlots[Enemy]` 绑定场景中的 Snake Host prefab。
+当前生成内容包含 `DA_Encounter_SnakeSingle`：`EncounterDefinitionId=Encounter.Snake.Single`，单个 `EnemySlotId=Enemy` 引用 `DA_Enemy_Snake`。`DA_Enemy_Snake` 通过 `DefaultBehavior=DA_Behavior_Snake` 绑定 Head / Body / Tail 三套 `Sequence` intent set，三份 `DA_Part_Snake_*` 只保存 HP、经验和毒牙奖励。关卡 Trigger 应优先引用该 Encounter，再用 `SceneEnemyHostSlots[Enemy]` 绑定场景中的 Snake Host prefab。
 
 ## §6 Character Definition
 

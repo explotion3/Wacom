@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Types/WacomEnums.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
@@ -35,8 +36,8 @@ struct WACOMAPP_API FWacomBattleCombatLogCommandContext
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "出牌命令对应的卡牌实例 id，仅用于日志补充卡牌名。"))
 	FGuid CardInstanceId;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "出牌命令对应的敌方部位目标实例 id，仅用于日志补充目标名。"))
-	FGuid TargetPartInstanceId;
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "出牌命令对应的敌方部位稳定 key，仅用于日志补充目标名。"))
+	FBattlePartSlotIdentity TargetPartKey;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "出牌命令对应的手牌目标实例 id，仅用于日志补充目标名。"))
 	FGuid TargetCardInstanceId;
@@ -118,7 +119,7 @@ public:
 	static FWacomBattleCombatLogCommandContext BuildPlayCardCommandContext(
 		const FBattleSnapshot& Snapshot,
 		const FGuid& CardInstanceId,
-		const FGuid& TargetPartInstanceId,
+		const FBattlePartSlotIdentity& TargetPartKey,
 		const FGuid& TargetCardInstanceId);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "构建等待命令块上下文。只生成日志 ViewData，不提交等待命令。"))

@@ -69,7 +69,9 @@ void FWacomBattleHUDTargetingFlow::HandleCardClicked(UBattleHUD& HUD, const FGui
 	}
 }
 
-void FWacomBattleHUDTargetingFlow::HandleEnemyPartClicked(UBattleHUD& HUD, const FGuid& PartInstanceId)
+void FWacomBattleHUDTargetingFlow::HandleEnemyPartClicked(
+	UBattleHUD& HUD,
+	const FWacomInteractionTargetHandle& TargetHandle)
 {
 	HUD.HideCardDetailPanel();
 
@@ -84,7 +86,7 @@ void FWacomBattleHUDTargetingFlow::HandleEnemyPartClicked(UBattleHUD& HUD, const
 
 	const FGuid CardId = HUD.PendingTargetingCardId;
 
-	FWacomBattleHUDCommandFlow::SubmitPlayCard(HUD, CardId, PartInstanceId);
+	FWacomBattleHUDCommandFlow::SubmitPlayCardOnWorldTarget(HUD, CardId, TargetHandle);
 }
 
 void FWacomBattleHUDTargetingFlow::CancelTargetSelect(UBattleHUD& HUD)

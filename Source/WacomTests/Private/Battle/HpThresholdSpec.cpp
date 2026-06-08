@@ -64,7 +64,7 @@ namespace
 		const FBattleSnapshot Snap = S->BuildSnapshot();
 		const FGuid Pid = FWacomBattleFixture::FindHandInstanceByCardId(Snap, CardId);
 		check(Pid.IsValid());
-		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid, FGuid()));
+		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid));
 	}
 }
 
@@ -204,7 +204,7 @@ bool FWacomBattleHpThresholdFirstTimeOnlySpec::RunTest(const FString& /*Paramete
 	{
 		const FBattleSnapshot Snap = S->BuildSnapshot();
 		const FGuid Pid = FWacomBattleFixture::FindHandInstanceByCardId(Snap, Self30->CardId);
-		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid, FGuid()));
+		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid));
 	}
 	{
 		const FBattleResultPacket P = S->BuildResultPacket();
@@ -215,7 +215,7 @@ bool FWacomBattleHpThresholdFirstTimeOnlySpec::RunTest(const FString& /*Paramete
 	{
 		const FBattleSnapshot Snap = S->BuildSnapshot();
 		const FGuid Pid = FWacomBattleFixture::FindHandInstanceByCardId(Snap, Self30->CardId);
-		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid, FGuid()));
+		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid));
 	}
 	{
 		const FBattleSnapshot Snap = S->BuildSnapshot();

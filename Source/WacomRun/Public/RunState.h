@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Events/RunEventDefinition.h"
 #include "GameplayTagContainer.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Session/BattleSession.h"  // FBattleInitParams
 #include "RunStateTypes.h"
 #include "RunState.generated.h"
@@ -16,14 +17,14 @@ class UWacomRunEventDefinition;
 /**
  * 单个战斗节点（Trigger）的进度快照。
  *
- * 撤离时 Run 层用 packet.DestroyedParts 写入 RunState.BattleProgress；
- * 下次进入同一 Trigger 时，BuildInitParamsForBattle 把 DestroyedParts
- * 灌进 BattleInitParams.PreDestroyedParts，BattleSession 应用为
+ * 撤离时 Run 层用 packet.DestroyedPartKeys 写入 RunState.BattleProgress；
+ * 下次进入同一 Trigger 时，BuildInitParamsForBattle 优先把 DestroyedPartKeys
+ * 转成 BattleInitParams.PreDestroyedParts，BattleSession 应用为
  * Part.bDestroyed = true（不发经验、不入击倒队列）。
  *
  * 战斗胜利时清理对应 Trigger 的进度。
  *
- * DestroyedPartIds 是旧单敌人投影，保留给 debug / 兼容读取；完整身份以 DestroyedParts 为准。
+ * DestroyedPartKeys 是稳定公开真相；DestroyedParts 是内部 identity 投影。
  * 如果后续需要保存中间血量、部位状态层数等，再扩字段。
  */
 USTRUCT(BlueprintType)
@@ -34,9 +35,9 @@ struct WACOMRUN_API FBattleProgressSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Battle")
 	TArray<FBattlePartSlotIdentity> DestroyedParts;
 
-	/** Legacy 单敌人投影：只保留 PartId，不能区分多敌人同名部位。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Battle")
-	TArray<FName> DestroyedPartIds;
+	TArray<FBattleEnemyPartKey> DestroyedPartKeys;
+
 };
 
 /** 调用方传入的一条商店商品配置。 */

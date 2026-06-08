@@ -27,6 +27,9 @@ namespace
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::StatusApplied;
 		Ev.ActorInstanceId = Ctx.TargetInstanceId;
+		Ev.ActorEnemyPartKey = (Ctx.TargetKind == EEffectTargetKind::EnemyPart)
+			? FBattleRules::FindEnemyPartKey(*Ctx.State, Ctx.TargetInstanceId)
+			: FBattleEnemyPartKey();
 		Ev.Tag             = StatusTag;
 		Ev.Amount          = Stacks;
 		Ctx.Events->Emit(Ev);
@@ -149,6 +152,7 @@ namespace
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::DamageDealt;
 		Ev.ActorInstanceId = Part->InstanceId;
+		Ev.ActorEnemyPartKey = Part->Identity.ToEnemyPartKey();
 		Ev.CardInstanceId  = (Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
 		Ev.Amount          = Damage;
 		Ctx.Events->Emit(Ev);
@@ -159,7 +163,7 @@ namespace
 			Part->bDestroyed        = true;
 			Part->CurrentInitiative = 0;
 
-			// 统一处理：发事件 + 经验 + DestroyedPartIds + 击倒事件队列。
+			// 统一处理：发事件 + 经验 + DestroyedParts + 击倒事件队列。
 			// 传当前卡实例 ID：让击倒选项排除"正在被打出的左/右手 anchor"
 			const FGuid InflictedByCardId =
 				(Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();

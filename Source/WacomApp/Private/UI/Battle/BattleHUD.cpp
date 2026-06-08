@@ -13,6 +13,7 @@
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/WacomBattlePresentationTargetRegistry.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
+#include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
@@ -604,6 +605,12 @@ UWacomBattleEnemyPartWorldTargetBridgeComponent* UBattleHUD::ResolveBattleEnemyP
 	return GetSceneEnemyTargetCoordinator().ResolveWorldTargetBridge(TargetHandle);
 }
 
+UWacomBattleEnemyPartPresentationComponent* UBattleHUD::ResolveBattleEnemyPartWorldTargetPresentation(
+	const FWacomInteractionTargetHandle& TargetHandle) const
+{
+	return GetSceneEnemyTargetCoordinator().ResolveWorldTargetPresentation(TargetHandle);
+}
+
 bool UBattleHUD::ProbeFirstPersonCardDragTarget(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView,
@@ -626,9 +633,9 @@ void UBattleHUD::OnCardClickedByUser(const FGuid& CardInstanceId)
 	FWacomBattleHUDTargetingFlow::HandleCardClicked(*this, CardInstanceId);
 }
 
-void UBattleHUD::OnEnemyPartClickedByUser(const FGuid& PartInstanceId)
+void UBattleHUD::OnEnemyPartClickedByUser(const FWacomInteractionTargetHandle& TargetHandle)
 {
-	FWacomBattleHUDTargetingFlow::HandleEnemyPartClicked(*this, PartInstanceId);
+	FWacomBattleHUDTargetingFlow::HandleEnemyPartClicked(*this, TargetHandle);
 }
 
 void UBattleHUD::OnWaitRequested()
@@ -956,9 +963,9 @@ void UBattleHUD::ClearPendingFirstPersonCardTransitionEvents()
 
 void UBattleHUD::RecordFirstPersonPlayCommit(
 	const FGuid& CardInstanceId,
-	const FGuid& TargetPartInstanceId)
+	const FBattlePartSlotIdentity& TargetPartKey)
 {
-	GetFirstPersonHandBridge().RecordPlayCommit(CardInstanceId, TargetPartInstanceId);
+	GetFirstPersonHandBridge().RecordPlayCommit(CardInstanceId, TargetPartKey);
 }
 
 TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCardTransitionHints(
@@ -1069,11 +1076,11 @@ void UBattleHUD::ClearBattlePresentationTargetRegistry()
 }
 
 void UBattleHUD::RegisterBattlePresentationTarget(
-	const FGuid& PartInstanceId,
+	const FBattlePartSlotIdentity& TargetPartKey,
 	UObject* Owner,
 	TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler)
 {
-	GetBattlePresentationTargetRegistry().Register(PartInstanceId, Owner, MoveTemp(Handler));
+	GetBattlePresentationTargetRegistry().Register(TargetPartKey, Owner, MoveTemp(Handler));
 }
 
 void UBattleHUD::UnregisterBattlePresentationTargetsForOwner(const UObject* Owner)
@@ -1144,21 +1151,21 @@ void UBattleHUD::AdvanceBattlePresentationQueueOnce()
 #if WITH_AUTOMATION_TESTS
 void UBattleHUD::PlayBattlePresentationCueForTest(
 	EBattleEventType SourceEventType,
-	const FGuid& TargetPartInstanceId,
+	const FBattlePartSlotIdentity& TargetPartKey,
 	int32 Amount)
 {
 	FWacomBattlePresentationTargetCue Cue;
 	Cue.SourceEventType = SourceEventType;
-	Cue.TargetPartInstanceId = TargetPartInstanceId;
+	Cue.TargetPartKey = TargetPartKey;
 	Cue.Amount = Amount;
 	PlayBattlePresentationCue(Cue);
 }
 
-void UBattleHUD::PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId)
+void UBattleHUD::PlayTargetConfirmedCueForTest(const FBattlePartSlotIdentity& TargetPartKey)
 {
 	FWacomBattlePresentationTargetCue Cue;
 	Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
-	Cue.TargetPartInstanceId = TargetPartInstanceId;
+	Cue.TargetPartKey = TargetPartKey;
 	Cue.Duration = 0.10f;
 	PlayBattlePresentationCue(Cue);
 }

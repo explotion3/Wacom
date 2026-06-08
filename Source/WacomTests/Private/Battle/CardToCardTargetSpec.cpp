@@ -876,7 +876,7 @@ bool FWacomBattleMissingTargetCardForHandCardPlayFailsSpec::RunTest(const FStrin
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
 
-	const FWacomStatus MissingStatus = Session->SubmitCommand(FBattleCommand::MakePlayCard(SourceId, FGuid()));
+	const FWacomStatus MissingStatus = Session->SubmitCommand(FBattleCommand::MakePlayCard(SourceId));
 	TestFalse(TEXT("Missing selected hand card target fails"), MissingStatus.IsOk());
 	TestEqual(TEXT("Missing target is illegal target"),
 		static_cast<int32>(MissingStatus.Code),

@@ -13,6 +13,7 @@ class UEnemyDefinition;
 class UEnemyPartDefinition;
 struct FBattleCommand;
 struct FBattleEvent;
+struct FBattleEnemyPartKey;
 struct FBattleSnapshot;
 struct FEnemySnapshot;
 struct FEnemyPartSnapshot;
@@ -138,6 +139,21 @@ public:
 
 	/** 某 Part 的 InstanceId，按 EnemyDefinition.Parts 的顺序。 */
 	static FGuid FindPartInstanceId(const FBattleSnapshot& Snap, int32 PartIndex);
+
+	/** 某 Part 的稳定目标 key，按 EnemyDefinition.Parts 的顺序。 */
+	static FBattleEnemyPartKey FindPartKey(const FBattleSnapshot& Snap, int32 PartIndex);
+
+	/** 按 runtime InstanceId 找对应部位稳定 key。失败返回无效 key。 */
+	static FBattleEnemyPartKey FindPartKeyByInstanceId(const FBattleSnapshot& Snap, const FGuid& PartInstanceId);
+
+	/** 用 Snapshot 中的敌方部位稳定 key 构造 PlayCard 命令。 */
+	static FBattleCommand MakePlayCardOnPart(const FBattleSnapshot& Snap, const FGuid& CardInstanceId, int32 PartIndex);
+
+	/** 用 Snapshot 中匹配 runtime InstanceId 的稳定 key 构造 PlayCard 命令。 */
+	static FBattleCommand MakePlayCardOnPartInstance(
+		const FBattleSnapshot& Snap,
+		const FGuid& CardInstanceId,
+		const FGuid& PartInstanceId);
 
 	/** 按 PartId 找敌方部位快照。失败返回 nullptr。 */
 	static const FEnemyPartSnapshot* FindPartByPartId(const FBattleSnapshot& Snap, FName PartId);

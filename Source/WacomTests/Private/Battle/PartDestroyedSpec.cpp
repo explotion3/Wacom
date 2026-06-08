@@ -49,7 +49,8 @@ bool FWacomBattlePartDestroyedSpec::RunTest(const FString& /*Parameters*/)
 	TestTrue(TEXT("LightInHand"), LightId.IsValid());
 
 	// 打 Heavy：Head 被破坏；Body/Tail 先机 - 1 = 6；Head 先机 = 0（因为破坏）。
-	TestTrue(TEXT("PlayHeavy"), S->SubmitCommand(FBattleCommand::MakePlayCard(HeavyId, Head)).IsOk());
+	TestTrue(TEXT("PlayHeavy"),
+		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, HeavyId, Head)).IsOk());
 	Snap = S->BuildSnapshot();
 
 	TestEqual(TEXT("HeadHp == 0"),       FWacomBattleFixture::FindPartHp(Snap, 0), 0);
@@ -68,7 +69,8 @@ bool FWacomBattlePartDestroyedSpec::RunTest(const FString& /*Parameters*/)
 		S->GetPhase() == EBattlePhase::PlayerAction);
 
 	// 再打 Light（Cost=1）：Head 已破坏，先机不变；Body/Tail -1 = 5。
-	TestTrue(TEXT("PlayLight"), S->SubmitCommand(FBattleCommand::MakePlayCard(LightId, Body)).IsOk());
+	TestTrue(TEXT("PlayLight"),
+		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, LightId, Body)).IsOk());
 	Snap = S->BuildSnapshot();
 
 	TestEqual(TEXT("HeadInit still 0"), FWacomBattleFixture::FindPartInitiative(Snap, 0), 0);

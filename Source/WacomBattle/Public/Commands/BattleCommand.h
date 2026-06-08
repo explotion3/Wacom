@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Types/WacomEnums.h"
-#include "Runtime/BattlePartSlotIdentity.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "BattleCommand.generated.h"
 
 /**
@@ -32,7 +32,7 @@ enum class EBattleCommandType : uint8
  * 后续命令集膨胀到 6 个以上再考虑 polymorphic USTRUCT。
  *
  * 字段约定：
- * - Type == PlayCard：CardInstanceId 必填；TargetPartInstanceId / TargetCardInstanceId 按卡牌 TargetMode 选择其一填写。
+ * - Type == PlayCard：CardInstanceId 必填；TargetEnemyPartKey / TargetCardInstanceId 按卡牌 TargetMode 选择其一填写。
  * - Type == Wait / EndTurn：不读取任何目标字段。
  */
 USTRUCT(BlueprintType)
@@ -47,17 +47,9 @@ struct WACOMBATTLE_API FBattleCommand
 	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
 	FGuid CardInstanceId;
 
-	/** 目标敌方部位的运行时实例 ID。按卡牌 TargetMode 决定是否必填。 */
+	/** 目标敌方部位稳定身份。仅 TargetMode == SingleEnemyPart 的 PlayCard 使用。 */
 	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
-	FGuid TargetPartInstanceId;
-
-	/** 目标敌人槽位 ID。TargetPartInstanceId 为空时可用于解析目标部位。 */
-	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
-	FName TargetEnemySlotId = NAME_None;
-
-	/** 目标部位槽位 ID。TargetPartInstanceId 为空时可用于解析目标部位。 */
-	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
-	FName TargetPartSlotId = NAME_None;
+	FBattleEnemyPartKey TargetEnemyPartKey;
 
 	/** 目标手牌的运行时实例 ID。仅 TargetMode == HandCard 的 PlayCard 使用。 */
 	UPROPERTY(BlueprintReadWrite, Category = "Wacom|Battle|Command")
@@ -69,25 +61,22 @@ struct WACOMBATTLE_API FBattleCommand
 
 	FBattleCommand() = default;
 
-	static FBattleCommand MakePlayCard(const FGuid& InCardInstanceId, const FGuid& InTargetPartInstanceId = FGuid())
+	static FBattleCommand MakePlayCard(const FGuid& InCardInstanceId)
 	{
 		FBattleCommand Cmd;
 		Cmd.Type = EBattleCommandType::PlayCard;
 		Cmd.CardInstanceId = InCardInstanceId;
-		Cmd.TargetPartInstanceId = InTargetPartInstanceId;
 		return Cmd;
 	}
 
-	static FBattleCommand MakePlayCardOnPartSlot(
+	static FBattleCommand MakePlayCardOnEnemyPartKey(
 		const FGuid& InCardInstanceId,
-		FName InTargetEnemySlotId,
-		FName InTargetPartSlotId)
+		const FBattleEnemyPartKey& InTargetEnemyPartKey)
 	{
 		FBattleCommand Cmd;
 		Cmd.Type = EBattleCommandType::PlayCard;
 		Cmd.CardInstanceId = InCardInstanceId;
-		Cmd.TargetEnemySlotId = InTargetEnemySlotId;
-		Cmd.TargetPartSlotId = InTargetPartSlotId;
+		Cmd.TargetEnemyPartKey = InTargetEnemyPartKey;
 		return Cmd;
 	}
 

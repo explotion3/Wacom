@@ -7,10 +7,12 @@
 #include "Cards/CardPassive.h"
 #include "Characters/CharacterDefinition.h"
 #include "Commands/BattleCommand.h"
+#include "Enemies/EnemyBehaviorDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
 #include "Enemies/IntentEffect.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Events/BattleEvent.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -23,6 +25,26 @@ namespace
 	T* NewTransient()
 	{
 		return NewObject<T>(GetTransientPackage(), NAME_None, RF_Transient);
+	}
+
+	FWacomEnemyBehaviorIntent MakeTestBehaviorIntent(
+		FName IntentId,
+		int32 Initiative,
+		int32 IntentResist,
+		int32 Damage)
+	{
+		FWacomEnemyBehaviorIntent IntentEntry;
+		IntentEntry.Intent.IntentId = IntentId;
+		IntentEntry.Intent.DisplayName = FText::FromName(IntentId);
+		IntentEntry.Intent.Initiative = Initiative;
+		IntentEntry.Intent.ResistanceValue = IntentResist;
+
+		FIntentEffect Eff;
+		Eff.EffectType = WacomTags::Effect_Damage;
+		Eff.Magnitude = Damage;
+		Eff.Target = WacomTags::Target_Player;
+		IntentEntry.Intent.Effects.Add(Eff);
+		return IntentEntry;
 	}
 }
 
@@ -197,24 +219,32 @@ UEnemyDefinition* FWacomBattleFixture::MakeSinglePartEnemyWithIntentDamage(
 	UEnemyPartDefinition* Part = NewTransient<UEnemyPartDefinition>();
 	Part->PartId = TEXT("Test.Part.Solo");
 	Part->MaxHp  = Hp;
-	Part->InitialIntentIndex = 0;
-
-	FIntentDefinition Intent;
-	Intent.IntentId        = TEXT("Test.Intent.BasicAttack");
-	Intent.Initiative      = Initiative;
-	Intent.ResistanceValue = IntentResist;
-	FIntentEffect Eff;
-	Eff.EffectType = WacomTags::Effect_Damage;
-	Eff.Magnitude  = Damage;
-	Eff.Target     = WacomTags::Target_Player;
-	Intent.Effects.Add(Eff);
-	Part->IntentSequence.Add(Intent);
 
 	Roots.Add(TStrongObjectPtr<UObject>(Part));
 
+	UEnemyBehaviorDefinition* Behavior = NewTransient<UEnemyBehaviorDefinition>();
+	Behavior->BehaviorId = TEXT("Test.Behavior.Solo");
+	Behavior->InitialPhaseId = TEXT("Default");
+	FWacomEnemyIntentSetDefinition IntentSet;
+	IntentSet.IntentSetId = TEXT("Test.IntentSet.Solo");
+	IntentSet.AppliesToPartSlotId = TEXT("Test.Part.Solo");
+	IntentSet.SelectorMode = EWacomEnemyIntentSelectorMode::Sequence;
+	IntentSet.Intents = {
+		MakeTestBehaviorIntent(TEXT("Test.Intent.BasicAttack"), Initiative, IntentResist, Damage)
+	};
+	FWacomEnemyPhaseDefinition Phase;
+	Phase.PhaseId = TEXT("Default");
+	Phase.IntentSets = { IntentSet };
+	Behavior->Phases = { Phase };
+	Roots.Add(TStrongObjectPtr<UObject>(Behavior));
+
 	UEnemyDefinition* Enemy = NewTransient<UEnemyDefinition>();
 	Enemy->EnemyId = TEXT("Test.Enemy.Solo");
-	FEnemyPartSlot Slot; Slot.PartDef = Part;
+	Enemy->DefaultBehavior = Behavior;
+	Enemy->DefaultPhaseId = TEXT("Default");
+	FEnemyPartSlot Slot;
+	Slot.PartSlotId = TEXT("Test.Part.Solo");
+	Slot.PartDef = Part;
 	Enemy->Parts.Add(Slot);
 
 	Roots.Add(TStrongObjectPtr<UObject>(Enemy));
@@ -229,18 +259,6 @@ UEnemyDefinition* FWacomBattleFixture::MakeThreePartEnemy(int32 HH, int32 HB, in
 		UEnemyPartDefinition* Part = NewTransient<UEnemyPartDefinition>();
 		Part->PartId = Id;
 		Part->MaxHp  = Hp;
-		Part->InitialIntentIndex = 0;
-
-		FIntentDefinition Intent;
-		Intent.IntentId        = Id;
-		Intent.Initiative      = Initiative;
-		Intent.ResistanceValue = 0;
-		FIntentEffect Eff;
-		Eff.EffectType = WacomTags::Effect_Damage;
-		Eff.Magnitude  = 1;
-		Eff.Target     = WacomTags::Target_Player;
-		Intent.Effects.Add(Eff);
-		Part->IntentSequence.Add(Intent);
 
 		Roots.Add(TStrongObjectPtr<UObject>(Part));
 		return Part;
@@ -249,10 +267,44 @@ UEnemyDefinition* FWacomBattleFixture::MakeThreePartEnemy(int32 HH, int32 HB, in
 	UEnemyDefinition* Enemy = NewTransient<UEnemyDefinition>();
 	Enemy->EnemyId = TEXT("Test.Enemy.ThreeParts");
 
-	FEnemyPartSlot S1; S1.PartDef = MakePart(TEXT("Test.Part.Head"), HH, IH);
-	FEnemyPartSlot S2; S2.PartDef = MakePart(TEXT("Test.Part.Body"), HB, IB);
-	FEnemyPartSlot S3; S3.PartDef = MakePart(TEXT("Test.Part.Tail"), HT, IT);
+	UEnemyBehaviorDefinition* Behavior = NewTransient<UEnemyBehaviorDefinition>();
+	Behavior->BehaviorId = TEXT("Test.Behavior.ThreeParts");
+	Behavior->InitialPhaseId = TEXT("Default");
+	FWacomEnemyPhaseDefinition Phase;
+	Phase.PhaseId = TEXT("Default");
+
+	FEnemyPartSlot S1;
+	S1.PartSlotId = TEXT("Test.Part.Head");
+	S1.PartDef = MakePart(TEXT("Test.Part.Head"), HH, IH);
+	S1.InitialIntentSetId = TEXT("Test.IntentSet.Head");
+	FEnemyPartSlot S2;
+	S2.PartSlotId = TEXT("Test.Part.Body");
+	S2.PartDef = MakePart(TEXT("Test.Part.Body"), HB, IB);
+	S2.InitialIntentSetId = TEXT("Test.IntentSet.Body");
+	FEnemyPartSlot S3;
+	S3.PartSlotId = TEXT("Test.Part.Tail");
+	S3.PartDef = MakePart(TEXT("Test.Part.Tail"), HT, IT);
+	S3.InitialIntentSetId = TEXT("Test.IntentSet.Tail");
 	Enemy->Parts = { S1, S2, S3 };
+
+	auto AddIntentSet = [&Phase](FName IntentSetId, FName PartSlotId, int32 Initiative)
+	{
+		FWacomEnemyIntentSetDefinition IntentSet;
+		IntentSet.IntentSetId = IntentSetId;
+		IntentSet.AppliesToPartSlotId = PartSlotId;
+		IntentSet.SelectorMode = EWacomEnemyIntentSelectorMode::Sequence;
+		IntentSet.Intents = {
+			MakeTestBehaviorIntent(PartSlotId, Initiative, /*IntentResist*/0, /*Damage*/1)
+		};
+		Phase.IntentSets.Add(IntentSet);
+	};
+	AddIntentSet(TEXT("Test.IntentSet.Head"), TEXT("Test.Part.Head"), IH);
+	AddIntentSet(TEXT("Test.IntentSet.Body"), TEXT("Test.Part.Body"), IB);
+	AddIntentSet(TEXT("Test.IntentSet.Tail"), TEXT("Test.Part.Tail"), IT);
+	Behavior->Phases = { Phase };
+	Enemy->DefaultBehavior = Behavior;
+	Enemy->DefaultPhaseId = TEXT("Default");
+	Roots.Add(TStrongObjectPtr<UObject>(Behavior));
 
 	Roots.Add(TStrongObjectPtr<UObject>(Enemy));
 	return Enemy;
@@ -392,6 +444,47 @@ FGuid FWacomBattleFixture::FindPartInstanceId(const FBattleSnapshot& Snap, int32
 {
 	const FEnemyPartSnapshot* Part = GetEnemyPartSnapshot(Snap, PartIndex);
 	return Part ? Part->InstanceId : FGuid();
+}
+
+FBattleEnemyPartKey FWacomBattleFixture::FindPartKey(const FBattleSnapshot& Snap, int32 PartIndex)
+{
+	const FEnemyPartSnapshot* Part = GetEnemyPartSnapshot(Snap, PartIndex);
+	return Part ? Part->PartKey : FBattleEnemyPartKey();
+}
+
+FBattleEnemyPartKey FWacomBattleFixture::FindPartKeyByInstanceId(
+	const FBattleSnapshot& Snap,
+	const FGuid& PartInstanceId)
+{
+	for (const FEnemySnapshot& Enemy : Snap.Enemies)
+	{
+		for (const FEnemyPartSnapshot& Part : Enemy.Parts)
+		{
+			if (Part.InstanceId == PartInstanceId)
+			{
+				return Part.PartKey;
+			}
+		}
+	}
+	return FBattleEnemyPartKey();
+}
+
+FBattleCommand FWacomBattleFixture::MakePlayCardOnPart(
+	const FBattleSnapshot& Snap,
+	const FGuid& CardInstanceId,
+	int32 PartIndex)
+{
+	return FBattleCommand::MakePlayCardOnEnemyPartKey(CardInstanceId, FindPartKey(Snap, PartIndex));
+}
+
+FBattleCommand FWacomBattleFixture::MakePlayCardOnPartInstance(
+	const FBattleSnapshot& Snap,
+	const FGuid& CardInstanceId,
+	const FGuid& PartInstanceId)
+{
+	return FBattleCommand::MakePlayCardOnEnemyPartKey(
+		CardInstanceId,
+		FindPartKeyByInstanceId(Snap, PartInstanceId));
 }
 
 const FEnemyPartSnapshot* FWacomBattleFixture::FindPartByPartId(const FBattleSnapshot& Snap, FName PartId)

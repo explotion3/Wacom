@@ -134,7 +134,7 @@ bool FWacomBattleRetainNormalCardDiscardsSpec::RunTest(const FString& /*Paramete
 	TestTrue(TEXT("LH anchor in hand"), LHId.IsValid());
 
 	// 打出左手锚点（进 Limbo，本回合离开手牌）。这样结束回合时只剩右手。
-	TestTrue(TEXT("PlayLH"), S->SubmitCommand(FBattleCommand::MakePlayCard(LHId, FGuid())).IsOk());
+	TestTrue(TEXT("PlayLH"), S->SubmitCommand(FBattleCommand::MakePlayCard(LHId)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestTrue (TEXT("LH gone from hand"),  !HandHas(Snap, LHId));
@@ -244,7 +244,7 @@ bool FWacomBattleRetainBothZoneDiscardsIfAnchorMissingSpec::RunTest(const FStrin
 		TestTrue(TEXT("LH in hand"), LHId.IsValid());
 
 		// 打出左手：进 Limbo，LH 离开手牌。
-		TestTrue(TEXT("PlayLH"), S->SubmitCommand(FBattleCommand::MakePlayCard(LHId, FGuid())).IsOk());
+		TestTrue(TEXT("PlayLH"), S->SubmitCommand(FBattleCommand::MakePlayCard(LHId)).IsOk());
 
 		Snap = S->BuildSnapshot();
 		TestFalse(FString::Printf(TEXT("Seed=%d LH present = false"), Seed), Snap.Hand.bLeftHandPresent);

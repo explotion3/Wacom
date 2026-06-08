@@ -7,8 +7,10 @@
 
 class AWacomBattleEnemyActor;
 class UBattleHUD;
+class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 struct FBattleSnapshot;
+struct FWacomBattlePresentationTargetCue;
 struct FWacomBattleEnemyPartDragPredictionDebugInput;
 
 class FWacomBattleHUDSceneEnemyTargetCoordinator
@@ -23,6 +25,8 @@ public:
 	bool IsWorldTargetInCurrentRegistry(const FWacomInteractionTargetHandle& TargetHandle) const;
 	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveWorldTargetBridge(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
+	UWacomBattleEnemyPartPresentationComponent* ResolveWorldTargetPresentation(
+		const FWacomInteractionTargetHandle& TargetHandle) const;
 	bool IsBridgeInCurrentRegistry(const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
 
 	void RebuildRegistry();
@@ -36,13 +40,19 @@ public:
 	FWacomBattleEnemyPartDragPredictionDebugInput BuildHoverPredictionInput(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 
-	int32 GetRegisteredBridgeCount() const { return SceneEnemyPartWorldTargetBridges.Num(); }
+	int32 GetRegisteredBridgeCount() const { return SceneEnemyPartWorldTargets.Num(); }
 
 private:
+	struct FSceneEnemyPartWorldTargetEntry
+	{
+		TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> Bridge;
+		TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> Presentation;
+	};
+
 	UBattleHUD& HUD;
 	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> SceneEnemyHosts;
-	TArray<TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent>> SceneEnemyPartWorldTargetBridges;
-	TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> HoveredBridge;
+	TArray<FSceneEnemyPartWorldTargetEntry> SceneEnemyPartWorldTargets;
+	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> HoveredPresentation;
 	FWacomInteractionTargetHandle HoveredHandle;
 	float HoverProbeElapsedSeconds = 0.0f;
 };

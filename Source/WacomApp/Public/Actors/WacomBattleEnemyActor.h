@@ -11,11 +11,13 @@
 
 class AWacomBattleEnemyPartActor;
 class UEnemyDefinition;
+class UMaterialInterface;
 class UPaperFlipbook;
 class UPaperFlipbookComponent;
 class UPaperSprite;
 class UPaperSpriteComponent;
 class USceneComponent;
+class UWacomBattleEnemyHostVisualComponent;
 
 UENUM(BlueprintType)
 enum class EWacomBattleEnemyHostVisualMode : uint8
@@ -200,6 +202,14 @@ public:
 	FLinearColor HostVisualTint = FLinearColor::White;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Rendering",
+		meta = (ToolTip = "Host 整体 PaperSprite / PaperFlipbook 的材质覆盖。需要投射阴影时可指定 Paper2D 的 MaskedLitSpriteMaterial 或等效 lit masked 材质。"))
+	TObjectPtr<UMaterialInterface> HostVisualMaterialOverride = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Rendering",
+		meta = (ToolTip = "Host 整体 PaperSprite / PaperFlipbook 是否投射阴影。需要材质支持光照/Masked，并确保场景光源开启阴影。"))
+	bool bHostVisualCastShadow = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Rendering",
 		meta = (ToolTip = "是否显示 Host 整体视觉。关闭时保留配置，但不会让子 PartActor 进入 HitOnly 视觉模式。"))
 	bool bHostVisualVisible = true;
 
@@ -289,11 +299,11 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Presentation",
 		meta = (ToolTip = "返回当前生成的 Host 静态 Sprite 组件；没有或模式不匹配时为空。"))
-	UPaperSpriteComponent* GetGeneratedHostSpriteVisualComponent() const { return GeneratedHostSpriteVisualComponent; }
+	UPaperSpriteComponent* GetGeneratedHostSpriteVisualComponent() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Presentation",
 		meta = (ToolTip = "返回当前生成的 Host Flipbook 组件；没有或模式不匹配时为空。"))
-	UPaperFlipbookComponent* GetGeneratedHostFlipbookVisualComponent() const { return GeneratedHostFlipbookVisualComponent; }
+	UPaperFlipbookComponent* GetGeneratedHostFlipbookVisualComponent() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Presentation",
 		meta = (ToolTip = "当前 Host 是否配置了可生成的整体视觉资源。"))
@@ -308,7 +318,7 @@ public:
 	void RefreshBattleEnemyPartAuthoringState() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "返回当前 Host 的有效敌人槽位 ID。为空时回退为 Enemy。"))
+		meta = (ToolTip = "返回当前 Host 的敌人槽位 ID。正式多敌人身份由 BattleTrigger.SceneEnemyHostSlots 注入；这里不根据 Actor 名称或空值推断。"))
 	FName GetEffectiveEnemySlotId() const;
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Authoring",
@@ -356,18 +366,8 @@ private:
 	int32 GetGeneratedHostVisualComponentCount() const;
 	int32 GetRegisteredHostVisualComponentCount() const;
 	int32 GetVisibleHostVisualComponentCount() const;
-	void SyncDefinitionIdentityToPartActors() const;
 	TArray<AWacomBattleEnemyPartActor*> BuildAttachedBattleEnemyPartActors() const;
 	void SyncHostIdentityToPartActors() const;
-	TSet<FName> BuildDefinitionPartIdSet() const;
-	TSet<FName> BuildDefinitionPartSlotIdSet() const;
-	TArray<FName> BuildConfiguredPartIds() const;
-	TArray<FName> BuildConfiguredPartSlotIds() const;
-	TArray<FName> BuildUnknownPartIds() const;
-	TArray<FName> BuildUnknownPartSlotIds() const;
-	TArray<FName> BuildMissingDefinitionPartIds() const;
-	TArray<FName> BuildMissingDefinitionPartSlotIds() const;
-	TArray<FName> BuildDuplicateConfiguredPartSlotIds() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 根节点。部位 Actor 可附着到本 Actor 下进行分组。"))
@@ -377,9 +377,7 @@ private:
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 整体视觉根节点。普通小怪整体图挂在这里；不参与命中。"))
 	TObjectPtr<USceneComponent> HostVisualRoot = nullptr;
 
-	UPROPERTY(Transient)
-	TObjectPtr<UPaperSpriteComponent> GeneratedHostSpriteVisualComponent = nullptr;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UPaperFlipbookComponent> GeneratedHostFlipbookVisualComponent = nullptr;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
+		meta = (AllowPrivateAccess = "true", ToolTip = "Host 整体视觉生成组件。只负责 PaperSprite / PaperFlipbook 生命周期，不参与命中或战斗目标绑定。"))
+	TObjectPtr<UWacomBattleEnemyHostVisualComponent> HostVisualComponent = nullptr;
 };

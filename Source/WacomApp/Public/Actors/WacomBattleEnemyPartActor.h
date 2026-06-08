@@ -5,21 +5,20 @@
 #include "CoreMinimal.h"
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "GameFramework/Actor.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "UI/Battle/WacomBattleEnemyPartVisualLayerTypes.h"
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
 #endif
 #include "WacomBattleEnemyPartActor.generated.h"
 
-class UStaticMesh;
 class UUserWidget;
 class UWidgetComponent;
 class UPaperFlipbook;
-class UPaperFlipbookComponent;
 class UPaperSprite;
-class UPaperSpriteComponent;
+class UWacomBattleEnemyPartVisualLayerComponent;
 class UWacomBattleEnemyPartPredictionWidget;
 class UWacomBattleEnemyPartStatusBadgeWidget;
 class UWacomInteractionTargetComponent;
@@ -30,83 +29,6 @@ UCLASS(NotBlueprintable, HideDropdown, CollapseCategories,
 class WACOMAPP_API UWacomBattleEnemyPartHitBoundsComponent : public UBoxComponent
 {
 	GENERATED_BODY()
-};
-
-UCLASS(NotBlueprintable, HideDropdown, CollapseCategories,
-	HideCategories = (Object, ActorComponent, Physics, Collision, Navigation, Cooking, Events, Tags, AssetUserData,
-		ComponentTick, ComponentReplication, Activation, HLOD, Mobile, RayTracing, TextureStreaming))
-class WACOMAPP_API UWacomBattleEnemyPartVisualComponent : public UStaticMeshComponent
-{
-	GENERATED_BODY()
-};
-
-UENUM(BlueprintType)
-enum class EWacomBattleEnemyPartVisualLayerMode : uint8
-{
-	StaticSprite UMETA(DisplayName = "Static Sprite"),
-	Flipbook UMETA(DisplayName = "Flipbook"),
-};
-
-USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomBattleEnemyPartVisualLayer
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers",
-		meta = (ToolTip = "部位视觉层稳定 ID，例如 Head.Main、Body.Shadow。用于 debug / validation，不影响战斗规则。"))
-	FName LayerId = NAME_None;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers",
-		meta = (ToolTip = "视觉层类型。StaticSprite 使用单张 PaperSprite；Flipbook 使用 PaperFlipbook 播放序列帧。只影响表现，不影响命中或战斗规则。"))
-	EWacomBattleEnemyPartVisualLayerMode LayerMode = EWacomBattleEnemyPartVisualLayerMode::StaticSprite;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers",
-		meta = (ToolTip = "StaticSprite 层使用的 PaperSprite。LayerMode=StaticSprite 且留空时不生成组件，但会进入 debug / validation。"))
-	TObjectPtr<UPaperSprite> Sprite = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers",
-		meta = (ToolTip = "Flipbook 层使用的 PaperFlipbook。LayerMode=Flipbook 且留空时不生成组件，但会进入 debug / validation。"))
-	TObjectPtr<UPaperFlipbook> Flipbook = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Flipbook",
-		meta = (ToolTip = "Flipbook 层播放倍率。只影响视觉播放速度；1 表示原速。", ClampMin = "0.0", ClampMax = "8.0", UIMin = "0.0", UIMax = "3.0"))
-	float FlipbookPlayRate = 1.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Flipbook",
-		meta = (ToolTip = "Flipbook 层是否循环播放。只影响视觉表现。"))
-	bool bLoopFlipbook = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Flipbook",
-		meta = (ToolTip = "Flipbook 层初始播放时间，单位秒。用于让多层动画错帧。", ClampMin = "0.0", UIMin = "0.0"))
-	float FlipbookStartTimeSeconds = 0.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Flipbook",
-		meta = (ToolTip = "Flipbook 层是否在生成后立即播放。关闭时停在初始播放时间。"))
-	bool bAutoPlayFlipbook = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Transform",
-		meta = (ToolTip = "视觉层相对 VisualLayersRoot 的位置。单位：厘米；只影响显示，不影响 HitBounds。"))
-	FVector RelativeLocation = FVector::ZeroVector;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Transform",
-		meta = (ToolTip = "视觉层相对 VisualLayersRoot 的旋转。只影响显示，不影响 HitBounds。"))
-	FRotator RelativeRotation = FRotator::ZeroRotator;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Transform",
-		meta = (ToolTip = "视觉层相对缩放。任一轴不能为 0；只影响显示，不影响 HitBounds。"))
-	FVector RelativeScale3D = FVector::OneVector;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Rendering",
-		meta = (ToolTip = "视觉层半透明排序优先级。数值越大越靠前。", UIMin = "-100", UIMax = "100"))
-	int32 SortOrder = 0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Rendering",
-		meta = (ToolTip = "视觉层颜色和透明度。Alpha 会作为 sprite 透明度。"))
-	FLinearColor Tint = FLinearColor::White;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Rendering",
-		meta = (ToolTip = "是否显示该视觉层。关闭时仍保留配置，但生成组件默认隐藏。"))
-	bool bVisible = true;
 };
 
 USTRUCT(BlueprintType)
@@ -130,7 +52,7 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	FName StableSceneTargetId = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
-		meta = (ToolTip = "部位制作诊断状态：Ready、MissingIdentity、InvalidHitBounds、UsingVisualLayers、HitOnly、UsingLegacyPrototype 或 MissingVisualResource。"))
+		meta = (ToolTip = "部位制作诊断状态：Ready、MissingIdentity、InvalidHitBounds、UsingVisualLayers、HitOnly 或 MissingVisualResource。"))
 	FName AuthoringState = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
@@ -138,7 +60,7 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	bool bAuthoringReady = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
-		meta = (ToolTip = "当前视觉路径：VisualLayers、HitOnly、LegacyPrototype 或 None。"))
+		meta = (ToolTip = "当前视觉路径：VisualLayers、HitOnly 或 None。"))
 	FName VisualAuthoringMode = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
@@ -151,18 +73,6 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FVector HitBoundsExtent = FVector::ZeroVector;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	FName VisualName = NAME_None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	FName VisualMeshName = NAME_None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	FVector VisualScale = FVector::ZeroVector;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	FVector VisualRelativeLocation = FVector::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	bool bUsingVisualLayers = false;
@@ -233,6 +143,9 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	FWacomBattleEnemyPartWorldTargetDebugView BridgeDebugView;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FWacomBattleEnemyPartPresentationDebugView PresentationDebugView;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FName PredictionWidgetName = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
@@ -291,7 +204,7 @@ public:
 	FName PartId = NAME_None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Identity",
-		meta = (ToolTip = "敌人 Host 内的局部部位槽位 ID，例如 Head、Body、LeftClaw。为空时兼容使用 PartId。"))
+		meta = (ToolTip = "敌人 Host 内的局部部位槽位 ID，例如 Head、Body、LeftClaw。必须显式填写，并对应 EnemyDefinition.Parts[].PartSlotId。"))
 	FName PartSlotId = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Identity",
@@ -303,20 +216,8 @@ public:
 			ClampMin = "1.0", UIMin = "1.0"))
 	FVector HitBoundsExtent = FVector(55.f, 45.f, 55.f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Legacy Prototype",
-		meta = (ToolTip = "旧原型可见网格。仅在 VisualLayers 为空时显示，用于旧地图/快速占位；正式 2D 敌人请优先配置 VisualLayers。"))
-	TObjectPtr<UStaticMesh> VisualMesh = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Legacy Prototype",
-		meta = (ToolTip = "旧原型网格相对缩放。只在 VisualLayers 为空时可见；不影响 HitBounds 命中范围。"))
-	FVector VisualScale = FVector(0.55f, 0.45f, 0.55f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Legacy Prototype",
-		meta = (ToolTip = "旧原型网格相对位置。单位：厘米；只在 VisualLayers 为空时可见。"))
-	FVector VisualRelativeLocation = FVector::ZeroVector;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers",
-		meta = (ToolTip = "正式 2D 视觉层。非空时按 LayerMode 生成 PaperSprite / PaperFlipbook 表现层并隐藏旧 PartVisual 原型网格；视觉层不影响 HitBounds、目标身份或战斗规则。"))
+		meta = (ToolTip = "正式 2D 视觉层。非空时按 LayerMode 在 VisualLayersRoot 下生成 PaperSprite / PaperFlipbook 表现层；视觉层不影响 HitBounds、目标身份或战斗规则。"))
 	TArray<FWacomBattleEnemyPartVisualLayer> VisualLayers;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
@@ -408,7 +309,7 @@ public:
 	bool bAuthoringReady = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
-		meta = (ToolTip = "当前部位视觉制作路径：VisualLayers、HitOnly、LegacyPrototype 或 None。"))
+		meta = (ToolTip = "当前部位视觉制作路径：VisualLayers、HitOnly 或 None。"))
 	FName VisualAuthoringMode = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
@@ -416,7 +317,7 @@ public:
 	bool bAuthoringUsingHostVisual = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
-		meta = (ToolTip = "当前部位是否为 HitOnly 命中区模式：自身不显示旧 cube/VisualLayers，但保留 HitBounds、target bridge、预测和状态 Badge。"))
+		meta = (ToolTip = "当前部位是否为 HitOnly 命中区模式：自身不生成可见体，但保留 HitBounds、target bridge、预测和状态 Badge。"))
 	bool bAuthoringHitOnlyVisual = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
@@ -459,9 +360,6 @@ public:
 	UBoxComponent* GetHitBounds() const { return HitBounds; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
-	UStaticMeshComponent* GetPartVisual() const { return PartVisual; }
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
 	USceneComponent* GetVisualLayersRoot() const { return VisualLayersRoot; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
@@ -471,6 +369,18 @@ public:
 	UWacomBattleEnemyPartWorldTargetBridgeComponent* GetWorldTargetBridgeComponent() const
 	{
 		return WorldTargetBridgeComponent;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
+	UWacomBattleEnemyPartPresentationComponent* GetPresentationComponent() const
+	{
+		return PresentationComponent;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
+	UWacomBattleEnemyPartVisualLayerComponent* GetVisualLayerComponent() const
+	{
+		return VisualLayerComponent;
 	}
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
@@ -492,23 +402,23 @@ public:
 	void SetEnemySlotId(FName InEnemySlotId);
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "由 Host 调用：说明 Host 是否提供整体视觉。为 true 且本部位没有 VisualLayers 时，旧原型 cube 会隐藏为 HitOnly 命中区模式。"))
+		meta = (ToolTip = "由 Host 调用：说明 Host 是否提供整体视觉。为 true 且本部位没有 VisualLayers 时，部位进入 HitOnly 命中区模式。"))
 	void SetHostVisualContext(bool bInHostVisualActive);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "返回 Host 是否为该部位提供整体视觉语境。只影响视觉诊断和旧原型 cube 显隐，不影响 HitBounds 或 BattleSession。"))
+		meta = (ToolTip = "返回 Host 是否为该部位提供整体视觉语境。只影响视觉诊断，不影响 HitBounds 或 BattleSession。"))
 	bool IsHostVisualContextActive() const { return bHostVisualContextActive; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "返回 Host 内局部部位槽位 ID；PartSlotId 为空时回退到 PartId。"))
+		meta = (ToolTip = "返回 Host 内局部部位槽位 ID。必须显式配置；为空时该场景部位不能绑定 Battle Snapshot。"))
 	FName GetEffectivePartSlotId() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "返回当前单敌人规则绑定用的部位 ID。第一阶段仍必须配置 PartId，不能只靠 PartSlotId 绑定 BattleSession。"))
+		meta = (ToolTip = "返回当前部位的静态部位定义 ID，对应 UEnemyPartDefinition::PartId；不作为场景目标 identity。"))
 	FName GetEffectivePartDefinitionId() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "返回未来多敌人场景目标稳定身份，例如 Enemy.Head。当前 BattleSession 仍使用 PartId 绑定运行时部位。"))
+		meta = (ToolTip = "返回场景目标稳定身份，例如 Enemy.Head。由 EnemySlotId + 显式 PartSlotId 组成。"))
 	FName GetStableSceneTargetId() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
@@ -560,13 +470,7 @@ private:
 	void ConfigureDebugSnakeSample(
 		FName InPartId,
 		FName InPartSlotId,
-		const FVector& InHitBoundsExtent,
-		const FVector& InVisualScale,
-		const FVector& InVisualRelativeLocation);
-	TArray<FName> BuildDuplicateVisualLayerIds() const;
-	int32 CountMissingVisualLayerAssets() const;
-	int32 CountMissingVisualLayerSprites() const;
-	int32 CountMissingVisualLayerFlipbooks() const;
+		const FVector& InHitBoundsExtent);
 	FVector GetAppliedPredictionBadgeRelativeLocation() const;
 	FVector GetAppliedStatusBadgeRelativeLocation() const;
 	void RefreshAuthoringStatusPreview();
@@ -576,26 +480,24 @@ private:
 	TObjectPtr<UWacomBattleEnemyPartHitBoundsComponent> HitBounds = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
-		meta = (AllowPrivateAccess = "true", ToolTip = "部位视觉层根节点。视觉层和旧原型 PartVisual 都挂在此节点下，cue 缩放默认作用于整组视觉。"))
+		meta = (AllowPrivateAccess = "true", ToolTip = "部位视觉层根节点。VisualLayers 生成组件挂在此节点下，cue 缩放默认作用于整组视觉。"))
 	TObjectPtr<USceneComponent> VisualLayersRoot = nullptr;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
-		meta = (AllowPrivateAccess = "true", ToolTip = "部位原型可见体。正式美术可在 Blueprint 或子类里替换。"))
-	TObjectPtr<UWacomBattleEnemyPartVisualComponent> PartVisual = nullptr;
-
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<UPaperSpriteComponent>> GeneratedVisualLayerComponents;
-
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<UPaperFlipbookComponent>> GeneratedFlipbookVisualLayerComponents;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
 		meta = (AllowPrivateAccess = "true", ToolTip = "部位默认携带的通用交互目标身份组件。"))
 	TObjectPtr<UWacomInteractionTargetComponent> InteractionTargetComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
-		meta = (AllowPrivateAccess = "true", ToolTip = "把稳定 PartId 绑定到当前战斗运行时部位 ID，并接收目标 cue。"))
+		meta = (AllowPrivateAccess = "true", ToolTip = "把 EncounterId + EnemySlotId + PartSlotId 绑定到当前战斗运行时部位 ID，并接收目标 cue。"))
 	TObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> WorldTargetBridgeComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
+		meta = (AllowPrivateAccess = "true", ToolTip = "场景敌人部位表现组件，负责 cue 缩放、hover/拖卡预览、预测 Widget 和状态 Badge。"))
+	TObjectPtr<UWacomBattleEnemyPartPresentationComponent> PresentationComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
+		meta = (AllowPrivateAccess = "true", ToolTip = "场景敌人部位视觉层组件，负责生成 PaperSprite / PaperFlipbook 层。"))
+	TObjectPtr<UWacomBattleEnemyPartVisualLayerComponent> VisualLayerComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
 		meta = (AllowPrivateAccess = "true", ToolTip = "部位上方的只读先机预测 Widget。不要直接编辑内部组件，请改 Actor facade 字段。"))

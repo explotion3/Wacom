@@ -852,7 +852,7 @@ bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetS
 		const FWacomInteractionTargetHandle Handle = BuildInteractionTargetHandleFromHit(HitResult);
 		if (Handle.IsValid() && Handle.TargetKind == EWacomInteractionTargetKind::World
 			&& Handle.TargetTag == WacomTags::Interaction_Target_Battle_EnemyPart
-			&& Handle.WorldTargetId.IsValid())
+			&& Handle.HasBattlePartSlotIdentity())
 		{
 			if (!HUD || !HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(Handle))
 			{
@@ -865,7 +865,7 @@ bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetS
 				}
 				return false;
 			}
-			HUD->OnEnemyPartClickedByUser(Handle.WorldTargetId);
+			HUD->OnEnemyPartClickedByUser(Handle);
 			if (bLogBattleSceneTargetClickRouting)
 			{
 				UE_LOG(LogTemp, Display,

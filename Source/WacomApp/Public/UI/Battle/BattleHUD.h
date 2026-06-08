@@ -17,6 +17,7 @@ class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UWacomCardDetailPanel;
 class UWacomFirstPersonCardLayoutPreset;
+class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class AWacomBattleEnemyActor;
 class APlayerController;
@@ -284,10 +285,9 @@ public:
 
 	/**
 	 * TargetSelect 状态下玩家点击了某个敌方部位。
-	 * 提交 PlayCard(PendingCardId, PartId)，回到 Idle。
+	 * 提交 PlayCard(PendingCardId, EnemyPartKey)，回到 Idle。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "玩家在 TargetSelect 中点击敌方部位后的 BattleHUD 命令入口。Widget / 场景 target 只上报意图，BattleHUD 负责校验并提交 BattleSession 命令。"))
-	void OnEnemyPartClickedByUser(const FGuid& PartInstanceId);
+	void OnEnemyPartClickedByUser(const FWacomInteractionTargetHandle& TargetHandle);
 
 	/** 等待按钮点击。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "玩家点击 Wait 后的 BattleHUD 命令入口。BattleHUD 会按表现栈和战斗阶段决定立即提交或进入 pending。"))
@@ -465,7 +465,7 @@ private:
 	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
 	void StoreFirstPersonCardTransitionEvents(const TArray<struct FBattleEvent>& Events);
 	void ClearPendingFirstPersonCardTransitionEvents();
-	void RecordFirstPersonPlayCommit(const FGuid& CardInstanceId, const FGuid& TargetPartInstanceId);
+	void RecordFirstPersonPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
@@ -487,7 +487,7 @@ private:
 	FWacomBattlePresentationTargetRegistry& GetBattlePresentationTargetRegistry();
 	void ClearBattlePresentationTargetRegistry();
 	void RegisterBattlePresentationTarget(
-		const FGuid& PartInstanceId,
+		const FBattlePartSlotIdentity& TargetPartKey,
 		UObject* Owner,
 		TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler);
 	void UnregisterBattlePresentationTargetsForOwner(const UObject* Owner);
@@ -497,8 +497,8 @@ private:
 	void AdvanceBattlePresentationQueueOnce();
 
 #if WITH_AUTOMATION_TESTS
-	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FGuid& TargetPartInstanceId, int32 Amount);
-	void PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId);
+	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FBattlePartSlotIdentity& TargetPartKey, int32 Amount);
+	void PlayTargetConfirmedCueForTest(const FBattlePartSlotIdentity& TargetPartKey);
 	FWacomBattleHUDAutomationTestView GetAutomationTestViewForTest() const;
 #endif
 
@@ -587,6 +587,8 @@ private:
 		const UBattleSession& BattleSession) const;
 	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveBattleEnemyPartWorldTargetBridge(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
+	UWacomBattleEnemyPartPresentationComponent* ResolveBattleEnemyPartWorldTargetPresentation(
+		const FWacomInteractionTargetHandle& TargetHandle) const;
 	bool ProbeFirstPersonCardDragTarget(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView,
@@ -606,6 +608,5 @@ private:
 	friend class FWacomBattleHUDFirstPersonHandBridge;
 	friend class FWacomBattleHUDPresentationCoordinator;
 	friend class FWacomBattleHUDSceneEnemyTargetCoordinator;
-	friend class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 	friend class UWacomBattleHUDDetailTest;
 };

@@ -112,7 +112,8 @@ bool FWacomBattlePoisonTickOnCardPlaySpec::RunTest(const FString& /*Parameters*/
 	// 1) 施加 3 层毒到部位
 	// 2) PlayCardResolver 末尾 PoisonResolver 触发 → 部位 -3 HP
 	// 敌方先机由 20 扣到 19，不触发行动。
-	TestTrue(TEXT("PlayPoison"), S->SubmitCommand(FBattleCommand::MakePlayCard(Pid, PartId)).IsOk());
+	TestTrue(TEXT("PlayPoison"),
+		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, Pid, PartId)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after poison tick"), FWacomBattleFixture::FindPartHp(Snap, 0), 27);
@@ -162,7 +163,7 @@ bool FWacomBattlePoisonTickOnEnemyActSpec::RunTest(const FString& /*Parameters*/
 
 	// 打出 → 玩家获得 3 层毒 + 立即触发一次中毒结算（玩家 -3）。
 	// 先机 20→19，敌方不行动。
-	TestTrue(TEXT("PlayPoisonOnPlayer"), S->SubmitCommand(FBattleCommand::MakePlayCard(Pid, FGuid())).IsOk());
+	TestTrue(TEXT("PlayPoisonOnPlayer"), S->SubmitCommand(FBattleCommand::MakePlayCard(Pid)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PlayerHp after card-play tick"), Snap.Player.CurrentHp, 97);
@@ -221,7 +222,7 @@ bool FWacomBattlePoisonPenetratesShieldSpec::RunTest(const FString& /*Parameters
 	// 1) Shield 100 加到玩家
 	// 2) 施加 Poison 3 到玩家
 	// 3) PoisonResolver 触发 → 玩家直接 -3 HP（Shield 不吸收）
-	TestTrue(TEXT("PlayCombo"), S->SubmitCommand(FBattleCommand::MakePlayCard(Pid, FGuid())).IsOk());
+	TestTrue(TEXT("PlayCombo"), S->SubmitCommand(FBattleCommand::MakePlayCard(Pid)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PlayerShield unchanged by poison"), Snap.Player.Shield,    100);
@@ -265,12 +266,13 @@ bool FWacomBattlePoisonStacksUnchangedSpec::RunTest(const FString& /*Parameters*
 	TestTrue(TEXT("NoopCostInHand"),   NoopId.IsValid());
 
 	// 第 1 张：施加 3 层毒 + 结算一次（部位 HP 50→47）
-	TestTrue(TEXT("Play1"), S->SubmitCommand(FBattleCommand::MakePlayCard(PoisonId, PartId)).IsOk());
+	TestTrue(TEXT("Play1"),
+		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, PoisonId, PartId)).IsOk());
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after tick1"), FWacomBattleFixture::FindPartHp(Snap, 0), 47);
 
 	// 第 2 张：无效果卡，PoisonResolver 仍应触发（部位 HP 47→44）
-	TestTrue(TEXT("Play2"), S->SubmitCommand(FBattleCommand::MakePlayCard(NoopId, FGuid())).IsOk());
+	TestTrue(TEXT("Play2"), S->SubmitCommand(FBattleCommand::MakePlayCard(NoopId)).IsOk());
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after tick2"), FWacomBattleFixture::FindPartHp(Snap, 0), 44);
 

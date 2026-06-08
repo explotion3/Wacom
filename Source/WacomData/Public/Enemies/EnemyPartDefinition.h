@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
-#include "Enemies/IntentDefinition.h"
 #include "EnemyPartDefinition.generated.h"
 
 class UCardDefinition;
@@ -24,13 +23,6 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy")
 	int32 MaxHp = 0;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy")
-	int32 InitialIntentIndex = 0;
-
-	/** 循环执行的意图序列。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy")
-	TArray<FIntentDefinition> IntentSequence;
 
 	/**
 	 * 部位被破坏时给予玩家的经验值。

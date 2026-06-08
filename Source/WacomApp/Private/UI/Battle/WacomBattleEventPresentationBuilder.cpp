@@ -46,6 +46,8 @@ namespace
 		case EBattleEventType::TurnStarted:
 		case EBattleEventType::TurnEnded:
 		case EBattleEventType::CardsDrawn:
+		case EBattleEventType::EnemyIntentSelected:
+		case EBattleEventType::EnemyPhaseChanged:
 			return EWacomBattleEventVisualTone::System;
 		default:
 			return EWacomBattleEventVisualTone::Neutral;
@@ -84,6 +86,9 @@ namespace
 			return FString::Printf(TEXT("等待：敌方先机 -%d"), E.Amount);
 		case EBattleEventType::EnemyPartActed:
 			return E.Count > 0 ? TEXT("敌方部位行动") : TEXT("敌方部位因眩晕跳过行动");
+		case EBattleEventType::EnemyIntentSelected:
+		case EBattleEventType::EnemyPhaseChanged:
+			return FString();
 		case EBattleEventType::EnemyPartHpEmptied:
 			return TEXT("敌方部位被击破");
 		case EBattleEventType::EnemyKnockdown:

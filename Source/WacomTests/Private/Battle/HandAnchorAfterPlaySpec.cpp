@@ -42,7 +42,7 @@ bool FWacomBattleHandAnchorAfterPlaySpec::RunTest(const FString& /*Parameters*/)
 	const FGuid LHId = FWacomBattleFixture::FindHandInstanceByCardId(Snap, LH->CardId);
 	TestTrue(TEXT("LeftHand in hand"), LHId.IsValid());
 
-	TestTrue(TEXT("Play LeftHand"), S->SubmitCommand(FBattleCommand::MakePlayCard(LHId, FGuid())).IsOk());
+	TestTrue(TEXT("Play LeftHand"), S->SubmitCommand(FBattleCommand::MakePlayCard(LHId)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("LeftHand gone from hand"),

@@ -9,6 +9,7 @@
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Resolution/BattleTargetValidationResult.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "RunSession.h"
 #include "RunState.h"
 #include "Session/BattleSession.h"
@@ -150,11 +151,11 @@ namespace
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomBattleTargetIdentitySlotHandleResolvesDuplicatePartIdsSpec,
-	"Wacom.Battle.TargetIdentity.SlotHandleResolvesDuplicatePartIds",
+	FWacomBattleTargetIdentityPartKeyResolvesDuplicatePartIdsSpec,
+	"Wacom.Battle.TargetIdentity.PartKeyResolvesDuplicatePartIds",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomBattleTargetIdentitySlotHandleResolvesDuplicatePartIdsSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomBattleTargetIdentityPartKeyResolvesDuplicatePartIdsSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCardDefinition* DamageCard = nullptr;
@@ -200,10 +201,13 @@ bool FWacomBattleTargetIdentitySlotHandleResolvesDuplicatePartIdsSpec::RunTest(c
 	TestEqual(TEXT("Validation preserves resolved enemy slot"),
 		Validation.ResolvedPartIdentity.GetEffectiveEnemySlotId(),
 		FName(TEXT("RightEnemy")));
+	TestEqual(TEXT("Validation resolves right part key"),
+		Validation.ResolvedPartKey,
+		RightPart->PartKey);
 
 	const FWacomStatus Status =
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnPartSlot(CardId, TEXT("RightEnemy"), TEXT("Core")));
-	TestTrue(TEXT("PlayCard by slot succeeds"), Status.IsOk());
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, RightPart->PartKey));
+	TestTrue(TEXT("PlayCard by part key succeeds"), Status.IsOk());
 
 	const FBattleSnapshot After = Session->BuildSnapshot();
 	const FEnemyPartSnapshot* LeftAfter = FindPartBySlot(After, TEXT("LeftEnemy"), TEXT("Core"));
@@ -220,11 +224,11 @@ bool FWacomBattleTargetIdentitySlotHandleResolvesDuplicatePartIdsSpec::RunTest(c
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomBattleTargetIdentityMismatchedRuntimeAndSlotRejectsSpec,
-	"Wacom.Battle.TargetIdentity.RuntimeIdAndSlotMismatchRejects",
+	FWacomBattleTargetIdentityMismatchedRuntimeAndKeyRejectsSpec,
+	"Wacom.Battle.TargetIdentity.RuntimeIdAndKeyMismatchRejects",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomBattleTargetIdentityMismatchedRuntimeAndSlotRejectsSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomBattleTargetIdentityMismatchedRuntimeAndKeyRejectsSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCardDefinition* DamageCard = nullptr;
@@ -262,14 +266,14 @@ bool FWacomBattleTargetIdentityMismatchedRuntimeAndSlotRejectsSpec::RunTest(cons
 		Validation.RejectReason,
 		EWacomBattleTargetRejectReason::TargetIdentityMismatch);
 
-	FBattleCommand Command = FBattleCommand::MakePlayCard(CardId, LeftPart->InstanceId);
-	Command.TargetEnemySlotId = TEXT("RightEnemy");
-	Command.TargetPartSlotId = TEXT("Core");
-	const FWacomStatus Status = Session->SubmitCommand(Command);
-	TestFalse(TEXT("PlayCard rejects mismatched runtime id and slot identity"), Status.IsOk());
-	TestEqual(TEXT("Reject detail reports identity mismatch"),
+	const FBattleEnemyPartKey MissingKey =
+		FBattleEnemyPartKey::Make(TEXT("Encounter.TargetIdentity"), TEXT("RightEnemy"), TEXT("Missing"));
+	const FWacomStatus Status =
+		Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, MissingKey));
+	TestFalse(TEXT("PlayCard rejects stale or missing part key"), Status.IsOk());
+	TestEqual(TEXT("Reject detail reports invalid key"),
 		Status.Detail,
-		FName(TEXT("TargetIdentityMismatch")));
+		FName(TEXT("TargetKeyInvalid")));
 
 	return true;
 }
@@ -321,7 +325,7 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 		}
 
 		const FWacomStatus PlayStatus =
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnPartSlot(CardId, TEXT("RightEnemy"), TEXT("Core")));
+			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, RightPart->PartKey));
 		TestTrue(TEXT("PlayCard destroys right enemy slot"), PlayStatus.IsOk());
 		TestEqual(TEXT("Pending knockdown choice"), Session->GetPhase(), EBattlePhase::PendingKnockdownChoice);
 
@@ -331,6 +335,13 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 
 		const FBattleResultPacket Packet = Session->BuildResultPacket();
 		TestTrue(TEXT("Packet withdrawn"), Packet.bWithdrawn);
+		TestEqual(TEXT("Packet records one destroyed part key"), Packet.DestroyedPartKeys.Num(), 1);
+		if (Packet.DestroyedPartKeys.Num() == 1)
+		{
+			TestEqual(TEXT("Destroyed key is right part"),
+				Packet.DestroyedPartKeys[0],
+				RightPart->PartKey);
+		}
 		TestEqual(TEXT("Packet records one destroyed part identity"), Packet.DestroyedParts.Num(), 1);
 		if (Packet.DestroyedParts.Num() == 1)
 		{
@@ -354,8 +365,14 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 	{
 		return false;
 	}
-	TestEqual(TEXT("Run progress stores one destroyed identity"), Progress->DestroyedParts.Num(), 1);
-	TestEqual(TEXT("Run progress keeps legacy projection"), Progress->DestroyedPartIds.Num(), 1);
+	TestEqual(TEXT("Run progress stores one destroyed part key"), Progress->DestroyedPartKeys.Num(), 1);
+	if (Progress->DestroyedPartKeys.Num() == 1)
+	{
+		TestEqual(TEXT("Run progress key is right part"),
+			Progress->DestroyedPartKeys[0],
+			FBattleEnemyPartKey::Make(TEXT("ProgressTrigger"), TEXT("RightEnemy"), TEXT("Core")));
+	}
+	TestEqual(TEXT("Run progress stores one destroyed identity projection"), Progress->DestroyedParts.Num(), 1);
 
 	FBattleInitParams ReentryParams;
 	const bool bBuildOk =
@@ -365,7 +382,6 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 		ReentryParams.EncounterId,
 		FName(TEXT("ProgressTrigger")));
 	TestEqual(TEXT("Run reentry fills PreDestroyedParts"), ReentryParams.PreDestroyedParts.Num(), 1);
-	TestEqual(TEXT("Run reentry leaves legacy PreDestroyedPartIds empty"), ReentryParams.PreDestroyedPartIds.Num(), 0);
 
 	ReentryParams.EnemySlots.Reset();
 	AppendTwoEnemySlots(ReentryParams, Fixture);

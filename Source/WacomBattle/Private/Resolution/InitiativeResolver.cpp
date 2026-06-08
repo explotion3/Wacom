@@ -39,9 +39,7 @@ namespace
 	 */
 	int32 GetPartIntentResistanceValue(const FRuntimeEnemyPart& Part)
 	{
-		if (!Part.Definition) { return 0; }
-		if (!Part.Definition->IntentSequence.IsValidIndex(Part.CurrentIntentIndex)) { return 0; }
-		return Part.Definition->IntentSequence[Part.CurrentIntentIndex].ResistanceValue;
+		return Part.CurrentIntentId.IsNone() ? 0 : Part.CurrentIntent.ResistanceValue;
 	}
 }
 
@@ -93,6 +91,7 @@ void FInitiativeResolver::ResolveResistance(
 			FBattleEvent Ev;
 			Ev.Type            = EBattleEventType::ResistanceResolved;
 			Ev.ActorInstanceId = PartId;
+			Ev.ActorEnemyPartKey = Part->Identity.ToEnemyPartKey();
 			Ev.CardInstanceId  = CardId;
 			Ev.Amount          = CardResist;
 			Ev.Count           = IntentResist;
@@ -109,6 +108,7 @@ void FInitiativeResolver::ResolveResistance(
 			FBattleEvent SEv;
 			SEv.Type            = EBattleEventType::StatusApplied;
 			SEv.ActorInstanceId = PartId;
+			SEv.ActorEnemyPartKey = Part->Identity.ToEnemyPartKey();
 			SEv.CardInstanceId  = CardId;
 			SEv.Tag             = WacomTags::Status_Stunned;
 			SEv.Amount          = 1;
@@ -138,6 +138,7 @@ void FInitiativeResolver::ResolvePerfectRelease(
 			FBattleEvent Ev;
 			Ev.Type            = EBattleEventType::PerfectReleaseResolved;
 			Ev.ActorInstanceId = PartId;
+			Ev.ActorEnemyPartKey = Part->Identity.ToEnemyPartKey();
 			Ev.CardInstanceId  = CardId;
 			Events.Emit(Ev);
 		}

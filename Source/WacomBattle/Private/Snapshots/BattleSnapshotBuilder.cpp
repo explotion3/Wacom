@@ -20,10 +20,13 @@ namespace
 		PartSnap.InstanceId        = Part.InstanceId;
 		PartSnap.Definition        = Part.Definition;
 		PartSnap.Identity          = Part.Identity;
+		PartSnap.PartKey           = Part.Identity.ToEnemyPartKey();
 		PartSnap.EncounterId       = Part.Identity.GetEffectiveEncounterId();
 		PartSnap.EnemySlotId       = Part.Identity.GetEffectiveEnemySlotId();
 		PartSnap.PartSlotId        = Part.Identity.GetEffectivePartSlotId();
-		PartSnap.PartDefinitionId  = Part.Identity.PartDefinitionId;
+		PartSnap.CurrentPhaseId    = Part.CurrentPhaseId;
+		PartSnap.CurrentIntentSetId = Part.CurrentIntentSetId;
+		PartSnap.CurrentIntentId   = Part.CurrentIntentId;
 		PartSnap.CurrentHp         = Part.CurrentHp;
 		PartSnap.MaxHp             = Part.Definition ? Part.Definition->MaxHp : 0;
 		PartSnap.CurrentInitiative = Part.CurrentInitiative;
@@ -32,9 +35,9 @@ namespace
 		PartSnap.Statuses          = Part.Statuses;
 		PartSnap.StatusStacks      = Part.StatusStacks;
 
-		if (Part.Definition && Part.Definition->IntentSequence.IsValidIndex(Part.CurrentIntentIndex))
+		if (!Part.CurrentIntentId.IsNone())
 		{
-			const FIntentDefinition& IntentDef = Part.Definition->IntentSequence[Part.CurrentIntentIndex];
+			const FIntentDefinition& IntentDef = Part.CurrentIntent;
 			PartSnap.CurrentIntent.IntentId        = IntentDef.IntentId;
 			PartSnap.CurrentIntent.DisplayName     = IntentDef.DisplayName;
 			PartSnap.CurrentIntent.Initiative      = IntentDef.Initiative;
@@ -97,6 +100,7 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		EnemySnap.Definition = EnemySlot.Definition;
 		EnemySnap.EncounterId = EnemySlot.EncounterId;
 		EnemySnap.EnemySlotId = EnemySlot.EnemySlotId;
+		EnemySnap.UnitKey = FBattleEnemyUnitKey::Make(EnemySlot.EncounterId, EnemySlot.EnemySlotId);
 		EnemySnap.Parts.Reserve(EnemySlot.PartInstanceIds.Num());
 		EnemySnap.bAllPartsDestroyed = !EnemySlot.PartInstanceIds.IsEmpty();
 

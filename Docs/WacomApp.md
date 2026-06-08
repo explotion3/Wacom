@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-06-05
+updated: 2026-06-08
 tags:
   - wacom/app
   - wacom/gameflow
@@ -182,6 +182,8 @@ GameMode 进入战斗时：
 6. 通过 UIManager Push `UBattleHUD` 到 Game 层。
 7. 将 input coordinator 切到 `Battle` profile。
 8. 记录触发战斗的 Trigger Actor，并把 Trigger 的 `SceneEnemyHostSlots` 映射传给 BattleHUD 场景目标 registry。
+
+敌人入口只走 `EncounterDefinition + SceneEnemyHostSlots`。`EncounterDefinition.EnemySlots` 负责规则敌人槽，`SceneEnemyHostSlots` 负责 `EnemySlotId -> SceneEnemyHost` 的场景表现绑定；缺 Host、漏 slot 或多余 slot 会被编辑器验证阻止。场景敌人点击、hover 和拖卡目标路由只认当前 BattleHUD registry 中的 `EncounterId + EnemySlotId + PartSlotId`，不通过 Actor 名称、单 Host 缓存或旧第一敌人入口推断身份。
 
 ### ExitBattle
 

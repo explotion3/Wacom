@@ -8,6 +8,7 @@
 struct FBattleState;
 struct FRuntimeCardInstance;
 struct FRuntimeEnemyPart;
+struct FBattleEnemyPartKey;
 
 /**
  * 战斗规则的小工具集合。仅 WacomBattle/Private 使用。
@@ -33,8 +34,9 @@ public:
 
 	static FRuntimeEnemyPart* FindEnemyPart(FBattleState& State, const FGuid& PartInstanceId);
 	static const FRuntimeEnemyPart* FindEnemyPart(const FBattleState& State, const FGuid& PartInstanceId);
-	static FRuntimeEnemyPart* FindEnemyPartBySlot(FBattleState& State, FName EnemySlotId, FName PartSlotId);
-	static const FRuntimeEnemyPart* FindEnemyPartBySlot(const FBattleState& State, FName EnemySlotId, FName PartSlotId);
+	static FRuntimeEnemyPart* FindEnemyPartByKey(FBattleState& State, const FBattleEnemyPartKey& PartKey);
+	static const FRuntimeEnemyPart* FindEnemyPartByKey(const FBattleState& State, const FBattleEnemyPartKey& PartKey);
+	static FBattleEnemyPartKey FindEnemyPartKey(const FBattleState& State, const FGuid& PartInstanceId);
 	static FRuntimeCardInstance* FindCard(FBattleState& State, const FGuid& CardInstanceId);
 	static const FRuntimeCardInstance* FindCard(const FBattleState& State, const FGuid& CardInstanceId);
 

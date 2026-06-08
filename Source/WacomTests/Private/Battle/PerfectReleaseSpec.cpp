@@ -48,7 +48,8 @@ bool FWacomBattlePerfectReleaseSpec::RunTest(const FString& /*Parameters*/)
 	const FGuid CardId     = FWacomBattleFixture::FindHandInstanceByCardId(Snap, HitCard->CardId);
 	TestTrue(TEXT("CardInHand"), CardId.IsValid());
 
-	TestTrue(TEXT("Play ok"), S->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TargetPart)).IsOk());
+	TestTrue(TEXT("Play ok"),
+		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, CardId, TargetPart)).IsOk());
 
 	const TArray<FBattleEvent> Events = S->ConsumeEvents();
 

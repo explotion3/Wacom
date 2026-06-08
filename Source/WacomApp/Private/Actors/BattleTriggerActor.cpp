@@ -841,27 +841,35 @@ void ABattleTriggerActor::BuildBattleSceneEnemyHosts(
 {
 	OutSceneEnemyHosts.Reset();
 
-	if (SceneEnemyHostSlots.Num() > 0)
+	if (!EncounterDefinition || SceneEnemyHostSlots.IsEmpty())
 	{
-		OutSceneEnemyHosts.Reserve(SceneEnemyHostSlots.Num());
+		return;
+	}
+
+	TArray<FName> EncounterSlotIds;
+	CollectValidEncounterEnemySlotIdsInOrder(EncounterDefinition, EncounterSlotIds);
+	OutSceneEnemyHosts.Reserve(EncounterSlotIds.Num());
+	for (const FName& EncounterSlotId : EncounterSlotIds)
+	{
+		const FWacomBattleSceneEnemyHostSlot* MatchedSceneSlot = nullptr;
 		for (const FWacomBattleSceneEnemyHostSlot& Slot : SceneEnemyHostSlots)
 		{
-			if (Slot.EnemySlotId.IsNone())
+			if (Slot.EnemySlotId == EncounterSlotId && Slot.SceneEnemyHost)
 			{
-				continue;
+				MatchedSceneSlot = &Slot;
+				break;
 			}
-
-			AWacomBattleEnemyActor* Host = Slot.SceneEnemyHost;
-			if (!Host)
-			{
-				continue;
-			}
-
-			Host->EnemySlotId = Slot.EnemySlotId;
-			Host->RefreshBattleEnemyPartAuthoringState();
-			OutSceneEnemyHosts.AddUnique(Host);
 		}
-		return;
+
+		if (!MatchedSceneSlot || !MatchedSceneSlot->SceneEnemyHost)
+		{
+			continue;
+		}
+
+		AWacomBattleEnemyActor* Host = MatchedSceneSlot->SceneEnemyHost;
+		Host->EnemySlotId = EncounterSlotId;
+		Host->RefreshBattleEnemyPartAuthoringState();
+		OutSceneEnemyHosts.AddUnique(Host);
 	}
 }
 

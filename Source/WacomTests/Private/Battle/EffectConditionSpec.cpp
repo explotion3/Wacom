@@ -72,7 +72,7 @@ bool FWacomBattleEffectConditionNoneAlwaysExecutes::RunTest(const FString& /*Par
 	TestTrue(TEXT("CardInHand"), Id.IsValid());
 	TestEqual(TEXT("PartHp initial"), FWacomBattleFixture::FindPartHp(Snap, 0), 50);
 
-	TestTrue(TEXT("Play"), S->SubmitCommand(FBattleCommand::MakePlayCard(Id, PartId)).IsOk());
+	TestTrue(TEXT("Play"), S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, Id, PartId)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp dropped"), FWacomBattleFixture::FindPartHp(Snap, 0), 45);
@@ -115,7 +115,7 @@ bool FWacomBattleEffectConditionTargetHasStatusBlocksWhenAbsent::RunTest(const F
 	TestEqual(TEXT("PartHp initial"), FWacomBattleFixture::FindPartHp(Snap, 0), 50);
 
 	// 目标部位不含中毒 → 条件失败 → 伤害跳过。
-	TestTrue(TEXT("Play"), S->SubmitCommand(FBattleCommand::MakePlayCard(Id, PartId)).IsOk());
+	TestTrue(TEXT("Play"), S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, Id, PartId)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp unchanged (condition failed)"),
@@ -172,13 +172,13 @@ bool FWacomBattleEffectConditionTargetHasStatusAllowsWhenPresent::RunTest(const 
 	TestTrue(TEXT("DmgInHand"),    DmgId.IsValid());
 
 	// 打施毒卡：施加 3 层中毒，立即结算 -3 HP。部位 HP 100 → 97。
-	TestTrue(TEXT("PlayPoison"), S->SubmitCommand(FBattleCommand::MakePlayCard(PoisonId, PartId)).IsOk());
+	TestTrue(TEXT("PlayPoison"), S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, PoisonId, PartId)).IsOk());
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after poison tick"), FWacomBattleFixture::FindPartHp(Snap, 0), 97);
 
 	// 打条件伤害卡：条件成立（Poison 在）-> -5 HP。中毒会再结算 -3。
 	// 打牌后总 HP = 97 - 5 (伤害) - 3 (中毒) = 89。
-	TestTrue(TEXT("PlayDmg"), S->SubmitCommand(FBattleCommand::MakePlayCard(DmgId, PartId)).IsOk());
+	TestTrue(TEXT("PlayDmg"), S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, DmgId, PartId)).IsOk());
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after conditional damage"), FWacomBattleFixture::FindPartHp(Snap, 0), 89);
 	return true;

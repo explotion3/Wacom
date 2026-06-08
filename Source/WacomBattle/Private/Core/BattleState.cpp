@@ -16,6 +16,7 @@ void FBattleState::RecordPartDestroyed(FRuntimeEnemyPart& Part, FBattleEventBus&
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::EnemyPartHpEmptied;
 		Ev.ActorInstanceId = Part.InstanceId;
+		Ev.ActorEnemyPartKey = Part.Identity.ToEnemyPartKey();
 		Events.Emit(Ev);
 	}
 
@@ -24,18 +25,14 @@ void FBattleState::RecordPartDestroyed(FRuntimeEnemyPart& Part, FBattleEventBus&
 		FKnockdownExpGain Gain;
 		Gain.PartId    = PartId;
 		Gain.Identity  = Part.Identity;
+		Gain.PartKey   = Part.Identity.ToEnemyPartKey();
 		Gain.ExpAmount = ExpAmount;
 		PendingKnockdownExpGains.Add(Gain);
 	}
 
-	// 3) 加入 DestroyedPartIds（撤离时持久化用）
-	if (!PartId.IsNone() && !DestroyedPartIds.Contains(PartId))
-	{
-		DestroyedPartIds.Add(PartId);
-	}
 	DestroyedParts.AddUnique(Part.Identity);
 
-	// 4) 入队等玩家三选一
+	// 3) 入队等玩家三选一
 	FPendingKnockdownEvent Event;
 	Event.PartInstanceId = Part.InstanceId;
 	Event.PartId         = PartId;

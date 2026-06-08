@@ -6,11 +6,35 @@
 #include "Actors/WacomBattleEnemyPartActor.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Enemies/EnemyDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Engine/World.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+
+namespace
+{
+	FName ResolvePartSlotIdForDefinitionPart(
+		const UEnemyDefinition* EnemyDefinition,
+		FName PartId)
+	{
+		if (!EnemyDefinition || PartId.IsNone())
+		{
+			return NAME_None;
+		}
+
+		for (const FEnemyPartSlot& Slot : EnemyDefinition->Parts)
+		{
+			if (Slot.PartDef && Slot.PartDef->PartId == PartId)
+			{
+				return Slot.PartSlotId;
+			}
+		}
+		return NAME_None;
+	}
+}
 
 FWacomBattleHUDTestHarness::FWacomBattleHUDTestHarness(UWorld* InWorld)
 	: World(InWorld)
@@ -172,6 +196,8 @@ FWacomBattleHUDTestSceneEnemyHost& FWacomBattleHUDTestHarness::AttachSceneEnemyH
 
 		CurrentSceneEnemyHost.Parts.Add(PartActor);
 		PartActor->PartId = PartIds[Index];
+		PartActor->PartSlotId =
+			ResolvePartSlotIdForDefinitionPart(EnemyDefinition, PartIds[Index]);
 		PartActor->AttachToActor(CurrentSceneEnemyHost.Host, FAttachmentTransformRules::KeepWorldTransform);
 	}
 

@@ -600,3 +600,102 @@ bool FWacomAppEncounterTriggerSyncSceneEnemyHostSlotsPreservesHostsAndRetainsMan
 		FName(TEXT("Extra")));
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomAppEncounterTriggerSceneHostSlotsBindUnitKeysByEncounterOrderSpec,
+	"Wacom.App.BattleTrigger.EncounterDefinition.SceneHostSlotsBindUnitKeysByEncounterOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomAppEncounterTriggerSceneHostSlotsBindUnitKeysByEncounterOrderSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Trigger(NewObject<ABattleTriggerActor>());
+	Trigger->PersistentId = TEXT("Trigger.EncounterRuntime.HostOrder");
+	UEnemyDefinition* Enemy = MakeEncounterTriggerEnemy(
+		Trigger.Get(),
+		TEXT("Enemy.HostOrder"),
+		TEXT("Part.HostOrder"));
+	UEnemyDefinition* Support = MakeEncounterTriggerEnemy(
+		Trigger.Get(),
+		TEXT("Enemy.HostOrder.Support"),
+		TEXT("Part.HostOrder.Support"));
+	Trigger->EncounterDefinition = MakeEncounterWithSlots(
+		Trigger.Get(),
+		{
+			TPair<FName, UEnemyDefinition*>(TEXT("Enemy"), Enemy),
+			TPair<FName, UEnemyDefinition*>(TEXT("Support"), Support),
+		});
+
+	AWacomBattleEnemyActor* EnemyHost =
+		MakeEncounterTriggerSceneEnemyHost(Trigger.Get(), Enemy, TEXT("WrongBeforeTrigger"));
+	AWacomBattleEnemyActor* SupportHost =
+		MakeEncounterTriggerSceneEnemyHost(Trigger.Get(), Support, TEXT("AlsoWrongBeforeTrigger"));
+
+	FWacomBattleSceneEnemyHostSlot SupportSlot;
+	SupportSlot.EnemySlotId = TEXT("Support");
+	SupportSlot.SceneEnemyHost = SupportHost;
+	FWacomBattleSceneEnemyHostSlot EnemySlot;
+	EnemySlot.EnemySlotId = TEXT("Enemy");
+	EnemySlot.SceneEnemyHost = EnemyHost;
+	Trigger->SceneEnemyHostSlots = { SupportSlot, EnemySlot };
+
+	TArray<AWacomBattleEnemyActor*> SceneHosts;
+	Trigger->BuildBattleSceneEnemyHosts(SceneHosts);
+
+	TestEqual(TEXT("Scene host export follows Encounter slot order"), SceneHosts.Num(), 2);
+	if (SceneHosts.Num() == 2)
+	{
+		TestTrue(TEXT("Encounter first host is exported first"), SceneHosts[0] == EnemyHost);
+		TestTrue(TEXT("Encounter second host is exported second"), SceneHosts[1] == SupportHost);
+	}
+	TestEqual(TEXT("Trigger slot overwrites host-authored EnemySlotId for first unit"),
+		EnemyHost->GetEffectiveEnemySlotId(),
+		FName(TEXT("Enemy")));
+	TestEqual(TEXT("Trigger slot overwrites host-authored EnemySlotId for second unit"),
+		SupportHost->GetEffectiveEnemySlotId(),
+		FName(TEXT("Support")));
+
+	const FWacomBattleTriggerDebugView View = Trigger->GetBattleTriggerDebugView(nullptr);
+	TestEqual(TEXT("Debug view reports both exported hosts"), View.SceneEnemyHostCount, 2);
+	TestEqual(TEXT("Debug view has no missing scene host slots"), View.MissingSceneEnemyHostSlotIds.Num(), 0);
+	TestEqual(TEXT("Debug view has no extra scene host slots"), View.ExtraSceneEnemyHostSlotIds.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomAppEncounterTriggerDoesNotGuessMissingHostEnemySlotIdSpec,
+	"Wacom.App.BattleTrigger.EncounterDefinition.DoesNotGuessMissingHostEnemySlotId",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomAppEncounterTriggerDoesNotGuessMissingHostEnemySlotIdSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<ABattleTriggerActor> Trigger(NewObject<ABattleTriggerActor>());
+	Trigger->PersistentId = TEXT("Trigger.EncounterRuntime.MissingHostSlot");
+	UEnemyDefinition* Enemy = MakeEncounterTriggerEnemy(
+		Trigger.Get(),
+		TEXT("Enemy.MissingHostSlot"),
+		TEXT("Part.MissingHostSlot"));
+	Trigger->EncounterDefinition = MakeEncounterWithSlots(
+		Trigger.Get(),
+		{ TPair<FName, UEnemyDefinition*>(TEXT("Enemy"), Enemy) });
+
+	AWacomBattleEnemyActor* Host =
+		MakeEncounterTriggerSceneEnemyHost(Trigger.Get(), Enemy, TEXT("Enemy"));
+	FWacomBattleSceneEnemyHostSlot Slot;
+	Slot.EnemySlotId = NAME_None;
+	Slot.SceneEnemyHost = Host;
+	Trigger->SceneEnemyHostSlots = { Slot };
+
+	TArray<AWacomBattleEnemyActor*> SceneHosts;
+	Trigger->BuildBattleSceneEnemyHosts(SceneHosts);
+
+	TestEqual(TEXT("Slot without EnemySlotId is not exported"), SceneHosts.Num(), 0);
+	TestEqual(TEXT("Host-authored EnemySlotId is not used as a trigger-slot fallback"),
+		Host->GetEffectiveEnemySlotId(),
+		FName(TEXT("Enemy")));
+	const FWacomBattleTriggerDebugView View = Trigger->GetBattleTriggerDebugView(nullptr);
+	TestEqual(TEXT("Missing Encounter slot is reported"), View.MissingSceneEnemyHostSlotIds.Num(), 1);
+	TestTrue(TEXT("Missing host slot is reported"), View.MissingSceneEnemyHostSlotIds.Contains(TEXT("Enemy")));
+	return true;
+}

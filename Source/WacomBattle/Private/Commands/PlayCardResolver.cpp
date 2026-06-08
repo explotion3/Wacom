@@ -84,49 +84,16 @@ namespace
 	{
 		OutRejectDetail = NAME_None;
 
-		FRuntimeEnemyPart* PartByInstance = nullptr;
-		if (Command.TargetPartInstanceId.IsValid())
-		{
-			PartByInstance = FBattleRules::FindEnemyPart(State, Command.TargetPartInstanceId);
-			if (!PartByInstance)
-			{
-				OutRejectDetail = TEXT("TargetInvalid");
-				return nullptr;
-			}
-		}
-
-		const bool bHasAnySlotField = !Command.TargetEnemySlotId.IsNone() || !Command.TargetPartSlotId.IsNone();
-		const bool bHasCompleteSlotIdentity =
-			!Command.TargetEnemySlotId.IsNone() && !Command.TargetPartSlotId.IsNone();
-		FRuntimeEnemyPart* PartBySlot = nullptr;
-		if (bHasCompleteSlotIdentity)
-		{
-			PartBySlot = FBattleRules::FindEnemyPartBySlot(
-				State,
-				Command.TargetEnemySlotId,
-				Command.TargetPartSlotId);
-			if (!PartBySlot)
-			{
-				OutRejectDetail = TEXT("TargetSlotInvalid");
-				return nullptr;
-			}
-		}
-		else if (bHasAnySlotField)
-		{
-			OutRejectDetail = TEXT("MissingTargetSlotIdentity");
-			return nullptr;
-		}
-
-		if (PartByInstance && PartBySlot && PartByInstance->InstanceId != PartBySlot->InstanceId)
-		{
-			OutRejectDetail = TEXT("TargetIdentityMismatch");
-			return nullptr;
-		}
-
-		FRuntimeEnemyPart* ResolvedPart = PartByInstance ? PartByInstance : PartBySlot;
-		if (!ResolvedPart)
+		if (!Command.TargetEnemyPartKey.IsValidKey())
 		{
 			OutRejectDetail = TEXT("MissingTarget");
+			return nullptr;
+		}
+
+		FRuntimeEnemyPart* ResolvedPart = FBattleRules::FindEnemyPartByKey(State, Command.TargetEnemyPartKey);
+		if (!ResolvedPart)
+		{
+			OutRejectDetail = TEXT("TargetKeyInvalid");
 			return nullptr;
 		}
 		if (ResolvedPart->bDestroyed)
@@ -235,6 +202,8 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 
 	const FGuid CardId            = Card->InstanceId;
 	const FGuid SelectedPartId    = TargetPart ? TargetPart->InstanceId : FGuid();
+	const FBattleEnemyPartKey SelectedPartKey =
+		TargetPart ? TargetPart->Identity.ToEnemyPartKey() : FBattleEnemyPartKey();
 	const FGuid SelectedHandCardId = TargetCard ? TargetCard->InstanceId : FGuid();
 
 	// ================ 4. 打牌事件 ================
@@ -243,6 +212,7 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		Ev.Type            = EBattleEventType::CardPlayed;
 		Ev.CardInstanceId  = CardId;
 		Ev.ActorInstanceId = SelectedPartId;
+		Ev.ActorEnemyPartKey = SelectedPartKey;
 		Ev.Amount          = RuntimeCost;
 		Events.Emit(Ev);
 	}
@@ -263,6 +233,7 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::InitiativeHit;
 		Ev.ActorInstanceId = HitId;
+		Ev.ActorEnemyPartKey = FBattleRules::FindEnemyPartKey(State, HitId);
 		Ev.CardInstanceId  = CardId;
 		Ev.Amount          = RuntimeCost;
 		Events.Emit(Ev);

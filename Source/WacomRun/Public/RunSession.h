@@ -663,7 +663,6 @@ public:
 	 *   - Params.EncounterId = TriggerPersistentId（为空时使用默认 Encounter）
 	 *   - **Params.PreDestroyedParts**：若 TriggerPersistentId 非空且 RunState.BattleProgress
 	 *     中有该 Trigger 的进度，灌入已破坏的完整部位身份。
-	 *     旧 DestroyedPartIds 进度会转换到默认 Enemy 槽作为兼容。
 	 *
 	 * RunSession 不读取、不接收、不写入敌人定义。调用方（当前为 GameMode / BattleTrigger）
 	 * 负责把 EncounterDefinition 转成 Params.EnemySlots。

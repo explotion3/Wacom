@@ -71,11 +71,11 @@ tags:
 | [`WacomWorldInteraction.md`](WacomWorldInteraction.md) | 世界交互和目标系统，包括 Run world interactable Actor、Battle scene target、Run menu zone target、debug / authoring / validation 约定。 |
 | [`WacomUI.md`](WacomUI.md) | UI 表现层总入口，包括 UI 原则、ownership、测试访问原则、Run UI 摘要、卡牌展示和 WBP 文档分工。 |
 | [`WacomUIFoundation.md`](WacomUIFoundation.md) | CommonUI shell、PrimaryLayout、UI Settings、Widget registry、Modal / MainMenu、Run MVVM 和 AppToast 例外路径。 |
-| [`WacomBattleUI.md`](WacomBattleUI.md) | BattleHUD、命令出口、targeting、presentation flow、Combat Log、Presentation Stack、legacy / fallback Battle UI。 |
+| [`WacomBattleUI.md`](WacomBattleUI.md) | BattleHUD、命令出口、targeting、presentation flow、Combat Log、Presentation Stack 和当前 Battle UI surface。 |
 | [`First_Person_Card_Layer_Design.md`](First_Person_Card_Layer_Design.md) | 第一人称卡牌层 authoring / runtime contract，包括 Battle / Run source、hover / drag / drop 和 WBP_FirstPersonCardView。 |
 | [`Run_Tunnel_Exploration_Spike_V0.md`](Run_Tunnel_Exploration_Spike_V0.md) / [`Run_Tunnel_Presentation_Discussion.md`](Run_Tunnel_Presentation_Discussion.md) | Run Tunnel archived historical background；只用于理解历史 Spike / 表现讨论，当前 movement / input / Run 规则 / world interaction / first-person hand 事实分别看 `WacomApp.md`、`WacomRun.md`、`WacomWorldInteraction.md` 和 `First_Person_Card_Layer_Design.md`。 |
 | [`UI_Backpack_WBP_Binding.md`](UI_Backpack_WBP_Binding.md) | 背包、卡牌详情、卡牌显示等 WBP 的绑定槽位和制作约束。 |
-| [`UI_Battle_WBP_Binding.md`](UI_Battle_WBP_Binding.md) | BattleHUD、first-person card view、Combat Log、Presentation Stack、shared widgets、legacy / fallback Battle UI 的 WBP 绑定协议。 |
+| [`UI_Battle_WBP_Binding.md`](UI_Battle_WBP_Binding.md) | BattleHUD、first-person card view、Combat Log、Presentation Stack、shared widgets 和当前 Battle UI 的 WBP 绑定协议。 |
 | [`UI_RunEvent_WBP_Binding.md`](UI_RunEvent_WBP_Binding.md) | RunEventScreen、ChoiceButton、PaymentDropTarget 的 WBP 绑定槽位、制作边界和 PIE smoke 检查。 |
 | [`TODO.md`](TODO.md) | 短期任务索引，只保留优先级、归属和跳转，不承载长说明。 |
 | [`Roadmap.md`](Roadmap.md) | 未实现功能、后续方向和前置依赖索引；不承载当前实现事实。 |

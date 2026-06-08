@@ -225,9 +225,11 @@ public:
 		StoreFirstPersonCardTransitionEvents(Events);
 	}
 
-	void RecordFirstPersonPlayCommitForTest(const FGuid& CardInstanceId, const FGuid& TargetPartInstanceId = FGuid())
+	void RecordFirstPersonPlayCommitForTest(
+		const FGuid& CardInstanceId,
+		const FBattlePartSlotIdentity& TargetPartKey = FBattlePartSlotIdentity())
 	{
-		RecordFirstPersonPlayCommit(CardInstanceId, TargetPartInstanceId);
+		RecordFirstPersonPlayCommit(CardInstanceId, TargetPartKey);
 	}
 
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForTest(
@@ -560,15 +562,15 @@ public:
 
 	void PlayBattlePresentationCueForTest(
 		EBattleEventType SourceEventType,
-		const FGuid& TargetPartInstanceId,
+		const FBattlePartSlotIdentity& TargetPartKey,
 		int32 Amount)
 	{
-		UBattleHUD::PlayBattlePresentationCueForTest(SourceEventType, TargetPartInstanceId, Amount);
+		UBattleHUD::PlayBattlePresentationCueForTest(SourceEventType, TargetPartKey, Amount);
 	}
 
-	void PlayTargetConfirmedCueForTest(const FGuid& TargetPartInstanceId)
+	void PlayTargetConfirmedCueForTest(const FBattlePartSlotIdentity& TargetPartKey)
 	{
-		UBattleHUD::PlayTargetConfirmedCueForTest(TargetPartInstanceId);
+		UBattleHUD::PlayTargetConfirmedCueForTest(TargetPartKey);
 	}
 
 	int32 GetBattlePresentationTargetCountForTest() const

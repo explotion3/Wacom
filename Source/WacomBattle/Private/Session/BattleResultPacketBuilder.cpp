@@ -17,7 +17,11 @@ FBattleResultPacket FBattleResultPacketBuilder::Build(const FBattleState& State)
 	Packet.KnockdownChoices        = State.PendingKnockdownChoices;
 	Packet.GainedCards             = State.PendingGainedCards;
 	Packet.DestroyedParts          = State.DestroyedParts;
-	Packet.DestroyedPartIds        = State.DestroyedPartIds;
+	Packet.DestroyedPartKeys.Reserve(State.DestroyedParts.Num());
+	for (const FBattlePartSlotIdentity& Identity : State.DestroyedParts)
+	{
+		Packet.DestroyedPartKeys.AddUnique(Identity.ToEnemyPartKey());
+	}
 
 	Packet.EnemyResults.Reserve(State.Enemy.EnemySlots.Num());
 	for (const FEnemySlotState& EnemySlot : State.Enemy.EnemySlots)
@@ -37,6 +41,7 @@ FBattleResultPacket FBattleResultPacketBuilder::Build(const FBattleState& State)
 			if (Part.bDestroyed)
 			{
 				EnemyResult.DestroyedParts.AddUnique(Part.Identity);
+				EnemyResult.DestroyedPartKeys.AddUnique(Part.Identity.ToEnemyPartKey());
 			}
 		}
 		Packet.EnemyResults.Add(MoveTemp(EnemyResult));

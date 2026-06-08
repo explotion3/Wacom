@@ -14,6 +14,7 @@ FBattleCardGrantResult FBattleCardGrantService::GrantCardToHand(
 	FBattleEventBus& Events,
 	UCardDefinition* CardDefinition,
 	const FGuid& SourcePartInstanceId,
+	const FBattleEnemyPartKey& SourcePartKey,
 	EKnockdownChoice SourceChoice)
 {
 	FBattleCardGrantResult Result;
@@ -44,6 +45,7 @@ FBattleCardGrantResult FBattleCardGrantService::GrantCardToHand(
 		FBattleEvent Ev;
 		Ev.Type = EBattleEventType::CardGained;
 		Ev.ActorInstanceId = SourcePartInstanceId;
+		Ev.ActorEnemyPartKey = SourcePartKey;
 		Ev.CardInstanceId = Result.GrantedCardInstanceId;
 		Ev.CardDefinition = CardDefinition;
 		Ev.Count = static_cast<int32>(SourceChoice);

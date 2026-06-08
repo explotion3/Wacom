@@ -7,6 +7,7 @@
 #include "Cards/CardZoneHook.h"
 #include "Characters/CharacterDefinition.h"
 #include "Encounters/EncounterDefinition.h"
+#include "Enemies/EnemyBehaviorDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
@@ -18,6 +19,7 @@
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "Validation/CardDefinitionValidation.h"
 #include "Validation/CharacterDefinitionValidation.h"
+#include "Validation/EnemyBehaviorDefinitionValidation.h"
 #include "Validation/EnemyDefinitionValidation.h"
 #include "Validation/EnemyPartDefinitionValidation.h"
 #include "Validation/EncounterDefinitionValidation.h"
@@ -62,7 +64,6 @@ namespace
 		Part->PartId = PartId;
 		Part->DisplayName = FText::FromName(PartId);
 		Part->MaxHp = 10;
-		Part->InitialIntentIndex = 0;
 		Part->ExperienceReward = 1;
 		return Part;
 	}
@@ -74,6 +75,7 @@ namespace
 		Enemy->DisplayName = FText::FromString(TEXT("校验敌人"));
 
 		FEnemyPartSlot Slot;
+		Slot.PartSlotId = TEXT("Core");
 		Slot.PartDef = MakeValidEnemyPartForValidation(Enemy);
 		Enemy->Parts = { Slot };
 		return Enemy;
@@ -118,6 +120,14 @@ namespace
 		return FWacomEnemyDefinitionValidation::Validate(Enemy, OutErrors);
 	}
 
+	bool ValidateEnemyBehaviorForTest(
+		const UEnemyBehaviorDefinition* Behavior,
+		TArray<FText>& OutErrors,
+		const UEnemyDefinition* Enemy = nullptr)
+	{
+		return FWacomEnemyBehaviorDefinitionValidation::Validate(Behavior, OutErrors, Enemy);
+	}
+
 	bool ValidateCharacterForTest(const UCharacterDefinition* Character, TArray<FText>& OutErrors)
 	{
 		return FWacomCharacterDefinitionValidation::Validate(Character, OutErrors);
@@ -140,19 +150,47 @@ namespace
 		return false;
 	}
 
-	bool HasIntentEffect(
-		const UEnemyPartDefinition* Part,
+	const FWacomEnemyIntentSetDefinition* FindIntentSet(
+		const UEnemyBehaviorDefinition* Behavior,
+		FName PhaseId,
+		FName IntentSetId)
+	{
+		if (!Behavior)
+		{
+			return nullptr;
+		}
+
+		for (const FWacomEnemyPhaseDefinition& Phase : Behavior->Phases)
+		{
+			if (Phase.PhaseId != PhaseId)
+			{
+				continue;
+			}
+
+			for (const FWacomEnemyIntentSetDefinition& IntentSet : Phase.IntentSets)
+			{
+				if (IntentSet.IntentSetId == IntentSetId)
+				{
+					return &IntentSet;
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	bool HasBehaviorIntentEffect(
+		const FWacomEnemyIntentSetDefinition* IntentSet,
 		const FGameplayTag& EffectType,
 		const FGameplayTag& Target)
 	{
-		if (!Part)
+		if (!IntentSet)
 		{
 			return false;
 		}
 
-		for (const FIntentDefinition& Intent : Part->IntentSequence)
+		for (const FWacomEnemyBehaviorIntent& IntentEntry : IntentSet->Intents)
 		{
-			for (const FIntentEffect& Effect : Intent.Effects)
+			for (const FIntentEffect& Effect : IntentEntry.Intent.Effects)
 			{
 				if (Effect.EffectType == EffectType && Effect.Target == Target)
 				{
@@ -457,7 +495,7 @@ bool FWacomDataEnemyPartValidationValidSpec::RunTest(const FString& /*Parameters
 {
 	TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
 	TArray<FText> Errors;
-	TestTrue(TEXT("Valid EnemyPartDefinition with empty IntentSequence passes validation"), ValidateEnemyPartForTest(Part.Get(), Errors));
+	TestTrue(TEXT("Valid EnemyPartDefinition static data passes validation"), ValidateEnemyPartForTest(Part.Get(), Errors));
 	TestEqual(TEXT("No validation errors"), Errors.Num(), 0);
 	return true;
 }
@@ -487,142 +525,10 @@ bool FWacomDataEnemyPartValidationRequiredFieldsSpec::RunTest(const FString& /*P
 
 	{
 		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		Part->InitialIntentIndex = -1;
-		TArray<FText> Errors;
-		TestFalse(TEXT("Negative InitialIntentIndex fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Negative InitialIntentIndex has error"), Errors.Num() > 0);
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		Part->IntentSequence = { MakeValidIntentDefinition() };
-		Part->InitialIntentIndex = 1;
-		TArray<FText> Errors;
-		TestFalse(TEXT("InitialIntentIndex out of bounds fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("InitialIntentIndex out of bounds has error"), Errors.Num() > 0);
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
 		Part->ExperienceReward = -1;
 		TArray<FText> Errors;
 		TestFalse(TEXT("Negative ExperienceReward fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
 		TestTrue(TEXT("Negative ExperienceReward has error"), Errors.Num() > 0);
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.IntentId = NAME_None;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Missing IntentId fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Missing IntentId has error"), Errors.Num() > 0);
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].EffectType = FGameplayTag();
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Invalid IntentEffect EffectType fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Invalid IntentEffect EffectType has error"), Errors.Num() > 0);
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].Magnitude = -1;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Negative IntentEffect Magnitude fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Negative IntentEffect Magnitude has error"), Errors.Num() > 0);
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].Duration = -1;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Negative IntentEffect Duration fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Negative IntentEffect Duration has error"), Errors.Num() > 0);
-	}
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomDataEnemyPartValidationIntentRuleContentContractSpec,
-	"Wacom.Data.EnemyPart.Validation.IntentRuleContentContract",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomDataEnemyPartValidationIntentRuleContentContractSpec::RunTest(const FString& /*Parameters*/)
-{
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].EffectType = WacomTags::Effect_Card_AddCost;
-		Intent.Effects[0].Target = WacomTags::Target_SelectedHandCard;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Card-only effect in enemy intent fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Enemy intent unsupported effect reported"), ErrorsContain(Errors, TEXT("未支持")));
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].Target = WacomTags::Target_SingleEnemyPart;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Enemy intent cannot target enemy part"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Enemy intent target issue reported"), ErrorsContain(Errors, TEXT("Target")));
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].EffectType = WacomTags::Status_Shield;
-		Intent.Effects[0].Magnitude = 4;
-		Intent.Effects[0].Target = WacomTags::Target_Player;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Enemy intent shield cannot target player"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Enemy player shield target issue reported"), ErrorsContain(Errors, TEXT("Target")));
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].Target = WacomTags::Target_Self;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Enemy intent damage cannot target self"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Enemy self damage target issue reported"), ErrorsContain(Errors, TEXT("Target")));
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].EffectType = WacomTags::Status_Shield;
-		Intent.Effects[0].Magnitude = 4;
-		Intent.Effects[0].Target = WacomTags::Target_Self;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestTrue(TEXT("Enemy intent self shield passes"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestEqual(TEXT("No enemy self shield errors"), Errors.Num(), 0);
-	}
-
-	{
-		TStrongObjectPtr<UEnemyPartDefinition> Part(MakeValidEnemyPartForValidation(GetTransientPackage()));
-		FIntentDefinition Intent = MakeValidIntentDefinition();
-		Intent.Effects[0].Magnitude = 0;
-		Part->IntentSequence = { Intent };
-		TArray<FText> Errors;
-		TestFalse(TEXT("Enemy intent positive effect magnitude must be positive"), ValidateEnemyPartForTest(Part.Get(), Errors));
-		TestTrue(TEXT("Enemy intent magnitude issue reported"), ErrorsContain(Errors, TEXT("Magnitude")));
 	}
 
 	return true;
@@ -781,6 +687,7 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 {
 	UCharacterDefinition* BugGirl = FWacomGeneratedBattleContentAssets::LoadBugGirl(*this);
 	UEnemyDefinition* Snake = FWacomGeneratedBattleContentAssets::LoadSnake(*this);
+	UEnemyBehaviorDefinition* SnakeBehavior = FWacomGeneratedBattleContentAssets::LoadSnakeBehavior(*this);
 	UEnemyPartDefinition* SnakeHead = FWacomGeneratedBattleContentAssets::LoadSnakeHead(*this);
 	UEnemyPartDefinition* SnakeBody = FWacomGeneratedBattleContentAssets::LoadSnakeBody(*this);
 	UEnemyPartDefinition* SnakeTail = FWacomGeneratedBattleContentAssets::LoadSnakeTail(*this);
@@ -790,6 +697,7 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	bool bAllAssetsLoaded = true;
 	bAllAssetsLoaded &= TestNotNull(TEXT("BugGirl character asset loads"), BugGirl);
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake enemy asset loads"), Snake);
+	bAllAssetsLoaded &= TestNotNull(TEXT("Snake behavior asset loads"), SnakeBehavior);
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake head part asset loads"), SnakeHead);
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake body part asset loads"), SnakeBody);
 	bAllAssetsLoaded &= TestNotNull(TEXT("Snake tail part asset loads"), SnakeTail);
@@ -826,10 +734,21 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 	TestEqual(TEXT("Snake enemy validation errors"), Errors.Num(), 0);
 	if (Snake && Snake->Parts.Num() == 3)
 	{
+		TestTrue(TEXT("Snake references generated behavior"),
+			Snake->DefaultBehavior.Get() == SnakeBehavior);
+		TestEqual(TEXT("Snake default phase"), Snake->DefaultPhaseId, FName(TEXT("Default")));
 		TestEqual(TEXT("Snake head slot id"), Snake->Parts[0].PartSlotId, FName(TEXT("Head")));
 		TestEqual(TEXT("Snake body slot id"), Snake->Parts[1].PartSlotId, FName(TEXT("Body")));
 		TestEqual(TEXT("Snake tail slot id"), Snake->Parts[2].PartSlotId, FName(TEXT("Tail")));
+		TestEqual(TEXT("Snake head intent set"), Snake->Parts[0].InitialIntentSetId, FName(TEXT("Snake.Head.Sequence")));
+		TestEqual(TEXT("Snake body intent set"), Snake->Parts[1].InitialIntentSetId, FName(TEXT("Snake.Body.Sequence")));
+		TestEqual(TEXT("Snake tail intent set"), Snake->Parts[2].InitialIntentSetId, FName(TEXT("Snake.Tail.Sequence")));
 	}
+
+	Errors.Reset();
+	TestTrue(TEXT("Snake behavior asset passes validation"),
+		ValidateEnemyBehaviorForTest(SnakeBehavior, Errors, Snake));
+	TestEqual(TEXT("Snake behavior validation errors"), Errors.Num(), 0);
 
 	Errors.Reset();
 	TestTrue(TEXT("Snake head asset passes validation"), ValidateEnemyPartForTest(SnakeHead, Errors));
@@ -1035,28 +954,47 @@ bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /
 	UEnemyPartDefinition* SnakeHead = FWacomGeneratedBattleContentAssets::LoadSnakeHead(*this);
 	UEnemyPartDefinition* SnakeBody = FWacomGeneratedBattleContentAssets::LoadSnakeBody(*this);
 	UEnemyPartDefinition* SnakeTail = FWacomGeneratedBattleContentAssets::LoadSnakeTail(*this);
+	UEnemyBehaviorDefinition* SnakeBehavior = FWacomGeneratedBattleContentAssets::LoadSnakeBehavior(*this);
 	if (!TestNotNull(TEXT("SnakeHead loads"), SnakeHead)
 		|| !TestNotNull(TEXT("SnakeBody loads"), SnakeBody)
-		|| !TestNotNull(TEXT("SnakeTail loads"), SnakeTail))
+		|| !TestNotNull(TEXT("SnakeTail loads"), SnakeTail)
+		|| !TestNotNull(TEXT("Snake behavior loads"), SnakeBehavior))
 	{
 		return false;
 	}
 
-	TestEqual(TEXT("Snake head intent count"), SnakeHead->IntentSequence.Num(), 4);
-	TestEqual(TEXT("Snake body intent count"), SnakeBody->IntentSequence.Num(), 4);
-	TestEqual(TEXT("Snake tail intent count"), SnakeTail->IntentSequence.Num(), 5);
 	for (const UEnemyPartDefinition* Part : { SnakeHead, SnakeBody, SnakeTail })
 	{
 		Errors.Reset();
 		TestTrue(*FString::Printf(TEXT("%s passes validation"), *GetNameSafe(Part)), ValidateEnemyPartForTest(Part, Errors));
 		TestEqual(*FString::Printf(TEXT("%s validation errors"), *GetNameSafe(Part)), Errors.Num(), 0);
-		TestTrue(*FString::Printf(TEXT("%s has player damage intent"), *Part->PartId.ToString()),
-			HasIntentEffect(Part, WacomTags::Effect_Damage, WacomTags::Target_Player));
-		TestTrue(*FString::Printf(TEXT("%s has self shield intent"), *Part->PartId.ToString()),
-			HasIntentEffect(Part, WacomTags::Status_Shield, WacomTags::Target_Self));
-		TestTrue(*FString::Printf(TEXT("%s has player status intent"), *Part->PartId.ToString()),
-			HasIntentEffect(Part, WacomTags::Effect_ApplyStatus_Poison, WacomTags::Target_Player)
-			|| HasIntentEffect(Part, WacomTags::Effect_ApplyStatus_Slow, WacomTags::Target_Player));
+	}
+
+	const FWacomEnemyIntentSetDefinition* HeadIntentSet =
+		FindIntentSet(SnakeBehavior, TEXT("Default"), TEXT("Snake.Head.Sequence"));
+	const FWacomEnemyIntentSetDefinition* BodyIntentSet =
+		FindIntentSet(SnakeBehavior, TEXT("Default"), TEXT("Snake.Body.Sequence"));
+	const FWacomEnemyIntentSetDefinition* TailIntentSet =
+		FindIntentSet(SnakeBehavior, TEXT("Default"), TEXT("Snake.Tail.Sequence"));
+	if (!TestNotNull(TEXT("Snake head behavior intent set"), HeadIntentSet)
+		|| !TestNotNull(TEXT("Snake body behavior intent set"), BodyIntentSet)
+		|| !TestNotNull(TEXT("Snake tail behavior intent set"), TailIntentSet))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Snake head behavior intent count"), HeadIntentSet->Intents.Num(), 4);
+	TestEqual(TEXT("Snake body behavior intent count"), BodyIntentSet->Intents.Num(), 4);
+	TestEqual(TEXT("Snake tail behavior intent count"), TailIntentSet->Intents.Num(), 5);
+	for (const FWacomEnemyIntentSetDefinition* IntentSet : { HeadIntentSet, BodyIntentSet, TailIntentSet })
+	{
+		TestTrue(*FString::Printf(TEXT("%s has player damage intent"), *IntentSet->IntentSetId.ToString()),
+			HasBehaviorIntentEffect(IntentSet, WacomTags::Effect_Damage, WacomTags::Target_Player));
+		TestTrue(*FString::Printf(TEXT("%s has self shield intent"), *IntentSet->IntentSetId.ToString()),
+			HasBehaviorIntentEffect(IntentSet, WacomTags::Status_Shield, WacomTags::Target_Self));
+		TestTrue(*FString::Printf(TEXT("%s has player status intent"), *IntentSet->IntentSetId.ToString()),
+			HasBehaviorIntentEffect(IntentSet, WacomTags::Effect_ApplyStatus_Poison, WacomTags::Target_Player)
+			|| HasBehaviorIntentEffect(IntentSet, WacomTags::Effect_ApplyStatus_Slow, WacomTags::Target_Player));
 	}
 
 	return true;

@@ -4,10 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Enemies/IntentDefinition.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "Runtime/RuntimeStatus.h"
 #include "RuntimeEnemyPart.generated.h"
 
+class UEnemyBehaviorDefinition;
 class UEnemyPartDefinition;
 
 /**
@@ -30,11 +32,34 @@ struct WACOMBATTLE_API FRuntimeEnemyPart
 	FBattlePartSlotIdentity Identity;
 
 	UPROPERTY()
+	TObjectPtr<const UEnemyBehaviorDefinition> BehaviorDefinition = nullptr;
+
+	UPROPERTY()
+	FName CurrentPhaseId = NAME_None;
+
+	UPROPERTY()
+	FName PreferredIntentSetId = NAME_None;
+
+	UPROPERTY()
 	int32 CurrentHp = 0;
 
-	/** 当前意图在 Definition->IntentSequence 中的索引。 */
 	UPROPERTY()
-	int32 CurrentIntentIndex = 0;
+	FName CurrentIntentSetId = NAME_None;
+
+	UPROPERTY()
+	FName CurrentIntentId = NAME_None;
+
+	UPROPERTY()
+	FIntentDefinition CurrentIntent;
+
+	UPROPERTY()
+	int32 BehaviorSequenceCursor = 0;
+
+	UPROPERTY()
+	int32 BehaviorSelectionCounter = 0;
+
+	UPROPERTY()
+	TMap<FName, int32> IntentCooldownSelectionsRemaining;
 
 	/**
 	 * 当前先机。

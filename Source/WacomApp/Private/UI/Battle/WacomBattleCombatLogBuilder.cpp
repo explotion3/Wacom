@@ -49,27 +49,27 @@ namespace
 		return nullptr;
 	}
 
-	const FEnemyPartSnapshot* FindEnemyPart(const FBattleSnapshot& Snapshot, const FGuid& PartInstanceId)
+const FEnemyPartSnapshot* FindEnemyPart(const FBattleSnapshot& Snapshot, const FBattlePartSlotIdentity& PartKey)
+{
+	if (!PartKey.IsValidSlot())
 	{
-		if (!PartInstanceId.IsValid())
-		{
-			return nullptr;
-		}
+		return nullptr;
+	}
 
 		for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
 		{
 			for (const FEnemyPartSnapshot& Part : Enemy.Parts)
 			{
-				if (Part.InstanceId == PartInstanceId)
-				{
-					return &Part;
-				}
+			if (Part.Identity == PartKey)
+			{
+				return &Part;
+			}
 			}
 		}
-		return nullptr;
-	}
+	return nullptr;
+}
 
-	EWacomBattleEventVisualTone ToneForCommand(EWacomBattleCombatLogCommandKind CommandKind)
+EWacomBattleEventVisualTone ToneForCommand(EWacomBattleCombatLogCommandKind CommandKind)
 	{
 		switch (CommandKind)
 		{
@@ -222,18 +222,19 @@ FWacomBattleCombatLogCommandContext UWacomBattleCombatLogBuilder::BuildSystemCom
 FWacomBattleCombatLogCommandContext UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
 	const FBattleSnapshot& Snapshot,
 	const FGuid& CardInstanceId,
-	const FGuid& TargetPartInstanceId,
+	const FBattlePartSlotIdentity& TargetPartKey,
 	const FGuid& TargetCardInstanceId)
 {
 	FWacomBattleCombatLogCommandContext Context;
 	Context.CommandKind = EWacomBattleCombatLogCommandKind::PlayCard;
 	Context.TurnNumber = Snapshot.TurnNumber;
 	Context.CardInstanceId = CardInstanceId;
-	Context.TargetPartInstanceId = TargetPartInstanceId;
+	Context.TargetPartKey = TargetPartKey;
 	Context.TargetCardInstanceId = TargetCardInstanceId;
 	Context.CardName = MakeCardName(FindHandCard(Snapshot, CardInstanceId));
 
-	if (const FEnemyPartSnapshot* TargetPart = FindEnemyPart(Snapshot, TargetPartInstanceId))
+	const FEnemyPartSnapshot* TargetPart = FindEnemyPart(Snapshot, TargetPartKey);
+	if (TargetPart)
 	{
 		Context.TargetName = MakePartName(TargetPart);
 	}

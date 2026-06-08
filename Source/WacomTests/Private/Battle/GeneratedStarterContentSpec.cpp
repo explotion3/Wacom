@@ -182,7 +182,7 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		const int32 HeadHpBefore = HeadBefore->CurrentHp;
 		TestTrue(TEXT("PoisonNeedle is in hand"), CardId.IsValid());
 		TestTrue(TEXT("Play PoisonNeedle without poison"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId, HeadInstanceId)).IsOk());
+			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, HeadBefore->PartKey)).IsOk());
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* HeadAfter = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
@@ -305,7 +305,7 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		FGuid FuxiaoId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, FuxiaoFeie->CardId);
 		TestTrue(TEXT("FuxiaoFeie is in hand"), FuxiaoId.IsValid());
 		TestTrue(TEXT("Play FuxiaoFeie to apply Slow"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(FuxiaoId, BodyBefore->InstanceId)).IsOk());
+			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(FuxiaoId, BodyBefore->PartKey)).IsOk());
 		Session->ConsumeEvents();
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* BodyAfterSlow = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body"));
@@ -321,7 +321,7 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		const FGuid MoltCutId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, MoltCut->CardId);
 		TestTrue(TEXT("MoltCut is in hand"), MoltCutId.IsValid());
 		TestTrue(TEXT("Play MoltCut"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(MoltCutId, BodyAfterSlow->InstanceId)).IsOk());
+			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(MoltCutId, BodyAfterSlow->PartKey)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* BodyAfterMolt = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body"));
 		if (!TestNotNull(TEXT("Snake.Body exists after MoltCut"), BodyAfterMolt))
@@ -400,7 +400,7 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 		FGuid PoisonFangId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonFang->CardId);
 		TestTrue(TEXT("PoisonFang is in hand"), PoisonFangId.IsValid());
 		TestTrue(TEXT("Play PoisonFang"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(PoisonFangId, Head->InstanceId)).IsOk());
+			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonFangId, Head->PartKey)).IsOk());
 		Session->ConsumeEvents();
 		Snapshot = Session->BuildSnapshot();
 		Head = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
@@ -417,7 +417,7 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 		const FGuid PoisonNeedleId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonNeedle->CardId);
 		TestTrue(TEXT("PoisonNeedle is in hand after PoisonFang"), PoisonNeedleId.IsValid());
 		TestTrue(TEXT("Play PoisonNeedle against poisoned target"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(PoisonNeedleId, Head->InstanceId)).IsOk());
+			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonNeedleId, Head->PartKey)).IsOk());
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 		Snapshot = Session->BuildSnapshot();
 		Head = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
@@ -499,7 +499,7 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 			TailInitiativeBefore,
 			1);
 		TestTrue(TEXT("Play left-zone SilklineFeint on Tail"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TailInstanceId)).IsOk());
+			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, TailBefore->PartKey)).IsOk());
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* TailAfter = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Tail"));

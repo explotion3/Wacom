@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Components/WacomInteractionTargetComponent.h"
+#include "Tags/WacomGameplayTags.h"
 #include "Types/WacomInteractionTargetTypes.h"
 
 #include "GameFramework/Actor.h"
@@ -178,6 +179,25 @@ bool FWacomUIInteractionTargetComponentSpec::RunTest(const FString& /*Parameters
 	{
 		FWacomInteractionTargetHandle Handle = Component->BuildWorldTargetHandle();
 		TestFalse(TEXT("Empty TargetId returns invalid handle"), Handle.IsValid());
+	}
+
+	{
+		Component->SetInteractionTargetTag(WacomTags::Interaction_Target_Battle_EnemyPart);
+		Component->SetStableTargetId(TEXT("Test.Part.Core"));
+		Component->SetBattlePartSlotIdentity(TEXT("Encounter.Component"), TEXT("Enemy.Right"), TEXT("Core"));
+		FWacomInteractionTargetHandle Handle = Component->BuildWorldTargetHandle();
+		TestTrue(TEXT("Battle enemy part key-only target returns valid handle"), Handle.IsValid());
+		TestFalse(TEXT("Battle enemy part key-only handle keeps empty runtime world id"),
+			Handle.WorldTargetId.IsValid());
+		TestTrue(TEXT("Battle enemy part key-only handle reports complete key"),
+			Handle.HasBattlePartSlotIdentity());
+		TestTrue(TEXT("Battle enemy part key-only target tag"),
+			Handle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart));
+
+		Component->SetBattlePartSlotIdentity(NAME_None, NAME_None, NAME_None);
+		Handle = Component->BuildWorldTargetHandle();
+		TestFalse(TEXT("Battle enemy part without TargetId and without complete key is invalid"),
+			Handle.IsValid());
 	}
 
 	{

@@ -55,11 +55,13 @@ bool FWacomBattleCostLegalitySpec::RunTest(const FString& /*Parameters*/)
 	}
 
 	// 提交 PlayCard 应被拒绝
-	const FWacomStatus StExp = S->SubmitCommand(FBattleCommand::MakePlayCard(ExpId, TargetPart));
+	const FWacomStatus StExp = S->SubmitCommand(
+		FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, ExpId, TargetPart));
 	TestEqual(TEXT("Expensive rejected code"), (int32)StExp.Code, (int32)EWacomError::NotEnoughInitiative);
 
 	// 提交可支付的
-	const FWacomStatus StAff = S->SubmitCommand(FBattleCommand::MakePlayCard(AffId, TargetPart));
+	const FWacomStatus StAff = S->SubmitCommand(
+		FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, AffId, TargetPart));
 	TestTrue(TEXT("Affordable accepted"), StAff.IsOk());
 	return true;
 }

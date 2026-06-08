@@ -603,6 +603,7 @@ namespace WacomFirstPersonCardLayerSpec
 
 			Result.Parts.Add(PartActor);
 			PartActor->PartId = PartIds[Index];
+			PartActor->PartSlotId = PartIds[Index];
 			PartActor->AttachToActor(Result.Host, FAttachmentTransformRules::KeepWorldTransform);
 		}
 
@@ -12286,7 +12287,7 @@ bool FWacomFirstPersonDropIntentUIBlockedTest::RunTest(const FString& Parameters
 	FBattleEvent Event;
 	Event.Type = EBattleEventType::DamageDealt;
 	Event.Sequence = 1;
-	Event.ActorInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	Event.ActorEnemyPartKey = FWacomBattleFixture::FindPartKey(Snapshot, 0);
 	Event.Amount = 1;
 	HUD->EnqueueBattlePresentationEventsForTest({ Event });
 	World->GetTimerManager().Tick(0.01f);

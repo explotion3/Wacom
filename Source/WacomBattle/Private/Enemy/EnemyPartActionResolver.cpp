@@ -4,6 +4,7 @@
 
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
+#include "Enemy/EnemyIntentSelector.h"
 #include "Effects/EffectContext.h"
 #include "Effects/EffectExecutor.h"
 #include "Events/BattleEventBus.h"
@@ -51,22 +52,6 @@ namespace
 	}
 
 	/**
-	 * 行动后刷新：下一条意图 + 重置 CurrentInitiative = 新意图的 Initiative。
-	 *
-	 * 未破坏部位才刷新。已破坏部位保持 CurrentIntentIndex / CurrentInitiative = 0 的终态。
-	 */
-	void AdvanceToNextIntent(FRuntimeEnemyPart& Part)
-	{
-		if (Part.bDestroyed || !Part.Definition) { return; }
-
-		const TArray<FIntentDefinition>& Seq = Part.Definition->IntentSequence;
-		if (Seq.IsEmpty()) { return; }
-
-		Part.CurrentIntentIndex = (Part.CurrentIntentIndex + 1) % Seq.Num();
-		Part.CurrentInitiative  = Seq[Part.CurrentIntentIndex].Initiative;
-	}
-
-	/**
 	 * 晕厥消耗。晕厥处理后仍刷新意图。当前把 Stunned / Freeze 都按
 	 * "每次行动消耗一层"处理，层数归零时移除该状态。
 	 */
@@ -103,13 +88,12 @@ namespace
 		{
 			return;
 		}
-		const TArray<FIntentDefinition>& Seq = Part.Definition->IntentSequence;
-		if (!Seq.IsValidIndex(Part.CurrentIntentIndex))
+		if (Part.CurrentIntentId.IsNone())
 		{
 			return;
 		}
 
-		const FIntentDefinition& Intent = Seq[Part.CurrentIntentIndex];
+		const FIntentDefinition Intent = Part.CurrentIntent;
 		const bool bSkip = IsStunnedOrFrozen(Part);
 
 		// 事件只记录行动部位和是否跳过；意图展示名由 Snapshot 提供给 UI。
@@ -117,6 +101,10 @@ namespace
 			FBattleEvent Ev;
 			Ev.Type            = EBattleEventType::EnemyPartActed;
 			Ev.ActorInstanceId = Part.InstanceId;
+			Ev.ActorEnemyPartKey = Part.Identity.ToEnemyPartKey();
+			Ev.IntentId        = Part.CurrentIntentId;
+			Ev.IntentSetId     = Part.CurrentIntentSetId;
+			Ev.EnemyPhaseId    = Part.CurrentPhaseId;
 			Ev.Count           = bSkip ? 0 : 1;
 			Events.Emit(Ev);
 		}
@@ -152,7 +140,7 @@ namespace
 		}
 
 		// 无论是否跳过，行动结算后都刷新意图。
-		AdvanceToNextIntent(Part);
+		FEnemyIntentSelector::RefreshIntentForPart(State, Part, /*bAdvanceSequence*/true, &Events);
 
 		// 敌方部位每行动一次后，对双方中毒结算一次。
 		// 放在意图刷新之后：即使此次行动本部位被中毒打死，AdvanceToNextIntent 内部已对

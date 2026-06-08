@@ -117,7 +117,10 @@ bool FWacomBattleSessionPreDestroyedPartsDoNotRequestKnockdownSpec::RunTest(cons
 	EnemySlot.EnemySlotId = TEXT("Enemy");
 	EnemySlot.Enemy = Enemy;
 	Params.EnemySlots.Add(EnemySlot);
-	Params.PreDestroyedPartIds.Add(FName(TEXT("Test.Part.Head")));
+	Params.PreDestroyedParts.Add(FBattlePartSlotIdentity::Make(
+		TEXT("Encounter"),
+		TEXT("Enemy"),
+		TEXT("Test.Part.Head")));
 
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
 	const FWacomStatus Status = Session->Initialize(Params);
@@ -144,7 +147,10 @@ bool FWacomBattleSessionPreDestroyedPartsDoNotRequestKnockdownSpec::RunTest(cons
 
 	const FBattleResultPacket Packet = Session->BuildResultPacket();
 	TestTrue(TEXT("Result packet records pre-destroyed Head"),
-		Packet.DestroyedPartIds.Contains(FName(TEXT("Test.Part.Head"))));
+		Packet.DestroyedParts.Contains(FBattlePartSlotIdentity::Make(
+			TEXT("Encounter"),
+			TEXT("Enemy"),
+			TEXT("Test.Part.Head"))));
 
 	return true;
 }
@@ -175,7 +181,8 @@ bool FWacomBattleKnockdownRequestFlowSingleInitialRequestSpec::RunTest(const FSt
 		return false;
 	}
 
-	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, HeadId));
+	const FWacomStatus Status = Session->SubmitCommand(
+		FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, KillerId, HeadId));
 	TestTrue(TEXT("Killer play succeeds"), Status.IsOk());
 
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
@@ -213,7 +220,7 @@ bool FWacomBattleResultPacketWithdrawnDerivedFromChoicesSpec::RunTest(const FStr
 	}
 
 	TestTrue(TEXT("Killer play succeeds"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(KillerId, HeadId)).IsOk());
+		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, KillerId, HeadId)).IsOk());
 	TestTrue(TEXT("Withdraw choice succeeds"),
 		Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw)).IsOk());
 

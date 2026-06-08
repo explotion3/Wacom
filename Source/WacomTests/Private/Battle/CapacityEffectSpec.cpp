@@ -572,7 +572,8 @@ bool FWacomBattleCapacityEffectWeaponDamagePlus3Spec::RunTest(const FString& /*P
 	TestTrue(TEXT("Weapon card in hand"), CardId.IsValid());
 	TestTrue(TEXT("Target valid"), TargetId.IsValid());
 
-	TestTrue(TEXT("Play weapon"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TargetId)).IsOk());
+	TestTrue(TEXT("Play weapon"),
+		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPart(Before, CardId, 0)).IsOk());
 	const FBattleSnapshot After = Session->BuildSnapshot();
 	TestEqual(TEXT("Damage 4 + WeaponDamagePlus3 = 7"),
 		FWacomBattleFixture::FindPartHp(After, 0), 13);
@@ -600,7 +601,8 @@ bool FWacomBattleCapacityEffectNonWeaponNoBonusSpec::RunTest(const FString& /*Pa
 	TestTrue(TEXT("Non-weapon card in hand"), CardId.IsValid());
 	TestTrue(TEXT("Target valid"), TargetId.IsValid());
 
-	TestTrue(TEXT("Play non-weapon"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TargetId)).IsOk());
+	TestTrue(TEXT("Play non-weapon"),
+		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPart(Before, CardId, 0)).IsOk());
 	const FBattleSnapshot After = Session->BuildSnapshot();
 	TestEqual(TEXT("Damage remains 4 without Weapon keyword"),
 		FWacomBattleFixture::FindPartHp(After, 0), 16);
@@ -630,7 +632,8 @@ bool FWacomBattleCapacityEffectWeaponWithoutTagNoBonusSpec::RunTest(const FStrin
 	TestTrue(TEXT("Weapon card in hand"), CardId.IsValid());
 	TestTrue(TEXT("Target valid"), TargetId.IsValid());
 
-	TestTrue(TEXT("Play weapon without capacity tag"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId, TargetId)).IsOk());
+	TestTrue(TEXT("Play weapon without capacity tag"),
+		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPart(Before, CardId, 0)).IsOk());
 	const FBattleSnapshot After = Session->BuildSnapshot();
 	TestEqual(TEXT("Damage remains 4 without WeaponDamagePlus3 tag"),
 		FWacomBattleFixture::FindPartHp(After, 0), 16);

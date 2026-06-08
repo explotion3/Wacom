@@ -7,6 +7,7 @@
 class FAutomationTestBase;
 class UCardDefinition;
 class UCharacterDefinition;
+class UEnemyBehaviorDefinition;
 class UEnemyDefinition;
 class UEnemyPartDefinition;
 class UEncounterDefinition;
@@ -58,6 +59,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static const TCHAR* LightHuskPath();
 	static const TCHAR* SilklineFeintPath();
 	static const TCHAR* SnakePath();
+	static const TCHAR* SnakeBehaviorPath();
 	static const TCHAR* SnakeHeadPath();
 	static const TCHAR* SnakeBodyPath();
 	static const TCHAR* SnakeTailPath();
@@ -103,6 +105,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static TArray<UCardDefinition*> LoadGeneratedDefinitionCards(FAutomationTestBase& Test);
 
 	static UEnemyDefinition* LoadSnake(FAutomationTestBase& Test);
+	static UEnemyBehaviorDefinition* LoadSnakeBehavior(FAutomationTestBase& Test);
 	static UEnemyPartDefinition* LoadEnemyPartByPath(const TCHAR* Path, FAutomationTestBase& Test);
 	static UEnemyPartDefinition* LoadSnakeHead(FAutomationTestBase& Test);
 	static UEnemyPartDefinition* LoadSnakeBody(FAutomationTestBase& Test);

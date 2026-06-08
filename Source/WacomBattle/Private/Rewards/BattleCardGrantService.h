@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Types/WacomEnums.h"
 
 class UCardDefinition;
@@ -27,5 +28,6 @@ struct FBattleCardGrantService
 		FBattleEventBus& Events,
 		UCardDefinition* CardDefinition,
 		const FGuid& SourcePartInstanceId,
+		const FBattleEnemyPartKey& SourcePartKey,
 		EKnockdownChoice SourceChoice);
 };

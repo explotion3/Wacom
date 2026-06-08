@@ -7,6 +7,7 @@
 #include "EnemyDefinition.generated.h"
 
 class UEnemyPartDefinition;
+class UEnemyBehaviorDefinition;
 
 /**
  * 敌人部位槽。
@@ -24,6 +25,14 @@ struct WACOMDATA_API FEnemyPartSlot
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy")
 	TObjectPtr<UEnemyPartDefinition> PartDef = nullptr;
+
+	/** 可选部位行为覆盖；为空时使用 EnemyDefinition.DefaultBehavior。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Behavior")
+	TObjectPtr<UEnemyBehaviorDefinition> BehaviorOverride = nullptr;
+
+	/** 可选初始 intent set；为空时按 PartSlotId 匹配。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Behavior")
+	FName InitialIntentSetId = NAME_None;
 };
 
 /** 敌人静态定义。 */
@@ -38,6 +47,13 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy")
 	FText DisplayName;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Behavior")
+	TObjectPtr<UEnemyBehaviorDefinition> DefaultBehavior = nullptr;
+
+	/** 可选初始 phase 覆盖；为空时使用 DefaultBehavior.InitialPhaseId。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Behavior")
+	FName DefaultPhaseId = NAME_None;
 
 	/** 部位顺序由 Parts 的数组顺序决定。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy")

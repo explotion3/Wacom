@@ -5,12 +5,14 @@
 #include "Core/BattleState.h"
 #include "Core/BattleTurnFlow.h"
 #include "Deck/DeckService.h"
+#include "Enemy/EnemyIntentSelector.h"
 #include "Events/BattleEventBus.h"
 #include "Session/BattleSession.h"
 
 #include "Cards/CardDefinition.h"
 #include "Cards/CardPhysique.h"
 #include "Characters/CharacterDefinition.h"
+#include "Enemies/EnemyBehaviorDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Runtime/RuntimeCardInstance.h"
@@ -66,8 +68,7 @@ namespace
 
 	bool IsPartPreDestroyed(
 		const FBattlePartSlotIdentity& Identity,
-		const TArray<FBattlePartSlotIdentity>& PreDestroyedParts,
-		const TArray<FName>& LegacyPreDestroyedPartIds)
+		const TArray<FBattlePartSlotIdentity>& PreDestroyedParts)
 	{
 		for (const FBattlePartSlotIdentity& PreDestroyedIdentity : PreDestroyedParts)
 		{
@@ -77,8 +78,7 @@ namespace
 			}
 		}
 
-		return Identity.GetEffectiveEnemySlotId() == FName(TEXT("Enemy"))
-			&& LegacyPreDestroyedPartIds.Contains(Identity.PartDefinitionId);
+		return false;
 	}
 }
 
@@ -202,14 +202,17 @@ FWacomStatus FBattleInitializer::Initialize(
 		RuntimeEnemySlot.EnemySlotId = EnemySlotId;
 		RuntimeEnemySlot.Definition = EnemySlotInput.Enemy;
 		ReferencedAssets.Add(EnemySlotInput.Enemy);
+		if (EnemySlotInput.Enemy->DefaultBehavior)
+		{
+			ReferencedAssets.Add(EnemySlotInput.Enemy->DefaultBehavior);
+		}
 
 		TSet<FName> UsedPartSlotIds;
 		for (const FEnemyPartSlot& Slot : EnemySlotInput.Enemy->Parts)
 		{
 			if (!Slot.PartDef) { continue; }
 
-			const FName PartDefinitionId = Slot.PartDef->PartId;
-			const FName PartSlotId = Slot.PartSlotId.IsNone() ? PartDefinitionId : Slot.PartSlotId;
+			const FName PartSlotId = Slot.PartSlotId;
 			if (PartSlotId.IsNone())
 			{
 				return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("MissingPartSlotId"));
@@ -223,28 +226,30 @@ FWacomStatus FBattleInitializer::Initialize(
 			FRuntimeEnemyPart Part;
 			Part.InstanceId         = FGuid::NewGuid();
 			Part.Definition         = Slot.PartDef;
-			Part.Identity           = FBattlePartSlotIdentity::Make(
-				EncounterId,
-				EnemySlotId,
-				PartSlotId,
-				PartDefinitionId);
+			Part.BehaviorDefinition = Slot.BehaviorOverride
+				? Slot.BehaviorOverride.Get()
+				: EnemySlotInput.Enemy->DefaultBehavior.Get();
+			Part.CurrentPhaseId = !EnemySlotInput.Enemy->DefaultPhaseId.IsNone()
+				? EnemySlotInput.Enemy->DefaultPhaseId
+				: (Part.BehaviorDefinition ? Part.BehaviorDefinition->InitialPhaseId : NAME_None);
+			Part.PreferredIntentSetId = Slot.InitialIntentSetId;
+		Part.Identity           = FBattlePartSlotIdentity::Make(
+			EncounterId,
+			EnemySlotId,
+			PartSlotId);
 			Part.CurrentHp          = Slot.PartDef->MaxHp;
-			Part.CurrentIntentIndex = Slot.PartDef->InitialIntentIndex;
-			// 从初始意图读取先机值。若 IntentSequence 为空，保持 0。
-			if (Slot.PartDef->IntentSequence.IsValidIndex(Part.CurrentIntentIndex))
-			{
-				Part.CurrentInitiative = Slot.PartDef->IntentSequence[Part.CurrentIntentIndex].Initiative;
-			}
-			else
-			{
-				Part.CurrentInitiative = 0;
-			}
 
 			const int32 NewIdx = State.Enemy.Parts.Add(Part);
 			State.Enemy.PartIndexById.Add(Part.InstanceId, NewIdx);
+			State.Enemy.PartIndexByKey.Add(Part.Identity.ToEnemyPartKey(), NewIdx);
 			RuntimeEnemySlot.PartInstanceIds.Add(Part.InstanceId);
 
 			ReferencedAssets.Add(Slot.PartDef);
+			if (Slot.BehaviorOverride)
+			{
+				ReferencedAssets.Add(Slot.BehaviorOverride);
+			}
+
 		}
 
 		State.Enemy.EnemySlots.Add(MoveTemp(RuntimeEnemySlot));
@@ -255,22 +260,26 @@ FWacomStatus FBattleInitializer::Initialize(
 		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoEnemy"));
 	}
 
+	for (FRuntimeEnemyPart& Part : State.Enemy.Parts)
+	{
+		FEnemyIntentSelector::RefreshIntentForPart(State, Part, /*bAdvanceSequence*/false);
+	}
+
 	// ---- 应用预先破坏部位（撤离重入）----
 	// 来自 RunSession.BattleProgress 的持久化破坏列表。
 	// 不发 EnemyPartHpEmptied 事件、不入 PendingKnockdownEvents、不发 KnockdownExpGain
 	// （已经在上一次撤离时处理过了，避免重复弹 dialog 和刷经验）。
-	// 但加进 DestroyedPartIds，让本场撤离/胜利时仍能完整持久化。
-	if (Params.PreDestroyedParts.Num() > 0 || Params.PreDestroyedPartIds.Num() > 0)
+	// 但加进 DestroyedParts，让本场撤离/胜利时仍能完整持久化。
+	if (Params.PreDestroyedParts.Num() > 0)
 	{
 		for (FRuntimeEnemyPart& P : State.Enemy.Parts)
 		{
 			if (!P.Definition) { continue; }
-			if (IsPartPreDestroyed(P.Identity, Params.PreDestroyedParts, Params.PreDestroyedPartIds))
+			if (IsPartPreDestroyed(P.Identity, Params.PreDestroyedParts))
 			{
 				P.bDestroyed        = true;
 				P.CurrentHp         = 0;
 				P.CurrentInitiative = 0;
-				State.DestroyedPartIds.AddUnique(P.Definition->PartId);
 				State.DestroyedParts.AddUnique(P.Identity);
 
 				UE_LOG(LogTemp, Display,
@@ -292,6 +301,37 @@ FWacomStatus FBattleInitializer::Initialize(
 		FBattleEvent StartEvent;
 		StartEvent.Type = EBattleEventType::BattleStarted;
 		EventBus.Emit(StartEvent);
+	}
+
+	for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
+	{
+		if (Part.bDestroyed)
+		{
+			continue;
+		}
+
+		if (!Part.CurrentPhaseId.IsNone())
+		{
+			FBattleEvent PhaseEvent;
+			PhaseEvent.Type = EBattleEventType::EnemyPhaseChanged;
+			PhaseEvent.ActorInstanceId = Part.InstanceId;
+			PhaseEvent.ActorEnemyPartKey = Part.Identity.ToEnemyPartKey();
+			PhaseEvent.EnemyPhaseId = Part.CurrentPhaseId;
+			EventBus.Emit(PhaseEvent);
+		}
+
+		if (!Part.CurrentIntentId.IsNone())
+		{
+			FBattleEvent IntentEvent;
+			IntentEvent.Type = EBattleEventType::EnemyIntentSelected;
+			IntentEvent.ActorInstanceId = Part.InstanceId;
+			IntentEvent.ActorEnemyPartKey = Part.Identity.ToEnemyPartKey();
+			IntentEvent.IntentId = Part.CurrentIntentId;
+			IntentEvent.IntentSetId = Part.CurrentIntentSetId;
+			IntentEvent.EnemyPhaseId = Part.CurrentPhaseId;
+			IntentEvent.Amount = Part.CurrentInitiative;
+			EventBus.Emit(IntentEvent);
+		}
 	}
 
 	{

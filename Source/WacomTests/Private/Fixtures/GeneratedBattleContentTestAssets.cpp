@@ -5,6 +5,7 @@
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Encounters/EncounterDefinition.h"
+#include "Enemies/EnemyBehaviorDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Misc/AutomationTest.h"
@@ -180,6 +181,11 @@ const TCHAR* FWacomGeneratedBattleContentAssets::SilklineFeintPath()
 const TCHAR* FWacomGeneratedBattleContentAssets::SnakePath()
 {
 	return TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake.DA_Enemy_Snake");
+}
+
+const TCHAR* FWacomGeneratedBattleContentAssets::SnakeBehaviorPath()
+{
+	return TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Behavior_Snake.DA_Behavior_Snake");
 }
 
 const TCHAR* FWacomGeneratedBattleContentAssets::SnakeHeadPath()
@@ -481,6 +487,11 @@ TArray<UCardDefinition*> FWacomGeneratedBattleContentAssets::LoadGeneratedDefini
 UEnemyDefinition* FWacomGeneratedBattleContentAssets::LoadSnake(FAutomationTestBase& Test)
 {
 	return LoadRequiredAsset<UEnemyDefinition>(SnakePath(), Test);
+}
+
+UEnemyBehaviorDefinition* FWacomGeneratedBattleContentAssets::LoadSnakeBehavior(FAutomationTestBase& Test)
+{
+	return LoadRequiredAsset<UEnemyBehaviorDefinition>(SnakeBehaviorPath(), Test);
 }
 
 UEnemyPartDefinition* FWacomGeneratedBattleContentAssets::LoadEnemyPartByPath(const TCHAR* Path, FAutomationTestBase& Test)

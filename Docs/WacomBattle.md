@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-battle
 status: active
-updated: 2026-06-06
+updated: 2026-06-08
 tags:
   - wacom/battle
   - wacom/rules
@@ -46,6 +46,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `CardEffectDispatcher` | Target 映射、条件、Magnitude 和 Effect 执行分发 |
 | `EffectExecutor` | 按 `EffectTag -> Handler` 注册制执行效果 |
 | `HandZoneService` | 手牌区域、上限和腾挪规则 |
+| `EnemyIntentSelector` | 按 BehaviorDefinition / phase / intent set / selector rule 刷新敌方部位当前意图 |
 | `EnemyPartActionResolver` | 敌方部位行动子流程 |
 | `BattleResultPacketBuilder` | 从 `BattleState` 构造战后包 |
 
@@ -68,7 +69,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 
 Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`UEncounterDefinition` 是 WacomData 层的静态 Encounter 合同，不由 BattleSession 直接读取；`ABattleTriggerActor` 在进入战斗前把 Encounter 敌人槽转换成 `FBattleInitParams.EnemySlots`。运行态 `EncounterId` 由场景 Trigger 的 `PersistentId` 提供，而不是 Encounter 资产 ID。
 
-`FBattleSnapshot.Enemies` 是敌人快照的唯一 public 入口。它按初始化 `EnemySlots` 顺序输出 `FEnemySnapshot`，每个 enemy 下再输出 `Parts`。不再提供 `FBattleSnapshot.Enemy` 或“第一个敌人”别名；UI、日志、场景目标绑定和新测试都应遍历 `Enemies`，或在明确单敌人 fixture 中显式读取 `Enemies[0]`。敌方部位长期身份以 `EncounterId + EnemySlotId + PartSlotId` 为准，`PartDefinitionId / PartId` 只保留静态内容和 debug 语义。
+`FBattleSnapshot.Enemies` 是敌人快照的唯一 public 入口。它按初始化 `EnemySlots` 顺序输出 `FEnemySnapshot`，每个 enemy 下再输出 `Parts`。不再提供 `FBattleSnapshot.Enemy` 或“第一个敌人”别名；UI、日志、场景目标绑定和新测试都应遍历 `Enemies`，或在明确单敌人 fixture 中显式读取 `Enemies[0]`。敌方部位长期身份以 `EncounterId + EnemySlotId + PartSlotId` 为准；`PartId` 只保留在静态内容定义和 debug 语义中，不参与运行时目标匹配。
 
 ## §3 PlayCard 与目标合同
 
@@ -77,7 +78,7 @@ Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`U
 | TargetMode | 命令字段 | 合法性 |
 |---|---|---|
 | `None / Self / AllEnemyParts` | 不要求额外目标 | 检查源卡在手牌、费用合法 |
-| `SingleEnemyPart` | `TargetPartInstanceId` 或 `TargetEnemySlotId + TargetPartSlotId` | 目标必须是当前战斗中未破坏的敌方部位；两套身份同时提供时必须解析到同一运行时部位 |
+| `SingleEnemyPart` | `TargetEnemyPartKey` | 目标 key 必须解析到当前战斗中未破坏的敌方部位 |
 | `HandCard` | `TargetCardInstanceId` | 目标必须是另一张当前手牌；拒绝 self、无效 ID、已离开手牌的卡 |
 
 `TargetMode=HandCard` 会把玩家选中的目标手牌作为 `Target.SelectedHandCard` 传给主效果链。基础资格由 `UCardDefinition::HandCardTargetFilter` 决定：
@@ -91,11 +92,11 @@ Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`U
 
 当前 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可精确作用到目标手牌；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 可把选中的普通手牌移入弃牌堆 / 消耗牌堆。费用、卡牌类型、区域、伙伴 / 食物专用属性等更复杂筛选属于后续扩展方向。
 
-`UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`。调用方读取 `bCanTarget` 判断是否可选，并可使用 `RejectReason / DebugSummary / ResolvedPartIdentity` 做 UI 反馈和排查；不再保留 bool-only 兼容入口。
+`UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`。调用方读取 `bCanTarget` 判断是否可选，并可使用 `RejectReason / DebugSummary / ResolvedPartKey` 做 UI 反馈和排查；不再保留 bool-only 兼容入口。
 
-Battle world target 优先按 `TargetPartInstanceId`（runtime id）定位；当 runtime id 为空时，可用 `TargetEnemySlotId + TargetPartSlotId` 或 handle 上的 `EnemySlotId + PartSlotId` 定位。同一命令 / handle 同时携带 runtime id 与 slot identity 时，两者必须指向同一部位，否则返回 `TargetIdentityMismatch` / `TargetIdentityMismatch` detail。`EncounterId` 用于解释 handle 是否属于当前 battle session，不参与跨 session 查找。
+Battle world target 按 handle 上的 `EncounterId + EnemySlotId + PartSlotId` 构造 `FBattleEnemyPartKey` 并定位。`WorldTargetId`（runtime GUID）只作为表现层目标 cue / debug 的运行时校验字段；如果 handle 同时携带 runtime GUID 和稳定 key，两者必须指向同一部位，否则返回 `TargetIdentityMismatch`。`FBattleCommand` 不再接受 runtime part GUID 或 slot 字段作为敌方目标，最终提交统一使用 `TargetEnemyPartKey`。
 
-Validation 只解释“这个目标能不能被这张卡作用”。它不校验费用、UI 状态、动画队列或命令提交时机；最终提交仍由 `PlayCardResolver` 再校验。`FWacomBattleTargetValidationResult` 会回填 `ResolvedPartInstanceId` 和 `ResolvedPartIdentity`，供 first-person drag preview、debug summary 和提交流使用。
+Validation 只解释“这个目标能不能被这张卡作用”。它不校验费用、UI 状态、动画队列或命令提交时机；最终提交仍由 `PlayCardResolver` 再校验。`FWacomBattleTargetValidationResult` 会回填 `ResolvedPartKey`，并保留 `ResolvedPartInstanceId / ResolvedPartIdentity` 作为表现 cue / debug 投影。
 
 ## §4 战斗流程
 
@@ -285,7 +286,7 @@ GameplayTag 已声明不等于已可制作。能否进入 DataAsset，以 `FWaco
 
 新增 Effect、Target、MagnitudeSource、Condition 或 Passive 触发点时，应同时更新 runtime resolver、authoring matrix、Data Validation、生成内容测试和相关文档。
 
-敌方 Intent 当前只允许 `Target.Player` 和 `Target.Self`，不支持手牌目标、全体敌方部位目标或卡牌专用效果。
+敌方 Intent 当前只允许 `Target.Player` 和 `Target.Self`，不支持手牌目标、全体敌方部位目标或卡牌专用效果。正式内容通过 `UEnemyBehaviorDefinition` 的 phase / intent set / selector rule 选择意图；`UEnemyPartDefinition` 只承载部位静态数值与奖励，不再承载行为序列。
 
 ## §9 敌方部位行动子流程
 
@@ -310,6 +311,15 @@ GameplayTag 已声明不等于已可制作。能否进入 DataAsset，以 `FWaco
    -> 结算 Poison
    -> 检查玩家失败、部位破坏、敌人死亡和 BattleEnd
 ```
+
+当前意图刷新由 `EnemyIntentSelector` 负责：
+
+- 初始化时，Battle 从 `UEnemyDefinition.DefaultBehavior` 或 `FEnemyPartSlot.BehaviorOverride` 取得行为资产，设置 `CurrentPhaseId / PreferredIntentSetId`，并刷新首个当前意图。
+- `Sequence` intent set 会按 authored 顺序选择下一条可用意图；`Weighted` 使用战斗 RNG 在有效 rule 中确定性选择；`PriorityFirst` 选择最高优先级有效 rule。
+- selector condition 当前支持自身 HP 阈值、同单位任意部位 HP 阈值、部位已破坏、当前 phase、自身状态、玩家状态和冷却可用。
+- 每次部位行动后，无论执行还是因晕厥 / 冻结跳过，都会刷新到下一条当前意图，并把 `CurrentInitiative` 设置为新意图先机。
+- Snapshot 暴露每个部位当前 `CurrentPhaseId / CurrentIntentSetId / CurrentIntentId`，以及当前意图的 `IntentId / DisplayName / Initiative / ResistanceValue`。
+- 初始化和行动后意图刷新会发 `EnemyIntentSelected` 事件；初始化 phase 会发 `EnemyPhaseChanged` 事件。当前还没有 phase transition resolver，因此运行中 phase 变化事件只预留给后续 phase 切换规则。
 
 晕厥以层数模型记录。每次该部位行动时，无论执行意图还是跳过意图，都消耗 1 层；层数归零时移除 `Status.Stunned`。
 
@@ -336,7 +346,7 @@ BattleState
 │   ├── PendingKnockdownEvents[]
 │   ├── PendingKnockdownChoices[]
 │   ├── PendingGainedCards[]
-│   └── DestroyedPartIds[]
+│   └── DestroyedParts[]（内部 identity 投影）
 ├── PlayerState
 │   ├── CurrentHp / MaxHp
 │   ├── Shield
@@ -351,8 +361,9 @@ BattleState
 │   ├── ExhaustPile
 │   └── Limbo
 └── EnemyState
-    ├── EnemyDefinition
-    └── Parts[]
+    ├── EnemySlots[]
+    ├── Parts[]
+    └── PartIndexByKey
 ```
 
 卡牌离开手牌后的去向：
@@ -428,7 +439,8 @@ BattleState
 | `KnockdownExpGains[]` | `BattleState.PendingKnockdownExpGains` | 部位破坏经验记账 |
 | `KnockdownChoices[]` | `BattleState.PendingKnockdownChoices` | 玩家击倒三选一选择列表 |
 | `GainedCards[]` | `BattleState.PendingGainedCards` | 战斗中获得、战后可能进入 Run 的卡牌 |
-| `DestroyedPartIds[]` | `BattleState.DestroyedPartIds` | 本场截至结束已破坏部位 ID，用于撤离重入 |
+| `DestroyedPartKeys[]` | `BattleState.DestroyedParts -> FBattleEnemyPartKey` | 本场截至结束已破坏部位的稳定公开 key，用于 Run 撤离重入 |
+| `DestroyedParts[]` | `BattleState.DestroyedParts` | 内部 identity 投影，用于 runtime 汇总和 debug；Battle 外规则真相使用 `DestroyedPartKeys[]` |
 
 Battle 只负责产出战后包。疲劳、伤口、经验、获得卡、撤离进度、节点消耗等战外处理见 [WacomRun §10](./WacomRun.md#wacomrun-battle-settlement)。
 

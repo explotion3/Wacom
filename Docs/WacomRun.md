@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-run
 status: active
-updated: 2026-06-06
+updated: 2026-06-08
 tags:
   - wacom/run
   - wacom/rules
@@ -353,7 +353,7 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 - HP 压力阈值 `HighHpThreshold / LowHpThreshold`。
 - `BattleDeck` 中的物理卡。
 - SpecialZone 中勾选入战的卡：只有 B 主卡位于 `BattleDeck`，且主卡有 `CapacityEffect`，其 SpecialZone 内 `bBattleEnabledInSpecialZone == true` 的卡才会入战，并携带主卡容量效果。
-- 若传入 `TriggerPersistentId`，`BuildInitParamsForBattle()` 会把 `Params.EncounterId` 设为该 PersistentId；若 `RunState.BattleProgress` 有记录，则优先把完整 `DestroyedParts` 写入 `PreDestroyedParts`。旧 `DestroyedPartIds` 进度只作为 legacy 投影，转换到默认 `Enemy` 槽兼容重入。
+- 若传入 `TriggerPersistentId`，`BuildInitParamsForBattle()` 会把 `Params.EncounterId` 设为该 PersistentId；若 `RunState.BattleProgress` 有记录，则优先把 `DestroyedPartKeys` 转换为 `PreDestroyedParts`，没有公开 key 时才读取 `DestroyedParts` 内部 identity 投影。
 
 运行态 `EncounterId` 仍来自场景 Trigger 的 `PersistentId`，不要用 `EncounterDefinitionId` 替代撤离重入进度 key。同一个 Encounter 资产可被多个 Trigger 复用；只要 Trigger `PersistentId` 不同，它们的 `BattleProgress` 就彼此独立。
 
@@ -363,7 +363,7 @@ Outcome 分支：
 
 | 结果 | Run 处理 |
 |---|---|
-| Victory 且 `bWithdrawn == true` | 撤离；不销毁 Trigger；写 `BattleProgress[TriggerId].DestroyedParts`，并保留 `DestroyedPartIds` legacy 投影 |
+| Victory 且 `bWithdrawn == true` | 撤离；不销毁 Trigger；写 `BattleProgress[TriggerId].DestroyedPartKeys`，并保留 `DestroyedParts` 投影 |
 | Victory 且未撤离 | 真胜利；清理 `BattleProgress[TriggerId]`；场景完成状态由 GameMode 调 `MarkTriggerDestroyed(TriggerId)` 写入 `DestroyedTriggerIds` |
 | Defeat | `bRunActive = false` |
 | Undetermined | 不做战外结算并返回 |
@@ -382,7 +382,7 @@ Outcome 分支：
 
 战斗 Trigger 的场景销毁由 GameMode 处理。真胜利会调用 `MarkTriggerDestroyed(PersistentId)` 并 Destroy Actor；撤离不销毁，允许下次重入。
 
-`BattleProgress.DestroyedParts` 是撤离重入的新规则真相，身份由 `EncounterId + EnemySlotId + PartSlotId` 匹配，避免后续多敌人 encounter 中同名部位互相串进度。`DestroyedPartIds` 仍保留在内存 snapshot 中，供旧单敌人进度、测试和 debug 兼容读取；Run 构建战斗参数时会把只有旧字段的进度转换为默认 `Enemy` 槽的 `PreDestroyedParts`。当前 `BattleProgress` 仍不进入 SaveGame。
+`BattleProgress.DestroyedPartKeys` 是撤离重入的规则真相，身份由 `EncounterId + EnemySlotId + PartSlotId` 匹配，避免多敌人 encounter 中同名部位互相串进度。`DestroyedParts` 是内部 identity 投影，用于当前 runtime / debug 读取；Run 构建战斗参数时不会按旧 PartId 宽匹配。当前 `BattleProgress` 仍不进入 SaveGame。
 
 ## §11 PersistentId 规则
 
