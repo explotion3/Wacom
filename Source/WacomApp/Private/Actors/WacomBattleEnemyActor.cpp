@@ -9,6 +9,7 @@
 #include "Engine/SimpleConstructionScript.h"
 #include "Components/ChildActorComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/WidgetComponent.h"
 #include "Components/WacomBattleEnemyHostVisualComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "PaperFlipbook.h"
@@ -16,6 +17,8 @@
 #include "PaperSprite.h"
 #include "PaperSpriteComponent.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattleEnemyPanelWidget.h"
+#include "Blueprint/UserWidget.h"
 
 namespace
 {
@@ -206,6 +209,12 @@ AWacomBattleEnemyActor::AWacomBattleEnemyActor()
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = SceneRoot;
 
+	EnemyPanelWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("EnemyPanelWidget"));
+	EnemyPanelWidgetComponent->SetupAttachment(SceneRoot);
+	EnemyPanelWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
+	EnemyPanelWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	EnemyPanelWidgetComponent->SetVisibility(false, true);
+
 	HostVisualRoot = CreateDefaultSubobject<USceneComponent>(TEXT("HostVisualRoot"));
 	HostVisualRoot->SetupAttachment(SceneRoot);
 	HostVisualRoot->SetRelativeLocation(FVector::ZeroVector);
@@ -222,6 +231,7 @@ void AWacomBattleEnemyActor::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	RefreshHostVisual();
+	RefreshEnemyPanelWidgetComponent();
 	RefreshBattleEnemyPartAuthoringState();
 }
 
@@ -229,6 +239,7 @@ void AWacomBattleEnemyActor::BeginPlay()
 {
 	Super::BeginPlay();
 	RefreshHostVisual();
+	RefreshEnemyPanelWidgetComponent();
 	SyncHostIdentityToPartActors();
 	RefreshAuthoringStatusPreview();
 }
@@ -294,6 +305,21 @@ void AWacomBattleEnemyActor::RefreshHostVisual()
 		bLoopHostFlipbook,
 		HostFlipbookStartTimeSeconds,
 		bAutoPlayHostFlipbook);
+}
+
+void AWacomBattleEnemyActor::RefreshEnemyPanelWidgetComponent()
+{
+	if (!EnemyPanelWidgetComponent)
+	{
+		return;
+	}
+
+	const TSubclassOf<UUserWidget> WidgetClass =
+		EnemyPanelWidgetClass ? EnemyPanelWidgetClass.Get() : UWacomBattleEnemyPanelWidget::StaticClass();
+	EnemyPanelWidgetComponent->SetWidgetClass(WidgetClass);
+	EnemyPanelWidgetComponent->SetRelativeLocation(EnemyPanelRelativeLocation);
+	EnemyPanelWidgetComponent->SetDrawSize(EnemyPanelDrawSize);
+	EnemyPanelWidgetComponent->SetVisibility(false, true);
 }
 
 FName AWacomBattleEnemyActor::GetHostVisualModeDebugName() const
@@ -585,10 +611,6 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 			{
 				++View.PredictionVisiblePartActorCount;
 			}
-			if (PartView.PresentationDebugView.StatusBadgeView.bVisible)
-			{
-				++View.StatusBadgeVisiblePartActorCount;
-			}
 			if (PartView.BadgeLayoutStaggerIndex != INDEX_NONE)
 			{
 				++View.BadgeLayoutAppliedPartActorCount;
@@ -608,6 +630,46 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 		Audit);
 	View.bAuthoringReady = View.AuthoringState == FName(TEXT("Ready"));
 	return View;
+}
+
+void AWacomBattleEnemyActor::SetEnemyPanelViewData(const FWacomBattleEnemyPanelViewData& ViewData)
+{
+	if (!EnemyPanelWidgetComponent)
+	{
+		return;
+	}
+
+	if (UWacomBattleEnemyPanelWidget* PanelWidget =
+		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
+	{
+		PanelWidget->SetEnemyPanelViewData({ ViewData });
+	}
+
+	EnemyPanelWidgetComponent->SetVisibility(bEnemyPanelVisibleByDefault, true);
+}
+
+void AWacomBattleEnemyActor::ClearEnemyPanelViewData()
+{
+	if (UWacomBattleEnemyPanelWidget* PanelWidget =
+		EnemyPanelWidgetComponent ? Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()) : nullptr)
+	{
+		PanelWidget->SetEnemyPanelViewData({});
+	}
+
+	if (EnemyPanelWidgetComponent)
+	{
+		EnemyPanelWidgetComponent->SetVisibility(false, true);
+	}
+}
+
+void AWacomBattleEnemyActor::SetEnemyPanelHoveredVisible(bool bVisible)
+{
+	if (!EnemyPanelWidgetComponent)
+	{
+		return;
+	}
+
+	EnemyPanelWidgetComponent->SetVisibility(bVisible || bEnemyPanelVisibleByDefault, true);
 }
 
 FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const

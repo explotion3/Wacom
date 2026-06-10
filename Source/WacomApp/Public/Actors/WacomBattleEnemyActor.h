@@ -17,7 +17,10 @@ class UPaperFlipbookComponent;
 class UPaperSprite;
 class UPaperSpriteComponent;
 class USceneComponent;
+class UWidgetComponent;
 class UWacomBattleEnemyHostVisualComponent;
+class UWacomBattleEnemyPanelWidget;
+struct FWacomBattleEnemyPanelViewData;
 
 UENUM(BlueprintType)
 enum class EWacomBattleEnemyHostVisualMode : uint8
@@ -117,9 +120,6 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 PredictionVisiblePartActorCount = 0;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	int32 StatusBadgeVisiblePartActorCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 BadgeLayoutAppliedPartActorCount = 0;
@@ -225,6 +225,22 @@ public:
 		meta = (ToolTip = "相邻部位 Badge 的竖向错开距离。单位：厘米；与横向错开一起叠加到 PartActor badge facade 位置。", ClampMin = "0.0", ClampMax = "300.0", UIMin = "0.0", UIMax = "80.0"))
 	float BadgeStaggerVerticalStep = 18.0f;
 
+	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
+		meta = (ToolTip = "敌人头顶聚合面板使用的 Widget 类。为空时使用 C++ fallback UWacomBattleEnemyPanelWidget。"))
+	TSubclassOf<UWacomBattleEnemyPanelWidget> EnemyPanelWidgetClass;
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
+		meta = (ToolTip = "敌人头顶聚合面板相对 Host 根节点的位置，单位 cm。"))
+	FVector EnemyPanelRelativeLocation = FVector(0.0f, 0.0f, 180.0f);
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
+		meta = (ToolTip = "敌人头顶聚合面板的渲染尺寸，单位 Slate 像素。", ClampMin = "1.0", UIMin = "64.0"))
+	FVector2D EnemyPanelDrawSize = FVector2D(360.0f, 220.0f);
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
+		meta = (ToolTip = "是否在有敌人数据时常驻显示头顶聚合面板。关闭后只在部位悬浮等交互状态显示。"))
+	bool bEnemyPanelVisibleByDefault = true;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
 		meta = (ToolTip = "Details 只读制作状态缓存。Ready 表示 Host 的 EnemyDefinition、子 PartActor、PartId 和 PartSlotId 当前对齐。"))
 	FName AuthoringState = NAME_None;
@@ -325,6 +341,12 @@ public:
 		meta = (ToolTip = "按当前 Host 部位顺序刷新状态/预测 Badge 的稳定错开布局。不会自动生成子 Actor。"))
 	void RefreshAttachedPartBadgeLayout() const;
 
+	void SetEnemyPanelViewData(const FWacomBattleEnemyPanelViewData& ViewData);
+
+	void ClearEnemyPanelViewData();
+
+	void SetEnemyPanelHoveredVisible(bool bVisible);
+
 	UFUNCTION(CallInEditor, Category = "Wacom|Battle|Scene Enemy|Debug Sample",
 		meta = (ToolTip = "开发样例按钮：把当前 Host 下已有 Head/Body/Tail PartActor 配置为 Debug 蛇样例。不会自动生成部位 Actor，不会创建正式 sprite 资产，也不会修改 BattleSession。"))
 	void ConfigureDebugSnakeHostSample();
@@ -361,6 +383,7 @@ protected:
 private:
 	void RefreshAuthoringStatusPreview();
 	void RefreshHostVisual();
+	void RefreshEnemyPanelWidgetComponent();
 	FName GetHostVisualModeDebugName() const;
 	FName GetHostVisualAssetName() const;
 	int32 GetGeneratedHostVisualComponentCount() const;
@@ -372,6 +395,10 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 根节点。部位 Actor 可附着到本 Actor 下进行分组。"))
 	TObjectPtr<USceneComponent> SceneRoot = nullptr;
+
+	UPROPERTY(VisibleAnywhere, Category = "Wacom|Battle|Scene Enemy|Internal",
+		meta = (ToolTip = "敌人头顶聚合状态面板的世界空间 WidgetComponent。"))
+	TObjectPtr<UWidgetComponent> EnemyPanelWidgetComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 整体视觉根节点。普通小怪整体图挂在这里；不参与命中。"))

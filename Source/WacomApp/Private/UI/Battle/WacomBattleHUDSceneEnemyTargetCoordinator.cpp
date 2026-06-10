@@ -13,6 +13,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 
 namespace
 {
@@ -270,6 +271,28 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 			Host->RefreshAttachedPartBadgeLayout();
 		}
 	}
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
+	{
+		if (AWacomBattleEnemyActor* Host = WeakHost.Get())
+		{
+			Host->RefreshAttachedPartBadgeLayout();
+			const FEnemySnapshot* MatchedEnemy = Snapshot.Enemies.FindByPredicate(
+				[Host](const FEnemySnapshot& Enemy)
+				{
+					return Enemy.EnemySlotId == Host->GetEffectiveEnemySlotId();
+				});
+			if (MatchedEnemy)
+			{
+				Host->SetEnemyPanelViewData(
+					UWacomBattleEnemyPanelWidget::BuildEnemyPanelViewDataFromSnapshot(Snapshot, *MatchedEnemy));
+			}
+			else
+			{
+				Host->ClearEnemyPanelViewData();
+			}
+		}
+	}
+
 	RebuildRegistry();
 	const FBattleTargetSelectionView TargetSelectionView = HUD.BuildTargetSelectionView();
 	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
@@ -355,6 +378,14 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
 	HUD.ClearFirstPersonCardDragTargetFeedback();
 	ClearHoverProbe(TEXT("WorldTargetsCleared"));
 
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
+	{
+		if (AWacomBattleEnemyActor* Host = WeakHost.Get())
+		{
+			Host->ClearEnemyPanelViewData();
+		}
+	}
+
 	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
 	{
 		if (UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get())
@@ -401,7 +432,13 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearHoverProbe(FName Reason)
 	{
 		Presentation->ClearHoverProbeState(Reason);
 	}
+	if (AWacomBattleEnemyActor* Host = HoveredEnemyHost.Get())
+	{
+		Host->SetEnemyPanelHoveredVisible(false);
+	}
+
 	HoveredPresentation.Reset();
+	HoveredEnemyHost.Reset();
 	HoveredHandle = FWacomInteractionTargetHandle();
 }
 
@@ -456,13 +493,24 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::UpdateHoverProbe()
 		return;
 	}
 
+	AWacomBattleEnemyActor* HoveredHost = nullptr;
+	if (const AWacomBattleEnemyPartActor* PartActor = Cast<AWacomBattleEnemyPartActor>(Bridge->GetOwner()))
+	{
+		HoveredHost = Cast<AWacomBattleEnemyActor>(PartActor->GetAttachParentActor());
+	}
+
 	if (HoveredPresentation.Get() != Presentation)
 	{
 		ClearHoverProbe(TEXT("TargetChanged"));
 		HoveredPresentation = Presentation;
+		HoveredEnemyHost = HoveredHost;
 	}
 
 	HoveredHandle = TargetHandle;
+	if (HoveredHost)
+	{
+		HoveredHost->SetEnemyPanelHoveredVisible(true);
+	}
 	Presentation->SetHoverProbeState(
 		TargetHandle,
 		TEXT("Hovered"),

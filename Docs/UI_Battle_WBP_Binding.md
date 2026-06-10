@@ -255,43 +255,47 @@ WBP 不应做：不直接提交 `FBattleCommand`；按钮可用性由父类 / HU
 
 WBP 不应做：不修改牌堆或规则状态。
 
-## Scene Enemy Status WBP
+## Enemy Panel WBP
 
-### WBP_BattleEnemyPartStatusBadgeWidget
+### WBP_BattleEnemyPanelWidget
 
-父类：`UWacomBattleEnemyPartStatusBadgeWidget`
+父类：`UWacomBattleEnemyPanelWidget`
 
-用途：挂在 `AWacomBattleEnemyPartActor.StatusBadgeWidgetComponent` 上的 screen-space 常驻状态 Badge。它只读取 `FWacomBattleEnemyPartStatusBadgeView`。
+用途：敌人 Host 头顶的世界空间聚合面板。`AWacomBattleEnemyActor.EnemyPanelWidgetComponent` 承载该 WBP，HUD 只从 `FBattleSnapshot.Enemies` 派发只读 view data，按敌人聚合展示所有部位。
 
 推荐绑定：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `BadgeBorder` | `Border` | Optional | 紧凑状态底板 |
-| `PartNameTextBlock` | `TextBlock` | Optional | 部位名 |
-| `HpBar` | `UWacomProgressBar` | Optional | HP / MaxHP |
-| `InitiativeTextBlock` | `TextBlock` | Optional | 当前先机 |
-| `IntentTextBlock` | `TextBlock` | Optional | 当前意图或已破坏 |
-| `ShieldTextBlock` | `TextBlock` | Optional | 护盾 |
-| `StatusTextBlock` | `TextBlock` | Optional | 状态摘要 |
+| `EnemyListBox` | `VerticalBox` | Optional | 每个敌人一组；缺省时 C++ fallback 自动创建 |
 
-WBP 不应做：
+WBP 不应做：不直接读取或修改 `UBattleSession`，不在部位 Actor 上创建常驻状态 UI。
 
-- 不阻挡 Visibility trace、TargetSelect 点击或 first-person drag preview / release。
-- 不提交 Battle 命令。
-- 不把临时 Prediction 文案合并进常驻 Status Badge；Prediction Widget 是独立表现。
+### WBP_BattleEnemyPartEntryWidget
 
-最小 PIE 验收：
+父类：`UWacomBattleEnemyPartEntryWidget`
 
-- Badge 常驻显示当前 Host 已绑定部位，包括破坏部位。
-- 长中文文案不会撑大 screen-space badge 到遮挡其他部位。
+用途：敌人面板内的通用部位条目，展示单个部位的名称、HP/MaxHP、护盾、先机、意图和状态文本。
 
+推荐绑定：
+
+| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
+|---|---|---|---|
+| `PartNameText` | `TextBlock` | Optional | 部位名 |
+| `HpText` | `TextBlock` | Optional | HP / MaxHP |
+| `ShieldText` | `TextBlock` | Optional | 护盾；无护盾时可为空或隐藏 |
+| `InitiativeText` | `TextBlock` | Optional | 当前先机 |
+| `IntentText` | `TextBlock` | Optional | 当前意图 |
+| `StatusText` | `TextBlock` | Optional | 状态标签汇总 |
+| `DestroyedOverlay` | `Widget` | Optional | 部位破坏时的弱化/覆盖层 |
+
+WBP 不应做：不提交战斗命令，不反向写入 Snapshot，不承担 world target/hover/drag preview 反馈。
 ## PIE Smoke Checklist
 
-- `WBP_BattleHUD` 能显示玩家状态、ActionPanel、牌堆数量、CombatLogFeed 和 PresentationStack。
+- `WBP_BattleHUD` 能显示玩家状态、ActionPanel、牌堆数量、CombatLogFeed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。
 - `WaitButton / EndTurnButton` 可点击并由 HUD 状态控制可用性。
 - `WBP_FirstPersonCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
-- 有 `SceneEnemyHostSlots` 的战斗中，Host prefab 扫描到的 PartActor Status Badge 可读。
+- 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；PartActor 只显示 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。
-- 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget / EventLogPanel / EventToast` 已删除，不再作为 BattleHUD 制作入口。
+- 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget / EventLogPanel / EventToast / WBP_BattleEnemyPartStatusBadgeWidget` 已删除，不再作为 BattleHUD 制作入口。

@@ -20,7 +20,6 @@ class UPaperFlipbook;
 class UPaperSprite;
 class UWacomBattleEnemyPartVisualLayerComponent;
 class UWacomBattleEnemyPartPredictionWidget;
-class UWacomBattleEnemyPartStatusBadgeWidget;
 class UWacomInteractionTargetComponent;
 
 UCLASS(NotBlueprintable, HideDropdown, CollapseCategories,
@@ -149,13 +148,7 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	FName PredictionWidgetName = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	FName StatusBadgeWidgetName = NAME_None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FVector PredictionBadgeRelativeLocation = FVector::ZeroVector;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	FVector StatusBadgeRelativeLocation = FVector::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FVector BadgeLayoutStaggerOffset = FVector::ZeroVector;
@@ -164,22 +157,10 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	FVector2D PredictionBadgeDrawSize = FVector2D::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	FVector2D StatusBadgeDrawSize = FVector2D::ZeroVector;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 BadgeLayoutStaggerIndex = INDEX_NONE;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	float PredictionBadgeScale = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	float StatusBadgeScale = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	float StatusBadgeOpacity = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	float DestroyedStatusBadgeOpacity = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	float PredictionBadgeZOffsetWhenVisible = 0.0f;
@@ -269,36 +250,14 @@ public:
 	float PredictionBadgeScale = 0.92f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Prediction",
-		meta = (ToolTip = "预测 Widget 显示时额外向上错开的距离。单位：厘米；用于避免覆盖常驻状态 Badge。", ClampMin = "0.0", ClampMax = "300.0", UIMin = "0.0", UIMax = "100.0"))
+		meta = (ToolTip = "预测 Widget 显示时额外向上错开的距离。单位：厘米；用于避免覆盖目标反馈。", ClampMin = "0.0", ClampMax = "300.0", UIMin = "0.0", UIMax = "100.0"))
 	float PredictionBadgeZOffsetWhenVisible = 42.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
-		meta = (ToolTip = "是否在部位上方显示常驻状态 Badge。只影响表现，不影响 BattleSession 规则。"))
-	bool bEnableStatusBadgeWidget = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
-		meta = (ToolTip = "部位状态 Badge Widget 类。为空时使用 C++ fallback UWacomBattleEnemyPartStatusBadgeWidget。"))
-	TSubclassOf<UWacomBattleEnemyPartStatusBadgeWidget> StatusBadgeWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
-		meta = (ToolTip = "状态 Badge 相对 HitBounds 的位置。单位：厘米；默认显示在部位上方，和预测 Widget 错开。"))
-	FVector StatusBadgeRelativeLocation = FVector(0.f, 0.f, 108.f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
-		meta = (ToolTip = "状态 Badge 的绘制尺寸，单位：Slate 像素。", ClampMin = "1.0", UIMin = "32.0"))
-	FVector2D StatusBadgeDrawSize = FVector2D(204.f, 112.f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
-		meta = (ToolTip = "状态 Badge 的整体渲染缩放。只影响 UI 可读性，不影响命中。", ClampMin = "0.25", ClampMax = "2.0", UIMin = "0.6", UIMax = "1.2"))
-	float StatusBadgeScale = 0.86f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
-		meta = (ToolTip = "普通状态 Badge 的透明度。只影响 UI 表现，不影响命中。", ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.35", UIMax = "1.0"))
-	float StatusBadgeOpacity = 0.92f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Status",
-		meta = (ToolTip = "部位破坏后状态 Badge 的透明度。破坏态仍常驻显示，但视觉弱化。", ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.25", UIMax = "1.0"))
-	float DestroyedStatusBadgeOpacity = 0.58f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
 		meta = (ToolTip = "Details 只读制作状态缓存。UsingVisualLayers 表示正式 2D 视觉层路径；HitOnly 表示由 Host 整体视觉承载显示；MissingIdentity / InvalidHitBounds 需要优先修复。"))
@@ -386,9 +345,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
 	UWidgetComponent* GetPredictionWidgetComponent() const { return PredictionWidgetComponent; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
-	UWidgetComponent* GetStatusBadgeWidgetComponent() const { return StatusBadgeWidgetComponent; }
-
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "把 Actor facade 字段同步到内部命中体、可见体、InteractionTarget 和 Battle Part Bridge。"))
 	void RefreshAuthoringState();
@@ -472,7 +428,6 @@ private:
 		FName InPartSlotId,
 		const FVector& InHitBoundsExtent);
 	FVector GetAppliedPredictionBadgeRelativeLocation() const;
-	FVector GetAppliedStatusBadgeRelativeLocation() const;
 	void RefreshAuthoringStatusPreview();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
@@ -502,10 +457,6 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
 		meta = (AllowPrivateAccess = "true", ToolTip = "部位上方的只读先机预测 Widget。不要直接编辑内部组件，请改 Actor facade 字段。"))
 	TObjectPtr<UWidgetComponent> PredictionWidgetComponent = nullptr;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
-		meta = (AllowPrivateAccess = "true", ToolTip = "部位上方的常驻状态 Badge Widget。不要直接编辑内部组件，请改 Actor facade 字段。"))
-	TObjectPtr<UWidgetComponent> StatusBadgeWidgetComponent = nullptr;
 
 	bool bHostVisualContextActive = false;
 

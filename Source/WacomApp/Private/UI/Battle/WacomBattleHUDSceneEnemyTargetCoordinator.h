@@ -53,6 +53,7 @@ private:
 	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> SceneEnemyHosts;
 	TArray<FSceneEnemyPartWorldTargetEntry> SceneEnemyPartWorldTargets;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> HoveredPresentation;
+	TWeakObjectPtr<AWacomBattleEnemyActor> HoveredEnemyHost;
 	FWacomInteractionTargetHandle HoveredHandle;
 	float HoverProbeElapsedSeconds = 0.0f;
 };

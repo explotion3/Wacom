@@ -20,7 +20,6 @@
 #include "UI/Battle/BattlePresentationStackEntryWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
-#include "UI/Battle/WacomBattleEnemyPartStatusBadgeWidget.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
@@ -2961,7 +2960,6 @@ bool FWacomUIBattleSceneEnemyPartBridgeRuntimeFactsSpec::RunTest(const FString& 
 	TestTrue(TEXT("Presentation reports runtime facts"), PresentationView.bHasRuntimePartFacts);
 	TestEqual(TEXT("Presentation reports current initiative"), PresentationView.CurrentInitiative, 7);
 	TestEqual(TEXT("Presentation reports intent id"), PresentationView.CurrentIntentId, FName(TEXT("Test.Part.Head")));
-	TestEqual(TEXT("Presentation reports intent initiative"), PresentationView.CurrentIntentInitiative, 7);
 	TestFalse(TEXT("Presentation reports part not destroyed"), PresentationView.bRuntimePartDestroyed);
 
 	return true;
@@ -5945,436 +5943,8 @@ bool FWacomUIBattleCurrentHostRegistryRoutesFeedbackSpec::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartStatusBadgeSnapshotFactsSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartStatusBadgeShowsSnapshotFacts",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyPartStatusBadgeSnapshotFactsSpec::RunTest(const FString& /*Parameters*/)
-{
-	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeSimpleDamageCard(1, 1) });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(24, 18, 12, 7, 5, 3);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-
-	WacomBattleWidgetSpec::FSceneEnemyHostActors SceneEnemy =
-		WacomBattleWidgetSpec::SpawnSceneEnemyHost(
-			*World,
-			Enemy,
-			{ TEXT("Test.Part.Head") });
-	AWacomBattleEnemyPartActor* PartActor =
-		SceneEnemy.Parts.Num() > 0 ? SceneEnemy.Parts[0] : nullptr;
-	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
-		|| !TestNotNull(TEXT("Part actor"), PartActor))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		WacomBattleWidgetSpec::DestroySceneEnemyHost(SceneEnemy);
-	};
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	HUD->SetWorldForTest(World);
-	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
-	HUD->RefreshFromSnapshotForTest(Snapshot);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-
-	const FWacomBattleEnemyPartPresentationDebugView DebugView =
-		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	const FWacomBattleEnemyPartStatusBadgeView& BadgeView = DebugView.StatusBadgeView;
-	TestTrue(TEXT("Status badge visible after binding"), BadgeView.bVisible);
-	TestEqual(TEXT("Status badge part id"), BadgeView.PartId, FName(TEXT("Test.Part.Head")));
-	TestEqual(TEXT("Status badge HP"), BadgeView.CurrentHp, 24);
-	TestEqual(TEXT("Status badge MaxHP"), BadgeView.MaxHp, 24);
-	TestEqual(TEXT("Status badge initiative"), BadgeView.CurrentInitiative, 7);
-	TestEqual(TEXT("Status badge HP text"), BadgeView.HpText.ToString(), FString(TEXT("24/24")));
-	TestEqual(TEXT("Status badge initiative text"), BadgeView.InitiativeText.ToString(), FString(TEXT("先机 7")));
-	TestTrue(TEXT("Status badge intent text reports intent"),
-		BadgeView.CurrentIntentText.ToString().Contains(TEXT("意图")));
-	TestTrue(TEXT("Status badge widget component visible"),
-		PartActor->GetStatusBadgeWidgetComponent()->IsVisible());
-
-	if (UWacomBattleEnemyPartStatusBadgeWidget* StatusWidget =
-		Cast<UWacomBattleEnemyPartStatusBadgeWidget>(
-			PartActor->GetStatusBadgeWidgetComponent()->GetUserWidgetObject()))
-	{
-		TestEqual(TEXT("Fallback widget receives badge view"), StatusWidget->GetStatusBadgeView().CurrentHp, 24);
-	}
-	else
-	{
-		AddError(TEXT("Status badge widget object is not UWacomBattleEnemyPartStatusBadgeWidget"));
-	}
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartStatusBadgeDamageDestroyedSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartStatusBadgeUpdatesAfterDamageAndDestroyed",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyPartStatusBadgeDamageDestroyedSpec::RunTest(const FString& /*Parameters*/)
-{
-	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FWacomBattleFixture Fx;
-	UCardDefinition* DamageCard = Fx.MakeSimpleDamageCard(1, 5);
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ DamageCard });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(5, 20, 20, 5, 5, 5);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-	const FBattleSnapshot StartSnapshot = Session->BuildSnapshot();
-	const FGuid CardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
-		StartSnapshot,
-		ECardTargetMode::SingleEnemyPart);
-	const FGuid HeadId = FWacomBattleFixture::FindPartInstanceId(StartSnapshot, 0);
-
-	WacomBattleWidgetSpec::FSceneEnemyHostActors SceneEnemy =
-		WacomBattleWidgetSpec::SpawnSceneEnemyHost(
-			*World,
-			Enemy,
-			{ TEXT("Test.Part.Head") });
-	AWacomBattleEnemyPartActor* PartActor =
-		SceneEnemy.Parts.Num() > 0 ? SceneEnemy.Parts[0] : nullptr;
-	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
-		|| !TestNotNull(TEXT("Part actor"), PartActor)
-		|| !TestTrue(TEXT("Card exists"), CardId.IsValid())
-		|| !TestTrue(TEXT("Head exists"), HeadId.IsValid()))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		WacomBattleWidgetSpec::DestroySceneEnemyHost(SceneEnemy);
-	};
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	HUD->SetWorldForTest(World);
-	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
-	HUD->RefreshFromSnapshotForTest(StartSnapshot);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-
-	TestTrue(TEXT("Play destroying card"),
-		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
-			StartSnapshot,
-			CardId,
-			HeadId)).IsOk());
-	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-
-	const FWacomBattleEnemyPartStatusBadgeView BadgeView =
-		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView().StatusBadgeView;
-	TestTrue(TEXT("Destroyed status badge remains visible"), BadgeView.bVisible);
-	TestTrue(TEXT("Destroyed status badge marks destroyed"), BadgeView.bDestroyed);
-	TestEqual(TEXT("Destroyed status badge hp"), BadgeView.CurrentHp, 0);
-	TestEqual(TEXT("Destroyed status badge intent text"),
-		BadgeView.CurrentIntentText.ToString(),
-		FString(TEXT("已破坏")));
-	TestFalse(TEXT("Destroyed part is no longer bound as click target"),
-		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bBoundToSnapshot);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartStatusBadgeShieldIntentStatusesSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartStatusBadgeReportsShieldIntentAndStatuses",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyPartStatusBadgeShieldIntentStatusesSpec::RunTest(const FString& /*Parameters*/)
-{
-	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeSimpleDamageCard(1, 1) });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 7, 5, 3);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-	FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	if (Snapshot.Enemies.IsValidIndex(0) && Snapshot.Enemies[0].Parts.IsValidIndex(0))
-	{
-		Snapshot.Enemies[0].Parts[0].Shield = 4;
-		Snapshot.Enemies[0].Parts[0].Statuses.AddTag(WacomTags::Status_Poison);
-		Snapshot.Enemies[0].Parts[0].StatusStacks.Add(WacomTags::Status_Poison, 3);
-		Snapshot.Enemies[0].Parts[0].CurrentIntent.DisplayName = FText::FromString(TEXT("撕咬"));
-	}
-
-	WacomBattleWidgetSpec::FSceneEnemyHostActors SceneEnemy =
-		WacomBattleWidgetSpec::SpawnSceneEnemyHost(
-			*World,
-			Enemy,
-			{ TEXT("Test.Part.Head") });
-	AWacomBattleEnemyPartActor* PartActor =
-		SceneEnemy.Parts.Num() > 0 ? SceneEnemy.Parts[0] : nullptr;
-	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
-		|| !TestNotNull(TEXT("Part actor"), PartActor))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		WacomBattleWidgetSpec::DestroySceneEnemyHost(SceneEnemy);
-	};
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	HUD->SetWorldForTest(World);
-	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
-	HUD->RefreshFromSnapshotForTest(Snapshot);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-
-	const FWacomBattleEnemyPartStatusBadgeView BadgeView =
-		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView().StatusBadgeView;
-	TestEqual(TEXT("Status badge shield"), BadgeView.Shield, 4);
-	TestEqual(TEXT("Status badge shield text"), BadgeView.ShieldText.ToString(), FString(TEXT("护盾 4")));
-	TestTrue(TEXT("Status badge intent display name"),
-		BadgeView.CurrentIntentText.ToString().Contains(TEXT("撕咬")));
-	TestTrue(TEXT("Status badge status text includes poison"),
-		BadgeView.StatusText.ToString().Contains(TEXT("中毒")));
-	TestTrue(TEXT("Status badge status text includes stack"),
-		BadgeView.StatusText.ToString().Contains(TEXT("x3")));
-	TestTrue(TEXT("Debug summary reports status text"),
-		PartActor->GetBattleSceneEnemyPartDebugSummary().Contains(TEXT("StatusText=")));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartStatusBadgeSeparatePredictionSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartStatusBadgeIsSeparateFromPredictionWidget",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyPartStatusBadgeSeparatePredictionSpec::RunTest(const FString& /*Parameters*/)
-{
-	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ Fx.MakeSimpleDamageCard(1, 1) });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 7, 5, 3);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-
-	WacomBattleWidgetSpec::FSceneEnemyHostActors SceneEnemy =
-		WacomBattleWidgetSpec::SpawnSceneEnemyHost(
-			*World,
-			Enemy,
-			{ TEXT("Test.Part.Head") });
-	AWacomBattleEnemyPartActor* PartActor =
-		SceneEnemy.Parts.Num() > 0 ? SceneEnemy.Parts[0] : nullptr;
-	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
-		|| !TestNotNull(TEXT("Part actor"), PartActor))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		WacomBattleWidgetSpec::DestroySceneEnemyHost(SceneEnemy);
-	};
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	HUD->SetWorldForTest(World);
-	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
-	HUD->RefreshFromSnapshotForTest(Snapshot);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-
-	FWacomBattleEnemyPartPresentationDebugView View =
-		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	TestTrue(TEXT("Status badge visible without hover"), View.StatusBadgeView.bVisible);
-	TestFalse(TEXT("Prediction hidden without hover"), View.PredictionView.bVisible);
-
-	PartActor->GetPresentationComponent()->SetHoverProbeState(
-		WacomBattleWidgetSpec::MakeBattleEnemyPartHandle(
-			PartActor->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
-			PartActor->GetInteractionTargetComponent(),
-			FVector::ZeroVector,
-			FVector2D(220.0f, 120.0f),
-			WacomTags::Interaction_Target_Battle_EnemyPart,
-			TEXT("Test.Part.Head")),
-		TEXT("Hovered"));
-
-	View = PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	TestTrue(TEXT("Status badge remains visible while prediction shows"), View.StatusBadgeView.bVisible);
-	TestTrue(TEXT("Prediction visible on hover"), View.PredictionView.bVisible);
-	TestNotEqual(TEXT("Status and prediction use separate widget components"),
-		PartActor->GetStatusBadgeWidgetComponent(),
-		PartActor->GetPredictionWidgetComponent());
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartStatusBadgeComponentFacadeSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.StatusBadgeComponentIsScreenSpaceNoCollisionAndFacadeDriven",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyPartStatusBadgeComponentFacadeSpec::RunTest(const FString& /*Parameters*/)
-{
-	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.ObjectFlags |= RF_Transient;
-	AWacomBattleEnemyPartActor* PartActor =
-		World->SpawnActor<AWacomBattleEnemyPartActor>(
-			AWacomBattleEnemyPartActor::StaticClass(),
-			FTransform::Identity,
-			SpawnParams);
-	if (!TestNotNull(TEXT("Part actor"), PartActor))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		if (IsValid(PartActor))
-		{
-			PartActor->Destroy();
-		}
-	};
-
-	PartActor->StatusBadgeRelativeLocation = FVector(3.0f, 4.0f, 140.0f);
-	PartActor->StatusBadgeDrawSize = FVector2D(260.0f, 132.0f);
-	PartActor->bEnableStatusBadgeWidget = true;
-	PartActor->RefreshAuthoringState();
-
-	UWidgetComponent* StatusComponent = PartActor->GetStatusBadgeWidgetComponent();
-	if (!TestNotNull(TEXT("Status badge component"), StatusComponent))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("Status badge screen space"),
-		StatusComponent->GetWidgetSpace(),
-		EWidgetSpace::Screen);
-	TestEqual(TEXT("Status badge no collision"),
-		StatusComponent->GetCollisionEnabled(),
-		ECollisionEnabled::NoCollision);
-	TestFalse(TEXT("Status badge no overlap events"),
-		StatusComponent->GetGenerateOverlapEvents());
-	TestEqual(TEXT("Status badge facade location"),
-		StatusComponent->GetRelativeLocation(),
-		PartActor->StatusBadgeRelativeLocation);
-	TestEqual(TEXT("Status badge facade draw size"),
-		StatusComponent->GetDrawSize(),
-		PartActor->StatusBadgeDrawSize);
-	TestGreaterEqual(TEXT("Default status badge height leaves room for intent"),
-		static_cast<float>(AWacomBattleEnemyPartActor::StaticClass()
-			->GetDefaultObject<AWacomBattleEnemyPartActor>()
-			->StatusBadgeDrawSize.Y),
-		112.0f);
-	TestTrue(TEXT("Status badge fallback widget class"),
-		StatusComponent->GetWidgetClass() == UWacomBattleEnemyPartStatusBadgeWidget::StaticClass());
-	TestTrue(TEXT("Presentation receives status badge component"),
-		PartActor->GetPresentationComponent()
-			->GetBattleEnemyPartPresentationDebugView()
-			.StatusBadgeWidgetName
-			== FName(*StatusComponent->GetName()));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartStatusBadgeCompactLayoutSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartStatusBadgeUsesCompactReadableFallbackLayout",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyPartStatusBadgeCompactLayoutSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<UWacomBattleEnemyPartStatusBadgeWidget> Widget(
-		NewObject<UWacomBattleEnemyPartStatusBadgeWidget>());
-	Widget->TakeWidget();
-
-	TestNotNull(TEXT("Fallback status badge has compact core row"),
-		Widget->WidgetTree ? Widget->WidgetTree->FindWidget(TEXT("CoreRow")) : nullptr);
-	TestNotNull(TEXT("Fallback status badge has clipped name text"),
-		Widget->WidgetTree ? Widget->WidgetTree->FindWidget(TEXT("PartNameTextBlock")) : nullptr);
-	TestNotNull(TEXT("Fallback status badge has dedicated intent text"),
-		Widget->WidgetTree ? Widget->WidgetTree->FindWidget(TEXT("IntentTextBlock")) : nullptr);
-
-	UTextBlock* NameText = Widget->WidgetTree
-		? Cast<UTextBlock>(Widget->WidgetTree->FindWidget(TEXT("PartNameTextBlock")))
-		: nullptr;
-	UHorizontalBox* CoreRow = Widget->WidgetTree
-		? Cast<UHorizontalBox>(Widget->WidgetTree->FindWidget(TEXT("CoreRow")))
-		: nullptr;
-	UTextBlock* IntentText = Widget->WidgetTree
-		? Cast<UTextBlock>(Widget->WidgetTree->FindWidget(TEXT("IntentTextBlock")))
-		: nullptr;
-	TestNotNull(TEXT("Name text exists"), NameText);
-	if (NameText)
-	{
-		TestFalse(TEXT("Name text does not wrap"), NameText->GetAutoWrapText());
-		TestEqual(TEXT("Name text clips overflow"),
-			NameText->GetClipping(),
-			EWidgetClipping::ClipToBoundsAlways);
-	}
-	TestNotNull(TEXT("Intent text exists"), IntentText);
-	if (CoreRow && IntentText)
-	{
-		TestFalse(TEXT("Intent text is not squeezed into core row"),
-			CoreRow->GetAllChildren().Contains(IntentText));
-		TestFalse(TEXT("Intent text does not wrap"), IntentText->GetAutoWrapText());
-		TestGreaterEqual(TEXT("Intent line has readable minimum width"),
-			IntentText->GetMinDesiredWidth(),
-			150.0f);
-	}
-
-	FWacomBattleEnemyPartStatusBadgeView View;
-	View.bVisible = true;
-	View.PartNameText = FText::FromString(TEXT("非常非常长的蛇头部位名称"));
-	View.CurrentHp = 7;
-	View.MaxHp = 12;
-	View.HpText = FText::FromString(TEXT("7/12"));
-	View.InitiativeText = FText::FromString(TEXT("先机 3"));
-	View.CurrentIntentText = FText::FromString(TEXT("意图 撕咬"));
-	Widget->SetStatusBadgeView(View);
-
-	UTextBlock* ShieldText = Widget->WidgetTree
-		? Cast<UTextBlock>(Widget->WidgetTree->FindWidget(TEXT("ShieldTextBlock")))
-		: nullptr;
-	UTextBlock* StatusText = Widget->WidgetTree
-		? Cast<UTextBlock>(Widget->WidgetTree->FindWidget(TEXT("StatusTextBlock")))
-		: nullptr;
-	TestEqual(TEXT("Empty shield collapses"), ShieldText ? ShieldText->GetVisibility() : ESlateVisibility::Visible,
-		ESlateVisibility::Collapsed);
-	TestEqual(TEXT("Empty statuses collapse"), StatusText ? StatusText->GetVisibility() : ESlateVisibility::Visible,
-		ESlateVisibility::Collapsed);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleSceneEnemyPartPredictionBadgeOffsetSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartPredictionBadgeOffsetsWithoutHidingStatusBadge",
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartPredictionBadgeAppliesConfiguredOffset",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleSceneEnemyPartPredictionBadgeOffsetSpec::RunTest(const FString& /*Parameters*/)
@@ -6408,7 +5978,6 @@ bool FWacomUIBattleSceneEnemyPartPredictionBadgeOffsetSpec::RunTest(const FStrin
 	};
 
 	PartActor->PredictionRelativeLocation = FVector(0.0f, 0.0f, 80.0f);
-	PartActor->StatusBadgeRelativeLocation = FVector(0.0f, 0.0f, 100.0f);
 	PartActor->PredictionBadgeZOffsetWhenVisible = 36.0f;
 	PartActor->RefreshAuthoringState();
 
@@ -6432,89 +6001,11 @@ bool FWacomUIBattleSceneEnemyPartPredictionBadgeOffsetSpec::RunTest(const FStrin
 
 	const FWacomBattleEnemyPartPresentationDebugView DebugView =
 		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	TestTrue(TEXT("Status badge remains visible"), DebugView.StatusBadgeView.bVisible);
 	TestTrue(TEXT("Prediction visible"), DebugView.PredictionView.bVisible);
 	TestTrue(TEXT("Prediction offset is active"), DebugView.bPredictionBadgeOffsetActive);
 	TestEqual(TEXT("Prediction offset applied"),
 		PartActor->GetPredictionWidgetComponent()->GetRelativeLocation().Z,
 		PredictionBaseLocation.Z + PartActor->PredictionBadgeZOffsetWhenVisible);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartDestroyedBadgeDimSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartDestroyedStatusBadgeIsDimmedButVisible",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyPartDestroyedBadgeDimSpec::RunTest(const FString& /*Parameters*/)
-{
-	UWorld* World = WacomBattleWidgetSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FWacomBattleFixture Fx;
-	UCardDefinition* DamageCard = Fx.MakeSimpleDamageCard(1, 5);
-	UCharacterDefinition* Character = Fx.MakeCharacter(
-		Fx.MakeNoopCard(0),
-		Fx.MakeNoopCard(0),
-		{ DamageCard });
-	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(5, 20, 20, 5, 5, 5);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
-	const FBattleSnapshot StartSnapshot = Session->BuildSnapshot();
-	const FGuid CardId = WacomBattleWidgetSpec::FindFirstHandCardByTargetMode(
-		StartSnapshot,
-		ECardTargetMode::SingleEnemyPart);
-	const FGuid HeadId = FWacomBattleFixture::FindPartInstanceId(StartSnapshot, 0);
-
-	WacomBattleWidgetSpec::FSceneEnemyHostActors SceneEnemy =
-		WacomBattleWidgetSpec::SpawnSceneEnemyHost(*World, Enemy, { TEXT("Test.Part.Head") });
-	AWacomBattleEnemyPartActor* PartActor = SceneEnemy.Parts.Num() > 0 ? SceneEnemy.Parts[0] : nullptr;
-	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
-		|| !TestNotNull(TEXT("Part actor"), PartActor)
-		|| !TestTrue(TEXT("Card exists"), CardId.IsValid())
-		|| !TestTrue(TEXT("Head exists"), HeadId.IsValid()))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		WacomBattleWidgetSpec::DestroySceneEnemyHost(SceneEnemy);
-	};
-
-	PartActor->StatusBadgeOpacity = 0.93f;
-	PartActor->DestroyedStatusBadgeOpacity = 0.41f;
-	PartActor->RefreshAuthoringState();
-
-	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
-	HUD->SetWorldForTest(World);
-	HUD->SetSession(Session);
-	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
-	HUD->RefreshFromSnapshotForTest(StartSnapshot);
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-
-	TestTrue(TEXT("Play destroying card"),
-		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
-			StartSnapshot,
-			CardId,
-			HeadId)).IsOk());
-	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
-	WacomBattleWidgetSpec::SettleBattlePresentationQueue(*HUD);
-
-	const FWacomBattleEnemyPartPresentationDebugView DebugView =
-		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	TestTrue(TEXT("Destroyed badge remains visible"), DebugView.StatusBadgeView.bVisible);
-	TestTrue(TEXT("Destroyed badge marked"), DebugView.StatusBadgeView.bDestroyed);
-	TestEqual(TEXT("Destroyed opacity applied"),
-		DebugView.CurrentStatusBadgeAppliedOpacity,
-		PartActor->DestroyedStatusBadgeOpacity);
-	if (UUserWidget* StatusWidget = PartActor->GetStatusBadgeWidgetComponent()->GetUserWidgetObject())
-	{
-		TestEqual(TEXT("Status widget render opacity dimmed"),
-			StatusWidget->GetRenderOpacity(),
-			PartActor->DestroyedStatusBadgeOpacity);
-	}
 	return true;
 }
 
@@ -6603,9 +6094,6 @@ bool FWacomUIBattleSceneEnemyPartBadgeLayoutDebugSpec::RunTest(const FString& /*
 
 	PartActor->SetBadgeLayoutStagger(2, FVector(0.0f, 20.0f, 10.0f));
 	PartActor->PredictionBadgeScale = 0.77f;
-	PartActor->StatusBadgeScale = 0.66f;
-	PartActor->StatusBadgeOpacity = 0.88f;
-	PartActor->DestroyedStatusBadgeOpacity = 0.44f;
 	PartActor->PredictionBadgeZOffsetWhenVisible = 33.0f;
 	PartActor->RefreshAuthoringState();
 
@@ -6616,12 +6104,9 @@ bool FWacomUIBattleSceneEnemyPartBadgeLayoutDebugSpec::RunTest(const FString& /*
 		View.BadgeLayoutStaggerOffset,
 		FVector(0.0f, 20.0f, 10.0f));
 	TestEqual(TEXT("Debug view reports prediction scale"), View.PredictionBadgeScale, 0.77f);
-	TestEqual(TEXT("Debug view reports status scale"), View.StatusBadgeScale, 0.66f);
 	const FString Summary = PartActor->GetBattleSceneEnemyPartDebugSummary();
 	TestTrue(TEXT("Summary reports prediction draw size"),
 		Summary.Contains(TEXT("PredictionBadgeDrawSize=")));
-	TestTrue(TEXT("Summary reports status opacity"),
-		Summary.Contains(TEXT("StatusBadgeOpacity=0.88")));
 	TestTrue(TEXT("Summary reports stagger index"),
 		Summary.Contains(TEXT("BadgeStaggerIndex=2")));
 	return true;

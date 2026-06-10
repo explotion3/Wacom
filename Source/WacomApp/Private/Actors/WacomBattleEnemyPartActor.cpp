@@ -13,7 +13,6 @@
 #include "PaperFlipbook.h"
 #include "PaperSprite.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
-#include "UI/Battle/WacomBattleEnemyPartStatusBadgeWidget.h"
 
 AWacomBattleEnemyPartActor::AWacomBattleEnemyPartActor()
 {
@@ -55,14 +54,6 @@ AWacomBattleEnemyPartActor::AWacomBattleEnemyPartActor()
 	PredictionWidgetComponent->SetVisibility(false, true);
 	PredictionWidgetComponent->bEditableWhenInherited = false;
 
-	StatusBadgeWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("StatusBadgeWidget"));
-	StatusBadgeWidgetComponent->SetupAttachment(RootComponent);
-	StatusBadgeWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
-	StatusBadgeWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	StatusBadgeWidgetComponent->SetGenerateOverlapEvents(false);
-	StatusBadgeWidgetComponent->SetVisibility(false, true);
-	StatusBadgeWidgetComponent->bEditableWhenInherited = false;
-
 	RefreshAuthoringState();
 }
 
@@ -97,11 +88,7 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 		PresentationComponent->VisualTargetComponent = nullptr;
 		PresentationComponent->FeedbackTargetComponent = VisualLayersRoot;
 		PresentationComponent->bEnablePredictionDisplay = bEnablePredictionWidget;
-		PresentationComponent->bEnableStatusBadgeDisplay = bEnableStatusBadgeWidget;
 		PresentationComponent->PredictionBadgeScale = PredictionBadgeScale;
-		PresentationComponent->StatusBadgeScale = StatusBadgeScale;
-		PresentationComponent->StatusBadgeOpacity = StatusBadgeOpacity;
-		PresentationComponent->DestroyedStatusBadgeOpacity = DestroyedStatusBadgeOpacity;
 		PresentationComponent->PredictionBadgeZOffsetWhenVisible = PredictionBadgeZOffsetWhenVisible;
 		PresentationComponent->TargetConfirmPulseScale = TargetConfirmPulseScale;
 		PresentationComponent->DamagePulseScale = DamagePulseScale;
@@ -124,22 +111,9 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 		PredictionWidgetComponent->SetVisibility(false, true);
 	}
 
-	if (StatusBadgeWidgetComponent)
-	{
-		StatusBadgeWidgetComponent->SetRelativeLocation(GetAppliedStatusBadgeRelativeLocation());
-		StatusBadgeWidgetComponent->SetDrawSize(StatusBadgeDrawSize);
-		StatusBadgeWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
-		StatusBadgeWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		StatusBadgeWidgetComponent->SetGenerateOverlapEvents(false);
-		StatusBadgeWidgetComponent->SetWidgetClass(
-			StatusBadgeWidgetClass ? StatusBadgeWidgetClass.Get() : UWacomBattleEnemyPartStatusBadgeWidget::StaticClass());
-		StatusBadgeWidgetComponent->SetVisibility(false, true);
-	}
-
 	if (PresentationComponent)
 	{
 		PresentationComponent->SetPredictionWidgetComponent(PredictionWidgetComponent);
-		PresentationComponent->SetStatusBadgeWidgetComponent(StatusBadgeWidgetComponent);
 		PresentationComponent->SetBadgeLayoutDebugState(BadgeLayoutStaggerIndex);
 	}
 
@@ -286,27 +260,15 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 	View.PredictionWidgetName = PredictionWidgetComponent
 		? FName(*PredictionWidgetComponent->GetName())
 		: NAME_None;
-	View.StatusBadgeWidgetName = StatusBadgeWidgetComponent
-		? FName(*StatusBadgeWidgetComponent->GetName())
-		: NAME_None;
 	View.PredictionBadgeRelativeLocation = PredictionWidgetComponent
 		? PredictionWidgetComponent->GetRelativeLocation()
-		: FVector::ZeroVector;
-	View.StatusBadgeRelativeLocation = StatusBadgeWidgetComponent
-		? StatusBadgeWidgetComponent->GetRelativeLocation()
 		: FVector::ZeroVector;
 	View.BadgeLayoutStaggerOffset = BadgeLayoutStaggerOffset;
 	View.PredictionBadgeDrawSize = PredictionWidgetComponent
 		? PredictionWidgetComponent->GetDrawSize()
 		: FVector2D::ZeroVector;
-	View.StatusBadgeDrawSize = StatusBadgeWidgetComponent
-		? StatusBadgeWidgetComponent->GetDrawSize()
-		: FVector2D::ZeroVector;
 	View.BadgeLayoutStaggerIndex = BadgeLayoutStaggerIndex;
 	View.PredictionBadgeScale = PredictionBadgeScale;
-	View.StatusBadgeScale = StatusBadgeScale;
-	View.StatusBadgeOpacity = StatusBadgeOpacity;
-	View.DestroyedStatusBadgeOpacity = DestroyedStatusBadgeOpacity;
 	View.PredictionBadgeZOffsetWhenVisible = PredictionBadgeZOffsetWhenVisible;
 	const WacomBattleEnemyPartTargetAuthoring::FInteractionTargetDebug InteractionDebug =
 		WacomBattleEnemyPartTargetAuthoring::BuildInteractionTargetDebug(
@@ -388,9 +350,4 @@ void AWacomBattleEnemyPartActor::ConfigureDebugSnakeSample(
 FVector AWacomBattleEnemyPartActor::GetAppliedPredictionBadgeRelativeLocation() const
 {
 	return PredictionRelativeLocation + BadgeLayoutStaggerOffset;
-}
-
-FVector AWacomBattleEnemyPartActor::GetAppliedStatusBadgeRelativeLocation() const
-{
-	return StatusBadgeRelativeLocation + BadgeLayoutStaggerOffset;
 }

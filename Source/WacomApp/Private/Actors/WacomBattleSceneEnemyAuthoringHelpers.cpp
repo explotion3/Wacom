@@ -302,7 +302,7 @@ namespace WacomBattleSceneEnemyAuthoring
 	FString FormatHostDebugSummary(const FWacomBattleSceneEnemyDebugView& View)
 	{
 		return FString::Printf(
-			TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s HostVisualMode=%s UsingHostVisual=%s HostVisualAsset=%s GeneratedHostVisualComponents=%d RegisteredHostVisualComponents=%d VisibleHostVisualComponents=%d AuthoringState=%s AuthoringReady=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d StatusBadgeVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s]}"),
+			TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s HostVisualMode=%s UsingHostVisual=%s HostVisualAsset=%s GeneratedHostVisualComponents=%d RegisteredHostVisualComponents=%d VisibleHostVisualComponents=%d AuthoringState=%s AuthoringReady=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s]}"),
 			*View.ActorName,
 			*View.EnemyDefinitionName.ToString(),
 			*View.EnemyId.ToString(),
@@ -322,7 +322,6 @@ namespace WacomBattleSceneEnemyAuthoring
 			View.RuntimeInitiativeTotal,
 			View.HoveredPartActorCount,
 			View.PredictionVisiblePartActorCount,
-			View.StatusBadgeVisiblePartActorCount,
 			View.BadgeLayoutAppliedPartActorCount,
 			View.bUsedByBattleHUD ? TEXT("true") : TEXT("false"),
 			*View.ActiveBattleHUDName,
@@ -381,7 +380,7 @@ namespace WacomBattleSceneEnemyAuthoring
 		const FWacomBattleEnemyPartWorldTargetDebugView& BridgeView = View.BridgeDebugView;
 		const FWacomBattleEnemyPartPresentationDebugView& PresentationView = View.PresentationDebugView;
 		return FString::Printf(
-			TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s AuthoringState=%s AuthoringReady=%s VisualAuthoringMode=%s UsingHostVisual=%s HitOnlyVisual=%s HitBounds=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d RegisteredVisualLayerComponents=%d RegisteredStaticVisualLayerComponents=%d RegisteredFlipbookVisualLayerComponents=%d VisibleVisualLayerComponents=%d VisibleStaticVisualLayerComponents=%d VisibleFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s FeedbackTarget=%s PredictionWidget=%s StatusBadgeWidget=%s PredictionBadgeLocation=%s StatusBadgeLocation=%s PredictionBadgeDrawSize=%s StatusBadgeDrawSize=%s PredictionBadgeScale=%.2f StatusBadgeScale=%.2f StatusBadgeOpacity=%.2f DestroyedStatusBadgeOpacity=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s RuntimePart=%s Hp=%d MaxHp=%d Shield=%d Initiative=%d Destroyed=%s Intent=%s IntentText=%s IntentInitiative=%d IntentResistance=%d StatusText=%s StatusBadgeVisible=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s CurrentStatusBadgeOpacity=%.2f}"),
+			TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s AuthoringState=%s AuthoringReady=%s VisualAuthoringMode=%s UsingHostVisual=%s HitOnlyVisual=%s HitBounds=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d RegisteredVisualLayerComponents=%d RegisteredStaticVisualLayerComponents=%d RegisteredFlipbookVisualLayerComponents=%d VisibleVisualLayerComponents=%d VisibleStaticVisualLayerComponents=%d VisibleFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s FeedbackTarget=%s PredictionWidget=%s PredictionBadgeLocation=%s PredictionBadgeDrawSize=%s PredictionBadgeScale=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s Initiative=%d Destroyed=%s Intent=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s}"),
 			*View.ActorName,
 			*View.EnemySlotId.ToString(),
 			*View.PartSlotId.ToString(),
@@ -411,37 +410,22 @@ namespace WacomBattleSceneEnemyAuthoring
 			*JoinNames(View.VisualLayerAssetNames, TEXT("|")),
 			*View.FeedbackTargetName.ToString(),
 			*View.PredictionWidgetName.ToString(),
-			*View.StatusBadgeWidgetName.ToString(),
 			*View.PredictionBadgeRelativeLocation.ToCompactString(),
-			*View.StatusBadgeRelativeLocation.ToCompactString(),
 			*View.PredictionBadgeDrawSize.ToString(),
-			*View.StatusBadgeDrawSize.ToString(),
 			View.PredictionBadgeScale,
-			View.StatusBadgeScale,
-			View.StatusBadgeOpacity,
-			View.DestroyedStatusBadgeOpacity,
 			View.PredictionBadgeZOffsetWhenVisible,
 			View.BadgeLayoutStaggerIndex,
 			*View.BadgeLayoutStaggerOffset.ToCompactString(),
 			View.bInteractionTargetConfigured ? TEXT("true") : TEXT("false"),
-			*View.InteractionTargetId.ToString(EGuidFormats::DigitsWithHyphens),
+			*View.InteractionTargetId.ToString(),
 			*View.InteractionTargetStableId.ToString(),
 			*BridgeView.PartId.ToString(),
 			BridgeView.bBoundToSnapshot ? TEXT("true") : TEXT("false"),
 			BridgeView.bRegisteredWithBattleHUD ? TEXT("true") : TEXT("false"),
 			PresentationView.bHasRuntimePartFacts ? TEXT("true") : TEXT("false"),
-			*PresentationView.RuntimePartInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
-			PresentationView.CurrentHp,
-			PresentationView.MaxHp,
-			PresentationView.Shield,
 			PresentationView.CurrentInitiative,
 			PresentationView.bRuntimePartDestroyed ? TEXT("true") : TEXT("false"),
 			*PresentationView.CurrentIntentId.ToString(),
-			*PresentationView.StatusBadgeView.CurrentIntentText.ToString(),
-			PresentationView.CurrentIntentInitiative,
-			PresentationView.CurrentIntentResistanceValue,
-			*PresentationView.StatusBadgeView.StatusText.ToString(),
-			PresentationView.StatusBadgeView.bVisible ? TEXT("true") : TEXT("false"),
 			BridgeView.bTargetable ? TEXT("true") : TEXT("false"),
 			*BridgeView.LastBindResult.ToString(),
 			*PresentationView.LastCueKind.ToString(),
@@ -467,10 +451,8 @@ namespace WacomBattleSceneEnemyAuthoring
 			PresentationView.PredictionView.bPerfectReleaseCandidate ? TEXT("true") : TEXT("false"),
 			PresentationView.PredictionView.bActionRisk ? TEXT("true") : TEXT("false"),
 			*PresentationView.PredictionView.RejectReason.ToString(),
-			PresentationView.bPredictionBadgeOffsetActive ? TEXT("true") : TEXT("false"),
-			PresentationView.CurrentStatusBadgeAppliedOpacity);
+			PresentationView.bPredictionBadgeOffsetActive ? TEXT("true") : TEXT("false"));
 	}
-
 #if WITH_EDITOR
 	EDataValidationResult ValidateHostPlacement(
 		const AWacomBattleEnemyActor& EnemyActor,

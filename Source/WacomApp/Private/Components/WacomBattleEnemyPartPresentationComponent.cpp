@@ -11,7 +11,6 @@
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
-#include "UI/Battle/WacomBattleEnemyPartStatusBadgeWidget.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
 
 #define LOCTEXT_NAMESPACE "WacomBattleEnemyPartPresentation"
@@ -28,22 +27,9 @@ void UWacomBattleEnemyPartPresentationComponent::CacheRuntimePartFacts(
 	PartId = InPartId;
 	RuntimePartInstanceId = Part.InstanceId;
 	bHasRuntimePartFacts = Part.InstanceId.IsValid();
-	RuntimePartDisplayName =
-		Part.Definition && !Part.Definition->DisplayName.IsEmpty()
-			? Part.Definition->DisplayName
-			: FText::FromName(PartId);
-	CurrentHp = Part.CurrentHp;
-	MaxHp = Part.MaxHp;
-	Shield = Part.Shield;
 	CurrentInitiative = Part.CurrentInitiative;
 	bRuntimePartDestroyed = Part.bDestroyed;
 	CurrentIntentId = Part.CurrentIntent.IntentId;
-	CurrentIntentDisplayName = Part.CurrentIntent.DisplayName;
-	CurrentIntentInitiative = Part.CurrentIntent.Initiative;
-	CurrentIntentResistanceValue = Part.CurrentIntent.ResistanceValue;
-	RuntimeStatuses = Part.Statuses;
-	RuntimeStatusStacks = Part.StatusStacks;
-	RefreshStatusBadgeDisplay();
 	RefreshPredictionDisplay();
 }
 
@@ -51,19 +37,9 @@ void UWacomBattleEnemyPartPresentationComponent::ClearRuntimePartFacts()
 {
 	RuntimePartInstanceId.Invalidate();
 	bHasRuntimePartFacts = false;
-	RuntimePartDisplayName = FText::GetEmpty();
-	CurrentHp = 0;
-	MaxHp = 0;
-	Shield = 0;
 	CurrentInitiative = 0;
 	bRuntimePartDestroyed = false;
 	CurrentIntentId = NAME_None;
-	CurrentIntentDisplayName = FText::GetEmpty();
-	CurrentIntentInitiative = 0;
-	CurrentIntentResistanceValue = 0;
-	RuntimeStatuses.Reset();
-	RuntimeStatusStacks.Reset();
-	RefreshStatusBadgeDisplay();
 	RefreshPredictionDisplay();
 }
 
@@ -193,13 +169,6 @@ void UWacomBattleEnemyPartPresentationComponent::SetPredictionWidgetComponent(
 	ApplyPredictionViewToWidget();
 }
 
-void UWacomBattleEnemyPartPresentationComponent::SetStatusBadgeWidgetComponent(
-	UWidgetComponent* InStatusBadgeWidgetComponent)
-{
-	StatusBadgeWidgetComponent = InStatusBadgeWidgetComponent;
-	ApplyStatusBadgeViewToWidget();
-}
-
 void UWacomBattleEnemyPartPresentationComponent::SetBadgeLayoutDebugState(int32 InStaggerIndex)
 {
 	BadgeLayoutStaggerIndex = InStaggerIndex;
@@ -212,28 +181,15 @@ void UWacomBattleEnemyPartPresentationComponent::ClearPredictionDisplay(FName Re
 	ApplyPredictionViewToWidget();
 }
 
-void UWacomBattleEnemyPartPresentationComponent::ClearStatusBadgeDisplay(FName /*Reason*/)
-{
-	CurrentStatusBadgeView = FWacomBattleEnemyPartStatusBadgeView();
-	ApplyStatusBadgeViewToWidget();
-}
-
 FWacomBattleEnemyPartPresentationDebugView
 UWacomBattleEnemyPartPresentationComponent::GetBattleEnemyPartPresentationDebugView() const
 {
 	FWacomBattleEnemyPartPresentationDebugView View;
 	View.bHasRuntimePartFacts = bHasRuntimePartFacts;
 	View.RuntimePartInstanceId = RuntimePartInstanceId;
-	View.RuntimePartDisplayName = RuntimePartDisplayName;
-	View.CurrentHp = CurrentHp;
-	View.MaxHp = MaxHp;
-	View.Shield = Shield;
 	View.CurrentInitiative = CurrentInitiative;
 	View.bRuntimePartDestroyed = bRuntimePartDestroyed;
 	View.CurrentIntentId = CurrentIntentId;
-	View.CurrentIntentDisplayName = CurrentIntentDisplayName;
-	View.CurrentIntentInitiative = CurrentIntentInitiative;
-	View.CurrentIntentResistanceValue = CurrentIntentResistanceValue;
 	View.LastCueKind = LastCueKind;
 	View.LastCueType = LastCueType;
 	View.LastCueAmount = LastCueAmount;
@@ -247,26 +203,13 @@ UWacomBattleEnemyPartPresentationComponent::GetBattleEnemyPartPresentationDebugV
 	View.HoverWorldTargetId = HoverWorldTargetId;
 	View.HoverScreenPosition = HoverScreenPosition;
 	View.PredictionView = CurrentPredictionView;
-	View.StatusBadgeView = CurrentStatusBadgeView;
 	if (const UWidgetComponent* PredictionWidget = PredictionWidgetComponent.Get())
 	{
 		View.PredictionWidgetName = FName(*PredictionWidget->GetName());
 		View.PredictionBadgeRelativeLocation = PredictionWidget->GetRelativeLocation();
 		View.PredictionBadgeDrawSize = PredictionWidget->GetDrawSize();
 	}
-	if (const UWidgetComponent* StatusWidgetComponent = StatusBadgeWidgetComponent.Get())
-	{
-		View.StatusBadgeWidgetName = FName(*StatusWidgetComponent->GetName());
-		View.StatusBadgeRelativeLocation = StatusWidgetComponent->GetRelativeLocation();
-		View.StatusBadgeDrawSize = StatusWidgetComponent->GetDrawSize();
-	}
 	View.PredictionBadgeScale = PredictionBadgeScale;
-	View.StatusBadgeScale = StatusBadgeScale;
-	View.StatusBadgeOpacity = StatusBadgeOpacity;
-	View.DestroyedStatusBadgeOpacity = DestroyedStatusBadgeOpacity;
-	View.CurrentStatusBadgeAppliedOpacity = CurrentStatusBadgeView.bDestroyed
-		? DestroyedStatusBadgeOpacity
-		: StatusBadgeOpacity;
 	View.PredictionBadgeZOffsetWhenVisible = PredictionBadgeZOffsetWhenVisible;
 	View.bPredictionBadgeOffsetActive = CurrentPredictionView.bVisible && PredictionBadgeZOffsetWhenVisible > 0.0f;
 	View.BadgeLayoutStaggerIndex = BadgeLayoutStaggerIndex;
@@ -320,7 +263,8 @@ void UWacomBattleEnemyPartPresentationComponent::RefreshPredictionDisplay()
 	}
 	else if (bHoverProbeActive)
 	{
-		CurrentPredictionView = BuildPredictionView(LastHoverPredictionInput);
+		ClearPredictionDisplay(TEXT("EnemyPanelHover"));
+		return;
 	}
 	else
 	{
@@ -363,44 +307,6 @@ void UWacomBattleEnemyPartPresentationComponent::ApplyPredictionViewToWidget()
 			Cast<UWacomBattleEnemyPartPredictionWidget>(UserWidget))
 		{
 			PredictionWidget->SetPredictionView(CurrentPredictionView);
-		}
-	}
-}
-
-void UWacomBattleEnemyPartPresentationComponent::RefreshStatusBadgeDisplay()
-{
-	if (!bEnableStatusBadgeDisplay || !bHasRuntimePartFacts)
-	{
-		ClearStatusBadgeDisplay(!bEnableStatusBadgeDisplay ? TEXT("Disabled") : TEXT("MissingRuntimeFacts"));
-		return;
-	}
-
-	CurrentStatusBadgeView = BuildStatusBadgeView();
-	ApplyStatusBadgeViewToWidget();
-}
-
-void UWacomBattleEnemyPartPresentationComponent::ApplyStatusBadgeViewToWidget()
-{
-	UWidgetComponent* WidgetComponent = StatusBadgeWidgetComponent.Get();
-	if (!WidgetComponent)
-	{
-		return;
-	}
-
-	WidgetComponent->SetVisibility(CurrentStatusBadgeView.bVisible, true);
-	const float AppliedOpacity = CurrentStatusBadgeView.bDestroyed
-		? DestroyedStatusBadgeOpacity
-		: StatusBadgeOpacity;
-	WidgetComponent->InitWidget();
-	if (UUserWidget* UserWidget = WidgetComponent->GetUserWidgetObject())
-	{
-		UserWidget->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
-		UserWidget->SetRenderScale(FVector2D(StatusBadgeScale, StatusBadgeScale));
-		UserWidget->SetRenderOpacity(AppliedOpacity);
-		if (UWacomBattleEnemyPartStatusBadgeWidget* StatusBadgeWidget =
-			Cast<UWacomBattleEnemyPartStatusBadgeWidget>(UserWidget))
-		{
-			StatusBadgeWidget->SetStatusBadgeView(CurrentStatusBadgeView);
 		}
 	}
 }
@@ -464,73 +370,6 @@ FWacomBattleEnemyPartPredictionView UWacomBattleEnemyPartPresentationComponent::
 		View.DetailText = LOCTEXT("ActionRisk", "行动风险");
 	}
 	return View;
-}
-
-FWacomBattleEnemyPartStatusBadgeView
-UWacomBattleEnemyPartPresentationComponent::BuildStatusBadgeView() const
-{
-	FWacomBattleEnemyPartStatusBadgeView View;
-	View.bVisible = bHasRuntimePartFacts;
-	View.PartId = PartId;
-	View.PartInstanceId = RuntimePartInstanceId;
-	View.PartNameText = RuntimePartDisplayName.IsEmpty() ? FText::FromName(PartId) : RuntimePartDisplayName;
-	View.CurrentHp = CurrentHp;
-	View.MaxHp = MaxHp;
-	View.Shield = Shield;
-	View.CurrentInitiative = CurrentInitiative;
-	View.CurrentIntentId = CurrentIntentId;
-	View.bDestroyed = bRuntimePartDestroyed;
-	View.HpText = FText::Format(
-		LOCTEXT("StatusBadgeHpFmt", "{0}/{1}"),
-		FText::AsNumber(CurrentHp),
-		FText::AsNumber(MaxHp));
-	View.InitiativeText = FText::Format(
-		LOCTEXT("StatusBadgeInitiativeFmt", "先机 {0}"),
-		FText::AsNumber(CurrentInitiative));
-	if (bRuntimePartDestroyed)
-	{
-		View.CurrentIntentText = LOCTEXT("StatusBadgeDestroyedIntent", "已破坏");
-	}
-	else
-	{
-		const FText IntentName = CurrentIntentDisplayName.IsEmpty()
-			? FText::FromString(TEXT("--"))
-			: CurrentIntentDisplayName;
-		View.CurrentIntentText = FText::Format(
-			LOCTEXT("StatusBadgeIntentFmt", "意图 {0}"),
-			IntentName);
-	}
-	if (Shield > 0)
-	{
-		View.ShieldText = FText::Format(
-			LOCTEXT("StatusBadgeShieldFmt", "护盾 {0}"),
-			FText::AsNumber(Shield));
-	}
-	View.StatusText = BuildStatusBadgeStatusText();
-	return View;
-}
-
-FText UWacomBattleEnemyPartPresentationComponent::BuildStatusBadgeStatusText() const
-{
-	TArray<FString> Parts;
-	TArray<FGameplayTag> Tags;
-	RuntimeStatuses.GetGameplayTagArray(Tags);
-	Tags.Sort([](const FGameplayTag& Left, const FGameplayTag& Right)
-	{
-		return Left.GetTagName().LexicalLess(Right.GetTagName());
-	});
-	for (const FGameplayTag& Tag : Tags)
-	{
-		const int32* Stack = RuntimeStatusStacks.Find(Tag);
-		const int32 StackCount = Stack ? *Stack : 0;
-		const FString StatusName = UWacomBattleEventPresentationBuilder::FormatStatusName(Tag);
-		Parts.Add(StackCount > 1
-			? FString::Printf(TEXT("%s x%d"), *StatusName, StackCount)
-			: StatusName);
-	}
-	return Parts.Num() > 0
-		? FText::FromString(FString::Join(Parts, TEXT(" / ")))
-		: FText::GetEmpty();
 }
 
 void UWacomBattleEnemyPartPresentationComponent::ApplyPersistentScaleState()
