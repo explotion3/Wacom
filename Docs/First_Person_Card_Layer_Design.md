@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-06-06
+updated: 2026-06-11
 tags:
   - wacom/ui
   - wacom/cards
@@ -62,15 +62,35 @@ ViewportClampMode = SoftClampToViewport
 
 `SoftClampToViewport` 允许手牌中心部分离开视口，超过 soft allowance 后再柔性拉回，保留空间感。`HardClampToViewport` 用于复现旧的始终屏内行为，`AllowOffscreen` 用于验证最接近空间物体的表现。
 
-`UWacomFirstPersonCardLayoutPreset` 是 first-person hand 表现调参 DataAsset，位于 `WacomApp`，不是 `WacomData` 规则数据。Preset 运行时生成 resolved config，不把值写回组件 UPROPERTY，也不覆盖 `FirstPersonCardViewClass`、prototype preview、debug 开关或 viewport ZOrder。
+当前 first-person hand 的正式制作入口是 `UWacomFirstPersonCardAnchorComponent` Details 面板参数。`BP_WacomPlayerCharacter` 上的 AnchorComponent 直接承载卡面 Widget、锚点位置、投影、手牌形状、slot motion、hover、gesture、feedback 和 camera look 调参；这些字段是当前 Battle / Run 手牌表现的主线来源。
 
-`UWacomFirstPersonCardAnchorComponent.FirstPersonCardLayoutPreset` 是组件默认 / fallback preset。Battle 和 Run 可以在各自 source 激活时声明 source-owned runtime preset override：`UBattleHUD.BattleFirstPersonCardLayoutPreset` 用于战斗手牌，`UWacomRunFirstPersonCardSourceComponent.RunFirstPersonCardLayoutPreset` 用于探索默认源和菜单租约。Runtime override 只在 `RuntimeCardLayerSourceId` 与 override `SourceId` 相同时参与 resolved config；例如 BattleHand 清理晚于 Run source 重启时，Battle 残留 preset 不会继续驱动 Run hand，也不会误清 Run 的 preset。
+`UWacomFirstPersonCardLayoutPreset` 位于 `WacomApp`，当前作为 legacy / paused 路径保留，用于旧资产和 runtime preset override 兼容，不作为现阶段新内容调参主线。本轮不删除 Preset、validator、Battle / Run preset 字段或相关测试；后续是否删除或重新启用需要单独评估。
 
-`UWacomFirstPersonCardLayoutPreset` 已接入 Editor DataValidation。会导致布局不可见、数学异常或范围非法的值会报 Invalid，例如非正缩放、非法 viewport anchor、像素吸附网格小于等于 0、edge drop 数量范围反向。能运行但调参风险较高的值只报 Warning，例如 BodyLocked 下配置了 LookInfluence、Look Responsive influence 偏高、scale / edge drop / fan angle 过大，或启用 smoothing / slot motion 但速度为 0。
+`LookInfluenceYaw / LookInfluencePitch` 也属于 first-person hand 表现参数，当前推荐直接在 AnchorComponent Details 中调整。制作起点：战斗默认使用 `BodyLocked`；探索、特殊检查或希望手牌有更强空间跟随感的场景可使用 `Look Responsive Projected`。`LookInfluenceYaw` 建议先在 `0.05-0.35` 内调，`LookInfluencePitch` 建议先在 `0.03-0.20` 内调；如果手牌在移动鼠标时过度漂移、读牌不稳或与镜头响应产生二次晃动，优先降低这两个值，再调整 clamp / smoothing。
 
-`LookInfluenceYaw / LookInfluencePitch` 也属于 first-person hand 表现参数，可由 `UWacomFirstPersonCardLayoutPreset` 覆盖。推荐制作起点：战斗默认使用 `BodyLocked`；探索、特殊检查或希望手牌有更强空间跟随感的场景可使用 `Look Responsive Projected`。`LookInfluenceYaw` 建议先在 `0.05-0.35` 内调，`LookInfluencePitch` 建议先在 `0.03-0.20` 内调；如果手牌在移动鼠标时过度漂移、读牌不稳或与镜头响应产生二次晃动，优先降低这两个值，再调整 clamp / smoothing。
+Anchor Details 分类使用稳定编号，当前口径如下：
 
-Anchor debug view 会同时报告 `ResolvedLayoutPresetName`、`bUsingRuntimeLayoutPresetOverride`、`RuntimeLayoutPresetOverrideSourceId`、`RawCursorLookOffset`、`AppliedAnchorLookOffset`、`LookInfluenceYaw`、`LookInfluencePitch` 和 `bLookResponsiveProjection`。排查时可以用它区分“鼠标确实产生了 look offset”与“该 offset 是否被当前 ProjectionMode / Preset 应用到 hand anchor”，以及当前 resolved preset 来自组件默认值还是当前 runtime source 的 override。Automation view 仍会暴露当前存储的 override owner / asset；它可能是等待原 owner 清理的残留值，不代表 resolved config 正在使用它。
+| 分类 | 主要内容 |
+|---|---|
+| `01 Card View` | `FirstPersonCardViewClass` |
+| `02 Anchor World Position` | 世界锚点距离、偏移、间距、扇形 yaw、跟随速度 |
+| `03 Projection` | 投影模式、Look Responsive、viewport clamp、pixel snap、角度限制 |
+| `04 Hand Shape` | Authored2D 间距、宽度、中心抬升、曲线、底部保护、卡牌 scale、edge drop、不可用透明度 |
+| `05 Slot Motion` | 基础 slot 插值、入场 / 离场通用参数 |
+| `06 Transition Motion` | Drawn / Gained / Played / Discarded 事件转场方向和来源 |
+| `07 Hover` | hover lift / scale / ZOrder / hit hysteresis |
+| `08 Targeting State` | pending targeting、target select deemphasis |
+| `09 Gesture` | 点击出牌、按住读牌、拖出提交、inspect 姿态、aim arrow |
+| `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit feedback |
+| `11 Drag Target Feedback` | world / card target 颜色、opacity、arrow snap、card-target focus |
+| `12 Camera Look While UI` | hover / pointer 和 drag 期间 camera look override |
+| `90 Prototype Preview` | static preview-only 字段 |
+| `98 Legacy / Preset` | legacy preset 和 `HandAnchorScale` |
+| `99 Debug` | debug widget、projection debug、motion / drag diagnostics |
+
+`StaticCardRenderScale`、`StaticCardEdgeDropPixels`、`bScaleEdgeDropByHandCount`、`ShortHandEdgeDropPixels`、`EdgeDropScaleMinCardCount` 和 `EdgeDropScaleMaxCardCount` 是 runtime hand 表现参数，不是 prototype-only。`Prototype Preview` 只保留静态预览开关、预览 Widget、预览卡牌定义、预览 ZOrder 和 fallback count。
+
+Anchor debug view 会同时报告 `ResolvedLayoutPresetName`、`bUsingRuntimeLayoutPresetOverride`、`RuntimeLayoutPresetOverrideSourceId`、`RawCursorLookOffset`、`AppliedAnchorLookOffset`、`LookInfluenceYaw`、`LookInfluencePitch` 和 `bLookResponsiveProjection`。排查时可以用它区分“鼠标确实产生了 look offset”与“该 offset 是否被当前 ProjectionMode 应用到 hand anchor”。Preset 相关 debug 字段仅表示 legacy / override 兼容状态，不代表当前新内容推荐通过 Preset 调参。
 
 边缘下坠是纯表现参数，不影响战斗规则、手牌数量或卡牌状态。`StaticCardEdgeDropPixels` 表示大手牌时最外侧卡牌的最大下坠；默认开启 `bScaleEdgeDropByHandCount` 后，5 张及以下使用 `ShortHandEdgeDropPixels`，12 张及以上使用 `StaticCardEdgeDropPixels`，中间数量用 SmoothStep 平滑过渡。左右手锚点牌在规则上承担手牌区域切分语义，但在 first-person hand 表现层仍按普通卡牌参与下坠、缩放、扇形角度和层级计算。推荐起点是 `ShortHandEdgeDropPixels = 64`、`StaticCardEdgeDropPixels = 110`、`EdgeDropScaleMinCardCount = 5`、`EdgeDropScaleMaxCardCount = 12`。
 
@@ -91,13 +111,7 @@ Runtime source 优先级：
 
 BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。清理或 `NativeDestruct` 可能晚于 Run source 重新激活，因此 BattleHUD 解绑自身 delegate 时必须检查 Anchor 当前 `RuntimeCardLayerSourceId`：只有仍为 `BattleHand` 时才关闭 first-person card interaction、取消拖拽和清 runtime data；如果已经被 `RunFirstPersonBattleDeck` 或 menu lease 接管，只能解绑 BattleHUD delegate 和清战斗 world preview，不得改写 Run source 的交互状态。
 
-Layout preset ownership 与 runtime card data ownership 使用同一套 source 语义，但互相独立：BattleHand 同步时可设置 `BattleFirstPersonCardLayoutPreset`，Run default source / Run menu lease 同步时可设置 `RunFirstPersonCardLayoutPreset`，GameMenu suppression 空 source 不占用 preset。清理时只有 matching `SourceId` 能清自己的 preset override，避免 Battle / Run 生命周期交错时出现 preset 被旧 source 误清。
-
-推荐配置：
-
-- Battle hand preset：稳定 `BodyLocked`，优先保证读牌、拖拽目标和战斗反馈稳定。
-- Run preset：可选 `Look Responsive Projected`，使用较低 `LookInfluenceYaw / LookInfluencePitch` 做探索期视差。
-- Run menu lease：当前跟随 Run preset；如果后续菜单需要更平面的读卡风格，再单独引入 menu lease preset 字段。
+Runtime source 只拥有卡牌 entries、transition hints、interaction ownership 和 source 生命周期；视觉调参当前主要来自 AnchorComponent Details。Legacy preset ownership 仍保留 source 语义并与 runtime card data ownership 独立，清理时只有 matching `SourceId` 能清自己的 preset override，避免 Battle / Run 生命周期交错时出现 preset 被旧 source 误清；但新内容暂不推荐通过 preset 字段调参。
 
 BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
 
@@ -141,7 +155,7 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 
 悬浮和拖拽期间，卡牌层都会记录 DPI-aware widget-space 指针和归一化视口坐标。普通 hover 的 mouse move 被 UMG 处理后，`UWacomFirstPersonCardLayerWidget` 会广播 `FWacomFirstPersonCardPointerView`，由 BattleHUD 写入 Battle camera look 临时 override，探索 / Run 则由 `AWacomPlayerController` 写入 Run Tunnel cursor look override。因此鼠标在悬浮放大的卡牌上移动时，镜头仍会跟随当前指针，不会等离开卡牌后突然跳到新位置。
 
-拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。拖拽镜头旧参数 `bAllowCameraLookDuringCardDrag`、`CardDragCameraLookScale`、`CardDragCameraLookInterpSpeedOverride` 继续只控制 drag override，保持既有资产兼容；hover / pointer 通用路径使用 `bAllowCameraLookDuringCardPointer`、`CardPointerCameraLookScale`、`CardPointerCameraLookInterpSpeedOverride`，也可由 `UWacomFirstPersonCardLayoutPreset` 覆盖。拖拽 active 时会清空并压制普通 pointer view，避免 hover override 与 drag override 抢同一个 camera look 状态。
+拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。拖拽镜头旧参数 `bAllowCameraLookDuringCardDrag`、`CardDragCameraLookScale`、`CardDragCameraLookInterpSpeedOverride` 继续只控制 drag override，保持既有资产兼容；hover / pointer 通用路径使用 `bAllowCameraLookDuringCardPointer`、`CardPointerCameraLookScale`、`CardPointerCameraLookInterpSpeedOverride`。这些 camera look 参数当前推荐在 AnchorComponent Details 的 `12 Camera Look While UI` 分类中调整。拖拽 active 时会清空并压制普通 pointer view，避免 hover override 与 drag override 抢同一个 camera look 状态。
 
 Hover 输入命中与 hover 视觉几何分离。Anchor 构建 slot view 时会先写入稳定输入几何：`InputHitCenter`、`InputHitScale`、`InputHitAngleDegrees`、`InputHitOrder`，再应用 hover / pending 的视觉 lift、scale 和 ZOrder。悬浮卡仍然可以放大、抬升并绘制在上层，但鼠标命中哪张牌由 `UWacomFirstPersonCardLayerWidget` 使用基础几何统一解析，不再由被 Slate 命中的单个 slot 自行决定。
 

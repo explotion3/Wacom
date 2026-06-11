@@ -166,6 +166,12 @@ tags:
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
   - 说明：后续按美术反馈微调扇形参数、卡面采样、Retainer 外元素、slot motion、commit pulse 和 drag / aim 读牌姿态。
 
+- [ ] **评估 / 清理 FirstPersonCardLayoutPreset legacy 路径**
+  - 状态：`Ready: 单独清理切片`
+  - 归属：UI / First-person hand
+  - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)
+  - 说明：当前 first-person hand 制作入口是 `UWacomFirstPersonCardAnchorComponent` Details 参数；`UWacomFirstPersonCardLayoutPreset`、runtime preset override、validator 和相关测试本轮仅作为 legacy / paused 路径保留，后续单独评估删除或重新启用。
+
 - [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
   - 状态：`Blocked: Demo 范围确认`
   - 归属：Run / App
