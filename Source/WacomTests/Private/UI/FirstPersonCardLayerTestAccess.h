@@ -28,7 +28,7 @@ struct FWacomFirstPersonCardLayerTestAccess
 		UWacomRunFirstPersonCardSourceComponent& Source,
 		const FWacomRunMenuCardLeaseRequest& Request);
 
-	static UWacomFirstPersonCardLayerWidget* StaticLayer(
+	static UWacomFirstPersonCardLayerWidget* CardLayer(
 		const UWacomFirstPersonCardAnchorComponent& Anchor);
 	static void SetHoveredCardInstanceId(
 		UWacomFirstPersonCardAnchorComponent& Anchor,

@@ -9,7 +9,6 @@
 #include "WacomRunFirstPersonCardSourceComponent.generated.h"
 
 class UCardDefinition;
-class UWacomFirstPersonCardLayoutPreset;
 class URunSession;
 
 USTRUCT(BlueprintType)
@@ -190,9 +189,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards", meta = (ToolTip = "写入 Anchor 的 runtime source id。用于和 BattleHUD 的战斗手牌 source 区分。"))
 	FName RunFirstPersonCardLayerSourceId = TEXT("RunFirstPersonBattleDeck");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Presentation", meta = (ToolTip = "探索期第一人称手牌表现 preset。为空时使用 Anchor 组件默认 preset；默认源和菜单卡牌租约共享该表现，不影响 Run 规则或卡牌持有区。"))
-	TObjectPtr<UWacomFirstPersonCardLayoutPreset> RunFirstPersonCardLayoutPreset = nullptr;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "开启后，探索期第一人称卡牌 source 刷新和清理会输出简短日志。默认关闭。"))
 	bool bLogRunFirstPersonCardLayer = false;
 
@@ -280,7 +276,6 @@ private:
 		bool bIsValid = false;
 		uint64 BackpackStorageRevision = 0;
 		FName SourceId = NAME_None;
-		const UWacomFirstPersonCardLayoutPreset* LayoutPreset = nullptr;
 		bool bIncludeProjectedCards = false;
 
 		void Reset()
@@ -288,7 +283,6 @@ private:
 			bIsValid = false;
 			BackpackStorageRevision = 0;
 			SourceId = NAME_None;
-			LayoutPreset = nullptr;
 			bIncludeProjectedCards = false;
 		}
 	};
@@ -299,7 +293,6 @@ private:
 		uint64 BackpackStorageRevision = 0;
 		FName LeaseId = NAME_None;
 		FName SourceId = NAME_None;
-		const UWacomFirstPersonCardLayoutPreset* LayoutPreset = nullptr;
 		FWacomRunMenuCardLeaseRequest ProviderRequest;
 
 		void Reset()
@@ -308,7 +301,6 @@ private:
 			BackpackStorageRevision = 0;
 			LeaseId = NAME_None;
 			SourceId = NAME_None;
-			LayoutPreset = nullptr;
 			ProviderRequest = FWacomRunMenuCardLeaseRequest();
 		}
 	};

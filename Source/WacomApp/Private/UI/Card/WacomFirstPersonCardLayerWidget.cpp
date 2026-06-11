@@ -232,6 +232,35 @@ void UWacomFirstPersonCardLayerWidget::SetSlotMotionConfig(
 	}
 }
 
+void UWacomFirstPersonCardLayerWidget::SetSlotVisualConfig(
+	const FWacomFirstPersonCardSlotVisualConfig& InConfig)
+{
+	const FWacomFirstPersonCardSlotVisualConfig NewConfig = NormalizeSlotVisualConfig(InConfig);
+	if (AreSlotVisualConfigsEquivalent(SlotVisualConfig, NewConfig))
+	{
+		return;
+	}
+
+	SlotVisualConfig = NewConfig;
+#if WITH_AUTOMATION_TESTS
+	++SlotVisualConfigPropagationCountForTest;
+#endif
+	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (SlotWidget)
+		{
+			SlotWidget->SetSlotVisualConfig(SlotVisualConfig);
+		}
+	}
+	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
+	{
+		if (SlotWidget)
+		{
+			SlotWidget->SetSlotVisualConfig(SlotVisualConfig);
+		}
+	}
+}
+
 void UWacomFirstPersonCardLayerWidget::SetSlotFeedbackConfig(
 	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig)
 {
@@ -521,6 +550,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		SlotWidget->SetSlotMotionKey(SlotKey);
 		SlotWidget->SetCardViewClass(CardViewClass);
 		SlotWidget->SetSlotMotionConfig(SlotMotionConfig);
+		SlotWidget->SetSlotVisualConfig(SlotVisualConfig);
 		SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
 		SlotWidget->SetCardDragConfig(CardDragConfig);
 		SlotWidget->SetCardLayerInteractionEnabled(bCardLayerInteractionEnabled);
@@ -664,12 +694,6 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 	PendingTransitionHintsByKey.Reset();
 }
 
-void UWacomFirstPersonCardLayerWidget::SetStaticCardSlots(
-	const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots)
-{
-	SetCardSlots(InSlots);
-}
-
 bool UWacomFirstPersonCardLayerWidget::CanSkipEquivalentSlotRefresh(
 	const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots) const
 {
@@ -744,6 +768,7 @@ bool UWacomFirstPersonCardLayerWidget::AreSlotViewsEquivalentForRefresh(
 		&& A.bPixelSnapped == B.bPixelSnapped
 		&& A.bBodyBottomViewportAdjusted == B.bBodyBottomViewportAdjusted
 		&& A.bIsHovered == B.bIsHovered
+		&& A.bHasPendingTargetingCardInHand == B.bHasPendingTargetingCardInHand
 		&& A.bAnchorScreenSmoothed == B.bAnchorScreenSmoothed
 		&& A.bBodyLockedLayout == B.bBodyLockedLayout
 		&& A.bCurrentCameraProjection == B.bCurrentCameraProjection
@@ -882,9 +907,11 @@ FWacomFirstPersonCardLayerAutomationTestView UWacomFirstPersonCardLayerWidget::G
 	FWacomFirstPersonCardLayerAutomationTestView View;
 	View.SkippedEquivalentSlotRefreshCount = SkippedEquivalentSlotRefreshCountForTest;
 	View.SlotMotionConfigPropagationCount = SlotMotionConfigPropagationCountForTest;
+	View.SlotVisualConfigPropagationCount = SlotVisualConfigPropagationCountForTest;
 	View.SlotFeedbackConfigPropagationCount = SlotFeedbackConfigPropagationCountForTest;
 	View.CardDragConfigPropagationCount = CardDragConfigPropagationCountForTest;
 	View.SlotMotionConfig = SlotMotionConfig;
+	View.SlotVisualConfig = SlotVisualConfig;
 	View.SlotFeedbackConfig = SlotFeedbackConfig;
 	View.CardDragConfig = CardDragConfig;
 	View.CurrentDragView = CurrentDragView;
@@ -1200,6 +1227,7 @@ UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::CreateSl
 
 	SlotWidget->SetCardViewClass(CardViewClass);
 	SlotWidget->SetSlotMotionConfig(SlotMotionConfig);
+	SlotWidget->SetSlotVisualConfig(SlotVisualConfig);
 	SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
 	SlotWidget->SetCardDragConfig(CardDragConfig);
 	SlotWidget->SetCardLayerInteractionEnabled(bCardLayerInteractionEnabled);

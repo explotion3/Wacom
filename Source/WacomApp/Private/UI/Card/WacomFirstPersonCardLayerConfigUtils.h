@@ -11,6 +11,12 @@ bool AreSlotMotionConfigsEquivalent(
 	const FWacomFirstPersonCardSlotMotionConfig& A,
 	const FWacomFirstPersonCardSlotMotionConfig& B);
 
+FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
+	const FWacomFirstPersonCardSlotVisualConfig& InConfig);
+bool AreSlotVisualConfigsEquivalent(
+	const FWacomFirstPersonCardSlotVisualConfig& A,
+	const FWacomFirstPersonCardSlotVisualConfig& B);
+
 FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
 	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
 bool AreSlotFeedbackConfigsEquivalent(

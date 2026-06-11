@@ -47,10 +47,10 @@ void FWacomFirstPersonCardLayerTestAccess::SetActiveProviderLeaseRequest(
 	Source.SetActiveProviderLeaseRequestForTest(Request);
 }
 
-UWacomFirstPersonCardLayerWidget* FWacomFirstPersonCardLayerTestAccess::StaticLayer(
+UWacomFirstPersonCardLayerWidget* FWacomFirstPersonCardLayerTestAccess::CardLayer(
 	const UWacomFirstPersonCardAnchorComponent& Anchor)
 {
-	return Anchor.GetAutomationTestViewForTest().StaticCardLayerWidget;
+	return Anchor.GetAutomationTestViewForTest().CardLayerWidget;
 }
 
 void FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(

@@ -64,7 +64,7 @@ ViewportClampMode = SoftClampToViewport
 
 当前 first-person hand 的正式制作入口是 `UWacomFirstPersonCardAnchorComponent` Details 面板参数。`BP_WacomPlayerCharacter` 上的 AnchorComponent 直接承载卡面 Widget、锚点位置、投影、手牌形状、slot motion、hover、gesture、feedback 和 camera look 调参；这些字段是当前 Battle / Run 手牌表现的主线来源。
 
-`UWacomFirstPersonCardLayoutPreset` 位于 `WacomApp`，当前作为 legacy / paused 路径保留，用于旧资产和 runtime preset override 兼容，不作为现阶段新内容调参主线。本轮不删除 Preset、validator、Battle / Run preset 字段或相关测试；后续是否删除或重新启用需要单独评估。
+旧 `UWacomFirstPersonCardLayoutPreset` DataAsset、runtime override API、Anchor 内部 preset resolve、editor validator 和相关测试已经删除。战斗与探索手牌表现都应通过玩家 AnchorComponent Details 参数调节；如果后续需要共享调参模板，应重新设计新的数据合同，而不是恢复旧 preset 路径。
 
 `LookInfluenceYaw / LookInfluencePitch` 也属于 first-person hand 表现参数，当前推荐直接在 AnchorComponent Details 中调整。制作起点：战斗默认使用 `BodyLocked`；探索、特殊检查或希望手牌有更强空间跟随感的场景可使用 `Look Responsive Projected`。`LookInfluenceYaw` 建议先在 `0.05-0.35` 内调，`LookInfluencePitch` 建议先在 `0.03-0.20` 内调；如果手牌在移动鼠标时过度漂移、读牌不稳或与镜头响应产生二次晃动，优先降低这两个值，再调整 clamp / smoothing。
 
@@ -72,7 +72,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 
 | 分类 | 主要内容 |
 |---|---|
-| `01 Card View` | `FirstPersonCardViewClass` |
+| `01 Card View` | `CardLayerWidgetClass`、`FirstPersonCardViewClass`、`CardLayerZOrder` |
 | `02 Anchor World Position` | 世界锚点距离、偏移、间距、扇形 yaw、跟随速度 |
 | `03 Projection` | 投影模式、Look Responsive、viewport clamp、pixel snap、角度限制 |
 | `04 Hand Shape` | Authored2D 间距、宽度、中心抬升、曲线、底部保护、卡牌 scale、edge drop、不可用透明度 |
@@ -84,15 +84,15 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit feedback |
 | `11 Drag Target Feedback` | world / card target 颜色、opacity、arrow snap、card-target focus |
 | `12 Camera Look While UI` | hover / pointer 和 drag 期间 camera look override |
-| `90 Prototype Preview` | static preview-only 字段 |
-| `98 Legacy / Preset` | legacy preset 和 `HandAnchorScale` |
+| `90 Prototype Preview` | preview source-only 字段：`bDrawPreviewCardLayer`、`PreviewCardDefinitions`、`PreviewCardCountFallback` |
+| `98 Legacy` | `HandAnchorScale` 等旧资产序列化兼容字段 |
 | `99 Debug` | debug widget、projection debug、motion / drag diagnostics |
 
-`StaticCardRenderScale`、`StaticCardEdgeDropPixels`、`bScaleEdgeDropByHandCount`、`ShortHandEdgeDropPixels`、`EdgeDropScaleMinCardCount` 和 `EdgeDropScaleMaxCardCount` 是 runtime hand 表现参数，不是 prototype-only。`Prototype Preview` 只保留静态预览开关、预览 Widget、预览卡牌定义、预览 ZOrder 和 fallback count。
+`CardLayerWidgetClass` 和 `CardLayerZOrder` 是正式第一人称卡牌层配置，同时服务 Battle / Run runtime hand 与 PIE 预览，不属于 prototype-only。`HandCardRenderScale`、`HandMaxEdgeDropPixels`、`bScaleEdgeDropByHandCount`、`ShortHandEdgeDropPixels`、`EdgeDropScaleMinCardCount` 和 `EdgeDropScaleMaxCardCount` 是 runtime hand 表现参数，不是 prototype-only。`Prototype Preview` 只保留预览开关、预览卡牌定义和 fallback count。
 
-Anchor debug view 会同时报告 `ResolvedLayoutPresetName`、`bUsingRuntimeLayoutPresetOverride`、`RuntimeLayoutPresetOverrideSourceId`、`RawCursorLookOffset`、`AppliedAnchorLookOffset`、`LookInfluenceYaw`、`LookInfluencePitch` 和 `bLookResponsiveProjection`。排查时可以用它区分“鼠标确实产生了 look offset”与“该 offset 是否被当前 ProjectionMode 应用到 hand anchor”。Preset 相关 debug 字段仅表示 legacy / override 兼容状态，不代表当前新内容推荐通过 Preset 调参。
+Anchor debug view 会报告 `RawCursorLookOffset`、`AppliedAnchorLookOffset`、`LookInfluenceYaw`、`LookInfluencePitch` 和 `bLookResponsiveProjection`。排查时可以用它区分“鼠标确实产生了 look offset”与“该 offset 是否被当前 ProjectionMode 应用到 hand anchor”。Debug view 不再报告 layout preset 状态。
 
-边缘下坠是纯表现参数，不影响战斗规则、手牌数量或卡牌状态。`StaticCardEdgeDropPixels` 表示大手牌时最外侧卡牌的最大下坠；默认开启 `bScaleEdgeDropByHandCount` 后，5 张及以下使用 `ShortHandEdgeDropPixels`，12 张及以上使用 `StaticCardEdgeDropPixels`，中间数量用 SmoothStep 平滑过渡。左右手锚点牌在规则上承担手牌区域切分语义，但在 first-person hand 表现层仍按普通卡牌参与下坠、缩放、扇形角度和层级计算。推荐起点是 `ShortHandEdgeDropPixels = 64`、`StaticCardEdgeDropPixels = 110`、`EdgeDropScaleMinCardCount = 5`、`EdgeDropScaleMaxCardCount = 12`。
+边缘下坠是纯表现参数，不影响战斗规则、手牌数量或卡牌状态。`HandMaxEdgeDropPixels` 表示大手牌时最外侧卡牌的最大下坠；默认开启 `bScaleEdgeDropByHandCount` 后，5 张及以下使用 `ShortHandEdgeDropPixels`，12 张及以上使用 `HandMaxEdgeDropPixels`，中间数量用 SmoothStep 平滑过渡。左右手锚点牌在规则上承担手牌区域切分语义，但在 first-person hand 表现层仍按普通卡牌参与下坠、缩放、扇形角度和层级计算。推荐起点是 `ShortHandEdgeDropPixels = 64`、`HandMaxEdgeDropPixels = 110`、`EdgeDropScaleMinCardCount = 5`、`EdgeDropScaleMaxCardCount = 12`。
 
 Hover 命中滞后是纯输入表现参数，不影响战斗规则、手牌数量或卡牌状态。`HoverHitHysteresisPixels` 默认 `16`，建议调参范围 `0-64` UMG 布局像素；它只用于卡牌基础命中分界线附近的 hover 稳定性，避免鼠标贴着重叠边界移动时频繁抖动切卡。
 
@@ -111,7 +111,7 @@ Runtime source 优先级：
 
 BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。清理或 `NativeDestruct` 可能晚于 Run source 重新激活，因此 BattleHUD 解绑自身 delegate 时必须检查 Anchor 当前 `RuntimeCardLayerSourceId`：只有仍为 `BattleHand` 时才关闭 first-person card interaction、取消拖拽和清 runtime data；如果已经被 `RunFirstPersonBattleDeck` 或 menu lease 接管，只能解绑 BattleHUD delegate 和清战斗 world preview，不得改写 Run source 的交互状态。
 
-Runtime source 只拥有卡牌 entries、transition hints、interaction ownership 和 source 生命周期；视觉调参当前主要来自 AnchorComponent Details。Legacy preset ownership 仍保留 source 语义并与 runtime card data ownership 独立，清理时只有 matching `SourceId` 能清自己的 preset override，避免 Battle / Run 生命周期交错时出现 preset 被旧 source 误清；但新内容暂不推荐通过 preset 字段调参。
+Runtime source 只拥有卡牌 entries、transition hints、interaction ownership 和 source 生命周期；视觉调参来自 AnchorComponent Details。BattleHUD / Run source 不设置、不清理、也不持有 layout preset override。
 
 BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
 
@@ -125,7 +125,7 @@ Layer 使用稳定 motion key 复用 slot widget：
 - Static preview 或 placeholder 使用 `StaticIndex:{Index}`。
 - 同一 key 重新进入时复用 active 或回收 outgoing widget，避免幽灵 widget。
 
-Anchor 每帧计算目标 slot，Layer 只在输入 slot、transition hint、配置或生命周期状态实际变化时完整 reconcile。Slot motion 独立 tick，把 visual position、angle、scale 和 opacity 追向 target slot。
+Anchor 每帧计算基础目标 slot，Layer 只在输入 slot、transition hint、配置或生命周期状态实际变化时完整 reconcile。SlotWidget 会先把基础 slot 与 hover / pending / drag card-target focus 等状态合成为最终 presentation，Slot motion 再独立 tick，把 visual position、angle、scale、opacity 和 ZOrder 追向这个最终 presentation。
 
 默认表现：
 
@@ -157,7 +157,11 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 
 拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。拖拽镜头旧参数 `bAllowCameraLookDuringCardDrag`、`CardDragCameraLookScale`、`CardDragCameraLookInterpSpeedOverride` 继续只控制 drag override，保持既有资产兼容；hover / pointer 通用路径使用 `bAllowCameraLookDuringCardPointer`、`CardPointerCameraLookScale`、`CardPointerCameraLookInterpSpeedOverride`。这些 camera look 参数当前推荐在 AnchorComponent Details 的 `12 Camera Look While UI` 分类中调整。拖拽 active 时会清空并压制普通 pointer view，避免 hover override 与 drag override 抢同一个 camera look 状态。
 
-Hover 输入命中与 hover 视觉几何分离。Anchor 构建 slot view 时会先写入稳定输入几何：`InputHitCenter`、`InputHitScale`、`InputHitAngleDegrees`、`InputHitOrder`，再应用 hover / pending 的视觉 lift、scale 和 ZOrder。悬浮卡仍然可以放大、抬升并绘制在上层，但鼠标命中哪张牌由 `UWacomFirstPersonCardLayerWidget` 使用基础几何统一解析，不再由被 Slate 命中的单个 slot 自行决定。
+Hover 输入命中与最终视觉几何分离。Anchor 构建 slot view 时只写入基础布局、基础 `RenderScale / RenderOpacity / RenderAngleDegrees / ZOrder`、稳定输入几何 `InputHitCenter / InputHitScale / InputHitAngleDegrees / InputHitOrder`，以及 `bIsHovered`、`bHasPendingTargetingCardInHand`、`Entry.bIsPendingTargeting` 等状态标记。Hover lift / scale / ZOrder、pending lift / scale / angle / ZOrder、target-select deemphasis 和 drag card-target focus 统一由 `UWacomFirstPersonCardLayerSlotWidget` 的 presentation resolver 合成。悬浮卡仍然可以放大、抬升并绘制在上层，但鼠标命中哪张牌由 `UWacomFirstPersonCardLayerWidget` 使用基础几何统一解析，不再由被 Slate 命中的单个 slot 自行决定。
+
+`FWacomFirstPersonCardLayerSlotView` 本轮仍保留原字段名以降低调用方和测试改动量，但语义需要区分：`GetSlotView()` 更接近基础 slot + state flags，`GetVisualSlotView()` 是 SlotWidget 合成和 motion 后的最终视觉真相。详情面板、hover update、drag arrow 和 card-target feedback 应使用 final visual slot 语义；稳定 hover / click / press / drag 起手命中应继续使用基础 input hit 几何。
+
+视觉状态优先级固定为：pending source 高于普通 hover；drag card-target focus 不触发普通 hover，只负责当前指针压中的唯一目标卡 lift / scale / ZOrder；target affordance 只控制 overlay，不参与 lift / scale / ZOrder；pressed、commit pulse 和 deny shake 保留为短时 micro feedback，其中 deny 只做 shake + overlay，不改变主 scale / ZOrder。
 
 稳定命中 resolver 只考虑 projected、非 exiting、有效 `CardInstanceId` 且可交互的 active slot。透明 bleed 不参与命中，命中范围仍只使用 `UWacomCardView.FixedCardBodyHitSize` 对应的 card body bounds。多张基础 body 重叠时，不按 hover 后 ZOrder 抢输入，而是按手牌左右顺序的相邻中心线分界选择；当前 hover 卡在分界线附近享有 `HoverHitHysteresisPixels` 滞后区，越过滞后区后才切到相邻卡。
 

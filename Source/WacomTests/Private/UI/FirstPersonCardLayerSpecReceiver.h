@@ -19,7 +19,7 @@ class UWacomFirstPersonCardAnchorSpecProbeComponent : public UWacomFirstPersonCa
 
 public:
 	bool bProjectionSucceeds = true;
-	bool bAllowStaticLayerCreation = true;
+	bool bAllowCardLayerCreation = true;
 	bool bUseCameraTransformProjection = false;
 	FVector2D ProbeViewportSize = FVector2D(1920.0f, 1080.0f);
 	float ProbeViewportScale = 1.0f;
@@ -29,9 +29,9 @@ public:
 		FVector(100.0f, 200.0f, 300.0f),
 		FVector::OneVector);
 
-	void RefreshStaticLayerForTest()
+	void RefreshCardLayerForTest()
 	{
-		UpdateStaticCardLayer();
+		UpdateCardLayer();
 	}
 
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViewsForTest() const
@@ -45,12 +45,12 @@ public:
 	}
 
 protected:
-	virtual bool CanCreateStaticCardLayerForAnchor(APlayerController* PlayerController) const override
+	virtual bool CanCreateCardLayerForAnchor(APlayerController* PlayerController) const override
 	{
-		return bAllowStaticLayerCreation && PlayerController != nullptr;
+		return bAllowCardLayerCreation && PlayerController != nullptr;
 	}
 
-	virtual UWacomFirstPersonCardLayerWidget* CreateStaticCardLayerWidgetForAnchor(
+	virtual UWacomFirstPersonCardLayerWidget* CreateCardLayerWidgetForAnchor(
 		APlayerController* PlayerController,
 		TSubclassOf<UWacomFirstPersonCardLayerWidget> LayerClass) const override
 	{
@@ -63,7 +63,7 @@ protected:
 		return NewObject<UWacomFirstPersonCardLayerWidget>(PlayerController, ClassToUse);
 	}
 
-	virtual void AddStaticCardLayerWidgetToViewportForAnchor(
+	virtual void AddCardLayerWidgetToViewportForAnchor(
 		UWacomFirstPersonCardLayerWidget* LayerWidget,
 		int32 ZOrder) const override
 	{
@@ -125,12 +125,6 @@ protected:
 	{
 		return FMath::Max(0.0f, ProbeAnchorSmoothingDeltaTime);
 	}
-};
-
-UCLASS()
-class UWacomFirstPersonCardLayerPresetViewClassProbe : public UWacomCardView
-{
-	GENERATED_BODY()
 };
 
 UCLASS()

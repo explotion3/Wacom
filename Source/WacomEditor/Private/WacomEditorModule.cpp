@@ -11,7 +11,6 @@
 #include "Validation/WacomEnemyBehaviorDefinitionValidator.h"
 #include "Validation/WacomEnemyDefinitionValidator.h"
 #include "Validation/WacomEnemyPartDefinitionValidator.h"
-#include "Validation/WacomFirstPersonCardLayoutPresetValidator.h"
 #include "Validation/WacomRunEventDefinitionValidator.h"
 #include "Validation/WacomRunPickupDefinitionValidator.h"
 #include "Validation/WacomRunWorldCardInteractionDefinitionValidator.h"
@@ -24,7 +23,6 @@ void FWacomEditorModule::StartupModule()
 	RegisterEditorValidator(NewObject<UWacomEnemyBehaviorDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEnemyDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEnemyPartDefinitionValidator>(GetTransientPackage()));
-	RegisterEditorValidator(NewObject<UWacomFirstPersonCardLayoutPresetValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomCharacterDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomRunEventDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomRunPickupDefinitionValidator>(GetTransientPackage()));

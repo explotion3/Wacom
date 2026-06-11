@@ -16,7 +16,6 @@ class UWacomBattleWidgetBase;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UWacomCardDetailPanel;
-class UWacomFirstPersonCardLayoutPreset;
 class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class AWacomBattleEnemyActor;
@@ -249,7 +248,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Presentation Stack|Authoring", meta = (ClampMin = "0.01", UIMin = "0.05", UIMax = "1.0", ToolTip = "打出的卡牌没有目标 cue 或延迟表现时，在表现栈中最短停留多久，单位为秒。用于避免无表现卡牌一闪而过。"))
 	float CardPresentationStackMinimumHoldSeconds = 0.18f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.StaticCardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.CardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
 	int32 FirstPersonCardDetailViewportZOrder = 9999;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FirstPersonCardView 或 WBP_CardView 的设计尺寸一致。"))
@@ -411,9 +410,6 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ToolTip = "战斗第一人称手牌详情面板 Widget 类。"))
 	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ToolTip = "战斗第一人称手牌表现 preset。为空时使用玩家 FirstPersonCardAnchor 组件默认 preset；只影响战斗手牌 UI 表现，不影响 BattleSession 规则。"))
-	TObjectPtr<UWacomFirstPersonCardLayoutPreset> BattleFirstPersonCardLayoutPreset = nullptr;
 
 private:
 	enum class ECardDetailHost : uint8

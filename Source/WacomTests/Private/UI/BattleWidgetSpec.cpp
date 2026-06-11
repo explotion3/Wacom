@@ -24,7 +24,6 @@
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomCardView.h"
-#include "UI/Card/WacomFirstPersonCardLayoutPreset.h"
 #include "UI/Common/PileCountView.h"
 #include "BattleHUDTestHarness.h"
 #include "UI/BattleSceneTargetClickTestAccess.h"
@@ -7358,9 +7357,6 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 	}
 
 	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
-	TStrongObjectPtr<UWacomFirstPersonCardLayoutPreset> BattlePreset(
-		NewObject<UWacomFirstPersonCardLayoutPreset>());
-	HUD->SetBattleFirstPersonCardLayoutPresetForTest(BattlePreset.Get());
 	Harness->SetSession(Session);
 	if (!TestNotNull(TEXT("HUD"), HUD))
 	{
@@ -7377,11 +7373,6 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 
 	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
 	TestTrue(TEXT("HUD bridge writes runtime hand to anchor"), Anchor->HasRuntimeCardLayerData());
-	TestEqual(TEXT("HUD bridge owns battle layout preset override"),
-		Anchor->GetRuntimeCardLayoutPresetOverrideSourceId(),
-		FName(TEXT("BattleHand")));
-	TestTrue(TEXT("HUD bridge writes configured battle layout preset"),
-		Anchor->GetRuntimeCardLayoutPresetOverride() == BattlePreset.Get());
 	TestTrue(TEXT("HUD bridge enables first-person hand interaction"),
 		Anchor->IsBattleHandInteractionEnabled());
 
@@ -7406,10 +7397,6 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 
 	HUD->ClearFirstPersonBattleHandLayerForTest();
 	TestFalse(TEXT("HUD bridge clear removes runtime hand"), Anchor->HasRuntimeCardLayerData());
-	TestTrue(TEXT("HUD bridge clear releases battle layout preset override"),
-		Anchor->GetRuntimeCardLayoutPresetOverrideSourceId().IsNone());
-	TestNull(TEXT("HUD bridge clear removes battle layout preset override"),
-		Anchor->GetRuntimeCardLayoutPresetOverride());
 	TestFalse(TEXT("HUD bridge clear disables interaction"), Anchor->IsBattleHandInteractionEnabled());
 	TestFalse(TEXT("HUD bridge clear removes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
 	TestFalse(TEXT("HUD bridge clear hides first-person detail"),

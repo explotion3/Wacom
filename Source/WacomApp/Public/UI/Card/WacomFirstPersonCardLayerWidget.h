@@ -32,9 +32,11 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
 {
 	int32 SkippedEquivalentSlotRefreshCount = 0;
 	int32 SlotMotionConfigPropagationCount = 0;
+	int32 SlotVisualConfigPropagationCount = 0;
 	int32 SlotFeedbackConfigPropagationCount = 0;
 	int32 CardDragConfigPropagationCount = 0;
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
+	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardDragView CurrentDragView;
@@ -60,6 +62,7 @@ class WACOMAPP_API UWacomFirstPersonCardLayerWidget : public UUserWidget
 public:
 	void SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass);
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
+	void SetSlotVisualConfig(const FWacomFirstPersonCardSlotVisualConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
 	void SetCardDragConfig(const FWacomFirstPersonCardDragConfig& InConfig);
 	void SetCardDragFeedbackTarget(
@@ -75,7 +78,6 @@ public:
 	void ClearSlotMotionState();
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
-	void SetStaticCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
@@ -177,6 +179,7 @@ private:
 	TSubclassOf<UWacomCardView> CardViewClass;
 
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
+	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
@@ -196,6 +199,7 @@ private:
 	TOptional<FVector2D> WidgetViewportSizeOverrideForTest;
 	int32 SkippedEquivalentSlotRefreshCountForTest = 0;
 	int32 SlotMotionConfigPropagationCountForTest = 0;
+	int32 SlotVisualConfigPropagationCountForTest = 0;
 	int32 SlotFeedbackConfigPropagationCountForTest = 0;
 	int32 CardDragConfigPropagationCountForTest = 0;
 #endif

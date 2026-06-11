@@ -12,7 +12,6 @@
 #include "RunState.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
-#include "UI/Card/WacomFirstPersonCardLayoutPreset.h"
 #include "UI/PlayerControllerRunInteractionTestAccess.h"
 #include "UI/RunMenuDropTargetWidgetTestAccess.h"
 #include "UI/RunFirstPersonCardLayerSpecReceiver.h"
@@ -241,23 +240,12 @@ bool FWacomUIRunFirstPersonRefreshWritesAnchorRuntimeSourceSpec::RunTest(const F
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
-	TStrongObjectPtr<UWacomFirstPersonCardLayoutPreset> RunPreset(
-		NewObject<UWacomFirstPersonCardLayoutPreset>());
 	Source->AnchorForTest = Anchor.Get();
-	Source->RunFirstPersonCardLayoutPreset = RunPreset.Get();
 	Source->BindRunSession(Run.Get());
 
 	Source->SetRunFirstPersonCardLayerActive(true);
 	TestEqual(TEXT("Refresh writes once when activated"), Source->WriteCount, 1);
 	TestEqual(TEXT("Refresh writes BattleDeck entry"), Source->LastWrittenEntries.Num(), 1);
-	TestEqual(TEXT("Run source owns runtime layout preset override"),
-		Anchor->GetRuntimeCardLayoutPresetOverrideSourceId(),
-		Source->RunFirstPersonCardLayerSourceId);
-	TestTrue(TEXT("Run source writes configured layout preset"),
-		Anchor->GetRuntimeCardLayoutPresetOverride() == RunPreset.Get());
-	TestEqual(TEXT("Anchor automation view reports run preset owner"),
-		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).RuntimeCardLayoutPresetOverrideSourceId,
-		Source->RunFirstPersonCardLayerSourceId);
 	TestEqual(TEXT("Debug tracks written entry count"),
 		Source->GetRunFirstPersonCardSourceDebugView().EntryCount,
 		1);
@@ -265,10 +253,6 @@ bool FWacomUIRunFirstPersonRefreshWritesAnchorRuntimeSourceSpec::RunTest(const F
 	Source->ClearRunFirstPersonCardLayer();
 	TestEqual(TEXT("Clear goes through runtime source cleanup"), Source->ClearCount, 1);
 	TestEqual(TEXT("Clear drops cached test entries"), Source->LastWrittenEntries.Num(), 0);
-	TestTrue(TEXT("Clear releases run layout preset override"),
-		Anchor->GetRuntimeCardLayoutPresetOverrideSourceId().IsNone());
-	TestNull(TEXT("Clear removes run layout preset override"),
-		Anchor->GetRuntimeCardLayoutPresetOverride());
 
 	return true;
 }
@@ -424,10 +408,10 @@ bool FWacomUIRunFirstPersonMenuSuppressionBlocksStaticFallbackSpec::RunTest(cons
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
-	Anchor->bDrawStaticCardLayer = true;
-	Anchor->StaticCardCountFallback = 3;
+	Anchor->bDrawPreviewCardLayer = true;
+	Anchor->PreviewCardCountFallback = 3;
 	TestEqual(TEXT("Static preview is configured with fallback cards"),
-		Anchor->StaticCardCountFallback,
+		Anchor->PreviewCardCountFallback,
 		3);
 
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -446,7 +430,7 @@ bool FWacomUIRunFirstPersonMenuSuppressionBlocksStaticFallbackSpec::RunTest(cons
 		Anchor->GetRuntimeCardLayerEntries().Num(),
 		0);
 	TestEqual(TEXT("Static preview is still configured, proving runtime ownership blocks fallback"),
-		Anchor->StaticCardCountFallback,
+		Anchor->PreviewCardCountFallback,
 		3);
 
 	return true;
@@ -789,10 +773,7 @@ bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FStrin
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
-	TStrongObjectPtr<UWacomFirstPersonCardLayoutPreset> RunPreset(
-		NewObject<UWacomFirstPersonCardLayoutPreset>());
 	Source->AnchorForTest = Anchor.Get();
-	Source->RunFirstPersonCardLayoutPreset = RunPreset.Get();
 	Source->SetRunFirstPersonCardLayerActive(true);
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 
@@ -804,19 +785,12 @@ bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FStrin
 
 	TestTrue(TEXT("Menu lease can be written"),
 		Source->SetRunFirstPersonCardLayerMenuLease(TEXT("Lease"), TEXT("LeaseSource"), { LeaseEntry }));
-	TestEqual(TEXT("Menu lease owns run layout preset override"),
-		Anchor->GetRuntimeCardLayoutPresetOverrideSourceId(),
-		FName(TEXT("LeaseSource")));
-	TestTrue(TEXT("Menu lease uses run layout preset"),
-		Anchor->GetRuntimeCardLayoutPresetOverride() == RunPreset.Get());
 	TestTrue(TEXT("Menu lease enables first-person interaction for probe"),
 		Anchor->IsBattleHandInteractionEnabled());
 	TestFalse(TEXT("Menu lease disables quick click-to-play while probe drag is active"),
 		Anchor->bEnableClickToPlayCard);
 
 	Source->ClearRunFirstPersonCardLayerMenuLease(TEXT("Lease"));
-	TestTrue(TEXT("Menu lease clear releases layout preset override"),
-		Anchor->GetRuntimeCardLayoutPresetOverrideSourceId().IsNone());
 	TestFalse(TEXT("Suppressed default source disables interaction after lease clears"),
 		Anchor->IsBattleHandInteractionEnabled());
 	TestTrue(TEXT("Menu lease restores the anchor click-to-play setting after clear"),

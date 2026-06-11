@@ -39,6 +39,59 @@ struct WACOMAPP_API FWacomFirstPersonCardTransitionMotionProfile
 };
 
 USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float HoverLiftPixels = 28.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float HoverScale = 1.06f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 HoverZOrderBoost = 500;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PendingTargetingLiftPixels = 36.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PendingTargetingScale = 1.08f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 PendingTargetingZOrderBoost = 1200;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bPendingTargetingStraightenAngle = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PendingTargetingAngleBlend = 0.75f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnableTargetSelectHandDeemphasis = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float TargetSelectNonPendingOpacityMultiplier = 0.88f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragCardTargetFocusLiftPixels = 18.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragCardTargetFocusScale = 1.045f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 DragCardTargetFocusZOrderBoost = 650;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState
+{
+	bool bPendingSource = false;
+	bool bTargetSelectDeemphasized = false;
+	bool bHovered = false;
+	bool bCardDragTargetFocusActive = false;
+};
+
+USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 {
 	GENERATED_BODY()
@@ -212,9 +265,11 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
+	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
 	int32 SlotMotionConfigApplyCount = 0;
 	int32 SlotFeedbackConfigApplyCount = 0;
 	int32 CardDragConfigApplyCount = 0;
+	int32 SlotVisualConfigApplyCount = 0;
 };
 #endif
 
@@ -251,6 +306,7 @@ public:
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride);
 	void TriggerCommitFeedback();
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
+	void SetSlotVisualConfig(const FWacomFirstPersonCardSlotVisualConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
 	void SetCardDragConfig(const FWacomFirstPersonCardDragConfig& InConfig);
 	void SetCardDragFeedbackTarget(
@@ -371,6 +427,7 @@ private:
 
 	TWeakObjectPtr<UWacomFirstPersonCardLayerWidget> OwningFirstPersonCardLayer;
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
+	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FString SlotMotionKey;
@@ -416,6 +473,7 @@ private:
 	int32 SlotMotionConfigApplyCountForTest = 0;
 	int32 SlotFeedbackConfigApplyCountForTest = 0;
 	int32 CardDragConfigApplyCountForTest = 0;
+	int32 SlotVisualConfigApplyCountForTest = 0;
 #endif
 
 	void EnsureCardView();
@@ -423,6 +481,11 @@ private:
 	void ApplyCurrentSlotView();
 	void ApplyVisualSlotView();
 	void ApplySlotViewToWidget(const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void RefreshPresentationTarget(bool bSnapVisualWhenMotionDisabled);
+	FWacomFirstPersonCardSlotVisualState ResolveVisualState(
+		const FWacomFirstPersonCardLayerSlotView& BaseSlotView) const;
+	FWacomFirstPersonCardLayerSlotView ComposePresentationSlotView(
+		const FWacomFirstPersonCardLayerSlotView& BaseSlotView) const;
 	EWacomFirstPersonCardDragTargetFeedbackState ResolveEffectiveDragTargetFeedbackState() const;
 	void BroadcastVisualSlotUpdatedIfNeeded(
 		const FWacomFirstPersonCardLayerSlotView& PreviousVisualSlotView,

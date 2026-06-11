@@ -85,6 +85,45 @@ bool AreSlotMotionConfigsEquivalent(
 		&& AreFloatsEquivalent(A.DiscardedExitAngleOffsetDegrees, B.DiscardedExitAngleOffsetDegrees);
 }
 
+FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
+	const FWacomFirstPersonCardSlotVisualConfig& InConfig)
+{
+	FWacomFirstPersonCardSlotVisualConfig Config = InConfig;
+	Config.HoverLiftPixels = FMath::Max(0.0f, Config.HoverLiftPixels);
+	Config.HoverScale = FMath::Max(0.01f, Config.HoverScale);
+	Config.HoverZOrderBoost = FMath::Max(0, Config.HoverZOrderBoost);
+	Config.PendingTargetingLiftPixels = FMath::Max(0.0f, Config.PendingTargetingLiftPixels);
+	Config.PendingTargetingScale = FMath::Max(0.01f, Config.PendingTargetingScale);
+	Config.PendingTargetingZOrderBoost = FMath::Max(0, Config.PendingTargetingZOrderBoost);
+	Config.PendingTargetingAngleBlend =
+		FMath::Clamp(Config.PendingTargetingAngleBlend, 0.0f, 1.0f);
+	Config.TargetSelectNonPendingOpacityMultiplier =
+		FMath::Clamp(Config.TargetSelectNonPendingOpacityMultiplier, 0.0f, 1.0f);
+	Config.DragCardTargetFocusLiftPixels = FMath::Max(0.0f, Config.DragCardTargetFocusLiftPixels);
+	Config.DragCardTargetFocusScale = FMath::Max(0.01f, Config.DragCardTargetFocusScale);
+	Config.DragCardTargetFocusZOrderBoost = FMath::Max(0, Config.DragCardTargetFocusZOrderBoost);
+	return Config;
+}
+
+bool AreSlotVisualConfigsEquivalent(
+	const FWacomFirstPersonCardSlotVisualConfig& A,
+	const FWacomFirstPersonCardSlotVisualConfig& B)
+{
+	return AreFloatsEquivalent(A.HoverLiftPixels, B.HoverLiftPixels)
+		&& AreFloatsEquivalent(A.HoverScale, B.HoverScale)
+		&& A.HoverZOrderBoost == B.HoverZOrderBoost
+		&& AreFloatsEquivalent(A.PendingTargetingLiftPixels, B.PendingTargetingLiftPixels)
+		&& AreFloatsEquivalent(A.PendingTargetingScale, B.PendingTargetingScale)
+		&& A.PendingTargetingZOrderBoost == B.PendingTargetingZOrderBoost
+		&& A.bPendingTargetingStraightenAngle == B.bPendingTargetingStraightenAngle
+		&& AreFloatsEquivalent(A.PendingTargetingAngleBlend, B.PendingTargetingAngleBlend)
+		&& A.bEnableTargetSelectHandDeemphasis == B.bEnableTargetSelectHandDeemphasis
+		&& AreFloatsEquivalent(A.TargetSelectNonPendingOpacityMultiplier, B.TargetSelectNonPendingOpacityMultiplier)
+		&& AreFloatsEquivalent(A.DragCardTargetFocusLiftPixels, B.DragCardTargetFocusLiftPixels)
+		&& AreFloatsEquivalent(A.DragCardTargetFocusScale, B.DragCardTargetFocusScale)
+		&& A.DragCardTargetFocusZOrderBoost == B.DragCardTargetFocusZOrderBoost;
+}
+
 FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
 	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig)
 {
