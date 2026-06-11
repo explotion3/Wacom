@@ -14,12 +14,24 @@ class UCardDefinition;
 class UWacomCardView;
 class UWacomFirstPersonCardAnchorDebugWidget;
 class UWacomFirstPersonCardLayerWidget;
+class FWacomFirstPersonCardLayerDelegateRouter;
+class FWacomFirstPersonCardLayerOwner;
 class FWacomFirstPersonCardAnchorRuntimeState;
 struct FWacomFirstPersonCardLayerSlotView;
 
 struct FWacomFirstPersonCardAnchorRuntimeStateDeleter
 {
 	void operator()(FWacomFirstPersonCardAnchorRuntimeState* State) const;
+};
+
+struct FWacomFirstPersonCardLayerOwnerDeleter
+{
+	void operator()(FWacomFirstPersonCardLayerOwner* Owner) const;
+};
+
+struct FWacomFirstPersonCardLayerDelegateRouterDeleter
+{
+	void operator()(FWacomFirstPersonCardLayerDelegateRouter* Router) const;
 };
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerAnchorInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -589,18 +601,16 @@ private:
 	mutable float LastAnchorScreenSmoothingDistancePixels = 0.0f;
 	mutable bool bHasResolvedCardLayoutConfigHash = false;
 	mutable uint32 LastResolvedCardLayoutConfigHash = 0;
-	bool bHasAppliedCardLayerConfig = false;
-	uint32 LastAppliedCardLayerConfigHash = 0;
-	TWeakObjectPtr<UClass> LastAppliedCardLayerCardViewClass;
-	bool bLastAppliedCardLayerLogDiagnostics = false;
-	bool bLastAppliedCardLayerInteractionEnabled = false;
-#if WITH_AUTOMATION_TESTS
-	int32 CardLayerConfigApplyCountForTest = 0;
-#endif
 
 	TUniquePtr<
 		FWacomFirstPersonCardAnchorRuntimeState,
 		FWacomFirstPersonCardAnchorRuntimeStateDeleter> RuntimeState;
+	TUniquePtr<
+		FWacomFirstPersonCardLayerOwner,
+		FWacomFirstPersonCardLayerOwnerDeleter> CardLayerOwner;
+	TUniquePtr<
+		FWacomFirstPersonCardLayerDelegateRouter,
+		FWacomFirstPersonCardLayerDelegateRouterDeleter> CardLayerDelegateRouter;
 
 	AWacomPlayerCharacter* GetOwnerCharacter() const;
 	APlayerController* GetOwnerPlayerController() const;
@@ -619,21 +629,7 @@ private:
 	void UpdateDebugWidget();
 	void RemoveDebugWidget();
 	void RemoveCardLayer();
-	void BindCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget);
-	void UnbindCardLayerWidget(UWacomFirstPersonCardLayerWidget* LayerWidget);
-	void HandleLayerCardClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleLayerHoveredCardSlotUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleLayerCardTargetHovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleLayerCardTargetUnhovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleLayerHoveredCardTargetUpdated(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void HandleLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
-	void HandleLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
-	void HandleLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
-	void HandleLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
-	void HandleLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
-	void HandleLayerPointerLeft();
+	void ConfigureCardLayerDelegateRouter();
 	static FString AnchorModeToString(EWacomFirstPersonCardAnchorMode Mode);
 	static FString ProjectionModeToString(EWacomFirstPersonCardProjectionMode Mode);
 	static FString ViewportClampModeToString(EWacomFirstPersonCardViewportClampMode Mode);

@@ -37,10 +37,12 @@ Battle / Run snapshot
 
 | 类型 | 职责 | 不负责 |
 |---|---|---|
-| `UWacomFirstPersonCardAnchorComponent` | 作为制作参数 façade、投影锚点 owner 和 CardLayerWidget 生命周期入口；从 Details 构建 layout / motion / feedback config | 不提交 Battle / Run 命令，不直接持有规则状态 |
+| `UWacomFirstPersonCardAnchorComponent` | 作为制作参数 façade、投影锚点 owner 和对外事件 façade；从 Details 构建 layout / motion / feedback config | 不提交 Battle / Run 命令，不直接持有规则状态 |
 | `WacomFirstPersonCardLayerTypes.h` | 第一人称卡牌层公共 UI 协议：entry、slot view、drag / pointer view、transition hint、motion / visual / feedback config | 不包含 AnchorComponent 制作参数或运行时实现 |
 | `FWacomFirstPersonCardAnchorRuntimeState` | Anchor 私有 runtime source 状态：entries、view data、transition hints、hovered card / card target handle | 不暴露 Blueprint API，不负责布局或 widget 生命周期 |
 | `FWacomFirstPersonCardSlotLayoutBuilder` | Anchor 私有布局构建器：根据 resolved config、投影后 hand anchor 和 viewport size 生成基础 slot view / input hit 几何 | 不依赖 `UWacomFirstPersonCardAnchorComponent`，不处理 hover 视觉合成或命令 |
+| `FWacomFirstPersonCardLayerOwner` | Anchor 私有 CardLayerWidget 生命周期 owner：创建 / 移除 widget、应用 layer config、推送 transition hints 和 slots | 不解析 anchor / viewport，不读取 runtime source，不转发 Battle / Run 命令 |
+| `FWacomFirstPersonCardLayerDelegateRouter` | Anchor 私有 LayerWidget 事件 router：绑定 / 解绑 native delegates、同步 hovered runtime state、转发 Anchor 对外 delegates | 不创建 widget，不解析布局，不提交 Battle / Run 命令 |
 | `UWacomFirstPersonCardLayerWidget` | 按 entries reconcile slot widget，维护 active / outgoing slot，绘制 drag arrow 和 layer-level feedback | 不读取 Battle / Run 规则状态 |
 | `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomCardView`，处理 hover / press / inspect / drag gesture 和 visual slot motion | 不直接调用 BattleSession 或 RunSession |
 | `UWacomRunFirstPersonCardSourceComponent` | 探索期把 Run BattleDeck / menu lease 写入 anchor runtime source | 不提交 Run 规则 |
