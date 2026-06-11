@@ -166,12 +166,6 @@ tags:
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
   - 说明：后续按美术反馈微调扇形参数、卡面采样、Retainer 外元素、slot motion、commit pulse 和 drag / aim 读牌姿态。
 
-- [x] **First-person hand Anchor 职责继续拆分：delegate router**
-  - 状态：`Done`
-  - 归属：UI / App
-  - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)
-  - 说明：Anchor 已收口为制作参数 façade、投影锚点 owner、runtime/layout 私有 helper 调度、CardLayerWidget 生命周期 owner 和 delegate router；后续手牌方向转为表现 polish 或更大粒度的组件边界评估。
-
 - [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
   - 状态：`Blocked: Demo 范围确认`
   - 归属：Run / App

@@ -1189,12 +1189,12 @@ FWacomCardViewData UWacomFirstPersonCardAnchorComponent::BuildPreviewCardViewDat
 
 	FWacomCardViewData Data;
 	Data.Name = FText::Format(
-		NSLOCTEXT("Wacom.FirstPersonCardLayer", "StaticPlaceholderName", "Anchor Card {0}"),
+		NSLOCTEXT("Wacom.FirstPersonCardLayer", "DevelopmentPreviewPlaceholderName", "Anchor Card {0}"),
 		FText::AsNumber(CardIndex + 1));
-	Data.TypeText = NSLOCTEXT("Wacom.FirstPersonCardLayer", "StaticPlaceholderType", "Static Preview");
+	Data.TypeText = NSLOCTEXT("Wacom.FirstPersonCardLayer", "DevelopmentPreviewPlaceholderType", "Development Preview");
 	Data.Description = NSLOCTEXT(
 		"Wacom.FirstPersonCardLayer",
-		"StaticPlaceholderDescription",
+		"DevelopmentPreviewPlaceholderDescription",
 		"HUD card view driven by the first-person anchor.");
 	Data.Cost = CardIndex;
 	Data.bShowCost = true;

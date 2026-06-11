@@ -391,11 +391,11 @@ bool FWacomUIRunFirstPersonGameMenuSuppressionClearsDefaultSpec::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunFirstPersonMenuSuppressionBlocksStaticFallbackSpec,
-	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.GameMenuSuppressionBlocksStaticAnchorFallback",
+	FWacomUIRunFirstPersonMenuSuppressionBlocksDevelopmentPreviewSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.GameMenuSuppressionBlocksDevelopmentPreview",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunFirstPersonMenuSuppressionBlocksStaticFallbackSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIRunFirstPersonMenuSuppressionBlocksDevelopmentPreviewSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
@@ -410,7 +410,7 @@ bool FWacomUIRunFirstPersonMenuSuppressionBlocksStaticFallbackSpec::RunTest(cons
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	Anchor->bDrawPreviewCardLayer = true;
 	Anchor->PreviewCardCountFallback = 3;
-	TestEqual(TEXT("Static preview is configured with fallback cards"),
+	TestEqual(TEXT("Development preview is configured with placeholder cards"),
 		Anchor->PreviewCardCountFallback,
 		3);
 
@@ -426,10 +426,10 @@ bool FWacomUIRunFirstPersonMenuSuppressionBlocksStaticFallbackSpec::RunTest(cons
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 	TestTrue(TEXT("Suppressed layer still has runtime data ownership"),
 		Anchor->HasRuntimeCardLayerData());
-	TestEqual(TEXT("Suppressed runtime entries are empty instead of exposing fallback data"),
+	TestEqual(TEXT("Suppressed runtime entries are empty instead of exposing preview data"),
 		Anchor->GetRuntimeCardLayerEntries().Num(),
 		0);
-	TestEqual(TEXT("Static preview is still configured, proving runtime ownership blocks fallback"),
+	TestEqual(TEXT("Development preview is still configured, proving runtime ownership blocks preview data"),
 		Anchor->PreviewCardCountFallback,
 		3);
 

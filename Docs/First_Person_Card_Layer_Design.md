@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-06-11
+updated: 2026-06-12
 tags:
   - wacom/ui
   - wacom/cards
@@ -14,7 +14,7 @@ tags:
 # First-person Card Layer 文档
 
 > [!info] 本文职责
-> 本文记录第一人称卡牌层的当前制作与运行时合同：正式布局默认、Battle / Run 数据源、hover / inspect / drag、target / drop 边界、legacy / prototype 隔离和 `WBP_FirstPersonCardView` 制作要求。
+> 本文记录第一人称卡牌层的当前制作与运行时合同：正式布局默认、Battle / Run 数据源、hover / inspect / drag、target / drop 边界、开发预览 / 兼容边界和 `WBP_FirstPersonCardView` 制作要求。
 
 > [!warning] 边界
 > 第一人称卡牌层只做 UI 表现和玩家意图桥接。Battle 规则见 [WacomBattle.md](./WacomBattle.md)，Run 规则见 [WacomRun.md](./WacomRun.md)，世界 target / drop 路由见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)，BattleHUD 命令出口见 [WacomBattleUI.md](./WacomBattleUI.md)。
@@ -89,11 +89,10 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit feedback |
 | `11 Drag Target Feedback` | world / card target 颜色、opacity、arrow snap、card-target focus |
 | `12 Camera Look While UI` | hover / pointer 和 drag 期间 camera look override |
-| `90 Prototype Preview` | preview source-only 字段：`bDrawPreviewCardLayer`、`PreviewCardDefinitions`、`PreviewCardCountFallback` |
-| `98 Legacy` | `HandAnchorScale` 等旧资产序列化兼容字段 |
+| `90 Development Preview` | preview source-only 字段：`bDrawPreviewCardLayer`、`PreviewCardDefinitions`、`PreviewCardCountFallback` |
 | `99 Debug` | debug widget、projection debug、motion / drag diagnostics |
 
-`CardLayerWidgetClass` 和 `CardLayerZOrder` 是正式第一人称卡牌层配置，同时服务 Battle / Run runtime hand 与 PIE 预览，不属于 prototype-only。`HandCardRenderScale`、`HandMaxEdgeDropPixels`、`bScaleEdgeDropByHandCount`、`ShortHandEdgeDropPixels`、`EdgeDropScaleMinCardCount` 和 `EdgeDropScaleMaxCardCount` 是 runtime hand 表现参数，不是 prototype-only。`Prototype Preview` 只保留预览开关、预览卡牌定义和 fallback count。
+`CardLayerWidgetClass` 和 `CardLayerZOrder` 是正式第一人称卡牌层配置，同时服务 Battle / Run runtime hand 与 PIE 预览，不属于 preview-only。`HandCardRenderScale`、`HandMaxEdgeDropPixels`、`bScaleEdgeDropByHandCount`、`ShortHandEdgeDropPixels`、`EdgeDropScaleMinCardCount` 和 `EdgeDropScaleMaxCardCount` 是 runtime hand 表现参数，不是 preview-only。`Development Preview` 只保留预览开关、预览卡牌定义和占位卡数量。
 
 Anchor debug view 会报告 `RawCursorLookOffset`、`AppliedAnchorLookOffset`、`LookInfluenceYaw`、`LookInfluencePitch` 和 `bLookResponsiveProjection`。排查时可以用它区分“鼠标确实产生了 look offset”与“该 offset 是否被当前 ProjectionMode 应用到 hand anchor”。Debug view 不再报告 layout preset 状态。
 
@@ -110,7 +109,7 @@ Runtime source 优先级：
 | Battle runtime hand | `UBattleHUD` first-person hand bridge | 使用 `FBattleSnapshot.Hand.Cards`，启用 battle hand hover / click / hold / drag |
 | Run default source | `UWacomRunFirstPersonCardSourceComponent` | 探索期显示 Run BattleDeck 物理卡和可选投影卡，只读展示 |
 | Run menu lease | `UWacomMenuWidgetBase` / owning menu | GameMenu 内临时显示候选持有卡，可启用 hold / drag 到 menu Zone |
-| Static preview | Anchor prototype preview | PIE / 开发验证，不是 Battle / Run runtime source |
+| Development preview | Anchor development preview | PIE / 开发验证，不是 Battle / Run runtime source |
 
 进入战斗时，GameMode / PlayerController 会清理探索期 Run source 和 active menu lease。退出战斗回到 Exploration 后，PlayerController 重新激活 Run first-person source 并刷新当前 BattleDeck 展示。
 
@@ -127,7 +126,7 @@ BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。�
 Layer 使用稳定 motion key 复用 slot widget：
 
 - Battle runtime hand 优先使用 `CardInstanceId`。
-- Static preview 或 placeholder 使用 `StaticIndex:{Index}`。
+- Development preview 或 placeholder 使用 `StaticIndex:{Index}`。
 - 同一 key 重新进入时复用 active 或回收 outgoing widget，避免幽灵 widget。
 
 Anchor 每帧计算基础目标 slot，Layer 只在输入 slot、transition hint、配置或生命周期状态实际变化时完整 reconcile。SlotWidget 会先把基础 slot 与 hover / pending / drag card-target focus 等状态合成为最终 presentation，Slot motion 再独立 tick，把 visual position、angle、scale、opacity 和 ZOrder 追向这个最终 presentation。
@@ -193,19 +192,19 @@ Battle enemy world target 只来自当前 SceneEnemyHost registry 中的 PartAct
 
 Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCard resolver 判定。Run world drop 合法性由 receiver 和 `URunSession::ValidateRunWorldCardInteraction()` 判定。Run menu Zone drop 默认 probe-only，只有 owning menu 明确接管时才提交。
 
-## §8 Projection Styles / Prototype Boundaries
+## §8 Projection Styles / Preview Boundaries
 
 | 入口 | 当前口径 |
 |---|---|
 | `BodyLocked` | 稳定默认投影风格：cursor look 不参与 hand anchor 计算，只通过当前真实相机影响最终投影 |
 | `Look Responsive Projected` | 保留的视差投影风格：cursor look 先参与 hand anchor 计算，再通过当前真实相机投影；内部兼容枚举名仍为 `LegacyWorldProjected` |
 | `LookInfluenceYaw / LookInfluencePitch` | 只服务 `Look Responsive Projected`，控制 cursor look 对 hand anchor 的影响比例 |
-| Static preview layer | Prototype preview，只用于 PIE / 开发验证，不是 Battle / Run runtime source |
+| Development preview layer | 只用于 PIE / 开发验证，不是 Battle / Run runtime source |
 | Battle hand interaction | 使用 `bEnableBattleHandInteraction`、`SetBattleHandInteractionEnabled()`、`IsBattleHandInteractionEnabled()` |
 
 `LegacyWorldProjected` 的枚举名因蓝图 / 资产序列化兼容暂时保留，但制作语义不是待删除 fallback。后续如果要进一步整理，可以单独做一刀把编辑器文案、文档和资产制作指南继续朝 `LookResponsiveProjected` 命名靠拢；是否真正重命名 C++ 枚举值需要先评估资产迁移成本。
 
-不要把 Static preview layer 当作 Battle / Run runtime source，也不要恢复旧 `LegacyProjectedFan2D` 每卡 3D 槽位分别投影路径。当前两个投影风格都共享 `Authored2D` 手牌布局，区别只在整副手牌中心 anchor 是否吃 cursor look。
+不要把 development preview layer 当作 Battle / Run runtime source，也不要恢复旧 `LegacyProjectedFan2D` 每卡 3D 槽位分别投影路径。当前两个投影风格都共享 `Authored2D` 手牌布局，区别只在整副手牌中心 anchor 是否吃 cursor look。
 
 ## §9 `WBP_FirstPersonCardView` 制作合同
 
@@ -216,8 +215,8 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 使用入口：
 
 - `BP_WacomPlayerCharacter -> FirstPersonCardAnchorComponent -> FirstPersonCardViewClass`
-- 同一个入口服务 static preview 和 BattleHUD runtime battle hand。
-- C++ 不硬编码该 WBP 路径；为空时使用 `UWacomCardView` 测试 fallback。
+- 同一个入口服务 development preview 和 BattleHUD runtime battle hand。
+- C++ 不硬编码该 WBP 路径；为空时使用原生 `UWacomCardView` 调试视图。
 
 制作要求：
 
@@ -226,7 +225,7 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 - 内部必须提供 `CardSizeBox` 主体 `SizeBox`，默认 296 x 420，并在 bleed 画布中尽量居中。
 - 命中范围使用 `UWacomCardView.FixedCardBodyHitSize`，默认 296 x 420；不会因 bleed 画布、RetainerBox 或布局压缩而变小。
 - RetainerBox 内部可轻微缩放，给旋转采样留下透明边缘。
-- 费用图标使用固定 `CostDigitImage : Image` 绑定；多位数、缺图标或未绑定时不显示文字费用 fallback。
+- 费用图标使用固定 `CostDigitImage : Image` 绑定；多位数、缺图标或未绑定时不会回退成文字费用。
 - 材质流光和 disabled overlay 继续走 `UWacomCardView` 现有绑定，不在 slot widget 内新增数据绑定。
 - WBP 只负责卡面显示质量，不提交战斗命令，不读取 `UBattleSession`。
 

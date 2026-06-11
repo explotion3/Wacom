@@ -50,8 +50,9 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FWacomFirstPersonCardLayerAnchorPointerNativ
 DECLARE_MULTICAST_DELEGATE(FWacomFirstPersonCardLayerAnchorPointerExitNative);
 
 /**
- * Computes the first-person virtual card hand anchor used by future HUD-rendered
- * cards. V0-B can draw a non-interactive static card layer for PIE validation.
+ * Computes the first-person virtual card hand anchor used by the HUD-rendered
+ * Battle / Run hand. It can also draw a non-interactive development preview
+ * layer for PIE validation.
  */
 UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent))
 class WACOMAPP_API UWacomFirstPersonCardAnchorComponent : public UActorComponent
@@ -248,19 +249,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|99 Debug", meta = (ToolTip = "是否在第一人称卡牌层检测到槽位生命周期异常时输出简短日志；默认关闭，仅用于排查幽灵 Widget、outgoing 泄漏或重复槽位。"))
 	bool bLogCardLayerMotionDiagnostics = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|90 Prototype Preview", meta = (ToolTip = "是否从第一人称卡牌锚点绘制非交互 HUD/UMG 静态预览卡牌层；仅用于 PIE / 开发验证，不是 Battle / Run runtime hand 数据源，默认关闭。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|90 Development Preview", meta = (ToolTip = "是否从第一人称卡牌锚点绘制非交互 HUD/UMG 开发预览卡牌层；仅用于 PIE / 开发验证，不是 Battle / Run runtime hand 数据源，默认关闭。"))
 	bool bDrawPreviewCardLayer = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ToolTip = "第一人称卡牌层使用的 Layer Widget 类；同时服务 Battle / Run runtime hand 与 PIE 预览。空值时使用 C++ 默认层 Widget。"))
 	TSubclassOf<UWacomFirstPersonCardLayerWidget> CardLayerWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ToolTip = "第一人称卡牌层使用的卡面 Widget 类；正式验证建议设置为 /Game/Wacom/UI/Card/WBP_FirstPersonCardView。为空时仅使用 UWacomCardView 作为测试兜底。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ToolTip = "第一人称卡牌层使用的卡面 Widget 类；正式验证建议设置为 /Game/Wacom/UI/Card/WBP_FirstPersonCardView。为空时使用原生 UWacomCardView 调试视图。"))
 	TSubclassOf<UWacomCardView> FirstPersonCardViewClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|90 Prototype Preview", meta = (ToolTip = "静态预览卡牌层使用的可选卡牌定义；仅用于 PIE / 开发验证，空值时生成占位卡牌数据。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|90 Development Preview", meta = (ToolTip = "开发预览卡牌层使用的可选卡牌定义；仅用于 PIE / 开发验证，空值时生成占位卡牌数据。"))
 	TArray<TSoftObjectPtr<UCardDefinition>> PreviewCardDefinitions;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|04 Hand Shape", meta = (ClampMin = "0.01", UIMin = "0.1", UIMax = "2.0", ToolTip = "第一人称 runtime hand 与静态预览中每张卡牌使用的 UMG 渲染缩放；只影响表现，不改变 Battle / Run 手牌数据。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|04 Hand Shape", meta = (ClampMin = "0.01", UIMin = "0.1", UIMax = "2.0", ToolTip = "第一人称 runtime hand 与开发预览中每张卡牌使用的 UMG 渲染缩放；只影响表现，不改变 Battle / Run 手牌数据。"))
 	float HandCardRenderScale = 0.55f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|04 Hand Shape", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "260.0", ToolTip = "runtime hand 的 Authored2D 排布中，大手牌最外侧卡牌额外下坠的最大屏幕距离，单位为 UMG 布局像素；越靠近中心的卡牌下坠越少。"))
@@ -281,7 +282,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称卡牌层 Widget 添加到 Viewport 时使用的层级；同时影响 Battle / Run runtime hand 与 PIE 预览。"))
 	int32 CardLayerZOrder = 9996;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|90 Prototype Preview", meta = (ClampMin = "0", UIMin = "0", UIMax = "12", ToolTip = "静态预览卡牌定义为空时绘制的占位卡牌数量；仅用于 PIE / 开发验证。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|90 Development Preview", meta = (ClampMin = "0", UIMin = "0", UIMax = "12", ToolTip = "开发预览卡牌定义为空时绘制的占位卡牌数量；仅用于 PIE / 开发验证。"))
 	int32 PreviewCardCountFallback = 5;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|08 Targeting State", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "正在等待目标选择的卡牌额外上浮距离，单位为 UMG 布局像素。"))
@@ -304,9 +305,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|08 Targeting State", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "TargetSelect 中非 pending 手牌的透明度倍率；会与不可用卡透明度相乘，范围 0 到 1。"))
 	float TargetSelectNonPendingOpacityMultiplier = 0.88f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Legacy", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "旧兼容：左右手锚点牌现在按普通卡牌表现，此字段不作为新调参入口，仅保留旧资产序列化兼容。"))
-	float HandAnchorScale = 0.96f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|04 Hand Shape", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "不可用卡牌在第一人称卡牌层上的整体透明度；卡面自身的 disabled overlay 仍由 FWacomCardViewData::bDisabled 控制。"))
 	float DisabledRenderOpacity = 0.78f;
@@ -482,7 +480,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Hand|99 Debug", meta = (ToolTip = "构建第一人称卡牌 Anchor 的投影调试快照；用于 PIE / 蓝图排查布局，不改变手牌或战斗状态。"))
 	FWacomFirstPersonCardAnchorDebugView GetFirstPersonCardAnchorDebugView(int32 NumDebugCards = 5) const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Hand|90 Prototype Preview")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Hand|90 Development Preview")
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildPreviewCardSlotViews() const;
 
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViews() const;
@@ -508,7 +506,7 @@ public:
 
 	void SetBattleHandInteractionEnabled(bool bEnabled);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|90 Prototype Preview")
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|90 Development Preview")
 	bool IsCardLayerWidgetActive() const { return CardLayerWidget != nullptr; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|09 Gesture")

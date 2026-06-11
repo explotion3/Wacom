@@ -1672,11 +1672,11 @@ bool FWacomFirstPersonCardLayerLookResponsiveProjectionTest::RunTest(const FStri
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerFallbackStaticCardsTest,
-	"Wacom.UI.FirstPersonCardLayer.PreviewLayer.CreatesCardViewsFromFallbackData",
+	FWacomFirstPersonCardLayerPreviewPlaceholderCardsTest,
+	"Wacom.UI.FirstPersonCardLayer.PreviewLayer.CreatesCardViewsFromPlaceholderData",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerFallbackStaticCardsTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonCardLayerPreviewPlaceholderCardsTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -1697,11 +1697,11 @@ bool FWacomFirstPersonCardLayerFallbackStaticCardsTest::RunTest(const FString& P
 	Anchor->PreviewCardCountFallback = 5;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildPreviewCardSlotViews();
-	TestEqual(TEXT("Fallback creates five static slots"), Slots.Num(), 5);
+	TestEqual(TEXT("Preview creates five placeholder slots"), Slots.Num(), 5);
 	if (Slots.Num() > 0)
 	{
-		TestEqual(TEXT("Fallback card has placeholder name"), Slots[0].Entry.CardViewData.Name.ToString(), FString(TEXT("Anchor Card 1")));
-		TestTrue(TEXT("Fallback slot is projected"), Slots[0].bProjected);
+		TestEqual(TEXT("Preview card has placeholder name"), Slots[0].Entry.CardViewData.Name.ToString(), FString(TEXT("Anchor Card 1")));
+		TestTrue(TEXT("Preview slot is projected"), Slots[0].bProjected);
 	}
 
 	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
@@ -2999,7 +2999,6 @@ bool FWacomFirstPersonCardLayerAuthoredHandAnchorNormalLayoutTest::RunTest(const
 	Anchor->HandMaxEdgeDropPixels = 100.0f;
 	Anchor->ShortHandEdgeDropPixels = 100.0f;
 	Anchor->HandCardRenderScale = 0.5f;
-	Anchor->HandAnchorScale = 0.25f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
@@ -4055,11 +4054,11 @@ bool FWacomFirstPersonCardLayerMotionLargeJumpTest::RunTest(const FString& Param
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerMotionStaticKeyTest,
-	"Wacom.UI.FirstPersonCardLayer.SlotMotion.StaticPreviewUsesStableIndexKeys",
+	FWacomFirstPersonCardLayerMotionDevelopmentPreviewKeyTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.DevelopmentPreviewUsesStableIndexKeys",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerMotionStaticKeyTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonCardLayerMotionDevelopmentPreviewKeyTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -7224,20 +7223,20 @@ bool FWacomFirstPersonCardLayerRuntimeSourcePriorityTest::RunTest(const FString&
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	Anchor->bDrawPreviewCardLayer = true;
 	Anchor->PreviewCardCountFallback = 5;
-	TestEqual(TEXT("Static fallback has five cards"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
+	TestEqual(TEXT("Development preview has five cards"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
 
 	FWacomCardViewData RuntimeCard;
 	RuntimeCard.Name = FText::FromString(TEXT("Runtime Battle Card"));
 	Anchor->SetRuntimeCardLayerData(TEXT("BattleHand"), { RuntimeCard });
 	const TArray<FWacomFirstPersonCardLayerSlotView> RuntimeSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
-	TestEqual(TEXT("Runtime source overrides static fallback"), RuntimeSlots.Num(), 1);
+	TestEqual(TEXT("Runtime source overrides development preview"), RuntimeSlots.Num(), 1);
 	if (RuntimeSlots.Num() == 1)
 	{
 		TestEqual(TEXT("Runtime card data is used"), RuntimeSlots[0].Entry.CardViewData.Name.ToString(), FString(TEXT("Runtime Battle Card")));
 	}
 
 	Anchor->ClearRuntimeCardLayerData(TEXT("BattleHand"));
-	TestEqual(TEXT("Clearing runtime source restores static fallback"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
+	TestEqual(TEXT("Clearing runtime source restores development preview"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -7999,7 +7998,6 @@ bool FWacomFirstPersonCardLayerVisualStateSlotTest::RunTest(const FString& Param
 	Anchor->PendingTargetingLiftPixels = 40.0f;
 	Anchor->PendingTargetingScale = 1.2f;
 	Anchor->PendingTargetingZOrderBoost = 1200;
-	Anchor->HandAnchorScale = 0.9f;
 	Anchor->DisabledRenderOpacity = 0.6f;
 	Anchor->TargetSelectNonPendingOpacityMultiplier = 0.5f;
 	Anchor->bEnableCardLayerPixelSnapping = false;
