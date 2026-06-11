@@ -3,6 +3,7 @@
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 
 #include "Cards/CardDefinition.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"

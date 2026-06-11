@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-06-08
+updated: 2026-06-12
 tags:
   - wacom/todo
   - wacom/docs
@@ -165,6 +165,12 @@ tags:
   - 归属：UI / 战斗表现
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
   - 说明：后续按美术反馈微调扇形参数、卡面采样、Retainer 外元素、slot motion、commit pulse 和 drag / aim 读牌姿态。
+
+- [ ] **First-person hand Anchor 职责继续拆分：CardLayerOwner / delegate router**
+  - 状态：`Ready: 结构清理后续刀`
+  - 归属：UI / App
+  - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)
+  - 说明：Anchor 已收口为制作参数 façade、投影锚点 owner 和 runtime/layout 私有 helper 调度；后续可继续拆出 CardLayerWidget 生命周期 owner、delegate 绑定 / 转发 router，让 Anchor 更专注于 authoring 与投影。
 
 - [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
   - 状态：`Blocked: Demo 范围确认`

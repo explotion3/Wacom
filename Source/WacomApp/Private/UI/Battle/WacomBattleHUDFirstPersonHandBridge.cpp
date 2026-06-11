@@ -3,6 +3,7 @@
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 
 #include "Cards/CardDefinition.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"

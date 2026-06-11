@@ -3,11 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "RunStateTypes.h"
 #include "Types/WacomInteractionTargetTypes.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 #include "WacomPlayerController.generated.h"
 
@@ -24,6 +24,7 @@ class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
 class UWacomRunTunnelMovementComponent;
+class UWacomFirstPersonCardAnchorComponent;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;

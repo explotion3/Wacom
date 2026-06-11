@@ -5,10 +5,10 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Events/BattleEvent.h"
-#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionTypes.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "WacomBattleEnemyPartPresentationComponent.generated.h"
 
 class UPrimitiveComponent;

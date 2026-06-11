@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "WacomFirstPersonCardAnchorDebugWidget.generated.h"
 
 /**

@@ -10,6 +10,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"

@@ -4,12 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "GameplayTagContainer.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "WacomRunFirstPersonCardSourceComponent.generated.h"
 
 class UCardDefinition;
 class URunSession;
+class UWacomFirstPersonCardAnchorComponent;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomRunMenuCardLeaseRequest

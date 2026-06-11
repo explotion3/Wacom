@@ -3,8 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 class UBattleHUD;
 class UWacomCardDetailPanel;

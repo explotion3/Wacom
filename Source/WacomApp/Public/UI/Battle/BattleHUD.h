@@ -3,11 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Events/BattleEvent.h"
 #include "Resolution/BattleTargetValidationResult.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "Types/WacomEnums.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "BattleHUD.generated.h"
@@ -26,6 +26,7 @@ class FWacomBattleHUDCombatLogController;
 class FWacomBattleHUDFirstPersonHandBridge;
 class FWacomBattleHUDSceneEnemyTargetCoordinator;
 class FWacomBattleHUDPresentationCoordinator;
+class UWacomFirstPersonCardAnchorComponent;
 struct FBattleHUDFallbackLayoutBuilder;
 struct FWacomBattleHUDCommandFlow;
 struct FWacomBattleHUDEventFlow;
