@@ -63,6 +63,9 @@ struct WACOMAPP_API FWacomBattleEnemyPartPresentationDebugView
 	bool bHoverActive = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FWacomBattleEnemyPartDragPredictionDebugInput LastHoverPredictionInput;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
 	FName HoverReason = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")

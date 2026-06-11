@@ -2530,28 +2530,24 @@ bool FWacomUIBattleSceneEnemyPartPredictionHoverInitiativeSpec::RunTest(const FS
 
 	const FWacomBattleEnemyPartPresentationDebugView DebugView =
 		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	TestTrue(TEXT("Prediction is visible"), DebugView.PredictionView.bVisible);
-	TestEqual(TEXT("Prediction mode hover"),
-		DebugView.PredictionView.Mode,
-		EWacomBattleEnemyPartPredictionMode::HoverInitiative);
-	TestEqual(TEXT("Prediction current initiative"), DebugView.PredictionView.CurrentInitiative, 7);
-	TestEqual(TEXT("Prediction predicted initiative remains current"),
-		DebugView.PredictionView.PredictedInitiative,
-		7);
+	TestFalse(TEXT("Hover prediction is handled by enemy panel"), DebugView.PredictionView.bVisible);
+	TestEqual(TEXT("Hover clears part prediction badge"),
+		DebugView.PredictionView.RejectReason,
+		FName(TEXT("EnemyPanelHover")));
 	TestEqual(TEXT("Prediction widget component visible"),
 		PartActor->GetPredictionWidgetComponent()->IsVisible(),
-		true);
+		false);
 	if (const UWacomBattleEnemyPartPredictionWidget* PredictionWidget =
 		Cast<UWacomBattleEnemyPartPredictionWidget>(
 			PartActor->GetPredictionWidgetComponent()->GetUserWidgetObject()))
 	{
-		TestEqual(TEXT("Widget receives hover prediction mode"),
-			PredictionWidget->GetPredictionView().Mode,
-			EWacomBattleEnemyPartPredictionMode::HoverInitiative);
+		TestFalse(TEXT("Widget hides hover prediction badge"),
+			PredictionWidget->GetPredictionView().bVisible);
 	}
 	else
 	{
-		AddError(TEXT("Prediction widget object missing or wrong class"));
+		TestNull(TEXT("Hidden prediction badge may remain uninitialized"),
+			PartActor->GetPredictionWidgetComponent()->GetUserWidgetObject());
 	}
 	return true;
 }
@@ -4944,9 +4940,11 @@ bool FWacomUIBattleSceneEnemyHostPredictionVisibleCountSpec::RunTest(const FStri
 		TEXT("Hovered"));
 
 	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
-	TestEqual(TEXT("Host aggregates visible predictions"), View.PredictionVisiblePartActorCount, 1);
-	TestTrue(TEXT("Host summary reports visible prediction count"),
-		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("PredictionVisibleParts=1")));
+	TestEqual(TEXT("Host hover no longer aggregates part prediction badges"),
+		View.PredictionVisiblePartActorCount,
+		0);
+	TestTrue(TEXT("Host summary reports hidden prediction count"),
+		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("PredictionVisibleParts=0")));
 	return true;
 }
 
@@ -5913,7 +5911,7 @@ bool FWacomUIBattleCurrentHostRegistryRoutesFeedbackSpec::RunTest(const FString&
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 	TestTrue(TEXT("Current host hover activates"),
 		CurrentPart->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView().bHoverActive);
-	TestTrue(TEXT("Current host prediction visible"),
+	TestFalse(TEXT("Current host hover prediction handled by enemy panel"),
 		CurrentPart->GetPresentationComponent()
 			->GetBattleEnemyPartPresentationDebugView()
 			.PredictionView.bVisible);
@@ -6001,11 +5999,11 @@ bool FWacomUIBattleSceneEnemyPartPredictionBadgeOffsetSpec::RunTest(const FStrin
 
 	const FWacomBattleEnemyPartPresentationDebugView DebugView =
 		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	TestTrue(TEXT("Prediction visible"), DebugView.PredictionView.bVisible);
-	TestTrue(TEXT("Prediction offset is active"), DebugView.bPredictionBadgeOffsetActive);
-	TestEqual(TEXT("Prediction offset applied"),
+	TestFalse(TEXT("Hover prediction is handled by enemy panel"), DebugView.PredictionView.bVisible);
+	TestFalse(TEXT("Prediction offset stays inactive for hover"), DebugView.bPredictionBadgeOffsetActive);
+	TestEqual(TEXT("Prediction offset is not applied for hover"),
 		PartActor->GetPredictionWidgetComponent()->GetRelativeLocation().Z,
-		PredictionBaseLocation.Z + PartActor->PredictionBadgeZOffsetWhenVisible);
+		PredictionBaseLocation.Z);
 	return true;
 }
 
@@ -6436,11 +6434,11 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeSetsBridgeStateSpec::RunTest(const FS
 	TestEqual(TEXT("Hover scales visual layer root"),
 		PartActor->GetVisualLayersRoot()->GetRelativeScale3D(),
 		BaseScale * PartActor->HoverProbeScale);
-	TestTrue(TEXT("Hover prediction visible"),
+	TestFalse(TEXT("Hover prediction is handled by enemy panel"),
 		View.PredictionView.bVisible);
-	TestEqual(TEXT("Hover prediction mode"),
-		View.PredictionView.Mode,
-		EWacomBattleEnemyPartPredictionMode::HoverInitiative);
+	TestEqual(TEXT("Hover clears part prediction badge"),
+		View.PredictionView.RejectReason,
+		FName(TEXT("EnemyPanelHover")));
 
 	return true;
 }
@@ -6514,16 +6512,20 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeTargetSelectPredictionSpec::RunTest(c
 
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 
-	const FWacomBattleEnemyPartPredictionView PredictionView =
-		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView().PredictionView;
-	TestTrue(TEXT("TargetSelect prediction visible"), PredictionView.bVisible);
-	TestEqual(TEXT("TargetSelect prediction mode"),
-		PredictionView.Mode,
-		EWacomBattleEnemyPartPredictionMode::CardPrediction);
-	TestEqual(TEXT("TargetSelect prediction source cost"), PredictionView.SourceCardRuntimeCost, 2);
-	TestEqual(TEXT("TargetSelect predicted initiative"), PredictionView.PredictedInitiative, 3);
-	TestTrue(TEXT("TargetSelect prediction valid target no reject"),
-		PredictionView.RejectReason.IsNone());
+	const FWacomBattleEnemyPartPresentationDebugView View =
+		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
+	TestTrue(TEXT("TargetSelect hover still activates part focus"), View.bHoverActive);
+	TestFalse(TEXT("TargetSelect hover prediction is handled by enemy panel"), View.PredictionView.bVisible);
+	TestEqual(TEXT("TargetSelect hover clears part prediction badge"),
+		View.PredictionView.RejectReason,
+		FName(TEXT("EnemyPanelHover")));
+	TestTrue(TEXT("TargetSelect prediction input records source card"),
+		View.LastHoverPredictionInput.bHasSourceCard);
+	TestEqual(TEXT("TargetSelect prediction input source cost"),
+		View.LastHoverPredictionInput.SourceCardRuntimeCost,
+		2);
+	TestTrue(TEXT("TargetSelect prediction input can submit"),
+		View.LastHoverPredictionInput.bPreviewCanSubmit);
 	return true;
 }
 
@@ -6596,14 +6598,19 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeTargetSelectInvalidPredictionSpec::Ru
 
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest();
 
-	const FWacomBattleEnemyPartPredictionView PredictionView =
-		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView().PredictionView;
-	TestEqual(TEXT("Invalid TargetSelect prediction mode"),
-		PredictionView.Mode,
-		EWacomBattleEnemyPartPredictionMode::Rejected);
-	TestFalse(TEXT("Invalid TargetSelect no misleading perfect marker"), PredictionView.bPerfectReleaseCandidate);
-	TestFalse(TEXT("Invalid TargetSelect no misleading risk marker"), PredictionView.bActionRisk);
-	TestFalse(TEXT("Invalid TargetSelect reject reason present"), PredictionView.RejectReason.IsNone());
+	const FWacomBattleEnemyPartPresentationDebugView View =
+		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
+	TestTrue(TEXT("Invalid TargetSelect hover still activates part focus"), View.bHoverActive);
+	TestFalse(TEXT("Invalid TargetSelect hover prediction is handled by enemy panel"), View.PredictionView.bVisible);
+	TestEqual(TEXT("Invalid TargetSelect hover clears part prediction badge"),
+		View.PredictionView.RejectReason,
+		FName(TEXT("EnemyPanelHover")));
+	TestTrue(TEXT("Invalid TargetSelect prediction input records source card"),
+		View.LastHoverPredictionInput.bHasSourceCard);
+	TestFalse(TEXT("Invalid TargetSelect prediction input cannot submit"),
+		View.LastHoverPredictionInput.bPreviewCanSubmit);
+	TestFalse(TEXT("Invalid TargetSelect reject reason present"),
+		View.LastHoverPredictionInput.PreviewRejectReason.IsNone());
 	return true;
 }
 

@@ -606,7 +606,7 @@ bool FWacomUIBattleSceneEnemyTargetHoverRoutesByEnemyPartKeySpec::RunTest(const 
 		View.HoverWorldTargetId.IsValid());
 	TestEqual(TEXT("Hover stable id"), View.HoverStableId, FName(TEXT("Test.Part.SharedCore")));
 	TestEqual(TEXT("Hover reason"), View.HoverReason, FName(TEXT("Hovered")));
-	TestTrue(TEXT("Hover prediction visible"), View.PredictionView.bVisible);
+	TestFalse(TEXT("Hover prediction is handled by enemy panel, not prediction badge"), View.PredictionView.bVisible);
 	return true;
 }
 

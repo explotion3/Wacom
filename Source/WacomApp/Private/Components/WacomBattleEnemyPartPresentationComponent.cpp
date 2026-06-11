@@ -198,6 +198,7 @@ UWacomBattleEnemyPartPresentationComponent::GetBattleEnemyPartPresentationDebugV
 	View.bDragPreviewActive = bDragPreviewActive;
 	View.LastDragPredictionDebugInput = LastDragPredictionDebugInput;
 	View.bHoverActive = bHoverProbeActive;
+	View.LastHoverPredictionInput = LastHoverPredictionInput;
 	View.HoverReason = HoverReason;
 	View.HoverStableId = HoverStableId;
 	View.HoverWorldTargetId = HoverWorldTargetId;

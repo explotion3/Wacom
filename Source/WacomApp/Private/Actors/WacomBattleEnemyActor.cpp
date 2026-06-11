@@ -639,9 +639,11 @@ void AWacomBattleEnemyActor::SetEnemyPanelViewData(const FWacomBattleEnemyPanelV
 		return;
 	}
 
+	EnemyPanelWidgetComponent->InitWidget();
 	if (UWacomBattleEnemyPanelWidget* PanelWidget =
 		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
+		PanelWidget->TakeWidget();
 		PanelWidget->SetEnemyPanelViewData({ ViewData });
 	}
 

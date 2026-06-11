@@ -269,6 +269,12 @@ WBP 不应做：不修改牌堆或规则状态。
 |---|---|---|---|
 | `EnemyListBox` | `VerticalBox` | Optional | 每个敌人一组；缺省时 C++ fallback 自动创建 |
 
+推荐类默认值：
+
+| 属性 | 推荐值 | 运行时职责 |
+|---|---|---|
+| `PartEntryWidgetClass` | `BP_WacomBattleEnemyPartEntryWidget` | 面板内每个部位条目的正式 WBP 类；为空时使用 C++ fallback |
+
 WBP 不应做：不直接读取或修改 `UBattleSession`，不在部位 Actor 上创建常驻状态 UI。
 
 ### WBP_BattleEnemyPartEntryWidget
@@ -285,9 +291,18 @@ WBP 不应做：不直接读取或修改 `UBattleSession`，不在部位 Actor �
 | `HpText` | `TextBlock` | Optional | HP / MaxHP |
 | `ShieldText` | `TextBlock` | Optional | 护盾；无护盾时可为空或隐藏 |
 | `InitiativeText` | `TextBlock` | Optional | 当前先机 |
+| `StatsText` | `TextBlock` | Optional | HP / 护盾 / 先机的汇总兜底文本；正式 WBP 拆出上面三个字段后可以不放 |
 | `IntentText` | `TextBlock` | Optional | 当前意图 |
 | `StatusText` | `TextBlock` | Optional | 状态标签汇总 |
 | `DestroyedOverlay` | `Widget` | Optional | 部位破坏时的弱化/覆盖层 |
+
+刷新语义：
+
+- Panel 按 `EnemySlotId` 复用敌人组，按 `EnemySlotId + PartSlotId` 复用部位条目；同一部位只更新 view data，不重建条目 Widget。
+- `Shield == 0` 时 `ShieldText` 会清空并折叠；如果 WBP 只绑定 `StatsText` 而未绑定 `HpText / ShieldText / InitiativeText`，汇总文本仍会显示。
+- `bDestroyed` 时 `DestroyedOverlay` 显示，条目整体透明度降低。
+- C++ fallback 使用暗色紧凑面板和水平部位条目：部位名、HP、护盾、先机、意图同排展示，状态和破坏标记作为次级信息显示。
+- C++ fallback 自带轻量表现动效：新增条目错峰淡入/轻微下移归位，HP、护盾和破坏状态变化时短促 pulse。正式 WBP 可以用 UMG Animation 覆盖更完整的动效表现。
 
 WBP 不应做：不提交战斗命令，不反向写入 Snapshot，不承担 world target/hover/drag preview 反馈。
 ## PIE Smoke Checklist
