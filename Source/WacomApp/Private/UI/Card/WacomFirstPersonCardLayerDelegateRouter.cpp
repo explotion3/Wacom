@@ -18,7 +18,6 @@ void FWacomFirstPersonCardLayerDelegateRouter::Bind(UWacomFirstPersonCardLayerWi
 	}
 
 	Unbind(LayerWidget);
-	LayerWidget->OnCardClickedNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandleCardClicked);
 	LayerWidget->OnCardHoveredNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandleCardHovered);
 	LayerWidget->OnCardUnhoveredNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandleCardUnhovered);
 	LayerWidget->OnHoveredCardSlotUpdatedNative.AddRaw(
@@ -48,7 +47,6 @@ void FWacomFirstPersonCardLayerDelegateRouter::Unbind(UWacomFirstPersonCardLayer
 		return;
 	}
 
-	LayerWidget->OnCardClickedNative.RemoveAll(this);
 	LayerWidget->OnCardHoveredNative.RemoveAll(this);
 	LayerWidget->OnCardUnhoveredNative.RemoveAll(this);
 	LayerWidget->OnHoveredCardSlotUpdatedNative.RemoveAll(this);
@@ -61,16 +59,6 @@ void FWacomFirstPersonCardLayerDelegateRouter::Unbind(UWacomFirstPersonCardLayer
 	LayerWidget->OnCardDragCancelledNative.RemoveAll(this);
 	LayerWidget->OnCardPointerMovedNative.RemoveAll(this);
 	LayerWidget->OnCardPointerLeftNative.RemoveAll(this);
-}
-
-void FWacomFirstPersonCardLayerDelegateRouter::HandleCardClicked(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	if (Callbacks.CardClicked)
-	{
-		Callbacks.CardClicked(CardInstanceId, SlotView);
-	}
 }
 
 void FWacomFirstPersonCardLayerDelegateRouter::HandleCardHovered(

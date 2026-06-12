@@ -489,13 +489,6 @@ void UBattleHUD::UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonC
 	GetFirstPersonHandBridge().UnbindLayerInteractions(Anchor);
 }
 
-void UBattleHUD::HandleFirstPersonCardLayerCardClicked(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	GetFirstPersonHandBridge().HandleCardClicked(CardInstanceId, SlotView);
-}
-
 void UBattleHUD::HandleFirstPersonCardLayerCardHovered(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardLayerSlotView& SlotView)

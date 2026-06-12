@@ -257,6 +257,7 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void PlayerTick(float DeltaTime) override;
 	virtual void SetupInputComponent() override;
 	virtual bool InputKey(const FInputKeyEventArgs& Params) override;
 
@@ -363,6 +364,8 @@ private:
 	void ClearRunWorldCardDropProbe();
 	void RefreshRunFirstPersonCardLayerMenuSuppression();
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
+	void PumpFirstPersonCardActiveDragPointer();
+	bool TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
 	UWacomRunTunnelMovementComponent* ResolveRunTunnelMovementForCardDragLook() const;
 	bool ShouldHandleRunFirstPersonMenuDropProbe() const;

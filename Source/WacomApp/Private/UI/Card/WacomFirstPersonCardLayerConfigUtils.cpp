@@ -262,7 +262,6 @@ bool AreCardDragConfigsEquivalent(
 	const FWacomFirstPersonCardDragConfig& B)
 {
 	return A.bEnableFirstPersonCardDragCommit == B.bEnableFirstPersonCardDragCommit
-		&& A.bEnableClickToPlayCard == B.bEnableClickToPlayCard
 		&& AreFloatsEquivalent(A.CardInspectHoldDelaySeconds, B.CardInspectHoldDelaySeconds)
 		&& AreFloatsEquivalent(A.CardDragStartThresholdPixels, B.CardDragStartThresholdPixels)
 		&& AreFloatsEquivalent(A.HoverHitHysteresisPixels, B.HoverHitHysteresisPixels)

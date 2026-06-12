@@ -11,7 +11,6 @@ class UWacomFirstPersonCardLayerWidget;
 
 struct FWacomFirstPersonCardLayerDelegateRouterCallbacks
 {
-	TFunction<void(const FGuid&, const FWacomFirstPersonCardLayerSlotView&)> CardClicked;
 	TFunction<void(const FGuid&, const FWacomFirstPersonCardLayerSlotView&)> CardHovered;
 	TFunction<void(const FGuid&, const FWacomFirstPersonCardLayerSlotView&)> CardUnhovered;
 	TFunction<void(const FGuid&, const FWacomFirstPersonCardLayerSlotView&)> HoveredCardLayoutUpdated;
@@ -40,7 +39,6 @@ public:
 	void Unbind(UWacomFirstPersonCardLayerWidget* LayerWidget);
 
 private:
-	void HandleCardClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleHoveredCardSlotUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);

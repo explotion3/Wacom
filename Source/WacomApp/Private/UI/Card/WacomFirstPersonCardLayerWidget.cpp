@@ -381,6 +381,69 @@ void UWacomFirstPersonCardLayerWidget::CancelCardDragGesture(bool bBroadcastCanc
 	ClearCurrentDragState(bBroadcastCancel);
 }
 
+bool UWacomFirstPersonCardLayerWidget::TryStartCardDragGesture(const FGuid& CardInstanceId)
+{
+	return TryStartCardDragGesture(CardInstanceId, TOptional<FVector2D>());
+}
+
+bool UWacomFirstPersonCardLayerWidget::TryStartCardDragGesture(
+	const FGuid& CardInstanceId,
+	const TOptional<FVector2D>& InitialPointerWidgetPosition)
+{
+	if (!CardInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	UWacomFirstPersonCardLayerSlotWidget* TargetSlotWidget = nullptr;
+	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (!SlotWidget
+			|| SlotWidget->GetSlotView().Entry.CardInstanceId != CardInstanceId)
+		{
+			continue;
+		}
+		TargetSlotWidget = SlotWidget.Get();
+		break;
+	}
+	if (!TargetSlotWidget)
+	{
+		return false;
+	}
+
+	if (UWacomFirstPersonCardLayerSlotWidget* ExistingGestureSlot = FindActiveGestureSlot())
+	{
+		ExistingGestureSlot->CancelCardDragGesture(true);
+		ClearCurrentDragState(true);
+	}
+
+	const FVector2D GestureOriginPosition = TargetSlotWidget->GetSlotView().ScreenPosition;
+	const FVector2D InitialPointerPosition = InitialPointerWidgetPosition.IsSet()
+		? InitialPointerWidgetPosition.GetValue()
+		: GestureOriginPosition;
+
+	PressedSlotWidget = TargetSlotWidget;
+	const bool bStarted = TargetSlotWidget->BeginDragGestureFromFirstPersonLayer(
+		GestureOriginPosition,
+		InitialPointerPosition);
+	if (!bStarted)
+	{
+		PressedSlotWidget.Reset();
+	}
+	return bStarted;
+}
+
+bool UWacomFirstPersonCardLayerWidget::UpdateActiveDragPointerFromWidgetPosition(
+	const FVector2D& WidgetPosition)
+{
+	return RoutePointerToActiveGestureSlot(WidgetPosition);
+}
+
+bool UWacomFirstPersonCardLayerWidget::IsCardDragGestureActive() const
+{
+	return FindActiveGestureSlot() != nullptr;
+}
+
 void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 {
 	ClearHoveredCardTargetState(true);
@@ -1107,7 +1170,6 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 			UnbindSlotWidget(SlotWidget);
 		}
 	}
-	OnCardClickedNative.Clear();
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
 	OnHoveredCardSlotUpdatedNative.Clear();
@@ -1269,7 +1331,6 @@ void UWacomFirstPersonCardLayerWidget::BindSlotWidget(UWacomFirstPersonCardLayer
 		return;
 	}
 
-	SlotWidget->OnCardClickedNative.RemoveAll(this);
 	SlotWidget->OnCardHoveredNative.RemoveAll(this);
 	SlotWidget->OnCardUnhoveredNative.RemoveAll(this);
 	SlotWidget->OnCardVisualSlotUpdatedNative.RemoveAll(this);
@@ -1280,7 +1341,6 @@ void UWacomFirstPersonCardLayerWidget::BindSlotWidget(UWacomFirstPersonCardLayer
 	SlotWidget->OnCardDragReleasedNative.RemoveAll(this);
 	SlotWidget->OnCardDragCancelledNative.RemoveAll(this);
 	SlotWidget->SetOwningFirstPersonCardLayer(this);
-	SlotWidget->OnCardClickedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotClicked);
 	SlotWidget->OnCardHoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotHovered);
 	SlotWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotUnhovered);
 	SlotWidget->OnCardVisualSlotUpdatedNative.AddUObject(
@@ -1305,7 +1365,6 @@ void UWacomFirstPersonCardLayerWidget::UnbindSlotWidget(UWacomFirstPersonCardLay
 		return;
 	}
 
-	SlotWidget->OnCardClickedNative.RemoveAll(this);
 	SlotWidget->OnCardHoveredNative.RemoveAll(this);
 	SlotWidget->OnCardUnhoveredNative.RemoveAll(this);
 	SlotWidget->OnCardVisualSlotUpdatedNative.RemoveAll(this);
@@ -1825,13 +1884,6 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 	ApplyPlayedTargetBias();
 
 	return Profile;
-}
-
-void UWacomFirstPersonCardLayerWidget::HandleSlotClicked(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	OnCardClickedNative.Broadcast(CardInstanceId, SlotView);
 }
 
 void UWacomFirstPersonCardLayerWidget::HandleSlotHovered(

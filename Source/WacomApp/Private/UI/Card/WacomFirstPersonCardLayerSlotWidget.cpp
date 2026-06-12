@@ -640,7 +640,6 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	ClearGestureState(false);
 	ClearInteractionFeedback();
 	SetTickEnabledForMotion(false);
-	OnCardClickedNative.Clear();
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
 	OnCardVisualSlotUpdatedNative.Clear();
@@ -1243,14 +1242,10 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanInteractWithCurrentSlot() const
 
 bool UWacomFirstPersonCardLayerSlotWidget::CanApplyPlayableHoverFeedback() const
 {
-	return CanClickCurrentSlot()
+	return CanInteractWithCurrentSlot()
+		&& CurrentSlotView.Entry.bIsPlayable
 		&& !CurrentSlotView.Entry.bIsPendingTargeting
 		&& bIsHoveredForFirstPersonLayer;
-}
-
-bool UWacomFirstPersonCardLayerSlotWidget::CanClickCurrentSlot() const
-{
-	return CanInteractWithCurrentSlot() && CurrentSlotView.Entry.bIsPlayable;
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::CanStartCardDragGesture() const
@@ -1481,7 +1476,6 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginGesturePress(const FVector2D& Sc
 	GestureElapsedSeconds = 0.0f;
 	bGestureTargetValid = false;
 	bGestureCommitArmed = false;
-	bSuppressClickOnRelease = false;
 	GestureFeedbackTargetHandle = FWacomInteractionTargetHandle();
 	bCardDragProbeFeedback = false;
 	bCardDragProbeFeedbackValid = false;
@@ -1581,32 +1575,15 @@ bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(const FVector2D& Scree
 	SetPressedForFirstPersonLayer(false);
 	BroadcastDragReleased();
 
-	const bool bAllowQuickClick =
-		!bSuppressClickOnRelease
-		&& CardDragConfig.bEnableClickToPlayCard
-		&& ReleaseState == EWacomFirstPersonCardGestureState::Pressed
-		&& GestureElapsedSeconds < CardDragConfig.CardInspectHoldDelaySeconds;
-
-	if (bAllowQuickClick)
-	{
-		if (CanClickCurrentSlot())
-		{
-			TriggerConfirmFeedback();
-			OnCardClickedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
-		}
-		else
-		{
-			TriggerDenyFeedback();
-		}
-	}
-	else if (ReleaseState == EWacomFirstPersonCardGestureState::ArmedForCommit
+	if (ReleaseState == EWacomFirstPersonCardGestureState::ArmedForCommit
 		|| (ReleaseState == EWacomFirstPersonCardGestureState::AimingTargetedCard && bGestureTargetValid))
 	{
 		TriggerConfirmFeedback();
 	}
-	else if (ReleaseState == EWacomFirstPersonCardGestureState::Inspecting)
+	else if (ReleaseState == EWacomFirstPersonCardGestureState::Inspecting
+		|| ReleaseState == EWacomFirstPersonCardGestureState::Pressed)
 	{
-		// Releasing read/inspect mode is a neutral return to the hand, not a rejected play attempt.
+		// Releasing read/inspect or an un-dragged press is a neutral return to the hand.
 	}
 	else if (ReleaseState != EWacomFirstPersonCardGestureState::Pressed)
 	{
@@ -1628,12 +1605,6 @@ void UWacomFirstPersonCardLayerSlotWidget::SetGestureState(
 
 	const EWacomFirstPersonCardGestureState PreviousState = GestureState;
 	GestureState = NewState;
-	bSuppressClickOnRelease =
-		bSuppressClickOnRelease
-		|| NewState == EWacomFirstPersonCardGestureState::Inspecting
-		|| NewState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
-		|| NewState == EWacomFirstPersonCardGestureState::AimingTargetedCard
-		|| NewState == EWacomFirstPersonCardGestureState::ArmedForCommit;
 	bGestureCommitArmed = NewState == EWacomFirstPersonCardGestureState::ArmedForCommit;
 	UpdateGestureOverrideTarget();
 
@@ -1697,7 +1668,6 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearGestureState(bool bBroadcastCanc
 	ClearPointerViewportDiagnostics();
 	bGestureTargetValid = false;
 	bGestureCommitArmed = false;
-	bSuppressClickOnRelease = false;
 	GestureElapsedSeconds = 0.0f;
 	SetPressedForFirstPersonLayer(false);
 	RefreshPresentationTarget(
@@ -1796,6 +1766,42 @@ bool UWacomFirstPersonCardLayerSlotWidget::BeginGesturePressFromFirstPersonLayer
 	}
 
 	BeginGesturePress(WidgetPosition);
+	return true;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::BeginDragGestureFromFirstPersonLayer(const FVector2D& WidgetPosition)
+{
+	return BeginDragGestureFromFirstPersonLayer(WidgetPosition, WidgetPosition);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::BeginDragGestureFromFirstPersonLayer(
+	const FVector2D& GestureOriginPosition,
+	const FVector2D& InitialPointerPosition)
+{
+	if (!CanStartCardDragGesture())
+	{
+		return false;
+	}
+
+	BeginGesturePress(GestureOriginPosition);
+	CurrentGestureScreenPosition = InitialPointerPosition;
+	UpdatePointerViewportDiagnostics(InitialPointerPosition);
+	if (IsNoTargetDragCard())
+	{
+		SetGestureState(EWacomFirstPersonCardGestureState::DraggingNoTargetCard, true);
+	}
+	else if (IsTargetedAimCard())
+	{
+		SetGestureState(EWacomFirstPersonCardGestureState::AimingTargetedCard, true);
+	}
+	else
+	{
+		SetGestureState(EWacomFirstPersonCardGestureState::Cancelled, true);
+		return false;
+	}
+
+	UpdateGestureOverrideTarget();
+	UpdateGesture(0.0f, InitialPointerPosition);
 	return true;
 }
 
@@ -1967,18 +1973,6 @@ bool UWacomFirstPersonCardLayerSlotWidget::RequestPressForTest()
 	return true;
 }
 
-bool UWacomFirstPersonCardLayerSlotWidget::RequestClickForTest()
-{
-	if (!CanClickCurrentSlot())
-	{
-		return false;
-	}
-
-	TriggerConfirmFeedback();
-	OnCardClickedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
-	return true;
-}
-
 bool UWacomFirstPersonCardLayerSlotWidget::RequestMouseUpForTest()
 {
 	if (!CanInteractWithCurrentSlot())
@@ -1992,15 +1986,6 @@ bool UWacomFirstPersonCardLayerSlotWidget::RequestMouseUpForTest()
 	}
 
 	SetPressedForFirstPersonLayer(false);
-	if (CanClickCurrentSlot())
-	{
-		TriggerConfirmFeedback();
-		OnCardClickedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, CurrentSlotView);
-	}
-	else
-	{
-		TriggerDenyFeedback();
-	}
 	return true;
 }
 

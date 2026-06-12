@@ -256,7 +256,6 @@ void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPers
 		}
 	}
 
-	Anchor->OnFirstPersonCardLayerCardClicked.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&HUD);
@@ -266,9 +265,6 @@ void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPers
 	Anchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerCardClicked.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerCardClicked);
 	Anchor->OnFirstPersonCardLayerCardHovered.AddUObject(
 		&HUD,
 		&UBattleHUD::HandleFirstPersonCardLayerCardHovered);
@@ -306,7 +302,6 @@ void FWacomBattleHUDFirstPersonHandBridge::UnbindLayerInteractions(UWacomFirstPe
 		return;
 	}
 
-	Anchor->OnFirstPersonCardLayerCardClicked.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&HUD);
@@ -320,17 +315,6 @@ void FWacomBattleHUDFirstPersonHandBridge::UnbindLayerInteractions(UWacomFirstPe
 	{
 		LastAnchor.Reset();
 	}
-}
-
-void FWacomBattleHUDFirstPersonHandBridge::HandleCardClicked(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardLayerSlotView& /*SlotView*/)
-{
-	if (!ShouldEnableFirstPersonBattleHandInteraction())
-	{
-		return;
-	}
-	HUD.OnCardClickedByUser(CardInstanceId);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::HandleCardHovered(

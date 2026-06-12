@@ -356,13 +356,10 @@ private:
 	bool bRuntimeSourceActive = false;
 	bool bSuppressedByGameMenu = false;
 	bool bActiveMenuLeaseBackedByProvider = false;
-	bool bHasMenuLeaseClickOverride = false;
-	bool bMenuLeasePreviousClickToPlayCard = true;
 	FName ActiveMenuLeaseId = NAME_None;
 	FName ActiveMenuLeaseSourceId = NAME_None;
 	FWacomRunMenuCardLeaseRequest ActiveMenuLeaseProviderRequest;
 	FName LastWrittenRuntimeSourceId = NAME_None;
-	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> MenuLeaseClickOverrideAnchor;
 	FDefaultSourceRefreshKey LastDefaultSourceRefreshKey;
 	FProviderLeaseRefreshKey LastProviderLeaseRefreshKey;
 	mutable int32 LastBattleDeckPhysicalCount = 0;

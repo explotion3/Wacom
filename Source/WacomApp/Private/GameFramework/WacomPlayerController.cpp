@@ -437,6 +437,12 @@ void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+void AWacomPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+	PumpFirstPersonCardActiveDragPointer();
+}
+
 void AWacomPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
@@ -1633,6 +1639,37 @@ bool AWacomPlayerController::ShouldHandleRunWorldCardDropProbe() const
 	return !bHasActiveGameMenu;
 }
 
+void AWacomPlayerController::PumpFirstPersonCardActiveDragPointer()
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe();
+	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
+	{
+		return;
+	}
+
+	FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
+	if (!TryGetMouseWidgetPosition(MouseWidgetPosition))
+	{
+		return;
+	}
+
+	Anchor->UpdateFirstPersonCardDragPointer(MouseWidgetPosition);
+}
+
+bool AWacomPlayerController::TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition)
+{
+	float MouseX = 0.0f;
+	float MouseY = 0.0f;
+	if (!GetMousePosition(MouseX, MouseY))
+	{
+		return false;
+	}
+
+	const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
+	OutWidgetPosition = FVector2D(MouseX, MouseY) / ViewportScale;
+	return true;
+}
+
 UWacomMenuWidgetBase* AWacomPlayerController::ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const
 {
 	if (LeaseId.IsNone())
@@ -2456,7 +2493,16 @@ void AWacomPlayerController::RouteHandIndex(int32 OneBasedIndex)
 	if (!Snap.Hand.Cards.IsValidIndex(Idx)) { return; }
 
 	const FGuid CardId = Snap.Hand.Cards[Idx].InstanceId;
-	HUD->OnCardClickedByUser(CardId);
+	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe())
+	{
+		TOptional<FVector2D> PointerWidgetPosition;
+		FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
+		if (TryGetMouseWidgetPosition(MouseWidgetPosition))
+		{
+			PointerWidgetPosition = MouseWidgetPosition;
+		}
+		Anchor->TryStartFirstPersonCardDragGesture(CardId, PointerWidgetPosition);
+	}
 }
 
 void AWacomPlayerController::OnPlayCard1() { RouteHandIndex(1); }

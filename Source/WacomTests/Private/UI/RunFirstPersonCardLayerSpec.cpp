@@ -580,7 +580,6 @@ bool FWacomUIRunFirstPersonSuppressionDoesNotDisableLeaseSpec::RunTest(const FSt
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
 	Source->AnchorForTest = Anchor.Get();
-	Anchor->bEnableClickToPlayCard = true;
 	Source->SetRunFirstPersonCardLayerActive(true);
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 
@@ -787,14 +786,10 @@ bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FStrin
 		Source->SetRunFirstPersonCardLayerMenuLease(TEXT("Lease"), TEXT("LeaseSource"), { LeaseEntry }));
 	TestTrue(TEXT("Menu lease enables first-person interaction for probe"),
 		Anchor->IsBattleHandInteractionEnabled());
-	TestFalse(TEXT("Menu lease disables quick click-to-play while probe drag is active"),
-		Anchor->bEnableClickToPlayCard);
 
 	Source->ClearRunFirstPersonCardLayerMenuLease(TEXT("Lease"));
 	TestFalse(TEXT("Suppressed default source disables interaction after lease clears"),
 		Anchor->IsBattleHandInteractionEnabled());
-	TestTrue(TEXT("Menu lease restores the anchor click-to-play setting after clear"),
-		Anchor->bEnableClickToPlayCard);
 
 	return true;
 }
@@ -1334,7 +1329,7 @@ bool FWacomUIRunFirstPersonLeaseProviderDebugReportsSpec::RunTest(const FString&
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunFirstPersonDefaultBattleDeckEnablesRunWorldDragSpec,
-	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.DefaultBattleDeckSourceEnablesRunWorldDragButNotClickToPlay",
+	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.DefaultBattleDeckSourceEnablesRunWorldDrag",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunFirstPersonDefaultBattleDeckEnablesRunWorldDragSpec::RunTest(const FString& /*Parameters*/)
@@ -1358,8 +1353,6 @@ bool FWacomUIRunFirstPersonDefaultBattleDeckEnablesRunWorldDragSpec::RunTest(con
 	Source->SetRunFirstPersonCardLayerActive(true);
 	TestTrue(TEXT("Default Run BattleDeck source enables run-world drag probe"),
 		Anchor->IsBattleHandInteractionEnabled());
-	TestFalse(TEXT("Default Run BattleDeck source disables quick click-to-play"),
-		Anchor->bEnableClickToPlayCard);
 
 	return true;
 }

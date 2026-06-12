@@ -53,7 +53,6 @@ void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity
 		const FBattleSnapshot& NextSnapshot) const;
 	void SetTransitionSnapshot(const FBattleSnapshot& Snapshot);
 
-	void HandleCardClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleHoveredCardLayoutUpdated(

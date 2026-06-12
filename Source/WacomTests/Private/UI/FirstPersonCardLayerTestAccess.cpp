@@ -147,12 +147,6 @@ bool FWacomFirstPersonCardLayerTestAccess::RequestPress(
 	return Slot.RequestPressForTest();
 }
 
-bool FWacomFirstPersonCardLayerTestAccess::RequestClick(
-	UWacomFirstPersonCardLayerSlotWidget& Slot)
-{
-	return Slot.RequestClickForTest();
-}
-
 bool FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(
 	UWacomFirstPersonCardLayerSlotWidget& Slot)
 {

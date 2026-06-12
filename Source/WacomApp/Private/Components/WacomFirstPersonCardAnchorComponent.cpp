@@ -332,7 +332,6 @@ namespace
 	{
 		FWacomFirstPersonCardDragConfig DragConfig;
 		DragConfig.bEnableFirstPersonCardDragCommit = Anchor.bEnableFirstPersonCardDragCommit;
-		DragConfig.bEnableClickToPlayCard = Anchor.bEnableClickToPlayCard;
 		DragConfig.CardInspectHoldDelaySeconds = Anchor.CardInspectHoldDelaySeconds;
 		DragConfig.CardDragStartThresholdPixels = Anchor.CardDragStartThresholdPixels;
 		DragConfig.HoverHitHysteresisPixels = Config.HoverHitHysteresisPixels;
@@ -1144,7 +1143,7 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		? CardLayerWidget->GetDragTargetDebugSummary()
 		: TEXT("DragTarget Inactive");
 	return FString::Printf(
-		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s ViewportClampMode=%s BodyLockedLayout=%s CurrentCameraProjection=true LookResponsiveProjection=%s LookUsedForLayout=%s LookInfluenceYaw=%.3f LookInfluencePitch=%.3f Valid=%s Anchor=%s RawCursorLookOffset=%s AppliedAnchorLookOffset=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s ClickToPlay=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f PointerCameraLook=%s PointerCameraLookScale=%.2f PointerCameraLookInterpOverride=%.2f DragTargetFeedback=%s DragAimSnap=%s DragAimSnapBlend=%.2f %s %s"),
+		TEXT("FirstPersonCardAnchor Mode=%s ProjectionMode=%s ViewportClampMode=%s BodyLockedLayout=%s CurrentCameraProjection=true LookResponsiveProjection=%s LookUsedForLayout=%s LookInfluenceYaw=%.3f LookInfluencePitch=%.3f Valid=%s Anchor=%s RawCursorLookOffset=%s AppliedAnchorLookOffset=%s LookOffset=%s Fallback=%s PixelSnap=%s SnapGrid=%.2f AngleClamp=%s MaxAngle=%.2f ViewportScale=%.2f SoftAllowance=%.2f SoftBlend=%.2f AnchorScreenSmoothing=%s AnchorScreenSmoothingSpeed=%.2f AnchorScreenSmoothingReset=%.2f AnchorScreenSmoothed=%s AnchorScreenSmoothingDistance=%.2f DragCommit=%s HoldDelay=%.2f DragThreshold=%.2f DragCameraLook=%s DragCameraLookScale=%.2f DragCameraLookInterpOverride=%.2f PointerCameraLook=%s PointerCameraLookScale=%.2f PointerCameraLookInterpOverride=%.2f DragTargetFeedback=%s DragAimSnap=%s DragAimSnapBlend=%.2f %s %s"),
 		*AnchorModeToString(CurrentMode),
 		*ProjectionModeToString(Config.ProjectionMode),
 		*ViewportClampModeToString(Config.ViewportClampMode),
@@ -1172,7 +1171,6 @@ FString UWacomFirstPersonCardAnchorComponent::GetDebugSummary() const
 		bLastAnchorScreenSmoothed ? TEXT("true") : TEXT("false"),
 		LastAnchorScreenSmoothingDistancePixels,
 		bEnableFirstPersonCardDragCommit ? TEXT("true") : TEXT("false"),
-		bEnableClickToPlayCard ? TEXT("true") : TEXT("false"),
 		CardInspectHoldDelaySeconds,
 		CardDragStartThresholdPixels,
 		bAllowCameraLookDuringCardDrag ? TEXT("true") : TEXT("false"),
@@ -1608,12 +1606,6 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureCardLayerDelegateRouter()
 	}
 
 	FWacomFirstPersonCardLayerDelegateRouterCallbacks Callbacks;
-	Callbacks.CardClicked = [this](
-		const FGuid& CardInstanceId,
-		const FWacomFirstPersonCardLayerSlotView& SlotView)
-	{
-		OnFirstPersonCardLayerCardClicked.Broadcast(CardInstanceId, SlotView);
-	};
 	Callbacks.CardHovered = [this](
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardLayerSlotView& SlotView)
@@ -1762,4 +1754,30 @@ void UWacomFirstPersonCardAnchorComponent::CancelFirstPersonCardDragGesture(bool
 	{
 		CardLayerWidget->CancelCardDragGesture(bBroadcastCancel);
 	}
+}
+
+bool UWacomFirstPersonCardAnchorComponent::TryStartFirstPersonCardDragGesture(const FGuid& CardInstanceId)
+{
+	return CardLayerWidget
+		&& CardLayerWidget->TryStartCardDragGesture(CardInstanceId);
+}
+
+bool UWacomFirstPersonCardAnchorComponent::TryStartFirstPersonCardDragGesture(
+	const FGuid& CardInstanceId,
+	const TOptional<FVector2D>& InitialPointerWidgetPosition)
+{
+	return CardLayerWidget
+		&& CardLayerWidget->TryStartCardDragGesture(CardInstanceId, InitialPointerWidgetPosition);
+}
+
+bool UWacomFirstPersonCardAnchorComponent::UpdateFirstPersonCardDragPointer(
+	const FVector2D& WidgetPosition)
+{
+	return CardLayerWidget
+		&& CardLayerWidget->UpdateActiveDragPointerFromWidgetPosition(WidgetPosition);
+}
+
+bool UWacomFirstPersonCardAnchorComponent::IsFirstPersonCardDragGestureActive() const
+{
+	return CardLayerWidget && CardLayerWidget->IsCardDragGestureActive();
 }

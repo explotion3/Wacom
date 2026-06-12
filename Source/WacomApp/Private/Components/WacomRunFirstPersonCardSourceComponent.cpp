@@ -1039,33 +1039,10 @@ void UWacomRunFirstPersonCardSourceComponent::ApplyMenuLeaseInteractionOverrides
 		RestoreMenuLeaseInteractionOverrides();
 		return;
 	}
-
-	if (bHasMenuLeaseClickOverride && MenuLeaseClickOverrideAnchor.Get() == &Anchor)
-	{
-		Anchor.bEnableClickToPlayCard = false;
-		return;
-	}
-
-	RestoreMenuLeaseInteractionOverrides();
-	bMenuLeasePreviousClickToPlayCard = Anchor.bEnableClickToPlayCard;
-	Anchor.bEnableClickToPlayCard = false;
-	MenuLeaseClickOverrideAnchor = &Anchor;
-	bHasMenuLeaseClickOverride = true;
 }
 
 void UWacomRunFirstPersonCardSourceComponent::RestoreMenuLeaseInteractionOverrides()
 {
-	if (bHasMenuLeaseClickOverride)
-	{
-		if (UWacomFirstPersonCardAnchorComponent* Anchor = MenuLeaseClickOverrideAnchor.Get())
-		{
-			Anchor->bEnableClickToPlayCard = bMenuLeasePreviousClickToPlayCard;
-		}
-	}
-
-	bHasMenuLeaseClickOverride = false;
-	bMenuLeasePreviousClickToPlayCard = true;
-	MenuLeaseClickOverrideAnchor.Reset();
 }
 
 void UWacomRunFirstPersonCardSourceComponent::ClearKnownRuntimeSources(

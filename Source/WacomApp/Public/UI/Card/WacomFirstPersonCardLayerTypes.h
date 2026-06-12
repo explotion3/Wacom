@@ -223,9 +223,6 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 	bool bEnableFirstPersonCardDragCommit = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	bool bEnableClickToPlayCard = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float CardInspectHoldDelaySeconds = 0.12f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")

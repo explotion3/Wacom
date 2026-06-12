@@ -63,7 +63,6 @@ struct FWacomFirstPersonCardLayerTestAccess
 	static bool RequestHover(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static void RequestUnhover(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static bool RequestPress(UWacomFirstPersonCardLayerSlotWidget& Slot);
-	static bool RequestClick(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static bool RequestMouseUp(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static void TickSlotMotion(UWacomFirstPersonCardLayerSlotWidget& Slot, float DeltaTime);
 	static void SetLocalHitCanvasSizeOverride(

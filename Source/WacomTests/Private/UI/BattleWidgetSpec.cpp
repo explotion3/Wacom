@@ -7404,10 +7404,9 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 
 	const int32 VersionBeforeStaleDelegate = Session->BuildSnapshot().Version;
-	FWacomFirstPersonCardLayerSlotView SlotView;
-	SlotView.Entry.CardInstanceId = CardId;
-	Anchor->OnFirstPersonCardLayerCardClicked.Broadcast(CardId, SlotView);
-	TestEqual(TEXT("Cleared bridge unbinds anchor click delegate"),
+	FWacomFirstPersonCardDragView StaleDragView = WacomBattleWidgetSpec::MakeCommitDragView(CardId);
+	Anchor->OnFirstPersonCardLayerDragReleased.Broadcast(CardId, StaleDragView);
+	TestEqual(TEXT("Cleared bridge unbinds anchor drag delegate"),
 		Session->BuildSnapshot().Version,
 		VersionBeforeStaleDelegate);
 	TestEqual(TEXT("Cleared bridge does not set target select"),

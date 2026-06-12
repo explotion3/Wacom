@@ -53,7 +53,7 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
 /**
  * HUD card layer driven by first-person card anchor projection.
  * Renders UWacomFirstPersonCardViewWidget-compatible card face widgets, may opt into slot-level
- * hover/click intent, and never owns battle or Run commands.
+ * hover / press / drag intent, and never owns battle or Run commands.
  */
 UCLASS()
 class WACOMAPP_API UWacomFirstPersonCardLayerWidget : public UUserWidget
@@ -77,6 +77,12 @@ public:
 			TArray<FWacomFirstPersonCardTargetAffordance>());
 	void CancelCardDragGesture(bool bBroadcastCancel);
 	void ClearSlotMotionState();
+	bool TryStartCardDragGesture(const FGuid& CardInstanceId);
+	bool TryStartCardDragGesture(
+		const FGuid& CardInstanceId,
+		const TOptional<FVector2D>& InitialPointerWidgetPosition);
+	bool UpdateActiveDragPointerFromWidgetPosition(const FVector2D& WidgetPosition);
+	bool IsCardDragGestureActive() const;
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
@@ -139,7 +145,6 @@ public:
 	bool RequestReleaseAtWidgetPositionForTest(const FVector2D& WidgetPosition);
 #endif
 
-	FWacomFirstPersonCardLayerInteractionNative OnCardClickedNative;
 	FWacomFirstPersonCardLayerInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerInteractionNative OnCardUnhoveredNative;
 	FWacomFirstPersonCardLayerInteractionNative OnHoveredCardSlotUpdatedNative;
@@ -243,7 +248,6 @@ private:
 		const FVector2D& WidgetPosition,
 		FVector2D& OutPointerViewportPosition,
 		FVector2D& OutPointerNormalizedViewportPosition) const;
-	void HandleSlotClicked(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotVisualSlotUpdated(

@@ -143,6 +143,10 @@ public:
 	FWacomFirstPersonCardDragView BuildDragView() const;
 	void SetHoveredFromFirstPersonLayer(bool bHovered);
 	bool BeginGesturePressFromFirstPersonLayer(const FVector2D& WidgetPosition);
+	bool BeginDragGestureFromFirstPersonLayer(const FVector2D& WidgetPosition);
+	bool BeginDragGestureFromFirstPersonLayer(
+		const FVector2D& GestureOriginPosition,
+		const FVector2D& InitialPointerPosition);
 	void UpdateGestureFromFirstPersonLayer(float DeltaTime, const FVector2D& WidgetPosition);
 	bool ReleaseGestureFromFirstPersonLayer(const FVector2D& WidgetPosition);
 
@@ -157,7 +161,6 @@ public:
 	bool RequestHoverForTest();
 	void RequestUnhoverForTest();
 	bool RequestPressForTest();
-	bool RequestClickForTest();
 	bool RequestMouseUpForTest();
 	void TickSlotMotionForTest(float DeltaTime);
 	void SetLocalHitCanvasSizeOverrideForTest(const TOptional<FVector2D>& InSize);
@@ -169,7 +172,6 @@ public:
 	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
 #endif
 
-	FWacomFirstPersonCardLayerSlotInteractionNative OnCardClickedNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardUnhoveredNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardVisualSlotUpdatedNative;
@@ -235,7 +237,6 @@ private:
 	bool bWantsSlotMotionTick = false;
 	bool bGestureTargetValid = false;
 	bool bGestureCommitArmed = false;
-	bool bSuppressClickOnRelease = false;
 	bool bHasPointerViewportPosition = false;
 	bool bHasFeedbackTargetScreenPosition = false;
 	bool bCardDragProbeFeedback = false;
@@ -287,7 +288,6 @@ private:
 		const FWacomFirstPersonCardLayerSlotView& CurrentVisualSlotView);
 	bool CanInteractWithCurrentSlot() const;
 	bool CanApplyPlayableHoverFeedback() const;
-	bool CanClickCurrentSlot() const;
 	bool CanStartCardDragGesture() const;
 	bool IsNoTargetDragCard() const;
 	bool IsTargetedAimCard() const;
