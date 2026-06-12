@@ -186,7 +186,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView")
 	TSubclassOf<UWacomCardEffectBadgeWidget> EffectBadgeWidgetClass;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Surface", meta = (ToolTip = "卡牌表面弱流光覆盖材质。为空时会保留 WBP 中 SurfaceFoilOverlay 自己配置的 Brush；两者都为空则隐藏覆盖层。"))
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Surface", meta = (ToolTip = "卡牌表面弱流光覆盖材质。仅在 WBP 或 C++ fallback 显式提供 SurfaceFoilOverlay 时生效；未绑定 SurfaceFoilOverlay 时不会自动创建覆盖层。"))
 	TObjectPtr<UMaterialInterface> SurfaceFoilMaterial;
 
 	bool bSpriteIconCachesBuilt = false;
@@ -214,7 +214,6 @@ private:
 	void UpdateArtDisplay();
 	void UpdateRarityBorderDisplay();
 	void UpdateDisabledDisplay();
-	void EnsureSurfaceFoilOverlay();
 	void ApplySurfaceFoilOverlay();
 	void EnsureSpriteIconCachesBuilt();
 	void RebuildSpriteIconCaches();

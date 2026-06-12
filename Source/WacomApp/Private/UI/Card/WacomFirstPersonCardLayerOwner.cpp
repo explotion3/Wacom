@@ -2,8 +2,8 @@
 
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
 
-#include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 
 bool FWacomFirstPersonCardLayerOwner::Update(
 	const FWacomFirstPersonCardLayerOwnerUpdateInput& Input,

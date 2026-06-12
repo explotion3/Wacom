@@ -252,7 +252,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称手牌 hover 详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.CardLayerZOrder，避免详情被第一人称卡牌遮挡。"))
 	int32 FirstPersonCardDetailViewportZOrder = 9999;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FirstPersonCardView 或 WBP_CardView 的设计尺寸一致。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|First Person Card Layer|Authoring", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FPCardView 或 WBP_CardView 的设计尺寸一致。"))
 	FVector2D FirstPersonCardDetailAnchorBaseSize = FVector2D(296.0f, 420.0f);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|HUD State", meta = (ToolTip = "当前 BattleHUD UI 状态。只读查询，不修改战斗或 UI 流程。"))

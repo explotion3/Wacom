@@ -14,6 +14,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Engine/Engine.h"
+#include "Materials/Material.h"
 #include "Engine/World.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/PlayerController.h"
@@ -27,6 +28,7 @@
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/CardViewTestAccess.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
@@ -273,6 +275,7 @@ namespace WacomFirstPersonCardLayerSpec
 		Config.bEnabled = true;
 		Config.MotionSpeed = 1.0f;
 		Config.OpacitySpeed = 1.0f;
+		Config.EasePower = 1.0f;
 		Config.EnterOffsetPixels = FVector2D(0.0f, 40.0f);
 		Config.EnterOpacity = 0.0f;
 		Config.ExitOffsetPixels = FVector2D(0.0f, 30.0f);
@@ -312,19 +315,24 @@ namespace WacomFirstPersonCardLayerSpec
 		Config.PressedScale = 0.9f;
 		Config.PressedColor = FLinearColor::White;
 		Config.PressedOpacity = 0.3f;
-	Config.ConfirmDuration = 0.1f;
-	Config.ConfirmOpacity = 0.4f;
-	Config.DenyDuration = 0.2f;
-	Config.DenyShakePixels = 8.0f;
-	Config.DenyColor = FLinearColor::Red;
-	Config.DenyOpacity = 0.5f;
-	Config.bEnablePlayCommitFeedback = true;
-	Config.PlayCommitDuration = 0.12f;
-	Config.PlayCommitOpacity = 0.6f;
-	Config.PlayCommitColor = FLinearColor::Green;
-	Config.PlayCommitScale = 1.1f;
-	return Config;
-}
+		Config.ConfirmDuration = 0.1f;
+		Config.ConfirmOpacity = 0.4f;
+		Config.DenyDuration = 0.2f;
+		Config.DenyShakePixels = 8.0f;
+		Config.DenyColor = FLinearColor::Red;
+		Config.DenyOpacity = 0.5f;
+		Config.InteractionFeedbackEdgeWidth = 0.048f;
+		Config.InteractionFeedbackEdgeSoftness = 0.024f;
+		Config.InteractionFeedbackVignetteStrength = 0.22f;
+		Config.InteractionFeedbackVignetteRadius = 0.58f;
+		Config.InteractionFeedbackVignetteSoftness = 0.28f;
+		Config.bEnablePlayCommitFeedback = true;
+		Config.PlayCommitDuration = 0.12f;
+		Config.PlayCommitOpacity = 0.6f;
+		Config.PlayCommitColor = FLinearColor::Green;
+		Config.PlayCommitScale = 1.1f;
+		return Config;
+	}
 
 
 	FWacomFirstPersonCardLayerTransitionHint MakeTransitionHint(
@@ -787,7 +795,7 @@ bool FWacomFirstPersonCardLayerBleedHoverHitBoundsTest::RunTest(const FString& P
 	}
 
 	const FGuid CardId = FGuid::NewGuid();
-	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedCardViewProbe::StaticClass());
+	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedFirstPersonCardViewProbe::StaticClass());
 	Layer->SetCardLayerInteractionEnabled(true);
 	Layer->SetCardSlots({
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true)
@@ -853,7 +861,7 @@ bool FWacomFirstPersonCardLayerBleedPressHitBoundsTest::RunTest(const FString& P
 	FWacomFirstPersonCardDragConfig DragConfig;
 	DragConfig.CardDragStartThresholdPixels = 10.0f;
 	Layer->SetCardDragConfig(DragConfig);
-	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedCardViewProbe::StaticClass());
+	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedFirstPersonCardViewProbe::StaticClass());
 	Layer->SetCardLayerInteractionEnabled(true);
 
 	FWacomFirstPersonCardLayerSlotView Slot =
@@ -952,7 +960,7 @@ bool FWacomFirstPersonCardLayerFallbackHitBoundsTest::RunTest(const FString& Par
 		return false;
 	}
 
-	Layer->SetCardViewClass(UWacomFirstPersonCardLayerLegacyBleedCardViewProbe::StaticClass());
+	Layer->SetCardViewClass(UWacomFirstPersonCardLayerLegacyBleedFirstPersonCardViewProbe::StaticClass());
 	Layer->SetCardLayerInteractionEnabled(true);
 	Layer->SetCardSlots({
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true)
@@ -3809,6 +3817,334 @@ bool FWacomFirstPersonCardLayerMotionInterpolatesTest::RunTest(const FString& Pa
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMotionEasePowerDefaultTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.EasePowerOneKeepsLinearMotion",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMotionEasePowerDefaultTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.MotionSpeed = 1.0f;
+	Config.OpacitySpeed = 1.0f;
+	Config.EasePower = 1.0f;
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f), 0.0f, 1.0f, 1.0f)
+	});
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(200.0f, 300.0f), 10.0f, 1.2f, 0.4f)
+	});
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		const FWacomFirstPersonCardLayerSlotView& Visual = SlotWidget->GetVisualSlotView();
+		TestTrue(TEXT("Linear ease position X"),
+			FMath::IsNearlyEqual(Visual.ScreenPosition.X, 125.0f, 0.01f));
+		TestTrue(TEXT("Linear ease position Y"),
+			FMath::IsNearlyEqual(Visual.ScreenPosition.Y, 225.0f, 0.01f));
+		TestTrue(TEXT("Linear ease angle"),
+			FMath::IsNearlyEqual(Visual.RenderAngleDegrees, 2.5f, 0.01f));
+		TestTrue(TEXT("Linear ease scale"),
+			FMath::IsNearlyEqual(Visual.RenderScale, 1.05f, 0.001f));
+		TestTrue(TEXT("Linear ease opacity"),
+			FMath::IsNearlyEqual(Visual.RenderOpacity, 0.85f, 0.001f));
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMotionEasePowerSoftensTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.EasePowerAboveOneSoftensMotionStep",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMotionEasePowerSoftensTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.MotionSpeed = 1.0f;
+	Config.OpacitySpeed = 1.0f;
+	Config.EasePower = 2.0f;
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f), 0.0f, 1.0f, 1.0f)
+	});
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(200.0f, 300.0f), 10.0f, 1.2f, 0.4f)
+	});
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+
+	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
+	{
+		const FWacomFirstPersonCardLayerSlotView& Visual = SlotWidget->GetVisualSlotView();
+		TestTrue(TEXT("Ease power position X"),
+			FMath::IsNearlyEqual(Visual.ScreenPosition.X, 106.25f, 0.01f));
+		TestTrue(TEXT("Ease power position Y"),
+			FMath::IsNearlyEqual(Visual.ScreenPosition.Y, 206.25f, 0.01f));
+		TestTrue(TEXT("Ease power angle"),
+			FMath::IsNearlyEqual(Visual.RenderAngleDegrees, 0.625f, 0.01f));
+		TestTrue(TEXT("Ease power scale"),
+			FMath::IsNearlyEqual(Visual.RenderScale, 1.0125f, 0.001f));
+		TestTrue(TEXT("Ease power opacity"),
+			FMath::IsNearlyEqual(Visual.RenderOpacity, 0.9625f, 0.001f));
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMotionHoverProfileTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.HoverProfileOnlyAffectsHoverIntent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMotionHoverProfileTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Config.LayoutMotionProfile.MotionSpeed = 1.0f;
+	Config.LayoutMotionProfile.OpacitySpeed = 1.0f;
+	Config.LayoutMotionProfile.EasePower = 1.0f;
+	Config.HoverMotionProfile.MotionSpeed = 4.0f;
+	Config.HoverMotionProfile.OpacitySpeed = 4.0f;
+	Config.HoverMotionProfile.EasePower = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+	FWacomFirstPersonCardSlotVisualConfig VisualConfig;
+	VisualConfig.HoverLiftPixels = 40.0f;
+	VisualConfig.HoverScale = 1.10f;
+	Layer->SetSlotVisualConfig(VisualConfig);
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f), 0.0f, 1.0f, 1.0f)
+	});
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(200.0f, 300.0f), 0.0f, 1.0f, 1.0f)
+	});
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+	TestTrue(TEXT("Layout motion still uses layout profile"),
+		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().ScreenPosition.X, 125.0f, 0.01f));
+	TestEqual(TEXT("Layout intent selected"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).ActiveMotionIntent,
+		EWacomFirstPersonCardMotionIntent::Layout);
+
+	FWacomFirstPersonCardLayerSlotView HoverSlot =
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(200.0f, 300.0f), 0.0f, 1.0f, 1.0f);
+	HoverSlot.bIsHovered = true;
+	Layer->SetCardSlots({ HoverSlot });
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+	TestEqual(TEXT("Hover intent selected"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).ActiveMotionIntent,
+		EWacomFirstPersonCardMotionIntent::Hover);
+	TestTrue(TEXT("Hover profile moves to hover lift immediately"),
+		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().ScreenPosition.Y, 260.0f, 0.01f));
+	TestTrue(TEXT("Hover profile moves to hover scale immediately"),
+		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().RenderScale, 1.10f, 0.001f));
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMotionDragTargetFocusProfileTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.DragTargetFocusProfileOnlyAffectsFocusedTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMotionDragTargetFocusProfileTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Config.DragTargetFocusMotionProfile.MotionSpeed = 4.0f;
+	Config.DragTargetFocusMotionProfile.OpacitySpeed = 4.0f;
+	Config.DragTargetFocusMotionProfile.EasePower = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+	FWacomFirstPersonCardSlotVisualConfig VisualConfig;
+	VisualConfig.DragCardTargetFocusLiftPixels = 24.0f;
+	VisualConfig.DragCardTargetFocusScale = 1.08f;
+	Layer->SetSlotVisualConfig(VisualConfig);
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.bEnableDragTargetFeedback = true;
+	Layer->SetCardDragConfig(DragConfig);
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(300.0f, 400.0f), 0.0f, 1.0f, 1.0f)
+	});
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	SlotWidget->SetCardDragTargetAffordanceFeedback(
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
+		true);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+	TestTrue(TEXT("Affordance does not lift target"),
+		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().ScreenPosition.Y, 400.0f, 0.01f));
+
+	SlotWidget->SetCardDragProbeFeedback(true, true);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+	TestEqual(TEXT("Focus intent selected"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).ActiveMotionIntent,
+		EWacomFirstPersonCardMotionIntent::DragTargetFocus);
+	TestTrue(TEXT("Focus profile moves to focus lift immediately"),
+		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().ScreenPosition.Y, 376.0f, 0.01f));
+	TestTrue(TEXT("Focus profile moves to focus scale immediately"),
+		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().RenderScale, 1.08f, 0.001f));
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMotionEnterExitProfilesTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.EnterAndExitUseDedicatedProfiles",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMotionEnterExitProfilesTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D(0.0f, 40.0f);
+	Config.EnterOpacity = 0.0f;
+	Config.ExitOffsetPixels = FVector2D(0.0f, 40.0f);
+	Config.ExitDuration = 1.0f;
+	Config.EnterMotionProfile.MotionSpeed = 4.0f;
+	Config.EnterMotionProfile.OpacitySpeed = 4.0f;
+	Config.EnterMotionProfile.EasePower = 1.0f;
+	Config.ExitMotionProfile.MotionSpeed = 0.5f;
+	Config.ExitMotionProfile.OpacitySpeed = 0.5f;
+	Config.ExitMotionProfile.EasePower = 1.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(100.0f, 200.0f), 0.0f, 1.0f, 1.0f)
+	});
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+	TestEqual(TEXT("Enter intent selected"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).ActiveMotionIntent,
+		EWacomFirstPersonCardMotionIntent::Enter);
+	TestTrue(TEXT("Enter profile reaches target in one tick"),
+		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().ScreenPosition.Y, 200.0f, 0.01f));
+	TestTrue(TEXT("Enter profile reaches full opacity"),
+		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().RenderOpacity, 1.0f, 0.001f));
+
+	Layer->SetCardSlots({});
+	UWacomFirstPersonCardLayerSlotWidget* Outgoing = FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
+	if (!TestNotNull(TEXT("Outgoing slot"), Outgoing))
+	{
+		PC->Destroy();
+		return false;
+	}
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+	TestEqual(TEXT("Exit intent selected"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Outgoing).ActiveMotionIntent,
+		EWacomFirstPersonCardMotionIntent::Exit);
+	TestTrue(TEXT("Exit profile moves slowly toward exit target"),
+		FMath::IsNearlyEqual(Outgoing->GetVisualSlotView().ScreenPosition.Y, 205.0f, 0.01f));
+	TestTrue(TEXT("Exit profile fades slowly"),
+		FMath::IsNearlyEqual(Outgoing->GetVisualSlotView().RenderOpacity, 0.875f, 0.001f));
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerMotionHoverPendingTest,
 	"Wacom.UI.FirstPersonCardLayer.SlotMotion.HoverAndPendingAnimateWithoutChangingInput",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -4267,7 +4603,12 @@ bool FWacomFirstPersonCardLayerNoTargetCommitTest::RunTest(const FString& Parame
 	if (TestNotNull(TEXT("Outgoing played slot"), Outgoing))
 	{
 		TestTrue(TEXT("Commit feedback starts on played outgoing"), FWacomFirstPersonCardLayerTestAccess::View(*Outgoing).bCommitFeedbackActive);
-		TestEqual(TEXT("Commit overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*Outgoing).FeedbackOverlayOpacity, 0.6f);
+		TestEqual(
+			TEXT("Commit uses interaction feedback"),
+			FWacomFirstPersonCardLayerTestAccess::View(*Outgoing).InteractionFeedbackKind,
+			EWacomFirstPersonCardInteractionFeedbackKind::Commit);
+		TestEqual(TEXT("Commit interaction feedback opacity"), FWacomFirstPersonCardLayerTestAccess::View(*Outgoing).InteractionFeedbackOpacity, 0.6f);
+		TestEqual(TEXT("Commit does not use full-card overlay"), FWacomFirstPersonCardLayerTestAccess::View(*Outgoing).FeedbackOverlayOpacity, 0.0f);
 		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.1f);
 		TestTrue(TEXT("Played card exits upward"), Outgoing->GetVisualSlotView().ScreenPosition.Y < BasePosition.Y);
 	}
@@ -4497,15 +4838,27 @@ bool FWacomFirstPersonCardLayerCommitFeedbackClearsTest::RunTest(const FString& 
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
 	SlotWidget->TriggerCommitFeedback();
 	TestTrue(TEXT("Commit feedback starts"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bCommitFeedbackActive);
+	TestEqual(
+		TEXT("Commit starts as interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::Commit);
 
 	SlotWidget->SetCardLayerInteractionEnabled(false);
 	TestFalse(TEXT("Interaction disabled clears commit"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bCommitFeedbackActive);
+	TestEqual(
+		TEXT("Interaction disabled clears interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::None);
 
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->TriggerCommitFeedback();
 	TestTrue(TEXT("Commit feedback restarts"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bCommitFeedbackActive);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
 	TestFalse(TEXT("Slot reuse clears commit"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bCommitFeedbackActive);
+	TestEqual(
+		TEXT("Slot reuse clears interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::None);
 
 	PC->Destroy();
 	return true;
@@ -5823,6 +6176,10 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	FWacomFirstPersonCardSlotMotionConfig MotionConfig = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
 	MotionConfig.MotionSpeed = 8.0f;
 	MotionConfig.OpacitySpeed = -9.0f;
+	MotionConfig.EasePower = -2.0f;
+	MotionConfig.HoverMotionProfile.MotionSpeed = -4.0f;
+	MotionConfig.HoverMotionProfile.OpacitySpeed = -5.0f;
+	MotionConfig.HoverMotionProfile.EasePower = -6.0f;
 	MotionConfig.EnterOpacity = 4.0f;
 	MotionConfig.DrawnEnterViewportAnchor = FVector2D(-1.0f, 2.0f);
 	MotionConfig.DrawnEnterScaleMultiplier = -3.0f;
@@ -5831,6 +6188,10 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	const int32 SlotMotionApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount;
 	FWacomFirstPersonCardSlotMotionConfig NormalizedEquivalentMotionConfig = MotionConfig;
 	NormalizedEquivalentMotionConfig.OpacitySpeed = 0.0f;
+	NormalizedEquivalentMotionConfig.EasePower = 0.1f;
+	NormalizedEquivalentMotionConfig.HoverMotionProfile.MotionSpeed = 0.0f;
+	NormalizedEquivalentMotionConfig.HoverMotionProfile.OpacitySpeed = 0.0f;
+	NormalizedEquivalentMotionConfig.HoverMotionProfile.EasePower = 0.1f;
 	NormalizedEquivalentMotionConfig.EnterOpacity = 1.0f;
 	NormalizedEquivalentMotionConfig.DrawnEnterViewportAnchor = FVector2D(0.0f, 1.0f);
 	NormalizedEquivalentMotionConfig.DrawnEnterScaleMultiplier = 0.01f;
@@ -5882,6 +6243,11 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	FeedbackConfig.PressedScale = -4.0f;
 	FeedbackConfig.PressedOpacity = -1.0f;
 	FeedbackConfig.DenyShakePixels = -8.0f;
+	FeedbackConfig.InteractionFeedbackEdgeWidth = -0.1f;
+	FeedbackConfig.InteractionFeedbackEdgeSoftness = -0.2f;
+	FeedbackConfig.InteractionFeedbackVignetteStrength = -0.3f;
+	FeedbackConfig.InteractionFeedbackVignetteRadius = -0.4f;
+	FeedbackConfig.InteractionFeedbackVignetteSoftness = -0.5f;
 	Layer->SetSlotFeedbackConfig(FeedbackConfig);
 	const int32 FeedbackPropagationCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotFeedbackConfigPropagationCount;
 	const int32 SlotFeedbackApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotFeedbackConfigApplyCount;
@@ -5890,6 +6256,11 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	NormalizedEquivalentFeedbackConfig.PressedScale = 0.01f;
 	NormalizedEquivalentFeedbackConfig.PressedOpacity = 0.0f;
 	NormalizedEquivalentFeedbackConfig.DenyShakePixels = 0.0f;
+	NormalizedEquivalentFeedbackConfig.InteractionFeedbackEdgeWidth = 0.0f;
+	NormalizedEquivalentFeedbackConfig.InteractionFeedbackEdgeSoftness = 0.0f;
+	NormalizedEquivalentFeedbackConfig.InteractionFeedbackVignetteStrength = 0.0f;
+	NormalizedEquivalentFeedbackConfig.InteractionFeedbackVignetteRadius = 0.0f;
+	NormalizedEquivalentFeedbackConfig.InteractionFeedbackVignetteSoftness = 0.0f;
 	Layer->SetSlotFeedbackConfig(NormalizedEquivalentFeedbackConfig);
 	TestEqual(TEXT("Normalized-equivalent feedback config skipped at layer"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotFeedbackConfigPropagationCount,
@@ -5964,6 +6335,10 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 
 	FWacomFirstPersonCardSlotMotionConfig MotionConfig = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
 	MotionConfig.MotionSpeed = -4.0f;
+	MotionConfig.EasePower = -2.0f;
+	MotionConfig.PendingMotionProfile.MotionSpeed = -2.0f;
+	MotionConfig.PendingMotionProfile.OpacitySpeed = -3.0f;
+	MotionConfig.PendingMotionProfile.EasePower = -4.0f;
 	MotionConfig.EnterOpacity = 2.0f;
 	MotionConfig.GainedEnterViewportAnchor = FVector2D(3.0f, -2.0f);
 	MotionConfig.GainedEnterScaleMultiplier = -5.0f;
@@ -5971,6 +6346,10 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	const int32 SlotMotionApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount;
 	FWacomFirstPersonCardSlotMotionConfig NormalizedMotionConfig = MotionConfig;
 	NormalizedMotionConfig.MotionSpeed = 0.0f;
+	NormalizedMotionConfig.EasePower = 0.1f;
+	NormalizedMotionConfig.PendingMotionProfile.MotionSpeed = 0.0f;
+	NormalizedMotionConfig.PendingMotionProfile.OpacitySpeed = 0.0f;
+	NormalizedMotionConfig.PendingMotionProfile.EasePower = 0.1f;
 	NormalizedMotionConfig.EnterOpacity = 1.0f;
 	NormalizedMotionConfig.GainedEnterViewportAnchor = FVector2D(1.0f, 0.0f);
 	NormalizedMotionConfig.GainedEnterScaleMultiplier = 0.01f;
@@ -6000,12 +6379,22 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	FeedbackConfig.ConfirmDuration = -1.0f;
 	FeedbackConfig.ConfirmOpacity = 2.0f;
 	FeedbackConfig.PlayCommitScale = -4.0f;
+	FeedbackConfig.InteractionFeedbackEdgeWidth = -0.1f;
+	FeedbackConfig.InteractionFeedbackEdgeSoftness = -0.2f;
+	FeedbackConfig.InteractionFeedbackVignetteStrength = -0.3f;
+	FeedbackConfig.InteractionFeedbackVignetteRadius = -0.4f;
+	FeedbackConfig.InteractionFeedbackVignetteSoftness = -0.5f;
 	SlotWidget->SetSlotFeedbackConfig(FeedbackConfig);
 	const int32 SlotFeedbackApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotFeedbackConfigApplyCount;
 	FWacomFirstPersonCardSlotFeedbackConfig NormalizedFeedbackConfig = FeedbackConfig;
 	NormalizedFeedbackConfig.ConfirmDuration = 0.0f;
 	NormalizedFeedbackConfig.ConfirmOpacity = 1.0f;
 	NormalizedFeedbackConfig.PlayCommitScale = 0.01f;
+	NormalizedFeedbackConfig.InteractionFeedbackEdgeWidth = 0.0f;
+	NormalizedFeedbackConfig.InteractionFeedbackEdgeSoftness = 0.0f;
+	NormalizedFeedbackConfig.InteractionFeedbackVignetteStrength = 0.0f;
+	NormalizedFeedbackConfig.InteractionFeedbackVignetteRadius = 0.0f;
+	NormalizedFeedbackConfig.InteractionFeedbackVignetteSoftness = 0.0f;
 	Layer->SetSlotFeedbackConfig(NormalizedFeedbackConfig);
 	TestEqual(TEXT("Layer-normalized feedback matches slot-normalized feedback"),
 		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotFeedbackConfigApplyCount,
@@ -6037,6 +6426,117 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 		SlotDragApplyCount);
 
 	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardAnchorMotionProfileOverridesTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.AnchorMotionProfileOverridesMapToLayerConfig",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardAnchorMotionProfileOverridesTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character =
+		World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Character"), Character))
+	{
+		return false;
+	}
+	PC->Possess(Character);
+
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor =
+		NewObject<UWacomFirstPersonCardAnchorSpecProbeComponent>(Character);
+	if (!TestNotNull(TEXT("Anchor"), Anchor))
+	{
+		PC->Destroy();
+		Character->Destroy();
+		return false;
+	}
+	Anchor->RegisterComponent();
+	Anchor->bDrawPreviewCardLayer = true;
+	Anchor->PreviewCardCountFallback = 1;
+	Anchor->SetBattleHandInteractionEnabled(true);
+	Anchor->CardSlotMotionSpeed = 11.0f;
+	Anchor->CardSlotOpacitySpeed = 12.0f;
+	Anchor->CardSlotMotionEasePower = 1.3f;
+	Anchor->RefreshAnchor(1.0f / 60.0f);
+	Anchor->RefreshCardLayerForTest();
+
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::CardLayer(*Anchor);
+	if (!TestNotNull(TEXT("Layer"), Layer))
+	{
+		Anchor->DestroyComponent();
+		PC->Destroy();
+		Character->Destroy();
+		return false;
+	}
+
+	const auto ExpectProfile = [this](
+		const TCHAR* Label,
+		const FWacomFirstPersonCardMotionProfile& Profile,
+		float MotionSpeed,
+		float OpacitySpeed,
+		float EasePower)
+	{
+		TestTrue(FString::Printf(TEXT("%s motion speed"), Label),
+			FMath::IsNearlyEqual(Profile.MotionSpeed, MotionSpeed, 0.001f));
+		TestTrue(FString::Printf(TEXT("%s opacity speed"), Label),
+			FMath::IsNearlyEqual(Profile.OpacitySpeed, OpacitySpeed, 0.001f));
+		TestTrue(FString::Printf(TEXT("%s ease power"), Label),
+			FMath::IsNearlyEqual(Profile.EasePower, EasePower, 0.001f));
+	};
+
+	FWacomFirstPersonCardSlotMotionConfig MotionConfig =
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotMotionConfig;
+	ExpectProfile(TEXT("Layout inherits global"), MotionConfig.LayoutMotionProfile, 11.0f, 12.0f, 1.3f);
+	ExpectProfile(TEXT("Hover inherits global"), MotionConfig.HoverMotionProfile, 11.0f, 12.0f, 1.3f);
+	ExpectProfile(TEXT("Pending inherits global"), MotionConfig.PendingMotionProfile, 11.0f, 12.0f, 1.3f);
+	ExpectProfile(TEXT("Drag focus inherits global"), MotionConfig.DragTargetFocusMotionProfile, 11.0f, 12.0f, 1.3f);
+	ExpectProfile(TEXT("Enter inherits global"), MotionConfig.EnterMotionProfile, 11.0f, 12.0f, 1.3f);
+	ExpectProfile(TEXT("Exit inherits global"), MotionConfig.ExitMotionProfile, 11.0f, 12.0f, 1.3f);
+
+	const int32 ApplyCountBeforeOverrides =
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).CardLayerConfigApplyCount;
+	Anchor->bOverrideHoverMotionProfile = true;
+	Anchor->HoverMotionSpeed = 21.0f;
+	Anchor->HoverOpacitySpeed = 22.0f;
+	Anchor->HoverMotionEasePower = 1.4f;
+	Anchor->bOverrideDragTargetFocusMotionProfile = true;
+	Anchor->DragTargetFocusMotionSpeed = 31.0f;
+	Anchor->DragTargetFocusOpacitySpeed = 32.0f;
+	Anchor->DragTargetFocusMotionEasePower = 1.5f;
+	Anchor->bOverrideEnterExitMotionProfile = true;
+	Anchor->EnterMotionSpeed = 41.0f;
+	Anchor->EnterOpacitySpeed = 42.0f;
+	Anchor->EnterMotionEasePower = 1.6f;
+	Anchor->ExitMotionSpeed = 51.0f;
+	Anchor->ExitOpacitySpeed = 52.0f;
+	Anchor->ExitMotionEasePower = 1.7f;
+	Anchor->RefreshAnchor(1.0f / 60.0f);
+	Anchor->RefreshCardLayerForTest();
+
+	TestEqual(TEXT("Motion profile override changes reapply layer config"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).CardLayerConfigApplyCount,
+		ApplyCountBeforeOverrides + 1);
+
+	MotionConfig = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotMotionConfig;
+	ExpectProfile(TEXT("Layout still inherits global"), MotionConfig.LayoutMotionProfile, 11.0f, 12.0f, 1.3f);
+	ExpectProfile(TEXT("Pending still inherits global"), MotionConfig.PendingMotionProfile, 11.0f, 12.0f, 1.3f);
+	ExpectProfile(TEXT("Hover uses override"), MotionConfig.HoverMotionProfile, 21.0f, 22.0f, 1.4f);
+	ExpectProfile(TEXT("Drag focus uses override"), MotionConfig.DragTargetFocusMotionProfile, 31.0f, 32.0f, 1.5f);
+	ExpectProfile(TEXT("Enter uses override"), MotionConfig.EnterMotionProfile, 41.0f, 42.0f, 1.6f);
+	ExpectProfile(TEXT("Exit uses override"), MotionConfig.ExitMotionProfile, 51.0f, 52.0f, 1.7f);
+
+	Anchor->DestroyComponent();
+	PC->Destroy();
+	Character->Destroy();
 	return true;
 }
 
@@ -6102,6 +6602,13 @@ bool FWacomFirstPersonCardAnchorCardLayerConfigDirtyGateTest::RunTest(const FStr
 	TestEqual(TEXT("Changed resolved config reapplies once"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).CardLayerConfigApplyCount,
 		InitialApplyCount + 1);
+
+	Anchor->CardSlotMotionEasePower += 1.0f;
+	Anchor->RefreshAnchor(1.0f / 60.0f);
+	Anchor->RefreshCardLayerForTest();
+	TestEqual(TEXT("Changed motion ease reapplies config"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).CardLayerConfigApplyCount,
+		InitialApplyCount + 2);
 
 	Anchor->DestroyComponent();
 	PC->Destroy();
@@ -6929,7 +7436,12 @@ bool FWacomFirstPersonCardLayerPressFeedbackTest::RunTest(const FString& Paramet
 	TestTrue(TEXT("Pressed flag is set"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
 	TestEqual(TEXT("Press does not broadcast"), Receiver.ClickCount, 0);
 	TestTrue(TEXT("Pressed scale applies"), FMath::IsNearlyEqual(SlotWidget->GetRenderTransform().Scale.X, 0.55f * 0.9f, KINDA_SMALL_NUMBER));
-	TestEqual(TEXT("Pressed overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.3f);
+	TestEqual(
+		TEXT("Pressed uses interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::Pressed);
+	TestEqual(TEXT("Pressed interaction feedback opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackOpacity, 0.3f);
+	TestEqual(TEXT("Pressed does not use full-card overlay"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
 	PC->Destroy();
@@ -6974,7 +7486,12 @@ bool FWacomFirstPersonCardLayerMouseUpConfirmFeedbackTest::RunTest(const FString
 	TestEqual(TEXT("Mouse up broadcasts once"), Receiver.ClickCount, 1);
 	TestEqual(TEXT("Mouse up forwards card id"), Receiver.LastCardId, CardId);
 	TestTrue(TEXT("Confirm feedback starts"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bConfirmFeedbackActive);
-	TestEqual(TEXT("Confirm overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.4f);
+	TestEqual(
+		TEXT("Confirm uses interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::Confirm);
+	TestEqual(TEXT("Confirm interaction feedback opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackOpacity, 0.4f);
+	TestEqual(TEXT("Confirm does not use full-card overlay"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.2f);
 	TestFalse(TEXT("Confirm feedback expires"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bConfirmFeedbackActive);
 
@@ -7018,13 +7535,192 @@ bool FWacomFirstPersonCardLayerDenyFeedbackTest::RunTest(const FString& Paramete
 	TestTrue(TEXT("Mouse up is consumed"), FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*SlotWidget));
 	TestEqual(TEXT("Deny does not broadcast"), Receiver.ClickCount, 0);
 	TestTrue(TEXT("Deny feedback starts"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bDenyFeedbackActive);
-	TestEqual(TEXT("Deny overlay opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.5f);
+	TestEqual(TEXT("Deny does not use full-card overlay"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
+	TestTrue(TEXT("Fallback wrapper still exposes interaction feedback image"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bHasInteractionFeedbackImage);
+	TestFalse(TEXT("Interaction feedback material is optional"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bInteractionFeedbackMaterialConfigured);
+	TestFalse(TEXT("Interaction feedback material is not loaded when unset"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bInteractionFeedbackMaterialLoaded);
+	TestFalse(TEXT("Unset material does not use Anchor override"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bInteractionFeedbackUsesOverrideMaterial);
+	TestFalse(TEXT("Unset material does not use WBP brush material"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bInteractionFeedbackUsesBrushMaterial);
+	TestEqual(
+		TEXT("Deny feedback uses interaction feedback state"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::Deny);
+	TestEqual(TEXT("Unset material keeps deny interaction feedback hidden"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackOpacity, 0.0f);
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.05f);
 	TestTrue(TEXT("Deny shake changes translation"), FMath::Abs(SlotWidget->GetRenderTransform().Translation.X) > KINDA_SMALL_NUMBER);
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.2f);
 	TestFalse(TEXT("Deny feedback expires"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bDenyFeedbackActive);
+	TestEqual(TEXT("Interaction feedback expires"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackOpacity, 0.0f);
 
 	SlotWidget->OnCardClickedNative.RemoveAll(&Receiver);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerInteractionFeedbackMaterialTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.ConfiguredInteractionFeedbackMaterialRendersFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerInteractionFeedbackMaterialTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	UMaterial* TestMaterial = NewObject<UMaterial>(PC, TEXT("InteractionFeedbackTestMaterial"));
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget)
+		|| !TestNotNull(TEXT("Test material"), TestMaterial))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig =
+		WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig();
+	FeedbackConfig.InteractionFeedbackMaterial = TestMaterial;
+	FeedbackConfig.InteractionFeedbackEdgeWidth = 0.07f;
+	FeedbackConfig.InteractionFeedbackEdgeSoftness = 0.03f;
+	FeedbackConfig.InteractionFeedbackVignetteStrength = 0.4f;
+	FeedbackConfig.InteractionFeedbackVignetteRadius = 0.52f;
+	FeedbackConfig.InteractionFeedbackVignetteSoftness = 0.22f;
+
+	SlotWidget->SetSlotFeedbackConfig(FeedbackConfig);
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), false, true));
+
+	TestTrue(TEXT("Press succeeds for configured interaction material slot"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
+	TestTrue(TEXT("Mouse up is consumed"), FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*SlotWidget));
+	const FWacomFirstPersonCardSlotAutomationTestView FeedbackView =
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget);
+	TestEqual(
+		TEXT("Configured material uses unified interaction feedback"),
+		FeedbackView.InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::Deny);
+	TestTrue(TEXT("Interaction feedback material is configured"), FeedbackView.bInteractionFeedbackMaterialConfigured);
+	TestTrue(TEXT("Interaction feedback material instance is loaded"), FeedbackView.bInteractionFeedbackMaterialLoaded);
+	TestTrue(TEXT("Interaction feedback material comes from Anchor override"), FeedbackView.bInteractionFeedbackUsesOverrideMaterial);
+	TestFalse(TEXT("Interaction feedback material does not come from WBP brush"), FeedbackView.bInteractionFeedbackUsesBrushMaterial);
+	TestTrue(TEXT("Interaction feedback layer is above full-card feedback overlay"),
+		FeedbackView.bInteractionFeedbackLayerAboveFeedbackOverlay);
+	TestEqual(TEXT("Configured material drives interaction feedback opacity"), FeedbackView.InteractionFeedbackOpacity, 0.5f);
+	TestEqual(TEXT("Configured material keeps full-card overlay hidden"), FeedbackView.FeedbackOverlayOpacity, 0.0f);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerInteractionFeedbackBrushMaterialTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.WBPBrushInteractionFeedbackMaterialRendersFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerInteractionFeedbackBrushMaterialTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerBrushFeedbackFirstPersonCardViewProbe* CardView =
+		NewObject<UWacomFirstPersonCardLayerBrushFeedbackFirstPersonCardViewProbe>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Card view"), CardView))
+	{
+		return false;
+	}
+
+	CardView->TakeWidget();
+
+	FWacomFirstPersonCardInteractionFeedbackView InteractionView;
+	InteractionView.Kind = EWacomFirstPersonCardInteractionFeedbackKind::Deny;
+	InteractionView.Color = FLinearColor::Red;
+	InteractionView.Opacity = 0.5f;
+	InteractionView.Pulse = 1.0f;
+	CardView->SetInteractionFeedbackView(InteractionView);
+
+	const FWacomFirstPersonCardViewAutomationTestView FeedbackView =
+		CardView->GetAutomationTestViewForTest();
+	TestEqual(
+		TEXT("Brush material uses unified interaction feedback"),
+		FeedbackView.InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::Deny);
+	TestTrue(TEXT("Interaction feedback image exists"), FeedbackView.bHasInteractionFeedbackImage);
+	TestTrue(TEXT("Interaction feedback material is configured from WBP brush"), FeedbackView.bInteractionFeedbackMaterialConfigured);
+	TestTrue(TEXT("Interaction feedback material instance is loaded from WBP brush"), FeedbackView.bInteractionFeedbackMaterialLoaded);
+	TestFalse(TEXT("WBP brush material does not use Anchor override"), FeedbackView.bInteractionFeedbackUsesOverrideMaterial);
+	TestTrue(TEXT("WBP brush material source is reported"), FeedbackView.bInteractionFeedbackUsesBrushMaterial);
+	TestEqual(TEXT("WBP brush material drives deny opacity"), FeedbackView.InteractionFeedbackOpacity, 0.5f);
+	TestEqual(TEXT("WBP brush material keeps full-card overlay hidden"), FeedbackView.FeedbackOverlayOpacity, 0.0f);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDenySuppressesFullCardOverlayTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.DenySuppressesExistingFullCardOverlay",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDenySuppressesFullCardOverlayTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	UMaterial* TestMaterial = NewObject<UMaterial>(PC, TEXT("DenySuppressesOverlayTestMaterial"));
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget)
+		|| !TestNotNull(TEXT("Test material"), TestMaterial))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig =
+		WacomFirstPersonCardLayerSpec::MakeTestFeedbackConfig();
+	FeedbackConfig.InteractionFeedbackMaterial = TestMaterial;
+	SlotWidget->SetSlotFeedbackConfig(FeedbackConfig);
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.bEnableDragTargetFeedback = true;
+	DragConfig.DragTargetFeedbackOpacity = 0.8f;
+	DragConfig.DragInvalidTargetColor = FLinearColor::Red;
+	SlotWidget->SetCardDragConfig(DragConfig);
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), false, true));
+	TestTrue(TEXT("Press succeeds before invalid overlay"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
+	SlotWidget->SetCardDragTargetAffordanceFeedback(
+		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget,
+		false);
+
+	TestEqual(TEXT("Invalid drag target starts full-card overlay"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity,
+		0.48f);
+
+	TestTrue(TEXT("Release triggers deny"), FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*SlotWidget));
+	const FWacomFirstPersonCardSlotAutomationTestView DenyView =
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget);
+	TestTrue(TEXT("Deny starts while previous overlay existed"), DenyView.bDenyFeedbackActive);
+	TestEqual(TEXT("Deny suppresses full-card overlay"), DenyView.FeedbackOverlayOpacity, 0.0f);
+	TestEqual(TEXT("Interaction feedback remains visible"), DenyView.InteractionFeedbackOpacity, 0.5f);
+	TestTrue(TEXT("Interaction feedback remains topmost"), DenyView.bInteractionFeedbackLayerAboveFeedbackOverlay);
+
 	PC->Destroy();
 	return true;
 }
@@ -7055,21 +7751,37 @@ bool FWacomFirstPersonCardLayerFeedbackClearsTest::RunTest(const FString& Parame
 	TestTrue(TEXT("Press starts"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
 	FWacomFirstPersonCardLayerTestAccess::RequestUnhover(*SlotWidget);
 	TestFalse(TEXT("Unhover clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
+	TestEqual(
+		TEXT("Unhover clears interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::None);
 
 	TestTrue(TEXT("Press restarts"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
 	TestFalse(TEXT("Reuse clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
+	TestEqual(
+		TEXT("Reuse clears interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::None);
 
 	TestTrue(TEXT("Press starts before exit"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
 	SlotWidget->BeginExitMotion(SlotWidget->GetSlotView());
 	TestFalse(TEXT("Exit clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
 	TestEqual(TEXT("Exit clears overlay"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
+	TestEqual(
+		TEXT("Exit clears interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::None);
 	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid()));
 
 	TestTrue(TEXT("Press starts before disable"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*SlotWidget));
 	SlotWidget->SetCardLayerInteractionEnabled(false);
 	TestFalse(TEXT("Disabling interaction clears pressed"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bPressed);
 	TestEqual(TEXT("Disabling interaction clears overlay"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.0f);
+	TestEqual(
+		TEXT("Disabling interaction clears interaction feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).InteractionFeedbackKind,
+		EWacomFirstPersonCardInteractionFeedbackKind::None);
 
 	PC->Destroy();
 	return true;
@@ -10138,7 +10850,7 @@ bool FWacomFirstPersonCardLayerBleedCardTargetProbeTest::RunTest(const FString& 
 	FWacomFirstPersonCardDragConfig DragConfig;
 	DragConfig.CardDragStartThresholdPixels = 10.0f;
 	Layer->SetCardDragConfig(DragConfig);
-	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedCardViewProbe::StaticClass());
+	Layer->SetCardViewClass(UWacomFirstPersonCardLayerBleedFirstPersonCardViewProbe::StaticClass());
 	Layer->SetCardLayerInteractionEnabled(true);
 
 	const FGuid SourceCardId = FGuid::NewGuid();

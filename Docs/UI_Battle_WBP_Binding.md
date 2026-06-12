@@ -65,42 +65,55 @@ WBP 不应做：
 
 BattleHUD 战斗手牌由 first-person card layer 提供，不再通过 WBP_BattleHUD 绑定 `UHandPanel`。战斗卡牌详情由 BattleHUD 创建 viewport-level `UWacomCardDetailPanel`，不再需要 BattleHUD WBP 提供 `CardDetailLayer`。
 
-## WBP_FirstPersonCardView
+## WBP_FPCardView
 
-父类：`UWacomCardView`
+父类：`UWacomFirstPersonCardViewWidget`
 
-推荐资产路径：`/Game/Wacom/UI/Card/WBP_FirstPersonCardView`
+推荐资产路径：`/Game/Wacom/UI/Card/WBP_FPCardView`
 
 配置入口：`BP_WacomPlayerCharacter -> FirstPersonCardAnchorComponent -> FirstPersonCardViewClass`
 
-用途：first-person card layer 的卡面皮肤，服务静态预览和 BattleHUD runtime battle hand。它只显示 `FWacomCardViewData`，不承接点击、hover 命令、目标选择或战斗规则。
+用途：first-person card layer 的卡面 wrapper，服务静态预览和 BattleHUD runtime battle hand。它组合通用 `UWacomCardView` 与 first-person 专属反馈层，只显示 `FWacomCardViewData` 和交互反馈，不承接点击、hover 命令、目标选择或战斗规则。
 
 推荐结构：
 
 ```text
-WBP_FirstPersonCardView
-└─ BleedCanvas / SizeBox
-   └─ RetainerBox
-      └─ Overlay
-         └─ CardSizeBox / SizeBox
-            └─ 原 WBP_CardView 卡面内容
+WBP_FPCardView
+└─ RootOverlay / Overlay
+   ├─ CardView : UWacomCardView
+   │  └─ BleedCanvas / SizeBox
+   │     └─ RetainerBox
+   │        └─ Overlay
+   │           └─ CardSizeBox / SizeBox
+   │              └─ 原 WBP_CardView 卡面内容
+   ├─ FeedbackOverlay : Image
+   └─ InteractionFeedbackImage : Image
 ```
 
 关键绑定 / 命名：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `CardSizeBox` | `SizeBox` | Required by convention | 296 x 420 主体显示和交互参考范围 |
-| `CostDigitImage` | `Image` | Optional | 单位费用数字图标 brush |
-| `SurfaceFoilOverlay` | `Widget` | Optional | 复用 `UWacomCardView` 弱流光 / 表面装饰 |
+| `CardView` | `UWacomCardView` | Optional BindWidget | 通用卡面显示、`FWacomCardViewData` 刷新、主体命中几何来源 |
+| `FeedbackOverlay` | `Image` | Optional BindWidget | playable hover / drag target / card target affordance 的 full-card overlay |
+| `InteractionFeedbackImage` | `Image` | Optional BindWidget | pressed / confirm / commit / deny 的第一人称源卡交互反馈层；尺寸、层级和默认材质由 WBP 控制 |
+| `CardSizeBox` | `SizeBox` | `CardView` 内 Required by convention | 296 x 420 主体显示和交互参考范围 |
+| `CostDigitImage` | `Image` | `CardView` 内 Optional | 单位费用数字图标 brush |
+| `SurfaceFoilOverlay` | `Widget` | `CardView` 内 Optional | 复用 `UWacomCardView` 弱流光 / 表面装饰；未绑定时不会自动创建覆盖层 |
 
 WBP 合同：
 
-- 外层可使用透明 bleed 画布，保证超出主体边界的装饰被 Retainer 完整渲染。
-- `CardSizeBox` 默认保持 296 x 420，并居中放在 bleed 画布中；缺失时运行时回退旧主体尺寸。
+- `WBP_FPCardView` 外层只负责包装和反馈层；通用卡面内容应放在 `CardView` 子控件里。
+- `FeedbackOverlay` 和 `InteractionFeedbackImage` 都由 WBP 控制尺寸、锚点和层级；C++ 只写颜色、透明度和材质参数。
+- `InteractionFeedbackImage` 优先使用 Anchor 的 `InteractionFeedbackMaterial`；该材质为空时，会复用 WBP Image brush 上预设的材质。推荐制作流程是：常规风格直接把材质放到 `InteractionFeedbackImage` 的 brush 上；需要角色 / 场景级替换时再在 Anchor 上填 override。若没有材质，pressed / confirm / commit 仍可退化为普通 tint，deny 只保留 shake，不退回整卡红色 overlay。
+- 交互反馈材质需要支持 C++ 写入参数：`FeedbackColor`、`EdgeWidth`、`EdgeSoftness`、`VignetteStrength`、`VignetteRadius`、`VignetteSoftness`、`Opacity`、`Pulse`。
+- 不再支持旧 `DenyFeedbackEdgeImage` fallback；源卡交互反馈统一绑定到 `InteractionFeedbackImage`。
+- `CardView` 内部可使用透明 bleed 画布，保证超出主体边界的装饰被 Retainer 完整渲染。
+- `SurfaceFoilOverlay` 是显式 opt-in 装饰层；需要卡面流光时由 WBP 自己添加并绑定该 Image。
+- `CardView.CardSizeBox` 默认保持 296 x 420，并居中放在 bleed 画布中；缺失时运行时回退旧主体尺寸。
 - 透明 bleed 只负责渲染，不扩大 hover、click、drag 起手或 Card target probe 范围。
 - 不绑定按钮，不在 WBP 图里实现 hover / pending / disabled 状态机。
-- 材质流光和表面装饰继续走 `UWacomCardView` 路径，不在 first-person slot widget 内新增材质刷新逻辑。
+- 材质流光和表面装饰继续走内层 `UWacomCardView` 路径；first-person 反馈走 wrapper 绑定控件，不在 slot widget 内新增 Image / 材质刷新逻辑。
 
 最小 PIE 验收：
 
@@ -188,7 +201,7 @@ WBP 合同：
 WBP 不应做：
 
 - 不额外显示卡名、目标、数量或规则解释文案。
-- 不使用 `WBP_FirstPersonCardView` 作为小卡类。
+- 不使用 `WBP_FPCardView` 作为小卡类。
 - 不把 stack entry 做成可点击、可拖拽或规则命令入口。
 
 最小 PIE 验收：
@@ -309,7 +322,7 @@ WBP 不应做：不提交战斗命令，不反向写入 Snapshot，不承担 wor
 
 - `WBP_BattleHUD` 能显示玩家状态、ActionPanel、牌堆数量、CombatLogFeed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。
 - `WaitButton / EndTurnButton` 可点击并由 HUD 状态控制可用性。
-- `WBP_FirstPersonCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
+- `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；PartActor 只显示 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。

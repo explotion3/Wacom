@@ -24,6 +24,7 @@
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UI/Common/PileCountView.h"
 #include "BattleHUDTestHarness.h"
 #include "UI/BattleSceneTargetClickTestAccess.h"
@@ -1051,9 +1052,9 @@ bool FWacomUIBattlePresentationStackFallbackSpec::RunTest(const FString& /*Param
 	UClass* DefaultCardViewClass = LoadClass<UWacomCardView>(
 		nullptr,
 		TEXT("/Game/Wacom/UI/Card/WBP_CardView.WBP_CardView_C"));
-	UClass* FirstPersonCardViewClass = LoadClass<UWacomCardView>(
+	UClass* FirstPersonCardViewClass = LoadClass<UWacomFirstPersonCardViewWidget>(
 		nullptr,
-		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C"));
+		TEXT("/Game/Wacom/UI/Card/WBP_FPCardView.WBP_FPCardView_C"));
 
 	TStrongObjectPtr<UBattlePresentationStackWidget> DefaultStack(NewObject<UBattlePresentationStackWidget>());
 	if (TestNotNull(TEXT("WBP_CardView loads for presentation stack default"), DefaultCardViewClass))
@@ -1066,7 +1067,7 @@ bool FWacomUIBattlePresentationStackFallbackSpec::RunTest(const FString& /*Param
 	if (FirstPersonCardViewClass)
 	{
 		TestNotEqual(
-			TEXT("Presentation stack does not default to WBP_FirstPersonCardView"),
+			TEXT("Presentation stack does not default to WBP_FPCardView"),
 			DefaultStack->MiniCardViewClass.Get(),
 			FirstPersonCardViewClass);
 	}

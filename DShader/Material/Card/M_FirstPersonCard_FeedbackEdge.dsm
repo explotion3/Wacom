@@ -1,0 +1,138 @@
+Shader(Name="DreamMaterials/Card/M_FirstPersonCard_FeedbackEdge")
+{
+    Properties = {
+        VectorParameter FeedbackColor = float4(1.0, 0.14, 0.08, 1.0) [
+            Group="第一人称手牌反馈|颜色";
+            SortPriority=0;
+            Description="反馈边缘光颜色。C++ 会在 DenyFeedback 时写入当前 DenyColor。";
+        ];
+
+        ScalarParameter Opacity = 0.48 [
+            Group="第一人称手牌反馈|透明";
+            SortPriority=10;
+            Description="整体透明度。C++ 会在 DenyFeedback 时写入当前 DenyOpacity。";
+        ];
+
+        ScalarParameter Pulse = 1.0 [
+            Group="第一人称手牌反馈|动画";
+            SortPriority=20;
+            Description="瞬时脉冲强度。C++ 每帧写入 0 到 1 的衰减值。";
+        ];
+
+        ScalarParameter EdgeWidth = 0.048 [
+            Group="第一人称手牌反馈|边缘";
+            SortPriority=30;
+            Description="卡牌四边高亮宽度，UV 单位。";
+        ];
+
+        ScalarParameter EdgeSoftness = 0.024 [
+            Group="第一人称手牌反馈|边缘";
+            SortPriority=40;
+            Description="边缘向内淡出的柔和宽度，UV 单位。";
+        ];
+
+        ScalarParameter VignetteStrength = 0.22 [
+            Group="第一人称手牌反馈|暗角";
+            SortPriority=50;
+            Description="轻微暗角/压迫感强度。";
+        ];
+
+        ScalarParameter VignetteRadius = 0.58 [
+            Group="第一人称手牌反馈|暗角";
+            SortPriority=60;
+            Description="暗角开始出现的中心距离。";
+        ];
+
+        ScalarParameter VignetteSoftness = 0.28 [
+            Group="第一人称手牌反馈|暗角";
+            SortPriority=70;
+            Description="暗角淡入柔和度。";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+
+        float leftInner = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=EdgeWidth,
+            Max=EdgeWidth + EdgeSoftness,
+            Value=uv.x
+        );
+
+        float rightInner = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=EdgeWidth,
+            Max=EdgeWidth + EdgeSoftness,
+            Value=1.0 - uv.x
+        );
+
+        float topInner = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=EdgeWidth,
+            Max=EdgeWidth + EdgeSoftness,
+            Value=uv.y
+        );
+
+        float bottomInner = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=EdgeWidth,
+            Max=EdgeWidth + EdgeSoftness,
+            Value=1.0 - uv.y
+        );
+
+        float edgeMaskRaw =
+            (1.0 - leftInner)
+            + (1.0 - rightInner)
+            + (1.0 - topInner)
+            + (1.0 - bottomInner);
+
+        float edgeMask = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=edgeMaskRaw
+        );
+
+        float2 centeredUV = (uv - float2(0.5, 0.5)) * float2(1.0, 1.34);
+        float centerDistance = UE.Length(
+            OutputType="float1",
+            Input=centeredUV
+        );
+
+        float vignetteMask = UE.Expression(
+            Class="SmoothStep",
+            OutputType="float1",
+            Min=VignetteRadius,
+            Max=VignetteRadius + VignetteSoftness,
+            Value=centerDistance
+        );
+
+        float maskRaw = edgeMask + vignetteMask * VignetteStrength;
+        float mask = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=maskRaw
+        );
+
+        Color = float3(FeedbackColor.x, FeedbackColor.y, FeedbackColor.z);
+        Alpha = mask * Opacity * Pulse;
+    }
+}

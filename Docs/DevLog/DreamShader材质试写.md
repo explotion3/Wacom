@@ -29,7 +29,8 @@ tags:
 - 优先在 `Graph` 中使用 `UE.*` / `UE.Expression(...)` 描述 Unreal 材质节点；只有 DreamShader 图语法不适合表达的复杂 HLSL 逻辑才拆到 `DShader/Shared/*.dsh` 或局部 `Function`。
 - `M_UI_BloodBar` 已改成 Graph-first 写法，显式使用 `UE.Panner`、`UE.Expression(Class="TextureSample")`、`UE.Expression(Class="SmoothStep")`、`UE.Expression(Class="Sine")` 等节点。
 - 从 `M_CosmicBlob` 拆出可复用能量母题：`DShader/Shared/CosmicEnergy.dsh` 输出 `distortedUV`、`energyMask`、`sourceColor`，示例材质 `DShader/Material/Procedural/M_CosmicEnergy_Motif.dsm` 负责上色和噪声细节。
-- 基于 `CosmicEnergy` 新增卡面弱流光材质：`DShader/Material/Card/M_CardSurface_CosmicFoil.dsm`，生成到 `/Game/DreamMaterials/Card/M_CardSurface_CosmicFoil.M_CardSurface_CosmicFoil`，供 `UWacomCardView::SurfaceFoilOverlay` 作为卡牌表面装饰层使用。
+- 基于 `CosmicEnergy` 新增卡面弱流光材质：`DShader/Material/Card/M_CardSurface_CosmicFoil.dsm`，生成到 `/Game/DreamMaterials/Card/M_CardSurface_CosmicFoil.M_CardSurface_CosmicFoil`，供 `UWacomCardView::SurfaceFoilOverlay` 作为卡牌表面装饰层使用；`SurfaceFoilOverlay` 必须由 WBP 显式绑定，未绑定时不会运行时创建覆盖层。
+- 新增 first-person hand 源卡交互反馈材质：`DShader/Material/Card/M_FirstPersonCard_FeedbackEdge.dsm`，生成到 `/Game/DreamMaterials/Card/M_FirstPersonCard_FeedbackEdge.M_FirstPersonCard_FeedbackEdge`。推荐把它直接设置到 `WBP_FPCardView -> InteractionFeedbackImage` 的 brush 上作为默认制作路径；也可以在 `BP_WacomPlayerCharacter -> FirstPersonCardAnchorComponent -> 10 Interaction Feedback -> InteractionFeedbackMaterial` 手动指定 override。`UWacomFirstPersonCardLayerSlotWidget` 只计算 pressed / confirm / commit / deny 状态和参数，`UWacomFirstPersonCardViewWidget` 会把材质写入 WBP 内的 `InteractionFeedbackImage` 作为卡身边缘 / 暗角 overlay。旧 `DenyFeedbackEdgeImage` fallback 已删除；若未指定材质，pressed / confirm / commit 会退化为普通 tint，Deny 只保留横向 shake，不回退成整卡红色填充。
 
 血条材质参数口径：
 

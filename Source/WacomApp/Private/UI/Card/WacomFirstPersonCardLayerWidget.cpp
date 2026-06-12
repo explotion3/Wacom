@@ -12,6 +12,7 @@
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 
 namespace
 {
@@ -186,12 +187,13 @@ namespace
 	}
 }
 
-void UWacomFirstPersonCardLayerWidget::SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass)
+void UWacomFirstPersonCardLayerWidget::SetCardViewClass(
+	TSubclassOf<UWacomFirstPersonCardViewWidget> InCardViewClass)
 {
-	TSubclassOf<UWacomCardView> NewCardViewClass = InCardViewClass;
+	TSubclassOf<UWacomFirstPersonCardViewWidget> NewCardViewClass = InCardViewClass;
 	if (!NewCardViewClass)
 	{
-		NewCardViewClass = UWacomCardView::StaticClass();
+		NewCardViewClass = UWacomFirstPersonCardViewWidget::StaticClass();
 	}
 
 	if (CardViewClass == NewCardViewClass)
@@ -801,6 +803,12 @@ void UWacomFirstPersonCardLayerWidget::SetCardLayerInteractionEnabled(bool bEnab
 }
 
 UWacomCardView* UWacomFirstPersonCardLayerWidget::GetCardViewAt(int32 Index) const
+{
+	const UWacomFirstPersonCardLayerSlotWidget* SlotWidget = GetSlotWidgetAt(Index);
+	return SlotWidget ? SlotWidget->GetInnerCardView() : nullptr;
+}
+
+UWacomFirstPersonCardViewWidget* UWacomFirstPersonCardLayerWidget::GetFirstPersonCardViewAt(int32 Index) const
 {
 	const UWacomFirstPersonCardLayerSlotWidget* SlotWidget = GetSlotWidgetAt(Index);
 	return SlotWidget ? SlotWidget->GetCardView() : nullptr;

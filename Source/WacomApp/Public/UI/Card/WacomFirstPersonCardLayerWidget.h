@@ -11,6 +11,7 @@
 
 class UCanvasPanel;
 class UWacomCardView;
+class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerSlotWidget;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -45,13 +46,13 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
 	FGuid HoveredCardInstanceId;
 	FLinearColor AimArrowColor = FLinearColor::White;
 	FVector2D AimArrowEnd = FVector2D::ZeroVector;
-	TSubclassOf<UWacomCardView> CardViewClass;
+	TSubclassOf<UWacomFirstPersonCardViewWidget> CardViewClass;
 };
 #endif
 
 /**
  * HUD card layer driven by first-person card anchor projection.
- * Renders UWacomCardView-compatible card face widgets, may opt into slot-level
+ * Renders UWacomFirstPersonCardViewWidget-compatible card face widgets, may opt into slot-level
  * hover/click intent, and never owns battle or Run commands.
  */
 UCLASS()
@@ -60,7 +61,7 @@ class WACOMAPP_API UWacomFirstPersonCardLayerWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	void SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass);
+	void SetCardViewClass(TSubclassOf<UWacomFirstPersonCardViewWidget> InCardViewClass);
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotVisualConfig(const FWacomFirstPersonCardSlotVisualConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
@@ -88,6 +89,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	UWacomCardView* GetCardViewAt(int32 Index) const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
+	UWacomFirstPersonCardViewWidget* GetFirstPersonCardViewAt(int32 Index) const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	UWacomFirstPersonCardLayerSlotWidget* GetSlotWidgetAt(int32 Index) const;
@@ -176,7 +180,7 @@ private:
 	TArray<FWacomFirstPersonCardLayerSlotView> LastSlots;
 
 	UPROPERTY(Transient)
-	TSubclassOf<UWacomCardView> CardViewClass;
+	TSubclassOf<UWacomFirstPersonCardViewWidget> CardViewClass;
 
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;

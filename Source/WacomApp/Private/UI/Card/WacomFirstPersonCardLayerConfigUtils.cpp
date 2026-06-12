@@ -23,6 +23,38 @@ namespace
 			&& AreFloatsEquivalent(A.B, B.B)
 			&& AreFloatsEquivalent(A.A, B.A);
 	}
+
+	bool IsDefaultMotionProfile(const FWacomFirstPersonCardMotionProfile& Profile)
+	{
+		const FWacomFirstPersonCardMotionProfile DefaultProfile;
+		return AreFloatsEquivalent(Profile.MotionSpeed, DefaultProfile.MotionSpeed)
+			&& AreFloatsEquivalent(Profile.OpacitySpeed, DefaultProfile.OpacitySpeed)
+			&& AreFloatsEquivalent(Profile.EasePower, DefaultProfile.EasePower);
+	}
+
+	FWacomFirstPersonCardMotionProfile NormalizeMotionProfile(
+		FWacomFirstPersonCardMotionProfile Profile,
+		const FWacomFirstPersonCardMotionProfile& LegacyProfile)
+	{
+		if (IsDefaultMotionProfile(Profile))
+		{
+			Profile = LegacyProfile;
+		}
+
+		Profile.MotionSpeed = FMath::Max(0.0f, Profile.MotionSpeed);
+		Profile.OpacitySpeed = FMath::Max(0.0f, Profile.OpacitySpeed);
+		Profile.EasePower = FMath::Max(0.1f, Profile.EasePower);
+		return Profile;
+	}
+
+	bool AreMotionProfilesEquivalent(
+		const FWacomFirstPersonCardMotionProfile& A,
+		const FWacomFirstPersonCardMotionProfile& B)
+	{
+		return AreFloatsEquivalent(A.MotionSpeed, B.MotionSpeed)
+			&& AreFloatsEquivalent(A.OpacitySpeed, B.OpacitySpeed)
+			&& AreFloatsEquivalent(A.EasePower, B.EasePower);
+	}
 }
 
 FWacomFirstPersonCardSlotMotionConfig NormalizeSlotMotionConfig(
@@ -31,6 +63,17 @@ FWacomFirstPersonCardSlotMotionConfig NormalizeSlotMotionConfig(
 	FWacomFirstPersonCardSlotMotionConfig Config = InConfig;
 	Config.MotionSpeed = FMath::Max(0.0f, Config.MotionSpeed);
 	Config.OpacitySpeed = FMath::Max(0.0f, Config.OpacitySpeed);
+	Config.EasePower = FMath::Max(0.1f, Config.EasePower);
+	FWacomFirstPersonCardMotionProfile LegacyProfile;
+	LegacyProfile.MotionSpeed = Config.MotionSpeed;
+	LegacyProfile.OpacitySpeed = Config.OpacitySpeed;
+	LegacyProfile.EasePower = Config.EasePower;
+	Config.LayoutMotionProfile = NormalizeMotionProfile(Config.LayoutMotionProfile, LegacyProfile);
+	Config.HoverMotionProfile = NormalizeMotionProfile(Config.HoverMotionProfile, LegacyProfile);
+	Config.PendingMotionProfile = NormalizeMotionProfile(Config.PendingMotionProfile, LegacyProfile);
+	Config.DragTargetFocusMotionProfile = NormalizeMotionProfile(Config.DragTargetFocusMotionProfile, LegacyProfile);
+	Config.EnterMotionProfile = NormalizeMotionProfile(Config.EnterMotionProfile, LegacyProfile);
+	Config.ExitMotionProfile = NormalizeMotionProfile(Config.ExitMotionProfile, LegacyProfile);
 	Config.EnterOpacity = FMath::Clamp(Config.EnterOpacity, 0.0f, 1.0f);
 	Config.ExitDuration = FMath::Max(0.0f, Config.ExitDuration);
 	Config.ResetDistancePixels = FMath::Max(0.0f, Config.ResetDistancePixels);
@@ -56,6 +99,13 @@ bool AreSlotMotionConfigsEquivalent(
 	return A.bEnabled == B.bEnabled
 		&& AreFloatsEquivalent(A.MotionSpeed, B.MotionSpeed)
 		&& AreFloatsEquivalent(A.OpacitySpeed, B.OpacitySpeed)
+		&& AreFloatsEquivalent(A.EasePower, B.EasePower)
+		&& AreMotionProfilesEquivalent(A.LayoutMotionProfile, B.LayoutMotionProfile)
+		&& AreMotionProfilesEquivalent(A.HoverMotionProfile, B.HoverMotionProfile)
+		&& AreMotionProfilesEquivalent(A.PendingMotionProfile, B.PendingMotionProfile)
+		&& AreMotionProfilesEquivalent(A.DragTargetFocusMotionProfile, B.DragTargetFocusMotionProfile)
+		&& AreMotionProfilesEquivalent(A.EnterMotionProfile, B.EnterMotionProfile)
+		&& AreMotionProfilesEquivalent(A.ExitMotionProfile, B.ExitMotionProfile)
 		&& AreVectorsEquivalent(A.EnterOffsetPixels, B.EnterOffsetPixels)
 		&& AreFloatsEquivalent(A.EnterOpacity, B.EnterOpacity)
 		&& AreVectorsEquivalent(A.ExitOffsetPixels, B.ExitOffsetPixels)
@@ -136,6 +186,11 @@ FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
 	Config.DenyDuration = FMath::Max(0.0f, Config.DenyDuration);
 	Config.DenyShakePixels = FMath::Max(0.0f, Config.DenyShakePixels);
 	Config.DenyOpacity = FMath::Clamp(Config.DenyOpacity, 0.0f, 1.0f);
+	Config.InteractionFeedbackEdgeWidth = FMath::Max(0.0f, Config.InteractionFeedbackEdgeWidth);
+	Config.InteractionFeedbackEdgeSoftness = FMath::Max(0.0f, Config.InteractionFeedbackEdgeSoftness);
+	Config.InteractionFeedbackVignetteStrength = FMath::Max(0.0f, Config.InteractionFeedbackVignetteStrength);
+	Config.InteractionFeedbackVignetteRadius = FMath::Max(0.0f, Config.InteractionFeedbackVignetteRadius);
+	Config.InteractionFeedbackVignetteSoftness = FMath::Max(0.0f, Config.InteractionFeedbackVignetteSoftness);
 	Config.PlayCommitDuration = FMath::Max(0.0f, Config.PlayCommitDuration);
 	Config.PlayCommitOpacity = FMath::Clamp(Config.PlayCommitOpacity, 0.0f, 1.0f);
 	Config.PlayCommitScale = FMath::Max(0.01f, Config.PlayCommitScale);
@@ -158,6 +213,12 @@ bool AreSlotFeedbackConfigsEquivalent(
 		&& AreFloatsEquivalent(A.DenyShakePixels, B.DenyShakePixels)
 		&& AreColorsEquivalent(A.DenyColor, B.DenyColor)
 		&& AreFloatsEquivalent(A.DenyOpacity, B.DenyOpacity)
+		&& A.InteractionFeedbackMaterial.ToSoftObjectPath() == B.InteractionFeedbackMaterial.ToSoftObjectPath()
+		&& AreFloatsEquivalent(A.InteractionFeedbackEdgeWidth, B.InteractionFeedbackEdgeWidth)
+		&& AreFloatsEquivalent(A.InteractionFeedbackEdgeSoftness, B.InteractionFeedbackEdgeSoftness)
+		&& AreFloatsEquivalent(A.InteractionFeedbackVignetteStrength, B.InteractionFeedbackVignetteStrength)
+		&& AreFloatsEquivalent(A.InteractionFeedbackVignetteRadius, B.InteractionFeedbackVignetteRadius)
+		&& AreFloatsEquivalent(A.InteractionFeedbackVignetteSoftness, B.InteractionFeedbackVignetteSoftness)
 		&& A.bEnablePlayCommitFeedback == B.bEnablePlayCommitFeedback
 		&& AreFloatsEquivalent(A.PlayCommitDuration, B.PlayCommitDuration)
 		&& AreFloatsEquivalent(A.PlayCommitOpacity, B.PlayCommitOpacity)

@@ -14,7 +14,7 @@ tags:
 # First-person Card Layer 文档
 
 > [!info] 本文职责
-> 本文记录第一人称卡牌层的当前制作与运行时合同：正式布局默认、Battle / Run 数据源、hover / inspect / drag、target / drop 边界、开发预览 / 兼容边界和 `WBP_FirstPersonCardView` 制作要求。
+> 本文记录第一人称卡牌层的当前制作与运行时合同：正式布局默认、Battle / Run 数据源、hover / inspect / drag、target / drop 边界、开发预览 / 兼容边界和 `WBP_FPCardView` 制作要求。
 
 > [!warning] 边界
 > 第一人称卡牌层只做 UI 表现和玩家意图桥接。Battle 规则见 [WacomBattle.md](./WacomBattle.md)，Run 规则见 [WacomRun.md](./WacomRun.md)，世界 target / drop 路由见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)，BattleHUD 命令出口见 [WacomBattleUI.md](./WacomBattleUI.md)。
@@ -44,7 +44,8 @@ Battle / Run snapshot
 | `FWacomFirstPersonCardLayerOwner` | Anchor 私有 CardLayerWidget 生命周期 owner：创建 / 移除 widget、应用 layer config、推送 transition hints 和 slots | 不解析 anchor / viewport，不读取 runtime source，不转发 Battle / Run 命令 |
 | `FWacomFirstPersonCardLayerDelegateRouter` | Anchor 私有 LayerWidget 事件 router：绑定 / 解绑 native delegates、同步 hovered runtime state、转发 Anchor 对外 delegates | 不创建 widget，不解析布局，不提交 Battle / Run 命令 |
 | `UWacomFirstPersonCardLayerWidget` | 按 entries reconcile slot widget，维护 active / outgoing slot，绘制 drag arrow 和 layer-level feedback | 不读取 Battle / Run 规则状态 |
-| `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomCardView`，处理 hover / press / inspect / drag gesture 和 visual slot motion | 不直接调用 BattleSession 或 RunSession |
+| `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomFirstPersonCardViewWidget`，处理 hover / press / inspect / drag gesture 和 visual slot motion | 不直接调用 BattleSession 或 RunSession，不直接创建卡面反馈 Image / 材质控件 |
+| `UWacomFirstPersonCardViewWidget` | 第一人称卡面 wrapper：组合通用 `UWacomCardView` 与 first-person 专属 `FeedbackOverlay`、`InteractionFeedbackImage` | 不处理 hover / drag 手势，不提交 Battle / Run 命令 |
 | `UWacomRunFirstPersonCardSourceComponent` | 探索期把 Run BattleDeck / menu lease 写入 anchor runtime source | 不提交 Run 规则 |
 | `FWacomBattleHUDFirstPersonHandBridge` | BattleHUD 内部同步 battle hand、transition hints、drag preview / release | 不暴露 Blueprint API |
 | `FWacomBattleHUDCardDetailController` | first-person viewport 详情数据、motion、定位和 teardown | 不改变卡牌规则 |
@@ -131,6 +132,12 @@ Layer 使用稳定 motion key 复用 slot widget：
 
 Anchor 每帧计算基础目标 slot，Layer 只在输入 slot、transition hint、配置或生命周期状态实际变化时完整 reconcile。SlotWidget 会先把基础 slot 与 hover / pending / drag card-target focus 等状态合成为最终 presentation，Slot motion 再独立 tick，把 visual position、angle、scale、opacity 和 ZOrder 追向这个最终 presentation。
 
+Slot motion 现在按语义选择 motion intent / motion profile：`Layout` 负责普通手牌重排，`Hover` 负责悬浮 presentation，`Pending` 负责等待选目标源卡和非源卡弱化，`DragTargetFocus` 负责当前拖拽指针压中的唯一手牌目标，`Enter` / `Exit` 负责入场和离场。每个 `FWacomFirstPersonCardMotionProfile` 包含 `MotionSpeed / OpacitySpeed / EasePower`，Tick 时用当前 active profile 计算位置、角度、缩放和透明度追踪 alpha。
+
+Anchor Details 的默认入口仍是 `CardSlotMotionSpeed / CardSlotOpacitySpeed / CardSlotMotionEasePower`，这三个值会映射到全部 profile；如果某个 profile 保持默认值，Normalize 时也会继承这三个旧参数。当前只开放少量高级覆盖项：`bOverrideHoverMotionProfile` 单独调悬浮，`bOverrideDragTargetFocusMotionProfile` 单独调拖拽手牌目标 focus，`bOverrideEnterExitMotionProfile` 单独调入场和离场。`Layout` 和 `Pending` 仍继承全局参数，避免 Details 面板过早变成全量 motion 表。`CardSlotMotionEasePower = 1` 保持线性旧手感；大于 `1` 时当前 profile 每帧起步更柔和，小于 `1` 时更快贴近目标。
+
+Motion profile 只影响最终 visual slot 追踪，不改变 `InputHitCenter / InputHitScale / InputHitAngleDegrees` 等稳定命中几何，也不改变 hover / click / drag target resolver。候选目标 affordance 仍只控制 `FeedbackOverlay`，不会触发 `DragTargetFocus` 的 lift / scale / ZOrder；deny shake、confirm / commit pulse 和 `InteractionFeedbackImage` 也不接入 motion profile。
+
 默认表现：
 
 - 新卡按 enter offset 和 enter opacity 淡入。
@@ -165,7 +172,22 @@ Hover 输入命中与最终视觉几何分离。Anchor 先投影并平滑整副�
 
 `FWacomFirstPersonCardLayerSlotView` 本轮仍保留原字段名以降低调用方和测试改动量，但语义需要区分：`GetSlotView()` 更接近基础 slot + state flags，`GetVisualSlotView()` 是 SlotWidget 合成和 motion 后的最终视觉真相。详情面板、hover update、drag arrow 和 card-target feedback 应使用 final visual slot 语义；稳定 hover / click / press / drag 起手命中应继续使用基础 input hit 几何。
 
-视觉状态优先级固定为：pending source 高于普通 hover；drag card-target focus 不触发普通 hover，只负责当前指针压中的唯一目标卡 lift / scale / ZOrder；target affordance 只控制 overlay，不参与 lift / scale / ZOrder；pressed、commit pulse 和 deny shake 保留为短时 micro feedback，其中 deny 只做 shake + overlay，不改变主 scale / ZOrder。
+视觉状态优先级固定为：pending source 高于普通 hover；drag card-target focus 不触发普通 hover，只负责当前指针压中的唯一目标卡 lift / scale / ZOrder；target affordance 只控制 overlay，不参与 lift / scale / ZOrder；pressed、commit pulse 和 deny shake 保留为短时 micro feedback，其中 deny 只做 shake + 边缘 / 暗角反馈，不改变主 scale / ZOrder。
+
+源卡短时交互反馈统一走 `InteractionFeedbackImage`，包括 `Pressed / Confirm / Commit / Deny`。SlotWidget 只计算状态、shake、scale 和 `FWacomFirstPersonCardInteractionFeedbackView`，然后交给 `UWacomFirstPersonCardViewWidget`；实际尺寸、层级和默认材质由 WBP 内的 `InteractionFeedbackImage` 控件负责。材质来源有两级：AnchorComponent Details 的 `InteractionFeedbackMaterial` 显式 override 优先；为空时 C++ 会复用 `InteractionFeedbackImage` 自身 brush 上的材质，作为 WBP 默认材质。若没有任何材质，pressed / confirm / commit 会退化为普通 tint，deny 仍保留 shake，且不会回退成整卡红色填充。`DenyFeedbackEdgeImage` 旧 fallback 已删除，新制作主线必须使用 `InteractionFeedbackImage`。拖拽 `InvalidCardTarget / ValidCardTarget`、card probe、commit ready 和 playable hover 等目标/候选提示继续使用 `FeedbackOverlay` full-card overlay 语义，但 overlay 控件本身也由 `WBP_FPCardView` 绑定和控制尺寸。
+
+`InteractionFeedbackImage` 材质需要支持以下参数名，C++ 会在每次反馈刷新时写入动态材质实例：
+
+| 参数 | 类型 | 含义 |
+|---|---|---|
+| `FeedbackColor` | Vector | 当前反馈颜色，来自 pressed / confirm / commit / deny 对应配置 |
+| `EdgeWidth` | Scalar | 四边高亮宽度，UV 单位 |
+| `EdgeSoftness` | Scalar | 边缘向内淡出的柔和宽度，UV 单位 |
+| `VignetteStrength` | Scalar | 暗角强度 |
+| `VignetteRadius` | Scalar | 暗角开始出现的中心距离 |
+| `VignetteSoftness` | Scalar | 暗角淡入柔和度 |
+| `Opacity` | Scalar | 状态基础不透明度 |
+| `Pulse` | Scalar | 反馈生命周期脉冲，0 到 1 |
 
 稳定命中 resolver 只考虑 projected、非 exiting、有效 `CardInstanceId` 且可交互的 active slot。透明 bleed 不参与命中，命中范围仍只使用 `UWacomCardView.FixedCardBodyHitSize` 对应的 card body bounds。多张基础 body 重叠时，不按 hover 后 ZOrder 抢输入，而是按手牌左右顺序的相邻中心线分界选择；当前 hover 卡在分界线附近享有 `HoverHitHysteresisPixels` 滞后区，越过滞后区后才切到相邻卡。
 
@@ -206,34 +228,38 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 
 不要把 development preview layer 当作 Battle / Run runtime source，也不要恢复旧 `LegacyProjectedFan2D` 每卡 3D 槽位分别投影路径。当前两个投影风格都共享 `Authored2D` 手牌布局，区别只在整副手牌中心 anchor 是否吃 cursor look。
 
-## §9 `WBP_FirstPersonCardView` 制作合同
+## §9 `WBP_FPCardView` 制作合同
 
-推荐资产路径：`/Game/Wacom/UI/Card/WBP_FirstPersonCardView`
+推荐资产路径：`/Game/Wacom/UI/Card/WBP_FPCardView`
 
-父类：`UWacomCardView`
+父类：`UWacomFirstPersonCardViewWidget`
 
 使用入口：
 
 - `BP_WacomPlayerCharacter -> FirstPersonCardAnchorComponent -> FirstPersonCardViewClass`
 - 同一个入口服务 development preview 和 BattleHUD runtime battle hand。
-- C++ 不硬编码该 WBP 路径；为空时使用原生 `UWacomCardView` 调试视图。
+- C++ 不硬编码该 WBP 路径；为空时使用原生 `UWacomFirstPersonCardViewWidget` 调试视图。
 
 制作要求：
 
-- 以 `WBP_CardView` 为基础复制，不改 `UWacomCardView::SetCardViewData()` 语义。
+- 外层 WBP 负责 first-person 专属卡面包装；通用卡面仍放在名为 `CardView` 的 `UWacomCardView` 子控件中，不改 `UWacomCardView::SetCardViewData()` 语义。
+- 必须提供 `CardView : UWacomCardView`，用于显示 `FWacomCardViewData` 和提供 `CardSizeBox` 主体命中几何。
+- 建议提供 `FeedbackOverlay : UImage`，用于 playable hover / drag target / card target affordance full-card overlay；尺寸和层级由 WBP 控制。
+- 建议提供 `InteractionFeedbackImage : UImage`，用于 pressed / confirm / commit / deny 第一人称源卡交互反馈层；尺寸、层级和默认材质由 WBP 控制，通常放在 `FeedbackOverlay` 上方。
+- 不再支持旧 `DenyFeedbackEdgeImage` fallback；需要源卡交互反馈时必须绑定 `InteractionFeedbackImage`。
 - 外层可以是大于主体的透明 bleed 画布，例如 392 x 422 或 392 x 516，用于完整渲染主体外装饰。
-- 内部必须提供 `CardSizeBox` 主体 `SizeBox`，默认 296 x 420，并在 bleed 画布中尽量居中。
+- 内层 `CardView` 必须提供 `CardSizeBox` 主体 `SizeBox`，默认 296 x 420，并在 bleed 画布中尽量居中。
 - 命中范围使用 `UWacomCardView.FixedCardBodyHitSize`，默认 296 x 420；不会因 bleed 画布、RetainerBox 或布局压缩而变小。
 - RetainerBox 内部可轻微缩放，给旋转采样留下透明边缘。
 - 费用图标使用固定 `CostDigitImage : Image` 绑定；多位数、缺图标或未绑定时不会回退成文字费用。
-- 材质流光和 disabled overlay 继续走 `UWacomCardView` 现有绑定，不在 slot widget 内新增数据绑定。
+- 材质流光和 disabled overlay 继续走内层 `UWacomCardView` 现有绑定；first-person 交互反馈走 wrapper 的 `FeedbackOverlay / InteractionFeedbackImage`。
 - WBP 只负责卡面显示质量，不提交战斗命令，不读取 `UBattleSession`。
 
 验收口径：
 
 - 大角度扇形排布下没有明显锯齿、像素断裂或黑边。
 - 卡面材质动画在 HUD first-person layer 中正常刷新。
-- Hover、pending、disabled、pressed、confirm、deny 由 slot transform、opacity 和 feedback overlay 表现，WBP 不重复实现状态机。
+- Hover、pending、disabled、pressed、confirm、deny 由 slot transform、opacity 和 wrapper feedback overlay 表现，WBP 只提供控件和材质承载，不重复实现状态机。
 - 透明 bleed 区只用于渲染，不扩大 hover、click、drag 起手或 card target probe 范围。
 
 ## §10 测试入口

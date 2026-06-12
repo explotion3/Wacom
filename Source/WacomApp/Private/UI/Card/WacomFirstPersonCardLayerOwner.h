@@ -7,13 +7,13 @@
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 class APlayerController;
-class UWacomCardView;
+class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 
 struct FWacomFirstPersonCardLayerOwnerConfig
 {
 	TSubclassOf<UWacomFirstPersonCardLayerWidget> LayerWidgetClass;
-	TSubclassOf<UWacomCardView> CardViewClass;
+	TSubclassOf<UWacomFirstPersonCardViewWidget> CardViewClass;
 	int32 ZOrder = 0;
 	uint32 ConfigHash = 0;
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;

@@ -78,6 +78,22 @@ namespace
 		Config.bEnableCardSlotMotion = Anchor.bEnableCardSlotMotion;
 		Config.CardSlotMotionSpeed = Anchor.CardSlotMotionSpeed;
 		Config.CardSlotOpacitySpeed = Anchor.CardSlotOpacitySpeed;
+		Config.CardSlotMotionEasePower = Anchor.CardSlotMotionEasePower;
+		Config.bOverrideHoverMotionProfile = Anchor.bOverrideHoverMotionProfile;
+		Config.HoverMotionSpeed = Anchor.HoverMotionSpeed;
+		Config.HoverOpacitySpeed = Anchor.HoverOpacitySpeed;
+		Config.HoverMotionEasePower = Anchor.HoverMotionEasePower;
+		Config.bOverrideDragTargetFocusMotionProfile = Anchor.bOverrideDragTargetFocusMotionProfile;
+		Config.DragTargetFocusMotionSpeed = Anchor.DragTargetFocusMotionSpeed;
+		Config.DragTargetFocusOpacitySpeed = Anchor.DragTargetFocusOpacitySpeed;
+		Config.DragTargetFocusMotionEasePower = Anchor.DragTargetFocusMotionEasePower;
+		Config.bOverrideEnterExitMotionProfile = Anchor.bOverrideEnterExitMotionProfile;
+		Config.EnterMotionSpeed = Anchor.EnterMotionSpeed;
+		Config.EnterOpacitySpeed = Anchor.EnterOpacitySpeed;
+		Config.EnterMotionEasePower = Anchor.EnterMotionEasePower;
+		Config.ExitMotionSpeed = Anchor.ExitMotionSpeed;
+		Config.ExitOpacitySpeed = Anchor.ExitOpacitySpeed;
+		Config.ExitMotionEasePower = Anchor.ExitMotionEasePower;
 		Config.CardSlotEnterOffsetPixels = Anchor.CardSlotEnterOffsetPixels;
 		Config.CardSlotEnterOpacity = Anchor.CardSlotEnterOpacity;
 		Config.CardSlotExitOffsetPixels = Anchor.CardSlotExitOffsetPixels;
@@ -134,6 +150,12 @@ namespace
 		Config.DenyFeedbackShakePixels = Anchor.DenyFeedbackShakePixels;
 		Config.DenyFeedbackColor = Anchor.DenyFeedbackColor;
 		Config.DenyFeedbackOpacity = Anchor.DenyFeedbackOpacity;
+		Config.InteractionFeedbackMaterial = Anchor.InteractionFeedbackMaterial;
+		Config.InteractionFeedbackEdgeWidth = Anchor.InteractionFeedbackEdgeWidth;
+		Config.InteractionFeedbackEdgeSoftness = Anchor.InteractionFeedbackEdgeSoftness;
+		Config.InteractionFeedbackVignetteStrength = Anchor.InteractionFeedbackVignetteStrength;
+		Config.InteractionFeedbackVignetteRadius = Anchor.InteractionFeedbackVignetteRadius;
+		Config.InteractionFeedbackVignetteSoftness = Anchor.InteractionFeedbackVignetteSoftness;
 		Config.bEnablePlayCommitFeedback = Anchor.bEnablePlayCommitFeedback;
 		Config.PlayCommitFeedbackDuration = Anchor.PlayCommitFeedbackDuration;
 		Config.PlayCommitFeedbackOpacity = Anchor.PlayCommitFeedbackOpacity;
@@ -190,6 +212,12 @@ namespace
 		FeedbackConfig.DenyShakePixels = Config.DenyFeedbackShakePixels;
 		FeedbackConfig.DenyColor = Config.DenyFeedbackColor;
 		FeedbackConfig.DenyOpacity = Config.DenyFeedbackOpacity;
+		FeedbackConfig.InteractionFeedbackMaterial = Config.InteractionFeedbackMaterial;
+		FeedbackConfig.InteractionFeedbackEdgeWidth = Config.InteractionFeedbackEdgeWidth;
+		FeedbackConfig.InteractionFeedbackEdgeSoftness = Config.InteractionFeedbackEdgeSoftness;
+		FeedbackConfig.InteractionFeedbackVignetteStrength = Config.InteractionFeedbackVignetteStrength;
+		FeedbackConfig.InteractionFeedbackVignetteRadius = Config.InteractionFeedbackVignetteRadius;
+		FeedbackConfig.InteractionFeedbackVignetteSoftness = Config.InteractionFeedbackVignetteSoftness;
 		FeedbackConfig.bEnablePlayCommitFeedback = Config.bEnablePlayCommitFeedback;
 		FeedbackConfig.PlayCommitDuration = Config.PlayCommitFeedbackDuration;
 		FeedbackConfig.PlayCommitOpacity = Config.PlayCommitFeedbackOpacity;
@@ -221,10 +249,53 @@ namespace
 	FWacomFirstPersonCardSlotMotionConfig BuildSlotMotionConfig(
 		const FWacomFirstPersonCardResolvedLayoutConfig& Config)
 	{
+		const auto MakeProfile = [](
+			float MotionSpeed,
+			float OpacitySpeed,
+			float EasePower)
+		{
+			FWacomFirstPersonCardMotionProfile Profile;
+			Profile.MotionSpeed = MotionSpeed;
+			Profile.OpacitySpeed = OpacitySpeed;
+			Profile.EasePower = EasePower;
+			return Profile;
+		};
+
 		FWacomFirstPersonCardSlotMotionConfig MotionConfig;
 		MotionConfig.bEnabled = Config.bEnableCardSlotMotion;
 		MotionConfig.MotionSpeed = Config.CardSlotMotionSpeed;
 		MotionConfig.OpacitySpeed = Config.CardSlotOpacitySpeed;
+		MotionConfig.EasePower = Config.CardSlotMotionEasePower;
+		const FWacomFirstPersonCardMotionProfile DefaultProfile = MakeProfile(
+			Config.CardSlotMotionSpeed,
+			Config.CardSlotOpacitySpeed,
+			Config.CardSlotMotionEasePower);
+		MotionConfig.LayoutMotionProfile = DefaultProfile;
+		MotionConfig.HoverMotionProfile = Config.bOverrideHoverMotionProfile
+			? MakeProfile(
+				Config.HoverMotionSpeed,
+				Config.HoverOpacitySpeed,
+				Config.HoverMotionEasePower)
+			: DefaultProfile;
+		MotionConfig.PendingMotionProfile = DefaultProfile;
+		MotionConfig.DragTargetFocusMotionProfile = Config.bOverrideDragTargetFocusMotionProfile
+			? MakeProfile(
+				Config.DragTargetFocusMotionSpeed,
+				Config.DragTargetFocusOpacitySpeed,
+				Config.DragTargetFocusMotionEasePower)
+			: DefaultProfile;
+		MotionConfig.EnterMotionProfile = Config.bOverrideEnterExitMotionProfile
+			? MakeProfile(
+				Config.EnterMotionSpeed,
+				Config.EnterOpacitySpeed,
+				Config.EnterMotionEasePower)
+			: DefaultProfile;
+		MotionConfig.ExitMotionProfile = Config.bOverrideEnterExitMotionProfile
+			? MakeProfile(
+				Config.ExitMotionSpeed,
+				Config.ExitOpacitySpeed,
+				Config.ExitMotionEasePower)
+			: DefaultProfile;
 		MotionConfig.EnterOffsetPixels = Config.CardSlotEnterOffsetPixels;
 		MotionConfig.EnterOpacity = Config.CardSlotEnterOpacity;
 		MotionConfig.ExitOffsetPixels = Config.CardSlotExitOffsetPixels;
@@ -330,6 +401,10 @@ namespace
 			AddFloat(Value.B);
 			AddFloat(Value.A);
 		};
+		const auto AddSoftObjectPath = [&Combine](const FSoftObjectPath& Value)
+		{
+			Combine(GetTypeHash(Value.ToString()));
+		};
 
 		AddInt(static_cast<int32>(Config.ProjectionMode));
 		AddInt(static_cast<int32>(Config.ViewportClampMode));
@@ -364,6 +439,22 @@ namespace
 		AddBool(Config.bEnableCardSlotMotion);
 		AddFloat(Config.CardSlotMotionSpeed);
 		AddFloat(Config.CardSlotOpacitySpeed);
+		AddFloat(Config.CardSlotMotionEasePower);
+		AddBool(Config.bOverrideHoverMotionProfile);
+		AddFloat(Config.HoverMotionSpeed);
+		AddFloat(Config.HoverOpacitySpeed);
+		AddFloat(Config.HoverMotionEasePower);
+		AddBool(Config.bOverrideDragTargetFocusMotionProfile);
+		AddFloat(Config.DragTargetFocusMotionSpeed);
+		AddFloat(Config.DragTargetFocusOpacitySpeed);
+		AddFloat(Config.DragTargetFocusMotionEasePower);
+		AddBool(Config.bOverrideEnterExitMotionProfile);
+		AddFloat(Config.EnterMotionSpeed);
+		AddFloat(Config.EnterOpacitySpeed);
+		AddFloat(Config.EnterMotionEasePower);
+		AddFloat(Config.ExitMotionSpeed);
+		AddFloat(Config.ExitOpacitySpeed);
+		AddFloat(Config.ExitMotionEasePower);
 		AddVector(Config.CardSlotEnterOffsetPixels);
 		AddFloat(Config.CardSlotEnterOpacity);
 		AddVector(Config.CardSlotExitOffsetPixels);
@@ -418,6 +509,12 @@ namespace
 		AddFloat(Config.DenyFeedbackOpacity);
 		AddFloat(Config.DenyFeedbackDuration);
 		AddFloat(Config.DenyFeedbackShakePixels);
+		AddSoftObjectPath(Config.InteractionFeedbackMaterial.ToSoftObjectPath());
+		AddFloat(Config.InteractionFeedbackEdgeWidth);
+		AddFloat(Config.InteractionFeedbackEdgeSoftness);
+		AddFloat(Config.InteractionFeedbackVignetteStrength);
+		AddFloat(Config.InteractionFeedbackVignetteRadius);
+		AddFloat(Config.InteractionFeedbackVignetteSoftness);
 		AddBool(Config.bEnablePlayCommitFeedback);
 		AddFloat(Config.PlayCommitFeedbackDuration);
 		AddFloat(Config.PlayCommitFeedbackOpacity);

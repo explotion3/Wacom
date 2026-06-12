@@ -407,7 +407,6 @@ bool UWacomCardView::IsLocalPositionInsideCardBodyWithBoundsForTest(
 void UWacomCardView::NativeConstruct()
 {
 	Super::NativeConstruct();
-	EnsureSurfaceFoilOverlay();
 	ApplySurfaceFoilOverlay();
 	bCardViewDataAppliedToWidgets = false;
 	ApplyCurrentDataToWidgets();
@@ -581,43 +580,6 @@ void UWacomCardView::UpdateEffectBadgeDisplays()
 		EffectStatsHost->SetVisibility(RenderableBadges.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 
-}
-
-void UWacomCardView::EnsureSurfaceFoilOverlay()
-{
-	if (SurfaceFoilOverlay || !WidgetTree)
-	{
-		return;
-	}
-
-	UOverlay* HostOverlay = Cast<UOverlay>(WidgetTree->RootWidget);
-	if (!HostOverlay)
-	{
-		WidgetTree->ForEachWidget([&HostOverlay](UWidget* Widget)
-		{
-			if (!HostOverlay)
-			{
-				HostOverlay = Cast<UOverlay>(Widget);
-			}
-		});
-	}
-
-	if (!HostOverlay)
-	{
-		return;
-	}
-
-	SurfaceFoilOverlay = WidgetTree->ConstructWidget<UImage>(
-		UImage::StaticClass(),
-		TEXT("SurfaceFoilOverlay_Runtime"));
-	SurfaceFoilOverlay->SetVisibility(ESlateVisibility::Collapsed);
-	SurfaceFoilOverlay->SetColorAndOpacity(FLinearColor::White);
-
-	if (UOverlaySlot* FoilSlot = HostOverlay->AddChildToOverlay(SurfaceFoilOverlay))
-	{
-		FoilSlot->SetHorizontalAlignment(HAlign_Fill);
-		FoilSlot->SetVerticalAlignment(VAlign_Fill);
-	}
 }
 
 void UWacomCardView::ApplySurfaceFoilOverlay()

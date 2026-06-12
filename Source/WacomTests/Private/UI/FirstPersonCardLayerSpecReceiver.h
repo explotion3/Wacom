@@ -4,11 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
 #include "Blueprint/WidgetTree.h"
+#include "Materials/Material.h"
+#include "Styling/SlateBrush.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "FirstPersonCardLayerSpecReceiver.generated.h"
 
@@ -193,6 +197,156 @@ protected:
 			BleedRoot->SetWidthOverride(392.0f);
 			BleedRoot->SetHeightOverride(516.0f);
 			WidgetTree->RootWidget = BleedRoot;
+		}
+
+		return Super::RebuildWidget();
+	}
+};
+
+UCLASS()
+class UWacomFirstPersonCardLayerBleedFirstPersonCardViewProbe : public UWacomFirstPersonCardViewWidget
+{
+	GENERATED_BODY()
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override
+	{
+		if (!WidgetTree)
+		{
+			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_BleedFirstPersonProbe"));
+		}
+
+		if (!WidgetTree->RootWidget)
+		{
+			UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("BleedFirstPersonRoot"));
+			WidgetTree->RootWidget = Root;
+
+			CardView = WidgetTree->ConstructWidget<UWacomFirstPersonCardLayerBleedCardViewProbe>(
+				UWacomFirstPersonCardLayerBleedCardViewProbe::StaticClass(),
+				TEXT("CardView"));
+			if (CardView)
+			{
+				CardView->SetVisibility(ESlateVisibility::HitTestInvisible);
+				if (UOverlaySlot* CardSlot = Root->AddChildToOverlay(CardView))
+				{
+					CardSlot->SetHorizontalAlignment(HAlign_Fill);
+					CardSlot->SetVerticalAlignment(VAlign_Fill);
+				}
+			}
+		}
+
+		return Super::RebuildWidget();
+	}
+};
+
+UCLASS()
+class UWacomFirstPersonCardLayerLegacyBleedFirstPersonCardViewProbe : public UWacomFirstPersonCardViewWidget
+{
+	GENERATED_BODY()
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override
+	{
+		if (!WidgetTree)
+		{
+			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_LegacyBleedFirstPersonProbe"));
+		}
+
+		if (!WidgetTree->RootWidget)
+		{
+			UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("LegacyBleedFirstPersonRoot"));
+			WidgetTree->RootWidget = Root;
+
+			CardView = WidgetTree->ConstructWidget<UWacomFirstPersonCardLayerLegacyBleedCardViewProbe>(
+				UWacomFirstPersonCardLayerLegacyBleedCardViewProbe::StaticClass(),
+				TEXT("CardView"));
+			if (CardView)
+			{
+				CardView->SetVisibility(ESlateVisibility::HitTestInvisible);
+				if (UOverlaySlot* CardSlot = Root->AddChildToOverlay(CardView))
+				{
+					CardSlot->SetHorizontalAlignment(HAlign_Fill);
+					CardSlot->SetVerticalAlignment(VAlign_Fill);
+				}
+			}
+		}
+
+		return Super::RebuildWidget();
+	}
+};
+
+UCLASS()
+class UWacomFirstPersonCardLayerBrushFeedbackFirstPersonCardViewProbe : public UWacomFirstPersonCardViewWidget
+{
+	GENERATED_BODY()
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override
+	{
+		if (!WidgetTree)
+		{
+			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_BrushFeedbackFirstPersonProbe"));
+		}
+
+		if (!WidgetTree->RootWidget)
+		{
+			UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("BrushFeedbackFirstPersonRoot"));
+			WidgetTree->RootWidget = Root;
+
+			CardView = WidgetTree->ConstructWidget<UWacomCardView>(
+				UWacomCardView::StaticClass(),
+				TEXT("CardView"));
+			if (CardView)
+			{
+				CardView->SetVisibility(ESlateVisibility::HitTestInvisible);
+				if (UOverlaySlot* CardSlot = Root->AddChildToOverlay(CardView))
+				{
+					CardSlot->SetHorizontalAlignment(HAlign_Fill);
+					CardSlot->SetVerticalAlignment(VAlign_Fill);
+				}
+			}
+
+			FeedbackOverlay = WidgetTree->ConstructWidget<UImage>(
+				UImage::StaticClass(),
+				TEXT("FeedbackOverlay"));
+			if (FeedbackOverlay)
+			{
+				FeedbackOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
+				FeedbackOverlay->SetRenderOpacity(0.0f);
+				FSlateBrush FeedbackBrush;
+				FeedbackBrush.DrawAs = ESlateBrushDrawType::Box;
+				FeedbackOverlay->SetBrush(FeedbackBrush);
+				if (UOverlaySlot* OverlaySlot = Root->AddChildToOverlay(FeedbackOverlay))
+				{
+					OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+					OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+				}
+			}
+
+			InteractionFeedbackImage = WidgetTree->ConstructWidget<UImage>(
+				UImage::StaticClass(),
+				TEXT("InteractionFeedbackImage"));
+			if (InteractionFeedbackImage)
+			{
+				InteractionFeedbackImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+				InteractionFeedbackImage->SetRenderOpacity(0.0f);
+				UMaterial* BrushMaterial = NewObject<UMaterial>(this, TEXT("InteractionFeedbackBrushMaterial"));
+				FSlateBrush InteractionBrush;
+				InteractionBrush.DrawAs = ESlateBrushDrawType::Box;
+				InteractionBrush.SetResourceObject(BrushMaterial);
+				InteractionFeedbackImage->SetBrush(InteractionBrush);
+				if (UOverlaySlot* InteractionSlot = Root->AddChildToOverlay(InteractionFeedbackImage))
+				{
+					InteractionSlot->SetHorizontalAlignment(HAlign_Fill);
+					InteractionSlot->SetVerticalAlignment(VAlign_Fill);
+				}
+			}
 		}
 
 		return Super::RebuildWidget();

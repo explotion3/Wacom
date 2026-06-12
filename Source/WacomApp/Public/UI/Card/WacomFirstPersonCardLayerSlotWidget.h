@@ -9,8 +9,8 @@
 #include "WacomFirstPersonCardLayerSlotWidget.generated.h"
 
 class UOverlay;
-class UImage;
 class UWacomCardView;
+class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -22,6 +22,15 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 {
 	float FeedbackOverlayOpacity = 0.0f;
 	FLinearColor FeedbackOverlayColor = FLinearColor::Transparent;
+	float InteractionFeedbackOpacity = 0.0f;
+	EWacomFirstPersonCardInteractionFeedbackKind InteractionFeedbackKind =
+		EWacomFirstPersonCardInteractionFeedbackKind::None;
+	bool bHasInteractionFeedbackImage = false;
+	bool bInteractionFeedbackMaterialConfigured = false;
+	bool bInteractionFeedbackMaterialLoaded = false;
+	bool bInteractionFeedbackUsesOverrideMaterial = false;
+	bool bInteractionFeedbackUsesBrushMaterial = false;
+	bool bInteractionFeedbackLayerAboveFeedbackOverlay = false;
 	bool bPressed = false;
 	bool bDenyFeedbackActive = false;
 	bool bConfirmFeedbackActive = false;
@@ -37,6 +46,8 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
+	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
+	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
 	int32 SlotMotionConfigApplyCount = 0;
@@ -58,7 +69,7 @@ class WACOMAPP_API UWacomFirstPersonCardLayerSlotWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	void SetCardViewClass(TSubclassOf<UWacomCardView> InCardViewClass);
+	void SetCardViewClass(TSubclassOf<UWacomFirstPersonCardViewWidget> InCardViewClass);
 	void SetSlotView(const FWacomFirstPersonCardLayerSlotView& InSlotView);
 	void SetSlotViewImmediate(const FWacomFirstPersonCardLayerSlotView& InSlotView);
 	void BeginSlotMotion(const FWacomFirstPersonCardLayerSlotView& InTargetSlotView, bool bTreatAsNewSlot);
@@ -102,7 +113,10 @@ public:
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
-	UWacomCardView* GetCardView() const { return CardView; }
+	UWacomFirstPersonCardViewWidget* GetCardView() const { return CardView; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
+	UWacomCardView* GetInnerCardView() const;
 
 	const FWacomFirstPersonCardLayerSlotView& GetSlotView() const { return CurrentSlotView; }
 	const FWacomFirstPersonCardLayerSlotView& GetVisualSlotView() const { return VisualSlotView; }
@@ -181,13 +195,10 @@ private:
 	TObjectPtr<UOverlay> RootOverlay;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UWacomCardView> CardView;
+	TObjectPtr<UWacomFirstPersonCardViewWidget> CardView;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UImage> FeedbackOverlay;
-
-	UPROPERTY(Transient)
-	TSubclassOf<UWacomCardView> CardViewClass;
+	TSubclassOf<UWacomFirstPersonCardViewWidget> CardViewClass;
 
 	UPROPERTY(Transient)
 	FWacomFirstPersonCardLayerSlotView CurrentSlotView;
@@ -204,6 +215,7 @@ private:
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FString SlotMotionKey;
+	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
 	EWacomFirstPersonCardGestureState GestureState = EWacomFirstPersonCardGestureState::Idle;
 	TOptional<FWacomFirstPersonCardLayerSlotView> GestureStartSlotView;
 	TOptional<FWacomFirstPersonCardLayerSlotView> GestureOverrideTargetSlotView;
@@ -250,13 +262,23 @@ private:
 #endif
 
 	void EnsureCardView();
-	void EnsureFeedbackOverlay();
 	void ApplyCurrentSlotView();
 	void ApplyVisualSlotView();
 	void ApplySlotViewToWidget(const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void RefreshPresentationTarget(bool bSnapVisualWhenMotionDisabled);
+	void RefreshPresentationTarget(
+		bool bSnapVisualWhenMotionDisabled,
+		EWacomFirstPersonCardMotionIntent PreferredIntent = EWacomFirstPersonCardMotionIntent::Layout);
 	FWacomFirstPersonCardSlotVisualState ResolveVisualState(
 		const FWacomFirstPersonCardLayerSlotView& BaseSlotView) const;
+	EWacomFirstPersonCardMotionIntent ResolveMotionIntentForPresentationChange(
+		const FWacomFirstPersonCardLayerSlotView& PreviousBaseSlotView,
+		const FWacomFirstPersonCardLayerSlotView& NewBaseSlotView,
+		const FWacomFirstPersonCardLayerSlotView& PreviousPresentationSlotView,
+		const FWacomFirstPersonCardLayerSlotView& NewPresentationSlotView,
+		EWacomFirstPersonCardMotionIntent PreferredIntent) const;
+	static int32 GetMotionIntentPriority(EWacomFirstPersonCardMotionIntent Intent);
+	const FWacomFirstPersonCardMotionProfile& GetMotionProfileForIntent(
+		EWacomFirstPersonCardMotionIntent Intent) const;
 	FWacomFirstPersonCardLayerSlotView ComposePresentationSlotView(
 		const FWacomFirstPersonCardLayerSlotView& BaseSlotView) const;
 	EWacomFirstPersonCardDragTargetFeedbackState ResolveEffectiveDragTargetFeedbackState() const;
@@ -299,7 +321,9 @@ private:
 	void TriggerConfirmFeedback();
 	void TriggerDenyFeedback();
 	void ClearInteractionFeedback();
+	bool IsDenyFeedbackActive() const;
 	void ApplyFeedbackOverlay();
+	void ApplyInteractionFeedbackOverlay();
 	void UpdateVisibilityForInteractionMode();
 	void SetTickEnabledForMotion(bool bEnabled);
 	void UpdateWantsTick();
