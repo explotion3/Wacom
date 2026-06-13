@@ -96,6 +96,7 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
 	bool bHasCurrentPointerView = false;
 	FGuid HoveredCardInstanceId;
 	FLinearColor AimArrowColor = FLinearColor::White;
+	FVector2D AimArrowStart = FVector2D::ZeroVector;
 	FVector2D AimArrowEnd = FVector2D::ZeroVector;
 	TSubclassOf<UWacomFirstPersonCardViewWidget> CardViewClass;
 };
@@ -347,6 +348,11 @@ private:
 		bool bRequirePlayable,
 		bool bUseHoverHysteresis,
 		FWacomFirstPersonCardLayerSlotView* OutResolvedSlotView = nullptr) const;
+	bool TryResolveInspectScrubHandBounds(FVector2D& OutMin, FVector2D& OutMax) const;
+	bool IsWidgetPositionInsideInspectScrubArea(const FVector2D& WidgetPosition) const;
+	bool TryRouteInspectScrubPointer(
+		UWacomFirstPersonCardLayerSlotWidget& GestureSlot,
+		const FVector2D& WidgetPosition);
 	bool UpdateHoveredSlotFromWidgetPosition(const FVector2D& WidgetPosition);
 	FWacomFirstPersonCardPointerRouteResult RouteSlotPointerMovedAtWidgetPosition(
 		const FVector2D& WidgetPosition);
@@ -374,5 +380,6 @@ private:
 		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
 		const TOptional<FVector2D>& FeedbackTargetScreenPosition);
 	FLinearColor ResolveAimArrowColor() const;
+	FVector2D ResolveAimArrowStart() const;
 	FVector2D ResolveAimArrowEnd() const;
 };

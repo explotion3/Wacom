@@ -236,6 +236,9 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 	float CardDragStartThresholdPixels = 10.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
+	FVector2D CardInspectScrubHandPaddingPixels = FVector2D(32.0f, 48.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float HoverHitHysteresisPixels = 16.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")

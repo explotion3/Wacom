@@ -64,6 +64,7 @@ private:
 	bool bHasAppliedConfig = false;
 	uint32 LastAppliedConfigHash = 0;
 	TWeakObjectPtr<UClass> LastAppliedCardViewClass;
+	FWacomFirstPersonCardDragConfig LastAppliedCardDragConfig;
 	bool bLastAppliedLogDiagnostics = false;
 	bool bLastAppliedInteractionEnabled = false;
 #if WITH_AUTOMATION_TESTS

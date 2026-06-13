@@ -11171,6 +11171,95 @@ bool FWacomFirstPersonCardLayerTargetedAimIgnoresLiveAnchorMotionTest::RunTest(c
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerAimArrowStartFollowsVisualSourceTest,
+	"Wacom.UI.FirstPersonCardLayer.CardDragInspect.TargetedAimArrowStartFollowsVisualSource",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerAimArrowStartFollowsVisualSourceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig MotionConfig =
+		WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	MotionConfig.MotionSpeed = 1.0f;
+	Layer->SetSlotMotionConfig(MotionConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.CardInspectHoldDelaySeconds = 0.1f;
+	Layer->SetCardDragConfig(DragConfig);
+
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView Slot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
+	Slot.Entry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	Slot.WidgetPosition = Slot.ScreenPosition;
+	Slot.SnappedWidgetPosition = Slot.ScreenPosition;
+	Slot.AnchorWidgetPosition = Slot.ScreenPosition;
+	Layer->SetCardSlots({ Slot });
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D PressPosition = Slot.ScreenPosition;
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, PressPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, PressPosition);
+	TestEqual(TEXT("Card enters inspect before aim"),
+		SlotWidget->GetGestureStateForFirstPersonLayer(),
+		EWacomFirstPersonCardGestureState::Inspecting);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 1.0f);
+
+	const FVector2D AimPointerPosition = PressPosition + FVector2D(60.0f, -20.0f);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.0f, AimPointerPosition);
+	const FWacomFirstPersonCardLayerAutomationTestView ViewAtAimStart =
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer);
+	TestEqual(TEXT("Card enters aim"),
+		ViewAtAimStart.CurrentDragView.GestureState,
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	TestEqual(TEXT("Cached drag source records aim promotion visual"),
+		ViewAtAimStart.AimArrowStart,
+		ViewAtAimStart.CurrentDragView.SourceSlotView.ScreenPosition);
+
+	const FVector2D CachedDragSource = ViewAtAimStart.CurrentDragView.SourceSlotView.ScreenPosition;
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.16f);
+	const FVector2D CurrentVisualSource = SlotWidget->GetVisualSlotView().ScreenPosition;
+	TestNotEqual(TEXT("Aim visual moves after promotion"),
+		CurrentVisualSource,
+		CachedDragSource);
+
+	const FWacomFirstPersonCardLayerAutomationTestView ViewAfterAimMotion =
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer);
+	TestEqual(TEXT("Drag view source remains the promotion snapshot"),
+		ViewAfterAimMotion.CurrentDragView.SourceSlotView.ScreenPosition,
+		CachedDragSource);
+	TestEqual(TEXT("Aim arrow start follows current source visual"),
+		ViewAfterAimMotion.AimArrowStart,
+		CurrentVisualSource);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, AimPointerPosition);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerHandCardDenyTest,
 	"Wacom.UI.FirstPersonCardLayer.CardDragInspect.HandCardTargetIsDetectedButDoesNotSubmit",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

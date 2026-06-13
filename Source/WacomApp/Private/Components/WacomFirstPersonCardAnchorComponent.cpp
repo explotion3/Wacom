@@ -334,6 +334,7 @@ namespace
 		DragConfig.bEnableFirstPersonCardDragCommit = Anchor.bEnableFirstPersonCardDragCommit;
 		DragConfig.CardInspectHoldDelaySeconds = Anchor.CardInspectHoldDelaySeconds;
 		DragConfig.CardDragStartThresholdPixels = Anchor.CardDragStartThresholdPixels;
+		DragConfig.CardInspectScrubHandPaddingPixels = Anchor.CardInspectScrubHandPaddingPixels;
 		DragConfig.HoverHitHysteresisPixels = Config.HoverHitHysteresisPixels;
 		DragConfig.NoTargetCardDragOutCommitDistancePixels = Anchor.NoTargetCardDragOutCommitDistancePixels;
 		DragConfig.NoTargetCardDragOutDirection = Anchor.NoTargetCardDragOutDirection;

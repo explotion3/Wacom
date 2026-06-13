@@ -232,6 +232,10 @@ FWacomFirstPersonCardDragConfig NormalizeCardDragConfig(
 	FWacomFirstPersonCardDragConfig Config = InConfig;
 	Config.CardInspectHoldDelaySeconds = FMath::Max(0.0f, Config.CardInspectHoldDelaySeconds);
 	Config.CardDragStartThresholdPixels = FMath::Max(0.0f, Config.CardDragStartThresholdPixels);
+	Config.CardInspectScrubHandPaddingPixels.X =
+		FMath::Max(0.0f, Config.CardInspectScrubHandPaddingPixels.X);
+	Config.CardInspectScrubHandPaddingPixels.Y =
+		FMath::Max(0.0f, Config.CardInspectScrubHandPaddingPixels.Y);
 	Config.HoverHitHysteresisPixels = FMath::Max(0.0f, Config.HoverHitHysteresisPixels);
 	Config.NoTargetCardDragOutCommitDistancePixels =
 		FMath::Max(0.0f, Config.NoTargetCardDragOutCommitDistancePixels);
@@ -264,6 +268,7 @@ bool AreCardDragConfigsEquivalent(
 	return A.bEnableFirstPersonCardDragCommit == B.bEnableFirstPersonCardDragCommit
 		&& AreFloatsEquivalent(A.CardInspectHoldDelaySeconds, B.CardInspectHoldDelaySeconds)
 		&& AreFloatsEquivalent(A.CardDragStartThresholdPixels, B.CardDragStartThresholdPixels)
+		&& AreVectorsEquivalent(A.CardInspectScrubHandPaddingPixels, B.CardInspectScrubHandPaddingPixels)
 		&& AreFloatsEquivalent(A.HoverHitHysteresisPixels, B.HoverHitHysteresisPixels)
 		&& AreFloatsEquivalent(A.NoTargetCardDragOutCommitDistancePixels, B.NoTargetCardDragOutCommitDistancePixels)
 		&& A.NoTargetCardDragOutDirection == B.NoTargetCardDragOutDirection

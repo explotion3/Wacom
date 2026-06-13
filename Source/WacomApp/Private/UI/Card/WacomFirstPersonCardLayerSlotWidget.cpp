@@ -566,6 +566,18 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanUpdateGestureFromExternalPointer()
 	return GestureInputSource == EWacomFirstPersonCardGestureInputSource::ExternalPointer;
 }
 
+bool UWacomFirstPersonCardLayerSlotWidget::IsInspectScrubActiveForFirstPersonLayer() const
+{
+	return GestureState == EWacomFirstPersonCardGestureState::Inspecting
+		&& GestureSource == EWacomFirstPersonCardGestureSource::MousePress
+		&& GestureInputSource == EWacomFirstPersonCardGestureInputSource::MousePointer;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::CanBeginInspectScrubFromFirstPersonLayer() const
+{
+	return CanStartCardDragGesture();
+}
+
 FWacomInteractionTargetHandle UWacomFirstPersonCardLayerSlotWidget::BuildCardTargetHandle() const
 {
 	if (!CanExposeCardTarget())
@@ -1490,7 +1502,10 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginGesturePress(
 	UpdateWantsTick();
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(float DeltaTime, const FVector2D& ScreenPosition)
+void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(
+	float DeltaTime,
+	const FVector2D& ScreenPosition,
+	bool bSuppressInspectDragPromotion)
 {
 	if (GestureState == EWacomFirstPersonCardGestureState::Idle
 		|| GestureState == EWacomFirstPersonCardGestureState::Cancelled)
@@ -1518,6 +1533,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(float DeltaTime, const 
 	}
 
 	if (GestureState == EWacomFirstPersonCardGestureState::Inspecting
+		&& !bSuppressInspectDragPromotion
 		&& DragDistance >= CardDragConfig.CardDragStartThresholdPixels)
 	{
 		PromoteGestureToCardDrag(true);
@@ -1546,7 +1562,9 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(float DeltaTime, const 
 	UpdateWantsTick();
 }
 
-bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(const FVector2D& ScreenPosition)
+bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(
+	const FVector2D& ScreenPosition,
+	bool bSuppressInspectDragPromotion)
 {
 	if (GestureState == EWacomFirstPersonCardGestureState::Idle
 		|| GestureState == EWacomFirstPersonCardGestureState::Cancelled)
@@ -1555,7 +1573,7 @@ bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(const FVector2D& Scree
 	}
 
 	CurrentGestureScreenPosition = ScreenPosition;
-	UpdateGesture(0.0f, ScreenPosition);
+	UpdateGesture(0.0f, ScreenPosition, bSuppressInspectDragPromotion);
 
 	const EWacomFirstPersonCardGestureState ReleaseState = GestureState;
 	SetPressedForFirstPersonLayer(false);
@@ -1818,16 +1836,47 @@ bool UWacomFirstPersonCardLayerSlotWidget::BeginDragGestureFromFirstPersonLayer(
 	return true;
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::UpdateGestureFromFirstPersonLayer(
-	float DeltaTime,
+bool UWacomFirstPersonCardLayerSlotWidget::BeginInspectScrubFromFirstPersonLayer(
 	const FVector2D& WidgetPosition)
 {
-	UpdateGesture(DeltaTime, WidgetPosition);
+	if (!CanBeginInspectScrubFromFirstPersonLayer())
+	{
+		return false;
+	}
+
+	BeginGesturePress(
+		WidgetPosition,
+		EWacomFirstPersonCardGestureSource::MousePress,
+		EWacomFirstPersonCardGestureInputSource::MousePointer);
+	CurrentGestureScreenPosition = WidgetPosition;
+	UpdatePointerViewportDiagnostics(WidgetPosition);
+	GestureElapsedSeconds = FMath::Max(GestureElapsedSeconds, CardDragConfig.CardInspectHoldDelaySeconds);
+	SetGestureState(EWacomFirstPersonCardGestureState::Inspecting, true);
+	UpdateGesture(0.0f, WidgetPosition, true);
+	return GestureState == EWacomFirstPersonCardGestureState::Inspecting;
 }
 
-bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGestureFromFirstPersonLayer(const FVector2D& WidgetPosition)
+void UWacomFirstPersonCardLayerSlotWidget::UpdateGestureFromFirstPersonLayer(
+	float DeltaTime,
+	const FVector2D& WidgetPosition,
+	bool bSuppressInspectDragPromotion)
 {
-	return ReleaseGesture(WidgetPosition);
+	UpdateGesture(DeltaTime, WidgetPosition, bSuppressInspectDragPromotion);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGestureFromFirstPersonLayer(
+	const FVector2D& WidgetPosition,
+	bool bSuppressInspectDragPromotion)
+{
+	return ReleaseGesture(WidgetPosition, bSuppressInspectDragPromotion);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ClearInspectScrubGestureFromFirstPersonLayer()
+{
+	if (GestureState == EWacomFirstPersonCardGestureState::Inspecting)
+	{
+		ClearGestureState(false);
+	}
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::BroadcastDragStarted()

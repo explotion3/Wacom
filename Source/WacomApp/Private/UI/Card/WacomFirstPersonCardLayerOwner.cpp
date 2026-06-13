@@ -2,6 +2,7 @@
 
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
 
+#include "WacomFirstPersonCardLayerConfigUtils.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 
@@ -82,6 +83,7 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfigIfNeeded(
 		!bHasAppliedConfig
 		|| LastAppliedConfigHash != Config.ConfigHash
 		|| LastAppliedCardViewClass.Get() != Config.CardViewClass.Get()
+		|| !AreCardDragConfigsEquivalent(LastAppliedCardDragConfig, Config.CardDragConfig)
 		|| bLastAppliedLogDiagnostics != Config.bLogSlotMotionDiagnostics
 		|| bLastAppliedInteractionEnabled != Config.bInteractionEnabled;
 	if (bConfigChanged)
@@ -105,6 +107,7 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfig(
 	bHasAppliedConfig = true;
 	LastAppliedConfigHash = Config.ConfigHash;
 	LastAppliedCardViewClass = Config.CardViewClass.Get();
+	LastAppliedCardDragConfig = Config.CardDragConfig;
 	bLastAppliedLogDiagnostics = Config.bLogSlotMotionDiagnostics;
 	bLastAppliedInteractionEnabled = Config.bInteractionEnabled;
 #if WITH_AUTOMATION_TESTS
@@ -117,6 +120,7 @@ void FWacomFirstPersonCardLayerOwner::ResetConfigState()
 	bHasAppliedConfig = false;
 	LastAppliedConfigHash = 0;
 	LastAppliedCardViewClass.Reset();
+	LastAppliedCardDragConfig = FWacomFirstPersonCardDragConfig();
 	bLastAppliedLogDiagnostics = false;
 	bLastAppliedInteractionEnabled = false;
 }

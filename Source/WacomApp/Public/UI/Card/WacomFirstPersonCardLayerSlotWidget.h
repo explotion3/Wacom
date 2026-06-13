@@ -142,6 +142,8 @@ public:
 	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const { return GestureState; }
 	bool CanUpdateGestureFromSlotPointer() const;
 	bool CanUpdateGestureFromExternalPointer() const;
+	bool IsInspectScrubActiveForFirstPersonLayer() const;
+	bool CanBeginInspectScrubFromFirstPersonLayer() const;
 	EWacomFirstPersonCardDragTargetFeedbackState GetDragTargetFeedbackStateForFirstPersonLayer() const
 	{
 		return ResolveEffectiveDragTargetFeedbackState();
@@ -157,8 +159,15 @@ public:
 	bool BeginDragGestureFromFirstPersonLayer(
 		const FVector2D& GestureOriginPosition,
 		const FVector2D& InitialPointerPosition);
-	void UpdateGestureFromFirstPersonLayer(float DeltaTime, const FVector2D& WidgetPosition);
-	bool ReleaseGestureFromFirstPersonLayer(const FVector2D& WidgetPosition);
+	bool BeginInspectScrubFromFirstPersonLayer(const FVector2D& WidgetPosition);
+	void UpdateGestureFromFirstPersonLayer(
+		float DeltaTime,
+		const FVector2D& WidgetPosition,
+		bool bSuppressInspectDragPromotion = false);
+	bool ReleaseGestureFromFirstPersonLayer(
+		const FVector2D& WidgetPosition,
+		bool bSuppressInspectDragPromotion = false);
+	void ClearInspectScrubGestureFromFirstPersonLayer();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsHoveredForFirstPersonLayer() const { return bIsHoveredForFirstPersonLayer; }
@@ -320,8 +329,13 @@ private:
 		const FVector2D& ScreenPosition,
 		EWacomFirstPersonCardGestureSource Source,
 		EWacomFirstPersonCardGestureInputSource InputSource);
-	void UpdateGesture(float DeltaTime, const FVector2D& ScreenPosition);
-	bool ReleaseGesture(const FVector2D& ScreenPosition);
+	void UpdateGesture(
+		float DeltaTime,
+		const FVector2D& ScreenPosition,
+		bool bSuppressInspectDragPromotion = false);
+	bool ReleaseGesture(
+		const FVector2D& ScreenPosition,
+		bool bSuppressInspectDragPromotion = false);
 	bool PromoteGestureToCardDrag(bool bBroadcastStartOrCancel);
 	void SetGestureState(EWacomFirstPersonCardGestureState NewState, bool bBroadcastStartOrCancel);
 	void UpdateGestureOverrideTarget();

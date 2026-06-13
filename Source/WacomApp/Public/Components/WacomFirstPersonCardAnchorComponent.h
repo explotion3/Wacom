@@ -452,6 +452,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|09 Gesture", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "80.0", ToolTip = "按下后鼠标移动超过该距离才进入拖出/瞄准状态，单位为 UMG 布局像素。"))
 	float CardDragStartThresholdPixels = 10.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|09 Gesture", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "128.0", ToolTip = "读牌 scrub 区域在整副手牌卡牌主体包围盒外额外扩展的 X/Y padding，单位为 UMG 布局像素；用于让卡牌间小缝保持读牌而不误触拖拽。"))
+	FVector2D CardInspectScrubHandPaddingPixels = FVector2D(32.0f, 48.0f);
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|09 Gesture", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "480.0", ToolTip = "无目标卡向上拖出超过该距离后进入可提交状态，单位为 UMG 布局像素；释放时才真正提交。"))
 	float NoTargetCardDragOutCommitDistancePixels = 140.0f;
 
