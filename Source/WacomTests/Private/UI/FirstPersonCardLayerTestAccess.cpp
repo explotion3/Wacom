@@ -53,6 +53,13 @@ UWacomFirstPersonCardLayerWidget* FWacomFirstPersonCardLayerTestAccess::CardLaye
 	return Anchor.GetAutomationTestViewForTest().CardLayerWidget;
 }
 
+void FWacomFirstPersonCardLayerTestAccess::SetCardLayer(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	UWacomFirstPersonCardLayerWidget* Layer)
+{
+	Anchor.SetCardLayerWidgetForTest(Layer);
+}
+
 void FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(
 	UWacomFirstPersonCardAnchorComponent& Anchor,
 	const FGuid& CardInstanceId)
@@ -115,6 +122,23 @@ bool FWacomFirstPersonCardLayerTestAccess::HandleSlotPointerEnteredAtWidgetPosit
 	return Layer.HandleSlotPointerEnteredAtWidgetPositionForTest(SourceSlot, WidgetPosition);
 }
 
+bool FWacomFirstPersonCardLayerTestAccess::HandleSlotPointerMovedAtWidgetPosition(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& WidgetPosition)
+{
+	return Layer.HandleSlotPointerMovedAtWidgetPositionForTest(SourceSlot, WidgetPosition);
+}
+
+EWacomFirstPersonCardPointerRouteAction
+FWacomFirstPersonCardLayerTestAccess::HandleSlotPointerMovedRouteActionAtWidgetPosition(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& WidgetPosition)
+{
+	return Layer.HandleSlotPointerMovedRouteActionAtWidgetPositionForTest(SourceSlot, WidgetPosition);
+}
+
 bool FWacomFirstPersonCardLayerTestAccess::RequestPressAtWidgetPosition(
 	UWacomFirstPersonCardLayerWidget& Layer,
 	const FVector2D& WidgetPosition)
@@ -122,11 +146,26 @@ bool FWacomFirstPersonCardLayerTestAccess::RequestPressAtWidgetPosition(
 	return Layer.RequestPressAtWidgetPositionForTest(WidgetPosition);
 }
 
+EWacomFirstPersonCardPointerRouteAction FWacomFirstPersonCardLayerTestAccess::RequestPressRouteActionAtWidgetPosition(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FVector2D& WidgetPosition)
+{
+	return Layer.RequestPressRouteActionAtWidgetPositionForTest(WidgetPosition);
+}
+
 bool FWacomFirstPersonCardLayerTestAccess::RequestReleaseAtWidgetPosition(
 	UWacomFirstPersonCardLayerWidget& Layer,
 	const FVector2D& WidgetPosition)
 {
 	return Layer.RequestReleaseAtWidgetPositionForTest(WidgetPosition);
+}
+
+EWacomFirstPersonCardPointerRouteAction
+FWacomFirstPersonCardLayerTestAccess::RequestReleaseRouteActionAtWidgetPosition(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FVector2D& WidgetPosition)
+{
+	return Layer.RequestReleaseRouteActionAtWidgetPositionForTest(WidgetPosition);
 }
 
 bool FWacomFirstPersonCardLayerTestAccess::RequestHover(

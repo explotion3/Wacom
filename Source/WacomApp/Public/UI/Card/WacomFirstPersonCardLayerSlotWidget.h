@@ -17,6 +17,13 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNa
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
 
+enum class EWacomFirstPersonCardGestureInputSource : uint8
+{
+	None,
+	MousePointer,
+	ExternalPointer
+};
+
 #if WITH_AUTOMATION_TESTS
 struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 {
@@ -132,6 +139,8 @@ public:
 	FVector2D GetCardBodyHitSizeForFirstPersonLayer() const;
 	bool IsWidgetPositionInsideCardBodyForFirstPersonLayer(const FVector2D& WidgetPosition) const;
 	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const { return GestureState; }
+	bool CanUpdateGestureFromSlotPointer() const;
+	bool CanUpdateGestureFromExternalPointer() const;
 	EWacomFirstPersonCardDragTargetFeedbackState GetDragTargetFeedbackStateForFirstPersonLayer() const
 	{
 		return ResolveEffectiveDragTargetFeedbackState();
@@ -219,6 +228,7 @@ private:
 	FString SlotMotionKey;
 	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
 	EWacomFirstPersonCardGestureState GestureState = EWacomFirstPersonCardGestureState::Idle;
+	EWacomFirstPersonCardGestureInputSource GestureInputSource = EWacomFirstPersonCardGestureInputSource::None;
 	TOptional<FWacomFirstPersonCardLayerSlotView> GestureStartSlotView;
 	TOptional<FWacomFirstPersonCardLayerSlotView> GestureOverrideTargetSlotView;
 	FWacomInteractionTargetHandle GestureFeedbackTargetHandle;
@@ -235,6 +245,7 @@ private:
 	bool bHasVisualSlotView = false;
 	bool bIsExitingForFirstPersonLayer = false;
 	bool bWantsSlotMotionTick = false;
+	bool bPreserveGestureReturnMotion = false;
 	bool bGestureTargetValid = false;
 	bool bGestureCommitArmed = false;
 	bool bHasPointerViewportPosition = false;
@@ -306,6 +317,7 @@ private:
 	void BeginGesturePress(const FVector2D& ScreenPosition);
 	void UpdateGesture(float DeltaTime, const FVector2D& ScreenPosition);
 	bool ReleaseGesture(const FVector2D& ScreenPosition);
+	bool PromoteGestureToCardDrag(bool bBroadcastStartOrCancel);
 	void SetGestureState(EWacomFirstPersonCardGestureState NewState, bool bBroadcastStartOrCancel);
 	void UpdateGestureOverrideTarget();
 	void ClearGestureState(bool bBroadcastCancel);

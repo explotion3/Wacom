@@ -53,6 +53,23 @@ namespace
 			|| FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
 	}
 
+	FReply BuildPointerRouteReply(
+		const FWacomFirstPersonCardPointerRouteResult& RouteResult,
+		const TSharedRef<SWidget>& CaptureWidget)
+	{
+		switch (RouteResult.Action)
+		{
+		case EWacomFirstPersonCardPointerRouteAction::Handled:
+			return FReply::Handled();
+		case EWacomFirstPersonCardPointerRouteAction::CaptureMouse:
+			return FReply::Handled().CaptureMouse(CaptureWidget);
+		case EWacomFirstPersonCardPointerRouteAction::ReleaseMouseCapture:
+			return FReply::Handled().ReleaseMouseCapture();
+		case EWacomFirstPersonCardPointerRouteAction::Unhandled:
+		default:
+			return FReply::Unhandled();
+		}
+	}
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::SetCardViewClass(
@@ -186,6 +203,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	const bool bLargeJump =
 		bCanReuseVisual
 		&& !bGestureActive
+		&& !bPreserveGestureReturnMotion
 		&& SlotMotionConfig.ResetDistancePixels > 0.0f
 		&& JumpDistance > SlotMotionConfig.ResetDistancePixels;
 
@@ -205,6 +223,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 
 	if (!bCanReuseVisual || bLargeJump)
 	{
+		bPreserveGestureReturnMotion = false;
 		VisualSlotView = TargetSlotView;
 		if (bTreatAsNewSlot && InTargetSlotView.bProjected)
 		{
@@ -537,6 +556,16 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanExposeCardTarget() const
 		&& CurrentSlotView.Entry.CardInstanceId.IsValid();
 }
 
+bool UWacomFirstPersonCardLayerSlotWidget::CanUpdateGestureFromSlotPointer() const
+{
+	return GestureInputSource == EWacomFirstPersonCardGestureInputSource::MousePointer;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::CanUpdateGestureFromExternalPointer() const
+{
+	return GestureInputSource == EWacomFirstPersonCardGestureInputSource::ExternalPointer;
+}
+
 FWacomInteractionTargetHandle UWacomFirstPersonCardLayerSlotWidget::BuildCardTargetHandle() const
 {
 	if (!CanExposeCardTarget())
@@ -717,6 +746,11 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 		{
 			VisualSlotView = EffectiveTargetSlotView;
 			ApplyVisualSlotView();
+			if (GestureState == EWacomFirstPersonCardGestureState::Idle
+				|| GestureState == EWacomFirstPersonCardGestureState::Cancelled)
+			{
+				bPreserveGestureReturnMotion = false;
+			}
 		}
 	}
 	else
@@ -792,27 +826,16 @@ FReply UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseButtonDown(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
-	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CanInteractWithCurrentSlot())
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		if (UWacomFirstPersonCardLayerWidget* Layer = OwningFirstPersonCardLayer.Get())
 		{
-			return Layer->HandleSlotPointerPressed(*this, InMouseEvent.GetScreenSpacePosition())
-				? FReply::Handled().CaptureMouse(TakeWidget())
+			const FWacomFirstPersonCardPointerRouteResult RouteResult =
+				Layer->HandleSlotPointerPressed(*this, InMouseEvent.GetScreenSpacePosition());
+			return RouteResult.IsHandled()
+				? BuildPointerRouteReply(RouteResult, TakeWidget())
 				: Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 		}
-		FVector2D PointerWidgetPosition = FVector2D::ZeroVector;
-		if (!ResolvePointerWidgetPosition(InMouseEvent, PointerWidgetPosition))
-		{
-			PointerWidgetPosition = bHasVisualSlotView
-				? VisualSlotView.ScreenPosition
-				: CurrentSlotView.ScreenPosition;
-		}
-		if (!IsScreenPositionInsideCardBody(InMouseEvent.GetScreenSpacePosition()))
-		{
-			return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
-		}
-		BeginGesturePress(PointerWidgetPosition);
-		return FReply::Handled().CaptureMouse(TakeWidget());
 	}
 
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
@@ -822,32 +845,16 @@ FReply UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseButtonUp(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
-	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && CanInteractWithCurrentSlot())
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		if (UWacomFirstPersonCardLayerWidget* Layer = OwningFirstPersonCardLayer.Get())
 		{
-			return Layer->HandleSlotPointerReleased(*this, InMouseEvent.GetScreenSpacePosition())
-				? FReply::Handled().ReleaseMouseCapture()
+			const FWacomFirstPersonCardPointerRouteResult RouteResult =
+				Layer->HandleSlotPointerReleased(*this, InMouseEvent.GetScreenSpacePosition());
+			return RouteResult.IsHandled()
+				? BuildPointerRouteReply(RouteResult, TakeWidget())
 				: Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
 		}
-		FVector2D PointerWidgetPosition = CurrentGestureScreenPosition;
-		ResolvePointerWidgetPosition(InMouseEvent, PointerWidgetPosition);
-		if (GestureState == EWacomFirstPersonCardGestureState::Idle
-			|| GestureState == EWacomFirstPersonCardGestureState::Cancelled)
-		{
-			if (!IsScreenPositionInsideCardBody(InMouseEvent.GetScreenSpacePosition()))
-			{
-				return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
-			}
-		}
-		else if (GestureState == EWacomFirstPersonCardGestureState::Pressed
-			&& !IsScreenPositionInsideCardBody(InMouseEvent.GetScreenSpacePosition()))
-		{
-			ClearGestureState(false);
-			return FReply::Handled().ReleaseMouseCapture();
-		}
-		ReleaseGesture(PointerWidgetPosition);
-		return FReply::Handled().ReleaseMouseCapture();
 	}
 
 	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
@@ -857,23 +864,15 @@ FReply UWacomFirstPersonCardLayerSlotWidget::NativeOnMouseMove(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
-	if (GestureState != EWacomFirstPersonCardGestureState::Idle
-		&& GestureState != EWacomFirstPersonCardGestureState::Cancelled)
-	{
-		FVector2D PointerWidgetPosition = CurrentGestureScreenPosition;
-		ResolvePointerWidgetPosition(InMouseEvent, PointerWidgetPosition);
-		UpdateGesture(0.0f, PointerWidgetPosition);
-		return FReply::Handled();
-	}
-
 	if (UWacomFirstPersonCardLayerWidget* Layer = OwningFirstPersonCardLayer.Get())
 	{
-		return Layer->HandleSlotPointerMoved(*this, InMouseEvent.GetScreenSpacePosition())
-			? FReply::Handled()
+		const FWacomFirstPersonCardPointerRouteResult RouteResult =
+			Layer->HandleSlotPointerMoved(*this, InMouseEvent.GetScreenSpacePosition());
+		return RouteResult.IsHandled()
+			? BuildPointerRouteReply(RouteResult, TakeWidget())
 			: Super::NativeOnMouseMove(InGeometry, InMouseEvent);
 	}
 
-	UpdateBodyHoverFromScreenPosition(InMouseEvent.GetScreenSpacePosition());
 	return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
 }
 
@@ -1301,7 +1300,7 @@ FWacomFirstPersonCardLayerSlotView UWacomFirstPersonCardLayerSlotWidget::BuildNo
 	DragSlot.WidgetPosition = DragSlot.ScreenPosition;
 	DragSlot.SnappedWidgetPosition = DragSlot.ScreenPosition;
 	DragSlot.RenderScale = FMath::Max(0.01f, BaseSlotView.RenderScale * CardDragConfig.CardInspectScale);
-	DragSlot.RenderAngleDegrees = FMath::Lerp(BaseSlotView.RenderAngleDegrees, 0.0f, 0.65f);
+	DragSlot.RenderAngleDegrees = 0.0f;
 	DragSlot.ZOrder = BaseSlotView.ZOrder + 1400;
 	DragSlot.GestureState = GestureState;
 	return DragSlot;
@@ -1469,6 +1468,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginGesturePress(const FVector2D& Sc
 	}
 
 	ClearGestureState(false);
+	GestureInputSource = EWacomFirstPersonCardGestureInputSource::MousePointer;
 	GestureStartSlotView = CurrentSlotView;
 	PressScreenPosition = ScreenPosition;
 	CurrentGestureScreenPosition = ScreenPosition;
@@ -1504,18 +1504,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(float DeltaTime, const 
 		if (CanStartCardDragGesture()
 			&& DragDistance >= CardDragConfig.CardDragStartThresholdPixels)
 		{
-			if (IsNoTargetDragCard())
-			{
-				SetGestureState(EWacomFirstPersonCardGestureState::DraggingNoTargetCard, true);
-			}
-			else if (IsTargetedAimCard())
-			{
-				SetGestureState(EWacomFirstPersonCardGestureState::AimingTargetedCard, true);
-			}
-			else
-			{
-				SetGestureState(EWacomFirstPersonCardGestureState::Cancelled, true);
-			}
+			PromoteGestureToCardDrag(true);
 		}
 		else if (CanStartCardDragGesture()
 			&& GestureElapsedSeconds >= CardDragConfig.CardInspectHoldDelaySeconds)
@@ -1527,14 +1516,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(float DeltaTime, const 
 	if (GestureState == EWacomFirstPersonCardGestureState::Inspecting
 		&& DragDistance >= CardDragConfig.CardDragStartThresholdPixels)
 	{
-		if (IsNoTargetDragCard())
-		{
-			SetGestureState(EWacomFirstPersonCardGestureState::DraggingNoTargetCard, true);
-		}
-		else if (IsTargetedAimCard())
-		{
-			SetGestureState(EWacomFirstPersonCardGestureState::AimingTargetedCard, true);
-		}
+		PromoteGestureToCardDrag(true);
 	}
 
 	if (GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
@@ -1591,6 +1573,33 @@ bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(const FVector2D& Scree
 	}
 
 	ClearGestureState(false);
+	return true;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::PromoteGestureToCardDrag(
+	bool bBroadcastStartOrCancel)
+{
+	EWacomFirstPersonCardMotionIntent PromotionMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
+	EWacomFirstPersonCardGestureState PromotedState = EWacomFirstPersonCardGestureState::Cancelled;
+	if (IsNoTargetDragCard())
+	{
+		PromotionMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
+		PromotedState = EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
+	}
+	else if (IsTargetedAimCard())
+	{
+		PromotionMotionIntent = EWacomFirstPersonCardMotionIntent::Pending;
+		PromotedState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
+	}
+	else
+	{
+		SetGestureState(EWacomFirstPersonCardGestureState::Cancelled, bBroadcastStartOrCancel);
+		return false;
+	}
+
+	SetGestureState(PromotedState, bBroadcastStartOrCancel);
+	ActiveMotionIntent = PromotionMotionIntent;
+	UpdateWantsTick();
 	return true;
 }
 
@@ -1655,6 +1664,8 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearGestureState(bool bBroadcastCanc
 	}
 
 	GestureState = EWacomFirstPersonCardGestureState::Idle;
+	GestureInputSource = EWacomFirstPersonCardGestureInputSource::None;
+	bPreserveGestureReturnMotion = bHadGesture && SlotMotionConfig.bEnabled && bHasVisualSlotView;
 	GestureStartSlotView.Reset();
 	GestureOverrideTargetSlotView.Reset();
 	GestureFeedbackTargetHandle = FWacomInteractionTargetHandle();
@@ -1784,23 +1795,14 @@ bool UWacomFirstPersonCardLayerSlotWidget::BeginDragGestureFromFirstPersonLayer(
 	}
 
 	BeginGesturePress(GestureOriginPosition);
+	GestureInputSource = EWacomFirstPersonCardGestureInputSource::ExternalPointer;
 	CurrentGestureScreenPosition = InitialPointerPosition;
 	UpdatePointerViewportDiagnostics(InitialPointerPosition);
-	if (IsNoTargetDragCard())
+	if (!PromoteGestureToCardDrag(true))
 	{
-		SetGestureState(EWacomFirstPersonCardGestureState::DraggingNoTargetCard, true);
-	}
-	else if (IsTargetedAimCard())
-	{
-		SetGestureState(EWacomFirstPersonCardGestureState::AimingTargetedCard, true);
-	}
-	else
-	{
-		SetGestureState(EWacomFirstPersonCardGestureState::Cancelled, true);
 		return false;
 	}
 
-	UpdateGestureOverrideTarget();
 	UpdateGesture(0.0f, InitialPointerPosition);
 	return true;
 }

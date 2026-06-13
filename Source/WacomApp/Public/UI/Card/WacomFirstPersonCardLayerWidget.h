@@ -20,6 +20,57 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerDragNative, const
 DECLARE_MULTICAST_DELEGATE_OneParam(FWacomFirstPersonCardLayerPointerNative, const FWacomFirstPersonCardPointerView&);
 DECLARE_MULTICAST_DELEGATE(FWacomFirstPersonCardLayerPointerExitNative);
 
+enum class EWacomFirstPersonCardPointerRouteAction : uint8
+{
+	Unhandled,
+	Handled,
+	CaptureMouse,
+	ReleaseMouseCapture
+};
+
+struct FWacomFirstPersonCardPointerRouteResult
+{
+	EWacomFirstPersonCardPointerRouteAction Action =
+		EWacomFirstPersonCardPointerRouteAction::Unhandled;
+
+	constexpr FWacomFirstPersonCardPointerRouteResult() = default;
+
+	explicit constexpr FWacomFirstPersonCardPointerRouteResult(
+		EWacomFirstPersonCardPointerRouteAction InAction)
+		: Action(InAction)
+	{
+	}
+
+	bool IsHandled() const
+	{
+		return Action != EWacomFirstPersonCardPointerRouteAction::Unhandled;
+	}
+
+	static constexpr FWacomFirstPersonCardPointerRouteResult Unhandled()
+	{
+		return FWacomFirstPersonCardPointerRouteResult(
+			EWacomFirstPersonCardPointerRouteAction::Unhandled);
+	}
+
+	static constexpr FWacomFirstPersonCardPointerRouteResult Handled()
+	{
+		return FWacomFirstPersonCardPointerRouteResult(
+			EWacomFirstPersonCardPointerRouteAction::Handled);
+	}
+
+	static constexpr FWacomFirstPersonCardPointerRouteResult CaptureMouse()
+	{
+		return FWacomFirstPersonCardPointerRouteResult(
+			EWacomFirstPersonCardPointerRouteAction::CaptureMouse);
+	}
+
+	static constexpr FWacomFirstPersonCardPointerRouteResult ReleaseMouseCapture()
+	{
+		return FWacomFirstPersonCardPointerRouteResult(
+			EWacomFirstPersonCardPointerRouteAction::ReleaseMouseCapture);
+	}
+};
+
 struct FWacomFirstPersonCardLayerResolvedTransitionHint
 {
 	EWacomFirstPersonCardSlotTransitionKind TransitionKind = EWacomFirstPersonCardSlotTransitionKind::Default;
@@ -82,6 +133,8 @@ public:
 		const FGuid& CardInstanceId,
 		const TOptional<FVector2D>& InitialPointerWidgetPosition);
 	bool UpdateActiveDragPointerFromWidgetPosition(const FVector2D& WidgetPosition);
+	bool ReleaseActiveDragGestureFromWidgetPosition(const FVector2D& WidgetPosition);
+	bool ReleaseActiveDragGestureAtCurrentPointer();
 	bool IsCardDragGestureActive() const;
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
@@ -141,8 +194,18 @@ public:
 	bool HandleSlotPointerEnteredAtWidgetPositionForTest(
 		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
 		const FVector2D& WidgetPosition);
+	bool HandleSlotPointerMovedAtWidgetPositionForTest(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
+	EWacomFirstPersonCardPointerRouteAction HandleSlotPointerMovedRouteActionAtWidgetPositionForTest(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
 	bool RequestPressAtWidgetPositionForTest(const FVector2D& WidgetPosition);
+	EWacomFirstPersonCardPointerRouteAction RequestPressRouteActionAtWidgetPositionForTest(
+		const FVector2D& WidgetPosition);
 	bool RequestReleaseAtWidgetPositionForTest(const FVector2D& WidgetPosition);
+	EWacomFirstPersonCardPointerRouteAction RequestReleaseRouteActionAtWidgetPositionForTest(
+		const FVector2D& WidgetPosition);
 #endif
 
 	FWacomFirstPersonCardLayerInteractionNative OnCardHoveredNative;
@@ -263,11 +326,18 @@ private:
 	void HandleSlotDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	bool RoutePointerPressToActiveGesture(const FVector2D& WidgetPosition);
 	bool HandleSlotPointerEntered(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
 	void HandleSlotPointerLeft(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
-	bool HandleSlotPointerMoved(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
-	bool HandleSlotPointerPressed(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
-	bool HandleSlotPointerReleased(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
+	FWacomFirstPersonCardPointerRouteResult HandleSlotPointerMoved(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& ScreenPosition);
+	FWacomFirstPersonCardPointerRouteResult HandleSlotPointerPressed(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& ScreenPosition);
+	FWacomFirstPersonCardPointerRouteResult HandleSlotPointerReleased(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& ScreenPosition);
 	bool ResolveAbsoluteScreenPositionToWidgetPosition(const FVector2D& AbsoluteScreenPosition, FVector2D& OutWidgetPosition) const;
 	bool BroadcastCardPointerMovedFromWidgetPosition(const FVector2D& WidgetPosition);
 	void ClearCardPointerView(bool bBroadcastPointerLeft);
@@ -278,7 +348,14 @@ private:
 		bool bUseHoverHysteresis,
 		FWacomFirstPersonCardLayerSlotView* OutResolvedSlotView = nullptr) const;
 	bool UpdateHoveredSlotFromWidgetPosition(const FVector2D& WidgetPosition);
+	FWacomFirstPersonCardPointerRouteResult RouteSlotPointerMovedAtWidgetPosition(
+		const FVector2D& WidgetPosition);
+	FWacomFirstPersonCardPointerRouteResult RouteSlotPointerPressedAtWidgetPosition(
+		const FVector2D& WidgetPosition);
+	FWacomFirstPersonCardPointerRouteResult RouteSlotPointerReleasedAtWidgetPosition(
+		const FVector2D& WidgetPosition);
 	bool RoutePointerToActiveGestureSlot(const FVector2D& WidgetPosition);
+	bool RouteExternalPointerToActiveGestureSlot(const FVector2D& WidgetPosition);
 	void ClearHoveredSlotState(bool bBroadcastUnhover);
 	UWacomFirstPersonCardLayerSlotWidget* FindActiveGestureSlot() const;
 	bool TryResolveCardTargetUnderDragPointer(

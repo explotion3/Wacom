@@ -436,7 +436,42 @@ bool UWacomFirstPersonCardLayerWidget::TryStartCardDragGesture(
 bool UWacomFirstPersonCardLayerWidget::UpdateActiveDragPointerFromWidgetPosition(
 	const FVector2D& WidgetPosition)
 {
-	return RoutePointerToActiveGestureSlot(WidgetPosition);
+	return RouteExternalPointerToActiveGestureSlot(WidgetPosition);
+}
+
+bool UWacomFirstPersonCardLayerWidget::ReleaseActiveDragGestureFromWidgetPosition(
+	const FVector2D& WidgetPosition)
+{
+	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	if (!GestureSlot)
+	{
+		return false;
+	}
+
+	const bool bSuppressHoverAfterRelease = ShouldSuppressOrdinaryHoverForDrag();
+	const bool bReleased = GestureSlot->ReleaseGestureFromFirstPersonLayer(WidgetPosition);
+	PressedSlotWidget.Reset();
+	if (bSuppressHoverAfterRelease)
+	{
+		ClearHoveredSlotState(true);
+	}
+	else
+	{
+		UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	}
+	return bReleased;
+}
+
+bool UWacomFirstPersonCardLayerWidget::ReleaseActiveDragGestureAtCurrentPointer()
+{
+	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	if (!GestureSlot)
+	{
+		return false;
+	}
+
+	return ReleaseActiveDragGestureFromWidgetPosition(
+		GestureSlot->BuildDragView().CurrentScreenPosition);
 }
 
 bool UWacomFirstPersonCardLayerWidget::IsCardDragGestureActive() const
@@ -1084,47 +1119,49 @@ bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerEnteredAtWidgetPositionF
 	return UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
 }
 
+bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerMovedAtWidgetPositionForTest(
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& WidgetPosition)
+{
+	return HandleSlotPointerMovedRouteActionAtWidgetPositionForTest(SourceSlot, WidgetPosition)
+		!= EWacomFirstPersonCardPointerRouteAction::Unhandled;
+}
+
+EWacomFirstPersonCardPointerRouteAction
+UWacomFirstPersonCardLayerWidget::HandleSlotPointerMovedRouteActionAtWidgetPositionForTest(
+	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+	const FVector2D& WidgetPosition)
+{
+	(void)SourceSlot;
+	return RouteSlotPointerMovedAtWidgetPosition(WidgetPosition).Action;
+}
+
 bool UWacomFirstPersonCardLayerWidget::RequestPressAtWidgetPositionForTest(
 	const FVector2D& WidgetPosition)
 {
-	FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
-	UWacomFirstPersonCardLayerSlotWidget* TargetSlot = ResolveInteractiveSlotUnderPointer(
-		WidgetPosition,
-		FGuid(),
-		false,
-		false,
-		&ResolvedSlotView);
-	if (!TargetSlot)
-	{
-		return false;
-	}
+	return RequestPressRouteActionAtWidgetPositionForTest(WidgetPosition)
+		!= EWacomFirstPersonCardPointerRouteAction::Unhandled;
+}
 
-	UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
-	PressedSlotWidget = TargetSlot;
-	return TargetSlot->BeginGesturePressFromFirstPersonLayer(WidgetPosition);
+EWacomFirstPersonCardPointerRouteAction
+UWacomFirstPersonCardLayerWidget::RequestPressRouteActionAtWidgetPositionForTest(
+	const FVector2D& WidgetPosition)
+{
+	return RouteSlotPointerPressedAtWidgetPosition(WidgetPosition).Action;
 }
 
 bool UWacomFirstPersonCardLayerWidget::RequestReleaseAtWidgetPositionForTest(
 	const FVector2D& WidgetPosition)
 {
-	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
-	if (!GestureSlot)
-	{
-		return false;
-	}
+	return RequestReleaseRouteActionAtWidgetPositionForTest(WidgetPosition)
+		!= EWacomFirstPersonCardPointerRouteAction::Unhandled;
+}
 
-	const bool bSuppressHoverAfterRelease = ShouldSuppressOrdinaryHoverForDrag();
-	const bool bReleased = GestureSlot->ReleaseGestureFromFirstPersonLayer(WidgetPosition);
-	PressedSlotWidget.Reset();
-	if (bSuppressHoverAfterRelease)
-	{
-		ClearHoveredSlotState(true);
-	}
-	else
-	{
-		UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
-	}
-	return bReleased;
+EWacomFirstPersonCardPointerRouteAction
+UWacomFirstPersonCardLayerWidget::RequestReleaseRouteActionAtWidgetPositionForTest(
+	const FVector2D& WidgetPosition)
+{
+	return RouteSlotPointerReleasedAtWidgetPosition(WidgetPosition).Action;
 }
 #endif
 
@@ -2205,10 +2242,140 @@ bool UWacomFirstPersonCardLayerWidget::UpdateHoveredSlotFromWidgetPosition(const
 	return true;
 }
 
+FWacomFirstPersonCardPointerRouteResult
+UWacomFirstPersonCardLayerWidget::RouteSlotPointerMovedAtWidgetPosition(
+	const FVector2D& WidgetPosition)
+{
+	if (RoutePointerToActiveGestureSlot(WidgetPosition))
+	{
+		if (ShouldSuppressOrdinaryHoverForDrag())
+		{
+			ClearCardPointerView(true);
+			ClearHoveredSlotState(true);
+		}
+		return FWacomFirstPersonCardPointerRouteResult::Handled();
+	}
+
+	const bool bPointerStillOverCard = BroadcastCardPointerMovedFromWidgetPosition(WidgetPosition);
+	const bool bHoverHandled = UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	return bPointerStillOverCard || bHoverHandled
+		? FWacomFirstPersonCardPointerRouteResult::Handled()
+		: FWacomFirstPersonCardPointerRouteResult::Unhandled();
+}
+
+FWacomFirstPersonCardPointerRouteResult
+UWacomFirstPersonCardLayerWidget::RouteSlotPointerPressedAtWidgetPosition(
+	const FVector2D& WidgetPosition)
+{
+	if (RoutePointerPressToActiveGesture(WidgetPosition))
+	{
+		return FWacomFirstPersonCardPointerRouteResult::Handled();
+	}
+
+	FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
+	UWacomFirstPersonCardLayerSlotWidget* TargetSlot = ResolveInteractiveSlotUnderPointer(
+		WidgetPosition,
+		FGuid(),
+		false,
+		false,
+		&ResolvedSlotView);
+	if (!TargetSlot)
+	{
+		return FWacomFirstPersonCardPointerRouteResult::Unhandled();
+	}
+
+	UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	if (!TargetSlot->BeginGesturePressFromFirstPersonLayer(WidgetPosition))
+	{
+		return FWacomFirstPersonCardPointerRouteResult::Unhandled();
+	}
+
+	PressedSlotWidget = TargetSlot;
+	return FWacomFirstPersonCardPointerRouteResult::CaptureMouse();
+}
+
+FWacomFirstPersonCardPointerRouteResult
+UWacomFirstPersonCardLayerWidget::RouteSlotPointerReleasedAtWidgetPosition(
+	const FVector2D& WidgetPosition)
+{
+	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	if (!GestureSlot)
+	{
+		FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
+		GestureSlot = ResolveInteractiveSlotUnderPointer(
+			WidgetPosition,
+			FGuid(),
+			false,
+			false,
+			&ResolvedSlotView);
+	}
+	if (!GestureSlot)
+	{
+		return FWacomFirstPersonCardPointerRouteResult::Unhandled();
+	}
+
+	const bool bSuppressHoverAfterRelease = ShouldSuppressOrdinaryHoverForDrag();
+	if (!GestureSlot->ReleaseGestureFromFirstPersonLayer(WidgetPosition))
+	{
+		return FWacomFirstPersonCardPointerRouteResult::Unhandled();
+	}
+
+	PressedSlotWidget.Reset();
+	if (bSuppressHoverAfterRelease)
+	{
+		ClearHoveredSlotState(true);
+	}
+	else
+	{
+		UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	}
+	return FWacomFirstPersonCardPointerRouteResult::ReleaseMouseCapture();
+}
+
 bool UWacomFirstPersonCardLayerWidget::RoutePointerToActiveGestureSlot(const FVector2D& WidgetPosition)
 {
 	if (UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot())
 	{
+		if (!GestureSlot->CanUpdateGestureFromSlotPointer())
+		{
+			// External drags are positioned by the player-controller pointer pump.
+			return true;
+		}
+
+		GestureSlot->UpdateGestureFromFirstPersonLayer(0.0f, WidgetPosition);
+		return true;
+	}
+	return false;
+}
+
+bool UWacomFirstPersonCardLayerWidget::RoutePointerPressToActiveGesture(
+	const FVector2D& WidgetPosition)
+{
+	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	if (!GestureSlot)
+	{
+		return false;
+	}
+
+	GestureSlot->UpdateGestureFromFirstPersonLayer(0.0f, WidgetPosition);
+	if (ShouldSuppressOrdinaryHoverForDrag())
+	{
+		ClearCardPointerView(true);
+		ClearHoveredSlotState(true);
+	}
+	return true;
+}
+
+bool UWacomFirstPersonCardLayerWidget::RouteExternalPointerToActiveGestureSlot(
+	const FVector2D& WidgetPosition)
+{
+	if (UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot())
+	{
+		if (!GestureSlot->CanUpdateGestureFromExternalPointer())
+		{
+			return false;
+		}
+
 		GestureSlot->UpdateGestureFromFirstPersonLayer(0.0f, WidgetPosition);
 		return true;
 	}
@@ -2294,7 +2461,7 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotPointerLeft(
 	}
 }
 
-bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerMoved(
+FWacomFirstPersonCardPointerRouteResult UWacomFirstPersonCardLayerWidget::HandleSlotPointerMoved(
 	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
 	const FVector2D& ScreenPosition)
 {
@@ -2303,20 +2470,10 @@ bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerMoved(
 	{
 		WidgetPosition = SourceSlot.GetSlotView().ScreenPosition;
 	}
-	if (RoutePointerToActiveGestureSlot(WidgetPosition))
-	{
-		if (ShouldSuppressOrdinaryHoverForDrag())
-		{
-			ClearCardPointerView(true);
-			ClearHoveredSlotState(true);
-		}
-		return true;
-	}
-	BroadcastCardPointerMovedFromWidgetPosition(WidgetPosition);
-	return UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
+	return RouteSlotPointerMovedAtWidgetPosition(WidgetPosition);
 }
 
-bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerPressed(
+FWacomFirstPersonCardPointerRouteResult UWacomFirstPersonCardLayerWidget::HandleSlotPointerPressed(
 	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
 	const FVector2D& ScreenPosition)
 {
@@ -2325,25 +2482,10 @@ bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerPressed(
 	{
 		WidgetPosition = SourceSlot.GetSlotView().ScreenPosition;
 	}
-
-	FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
-	UWacomFirstPersonCardLayerSlotWidget* TargetSlot = ResolveInteractiveSlotUnderPointer(
-		WidgetPosition,
-		FGuid(),
-		false,
-		false,
-		&ResolvedSlotView);
-	if (!TargetSlot)
-	{
-		return false;
-	}
-
-	UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
-	PressedSlotWidget = TargetSlot;
-	return TargetSlot->BeginGesturePressFromFirstPersonLayer(WidgetPosition);
+	return RouteSlotPointerPressedAtWidgetPosition(WidgetPosition);
 }
 
-bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerReleased(
+FWacomFirstPersonCardPointerRouteResult UWacomFirstPersonCardLayerWidget::HandleSlotPointerReleased(
 	UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
 	const FVector2D& ScreenPosition)
 {
@@ -2352,35 +2494,7 @@ bool UWacomFirstPersonCardLayerWidget::HandleSlotPointerReleased(
 	{
 		WidgetPosition = SourceSlot.GetSlotView().ScreenPosition;
 	}
-
-	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
-	if (!GestureSlot)
-	{
-		FWacomFirstPersonCardLayerSlotView ResolvedSlotView;
-		GestureSlot = ResolveInteractiveSlotUnderPointer(
-			WidgetPosition,
-			FGuid(),
-			false,
-			false,
-			&ResolvedSlotView);
-	}
-	if (!GestureSlot)
-	{
-		return false;
-	}
-
-	const bool bSuppressHoverAfterRelease = ShouldSuppressOrdinaryHoverForDrag();
-	const bool bReleased = GestureSlot->ReleaseGestureFromFirstPersonLayer(WidgetPosition);
-	PressedSlotWidget.Reset();
-	if (bSuppressHoverAfterRelease)
-	{
-		ClearHoveredSlotState(true);
-	}
-	else
-	{
-		UpdateHoveredSlotFromWidgetPosition(WidgetPosition);
-	}
-	return bReleased;
+	return RouteSlotPointerReleasedAtWidgetPosition(WidgetPosition);
 }
 
 void UWacomFirstPersonCardLayerWidget::HandleSlotDragStarted(

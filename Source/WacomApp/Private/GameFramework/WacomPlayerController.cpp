@@ -44,6 +44,7 @@
 #include "UI/Run/WacomRunMenuCardLeaseTestMenu.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
+#include "Framework/Application/SlateApplication.h"
 
 #define LOCTEXT_NAMESPACE "WacomPlayerController"
 
@@ -486,6 +487,12 @@ void AWacomPlayerController::SetupInputComponent()
 
 bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
+	if (Params.Key == EKeys::LeftMouseButton
+		&& Params.Event == IE_Released
+		&& TryReleaseFirstPersonCardActiveDragPointer())
+	{
+		return true;
+	}
 	if (Params.Key == EKeys::LeftMouseButton
 		&& Params.Event == IE_Released
 		&& TryRouteBattleSceneTargetClick(/*bRequireTargetSelect*/true))
@@ -1656,8 +1663,54 @@ void AWacomPlayerController::PumpFirstPersonCardActiveDragPointer()
 	Anchor->UpdateFirstPersonCardDragPointer(MouseWidgetPosition);
 }
 
+bool AWacomPlayerController::TryReleaseFirstPersonCardActiveDragPointer()
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe();
+	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
+	{
+		return false;
+	}
+
+	FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
+	if (TryGetMouseWidgetPosition(MouseWidgetPosition))
+	{
+		Anchor->UpdateFirstPersonCardDragPointer(MouseWidgetPosition);
+		return Anchor->ReleaseFirstPersonCardDragGesture(MouseWidgetPosition);
+	}
+
+	return Anchor->ReleaseFirstPersonCardDragGestureAtCurrentPointer();
+}
+
+bool AWacomPlayerController::TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut()
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe();
+	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
+	{
+		return false;
+	}
+
+	Anchor->CancelFirstPersonCardDragGesture(true);
+	return true;
+}
+
 bool AWacomPlayerController::TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition)
 {
+	if (FSlateApplication::IsInitialized())
+	{
+		const FGeometry ViewportGeometry = UWidgetLayoutLibrary::GetViewportWidgetGeometry(this);
+		const FVector2D ViewportSize = ViewportGeometry.GetLocalSize();
+		if (ViewportSize.X > 0.0f && ViewportSize.Y > 0.0f)
+		{
+			const FVector2D MouseWidgetPosition =
+				ViewportGeometry.AbsoluteToLocal(FSlateApplication::Get().GetCursorPos());
+			if (!MouseWidgetPosition.ContainsNaN())
+			{
+				OutWidgetPosition = MouseWidgetPosition;
+				return true;
+			}
+		}
+	}
+
 	float MouseX = 0.0f;
 	float MouseY = 0.0f;
 	if (!GetMousePosition(MouseX, MouseY))
@@ -2515,11 +2568,21 @@ void AWacomPlayerController::OnPlayCard7() { RouteHandIndex(7); }
 
 void AWacomPlayerController::OnWaitPressed()
 {
+	if (TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut())
+	{
+		return;
+	}
+
 	if (UBattleHUD* HUD = GetActiveBattleHUD()) { HUD->OnWaitRequested(); }
 }
 
 void AWacomPlayerController::OnEndTurnPressed()
 {
+	if (TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut())
+	{
+		return;
+	}
+
 	if (UBattleHUD* HUD = GetActiveBattleHUD()) { HUD->OnEndTurnRequested(); }
 }
 

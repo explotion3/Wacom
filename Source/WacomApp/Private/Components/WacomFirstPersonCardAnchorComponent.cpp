@@ -1123,6 +1123,21 @@ FWacomFirstPersonCardAnchorAutomationTestView UWacomFirstPersonCardAnchorCompone
 	return View;
 }
 
+void UWacomFirstPersonCardAnchorComponent::SetCardLayerWidgetForTest(
+	UWacomFirstPersonCardLayerWidget* LayerWidget)
+{
+	if (CardLayerWidget && CardLayerDelegateRouter)
+	{
+		CardLayerDelegateRouter->Unbind(CardLayerWidget);
+	}
+
+	CardLayerWidget = LayerWidget;
+	if (CardLayerWidget && CardLayerDelegateRouter)
+	{
+		CardLayerDelegateRouter->Bind(CardLayerWidget);
+	}
+}
+
 void UWacomFirstPersonCardAnchorComponent::SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId)
 {
 	if (RuntimeState)
@@ -1775,6 +1790,19 @@ bool UWacomFirstPersonCardAnchorComponent::UpdateFirstPersonCardDragPointer(
 {
 	return CardLayerWidget
 		&& CardLayerWidget->UpdateActiveDragPointerFromWidgetPosition(WidgetPosition);
+}
+
+bool UWacomFirstPersonCardAnchorComponent::ReleaseFirstPersonCardDragGesture(
+	const FVector2D& WidgetPosition)
+{
+	return CardLayerWidget
+		&& CardLayerWidget->ReleaseActiveDragGestureFromWidgetPosition(WidgetPosition);
+}
+
+bool UWacomFirstPersonCardAnchorComponent::ReleaseFirstPersonCardDragGestureAtCurrentPointer()
+{
+	return CardLayerWidget
+		&& CardLayerWidget->ReleaseActiveDragGestureAtCurrentPointer();
 }
 
 bool UWacomFirstPersonCardAnchorComponent::IsFirstPersonCardDragGestureActive() const

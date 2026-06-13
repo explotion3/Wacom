@@ -32,6 +32,8 @@ struct FWacomBattleSceneTargetClickTestAccess
 		FWacomInteractionTargetHandle& OutHandle);
 	static bool InputRightMousePressed(AWacomBattleSceneClickRouterPlayerControllerTest* PC);
 	static bool InputLeftMouseReleased(AWacomBattleSceneClickRouterPlayerControllerTest* PC);
+	static void PressWaitShortcut(AWacomBattleSceneClickRouterPlayerControllerTest* PC);
+	static void PressEndTurnShortcut(AWacomBattleSceneClickRouterPlayerControllerTest* PC);
 };
 
 #endif

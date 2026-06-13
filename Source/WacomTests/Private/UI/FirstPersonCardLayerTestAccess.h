@@ -30,6 +30,9 @@ struct FWacomFirstPersonCardLayerTestAccess
 
 	static UWacomFirstPersonCardLayerWidget* CardLayer(
 		const UWacomFirstPersonCardAnchorComponent& Anchor);
+	static void SetCardLayer(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		UWacomFirstPersonCardLayerWidget* Layer);
 	static void SetHoveredCardInstanceId(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		const FGuid& CardInstanceId);
@@ -53,10 +56,24 @@ struct FWacomFirstPersonCardLayerTestAccess
 		UWacomFirstPersonCardLayerWidget& Layer,
 		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
 		const FVector2D& WidgetPosition);
+	static bool HandleSlotPointerMovedAtWidgetPosition(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
+	static EWacomFirstPersonCardPointerRouteAction HandleSlotPointerMovedRouteActionAtWidgetPosition(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
 	static bool RequestPressAtWidgetPosition(
 		UWacomFirstPersonCardLayerWidget& Layer,
 		const FVector2D& WidgetPosition);
+	static EWacomFirstPersonCardPointerRouteAction RequestPressRouteActionAtWidgetPosition(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FVector2D& WidgetPosition);
 	static bool RequestReleaseAtWidgetPosition(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FVector2D& WidgetPosition);
+	static EWacomFirstPersonCardPointerRouteAction RequestReleaseRouteActionAtWidgetPosition(
 		UWacomFirstPersonCardLayerWidget& Layer,
 		const FVector2D& WidgetPosition);
 

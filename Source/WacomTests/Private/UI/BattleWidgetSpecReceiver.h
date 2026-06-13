@@ -102,6 +102,16 @@ private:
 		return InputKey(Args);
 	}
 
+	void PressWaitShortcutForTest()
+	{
+		OnWaitPressed();
+	}
+
+	void PressEndTurnShortcutForTest()
+	{
+		OnEndTurnPressed();
+	}
+
 protected:
 	virtual bool CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const override
 	{

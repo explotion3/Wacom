@@ -597,6 +597,8 @@ public:
 		const FGuid& CardInstanceId,
 		const TOptional<FVector2D>& InitialPointerWidgetPosition);
 	bool UpdateFirstPersonCardDragPointer(const FVector2D& WidgetPosition);
+	bool ReleaseFirstPersonCardDragGesture(const FVector2D& WidgetPosition);
+	bool ReleaseFirstPersonCardDragGestureAtCurrentPointer();
 	bool IsFirstPersonCardDragGestureActive() const;
 
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardHovered;
@@ -617,6 +619,7 @@ public:
 
 #if WITH_AUTOMATION_TESTS
 	FWacomFirstPersonCardAnchorAutomationTestView GetAutomationTestViewForTest() const;
+	void SetCardLayerWidgetForTest(UWacomFirstPersonCardLayerWidget* LayerWidget);
 	void SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId);
 	void ResetAnchorScreenSmoothingForTest() { ResetAnchorScreenSmoothing(); }
 #endif

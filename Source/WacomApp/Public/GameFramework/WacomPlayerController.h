@@ -365,6 +365,8 @@ private:
 	void RefreshRunFirstPersonCardLayerMenuSuppression();
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
 	void PumpFirstPersonCardActiveDragPointer();
+	bool TryReleaseFirstPersonCardActiveDragPointer();
+	bool TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut();
 	bool TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
 	UWacomRunTunnelMovementComponent* ResolveRunTunnelMovementForCardDragLook() const;

@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-06-12
+updated: 2026-06-13
 tags:
   - wacom/ui
   - wacom/cards
@@ -164,13 +164,21 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 
 快捷键 `1~7` 进入拖拽时使用双位置初始化：`PressScreenPosition` 固定为被选中卡牌的基础手牌位置，`CurrentScreenPosition / PointerViewportPosition` 使用 PlayerController 读取到的当前鼠标 widget-space 坐标；没有鼠标坐标时才退回卡牌自身位置。`CurrentPointerView` 只表示普通 hover / pointer view，不作为快捷键拖拽启动坐标来源，避免鼠标悬浮在 B 卡时按 A 卡快捷键却串用 B 的旧 pointer。
 
-快捷键拖拽启动后，`AWacomPlayerController` 每帧执行 active-drag pointer pump：如果当前 Anchor 的 first-person card layer 存在 active gesture，就读取真实鼠标位置，按 `UWidgetLayoutLibrary::GetViewportScale()` 转成 DPI-aware widget-space，再调用 `UpdateFirstPersonCardDragPointer()` 喂给 Layer。Layer 继续复用 active gesture slot 的 `UpdateGesture()` 链路刷新 `DragView`、aim arrow、card target probe 和上层 camera look override。没有 active gesture 或读取不到鼠标位置时 pump 为 no-op，不会改变普通 hover / pointer view。
+快捷键拖拽启动后，`AWacomPlayerController` 每帧执行 active-drag pointer pump：如果当前 Anchor 的 first-person card layer 存在 active gesture，就优先通过 Slate viewport geometry 读取全局 cursor 在 viewport 内的 widget-space 坐标；如果 Slate viewport geometry 不可用，再退回 `GetMousePosition()` + `UWidgetLayoutLibrary::GetViewportScale()` 的 PlayerController 路径。随后调用 `UpdateFirstPersonCardDragPointer()` 喂给 Layer。Layer 继续复用 active gesture slot 的 `UpdateGesture()` 链路刷新 `DragView`、aim arrow、card target probe 和上层 camera look override。没有 active gesture 或读取不到鼠标位置时 pump 为 no-op，不会改变普通 hover / pointer view。左键 release 时，PlayerController 会先尝试释放 active first-person drag：能读取鼠标坐标时先 pump 到最新位置再 release，读取不到时使用 DragView 当前指针位置 release；只有没有 active drag 时，左键 release 才继续走 Battle scene click、Run tunnel branch 或 Run world interactable click 路由。
+
+Battle 回合边界快捷键 `IA_Wait` / `IA_EndTurn` 在 PlayerController 入口先检查 first-person card layer active gesture。只要当前手势不是 `Idle` / `Cancelled`（包括 pressed、inspect、no-target drag、targeted aim、armed commit），本次快捷键会取消并消费该手势，不向 BattleHUD 提交等待或结束回合；下一次按键才按普通命令入口执行。取消后源卡保留当前 visual slot，并继续用 slot motion 返回手牌布局，不触发普通布局大跳变 reset。单纯 hover 不属于 active gesture，不会阻塞等待或结束回合。
 
 需要敌方部位目标的卡 release 到合法 world enemy part 后，BattleHUD 调用现有 play-card world target 路径。需要手牌目标的卡 release 到合法 first-person card target 后，BattleHUD 提交 hand-card target。UI 手势层只提交 target identity，不判断加费、减费、弃置或消耗规则。
 
 悬浮和拖拽期间，卡牌层都会记录 DPI-aware widget-space 指针和归一化视口坐标。普通 hover 的 mouse move 被 UMG 处理后，`UWacomFirstPersonCardLayerWidget` 会广播 `FWacomFirstPersonCardPointerView`，由 BattleHUD 写入 Battle camera look 临时 override，探索 / Run 则由 `AWacomPlayerController` 写入 Run Tunnel cursor look override。因此鼠标在悬浮放大的卡牌上移动时，镜头仍会跟随当前指针，不会等离开卡牌后突然跳到新位置。
 
-拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。SlotWidget mouse capture 是鼠标按下拖拽的输入来源，但不是 active drag 的唯一更新来源；快捷键拖拽和鼠标拖拽都会汇合到 Layer active gesture 更新入口，因此鼠标离开 SlotWidget 后，拖拽箭头和镜头仍由 PlayerController pointer pump 持续更新。拖拽镜头旧参数 `bAllowCameraLookDuringCardDrag`、`CardDragCameraLookScale`、`CardDragCameraLookInterpSpeedOverride` 继续只控制 drag override，保持既有资产兼容；hover / pointer 通用路径使用 `bAllowCameraLookDuringCardPointer`、`CardPointerCameraLookScale`、`CardPointerCameraLookInterpSpeedOverride`。这些 camera look 参数当前推荐在 AnchorComponent Details 的 `12 Camera Look While UI` 分类中调整。拖拽 active 时会清空并压制普通 pointer view，避免 hover override 与 drag override 抢同一个 camera look 状态。
+拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。SlotWidget mouse capture 是鼠标按下拖拽的输入来源，但不是 active drag 的唯一更新来源；快捷键拖拽和鼠标拖拽都会汇合到 Layer active gesture 更新入口，因此鼠标离开 SlotWidget 后，拖拽箭头和镜头仍由 PlayerController pointer pump 持续更新。快捷键启动的 external drag 以 PlayerController pointer pump 为唯一位置写入来源；进入或经过 SlotWidget 时，SlotWidget pointer enter / move 只消费事件并压制普通 hover，不改写 `CurrentScreenPosition / PointerViewportPosition`。拖拽镜头旧参数 `bAllowCameraLookDuringCardDrag`、`CardDragCameraLookScale`、`CardDragCameraLookInterpSpeedOverride` 继续只控制 drag override，保持既有资产兼容；hover / pointer 通用路径使用 `bAllowCameraLookDuringCardPointer`、`CardPointerCameraLookScale`、`CardPointerCameraLookInterpSpeedOverride`。这些 camera look 参数当前推荐在 AnchorComponent Details 的 `12 Camera Look While UI` 分类中调整。拖拽 active 时会清空并压制普通 pointer view，避免 hover override 与 drag override 抢同一个 camera look 状态。
+
+Layer pointer arbitration 是 first-person hand 输入的正式入口。`UWacomFirstPersonCardLayerSlotWidget` 的 Slate mouse down / move / up 只把 pointer 事件转交给 `UWacomFirstPersonCardLayerWidget`，再按 Layer 返回的 route action 映射成 `Unhandled`、`Handled`、`CaptureMouse` 或 `ReleaseMouseCapture`；没有 Owner Layer 的 hand Slot 不再自管 press / drag / release 生命周期。`PressedSlotWidget` 只在没有 active gesture 且 press 成功开启新手势时写入。已有 active gesture 时，release 永远优先释放当前 gesture；mouse-origin drag 的 slot move 可以写入 pointer，external-origin drag 的 slot move 只消费并压制普通 hover，external pointer 只能由 PlayerController pump 写入。external drag 下点击目标手牌时，slot press 只更新当前源卡 drag pointer / card target，不抢占 pressed slot，也不重新开启目标卡手势。
+
+鼠标拖拽和快捷键拖拽进入 active drag 时共用 SlotWidget 内部的 card-drag promotion 路径。`GestureInputSource` 只决定后续 pointer 坐标由 SlotWidget mouse move 还是 PlayerController pointer pump 写入，不决定源卡进入拖拽时的 presentation 逻辑。无目标卡的 `CurrentScreenPosition / PointerViewportPosition` 会立即更新，用于提交距离、DragView 和 release；源卡视觉位置不再直接 snap 到 pointer，而是以同一套 slot motion 追踪 drag override，并在拖拽 override 中把源卡角度归零，不继承手牌扇形角度。需要目标的卡牌仍保持 aim arrow 端点立即跟随真实 pointer。
+
+快捷键启动的 external drag 没有真实鼠标按住状态，因此鼠标点击目标手牌时，目标 SlotWidget 的 mouse down 不能重新占有 `PressedSlotWidget` 或开始目标卡的新 press。Layer 在已有 active gesture 时会把这次 pointer press 作为当前 drag 的最终指针更新并消费事件，随后 mouse up 释放的仍是原来的源卡；这样 `HandCard` 目标卡牌可以通过“快捷键进入拖拽 -> 点击另一张手牌”完成 card-to-card release，和普通鼠标拖拽到目标卡后松开左键得到一致提交语义。
 
 Hover 输入命中与最终视觉几何分离。Anchor 先投影并平滑整副手牌中心，随后把 resolved config、投影点、viewport size 和 runtime state 交给私有 `FWacomFirstPersonCardSlotLayoutBuilder`。Builder 只写入基础布局、基础 `RenderScale / RenderOpacity / RenderAngleDegrees / ZOrder`、稳定输入几何 `InputHitCenter / InputHitScale / InputHitAngleDegrees / InputHitOrder`，以及 `bIsHovered`、`bHasPendingTargetingCardInHand`、`Entry.bIsPendingTargeting` 等状态标记。Hover lift / scale / ZOrder、pending lift / scale / angle / ZOrder、target-select deemphasis 和 drag card-target focus 统一由 `UWacomFirstPersonCardLayerSlotWidget` 的 presentation resolver 合成。悬浮卡仍然可以放大、抬升并绘制在上层，但鼠标命中哪张牌由 `UWacomFirstPersonCardLayerWidget` 使用基础几何统一解析，不再由被 Slate 命中的单个 slot 自行决定。
 
