@@ -454,6 +454,7 @@ bool UWacomFirstPersonCardLayerWidget::ReleaseActiveDragGestureFromWidgetPositio
 	if (bSuppressHoverAfterRelease)
 	{
 		ClearHoveredSlotState(true);
+		BroadcastCardPointerMovedFromWidgetPosition(WidgetPosition);
 	}
 	else
 	{
@@ -2324,6 +2325,7 @@ UWacomFirstPersonCardLayerWidget::RouteSlotPointerReleasedAtWidgetPosition(
 	if (bSuppressHoverAfterRelease)
 	{
 		ClearHoveredSlotState(true);
+		BroadcastCardPointerMovedFromWidgetPosition(WidgetPosition);
 	}
 	else
 	{

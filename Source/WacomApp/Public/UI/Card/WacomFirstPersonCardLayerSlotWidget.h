@@ -38,6 +38,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bInteractionFeedbackUsesOverrideMaterial = false;
 	bool bInteractionFeedbackUsesBrushMaterial = false;
 	bool bInteractionFeedbackLayerAboveFeedbackOverlay = false;
+	EWacomFirstPersonCardGestureSource GestureSource = EWacomFirstPersonCardGestureSource::None;
 	bool bPressed = false;
 	bool bDenyFeedbackActive = false;
 	bool bConfirmFeedbackActive = false;
@@ -228,6 +229,7 @@ private:
 	FString SlotMotionKey;
 	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
 	EWacomFirstPersonCardGestureState GestureState = EWacomFirstPersonCardGestureState::Idle;
+	EWacomFirstPersonCardGestureSource GestureSource = EWacomFirstPersonCardGestureSource::None;
 	EWacomFirstPersonCardGestureInputSource GestureInputSource = EWacomFirstPersonCardGestureInputSource::None;
 	TOptional<FWacomFirstPersonCardLayerSlotView> GestureStartSlotView;
 	TOptional<FWacomFirstPersonCardLayerSlotView> GestureOverrideTargetSlotView;
@@ -314,7 +316,10 @@ private:
 	bool IsLocalPositionInsideCardBody(const FVector2D& LocalPosition) const;
 	void UpdateBodyHoverFromScreenPosition(const FVector2D& ScreenPosition);
 	void UpdateBodyHoverFromLocalPosition(const FVector2D& LocalPosition);
-	void BeginGesturePress(const FVector2D& ScreenPosition);
+	void BeginGesturePress(
+		const FVector2D& ScreenPosition,
+		EWacomFirstPersonCardGestureSource Source,
+		EWacomFirstPersonCardGestureInputSource InputSource);
 	void UpdateGesture(float DeltaTime, const FVector2D& ScreenPosition);
 	bool ReleaseGesture(const FVector2D& ScreenPosition);
 	bool PromoteGestureToCardDrag(bool bBroadcastStartOrCancel);

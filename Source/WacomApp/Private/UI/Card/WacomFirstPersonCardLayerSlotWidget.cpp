@@ -1460,7 +1460,10 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateBodyHoverFromLocalPosition(cons
 	SetHoveredForFirstPersonLayer(CanInteractWithCurrentSlot() && IsLocalPositionInsideCardBody(LocalPosition));
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::BeginGesturePress(const FVector2D& ScreenPosition)
+void UWacomFirstPersonCardLayerSlotWidget::BeginGesturePress(
+	const FVector2D& ScreenPosition,
+	EWacomFirstPersonCardGestureSource Source,
+	EWacomFirstPersonCardGestureInputSource InputSource)
 {
 	if (!CanInteractWithCurrentSlot())
 	{
@@ -1468,7 +1471,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginGesturePress(const FVector2D& Sc
 	}
 
 	ClearGestureState(false);
-	GestureInputSource = EWacomFirstPersonCardGestureInputSource::MousePointer;
+	GestureSource = Source;
+	GestureInputSource = InputSource;
 	GestureStartSlotView = CurrentSlotView;
 	PressScreenPosition = ScreenPosition;
 	CurrentGestureScreenPosition = ScreenPosition;
@@ -1664,6 +1668,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearGestureState(bool bBroadcastCanc
 	}
 
 	GestureState = EWacomFirstPersonCardGestureState::Idle;
+	GestureSource = EWacomFirstPersonCardGestureSource::None;
 	GestureInputSource = EWacomFirstPersonCardGestureInputSource::None;
 	bPreserveGestureReturnMotion = bHadGesture && SlotMotionConfig.bEnabled && bHasVisualSlotView;
 	GestureStartSlotView.Reset();
@@ -1747,6 +1752,7 @@ FWacomFirstPersonCardDragView UWacomFirstPersonCardLayerSlotWidget::BuildDragVie
 {
 	FWacomFirstPersonCardDragView View;
 	View.GestureState = GestureState;
+	View.GestureSource = GestureSource;
 	View.CardInstanceId = CurrentSlotView.Entry.CardInstanceId;
 	View.SourceSlotView = bHasVisualSlotView ? VisualSlotView : CurrentSlotView;
 	View.SourceSlotView.GestureState = GestureState;
@@ -1776,7 +1782,10 @@ bool UWacomFirstPersonCardLayerSlotWidget::BeginGesturePressFromFirstPersonLayer
 		return false;
 	}
 
-	BeginGesturePress(WidgetPosition);
+	BeginGesturePress(
+		WidgetPosition,
+		EWacomFirstPersonCardGestureSource::MousePress,
+		EWacomFirstPersonCardGestureInputSource::MousePointer);
 	return true;
 }
 
@@ -1794,8 +1803,10 @@ bool UWacomFirstPersonCardLayerSlotWidget::BeginDragGestureFromFirstPersonLayer(
 		return false;
 	}
 
-	BeginGesturePress(GestureOriginPosition);
-	GestureInputSource = EWacomFirstPersonCardGestureInputSource::ExternalPointer;
+	BeginGesturePress(
+		GestureOriginPosition,
+		EWacomFirstPersonCardGestureSource::KeyboardShortcut,
+		EWacomFirstPersonCardGestureInputSource::ExternalPointer);
 	CurrentGestureScreenPosition = InitialPointerPosition;
 	UpdatePointerViewportDiagnostics(InitialPointerPosition);
 	if (!PromoteGestureToCardDrag(true))
@@ -1878,6 +1889,7 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 		View.bInteractionFeedbackLayerAboveFeedbackOverlay =
 			CardViewTestView.bInteractionFeedbackLayerAboveFeedbackOverlay;
 	}
+	View.GestureSource = GestureSource;
 	View.bPressed = bIsPressedForFirstPersonLayer;
 	View.bDenyFeedbackActive = DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
 	View.bConfirmFeedbackActive = ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration;
@@ -1939,7 +1951,10 @@ bool UWacomFirstPersonCardLayerSlotWidget::RequestPressAtLocalPositionForTest(co
 	}
 
 	const FVector2D PressPosition = bHasVisualSlotView ? VisualSlotView.ScreenPosition : CurrentSlotView.ScreenPosition;
-	BeginGesturePress(PressPosition);
+	BeginGesturePress(
+		PressPosition,
+		EWacomFirstPersonCardGestureSource::MousePress,
+		EWacomFirstPersonCardGestureInputSource::MousePointer);
 	return true;
 }
 
@@ -1998,7 +2013,10 @@ bool UWacomFirstPersonCardLayerSlotWidget::RequestGesturePressForTest(const FVec
 		return false;
 	}
 
-	BeginGesturePress(ScreenPosition);
+	BeginGesturePress(
+		ScreenPosition,
+		EWacomFirstPersonCardGestureSource::MousePress,
+		EWacomFirstPersonCardGestureInputSource::MousePointer);
 	return true;
 }
 

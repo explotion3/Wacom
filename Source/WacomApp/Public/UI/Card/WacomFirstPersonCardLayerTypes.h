@@ -69,6 +69,13 @@ enum class EWacomFirstPersonCardGestureState : uint8
 	Cancelled UMETA(DisplayName = "Cancelled")
 };
 
+enum class EWacomFirstPersonCardGestureSource : uint8
+{
+	None,
+	MousePress,
+	KeyboardShortcut
+};
+
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardDragTargetFeedbackState : uint8
 {
@@ -617,6 +624,8 @@ struct WACOMAPP_API FWacomFirstPersonCardDragView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	EWacomFirstPersonCardGestureState GestureState = EWacomFirstPersonCardGestureState::Idle;
+
+	EWacomFirstPersonCardGestureSource GestureSource = EWacomFirstPersonCardGestureSource::None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	FGuid CardInstanceId;
