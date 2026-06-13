@@ -13,6 +13,8 @@
 #include "GameFramework/PlayerController.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomFirstPersonViewpointActor.h"
+#include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -871,6 +873,24 @@ void ABattleTriggerActor::BuildBattleSceneEnemyHosts(
 		Host->RefreshBattleEnemyPartAuthoringState();
 		OutSceneEnemyHosts.AddUnique(Host);
 	}
+}
+
+bool ABattleTriggerActor::TryBuildBattleEntryViewStageRequest(
+	FWacomFirstPersonViewStageRequest& OutRequest) const
+{
+	OutRequest = FWacomFirstPersonViewStageRequest();
+	if (!BattleEntryViewpoint)
+	{
+		return false;
+	}
+
+	OutRequest.bHasViewTransform = true;
+	OutRequest.ViewTransform = BattleEntryViewpoint->GetActorTransform();
+	OutRequest.Reason = FName(TEXT("BattleEntry"));
+	OutRequest.DebugSource = PersistentId.IsNone()
+		? FName(*GetName())
+		: PersistentId;
+	return true;
 }
 
 void ABattleTriggerActor::RefreshClickTargetBinding()

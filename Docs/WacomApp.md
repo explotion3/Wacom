@@ -81,7 +81,7 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 `AWacomPlayerCharacter` 是第一人称探索 Pawn：
 
 - 持有 Camera、CharacterMovement、Run Tunnel movement、cursor look driver、Battle camera look 和 `UWacomFirstPersonCardAnchorComponent`。
-- 探索期由 Run Tunnel movement 消费移动输入；战斗时 suspend Run Tunnel，不 UnPossess，不移动 Pawn。
+- 探索期由 Run Tunnel movement 消费移动输入；战斗时 suspend Run Tunnel，不 UnPossess。若 BattleTrigger 配置了 battle entry viewpoint，进入战斗时会构造 `FirstPersonViewStageRequest`，并把 Pawn 临时移动到该第一人称镜头站位。
 - 战斗期启用 Battle camera look，在战斗 base rotation 上叠加共享 cursor look offset。
 - first-person anchor 只负责给 HUD / card layer 提供稳定锚点；projection/layout 细节见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
@@ -176,7 +176,7 @@ GameMode 进入战斗时：
 
 1. 设置 `EGameFlowState::Battle`。
 2. 清理探索期 Run first-person BattleDeck source 和 active menu lease。
-3. Suspend PlayerCharacter 的 Run Tunnel 探索移动，并启用 Battle camera look。
+3. Suspend PlayerCharacter 的 Run Tunnel 探索移动；若 Trigger 配置了 battle entry viewpoint，则先把第一人称摄像机 View Pose 对齐到该站位，再启用 Battle camera look。
 4. 由 Trigger 的 `EncounterDefinition` 构造敌人槽，并由 RunSession 补齐撤离重入进度。
 5. 创建 / 初始化 `UBattleSession`。
 6. 通过 UIManager Push `UBattleHUD` 到 Game 层。
@@ -184,6 +184,8 @@ GameMode 进入战斗时：
 8. 记录触发战斗的 Trigger Actor，并把 Trigger 的 `SceneEnemyHostSlots` 映射传给 BattleHUD 场景目标 registry。
 
 敌人入口只走 `EncounterDefinition + SceneEnemyHostSlots`。`EncounterDefinition.EnemySlots` 负责规则敌人槽，`SceneEnemyHostSlots` 负责 `EnemySlotId -> SceneEnemyHost` 的场景表现绑定；缺 Host、漏 slot 或多余 slot 会被编辑器验证阻止。场景敌人点击、hover 和拖卡目标路由只认当前 BattleHUD registry 中的 `EncounterId + EnemySlotId + PartSlotId`，不通过 Actor 名称、单 Host 缓存或旧第一敌人入口推断身份。
+
+Battle entry viewpoint 是 `WacomApp` 的场景 / 镜头编排能力，不属于 `WacomRun` 或 `WacomBattle` 规则。关卡中可摆放 `AWacomFirstPersonViewpointActor`，并在 `ABattleTriggerActor.BattleEntryViewpoint` 引用它；该 Actor 的 transform 表示第一人称摄像机 View Pose，不是玩家 Capsule/root 位置。场景入口不直接操作 Pawn transform，而是先构造 `FWacomFirstPersonViewStageRequest`；BattleTrigger 是第一个 request producer，GameMode 是当前 request consumer。进入战斗时 GameMode 会先 suspend Run Tunnel，再按 request 的 View Pose 和摄像机相对偏移反推 Pawn root / Controller rotation，最后激活 Battle camera look，让 battle base rotation 捕获 staged view。未配置 viewpoint 时保持旧行为，从当前探索位置进入战斗。第一版只做 instant snap，不做 blend、输入锁定或 Level Sequence。
 
 ### ExitBattle
 
@@ -205,6 +207,8 @@ GameMode 退出战斗时：
 8. 非 Undetermined 战斗结束后消耗 1 节点。
 
 退出战斗回到 Exploration 后，PlayerController 会重新激活并刷新 `UWacomRunFirstPersonCardSourceComponent`，让 first-person card layer 再次显示当前 Run BattleDeck。这个刷新只读 Run snapshot，不提交 Run 命令。
+
+若进入战斗时使用了 battle entry viewpoint，退出战斗不保存该临时站位。`ResumeRunTunnel()` 会重新应用进入战斗前保留的 Segment / Distance，把 Pawn 和 Controller rotation 恢复到 Run Tunnel 样条进度。
 
 `UBattleHUD::NativeDestruct()` 可能在 Run first-person source 恢复之后才执行。BattleHUD 清理 first-person hand 时只允许清自己写入的 `BattleHand` runtime source；如果 Anchor 已经显示 `RunFirstPersonBattleDeck` 或 menu lease，只能解绑 BattleHUD delegate 和清战斗预览，不能关闭 Anchor 的 first-person card interaction。否则会出现回到 Exploration 后卡牌仍可见但无法拖拽 / 使用。
 

@@ -12,6 +12,7 @@
 #include "Session/BattleSession.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Camera/WacomFirstPersonViewpointPlacement.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -420,6 +421,14 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	if (AWacomPlayerCharacter* Pawn = PC->GetPawn<AWacomPlayerCharacter>())
 	{
 		Pawn->SetExplorationInputEnabled(false);
+		FWacomFirstPersonViewStageRequest BattleEntryStageRequest;
+		if (Trigger->TryBuildBattleEntryViewStageRequest(BattleEntryStageRequest))
+		{
+			WacomFirstPersonViewpointPlacement::ApplyStageRequest(
+				*Pawn,
+				*PC,
+				BattleEntryStageRequest);
+		}
 		if (UWacomBattleCameraLookComponent* BattleCameraLook = Pawn->GetBattleCameraLookComponent())
 		{
 			BattleCameraLook->ActivateBattleCameraLook();

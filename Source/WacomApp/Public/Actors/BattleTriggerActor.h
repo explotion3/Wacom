@@ -17,6 +17,8 @@ class UEnemyDefinition;
 class UWacomInteractionTargetComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class AWacomBattleEnemyActor;
+class AWacomFirstPersonViewpointActor;
+struct FWacomFirstPersonViewStageRequest;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleSceneEnemyHostSlot
@@ -167,6 +169,11 @@ public:
 			ClampMin = "50.0", UIMin = "50.0", UIMax = "1000.0"))
 	float TriggerRadius = 200.f;
 
+	/** 进入战斗时使用的可选第一人称镜头站位。Actor Transform 表示摄像机 View Pose，不是玩家 Capsule/root 位置。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Camera",
+		meta = (ToolTip = "进入战斗时使用的可选第一人称镜头站位。Actor Transform 表示摄像机 View Pose，不是玩家 Capsule/root 位置；未配置时保持当前探索位置进入战斗。"))
+	TObjectPtr<AWacomFirstPersonViewpointActor> BattleEntryViewpoint = nullptr;
+
 	/** 鼠标指向 ClickBounds 时探索 HUD 上显示的点击提示文本。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Click",
 		meta = (ToolTip = "鼠标指向战斗触发器点击命中体时显示的提示文本。只影响 hover 提示；点击后仍走 IWacomWorldInteractable。"))
@@ -231,6 +238,9 @@ public:
 
 	/** 返回本 Trigger 进入战斗时应绑定到 BattleHUD 的场景敌人 Host 列表，顺序跟随 EncounterDefinition.EnemySlots。 */
 	void BuildBattleSceneEnemyHosts(TArray<AWacomBattleEnemyActor*>& OutSceneEnemyHosts) const;
+
+	/** 构造进入战斗时应使用的第一人称镜头站位请求；未配置时返回 false。 */
+	bool TryBuildBattleEntryViewStageRequest(FWacomFirstPersonViewStageRequest& OutRequest) const;
 
 	// ---- IWacomWorldInteractable ----
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* PC) const override;
