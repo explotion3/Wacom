@@ -559,6 +559,7 @@ public:
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
 	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);
 	void ClearRuntimeCardLayerData(FName SourceId);
+	void ClearCardLayerVisualState();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|99 Debug")
 	bool HasRuntimeCardLayerData() const;

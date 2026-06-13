@@ -9,6 +9,7 @@
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomCursorLookDriverComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Components/WacomFirstPersonViewStageBlendComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
 #include "Cards/CardDefinition.h"
 #include "Components/StaticMeshComponent.h"
@@ -618,6 +619,83 @@ bool FWacomFirstPersonCardLayerRunTunnelAnchorTest::RunTest(const FString& Param
 	Anchor->DestroyComponent();
 	Segment->Destroy();
 	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerSuspendedRunTunnelFallbackAnchorTest,
+	"Wacom.UI.FirstPersonCardLayer.Anchor.SuspendedRunTunnelDoesNotOwnAnchor",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerSuspendedRunTunnelFallbackAnchorTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(
+		APlayerController::StaticClass(),
+		FTransform::Identity);
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
+		AWacomPlayerCharacter::StaticClass(),
+		FTransform::Identity);
+	AWacomRunTunnelSegmentActor* Segment = WacomFirstPersonCardLayerSpec::SpawnTestSegment(
+		*World,
+		FVector::ZeroVector,
+		FVector(1000.0f, 0.0f, 0.0f));
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor =
+		WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Segment"), Segment)
+		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		if (Anchor)
+		{
+			Anchor->DestroyComponent();
+		}
+		if (Segment)
+		{
+			Segment->Destroy();
+		}
+		if (Character)
+		{
+			Character->Destroy();
+		}
+		if (PC)
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	PC->Possess(Character);
+	UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent();
+	TestTrue(TEXT("Run tunnel activates"), RunTunnel && RunTunnel->ActivateRunTunnel(Segment, 200.0f));
+	Character->SetExplorationInputEnabled(false);
+	TestTrue(TEXT("Run tunnel is suspended"), RunTunnel && RunTunnel->IsRunTunnelSuspended());
+
+	Anchor->ProbeCameraTransform = FTransform(
+		FRotator(4.0f, 33.0f, 0.0f),
+		FVector(500.0f, 600.0f, 700.0f),
+		FVector::OneVector);
+	Anchor->RefreshAnchor(0.0f);
+	const FWacomFirstPersonCardAnchorDebugView View =
+		Anchor->GetFirstPersonCardAnchorDebugView();
+	TestTrue(TEXT("Suspended run tunnel keeps anchor valid through fallback"), View.bHasValidAnchor);
+	TestEqual(TEXT("Suspended run tunnel does not own anchor mode"),
+		View.Mode,
+		EWacomFirstPersonCardAnchorMode::CameraFallback);
+	TestEqual(TEXT("Fallback reason is recorded"),
+		View.LastFallbackReason,
+		FName(TEXT("CameraFallback")));
+
+	Anchor->DestroyComponent();
+	Segment->Destroy();
+	Character->Destroy();
+	PC->Destroy();
 	return true;
 }
 

@@ -6,7 +6,9 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomCursorLookDriverComponent.h"
+#include "Components/WacomFirstPersonViewStageBlendComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
+#include "Camera/CameraComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
@@ -982,6 +984,20 @@ void UWacomFirstPersonCardAnchorComponent::ClearRuntimeCardLayerData(FName Sourc
 	}
 }
 
+void UWacomFirstPersonCardAnchorComponent::ClearCardLayerVisualState()
+{
+	ResetAnchorScreenSmoothing();
+	if (RuntimeState)
+	{
+		RuntimeState->ClearTransientInteraction();
+	}
+	if (CardLayerWidget)
+	{
+		CardLayerWidget->CancelCardDragGesture(true);
+		CardLayerWidget->ClearSlotMotionState();
+	}
+}
+
 bool UWacomFirstPersonCardAnchorComponent::HasRuntimeCardLayerData() const
 {
 	return RuntimeState && RuntimeState->HasRuntimeData();
@@ -1237,17 +1253,26 @@ bool UWacomFirstPersonCardAnchorComponent::ResolveBaseAnchor(
 				return false;
 			}
 
-			FTransform CameraTransform = FTransform::Identity;
-			if (!ResolveCameraTransformForAnchor(CameraTransform))
+			FVector CameraLocation = FVector::ZeroVector;
+			if (const UCameraComponent* FirstPersonCamera = Character->GetFirstPersonCamera())
 			{
-				OutMode = EWacomFirstPersonCardAnchorMode::Invalid;
-				OutFallbackReason = NoCameraManagerReason;
-				return false;
+				CameraLocation = FirstPersonCamera->GetComponentLocation();
+			}
+			else
+			{
+				FTransform CameraTransform = FTransform::Identity;
+				if (!ResolveCameraTransformForAnchor(CameraTransform))
+				{
+					OutMode = EWacomFirstPersonCardAnchorMode::Invalid;
+					OutFallbackReason = NoCameraManagerReason;
+					return false;
+				}
+				CameraLocation = CameraTransform.GetLocation();
 			}
 
 			OutBaseTransform = FTransform(
 				BattleCamera->GetBaseBattleRotation(),
-				CameraTransform.GetLocation(),
+				CameraLocation,
 				FVector::OneVector);
 			OutMode = EWacomFirstPersonCardAnchorMode::BattleCamera;
 			OutFallbackReason = NAME_None;
@@ -1255,9 +1280,22 @@ bool UWacomFirstPersonCardAnchorComponent::ResolveBaseAnchor(
 		}
 	}
 
+	if (const UWacomFirstPersonViewStageBlendComponent* StageBlend =
+		Character->GetFirstPersonViewStageBlendComponent())
+	{
+		FTransform StageViewTransform = FTransform::Identity;
+		if (StageBlend->TryGetCurrentBaseViewTransform(StageViewTransform))
+		{
+			OutBaseTransform = StageViewTransform;
+			OutMode = EWacomFirstPersonCardAnchorMode::ViewStageBlend;
+			OutFallbackReason = NAME_None;
+			return true;
+		}
+	}
+
 	if (const UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent())
 	{
-		if (RunTunnel->IsRunTunnelActive())
+		if (RunTunnel->IsRunTunnelActive() && !RunTunnel->IsRunTunnelSuspended())
 		{
 			if (const AWacomRunTunnelSegmentActor* Segment = RunTunnel->GetActiveSegment())
 			{
@@ -1325,6 +1363,11 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureTickPrerequisites()
 		if (UWacomBattleCameraLookComponent* BattleCamera = Character->GetBattleCameraLookComponent())
 		{
 			PrimaryComponentTick.AddPrerequisite(BattleCamera, BattleCamera->PrimaryComponentTick);
+		}
+		if (UWacomFirstPersonViewStageBlendComponent* StageBlend =
+			Character->GetFirstPersonViewStageBlendComponent())
+		{
+			PrimaryComponentTick.AddPrerequisite(StageBlend, StageBlend->PrimaryComponentTick);
 		}
 	}
 }
@@ -1729,6 +1772,8 @@ FString UWacomFirstPersonCardAnchorComponent::AnchorModeToString(EWacomFirstPers
 	{
 	case EWacomFirstPersonCardAnchorMode::BattleCamera:
 		return TEXT("BattleCamera");
+	case EWacomFirstPersonCardAnchorMode::ViewStageBlend:
+		return TEXT("ViewStageBlend");
 	case EWacomFirstPersonCardAnchorMode::RunTunnel:
 		return TEXT("RunTunnel");
 	case EWacomFirstPersonCardAnchorMode::CameraFallback:

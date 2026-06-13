@@ -2,6 +2,7 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "BattleHUDTestHarness.h"
 #include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomFirstPersonViewpointActor.h"
 #include "Actors/WacomRunTunnelSegmentActor.h"
@@ -10,12 +11,34 @@
 #include "Camera/WacomFirstPersonViewpointPlacement.h"
 #include "Components/SplineComponent.h"
 #include "Components/WacomBattleCameraLookComponent.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
+#include "Components/WacomFirstPersonViewStageBlendComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "Session/BattleSession.h"
+#include "Snapshots/BattleSnapshot.h"
+#include "UI/BattleWidgetSpecReceiver.h"
 #include "UObject/StrongObjectPtr.h"
+
+struct FWacomFirstPersonViewStageBlendTestAccess
+{
+	static void Tick(UWacomFirstPersonViewStageBlendComponent& Component, float DeltaTime)
+	{
+		Component.TickComponent(DeltaTime, LEVELTICK_All, nullptr);
+	}
+
+	static void SetNormalizedCursorOverride(
+		UWacomFirstPersonViewStageBlendComponent& Component,
+		FVector2D NormalizedCursor)
+	{
+		Component.bHasStageLookNormalizedCursorOverrideForTest = true;
+		Component.StageLookNormalizedCursorOverrideForTest = NormalizedCursor;
+	}
+};
 
 namespace WacomBattleEntryFirstPersonViewpointSpec
 {
@@ -65,6 +88,21 @@ namespace WacomBattleEntryFirstPersonViewpointSpec
 		Spline->SetSplinePointType(1, ESplinePointType::Linear, false);
 		Spline->UpdateSpline();
 		return Segment;
+	}
+
+	UBattleSession* CreatePlayerActionSession(FWacomBattleFixture& Fixture)
+	{
+		UCharacterDefinition* Character = Fixture.MakeCharacter(
+			Fixture.MakeNoopCard(0),
+			Fixture.MakeNoopCard(0),
+			{
+				Fixture.MakeNoopCard(0),
+				Fixture.MakeNoopCard(0),
+				Fixture.MakeNoopCard(0),
+				Fixture.MakeNoopCard(0)
+			});
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 50, 0);
+		return Fixture.CreateSession(Character, Enemy, 1);
 	}
 }
 
@@ -127,13 +165,20 @@ bool FWacomUIBattleEntryViewpointTriggerStageRequestSpec::RunTest(const FString&
 		WacomBattleEntryFirstPersonViewpointSpec::IsNearlyEqual(
 			StageRequest.ViewTransform.Rotator(),
 			ViewRotation));
+	TestEqual(TEXT("Stage request defaults to instant blend"),
+		StageRequest.BlendTimeSeconds,
+		0.0f);
 
+	Viewpoint->StageBlendTimeSeconds = 0.35f;
 	Trigger->PersistentId = TEXT("Trigger.EntryView");
 	TestTrue(TEXT("Configured trigger rebuilds battle entry stage request"),
 		Trigger->TryBuildBattleEntryViewStageRequest(StageRequest));
 	TestEqual(TEXT("Stage request debug source prefers PersistentId"),
 		StageRequest.DebugSource,
 		FName(TEXT("Trigger.EntryView")));
+	TestEqual(TEXT("Stage request copies viewpoint blend time"),
+		StageRequest.BlendTimeSeconds,
+		0.35f);
 
 	Viewpoint->Destroy();
 	Trigger->Destroy();
@@ -240,6 +285,542 @@ bool FWacomUIBattleEntryViewpointAppliesBattleBaseSpec::RunTest(const FString& /
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEntryViewpointBlendActivatesBattleCameraAfterCompletionSpec,
+	"Wacom.UI.Battle.EntryFirstPersonViewpoint.BlendActivatesBattleCameraAfterCompletion",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEntryViewpointBlendActivatesBattleCameraAfterCompletionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleEntryFirstPersonViewpointSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>();
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
+		AWacomPlayerCharacter::StaticClass(),
+		FTransform::Identity);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character))
+	{
+		if (Character)
+		{
+			Character->Destroy();
+		}
+		if (PC)
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	PC->Possess(Character);
+	const UCameraComponent* Camera = Character->GetFirstPersonCamera();
+	UWacomFirstPersonViewStageBlendComponent* StageBlend =
+		Character->GetFirstPersonViewStageBlendComponent();
+	UWacomBattleCameraLookComponent* BattleCamera = Character->GetBattleCameraLookComponent();
+	if (!TestNotNull(TEXT("First-person camera"), Camera)
+		|| !TestNotNull(TEXT("Stage blend component"), StageBlend)
+		|| !TestNotNull(TEXT("Battle camera look component"), BattleCamera))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector StartViewLocation = Camera->GetComponentLocation();
+	const FVector TargetViewLocation = StartViewLocation + FVector(400.0f, 120.0f, 80.0f);
+	const FRotator TargetViewRotation(10.0f, 65.0f, 0.0f);
+	BattleCamera->YawClampDegrees = 7.0f;
+	BattleCamera->PitchClampDegrees = 5.0f;
+	BattleCamera->LookInterpSpeed = 0.0f;
+	FWacomFirstPersonViewStageRequest StageRequest;
+	StageRequest.bHasViewTransform = true;
+	StageRequest.ViewTransform = FTransform(TargetViewRotation, TargetViewLocation);
+	StageRequest.BlendTimeSeconds = 1.0f;
+	StageRequest.Reason = FName(TEXT("BattleEntry"));
+	StageRequest.DebugSource = FName(TEXT("Spec"));
+
+	bool bFinished = false;
+	TestTrue(TEXT("Stage blend starts"),
+		StageBlend->StartBlendToStageRequest(
+			*PC,
+			StageRequest,
+			[&bFinished, BattleCamera, TargetViewRotation]()
+			{
+				bFinished = true;
+				BattleCamera->ActivateBattleCameraLookFromBaseRotation(
+					FRotator(TargetViewRotation.Pitch, TargetViewRotation.Yaw, 0.0f),
+					FRotator(0.0f, TargetViewRotation.Yaw, 0.0f),
+					/*bPreserveCurrentCursorLookOffset*/true);
+			}));
+	FWacomFirstPersonViewStageBlendTestAccess::SetNormalizedCursorOverride(
+		*StageBlend,
+		FVector2D(1.0f, -1.0f));
+	TestTrue(TEXT("Stage blend is active"), StageBlend->IsStageBlendActive());
+	TestFalse(TEXT("Battle camera is not active before blend tick"),
+		BattleCamera->IsBattleCameraLookActive());
+
+	const FRotator HalfBaseViewRotation = FQuat::Slerp(
+		Camera->GetComponentQuat(),
+		StageRequest.ViewTransform.GetRotation(),
+		0.5f).GetNormalized().Rotator();
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 0.5f);
+	TestTrue(TEXT("Stage blend remains active at half time"), StageBlend->IsStageBlendActive());
+	TestFalse(TEXT("Blend completion callback has not fired at half time"), bFinished);
+	TestFalse(TEXT("Battle camera remains inactive at half time"),
+		BattleCamera->IsBattleCameraLookActive());
+	TestTrue(TEXT("Stage blend applies temporary cursor yaw offset at half time"),
+		PC->GetControlRotation().Yaw > HalfBaseViewRotation.Yaw + 6.5f);
+	TestTrue(TEXT("Stage blend applies temporary cursor pitch offset at half time"),
+		PC->GetControlRotation().Pitch > HalfBaseViewRotation.Pitch + 4.5f);
+	TestTrue(TEXT("Camera moved away from start at half time"),
+		FVector::Dist(Camera->GetComponentLocation(), StartViewLocation) > 1.0f);
+	TestTrue(TEXT("Camera has not reached target at half time"),
+		FVector::Dist(Camera->GetComponentLocation(), TargetViewLocation) > 1.0f);
+
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 0.5f);
+	TestFalse(TEXT("Stage blend ends after duration"), StageBlend->IsStageBlendActive());
+	TestTrue(TEXT("Blend completion callback fires"), bFinished);
+	TestTrue(TEXT("Camera reaches requested view location on completion"),
+		WacomBattleEntryFirstPersonViewpointSpec::IsNearlyEqual(
+			Camera->GetComponentLocation(),
+			TargetViewLocation));
+	TestTrue(TEXT("Battle camera activates after blend completion"),
+		BattleCamera->IsBattleCameraLookActive());
+	TestTrue(TEXT("Battle camera base remains pure completed staged control rotation"),
+		WacomBattleEntryFirstPersonViewpointSpec::IsNearlyEqual(
+			BattleCamera->GetBaseBattleRotation(),
+			FRotator(TargetViewRotation.Pitch, TargetViewRotation.Yaw, 0.0f)));
+	TestTrue(TEXT("Battle camera handoff preserves current cursor yaw offset"),
+		PC->GetControlRotation().Yaw > TargetViewRotation.Yaw + 6.5f);
+	TestTrue(TEXT("Battle camera handoff preserves current cursor pitch offset"),
+		PC->GetControlRotation().Pitch > TargetViewRotation.Pitch + 4.5f);
+
+	BattleCamera->DeactivateBattleCameraLook();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEntryViewpointBlendUnlocksHUDHandAfterCompletionSpec,
+	"Wacom.UI.Battle.EntryFirstPersonViewpoint.BlendUnlocksHUDHandAfterCompletion",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEntryViewpointBlendUnlocksHUDHandAfterCompletionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleEntryFirstPersonViewpointSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session =
+		WacomBattleEntryFirstPersonViewpointSpec::CreatePlayerActionSession(Fixture);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Battle session"), Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+
+	AWacomPlayerCharacter* Character = Harness->AttachFirstPersonCharacter();
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UWacomFirstPersonCardAnchorComponent* Anchor = Harness->FirstPersonAnchor();
+	UWacomFirstPersonViewStageBlendComponent* StageBlend =
+		Character ? Character->GetFirstPersonViewStageBlendComponent() : nullptr;
+	UWacomBattleCameraLookComponent* BattleCamera =
+		Character ? Character->GetBattleCameraLookComponent() : nullptr;
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("First-person anchor"), Anchor)
+		|| !TestNotNull(TEXT("Stage blend component"), StageBlend)
+		|| !TestNotNull(TEXT("Battle camera look"), BattleCamera)
+		|| !TestNotNull(TEXT("Player controller"), Harness->PlayerController()))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	HUD->SetBattleInputReady(false);
+	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	TestFalse(TEXT("Entry staging keeps HUD input not ready"), HUD->IsBattleInputReady());
+	TestTrue(TEXT("Entry staging keeps an empty BattleHand runtime source"),
+		Anchor->HasRuntimeCardLayerData());
+	TestEqual(TEXT("Entry staging keeps BattleHand source active"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		FName(TEXT("BattleHand")));
+	TestEqual(TEXT("Entry staging writes zero runtime hand cards"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		0);
+
+	const UCameraComponent* Camera = Character->GetFirstPersonCamera();
+	if (!TestNotNull(TEXT("First-person camera"), Camera))
+	{
+		return false;
+	}
+
+	const FRotator TargetViewRotation(8.0f, 45.0f, 0.0f);
+	FWacomFirstPersonViewStageRequest StageRequest;
+	StageRequest.bHasViewTransform = true;
+	StageRequest.ViewTransform = FTransform(
+		TargetViewRotation,
+		Camera->GetComponentLocation() + FVector(240.0f, 80.0f, 60.0f));
+	StageRequest.BlendTimeSeconds = 1.0f;
+	StageRequest.Reason = FName(TEXT("BattleEntry"));
+	StageRequest.DebugSource = FName(TEXT("HUDHandSpec"));
+
+	bool bFinished = false;
+	TestTrue(TEXT("Stage blend starts"),
+		StageBlend->StartBlendToStageRequest(
+			*Harness->PlayerController(),
+			StageRequest,
+			[&bFinished, BattleCamera, HUD, Session, TargetViewRotation]()
+			{
+				bFinished = true;
+				BattleCamera->ActivateBattleCameraLookFromBaseRotation(
+					FRotator(TargetViewRotation.Pitch, TargetViewRotation.Yaw, 0.0f),
+					FRotator(0.0f, TargetViewRotation.Yaw, 0.0f),
+					/*bPreserveCurrentCursorLookOffset*/true);
+				HUD->SetFirstPersonBattleHandSuppressedForEntry(false);
+				HUD->SetBattleInputReady(true);
+				HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+			}));
+
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 0.5f);
+	TestTrue(TEXT("Stage blend remains active at half time"), StageBlend->IsStageBlendActive());
+	TestFalse(TEXT("HUD unlock callback has not fired at half time"), bFinished);
+	TestFalse(TEXT("Battle camera remains inactive at half time"),
+		BattleCamera->IsBattleCameraLookActive());
+	TestFalse(TEXT("HUD input remains not ready at half time"), HUD->IsBattleInputReady());
+	TestTrue(TEXT("First-person hand keeps empty BattleHand source at half time"),
+		Anchor->HasRuntimeCardLayerData());
+	TestEqual(TEXT("First-person hand has no cards at half time"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		0);
+
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 0.5f);
+	TestFalse(TEXT("Stage blend completes"), StageBlend->IsStageBlendActive());
+	TestTrue(TEXT("HUD unlock callback fires on completion"), bFinished);
+	TestTrue(TEXT("Battle camera activates before HUD hand refresh"),
+		BattleCamera->IsBattleCameraLookActive());
+	TestTrue(TEXT("HUD input becomes ready after completion"), HUD->IsBattleInputReady());
+	TestFalse(TEXT("Entry hand suppression is released"),
+		HUD->IsFirstPersonBattleHandSuppressedForEntry());
+	TestTrue(TEXT("First-person hand runtime source is restored"),
+		Anchor->HasRuntimeCardLayerData());
+	TestEqual(TEXT("Restored hand card count"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		Snapshot.Hand.Cards.Num());
+	TestTrue(TEXT("Restored hand interaction is enabled"),
+		Anchor->IsBattleHandInteractionEnabled());
+
+	BattleCamera->DeactivateBattleCameraLook();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEntryViewpointBlendCancelKeepsHUDGuardedSpec,
+	"Wacom.UI.Battle.EntryFirstPersonViewpoint.BlendCancelKeepsHUDGuarded",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEntryViewpointBlendCancelKeepsHUDGuardedSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleEntryFirstPersonViewpointSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session =
+		WacomBattleEntryFirstPersonViewpointSpec::CreatePlayerActionSession(Fixture);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Battle session"), Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+
+	AWacomPlayerCharacter* Character = Harness->AttachFirstPersonCharacter();
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UWacomFirstPersonCardAnchorComponent* Anchor = Harness->FirstPersonAnchor();
+	UWacomFirstPersonViewStageBlendComponent* StageBlend =
+		Character ? Character->GetFirstPersonViewStageBlendComponent() : nullptr;
+	UWacomBattleCameraLookComponent* BattleCamera =
+		Character ? Character->GetBattleCameraLookComponent() : nullptr;
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("First-person anchor"), Anchor)
+		|| !TestNotNull(TEXT("Stage blend component"), StageBlend)
+		|| !TestNotNull(TEXT("Battle camera look"), BattleCamera)
+		|| !TestNotNull(TEXT("Player controller"), Harness->PlayerController()))
+	{
+		return false;
+	}
+
+	HUD->SetBattleInputReady(false);
+	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
+	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+
+	const UCameraComponent* Camera = Character->GetFirstPersonCamera();
+	if (!TestNotNull(TEXT("First-person camera"), Camera))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonViewStageRequest StageRequest;
+	StageRequest.bHasViewTransform = true;
+	StageRequest.ViewTransform = FTransform(
+		FRotator(5.0f, 35.0f, 0.0f),
+		Camera->GetComponentLocation() + FVector(180.0f, 40.0f, 50.0f));
+	StageRequest.BlendTimeSeconds = 1.0f;
+	StageRequest.Reason = FName(TEXT("BattleEntry"));
+	StageRequest.DebugSource = FName(TEXT("HUDHandCancelSpec"));
+
+	bool bFinished = false;
+	TestTrue(TEXT("Stage blend starts"),
+		StageBlend->StartBlendToStageRequest(
+			*Harness->PlayerController(),
+			StageRequest,
+			[&bFinished, BattleCamera, HUD, Session]()
+			{
+				bFinished = true;
+				BattleCamera->ActivateBattleCameraLook();
+				HUD->SetFirstPersonBattleHandSuppressedForEntry(false);
+				HUD->SetBattleInputReady(true);
+				HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
+			}));
+
+	StageBlend->CancelActiveBlend();
+	TestFalse(TEXT("Stage blend inactive after cancel"), StageBlend->IsStageBlendActive());
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 1.0f);
+	TestFalse(TEXT("Cancel suppresses completion callback"), bFinished);
+	TestFalse(TEXT("Battle camera remains inactive after canceled blend"),
+		BattleCamera->IsBattleCameraLookActive());
+	TestFalse(TEXT("HUD input remains guarded after canceled blend"), HUD->IsBattleInputReady());
+	TestTrue(TEXT("Entry hand suppression remains after canceled blend"),
+		HUD->IsFirstPersonBattleHandSuppressedForEntry());
+	TestTrue(TEXT("First-person hand keeps empty BattleHand source after canceled blend"),
+		Anchor->HasRuntimeCardLayerData());
+	TestEqual(TEXT("First-person hand has no cards after canceled blend"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEntryViewpointBlendCancelSuppressesCompletionSpec,
+	"Wacom.UI.Battle.EntryFirstPersonViewpoint.BlendCancelSuppressesCompletion",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEntryViewpointBlendCancelSuppressesCompletionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleEntryFirstPersonViewpointSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>();
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
+		AWacomPlayerCharacter::StaticClass(),
+		FTransform::Identity);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character))
+	{
+		if (Character)
+		{
+			Character->Destroy();
+		}
+		if (PC)
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	PC->Possess(Character);
+	UWacomFirstPersonViewStageBlendComponent* StageBlend =
+		Character->GetFirstPersonViewStageBlendComponent();
+	UWacomBattleCameraLookComponent* BattleCamera = Character->GetBattleCameraLookComponent();
+	if (!TestNotNull(TEXT("Stage blend component"), StageBlend)
+		|| !TestNotNull(TEXT("Battle camera look component"), BattleCamera))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	FWacomFirstPersonViewStageRequest StageRequest;
+	StageRequest.bHasViewTransform = true;
+	StageRequest.ViewTransform = FTransform(
+		FRotator(8.0f, 80.0f, 0.0f),
+		FVector(500.0f, 200.0f, 160.0f));
+	StageRequest.BlendTimeSeconds = 1.0f;
+	bool bFinished = false;
+	TestTrue(TEXT("Stage blend starts before cancel"),
+		StageBlend->StartBlendToStageRequest(
+			*PC,
+			StageRequest,
+			[&bFinished, BattleCamera]()
+			{
+				bFinished = true;
+				BattleCamera->ActivateBattleCameraLook();
+			}));
+
+	StageBlend->CancelActiveBlend();
+	TestFalse(TEXT("Stage blend inactive after cancel"), StageBlend->IsStageBlendActive());
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 1.0f);
+	TestFalse(TEXT("Cancel suppresses completion callback"), bFinished);
+	TestFalse(TEXT("Cancel does not activate battle camera"),
+		BattleCamera->IsBattleCameraLookActive());
+
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEntryViewpointAnchorUsesStageBlendSpec,
+	"Wacom.UI.Battle.EntryFirstPersonViewpoint.AnchorUsesStageBlendWhileRunTunnelSuspended",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEntryViewpointAnchorUsesStageBlendSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleEntryFirstPersonViewpointSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>();
+	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
+		AWacomPlayerCharacter::StaticClass(),
+		FTransform::Identity);
+	AWacomRunTunnelSegmentActor* Segment =
+		WacomBattleEntryFirstPersonViewpointSpec::SpawnTestSegment(
+			*World,
+			FVector::ZeroVector,
+			FVector(1000.0f, 0.0f, 0.0f));
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Segment"), Segment))
+	{
+		if (Segment)
+		{
+			Segment->Destroy();
+		}
+		if (Character)
+		{
+			Character->Destroy();
+		}
+		if (PC)
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	PC->Possess(Character);
+	UWacomRunTunnelMovementComponent* Tunnel = Character->GetRunTunnelMovementComponent();
+	UWacomFirstPersonViewStageBlendComponent* StageBlend =
+		Character->GetFirstPersonViewStageBlendComponent();
+	UWacomBattleCameraLookComponent* BattleCamera = Character->GetBattleCameraLookComponent();
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		Character->GetFirstPersonCardAnchorComponent();
+	const UCameraComponent* Camera = Character->GetFirstPersonCamera();
+	if (!TestNotNull(TEXT("Run tunnel movement"), Tunnel)
+		|| !TestNotNull(TEXT("Stage blend component"), StageBlend)
+		|| !TestNotNull(TEXT("Battle camera look component"), BattleCamera)
+		|| !TestNotNull(TEXT("First-person card anchor"), Anchor)
+		|| !TestNotNull(TEXT("First-person camera"), Camera))
+	{
+		Segment->Destroy();
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	Anchor->FollowInterpSpeed = 0.0f;
+	Anchor->DistanceFromView = 0.0f;
+	Anchor->HorizontalOffset = 0.0f;
+	Anchor->VerticalOffset = 0.0f;
+	TestTrue(TEXT("Run tunnel activates"), Tunnel->ActivateRunTunnel(Segment, 250.0f));
+	Character->SetExplorationInputEnabled(false);
+	TestTrue(TEXT("Run tunnel is suspended during staging"), Tunnel->IsRunTunnelSuspended());
+	TestFalse(TEXT("Battle camera is not active during staging"),
+		BattleCamera->IsBattleCameraLookActive());
+
+	FWacomFirstPersonViewStageRequest StageRequest;
+	StageRequest.bHasViewTransform = true;
+	StageRequest.ViewTransform = FTransform(
+		FRotator(8.0f, 90.0f, 0.0f),
+		FVector(700.0f, 240.0f, 180.0f));
+	StageRequest.BlendTimeSeconds = 1.0f;
+	TestTrue(TEXT("Stage blend starts"),
+		StageBlend->StartBlendToStageRequest(
+			*PC,
+			StageRequest,
+			[BattleCamera]()
+			{
+				BattleCamera->ActivateBattleCameraLookFromBaseRotation(
+					FRotator(8.0f, 90.0f, 0.0f),
+					FRotator(0.0f, 90.0f, 0.0f),
+					/*bPreserveCurrentCursorLookOffset*/true);
+			}));
+
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 0.5f);
+	TestTrue(TEXT("Stage blend remains active at half time"), StageBlend->IsStageBlendActive());
+	Anchor->RefreshAnchor(0.0f);
+	const FWacomFirstPersonCardAnchorDebugView HalfTimeView =
+		Anchor->GetFirstPersonCardAnchorDebugView();
+	TestTrue(TEXT("Anchor remains valid during stage blend"), HalfTimeView.bHasValidAnchor);
+	TestEqual(TEXT("Anchor uses stage blend before battle camera activates"),
+		HalfTimeView.Mode,
+		EWacomFirstPersonCardAnchorMode::ViewStageBlend);
+
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 0.5f);
+	TestFalse(TEXT("Stage blend completes"), StageBlend->IsStageBlendActive());
+	TestTrue(TEXT("Battle camera activates after stage blend"),
+		BattleCamera->IsBattleCameraLookActive());
+	Anchor->RefreshAnchor(0.0f);
+	const FWacomFirstPersonCardAnchorDebugView CompletedView =
+		Anchor->GetFirstPersonCardAnchorDebugView();
+	TestEqual(TEXT("Completed staging switches anchor to battle camera mode"),
+		CompletedView.Mode,
+		EWacomFirstPersonCardAnchorMode::BattleCamera);
+	TestTrue(TEXT("Battle camera anchor location uses freshly staged camera component"),
+		WacomBattleEntryFirstPersonViewpointSpec::IsNearlyEqual(
+			CompletedView.AnchorTransform.GetLocation(),
+			Camera->GetComponentLocation()));
+	TestTrue(TEXT("Camera component is at requested view location"),
+		WacomBattleEntryFirstPersonViewpointSpec::IsNearlyEqual(
+			Camera->GetComponentLocation(),
+			StageRequest.ViewTransform.GetLocation()));
+
+	BattleCamera->DeactivateBattleCameraLook();
+	Segment->Destroy();
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEntryViewpointRunTunnelResumeSpec,
 	"Wacom.UI.Battle.EntryFirstPersonViewpoint.RunTunnelResumeRestoresSplinePose",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -283,8 +864,11 @@ bool FWacomUIBattleEntryViewpointRunTunnelResumeSpec::RunTest(const FString& /*P
 	PC->Possess(Character);
 	UWacomRunTunnelMovementComponent* Tunnel = Character->GetRunTunnelMovementComponent();
 	const UCameraComponent* Camera = Character->GetFirstPersonCamera();
+	UWacomFirstPersonViewStageBlendComponent* StageBlend =
+		Character->GetFirstPersonViewStageBlendComponent();
 	if (!TestNotNull(TEXT("Run tunnel movement"), Tunnel)
-		|| !TestNotNull(TEXT("First-person camera"), Camera))
+		|| !TestNotNull(TEXT("First-person camera"), Camera)
+		|| !TestNotNull(TEXT("Stage blend component"), StageBlend))
 	{
 		Segment->Destroy();
 		Character->Destroy();
@@ -304,13 +888,16 @@ bool FWacomUIBattleEntryViewpointRunTunnelResumeSpec::RunTest(const FString& /*P
 	FWacomFirstPersonViewStageRequest StageRequest;
 	StageRequest.bHasViewTransform = true;
 	StageRequest.ViewTransform = FTransform(BattleViewRotation, BattleViewLocation);
+	StageRequest.BlendTimeSeconds = 0.25f;
 	StageRequest.Reason = FName(TEXT("BattleEntry"));
 	StageRequest.DebugSource = FName(TEXT("Spec"));
-	TestTrue(TEXT("Battle view stage request applies"),
-		WacomFirstPersonViewpointPlacement::ApplyStageRequest(
-			*Character,
+	TestTrue(TEXT("Battle view stage request blend starts"),
+		StageBlend->StartBlendToStageRequest(
 			*PC,
-			StageRequest));
+			StageRequest,
+			[]() {}));
+	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 0.25f);
+	TestFalse(TEXT("Battle view stage blend completed"), StageBlend->IsStageBlendActive());
 	TestTrue(TEXT("Camera is staged away from run tunnel"),
 		WacomBattleEntryFirstPersonViewpointSpec::IsNearlyEqual(
 			Camera->GetComponentLocation(),

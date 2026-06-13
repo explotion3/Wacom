@@ -10,4 +10,5 @@ struct WACOMAPP_API FWacomFirstPersonViewStageRequest
 	FTransform ViewTransform = FTransform::Identity;
 	FName Reason = NAME_None;
 	FName DebugSource = NAME_None;
+	float BlendTimeSeconds = 0.0f;
 };

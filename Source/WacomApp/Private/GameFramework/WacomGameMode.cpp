@@ -14,6 +14,7 @@
 #include "Actors/BattleTriggerActor.h"
 #include "Camera/WacomFirstPersonViewpointPlacement.h"
 #include "Components/WacomBattleCameraLookComponent.h"
+#include "Components/WacomFirstPersonViewStageBlendComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
@@ -46,6 +47,70 @@ namespace
 	int32 CountBattleInitEnemyParts(const FBattleInitParams& Params)
 	{
 		return CountBattleEnemySlotParts(Params.EnemySlots);
+	}
+
+	void ActivateBattleCameraLookForPawn(AWacomPlayerCharacter& Pawn)
+	{
+		if (UWacomBattleCameraLookComponent* BattleCameraLook = Pawn.GetBattleCameraLookComponent())
+		{
+			BattleCameraLook->ActivateBattleCameraLook();
+		}
+	}
+
+	void ActivateBattleCameraLookForStagedRequest(
+		AWacomPlayerCharacter& Pawn,
+		const FWacomFirstPersonViewStageRequest& Request)
+	{
+		UWacomBattleCameraLookComponent* BattleCameraLook = Pawn.GetBattleCameraLookComponent();
+		if (!BattleCameraLook)
+		{
+			return;
+		}
+		if (!Request.bHasViewTransform)
+		{
+			BattleCameraLook->ActivateBattleCameraLook();
+			return;
+		}
+
+		FVector ActorLocation = FVector::ZeroVector;
+		FRotator ActorRotation = FRotator::ZeroRotator;
+		FRotator ControlRotation = FRotator::ZeroRotator;
+		WacomFirstPersonViewpointPlacement::CalculateActorTransformForView(
+			Pawn,
+			Request.ViewTransform,
+			ActorLocation,
+			ActorRotation,
+			ControlRotation);
+		BattleCameraLook->ActivateBattleCameraLookFromBaseRotation(
+			ControlRotation,
+			ActorRotation,
+			/*bPreserveCurrentCursorLookOffset*/true);
+	}
+
+	void GuardBattleEntryHUD(UBattleHUD* BattleHUD)
+	{
+		if (!BattleHUD)
+		{
+			return;
+		}
+
+		BattleHUD->SetBattleInputReady(false);
+		BattleHUD->SetFirstPersonBattleHandSuppressedForEntry(true);
+	}
+
+	void ReleaseBattleEntryHUD(UBattleHUD* BattleHUD, UBattleSession* ActiveSession, bool bRefreshSnapshot)
+	{
+		if (!BattleHUD)
+		{
+			return;
+		}
+
+		BattleHUD->SetFirstPersonBattleHandSuppressedForEntry(false);
+		BattleHUD->SetBattleInputReady(true);
+		if (bRefreshSnapshot && ActiveSession)
+		{
+			BattleHUD->RefreshFromSnapshot(ActiveSession->BuildSnapshot());
+		}
 	}
 }
 
@@ -395,6 +460,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	}
 
 	BattleHUD->SetSession(ActiveSession);
+	GuardBattleEntryHUD(BattleHUD);
 	TArray<AWacomBattleEnemyActor*> SceneEnemyHosts;
 	Trigger->BuildBattleSceneEnemyHosts(SceneEnemyHosts);
 	BattleHUD->SetBattleSceneEnemyHosts(SceneEnemyHosts);
@@ -418,21 +484,70 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		}
 	}
 
+	bool bBattleCameraActivationDeferred = false;
 	if (AWacomPlayerCharacter* Pawn = PC->GetPawn<AWacomPlayerCharacter>())
 	{
 		Pawn->SetExplorationInputEnabled(false);
 		FWacomFirstPersonViewStageRequest BattleEntryStageRequest;
-		if (Trigger->TryBuildBattleEntryViewStageRequest(BattleEntryStageRequest))
+		const bool bHasBattleEntryStageRequest =
+			Trigger->TryBuildBattleEntryViewStageRequest(BattleEntryStageRequest)
+			&& BattleEntryStageRequest.bHasViewTransform;
+		if (bHasBattleEntryStageRequest)
 		{
-			WacomFirstPersonViewpointPlacement::ApplyStageRequest(
-				*Pawn,
-				*PC,
-				BattleEntryStageRequest);
+			if (BattleEntryStageRequest.BlendTimeSeconds > KINDA_SMALL_NUMBER)
+			{
+				if (UWacomFirstPersonViewStageBlendComponent* StageBlend =
+					Pawn->GetFirstPersonViewStageBlendComponent())
+				{
+					const TWeakObjectPtr<AWacomGameMode> WeakGameMode(this);
+					const TWeakObjectPtr<AWacomPlayerCharacter> WeakPawn(Pawn);
+					const FWacomFirstPersonViewStageRequest DeferredStageRequest =
+						BattleEntryStageRequest;
+					bBattleCameraActivationDeferred = StageBlend->StartBlendToStageRequest(
+						*PC,
+						BattleEntryStageRequest,
+						[WeakGameMode, WeakPawn, DeferredStageRequest]()
+						{
+							AWacomGameMode* GameMode = WeakGameMode.Get();
+							AWacomPlayerCharacter* StrongPawn = WeakPawn.Get();
+							if (!GameMode
+								|| !StrongPawn
+								|| GameMode->CurrentState != EGameFlowState::Battle)
+							{
+								return;
+							}
+							ActivateBattleCameraLookForStagedRequest(
+								*StrongPawn,
+								DeferredStageRequest);
+							ReleaseBattleEntryHUD(
+								GameMode->BattleHUD,
+								GameMode->ActiveSession,
+								/*bRefreshSnapshot*/true);
+						});
+				}
+			}
+
+			if (!bBattleCameraActivationDeferred)
+			{
+				WacomFirstPersonViewpointPlacement::ApplyStageRequest(
+					*Pawn,
+					*PC,
+					BattleEntryStageRequest);
+			}
 		}
-		if (UWacomBattleCameraLookComponent* BattleCameraLook = Pawn->GetBattleCameraLookComponent())
+
+		if (!bBattleCameraActivationDeferred)
 		{
-			BattleCameraLook->ActivateBattleCameraLook();
+			ActivateBattleCameraLookForPawn(*Pawn);
 		}
+	}
+
+	if (!bBattleCameraActivationDeferred)
+	{
+		ReleaseBattleEntryHUD(
+			BattleHUD,
+			ActiveSession,
+			/*bRefreshSnapshot*/false);
 	}
 
 	// 5) 记录状态
@@ -523,6 +638,11 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	{
 		if (AWacomPlayerCharacter* Pawn = PC->GetPawn<AWacomPlayerCharacter>())
 		{
+			if (UWacomFirstPersonViewStageBlendComponent* StageBlend =
+				Pawn->GetFirstPersonViewStageBlendComponent())
+			{
+				StageBlend->CancelActiveBlend();
+			}
 			if (UWacomBattleCameraLookComponent* BattleCameraLook = Pawn->GetBattleCameraLookComponent())
 			{
 				BattleCameraLook->DeactivateBattleCameraLook();

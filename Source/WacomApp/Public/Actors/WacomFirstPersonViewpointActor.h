@@ -26,6 +26,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Camera")
 	USceneComponent* GetViewRootComponent() const { return ViewRootComponent; }
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera",
+		meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "5.0", Units = "s", ToolTip = "使用该第一人称镜头站位时，从当前视角平滑移动到此 View Pose 的时长，单位秒；0 表示立即对齐。"))
+	float StageBlendTimeSeconds = 0.0f;
+
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Camera",
 		meta = (AllowPrivateAccess = "true", ToolTip = "第一人称镜头站位根组件。Actor Transform 表示摄像机 View Pose，不是玩家 Capsule/root 位置。"))

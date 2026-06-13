@@ -189,6 +189,8 @@ void UBattleHUD::NativeConstruct()
 
 void UBattleHUD::NativeDestruct()
 {
+	bBattleInputReady = true;
+	bFirstPersonBattleHandSuppressedForEntry = false;
 	if (PresentationCoordinator)
 	{
 		PresentationCoordinator->Shutdown();
@@ -305,6 +307,8 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 	Super::NativeOnSessionChanged(OldSession, NewSession);
 	if (OldSession != NewSession)
 	{
+		bBattleInputReady = true;
+		bFirstPersonBattleHandSuppressedForEntry = false;
 		ClearBattlePresentationQueue();
 		ClearBattlePresentationStack();
 		ClearPendingTurnBoundaryCommand();
@@ -317,6 +321,8 @@ void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSessi
 
 	// 新 Session 接入时，重置状态机到 Idle。
 	UIState = EBattleUIState::Idle;
+	bBattleInputReady = true;
+	bFirstPersonBattleHandSuppressedForEntry = false;
 	PendingTargetingCardId.Invalidate();
 	bHasBroadcastBattleEnd = false;
 	bHasLastBattleSnapshot = false;
@@ -358,6 +364,10 @@ bool UBattleHUD::IsBattlePresentationBusy() const
 
 bool UBattleHUD::CanSubmitPlayerActionCommand() const
 {
+	if (!bBattleInputReady)
+	{
+		return false;
+	}
 	if (UIState == EBattleUIState::BattleEnd)
 	{
 		return false;
@@ -375,6 +385,25 @@ bool UBattleHUD::CanSubmitPlayerActionCommand() const
 
 	const FBattleSnapshot Snapshot = CurrentSession->BuildSnapshot();
 	return Snapshot.Phase == EBattlePhase::PlayerAction;
+}
+
+void UBattleHUD::SetBattleInputReady(bool bReady)
+{
+	bBattleInputReady = bReady;
+}
+
+void UBattleHUD::SetFirstPersonBattleHandSuppressedForEntry(bool bSuppressed)
+{
+	if (bFirstPersonBattleHandSuppressedForEntry == bSuppressed)
+	{
+		return;
+	}
+
+	bFirstPersonBattleHandSuppressedForEntry = bSuppressed;
+	if (bFirstPersonBattleHandSuppressedForEntry)
+	{
+		GetFirstPersonHandBridge().SuppressLayerForEntry();
+	}
 }
 
 bool UBattleHUD::HasPendingTurnBoundaryCommand() const

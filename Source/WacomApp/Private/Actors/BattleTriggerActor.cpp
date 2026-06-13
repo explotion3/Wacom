@@ -886,6 +886,7 @@ bool ABattleTriggerActor::TryBuildBattleEntryViewStageRequest(
 
 	OutRequest.bHasViewTransform = true;
 	OutRequest.ViewTransform = BattleEntryViewpoint->GetActorTransform();
+	OutRequest.BlendTimeSeconds = FMath::Max(0.0f, BattleEntryViewpoint->StageBlendTimeSeconds);
 	OutRequest.Reason = FName(TEXT("BattleEntry"));
 	OutRequest.DebugSource = PersistentId.IsNone()
 		? FName(*GetName())

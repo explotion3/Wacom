@@ -29,6 +29,7 @@ public:
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints =
 			TArray<FWacomFirstPersonCardLayerTransitionHint>());
 	void ClearLayer();
+	void SuppressLayerForEntry();
 
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;

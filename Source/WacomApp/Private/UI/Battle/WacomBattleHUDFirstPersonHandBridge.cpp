@@ -144,6 +144,12 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 	const FBattleSnapshot& Snapshot,
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
 {
+	if (HUD.IsFirstPersonBattleHandSuppressedForEntry())
+	{
+		SuppressLayerForEntry();
+		return;
+	}
+
 	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveAnchor();
 	const bool bCanShowBattleHand =
 		ShouldUseFirstPersonBattleHandLayer()
@@ -231,14 +237,35 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer()
 	ClearPendingTransitionEvents();
 }
 
+void FWacomBattleHUDFirstPersonHandBridge::SuppressLayerForEntry()
+{
+	ClearLayer();
+
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveAnchor();
+	if (!Anchor)
+	{
+		return;
+	}
+
+	Anchor->SetBattleHandInteractionEnabled(false);
+	Anchor->CancelFirstPersonCardDragGesture(true);
+	Anchor->ClearCardLayerVisualState();
+	TArray<FWacomFirstPersonCardLayerTransitionHint> EmptyHints;
+	TArray<FWacomFirstPersonCardLayerEntry> EmptyEntries;
+	Anchor->SetRuntimeCardLayerTransitionHints(FirstPersonBattleHandLayerSourceId, EmptyHints);
+	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, EmptyEntries);
+	Anchor->SetBattleHandInteractionEnabled(false);
+	LastAnchor = Anchor;
+}
+
 bool FWacomBattleHUDFirstPersonHandBridge::ShouldUseFirstPersonBattleHandLayer() const
 {
-	return true;
+	return !HUD.IsFirstPersonBattleHandSuppressedForEntry();
 }
 
 bool FWacomBattleHUDFirstPersonHandBridge::ShouldEnableFirstPersonBattleHandInteraction() const
 {
-	return ShouldUseFirstPersonBattleHandLayer();
+	return ShouldUseFirstPersonBattleHandLayer() && HUD.IsBattleInputReady();
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)

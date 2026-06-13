@@ -51,6 +51,8 @@ HUD 是命令出口。子 Widget 和 WBP 不直接修改 `UBattleSession`，也�
 
 键盘 `IA_Wait` / `IA_EndTurn` 进入 BattleHUD 前由 `AWacomPlayerController` 做 first-person hand 输入仲裁：如果当前卡牌层存在 active gesture，快捷键先取消该手势并被消费；只有卡牌层处于 idle / cancelled 时才调用 `OnWaitRequested` 或 `OnEndTurnRequested`。
 
+`BattleInputReady` 是 BattleHUD 级玩家命令 gate，不属于 `UBattleSession` 规则阶段。进入战斗镜头 staging 期间它会临时为 false：ActionPanel 按钮禁用，`CanSubmitPlayerActionCommand()` 返回 false，first-person hand release / Wait / EndTurn 等普通玩家命令不会提交；HUD 仍可刷新 Snapshot、同步场景敌人和播放非交互表现。镜头完成并激活 Battle camera look 后，GameMode 再把它恢复为 true。
+
 HUD 状态入口：
 
 | 分类 | 内容 |
@@ -157,6 +159,8 @@ BattleHUD 战斗手牌运行时只使用 first-person card layer。`UBattleHUD` 
 First-person hand 不在 slot widget 内提交规则。轻点、hold inspect、drag/aim、world target release 和 hand-card target release 都经 BattleHUD bridge / command flow 进入 BattleSession。完整合同见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
 `FirstPersonCardDetailViewportZOrder / FirstPersonCardDetailAnchorBaseSize` 属于 `Wacom|Battle|First Person Card Layer|Authoring`。第一人称战斗手牌交互开关使用 `bEnableBattleHandInteraction`、`SetBattleHandInteractionEnabled()` 和 `IsBattleHandInteractionEnabled()`。
+
+Battle entry staging 期间，BattleHUD 的 first-person hand bridge 会把 `BattleHand` runtime layer 视为 suppressed：进入 suppression 时先清空当前 first-person card layer visual slot，任何 hand sync 都写入 0 entries 的空 `BattleHand` runtime source，不启用 hand interaction，也阻止 Anchor 回退到 preview card layer。Battle camera look 激活后，GameMode 解除 suppression 并用当前 Battle snapshot 重新刷新 first-person hand；这避免手牌从探索相机位置一路插值到 battle viewpoint。
 
 ## §8 Battle Shared Widgets
 

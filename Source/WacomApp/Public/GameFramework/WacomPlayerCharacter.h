@@ -11,6 +11,7 @@ class UInputAction;
 class UWacomBattleCameraLookComponent;
 class UWacomCursorLookDriverComponent;
 class UWacomFirstPersonCardAnchorComponent;
+class UWacomFirstPersonViewStageBlendComponent;
 class UWacomRunTunnelMovementComponent;
 struct FInputActionValue;
 
@@ -47,6 +48,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
 	UWacomFirstPersonCardAnchorComponent* GetFirstPersonCardAnchorComponent() const { return FirstPersonCardAnchorComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
+	UWacomFirstPersonViewStageBlendComponent* GetFirstPersonViewStageBlendComponent() const { return FirstPersonViewStageBlendComponent; }
 
 	/**
 	 * 禁用 / 启用探索期的移动 + 视角输入。
@@ -94,6 +98,10 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
 		meta = (AllowPrivateAccess = "true", ToolTip = "First-person card anchor component. It projects future HUD-rendered card slots from Run Tunnel or Battle camera base transforms."))
 	TObjectPtr<UWacomFirstPersonCardAnchorComponent> FirstPersonCardAnchorComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
+		meta = (AllowPrivateAccess = "true", ToolTip = "第一人称镜头站位过渡组件。它会在镜头模式捕获视角前，把摄像机 View Pose 平滑移动到关卡中摆放的站位。"))
+	TObjectPtr<UWacomFirstPersonViewStageBlendComponent> FirstPersonViewStageBlendComponent = nullptr;
 
 	/** 当前是否接受探索输入。战斗期间置 false。 */
 	bool bExplorationInputEnabled = true;

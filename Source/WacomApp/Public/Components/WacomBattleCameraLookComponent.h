@@ -40,6 +40,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Camera")
 	bool ActivateBattleCameraLook();
 
+	bool ActivateBattleCameraLookFromBaseRotation(
+		FRotator InBaseBattleRotation,
+		FRotator InBaseActorRotation,
+		bool bPreserveCurrentCursorLookOffset);
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Camera")
 	void DeactivateBattleCameraLook();
 
@@ -79,5 +84,12 @@ private:
 	AWacomPlayerCharacter* GetOwnerCharacter() const;
 	APlayerController* GetOwnerPlayerController() const;
 	UWacomCursorLookDriverComponent* GetCursorLookDriver() const;
+	bool ActivateBattleCameraLookInternal(
+		APlayerController& PlayerController,
+		UWacomCursorLookDriverComponent& Driver,
+		AWacomPlayerCharacter& Character,
+		FRotator InBaseBattleRotation,
+		FRotator InBaseActorRotation,
+		bool bResetCursorLookOffset);
 	void RestoreOwnerRotationPolicy();
 };

@@ -176,7 +176,7 @@ GameMode 进入战斗时：
 
 1. 设置 `EGameFlowState::Battle`。
 2. 清理探索期 Run first-person BattleDeck source 和 active menu lease。
-3. Suspend PlayerCharacter 的 Run Tunnel 探索移动；若 Trigger 配置了 battle entry viewpoint，则先把第一人称摄像机 View Pose 对齐到该站位，再启用 Battle camera look。
+3. Suspend PlayerCharacter 的 Run Tunnel 探索移动；若 Trigger 配置了 battle entry viewpoint，则先把第一人称摄像机 View Pose 对齐到该站位，再启用 Battle camera look。Viewpoint 可配置过渡时间，默认 0 秒立即对齐。
 4. 由 Trigger 的 `EncounterDefinition` 构造敌人槽，并由 RunSession 补齐撤离重入进度。
 5. 创建 / 初始化 `UBattleSession`。
 6. 通过 UIManager Push `UBattleHUD` 到 Game 层。
@@ -185,7 +185,7 @@ GameMode 进入战斗时：
 
 敌人入口只走 `EncounterDefinition + SceneEnemyHostSlots`。`EncounterDefinition.EnemySlots` 负责规则敌人槽，`SceneEnemyHostSlots` 负责 `EnemySlotId -> SceneEnemyHost` 的场景表现绑定；缺 Host、漏 slot 或多余 slot 会被编辑器验证阻止。场景敌人点击、hover 和拖卡目标路由只认当前 BattleHUD registry 中的 `EncounterId + EnemySlotId + PartSlotId`，不通过 Actor 名称、单 Host 缓存或旧第一敌人入口推断身份。
 
-Battle entry viewpoint 是 `WacomApp` 的场景 / 镜头编排能力，不属于 `WacomRun` 或 `WacomBattle` 规则。关卡中可摆放 `AWacomFirstPersonViewpointActor`，并在 `ABattleTriggerActor.BattleEntryViewpoint` 引用它；该 Actor 的 transform 表示第一人称摄像机 View Pose，不是玩家 Capsule/root 位置。场景入口不直接操作 Pawn transform，而是先构造 `FWacomFirstPersonViewStageRequest`；BattleTrigger 是第一个 request producer，GameMode 是当前 request consumer。进入战斗时 GameMode 会先 suspend Run Tunnel，再按 request 的 View Pose 和摄像机相对偏移反推 Pawn root / Controller rotation，最后激活 Battle camera look，让 battle base rotation 捕获 staged view。未配置 viewpoint 时保持旧行为，从当前探索位置进入战斗。第一版只做 instant snap，不做 blend、输入锁定或 Level Sequence。
+Battle entry viewpoint 是 `WacomApp` 的场景 / 镜头编排能力，不属于 `WacomRun` 或 `WacomBattle` 规则。关卡中可摆放 `AWacomFirstPersonViewpointActor`，并在 `ABattleTriggerActor.BattleEntryViewpoint` 引用它；该 Actor 的 transform 表示第一人称摄像机 View Pose，不是玩家 Capsule/root 位置。场景入口不直接操作 Pawn transform，而是先构造 `FWacomFirstPersonViewStageRequest`；BattleTrigger 是第一个 request producer，GameMode 是当前 request consumer。进入战斗时 GameMode 会先 suspend Run Tunnel，再按 request 的 View Pose 和摄像机相对偏移反推 Pawn root / Controller rotation。`StageBlendTimeSeconds` 默认为 0 秒，此时立即对齐；若大于 0，则由 PlayerCharacter 的 first-person view stage blend component 从当前 View Pose 平滑移动到目标 View Pose。过渡期间组件使用 Battle camera look 的 yaw / pitch clamp、scale 和 interp 参数按鼠标位置叠加 cursor look offset；完成交接时 Battle camera look 的 base rotation 仍使用原始 Viewpoint，但当前 cursor look offset 会被保留，避免镜头从鼠标偏移角度回弹到原始 Viewpoint。First-person card Anchor 在 `BattleCameraLook` 尚未激活但 stage blend active 时优先使用当前 staged base View Pose；suspended Run Tunnel 不再拥有 Anchor 空间，避免手牌锚点停在探索样条位置直到过渡结束。BattleHUD / BattleSession 仍按 EnterBattle 当前时序创建；若镜头过渡被延后，BattleHUD 会先进入 `BattleInputReady=false` 且 first-person `BattleHand` runtime layer suppressed 的 staging 状态。suppressed 状态会清空当前 card layer visual slot，并写入一个 0 entries 的空 `BattleHand` runtime source，用来阻止 Anchor 回退到 preview card layer；初始 Snapshot 刷新只更新 HUD / 场景目标，不显示或交互第一人称战斗手牌。Battle camera look 激活后，GameMode 解除 suppression、重新从当前 Battle snapshot 刷新 first-person hand，并解锁玩家命令。未配置 viewpoint 或 blend 为 0 秒时保持旧行为，从当前探索位置立即进入可操作战斗。本阶段不做 CameraDirector 或 Level Sequence。
 
 ### ExitBattle
 

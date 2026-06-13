@@ -70,6 +70,8 @@ ViewportClampMode = SoftClampToViewport
 
 当前 first-person hand 的正式制作入口是 `UWacomFirstPersonCardAnchorComponent` Details 面板参数。`BP_WacomPlayerCharacter` 上的 AnchorComponent 直接承载卡面 Widget、锚点位置、投影、手牌形状、slot motion、hover、gesture、feedback 和 camera look 调参；这些字段是当前 Battle / Run 手牌表现的主线来源。
 
+Anchor 空间优先级是 Battle camera look、active first-person view stage blend、active 且未 suspended 的 Run Tunnel，最后才是 camera fallback。进入战斗 viewpoint blend 时 Run Tunnel 会保留 Segment / Distance 但处于 suspended；此时它不能继续提供手牌锚点，否则 card layer 会停在探索样条位置直到 Battle camera look 激活。Stage blend 暴露当前 staged base View Pose 给 Anchor，鼠标 additive look 仍通过共享 cursor look / 当前相机投影体现，不把鼠标偏移写成新的 Viewpoint base。
+
 旧 `UWacomFirstPersonCardLayoutPreset` DataAsset、runtime override API、Anchor 内部 preset resolve、editor validator 和相关测试已经删除。战斗与探索手牌表现都应通过玩家 AnchorComponent Details 参数调节；如果后续需要共享调参模板，应重新设计新的数据合同，而不是恢复旧 preset 路径。
 
 `LookInfluenceYaw / LookInfluencePitch` 也属于 first-person hand 表现参数，当前推荐直接在 AnchorComponent Details 中调整。制作起点：战斗默认使用 `BodyLocked`；探索、特殊检查或希望手牌有更强空间跟随感的场景可使用 `Look Responsive Projected`。`LookInfluenceYaw` 建议先在 `0.05-0.35` 内调，`LookInfluencePitch` 建议先在 `0.03-0.20` 内调；如果手牌在移动鼠标时过度漂移、读牌不稳或与镜头响应产生二次晃动，优先降低这两个值，再调整 clamp / smoothing。
@@ -118,7 +120,7 @@ BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。�
 
 Runtime source 只拥有卡牌 entries、transition hints、hovered card / card target handle、interaction ownership 和 source 生命周期；视觉调参来自 AnchorComponent Details。BattleHUD / Run source 不设置、不清理、也不持有 layout preset override。代码上这些运行时状态由 Anchor 私有 `FWacomFirstPersonCardAnchorRuntimeState` 保存，Anchor 的 public API 保持 source façade 语义。
 
-BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
+BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。进入 battle entry staging suppression 时，BattleHUD 会先清空当前 card layer visual slot，再写入 0 entries 的空 `BattleHand` runtime source；这既阻止 development preview fallback，也避免旧 slot 被 `SetCardSlots(0)` 当作 outgoing slot 播离场动画。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
 
 打开 Backpack / Pause / Shop / RunEvent 等 GameMenu 时，默认压制 Run default source，避免卡层遮挡菜单。菜单需要卡牌交互时，应显式申请 owned menu lease。
 

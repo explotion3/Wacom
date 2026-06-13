@@ -339,6 +339,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "当前 BattleHUD 是否允许提交普通玩家行动命令。只读查询，包含战斗阶段、击倒选择和表现 pending gate。"))
 	bool CanSubmitPlayerActionCommand() const;
 
+	void SetBattleInputReady(bool bReady);
+	bool IsBattleInputReady() const { return bBattleInputReady; }
+	void SetFirstPersonBattleHandSuppressedForEntry(bool bSuppressed);
+	bool IsFirstPersonBattleHandSuppressedForEntry() const { return bFirstPersonBattleHandSuppressedForEntry; }
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "是否存在等待表现栈清空后再提交的 Wait / EndTurn 命令。"))
 	bool HasPendingTurnBoundaryCommand() const;
 
@@ -433,6 +438,9 @@ private:
 
 	/** 战斗结束回调是否已广播过。保证只广播一次。 */
 	bool bHasBroadcastBattleEnd = false;
+
+	bool bBattleInputReady = true;
+	bool bFirstPersonBattleHandSuppressedForEntry = false;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> FirstPersonCardDetailPanel;

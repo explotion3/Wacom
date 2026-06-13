@@ -55,11 +55,6 @@ void UWacomBattleCameraLookComponent::TickComponent(
 
 bool UWacomBattleCameraLookComponent::ActivateBattleCameraLook()
 {
-	if (bBattleCameraLookActive)
-	{
-		return true;
-	}
-
 	APlayerController* PC = GetOwnerPlayerController();
 	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
 	AWacomPlayerCharacter* Character = GetOwnerCharacter();
@@ -68,16 +63,72 @@ bool UWacomBattleCameraLookComponent::ActivateBattleCameraLook()
 		return false;
 	}
 
-	BaseBattleRotation = PC->GetControlRotation();
-	BaseActorRotation = Character->GetActorRotation();
-	bSavedUseControllerRotationYaw = Character->bUseControllerRotationYaw;
-	bSavedUseControllerRotationPitch = Character->bUseControllerRotationPitch;
-	bSavedUseControllerRotationRoll = Character->bUseControllerRotationRoll;
+	return ActivateBattleCameraLookInternal(
+		*PC,
+		*Driver,
+		*Character,
+		PC->GetControlRotation(),
+		Character->GetActorRotation(),
+		/*bResetCursorLookOffset*/true);
+}
+
+bool UWacomBattleCameraLookComponent::ActivateBattleCameraLookFromBaseRotation(
+	FRotator InBaseBattleRotation,
+	FRotator InBaseActorRotation,
+	bool bPreserveCurrentCursorLookOffset)
+{
+	APlayerController* PC = GetOwnerPlayerController();
+	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
+	AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	if (!PC || !Driver || !Character)
+	{
+		return false;
+	}
+
+	return ActivateBattleCameraLookInternal(
+		*PC,
+		*Driver,
+		*Character,
+		InBaseBattleRotation,
+		InBaseActorRotation,
+		/*bResetCursorLookOffset*/!bPreserveCurrentCursorLookOffset);
+}
+
+bool UWacomBattleCameraLookComponent::ActivateBattleCameraLookInternal(
+	APlayerController& PlayerController,
+	UWacomCursorLookDriverComponent& Driver,
+	AWacomPlayerCharacter& Character,
+	FRotator InBaseBattleRotation,
+	FRotator InBaseActorRotation,
+	bool bResetCursorLookOffset)
+{
+	if (bBattleCameraLookActive)
+	{
+		return true;
+	}
+
+	BaseBattleRotation = InBaseBattleRotation.GetNormalized();
+	BaseActorRotation = InBaseActorRotation.GetNormalized();
+	bSavedUseControllerRotationYaw = Character.bUseControllerRotationYaw;
+	bSavedUseControllerRotationPitch = Character.bUseControllerRotationPitch;
+	bSavedUseControllerRotationRoll = Character.bUseControllerRotationRoll;
 	bHasSavedRotationPolicy = true;
-	Character->bUseControllerRotationYaw = false;
-	Character->bUseControllerRotationPitch = false;
-	Character->bUseControllerRotationRoll = false;
-	Driver->ResetLookOffset();
+	Character.bUseControllerRotationYaw = false;
+	Character.bUseControllerRotationPitch = false;
+	Character.bUseControllerRotationRoll = false;
+	if (bResetCursorLookOffset)
+	{
+		Driver.ResetLookOffset();
+	}
+	else
+	{
+		const FRotator LookOffset = Driver.GetCurrentLookOffset();
+		PlayerController.SetControlRotation(FRotator(
+			BaseBattleRotation.Pitch + LookOffset.Pitch,
+			BaseBattleRotation.Yaw + LookOffset.Yaw,
+			0.0f));
+		Character.SetActorRotation(BaseActorRotation, ETeleportType::TeleportPhysics);
+	}
 	bBattleCameraLookActive = true;
 	SetComponentTickEnabled(true);
 	return true;

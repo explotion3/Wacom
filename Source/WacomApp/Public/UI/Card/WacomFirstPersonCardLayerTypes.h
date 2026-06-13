@@ -12,10 +12,11 @@
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardAnchorMode : uint8
 {
-	Invalid,
-	BattleCamera,
-	RunTunnel,
-	CameraFallback
+	Invalid = 0,
+	BattleCamera = 1,
+	RunTunnel = 2,
+	CameraFallback = 3,
+	ViewStageBlend = 4
 };
 
 UENUM(BlueprintType)
