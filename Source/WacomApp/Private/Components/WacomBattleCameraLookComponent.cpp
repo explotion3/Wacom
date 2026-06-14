@@ -159,6 +159,23 @@ void UWacomBattleCameraLookComponent::DeactivateBattleCameraLook()
 	RestoreOwnerRotationPolicy();
 }
 
+void UWacomBattleCameraLookComponent::DeactivateBattleCameraLookPreservingView()
+{
+	if (!bBattleCameraLookActive)
+	{
+		return;
+	}
+
+	bBattleCameraLookActive = false;
+	ClearCursorLookOverride();
+	SetComponentTickEnabled(false);
+	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
+	{
+		Driver->ResetLookOffset();
+	}
+	RestoreOwnerRotationPolicy();
+}
+
 void UWacomBattleCameraLookComponent::UpdateCursorLookOffset(float DeltaTime)
 {
 	APlayerController* PC = GetOwnerPlayerController();

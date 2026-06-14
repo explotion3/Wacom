@@ -12,9 +12,11 @@
 
 class USphereComponent;
 class UBoxComponent;
+class AWacomFirstPersonViewpointActor;
 class UShopDefinition;
 class UWacomInteractionTargetComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
+struct FWacomFirstPersonViewStageRequest;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomShopTriggerDebugView
@@ -90,6 +92,10 @@ public:
 		meta = (ToolTip = "该商店第一次打开时用于初始化库存的手动商品列表。配置 ShopDefinition 后会优先使用资产商品，本列表仅作兼容兜底。"))
 	TArray<FRunShopOfferInput> Offers;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop|Camera",
+		meta = (ToolTip = "可选商店入口第一人称镜头站位。配置后，玩家打开商店时会先移动到该 View Pose，再显示商店界面。"))
+	TObjectPtr<AWacomFirstPersonViewpointActor> ShopEntryViewpoint = nullptr;
+
 	/** 触发半径（cm）。玩家进入该范围后，探索期按 E 可以打开商店。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop",
 		meta = (ToolTip = "玩家进入该半径后，探索期按 E 可以打开商店。单位：厘米。建议范围 50-1000。",
@@ -127,6 +133,8 @@ public:
 	/** 解析当前将传给 RunSession 的商品列表：优先 ShopDefinition，未配置时使用手动 Offers。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
 	TArray<FRunShopOfferInput> BuildResolvedOffers() const;
+
+	bool TryBuildShopEntryViewStageRequest(FWacomFirstPersonViewStageRequest& OutRequest) const;
 
 	/** 返回鼠标 hover 到 ClickBounds 时应显示的提示文本。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Shop|Click",

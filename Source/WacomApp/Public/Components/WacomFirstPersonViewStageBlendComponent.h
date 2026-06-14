@@ -53,6 +53,7 @@ protected:
 private:
 #if WITH_AUTOMATION_TESTS
 	friend struct FWacomFirstPersonViewStageBlendTestAccess;
+	friend struct FWacomFirstPersonViewStageReturnFlowTestAccess;
 #endif
 
 	TWeakObjectPtr<APlayerController> ActivePlayerController;

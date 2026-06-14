@@ -10,6 +10,8 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 
 #include "Actors/BattleTriggerActor.h"
+#include "Camera/WacomFirstPersonViewStageRequest.h"
+#include "Camera/WacomFirstPersonViewStageReturnFlow.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
@@ -507,6 +509,7 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 	}
 	if (Params.Key == EKeys::LeftMouseButton
 		&& Params.Event == IE_Released
+		&& !bGameMenuViewpointStageTransitionActive
 		&& TryRouteRunWorldInteractableClick())
 	{
 		return true;
@@ -686,12 +689,50 @@ void AWacomPlayerController::RegisterActiveGameMenuWidget(UWacomMenuWidgetBase* 
 
 void AWacomPlayerController::UnregisterActiveGameMenuWidget(UWacomMenuWidgetBase* MenuWidget)
 {
+	const bool bTrackedGameMenuViewpointMenuClosing =
+		bGameMenuViewpointReturnArmed
+		&& (GameMenuViewpointReturnWidget.Get() == MenuWidget
+			|| !GameMenuViewpointReturnWidget.IsValid());
+
 	ActiveGameMenuWidgets.RemoveAll(
 		[MenuWidget](const TWeakObjectPtr<UWacomMenuWidgetBase>& Existing)
 		{
 			return !Existing.IsValid() || Existing.Get() == MenuWidget;
 		});
+
+	if (bTrackedGameMenuViewpointMenuClosing)
+	{
+		bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = true;
+		GameMenuViewpointReturnWidget.Reset();
+	}
+
 	RefreshRunFirstPersonCardLayerMenuSuppression();
+
+	if (!bTrackedGameMenuViewpointMenuClosing || ActiveGameMenuWidgets.Num() > 0)
+	{
+		return;
+	}
+
+	bGameMenuViewpointReturnArmed = false;
+	BeginGameMenuViewpointStageTransition(FName(TEXT("GameMenuReturn")));
+
+	if (AWacomPlayerCharacter* WacomPawn = GetPawn<AWacomPlayerCharacter>())
+	{
+		const TWeakObjectPtr<AWacomPlayerController> WeakThis(this);
+		FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+			*WacomPawn,
+			*this,
+			[WeakThis]()
+			{
+				if (AWacomPlayerController* StrongThis = WeakThis.Get())
+				{
+					StrongThis->FinishGameMenuViewpointStageTransition();
+				}
+			});
+		return;
+	}
+
+	FinishGameMenuViewpointStageTransition();
 }
 
 void AWacomPlayerController::SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(bool bSuppressed)
@@ -1235,7 +1276,9 @@ bool AWacomPlayerController::BuildRunTunnelBranchClickHitResult(FHitResult& OutH
 bool AWacomPlayerController::IsInExplorationFlow() const
 {
 	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
-	return GM && GM->GetGameFlowState() == EGameFlowState::Exploration;
+	return GM
+		&& GM->GetGameFlowState() == EGameFlowState::Exploration
+		&& !bGameMenuViewpointStageTransitionActive;
 }
 
 void AWacomPlayerController::StartRunWorldTargetProbePreviewLoop()
@@ -2759,9 +2802,83 @@ bool AWacomPlayerController::RequestOpenShop(FName ShopId, const TArray<FRunShop
 	return FWacomExplorationScreenRouter::OpenShop(*this, ShopId, Offers);
 }
 
+bool AWacomPlayerController::RequestOpenShop(
+	FName ShopId,
+	const TArray<FRunShopOfferInput>& Offers,
+	const FWacomFirstPersonViewStageRequest& StageRequest)
+{
+	return FWacomExplorationScreenRouter::OpenShop(*this, ShopId, Offers, StageRequest);
+}
+
+void AWacomPlayerController::BeginGameMenuViewpointStageTransition(FName DebugReason)
+{
+	bGameMenuViewpointStageTransitionActive = true;
+	ClearRunMenuDropTargetProbe();
+	ClearRunWorldCardDropProbe();
+	const FName HoverClearReason = DebugReason.IsNone()
+		? FName(TEXT("GameMenuViewpointStage"))
+		: FName(*FString::Printf(TEXT("%sViewpointStage"), *DebugReason.ToString()));
+	ClearRunWorldInteractableHoverPrompt(HoverClearReason);
+	SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(true);
+	if (AWacomPlayerCharacter* WacomPawn = GetPawn<AWacomPlayerCharacter>())
+	{
+		WacomPawn->SetExplorationInputEnabled(false);
+	}
+	RefreshInteractToast();
+}
+
+void AWacomPlayerController::ArmGameMenuViewpointReturnForMenu(UWacomMenuWidgetBase* MenuWidget)
+{
+	bGameMenuViewpointStageTransitionActive = false;
+	bGameMenuViewpointReturnArmed = MenuWidget != nullptr;
+	GameMenuViewpointReturnWidget = MenuWidget;
+	RefreshInteractToast();
+}
+
+void AWacomPlayerController::ReturnFromGameMenuViewpointStageAfterFailedOpen()
+{
+	bGameMenuViewpointReturnArmed = false;
+	GameMenuViewpointReturnWidget.Reset();
+	BeginGameMenuViewpointStageTransition(FName(TEXT("GameMenuReturn")));
+
+	if (AWacomPlayerCharacter* WacomPawn = GetPawn<AWacomPlayerCharacter>())
+	{
+		const TWeakObjectPtr<AWacomPlayerController> WeakThis(this);
+		FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+			*WacomPawn,
+			*this,
+			[WeakThis]()
+			{
+				if (AWacomPlayerController* StrongThis = WeakThis.Get())
+				{
+					StrongThis->FinishGameMenuViewpointStageTransition();
+				}
+			});
+		return;
+	}
+
+	FinishGameMenuViewpointStageTransition();
+}
+
+void AWacomPlayerController::FinishGameMenuViewpointStageTransition()
+{
+	bGameMenuViewpointStageTransitionActive = false;
+	SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(false);
+	RefreshRunFirstPersonCardLayer();
+	RefreshInteractToast();
+}
+
 bool AWacomPlayerController::RequestOpenRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition)
 {
 	return FWacomExplorationScreenRouter::OpenRunEvent(*this, PersistentId, EventDefinition);
+}
+
+bool AWacomPlayerController::RequestOpenRunEvent(
+	FName PersistentId,
+	UWacomRunEventDefinition* EventDefinition,
+	const FWacomFirstPersonViewStageRequest& StageRequest)
+{
+	return FWacomExplorationScreenRouter::OpenRunEvent(*this, PersistentId, EventDefinition, StageRequest);
 }
 
 void AWacomPlayerController::TryOpenBackpackFromConsole()

@@ -12,9 +12,9 @@
 #include "Session/BattleSession.h"
 
 #include "Actors/BattleTriggerActor.h"
-#include "Camera/WacomFirstPersonViewpointPlacement.h"
+#include "Camera/WacomFirstPersonViewStageCoordinator.h"
+#include "Camera/WacomFirstPersonViewStageReturnFlow.h"
 #include "Components/WacomBattleCameraLookComponent.h"
-#include "Components/WacomFirstPersonViewStageBlendComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
@@ -49,44 +49,6 @@ namespace
 		return CountBattleEnemySlotParts(Params.EnemySlots);
 	}
 
-	void ActivateBattleCameraLookForPawn(AWacomPlayerCharacter& Pawn)
-	{
-		if (UWacomBattleCameraLookComponent* BattleCameraLook = Pawn.GetBattleCameraLookComponent())
-		{
-			BattleCameraLook->ActivateBattleCameraLook();
-		}
-	}
-
-	void ActivateBattleCameraLookForStagedRequest(
-		AWacomPlayerCharacter& Pawn,
-		const FWacomFirstPersonViewStageRequest& Request)
-	{
-		UWacomBattleCameraLookComponent* BattleCameraLook = Pawn.GetBattleCameraLookComponent();
-		if (!BattleCameraLook)
-		{
-			return;
-		}
-		if (!Request.bHasViewTransform)
-		{
-			BattleCameraLook->ActivateBattleCameraLook();
-			return;
-		}
-
-		FVector ActorLocation = FVector::ZeroVector;
-		FRotator ActorRotation = FRotator::ZeroRotator;
-		FRotator ControlRotation = FRotator::ZeroRotator;
-		WacomFirstPersonViewpointPlacement::CalculateActorTransformForView(
-			Pawn,
-			Request.ViewTransform,
-			ActorLocation,
-			ActorRotation,
-			ControlRotation);
-		BattleCameraLook->ActivateBattleCameraLookFromBaseRotation(
-			ControlRotation,
-			ActorRotation,
-			/*bPreserveCurrentCursorLookOffset*/true);
-	}
-
 	void GuardBattleEntryHUD(UBattleHUD* BattleHUD)
 	{
 		if (!BattleHUD)
@@ -112,6 +74,48 @@ namespace
 			BattleHUD->RefreshFromSnapshot(ActiveSession->BuildSnapshot());
 		}
 	}
+
+	struct FExitBattleRunPresentationRestoreState
+	{
+		explicit FExitBattleRunPresentationRestoreState(AWacomPlayerController* InPlayerController)
+			: WeakPlayerController(InPlayerController)
+		{
+		}
+
+		void MarkReturnCompleted()
+		{
+			bReturnCompleted = true;
+			TryRestore();
+		}
+
+		void MarkExitBattlePostRunReady()
+		{
+			bExitBattlePostRunReady = true;
+			TryRestore();
+		}
+
+	private:
+		void TryRestore()
+		{
+			if (!bReturnCompleted || !bExitBattlePostRunReady || bPresentationRestored)
+			{
+				return;
+			}
+
+			bPresentationRestored = true;
+			if (AWacomPlayerController* WacomPC = WeakPlayerController.Get())
+			{
+				WacomPC->SetRunFirstPersonCardLayerActive(true);
+				WacomPC->RefreshRunFirstPersonCardLayer();
+				WacomPC->RefreshInteractToast();
+			}
+		}
+
+		TWeakObjectPtr<AWacomPlayerController> WeakPlayerController;
+		bool bReturnCompleted = false;
+		bool bExitBattlePostRunReady = false;
+		bool bPresentationRestored = false;
+	};
 }
 
 AWacomGameMode::AWacomGameMode()
@@ -489,57 +493,29 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	{
 		Pawn->SetExplorationInputEnabled(false);
 		FWacomFirstPersonViewStageRequest BattleEntryStageRequest;
-		const bool bHasBattleEntryStageRequest =
-			Trigger->TryBuildBattleEntryViewStageRequest(BattleEntryStageRequest)
-			&& BattleEntryStageRequest.bHasViewTransform;
-		if (bHasBattleEntryStageRequest)
-		{
-			if (BattleEntryStageRequest.BlendTimeSeconds > KINDA_SMALL_NUMBER)
-			{
-				if (UWacomFirstPersonViewStageBlendComponent* StageBlend =
-					Pawn->GetFirstPersonViewStageBlendComponent())
+		Trigger->TryBuildBattleEntryViewStageRequest(BattleEntryStageRequest);
+
+		const TWeakObjectPtr<AWacomGameMode> WeakGameMode(this);
+		const TWeakObjectPtr<AWacomPlayerCharacter> WeakPawn(Pawn);
+		bBattleCameraActivationDeferred =
+			FWacomFirstPersonViewStageCoordinator::StageFirstPersonViewAndActivateBattleCameraLook(
+				*Pawn,
+				*PC,
+				BattleEntryStageRequest,
+				[WeakGameMode, WeakPawn]()
 				{
-					const TWeakObjectPtr<AWacomGameMode> WeakGameMode(this);
-					const TWeakObjectPtr<AWacomPlayerCharacter> WeakPawn(Pawn);
-					const FWacomFirstPersonViewStageRequest DeferredStageRequest =
-						BattleEntryStageRequest;
-					bBattleCameraActivationDeferred = StageBlend->StartBlendToStageRequest(
-						*PC,
-						BattleEntryStageRequest,
-						[WeakGameMode, WeakPawn, DeferredStageRequest]()
-						{
-							AWacomGameMode* GameMode = WeakGameMode.Get();
-							AWacomPlayerCharacter* StrongPawn = WeakPawn.Get();
-							if (!GameMode
-								|| !StrongPawn
-								|| GameMode->CurrentState != EGameFlowState::Battle)
-							{
-								return;
-							}
-							ActivateBattleCameraLookForStagedRequest(
-								*StrongPawn,
-								DeferredStageRequest);
-							ReleaseBattleEntryHUD(
-								GameMode->BattleHUD,
-								GameMode->ActiveSession,
-								/*bRefreshSnapshot*/true);
-						});
-				}
-			}
-
-			if (!bBattleCameraActivationDeferred)
-			{
-				WacomFirstPersonViewpointPlacement::ApplyStageRequest(
-					*Pawn,
-					*PC,
-					BattleEntryStageRequest);
-			}
-		}
-
-		if (!bBattleCameraActivationDeferred)
-		{
-			ActivateBattleCameraLookForPawn(*Pawn);
-		}
+					AWacomGameMode* GameMode = WeakGameMode.Get();
+					if (!GameMode
+						|| !WeakPawn.Get()
+						|| GameMode->CurrentState != EGameFlowState::Battle)
+					{
+						return;
+					}
+					ReleaseBattleEntryHUD(
+						GameMode->BattleHUD,
+						GameMode->ActiveSession,
+						/*bRefreshSnapshot*/true);
+				});
 	}
 
 	if (!bBattleCameraActivationDeferred)
@@ -586,6 +562,9 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		static_cast<int32>(Outcome));
 
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
+	const TSharedRef<FExitBattleRunPresentationRestoreState> RunPresentationRestore =
+		MakeShared<FExitBattleRunPresentationRestoreState>(WacomPC);
 
 	UGameInstance* GI = GetGameInstance();
 	UWacomGameUIManagerSubsystem* UIManager =
@@ -620,9 +599,11 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	BattleHUD     = nullptr;
 	ActiveSession = nullptr;
 
-	// 2) 恢复探索输入 + 切输入上下文
-	if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
+	// 2) 切回探索输入上下文；探索输入会在镜头回到 RunTunnel 后恢复。
+	if (WacomPC)
 	{
+		// 回 RunTunnel staging 期间清空探索手牌，避免卡牌跟着相机从战斗 Viewpoint 平移回样条。
+		WacomPC->ClearRunFirstPersonCardLayer();
 		if (ULocalPlayer* LP = WacomPC->GetLocalPlayer())
 		{
 			if (UWacomInputContextCoordinatorSubsystem* InputCoordinator =
@@ -634,28 +615,35 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 			}
 		}
 	}
+	bool bRunReturnFlowStarted = false;
 	if (PC)
 	{
 		if (AWacomPlayerCharacter* Pawn = PC->GetPawn<AWacomPlayerCharacter>())
 		{
-			if (UWacomFirstPersonViewStageBlendComponent* StageBlend =
-				Pawn->GetFirstPersonViewStageBlendComponent())
-			{
-				StageBlend->CancelActiveBlend();
-			}
 			if (UWacomBattleCameraLookComponent* BattleCameraLook = Pawn->GetBattleCameraLookComponent())
 			{
-				BattleCameraLook->DeactivateBattleCameraLook();
+				BattleCameraLook->DeactivateBattleCameraLookPreservingView();
 			}
-			Pawn->SetExplorationInputEnabled(true);
+
+			bRunReturnFlowStarted = true;
+			FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+				*Pawn,
+				*PC,
+				[RunPresentationRestore]()
+				{
+					RunPresentationRestore->MarkReturnCompleted();
+				});
 		}
+	}
+	if (!bRunReturnFlowStarted)
+	{
+		RunPresentationRestore->MarkReturnCompleted();
 	}
 
 	// 3) 标记触发器为已销毁（在 Destroy 前读 PersistentId）+ Destroy 本身
 	const FName TriggerPersistentId = PendingTrigger ? PendingTrigger->PersistentId : NAME_None;
 	if (PendingTrigger)
 	{
-		AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
 		URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
 
 		// 真胜利（非撤离）才标记已销毁 + Destroy。
@@ -682,7 +670,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 
 	// 4) 通知 RunSession 战斗结束，让它更新击败列表 / run active 状态 / 战外结算压力
 	//    + 撤离时持久化破坏部位、真胜利时清理。
-	if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
+	if (WacomPC)
 	{
 		if (URunSession* Run = WacomPC->GetRunSession())
 		{
@@ -700,15 +688,9 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	// 5) 状态复位
 	CurrentState = EGameFlowState::Exploration;
 
-	// 撤离回探索时玩家仍在 Sphere 内（不会再发 BeginOverlap），
-	// 但候选列表里 Trigger 还在；显式刷一次 Toast 让 ExplorationHUD 显示"按 E 战斗"。
-	// 真胜利时 Trigger 已在前面 Destroy，EndPlay 会反注册候选，Toast 自然隐藏。
-	if (AWacomPlayerController* WPC = Cast<AWacomPlayerController>(PC))
-	{
-		WPC->SetRunFirstPersonCardLayerActive(true);
-		WPC->RefreshRunFirstPersonCardLayer();
-		WPC->RefreshInteractToast();
-	}
+	// 撤离回探索时玩家仍在 Sphere 内（不会再发 BeginOverlap），但候选列表里 Trigger 还在。
+	// Run 手牌和 Toast 等 return staging 完成后再恢复，避免退出战斗时从 Viewpoint 平移回样条。
+	RunPresentationRestore->MarkExitBattlePostRunReady();
 
 	// 6) 存档：先写 Auto 备份，再覆盖 Main。
 	// 顺序很重要——如果程序在这两次 Save 之间崩掉，Auto 至少是新的，Main 还是上次的旧档，

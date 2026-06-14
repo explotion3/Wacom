@@ -48,6 +48,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Camera")
 	void DeactivateBattleCameraLook();
 
+	void DeactivateBattleCameraLookPreservingView();
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Camera")
 	bool IsBattleCameraLookActive() const { return bBattleCameraLookActive; }
 

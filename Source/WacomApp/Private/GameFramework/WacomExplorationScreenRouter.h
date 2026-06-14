@@ -6,6 +6,7 @@
 
 class AWacomPlayerController;
 class UWacomRunEventDefinition;
+struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
 
 /**
@@ -20,5 +21,15 @@ struct FWacomExplorationScreenRouter
 	static void TogglePauseMenu(AWacomPlayerController& PC);
 	static void CloseTopGameMenu(AWacomPlayerController& PC);
 	static bool OpenShop(AWacomPlayerController& PC, FName ShopId, const TArray<FRunShopOfferInput>& Offers);
+	static bool OpenShop(
+		AWacomPlayerController& PC,
+		FName ShopId,
+		const TArray<FRunShopOfferInput>& Offers,
+		const FWacomFirstPersonViewStageRequest& StageRequest);
 	static bool OpenRunEvent(AWacomPlayerController& PC, FName PersistentId, UWacomRunEventDefinition* EventDefinition);
+	static bool OpenRunEvent(
+		AWacomPlayerController& PC,
+		FName PersistentId,
+		UWacomRunEventDefinition* EventDefinition,
+		const FWacomFirstPersonViewStageRequest& StageRequest);
 };

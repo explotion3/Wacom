@@ -51,6 +51,8 @@ Actor 和 Widget 可以提供 target handle、debug view、hover prompt 和 prev
 
 - 正式关卡推荐使用 Definition 驱动的入口：`ABattleTriggerActor.EncounterDefinition`、`AWacomShopTriggerActor.ShopDefinition`、`AWacomRunEventTriggerActor.EventDefinition`、`AWacomRunRewardPickupActor.PickupDefinition`、`AWacomRunKeyChestActor.CardInteractionDefinition`。
 - `ABattleTriggerActor` 必须通过 `EncounterDefinition` 进入战斗，并用 `SceneEnemyHostSlots` 完成 Encounter enemy slot 到场景 Host 的映射。
+- `AWacomShopTriggerActor` 可选配置 `ShopEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到商店第一人称 View Pose，再打开 ShopScreen；关闭后先退 UI，再回 RunTunnel。它不改变 `PersistentId`、`ShopDefinition`、`Offers`、库存持久化或购买规则。
+- `AWacomRunEventTriggerActor` 可选配置 `RunEventEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到事件第一人称 View Pose，再打开 RunEventScreen；关闭后先退 UI，再回 RunTunnel。已完成事件仍只显示完成提示，不会触发 staging；该字段不改变 `PersistentId`、`EventDefinition`、完成状态或选项结算规则。
 - Definition 字段语义见 [WacomData.md](./WacomData.md)；生成样例和资产 validator 口径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)。
 - 专用 Pickup Actor 只作为快速验证入口保留；正式关卡优先使用 Definition 驱动入口，不把快速入口扩展成新的长期制作主线。
 - Blueprint 只放默认外观和可见 primitive，不写 EventGraph 规则逻辑、不直接调用 RunSession。

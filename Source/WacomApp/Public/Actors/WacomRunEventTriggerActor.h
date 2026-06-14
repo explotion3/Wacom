@@ -11,9 +11,11 @@
 
 class USphereComponent;
 class UBoxComponent;
+class AWacomFirstPersonViewpointActor;
 class UWacomInteractionTargetComponent;
 class UWacomRunEventDefinition;
 class UWacomRunWorldInteractionTargetBridgeComponent;
+struct FWacomFirstPersonViewStageRequest;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomRunEventTriggerDebugView
@@ -87,6 +89,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|RunEvent",
 		meta = (ToolTip = "静态事件图定义。多个场景 Actor 可以引用同一事件定义，但运行态由各自 PersistentId 区分。"))
 	TObjectPtr<UWacomRunEventDefinition> EventDefinition = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|RunEvent|Camera",
+		meta = (ToolTip = "可选事件入口第一人称镜头站位。配置后，玩家打开事件时会先移动到该 View Pose，再显示事件界面。"))
+	TObjectPtr<AWacomFirstPersonViewpointActor> RunEventEntryViewpoint = nullptr;
 
 	/** 触发半径（cm）。玩家进入该范围后，探索期按 E 可以打开事件。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|RunEvent",
@@ -166,6 +172,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|RunEvent|Debug",
 		meta = (ToolTip = "将当前触发器诊断摘要写入日志，便于 PIE 排查事件配置和运行态。"))
 	void LogRunEventTriggerDebugSummary(AWacomPlayerController* PC) const;
+
+	bool TryBuildRunEventEntryViewStageRequest(FWacomFirstPersonViewStageRequest& OutRequest) const;
 
 	// ---- IWacomWorldInteractable ----
 	virtual FText GetInteractPromptText_Implementation(AWacomPlayerController* PC) const override;

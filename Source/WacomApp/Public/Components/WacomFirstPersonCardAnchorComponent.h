@@ -116,6 +116,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|02 Anchor World Position", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "30.0", ToolTip = "第一人称卡牌锚点跟随目标位置和朝向的插值速度；设为 0 时立即贴合目标锚点。"))
 	float FollowInterpSpeed = 12.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|02 Anchor World Position", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "120.0", ToolTip = "第一人称镜头 staging 期间以及 RunTunnel / BattleCamera / ViewStageBlend 交接帧的卡牌锚点跟随速度，单位为反秒；0 表示立即贴合目标镜头空间，避免 HUD 或 hand source 已刷新但锚点还在慢慢追。"))
+	float CameraStageFollowInterpSpeed = 0.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|03 Projection", meta = (ToolTip = "第一人称卡牌层的投影模式。BodyLocked 是稳定默认风格：锁定布局基准但仍使用当前真实相机投影；Look Responsive Projected 会让鼠标镜头偏移参与手牌锚点计算以获得更强跟随感和视差。"))
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 

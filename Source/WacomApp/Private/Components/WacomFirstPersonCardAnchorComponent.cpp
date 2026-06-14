@@ -30,6 +30,28 @@ namespace
 	const FName NoCameraManagerReason(TEXT("NoCameraManager"));
 	const FName CameraFallbackReason(TEXT("CameraFallback"));
 
+	bool IsCameraStageAnchorMode(EWacomFirstPersonCardAnchorMode Mode)
+	{
+		return Mode == EWacomFirstPersonCardAnchorMode::RunTunnel
+			|| Mode == EWacomFirstPersonCardAnchorMode::BattleCamera
+			|| Mode == EWacomFirstPersonCardAnchorMode::ViewStageBlend;
+	}
+
+	bool UsesCameraStageFollowSpeed(
+		EWacomFirstPersonCardAnchorMode PreviousMode,
+		EWacomFirstPersonCardAnchorMode NextMode)
+	{
+		if (PreviousMode == EWacomFirstPersonCardAnchorMode::ViewStageBlend
+			|| NextMode == EWacomFirstPersonCardAnchorMode::ViewStageBlend)
+		{
+			return true;
+		}
+
+		return PreviousMode != NextMode
+			&& IsCameraStageAnchorMode(PreviousMode)
+			&& IsCameraStageAnchorMode(NextMode);
+	}
+
 	void BuildProjectionConfigFromAnchor(
 		const UWacomFirstPersonCardAnchorComponent& Anchor,
 		FWacomFirstPersonCardResolvedLayoutConfig& Config)
@@ -637,8 +659,11 @@ void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
 		+ AnchorRotationMatrix.GetScaledAxis(EAxis::Y) * HorizontalOffset
 		+ AnchorRotationMatrix.GetScaledAxis(EAxis::Z) * VerticalOffset;
 	const FTransform TargetAnchorTransform(AnchorRotation, AnchorLocation, FVector::OneVector);
+	const float EffectiveFollowInterpSpeed = UsesCameraStageFollowSpeed(CurrentMode, ResolvedMode)
+		? CameraStageFollowInterpSpeed
+		: FollowInterpSpeed;
 
-	if (!bHasInitializedAnchor || FollowInterpSpeed <= 0.0f || DeltaTime <= 0.0f)
+	if (!bHasInitializedAnchor || EffectiveFollowInterpSpeed <= 0.0f || DeltaTime <= 0.0f)
 	{
 		CurrentAnchorTransform = TargetAnchorTransform;
 	}
@@ -648,12 +673,12 @@ void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
 			CurrentAnchorTransform.GetLocation(),
 			TargetAnchorTransform.GetLocation(),
 			DeltaTime,
-			FollowInterpSpeed);
+			EffectiveFollowInterpSpeed);
 		const FRotator SmoothedRotation = FMath::RInterpTo(
 			CurrentAnchorTransform.Rotator(),
 			TargetAnchorTransform.Rotator(),
 			DeltaTime,
-			FollowInterpSpeed);
+			EffectiveFollowInterpSpeed);
 		CurrentAnchorTransform = FTransform(SmoothedRotation, SmoothedLocation, FVector::OneVector);
 	}
 

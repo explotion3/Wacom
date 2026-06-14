@@ -11,10 +11,49 @@
 
 namespace
 {
-	float SmoothStageBlendAlpha(float Alpha)
+	float SmoothStepStageBlendAlpha(float Alpha)
 	{
 		const float ClampedAlpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
 		return ClampedAlpha * ClampedAlpha * (3.0f - 2.0f * ClampedAlpha);
+	}
+
+	float EvaluatePoweredEaseInOut(float Alpha, float EasePower)
+	{
+		if (Alpha <= 0.0f)
+		{
+			return 0.0f;
+		}
+		if (Alpha >= 1.0f)
+		{
+			return 1.0f;
+		}
+		if (Alpha < 0.5f)
+		{
+			return 0.5f * FMath::Pow(Alpha * 2.0f, EasePower);
+		}
+		return 1.0f - 0.5f * FMath::Pow((1.0f - Alpha) * 2.0f, EasePower);
+	}
+
+	float EvaluateStageBlendAlpha(
+		const FWacomFirstPersonViewStageRequest& Request,
+		float Alpha)
+	{
+		const float ClampedAlpha = FMath::Clamp(Alpha, 0.0f, 1.0f);
+		const float EasePower = FMath::Max(0.01f, Request.BlendEasePower);
+		switch (Request.BlendCurve)
+		{
+		case EWacomFirstPersonViewStageBlendCurve::Linear:
+			return ClampedAlpha;
+		case EWacomFirstPersonViewStageBlendCurve::EaseIn:
+			return FMath::Pow(ClampedAlpha, EasePower);
+		case EWacomFirstPersonViewStageBlendCurve::EaseOut:
+			return 1.0f - FMath::Pow(1.0f - ClampedAlpha, EasePower);
+		case EWacomFirstPersonViewStageBlendCurve::EaseInOut:
+			return EvaluatePoweredEaseInOut(ClampedAlpha, EasePower);
+		case EWacomFirstPersonViewStageBlendCurve::SmoothStep:
+		default:
+			return SmoothStepStageBlendAlpha(ClampedAlpha);
+		}
 	}
 }
 
@@ -59,7 +98,7 @@ void UWacomFirstPersonViewStageBlendComponent::TickComponent(
 
 	BlendElapsedSeconds += FMath::Max(0.0f, DeltaTime);
 	const float RawAlpha = GetStageBlendAlpha();
-	const float SmoothedAlpha = SmoothStageBlendAlpha(RawAlpha);
+	const float SmoothedAlpha = EvaluateStageBlendAlpha(ActiveRequest, RawAlpha);
 
 	const FVector ViewLocation = FMath::Lerp(
 		StartViewTransform.GetLocation(),

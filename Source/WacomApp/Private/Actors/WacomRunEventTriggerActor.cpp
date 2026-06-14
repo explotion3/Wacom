@@ -11,6 +11,8 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 
+#include "Actors/WacomFirstPersonViewpointActor.h"
+#include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Events/RunEventDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunState.h"
@@ -398,7 +400,31 @@ bool AWacomRunEventTriggerActor::TryInteract_Implementation(AWacomPlayerControll
 		ShowCompletedToast(PC);
 		return false;
 	}
-	return PC->RequestOpenRunEvent(PersistentId, EventDefinition);
+
+	FWacomFirstPersonViewStageRequest StageRequest;
+	TryBuildRunEventEntryViewStageRequest(StageRequest);
+	return PC->RequestOpenRunEvent(PersistentId, EventDefinition, StageRequest);
+}
+
+bool AWacomRunEventTriggerActor::TryBuildRunEventEntryViewStageRequest(
+	FWacomFirstPersonViewStageRequest& OutRequest) const
+{
+	OutRequest = FWacomFirstPersonViewStageRequest();
+	if (!RunEventEntryViewpoint)
+	{
+		return false;
+	}
+
+	OutRequest.bHasViewTransform = true;
+	OutRequest.ViewTransform = RunEventEntryViewpoint->GetActorTransform();
+	OutRequest.BlendTimeSeconds = FMath::Max(0.0f, RunEventEntryViewpoint->StageBlendTimeSeconds);
+	OutRequest.BlendCurve = RunEventEntryViewpoint->StageBlendCurve;
+	OutRequest.BlendEasePower = FMath::Max(0.01f, RunEventEntryViewpoint->StageBlendEasePower);
+	OutRequest.Reason = FName(TEXT("RunEventEntry"));
+	OutRequest.DebugSource = PersistentId.IsNone()
+		? FName(*GetName())
+		: PersistentId;
+	return true;
 }
 
 bool AWacomRunEventTriggerActor::ConfigureDebugSample(

@@ -8,6 +8,7 @@
 #include "Components/WacomCursorLookDriverComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomFirstPersonViewStageBlendComponent.h"
+#include "Components/WacomFirstPersonWalkBobComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
 #include "EnhancedInputComponent.h"
 #include "InputAction.h"
@@ -33,6 +34,7 @@ AWacomPlayerCharacter::AWacomPlayerCharacter()
 	BattleCameraLookComponent = CreateDefaultSubobject<UWacomBattleCameraLookComponent>(TEXT("BattleCameraLookComponent"));
 	FirstPersonCardAnchorComponent = CreateDefaultSubobject<UWacomFirstPersonCardAnchorComponent>(TEXT("FirstPersonCardAnchorComponent"));
 	FirstPersonViewStageBlendComponent = CreateDefaultSubobject<UWacomFirstPersonViewStageBlendComponent>(TEXT("FirstPersonViewStageBlendComponent"));
+	WalkBobComponent = CreateDefaultSubobject<UWacomFirstPersonWalkBobComponent>(TEXT("WalkBobComponent"));
 
 	// IA 资产延迟到 BeginPlay 里 LoadObject 解析，避免 CDO 阶段 FObjectFinder
 	// 在 commandlet 首次运行前 assets 不存在而崩溃。
@@ -104,11 +106,20 @@ void AWacomPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInp
 
 void AWacomPlayerCharacter::SetExplorationInputEnabled(bool bEnabled)
 {
+	SetExplorationInputEnabled(
+		bEnabled,
+		/*bPreserveCursorLookOffset*/false);
+}
+
+void AWacomPlayerCharacter::SetExplorationInputEnabled(
+	bool bEnabled,
+	bool bPreserveCursorLookOffset)
+{
 	if (RunTunnelMovementComponent)
 	{
 		if (bEnabled)
 		{
-			RunTunnelMovementComponent->ResumeRunTunnel();
+			RunTunnelMovementComponent->ResumeRunTunnel(bPreserveCursorLookOffset);
 		}
 		else
 		{

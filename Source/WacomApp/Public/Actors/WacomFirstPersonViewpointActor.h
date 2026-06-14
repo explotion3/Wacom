@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "GameFramework/Actor.h"
 #include "WacomFirstPersonViewpointActor.generated.h"
 
@@ -29,6 +30,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera",
 		meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "5.0", Units = "s", ToolTip = "使用该第一人称镜头站位时，从当前视角平滑移动到此 View Pose 的时长，单位秒；0 表示立即对齐。"))
 	float StageBlendTimeSeconds = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera",
+		meta = (ToolTip = "使用该第一人称镜头站位时的过渡速度曲线；只影响移动节奏，不改变目标 View Pose。"))
+	EWacomFirstPersonViewStageBlendCurve StageBlendCurve = EWacomFirstPersonViewStageBlendCurve::SmoothStep;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera",
+		meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "6.0", ToolTip = "EaseIn / EaseOut / EaseInOut 曲线的缓动强度；1 接近线性，数值越大起止越柔，中段越快。SmoothStep 不使用该值。"))
+	float StageBlendEasePower = 2.0f;
 
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Camera",

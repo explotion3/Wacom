@@ -11,6 +11,8 @@
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 
+#include "Actors/WacomFirstPersonViewpointActor.h"
+#include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Shops/ShopDefinition.h"
 
@@ -187,7 +189,31 @@ bool AWacomShopTriggerActor::TryInteract_Implementation(AWacomPlayerController* 
 	{
 		return false;
 	}
-	return PC->RequestOpenShop(PersistentId, BuildResolvedOffers());
+
+	FWacomFirstPersonViewStageRequest StageRequest;
+	TryBuildShopEntryViewStageRequest(StageRequest);
+	return PC->RequestOpenShop(PersistentId, BuildResolvedOffers(), StageRequest);
+}
+
+bool AWacomShopTriggerActor::TryBuildShopEntryViewStageRequest(
+	FWacomFirstPersonViewStageRequest& OutRequest) const
+{
+	OutRequest = FWacomFirstPersonViewStageRequest();
+	if (!ShopEntryViewpoint)
+	{
+		return false;
+	}
+
+	OutRequest.bHasViewTransform = true;
+	OutRequest.ViewTransform = ShopEntryViewpoint->GetActorTransform();
+	OutRequest.BlendTimeSeconds = FMath::Max(0.0f, ShopEntryViewpoint->StageBlendTimeSeconds);
+	OutRequest.BlendCurve = ShopEntryViewpoint->StageBlendCurve;
+	OutRequest.BlendEasePower = FMath::Max(0.01f, ShopEntryViewpoint->StageBlendEasePower);
+	OutRequest.Reason = FName(TEXT("ShopEntry"));
+	OutRequest.DebugSource = PersistentId.IsNone()
+		? FName(*GetName())
+		: PersistentId;
+	return true;
 }
 
 FWacomShopTriggerDebugView AWacomShopTriggerActor::GetShopTriggerDebugView(

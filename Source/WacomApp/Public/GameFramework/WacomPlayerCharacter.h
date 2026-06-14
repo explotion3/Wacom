@@ -12,6 +12,7 @@ class UWacomBattleCameraLookComponent;
 class UWacomCursorLookDriverComponent;
 class UWacomFirstPersonCardAnchorComponent;
 class UWacomFirstPersonViewStageBlendComponent;
+class UWacomFirstPersonWalkBobComponent;
 class UWacomRunTunnelMovementComponent;
 struct FInputActionValue;
 
@@ -52,6 +53,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
 	UWacomFirstPersonViewStageBlendComponent* GetFirstPersonViewStageBlendComponent() const { return FirstPersonViewStageBlendComponent; }
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
+	UWacomFirstPersonWalkBobComponent* GetWalkBobComponent() const { return WalkBobComponent; }
+
 	/**
 	 * 禁用 / 启用探索期的移动 + 视角输入。
 	 * 战斗开始时 SetExplorationInputEnabled(false)，结束时恢复。
@@ -59,6 +63,8 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Input")
 	void SetExplorationInputEnabled(bool bEnabled);
+
+	void SetExplorationInputEnabled(bool bEnabled, bool bPreserveCursorLookOffset);
 
 	// ---- Input Actions（ConstructorHelpers 填默认值，BP 可覆盖）----
 
@@ -102,6 +108,10 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
 		meta = (AllowPrivateAccess = "true", ToolTip = "第一人称镜头站位过渡组件。它会在镜头模式捕获视角前，把摄像机 View Pose 平滑移动到关卡中摆放的站位。"))
 	TObjectPtr<UWacomFirstPersonViewStageBlendComponent> FirstPersonViewStageBlendComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
+		meta = (AllowPrivateAccess = "true", ToolTip = "第一人称走路晃动组件。Run Tunnel 会读取它的轻量位置和旋转偏移，用来模拟沿样条移动时的脚步感。"))
+	TObjectPtr<UWacomFirstPersonWalkBobComponent> WalkBobComponent = nullptr;
 
 	/** 当前是否接受探索输入。战斗期间置 false。 */
 	bool bExplorationInputEnabled = true;

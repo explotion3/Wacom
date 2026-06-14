@@ -4,8 +4,13 @@
 
 #include "Actors/WacomRunTunnelSegmentActor.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/CameraShakeBase.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/WacomCursorLookDriverComponent.h"
+#include "Engine/Engine.h"
+#include "Components/WacomFirstPersonWalkBobComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/PlayerController.h"
@@ -48,9 +53,11 @@ void UWacomRunTunnelMovementComponent::TickComponent(
 
 	if (AWacomRunTunnelSegmentActor* Segment = ActiveSegment.Get())
 	{
+		const float OldDistanceAlongSpline = DistanceAlongSpline;
 		DistanceAlongSpline = Segment->GetClampedDistance(DistanceAlongSpline + MoveAxis * MoveSpeed * DeltaTime);
+		const float ActualDistanceDeltaCm = FMath::Abs(DistanceAlongSpline - OldDistanceAlongSpline);
 		UpdateCursorLook(DeltaTime);
-		ApplyTunnelTransform();
+		ApplyTunnelTransform(DeltaTime, ActualDistanceDeltaCm);
 	}
 	else
 	{
@@ -95,6 +102,8 @@ void UWacomRunTunnelMovementComponent::DeactivateRunTunnel()
 	bRunTunnelActive = false;
 	bRunTunnelSuspended = false;
 	ClearCursorLookOverride();
+	StopWalkCameraShake(/*bImmediately*/true);
+	ResetWalkBob();
 	ActiveSegment.Reset();
 	DistanceAlongSpline = 0.0f;
 	MoveAxis = 0.0f;
@@ -116,11 +125,19 @@ bool UWacomRunTunnelMovementComponent::SuspendRunTunnel()
 	bRunTunnelSuspended = true;
 	MoveAxis = 0.0f;
 	ClearCursorLookOverride();
+	StopWalkCameraShake(/*bImmediately*/true);
+	ResetWalkBob();
+	ApplyTunnelTransform();
 	SetComponentTickEnabled(false);
 	return true;
 }
 
 bool UWacomRunTunnelMovementComponent::ResumeRunTunnel()
+{
+	return ResumeRunTunnel(/*bPreserveCursorLookOffset*/false);
+}
+
+bool UWacomRunTunnelMovementComponent::ResumeRunTunnel(bool bPreserveCursorLookOffset)
 {
 	if (!bRunTunnelActive || !bRunTunnelSuspended || !ActiveSegment.IsValid())
 	{
@@ -129,10 +146,16 @@ bool UWacomRunTunnelMovementComponent::ResumeRunTunnel()
 
 	bRunTunnelSuspended = false;
 	SetComponentTickEnabled(true);
-	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
+	if (bPreserveCursorLookOffset)
+	{
+		UpdateCursorLook(/*DeltaTime*/0.0f);
+	}
+	else if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
 	{
 		Driver->ResetLookOffset();
 	}
+	ResetWalkBob();
+	StopWalkCameraShake(/*bImmediately*/true);
 	ApplyInputProfile();
 	ApplyTunnelTransform();
 	return true;
@@ -151,6 +174,8 @@ bool UWacomRunTunnelMovementComponent::SwitchToSegment(
 	DistanceAlongSpline = TargetSegment->GetClampedDistance(StartDistance);
 	MoveAxis = 0.0f;
 	ClearCursorLookOverride();
+	StopWalkCameraShake(/*bImmediately*/true);
+	ResetWalkBob();
 	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
 	{
 		Driver->ResetLookOffset();
@@ -207,6 +232,41 @@ void UWacomRunTunnelMovementComponent::ClearCursorLookOverride()
 	CursorLookOverrideInterpSpeed = -1.0f;
 }
 
+bool UWacomRunTunnelMovementComponent::TryGetCurrentTunnelViewTransform(
+	FTransform& OutViewTransform) const
+{
+	const AWacomRunTunnelSegmentActor* Segment = ActiveSegment.Get();
+	if (!bRunTunnelActive || !Segment)
+	{
+		return false;
+	}
+
+	OutViewTransform = Segment->GetSplineTransformAtDistance(DistanceAlongSpline);
+	return true;
+}
+
+bool UWacomRunTunnelMovementComponent::TryBuildReturnToRunTunnelStageRequest(
+	FWacomFirstPersonViewStageRequest& OutRequest) const
+{
+	OutRequest = FWacomFirstPersonViewStageRequest();
+
+	FTransform TunnelViewTransform = FTransform::Identity;
+	if (!TryGetCurrentTunnelViewTransform(TunnelViewTransform))
+	{
+		return false;
+	}
+
+	const AWacomRunTunnelSegmentActor* Segment = ActiveSegment.Get();
+	OutRequest.bHasViewTransform = true;
+	OutRequest.ViewTransform = TunnelViewTransform;
+	OutRequest.Reason = FName(TEXT("RunTunnelReturn"));
+	OutRequest.DebugSource = Segment ? FName(*Segment->GetName()) : NAME_None;
+	OutRequest.BlendTimeSeconds = FMath::Max(0.0f, ReturnStageBlendTimeSeconds);
+	OutRequest.BlendCurve = ReturnStageBlendCurve;
+	OutRequest.BlendEasePower = FMath::Max(0.01f, ReturnStageBlendEasePower);
+	return true;
+}
+
 AWacomPlayerCharacter* UWacomRunTunnelMovementComponent::GetOwnerCharacter() const
 {
 	return Cast<AWacomPlayerCharacter>(GetOwner());
@@ -222,6 +282,183 @@ UWacomCursorLookDriverComponent* UWacomRunTunnelMovementComponent::GetCursorLook
 {
 	const AWacomPlayerCharacter* Character = GetOwnerCharacter();
 	return Character ? Character->GetCursorLookDriverComponent() : nullptr;
+}
+
+UWacomFirstPersonWalkBobComponent* UWacomRunTunnelMovementComponent::GetWalkBob() const
+{
+	const AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	return Character ? Character->GetWalkBobComponent() : nullptr;
+}
+
+void UWacomRunTunnelMovementComponent::ResetWalkBob(bool bSnapToZero)
+{
+	if (UWacomFirstPersonWalkBobComponent* WalkBob = GetWalkBob())
+	{
+		WalkBob->ResetWalkBob(bSnapToZero);
+	}
+}
+
+bool UWacomRunTunnelMovementComponent::ShouldUseWalkCameraShake() const
+{
+	return bUseWalkCameraShake && WalkCameraShakeClass != nullptr;
+}
+
+bool UWacomRunTunnelMovementComponent::IsWalkCameraShakeMovementActive(float ActualDistanceDeltaCm) const
+{
+	float DeadZoneCm = 0.1f;
+	if (const UWacomFirstPersonWalkBobComponent* WalkBob = GetWalkBob())
+	{
+		DeadZoneCm = FMath::Max(0.0f, WalkBob->MovementDeadZoneCm);
+	}
+	return bRunTunnelActive
+		&& !bRunTunnelSuspended
+		&& ActualDistanceDeltaCm > DeadZoneCm;
+}
+
+void UWacomRunTunnelMovementComponent::UpdateWalkCameraShake(float DeltaTime, float ActualDistanceDeltaCm)
+{
+	if (!ShouldUseWalkCameraShake())
+	{
+		ShowWalkCameraShakeDebug(TEXT("DisabledOrNoClass"), ActualDistanceDeltaCm);
+		StopWalkCameraShake(/*bImmediately*/false);
+		return;
+	}
+
+	if (ActiveWalkCameraShakeInstance && ActiveWalkCameraShakeInstance->IsFinished())
+	{
+		ShowWalkCameraShakeDebug(TEXT("InstanceFinished"), ActualDistanceDeltaCm);
+		ActiveWalkCameraShakeInstance = nullptr;
+	}
+
+	if (!IsWalkCameraShakeMovementActive(ActualDistanceDeltaCm))
+	{
+		if (WalkCameraShakeStopGraceRemainingSeconds > 0.0f)
+		{
+			WalkCameraShakeStopGraceRemainingSeconds = FMath::Max(
+				0.0f,
+				WalkCameraShakeStopGraceRemainingSeconds - FMath::Max(0.0f, DeltaTime));
+			if (WalkCameraShakeStopGraceRemainingSeconds > 0.0f)
+			{
+				ShowWalkCameraShakeDebug(TEXT("StopGrace"), ActualDistanceDeltaCm);
+				return;
+			}
+		}
+
+		ShowWalkCameraShakeDebug(TEXT("NoMovement"), ActualDistanceDeltaCm);
+		StopWalkCameraShake(/*bImmediately*/false);
+		return;
+	}
+
+	WalkCameraShakeStopGraceRemainingSeconds = FMath::Max(0.0f, WalkCameraShakeStopGraceSeconds);
+
+	if (ActiveWalkCameraShakeInstance)
+	{
+		ShowWalkCameraShakeDebug(TEXT("Active"), ActualDistanceDeltaCm, ActiveWalkCameraShakeInstance);
+		return;
+	}
+
+	APlayerController* PC = GetOwnerPlayerController();
+	if (!PC || !PC->PlayerCameraManager)
+	{
+		ShowWalkCameraShakeDebug(TEXT("NoPlayerCameraManager"), ActualDistanceDeltaCm);
+		return;
+	}
+
+	ActiveWalkCameraShakeInstance = PC->PlayerCameraManager->StartCameraShake(
+		WalkCameraShakeClass,
+		FMath::Max(0.0f, WalkCameraShakeScale));
+	ShowWalkCameraShakeDebug(
+		ActiveWalkCameraShakeInstance ? TEXT("StartOK") : TEXT("StartReturnedNull"),
+		ActualDistanceDeltaCm,
+		ActiveWalkCameraShakeInstance);
+	if (bDebugWalkCameraShake)
+	{
+		UE_LOG(
+			LogTemp,
+			Display,
+			TEXT("[WacomRunTunnel][WalkCameraShake] Start Status=%s Class=%s Scale=%.3f Delta=%.3f Instance=%s PC=%s PCM=%s"),
+			ActiveWalkCameraShakeInstance ? TEXT("OK") : TEXT("Null"),
+			*GetNameSafe(WalkCameraShakeClass.Get()),
+			FMath::Max(0.0f, WalkCameraShakeScale),
+			ActualDistanceDeltaCm,
+			*GetNameSafe(ActiveWalkCameraShakeInstance),
+			*GetNameSafe(PC),
+			*GetNameSafe(PC->PlayerCameraManager));
+	}
+}
+
+void UWacomRunTunnelMovementComponent::StopWalkCameraShake(bool bImmediately)
+{
+	WalkCameraShakeStopGraceRemainingSeconds = 0.0f;
+
+	if (!ActiveWalkCameraShakeInstance)
+	{
+		return;
+	}
+
+	if (APlayerController* PC = GetOwnerPlayerController())
+	{
+		if (PC->PlayerCameraManager)
+		{
+			PC->PlayerCameraManager->StopCameraShake(ActiveWalkCameraShakeInstance, bImmediately);
+		}
+		else
+		{
+			ActiveWalkCameraShakeInstance->StopShake(bImmediately);
+		}
+	}
+	else
+	{
+		ActiveWalkCameraShakeInstance->StopShake(bImmediately);
+	}
+
+	if (bDebugWalkCameraShake)
+	{
+		UE_LOG(
+			LogTemp,
+			Display,
+			TEXT("[WacomRunTunnel][WalkCameraShake] Stop Class=%s Instance=%s Immediate=%s"),
+			*GetNameSafe(WalkCameraShakeClass.Get()),
+			*GetNameSafe(ActiveWalkCameraShakeInstance),
+			bImmediately ? TEXT("true") : TEXT("false"));
+	}
+	ActiveWalkCameraShakeInstance = nullptr;
+}
+
+void UWacomRunTunnelMovementComponent::ShowWalkCameraShakeDebug(
+	const TCHAR* Status,
+	float ActualDistanceDeltaCm,
+	const UCameraShakeBase* StartedInstance) const
+{
+	if (!bDebugWalkCameraShake || !GEngine)
+	{
+		return;
+	}
+
+	const APlayerController* PC = GetOwnerPlayerController();
+	const APlayerCameraManager* PCM = PC ? PC->PlayerCameraManager : nullptr;
+	float DeadZoneCm = 0.1f;
+	if (const UWacomFirstPersonWalkBobComponent* WalkBob = GetWalkBob())
+	{
+		DeadZoneCm = FMath::Max(0.0f, WalkBob->MovementDeadZoneCm);
+	}
+	const FString Message = FString::Printf(
+		TEXT("WalkCameraShake %s | use=%s class=%s scale=%.2f delta=%.3f dead=%.3f grace=%.3f moveAxis=%.2f active=%s suspended=%s inst=%s PC=%s PCM=%s"),
+		Status ? Status : TEXT("Unknown"),
+		bUseWalkCameraShake ? TEXT("true") : TEXT("false"),
+		*GetNameSafe(WalkCameraShakeClass.Get()),
+		FMath::Max(0.0f, WalkCameraShakeScale),
+		ActualDistanceDeltaCm,
+		DeadZoneCm,
+		WalkCameraShakeStopGraceRemainingSeconds,
+		MoveAxis,
+		bRunTunnelActive ? TEXT("true") : TEXT("false"),
+		bRunTunnelSuspended ? TEXT("true") : TEXT("false"),
+		*GetNameSafe(StartedInstance ? StartedInstance : ActiveWalkCameraShakeInstance.Get()),
+		*GetNameSafe(PC),
+		*GetNameSafe(PCM));
+	const uint64 DebugKey = 740000ull + static_cast<uint64>(GetUniqueID() % 10000u);
+	GEngine->AddOnScreenDebugMessage(DebugKey, 0.15f, FColor::Cyan, Message);
 }
 
 void UWacomRunTunnelMovementComponent::ApplyInputProfile()
@@ -279,27 +516,51 @@ void UWacomRunTunnelMovementComponent::UpdateCursorLook(float DeltaTime)
 		LookInterpSpeed);
 }
 
-void UWacomRunTunnelMovementComponent::ApplyTunnelTransform()
+void UWacomRunTunnelMovementComponent::ApplyTunnelTransform(
+	float DeltaTime,
+	float ActualDistanceDeltaCm)
 {
-	AWacomRunTunnelSegmentActor* Segment = ActiveSegment.Get();
 	AWacomPlayerCharacter* Character = GetOwnerCharacter();
-	if (!Segment || !Character)
+	FTransform SplineTransform = FTransform::Identity;
+	if (!Character || !TryGetCurrentTunnelViewTransform(SplineTransform))
 	{
 		return;
 	}
 
-	const FTransform SplineTransform = Segment->GetSplineTransformAtDistance(DistanceAlongSpline);
 	const FRotator SplineRotation = SplineTransform.Rotator();
 	const FRotator LookOffset = GetCursorLookDriver()
 		? GetCursorLookDriver()->GetCurrentLookOffset()
 		: FRotator::ZeroRotator;
-	const FRotator ControlRotation(
+	FRotator ControlRotation(
 		SplineRotation.Pitch + LookOffset.Pitch,
 		SplineRotation.Yaw + LookOffset.Yaw,
 		0.0f);
 	const FRotator ActorRotation(0.0f, SplineRotation.Yaw, 0.0f);
 
-	FVector ActorLocation = SplineTransform.GetLocation();
+	FVector ViewLocation = SplineTransform.GetLocation();
+	const float BobDistanceDeltaCm = bRunTunnelActive && !bRunTunnelSuspended
+		? ActualDistanceDeltaCm
+		: 0.0f;
+	if (ShouldUseWalkCameraShake())
+	{
+		ResetWalkBob();
+		UpdateWalkCameraShake(DeltaTime, BobDistanceDeltaCm);
+	}
+	else if (UWacomFirstPersonWalkBobComponent* WalkBob = GetWalkBob())
+	{
+		StopWalkCameraShake(/*bImmediately*/false);
+		WalkBob->UpdateWalkBobFromMovementDelta(
+			DeltaTime,
+			BobDistanceDeltaCm,
+			FMath::Max(MoveSpeed, KINDA_SMALL_NUMBER));
+
+		const FRotator WalkBobRotation = WalkBob->GetCurrentRotationOffset();
+		ViewLocation += ControlRotation.RotateVector(WalkBob->GetCurrentLocationOffset());
+		ControlRotation.Pitch += WalkBobRotation.Pitch;
+		ControlRotation.Roll += WalkBobRotation.Roll;
+	}
+
+	FVector ActorLocation = ViewLocation;
 	if (const UCameraComponent* Camera = Character->GetFirstPersonCamera())
 	{
 		ActorLocation -= ActorRotation.RotateVector(Camera->GetRelativeLocation());

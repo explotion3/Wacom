@@ -25,6 +25,7 @@ class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
 class UWacomRunTunnelMovementComponent;
 class UWacomFirstPersonCardAnchorComponent;
+struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;
@@ -241,9 +242,22 @@ public:
 
 	/** 由 ShopTriggerActor 调用：开始商店访问并 Push 商店界面。 */
 	bool RequestOpenShop(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
+	bool RequestOpenShop(
+		FName ShopId,
+		const TArray<FRunShopOfferInput>& Offers,
+		const FWacomFirstPersonViewStageRequest& StageRequest);
+	bool IsGameMenuViewpointStageTransitionActive() const { return bGameMenuViewpointStageTransitionActive; }
+	bool IsGameMenuViewpointReturnArmed() const { return bGameMenuViewpointReturnArmed; }
+	void BeginGameMenuViewpointStageTransition(FName DebugReason);
+	void ArmGameMenuViewpointReturnForMenu(UWacomMenuWidgetBase* MenuWidget);
+	void ReturnFromGameMenuViewpointStageAfterFailedOpen();
 
 	/** 由 RunEventTriggerActor 调用：开始事件访问并 Push 事件界面。 */
 	bool RequestOpenRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition);
+	bool RequestOpenRunEvent(
+		FName PersistentId,
+		UWacomRunEventDefinition* EventDefinition,
+		const FWacomFirstPersonViewStageRequest& StageRequest);
 
 	/** Console command / IA 共用入口（等同于按 E）。 */
 	void TryInteractFromConsole();
@@ -363,6 +377,7 @@ private:
 		const FWacomInteractionTargetHandle& Handle) const;
 	void ClearRunWorldCardDropProbe();
 	void RefreshRunFirstPersonCardLayerMenuSuppression();
+	void FinishGameMenuViewpointStageTransition();
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
 	void PumpFirstPersonCardActiveDragPointer();
 	bool TryReleaseFirstPersonCardActiveDragPointer();
@@ -407,12 +422,17 @@ private:
 	TWeakObjectPtr<UWacomRunMenuDropTargetWidget> PreviewedRunMenuDropTarget;
 
 	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomMenuWidgetBase> GameMenuViewpointReturnWidget;
+
+	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> PreviewedRunWorldCardDropBridge;
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> RunMenuProbeBoundAnchor;
 
 	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
+	bool bGameMenuViewpointStageTransitionActive = false;
+	bool bGameMenuViewpointReturnArmed = false;
 	bool bRunFirstPersonMenuLeaseDragBound = false;
 	bool bRunFirstPersonCardDragActiveForCameraLook = false;
 	FString LastRunMenuDropProbeDebugSummary;

@@ -5,8 +5,11 @@
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Actors/WacomRunTunnelSegmentActor.h"
 #include "Components/SplineComponent.h"
+#include "Camera/CameraShakeBase.h"
 #include "Components/WacomCursorLookDriverComponent.h"
+#include "Components/WacomFirstPersonWalkBobComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
+#include "Camera/CameraComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/WacomPlayerCharacter.h"
@@ -49,6 +52,54 @@ namespace WacomRunTunnelMovementSpec
 		return Segment;
 	}
 }
+
+struct FWacomRunTunnelMovementTestAccess
+{
+	static void Tick(UWacomRunTunnelMovementComponent& Component, float DeltaTime)
+	{
+		Component.TickComponent(DeltaTime, LEVELTICK_All, nullptr);
+	}
+
+	static bool ShouldUseWalkCameraShake(const UWacomRunTunnelMovementComponent& Component)
+	{
+		return Component.ShouldUseWalkCameraShake();
+	}
+
+	static bool IsWalkCameraShakeMovementActive(
+		const UWacomRunTunnelMovementComponent& Component,
+		float ActualDistanceDeltaCm)
+	{
+		return Component.IsWalkCameraShakeMovementActive(ActualDistanceDeltaCm);
+	}
+
+	static void SetWalkCameraShakeRuntimeState(
+		UWacomRunTunnelMovementComponent& Component,
+		bool bActive,
+		bool bSuspended)
+	{
+		Component.bRunTunnelActive = bActive;
+		Component.bRunTunnelSuspended = bSuspended;
+	}
+
+	static void UpdateWalkCameraShake(
+		UWacomRunTunnelMovementComponent& Component,
+		float DeltaTime,
+		float ActualDistanceDeltaCm)
+	{
+		Component.UpdateWalkCameraShake(DeltaTime, ActualDistanceDeltaCm);
+	}
+
+	static void StopWalkCameraShake(UWacomRunTunnelMovementComponent& Component, bool bImmediately)
+	{
+		Component.StopWalkCameraShake(bImmediately);
+	}
+
+	static float GetWalkCameraShakeStopGraceRemainingSeconds(
+		const UWacomRunTunnelMovementComponent& Component)
+	{
+		return Component.WalkCameraShakeStopGraceRemainingSeconds;
+	}
+};
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunTunnelSegmentDistanceClampTest,
@@ -306,6 +357,333 @@ bool FWacomRunTunnelMovementSuspendResumeTest::RunTest(const FString& Parameters
 		TestEqual(TEXT("Resume resets shared cursor look"), Driver->GetCurrentLookOffset(), FRotator::ZeroRotator);
 	}
 	TestTrue(TEXT("Resumed tunnel consumes move input"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
+
+	Segment->Destroy();
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunTunnelWalkBobAppliesAndClearsTest,
+	"Wacom.UI.RunTunnel.WalkBob.AppliesAndClears",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunTunnelWalkBobAppliesAndClearsTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomRunTunnelMovementSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomRunTunnelMovementCharacterProbe* Character =
+		World->SpawnActor<AWacomRunTunnelMovementCharacterProbe>(
+			AWacomRunTunnelMovementCharacterProbe::StaticClass(),
+			FTransform::Identity);
+	AWacomRunTunnelSegmentActor* Segment = WacomRunTunnelMovementSpec::SpawnTestSegment(
+		*World,
+		FVector::ZeroVector,
+		FVector(1000.0f, 0.0f, 0.0f));
+	AWacomRunTunnelSegmentActor* TargetSegment = WacomRunTunnelMovementSpec::SpawnTestSegment(
+		*World,
+		FVector(0.0f, 300.0f, 25.0f),
+		FVector(1000.0f, 300.0f, 25.0f));
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Segment"), Segment)
+		|| !TestNotNull(TEXT("Target segment"), TargetSegment))
+	{
+		return false;
+	}
+
+	UWacomRunTunnelMovementComponent* TunnelComponent =
+		Character->GetRunTunnelMovementComponent();
+	UWacomFirstPersonWalkBobComponent* WalkBob =
+		Character->GetWalkBobComponent();
+	UCameraComponent* Camera = Character->GetFirstPersonCamera();
+	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent)
+		|| !TestNotNull(TEXT("Walk bob"), WalkBob)
+		|| !TestNotNull(TEXT("Camera"), Camera))
+	{
+		return false;
+	}
+
+	WalkBob->StepDistanceCm = 55.0f;
+	WalkBob->VerticalAmplitudeCm = 10.0f;
+	WalkBob->FootPlantDropCm = 1.0f;
+	WalkBob->LateralAmplitudeCm = 0.0f;
+	WalkBob->PitchAmplitudeDegrees = 0.0f;
+	WalkBob->RollAmplitudeDegrees = 0.0f;
+	WalkBob->BlendInSpeed = 0.0f;
+	WalkBob->BlendOutSpeed = 0.0f;
+	TunnelComponent->MoveSpeed = 220.0f;
+
+	TestTrue(TEXT("Tunnel activates"), TunnelComponent->ActivateRunTunnel(Segment, 0.0f));
+	TestTrue(TEXT("Tunnel consumes move input"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
+	FWacomRunTunnelMovementTestAccess::Tick(*TunnelComponent, 0.125f);
+
+	const FTransform CurrentSplineTransform =
+		Segment->GetSplineTransformAtDistance(TunnelComponent->GetDistanceAlongSpline());
+	TestTrue(
+		TEXT("Moving tunnel camera includes vertical walk bob"),
+		Camera->GetComponentLocation().Z > CurrentSplineTransform.GetLocation().Z + 1.0f);
+
+	Character->SetExplorationInputEnabled(false);
+	const FTransform SuspendedSplineTransform =
+		Segment->GetSplineTransformAtDistance(TunnelComponent->GetDistanceAlongSpline());
+	TestTrue(
+		TEXT("Suspend clears visible walk bob offset"),
+		FMath::IsNearlyEqual(
+			Camera->GetComponentLocation().Z,
+			SuspendedSplineTransform.GetLocation().Z,
+			0.01f));
+
+	Character->SetExplorationInputEnabled(true);
+	TestFalse(TEXT("Resume clears tunnel suspension"), TunnelComponent->IsRunTunnelSuspended());
+	TestTrue(TEXT("Tunnel consumes move input after resume"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
+	FWacomRunTunnelMovementTestAccess::Tick(*TunnelComponent, 0.125f);
+	TestTrue(
+		TEXT("Walk bob reapplies after resume and movement"),
+		Camera->GetComponentLocation().Z
+			> Segment->GetSplineTransformAtDistance(TunnelComponent->GetDistanceAlongSpline()).GetLocation().Z + 1.0f);
+
+	TestTrue(TEXT("Switch target segment"), TunnelComponent->SwitchToSegment(TargetSegment, 0.0f));
+	TestTrue(
+		TEXT("Segment switch clears visible walk bob offset"),
+		FMath::IsNearlyEqual(
+			Camera->GetComponentLocation().Z,
+			TargetSegment->GetSplineTransformAtDistance(0.0f).GetLocation().Z,
+			0.01f));
+
+	TargetSegment->Destroy();
+	Segment->Destroy();
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunTunnelWalkCameraShakeRequiresClassTest,
+	"Wacom.UI.RunTunnel.WalkBob.CameraShakeRequiresClass",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunTunnelWalkCameraShakeRequiresClassTest::RunTest(const FString& Parameters)
+{
+	UWacomRunTunnelMovementComponent* TunnelComponent =
+		NewObject<UWacomRunTunnelMovementComponent>(GetTransientPackage());
+	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent))
+	{
+		return false;
+	}
+
+	TunnelComponent->bUseWalkCameraShake = true;
+	TunnelComponent->WalkCameraShakeClass = nullptr;
+	TestFalse(
+		TEXT("Camera shake mode needs both the toggle and a shake class"),
+		FWacomRunTunnelMovementTestAccess::ShouldUseWalkCameraShake(*TunnelComponent));
+
+	TunnelComponent->WalkCameraShakeClass = UCameraShakeBase::StaticClass();
+	TestTrue(
+		TEXT("Configured shake class enables camera shake mode"),
+		FWacomRunTunnelMovementTestAccess::ShouldUseWalkCameraShake(*TunnelComponent));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunTunnelWalkCameraShakeReplacesComponentBobTest,
+	"Wacom.UI.RunTunnel.WalkBob.CameraShakeReplacesComponentBob",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunTunnelWalkCameraShakeReplacesComponentBobTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomRunTunnelMovementSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomRunTunnelMovementCharacterProbe* Character =
+		World->SpawnActor<AWacomRunTunnelMovementCharacterProbe>(
+			AWacomRunTunnelMovementCharacterProbe::StaticClass(),
+			FTransform::Identity);
+	AWacomRunTunnelSegmentActor* Segment = WacomRunTunnelMovementSpec::SpawnTestSegment(
+		*World,
+		FVector::ZeroVector,
+		FVector(1000.0f, 0.0f, 0.0f));
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Segment"), Segment))
+	{
+		return false;
+	}
+
+	UWacomRunTunnelMovementComponent* TunnelComponent =
+		Character->GetRunTunnelMovementComponent();
+	UWacomFirstPersonWalkBobComponent* WalkBob =
+		Character->GetWalkBobComponent();
+	UCameraComponent* Camera = Character->GetFirstPersonCamera();
+	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent)
+		|| !TestNotNull(TEXT("Walk bob"), WalkBob)
+		|| !TestNotNull(TEXT("Camera"), Camera))
+	{
+		return false;
+	}
+
+	WalkBob->StepDistanceCm = 55.0f;
+	WalkBob->VerticalAmplitudeCm = 10.0f;
+	WalkBob->FootPlantDropCm = 1.0f;
+	WalkBob->BlendInSpeed = 0.0f;
+	WalkBob->BlendOutSpeed = 0.0f;
+	TunnelComponent->bUseWalkCameraShake = true;
+	TunnelComponent->WalkCameraShakeClass = UCameraShakeBase::StaticClass();
+	TunnelComponent->MoveSpeed = 220.0f;
+
+	TestTrue(TEXT("Tunnel activates"), TunnelComponent->ActivateRunTunnel(Segment, 0.0f));
+	TestTrue(TEXT("Tunnel consumes move input"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
+	FWacomRunTunnelMovementTestAccess::Tick(*TunnelComponent, 0.125f);
+
+	const FTransform CurrentSplineTransform =
+		Segment->GetSplineTransformAtDistance(TunnelComponent->GetDistanceAlongSpline());
+	TestTrue(
+		TEXT("Camera shake mode leaves component camera at spline pose"),
+		FMath::IsNearlyEqual(
+			Camera->GetComponentLocation().Z,
+			CurrentSplineTransform.GetLocation().Z,
+			0.01f));
+	TestTrue(
+		TEXT("Actual movement over dead zone would drive camera shake"),
+		FWacomRunTunnelMovementTestAccess::IsWalkCameraShakeMovementActive(*TunnelComponent, 1.0f));
+	TestFalse(
+		TEXT("Distance below dead zone does not drive camera shake"),
+		FWacomRunTunnelMovementTestAccess::IsWalkCameraShakeMovementActive(*TunnelComponent, 0.0f));
+
+	Segment->Destroy();
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunTunnelWalkCameraShakeStopGraceTest,
+	"Wacom.UI.RunTunnel.WalkCameraShake.StopGraceDebouncesNoMovement",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunTunnelWalkCameraShakeStopGraceTest::RunTest(const FString& Parameters)
+{
+	UWacomRunTunnelMovementComponent* TunnelComponent =
+		NewObject<UWacomRunTunnelMovementComponent>(GetTransientPackage());
+	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent))
+	{
+		return false;
+	}
+
+	TunnelComponent->bUseWalkCameraShake = true;
+	TunnelComponent->WalkCameraShakeClass = UCameraShakeBase::StaticClass();
+	TunnelComponent->WalkCameraShakeStopGraceSeconds = 0.2f;
+	FWacomRunTunnelMovementTestAccess::SetWalkCameraShakeRuntimeState(
+		*TunnelComponent,
+		/*bActive*/true,
+		/*bSuspended*/false);
+
+	FWacomRunTunnelMovementTestAccess::UpdateWalkCameraShake(
+		*TunnelComponent,
+		0.016f,
+		1.0f);
+	TestTrue(
+		TEXT("Actual movement refreshes stop grace"),
+		FMath::IsNearlyEqual(
+			FWacomRunTunnelMovementTestAccess::GetWalkCameraShakeStopGraceRemainingSeconds(*TunnelComponent),
+			0.2f));
+
+	FWacomRunTunnelMovementTestAccess::UpdateWalkCameraShake(
+		*TunnelComponent,
+		0.05f,
+		0.0f);
+	TestTrue(
+		TEXT("Brief no-movement frame consumes grace instead of stopping immediately"),
+		FWacomRunTunnelMovementTestAccess::GetWalkCameraShakeStopGraceRemainingSeconds(*TunnelComponent) > 0.0f);
+
+	FWacomRunTunnelMovementTestAccess::UpdateWalkCameraShake(
+		*TunnelComponent,
+		0.25f,
+		0.0f);
+	TestEqual(
+		TEXT("Grace reaches zero after sustained no movement"),
+		FWacomRunTunnelMovementTestAccess::GetWalkCameraShakeStopGraceRemainingSeconds(*TunnelComponent),
+		0.0f);
+
+	FWacomRunTunnelMovementTestAccess::UpdateWalkCameraShake(
+		*TunnelComponent,
+		0.016f,
+		1.0f);
+	FWacomRunTunnelMovementTestAccess::StopWalkCameraShake(
+		*TunnelComponent,
+		/*bImmediately*/true);
+	TestEqual(
+		TEXT("Forced stop clears grace immediately"),
+		FWacomRunTunnelMovementTestAccess::GetWalkCameraShakeStopGraceRemainingSeconds(*TunnelComponent),
+		0.0f);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunTunnelWalkBobStopsAtSplineEndTest,
+	"Wacom.UI.RunTunnel.WalkBob.StopsAtSplineEnd",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunTunnelWalkBobStopsAtSplineEndTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomRunTunnelMovementSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	AWacomRunTunnelMovementCharacterProbe* Character =
+		World->SpawnActor<AWacomRunTunnelMovementCharacterProbe>(
+			AWacomRunTunnelMovementCharacterProbe::StaticClass(),
+			FTransform::Identity);
+	AWacomRunTunnelSegmentActor* Segment = WacomRunTunnelMovementSpec::SpawnTestSegment(
+		*World,
+		FVector::ZeroVector,
+		FVector(100.0f, 0.0f, 0.0f));
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("Segment"), Segment))
+	{
+		return false;
+	}
+
+	UWacomRunTunnelMovementComponent* TunnelComponent =
+		Character->GetRunTunnelMovementComponent();
+	UWacomFirstPersonWalkBobComponent* WalkBob =
+		Character->GetWalkBobComponent();
+	UCameraComponent* Camera = Character->GetFirstPersonCamera();
+	if (!TestNotNull(TEXT("Tunnel component"), TunnelComponent)
+		|| !TestNotNull(TEXT("Walk bob"), WalkBob)
+		|| !TestNotNull(TEXT("Camera"), Camera))
+	{
+		return false;
+	}
+
+	WalkBob->StepDistanceCm = 55.0f;
+	WalkBob->VerticalAmplitudeCm = 10.0f;
+	WalkBob->FootPlantDropCm = 1.0f;
+	WalkBob->PitchAmplitudeDegrees = 0.0f;
+	WalkBob->BlendInSpeed = 0.0f;
+	WalkBob->BlendOutSpeed = 0.0f;
+	TunnelComponent->MoveSpeed = 220.0f;
+
+	const float EndDistance = Segment->GetSplineLength();
+	TestTrue(TEXT("Tunnel activates at spline end"), TunnelComponent->ActivateRunTunnel(Segment, EndDistance));
+	TestTrue(TEXT("Tunnel consumes forward input at spline end"), TunnelComponent->HandleMoveInput(FVector2D(0.0f, 1.0f)));
+	FWacomRunTunnelMovementTestAccess::Tick(*TunnelComponent, 0.125f);
+
+	const FTransform EndSplineTransform =
+		Segment->GetSplineTransformAtDistance(EndDistance);
+	TestEqual(TEXT("Distance remains clamped at spline end"), TunnelComponent->GetDistanceAlongSpline(), EndDistance);
+	TestTrue(
+		TEXT("Camera does not bob while input is held at clamped spline end"),
+		FMath::IsNearlyEqual(
+			Camera->GetComponentLocation().Z,
+			EndSplineTransform.GetLocation().Z,
+			0.01f));
 
 	Segment->Destroy();
 	Character->Destroy();
