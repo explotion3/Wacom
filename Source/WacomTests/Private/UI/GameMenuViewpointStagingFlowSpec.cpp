@@ -25,7 +25,7 @@
 #include "UI/WacomUITestAccess.h"
 #include "UObject/StrongObjectPtr.h"
 
-struct FWacomFirstPersonViewStageReturnFlowTestAccess
+struct FWacomGameMenuViewpointStageReturnFlowTestAccess
 {
 	static void Tick(UWacomFirstPersonViewStageBlendComponent& Component, float DeltaTime)
 	{
@@ -328,7 +328,7 @@ bool FWacomUIGameMenuViewpointStagingDefersRunEventOpenSpec::RunTest(
 		BeginRunEventCount,
 		0);
 
-	FWacomFirstPersonViewStageReturnFlowTestAccess::Tick(*StageBlend, 0.5f);
+	FWacomGameMenuViewpointStageReturnFlowTestAccess::Tick(*StageBlend, 0.5f);
 	TestTrue(TEXT("Blend remains active at half time"),
 		StageBlend->IsStageBlendActive());
 	TestFalse(TEXT("RunEvent still has not begun at half time"),
@@ -337,7 +337,7 @@ bool FWacomUIGameMenuViewpointStagingDefersRunEventOpenSpec::RunTest(
 		BeginRunEventCount,
 		0);
 
-	FWacomFirstPersonViewStageReturnFlowTestAccess::Tick(*StageBlend, 0.5f);
+	FWacomGameMenuViewpointStageReturnFlowTestAccess::Tick(*StageBlend, 0.5f);
 	TestFalse(TEXT("Entry blend completes"), StageBlend->IsStageBlendActive());
 	TestTrue(TEXT("Async push succeeds after stage completion"),
 		PushResult.bSucceeded);
@@ -445,7 +445,7 @@ bool FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunTunnelSpec::RunTest(
 	TestTrue(TEXT("Run tunnel remains suspended during return"),
 		Tunnel->IsRunTunnelSuspended());
 
-	FWacomFirstPersonViewStageReturnFlowTestAccess::Tick(*StageBlend, 1.0f);
+	FWacomGameMenuViewpointStageReturnFlowTestAccess::Tick(*StageBlend, 1.0f);
 	TestFalse(TEXT("Return blend completes"),
 		StageBlend->IsStageBlendActive());
 	TestFalse(TEXT("Stage transition clears after return"),
@@ -550,7 +550,7 @@ bool FWacomUIGameMenuViewpointStagingFailedPushRollsBackAndReturnsSpec::RunTest(
 			BeginRunEventCount,
 			PushResult));
 
-	FWacomFirstPersonViewStageReturnFlowTestAccess::Tick(*StageBlend, 1.0f);
+	FWacomGameMenuViewpointStageReturnFlowTestAccess::Tick(*StageBlend, 1.0f);
 	TestFalse(TEXT("Push fails after entry stage"),
 		PushResult.bSucceeded);
 	TestEqual(TEXT("Failure reason comes from UI push"),
@@ -568,7 +568,7 @@ bool FWacomUIGameMenuViewpointStagingFailedPushRollsBackAndReturnsSpec::RunTest(
 	TestTrue(TEXT("Return blend is active after failed push"),
 		StageBlend->IsStageBlendActive());
 
-	FWacomFirstPersonViewStageReturnFlowTestAccess::Tick(*StageBlend, 1.0f);
+	FWacomGameMenuViewpointStageReturnFlowTestAccess::Tick(*StageBlend, 1.0f);
 	TestFalse(TEXT("Return blend completes after failed push"),
 		StageBlend->IsStageBlendActive());
 	TestFalse(TEXT("Stage transition clears after failed push return"),

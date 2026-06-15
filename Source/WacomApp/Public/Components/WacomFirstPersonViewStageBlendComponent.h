@@ -54,6 +54,7 @@ private:
 #if WITH_AUTOMATION_TESTS
 	friend struct FWacomFirstPersonViewStageBlendTestAccess;
 	friend struct FWacomFirstPersonViewStageReturnFlowTestAccess;
+	friend struct FWacomGameMenuViewpointStageReturnFlowTestAccess;
 #endif
 
 	TWeakObjectPtr<APlayerController> ActivePlayerController;

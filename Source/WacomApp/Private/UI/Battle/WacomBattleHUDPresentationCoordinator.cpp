@@ -9,12 +9,12 @@
 #include "Session/BattleSession.h"
 #include "UI/Battle/ActionPanel.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
+#include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattleHUDTargetingFlow.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
-#include "UI/Card/WacomCardPresentationBuilder.h"
 
 namespace
 {
@@ -71,7 +71,7 @@ int32 FWacomBattleHUDPresentationCoordinator::AppendStackEntry(
 	FWacomBattlePresentationStackEntryView Entry;
 	Entry.EntryId = NextBattlePresentationStackEntryId++;
 	Entry.CardInstanceId = CommandContext.CardInstanceId;
-	Entry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot->Definition);
+	Entry.CardViewData = WacomBattleCardPresentation::BuildCardViewData(*CardSnapshot);
 	BattlePresentationStackEntries.Add(Entry);
 	SyncStackWidget();
 	RefreshCommandAvailabilityWidgets();

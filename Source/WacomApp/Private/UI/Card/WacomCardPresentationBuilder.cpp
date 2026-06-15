@@ -137,10 +137,23 @@ namespace
 			: FText::GetEmpty();
 	}
 
-	int32 GetDisplayMagnitude(const FCardEffect& Effect, const UCardDefinition* Card)
+	bool UsesRuntimeCostMagnitude(const FCardEffect& Effect)
 	{
-		if (Effect.MagnitudeSource.MatchesTagExact(WacomTags::Magnitude_Source_RuntimeCost))
+		return Effect.MagnitudeSource.MatchesTagExact(WacomTags::Magnitude_Source_RuntimeCost)
+			|| (!Effect.MagnitudeSource.IsValid() && Effect.bMagnitudeFromRuntimeCost);
+	}
+
+	int32 GetDisplayMagnitude(
+		const FCardEffect& Effect,
+		const UCardDefinition* Card,
+		const FWacomCardPresentationRuntimeContext& RuntimeContext)
+	{
+		if (UsesRuntimeCostMagnitude(Effect))
 		{
+			if (RuntimeContext.bHasRuntimeCost)
+			{
+				return RuntimeContext.RuntimeCost;
+			}
 			return Card ? Card->BaseCost : Effect.Magnitude;
 		}
 		return Effect.Magnitude;
@@ -194,9 +207,13 @@ namespace
 		}
 	}
 
-	bool TryBuildEffectBadge(const FCardEffect& Effect, const UCardDefinition* Card, FWacomCardViewEffectBadge& OutBadge)
+	bool TryBuildEffectBadge(
+		const FCardEffect& Effect,
+		const UCardDefinition* Card,
+		const FWacomCardPresentationRuntimeContext& RuntimeContext,
+		FWacomCardViewEffectBadge& OutBadge)
 	{
-		const int32 Value = GetDisplayMagnitude(Effect, Card);
+		const int32 Value = GetDisplayMagnitude(Effect, Card, RuntimeContext);
 		if (Value == 0)
 		{
 			return false;
@@ -284,15 +301,46 @@ namespace
 			TriggerText,
 			FText::AsNumber(Passive.Effects.Num()));
 	}
+
+	void AppendRuntimeDetailChangeLines(
+		const UCardDefinition* Card,
+		const FWacomCardPresentationRuntimeContext& RuntimeContext,
+		TArray<FText>& OutLines)
+	{
+		if (!Card)
+		{
+			return;
+		}
+
+		if (RuntimeContext.bHasRuntimeCost && RuntimeContext.RuntimeCost != Card->BaseCost)
+		{
+			OutLines.Add(FText::Format(
+				LOCTEXT("RuntimeCostChangeLineFmt", "当前费用：{0}（基础 {1}）"),
+				FText::AsNumber(RuntimeContext.RuntimeCost),
+				FText::AsNumber(Card->BaseCost)));
+		}
+
+		if (RuntimeContext.bHasPlayableState && !RuntimeContext.bIsPlayable)
+		{
+			OutLines.Add(LOCTEXT("RuntimeNotPlayableChangeLine", "先机不足，当前不可打出。"));
+		}
+	}
 }
 
 FWacomCardViewData UWacomCardPresentationBuilder::BuildCardViewData(const UCardDefinition* Card)
+{
+	return BuildCardViewData(Card, FWacomCardPresentationRuntimeContext());
+}
+
+FWacomCardViewData UWacomCardPresentationBuilder::BuildCardViewData(
+	const UCardDefinition* Card,
+	const FWacomCardPresentationRuntimeContext& RuntimeContext)
 {
 	FWacomCardViewData Data;
 	Data.Name = GetCardDisplayName(Card);
 	Data.TypeText = BuildTypeLine(Card);
 	Data.Description = BuildCompactDescriptionText(Card);
-	Data.Cost = Card ? Card->BaseCost : 0;
+	Data.Cost = RuntimeContext.bHasRuntimeCost ? RuntimeContext.RuntimeCost : (Card ? Card->BaseCost : 0);
 	Data.bShowCost = Card != nullptr;
 	Data.Rarity = Card ? Card->Rarity : FGameplayTag();
 	Data.Value = GetDeleteValueFromRarity(Card);
@@ -311,11 +359,22 @@ FWacomCardViewData UWacomCardPresentationBuilder::BuildCardViewData(const UCardD
 		Data.Durability = 0;
 		Data.bShowDurability = false;
 	}
-	Data.EffectBadges = BuildEffectBadges(Card);
+	Data.EffectBadges = BuildEffectBadges(Card, RuntimeContext);
+	if (RuntimeContext.bHasPlayableState)
+	{
+		Data.bDisabled = !RuntimeContext.bIsPlayable;
+	}
 	return Data;
 }
 
 FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(const UCardDefinition* Card)
+{
+	return BuildCardDetailViewData(Card, FWacomCardPresentationRuntimeContext());
+}
+
+FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
+	const UCardDefinition* Card,
+	const FWacomCardPresentationRuntimeContext& RuntimeContext)
 {
 	FWacomCardDetailViewData Data;
 	Data.Name = GetCardDisplayName(Card);
@@ -325,6 +384,7 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 	}
 
 	Data.Description = Card->Description;
+	AppendRuntimeDetailChangeLines(Card, RuntimeContext, Data.ChangeLines);
 	for (const FCardPassive& Passive : Card->Passives)
 	{
 		Data.PassiveLines.Add(Passive.DisplayText.IsEmpty() ? BuildPassiveLine(Passive) : Passive.DisplayText);
@@ -333,6 +393,13 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 }
 
 TArray<FWacomCardViewEffectBadge> UWacomCardPresentationBuilder::BuildEffectBadges(const UCardDefinition* Card)
+{
+	return BuildEffectBadges(Card, FWacomCardPresentationRuntimeContext());
+}
+
+TArray<FWacomCardViewEffectBadge> UWacomCardPresentationBuilder::BuildEffectBadges(
+	const UCardDefinition* Card,
+	const FWacomCardPresentationRuntimeContext& RuntimeContext)
 {
 	TArray<FWacomCardViewEffectBadge> Badges;
 	if (!Card)
@@ -343,7 +410,7 @@ TArray<FWacomCardViewEffectBadge> UWacomCardPresentationBuilder::BuildEffectBadg
 	for (const FCardEffect& Effect : Card->Effects)
 	{
 		FWacomCardViewEffectBadge Badge;
-		if (TryBuildEffectBadge(Effect, Card, Badge))
+		if (TryBuildEffectBadge(Effect, Card, RuntimeContext, Badge))
 		{
 			Badges.Add(Badge);
 		}

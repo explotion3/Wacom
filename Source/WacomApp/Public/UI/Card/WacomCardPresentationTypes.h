@@ -75,6 +75,22 @@ struct WACOMAPP_API FWacomCardViewEffectBadge
 };
 
 /**
+ * Optional UI-only runtime facts for a visible card.
+ *
+ * This is deliberately not a reflected type yet: Battle/App code can pass
+ * authoritative snapshot-derived facts into presentation builders without
+ * expanding the WBP contract or making widgets read gameplay state.
+ */
+struct WACOMAPP_API FWacomCardPresentationRuntimeContext
+{
+	bool bHasRuntimeCost = false;
+	int32 RuntimeCost = 0;
+
+	bool bHasPlayableState = false;
+	bool bIsPlayable = true;
+};
+
+/**
  * Lightweight data used by reusable card display widgets.
  *
  * This is intentionally UI-only: it is a view model for one visible card, not

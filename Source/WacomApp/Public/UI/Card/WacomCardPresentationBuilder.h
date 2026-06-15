@@ -25,9 +25,21 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardView")
 	static FWacomCardViewData BuildCardViewData(const UCardDefinition* Card);
 
+	static FWacomCardViewData BuildCardViewData(
+		const UCardDefinition* Card,
+		const FWacomCardPresentationRuntimeContext& RuntimeContext);
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardDetail")
 	static FWacomCardDetailViewData BuildCardDetailViewData(const UCardDefinition* Card);
 
+	static FWacomCardDetailViewData BuildCardDetailViewData(
+		const UCardDefinition* Card,
+		const FWacomCardPresentationRuntimeContext& RuntimeContext);
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardView")
 	static TArray<FWacomCardViewEffectBadge> BuildEffectBadges(const UCardDefinition* Card);
+
+	static TArray<FWacomCardViewEffectBadge> BuildEffectBadges(
+		const UCardDefinition* Card,
+		const FWacomCardPresentationRuntimeContext& RuntimeContext);
 };

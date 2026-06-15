@@ -13,9 +13,9 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
-#include "UI/Card/WacomCardPresentationBuilder.h"
 
 namespace
 {
@@ -168,14 +168,9 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 	CardEntries.Reserve(Snapshot.Hand.Cards.Num());
 	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
 	{
-		FWacomCardViewData Data = UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot.Definition);
-		Data.Cost = CardSnapshot.RuntimeCost;
-		Data.bShowCost = CardSnapshot.Definition != nullptr;
-		Data.bDisabled = !CardSnapshot.bIsPlayable;
-
 		FWacomFirstPersonCardLayerEntry Entry;
 		Entry.CardInstanceId = CardSnapshot.InstanceId;
-		Entry.CardViewData = MoveTemp(Data);
+		Entry.CardViewData = WacomBattleCardPresentation::BuildCardViewData(CardSnapshot);
 		Entry.Zone = CardSnapshot.Zone;
 		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
@@ -366,7 +361,7 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleCardHovered(
 
 	HUD.SetFirstPersonCardDetailSource(CardInstanceId);
 	if (HUD.ShowFirstPersonCardDetailAtSlot(
-		UWacomCardPresentationBuilder::BuildCardDetailViewData(CardSnapshot->Definition),
+		WacomBattleCardPresentation::BuildCardDetailViewData(*CardSnapshot),
 		SlotView))
 	{
 	}
@@ -423,7 +418,7 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragStarted(
 		{
 			HUD.SetFirstPersonCardDetailSource(CardInstanceId);
 			if (HUD.ShowFirstPersonCardDetailAtSlot(
-				UWacomCardPresentationBuilder::BuildCardDetailViewData(CardSnapshot->Definition),
+				WacomBattleCardPresentation::BuildCardDetailViewData(*CardSnapshot),
 				DragView.SourceSlotView))
 			{
 			}

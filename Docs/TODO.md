@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-06-12
+updated: 2026-06-15
 tags:
   - wacom/todo
   - wacom/docs
@@ -45,6 +45,14 @@ tags:
   - 状态：`Blocked: 策划确认`
   - 归属：战斗 / Run
   - 入口：[Questions: 击倒与战后结算](./Questions.md#questions-knockdown)
+
+## P0.5 近期架构规划
+
+- [ ] **WacomMap 总体规划：新建地图 / 节点 / 通道规则文档入口**
+  - 状态：`Ready: 优先规划`
+  - 归属：Map / Run / App
+  - 入口：[Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
+  - 说明：先规划 `Docs/WacomMap.md` 的职责边界，明确 WacomMap 管逻辑地图、节点状态、边 / 通道可达性、迷雾、撤离回路、地图运行时状态和 SaveGame 口径；RunTunnel 继续作为 App 表现 / 输入层，不把 Spline、Actor 或 UI 写进地图规则。
 
 ## P1 近期实现候选
 
@@ -115,11 +123,6 @@ tags:
   - 状态：`Blocked: P0 击倒口径`
   - 归属：战斗 / RunEvent
   - 入口：[Roadmap: 击倒事件扩展](./Roadmap.md#roadmap-knockdown)
-
-- [ ] **推进地图系统：节点、通道、迷雾、撤离回路、地图状态**
-  - 状态：`Ready: 需先定模块边界`
-  - 归属：Run / 地图
-  - 入口：[Roadmap: 地图与探索](./Roadmap.md#roadmap-map)
 
 - [ ] **推进 RunEvent：随机事件池、更多条件效果、地图节点生成、存档**
   - 状态：`Blocked: 地图节点口径`

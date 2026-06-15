@@ -186,6 +186,16 @@ namespace WacomFirstPersonCardLayerSpec
 		return Snapshot;
 	}
 
+	FWacomCardViewData BuildBattleCardViewDataForTest(const FHandCardSnapshot& CardSnapshot)
+	{
+		FWacomCardPresentationRuntimeContext RuntimeContext;
+		RuntimeContext.bHasRuntimeCost = true;
+		RuntimeContext.RuntimeCost = CardSnapshot.RuntimeCost;
+		RuntimeContext.bHasPlayableState = true;
+		RuntimeContext.bIsPlayable = CardSnapshot.bIsPlayable;
+		return UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot.Definition, RuntimeContext);
+	}
+
 	FGuid FindFirstHandCardByTargetMode(const FBattleSnapshot& Snapshot, ECardTargetMode TargetMode)
 	{
 		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
@@ -13504,10 +13514,7 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 	{
 		FWacomFirstPersonCardLayerEntry Entry;
 		Entry.CardInstanceId = CardSnapshot.InstanceId;
-		Entry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot.Definition);
-		Entry.CardViewData.Cost = CardSnapshot.RuntimeCost;
-		Entry.CardViewData.bShowCost = CardSnapshot.Definition != nullptr;
-		Entry.CardViewData.bDisabled = !CardSnapshot.bIsPlayable;
+		Entry.CardViewData = WacomFirstPersonCardLayerSpec::BuildBattleCardViewDataForTest(CardSnapshot);
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
 		Entry.TargetMode = CardSnapshot.Definition
 			? CardSnapshot.Definition->TargetMode
@@ -13675,10 +13682,7 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 	{
 		FWacomFirstPersonCardLayerEntry Entry;
 		Entry.CardInstanceId = CardSnapshot.InstanceId;
-		Entry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot.Definition);
-		Entry.CardViewData.Cost = CardSnapshot.RuntimeCost;
-		Entry.CardViewData.bShowCost = CardSnapshot.Definition != nullptr;
-		Entry.CardViewData.bDisabled = !CardSnapshot.bIsPlayable;
+		Entry.CardViewData = WacomFirstPersonCardLayerSpec::BuildBattleCardViewDataForTest(CardSnapshot);
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
 		Entry.TargetMode = CardSnapshot.Definition
 			? CardSnapshot.Definition->TargetMode
@@ -14261,10 +14265,7 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 	{
 		FWacomFirstPersonCardLayerEntry Entry;
 		Entry.CardInstanceId = CardSnapshot.InstanceId;
-		Entry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(CardSnapshot.Definition);
-		Entry.CardViewData.Cost = CardSnapshot.RuntimeCost;
-		Entry.CardViewData.bShowCost = CardSnapshot.Definition != nullptr;
-		Entry.CardViewData.bDisabled = !CardSnapshot.bIsPlayable;
+		Entry.CardViewData = WacomFirstPersonCardLayerSpec::BuildBattleCardViewDataForTest(CardSnapshot);
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
 		Entry.TargetMode = CardSnapshot.Definition
 			? CardSnapshot.Definition->TargetMode

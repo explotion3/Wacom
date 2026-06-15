@@ -94,6 +94,8 @@ Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.
 
 `UWacomCardPresentationBuilder` 是卡牌 UI 展示数据统一入口。它从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData` 和效果徽章 view，只服务 UI 表现，不参与 Battle 或 Run 结算。
 
+Battle 卡面可以额外传入 `FWacomCardPresentationRuntimeContext`（C++ only）来覆盖当前展示事实。该 context 由 `WacomApp/Private/UI/Battle` 从 `FHandCardSnapshot` 构造，当前只承载本场 `RuntimeCost` 和可用状态：卡面 Cost、disabled overlay、`Magnitude.Source.RuntimeCost` / 旧 `bMagnitudeFromRuntimeCost` 徽章，以及详情面板 `ChangeLines` 会使用这些运行时事实。没有 runtime context 的背包、商店和 Run 卡面继续使用静态定义展示。
+
 当前复用方：
 
 - 背包卡牌、拖拽预览和卡牌详情。
