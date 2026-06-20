@@ -53,6 +53,13 @@ namespace
 			|| FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
 	}
 
+	bool IsFormalDragGestureState(EWacomFirstPersonCardGestureState GestureState)
+	{
+		return GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
+			|| GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
+			|| GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard;
+	}
+
 	FReply BuildPointerRouteReply(
 		const FWacomFirstPersonCardPointerRouteResult& RouteResult,
 		const TSharedRef<SWidget>& CaptureWidget)
@@ -558,12 +565,16 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanExposeCardTarget() const
 
 bool UWacomFirstPersonCardLayerSlotWidget::CanUpdateGestureFromSlotPointer() const
 {
-	return GestureInputSource == EWacomFirstPersonCardGestureInputSource::MousePointer;
+	return GestureInputSource == EWacomFirstPersonCardGestureInputSource::MousePointer
+		&& (GestureState == EWacomFirstPersonCardGestureState::Pressed
+			|| GestureState == EWacomFirstPersonCardGestureState::Inspecting);
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::CanUpdateGestureFromExternalPointer() const
 {
-	return GestureInputSource == EWacomFirstPersonCardGestureInputSource::ExternalPointer;
+	return IsFormalDragGestureState(GestureState)
+		&& (GestureInputSource == EWacomFirstPersonCardGestureInputSource::MousePointer
+			|| GestureInputSource == EWacomFirstPersonCardGestureInputSource::ExternalPointer);
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::IsInspectScrubActiveForFirstPersonLayer() const

@@ -71,7 +71,9 @@ int32 FWacomBattleHUDPresentationCoordinator::AppendStackEntry(
 	FWacomBattlePresentationStackEntryView Entry;
 	Entry.EntryId = NextBattlePresentationStackEntryId++;
 	Entry.CardInstanceId = CommandContext.CardInstanceId;
-	Entry.CardViewData = WacomBattleCardPresentation::BuildCardViewData(*CardSnapshot);
+	Entry.CardViewData = CommandContext.CardTargetPreview.bHasPreview
+		? WacomBattleCardPresentation::BuildCardViewData(*CardSnapshot, CommandContext.CardTargetPreview)
+		: WacomBattleCardPresentation::BuildCardViewData(*CardSnapshot);
 	BattlePresentationStackEntries.Add(Entry);
 	SyncStackWidget();
 	RefreshCommandAvailabilityWidgets();

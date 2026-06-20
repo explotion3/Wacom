@@ -8,6 +8,98 @@
 #include "GameFramework/PlayerController.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 
+namespace
+{
+	bool AreDetailTextsEquivalent(const FText& Left, const FText& Right)
+	{
+		return Left.ToString() == Right.ToString();
+	}
+
+	bool AreDetailTextArraysEquivalent(const TArray<FText>& Left, const TArray<FText>& Right)
+	{
+		if (Left.Num() != Right.Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < Left.Num(); ++Index)
+		{
+			if (!AreDetailTextsEquivalent(Left[Index], Right[Index]))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool AreDetailTokensEquivalent(
+		const FWacomCardDetailToken& Left,
+		const FWacomCardDetailToken& Right)
+	{
+		return Left.StableId == Right.StableId
+			&& Left.Kind == Right.Kind
+			&& AreDetailTextsEquivalent(Left.Text, Right.Text)
+			&& Left.Icon == Right.Icon
+			&& Left.Value == Right.Value
+			&& Left.bHasValue == Right.bHasValue
+			&& Left.PreviewValue == Right.PreviewValue
+			&& Left.bHasPreviewValue == Right.bHasPreviewValue
+			&& Left.bSkipped == Right.bSkipped
+			&& Left.bEmphasized == Right.bEmphasized;
+	}
+
+	bool AreDetailTokenArraysEquivalent(
+		const TArray<FWacomCardDetailToken>& Left,
+		const TArray<FWacomCardDetailToken>& Right)
+	{
+		if (Left.Num() != Right.Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < Left.Num(); ++Index)
+		{
+			if (!AreDetailTokensEquivalent(Left[Index], Right[Index]))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool AreDetailTokenLinesEquivalent(
+		const TArray<FWacomCardDetailTokenLine>& Left,
+		const TArray<FWacomCardDetailTokenLine>& Right)
+	{
+		if (Left.Num() != Right.Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < Left.Num(); ++Index)
+		{
+			if (Left[Index].LineId != Right[Index].LineId
+				|| Left[Index].Kind != Right[Index].Kind
+				|| !AreDetailTokenArraysEquivalent(Left[Index].Tokens, Right[Index].Tokens))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool AreCardDetailViewDataEquivalent(
+		const FWacomCardDetailViewData& Left,
+		const FWacomCardDetailViewData& Right)
+	{
+		return AreDetailTextsEquivalent(Left.Name, Right.Name)
+			&& AreDetailTextsEquivalent(Left.Description, Right.Description)
+			&& AreDetailTextArraysEquivalent(Left.TaskLines, Right.TaskLines)
+			&& AreDetailTextArraysEquivalent(Left.PassiveLines, Right.PassiveLines)
+			&& AreDetailTokenLinesEquivalent(Left.TokenLines, Right.TokenLines);
+	}
+}
+
 FWacomBattleHUDCardDetailController::FWacomBattleHUDCardDetailController(UBattleHUD& InHUD)
 	: HUD(InHUD)
 {
@@ -112,6 +204,21 @@ bool FWacomBattleHUDCardDetailController::ShowFirstPersonAtSlot(
 	if (!Panel->IsInViewport())
 	{
 		Panel->AddToViewport(HUD.FirstPersonCardDetailViewportZOrder);
+	}
+
+	const bool bCanReuseCurrentDetail = HUD.bEnableCardDetailReadabilityPolish
+		&& MotionState.ActiveHost == UBattleHUD::ECardDetailHost::FirstPersonViewport
+		&& MotionState.bHasActiveFirstPersonSlot
+		&& AreCardDetailViewDataEquivalent(Panel->GetCardDetailData(), DetailData);
+	if (bCanReuseCurrentDetail)
+	{
+		PositionFirstPersonBesideSlot(SlotView);
+		Panel->SetDesiredSizeInViewport(HUD.CardDetailPanelEstimatedSize);
+		Panel->SetIsEnabled(true);
+		MotionState.ActiveFirstPersonSlot = SlotView;
+		MotionState.bHasActiveFirstPersonSlot = true;
+		RequestMotionShow(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+		return true;
 	}
 
 	Panel->SetCardDetailData(DetailData);

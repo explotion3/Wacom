@@ -174,7 +174,7 @@ namespace
 
 		Card->CardId      = TEXT("PoisonFang");
 		Card->DisplayName = FText::FromString(TEXT("毒牙"));
-		Card->Description = FText::FromString(TEXT("对一个敌方部位施加 1 中毒。"));
+		Card->Description = FText::FromString(TEXT("对一个敌方部位施加 {Effect.0} 中毒。"));
 		Card->BaseCost    = 0;
 		Card->Rarity      = WacomTags::Card_Rarity_White;
 		Card->Keywords.Reset();

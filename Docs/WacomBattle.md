@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-battle
 status: active
-updated: 2026-06-08
+updated: 2026-06-15
 tags:
   - wacom/battle
   - wacom/rules
@@ -59,6 +59,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `UBattleSession::BuildSnapshot()` | 输出当前只读状态；UI 和测试读取，不作为事件历史 |
 | `UBattleSession::ConsumeEvents()` | 输出并清空自上次消费以来的事件流 |
 | `UBattleSession::BuildPendingKnockdownChoiceView()` | 输出当前击倒选择 ViewData；UI 不解析事件 `Count` 位掩码 |
+| `UBattleSession::BuildCardTargetPreview()` | 输出单张手牌对候选目标的只读目标预览 facts；不提交命令、不改 BattleState |
 | `UBattleSession::BuildResultPacket()` | BattleEnd 后输出战后包；具体 Run 结算见 [WacomRun §10](./WacomRun.md#wacomrun-battle-settlement) |
 
 `SubmitCommand()` 是同步规则结算入口。命令成功后，`BattleState`、Snapshot 派生事实和事件列表立即更新。
@@ -93,6 +94,12 @@ Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`U
 当前 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可精确作用到目标手牌；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 可把选中的普通手牌移入弃牌堆 / 消耗牌堆。费用、卡牌类型、区域、伙伴 / 食物专用属性等更复杂筛选属于后续扩展方向。
 
 `UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`。调用方读取 `bCanTarget` 判断是否可选，并可使用 `RejectReason / DebugSummary / ResolvedPartKey` 做 UI 反馈和排查；不再保留 bool-only 兼容入口。
+
+`UBattleSession::BuildCardTargetPreview(CardInstanceId, TargetHandle)` 是 Battle 卡牌目标预览的 public 入口。它先复用目标校验，再返回 `FBattleCardTargetPreview`：validation、源卡运行时费用 / 迅捷事实、目标类型、resolved enemy part 或 target hand card，以及每个主效果的 preview magnitude / skip facts。该 API 只读，不触发事件、不修改手牌 / 敌人 / 状态，也不模拟整次 `PlayCard` 事务。
+
+敌人部位目标的 preview 归 `WacomBattle` 计算，复用 private 规则路径：`MagnitudeResolver`、`ConditionResolver`、`MagnitudeModifiers`、武器容量伤害 +3、伤害 clamp，并与正式结算共享最终 Magnitude helper。App / Widget 只能把这些 facts 转成卡面和详情 ViewData，不能复制或重算战斗规则。
+
+手牌目标的 preview 第一版只覆盖主效果摘要：`Effect.Card.AddCost / Effect.Card.ReduceCost` 预测目标卡费用变化；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected / Effect.Card.GainKeyword` 返回结构化动作事实。它不执行真实移动、不写临时关键词、不触发后续事件链。`AllEnemyParts` 在 hover 某个部位时按当前指向的单部位生成 preview；全体目标聚合预览属于后续扩展。
 
 Battle world target 按 handle 上的 `EncounterId + EnemySlotId + PartSlotId` 构造 `FBattleEnemyPartKey` 并定位。`WorldTargetId`（runtime GUID）只作为表现层目标 cue / debug 的运行时校验字段；如果 handle 同时携带 runtime GUID 和稳定 key，两者必须指向同一部位，否则返回 `TargetIdentityMismatch`。`FBattleCommand` 不再接受 runtime part GUID 或 slot 字段作为敌方目标，最终提交统一使用 `TargetEnemyPartKey`。
 

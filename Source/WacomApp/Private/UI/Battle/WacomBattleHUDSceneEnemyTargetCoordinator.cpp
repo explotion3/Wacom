@@ -4,16 +4,20 @@
 
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartActor.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Resolution/BattleCardTargetPreview.h"
 #include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
+#include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 
 namespace
 {
@@ -59,6 +63,26 @@ namespace
 			}
 		}
 		return nullptr;
+	}
+
+	FWacomBattleEnemyPartDragPredictionDebugInput BuildHoverPredictionInputFromPreview(
+		const FGuid& SourceCardInstanceId,
+		const FHandCardSnapshot& SourceSnapshot,
+		const FBattleCardTargetPreview& TargetPreview)
+	{
+		FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
+		PredictionInput.bHasSourceCard = true;
+		PredictionInput.SourceCardInstanceId = SourceCardInstanceId;
+		PredictionInput.SourceCardRuntimeCost = TargetPreview.bHasPreview
+			? TargetPreview.SourceCardRuntimeCost
+			: SourceSnapshot.RuntimeCost;
+		PredictionInput.bSourceCardSwift = TargetPreview.bHasPreview
+			? TargetPreview.bSourceCardSwift
+			: SourceSnapshot.bIsSwift;
+		PredictionInput.bPreviewCanSubmit = TargetPreview.Validation.bCanTarget;
+		PredictionInput.PreviewRejectReason =
+			FName(LexToStringForSceneEnemyTarget(TargetPreview.Validation.RejectReason));
+		return PredictionInput;
 	}
 }
 
@@ -440,6 +464,11 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearHoverProbe(FName Reason)
 	HoveredPresentation.Reset();
 	HoveredEnemyHost.Reset();
 	HoveredHandle = FWacomInteractionTargetHandle();
+	HUD.GetFirstPersonHandBridge().ClearTargetPreviewLayer();
+	if (HUD.UIState == EBattleUIState::TargetSelect && HUD.PendingTargetingCardId.IsValid())
+	{
+		HUD.HideFirstPersonCardDetailPanelForSource(HUD.PendingTargetingCardId);
+	}
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::CanUpdateHoverProbe() const
@@ -511,43 +540,158 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::UpdateHoverProbe()
 	{
 		HoveredHost->SetEnemyPanelHoveredVisible(true);
 	}
+
+	FBattleSnapshot CurrentSnapshot;
+	const FHandCardSnapshot* SourceSnapshot = nullptr;
+	FBattleCardTargetPreview TargetPreview;
+	FWacomBattleCardTargetPreviewPresentation TargetPreviewPresentation;
+	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
+	const bool bHasTargetPreviewContext =
+		TryBuildHoverTargetPreviewContext(
+			TargetHandle,
+			CurrentSnapshot,
+			SourceSnapshot,
+			TargetPreview,
+			PredictionInput);
+	if (bHasTargetPreviewContext && TargetPreview.bHasPreview)
+	{
+		TargetPreviewPresentation =
+			WacomBattleCardPresentation::BuildTargetPreviewPresentation(
+				CurrentSnapshot,
+				TargetPreview);
+	}
 	Presentation->SetHoverProbeState(
 		TargetHandle,
 		TEXT("Hovered"),
-		BuildHoverPredictionInput(TargetHandle));
+		PredictionInput);
+	ApplyHoverTargetPreview(
+		TargetPreviewPresentation,
+		bHasTargetPreviewContext);
 }
 
 FWacomBattleEnemyPartDragPredictionDebugInput
 FWacomBattleHUDSceneEnemyTargetCoordinator::BuildHoverPredictionInput(
 	const FWacomInteractionTargetHandle& TargetHandle) const
 {
+	FBattleSnapshot CurrentSnapshot;
+	const FHandCardSnapshot* SourceSnapshot = nullptr;
+	FBattleCardTargetPreview TargetPreview;
 	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
+	TryBuildHoverTargetPreviewContext(
+		TargetHandle,
+		CurrentSnapshot,
+		SourceSnapshot,
+		TargetPreview,
+		PredictionInput);
+	return PredictionInput;
+}
+
+bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryBuildHoverTargetPreviewContext(
+	const FWacomInteractionTargetHandle& TargetHandle,
+	FBattleSnapshot& OutSnapshot,
+	const FHandCardSnapshot*& OutSourceSnapshot,
+	FBattleCardTargetPreview& OutTargetPreview,
+	FWacomBattleEnemyPartDragPredictionDebugInput& OutPredictionInput) const
+{
+	OutSourceSnapshot = nullptr;
+	OutTargetPreview = FBattleCardTargetPreview();
+	OutPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
 	if (HUD.UIState != EBattleUIState::TargetSelect || !HUD.PendingTargetingCardId.IsValid())
 	{
-		return PredictionInput;
+		return false;
 	}
 
 	const UBattleSession* CurrentSession = HUD.GetSession();
 	if (!CurrentSession)
 	{
-		return PredictionInput;
+		return false;
 	}
 
-	const FBattleSnapshot CurrentSnapshot = CurrentSession->BuildSnapshot();
-	const FHandCardSnapshot* SourceSnapshot =
-		FindHandCardSnapshotForSceneEnemyTarget(CurrentSnapshot, HUD.PendingTargetingCardId);
-	if (!SourceSnapshot)
+	OutSnapshot = CurrentSession->BuildSnapshot();
+	OutSourceSnapshot =
+		FindHandCardSnapshotForSceneEnemyTarget(OutSnapshot, HUD.PendingTargetingCardId);
+	if (!OutSourceSnapshot)
 	{
-		return PredictionInput;
+		return false;
 	}
 
-	const FWacomBattleTargetValidationResult Validation =
-		CurrentSession->ValidateTargetWithCard(HUD.PendingTargetingCardId, TargetHandle);
-	PredictionInput.bHasSourceCard = true;
-	PredictionInput.SourceCardInstanceId = HUD.PendingTargetingCardId;
-	PredictionInput.SourceCardRuntimeCost = SourceSnapshot->RuntimeCost;
-	PredictionInput.bSourceCardSwift = SourceSnapshot->bIsSwift;
-	PredictionInput.bPreviewCanSubmit = Validation.bCanTarget;
-	PredictionInput.PreviewRejectReason = FName(LexToStringForSceneEnemyTarget(Validation.RejectReason));
-	return PredictionInput;
+	OutTargetPreview =
+		CurrentSession->BuildCardTargetPreview(HUD.PendingTargetingCardId, TargetHandle);
+	OutPredictionInput =
+		BuildHoverPredictionInputFromPreview(
+			HUD.PendingTargetingCardId,
+			*OutSourceSnapshot,
+			OutTargetPreview);
+	return true;
+}
+
+bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryFindPendingTargetingCardSlot(
+	FWacomFirstPersonCardLayerSlotView& OutSlotView) const
+{
+	if (!HUD.PendingTargetingCardId.IsValid())
+	{
+		return false;
+	}
+
+	const UWacomFirstPersonCardAnchorComponent* Anchor = HUD.ResolveActiveFirstPersonCardAnchor();
+	if (!Anchor)
+	{
+		return false;
+	}
+
+	for (const FWacomFirstPersonCardLayerSlotView& SlotView : Anchor->BuildActiveCardLayerSlotViews())
+	{
+		if (SlotView.Entry.CardInstanceId == HUD.PendingTargetingCardId && SlotView.bProjected)
+		{
+			OutSlotView = SlotView;
+			return true;
+		}
+	}
+	return false;
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ApplyHoverTargetPreview(
+	const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation,
+	bool bHasTargetPreviewContext) const
+{
+	if (!bHasTargetPreviewContext
+		|| HUD.UIState != EBattleUIState::TargetSelect
+		|| !HUD.PendingTargetingCardId.IsValid())
+	{
+		return;
+	}
+
+	FWacomFirstPersonCardLayerSlotView SourceSlotView;
+	if (!TryFindPendingTargetingCardSlot(SourceSlotView))
+	{
+		return;
+	}
+
+	FWacomBattleHUDFirstPersonHandBridge& FirstPersonHandBridge = HUD.GetFirstPersonHandBridge();
+	if (!TargetPreviewPresentation.bHasPreview)
+	{
+		FirstPersonHandBridge.ClearTargetPreviewLayer();
+		HUD.HideFirstPersonCardDetailPanelForSource(HUD.PendingTargetingCardId);
+		return;
+	}
+
+	const bool bCanReuseActiveTargetPreview =
+		HUD.IsCurrentFirstPersonCardDetailSource(HUD.PendingTargetingCardId)
+		&& FirstPersonHandBridge.IsSameActiveTargetPreviewState(TargetPreviewPresentation);
+	if (bCanReuseActiveTargetPreview)
+	{
+		HUD.UpdateFirstPersonCardDetailSlot(SourceSlotView);
+		HUD.PositionFirstPersonCardDetailPanelBesideSlot(SourceSlotView);
+		return;
+	}
+
+	FirstPersonHandBridge.ApplyTargetPreviewPresentationToLayer(TargetPreviewPresentation);
+	FirstPersonHandBridge.StoreActiveTargetPreviewState(TargetPreviewPresentation);
+	HUD.SetFirstPersonCardDetailSource(HUD.PendingTargetingCardId);
+	if (TargetPreviewPresentation.bHasSourceCardDetailViewData)
+	{
+		HUD.ShowFirstPersonCardDetailAtSlot(
+			TargetPreviewPresentation.SourceCardDetailViewData,
+			SourceSlotView);
+	}
 }

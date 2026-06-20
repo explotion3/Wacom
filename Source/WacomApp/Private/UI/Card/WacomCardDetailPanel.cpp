@@ -11,6 +11,42 @@
 
 #define LOCTEXT_NAMESPACE "WacomCardDetailPanel"
 
+namespace
+{
+	bool IsNonEmptyTokenLine(const FWacomCardDetailTokenLine& TokenLine)
+	{
+		return !TokenLine.Tokens.IsEmpty();
+	}
+
+	bool IsDescriptionSectionTokenLine(const FWacomCardDetailTokenLine& TokenLine)
+	{
+		return IsNonEmptyTokenLine(TokenLine)
+			&& (TokenLine.Kind == EWacomCardDetailTokenLineKind::Description
+				|| TokenLine.Kind == EWacomCardDetailTokenLineKind::Effect);
+	}
+
+	bool IsPassiveTokenLine(const FWacomCardDetailTokenLine& TokenLine)
+	{
+		return IsNonEmptyTokenLine(TokenLine)
+			&& TokenLine.Kind == EWacomCardDetailTokenLineKind::Passive;
+	}
+
+	TArray<FWacomCardDetailTokenLine> FilterTokenLines(
+		const TArray<FWacomCardDetailTokenLine>& TokenLines,
+		bool (*Predicate)(const FWacomCardDetailTokenLine&))
+	{
+		TArray<FWacomCardDetailTokenLine> FilteredLines;
+		for (const FWacomCardDetailTokenLine& TokenLine : TokenLines)
+		{
+			if (Predicate(TokenLine))
+			{
+				FilteredLines.Add(TokenLine);
+			}
+		}
+		return FilteredLines;
+	}
+}
+
 UWacomCardDetailPanel::UWacomCardDetailPanel(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
@@ -76,17 +112,35 @@ void UWacomCardDetailPanel::ApplyCurrentDataToWidgets()
 	SectionsBox->ClearChildren();
 	SectionWidgets.Reset();
 
-	if (!CurrentData.Description.IsEmpty())
+	const TArray<FWacomCardDetailTokenLine> DescriptionTokenLines =
+		FilterTokenLines(CurrentData.TokenLines, &IsDescriptionSectionTokenLine);
+	if (!DescriptionTokenLines.IsEmpty())
+	{
+		AddTokenSection(LOCTEXT("DescriptionSectionTitle", "描述"), DescriptionTokenLines);
+	}
+	else if (!CurrentData.Description.IsEmpty())
 	{
 		TArray<FText> DescriptionLines;
 		DescriptionLines.Add(CurrentData.Description);
 		AddSection(LOCTEXT("DescriptionSectionTitle", "描述"), DescriptionLines);
 	}
 	AddSection(LOCTEXT("TasksSectionTitle", "任务"), CurrentData.TaskLines);
-	AddSection(LOCTEXT("ChangesSectionTitle", "变化"), CurrentData.ChangeLines);
-	AddSection(LOCTEXT("PassivesSectionTitle", "被动"), CurrentData.PassiveLines);
 
-	SectionsBox->SetVisibility(SectionWidgets.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	const TArray<FWacomCardDetailTokenLine> PassiveTokenLines =
+		FilterTokenLines(CurrentData.TokenLines, &IsPassiveTokenLine);
+	if (!PassiveTokenLines.IsEmpty())
+	{
+		AddTokenSection(LOCTEXT("PassivesSectionTitle", "被动"), PassiveTokenLines);
+	}
+	else
+	{
+		AddSection(LOCTEXT("PassivesSectionTitle", "被动"), CurrentData.PassiveLines);
+	}
+
+	SectionsBox->SetVisibility(
+		SectionWidgets.Num() > 0
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
 }
 
 void UWacomCardDetailPanel::AddSection(const FText& Title, const TArray<FText>& Lines)
@@ -109,6 +163,34 @@ void UWacomCardDetailPanel::AddSection(const FText& Title, const TArray<FText>& 
 		return;
 	}
 
+	FWacomCardDetailSectionData SectionData;
+	SectionData.Title = Title;
+	SectionData.Lines = NonEmptyLines;
+	AddSectionData(SectionData);
+}
+
+void UWacomCardDetailPanel::AddTokenSection(
+	const FText& Title,
+	const TArray<FWacomCardDetailTokenLine>& TokenLines)
+{
+	if (!SectionsBox || TokenLines.IsEmpty())
+	{
+		return;
+	}
+
+	FWacomCardDetailSectionData SectionData;
+	SectionData.Title = Title;
+	SectionData.TokenLines = TokenLines;
+	AddSectionData(SectionData);
+}
+
+void UWacomCardDetailPanel::AddSectionData(const FWacomCardDetailSectionData& SectionData)
+{
+	if (!SectionsBox)
+	{
+		return;
+	}
+
 	UClass* WidgetClass = SectionWidgetClass
 		? SectionWidgetClass.Get()
 		: UWacomCardDetailSectionWidget::StaticClass();
@@ -120,9 +202,6 @@ void UWacomCardDetailPanel::AddSection(const FText& Title, const TArray<FText>& 
 		return;
 	}
 
-	FWacomCardDetailSectionData SectionData;
-	SectionData.Title = Title;
-	SectionData.Lines = NonEmptyLines;
 	SectionWidget->SetSectionData(SectionData);
 
 	if (UVerticalBoxSlot* SectionSlot = Cast<UVerticalBoxSlot>(SectionsBox->AddChild(SectionWidget)))

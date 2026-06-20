@@ -8,6 +8,98 @@
 
 class UTexture2D;
 
+UENUM(BlueprintType)
+enum class EWacomCardDetailTokenKind : uint8
+{
+	Text UMETA(DisplayName = "Text"),
+	Icon UMETA(DisplayName = "Icon"),
+	Number UMETA(DisplayName = "Number"),
+	Keyword UMETA(DisplayName = "Keyword")
+};
+
+UENUM(BlueprintType)
+enum class EWacomCardDetailIcon : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Damage UMETA(DisplayName = "Damage"),
+	Heal UMETA(DisplayName = "Heal"),
+	Shield UMETA(DisplayName = "Shield"),
+	Poison UMETA(DisplayName = "Poison"),
+	Cost UMETA(DisplayName = "Cost"),
+	Initiative UMETA(DisplayName = "Initiative"),
+	Draw UMETA(DisplayName = "Draw"),
+	Discard UMETA(DisplayName = "Discard"),
+	Exhaust UMETA(DisplayName = "Exhaust"),
+	Keyword UMETA(DisplayName = "Keyword")
+};
+
+UENUM(BlueprintType)
+enum class EWacomCardDetailTokenLineKind : uint8
+{
+	Effect UMETA(DisplayName = "Effect"),
+	Passive UMETA(DisplayName = "Passive"),
+	Change UMETA(DisplayName = "Change"),
+	Description UMETA(DisplayName = "Description"),
+	Flavor UMETA(DisplayName = "Flavor")
+};
+
+/**
+ * One semantic run inside a card detail line.
+ *
+ * First-pass fallback renders these tokens as text. Later WBP/RichText work can
+ * map Icon/Number tokens to inline images, highlights, and animations by StableId.
+ */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomCardDetailToken
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FName StableId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	EWacomCardDetailTokenKind Kind = EWacomCardDetailTokenKind::Text;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FText Text;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	EWacomCardDetailIcon Icon = EWacomCardDetailIcon::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	int32 Value = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	bool bHasValue = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	int32 PreviewValue = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	bool bHasPreviewValue = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	bool bSkipped = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	bool bEmphasized = false;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomCardDetailTokenLine
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FName LineId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	EWacomCardDetailTokenLineKind Kind = EWacomCardDetailTokenLineKind::Effect;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	TArray<FWacomCardDetailToken> Tokens;
+};
+
 /**
  * Hidden/expanded card detail data.
  *
@@ -33,6 +125,9 @@ struct WACOMAPP_API FWacomCardDetailViewData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	TArray<FText> PassiveLines;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	TArray<FWacomCardDetailTokenLine> TokenLines;
 };
 
 UENUM(BlueprintType)
@@ -83,11 +178,22 @@ struct WACOMAPP_API FWacomCardViewEffectBadge
  */
 struct WACOMAPP_API FWacomCardPresentationRuntimeContext
 {
+	struct FEffectPreview
+	{
+		int32 EffectIndex = INDEX_NONE;
+		bool bSkip = false;
+		bool bHasMagnitude = false;
+		int32 Magnitude = 0;
+	};
+
 	bool bHasRuntimeCost = false;
 	int32 RuntimeCost = 0;
 
 	bool bHasPlayableState = false;
 	bool bIsPlayable = true;
+
+	TArray<FEffectPreview> EffectPreviews;
+	TArray<FText> TargetPreviewChangeLines;
 };
 
 /**

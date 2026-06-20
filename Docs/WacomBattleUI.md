@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-06-13
+updated: 2026-06-20
 tags:
   - wacom/ui
   - wacom/battle
@@ -80,7 +80,7 @@ HUD 状态入口：
 
 `UBattlePresentationStackWidget` 是只读小卡表现 backlog，不是规则栈或交互入口。它用完整 `UWacomCardView` 作为 mini card，显示已提交但表现边界尚未释放的卡牌。正式 Details 配置位于 `Wacom|Battle|Presentation Stack|Authoring`。
 
-Presentation Stack 小卡使用出牌前 `FHandCardSnapshot` 构造卡牌 runtime presentation context，因此显示的是提交时的 `RuntimeCost`、可用状态和 RuntimeCost-based 徽章，不在表现期间回读后续手牌状态。
+Presentation Stack 小卡使用出牌前 `FHandCardSnapshot` 构造卡牌 runtime presentation context，因此显示的是提交时的 `RuntimeCost`、可用状态和 RuntimeCost-based 徽章，不在表现期间回读后续手牌状态。带目标的出牌命令会在提交前捕获 `FBattleCardTargetPreview` 并放入 command context；小卡可使用这份 preview facts 显示提交时的目标修正后徽章，避免源卡离开手牌后再回查失败。
 
 Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary；ActionPanel 显示 pending 文案并禁用按钮，coordinator 等 stack 和 queue 清空后再提交等待或结束回合。
 
@@ -160,7 +160,11 @@ BattleHUD 战斗手牌运行时只使用 first-person card layer。`UBattleHUD` 
 
 First-person hand 不在 slot widget 内提交规则。轻点、hold inspect、drag/aim、world target release 和 hand-card target release 都经 BattleHUD bridge / command flow 进入 BattleSession。完整合同见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
-First-person hand 卡面和 first-person viewport 详情都从 `FHandCardSnapshot` 派生 `FWacomCardPresentationRuntimeContext`，再交给 `UWacomCardPresentationBuilder` 生成 ViewData。当前 runtime context 只覆盖本场 `RuntimeCost` 与 `bIsPlayable`：卡面 Cost、disabled overlay、RuntimeCost-based 效果徽章和详情 `ChangeLines` 会显示当前战斗事实；target-dependent preview、临时关键词完整展示和条件 modifier 仍属于后续阶段。
+First-person hand 卡面和 first-person viewport 详情都从 `FHandCardSnapshot` 派生 `FWacomCardPresentationRuntimeContext`，再交给 `UWacomCardPresentationBuilder` 生成 ViewData。基础 runtime context 覆盖本场 `RuntimeCost` 与 `bIsPlayable`：卡面 Cost、disabled overlay、RuntimeCost-based 效果徽章和详情 `TokenLines` 会显示当前战斗事实。详情面板按 token kind 分区：`Description + Effect` 进入“描述”，`Passive` 进入“被动”。手写描述可用 `{Effect.N}` 显式把主动效果嵌入描述，例如 `造成 {Effect.0} 伤害。`；拖拽 preview 时占位符内数字直接变化，不额外追加整条主动效果行。没有手写描述时才使用自动主动效果行 fallback。`ChangeLines` 只作为 legacy/debug 过渡字段，不再渲染为正式“变化”区块。
+
+当玩家拖拽手牌并指向敌人部位或目标手牌时，first-person hand bridge 会把当前 `CardInstanceId + TargetHandle` 交给 `UBattleSession::BuildCardTargetPreview()`。Battle 返回的 `FBattleCardTargetPreview` 是只读规则 facts；App 侧随后用 `WacomBattleCardPresentation::BuildTargetPreviewPresentation()` 一次性生成 hand layer entries、源卡详情和可选目标手牌详情。源卡卡面徽章和详情 token 显示目标修正后的主效果预览；若目标是手牌，目标卡自己的卡面费用可以显示预测后的费用，但详情不生成 `[费] before -> after` token。preview 不提交命令、不模拟完整出牌事件链、不修改 Battle state。
+
+拖拽 release、cancel、离开目标、候选目标无效或 UI state 退出时，bridge 会清理 preview entries，恢复基础 hand entries 和当前详情。Scene enemy hover / TargetSelect hover 也先构建同一份 `FWacomBattleCardTargetPreviewPresentation` 再应用：场景目标反馈仍由 enemy presentation component 负责，卡面和详情只消费该 presentation，不在 hover / drag 两条路径里重复拼。Preview semantic state 由 snapshot version、source id、目标身份和 preview facts hash 组成；同一 state 上的高频 hover / drag move 只允许更新指针反馈、敌人 hover 和详情位置，hand layer preview entries 与详情数据必须等 preview semantic state 变化后再重建。Active drag 期间，目标手牌 preview 的生命周期由 bridge 保存的 `ActiveDragView.CurrentTarget` / target preview state 决定，SlotWidget 重建或 hover/unhover 抖动不能作为清理 preview 的权威信号。
 
 `FirstPersonCardDetailViewportZOrder / FirstPersonCardDetailAnchorBaseSize` 属于 `Wacom|Battle|First Person Card Layer|Authoring`。第一人称战斗手牌交互开关使用 `bEnableBattleHandInteraction`、`SetBattleHandInteractionEnabled()` 和 `IsBattleHandInteractionEnabled()`。
 

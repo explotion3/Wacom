@@ -1,17 +1,15 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Effects/CardEffectDispatcher.h"
+#include "Effects/CardEffectMagnitudeEvaluator.h"
 #include "Effects/ConditionResolver.h"
 #include "Effects/EffectContext.h"
 #include "Effects/EffectExecutor.h"
-#include "Effects/MagnitudeResolver.h"
 
 #include "Core/BattleState.h"
-#include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
 
 #include "Cards/CardEffect.h"
-#include "Cards/CardDefinition.h"
 
 namespace
 {
@@ -130,42 +128,12 @@ void FCardEffectDispatcher::Execute(
 	FGuid& InOutLastShuffledCardId,
 	const FGuid& SelectedHandCardId)
 {
-	int32 FinalMag = FMagnitudeResolver::Compute(State, Effect, RuntimeCost, SelectedPartId);
-
-	// 应用 MagnitudeModifiers（条件加伤）
-	for (const FMagnitudeModifier& Mod : Effect.MagnitudeModifiers)
-	{
-		if (!FConditionResolver::Evaluate(State, Mod.Condition, SelfCardId, SelectedPartId))
-		{
-			continue;
-		}
-		switch (Mod.Op)
-		{
-		case EMagnitudeModOp::Add:
-			FinalMag += Mod.Value;
-			break;
-		case EMagnitudeModOp::Multiply:
-			FinalMag *= Mod.Value;
-			break;
-		}
-	}
-
-	if (Effect.EffectType == WacomTags::Effect_Damage)
-	{
-		if (const int32* SelfIdx = State.Cards.CardIndexById.Find(SelfCardId))
-		{
-			const FRuntimeCardInstance& Self = State.Cards.AllCards[*SelfIdx];
-			if (Self.Definition
-				&& Self.Definition->Keywords.HasTagExact(WacomTags::Card_Keyword_Weapon)
-				&& Self.CapacityEffectTags.HasTagExact(WacomTags::Card_CapacityEffect_WeaponDamagePlus3))
-			{
-				// CapacityEffect 修正集中在 Dispatcher，确保主效果、完美释放、
-				// ZoneHook ExtraEffects 共用同一 Damage 路径。
-				FinalMag += 3;
-			}
-		}
-		FinalMag = FMath::Max(0, FinalMag);
-	}
+	const int32 FinalMag = FCardEffectMagnitudeEvaluator::ComputeFinalMagnitude(
+		State,
+		Effect,
+		RuntimeCost,
+		SelectedPartId,
+		SelfCardId);
 
 	// AllEnemyParts：展开到每个存活部位。
 	if (Effect.Target == WacomTags::Target_AllEnemyParts)

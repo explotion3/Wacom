@@ -539,6 +539,27 @@ void UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated(
 	GetFirstPersonHandBridge().HandleHoveredCardLayoutUpdated(CardInstanceId, SlotView);
 }
 
+void UBattleHUD::HandleFirstPersonCardLayerCardTargetHovered(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetFirstPersonHandBridge().HandleCardTargetHovered(CardTargetHandle, SlotView);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerCardTargetUnhovered(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetFirstPersonHandBridge().HandleCardTargetUnhovered(CardTargetHandle, SlotView);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerHoveredCardTargetUpdated(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetFirstPersonHandBridge().HandleHoveredCardTargetUpdated(CardTargetHandle, SlotView);
+}
+
 void UBattleHUD::HandleFirstPersonCardLayerDragStarted(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)

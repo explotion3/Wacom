@@ -9,6 +9,7 @@
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Resolution/BattleCardTargetPreview.h"
 #include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -111,6 +112,7 @@ namespace
 			return EWacomBattleCardDropRejectReason::MissingTarget;
 		}
 	}
+
 }
 
 FWacomBattleHUDFirstPersonHandBridge::FWacomBattleHUDFirstPersonHandBridge(UBattleHUD& InHUD)
@@ -164,36 +166,18 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 	}
 
 	bFirstPersonBattleHandLayerRuntimeActive = true;
-	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
-	CardEntries.Reserve(Snapshot.Hand.Cards.Num());
-	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
-	{
-		FWacomFirstPersonCardLayerEntry Entry;
-		Entry.CardInstanceId = CardSnapshot.InstanceId;
-		Entry.CardViewData = WacomBattleCardPresentation::BuildCardViewData(CardSnapshot);
-		Entry.Zone = CardSnapshot.Zone;
-		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
-		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
-		Entry.TargetMode = CardSnapshot.Definition
-			? CardSnapshot.Definition->TargetMode
-			: ECardTargetMode::None;
-		Entry.bIsPendingTargeting =
-			HUD.IsInTargetSelect()
-			&& HUD.PendingTargetingCardId.IsValid()
-			&& CardSnapshot.InstanceId == HUD.PendingTargetingCardId;
-		CardEntries.Add(MoveTemp(Entry));
-	}
-
 	Anchor->SetRuntimeCardLayerTransitionHints(FirstPersonBattleHandLayerSourceId, TransitionHints);
-	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
 	Anchor->SetBattleHandInteractionEnabled(ShouldEnableFirstPersonBattleHandInteraction());
 	BindLayerInteractions(Anchor);
 	LastAnchor = Anchor;
+	RecomposeFirstPersonHandLayer(Snapshot);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::ClearLayer()
 {
 	bFirstPersonBattleHandLayerRuntimeActive = false;
+	bHasActiveTargetPreviewLayer = false;
+	ResetActiveTargetPreviewState();
 
 	auto ClearBattleHandLayerOwnership = [this](UWacomFirstPersonCardAnchorComponent* Anchor)
 	{
@@ -227,6 +211,11 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer()
 	ClearDragCameraLookOverride();
 	ClearDragTargetFeedback(/*bClearFirstPersonCardLayerFeedback*/ false);
 	bFirstPersonCardDragActiveForBattleSceneHover = false;
+	bHasActiveDragView = false;
+	ActiveDragCardInstanceId.Invalidate();
+	ActiveDragView = FWacomFirstPersonCardDragView();
+	bHasActiveCardTargetHandle = false;
+	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
 	LastAnchor.Reset();
 	HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
 	ClearPendingTransitionEvents();
@@ -281,6 +270,9 @@ void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPers
 	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerCardTargetHovered.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerCardTargetUnhovered.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerHoveredCardTargetUpdated.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragStarted.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragReleased.RemoveAll(&HUD);
@@ -296,6 +288,15 @@ void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPers
 	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.AddUObject(
 		&HUD,
 		&UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated);
+	Anchor->OnFirstPersonCardLayerCardTargetHovered.AddUObject(
+		&HUD,
+		&UBattleHUD::HandleFirstPersonCardLayerCardTargetHovered);
+	Anchor->OnFirstPersonCardLayerCardTargetUnhovered.AddUObject(
+		&HUD,
+		&UBattleHUD::HandleFirstPersonCardLayerCardTargetUnhovered);
+	Anchor->OnFirstPersonCardLayerHoveredCardTargetUpdated.AddUObject(
+		&HUD,
+		&UBattleHUD::HandleFirstPersonCardLayerHoveredCardTargetUpdated);
 	Anchor->OnFirstPersonCardLayerDragStarted.AddUObject(
 		&HUD,
 		&UBattleHUD::HandleFirstPersonCardLayerDragStarted);
@@ -327,6 +328,9 @@ void FWacomBattleHUDFirstPersonHandBridge::UnbindLayerInteractions(UWacomFirstPe
 	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerCardTargetHovered.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerCardTargetUnhovered.RemoveAll(&HUD);
+	Anchor->OnFirstPersonCardLayerHoveredCardTargetUpdated.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragStarted.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(&HUD);
 	Anchor->OnFirstPersonCardLayerDragReleased.RemoveAll(&HUD);
@@ -399,6 +403,84 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleHoveredCardLayoutUpdated(
 	HUD.PositionFirstPersonCardDetailPanelBesideSlot(SlotView);
 }
 
+void FWacomBattleHUDFirstPersonHandBridge::HandleCardTargetHovered(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (!ShouldEnableFirstPersonBattleHandInteraction()
+		|| !CardTargetHandle.IsValid()
+		|| CardTargetHandle.TargetKind != EWacomInteractionTargetKind::Card)
+	{
+		return;
+	}
+
+	ActiveCardTargetHandle = CardTargetHandle;
+	bHasActiveCardTargetHandle = true;
+	if (bHasActiveDragView)
+	{
+		ApplyActiveCardTargetPreview(CardTargetHandle, SlotView);
+	}
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::HandleCardTargetUnhovered(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& /*SlotView*/)
+{
+	if (!bHasActiveCardTargetHandle
+		|| ActiveCardTargetHandle.TargetKind != EWacomInteractionTargetKind::Card
+		|| ActiveCardTargetHandle.CardInstanceId != CardTargetHandle.CardInstanceId)
+	{
+		return;
+	}
+
+	if (IsActiveDragCardTargetHandle(CardTargetHandle))
+	{
+		return;
+	}
+
+	bHasActiveCardTargetHandle = false;
+	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
+	if (bHasActiveDragView)
+	{
+		ActiveDragView.CurrentTarget = FWacomInteractionTargetHandle();
+		ActiveDragView.bTargetValid = false;
+		ActiveDragView.TargetFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::None;
+		ActiveDragView.bHasFeedbackTargetScreenPosition = false;
+		ActiveDragView.FeedbackTargetScreenPosition = FVector2D::ZeroVector;
+	}
+	if (HUD.bHasLastBattleSnapshot)
+	{
+		RecomposeFirstPersonHandLayer(HUD.LastBattleSnapshot);
+	}
+	else
+	{
+		ClearDragTargetFeedback();
+	}
+	if (bHasActiveDragView && ActiveDragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard)
+	{
+		HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+	}
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::HandleHoveredCardTargetUpdated(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (!ShouldEnableFirstPersonBattleHandInteraction()
+		|| !CardTargetHandle.IsValid()
+		|| CardTargetHandle.TargetKind != EWacomInteractionTargetKind::Card)
+	{
+		return;
+	}
+
+	ActiveCardTargetHandle = CardTargetHandle;
+	bHasActiveCardTargetHandle = true;
+	if (bHasActiveDragView)
+	{
+		ApplyActiveCardTargetPreview(CardTargetHandle, SlotView);
+	}
+}
+
 void FWacomBattleHUDFirstPersonHandBridge::HandleDragStarted(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
@@ -409,6 +491,9 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragStarted(
 	}
 
 	bFirstPersonCardDragActiveForBattleSceneHover = true;
+	bHasActiveDragView = true;
+	ActiveDragCardInstanceId = CardInstanceId;
+	ActiveDragView = DragView;
 	HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDrag"));
 
 	if (ShouldShowDragInspectDetail(DragView))
@@ -441,6 +526,19 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragUpdated(
 		return;
 	}
 
+	bHasActiveDragView = true;
+	ActiveDragCardInstanceId = CardInstanceId;
+	ActiveDragView = DragView;
+	if (DragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card)
+	{
+		ActiveCardTargetHandle = DragView.CurrentTarget;
+		bHasActiveCardTargetHandle = true;
+	}
+	else
+	{
+		ActiveCardTargetHandle = FWacomInteractionTargetHandle();
+		bHasActiveCardTargetHandle = false;
+	}
 	ApplyDragCameraLookOverride(DragView);
 
 	if (ShouldShowDragInspectDetail(DragView)
@@ -449,13 +547,14 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragUpdated(
 	{
 		HUD.UpdateFirstPersonCardDetailSlot(DragView.SourceSlotView);
 		HUD.PositionFirstPersonCardDetailPanelBesideSlot(DragView.SourceSlotView);
+		ClearTargetPreviewLayer();
 		return;
 	}
 	else if (DragView.GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard)
+		|| DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit)
 	{
 		HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+		ClearTargetPreviewLayer();
 	}
 
 	UpdateDragTargetFeedback(CardInstanceId, DragView);
@@ -476,12 +575,18 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragReleased(
 
 	ClearDragCameraLookOverride();
 	bFirstPersonCardDragActiveForBattleSceneHover = false;
+	bHasActiveDragView = false;
+	ActiveDragCardInstanceId.Invalidate();
+	ActiveDragView = FWacomFirstPersonCardDragView();
+	bHasActiveCardTargetHandle = false;
+	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
 	HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragReleased"));
 	if (UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = CurrentDragPreviewPresentation.Get())
 	{
 		PreviewPresentation->ClearDragTargetPreviewState();
 	}
 	CurrentDragPreviewPresentation.Reset();
+	ClearTargetPreviewLayer();
 	HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
 
 	if (!DropResult.bCanSubmit)
@@ -514,8 +619,14 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragCancelled(
 {
 	ClearDragCameraLookOverride();
 	bFirstPersonCardDragActiveForBattleSceneHover = false;
+	bHasActiveDragView = false;
+	ActiveDragCardInstanceId.Invalidate();
+	ActiveDragView = FWacomFirstPersonCardDragView();
+	bHasActiveCardTargetHandle = false;
+	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
 	HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragCancelled"));
 	ClearDragTargetFeedback();
+	ClearTargetPreviewLayer();
 	HUD.HideFirstPersonCardDetailPanelForSource(CardInstanceId);
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor())
 	{
@@ -640,6 +751,15 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 {
 	const FWacomBattleCardDropResolveResult DropResult =
 		ResolveDropIntent(CardInstanceId, DragView);
+	UpdateDragTargetFeedback(CardInstanceId, DragView, DropResult);
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView,
+	const FWacomBattleCardDropResolveResult& DropResult,
+	bool bForceApplyTargetPreview)
+{
 	TArray<FWacomFirstPersonCardTargetAffordance> CardTargetAffordances;
 	if (DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard)
 	{
@@ -657,6 +777,10 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	TOptional<FVector2D> FeedbackTargetPosition;
 	UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = nullptr;
+	FBattleSnapshot CurrentSnapshot;
+	FBattleCardTargetPreview TargetPreview;
+	FWacomBattleCardTargetPreviewPresentation TargetPreviewPresentation;
+	bool bHasTargetPreview = false;
 
 	switch (DropResult.IntentKind)
 	{
@@ -702,6 +826,67 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 		PreviewPresentation = HUD.ResolveBattleEnemyPartWorldTargetPresentation(DropResult.TargetHandle);
 	}
 
+	if ((DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardWorldTarget
+			|| DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardCardTarget)
+		&& DropResult.bCanSubmit)
+	{
+		if (const UBattleSession* CurrentSession = HUD.GetSession())
+		{
+			CurrentSnapshot = CurrentSession->BuildSnapshot();
+			TargetPreview = CurrentSession->BuildCardTargetPreview(CardInstanceId, DropResult.TargetHandle);
+			bHasTargetPreview = TargetPreview.bHasPreview;
+			if (bHasTargetPreview)
+			{
+				TargetPreviewPresentation =
+					WacomBattleCardPresentation::BuildTargetPreviewPresentation(
+						CurrentSnapshot,
+						TargetPreview);
+				bHasTargetPreview = TargetPreviewPresentation.bHasPreview;
+			}
+		}
+	}
+
+	if (bHasTargetPreview)
+	{
+		const bool bCanReuseActiveTargetPreview =
+			!bForceApplyTargetPreview
+			&& bHasActiveTargetPreviewLayer
+			&& HUD.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
+			&& IsSameActiveTargetPreviewState(TargetPreviewPresentation);
+
+		if (bCanReuseActiveTargetPreview)
+		{
+			if (DragView.SourceSlotView.bProjected)
+			{
+				HUD.UpdateFirstPersonCardDetailSlot(DragView.SourceSlotView);
+				HUD.PositionFirstPersonCardDetailPanelBesideSlot(DragView.SourceSlotView);
+			}
+		}
+		else
+		{
+			ApplyTargetPreviewPresentationToLayer(TargetPreviewPresentation);
+			StoreActiveTargetPreviewState(TargetPreviewPresentation);
+			if (TargetPreviewPresentation.bHasSourceCardDetailViewData)
+			{
+				HUD.SetFirstPersonCardDetailSource(CardInstanceId);
+				if (DragView.SourceSlotView.bProjected)
+				{
+					HUD.ShowFirstPersonCardDetailAtSlot(
+						TargetPreviewPresentation.SourceCardDetailViewData,
+						DragView.SourceSlotView);
+				}
+			}
+		}
+	}
+	else
+	{
+		ClearTargetPreviewLayer();
+		if (DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard)
+		{
+			HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+		}
+	}
+
 	if (CurrentDragPreviewPresentation.Get() != PreviewPresentation)
 	{
 		if (UWacomBattleEnemyPartPresentationComponent* PreviousPresentation =
@@ -717,11 +902,17 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 		PredictionDebugInput.SourceCardInstanceId = CardInstanceId;
 		PredictionDebugInput.bPreviewCanSubmit = DropResult.bCanSubmit;
 		PredictionDebugInput.PreviewRejectReason = FName(WacomCardDropRejectReasonToString(DropResult.RejectReason));
-		if (const UBattleSession* CurrentSession = HUD.GetSession())
+		if (bHasTargetPreview)
 		{
-			const FBattleSnapshot CurrentSnapshot = CurrentSession->BuildSnapshot();
+			PredictionDebugInput.bHasSourceCard = true;
+			PredictionDebugInput.SourceCardRuntimeCost = TargetPreview.SourceCardRuntimeCost;
+			PredictionDebugInput.bSourceCardSwift = TargetPreview.bSourceCardSwift;
+		}
+		else if (const UBattleSession* CurrentSession = HUD.GetSession())
+		{
+			const FBattleSnapshot PredictionSnapshot = CurrentSession->BuildSnapshot();
 			if (const FHandCardSnapshot* SourceSnapshot =
-				FindHandCardSnapshotForFirstPersonHandBridge(CurrentSnapshot, CardInstanceId))
+				FindHandCardSnapshotForFirstPersonHandBridge(PredictionSnapshot, CardInstanceId))
 			{
 				PredictionDebugInput.bHasSourceCard = true;
 				PredictionDebugInput.SourceCardRuntimeCost = SourceSnapshot->RuntimeCost;
@@ -743,6 +934,37 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	}
 }
 
+bool FWacomBattleHUDFirstPersonHandBridge::ApplyActiveCardTargetPreview(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& TargetSlotView)
+{
+	if (!ShouldEnableFirstPersonBattleHandInteraction()
+		|| !bHasActiveDragView
+		|| !ActiveDragCardInstanceId.IsValid()
+		|| ActiveDragView.GestureState != EWacomFirstPersonCardGestureState::AimingTargetedCard
+		|| !CardTargetHandle.IsValid()
+		|| CardTargetHandle.TargetKind != EWacomInteractionTargetKind::Card)
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragView SemanticDragView =
+		BuildSemanticActiveCardTargetDragView(CardTargetHandle, TargetSlotView);
+
+	const FWacomBattleCardDropResolveResult DropResult =
+		ResolveDropIntent(ActiveDragCardInstanceId, SemanticDragView);
+	SemanticDragView.bTargetValid = DropResult.bCanSubmit;
+	SemanticDragView.TargetFeedbackState = DropResult.bCanSubmit
+		? EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget
+		: EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
+	ActiveDragView = SemanticDragView;
+	ActiveCardTargetHandle = CardTargetHandle;
+	bHasActiveCardTargetHandle = DropResult.TargetHandle.TargetKind == EWacomInteractionTargetKind::Card
+		&& DropResult.TargetHandle.CardInstanceId == CardTargetHandle.CardInstanceId;
+	UpdateDragTargetFeedback(ActiveDragCardInstanceId, SemanticDragView, DropResult);
+	return DropResult.bCanSubmit;
+}
+
 void FWacomBattleHUDFirstPersonHandBridge::ClearDragTargetFeedback(bool bClearFirstPersonCardLayerFeedback)
 {
 	if (UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = CurrentDragPreviewPresentation.Get())
@@ -750,6 +972,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearDragTargetFeedback(bool bClearFi
 		PreviewPresentation->ClearDragTargetPreviewState();
 	}
 	CurrentDragPreviewPresentation.Reset();
+	ClearTargetPreviewLayer();
 	if (!bClearFirstPersonCardLayerFeedback)
 	{
 		return;
@@ -762,6 +985,40 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearDragTargetFeedback(bool bClearFi
 			false,
 			EWacomFirstPersonCardDragTargetFeedbackState::None);
 	}
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::RecomposeFirstPersonHandLayer(const FBattleSnapshot& Snapshot)
+{
+	if (!bFirstPersonBattleHandLayerRuntimeActive)
+	{
+		return;
+	}
+
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor();
+	if (!Anchor)
+	{
+		return;
+	}
+
+	if (bHasActiveDragView
+		&& ActiveDragCardInstanceId.IsValid()
+		&& ActiveDragView.CardInstanceId == ActiveDragCardInstanceId)
+	{
+		const FWacomBattleCardDropResolveResult DropResult =
+			ResolveDropIntent(ActiveDragCardInstanceId, ActiveDragView);
+		UpdateDragTargetFeedback(
+			ActiveDragCardInstanceId,
+			ActiveDragView,
+			DropResult,
+			/*bForceApplyTargetPreview*/ true);
+		return;
+	}
+
+	TArray<FWacomFirstPersonCardLayerEntry> CardEntries =
+		WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
+	ApplyPendingTargetingFlag(CardEntries);
+	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
+	bHasActiveTargetPreviewLayer = false;
 }
 
 FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveDropIntent(
@@ -1036,6 +1293,132 @@ bool FWacomBattleHUDFirstPersonHandBridge::ShouldShowDragInspectDetail(
 	}
 
 	return DragView.GestureState == EWacomFirstPersonCardGestureState::Inspecting;
+}
+
+bool FWacomBattleHUDFirstPersonHandBridge::IsActiveDragCardTargetHandle(
+	const FWacomInteractionTargetHandle& CardTargetHandle) const
+{
+	return bHasActiveDragView
+		&& ActiveDragCardInstanceId.IsValid()
+		&& ActiveDragView.CardInstanceId == ActiveDragCardInstanceId
+		&& ActiveDragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard
+		&& ActiveDragView.CurrentTarget.IsValid()
+		&& ActiveDragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card
+		&& CardTargetHandle.IsValid()
+		&& CardTargetHandle.TargetKind == EWacomInteractionTargetKind::Card
+		&& ActiveDragView.CurrentTarget.CardInstanceId == CardTargetHandle.CardInstanceId;
+}
+
+FWacomFirstPersonCardDragView FWacomBattleHUDFirstPersonHandBridge::BuildSemanticActiveCardTargetDragView(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& TargetSlotView) const
+{
+	FWacomFirstPersonCardDragView SemanticDragView = ActiveDragView;
+	SemanticDragView.CurrentTarget = CardTargetHandle;
+	SemanticDragView.CurrentTarget.ScreenPosition = TargetSlotView.ScreenPosition;
+	SemanticDragView.bTargetValid = true;
+	SemanticDragView.TargetFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget;
+	SemanticDragView.bHasFeedbackTargetScreenPosition = TargetSlotView.bProjected;
+	SemanticDragView.FeedbackTargetScreenPosition = TargetSlotView.ScreenPosition;
+	return SemanticDragView;
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ApplyTargetPreviewPresentationToLayer(
+	const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation)
+{
+	if (!bFirstPersonBattleHandLayerRuntimeActive || !TargetPreviewPresentation.bHasPreview)
+	{
+		RestoreBaseTargetPreviewLayer();
+		return;
+	}
+
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor();
+	if (!Anchor)
+	{
+		bHasActiveTargetPreviewLayer = false;
+		return;
+	}
+
+	TArray<FWacomFirstPersonCardLayerEntry> CardEntries =
+		TargetPreviewPresentation.CardLayerEntries;
+	ApplyPendingTargetingFlag(CardEntries);
+	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
+	bHasActiveTargetPreviewLayer = true;
+}
+
+bool FWacomBattleHUDFirstPersonHandBridge::IsSameActiveTargetPreviewState(
+	const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation) const
+{
+	if (!bHasActiveTargetPreviewState || !TargetPreviewPresentation.bHasPreview)
+	{
+		return false;
+	}
+
+	return WacomBattleCardPresentation::AreTargetPreviewStateKeysEquivalent(
+		ActiveTargetPreviewState,
+		TargetPreviewPresentation.StateKey);
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::StoreActiveTargetPreviewState(
+	const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation)
+{
+	if (!TargetPreviewPresentation.bHasPreview)
+	{
+		ResetActiveTargetPreviewState();
+		return;
+	}
+
+	ActiveTargetPreviewState = TargetPreviewPresentation.StateKey;
+	bHasActiveTargetPreviewState = true;
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ResetActiveTargetPreviewState()
+{
+	ActiveTargetPreviewState = FWacomBattleCardTargetPreviewPresentationStateKey();
+	bHasActiveTargetPreviewState = false;
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ClearTargetPreviewLayer()
+{
+	ResetActiveTargetPreviewState();
+	RestoreBaseTargetPreviewLayer();
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::RestoreBaseTargetPreviewLayer()
+{
+	if (!bHasActiveTargetPreviewLayer)
+	{
+		return;
+	}
+
+	bHasActiveTargetPreviewLayer = false;
+	if (!bFirstPersonBattleHandLayerRuntimeActive || !HUD.bHasLastBattleSnapshot)
+	{
+		return;
+	}
+
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor();
+	if (!Anchor)
+	{
+		return;
+	}
+
+	TArray<FWacomFirstPersonCardLayerEntry> CardEntries =
+		WacomBattleCardPresentation::BuildCardLayerEntries(HUD.LastBattleSnapshot);
+	ApplyPendingTargetingFlag(CardEntries);
+	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ApplyPendingTargetingFlag(
+	TArray<FWacomFirstPersonCardLayerEntry>& Entries) const
+{
+	const bool bHasPendingTargetingCard =
+		HUD.UIState == EBattleUIState::TargetSelect && HUD.PendingTargetingCardId.IsValid();
+	for (FWacomFirstPersonCardLayerEntry& Entry : Entries)
+	{
+		Entry.bIsPendingTargeting = bHasPendingTargetingCard
+			&& Entry.CardInstanceId == HUD.PendingTargetingCardId;
+	}
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::StoreTransitionEvents(const TArray<FBattleEvent>& Events)

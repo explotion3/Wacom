@@ -6,6 +6,7 @@
 #include "Resolution/BattleTargetValidationResult.h"
 
 struct FBattleState;
+struct FRuntimeEnemyPart;
 struct FWacomInteractionTargetHandle;
 
 /**
@@ -19,6 +20,11 @@ struct FWacomInteractionTargetHandle;
  */
 struct FBattleTargetResolver
 {
+	static const FRuntimeEnemyPart* ResolveWorldEnemyPartTarget(
+		const FBattleState& State,
+		const FWacomInteractionTargetHandle& Target,
+		EWacomBattleTargetRejectReason& OutRejectReason);
+
 	static FWacomBattleTargetValidationResult ValidateTargetWithCard(const FBattleState& State, const FGuid& CardInstanceId,
 		const FWacomInteractionTargetHandle& Target);
 };

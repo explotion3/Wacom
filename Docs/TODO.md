@@ -140,6 +140,18 @@ tags:
   - 入口：[Roadmap: 背包 UI](./Roadmap.md#roadmap-backpack-ui)
   - 说明：稳定刷新和 revision gate 事实见 Run / UI 专题；TODO 只追踪正式 WBP、拖拽表现、Shop 卡面预览和虚拟列表。
 
+- [ ] **卡牌详情 token：ConditionTokenBuilder**
+  - 状态：`Ready: 详情表现继续收口`
+  - 归属：UI / Data presentation
+  - 入口：[WacomUI.md](./WacomUI.md#wacomui-ui-ownership-map) / [WacomData.md](./WacomData.md#3-card-definition)
+  - 说明：当前详情 token 已覆盖主动效果和被动触发 / 效果；`FEffectCondition` 只显示“有条件”弱提示。后续需要把 `Condition.Self.InZone`、`Condition.Target.HasStatus` 等条件生成结构化 token。
+
+- [ ] **卡牌详情描述字段收口：Description vs FlavorText**
+  - 状态：`Ready: 内容清理前置规划`
+  - 归属：Data / UI presentation
+  - 入口：[WacomData.md](./WacomData.md#3-card-definition) / [WacomUI.md](./WacomUI.md)
+  - 说明：规则说明应逐步从 `Description` 迁到结构化 token；`Description` 是否保留为补充说明或拆出 `FlavorText` 需要单独规划，避免直接删除导致现有卡牌可读性下降。
+
 - [ ] **RunEvent 正式 WBP 外观接入**
   - 状态：`Ready: 美术 / WBP 工作`
   - 归属：UI / RunEvent

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Resolution/BattleCardTargetPreview.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Types/WacomEnums.h"
@@ -50,6 +51,9 @@ struct WACOMAPP_API FWacomBattleCombatLogCommandContext
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "击倒选择命令的选择项，仅用于日志文案。"))
 	EKnockdownChoice KnockdownChoice = EKnockdownChoice::None;
+
+	/** C++ only: command-time Battle preview facts for card presentation surfaces. Not exposed to WBP. */
+	FBattleCardTargetPreview CardTargetPreview;
 };
 
 USTRUCT(BlueprintType, meta = (ToolTip = "正式 Combat Log 命令块中的单条明细行。来源是规则事件，但本结构只承载 UI 文案、tone 和 icon。"))

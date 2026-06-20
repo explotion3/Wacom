@@ -33,7 +33,11 @@ namespace
 		LegacyRuntimeHeal.Magnitude = 9;
 		LegacyRuntimeHeal.bMagnitudeFromRuntimeCost = true;
 
-		Card->Effects = { RuntimeDamage, RuntimePoison, LegacyRuntimeHeal };
+		FCardEffect Shield;
+		Shield.EffectType = WacomTags::Status_Shield;
+		Shield.Magnitude = 6;
+
+		Card->Effects = { RuntimeDamage, RuntimePoison, LegacyRuntimeHeal, Shield };
 		return Card;
 	}
 
@@ -78,10 +82,37 @@ bool FWacomUICardPresentationRuntimeContextSpec::RunTest(const FString& /*Parame
 		UWacomCardPresentationBuilder::BuildCardViewData(Card.Get(), RuntimeContext);
 	TestEqual(TEXT("Runtime cost drives card face cost"), ViewData.Cost, 5);
 	TestTrue(TEXT("Runtime playable state drives disabled card face"), ViewData.bDisabled);
-	TestEqual(TEXT("Runtime badges include all supported effect badges"), ViewData.EffectBadges.Num(), 3);
+	TestEqual(TEXT("Runtime badges include all supported effect badges"), ViewData.EffectBadges.Num(), 4);
 	TestBadge(*this, ViewData.EffectBadges, 0, EWacomCardViewEffectBadgeKind::Damage, 5);
 	TestBadge(*this, ViewData.EffectBadges, 1, EWacomCardViewEffectBadgeKind::Poison, 5);
 	TestBadge(*this, ViewData.EffectBadges, 2, EWacomCardViewEffectBadgeKind::Heal, 5);
+	TestBadge(*this, ViewData.EffectBadges, 3, EWacomCardViewEffectBadgeKind::Shield, 6);
+
+	FWacomCardPresentationRuntimeContext PreviewContext = RuntimeContext;
+	FWacomCardPresentationRuntimeContext::FEffectPreview DamageOverride;
+	DamageOverride.EffectIndex = 0;
+	DamageOverride.bHasMagnitude = true;
+	DamageOverride.Magnitude = 9;
+	PreviewContext.EffectPreviews.Add(DamageOverride);
+
+	FWacomCardPresentationRuntimeContext::FEffectPreview PoisonSkip;
+	PoisonSkip.EffectIndex = 1;
+	PoisonSkip.bSkip = true;
+	PreviewContext.EffectPreviews.Add(PoisonSkip);
+
+	FWacomCardPresentationRuntimeContext::FEffectPreview ShieldOverride;
+	ShieldOverride.EffectIndex = 3;
+	ShieldOverride.bHasMagnitude = true;
+	ShieldOverride.Magnitude = 12;
+	PreviewContext.EffectPreviews.Add(ShieldOverride);
+	PreviewContext.TargetPreviewChangeLines.Add(FText::FromString(TEXT("目标预览：伤害 9")));
+
+	const FWacomCardViewData PreviewViewData =
+		UWacomCardPresentationBuilder::BuildCardViewData(Card.Get(), PreviewContext);
+	TestEqual(TEXT("Preview skip removes one effect badge"), PreviewViewData.EffectBadges.Num(), 3);
+	TestBadge(*this, PreviewViewData.EffectBadges, 0, EWacomCardViewEffectBadgeKind::Damage, 9);
+	TestBadge(*this, PreviewViewData.EffectBadges, 1, EWacomCardViewEffectBadgeKind::Heal, 5);
+	TestBadge(*this, PreviewViewData.EffectBadges, 2, EWacomCardViewEffectBadgeKind::Shield, 12);
 
 	const FWacomCardDetailViewData RuntimeDetail =
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get(), RuntimeContext);
@@ -97,6 +128,15 @@ bool FWacomUICardPresentationRuntimeContextSpec::RunTest(const FString& /*Parame
 	const FWacomCardDetailViewData StaticDetail =
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 	TestEqual(TEXT("Static detail does not emit runtime change lines"), StaticDetail.ChangeLines.Num(), 0);
+
+	const FWacomCardDetailViewData PreviewDetail =
+		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get(), PreviewContext);
+	TestEqual(TEXT("Preview detail appends target preview lines"), PreviewDetail.ChangeLines.Num(), 3);
+	if (PreviewDetail.ChangeLines.Num() >= 3)
+	{
+		TestTrue(TEXT("Preview detail includes target preview line"),
+			PreviewDetail.ChangeLines[2].ToString().Contains(TEXT("目标预览")));
+	}
 
 	return true;
 }

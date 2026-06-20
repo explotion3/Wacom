@@ -8,6 +8,7 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "UI/Card/WacomCardDetailTokenFlowWidget.h"
 
 namespace
 {
@@ -21,6 +22,22 @@ namespace
 		Font.Size = FontSize;
 		TextBlock->SetFont(Font);
 		return TextBlock;
+	}
+}
+
+UWacomCardDetailSectionWidget::UWacomCardDetailSectionWidget(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	if (UClass* Loaded = LoadObject<UClass>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_CardDetailTokenFlow.WBP_CardDetailTokenFlow_C"));
+		Loaded && Loaded->IsChildOf(UWacomCardDetailTokenFlowWidget::StaticClass()))
+	{
+		TokenFlowWidgetClass = Loaded;
+	}
+	else
+	{
+		TokenFlowWidgetClass = UWacomCardDetailTokenFlowWidget::StaticClass();
 	}
 }
 
@@ -79,30 +96,105 @@ void UWacomCardDetailSectionWidget::ApplyCurrentDataToWidgets()
 		TitleText->SetVisibility(CurrentData.Title.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
 
-	if (!LinesBox)
+	if (TokenFlowWidget)
+	{
+		TokenFlowWidget->SetTokenLinesData(TArray<FWacomCardDetailTokenLine>());
+		TokenFlowWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
+	bool bHasTextLines = false;
+	if (LinesBox)
+	{
+		for (int32 ChildIndex = LinesBox->GetChildrenCount() - 1; ChildIndex >= 0; --ChildIndex)
+		{
+			if (LinesBox->GetChildAt(ChildIndex) == TokenFlowWidget)
+			{
+				continue;
+			}
+			LinesBox->RemoveChildAt(ChildIndex);
+		}
+
+		for (int32 Index = 0; Index < CurrentData.Lines.Num(); ++Index)
+		{
+			const FText& Line = CurrentData.Lines[Index];
+			if (Line.IsEmpty())
+			{
+				continue;
+			}
+
+			UTextBlock* LineText = MakeSectionText(
+				WidgetTree,
+				FName(*FString::Printf(TEXT("SectionLine_%d_%d"), GetUniqueID(), Index)),
+				Line,
+				12,
+				FLinearColor(0.92f, 0.9f, 0.84f, 1.f));
+			if (UVerticalBoxSlot* LineSlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(LineText)))
+			{
+				LineSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+			}
+			bHasTextLines = true;
+		}
+	}
+
+	ApplyTokenLinesToWidgets();
+	const bool bHasTokenFlow = TokenFlowWidget && TokenFlowWidget->GetVisibility() != ESlateVisibility::Collapsed;
+	if (LinesBox)
+	{
+		LinesBox->SetVisibility(
+			bHasTextLines || bHasTokenFlow
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Collapsed);
+	}
+}
+
+void UWacomCardDetailSectionWidget::ApplyTokenLinesToWidgets()
+{
+	if (CurrentData.TokenLines.IsEmpty())
 	{
 		return;
 	}
 
-	LinesBox->ClearChildren();
-	for (int32 Index = 0; Index < CurrentData.Lines.Num(); ++Index)
+	UWacomCardDetailTokenFlowWidget* FlowWidget = EnsureTokenFlowWidget();
+	if (!FlowWidget)
 	{
-		const FText& Line = CurrentData.Lines[Index];
-		if (Line.IsEmpty())
-		{
-			continue;
-		}
+		return;
+	}
 
-		UTextBlock* LineText = MakeSectionText(
-			WidgetTree,
-			FName(*FString::Printf(TEXT("SectionLine_%d_%d"), GetUniqueID(), Index)),
-			Line,
-			12,
-			FLinearColor(0.92f, 0.9f, 0.84f, 1.f));
-		if (UVerticalBoxSlot* LineSlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(LineText)))
+	const bool bHasDesignerParent = FlowWidget->GetParent() != nullptr;
+	const bool bCanAttachFallbackFlow = LinesBox != nullptr;
+	if (!bHasDesignerParent && !bCanAttachFallbackFlow)
+	{
+		FlowWidget->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	FlowWidget->SetTokenLinesData(CurrentData.TokenLines);
+	if (FlowWidget->GetVisibility() == ESlateVisibility::Collapsed)
+	{
+		return;
+	}
+
+	if (!bHasDesignerParent && LinesBox)
+	{
+		if (UVerticalBoxSlot* FlowSlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(FlowWidget)))
 		{
-			LineSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+			FlowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
 		}
 	}
-	LinesBox->SetVisibility(LinesBox->GetChildrenCount() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
+UWacomCardDetailTokenFlowWidget* UWacomCardDetailSectionWidget::EnsureTokenFlowWidget()
+{
+	if (TokenFlowWidget)
+	{
+		return TokenFlowWidget;
+	}
+
+	UClass* WidgetClass = TokenFlowWidgetClass
+		? TokenFlowWidgetClass.Get()
+		: UWacomCardDetailTokenFlowWidget::StaticClass();
+	TokenFlowWidget = GetWorld()
+		? CreateWidget<UWacomCardDetailTokenFlowWidget>(this, WidgetClass)
+		: NewObject<UWacomCardDetailTokenFlowWidget>(this, WidgetClass);
+	return TokenFlowWidget;
 }

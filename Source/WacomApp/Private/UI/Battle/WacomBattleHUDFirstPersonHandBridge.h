@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 class UBattleHUD;
@@ -12,6 +13,7 @@ class UBattleSession;
 class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class UWacomFirstPersonCardAnchorComponent;
+struct FBattleCardTargetPreview;
 struct FBattleEvent;
 struct FBattleSnapshot;
 struct FHandCardSnapshot;
@@ -43,7 +45,7 @@ public:
 
 	void StoreTransitionEvents(const TArray<FBattleEvent>& Events);
 	void ClearPendingTransitionEvents();
-void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
+	void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
@@ -59,6 +61,15 @@ void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity
 	void HandleHoveredCardLayoutUpdated(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleCardTargetHovered(
+		const FWacomInteractionTargetHandle& CardTargetHandle,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleCardTargetUnhovered(
+		const FWacomInteractionTargetHandle& CardTargetHandle,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleHoveredCardTargetUpdated(
+		const FWacomInteractionTargetHandle& CardTargetHandle,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
@@ -71,6 +82,14 @@ void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity
 	void ApplyPointerCameraLookOverride(const FWacomFirstPersonCardPointerView& PointerView);
 	void ClearPointerCameraLookOverride();
 	void UpdateDragTargetFeedback(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void UpdateDragTargetFeedback(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		const FWacomBattleCardDropResolveResult& DropResult,
+		bool bForceApplyTargetPreview = false);
+	bool ApplyActiveCardTargetPreview(
+		const FWacomInteractionTargetHandle& CardTargetHandle,
+		const FWacomFirstPersonCardLayerSlotView& TargetSlotView);
 	void ClearDragTargetFeedback(bool bClearFirstPersonCardLayerFeedback = true);
 
 	FWacomBattleCardDropResolveResult ResolveDropIntent(
@@ -86,6 +105,21 @@ void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity
 		FWacomInteractionTargetHandle& OutTargetHandle,
 		bool& bOutValidTarget) const;
 	bool ShouldShowDragInspectDetail(const FWacomFirstPersonCardDragView& DragView) const;
+	bool IsActiveDragCardTargetHandle(const FWacomInteractionTargetHandle& CardTargetHandle) const;
+	FWacomFirstPersonCardDragView BuildSemanticActiveCardTargetDragView(
+		const FWacomInteractionTargetHandle& CardTargetHandle,
+		const FWacomFirstPersonCardLayerSlotView& TargetSlotView) const;
+	void ApplyTargetPreviewPresentationToLayer(
+		const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation);
+	void ClearTargetPreviewLayer();
+	void RestoreBaseTargetPreviewLayer();
+	void RecomposeFirstPersonHandLayer(const FBattleSnapshot& Snapshot);
+	bool IsSameActiveTargetPreviewState(
+		const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation) const;
+	void StoreActiveTargetPreviewState(
+		const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation);
+	void ResetActiveTargetPreviewState();
+	void ApplyPendingTargetingFlag(TArray<FWacomFirstPersonCardLayerEntry>& Entries) const;
 
 	void BindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 	void UnbindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
@@ -102,9 +136,17 @@ private:
 	TArray<FPlayCommitHint> PendingPlayCommitHints;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> CurrentDragPreviewPresentation;
+	FWacomBattleCardTargetPreviewPresentationStateKey ActiveTargetPreviewState;
+	FWacomFirstPersonCardDragView ActiveDragView;
+	FGuid ActiveDragCardInstanceId;
+	FWacomInteractionTargetHandle ActiveCardTargetHandle;
 	bool bHasTransitionSnapshot = false;
 	bool bFirstPersonBattleHandLayerRuntimeActive = false;
 	bool bFirstPersonCardDragActiveForBattleSceneHover = false;
+	bool bHasActiveTargetPreviewLayer = false;
+	bool bHasActiveTargetPreviewState = false;
+	bool bHasActiveDragView = false;
+	bool bHasActiveCardTargetHandle = false;
 
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
 };

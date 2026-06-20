@@ -386,6 +386,17 @@ public:
 		return FirstPersonCardDetailPanel ? FirstPersonCardDetailPanel->GetNameText() : FText::GetEmpty();
 	}
 
+	const FWacomCardDetailViewData& GetFirstPersonCardDetailDataForTest() const
+	{
+		if (FirstPersonCardDetailPanel)
+		{
+			return FirstPersonCardDetailPanel->GetCardDetailData();
+		}
+
+		static const FWacomCardDetailViewData EmptyData;
+		return EmptyData;
+	}
+
 	FVector2D GetFirstPersonCardDetailPanelPositionForTest() const
 	{
 		return GetLastFirstPersonCardDetailPanelPosition();

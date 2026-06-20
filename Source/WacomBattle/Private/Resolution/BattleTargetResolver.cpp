@@ -82,46 +82,47 @@ namespace
 		}
 	}
 
-	const FRuntimeEnemyPart* ResolveWorldEnemyPartTarget(
-		const FBattleState& State,
-		const FWacomInteractionTargetHandle& Target,
-		EWacomBattleTargetRejectReason& OutRejectReason)
+}
+
+const FRuntimeEnemyPart* FBattleTargetResolver::ResolveWorldEnemyPartTarget(
+	const FBattleState& State,
+	const FWacomInteractionTargetHandle& Target,
+	EWacomBattleTargetRejectReason& OutRejectReason)
+{
+	OutRejectReason = EWacomBattleTargetRejectReason::None;
+
+	if (!Target.EncounterId.IsNone() && Target.EncounterId != State.Enemy.EncounterId)
 	{
-		OutRejectReason = EWacomBattleTargetRejectReason::None;
-
-		if (!Target.EncounterId.IsNone() && Target.EncounterId != State.Enemy.EncounterId)
-		{
-			OutRejectReason = EWacomBattleTargetRejectReason::InvalidWorldTarget;
-			return nullptr;
-		}
-
-		if (!Target.HasBattlePartSlotIdentity())
-		{
-			OutRejectReason = EWacomBattleTargetRejectReason::InvalidWorldTarget;
-			return nullptr;
-		}
-
-		const FBattleEnemyPartKey TargetKey =
-			FBattleEnemyPartKey::Make(Target.EncounterId, Target.EnemySlotId, Target.PartSlotId);
-		const FRuntimeEnemyPart* PartByKey = FBattleRules::FindEnemyPartByKey(State, TargetKey);
-		if (!PartByKey)
-		{
-			OutRejectReason = EWacomBattleTargetRejectReason::InvalidWorldTarget;
-			return nullptr;
-		}
-
-		if (Target.WorldTargetId.IsValid())
-		{
-			const FRuntimeEnemyPart* PartByInstance = FBattleRules::FindEnemyPart(State, Target.WorldTargetId);
-			if (PartByInstance && PartByInstance->InstanceId != PartByKey->InstanceId)
-			{
-				OutRejectReason = EWacomBattleTargetRejectReason::TargetIdentityMismatch;
-				return nullptr;
-			}
-		}
-
-		return PartByKey;
+		OutRejectReason = EWacomBattleTargetRejectReason::InvalidWorldTarget;
+		return nullptr;
 	}
+
+	if (!Target.HasBattlePartSlotIdentity())
+	{
+		OutRejectReason = EWacomBattleTargetRejectReason::InvalidWorldTarget;
+		return nullptr;
+	}
+
+	const FBattleEnemyPartKey TargetKey =
+		FBattleEnemyPartKey::Make(Target.EncounterId, Target.EnemySlotId, Target.PartSlotId);
+	const FRuntimeEnemyPart* PartByKey = FBattleRules::FindEnemyPartByKey(State, TargetKey);
+	if (!PartByKey)
+	{
+		OutRejectReason = EWacomBattleTargetRejectReason::InvalidWorldTarget;
+		return nullptr;
+	}
+
+	if (Target.WorldTargetId.IsValid())
+	{
+		const FRuntimeEnemyPart* PartByInstance = FBattleRules::FindEnemyPart(State, Target.WorldTargetId);
+		if (PartByInstance && PartByInstance->InstanceId != PartByKey->InstanceId)
+		{
+			OutRejectReason = EWacomBattleTargetRejectReason::TargetIdentityMismatch;
+			return nullptr;
+		}
+	}
+
+	return PartByKey;
 }
 
 FWacomBattleTargetValidationResult FBattleTargetResolver::ValidateTargetWithCard(
@@ -166,7 +167,8 @@ FWacomBattleTargetValidationResult FBattleTargetResolver::ValidateTargetWithCard
 		case ECardTargetMode::SingleEnemyPart:
 		{
 			EWacomBattleTargetRejectReason RejectReason = EWacomBattleTargetRejectReason::None;
-			const FRuntimeEnemyPart* ResolvedPart = ResolveWorldEnemyPartTarget(State, Target, RejectReason);
+			const FRuntimeEnemyPart* ResolvedPart =
+				FBattleTargetResolver::ResolveWorldEnemyPartTarget(State, Target, RejectReason);
 			if (!ResolvedPart)
 			{
 				return MakeTargetValidationResult(false, RejectReason, CardInstanceId, Target);

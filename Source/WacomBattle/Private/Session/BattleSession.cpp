@@ -8,6 +8,7 @@
 #include "Session/BattleCommandPipeline.h"
 #include "Session/BattleInitializer.h"
 #include "Session/BattleResultPacketBuilder.h"
+#include "Resolution/BattleCardTargetPreviewBuilder.h"
 #include "Resolution/BattleTargetResolver.h"
 #include "Snapshots/BattleSnapshotBuilder.h"
 
@@ -113,4 +114,20 @@ FWacomBattleTargetValidationResult UBattleSession::ValidateTargetWithCard(
 	}
 
 	return FBattleTargetResolver::ValidateTargetWithCard(*State, CardInstanceId, Target);
+}
+
+FBattleCardTargetPreview UBattleSession::BuildCardTargetPreview(
+	const FGuid& CardInstanceId,
+	const FWacomInteractionTargetHandle& Target) const
+{
+	if (!State)
+	{
+		FBattleCardTargetPreview Preview;
+		Preview.Validation.bCanTarget = false;
+		Preview.Validation.RejectReason = EWacomBattleTargetRejectReason::SourceCardInvalid;
+		Preview.Validation.DebugSummary = TEXT("CardTargetPreview{MissingBattleState}");
+		return Preview;
+	}
+
+	return FBattleCardTargetPreviewBuilder::Build(*State, CardInstanceId, Target);
 }

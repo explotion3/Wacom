@@ -4,11 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/Card/WacomCardDetailSectionWidget.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomCardDetailPanel.generated.h"
 
 class UPanelWidget;
-class UWacomCardDetailSectionWidget;
 
 /**
  * Expanded card detail display.
@@ -49,16 +49,18 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> SectionsBox;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|CardDetail|Widget Classes", meta = (ToolTip = "详情区块 Widget 类。可在 WBP_CardDetailPanel 的 Class Defaults 中指定自定义 Section WBP；为空时使用 C++ 默认类或约定路径 fallback。"))
+	TSubclassOf<UWacomCardDetailSectionWidget> SectionWidgetClass;
+
 private:
 	UPROPERTY(Transient)
 	FWacomCardDetailViewData CurrentData;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardDetail")
-	TSubclassOf<UWacomCardDetailSectionWidget> SectionWidgetClass;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UWacomCardDetailSectionWidget>> SectionWidgets;
 
 	void ApplyCurrentDataToWidgets();
 	void AddSection(const FText& Title, const TArray<FText>& Lines);
+	void AddTokenSection(const FText& Title, const TArray<FWacomCardDetailTokenLine>& TokenLines);
+	void AddSectionData(const FWacomCardDetailSectionData& SectionData);
 };

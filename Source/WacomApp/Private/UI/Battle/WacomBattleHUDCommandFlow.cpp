@@ -30,6 +30,22 @@ namespace
 		}
 		return nullptr;
 	}
+
+	FWacomInteractionTargetHandle BuildWorldTargetHandleFromPart(
+		const FEnemyPartSnapshot& Part,
+		UObject* SourceObject)
+	{
+		return FWacomInteractionTargetHandle::ForWorldTarget(
+			Part.InstanceId,
+			SourceObject,
+			FVector::ZeroVector,
+			FVector2D::ZeroVector,
+			FGameplayTag(),
+			NAME_None,
+			Part.EncounterId,
+			Part.EnemySlotId,
+			Part.PartSlotId);
+	}
 }
 
 void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& CardId, const FGuid& TargetPartId)
@@ -46,18 +62,23 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCard(UBattleHUD& HUD, const FGuid& Ca
 		return;
 	}
 
-const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-const FEnemyPartSnapshot* TargetPart = TargetPartId.IsValid()
-? FindEnemyPartByInstanceId(PreCommandSnapshot, TargetPartId)
-: nullptr;
-const FWacomBattleCombatLogCommandContext LogContext =
-UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
-PreCommandSnapshot,
-CardId,
-TargetPart ? TargetPart->Identity : FBattlePartSlotIdentity(),
-FGuid());
+	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
+	const FEnemyPartSnapshot* TargetPart = TargetPartId.IsValid()
+		? FindEnemyPartByInstanceId(PreCommandSnapshot, TargetPartId)
+		: nullptr;
+	FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
+			PreCommandSnapshot,
+			CardId,
+			TargetPart ? TargetPart->Identity : FBattlePartSlotIdentity(),
+			FGuid());
+	if (TargetPart)
+	{
+		LogContext.CardTargetPreview =
+			Session->BuildCardTargetPreview(CardId, BuildWorldTargetHandleFromPart(*TargetPart, &HUD));
+	}
 
-const FBattleCommand Command = TargetPart
+	const FBattleCommand Command = TargetPart
 		? FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, TargetPart->PartKey)
 		: FBattleCommand::MakePlayCard(CardId);
 
@@ -106,12 +127,13 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCardOnWorldTarget(
 		? Validation.ResolvedPartInstanceId
 		: TargetHandle.WorldTargetId;
 	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-	const FWacomBattleCombatLogCommandContext LogContext =
+	FWacomBattleCombatLogCommandContext LogContext =
 		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
 			PreCommandSnapshot,
-CardId,
-FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey),
-FGuid());
+			CardId,
+			FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey),
+			FGuid());
+	LogContext.CardTargetPreview = Session->BuildCardTargetPreview(CardId, TargetHandle);
 
 	const FBattleCommand Command =
 		FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, Validation.ResolvedPartKey);
@@ -124,7 +146,7 @@ FGuid());
 		return;
 	}
 
-HUD.RecordFirstPersonPlayCommit(CardId, FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey));
+	HUD.RecordFirstPersonPlayCommit(CardId, FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey));
 	HUD.PendingTargetingCardId.Invalidate();
 	HUD.SetUIState(EBattleUIState::Idle);
 	AfterCommand(HUD, LogContext, PreCommandSnapshot);
@@ -148,12 +170,15 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCardOnHandCard(
 	}
 
 	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-	const FWacomBattleCombatLogCommandContext LogContext =
+	FWacomBattleCombatLogCommandContext LogContext =
 		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
 			PreCommandSnapshot,
 			CardId,
 			FBattlePartSlotIdentity(),
 			TargetCardId);
+	LogContext.CardTargetPreview = Session->BuildCardTargetPreview(
+		CardId,
+		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, &HUD));
 
 	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(CardId, TargetCardId));
 	if (!Status.IsOk())
@@ -163,7 +188,7 @@ void FWacomBattleHUDCommandFlow::SubmitPlayCardOnHandCard(
 		return;
 	}
 
-		HUD.RecordFirstPersonPlayCommit(CardId, FBattlePartSlotIdentity());
+	HUD.RecordFirstPersonPlayCommit(CardId, FBattlePartSlotIdentity());
 	HUD.PendingTargetingCardId.Invalidate();
 	HUD.SetUIState(EBattleUIState::Idle);
 	AfterCommand(HUD, LogContext, PreCommandSnapshot);

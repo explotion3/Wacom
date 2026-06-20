@@ -4,12 +4,16 @@
 
 #include "CoreMinimal.h"
 #include "Types/WacomInteractionTargetTypes.h"
+#include "UI/Battle/WacomBattleCardPresentationHelper.h"
 
 class AWacomBattleEnemyActor;
 class UBattleHUD;
 class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 struct FBattleSnapshot;
+struct FBattleCardTargetPreview;
+struct FHandCardSnapshot;
+struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomBattleEnemyPartDragPredictionDebugInput;
 
@@ -56,4 +60,15 @@ private:
 	TWeakObjectPtr<AWacomBattleEnemyActor> HoveredEnemyHost;
 	FWacomInteractionTargetHandle HoveredHandle;
 	float HoverProbeElapsedSeconds = 0.0f;
+
+	bool TryBuildHoverTargetPreviewContext(
+		const FWacomInteractionTargetHandle& TargetHandle,
+		FBattleSnapshot& OutSnapshot,
+		const FHandCardSnapshot*& OutSourceSnapshot,
+		FBattleCardTargetPreview& OutTargetPreview,
+		FWacomBattleEnemyPartDragPredictionDebugInput& OutPredictionInput) const;
+	bool TryFindPendingTargetingCardSlot(FWacomFirstPersonCardLayerSlotView& OutSlotView) const;
+	void ApplyHoverTargetPreview(
+		const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation,
+		bool bHasTargetPreviewContext) const;
 };

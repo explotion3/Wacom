@@ -10,6 +10,7 @@
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEvent.h"
 #include "Resolution/BattleTargetValidationResult.h"
+#include "Resolution/BattleCardTargetPreview.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "Session/BattleResultPacket.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -283,6 +284,16 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	FWacomBattleTargetValidationResult ValidateTargetWithCard(
+		const FGuid& CardInstanceId,
+		const FWacomInteractionTargetHandle& Target) const;
+
+	/**
+	 * 构造一张手牌针对候选目标的只读效果预览。
+	 *
+	 * 预览不提交命令、不发事件、不修改 BattleState。UI 只能消费返回的 facts，
+	 * 不应自行重算 Magnitude、Condition 或目标筛选规则。
+	 */
+	FBattleCardTargetPreview BuildCardTargetPreview(
 		const FGuid& CardInstanceId,
 		const FWacomInteractionTargetHandle& Target) const;
 
