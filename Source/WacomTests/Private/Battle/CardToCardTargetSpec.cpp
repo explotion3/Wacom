@@ -37,7 +37,7 @@ namespace
 		return FGuid();
 	}
 
-	int32 GetRuntimeCostInHand(const FBattleSnapshot& Snapshot, const FGuid& CardId)
+	int32 GetRuntimeCostInHandForCardToCardTargetSpec(const FBattleSnapshot& Snapshot, const FGuid& CardId)
 	{
 		if (const FHandCardSnapshot* Card = FindHandCard(Snapshot, CardId))
 		{
@@ -332,7 +332,7 @@ bool FWacomBattleImplicitFilterPreservesCostModifierAnchorBehaviorSpec::RunTest(
 	TestTrue(TEXT("Submit on implicit cost-modifier anchor target succeeds"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, LeftId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
-	TestEqual(TEXT("Implicit cost-modifier still changes anchor cost"), GetRuntimeCostInHand(Snapshot, LeftId), 2);
+	TestEqual(TEXT("Implicit cost-modifier still changes anchor cost"), GetRuntimeCostInHandForCardToCardTargetSpec(Snapshot, LeftId), 2);
 	return true;
 }
 
@@ -662,11 +662,11 @@ bool FWacomBattleSelectedHandCardAddCostSpec::RunTest(const FString& Parameters)
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
 	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
 
-	TestEqual(TEXT("Initial target cost"), GetRuntimeCostInHand(Snapshot, TargetId), 3);
+	TestEqual(TEXT("Initial target cost"), GetRuntimeCostInHandForCardToCardTargetSpec(Snapshot, TargetId), 3);
 	TestTrue(TEXT("Play card on selected target"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
-	TestEqual(TEXT("Selected target cost increased"), GetRuntimeCostInHand(Snapshot, TargetId), 5);
+	TestEqual(TEXT("Selected target cost increased"), GetRuntimeCostInHandForCardToCardTargetSpec(Snapshot, TargetId), 5);
 	TestFalse(TEXT("Source left hand after play"), FindHandCard(Snapshot, SourceId) != nullptr);
 	return true;
 }
@@ -686,11 +686,11 @@ bool FWacomBattleSelectedHandCardReduceCostSpec::RunTest(const FString& Paramete
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
 	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
 
-	TestEqual(TEXT("Initial target cost"), GetRuntimeCostInHand(Snapshot, TargetId), 3);
+	TestEqual(TEXT("Initial target cost"), GetRuntimeCostInHandForCardToCardTargetSpec(Snapshot, TargetId), 3);
 	TestTrue(TEXT("Play card on selected target"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
-	TestEqual(TEXT("Selected target cost reduced"), GetRuntimeCostInHand(Snapshot, TargetId), 1);
+	TestEqual(TEXT("Selected target cost reduced"), GetRuntimeCostInHandForCardToCardTargetSpec(Snapshot, TargetId), 1);
 	return true;
 }
 
@@ -858,7 +858,7 @@ bool FWacomBattleCostModifierStillAllowsHandAnchorTargetsSpec::RunTest(const FSt
 	TestTrue(TEXT("Cost modifier can submit on anchor target"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, LeftId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
-	TestEqual(TEXT("Anchor cost increased"), GetRuntimeCostInHand(Snapshot, LeftId), 2);
+	TestEqual(TEXT("Anchor cost increased"), GetRuntimeCostInHandForCardToCardTargetSpec(Snapshot, LeftId), 2);
 	return true;
 }
 
