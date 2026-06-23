@@ -21,6 +21,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerDelegateRouter.h"
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UI/Card/WacomFirstPersonCardSlotLayoutBuilder.h"
 
 namespace
@@ -1397,7 +1398,7 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureTickPrerequisites()
 	}
 }
 
-void UWacomFirstPersonCardAnchorComponent::RefreshResolvedCardLayoutRuntimeState() const
+bool UWacomFirstPersonCardAnchorComponent::RefreshResolvedCardLayoutRuntimeState() const
 {
 	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
 	const uint32 ConfigHash = BuildResolvedLayoutConfigHash(Config);
@@ -1406,16 +1407,18 @@ void UWacomFirstPersonCardAnchorComponent::RefreshResolvedCardLayoutRuntimeState
 		|| LastResolvedCardLayoutConfigHash != ConfigHash;
 	if (!bConfigChanged)
 	{
-		return;
+		return false;
 	}
 
 	bHasResolvedCardLayoutConfigHash = true;
 	LastResolvedCardLayoutConfigHash = ConfigHash;
 	InvalidateResolvedCardLayoutRuntimeState();
+	return true;
 }
 
 void UWacomFirstPersonCardAnchorComponent::InvalidateResolvedCardLayoutRuntimeState() const
 {
+	bHasCachedOwnerConfig = false;
 	ResetAnchorScreenSmoothing();
 	if (CardLayerWidget)
 	{
@@ -1607,19 +1610,45 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 	}
 
 	RefreshResolvedCardLayoutRuntimeState();
-	const FWacomFirstPersonCardResolvedLayoutConfig ResolvedConfig = ResolveLayoutConfig(*this);
+
+	const bool bLayoutConfigChanged =
+		LastResolvedCardLayoutConfigHash != CachedOwnerConfigHash;
+
+	const bool bRuntimeFlagsChanged =
+		!bHasCachedOwnerConfig
+		|| CachedInteractionEnabled != bEnableBattleHandInteraction
+		|| CachedLogDiagnostics != bLogCardLayerMotionDiagnostics;
+
+	const bool bCardViewClassChanged =
+		!bHasCachedOwnerConfig
+		|| CachedCardViewClass.Get() != FirstPersonCardViewClass.Get();
+
+	if (bLayoutConfigChanged || bRuntimeFlagsChanged || bCardViewClassChanged)
+	{
+		const FWacomFirstPersonCardResolvedLayoutConfig ResolvedConfig = ResolveLayoutConfig(*this);
+
+		CachedOwnerConfigHash          = BuildResolvedLayoutConfigHash(ResolvedConfig);
+		CachedSlotMotionConfig         = BuildSlotMotionConfig(ResolvedConfig);
+		CachedSlotVisualConfig         = BuildSlotVisualConfig(ResolvedConfig);
+		CachedSlotFeedbackConfig       = BuildSlotFeedbackConfig(ResolvedConfig);
+		CachedCardDragConfig           = BuildCardDragConfig(*this, ResolvedConfig);
+		CachedInteractionEnabled       = bEnableBattleHandInteraction;
+		CachedLogDiagnostics           = bLogCardLayerMotionDiagnostics;
+		CachedCardViewClass            = FirstPersonCardViewClass.Get();
+		bHasCachedOwnerConfig          = true;
+	}
 
 	FWacomFirstPersonCardLayerOwnerConfig OwnerConfig;
-	OwnerConfig.LayerWidgetClass = CardLayerWidgetClass;
-	OwnerConfig.CardViewClass = FirstPersonCardViewClass;
-	OwnerConfig.ZOrder = CardLayerZOrder;
-	OwnerConfig.ConfigHash = BuildResolvedLayoutConfigHash(ResolvedConfig);
-	OwnerConfig.SlotMotionConfig = BuildSlotMotionConfig(ResolvedConfig);
-	OwnerConfig.SlotVisualConfig = BuildSlotVisualConfig(ResolvedConfig);
-	OwnerConfig.SlotFeedbackConfig = BuildSlotFeedbackConfig(ResolvedConfig);
-	OwnerConfig.CardDragConfig = BuildCardDragConfig(*this, ResolvedConfig);
-	OwnerConfig.bLogSlotMotionDiagnostics = bLogCardLayerMotionDiagnostics;
-	OwnerConfig.bInteractionEnabled = bEnableBattleHandInteraction;
+	OwnerConfig.LayerWidgetClass          = CardLayerWidgetClass;
+	OwnerConfig.CardViewClass             = FirstPersonCardViewClass;
+	OwnerConfig.ZOrder                   = CardLayerZOrder;
+	OwnerConfig.ConfigHash               = CachedOwnerConfigHash;
+	OwnerConfig.SlotMotionConfig          = CachedSlotMotionConfig;
+	OwnerConfig.SlotVisualConfig          = CachedSlotVisualConfig;
+	OwnerConfig.SlotFeedbackConfig        = CachedSlotFeedbackConfig;
+	OwnerConfig.CardDragConfig            = CachedCardDragConfig;
+	OwnerConfig.bLogSlotMotionDiagnostics  = CachedLogDiagnostics;
+	OwnerConfig.bInteractionEnabled       = CachedInteractionEnabled;
 
 	FWacomFirstPersonCardLayerOwnerUpdateInput UpdateInput;
 	UpdateInput.PlayerController = PC;

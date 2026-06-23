@@ -680,6 +680,16 @@ private:
 	mutable bool bHasResolvedCardLayoutConfigHash = false;
 	mutable uint32 LastResolvedCardLayoutConfigHash = 0;
 
+	mutable FWacomFirstPersonCardSlotMotionConfig CachedSlotMotionConfig;
+	mutable FWacomFirstPersonCardSlotVisualConfig CachedSlotVisualConfig;
+	mutable FWacomFirstPersonCardSlotFeedbackConfig CachedSlotFeedbackConfig;
+	mutable FWacomFirstPersonCardDragConfig CachedCardDragConfig;
+	mutable TObjectPtr<UClass> CachedCardViewClass;
+	mutable uint32 CachedOwnerConfigHash = 0;
+	mutable bool CachedInteractionEnabled = false;
+	mutable bool CachedLogDiagnostics = false;
+	mutable bool bHasCachedOwnerConfig = false;
+
 	TUniquePtr<
 		FWacomFirstPersonCardAnchorRuntimeState,
 		FWacomFirstPersonCardAnchorRuntimeStateDeleter> RuntimeState;
@@ -695,7 +705,7 @@ private:
 	bool ResolveBaseAnchor(FTransform& OutBaseTransform, EWacomFirstPersonCardAnchorMode& OutMode, FName& OutFallbackReason) const;
 	FWacomCardViewData BuildPreviewCardViewData(int32 CardIndex) const;
 	void ConfigureTickPrerequisites();
-	void RefreshResolvedCardLayoutRuntimeState() const;
+	bool RefreshResolvedCardLayoutRuntimeState() const;
 	void InvalidateResolvedCardLayoutRuntimeState() const;
 	void ResetAnchorScreenSmoothing() const;
 	void ApplyAnchorScreenSmoothing(FWacomFirstPersonCardProjectedPoint& AnchorPoint) const;
