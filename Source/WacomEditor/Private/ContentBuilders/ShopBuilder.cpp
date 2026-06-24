@@ -75,6 +75,8 @@ namespace Wacom::ContentBuilder
 			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_DiscardSelectedHandCard"))));
 		UCardDefinition* TestExhaustSelectedHandCard = LoadGeneratedCard(
 			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_ExhaustSelectedHandCard"))));
+		UCardDefinition* TestDrawByCost = LoadGeneratedCard(
+			MakeObjectPath(MakePackagePath(BugGirlRoot, TEXT("DA_Card_Test_DrawByCost"))));
 		UCardDefinition* BadgeDamagePoison = LoadGeneratedCard(
 			MakeObjectPath(MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeDamagePoison"))));
 		UCardDefinition* BadgeShieldHeal = LoadGeneratedCard(
@@ -88,7 +90,7 @@ namespace Wacom::ContentBuilder
 			|| !DebugKey
 			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
 			|| !TestTargetCompanion || !TestRequireCompanionTarget || !TestBlockWeaponTarget
-			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard
+			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard || !TestDrawByCost
 			|| !BadgeDamagePoison || !BadgeShieldHeal || !BadgeDamageShieldHeal || !BadgeAllRuntimeSupported)
 		{
 			return nullptr;
@@ -124,6 +126,7 @@ namespace Wacom::ContentBuilder
 			MakeOffer(TestBlockWeaponTarget, 0),
 			MakeOffer(TestDiscardSelectedHandCard, 0),
 			MakeOffer(TestExhaustSelectedHandCard, 0),
+			MakeOffer(TestDrawByCost, 0),
 			MakeOffer(BadgeDamagePoison, 0),
 			MakeOffer(BadgeShieldHeal, 0),
 			MakeOffer(BadgeDamageShieldHeal, 0),

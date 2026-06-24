@@ -76,6 +76,7 @@ bool FWacomBattleEffectDrawInsertsCardsAtRandomSpec::RunTest(const FString& /*Pa
 		const int32 DrawPileBefore = Snap.PileCounts.DrawCount;
 		TestTrue(FString::Printf(TEXT("Seed=%d has draw pile card"), Seed), DrawPileBefore > 0);
 
+		Session->ConsumeEvents();
 		TestTrue(TEXT("Play draw card"),
 			Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
 
@@ -101,6 +102,20 @@ bool FWacomBattleEffectDrawInsertsCardsAtRandomSpec::RunTest(const FString& /*Pa
 		}
 		TestTrue(FString::Printf(TEXT("Seed=%d found newly drawn card in hand"), Seed),
 			InsertedCardId.IsValid());
+		const FBattleEvent* DrawEvent = Events.FindByPredicate(
+			[](const FBattleEvent& Event)
+			{
+				return Event.Type == EBattleEventType::CardsDrawn;
+			});
+		if (TestNotNull(TEXT("Effect.Draw event"), DrawEvent))
+		{
+			TestEqual(TEXT("Effect.Draw event count"), DrawEvent->Count, 1);
+			TestEqual(TEXT("Effect.Draw event ids match count"), DrawEvent->CardInstanceIds.Num(), DrawEvent->Count);
+			if (DrawEvent->CardInstanceIds.Num() == 1)
+			{
+				TestEqual(TEXT("Effect.Draw event id is inserted card"), DrawEvent->CardInstanceIds[0], InsertedCardId);
+			}
+		}
 		if (InsertedCardId.IsValid() && InsertedIndex != Snap.Hand.Cards.Num() - 1)
 		{
 			bCoveredNonTailInsertion = true;

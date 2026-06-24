@@ -6,6 +6,7 @@
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
+#include "UI/Battle/WacomBattleHandPresentationController.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 class UBattleHUD;
@@ -26,11 +27,11 @@ public:
 	explicit FWacomBattleHUDFirstPersonHandBridge(UBattleHUD& InHUD);
 	~FWacomBattleHUDFirstPersonHandBridge();
 
+	void SyncLayer(const FBattleSnapshot& Snapshot);
 	void SyncLayer(
 		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints =
-			TArray<FWacomFirstPersonCardLayerTransitionHint>());
-	void ClearLayer();
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+	void ClearLayer(bool bClearPendingTransitionEvents = true);
 	void SuppressLayerForEntry();
 
 	bool ShouldUseFirstPersonBattleHandLayer() const;
@@ -44,7 +45,9 @@ public:
 	UWacomFirstPersonCardAnchorComponent* ResolveActiveAnchor() const;
 
 	void StoreTransitionEvents(const TArray<FBattleEvent>& Events);
+	bool HasPendingTransitionPresentation() const;
 	void ClearPendingTransitionEvents();
+	void PreservePendingEntryRevealForNextRefresh();
 	void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
@@ -125,22 +128,21 @@ public:
 	void UnbindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 
 private:
-	struct FPlayCommitHint
-	{
-		FGuid CardInstanceId;
-	};
+	void SyncLayerInternal(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints);
+	void ApplyPresentationFrame(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FWacomBattleHandPresentationFrame&& Frame);
 
 	UBattleHUD& HUD;
-	FBattleSnapshot LastTransitionSnapshot;
-	TArray<FBattleEvent> PendingTransitionEvents;
-	TArray<FPlayCommitHint> PendingPlayCommitHints;
+	FWacomBattleHandPresentationController PresentationController;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> CurrentDragPreviewPresentation;
 	FWacomBattleCardTargetPreviewPresentationStateKey ActiveTargetPreviewState;
 	FWacomFirstPersonCardDragView ActiveDragView;
 	FGuid ActiveDragCardInstanceId;
 	FWacomInteractionTargetHandle ActiveCardTargetHandle;
-	bool bHasTransitionSnapshot = false;
 	bool bFirstPersonBattleHandLayerRuntimeActive = false;
 	bool bFirstPersonCardDragActiveForBattleSceneHover = false;
 	bool bHasActiveTargetPreviewLayer = false;

@@ -328,6 +328,13 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
 		Snapshot = Session->BuildSnapshot();
 		TestTrue(TEXT("Draw effect emits CardsDrawn"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::CardsDrawn));
+		TestTrue(TEXT("Draw effect emits CardsDrawn ids matching count"),
+			Events.ContainsByPredicate([](const FBattleEvent& Event)
+			{
+				return Event.Type == EBattleEventType::CardsDrawn
+					&& Event.Count == 1
+					&& Event.CardInstanceIds.Num() == Event.Count;
+			}));
 		TestEqual(TEXT("Draw pile consumed by one"), Snapshot.PileCounts.DrawCount, FMath::Max(0, DrawBefore - 1));
 	}
 
@@ -462,6 +469,48 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 		TestNotNull(TEXT("Primary part exists"), Part);
 		TestEqual(TEXT("RuntimeCost magnitude applies poison equal to cost"), FWacomBattleFixture::GetStatusStacks(Part ? Part->StatusStacks : TMap<FGameplayTag, int32>(), WacomTags::Status_Poison), 3);
+	}
+
+	{
+		FWacomBattleFixture Fixture;
+		FCardEffect DrawEffect = MakeEffect(
+			WacomTags::Effect_Draw,
+			0,
+			WacomTags::Target_Player,
+			WacomTags::CardLocation_Draw);
+		DrawEffect.MagnitudeSource = WacomTags::Magnitude_Source_RuntimeCost;
+		UCardDefinition* DrawCard = MakeMatrixCard(
+			Outer,
+			TEXT("Matrix.RuntimeCostDraw"),
+			/*Cost*/2,
+			ECardTargetMode::None,
+			{ DrawEffect });
+		UCardDefinition* Filler = MakeNoopMatrixCard(Outer, TEXT("Matrix.RuntimeCostDraw.Filler"));
+		ValidateCardForMatrix(DrawCard, *this);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(
+			/*Hp*/80,
+			/*Initiative*/50,
+			/*IntentResist*/0,
+			/*Damage*/0);
+		UBattleSession* Session = CreateSessionWithRequiredCards(
+			Fixture,
+			Outer,
+			{ DrawCard, Filler, Filler, Filler, Filler, Filler, Filler, Filler, Filler },
+			Enemy);
+		FBattleSnapshot Snapshot = Session->BuildSnapshot();
+		const int32 DrawBefore = Snapshot.PileCounts.DrawCount;
+		PlayCardByDefinition(Session, Snapshot, DrawCard, FGuid(), *this);
+		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		Snapshot = Session->BuildSnapshot();
+		TestEqual(TEXT("RuntimeCost draw event count"), Events.ContainsByPredicate([](const FBattleEvent& Event)
+		{
+			return Event.Type == EBattleEventType::CardsDrawn
+				&& Event.Count == 2
+				&& Event.CardInstanceIds.Num() == Event.Count;
+		}), true);
+		TestEqual(TEXT("RuntimeCost draw consumes cards equal to cost"),
+			DrawBefore - Snapshot.PileCounts.DrawCount,
+			2);
 	}
 
 	{

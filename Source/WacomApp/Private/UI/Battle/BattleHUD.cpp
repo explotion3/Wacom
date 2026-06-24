@@ -261,14 +261,9 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
 	HideCardDetailPanel();
-	const TArray<FWacomFirstPersonCardLayerTransitionHint> FirstPersonTransitionHints =
-		GetFirstPersonHandBridge().BuildTransitionHintsForRefresh(Snap);
-	ClearPendingFirstPersonCardTransitionEvents();
 	LastBattleSnapshot = Snap;
 	bHasLastBattleSnapshot = true;
-	GetFirstPersonHandBridge().SetTransitionSnapshot(Snap);
-
-	SyncFirstPersonBattleHandLayer(Snap, FirstPersonTransitionHints);
+	SyncFirstPersonBattleHandLayer(Snap);
 
 	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
 	if (Snap.Phase == EBattlePhase::BattleEnd)
@@ -484,6 +479,11 @@ UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor()
 UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveActiveFirstPersonCardAnchor() const
 {
 	return GetFirstPersonHandBridge().ResolveActiveAnchor();
+}
+
+void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
+{
+	GetFirstPersonHandBridge().SyncLayer(Snap);
 }
 
 void UBattleHUD::SyncFirstPersonBattleHandLayer(
@@ -1224,6 +1224,17 @@ FWacomBattleHUDAutomationTestView UBattleHUD::GetAutomationTestViewForTest() con
 	View.PresentationStackEntries = PresentationCoordinator ? &PresentationCoordinator->GetStackEntries() : &EmptyEntries;
 	View.CombatLogHistory = CombatLogController ? &CombatLogController->GetHistory() : &EmptyHistory;
 	return View;
+}
+
+TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCardTransitionHintsForRefreshForTest(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return GetFirstPersonHandBridge().BuildTransitionHintsForRefresh(NextSnapshot);
+}
+
+void UBattleHUD::SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot)
+{
+	GetFirstPersonHandBridge().SetTransitionSnapshot(Snapshot);
 }
 #endif
 

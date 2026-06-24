@@ -4758,6 +4758,7 @@ bool FWacomFirstPersonCardLayerCommandFailureNoCommitHintTest::RunTest(const FSt
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
 	HUD->SetSession(Session);
+	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	const FGuid FakeCardId = FGuid::NewGuid();
 	HUD->OnCardClickedByUser(FakeCardId);
 	HUD->StoreFirstPersonCardTransitionEventsForTest({
@@ -5061,9 +5062,6 @@ bool FWacomFirstPersonCardLayerReorderDefaultMotionTest::RunTest(const FString& 
 	UWacomFirstPersonCardLayerSlotWidget* FirstWidget = Layer->GetSlotWidgetAt(0);
 	UWacomFirstPersonCardLayerSlotWidget* SecondWidget = Layer->GetSlotWidgetAt(1);
 
-	Layer->SetCardTransitionHints({
-		WacomFirstPersonCardLayerSpec::MakeTransitionHint(FirstId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
-	});
 	Layer->SetCardSlots({
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondId, 0, FVector2D(100.0f, 200.0f)),
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstId, 1, FVector2D(220.0f, 200.0f))
@@ -5599,6 +5597,106 @@ bool FWacomFirstPersonCardLayerDrawHintAssignmentTest::RunTest(const FString& Pa
 	{
 		AddError(TEXT("Missing second draw hint"));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerExactDrawIdsOverrideSnapshotGuessTest,
+	"Wacom.UI.FirstPersonCardLayer.EventAwareTransitions.CardsDrawnExactIdsOverrideSnapshotGuess",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerExactDrawIdsOverrideSnapshotGuessTest::RunTest(const FString& Parameters)
+{
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	FHandCardSnapshot Existing = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	FHandCardSnapshot Redrawn = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	FHandCardSnapshot UnrelatedNew = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	const FBattleSnapshot Previous = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ Existing, Redrawn });
+	const FBattleSnapshot Next = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ Existing, Redrawn, UnrelatedNew });
+
+	FBattleEvent DrawEvent = WacomFirstPersonCardLayerSpec::MakeBattleEvent(EBattleEventType::CardsDrawn);
+	DrawEvent.CardInstanceIds = { Redrawn.InstanceId };
+	DrawEvent.Count = DrawEvent.CardInstanceIds.Num();
+	HUD->StoreFirstPersonCardTransitionEventsForTest({ DrawEvent });
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> Hints =
+		HUD->BuildFirstPersonCardTransitionHintsForTest(Previous, Next);
+
+	TestEqual(TEXT("Only exact drawn card gets a hint"), Hints.Num(), 1);
+	const FWacomFirstPersonCardLayerTransitionHint* RedrawnHint =
+		WacomFirstPersonCardLayerSpec::FindTransitionHint(Hints, Redrawn.InstanceId);
+	TestNotNull(TEXT("Exact redrawn card gets draw hint"), RedrawnHint);
+	if (RedrawnHint)
+	{
+		TestEqual(TEXT("Exact redrawn transition kind"), RedrawnHint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Drawn);
+		TestEqual(TEXT("Exact redrawn sequence index"), RedrawnHint->SequenceIndex, 0);
+		TestEqual(TEXT("Exact redrawn sequence count"), RedrawnHint->SequenceCount, 1);
+	}
+	TestNull(
+		TEXT("Snapshot new card outside CardInstanceIds does not get draw hint"),
+		WacomFirstPersonCardLayerSpec::FindTransitionHint(Hints, UnrelatedNew.InstanceId));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerExactDrawIdsSkipInvisibleCardsTest,
+	"Wacom.UI.FirstPersonCardLayer.EventAwareTransitions.CardsDrawnExactIdsSkipInvisibleCards",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerExactDrawIdsSkipInvisibleCardsTest::RunTest(const FString& Parameters)
+{
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	FHandCardSnapshot Existing = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	FHandCardSnapshot FirstVisibleDrawn = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	FHandCardSnapshot SecondVisibleDrawn = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	FHandCardSnapshot UnrelatedNew = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	const FGuid DiscardedByLimitId = FGuid::NewGuid();
+	const FBattleSnapshot Previous = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ Existing });
+	const FBattleSnapshot Next = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
+		Existing,
+		FirstVisibleDrawn,
+		UnrelatedNew,
+		SecondVisibleDrawn
+	});
+
+	FBattleEvent DrawEvent = WacomFirstPersonCardLayerSpec::MakeBattleEvent(EBattleEventType::CardsDrawn);
+	DrawEvent.CardInstanceIds = {
+		DiscardedByLimitId,
+		FirstVisibleDrawn.InstanceId,
+		SecondVisibleDrawn.InstanceId
+	};
+	DrawEvent.Count = DrawEvent.CardInstanceIds.Num();
+	HUD->StoreFirstPersonCardTransitionEventsForTest({ DrawEvent });
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> Hints =
+		HUD->BuildFirstPersonCardTransitionHintsForTest(Previous, Next);
+
+	TestEqual(TEXT("Only visible exact drawn cards get hints"), Hints.Num(), 2);
+	const FWacomFirstPersonCardLayerTransitionHint* FirstHint =
+		WacomFirstPersonCardLayerSpec::FindTransitionHint(Hints, FirstVisibleDrawn.InstanceId);
+	const FWacomFirstPersonCardLayerTransitionHint* SecondHint =
+		WacomFirstPersonCardLayerSpec::FindTransitionHint(Hints, SecondVisibleDrawn.InstanceId);
+	if (TestNotNull(TEXT("First visible drawn hint"), FirstHint))
+	{
+		TestEqual(TEXT("First visible drawn sequence index"), FirstHint->SequenceIndex, 0);
+		TestEqual(TEXT("First visible drawn sequence count"), FirstHint->SequenceCount, 2);
+	}
+	if (TestNotNull(TEXT("Second visible drawn hint"), SecondHint))
+	{
+		TestEqual(TEXT("Second visible drawn sequence index"), SecondHint->SequenceIndex, 1);
+		TestEqual(TEXT("Second visible drawn sequence count"), SecondHint->SequenceCount, 2);
+	}
+	TestNull(
+		TEXT("Unrelated snapshot-new card does not get exact draw hint"),
+		WacomFirstPersonCardLayerSpec::FindTransitionHint(Hints, UnrelatedNew.InstanceId));
 	return true;
 }
 
@@ -7649,6 +7747,21 @@ bool FWacomFirstPersonCardLayerMouseDragIgnoresExternalPointerPumpTest::RunTest(
 	TestEqual(TEXT("Mouse drag arrow remains after ignored pump"),
 		ViewAfterPump.AimArrowEnd,
 		MouseDragPosition);
+
+	const FVector2D NextMouseDragPosition(500.0f, 260.0f);
+	TestTrue(TEXT("Mouse-origin drag continues through slot pointer route"),
+		FWacomFirstPersonCardLayerTestAccess::HandleSlotPointerMovedAtWidgetPosition(
+			*Layer,
+			*SlotWidget,
+			NextMouseDragPosition));
+	const FWacomFirstPersonCardLayerAutomationTestView ViewAfterNextMouseMove =
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer);
+	TestEqual(TEXT("Mouse-origin drag pointer follows next slot pointer move"),
+		ViewAfterNextMouseMove.CurrentDragView.CurrentScreenPosition,
+		NextMouseDragPosition);
+	TestEqual(TEXT("Mouse-origin drag arrow follows next slot pointer move"),
+		ViewAfterNextMouseMove.AimArrowEnd,
+		NextMouseDragPosition);
 
 	PC->Destroy();
 	return true;

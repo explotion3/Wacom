@@ -434,7 +434,11 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::TickHoverProbe(float DeltaTime)
 {
 	if (!CanUpdateHoverProbe())
 	{
-		ClearHoverProbe(TEXT("ProbeGated"));
+		const bool bPreserveFirstPersonDragPreview =
+			HUD.IsFirstPersonCardDragActiveForBattleSceneHover();
+		ClearHoverProbe(
+			TEXT("ProbeGated"),
+			!bPreserveFirstPersonDragPreview);
 		HoverProbeElapsedSeconds = 0.0f;
 		return;
 	}
@@ -450,7 +454,9 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::TickHoverProbe(float DeltaTime)
 	UpdateHoverProbe();
 }
 
-void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearHoverProbe(FName Reason)
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearHoverProbe(
+	FName Reason,
+	bool bClearFirstPersonTargetPreviewLayer)
 {
 	if (UWacomBattleEnemyPartPresentationComponent* Presentation = HoveredPresentation.Get())
 	{
@@ -464,7 +470,10 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearHoverProbe(FName Reason)
 	HoveredPresentation.Reset();
 	HoveredEnemyHost.Reset();
 	HoveredHandle = FWacomInteractionTargetHandle();
-	HUD.GetFirstPersonHandBridge().ClearTargetPreviewLayer();
+	if (bClearFirstPersonTargetPreviewLayer)
+	{
+		HUD.GetFirstPersonHandBridge().ClearTargetPreviewLayer();
+	}
 	if (HUD.UIState == EBattleUIState::TargetSelect && HUD.PendingTargetingCardId.IsValid())
 	{
 		HUD.HideFirstPersonCardDetailPanelForSource(HUD.PendingTargetingCardId);

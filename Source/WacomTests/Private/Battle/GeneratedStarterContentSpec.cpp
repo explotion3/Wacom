@@ -151,6 +151,11 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 	{
 		return false;
 	}
+	UCardDefinition* DrawByCost = FWacomGeneratedBattleContentAssets::LoadDrawByCostCard(*this);
+	if (!TestNotNull(TEXT("DrawByCost loads"), DrawByCost))
+	{
+		return false;
+	}
 
 	{
 		FWacomBattleFixture Fixture;
@@ -263,7 +268,9 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		TestEqual(TEXT("AntennaSearch draws two cards from draw pile"), FWacomBattleFixture::CountEvents(Events, EBattleEventType::CardsDrawn), 1);
 		TestEqual(TEXT("AntennaSearch draw event count"), Events.ContainsByPredicate([](const FBattleEvent& Event)
 		{
-			return Event.Type == EBattleEventType::CardsDrawn && Event.Count == 2;
+			return Event.Type == EBattleEventType::CardsDrawn
+				&& Event.Count == 2
+				&& Event.CardInstanceIds.Num() == Event.Count;
 		}), true);
 		TestTrue(TEXT("AntennaSearch emits random discard event"),
 			FWacomBattleFixture::CountEvents(Events, EBattleEventType::CardDiscarded) >= 1);
@@ -273,6 +280,44 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		TestEqual(TEXT("AntennaSearch waits in played pile"),
 			Snapshot.PileCounts.PlayedCount,
 			1);
+	}
+
+	{
+		FWacomBattleFixture Fixture;
+		UBattleSession* Session = FindSessionWithHandCards(
+			Fixture,
+			Snake,
+			{ DrawByCost },
+			[DrawByCost](const FBattleSnapshot& Snapshot)
+			{
+				return FWacomBattleFixture::FindHandCardByCardId(Snapshot, DrawByCost->CardId) != nullptr
+					&& Snapshot.PileCounts.DrawCount >= 2;
+			},
+			*this,
+			TEXT("DrawByCost runtime-cost draw"),
+			/*MinimumDeckSize*/ 12);
+		if (!Session)
+		{
+			return false;
+		}
+
+		Session->ConsumeEvents();
+		FBattleSnapshot Snapshot = Session->BuildSnapshot();
+		const int32 DrawBefore = Snapshot.PileCounts.DrawCount;
+		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DrawByCost->CardId);
+		TestTrue(TEXT("DrawByCost is in hand"), CardId.IsValid());
+		TestTrue(TEXT("Play DrawByCost"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
+		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		Snapshot = Session->BuildSnapshot();
+		TestEqual(TEXT("DrawByCost emits draw count equal to default cost"), Events.ContainsByPredicate([](const FBattleEvent& Event)
+		{
+			return Event.Type == EBattleEventType::CardsDrawn
+				&& Event.Count == 2
+				&& Event.CardInstanceIds.Num() == Event.Count;
+		}), true);
+		TestEqual(TEXT("DrawByCost consumes two cards from draw pile"),
+			DrawBefore - Snapshot.PileCounts.DrawCount,
+			2);
 	}
 
 	{

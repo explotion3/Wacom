@@ -24,6 +24,18 @@ enum class EWacomFirstPersonCardGestureInputSource : uint8
 	ExternalPointer
 };
 
+struct FWacomFirstPersonCardEnterTransitionPlayback
+{
+	bool bActive = false;
+	FWacomFirstPersonCardLayerSlotView StartSlotView;
+	float ElapsedSeconds = 0.0f;
+	float StartDelaySeconds = 0.0f;
+	float DurationSeconds = 0.0f;
+	float ArcLiftPixels = 0.0f;
+	float EasePower = 1.0f;
+	bool bBlockInteractionDuringPlayback = true;
+};
+
 #if WITH_AUTOMATION_TESTS
 struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 {
@@ -55,6 +67,11 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
+	bool bEnterTransitionPlaybackActive = false;
+	bool bEnterTransitionBlocksInteraction = false;
+	float EnterTransitionElapsedSeconds = 0.0f;
+	float EnterTransitionStartDelaySeconds = 0.0f;
+	float EnterTransitionDurationSeconds = 0.0f;
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
@@ -247,6 +264,7 @@ private:
 	FVector2D CurrentGestureScreenPosition = FVector2D::ZeroVector;
 	float GestureElapsedSeconds = 0.0f;
 	float ExitMotionElapsedSeconds = 0.0f;
+	FWacomFirstPersonCardEnterTransitionPlayback EnterTransitionPlayback;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
@@ -358,6 +376,13 @@ private:
 	void UpdateVisibilityForInteractionMode();
 	void SetTickEnabledForMotion(bool bEnabled);
 	void UpdateWantsTick();
+	void StartEnterTransitionPlayback(
+		const FWacomFirstPersonCardLayerSlotView& StartSlotView,
+		const FWacomFirstPersonCardTransitionMotionProfile& EnterProfile);
+	void ClearEnterTransitionPlayback();
+	bool TickEnterTransitionPlayback(float DeltaTime);
+	bool IsEnterTransitionPlaybackActive() const { return EnterTransitionPlayback.bActive; }
+	bool IsEnterTransitionBlockingInteraction() const;
 	static FWacomFirstPersonCardLayerSlotView LerpSlotView(
 		const FWacomFirstPersonCardLayerSlotView& From,
 		const FWacomFirstPersonCardLayerSlotView& To,

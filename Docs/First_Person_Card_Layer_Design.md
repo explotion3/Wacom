@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-06-13
+updated: 2026-06-24
 tags:
   - wacom/ui
   - wacom/cards
@@ -39,15 +39,16 @@ Battle / Run snapshot
 |---|---|---|
 | `UWacomFirstPersonCardAnchorComponent` | 作为制作参数 façade、投影锚点 owner 和对外事件 façade；从 Details 构建 layout / motion / feedback config | 不提交 Battle / Run 命令，不直接持有规则状态 |
 | `WacomFirstPersonCardLayerTypes.h` | 第一人称卡牌层公共 UI 协议：entry、slot view、drag / pointer view、transition hint、motion / visual / feedback config | 不包含 AnchorComponent 制作参数或运行时实现 |
-| `FWacomFirstPersonCardAnchorRuntimeState` | Anchor 私有 runtime source 状态：entries、view data、transition hints、hovered card / card target handle | 不暴露 Blueprint API，不负责布局或 widget 生命周期 |
+| `FWacomFirstPersonCardAnchorRuntimeState` | Anchor 私有 runtime source 状态：entries、view data、legacy transition hints、presentation frame hints、hovered card / card target handle | 不暴露 Blueprint API，不负责布局或 widget 生命周期 |
 | `FWacomFirstPersonCardSlotLayoutBuilder` | Anchor 私有布局构建器：根据 resolved config、投影后 hand anchor 和 viewport size 生成基础 slot view / input hit 几何 | 不依赖 `UWacomFirstPersonCardAnchorComponent`，不处理 hover 视觉合成或命令 |
-| `FWacomFirstPersonCardLayerOwner` | Anchor 私有 CardLayerWidget 生命周期 owner：创建 / 移除 widget、应用 layer config、推送 transition hints 和 slots | 不解析 anchor / viewport，不读取 runtime source，不转发 Battle / Run 命令 |
+| `FWacomFirstPersonCardLayerOwner` | Anchor 私有 CardLayerWidget 生命周期 owner：创建 / 移除 widget、应用 layer config、推送 presentation frame / transition hints 和 slots | 不解析 anchor / viewport，不读取 runtime source，不转发 Battle / Run 命令 |
 | `FWacomFirstPersonCardLayerDelegateRouter` | Anchor 私有 LayerWidget 事件 router：绑定 / 解绑 native delegates、同步 hovered runtime state、转发 Anchor 对外 delegates | 不创建 widget，不解析布局，不提交 Battle / Run 命令 |
 | `UWacomFirstPersonCardLayerWidget` | 按 entries reconcile slot widget，维护 active / outgoing slot，绘制 drag arrow 和 layer-level feedback | 不读取 Battle / Run 规则状态 |
 | `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomFirstPersonCardViewWidget`，处理 hover / press / inspect / drag gesture 和 visual slot motion | 不直接调用 BattleSession 或 RunSession，不直接创建卡面反馈 Image / 材质控件 |
 | `UWacomFirstPersonCardViewWidget` | 第一人称卡面 wrapper：组合通用 `UWacomCardView` 与 first-person 专属 `FeedbackOverlay`、`InteractionFeedbackImage` | 不处理 hover / drag 手势，不提交 Battle / Run 命令 |
 | `UWacomRunFirstPersonCardSourceComponent` | 探索期把 Run BattleDeck / menu lease 写入 anchor runtime source | 不提交 Run 规则 |
-| `FWacomBattleHUDFirstPersonHandBridge` | BattleHUD 内部同步 battle hand、transition hints、drag preview / release | 不暴露 Blueprint API |
+| `FWacomBattleHandPresentationController` | BattleHUD 内部战斗手牌表现事务：收集 Battle events、选择 baseline、生成 entries + transition hints frame | 不读取 Anchor 投影，不提交 Battle 命令 |
+| `FWacomBattleHUDFirstPersonHandBridge` | BattleHUD 内部同步 battle hand presentation frame、drag preview / release | 不暴露 Blueprint API |
 | `FWacomBattleHUDCardDetailController` | first-person viewport 详情数据、motion、定位和 teardown | 不改变卡牌规则 |
 
 ## §3 Authoring 默认
@@ -85,7 +86,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `03 Projection` | 投影模式、Look Responsive、viewport clamp、pixel snap、角度限制 |
 | `04 Hand Shape` | Authored2D 间距、宽度、中心抬升、曲线、底部保护、卡牌 scale、edge drop、不可用透明度 |
 | `05 Slot Motion` | 基础 slot 插值、入场 / 离场通用参数 |
-| `06 Transition Motion` | Drawn / Gained / Played / Discarded 事件转场方向和来源 |
+| `06 Transition Motion` | Drawn / Gained / Played / Discarded 事件转场方向、来源和抽牌入场 timing |
 | `07 Hover` | hover lift / scale / ZOrder / hit hysteresis |
 | `08 Targeting State` | pending targeting、target select deemphasis |
 | `09 Gesture` | 按住读牌、拖出提交、快捷键拿起卡牌、inspect 姿态、aim arrow |
@@ -118,9 +119,9 @@ Runtime source 优先级：
 
 BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。清理或 `NativeDestruct` 可能晚于 Run source 重新激活，因此 BattleHUD 解绑自身 delegate 时必须检查 Anchor 当前 `RuntimeCardLayerSourceId`：只有仍为 `BattleHand` 时才关闭 first-person card interaction、取消拖拽和清 runtime data；如果已经被 `RunFirstPersonBattleDeck` 或 menu lease 接管，只能解绑 BattleHUD delegate 和清战斗 world preview，不得改写 Run source 的交互状态。
 
-Runtime source 只拥有卡牌 entries、transition hints、hovered card / card target handle、interaction ownership 和 source 生命周期；视觉调参来自 AnchorComponent Details。BattleHUD / Run source 不设置、不清理、也不持有 layout preset override。代码上这些运行时状态由 Anchor 私有 `FWacomFirstPersonCardAnchorRuntimeState` 保存，Anchor 的 public API 保持 source façade 语义。
+Runtime source 只拥有卡牌 entries、legacy transition hints、presentation frame hints、presentation gate、hovered card / card target handle、interaction ownership 和 source 生命周期；视觉调参来自 AnchorComponent Details。BattleHUD / Run source 不设置、不清理、也不持有 layout preset override。代码上这些运行时状态由 Anchor 私有 `FWacomFirstPersonCardAnchorRuntimeState` 保存，Anchor 的 public API 保持 source façade 语义。Battle hand 的正式入口是 presentation frame：`FWacomBattleHandPresentationController` 先把 Battle events 与当前 snapshot 合成为一帧 `entries + transition hints`，再由 `SetRuntimeCardLayerPresentationFrame()` 原子写入 `BattleHand` source；普通 hand refresh 只能写 entries / interaction，不替换 frame hints，也不能让等待入场的抽牌卡绕过 frame 直接显形。Legacy transition hints 保留给旧测试、非 Battle source 或显式兼容入口。Presentation gate 是 source-scoped 播放闸门：gate 关闭时 entries 可以继续刷新，但 pending frame hints / legacy hints 不会被 `FWacomFirstPersonCardLayerOwner` 消费到 Layer，也就不会在镜头 staging、hand suppression 或其他不可见阶段提前启动播放。Layer 侧也必须按“已应用才消费”处理：如果本次 `SetCardSlots` 没有对应 slot，或对应 slot 暂时不可投影，pending enter hint 保留到后续刷新；只有 presentation gate 已打开、匹配到 projected slot 并启动 enter playback，或匹配到 outgoing slot 并启动 exit playback 后，才移除对应 hint。
 
-BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。进入 battle entry staging suppression 时，BattleHUD 会先清空当前 card layer visual slot，再写入 0 entries 的空 `BattleHand` runtime source；这既阻止 development preview fallback，也避免旧 slot 被 `SetCardSlots(0)` 当作 outgoing slot 播离场动画。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
+BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。进入 battle entry staging suppression 时，BattleHUD 会先关闭 `BattleHand` presentation gate、清空当前 card layer visual slot，再写入 0 entries 的空 `BattleHand` runtime source；这既阻止 development preview fallback，也避免旧 slot 被 `SetCardSlots(0)` 当作 outgoing slot 播离场动画。suppression 不再推进 Battle hand presentation controller 的 snapshot baseline；如果首回合 entry reveal frame 已提交到 Anchor 但尚未被 Layer tick 消费，bridge 会在清空 visual source 前把该 frame 还原为 controller 的待播事件，保证解除 suppression 后只重放一次正式 Drawn 入场。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
 
 打开 Backpack / Pause / Shop / RunEvent 等 GameMenu 时，默认压制 Run default source，避免卡层遮挡菜单。菜单需要卡牌交互时，应显式申请 owned menu lease。
 
@@ -147,6 +148,10 @@ Motion profile 只影响最终 visual slot 追踪，不改变 `InputHitCenter / 
 - 目标大跳变超过 reset distance 时直接贴合。
 - Drawn / Gained / Played / Discarded transition hint 只改变表现来源或离场方向，不改变 snapshot 真相、命令路径或 slot key。
 
+`CardsDrawn` 事件由 `FWacomBattleHandPresentationController` 转成 Battle hand presentation frame 中的 `Drawn` transition hint。Controller 优先使用 `CardsDrawn.CardInstanceIds` 中的真实抽牌 / 移入手牌 ID，并且只为这些 ID 中仍存在于最新 `BattleSnapshot.Hand.Cards` 的卡生成 hint；同一批可见 hint 会写入连续稳定的 `SequenceIndex / SequenceCount`，被手牌上限立刻弃掉的 ID 不占可见动画序列。旧式或测试手写的 Count-only `CardsDrawn` 事件仍保留兼容 fallback：仅在 `CardInstanceIds` 为空时，才按 baseline snapshot 与 next snapshot 中“新出现的卡”分配 Drawn hint。Battle hand 不再让普通 snapshot refresh 直接决定“新卡是否可见”：有 pending 事件时必须提交显式 `entries + hints` frame，没有 pending 事件时才是普通 entries refresh；状态刷新、输入解锁刷新或 ActionPanel 可用性刷新不会用空 hints 覆盖尚未消费的 Drawn frame。Anchor 把 presentation frame hints 与 legacy hints 分开保存，Layer owner 优先消费 frame hints，消费成功后才交给 `UWacomFirstPersonCardLayerWidget` reconcile。Layer 只消费这些表现语义，不重新推断战斗事件、不读牌堆、不修改 Battle snapshot；如果 battle entry presentation gate 尚未打开，或镜头 staging / viewport 投影导致 slot 暂不可见，Drawn hint 会留在 Anchor runtime source 或 Layer pending set，直到 gate 打开且 slot 可见并真正启动入场，避免卡牌在不可见阶段播放完后直接落位。当前 `Drawn` 入场使用 `06 Transition Motion` 下的专用参数：`DrawnCardEnterDurationSeconds` 控制固定时长播放，`DrawnCardEnterStaggerSeconds` 按 sequence index 做批次错峰，`DrawnCardEnterArcLiftPixels` 叠加抛物线式上扬弧线，`DrawnCardEnterEasePower` 控制入场 ease，`bBlockInteractionDuringDrawnCardEnter` 决定播放期间是否临时禁止 hover / press / drag。播放完成后 SlotWidget 交回普通 slot motion，由 `Layout / Hover / Pending / DragTargetFocus` 等 motion intent 继续接管。
+
+`bEnableReadableTransitionOrigins` 只控制 Drawn / Gained / Played / Discarded 的可读来源方向兼容，不关闭 Drawn 的有限时长播放、错峰和弧线。需要在 PIE 中验证抽牌手感时，优先调整 `06 Transition Motion` 的 Drawn 专用参数；不应在 BattleHUD 或 BattleSession 中硬编码动画位置、延迟或曲线。
+
 Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和本次刷新创建、复用、移除、异常修复数量。诊断日志默认关闭，只在手动排查时开启。
 
 ## §6 Battle 交互
@@ -166,7 +171,7 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 
 快捷键 `1~7` 进入拖拽时使用双位置初始化：`PressScreenPosition` 固定为被选中卡牌的基础手牌位置，`CurrentScreenPosition / PointerViewportPosition` 使用 PlayerController 读取到的当前鼠标 widget-space 坐标；没有鼠标坐标时才退回卡牌自身位置。`CurrentPointerView` 只表示普通 hover / pointer view，不作为快捷键拖拽启动坐标来源，避免鼠标悬浮在 B 卡时按 A 卡快捷键却串用 B 的旧 pointer。
 
-快捷键拖拽启动后，`AWacomPlayerController` 每帧执行 active-drag pointer pump：如果当前 Anchor 的 first-person card layer 存在 active gesture，就优先通过 Slate viewport geometry 读取全局 cursor 在 viewport 内的 widget-space 坐标；如果 Slate viewport geometry 不可用，再退回 `GetMousePosition()` + `UWidgetLayoutLibrary::GetViewportScale()` 的 PlayerController 路径。随后调用 `UpdateFirstPersonCardDragPointer()` 喂给 Layer。Layer 继续复用 active gesture slot 的 `UpdateGesture()` 链路刷新 `DragView`、aim arrow、card target probe 和上层 camera look override。没有 active gesture 或读取不到鼠标位置时 pump 为 no-op，不会改变普通 hover / pointer view。左键 release 时，PlayerController 会先尝试释放 active first-person drag：能读取鼠标坐标时先 pump 到最新位置再 release，读取不到时使用 DragView 当前指针位置 release；只有没有 active drag 时，左键 release 才继续走 Battle scene click、Run tunnel branch 或 Run world interactable click 路由。
+快捷键拖拽启动后，`AWacomPlayerController` 每帧执行 active-drag pointer pump：如果当前 Anchor 的 first-person card layer 存在 active gesture，就优先通过 Slate viewport geometry 读取全局 cursor 在 viewport 内的 widget-space 坐标；如果 Slate viewport geometry 不可用，再退回 `GetMousePosition()` + `UWidgetLayoutLibrary::GetViewportScale()` 的 PlayerController 路径。随后调用 `UpdateFirstPersonCardDragPointer()` 喂给 Layer。Layer 继续复用 active gesture slot 的 `UpdateGesture()` 链路刷新 `DragView`、aim arrow、card target probe 和上层 camera look override。没有 active gesture、读取不到鼠标位置，或当前 active gesture 不是 `ExternalPointer` 来源时，pump 为 no-op，不会改变普通 hover / pointer view，也不会覆盖鼠标来源拖拽的最新指针。左键 release 时，PlayerController 会先尝试释放 active first-person drag：能读取鼠标坐标时先 pump 到最新位置再 release，读取不到时使用 DragView 当前指针位置 release；只有没有 active drag 时，左键 release 才继续走 Battle scene click、Run tunnel branch 或 Run world interactable click 路由。
 
 Battle 回合边界快捷键 `IA_Wait` / `IA_EndTurn` 在 PlayerController 入口先检查 first-person card layer active gesture。只要当前手势不是 `Idle` / `Cancelled`（包括 pressed、inspect、no-target drag、targeted aim、armed commit），本次快捷键会取消并消费该手势，不向 BattleHUD 提交等待或结束回合；下一次按键才按普通命令入口执行。取消后源卡保留当前 visual slot，并继续用 slot motion 返回手牌布局，不触发普通布局大跳变 reset。单纯 hover 不属于 active gesture，不会阻塞等待或结束回合。
 
@@ -174,11 +179,11 @@ Battle 回合边界快捷键 `IA_Wait` / `IA_EndTurn` 在 PlayerController 入�
 
 悬浮和拖拽期间，卡牌层都会记录 DPI-aware widget-space 指针和归一化视口坐标。普通 hover 的 mouse move 被 UMG 处理后，`UWacomFirstPersonCardLayerWidget` 会广播 `FWacomFirstPersonCardPointerView`，由 BattleHUD 写入 Battle camera look 临时 override，探索 / Run 则由 `AWacomPlayerController` 写入 Run Tunnel cursor look override。因此鼠标在悬浮放大的卡牌上移动时，镜头仍会跟随当前指针，不会等离开卡牌后突然跳到新位置。
 
-拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。SlotWidget mouse capture 负责鼠标按下、Pressed 阶段拖拽阈值判断、Inspect 阶段和 release/cancel 路由；一旦手势进入正式拖拽态（`DraggingNoTargetCard / ArmedForCommit / AimingTargetedCard`），鼠标拖拽和快捷键拖拽都会统一由 PlayerController active-drag pointer pump 写入 `CurrentScreenPosition / PointerViewportPosition`。因此鼠标离开 SlotWidget 后，拖拽箭头和镜头仍会持续跟随全局 cursor；进入或经过其他 SlotWidget 时，SlotWidget pointer enter / move 只消费事件并压制普通 hover，不再改写正式拖拽指针。拖拽镜头旧参数 `bAllowCameraLookDuringCardDrag`、`CardDragCameraLookScale`、`CardDragCameraLookInterpSpeedOverride` 继续只控制 drag override，保持既有资产兼容；hover / pointer 通用路径使用 `bAllowCameraLookDuringCardPointer`、`CardPointerCameraLookScale`、`CardPointerCameraLookInterpSpeedOverride`。这些 camera look 参数当前推荐在 AnchorComponent Details 的 `12 Camera Look While UI` 分类中调整。拖拽 active 时会清空并压制普通 pointer view，避免 hover override 与 drag override 抢同一个 camera look 状态。
+拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。SlotWidget mouse capture 负责鼠标按下、Pressed 阶段拖拽阈值判断、Inspect 阶段、鼠标来源正式拖拽 pointer 更新和 release/cancel 路由；快捷键或程序化启动的 `ExternalPointer` 拖拽才由 PlayerController active-drag pointer pump 写入 `CurrentScreenPosition / PointerViewportPosition`。这样鼠标来源拖拽不会被同帧偏旧的全局 pump 坐标覆盖，external drag 又可以在没有真实 mouse capture 的情况下持续跟随全局 cursor。拖拽镜头旧参数 `bAllowCameraLookDuringCardDrag`、`CardDragCameraLookScale`、`CardDragCameraLookInterpSpeedOverride` 继续只控制 drag override，保持既有资产兼容；hover / pointer 通用路径使用 `bAllowCameraLookDuringCardPointer`、`CardPointerCameraLookScale`、`CardPointerCameraLookInterpSpeedOverride`。这些 camera look 参数当前推荐在 AnchorComponent Details 的 `12 Camera Look While UI` 分类中调整。拖拽 active 时会清空并压制普通 pointer view，避免 hover override 与 drag override 抢同一个 camera look 状态。
 
-Layer pointer arbitration 是 first-person hand 输入的正式入口。`UWacomFirstPersonCardLayerSlotWidget` 的 Slate mouse down / move / up 只把 pointer 事件转交给 `UWacomFirstPersonCardLayerWidget`，再按 Layer 返回的 route action 映射成 `Unhandled`、`Handled`、`CaptureMouse` 或 `ReleaseMouseCapture`；没有 Owner Layer 的 hand Slot 不再自管 press / drag / release 生命周期。`PressedSlotWidget` 只在没有 active gesture 且 press 成功开启新手势时写入。已有 active gesture 时，release 永远优先释放当前 gesture；mouse-origin drag 的 slot move 只在 `Pressed / Inspecting` 阶段写入 pointer，用于启动拖拽或读牌姿态；进入正式拖拽态后，slot move 与 external-origin drag 一样只消费并压制普通 hover，正式拖拽 pointer 只能由 PlayerController pump 写入。external drag 下点击目标手牌时，slot press 只更新当前源卡 drag pointer / card target，不抢占 pressed slot，也不重新开启目标卡手势。
+Layer pointer arbitration 是 first-person hand 输入的正式入口。`UWacomFirstPersonCardLayerSlotWidget` 的 Slate mouse down / move / up 只把 pointer 事件转交给 `UWacomFirstPersonCardLayerWidget`，再按 Layer 返回的 route action 映射成 `Unhandled`、`Handled`、`CaptureMouse` 或 `ReleaseMouseCapture`；没有 Owner Layer 的 hand Slot 不再自管 press / drag / release 生命周期。`PressedSlotWidget` 只在没有 active gesture 且 press 成功开启新手势时写入。已有 active gesture 时，release 永远优先释放当前 gesture；mouse-origin drag 的 slot move 在 `Pressed / Inspecting / DraggingNoTargetCard / ArmedForCommit / AimingTargetedCard` 阶段都可以写入 pointer，用于启动拖拽、读牌姿态和鼠标来源拖拽持续更新。external-origin drag 的 slot enter / move 只消费并压制普通 hover，不改写正式拖拽 pointer；它的 pointer 只能由 PlayerController pump 写入。external drag 下点击目标手牌时，slot press 只更新当前源卡 drag pointer / card target，不抢占 pressed slot，也不重新开启目标卡手势。
 
-鼠标拖拽和快捷键拖拽进入 active drag 时共用 SlotWidget 内部的 card-drag promotion 路径。拖拽内部同时记录两条互不替代的输入语义：`GestureSource` 表示手势起源和生命周期意图，目前为 `MousePress` 或 `KeyboardShortcut`；`GestureInputSource` 表示启动阶段来源，目前为 `MousePointer` 或 `ExternalPointer`。真实鼠标拖拽使用 `MousePress + MousePointer`，`1~7` 快捷键拖拽使用 `KeyboardShortcut + ExternalPointer`。`GestureSource` 不直接改变提交规则、目标合法性或视觉动画，只让后续输入生命周期可以按起源扩展；`GestureInputSource` 不再决定正式拖拽态的持续 pointer 写入来源，正式拖拽统一由 PlayerController pointer pump 更新。无目标卡的 `CurrentScreenPosition / PointerViewportPosition` 会立即更新，用于提交距离、DragView 和 release；源卡视觉位置不再直接 snap 到 pointer，而是以同一套 slot motion 追踪 drag override，并在拖拽 override 中把源卡角度归零，不继承手牌扇形角度。需要目标的卡牌仍保持 aim arrow 端点立即跟随真实 pointer。
+鼠标拖拽和快捷键拖拽进入 active drag 时共用 SlotWidget 内部的 card-drag promotion 路径。拖拽内部同时记录两条互不替代的输入语义：`GestureSource` 表示手势起源和生命周期意图，目前为 `MousePress` 或 `KeyboardShortcut`；`GestureInputSource` 表示持续 pointer owner，目前为 `MousePointer` 或 `ExternalPointer`。真实鼠标拖拽使用 `MousePress + MousePointer`，`1~7` 快捷键拖拽使用 `KeyboardShortcut + ExternalPointer`。`GestureSource` 不直接改变提交规则、目标合法性或视觉动画，只让后续输入生命周期可以按起源扩展；`GestureInputSource` 决定正式拖拽态的持续 pointer 写入来源：`MousePointer` 只接受 slot pointer route，`ExternalPointer` 只接受 PlayerController pump。无目标卡的 `CurrentScreenPosition / PointerViewportPosition` 会立即更新，用于提交距离、DragView 和 release；源卡视觉位置不再直接 snap 到 pointer，而是以同一套 slot motion 追踪 drag override，并在拖拽 override 中把源卡角度归零，不继承手牌扇形角度。需要目标的卡牌仍保持 aim arrow 端点立即跟随真实 pointer。
 
 快捷键启动的 external drag 没有真实鼠标按住状态，因此鼠标点击目标手牌时，目标 SlotWidget 的 mouse down 不能重新占有 `PressedSlotWidget` 或开始目标卡的新 press。Layer 在已有 active gesture 时会把这次 pointer press 作为当前 drag 的最终指针更新并消费事件，随后 mouse up 释放的仍是原来的源卡；这样 `HandCard` 目标卡牌可以通过“快捷键进入拖拽 -> 点击另一张手牌”完成 card-to-card release，和普通鼠标拖拽到目标卡后松开左键得到一致提交语义。
 

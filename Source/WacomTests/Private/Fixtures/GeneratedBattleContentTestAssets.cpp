@@ -123,6 +123,11 @@ const TCHAR* FWacomGeneratedBattleContentAssets::ExhaustSelectedHandCardPath()
 	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_ExhaustSelectedHandCard.DA_Card_Test_ExhaustSelectedHandCard");
 }
 
+const TCHAR* FWacomGeneratedBattleContentAssets::DrawByCostCardPath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/BugGirl/DA_Card_Test_DrawByCost.DA_Card_Test_DrawByCost");
+}
+
 const TCHAR* FWacomGeneratedBattleContentAssets::BadgeDamagePoisonCardPath()
 {
 	return TEXT("/Game/Wacom/Data/Cards/BugGirl/BadgeDisplayTests/DA_Card_Test_BadgeDamagePoison.DA_Card_Test_BadgeDamagePoison");
@@ -236,7 +241,8 @@ TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::DebugAndTestCardPaths()
 		RequireCompanionTargetCardPath(),
 		BlockWeaponTargetCardPath(),
 		DiscardSelectedHandCardPath(),
-		ExhaustSelectedHandCardPath()
+		ExhaustSelectedHandCardPath(),
+		DrawByCostCardPath()
 	};
 }
 
@@ -279,6 +285,7 @@ TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::GeneratedDefinitionCard
 		BlockWeaponTargetCardPath(),
 		DiscardSelectedHandCardPath(),
 		ExhaustSelectedHandCardPath(),
+		DrawByCostCardPath(),
 		BadgeDamagePoisonCardPath(),
 		BadgeShieldHealCardPath(),
 		BadgeDamageShieldHealCardPath(),
@@ -317,6 +324,7 @@ TArray<FWacomGeneratedBattleContentShopOfferExpectation> FWacomGeneratedBattleCo
 		{ BlockWeaponTargetCardPath(), 0 },
 		{ DiscardSelectedHandCardPath(), 0 },
 		{ ExhaustSelectedHandCardPath(), 0 },
+		{ DrawByCostCardPath(), 0 },
 		{ BadgeDamagePoisonCardPath(), 0 },
 		{ BadgeShieldHealCardPath(), 0 },
 		{ BadgeDamageShieldHealCardPath(), 0 },
@@ -407,6 +415,11 @@ UCardDefinition* FWacomGeneratedBattleContentAssets::LoadDiscardSelectedHandCard
 UCardDefinition* FWacomGeneratedBattleContentAssets::LoadExhaustSelectedHandCard(FAutomationTestBase& Test)
 {
 	return LoadCardByPath(ExhaustSelectedHandCardPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadDrawByCostCard(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(DrawByCostCardPath(), Test);
 }
 
 UCardDefinition* FWacomGeneratedBattleContentAssets::LoadBadgeDamagePoisonCard(FAutomationTestBase& Test)

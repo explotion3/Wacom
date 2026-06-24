@@ -92,7 +92,8 @@ bool FWacomBattleRuleContentContract::IsSupportedCardEffectMagnitudeSource(
 	if (MagnitudeSource == WacomTags::Magnitude_Source_RuntimeCost)
 	{
 		return EffectType == WacomTags::Effect_Damage
-			|| EffectType == WacomTags::Effect_ApplyStatus_Poison;
+			|| EffectType == WacomTags::Effect_ApplyStatus_Poison
+			|| EffectType == WacomTags::Effect_Draw;
 	}
 
 	if (MagnitudeSource == WacomTags::Magnitude_Source_TargetStatusStacks)

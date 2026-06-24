@@ -74,6 +74,8 @@ struct FWacomFirstPersonCardPointerRouteResult
 struct FWacomFirstPersonCardLayerResolvedTransitionHint
 {
 	EWacomFirstPersonCardSlotTransitionKind TransitionKind = EWacomFirstPersonCardSlotTransitionKind::Default;
+	int32 SequenceIndex = 0;
+	int32 SequenceCount = 1;
 	bool bPlayCommitFeedback = false;
 	bool bHasPlayedExitTargetWidgetPosition = false;
 	FVector2D PlayedExitTargetWidgetPosition = FVector2D::ZeroVector;
@@ -300,7 +302,7 @@ private:
 		const FWacomFirstPersonCardLayerSlotView& A,
 		const FWacomFirstPersonCardLayerSlotView& B) const;
 	TOptional<FWacomFirstPersonCardTransitionMotionProfile> GetEnterProfileForTransition(
-		EWacomFirstPersonCardSlotTransitionKind TransitionKind,
+		const FWacomFirstPersonCardLayerResolvedTransitionHint& TransitionHint,
 		const FWacomFirstPersonCardLayerSlotView& TargetSlotView) const;
 	TOptional<FWacomFirstPersonCardTransitionMotionProfile> GetExitProfileForTransition(
 		const FWacomFirstPersonCardLayerResolvedTransitionHint& TransitionHint,

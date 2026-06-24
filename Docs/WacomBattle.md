@@ -415,6 +415,8 @@ BattleState
 | `CardGained` | 战斗中获得新卡 |
 | `BattleEnded` | 战斗进入结束态 |
 
+`CardsDrawn` 的公共合同是“本批真实入手卡实例列表”：`CardInstanceIds` 按规则抽取 / 从弃牌堆或消耗牌堆移入手牌的顺序记录卡实例 ID，`Count` 始终等于 `CardInstanceIds.Num()`，仅作为旧 debug / 测试读取的兼容计数字段。单卡事件继续使用 `CardInstanceId`，批量抽牌不要让 UI 再从前后 `FBattleSnapshot` 差异猜测抽到的是哪几张牌。
+
 `EnemyKnockdown` enum 保留在公共类型中，但当前击倒路径使用 `EnemyPartHpEmptied + KnockdownChoiceRequested + KnockdownChoiceMade`。不要把 `EnemyKnockdown` 当作活跃事件依赖。
 
 中文文案、tone、icon、Combat Log、Toast 和玩家可读命令块属于表现层，见 [WacomBattleUI.md](./WacomBattleUI.md) 与 [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md)。它们不改变 `FBattleEvent` 协议，也不新增规则层 command batch id。

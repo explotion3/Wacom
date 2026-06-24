@@ -10,6 +10,7 @@
 #include "Deck/DeckService.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEventBus.h"
+#include "Events/BattleEventHelpers.h"
 #include "Hand/HandZoneService.h"
 #include "Hand/HandZoneMoveEventService.h"
 #include "Runtime/RuntimeCardInstance.h"
@@ -404,10 +405,7 @@ bool HandleDraw(FEffectContext& Ctx)
 		const TArray<FGuid> DiscardedByLimit = EnforceHandLimitAfterCardsEnterHand(Ctx);
 		if (DrawnIds.Num() > 0)
 		{
-			FBattleEvent Ev;
-			Ev.Type  = EBattleEventType::CardsDrawn;
-			Ev.Count = DrawnIds.Num();
-			Ctx.Events->Emit(Ev);
+			WacomBattleEvents::EmitCardsDrawn(*Ctx.Events, DrawnIds);
 		}
 		FHandZoneMoveEventService::ResolveDiscardedFromHand(
 			*Ctx.State,
@@ -438,10 +436,7 @@ bool HandleDraw(FEffectContext& Ctx)
 
 	if (MovedIds.Num() > 0)
 	{
-		FBattleEvent Ev;
-		Ev.Type  = EBattleEventType::CardsDrawn;
-		Ev.Count = MovedIds.Num();
-		Ctx.Events->Emit(Ev);
+		WacomBattleEvents::EmitCardsDrawn(*Ctx.Events, MovedIds);
 	}
 	FHandZoneMoveEventService::ResolveDiscardedFromHand(
 		*Ctx.State,

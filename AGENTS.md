@@ -8,20 +8,30 @@
 - 规则和设计真相优先看 `Docs/`，代码实现位于 `Source/`。
 - 新增功能要服务长期扩展：能复用的系统不要写成一次性页面、一次性 Actor 或硬编码流程。
 
+## 当前阶段重点
+
+- 项目已从规则原型阶段进入“规则内核继续稳固，first-person hand / Battle UI / Run UI 表现和 WacomMap 规划逐步落地”的阶段。
+- 近期卡牌表现主线是 HUD-rendered first-person card layer。涉及手牌、抽牌、出牌、悬停、选中、fake-3D 或发牌动效时，优先沿用现有链路：Battle/Run 事件或 Snapshot -> UI transition hint / ViewData -> Anchor/Layer/Slot/ViewWidget 表现。不要重新引入旧版 2D battle hand、世界 WidgetComponent 手牌或一次性 Widget 状态机。
+- 外部 Demo、GitHub 项目和视频参考只作为行为、节奏、视觉目标参考；除非授权兼容且用户明确同意，不直接复制第三方代码、shader、资产或工程结构。复刻时应实现 Wacom-native 的 UE/UMG/Material 方案，并把关键假设写入对应 `Docs/`。
+- 工作区可能包含上一轮 agent 的试验内容。开始实现前先确认 `git status` 和相关 diff，区分用户改动、试验残留和本次任务范围。
+
 ## 开始任务前
 
 1. 先判断任务属于哪个领域。
 2. 读取对应文档和代码。
 3. 如果规则不明确，先列出假设和问题，不要悄悄写死行为。
 4. 会影响规则、长期架构、策划口径或资产语义的关键细节，正式执行前必须向用户确认；普通实现细节可按现有文档和代码风格自行决策。
-5. 代码完成后，同步更新相关文档或 `Docs/TODO.md`。
+5. 代码完成后，按事实类型同步文档：长期规则、资产语义和制作合同写对应领域文档；短期任务写 `Docs/TODO.md`；技术债写 `Docs/TechDebt.md`；待确认设计问题写 `Docs/Questions.md`。
 
 | 领域 | 文档 | 代码 |
 |---|---|---|
 | 战斗规则 | `Docs/WacomBattle.md` | `Source/WacomBattle/` |
 | Run/探索 | `Docs/WacomRun.md` | `Source/WacomRun/` |
 | 数据/卡牌 | `Docs/WacomData.md` | `Source/WacomData/` |
-| UI/App | `Docs/WacomApp.md` | `Source/WacomApp/` |
+| Battle UI / first-person 手牌 | `Docs/WacomBattleUI.md`, `Docs/First_Person_Card_Layer_Design.md`, `Docs/UI_Battle_WBP_Binding.md` | `Source/WacomApp/Private/UI/Battle/`, `Source/WacomApp/Private/UI/Card/`, `Source/WacomApp/Public/UI/Card/` |
+| UI/App shell | `Docs/WacomApp.md`, `Docs/WacomUI.md`, `Docs/WacomUIFoundation.md` | `Source/WacomApp/` |
+| 世界交互 | `Docs/WacomWorldInteraction.md` | `Source/WacomApp/Private/Interaction/`, `Source/WacomApp/Private/Actors/`, `Source/WacomApp/Private/Components/` |
+| 内容制作/校验 | `Docs/WacomDataAuthoring.md` | `Source/WacomEditor/`, `Source/WacomData/` |
 | 架构/模块 | `Docs/Architecture.md` | `Source/*/` |
 | 测试 | 对应领域文档 | `Source/WacomTests/` |
 
@@ -58,11 +68,11 @@ Spec Kit 是项目级规划工具，用来把较大的功能需求拆成 `spec.m
 1. `$speckit-specify`：把需求写成规格；正文可优先使用中文，代码名、路径、命令、GameplayTag、类名保持英文。
 2. `$speckit-plan`：结合 `Docs/`、模块边界和现有源码生成实现计划。
 3. `$speckit-tasks`：生成任务清单；生成后必须再由主会话审阅，删除或改写过泛、条件化、跨错模块或会扩大巨型测试文件的任务。
-4. 实现阶段默认不调用 `$speckit-implement`，而是由主会话读取 `tasks.md`、相关文档和 live 源码后逐项实现、验证并同步文档。
+4. 实现阶段默认不调用 `$speckit-implement`，而是由主会话读取 `tasks.md`、相关文档和 live 源码后逐项实现、验证并同步长期文档、`Docs/TODO.md` 或 `Docs/TechDebt.md`。
 
-Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `WacomBattle` / `WacomData` / `WacomApp` 的职责边界、UI 是否保持 passive、测试是否放在合适的小型 spec 文件中，以及是否需要更新 `Docs/` 或 `Docs/TODO.md`。
+Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `WacomBattle` / `WacomData` / `WacomApp` 的职责边界、UI 是否保持 passive、测试是否放在合适的小型 spec 文件中，以及是否需要更新 `Docs/`、`Docs/TODO.md`、`Docs/TechDebt.md` 或 `Docs/Questions.md`。
 
-`specs/` 目录里的 `spec.md / plan.md / tasks.md` 是阶段性规划工件，不是项目长期规则真相。功能完成后，凡是已经落地为规则、资产语义、UI 绑定、制作流程、验证口径或技术债的内容，都必须回写到对应 `Docs/` 文件、`Docs/TODO.md` 或 `Docs/TechDebt.md`；不要让长期事实只停留在某个 feature spec 里。
+`specs/` 目录里的 `spec.md / plan.md / tasks.md` 是阶段性规划工件，不是项目长期规则真相。功能完成后，凡是已经落地为规则、资产语义、UI 绑定、制作流程、验证口径或技术债的内容，都必须回写到对应 `Docs/` 文件、`Docs/TODO.md`、`Docs/TechDebt.md` 或 `Docs/Questions.md`；不要让长期事实只停留在某个 feature spec 里。
 
 ## 协作模式
 
@@ -104,6 +114,22 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 
 不要让高层模块反向污染底层模块。例如 `WacomBattle` 不应该依赖 UI，`WacomCore` 不应该依赖具体玩法实现。
 
+## 方案设计原则
+
+- 做方案时默认提供成熟、长期可复用的设计，而不是临时绕过、一次性修补或只服务当前 Demo 的实现。
+- 首选方案应说明可复用边界：所属模块、公共 contract、数据来源、UI/规则分层、扩展点、验证方式和需要回写的文档。
+- 如果存在短期 workaround，只能作为用户明确要求、风险控制或分阶段交付时的备选项；不要把临时实现包装成正式设计。
+- 提出临时备选时，必须同时给出正式方案、临时方案的适用范围、可能复发或阻塞后续扩展的风险，以及清理条件。
+- 当长期方案成本明显更高或会影响大量资产/模块/策划口径时，先说明取舍并和用户确认分阶段路线；每一阶段都应朝最终架构靠近。
+
+### 当前阶段重构授权
+
+- 当前阶段允许为了正式架构大规模重构旧代码，不需要为了兼容早期原型、上一轮 agent 试验实现或短期 Demo 路径而保守设计。
+- 方案设计可以采用更激进的正式实现：删除或替换脆弱原型路径、重划模块边界、拆分巨型类、收敛重复 UI flow、改造公共 contract、迁移数据结构或重新组织测试。
+- 大规模重构前先说明目标架构、影响模块、计划删除/迁移的旧路径、验证策略和文档更新点；执行时尽量拆成可编译、可验证的小切片。
+- 允许主动指出“这块应该重写而不是修补”。如果重写更符合长期架构，应优先给重写方案，并说明为什么继续补丁会拖累后续扩展。
+- 即使允许激进重构，也不能回退用户已有改动或静默改变策划规则、资产语义、存档 schema、内容制作流程。此类变化仍需明确列出并获得确认。
+
 ## 可复用扩展原则
 
 新增模块、系统或功能时默认按以下方式设计：
@@ -117,7 +143,7 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 - 头文件尽量前向声明，具体 include 放到 `.cpp`。
 - 不为赶进度引入临时单例、全局状态、字符串拼 tag、Tick 轮询 UI 数据。
 
-如果必须采用临时方案，需要在代码中标注 `TODO(技术债)`，并写入 `Docs/TODO.md`，说明正式方案。
+如果必须采用临时方案，需要在代码中标注 `TODO(技术债)`，并写入 `Docs/TechDebt.md`，说明正式方案、影响范围和建议清理顺序。
 
 ## Bug 修复原则
 
@@ -127,7 +153,7 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 - 如果根因暴露的是职责边界、生命周期、输入所有权、状态同步、异步事务、资源注册/反注册等结构问题，应主动指出，并给出可落地的整理方案。
 - 优先修正系统级所有权和公共路径，让同类问题不再在下一个界面、Actor、Widget 或测试里重复出现。
 - 不把 prototype / spike 的临时假设继续扩散到正式路径；如果原型代码已经影响正式流程，应提出收口或迁移计划。
-- 允许为了风险控制分阶段落地，但每一阶段都应朝正式版架构靠近，并在文档或 `Docs/TODO.md` 记录剩余技术债。
+- 允许为了风险控制分阶段落地，但每一阶段都应朝正式版架构靠近，并在 `Docs/TechDebt.md` 或 `Docs/TODO.md` 记录剩余问题。
 - 如果长期方案会明显影响策划口径、资产制作方式、模块边界或大量现有代码，先和用户讨论方案取舍；不要悄悄做大范围重构。
 - 如果用户选择短期修复，也要在最终说明中标明它为何是临时方案、可能复发的场景，以及建议的正式修复方向。
 
@@ -140,17 +166,29 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 - Run/UI 长生命周期界面优先通过 ViewModel/Provider 获取只读数据；Shop / RunEvent / Backpack 等 Screen 可以读取 Run Snapshot/ViewData，并由 Screen flow 提交 `URunSession` 写 API。
 - Widget 生命周期要考虑 CommonUI 的 Activate/Deactivate，不要只依赖 Construct。
 - 新 UI 控件应明确：数据来源、刷新时机、输入焦点、反订阅时机。
-- 暴露给编辑器的 UI / 调试 / 数值参数必须写清 `meta` 注释：`ToolTip` 说明用途，且 `ToolTip` 文案默认使用中文；数值型参数需要尽量提供 `ClampMin`、`ClampMax` 或 `UIMin`、`UIMax`，并在说明中写明单位、作用范围和是否影响布局。
+- 暴露给编辑器的 UI / 调试 / 数值参数必须写清 `meta` 注释：`ToolTip` 说明用途，且 `ToolTip` 文案默认使用中文；数值型参数应在 `ToolTip` 文案中写明单位、作用范围、推荐调参区间和是否影响布局，不要把推荐范围直接写成 `ClampMin`、`ClampMax`、`UIMin` 或 `UIMax` 来顶死调参空间。只有存在真实规则、运行时安全、引擎 API 或资产合法性约束时，才在代码 meta 中使用硬限制，并在 `ToolTip` 中说明原因。
 - 自动化测试访问 UI 内部状态时，优先使用 production 非反射 automation test view + `WacomTests/Private` access wrapper；不要在 `WacomApp/Public` 扩散散落 `ForTest` getter、测试字段或 Blueprint 可见测试 API。
+
+### First-person card layer 当前边界
+
+- `UWacomFirstPersonCardAnchorComponent` 是手牌布局和表现参数的主要制作入口；C++ 默认值应该服务 WBP 可调，不把单次 Demo 参数硬编码到规则层或 HUD 流程里。
+- `UWacomFirstPersonCardLayerWidget` 负责整层布局、输入和 transition hint 分发；`UWacomFirstPersonCardLayerSlotWidget` 负责单槽运动；`UWacomFirstPersonCardViewWidget` 负责卡面内容。新增抽牌、发牌、hover、selected 或 fake-3D 表现时，优先保持这个边界。
+- 抽牌/发牌动效应从领域事件或 UI transition hint 派生，表现层只消费语义和参数；不要让 Widget 自己推断抽牌规则、卡组状态或战斗结算。
+- Godot Demo 0.2 一类参考效果应先拆成 Wacom 可复用的表现能力：入场 origin、stagger、arc/curve、scale/rotation/opacity、hover fake-3D、RetainerBox/Material 效果。每一层能力独立验证，避免把整套 Demo 一次性塞进 BattleHUD。
 
 ## 测试与验证
 
 每个可运行切片完成后至少编译一次。涉及规则、存档、背包、UI 流程时补充或更新自动化测试，并优先运行相关命名空间而不是默认全量 `Wacom`。
 
-测试补充口径保持简单：
+纯文档、规划或 `AGENTS.md` 调整不需要编译；最终说明中写清未运行编译/测试即可。仅改 UMG/WBP/材质资产而没有 C++ 变更时，优先做编辑器或 PIE 验证，并在无法自动化时记录手动验收点。
 
-- 必须当场补测试：战斗规则、Run 状态、存档 schema、数据校验、公共 contract、已经复现过的 bug、容易回归的生命周期问题。
-- 可以不补或只跑现有测试：纯文档、命名整理、低风险 UI 文案/布局、debug summary 小改、没有改变行为的重构。
+验证分层口径保持简单：
+
+- 自动化测试负责稳定契约：战斗规则、Run 状态、抽牌结果、卡牌 ID/顺序/数量、存档 schema、数据校验、公共 contract、UI transition hint 生成、CommonUI 生命周期、反订阅、边界状态和已经复现过的 bug。
+- PIE / 人工验收负责表现和手感：手牌抽牌/发牌动效、hover 手感、fake-3D 视觉、UMG/WBP 绑定、材质表现、镜头/布局/节奏，以及需要判断“像不像、顺不顺、好不好看”的内容。
+- 不补自动化测试时，也必须有明确验证路径。容易在 PIE 中稳定复现的表现类功能，可以交给用户验收；最终说明需要列出建议的 PIE 检查点和剩余风险。
+- 不容易在 PIE 中稳定复现、牵涉边界条件、状态所有权、异步/生命周期或跨模块 contract 的内容，优先补自动化测试；不要只交给人工观察。
+- 同时包含表现和契约的功能要拆开验证。例如抽牌动效的视觉节奏可以 PIE 验收，但 `CardsDrawn` 事件是否给新卡生成 `Drawn` transition hint、顺序是否稳定、重复刷新是否不重播等契约应补小型自动化测试。
 - 可以阶段性集中补测试：大 UI/Actor 制作模块还在快速成型时，先保留清晰验收清单，等 2-4 个相关切片稳定后再集中写一组更高质量的 contract/integration tests。
 - 不要继续塞进巨型测试文件：像 `BattleWidgetSpec.cpp` 这种已经太大了，后续应该拆成更小的 spec 文件，比如 `BattleSceneEnemyActorSpec.cpp`、`BattleHUDSceneTargetSpec.cpp`、`BattlePresentationSpec.cpp`。
 
@@ -177,6 +215,7 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 
 - 不要回退用户已有改动。
 - 不要使用 `git reset --hard`、`git checkout --` 或批量删除，除非用户明确要求。
+- 清理上一轮 agent 工作区时，先用 `git status` / `git diff` 确认范围；除非用户明确要求丢弃，否则优先保护用户改动，再做定向 restore / clean。
 - 编辑文件优先使用小范围 patch。
 - 生成文件、缓存、Binaries、Intermediate 不作为主要交付内容。
 

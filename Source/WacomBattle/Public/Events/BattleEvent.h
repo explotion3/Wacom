@@ -77,7 +77,7 @@ enum class EHandCardZoneMoveReason : uint8
  * 使用扁平字段变体：不同事件类型填不同字段，未使用的留默认值。
  *
  * 字段使用约定（非穷举）：
- * - CardsDrawn          ：Count = 抽牌数
+ * - CardsDrawn          ：CardInstanceIds = 本批真实抽到 / 移入手牌的卡实例，Count = CardInstanceIds.Num()
  * - CardPlayed          ：CardInstanceId、ActorEnemyPartKey = 目标部位稳定 key
  * - InitiativeHit       ：ActorEnemyPartKey = 被命中部位、Amount = 本次 RuntimeCost
  * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；玩家目标时 key 为空
@@ -117,6 +117,10 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 若事件涉及一张卡，这是该卡的运行时实例 ID。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	FGuid CardInstanceId;
+
+	/** 批量卡牌事件涉及的运行时实例 ID。CardsDrawn 按规则抽取 / 移入手牌顺序记录本批真实入手卡。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	TArray<FGuid> CardInstanceIds;
 
 	/** 通用标签字段。按 Type 语义使用（状态 tag、意图 id、效果 tag 等）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

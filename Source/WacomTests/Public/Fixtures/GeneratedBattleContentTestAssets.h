@@ -47,6 +47,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static const TCHAR* BlockWeaponTargetCardPath();
 	static const TCHAR* DiscardSelectedHandCardPath();
 	static const TCHAR* ExhaustSelectedHandCardPath();
+	static const TCHAR* DrawByCostCardPath();
 	static const TCHAR* BadgeDamagePoisonCardPath();
 	static const TCHAR* BadgeShieldHealCardPath();
 	static const TCHAR* BadgeDamageShieldHealCardPath();
@@ -90,6 +91,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static UCardDefinition* LoadBlockWeaponTargetCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadDiscardSelectedHandCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadExhaustSelectedHandCard(FAutomationTestBase& Test);
+	static UCardDefinition* LoadDrawByCostCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadBadgeDamagePoisonCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadBadgeShieldHealCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadBadgeDamageShieldHealCard(FAutomationTestBase& Test);

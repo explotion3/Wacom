@@ -5,6 +5,7 @@
 #include "Core/BattleState.h"
 #include "Deck/DeckService.h"
 #include "Events/BattleEventBus.h"
+#include "Events/BattleEventHelpers.h"
 #include "Hand/HandZoneService.h"
 #include "Hand/HandZoneMoveEventService.h"
 #include "Runtime/RuntimeCardInstance.h"
@@ -29,7 +30,7 @@ void FBattleTurnFlow::BeginPlayerTurn(FBattleState& State, FBattleEventBus& Even
 	//    FDeckService::DrawCards 会把 Location 置为 Hand，但实际进入 Hand 队列
 	//    由 FHandZoneService 统一编排。
 	TArray<FGuid> DrawnCardIds;
-	const int32 ActuallyDrawn = FDeckService::DrawCards(State, InitialDrawCount, DrawnCardIds);
+	FDeckService::DrawCards(State, InitialDrawCount, DrawnCardIds);
 
 	// 4. 生成本回合手牌队列。
 	FHandZoneService::GenerateHandQueueOnTurnStart(State, DrawnCardIds);
@@ -43,12 +44,7 @@ void FBattleTurnFlow::BeginPlayerTurn(FBattleState& State, FBattleEventBus& Even
 	(void)bIsFirstTurn;
 
 	// 6. 事件。
-	{
-		FBattleEvent CardsDrawnEv;
-		CardsDrawnEv.Type  = EBattleEventType::CardsDrawn;
-		CardsDrawnEv.Count = ActuallyDrawn;
-		Events.Emit(CardsDrawnEv);
-	}
+	WacomBattleEvents::EmitCardsDrawn(Events, DrawnCardIds);
 
 	FHandZoneMoveEventService::ResolveDiscardedFromHand(
 		State,

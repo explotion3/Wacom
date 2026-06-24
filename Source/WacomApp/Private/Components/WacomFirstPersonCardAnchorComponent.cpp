@@ -131,6 +131,11 @@ namespace
 		Config.DrawnCardEnterViewportAnchor = Anchor.DrawnCardEnterViewportAnchor;
 		Config.DrawnCardEnterScaleMultiplier = Anchor.DrawnCardEnterScaleMultiplier;
 		Config.DrawnCardEnterAngleOffsetDegrees = Anchor.DrawnCardEnterAngleOffsetDegrees;
+		Config.DrawnCardEnterDurationSeconds = Anchor.DrawnCardEnterDurationSeconds;
+		Config.DrawnCardEnterStaggerSeconds = Anchor.DrawnCardEnterStaggerSeconds;
+		Config.DrawnCardEnterArcLiftPixels = Anchor.DrawnCardEnterArcLiftPixels;
+		Config.DrawnCardEnterEasePower = Anchor.DrawnCardEnterEasePower;
+		Config.bBlockInteractionDuringDrawnCardEnter = Anchor.bBlockInteractionDuringDrawnCardEnter;
 		Config.GainedCardEnterOffsetPixels = Anchor.GainedCardEnterOffsetPixels;
 		Config.GainedCardEnterOriginMode = Anchor.GainedCardEnterOriginMode;
 		Config.GainedCardEnterViewportAnchor = Anchor.GainedCardEnterViewportAnchor;
@@ -333,6 +338,11 @@ namespace
 		MotionConfig.DrawnEnterViewportAnchor = Config.DrawnCardEnterViewportAnchor;
 		MotionConfig.DrawnEnterScaleMultiplier = Config.DrawnCardEnterScaleMultiplier;
 		MotionConfig.DrawnEnterAngleOffsetDegrees = Config.DrawnCardEnterAngleOffsetDegrees;
+		MotionConfig.DrawnEnterDurationSeconds = Config.DrawnCardEnterDurationSeconds;
+		MotionConfig.DrawnEnterStaggerSeconds = Config.DrawnCardEnterStaggerSeconds;
+		MotionConfig.DrawnEnterArcLiftPixels = Config.DrawnCardEnterArcLiftPixels;
+		MotionConfig.DrawnEnterEasePower = Config.DrawnCardEnterEasePower;
+		MotionConfig.bBlockInteractionDuringDrawnEnter = Config.bBlockInteractionDuringDrawnCardEnter;
 		MotionConfig.GainedEnterOffsetPixels = Config.GainedCardEnterOffsetPixels;
 		MotionConfig.GainedEnterOriginMode = Config.GainedCardEnterOriginMode;
 		MotionConfig.GainedEnterViewportAnchor = Config.GainedCardEnterViewportAnchor;
@@ -492,6 +502,11 @@ namespace
 		AddVector(Config.DrawnCardEnterViewportAnchor);
 		AddFloat(Config.DrawnCardEnterScaleMultiplier);
 		AddFloat(Config.DrawnCardEnterAngleOffsetDegrees);
+		AddFloat(Config.DrawnCardEnterDurationSeconds);
+		AddFloat(Config.DrawnCardEnterStaggerSeconds);
+		AddFloat(Config.DrawnCardEnterArcLiftPixels);
+		AddFloat(Config.DrawnCardEnterEasePower);
+		AddBool(Config.bBlockInteractionDuringDrawnCardEnter);
 		AddVector(Config.GainedCardEnterOffsetPixels);
 		AddInt(static_cast<int32>(Config.GainedCardEnterOriginMode));
 		AddVector(Config.GainedCardEnterViewportAnchor);
@@ -977,6 +992,22 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerEntries(
 	}
 }
 
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerPresentationFrame(
+	FName SourceId,
+	const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+{
+	const bool bRuntimeSourceChanged = RuntimeState && RuntimeState->SetEntries(SourceId, Entries);
+	if (RuntimeState)
+	{
+		RuntimeState->SetPresentationFrameHints(SourceId, TransitionHints);
+	}
+	if (bRuntimeSourceChanged)
+	{
+		RefreshResolvedCardLayoutRuntimeState();
+	}
+}
+
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionHints(
 	FName SourceId,
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints)
@@ -985,6 +1016,21 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionHints(
 	{
 		RuntimeState->SetTransitionHints(SourceId, Hints);
 	}
+}
+
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionPresentationEnabled(
+	FName SourceId,
+	bool bEnabled)
+{
+	if (RuntimeState)
+	{
+		RuntimeState->SetTransitionPresentationEnabled(SourceId, bEnabled);
+	}
+}
+
+bool UWacomFirstPersonCardAnchorComponent::HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const
+{
+	return RuntimeState && RuntimeState->HasPresentationFrameHintsForSource(SourceId);
 }
 
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(
@@ -1147,7 +1193,6 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionEnabled(bool 
 		if (CardLayerWidget)
 		{
 			CardLayerWidget->CancelCardDragGesture(true);
-			CardLayerWidget->ClearSlotMotionState();
 		}
 	}
 	if (CardLayerWidget)
@@ -1163,6 +1208,31 @@ FWacomFirstPersonCardAnchorAutomationTestView UWacomFirstPersonCardAnchorCompone
 	FWacomFirstPersonCardAnchorAutomationTestView View;
 	View.CardLayerWidget = CardLayerWidget;
 	View.CardLayerConfigApplyCount = CardLayerOwner ? CardLayerOwner->GetConfigApplyCountForTest() : 0;
+	if (RuntimeState)
+	{
+		View.PendingTransitionHintSourceId = RuntimeState->GetTransitionHintSourceId();
+		if (RuntimeState->GetPresentationFrameHintSourceId() == RuntimeState->GetSourceId()
+			&& RuntimeState->GetPresentationFrameHints().Num() > 0)
+		{
+			View.PendingTransitionHintSourceId = RuntimeState->GetPresentationFrameHintSourceId();
+		}
+		View.bHasPendingTransitionHintsForCurrentSource =
+			RuntimeState->HasTransitionHintsForCurrentSource()
+			|| RuntimeState->HasPresentationFrameHintsForCurrentSource();
+		View.bCanConsumePendingTransitionHintsForCurrentSource =
+			RuntimeState->CanConsumeTransitionHintsForCurrentSource()
+			|| RuntimeState->CanConsumePresentationFrameHintsForCurrentSource();
+		View.bTransitionPresentationEnabledForCurrentSource =
+			RuntimeState->IsTransitionPresentationEnabled(RuntimeState->GetSourceId());
+		for (const FWacomFirstPersonCardLayerTransitionHint& Hint : RuntimeState->GetTransitionHints())
+		{
+			View.PendingTransitionHintCardIds.Add(Hint.CardInstanceId);
+		}
+		for (const FWacomFirstPersonCardLayerTransitionHint& Hint : RuntimeState->GetPresentationFrameHints())
+		{
+			View.PendingTransitionHintCardIds.Add(Hint.CardInstanceId);
+		}
+	}
 	return View;
 }
 
@@ -1673,10 +1743,22 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 	};
 	UpdateInput.ConsumeTransitionHints = [this]()
 	{
-		return RuntimeState && RuntimeState->HasTransitionHintsForCurrentSource()
+		if (!RuntimeState)
+		{
+			return TArray<FWacomFirstPersonCardLayerTransitionHint>();
+		}
+		if (RuntimeState->CanConsumePresentationFrameHintsForCurrentSource())
+		{
+			return RuntimeState->ConsumePresentationFrameHintsForCurrentSource();
+		}
+		return RuntimeState->CanConsumeTransitionHintsForCurrentSource()
 			? RuntimeState->ConsumeTransitionHintsForCurrentSource()
 			: TArray<FWacomFirstPersonCardLayerTransitionHint>();
 	};
+	UpdateInput.bCanConsumeTransitionHints =
+		RuntimeState
+		&& (RuntimeState->CanConsumePresentationFrameHintsForCurrentSource()
+			|| RuntimeState->CanConsumeTransitionHintsForCurrentSource());
 
 	CardLayerOwner->Update(UpdateInput, CardLayerWidget);
 }
@@ -1707,6 +1789,7 @@ void UWacomFirstPersonCardAnchorComponent::RemoveCardLayer()
 	if (RuntimeState)
 	{
 		RuntimeState->ClearTransitionHints();
+		RuntimeState->ClearPresentationFrameHints();
 		RuntimeState->ClearTransientInteraction();
 	}
 }

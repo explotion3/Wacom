@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-06-08
+updated: 2026-06-24
 tags:
   - wacom/data
   - wacom/authoring
@@ -63,7 +63,7 @@ Builder 当前职责：
 | 容器 / 功能卡 | 虫妹的小布袋、蛛茧绒囊、暮色引虫灯 |
 | Starter pack | 毒针、几丁护片、触须探路、蜕壳切、轻蜕壳、丝线佯攻 |
 | 奖励卡 | `DA_Card_PoisonFang`，当前蛇部位击倒奖励样例 |
-| Debug / 测试卡 | DebugKey、卡对卡加费 / 减费 / 弃置 / 消耗、关键词筛选目标卡 |
+| Debug / 测试卡 | DebugKey、卡对卡加费 / 减费 / 弃置 / 消耗、关键词筛选目标卡、按当前费用抽牌测试卡 |
 | Badge 测试卡 | Damage / Poison / Shield / Heal 的卡面徽章显示测试卡；Burn 只有 UI 预留，不生成正式测试卡 |
 
 核心敌人、商店与 Run 内容：
@@ -74,7 +74,7 @@ Builder 当前职责：
 | `DA_Behavior_Snake` | 蛇行为资产，Default phase 下为 Head / Body / Tail 提供三套 `Sequence` intent set |
 | 蛇部位 | Head / Body / Tail 配置 HP、经验和毒牙奖励；部位资产不承载行为，行为统一写入 `DA_Behavior_Snake` |
 | `DA_Encounter_SnakeSingle` | 正式单蛇 Encounter 样例，`EncounterDefinitionId=Encounter.Snake.Single`，`EnemySlots[0]=Enemy -> DA_Enemy_Snake` |
-| `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡和 badge 测试卡 |
+| `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡和 badge 测试卡 |
 | `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力 / 节点效果 |
 | `DA_Event_DebugFlagReward` | RunFlag 与 `MinGold + AddGold(-N)` 组合样例 |
 | `DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
@@ -188,14 +188,14 @@ Magnitude 计算顺序：
 | `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 计算时下限 clamp 到 0 |
 | `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆，触发目标卡 `OnDiscard` |
 | `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗牌堆，不触发 `OnDiscard` |
-| `Effect.Draw` | 张数 | Self / Player | CardLocation.Draw / Discard / Exhaust | - | Literal | `TargetZone` 复用为源区域 |
+| `Effect.Draw` | 张数 | Self / Player | CardLocation.Draw / Discard / Exhaust | - | Literal / RuntimeCost | `TargetZone` 复用为源区域 |
 | `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉普通手牌，不弃锚点 |
 | `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 交给打出后去向阶段 |
 | `Effect.GainKeyword` | - | LastShuffledCard / SelectedHandCard | Card.Keyword.* | - | - | `TargetZone` 复用为要添加的 keyword |
 | `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | Status.Poison / Slow / Freeze / Twilight / Stunned | - | Literal / TargetStatusStacks | 不支持 `Status.Shield` |
 | `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal / TargetStatusStacks | 正数增加，负数减少 |
 
-`Magnitude.Source.RuntimeCost` 当前只允许用于 `Effect.Damage` 和 `Effect.ApplyStatus.Poison`。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 指定要读取的状态，只允许 Poison / Slow / Freeze / Twilight / Stunned。`Status.Shield` 不在 `StatusStacks` 中。
+`Magnitude.Source.RuntimeCost` 当前允许用于 `Effect.Damage`、`Effect.ApplyStatus.Poison` 和 `Effect.Draw`。用于 `Effect.Draw` 时，抽牌数量等于本卡打出时的 RuntimeCost，例如基础费用 2 的测试卡默认抽 2 张，费用被改变后按改变后的费用抽。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 指定要读取的状态，只允许 Poison / Slow / Freeze / Twilight / Stunned。`Status.Shield` 不在 `StatusStacks` 中。
 
 敌人 Intent 效果矩阵：
 

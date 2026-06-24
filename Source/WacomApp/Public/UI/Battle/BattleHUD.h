@@ -505,6 +505,9 @@ private:
 	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FBattlePartSlotIdentity& TargetPartKey, int32 Amount);
 	void PlayTargetConfirmedCueForTest(const FBattlePartSlotIdentity& TargetPartKey);
 	FWacomBattleHUDAutomationTestView GetAutomationTestViewForTest() const;
+	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
+		const FBattleSnapshot& NextSnapshot) const;
+	void SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot);
 #endif
 
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
@@ -558,9 +561,10 @@ private:
 	void ClearBattleSceneEnemyPartHoverProbe(FName Reason);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
 	UWacomFirstPersonCardAnchorComponent* ResolveActiveFirstPersonCardAnchor() const;
+	void SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap);
 	void SyncFirstPersonBattleHandLayer(
 		const FBattleSnapshot& Snap,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints = TArray<FWacomFirstPersonCardLayerTransitionHint>());
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
 	void ClearFirstPersonBattleHandLayer();
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;

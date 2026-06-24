@@ -244,6 +244,17 @@ public:
 		return BuildFirstPersonCardTransitionHints(PreviousSnapshot, NextSnapshot);
 	}
 
+	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
+		const FBattleSnapshot& NextSnapshot) const
+	{
+		return UBattleHUD::BuildFirstPersonCardTransitionHintsForRefreshForTest(NextSnapshot);
+	}
+
+	void SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot)
+	{
+		UBattleHUD::SetFirstPersonCardTransitionSnapshotForTest(Snapshot);
+	}
+
 	void ClearPendingFirstPersonCardTransitionEventsForTest()
 	{
 		ClearPendingFirstPersonCardTransitionEvents();

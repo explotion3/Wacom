@@ -40,7 +40,7 @@ public:
 	bool CanUpdateHoverProbe() const;
 	void TickHoverProbe(float DeltaTime);
 	void UpdateHoverProbe();
-	void ClearHoverProbe(FName Reason);
+	void ClearHoverProbe(FName Reason, bool bClearFirstPersonTargetPreviewLayer = true);
 	FWacomBattleEnemyPartDragPredictionDebugInput BuildHoverPredictionInput(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 

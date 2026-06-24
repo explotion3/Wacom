@@ -44,6 +44,11 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorAutomationTestView
 {
 	UWacomFirstPersonCardLayerWidget* CardLayerWidget = nullptr;
 	int32 CardLayerConfigApplyCount = 0;
+	FName PendingTransitionHintSourceId = NAME_None;
+	TArray<FGuid> PendingTransitionHintCardIds;
+	bool bHasPendingTransitionHintsForCurrentSource = false;
+	bool bCanConsumePendingTransitionHintsForCurrentSource = false;
+	bool bTransitionPresentationEnabledForCurrentSource = true;
 };
 #endif
 
@@ -235,6 +240,21 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-30.0", UIMax = "30.0", Units = "deg", ToolTip = "抽牌入场起点相对目标卡牌角度的额外偏移，单位为度；默认 0，避免额外增加旋转采样锯齿。"))
 	float DrawnCardEnterAngleOffsetDegrees = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0", Units = "s", ToolTip = "抽牌入场的固定播放时长，单位为秒；0 表示沿用普通入场速度追踪。"))
+	float DrawnCardEnterDurationSeconds = 0.32f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.2", Units = "s", ToolTip = "同一批抽牌中每张卡开始入场的错峰间隔，单位为秒；只影响表现顺序，不改变手牌顺序。"))
+	float DrawnCardEnterStaggerSeconds = 0.075f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "抽牌入场中段向上的弧线抬升，单位为 UMG 布局像素；0 表示直线飞入。"))
+	float DrawnCardEnterArcLiftPixels = 42.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.1", UIMin = "0.5", UIMax = "4.0", ToolTip = "抽牌入场固定播放的缓动指数；数值越大起落越柔和。"))
+	float DrawnCardEnterEasePower = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "抽牌入场播放期间是否禁止该卡 hover / press / drag；用于避免发牌途中被交互状态打断。"))
+	bool bBlockInteractionDuringDrawnCardEnter = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "战斗中获得卡牌进入手牌时相对目标位置的起始偏移，单位为 UMG 布局像素；默认从上方 / 战斗空间方向进入。"))
 	FVector2D GainedCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
@@ -557,9 +577,15 @@ public:
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViews() const;
 
 	void SetRuntimeCardLayerEntries(FName SourceId, const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
+	void SetRuntimeCardLayerPresentationFrame(
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
 	void SetRuntimeCardLayerTransitionHints(
 		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
+	void SetRuntimeCardLayerTransitionPresentationEnabled(FName SourceId, bool bEnabled);
+	bool HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const;
 	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);
 	void ClearRuntimeCardLayerData(FName SourceId);
 	void ClearCardLayerVisualState();

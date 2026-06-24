@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Events/BattleEvent.h"
 #include "Misc/AutomationTest.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -38,5 +39,28 @@ bool FWacomBattleDrawFiveSpec::RunTest(const FString& /*Parameters*/)
 	TestTrue (TEXT("LeftHandPresent"), Snap.Hand.bLeftHandPresent);
 	TestTrue (TEXT("RightHandPresent"), Snap.Hand.bRightHandPresent);
 	TestEqual(TEXT("DrawPileAfter"),  Snap.PileCounts.DrawCount, 5);  // 10 - 5
+
+	const TArray<FBattleEvent> InitialEvents = S->ConsumeEvents();
+	const FBattleEvent* OpeningDrawEvent = InitialEvents.FindByPredicate(
+		[](const FBattleEvent& Event)
+		{
+			return Event.Type == EBattleEventType::CardsDrawn;
+		});
+	if (TestNotNull(TEXT("Opening draw event"), OpeningDrawEvent))
+	{
+		TestEqual(TEXT("Opening draw count"), OpeningDrawEvent->Count, 5);
+		TestEqual(TEXT("Opening draw ids match count"), OpeningDrawEvent->CardInstanceIds.Num(), OpeningDrawEvent->Count);
+		for (const FGuid& DrawnCardId : OpeningDrawEvent->CardInstanceIds)
+		{
+			TestTrue(TEXT("Opening draw id is valid"), DrawnCardId.IsValid());
+			TestNotNull(
+				TEXT("Opening draw id is present in hand"),
+				Snap.Hand.Cards.FindByPredicate(
+					[DrawnCardId](const FHandCardSnapshot& Card)
+					{
+						return Card.InstanceId == DrawnCardId;
+					}));
+		}
+	}
 	return true;
 }

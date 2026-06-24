@@ -43,7 +43,7 @@ bool FWacomFirstPersonCardLayerOwner::Update(
 
 	ApplyConfigIfNeeded(*WidgetRef, Input.Config);
 
-	if (Input.ConsumeTransitionHints)
+	if (Input.bCanConsumeTransitionHints && Input.ConsumeTransitionHints)
 	{
 		const TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints =
 			Input.ConsumeTransitionHints();

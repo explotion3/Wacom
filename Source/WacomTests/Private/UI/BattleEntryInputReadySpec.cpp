@@ -5,6 +5,7 @@
 #include "BattleHUDTestHarness.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Engine/Engine.h"
+#include "Events/BattleEvent.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -138,6 +139,23 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 	}
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FHandCardSnapshot* OpeningDrawnCard = Snapshot.Hand.Cards.FindByPredicate(
+		[](const FHandCardSnapshot& Card)
+		{
+			return !Card.bIsHandAnchor && Card.InstanceId.IsValid();
+		});
+	if (!TestNotNull(TEXT("Fixture has an opening normal hand card"), OpeningDrawnCard))
+	{
+		return false;
+	}
+	const FGuid OpeningDrawnCardId = OpeningDrawnCard->InstanceId;
+	FBattleEvent OpeningDrawEvent;
+	OpeningDrawEvent.Type = EBattleEventType::CardsDrawn;
+	OpeningDrawEvent.CardInstanceIds = { OpeningDrawnCardId };
+	OpeningDrawEvent.Count = OpeningDrawEvent.CardInstanceIds.Num();
+	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
+	HUD->StoreFirstPersonCardTransitionEventsForTest({ OpeningDrawEvent });
+
 	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
 	TestTrue(TEXT("Runtime hand source is active before suppression"), Anchor->HasRuntimeCardLayerData());
 	TestEqual(TEXT("Runtime hand source id before suppression"),
@@ -187,15 +205,40 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		0);
 	TestFalse(TEXT("Suppression disables runtime hand interaction"),
 		Anchor->IsBattleHandInteractionEnabled());
+	const FWacomFirstPersonCardAnchorAutomationTestView SuppressedGateView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
+	TestFalse(TEXT("Suppression closes battle hand presentation gate"),
+		SuppressedGateView.bTransitionPresentationEnabledForCurrentSource);
+	TestFalse(TEXT("Suppression blocks pending transition consumption"),
+		SuppressedGateView.bCanConsumePendingTransitionHintsForCurrentSource);
 
-	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
-	TestTrue(TEXT("Suppressed sync keeps the empty runtime hand source"),
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	TestTrue(TEXT("Suppressed refresh keeps the empty runtime hand source"),
 		Anchor->HasRuntimeCardLayerData());
-	TestEqual(TEXT("Suppressed sync does not rewrite runtime hand cards"),
+	TestEqual(TEXT("Suppressed refresh does not rewrite runtime hand cards"),
 		Anchor->GetRuntimeCardLayerCardCount(),
 		0);
 
 	HUD->SetFirstPersonBattleHandSuppressedForEntry(false);
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> DeferredEntryHints =
+		HUD->BuildFirstPersonCardTransitionHintsForRefreshForTest(Snapshot);
+	TestEqual(TEXT("Deferred entry reveal keeps one opening draw hint"), DeferredEntryHints.Num(), 1);
+	if (const FWacomFirstPersonCardLayerTransitionHint* OpeningHint =
+		DeferredEntryHints.FindByPredicate(
+			[OpeningDrawnCardId](const FWacomFirstPersonCardLayerTransitionHint& Hint)
+			{
+				return Hint.CardInstanceId == OpeningDrawnCardId;
+			}))
+	{
+		TestEqual(TEXT("Deferred entry hint is drawn"), OpeningHint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Drawn);
+		TestEqual(TEXT("Deferred entry hint sequence index"), OpeningHint->SequenceIndex, 0);
+		TestEqual(TEXT("Deferred entry hint sequence count"), OpeningHint->SequenceCount, 1);
+	}
+	else
+	{
+		AddError(TEXT("Missing deferred opening draw hint"));
+	}
+
 	HUD->SetBattleInputReady(false);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	TestTrue(TEXT("Unsuppressed refresh rewrites runtime hand source"),
@@ -205,11 +248,46 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		Snapshot.Hand.Cards.Num());
 	TestFalse(TEXT("Runtime hand remains non-interactive while input is not ready"),
 		Anchor->IsBattleHandInteractionEnabled());
+	const FWacomFirstPersonCardAnchorAutomationTestView PendingDeferredEntry =
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
+	TestEqual(TEXT("Unsuppressed refresh submits one pending deferred draw hint"),
+		PendingDeferredEntry.PendingTransitionHintCardIds.Num(),
+		1);
+	TestTrue(TEXT("Pending deferred draw belongs to current runtime source"),
+		PendingDeferredEntry.bHasPendingTransitionHintsForCurrentSource);
+	TestTrue(TEXT("Unsuppressed refresh opens presentation gate"),
+		PendingDeferredEntry.bTransitionPresentationEnabledForCurrentSource);
+	TestTrue(TEXT("Unsuppressed refresh allows deferred draw consumption"),
+		PendingDeferredEntry.bCanConsumePendingTransitionHintsForCurrentSource);
+	TestTrue(TEXT("Pending deferred draw contains opening card id"),
+		PendingDeferredEntry.PendingTransitionHintCardIds.Contains(OpeningDrawnCardId));
+	Anchor->PrimaryComponentTick.ExecuteTick(
+		0.0f,
+		LEVELTICK_All,
+		ENamedThreads::GameThread,
+		FGraphEventRef());
+	TestEqual(TEXT("Anchor tick consumes deferred entry draw hint"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).PendingTransitionHintCardIds.Num(),
+		0);
+	TestEqual(TEXT("Deferred entry reveal is consumed once"),
+		HUD->BuildFirstPersonCardTransitionHintsForRefreshForTest(Snapshot).Num(),
+		0);
 
 	HUD->SetBattleInputReady(true);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
+	TestEqual(TEXT("Input-ready refresh does not submit another deferred draw hint"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).PendingTransitionHintCardIds.Num(),
+		0);
+	Anchor->PrimaryComponentTick.ExecuteTick(
+		0.0f,
+		LEVELTICK_All,
+		ENamedThreads::GameThread,
+		FGraphEventRef());
 	TestTrue(TEXT("Runtime hand interaction unlocks after input ready"),
 		Anchor->IsBattleHandInteractionEnabled());
+	TestEqual(TEXT("Input-ready refresh remains no-replay after anchor tick"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).PendingTransitionHintCardIds.Num(),
+		0);
 
 	return true;
 }

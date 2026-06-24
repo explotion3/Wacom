@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-06-20
+updated: 2026-06-24
 tags:
   - wacom/ui
   - wacom/battle
@@ -33,7 +33,7 @@ BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`�
 | 场景敌人 | `FWacomBattleHUDSceneEnemyTargetCoordinator` | 同步当前 Trigger Host registry 的 PartActor bridge 和 cue |
 | 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier |
 | Combat Log | `FWacomBattleHUDCombatLogController` | history、trim、feed sync、readable log |
-| First-person hand | `FWacomBattleHUDFirstPersonHandBridge` | runtime hand、drag preview/release、transition hint |
+| First-person hand | `FWacomBattleHUDFirstPersonHandBridge + FWacomBattleHandPresentationController` | runtime hand presentation frame、drag preview/release、Drawn transaction |
 | Card Detail | `FWacomBattleHUDCardDetailController` | first-person viewport 详情 motion / source guard |
 
 ## §2 命令与 HUD State
@@ -168,7 +168,9 @@ First-person hand 卡面和 first-person viewport 详情都从 `FHandCardSnapsho
 
 `FirstPersonCardDetailViewportZOrder / FirstPersonCardDetailAnchorBaseSize` 属于 `Wacom|Battle|First Person Card Layer|Authoring`。第一人称战斗手牌交互开关使用 `bEnableBattleHandInteraction`、`SetBattleHandInteractionEnabled()` 和 `IsBattleHandInteractionEnabled()`。
 
-Battle entry staging 期间，BattleHUD 的 first-person hand bridge 会把 `BattleHand` runtime layer 视为 suppressed：进入 suppression 时先清空当前 first-person card layer visual slot，任何 hand sync 都写入 0 entries 的空 `BattleHand` runtime source，不启用 hand interaction，也阻止 Anchor 回退到 preview card layer。Battle camera look 激活后，GameMode 解除 suppression 并用当前 Battle snapshot 重新刷新 first-person hand；这避免手牌从探索相机位置一路插值到 battle viewpoint。
+Battle entry staging 期间，BattleHUD 的 first-person hand bridge 会把 `BattleHand` runtime layer 视为 suppressed：进入 suppression 时先关闭 `BattleHand` presentation gate、清空当前 first-person card layer visual slot，任何 hand sync 都写入 0 entries 的空 `BattleHand` runtime source，不启用 hand interaction，也阻止 Anchor 回退到 preview card layer。suppressed 期间 `FWacomBattleHandPresentationController` 不推进已展示 snapshot baseline；首回合 `CardsDrawn` 作为 entry reveal transaction 保留到 Battle camera look 激活、suppression 解除后的第一次 hand refresh 中，再用空手牌 baseline 生成一次显式 `entries + Drawn hints` presentation frame。若这帧已经提交给 Anchor 但还没被 Layer tick 消费时又进入 suppression，bridge 会先把该提交恢复成 controller 待播事件，再清空 visual source，避免卡牌在不可见阶段被吞掉或后续直接落位。Battle camera look 激活后，GameMode 解除 suppression 并用当前 Battle snapshot 重新刷新 first-person hand；这次正式 hand sync 会重新打开 presentation gate，Anchor 才允许消费 frame hints。这避免手牌从探索相机位置一路插值到 battle viewpoint，也避免抽牌入场在不可见阶段提前播完。
+
+Battle hand 抽牌表现由 `FWacomBattleHandPresentationController` 事务化交付。Controller 消费 Battle events 时，优先把 `CardsDrawn.CardInstanceIds` 中仍存在于下一帧 hand snapshot 的真实卡实例转成 `Drawn` transition hint，并为可见 hint 写入稳定 `SequenceIndex / SequenceCount`；只有旧式 Count-only 事件才回退到 baseline / next snapshot 新增卡推断。HUD 不计算入场曲线、延迟、弧线或来源位置；这些表现参数由 first-person card layer / Anchor `06 Transition Motion` 统一处理。Bridge 只负责把 controller 给出的 presentation frame 写入 Anchor，或在没有 pending event 时执行普通 entries refresh。普通 refresh 不会替换 Anchor 里尚未消费的 presentation frame hints；只有新的显式 frame、source clear、suppression 或 battle end 会替换 / 清空 hints，避免状态刷新把抽牌入场表现吞掉。Anchor 还有 source-scoped presentation gate：gate 关闭时 entries 可以刷新，但 pending frame hints 不能被送进 Layer。Layer 收到 frame 后也不会在一次空 slots / unprojected slots 刷新中丢弃 Drawn：只有 gate 已打开、对应 slot 可投影并真正启动入场播放后才消费该 hint，镜头 staging 或 viewport 投影暂不可用时会延迟到后续 hand refresh。
 
 ## §8 Battle Shared Widgets
 

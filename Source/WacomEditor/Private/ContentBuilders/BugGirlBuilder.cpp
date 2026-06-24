@@ -76,6 +76,17 @@ namespace
 		return E;
 	}
 
+	FCardEffect DrawFromRuntimeCost()
+	{
+		FCardEffect E;
+		E.EffectType = WacomTags::Effect_Draw;
+		E.Magnitude = 0;
+		E.Target = WacomTags::Target_Player;
+		E.TargetZone = WacomTags::CardLocation_Draw;
+		E.MagnitudeSource = WacomTags::Magnitude_Source_RuntimeCost;
+		return E;
+	}
+
 	FCardEffect DiscardRandomHandCard(int32 Count)
 	{
 		FCardEffect E;
@@ -859,6 +870,23 @@ namespace Wacom::ContentBuilder
 			MakeHandCardTargetFilter(/*bAllowNormalHandCards*/ true, /*bAllowHandAnchors*/ false)
 		);
 
+		UCardDefinition* TestDrawByCost = BuildCard(
+			MakePackagePath(BugGirlCards, TEXT("DA_Card_Test_DrawByCost")),
+			TEXT("DA_Card_Test_DrawByCost"),
+			TEXT("Test.DrawByCost"),
+			TEXT("按费抽牌测试"),
+			TEXT("测试卡：从抽牌堆抽取等于此卡当前费用的牌。默认费用为 2。"),
+			/*BaseCost*/ 2,
+			WacomTags::Card_Rarity_White,
+			/*Keywords*/ { WacomTags::Card_Keyword_Tool },
+			ECardTargetMode::None,
+			FCardPhysique{},
+			/*Effects*/ { DrawFromRuntimeCost() },
+			/*PerfectRelease*/ {},
+			/*ZoneHooks*/ {},
+			/*Passives*/ {}
+		);
+
 		TArray<UCardDefinition*> StarterPackCards = BuildBugGirlStarterPackCards();
 		TArray<UCardDefinition*> BadgeDisplayTestCards = BuildBugGirlBadgeDisplayTestCards();
 
@@ -868,6 +896,7 @@ namespace Wacom::ContentBuilder
 			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
 			|| !TestTargetCompanion || !TestRequireCompanionTarget || !TestBlockWeaponTarget
 			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard
+			|| !TestDrawByCost
 			|| StarterPackCards.Num() != 6 || StarterPackCards.Contains(nullptr)
 			|| BadgeDisplayTestCards.Num() != 4 || BadgeDisplayTestCards.Contains(nullptr))
 		{

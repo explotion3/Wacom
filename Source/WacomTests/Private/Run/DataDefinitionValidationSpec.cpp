@@ -393,11 +393,12 @@ bool FWacomDataCardValidationBattleRuleContentContractSpec::RunTest(const FStrin
 		TStrongObjectPtr<UCardDefinition> Card(MakeValidCardForValidation(GetTransientPackage()));
 		Card->Effects[0].EffectType = WacomTags::Effect_Draw;
 		Card->Effects[0].Target = WacomTags::Target_Player;
+		Card->Effects[0].TargetZone = WacomTags::CardLocation_Draw;
 		Card->Effects[0].Magnitude = 0;
 		Card->Effects[0].MagnitudeSource = WacomTags::Magnitude_Source_RuntimeCost;
 		TArray<FText> Errors;
-		TestFalse(TEXT("RuntimeCost source cannot drive draw"), ValidateCardForTest(Card.Get(), Errors));
-		TestTrue(TEXT("RuntimeCost source mismatch reported"), ErrorsContain(Errors, TEXT("MagnitudeSource")));
+		TestTrue(TEXT("RuntimeCost source can drive draw"), ValidateCardForTest(Card.Get(), Errors));
+		TestEqual(TEXT("RuntimeCost draw has no validation errors"), Errors.Num(), 0);
 	}
 
 	{
@@ -939,6 +940,23 @@ bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /
 		}
 		TestFalse(FString::Printf(TEXT("BugGirl starter deck excludes debug/test card: %s"), TestCardPath),
 			BugGirl->StarterDeck.Contains(TestCard));
+	}
+	UCardDefinition* DrawByCost = FWacomGeneratedBattleContentAssets::LoadDrawByCostCard(*this);
+	if (!TestNotNull(TEXT("DrawByCost test card loads"), DrawByCost))
+	{
+		return false;
+	}
+	TestEqual(TEXT("DrawByCost id"), DrawByCost->CardId, FName(TEXT("Test.DrawByCost")));
+	TestEqual(TEXT("DrawByCost default cost"), DrawByCost->BaseCost, 2);
+	TestEqual(TEXT("DrawByCost target mode"), DrawByCost->TargetMode, ECardTargetMode::None);
+	TestEqual(TEXT("DrawByCost effects"), DrawByCost->Effects.Num(), 1);
+	if (DrawByCost->Effects.IsValidIndex(0))
+	{
+		TestEqual(TEXT("DrawByCost effect type"), DrawByCost->Effects[0].EffectType, FGameplayTag(WacomTags::Effect_Draw));
+		TestEqual(TEXT("DrawByCost source pile"), DrawByCost->Effects[0].TargetZone, FGameplayTag(WacomTags::CardLocation_Draw));
+		TestEqual(TEXT("DrawByCost magnitude source"),
+			DrawByCost->Effects[0].MagnitudeSource,
+			FGameplayTag(WacomTags::Magnitude_Source_RuntimeCost));
 	}
 	for (const TCHAR* BadgeCardPath : FWacomGeneratedBattleContentAssets::BadgeDisplayTestCardPaths())
 	{

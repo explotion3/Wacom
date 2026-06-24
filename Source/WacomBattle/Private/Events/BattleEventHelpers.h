@@ -9,6 +9,10 @@ struct FBattleEventBus;
 
 namespace WacomBattleEvents
 {
+	void EmitCardsDrawn(
+		FBattleEventBus& Events,
+		const TArray<FGuid>& DrawnCardIds);
+
 	void EmitHandLimitDiscardedEvents(
 		FBattleEventBus& Events,
 		const TArray<FGuid>& DiscardedCardIds,
