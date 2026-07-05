@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-card-animation
 status: draft
-updated: 2026-07-05
+updated: 2026-07-06
 tags:
   - wacom/ui
   - wacom/cards
@@ -48,7 +48,8 @@ tags:
 - `CardsRetained` 是规则事件，只记录回合结束明确保留的普通手牌实例；当前会生成独立 retained feedback hint，但不对应 first-person `Retained` transition kind。
 - `FBattlePresentationJournal` 是 C++ only 只读 checkpoint journal，当前只记录 EndTurn 的 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`。
 - first-person card layer 当前 transition kind 只有 `Default`、`Drawn`、`Gained`、`Played`、`Discarded`。
-- `FWacomBattleHandPresentationController` 当前把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`，并把 `CardsRetained` 转为同帧 `feedback hints`。
+- EndTurn journal 现在由 `WacomApp` presentation coordinator 翻译为阶段化 plan：`TurnEndDiscard -> TurnEndRetain -> EnemyAction -> TurnStartDraw`。手牌阶段等待 first-person card layer 报告播放结束后再进入下一阶段；enemy phase v1 复用现有 battle event presentation queue。
+- `FWacomBattleHandPresentationController` 在非 EndTurn phase plan 路径中，仍把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`，并把 `CardsRetained` 转为同帧 `feedback hints`。
 - `UWacomFirstPersonCardAnchorComponent` 的 `05 Slot Motion` 和 `06 Transition Motion` 是当前卡牌入场、离场和事件感知转场的主要制作参数入口。
 - WBP 可以负责卡面、overlay、材质和局部视觉反馈；核心手牌动画队列不应依赖 UMG Designer timeline。
 
@@ -90,7 +91,7 @@ Anchor runtime source
 Layer / Slot / CardView animation
 ```
 
-当前代码还没有完整的 `BattleHandPresentationPlan` 和 `CardLayerTransitionBatch` 类型。第一版文档先把它们作为目标概念记录，避免新版抽牌动画继续堆进 HUD timer、WBP timeline 或 slot widget 的临时分支。
+当前已落地 EndTurn-only `BattlePresentationPlan` v1，负责按 journal checkpoint 串行播放回合边界阶段。更通用的 `BattleHandPresentationPlan` / `CardLayerTransitionBatch` 仍是后续目标，避免新版抽牌、消耗、关键词表现继续堆进 HUD timer、WBP timeline 或 slot widget 的临时分支。
 
 目标结构含义：
 
@@ -100,6 +101,15 @@ Layer / Slot / CardView animation
 | `CardLayerTransitionBatch` | Card layer 可消费的一批卡牌 transition；只关心卡实例、语义、顺序、来源、去向和播放策略 |
 | Anchor runtime source | 当前 first-person card layer 的 source ownership、presentation gate、entries 和 pending hints |
 | Slot animation | 最终 widget 运动，包括 position、scale、rotation、opacity、z order、material feedback |
+
+EndTurn phase plan 的当前合同：
+
+| Phase | 来源 | Card layer 输入 | 完成条件 |
+|---|---|---|---|
+| `TurnEndDiscard` | `TurnEndDiscardResolved` checkpoint | checkpoint snapshot + `Discarded` transition hints | card layer 没有 active enter / exit / retained feedback，或 timeout 兜底 |
+| `TurnEndRetain` | `TurnEndRetainResolved` checkpoint | checkpoint snapshot + `Retained` feedback hints | 同上 |
+| `EnemyAction` | retain / discard checkpoint 与 draw checkpoint 之间的 battle events | 现有 battle event presentation queue | event queue finished |
+| `TurnStartDraw` | `TurnStartDrawResolved` checkpoint | checkpoint snapshot + `Drawn` transition hints | card layer 没有 active presentation playback，或 timeout 兜底 |
 
 ## §5 动画语义词汇
 
@@ -141,7 +151,7 @@ Layer / Slot / CardView animation
 
 | 事件 | 当前 transition |
 |---|---|
-| `CardsDrawn` | 对仍存在于 next hand snapshot 的 `CardInstanceIds` 生成 `Drawn`，并写入稳定 `SequenceIndex / SequenceCount` |
+| `CardsDrawn` | 对仍存在于 next hand snapshot 的 `CardInstanceIds` 生成 `Drawn`，并按最终手牌槽位从左到右写入稳定 `SequenceIndex / SequenceCount` |
 | `CardGained` | 新出现在手牌中的对应卡生成 `Gained` |
 | `CardPlayed` | 从手牌移除的对应卡生成 `Played` |
 | `HandLimitDiscarded` | 从手牌移除的对应卡生成 `Discarded` |
@@ -163,6 +173,8 @@ Layer / Slot / CardView animation
 ### Draw / Enter Hand
 
 抽牌动画的权威输入是 `CardsDrawn.CardInstanceIds`，不是前后 snapshot 猜测。放不下的牌不会进入该列表，也不应播放入手动画。
+
+同批可见 `Drawn` 入场的错峰顺序以目标 hand snapshot 中的普通手牌槽位为准：最左侧目标槽先进入，依次到最右侧。`CardsDrawn.CardInstanceIds` 只决定“哪些卡真实入手”，不决定最终 stagger 方向。
 
 当前 layer 可消费 `Drawn` hint，并由 Anchor `06 Transition Motion` 控制来源模式、offset、viewport anchor、scale、angle、duration、stagger、arc lift、ease 和播放期间交互阻塞。
 

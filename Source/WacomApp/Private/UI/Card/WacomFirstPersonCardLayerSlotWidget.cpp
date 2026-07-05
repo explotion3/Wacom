@@ -2316,6 +2316,13 @@ bool UWacomFirstPersonCardLayerSlotWidget::IsRetainedFeedbackActive() const
 			< RetainedFeedbackStartDelaySeconds + SlotFeedbackConfig.RetainedFeedbackDuration;
 }
 
+bool UWacomFirstPersonCardLayerSlotWidget::HasActivePresentationPlayback() const
+{
+	return IsEnterTransitionPlaybackActive()
+		|| IsExitingForFirstPersonLayer()
+		|| IsRetainedFeedbackActive();
+}
+
 float UWacomFirstPersonCardLayerSlotWidget::ComputeRetainedFeedbackAlpha() const
 {
 	if (!IsRetainedFeedbackActive())

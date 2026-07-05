@@ -118,6 +118,7 @@ public:
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride);
 	void TriggerCommitFeedback();
 	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
+	bool HasActivePresentationPlayback() const;
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotVisualConfig(const FWacomFirstPersonCardSlotVisualConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);

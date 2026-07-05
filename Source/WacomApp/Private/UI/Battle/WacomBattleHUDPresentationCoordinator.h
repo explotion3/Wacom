@@ -4,10 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "UI/Battle/BattlePresentationStackEntryWidget.h"
+#include "UI/Battle/WacomBattlePresentationPlan.h"
 
 class FWacomBattleEventPresentationQueue;
 class UBattleHUD;
 struct FBattleEvent;
+struct FBattlePresentationJournal;
 struct FBattleSnapshot;
 struct FWacomBattleCombatLogCommandContext;
 struct FWacomBattlePresentationTargetCue;
@@ -40,9 +42,16 @@ public:
 	}
 
 	void EnqueueEvents(const TArray<FBattleEvent>& Events, int32 PresentationStackEntryId = INDEX_NONE);
+	bool EnqueueEndTurnPresentationPlan(
+		const FBattlePresentationJournal& Journal,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PostCommandSnapshot);
 	void ClearQueue();
 	bool IsQueueBusy() const;
-	bool IsBusy() const { return IsQueueBusy() || HasStackEntries(); }
+	bool IsPresentationPlanBusy() const { return bProcessingPresentationPlan; }
+	int32 GetPendingPresentationPlanPhaseCount() const { return PresentationPlan.Phases.Num(); }
+	FName GetActivePresentationPlanPhaseName() const;
+	bool IsBusy() const { return IsQueueBusy() || HasStackEntries() || IsPresentationPlanBusy(); }
 
 	void QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand Command);
 	void ClearPendingTurnBoundaryCommand();
@@ -69,6 +78,11 @@ public:
 
 #if WITH_AUTOMATION_TESTS
 	void AdvanceQueueOnce();
+	void AdvancePresentationPlanOnce();
+	const TArray<FName>& GetStartedPresentationPlanPhaseNamesForTest() const
+	{
+		return StartedPresentationPlanPhaseNamesForTest;
+	}
 #endif
 
 private:
@@ -77,11 +91,31 @@ private:
 	TSharedPtr<FWacomBattleEventPresentationQueue> BattleEventPresentationQueue;
 	TArray<int32> BattlePresentationStackExitingEntryIds;
 	TMap<int32, FTimerHandle> BattlePresentationStackExitTimerHandles;
+	FTimerHandle PresentationPlanTimerHandle;
+	FWacomBattlePresentationPlan PresentationPlan;
+	EWacomBattlePresentationPhaseKind ActivePresentationPlanPhaseKind =
+		EWacomBattlePresentationPhaseKind::None;
+	float ActivePresentationPlanPhaseElapsedSeconds = 0.0f;
 	int32 NextBattlePresentationStackEntryId = 1;
 	EWacomBattleHUDTurnBoundaryCommand PendingTurnBoundaryCommand =
 		EWacomBattleHUDTurnBoundaryCommand::None;
+	bool bProcessingPresentationPlan = false;
+	bool bWaitingForPresentationPlanEventQueue = false;
+#if WITH_AUTOMATION_TESTS
+	TArray<FName> StartedPresentationPlanPhaseNamesForTest;
+#endif
 
 	void SyncStackWidget();
 	void ExecuteTurnBoundaryCommandNow(EWacomBattleHUDTurnBoundaryCommand Command);
 	void RefreshCommandAvailabilityWidgets();
+	void ClearPresentationPlan();
+	void StartNextPresentationPlanPhase();
+	void StartHandPresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);
+	void StartEventPresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);
+	void SchedulePresentationPlanPoll(float DelaySeconds);
+	void StopPresentationPlanTimer();
+	void PollActivePresentationPlanPhase();
+	void FinishPresentationPlan();
+	bool HasActiveFirstPersonHandPresentationPlayback() const;
+	bool HasPendingFirstPersonHandPresentationFrame() const;
 };

@@ -922,6 +922,27 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 	}
 }
 
+bool UWacomFirstPersonCardLayerWidget::HasActivePresentationPlayback() const
+{
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (SlotWidget && SlotWidget->HasActivePresentationPlayback())
+		{
+			return true;
+		}
+	}
+
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
+	{
+		if (SlotWidget && SlotWidget->HasActivePresentationPlayback())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
 bool UWacomFirstPersonCardLayerWidget::CanSkipEquivalentSlotRefresh(
 	const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots) const
 {

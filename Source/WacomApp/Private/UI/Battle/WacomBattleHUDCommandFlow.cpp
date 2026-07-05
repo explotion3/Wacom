@@ -332,10 +332,15 @@ void FWacomBattleHUDCommandFlow::AfterCommand(
 	}
 
 	const FBattleSnapshot PostCommandSnapshot = Session->BuildSnapshot();
-	FWacomBattleHUDEventFlow::ConsumeAndLogEvents(
+	const bool bPresentationHandled =
+		FWacomBattleHUDEventFlow::ConsumeAndLogEvents(
 		HUD,
 		LogContext,
 		PreCommandSnapshot,
 		PostCommandSnapshot);
+	if (bPresentationHandled)
+	{
+		return;
+	}
 	HUD.RefreshFromSnapshot(PostCommandSnapshot);
 }

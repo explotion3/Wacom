@@ -31,6 +31,10 @@ public:
 	void SyncLayer(
 		const FBattleSnapshot& Snapshot,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+	void SyncLayer(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
 	void ClearLayer(bool bClearPendingTransitionEvents = true);
 	void SuppressLayerForEntry();
 
@@ -48,6 +52,7 @@ public:
 	bool HasPendingTransitionPresentation() const;
 	void ClearPendingTransitionEvents();
 	void PreservePendingEntryRevealForNextRefresh();
+	bool HasPendingPresentationFrame() const;
 	void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
@@ -132,7 +137,8 @@ public:
 private:
 	void SyncLayerInternal(
 		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints);
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>* FeedbackHints);
 	void ApplyPresentationFrame(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		FWacomBattleHandPresentationFrame&& Frame);

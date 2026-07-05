@@ -731,6 +731,12 @@ void UWacomFirstPersonCardAnchorComponent::RefreshAnchor(float DeltaTime)
 	LastFallbackReason = ResolvedFallbackReason;
 }
 
+void UWacomFirstPersonCardAnchorComponent::RefreshCardLayerNow(float DeltaTime)
+{
+	RefreshAnchor(DeltaTime);
+	UpdateCardLayer();
+}
+
 FTransform UWacomFirstPersonCardAnchorComponent::ComputeCardTransform(int32 NumCards, int32 CardIndex) const
 {
 	RefreshResolvedCardLayoutRuntimeState();
@@ -1066,7 +1072,14 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionPresenta
 
 bool UWacomFirstPersonCardAnchorComponent::HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const
 {
-	return RuntimeState && RuntimeState->HasPresentationFrameHintsForSource(SourceId);
+	return RuntimeState
+		&& (RuntimeState->HasPresentationFrameHintsForSource(SourceId)
+			|| RuntimeState->HasPresentationFrameFeedbackHintsForSource(SourceId));
+}
+
+bool UWacomFirstPersonCardAnchorComponent::HasActiveCardLayerPresentationPlayback() const
+{
+	return CardLayerWidget && CardLayerWidget->HasActivePresentationPlayback();
 }
 
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(

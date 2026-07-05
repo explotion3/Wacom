@@ -20,6 +20,7 @@
 #include "Components/Widget.h"
 #include "Input/Events.h"
 #include "InputCoreTypes.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "BattleWidgetSpecReceiver.generated.h"
 
 struct FWacomBattleSceneTargetClickTestAccess;
@@ -208,6 +209,30 @@ public:
 	FWacomBattleHUDAutomationTestView AutomationViewForTest() const
 	{
 		return GetAutomationTestViewForTest();
+	}
+
+	bool IsPresentationPlanActiveForTest() const
+	{
+		return AutomationViewForTest().bPresentationPlanActive;
+	}
+
+	int32 GetPresentationPlanPendingPhaseCountForTest() const
+	{
+		return AutomationViewForTest().PresentationPlanPendingPhaseCount;
+	}
+
+	FName GetActivePresentationPlanPhaseNameForTest() const
+	{
+		return AutomationViewForTest().ActivePresentationPlanPhaseName;
+	}
+
+	TArray<FName> GetStartedPresentationPlanPhaseNamesForTest() const
+	{
+		if (const TArray<FName>* Names = AutomationViewForTest().PresentationPlanStartedPhaseNames)
+		{
+			return *Names;
+		}
+		return TArray<FName>();
 	}
 
 	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
@@ -576,6 +601,17 @@ public:
 	void EnqueueBattlePresentationEventsForTest(const TArray<FBattleEvent>& Events)
 	{
 		EnqueueBattlePresentationEvents(Events);
+	}
+
+	bool EnqueueEndTurnPresentationPlanForTest(
+		const FBattlePresentationJournal& Journal,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PostCommandSnapshot)
+	{
+		return UBattleHUD::EnqueueEndTurnPresentationPlanForTest(
+			Journal,
+			Events,
+			PostCommandSnapshot);
 	}
 
 	void ClearBattlePresentationQueueForTest()

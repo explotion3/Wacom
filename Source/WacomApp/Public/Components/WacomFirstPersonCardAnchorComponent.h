@@ -584,6 +584,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Hand|99 Debug")
 	void RefreshAnchor(float DeltaTime);
 
+	void RefreshCardLayerNow(float DeltaTime = 0.0f);
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|99 Debug")
 	FTransform GetCurrentAnchorTransform() const { return CurrentAnchorTransform; }
 
@@ -618,6 +620,7 @@ public:
 		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
 	void SetRuntimeCardLayerTransitionPresentationEnabled(FName SourceId, bool bEnabled);
 	bool HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const;
+	bool HasActiveCardLayerPresentationPlayback() const;
 	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);
 	void ClearRuntimeCardLayerData(FName SourceId);
 	void ClearCardLayerVisualState();

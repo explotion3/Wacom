@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-06-24
+updated: 2026-07-06
 tags:
   - wacom/ui
   - wacom/battle
@@ -31,7 +31,7 @@ BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`�
 | 目标选择 | `FWacomBattleHUDTargetingFlow` | 维护 TargetSelect UI state 和点击入口 |
 | 事件消费 | `FWacomBattleHUDEventFlow` | 消费 `UBattleSession::ConsumeEvents()` 并 fanout |
 | 场景敌人 | `FWacomBattleHUDSceneEnemyTargetCoordinator` | 同步当前 Trigger Host registry 的 PartActor bridge 和 cue |
-| 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier |
+| 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier、EndTurn phase plan |
 | Combat Log | `FWacomBattleHUDCombatLogController` | history、trim、feed sync、readable log |
 | First-person hand | `FWacomBattleHUDFirstPersonHandBridge + FWacomBattleHandPresentationController` | runtime hand presentation frame、drag preview/release、Drawn transaction |
 | Card Detail | `FWacomBattleHUDCardDetailController` | first-person viewport 详情 motion / source guard |
@@ -53,6 +53,8 @@ HUD 是命令出口。子 Widget 和 WBP 不直接修改 `UBattleSession`，也�
 
 `BattleInputReady` 是 BattleHUD 级玩家命令 gate，不属于 `UBattleSession` 规则阶段。进入战斗镜头 staging 期间它会临时为 false：ActionPanel 按钮禁用，`CanSubmitPlayerActionCommand()` 返回 false，first-person hand release / Wait / EndTurn 等普通玩家命令不会提交；HUD 仍可刷新 Snapshot、同步场景敌人和播放非交互表现。镜头完成并激活 Battle camera look 后，GameMode 再把它恢复为 true。
 
+EndTurn phase plan 运行期间，`CanSubmitPlayerActionCommand()` 返回 false，避免阶段化弃牌、保留、敌人行动和抽牌被新的玩家命令插入。普通 target cue queue 的旧节奏不因此改变；它仍可作为非阻塞表现队列服务出牌后的轻量反馈。
+
 HUD 状态入口：
 
 | 分类 | 内容 |
@@ -69,7 +71,7 @@ HUD 状态入口：
 
 | 层 | 类型 | 用途 |
 |---|---|---|
-| Presentation coordinator | `FWacomBattleHUDPresentationCoordinator` | TargetCue、短暂停顿、击倒 modal、BattleEnd signal、card stack boundary |
+| Presentation coordinator | `FWacomBattleHUDPresentationCoordinator` | TargetCue、短暂停顿、击倒 modal、BattleEnd signal、card stack boundary、EndTurn phase plan |
 | Presentation Stack | `UBattlePresentationStackWidget` | 已提交但表现仍在追赶的卡牌小堆叠 |
 | Combat Log | `UBattleCombatLogFeedWidget + UWacomBattleCombatLogBuilder` | 玩家可读命令块和事件 detail line |
 | UE_LOG | readable log | 开发诊断 |
@@ -83,6 +85,15 @@ HUD 状态入口：
 Presentation Stack 小卡使用出牌前 `FHandCardSnapshot` 构造卡牌 runtime presentation context，因此显示的是提交时的 `RuntimeCost`、可用状态和 RuntimeCost-based 徽章，不在表现期间回读后续手牌状态。带目标的出牌命令会在提交前捕获 `FBattleCardTargetPreview` 并放入 command context；小卡可使用这份 preview facts 显示提交时的目标修正后徽章，避免源卡离开手牌后再回查失败。
 
 Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary；ActionPanel 显示 pending 文案并禁用按钮，coordinator 等 stack 和 queue 清空后再提交等待或结束回合。
+
+EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当 journal 能生成有效 phase plan 时，`FWacomBattleHUDPresentationCoordinator` 接管本次 EndTurn 表现，不再把整批事件直接压成一帧 hand hints，也不立即把 first-person hand 刷到最终抽牌态。v1 phase 顺序固定为：
+
+1. `TurnEndDiscard`：用 discard checkpoint snapshot 播放非保留普通手牌 `Discarded` 离场。
+2. `TurnEndRetain`：用 retain checkpoint snapshot 播放保留普通手牌 `Retained` feedback。
+3. `EnemyAction`：复用现有 battle event presentation queue 播放敌人行动相关 cue / delay / battle end / knockdown modal。
+4. `TurnStartDraw`：用 draw checkpoint snapshot 播放新回合 `Drawn` 入场。
+
+手牌 phase 的完成条件由 first-person card layer 的 production playback 状态提供：仍有 active enter、exit outgoing 或 retained feedback 时保持 phase busy；播放结束后才进入下一 phase，并带 timeout 兜底。没有 journal 或 journal 无有效 phase 时，非 EndTurn / fallback 路径继续使用原来的 loose event hints 与 event queue。
 
 ## §4 Event Presentation Helper
 

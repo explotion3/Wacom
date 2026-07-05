@@ -363,6 +363,10 @@ bool UBattleHUD::CanSubmitPlayerActionCommand() const
 	{
 		return false;
 	}
+	if (PresentationCoordinator && PresentationCoordinator->IsPresentationPlanBusy())
+	{
+		return false;
+	}
 	if (UIState == EBattleUIState::BattleEnd)
 	{
 		return false;
@@ -491,6 +495,40 @@ void UBattleHUD::SyncFirstPersonBattleHandLayer(
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
 {
 	GetFirstPersonHandBridge().SyncLayer(Snap, TransitionHints);
+}
+
+void UBattleHUD::SyncFirstPersonBattleHandLayer(
+	const FBattleSnapshot& Snap,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+{
+	GetFirstPersonHandBridge().SyncLayer(Snap, TransitionHints, FeedbackHints);
+}
+
+void UBattleHUD::RefreshFromPresentationPhase(
+	const FBattleSnapshot& Snap,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+{
+	HideCardDetailPanel();
+	LastBattleSnapshot = Snap;
+	bHasLastBattleSnapshot = true;
+
+	if (PlayerStatusBar) { PlayerStatusBar->RefreshFromSnapshot(Snap); }
+	if (ActionPanel) { ActionPanel->RefreshFromSnapshot(Snap); }
+	if (EquipmentBar) { EquipmentBar->RefreshFromSnapshot(Snap); }
+	if (CombatLogFeed) { CombatLogFeed->RefreshFromSnapshot(Snap); }
+	if (BattlePresentationStack) { BattlePresentationStack->RefreshFromSnapshot(Snap); }
+	if (DrawPileView) { DrawPileView->SetCount(Snap.PileCounts.DrawCount); }
+	if (DiscardPileView)
+	{
+		DiscardPileView->SetCount(Snap.PileCounts.DiscardCount);
+		DiscardPileView->SetCountDisplayText(BuildDiscardPileCountDisplayText(Snap.PileCounts));
+	}
+	if (ExhaustPileView) { ExhaustPileView->SetCount(Snap.PileCounts.ExhaustCount); }
+
+	SyncFirstPersonBattleHandLayer(Snap, TransitionHints, FeedbackHints);
+	SyncBattleEnemyPartWorldTargets(Snap);
 }
 
 void UBattleHUD::ClearFirstPersonBattleHandLayer()
@@ -1194,6 +1232,7 @@ void UBattleHUD::AdvanceBattlePresentationQueueOnce()
 {
 #if WITH_AUTOMATION_TESTS
 	GetPresentationCoordinator().AdvanceQueueOnce();
+	GetPresentationCoordinator().AdvancePresentationPlanOnce();
 #endif
 }
 
@@ -1219,6 +1258,17 @@ void UBattleHUD::PlayTargetConfirmedCueForTest(const FBattlePartSlotIdentity& Ta
 	PlayBattlePresentationCue(Cue);
 }
 
+bool UBattleHUD::EnqueueEndTurnPresentationPlanForTest(
+	const FBattlePresentationJournal& Journal,
+	const TArray<FBattleEvent>& Events,
+	const FBattleSnapshot& PostCommandSnapshot)
+{
+	return GetPresentationCoordinator().EnqueueEndTurnPresentationPlan(
+		Journal,
+		Events,
+		PostCommandSnapshot);
+}
+
 FWacomBattleHUDAutomationTestView UBattleHUD::GetAutomationTestViewForTest() const
 {
 	static const TArray<FWacomBattlePresentationStackEntryView> EmptyEntries;
@@ -1229,6 +1279,14 @@ FWacomBattleHUDAutomationTestView UBattleHUD::GetAutomationTestViewForTest() con
 	View.SceneEnemyPartWorldTargetBridgeCount = GetSceneEnemyTargetCoordinator().GetRegisteredBridgeCount();
 	View.PresentationStackEntries = PresentationCoordinator ? &PresentationCoordinator->GetStackEntries() : &EmptyEntries;
 	View.CombatLogHistory = CombatLogController ? &CombatLogController->GetHistory() : &EmptyHistory;
+	if (PresentationCoordinator)
+	{
+		View.bPresentationPlanActive = PresentationCoordinator->IsPresentationPlanBusy();
+		View.PresentationPlanPendingPhaseCount = PresentationCoordinator->GetPendingPresentationPlanPhaseCount();
+		View.ActivePresentationPlanPhaseName = PresentationCoordinator->GetActivePresentationPlanPhaseName();
+		View.PresentationPlanStartedPhaseNames =
+			&PresentationCoordinator->GetStartedPresentationPlanPhaseNamesForTest();
+	}
 	return View;
 }
 

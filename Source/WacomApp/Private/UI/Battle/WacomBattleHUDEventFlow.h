@@ -11,8 +11,8 @@ struct FWacomBattleCombatLogCommandContext;
 
 struct FWacomBattleHUDEventFlow
 {
-	static void ConsumeAndLogEvents(UBattleHUD& HUD);
-	static void ConsumeAndLogEvents(
+	static bool ConsumeAndLogEvents(UBattleHUD& HUD);
+	static bool ConsumeAndLogEvents(
 		UBattleHUD& HUD,
 		const FWacomBattleCombatLogCommandContext& CommandContext,
 		const FBattleSnapshot& PreCommandSnapshot,

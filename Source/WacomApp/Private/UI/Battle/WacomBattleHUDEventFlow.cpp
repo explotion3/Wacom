@@ -5,9 +5,11 @@
 #include "UI/Battle/BattleHUD.h"
 
 #include "Events/BattleEvent.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "Session/BattleSession.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
+#include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 
 namespace
 {
@@ -40,6 +42,7 @@ namespace
 		case EBattleEventType::CardDiscarded:             return TEXT("CardDiscarded");
 		case EBattleEventType::CardExhausted:             return TEXT("CardExhausted");
 		case EBattleEventType::CardGained:                return TEXT("CardGained");
+		case EBattleEventType::CardsRetained:             return TEXT("CardsRetained");
 		case EBattleEventType::BattleEnded:               return TEXT("BattleEnded");
 		default:                                          return TEXT("?");
 		}
@@ -62,15 +65,16 @@ namespace
 	}
 }
 
-void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(UBattleHUD& HUD)
+bool FWacomBattleHUDEventFlow::ConsumeAndLogEvents(UBattleHUD& HUD)
 {
 	UBattleSession* Session = HUD.GetSession();
 	if (!Session)
 	{
-		return;
+		return false;
 	}
 
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	(void)Session->ConsumePresentationJournal();
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FWacomBattleCombatLogCommandContext SystemContext =
 		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot);
@@ -78,9 +82,10 @@ void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(UBattleHUD& HUD)
 	HUD.StoreFirstPersonCardTransitionEvents(Events);
 	HUD.GetCombatLogController().AppendBlock(SystemContext, Events, Snapshot, Snapshot);
 	HUD.EnqueueBattlePresentationEvents(Events, INDEX_NONE);
+	return false;
 }
 
-void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(
+bool FWacomBattleHUDEventFlow::ConsumeAndLogEvents(
 	UBattleHUD& HUD,
 	const FWacomBattleCombatLogCommandContext& CommandContext,
 	const FBattleSnapshot& PreCommandSnapshot,
@@ -89,20 +94,31 @@ void FWacomBattleHUDEventFlow::ConsumeAndLogEvents(
 	UBattleSession* Session = HUD.GetSession();
 	if (!Session)
 	{
-		return;
+		return false;
 	}
 
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const FBattlePresentationJournal PresentationJournal = Session->ConsumePresentationJournal();
 	LogRawBattleEvents(Events);
-	HUD.StoreFirstPersonCardTransitionEvents(Events);
 	HUD.GetCombatLogController().AppendBlock(
 		CommandContext,
 		Events,
 		PreCommandSnapshot,
 		PostCommandSnapshot);
+	if (CommandContext.CommandKind == EWacomBattleCombatLogCommandKind::EndTurn
+		&& HUD.GetPresentationCoordinator().EnqueueEndTurnPresentationPlan(
+			PresentationJournal,
+			Events,
+			PostCommandSnapshot))
+	{
+		return true;
+	}
+
+	HUD.StoreFirstPersonCardTransitionEvents(Events);
 	const int32 PresentationStackEntryId =
 		CommandContext.CommandKind == EWacomBattleCombatLogCommandKind::PlayCard
 			? HUD.AppendBattlePresentationStackEntry(CommandContext, PreCommandSnapshot)
 			: INDEX_NONE;
 	HUD.EnqueueBattlePresentationEvents(Events, PresentationStackEntryId);
+	return false;
 }

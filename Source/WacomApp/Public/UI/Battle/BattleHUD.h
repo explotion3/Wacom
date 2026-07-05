@@ -32,6 +32,7 @@ struct FWacomBattleHUDCommandFlow;
 struct FWacomBattleHUDEventFlow;
 struct FWacomBattleHUDTargetingFlow;
 struct FBattleCommand;
+struct FBattlePresentationJournal;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomBattlePresentationStackEntryView;
 struct FWacomFirstPersonCardLayerSlotView;
@@ -161,6 +162,10 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 	int32 SceneEnemyPartWorldTargetBridgeCount = 0;
 	const TArray<FWacomBattlePresentationStackEntryView>* PresentationStackEntries = nullptr;
 	const TArray<FWacomBattleCombatLogBlockView>* CombatLogHistory = nullptr;
+	bool bPresentationPlanActive = false;
+	int32 PresentationPlanPendingPhaseCount = 0;
+	FName ActivePresentationPlanPhaseName = NAME_None;
+	const TArray<FName>* PresentationPlanStartedPhaseNames = nullptr;
 };
 #endif
 
@@ -506,6 +511,10 @@ private:
 #if WITH_AUTOMATION_TESTS
 	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FBattlePartSlotIdentity& TargetPartKey, int32 Amount);
 	void PlayTargetConfirmedCueForTest(const FBattlePartSlotIdentity& TargetPartKey);
+	bool EnqueueEndTurnPresentationPlanForTest(
+		const FBattlePresentationJournal& Journal,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PostCommandSnapshot);
 	FWacomBattleHUDAutomationTestView GetAutomationTestViewForTest() const;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
 		const FBattleSnapshot& NextSnapshot) const;
@@ -567,6 +576,14 @@ private:
 	void SyncFirstPersonBattleHandLayer(
 		const FBattleSnapshot& Snap,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+	void SyncFirstPersonBattleHandLayer(
+		const FBattleSnapshot& Snap,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+	void RefreshFromPresentationPhase(
+		const FBattleSnapshot& Snap,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
 	void ClearFirstPersonBattleHandLayer();
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;

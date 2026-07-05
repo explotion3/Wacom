@@ -44,6 +44,34 @@ namespace
 		}
 		return false;
 	}
+
+	TArray<FGuid> SortCardIdsByHandSnapshotOrder(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FGuid>& CardInstanceIds)
+	{
+		TArray<FGuid> Result;
+		Result.Reserve(CardInstanceIds.Num());
+
+		TSet<FGuid> PendingCardIds;
+		PendingCardIds.Reserve(CardInstanceIds.Num());
+		for (const FGuid& CardInstanceId : CardInstanceIds)
+		{
+			if (CardInstanceId.IsValid())
+			{
+				PendingCardIds.Add(CardInstanceId);
+			}
+		}
+
+		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+		{
+			if (PendingCardIds.Remove(CardSnapshot.InstanceId) > 0)
+			{
+				Result.Add(CardSnapshot.InstanceId);
+			}
+		}
+
+		return Result;
+	}
 }
 
 void FWacomBattleHandPresentationController::Reset()
@@ -310,6 +338,7 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 		NewCardIds.Remove(CardInstanceId);
 	}
 
+	VisibleExactDrawnCardIds = SortCardIdsByHandSnapshotOrder(NextSnapshot, VisibleExactDrawnCardIds);
 	const int32 ExactDrawnCardHintCount = VisibleExactDrawnCardIds.Num();
 	for (int32 Index = 0; Index < VisibleExactDrawnCardIds.Num(); ++Index)
 	{
