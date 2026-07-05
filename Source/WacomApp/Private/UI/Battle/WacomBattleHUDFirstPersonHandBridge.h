@@ -53,6 +53,7 @@ public:
 	void ClearPendingTransitionEvents();
 	void PreservePendingEntryRevealForNextRefresh();
 	bool HasPendingPresentationFrame() const;
+	void TickPendingPresentationFrames(float DeltaTime);
 	void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
@@ -157,6 +158,7 @@ private:
 	bool bHasActiveTargetPreviewState = false;
 	bool bHasActiveDragView = false;
 	bool bHasActiveCardTargetHandle = false;
+	float PendingHandAnchorEnterFrameElapsedSeconds = 0.0f;
 
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
 };

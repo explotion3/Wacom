@@ -21,6 +21,7 @@
 namespace
 {
 	const FName FirstPersonBattleHandLayerSourceId(TEXT("BattleHand"));
+	constexpr float PendingHandAnchorEnterFrameTimeoutSeconds = 4.0f;
 
 	bool ContainsHandCardIdForFirstPersonHandBridge(
 		const FBattleSnapshot& Snapshot,
@@ -263,6 +264,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer(bool bClearPendingTransiti
 		ClearPendingTransitionEvents();
 		PresentationController.Reset();
 	}
+	PendingHandAnchorEnterFrameElapsedSeconds = 0.0f;
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::SuppressLayerForEntry()
@@ -1518,6 +1520,7 @@ bool FWacomBattleHUDFirstPersonHandBridge::HasPendingTransitionPresentation() co
 void FWacomBattleHUDFirstPersonHandBridge::ClearPendingTransitionEvents()
 {
 	PresentationController.ClearPendingTransitionEvents();
+	PendingHandAnchorEnterFrameElapsedSeconds = 0.0f;
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::PreservePendingEntryRevealForNextRefresh()
@@ -1528,8 +1531,46 @@ void FWacomBattleHUDFirstPersonHandBridge::PreservePendingEntryRevealForNextRefr
 bool FWacomBattleHUDFirstPersonHandBridge::HasPendingPresentationFrame() const
 {
 	const UWacomFirstPersonCardAnchorComponent* ActiveAnchor = ResolveActiveAnchor();
-	return ActiveAnchor
-		&& ActiveAnchor->HasRuntimeCardLayerPendingPresentationFrame(FirstPersonBattleHandLayerSourceId);
+	return (ActiveAnchor
+			&& ActiveAnchor->HasRuntimeCardLayerPendingPresentationFrame(FirstPersonBattleHandLayerSourceId))
+		|| PresentationController.HasPendingHandAnchorEnterFrame();
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::TickPendingPresentationFrames(float DeltaTime)
+{
+	if (!PresentationController.HasPendingHandAnchorEnterFrame())
+	{
+		PendingHandAnchorEnterFrameElapsedSeconds = 0.0f;
+		return;
+	}
+
+	UWacomFirstPersonCardAnchorComponent* ActiveAnchor = ResolveActiveAnchor();
+	if (!ActiveAnchor
+		|| !bFirstPersonBattleHandLayerRuntimeActive
+		|| HUD.IsFirstPersonBattleHandSuppressedForEntry())
+	{
+		return;
+	}
+
+	if (ActiveAnchor->HasRuntimeCardLayerPendingPresentationFrame(FirstPersonBattleHandLayerSourceId))
+	{
+		return;
+	}
+
+	if (ActiveAnchor->HasActiveCardLayerPresentationPlayback())
+	{
+		PendingHandAnchorEnterFrameElapsedSeconds += FMath::Max(0.0f, DeltaTime);
+		if (PendingHandAnchorEnterFrameElapsedSeconds < PendingHandAnchorEnterFrameTimeoutSeconds)
+		{
+			return;
+		}
+	}
+
+	ApplyPresentationFrame(
+		*ActiveAnchor,
+		PresentationController.ConsumePendingHandAnchorEnterFrame());
+	PendingHandAnchorEnterFrameElapsedSeconds = 0.0f;
+	ActiveAnchor->RefreshCardLayerNow(0.0f);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(

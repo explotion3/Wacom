@@ -87,6 +87,13 @@ FWacomFirstPersonCardSlotMotionConfig NormalizeSlotMotionConfig(
 	Config.GainedEnterViewportAnchor.X = FMath::Clamp(Config.GainedEnterViewportAnchor.X, 0.0f, 1.0f);
 	Config.GainedEnterViewportAnchor.Y = FMath::Clamp(Config.GainedEnterViewportAnchor.Y, 0.0f, 1.0f);
 	Config.GainedEnterScaleMultiplier = FMath::Max(0.01f, Config.GainedEnterScaleMultiplier);
+	Config.HandAnchorEnterViewportAnchor.X = FMath::Clamp(Config.HandAnchorEnterViewportAnchor.X, 0.0f, 1.0f);
+	Config.HandAnchorEnterViewportAnchor.Y = FMath::Clamp(Config.HandAnchorEnterViewportAnchor.Y, 0.0f, 1.0f);
+	Config.HandAnchorEnterScaleMultiplier = FMath::Max(0.01f, Config.HandAnchorEnterScaleMultiplier);
+	Config.HandAnchorEnterDurationSeconds = FMath::Max(0.0f, Config.HandAnchorEnterDurationSeconds);
+	Config.HandAnchorEnterStaggerSeconds = FMath::Max(0.0f, Config.HandAnchorEnterStaggerSeconds);
+	Config.HandAnchorEnterArcLiftPixels = FMath::Max(0.0f, Config.HandAnchorEnterArcLiftPixels);
+	Config.HandAnchorEnterEasePower = FMath::Max(0.1f, Config.HandAnchorEnterEasePower);
 	Config.PlayedExitViewportAnchor.X = FMath::Clamp(Config.PlayedExitViewportAnchor.X, 0.0f, 1.0f);
 	Config.PlayedExitViewportAnchor.Y = FMath::Clamp(Config.PlayedExitViewportAnchor.Y, 0.0f, 1.0f);
 	Config.PlayedExitScaleMultiplier = FMath::Max(0.01f, Config.PlayedExitScaleMultiplier);
@@ -132,6 +139,16 @@ bool AreSlotMotionConfigsEquivalent(
 		&& AreVectorsEquivalent(A.GainedEnterViewportAnchor, B.GainedEnterViewportAnchor)
 		&& AreFloatsEquivalent(A.GainedEnterScaleMultiplier, B.GainedEnterScaleMultiplier)
 		&& AreFloatsEquivalent(A.GainedEnterAngleOffsetDegrees, B.GainedEnterAngleOffsetDegrees)
+		&& AreVectorsEquivalent(A.HandAnchorEnterOffsetPixels, B.HandAnchorEnterOffsetPixels)
+		&& A.HandAnchorEnterOriginMode == B.HandAnchorEnterOriginMode
+		&& AreVectorsEquivalent(A.HandAnchorEnterViewportAnchor, B.HandAnchorEnterViewportAnchor)
+		&& AreFloatsEquivalent(A.HandAnchorEnterScaleMultiplier, B.HandAnchorEnterScaleMultiplier)
+		&& AreFloatsEquivalent(A.HandAnchorEnterAngleOffsetDegrees, B.HandAnchorEnterAngleOffsetDegrees)
+		&& AreFloatsEquivalent(A.HandAnchorEnterDurationSeconds, B.HandAnchorEnterDurationSeconds)
+		&& AreFloatsEquivalent(A.HandAnchorEnterStaggerSeconds, B.HandAnchorEnterStaggerSeconds)
+		&& AreFloatsEquivalent(A.HandAnchorEnterArcLiftPixels, B.HandAnchorEnterArcLiftPixels)
+		&& AreFloatsEquivalent(A.HandAnchorEnterEasePower, B.HandAnchorEnterEasePower)
+		&& A.bBlockInteractionDuringHandAnchorEnter == B.bBlockInteractionDuringHandAnchorEnter
 		&& AreVectorsEquivalent(A.PlayedExitOffsetPixels, B.PlayedExitOffsetPixels)
 		&& A.PlayedExitOriginMode == B.PlayedExitOriginMode
 		&& AreVectorsEquivalent(A.PlayedExitViewportAnchor, B.PlayedExitViewportAnchor)

@@ -37,6 +37,8 @@ namespace
 			return TEXT("EnemyAction");
 		case EWacomBattlePresentationPhaseKind::TurnStartDraw:
 			return TEXT("TurnStartDraw");
+		case EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter:
+			return TEXT("TurnStartHandAnchorEnter");
 		case EWacomBattlePresentationPhaseKind::None:
 		default:
 			return TEXT("None");
@@ -72,6 +74,101 @@ namespace
 			}
 		}
 		return false;
+	}
+
+	bool ContainsHandCardId(
+		const FBattleSnapshot& Snapshot,
+		const FGuid& CardInstanceId)
+	{
+		if (!CardInstanceId.IsValid())
+		{
+			return false;
+		}
+
+		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+		{
+			if (CardSnapshot.InstanceId == CardInstanceId)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	TArray<FGuid> CollectHandAnchorCardIds(const FBattleSnapshot& Snapshot)
+	{
+		TArray<FGuid> Result;
+		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+		{
+			if (CardSnapshot.InstanceId.IsValid()
+				&& CardSnapshot.bIsHandAnchor)
+			{
+				Result.Add(CardSnapshot.InstanceId);
+			}
+		}
+		return Result;
+	}
+
+	TArray<FGuid> CollectNewHandAnchorCardIds(
+		const FBattleSnapshot& PreviousSnapshot,
+		const FBattleSnapshot& NextSnapshot)
+	{
+		TArray<FGuid> Result;
+		TSet<FGuid> SeenIds;
+		for (const FHandCardSnapshot& CardSnapshot : NextSnapshot.Hand.Cards)
+		{
+			if (!CardSnapshot.InstanceId.IsValid()
+				|| !CardSnapshot.bIsHandAnchor
+				|| SeenIds.Contains(CardSnapshot.InstanceId)
+				|| ContainsHandCardId(PreviousSnapshot, CardSnapshot.InstanceId))
+			{
+				continue;
+			}
+
+			SeenIds.Add(CardSnapshot.InstanceId);
+			Result.Add(CardSnapshot.InstanceId);
+		}
+		return Result;
+	}
+
+	FBattleSnapshot BuildSnapshotWithoutHandCardIds(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FGuid>& CardInstanceIds)
+	{
+		if (CardInstanceIds.IsEmpty())
+		{
+			return Snapshot;
+		}
+
+		TSet<FGuid> HiddenIds;
+		HiddenIds.Reserve(CardInstanceIds.Num());
+		for (const FGuid& CardInstanceId : CardInstanceIds)
+		{
+			if (CardInstanceId.IsValid())
+			{
+				HiddenIds.Add(CardInstanceId);
+			}
+		}
+		if (HiddenIds.IsEmpty())
+		{
+			return Snapshot;
+		}
+
+		FBattleSnapshot Result = Snapshot;
+		Result.Hand.Cards.RemoveAll(
+			[&HiddenIds](const FHandCardSnapshot& CardSnapshot)
+			{
+				return HiddenIds.Contains(CardSnapshot.InstanceId);
+			});
+		Result.Hand.NormalCardCount = 0;
+		for (const FHandCardSnapshot& CardSnapshot : Result.Hand.Cards)
+		{
+			if (!CardSnapshot.bIsHandAnchor)
+			{
+				++Result.Hand.NormalCardCount;
+			}
+		}
+		return Result;
 	}
 
 	TArray<FGuid> BuildUniqueValidCardIds(
@@ -121,6 +218,20 @@ namespace
 		}
 
 		return Result;
+	}
+
+	TArray<FGuid> BuildRetainedPhaseFeedbackCardIds(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FGuid>& RetainedNormalCardIds)
+	{
+		TArray<FGuid> FeedbackCardIds = BuildUniqueValidCardIds(
+			RetainedNormalCardIds,
+			[&Snapshot](const FGuid& CardInstanceId)
+			{
+				return ContainsNormalHandCardId(Snapshot, CardInstanceId);
+			});
+		FeedbackCardIds.Append(CollectHandAnchorCardIds(Snapshot));
+		return SortCardIdsByHandSnapshotOrder(Snapshot, FeedbackCardIds);
 	}
 
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHintsForCardIds(
@@ -226,24 +337,25 @@ namespace
 
 		if (RetainCheckpoint)
 		{
-			const TArray<FGuid> RetainedCardIds = BuildUniqueValidCardIds(
-				RetainCheckpoint->CardInstanceIds,
-				[RetainCheckpoint](const FGuid& CardInstanceId)
-				{
-					return ContainsNormalHandCardId(RetainCheckpoint->Snapshot, CardInstanceId);
-				});
-			if (!RetainedCardIds.IsEmpty())
+			const TArray<FGuid> RetainedFeedbackCardIds = BuildRetainedPhaseFeedbackCardIds(
+				RetainCheckpoint->Snapshot,
+				RetainCheckpoint->CardInstanceIds);
+			if (!RetainedFeedbackCardIds.IsEmpty())
 			{
 				FWacomBattlePresentationPhase Phase;
 				Phase.Kind = EWacomBattlePresentationPhaseKind::TurnEndRetain;
 				Phase.Snapshot = RetainCheckpoint->Snapshot;
-				Phase.FeedbackHints = BuildRetainedFeedbackHintsForCardIds(RetainedCardIds);
+				Phase.FeedbackHints = BuildRetainedFeedbackHintsForCardIds(RetainedFeedbackCardIds);
 				Plan.Phases.Add(MoveTemp(Phase));
 			}
 		}
 
 		const FBattlePresentationCheckpoint* LastHandCheckpointBeforeEnemy =
 			RetainCheckpoint ? RetainCheckpoint : DiscardCheckpoint;
+		const FBattleSnapshot& HandSnapshotBeforeDraw =
+			LastHandCheckpointBeforeEnemy
+			? LastHandCheckpointBeforeEnemy->Snapshot
+			: PostCommandSnapshot;
 		const int32 EnemyFirstSequence =
 			LastHandCheckpointBeforeEnemy && LastHandCheckpointBeforeEnemy->LastEventSequence != INDEX_NONE
 			? LastHandCheckpointBeforeEnemy->LastEventSequence + 1
@@ -269,22 +381,38 @@ namespace
 
 		if (DrawCheckpoint)
 		{
-			const TArray<FGuid> DrawnCardIds = SortCardIdsByHandSnapshotOrder(
+			const TArray<FGuid> NewHandAnchorCardIds = CollectNewHandAnchorCardIds(
+				HandSnapshotBeforeDraw,
+				DrawCheckpoint->Snapshot);
+			const FBattleSnapshot DrawPhaseSnapshot = BuildSnapshotWithoutHandCardIds(
 				DrawCheckpoint->Snapshot,
+				NewHandAnchorCardIds);
+			const TArray<FGuid> DrawnCardIds = SortCardIdsByHandSnapshotOrder(
+				DrawPhaseSnapshot,
 				BuildUniqueValidCardIds(
 					DrawCheckpoint->CardInstanceIds,
-					[DrawCheckpoint](const FGuid& CardInstanceId)
+					[&DrawPhaseSnapshot](const FGuid& CardInstanceId)
 					{
-						return ContainsNormalHandCardId(DrawCheckpoint->Snapshot, CardInstanceId);
+						return ContainsNormalHandCardId(DrawPhaseSnapshot, CardInstanceId);
 					}));
 			if (!DrawnCardIds.IsEmpty())
 			{
 				FWacomBattlePresentationPhase Phase;
 				Phase.Kind = EWacomBattlePresentationPhaseKind::TurnStartDraw;
-				Phase.Snapshot = DrawCheckpoint->Snapshot;
+				Phase.Snapshot = DrawPhaseSnapshot;
 				Phase.TransitionHints = BuildTransitionHintsForCardIds(
 					DrawnCardIds,
 					EWacomFirstPersonCardSlotTransitionKind::Drawn);
+				Plan.Phases.Add(MoveTemp(Phase));
+			}
+			if (!NewHandAnchorCardIds.IsEmpty())
+			{
+				FWacomBattlePresentationPhase Phase;
+				Phase.Kind = EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter;
+				Phase.Snapshot = DrawCheckpoint->Snapshot;
+				Phase.TransitionHints = BuildTransitionHintsForCardIds(
+					SortCardIdsByHandSnapshotOrder(DrawCheckpoint->Snapshot, NewHandAnchorCardIds),
+					EWacomFirstPersonCardSlotTransitionKind::HandAnchorEntered);
 				Plan.Phases.Add(MoveTemp(Phase));
 			}
 		}

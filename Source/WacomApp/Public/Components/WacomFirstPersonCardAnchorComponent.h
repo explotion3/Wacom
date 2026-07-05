@@ -275,6 +275,37 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-30.0", UIMax = "30.0", Units = "deg", ToolTip = "获得卡牌入场起点相对目标卡牌角度的额外偏移，单位为度。"))
 	float GainedCardEnterAngleOffsetDegrees = 0.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "左/右手牌生成入手时相对目标位置的起始偏移，单位为 UMG 布局像素；只影响 UI 表现，不改变抽牌或保留规则。"))
+	FVector2D HandAnchorCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "左/右手牌生成入手的来源模式；默认从整副手牌中心上方进入，和普通抽牌方向区分开。"))
+	EWacomFirstPersonCardTransitionOriginMode HandAnchorCardEnterOriginMode =
+		EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "左/右手牌生成入手使用 ViewportAnchor 时的归一化视口锚点；(0,0) 为左上，(1,1) 为右下。"))
+	FVector2D HandAnchorCardEnterViewportAnchor = FVector2D(0.5f, 0.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.01", UIMin = "0.5", UIMax = "1.5", ToolTip = "左/右手牌生成入手起点相对目标卡牌缩放的倍率；只影响转场视觉起点。"))
+	float HandAnchorCardEnterScaleMultiplier = 0.96f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-30.0", UIMax = "30.0", Units = "deg", ToolTip = "左/右手牌生成入手起点相对目标卡牌角度的额外偏移，单位为度。"))
+	float HandAnchorCardEnterAngleOffsetDegrees = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0", Units = "s", ToolTip = "左/右手牌生成入手的固定播放时长，单位为秒；0 表示沿用普通入场速度追踪。"))
+	float HandAnchorCardEnterDurationSeconds = 0.32f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.2", Units = "s", ToolTip = "同一批左/右手牌生成入手时每张卡开始的错峰间隔，单位为秒；只影响表现顺序。"))
+	float HandAnchorCardEnterStaggerSeconds = 0.075f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "左/右手牌生成入手中段向上的弧线抬升，单位为 UMG 布局像素；0 表示直线飞入。"))
+	float HandAnchorCardEnterArcLiftPixels = 42.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ClampMin = "0.1", UIMin = "0.5", UIMax = "4.0", ToolTip = "左/右手牌生成入手固定播放的缓动指数；数值越大起落越柔和。"))
+	float HandAnchorCardEnterEasePower = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "左/右手牌生成入手播放期间是否禁止该卡 hover / press / drag；用于避免生成途中被交互状态打断。"))
+	bool bBlockInteractionDuringHandAnchorCardEnter = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "卡牌被打出时相对当前位置的离场偏移，单位为 UMG 布局像素；默认向上离开手牌。"))
 	FVector2D PlayedCardExitOffsetPixels = FVector2D(0.0f, -120.0f);
 

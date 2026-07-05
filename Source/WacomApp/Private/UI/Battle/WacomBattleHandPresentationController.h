@@ -25,6 +25,8 @@ public:
 	bool HasPendingTransitionPresentation() const;
 	void PreservePendingEntryRevealForNextRefresh();
 	void DiscardSubmittedTransitionFrame();
+	bool HasPendingHandAnchorEnterFrame() const;
+	FWacomBattleHandPresentationFrame ConsumePendingHandAnchorEnterFrame();
 
 	FWacomBattleHandPresentationFrame BuildFrame(
 		const FBattleSnapshot& Snapshot,
@@ -58,14 +60,21 @@ private:
 	void MarkSnapshotPresented(const FBattleSnapshot& Snapshot);
 	void RecordSubmittedTransitionFrame();
 	void RestoreSubmittedEntryRevealEventsIfNeeded();
+	void StorePendingHandAnchorEnterFrame(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FGuid>& CardInstanceIds);
+	void ClearPendingHandAnchorEnterFrame();
 
 	FBattleSnapshot LastPresentedSnapshot;
 	FBattleSnapshot LastTransitionSnapshot;
+	FBattleSnapshot PendingHandAnchorEnterSnapshot;
 	TArray<FBattleEvent> PendingTransitionEvents;
 	TArray<FPlayCommitHint> PendingPlayCommitHints;
 	TArray<FBattleEvent> SubmittedTransitionEvents;
 	TArray<FPlayCommitHint> SubmittedPlayCommitHints;
+	TArray<FGuid> PendingHandAnchorEnterCardIds;
 	bool bHasLastPresentedSnapshot = false;
 	bool bHasTransitionSnapshot = false;
 	bool bUseEmptyHandSnapshotForNextTransitionRefresh = false;
+	bool bHasPendingHandAnchorEnterFrame = false;
 };

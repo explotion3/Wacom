@@ -214,6 +214,7 @@ void UBattleHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	TickCardDetailMotion(InDeltaTime);
 	TickBattleSceneEnemyPartHoverProbe(InDeltaTime);
+	GetFirstPersonHandBridge().TickPendingPresentationFrames(InDeltaTime);
 }
 
 FReply UBattleHUD::NativeOnMouseButtonUp(

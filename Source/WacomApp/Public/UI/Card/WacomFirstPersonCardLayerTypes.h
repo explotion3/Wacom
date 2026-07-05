@@ -40,6 +40,7 @@ enum class EWacomFirstPersonCardSlotTransitionKind : uint8
 	Default UMETA(DisplayName = "Default", ToolTip = "默认槽位转场；使用通用入场或离场偏移。"),
 	Drawn UMETA(DisplayName = "Drawn", ToolTip = "抽牌进入手牌；默认从手牌下方进入。"),
 	Gained UMETA(DisplayName = "Gained", ToolTip = "战斗中获得卡牌进入手牌；默认从战斗空间方向进入。"),
+	HandAnchorEntered UMETA(DisplayName = "Hand Anchor Entered", ToolTip = "左/右手牌生成入手；由 UI 表现层在普通抽牌后触发，不属于普通抽牌事件。"),
 	Played UMETA(DisplayName = "Played", ToolTip = "卡牌被打出离开手牌；默认向上离开。"),
 	Discarded UMETA(DisplayName = "Discarded", ToolTip = "卡牌被弃置离开手牌；默认向下离开。")
 };
@@ -941,6 +942,37 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float GainedEnterAngleOffsetDegrees = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D HandAnchorEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardTransitionOriginMode HandAnchorEnterOriginMode =
+		EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D HandAnchorEnterViewportAnchor = FVector2D(0.5f, 0.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float HandAnchorEnterScaleMultiplier = 0.96f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float HandAnchorEnterAngleOffsetDegrees = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float HandAnchorEnterDurationSeconds = 0.32f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float HandAnchorEnterStaggerSeconds = 0.075f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float HandAnchorEnterArcLiftPixels = 42.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float HandAnchorEnterEasePower = 2.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bBlockInteractionDuringHandAnchorEnter = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);

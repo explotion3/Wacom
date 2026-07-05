@@ -13,7 +13,8 @@ enum class EWacomBattlePresentationPhaseKind : uint8
 	TurnEndDiscard,
 	TurnEndRetain,
 	EnemyAction,
-	TurnStartDraw
+	TurnStartDraw,
+	TurnStartHandAnchorEnter
 };
 
 struct FWacomBattlePresentationPhase
@@ -28,7 +29,8 @@ struct FWacomBattlePresentationPhase
 	{
 		return Kind == EWacomBattlePresentationPhaseKind::TurnEndDiscard
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnEndRetain
-			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartDraw;
+			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartDraw
+			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter;
 	}
 
 	bool HasEventQueue() const

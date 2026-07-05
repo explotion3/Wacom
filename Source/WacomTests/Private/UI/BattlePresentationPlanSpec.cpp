@@ -46,13 +46,14 @@ namespace WacomBattlePresentationPlanSpec
 		return Fixture.CreateSession(Character, Enemy, 1);
 	}
 
-	FHandCardSnapshot MakeHandCard(const FGuid& CardInstanceId)
+	FHandCardSnapshot MakeHandCard(const FGuid& CardInstanceId, bool bIsHandAnchor = false)
 	{
 		FHandCardSnapshot Card;
 		Card.InstanceId = CardInstanceId;
 		Card.RuntimeCost = 1;
 		Card.Zone = EHandZone::Both;
 		Card.bIsPlayable = true;
+		Card.bIsHandAnchor = bIsHandAnchor;
 		return Card;
 	}
 
@@ -66,6 +67,23 @@ namespace WacomBattlePresentationPlanSpec
 			Snapshot.Hand.Cards.Add(MakeHandCard(CardInstanceId));
 		}
 		Snapshot.Hand.NormalCardCount = Snapshot.Hand.Cards.Num();
+		return Snapshot;
+	}
+
+	FBattleSnapshot MakeSnapshotWithHandCards(const TArray<FHandCardSnapshot>& Cards)
+	{
+		FBattleSnapshot Snapshot;
+		Snapshot.Phase = EBattlePhase::PlayerAction;
+		Snapshot.TurnNumber = 2;
+		Snapshot.Hand.Cards = Cards;
+		Snapshot.Hand.NormalCardCount = 0;
+		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+		{
+			if (!Card.bIsHandAnchor)
+			{
+				++Snapshot.Hand.NormalCardCount;
+			}
+		}
 		return Snapshot;
 	}
 
@@ -199,6 +217,161 @@ bool FWacomUIBattleEndTurnPresentationPlanSequencesPhasesTest::RunTest(const FSt
 			StartedPhases[Index],
 			ExpectedPhases[Index]);
 	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEndTurnPresentationPlanAddsHandAnchorEnterAfterDrawTest,
+	"Wacom.UI.Battle.PresentationPlan.EndTurnJournalAddsHandAnchorEnterAfterDraw",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEndTurnPresentationPlanAddsHandAnchorEnterAfterDrawTest::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomBattlePresentationPlanSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session = CreatePlayerActionSession(Fixture);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Battle session"), Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	const FGuid RetainedId = FGuid::NewGuid();
+	const FGuid DrawnId = FGuid::NewGuid();
+	const FGuid HandAnchorId = FGuid::NewGuid();
+	const FHandCardSnapshot Retained = MakeHandCard(RetainedId);
+	const FHandCardSnapshot Drawn = MakeHandCard(DrawnId);
+	const FHandCardSnapshot HandAnchor = MakeHandCard(HandAnchorId, true);
+	const FBattleSnapshot RetainSnapshot = MakeSnapshotWithHandCards({ Retained });
+	const FBattleSnapshot DrawSnapshot = MakeSnapshotWithHandCards({ Retained, Drawn, HandAnchor });
+
+	FBattlePresentationJournal Journal;
+	Journal.AddCheckpoint(
+		EBattlePresentationCheckpointType::TurnEndRetainResolved,
+		RetainSnapshot,
+		{ RetainedId },
+		12,
+		12);
+	Journal.AddCheckpoint(
+		EBattlePresentationCheckpointType::TurnStartDrawResolved,
+		DrawSnapshot,
+		{ DrawnId },
+		30,
+		30);
+
+	const TArray<FBattleEvent> Events = {
+		MakeCardEvent(EBattleEventType::CardsRetained, 12, RetainedId),
+		MakeCardEvent(EBattleEventType::CardsDrawn, 30, DrawnId)
+	};
+
+	TestTrue(
+		TEXT("EndTurn journal enqueues a presentation plan"),
+		HUD->EnqueueEndTurnPresentationPlanForTest(Journal, Events, DrawSnapshot));
+	TestFalse(TEXT("Presentation plan finishes without a card layer"), HUD->IsPresentationPlanActiveForTest());
+
+	const TArray<FName> StartedPhases = HUD->GetStartedPresentationPlanPhaseNamesForTest();
+	const TArray<FName> ExpectedPhases = {
+		FName(TEXT("TurnEndRetain")),
+		FName(TEXT("TurnStartDraw")),
+		FName(TEXT("TurnStartHandAnchorEnter"))
+	};
+	TestEqual(TEXT("Plan starts retained, draw, then hand-anchor enter"), StartedPhases.Num(), ExpectedPhases.Num());
+	for (int32 Index = 0; Index < FMath::Min(StartedPhases.Num(), ExpectedPhases.Num()); ++Index)
+	{
+		TestEqual(
+			FString::Printf(TEXT("Plan phase %d starts in order"), Index),
+			StartedPhases[Index],
+			ExpectedPhases[Index]);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEndTurnPresentationPlanSkipsExistingHandAnchorEnterTest,
+	"Wacom.UI.Battle.PresentationPlan.EndTurnJournalSkipsExistingHandAnchorEnter",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEndTurnPresentationPlanSkipsExistingHandAnchorEnterTest::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomBattlePresentationPlanSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UBattleSession* Session = CreatePlayerActionSession(Fixture);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Battle session"), Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	const FGuid RetainedId = FGuid::NewGuid();
+	const FGuid DrawnId = FGuid::NewGuid();
+	const FGuid HandAnchorId = FGuid::NewGuid();
+	const FHandCardSnapshot Retained = MakeHandCard(RetainedId);
+	const FHandCardSnapshot Drawn = MakeHandCard(DrawnId);
+	const FHandCardSnapshot HandAnchor = MakeHandCard(HandAnchorId, true);
+	const FBattleSnapshot RetainSnapshot = MakeSnapshotWithHandCards({ Retained, HandAnchor });
+	const FBattleSnapshot DrawSnapshot = MakeSnapshotWithHandCards({ Retained, Drawn, HandAnchor });
+
+	FBattlePresentationJournal Journal;
+	Journal.AddCheckpoint(
+		EBattlePresentationCheckpointType::TurnEndRetainResolved,
+		RetainSnapshot,
+		{ RetainedId },
+		12,
+		12);
+	Journal.AddCheckpoint(
+		EBattlePresentationCheckpointType::TurnStartDrawResolved,
+		DrawSnapshot,
+		{ DrawnId },
+		30,
+		30);
+
+	const TArray<FBattleEvent> Events = {
+		MakeCardEvent(EBattleEventType::CardsRetained, 12, RetainedId),
+		MakeCardEvent(EBattleEventType::CardsDrawn, 30, DrawnId)
+	};
+
+	TestTrue(
+		TEXT("EndTurn journal enqueues a presentation plan"),
+		HUD->EnqueueEndTurnPresentationPlanForTest(Journal, Events, DrawSnapshot));
+
+	const TArray<FName> StartedPhases = HUD->GetStartedPresentationPlanPhaseNamesForTest();
+	TestFalse(
+		TEXT("Existing hand anchor does not get a generated enter phase"),
+		StartedPhases.Contains(FName(TEXT("TurnStartHandAnchorEnter"))));
 
 	return true;
 }

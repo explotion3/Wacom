@@ -467,6 +467,7 @@ bool FWacomUIBattleEntryViewpointBlendUnlocksHUDHandAfterCompletionSpec::RunTest
 	}
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	HUD->SetBattleInputReady(false);
 	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
 	HUD->RefreshFromSnapshotForTest(Snapshot);

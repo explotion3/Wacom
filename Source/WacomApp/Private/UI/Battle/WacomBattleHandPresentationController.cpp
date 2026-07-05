@@ -45,6 +45,68 @@ namespace
 		return false;
 	}
 
+	TArray<FGuid> CollectNewHandAnchorCardIdsForBattleHandPresentation(
+		const FBattleSnapshot& PreviousSnapshot,
+		const FBattleSnapshot& NextSnapshot)
+	{
+		TArray<FGuid> Result;
+		TSet<FGuid> SeenIds;
+		for (const FHandCardSnapshot& CardSnapshot : NextSnapshot.Hand.Cards)
+		{
+			if (!CardSnapshot.InstanceId.IsValid()
+				|| !CardSnapshot.bIsHandAnchor
+				|| SeenIds.Contains(CardSnapshot.InstanceId)
+				|| ContainsHandCardIdForBattleHandPresentation(PreviousSnapshot, CardSnapshot.InstanceId))
+			{
+				continue;
+			}
+
+			SeenIds.Add(CardSnapshot.InstanceId);
+			Result.Add(CardSnapshot.InstanceId);
+		}
+		return Result;
+	}
+
+	FBattleSnapshot BuildSnapshotWithoutHandCardIdsForBattleHandPresentation(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FGuid>& CardInstanceIds)
+	{
+		if (CardInstanceIds.IsEmpty())
+		{
+			return Snapshot;
+		}
+
+		TSet<FGuid> HiddenIds;
+		HiddenIds.Reserve(CardInstanceIds.Num());
+		for (const FGuid& CardInstanceId : CardInstanceIds)
+		{
+			if (CardInstanceId.IsValid())
+			{
+				HiddenIds.Add(CardInstanceId);
+			}
+		}
+		if (HiddenIds.IsEmpty())
+		{
+			return Snapshot;
+		}
+
+		FBattleSnapshot Result = Snapshot;
+		Result.Hand.Cards.RemoveAll(
+			[&HiddenIds](const FHandCardSnapshot& CardSnapshot)
+			{
+				return HiddenIds.Contains(CardSnapshot.InstanceId);
+			});
+		Result.Hand.NormalCardCount = 0;
+		for (const FHandCardSnapshot& CardSnapshot : Result.Hand.Cards)
+		{
+			if (!CardSnapshot.bIsHandAnchor)
+			{
+				++Result.Hand.NormalCardCount;
+			}
+		}
+		return Result;
+	}
+
 	TArray<FGuid> SortCardIdsByHandSnapshotOrder(
 		const FBattleSnapshot& Snapshot,
 		const TArray<FGuid>& CardInstanceIds)
@@ -82,6 +144,7 @@ void FWacomBattleHandPresentationController::Reset()
 	PendingPlayCommitHints.Reset();
 	SubmittedTransitionEvents.Reset();
 	SubmittedPlayCommitHints.Reset();
+	ClearPendingHandAnchorEnterFrame();
 	bHasLastPresentedSnapshot = false;
 	bHasTransitionSnapshot = false;
 	bUseEmptyHandSnapshotForNextTransitionRefresh = false;
@@ -91,6 +154,7 @@ void FWacomBattleHandPresentationController::ClearPendingTransitionEvents()
 {
 	PendingTransitionEvents.Reset();
 	PendingPlayCommitHints.Reset();
+	ClearPendingHandAnchorEnterFrame();
 	bUseEmptyHandSnapshotForNextTransitionRefresh = false;
 }
 
@@ -145,6 +209,41 @@ void FWacomBattleHandPresentationController::DiscardSubmittedTransitionFrame()
 	SubmittedPlayCommitHints.Reset();
 }
 
+bool FWacomBattleHandPresentationController::HasPendingHandAnchorEnterFrame() const
+{
+	return bHasPendingHandAnchorEnterFrame && !PendingHandAnchorEnterCardIds.IsEmpty();
+}
+
+FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::ConsumePendingHandAnchorEnterFrame()
+{
+	FWacomBattleHandPresentationFrame Frame;
+	if (!HasPendingHandAnchorEnterFrame())
+	{
+		ClearPendingHandAnchorEnterFrame();
+		return Frame;
+	}
+
+	const TArray<FGuid> EnterCardIds = SortCardIdsByHandSnapshotOrder(
+		PendingHandAnchorEnterSnapshot,
+		PendingHandAnchorEnterCardIds);
+	Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(PendingHandAnchorEnterSnapshot);
+	Frame.TransitionHints.Reserve(EnterCardIds.Num());
+	const int32 SequenceCount = EnterCardIds.Num();
+	for (int32 Index = 0; Index < EnterCardIds.Num(); ++Index)
+	{
+		FWacomFirstPersonCardLayerTransitionHint Hint;
+		Hint.CardInstanceId = EnterCardIds[Index];
+		Hint.TransitionKind = EWacomFirstPersonCardSlotTransitionKind::HandAnchorEntered;
+		Hint.SequenceIndex = Index;
+		Hint.SequenceCount = FMath::Max(1, SequenceCount);
+		Frame.TransitionHints.Add(Hint);
+	}
+	Frame.bHasTransitionFrame = !Frame.TransitionHints.IsEmpty();
+	MarkSnapshotPresented(PendingHandAnchorEnterSnapshot);
+	ClearPendingHandAnchorEnterFrame();
+	return Frame;
+}
+
 FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildFrame(
 	const FBattleSnapshot& Snapshot,
 	bool bSuppressed)
@@ -162,9 +261,13 @@ FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildF
 			(bUseEmptyHandSnapshotForNextTransitionRefresh || !bHasLastPresentedSnapshot)
 			? BuildEmptyHandBaseline(Snapshot)
 			: LastPresentedSnapshot;
-		Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
-		Frame.TransitionHints = BuildTransitionHints(Baseline, Snapshot);
-		Frame.FeedbackHints = BuildFeedbackHints(Snapshot);
+		const TArray<FGuid> NewHandAnchorCardIds =
+			CollectNewHandAnchorCardIdsForBattleHandPresentation(Baseline, Snapshot);
+		const FBattleSnapshot FrameSnapshot =
+			BuildSnapshotWithoutHandCardIdsForBattleHandPresentation(Snapshot, NewHandAnchorCardIds);
+		Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(FrameSnapshot);
+		Frame.TransitionHints = BuildTransitionHints(Baseline, FrameSnapshot);
+		Frame.FeedbackHints = BuildFeedbackHints(FrameSnapshot);
 		Frame.bHasTransitionFrame =
 			Frame.TransitionHints.Num() > 0
 			|| Frame.FeedbackHints.Num() > 0;
@@ -172,8 +275,14 @@ FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildF
 		{
 			RecordSubmittedTransitionFrame();
 		}
-		MarkSnapshotPresented(Snapshot);
-		ClearPendingTransitionEvents();
+		if (!NewHandAnchorCardIds.IsEmpty())
+		{
+			StorePendingHandAnchorEnterFrame(Snapshot, NewHandAnchorCardIds);
+		}
+		MarkSnapshotPresented(FrameSnapshot);
+		PendingTransitionEvents.Reset();
+		PendingPlayCommitHints.Reset();
+		bUseEmptyHandSnapshotForNextTransitionRefresh = false;
 		return Frame;
 	}
 
@@ -328,7 +437,7 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 		if (!CardInstanceId.IsValid()
 			|| SeenExactDrawnCardIds.Contains(CardInstanceId)
 			|| HintedCardIds.Contains(CardInstanceId)
-			|| !ContainsHandCardIdForBattleHandPresentation(NextSnapshot, CardInstanceId))
+			|| !ContainsNormalHandCardIdForBattleHandPresentation(NextSnapshot, CardInstanceId))
 		{
 			continue;
 		}
@@ -357,6 +466,7 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 			break;
 		}
 		if (!NewCardIds.Contains(CardSnapshot.InstanceId)
+			|| CardSnapshot.bIsHandAnchor
 			|| HintedCardIds.Contains(CardSnapshot.InstanceId))
 		{
 			continue;
@@ -476,6 +586,22 @@ void FWacomBattleHandPresentationController::RecordSubmittedTransitionFrame()
 {
 	SubmittedTransitionEvents = PendingTransitionEvents;
 	SubmittedPlayCommitHints = PendingPlayCommitHints;
+}
+
+void FWacomBattleHandPresentationController::StorePendingHandAnchorEnterFrame(
+	const FBattleSnapshot& Snapshot,
+	const TArray<FGuid>& CardInstanceIds)
+{
+	PendingHandAnchorEnterSnapshot = Snapshot;
+	PendingHandAnchorEnterCardIds = CardInstanceIds;
+	bHasPendingHandAnchorEnterFrame = !PendingHandAnchorEnterCardIds.IsEmpty();
+}
+
+void FWacomBattleHandPresentationController::ClearPendingHandAnchorEnterFrame()
+{
+	PendingHandAnchorEnterSnapshot = FBattleSnapshot();
+	PendingHandAnchorEnterCardIds.Reset();
+	bHasPendingHandAnchorEnterFrame = false;
 }
 
 void FWacomBattleHandPresentationController::RestoreSubmittedEntryRevealEventsIfNeeded()

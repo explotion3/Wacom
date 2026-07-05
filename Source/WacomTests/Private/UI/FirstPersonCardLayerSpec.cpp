@@ -9458,6 +9458,7 @@ bool FWacomFirstPersonCardLayerBattleHUDWritesHandTest::RunTest(const FString& P
 
 	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
 	HUD->SetSession(Session);
+	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
 	Anchor->RefreshAnchor(0.0f);
 	FHandCardSnapshot FirstSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(FirstCard, 7, true);

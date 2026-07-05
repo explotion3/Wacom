@@ -223,6 +223,55 @@ bool FWacomFirstPersonCardLayerDrawHintSequenceTest::RunTest(const FString& Para
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDrawHintFallbackSkipsHandAnchorsTest,
+	"Wacom.UI.FirstPersonCardLayer.DrawTransition.CardsDrawnFallbackSkipsHandAnchors",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDrawHintFallbackSkipsHandAnchorsTest::RunTest(const FString& Parameters)
+{
+	using namespace WacomFirstPersonCardLayerDrawTransitionSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+	HUD->SetWorldForTest(World);
+	HUD->SetOwningPlayerForTest(PC);
+
+	const FHandCardSnapshot Existing = MakeHandCardSnapshot();
+	const FHandCardSnapshot FirstDrawn = MakeHandCardSnapshot();
+	FHandCardSnapshot NewHandAnchor = MakeHandCardSnapshot();
+	NewHandAnchor.bIsHandAnchor = true;
+	const FBattleSnapshot Previous = MakeSnapshotWithHand({ Existing });
+	const FBattleSnapshot Next = MakeSnapshotWithHand({ FirstDrawn, Existing, NewHandAnchor });
+
+	HUD->StoreFirstPersonCardTransitionEventsForTest({ MakeCardsDrawnEvent(2) });
+	const TArray<FWacomFirstPersonCardLayerTransitionHint> Hints =
+		HUD->BuildFirstPersonCardTransitionHintsForTest(Previous, Next);
+
+	TestEqual(TEXT("Fallback draw hints only include normal new cards"), Hints.Num(), 1);
+	const FWacomFirstPersonCardLayerTransitionHint* DrawnHint =
+		FindHint(Hints, FirstDrawn.InstanceId);
+	if (TestNotNull(TEXT("Normal drawn hint"), DrawnHint))
+	{
+		TestEqual(TEXT("Normal drawn hint kind"), DrawnHint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Drawn);
+		TestEqual(TEXT("Normal drawn sequence count"), DrawnHint->SequenceCount, 1);
+	}
+	TestNull(TEXT("Hand anchor does not receive drawn hint"), FindHint(Hints, NewHandAnchor.InstanceId));
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerDrawEnterPlaybackTest,
 	"Wacom.UI.FirstPersonCardLayer.DrawTransition.DrawnCardUsesFiniteStaggeredArcPlayback",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

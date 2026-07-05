@@ -153,9 +153,17 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 	OpeningDrawEvent.Type = EBattleEventType::CardsDrawn;
 	OpeningDrawEvent.CardInstanceIds = { OpeningDrawnCardId };
 	OpeningDrawEvent.Count = OpeningDrawEvent.CardInstanceIds.Num();
-	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
-	HUD->StoreFirstPersonCardTransitionEventsForTest({ OpeningDrawEvent });
+	TArray<FGuid> OpeningHandAnchorIds;
+	for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+	{
+		if (Card.bIsHandAnchor && Card.InstanceId.IsValid())
+		{
+			OpeningHandAnchorIds.Add(Card.InstanceId);
+		}
+	}
+	TestTrue(TEXT("Fixture has opening hand anchors"), OpeningHandAnchorIds.Num() > 0);
 
+	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
 	TestTrue(TEXT("Runtime hand source is active before suppression"), Anchor->HasRuntimeCardLayerData());
 	TestEqual(TEXT("Runtime hand source id before suppression"),
@@ -188,6 +196,8 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 	StaleRunEntry.CardInstanceId = StaleSlot.Entry.CardInstanceId;
 	Anchor->SetRuntimeCardLayerEntries(TEXT("RunFirstPersonBattleDeck"), { StaleRunEntry });
 
+	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
+	HUD->StoreFirstPersonCardTransitionEventsForTest({ OpeningDrawEvent });
 	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
 	TestTrue(TEXT("HUD records entry hand suppression"), HUD->IsFirstPersonBattleHandSuppressedForEntry());
 	TestTrue(TEXT("Suppression keeps an empty runtime hand source"), Anchor->HasRuntimeCardLayerData());
@@ -241,11 +251,21 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 
 	HUD->SetBattleInputReady(false);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
+	const int32 OpeningDrawFrameCardCount = Snapshot.Hand.Cards.Num() - OpeningHandAnchorIds.Num();
 	TestTrue(TEXT("Unsuppressed refresh rewrites runtime hand source"),
 		Anchor->HasRuntimeCardLayerData());
-	TestEqual(TEXT("Unsuppressed refresh writes all hand cards"),
+	TestEqual(TEXT("Unsuppressed refresh writes draw frame without hand anchors"),
 		Anchor->GetRuntimeCardLayerCardCount(),
-		Snapshot.Hand.Cards.Num());
+		OpeningDrawFrameCardCount);
+	for (const FGuid& HandAnchorId : OpeningHandAnchorIds)
+	{
+		const bool bContainsHandAnchor = Anchor->GetRuntimeCardLayerEntries().ContainsByPredicate(
+			[&HandAnchorId](const FWacomFirstPersonCardLayerEntry& Entry)
+			{
+				return Entry.CardInstanceId == HandAnchorId;
+			});
+		TestFalse(TEXT("Opening draw frame hides generated hand anchor"), bContainsHandAnchor);
+	}
 	TestFalse(TEXT("Runtime hand remains non-interactive while input is not ready"),
 		Anchor->IsBattleHandInteractionEnabled());
 	const FWacomFirstPersonCardAnchorAutomationTestView PendingDeferredEntry =
@@ -272,6 +292,20 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 	TestEqual(TEXT("Deferred entry reveal is consumed once"),
 		HUD->BuildFirstPersonCardTransitionHintsForRefreshForTest(Snapshot).Num(),
 		0);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	HUD->TickCardDetailMotionForTest(0.05f);
+	TestEqual(TEXT("Opening hand-anchor enter follow-up restores full hand"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		Snapshot.Hand.Cards.Num());
+	for (const FGuid& HandAnchorId : OpeningHandAnchorIds)
+	{
+		const bool bContainsHandAnchor = Anchor->GetRuntimeCardLayerEntries().ContainsByPredicate(
+			[&HandAnchorId](const FWacomFirstPersonCardLayerEntry& Entry)
+			{
+				return Entry.CardInstanceId == HandAnchorId;
+			});
+		TestTrue(TEXT("Opening hand-anchor enter follow-up contains generated hand anchor"), bContainsHandAnchor);
+	}
 
 	HUD->SetBattleInputReady(true);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
