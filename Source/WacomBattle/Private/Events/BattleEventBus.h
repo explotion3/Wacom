@@ -24,6 +24,7 @@ struct FBattleEventBus
 
 	/** 只读查询。测试友好。 */
 	int32 Num() const { return Pending.Num(); }
+	int32 GetNextSequence() const { return NextSequence; }
 
 	/** 清空并重置序号。仅 Initialize 时使用。 */
 	void Reset();

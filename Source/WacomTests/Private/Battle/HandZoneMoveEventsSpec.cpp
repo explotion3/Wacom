@@ -157,32 +157,27 @@ bool FWacomBattleRandomDiscardEmitsCardDiscardedAndRunsOnDiscardSpec::RunTest(co
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomBattleHandLimitDiscardEmitsCardDiscardedAndLegacyHandLimitEventSpec,
-	"Wacom.Battle.HandZoneMoveEvents.HandLimitDiscardEmitsCardDiscardedAndLegacyHandLimitEvent",
+	FWacomBattleDrawLimitDoesNotEmitHandLimitDiscardEventsSpec,
+	"Wacom.Battle.HandZoneMoveEvents.DrawLimitDoesNotEmitHandLimitDiscardEvents",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomBattleHandLimitDiscardEmitsCardDiscardedAndLegacyHandLimitEventSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomBattleDrawLimitDoesNotEmitHandLimitDiscardEventsSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	UCardDefinition* SourceDef = nullptr;
-	UCardDefinition* TargetDef = nullptr;
 	UBattleSession* Session = nullptr;
 	FGuid SourceId;
-	FGuid TargetId;
+	int32 DrawPileBefore = 0;
 
 	for (int32 Seed = 1; Seed <= 80 && !Session; ++Seed)
 	{
-		SourceDef = nullptr;
-		TargetDef = Fx.MakeOnDiscardShieldCard(/*Cost*/0, /*ShieldAmount*/3);
 		UCardDefinition* DrawCard = Fx.MakeNoopCard(/*Cost*/0);
-		SourceDef = DrawCard;
 		FCardEffect DrawEffect;
 		DrawEffect.EffectType = WacomTags::Effect_Draw;
 		DrawEffect.Magnitude = 7;
 		DrawEffect.TargetZone = WacomTags::CardLocation_Draw;
 		DrawCard->Effects.Add(DrawEffect);
 
-		TArray<UCardDefinition*> Deck = { DrawCard, TargetDef };
+		TArray<UCardDefinition*> Deck = { DrawCard };
 		for (int32 Index = 0; Index < 14; ++Index)
 		{
 			Deck.Add(Fx.MakeNoopCard(0));
@@ -193,28 +188,37 @@ bool FWacomBattleHandLimitDiscardEmitsCardDiscardedAndLegacyHandLimitEventSpec::
 			Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0),
 			Seed);
 		const FBattleSnapshot Snapshot = Candidate->BuildSnapshot();
-		SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
-		TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
-		if (SourceId.IsValid() && TargetId.IsValid())
+		SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DrawCard->CardId);
+		if (SourceId.IsValid())
 		{
+			DrawPileBefore = Snapshot.PileCounts.DrawCount;
 			Session = Candidate;
 		}
 	}
 
 	TestTrue(TEXT("Found source in opening hand"), SourceId.IsValid());
-	TestTrue(TEXT("Found target in opening hand"), TargetId.IsValid());
 	if (!Session)
 	{
 		return false;
 	}
 
 	Session->ConsumeEvents();
-	TestTrue(TEXT("Submit draw that enforces hand limit"),
+	TestTrue(TEXT("Submit draw that reaches hand limit"),
 		Session->SubmitCommand(FBattleCommand::MakePlayCard(SourceId)).IsOk());
 	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 
 	int32 LimitDiscardEvents = 0;
 	int32 CardDiscardedEvents = 0;
+	const FBattleEvent* DrawEvent = Events.FindByPredicate(
+		[](const FBattleEvent& Event)
+		{
+			return Event.Type == EBattleEventType::CardsDrawn;
+		});
+	if (TestNotNull(TEXT("Draw event emitted for visible capacity"), DrawEvent))
+	{
+		TestEqual(TEXT("Draw event count is capped by available slots"), DrawEvent->Count, 6);
+	}
 	for (const FBattleEvent& Event : Events)
 	{
 		if (Event.Type == EBattleEventType::HandLimitDiscarded)
@@ -231,8 +235,10 @@ bool FWacomBattleHandLimitDiscardEmitsCardDiscardedAndLegacyHandLimitEventSpec::
 			TestEqual(TEXT("CardDiscarded actor"), Event.ActorInstanceId, SourceId);
 		}
 	}
-	TestTrue(TEXT("Hand limit emits legacy event"), LimitDiscardEvents > 0);
-	TestEqual(TEXT("Hand limit emits matching CardDiscarded events"), CardDiscardedEvents, LimitDiscardEvents);
+	TestEqual(TEXT("Draw limit emits no legacy hand limit event"), LimitDiscardEvents, 0);
+	TestEqual(TEXT("Draw limit emits no CardDiscarded hand limit event"), CardDiscardedEvents, 0);
+	TestEqual(TEXT("Draw leaves excess cards in draw pile"),
+		DrawPileBefore - Snapshot.PileCounts.DrawCount, 6);
 	return true;
 }
 

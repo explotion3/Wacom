@@ -8,7 +8,11 @@
 #include "Commands/EndTurnResolver.h"
 #include "Commands/KnockdownChoiceResolver.h"
 
-FWacomStatus FBattleResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
+FWacomStatus FBattleResolver::Resolve(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	FBattlePresentationJournal& PresentationJournal,
+	const FBattleCommand& Command)
 {
 	// KnockdownChoice 命令独立 Phase 受理：仅在 PendingKnockdownChoice 阶段允许。
 	if (Command.Type == EBattleCommandType::KnockdownChoice)
@@ -36,7 +40,7 @@ FWacomStatus FBattleResolver::Resolve(FBattleState& State, FBattleEventBus& Even
 		return FWaitResolver::Resolve(State, Events, Command);
 
 	case EBattleCommandType::EndTurn:
-		return FEndTurnResolver::Resolve(State, Events, Command);
+		return FEndTurnResolver::Resolve(State, Events, PresentationJournal, Command);
 
 	default:
 		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("UnknownCommand"));

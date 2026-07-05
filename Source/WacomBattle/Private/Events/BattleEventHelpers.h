@@ -13,6 +13,10 @@ namespace WacomBattleEvents
 		FBattleEventBus& Events,
 		const TArray<FGuid>& DrawnCardIds);
 
+	void EmitCardsRetained(
+		FBattleEventBus& Events,
+		const TArray<FGuid>& RetainedCardIds);
+
 	void EmitHandLimitDiscardedEvents(
 		FBattleEventBus& Events,
 		const TArray<FGuid>& DiscardedCardIds,

@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-battle
 status: active
-updated: 2026-06-15
+updated: 2026-06-24
 tags:
   - wacom/battle
   - wacom/rules
@@ -40,6 +40,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `FBattleCommand` | 玩家或系统提交的规则命令 |
 | `FBattleSnapshot` | UI / 测试读取的当前只读状态 |
 | `FBattleEvent` | 结算过程事件流；不是真正规则状态 |
+| `FBattlePresentationJournal` | 单次命令内的 C++ only 只读表现 checkpoint journal；当前仅记录 EndTurn 手牌规则 checkpoint |
 | `FBattleResultPacket` | BattleEnd 后给 Run 层消费的战后包 |
 | `BattleCommandPipeline` | 拦截 BattleEnd、分派 resolver、维护版本兜底和击倒请求 |
 | `BattleResolver` | PlayCard / Wait / EndTurn / KnockdownChoice 调度入口 |
@@ -58,6 +59,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `UBattleSession::SubmitCommand()` | 唯一命令入口：`PlayCard / Wait / EndTurn / KnockdownChoice` |
 | `UBattleSession::BuildSnapshot()` | 输出当前只读状态；UI 和测试读取，不作为事件历史 |
 | `UBattleSession::ConsumeEvents()` | 输出并清空自上次消费以来的事件流 |
+| `UBattleSession::ConsumePresentationJournal()` | 输出并清空自上次成功命令以来的表现 checkpoint journal；与事件一样只消费一次 |
 | `UBattleSession::BuildPendingKnockdownChoiceView()` | 输出当前击倒选择 ViewData；UI 不解析事件 `Count` 位掩码 |
 | `UBattleSession::BuildCardTargetPreview()` | 输出单张手牌对候选目标的只读目标预览 facts；不提交命令、不改 BattleState |
 | `UBattleSession::BuildResultPacket()` | BattleEnd 后输出战后包；具体 Run 结算见 [WacomRun §10](./WacomRun.md#wacomrun-battle-settlement) |
@@ -65,6 +67,8 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 `SubmitCommand()` 是同步规则结算入口。命令成功后，`BattleState`、Snapshot 派生事实和事件列表立即更新。
 
 规则层不等待 UI 动画。BattleHUD 的 presentation queue、Combat Log、Presentation Stack 和 turn-boundary barrier 都属于表现层；它们只决定何时把玩家意图提交成 `FBattleCommand`，不改变命令本身。
+
+`FBattlePresentationJournal` 也是 C++ only 只读表现合同，不是规则状态，也不是 WBP 制作面。它记录一次成功命令结算中的关键 checkpoint snapshot 和相关卡实例 ID，让 App 层后续表现计划能读取精确中间态；恢复、存档、规则判断和权威 UI 刷新仍以 `FBattleSnapshot` 为准。当前 journal v1 只覆盖 `EndTurn` 手牌阶段：`TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`。
 
 普通玩家命令在 `PlayerAction` 阶段提交。`PendingKnockdownChoice`、`BattleEnd` 和非玩家行动阶段会阻止普通 `PlayCard / Wait / EndTurn`。
 
@@ -136,12 +140,11 @@ PlayCard resolver 当前顺序：
 
 ```text
 重置 CurrentWaitValue 为 2
--> 从抽牌堆抽取 5 张普通卡
+-> 按剩余普通手牌容量，从抽牌堆最多抽取 5 张普通卡
 -> 合并上回合保留普通卡与本回合新抽普通卡
 -> 重新随机编排普通卡池
 -> 重新插入左右手锚点
--> 执行普通手牌上限
--> 发 CardsDrawn / HandLimitDiscarded / CardDiscarded / HandZoneChanged
+-> 发 CardsDrawn / HandZoneChanged
 -> Phase 切到 PlayerAction
 ```
 
@@ -151,11 +154,13 @@ PlayCard resolver 当前顺序：
 发 TurnEnded
 -> 本回合使用牌堆自然进入弃牌堆
 -> 非保留普通卡进入弃牌堆
+-> 记录 TurnEndDiscardResolved checkpoint，CardInstanceIds 为本阶段弃掉的普通手牌
 -> 必要时发 HandZoneChanged
+-> 有明确保留普通牌时发 CardsRetained，并记录 TurnEndRetainResolved checkpoint
 -> 敌方行动前 early-exit 检查
 -> 执行敌方部位行动子流程
 -> 检查战斗结束
--> 若未结束，回到起始阶段
+-> 若未结束，回到起始阶段，并在回合开始抽牌后记录 TurnStartDrawResolved checkpoint
 ```
 
 等待流程：
@@ -183,21 +188,24 @@ PlayCard resolver 当前顺序：
 
 抽牌和重建：
 
-- 回合开始固定从抽牌堆抽取 5 张普通卡。
+- 回合开始按剩余普通手牌容量，从抽牌堆最多抽取 5 张普通卡。
+- 若普通手牌已到上限，则本次不继续抽牌；未抽出的卡保留在抽牌堆中，不进入弃牌堆，也不发 `CardsDrawn`。
 - 回合开始把上回合保留普通卡和本回合新抽普通卡合成预备普通卡池。
 - 预备普通卡池每回合重新随机编排，不保留上回合 index、相对顺序或区域。
 - 两张锚点都有效且普通卡池非空时，两者之间至少一张普通卡。
 - 两张锚点都有效但普通卡池为空时，fallback 队列为 `[LeftHand, RightHand]`。
-- 战斗中途的 `Effect.Draw` 不重建整条手牌；抽到或回收的普通卡逐张随机插入当前手牌队列，并立即执行普通手牌上限。
-- `Effect.Draw` 触发普通手牌上限时，正在打出的抽牌源卡会被排除在本次上限弃牌候选外。
+- 战斗中途的 `Effect.Draw` 不重建整条手牌；抽到或回收的普通卡逐张随机插入当前手牌队列。
+- `Effect.Draw` 同样按剩余普通手牌容量截断。正在打出的抽牌源卡会被排除出容量占用，因为它将在本次结算末尾离开手牌。
+- `Effect.Draw` 从抽牌堆、弃牌堆或消耗牌堆移动卡牌时，只移动能放进普通手牌容量的数量；放不下的卡保持在原源牌堆，不会因为手牌上限转入弃牌堆。
 
 手牌上限：
 
 - 普通卡牌上限 10，不计算左手牌和右手牌。
 - 最终手牌队列上限 12。
-- 超出上限的普通卡牌立即移动到弃牌堆；中途抽牌、回手和击倒奖励卡入手也会即时检查。
+- 抽牌类入口不会把超出容量的卡牌抽出后弃掉，而是在移动前截断数量，未抽 / 未回收的卡保留在源牌堆。
+- 回手、击倒奖励卡入手等非抽牌式直接入手仍会即时检查普通手牌上限；超出上限的普通卡牌立即移动到弃牌堆。
 - 每张因普通手牌上限进入弃牌堆的卡都会产生 `HandLimitDiscarded`，并同步记录真正弃牌路径的 `CardDiscarded`。
-- `HandLimitDiscardSource` 区分 `TurnStart / EffectDraw / PassiveOnCompanionCount / None`；击倒奖励卡触发上限弃牌时当前为 `None`。
+- `HandLimitDiscardSource` 当前活跃来源主要是 `PassiveOnCompanionCount / None`；`TurnStart / EffectDraw` 保留为兼容枚举，不再表示普通抽牌达到上限后的自动弃牌。
 - `HandZoneChanged` 只表示手牌区需要刷新，不承载具体弃牌语义。
 
 `OnDiscard` 表示“本卡被弃掉”，不表示“任何进入弃牌堆”。会触发的路径包括 `Effect.Discard`、`Effect.Card.DiscardSelected`、普通手牌上限弃牌和回合结束非保留普通卡弃牌。普通打出进入本回合使用牌堆、回合结束自然转入弃牌堆、`Effect.Card.ExhaustSelected` 和 `Effect.ExhaustSelf` 不触发 `OnDiscard`。
@@ -273,7 +281,7 @@ Effect executor 按 `EffectTag -> Handler` 注册制分派。新增效果类型�
 | `Effect.Shuffle.Random` | ShuffleHandler | 随机腾挪 |
 | `Effect.Shuffle.FromBothToOther` | ShuffleHandler | 从双手区腾挪到其他区域 |
 | `Effect.Shuffle.ToRandomZone` | ShuffleHandler | 腾挪到随机区域 |
-| `Effect.Draw` | DrawHandler | 从 Draw / Discard / Exhaust 入手并随机插入当前手牌 |
+| `Effect.Draw` | DrawHandler | 按普通手牌剩余容量，从 Draw / Discard / Exhaust 入手并随机插入当前手牌 |
 | `Effect.Discard` | DiscardHandler | 随机弃掉普通手牌，不弃左右手锚点 |
 | `Effect.ExhaustSelf` | ExhaustSelfHandler | 给源卡加临时消耗关键词，出牌去向阶段进消耗牌堆 |
 | `Effect.Card.AddCost` | CostModHandler | 增加目标手牌费用 |
@@ -394,6 +402,7 @@ BattleState
 | `BattleStarted` | `Initialize` 成功后发出 |
 | `TurnStarted` | `Initialize` 成功后首回合发出 |
 | `CardsDrawn` | 回合开始抽牌或 `Effect.Draw` 成功入手 |
+| `CardsRetained` | 玩家回合结束明确保留普通手牌 |
 | `HandZoneChanged` | 手牌队列、区域或上限弃牌后需要 UI 刷新 |
 | `CardPlayed` | 玩家打出卡牌 |
 | `InitiativeHit` | 出牌前先机命中部位 |
@@ -415,7 +424,11 @@ BattleState
 | `CardGained` | 战斗中获得新卡 |
 | `BattleEnded` | 战斗进入结束态 |
 
-`CardsDrawn` 的公共合同是“本批真实入手卡实例列表”：`CardInstanceIds` 按规则抽取 / 从弃牌堆或消耗牌堆移入手牌的顺序记录卡实例 ID，`Count` 始终等于 `CardInstanceIds.Num()`，仅作为旧 debug / 测试读取的兼容计数字段。单卡事件继续使用 `CardInstanceId`，批量抽牌不要让 UI 再从前后 `FBattleSnapshot` 差异猜测抽到的是哪几张牌。
+`CardsDrawn` 的公共合同是“本批真实入手卡实例列表”：`CardInstanceIds` 按规则抽取 / 从弃牌堆或消耗牌堆移入手牌的顺序记录卡实例 ID，`Count` 始终等于 `CardInstanceIds.Num()`，仅作为旧 debug / 测试读取的兼容计数字段。因普通手牌容量不足而未移动的卡不会进入 `CardInstanceIds`，也不会触发 `CardsDrawn`。单卡事件继续使用 `CardInstanceId`，批量抽牌不要让 UI 再从前后 `FBattleSnapshot` 差异猜测抽到的是哪几张牌。
+
+`CardsRetained` 的公共合同是“本次回合结束明确保留的普通手牌实例列表”：`CardInstanceIds` 只包含普通手牌，不包含左手 / 右手锚点，`Count` 始终等于 `CardInstanceIds.Num()`。它只提供保留事实，不改变保留规则本身，也不绑定具体 first-person transition。
+
+EndTurn presentation journal 的 checkpoint 顺序遵循规则结算顺序。`TurnEndDiscardResolved.CardInstanceIds` 是本阶段因回合结束进入弃牌堆的普通手牌；`TurnEndRetainResolved.CardInstanceIds` 是本次保留的普通手牌；`TurnStartDrawResolved.CardInstanceIds` 是下一玩家回合真实抽到并进入手牌流程的普通牌。若某阶段没有相关 ID，或战斗在敌方行动前 / 后结束，则不生成对应 checkpoint。
 
 `EnemyKnockdown` enum 保留在公共类型中，但当前击倒路径使用 `EnemyPartHpEmptied + KnockdownChoiceRequested + KnockdownChoiceMade`。不要把 `EnemyKnockdown` 当作活跃事件依赖。
 

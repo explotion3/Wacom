@@ -43,6 +43,7 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 	delete State;
 	State = new FBattleState();
 	EventBus->Reset();
+	PresentationJournal.Reset();
 	ReferencedAssets.Reset();
 
 	return FBattleInitializer::Initialize(*State, *EventBus, Params, ReferencedAssets);
@@ -54,7 +55,14 @@ FWacomStatus UBattleSession::SubmitCommand(const FBattleCommand& Command)
 	{
 		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("NotInitialized"));
 	}
-	return FBattleCommandPipeline::Submit(*State, *EventBus, Command);
+	PresentationJournal.Reset();
+	const FWacomStatus Status =
+		FBattleCommandPipeline::Submit(*State, *EventBus, PresentationJournal, Command);
+	if (!Status.IsOk())
+	{
+		PresentationJournal.Reset();
+	}
+	return Status;
 }
 
 FBattleSnapshot UBattleSession::BuildSnapshot() const
@@ -73,6 +81,13 @@ TArray<FBattleEvent> UBattleSession::ConsumeEvents()
 		return {};
 	}
 	return EventBus->Consume();
+}
+
+FBattlePresentationJournal UBattleSession::ConsumePresentationJournal()
+{
+	FBattlePresentationJournal Out = MoveTemp(PresentationJournal);
+	PresentationJournal.Reset();
+	return Out;
 }
 
 bool UBattleSession::IsBattleEnded() const

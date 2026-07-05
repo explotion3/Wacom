@@ -9,6 +9,7 @@
 #include "Types/WacomResult.h"
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEvent.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "Resolution/BattleTargetValidationResult.h"
 #include "Resolution/BattleCardTargetPreview.h"
 #include "Runtime/BattlePartSlotIdentity.h"
@@ -250,6 +251,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle")
 	TArray<FBattleEvent> ConsumeEvents();
 
+	/** 取走上一条命令生成的表现 checkpoint journal 并清空。 */
+	FBattlePresentationJournal ConsumePresentationJournal();
+
 	/** 战斗是否已结束（Phase == BattleEnd）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	bool IsBattleEnded() const;
@@ -301,6 +305,7 @@ private:
 	/** 持有 FBattleState 和 FBattleEventBus。裸指针 + 手动管理，避免 TUniquePtr 在 UHT gen.cpp 里需要完整定义。 */
 	FBattleState* State = nullptr;
 	FBattleEventBus* EventBus = nullptr;
+	FBattlePresentationJournal PresentationJournal;
 
 	/** 让 GC 追踪 Session 生命周期内引用到的资产。 */
 	UPROPERTY()

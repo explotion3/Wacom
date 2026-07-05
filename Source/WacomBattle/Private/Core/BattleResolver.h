@@ -8,6 +8,7 @@
 struct FBattleState;
 struct FBattleCommand;
 struct FBattleEventBus;
+struct FBattlePresentationJournal;
 
 /**
  * 战斗命令分派入口。
@@ -23,5 +24,9 @@ struct FBattleEventBus;
 class FBattleResolver
 {
 public:
-	static FWacomStatus Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command);
+	static FWacomStatus Resolve(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		FBattlePresentationJournal& PresentationJournal,
+		const FBattleCommand& Command);
 };

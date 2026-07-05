@@ -8,7 +8,10 @@
 #include "Core/BattleState.h"
 
 FWacomStatus FBattleCommandPipeline::Submit(
-	FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
+	FBattleState& State,
+	FBattleEventBus& Events,
+	FBattlePresentationJournal& PresentationJournal,
+	const FBattleCommand& Command)
 {
 	if (State.Phase == EBattlePhase::BattleEnd)
 	{
@@ -16,7 +19,7 @@ FWacomStatus FBattleCommandPipeline::Submit(
 	}
 
 	const int32 VersionBefore = State.StateVersion;
-	const FWacomStatus Status = FBattleResolver::Resolve(State, Events, Command);
+	const FWacomStatus Status = FBattleResolver::Resolve(State, Events, PresentationJournal, Command);
 	if (Status.IsOk() && State.StateVersion == VersionBefore)
 	{
 		// 成功执行但未显式递增版本号，补一次。Resolver 应当自行管理，这里只是兜底。

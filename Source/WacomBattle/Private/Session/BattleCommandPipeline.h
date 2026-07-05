@@ -7,6 +7,7 @@
 
 struct FBattleCommand;
 struct FBattleEventBus;
+struct FBattlePresentationJournal;
 struct FBattleState;
 
 /**
@@ -16,5 +17,9 @@ struct FBattleState;
  */
 struct FBattleCommandPipeline
 {
-	static FWacomStatus Submit(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command);
+	static FWacomStatus Submit(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		FBattlePresentationJournal& PresentationJournal,
+		const FBattleCommand& Command);
 };

@@ -8,10 +8,41 @@
 #include "Deck/DeckService.h"
 #include "Enemy/EnemyPartActionResolver.h"
 #include "Events/BattleEventBus.h"
+#include "Events/BattleEventHelpers.h"
 #include "Hand/HandZoneService.h"
 #include "Hand/HandZoneMoveEventService.h"
+#include "Presentation/BattlePresentationJournal.h"
+#include "Snapshots/BattleSnapshotBuilder.h"
 
-FWacomStatus FEndTurnResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& /*Command*/)
+namespace
+{
+	void RecordEndTurnCheckpoint(
+		FBattlePresentationJournal& PresentationJournal,
+		EBattlePresentationCheckpointType Type,
+		const FBattleState& State,
+		const TArray<FGuid>& CardInstanceIds,
+		int32 FirstEventSequence,
+		int32 LastEventSequence)
+	{
+		if (CardInstanceIds.IsEmpty())
+		{
+			return;
+		}
+
+		PresentationJournal.AddCheckpoint(
+			Type,
+			FBattleSnapshotBuilder::Build(State),
+			CardInstanceIds,
+			FirstEventSequence,
+			LastEventSequence);
+	}
+}
+
+FWacomStatus FEndTurnResolver::Resolve(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	FBattlePresentationJournal& PresentationJournal,
+	const FBattleCommand& /*Command*/)
 {
 	// 回合结束流程：
 	//   1. 结束阶段开始（Phase 切换 + TurnEnded 事件）
@@ -38,13 +69,37 @@ FWacomStatus FEndTurnResolver::Resolve(FBattleState& State, FBattleEventBus& Eve
 	FDeckService::MovePlayedPileToDiscard(State);
 
 	// ---- 3. 回合结束弃牌 ----
+	TArray<FGuid> RetainedAtTurnEnd;
+	FHandZoneService::CollectRetainedNormalCardsAtTurnEnd(State, RetainedAtTurnEnd);
+
 	TArray<FGuid> DiscardedAtTurnEnd;
+	const int32 DiscardFirstEventSequence = Events.GetNextSequence();
 	FHandZoneService::DiscardNonRetainedNormalCardsAtTurnEnd(State, DiscardedAtTurnEnd);
 	FHandZoneMoveEventService::ResolveDiscardedFromHand(
 		State,
 		Events,
 		DiscardedAtTurnEnd,
 		EHandCardZoneMoveReason::TurnEnd);
+	RecordEndTurnCheckpoint(
+		PresentationJournal,
+		EBattlePresentationCheckpointType::TurnEndDiscardResolved,
+		State,
+		DiscardedAtTurnEnd,
+		DiscardFirstEventSequence,
+		Events.GetNextSequence() - 1);
+
+	if (!RetainedAtTurnEnd.IsEmpty())
+	{
+		const int32 RetainFirstEventSequence = Events.GetNextSequence();
+		WacomBattleEvents::EmitCardsRetained(Events, RetainedAtTurnEnd);
+		RecordEndTurnCheckpoint(
+			PresentationJournal,
+			EBattlePresentationCheckpointType::TurnEndRetainResolved,
+			State,
+			RetainedAtTurnEnd,
+			RetainFirstEventSequence,
+			Events.GetNextSequence() - 1);
+	}
 
 	// ---- 4. "直到回合结束"类效果终止（当前无）----
 
@@ -67,7 +122,16 @@ FWacomStatus FEndTurnResolver::Resolve(FBattleState& State, FBattleEventBus& Eve
 
 	// ---- 8. 推进到下一回合 ----
 	++State.TurnNumber;
-	FBattleTurnFlow::BeginPlayerTurn(State, Events, /*bIsFirstTurn=*/false);
+	TArray<FGuid> DrawnCardIds;
+	const int32 DrawFirstEventSequence = Events.GetNextSequence();
+	FBattleTurnFlow::BeginPlayerTurn(State, Events, /*bIsFirstTurn=*/false, &DrawnCardIds);
+	RecordEndTurnCheckpoint(
+		PresentationJournal,
+		EBattlePresentationCheckpointType::TurnStartDrawResolved,
+		State,
+		DrawnCardIds,
+		DrawFirstEventSequence,
+		Events.GetNextSequence() - 1);
 
 	return FWacomStatus::Ok();
 }

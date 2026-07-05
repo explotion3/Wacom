@@ -275,11 +275,11 @@ bool FWacomBattleRetainBothZoneDiscardsIfAnchorMissingSpec::RunTest(const FStrin
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomBattleTurnStartHandLimitDiscardEventSpec,
-	"Wacom.Battle.TurnStart.HandLimitDiscardEvent",
+	FWacomBattleTurnStartDrawStopsAtHandLimitSpec,
+	"Wacom.Battle.TurnStart.DrawStopsAtHandLimit",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomBattleTurnStartHandLimitDiscardEventSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomBattleTurnStartDrawStopsAtHandLimitSpec::RunTest(const FString& /*Parameters*/)
 {
 	for (int32 Seed = 1; Seed <= 10; ++Seed)
 	{
@@ -301,20 +301,28 @@ bool FWacomBattleTurnStartHandLimitDiscardEventSpec::RunTest(const FString& /*Pa
 		UBattleSession* S = Fx.CreateSession(Char, Enemy, Seed);
 
 		// 清掉初始化事件。第一轮结束后：保留 5 张 + 新抽 5 张 = 10，刚好不超限。
-		// 第二轮结束后：保留 10 张 + 新抽剩余 2 张 = 12，稳定触发 2 张上限弃牌。
+		// 第二轮结束后：保留 10 张，手牌已满，不再抽剩余 2 张，它们保留在抽牌堆。
 		S->ConsumeEvents();
 		TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		S->ConsumeEvents();
+		const int32 DrawBeforeSecondEndTurn = S->BuildSnapshot().PileCounts.DrawCount;
 		TestTrue(TEXT("EndTurn second turn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
 
 		const FBattleSnapshot Snap = S->BuildSnapshot();
-		TestEqual(TEXT("Turn start enforces normal hand limit"),
+		TestEqual(TEXT("Turn start keeps normal hand at limit"),
 			Snap.Hand.NormalCardCount, Snap.Hand.NormalCardLimit);
+		TestEqual(TEXT("Full hand leaves undrawn cards in draw pile"),
+			Snap.PileCounts.DrawCount, DrawBeforeSecondEndTurn);
 
 		const TArray<FBattleEvent> Events = S->ConsumeEvents();
 		int32 LimitDiscardEvents = 0;
+		int32 DrawEvents = 0;
 		for (const FBattleEvent& Event : Events)
 		{
+			if (Event.Type == EBattleEventType::CardsDrawn)
+			{
+				++DrawEvents;
+			}
 			if (Event.Type != EBattleEventType::HandLimitDiscarded)
 			{
 				continue;
@@ -326,8 +334,10 @@ bool FWacomBattleTurnStartHandLimitDiscardEventSpec::RunTest(const FString& /*Pa
 			TestEqual(TEXT("Turn start limit discard source"),
 				Event.HandLimitDiscardSource, EHandLimitDiscardSource::TurnStart);
 		}
-		TestEqual(TEXT("Turn start emits one event per limit discard"),
-			LimitDiscardEvents, 2);
+		TestEqual(TEXT("Turn start emits no draw event when hand is full"),
+			DrawEvents, 0);
+		TestEqual(TEXT("Turn start emits no hand limit discard when hand is full"),
+			LimitDiscardEvents, 0);
 	}
 
 	return true;

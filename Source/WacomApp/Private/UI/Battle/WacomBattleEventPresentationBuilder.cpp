@@ -46,6 +46,7 @@ namespace
 		case EBattleEventType::TurnStarted:
 		case EBattleEventType::TurnEnded:
 		case EBattleEventType::CardsDrawn:
+		case EBattleEventType::CardsRetained:
 		case EBattleEventType::EnemyIntentSelected:
 		case EBattleEventType::EnemyPhaseChanged:
 			return EWacomBattleEventVisualTone::System;
@@ -64,6 +65,8 @@ namespace
 			return FString::Printf(TEXT("第 %d 回合开始"), E.Count);
 		case EBattleEventType::CardsDrawn:
 			return FString::Printf(TEXT("抽取 %d 张牌"), E.Count);
+		case EBattleEventType::CardsRetained:
+			return FString::Printf(TEXT("保留 %d 张牌"), E.Count);
 		case EBattleEventType::CardPlayed:
 			return FString::Printf(TEXT("打出卡牌，消耗 %d 先机"), E.Amount);
 		case EBattleEventType::InitiativeHit:

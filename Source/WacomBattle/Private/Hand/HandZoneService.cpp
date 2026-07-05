@@ -152,6 +152,25 @@ void FHandZoneService::InsertCardsIntoHandAtRandom(FBattleState& State, const TA
 	}
 }
 
+int32 FHandZoneService::GetAvailableNormalCardSlots(const FBattleState& State, const FGuid& ExcludeId)
+{
+	int32 NormalCount = 0;
+	for (const FGuid& Id : State.Cards.Hand)
+	{
+		if (IsHandAnchor(State, Id))
+		{
+			continue;
+		}
+		if (ExcludeId.IsValid() && Id == ExcludeId)
+		{
+			continue;
+		}
+		++NormalCount;
+	}
+
+	return FMath::Max(0, NormalCardLimit - NormalCount);
+}
+
 void FHandZoneService::EnforceNormalCardLimit(FBattleState& State, TArray<FGuid>& OutDiscarded, const FGuid& ExcludeId)
 {
 	OutDiscarded.Reset();
@@ -301,6 +320,24 @@ bool FHandZoneService::ShouldRetainCardAtTurnEnd(const FBattleState& State, cons
 	}
 
 	return false;
+}
+
+void FHandZoneService::CollectRetainedNormalCardsAtTurnEnd(const FBattleState& State, TArray<FGuid>& OutRetained)
+{
+	OutRetained.Reset();
+
+	for (const FGuid& Id : State.Cards.Hand)
+	{
+		if (!Id.IsValid() || IsHandAnchor(State, Id))
+		{
+			continue;
+		}
+
+		if (ShouldRetainCardAtTurnEnd(State, Id))
+		{
+			OutRetained.Add(Id);
+		}
+	}
 }
 
 void FHandZoneService::DiscardNonRetainedNormalCardsAtTurnEnd(FBattleState& State, TArray<FGuid>& OutDiscarded)

@@ -33,7 +33,8 @@ public:
 	 * - 保留只保留"卡在手牌中"，不保留 index、相对顺序或区域。
 	 * - 更新所有相关卡的 Location = Hand。
 	 *
-	 * 调用方需在此后调用 EnforceNormalCardLimit 处理上限。
+	 * 调用方应在抽牌前使用 GetAvailableNormalCardSlots 截断抽牌数量，避免把放不下的牌
+	 * 从源牌堆移出。
 	 */
 	static void GenerateHandQueueOnTurnStart(FBattleState& State, const TArray<FGuid>& NewlyDrawnCards);
 
@@ -45,6 +46,15 @@ public:
 	 * 调用方需保证这些卡已从源牌堆移除；本方法会设置 Location = Hand。
 	 */
 	static void InsertCardsIntoHandAtRandom(FBattleState& State, const TArray<FGuid>& CardInstanceIds);
+
+	/**
+	 * 计算当前还可以放入多少张普通手牌。
+	 *
+	 * ExcludeId 用于排除正在结算、随后会离开手牌的源卡。例如一张手牌正在执行
+	 * Effect.Draw，源卡此刻仍在 Hand，但本次结算结束会进入 Played / Exhaust / Discard，
+	 * 因此不应占用本次抽牌容量。
+	 */
+	static int32 GetAvailableNormalCardSlots(const FBattleState& State, const FGuid& ExcludeId = FGuid());
 
 	/**
 	 * 执行普通卡手牌上限规则。超限的普通卡移动到弃牌区。
@@ -89,6 +99,14 @@ public:
 	 * 调用方保证此时 State.Cards.Hand 即是回合结束前的快照。
 	 */
 	static bool ShouldRetainCardAtTurnEnd(const FBattleState& State, const FGuid& CardInstanceId);
+
+	/**
+	 * 收集回合结束时明确保留的普通手牌 ID。
+	 *
+	 * 不包含左右手锚点；顺序遵循当前 State.Cards.Hand，供 CardsRetained 事件和
+	 * presentation checkpoint 直接消费。
+	 */
+	static void CollectRetainedNormalCardsAtTurnEnd(const FBattleState& State, TArray<FGuid>& OutRetained);
 
 	/**
 	 * 回合结束时把所有不满足保留条件的普通卡移到弃牌区。

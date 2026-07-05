@@ -22,6 +22,7 @@ enum class EBattleEventType : uint8
 	BattleStarted         UMETA(DisplayName = "BattleStarted"),
 	TurnStarted           UMETA(DisplayName = "TurnStarted"),
 	CardsDrawn            UMETA(DisplayName = "CardsDrawn"),
+	CardsRetained         UMETA(DisplayName = "CardsRetained"),
 	HandZoneChanged       UMETA(DisplayName = "HandZoneChanged"),      // 区域重新判定/腾挪后触发
 	CardPlayed            UMETA(DisplayName = "CardPlayed"),
 	InitiativeHit         UMETA(DisplayName = "InitiativeHit"),        // 先机命中（完美释放窗口成立）
@@ -48,7 +49,8 @@ enum class EBattleEventType : uint8
 };
 
 /**
- * 普通手牌上限弃牌来源。用于表现层区分是回合开始抽牌、中途抽牌，还是被动回手触发。
+ * 普通手牌上限弃牌来源。抽牌路径当前会在移动前按容量截断；TurnStart / EffectDraw
+ * 保留为兼容来源，当前活跃路径主要是被动回手和战斗内获得卡牌。
  */
 UENUM(BlueprintType)
 enum class EHandLimitDiscardSource : uint8
@@ -77,7 +79,8 @@ enum class EHandCardZoneMoveReason : uint8
  * 使用扁平字段变体：不同事件类型填不同字段，未使用的留默认值。
  *
  * 字段使用约定（非穷举）：
- * - CardsDrawn          ：CardInstanceIds = 本批真实抽到 / 移入手牌的卡实例，Count = CardInstanceIds.Num()
+ * - CardsDrawn          ：CardInstanceIds = 本批真实抽到 / 移入手牌的普通卡实例，Count = CardInstanceIds.Num()
+ * - CardsRetained       ：CardInstanceIds = 本次回合结束明确保留的普通手牌，Count = CardInstanceIds.Num()
  * - CardPlayed          ：CardInstanceId、ActorEnemyPartKey = 目标部位稳定 key
  * - InitiativeHit       ：ActorEnemyPartKey = 被命中部位、Amount = 本次 RuntimeCost
  * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；玩家目标时 key 为空
@@ -88,7 +91,7 @@ enum class EHandCardZoneMoveReason : uint8
  * - EnemyIntentSelected ：ActorEnemyPartKey = 行动部位、IntentId / IntentSetId / EnemyPhaseId = 新选中意图上下文
  * - EnemyPhaseChanged   ：ActorEnemyPartKey = 触发部位、EnemyPhaseId = 新 phase
  * - EnemyPartHpEmptied  ：ActorEnemyPartKey = 被破坏部位
- * - HandLimitDiscarded  ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡（仅 EffectDraw）
+ * - HandLimitDiscarded  ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡（若存在）
  * - CardDiscarded       ：CardInstanceId = 被弃掉的卡；ActorInstanceId = 触发源卡；Tag = 效果 tag
  * - CardExhausted       ：CardInstanceId = 被消耗的卡；ActorInstanceId = 触发源卡；Tag = 效果 tag
  * - CardGained          ：CardInstanceId = 战斗内新卡实例；ActorEnemyPartKey = 来源部位；CardDefinition = 新卡定义；Count = EKnockdownChoice
@@ -118,7 +121,7 @@ struct WACOMBATTLE_API FBattleEvent
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	FGuid CardInstanceId;
 
-	/** 批量卡牌事件涉及的运行时实例 ID。CardsDrawn 按规则抽取 / 移入手牌顺序记录本批真实入手卡。 */
+	/** 批量卡牌事件涉及的运行时实例 ID。CardsDrawn / CardsRetained 按规则顺序记录真实普通手牌。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	TArray<FGuid> CardInstanceIds;
 

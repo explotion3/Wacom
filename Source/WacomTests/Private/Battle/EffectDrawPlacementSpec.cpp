@@ -127,15 +127,15 @@ bool FWacomBattleEffectDrawInsertsCardsAtRandomSpec::RunTest(const FString& /*Pa
 }
 
 /**
- * 中途抽牌会立刻执行普通卡上限 10。
- * 注意：正在打出的抽牌卡随后会离开手牌，不能被这次上限检查计入。
+ * 中途抽牌按普通手牌上限截断。
+ * 注意：正在打出的抽牌卡随后会离开手牌，不能占用本次抽牌容量。
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomBattleEffectDrawImmediatelyEnforcesHandLimitSpec,
-	"Wacom.Battle.Effect.DrawImmediatelyEnforcesHandLimit",
+	FWacomBattleEffectDrawStopsAtHandLimitSpec,
+	"Wacom.Battle.Effect.DrawStopsAtHandLimit",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomBattleEffectDrawImmediatelyEnforcesHandLimitSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomBattleEffectDrawStopsAtHandLimitSpec::RunTest(const FString& /*Parameters*/)
 {
 	for (int32 Seed = 1; Seed <= 80; ++Seed)
 	{
@@ -164,8 +164,10 @@ bool FWacomBattleEffectDrawImmediatelyEnforcesHandLimitSpec::RunTest(const FStri
 
 		TestEqual(FString::Printf(TEXT("Seed=%d starts with first turn draw count"), Seed),
 			Snap.Hand.NormalCardCount, 5);
+		const int32 DrawPileBefore = Snap.PileCounts.DrawCount;
 		const int32 DiscardBefore = Snap.PileCounts.DiscardCount;
 
+		Session->ConsumeEvents();
 		TestTrue(TEXT("Play draw card"),
 			Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
 		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
@@ -173,14 +175,26 @@ bool FWacomBattleEffectDrawImmediatelyEnforcesHandLimitSpec::RunTest(const FStri
 		Snap = Session->BuildSnapshot();
 		TestEqual(FString::Printf(TEXT("Seed=%d normal count remains limited immediately"), Seed),
 			Snap.Hand.NormalCardCount, Snap.Hand.NormalCardLimit);
-		TestTrue(FString::Printf(TEXT("Seed=%d extra card discarded by limit"), Seed),
-			Snap.PileCounts.DiscardCount >= DiscardBefore + 1);
+		TestEqual(FString::Printf(TEXT("Seed=%d draw only consumes available slots"), Seed),
+			DrawPileBefore - Snap.PileCounts.DrawCount, 6);
+		TestEqual(FString::Printf(TEXT("Seed=%d capped draw does not discard extras"), Seed),
+			Snap.PileCounts.DiscardCount, DiscardBefore);
 		TestEqual(FString::Printf(TEXT("Seed=%d played draw card waits in played pile"), Seed),
 			Snap.PileCounts.PlayedCount, 1);
 		TestEqual(FString::Printf(TEXT("Seed=%d played draw card leaves hand"), Seed),
 			FWacomBattleFixture::FindHandIndex(Snap, DrawCardId), INDEX_NONE);
 
 		int32 LimitDiscardEvents = 0;
+		const FBattleEvent* DrawEvent = Events.FindByPredicate(
+			[](const FBattleEvent& Event)
+			{
+				return Event.Type == EBattleEventType::CardsDrawn;
+			});
+		if (TestNotNull(TEXT("Effect.Draw event"), DrawEvent))
+		{
+			TestEqual(TEXT("Effect.Draw count equals available hand slots"), DrawEvent->Count, 6);
+			TestEqual(TEXT("Effect.Draw ids match count"), DrawEvent->CardInstanceIds.Num(), DrawEvent->Count);
+		}
 		for (const FBattleEvent& Event : Events)
 		{
 			if (Event.Type != EBattleEventType::HandLimitDiscarded)
@@ -195,7 +209,7 @@ bool FWacomBattleEffectDrawImmediatelyEnforcesHandLimitSpec::RunTest(const FStri
 				Event.HandLimitDiscardSource, EHandLimitDiscardSource::EffectDraw);
 			TestEqual(TEXT("Limit discard actor is draw source card"), Event.ActorInstanceId, DrawCardId);
 		}
-		TestTrue(TEXT("Effect draw emits per-card hand limit discard event"), LimitDiscardEvents > 0);
+		TestEqual(TEXT("Effect draw does not emit hand limit discard event"), LimitDiscardEvents, 0);
 		return true;
 	}
 

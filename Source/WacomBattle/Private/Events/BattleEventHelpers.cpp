@@ -24,6 +24,24 @@ namespace WacomBattleEvents
 		Events.Emit(Ev);
 	}
 
+	void EmitCardsRetained(
+		FBattleEventBus& Events,
+		const TArray<FGuid>& RetainedCardIds)
+	{
+		FBattleEvent Ev;
+		Ev.Type = EBattleEventType::CardsRetained;
+		Ev.CardInstanceIds.Reserve(RetainedCardIds.Num());
+		for (const FGuid& RetainedCardId : RetainedCardIds)
+		{
+			if (RetainedCardId.IsValid())
+			{
+				Ev.CardInstanceIds.Add(RetainedCardId);
+			}
+		}
+		Ev.Count = Ev.CardInstanceIds.Num();
+		Events.Emit(Ev);
+	}
+
 	void EmitHandLimitDiscardedEvents(
 		FBattleEventBus& Events,
 		const TArray<FGuid>& DiscardedCardIds,
