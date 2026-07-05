@@ -154,7 +154,9 @@ Motion profile 只影响最终 visual slot 追踪，不改变 `InputHitCenter / 
 
 `CardsRetained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 retained feedback hint，而不是 `Retained` transition hint。Controller 的 loose event 路径只为仍存在于下一份普通手牌中的卡生成 feedback，过滤无效 ID、重复 ID、左右手 anchor 和已经离开手牌的 ID；EndTurn `TurnEndRetain` phase 会在不改变 `CardsRetained` 规则事件的前提下，为 retain checkpoint snapshot 中仍存在的左右手 anchor 追加同款 retained feedback。同一批 feedback 使用稳定 `SequenceIndex / SequenceCount`。Layer 侧 retained feedback 是 post-layout pulse：卡牌保持当前 slot identity 和 layout target，只短促上浮、轻微放大并播放暖金色 feedback overlay。普通 refresh 不会取消正在播放的 retained feedback；slot 暂不可投影时 hint 会留到下一次 projected refresh。
 
-`bEnableReadableTransitionOrigins` 只控制 Drawn / Gained / HandAnchorEntered / Played / Discarded 的可读来源方向兼容，不关闭 Drawn / HandAnchorEntered 的有限时长播放、错峰和弧线。需要在 PIE 中验证抽牌或左右手生成手感时，优先调整 `06 Transition Motion` 的对应专用参数；不应在 BattleHUD 或 BattleSession 中硬编码动画位置、延迟或曲线。
+`CardGained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 `Gained` transition hint。`Gained` 和 `Drawn / HandAnchorEntered` 一样必须启动有限时长 enter playback；Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 控制奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞。
+
+`bEnableReadableTransitionOrigins` 只控制 Drawn / Gained / HandAnchorEntered / Played / Discarded 的可读来源方向兼容，不关闭 Drawn / Gained / HandAnchorEntered 的有限时长播放、错峰和弧线。需要在 PIE 中验证抽牌、战斗奖励卡或左右手生成手感时，优先调整 `06 Transition Motion` 的对应专用参数；不应在 BattleHUD 或 BattleSession 中硬编码动画位置、延迟或曲线。
 
 Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和本次刷新创建、复用、移除、异常修复数量。诊断日志默认关闭，只在手动排查时开启。
 

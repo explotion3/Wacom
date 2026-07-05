@@ -198,6 +198,8 @@ EndTurn phase plan 的 `TurnEndRetain` 阶段会在不改变 `CardsRetained` 规
 
 战斗中获得卡牌使用 `CardGained` 事件和 `Gained` hint。它和普通抽牌不同：语义来源是战斗奖励、击倒选择或其他获得入口，不是抽牌堆。
 
+`Gained` 入场和 `Drawn / HandAnchorEntered` 一样是有限时长 enter playback，而不是只给新 slot 一个初始 offset 后交给普通 layout motion。Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 决定奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞。
+
 后续可把 reward source、敌方部位来源、choice 类型转成更丰富的入场 origin，但不能让 first-person card layer 读取击倒规则。
 
 ### Played / Commit Exit

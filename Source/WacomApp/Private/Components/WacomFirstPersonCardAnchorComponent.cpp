@@ -141,6 +141,11 @@ namespace
 		Config.GainedCardEnterViewportAnchor = Anchor.GainedCardEnterViewportAnchor;
 		Config.GainedCardEnterScaleMultiplier = Anchor.GainedCardEnterScaleMultiplier;
 		Config.GainedCardEnterAngleOffsetDegrees = Anchor.GainedCardEnterAngleOffsetDegrees;
+		Config.GainedCardEnterDurationSeconds = Anchor.GainedCardEnterDurationSeconds;
+		Config.GainedCardEnterStaggerSeconds = Anchor.GainedCardEnterStaggerSeconds;
+		Config.GainedCardEnterArcLiftPixels = Anchor.GainedCardEnterArcLiftPixels;
+		Config.GainedCardEnterEasePower = Anchor.GainedCardEnterEasePower;
+		Config.bBlockInteractionDuringGainedCardEnter = Anchor.bBlockInteractionDuringGainedCardEnter;
 		Config.HandAnchorCardEnterOffsetPixels = Anchor.HandAnchorCardEnterOffsetPixels;
 		Config.HandAnchorCardEnterOriginMode = Anchor.HandAnchorCardEnterOriginMode;
 		Config.HandAnchorCardEnterViewportAnchor = Anchor.HandAnchorCardEnterViewportAnchor;
@@ -374,6 +379,11 @@ namespace
 		MotionConfig.GainedEnterViewportAnchor = Config.GainedCardEnterViewportAnchor;
 		MotionConfig.GainedEnterScaleMultiplier = Config.GainedCardEnterScaleMultiplier;
 		MotionConfig.GainedEnterAngleOffsetDegrees = Config.GainedCardEnterAngleOffsetDegrees;
+		MotionConfig.GainedEnterDurationSeconds = Config.GainedCardEnterDurationSeconds;
+		MotionConfig.GainedEnterStaggerSeconds = Config.GainedCardEnterStaggerSeconds;
+		MotionConfig.GainedEnterArcLiftPixels = Config.GainedCardEnterArcLiftPixels;
+		MotionConfig.GainedEnterEasePower = Config.GainedCardEnterEasePower;
+		MotionConfig.bBlockInteractionDuringGainedEnter = Config.bBlockInteractionDuringGainedCardEnter;
 		MotionConfig.HandAnchorEnterOffsetPixels = Config.HandAnchorCardEnterOffsetPixels;
 		MotionConfig.HandAnchorEnterOriginMode = Config.HandAnchorCardEnterOriginMode;
 		MotionConfig.HandAnchorEnterViewportAnchor = Config.HandAnchorCardEnterViewportAnchor;
@@ -548,6 +558,11 @@ namespace
 		AddVector(Config.GainedCardEnterViewportAnchor);
 		AddFloat(Config.GainedCardEnterScaleMultiplier);
 		AddFloat(Config.GainedCardEnterAngleOffsetDegrees);
+		AddFloat(Config.GainedCardEnterDurationSeconds);
+		AddFloat(Config.GainedCardEnterStaggerSeconds);
+		AddFloat(Config.GainedCardEnterArcLiftPixels);
+		AddFloat(Config.GainedCardEnterEasePower);
+		AddBool(Config.bBlockInteractionDuringGainedCardEnter);
 		AddVector(Config.HandAnchorCardEnterOffsetPixels);
 		AddInt(static_cast<int32>(Config.HandAnchorCardEnterOriginMode));
 		AddVector(Config.HandAnchorCardEnterViewportAnchor);

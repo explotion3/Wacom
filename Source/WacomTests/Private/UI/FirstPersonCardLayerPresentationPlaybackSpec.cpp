@@ -80,6 +80,10 @@ namespace WacomFirstPersonCardLayerPresentationPlaybackSpec
 		Config.DrawnEnterOffsetPixels = FVector2D(0.0f, 80.0f);
 		Config.DrawnEnterDurationSeconds = 0.2f;
 		Config.DrawnEnterStaggerSeconds = 0.0f;
+		Config.GainedEnterOffsetPixels = FVector2D(0.0f, -80.0f);
+		Config.GainedEnterDurationSeconds = 0.2f;
+		Config.GainedEnterStaggerSeconds = 0.0f;
+		Config.GainedEnterArcLiftPixels = 30.0f;
 		Config.HandAnchorEnterOffsetPixels = FVector2D(0.0f, -80.0f);
 		Config.HandAnchorEnterDurationSeconds = 0.2f;
 		Config.HandAnchorEnterStaggerSeconds = 0.0f;
@@ -166,6 +170,41 @@ bool FWacomFirstPersonCardLayerEnterPlaybackActiveContractTest::RunTest(const FS
 	TestTrue(TEXT("Drawn enter reports active playback"), Layer->HasActivePresentationPlayback());
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.3f);
 	TestFalse(TEXT("Drawn enter clears active playback"), Layer->HasActivePresentationPlayback());
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerGainedEnterPlaybackActiveContractTest,
+	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.GainedEnterReportsActive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerGainedEnterPlaybackActiveContractTest::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	Layer->SetSlotMotionConfig(MakeMotionConfig());
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Gained) });
+	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(140.0f, 250.0f)) });
+
+	TestTrue(TEXT("Gained enter reports active playback"), Layer->HasActivePresentationPlayback());
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.3f);
+	TestFalse(TEXT("Gained enter clears active playback"), Layer->HasActivePresentationPlayback());
 
 	PC->Destroy();
 	return true;

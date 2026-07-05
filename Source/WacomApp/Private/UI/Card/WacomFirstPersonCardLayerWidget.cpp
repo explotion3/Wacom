@@ -1975,6 +1975,12 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		Profile.ViewportAnchor = SlotMotionConfig.GainedEnterViewportAnchor;
 		Profile.ScaleMultiplier = SlotMotionConfig.GainedEnterScaleMultiplier;
 		Profile.AngleOffsetDegrees = SlotMotionConfig.GainedEnterAngleOffsetDegrees;
+		Profile.StartDelaySeconds =
+			FMath::Max(0, TransitionHint.SequenceIndex) * SlotMotionConfig.GainedEnterStaggerSeconds;
+		Profile.DurationSeconds = SlotMotionConfig.GainedEnterDurationSeconds;
+		Profile.ArcLiftPixels = SlotMotionConfig.GainedEnterArcLiftPixels;
+		Profile.EasePower = SlotMotionConfig.GainedEnterEasePower;
+		Profile.bBlockInteractionDuringPlayback = SlotMotionConfig.bBlockInteractionDuringGainedEnter;
 		break;
 	case EWacomFirstPersonCardSlotTransitionKind::HandAnchorEntered:
 		Profile.OriginMode = SlotMotionConfig.HandAnchorEnterOriginMode;

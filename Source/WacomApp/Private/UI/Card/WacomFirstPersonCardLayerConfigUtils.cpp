@@ -87,6 +87,10 @@ FWacomFirstPersonCardSlotMotionConfig NormalizeSlotMotionConfig(
 	Config.GainedEnterViewportAnchor.X = FMath::Clamp(Config.GainedEnterViewportAnchor.X, 0.0f, 1.0f);
 	Config.GainedEnterViewportAnchor.Y = FMath::Clamp(Config.GainedEnterViewportAnchor.Y, 0.0f, 1.0f);
 	Config.GainedEnterScaleMultiplier = FMath::Max(0.01f, Config.GainedEnterScaleMultiplier);
+	Config.GainedEnterDurationSeconds = FMath::Max(0.0f, Config.GainedEnterDurationSeconds);
+	Config.GainedEnterStaggerSeconds = FMath::Max(0.0f, Config.GainedEnterStaggerSeconds);
+	Config.GainedEnterArcLiftPixels = FMath::Max(0.0f, Config.GainedEnterArcLiftPixels);
+	Config.GainedEnterEasePower = FMath::Max(0.1f, Config.GainedEnterEasePower);
 	Config.HandAnchorEnterViewportAnchor.X = FMath::Clamp(Config.HandAnchorEnterViewportAnchor.X, 0.0f, 1.0f);
 	Config.HandAnchorEnterViewportAnchor.Y = FMath::Clamp(Config.HandAnchorEnterViewportAnchor.Y, 0.0f, 1.0f);
 	Config.HandAnchorEnterScaleMultiplier = FMath::Max(0.01f, Config.HandAnchorEnterScaleMultiplier);
@@ -139,6 +143,11 @@ bool AreSlotMotionConfigsEquivalent(
 		&& AreVectorsEquivalent(A.GainedEnterViewportAnchor, B.GainedEnterViewportAnchor)
 		&& AreFloatsEquivalent(A.GainedEnterScaleMultiplier, B.GainedEnterScaleMultiplier)
 		&& AreFloatsEquivalent(A.GainedEnterAngleOffsetDegrees, B.GainedEnterAngleOffsetDegrees)
+		&& AreFloatsEquivalent(A.GainedEnterDurationSeconds, B.GainedEnterDurationSeconds)
+		&& AreFloatsEquivalent(A.GainedEnterStaggerSeconds, B.GainedEnterStaggerSeconds)
+		&& AreFloatsEquivalent(A.GainedEnterArcLiftPixels, B.GainedEnterArcLiftPixels)
+		&& AreFloatsEquivalent(A.GainedEnterEasePower, B.GainedEnterEasePower)
+		&& A.bBlockInteractionDuringGainedEnter == B.bBlockInteractionDuringGainedEnter
 		&& AreVectorsEquivalent(A.HandAnchorEnterOffsetPixels, B.HandAnchorEnterOffsetPixels)
 		&& A.HandAnchorEnterOriginMode == B.HandAnchorEnterOriginMode
 		&& AreVectorsEquivalent(A.HandAnchorEnterViewportAnchor, B.HandAnchorEnterViewportAnchor)

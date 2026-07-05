@@ -80,6 +80,11 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	FVector2D GainedCardEnterViewportAnchor = FVector2D(0.5f, 0.0f);
 	float GainedCardEnterScaleMultiplier = 0.96f;
 	float GainedCardEnterAngleOffsetDegrees = 0.0f;
+	float GainedCardEnterDurationSeconds = 0.32f;
+	float GainedCardEnterStaggerSeconds = 0.075f;
+	float GainedCardEnterArcLiftPixels = 42.0f;
+	float GainedCardEnterEasePower = 2.0f;
+	bool bBlockInteractionDuringGainedCardEnter = true;
 	FVector2D HandAnchorCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
 	EWacomFirstPersonCardTransitionOriginMode HandAnchorCardEnterOriginMode =
 		EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;

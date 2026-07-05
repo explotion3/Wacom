@@ -945,6 +945,21 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 	float GainedEnterAngleOffsetDegrees = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterDurationSeconds = 0.32f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterStaggerSeconds = 0.075f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterArcLiftPixels = 42.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterEasePower = 2.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bBlockInteractionDuringGainedEnter = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D HandAnchorEnterOffsetPixels = FVector2D(0.0f, -120.0f);
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")

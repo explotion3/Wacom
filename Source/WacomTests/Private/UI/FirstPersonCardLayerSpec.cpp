@@ -6599,6 +6599,10 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	MotionConfig.EnterOpacity = 2.0f;
 	MotionConfig.GainedEnterViewportAnchor = FVector2D(3.0f, -2.0f);
 	MotionConfig.GainedEnterScaleMultiplier = -5.0f;
+	MotionConfig.GainedEnterDurationSeconds = -0.5f;
+	MotionConfig.GainedEnterStaggerSeconds = -0.25f;
+	MotionConfig.GainedEnterArcLiftPixels = -30.0f;
+	MotionConfig.GainedEnterEasePower = -1.0f;
 	SlotWidget->SetSlotMotionConfig(MotionConfig);
 	const int32 SlotMotionApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount;
 	FWacomFirstPersonCardSlotMotionConfig NormalizedMotionConfig = MotionConfig;
@@ -6610,6 +6614,10 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	NormalizedMotionConfig.EnterOpacity = 1.0f;
 	NormalizedMotionConfig.GainedEnterViewportAnchor = FVector2D(1.0f, 0.0f);
 	NormalizedMotionConfig.GainedEnterScaleMultiplier = 0.01f;
+	NormalizedMotionConfig.GainedEnterDurationSeconds = 0.0f;
+	NormalizedMotionConfig.GainedEnterStaggerSeconds = 0.0f;
+	NormalizedMotionConfig.GainedEnterArcLiftPixels = 0.0f;
+	NormalizedMotionConfig.GainedEnterEasePower = 0.1f;
 	Layer->SetSlotMotionConfig(NormalizedMotionConfig);
 	TestEqual(TEXT("Layer-normalized motion matches slot-normalized motion"),
 		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount,
