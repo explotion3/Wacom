@@ -133,7 +133,7 @@ namespace
 		return FWacomCharacterDefinitionValidation::Validate(Character, OutErrors);
 	}
 
-	bool ValidateEncounterForTest(const UEncounterDefinition* Encounter, TArray<FText>& OutErrors)
+	bool ValidateRunEncounterForTest(const UEncounterDefinition* Encounter, TArray<FText>& OutErrors)
 	{
 		return FWacomEncounterDefinitionValidation::Validate(Encounter, OutErrors);
 	}
@@ -765,7 +765,7 @@ bool FWacomDataGeneratedContentDefinitionAssetValidationSpec::RunTest(const FStr
 
 	Errors.Reset();
 	TestTrue(TEXT("Snake single encounter asset passes validation"),
-		ValidateEncounterForTest(SnakeSingleEncounter, Errors));
+		ValidateRunEncounterForTest(SnakeSingleEncounter, Errors));
 	TestEqual(TEXT("Snake single encounter validation errors"), Errors.Num(), 0);
 	if (SnakeSingleEncounter && SnakeSingleEncounter->EnemySlots.Num() == 1)
 	{

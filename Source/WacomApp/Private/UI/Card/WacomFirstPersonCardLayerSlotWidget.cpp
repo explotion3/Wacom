@@ -216,8 +216,13 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	const bool bGestureActive =
 		GestureState != EWacomFirstPersonCardGestureState::Idle
 		&& GestureState != EWacomFirstPersonCardGestureState::Cancelled;
+	const bool bPreserveActiveEnterPlayback =
+		EnterTransitionPlayback.bActive
+		&& !EnterProfileOverride.IsSet()
+		&& bCanReuseVisual;
 	const bool bLargeJump =
 		bCanReuseVisual
+		&& !bPreserveActiveEnterPlayback
 		&& !bGestureActive
 		&& !bPreserveGestureReturnMotion
 		&& SlotMotionConfig.ResetDistancePixels > 0.0f

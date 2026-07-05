@@ -288,6 +288,89 @@ bool FWacomFirstPersonCardLayerDrawEnterPlaybackTest::RunTest(const FString& Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDrawEnterPlaybackSurvivesOrdinaryRefreshTest,
+	"Wacom.UI.FirstPersonCardLayer.DrawTransition.DrawnEnterPlaybackSurvivesOrdinaryRefresh",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDrawEnterPlaybackSurvivesOrdinaryRefreshTest::RunTest(const FString& Parameters)
+{
+	using namespace WacomFirstPersonCardLayerDrawTransitionSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig MotionConfig = MakeDrawPlaybackMotionConfig();
+	MotionConfig.ResetDistancePixels = 80.0f;
+	MotionConfig.DrawnEnterOffsetPixels = FVector2D(0.0f, 240.0f);
+	MotionConfig.DrawnEnterDurationSeconds = 0.4f;
+	MotionConfig.DrawnEnterStaggerSeconds = 0.0f;
+	MotionConfig.DrawnEnterArcLiftPixels = 0.0f;
+	MotionConfig.DrawnEnterEasePower = 1.0f;
+	Layer->SetSlotMotionConfig(MotionConfig);
+	Layer->SetCardLayerInteractionEnabled(true);
+
+	const FGuid CardId = FGuid::NewGuid();
+	const FVector2D InitialTargetPosition(100.0f, 200.0f);
+	const FVector2D RefreshedTargetPosition(112.0f, 200.0f);
+	const FVector2D SourcePosition = InitialTargetPosition + MotionConfig.DrawnEnterOffsetPixels;
+
+	Layer->SetCardTransitionHints({ MakeDrawnHint(CardId, 0, 1) });
+	Layer->SetCardSlots({ MakeSlot(CardId, InitialTargetPosition) });
+
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (TestNotNull(TEXT("Drawn slot widget"), SlotWidget))
+	{
+		TestEqual(
+			TEXT("Large-offset drawn card starts at source"),
+			SlotWidget->GetVisualSlotView().ScreenPosition,
+			SourcePosition);
+		TestTrue(
+			TEXT("Enter playback starts before ordinary refresh"),
+			FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bEnterTransitionPlaybackActive);
+
+		Layer->SetCardSlots({ MakeSlot(CardId, RefreshedTargetPosition) });
+
+		TestEqual(
+			TEXT("Ordinary refresh updates target slot"),
+			SlotWidget->GetSlotView().ScreenPosition,
+			RefreshedTargetPosition);
+		TestEqual(
+			TEXT("Ordinary refresh keeps drawn visual at source"),
+			SlotWidget->GetVisualSlotView().ScreenPosition,
+			SourcePosition);
+		TestTrue(
+			TEXT("Ordinary refresh preserves active enter playback"),
+			FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bEnterTransitionPlaybackActive);
+		TestTrue(
+			TEXT("Ordinary refresh does not snap large-offset drawn card"),
+			FVector2D::Distance(SlotWidget->GetVisualSlotView().ScreenPosition, RefreshedTargetPosition)
+				> MotionConfig.ResetDistancePixels);
+
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+		TestEqual(
+			TEXT("Drawn card finishes at refreshed target"),
+			SlotWidget->GetVisualSlotView().ScreenPosition,
+			RefreshedTargetPosition);
+		TestFalse(
+			TEXT("Enter playback completes after preserved refresh"),
+			FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).bEnterTransitionPlaybackActive);
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerAnchorPresentationGateDefersDrawHintsTest,
 	"Wacom.UI.FirstPersonCardLayer.DrawTransition.AnchorPresentationGateDefersDrawHints",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
