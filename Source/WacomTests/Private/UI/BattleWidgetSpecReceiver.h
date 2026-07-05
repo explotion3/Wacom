@@ -244,6 +244,12 @@ public:
 		return BuildFirstPersonCardTransitionHints(PreviousSnapshot, NextSnapshot);
 	}
 
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFirstPersonCardFeedbackHintsForTest(
+		const FBattleSnapshot& NextSnapshot) const
+	{
+		return BuildFirstPersonCardFeedbackHints(NextSnapshot);
+	}
+
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
 		const FBattleSnapshot& NextSnapshot) const
 	{

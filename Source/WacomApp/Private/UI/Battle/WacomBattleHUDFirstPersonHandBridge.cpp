@@ -277,8 +277,10 @@ void FWacomBattleHUDFirstPersonHandBridge::SuppressLayerForEntry()
 	Anchor->CancelFirstPersonCardDragGesture(true);
 	Anchor->ClearCardLayerVisualState();
 	TArray<FWacomFirstPersonCardLayerTransitionHint> EmptyHints;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> EmptyFeedbackHints;
 	TArray<FWacomFirstPersonCardLayerEntry> EmptyEntries;
 	Anchor->SetRuntimeCardLayerTransitionHints(FirstPersonBattleHandLayerSourceId, EmptyHints);
+	Anchor->SetRuntimeCardLayerFeedbackHints(FirstPersonBattleHandLayerSourceId, EmptyFeedbackHints);
 	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, EmptyEntries);
 	Anchor->SetBattleHandInteractionEnabled(false);
 	LastAnchor = Anchor;
@@ -1079,7 +1081,8 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPresentationFrame(
 		Anchor.SetRuntimeCardLayerPresentationFrame(
 			FirstPersonBattleHandLayerSourceId,
 			Frame.Entries,
-			Frame.TransitionHints);
+			Frame.TransitionHints,
+			Frame.FeedbackHints);
 	}
 	else
 	{
@@ -1535,6 +1538,12 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> FWacomBattleHUDFirstPersonHandB
 	const FBattleSnapshot& NextSnapshot) const
 {
 	return PresentationController.BuildTransitionHints(PreviousSnapshot, NextSnapshot);
+}
+
+TArray<FWacomFirstPersonCardLayerFeedbackHint> FWacomBattleHUDFirstPersonHandBridge::BuildFeedbackHints(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return PresentationController.BuildFeedbackHints(NextSnapshot);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::ClearTransitionSnapshot()

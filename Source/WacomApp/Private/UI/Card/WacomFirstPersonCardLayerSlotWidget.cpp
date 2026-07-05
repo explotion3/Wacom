@@ -413,6 +413,12 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotFeedbackConfig(
 	{
 		ClearInteractionFeedback();
 	}
+	else if (!SlotFeedbackConfig.bEnableRetainedFeedback
+		|| SlotFeedbackConfig.RetainedFeedbackDuration <= 0.0f)
+	{
+		RetainedFeedbackElapsedSeconds =
+			RetainedFeedbackStartDelaySeconds + SlotFeedbackConfig.RetainedFeedbackDuration;
+	}
 	ApplyVisualSlotView();
 }
 
@@ -771,6 +777,10 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	if (CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration)
 	{
 		CommitFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
+	}
+	if (IsRetainedFeedbackActive())
+	{
+		RetainedFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
 	}
 
 	bool bNearTarget = true;
@@ -1210,12 +1220,21 @@ FWacomFirstPersonCardLayerSlotView UWacomFirstPersonCardLayerSlotWidget::Compose
 void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
+	const EWacomFirstPersonCardDragTargetFeedbackState EffectiveDragTargetFeedbackState =
+		ResolveEffectiveDragTargetFeedbackState();
+	const bool bDragTargetFeedbackActive =
+		CardDragConfig.bEnableDragTargetFeedback
+		&& EffectiveDragTargetFeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::None;
+	const float RetainedAlpha = ComputeRetainedFeedbackAlpha();
+	const bool bRetainedTransformActive = RetainedAlpha > 0.0f && !bDragTargetFeedbackActive;
 	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Slot))
 	{
 		CanvasSlot->SetAutoSize(true);
 		CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
 		CanvasSlot->SetPosition(SlotView.ScreenPosition);
-		CanvasSlot->SetZOrder(SlotView.ZOrder);
+		CanvasSlot->SetZOrder(
+			SlotView.ZOrder
+			+ (bRetainedTransformActive ? SlotFeedbackConfig.RetainedFeedbackZOrderBoost : 0));
 	}
 	const bool bDenyActive = SlotFeedbackConfig.bEnabled
 		&& DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
@@ -1229,20 +1248,18 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 	SetRenderOpacity(FMath::Clamp(SlotView.RenderOpacity, 0.0f, 1.0f));
 	SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	FWidgetTransform CardRenderTransform;
-	const EWacomFirstPersonCardDragTargetFeedbackState EffectiveDragTargetFeedbackState =
-		ResolveEffectiveDragTargetFeedbackState();
 	const float PressedScale = (SlotFeedbackConfig.bEnabled && bIsPressedForFirstPersonLayer)
 		? SlotFeedbackConfig.PressedScale
 		: 1.0f;
-	const bool bDragTargetFeedbackActive =
-		CardDragConfig.bEnableDragTargetFeedback
-		&& EffectiveDragTargetFeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::None;
 	const float CommitScale =
 		SlotFeedbackConfig.bEnabled
 		&& SlotFeedbackConfig.bEnablePlayCommitFeedback
 		&& CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration
 			? SlotFeedbackConfig.PlayCommitScale
 			: 1.0f;
+	const float RetainedScale = bRetainedTransformActive
+		? FMath::Lerp(1.0f, SlotFeedbackConfig.RetainedFeedbackScale, RetainedAlpha)
+		: 1.0f;
 	const float DragReadyScale =
 		CardDragConfig.bEnableDragTargetFeedback
 		&& EffectiveDragTargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CommitReady
@@ -1250,12 +1267,15 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 			: 1.0f;
 	CardRenderTransform.Translation = FVector2D(
 		DenyShakeOffset,
-		0.0f);
+		bRetainedTransformActive
+			? -SlotFeedbackConfig.RetainedFeedbackLiftPixels * RetainedAlpha
+			: 0.0f);
 	CardRenderTransform.Scale = FVector2D(FMath::Max(
 		0.01f,
 		SlotView.RenderScale
 			* (bDragTargetFeedbackActive ? 1.0f : PressedScale)
 			* CommitScale
+			* RetainedScale
 			* DragReadyScale));
 	CardRenderTransform.Angle = SlotView.RenderAngleDegrees;
 	SetRenderTransform(CardRenderTransform);
@@ -1990,6 +2010,9 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.bDenyFeedbackActive = DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
 	View.bConfirmFeedbackActive = ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration;
 	View.bCommitFeedbackActive = CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration;
+	View.bRetainedFeedbackActive = IsRetainedFeedbackActive();
+	View.RetainedFeedbackElapsedSeconds = RetainedFeedbackElapsedSeconds;
+	View.RetainedFeedbackStartDelaySeconds = RetainedFeedbackStartDelaySeconds;
 	View.bCardDragProbeFeedback = bCardDragProbeFeedback;
 	View.bCardDragTargetAffordanceFeedback = bCardDragTargetAffordanceFeedback;
 	View.bCardDragTargetFocusActive =
@@ -2241,6 +2264,28 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerCommitFeedback()
 	UpdateWantsTick();
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::TriggerRetainedFeedback(
+	int32 SequenceIndex,
+	int32 SequenceCount)
+{
+	if (!SlotFeedbackConfig.bEnabled
+		|| !SlotFeedbackConfig.bEnableRetainedFeedback
+		|| SlotFeedbackConfig.RetainedFeedbackDuration <= 0.0f)
+	{
+		return;
+	}
+
+	const int32 SafeSequenceIndex = FMath::Clamp(
+		SequenceIndex,
+		0,
+		FMath::Max(0, SequenceCount - 1));
+	RetainedFeedbackStartDelaySeconds =
+		static_cast<float>(SafeSequenceIndex) * SlotFeedbackConfig.RetainedFeedbackStaggerSeconds;
+	RetainedFeedbackElapsedSeconds = 0.0f;
+	ApplyVisualSlotView();
+	UpdateWantsTick();
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
 {
 	bIsPressedForFirstPersonLayer = false;
@@ -2250,6 +2295,8 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
 	ConfirmFeedbackElapsedSeconds = SlotFeedbackConfig.ConfirmDuration;
 	DenyFeedbackElapsedSeconds = SlotFeedbackConfig.DenyDuration;
 	CommitFeedbackElapsedSeconds = SlotFeedbackConfig.PlayCommitDuration;
+	RetainedFeedbackStartDelaySeconds = 0.0f;
+	RetainedFeedbackElapsedSeconds = SlotFeedbackConfig.RetainedFeedbackDuration;
 	ApplyFeedbackOverlay();
 	ApplyInteractionFeedbackOverlay();
 }
@@ -2258,6 +2305,31 @@ bool UWacomFirstPersonCardLayerSlotWidget::IsDenyFeedbackActive() const
 {
 	return SlotFeedbackConfig.bEnabled
 		&& DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::IsRetainedFeedbackActive() const
+{
+	return SlotFeedbackConfig.bEnabled
+		&& SlotFeedbackConfig.bEnableRetainedFeedback
+		&& SlotFeedbackConfig.RetainedFeedbackDuration > 0.0f
+		&& RetainedFeedbackElapsedSeconds
+			< RetainedFeedbackStartDelaySeconds + SlotFeedbackConfig.RetainedFeedbackDuration;
+}
+
+float UWacomFirstPersonCardLayerSlotWidget::ComputeRetainedFeedbackAlpha() const
+{
+	if (!IsRetainedFeedbackActive())
+	{
+		return 0.0f;
+	}
+
+	const float PlaybackSeconds = RetainedFeedbackElapsedSeconds - RetainedFeedbackStartDelaySeconds;
+	if (PlaybackSeconds < 0.0f)
+	{
+		return 0.0f;
+	}
+
+	return ComputeFeedbackPulseAlpha(PlaybackSeconds, SlotFeedbackConfig.RetainedFeedbackDuration);
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
@@ -2278,10 +2350,17 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyFeedbackOverlay()
 			SlotFeedbackConfig.bEnablePlayCommitFeedback
 				? ComputeFeedbackPulseAlpha(CommitFeedbackElapsedSeconds, SlotFeedbackConfig.PlayCommitDuration)
 				: 0.0f;
+		const float RetainedAlpha = ComputeRetainedFeedbackAlpha();
 		const bool bSourceInteractionFeedbackActive =
 			bIsPressedForFirstPersonLayer
 			|| ConfirmAlpha > 0.0f
-			|| CommitAlpha > 0.0f;
+			|| CommitAlpha > 0.0f
+			|| RetainedAlpha > 0.0f;
+		if (RetainedAlpha > 0.0f)
+		{
+			OverlayColor = SlotFeedbackConfig.RetainedFeedbackColor;
+			OverlayOpacity = SlotFeedbackConfig.RetainedFeedbackOpacity * RetainedAlpha;
+		}
 		if (!bSourceInteractionFeedbackActive && CanApplyPlayableHoverFeedback())
 		{
 			OverlayColor = SlotFeedbackConfig.PlayableHoverColor;
@@ -2345,6 +2424,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyInteractionFeedbackOverlay()
 	const float ConfirmAlpha = SlotFeedbackConfig.bEnabled
 		? ComputeFeedbackPulseAlpha(ConfirmFeedbackElapsedSeconds, SlotFeedbackConfig.ConfirmDuration)
 		: 0.0f;
+	const float RetainedAlpha = ComputeRetainedFeedbackAlpha();
 	const bool bDragTargetFeedbackActive =
 		CardDragConfig.bEnableDragTargetFeedback
 		&& ResolveEffectiveDragTargetFeedbackState() != EWacomFirstPersonCardDragTargetFeedbackState::None;
@@ -2377,6 +2457,13 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyInteractionFeedbackOverlay()
 		FeedbackColor = SlotFeedbackConfig.PlayCommitColor;
 		FeedbackOpacity = SlotFeedbackConfig.PlayCommitOpacity;
 		FeedbackPulse = CommitAlpha;
+	}
+	else if (RetainedAlpha > 0.0f && !bDragTargetFeedbackActive)
+	{
+		FeedbackKind = EWacomFirstPersonCardInteractionFeedbackKind::Retained;
+		FeedbackColor = SlotFeedbackConfig.RetainedFeedbackColor;
+		FeedbackOpacity = SlotFeedbackConfig.RetainedFeedbackOpacity;
+		FeedbackPulse = RetainedAlpha;
 	}
 	else if (ConfirmAlpha > 0.0f)
 	{
@@ -2433,6 +2520,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 		|| DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration
 		|| (SlotFeedbackConfig.bEnablePlayCommitFeedback
 			&& CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration)
+		|| IsRetainedFeedbackActive()
 		|| (CardDragConfig.bEnableDragTargetFeedback
 			&& (ResolveEffectiveDragTargetFeedbackState() != EWacomFirstPersonCardDragTargetFeedbackState::None
 				|| bCardDragProbeFeedback

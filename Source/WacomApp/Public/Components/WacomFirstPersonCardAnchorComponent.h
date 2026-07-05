@@ -46,8 +46,12 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorAutomationTestView
 	int32 CardLayerConfigApplyCount = 0;
 	FName PendingTransitionHintSourceId = NAME_None;
 	TArray<FGuid> PendingTransitionHintCardIds;
+	FName PendingFeedbackHintSourceId = NAME_None;
+	TArray<FGuid> PendingFeedbackHintCardIds;
 	bool bHasPendingTransitionHintsForCurrentSource = false;
 	bool bCanConsumePendingTransitionHintsForCurrentSource = false;
+	bool bHasPendingFeedbackHintsForCurrentSource = false;
+	bool bCanConsumePendingFeedbackHintsForCurrentSource = false;
 	bool bTransitionPresentationEnabledForCurrentSource = true;
 };
 #endif
@@ -466,6 +470,30 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.01", UIMin = "0.9", UIMax = "1.2", ToolTip = "成功提交出牌后 commit 反馈额外乘上的缩放倍率；只作用于视觉 slot。"))
 	float PlayCommitFeedbackScale = 1.015f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否在回合结束保留普通手牌时播放锁定保留反馈；只影响 UMG 表现，不延迟回合流程或改变战斗规则。"))
+	bool bEnableRetainedFeedback = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.6", Units = "s", ToolTip = "保留卡牌锁定反馈的播放时长，单位为秒；建议 0.22 到 0.34 秒，保持短促不抢抽牌动画。"))
+	float RetainedFeedbackDuration = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.16", Units = "s", ToolTip = "多张保留卡牌之间的反馈错峰间隔，单位为秒；只影响视觉节奏，不改变事件顺序。"))
+	float RetainedFeedbackStaggerSeconds = 0.045f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "48.0", ToolTip = "保留反馈期间卡牌额外上浮距离，单位为 UMG 布局像素；使用 render transform，不改变稳定槽位布局。"))
+	float RetainedFeedbackLiftPixels = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.01", UIMin = "1.0", UIMax = "1.12", ToolTip = "保留反馈期间卡牌额外乘上的缩放倍率；只作用于视觉 slot。"))
+	float RetainedFeedbackScale = 1.025f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留反馈使用的锁定色；默认暖金色，用于和抽牌、出牌反馈区分。"))
+	FLinearColor RetainedFeedbackColor = FLinearColor(1.0f, 0.84f, 0.34f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.5", ToolTip = "保留反馈边缘/叠加的不透明度，范围 0 到 1。"))
+	float RetainedFeedbackOpacity = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0", UIMin = "0", UIMax = "800", ToolTip = "保留反馈播放期间临时增加的绘制层级；用于避免被相邻手牌遮住，不改变手牌顺序。"))
+	int32 RetainedFeedbackZOrderBoost = 180;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|09 Gesture", meta = (ToolTip = "是否启用第一人称手牌按住读牌、拖出手牌或拉箭头提交。关闭后只保留 hover / 读牌表现，不再提交卡牌。"))
 	bool bEnableFirstPersonCardDragCommit = true;
 
@@ -580,10 +608,14 @@ public:
 	void SetRuntimeCardLayerPresentationFrame(
 		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
 	void SetRuntimeCardLayerTransitionHints(
 		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
+	void SetRuntimeCardLayerFeedbackHints(
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
 	void SetRuntimeCardLayerTransitionPresentationEnabled(FName SourceId, bool bEnabled);
 	bool HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const;
 	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);

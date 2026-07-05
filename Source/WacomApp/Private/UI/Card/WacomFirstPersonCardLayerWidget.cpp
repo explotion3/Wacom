@@ -556,6 +556,7 @@ void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 	OutgoingSlotWidgets.Reset();
 	LastSlots.Reset();
 	PendingTransitionHintsByKey.Reset();
+	PendingFeedbackHintsByKey.Reset();
 	HoveredCardTargetHandle = FWacomInteractionTargetHandle();
 	HoveredCardTargetSlotView = FWacomFirstPersonCardLayerSlotView();
 	LastMotionDebugView = FWacomFirstPersonCardLayerMotionDebugView();
@@ -582,6 +583,28 @@ void UWacomFirstPersonCardLayerWidget::SetCardTransitionHints(
 		ResolvedHint.bHasPlayedExitTargetWidgetPosition = Hint.bHasPlayedExitTargetWidgetPosition;
 		ResolvedHint.PlayedExitTargetWidgetPosition = Hint.PlayedExitTargetWidgetPosition;
 		PendingTransitionHintsByKey.Add(
+			Hint.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphensLower),
+			ResolvedHint);
+	}
+}
+
+void UWacomFirstPersonCardLayerWidget::SetCardFeedbackHints(
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints)
+{
+	PendingFeedbackHintsByKey.Reset();
+	for (const FWacomFirstPersonCardLayerFeedbackHint& Hint : InHints)
+	{
+		if (!Hint.CardInstanceId.IsValid()
+			|| Hint.FeedbackKind == EWacomFirstPersonCardLayerFeedbackKind::None)
+		{
+			continue;
+		}
+
+		FWacomFirstPersonCardLayerResolvedFeedbackHint ResolvedHint;
+		ResolvedHint.FeedbackKind = Hint.FeedbackKind;
+		ResolvedHint.SequenceIndex = FMath::Max(0, Hint.SequenceIndex);
+		ResolvedHint.SequenceCount = FMath::Max(1, Hint.SequenceCount);
+		PendingFeedbackHintsByKey.Add(
 			Hint.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphensLower),
 			ResolvedHint);
 	}
@@ -647,6 +670,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 	TSet<FString> IncomingKeys;
 	TSet<FString> UsedKeys;
 	TSet<FString> AppliedTransitionHintKeys;
+	TSet<FString> AppliedFeedbackHintKeys;
 	TArray<TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>> NewSlotWidgets;
 	NewSlotWidgets.Reserve(InSlots.Num());
 	bool bHoveredCardTargetUpdatedThisRefresh = false;
@@ -700,6 +724,8 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		}
 		const FWacomFirstPersonCardLayerResolvedTransitionHint* IncomingTransitionHint =
 			PendingTransitionHintsByKey.Find(SlotKey);
+		const FWacomFirstPersonCardLayerResolvedFeedbackHint* IncomingFeedbackHint =
+			PendingFeedbackHintsByKey.Find(SlotKey);
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile> EnterProfileOverride =
 			(IncomingTransitionHint && SlotView.bProjected)
 				? GetEnterProfileForTransition(*IncomingTransitionHint, SlotView)
@@ -748,6 +774,22 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 			const FWacomFirstPersonCardLayerSlotView& VisualSlotView = SlotWidget->GetVisualSlotView();
 			CanvasSlot->SetPosition(VisualSlotView.ScreenPosition);
 			CanvasSlot->SetZOrder(VisualSlotView.ZOrder);
+		}
+
+		if (IncomingFeedbackHint && SlotView.bProjected)
+		{
+			switch (IncomingFeedbackHint->FeedbackKind)
+			{
+			case EWacomFirstPersonCardLayerFeedbackKind::Retained:
+				SlotWidget->TriggerRetainedFeedback(
+					IncomingFeedbackHint->SequenceIndex,
+					IncomingFeedbackHint->SequenceCount);
+				AppliedFeedbackHintKeys.Add(SlotKey);
+				break;
+			case EWacomFirstPersonCardLayerFeedbackKind::None:
+			default:
+				break;
+			}
 		}
 
 		if (SlotView.bIsHovered && SlotView.bProjected && SlotView.Entry.CardInstanceId.IsValid())
@@ -867,12 +909,24 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 	{
 		PendingTransitionHintsByKey.Remove(AppliedTransitionHintKey);
 	}
+	for (const FString& AppliedFeedbackHintKey : AppliedFeedbackHintKeys)
+	{
+		PendingFeedbackHintsByKey.Remove(AppliedFeedbackHintKey);
+	}
+	for (auto It = PendingFeedbackHintsByKey.CreateIterator(); It; ++It)
+	{
+		if (!IncomingKeys.Contains(It.Key()))
+		{
+			It.RemoveCurrent();
+		}
+	}
 }
 
 bool UWacomFirstPersonCardLayerWidget::CanSkipEquivalentSlotRefresh(
 	const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots) const
 {
 	if (PendingTransitionHintsByKey.Num() > 0
+		|| PendingFeedbackHintsByKey.Num() > 0
 		|| OutgoingSlotWidgets.Num() > 0
 		|| SlotWidgets.Num() != InSlots.Num()
 		|| LastSlots.Num() != InSlots.Num()
@@ -1103,6 +1157,14 @@ FWacomFirstPersonCardLayerAutomationTestView UWacomFirstPersonCardLayerWidget::G
 	View.AimArrowStart = ResolveAimArrowStart();
 	View.AimArrowEnd = ResolveAimArrowEnd();
 	View.CardViewClass = CardViewClass;
+	for (const TPair<FString, FWacomFirstPersonCardLayerResolvedFeedbackHint>& Pair : PendingFeedbackHintsByKey)
+	{
+		FGuid CardId;
+		if (FGuid::Parse(Pair.Key, CardId))
+		{
+			View.PendingFeedbackHintCardIds.Add(CardId);
+		}
+	}
 	return View;
 }
 
@@ -1299,6 +1361,7 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	CurrentDragView = FWacomFirstPersonCardDragView();
 	RootCanvas = nullptr;
 	PendingTransitionHintsByKey.Reset();
+	PendingFeedbackHintsByKey.Reset();
 	Super::NativeDestruct();
 }
 

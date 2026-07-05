@@ -38,16 +38,16 @@ Battle / Run snapshot
 | 类型 | 职责 | 不负责 |
 |---|---|---|
 | `UWacomFirstPersonCardAnchorComponent` | 作为制作参数 façade、投影锚点 owner 和对外事件 façade；从 Details 构建 layout / motion / feedback config | 不提交 Battle / Run 命令，不直接持有规则状态 |
-| `WacomFirstPersonCardLayerTypes.h` | 第一人称卡牌层公共 UI 协议：entry、slot view、drag / pointer view、transition hint、motion / visual / feedback config | 不包含 AnchorComponent 制作参数或运行时实现 |
-| `FWacomFirstPersonCardAnchorRuntimeState` | Anchor 私有 runtime source 状态：entries、view data、legacy transition hints、presentation frame hints、hovered card / card target handle | 不暴露 Blueprint API，不负责布局或 widget 生命周期 |
+| `WacomFirstPersonCardLayerTypes.h` | 第一人称卡牌层公共 UI 协议：entry、slot view、drag / pointer view、transition hint、feedback hint、motion / visual / feedback config | 不包含 AnchorComponent 制作参数或运行时实现 |
+| `FWacomFirstPersonCardAnchorRuntimeState` | Anchor 私有 runtime source 状态：entries、view data、legacy transition hints、feedback hints、presentation frame hints、presentation gate、hovered card / card target handle | 不暴露 Blueprint API，不负责布局或 widget 生命周期 |
 | `FWacomFirstPersonCardSlotLayoutBuilder` | Anchor 私有布局构建器：根据 resolved config、投影后 hand anchor 和 viewport size 生成基础 slot view / input hit 几何 | 不依赖 `UWacomFirstPersonCardAnchorComponent`，不处理 hover 视觉合成或命令 |
-| `FWacomFirstPersonCardLayerOwner` | Anchor 私有 CardLayerWidget 生命周期 owner：创建 / 移除 widget、应用 layer config、推送 presentation frame / transition hints 和 slots | 不解析 anchor / viewport，不读取 runtime source，不转发 Battle / Run 命令 |
+| `FWacomFirstPersonCardLayerOwner` | Anchor 私有 CardLayerWidget 生命周期 owner：创建 / 移除 widget、应用 layer config、推送 presentation frame / transition hints / feedback hints 和 slots | 不解析 anchor / viewport，不读取 runtime source，不转发 Battle / Run 命令 |
 | `FWacomFirstPersonCardLayerDelegateRouter` | Anchor 私有 LayerWidget 事件 router：绑定 / 解绑 native delegates、同步 hovered runtime state、转发 Anchor 对外 delegates | 不创建 widget，不解析布局，不提交 Battle / Run 命令 |
 | `UWacomFirstPersonCardLayerWidget` | 按 entries reconcile slot widget，维护 active / outgoing slot，绘制 drag arrow 和 layer-level feedback | 不读取 Battle / Run 规则状态 |
 | `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomFirstPersonCardViewWidget`，处理 hover / press / inspect / drag gesture 和 visual slot motion | 不直接调用 BattleSession 或 RunSession，不直接创建卡面反馈 Image / 材质控件 |
 | `UWacomFirstPersonCardViewWidget` | 第一人称卡面 wrapper：组合通用 `UWacomCardView` 与 first-person 专属 `FeedbackOverlay`、`InteractionFeedbackImage` | 不处理 hover / drag 手势，不提交 Battle / Run 命令 |
 | `UWacomRunFirstPersonCardSourceComponent` | 探索期把 Run BattleDeck / menu lease 写入 anchor runtime source | 不提交 Run 规则 |
-| `FWacomBattleHandPresentationController` | BattleHUD 内部战斗手牌表现事务：收集 Battle events、选择 baseline、生成 entries + transition hints frame | 不读取 Anchor 投影，不提交 Battle 命令 |
+| `FWacomBattleHandPresentationController` | BattleHUD 内部战斗手牌表现事务：收集 Battle events、选择 baseline、生成 entries + transition hints + feedback hints frame | 不读取 Anchor 投影，不提交 Battle 命令 |
 | `FWacomBattleHUDFirstPersonHandBridge` | BattleHUD 内部同步 battle hand presentation frame、drag preview / release | 不暴露 Blueprint API |
 | `FWacomBattleHUDCardDetailController` | first-person viewport 详情数据、motion、定位和 teardown | 不改变卡牌规则 |
 
@@ -90,7 +90,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `07 Hover` | hover lift / scale / ZOrder / hit hysteresis |
 | `08 Targeting State` | pending targeting、target select deemphasis |
 | `09 Gesture` | 按住读牌、拖出提交、快捷键拿起卡牌、inspect 姿态、aim arrow |
-| `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit feedback |
+| `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit、retained feedback |
 | `11 Drag Target Feedback` | world / card target 颜色、opacity、arrow snap、card-target focus |
 | `12 Camera Look While UI` | hover / pointer 和 drag 期间 camera look override |
 | `90 Development Preview` | preview source-only 字段：`bDrawPreviewCardLayer`、`PreviewCardDefinitions`、`PreviewCardCountFallback` |
@@ -119,7 +119,7 @@ Runtime source 优先级：
 
 BattleHUD 的 first-person hand bridge 只拥有 `BattleHand` runtime source。清理或 `NativeDestruct` 可能晚于 Run source 重新激活，因此 BattleHUD 解绑自身 delegate 时必须检查 Anchor 当前 `RuntimeCardLayerSourceId`：只有仍为 `BattleHand` 时才关闭 first-person card interaction、取消拖拽和清 runtime data；如果已经被 `RunFirstPersonBattleDeck` 或 menu lease 接管，只能解绑 BattleHUD delegate 和清战斗 world preview，不得改写 Run source 的交互状态。
 
-Runtime source 只拥有卡牌 entries、legacy transition hints、presentation frame hints、presentation gate、hovered card / card target handle、interaction ownership 和 source 生命周期；视觉调参来自 AnchorComponent Details。BattleHUD / Run source 不设置、不清理、也不持有 layout preset override。代码上这些运行时状态由 Anchor 私有 `FWacomFirstPersonCardAnchorRuntimeState` 保存，Anchor 的 public API 保持 source façade 语义。Battle hand 的正式入口是 presentation frame：`FWacomBattleHandPresentationController` 先把 Battle events 与当前 snapshot 合成为一帧 `entries + transition hints`，再由 `SetRuntimeCardLayerPresentationFrame()` 原子写入 `BattleHand` source；普通 hand refresh 只能写 entries / interaction，不替换 frame hints，也不能让等待入场的抽牌卡绕过 frame 直接显形。Legacy transition hints 保留给旧测试、非 Battle source 或显式兼容入口。Presentation gate 是 source-scoped 播放闸门：gate 关闭时 entries 可以继续刷新，但 pending frame hints / legacy hints 不会被 `FWacomFirstPersonCardLayerOwner` 消费到 Layer，也就不会在镜头 staging、hand suppression 或其他不可见阶段提前启动播放。Layer 侧也必须按“已应用才消费”处理：如果本次 `SetCardSlots` 没有对应 slot，或对应 slot 暂时不可投影，pending enter hint 保留到后续刷新；只有 presentation gate 已打开、匹配到 projected slot 并启动 enter playback，或匹配到 outgoing slot 并启动 exit playback 后，才移除对应 hint。
+Runtime source 只拥有卡牌 entries、legacy transition hints、feedback hints、presentation frame hints、presentation gate、hovered card / card target handle、interaction ownership 和 source 生命周期；视觉调参来自 AnchorComponent Details。BattleHUD / Run source 不设置、不清理、也不持有 layout preset override。代码上这些运行时状态由 Anchor 私有 `FWacomFirstPersonCardAnchorRuntimeState` 保存，Anchor 的 public API 保持 source façade 语义。Battle hand 的正式入口是 presentation frame：`FWacomBattleHandPresentationController` 先把 Battle events 与当前 snapshot 合成为一帧 `entries + transition hints + feedback hints`，再由 `SetRuntimeCardLayerPresentationFrame()` 原子写入 `BattleHand` source；普通 hand refresh 只能写 entries / interaction，不替换 frame hints，也不能让等待入场的抽牌卡绕过 frame 直接显形。Legacy transition hints 保留给旧测试、非 Battle source 或显式兼容入口。Presentation gate 是 source-scoped 播放闸门：gate 关闭时 entries 可以继续刷新，但 pending frame hints / feedback hints / legacy hints 不会被 `FWacomFirstPersonCardLayerOwner` 消费到 Layer，也就不会在镜头 staging、hand suppression 或其他不可见阶段提前启动播放。Layer 侧也必须按“已应用才消费”处理：如果本次 `SetCardSlots` 没有对应 slot，或对应 slot 暂时不可投影，pending enter hint 或 retained feedback hint 保留到后续刷新；只有 presentation gate 已打开、匹配到 projected slot 并启动 enter playback、匹配到 outgoing slot 并启动 exit playback，或匹配到 projected slot 并启动 retained feedback 后，才移除对应 hint。
 
 BattleHUD runtime 战斗手牌不再有 legacy 2D hand 可见性恢复路径。进入 battle entry staging suppression 时，BattleHUD 会先关闭 `BattleHand` presentation gate、清空当前 card layer visual slot，再写入 0 entries 的空 `BattleHand` runtime source；这既阻止 development preview fallback，也避免旧 slot 被 `SetCardSlots(0)` 当作 outgoing slot 播离场动画。suppression 不再推进 Battle hand presentation controller 的 snapshot baseline；如果首回合 entry reveal frame 已提交到 Anchor 但尚未被 Layer tick 消费，bridge 会在清空 visual source 前把该 frame 还原为 controller 的待播事件，保证解除 suppression 后只重放一次正式 Drawn 入场。退出战斗后的手牌恢复只依赖 Run source ownership 交接，不能通过旧 2D hand 兜底。
 
@@ -149,6 +149,8 @@ Motion profile 只影响最终 visual slot 追踪，不改变 `InputHitCenter / 
 - Drawn / Gained / Played / Discarded transition hint 只改变表现来源或离场方向，不改变 snapshot 真相、命令路径或 slot key。
 
 `CardsDrawn` 事件由 `FWacomBattleHandPresentationController` 转成 Battle hand presentation frame 中的 `Drawn` transition hint。Controller 优先使用 `CardsDrawn.CardInstanceIds` 中的真实抽牌 / 移入手牌 ID，并且只为这些 ID 中仍存在于最新 `BattleSnapshot.Hand.Cards` 的卡生成 hint；同一批可见 hint 会写入连续稳定的 `SequenceIndex / SequenceCount`，被手牌上限立刻弃掉的 ID 不占可见动画序列。旧式或测试手写的 Count-only `CardsDrawn` 事件仍保留兼容 fallback：仅在 `CardInstanceIds` 为空时，才按 baseline snapshot 与 next snapshot 中“新出现的卡”分配 Drawn hint。Battle hand 不再让普通 snapshot refresh 直接决定“新卡是否可见”：有 pending 事件时必须提交显式 `entries + hints` frame，没有 pending 事件时才是普通 entries refresh；状态刷新、输入解锁刷新或 ActionPanel 可用性刷新不会用空 hints 覆盖尚未消费的 Drawn frame。Anchor 把 presentation frame hints 与 legacy hints 分开保存，Layer owner 优先消费 frame hints，消费成功后才交给 `UWacomFirstPersonCardLayerWidget` reconcile。Layer 只消费这些表现语义，不重新推断战斗事件、不读牌堆、不修改 Battle snapshot；如果 battle entry presentation gate 尚未打开，或镜头 staging / viewport 投影导致 slot 暂不可见，Drawn hint 会留在 Anchor runtime source 或 Layer pending set，直到 gate 打开且 slot 可见并真正启动入场，避免卡牌在不可见阶段播放完后直接落位。当前 `Drawn` 入场使用 `06 Transition Motion` 下的专用参数：`DrawnCardEnterDurationSeconds` 控制固定时长播放，`DrawnCardEnterStaggerSeconds` 按 sequence index 做批次错峰，`DrawnCardEnterArcLiftPixels` 叠加抛物线式上扬弧线，`DrawnCardEnterEasePower` 控制入场 ease，`bBlockInteractionDuringDrawnCardEnter` 决定播放期间是否临时禁止 hover / press / drag。播放完成后 SlotWidget 交回普通 slot motion，由 `Layout / Hover / Pending / DragTargetFocus` 等 motion intent 继续接管。
+
+`CardsRetained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 retained feedback hint，而不是 `Retained` transition hint。Controller 只为仍存在于下一份普通手牌中的卡生成 feedback，过滤无效 ID、重复 ID、左右手 anchor 和已经离开手牌的 ID；同一批 feedback 使用稳定 `SequenceIndex / SequenceCount`。Layer 侧 retained feedback 是 post-layout pulse：卡牌保持当前 slot identity 和 layout target，只短促上浮、轻微放大并播放暖金色 feedback overlay。普通 refresh 不会取消正在播放的 retained feedback；slot 暂不可投影时 hint 会留到下一次 projected refresh。
 
 `bEnableReadableTransitionOrigins` 只控制 Drawn / Gained / Played / Discarded 的可读来源方向兼容，不关闭 Drawn 的有限时长播放、错峰和弧线。需要在 PIE 中验证抽牌手感时，优先调整 `06 Transition Motion` 的 Drawn 专用参数；不应在 BattleHUD 或 BattleSession 中硬编码动画位置、延迟或曲线。
 
@@ -195,7 +197,7 @@ Hover 输入命中与最终视觉几何分离。Anchor 先投影并平滑整副�
 
 视觉状态优先级固定为：pending source 高于普通 hover；drag card-target focus 不触发普通 hover，只负责当前指针压中的唯一目标卡 lift / scale / ZOrder；target affordance 只控制 overlay，不参与 lift / scale / ZOrder；pressed、commit pulse 和 deny shake 保留为短时 micro feedback，其中 deny 只做 shake + 边缘 / 暗角反馈，不改变主 scale / ZOrder。
 
-源卡短时交互反馈统一走 `InteractionFeedbackImage`，包括 `Pressed / Confirm / Commit / Deny`。SlotWidget 只计算状态、shake、scale 和 `FWacomFirstPersonCardInteractionFeedbackView`，然后交给 `UWacomFirstPersonCardViewWidget`；实际尺寸、层级和默认材质由 WBP 内的 `InteractionFeedbackImage` 控件负责。材质来源有两级：AnchorComponent Details 的 `InteractionFeedbackMaterial` 显式 override 优先；为空时 C++ 会复用 `InteractionFeedbackImage` 自身 brush 上的材质，作为 WBP 默认材质。若没有任何材质，pressed / confirm / commit 会退化为普通 tint，deny 仍保留 shake，且不会回退成整卡红色填充。`DenyFeedbackEdgeImage` 旧 fallback 已删除，新制作主线必须使用 `InteractionFeedbackImage`。拖拽 `InvalidCardTarget / ValidCardTarget`、card probe、commit ready 和 playable hover 等目标/候选提示继续使用 `FeedbackOverlay` full-card overlay 语义，但 overlay 控件本身也由 `WBP_FPCardView` 绑定和控制尺寸。
+源卡短时交互反馈统一走 `InteractionFeedbackImage`，包括 `Pressed / Confirm / Commit / Deny / Retained`。SlotWidget 只计算状态、shake、scale 和 `FWacomFirstPersonCardInteractionFeedbackView`，然后交给 `UWacomFirstPersonCardViewWidget`；实际尺寸、层级和默认材质由 WBP 内的 `InteractionFeedbackImage` 控件负责。Retained feedback 是 Battle event 派生的非阻塞 pulse，不改变 slot motion target、命中区或 transition kind。材质来源有两级：AnchorComponent Details 的 `InteractionFeedbackMaterial` 显式 override 优先；为空时 C++ 会复用 `InteractionFeedbackImage` 自身 brush 上的材质，作为 WBP 默认材质。若没有任何材质，pressed / confirm / commit / retained 会退化为普通 tint，deny 仍保留 shake，且不会回退成整卡红色填充。`DenyFeedbackEdgeImage` 旧 fallback 已删除，新制作主线必须使用 `InteractionFeedbackImage`。拖拽 `InvalidCardTarget / ValidCardTarget`、card probe、commit ready 和 playable hover 等目标/候选提示继续使用 `FeedbackOverlay` full-card overlay 语义，但 overlay 控件本身也由 `WBP_FPCardView` 绑定和控制尺寸。
 
 `InteractionFeedbackImage` 材质需要支持以下参数名，C++ 会在每次反馈刷新时写入动态材质实例：
 
@@ -280,7 +282,7 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 
 - 大角度扇形排布下没有明显锯齿、像素断裂或黑边。
 - 卡面材质动画在 HUD first-person layer 中正常刷新。
-- Hover、pending、disabled、pressed、confirm、deny 由 slot transform、opacity 和 wrapper feedback overlay 表现，WBP 只提供控件和材质承载，不重复实现状态机。
+- Hover、pending、disabled、pressed、confirm、deny、retained 由 slot transform、opacity 和 wrapper feedback overlay 表现，WBP 只提供控件和材质承载，不重复实现状态机。
 - 透明 bleed 区只用于渲染，不扩大 hover、press、drag 起手或 card target probe 范围。
 
 ## §10 测试入口

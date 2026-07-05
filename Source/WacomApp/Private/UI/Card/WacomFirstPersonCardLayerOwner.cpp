@@ -53,6 +53,16 @@ bool FWacomFirstPersonCardLayerOwner::Update(
 		}
 	}
 
+	if (Input.bCanConsumeFeedbackHints && Input.ConsumeFeedbackHints)
+	{
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints =
+			Input.ConsumeFeedbackHints();
+		if (FeedbackHints.Num() > 0)
+		{
+			WidgetRef->SetCardFeedbackHints(FeedbackHints);
+		}
+	}
+
 	WidgetRef->SetCardSlots(Input.Slots);
 	return true;
 }

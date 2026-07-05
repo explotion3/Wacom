@@ -45,10 +45,10 @@ tags:
 当前已落地的正式事实：
 
 - `CardsDrawn.CardInstanceIds` 是真实入手普通卡实例列表。Battle hand presentation controller 优先用这些 ID 生成 `Drawn` transition hint。
-- `CardsRetained` 是规则事件，只记录回合结束明确保留的普通手牌实例；当前不对应 first-person `Retained` transition kind。
+- `CardsRetained` 是规则事件，只记录回合结束明确保留的普通手牌实例；当前会生成独立 retained feedback hint，但不对应 first-person `Retained` transition kind。
 - `FBattlePresentationJournal` 是 C++ only 只读 checkpoint journal，当前只记录 EndTurn 的 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`。
 - first-person card layer 当前 transition kind 只有 `Default`、`Drawn`、`Gained`、`Played`、`Discarded`。
-- `FWacomBattleHandPresentationController` 当前把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`。
+- `FWacomBattleHandPresentationController` 当前把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`，并把 `CardsRetained` 转为同帧 `feedback hints`。
 - `UWacomFirstPersonCardAnchorComponent` 的 `05 Slot Motion` 和 `06 Transition Motion` 是当前卡牌入场、离场和事件感知转场的主要制作参数入口。
 - WBP 可以负责卡面、overlay、材质和局部视觉反馈；核心手牌动画队列不应依赖 UMG Designer timeline。
 
@@ -66,7 +66,7 @@ tags:
 |---|---|---|
 | `WacomBattle` | 结算规则，发 `FBattleEvent`，输出 `FBattleSnapshot` 和 `FBattlePresentationJournal` | 不计算屏幕位置、曲线、延迟、材质、动画时长 |
 | BattleHUD / App flow | 消费事件和 journal，形成手牌表现帧或未来 presentation plan | 不改写规则结果，不让 UI 事件反向污染 Battle |
-| `FWacomBattleHandPresentationController` | 当前 Battle hand 的 `entries + transition hints` 事务入口 | 不读取 Anchor 投影，不负责曲线和视觉参数 |
+| `FWacomBattleHandPresentationController` | 当前 Battle hand 的 `entries + transition hints + feedback hints` 事务入口 | 不读取 Anchor 投影，不负责曲线和视觉参数 |
 | `UWacomFirstPersonCardAnchorComponent` | 制作参数 facade、runtime source、projection、presentation gate | 不提交 Battle / Run 命令，不持有规则真相 |
 | `UWacomFirstPersonCardLayerWidget` | reconcile active / outgoing slot，应用 transition hint，管理 layer-level gesture | 不读取牌堆或战斗规则 |
 | `UWacomFirstPersonCardLayerSlotWidget` | 单槽 motion、hover / inspect / drag visual composition、入场 / 离场播放 | 不直接调用 BattleSession |
@@ -106,8 +106,9 @@ Layer / Slot / CardView animation
 | 术语 | 定义 |
 |---|---|
 | `Transition` | 单张卡的入场、离场或语义移动。当前由 `FWacomFirstPersonCardLayerTransitionHint` 表达 |
+| `Feedback` | 单张卡的非阻塞短反馈，不改变入场 / 离场语义。当前由 `FWacomFirstPersonCardLayerFeedbackHint` 表达 |
 | `TransitionBatch` | 同一规则或表现阶段产生的一组 transition。当前还没有独立类型 |
-| `PresentationFrame` | 一次原子提交给 card layer 的 `entries + transition hints` |
+| `PresentationFrame` | 一次原子提交给 card layer 的 `entries + transition hints + feedback hints` |
 | `Origin` | 动画起点语义，例如 slot offset、hand anchor offset 或 viewport anchor |
 | `DestinationSlot` | 由 snapshot / entries 解析出的目标手牌槽位 |
 | `Reflow` | 手牌数量、顺序、zone 或投影变化导致的普通布局移动 |
@@ -122,7 +123,7 @@ Layer / Slot / CardView animation
 - Layer transition 名描述单卡运动语义，例如 `Drawn`、`Played`、`Discarded`。
 - WBP 控件名描述视觉图层，例如 `FeedbackOverlay`、`InteractionFeedbackImage`。
 
-## §6 当前 Transition Hint 合同
+## §6 当前 Hint 合同
 
 `FWacomFirstPersonCardLayerTransitionHint` 是当前 first-person card layer 的最小 transition 输入：
 
@@ -147,7 +148,15 @@ Layer / Slot / CardView animation
 | `CardDiscarded` | 从手牌移除的对应卡生成 `Discarded` |
 | `CardExhausted` | 从手牌移除的对应卡生成 `Discarded`，当前 first-person layer 不区分 exhaust 视觉 |
 
-`CardsRetained` 当前只作为规则事实和日志识别输入，不生成 first-person transition。若后续要做保留反馈，应优先在 `BattleHandPresentationPlan` 中表达为阶段性 hold / pulse / deemphasis，而不是新增 Widget 自发状态。
+`FWacomFirstPersonCardLayerFeedbackHint` 是当前 first-person card layer 的非阻塞反馈输入。它和 transition hint 并列传递，不进入 `EWacomFirstPersonCardSlotTransitionKind`，也不改变 slot motion target、motion key、reset distance 或手牌命中区。
+
+当前生成口径：
+
+| 事件 | 当前 feedback |
+|---|---|
+| `CardsRetained` | 对仍存在于 next hand snapshot 的普通保留手牌生成 `Retained` feedback，并写入稳定 `SequenceIndex / SequenceCount` |
+
+`CardsRetained` 不生成 first-person transition。Layer 收到 retained feedback 后只在匹配 slot 上播放短促锁定脉冲；若 slot 暂不可投影，hint 保留到下一次可见刷新。播放期间的普通 refresh 只能更新 slot 最新布局目标，不能取消 retained feedback。
 
 ## §7 动画类型目录
 
@@ -185,15 +194,15 @@ Layer / Slot / CardView animation
 
 ### Retain
 
-`CardsRetained` 表示回合结束仍留在普通手牌中的卡。当前没有 `Retained` transition kind。
+`CardsRetained` 表示回合结束仍留在普通手牌中的卡。当前没有 `Retained` transition kind，只有独立 `Retained` feedback hint。
 
-正式 retain 表现应避免和“入手 / 离手”混在一起。建议先作为 `BattleHandPresentationPlan` 的阶段反馈：
+Retain 表现必须避免和“入手 / 离手”混在一起。当前 v1 是非阻塞反馈：
 
 - 非保留普通卡执行 `TurnEndDiscard` 离场。
-- 保留普通卡保持 slot identity，可以播放轻量 pulse、lift 或 dim recover。
+- 保留普通卡保持 slot identity，播放轻量 lift / scale / 暖金色 feedback pulse。
 - 下回合抽牌完成后，保留卡参与普通 reflow。
 
-是否需要新增 `Retained` transition kind，要等新版 EndTurn 表现方案确定后再定。
+后续如果要做完整 EndTurn hand timeline，应在 `BattleHandPresentationPlan` 里表达 retain hold / deemphasis / recover 阶段；不要把当前 retained feedback 升级成 Widget 自发状态，也不要为 v1 新增 `Retained` transition kind。
 
 ### Reflow
 
@@ -250,7 +259,7 @@ Hover、inspect 和 drag 是交互表现，不属于规则事件动画。
 | `06 Transition Motion` | `Drawn / Gained / Played / Discarded` 的事件感知来源和运动参数 |
 | `07 Hover` | hover lift、scale、ZOrder 和命中稳定性 |
 | `09 Gesture` | inspect、drag 起手、commit 距离和 drag 姿态 |
-| `10 Interaction Feedback` | pressed、confirm、commit、deny 等源卡反馈 |
+| `10 Interaction Feedback` | pressed、confirm、commit、deny、retained 等源卡反馈 |
 | `11 Drag Target Feedback` | world / card target affordance 和 focus |
 | `12 Camera Look While UI` | hover / pointer / drag 时的镜头 look override |
 
@@ -279,7 +288,7 @@ UMG Designer timeline 不适合作为核心手牌动画主线：
 
 - `CardsDrawn.CardInstanceIds` 只为真实入手且仍可见的卡生成 `Drawn` hint。
 - 同批 `Drawn` hint 的 `SequenceIndex / SequenceCount` 稳定。
-- `CardsRetained` 不自动生成 first-person transition。
+- `CardsRetained` 只为仍在 next hand snapshot 的普通保留手牌生成 retained feedback hint，不生成 first-person transition，也不包含左右手 anchor。
 - presentation journal 消费一次，checkpoint 顺序和 ID 正确。
 - 普通 refresh 不覆盖尚未消费的 explicit presentation frame。
 - source suppression / gate 关闭时不提前消费入场 hint。
@@ -306,7 +315,7 @@ PIE / 人工验收负责手感：
 
 待确认问题：
 
-- 保留反馈是否需要新增 `Retained` transition kind，还是作为 batch-level feedback 表达。
+- 完整 EndTurn hand timeline 是否需要把 retain hold / deemphasis / recover 表达成 `BattleHandPresentationPlan` 阶段，而不是继续扩展 loose feedback hint。
 - `CardExhausted` 是否需要从 `Discarded` 中拆出独立 transition。
 - 抽牌 origin 是否需要真实牌堆 widget / screen anchor，还是继续使用 hand anchor / viewport anchor 语义。
 - Run 探索期获得卡牌是否复用 `Gained`，还是需要 Run 专属入场语义。

@@ -24,6 +24,26 @@ namespace
 		}
 		return false;
 	}
+
+	bool ContainsNormalHandCardIdForBattleHandPresentation(
+		const FBattleSnapshot& Snapshot,
+		const FGuid& CardInstanceId)
+	{
+		if (!CardInstanceId.IsValid())
+		{
+			return false;
+		}
+
+		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+		{
+			if (CardSnapshot.InstanceId == CardInstanceId
+				&& !CardSnapshot.bIsHandAnchor)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 }
 
 void FWacomBattleHandPresentationController::Reset()
@@ -58,6 +78,7 @@ void FWacomBattleHandPresentationController::StoreTransitionEvents(const TArray<
 		case EBattleEventType::HandLimitDiscarded:
 		case EBattleEventType::CardDiscarded:
 		case EBattleEventType::CardExhausted:
+		case EBattleEventType::CardsRetained:
 			PendingTransitionEvents.Add(Event);
 			break;
 		default:
@@ -115,7 +136,10 @@ FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildF
 			: LastPresentedSnapshot;
 		Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
 		Frame.TransitionHints = BuildTransitionHints(Baseline, Snapshot);
-		Frame.bHasTransitionFrame = Frame.TransitionHints.Num() > 0;
+		Frame.FeedbackHints = BuildFeedbackHints(Snapshot);
+		Frame.bHasTransitionFrame =
+			Frame.TransitionHints.Num() > 0
+			|| Frame.FeedbackHints.Num() > 0;
 		if (Frame.bHasTransitionFrame)
 		{
 			RecordSubmittedTransitionFrame();
@@ -132,12 +156,16 @@ FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildF
 
 FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildExplicitFrame(
 	const FBattleSnapshot& Snapshot,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
 {
 	FWacomBattleHandPresentationFrame Frame;
 	Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
 	Frame.TransitionHints = TransitionHints;
-	Frame.bHasTransitionFrame = Frame.TransitionHints.Num() > 0;
+	Frame.FeedbackHints = FeedbackHints;
+	Frame.bHasTransitionFrame =
+		Frame.TransitionHints.Num() > 0
+		|| Frame.FeedbackHints.Num() > 0;
 	if (Frame.bHasTransitionFrame)
 	{
 		RecordSubmittedTransitionFrame();
@@ -320,6 +348,48 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 			FallbackDrawnCardHintCount);
 	}
 
+	return Hints;
+}
+
+TArray<FWacomFirstPersonCardLayerFeedbackHint>
+FWacomBattleHandPresentationController::BuildFeedbackHints(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	TArray<FGuid> RetainedCardIds;
+	TSet<FGuid> SeenRetainedCardIds;
+	for (const FBattleEvent& Event : PendingTransitionEvents)
+	{
+		if (Event.Type != EBattleEventType::CardsRetained)
+		{
+			continue;
+		}
+
+		for (const FGuid& CardInstanceId : Event.CardInstanceIds)
+		{
+			if (!CardInstanceId.IsValid()
+				|| SeenRetainedCardIds.Contains(CardInstanceId)
+				|| !ContainsNormalHandCardIdForBattleHandPresentation(NextSnapshot, CardInstanceId))
+			{
+				continue;
+			}
+
+			SeenRetainedCardIds.Add(CardInstanceId);
+			RetainedCardIds.Add(CardInstanceId);
+		}
+	}
+
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints;
+	Hints.Reserve(RetainedCardIds.Num());
+	const int32 SequenceCount = RetainedCardIds.Num();
+	for (int32 Index = 0; Index < RetainedCardIds.Num(); ++Index)
+	{
+		FWacomFirstPersonCardLayerFeedbackHint Hint;
+		Hint.CardInstanceId = RetainedCardIds[Index];
+		Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::Retained;
+		Hint.SequenceIndex = Index;
+		Hint.SequenceCount = FMath::Max(1, SequenceCount);
+		Hints.Add(Hint);
+	}
 	return Hints;
 }
 

@@ -1018,6 +1018,12 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCar
 	return GetFirstPersonHandBridge().BuildTransitionHints(PreviousSnapshot, NextSnapshot);
 }
 
+TArray<FWacomFirstPersonCardLayerFeedbackHint> UBattleHUD::BuildFirstPersonCardFeedbackHints(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return GetFirstPersonHandBridge().BuildFeedbackHints(NextSnapshot);
+}
+
 int32 UBattleHUD::AppendBattlePresentationStackEntry(
 	const FWacomBattleCombatLogCommandContext& CommandContext,
 	const FBattleSnapshot& PreCommandSnapshot)

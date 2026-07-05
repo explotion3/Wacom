@@ -35,7 +35,9 @@ struct FWacomFirstPersonCardLayerOwnerUpdateInput
 	TFunction<void(UWacomFirstPersonCardLayerWidget*)> BindLayerWidget;
 	TFunction<void(UWacomFirstPersonCardLayerWidget*, int32)> AddLayerWidgetToViewport;
 	TFunction<TArray<FWacomFirstPersonCardLayerTransitionHint>()> ConsumeTransitionHints;
+	TFunction<TArray<FWacomFirstPersonCardLayerFeedbackHint>()> ConsumeFeedbackHints;
 	bool bCanConsumeTransitionHints = true;
+	bool bCanConsumeFeedbackHints = true;
 };
 
 class FWacomFirstPersonCardLayerOwner

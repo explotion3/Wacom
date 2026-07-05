@@ -130,6 +130,14 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float PlayCommitFeedbackOpacity = 0.16f;
 	FLinearColor PlayCommitFeedbackColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
 	float PlayCommitFeedbackScale = 1.015f;
+	bool bEnableRetainedFeedback = true;
+	float RetainedFeedbackDuration = 0.28f;
+	float RetainedFeedbackStaggerSeconds = 0.045f;
+	float RetainedFeedbackLiftPixels = 12.0f;
+	float RetainedFeedbackScale = 1.025f;
+	FLinearColor RetainedFeedbackColor = FLinearColor(1.0f, 0.84f, 0.34f, 1.0f);
+	float RetainedFeedbackOpacity = 0.18f;
+	int32 RetainedFeedbackZOrderBoost = 180;
 	bool bAllowCameraLookDuringCardDrag = true;
 	float CardDragCameraLookScale = 1.0f;
 	float CardDragCameraLookInterpSpeedOverride = -1.0f;

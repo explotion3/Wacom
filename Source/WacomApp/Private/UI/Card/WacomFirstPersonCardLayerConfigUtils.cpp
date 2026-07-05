@@ -203,6 +203,11 @@ FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
 	Config.PlayCommitDuration = FMath::Max(0.0f, Config.PlayCommitDuration);
 	Config.PlayCommitOpacity = FMath::Clamp(Config.PlayCommitOpacity, 0.0f, 1.0f);
 	Config.PlayCommitScale = FMath::Max(0.01f, Config.PlayCommitScale);
+	Config.RetainedFeedbackDuration = FMath::Max(0.0f, Config.RetainedFeedbackDuration);
+	Config.RetainedFeedbackStaggerSeconds = FMath::Max(0.0f, Config.RetainedFeedbackStaggerSeconds);
+	Config.RetainedFeedbackLiftPixels = FMath::Max(0.0f, Config.RetainedFeedbackLiftPixels);
+	Config.RetainedFeedbackScale = FMath::Max(0.01f, Config.RetainedFeedbackScale);
+	Config.RetainedFeedbackOpacity = FMath::Clamp(Config.RetainedFeedbackOpacity, 0.0f, 1.0f);
 	return Config;
 }
 
@@ -232,7 +237,15 @@ bool AreSlotFeedbackConfigsEquivalent(
 		&& AreFloatsEquivalent(A.PlayCommitDuration, B.PlayCommitDuration)
 		&& AreFloatsEquivalent(A.PlayCommitOpacity, B.PlayCommitOpacity)
 		&& AreColorsEquivalent(A.PlayCommitColor, B.PlayCommitColor)
-		&& AreFloatsEquivalent(A.PlayCommitScale, B.PlayCommitScale);
+		&& AreFloatsEquivalent(A.PlayCommitScale, B.PlayCommitScale)
+		&& A.bEnableRetainedFeedback == B.bEnableRetainedFeedback
+		&& AreFloatsEquivalent(A.RetainedFeedbackDuration, B.RetainedFeedbackDuration)
+		&& AreFloatsEquivalent(A.RetainedFeedbackStaggerSeconds, B.RetainedFeedbackStaggerSeconds)
+		&& AreFloatsEquivalent(A.RetainedFeedbackLiftPixels, B.RetainedFeedbackLiftPixels)
+		&& AreFloatsEquivalent(A.RetainedFeedbackScale, B.RetainedFeedbackScale)
+		&& AreColorsEquivalent(A.RetainedFeedbackColor, B.RetainedFeedbackColor)
+		&& AreFloatsEquivalent(A.RetainedFeedbackOpacity, B.RetainedFeedbackOpacity)
+		&& A.RetainedFeedbackZOrderBoost == B.RetainedFeedbackZOrderBoost;
 }
 
 FWacomFirstPersonCardDragConfig NormalizeCardDragConfig(

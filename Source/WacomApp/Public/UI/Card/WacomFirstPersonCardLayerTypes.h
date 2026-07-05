@@ -97,7 +97,15 @@ enum class EWacomFirstPersonCardInteractionFeedbackKind : uint8
 	Pressed UMETA(DisplayName = "Pressed"),
 	Confirm UMETA(DisplayName = "Confirm"),
 	Commit UMETA(DisplayName = "Commit"),
+	Retained UMETA(DisplayName = "Retained"),
 	Deny UMETA(DisplayName = "Deny")
+};
+
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardLayerFeedbackKind : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Retained UMETA(DisplayName = "Retained")
 };
 
 USTRUCT(BlueprintType)
@@ -181,6 +189,25 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerTransitionHint
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D PlayedExitTargetWidgetPosition = FVector2D::ZeroVector;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardLayerFeedbackHint
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FGuid CardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardLayerFeedbackKind FeedbackKind =
+		EWacomFirstPersonCardLayerFeedbackKind::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 SequenceIndex = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 SequenceCount = 1;
 };
 
 USTRUCT(BlueprintType)
@@ -1019,4 +1046,28 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float PlayCommitScale = 1.015f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnableRetainedFeedback = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackDuration = 0.28f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackStaggerSeconds = 0.045f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackLiftPixels = 12.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackScale = 1.025f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FLinearColor RetainedFeedbackColor = FLinearColor(1.0f, 0.84f, 0.34f, 1.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackOpacity = 0.18f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 RetainedFeedbackZOrderBoost = 180;
 };

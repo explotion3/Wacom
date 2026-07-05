@@ -191,6 +191,14 @@ namespace
 		Config.PlayCommitFeedbackOpacity = Anchor.PlayCommitFeedbackOpacity;
 		Config.PlayCommitFeedbackColor = Anchor.PlayCommitFeedbackColor;
 		Config.PlayCommitFeedbackScale = Anchor.PlayCommitFeedbackScale;
+		Config.bEnableRetainedFeedback = Anchor.bEnableRetainedFeedback;
+		Config.RetainedFeedbackDuration = Anchor.RetainedFeedbackDuration;
+		Config.RetainedFeedbackStaggerSeconds = Anchor.RetainedFeedbackStaggerSeconds;
+		Config.RetainedFeedbackLiftPixels = Anchor.RetainedFeedbackLiftPixels;
+		Config.RetainedFeedbackScale = Anchor.RetainedFeedbackScale;
+		Config.RetainedFeedbackColor = Anchor.RetainedFeedbackColor;
+		Config.RetainedFeedbackOpacity = Anchor.RetainedFeedbackOpacity;
+		Config.RetainedFeedbackZOrderBoost = Anchor.RetainedFeedbackZOrderBoost;
 		Config.bAllowCameraLookDuringCardDrag = Anchor.bAllowCameraLookDuringCardDrag;
 		Config.CardDragCameraLookScale = Anchor.CardDragCameraLookScale;
 		Config.CardDragCameraLookInterpSpeedOverride = Anchor.CardDragCameraLookInterpSpeedOverride;
@@ -253,6 +261,14 @@ namespace
 		FeedbackConfig.PlayCommitOpacity = Config.PlayCommitFeedbackOpacity;
 		FeedbackConfig.PlayCommitColor = Config.PlayCommitFeedbackColor;
 		FeedbackConfig.PlayCommitScale = Config.PlayCommitFeedbackScale;
+		FeedbackConfig.bEnableRetainedFeedback = Config.bEnableRetainedFeedback;
+		FeedbackConfig.RetainedFeedbackDuration = Config.RetainedFeedbackDuration;
+		FeedbackConfig.RetainedFeedbackStaggerSeconds = Config.RetainedFeedbackStaggerSeconds;
+		FeedbackConfig.RetainedFeedbackLiftPixels = Config.RetainedFeedbackLiftPixels;
+		FeedbackConfig.RetainedFeedbackScale = Config.RetainedFeedbackScale;
+		FeedbackConfig.RetainedFeedbackColor = Config.RetainedFeedbackColor;
+		FeedbackConfig.RetainedFeedbackOpacity = Config.RetainedFeedbackOpacity;
+		FeedbackConfig.RetainedFeedbackZOrderBoost = Config.RetainedFeedbackZOrderBoost;
 		return FeedbackConfig;
 	}
 
@@ -560,6 +576,14 @@ namespace
 		AddFloat(Config.PlayCommitFeedbackOpacity);
 		AddColor(Config.PlayCommitFeedbackColor);
 		AddFloat(Config.PlayCommitFeedbackScale);
+		AddBool(Config.bEnableRetainedFeedback);
+		AddFloat(Config.RetainedFeedbackDuration);
+		AddFloat(Config.RetainedFeedbackStaggerSeconds);
+		AddFloat(Config.RetainedFeedbackLiftPixels);
+		AddFloat(Config.RetainedFeedbackScale);
+		AddColor(Config.RetainedFeedbackColor);
+		AddFloat(Config.RetainedFeedbackOpacity);
+		AddInt(Config.RetainedFeedbackZOrderBoost);
 		AddBool(Config.bAllowCameraLookDuringCardDrag);
 		AddFloat(Config.CardDragCameraLookScale);
 		AddFloat(Config.CardDragCameraLookInterpSpeedOverride);
@@ -995,12 +1019,14 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerEntries(
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerPresentationFrame(
 	FName SourceId,
 	const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
 {
 	const bool bRuntimeSourceChanged = RuntimeState && RuntimeState->SetEntries(SourceId, Entries);
 	if (RuntimeState)
 	{
 		RuntimeState->SetPresentationFrameHints(SourceId, TransitionHints);
+		RuntimeState->SetPresentationFrameFeedbackHints(SourceId, FeedbackHints);
 	}
 	if (bRuntimeSourceChanged)
 	{
@@ -1015,6 +1041,16 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionHints(
 	if (RuntimeState)
 	{
 		RuntimeState->SetTransitionHints(SourceId, Hints);
+	}
+}
+
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerFeedbackHints(
+	FName SourceId,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints)
+{
+	if (RuntimeState)
+	{
+		RuntimeState->SetFeedbackHints(SourceId, Hints);
 	}
 }
 
@@ -1211,10 +1247,16 @@ FWacomFirstPersonCardAnchorAutomationTestView UWacomFirstPersonCardAnchorCompone
 	if (RuntimeState)
 	{
 		View.PendingTransitionHintSourceId = RuntimeState->GetTransitionHintSourceId();
+		View.PendingFeedbackHintSourceId = RuntimeState->GetFeedbackHintSourceId();
 		if (RuntimeState->GetPresentationFrameHintSourceId() == RuntimeState->GetSourceId()
 			&& RuntimeState->GetPresentationFrameHints().Num() > 0)
 		{
 			View.PendingTransitionHintSourceId = RuntimeState->GetPresentationFrameHintSourceId();
+		}
+		if (RuntimeState->GetPresentationFrameFeedbackHintSourceId() == RuntimeState->GetSourceId()
+			&& RuntimeState->GetPresentationFrameFeedbackHints().Num() > 0)
+		{
+			View.PendingFeedbackHintSourceId = RuntimeState->GetPresentationFrameFeedbackHintSourceId();
 		}
 		View.bHasPendingTransitionHintsForCurrentSource =
 			RuntimeState->HasTransitionHintsForCurrentSource()
@@ -1222,6 +1264,12 @@ FWacomFirstPersonCardAnchorAutomationTestView UWacomFirstPersonCardAnchorCompone
 		View.bCanConsumePendingTransitionHintsForCurrentSource =
 			RuntimeState->CanConsumeTransitionHintsForCurrentSource()
 			|| RuntimeState->CanConsumePresentationFrameHintsForCurrentSource();
+		View.bHasPendingFeedbackHintsForCurrentSource =
+			RuntimeState->HasFeedbackHintsForCurrentSource()
+			|| RuntimeState->HasPresentationFrameFeedbackHintsForCurrentSource();
+		View.bCanConsumePendingFeedbackHintsForCurrentSource =
+			RuntimeState->CanConsumeFeedbackHintsForCurrentSource()
+			|| RuntimeState->CanConsumePresentationFrameFeedbackHintsForCurrentSource();
 		View.bTransitionPresentationEnabledForCurrentSource =
 			RuntimeState->IsTransitionPresentationEnabled(RuntimeState->GetSourceId());
 		for (const FWacomFirstPersonCardLayerTransitionHint& Hint : RuntimeState->GetTransitionHints())
@@ -1231,6 +1279,14 @@ FWacomFirstPersonCardAnchorAutomationTestView UWacomFirstPersonCardAnchorCompone
 		for (const FWacomFirstPersonCardLayerTransitionHint& Hint : RuntimeState->GetPresentationFrameHints())
 		{
 			View.PendingTransitionHintCardIds.Add(Hint.CardInstanceId);
+		}
+		for (const FWacomFirstPersonCardLayerFeedbackHint& Hint : RuntimeState->GetFeedbackHints())
+		{
+			View.PendingFeedbackHintCardIds.Add(Hint.CardInstanceId);
+		}
+		for (const FWacomFirstPersonCardLayerFeedbackHint& Hint : RuntimeState->GetPresentationFrameFeedbackHints())
+		{
+			View.PendingFeedbackHintCardIds.Add(Hint.CardInstanceId);
 		}
 	}
 	return View;
@@ -1755,10 +1811,28 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 			? RuntimeState->ConsumeTransitionHintsForCurrentSource()
 			: TArray<FWacomFirstPersonCardLayerTransitionHint>();
 	};
+	UpdateInput.ConsumeFeedbackHints = [this]()
+	{
+		if (!RuntimeState)
+		{
+			return TArray<FWacomFirstPersonCardLayerFeedbackHint>();
+		}
+		if (RuntimeState->CanConsumePresentationFrameFeedbackHintsForCurrentSource())
+		{
+			return RuntimeState->ConsumePresentationFrameFeedbackHintsForCurrentSource();
+		}
+		return RuntimeState->CanConsumeFeedbackHintsForCurrentSource()
+			? RuntimeState->ConsumeFeedbackHintsForCurrentSource()
+			: TArray<FWacomFirstPersonCardLayerFeedbackHint>();
+	};
 	UpdateInput.bCanConsumeTransitionHints =
 		RuntimeState
 		&& (RuntimeState->CanConsumePresentationFrameHintsForCurrentSource()
 			|| RuntimeState->CanConsumeTransitionHintsForCurrentSource());
+	UpdateInput.bCanConsumeFeedbackHints =
+		RuntimeState
+		&& (RuntimeState->CanConsumePresentationFrameFeedbackHintsForCurrentSource()
+			|| RuntimeState->CanConsumeFeedbackHintsForCurrentSource());
 
 	CardLayerOwner->Update(UpdateInput, CardLayerWidget);
 }
@@ -1789,7 +1863,9 @@ void UWacomFirstPersonCardAnchorComponent::RemoveCardLayer()
 	if (RuntimeState)
 	{
 		RuntimeState->ClearTransitionHints();
+		RuntimeState->ClearFeedbackHints();
 		RuntimeState->ClearPresentationFrameHints();
+		RuntimeState->ClearPresentationFrameFeedbackHints();
 		RuntimeState->ClearTransientInteraction();
 	}
 }

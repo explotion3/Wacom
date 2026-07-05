@@ -55,6 +55,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bDenyFeedbackActive = false;
 	bool bConfirmFeedbackActive = false;
 	bool bCommitFeedbackActive = false;
+	bool bRetainedFeedbackActive = false;
+	float RetainedFeedbackElapsedSeconds = 0.0f;
+	float RetainedFeedbackStartDelaySeconds = 0.0f;
 	bool bCardDragProbeFeedback = false;
 	bool bCardDragTargetAffordanceFeedback = false;
 	bool bCardDragTargetFocusActive = false;
@@ -114,6 +117,7 @@ public:
 		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride);
 	void TriggerCommitFeedback();
+	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotVisualConfig(const FWacomFirstPersonCardSlotVisualConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
@@ -268,6 +272,8 @@ private:
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
+	float RetainedFeedbackElapsedSeconds = 999999.0f;
+	float RetainedFeedbackStartDelaySeconds = 0.0f;
 	bool bCardLayerInteractionEnabled = false;
 	bool bIsHoveredForFirstPersonLayer = false;
 	bool bIsPressedForFirstPersonLayer = false;
@@ -371,6 +377,8 @@ private:
 	void TriggerDenyFeedback();
 	void ClearInteractionFeedback();
 	bool IsDenyFeedbackActive() const;
+	bool IsRetainedFeedbackActive() const;
+	float ComputeRetainedFeedbackAlpha() const;
 	void ApplyFeedbackOverlay();
 	void ApplyInteractionFeedbackOverlay();
 	void UpdateVisibilityForInteractionMode();
