@@ -4420,11 +4420,11 @@ bool FWacomFirstPersonCardLayerMotionProjectionExitTest::RunTest(const FString& 
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerMotionLargeJumpTest,
-	"Wacom.UI.FirstPersonCardLayer.SlotMotion.LargeJumpResetsSlotMotion",
+	FWacomFirstPersonCardLayerMotionLargeDistanceLayoutAnimatesTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.LargeDistanceLayoutAnimates",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerMotionLargeJumpTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonCardLayerMotionLargeDistanceLayoutAnimatesTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -4452,7 +4452,96 @@ bool FWacomFirstPersonCardLayerMotionLargeJumpTest::RunTest(const FString& Param
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (TestNotNull(TEXT("Slot widget"), SlotWidget))
 	{
-		TestEqual(TEXT("Large jump resets position immediately"), SlotWidget->GetVisualSlotView().ScreenPosition, FVector2D(400.0f, 500.0f));
+		TestEqual(
+			TEXT("Large-distance layout update keeps current visual position"),
+			SlotWidget->GetVisualSlotView().ScreenPosition,
+			FVector2D(100.0f, 200.0f));
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+		const FVector2D MidMotionPosition = SlotWidget->GetVisualSlotView().ScreenPosition;
+		TestTrue(
+			TEXT("Large-distance layout update starts moving smoothly"),
+			FVector2D::Distance(MidMotionPosition, FVector2D(100.0f, 200.0f)) > 0.1f);
+		TestTrue(
+			TEXT("Large-distance layout update does not snap on first tick"),
+			FVector2D::Distance(MidMotionPosition, FVector2D(400.0f, 500.0f)) > 0.1f);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+		TestEqual(
+			TEXT("Large-distance layout update eventually reaches target"),
+			SlotWidget->GetVisualSlotView().ScreenPosition,
+			FVector2D(400.0f, 500.0f));
+	}
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerMotionInsertedCardKeepsExistingReflowSmoothTest,
+	"Wacom.UI.FirstPersonCardLayer.SlotMotion.InsertedCardKeepsExistingReflowSmooth",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerMotionInsertedCardKeepsExistingReflowSmoothTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
+	Config.EnterOffsetPixels = FVector2D::ZeroVector;
+	Config.EnterOpacity = 1.0f;
+	Config.ResetDistancePixels = 80.0f;
+	Layer->SetSlotMotionConfig(Config);
+
+	const FGuid FirstCardId = FGuid::NewGuid();
+	const FGuid SecondCardId = FGuid::NewGuid();
+	const FGuid InsertedCardId = FGuid::NewGuid();
+	const FVector2D FirstInitialPosition(100.0f, 200.0f);
+	const FVector2D SecondInitialPosition(220.0f, 200.0f);
+	const FVector2D FirstReflowPosition(500.0f, 200.0f);
+	const FVector2D SecondReflowPosition(620.0f, 200.0f);
+
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstCardId, 0, FirstInitialPosition),
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondCardId, 1, SecondInitialPosition)
+	});
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	Layer->SetCardSlots({
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(InsertedCardId, 0, FVector2D(100.0f, 200.0f)),
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstCardId, 1, FirstReflowPosition),
+		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SecondCardId, 2, SecondReflowPosition)
+	});
+
+	UWacomFirstPersonCardLayerSlotWidget* FirstWidget =
+		FWacomFirstPersonCardLayerTestAccess::FindSlotWidgetByKey(
+			*Layer,
+			FirstCardId.ToString(EGuidFormats::DigitsWithHyphensLower));
+	if (TestNotNull(TEXT("Existing first card widget"), FirstWidget))
+	{
+		TestEqual(
+			TEXT("Inserted card reflow keeps existing card visual at old position"),
+			FirstWidget->GetVisualSlotView().ScreenPosition,
+			FirstInitialPosition);
+		TestEqual(
+			TEXT("Inserted card reflow updates existing card target"),
+			FirstWidget->GetSlotView().ScreenPosition,
+			FirstReflowPosition);
+		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
+		const FVector2D MidMotionPosition = FirstWidget->GetVisualSlotView().ScreenPosition;
+		TestTrue(
+			TEXT("Existing card begins smooth reflow after insertion"),
+			FVector2D::Distance(MidMotionPosition, FirstInitialPosition) > 0.1f);
+		TestTrue(
+			TEXT("Existing card does not snap to far reflow target"),
+			FVector2D::Distance(MidMotionPosition, FirstReflowPosition) > 0.1f);
 	}
 
 	PC->Destroy();

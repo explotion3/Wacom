@@ -186,6 +186,8 @@ EndTurn phase plan 的 `TurnEndRetain` 阶段会在不改变 `CardsRetained` 规
 
 `Drawn / Gained / HandAnchorEntered` 入场一旦由对应 slot 启动播放，同一 `CardInstanceId` 的普通 layout refresh 只能更新最新目标 slot，不能因 `ResetDistancePixels` 大跳变判定而取消入场或直接 snap 到目标；入场结束后再交回普通 layout motion。
 
+普通 slot reflow 不再使用 `ResetDistancePixels` 这类距离阈值做硬重置；该参数仅作为兼容保留字段。后续如果需要“传送 / 切段 / 窗口恢复”一类瞬移，应通过显式 resync policy 表达，而不是让 SlotWidget 根据移动距离自行猜测。
+
 后续新版抽牌动画应补充：
 
 - 以 `BattleHandPresentationPlan` 聚合回合开始抽牌、`Effect.Draw` 和回合边界抽牌。
@@ -230,8 +232,8 @@ Reflow 应遵循：
 
 - 不重播 `Drawn / Gained / HandAnchorEntered / Played / Discarded`。
 - 不改变 `CardInstanceId` motion key。
-- 大跳变超过 reset distance 时可以直接贴合，避免慢漂。
-- 重同步优先服从 snapshot，不保留过期 visual 幻象。
+- 同一卡普通 reflow 即使距离很远，也从当前 visual 平滑移动到最新目标 slot。
+- 重同步优先服从 snapshot；真正需要瞬移时应由后续显式 resync policy 触发。
 
 ### Hover / Inspect / Drag
 

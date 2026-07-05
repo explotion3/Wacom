@@ -221,7 +221,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "卡牌离开手牌时保留 outgoing widget 的时长，单位为秒；0 表示立即移除。"))
 	float CardSlotExitDuration = 0.16f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1600.0", ToolTip = "当卡牌槽目标位置跳变超过该距离时重置视觉过渡，单位为 UMG 布局像素；用于传送、切段或窗口变化时避免慢漂。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1600.0", ToolTip = "兼容保留参数，单位为 UMG 布局像素；当前普通卡牌槽 reflow 不再根据距离阈值重置视觉过渡，真正需要瞬移的重同步后续应使用显式策略。"))
 	float CardSlotMotionResetDistancePixels = 420.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "是否启用事件感知的第一人称卡牌转场；只根据 BattleHUD 提供的表现 hint 改变入场 / 离场方向，不改变战斗规则或命令路径。"))

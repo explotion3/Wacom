@@ -210,23 +210,6 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	const FWacomFirstPersonCardLayerSlotView PreviousPresentationSlotView = TargetSlotView;
 	const FWacomFirstPersonCardLayerSlotView IncomingPresentationSlotView =
 		ComposePresentationSlotView(InTargetSlotView);
-	const float JumpDistance = bCanReuseVisual
-		? FVector2D::Distance(VisualSlotView.ScreenPosition, IncomingPresentationSlotView.ScreenPosition)
-		: 0.0f;
-	const bool bGestureActive =
-		GestureState != EWacomFirstPersonCardGestureState::Idle
-		&& GestureState != EWacomFirstPersonCardGestureState::Cancelled;
-	const bool bPreserveActiveEnterPlayback =
-		EnterTransitionPlayback.bActive
-		&& !EnterProfileOverride.IsSet()
-		&& bCanReuseVisual;
-	const bool bLargeJump =
-		bCanReuseVisual
-		&& !bPreserveActiveEnterPlayback
-		&& !bGestureActive
-		&& !bPreserveGestureReturnMotion
-		&& SlotMotionConfig.ResetDistancePixels > 0.0f
-		&& JumpDistance > SlotMotionConfig.ResetDistancePixels;
 
 	CurrentSlotView = InTargetSlotView;
 	TargetSlotView = IncomingPresentationSlotView;
@@ -242,7 +225,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	ExitMotionElapsedSeconds = 0.0f;
 	ApplyCurrentSlotView();
 
-	if (!bCanReuseVisual || bLargeJump)
+	if (!bCanReuseVisual)
 	{
 		bPreserveGestureReturnMotion = false;
 		VisualSlotView = TargetSlotView;

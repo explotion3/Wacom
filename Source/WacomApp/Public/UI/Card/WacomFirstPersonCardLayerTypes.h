@@ -889,6 +889,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float ExitDuration = 0.16f;
 
+	// Legacy compatibility field. Ordinary slot reflow no longer uses distance-threshold snapping.
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float ResetDistancePixels = 420.0f;
 
