@@ -94,8 +94,7 @@ namespace
 			&& A.bIsHandAnchor == B.bIsHandAnchor
 			&& A.bIsPlayable == B.bIsPlayable
 			&& A.bIsPendingTargeting == B.bIsPendingTargeting
-			&& A.InteractionIntent == B.InteractionIntent
-			&& A.TargetMode == B.TargetMode;
+			&& A.InteractionIntent == B.InteractionIntent;
 	}
 
 	FVector2D ResolveInputHitCenter(const FWacomFirstPersonCardLayerSlotView& SlotView)
@@ -628,6 +627,15 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
 	if (CanSkipEquivalentSlotRefresh(InSlots))
 	{
+		LastSlots = InSlots;
+		for (int32 Index = 0; Index < InSlots.Num(); ++Index)
+		{
+			if (SlotWidgets.IsValidIndex(Index) && SlotWidgets[Index])
+			{
+				SlotWidgets[Index]->SyncLegacyTargetModeForFirstPersonLayer(
+					InSlots[Index].Entry.TargetMode);
+			}
+		}
 		RefreshSlotMotionDebugCounts();
 #if WITH_AUTOMATION_TESTS
 		++SkippedEquivalentSlotRefreshCountForTest;
