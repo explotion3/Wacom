@@ -147,9 +147,6 @@ struct WACOMAPP_API FWacomRunFirstPersonCardSourceDebugView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "最近一次 provider-backed menu lease 的调试摘要。"))
 	FString LastMenuLeaseProviderDebugSummary;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前活动菜单租约是否由 provider request 驱动。"))
-	bool bActiveMenuLeaseBackedByProvider = false;
-
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "默认 Run 手牌源是否还有一次待完成的状态对齐。常见原因是 RunSession 或第一人称 Anchor 尚未就绪。"))
 	bool bHasPendingDefaultSourceReconcile = false;
 
@@ -224,12 +221,6 @@ public:
 	void SetRunFirstPersonCardLayerSuppressedByGameMenu(bool bSuppressed);
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
-	bool SetRunFirstPersonCardLayerMenuLease(
-		FName LeaseId,
-		FName SourceId,
-		const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	bool SetRunFirstPersonCardLayerMenuLeaseFromRunCards(
 		const FWacomRunMenuCardLeaseRequest& Request,
 		FWacomRunMenuCardLeaseResult& OutResult);
@@ -285,12 +276,7 @@ protected:
 
 	virtual UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
 
-	virtual void WriteRuntimeCardLayerEntries(
-		UWacomFirstPersonCardAnchorComponent& Anchor,
-		FName SourceId,
-		const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
-
-	virtual void WriteRuntimeCardLayerPresentationFrame(
+	virtual void WriteRuntimeCardLayerFrame(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
 
@@ -370,9 +356,14 @@ private:
 	FWacomFirstPersonCardLayerPresentationFrame BuildDefaultSourcePresentationFrame(
 		const UWacomFirstPersonCardAnchorComponent& Anchor,
 		TArray<FWacomFirstPersonCardLayerEntry>&& Entries) const;
+	FWacomFirstPersonCardLayerPresentationFrame BuildRunHandEnteredPresentationFrame(
+		const UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
+		TArray<FWacomFirstPersonCardLayerEntry>&& Entries) const;
 	FWacomFirstPersonCardLayerPresentationFrame BuildSuppressedPresentationFrame() const;
 	TSet<FGuid> DetermineRunHandEnteredCardIds(
 		const UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerEntry>& Entries) const;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildRunHandEnteredTransitionHints(
 		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
@@ -403,7 +394,6 @@ private:
 
 	bool bRuntimeSourceActive = false;
 	bool bSuppressedByGameMenu = false;
-	bool bActiveMenuLeaseBackedByProvider = false;
 	FName ActiveMenuLeaseId = NAME_None;
 	FName ActiveMenuLeaseSourceId = NAME_None;
 	FWacomRunMenuCardLeaseRequest ActiveMenuLeaseProviderRequest;

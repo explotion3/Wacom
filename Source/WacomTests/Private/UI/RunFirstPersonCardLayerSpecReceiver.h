@@ -23,6 +23,8 @@ public:
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> LastWrittenFeedbackHints;
 	FName LastWrittenSourceId = NAME_None;
 	FName LastClearedSourceId = NAME_None;
+	EWacomFirstPersonCardLayerFrameCommitMode LastWrittenCommitMode =
+		EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 	int32 WriteCount = 0;
 	int32 PresentationFrameWriteCount = 0;
 	int32 ClearCount = 0;
@@ -33,30 +35,24 @@ protected:
 		return AnchorForTest;
 	}
 
-	virtual void WriteRuntimeCardLayerEntries(
-		UWacomFirstPersonCardAnchorComponent& Anchor,
-		FName SourceId,
-		const TArray<FWacomFirstPersonCardLayerEntry>& Entries) override
-	{
-		Super::WriteRuntimeCardLayerEntries(Anchor, SourceId, Entries);
-		LastWrittenSourceId = SourceId;
-		LastWrittenEntries = Entries;
-		++WriteCount;
-	}
-
-	virtual void WriteRuntimeCardLayerPresentationFrame(
+	virtual void WriteRuntimeCardLayerFrame(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame) override
 	{
-		Super::WriteRuntimeCardLayerPresentationFrame(
+		Super::WriteRuntimeCardLayerFrame(
 			Anchor,
 			Frame);
 		LastWrittenSourceId = Frame.SourceId;
 		LastWrittenEntries = Frame.Entries;
 		LastWrittenTransitionHints = Frame.TransitionHints;
 		LastWrittenFeedbackHints = Frame.FeedbackHints;
+		LastWrittenCommitMode = Frame.CommitMode;
 		++WriteCount;
-		++PresentationFrameWriteCount;
+		if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
+			|| Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::Suppressed)
+		{
+			++PresentationFrameWriteCount;
+		}
 	}
 
 	virtual void ClearRuntimeCardLayerEntries(

@@ -652,6 +652,10 @@ public:
 
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViews() const;
 
+	void CommitRuntimeCardLayerFrame(
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
+
+#if WITH_AUTOMATION_TESTS
 	void SetRuntimeCardLayerEntries(FName SourceId, const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
 	void SetRuntimeCardLayerPresentationFrame(
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
@@ -666,6 +670,7 @@ public:
 	void SetRuntimeCardLayerFeedbackHints(
 		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
+#endif
 	void SetRuntimeCardLayerTransitionPresentationEnabled(FName SourceId, bool bEnabled);
 	bool HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const;
 	bool HasActiveCardLayerPresentationPlayback() const;

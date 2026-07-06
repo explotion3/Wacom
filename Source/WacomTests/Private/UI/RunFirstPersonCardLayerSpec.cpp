@@ -108,6 +108,28 @@ namespace WacomRunFirstPersonCardLayerSpec
 		return Request;
 	}
 
+	bool SetDefinitionLease(
+		UWacomRunFirstPersonCardSourceComponent& Source,
+		FName LeaseId,
+		UCardDefinition* Definition,
+		FWacomRunMenuCardLeaseResult& OutResult)
+	{
+		FWacomRunMenuCardLeaseRequest Request = MakeLeaseRequest(LeaseId);
+		Request.AllowedCardDefinitions.Add(Definition);
+		return Source.SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, OutResult);
+	}
+
+	bool SetDefinitionLease(
+		AWacomPlayerControllerProbe& PC,
+		FName LeaseId,
+		UCardDefinition* Definition,
+		FWacomRunMenuCardLeaseResult& OutResult)
+	{
+		FWacomRunMenuCardLeaseRequest Request = MakeLeaseRequest(LeaseId);
+		Request.AllowedCardDefinitions.Add(Definition);
+		return PC.SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, OutResult);
+	}
+
 	FCardInstance MakeRunCardInstance(UCardDefinition* Definition)
 	{
 		FCardInstance Instance;
@@ -1152,7 +1174,7 @@ bool FWacomUIRunFirstPersonMenuLeaseOverridesDefaultSpec::RunTest(const FString&
 	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
 		Fx, TEXT("Test.Lease"), TEXT("Lease Card"), 2);
 	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
-	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { DefaultCard, Pack });
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { DefaultCard, LeaseCard, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
@@ -1165,20 +1187,14 @@ bool FWacomUIRunFirstPersonMenuLeaseOverridesDefaultSpec::RunTest(const FString&
 	Source->BindRunSession(Run.Get());
 	Source->SetRunFirstPersonCardLayerActive(true);
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease Card"));
-	LeaseEntry.CardViewData.Cost = 2;
-	LeaseEntry.CardViewData.bShowCost = true;
-	LeaseEntry.CardViewData.bDisabled = false;
-	LeaseEntry.bIsPlayable = true;
-	LeaseEntry.TargetMode = LeaseCard->TargetMode;
+	FWacomRunMenuCardLeaseResult LeaseResult;
 
 	TestTrue(TEXT("Lease can be set"),
-		Source->SetRunFirstPersonCardLayerMenuLease(
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*Source,
 			TEXT("RunEventChoice"),
-			TEXT("RunEventChoiceSource"),
-			{ LeaseEntry }));
+			LeaseCard,
+			LeaseResult));
 	TestEqual(TEXT("Lease writes its own source id"),
 		Source->LastWrittenSourceId,
 		FName(TEXT("RunEventChoiceSource")));
@@ -1201,24 +1217,32 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunFirstPersonSuppressionDoesNotDisableLeaseSpec::RunTest(const FString& /*Parameters*/)
 {
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.LeaseSuppressed"), TEXT("Lease While Suppressed"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
 	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
 	Source->SetRunFirstPersonCardLayerActive(true);
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease While Suppressed"));
-	LeaseEntry.bIsPlayable = true;
+	FWacomRunMenuCardLeaseResult LeaseResult;
 
 	TestTrue(TEXT("Lease writes while GameMenu suppression is active"),
-		Source->SetRunFirstPersonCardLayerMenuLease(
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*Source,
 			TEXT("MenuLease"),
-			TEXT("MenuLeaseSource"),
-			{ LeaseEntry }));
+			LeaseCard,
+			LeaseResult));
 	TestEqual(TEXT("Lease source still writes"),
 		Source->LastWrittenSourceId,
 		FName(TEXT("MenuLeaseSource")));
@@ -1256,11 +1280,13 @@ bool FWacomUIRunFirstPersonLeaseReleaseRestoresStateSpec::RunTest(const FString&
 	Source->SetRunFirstPersonCardLayerActive(true);
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease"));
-	LeaseEntry.bIsPlayable = true;
-	Source->SetRunFirstPersonCardLayerMenuLease(TEXT("Lease"), TEXT("LeaseSource"), { LeaseEntry });
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Lease can be set"),
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*Source,
+			TEXT("Lease"),
+			Card,
+			LeaseResult));
 	const int32 WritesWithLease = Source->WriteCount;
 
 	TestTrue(TEXT("Lease can be cleared"),
@@ -1296,22 +1322,37 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunFirstPersonDifferentLeaseCannotStealSpec::RunTest(const FString& /*Parameters*/)
 {
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.LeaseSteal"), TEXT("Lease"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
 	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
 	Source->SetRunFirstPersonCardLayerActive(true);
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease"));
-	LeaseEntry.bIsPlayable = true;
+	FWacomRunMenuCardLeaseResult LeaseResult;
 
 	TestTrue(TEXT("First lease succeeds"),
-		Source->SetRunFirstPersonCardLayerMenuLease(TEXT("LeaseA"), TEXT("LeaseASource"), { LeaseEntry }));
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*Source,
+			TEXT("LeaseA"),
+			LeaseCard,
+			LeaseResult));
 	TestFalse(TEXT("Different lease cannot steal active lease"),
-		Source->SetRunFirstPersonCardLayerMenuLease(TEXT("LeaseB"), TEXT("LeaseBSource"), { LeaseEntry }));
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*Source,
+			TEXT("LeaseB"),
+			LeaseCard,
+			LeaseResult));
 	TestEqual(TEXT("Conflict is reported"),
 		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
 		FName(TEXT("MenuLeaseConflict")));
@@ -1329,19 +1370,31 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunFirstPersonClearLayerClearsMenuContextSpec::RunTest(const FString& /*Parameters*/)
 {
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.LeaseClear"), TEXT("Lease"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
 	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
 	Source->SetRunFirstPersonCardLayerActive(true);
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease"));
-	LeaseEntry.bIsPlayable = true;
-	Source->SetRunFirstPersonCardLayerMenuLease(TEXT("Lease"), TEXT("LeaseSource"), { LeaseEntry });
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Lease can be set"),
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*Source,
+			TEXT("Lease"),
+			LeaseCard,
+			LeaseResult));
 
 	Source->ClearRunFirstPersonCardLayer();
 	const FWacomRunFirstPersonCardSourceDebugView Debug = Source->GetRunFirstPersonCardSourceDebugView();
@@ -1360,19 +1413,31 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunFirstPersonDebugSummaryReportsMenuContextSpec::RunTest(const FString& /*Parameters*/)
 {
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.LeaseDebug"), TEXT("Lease"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
 	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
 	Source->SetRunFirstPersonCardLayerActive(true);
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease"));
-	LeaseEntry.bIsPlayable = true;
-	Source->SetRunFirstPersonCardLayerMenuLease(TEXT("Lease"), TEXT("LeaseSource"), { LeaseEntry });
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Lease can be set"),
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*Source,
+			TEXT("Lease"),
+			LeaseCard,
+			LeaseResult));
 
 	const FString Summary = Source->GetRunFirstPersonCardSourceDebugSummary();
 	TestTrue(TEXT("Summary includes suppression"),
@@ -1394,22 +1459,33 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FString& /*Parameters*/)
 {
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.LeaseDragProbe"), TEXT("Lease"), 1);
+	LeaseCard->TargetMode = ECardTargetMode::SingleEnemyPart;
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
 	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
 	Source->SetRunFirstPersonCardLayerActive(true);
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease"));
-	LeaseEntry.bIsPlayable = true;
-	LeaseEntry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	FWacomRunMenuCardLeaseResult LeaseResult;
 
 	TestTrue(TEXT("Menu lease can be written"),
-		Source->SetRunFirstPersonCardLayerMenuLease(TEXT("Lease"), TEXT("LeaseSource"), { LeaseEntry }));
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*Source,
+			TEXT("Lease"),
+			LeaseCard,
+			LeaseResult));
 	TestTrue(TEXT("Menu lease enables first-person interaction for probe"),
 		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
@@ -1456,10 +1532,15 @@ bool FWacomUIRunFirstPersonRequestBuildsLeaseEntriesFromDefinitionsSpec::RunTest
 		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest();
 	Request.AllowedCardDefinitions.Add(Fang);
 	FWacomRunMenuCardLeaseResult Result;
+	const int32 PresentationFrameWritesBeforeProvider =
+		Source->PresentationFrameWriteCount;
 
 	TestTrue(TEXT("Provider sets lease from allowed definition"),
 		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, Result));
 	TestTrue(TEXT("Result reports lease set"), Result.bLeaseSet);
+	TestEqual(TEXT("Provider lease writes through presentation frame"),
+		Source->PresentationFrameWriteCount,
+		PresentationFrameWritesBeforeProvider + 1);
 	TestEqual(TEXT("Only matching definition becomes a candidate"), Result.CandidateCount, 1);
 	TestEqual(TEXT("Written lease entry preserves Fang instance"),
 		Source->LastWrittenEntries[0].CardInstanceId,
@@ -1470,6 +1551,24 @@ bool FWacomUIRunFirstPersonRequestBuildsLeaseEntriesFromDefinitionsSpec::RunTest
 	TestEqual(TEXT("Card face uses presentation data"),
 		Source->LastWrittenEntries[0].CardViewData.Name.ToString(),
 		FString(TEXT("毒牙")));
+	TestEqual(TEXT("Provider lease animates filtered Run card entering the menu hand"),
+		Source->LastWrittenTransitionHints.Num(),
+		1);
+	if (Source->LastWrittenTransitionHints.Num() == 1)
+	{
+		TestEqual(TEXT("Provider lease entry uses Run hand enter transition"),
+			Source->LastWrittenTransitionHints[0].TransitionKind,
+			EWacomFirstPersonCardSlotTransitionKind::RunHandEntered);
+		TestEqual(TEXT("Provider lease enter hint targets Fang"),
+			Source->LastWrittenTransitionHints[0].CardInstanceId,
+			State.Backpack[0].InstanceId);
+		TestEqual(TEXT("Provider lease enter hint sequence index"),
+			Source->LastWrittenTransitionHints[0].SequenceIndex,
+			0);
+		TestEqual(TEXT("Provider lease enter hint sequence count"),
+			Source->LastWrittenTransitionHints[0].SequenceCount,
+			1);
+	}
 	FRunCardWorkspaceEntry WorkspaceEntry;
 	TestTrue(TEXT("Provider source stores workspace metadata"),
 		Source->FindCurrentRunFirstPersonCardWorkspaceEntry(
@@ -2040,6 +2139,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunFirstPersonDragReleaseOnMenuZoneProbeOnlySpec::RunTest(const FString& /*Parameters*/)
 {
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunEventLease.ProbeOnly"), TEXT("Lease"), 0);
+	LeaseCard->TargetMode = ECardTargetMode::SingleEnemyPart;
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	const FGuid LeaseCardInstanceId =
+		WacomRunFirstPersonCardLayerSpec::FindOwnedInstanceIdByDefinition(Run->GetRunState(), LeaseCard);
+	TestTrue(TEXT("Lease card instance is valid"), LeaseCardInstanceId.IsValid());
+
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	UWacomRunFirstPersonCardSourceComponent* Source = PC->GetRunFirstPersonCardSourceComponent();
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
@@ -2048,24 +2158,26 @@ bool FWacomUIRunFirstPersonDragReleaseOnMenuZoneProbeOnlySpec::RunTest(const FSt
 	Target->ZoneId = TEXT("RunEvent.Pay.Fang");
 	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
 	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease"));
-	LeaseEntry.bIsPlayable = true;
-	LeaseEntry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is accepted"),
-		PC->SetRunFirstPersonCardLayerMenuLease(TEXT("RunEventLease"), TEXT("RunEventLeaseSource"), { LeaseEntry }));
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*PC.Get(),
+			TEXT("RunEventLease"),
+			LeaseCard,
+			LeaseResult));
+	TestTrue(TEXT("Lease result is set"), LeaseResult.bLeaseSet);
 
 	FWacomFirstPersonCardDragView DragView;
-	DragView.CardInstanceId = LeaseEntry.CardInstanceId;
+	DragView.CardInstanceId = LeaseCardInstanceId;
 	DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
 	DragView.CurrentScreenPosition = FVector2D(100.0f, 200.0f);
 	DragView.PointerViewportPosition = FVector2D(100.0f, 200.0f);
 	DragView.bHasPointerViewportPosition = true;
 
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
-	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), LeaseEntry.CardInstanceId, DragView, /*bReleased*/ true);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), LeaseCardInstanceId, DragView, /*bReleased*/ true);
 
 	const FString Debug = FWacomPlayerControllerRunInteractionTestAccess::RunMenuDropProbeDebugSummary(PC.Get());
 	TestTrue(TEXT("Release is probe-only"),
@@ -2089,6 +2201,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunFirstPersonMenuDropProbeClearSpec::RunTest(const FString& /*Parameters*/)
 {
+	FWacomBattleFixture Fx;
+	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunEventLease.ProbeClear"), TEXT("Lease"), 0);
+	LeaseCard->TargetMode = ECardTargetMode::SingleEnemyPart;
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	const FGuid LeaseCardInstanceId =
+		WacomRunFirstPersonCardLayerSpec::FindOwnedInstanceIdByDefinition(Run->GetRunState(), LeaseCard);
+	TestTrue(TEXT("Lease card instance is valid"), LeaseCardInstanceId.IsValid());
+
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Target(
 		NewObject<UWacomRunMenuDropTargetWidgetProbe>(PC.Get()));
@@ -2096,23 +2219,25 @@ bool FWacomUIRunFirstPersonMenuDropProbeClearSpec::RunTest(const FString& /*Para
 	Target->ZoneId = TEXT("RunEvent.Clear.Zone");
 	FWacomRunMenuDropTargetWidgetTestAccess::SetProbeHit(Target.Get(), true);
 	FWacomPlayerControllerRunInteractionTestAccess::RegisterRunMenuDropTarget(PC.Get(), Target.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
 
-	FWacomFirstPersonCardLayerEntry LeaseEntry;
-	LeaseEntry.CardInstanceId = FGuid::NewGuid();
-	LeaseEntry.CardViewData.Name = FText::FromString(TEXT("Lease"));
-	LeaseEntry.bIsPlayable = true;
-	LeaseEntry.TargetMode = ECardTargetMode::SingleEnemyPart;
+	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is accepted"),
-		PC->SetRunFirstPersonCardLayerMenuLease(TEXT("RunEventLease"), TEXT("RunEventLeaseSource"), { LeaseEntry }));
+		WacomRunFirstPersonCardLayerSpec::SetDefinitionLease(
+			*PC.Get(),
+			TEXT("RunEventLease"),
+			LeaseCard,
+			LeaseResult));
+	TestTrue(TEXT("Lease result is set"), LeaseResult.bLeaseSet);
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	FWacomFirstPersonCardDragView DragView;
-	DragView.CardInstanceId = LeaseEntry.CardInstanceId;
+	DragView.CardInstanceId = LeaseCardInstanceId;
 	DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
 	DragView.CurrentScreenPosition = FVector2D(100.0f, 200.0f);
 	DragView.PointerViewportPosition = FVector2D(100.0f, 200.0f);
 	DragView.bHasPointerViewportPosition = true;
-	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), LeaseEntry.CardInstanceId, DragView, /*bReleased*/ false);
+	FWacomPlayerControllerRunInteractionTestAccess::ApplyRunMenuDropProbeFeedback(PC.Get(), LeaseCardInstanceId, DragView, /*bReleased*/ false);
 	TestEqual(TEXT("Probe preview is active before clear"),
 		Target->GetRunMenuDropPreviewState(),
 		EWacomRunMenuDropTargetPreviewState::Probe);
@@ -2824,6 +2949,74 @@ bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionRefreshesSpec::RunTest(co
 	TestEqual(TEXT("Provider candidate count refreshes"),
 		Source->GetRunFirstPersonCardSourceDebugView().ActiveMenuLeaseEntryCount,
 		2);
+#if WITH_AUTOMATION_TESTS
+	TestEqual(TEXT("Provider rebuild happens once"),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).DataBuildCount,
+		1);
+	TestEqual(TEXT("Provider apply happens once"),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RuntimeApplyCount,
+		1);
+	TestEqual(TEXT("Storage revision refresh does not count as skip"),
+		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).RevisionSkipCount,
+		0);
+#endif
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonProviderLeaseUnchangedCandidatesUseStateRefreshSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.ProviderBackedLeaseStorageRevisionWithoutNewCandidatesUsesStateRefresh",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonProviderLeaseUnchangedCandidatesUseStateRefreshSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
+	UCardDefinition* Other = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Other"), TEXT("Other"), 1);
+	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+
+	FWacomRunMenuCardLeaseRequest Request =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("ProviderStateRefreshLease"));
+	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
+	FWacomRunMenuCardLeaseResult LeaseResult;
+	TestTrue(TEXT("Provider lease is set"),
+		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+	const int32 WritesAfterLease = Source->WriteCount;
+	const uint64 StorageRevisionAfterLease = Run->GetBackpackStorageSnapshotRevision();
+#if WITH_AUTOMATION_TESTS
+	FWacomFirstPersonCardLayerTestAccess::ResetSourceCounters(*Source);
+#endif
+
+	Run->AcquireCardToRun(Other);
+	TestTrue(TEXT("Storage mutation bumps storage revision"),
+		Run->GetBackpackStorageSnapshotRevision() > StorageRevisionAfterLease);
+	TestEqual(TEXT("Provider source rewrites after storage revision change"),
+		Source->WriteCount,
+		WritesAfterLease + 1);
+	TestEqual(TEXT("Provider candidate count remains unchanged"),
+		Source->GetRunFirstPersonCardSourceDebugView().ActiveMenuLeaseEntryCount,
+		1);
+	TestEqual(TEXT("Unchanged candidates use state refresh commit"),
+		Source->LastWrittenCommitMode,
+		EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh);
+	TestEqual(TEXT("Unchanged candidates do not replay RunHandEntered"),
+		Source->LastWrittenTransitionHints.Num(),
+		0);
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Provider rebuild happens once"),
 		FWacomFirstPersonCardLayerTestAccess::ProviderLeaseCounters(*Source).DataBuildCount,

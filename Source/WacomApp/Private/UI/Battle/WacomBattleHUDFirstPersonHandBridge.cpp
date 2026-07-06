@@ -293,12 +293,10 @@ void FWacomBattleHUDFirstPersonHandBridge::SuppressLayerForEntry()
 		false);
 	Anchor->CancelFirstPersonCardDragGesture(true);
 	Anchor->ClearCardLayerVisualState();
-	TArray<FWacomFirstPersonCardLayerTransitionHint> EmptyHints;
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> EmptyFeedbackHints;
-	TArray<FWacomFirstPersonCardLayerEntry> EmptyEntries;
-	Anchor->SetRuntimeCardLayerTransitionHints(FirstPersonBattleHandLayerSourceId, EmptyHints);
-	Anchor->SetRuntimeCardLayerFeedbackHints(FirstPersonBattleHandLayerSourceId, EmptyFeedbackHints);
-	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, EmptyEntries);
+	FWacomFirstPersonCardLayerPresentationFrame SuppressedFrame;
+	SuppressedFrame.SourceId = FirstPersonBattleHandLayerSourceId;
+	SuppressedFrame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::Suppressed;
+	Anchor->CommitRuntimeCardLayerFrame(SuppressedFrame);
 	Anchor->SetFirstPersonCardLayerInteractionEnabled(false);
 	LastAnchor = Anchor;
 }
@@ -1119,16 +1117,12 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPresentationFrame(
 {
 	Frame.SourceId = FirstPersonBattleHandLayerSourceId;
 	ApplyPendingTargetingFlag(Frame.Entries);
-	if (Frame.ShouldApplyAsPresentationFrame())
+	if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh
+		&& Frame.ShouldApplyAsPresentationFrame())
 	{
-		Anchor.SetRuntimeCardLayerPresentationFrame(Frame);
+		Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame;
 	}
-	else
-	{
-		Anchor.SetRuntimeCardLayerEntries(
-			Frame.SourceId,
-			Frame.Entries);
-	}
+	Anchor.CommitRuntimeCardLayerFrame(Frame);
 }
 
 FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveDropIntent(
@@ -1452,7 +1446,11 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyTargetPreviewPresentationToLayer
 	TArray<FWacomFirstPersonCardLayerEntry> CardEntries =
 		TargetPreviewPresentation.CardLayerEntries;
 	ApplyPendingTargetingFlag(CardEntries);
-	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
+	FWacomFirstPersonCardLayerPresentationFrame PreviewFrame;
+	PreviewFrame.SourceId = FirstPersonBattleHandLayerSourceId;
+	PreviewFrame.Entries = MoveTemp(CardEntries);
+	PreviewFrame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PreviewOverlay;
+	Anchor->CommitRuntimeCardLayerFrame(PreviewFrame);
 	bHasActiveTargetPreviewLayer = true;
 }
 
@@ -1516,7 +1514,11 @@ void FWacomBattleHUDFirstPersonHandBridge::RestoreBaseTargetPreviewLayer()
 	TArray<FWacomFirstPersonCardLayerEntry> CardEntries =
 		WacomBattleCardPresentation::BuildCardLayerEntries(HUD.LastBattleSnapshot);
 	ApplyPendingTargetingFlag(CardEntries);
-	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, CardEntries);
+	FWacomFirstPersonCardLayerPresentationFrame RestoreFrame;
+	RestoreFrame.SourceId = FirstPersonBattleHandLayerSourceId;
+	RestoreFrame.Entries = MoveTemp(CardEntries);
+	RestoreFrame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
+	Anchor->CommitRuntimeCardLayerFrame(RestoreFrame);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::ApplyPendingTargetingFlag(

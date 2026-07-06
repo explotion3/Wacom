@@ -305,7 +305,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource(
 
 	FWacomFirstPersonCardLayerPresentationFrame Frame =
 		BuildDefaultSourcePresentationFrame(*Anchor, MoveTemp(Entries));
-	WriteRuntimeCardLayerPresentationFrame(
+	WriteRuntimeCardLayerFrame(
 		*Anchor,
 		Frame);
 	StoreRunCardWorkspaceMetadata(WorkspaceSnapshot);
@@ -373,7 +373,6 @@ bool UWacomRunFirstPersonCardSourceComponent::TryBuildCurrentProviderLeaseRefres
 	FProviderLeaseRefreshKey& OutKey) const
 {
 	if (!BoundRunSession
-		|| !bActiveMenuLeaseBackedByProvider
 		|| ActiveMenuLeaseId.IsNone()
 		|| ActiveMenuLeaseSourceId.IsNone())
 	{
@@ -501,14 +500,29 @@ UWacomRunFirstPersonCardSourceComponent::BuildDefaultSourcePresentationFrame(
 	const UWacomFirstPersonCardAnchorComponent& Anchor,
 	TArray<FWacomFirstPersonCardLayerEntry>&& Entries) const
 {
+	return BuildRunHandEnteredPresentationFrame(
+		Anchor,
+		RunFirstPersonCardLayerSourceId,
+		MoveTemp(Entries));
+}
+
+FWacomFirstPersonCardLayerPresentationFrame
+UWacomRunFirstPersonCardSourceComponent::BuildRunHandEnteredPresentationFrame(
+	const UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId,
+	TArray<FWacomFirstPersonCardLayerEntry>&& Entries) const
+{
 	FWacomFirstPersonCardLayerPresentationFrame Frame;
-	Frame.SourceId = RunFirstPersonCardLayerSourceId;
+	Frame.SourceId = SourceId;
 	Frame.Entries = MoveTemp(Entries);
 	const TSet<FGuid> RunHandEnteredCardIds =
-		DetermineRunHandEnteredCardIds(Anchor, Frame.Entries);
+		DetermineRunHandEnteredCardIds(Anchor, SourceId, Frame.Entries);
 	Frame.TransitionHints =
 		BuildRunHandEnteredTransitionHints(Frame.Entries, RunHandEnteredCardIds);
-	Frame.bApplyAsPresentationFrame = true;
+	Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
+	Frame.CommitMode = Frame.ShouldApplyAsPresentationFrame()
+		? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
+		: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 	return Frame;
 }
 
@@ -517,12 +531,14 @@ UWacomRunFirstPersonCardSourceComponent::BuildSuppressedPresentationFrame() cons
 {
 	FWacomFirstPersonCardLayerPresentationFrame Frame;
 	Frame.SourceId = RunFirstPersonCardLayerSuppressedSourceId;
+	Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::Suppressed;
 	Frame.bApplyAsPresentationFrame = true;
 	return Frame;
 }
 
 TSet<FGuid> UWacomRunFirstPersonCardSourceComponent::DetermineRunHandEnteredCardIds(
 	const UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId,
 	const TArray<FWacomFirstPersonCardLayerEntry>& Entries) const
 {
 	TSet<FGuid> CardIdsToAnimate;
@@ -533,7 +549,7 @@ TSet<FGuid> UWacomRunFirstPersonCardSourceComponent::DetermineRunHandEnteredCard
 
 	const bool bAnimateAll =
 		!Anchor.HasRuntimeCardLayerData()
-		|| Anchor.GetRuntimeCardLayerSourceId() != RunFirstPersonCardLayerSourceId
+		|| Anchor.GetRuntimeCardLayerSourceId() != SourceId
 		|| Anchor.GetRuntimeCardLayerCardCount() == 0;
 	if (bAnimateAll)
 	{
@@ -612,7 +628,6 @@ void UWacomRunFirstPersonCardSourceComponent::ResetRunFirstPersonCardLayerMenuCo
 	ActiveMenuLeaseId = NAME_None;
 	ActiveMenuLeaseSourceId = NAME_None;
 	ActiveMenuLeaseEntries.Reset();
-	bActiveMenuLeaseBackedByProvider = false;
 	ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
 	ResetDefaultSourceRefreshKey();
 	ResetProviderLeaseRefreshKey();
@@ -641,38 +656,37 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshActiveMenuLease(bool bAllow
 		return false;
 	}
 
-	if (bActiveMenuLeaseBackedByProvider)
+	if (bAllowRevisionSkip && CanSkipProviderLeaseRefresh(*Anchor))
 	{
-		if (bAllowRevisionSkip && CanSkipProviderLeaseRefresh(*Anchor))
-		{
-			ClearMenuLeaseReconcileBlock();
-			LastRefreshResult = TEXT("MenuLeaseProviderSkippedUnchangedRevision");
+		ClearMenuLeaseReconcileBlock();
+		LastRefreshResult = TEXT("MenuLeaseProviderSkippedUnchangedRevision");
 #if WITH_AUTOMATION_TESTS
-			++ProviderLeaseRefreshCountersForTest.RevisionSkipCount;
+		++ProviderLeaseRefreshCountersForTest.RevisionSkipCount;
 #endif
-			LogDebugState(TEXT("MenuLeaseProviderRefreshSkipped"));
-			return true;
-		}
+		LogDebugState(TEXT("MenuLeaseProviderRefreshSkipped"));
+		return true;
+	}
 
 #if WITH_AUTOMATION_TESTS
-		++ProviderLeaseRefreshCountersForTest.DataBuildCount;
+	++ProviderLeaseRefreshCountersForTest.DataBuildCount;
 #endif
-		if (!RebuildActiveMenuLeaseFromProviderRequest())
-		{
-			return false;
-		}
+	if (!RebuildActiveMenuLeaseFromProviderRequest())
+	{
+		return false;
 	}
 
 	LastEntryCount = ActiveMenuLeaseEntries.Num();
-	WriteRuntimeCardLayerEntries(*Anchor, ActiveMenuLeaseSourceId, ActiveMenuLeaseEntries);
+	FWacomFirstPersonCardLayerPresentationFrame Frame =
+		BuildRunHandEnteredPresentationFrame(
+			*Anchor,
+			ActiveMenuLeaseSourceId,
+			TArray<FWacomFirstPersonCardLayerEntry>(ActiveMenuLeaseEntries));
+	WriteRuntimeCardLayerFrame(*Anchor, Frame);
 	LastWrittenRuntimeSourceId = ActiveMenuLeaseSourceId;
-	if (bActiveMenuLeaseBackedByProvider)
-	{
-		StoreProviderLeaseRefreshKey();
+	StoreProviderLeaseRefreshKey();
 #if WITH_AUTOMATION_TESTS
-		++ProviderLeaseRefreshCountersForTest.RuntimeApplyCount;
+	++ProviderLeaseRefreshCountersForTest.RuntimeApplyCount;
 #endif
-	}
 	ClearMenuLeaseReconcileBlock();
 	LastRefreshResult = TEXT("MenuLeaseRefreshed");
 	LogDebugState(TEXT("MenuLeaseRefreshed"));
@@ -715,7 +729,6 @@ bool UWacomRunFirstPersonCardSourceComponent::RebuildActiveMenuLeaseFromProvider
 		ActiveMenuLeaseId = NAME_None;
 		ActiveMenuLeaseSourceId = NAME_None;
 		ActiveMenuLeaseEntries.Reset();
-		bActiveMenuLeaseBackedByProvider = false;
 		ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
 		ResetProviderLeaseRefreshKey();
 		ClearMenuLeaseReconcileBlock();
@@ -776,7 +789,7 @@ bool UWacomRunFirstPersonCardSourceComponent::WriteSuppressedRuntimeCardLayerWit
 	}
 
 	FWacomFirstPersonCardLayerPresentationFrame Frame = BuildSuppressedPresentationFrame();
-	WriteRuntimeCardLayerPresentationFrame(
+	WriteRuntimeCardLayerFrame(
 		*Anchor,
 		Frame);
 	LastEntryCount = 0;
@@ -820,7 +833,6 @@ void UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerWithRe
 		ActiveMenuLeaseId = NAME_None;
 		ActiveMenuLeaseSourceId = NAME_None;
 		ActiveMenuLeaseEntries.Reset();
-		bActiveMenuLeaseBackedByProvider = false;
 		ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
 		ClearReconcileBlocks();
 	}
@@ -843,38 +855,6 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerSuppress
 	ReconcileRunFirstPersonCardLayer(
 		/*bAllowDefaultSourceRevisionSkip*/ false,
 		/*bAllowProviderLeaseRevisionSkip*/ false);
-}
-
-bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLease(
-	FName LeaseId,
-	FName SourceId,
-	const TArray<FWacomFirstPersonCardLayerEntry>& Entries)
-{
-	if (LeaseId.IsNone() || SourceId.IsNone())
-	{
-		LastRefreshResult = TEXT("InvalidMenuLease");
-		LogDebugState(TEXT("MenuLeaseRejected"));
-		return false;
-	}
-	if (!ActiveMenuLeaseId.IsNone() && ActiveMenuLeaseId != LeaseId)
-	{
-		LastRefreshResult = TEXT("MenuLeaseConflict");
-		LogDebugState(TEXT("MenuLeaseRejected"));
-		return false;
-	}
-
-	ActiveMenuLeaseId = LeaseId;
-	ActiveMenuLeaseSourceId = SourceId;
-	ActiveMenuLeaseEntries = Entries;
-	bActiveMenuLeaseBackedByProvider = false;
-	ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
-	ClearRunCardWorkspaceMetadata();
-	ResetDefaultSourceRefreshKey();
-	ResetProviderLeaseRefreshKey();
-	ReconcileRunFirstPersonCardLayer(
-		/*bAllowDefaultSourceRevisionSkip*/ false,
-		/*bAllowProviderLeaseRevisionSkip*/ false);
-	return true;
 }
 
 bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeaseFromRunCards(
@@ -929,30 +909,22 @@ bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeas
 				: WorkspaceSnapshot.RejectReason);
 	}
 
-	const bool bLeaseSet =
-		SetRunFirstPersonCardLayerMenuLease(Request.LeaseId, Request.SourceId, Entries);
-	if (bLeaseSet)
-	{
-		ResetProviderLeaseRefreshKey();
-		bActiveMenuLeaseBackedByProvider = true;
-		ActiveMenuLeaseProviderRequest = Request;
-		StoreProviderLeaseRefreshKey();
-		StoreRunCardWorkspaceMetadata(WorkspaceSnapshot);
-	}
+	ActiveMenuLeaseId = Request.LeaseId;
+	ActiveMenuLeaseSourceId = Request.SourceId;
+	ActiveMenuLeaseEntries = Entries;
+	ActiveMenuLeaseProviderRequest = Request;
+	ResetDefaultSourceRefreshKey();
+	ResetProviderLeaseRefreshKey();
+	StoreRunCardWorkspaceMetadata(WorkspaceSnapshot);
+	ReconcileRunFirstPersonCardLayer(
+		/*bAllowDefaultSourceRevisionSkip*/ false,
+		/*bAllowProviderLeaseRevisionSkip*/ false);
+	const bool bLeaseSet = true;
 	OutResult.bLeaseSet = bLeaseSet;
-	OutResult.RejectReason = bLeaseSet
-		? NAME_None
-		: LastRefreshResult;
+	OutResult.RejectReason = NAME_None;
 	OutResult.DebugSummary = WorkspaceSnapshot.DebugSummary;
 	StoreLastMenuLeaseProviderResult(OutResult);
-	if (!bLeaseSet)
-	{
-		LogDebugState(TEXT("MenuLeaseProviderRejected"));
-	}
-	else
-	{
-		LogDebugState(TEXT("MenuLeaseProviderSet"));
-	}
+	LogDebugState(TEXT("MenuLeaseProviderSet"));
 	return bLeaseSet;
 }
 
@@ -969,7 +941,6 @@ bool UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerMenuLe
 	ActiveMenuLeaseId = NAME_None;
 	ActiveMenuLeaseSourceId = NAME_None;
 	ActiveMenuLeaseEntries.Reset();
-	bActiveMenuLeaseBackedByProvider = false;
 	ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
 	ClearRunCardWorkspaceMetadata();
 	ResetDefaultSourceRefreshKey();
@@ -1003,7 +974,6 @@ UWacomRunFirstPersonCardSourceComponent::GetRunFirstPersonCardSourceDebugView() 
 	View.ActiveMenuLeaseId = ActiveMenuLeaseId;
 	View.ActiveMenuLeaseSourceId = ActiveMenuLeaseSourceId;
 	View.ActiveMenuLeaseEntryCount = ActiveMenuLeaseEntries.Num();
-	View.bActiveMenuLeaseBackedByProvider = bActiveMenuLeaseBackedByProvider;
 	View.bHasRunSession = BoundRunSession != nullptr;
 	View.bHasAnchor = ResolveFirstPersonCardAnchor() != nullptr;
 	View.BattleDeckPhysicalCount = LastBattleDeckPhysicalCount;
@@ -1027,14 +997,13 @@ FString UWacomRunFirstPersonCardSourceComponent::GetRunFirstPersonCardSourceDebu
 {
 	const FWacomRunFirstPersonCardSourceDebugView View = GetRunFirstPersonCardSourceDebugView();
 	return FString::Printf(
-		TEXT("RunFirstPersonCardSource{Owner=%s SourceId=%s Enabled=%s Active=%s SuppressedByGameMenu=%s HasLease=%s ProviderBacked=%s LeaseId=%s LeaseSource=%s LeaseEntries=%d HasRun=%s HasAnchor=%s Physical=%d Projected=%d Entries=%d Last=%s}"),
+		TEXT("RunFirstPersonCardSource{Owner=%s SourceId=%s Enabled=%s Active=%s SuppressedByGameMenu=%s HasLease=%s LeaseId=%s LeaseSource=%s LeaseEntries=%d HasRun=%s HasAnchor=%s Physical=%d Projected=%d Entries=%d Last=%s}"),
 		*GetNameSafe(GetOwner()),
 		*View.SourceId.ToString(),
 		View.bEnabled ? TEXT("true") : TEXT("false"),
 		View.bActive ? TEXT("true") : TEXT("false"),
 		View.bSuppressedByGameMenu ? TEXT("true") : TEXT("false"),
 		View.bHasActiveMenuLease ? TEXT("true") : TEXT("false"),
-		View.bActiveMenuLeaseBackedByProvider ? TEXT("true") : TEXT("false"),
 		*View.ActiveMenuLeaseId.ToString(),
 		*View.ActiveMenuLeaseSourceId.ToString(),
 		View.ActiveMenuLeaseEntryCount,
@@ -1174,25 +1143,7 @@ UWacomRunFirstPersonCardSourceComponent::ResolveFirstPersonCardAnchor() const
 	return Character ? Character->GetFirstPersonCardAnchorComponent() : nullptr;
 }
 
-void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerEntries(
-	UWacomFirstPersonCardAnchorComponent& Anchor,
-	FName SourceId,
-	const TArray<FWacomFirstPersonCardLayerEntry>& Entries)
-{
-	const bool bEnableMenuLeaseDragProbe =
-		!ActiveMenuLeaseId.IsNone()
-		&& SourceId == ActiveMenuLeaseSourceId;
-	const bool bEnableRunWorldCardDropDrag =
-		ActiveMenuLeaseId.IsNone()
-		&& SourceId == RunFirstPersonCardLayerSourceId;
-	const bool bEnableRuntimeInteraction =
-		bEnableMenuLeaseDragProbe || bEnableRunWorldCardDropDrag;
-	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableRuntimeInteraction);
-	Anchor.SetRuntimeCardLayerEntries(SourceId, Entries);
-	Anchor.SetFirstPersonCardLayerInteractionEnabled(bEnableRuntimeInteraction);
-}
-
-void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerPresentationFrame(
+void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerFrame(
 	UWacomFirstPersonCardAnchorComponent& Anchor,
 	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
 {
@@ -1205,7 +1156,7 @@ void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerPresentationF
 	const bool bEnableRuntimeInteraction =
 		bEnableMenuLeaseDragProbe || bEnableRunWorldCardDropDrag;
 	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableRuntimeInteraction);
-	Anchor.SetRuntimeCardLayerPresentationFrame(Frame);
+	Anchor.CommitRuntimeCardLayerFrame(Frame);
 	Anchor.SetFirstPersonCardLayerInteractionEnabled(bEnableRuntimeInteraction);
 }
 

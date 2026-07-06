@@ -2902,7 +2902,6 @@ bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Par
 	Menu->SubmitPolicyForTest = EWacomRunMenuCardDropSubmitPolicy::MenuHandled;
 	Menu->AcceptedZoneIdForTest = TEXT("RunMenu.Zone.Key");
 	PC->RegisterActiveGameMenuWidget(Menu.Get());
-	FWacomPlayerControllerRunInteractionTestAccess::SetRunFirstPersonMenuLease(PC.Get(), TEXT("Lease.MenuPriority"));
 	FWacomRunMenuCardLeaseRequest LeaseRequest;
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	LeaseRequest.LeaseId = TEXT("Lease.MenuPriority");
@@ -6239,10 +6238,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIRunEventHoverPromptIgnoredDuringRunMenuDragSpec::RunTest(const FString& /*Parameters*/)
 {
+	TStrongObjectPtr<UCardDefinition> DragCard(
+		MakeUiWorldDropCard(GetTransientPackage(), TEXT("HoverDragBlockedCard")));
+	TStrongObjectPtr<UCharacterDefinition> Character(
+		MakeUiWorldDropCharacter(GetTransientPackage(), DragCard.Get()));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
 		NewObject<AWacomRunEventTriggerClickProbe>());
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(NewObject<UWacomMenuWidgetBaseProbe>());
+	InjectRunSession(PC.Get(), Run.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
 	Trigger->PersistentId = TEXT("Event.UI.HoverDragBlocked");
 	Trigger->HoverPromptText = FText::FromString(TEXT("不应显示"));
 	FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(Trigger.Get());

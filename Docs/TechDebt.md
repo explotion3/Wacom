@@ -103,7 +103,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 
 | 项 | 临时做法 / 当前决定 | 正式方案 / 处理方向 |
 |---|---|---|
-| MSVC 工具链 14.38 | UE 5.7 警告 “not preferred”，当前不影响功能 | 升级到 14.44+ |
+| MSVC 工具链 14.38 | 旧引擎阶段曾有 “not preferred” 警告；当前 UE 5.8 构建使用 14.44 | 旧开发机若仍使用 14.38，升级到 14.44+ |
 | `RunSession.cpp::ApplySaveGameToRunState` C1001 ICE | 把 `RestoreCardInstanceList` 提取为 anonymous-namespace file-scope free function | MSVC 14.44+ 或 Clang 后视情况合回 lambda |
 
 ---

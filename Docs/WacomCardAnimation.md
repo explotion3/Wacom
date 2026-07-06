@@ -47,7 +47,7 @@ tags:
 - `CardsDrawn.CardInstanceIds` 是真实入手普通卡实例列表。Battle hand presentation controller 优先用这些 ID 生成 `Drawn` transition hint。
 - `CardsRetained` 是规则事件，只记录回合结束明确保留的普通手牌实例；当前会生成独立 retained feedback hint，但不对应 first-person `Retained` transition kind。
 - `FBattlePresentationJournal` 是 C++ only 只读 checkpoint journal，当前只记录 EndTurn 的 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`。
-- first-person card layer 当前 transition kind 包含 `Default`、`Drawn`、`RunHandEntered`、`Gained`、`HandAnchorEntered`、`Played`、`Discarded`。`RunHandEntered` 是 Run/App-only 默认手牌进入语义，v1 复用 `Drawn` 入场 profile；`HandAnchorEntered` 是 UI-only 左右手牌生成入手语义。两者都不属于 `CardsDrawn`。
+- first-person card layer 当前 transition kind 包含 `Default`、`Drawn`、`RunHandEntered`、`Gained`、`HandAnchorEntered`、`Played`、`Discarded`。`RunHandEntered` 是 Run/App-only hand/source 进入语义，v1 复用 `Drawn` 入场 profile；`HandAnchorEntered` 是 UI-only 左右手牌生成入手语义。两者都不属于 `CardsDrawn`。
 - EndTurn journal 现在由 `WacomApp` presentation coordinator 翻译为阶段化 plan：`TurnEndDiscard -> TurnEndRetain -> EnemyAction -> TurnStartDraw -> TurnStartHandAnchorEnter`。手牌阶段等待 first-person card layer 报告播放结束后再进入下一阶段；enemy phase v1 复用现有 battle event presentation queue。
 - `FWacomBattleHandPresentationController` 在非 EndTurn phase plan 路径中，仍把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`，并把 `CardsRetained` 转为同帧 `feedback hints`。
 - `UWacomFirstPersonCardAnchorComponent` 的 `05 Slot Motion` 和 `06 Transition Motion` 是当前卡牌入场、离场和事件感知转场的主要制作参数入口。
@@ -68,7 +68,8 @@ tags:
 | `WacomBattle` | 结算规则，发 `FBattleEvent`，输出 `FBattleSnapshot` 和 `FBattlePresentationJournal` | 不计算屏幕位置、曲线、延迟、材质、动画时长 |
 | BattleHUD / App flow | 消费事件和 journal，形成手牌表现帧或未来 presentation plan | 不改写规则结果，不让 UI 事件反向污染 Battle |
 | `FWacomBattleHandPresentationController` | 当前 Battle hand 的 `entries + transition hints + feedback hints` 事务入口 | 不读取 Anchor 投影，不负责曲线和视觉参数 |
-| `FWacomFirstPersonCardLayerPresentationFrame` | Battle / Run 共用的 `SourceId + entries + transition hints + feedback hints` C++ 表现帧 contract | 不决定规则事件语义，不暴露 Blueprint 制作面 |
+| `FWacomFirstPersonCardLayerPresentationFrame` | Battle / Run 共用的 `SourceId + entries + transition hints + feedback hints + CommitMode` C++ 表现帧 contract | 不决定规则事件语义，不暴露 Blueprint 制作面 |
+| `UWacomFirstPersonCardAnchorComponent::CommitRuntimeCardLayerFrame` | Battle / Run adapter 写入 Anchor runtime source 的统一提交入口 | 不生成领域事件，不读取 Run workspace 或 Battle snapshot |
 | `UWacomFirstPersonCardAnchorComponent` | 制作参数 facade、runtime source、projection、presentation gate | 不提交 Battle / Run 命令，不持有规则真相 |
 | `UWacomFirstPersonCardLayerWidget` | reconcile active / outgoing slot，应用 transition hint，管理 layer-level gesture | 不读取牌堆或战斗规则 |
 | `UWacomFirstPersonCardLayerSlotWidget` | 单槽 motion、hover / inspect / drag visual composition、入场 / 离场播放 | 不直接调用 BattleSession |
@@ -121,7 +122,8 @@ EndTurn phase plan 的当前合同：
 | `Transition` | 单张卡的入场、离场或语义移动。当前由 `FWacomFirstPersonCardLayerTransitionHint` 表达 |
 | `Feedback` | 单张卡的非阻塞短反馈，不改变入场 / 离场语义。当前由 `FWacomFirstPersonCardLayerFeedbackHint` 表达 |
 | `TransitionBatch` | 同一规则或表现阶段产生的一组 transition。当前还没有独立类型 |
-| `FWacomFirstPersonCardLayerPresentationFrame` | 一次原子提交给 card layer 的 `SourceId + entries + transition hints + feedback hints`；Battle / Run 共用该 contract，只在各自 adapter 中决定数据来源和 apply policy |
+| `FWacomFirstPersonCardLayerPresentationFrame` | 一次原子提交给 card layer 的 `SourceId + entries + transition hints + feedback hints + CommitMode`；Battle / Run 共用该 contract，只在各自 adapter 中决定数据来源和提交语义 |
+| `CommitMode` | Anchor 应如何提交 frame：`PresentationFrame` 替换 pending hints，`StateRefresh` 只刷新 entries 并保留 pending，`PreviewOverlay` 写预览 entries 且保留 pending，`Suppressed` 清空 entries 和 pending |
 | `Origin` | 动画起点语义，例如 slot offset、hand anchor offset 或 viewport anchor |
 | `DestinationSlot` | 由 snapshot / entries 解析出的目标手牌槽位 |
 | `Reflow` | 手牌数量、顺序、zone 或投影变化导致的普通布局移动 |
@@ -155,7 +157,7 @@ EndTurn phase plan 的当前合同：
 | 事件 | 当前 transition |
 |---|---|
 | `CardsDrawn` | 对仍存在于 next hand snapshot 的 `CardInstanceIds` 生成 `Drawn`，并按最终手牌槽位从左到右写入稳定 `SequenceIndex / SequenceCount` |
-| Run 默认手牌进入 | `UWacomRunFirstPersonCardSourceComponent` 在默认 `RunFirstPersonBattleDeck` source 初次显示、从菜单恢复或新增默认卡时生成 `RunHandEntered`；不进入 `CardsDrawn` |
+| Run 默认手牌 / provider menu lease 进入 | `UWacomRunFirstPersonCardSourceComponent` 在默认 `RunFirstPersonBattleDeck` source 初次显示、从菜单恢复、新增默认卡，或 RunEvent / 菜单通过 `OwnedCardsFilter` provider lease 筛出候选持有卡进入 first-person hand 时生成 `RunHandEntered`，并通过 `CommitRuntimeCardLayerFrame` 统一提交；不进入 `CardsDrawn` |
 | `CardGained` | 新出现在手牌中的对应卡生成 `Gained` |
 | 左/右手牌生成入手 | App 层在普通抽牌后对新出现的左右手 anchor 生成 `HandAnchorEntered`；不进入 `CardsDrawn.CardInstanceIds` |
 | `CardPlayed` | 从手牌移除的对应卡生成 `Played` |
@@ -184,6 +186,8 @@ EndTurn phase plan 的 `TurnEndRetain` 阶段会在不改变 `CardsRetained` 规
 同批可见 `Drawn` 入场的错峰顺序以目标 hand snapshot 中的普通手牌槽位为准：最左侧目标槽先进入，依次到最右侧。`CardsDrawn.CardInstanceIds` 只决定“哪些卡真实入手”，不决定最终 stagger 方向。
 
 当前 layer 可消费 `Drawn` hint，并由 Anchor `06 Transition Motion` 控制来源模式、offset、viewport anchor、scale、angle、duration、stagger、arc lift、ease 和播放期间交互阻塞。
+
+Run default source 和 RunEvent / 菜单的 provider-backed menu lease 使用 `RunHandEntered` hint，并通过 `CommitRuntimeCardLayerFrame` 提交 `PresentationFrame`；不再保留 entries-only raw menu lease 作为无动画旁路。若后续某类菜单确实需要跳过入场，应在 frame commit / 动画策略上显式表达，而不是绕开 Run workspace provider。
 
 `TurnStartDraw` 阶段会暂时不提交本次新出现的左右手 anchor entries，让普通抽牌先完成；随后 `TurnStartHandAnchorEnter` 提交完整 hand snapshot，并只为这些新出现的 anchor 播放 `HandAnchorEntered`。Battle entry reveal 也采用同样两段式：普通 opening `Drawn` frame 先播，播放结束后 bridge 再提交左右手 `HandAnchorEntered` follow-up frame。这个隐藏只是当前 v1 为了保证“抽牌后生成左右手”可见，不是完整阶段内临时布局系统。
 

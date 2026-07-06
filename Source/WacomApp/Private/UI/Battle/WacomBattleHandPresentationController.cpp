@@ -240,6 +240,9 @@ FWacomBattleHandPresentationController::ConsumePendingHandAnchorEnterFrame()
 		Frame.TransitionHints.Add(Hint);
 	}
 	Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
+	Frame.CommitMode = Frame.ShouldApplyAsPresentationFrame()
+		? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
+		: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 	MarkSnapshotPresented(PendingHandAnchorEnterSnapshot);
 	ClearPendingHandAnchorEnterFrame();
 	return Frame;
@@ -270,6 +273,9 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 		Frame.TransitionHints = BuildTransitionHints(Baseline, FrameSnapshot);
 		Frame.FeedbackHints = BuildFeedbackHints(FrameSnapshot);
 		Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
+		Frame.CommitMode = Frame.ShouldApplyAsPresentationFrame()
+			? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
+			: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 		if (Frame.ShouldApplyAsPresentationFrame())
 		{
 			RecordSubmittedTransitionFrame();
@@ -286,6 +292,7 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 	}
 
 	Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
+	Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 	MarkSnapshotPresented(Snapshot);
 	return Frame;
 }
@@ -300,6 +307,9 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 	Frame.TransitionHints = TransitionHints;
 	Frame.FeedbackHints = FeedbackHints;
 	Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
+	Frame.CommitMode = Frame.ShouldApplyAsPresentationFrame()
+		? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
+		: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 	if (Frame.ShouldApplyAsPresentationFrame())
 	{
 		RecordSubmittedTransitionFrame();

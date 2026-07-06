@@ -539,12 +539,22 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerEntry
 	ECardTargetMode TargetMode = ECardTargetMode::None;
 };
 
+enum class EWacomFirstPersonCardLayerFrameCommitMode : uint8
+{
+	StateRefresh,
+	PresentationFrame,
+	PreviewOverlay,
+	Suppressed
+};
+
 struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 {
 	FName SourceId = NAME_None;
 	TArray<FWacomFirstPersonCardLayerEntry> Entries;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
+	EWacomFirstPersonCardLayerFrameCommitMode CommitMode =
+		EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 
 	// True when this frame should atomically replace pending presentation hints.
 	bool bApplyAsPresentationFrame = false;
@@ -556,7 +566,10 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 
 	bool ShouldApplyAsPresentationFrame() const
 	{
-		return bApplyAsPresentationFrame || HasPresentationHints();
+		return CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
+			|| CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::Suppressed
+			|| bApplyAsPresentationFrame
+			|| HasPresentationHints();
 	}
 
 	void Reset()
@@ -565,6 +578,7 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 		Entries.Reset();
 		TransitionHints.Reset();
 		FeedbackHints.Reset();
+		CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 		bApplyAsPresentationFrame = false;
 	}
 };

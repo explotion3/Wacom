@@ -704,28 +704,6 @@ void AWacomPlayerController::SetRunFirstPersonCardLayerSuppressedByGameMenu(bool
 	RefreshRunFirstPersonCardDetailBinding();
 }
 
-bool AWacomPlayerController::SetRunFirstPersonCardLayerMenuLease(
-	FName LeaseId,
-	FName SourceId,
-	const TArray<FWacomFirstPersonCardLayerEntry>& Entries)
-{
-	if (!RunFirstPersonCardSourceComponent)
-	{
-		return false;
-	}
-
-	RunFirstPersonCardSourceComponent->BindRunSession(ResolveRunSessionForFirstPersonCardSource());
-	const bool bSet =
-		RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerMenuLease(LeaseId, SourceId, Entries);
-	if (!bSet)
-	{
-		HideRunFirstPersonCardDetailPanel();
-	}
-	RefreshRunFirstPersonCardDetailBinding();
-	RefreshRunFirstPersonMenuLeaseDragBinding();
-	return bSet;
-}
-
 bool AWacomPlayerController::SetRunFirstPersonCardLayerMenuLeaseFromRunCards(
 	const FWacomRunMenuCardLeaseRequest& Request,
 	FWacomRunMenuCardLeaseResult& OutResult)

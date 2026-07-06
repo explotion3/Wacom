@@ -313,11 +313,12 @@ private:
 
 	void SetRunFirstPersonMenuLeaseForTest(FName LeaseId = TEXT("Test.MenuLease"))
 	{
-		TArray<FWacomFirstPersonCardLayerEntry> Entries;
-		FWacomFirstPersonCardLayerEntry Entry;
-		Entry.CardInstanceId = FGuid::NewGuid();
-		Entries.Add(Entry);
-		SetRunFirstPersonCardLayerMenuLease(LeaseId, TEXT("Test.Source"), Entries);
+		FWacomRunMenuCardLeaseRequest Request;
+		Request.LeaseId = LeaseId;
+		Request.SourceId = TEXT("Test.Source");
+		Request.bAllowAllOwnedCardsWhenNoFilter = true;
+		FWacomRunMenuCardLeaseResult Result;
+		SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, Result);
 	}
 
 	void PrepareExplorationRunFirstPersonCardLayerForTest()

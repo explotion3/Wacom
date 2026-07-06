@@ -139,6 +139,18 @@ namespace WacomFirstPersonCardLayerPresentationPlaybackSpec
 		Hint.SequenceCount = 1;
 		return Hint;
 	}
+
+	FWacomFirstPersonCardLayerPresentationFrame MakeCommitFrame(
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
+		EWacomFirstPersonCardLayerFrameCommitMode CommitMode)
+	{
+		FWacomFirstPersonCardLayerPresentationFrame Frame;
+		Frame.SourceId = SourceId;
+		Frame.Entries = Entries;
+		Frame.CommitMode = CommitMode;
+		return Frame;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -399,6 +411,144 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 		{});
 	Anchor->RefreshCardLayerNow(0.0f);
 	TestTrue(TEXT("Draw presentation frame starts playback immediately"), Anchor->HasActiveCardLayerPresentationPlayback());
+
+	PC->Destroy();
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardAnchorCommitFrameModesContractTest,
+	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.AnchorCommitFrameModes",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character =
+		World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character))
+	{
+		return false;
+	}
+	PC->Possess(Character);
+
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = AddProbeAnchor(Character);
+	if (!TestNotNull(TEXT("Probe anchor"), Anchor))
+	{
+		PC->Destroy();
+		Character->Destroy();
+		return false;
+	}
+
+	const FName SourceId = WacomFirstPersonCardLayerSourceIds::BattleHand();
+	const FGuid DrawnId = FGuid::NewGuid();
+	const FGuid RetainedId = FGuid::NewGuid();
+	const FGuid AddedId = FGuid::NewGuid();
+	const FGuid PreviewId = FGuid::NewGuid();
+	const FWacomFirstPersonCardLayerEntry DrawnEntry = MakeEntry(DrawnId, TEXT("Drawn"));
+	const FWacomFirstPersonCardLayerEntry RetainedEntry = MakeEntry(RetainedId, TEXT("Retained"));
+	const FWacomFirstPersonCardLayerEntry AddedEntry = MakeEntry(AddedId, TEXT("Added"));
+	const FWacomFirstPersonCardLayerEntry PreviewEntry = MakeEntry(PreviewId, TEXT("Preview"));
+
+	FWacomFirstPersonCardLayerPresentationFrame PresentationFrame =
+		MakeCommitFrame(
+			SourceId,
+			{ DrawnEntry, RetainedEntry },
+			EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame);
+	PresentationFrame.TransitionHints.Add(
+		MakeTransitionHint(DrawnId, EWacomFirstPersonCardSlotTransitionKind::Drawn));
+	PresentationFrame.FeedbackHints.Add(
+		MakeFeedbackHint(RetainedId, EWacomFirstPersonCardLayerFeedbackKind::Retained));
+	Anchor->CommitRuntimeCardLayerFrame(PresentationFrame);
+
+	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterPresentation =
+		Anchor->GetAutomationTestViewForTest();
+	TestEqual(
+		TEXT("Presentation frame writes one pending transition"),
+		PendingAfterPresentation.PendingTransitionHintCardIds.Num(),
+		1);
+	TestEqual(
+		TEXT("Presentation frame writes one pending feedback"),
+		PendingAfterPresentation.PendingFeedbackHintCardIds.Num(),
+		1);
+	TestTrue(
+		TEXT("Presentation frame stores draw hint"),
+		PendingAfterPresentation.PendingTransitionHintCardIds.Contains(DrawnId));
+	TestTrue(
+		TEXT("Presentation frame stores feedback hint"),
+		PendingAfterPresentation.PendingFeedbackHintCardIds.Contains(RetainedId));
+
+	const FWacomFirstPersonCardLayerPresentationFrame StateRefreshFrame =
+		MakeCommitFrame(
+			SourceId,
+			{ DrawnEntry, RetainedEntry, AddedEntry },
+			EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh);
+	Anchor->CommitRuntimeCardLayerFrame(StateRefreshFrame);
+
+	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterStateRefresh =
+		Anchor->GetAutomationTestViewForTest();
+	TestEqual(
+		TEXT("State refresh updates entries"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		3);
+	TestTrue(
+		TEXT("State refresh preserves pending draw hint"),
+		PendingAfterStateRefresh.PendingTransitionHintCardIds.Contains(DrawnId));
+	TestTrue(
+		TEXT("State refresh preserves pending feedback hint"),
+		PendingAfterStateRefresh.PendingFeedbackHintCardIds.Contains(RetainedId));
+
+	const FWacomFirstPersonCardLayerPresentationFrame PreviewFrame =
+		MakeCommitFrame(
+			SourceId,
+			{ PreviewEntry },
+			EWacomFirstPersonCardLayerFrameCommitMode::PreviewOverlay);
+	Anchor->CommitRuntimeCardLayerFrame(PreviewFrame);
+
+	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterPreview =
+		Anchor->GetAutomationTestViewForTest();
+	TestEqual(
+		TEXT("Preview overlay updates entries"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		1);
+	TestTrue(
+		TEXT("Preview overlay preserves pending draw hint"),
+		PendingAfterPreview.PendingTransitionHintCardIds.Contains(DrawnId));
+	TestTrue(
+		TEXT("Preview overlay preserves pending feedback hint"),
+		PendingAfterPreview.PendingFeedbackHintCardIds.Contains(RetainedId));
+
+	const FWacomFirstPersonCardLayerPresentationFrame SuppressedFrame =
+		MakeCommitFrame(
+			SourceId,
+			{},
+			EWacomFirstPersonCardLayerFrameCommitMode::Suppressed);
+	Anchor->CommitRuntimeCardLayerFrame(SuppressedFrame);
+
+	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterSuppressed =
+		Anchor->GetAutomationTestViewForTest();
+	TestEqual(
+		TEXT("Suppressed frame clears entries"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		0);
+	TestEqual(
+		TEXT("Suppressed frame clears pending transitions"),
+		PendingAfterSuppressed.PendingTransitionHintCardIds.Num(),
+		0);
+	TestEqual(
+		TEXT("Suppressed frame clears pending feedback"),
+		PendingAfterSuppressed.PendingFeedbackHintCardIds.Num(),
+		0);
 
 	PC->Destroy();
 	Character->Destroy();

@@ -222,12 +222,6 @@ public:
 	void SetRunFirstPersonCardLayerSuppressedByGameMenu(bool bSuppressed);
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
-	bool SetRunFirstPersonCardLayerMenuLease(
-		FName LeaseId,
-		FName SourceId,
-		const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	bool SetRunFirstPersonCardLayerMenuLeaseFromRunCards(
 		const FWacomRunMenuCardLeaseRequest& Request,
 		FWacomRunMenuCardLeaseResult& OutResult);

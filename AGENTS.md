@@ -4,7 +4,7 @@
 
 ## 项目概况
 
-- UE 5.7 第一人称 HD-2D 卡牌冒险游戏。
+- UE 5.8 第一人称 HD-2D 卡牌冒险游戏。
 - 规则和设计真相优先看 `Docs/`，代码实现位于 `Source/`。
 - 新增功能要服务长期扩展：能复用的系统不要写成一次性页面、一次性 Actor 或硬编码流程。
 
@@ -193,11 +193,11 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 - 不要继续塞进巨型测试文件：像 `BattleWidgetSpec.cpp` 这种已经太大了，后续应该拆成更小的 spec 文件，比如 `BattleSceneEnemyActorSpec.cpp`、`BattleHUDSceneTargetSpec.cpp`、`BattlePresentationSpec.cpp`。
 
 ```powershell
-& 'E:\UE_5.7\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
+& 'E:\UE_5.8\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
 ```
 
 ```powershell
-& 'E:\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests Wacom; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests Wacom; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
 常用 UI 测试前缀示例：

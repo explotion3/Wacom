@@ -1057,25 +1057,63 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 	return BuildCardSlotViewsFromEntries(BuildPreviewCardLayerEntries());
 }
 
-void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerEntries(
-	FName SourceId,
-	const TArray<FWacomFirstPersonCardLayerEntry>& Entries)
+void UWacomFirstPersonCardAnchorComponent::CommitRuntimeCardLayerFrame(
+	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
 {
-	const bool bRuntimeSourceChanged = RuntimeState && RuntimeState->SetEntries(SourceId, Entries);
+	if (!RuntimeState || Frame.SourceId.IsNone())
+	{
+		return;
+	}
+
+	const bool bRuntimeSourceChanged =
+		RuntimeState->SetEntries(Frame.SourceId, Frame.Entries);
+	switch (Frame.CommitMode)
+	{
+	case EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame:
+		RuntimeState->SetPresentationFrameHints(Frame.SourceId, Frame.TransitionHints);
+		RuntimeState->SetPresentationFrameFeedbackHints(Frame.SourceId, Frame.FeedbackHints);
+		break;
+	case EWacomFirstPersonCardLayerFrameCommitMode::Suppressed:
+	{
+		const TArray<FWacomFirstPersonCardLayerTransitionHint> EmptyTransitionHints;
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint> EmptyFeedbackHints;
+		RuntimeState->SetPresentationFrameHints(Frame.SourceId, EmptyTransitionHints);
+		RuntimeState->SetPresentationFrameFeedbackHints(Frame.SourceId, EmptyFeedbackHints);
+		RuntimeState->SetTransitionHints(Frame.SourceId, EmptyTransitionHints);
+		RuntimeState->SetFeedbackHints(Frame.SourceId, EmptyFeedbackHints);
+		RuntimeState->ClearTransientInteraction();
+		break;
+	}
+	case EWacomFirstPersonCardLayerFrameCommitMode::PreviewOverlay:
+	case EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh:
+	default:
+		break;
+	}
+
 	if (bRuntimeSourceChanged)
 	{
 		RefreshResolvedCardLayoutRuntimeState();
 	}
 }
 
+#if WITH_AUTOMATION_TESTS
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerEntries(
+	FName SourceId,
+	const TArray<FWacomFirstPersonCardLayerEntry>& Entries)
+{
+	FWacomFirstPersonCardLayerPresentationFrame Frame;
+	Frame.SourceId = SourceId;
+	Frame.Entries = Entries;
+	Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
+	CommitRuntimeCardLayerFrame(Frame);
+}
+
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerPresentationFrame(
 	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
 {
-	SetRuntimeCardLayerPresentationFrame(
-		Frame.SourceId,
-		Frame.Entries,
-		Frame.TransitionHints,
-		Frame.FeedbackHints);
+	FWacomFirstPersonCardLayerPresentationFrame MutableFrame = Frame;
+	MutableFrame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame;
+	CommitRuntimeCardLayerFrame(MutableFrame);
 }
 
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerPresentationFrame(
@@ -1084,16 +1122,13 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerPresentationFrame(
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
 	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
 {
-	const bool bRuntimeSourceChanged = RuntimeState && RuntimeState->SetEntries(SourceId, Entries);
-	if (RuntimeState)
-	{
-		RuntimeState->SetPresentationFrameHints(SourceId, TransitionHints);
-		RuntimeState->SetPresentationFrameFeedbackHints(SourceId, FeedbackHints);
-	}
-	if (bRuntimeSourceChanged)
-	{
-		RefreshResolvedCardLayoutRuntimeState();
-	}
+	FWacomFirstPersonCardLayerPresentationFrame Frame;
+	Frame.SourceId = SourceId;
+	Frame.Entries = Entries;
+	Frame.TransitionHints = TransitionHints;
+	Frame.FeedbackHints = FeedbackHints;
+	Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame;
+	CommitRuntimeCardLayerFrame(Frame);
 }
 
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionHints(
@@ -1115,6 +1150,7 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerFeedbackHints(
 		RuntimeState->SetFeedbackHints(SourceId, Hints);
 	}
 }
+#endif
 
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionPresentationEnabled(
 	FName SourceId,
@@ -1142,7 +1178,11 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(
 	FName SourceId,
 	const TArray<FWacomCardViewData>& Cards)
 {
-	SetRuntimeCardLayerEntries(SourceId, BuildCardLayerEntriesFromData(Cards));
+	FWacomFirstPersonCardLayerPresentationFrame Frame;
+	Frame.SourceId = SourceId;
+	Frame.Entries = BuildCardLayerEntriesFromData(Cards);
+	Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
+	CommitRuntimeCardLayerFrame(Frame);
 }
 
 void UWacomFirstPersonCardAnchorComponent::ClearRuntimeCardLayerData(FName SourceId)
