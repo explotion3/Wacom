@@ -155,9 +155,6 @@ struct WACOMAPP_API FWacomCardDetailViewData
 	TArray<FText> TaskLines;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	TArray<FText> PassiveLines;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	TArray<FWacomCardDetailTokenLine> TokenLines;
 };
 

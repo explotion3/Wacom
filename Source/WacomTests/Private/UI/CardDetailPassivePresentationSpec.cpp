@@ -132,15 +132,6 @@ bool FWacomUICardDetailPassiveAuthoredTextSpec::RunTest(const FString& /*Paramet
 
 	const FWacomCardDetailViewData Data = UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 
-	TestEqual(TEXT("Passive plain text mirror is normalized"), Data.PassiveLines.Num(), 1);
-	if (Data.PassiveLines.Num() > 0)
-	{
-		TestEqual(
-			TEXT("Passive plain text drops section label"),
-			Data.PassiveLines[0].ToString(),
-			TEXT("暮气触发时，使一张中毒卡牌效果 +1。"));
-	}
-
 	const TArray<FWacomCardDetailTokenLine> PassiveTokenLines = CollectPassiveTokenLines(Data);
 	TestEqual(TEXT("Authored passive emits one passive token line"), PassiveTokenLines.Num(), 1);
 	TestNotNull(TEXT("Authored passive emits canonical passive section"),
@@ -307,7 +298,6 @@ bool FWacomUICardDetailPanelUsesSectionsSpec::RunTest(const FString& /*Parameter
 	FWacomCardDetailViewData Data;
 	Data.Name = FText::FromString(TEXT("面板文档卡"));
 	Data.Description = FText::FromString(TEXT("旧描述不应决定区块"));
-	Data.PassiveLines.Add(FText::FromString(TEXT("旧被动不应决定区块")));
 
 	FWacomCardDetailSection Section;
 	Section.SectionId = FName(TEXT("Canonical"));

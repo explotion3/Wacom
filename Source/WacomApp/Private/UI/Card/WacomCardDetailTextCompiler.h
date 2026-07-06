@@ -23,11 +23,10 @@ namespace WacomCardDetailTextCompiler
 		const UCardDefinition* Card,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext);
 
-	bool BuildPassiveTokenLines(
+	void BuildPassiveTokenLines(
 		const UCardDefinition* Card,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext,
-		TArray<FWacomCardDetailTokenLine>& OutLines,
-		TArray<FText>& OutFallbackPassiveLines);
+		TArray<FWacomCardDetailTokenLine>& OutLines);
 
 	TArray<FWacomCardDetailTokenLine> BuildPlainTextTokenLines(
 		const TArray<FText>& Lines,

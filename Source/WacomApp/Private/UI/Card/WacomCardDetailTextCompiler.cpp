@@ -646,18 +646,16 @@ namespace WacomCardDetailTextCompiler
 		return Lines;
 	}
 
-	bool BuildPassiveTokenLines(
+	void BuildPassiveTokenLines(
 		const UCardDefinition* Card,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext,
-		TArray<FWacomCardDetailTokenLine>& OutLines,
-		TArray<FText>& OutFallbackPassiveLines)
+		TArray<FWacomCardDetailTokenLine>& OutLines)
 	{
 		if (!Card)
 		{
-			return false;
+			return;
 		}
 
-		bool bAnyPassiveTokenLines = false;
 		const FWacomCardPresentationRuntimeContext PassiveRuntimeContext =
 			MakePassiveEffectRuntimeContext(RuntimeContext);
 		for (int32 PassiveIndex = 0; PassiveIndex < Card->Passives.Num(); ++PassiveIndex)
@@ -667,10 +665,6 @@ namespace WacomCardDetailTextCompiler
 				Passive.DisplayText.IsEmpty()
 					? BuildPassiveLine(Passive)
 					: Passive.DisplayText);
-			if (!PassiveBodyText.IsEmpty())
-			{
-				OutFallbackPassiveLines.Add(PassiveBodyText);
-			}
 
 			if (!Passive.DisplayText.IsEmpty())
 			{
@@ -684,7 +678,6 @@ namespace WacomCardDetailTextCompiler
 				if (!DisplayLines.IsEmpty())
 				{
 					OutLines.Append(MoveTemp(DisplayLines));
-					bAnyPassiveTokenLines = true;
 				}
 				continue;
 			}
@@ -717,7 +710,6 @@ namespace WacomCardDetailTextCompiler
 				{
 					OutLines.Add(MoveTemp(EffectLine));
 				}
-				bAnyPassiveTokenLines = true;
 			}
 			else if (!PassiveBodyText.IsEmpty())
 			{
@@ -731,11 +723,9 @@ namespace WacomCardDetailTextCompiler
 				if (!FallbackLines.IsEmpty())
 				{
 					OutLines.Append(MoveTemp(FallbackLines));
-					bAnyPassiveTokenLines = true;
 				}
 			}
 		}
-		return bAnyPassiveTokenLines;
 	}
 
 	TArray<FWacomCardDetailTokenLine> BuildPlainTextTokenLines(

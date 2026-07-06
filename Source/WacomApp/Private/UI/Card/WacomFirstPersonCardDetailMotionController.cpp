@@ -114,7 +114,6 @@ namespace
 			&& AreDetailTextsEquivalent(Left.Description, Right.Description)
 			&& AreDetailSectionsEquivalent(Left.Sections, Right.Sections)
 			&& AreDetailTextArraysEquivalent(Left.TaskLines, Right.TaskLines)
-			&& AreDetailTextArraysEquivalent(Left.PassiveLines, Right.PassiveLines)
 			&& AreDetailTokenLinesEquivalent(Left.TokenLines, Right.TokenLines);
 	}
 }

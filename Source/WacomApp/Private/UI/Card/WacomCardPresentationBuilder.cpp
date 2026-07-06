@@ -384,8 +384,7 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 	WacomCardDetailTextCompiler::BuildPassiveTokenLines(
 		Card,
 		RuntimeContext,
-		PassiveSectionLines,
-		Data.PassiveLines);
+		PassiveSectionLines);
 	Data.TokenLines.Append(PassiveSectionLines);
 
 	WacomCardDetailTextCompiler::AddCardDetailSection(

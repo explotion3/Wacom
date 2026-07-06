@@ -62,6 +62,42 @@ namespace
 		return Line;
 	}
 
+	FString CardDetailTokenTextForTest(const FWacomCardDetailToken& Token)
+	{
+		if (Token.Kind == EWacomCardDetailTokenKind::Number && Token.bHasValue)
+		{
+			return FString::FromInt(Token.bHasPreviewValue ? Token.PreviewValue : Token.Value);
+		}
+		return Token.Text.ToString();
+	}
+
+	FString JoinCardDetailSectionTextForTest(
+		const FWacomCardDetailViewData& Data,
+		EWacomCardDetailSectionKind SectionKind)
+	{
+		FString Text;
+		for (const FWacomCardDetailSection& Section : Data.Sections)
+		{
+			if (Section.Kind != SectionKind)
+			{
+				continue;
+			}
+
+			for (const FWacomCardDetailTokenLine& Line : Section.TokenLines)
+			{
+				if (!Text.IsEmpty())
+				{
+					Text += TEXT("\n");
+				}
+				for (const FWacomCardDetailToken& Token : Line.Tokens)
+				{
+					Text += CardDetailTokenTextForTest(Token);
+				}
+			}
+		}
+		return Text;
+	}
+
 	const UWacomCardEffectBadgeWidget* GetSingleSlotBadgeForTest(const UPanelWidget* Slot)
 	{
 		if (!Slot || Slot->GetChildrenCount() != 1)
@@ -1039,11 +1075,9 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 		TEXT("造成1暮气，1中毒。"));
 	TestFalse(TEXT("Description does not contain passive copy"), Data.Description.ToString().Contains(TEXT("被动")));
 	TestEqual(TEXT("Task lines empty before schema support"), Data.TaskLines.Num(), 0);
-	TestEqual(TEXT("One passive line"), Data.PassiveLines.Num(), 1);
-	if (Data.PassiveLines.Num() > 0)
-	{
-		TestEqual(TEXT("Passive line uses DisplayText"), Data.PassiveLines[0].ToString(), TEXT("每当你打出 3 张伙伴时，使此牌回到手中。"));
-	}
+	TestTrue(TEXT("Passive section uses DisplayText"),
+		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Passive)
+			.Contains(TEXT("每当你打出 3 张伙伴时，使此牌回到手中。")));
 
 	return true;
 }
@@ -1067,12 +1101,10 @@ bool FWacomUIBackpackCardDetailPassiveFallbackSpec::RunTest(const FString& /*Par
 
 	const FWacomCardDetailViewData Data = UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 
-	TestEqual(TEXT("One fallback passive line"), Data.PassiveLines.Num(), 1);
-	if (Data.PassiveLines.Num() > 0)
-	{
-		TestTrue(TEXT("Fallback passive line contains threshold"), Data.PassiveLines[0].ToString().Contains(TEXT("3")));
-		TestTrue(TEXT("Fallback passive line contains companion"), Data.PassiveLines[0].ToString().Contains(TEXT("伙伴")));
-	}
+	const FString PassiveSectionText =
+		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Passive);
+	TestTrue(TEXT("Fallback passive section contains threshold"), PassiveSectionText.Contains(TEXT("3")));
+	TestTrue(TEXT("Fallback passive section contains companion"), PassiveSectionText.Contains(TEXT("伙伴")));
 
 	return true;
 }
@@ -1089,7 +1121,6 @@ bool FWacomUIBackpackCardDetailPanelSectionsSpec::RunTest(const FString& /*Param
 	FWacomCardDetailViewData Data;
 	Data.Name = FText::FromString(TEXT("详情测试卡"));
 	Data.Description = FText::FromString(TEXT("完整描述文本"));
-	Data.PassiveLines.Add(FText::FromString(TEXT("被动：回合结束")));
 
 	FWacomCardDetailSection DescriptionSection;
 	DescriptionSection.SectionId = FName(TEXT("Description"));
@@ -1119,7 +1150,6 @@ bool FWacomUIBackpackCardDetailPanelSectionsSpec::RunTest(const FString& /*Param
 	TestEqual(TEXT("Detail panel preserves description"), Panel->GetCardDetailData().Description.ToString(), TEXT("完整描述文本"));
 	TestEqual(TEXT("Detail panel name getter"), Panel->GetNameText().ToString(), TEXT("详情测试卡"));
 	TestEqual(TEXT("Detail panel description getter"), Panel->GetDescriptionText().ToString(), TEXT("完整描述文本"));
-	TestEqual(TEXT("Detail panel passive lines preserved"), Panel->GetCardDetailData().PassiveLines.Num(), 1);
 	TestEqual(TEXT("Detail panel creates description and passive sections"), Panel->GetSectionCount(), 2);
 	TestEqual(TEXT("First section is description"), Panel->GetSectionTitleText(0).ToString(), TEXT("描述"));
 	TestEqual(TEXT("Second section is passive"), Panel->GetSectionTitleText(1).ToString(), TEXT("被动"));

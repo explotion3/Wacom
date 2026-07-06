@@ -101,9 +101,9 @@ Runtime context 当前覆盖：
 - 本场 `RuntimeCost`、可用状态、卡面 Cost、disabled overlay，以及 `Magnitude.Source.RuntimeCost` / 旧 `bMagnitudeFromRuntimeCost` 徽章。
 - 按 `EffectIndex` 的目标预览 magnitude override / skip；被 preview 判定不会生效的效果不显示误导性徽章。
 - 详情面板 `TokenLines`：`Description` kind 保留原 `Description` 文案并用 token WBP 渲染；描述文本可使用显式占位符 `{Effect.N}` 引用主动效果，例如 `造成 {Effect.0} 伤害。` 会显示为类似 `造成 [伤] 6 伤害。`，目标预览时占位符内数字可显示 `6 -> 8`。`Effect` kind 只在没有手写 `Description` 时作为自动 fallback 主动效果行；`Passive` kind 承载被动触发 / 被动效果 token。面板会把 `Description + Effect` 渲染进“描述”Section，把 `Passive` 渲染进“被动”Section，不再生成“规则”Section。Description 不从中文自然语言反推规则，普通旧文本如 `造成 6 伤害。` 会按纯文本显示。Token 使用稳定 `StableId`，后续 WBP / RichText / 动效可以按 token 复用和高亮；约定路径下存在 `WBP_CardDetailTokenFlow / Line / Token` 时会自动进入 UMG 制作链路，不存在时 C++ fallback 只把 icon 渲染成短文本占位。
-- 详情面板 `PassiveLines`：只作为被动无法 token 化时的 fallback；只要 `TokenLines` 中存在被动 token，面板不再额外显示旧 `被动` 区块。
 
 旧 `FWacomCardDetailViewData.ChangeLines` 已删除。费用变化、目标手牌 cost preview 等卡面属性变化应反映到对应 `UWacomCardView` 卡面数值，或进入正式 `Sections` / token 文档；不要再生成未渲染的 `[费] before -> after` 详情文本旁路。
+旧 `FWacomCardDetailViewData.PassiveLines` 已删除。被动正文应进入正式“被动”Section 的 passive token line；无法完全结构化的被动也由 `Passive.DisplayText` 编译为 token，不再保留平行纯文本镜像。
 
 没有 runtime context 的背包、商店和 Run 卡面继续使用静态定义展示；旧 `BuildCardViewData(Card)` / `BuildCardDetailViewData(Card)` 路径会生成基础 token lines，但不产生 target preview 数值。
 
