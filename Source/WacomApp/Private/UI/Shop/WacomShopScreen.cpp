@@ -19,6 +19,7 @@
 #include "RunSession.h"
 #include "RunState.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
+#include "UI/Shop/WacomShopOfferRowListReconciler.h"
 #include "UI/Shop/WacomShopOfferRowWidget.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "UI/Shop/WacomShopRefreshGate.h"
@@ -321,75 +322,38 @@ void UWacomShopScreen::RebuildOfferRows(const FRunShopSnapshot& Snapshot, int32 
 		return;
 	}
 
-	TMap<FGuid, UWacomShopOfferRowWidget*> ExistingRowsByOfferId;
-	for (int32 ChildIndex = 0; ChildIndex < OfferList->GetChildrenCount(); ++ChildIndex)
-	{
-		UWacomShopOfferRowWidget* ExistingRow = Cast<UWacomShopOfferRowWidget>(OfferList->GetChildAt(ChildIndex));
-		if (!ExistingRow)
-		{
-			continue;
-		}
-
-		const FGuid ExistingOfferId = ExistingRow->GetOfferPresentationView().OfferId;
-		if (ExistingOfferId.IsValid())
-		{
-			ExistingRowsByOfferId.Add(ExistingOfferId, ExistingRow);
-		}
-	}
-
 	const TArray<FWacomShopOfferPresentationView> OfferViews =
 		UWacomShopPresentationBuilder::BuildOfferPresentationViews(Snapshot, CurrentGold);
 	CachedOfferIds.Reset();
 	CachedOfferViews = OfferViews;
-	TSet<UWacomShopOfferRowWidget*> UsedRows;
-	for (int32 DesiredIndex = 0; DesiredIndex < OfferViews.Num(); ++DesiredIndex)
+	CachedOfferIds.Reserve(OfferViews.Num());
+	for (const FWacomShopOfferPresentationView& OfferView : OfferViews)
 	{
-		const FWacomShopOfferPresentationView& OfferView = OfferViews[DesiredIndex];
 		CachedOfferIds.Add(OfferView.OfferId);
-		UWacomShopOfferRowWidget* RowWidget = ExistingRowsByOfferId.FindRef(OfferView.OfferId);
-		if (!RowWidget)
+	}
+
+	FWacomShopOfferRowListReconciler::Reconcile(
+		OfferList,
+		OfferViews,
+		[this](const FWacomShopOfferPresentationView& /*OfferView*/) -> UWacomShopOfferRowWidget*
 		{
 			if (!WidgetTree)
 			{
-				continue;
+				return nullptr;
 			}
 
-			RowWidget = WidgetTree->ConstructWidget<UWacomShopOfferRowWidget>(
+			UWacomShopOfferRowWidget* RowWidget = WidgetTree->ConstructWidget<UWacomShopOfferRowWidget>(
 				UWacomShopOfferRowWidget::StaticClass());
 			if (RowWidget)
 			{
 				RowWidget->OnPurchaseRequestedNative.AddUObject(this, &UWacomShopScreen::HandleOfferPurchaseRequested);
 			}
-		}
-		if (!RowWidget)
+			return RowWidget;
+		},
+		[](UWacomShopOfferRowWidget& RowWidget, const FWacomShopOfferPresentationView& OfferView)
 		{
-			continue;
-		}
-
-		RowWidget->SetOfferPresentationView(OfferView);
-		UsedRows.Add(RowWidget);
-		if (RowWidget->GetParent() == OfferList)
-		{
-			OfferList->ShiftChild(DesiredIndex, RowWidget);
-			if (UVerticalBoxSlot* RowSlot = Cast<UVerticalBoxSlot>(RowWidget->Slot))
-			{
-				RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-			}
-		}
-		else if (UVerticalBoxSlot* RowSlot = OfferList->AddChildToVerticalBox(RowWidget))
-		{
-			RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-			OfferList->ShiftChild(DesiredIndex, RowWidget);
-		}
-	}
-
-	for (const TPair<FGuid, UWacomShopOfferRowWidget*>& ExistingPair : ExistingRowsByOfferId)
-	{
-		if (ExistingPair.Value && !UsedRows.Contains(ExistingPair.Value))
-		{
-			ExistingPair.Value->RemoveFromParent();
-		}
-	}
+			RowWidget.SetOfferPresentationView(OfferView);
+		});
 }
 
 void UWacomShopScreen::ResetShopOfferRefreshDirtyGate()
