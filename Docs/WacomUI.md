@@ -88,7 +88,7 @@ Run UI 只显示 RunSession 的当前事实和 presentation view，不直接改 
 | `UWacomRunEventScreen` | GameMenu | 展示当前事件节点、选项、支付需求和后果预览；选项提交和卡牌支付经 Screen flow 提交 |
 | `UWacomMenuWidgetBase` | GameMenu base | 处理 CommonUI activation、Back 请求和可选 first-person card menu lease |
 
-Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。`UWacomBackpackScreen` 保留 Screen 生命周期、WBP 绑定、列表刷新和玩家意图入口；卡牌详情面板的创建、source guard、显示隐藏和 viewport-safe positioning 由 `FWacomBackpackCardDetailController` 承接，普通卡牌列表的 identity reconcile、复用、排序和移除回调由 `FWacomBackpackDeckCardListReconciler` 承接，避免在 Screen / SpecialZone Widget 内重复扩散列表算法。
+Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。`UWacomBackpackScreen` 保留 Screen 生命周期、WBP 绑定、列表刷新和玩家意图入口；卡牌详情面板的创建、source guard、显示隐藏和 viewport-safe positioning 由 `FWacomBackpackCardDetailController` 承接，存放区 snapshot revision / signature dirty gate 由 `FWacomBackpackStorageRefreshGate` 承接，普通卡牌列表的 identity reconcile、复用、排序和移除回调由 `FWacomBackpackDeckCardListReconciler` 承接，避免在 Screen / SpecialZone Widget 内重复扩散列表算法。
 
 ## §6 卡牌展示与 Builder
 

@@ -23,6 +23,7 @@
 #include "UI/Backpack/WacomBackpackCommandFlow.h"
 #include "UI/Backpack/WacomBackpackDeckCardListReconciler.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
+#include "UI/Backpack/WacomBackpackStorageRefreshGate.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
@@ -111,96 +112,6 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 
 namespace
 {
-uint32 HashGuidForBackpackRefresh(uint32 Hash, const FGuid& Value)
-{
-	Hash = HashCombine(Hash, Value.A);
-	Hash = HashCombine(Hash, Value.B);
-	Hash = HashCombine(Hash, Value.C);
-	Hash = HashCombine(Hash, Value.D);
-	return Hash;
-}
-
-uint32 HashNameForBackpackRefresh(uint32 Hash, const FName& Value)
-{
-	return HashCombine(Hash, GetTypeHash(Value));
-}
-
-uint32 HashBoolForBackpackRefresh(uint32 Hash, bool bValue)
-{
-	return HashCombine(Hash, bValue ? 1u : 0u);
-}
-
-uint32 HashCardViewForBackpackRefresh(
-	uint32 Hash,
-	const FRunStorageCardView& CardView,
-	EWacomBackpackDeckCardListReuseRole Role)
-{
-	Hash = HashGuidForBackpackRefresh(Hash, CardView.Instance.InstanceId);
-	Hash = HashNameForBackpackRefresh(
-		Hash,
-		CardView.Instance.Definition ? CardView.Instance.Definition->CardId : NAME_None);
-	Hash = HashBoolForBackpackRefresh(Hash, CardView.Instance.bBattleEnabledInSpecialZone);
-	Hash = HashCombine(Hash, static_cast<uint32>(CardView.PhysicalZone));
-	Hash = HashGuidForBackpackRefresh(Hash, CardView.ZoneOwnerInstanceId);
-	Hash = HashBoolForBackpackRefresh(Hash, CardView.bIsContainer);
-	Hash = HashBoolForBackpackRefresh(Hash, CardView.bIsTypeAContainer);
-	Hash = HashBoolForBackpackRefresh(Hash, CardView.bIsTypeBContainer);
-	Hash = HashBoolForBackpackRefresh(Hash, CardView.bIsPhysicalInBattleDeck);
-	Hash = HashCombine(Hash, static_cast<uint32>(Role));
-	return Hash;
-}
-
-uint32 BuildBackpackStorageRefreshSignature(const FRunBackpackStorageSnapshot& Snapshot)
-{
-	uint32 Hash = 2166136261u;
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.FluxCapacity));
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BattleDeckCapacity));
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BackpackPhysicalCount));
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.FluxContentCount));
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BattleDeckPhysicalCount));
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BurdenCount));
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.Flux.FluxCapacity));
-
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BattleDeckPhysicalCards.Num()));
-	for (const FRunStorageCardView& CardView : Snapshot.BattleDeckPhysicalCards)
-	{
-		Hash = HashCardViewForBackpackRefresh(Hash, CardView, EWacomBackpackDeckCardListReuseRole::PhysicalList);
-	}
-
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BattleDeckProjectedCards.Num()));
-	for (const FRunStorageCardView& CardView : Snapshot.BattleDeckProjectedCards)
-	{
-		Hash = HashCardViewForBackpackRefresh(Hash, CardView, EWacomBackpackDeckCardListReuseRole::BattleDeckProjected);
-	}
-
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.Flux.ContentCards.Num()));
-	for (const FRunStorageCardView& CardView : Snapshot.Flux.ContentCards)
-	{
-		Hash = HashCardViewForBackpackRefresh(Hash, CardView, EWacomBackpackDeckCardListReuseRole::PhysicalList);
-	}
-
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.SpecialZones.Num()));
-	for (const FRunSpecialStorageView& SpecialView : Snapshot.SpecialZones)
-	{
-		Hash = HashCardViewForBackpackRefresh(Hash, SpecialView.OwnerCard, EWacomBackpackDeckCardListReuseRole::SpecialOwner);
-		Hash = HashCombine(Hash, static_cast<uint32>(SpecialView.Capacity));
-		Hash = HashBoolForBackpackRefresh(Hash, SpecialView.bOwnerInBattleDeck);
-		Hash = HashCombine(Hash, static_cast<uint32>(SpecialView.ContentCards.Num()));
-		for (const FRunStorageCardView& CardView : SpecialView.ContentCards)
-		{
-			Hash = HashCardViewForBackpackRefresh(Hash, CardView, EWacomBackpackDeckCardListReuseRole::SpecialContent);
-		}
-	}
-
-	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BurdenCards.Num()));
-	for (const FRunStorageCardView& CardView : Snapshot.BurdenCards)
-	{
-		Hash = HashCardViewForBackpackRefresh(Hash, CardView, EWacomBackpackDeckCardListReuseRole::PhysicalList);
-	}
-
-	return Hash;
-}
-
 template <typename TWidget>
 TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath)
 {
@@ -487,6 +398,22 @@ UWacomSpecialZoneWidget* UWacomBackpackScreen::GetSpecialZoneWidgetForTest(int32
 		? Cast<UWacomSpecialZoneWidget>(SpecialZonesPanel->GetChildAt(Index))
 		: nullptr;
 }
+
+FWacomBackpackScreenAutomationTestView UWacomBackpackScreen::GetAutomationTestViewForTest() const
+{
+	FWacomBackpackScreenAutomationTestView View;
+	if (!StorageRefreshGate)
+	{
+		return View;
+	}
+
+	const FWacomBackpackStorageRefreshGateCounters& Counters = StorageRefreshGate->GetCounters();
+	View.ListRefreshApplyCount = Counters.ListRefreshApplyCount;
+	View.ListRefreshSkipCount = Counters.ListRefreshSkipCount;
+	View.SnapshotBuildCount = Counters.SnapshotBuildCount;
+	View.SnapshotRevisionSkipCount = Counters.SnapshotRevisionSkipCount;
+	return View;
+}
 #endif
 
 UWacomDeckCardWidget* UWacomBackpackScreen::CreateCardWidget(const FCardInstance& Inst, EZoneKind FromZone, FGuid FromZoneOwnerInstanceId)
@@ -532,47 +459,23 @@ void UWacomBackpackScreen::RebuildAll()
 	if (!Run)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[Backpack] RebuildAll: RunSession 未就位，列表跳过重建"));
-		LastBackpackStorageRunSession = nullptr;
+		GetStorageRefreshGate().ForgetRunSession();
 		ClearCardBoxes();
 		return;
 	}
 
-	if (LastBackpackStorageRunSession.Get() != Run)
+	FWacomBackpackStorageRefreshGate& RefreshGate = GetStorageRefreshGate();
+	if (RefreshGate.BeginRefresh(*Run) == EWacomBackpackStorageRefreshGateResult::SkipSnapshotRevision)
 	{
-		LastBackpackStorageRunSession = Run;
-		ResetBackpackRefreshDirtyGate();
-	}
-
-	const uint64 StorageRevision = Run->GetBackpackStorageSnapshotRevision();
-	if (bHasLastBackpackStorageSnapshotRevision
-		&& LastBackpackStorageSnapshotRevision == StorageRevision)
-	{
-#if WITH_AUTOMATION_TESTS
-		++BackpackSnapshotRevisionSkipCountForTest;
-#endif
 		return;
 	}
 
-	LastBackpackStorageSnapshotRevision = StorageRevision;
-	bHasLastBackpackStorageSnapshotRevision = true;
-#if WITH_AUTOMATION_TESTS
-	++BackpackSnapshotBuildCountForTest;
-#endif
 	const FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
-	const uint32 RefreshSignature = BuildBackpackStorageRefreshSignature(Snapshot);
-	if (bHasLastBackpackStorageRefreshSignature && LastBackpackStorageRefreshSignature == RefreshSignature)
+	if (!RefreshGate.ShouldApplySnapshot(Snapshot))
 	{
-#if WITH_AUTOMATION_TESTS
-		++BackpackListRefreshSkipCountForTest;
-#endif
 		return;
 	}
 
-	LastBackpackStorageRefreshSignature = RefreshSignature;
-	bHasLastBackpackStorageRefreshSignature = true;
-#if WITH_AUTOMATION_TESTS
-	++BackpackListRefreshApplyCountForTest;
-#endif
 	RebuildBattleDeckZone(Snapshot);
 	RebuildBackpackZone(Snapshot);
 	RebuildSpecialZones(Snapshot);
@@ -581,10 +484,7 @@ void UWacomBackpackScreen::RebuildAll()
 
 void UWacomBackpackScreen::ResetBackpackRefreshDirtyGate()
 {
-	LastBackpackStorageRefreshSignature = 0;
-	bHasLastBackpackStorageRefreshSignature = false;
-	LastBackpackStorageSnapshotRevision = 0;
-	bHasLastBackpackStorageSnapshotRevision = false;
+	GetStorageRefreshGate().Reset();
 }
 
 void UWacomBackpackScreen::RebuildTopStats(UWacomRunViewModel* VM)
@@ -843,6 +743,15 @@ FWacomBackpackCardDetailController& UWacomBackpackScreen::GetCardDetailControlle
 const FWacomBackpackCardDetailController& UWacomBackpackScreen::GetCardDetailController() const
 {
 	return const_cast<UWacomBackpackScreen*>(this)->GetCardDetailController();
+}
+
+FWacomBackpackStorageRefreshGate& UWacomBackpackScreen::GetStorageRefreshGate()
+{
+	if (!StorageRefreshGate)
+	{
+		StorageRefreshGate = MakeShared<FWacomBackpackStorageRefreshGate>();
+	}
+	return *StorageRefreshGate;
 }
 
 void UWacomBackpackScreen::HandleCloseClicked()

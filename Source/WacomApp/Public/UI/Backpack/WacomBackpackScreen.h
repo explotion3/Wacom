@@ -25,6 +25,7 @@ class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
 class UWacomCardDragOperation;
 class FWacomBackpackCardDetailController;
+class FWacomBackpackStorageRefreshGate;
 struct FWacomBackpackScreenTestAccess;
 struct FCardInstance;
 
@@ -267,6 +268,7 @@ private:
 	void HideCardDetailPanelIfSourceRemoved(UWacomDeckCardWidget* RemovedWidget);
 	FWacomBackpackCardDetailController& GetCardDetailController();
 	const FWacomBackpackCardDetailController& GetCardDetailController() const;
+	FWacomBackpackStorageRefreshGate& GetStorageRefreshGate();
 
 #if WITH_AUTOMATION_TESTS
 	friend struct FWacomBackpackScreenTestAccess;
@@ -279,15 +281,7 @@ private:
 	UWacomDeckCardWidget* GetBurdenCardWidgetForTest(int32 Index) const;
 	UWacomSpecialZoneWidget* GetSpecialZoneWidgetForTest(int32 Index) const;
 	void RebuildAllForTest() { RebuildAll(); }
-	FWacomBackpackScreenAutomationTestView GetAutomationTestViewForTest() const
-	{
-		FWacomBackpackScreenAutomationTestView View;
-		View.ListRefreshApplyCount = BackpackListRefreshApplyCountForTest;
-		View.ListRefreshSkipCount = BackpackListRefreshSkipCountForTest;
-		View.SnapshotBuildCount = BackpackSnapshotBuildCountForTest;
-		View.SnapshotRevisionSkipCount = BackpackSnapshotRevisionSkipCountForTest;
-		return View;
-	}
+	FWacomBackpackScreenAutomationTestView GetAutomationTestViewForTest() const;
 
 	void SetRunSessionForTest(URunSession* InRunSession)
 	{
@@ -299,17 +293,9 @@ private:
 	}
 #endif
 
-	uint32 LastBackpackStorageRefreshSignature = 0;
-	bool bHasLastBackpackStorageRefreshSignature = false;
-	uint64 LastBackpackStorageSnapshotRevision = 0;
-	bool bHasLastBackpackStorageSnapshotRevision = false;
-	TWeakObjectPtr<URunSession> LastBackpackStorageRunSession;
+	TSharedPtr<FWacomBackpackStorageRefreshGate> StorageRefreshGate;
 
 #if WITH_AUTOMATION_TESTS
-	int32 BackpackListRefreshApplyCountForTest = 0;
-	int32 BackpackListRefreshSkipCountForTest = 0;
-	int32 BackpackSnapshotBuildCountForTest = 0;
-	int32 BackpackSnapshotRevisionSkipCountForTest = 0;
 	URunSession* RunSessionOverrideForTest = nullptr;
 #endif
 };
