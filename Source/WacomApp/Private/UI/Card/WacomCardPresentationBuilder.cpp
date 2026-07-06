@@ -4,7 +4,7 @@
 
 #include "Cards/CardDefinition.h"
 #include "Tags/WacomGameplayTags.h"
-#include "WacomCardDetailTextCompiler.h"
+#include "WacomCardDetailDocumentBuilder.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardPresentationBuilder"
 
@@ -293,18 +293,6 @@ namespace
 		return true;
 	}
 
-	bool ShouldAppendGeneratedActiveEffectTokenLines(
-		const UCardDefinition* Card)
-	{
-		if (!Card)
-		{
-			return false;
-		}
-
-		// 手写 Description 是卡牌详情的主阅读文本；自动 Effect 行只在没有描述时补规则。
-		return Card->Description.IsEmpty();
-	}
-
 }
 
 FWacomCardViewData UWacomCardPresentationBuilder::BuildCardViewData(const UCardDefinition* Card)
@@ -356,46 +344,7 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 	const UCardDefinition* Card,
 	const FWacomCardPresentationRuntimeContext& RuntimeContext)
 {
-	FWacomCardDetailViewData Data;
-	Data.Name = GetCardDisplayName(Card);
-	if (!Card)
-	{
-		return Data;
-	}
-
-	TArray<FWacomCardDetailTokenLine> DescriptionSectionLines;
-	DescriptionSectionLines = WacomCardDetailTextCompiler::BuildAuthoredTextTokenLines(
-		Card,
-		Card->Effects,
-		RuntimeContext,
-		Card->Description,
-		EWacomCardDetailTokenLineKind::Description,
-		TEXT("Description"));
-	if (ShouldAppendGeneratedActiveEffectTokenLines(Card))
-	{
-		TArray<FWacomCardDetailTokenLine> EffectLines =
-			WacomCardDetailTextCompiler::BuildEffectTokenLines(Card, RuntimeContext);
-		DescriptionSectionLines.Append(MoveTemp(EffectLines));
-	}
-	TArray<FWacomCardDetailTokenLine> PassiveSectionLines;
-	WacomCardDetailTextCompiler::BuildPassiveTokenLines(
-		Card,
-		RuntimeContext,
-		PassiveSectionLines);
-
-	WacomCardDetailTextCompiler::AddCardDetailSection(
-		Data,
-		FName(TEXT("Description")),
-		EWacomCardDetailSectionKind::Description,
-		LOCTEXT("DescriptionSectionTitle", "描述"),
-		MoveTemp(DescriptionSectionLines));
-	WacomCardDetailTextCompiler::AddCardDetailSection(
-		Data,
-		FName(TEXT("Passive")),
-		EWacomCardDetailSectionKind::Passive,
-		LOCTEXT("PassivesSectionTitle", "被动"),
-		MoveTemp(PassiveSectionLines));
-	return Data;
+	return WacomCardDetailDocumentBuilder::BuildCardDetailViewData(Card, RuntimeContext);
 }
 
 TArray<FWacomCardViewEffectBadge> UWacomCardPresentationBuilder::BuildEffectBadges(const UCardDefinition* Card)

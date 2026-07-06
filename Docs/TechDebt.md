@@ -130,5 +130,6 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Card detail `PassiveLines` legacy mirror 已清理：被动正文只通过正式 `Sections` / passive token line 承载，`Passive.DisplayText` fallback 不再生成平行纯文本字段。
 - Card detail `TaskLines` 与扁平 `TokenLines` legacy mirror 已清理：`FWacomCardDetailViewData` 的正式详情文档只保留 `Sections`，后续任务、预览或风味文本应新增正式 section，而不是维护平行数组镜像。
 - Card detail `Description` legacy mirror 已清理：`FWacomCardDetailViewData` 不再暴露平行纯文本正文或 `UWacomCardDetailPanel::GetDescriptionText()`；`UCardDefinition::Description` 只作为 Builder 编译“描述”Section 的输入，`FWacomCardViewData.Description` 仍保留为小卡卡面紧凑描述。
+- Card detail document builder 已抽出：`UWacomCardPresentationBuilder` 保留为 public / Blueprint facade，`WacomCardDetailDocumentBuilder` 负责详情 `Sections` 组装，`WacomCardDetailTextCompiler` 只负责编译 token line，Widget 不承载 Description / Passive / Effect 分区逻辑。
 - Legacy battle event log 已清理：`UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` 和 `BuildLegacyEventBlock()` 已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。
 - Enemy system refactor 主链路已收口：旧敌方 2D fallback、第一敌人 HUD 入口、Actor 名称身份推断、旧部位意图序列主合同和旧单 Host Trigger 入口已删除；当前规则和制作口径见 `WacomBattle.md`、`WacomData.md`、`WacomRun.md`、`WacomWorldInteraction.md`、`WacomBattleUI.md` 和 `WacomDataAuthoring.md`。

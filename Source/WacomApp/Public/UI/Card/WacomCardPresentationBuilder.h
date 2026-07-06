@@ -10,11 +10,10 @@
 class UCardDefinition;
 
 /**
- * Builds UI-only presentation data from card definitions.
+ * Public facade for UI-only presentation data from card definitions.
  *
- * This class owns display text derivation, effect badge extraction, and detail
- * panel fallback copy. Widgets should render the resulting data and avoid
- * parsing UCardDefinition directly.
+ * Widgets should render the resulting data and avoid parsing UCardDefinition
+ * directly. App-private builders own the detailed document assembly.
  */
 UCLASS()
 class WACOMAPP_API UWacomCardPresentationBuilder : public UBlueprintFunctionLibrary

@@ -92,7 +92,7 @@ Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.
 
 ## §6 卡牌展示与 Builder
 
-`UWacomCardPresentationBuilder` 是卡牌 UI 展示数据统一入口。它从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData`、详情 token line 和效果徽章 view，只服务 UI 表现，不参与 Battle 或 Run 结算。
+`UWacomCardPresentationBuilder` 是卡牌 UI 展示数据统一入口和 Blueprint 可用门面。它从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData` 和效果徽章 view，只服务 UI 表现，不参与 Battle 或 Run 结算。详情文档的 Section 组装由 App-private `WacomCardDetailDocumentBuilder` 负责，token 编译由 App-private `WacomCardDetailTextCompiler` 负责；Widget 只消费最终 `Sections`，不推断 Description / Passive / Effect 的分区规则。
 
 Battle 卡面可以额外传入 `FWacomCardPresentationRuntimeContext`（C++ only）来覆盖当前展示事实。该 context 由 `WacomApp/Private/UI/Battle` 从 `FHandCardSnapshot` 构造；拖拽、敌人 hover 或 TargetSelect hover 有候选目标时，可以再叠加 `WacomBattle` 返回的 `FBattleCardTargetPreview` facts。`FBattleCardTargetPreview` 只表示规则事实；App 侧统一通过 `WacomBattleCardPresentation::BuildTargetPreviewPresentation()` 生成 `FWacomBattleCardTargetPreviewPresentation`，其中包含 hand layer entries、source detail 和可选 target hand card detail。Bridge / coordinator 只应用这份 presentation，不在各自路径里重新拼卡面和详情。Builder 只消费这些 UI-only facts，不读取 `UBattleSession`，也不重算战斗规则。
 
@@ -100,7 +100,7 @@ Runtime context 当前覆盖：
 
 - 本场 `RuntimeCost`、可用状态、卡面 Cost、disabled overlay，以及 `Magnitude.Source.RuntimeCost` / 旧 `bMagnitudeFromRuntimeCost` 徽章。
 - 按 `EffectIndex` 的目标预览 magnitude override / skip；被 preview 判定不会生效的效果不显示误导性徽章。
-- 详情面板 `Sections`：`Description` kind 保留 `UCardDefinition::Description` 文案并用 token WBP 渲染；描述文本可使用显式占位符 `{Effect.N}` 引用主动效果，例如 `造成 {Effect.0} 伤害。` 会显示为类似 `造成 [伤] 6 伤害。`，目标预览时占位符内数字可显示 `6 -> 8`。`Effect` kind 只在没有手写 `Description` 时作为自动 fallback 主动效果行；`Passive` kind 承载被动触发 / 被动效果 token。面板会把 `Description + Effect` token line 渲染进“描述”Section，把 `Passive` token line 渲染进“被动”Section，不再生成“规则”Section。Description 不从中文自然语言反推规则，普通旧文本如 `造成 6 伤害。` 会按纯文本显示。Token 使用稳定 `StableId`，后续 WBP / RichText / 动效可以按 token 复用和高亮；约定路径下存在 `WBP_CardDetailTokenFlow / Line / Token` 时会自动进入 UMG 制作链路，不存在时 C++ fallback 只把 icon 渲染成短文本占位。
+- 详情面板 `Sections`：`Description` kind 保留 `UCardDefinition::Description` 文案并用 token WBP 渲染；描述文本可使用显式占位符 `{Effect.N}` 引用主动效果，例如 `造成 {Effect.0} 伤害。` 会显示为类似 `造成 [伤] 6 伤害。`，目标预览时占位符内数字可显示 `6 -> 8`。`Effect` kind 只在没有手写 `Description` 时由 `WacomCardDetailDocumentBuilder` 作为自动 fallback 主动效果行加入“描述”Section；`Passive` kind 承载被动触发 / 被动效果 token 并进入“被动”Section，不再生成“规则”Section。Description 不从中文自然语言反推规则，普通旧文本如 `造成 6 伤害。` 会按纯文本显示。Token 使用稳定 `StableId`，后续 WBP / RichText / 动效可以按 token 复用和高亮；约定路径下存在 `WBP_CardDetailTokenFlow / Line / Token` 时会自动进入 UMG 制作链路，不存在时 C++ fallback 只把 icon 渲染成短文本占位。
 
 旧 `FWacomCardDetailViewData.Description` 已删除。详情面板不再暴露平行纯文本正文或 `GetDescriptionText()`；需要显示的正文必须进入正式 `Sections` token 文档。`FWacomCardViewData.Description` 仍是小卡卡面的紧凑描述，不属于详情面板 contract。
 旧 `FWacomCardDetailViewData.ChangeLines` 已删除。费用变化、目标手牌 cost preview 等卡面属性变化应反映到对应 `UWacomCardView` 卡面数值，或进入正式 `Sections` / token 文档；不要再生成未渲染的 `[费] before -> after` 详情文本旁路。
