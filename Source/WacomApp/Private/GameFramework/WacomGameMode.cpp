@@ -105,8 +105,7 @@ namespace
 			bPresentationRestored = true;
 			if (AWacomPlayerController* WacomPC = WeakPlayerController.Get())
 			{
-				WacomPC->SetRunFirstPersonCardLayerActive(true);
-				WacomPC->RefreshRunFirstPersonCardLayer();
+				WacomPC->PrepareExplorationRunFirstPersonCardLayer();
 				WacomPC->RefreshInteractToast();
 			}
 		}
@@ -235,8 +234,7 @@ void AWacomGameMode::BootstrapRunFromSave()
 		if (AWacomPlayerController* WacomPC =
 			Cast<AWacomPlayerController>(GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr))
 		{
-			WacomPC->SetRunFirstPersonCardLayerActive(true);
-			WacomPC->RefreshRunFirstPersonCardLayer();
+			WacomPC->PrepareExplorationRunFirstPersonCardLayer();
 		}
 		return;
 	}
@@ -317,8 +315,7 @@ void AWacomGameMode::BootstrapRunFromSave()
 
 	if (WacomPC)
 	{
-		WacomPC->SetRunFirstPersonCardLayerActive(true);
-		WacomPC->RefreshRunFirstPersonCardLayer();
+		WacomPC->PrepareExplorationRunFirstPersonCardLayer();
 	}
 }
 

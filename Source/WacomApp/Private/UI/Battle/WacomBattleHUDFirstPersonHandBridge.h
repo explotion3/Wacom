@@ -7,6 +7,7 @@
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHandPresentationController.h"
+#include "UI/Card/WacomFirstPersonCardCameraLookBridge.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 class UBattleHUD;
@@ -136,16 +137,20 @@ public:
 	void UnbindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 
 private:
+	void ApplyDragCameraLookOverrideToBattleCamera(const FWacomFirstPersonCardDragView& DragView);
+	void ApplyPointerCameraLookOverrideToBattleCamera(const FWacomFirstPersonCardPointerView& PointerView);
+	void ClearCameraLookOverrideOnBattleCamera();
 	void SyncLayerInternal(
 		const FBattleSnapshot& Snapshot,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints,
 		const TArray<FWacomFirstPersonCardLayerFeedbackHint>* FeedbackHints);
 	void ApplyPresentationFrame(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
-		FWacomBattleHandPresentationFrame&& Frame);
+		FWacomFirstPersonCardLayerPresentationFrame&& Frame);
 
 	UBattleHUD& HUD;
 	FWacomBattleHandPresentationController PresentationController;
+	FWacomFirstPersonCardCameraLookBridge CameraLookBridge;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> CurrentDragPreviewPresentation;
 	FWacomBattleCardTargetPreviewPresentationStateKey ActiveTargetPreviewState;

@@ -12,6 +12,7 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
@@ -487,7 +488,7 @@ bool FWacomFirstPersonCardLayerAnchorPresentationGateDefersDrawHintsTest::RunTes
 	}
 	FWacomFirstPersonCardLayerTestAccess::SetCardLayer(*Anchor, Layer);
 
-	const FName BattleHandSourceId(TEXT("BattleHand"));
+	const FName BattleHandSourceId = WacomFirstPersonCardLayerSourceIds::BattleHand();
 	const FGuid CardId = FGuid::NewGuid();
 	Anchor->SetRuntimeCardLayerEntries(BattleHandSourceId, { MakeLayerEntry(CardId) });
 	Anchor->SetRuntimeCardLayerTransitionHints(BattleHandSourceId, { MakeDrawnHint(CardId, 0, 1) });
@@ -732,7 +733,7 @@ bool FWacomFirstPersonCardLayerHUDDrawHintsSurviveOrdinaryRefreshTest::RunTest(c
 	TestEqual(
 		TEXT("Pending draw hints belong to battle hand source"),
 		PendingAfterPresentation.PendingTransitionHintSourceId,
-		FName(TEXT("BattleHand")));
+		WacomFirstPersonCardLayerSourceIds::BattleHand());
 	TestTrue(
 		TEXT("Pending draw hints match the active runtime source"),
 		PendingAfterPresentation.bHasPendingTransitionHintsForCurrentSource);

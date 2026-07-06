@@ -432,7 +432,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|04 Hand Shape", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "不可用卡牌在第一人称卡牌层上的整体透明度；卡面自身的 disabled overlay 仍由 FWacomCardViewData::bDisabled 控制。"))
 	float DisabledRenderOpacity = 0.78f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|09 Gesture", meta = (ToolTip = "是否启用第一人称战斗手牌层的 hover / press / drag 处理；战斗中由 BattleHUD 控制，默认关闭。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|09 Gesture", meta = (ToolTip = "兼容旧资产的默认交互开关；正式运行时由当前 first-person card layer source owner 调用 SetFirstPersonCardLayerInteractionEnabled 控制，不再只属于 BattleHand。"))
 	bool bEnableBattleHandInteraction = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Hover", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "鼠标悬停的第一人称卡牌槽额外上浮距离，单位为 UMG 布局像素。"))
@@ -654,6 +654,8 @@ public:
 
 	void SetRuntimeCardLayerEntries(FName SourceId, const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
 	void SetRuntimeCardLayerPresentationFrame(
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
+	void SetRuntimeCardLayerPresentationFrame(
 		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
@@ -683,13 +685,26 @@ public:
 	const TArray<FWacomCardViewData>& GetRuntimeCardLayerData() const;
 	const TArray<FWacomFirstPersonCardLayerEntry>& GetRuntimeCardLayerEntries() const;
 
-	void SetBattleHandInteractionEnabled(bool bEnabled);
+	void SetFirstPersonCardLayerInteractionEnabled(bool bEnabled);
+	void SetBattleHandInteractionEnabled(bool bEnabled)
+	{
+		SetFirstPersonCardLayerInteractionEnabled(bEnabled);
+	}
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|90 Development Preview")
 	bool IsCardLayerWidgetActive() const { return CardLayerWidget != nullptr; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|09 Gesture")
-	bool IsBattleHandInteractionEnabled() const { return bEnableBattleHandInteraction; }
+	bool IsFirstPersonCardLayerInteractionEnabled() const
+	{
+		return bFirstPersonCardLayerInteractionEnabled;
+	}
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|09 Gesture", meta = (ToolTip = "兼容旧 Blueprint 的 BattleHand 命名 getter；新代码请使用 IsFirstPersonCardLayerInteractionEnabled。"))
+	bool IsBattleHandInteractionEnabled() const
+	{
+		return IsFirstPersonCardLayerInteractionEnabled();
+	}
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|07 Hover")
 	FGuid GetHoveredCardInstanceId() const;
@@ -796,6 +811,7 @@ private:
 	mutable bool CachedInteractionEnabled = false;
 	mutable bool CachedLogDiagnostics = false;
 	mutable bool bHasCachedOwnerConfig = false;
+	bool bFirstPersonCardLayerInteractionEnabled = false;
 
 	TUniquePtr<
 		FWacomFirstPersonCardAnchorRuntimeState,

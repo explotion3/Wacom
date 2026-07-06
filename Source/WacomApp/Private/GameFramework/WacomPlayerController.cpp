@@ -12,6 +12,7 @@
 #include "Actors/BattleTriggerActor.h"
 #include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Camera/WacomFirstPersonViewStageReturnFlow.h"
+#include "Cards/CardDefinition.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
@@ -42,6 +43,10 @@
 #include "UI/Foundation/WacomMenuWidgetBase.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
+#include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
+#include "UI/Run/WacomRunFirstPersonCardDetailController.h"
+#include "UI/Run/WacomRunFirstPersonCardDragController.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
 #include "UI/Run/WacomRunMenuCardLeaseTestMenu.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
@@ -344,6 +349,7 @@ namespace
 			LOCTEXT("RunWorldCardDropConfigWarningWithReason", "场景交互配置异常：{0}"),
 			FText::FromName(Reason));
 	}
+
 }
 
 AWacomPlayerController::AWacomPlayerController()
@@ -351,6 +357,19 @@ AWacomPlayerController::AWacomPlayerController()
 	RunFirstPersonCardSourceComponent =
 		CreateDefaultSubobject<UWacomRunFirstPersonCardSourceComponent>(
 			TEXT("RunFirstPersonCardSourceComponent"));
+	if (!RunFirstPersonCardDetailPanelClass)
+	{
+		if (UClass* Loaded = LoadObject<UClass>(
+			nullptr,
+			TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C")))
+		{
+			RunFirstPersonCardDetailPanelClass = Loaded;
+		}
+		else
+		{
+			RunFirstPersonCardDetailPanelClass = UWacomCardDetailPanel::StaticClass();
+		}
+	}
 }
 
 void AWacomPlayerController::BeginPlay()
@@ -418,8 +437,7 @@ void AWacomPlayerController::BeginPlay()
 
 		if (RunFirstPersonCardSourceComponent)
 		{
-			RunFirstPersonCardSourceComponent->BindRunSession(RunSession);
-			RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerActive(true);
+			PrepareExplorationRunFirstPersonCardLayer();
 		}
 
 		StartRunWorldTargetProbePreviewLoop();
@@ -434,15 +452,60 @@ void AWacomPlayerController::BeginPlay()
 void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	ClearRunFirstPersonCardLayer();
+	if (RunFirstPersonCardDetailController)
+	{
+		RunFirstPersonCardDetailController->UnbindCurrentBinding();
+		RunFirstPersonCardDetailController->RemovePanelFromViewport();
+	}
+	else if (RunFirstPersonCardDetailPanel)
+	{
+		RunFirstPersonCardDetailPanel->RemoveFromParent();
+		RunFirstPersonCardDetailPanel = nullptr;
+	}
+	if (RunFirstPersonCardDragController)
+	{
+		RunFirstPersonCardDragController->UnbindCurrentBinding();
+	}
 	ClearRunWorldTargetProbePreview();
 	ClearRunWorldInteractableHoverPrompt(TEXT("EndPlay"));
 	StopRunWorldTargetProbePreviewLoop();
 	Super::EndPlay(EndPlayReason);
 }
 
+void AWacomPlayerController::SetPawn(APawn* InPawn)
+{
+	APawn* PreviousPawn = GetPawn();
+	Super::SetPawn(InPawn);
+	if (PreviousPawn == InPawn)
+	{
+		return;
+	}
+
+	HideRunFirstPersonCardDetailPanel();
+	RefreshRunFirstPersonCardDetailBinding();
+	RefreshRunFirstPersonMenuLeaseDragBinding();
+
+	if (!InPawn
+		|| !RunFirstPersonCardSourceComponent
+		|| !RunFirstPersonCardSourceComponent->IsRunFirstPersonCardLayerActive()
+		|| !IsInExplorationFlow())
+	{
+		return;
+	}
+
+	RunFirstPersonCardSourceComponent->BindRunSession(ResolveRunSessionForFirstPersonCardSource());
+	RunFirstPersonCardSourceComponent->RefreshRunFirstPersonCardLayer();
+	RefreshRunFirstPersonCardDetailBinding();
+	RefreshRunFirstPersonMenuLeaseDragBinding();
+}
+
 void AWacomPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+	if (RunFirstPersonCardDetailController)
+	{
+		RunFirstPersonCardDetailController->TickMotion(DeltaTime);
+	}
 	PumpFirstPersonCardActiveDragPointer();
 }
 
@@ -523,6 +586,7 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 void AWacomPlayerController::RequestEnterBattle(ABattleTriggerActor* Trigger)
 {
 	ClearRunMenuDropTargetProbe();
+	HideRunFirstPersonCardDetailPanel();
 	ClearRunFirstPersonCardLayer();
 	if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
 	{
@@ -548,12 +612,21 @@ void AWacomPlayerController::RequestExitBattle(uint8 Outcome)
 
 void AWacomPlayerController::SetRunFirstPersonCardLayerActive(bool bActive)
 {
+	if (!bActive)
+	{
+		HideRunFirstPersonCardDetailPanel();
+	}
 	if (RunFirstPersonCardSourceComponent)
 	{
 		RunFirstPersonCardSourceComponent->BindRunSession(ResolveRunSessionForFirstPersonCardSource());
 		RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerActive(bActive);
 	}
+	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
+	if (bActive)
+	{
+		PrewarmRunFirstPersonCardDetailPanel();
+	}
 }
 
 bool AWacomPlayerController::RefreshRunFirstPersonCardLayer()
@@ -565,16 +638,23 @@ bool AWacomPlayerController::RefreshRunFirstPersonCardLayer()
 
 	RunFirstPersonCardSourceComponent->BindRunSession(ResolveRunSessionForFirstPersonCardSource());
 	const bool bRefreshed = RunFirstPersonCardSourceComponent->RefreshRunFirstPersonCardLayer();
+	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
+	if (bRefreshed)
+	{
+		PrewarmRunFirstPersonCardDetailPanel();
+	}
 	return bRefreshed;
 }
 
 void AWacomPlayerController::ClearRunFirstPersonCardLayer()
 {
+	HideRunFirstPersonCardDetailPanel();
 	ClearRunFirstPersonCardDragCameraLookOverride();
 	ClearRunMenuDropTargetProbe();
 	ClearRunWorldCardDropProbe();
 	ClearRunWorldInteractableHoverPrompt(TEXT("FirstPersonLayerCleared"));
+	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
 	if (RunFirstPersonCardSourceComponent)
 	{
@@ -582,7 +662,32 @@ void AWacomPlayerController::ClearRunFirstPersonCardLayer()
 	}
 	ActiveGameMenuWidgets.Reset();
 	bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
+	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
+}
+
+void AWacomPlayerController::PrepareExplorationRunFirstPersonCardLayer()
+{
+	HideRunFirstPersonCardDetailPanel();
+	ClearRunMenuDropTargetProbe();
+	ClearRunWorldCardDropProbe();
+	ActiveGameMenuWidgets.Reset();
+	bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
+
+	if (RunFirstPersonCardSourceComponent)
+	{
+		RunFirstPersonCardSourceComponent->BindRunSession(ResolveRunSessionForFirstPersonCardSource());
+		const bool bWasActive = RunFirstPersonCardSourceComponent->IsRunFirstPersonCardLayerActive();
+		RunFirstPersonCardSourceComponent->ResetRunFirstPersonCardLayerMenuContext();
+		if (!bWasActive)
+		{
+			RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerActive(true);
+		}
+	}
+
+	RefreshRunFirstPersonCardDetailBinding();
+	RefreshRunFirstPersonMenuLeaseDragBinding();
+	PrewarmRunFirstPersonCardDetailPanel();
 }
 
 void AWacomPlayerController::SetRunFirstPersonCardLayerSuppressedByGameMenu(bool bSuppressed)
@@ -591,6 +696,12 @@ void AWacomPlayerController::SetRunFirstPersonCardLayerSuppressedByGameMenu(bool
 	{
 		RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerSuppressedByGameMenu(bSuppressed);
 	}
+	if (bSuppressed
+		&& (!RunFirstPersonCardSourceComponent || !RunFirstPersonCardSourceComponent->HasActiveMenuLease()))
+	{
+		HideRunFirstPersonCardDetailPanel();
+	}
+	RefreshRunFirstPersonCardDetailBinding();
 }
 
 bool AWacomPlayerController::SetRunFirstPersonCardLayerMenuLease(
@@ -606,6 +717,11 @@ bool AWacomPlayerController::SetRunFirstPersonCardLayerMenuLease(
 	RunFirstPersonCardSourceComponent->BindRunSession(ResolveRunSessionForFirstPersonCardSource());
 	const bool bSet =
 		RunFirstPersonCardSourceComponent->SetRunFirstPersonCardLayerMenuLease(LeaseId, SourceId, Entries);
+	if (!bSet)
+	{
+		HideRunFirstPersonCardDetailPanel();
+	}
+	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
 	return bSet;
 }
@@ -642,7 +758,9 @@ bool AWacomPlayerController::SetRunFirstPersonCardLayerMenuLeaseFromRunCards(
 			|| RunFirstPersonCardSourceComponent->GetActiveMenuLeaseId() != Request.LeaseId))
 	{
 		ClearRunMenuDropTargetProbe();
+		HideRunFirstPersonCardDetailPanel();
 	}
+	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
 	return bSet;
 }
@@ -655,7 +773,9 @@ bool AWacomPlayerController::ClearRunFirstPersonCardLayerMenuLease(FName LeaseId
 	if (bCleared)
 	{
 		ClearRunMenuDropTargetProbe();
+		HideRunFirstPersonCardDetailPanel();
 	}
+	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
 	return bCleared;
 }
@@ -829,8 +949,153 @@ void AWacomPlayerController::RefreshRunFirstPersonCardLayerMenuSuppression()
 	{
 		ClearRunMenuDropTargetProbe();
 	}
+	else if (!RunFirstPersonCardSourceComponent || !RunFirstPersonCardSourceComponent->HasActiveMenuLease())
+	{
+		HideRunFirstPersonCardDetailPanel();
+	}
+	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
 }
+
+FWacomRunFirstPersonCardDetailController&
+AWacomPlayerController::GetRunFirstPersonCardDetailController()
+{
+	if (!RunFirstPersonCardDetailController)
+	{
+		RunFirstPersonCardDetailController =
+			MakeShared<FWacomRunFirstPersonCardDetailController>(*this);
+	}
+	return *RunFirstPersonCardDetailController;
+}
+
+const FWacomRunFirstPersonCardDetailController&
+AWacomPlayerController::GetRunFirstPersonCardDetailController() const
+{
+	return const_cast<AWacomPlayerController*>(this)->GetRunFirstPersonCardDetailController();
+}
+
+FWacomRunFirstPersonCardDragController&
+AWacomPlayerController::GetRunFirstPersonCardDragController()
+{
+	if (!RunFirstPersonCardDragController)
+	{
+		RunFirstPersonCardDragController =
+			MakeShared<FWacomRunFirstPersonCardDragController>(*this);
+	}
+	return *RunFirstPersonCardDragController;
+}
+
+const FWacomRunFirstPersonCardDragController&
+AWacomPlayerController::GetRunFirstPersonCardDragController() const
+{
+	return const_cast<AWacomPlayerController*>(this)->GetRunFirstPersonCardDragController();
+}
+
+bool AWacomPlayerController::BuildRunFirstPersonCardDetailViewData(
+	const FGuid& CardInstanceId,
+	FWacomCardDetailViewData& OutDetailData) const
+{
+	URunSession* Run = ResolveRunSessionForFirstPersonCardSource();
+	if (!Run || !CardInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	FCardInstance Instance;
+	EZoneKind Zone = EZoneKind::Backpack;
+	FGuid ZoneOwnerInstanceId;
+	if (!Run->FindInstance(CardInstanceId, Instance, Zone, ZoneOwnerInstanceId)
+		|| !Instance.Definition)
+	{
+		return false;
+	}
+
+	OutDetailData = UWacomCardPresentationBuilder::BuildCardDetailViewData(Instance.Definition);
+	return true;
+}
+
+void AWacomPlayerController::PrewarmRunFirstPersonCardDetailPanel()
+{
+	if (IsInExplorationFlow())
+	{
+		GetRunFirstPersonCardDetailController().PrewarmPanel();
+	}
+}
+
+void AWacomPlayerController::RefreshRunFirstPersonCardDetailBinding()
+{
+	GetRunFirstPersonCardDetailController().RefreshBinding();
+}
+
+void AWacomPlayerController::HideRunFirstPersonCardDetailPanel()
+{
+	if (RunFirstPersonCardDetailController)
+	{
+		RunFirstPersonCardDetailController->ForceHideAll();
+	}
+	else if (RunFirstPersonCardDetailPanel)
+	{
+		RunFirstPersonCardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+		RunFirstPersonCardDetailPanel->SetRenderOpacity(0.0f);
+		RunFirstPersonCardDetailPanel->SetRenderTransform(FWidgetTransform());
+	}
+}
+
+#if WITH_AUTOMATION_TESTS
+bool AWacomPlayerController::IsRunFirstPersonCardDetailPanelVisibleForTest() const
+{
+	return RunFirstPersonCardDetailController
+		&& RunFirstPersonCardDetailController->IsVisible();
+}
+
+FText AWacomPlayerController::GetRunFirstPersonCardDetailPanelNameTextForTest() const
+{
+	return RunFirstPersonCardDetailController
+		? RunFirstPersonCardDetailController->GetNameText()
+		: FText::GetEmpty();
+}
+
+FVector2D AWacomPlayerController::GetRunFirstPersonCardDetailPanelPositionForTest() const
+{
+	return RunFirstPersonCardDetailController
+		? RunFirstPersonCardDetailController->GetLastPanelPosition()
+		: FVector2D::ZeroVector;
+}
+
+bool AWacomPlayerController::IsRunFirstPersonCardDetailPanelPrewarmedForTest() const
+{
+	return RunFirstPersonCardDetailController
+		&& RunFirstPersonCardDetailController->IsPrewarmed();
+}
+
+bool AWacomPlayerController::IsRunFirstPersonCardDetailMotionPendingForTest() const
+{
+	return RunFirstPersonCardDetailController
+		&& RunFirstPersonCardDetailController->IsPendingShowForTest();
+}
+
+float AWacomPlayerController::GetRunFirstPersonCardDetailPanelOpacityForTest() const
+{
+	return RunFirstPersonCardDetailController
+		? RunFirstPersonCardDetailController->GetPanelOpacityForTest()
+		: 0.0f;
+}
+
+int32 AWacomPlayerController::GetRunFirstPersonCardDetailDataApplyCountForTest() const
+{
+	return RunFirstPersonCardDetailController
+		? RunFirstPersonCardDetailController->GetDetailDataApplyCountForTest()
+		: 0;
+}
+
+void AWacomPlayerController::TickRunFirstPersonCardDetailForTest(float DeltaTime)
+{
+	if (RunFirstPersonCardDetailController)
+	{
+		RunFirstPersonCardDetailController->TickMotion(DeltaTime);
+	}
+}
+#endif
 
 // ================ IMC 切换 ================
 
@@ -1585,58 +1850,7 @@ void AWacomPlayerController::ClearRunMenuDropTargetProbe()
 
 void AWacomPlayerController::RefreshRunFirstPersonMenuLeaseDragBinding()
 {
-	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe();
-	UWacomFirstPersonCardAnchorComponent* BoundAnchor = RunMenuProbeBoundAnchor.Get();
-
-	const bool bShouldBind =
-		Anchor
-		&& RunFirstPersonCardSourceComponent
-		&& (RunFirstPersonCardSourceComponent->HasActiveMenuLease()
-			|| ShouldHandleRunWorldCardDropProbe());
-
-	if ((!bShouldBind || BoundAnchor != Anchor) && BoundAnchor)
-	{
-		BoundAnchor->OnFirstPersonCardLayerDragStarted.RemoveAll(this);
-		BoundAnchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(this);
-		BoundAnchor->OnFirstPersonCardLayerDragReleased.RemoveAll(this);
-		BoundAnchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(this);
-		BoundAnchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(this);
-		BoundAnchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(this);
-		ClearRunFirstPersonCardDragCameraLookOverride();
-		RunMenuProbeBoundAnchor.Reset();
-		bRunFirstPersonMenuLeaseDragBound = false;
-		bRunFirstPersonCardDragActiveForCameraLook = false;
-	}
-
-	if (bShouldBind && Anchor && RunMenuProbeBoundAnchor.Get() != Anchor)
-	{
-		Anchor->OnFirstPersonCardLayerDragStarted.RemoveAll(this);
-		Anchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(this);
-		Anchor->OnFirstPersonCardLayerDragReleased.RemoveAll(this);
-		Anchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(this);
-		Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(this);
-		Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(this);
-		Anchor->OnFirstPersonCardLayerDragStarted.AddUObject(
-			this,
-			&AWacomPlayerController::HandleRunFirstPersonCardLayerDragStarted);
-		Anchor->OnFirstPersonCardLayerDragUpdated.AddUObject(
-			this,
-			&AWacomPlayerController::HandleRunFirstPersonCardLayerDragUpdated);
-		Anchor->OnFirstPersonCardLayerDragReleased.AddUObject(
-			this,
-			&AWacomPlayerController::HandleRunFirstPersonCardLayerDragReleased);
-		Anchor->OnFirstPersonCardLayerDragCancelled.AddUObject(
-			this,
-			&AWacomPlayerController::HandleRunFirstPersonCardLayerDragCancelled);
-		Anchor->OnFirstPersonCardLayerPointerMoved.AddUObject(
-			this,
-			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerMoved);
-		Anchor->OnFirstPersonCardLayerPointerLeft.AddUObject(
-			this,
-			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerLeft);
-		RunMenuProbeBoundAnchor = Anchor;
-		bRunFirstPersonMenuLeaseDragBound = true;
-	}
+	GetRunFirstPersonCardDragController().RefreshBinding();
 }
 
 UWacomFirstPersonCardAnchorComponent*
@@ -1691,49 +1905,17 @@ bool AWacomPlayerController::ShouldHandleRunWorldCardDropProbe() const
 
 void AWacomPlayerController::PumpFirstPersonCardActiveDragPointer()
 {
-	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe();
-	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
-	{
-		return;
-	}
-
-	FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
-	if (!TryGetMouseWidgetPosition(MouseWidgetPosition))
-	{
-		return;
-	}
-
-	Anchor->UpdateFirstPersonCardDragPointer(MouseWidgetPosition);
+	GetRunFirstPersonCardDragController().PumpActiveDragPointer();
 }
 
 bool AWacomPlayerController::TryReleaseFirstPersonCardActiveDragPointer()
 {
-	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe();
-	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
-	{
-		return false;
-	}
-
-	FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
-	if (TryGetMouseWidgetPosition(MouseWidgetPosition))
-	{
-		Anchor->UpdateFirstPersonCardDragPointer(MouseWidgetPosition);
-		return Anchor->ReleaseFirstPersonCardDragGesture(MouseWidgetPosition);
-	}
-
-	return Anchor->ReleaseFirstPersonCardDragGestureAtCurrentPointer();
+	return GetRunFirstPersonCardDragController().TryReleaseActiveDragPointer();
 }
 
 bool AWacomPlayerController::TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut()
 {
-	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe();
-	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
-	{
-		return false;
-	}
-
-	Anchor->CancelFirstPersonCardDragGesture(true);
-	return true;
+	return GetRunFirstPersonCardDragController().TryCancelActiveGestureForTurnBoundaryShortcut();
 }
 
 bool AWacomPlayerController::TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition)
@@ -1784,82 +1966,64 @@ UWacomMenuWidgetBase* AWacomPlayerController::ResolveOwningMenuForActiveRunMenuL
 	return nullptr;
 }
 
+void AWacomPlayerController::HandleRunFirstPersonCardLayerCardHovered(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetRunFirstPersonCardDetailController().HandleCardHovered(CardInstanceId, SlotView);
+}
+
+void AWacomPlayerController::HandleRunFirstPersonCardLayerCardUnhovered(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetRunFirstPersonCardDetailController().HandleCardUnhovered(CardInstanceId, SlotView);
+}
+
+void AWacomPlayerController::HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetRunFirstPersonCardDetailController().HandleHoveredCardLayoutUpdated(CardInstanceId, SlotView);
+}
+
 void AWacomPlayerController::HandleRunFirstPersonCardLayerDragStarted(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
-	bRunFirstPersonCardDragActiveForCameraLook = true;
-	ApplyRunFirstPersonCardDragCameraLookOverride(DragView);
-	if (ShouldHandleRunFirstPersonMenuDropProbe())
-	{
-		ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, /*bReleased*/ false);
-		return;
-	}
-	ApplyRunWorldCardDropProbeFeedback(CardInstanceId, DragView, /*bReleased*/ false);
+	GetRunFirstPersonCardDragController().HandleDragStarted(CardInstanceId, DragView);
 }
 
 void AWacomPlayerController::HandleRunFirstPersonCardLayerDragUpdated(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
-	ApplyRunFirstPersonCardDragCameraLookOverride(DragView);
-	if (ShouldHandleRunFirstPersonMenuDropProbe())
-	{
-		ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, /*bReleased*/ false);
-		return;
-	}
-	ApplyRunWorldCardDropProbeFeedback(CardInstanceId, DragView, /*bReleased*/ false);
+	GetRunFirstPersonCardDragController().HandleDragUpdated(CardInstanceId, DragView);
 }
 
 void AWacomPlayerController::HandleRunFirstPersonCardLayerDragReleased(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
-	bRunFirstPersonCardDragActiveForCameraLook = false;
-	ClearRunFirstPersonCardDragCameraLookOverride();
-	if (ShouldHandleRunFirstPersonMenuDropProbe())
-	{
-		const bool bKeepReleasePreview =
-			ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, /*bReleased*/ true);
-		if (!bKeepReleasePreview)
-		{
-			ClearRunMenuDropTargetProbe();
-		}
-		return;
-	}
-	ApplyRunWorldCardDropProbeFeedback(CardInstanceId, DragView, /*bReleased*/ true);
-	ClearRunWorldCardDropProbe();
+	GetRunFirstPersonCardDragController().HandleDragReleased(CardInstanceId, DragView);
 }
 
 void AWacomPlayerController::HandleRunFirstPersonCardLayerDragCancelled(
-	const FGuid& /*CardInstanceId*/,
-	const FWacomFirstPersonCardDragView& /*DragView*/)
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
 {
-	bRunFirstPersonCardDragActiveForCameraLook = false;
-	ClearRunFirstPersonCardDragCameraLookOverride();
-	ClearRunMenuDropTargetProbe();
-	ClearRunWorldCardDropProbe();
+	GetRunFirstPersonCardDragController().HandleDragCancelled(CardInstanceId, DragView);
 }
 
 void AWacomPlayerController::HandleRunFirstPersonCardLayerPointerMoved(
 	const FWacomFirstPersonCardPointerView& PointerView)
 {
-	if (bRunFirstPersonCardDragActiveForCameraLook)
-	{
-		return;
-	}
-
-	ApplyRunFirstPersonCardPointerCameraLookOverride(PointerView);
+	GetRunFirstPersonCardDragController().HandlePointerMoved(PointerView);
 }
 
 void AWacomPlayerController::HandleRunFirstPersonCardLayerPointerLeft()
 {
-	if (bRunFirstPersonCardDragActiveForCameraLook)
-	{
-		return;
-	}
-
-	ClearRunFirstPersonCardDragCameraLookOverride();
+	GetRunFirstPersonCardDragController().HandlePointerLeft();
 }
 
 void AWacomPlayerController::ApplyRunFirstPersonCardDragCameraLookOverride(

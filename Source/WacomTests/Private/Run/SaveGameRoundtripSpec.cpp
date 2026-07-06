@@ -33,12 +33,17 @@
 namespace
 {
 	const FString TestSlot = TEXT("Wacom_SaveRoundtripTest");
+	const FString NotifyTestSlot = TEXT("Wacom_SaveLoadNotifyTest");
 
 	void ClearTestSlot()
 	{
 		if (UGameplayStatics::DoesSaveGameExist(TestSlot, 0))
 		{
 			UGameplayStatics::DeleteGameInSlot(TestSlot, 0);
+		}
+		if (UGameplayStatics::DoesSaveGameExist(NotifyTestSlot, 0))
+		{
+			UGameplayStatics::DeleteGameInSlot(NotifyTestSlot, 0);
 		}
 	}
 }
@@ -169,6 +174,53 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 	ClearTestSlot();
 	TestFalse(TEXT("After delete, HasSaveInSlot=false"), A->HasSaveInSlot(TestSlot));
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunSaveGameLoadNotifiesRunStateChangedSpec,
+	"Wacom.Run.Save.LoadFromSlotNotifiesRunStateChanged",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunSaveGameLoadNotifiesRunStateChangedSpec::RunTest(const FString& /*Parameters*/)
+{
+	ClearTestSlot();
+
+	UCharacterDefinition* Character = LoadObject<UCharacterDefinition>(
+		nullptr,
+		TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
+	TestNotNull(TEXT("Default character asset loads for save notification test"), Character);
+	if (!Character)
+	{
+		return false;
+	}
+
+	UWacomSaveGame* Save = NewObject<UWacomSaveGame>();
+	Save->SaveVersion = UWacomSaveGame::CurrentSaveVersion;
+	Save->CharacterAssetPath = FSoftObjectPath(Character);
+	Save->BattleSeed = 9901;
+	Save->bRunActive = true;
+	Save->bHasPlayerTransform = true;
+	Save->PlayerTransform = FTransform(
+		FRotator(0.0, 45.0, 0.0),
+		FVector(11.0, 22.0, 33.0));
+
+	TestTrue(TEXT("Notification save writes to slot"),
+		UGameplayStatics::SaveGameToSlot(Save, NotifyTestSlot, 0));
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	int32 NotifyCount = 0;
+	Run->OnRunStateChangedNative.AddLambda([&NotifyCount]()
+	{
+		++NotifyCount;
+	});
+	TestTrue(TEXT("LoadFromSlot succeeds"), Run->LoadFromSlot(NotifyTestSlot));
+	TestEqual(TEXT("LoadFromSlot broadcasts RunStateChanged once"), NotifyCount, 1);
+	TestEqual(TEXT("Loaded save applied to RunState"),
+		Run->GetRunState().BattleSeed,
+		9901);
+
+	ClearTestSlot();
 	return true;
 }
 

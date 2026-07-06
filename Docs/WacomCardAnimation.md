@@ -47,7 +47,7 @@ tags:
 - `CardsDrawn.CardInstanceIds` 是真实入手普通卡实例列表。Battle hand presentation controller 优先用这些 ID 生成 `Drawn` transition hint。
 - `CardsRetained` 是规则事件，只记录回合结束明确保留的普通手牌实例；当前会生成独立 retained feedback hint，但不对应 first-person `Retained` transition kind。
 - `FBattlePresentationJournal` 是 C++ only 只读 checkpoint journal，当前只记录 EndTurn 的 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`。
-- first-person card layer 当前 transition kind 包含 `Default`、`Drawn`、`Gained`、`HandAnchorEntered`、`Played`、`Discarded`。`HandAnchorEntered` 是 UI-only 左右手牌生成入手语义，不属于 `CardsDrawn`。
+- first-person card layer 当前 transition kind 包含 `Default`、`Drawn`、`RunHandEntered`、`Gained`、`HandAnchorEntered`、`Played`、`Discarded`。`RunHandEntered` 是 Run/App-only 默认手牌进入语义，v1 复用 `Drawn` 入场 profile；`HandAnchorEntered` 是 UI-only 左右手牌生成入手语义。两者都不属于 `CardsDrawn`。
 - EndTurn journal 现在由 `WacomApp` presentation coordinator 翻译为阶段化 plan：`TurnEndDiscard -> TurnEndRetain -> EnemyAction -> TurnStartDraw -> TurnStartHandAnchorEnter`。手牌阶段等待 first-person card layer 报告播放结束后再进入下一阶段；enemy phase v1 复用现有 battle event presentation queue。
 - `FWacomBattleHandPresentationController` 在非 EndTurn phase plan 路径中，仍把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`，并把 `CardsRetained` 转为同帧 `feedback hints`。
 - `UWacomFirstPersonCardAnchorComponent` 的 `05 Slot Motion` 和 `06 Transition Motion` 是当前卡牌入场、离场和事件感知转场的主要制作参数入口。
@@ -68,9 +68,11 @@ tags:
 | `WacomBattle` | 结算规则，发 `FBattleEvent`，输出 `FBattleSnapshot` 和 `FBattlePresentationJournal` | 不计算屏幕位置、曲线、延迟、材质、动画时长 |
 | BattleHUD / App flow | 消费事件和 journal，形成手牌表现帧或未来 presentation plan | 不改写规则结果，不让 UI 事件反向污染 Battle |
 | `FWacomBattleHandPresentationController` | 当前 Battle hand 的 `entries + transition hints + feedback hints` 事务入口 | 不读取 Anchor 投影，不负责曲线和视觉参数 |
+| `FWacomFirstPersonCardLayerPresentationFrame` | Battle / Run 共用的 `SourceId + entries + transition hints + feedback hints` C++ 表现帧 contract | 不决定规则事件语义，不暴露 Blueprint 制作面 |
 | `UWacomFirstPersonCardAnchorComponent` | 制作参数 facade、runtime source、projection、presentation gate | 不提交 Battle / Run 命令，不持有规则真相 |
 | `UWacomFirstPersonCardLayerWidget` | reconcile active / outgoing slot，应用 transition hint，管理 layer-level gesture | 不读取牌堆或战斗规则 |
 | `UWacomFirstPersonCardLayerSlotWidget` | 单槽 motion、hover / inspect / drag visual composition、入场 / 离场播放 | 不直接调用 BattleSession |
+| `FWacomFirstPersonCardDetailMotionController` | Battle / Run 共用的详情面板预热、缓存、淡入淡出、scale、follow 和稳定换边 motion core | 不创建 panel，不读取规则状态，不决定详情数据来源 |
 | `UWacomFirstPersonCardViewWidget` / WBP | 卡面内容、overlay、材质参数、局部反馈图层 | 不决定手牌顺序、目标合法性或动画队列 |
 
 所有卡牌动画都应以 `CardInstanceId` 为稳定身份。Slot index 只表示当前布局位置，不能作为动画身份、事件身份或重同步判断依据。
@@ -119,7 +121,7 @@ EndTurn phase plan 的当前合同：
 | `Transition` | 单张卡的入场、离场或语义移动。当前由 `FWacomFirstPersonCardLayerTransitionHint` 表达 |
 | `Feedback` | 单张卡的非阻塞短反馈，不改变入场 / 离场语义。当前由 `FWacomFirstPersonCardLayerFeedbackHint` 表达 |
 | `TransitionBatch` | 同一规则或表现阶段产生的一组 transition。当前还没有独立类型 |
-| `PresentationFrame` | 一次原子提交给 card layer 的 `entries + transition hints + feedback hints` |
+| `FWacomFirstPersonCardLayerPresentationFrame` | 一次原子提交给 card layer 的 `SourceId + entries + transition hints + feedback hints`；Battle / Run 共用该 contract，只在各自 adapter 中决定数据来源和 apply policy |
 | `Origin` | 动画起点语义，例如 slot offset、hand anchor offset 或 viewport anchor |
 | `DestinationSlot` | 由 snapshot / entries 解析出的目标手牌槽位 |
 | `Reflow` | 手牌数量、顺序、zone 或投影变化导致的普通布局移动 |
@@ -141,7 +143,7 @@ EndTurn phase plan 的当前合同：
 | 字段 | 语义 |
 |---|---|
 | `CardInstanceId` | 目标卡实例 ID |
-| `TransitionKind` | `Default / Drawn / Gained / HandAnchorEntered / Played / Discarded` |
+| `TransitionKind` | `Default / Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded` |
 | `SequenceIndex` | 同批可见 transition 的稳定序号 |
 | `SequenceCount` | 同批可见 transition 总数 |
 | `bPlayCommitFeedback` | 打出离场时是否播放提交反馈 |
@@ -153,6 +155,7 @@ EndTurn phase plan 的当前合同：
 | 事件 | 当前 transition |
 |---|---|
 | `CardsDrawn` | 对仍存在于 next hand snapshot 的 `CardInstanceIds` 生成 `Drawn`，并按最终手牌槽位从左到右写入稳定 `SequenceIndex / SequenceCount` |
+| Run 默认手牌进入 | `UWacomRunFirstPersonCardSourceComponent` 在默认 `RunFirstPersonBattleDeck` source 初次显示、从菜单恢复或新增默认卡时生成 `RunHandEntered`；不进入 `CardsDrawn` |
 | `CardGained` | 新出现在手牌中的对应卡生成 `Gained` |
 | 左/右手牌生成入手 | App 层在普通抽牌后对新出现的左右手 anchor 生成 `HandAnchorEntered`；不进入 `CardsDrawn.CardInstanceIds` |
 | `CardPlayed` | 从手牌移除的对应卡生成 `Played` |
@@ -184,7 +187,7 @@ EndTurn phase plan 的 `TurnEndRetain` 阶段会在不改变 `CardsRetained` 规
 
 `TurnStartDraw` 阶段会暂时不提交本次新出现的左右手 anchor entries，让普通抽牌先完成；随后 `TurnStartHandAnchorEnter` 提交完整 hand snapshot，并只为这些新出现的 anchor 播放 `HandAnchorEntered`。Battle entry reveal 也采用同样两段式：普通 opening `Drawn` frame 先播，播放结束后 bridge 再提交左右手 `HandAnchorEntered` follow-up frame。这个隐藏只是当前 v1 为了保证“抽牌后生成左右手”可见，不是完整阶段内临时布局系统。
 
-`Drawn / Gained / HandAnchorEntered` 入场一旦由对应 slot 启动播放，同一 `CardInstanceId` 的普通 layout refresh 只能更新最新目标 slot，不能因 `ResetDistancePixels` 大跳变判定而取消入场或直接 snap 到目标；入场结束后再交回普通 layout motion。
+`Drawn / RunHandEntered / Gained / HandAnchorEntered` 入场一旦由对应 slot 启动播放，同一 `CardInstanceId` 的普通 layout refresh 只能更新最新目标 slot，不能因 `ResetDistancePixels` 大跳变判定而取消入场或直接 snap 到目标；入场结束后再交回普通 layout motion。
 
 普通 slot reflow 不再使用 `ResetDistancePixels` 这类距离阈值做硬重置；该参数仅作为兼容保留字段。后续如果需要“传送 / 切段 / 窗口恢复”一类瞬移，应通过显式 resync policy 表达，而不是让 SlotWidget 根据移动距离自行猜测。
 
@@ -198,7 +201,7 @@ EndTurn phase plan 的 `TurnEndRetain` 阶段会在不改变 `CardsRetained` 规
 
 战斗中获得卡牌使用 `CardGained` 事件和 `Gained` hint。它和普通抽牌不同：语义来源是战斗奖励、击倒选择或其他获得入口，不是抽牌堆。
 
-`Gained` 入场和 `Drawn / HandAnchorEntered` 一样是有限时长 enter playback，而不是只给新 slot 一个初始 offset 后交给普通 layout motion。Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 决定奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞。
+`Gained` 入场和 `Drawn / RunHandEntered / HandAnchorEntered` 一样是有限时长 enter playback，而不是只给新 slot 一个初始 offset 后交给普通 layout motion。Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 决定奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞。
 
 后续可把 reward source、敌方部位来源、choice 类型转成更丰富的入场 origin，但不能让 first-person card layer 读取击倒规则。
 
@@ -232,7 +235,7 @@ Reflow 是普通 layout motion，不是规则事件。手牌顺序、zone、投�
 
 Reflow 应遵循：
 
-- 不重播 `Drawn / Gained / HandAnchorEntered / Played / Discarded`。
+- 不重播 `Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded`。
 - 不改变 `CardInstanceId` motion key。
 - 同一卡普通 reflow 即使距离很远，也从当前 visual 平滑移动到最新目标 slot。
 - 重同步优先服从 snapshot；真正需要瞬移时应由后续显式 resync policy 触发。
@@ -278,7 +281,7 @@ Hover、inspect 和 drag 是交互表现，不属于规则事件动画。
 | 分类 | 用途 |
 |---|---|
 | `05 Slot Motion` | 普通 slot motion、enter / exit baseline、reset distance |
-| `06 Transition Motion` | `Drawn / Gained / HandAnchorEntered / Played / Discarded` 的事件感知来源和运动参数 |
+| `06 Transition Motion` | `Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded` 的事件感知来源和运动参数 |
 | `07 Hover` | hover lift、scale、ZOrder 和命中稳定性 |
 | `09 Gesture` | inspect、drag 起手、commit 距离和 drag 姿态 |
 | `10 Interaction Feedback` | pressed、confirm、commit、deny、retained 等源卡反馈 |

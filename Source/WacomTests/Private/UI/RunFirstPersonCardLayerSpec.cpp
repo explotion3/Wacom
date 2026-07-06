@@ -11,6 +11,7 @@
 #include "RunSession.h"
 #include "RunState.h"
 #include "Tags/WacomGameplayTags.h"
+#include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
 #include "UI/PlayerControllerRunInteractionTestAccess.h"
 #include "UI/RunMenuDropTargetWidgetTestAccess.h"
@@ -65,6 +66,38 @@ namespace WacomRunFirstPersonCardLayerSpec
 		{
 			PC->SetPawn(NewObject<AWacomPlayerCharacter>(PC));
 		}
+	}
+
+	UWacomFirstPersonCardAnchorComponent* GetFirstPersonAnchorForTest(
+		AWacomPlayerControllerProbe* PC)
+	{
+		const AWacomPlayerCharacter* Character =
+			PC ? Cast<AWacomPlayerCharacter>(PC->GetPawn()) : nullptr;
+		return Character ? Character->GetFirstPersonCardAnchorComponent() : nullptr;
+	}
+
+	FWacomFirstPersonCardLayerSlotView MakeProjectedSlotForRunDetail(
+		const FGuid& CardInstanceId,
+		const FVector2D& ScreenPosition)
+	{
+		FWacomFirstPersonCardLayerSlotView SlotView;
+		SlotView.Entry.CardInstanceId = CardInstanceId;
+		SlotView.ScreenPosition = ScreenPosition;
+		SlotView.RenderScale = 1.0f;
+		SlotView.bProjected = true;
+		return SlotView;
+	}
+
+	FWacomFirstPersonCardDragView MakeRunDetailDragView(
+		const FGuid& CardInstanceId,
+		EWacomFirstPersonCardGestureState GestureState,
+		const FWacomFirstPersonCardLayerSlotView& SourceSlotView)
+	{
+		FWacomFirstPersonCardDragView DragView;
+		DragView.CardInstanceId = CardInstanceId;
+		DragView.GestureState = GestureState;
+		DragView.SourceSlotView = SourceSlotView;
+		return DragView;
 	}
 
 	FWacomRunMenuCardLeaseRequest MakeLeaseRequest(FName LeaseId = TEXT("ProviderLease"))
@@ -245,7 +278,22 @@ bool FWacomUIRunFirstPersonRefreshWritesAnchorRuntimeSourceSpec::RunTest(const F
 
 	Source->SetRunFirstPersonCardLayerActive(true);
 	TestEqual(TEXT("Refresh writes once when activated"), Source->WriteCount, 1);
+	TestEqual(TEXT("Default source writes through presentation frame"),
+		Source->PresentationFrameWriteCount,
+		1);
 	TestEqual(TEXT("Refresh writes BattleDeck entry"), Source->LastWrittenEntries.Num(), 1);
+	TestEqual(TEXT("Initial default source animates visible Run card"),
+		Source->LastWrittenTransitionHints.Num(),
+		1);
+	if (Source->LastWrittenTransitionHints.Num() == 1)
+	{
+		TestEqual(TEXT("Initial default source uses Run hand enter transition"),
+			Source->LastWrittenTransitionHints[0].TransitionKind,
+			EWacomFirstPersonCardSlotTransitionKind::RunHandEntered);
+		TestEqual(TEXT("Initial Run hand enter targets BattleDeck card"),
+			Source->LastWrittenTransitionHints[0].CardInstanceId,
+			Run->GetBattleDeck()[0].InstanceId);
+	}
 	TestEqual(TEXT("Debug tracks written entry count"),
 		Source->GetRunFirstPersonCardSourceDebugView().EntryCount,
 		1);
@@ -253,6 +301,492 @@ bool FWacomUIRunFirstPersonRefreshWritesAnchorRuntimeSourceSpec::RunTest(const F
 	Source->ClearRunFirstPersonCardLayer();
 	TestEqual(TEXT("Clear goes through runtime source cleanup"), Source->ClearCount, 1);
 	TestEqual(TEXT("Clear drops cached test entries"), Source->LastWrittenEntries.Num(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonPawnReadyRefreshesInitialMissingAnchorSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.PawnReadyRefreshesInitialMissingAnchorSource",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonPawnReadyRefreshesInitialMissingAnchorSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.PawnReady"), TEXT("Pawn Ready Card"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+
+	UWacomRunFirstPersonCardSourceComponent* Source = PC->GetRunFirstPersonCardSourceComponent();
+	TestNotNull(TEXT("PC owns Run first-person source"), Source);
+	TestEqual(TEXT("Initial active refresh reports missing anchor"),
+		Source ? Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult : FName(),
+		FName(TEXT("MissingAnchor")));
+	TestTrue(TEXT("Missing anchor keeps default source reconcile pending"),
+		Source && Source->GetRunFirstPersonCardSourceDebugView().bHasPendingDefaultSourceReconcile);
+	TestEqual(TEXT("Missing anchor is the pending block reason"),
+		Source ? Source->GetRunFirstPersonCardSourceDebugView().PendingDefaultSourceBlockReason : FName(),
+		FName(TEXT("MissingAnchor")));
+
+	TStrongObjectPtr<AWacomPlayerCharacter> CharacterPawn(NewObject<AWacomPlayerCharacter>());
+	PC->SetPawn(CharacterPawn.Get());
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		WacomRunFirstPersonCardLayerSpec::GetFirstPersonAnchorForTest(PC.Get());
+	TestNotNull(TEXT("Pawn provides first-person anchor"), Anchor);
+	if (!Source || !Anchor)
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Pawn-ready refresh writes Run source to anchor"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		Source->RunFirstPersonCardLayerSourceId);
+	TestEqual(TEXT("Pawn-ready refresh writes BattleDeck card"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		1);
+	TestEqual(TEXT("Source reports refreshed after pawn arrives"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("Refreshed")));
+	TestFalse(TEXT("Pawn-ready refresh clears pending reconcile"),
+		Source->GetRunFirstPersonCardSourceDebugView().bHasPendingDefaultSourceReconcile);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonSessionReadyRefreshesInitialMissingSessionSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.SessionReadyRefreshesInitialMissingSessionSource",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonSessionReadyRefreshesInitialMissingSessionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.SessionReady"), TEXT("Session Ready Card"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->SetRunFirstPersonCardLayerActive(true);
+	TestEqual(TEXT("Initial active refresh reports missing session"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("MissingRunSession")));
+	TestTrue(TEXT("Missing session keeps default source reconcile pending"),
+		Source->GetRunFirstPersonCardSourceDebugView().bHasPendingDefaultSourceReconcile);
+	TestEqual(TEXT("Missing session is the pending block reason"),
+		Source->GetRunFirstPersonCardSourceDebugView().PendingDefaultSourceBlockReason,
+		FName(TEXT("MissingRunSession")));
+
+	Source->BindRunSession(Run.Get());
+	TestEqual(TEXT("Session-ready reconcile writes Run source to anchor"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		Source->RunFirstPersonCardLayerSourceId);
+	TestEqual(TEXT("Session-ready reconcile writes BattleDeck card"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		1);
+	TestEqual(TEXT("Source reports refreshed after session arrives"),
+		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("Refreshed")));
+	TestFalse(TEXT("Session-ready refresh clears pending reconcile"),
+		Source->GetRunFirstPersonCardSourceDebugView().bHasPendingDefaultSourceReconcile);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonHoverShowsDefaultBattleDeckCardDetailSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.Detail.HoverShowsDefaultBattleDeckCardDetail",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonHoverShowsDefaultBattleDeckCardDetailSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunDetail.Default"), TEXT("Run Detail Default"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run has BattleDeck card"), Run->GetBattleDeck().IsValidIndex(0));
+	const FGuid CardInstanceId = Run->GetBattleDeck()[0].InstanceId;
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	TestTrue(TEXT("Run detail panel is prewarmed after source activation"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelPrewarmed(PC.Get()));
+	const UWacomRunFirstPersonCardSourceComponent* Source =
+		PC->GetRunFirstPersonCardSourceComponent();
+	TestNotNull(TEXT("Run first-person source exists"), Source);
+	TestTrue(TEXT("Default Run source owns detail without menu lease"),
+		Source && Source->CanHandleRunFirstPersonCardLayerSource(Source->RunFirstPersonCardLayerSourceId));
+	TestFalse(TEXT("Run source ownership rejects BattleHand"),
+		Source && Source->CanHandleRunFirstPersonCardLayerSource(WacomFirstPersonCardLayerSourceIds::BattleHand()));
+	TestFalse(TEXT("Run source ownership rejects suppressed source"),
+		Source && Source->CanHandleRunFirstPersonCardLayerSource(WacomFirstPersonCardLayerSourceIds::RunMenuSuppressed()));
+
+	const FWacomFirstPersonCardLayerSlotView SlotView =
+		WacomRunFirstPersonCardLayerSpec::MakeProjectedSlotForRunDetail(
+			CardInstanceId,
+			FVector2D(700.0f, 720.0f));
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardHovered(
+		PC.Get(),
+		CardInstanceId,
+		SlotView);
+
+	TestFalse(TEXT("Hover starts detail motion without immediate pop-in"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+	TestTrue(TEXT("Hover detail waits in pending show"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailMotionPending(PC.Get()));
+	TestEqual(TEXT("Hover detail starts transparent"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelOpacity(PC.Get()),
+		0.0f);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestTrue(TEXT("Hover shows Run first-person card detail after motion tick"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+	TestEqual(TEXT("Detail uses Run card definition display name"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelNameText(PC.Get()).ToString(),
+		FString(TEXT("Run Detail Default")));
+
+	const FVector2D InitialPosition =
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelPosition(PC.Get());
+	FWacomFirstPersonCardLayerSlotView MovedSlot = SlotView;
+	MovedSlot.ScreenPosition = FVector2D(1100.0f, 640.0f);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(
+		PC.Get(),
+		CardInstanceId,
+		MovedSlot);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.05f);
+	TestNotEqual(TEXT("Layout update repositions visible detail"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelPosition(PC.Get()),
+		InitialPosition);
+
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardUnhovered(
+		PC.Get(),
+		CardInstanceId,
+		MovedSlot);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestFalse(TEXT("Unhover hides detail"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonHoverShowsMenuLeaseCardDetailSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.Detail.HoverShowsMenuLeaseCardDetail",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonHoverShowsMenuLeaseCardDetailSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunDetail.Lease"), TEXT("Run Detail Lease"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	const FGuid CardInstanceId = Run->GetBattleDeck().IsValidIndex(0)
+		? Run->GetBattleDeck()[0].InstanceId
+		: FGuid();
+	TestTrue(TEXT("Lease card instance is valid"), CardInstanceId.IsValid());
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+
+	FWacomRunMenuCardLeaseRequest Request =
+		WacomRunFirstPersonCardLayerSpec::MakeLeaseRequest(TEXT("DetailLease"));
+	Request.ExplicitCardInstanceIds.Add(CardInstanceId);
+	FWacomRunMenuCardLeaseResult Result;
+	TestTrue(TEXT("Menu lease is set"),
+		PC->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, Result));
+	TestTrue(TEXT("Menu lease result is set"), Result.bLeaseSet);
+	const UWacomRunFirstPersonCardSourceComponent* Source =
+		PC->GetRunFirstPersonCardSourceComponent();
+	TestNotNull(TEXT("Run first-person source exists"), Source);
+	TestFalse(TEXT("Default Run source is paused while menu lease is active"),
+		Source && Source->CanHandleRunFirstPersonCardLayerSource(Source->RunFirstPersonCardLayerSourceId));
+	TestTrue(TEXT("Active menu lease source owns detail"),
+		Source && Source->CanHandleRunFirstPersonCardLayerSource(Result.SourceId));
+
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardHovered(
+		PC.Get(),
+		CardInstanceId,
+		WacomRunFirstPersonCardLayerSpec::MakeProjectedSlotForRunDetail(
+			CardInstanceId,
+			FVector2D(760.0f, 710.0f)));
+
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestTrue(TEXT("Menu lease hover shows detail"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+	TestEqual(TEXT("Menu lease detail uses owned Run card definition"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelNameText(PC.Get()).ToString(),
+		FString(TEXT("Run Detail Lease")));
+
+	PC->ClearRunFirstPersonCardLayerMenuLease(Request.LeaseId);
+	TestFalse(TEXT("Clearing lease hides detail"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonDetailRejectsInvalidSourcesAndHidesOnDragSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.Detail.RejectsInvalidSourcesAndHidesOnDrag",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonDetailRejectsInvalidSourcesAndHidesOnDragSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunDetail.Invalid"), TEXT("Run Detail Invalid"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	const FGuid CardInstanceId = Run->GetBattleDeck().IsValidIndex(0)
+		? Run->GetBattleDeck()[0].InstanceId
+		: FGuid();
+	TestTrue(TEXT("Detail card instance is valid"), CardInstanceId.IsValid());
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		WacomRunFirstPersonCardLayerSpec::GetFirstPersonAnchorForTest(PC.Get());
+	TestNotNull(TEXT("Probe pawn has first-person anchor"), Anchor);
+	if (!Anchor)
+	{
+		return false;
+	}
+
+	const FWacomFirstPersonCardLayerSlotView SlotView =
+		WacomRunFirstPersonCardLayerSpec::MakeProjectedSlotForRunDetail(
+			CardInstanceId,
+			FVector2D(740.0f, 700.0f));
+	TArray<FWacomFirstPersonCardLayerEntry> BattleHandEntries;
+	BattleHandEntries.Add(SlotView.Entry);
+	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), BattleHandEntries);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardHovered(
+		PC.Get(),
+		CardInstanceId,
+		SlotView);
+	TestFalse(TEXT("Run detail ignores BattleHand source"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+		PC.Get(),
+		CardInstanceId,
+		WacomRunFirstPersonCardLayerSpec::MakeRunDetailDragView(
+			CardInstanceId,
+			EWacomFirstPersonCardGestureState::Inspecting,
+			SlotView));
+	TestFalse(TEXT("Run inspect detail ignores BattleHand source"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	PC->RefreshRunFirstPersonCardLayer();
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardHovered(
+		PC.Get(),
+		CardInstanceId,
+		SlotView);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestTrue(TEXT("Default Run source shows detail again"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	FWacomFirstPersonCardDragView DragView;
+	DragView.CardInstanceId = CardInstanceId;
+	DragView.GestureState = EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+		PC.Get(),
+		CardInstanceId,
+		DragView);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestFalse(TEXT("Starting drag hides Run detail"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardHovered(
+		PC.Get(),
+		FGuid::NewGuid(),
+		SlotView);
+	TestFalse(TEXT("Invalid Run instance does not show detail"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonInspectKeepsAndScrubsCardDetailSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.Detail.InspectKeepsAndScrubsCardDetail",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonInspectKeepsAndScrubsCardDetailSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* First = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunInspect.First"), TEXT("Run Inspect First"), 1);
+	UCardDefinition* Second = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunInspect.Second"), TEXT("Run Inspect Second"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { First, Second, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run has first BattleDeck card"), Run->GetBattleDeck().IsValidIndex(0));
+	TestTrue(TEXT("Run has second BattleDeck card"), Run->GetBattleDeck().IsValidIndex(1));
+	const FGuid FirstId = Run->GetBattleDeck().IsValidIndex(0)
+		? Run->GetBattleDeck()[0].InstanceId
+		: FGuid();
+	const FGuid SecondId = Run->GetBattleDeck().IsValidIndex(1)
+		? Run->GetBattleDeck()[1].InstanceId
+		: FGuid();
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		WacomRunFirstPersonCardLayerSpec::GetFirstPersonAnchorForTest(PC.Get());
+	TestNotNull(TEXT("Probe pawn has first-person anchor"), Anchor);
+	if (!Anchor)
+	{
+		return false;
+	}
+
+	const FWacomFirstPersonCardLayerSlotView FirstSlot =
+		WacomRunFirstPersonCardLayerSpec::MakeProjectedSlotForRunDetail(
+			FirstId,
+			FVector2D(700.0f, 720.0f));
+	const FWacomFirstPersonCardLayerSlotView SecondSlot =
+		WacomRunFirstPersonCardLayerSpec::MakeProjectedSlotForRunDetail(
+			SecondId,
+			FVector2D(900.0f, 720.0f));
+
+	FWacomFirstPersonCardDragView InspectFirst =
+		WacomRunFirstPersonCardLayerSpec::MakeRunDetailDragView(
+			FirstId,
+			EWacomFirstPersonCardGestureState::Inspecting,
+			FirstSlot);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+		PC.Get(),
+		FirstId,
+		InspectFirst);
+	TestTrue(TEXT("Inspect detail starts pending show"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailMotionPending(PC.Get()));
+	TestFalse(TEXT("Inspect detail does not pop in immediately"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestTrue(TEXT("Inspect shows Run first-person card detail after motion tick"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+	TestEqual(TEXT("Inspect detail uses first card"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelNameText(PC.Get()).ToString(),
+		FString(TEXT("Run Inspect First")));
+	TestTrue(TEXT("Inspect does not start world drop probe"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunWorldCardDropDebugSummary(PC.Get()).IsEmpty());
+	const int32 DataApplyCountAfterFirstInspect =
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailDataApplyCount(PC.Get());
+
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardUnhovered(
+		PC.Get(),
+		FirstId,
+		FirstSlot);
+	TestTrue(TEXT("Unhover during inspect keeps detail visible"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	const FVector2D InitialPosition =
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelPosition(PC.Get());
+	FWacomFirstPersonCardDragView MovedInspectFirst = InspectFirst;
+	MovedInspectFirst.SourceSlotView.ScreenPosition = FVector2D(1040.0f, 620.0f);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragUpdated(
+		PC.Get(),
+		FirstId,
+		MovedInspectFirst);
+	TestEqual(TEXT("Same-card inspect update reuses detail data"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailDataApplyCount(PC.Get()),
+		DataApplyCountAfterFirstInspect);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.05f);
+	TestNotEqual(TEXT("Inspect drag update repositions detail"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelPosition(PC.Get()),
+		InitialPosition);
+
+	FWacomFirstPersonCardDragView InspectSecond =
+		WacomRunFirstPersonCardLayerSpec::MakeRunDetailDragView(
+			SecondId,
+			EWacomFirstPersonCardGestureState::Inspecting,
+			SecondSlot);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+		PC.Get(),
+		SecondId,
+		InspectSecond);
+	TestTrue(TEXT("Inspect scrub applies detail data for second card"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailDataApplyCount(PC.Get())
+			> DataApplyCountAfterFirstInspect);
+	TestEqual(TEXT("Inspect scrub switches detail to second card"),
+		FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelNameText(PC.Get()).ToString(),
+		FString(TEXT("Run Inspect Second")));
+
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragReleased(
+		PC.Get(),
+		SecondId,
+		InspectSecond);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestFalse(TEXT("Inspect release hides detail when no hover owns it"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	Anchor->bShowDetailDuringCardInspect = false;
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+		PC.Get(),
+		FirstId,
+		InspectFirst);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestFalse(TEXT("Inspect detail respects anchor disable flag"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+
+	Anchor->bShowDetailDuringCardInspect = true;
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
+		PC.Get(),
+		FirstId,
+		InspectFirst);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestTrue(TEXT("Inspect detail is visible before formal drag promotion"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
+	FWacomFirstPersonCardDragView FormalDrag = InspectFirst;
+	FormalDrag.GestureState = EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragUpdated(
+		PC.Get(),
+		FirstId,
+		FormalDrag);
+	FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(PC.Get(), 0.2f);
+	TestFalse(TEXT("Formal drag promotion hides inspect detail"),
+		FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(PC.Get()));
 
 	return true;
 }
@@ -335,11 +869,30 @@ bool FWacomUIRunFirstPersonMissingSessionOrAnchorClearsSpec::RunTest(const FStri
 	TestEqual(TEXT("Missing session is reported"),
 		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
 		FName(TEXT("MissingRunSession")));
+	TestTrue(TEXT("Missing session is pending instead of a final success state"),
+		Source->GetRunFirstPersonCardSourceDebugView().bHasPendingDefaultSourceReconcile);
+	TestEqual(TEXT("Missing session records its block reason"),
+		Source->GetRunFirstPersonCardSourceDebugView().PendingDefaultSourceBlockReason,
+		FName(TEXT("MissingRunSession")));
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.MissingAnchor"), TEXT("Missing Anchor Card"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes for missing anchor branch"), Run->Initialize(Character));
+	Source->BindRunSession(Run.Get());
 
 	Source->ClearCount = 0;
 	Source->AnchorForTest = nullptr;
 	TestFalse(TEXT("Missing anchor refresh fails"), Source->RefreshRunFirstPersonCardLayer());
 	TestEqual(TEXT("Missing anchor does not call anchor clear"), Source->ClearCount, 0);
+	TestTrue(TEXT("Missing anchor remains pending"),
+		Source->GetRunFirstPersonCardSourceDebugView().bHasPendingDefaultSourceReconcile);
+	TestEqual(TEXT("Missing anchor records its block reason"),
+		Source->GetRunFirstPersonCardSourceDebugView().PendingDefaultSourceBlockReason,
+		FName(TEXT("MissingAnchor")));
 
 	return true;
 }
@@ -370,6 +923,9 @@ bool FWacomUIRunFirstPersonGameMenuSuppressionClearsDefaultSpec::RunTest(const F
 	TestEqual(TEXT("Default source writes once"), Source->WriteCount, 1);
 
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+	TestEqual(TEXT("Suppression writes empty frame instead of hard clearing source"),
+		Source->ClearCount,
+		0);
 	TestTrue(TEXT("Suppression keeps runtime ownership so static preview cannot reappear"),
 		Anchor->HasRuntimeCardLayerData());
 	TestEqual(TEXT("Suppression writes an empty runtime layer"),
@@ -377,7 +933,7 @@ bool FWacomUIRunFirstPersonGameMenuSuppressionClearsDefaultSpec::RunTest(const F
 		0);
 	TestEqual(TEXT("Suppression uses its own runtime source"),
 		Anchor->GetRuntimeCardLayerSourceId(),
-		FName(TEXT("RunFirstPersonMenuSuppressed")));
+		WacomFirstPersonCardLayerSourceIds::RunMenuSuppressed());
 	TestEqual(TEXT("Suppression reports state"),
 		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
 		FName(TEXT("SuppressedByGameMenu")));
@@ -385,6 +941,9 @@ bool FWacomUIRunFirstPersonGameMenuSuppressionClearsDefaultSpec::RunTest(const F
 		Source->GetRunFirstPersonCardSourceDebugView().bSuppressedByGameMenu);
 	TestEqual(TEXT("Suppression does not keep stale entries"),
 		Source->GetRunFirstPersonCardSourceDebugView().EntryCount,
+		0);
+	TestEqual(TEXT("Suppression frame has no enter hints"),
+		Source->LastWrittenTransitionHints.Num(),
 		0);
 
 	return true;
@@ -469,8 +1028,75 @@ bool FWacomUIRunFirstPersonGameMenuSuppressionReleaseRestoresSpec::RunTest(const
 	TestEqual(TEXT("Restored entry count"),
 		Source->LastWrittenEntries.Num(),
 		1);
+	TestEqual(TEXT("Restore animates Run hand enter"),
+		Source->LastWrittenTransitionHints.Num(),
+		1);
+	if (Source->LastWrittenTransitionHints.Num() == 1)
+	{
+		TestEqual(TEXT("Restore uses Run hand enter transition"),
+			Source->LastWrittenTransitionHints[0].TransitionKind,
+			EWacomFirstPersonCardSlotTransitionKind::RunHandEntered);
+	}
 	TestEqual(TEXT("Restore reports refreshed"),
 		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
+		FName(TEXT("Refreshed")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonPrepareExplorationClearsStaleMenuContextSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.PrepareExplorationClearsStaleMenuContext",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonPrepareExplorationClearsStaleMenuContextSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.PrepareRun"), TEXT("Prepare Run Card"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
+	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
+	PC->SetRunFirstPersonCardLayerActive(true);
+	UWacomRunFirstPersonCardSourceComponent* Source = PC->GetRunFirstPersonCardSourceComponent();
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		WacomRunFirstPersonCardLayerSpec::GetFirstPersonAnchorForTest(PC.Get());
+	TestNotNull(TEXT("PC owns source"), Source);
+	TestNotNull(TEXT("Pawn provides anchor"), Anchor);
+	if (!Source || !Anchor)
+	{
+		return false;
+	}
+
+	FWacomPlayerControllerRunInteractionTestAccess::SetRunFirstPersonMenuLease(
+		PC.Get(),
+		TEXT("StaleMenuLease"));
+	PC->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
+	TestTrue(TEXT("Fixture has stale menu lease"),
+		Source->GetRunFirstPersonCardSourceDebugView().bHasActiveMenuLease);
+	TestTrue(TEXT("Fixture has stale suppression"),
+		Source->GetRunFirstPersonCardSourceDebugView().bSuppressedByGameMenu);
+
+	FWacomPlayerControllerRunInteractionTestAccess::PrepareExplorationRunFirstPersonCardLayer(PC.Get());
+	const FWacomRunFirstPersonCardSourceDebugView DebugView =
+		Source->GetRunFirstPersonCardSourceDebugView();
+	TestFalse(TEXT("Prepare clears stale menu lease"), DebugView.bHasActiveMenuLease);
+	TestFalse(TEXT("Prepare clears stale GameMenu suppression"), DebugView.bSuppressedByGameMenu);
+	TestEqual(TEXT("Prepare restores default Run source"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		Source->RunFirstPersonCardLayerSourceId);
+	TestEqual(TEXT("Prepare writes BattleDeck card"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		1);
+	TestEqual(TEXT("Prepare reports refreshed"),
+		DebugView.LastRefreshResult,
 		FName(TEXT("Refreshed")));
 
 	return true;
@@ -644,7 +1270,7 @@ bool FWacomUIRunFirstPersonLeaseReleaseRestoresStateSpec::RunTest(const FString&
 		WritesWithLease + 1);
 	TestEqual(TEXT("Lease release restores suppression source"),
 		Source->LastWrittenSourceId,
-		FName(TEXT("RunFirstPersonMenuSuppressed")));
+		WacomFirstPersonCardLayerSourceIds::RunMenuSuppressed());
 	TestEqual(TEXT("Lease release does not expose stale lease entries"),
 		Source->LastWrittenEntries.Num(),
 		0);
@@ -785,11 +1411,11 @@ bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FStrin
 	TestTrue(TEXT("Menu lease can be written"),
 		Source->SetRunFirstPersonCardLayerMenuLease(TEXT("Lease"), TEXT("LeaseSource"), { LeaseEntry }));
 	TestTrue(TEXT("Menu lease enables first-person interaction for probe"),
-		Anchor->IsBattleHandInteractionEnabled());
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
 	Source->ClearRunFirstPersonCardLayerMenuLease(TEXT("Lease"));
 	TestFalse(TEXT("Suppressed default source disables interaction after lease clears"),
-		Anchor->IsBattleHandInteractionEnabled());
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
 	return true;
 }
@@ -844,6 +1470,16 @@ bool FWacomUIRunFirstPersonRequestBuildsLeaseEntriesFromDefinitionsSpec::RunTest
 	TestEqual(TEXT("Card face uses presentation data"),
 		Source->LastWrittenEntries[0].CardViewData.Name.ToString(),
 		FString(TEXT("毒牙")));
+	FRunCardWorkspaceEntry WorkspaceEntry;
+	TestTrue(TEXT("Provider source stores workspace metadata"),
+		Source->FindCurrentRunFirstPersonCardWorkspaceEntry(
+			State.Backpack[0].InstanceId,
+			WorkspaceEntry));
+	TestEqual(TEXT("Workspace metadata keeps physical source zone"),
+		WorkspaceEntry.PhysicalZone,
+		EZoneKind::Backpack);
+	TestFalse(TEXT("Provider workspace entry is not projected"),
+		WorkspaceEntry.bIsProjectedBattleDeckCard);
 
 	return true;
 }
@@ -1237,11 +1873,11 @@ bool FWacomUIRunFirstPersonPrototypeTestMenuRequestsOwnedLeaseSpec::RunTest(cons
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunFirstPersonLeaseProviderRejectsMissingAnchorSpec,
-	"Wacom.UI.RunFirstPersonCardLayer.MenuLeaseProvider.MissingAnchorRejectsWithoutActiveLease",
+	FWacomUIRunFirstPersonLeaseProviderPendingMissingAnchorSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.MenuLeaseProvider.MissingAnchorKeepsPendingLease",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunFirstPersonLeaseProviderRejectsMissingAnchorSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIRunFirstPersonLeaseProviderPendingMissingAnchorSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
@@ -1264,13 +1900,26 @@ bool FWacomUIRunFirstPersonLeaseProviderRejectsMissingAnchorSpec::RunTest(const 
 	Request.AllowedCardDefinitions.Add(Fang);
 	FWacomRunMenuCardLeaseResult Result;
 
-	TestFalse(TEXT("Provider rejects when no anchor can display the lease"),
+	TestTrue(TEXT("Provider accepts desired lease before anchor is available"),
 		Source->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, Result));
-	TestEqual(TEXT("Missing anchor reason is reported"),
-		Result.RejectReason,
-		FName(TEXT("MissingAnchor")));
-	TestFalse(TEXT("Rejected provider request does not leave an active lease"),
+	TestTrue(TEXT("Missing anchor keeps an active lease to retry"),
 		Source->HasActiveMenuLease());
+	TestTrue(TEXT("Missing anchor is reported as pending menu lease reconcile"),
+		Source->GetRunFirstPersonCardSourceDebugView().bHasPendingMenuLeaseReconcile);
+	TestEqual(TEXT("Missing anchor pending reason is reported"),
+		Source->GetRunFirstPersonCardSourceDebugView().PendingMenuLeaseBlockReason,
+		FName(TEXT("MissingAnchorForMenuLease")));
+
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	TestTrue(TEXT("Anchor-ready manual refresh applies pending provider lease"),
+		Source->RefreshRunFirstPersonCardLayer());
+	TestEqual(TEXT("Pending lease writes candidate to anchor"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		1);
+	TestFalse(TEXT("Anchor-ready refresh clears pending menu lease reconcile"),
+		Source->GetRunFirstPersonCardSourceDebugView().bHasPendingMenuLeaseReconcile);
 
 	return true;
 }
@@ -1352,7 +2001,7 @@ bool FWacomUIRunFirstPersonDefaultBattleDeckEnablesRunWorldDragSpec::RunTest(con
 
 	Source->SetRunFirstPersonCardLayerActive(true);
 	TestTrue(TEXT("Default Run BattleDeck source enables run-world drag probe"),
-		Anchor->IsBattleHandInteractionEnabled());
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
 	return true;
 }
@@ -2517,6 +3166,9 @@ bool FWacomUIRunFirstPersonManualAndSuppressionBypassRevisionGateSpec::RunTest(c
 	TestEqual(TEXT("Manual refresh bypasses revision skip"),
 		Source->WriteCount,
 		WritesAfterActivate + 1);
+	TestEqual(TEXT("Manual refresh does not replay unchanged Run hand enter"),
+		Source->LastWrittenTransitionHints.Num(),
+		0);
 #if WITH_AUTOMATION_TESTS
 	TestEqual(TEXT("Manual refresh rebuilds snapshot"),
 		FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(*Source).DataBuildCount,
@@ -2535,6 +3187,79 @@ bool FWacomUIRunFirstPersonManualAndSuppressionBypassRevisionGateSpec::RunTest(c
 	TestEqual(TEXT("Suppression release reports refreshed"),
 		Source->GetRunFirstPersonCardSourceDebugView().LastRefreshResult,
 		FName(TEXT("Refreshed")));
+	TestEqual(TEXT("Suppression release replays Run hand enter"),
+		Source->LastWrittenTransitionHints.Num(),
+		1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunFirstPersonNewDefaultCardGetsRunHandEnterSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.PresentationFrame.NewDefaultCardGetsRunHandEnterOnlyForNewCard",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunFirstPersonNewDefaultCardGetsRunHandEnterSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Initial = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunEnter.Initial"), TEXT("Initial Run Card"), 1);
+	UCardDefinition* Extra = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
+		Fx, TEXT("Test.RunEnter.Extra"), TEXT("Extra Run Card"), 1);
+	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
+	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Initial, Pack });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+
+	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
+		NewObject<UWacomFirstPersonCardAnchorComponent>());
+	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
+		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
+	Source->AnchorForTest = Anchor.Get();
+	Source->BindRunSession(Run.Get());
+	Source->SetRunFirstPersonCardLayerActive(true);
+	TestEqual(TEXT("Initial source animates one card"),
+		Source->LastWrittenTransitionHints.Num(),
+		1);
+
+	Run->AcquireCardToRun(Extra);
+	const FGuid ExtraInstanceId =
+		WacomRunFirstPersonCardLayerSpec::FindOwnedInstanceIdByDefinition(
+			Run->GetRunState(),
+			Extra);
+	TestTrue(TEXT("Extra card is acquired"), ExtraInstanceId.IsValid());
+	TestEqual(TEXT("Backpack acquire does not animate default BattleDeck source"),
+		Source->LastWrittenTransitionHints.Num(),
+		0);
+
+	const int32 WritesAfterAcquire = Source->WriteCount;
+	TestTrue(TEXT("Extra card moves to BattleDeck"),
+		Run->MoveInstance(ExtraInstanceId, EZoneKind::BattleDeck, FGuid()));
+	TestEqual(TEXT("BattleDeck move refreshes default source"),
+		Source->WriteCount,
+		WritesAfterAcquire + 1);
+	TestEqual(TEXT("Default source now has two cards"),
+		Source->LastWrittenEntries.Num(),
+		2);
+	TestEqual(TEXT("Only new BattleDeck card gets enter hint"),
+		Source->LastWrittenTransitionHints.Num(),
+		1);
+	if (Source->LastWrittenTransitionHints.Num() == 1)
+	{
+		TestEqual(TEXT("New card hint uses Run hand enter"),
+			Source->LastWrittenTransitionHints[0].TransitionKind,
+			EWacomFirstPersonCardSlotTransitionKind::RunHandEntered);
+		TestEqual(TEXT("New card hint targets moved card"),
+			Source->LastWrittenTransitionHints[0].CardInstanceId,
+			ExtraInstanceId);
+		TestEqual(TEXT("New card enters as first item in its animation batch"),
+			Source->LastWrittenTransitionHints[0].SequenceIndex,
+			0);
+		TestEqual(TEXT("New card animation batch count"),
+			Source->LastWrittenTransitionHints[0].SequenceCount,
+			1);
+	}
 
 	return true;
 }

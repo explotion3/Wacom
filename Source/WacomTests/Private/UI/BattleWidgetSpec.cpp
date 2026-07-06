@@ -7375,7 +7375,7 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
 	TestTrue(TEXT("HUD bridge writes runtime hand to anchor"), Anchor->HasRuntimeCardLayerData());
 	TestTrue(TEXT("HUD bridge enables first-person hand interaction"),
-		Anchor->IsBattleHandInteractionEnabled());
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
 	TestTrue(TEXT("Battle camera activates for drag override"), BattleCamera->ActivateBattleCameraLook());
 	FWacomFirstPersonCardPointerView PointerView;
@@ -7398,7 +7398,7 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 
 	HUD->ClearFirstPersonBattleHandLayerForTest();
 	TestFalse(TEXT("HUD bridge clear removes runtime hand"), Anchor->HasRuntimeCardLayerData());
-	TestFalse(TEXT("HUD bridge clear disables interaction"), Anchor->IsBattleHandInteractionEnabled());
+	TestFalse(TEXT("HUD bridge clear disables interaction"), Anchor->IsFirstPersonCardLayerInteractionEnabled());
 	TestFalse(TEXT("HUD bridge clear removes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
 	TestFalse(TEXT("HUD bridge clear hides first-person detail"),
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());

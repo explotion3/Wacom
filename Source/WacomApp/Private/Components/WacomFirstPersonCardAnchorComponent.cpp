@@ -673,13 +673,14 @@ UWacomFirstPersonCardAnchorComponent::~UWacomFirstPersonCardAnchorComponent() = 
 void UWacomFirstPersonCardAnchorComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	bFirstPersonCardLayerInteractionEnabled = bEnableBattleHandInteraction;
 	ConfigureTickPrerequisites();
 	SetComponentTickEnabled(true);
 }
 
 void UWacomFirstPersonCardAnchorComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	SetBattleHandInteractionEnabled(false);
+	SetFirstPersonCardLayerInteractionEnabled(false);
 	ResetAnchorScreenSmoothing();
 	RemoveCardLayer();
 	RemoveDebugWidget();
@@ -1068,6 +1069,16 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerEntries(
 }
 
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerPresentationFrame(
+	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+{
+	SetRuntimeCardLayerPresentationFrame(
+		Frame.SourceId,
+		Frame.Entries,
+		Frame.TransitionHints,
+		Frame.FeedbackHints);
+}
+
+void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerPresentationFrame(
 	FName SourceId,
 	const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
@@ -1270,15 +1281,15 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		: BuildPreviewCardSlotViews();
 }
 
-void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionEnabled(bool bEnabled)
+void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardLayerInteractionEnabled(bool bEnabled)
 {
-	if (bEnableBattleHandInteraction == bEnabled)
+	if (bFirstPersonCardLayerInteractionEnabled == bEnabled)
 	{
 		return;
 	}
 
-	bEnableBattleHandInteraction = bEnabled;
-	if (!bEnableBattleHandInteraction)
+	bFirstPersonCardLayerInteractionEnabled = bEnabled;
+	if (!bFirstPersonCardLayerInteractionEnabled)
 	{
 		if (RuntimeState)
 		{
@@ -1291,7 +1302,7 @@ void UWacomFirstPersonCardAnchorComponent::SetBattleHandInteractionEnabled(bool 
 	}
 	if (CardLayerWidget)
 	{
-		CardLayerWidget->SetCardLayerInteractionEnabled(bEnableBattleHandInteraction);
+		CardLayerWidget->SetCardLayerInteractionEnabled(bFirstPersonCardLayerInteractionEnabled);
 	}
 }
 
@@ -1800,7 +1811,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 
 	const bool bRuntimeFlagsChanged =
 		!bHasCachedOwnerConfig
-		|| CachedInteractionEnabled != bEnableBattleHandInteraction
+		|| CachedInteractionEnabled != bFirstPersonCardLayerInteractionEnabled
 		|| CachedLogDiagnostics != bLogCardLayerMotionDiagnostics;
 
 	const bool bCardViewClassChanged =
@@ -1816,7 +1827,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 		CachedSlotVisualConfig         = BuildSlotVisualConfig(ResolvedConfig);
 		CachedSlotFeedbackConfig       = BuildSlotFeedbackConfig(ResolvedConfig);
 		CachedCardDragConfig           = BuildCardDragConfig(*this, ResolvedConfig);
-		CachedInteractionEnabled       = bEnableBattleHandInteraction;
+		CachedInteractionEnabled       = bFirstPersonCardLayerInteractionEnabled;
 		CachedLogDiagnostics           = bLogCardLayerMotionDiagnostics;
 		CachedCardViewClass            = FirstPersonCardViewClass.Get();
 		bHasCachedOwnerConfig          = true;

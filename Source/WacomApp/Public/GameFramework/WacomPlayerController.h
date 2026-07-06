@@ -25,6 +25,10 @@ class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
 class UWacomRunTunnelMovementComponent;
 class UWacomFirstPersonCardAnchorComponent;
+class UWacomCardDetailPanel;
+class FWacomRunFirstPersonCardDetailController;
+class FWacomRunFirstPersonCardDragController;
+struct FWacomCardDetailViewData;
 struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
@@ -61,6 +65,8 @@ public:
 	/** 由战斗 UI 在 BattleEnd 时调用，转发到 GameMode。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
 	void RequestExitBattle(uint8 Outcome);
+
+	virtual void SetPawn(APawn* InPawn) override;
 
 	// ---- IMC 资产（LoadObject 填默认，蓝图可覆盖）----
 
@@ -143,6 +149,42 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Card Drop|Debug", meta = (ToolTip = "开启后，探索期拖卡到场景目标会输出预览、释放和拒绝原因。默认关闭。"))
 	bool bLogRunWorldCardDrop = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail", meta = (ToolTip = "Run 第一人称手牌悬浮详情面板类。为空时会尝试加载 WBP_CardDetailPanel；加载失败则使用 C++ 默认 UWacomCardDetailPanel。"))
+	TSubclassOf<UWacomCardDetailPanel> RunFirstPersonCardDetailPanelClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail", meta = (ToolTip = "Run 第一人称手牌悬浮详情面板的估算宽高，单位为 Slate 像素。用于 viewport clamp 和 SetDesiredSizeInViewport；建议从 300x380 到 440x520 区间调试。"))
+	FVector2D RunFirstPersonCardDetailPanelEstimatedSize = FVector2D(360.0f, 420.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail", meta = (ToolTip = "Run 第一人称手牌悬浮详情面板与卡牌之间的间距，单位为 Slate 像素。面板默认显示在卡牌左侧，左侧空间不足时换到右侧。"))
+	float RunFirstPersonCardDetailPanelPadding = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail", meta = (ToolTip = "Run 第一人称手牌悬浮详情面板添加到 Viewport 时使用的层级。需要高于 FirstPersonCardAnchorComponent.CardLayerZOrder，避免详情被卡牌层遮挡。"))
+	int32 RunFirstPersonCardDetailViewportZOrder = 9999;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail", meta = (ToolTip = "Run 第一人称手牌详情定位时使用的卡牌锚点基础尺寸，单位为 UMG 布局像素。通常应与 WBP_FPCardView 或 WBP_CardView 的设计尺寸一致。"))
+	FVector2D RunFirstPersonCardDetailAnchorBaseSize = FVector2D(296.0f, 420.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail|Motion", meta = (ToolTip = "开启后，Run 第一人称手牌详情使用预创建面板、淡入淡出、轻微缩放和跟随运动。关闭时回到立即显示/隐藏，主要用于排查表现问题。"))
+	bool bEnableRunFirstPersonCardDetailReadabilityPolish = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail|Motion", meta = (ToolTip = "Run 第一人称手牌 hover 或 inspect 后显示详情前的延迟，单位为秒。建议 0.05 到 0.18，用于避免突兀闪现。"))
+	float RunFirstPersonCardDetailHoverDelaySeconds = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail|Motion", meta = (ToolTip = "Run 第一人称手牌详情淡入插值速度，单位为 1/秒。值越大出现越快；建议 12 到 24。"))
+	float RunFirstPersonCardDetailFadeInSpeed = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail|Motion", meta = (ToolTip = "Run 第一人称手牌详情淡出插值速度，单位为 1/秒。值越大消失越快；建议 16 到 32。"))
+	float RunFirstPersonCardDetailFadeOutSpeed = 24.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail|Motion", meta = (ToolTip = "Run 第一人称手牌详情跟随卡槽目标位置的插值速度，单位为 1/秒。值越大越贴近目标；建议 18 到 32。"))
+	float RunFirstPersonCardDetailFollowSpeed = 24.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail|Motion", meta = (ToolTip = "Run 第一人称手牌详情出现时的起始缩放。1 表示不缩放；建议 0.94 到 0.99，用于减轻突然弹出的感觉。"))
+	float RunFirstPersonCardDetailAppearStartScale = 0.97f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Detail|Motion", meta = (ToolTip = "Run 第一人称手牌详情左右换边的滞后距离，单位为 Slate 像素。建议 48 到 96，避免卡牌轻微移动时面板左右跳。"))
+	float RunFirstPersonCardDetailSideSwitchHysteresisPixels = 72.0f;
+
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
 
@@ -173,6 +215,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	void ClearRunFirstPersonCardLayer();
+
+	void PrepareExplorationRunFirstPersonCardLayer();
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	void SetRunFirstPersonCardLayerSuppressedByGameMenu(bool bSuppressed);
@@ -305,6 +349,9 @@ protected:
 	void ClearRunMenuDropTargetProbe();
 	FString GetRunMenuDropProbeDebugSummaryForTest() const { return LastRunMenuDropProbeDebugSummary; }
 	FString GetRunWorldCardDropDebugSummaryForTest() const { return LastRunWorldCardDropDebugSummary; }
+	void HandleRunFirstPersonCardLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleRunFirstPersonCardLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleRunFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
@@ -342,6 +389,17 @@ protected:
 		FRunWorldCardInteractionValidation& InOutValidation);
 	virtual UWacomAppToastSubsystem* ResolveAppToastSubsystem() const;
 
+#if WITH_AUTOMATION_TESTS
+	bool IsRunFirstPersonCardDetailPanelVisibleForTest() const;
+	FText GetRunFirstPersonCardDetailPanelNameTextForTest() const;
+	FVector2D GetRunFirstPersonCardDetailPanelPositionForTest() const;
+	bool IsRunFirstPersonCardDetailPanelPrewarmedForTest() const;
+	bool IsRunFirstPersonCardDetailMotionPendingForTest() const;
+	float GetRunFirstPersonCardDetailPanelOpacityForTest() const;
+	int32 GetRunFirstPersonCardDetailDataApplyCountForTest() const;
+	void TickRunFirstPersonCardDetailForTest(float DeltaTime);
+#endif
+
 	/** 按当前候选对象计算显示的交互提示文案。 */
 	FText BuildCurrentInteractPrompt() const;
 
@@ -378,6 +436,16 @@ private:
 	void ClearRunWorldCardDropProbe();
 	void RefreshRunFirstPersonCardLayerMenuSuppression();
 	void FinishGameMenuViewpointStageTransition();
+	FWacomRunFirstPersonCardDetailController& GetRunFirstPersonCardDetailController();
+	const FWacomRunFirstPersonCardDetailController& GetRunFirstPersonCardDetailController() const;
+	bool BuildRunFirstPersonCardDetailViewData(
+		const FGuid& CardInstanceId,
+		FWacomCardDetailViewData& OutDetailData) const;
+	void PrewarmRunFirstPersonCardDetailPanel();
+	void RefreshRunFirstPersonCardDetailBinding();
+	void HideRunFirstPersonCardDetailPanel();
+	FWacomRunFirstPersonCardDragController& GetRunFirstPersonCardDragController();
+	const FWacomRunFirstPersonCardDragController& GetRunFirstPersonCardDragController() const;
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
 	void PumpFirstPersonCardActiveDragPointer();
 	bool TryReleaseFirstPersonCardActiveDragPointer();
@@ -428,15 +496,19 @@ private:
 	TWeakObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> PreviewedRunWorldCardDropBridge;
 
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> RunMenuProbeBoundAnchor;
+	TObjectPtr<UWacomCardDetailPanel> RunFirstPersonCardDetailPanel = nullptr;
+
+	TSharedPtr<FWacomRunFirstPersonCardDetailController> RunFirstPersonCardDetailController;
+	TSharedPtr<FWacomRunFirstPersonCardDragController> RunFirstPersonCardDragController;
 
 	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
 	bool bGameMenuViewpointStageTransitionActive = false;
 	bool bGameMenuViewpointReturnArmed = false;
-	bool bRunFirstPersonMenuLeaseDragBound = false;
-	bool bRunFirstPersonCardDragActiveForCameraLook = false;
 	FString LastRunMenuDropProbeDebugSummary;
 	FString LastRunWorldCardDropDebugSummary;
 
 	FTimerHandle RunWorldTargetProbePreviewTimerHandle;
+
+	friend class FWacomRunFirstPersonCardDetailController;
+	friend class FWacomRunFirstPersonCardDragController;
 };

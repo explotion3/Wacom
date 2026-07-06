@@ -9,10 +9,12 @@
 #include "RunSession.h"
 #include "RunStateTypes.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
+#include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 
 namespace
 {
-	const FName RunFirstPersonCardLayerSuppressedSourceId(TEXT("RunFirstPersonMenuSuppressed"));
+	const FName RunFirstPersonCardLayerSuppressedSourceId =
+		WacomFirstPersonCardLayerSourceIds::RunMenuSuppressed();
 
 	FWacomFirstPersonCardLayerEntry BuildRunFirstPersonCardLayerEntryFromInstance(
 		const FCardInstance& Instance)
@@ -35,100 +37,58 @@ namespace
 		return Entry;
 	}
 
-	bool ContainsDefinition(
-		const TArray<TObjectPtr<UCardDefinition>>& Definitions,
-		const UCardDefinition* Definition)
+	FWacomFirstPersonCardLayerEntry BuildRunFirstPersonCardLayerEntryFromWorkspaceEntry(
+		const FRunCardWorkspaceEntry& WorkspaceEntry)
 	{
-		return Definition
-			&& Definitions.ContainsByPredicate(
-				[Definition](const TObjectPtr<UCardDefinition>& Candidate)
-				{
-					return Candidate.Get() == Definition;
-				});
+		return BuildRunFirstPersonCardLayerEntryFromInstance(WorkspaceEntry.Instance);
 	}
 
-	bool ContainsGuid(const TArray<FGuid>& Guids, FGuid Guid)
+	FRunCardWorkspaceRequest BuildDefaultRunCardWorkspaceRequest(
+		FName WorkspaceId,
+		bool bIncludeProjectedBattleDeckCards)
 	{
-		return Guids.ContainsByPredicate(
-			[Guid](const FGuid& Candidate)
-			{
-				return Candidate == Guid;
-			});
+		FRunCardWorkspaceRequest Request;
+		Request.WorkspaceId = WorkspaceId;
+		Request.Kind = ERunCardWorkspaceKind::DefaultExploration;
+		Request.bIncludeProjectedBattleDeckCards = bIncludeProjectedBattleDeckCards;
+		return Request;
 	}
 
-	bool HasAnyRuntimeFilter(const FWacomRunMenuCardLeaseRequest& Request)
-	{
-		return Request.AllowedCardDefinitions.Num() > 0
-			|| Request.AllowedCardIds.Num() > 0
-			|| Request.ExplicitCardInstanceIds.Num() > 0
-			|| !Request.RequiredKeywords.IsEmpty()
-			|| !Request.BlockedKeywords.IsEmpty();
-	}
-
-	bool DoesInstanceMatchRunMenuCardLeaseRequest(
-		const FCardInstance& Instance,
+	FRunCardWorkspaceRequest BuildRunCardWorkspaceRequestFromMenuLeaseRequest(
 		const FWacomRunMenuCardLeaseRequest& Request)
 	{
-		const UCardDefinition* Definition = Instance.Definition;
-		if (!Instance.InstanceId.IsValid() || !Definition)
-		{
-			return false;
-		}
-
-		if (Request.ExplicitCardInstanceIds.Num() > 0
-			&& !ContainsGuid(Request.ExplicitCardInstanceIds, Instance.InstanceId))
-		{
-			return false;
-		}
-
-		const bool bHasIdentityFilter =
-			Request.AllowedCardDefinitions.Num() > 0
-			|| Request.AllowedCardIds.Num() > 0;
-		if (bHasIdentityFilter)
-		{
-			const bool bMatchesDefinition =
-				ContainsDefinition(Request.AllowedCardDefinitions, Definition);
-			const bool bMatchesCardId =
-				Request.AllowedCardIds.Contains(Definition->CardId);
-			if (!bMatchesDefinition && !bMatchesCardId)
-			{
-				return false;
-			}
-		}
-
-		if (!Request.RequiredKeywords.IsEmpty()
-			&& !Definition->Keywords.HasAllExact(Request.RequiredKeywords))
-		{
-			return false;
-		}
-
-		if (!Request.BlockedKeywords.IsEmpty()
-			&& Definition->Keywords.HasAnyExact(Request.BlockedKeywords))
-		{
-			return false;
-		}
-
-		return true;
+		FRunCardWorkspaceRequest WorkspaceRequest;
+		WorkspaceRequest.WorkspaceId = Request.LeaseId;
+		WorkspaceRequest.Kind = ERunCardWorkspaceKind::OwnedCardsFilter;
+		WorkspaceRequest.AllowedCardDefinitions = Request.AllowedCardDefinitions;
+		WorkspaceRequest.AllowedCardIds = Request.AllowedCardIds;
+		WorkspaceRequest.ExplicitCardInstanceIds = Request.ExplicitCardInstanceIds;
+		WorkspaceRequest.RequiredKeywords = Request.RequiredKeywords;
+		WorkspaceRequest.BlockedKeywords = Request.BlockedKeywords;
+		WorkspaceRequest.bIncludeBackpack = Request.bIncludeBackpack;
+		WorkspaceRequest.bIncludeBattleDeck = Request.bIncludeBattleDeck;
+		WorkspaceRequest.bIncludeBurdenZone = Request.bIncludeBurdenZone;
+		WorkspaceRequest.bIncludeSpecialZones = Request.bIncludeSpecialZones;
+		WorkspaceRequest.bAllowAllOwnedCardsWhenNoFilter =
+			Request.bAllowAllOwnedCardsWhenNoFilter;
+		return WorkspaceRequest;
 	}
 
-	void AppendRunMenuLeaseCandidatesFromZone(
-		const TArray<FCardInstance>& ZoneCards,
-		const FWacomRunMenuCardLeaseRequest& Request,
-		TArray<FWacomFirstPersonCardLayerEntry>& OutEntries,
-		int32& InOutConsideredCount)
+	void BuildLayerEntriesFromRunCardWorkspaceSnapshot(
+		const FRunCardWorkspaceSnapshot& Snapshot,
+		TArray<FWacomFirstPersonCardLayerEntry>& OutEntries)
 	{
-		for (const FCardInstance& Instance : ZoneCards)
+		OutEntries.Reset();
+		OutEntries.Reserve(Snapshot.Entries.Num());
+		for (const FRunCardWorkspaceEntry& WorkspaceEntry : Snapshot.Entries)
 		{
-			if (!Instance.InstanceId.IsValid() || !Instance.Definition)
+			if (!WorkspaceEntry.Instance.InstanceId.IsValid()
+				|| !WorkspaceEntry.Instance.Definition)
 			{
 				continue;
 			}
-
-			++InOutConsideredCount;
-			if (DoesInstanceMatchRunMenuCardLeaseRequest(Instance, Request))
-			{
-				OutEntries.Add(BuildRunFirstPersonCardLayerEntryFromInstance(Instance));
-			}
+			OutEntries.Add(
+				BuildRunFirstPersonCardLayerEntryFromWorkspaceEntry(WorkspaceEntry));
 		}
 	}
 
@@ -160,6 +120,7 @@ namespace
 UWacomRunFirstPersonCardSourceComponent::UWacomRunFirstPersonCardSourceComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	RunFirstPersonCardLayerSourceId = WacomFirstPersonCardLayerSourceIds::RunDefault();
 }
 
 void UWacomRunFirstPersonCardSourceComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -175,7 +136,9 @@ void UWacomRunFirstPersonCardSourceComponent::BindRunSession(URunSession* InRunS
 	{
 		if (bRuntimeSourceActive)
 		{
-			RefreshRunFirstPersonCardLayer();
+			ReconcileRunFirstPersonCardLayer(
+				/*bAllowDefaultSourceRevisionSkip*/ false,
+				/*bAllowProviderLeaseRevisionSkip*/ false);
 		}
 		return;
 	}
@@ -193,7 +156,9 @@ void UWacomRunFirstPersonCardSourceComponent::BindRunSession(URunSession* InRunS
 
 	if (bRuntimeSourceActive)
 	{
-		RefreshRunFirstPersonCardLayer();
+		ReconcileRunFirstPersonCardLayer(
+			/*bAllowDefaultSourceRevisionSkip*/ false,
+			/*bAllowProviderLeaseRevisionSkip*/ false);
 	}
 }
 
@@ -203,7 +168,9 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerActive(b
 	{
 		if (bRuntimeSourceActive)
 		{
-			RefreshRunFirstPersonCardLayer();
+			ReconcileRunFirstPersonCardLayer(
+				/*bAllowDefaultSourceRevisionSkip*/ false,
+				/*bAllowProviderLeaseRevisionSkip*/ false);
 		}
 		return;
 	}
@@ -213,7 +180,9 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerActive(b
 	ResetProviderLeaseRefreshKey();
 	if (bRuntimeSourceActive)
 	{
-		RefreshRunFirstPersonCardLayer();
+		ReconcileRunFirstPersonCardLayer(
+			/*bAllowDefaultSourceRevisionSkip*/ false,
+			/*bAllowProviderLeaseRevisionSkip*/ false);
 	}
 	else
 	{
@@ -223,9 +192,18 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerActive(b
 
 bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayer()
 {
-	return RefreshRunFirstPersonCardLayerInternal(
+	return ReconcileRunFirstPersonCardLayer(
 		/*bAllowDefaultSourceRevisionSkip*/ false,
 		/*bAllowProviderLeaseRevisionSkip*/ false);
+}
+
+bool UWacomRunFirstPersonCardSourceComponent::ReconcileRunFirstPersonCardLayer(
+	bool bAllowDefaultSourceRevisionSkip,
+	bool bAllowProviderLeaseRevisionSkip)
+{
+	return RefreshRunFirstPersonCardLayerInternal(
+		bAllowDefaultSourceRevisionSkip,
+		bAllowProviderLeaseRevisionSkip);
 }
 
 bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayerInternal(
@@ -237,6 +215,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayerInte
 		ResetBattleDeckRefreshDebugCounts();
 		ResetDefaultSourceRefreshKey();
 		ResetProviderLeaseRefreshKey();
+		ClearReconcileBlocks();
 		LastRefreshResult = TEXT("Inactive");
 		LogDebugState(TEXT("RefreshSkipped"));
 		return false;
@@ -246,6 +225,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayerInte
 		ResetBattleDeckRefreshDebugCounts();
 		ResetDefaultSourceRefreshKey();
 		ResetProviderLeaseRefreshKey();
+		ClearReconcileBlocks();
 		LastRefreshResult = TEXT("Disabled");
 		ClearRunFirstPersonCardLayerWithResult(LastRefreshResult, /*bClearMenuContext*/ false);
 		LogDebugState(TEXT("RefreshSkipped"));
@@ -255,6 +235,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayerInte
 	{
 		ResetBattleDeckRefreshDebugCounts();
 		ResetDefaultSourceRefreshKey();
+		ClearDefaultSourceReconcileBlock();
 		return RefreshActiveMenuLease(bAllowProviderLeaseRevisionSkip);
 	}
 	if (bSuppressedByGameMenu)
@@ -262,6 +243,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshRunFirstPersonCardLayerInte
 		ResetBattleDeckRefreshDebugCounts();
 		ResetDefaultSourceRefreshKey();
 		ResetProviderLeaseRefreshKey();
+		ClearReconcileBlocks();
 		return WriteSuppressedRuntimeCardLayerWithResult(TEXT("SuppressedByGameMenu"));
 	}
 
@@ -275,8 +257,9 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource(
 	{
 		ResetBattleDeckRefreshDebugCounts();
 		ResetDefaultSourceRefreshKey();
+		ClearRunFirstPersonCardLayerWithResult(TEXT("MissingRunSession"), /*bClearMenuContext*/ false);
+		MarkDefaultSourceReconcileBlocked(TEXT("MissingRunSession"));
 		LastRefreshResult = TEXT("MissingRunSession");
-		ClearRunFirstPersonCardLayerWithResult(LastRefreshResult, /*bClearMenuContext*/ false);
 		LogDebugState(TEXT("RefreshFailed"));
 		return false;
 	}
@@ -288,6 +271,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource(
 		ResetBattleDeckRefreshDebugCounts();
 		ResetDefaultSourceRefreshKey();
 		RestoreMenuLeaseInteractionOverrides();
+		MarkDefaultSourceReconcileBlocked(TEXT("MissingAnchor"));
 		LastRefreshResult = TEXT("MissingAnchor");
 		LogDebugState(TEXT("RefreshFailed"));
 		return false;
@@ -295,6 +279,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource(
 
 	if (bAllowRevisionSkip && CanSkipDefaultSourceRefresh(*Anchor))
 	{
+		ClearDefaultSourceReconcileBlock();
 		LastRefreshResult = TEXT("SkippedUnchangedRevision");
 #if WITH_AUTOMATION_TESTS
 		++DefaultSourceRefreshCountersForTest.RevisionSkipCount;
@@ -307,12 +292,26 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource(
 #if WITH_AUTOMATION_TESTS
 	++DefaultSourceRefreshCountersForTest.DataBuildCount;
 #endif
-	BuildRunFirstPersonCardEntries(*BoundRunSession, Entries);
+	const FRunCardWorkspaceRequest WorkspaceRequest =
+		BuildDefaultRunCardWorkspaceRequest(
+			RunFirstPersonCardLayerSourceId,
+			bIncludeProjectedRunBattleDeckCards);
+	const FRunCardWorkspaceSnapshot WorkspaceSnapshot =
+		BoundRunSession->BuildRunCardWorkspaceSnapshot(WorkspaceRequest);
+	LastBattleDeckPhysicalCount = WorkspaceSnapshot.PhysicalBattleDeckCount;
+	LastBattleDeckProjectedCount = WorkspaceSnapshot.ProjectedBattleDeckCount;
+	BuildLayerEntriesFromRunCardWorkspaceSnapshot(WorkspaceSnapshot, Entries);
 	LastEntryCount = Entries.Num();
 
-	WriteRuntimeCardLayerEntries(*Anchor, RunFirstPersonCardLayerSourceId, Entries);
-	LastWrittenRuntimeSourceId = RunFirstPersonCardLayerSourceId;
+	FWacomFirstPersonCardLayerPresentationFrame Frame =
+		BuildDefaultSourcePresentationFrame(*Anchor, MoveTemp(Entries));
+	WriteRuntimeCardLayerPresentationFrame(
+		*Anchor,
+		Frame);
+	StoreRunCardWorkspaceMetadata(WorkspaceSnapshot);
+	LastWrittenRuntimeSourceId = Frame.SourceId;
 	StoreDefaultSourceRefreshKey();
+	ClearDefaultSourceReconcileBlock();
 	LastRefreshResult = TEXT("Refreshed");
 #if WITH_AUTOMATION_TESTS
 	++DefaultSourceRefreshCountersForTest.RuntimeApplyCount;
@@ -475,9 +474,156 @@ void UWacomRunFirstPersonCardSourceComponent::ResetBattleDeckRefreshDebugCounts(
 	bLastHadAnchor = false;
 }
 
+void UWacomRunFirstPersonCardSourceComponent::StoreRunCardWorkspaceMetadata(
+	const FRunCardWorkspaceSnapshot& Snapshot)
+{
+	CurrentWorkspaceEntriesByCardId.Reset();
+	CurrentWorkspaceId = Snapshot.WorkspaceId;
+	CurrentWorkspaceKind = Snapshot.Kind;
+	for (const FRunCardWorkspaceEntry& Entry : Snapshot.Entries)
+	{
+		if (Entry.Instance.InstanceId.IsValid())
+		{
+			CurrentWorkspaceEntriesByCardId.Add(Entry.Instance.InstanceId, Entry);
+		}
+	}
+}
+
+void UWacomRunFirstPersonCardSourceComponent::ClearRunCardWorkspaceMetadata()
+{
+	CurrentWorkspaceEntriesByCardId.Reset();
+	CurrentWorkspaceId = NAME_None;
+	CurrentWorkspaceKind = ERunCardWorkspaceKind::DefaultExploration;
+}
+
+FWacomFirstPersonCardLayerPresentationFrame
+UWacomRunFirstPersonCardSourceComponent::BuildDefaultSourcePresentationFrame(
+	const UWacomFirstPersonCardAnchorComponent& Anchor,
+	TArray<FWacomFirstPersonCardLayerEntry>&& Entries) const
+{
+	FWacomFirstPersonCardLayerPresentationFrame Frame;
+	Frame.SourceId = RunFirstPersonCardLayerSourceId;
+	Frame.Entries = MoveTemp(Entries);
+	const TSet<FGuid> RunHandEnteredCardIds =
+		DetermineRunHandEnteredCardIds(Anchor, Frame.Entries);
+	Frame.TransitionHints =
+		BuildRunHandEnteredTransitionHints(Frame.Entries, RunHandEnteredCardIds);
+	Frame.bApplyAsPresentationFrame = true;
+	return Frame;
+}
+
+FWacomFirstPersonCardLayerPresentationFrame
+UWacomRunFirstPersonCardSourceComponent::BuildSuppressedPresentationFrame() const
+{
+	FWacomFirstPersonCardLayerPresentationFrame Frame;
+	Frame.SourceId = RunFirstPersonCardLayerSuppressedSourceId;
+	Frame.bApplyAsPresentationFrame = true;
+	return Frame;
+}
+
+TSet<FGuid> UWacomRunFirstPersonCardSourceComponent::DetermineRunHandEnteredCardIds(
+	const UWacomFirstPersonCardAnchorComponent& Anchor,
+	const TArray<FWacomFirstPersonCardLayerEntry>& Entries) const
+{
+	TSet<FGuid> CardIdsToAnimate;
+	if (Entries.IsEmpty())
+	{
+		return CardIdsToAnimate;
+	}
+
+	const bool bAnimateAll =
+		!Anchor.HasRuntimeCardLayerData()
+		|| Anchor.GetRuntimeCardLayerSourceId() != RunFirstPersonCardLayerSourceId
+		|| Anchor.GetRuntimeCardLayerCardCount() == 0;
+	if (bAnimateAll)
+	{
+		for (const FWacomFirstPersonCardLayerEntry& Entry : Entries)
+		{
+			if (Entry.CardInstanceId.IsValid())
+			{
+				CardIdsToAnimate.Add(Entry.CardInstanceId);
+			}
+		}
+		return CardIdsToAnimate;
+	}
+
+	TSet<FGuid> ExistingCardIds;
+	for (const FWacomFirstPersonCardLayerEntry& ExistingEntry : Anchor.GetRuntimeCardLayerEntries())
+	{
+		if (ExistingEntry.CardInstanceId.IsValid())
+		{
+			ExistingCardIds.Add(ExistingEntry.CardInstanceId);
+		}
+	}
+
+	for (const FWacomFirstPersonCardLayerEntry& Entry : Entries)
+	{
+		if (Entry.CardInstanceId.IsValid() && !ExistingCardIds.Contains(Entry.CardInstanceId))
+		{
+			CardIdsToAnimate.Add(Entry.CardInstanceId);
+		}
+	}
+	return CardIdsToAnimate;
+}
+
+TArray<FWacomFirstPersonCardLayerTransitionHint>
+UWacomRunFirstPersonCardSourceComponent::BuildRunHandEnteredTransitionHints(
+	const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
+	const TSet<FGuid>& CardIdsToAnimate) const
+{
+	TArray<FGuid> OrderedAnimatedCardIds;
+	OrderedAnimatedCardIds.Reserve(CardIdsToAnimate.Num());
+	TSet<FGuid> SeenCardIds;
+	for (const FWacomFirstPersonCardLayerEntry& Entry : Entries)
+	{
+		if (!Entry.CardInstanceId.IsValid()
+			|| !CardIdsToAnimate.Contains(Entry.CardInstanceId)
+			|| SeenCardIds.Contains(Entry.CardInstanceId))
+		{
+			continue;
+		}
+		SeenCardIds.Add(Entry.CardInstanceId);
+		OrderedAnimatedCardIds.Add(Entry.CardInstanceId);
+	}
+
+	TArray<FWacomFirstPersonCardLayerTransitionHint> Hints;
+	Hints.Reserve(OrderedAnimatedCardIds.Num());
+	const int32 SequenceCount = OrderedAnimatedCardIds.Num();
+	for (int32 Index = 0; Index < OrderedAnimatedCardIds.Num(); ++Index)
+	{
+		FWacomFirstPersonCardLayerTransitionHint Hint;
+		Hint.CardInstanceId = OrderedAnimatedCardIds[Index];
+		Hint.TransitionKind = EWacomFirstPersonCardSlotTransitionKind::RunHandEntered;
+		Hint.SequenceIndex = Index;
+		Hint.SequenceCount = SequenceCount;
+		Hints.Add(Hint);
+	}
+	return Hints;
+}
+
 void UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayer()
 {
 	ClearRunFirstPersonCardLayerWithResult(TEXT("Cleared"), /*bClearMenuContext*/ true);
+}
+
+void UWacomRunFirstPersonCardSourceComponent::ResetRunFirstPersonCardLayerMenuContext()
+{
+	bSuppressedByGameMenu = false;
+	ActiveMenuLeaseId = NAME_None;
+	ActiveMenuLeaseSourceId = NAME_None;
+	ActiveMenuLeaseEntries.Reset();
+	bActiveMenuLeaseBackedByProvider = false;
+	ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
+	ResetDefaultSourceRefreshKey();
+	ResetProviderLeaseRefreshKey();
+	ClearReconcileBlocks();
+
+	if (bRuntimeSourceActive)
+	{
+		ReconcileRunFirstPersonCardLayer(
+			/*bAllowDefaultSourceRevisionSkip*/ false,
+			/*bAllowProviderLeaseRevisionSkip*/ false);
+	}
 }
 
 bool UWacomRunFirstPersonCardSourceComponent::RefreshActiveMenuLease(bool bAllowRevisionSkip)
@@ -489,6 +635,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshActiveMenuLease(bool bAllow
 		ResetProviderLeaseRefreshKey();
 		RestoreMenuLeaseInteractionOverrides();
 		LastEntryCount = 0;
+		MarkMenuLeaseReconcileBlocked(TEXT("MissingAnchorForMenuLease"));
 		LastRefreshResult = TEXT("MissingAnchorForMenuLease");
 		LogDebugState(TEXT("RefreshFailed"));
 		return false;
@@ -498,6 +645,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshActiveMenuLease(bool bAllow
 	{
 		if (bAllowRevisionSkip && CanSkipProviderLeaseRefresh(*Anchor))
 		{
+			ClearMenuLeaseReconcileBlock();
 			LastRefreshResult = TEXT("MenuLeaseProviderSkippedUnchangedRevision");
 #if WITH_AUTOMATION_TESTS
 			++ProviderLeaseRefreshCountersForTest.RevisionSkipCount;
@@ -525,6 +673,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshActiveMenuLease(bool bAllow
 		++ProviderLeaseRefreshCountersForTest.RuntimeApplyCount;
 #endif
 	}
+	ClearMenuLeaseReconcileBlock();
 	LastRefreshResult = TEXT("MenuLeaseRefreshed");
 	LogDebugState(TEXT("MenuLeaseRefreshed"));
 	return true;
@@ -542,43 +691,24 @@ bool UWacomRunFirstPersonCardSourceComponent::RebuildActiveMenuLeaseFromProvider
 	{
 		ResetProviderLeaseRefreshKey();
 		LastEntryCount = 0;
+		MarkMenuLeaseReconcileBlocked(TEXT("MissingRunSessionForMenuLease"));
 		LastRefreshResult = TEXT("MissingRunSessionForMenuLease");
 		LogDebugState(TEXT("MenuLeaseProviderRefreshFailed"));
 		return false;
 	}
 
-	const FRunState& RunState = BoundRunSession->GetRunState();
 	TArray<FWacomFirstPersonCardLayerEntry> Entries;
-	int32 ConsideredCount = 0;
-	if (Request.bIncludeBackpack)
-	{
-		AppendRunMenuLeaseCandidatesFromZone(RunState.Backpack, Request, Entries, ConsideredCount);
-	}
-	if (Request.bIncludeBattleDeck)
-	{
-		AppendRunMenuLeaseCandidatesFromZone(RunState.BattleDeck, Request, Entries, ConsideredCount);
-	}
-	if (Request.bIncludeBurdenZone)
-	{
-		AppendRunMenuLeaseCandidatesFromZone(RunState.BurdenZone, Request, Entries, ConsideredCount);
-	}
-	if (Request.bIncludeSpecialZones)
-	{
-		for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
-		{
-			AppendRunMenuLeaseCandidatesFromZone(
-				SpecialZone.Cards,
-				Request,
-				Entries,
-				ConsideredCount);
-		}
-	}
+	const FRunCardWorkspaceRequest WorkspaceRequest =
+		BuildRunCardWorkspaceRequestFromMenuLeaseRequest(Request);
+	const FRunCardWorkspaceSnapshot WorkspaceSnapshot =
+		BoundRunSession->BuildRunCardWorkspaceSnapshot(WorkspaceRequest);
+	BuildLayerEntriesFromRunCardWorkspaceSnapshot(WorkspaceSnapshot, Entries);
 
 	FWacomRunMenuCardLeaseResult Result;
 	Result.LeaseId = ActiveMenuLeaseId;
 	Result.SourceId = ActiveMenuLeaseSourceId;
 	Result.CandidateCount = Entries.Num();
-	Result.ConsideredCount = ConsideredCount;
+	Result.ConsideredCount = WorkspaceSnapshot.ConsideredCount;
 	if (Entries.Num() == 0)
 	{
 		const FName PreviousLeaseSourceId = ActiveMenuLeaseSourceId;
@@ -588,10 +718,14 @@ bool UWacomRunFirstPersonCardSourceComponent::RebuildActiveMenuLeaseFromProvider
 		bActiveMenuLeaseBackedByProvider = false;
 		ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
 		ResetProviderLeaseRefreshKey();
+		ClearMenuLeaseReconcileBlock();
 		Result.bLeaseSet = false;
-		Result.RejectReason = TEXT("NoMatchingCandidates");
-		Result.DebugSummary = BuildRunMenuCardLeaseProviderDebugSummary(Request, Result);
+		Result.RejectReason = WorkspaceSnapshot.RejectReason.IsNone()
+			? FName(TEXT("NoMatchingCandidates"))
+			: WorkspaceSnapshot.RejectReason;
+		Result.DebugSummary = WorkspaceSnapshot.DebugSummary;
 		StoreLastMenuLeaseProviderResult(Result);
+		ClearRunCardWorkspaceMetadata();
 		if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor())
 		{
 			ClearRuntimeCardLayerEntries(*Anchor, PreviousLeaseSourceId);
@@ -609,7 +743,8 @@ bool UWacomRunFirstPersonCardSourceComponent::RebuildActiveMenuLeaseFromProvider
 
 	ActiveMenuLeaseEntries = MoveTemp(Entries);
 	Result.bLeaseSet = true;
-	Result.DebugSummary = BuildRunMenuCardLeaseProviderDebugSummary(Request, Result);
+	Result.DebugSummary = WorkspaceSnapshot.DebugSummary;
+	StoreRunCardWorkspaceMetadata(WorkspaceSnapshot);
 	StoreLastMenuLeaseProviderResult(Result);
 	return true;
 }
@@ -624,13 +759,8 @@ bool UWacomRunFirstPersonCardSourceComponent::WriteSuppressedRuntimeCardLayerWit
 		LastEntryCount = 0;
 		LastRefreshResult = Result;
 		LogDebugState(TEXT("SuppressedMissingAnchor"));
+		ClearRunCardWorkspaceMetadata();
 		return false;
-	}
-
-	ClearRuntimeCardLayerEntries(*Anchor, RunFirstPersonCardLayerSourceId);
-	if (!ActiveMenuLeaseSourceId.IsNone())
-	{
-		ClearRuntimeCardLayerEntries(*Anchor, ActiveMenuLeaseSourceId);
 	}
 
 	if (Anchor->HasRuntimeCardLayerData()
@@ -641,14 +771,18 @@ bool UWacomRunFirstPersonCardSourceComponent::WriteSuppressedRuntimeCardLayerWit
 		LastWrittenRuntimeSourceId = RunFirstPersonCardLayerSuppressedSourceId;
 		LastRefreshResult = Result;
 		LogDebugState(TEXT("SuppressedUnchanged"));
+		ClearRunCardWorkspaceMetadata();
 		return false;
 	}
 
-	TArray<FWacomFirstPersonCardLayerEntry> EmptyEntries;
-	WriteRuntimeCardLayerEntries(*Anchor, RunFirstPersonCardLayerSuppressedSourceId, EmptyEntries);
+	FWacomFirstPersonCardLayerPresentationFrame Frame = BuildSuppressedPresentationFrame();
+	WriteRuntimeCardLayerPresentationFrame(
+		*Anchor,
+		Frame);
 	LastEntryCount = 0;
 	LastWrittenRuntimeSourceId = RunFirstPersonCardLayerSuppressedSourceId;
 	LastRefreshResult = Result;
+	ClearRunCardWorkspaceMetadata();
 	LogDebugState(TEXT("Suppressed"));
 	return false;
 }
@@ -668,6 +802,7 @@ bool UWacomRunFirstPersonCardSourceComponent::ClearVisibleRuntimeCardLayerWithRe
 		bLastHadAnchor = false;
 	}
 	RestoreMenuLeaseInteractionOverrides();
+	ClearRunCardWorkspaceMetadata();
 	LastEntryCount = 0;
 	LastWrittenRuntimeSourceId = NAME_None;
 	LastRefreshResult = Result;
@@ -687,6 +822,7 @@ void UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerWithRe
 		ActiveMenuLeaseEntries.Reset();
 		bActiveMenuLeaseBackedByProvider = false;
 		ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
+		ClearReconcileBlocks();
 	}
 	ClearVisibleRuntimeCardLayerWithResult(Result);
 }
@@ -695,14 +831,18 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerSuppress
 {
 	if (bSuppressedByGameMenu == bSuppressed)
 	{
-		RefreshRunFirstPersonCardLayer();
+		ReconcileRunFirstPersonCardLayer(
+			/*bAllowDefaultSourceRevisionSkip*/ false,
+			/*bAllowProviderLeaseRevisionSkip*/ false);
 		return;
 	}
 
 	bSuppressedByGameMenu = bSuppressed;
 	ResetDefaultSourceRefreshKey();
 	ResetProviderLeaseRefreshKey();
-	RefreshRunFirstPersonCardLayer();
+	ReconcileRunFirstPersonCardLayer(
+		/*bAllowDefaultSourceRevisionSkip*/ false,
+		/*bAllowProviderLeaseRevisionSkip*/ false);
 }
 
 bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLease(
@@ -728,9 +868,12 @@ bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeas
 	ActiveMenuLeaseEntries = Entries;
 	bActiveMenuLeaseBackedByProvider = false;
 	ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
+	ClearRunCardWorkspaceMetadata();
 	ResetDefaultSourceRefreshKey();
 	ResetProviderLeaseRefreshKey();
-	RefreshRunFirstPersonCardLayer();
+	ReconcileRunFirstPersonCardLayer(
+		/*bAllowDefaultSourceRevisionSkip*/ false,
+		/*bAllowProviderLeaseRevisionSkip*/ false);
 	return true;
 }
 
@@ -765,40 +908,14 @@ bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeas
 	{
 		return RejectWith(TEXT("MissingRunSession"));
 	}
-	if (!ResolveFirstPersonCardAnchor())
-	{
-		return RejectWith(TEXT("MissingAnchor"));
-	}
-	if (!HasAnyRuntimeFilter(Request) && !Request.bAllowAllOwnedCardsWhenNoFilter)
-	{
-		return RejectWith(TEXT("EmptyFilter"));
-	}
-
-	const FRunState& RunState = BoundRunSession->GetRunState();
 	TArray<FWacomFirstPersonCardLayerEntry> Entries;
-	int32 ConsideredCount = 0;
+	const FRunCardWorkspaceRequest WorkspaceRequest =
+		BuildRunCardWorkspaceRequestFromMenuLeaseRequest(Request);
+	const FRunCardWorkspaceSnapshot WorkspaceSnapshot =
+		BoundRunSession->BuildRunCardWorkspaceSnapshot(WorkspaceRequest);
+	BuildLayerEntriesFromRunCardWorkspaceSnapshot(WorkspaceSnapshot, Entries);
 
-	if (Request.bIncludeBackpack)
-	{
-		AppendRunMenuLeaseCandidatesFromZone(RunState.Backpack, Request, Entries, ConsideredCount);
-	}
-	if (Request.bIncludeBattleDeck)
-	{
-		AppendRunMenuLeaseCandidatesFromZone(RunState.BattleDeck, Request, Entries, ConsideredCount);
-	}
-	if (Request.bIncludeBurdenZone)
-	{
-		AppendRunMenuLeaseCandidatesFromZone(RunState.BurdenZone, Request, Entries, ConsideredCount);
-	}
-	if (Request.bIncludeSpecialZones)
-	{
-		for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
-		{
-			AppendRunMenuLeaseCandidatesFromZone(SpecialZone.Cards, Request, Entries, ConsideredCount);
-		}
-	}
-
-	OutResult.ConsideredCount = ConsideredCount;
+	OutResult.ConsideredCount = WorkspaceSnapshot.ConsideredCount;
 	OutResult.CandidateCount = Entries.Num();
 	if (Entries.Num() == 0)
 	{
@@ -806,7 +923,10 @@ bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeas
 		{
 			ClearRunFirstPersonCardLayerMenuLease(Request.LeaseId);
 		}
-		return RejectWith(TEXT("NoMatchingCandidates"));
+		return RejectWith(
+			WorkspaceSnapshot.RejectReason.IsNone()
+				? FName(TEXT("NoMatchingCandidates"))
+				: WorkspaceSnapshot.RejectReason);
 	}
 
 	const bool bLeaseSet =
@@ -817,12 +937,13 @@ bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeas
 		bActiveMenuLeaseBackedByProvider = true;
 		ActiveMenuLeaseProviderRequest = Request;
 		StoreProviderLeaseRefreshKey();
+		StoreRunCardWorkspaceMetadata(WorkspaceSnapshot);
 	}
 	OutResult.bLeaseSet = bLeaseSet;
 	OutResult.RejectReason = bLeaseSet
 		? NAME_None
 		: LastRefreshResult;
-	OutResult.DebugSummary = BuildRunMenuCardLeaseProviderDebugSummary(Request, OutResult);
+	OutResult.DebugSummary = WorkspaceSnapshot.DebugSummary;
 	StoreLastMenuLeaseProviderResult(OutResult);
 	if (!bLeaseSet)
 	{
@@ -850,6 +971,7 @@ bool UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerMenuLe
 	ActiveMenuLeaseEntries.Reset();
 	bActiveMenuLeaseBackedByProvider = false;
 	ActiveMenuLeaseProviderRequest = FWacomRunMenuCardLeaseRequest();
+	ClearRunCardWorkspaceMetadata();
 	ResetDefaultSourceRefreshKey();
 	ResetProviderLeaseRefreshKey();
 
@@ -863,7 +985,9 @@ bool UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerMenuLe
 		bLastHadAnchor = false;
 	}
 
-	RefreshRunFirstPersonCardLayer();
+	ReconcileRunFirstPersonCardLayer(
+		/*bAllowDefaultSourceRevisionSkip*/ false,
+		/*bAllowProviderLeaseRevisionSkip*/ false);
 	return true;
 }
 
@@ -892,6 +1016,10 @@ UWacomRunFirstPersonCardSourceComponent::GetRunFirstPersonCardSourceDebugView() 
 	View.LastMenuLeaseProviderCandidateCount = LastMenuLeaseProviderCandidateCount;
 	View.LastMenuLeaseProviderConsideredCount = LastMenuLeaseProviderConsideredCount;
 	View.LastMenuLeaseProviderDebugSummary = LastMenuLeaseProviderDebugSummary;
+	View.bHasPendingDefaultSourceReconcile = bHasPendingDefaultSourceReconcile;
+	View.PendingDefaultSourceBlockReason = PendingDefaultSourceBlockReason;
+	View.bHasPendingMenuLeaseReconcile = bHasPendingMenuLeaseReconcile;
+	View.PendingMenuLeaseBlockReason = PendingMenuLeaseBlockReason;
 	return View;
 }
 
@@ -917,6 +1045,12 @@ FString UWacomRunFirstPersonCardSourceComponent::GetRunFirstPersonCardSourceDebu
 		View.EntryCount,
 		*View.LastRefreshResult.ToString())
 		+ FString::Printf(
+			TEXT(" Pending{Default=%s DefaultReason=%s MenuLease=%s MenuLeaseReason=%s}"),
+			View.bHasPendingDefaultSourceReconcile ? TEXT("true") : TEXT("false"),
+			*View.PendingDefaultSourceBlockReason.ToString(),
+			View.bHasPendingMenuLeaseReconcile ? TEXT("true") : TEXT("false"),
+			*View.PendingMenuLeaseBlockReason.ToString())
+		+ FString::Printf(
 			TEXT(" Provider{LeaseId=%s SourceId=%s Result=%s Candidates=%d Considered=%d Debug=%s}"),
 			*View.LastMenuLeaseProviderLeaseId.ToString(),
 			*View.LastMenuLeaseProviderSourceId.ToString(),
@@ -933,6 +1067,66 @@ void UWacomRunFirstPersonCardSourceComponent::LogRunFirstPersonCardSourceDebugSu
 		*GetRunFirstPersonCardSourceDebugSummary());
 }
 
+bool UWacomRunFirstPersonCardSourceComponent::IsDefaultRunFirstPersonCardLayerSource(
+	FName SourceId) const
+{
+	return !SourceId.IsNone()
+		&& SourceId == RunFirstPersonCardLayerSourceId;
+}
+
+bool UWacomRunFirstPersonCardSourceComponent::IsActiveMenuLeaseSource(
+	FName SourceId) const
+{
+	return !SourceId.IsNone()
+		&& !ActiveMenuLeaseSourceId.IsNone()
+		&& SourceId == ActiveMenuLeaseSourceId;
+}
+
+bool UWacomRunFirstPersonCardSourceComponent::IsSuppressedRunFirstPersonCardLayerSource(
+	FName SourceId) const
+{
+	return !SourceId.IsNone()
+		&& SourceId == RunFirstPersonCardLayerSuppressedSourceId;
+}
+
+bool UWacomRunFirstPersonCardSourceComponent::CanHandleRunFirstPersonCardLayerSource(
+	FName SourceId) const
+{
+	if (SourceId.IsNone()
+		|| SourceId == WacomFirstPersonCardLayerSourceIds::BattleHand()
+		|| IsSuppressedRunFirstPersonCardLayerSource(SourceId))
+	{
+		return false;
+	}
+
+	if (IsDefaultRunFirstPersonCardLayerSource(SourceId))
+	{
+		return !HasActiveMenuLease();
+	}
+
+	return HasActiveMenuLease()
+		&& IsActiveMenuLeaseSource(SourceId);
+}
+
+bool UWacomRunFirstPersonCardSourceComponent::FindCurrentRunFirstPersonCardWorkspaceEntry(
+	FGuid CardInstanceId,
+	FRunCardWorkspaceEntry& OutEntry) const
+{
+	if (!CardInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	if (const FRunCardWorkspaceEntry* Found =
+		CurrentWorkspaceEntriesByCardId.Find(CardInstanceId))
+	{
+		OutEntry = *Found;
+		return true;
+	}
+
+	return false;
+}
+
 bool UWacomRunFirstPersonCardSourceComponent::BuildRunFirstPersonCardEntries(
 	const URunSession& Run,
 	TArray<FWacomFirstPersonCardLayerEntry>& OutEntries) const
@@ -941,34 +1135,15 @@ bool UWacomRunFirstPersonCardSourceComponent::BuildRunFirstPersonCardEntries(
 	LastBattleDeckPhysicalCount = 0;
 	LastBattleDeckProjectedCount = 0;
 
-	const FRunBackpackStorageSnapshot Snapshot = Run.BuildBackpackStorageSnapshot();
-	LastBattleDeckPhysicalCount = Snapshot.BattleDeckPhysicalCards.Num();
-	LastBattleDeckProjectedCount = bIncludeProjectedRunBattleDeckCards
-		? Snapshot.BattleDeckProjectedCards.Num()
-		: 0;
-	OutEntries.Reserve(LastBattleDeckPhysicalCount + LastBattleDeckProjectedCount);
-
-	auto AppendCardView = [&OutEntries](const FRunStorageCardView& StorageView)
-	{
-		const FCardInstance& Instance = StorageView.Instance;
-		if (!Instance.InstanceId.IsValid() || !Instance.Definition)
-		{
-			return;
-		}
-		OutEntries.Add(BuildRunFirstPersonCardLayerEntryFromInstance(Instance));
-	};
-
-	for (const FRunStorageCardView& StorageView : Snapshot.BattleDeckPhysicalCards)
-	{
-		AppendCardView(StorageView);
-	}
-	if (bIncludeProjectedRunBattleDeckCards)
-	{
-		for (const FRunStorageCardView& StorageView : Snapshot.BattleDeckProjectedCards)
-		{
-			AppendCardView(StorageView);
-		}
-	}
+	const FRunCardWorkspaceRequest WorkspaceRequest =
+		BuildDefaultRunCardWorkspaceRequest(
+			RunFirstPersonCardLayerSourceId,
+			bIncludeProjectedRunBattleDeckCards);
+	const FRunCardWorkspaceSnapshot WorkspaceSnapshot =
+		Run.BuildRunCardWorkspaceSnapshot(WorkspaceRequest);
+	LastBattleDeckPhysicalCount = WorkspaceSnapshot.PhysicalBattleDeckCount;
+	LastBattleDeckProjectedCount = WorkspaceSnapshot.ProjectedBattleDeckCount;
+	BuildLayerEntriesFromRunCardWorkspaceSnapshot(WorkspaceSnapshot, OutEntries);
 
 	LastEntryCount = OutEntries.Num();
 	return OutEntries.Num() > 0;
@@ -1014,7 +1189,24 @@ void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerEntries(
 		bEnableMenuLeaseDragProbe || bEnableRunWorldCardDropDrag;
 	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableRuntimeInteraction);
 	Anchor.SetRuntimeCardLayerEntries(SourceId, Entries);
-	Anchor.SetBattleHandInteractionEnabled(bEnableRuntimeInteraction);
+	Anchor.SetFirstPersonCardLayerInteractionEnabled(bEnableRuntimeInteraction);
+}
+
+void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerPresentationFrame(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+{
+	const bool bEnableMenuLeaseDragProbe =
+		!ActiveMenuLeaseId.IsNone()
+		&& Frame.SourceId == ActiveMenuLeaseSourceId;
+	const bool bEnableRunWorldCardDropDrag =
+		ActiveMenuLeaseId.IsNone()
+		&& Frame.SourceId == RunFirstPersonCardLayerSourceId;
+	const bool bEnableRuntimeInteraction =
+		bEnableMenuLeaseDragProbe || bEnableRunWorldCardDropDrag;
+	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableRuntimeInteraction);
+	Anchor.SetRuntimeCardLayerPresentationFrame(Frame);
+	Anchor.SetFirstPersonCardLayerInteractionEnabled(bEnableRuntimeInteraction);
 }
 
 void UWacomRunFirstPersonCardSourceComponent::ClearRuntimeCardLayerEntries(
@@ -1023,7 +1215,7 @@ void UWacomRunFirstPersonCardSourceComponent::ClearRuntimeCardLayerEntries(
 {
 	if (Anchor.GetRuntimeCardLayerSourceId() == SourceId)
 	{
-		Anchor.SetBattleHandInteractionEnabled(false);
+		Anchor.SetFirstPersonCardLayerInteractionEnabled(false);
 		Anchor.CancelFirstPersonCardDragGesture(true);
 		RestoreMenuLeaseInteractionOverrides();
 	}
@@ -1076,10 +1268,40 @@ void UWacomRunFirstPersonCardSourceComponent::HandleRunStateChanged()
 {
 	if (bRuntimeSourceActive)
 	{
-		RefreshRunFirstPersonCardLayerInternal(
+		ReconcileRunFirstPersonCardLayer(
 			/*bAllowDefaultSourceRevisionSkip*/ true,
 			/*bAllowProviderLeaseRevisionSkip*/ true);
 	}
+}
+
+void UWacomRunFirstPersonCardSourceComponent::MarkDefaultSourceReconcileBlocked(FName Reason)
+{
+	bHasPendingDefaultSourceReconcile = true;
+	PendingDefaultSourceBlockReason = Reason;
+}
+
+void UWacomRunFirstPersonCardSourceComponent::ClearDefaultSourceReconcileBlock()
+{
+	bHasPendingDefaultSourceReconcile = false;
+	PendingDefaultSourceBlockReason = NAME_None;
+}
+
+void UWacomRunFirstPersonCardSourceComponent::MarkMenuLeaseReconcileBlocked(FName Reason)
+{
+	bHasPendingMenuLeaseReconcile = true;
+	PendingMenuLeaseBlockReason = Reason;
+}
+
+void UWacomRunFirstPersonCardSourceComponent::ClearMenuLeaseReconcileBlock()
+{
+	bHasPendingMenuLeaseReconcile = false;
+	PendingMenuLeaseBlockReason = NAME_None;
+}
+
+void UWacomRunFirstPersonCardSourceComponent::ClearReconcileBlocks()
+{
+	ClearDefaultSourceReconcileBlock();
+	ClearMenuLeaseReconcileBlock();
 }
 
 void UWacomRunFirstPersonCardSourceComponent::LogDebugState(const TCHAR* Prefix) const

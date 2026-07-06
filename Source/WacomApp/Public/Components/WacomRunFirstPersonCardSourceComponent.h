@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
+#include "RunStateTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "WacomRunFirstPersonCardSourceComponent.generated.h"
 
@@ -148,6 +149,18 @@ struct WACOMAPP_API FWacomRunFirstPersonCardSourceDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前活动菜单租约是否由 provider request 驱动。"))
 	bool bActiveMenuLeaseBackedByProvider = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "默认 Run 手牌源是否还有一次待完成的状态对齐。常见原因是 RunSession 或第一人称 Anchor 尚未就绪。"))
+	bool bHasPendingDefaultSourceReconcile = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "默认 Run 手牌源最近一次待完成状态对齐的阻塞原因。"))
+	FName PendingDefaultSourceBlockReason = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "菜单租约源是否还有一次待完成的状态对齐。常见原因是 RunSession 或第一人称 Anchor 尚未就绪。"))
+	bool bHasPendingMenuLeaseReconcile = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "菜单租约源最近一次待完成状态对齐的阻塞原因。"))
+	FName PendingMenuLeaseBlockReason = NAME_None;
 };
 
 #if WITH_AUTOMATION_TESTS
@@ -187,8 +200,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards", meta = (ToolTip = "是否把 B 类特殊区中已勾选入战的投影卡也显示在探索期第一人称备战手牌中。"))
 	bool bIncludeProjectedRunBattleDeckCards = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards", meta = (ToolTip = "写入 Anchor 的 runtime source id。用于和 BattleHUD 的战斗手牌 source 区分。"))
-	FName RunFirstPersonCardLayerSourceId = TEXT("RunFirstPersonBattleDeck");
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards", meta = (ToolTip = "写入 Anchor 的 runtime source id。用于和 BattleHUD 的战斗手牌 source 区分；默认使用 WacomFirstPersonCardLayerSourceIds::RunDefault()。"))
+	FName RunFirstPersonCardLayerSourceId = NAME_None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "开启后，探索期第一人称卡牌 source 刷新和清理会输出简短日志。默认关闭。"))
 	bool bLogRunFirstPersonCardLayer = false;
@@ -204,6 +217,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	void ClearRunFirstPersonCardLayer();
+
+	void ResetRunFirstPersonCardLayerMenuContext();
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	void SetRunFirstPersonCardLayerSuppressedByGameMenu(bool bSuppressed);
@@ -233,6 +248,14 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards")
 	FName GetActiveMenuLeaseSourceId() const { return ActiveMenuLeaseSourceId; }
+
+	bool IsDefaultRunFirstPersonCardLayerSource(FName SourceId) const;
+	bool IsActiveMenuLeaseSource(FName SourceId) const;
+	bool IsSuppressedRunFirstPersonCardLayerSource(FName SourceId) const;
+	bool CanHandleRunFirstPersonCardLayerSource(FName SourceId) const;
+	bool FindCurrentRunFirstPersonCardWorkspaceEntry(
+		FGuid CardInstanceId,
+		FRunCardWorkspaceEntry& OutEntry) const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "获取探索期第一人称卡牌 source 的只读调试快照；用于 PIE / 蓝图排查，不提交 Run 规则。"))
 	FWacomRunFirstPersonCardSourceDebugView GetRunFirstPersonCardSourceDebugView() const;
@@ -266,6 +289,10 @@ protected:
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
+
+	virtual void WriteRuntimeCardLayerPresentationFrame(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
 
 	virtual void ClearRuntimeCardLayerEntries(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
@@ -309,6 +336,9 @@ private:
 	bool RefreshRunFirstPersonCardLayerInternal(
 		bool bAllowDefaultSourceRevisionSkip,
 		bool bAllowProviderLeaseRevisionSkip);
+	bool ReconcileRunFirstPersonCardLayer(
+		bool bAllowDefaultSourceRevisionSkip,
+		bool bAllowProviderLeaseRevisionSkip);
 	bool RefreshActiveMenuLease(bool bAllowRevisionSkip);
 	bool RebuildActiveMenuLeaseFromProviderRequest();
 	bool RefreshDefaultBattleDeckSource(bool bAllowRevisionSkip);
@@ -334,6 +364,19 @@ private:
 		const FWacomRunMenuCardLeaseRequest& Left,
 		const FWacomRunMenuCardLeaseRequest& Right) const;
 	void ResetBattleDeckRefreshDebugCounts();
+	void StoreRunCardWorkspaceMetadata(
+		const FRunCardWorkspaceSnapshot& Snapshot);
+	void ClearRunCardWorkspaceMetadata();
+	FWacomFirstPersonCardLayerPresentationFrame BuildDefaultSourcePresentationFrame(
+		const UWacomFirstPersonCardAnchorComponent& Anchor,
+		TArray<FWacomFirstPersonCardLayerEntry>&& Entries) const;
+	FWacomFirstPersonCardLayerPresentationFrame BuildSuppressedPresentationFrame() const;
+	TSet<FGuid> DetermineRunHandEnteredCardIds(
+		const UWacomFirstPersonCardAnchorComponent& Anchor,
+		const TArray<FWacomFirstPersonCardLayerEntry>& Entries) const;
+	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildRunHandEnteredTransitionHints(
+		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
+		const TSet<FGuid>& CardIdsToAnimate) const;
 	bool WriteSuppressedRuntimeCardLayerWithResult(FName Result);
 	bool ClearVisibleRuntimeCardLayerWithResult(FName Result);
 	void ClearRunFirstPersonCardLayerWithResult(FName Result, bool bClearMenuContext);
@@ -346,6 +389,11 @@ private:
 	void HandleRunStateChanged();
 	void LogDebugState(const TCHAR* Prefix) const;
 	void StoreLastMenuLeaseProviderResult(const FWacomRunMenuCardLeaseResult& Result);
+	void MarkDefaultSourceReconcileBlocked(FName Reason);
+	void ClearDefaultSourceReconcileBlock();
+	void MarkMenuLeaseReconcileBlocked(FName Reason);
+	void ClearMenuLeaseReconcileBlock();
+	void ClearReconcileBlocks();
 
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> BoundRunSession = nullptr;
@@ -359,6 +407,10 @@ private:
 	FName ActiveMenuLeaseId = NAME_None;
 	FName ActiveMenuLeaseSourceId = NAME_None;
 	FWacomRunMenuCardLeaseRequest ActiveMenuLeaseProviderRequest;
+	TMap<FGuid, FRunCardWorkspaceEntry> CurrentWorkspaceEntriesByCardId;
+	FName CurrentWorkspaceId = NAME_None;
+	ERunCardWorkspaceKind CurrentWorkspaceKind =
+		ERunCardWorkspaceKind::DefaultExploration;
 	FName LastWrittenRuntimeSourceId = NAME_None;
 	FDefaultSourceRefreshKey LastDefaultSourceRefreshKey;
 	FProviderLeaseRefreshKey LastProviderLeaseRefreshKey;
@@ -373,6 +425,10 @@ private:
 	int32 LastMenuLeaseProviderCandidateCount = 0;
 	int32 LastMenuLeaseProviderConsideredCount = 0;
 	FString LastMenuLeaseProviderDebugSummary;
+	bool bHasPendingDefaultSourceReconcile = false;
+	FName PendingDefaultSourceBlockReason = NAME_None;
+	bool bHasPendingMenuLeaseReconcile = false;
+	FName PendingMenuLeaseBlockReason = NAME_None;
 #if WITH_AUTOMATION_TESTS
 	FWacomRunFirstPersonCardSourceRefreshCountersForTest
 		DefaultSourceRefreshCountersForTest;

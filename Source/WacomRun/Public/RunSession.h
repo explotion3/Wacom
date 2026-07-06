@@ -286,6 +286,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck|Snapshot")
 	FRunBackpackStorageSnapshot BuildBackpackStorageSnapshot() const;
 
+	/**
+	 * 构建 Run 第一人称卡牌 workspace 快照。
+	 *
+	 * Workspace 是展示/操作视图，不改变 Backpack / BattleDeck / BurdenZone /
+	 * SpecialZones 的物理归属。App 层用它生成 first-person card layer entries。
+	 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck|Snapshot")
+	FRunCardWorkspaceSnapshot BuildRunCardWorkspaceSnapshot(
+		const FRunCardWorkspaceRequest& Request) const;
+
 	/** 卡是否是容器卡（Capacity > 0）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static bool IsContainerCard(const UCardDefinition* Card);

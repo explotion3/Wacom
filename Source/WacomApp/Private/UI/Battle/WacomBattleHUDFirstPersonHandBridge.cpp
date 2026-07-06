@@ -17,10 +17,12 @@
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
+#include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 
 namespace
 {
-	const FName FirstPersonBattleHandLayerSourceId(TEXT("BattleHand"));
+	const FName FirstPersonBattleHandLayerSourceId =
+		WacomFirstPersonCardLayerSourceIds::BattleHand();
 	constexpr float PendingHandAnchorEnterFrameTimeoutSeconds = 4.0f;
 
 	bool ContainsHandCardIdForFirstPersonHandBridge(
@@ -192,7 +194,7 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayerInternal(
 	Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(
 		FirstPersonBattleHandLayerSourceId,
 		true);
-	Anchor->SetBattleHandInteractionEnabled(ShouldEnableFirstPersonBattleHandInteraction());
+	Anchor->SetFirstPersonCardLayerInteractionEnabled(ShouldEnableFirstPersonBattleHandInteraction());
 	BindLayerInteractions(Anchor);
 	LastAnchor = Anchor;
 	if (TransitionHints)
@@ -228,7 +230,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer(bool bClearPendingTransiti
 			Anchor->GetRuntimeCardLayerSourceId() == FirstPersonBattleHandLayerSourceId;
 		if (bOwnsBattleHandLayer)
 		{
-			Anchor->SetBattleHandInteractionEnabled(false);
+			Anchor->SetFirstPersonCardLayerInteractionEnabled(false);
 			Anchor->CancelFirstPersonCardDragGesture(true);
 			Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(
 				FirstPersonBattleHandLayerSourceId,
@@ -285,7 +287,7 @@ void FWacomBattleHUDFirstPersonHandBridge::SuppressLayerForEntry()
 		return;
 	}
 
-	Anchor->SetBattleHandInteractionEnabled(false);
+	Anchor->SetFirstPersonCardLayerInteractionEnabled(false);
 	Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(
 		FirstPersonBattleHandLayerSourceId,
 		false);
@@ -297,7 +299,7 @@ void FWacomBattleHUDFirstPersonHandBridge::SuppressLayerForEntry()
 	Anchor->SetRuntimeCardLayerTransitionHints(FirstPersonBattleHandLayerSourceId, EmptyHints);
 	Anchor->SetRuntimeCardLayerFeedbackHints(FirstPersonBattleHandLayerSourceId, EmptyFeedbackHints);
 	Anchor->SetRuntimeCardLayerEntries(FirstPersonBattleHandLayerSourceId, EmptyEntries);
-	Anchor->SetBattleHandInteractionEnabled(false);
+	Anchor->SetFirstPersonCardLayerInteractionEnabled(false);
 	LastAnchor = Anchor;
 }
 
@@ -705,25 +707,55 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragCancelled(
 void FWacomBattleHUDFirstPersonHandBridge::HandlePointerMoved(
 	const FWacomFirstPersonCardPointerView& PointerView)
 {
-	if (bFirstPersonCardDragActiveForBattleSceneHover)
-	{
-		return;
-	}
-
 	ApplyPointerCameraLookOverride(PointerView);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::HandlePointerLeft()
 {
-	if (bFirstPersonCardDragActiveForBattleSceneHover)
-	{
-		return;
-	}
-
 	ClearPointerCameraLookOverride();
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::ApplyDragCameraLookOverride(
+	const FWacomFirstPersonCardDragView& DragView)
+{
+	CameraLookBridge.ApplyDragView(
+		DragView,
+		[this](const FWacomFirstPersonCardDragView& AppliedDragView)
+		{
+			ApplyDragCameraLookOverrideToBattleCamera(AppliedDragView);
+		});
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ClearDragCameraLookOverride()
+{
+	CameraLookBridge.ClearDragView(
+		[this]()
+		{
+			ClearCameraLookOverrideOnBattleCamera();
+		});
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ApplyPointerCameraLookOverride(
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	CameraLookBridge.HandlePointerMoved(
+		PointerView,
+		[this](const FWacomFirstPersonCardPointerView& AppliedPointerView)
+		{
+			ApplyPointerCameraLookOverrideToBattleCamera(AppliedPointerView);
+		});
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ClearPointerCameraLookOverride()
+{
+	CameraLookBridge.HandlePointerLeft(
+		[this]()
+		{
+			ClearCameraLookOverrideOnBattleCamera();
+		});
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::ApplyDragCameraLookOverrideToBattleCamera(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	if (!DragView.bHasPointerViewportPosition)
@@ -759,12 +791,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyDragCameraLookOverride(
 		Anchor->CardDragCameraLookInterpSpeedOverride);
 }
 
-void FWacomBattleHUDFirstPersonHandBridge::ClearDragCameraLookOverride()
-{
-	ClearPointerCameraLookOverride();
-}
-
-void FWacomBattleHUDFirstPersonHandBridge::ApplyPointerCameraLookOverride(
+void FWacomBattleHUDFirstPersonHandBridge::ApplyPointerCameraLookOverrideToBattleCamera(
 	const FWacomFirstPersonCardPointerView& PointerView)
 {
 	if (!PointerView.bHasPointerViewportPosition)
@@ -800,7 +827,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPointerCameraLookOverride(
 		Anchor->CardPointerCameraLookInterpSpeedOverride);
 }
 
-void FWacomBattleHUDFirstPersonHandBridge::ClearPointerCameraLookOverride()
+void FWacomBattleHUDFirstPersonHandBridge::ClearCameraLookOverrideOnBattleCamera()
 {
 	const APlayerController* PC = HUD.GetOwningPlayer();
 	AWacomPlayerCharacter* Character = PC ? Cast<AWacomPlayerCharacter>(PC->GetPawn()) : nullptr;
@@ -1078,7 +1105,7 @@ void FWacomBattleHUDFirstPersonHandBridge::RecomposeFirstPersonHandLayer(const F
 		return;
 	}
 
-	FWacomBattleHandPresentationFrame Frame =
+	FWacomFirstPersonCardLayerPresentationFrame Frame =
 		PresentationController.BuildFrame(
 			Snapshot,
 			HUD.IsFirstPersonBattleHandSuppressedForEntry());
@@ -1088,21 +1115,18 @@ void FWacomBattleHUDFirstPersonHandBridge::RecomposeFirstPersonHandLayer(const F
 
 void FWacomBattleHUDFirstPersonHandBridge::ApplyPresentationFrame(
 	UWacomFirstPersonCardAnchorComponent& Anchor,
-	FWacomBattleHandPresentationFrame&& Frame)
+	FWacomFirstPersonCardLayerPresentationFrame&& Frame)
 {
+	Frame.SourceId = FirstPersonBattleHandLayerSourceId;
 	ApplyPendingTargetingFlag(Frame.Entries);
-	if (Frame.bHasTransitionFrame)
+	if (Frame.ShouldApplyAsPresentationFrame())
 	{
-		Anchor.SetRuntimeCardLayerPresentationFrame(
-			FirstPersonBattleHandLayerSourceId,
-			Frame.Entries,
-			Frame.TransitionHints,
-			Frame.FeedbackHints);
+		Anchor.SetRuntimeCardLayerPresentationFrame(Frame);
 	}
 	else
 	{
 		Anchor.SetRuntimeCardLayerEntries(
-			FirstPersonBattleHandLayerSourceId,
+			Frame.SourceId,
 			Frame.Entries);
 	}
 }

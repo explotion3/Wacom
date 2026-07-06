@@ -194,6 +194,27 @@ private:
 		ClearRunMenuDropTargetProbe();
 	}
 
+	void HandleRunFirstPersonCardLayerCardHoveredForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		HandleRunFirstPersonCardLayerCardHovered(CardInstanceId, SlotView);
+	}
+
+	void HandleRunFirstPersonCardLayerCardUnhoveredForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		HandleRunFirstPersonCardLayerCardUnhovered(CardInstanceId, SlotView);
+	}
+
+	void HandleRunFirstPersonCardLayerHoveredCardLayoutUpdatedForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(CardInstanceId, SlotView);
+	}
+
 	void HandleRunFirstPersonCardLayerDragStartedForTest(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView)
@@ -297,6 +318,11 @@ private:
 		Entry.CardInstanceId = FGuid::NewGuid();
 		Entries.Add(Entry);
 		SetRunFirstPersonCardLayerMenuLease(LeaseId, TEXT("Test.Source"), Entries);
+	}
+
+	void PrepareExplorationRunFirstPersonCardLayerForTest()
+	{
+		PrepareExplorationRunFirstPersonCardLayer();
 	}
 
 	void SetAppToastSubsystemForTest(UWacomAppToastSubsystem* InToastSubsystem)

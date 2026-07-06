@@ -54,6 +54,26 @@ struct FWacomPlayerControllerRunInteractionTestAccess
 		const FVector2D& WidgetPosition,
 		FWacomInteractionTargetHandle& OutHandle);
 	static void ClearRunMenuDropTargetProbe(AWacomPlayerControllerProbe* PC);
+	static void HandleRunFirstPersonCardLayerCardHovered(
+		AWacomPlayerControllerProbe* PC,
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	static void HandleRunFirstPersonCardLayerCardUnhovered(
+		AWacomPlayerControllerProbe* PC,
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	static void HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(
+		AWacomPlayerControllerProbe* PC,
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	static bool IsRunFirstPersonCardDetailPanelVisible(const AWacomPlayerControllerProbe* PC);
+	static FText RunFirstPersonCardDetailPanelNameText(const AWacomPlayerControllerProbe* PC);
+	static FVector2D RunFirstPersonCardDetailPanelPosition(const AWacomPlayerControllerProbe* PC);
+	static bool IsRunFirstPersonCardDetailPanelPrewarmed(const AWacomPlayerControllerProbe* PC);
+	static bool IsRunFirstPersonCardDetailMotionPending(const AWacomPlayerControllerProbe* PC);
+	static float RunFirstPersonCardDetailPanelOpacity(const AWacomPlayerControllerProbe* PC);
+	static int32 RunFirstPersonCardDetailDataApplyCount(const AWacomPlayerControllerProbe* PC);
+	static void TickRunFirstPersonCardDetail(AWacomPlayerControllerProbe* PC, float DeltaTime);
 	static void HandleRunFirstPersonCardLayerDragStarted(
 		AWacomPlayerControllerProbe* PC,
 		const FGuid& CardInstanceId,
@@ -102,6 +122,7 @@ struct FWacomPlayerControllerRunInteractionTestAccess
 	static FString RunWorldCardDropDebugSummary(const AWacomPlayerControllerProbe* PC);
 
 	static void SetRunSession(AWacomPlayerControllerProbe* PC, URunSession* RunSession);
+	static void PrepareExplorationRunFirstPersonCardLayer(AWacomPlayerControllerProbe* PC);
 	static void SetRunFirstPersonMenuLease(
 		AWacomPlayerControllerProbe* PC,
 		FName LeaseId = TEXT("Test.MenuLease"));

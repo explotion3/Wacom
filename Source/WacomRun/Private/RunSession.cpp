@@ -86,6 +86,152 @@ namespace
 				});
 	}
 
+	bool ContainsGuid(const TArray<FGuid>& Guids, FGuid Guid)
+	{
+		return Guids.ContainsByPredicate(
+			[Guid](const FGuid& Candidate)
+			{
+				return Candidate == Guid;
+			});
+	}
+
+	const TCHAR* ToRunCardWorkspaceKindDebugString(ERunCardWorkspaceKind Kind)
+	{
+		switch (Kind)
+		{
+		case ERunCardWorkspaceKind::DefaultExploration:
+			return TEXT("DefaultExploration");
+		case ERunCardWorkspaceKind::OwnedCardsFilter:
+			return TEXT("OwnedCardsFilter");
+		default:
+			return TEXT("Unknown");
+		}
+	}
+
+	bool HasRunCardWorkspaceFilter(const FRunCardWorkspaceRequest& Request)
+	{
+		return Request.AllowedCardDefinitions.Num() > 0
+			|| Request.AllowedCardIds.Num() > 0
+			|| Request.ExplicitCardInstanceIds.Num() > 0
+			|| !Request.RequiredKeywords.IsEmpty()
+			|| !Request.BlockedKeywords.IsEmpty();
+	}
+
+	bool DoesInstanceMatchRunCardWorkspaceRequest(
+		const FCardInstance& Instance,
+		const FRunCardWorkspaceRequest& Request)
+	{
+		const UCardDefinition* Definition = Instance.Definition;
+		if (!Instance.InstanceId.IsValid() || !Definition)
+		{
+			return false;
+		}
+
+		if (Request.ExplicitCardInstanceIds.Num() > 0
+			&& !ContainsGuid(Request.ExplicitCardInstanceIds, Instance.InstanceId))
+		{
+			return false;
+		}
+
+		const bool bHasIdentityFilter =
+			Request.AllowedCardDefinitions.Num() > 0
+			|| Request.AllowedCardIds.Num() > 0;
+		if (bHasIdentityFilter)
+		{
+			const bool bMatchesDefinition =
+				ContainsCardDefinition(Request.AllowedCardDefinitions, Definition);
+			const bool bMatchesCardId =
+				Request.AllowedCardIds.Contains(Definition->CardId);
+			if (!bMatchesDefinition && !bMatchesCardId)
+			{
+				return false;
+			}
+		}
+
+		if (!Request.RequiredKeywords.IsEmpty()
+			&& !Definition->Keywords.HasAllExact(Request.RequiredKeywords))
+		{
+			return false;
+		}
+
+		if (!Request.BlockedKeywords.IsEmpty()
+			&& Definition->Keywords.HasAnyExact(Request.BlockedKeywords))
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	FRunCardWorkspaceEntry MakeRunCardWorkspaceEntry(
+		const FCardInstance& Instance,
+		EZoneKind PhysicalZone,
+		FGuid ZoneOwnerInstanceId,
+		bool bIsProjectedBattleDeckCard)
+	{
+		FRunCardWorkspaceEntry Entry;
+		Entry.Instance = Instance;
+		Entry.PhysicalZone = PhysicalZone;
+		Entry.ZoneOwnerInstanceId = ZoneOwnerInstanceId;
+		Entry.bIsProjectedBattleDeckCard = bIsProjectedBattleDeckCard;
+		return Entry;
+	}
+
+	void AppendRunCardWorkspaceCandidatesFromZone(
+		const TArray<FCardInstance>& ZoneCards,
+		EZoneKind PhysicalZone,
+		FGuid ZoneOwnerInstanceId,
+		const FRunCardWorkspaceRequest& Request,
+		FRunCardWorkspaceSnapshot& InOutSnapshot)
+	{
+		for (const FCardInstance& Instance : ZoneCards)
+		{
+			if (!Instance.InstanceId.IsValid() || !Instance.Definition)
+			{
+				continue;
+			}
+
+			++InOutSnapshot.ConsideredCount;
+			if (DoesInstanceMatchRunCardWorkspaceRequest(Instance, Request))
+			{
+				InOutSnapshot.Entries.Add(
+					MakeRunCardWorkspaceEntry(
+						Instance,
+						PhysicalZone,
+						ZoneOwnerInstanceId,
+						/*bIsProjectedBattleDeckCard*/ false));
+			}
+		}
+	}
+
+	FString BuildRunCardWorkspaceDebugSummary(
+		const FRunCardWorkspaceRequest& Request,
+		const FRunCardWorkspaceSnapshot& Snapshot)
+	{
+		return FString::Printf(
+			TEXT("RunCardWorkspace{Id=%s Kind=%s Succeeded=%s Reject=%s Entries=%d Candidates=%d Considered=%d PhysicalBattleDeck=%d ProjectedBattleDeck=%d Filters{Definitions=%d CardIds=%d Instances=%d Required=%s Blocked=%s AllowAllWhenEmpty=%s Include{Backpack=%s BattleDeck=%s Burden=%s Special=%s Projected=%s}}}"),
+			*Snapshot.WorkspaceId.ToString(),
+			ToRunCardWorkspaceKindDebugString(Snapshot.Kind),
+			Snapshot.bSucceeded ? TEXT("true") : TEXT("false"),
+			*Snapshot.RejectReason.ToString(),
+			Snapshot.Entries.Num(),
+			Snapshot.Entries.Num(),
+			Snapshot.ConsideredCount,
+			Snapshot.PhysicalBattleDeckCount,
+			Snapshot.ProjectedBattleDeckCount,
+			Request.AllowedCardDefinitions.Num(),
+			Request.AllowedCardIds.Num(),
+			Request.ExplicitCardInstanceIds.Num(),
+			*Request.RequiredKeywords.ToStringSimple(),
+			*Request.BlockedKeywords.ToStringSimple(),
+			Request.bAllowAllOwnedCardsWhenNoFilter ? TEXT("true") : TEXT("false"),
+			Request.bIncludeBackpack ? TEXT("true") : TEXT("false"),
+			Request.bIncludeBattleDeck ? TEXT("true") : TEXT("false"),
+			Request.bIncludeBurdenZone ? TEXT("true") : TEXT("false"),
+			Request.bIncludeSpecialZones ? TEXT("true") : TEXT("false"),
+			Request.bIncludeProjectedBattleDeckCards ? TEXT("true") : TEXT("false"));
+	}
+
 	bool HasRunWorldCardInteractionFilter(const FRunWorldCardInteractionRequest& Request)
 	{
 		return Request.AllowedCardDefinitions.Num() > 0
@@ -994,6 +1140,129 @@ FRunBackpackStorageSnapshot URunSession::BuildBackpackStorageSnapshot() const
 	}
 
 	return Snapshot;
+}
+
+FRunCardWorkspaceSnapshot URunSession::BuildRunCardWorkspaceSnapshot(
+	const FRunCardWorkspaceRequest& Request) const
+{
+	FRunCardWorkspaceSnapshot Snapshot;
+	Snapshot.WorkspaceId = Request.WorkspaceId;
+	Snapshot.Kind = Request.Kind;
+
+	auto Finish = [&Request, &Snapshot](bool bSucceeded, FName RejectReason)
+	{
+		Snapshot.bSucceeded = bSucceeded;
+		Snapshot.RejectReason = RejectReason;
+		Snapshot.DebugSummary = BuildRunCardWorkspaceDebugSummary(Request, Snapshot);
+		return Snapshot;
+	};
+
+	if (Request.Kind == ERunCardWorkspaceKind::DefaultExploration)
+	{
+		const FRunBackpackStorageSnapshot StorageSnapshot =
+			BuildBackpackStorageSnapshot();
+		Snapshot.PhysicalBattleDeckCount =
+			StorageSnapshot.BattleDeckPhysicalCards.Num();
+		Snapshot.ProjectedBattleDeckCount =
+			Request.bIncludeProjectedBattleDeckCards
+				? StorageSnapshot.BattleDeckProjectedCards.Num()
+				: 0;
+		Snapshot.Entries.Reserve(
+			Snapshot.PhysicalBattleDeckCount
+			+ Snapshot.ProjectedBattleDeckCount);
+
+		for (const FRunStorageCardView& View :
+			StorageSnapshot.BattleDeckPhysicalCards)
+		{
+			if (!View.Instance.InstanceId.IsValid() || !View.Instance.Definition)
+			{
+				continue;
+			}
+			Snapshot.Entries.Add(
+				MakeRunCardWorkspaceEntry(
+					View.Instance,
+					View.PhysicalZone,
+					View.ZoneOwnerInstanceId,
+					/*bIsProjectedBattleDeckCard*/ false));
+		}
+
+		if (Request.bIncludeProjectedBattleDeckCards)
+		{
+			for (const FRunStorageCardView& View :
+				StorageSnapshot.BattleDeckProjectedCards)
+			{
+				if (!View.Instance.InstanceId.IsValid()
+					|| !View.Instance.Definition)
+				{
+					continue;
+				}
+				Snapshot.Entries.Add(
+					MakeRunCardWorkspaceEntry(
+						View.Instance,
+						View.PhysicalZone,
+						View.ZoneOwnerInstanceId,
+						/*bIsProjectedBattleDeckCard*/ true));
+			}
+		}
+
+		Snapshot.ConsideredCount = Snapshot.Entries.Num();
+		return Finish(/*bSucceeded*/ true, NAME_None);
+	}
+
+	if (Request.Kind != ERunCardWorkspaceKind::OwnedCardsFilter)
+	{
+		return Finish(/*bSucceeded*/ false, TEXT("UnsupportedWorkspaceKind"));
+	}
+
+	if (!HasRunCardWorkspaceFilter(Request)
+		&& !Request.bAllowAllOwnedCardsWhenNoFilter)
+	{
+		return Finish(/*bSucceeded*/ false, TEXT("EmptyFilter"));
+	}
+
+	if (Request.bIncludeBackpack)
+	{
+		AppendRunCardWorkspaceCandidatesFromZone(
+			RunState.Backpack,
+			EZoneKind::Backpack,
+			FGuid(),
+			Request,
+			Snapshot);
+	}
+	if (Request.bIncludeBattleDeck)
+	{
+		AppendRunCardWorkspaceCandidatesFromZone(
+			RunState.BattleDeck,
+			EZoneKind::BattleDeck,
+			FGuid(),
+			Request,
+			Snapshot);
+	}
+	if (Request.bIncludeBurdenZone)
+	{
+		AppendRunCardWorkspaceCandidatesFromZone(
+			RunState.BurdenZone,
+			EZoneKind::BurdenZone,
+			FGuid(),
+			Request,
+			Snapshot);
+	}
+	if (Request.bIncludeSpecialZones)
+	{
+		for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
+		{
+			AppendRunCardWorkspaceCandidatesFromZone(
+				SpecialZone.Cards,
+				EZoneKind::SpecialZone,
+				SpecialZone.OwnerInstanceId,
+				Request,
+				Snapshot);
+		}
+	}
+
+	return Finish(
+		/*bSucceeded*/ !Snapshot.Entries.IsEmpty(),
+		Snapshot.Entries.IsEmpty() ? FName(TEXT("NoMatchingCandidates")) : NAME_None);
 }
 
 int32 URunSession::SumOwnedCardCapacity(bool bTypeAOnly) const

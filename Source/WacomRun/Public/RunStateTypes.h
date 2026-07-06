@@ -354,3 +354,121 @@ struct WACOMRUN_API FRunBackpackStorageSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
 	int32 BurdenCount = 0;
 };
+
+/**
+ * Run 第一人称卡牌 workspace 的用途。
+ *
+ * Workspace 不是新的物理持有区；它只是把 RunState 四个物理区重组为一组当前可展示 /
+ * 可操作的卡牌快照。UI 可以切换 workspace，但不能把 workspace 当作卡牌归属真相。
+ */
+UENUM(BlueprintType)
+enum class ERunCardWorkspaceKind : uint8
+{
+	DefaultExploration UMETA(DisplayName = "探索默认手牌"),
+	OwnedCardsFilter   UMETA(DisplayName = "持有卡筛选"),
+};
+
+/**
+ * Run 卡牌 workspace 查询请求。
+ *
+ * DefaultExploration：读取备战区物理卡，并按需追加已启用入战的 SpecialZone 投影卡。
+ * OwnedCardsFilter：按 include flags 扫描真实物理持有区，再应用 instance / definition /
+ * CardId / keyword 过滤。
+ */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunCardWorkspaceRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	FName WorkspaceId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	ERunCardWorkspaceKind Kind = ERunCardWorkspaceKind::DefaultExploration;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	bool bIncludeProjectedBattleDeckCards = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	TArray<TObjectPtr<UCardDefinition>> AllowedCardDefinitions;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	TArray<FName> AllowedCardIds;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	TArray<FGuid> ExplicitCardInstanceIds;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	FGameplayTagContainer RequiredKeywords;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	FGameplayTagContainer BlockedKeywords;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	bool bIncludeBackpack = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	bool bIncludeBattleDeck = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	bool bIncludeBurdenZone = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	bool bIncludeSpecialZones = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Card Workspace")
+	bool bAllowAllOwnedCardsWhenNoFilter = false;
+};
+
+/** 单张卡在 Run card workspace 中的只读条目。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunCardWorkspaceEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	FCardInstance Instance;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	EZoneKind PhysicalZone = EZoneKind::Backpack;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	FGuid ZoneOwnerInstanceId;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	bool bIsProjectedBattleDeckCard = false;
+};
+
+/** Run card workspace 查询结果；失败路径不修改 RunState。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunCardWorkspaceSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	FName WorkspaceId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	ERunCardWorkspaceKind Kind = ERunCardWorkspaceKind::DefaultExploration;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	bool bSucceeded = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	FName RejectReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	TArray<FRunCardWorkspaceEntry> Entries;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	int32 ConsideredCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	int32 PhysicalBattleDeckCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	int32 ProjectedBattleDeckCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Card Workspace")
+	FString DebugSummary;
+};

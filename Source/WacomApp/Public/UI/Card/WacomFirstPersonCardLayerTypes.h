@@ -39,6 +39,7 @@ enum class EWacomFirstPersonCardSlotTransitionKind : uint8
 {
 	Default UMETA(DisplayName = "Default", ToolTip = "默认槽位转场；使用通用入场或离场偏移。"),
 	Drawn UMETA(DisplayName = "Drawn", ToolTip = "抽牌进入手牌；默认从手牌下方进入。"),
+	RunHandEntered UMETA(DisplayName = "Run Hand Entered", ToolTip = "Run 探索期默认手牌进入第一人称手牌层；UI 表现语义，不属于战斗抽牌事件。"),
 	Gained UMETA(DisplayName = "Gained", ToolTip = "战斗中获得卡牌进入手牌；默认从战斗空间方向进入。"),
 	HandAnchorEntered UMETA(DisplayName = "Hand Anchor Entered", ToolTip = "左/右手牌生成入手；由 UI 表现层在普通抽牌后触发，不属于普通抽牌事件。"),
 	Played UMETA(DisplayName = "Played", ToolTip = "卡牌被打出离开手牌；默认向上离开。"),
@@ -536,6 +537,36 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerEntry
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	ECardTargetMode TargetMode = ECardTargetMode::None;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
+{
+	FName SourceId = NAME_None;
+	TArray<FWacomFirstPersonCardLayerEntry> Entries;
+	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
+
+	// True when this frame should atomically replace pending presentation hints.
+	bool bApplyAsPresentationFrame = false;
+
+	bool HasPresentationHints() const
+	{
+		return !TransitionHints.IsEmpty() || !FeedbackHints.IsEmpty();
+	}
+
+	bool ShouldApplyAsPresentationFrame() const
+	{
+		return bApplyAsPresentationFrame || HasPresentationHints();
+	}
+
+	void Reset()
+	{
+		SourceId = NAME_None;
+		Entries.Reset();
+		TransitionHints.Reset();
+		FeedbackHints.Reset();
+		bApplyAsPresentationFrame = false;
+	}
 };
 
 USTRUCT(BlueprintType)

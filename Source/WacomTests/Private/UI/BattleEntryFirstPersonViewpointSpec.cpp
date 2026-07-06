@@ -23,6 +23,7 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 #include "UObject/StrongObjectPtr.h"
 
 struct FWacomFirstPersonViewStageBlendTestAccess
@@ -476,7 +477,7 @@ bool FWacomUIBattleEntryViewpointBlendUnlocksHUDHandAfterCompletionSpec::RunTest
 		Anchor->HasRuntimeCardLayerData());
 	TestEqual(TEXT("Entry staging keeps BattleHand source active"),
 		Anchor->GetRuntimeCardLayerSourceId(),
-		FName(TEXT("BattleHand")));
+		WacomFirstPersonCardLayerSourceIds::BattleHand());
 	TestEqual(TEXT("Entry staging writes zero runtime hand cards"),
 		Anchor->GetRuntimeCardLayerCardCount(),
 		0);
@@ -537,7 +538,7 @@ bool FWacomUIBattleEntryViewpointBlendUnlocksHUDHandAfterCompletionSpec::RunTest
 		Anchor->GetRuntimeCardLayerCardCount(),
 		Snapshot.Hand.Cards.Num());
 	TestTrue(TEXT("Restored hand interaction is enabled"),
-		Anchor->IsBattleHandInteractionEnabled());
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
 	BattleCamera->DeactivateBattleCameraLook();
 	return true;

@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-06-08
+updated: 2026-07-06
 tags:
   - wacom/app
   - wacom/gameflow
@@ -29,7 +29,7 @@ tags:
 - 输入上下文协调、Enhanced Input profile、CommonUI input config、鼠标显隐和 click / mouse-over lease。
 - 世界交互路由：E 键最近候选、鼠标 hover、左键点击、Battle scene target、Run world card drop、Run menu zone drop。
 - UI shell 调用入口：确保 PrimaryLayout、Push / Pop HUD 或菜单；具体 shell 行为见 `WacomUIFoundation.md`，Screen 数据流见 `WacomUI.md`。
-- first-person runtime source 所有权协调：探索期 Run BattleDeck 展示、GameMenu lease、进入战斗时清理、退出战斗后恢复。
+- first-person runtime source 所有权协调：探索期 Run Card Workspace 展示、GameMenu lease、进入战斗时清理、退出战斗后恢复。
 
 不负责：
 
@@ -75,7 +75,11 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 - 初始化 `UWacomInputContextCoordinatorSubsystem`，提供探索 / 战斗 mapping context 给 coordinator。
 - 处理探索交互、暂停菜单、背包、商店、RunEvent 打开请求；具体 GameMenu 打开、关闭、异步 Push 和 Shop / RunEvent rollback 由私有 `FWacomExplorationScreenRouter` 承接。
 - 转发战斗快捷键和目标点击到当前 `UBattleHUD / UBattleSession`。
-- 维护探索期 first-person Run BattleDeck source；GameMenu 可通过 owned menu lease 临时接管候选持有卡显示和 Zone drop。
+- 维护探索期 first-person Run Card Workspace source；默认 workspace 当前来自 Run `BattleDeck` 物理卡和可选投影入战卡，GameMenu 可通过 owned menu lease 临时接管候选持有卡显示和 Zone drop。
+- 维护 Run first-person hover / inspect 详情：只在 Exploration 且 `UWacomRunFirstPersonCardSourceComponent` 判定当前 card layer source 属于 Run default source 或 active menu lease 时，通过 `URunSession::FindInstance()` 反查 owned card instance 并显示静态 `UWacomCardDetailPanel`；App-private `FWacomRunFirstPersonCardDetailController` 负责 Anchor hover delegate 绑定、hover / inspect / scrub 决策、Run detail 数据缓存和面板状态，并委托 Battle / Run 共享的 `FWacomFirstPersonCardDetailMotionController` 与 `FWacomFirstPersonCardDetailPanelHost` 处理预热、面板创建、AddToViewport、淡入淡出 / scale / follow motion、稳定换边和 teardown。`AWacomPlayerController` 只作为 UObject delegate endpoint 和 RunSession 查询入口保留。同一张卡的 inspect update / hover layout update 只更新 motion target，不重复构建详情；scrub 到另一张卡时才切换详情数据。`Inspecting` 期间详情保持并支持 scrub 切卡，正式拖拽、进入战斗、source 清理或 lease 结束时隐藏。
+- 维护 Run first-person card drag：App-private `FWacomRunFirstPersonCardDragController` 负责 Anchor drag / pointer delegate 绑定、inspect 与正式拖拽分流、正式拖拽期间详情隐藏以及 menu zone drop / world drop probe 分发；Inspecting / 正式拖拽期间的 camera-look ownership 使用 Battle / Run 共用的 `FWacomFirstPersonCardCameraLookBridge`，`Inspecting` 只刷新读牌详情和相机跟随，不触发投放 probe；`AWacomPlayerController` 只保留 UObject delegate endpoint 和现有具体结算入口，menu owner / world receiver 继续决定提交结果。
+- Run first-person source 使用 desired-state reconcile：PlayerController BeginPlay 会创建 / 绑定 RunSession 并请求探索期手牌 source 处于 active；如果当帧 RunSession、Pawn / `UWacomFirstPersonCardAnchorComponent`、GameMenu suppression 或 menu lease 条件尚未就绪，`UWacomRunFirstPersonCardSourceComponent` 会记录 pending/block reason，并在 RunSession 绑定、`SetPawn()`、GameMenu suppression 解除、menu lease 清理或 RunStateChanged 时自动重试。进入探索关、读档 bootstrap 完成和战斗返回探索都走 `PrepareExplorationRunFirstPersonCardLayer()`，该入口会清理 stale menu widgets / suppression / menu lease，再恢复默认 Run workspace source，不依赖背包关闭补刷。Run default、active menu lease、suppressed source 和 `BattleHand` 的处理权查询集中在 `UWacomRunFirstPersonCardSourceComponent`，PlayerController 不直接比较保留 source id。
+- Run first-person source 写入默认 workspace 时使用 Battle / Run 共用的 `FWacomFirstPersonCardLayerPresentationFrame` 和 `WacomFirstPersonCardLayerSourceIds` 保留 source id。组件通过 `URunSession::BuildRunCardWorkspaceSnapshot()` 读取 Run 层只读 workspace，并缓存 `CardInstanceId -> FRunCardWorkspaceEntry` 来源 metadata；App 不再自行遍历 RunState 四个物理区来决定候选卡。初次显示、从 GameMenu suppression 恢复、menu lease 交还默认 source 或默认 source 新增卡时生成 `RunHandEntered` 入场 hints；普通刷新不重播。进入背包 / 事件等压制默认手牌的菜单场景写入 0 entries 的 suppressed frame，让 card layer 清空手牌，而不是直接隐藏或硬清 slot motion。
 - 在进入战斗、Controller EndPlay 或菜单 lease 结束时清理对应 first-person source / lease，避免 Run 展示层和 BattleHUD runtime hand 抢占同一 layer。
 - GameMenu 可选走 first-person viewpoint staging：当前 Shop 和 RunEvent 使用该通用流程，Trigger 生成 entry stage request，PlayerController / router 在 UI 出现前锁定探索输入并清空 Run first-person hand，到位后再开始对应 `URunSession` 事务并 Push Screen；菜单关闭后 staged return 到 RunTunnel，完成后恢复手牌和交互提示。
 
@@ -186,7 +190,7 @@ BattleTrigger E键/点击
 GameMode 进入战斗时：
 
 1. 设置 `EGameFlowState::Battle`。
-2. 清理探索期 Run first-person BattleDeck source 和 active menu lease。
+2. 清理探索期 Run first-person default workspace source 和 active menu lease。
 3. Suspend PlayerCharacter 的 Run Tunnel 探索移动；若 Trigger 配置了 battle entry viewpoint，则先把第一人称摄像机 View Pose 对齐到该站位，再启用 Battle camera look。Viewpoint 可配置过渡时间，默认 0 秒立即对齐。
 4. 由 Trigger 的 `EncounterDefinition` 构造敌人槽，并由 RunSession 补齐撤离重入进度。
 5. 创建 / 初始化 `UBattleSession`。
@@ -223,7 +227,7 @@ GameMode 退出战斗时：
 9. 真胜利时标记并销毁触发战斗的 BattleTrigger；撤离时不销毁 Trigger，允许玩家再次按 E 重入。
 10. `EGameFlowState` 回到 `Exploration` 后，等待 return staging completion，再重新激活并刷新 Run first-person hand，同时刷新交互 Toast。
 
-退出战斗回到 Exploration 后，PlayerController 会重新激活并刷新 `UWacomRunFirstPersonCardSourceComponent`，让 first-person card layer 再次显示当前 Run BattleDeck。这个刷新只读 Run snapshot，不提交 Run 命令；若回程是 deferred blend，刷新必须等镜头回到 RunTunnel 后再发生。
+退出战斗回到 Exploration 后，PlayerController 会重新激活并刷新 `UWacomRunFirstPersonCardSourceComponent`，让 first-person card layer 再次显示当前默认 Run workspace。当前默认 workspace provider 仍读取 Run `BattleDeck` 物理卡和可选投影卡；这个刷新只读 Run snapshot，不提交 Run 命令；若回程是 deferred blend，刷新必须等镜头回到 RunTunnel 后再发生。
 
 若进入战斗时使用了 battle entry viewpoint，退出战斗不保存该临时站位。Run Tunnel 仍保留进入战斗前的 Segment / Distance，并负责生成 `RunTunnelReturn` stage request；`ReturnStageBlendTimeSeconds` 默认 0.35 秒，可在 `UWacomRunTunnelMovementComponent` 的 `Wacom|Run Tunnel|Staging` 分类中调整，`ReturnStageBlendCurve` 和 `ReturnStageBlendEasePower` 用同一套 stage blend 曲线语义控制回程节奏。回程过渡期间 BattleHUD 已退场、探索输入仍锁定、first-person Run 手牌为空；`FWacomFirstPersonViewStageReturnFlow` 负责调用 stage coordinator 回到样条 View Pose，并在完成后恢复探索输入。Battle exit return 恢复 RunTunnel 时会按当前鼠标位置保留 / 预热 cursor look offset，不先把镜头拉回样条中心角度，避免回程完成瞬间出现中心回弹。这个 return flow 以后也可被商店、剧情、RunEvent 等临时站位复用。
 

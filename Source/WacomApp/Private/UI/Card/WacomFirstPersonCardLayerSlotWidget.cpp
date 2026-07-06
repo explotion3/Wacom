@@ -264,6 +264,10 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 		}
 		bHasVisualSlotView = true;
 	}
+	else if (!VisualSlotView.bProjected && TargetSlotView.bProjected)
+	{
+		VisualSlotView = TargetSlotView;
+	}
 
 	ApplyVisualSlotView();
 	SetTickEnabledForMotion(true);

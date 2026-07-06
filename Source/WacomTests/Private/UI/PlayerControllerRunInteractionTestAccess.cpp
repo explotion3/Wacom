@@ -140,6 +140,91 @@ void FWacomPlayerControllerRunInteractionTestAccess::ClearRunMenuDropTargetProbe
 	}
 }
 
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardHovered(
+	AWacomPlayerControllerProbe* PC,
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerCardHoveredForTest(CardInstanceId, SlotView);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardUnhovered(
+	AWacomPlayerControllerProbe* PC,
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerCardUnhoveredForTest(CardInstanceId, SlotView);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(
+	AWacomPlayerControllerProbe* PC,
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (PC)
+	{
+		PC->HandleRunFirstPersonCardLayerHoveredCardLayoutUpdatedForTest(CardInstanceId, SlotView);
+	}
+}
+
+bool FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelVisible(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC && PC->IsRunFirstPersonCardDetailPanelVisibleForTest();
+}
+
+FText FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelNameText(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC ? PC->GetRunFirstPersonCardDetailPanelNameTextForTest() : FText::GetEmpty();
+}
+
+FVector2D FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelPosition(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC ? PC->GetRunFirstPersonCardDetailPanelPositionForTest() : FVector2D::ZeroVector;
+}
+
+bool FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailPanelPrewarmed(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC && PC->IsRunFirstPersonCardDetailPanelPrewarmedForTest();
+}
+
+bool FWacomPlayerControllerRunInteractionTestAccess::IsRunFirstPersonCardDetailMotionPending(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC && PC->IsRunFirstPersonCardDetailMotionPendingForTest();
+}
+
+float FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailPanelOpacity(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC ? PC->GetRunFirstPersonCardDetailPanelOpacityForTest() : 0.0f;
+}
+
+int32 FWacomPlayerControllerRunInteractionTestAccess::RunFirstPersonCardDetailDataApplyCount(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC ? PC->GetRunFirstPersonCardDetailDataApplyCountForTest() : 0;
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::TickRunFirstPersonCardDetail(
+	AWacomPlayerControllerProbe* PC,
+	float DeltaTime)
+{
+	if (PC)
+	{
+		PC->TickRunFirstPersonCardDetailForTest(DeltaTime);
+	}
+}
+
 void FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
 	AWacomPlayerControllerProbe* PC,
 	const FGuid& CardInstanceId,
@@ -276,6 +361,15 @@ void FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(
 	if (PC)
 	{
 		PC->SetRunSessionForTest(RunSession);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::PrepareExplorationRunFirstPersonCardLayer(
+	AWacomPlayerControllerProbe* PC)
+{
+	if (PC)
+	{
+		PC->PrepareExplorationRunFirstPersonCardLayerForTest();
 	}
 }
 

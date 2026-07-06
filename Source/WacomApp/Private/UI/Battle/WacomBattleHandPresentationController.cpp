@@ -214,9 +214,10 @@ bool FWacomBattleHandPresentationController::HasPendingHandAnchorEnterFrame() co
 	return bHasPendingHandAnchorEnterFrame && !PendingHandAnchorEnterCardIds.IsEmpty();
 }
 
-FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::ConsumePendingHandAnchorEnterFrame()
+FWacomFirstPersonCardLayerPresentationFrame
+FWacomBattleHandPresentationController::ConsumePendingHandAnchorEnterFrame()
 {
-	FWacomBattleHandPresentationFrame Frame;
+	FWacomFirstPersonCardLayerPresentationFrame Frame;
 	if (!HasPendingHandAnchorEnterFrame())
 	{
 		ClearPendingHandAnchorEnterFrame();
@@ -238,17 +239,17 @@ FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::Consum
 		Hint.SequenceCount = FMath::Max(1, SequenceCount);
 		Frame.TransitionHints.Add(Hint);
 	}
-	Frame.bHasTransitionFrame = !Frame.TransitionHints.IsEmpty();
+	Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
 	MarkSnapshotPresented(PendingHandAnchorEnterSnapshot);
 	ClearPendingHandAnchorEnterFrame();
 	return Frame;
 }
 
-FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildFrame(
+FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationController::BuildFrame(
 	const FBattleSnapshot& Snapshot,
 	bool bSuppressed)
 {
-	FWacomBattleHandPresentationFrame Frame;
+	FWacomFirstPersonCardLayerPresentationFrame Frame;
 	if (bSuppressed)
 	{
 		PreservePendingEntryRevealForNextRefresh();
@@ -268,10 +269,8 @@ FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildF
 		Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(FrameSnapshot);
 		Frame.TransitionHints = BuildTransitionHints(Baseline, FrameSnapshot);
 		Frame.FeedbackHints = BuildFeedbackHints(FrameSnapshot);
-		Frame.bHasTransitionFrame =
-			Frame.TransitionHints.Num() > 0
-			|| Frame.FeedbackHints.Num() > 0;
-		if (Frame.bHasTransitionFrame)
+		Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
+		if (Frame.ShouldApplyAsPresentationFrame())
 		{
 			RecordSubmittedTransitionFrame();
 		}
@@ -291,24 +290,22 @@ FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildF
 	return Frame;
 }
 
-FWacomBattleHandPresentationFrame FWacomBattleHandPresentationController::BuildExplicitFrame(
+FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationController::BuildExplicitFrame(
 	const FBattleSnapshot& Snapshot,
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
 	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
 {
-	FWacomBattleHandPresentationFrame Frame;
+	FWacomFirstPersonCardLayerPresentationFrame Frame;
 	Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
 	Frame.TransitionHints = TransitionHints;
 	Frame.FeedbackHints = FeedbackHints;
-	Frame.bHasTransitionFrame =
-		Frame.TransitionHints.Num() > 0
-		|| Frame.FeedbackHints.Num() > 0;
-	if (Frame.bHasTransitionFrame)
+	Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
+	if (Frame.ShouldApplyAsPresentationFrame())
 	{
 		RecordSubmittedTransitionFrame();
 	}
 	MarkSnapshotPresented(Snapshot);
-	if (Frame.bHasTransitionFrame)
+	if (Frame.ShouldApplyAsPresentationFrame())
 	{
 		ClearPendingTransitionEvents();
 	}

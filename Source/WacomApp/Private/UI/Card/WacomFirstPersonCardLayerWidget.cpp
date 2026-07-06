@@ -1957,6 +1957,7 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 	switch (TransitionHint.TransitionKind)
 	{
 	case EWacomFirstPersonCardSlotTransitionKind::Drawn:
+	case EWacomFirstPersonCardSlotTransitionKind::RunHandEntered:
 		Profile.OriginMode = SlotMotionConfig.DrawnEnterOriginMode;
 		Profile.OffsetPixels = SlotMotionConfig.DrawnEnterOffsetPixels;
 		Profile.ViewportAnchor = SlotMotionConfig.DrawnEnterViewportAnchor;

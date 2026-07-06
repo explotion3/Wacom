@@ -7,6 +7,7 @@
 #include "FirstPersonCardLayerSpecReceiver.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
 
@@ -110,7 +111,7 @@ namespace WacomFirstPersonCardLayerPresentationPlaybackSpec
 			Anchor->RegisterComponent();
 			Anchor->FollowInterpSpeed = 0.0f;
 			Anchor->bEnableCardLayerPixelSnapping = false;
-			Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(TEXT("BattleHand"), true);
+			Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(WacomFirstPersonCardLayerSourceIds::BattleHand(), true);
 		}
 		return Anchor;
 	}
@@ -349,7 +350,7 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 		return false;
 	}
 
-	const FName SourceId(TEXT("BattleHand"));
+	const FName SourceId = WacomFirstPersonCardLayerSourceIds::BattleHand();
 	const FGuid DiscardedId = FGuid::NewGuid();
 	const FGuid RetainedId = FGuid::NewGuid();
 	const FGuid DrawnId = FGuid::NewGuid();

@@ -184,6 +184,14 @@ bool UWacomAppToastSubsystem::IsToastWidgetUsableForCurrentOwner(
 	const UWorld* CurrentWorld = GetWorld();
 	const UWorld* WidgetWorld = Widget->GetWorld();
 	const APlayerController* WidgetOwner = Widget->GetOwningPlayer();
+	// Test/prewarm overrides can surface a transient world after TakeWidget() in UE 5.8.
+	if (!WidgetOwner
+		&& !Widget->IsInViewport()
+		&& !Widget->GetTypedOuter<UWorld>()
+		&& !Widget->GetTypedOuter<APlayerController>())
+	{
+		return true;
+	}
 
 	return IsToastOwnerPairUsable(WidgetWorld, WidgetOwner, CurrentWorld, CurrentPC);
 }

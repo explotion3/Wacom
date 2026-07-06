@@ -10,6 +10,7 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
 
@@ -168,11 +169,11 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 	TestTrue(TEXT("Runtime hand source is active before suppression"), Anchor->HasRuntimeCardLayerData());
 	TestEqual(TEXT("Runtime hand source id before suppression"),
 		Anchor->GetRuntimeCardLayerSourceId(),
-		FName(TEXT("BattleHand")));
+		WacomFirstPersonCardLayerSourceIds::BattleHand());
 	TestEqual(TEXT("Runtime hand card count before suppression"),
 		Anchor->GetRuntimeCardLayerCardCount(),
 		Snapshot.Hand.Cards.Num());
-	TestTrue(TEXT("Runtime hand interaction starts enabled"), Anchor->IsBattleHandInteractionEnabled());
+	TestTrue(TEXT("Runtime hand interaction starts enabled"), Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
 	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(HUD);
 	if (!TestNotNull(TEXT("First-person card layer widget"), Layer))
@@ -194,7 +195,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		1);
 	FWacomFirstPersonCardLayerEntry StaleRunEntry;
 	StaleRunEntry.CardInstanceId = StaleSlot.Entry.CardInstanceId;
-	Anchor->SetRuntimeCardLayerEntries(TEXT("RunFirstPersonBattleDeck"), { StaleRunEntry });
+	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::RunDefault(), { StaleRunEntry });
 
 	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	HUD->StoreFirstPersonCardTransitionEventsForTest({ OpeningDrawEvent });
@@ -203,7 +204,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 	TestTrue(TEXT("Suppression keeps an empty runtime hand source"), Anchor->HasRuntimeCardLayerData());
 	TestEqual(TEXT("Suppression keeps BattleHand as the active source"),
 		Anchor->GetRuntimeCardLayerSourceId(),
-		FName(TEXT("BattleHand")));
+		WacomFirstPersonCardLayerSourceIds::BattleHand());
 	TestEqual(TEXT("Suppression writes zero runtime hand cards"),
 		Anchor->GetRuntimeCardLayerCardCount(),
 		0);
@@ -214,7 +215,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		Layer->GetSlotMotionDebugView().OutgoingSlotCount,
 		0);
 	TestFalse(TEXT("Suppression disables runtime hand interaction"),
-		Anchor->IsBattleHandInteractionEnabled());
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 	const FWacomFirstPersonCardAnchorAutomationTestView SuppressedGateView =
 		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestFalse(TEXT("Suppression closes battle hand presentation gate"),
@@ -267,7 +268,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		TestFalse(TEXT("Opening draw frame hides generated hand anchor"), bContainsHandAnchor);
 	}
 	TestFalse(TEXT("Runtime hand remains non-interactive while input is not ready"),
-		Anchor->IsBattleHandInteractionEnabled());
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 	const FWacomFirstPersonCardAnchorAutomationTestView PendingDeferredEntry =
 		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestEqual(TEXT("Unsuppressed refresh submits one pending deferred draw hint"),
@@ -318,7 +319,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		ENamedThreads::GameThread,
 		FGraphEventRef());
 	TestTrue(TEXT("Runtime hand interaction unlocks after input ready"),
-		Anchor->IsBattleHandInteractionEnabled());
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 	TestEqual(TEXT("Input-ready refresh remains no-replay after anchor tick"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).PendingTransitionHintCardIds.Num(),
 		0);

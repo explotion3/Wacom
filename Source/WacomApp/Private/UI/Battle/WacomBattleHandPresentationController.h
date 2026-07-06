@@ -7,14 +7,6 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
-struct FWacomBattleHandPresentationFrame
-{
-	TArray<FWacomFirstPersonCardLayerEntry> Entries;
-	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
-	bool bHasTransitionFrame = false;
-};
-
 class FWacomBattleHandPresentationController
 {
 public:
@@ -26,12 +18,12 @@ public:
 	void PreservePendingEntryRevealForNextRefresh();
 	void DiscardSubmittedTransitionFrame();
 	bool HasPendingHandAnchorEnterFrame() const;
-	FWacomBattleHandPresentationFrame ConsumePendingHandAnchorEnterFrame();
+	FWacomFirstPersonCardLayerPresentationFrame ConsumePendingHandAnchorEnterFrame();
 
-	FWacomBattleHandPresentationFrame BuildFrame(
+	FWacomFirstPersonCardLayerPresentationFrame BuildFrame(
 		const FBattleSnapshot& Snapshot,
 		bool bSuppressed);
-	FWacomBattleHandPresentationFrame BuildExplicitFrame(
+	FWacomFirstPersonCardLayerPresentationFrame BuildExplicitFrame(
 		const FBattleSnapshot& Snapshot,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
 		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints =

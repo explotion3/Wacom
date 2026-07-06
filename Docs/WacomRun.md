@@ -133,6 +133,13 @@ Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCard
 
 同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`；失败路径不修改 RunState。
 
+Run first-person hand 不直接等同于某个物理持有区。`URunSession::BuildRunCardWorkspaceSnapshot()` 提供 Run 层只读 `Run Card Workspace` contract，用来把当前需要展示或操作的一组已拥有卡投影给 App 层：
+
+- `DefaultExploration` workspace 当前读取 `BattleDeck` 物理卡，并可追加 SpecialZone 中随 B 主卡投影入战的卡；投影条目仍保留真实 `PhysicalZone = SpecialZone`、`ZoneOwnerInstanceId` 和 `bIsProjectedBattleDeckCard` metadata。
+- `OwnedCardsFilter` workspace 按 request 扫描 `Backpack / BattleDeck / BurdenZone / SpecialZones.Cards` 真实物理持有区，再应用 instance、Definition、CardId 和关键词过滤；它服务 RunEvent 支付、菜单临时选牌、未来世界交互候选等 App 场景。
+- Workspace 不是新持有区，不进入 SaveGame，不改变容量、负重、战斗入组或卡牌归属；任何规则事务仍必须用 `MoveInstance()`、`DestroyCardByInstance()`、`ChooseRunEventOptionWithPaidCardResult()` 等正式入口。
+- 未来如果 Run 专属手牌/行动牌组变成真实规则区，应先扩展物理区和存档/容量/移动规则，再让默认 workspace provider 改读该新区；first-person UI 不应因此重写。
+
 玩家已拥有卡的操作以 `InstanceId` 为主。UI、蓝图玩家操作和交互层必须使用 `DestroyCardByInstance()`、`ValidateDestroyCardByInstance()`、`DeleteCardForGoldByInstance()`、`MoveInstance()` 等入口，不能用 Definition 指代某张已拥有卡。`URunSession` 不再提供 `AddCardToBattleDeck()`、`RemoveCardFromBattleDeck()`、`DestroyCardFromBackpack()`、`DeleteCardForGold()` 这类 Definition 级已拥有卡 wrapper。
 
 Definition 仍然用于资产语义：`AcquireCardToRun()` / 战斗奖励 / 商店购买 / 世界拾取表达“获得一张某种卡”；RunEvent / DataAsset 可以表达“交出一张某种卡”，由 RunEvent 执行路径在运行态选择一张匹配 instance。玩家直接操作某张已拥有卡时必须先解析到 `InstanceId`。
@@ -415,6 +422,8 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 当前 `AWacomGameMode::bSaveSystemEnabled == false`。正常游戏流程不读盘、不写盘；战斗结束和退出时的自动存档会静默 no-op。
 
 下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v3 的实际字段拷贝结果。
+
+`LoadFromSlot()` 成功应用 SaveGame 到 `RunState` 后会标记 Run UI snapshot dirty，并广播一次 `OnRunStateChangedNative`。读档失败（slot 不存在、SaveGame 类型不匹配、版本或字段校验失败）不修改 RunState，也不广播。Run first-person source、ViewModel provider 和其他只读 Run UI 应依赖这条通知更新到读档后的 default workspace / storage 状态；当前 default workspace provider 仍读取 BattleDeck 物理卡和可选投影卡。
 
 ### v3 磁盘会保存
 
