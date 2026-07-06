@@ -34,6 +34,8 @@ namespace
 		Entry.TargetMode = Instance.Definition
 			? Instance.Definition->TargetMode
 			: ECardTargetMode::None;
+		Entry.InteractionIntent =
+			WacomFirstPersonCardInteractionIntentFromTargetMode(Entry.TargetMode);
 		return Entry;
 	}
 

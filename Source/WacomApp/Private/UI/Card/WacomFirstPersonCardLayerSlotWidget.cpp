@@ -1322,21 +1322,16 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanStartCardDragGesture() const
 
 bool UWacomFirstPersonCardLayerSlotWidget::IsNoTargetDragCard() const
 {
-	switch (CurrentSlotView.Entry.TargetMode)
-	{
-	case ECardTargetMode::None:
-	case ECardTargetMode::Self:
-	case ECardTargetMode::AllEnemyParts:
-		return true;
-	default:
-		return false;
-	}
+	return CurrentSlotView.Entry.InteractionIntent
+		== EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::IsTargetedAimCard() const
 {
-	return CurrentSlotView.Entry.TargetMode == ECardTargetMode::SingleEnemyPart
-		|| CurrentSlotView.Entry.TargetMode == ECardTargetMode::HandCard;
+	return CurrentSlotView.Entry.InteractionIntent
+			== EWacomFirstPersonCardInteractionIntent::AimWorldTarget
+		|| CurrentSlotView.Entry.InteractionIntent
+			== EWacomFirstPersonCardInteractionIntent::AimCardTarget;
 }
 
 FWacomFirstPersonCardLayerSlotView UWacomFirstPersonCardLayerSlotWidget::BuildInspectOverrideSlotView() const

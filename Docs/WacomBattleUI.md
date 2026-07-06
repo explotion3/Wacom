@@ -176,6 +176,8 @@ First-person hand 卡面和 first-person viewport 详情都从 `FHandCardSnapsho
 
 被动详情正文的分类由“被动”区块标题承载，正文 token 或 `PassiveLines` 不再携带 `被动：` 前缀。`Passive.DisplayText` 是被动正文的最高优先级来源，适合表达暮气、选择对象、特殊腾挪等尚未完全结构化的规则；没有手写正文且所有被动效果都能结构化时，Builder 才生成“触发条件：”加效果 token。只生成触发条件不能视为完整被动正文，避免后半句被 fallback 屏蔽。
 
+Battle hand entries 由 `WacomBattleCardPresentation` 从 `FHandCardSnapshot` 构建：`ECardTargetMode` 仍作为调试 / 迁移 projection 写入 entry，但同时必须映射成 first-person card layer 的 `InteractionIntent`。SlotWidget 只消费 `InteractionIntent` 来决定无目标拖拽或瞄准态，目标合法性和提交仍由 BattleHUD / BattleSession 处理。
+
 当玩家拖拽手牌并指向敌人部位或目标手牌时，first-person hand bridge 会把当前 `CardInstanceId + TargetHandle` 交给 `UBattleSession::BuildCardTargetPreview()`。Battle 返回的 `FBattleCardTargetPreview` 是只读规则 facts；App 侧随后用 `WacomBattleCardPresentation::BuildTargetPreviewPresentation()` 一次性生成 hand layer entries、源卡详情和可选目标手牌详情。源卡卡面徽章和详情 token 显示目标修正后的主效果预览；若目标是手牌，目标卡自己的卡面费用可以显示预测后的费用，但详情不生成 `[费] before -> after` token。preview 不提交命令、不模拟完整出牌事件链、不修改 Battle state。
 
 拖拽 release、cancel、离开目标、候选目标无效或 UI state 退出时，bridge 会清理 preview entries，恢复基础 hand entries 和当前详情。Scene enemy hover / TargetSelect hover 也先构建同一份 `FWacomBattleCardTargetPreviewPresentation` 再应用：场景目标反馈仍由 enemy presentation component 负责，卡面和详情只消费该 presentation，不在 hover / drag 两条路径里重复拼。Preview semantic state 由 snapshot version、source id、目标身份和 preview facts hash 组成；同一 state 上的高频 hover / drag move 只允许更新指针反馈、敌人 hover 和详情位置，hand layer preview entries 与详情数据必须等 preview semantic state 变化后再重建。Active drag 期间，目标手牌 preview 的生命周期由 bridge 保存的 `ActiveDragView.CurrentTarget` / target preview state 决定，SlotWidget 重建或 hover/unhover 抖动不能作为清理 preview 的权威信号。

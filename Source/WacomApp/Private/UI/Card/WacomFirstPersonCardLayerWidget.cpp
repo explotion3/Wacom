@@ -94,6 +94,7 @@ namespace
 			&& A.bIsHandAnchor == B.bIsHandAnchor
 			&& A.bIsPlayable == B.bIsPlayable
 			&& A.bIsPendingTargeting == B.bIsPendingTargeting
+			&& A.InteractionIntent == B.InteractionIntent
 			&& A.TargetMode == B.TargetMode;
 	}
 

@@ -72,6 +72,32 @@ enum class EWacomFirstPersonCardGestureState : uint8
 	Cancelled UMETA(DisplayName = "Cancelled")
 };
 
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardInteractionIntent : uint8
+{
+	CommitNoTarget UMETA(DisplayName = "Commit No Target", ToolTip = "无目标卡交互：拖出手牌后由上层提交，不需要世界或手牌目标。"),
+	AimWorldTarget UMETA(DisplayName = "Aim World Target", ToolTip = "世界目标交互：拖拽进入瞄准态，由上层解析世界目标并验证。"),
+	AimCardTarget UMETA(DisplayName = "Aim Card Target", ToolTip = "手牌目标交互：拖拽进入瞄准态，由上层解析目标手牌并验证。"),
+	InspectOnly UMETA(DisplayName = "Inspect Only", ToolTip = "仅允许悬停和读牌，不允许升级为正式拖拽或提交。")
+};
+
+inline EWacomFirstPersonCardInteractionIntent
+WacomFirstPersonCardInteractionIntentFromTargetMode(ECardTargetMode TargetMode)
+{
+	switch (TargetMode)
+	{
+	case ECardTargetMode::SingleEnemyPart:
+		return EWacomFirstPersonCardInteractionIntent::AimWorldTarget;
+	case ECardTargetMode::HandCard:
+		return EWacomFirstPersonCardInteractionIntent::AimCardTarget;
+	case ECardTargetMode::None:
+	case ECardTargetMode::Self:
+	case ECardTargetMode::AllEnemyParts:
+	default:
+		return EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+	}
+}
+
 enum class EWacomFirstPersonCardGestureSource : uint8
 {
 	None,
@@ -535,7 +561,11 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerEntry
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bIsPendingTargeting = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer", meta = (ToolTip = "UI 层自己的交互意图。Battle / Run 适配层负责从规则语义映射到这里；SlotWidget 只消费本字段，不直接推断规则。"))
+	EWacomFirstPersonCardInteractionIntent InteractionIntent =
+		EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer", meta = (ToolTip = "旧版调试 / 迁移投影字段。正式手势行为请使用 InteractionIntent，不要在 Widget 中直接消费 TargetMode。"))
 	ECardTargetMode TargetMode = ECardTargetMode::None;
 };
 

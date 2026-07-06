@@ -36,6 +36,8 @@ namespace WacomFirstPersonCardLayerInspectScrubSpec
 		Slot.Entry.CardInstanceId = CardInstanceId;
 		Slot.Entry.bIsPlayable = true;
 		Slot.Entry.TargetMode = ECardTargetMode::None;
+		Slot.Entry.InteractionIntent =
+			WacomFirstPersonCardInteractionIntentFromTargetMode(Slot.Entry.TargetMode);
 		Slot.ScreenPosition = Position;
 		Slot.WidgetPosition = Position;
 		Slot.SnappedWidgetPosition = Position;

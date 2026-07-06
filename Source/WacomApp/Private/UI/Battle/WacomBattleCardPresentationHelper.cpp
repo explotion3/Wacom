@@ -302,6 +302,8 @@ namespace WacomBattleCardPresentation
 		Entry.TargetMode = CardSnapshot.Definition
 			? CardSnapshot.Definition->TargetMode
 			: ECardTargetMode::None;
+		Entry.InteractionIntent =
+			WacomFirstPersonCardInteractionIntentFromTargetMode(Entry.TargetMode);
 		return Entry;
 	}
 
