@@ -198,8 +198,10 @@ bool FWacomUIRunFirstPersonBuildsEntriesFromBattleDeckSpec::RunTest(const FStrin
 	FWacomBattleFixture Fx;
 	UCardDefinition* First = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
 		Fx, TEXT("Test.RunCard.A"), TEXT("Run Card A"), 1);
+	First->TargetMode = ECardTargetMode::SingleEnemyPart;
 	UCardDefinition* Second = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
 		Fx, TEXT("Test.RunCard.B"), TEXT("Run Card B"), 2);
+	Second->TargetMode = ECardTargetMode::HandCard;
 	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 3);
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { First, Second, Pack });
 
@@ -224,6 +226,15 @@ bool FWacomUIRunFirstPersonBuildsEntriesFromBattleDeckSpec::RunTest(const FStrin
 	TestFalse(TEXT("Run first-person cards are not visually disabled"),
 		Entries[0].CardViewData.bDisabled);
 	TestTrue(TEXT("Run first-person entries stay visually playable"), Entries[0].bIsPlayable);
+	TestEqual(TEXT("Run default source uses drop target interaction intent"),
+		Entries[0].InteractionIntent,
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
+	TestEqual(TEXT("Run default source does not derive intent from battle target mode"),
+		Entries[1].InteractionIntent,
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
+	TestEqual(TEXT("Run entry keeps legacy target projection for diagnostics"),
+		Entries[0].TargetMode,
+		ECardTargetMode::SingleEnemyPart);
 
 	return true;
 }
@@ -1462,7 +1473,6 @@ bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FStrin
 	FWacomBattleFixture Fx;
 	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
 		Fx, TEXT("Test.LeaseDragProbe"), TEXT("Lease"), 1);
-	LeaseCard->TargetMode = ECardTargetMode::SingleEnemyPart;
 	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
 
@@ -1488,6 +1498,12 @@ bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FStrin
 			LeaseResult));
 	TestTrue(TEXT("Menu lease enables first-person interaction for probe"),
 		Anchor->IsFirstPersonCardLayerInteractionEnabled());
+	TestEqual(TEXT("Menu lease writes one probe entry"),
+		Source->LastWrittenEntries.Num(),
+		1);
+	TestEqual(TEXT("Menu lease uses Run drop target interaction intent"),
+		Source->LastWrittenEntries[0].InteractionIntent,
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
 
 	Source->ClearRunFirstPersonCardLayerMenuLease(TEXT("Lease"));
 	TestFalse(TEXT("Suppressed default source disables interaction after lease clears"),
@@ -1506,6 +1522,7 @@ bool FWacomUIRunFirstPersonRequestBuildsLeaseEntriesFromDefinitionsSpec::RunTest
 	FWacomBattleFixture Fx;
 	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
 		Fx, TEXT("PoisonFang"), TEXT("毒牙"), 0);
+	Fang->TargetMode = ECardTargetMode::SingleEnemyPart;
 	UCardDefinition* Other = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
 		Fx, TEXT("Other"), TEXT("Other"), 1);
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang });
@@ -1551,6 +1568,12 @@ bool FWacomUIRunFirstPersonRequestBuildsLeaseEntriesFromDefinitionsSpec::RunTest
 	TestEqual(TEXT("Card face uses presentation data"),
 		Source->LastWrittenEntries[0].CardViewData.Name.ToString(),
 		FString(TEXT("毒牙")));
+	TestEqual(TEXT("Provider lease uses Run drop target interaction intent"),
+		Source->LastWrittenEntries[0].InteractionIntent,
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
+	TestEqual(TEXT("Provider lease keeps legacy target projection for diagnostics"),
+		Source->LastWrittenEntries[0].TargetMode,
+		ECardTargetMode::SingleEnemyPart);
 	TestEqual(TEXT("Provider lease animates filtered Run card entering the menu hand"),
 		Source->LastWrittenTransitionHints.Num(),
 		1);
@@ -2098,7 +2121,6 @@ bool FWacomUIRunFirstPersonDragReleaseOnMenuZoneProbeOnlySpec::RunTest(const FSt
 	FWacomBattleFixture Fx;
 	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
 		Fx, TEXT("Test.RunEventLease.ProbeOnly"), TEXT("Lease"), 0);
-	LeaseCard->TargetMode = ECardTargetMode::SingleEnemyPart;
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
@@ -2160,7 +2182,6 @@ bool FWacomUIRunFirstPersonMenuDropProbeClearSpec::RunTest(const FString& /*Para
 	FWacomBattleFixture Fx;
 	UCardDefinition* LeaseCard = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
 		Fx, TEXT("Test.RunEventLease.ProbeClear"), TEXT("Lease"), 0);
-	LeaseCard->TargetMode = ECardTargetMode::SingleEnemyPart;
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));

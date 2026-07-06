@@ -1323,7 +1323,9 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanStartCardDragGesture() const
 bool UWacomFirstPersonCardLayerSlotWidget::IsNoTargetDragCard() const
 {
 	return CurrentSlotView.Entry.InteractionIntent
-		== EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+			== EWacomFirstPersonCardInteractionIntent::CommitNoTarget
+		|| CurrentSlotView.Entry.InteractionIntent
+			== EWacomFirstPersonCardInteractionIntent::DragToDropTarget;
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::IsTargetedAimCard() const

@@ -78,7 +78,8 @@ enum class EWacomFirstPersonCardInteractionIntent : uint8
 	CommitNoTarget UMETA(DisplayName = "Commit No Target", ToolTip = "无目标卡交互：拖出手牌后由上层提交，不需要世界或手牌目标。"),
 	AimWorldTarget UMETA(DisplayName = "Aim World Target", ToolTip = "世界目标交互：拖拽进入瞄准态，由上层解析世界目标并验证。"),
 	AimCardTarget UMETA(DisplayName = "Aim Card Target", ToolTip = "手牌目标交互：拖拽进入瞄准态，由上层解析目标手牌并验证。"),
-	InspectOnly UMETA(DisplayName = "Inspect Only", ToolTip = "仅允许悬停和读牌，不允许升级为正式拖拽或提交。")
+	InspectOnly UMETA(DisplayName = "Inspect Only", ToolTip = "仅允许悬停和读牌，不允许升级为正式拖拽或提交。"),
+	DragToDropTarget UMETA(DisplayName = "Drag To Drop Target", ToolTip = "Run / App 投放交互：拖拽源卡到菜单区域或世界投放目标，由上层 adapter 解析目标和提交规则。")
 };
 
 inline EWacomFirstPersonCardInteractionIntent

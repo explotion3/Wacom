@@ -16,8 +16,21 @@ namespace
 	const FName RunFirstPersonCardLayerSuppressedSourceId =
 		WacomFirstPersonCardLayerSourceIds::RunMenuSuppressed();
 
+	EWacomFirstPersonCardInteractionIntent ResolveRunFirstPersonCardInteractionIntent(
+		ERunCardWorkspaceKind WorkspaceKind)
+	{
+		switch (WorkspaceKind)
+		{
+		case ERunCardWorkspaceKind::DefaultExploration:
+		case ERunCardWorkspaceKind::OwnedCardsFilter:
+		default:
+			return EWacomFirstPersonCardInteractionIntent::DragToDropTarget;
+		}
+	}
+
 	FWacomFirstPersonCardLayerEntry BuildRunFirstPersonCardLayerEntryFromInstance(
-		const FCardInstance& Instance)
+		const FCardInstance& Instance,
+		EWacomFirstPersonCardInteractionIntent InteractionIntent)
 	{
 		FWacomCardViewData CardViewData =
 			UWacomCardPresentationBuilder::BuildCardViewData(Instance.Definition);
@@ -34,15 +47,17 @@ namespace
 		Entry.TargetMode = Instance.Definition
 			? Instance.Definition->TargetMode
 			: ECardTargetMode::None;
-		Entry.InteractionIntent =
-			WacomFirstPersonCardInteractionIntentFromTargetMode(Entry.TargetMode);
+		Entry.InteractionIntent = InteractionIntent;
 		return Entry;
 	}
 
 	FWacomFirstPersonCardLayerEntry BuildRunFirstPersonCardLayerEntryFromWorkspaceEntry(
-		const FRunCardWorkspaceEntry& WorkspaceEntry)
+		const FRunCardWorkspaceEntry& WorkspaceEntry,
+		EWacomFirstPersonCardInteractionIntent InteractionIntent)
 	{
-		return BuildRunFirstPersonCardLayerEntryFromInstance(WorkspaceEntry.Instance);
+		return BuildRunFirstPersonCardLayerEntryFromInstance(
+			WorkspaceEntry.Instance,
+			InteractionIntent);
 	}
 
 	FRunCardWorkspaceRequest BuildDefaultRunCardWorkspaceRequest(
@@ -82,6 +97,8 @@ namespace
 	{
 		OutEntries.Reset();
 		OutEntries.Reserve(Snapshot.Entries.Num());
+		const EWacomFirstPersonCardInteractionIntent InteractionIntent =
+			ResolveRunFirstPersonCardInteractionIntent(Snapshot.Kind);
 		for (const FRunCardWorkspaceEntry& WorkspaceEntry : Snapshot.Entries)
 		{
 			if (!WorkspaceEntry.Instance.InstanceId.IsValid()
@@ -90,7 +107,9 @@ namespace
 				continue;
 			}
 			OutEntries.Add(
-				BuildRunFirstPersonCardLayerEntryFromWorkspaceEntry(WorkspaceEntry));
+				BuildRunFirstPersonCardLayerEntryFromWorkspaceEntry(
+					WorkspaceEntry,
+					InteractionIntent));
 		}
 	}
 

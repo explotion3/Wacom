@@ -11457,6 +11457,30 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 		EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(540.0f, 590.0f));
 
+	const FGuid DropIntentCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView DropIntentSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(DropIntentCardId, true, true);
+	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(
+		DropIntentSlot,
+		ECardTargetMode::HandCard);
+	DropIntentSlot.Entry.InteractionIntent =
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget;
+	Layer->SetCardSlots({ DropIntentSlot });
+
+	SlotWidget = Layer->GetSlotWidgetAt(0);
+	if (!TestNotNull(TEXT("Drop intent slot"), SlotWidget))
+	{
+		PC->Destroy();
+		return false;
+	}
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
+	TestEqual(TEXT("Drop intent uses no-target drag presentation"),
+		SlotWidget->GetGestureStateForFirstPersonLayer(),
+		EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(540.0f, 590.0f));
+
 	const FGuid AimIntentCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView AimIntentSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(AimIntentCardId, true, true);
