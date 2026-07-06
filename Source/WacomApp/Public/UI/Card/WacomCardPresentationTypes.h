@@ -43,6 +43,16 @@ enum class EWacomCardDetailTokenLineKind : uint8
 	Flavor UMETA(DisplayName = "Flavor")
 };
 
+UENUM(BlueprintType)
+enum class EWacomCardDetailSectionKind : uint8
+{
+	Description UMETA(DisplayName = "Description"),
+	Task UMETA(DisplayName = "Task"),
+	Passive UMETA(DisplayName = "Passive"),
+	Preview UMETA(DisplayName = "Preview"),
+	Flavor UMETA(DisplayName = "Flavor")
+};
+
 /**
  * One semantic run inside a card detail line.
  *
@@ -100,11 +110,32 @@ struct WACOMAPP_API FWacomCardDetailTokenLine
 	TArray<FWacomCardDetailToken> Tokens;
 };
 
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomCardDetailSection
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FName SectionId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	EWacomCardDetailSectionKind Kind = EWacomCardDetailSectionKind::Description;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FText Title;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	TArray<FWacomCardDetailTokenLine> TokenLines;
+};
+
 /**
  * Hidden/expanded card detail data.
  *
- * Small card faces should keep using FWacomCardViewData. This structure is for
- * hover panels, selected-card inspectors, and other expanded detail surfaces.
+ * Small card faces should keep using FWacomCardViewData. Sections are the
+ * canonical document model for hover panels, selected-card inspectors, and
+ * other expanded detail surfaces. Legacy flat fields are kept during migration
+ * for existing tests, debug reads, and WBP accessors; display widgets should not
+ * infer sections from them.
  */
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomCardDetailViewData
@@ -116,6 +147,9 @@ struct WACOMAPP_API FWacomCardDetailViewData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail", meta = (MultiLine = true))
 	FText Description;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	TArray<FWacomCardDetailSection> Sections;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	TArray<FText> TaskLines;

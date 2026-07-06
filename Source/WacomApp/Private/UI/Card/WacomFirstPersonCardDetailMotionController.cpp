@@ -84,12 +84,35 @@ namespace
 		return true;
 	}
 
+	bool AreDetailSectionsEquivalent(
+		const TArray<FWacomCardDetailSection>& Left,
+		const TArray<FWacomCardDetailSection>& Right)
+	{
+		if (Left.Num() != Right.Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < Left.Num(); ++Index)
+		{
+			if (Left[Index].SectionId != Right[Index].SectionId
+				|| Left[Index].Kind != Right[Index].Kind
+				|| !AreDetailTextsEquivalent(Left[Index].Title, Right[Index].Title)
+				|| !AreDetailTokenLinesEquivalent(Left[Index].TokenLines, Right[Index].TokenLines))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	bool AreCardDetailViewDataEquivalent(
 		const FWacomCardDetailViewData& Left,
 		const FWacomCardDetailViewData& Right)
 	{
 		return AreDetailTextsEquivalent(Left.Name, Right.Name)
 			&& AreDetailTextsEquivalent(Left.Description, Right.Description)
+			&& AreDetailSectionsEquivalent(Left.Sections, Right.Sections)
 			&& AreDetailTextArraysEquivalent(Left.TaskLines, Right.TaskLines)
 			&& AreDetailTextArraysEquivalent(Left.PassiveLines, Right.PassiveLines)
 			&& AreDetailTokenLinesEquivalent(Left.TokenLines, Right.TokenLines);

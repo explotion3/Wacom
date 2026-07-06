@@ -45,6 +45,23 @@ namespace
 		return Badge;
 	}
 
+	FWacomCardDetailTokenLine MakeCardDetailTextLineForTest(
+		FName LineId,
+		EWacomCardDetailTokenLineKind Kind,
+		const FString& Text)
+	{
+		FWacomCardDetailToken Token;
+		Token.StableId = FName(*FString::Printf(TEXT("%s.Text"), *LineId.ToString()));
+		Token.Kind = EWacomCardDetailTokenKind::Text;
+		Token.Text = FText::FromString(Text);
+
+		FWacomCardDetailTokenLine Line;
+		Line.LineId = LineId;
+		Line.Kind = Kind;
+		Line.Tokens.Add(Token);
+		return Line;
+	}
+
 	const UWacomCardEffectBadgeWidget* GetSingleSlotBadgeForTest(const UPanelWidget* Slot)
 	{
 		if (!Slot || Slot->GetChildrenCount() != 1)
@@ -1047,11 +1064,11 @@ bool FWacomUIBackpackCardDetailPassiveFallbackSpec::RunTest(const FString& /*Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBackpackCardDetailPanelFallbackSpec,
-	"Wacom.UI.Backpack.CardDetailPanelFallback",
+	FWacomUIBackpackCardDetailPanelSectionsSpec,
+	"Wacom.UI.Backpack.CardDetailPanelSections",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBackpackCardDetailPanelFallbackSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBackpackCardDetailPanelSectionsSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<UWacomCardDetailPanel> Panel(NewObject<UWacomCardDetailPanel>());
 
@@ -1059,6 +1076,26 @@ bool FWacomUIBackpackCardDetailPanelFallbackSpec::RunTest(const FString& /*Param
 	Data.Name = FText::FromString(TEXT("详情测试卡"));
 	Data.Description = FText::FromString(TEXT("完整描述文本"));
 	Data.PassiveLines.Add(FText::FromString(TEXT("被动：回合结束")));
+
+	FWacomCardDetailSection DescriptionSection;
+	DescriptionSection.SectionId = FName(TEXT("Description"));
+	DescriptionSection.Kind = EWacomCardDetailSectionKind::Description;
+	DescriptionSection.Title = FText::FromString(TEXT("描述"));
+	DescriptionSection.TokenLines.Add(MakeCardDetailTextLineForTest(
+		FName(TEXT("Description.0")),
+		EWacomCardDetailTokenLineKind::Description,
+		TEXT("完整描述文本")));
+	Data.Sections.Add(DescriptionSection);
+
+	FWacomCardDetailSection PassiveSection;
+	PassiveSection.SectionId = FName(TEXT("Passive"));
+	PassiveSection.Kind = EWacomCardDetailSectionKind::Passive;
+	PassiveSection.Title = FText::FromString(TEXT("被动"));
+	PassiveSection.TokenLines.Add(MakeCardDetailTextLineForTest(
+		FName(TEXT("Passive.0")),
+		EWacomCardDetailTokenLineKind::Passive,
+		TEXT("回合结束")));
+	Data.Sections.Add(PassiveSection);
 
 	Panel->SetCardDetailData(Data);
 	Panel->TakeWidget();
