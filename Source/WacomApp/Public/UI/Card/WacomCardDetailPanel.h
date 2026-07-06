@@ -34,9 +34,6 @@ public:
 	FText GetNameText() const { return CurrentData.Name; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardDetail")
-	FText GetDescriptionText() const { return CurrentData.Description; }
-
-	UFUNCTION(BlueprintPure, Category = "Wacom|CardDetail")
 	int32 GetSectionCount() const { return SectionWidgets.Num(); }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardDetail")

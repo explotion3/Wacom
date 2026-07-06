@@ -233,7 +233,7 @@ WBP 不应做：
 - `UWacomCardDetailPanel` 只显示 `FWacomCardDetailViewData.Sections`。
 - 面板会把非空描述 token / 主动效果 token / 被动 token 或被动 fallback 数据转成多个 `UWacomCardDetailSectionWidget`。
 - `Description / Effect` token lines 会合并进标题为“描述”的 Section；`Passive` token lines 会进入标题为“被动”的 Section。手写 `Description` 可使用 `{Effect.N}` 显式占位符嵌入主动效果 token，例如 `造成 {Effect.0} 伤害。`；没有手写描述时才显示自动 `Effect` fallback 行。
-- 旧 `ChangeLines`、`PassiveLines`、`TaskLines` 和扁平 `TokenLines` 字段已删除；被动 fallback 只在没有被动 token 时显示。
+- 旧 `Description`、`ChangeLines`、`PassiveLines`、`TaskLines` 和扁平 `TokenLines` 字段已从 `FWacomCardDetailViewData` 删除；被动 fallback 只在没有被动 token 时显示。
 - 未绑定 `SectionsBox` 时，C++ 兼容路径会创建基础容器。
 
 ## WBP_CardDetailTokenFlow

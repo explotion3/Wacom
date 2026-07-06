@@ -94,7 +94,6 @@ namespace
 		const FWacomCardDetailViewData& Right)
 	{
 		return AreDetailTextsEquivalent(Left.Name, Right.Name)
-			&& AreDetailTextsEquivalent(Left.Description, Right.Description)
 			&& AreDetailSectionsEquivalent(Left.Sections, Right.Sections);
 	}
 }

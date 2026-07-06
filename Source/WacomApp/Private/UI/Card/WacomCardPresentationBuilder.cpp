@@ -363,7 +363,6 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 		return Data;
 	}
 
-	Data.Description = Card->Description;
 	TArray<FWacomCardDetailTokenLine> DescriptionSectionLines;
 	DescriptionSectionLines = WacomCardDetailTextCompiler::BuildAuthoredTextTokenLines(
 		Card,

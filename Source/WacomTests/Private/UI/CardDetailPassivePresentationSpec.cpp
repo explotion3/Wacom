@@ -297,7 +297,6 @@ bool FWacomUICardDetailPanelUsesSectionsSpec::RunTest(const FString& /*Parameter
 
 	FWacomCardDetailViewData Data;
 	Data.Name = FText::FromString(TEXT("面板文档卡"));
-	Data.Description = FText::FromString(TEXT("旧描述不应决定区块"));
 
 	FWacomCardDetailSection Section;
 	Section.SectionId = FName(TEXT("Canonical"));

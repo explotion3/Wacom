@@ -1070,10 +1070,11 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 	const FWacomCardDetailViewData Data = UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 
 	TestEqual(TEXT("Detail name"), Data.Name.ToString(), TEXT("暮色引虫灯"));
-	TestEqual(TEXT("Detail keeps full description"),
-		Data.Description.ToString(),
+	TestEqual(TEXT("Detail description section keeps authored description"),
+		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Description),
 		TEXT("造成1暮气，1中毒。"));
-	TestFalse(TEXT("Description does not contain passive copy"), Data.Description.ToString().Contains(TEXT("被动")));
+	TestFalse(TEXT("Description section does not contain passive copy"),
+		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Description).Contains(TEXT("被动")));
 	TestTrue(TEXT("Detail document has no task section before schema support"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Task).IsEmpty());
 	TestTrue(TEXT("Passive section uses DisplayText"),
@@ -1121,7 +1122,6 @@ bool FWacomUIBackpackCardDetailPanelSectionsSpec::RunTest(const FString& /*Param
 
 	FWacomCardDetailViewData Data;
 	Data.Name = FText::FromString(TEXT("详情测试卡"));
-	Data.Description = FText::FromString(TEXT("完整描述文本"));
 
 	FWacomCardDetailSection DescriptionSection;
 	DescriptionSection.SectionId = FName(TEXT("Description"));
@@ -1148,9 +1148,7 @@ bool FWacomUIBackpackCardDetailPanelSectionsSpec::RunTest(const FString& /*Param
 	Panel->SetCardDetailData(Data);
 
 	TestEqual(TEXT("Detail panel preserves name"), Panel->GetCardDetailData().Name.ToString(), TEXT("详情测试卡"));
-	TestEqual(TEXT("Detail panel preserves description"), Panel->GetCardDetailData().Description.ToString(), TEXT("完整描述文本"));
 	TestEqual(TEXT("Detail panel name getter"), Panel->GetNameText().ToString(), TEXT("详情测试卡"));
-	TestEqual(TEXT("Detail panel description getter"), Panel->GetDescriptionText().ToString(), TEXT("完整描述文本"));
 	TestEqual(TEXT("Detail panel creates description and passive sections"), Panel->GetSectionCount(), 2);
 	TestEqual(TEXT("First section is description"), Panel->GetSectionTitleText(0).ToString(), TEXT("描述"));
 	TestEqual(TEXT("Second section is passive"), Panel->GetSectionTitleText(1).ToString(), TEXT("被动"));

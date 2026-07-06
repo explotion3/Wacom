@@ -144,9 +144,6 @@ struct WACOMAPP_API FWacomCardDetailViewData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	FText Name;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail", meta = (MultiLine = true))
-	FText Description;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	TArray<FWacomCardDetailSection> Sections;
 };
