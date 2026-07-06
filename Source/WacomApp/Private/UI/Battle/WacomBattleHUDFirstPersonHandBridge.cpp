@@ -116,6 +116,12 @@ namespace
 		}
 	}
 
+	bool IsCardTargetKindUnsupportedForSource(
+		const FWacomBattleTargetValidationResult& Validation)
+	{
+		return Validation.RejectReason == EWacomBattleTargetRejectReason::UnsupportedCardTarget;
+	}
+
 }
 
 FWacomBattleHUDFirstPersonHandBridge::FWacomBattleHUDFirstPersonHandBridge(UBattleHUD& InHUD)
@@ -1277,7 +1283,7 @@ FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveD
 			return Result;
 		}
 
-		if (CardSnapshot->Definition->TargetMode == ECardTargetMode::HandCard)
+		if (!IsCardTargetKindUnsupportedForSource(Validation))
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
 			Result.RejectReason = MapTargetValidationRejectReason(Validation.RejectReason);
@@ -1314,17 +1320,15 @@ FWacomBattleHUDFirstPersonHandBridge::BuildCardTargetAffordances(
 	{
 		return Affordances;
 	}
-
 	const FHandCardSnapshot* SourceSnapshot =
 		FindHandCardSnapshotForFirstPersonHandBridge(Snapshot, SourceCardId);
-	if (!SourceSnapshot
-		|| !SourceSnapshot->Definition
-		|| SourceSnapshot->Definition->TargetMode != ECardTargetMode::HandCard)
+	if (!SourceSnapshot || !SourceSnapshot->Definition)
 	{
 		return Affordances;
 	}
 
 	Affordances.Reserve(FMath::Max(0, Snapshot.Hand.Cards.Num() - 1));
+	bool bSourceSupportsCardTargets = false;
 	for (const FHandCardSnapshot& TargetCard : Snapshot.Hand.Cards)
 	{
 		if (!TargetCard.InstanceId.IsValid() || TargetCard.InstanceId == SourceCardId)
@@ -1336,6 +1340,8 @@ FWacomBattleHUDFirstPersonHandBridge::BuildCardTargetAffordances(
 			FWacomInteractionTargetHandle::ForCardTarget(TargetCard.InstanceId, &HUD);
 		const FWacomBattleTargetValidationResult Validation =
 			BattleSession.ValidateTargetWithCard(SourceCardId, TargetHandle);
+		bSourceSupportsCardTargets |=
+			Validation.bCanTarget || !IsCardTargetKindUnsupportedForSource(Validation);
 
 		FWacomFirstPersonCardTargetAffordance Affordance;
 		Affordance.CardInstanceId = TargetCard.InstanceId;
@@ -1345,6 +1351,10 @@ FWacomBattleHUDFirstPersonHandBridge::BuildCardTargetAffordances(
 			: EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
 		Affordance.DebugSummary = Validation.DebugSummary;
 		Affordances.Add(MoveTemp(Affordance));
+	}
+	if (!bSourceSupportsCardTargets)
+	{
+		Affordances.Reset();
 	}
 	return Affordances;
 }

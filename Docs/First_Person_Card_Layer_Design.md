@@ -203,7 +203,7 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 
 Battle 回合边界快捷键 `IA_Wait` / `IA_EndTurn` 在 PlayerController 入口先检查 first-person card layer active gesture。只要当前手势不是 `Idle` / `Cancelled`（包括 pressed、inspect、no-target drag、targeted aim、armed commit），本次快捷键会取消并消费该手势，不向 BattleHUD 提交等待或结束回合；下一次按键才按普通命令入口执行。取消后源卡保留当前 visual slot，并继续用 slot motion 返回手牌布局，不触发普通布局大跳变 reset。单纯 hover 不属于 active gesture，不会阻塞等待或结束回合。
 
-需要敌方部位目标的卡 release 到合法 world enemy part 后，BattleHUD 调用现有 play-card world target 路径。需要手牌目标的卡 release 到合法 first-person card target 后，BattleHUD 提交 hand-card target。UI 手势层只提交 target identity，不判断加费、减费、弃置或消耗规则。
+需要敌方部位目标的卡 release 到合法 world enemy part 后，BattleHUD 调用现有 play-card world target 路径。需要手牌目标的卡 release 到合法 first-person card target 后，BattleHUD 提交 hand-card target。UI 手势层只提交 target identity，不判断加费、减费、弃置或消耗规则。Battle first-person hand bridge 生成 hand-card release / probe / full-hand affordance 时，只消费 `UBattleSession::ValidateTargetWithCard()` 返回的合法性和 reject reason；非 hand-card source 的卡牌目标停留在 probe-only，真实 hand-card source 的无效目标才显示 invalid card-target feedback。
 
 悬浮和拖拽期间，卡牌层都会记录 DPI-aware widget-space 指针和归一化视口坐标。普通 hover 的 mouse move 被 UMG 处理后，`UWacomFirstPersonCardLayerWidget` 会广播 `FWacomFirstPersonCardPointerView`，由 BattleHUD 写入 Battle camera look 临时 override，探索 / Run 则由 `AWacomPlayerController` 写入 Run Tunnel cursor look override。因此鼠标在悬浮放大的卡牌上移动时，镜头仍会跟随当前指针，不会等离开卡牌后突然跳到新位置。
 

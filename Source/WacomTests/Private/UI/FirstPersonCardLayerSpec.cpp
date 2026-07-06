@@ -14176,6 +14176,155 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonLayerWorldTargetSourceDoesNotBuildHandCardAffordanceTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.WorldTargetSourceDoesNotBuildFullHandCardAffordance",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonLayerWorldTargetSourceDoesNotBuildHandCardAffordanceTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* SourceCard = Fx.MakeSimpleDamageCard(/*Cost*/0, /*Damage*/1);
+	UCardDefinition* NormalTargetCard = Fx.MakeNoopCard(0);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ SourceCard, NormalTargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId =
+		WacomFirstPersonCardLayerSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::SingleEnemyPart);
+	const FGuid NormalTargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, NormalTargetCard->CardId);
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+			AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+			FTransform::Identity);
+	AWacomPlayerCharacter* Character =
+		World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid())
+		|| !TestTrue(TEXT("Normal target exists"), NormalTargetCardId.IsValid()))
+	{
+		if (Character)
+		{
+			Character->Destroy();
+		}
+		if (PC)
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	HUD->TakeWidget();
+	HUD->SetSession(Session);
+	WacomFirstPersonCardLayerSpec::SettleBattlePresentationQueue(*HUD);
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
+	if (!TestNotNull(TEXT("Anchor probe"), Anchor))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
+	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
+	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+	{
+		FWacomFirstPersonCardLayerEntry Entry;
+		Entry.CardInstanceId = CardSnapshot.InstanceId;
+		Entry.CardViewData = WacomFirstPersonCardLayerSpec::BuildBattleCardViewDataForTest(CardSnapshot);
+		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
+		WacomFirstPersonCardLayerSpec::SetEntryBattleTargetModeProjection(
+			Entry,
+			CardSnapshot.Definition
+				? CardSnapshot.Definition->TargetMode
+				: ECardTargetMode::None);
+		Entry.Zone = CardSnapshot.Zone;
+		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
+		CardEntries.Add(MoveTemp(Entry));
+	}
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), CardEntries);
+	HUD->SetFirstPersonCardAnchorForTest(Anchor);
+	Anchor->RefreshAnchor(0.0f);
+	Anchor->PrimaryComponentTick.ExecuteTick(
+		0.0f,
+		LEVELTICK_All,
+		ENamedThreads::GameThread,
+		FGraphEventRef());
+	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::CardLayer(*Anchor);
+	if (!TestNotNull(TEXT("First-person layer"), Layer))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = nullptr;
+	UWacomFirstPersonCardLayerSlotWidget* NormalTargetWidget = nullptr;
+	for (int32 Index = 0; Index < Layer->GetCardViewCount(); ++Index)
+	{
+		UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(Index);
+		if (!SlotWidget)
+		{
+			continue;
+		}
+		const FGuid SlotCardId = SlotWidget->GetSlotView().Entry.CardInstanceId;
+		if (SlotCardId == SourceCardId)
+		{
+			SourceWidget = SlotWidget;
+		}
+		else if (SlotCardId == NormalTargetCardId)
+		{
+			NormalTargetWidget = SlotWidget;
+		}
+	}
+	if (!TestNotNull(TEXT("Source slot"), SourceWidget)
+		|| !TestNotNull(TEXT("Normal target slot"), NormalTargetWidget))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+
+	const FVector2D SourcePosition = SourceWidget->GetVisualSlotView().ScreenPosition;
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SourceWidget, SourcePosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SourceWidget, 0.01f, SourcePosition + FVector2D(80.0f, -20.0f));
+	TestEqual(TEXT("World-target card keeps aiming gesture"),
+		SourceWidget->GetGestureStateForFirstPersonLayer(),
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	Anchor->OnFirstPersonCardLayerDragUpdated.Broadcast(SourceCardId, FWacomFirstPersonCardLayerTestAccess::View(*Layer).CurrentDragView);
+
+	const FWacomFirstPersonCardSlotAutomationTestView TargetView =
+		FWacomFirstPersonCardLayerTestAccess::View(*NormalTargetWidget);
+	TestFalse(TEXT("World-target source does not build hand-card affordance"), TargetView.bCardDragTargetAffordanceFeedback);
+	TestEqual(TEXT("World-target source leaves hand-card affordance state empty"),
+		TargetView.CardDragTargetAffordanceFeedbackState,
+		EWacomFirstPersonCardDragTargetFeedbackState::None);
+	TestTrue(TEXT("Debug reports no valid affordances"),
+		Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceValid=0")));
+	TestTrue(TEXT("Debug reports no invalid affordances"),
+		Layer->GetDragTargetDebugSummary().Contains(TEXT("AffordanceInvalid=0")));
+
+	Layer->CancelCardDragGesture(true);
+	Character->Destroy();
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonLayerKeywordFilterAffordanceTest,
 	"Wacom.UI.FirstPersonCardLayer.DragTargetFeedback.FullHandAffordanceUsesKeywordFilter",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
