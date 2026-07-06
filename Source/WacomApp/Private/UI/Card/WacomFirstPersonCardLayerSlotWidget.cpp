@@ -1361,8 +1361,7 @@ FWacomFirstPersonCardLayerSlotView UWacomFirstPersonCardLayerSlotWidget::BuildNo
 {
 	const FWacomFirstPersonCardLayerSlotView& BaseSlotView = GetGestureBaseSlotView();
 	FWacomFirstPersonCardLayerSlotView DragSlot = BaseSlotView;
-	const FVector2D DragDelta = CurrentGestureScreenPosition - PressScreenPosition;
-	DragSlot.ScreenPosition = BaseSlotView.ScreenPosition + DragDelta;
+	DragSlot.ScreenPosition = CurrentGestureScreenPosition;
 	DragSlot.WidgetPosition = DragSlot.ScreenPosition;
 	DragSlot.SnappedWidgetPosition = DragSlot.ScreenPosition;
 	DragSlot.RenderScale = FMath::Max(0.01f, BaseSlotView.RenderScale * CardDragConfig.CardInspectScale);

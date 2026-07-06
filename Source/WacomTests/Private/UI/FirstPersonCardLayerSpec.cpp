@@ -11338,8 +11338,63 @@ bool FWacomFirstPersonCardLayerNoTargetArmedTest::RunTest(const FString& Paramet
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerNoTargetDragCentersOnPointerTest,
+	"Wacom.UI.FirstPersonCardLayer.CardDragInspect.NoTargetDragCentersCardOnPointer",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerNoTargetDragCentersOnPointerTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(
+		APlayerController::StaticClass(),
+		FTransform::Identity);
+	UWacomFirstPersonCardLayerSlotWidget* SlotWidget =
+		NewObject<UWacomFirstPersonCardLayerSlotWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Slot widget"), SlotWidget))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragConfig DragConfig;
+	DragConfig.CardDragStartThresholdPixels = 10.0f;
+	DragConfig.NoTargetCardDragOutCommitDistancePixels = 200.0f;
+	SlotWidget->SetCardDragConfig(DragConfig);
+	SlotWidget->SetCardLayerInteractionEnabled(true);
+
+	const FGuid CardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerSlotView InitialSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
+	InitialSlot.Entry.TargetMode = ECardTargetMode::None;
+	InitialSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
+	InitialSlot.WidgetPosition = InitialSlot.ScreenPosition;
+	InitialSlot.SnappedWidgetPosition = InitialSlot.ScreenPosition;
+	SlotWidget->SetSlotViewImmediate(InitialSlot);
+
+	const FVector2D OffCenterPressPosition(532.0f, 624.0f);
+	const FVector2D PointerPosition(560.0f, 540.0f);
+	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, OffCenterPressPosition);
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, PointerPosition);
+	TestEqual(TEXT("No-target card enters drag state"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 1.0f);
+
+	TestEqual(TEXT("No-target visual centers on pointer"), SlotWidget->GetVisualSlotView().ScreenPosition, PointerPosition);
+	TestEqual(TEXT("Drag view still records original press"), SlotWidget->BuildDragView().PressScreenPosition, OffCenterPressPosition);
+	TestEqual(TEXT("Drag view still records current pointer"), SlotWidget->BuildDragView().CurrentScreenPosition, PointerPosition);
+
+	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, PointerPosition);
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerNoTargetDragIgnoresLiveAnchorMotionTest,
-	"Wacom.UI.FirstPersonCardLayer.CardDragInspect.NoTargetDragUsesFrozenVisualStart",
+	"Wacom.UI.FirstPersonCardLayer.CardDragInspect.NoTargetDragIgnoresLiveAnchorMotion",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerNoTargetDragIgnoresLiveAnchorMotionTest::RunTest(const FString& Parameters)
