@@ -28,11 +28,6 @@ namespace WacomCardDetailTextCompiler
 		const FWacomCardPresentationRuntimeContext& RuntimeContext,
 		TArray<FWacomCardDetailTokenLine>& OutLines);
 
-	TArray<FWacomCardDetailTokenLine> BuildPlainTextTokenLines(
-		const TArray<FText>& Lines,
-		EWacomCardDetailTokenLineKind Kind,
-		const FString& StableIdPrefix);
-
 	void AddCardDetailSection(
 		FWacomCardDetailViewData& Data,
 		FName SectionId,

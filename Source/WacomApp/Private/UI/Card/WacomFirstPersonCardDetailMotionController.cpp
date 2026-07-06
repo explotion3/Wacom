@@ -11,23 +11,6 @@ namespace
 		return Left.ToString() == Right.ToString();
 	}
 
-	bool AreDetailTextArraysEquivalent(const TArray<FText>& Left, const TArray<FText>& Right)
-	{
-		if (Left.Num() != Right.Num())
-		{
-			return false;
-		}
-
-		for (int32 Index = 0; Index < Left.Num(); ++Index)
-		{
-			if (!AreDetailTextsEquivalent(Left[Index], Right[Index]))
-			{
-				return false;
-			}
-		}
-		return true;
-	}
-
 	bool AreDetailTokensEquivalent(
 		const FWacomCardDetailToken& Left,
 		const FWacomCardDetailToken& Right)
@@ -112,9 +95,7 @@ namespace
 	{
 		return AreDetailTextsEquivalent(Left.Name, Right.Name)
 			&& AreDetailTextsEquivalent(Left.Description, Right.Description)
-			&& AreDetailSectionsEquivalent(Left.Sections, Right.Sections)
-			&& AreDetailTextArraysEquivalent(Left.TaskLines, Right.TaskLines)
-			&& AreDetailTokenLinesEquivalent(Left.TokenLines, Right.TokenLines);
+			&& AreDetailSectionsEquivalent(Left.Sections, Right.Sections);
 	}
 }
 

@@ -372,12 +372,10 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 		Card->Description,
 		EWacomCardDetailTokenLineKind::Description,
 		TEXT("Description"));
-	Data.TokenLines.Append(DescriptionSectionLines);
 	if (ShouldAppendGeneratedActiveEffectTokenLines(Card))
 	{
 		TArray<FWacomCardDetailTokenLine> EffectLines =
 			WacomCardDetailTextCompiler::BuildEffectTokenLines(Card, RuntimeContext);
-		Data.TokenLines.Append(EffectLines);
 		DescriptionSectionLines.Append(MoveTemp(EffectLines));
 	}
 	TArray<FWacomCardDetailTokenLine> PassiveSectionLines;
@@ -385,7 +383,6 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 		Card,
 		RuntimeContext,
 		PassiveSectionLines);
-	Data.TokenLines.Append(PassiveSectionLines);
 
 	WacomCardDetailTextCompiler::AddCardDetailSection(
 		Data,
@@ -393,15 +390,6 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 		EWacomCardDetailSectionKind::Description,
 		LOCTEXT("DescriptionSectionTitle", "描述"),
 		MoveTemp(DescriptionSectionLines));
-	WacomCardDetailTextCompiler::AddCardDetailSection(
-		Data,
-		FName(TEXT("Task")),
-		EWacomCardDetailSectionKind::Task,
-		LOCTEXT("TasksSectionTitle", "任务"),
-		WacomCardDetailTextCompiler::BuildPlainTextTokenLines(
-			Data.TaskLines,
-			EWacomCardDetailTokenLineKind::Description,
-			TEXT("Task")));
 	WacomCardDetailTextCompiler::AddCardDetailSection(
 		Data,
 		FName(TEXT("Passive")),

@@ -563,20 +563,6 @@ namespace WacomCardDetailTextCompiler
 			return true;
 		}
 
-		FWacomCardDetailTokenLine BuildPlainTextTokenLine(
-			const FText& Text,
-			EWacomCardDetailTokenLineKind Kind,
-			const FString& StableIdPrefix,
-			int32 LineIndex)
-		{
-			FWacomCardDetailTokenLine Line;
-			Line.LineId = FName(*FString::Printf(TEXT("%s.%d.Line"), *StableIdPrefix, LineIndex));
-			Line.Kind = Kind;
-			Line.Tokens.Add(MakeTextToken(
-				Text,
-				FName(*FString::Printf(TEXT("%s.%d.Text"), *StableIdPrefix, LineIndex))));
-			return Line;
-		}
 	}
 
 	TArray<FWacomCardDetailTokenLine> BuildAuthoredTextTokenLines(
@@ -726,24 +712,6 @@ namespace WacomCardDetailTextCompiler
 				}
 			}
 		}
-	}
-
-	TArray<FWacomCardDetailTokenLine> BuildPlainTextTokenLines(
-		const TArray<FText>& Lines,
-		EWacomCardDetailTokenLineKind Kind,
-		const FString& StableIdPrefix)
-	{
-		TArray<FWacomCardDetailTokenLine> TokenLines;
-		int32 LineIndex = 0;
-		for (const FText& LineText : Lines)
-		{
-			if (!LineText.IsEmpty())
-			{
-				TokenLines.Add(BuildPlainTextTokenLine(LineText, Kind, StableIdPrefix, LineIndex));
-				++LineIndex;
-			}
-		}
-		return TokenLines;
 	}
 
 	void AddCardDetailSection(

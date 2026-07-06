@@ -1074,7 +1074,8 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 		Data.Description.ToString(),
 		TEXT("造成1暮气，1中毒。"));
 	TestFalse(TEXT("Description does not contain passive copy"), Data.Description.ToString().Contains(TEXT("被动")));
-	TestEqual(TEXT("Task lines empty before schema support"), Data.TaskLines.Num(), 0);
+	TestTrue(TEXT("Detail document has no task section before schema support"),
+		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Task).IsEmpty());
 	TestTrue(TEXT("Passive section uses DisplayText"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Passive)
 			.Contains(TEXT("每当你打出 3 张伙伴时，使此牌回到手中。")));

@@ -133,9 +133,8 @@ struct WACOMAPP_API FWacomCardDetailSection
  *
  * Small card faces should keep using FWacomCardViewData. Sections are the
  * canonical document model for hover panels, selected-card inspectors, and
- * other expanded detail surfaces. Legacy flat mirrors are kept only where
- * existing WBP accessors still need them; display widgets should not infer
- * sections from those mirrors.
+ * other expanded detail surfaces. Display widgets should render sections
+ * directly instead of inferring their own detail document from flat text.
  */
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomCardDetailViewData
@@ -150,12 +149,6 @@ struct WACOMAPP_API FWacomCardDetailViewData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	TArray<FWacomCardDetailSection> Sections;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	TArray<FText> TaskLines;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	TArray<FWacomCardDetailTokenLine> TokenLines;
 };
 
 UENUM(BlueprintType)
