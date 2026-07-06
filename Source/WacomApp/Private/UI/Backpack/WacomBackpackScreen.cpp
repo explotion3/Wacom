@@ -12,7 +12,6 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
-#include "Components/WrapBoxSlot.h"
 #include "Misc/PackageName.h"
 
 #include "Cards/CardDefinition.h"
@@ -22,6 +21,7 @@
 #include "UI/Backpack/BackpackRuntimeZoneBuilder.h"
 #include "UI/Backpack/WacomBackpackCardDetailController.h"
 #include "UI/Backpack/WacomBackpackCommandFlow.h"
+#include "UI/Backpack/WacomBackpackDeckCardListReconciler.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
@@ -201,73 +201,6 @@ uint32 BuildBackpackStorageRefreshSignature(const FRunBackpackStorageSnapshot& S
 	return Hash;
 }
 
-struct FWacomBackpackCardWidgetKey
-{
-	FGuid InstanceId;
-	FGuid OwnerInstanceId;
-	EZoneKind PhysicalZone = EZoneKind::Backpack;
-	EWacomBackpackDeckCardListReuseRole Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
-
-	friend bool operator==(const FWacomBackpackCardWidgetKey& A, const FWacomBackpackCardWidgetKey& B)
-	{
-		return A.InstanceId == B.InstanceId
-			&& A.OwnerInstanceId == B.OwnerInstanceId
-			&& A.PhysicalZone == B.PhysicalZone
-			&& A.Role == B.Role;
-	}
-};
-
-uint32 GetTypeHash(const FWacomBackpackCardWidgetKey& Key)
-{
-	uint32 Hash = Key.InstanceId.A;
-	Hash = HashCombine(Hash, Key.InstanceId.B);
-	Hash = HashCombine(Hash, Key.InstanceId.C);
-	Hash = HashCombine(Hash, Key.InstanceId.D);
-	Hash = HashCombine(Hash, Key.OwnerInstanceId.A);
-	Hash = HashCombine(Hash, Key.OwnerInstanceId.B);
-	Hash = HashCombine(Hash, Key.OwnerInstanceId.C);
-	Hash = HashCombine(Hash, Key.OwnerInstanceId.D);
-	Hash = HashCombine(Hash, static_cast<uint32>(Key.PhysicalZone));
-	Hash = HashCombine(Hash, static_cast<uint32>(Key.Role));
-	return Hash;
-}
-
-FWacomBackpackCardWidgetKey MakeBackpackCardWidgetKey(
-	const FRunStorageCardView& CardView,
-	EWacomBackpackDeckCardListReuseRole Role)
-{
-	FWacomBackpackCardWidgetKey Key;
-	Key.InstanceId = CardView.Instance.InstanceId;
-	Key.PhysicalZone = CardView.PhysicalZone;
-	Key.OwnerInstanceId = (CardView.PhysicalZone == EZoneKind::SpecialZone)
-		? CardView.ZoneOwnerInstanceId
-		: FGuid();
-	Key.Role = Role;
-	return Key;
-}
-
-FWacomBackpackCardWidgetKey MakeBackpackCardWidgetKey(
-	const UWacomDeckCardWidget& Widget,
-	EWacomBackpackDeckCardListReuseRole Role)
-{
-	FWacomBackpackCardWidgetKey Key;
-	Key.InstanceId = Widget.GetCardInstanceId();
-	Key.PhysicalZone = Widget.GetFromZone();
-	Key.OwnerInstanceId = (Key.PhysicalZone == EZoneKind::SpecialZone)
-		? Widget.GetFromZoneOwnerInstanceId()
-		: FGuid();
-	Key.Role = Role;
-	return Key;
-}
-
-struct FWacomBackpackCardWidgetDesired
-{
-	FRunStorageCardView CardView;
-	EWacomBackpackDeckCardListReuseRole Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
-	FText ProjectedBadgeText;
-	bool bRightClickToggleEnabled = false;
-};
-
 template <typename TWidget>
 TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath)
 {
@@ -283,113 +216,6 @@ TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath)
 		return Loaded;
 	}
 	return TWidget::StaticClass();
-}
-
-UPanelWidget* GetPanelParent(UWacomDeckCardWidget* Widget)
-{
-	return Widget ? Cast<UPanelWidget>(Widget->GetParent()) : nullptr;
-}
-
-void AddCardWidgetToPanel(UPanelWidget* Panel, UWacomDeckCardWidget* Widget)
-{
-	if (!Panel || !Widget)
-	{
-		return;
-	}
-
-	if (GetPanelParent(Widget) != Panel)
-	{
-		Widget->RemoveFromParent();
-	}
-
-	if (UWrapBox* WrapBox = Cast<UWrapBox>(Panel))
-	{
-		WrapBox->AddChildToWrapBox(Widget);
-	}
-	else
-	{
-		Panel->AddChild(Widget);
-	}
-}
-
-void MoveCardWidgetToPanelIndex(UPanelWidget* Panel, UWacomDeckCardWidget* Widget, int32 DesiredIndex)
-{
-	if (!Panel || !Widget)
-	{
-		return;
-	}
-
-	if (GetPanelParent(Widget) == Panel)
-	{
-		Panel->ShiftChild(DesiredIndex, Widget);
-		return;
-	}
-
-	AddCardWidgetToPanel(Panel, Widget);
-	Panel->ShiftChild(DesiredIndex, Widget);
-}
-
-void ReconcileCardWidgetPanel(
-	UPanelWidget* Panel,
-	const TArray<FWacomBackpackCardWidgetDesired>& DesiredCards,
-	const TFunction<EWacomBackpackDeckCardListReuseRole(const UWacomDeckCardWidget&)>& ResolveExistingRole,
-	const TFunction<UWacomDeckCardWidget*(const FRunStorageCardView&)>& CreateWidget,
-	const TFunction<void(UWacomDeckCardWidget*)>& OnRemovedWidget)
-{
-	if (!Panel)
-	{
-		return;
-	}
-
-	TMap<FWacomBackpackCardWidgetKey, UWacomDeckCardWidget*> ExistingByKey;
-	for (int32 ChildIndex = 0; ChildIndex < Panel->GetChildrenCount(); ++ChildIndex)
-	{
-		UWacomDeckCardWidget* ChildWidget = Cast<UWacomDeckCardWidget>(Panel->GetChildAt(ChildIndex));
-		if (!ChildWidget)
-		{
-			continue;
-		}
-
-		ExistingByKey.Add(MakeBackpackCardWidgetKey(*ChildWidget, ResolveExistingRole(*ChildWidget)), ChildWidget);
-	}
-
-	TSet<UWacomDeckCardWidget*> UsedWidgets;
-	for (int32 DesiredIndex = 0; DesiredIndex < DesiredCards.Num(); ++DesiredIndex)
-	{
-		const FWacomBackpackCardWidgetDesired& Desired = DesiredCards[DesiredIndex];
-		const FRunStorageCardView& CardView = Desired.CardView;
-		const FWacomBackpackCardWidgetKey Key = MakeBackpackCardWidgetKey(CardView, Desired.Role);
-		UWacomDeckCardWidget* Widget = ExistingByKey.FindRef(Key);
-		if (!Widget)
-		{
-			Widget = CreateWidget(CardView);
-		}
-		if (!Widget)
-		{
-			continue;
-		}
-
-		Widget->PrepareForBackpackListReuse();
-		Widget->SetCard(CardView.Instance, CardView.PhysicalZone, CardView.ZoneOwnerInstanceId);
-		Widget->SetMoveEnabled(true);
-		Widget->SetBackpackListReuseRole(Desired.Role);
-		Widget->SetRightClickToggleEnabled(Desired.bRightClickToggleEnabled);
-		if (!Desired.ProjectedBadgeText.IsEmpty())
-		{
-			Widget->SetProjectedFromBadgeText(Desired.ProjectedBadgeText);
-		}
-		UsedWidgets.Add(Widget);
-		MoveCardWidgetToPanelIndex(Panel, Widget, DesiredIndex);
-	}
-
-	for (const TPair<FWacomBackpackCardWidgetKey, UWacomDeckCardWidget*>& ExistingPair : ExistingByKey)
-	{
-		if (ExistingPair.Value && !UsedWidgets.Contains(ExistingPair.Value))
-		{
-			OnRemovedWidget(ExistingPair.Value);
-			ExistingPair.Value->RemoveFromParent();
-		}
-	}
 }
 
 }
@@ -792,11 +618,11 @@ void UWacomBackpackScreen::RebuildBattleDeckZone(const FRunBackpackStorageSnapsh
 {
 	if (BattleDeckCardsBox)
 	{
-		TArray<FWacomBackpackCardWidgetDesired> DesiredCards;
+		TArray<FWacomBackpackDeckCardListItem> DesiredCards;
 		DesiredCards.Reserve(Snapshot.BattleDeckPhysicalCards.Num() + Snapshot.BattleDeckProjectedCards.Num());
 		for (const FRunStorageCardView& CardView : Snapshot.BattleDeckPhysicalCards)
 		{
-			FWacomBackpackCardWidgetDesired Desired;
+			FWacomBackpackDeckCardListItem Desired;
 			Desired.CardView = CardView;
 			Desired.Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 			DesiredCards.Add(MoveTemp(Desired));
@@ -804,7 +630,7 @@ void UWacomBackpackScreen::RebuildBattleDeckZone(const FRunBackpackStorageSnapsh
 
 		for (const FRunStorageCardView& ProjectedView : Snapshot.BattleDeckProjectedCards)
 		{
-			FWacomBackpackCardWidgetDesired Desired;
+			FWacomBackpackDeckCardListItem Desired;
 			Desired.CardView = ProjectedView;
 			Desired.Role = EWacomBackpackDeckCardListReuseRole::BattleDeckProjected;
 			Desired.ProjectedBadgeText = UWacomBackpackScreenPresenter::BuildBattleDeckProjectedFromBadgeText(ProjectedView, Snapshot);
@@ -812,13 +638,9 @@ void UWacomBackpackScreen::RebuildBattleDeckZone(const FRunBackpackStorageSnapsh
 			DesiredCards.Add(MoveTemp(Desired));
 		}
 
-		ReconcileCardWidgetPanel(
+		FWacomBackpackDeckCardListReconciler::Reconcile(
 			BattleDeckCardsBox,
 			DesiredCards,
-			[](const UWacomDeckCardWidget& Widget)
-			{
-				return Widget.GetBackpackListReuseRole();
-			},
 			[this](const FRunStorageCardView& CardView) { return CreateCardWidget(CardView); },
 			[this](UWacomDeckCardWidget* RemovedWidget) { HideCardDetailPanelIfSourceRemoved(RemovedWidget); });
 	}
@@ -840,19 +662,18 @@ void UWacomBackpackScreen::RebuildFluxContentCards(const FRunBackpackStorageSnap
 
 	if (FluxContentCardsBox)
 	{
-		TArray<FWacomBackpackCardWidgetDesired> DesiredCards;
+		TArray<FWacomBackpackDeckCardListItem> DesiredCards;
 		DesiredCards.Reserve(Snapshot.Flux.ContentCards.Num());
 		for (const FRunStorageCardView& CardView : Snapshot.Flux.ContentCards)
 		{
-			FWacomBackpackCardWidgetDesired Desired;
+			FWacomBackpackDeckCardListItem Desired;
 			Desired.CardView = CardView;
 			Desired.Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 			DesiredCards.Add(MoveTemp(Desired));
 		}
-		ReconcileCardWidgetPanel(
+		FWacomBackpackDeckCardListReconciler::Reconcile(
 			FluxContentCardsBox,
 			DesiredCards,
-			[](const UWacomDeckCardWidget& Widget) { return Widget.GetBackpackListReuseRole(); },
 			[this](const FRunStorageCardView& CardView) { return CreateCardWidget(CardView); },
 			[this](UWacomDeckCardWidget* RemovedWidget) { HideCardDetailPanelIfSourceRemoved(RemovedWidget); });
 	}
@@ -953,19 +774,18 @@ void UWacomBackpackScreen::RebuildBurdenZone(const FRunBackpackStorageSnapshot& 
 
 	if (BurdenCardsBox)
 	{
-		TArray<FWacomBackpackCardWidgetDesired> DesiredCards;
+		TArray<FWacomBackpackDeckCardListItem> DesiredCards;
 		DesiredCards.Reserve(Snapshot.BurdenCards.Num());
 		for (const FRunStorageCardView& CardView : Snapshot.BurdenCards)
 		{
-			FWacomBackpackCardWidgetDesired Desired;
+			FWacomBackpackDeckCardListItem Desired;
 			Desired.CardView = CardView;
 			Desired.Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 			DesiredCards.Add(MoveTemp(Desired));
 		}
-		ReconcileCardWidgetPanel(
+		FWacomBackpackDeckCardListReconciler::Reconcile(
 			BurdenCardsBox,
 			DesiredCards,
-			[](const UWacomDeckCardWidget& Widget) { return Widget.GetBackpackListReuseRole(); },
 			[this](const FRunStorageCardView& CardView) { return CreateCardWidget(CardView); },
 			[this](UWacomDeckCardWidget* RemovedWidget) { HideCardDetailPanelIfSourceRemoved(RemovedWidget); });
 	}

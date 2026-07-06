@@ -15,9 +15,9 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
-#include "Components/WrapBoxSlot.h"
 
 #include "Cards/CardDefinition.h"
+#include "UI/Backpack/WacomBackpackDeckCardListReconciler.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
@@ -43,45 +43,6 @@ void LogSpecialZoneBindingWarningOnce(FName Key, const TCHAR* Message)
 		LoggedKeys.Add(Key);
 		UE_LOG(LogTemp, Warning, TEXT("%s"), Message);
 	}
-}
-
-void AddDeckCardWidgetToPanel(UPanelWidget* Panel, UWacomDeckCardWidget* Widget)
-{
-	if (!Panel || !Widget)
-	{
-		return;
-	}
-
-	if (Widget->GetParent() != Panel)
-	{
-		Widget->RemoveFromParent();
-	}
-
-	if (UWrapBox* WrapBox = Cast<UWrapBox>(Panel))
-	{
-		WrapBox->AddChildToWrapBox(Widget);
-	}
-	else
-	{
-		Panel->AddChild(Widget);
-	}
-}
-
-void MoveDeckCardWidgetToPanelIndex(UPanelWidget* Panel, UWacomDeckCardWidget* Widget, int32 DesiredIndex)
-{
-	if (!Panel || !Widget)
-	{
-		return;
-	}
-
-	if (Widget->GetParent() == Panel)
-	{
-		Panel->ShiftChild(DesiredIndex, Widget);
-		return;
-	}
-
-	AddDeckCardWidgetToPanel(Panel, Widget);
-	Panel->ShiftChild(DesiredIndex, Widget);
 }
 
 UPanelWidget* GetRootPanel(UWidgetTree* WidgetTree)
@@ -369,72 +330,40 @@ void UWacomSpecialZoneWidget::RebuildFromCurrentView()
 		ContentDropTarget->SetOwnerScreen(OwnerScreen.Get());
 	}
 
-	if (!OwnerCardWidget
-		|| OwnerCardWidget->GetCardInstanceId() != CurrentView.OwnerCard.Instance.InstanceId
-		|| OwnerCardWidget->GetBackpackListReuseRole() != EWacomBackpackDeckCardListReuseRole::SpecialOwner)
-	{
-		if (OwnerCardWidget)
-		{
-			OnCardUnhoveredNative.Broadcast(OwnerCardWidget);
-			OwnerCardWidget->RemoveFromParent();
-		}
-		OwnerCardWidget = CreateCardWidget(CurrentView.OwnerCard);
-	}
-	if (OwnerCardWidget)
-	{
-		OwnerCardWidget->PrepareForBackpackListReuse();
-		OwnerCardWidget->SetBackpackListReuseRole(EWacomBackpackDeckCardListReuseRole::SpecialOwner);
-		OwnerCardWidget->SetCard(CurrentView.OwnerCard.Instance, CurrentView.OwnerCard.PhysicalZone, CurrentView.OwnerCard.ZoneOwnerInstanceId);
-		OwnerCardWidget->SetMoveEnabled(true);
-		if (CurrentView.bOwnerInBattleDeck)
-		{
-			OwnerCardWidget->SetProjectedFromBadgeText(LOCTEXT("SpecialZoneOwnerInBattleDeck", "已出战"));
-		}
-		MoveDeckCardWidgetToPanelIndex(OwnerCardHost, OwnerCardWidget, 0);
-	}
+	TArray<FWacomBackpackDeckCardListItem> OwnerItems;
+	FWacomBackpackDeckCardListItem OwnerItem;
+	OwnerItem.CardView = CurrentView.OwnerCard;
+	OwnerItem.Role = EWacomBackpackDeckCardListReuseRole::SpecialOwner;
+	OwnerItem.ProjectedBadgeText = CurrentView.bOwnerInBattleDeck
+		? LOCTEXT("SpecialZoneOwnerInBattleDeck", "已出战")
+		: FText::GetEmpty();
+	OwnerItems.Add(MoveTemp(OwnerItem));
 
-	TMap<FGuid, UWacomDeckCardWidget*> ExistingContentByInstanceId;
-	for (UWacomDeckCardWidget* ExistingWidget : ContentCardWidgets)
-	{
-		if (ExistingWidget)
-		{
-			ExistingContentByInstanceId.Add(ExistingWidget->GetCardInstanceId(), ExistingWidget);
-		}
-	}
+	TArray<TObjectPtr<UWacomDeckCardWidget>> OwnerWidgets;
+	FWacomBackpackDeckCardListReconciler::Reconcile(
+		OwnerCardHost,
+		OwnerItems,
+		[this](const FRunStorageCardView& CardView) { return CreateCardWidget(CardView); },
+		[this](UWacomDeckCardWidget* RemovedWidget) { OnCardUnhoveredNative.Broadcast(RemovedWidget); },
+		&OwnerWidgets);
+	OwnerCardWidget = OwnerWidgets.IsValidIndex(0) ? OwnerWidgets[0].Get() : nullptr;
 
-	TArray<TObjectPtr<UWacomDeckCardWidget>> NewContentWidgets;
-	NewContentWidgets.Reserve(CurrentView.ContentCards.Num());
-	TSet<UWacomDeckCardWidget*> UsedContentWidgets;
-	for (int32 DesiredIndex = 0; DesiredIndex < CurrentView.ContentCards.Num(); ++DesiredIndex)
+	TArray<FWacomBackpackDeckCardListItem> DesiredContentCards;
+	DesiredContentCards.Reserve(CurrentView.ContentCards.Num());
+	for (const FRunStorageCardView& CardView : CurrentView.ContentCards)
 	{
-		const FRunStorageCardView& CardView = CurrentView.ContentCards[DesiredIndex];
-		UWacomDeckCardWidget* CardWidget = ExistingContentByInstanceId.FindRef(CardView.Instance.InstanceId);
-		if (!CardWidget)
-		{
-			CardWidget = CreateCardWidget(CardView);
-		}
-		if (!CardWidget)
-		{
-			continue;
-		}
-		CardWidget->PrepareForBackpackListReuse();
-		CardWidget->SetBackpackListReuseRole(EWacomBackpackDeckCardListReuseRole::SpecialContent);
-		CardWidget->SetCard(CardView.Instance, CardView.PhysicalZone, CardView.ZoneOwnerInstanceId);
-		CardWidget->SetMoveEnabled(true);
-		CardWidget->SetRightClickToggleEnabled(true);
-		NewContentWidgets.Add(CardWidget);
-		UsedContentWidgets.Add(CardWidget);
-		MoveDeckCardWidgetToPanelIndex(ContentCardsBox, CardWidget, DesiredIndex);
+		FWacomBackpackDeckCardListItem Desired;
+		Desired.CardView = CardView;
+		Desired.Role = EWacomBackpackDeckCardListReuseRole::SpecialContent;
+		Desired.bRightClickToggleEnabled = true;
+		DesiredContentCards.Add(MoveTemp(Desired));
 	}
-	for (const TPair<FGuid, UWacomDeckCardWidget*>& ExistingPair : ExistingContentByInstanceId)
-	{
-		if (ExistingPair.Value && !UsedContentWidgets.Contains(ExistingPair.Value))
-		{
-			OnCardUnhoveredNative.Broadcast(ExistingPair.Value);
-			ExistingPair.Value->RemoveFromParent();
-		}
-	}
-	ContentCardWidgets = MoveTemp(NewContentWidgets);
+	FWacomBackpackDeckCardListReconciler::Reconcile(
+		ContentCardsBox,
+		DesiredContentCards,
+		[this](const FRunStorageCardView& CardView) { return CreateCardWidget(CardView); },
+		[this](UWacomDeckCardWidget* RemovedWidget) { OnCardUnhoveredNative.Broadcast(RemovedWidget); },
+		&ContentCardWidgets);
 }
 
 UWacomDeckCardWidget* UWacomSpecialZoneWidget::CreateCardWidget(const FRunStorageCardView& CardView)
