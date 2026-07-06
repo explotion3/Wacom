@@ -24,6 +24,7 @@ class UWacomZoneDropTarget;
 class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
 class UWacomCardDragOperation;
+class FWacomBackpackCardDetailController;
 struct FWacomBackpackScreenTestAccess;
 struct FCardInstance;
 
@@ -214,6 +215,8 @@ private:
 
 	TWeakObjectPtr<UWacomDeckCardWidget> CardDetailSourceWidget;
 
+	TSharedPtr<FWacomBackpackCardDetailController> CardDetailController;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomBackpackZoneSectionWidget> BattleDeckZoneSection;
 
@@ -262,10 +265,15 @@ private:
 	UWacomCardDetailPanel* EnsureCardDetailPanel();
 	void PositionCardDetailPanelNear(UWacomDeckCardWidget* SourceWidget);
 	void HideCardDetailPanelIfSourceRemoved(UWacomDeckCardWidget* RemovedWidget);
+	FWacomBackpackCardDetailController& GetCardDetailController();
+	const FWacomBackpackCardDetailController& GetCardDetailController() const;
 
 #if WITH_AUTOMATION_TESTS
 	friend struct FWacomBackpackScreenTestAccess;
+#endif
+	friend class FWacomBackpackCardDetailController;
 
+#if WITH_AUTOMATION_TESTS
 	UWacomDeckCardWidget* GetBattleDeckCardWidgetForTest(int32 Index) const;
 	UWacomDeckCardWidget* GetFluxContentCardWidgetForTest(int32 Index) const;
 	UWacomDeckCardWidget* GetBurdenCardWidgetForTest(int32 Index) const;

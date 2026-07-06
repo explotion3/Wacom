@@ -7,7 +7,6 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
-#include "Components/CanvasPanelSlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -21,6 +20,7 @@
 #include "RunSession.h"
 #include "UI/Backpack/BackpackFallbackLayoutBuilder.h"
 #include "UI/Backpack/BackpackRuntimeZoneBuilder.h"
+#include "UI/Backpack/WacomBackpackCardDetailController.h"
 #include "UI/Backpack/WacomBackpackCommandFlow.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
@@ -111,9 +111,6 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 
 namespace
 {
-const FVector2D CardDetailPanelEstimatedSize(360.f, 420.f);
-constexpr float CardDetailPanelPadding = 12.f;
-
 uint32 HashGuidForBackpackRefresh(uint32 Hash, const FGuid& Value)
 {
 	Hash = HashCombine(Hash, Value.A);
@@ -448,7 +445,19 @@ void UWacomBackpackScreen::NativeConstruct()
 
 void UWacomBackpackScreen::NativeDestruct()
 {
-	HideCardDetailPanel();
+	if (CardDetailController)
+	{
+		CardDetailController->Hide();
+		CardDetailController.Reset();
+	}
+	else
+	{
+		if (CardDetailPanel)
+		{
+			CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		CardDetailSourceWidget = nullptr;
+	}
 
 	if (UWacomRunViewModelProvider* Provider = SubscribedProvider.Get())
 	{
@@ -550,12 +559,12 @@ FVector2D UWacomBackpackScreen::ComputeCardDetailPanelPosition(
 
 bool UWacomBackpackScreen::IsCardDetailPanelVisible() const
 {
-	return CardDetailPanel && CardDetailPanel->GetVisibility() != ESlateVisibility::Collapsed;
+	return GetCardDetailController().IsVisible();
 }
 
 FText UWacomBackpackScreen::GetCardDetailPanelNameText() const
 {
-	return CardDetailPanel ? CardDetailPanel->GetNameText() : FText::GetEmpty();
+	return GetCardDetailController().GetNameText();
 }
 
 bool UWacomBackpackScreen::HandleZoneDropRequested(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId)
@@ -979,103 +988,41 @@ void UWacomBackpackScreen::HandleCardUnhovered(UWacomDeckCardWidget* SourceWidge
 
 bool UWacomBackpackScreen::ShowCardDetailForCardWidget(UWacomDeckCardWidget* SourceWidget)
 {
-	if (!SourceWidget || !SourceWidget->GetCard())
-	{
-		HideCardDetailPanel();
-		return false;
-	}
-
-	UWacomCardDetailPanel* Panel = EnsureCardDetailPanel();
-	if (!Panel)
-	{
-		return false;
-	}
-
-	Panel->SetCardDetailData(UWacomBackpackScreenPresenter::BuildCardDetailViewData(SourceWidget->GetCard()));
-	PositionCardDetailPanelNear(SourceWidget);
-	Panel->SetRenderOpacity(1.f);
-	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
-	CardDetailSourceWidget = SourceWidget;
-	return true;
+	return GetCardDetailController().ShowForCardWidget(SourceWidget);
 }
 
 void UWacomBackpackScreen::HideCardDetailPanel()
 {
-	if (CardDetailPanel)
-	{
-		CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	CardDetailSourceWidget = nullptr;
+	GetCardDetailController().Hide();
 }
 
 void UWacomBackpackScreen::HideCardDetailPanelIfSourceRemoved(UWacomDeckCardWidget* RemovedWidget)
 {
-	if (RemovedWidget && CardDetailSourceWidget.Get() == RemovedWidget)
-	{
-		HideCardDetailPanel();
-	}
+	GetCardDetailController().HideIfSourceRemoved(RemovedWidget);
 }
 
 UWacomCardDetailPanel* UWacomBackpackScreen::EnsureCardDetailPanel()
 {
-	EnsureRuntimeZoneWidgets();
-	if (!CardDetailLayer)
-	{
-		return nullptr;
-	}
-
-	if (CardDetailPanel)
-	{
-		return CardDetailPanel;
-	}
-
-	UClass* PanelClass = CardDetailPanelClass
-		? CardDetailPanelClass.Get()
-		: UWacomCardDetailPanel::StaticClass();
-	CardDetailPanel = GetWorld()
-		? CreateWidget<UWacomCardDetailPanel>(this, PanelClass)
-		: NewObject<UWacomCardDetailPanel>(this, PanelClass);
-	if (!CardDetailPanel)
-	{
-		return nullptr;
-	}
-
-	CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
-	CardDetailPanel->SetIsEnabled(true);
-	CardDetailPanel->SetRenderOpacity(1.f);
-	if (UCanvasPanelSlot* DetailSlot = CardDetailLayer->AddChildToCanvas(CardDetailPanel))
-	{
-		DetailSlot->SetAutoSize(false);
-		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
-		DetailSlot->SetZOrder(1);
-	}
-	return CardDetailPanel;
+	return GetCardDetailController().EnsurePanel();
 }
 
 void UWacomBackpackScreen::PositionCardDetailPanelNear(UWacomDeckCardWidget* SourceWidget)
 {
-	if (!SourceWidget || !CardDetailLayer || !CardDetailPanel)
-	{
-		return;
-	}
+	GetCardDetailController().PositionNear(SourceWidget);
+}
 
-	const FGeometry& LayerGeometry = CardDetailLayer->GetCachedGeometry();
-	const FGeometry& SourceGeometry = SourceWidget->GetCachedGeometry();
-	const FVector2D AnchorPosition = LayerGeometry.AbsoluteToLocal(SourceGeometry.GetAbsolutePosition());
-	const FVector2D AnchorSize = SourceGeometry.GetLocalSize();
-	const FVector2D LayerSize = LayerGeometry.GetLocalSize();
-	const FVector2D Position = UWacomBackpackScreenPresenter::ComputeCardDetailPanelPosition(
-		AnchorPosition,
-		AnchorSize,
-		LayerSize,
-		CardDetailPanelEstimatedSize,
-		CardDetailPanelPadding);
-
-	if (UCanvasPanelSlot* DetailSlot = Cast<UCanvasPanelSlot>(CardDetailPanel->Slot))
+FWacomBackpackCardDetailController& UWacomBackpackScreen::GetCardDetailController()
+{
+	if (!CardDetailController)
 	{
-		DetailSlot->SetPosition(Position);
-		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
+		CardDetailController = MakeShared<FWacomBackpackCardDetailController>(*this);
 	}
+	return *CardDetailController;
+}
+
+const FWacomBackpackCardDetailController& UWacomBackpackScreen::GetCardDetailController() const
+{
+	return const_cast<UWacomBackpackScreen*>(this)->GetCardDetailController();
 }
 
 void UWacomBackpackScreen::HandleCloseClicked()

@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-ui
 status: active
-updated: 2026-06-20
+updated: 2026-07-07
 tags:
   - wacom/ui
   - wacom/wbp
@@ -24,7 +24,7 @@ UI 不直接修改战斗或 Run 状态。Widget 读取 Snapshot、ViewData 或 V
 | 领域 | 数据来源 | 命令出口 |
 |---|---|---|
 | ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 只读显示探索状态和交互提示 |
-| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；DropTarget hover preview 和 drop 提交都经私有 command flow 调用 RunSession、Toast 和 Confirm |
+| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；DropTarget hover preview 和 drop 提交都经私有 command flow 调用 RunSession、Toast 和 Confirm；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
 | Shop | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 flow 编排购买、关闭访问和 Toast |
 | RunEvent | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 flow 编排选项提交、支付、关闭和 Toast |
 | Battle | `FBattleSnapshot`、`FBattleEvent`、Battle ViewData | `UBattleHUD` 是唯一战斗 UI 命令出口 |
@@ -88,7 +88,7 @@ Run UI 只显示 RunSession 的当前事实和 presentation view，不直接改 
 | `UWacomRunEventScreen` | GameMenu | 展示当前事件节点、选项、支付需求和后果预览；选项提交和卡牌支付经 Screen flow 提交 |
 | `UWacomMenuWidgetBase` | GameMenu base | 处理 CommonUI activation、Back 请求和可选 first-person card menu lease |
 
-Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。
+Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。`UWacomBackpackScreen` 保留 Screen 生命周期、WBP 绑定、列表刷新和玩家意图入口；卡牌详情面板的创建、source guard、显示隐藏和 viewport-safe positioning 由 `FWacomBackpackCardDetailController` 承接，避免在 Screen 内继续扩散悬浮详情行为。
 
 ## §6 卡牌展示与 Builder
 
@@ -115,7 +115,7 @@ Runtime context 当前覆盖：
 - 战斗 first-person hand、Presentation Stack 小卡和 Combat Log detail。
 - 商店商品 ViewData。
 
-`UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。卡牌详情由 `UWacomCardDetailPanel` 显示 `FWacomCardDetailViewData.Sections`；`UWacomCardDetailTokenFlowWidget -> UWacomCardDetailTokenLineWidget -> UWacomCardDetailTokenWidget` 是 Section 内 token line 的正式 UMG 制作入口，并会优先使用 `/Game/Wacom/UI/Card/` 下同名 WBP 资产。BattleHUD 内部 card detail controller 只服务 first-person viewport 详情。
+`UWacomCardView` 只显示 `FWacomCardViewData`，不提交战斗、背包或 Run 命令。卡牌详情由 `UWacomCardDetailPanel` 显示 `FWacomCardDetailViewData.Sections`；`UWacomCardDetailTokenFlowWidget -> UWacomCardDetailTokenLineWidget -> UWacomCardDetailTokenWidget` 是 Section 内 token line 的正式 UMG 制作入口，并会优先使用 `/Game/Wacom/UI/Card/` 下同名 WBP 资产。BattleHUD 内部 card detail controller 只服务 first-person viewport 详情；背包详情由 `FWacomBackpackCardDetailController` 承接背包界面内的 panel lifecycle、source guard 和定位。
 
 ## §7 WBP 绑定文档分工
 

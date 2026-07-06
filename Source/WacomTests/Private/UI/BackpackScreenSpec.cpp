@@ -2438,8 +2438,8 @@ bool FWacomUIBackpackBattleDeckFullPreviewRejectsBackpackDropSpec::RunTest(const
 	TestTrue(TEXT("BattleDeck in-place preview is accepted through Screen flow"),
 		Screen->CanPreviewZoneDrop(*InPlaceBattleOp, EZoneKind::BattleDeck, FGuid()));
 
-	TestTrue(TEXT("Move one BattleDeck card to Backpack to create capacity"),
-		Run->MoveInstance(BattleAId, EZoneKind::Backpack, FGuid()));
+	TestTrue(TEXT("Move one BattleDeck card to BurdenZone to create capacity"),
+		Run->MoveInstance(BattleAId, EZoneKind::BurdenZone, FGuid()));
 	TestTrue(TEXT("BattleDeck accepts Backpack-origin preview when there is capacity"),
 		Screen->CanPreviewZoneDrop(*BackpackOp, EZoneKind::BattleDeck, FGuid()));
 
