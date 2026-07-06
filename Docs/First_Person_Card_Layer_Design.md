@@ -320,3 +320,5 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 - `Wacom.UI.Battle`
 
 测试访问通过 production 非反射 automation test view 和 `WacomTests/Private/UI/FirstPersonCardLayerTestAccess.h` 读取 / 驱动。CardView / EffectBadge 计数通过 `FWacomCardViewTestAccess`。PlayerController Run / Battle target probe 通过对应 `WacomTests/Private` access wrapper，不直接依赖散落 probe forwarding 方法或测试字段。
+
+Slot gesture 测试应通过 `InteractionIntent` 构造 entry / slot，避免再用 `TargetMode` 作为手势配置入口；只有验证 Battle adapter 投影时，才允许用显式命名的 Battle target-mode projection helper。

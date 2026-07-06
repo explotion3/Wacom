@@ -238,20 +238,68 @@ namespace WacomFirstPersonCardLayerSpec
 		return DragView;
 	}
 
-	void SetEntryTargetMode(
+	ECardTargetMode LegacyTargetProjectionForInteractionIntent(
+		EWacomFirstPersonCardInteractionIntent InteractionIntent)
+	{
+		switch (InteractionIntent)
+		{
+		case EWacomFirstPersonCardInteractionIntent::AimWorldTarget:
+			return ECardTargetMode::SingleEnemyPart;
+		case EWacomFirstPersonCardInteractionIntent::AimCardTarget:
+			return ECardTargetMode::HandCard;
+		case EWacomFirstPersonCardInteractionIntent::CommitNoTarget:
+		case EWacomFirstPersonCardInteractionIntent::InspectOnly:
+		case EWacomFirstPersonCardInteractionIntent::DragToDropTarget:
+		default:
+			return ECardTargetMode::None;
+		}
+	}
+
+	void SetEntryInteractionIntent(
+		FWacomFirstPersonCardLayerEntry& Entry,
+		EWacomFirstPersonCardInteractionIntent InteractionIntent,
+		ECardTargetMode LegacyTargetProjection)
+	{
+		Entry.InteractionIntent = InteractionIntent;
+		Entry.TargetMode = LegacyTargetProjection;
+	}
+
+	void SetEntryInteractionIntent(
+		FWacomFirstPersonCardLayerEntry& Entry,
+		EWacomFirstPersonCardInteractionIntent InteractionIntent)
+	{
+		SetEntryInteractionIntent(
+			Entry,
+			InteractionIntent,
+			LegacyTargetProjectionForInteractionIntent(InteractionIntent));
+	}
+
+	void SetSlotInteractionIntent(
+		FWacomFirstPersonCardLayerSlotView& Slot,
+		EWacomFirstPersonCardInteractionIntent InteractionIntent,
+		ECardTargetMode LegacyTargetProjection)
+	{
+		SetEntryInteractionIntent(
+			Slot.Entry,
+			InteractionIntent,
+			LegacyTargetProjection);
+	}
+
+	void SetSlotInteractionIntent(
+		FWacomFirstPersonCardLayerSlotView& Slot,
+		EWacomFirstPersonCardInteractionIntent InteractionIntent)
+	{
+		SetEntryInteractionIntent(Slot.Entry, InteractionIntent);
+	}
+
+	void SetEntryBattleTargetModeProjection(
 		FWacomFirstPersonCardLayerEntry& Entry,
 		ECardTargetMode TargetMode)
 	{
-		Entry.TargetMode = TargetMode;
-		Entry.InteractionIntent =
-			WacomFirstPersonCardInteractionIntentFromTargetMode(TargetMode);
-	}
-
-	void SetSlotTargetMode(
-		FWacomFirstPersonCardLayerSlotView& Slot,
-		ECardTargetMode TargetMode)
-	{
-		SetEntryTargetMode(Slot.Entry, TargetMode);
+		SetEntryInteractionIntent(
+			Entry,
+			WacomFirstPersonCardInteractionIntentFromTargetMode(TargetMode),
+			TargetMode);
 	}
 
 	FWacomFirstPersonCardLayerSlotView MakeProjectedInteractionSlot(
@@ -264,7 +312,9 @@ namespace WacomFirstPersonCardLayerSpec
 		Slot.Entry.CardInstanceId = CardInstanceId;
 		Slot.Entry.bIsPlayable = bPlayable;
 		Slot.Entry.CardViewData.bDisabled = !bPlayable;
-		SetSlotTargetMode(Slot, ECardTargetMode::None);
+		SetSlotInteractionIntent(
+			Slot,
+			EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
 		Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 		Slot.RenderScale = 0.55f;
 		Slot.RenderOpacity = 1.0f;
@@ -964,7 +1014,7 @@ bool FWacomFirstPersonCardLayerBleedPressHitBoundsTest::RunTest(const FString& P
 
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::None);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
 	Layer->SetCardSlots({ Slot });
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -6974,12 +7024,16 @@ bool FWacomFirstPersonCardAnchorProgrammaticDragGestureTest::RunTest(const FStri
 	NoTargetEntry.CardInstanceId = NoTargetCardId;
 	NoTargetEntry.CardViewData.Name = FText::FromString(TEXT("No Target"));
 	NoTargetEntry.bIsPlayable = true;
-	WacomFirstPersonCardLayerSpec::SetEntryTargetMode(NoTargetEntry, ECardTargetMode::None);
+	WacomFirstPersonCardLayerSpec::SetEntryInteractionIntent(
+		NoTargetEntry,
+		EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
 	FWacomFirstPersonCardLayerEntry TargetedEntry;
 	TargetedEntry.CardInstanceId = TargetedCardId;
 	TargetedEntry.CardViewData.Name = FText::FromString(TEXT("Targeted"));
 	TargetedEntry.bIsPlayable = true;
-	WacomFirstPersonCardLayerSpec::SetEntryTargetMode(TargetedEntry, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetEntryInteractionIntent(
+		TargetedEntry,
+		EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { NoTargetEntry, TargetedEntry });
 	Anchor->RefreshAnchor(1.0f / 60.0f);
 	Anchor->RefreshCardLayerForTest();
@@ -8023,7 +8077,7 @@ bool FWacomFirstPersonCardLayerProgrammaticDragPointerPumpTest::RunTest(const FS
 	const FGuid CardInstanceId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardInstanceId);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	Slot.WidgetPosition = Slot.ScreenPosition;
 	Slot.SnappedWidgetPosition = Slot.ScreenPosition;
@@ -8254,7 +8308,7 @@ bool FWacomFirstPersonCardLayerWaitShortcutCancelsTargetedAimTest::RunTest(const
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId);
 	Slot.Entry.CardViewData.Name = FText::FromString(TEXT("Targeted Shortcut Cancel"));
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardSlots({ Slot });
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
 	FWacomFirstPersonCardLayerTestAccess::SetCardLayer(*Anchor, Layer);
@@ -8302,7 +8356,7 @@ bool FWacomFirstPersonCardLayerProgrammaticNoTargetDragAnimatesToPumpTest::RunTe
 	const FGuid CardInstanceId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardInstanceId);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::None);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
 	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	Slot.WidgetPosition = Slot.ScreenPosition;
 	Slot.SnappedWidgetPosition = Slot.ScreenPosition;
@@ -8378,7 +8432,7 @@ bool FWacomFirstPersonCardLayerProgrammaticDragClickCardTargetReleasesSourceTest
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
 	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
@@ -8472,7 +8526,7 @@ bool FWacomFirstPersonCardLayerPointerRouteActionsPreserveActiveSourceTest::RunT
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
 	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
@@ -8584,7 +8638,7 @@ bool FWacomFirstPersonCardLayerMouseCardTargetReleaseRefreshesPointerViewTest::R
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
 	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
@@ -8673,7 +8727,7 @@ bool FWacomFirstPersonCardLayerProgrammaticDragPointerPumpOutsideSlotsTest::RunT
 	const FGuid CardInstanceId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardInstanceId);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	Slot.WidgetPosition = Slot.ScreenPosition;
 	Slot.SnappedWidgetPosition = Slot.ScreenPosition;
@@ -8729,7 +8783,7 @@ bool FWacomFirstPersonCardLayerProgrammaticDragIgnoresSlotPointerEventsTest::Run
 	const FGuid CardInstanceId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardInstanceId);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	Slot.WidgetPosition = Slot.ScreenPosition;
 	Slot.SnappedWidgetPosition = Slot.ScreenPosition;
@@ -8822,7 +8876,7 @@ bool FWacomFirstPersonCardLayerProgrammaticDragPointerPumpNoopAfterReleaseOrCanc
 	const FGuid CardInstanceId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardInstanceId);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	Slot.WidgetPosition = Slot.ScreenPosition;
 	Slot.SnappedWidgetPosition = Slot.ScreenPosition;
@@ -9241,7 +9295,7 @@ bool FWacomFirstPersonCardLayerInteractionFeedbackMaterialTest::RunTest(const FS
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	SlotWidget->SetSlotViewImmediate(Slot);
 
 	TestTrue(TEXT("Gesture press starts for configured interaction material slot"),
@@ -9360,7 +9414,7 @@ bool FWacomFirstPersonCardLayerDenySuppressesFullCardOverlayTest::RunTest(const 
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	SlotWidget->SetSlotViewImmediate(Slot);
 	TestTrue(TEXT("Gesture press succeeds before invalid overlay"),
 		FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f)));
@@ -11386,7 +11440,7 @@ bool FWacomFirstPersonCardLayerNoTargetDragCentersOnPointerTest::RunTest(const F
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView InitialSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(InitialSlot, ECardTargetMode::None);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(InitialSlot, EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
 	InitialSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	InitialSlot.WidgetPosition = InitialSlot.ScreenPosition;
 	InitialSlot.SnappedWidgetPosition = InitialSlot.ScreenPosition;
@@ -11436,11 +11490,10 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 	const FGuid NoTargetIntentCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView NoTargetIntentSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(NoTargetIntentCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(
 		NoTargetIntentSlot,
+		EWacomFirstPersonCardInteractionIntent::CommitNoTarget,
 		ECardTargetMode::SingleEnemyPart);
-	NoTargetIntentSlot.Entry.InteractionIntent =
-		EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
 	Layer->SetCardSlots({ NoTargetIntentSlot });
 
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -11460,11 +11513,10 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 	const FGuid DropIntentCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView DropIntentSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(DropIntentCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(
 		DropIntentSlot,
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget,
 		ECardTargetMode::HandCard);
-	DropIntentSlot.Entry.InteractionIntent =
-		EWacomFirstPersonCardInteractionIntent::DragToDropTarget;
 	Layer->SetCardSlots({ DropIntentSlot });
 
 	SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -11484,9 +11536,10 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 	const FGuid AimIntentCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView AimIntentSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(AimIntentCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(AimIntentSlot, ECardTargetMode::None);
-	AimIntentSlot.Entry.InteractionIntent =
-		EWacomFirstPersonCardInteractionIntent::AimWorldTarget;
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(
+		AimIntentSlot,
+		EWacomFirstPersonCardInteractionIntent::AimWorldTarget,
+		ECardTargetMode::None);
 	Layer->SetCardSlots({ AimIntentSlot });
 
 	SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -11648,7 +11701,7 @@ bool FWacomFirstPersonCardLayerTargetedAimTest::RunTest(const FString& Parameter
 
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardLayerInteractionEnabled(true);
 	Layer->SetCardSlots({ Slot });
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -11703,7 +11756,7 @@ bool FWacomFirstPersonCardLayerTargetedAimIgnoresLiveAnchorMotionTest::RunTest(c
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView InitialSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(InitialSlot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(InitialSlot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	InitialSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	InitialSlot.WidgetPosition = InitialSlot.ScreenPosition;
 	InitialSlot.SnappedWidgetPosition = InitialSlot.ScreenPosition;
@@ -11787,7 +11840,7 @@ bool FWacomFirstPersonCardLayerAimArrowStartFollowsVisualSourceTest::RunTest(con
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	Slot.WidgetPosition = Slot.ScreenPosition;
 	Slot.SnappedWidgetPosition = Slot.ScreenPosition;
@@ -11864,7 +11917,7 @@ bool FWacomFirstPersonCardLayerHandCardDenyTest::RunTest(const FString& Paramete
 	}
 
 	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(Slot);
 
@@ -11900,7 +11953,7 @@ bool FWacomFirstPersonCardLayerDragClearTest::RunTest(const FString& Parameters)
 
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardLayerInteractionEnabled(true);
 	Layer->SetCardSlots({ Slot });
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -12006,7 +12059,7 @@ bool FWacomFirstPersonCardLayerValidWorldTargetFeedbackTest::RunTest(const FStri
 
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardSlots({ Slot });
 
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -12070,7 +12123,7 @@ bool FWacomFirstPersonCardLayerAimArrowSnapTest::RunTest(const FString& Paramete
 
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardSlots({ Slot });
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -12126,7 +12179,7 @@ bool FWacomFirstPersonCardLayerAimArrowFallbackTest::RunTest(const FString& Para
 
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardSlots({ Slot });
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -12182,7 +12235,7 @@ bool FWacomFirstPersonCardLayerAimArrowFeedbackPersistsAcrossDragUpdateTest::Run
 
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardSlots({ Slot });
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -12251,7 +12304,7 @@ bool FWacomFirstPersonCardLayerCardProbeFeedbackTest::RunTest(const FString& Par
 	const FGuid SourceCardId = FGuid::NewGuid();
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView TargetSlot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(TargetCardId, true, true);
 	TargetSlot.Index = 1;
 	TargetSlot.ScreenPosition = FVector2D(650.0f, 600.0f);
@@ -12319,7 +12372,7 @@ bool FWacomFirstPersonCardLayerDragPointerCardTargetProbeTest::RunTest(const FSt
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
 	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
@@ -12404,7 +12457,7 @@ bool FWacomFirstPersonCardLayerCardTargetValidFeedbackPersistenceTest::RunTest(c
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView TargetSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
 	Layer->SetCardSlots({ SourceSlot, TargetSlot });
@@ -12492,7 +12545,7 @@ bool FWacomFirstPersonCardLayerCardTargetSwitchResetsToProbeTest::RunTest(const 
 	const FGuid SecondTargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView FirstTargetSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstTargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
 	FWacomFirstPersonCardLayerSlotView SecondTargetSlot =
@@ -12590,7 +12643,7 @@ bool FWacomFirstPersonCardLayerAllValidAffordanceUniqueFocusTest::RunTest(const 
 	const FGuid SecondTargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView FirstTargetSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(FirstTargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
 	FWacomFirstPersonCardLayerSlotView SecondTargetSlot =
@@ -12728,7 +12781,7 @@ bool FWacomFirstPersonCardLayerBleedCardTargetProbeTest::RunTest(const FString& 
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
 	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
@@ -12804,7 +12857,7 @@ bool FWacomFirstPersonCardLayerRotatedCardTargetProbeTest::RunTest(const FString
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	SourceSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	SourceSlot.WidgetPosition = SourceSlot.ScreenPosition;
 	SourceSlot.SnappedWidgetPosition = SourceSlot.ScreenPosition;
@@ -12865,7 +12918,7 @@ bool FWacomFirstPersonCardLayerDragTargetFeedbackClearTest::RunTest(const FStrin
 	const FGuid SourceCardId = FGuid::NewGuid();
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView TargetSlot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(TargetCardId, true, true);
 	TargetSlot.Index = 1;
 	Layer->SetCardLayerInteractionEnabled(true);
@@ -12947,7 +13000,7 @@ bool FWacomFirstPersonCardLayerCardTargetFocusVisualTest::RunTest(const FString&
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView TargetSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
 	Layer->SetCardSlots({ SourceSlot, TargetSlot });
@@ -13063,7 +13116,7 @@ bool FWacomFirstPersonCardLayerDragTargetSuppressesOrdinaryHoverTest::RunTest(co
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView TargetSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
 	Layer->SetCardSlots({ SourceSlot, TargetSlot });
@@ -13162,7 +13215,7 @@ bool FWacomFirstPersonCardLayerCardTargetFocusClearsWhenLeavingBodyTest::RunTest
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(SourceCardId, 0, FVector2D(500.0f, 600.0f), 0.0f, 1.0f);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView TargetSlot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(TargetCardId, 1, FVector2D(650.0f, 600.0f), 0.0f, 1.0f);
 	Layer->SetCardSlots({ SourceSlot, TargetSlot });
@@ -13232,7 +13285,7 @@ bool FWacomFirstPersonCardLayerDragTargetDebugSummaryTest::RunTest(const FString
 
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot = WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(Slot, ECardTargetMode::SingleEnemyPart);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardLayerInteractionEnabled(true);
 	Layer->SetCardSlots({ Slot });
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -13295,7 +13348,7 @@ bool FWacomFirstPersonCardLayerValidCardTargetFeedbackTest::RunTest(const FStrin
 	const FGuid InvalidTargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView ValidTargetSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(ValidTargetCardId, true, true);
 	ValidTargetSlot.Index = 1;
@@ -13395,7 +13448,7 @@ bool FWacomFirstPersonCardLayerFocusedCardTargetOverrideTest::RunTest(const FStr
 	const FGuid TargetCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView SourceSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(SourceCardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotTargetMode(SourceSlot, ECardTargetMode::HandCard);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(SourceSlot, EWacomFirstPersonCardInteractionIntent::AimCardTarget);
 	FWacomFirstPersonCardLayerSlotView TargetSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(TargetCardId, true, true);
 	TargetSlot.Index = 1;
@@ -14011,7 +14064,7 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 		Entry.CardInstanceId = CardSnapshot.InstanceId;
 		Entry.CardViewData = WacomFirstPersonCardLayerSpec::BuildBattleCardViewDataForTest(CardSnapshot);
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
-		WacomFirstPersonCardLayerSpec::SetEntryTargetMode(
+		WacomFirstPersonCardLayerSpec::SetEntryBattleTargetModeProjection(
 			Entry,
 			CardSnapshot.Definition
 				? CardSnapshot.Definition->TargetMode
@@ -14181,7 +14234,7 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 		Entry.CardInstanceId = CardSnapshot.InstanceId;
 		Entry.CardViewData = WacomFirstPersonCardLayerSpec::BuildBattleCardViewDataForTest(CardSnapshot);
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
-		WacomFirstPersonCardLayerSpec::SetEntryTargetMode(
+		WacomFirstPersonCardLayerSpec::SetEntryBattleTargetModeProjection(
 			Entry,
 			CardSnapshot.Definition
 				? CardSnapshot.Definition->TargetMode
@@ -14766,7 +14819,7 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		Entry.CardInstanceId = CardSnapshot.InstanceId;
 		Entry.CardViewData = WacomFirstPersonCardLayerSpec::BuildBattleCardViewDataForTest(CardSnapshot);
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
-		WacomFirstPersonCardLayerSpec::SetEntryTargetMode(
+		WacomFirstPersonCardLayerSpec::SetEntryBattleTargetModeProjection(
 			Entry,
 			CardSnapshot.Definition
 				? CardSnapshot.Definition->TargetMode
