@@ -90,6 +90,8 @@ Run UI 只显示 RunSession 的当前事实和 presentation view，不直接改 
 
 Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。`UWacomBackpackScreen` 保留 Screen 生命周期、WBP 绑定、列表刷新和玩家意图入口；卡牌详情面板的创建、source guard、显示隐藏和 viewport-safe positioning 由 `FWacomBackpackCardDetailController` 承接，存放区 snapshot revision / signature dirty gate 由 `FWacomBackpackStorageRefreshGate` 承接，普通卡牌列表的 identity reconcile、复用、排序和移除回调由 `FWacomBackpackDeckCardListReconciler` 承接，SpecialZone 区块的 identity reconcile、排序和移除回调由 `FWacomBackpackSpecialZoneListReconciler` 承接，避免在 Screen / SpecialZone Widget 内重复扩散列表算法。
 
+`UWacomShopScreen` 保留 Screen 生命周期、WBP 绑定、cached shop snapshot、商品行创建和购买意图入口；shop snapshot revision / offer row signature dirty gate 由 `FWacomShopRefreshGate` 承接，金币变化仍通过 `CurrentGold` 进入 signature 来刷新购买可用状态。
+
 ## §6 卡牌展示与 Builder
 
 `UWacomCardPresentationBuilder` 是卡牌 UI 展示数据统一入口和 Blueprint 可用门面。它从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData` 和效果徽章 view，只服务 UI 表现，不参与 Battle 或 Run 结算。小卡卡面数据、紧凑描述、体格/价值展示和效果徽章由 App-private `WacomCardFaceViewDataBuilder` 负责；详情文档的 Section 组装由 App-private `WacomCardDetailDocumentBuilder` 负责，token 编译由 App-private `WacomCardDetailTextCompiler` 负责。Widget 只消费最终 `FWacomCardViewData` / `Sections`，不推断卡面字段、Description / Passive / Effect 的分区规则。

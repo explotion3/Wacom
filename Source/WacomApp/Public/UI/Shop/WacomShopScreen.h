@@ -13,6 +13,7 @@ class UVerticalBox;
 class URunSession;
 class UWacomAppToastSubsystem;
 class UWacomShopOfferRowWidget;
+class FWacomShopRefreshGate;
 struct FRunShopOffer;
 struct FRunShopSnapshot;
 
@@ -85,17 +86,7 @@ private:
 	UWacomShopOfferRowWidget* GetOfferRowWidgetForTest(int32 Index) const;
 	bool PurchaseOfferByIndex(int32 Index);
 	static FText BuildPurchaseFailureToastText(FName DisabledReason);
-	FWacomShopScreenAutomationTestView GetAutomationTestViewForTest() const
-	{
-		FWacomShopScreenAutomationTestView View;
-		View.DisplayedGoldText = GetDisplayedGoldText();
-		View.CachedOfferCount = CachedOfferIds.Num();
-		View.OfferRefreshApplyCount = ShopOfferRefreshApplyCountForTest;
-		View.OfferRefreshSkipCount = ShopOfferRefreshSkipCountForTest;
-		View.SnapshotBuildCount = ShopSnapshotBuildCountForTest;
-		View.SnapshotRevisionSkipCount = ShopSnapshotRevisionSkipCountForTest;
-		return View;
-	}
+	FWacomShopScreenAutomationTestView GetAutomationTestViewForTest() const;
 #endif
 
 	void RebuildOfferRows(const FRunShopSnapshot& Snapshot, int32 CurrentGold);
@@ -106,6 +97,7 @@ private:
 	void TrySubscribeRunSession();
 	void UnsubscribeRunSession();
 	void ResetShopOfferRefreshDirtyGate();
+	FWacomShopRefreshGate& GetShopRefreshGate();
 
 	UPROPERTY(Transient)
 	TArray<FGuid> CachedOfferIds;
@@ -118,20 +110,7 @@ private:
 
 	TWeakObjectPtr<URunSession> SubscribedRunSession;
 
-	uint32 LastShopOfferRefreshSignature = 0;
-	bool bHasLastShopOfferRefreshSignature = false;
-	uint64 LastShopSnapshotRevision = 0;
-	bool bHasLastShopSnapshotRevision = false;
-	uint64 LastShopEconomyRevision = 0;
-	bool bHasLastShopEconomyRevision = false;
-	TWeakObjectPtr<URunSession> LastShopRefreshRunSession;
-
-#if WITH_AUTOMATION_TESTS
-	int32 ShopOfferRefreshApplyCountForTest = 0;
-	int32 ShopOfferRefreshSkipCountForTest = 0;
-	int32 ShopSnapshotBuildCountForTest = 0;
-	int32 ShopSnapshotRevisionSkipCountForTest = 0;
-#endif
+	TSharedPtr<FWacomShopRefreshGate> ShopRefreshGate;
 
 	bool bDidEndShopVisit = false;
 };
