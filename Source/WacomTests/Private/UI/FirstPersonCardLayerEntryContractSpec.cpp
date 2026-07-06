@@ -51,7 +51,6 @@ namespace WacomFirstPersonCardLayerEntryContractSpec
 		Slot.Entry.CardViewData.bDisabled = false;
 		Slot.Entry.InteractionIntent =
 			EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
-		Slot.Entry.DebugLegacyTargetMode = ECardTargetMode::None;
 		Slot.ScreenPosition = Position;
 		Slot.WidgetPosition = Position;
 		Slot.SnappedWidgetPosition = Position;
@@ -66,11 +65,11 @@ namespace WacomFirstPersonCardLayerEntryContractSpec
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerEntryLegacyTargetProjectionRefreshTest,
-	"Wacom.UI.FirstPersonCardLayer.EntryContract.DebugLegacyTargetModeDoesNotDirtySlotRefresh",
+	FWacomFirstPersonCardLayerEntryInteractionIntentRefreshTest,
+	"Wacom.UI.FirstPersonCardLayer.EntryContract.InteractionIntentDrivesSlotRefresh",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerEntryLegacyTargetProjectionRefreshTest::RunTest(
+bool FWacomFirstPersonCardLayerEntryInteractionIntentRefreshTest::RunTest(
 	const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerEntryContractSpec::FindAutomationWorld();
@@ -105,41 +104,33 @@ bool FWacomFirstPersonCardLayerEntryLegacyTargetProjectionRefreshTest::RunTest(
 		FWacomFirstPersonCardLayerTestAccess::View(*Layer)
 			.SkippedEquivalentSlotRefreshCount;
 
-	FWacomFirstPersonCardLayerSlotView LegacyProjectionChangedSlot = BaseSlot;
-	LegacyProjectionChangedSlot.Entry.DebugLegacyTargetMode = ECardTargetMode::HandCard;
-	LegacyProjectionChangedSlot.Entry.InteractionIntent =
-		BaseSlot.Entry.InteractionIntent;
-	Layer->SetCardSlots({ LegacyProjectionChangedSlot });
+	Layer->SetCardSlots({ BaseSlot });
 
-	const FWacomFirstPersonCardLayerMotionDebugView LegacyProjectionDebug =
+	const FWacomFirstPersonCardLayerMotionDebugView EquivalentDebug =
 		Layer->GetSlotMotionDebugView();
 	TestEqual(
-		TEXT("Legacy target projection refresh skips full reconcile"),
+		TEXT("Equivalent entry refresh skips full reconcile"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Layer)
 			.SkippedEquivalentSlotRefreshCount,
 		InitialSkipCount + 1);
 	TestEqual(
-		TEXT("Legacy target projection refresh creates no widgets"),
-		LegacyProjectionDebug.CreatedThisUpdate,
+		TEXT("Equivalent entry refresh creates no widgets"),
+		EquivalentDebug.CreatedThisUpdate,
 		0);
 	TestEqual(
-		TEXT("Legacy target projection refresh reuses no widgets through full reconcile"),
-		LegacyProjectionDebug.ReusedThisUpdate,
+		TEXT("Equivalent entry refresh reuses no widgets through full reconcile"),
+		EquivalentDebug.ReusedThisUpdate,
 		0);
 	TestEqual(
-		TEXT("Legacy target projection keeps widget"),
+		TEXT("Equivalent entry refresh keeps widget"),
 		Layer->GetSlotWidgetAt(0),
 		OriginalWidget);
-	TestEqual(
-		TEXT("Legacy target projection still updates debug slot view"),
-		Layer->GetSlotWidgetAt(0)->GetSlotView().Entry.DebugLegacyTargetMode,
-		ECardTargetMode::HandCard);
 
-	const int32 AfterLegacyProjectionSkipCount =
+	const int32 AfterEquivalentSkipCount =
 		FWacomFirstPersonCardLayerTestAccess::View(*Layer)
 			.SkippedEquivalentSlotRefreshCount;
 	FWacomFirstPersonCardLayerSlotView IntentChangedSlot =
-		LegacyProjectionChangedSlot;
+		BaseSlot;
 	IntentChangedSlot.Entry.InteractionIntent =
 		EWacomFirstPersonCardInteractionIntent::AimCardTarget;
 	Layer->SetCardSlots({ IntentChangedSlot });
@@ -150,7 +141,7 @@ bool FWacomFirstPersonCardLayerEntryLegacyTargetProjectionRefreshTest::RunTest(
 		TEXT("Interaction intent refresh does not skip"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Layer)
 			.SkippedEquivalentSlotRefreshCount,
-		AfterLegacyProjectionSkipCount);
+		AfterEquivalentSkipCount);
 	TestEqual(
 		TEXT("Interaction intent refresh reuses widget"),
 		IntentDebug.ReusedThisUpdate,

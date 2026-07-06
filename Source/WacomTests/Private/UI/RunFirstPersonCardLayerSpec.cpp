@@ -232,9 +232,6 @@ bool FWacomUIRunFirstPersonBuildsEntriesFromBattleDeckSpec::RunTest(const FStrin
 	TestEqual(TEXT("Run default source does not derive intent from battle target mode"),
 		Entries[1].InteractionIntent,
 		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
-	TestEqual(TEXT("Run entry keeps legacy target projection for diagnostics"),
-		Entries[0].DebugLegacyTargetMode,
-		ECardTargetMode::SingleEnemyPart);
 
 	return true;
 }
@@ -1571,9 +1568,6 @@ bool FWacomUIRunFirstPersonRequestBuildsLeaseEntriesFromDefinitionsSpec::RunTest
 	TestEqual(TEXT("Provider lease uses Run drop target interaction intent"),
 		Source->LastWrittenEntries[0].InteractionIntent,
 		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
-	TestEqual(TEXT("Provider lease keeps legacy target projection for diagnostics"),
-		Source->LastWrittenEntries[0].DebugLegacyTargetMode,
-		ECardTargetMode::SingleEnemyPart);
 	TestEqual(TEXT("Provider lease animates filtered Run card entering the menu hand"),
 		Source->LastWrittenTransitionHints.Num(),
 		1);

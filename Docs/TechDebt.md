@@ -83,7 +83,6 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | `OnRunStateChangedNative` 粗粒度广播 | 组合事务已收口为事务末尾一次广播；普通 public mutation 仍保持成功后一次广播 | 订阅方仍按粗粒度事件幂等刷新；新增组合 Run mutation 时补 `Wacom.Run.NotificationCoalescing` 测试 |
 | BackpackScreen Presenter 边界 | Presenter 已抽展示计算；DropTarget 只转发拖拽意图，命令提交和确认框统一在 Screen | 如果 Screen 继续膨胀，再抽 section view data 或命令协调对象 |
 | BattleHUD coordinator 过重 | HUD 私有 helper 已承接 scene enemy target、presentation、combat log、first-person hand 和 card detail；HUD 仍持有 Session 绑定、Snapshot fanout、命令入口、WBP 绑定、配置和 GC 引用 | 保留 HUD 作为战斗 UI Screen coordinator；后续修改私有 helper 时优先补 HUD 合同测试并复用 harness |
-| First-person entry legacy target projection | `FWacomFirstPersonCardLayerEntry` 已新增 `InteractionIntent` 并由 SlotWidget / LayerWidget dirty gate 正式消费；Run source 已改为写 `DragToDropTarget`，不再从卡牌战斗 `TargetMode` 推导拖拽行为；slot gesture 测试 helper 已迁到显式 `InteractionIntent`，公共 layer types 已移除 TargetMode 转换 helper，Battle target-mode 映射只保留在 Battle adapter 私有 helper 和命名清楚的测试 projection helper；first-person hand bridge 的 hand-card release / probe / affordance 已改为消费 `UBattleSession::ValidateTargetWithCard()` 的 reject reason，不再直接读取 `TargetMode` 判断目标规则；entry 上的旧投影字段已降级为 `DebugLegacyTargetMode`，变化只同步调试 slot view，不再触发 full reconcile | 资产审计确认没有 WBP 依赖该调试字段后，评估把 `DebugLegacyTargetMode` 从 public entry 移到 automation/debug-only ViewData，或完全删除 |
 | WacomApp Public UI API surface | 公开面已完成多轮分类和测试访问收口；当前剩余债务是 prototype / test-only surface、Blueprint-visible 制作面保守保留和资产审计前不删除 | 历史见 [Wacom_Public_Surface_And_Docs_History.md](./DevLog/Wacom_Public_Surface_And_Docs_History.md)；继续按小切片评估，不用“无 C++ 调用”作为删除依据 |
 
 <a id="techdebt-wacomapp-public-ui-api-surface"></a>
@@ -126,5 +125,6 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Run Definition 级 deck wrappers 已清理；已拥有卡操作统一走 `InstanceId`，Definition 只保留获取 / 奖励 / RunEvent 资产语义。
 - Battle 世界空间手牌 prototype public surface 已从 runtime / tests 中移除；正式战斗手牌主线为 first-person card layer。
 - Legacy 2D battle hand 已清理：`UHandPanel / UCardWidget`、`WBP_HandPanel / WBP_CardWidget` 和独立 legacy hand 测试已删除；BattleHUD 运行时只走 first-person card layer。
+- First-person entry legacy target projection 已清理：`FWacomFirstPersonCardLayerEntry` 正式 interface 只保留 `InteractionIntent`，不再暴露 `DebugLegacyTargetMode`；Battle target-mode 映射只保留在 Battle adapter 私有 helper，Run source 写入 `DragToDropTarget`，hand-card 目标合法性由 Battle validation reject reason 驱动。
 - Legacy battle event log 已清理：`UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` 和 `BuildLegacyEventBlock()` 已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。
 - Enemy system refactor 主链路已收口：旧敌方 2D fallback、第一敌人 HUD 入口、Actor 名称身份推断、旧部位意图序列主合同和旧单 Host Trigger 入口已删除；当前规则和制作口径见 `WacomBattle.md`、`WacomData.md`、`WacomRun.md`、`WacomWorldInteraction.md`、`WacomBattleUI.md` 和 `WacomDataAuthoring.md`。

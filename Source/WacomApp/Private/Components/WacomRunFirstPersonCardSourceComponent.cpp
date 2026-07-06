@@ -44,9 +44,6 @@ namespace
 		Entry.bIsHandAnchor = false;
 		Entry.bIsPlayable = true;
 		Entry.bIsPendingTargeting = false;
-		Entry.DebugLegacyTargetMode = Instance.Definition
-			? Instance.Definition->TargetMode
-			: ECardTargetMode::None;
 		Entry.InteractionIntent = InteractionIntent;
 		return Entry;
 	}

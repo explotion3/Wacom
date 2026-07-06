@@ -238,23 +238,6 @@ namespace WacomFirstPersonCardLayerSpec
 		return DragView;
 	}
 
-	ECardTargetMode LegacyTargetProjectionForInteractionIntent(
-		EWacomFirstPersonCardInteractionIntent InteractionIntent)
-	{
-		switch (InteractionIntent)
-		{
-		case EWacomFirstPersonCardInteractionIntent::AimWorldTarget:
-			return ECardTargetMode::SingleEnemyPart;
-		case EWacomFirstPersonCardInteractionIntent::AimCardTarget:
-			return ECardTargetMode::HandCard;
-		case EWacomFirstPersonCardInteractionIntent::CommitNoTarget:
-		case EWacomFirstPersonCardInteractionIntent::InspectOnly:
-		case EWacomFirstPersonCardInteractionIntent::DragToDropTarget:
-		default:
-			return ECardTargetMode::None;
-		}
-	}
-
 	EWacomFirstPersonCardInteractionIntent BattleInteractionIntentForTargetModeProjection(
 		ECardTargetMode TargetMode)
 	{
@@ -274,32 +257,9 @@ namespace WacomFirstPersonCardLayerSpec
 
 	void SetEntryInteractionIntent(
 		FWacomFirstPersonCardLayerEntry& Entry,
-		EWacomFirstPersonCardInteractionIntent InteractionIntent,
-		ECardTargetMode LegacyTargetProjection)
-	{
-		Entry.InteractionIntent = InteractionIntent;
-		Entry.DebugLegacyTargetMode = LegacyTargetProjection;
-	}
-
-	void SetEntryInteractionIntent(
-		FWacomFirstPersonCardLayerEntry& Entry,
 		EWacomFirstPersonCardInteractionIntent InteractionIntent)
 	{
-		SetEntryInteractionIntent(
-			Entry,
-			InteractionIntent,
-			LegacyTargetProjectionForInteractionIntent(InteractionIntent));
-	}
-
-	void SetSlotInteractionIntent(
-		FWacomFirstPersonCardLayerSlotView& Slot,
-		EWacomFirstPersonCardInteractionIntent InteractionIntent,
-		ECardTargetMode LegacyTargetProjection)
-	{
-		SetEntryInteractionIntent(
-			Slot.Entry,
-			InteractionIntent,
-			LegacyTargetProjection);
+		Entry.InteractionIntent = InteractionIntent;
 	}
 
 	void SetSlotInteractionIntent(
@@ -315,8 +275,7 @@ namespace WacomFirstPersonCardLayerSpec
 	{
 		SetEntryInteractionIntent(
 			Entry,
-			BattleInteractionIntentForTargetModeProjection(TargetMode),
-			TargetMode);
+			BattleInteractionIntentForTargetModeProjection(TargetMode));
 	}
 
 	FWacomFirstPersonCardLayerSlotView MakeProjectedInteractionSlot(
@@ -11509,8 +11468,7 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(NoTargetIntentCardId, true, true);
 	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(
 		NoTargetIntentSlot,
-		EWacomFirstPersonCardInteractionIntent::CommitNoTarget,
-		ECardTargetMode::SingleEnemyPart);
+		EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
 	Layer->SetCardSlots({ NoTargetIntentSlot });
 
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -11522,7 +11480,7 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 
 	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
-	TestEqual(TEXT("Commit intent ignores targeted legacy projection"),
+	TestEqual(TEXT("Commit intent uses no-target drag presentation"),
 		SlotWidget->GetGestureStateForFirstPersonLayer(),
 		EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(540.0f, 590.0f));
@@ -11532,8 +11490,7 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(DropIntentCardId, true, true);
 	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(
 		DropIntentSlot,
-		EWacomFirstPersonCardInteractionIntent::DragToDropTarget,
-		ECardTargetMode::HandCard);
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
 	Layer->SetCardSlots({ DropIntentSlot });
 
 	SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -11555,8 +11512,7 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(AimIntentCardId, true, true);
 	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(
 		AimIntentSlot,
-		EWacomFirstPersonCardInteractionIntent::AimWorldTarget,
-		ECardTargetMode::None);
+		EWacomFirstPersonCardInteractionIntent::AimWorldTarget);
 	Layer->SetCardSlots({ AimIntentSlot });
 
 	SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -11568,7 +11524,7 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 
 	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(540.0f, 590.0f));
-	TestEqual(TEXT("Aim intent ignores no-target legacy projection"),
+	TestEqual(TEXT("Aim intent uses targeted drag presentation"),
 		SlotWidget->GetGestureStateForFirstPersonLayer(),
 		EWacomFirstPersonCardGestureState::AimingTargetedCard);
 

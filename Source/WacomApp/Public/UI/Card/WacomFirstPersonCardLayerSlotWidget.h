@@ -315,7 +315,6 @@ private:
 	void ApplyCurrentSlotView();
 	void ApplyVisualSlotView();
 	void ApplySlotViewToWidget(const FWacomFirstPersonCardLayerSlotView& SlotView);
-	void SyncLegacyDebugTargetModeForFirstPersonLayer(ECardTargetMode DebugLegacyTargetMode);
 	void RefreshPresentationTarget(
 		bool bSnapVisualWhenMotionDisabled,
 		EWacomFirstPersonCardMotionIntent PreferredIntent = EWacomFirstPersonCardMotionIntent::Layout);

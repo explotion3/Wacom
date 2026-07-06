@@ -175,14 +175,6 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterOffset(
 	BeginSlotMotionWithEnterProfile(InTargetSlotView, bTreatAsNewSlot, EnterProfileOverride);
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::SyncLegacyDebugTargetModeForFirstPersonLayer(
-	ECardTargetMode DebugLegacyTargetMode)
-{
-	CurrentSlotView.Entry.DebugLegacyTargetMode = DebugLegacyTargetMode;
-	TargetSlotView.Entry.DebugLegacyTargetMode = DebugLegacyTargetMode;
-	VisualSlotView.Entry.DebugLegacyTargetMode = DebugLegacyTargetMode;
-}
-
 void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
 	bool bTreatAsNewSlot,

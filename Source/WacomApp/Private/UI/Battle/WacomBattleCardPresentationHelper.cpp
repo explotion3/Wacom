@@ -316,11 +316,11 @@ namespace WacomBattleCardPresentation
 		Entry.Zone = CardSnapshot.Zone;
 		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
-		Entry.DebugLegacyTargetMode = CardSnapshot.Definition
-			? CardSnapshot.Definition->TargetMode
-			: ECardTargetMode::None;
 		Entry.InteractionIntent =
-			ResolveBattleFirstPersonCardInteractionIntent(Entry.DebugLegacyTargetMode);
+			ResolveBattleFirstPersonCardInteractionIntent(
+				CardSnapshot.Definition
+					? CardSnapshot.Definition->TargetMode
+					: ECardTargetMode::None);
 		return Entry;
 	}
 
