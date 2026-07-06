@@ -13,7 +13,7 @@ class UCardDefinition;
  * Public facade for UI-only presentation data from card definitions.
  *
  * Widgets should render the resulting data and avoid parsing UCardDefinition
- * directly. App-private builders own the detailed document assembly.
+ * directly. App-private builders own the card face and detail document assembly.
  */
 UCLASS()
 class WACOMAPP_API UWacomCardPresentationBuilder : public UBlueprintFunctionLibrary
