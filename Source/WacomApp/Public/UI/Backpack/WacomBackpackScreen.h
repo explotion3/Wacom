@@ -81,6 +81,12 @@ public:
 	/** DropTarget 命令出口：请求销毁卡牌。确认框和 Run 命令提交由 Private command flow 处理。 */
 	bool HandleDeleteDropRequested(const UWacomCardDragOperation& CardOp);
 
+	/** DropTarget 预览出口：只读判断移动意图是否可提交；Widget 不直接读取 RunSession。 */
+	bool CanPreviewZoneDrop(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId) const;
+
+	/** DropTarget 预览出口：只读判断删牌意图是否可提交；Widget 不直接读取 RunSession。 */
+	bool CanPreviewDeleteDrop(const UWacomCardDragOperation& CardOp) const;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;

@@ -102,6 +102,21 @@ namespace
 	{
 		return FWacomBackpackScreenTestAccess::Create(Outer, Run);
 	}
+
+	UWacomCardDragOperation* MakeBackpackUiCardDragOpForTest(
+		UObject* Outer,
+		FGuid InstanceId,
+		UCardDefinition* Card,
+		EZoneKind FromZone,
+		FGuid FromZoneOwnerInstanceId = FGuid())
+	{
+		UWacomCardDragOperation* Op = NewObject<UWacomCardDragOperation>(Outer);
+		Op->InstanceId = InstanceId;
+		Op->Definition = Card;
+		Op->FromZone = FromZone;
+		Op->FromZoneOwnerInstanceId = FromZone == EZoneKind::SpecialZone ? FromZoneOwnerInstanceId : FGuid();
+		return Op;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -1488,6 +1503,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBackpackBurdenZoneIsSourceOnlySpec::RunTest(const FString& /*Parameters*/)
 {
+	UObject* Outer = GetTransientPackage();
 	TStrongObjectPtr<UWacomDeckCardWidget> Widget(NewObject<UWacomDeckCardWidget>());
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 
@@ -1504,17 +1520,75 @@ bool FWacomUIBackpackBurdenZoneIsSourceOnlySpec::RunTest(const FString& /*Parame
 		TestFalse(TEXT("BurdenZone drag payload has no owner id"), DragOp->FromZoneOwnerInstanceId.IsValid());
 	}
 
-	TestFalse(TEXT("BurdenZone target rejects Backpack-origin preview"),
-		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BurdenZone, EZoneKind::Backpack, 0, 10));
-	TestFalse(TEXT("BurdenZone target rejects BattleDeck-origin preview"),
-		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BurdenZone, EZoneKind::BattleDeck, 0, 10));
-	TestFalse(TEXT("BurdenZone target rejects BurdenZone-origin in-place preview"),
-		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BurdenZone, EZoneKind::BurdenZone, 0, 10));
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.BurdenPreview.Capacity"), 2);
+	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.BurdenPreview.Battle"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes for burden preview"), Run->Initialize(Character));
+	const FGuid BattleId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
+	TestTrue(TEXT("Battle card id valid for burden preview"), BattleId.IsValid());
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(Outer, Run.Get()));
+	TStrongObjectPtr<UWacomCardDragOperation> PreviewOp(
+		MakeBackpackUiCardDragOpForTest(Outer, BattleId, BattleCard, EZoneKind::BattleDeck));
+	TestFalse(TEXT("BurdenZone target rejects preview through Screen flow"),
+		Screen->CanPreviewZoneDrop(*PreviewOp, EZoneKind::BurdenZone, FGuid()));
 
 	TStrongObjectPtr<UWacomZoneDropTarget> BurdenTarget(NewObject<UWacomZoneDropTarget>());
 	BurdenTarget->Configure(EZoneKind::BurdenZone, FGuid());
 	TestFalse(TEXT("BurdenZone background has no owner screen and cannot accept drop"),
 		BurdenTarget->TryHandleDropOperation(DragOp));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackDeletePreviewUsesScreenFlowValidationSpec,
+	"Wacom.UI.Backpack.DeletePreviewUsesScreenFlowValidation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackDeletePreviewUsesScreenFlowValidationSpec::RunTest(const FString& /*Parameters*/)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.DeletePreview.Capacity"), 3);
+	UCardDefinition* WhiteCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.DeletePreview.White"));
+	UCardDefinition* IntrinsicCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.DeletePreview.Intrinsic"));
+	IntrinsicCard->Rarity = WacomTags::Card_Rarity_Intrinsic;
+
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, WhiteCard, IntrinsicCard });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes for delete preview"), Run->Initialize(Character));
+
+	FGuid WhiteId;
+	FGuid IntrinsicId;
+	for (const FCardInstance& Inst : Run->GetBattleDeck())
+	{
+		if (Inst.Definition == WhiteCard)
+		{
+			WhiteId = Inst.InstanceId;
+		}
+		else if (Inst.Definition == IntrinsicCard)
+		{
+			IntrinsicId = Inst.InstanceId;
+		}
+	}
+	TestTrue(TEXT("White delete preview id valid"), WhiteId.IsValid());
+	TestTrue(TEXT("Intrinsic delete preview id valid"), IntrinsicId.IsValid());
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(Outer, Run.Get()));
+	TStrongObjectPtr<UWacomCardDragOperation> WhiteOp(
+		MakeBackpackUiCardDragOpForTest(Outer, WhiteId, WhiteCard, EZoneKind::BattleDeck));
+	TStrongObjectPtr<UWacomCardDragOperation> IntrinsicOp(
+		MakeBackpackUiCardDragOpForTest(Outer, IntrinsicId, IntrinsicCard, EZoneKind::BattleDeck));
+	TStrongObjectPtr<UWacomCardDragOperation> MissingDefinitionOp(
+		MakeBackpackUiCardDragOpForTest(Outer, WhiteId, nullptr, EZoneKind::BattleDeck));
+
+	TestTrue(TEXT("Deletable card preview accepts through Screen flow"),
+		Screen->CanPreviewDeleteDrop(*WhiteOp));
+	TestFalse(TEXT("Intrinsic card preview rejects through Screen flow"),
+		Screen->CanPreviewDeleteDrop(*IntrinsicOp));
+	TestFalse(TEXT("Missing definition preview rejects before confirm dialog"),
+		Screen->CanPreviewDeleteDrop(*MissingDefinitionOp));
 
 	return true;
 }
@@ -2294,22 +2368,52 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBackpackBattleDeckFullPreviewRejectsBackpackDropSpec::RunTest(const FString& /*Parameters*/)
 {
-	// Feature: backpack-special-zone-stage-4-5, R6.12: BattleDeck preview rejects Backpack-origin drops when capacity is full.
-	TestFalse(
-		TEXT("Full BattleDeck rejects Backpack-origin preview"),
-		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BattleDeck, EZoneKind::Backpack, 2, 2));
+	// Feature: backpack-special-zone-stage-4-5, R6.12: BattleDeck preview shares Screen flow validation with final drop.
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Capacity = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Preview.Capacity"), 2);
+	UCardDefinition* BattleA = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Preview.BattleA"));
+	UCardDefinition* BattleB = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Preview.BattleB"));
+	UCardDefinition* BackpackCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Preview.Backpack"));
+	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleA, BattleB });
 
-	TestTrue(
-		TEXT("BattleDeck accepts Backpack-origin preview when there is capacity"),
-		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BattleDeck, EZoneKind::Backpack, 1, 2));
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes for battle deck preview"), Run->Initialize(Character));
+	Run->AcquireCardToRun(BackpackCard);
 
-	TestTrue(
-		TEXT("BattleDeck in-place preview is not rejected by capacity"),
-		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::BattleDeck, EZoneKind::BattleDeck, 2, 2));
+	FGuid BattleAId;
+	FGuid BackpackId;
+	for (const FCardInstance& Inst : Run->GetBattleDeck())
+	{
+		if (Inst.Definition == BattleA)
+		{
+			BattleAId = Inst.InstanceId;
+		}
+	}
+	for (const FCardInstance& Inst : Run->GetBackpack())
+	{
+		if (Inst.Definition == BackpackCard)
+		{
+			BackpackId = Inst.InstanceId;
+		}
+	}
+	TestTrue(TEXT("BattleA id valid"), BattleAId.IsValid());
+	TestTrue(TEXT("Backpack card id valid"), BackpackId.IsValid());
 
-	TestTrue(
-		TEXT("Non-BattleDeck target preview is not rejected by BattleDeck capacity"),
-		UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind::SpecialZone, EZoneKind::Backpack, 2, 2));
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(Outer, Run.Get()));
+	TStrongObjectPtr<UWacomCardDragOperation> BackpackOp(
+		MakeBackpackUiCardDragOpForTest(Outer, BackpackId, BackpackCard, EZoneKind::Backpack));
+	TStrongObjectPtr<UWacomCardDragOperation> InPlaceBattleOp(
+		MakeBackpackUiCardDragOpForTest(Outer, BattleAId, BattleA, EZoneKind::BattleDeck));
+
+	TestFalse(TEXT("Full BattleDeck rejects Backpack-origin preview through Screen flow"),
+		Screen->CanPreviewZoneDrop(*BackpackOp, EZoneKind::BattleDeck, FGuid()));
+	TestTrue(TEXT("BattleDeck in-place preview is accepted through Screen flow"),
+		Screen->CanPreviewZoneDrop(*InPlaceBattleOp, EZoneKind::BattleDeck, FGuid()));
+
+	TestTrue(TEXT("Move one BattleDeck card to Backpack to create capacity"),
+		Run->MoveInstance(BattleAId, EZoneKind::Backpack, FGuid()));
+	TestTrue(TEXT("BattleDeck accepts Backpack-origin preview when there is capacity"),
+		Screen->CanPreviewZoneDrop(*BackpackOp, EZoneKind::BattleDeck, FGuid()));
 
 	return true;
 }

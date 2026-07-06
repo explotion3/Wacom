@@ -12,7 +12,6 @@ class UWacomCardDragOperation;
 class UBorder;
 class UDragDropOperation;
 class UWidget;
-struct FRunDeckOperationValidation;
 
 UENUM(BlueprintType)
 enum class EWacomDropTargetState : uint8
@@ -29,7 +28,7 @@ enum class EWacomDropTargetState : uint8
  * 背包 zone 拖拽接收器。
  *
  * Widget 生命周期声明：
- *   数据源：父 UWacomBackpackScreen 注入的 URunSession，仅用于 drop 预览校验。
+ *   数据源：父 UWacomBackpackScreen 提供的只读 drop preview，Widget 不直接读取 URunSession。
  *   更新触发：自身不刷新列表；MoveInstance 成功后走 RunSession -> ViewModelProvider -> BackpackScreen RebuildAll。
  *   订阅时机：不订阅任何事件。
  *   反订阅时机：不持有委托，NativeDestruct 无需反订阅。
@@ -46,7 +45,6 @@ public:
 	void SetDropContent(UWidget* InContent);
 	bool TryHandleDropOperation(UDragDropOperation* InOperation);
 	void SetDropTargetState(EWacomDropTargetState InState);
-	static bool ShouldPreviewDrop(EZoneKind TargetZone, EZoneKind SourceZone, int32 BattleDeckCount, int32 BattleDeckCapacity);
 	static FText FormatZoneNameForToast(EZoneKind Zone);
 	static FText FormatMoveFailureReasonForToast(FName DisabledReason);
 
@@ -79,6 +77,4 @@ protected:
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Wacom|Backpack|Drop", meta = (AllowPrivateAccess = "true"))
 	EWacomDropTargetState DropTargetState = EWacomDropTargetState::Normal;
-
-	bool CanPreviewDrop(const UWacomCardDragOperation& CardOp) const;
 };

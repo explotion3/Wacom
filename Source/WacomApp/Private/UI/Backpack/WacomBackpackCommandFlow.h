@@ -14,6 +14,16 @@ class UWacomCardDragOperation;
 class FWacomBackpackCommandFlow
 {
 public:
+	static FRunDeckOperationValidation ValidateZoneDropPreview(
+		URunSession* Run,
+		const UWacomCardDragOperation& CardOp,
+		EZoneKind TargetZone,
+		FGuid TargetZoneOwnerInstanceId);
+
+	static FRunDeckOperationValidation ValidateDeleteDropPreview(
+		URunSession* Run,
+		const UWacomCardDragOperation& CardOp);
+
 	static bool HandleZoneDropRequested(
 		UWacomBackpackScreen& Screen,
 		URunSession* Run,

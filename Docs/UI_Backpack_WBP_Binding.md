@@ -58,13 +58,14 @@ WBP 不应做：
 
 - 不直接调用 `URunSession` 或背包命令 API。
 - 不预放运行时卡牌；Host 内容由 C++ 根据 snapshot 填充。
-- 不在 WBP 图里判断容量、删牌金币、负重、SpecialZone 入战或拖拽目标是否合法。
+- 不在 WBP 图里判断容量、删牌金币、负重、SpecialZone 入战或拖拽目标是否合法；DropTarget hover preview 也由 `UWacomBackpackScreen` 私有 command flow 统一查询。
 - 不绑定旧 `FluxZoneHost / BackpackCardsBox` 混合布局槽位；这些旧槽位不再是制作合同。
 
 最小验收：
 
 - 推荐 Host 绑定后，删牌、备战、通量内容、SpecialZone 和负重区都能显示 C++ 动态填充内容。
 - `CardDetailLayer` 覆盖背包界面可见区域，位于卡牌区域上方，详情面板不抢拖拽或右键输入。
+- 拖拽 hover preview 和最终 drop 提交使用同一 Screen flow validation；WBP / DropTarget 不自行复制容量或删牌规则。
 - 推荐 Host 未绑定时，对应区域缺失运行时内容，C++ 只作为兼容路径输出 warning 或使用默认外壳。
 
 ## 局部 Zone WBP

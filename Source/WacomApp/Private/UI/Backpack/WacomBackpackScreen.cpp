@@ -573,6 +573,23 @@ bool UWacomBackpackScreen::HandleDeleteDropRequested(const UWacomCardDragOperati
 	return FWacomBackpackCommandFlow::HandleDeleteDropRequested(*this, GetRunSession(), CardOp);
 }
 
+bool UWacomBackpackScreen::CanPreviewZoneDrop(
+	const UWacomCardDragOperation& CardOp,
+	EZoneKind TargetZone,
+	FGuid TargetZoneOwnerInstanceId) const
+{
+	return FWacomBackpackCommandFlow::ValidateZoneDropPreview(
+		GetRunSession(),
+		CardOp,
+		TargetZone,
+		TargetZoneOwnerInstanceId).bCanExecute;
+}
+
+bool UWacomBackpackScreen::CanPreviewDeleteDrop(const UWacomCardDragOperation& CardOp) const
+{
+	return FWacomBackpackCommandFlow::ValidateDeleteDropPreview(GetRunSession(), CardOp).bCanExecute;
+}
+
 void UWacomBackpackScreen::EnsureRuntimeZoneWidgets()
 {
 	FBackpackRuntimeZoneBuilder::Ensure(FBackpackRuntimeZoneBuilderContext{

@@ -13,7 +13,7 @@ class UWacomCardDragOperation;
  * 背包删牌区拖拽接收器。
  *
  * Widget 生命周期声明：
- *   数据源：父 UWacomBackpackScreen 注入的 URunSession，仅用于 drop 预览校验。
+ *   数据源：父 UWacomBackpackScreen 提供的只读删牌 preview，Widget 不直接读取 URunSession。
  *   更新触发：自身不刷新列表；DeleteCardForGold 成功后走 RunSession -> ViewModelProvider -> BackpackScreen RebuildAll。
  *   订阅时机：不订阅任何事件。
  *   反订阅时机：不持有委托，NativeDestruct 无需反订阅。

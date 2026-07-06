@@ -4,9 +4,7 @@
 
 #include "Blueprint/DragDropOperation.h"
 #include "Blueprint/WidgetTree.h"
-#include "Cards/CardDefinition.h"
 #include "Components/Border.h"
-#include "RunSession.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
 
@@ -73,21 +71,15 @@ void UWacomZoneDropTarget::SetDropTargetState(EWacomDropTargetState InState)
 
 bool UWacomZoneDropTarget::NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
-	if (ZoneKind == EZoneKind::BurdenZone)
-	{
-		SetDropTargetState(EWacomDropTargetState::Normal);
-		return false;
-	}
-
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
-	URunSession* Run = OwnerScreen.IsValid() ? OwnerScreen->GetRunSession() : nullptr;
-	if (!CardOp || !CardOp->InstanceId.IsValid() || !Run)
+	UWacomBackpackScreen* Screen = OwnerScreen.Get();
+	if (!CardOp || !CardOp->InstanceId.IsValid() || !Screen)
 	{
 		SetDropTargetState(EWacomDropTargetState::HoverInvalid);
 		return false;
 	}
 
-	const bool bCanPreview = CanPreviewDrop(*CardOp);
+	const bool bCanPreview = Screen->CanPreviewZoneDrop(*CardOp, ZoneKind, OwnerInstanceId);
 	SetDropTargetState(bCanPreview ? EWacomDropTargetState::HoverValid : EWacomDropTargetState::HoverInvalid);
 	return true;
 }
@@ -96,42 +88,6 @@ void UWacomZoneDropTarget::NativeOnDragLeave(const FDragDropEvent& InDragDropEve
 {
 	Super::NativeOnDragLeave(InDragDropEvent, InOperation);
 	SetDropTargetState(EWacomDropTargetState::Normal);
-}
-
-bool UWacomZoneDropTarget::CanPreviewDrop(const UWacomCardDragOperation& CardOp) const
-{
-	URunSession* Run = OwnerScreen.IsValid() ? OwnerScreen->GetRunSession() : nullptr;
-	if (!Run)
-	{
-		return false;
-	}
-
-	const FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
-	if (!ShouldPreviewDrop(ZoneKind, CardOp.FromZone, Snapshot.BattleDeckPhysicalCount, Snapshot.BattleDeckCapacity))
-	{
-		return false;
-	}
-
-	return Run->ValidateMoveInstance(CardOp.InstanceId, ZoneKind, OwnerInstanceId).bCanExecute;
-}
-
-bool UWacomZoneDropTarget::ShouldPreviewDrop(EZoneKind TargetZone, EZoneKind SourceZone, int32 BattleDeckCount, int32 BattleDeckCapacity)
-{
-	if (TargetZone == EZoneKind::BurdenZone)
-	{
-		return false;
-	}
-
-	if (TargetZone == EZoneKind::BattleDeck
-		&& SourceZone == EZoneKind::Backpack
-		&& BattleDeckCount >= BattleDeckCapacity)
-	{
-		// 视觉预判：从通量区拖入已满备战区时拒绝接收。
-		// 最终规则仍以 BackpackScreen 命令出口提交到 RunSession 的返回值为准。
-		return false;
-	}
-
-	return true;
 }
 
 FText UWacomZoneDropTarget::FormatZoneNameForToast(EZoneKind Zone)
@@ -194,12 +150,6 @@ FText UWacomZoneDropTarget::FormatMoveFailureReasonForToast(FName DisabledReason
 
 bool UWacomZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
-	if (ZoneKind == EZoneKind::BurdenZone)
-	{
-		SetDropTargetState(EWacomDropTargetState::Normal);
-		return false;
-	}
-
 	const bool bHandled = TryHandleDropOperation(InOperation);
 	SetDropTargetState(bHandled ? EWacomDropTargetState::DropAccepted : EWacomDropTargetState::DropRejected);
 	return bHandled;
@@ -207,11 +157,6 @@ bool UWacomZoneDropTarget::NativeOnDrop(const FGeometry& InGeometry, const FDrag
 
 bool UWacomZoneDropTarget::TryHandleDropOperation(UDragDropOperation* InOperation)
 {
-	if (ZoneKind == EZoneKind::BurdenZone)
-	{
-		return false;
-	}
-
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
 	if (!CardOp || !CardOp->InstanceId.IsValid())
 	{

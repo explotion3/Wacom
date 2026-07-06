@@ -42,13 +42,13 @@ FText UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(FName Disabl
 bool UWacomDeleteZoneDropTarget::NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation)
 {
 	const UWacomCardDragOperation* CardOp = Cast<UWacomCardDragOperation>(InOperation);
-	URunSession* Run = OwnerScreen.IsValid() ? OwnerScreen->GetRunSession() : nullptr;
-	if (!CardOp || !CardOp->InstanceId.IsValid() || !Run)
+	UWacomBackpackScreen* Screen = OwnerScreen.Get();
+	if (!CardOp || !CardOp->InstanceId.IsValid() || !Screen)
 	{
 		SetDropTargetState(EWacomDropTargetState::HoverInvalid);
 		return false;
 	}
-	const bool bCanDrop = Run->ValidateDeleteCardForGoldByInstance(CardOp->InstanceId).bCanExecute;
+	const bool bCanDrop = Screen->CanPreviewDeleteDrop(*CardOp);
 	SetDropTargetState(bCanDrop ? EWacomDropTargetState::HoverValid : EWacomDropTargetState::HoverInvalid);
 	return true;
 }

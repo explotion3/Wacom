@@ -13,6 +13,17 @@
 
 #define LOCTEXT_NAMESPACE "WacomBackpack"
 
+namespace
+{
+	FRunDeckOperationValidation MakeRejectedBackpackOperation(FName DisabledReason)
+	{
+		FRunDeckOperationValidation Validation;
+		Validation.bCanExecute = false;
+		Validation.DisabledReason = DisabledReason;
+		return Validation;
+	}
+}
+
 FText FWacomBackpackCommandFlow::GetCardDisplayName(const UCardDefinition* Card)
 {
 	if (!Card)
@@ -47,6 +58,47 @@ void FWacomBackpackCommandFlow::ShowMoveFailureToast(UWacomAppToastSubsystem* To
 	}
 }
 
+FRunDeckOperationValidation FWacomBackpackCommandFlow::ValidateZoneDropPreview(
+	URunSession* Run,
+	const UWacomCardDragOperation& CardOp,
+	EZoneKind TargetZone,
+	FGuid TargetZoneOwnerInstanceId)
+{
+	if (!CardOp.InstanceId.IsValid())
+	{
+		return MakeRejectedBackpackOperation(TEXT("CardNotFound"));
+	}
+
+	if (TargetZone == EZoneKind::BurdenZone)
+	{
+		return MakeRejectedBackpackOperation(TEXT("InvalidTargetZone"));
+	}
+
+	if (!Run)
+	{
+		return MakeRejectedBackpackOperation(TEXT("RunSessionMissing"));
+	}
+
+	return Run->ValidateMoveInstance(CardOp.InstanceId, TargetZone, TargetZoneOwnerInstanceId);
+}
+
+FRunDeckOperationValidation FWacomBackpackCommandFlow::ValidateDeleteDropPreview(
+	URunSession* Run,
+	const UWacomCardDragOperation& CardOp)
+{
+	if (!CardOp.InstanceId.IsValid() || !CardOp.Definition.Get())
+	{
+		return MakeRejectedBackpackOperation(TEXT("MissingCard"));
+	}
+
+	if (!Run)
+	{
+		return MakeRejectedBackpackOperation(TEXT("RunSessionMissing"));
+	}
+
+	return Run->ValidateDeleteCardForGoldByInstance(CardOp.InstanceId);
+}
+
 bool FWacomBackpackCommandFlow::HandleZoneDropRequested(
 	UWacomBackpackScreen& Screen,
 	URunSession* Run,
@@ -56,20 +108,11 @@ bool FWacomBackpackCommandFlow::HandleZoneDropRequested(
 {
 	UWacomAppToastSubsystem* ToastSubsystem = GetToastSubsystem(&Screen);
 
-	if (!CardOp.InstanceId.IsValid())
-	{
-		ShowMoveFailureToast(ToastSubsystem, TEXT("CardNotFound"));
-		return false;
-	}
-
-	if (!Run)
-	{
-		ShowMoveFailureToast(ToastSubsystem, TEXT("RunSessionMissing"));
-		return false;
-	}
-
-	const FRunDeckOperationValidation Validation =
-		Run->ValidateMoveInstance(CardOp.InstanceId, TargetZone, TargetZoneOwnerInstanceId);
+	const FRunDeckOperationValidation Validation = ValidateZoneDropPreview(
+		Run,
+		CardOp,
+		TargetZone,
+		TargetZoneOwnerInstanceId);
 	if (!Validation.bCanExecute)
 	{
 		ShowMoveFailureToast(ToastSubsystem, Validation.DisabledReason);
@@ -103,38 +146,15 @@ bool FWacomBackpackCommandFlow::HandleDeleteDropRequested(
 	URunSession* Run,
 	const UWacomCardDragOperation& CardOp)
 {
-	if (!CardOp.InstanceId.IsValid())
-	{
-		ShowWarningToast(
-			&Screen,
-			UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("MissingCard")));
-		return false;
-	}
-
 	UCardDefinition* Card = CardOp.Definition.Get();
-	if (!Card)
-	{
-		ShowWarningToast(
-			&Screen,
-			UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("MissingCard")));
-		return false;
-	}
-
-	if (!Run)
-	{
-		ShowWarningToast(
-			&Screen,
-			UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("RunSessionMissing")));
-		return false;
-	}
-
 	const FGuid InstanceId = CardOp.InstanceId;
-	const FRunDeckOperationValidation Validation = Run->ValidateDeleteCardForGoldByInstance(InstanceId);
+	const FRunDeckOperationValidation Validation = ValidateDeleteDropPreview(Run, CardOp);
 	if (!Validation.bCanExecute)
 	{
-		ShowWarningToast(
-			&Screen,
-			UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(Validation.DisabledReason));
+		const FText FailureText = Validation.DisabledReason == TEXT("RunSessionMissing")
+			? UWacomZoneDropTarget::FormatMoveFailureReasonForToast(Validation.DisabledReason)
+			: UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(Validation.DisabledReason);
+		ShowWarningToast(&Screen, FailureText);
 		return false;
 	}
 
