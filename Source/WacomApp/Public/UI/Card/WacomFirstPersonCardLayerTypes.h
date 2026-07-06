@@ -82,23 +82,6 @@ enum class EWacomFirstPersonCardInteractionIntent : uint8
 	DragToDropTarget UMETA(DisplayName = "Drag To Drop Target", ToolTip = "Run / App 投放交互：拖拽源卡到菜单区域或世界投放目标，由上层 adapter 解析目标和提交规则。")
 };
 
-inline EWacomFirstPersonCardInteractionIntent
-WacomFirstPersonCardInteractionIntentFromTargetMode(ECardTargetMode TargetMode)
-{
-	switch (TargetMode)
-	{
-	case ECardTargetMode::SingleEnemyPart:
-		return EWacomFirstPersonCardInteractionIntent::AimWorldTarget;
-	case ECardTargetMode::HandCard:
-		return EWacomFirstPersonCardInteractionIntent::AimCardTarget;
-	case ECardTargetMode::None:
-	case ECardTargetMode::Self:
-	case ECardTargetMode::AllEnemyParts:
-	default:
-		return EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
-	}
-}
-
 enum class EWacomFirstPersonCardGestureSource : uint8
 {
 	None,

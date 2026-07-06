@@ -84,6 +84,23 @@ namespace
 		return Keyword.IsValid() ? FText::FromName(Keyword.GetTagName()) : FText::GetEmpty();
 	}
 
+	EWacomFirstPersonCardInteractionIntent ResolveBattleFirstPersonCardInteractionIntent(
+		ECardTargetMode TargetMode)
+	{
+		switch (TargetMode)
+		{
+		case ECardTargetMode::SingleEnemyPart:
+			return EWacomFirstPersonCardInteractionIntent::AimWorldTarget;
+		case ECardTargetMode::HandCard:
+			return EWacomFirstPersonCardInteractionIntent::AimCardTarget;
+		case ECardTargetMode::None:
+		case ECardTargetMode::Self:
+		case ECardTargetMode::AllEnemyParts:
+		default:
+			return EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+		}
+	}
+
 	bool TryGetPreviewEffectLabel(const FGameplayTag& EffectType, FText& OutLabel)
 	{
 		if (EffectType.MatchesTagExact(WacomTags::Effect_Damage))
@@ -303,7 +320,7 @@ namespace WacomBattleCardPresentation
 			? CardSnapshot.Definition->TargetMode
 			: ECardTargetMode::None;
 		Entry.InteractionIntent =
-			WacomFirstPersonCardInteractionIntentFromTargetMode(Entry.TargetMode);
+			ResolveBattleFirstPersonCardInteractionIntent(Entry.TargetMode);
 		return Entry;
 	}
 

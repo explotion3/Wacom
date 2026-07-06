@@ -255,6 +255,23 @@ namespace WacomFirstPersonCardLayerSpec
 		}
 	}
 
+	EWacomFirstPersonCardInteractionIntent BattleInteractionIntentForTargetModeProjection(
+		ECardTargetMode TargetMode)
+	{
+		switch (TargetMode)
+		{
+		case ECardTargetMode::SingleEnemyPart:
+			return EWacomFirstPersonCardInteractionIntent::AimWorldTarget;
+		case ECardTargetMode::HandCard:
+			return EWacomFirstPersonCardInteractionIntent::AimCardTarget;
+		case ECardTargetMode::None:
+		case ECardTargetMode::Self:
+		case ECardTargetMode::AllEnemyParts:
+		default:
+			return EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+		}
+	}
+
 	void SetEntryInteractionIntent(
 		FWacomFirstPersonCardLayerEntry& Entry,
 		EWacomFirstPersonCardInteractionIntent InteractionIntent,
@@ -298,7 +315,7 @@ namespace WacomFirstPersonCardLayerSpec
 	{
 		SetEntryInteractionIntent(
 			Entry,
-			WacomFirstPersonCardInteractionIntentFromTargetMode(TargetMode),
+			BattleInteractionIntentForTargetModeProjection(TargetMode),
 			TargetMode);
 	}
 
