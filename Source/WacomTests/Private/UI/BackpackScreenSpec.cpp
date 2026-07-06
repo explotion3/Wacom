@@ -1039,7 +1039,6 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 		TEXT("造成1暮气，1中毒。"));
 	TestFalse(TEXT("Description does not contain passive copy"), Data.Description.ToString().Contains(TEXT("被动")));
 	TestEqual(TEXT("Task lines empty before schema support"), Data.TaskLines.Num(), 0);
-	TestEqual(TEXT("Change lines empty before schema support"), Data.ChangeLines.Num(), 0);
 	TestEqual(TEXT("One passive line"), Data.PassiveLines.Num(), 1);
 	if (Data.PassiveLines.Num() > 0)
 	{

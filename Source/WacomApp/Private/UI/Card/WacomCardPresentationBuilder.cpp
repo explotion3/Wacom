@@ -305,31 +305,6 @@ namespace
 		return Card->Description.IsEmpty();
 	}
 
-	void AppendRuntimeDetailChangeLines(
-		const UCardDefinition* Card,
-		const FWacomCardPresentationRuntimeContext& RuntimeContext,
-		TArray<FText>& OutLines)
-	{
-		if (!Card)
-		{
-			return;
-		}
-
-		if (RuntimeContext.bHasRuntimeCost && RuntimeContext.RuntimeCost != Card->BaseCost)
-		{
-			OutLines.Add(FText::Format(
-				LOCTEXT("RuntimeCostChangeLineFmt", "当前费用：{0}（基础 {1}）"),
-				FText::AsNumber(RuntimeContext.RuntimeCost),
-				FText::AsNumber(Card->BaseCost)));
-		}
-
-		if (RuntimeContext.bHasPlayableState && !RuntimeContext.bIsPlayable)
-		{
-			OutLines.Add(LOCTEXT("RuntimeNotPlayableChangeLine", "先机不足，当前不可打出。"));
-		}
-
-		OutLines.Append(RuntimeContext.TargetPreviewChangeLines);
-	}
 }
 
 FWacomCardViewData UWacomCardPresentationBuilder::BuildCardViewData(const UCardDefinition* Card)
@@ -405,7 +380,6 @@ FWacomCardDetailViewData UWacomCardPresentationBuilder::BuildCardDetailViewData(
 		Data.TokenLines.Append(EffectLines);
 		DescriptionSectionLines.Append(MoveTemp(EffectLines));
 	}
-	AppendRuntimeDetailChangeLines(Card, RuntimeContext, Data.ChangeLines);
 	TArray<FWacomCardDetailTokenLine> PassiveSectionLines;
 	WacomCardDetailTextCompiler::BuildPassiveTokenLines(
 		Card,

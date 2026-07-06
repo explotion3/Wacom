@@ -66,6 +66,53 @@ namespace
 		Test.TestEqual(TEXT("Badge kind"), Badges[Index].Kind, ExpectedKind);
 		Test.TestEqual(TEXT("Badge value"), Badges[Index].Value, ExpectedValue);
 	}
+
+	bool HasDetailNumberToken(
+		const FWacomCardDetailViewData& DetailData,
+		int32 ExpectedValue,
+		int32 ExpectedPreviewValue)
+	{
+		for (const FWacomCardDetailSection& Section : DetailData.Sections)
+		{
+			for (const FWacomCardDetailTokenLine& Line : Section.TokenLines)
+			{
+				for (const FWacomCardDetailToken& Token : Line.Tokens)
+				{
+					if (Token.Kind == EWacomCardDetailTokenKind::Number
+						&& Token.bHasValue
+						&& Token.Value == ExpectedValue
+						&& Token.bHasPreviewValue
+						&& Token.PreviewValue == ExpectedPreviewValue)
+					{
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	bool HasSkippedDetailIconToken(
+		const FWacomCardDetailViewData& DetailData,
+		EWacomCardDetailIcon ExpectedIcon)
+	{
+		for (const FWacomCardDetailSection& Section : DetailData.Sections)
+		{
+			for (const FWacomCardDetailTokenLine& Line : Section.TokenLines)
+			{
+				for (const FWacomCardDetailToken& Token : Line.Tokens)
+				{
+					if (Token.Kind == EWacomCardDetailTokenKind::Icon
+						&& Token.Icon == ExpectedIcon
+						&& Token.bSkipped)
+					{
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -105,7 +152,6 @@ bool FWacomUICardPresentationRuntimeContextSpec::RunTest(const FString& /*Parame
 	ShieldOverride.bHasMagnitude = true;
 	ShieldOverride.Magnitude = 12;
 	PreviewContext.EffectPreviews.Add(ShieldOverride);
-	PreviewContext.TargetPreviewChangeLines.Add(FText::FromString(TEXT("目标预览：伤害 9")));
 
 	const FWacomCardViewData PreviewViewData =
 		UWacomCardPresentationBuilder::BuildCardViewData(Card.Get(), PreviewContext);
@@ -114,29 +160,19 @@ bool FWacomUICardPresentationRuntimeContextSpec::RunTest(const FString& /*Parame
 	TestBadge(*this, PreviewViewData.EffectBadges, 1, EWacomCardViewEffectBadgeKind::Heal, 5);
 	TestBadge(*this, PreviewViewData.EffectBadges, 2, EWacomCardViewEffectBadgeKind::Shield, 12);
 
+	Card->Description = FText::GetEmpty();
 	const FWacomCardDetailViewData RuntimeDetail =
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get(), RuntimeContext);
-	TestEqual(TEXT("Runtime detail records cost and playability changes"), RuntimeDetail.ChangeLines.Num(), 2);
-	if (RuntimeDetail.ChangeLines.Num() >= 2)
-	{
-		TestTrue(TEXT("Runtime detail mentions current cost"),
-			RuntimeDetail.ChangeLines[0].ToString().Contains(TEXT("当前费用")));
-		TestTrue(TEXT("Runtime detail mentions insufficient initiative"),
-			RuntimeDetail.ChangeLines[1].ToString().Contains(TEXT("先机不足")));
-	}
-
-	const FWacomCardDetailViewData StaticDetail =
-		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
-	TestEqual(TEXT("Static detail does not emit runtime change lines"), StaticDetail.ChangeLines.Num(), 0);
+	TestTrue(TEXT("Runtime detail emits section token lines"), RuntimeDetail.Sections.Num() > 0);
 
 	const FWacomCardDetailViewData PreviewDetail =
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get(), PreviewContext);
-	TestEqual(TEXT("Preview detail appends target preview lines"), PreviewDetail.ChangeLines.Num(), 3);
-	if (PreviewDetail.ChangeLines.Num() >= 3)
-	{
-		TestTrue(TEXT("Preview detail includes target preview line"),
-			PreviewDetail.ChangeLines[2].ToString().Contains(TEXT("目标预览")));
-	}
+	TestTrue(TEXT("Preview detail token records damage override"),
+		HasDetailNumberToken(PreviewDetail, 5, 9));
+	TestTrue(TEXT("Preview detail token marks skipped poison"),
+		HasSkippedDetailIconToken(PreviewDetail, EWacomCardDetailIcon::Poison));
+	TestTrue(TEXT("Preview detail token records shield override"),
+		HasDetailNumberToken(PreviewDetail, 6, 12));
 
 	return true;
 }

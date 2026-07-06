@@ -197,20 +197,6 @@ namespace
 		return DragView;
 	}
 
-	bool HasChangeLineContainingForTargetPreviewPresentation(
-		const FWacomCardDetailViewData& DetailData,
-		const TCHAR* Needle)
-	{
-		for (const FText& Line : DetailData.ChangeLines)
-		{
-			if (Line.ToString().Contains(Needle))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
 	FCardEffect MakePreviewPresentationEffect(
 		const FGameplayTag& EffectType,
 		int32 Magnitude)
@@ -482,10 +468,8 @@ bool FWacomUIBattleFirstPersonEnemyPreviewReusesStableDetailSpec::RunTest(const 
 	HUD->TickCardDetailMotionForTest(0.06f);
 	TestTrue(TEXT("Equivalent repeat preview keeps accumulated hover delay"),
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
-	TestTrue(TEXT("Detail contains target preview line"),
-		HasChangeLineContainingForTargetPreviewPresentation(
-			HUD->GetFirstPersonCardDetailDataForTest(),
-			TEXT("目标预览")));
+	TestTrue(TEXT("Detail uses section document data"),
+		HUD->GetFirstPersonCardDetailDataForTest().Sections.Num() > 0);
 
 	return true;
 }
@@ -621,10 +605,8 @@ bool FWacomUIBattleFirstPersonSceneHoverPreviewReusesStableDetailSpec::RunTest(c
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest(0.05f);
 	TestTrue(TEXT("Equivalent repeat scene hover keeps accumulated hover delay"),
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
-	TestTrue(TEXT("Scene hover detail contains target preview line"),
-		HasChangeLineContainingForTargetPreviewPresentation(
-			HUD->GetFirstPersonCardDetailDataForTest(),
-			TEXT("目标预览")));
+	TestTrue(TEXT("Scene hover detail uses section document data"),
+		HUD->GetFirstPersonCardDetailDataForTest().Sections.Num() > 0);
 
 	return true;
 }
@@ -683,10 +665,8 @@ bool FWacomUIBattleFirstPersonHandCardPreviewShowsOnFirstUpdateSpec::RunTest(con
 	HUD->HandleFirstPersonCardDragUpdatedForTest(SourceCardId, DragView);
 	TestTrue(TEXT("Detail shows immediately for first hand-card target update"),
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
-	TestTrue(TEXT("Source detail includes target hand-card cost preview"),
-		HasChangeLineContainingForTargetPreviewPresentation(
-			HUD->GetFirstPersonCardDetailDataForTest(),
-			TEXT("目标手牌费用")));
+	TestTrue(TEXT("Source detail uses section document data"),
+		HUD->GetFirstPersonCardDetailDataForTest().Sections.Num() > 0);
 
 	return true;
 }
