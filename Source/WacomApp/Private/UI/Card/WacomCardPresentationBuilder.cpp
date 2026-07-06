@@ -559,38 +559,38 @@ namespace
 	{
 		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_AfterPlayed))
 		{
-			return LOCTEXT("PassiveTriggerAfterPlayed", "被动：打出后");
+			return LOCTEXT("PassiveTriggerAfterPlayed", "打出后");
 		}
 		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnCompanionCount))
 		{
 			return Passive.TriggerThreshold > 0
-				? FText::Format(LOCTEXT("PassiveTriggerOnCompanionCountFmt", "被动：每打出{0}张伙伴"), FText::AsNumber(Passive.TriggerThreshold))
-				: LOCTEXT("PassiveTriggerOnCompanionCount", "被动：打出伙伴计数");
+				? FText::Format(LOCTEXT("PassiveTriggerOnCompanionCountFmt", "每打出{0}张伙伴"), FText::AsNumber(Passive.TriggerThreshold))
+				: LOCTEXT("PassiveTriggerOnCompanionCount", "打出伙伴计数");
 		}
 		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnTwilightTriggered))
 		{
-			return LOCTEXT("PassiveTriggerOnTwilightTriggered", "被动：暮气触发");
+			return LOCTEXT("PassiveTriggerOnTwilightTriggered", "暮气触发时");
 		}
 		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnTurnStart))
 		{
-			return LOCTEXT("PassiveTriggerOnTurnStart", "被动：回合开始");
+			return LOCTEXT("PassiveTriggerOnTurnStart", "回合开始");
 		}
 		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnTurnEnd))
 		{
-			return LOCTEXT("PassiveTriggerOnTurnEnd", "被动：回合结束");
+			return LOCTEXT("PassiveTriggerOnTurnEnd", "回合结束");
 		}
 		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnDraw))
 		{
-			return LOCTEXT("PassiveTriggerOnDraw", "被动：抽到时");
+			return LOCTEXT("PassiveTriggerOnDraw", "抽到时");
 		}
 		if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnDiscard))
 		{
-			return LOCTEXT("PassiveTriggerOnDiscard", "被动：弃掉时");
+			return LOCTEXT("PassiveTriggerOnDiscard", "弃掉时");
 		}
 
 		return Passive.Trigger.IsValid()
-			? FText::FromString(FString::Printf(TEXT("被动：%s"), *ShortGameplayTagName(Passive.Trigger)))
-			: LOCTEXT("PassiveTriggerUnknown", "被动");
+			? FText::FromString(ShortGameplayTagName(Passive.Trigger))
+			: LOCTEXT("PassiveTriggerUnknown", "触发时机未知");
 	}
 
 	FText BuildPassiveTriggerDisplayText(const FCardPassive& Passive)
@@ -643,6 +643,38 @@ namespace
 			LOCTEXT("PassiveLineWithEffectCountFmt", "{0}（效果 {1}）"),
 			TriggerText,
 			FText::AsNumber(Passive.Effects.Num()));
+	}
+
+	FText NormalizePassiveBodyText(const FText& Text)
+	{
+		FString Value = Text.ToString().TrimStartAndEnd();
+		const FString FullWidthLabel(TEXT("被动："));
+		const FString HalfWidthLabel(TEXT("被动:"));
+		if (Value.StartsWith(FullWidthLabel))
+		{
+			Value.RightChopInline(FullWidthLabel.Len(), EAllowShrinking::No);
+			Value.TrimStartInline();
+		}
+		else if (Value.StartsWith(HalfWidthLabel))
+		{
+			Value.RightChopInline(HalfWidthLabel.Len(), EAllowShrinking::No);
+			Value.TrimStartInline();
+		}
+		return Value.IsEmpty() ? FText::GetEmpty() : FText::FromString(Value);
+	}
+
+	FWacomCardDetailTokenLine BuildPassiveTextTokenLine(
+		const FText& Text,
+		int32 PassiveIndex,
+		const TCHAR* StableIdSuffix)
+	{
+		FWacomCardDetailTokenLine Line;
+		Line.LineId = FName(*FString::Printf(TEXT("Passive.%d.%s"), PassiveIndex, StableIdSuffix));
+		Line.Kind = EWacomCardDetailTokenLineKind::Passive;
+		Line.Tokens.Add(MakeTextToken(
+			Text,
+			FName(*FString::Printf(TEXT("Passive.%d.%s.Text"), PassiveIndex, StableIdSuffix))));
+		return Line;
 	}
 
 	bool TryBuildEffectTokenLine(
@@ -723,6 +755,18 @@ namespace
 			OutLine.Tokens.Add(MakeTextToken(FText::FromString(TEXT(" ")), BuildTokenStableId(StableIdPrefix, TEXT("IconGap"))));
 			OutLine.Tokens.Add(MakeActionToken(LOCTEXT("DetailTokenExhaustSelected", "消耗目标手牌。"), BuildTokenStableId(StableIdPrefix, TEXT("Action"))));
 		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Shuffle_Random))
+		{
+			OutLine.Tokens.Add(MakeActionToken(LOCTEXT("DetailTokenShuffleRandom", "随机腾挪 1 张手牌。"), BuildTokenStableId(StableIdPrefix, TEXT("Action"))));
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Shuffle_FromBothToOther))
+		{
+			OutLine.Tokens.Add(MakeActionToken(LOCTEXT("DetailTokenShuffleFromBothToOther", "将双手区随机 1 张卡牌腾挪至其他区域。"), BuildTokenStableId(StableIdPrefix, TEXT("Action"))));
+		}
+		else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Shuffle_ToRandomZone))
+		{
+			OutLine.Tokens.Add(MakeActionToken(LOCTEXT("DetailTokenShuffleToRandomZone", "该牌腾挪至随机区域。"), BuildTokenStableId(StableIdPrefix, TEXT("Action"))));
+		}
 		else
 		{
 			return false;
@@ -782,9 +826,6 @@ namespace
 		OutLine.LineId = FName(*FString::Printf(TEXT("Passive.%d.Trigger"), PassiveIndex));
 		OutLine.Kind = EWacomCardDetailTokenLineKind::Passive;
 		OutLine.Tokens.Add(MakeActionToken(
-			LOCTEXT("PassiveTokenLabel", "被动："),
-			FName(*FString::Printf(TEXT("Passive.%d.Trigger.Label"), PassiveIndex))));
-		OutLine.Tokens.Add(MakeTextToken(
 			BuildPassiveTriggerDisplayText(Passive),
 			FName(*FString::Printf(TEXT("Passive.%d.Trigger.Text"), PassiveIndex))));
 		if (Passive.Condition.IsSet())
@@ -793,6 +834,9 @@ namespace
 				LOCTEXT("PassiveTokenConditionHint", "（有条件）"),
 				FName(*FString::Printf(TEXT("Passive.%d.Trigger.ConditionHint"), PassiveIndex))));
 		}
+		OutLine.Tokens.Add(MakeTextToken(
+			LOCTEXT("PassiveTokenTriggerSuffix", "："),
+			FName(*FString::Printf(TEXT("Passive.%d.Trigger.Suffix"), PassiveIndex))));
 		return true;
 	}
 
@@ -811,14 +855,26 @@ namespace
 		for (int32 PassiveIndex = 0; PassiveIndex < Card->Passives.Num(); ++PassiveIndex)
 		{
 			const FCardPassive& Passive = Card->Passives[PassiveIndex];
-			const int32 InitialLineCount = OutLines.Num();
-
-			FWacomCardDetailTokenLine TriggerLine;
-			if (TryBuildPassiveTriggerTokenLine(Passive, PassiveIndex, TriggerLine))
+			const FText PassiveBodyText = NormalizePassiveBodyText(
+				Passive.DisplayText.IsEmpty()
+					? BuildPassiveLine(Passive)
+					: Passive.DisplayText);
+			if (!PassiveBodyText.IsEmpty())
 			{
-				OutLines.Add(MoveTemp(TriggerLine));
+				OutFallbackPassiveLines.Add(PassiveBodyText);
 			}
 
+			if (!Passive.DisplayText.IsEmpty())
+			{
+				if (!PassiveBodyText.IsEmpty())
+				{
+					OutLines.Add(BuildPassiveTextTokenLine(PassiveBodyText, PassiveIndex, TEXT("Display")));
+					bAnyPassiveTokenLines = true;
+				}
+				continue;
+			}
+
+			TArray<FWacomCardDetailTokenLine> EffectLines;
 			for (int32 EffectIndex = 0; EffectIndex < Passive.Effects.Num(); ++EffectIndex)
 			{
 				FWacomCardDetailTokenLine EffectLine;
@@ -830,17 +886,27 @@ namespace
 					EffectIndex,
 					EffectLine))
 				{
-					OutLines.Add(MoveTemp(EffectLine));
+					EffectLines.Add(MoveTemp(EffectLine));
 				}
 			}
 
-			const bool bPassiveTokenized = OutLines.Num() > InitialLineCount;
-			bAnyPassiveTokenLines |= bPassiveTokenized;
-			if (!bPassiveTokenized)
+			if (Passive.Effects.Num() > 0 && EffectLines.Num() == Passive.Effects.Num())
 			{
-				OutFallbackPassiveLines.Add(Passive.DisplayText.IsEmpty()
-					? BuildPassiveLine(Passive)
-					: Passive.DisplayText);
+				FWacomCardDetailTokenLine TriggerLine;
+				if (TryBuildPassiveTriggerTokenLine(Passive, PassiveIndex, TriggerLine))
+				{
+					OutLines.Add(MoveTemp(TriggerLine));
+				}
+				for (FWacomCardDetailTokenLine& EffectLine : EffectLines)
+				{
+					OutLines.Add(MoveTemp(EffectLine));
+				}
+				bAnyPassiveTokenLines = true;
+			}
+			else if (!PassiveBodyText.IsEmpty())
+			{
+				OutLines.Add(BuildPassiveTextTokenLine(PassiveBodyText, PassiveIndex, TEXT("Fallback")));
+				bAnyPassiveTokenLines = true;
 			}
 		}
 		return bAnyPassiveTokenLines;
