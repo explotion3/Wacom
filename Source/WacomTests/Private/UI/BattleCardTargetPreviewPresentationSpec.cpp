@@ -27,6 +27,7 @@
 #include "UI/Battle/BattlePresentationStackEntryWidget.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
+#include "UI/FirstPersonCardLayerTestAccess.h"
 #include "Misc/ScopeExit.h"
 
 namespace
@@ -583,7 +584,7 @@ bool FWacomUIBattleFirstPersonSceneHoverPreviewReusesStableDetailSpec::RunTest(c
 	}
 	ProbeAnchor->RegisterComponent();
 	ProbeAnchor->FollowInterpSpeed = 0.0f;
-	ProbeAnchor->SetRuntimeCardLayerEntries(
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*ProbeAnchor,
 		RuntimeAnchor->GetRuntimeCardLayerSourceId(),
 		RuntimeAnchor->GetRuntimeCardLayerEntries());
 	HUD->SetFirstPersonCardAnchorForTest(ProbeAnchor);

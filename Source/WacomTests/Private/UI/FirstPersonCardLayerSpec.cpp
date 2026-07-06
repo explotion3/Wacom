@@ -2968,7 +2968,7 @@ bool FWacomFirstPersonCardLayerAuthoredEdgeDropHandCountScaleTest::RunTest(const
 	{
 		TArray<FWacomFirstPersonCardLayerEntry> Entries;
 		Entries.SetNum(CardCount);
-		Anchor->SetRuntimeCardLayerEntries(TEXT("EdgeDropScale"), Entries);
+		FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, TEXT("EdgeDropScale"), Entries);
 		return Anchor->BuildActiveCardLayerSlotViewsForTest();
 	};
 
@@ -3092,11 +3092,11 @@ bool FWacomFirstPersonCardLayerAuthoredHandAnchorNormalLayoutTest::RunTest(const
 	Anchor->bEnableCardLayerPixelSnapping = false;
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { LeftAnchor, NormalA, NormalB, NormalC, RightAnchor });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { LeftAnchor, NormalA, NormalB, NormalC, RightAnchor });
 	const TArray<FWacomFirstPersonCardLayerSlotView> AnchorEdgeSlots =
 		Anchor->BuildActiveCardLayerSlotViewsForTest();
 
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { LeftNormal, NormalA, NormalB, NormalC, RightNormal });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { LeftNormal, NormalA, NormalB, NormalC, RightNormal });
 	const TArray<FWacomFirstPersonCardLayerSlotView> NormalEdgeSlots =
 		Anchor->BuildActiveCardLayerSlotViewsForTest();
 
@@ -3274,7 +3274,7 @@ bool FWacomFirstPersonCardLayerAuthoredScaleTest::RunTest(const FString& Paramet
 	FWacomFirstPersonCardLayerEntry Hovered;
 	Hovered.CardInstanceId = HoveredId;
 	Hovered.CardViewData.Name = FText::FromString(TEXT("Hovered"));
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { Pending, Hovered });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { Pending, Hovered });
 	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, HoveredId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> NearSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
@@ -3340,7 +3340,7 @@ bool FWacomFirstPersonCardLayerAuthoredZOrderTest::RunTest(const FString& Parame
 	FWacomFirstPersonCardLayerEntry E;
 	E.CardInstanceId = HoveredId;
 	E.CardViewData.Name = FText::FromString(TEXT("E"));
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { A, B, C, D, E });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { A, B, C, D, E });
 	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, HoveredId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> HoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
@@ -3635,11 +3635,11 @@ bool FWacomFirstPersonCardLayerBodyLockedVisualOffsetsTest::RunTest(const FStrin
 	FWacomFirstPersonCardLayerEntry HoveredRightEdge;
 	HoveredRightEdge.CardInstanceId = HoveredCardId;
 	HoveredRightEdge.CardViewData.Name = FText::FromString(TEXT("Hovered"));
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { LeftEdge, PendingCenter, HoveredRightEdge });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { LeftEdge, PendingCenter, HoveredRightEdge });
 	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
 	PendingCenter.bIsPendingTargeting = true;
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { LeftEdge, PendingCenter, HoveredRightEdge });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { LeftEdge, PendingCenter, HoveredRightEdge });
 	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, HoveredCardId);
 
 	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
@@ -6841,7 +6841,7 @@ bool FWacomFirstPersonCardAnchorMotionProfileOverridesTest::RunTest(const FStrin
 	Anchor->RegisterComponent();
 	Anchor->bDrawPreviewCardLayer = true;
 	Anchor->PreviewCardCountFallback = 1;
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	Anchor->CardSlotMotionSpeed = 11.0f;
 	Anchor->CardSlotOpacitySpeed = 12.0f;
 	Anchor->CardSlotMotionEasePower = 1.3f;
@@ -6950,7 +6950,7 @@ bool FWacomFirstPersonCardAnchorProgrammaticDragGestureTest::RunTest(const FStri
 		return false;
 	}
 	Anchor->RegisterComponent();
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 
 	const FGuid NoTargetCardId = FGuid::NewGuid();
 	const FGuid TargetedCardId = FGuid::NewGuid();
@@ -6964,7 +6964,7 @@ bool FWacomFirstPersonCardAnchorProgrammaticDragGestureTest::RunTest(const FStri
 	TargetedEntry.CardViewData.Name = FText::FromString(TEXT("Targeted"));
 	TargetedEntry.bIsPlayable = true;
 	TargetedEntry.TargetMode = ECardTargetMode::SingleEnemyPart;
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { NoTargetEntry, TargetedEntry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { NoTargetEntry, TargetedEntry });
 	Anchor->RefreshAnchor(1.0f / 60.0f);
 	Anchor->RefreshCardLayerForTest();
 
@@ -7074,7 +7074,7 @@ bool FWacomFirstPersonCardAnchorCardLayerConfigDirtyGateTest::RunTest(const FStr
 	Anchor->RegisterComponent();
 	Anchor->bDrawPreviewCardLayer = true;
 	Anchor->PreviewCardCountFallback = 2;
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	Anchor->RefreshAnchor(1.0f / 60.0f);
 	Anchor->RefreshCardLayerForTest();
 
@@ -7479,11 +7479,11 @@ bool FWacomFirstPersonCardLayerHoverVisualStateTest::RunTest(const FString& Para
 	Entry.CardInstanceId = CardInstanceId;
 	Entry.CardViewData.Name = FText::FromString(TEXT("Hover"));
 	Entry.bIsPlayable = true;
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
 
 	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 	TestEqual(TEXT("Base slot count"), BaseSlots.Num(), 1);
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	Anchor->RefreshCardLayerForTest();
 
 	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::CardLayer(*Anchor);
@@ -7569,8 +7569,8 @@ bool FWacomFirstPersonCardLayerHoveredSlotLayoutUpdateTest::RunTest(const FStrin
 	FWacomFirstPersonCardLayerEntry Entry;
 	Entry.CardInstanceId = CardInstanceId;
 	Entry.CardViewData.Name = FText::FromString(TEXT("Hovered layout"));
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	Anchor->RefreshCardLayerForTest();
 
 	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::CardLayer(*Anchor);
@@ -7629,8 +7629,8 @@ bool FWacomFirstPersonCardLayerAnchorCardTargetBridgeTest::RunTest(const FString
 	Entry.CardInstanceId = CardInstanceId;
 	Entry.CardViewData.Name = FText::FromString(TEXT("Card Target"));
 	Entry.bIsPlayable = false;
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	Anchor->RefreshCardLayerForTest();
 
 	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::CardLayer(*Anchor);
@@ -8111,7 +8111,7 @@ bool FWacomFirstPersonCardLayerEndTurnShortcutCancelsActiveDragTest::RunTest(con
 		return false;
 	}
 
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 
 	const FGuid CardId = FGuid::NewGuid();
 	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
@@ -8224,7 +8224,7 @@ bool FWacomFirstPersonCardLayerWaitShortcutCancelsTargetedAimTest::RunTest(const
 		return false;
 	}
 
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 
 	const FGuid CardId = FGuid::NewGuid();
 	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
@@ -8949,7 +8949,7 @@ bool FWacomFirstPersonCardLayerPlayableHoverFeedbackTest::RunTest(const FString&
 	Entry.CardViewData.Name = FText::FromString(TEXT("Playable"));
 	Entry.bIsPlayable = true;
 
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
 	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, CardId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> HoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
@@ -9024,7 +9024,7 @@ bool FWacomFirstPersonCardLayerNonPlayableHoverFeedbackTest::RunTest(const FStri
 	Entry.CardViewData.Name = FText::FromString(TEXT("Blocked"));
 	Entry.bIsPlayable = false;
 
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { Entry });
 	const TArray<FWacomFirstPersonCardLayerSlotView> BaseSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, CardId);
 	const TArray<FWacomFirstPersonCardLayerSlotView> HoverSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
@@ -9581,7 +9581,7 @@ bool FWacomFirstPersonCardLayerRuntimeSourcePriorityTest::RunTest(const FString&
 
 	FWacomCardViewData RuntimeCard;
 	RuntimeCard.Name = FText::FromString(TEXT("Runtime Battle Card"));
-	Anchor->SetRuntimeCardLayerData(WacomFirstPersonCardLayerSourceIds::BattleHand(), { RuntimeCard });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerData(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { RuntimeCard });
 	const TArray<FWacomFirstPersonCardLayerSlotView> RuntimeSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 	TestEqual(TEXT("Runtime source overrides development preview"), RuntimeSlots.Num(), 1);
 	if (RuntimeSlots.Num() == 1)
@@ -9589,7 +9589,7 @@ bool FWacomFirstPersonCardLayerRuntimeSourcePriorityTest::RunTest(const FString&
 		TestEqual(TEXT("Runtime card data is used"), RuntimeSlots[0].Entry.CardViewData.Name.ToString(), FString(TEXT("Runtime Battle Card")));
 	}
 
-	Anchor->ClearRuntimeCardLayerData(WacomFirstPersonCardLayerSourceIds::BattleHand());
+	FWacomFirstPersonCardLayerTestAccess::ClearRuntimeCardLayerData(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand());
 	TestEqual(TEXT("Clearing runtime source restores development preview"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
 
 	Anchor->DestroyComponent();
@@ -9624,11 +9624,11 @@ bool FWacomFirstPersonCardLayerEmptyRuntimeSourceTest::RunTest(const FString& Pa
 	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
 	Anchor->bDrawPreviewCardLayer = true;
 	Anchor->PreviewCardCountFallback = 5;
-	Anchor->SetRuntimeCardLayerData(WacomFirstPersonCardLayerSourceIds::BattleHand(), {});
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerData(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), {});
 	TestTrue(TEXT("Empty runtime source is still active"), Anchor->HasRuntimeCardLayerData());
 	TestEqual(TEXT("Empty runtime hand shows no cards"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 0);
 
-	Anchor->ClearRuntimeCardLayerData(WacomFirstPersonCardLayerSourceIds::BattleHand());
+	FWacomFirstPersonCardLayerTestAccess::ClearRuntimeCardLayerData(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand());
 	TestEqual(TEXT("Static fallback returns after clearing empty runtime hand"), Anchor->BuildActiveCardLayerSlotViewsForTest().Num(), 5);
 
 	Anchor->DestroyComponent();
@@ -10366,7 +10366,7 @@ bool FWacomFirstPersonCardLayerVisualStateSlotTest::RunTest(const FString& Param
 	DisabledAnchorEntry.bIsPlayable = false;
 	DisabledAnchorEntry.CardViewData.bDisabled = true;
 
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { NormalEntry, PendingEntry, DisabledAnchorEntry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { NormalEntry, PendingEntry, DisabledAnchorEntry });
 	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 	TestEqual(TEXT("Runtime entries produce slots"), Slots.Num(), 3);
 	if (Slots.Num() == 3)
@@ -10452,7 +10452,7 @@ bool FWacomFirstPersonCardLayerPendingFocusAngleTest::RunTest(const FString& Par
 	FWacomFirstPersonCardLayerEntry NormalEntry;
 	NormalEntry.CardViewData.Name = FText::FromString(TEXT("Normal"));
 
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { PendingEntry, NormalEntry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { PendingEntry, NormalEntry });
 	const TArray<FWacomFirstPersonCardLayerSlotView> UnblendedSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
 	Anchor->bPendingTargetingStraightenAngle = true;
@@ -10526,7 +10526,7 @@ bool FWacomFirstPersonCardLayerPendingHoverPriorityTest::RunTest(const FString& 
 	PendingEntry.CardViewData.Name = FText::FromString(TEXT("Pending"));
 	PendingEntry.bIsPendingTargeting = true;
 
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), { PendingEntry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), { PendingEntry });
 	const TArray<FWacomFirstPersonCardLayerSlotView> PendingSlots = Anchor->BuildActiveCardLayerSlotViewsForTest();
 
 	FWacomFirstPersonCardLayerTestAccess::SetHoveredCardInstanceId(*Anchor, PendingId);
@@ -10744,8 +10744,8 @@ bool FWacomFirstPersonCardLayerBattleHUDLateCleanupKeepsRunSourceTest::RunTest(c
 	RunEntry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(RunCard);
 	RunEntry.bIsPlayable = true;
 	RunEntry.CardViewData.bDisabled = false;
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::RunDefault(), { RunEntry });
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::RunDefault(), { RunEntry });
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	TestEqual(TEXT("Run source takes over before late BattleHUD cleanup"),
 		Anchor->GetRuntimeCardLayerSourceId(),
 		WacomFirstPersonCardLayerSourceIds::RunDefault());
@@ -13888,7 +13888,7 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 		return false;
 	}
 
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
 	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
 	{
@@ -13903,7 +13903,7 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
 		CardEntries.Add(MoveTemp(Entry));
 	}
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), CardEntries);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), CardEntries);
 	HUD->SetFirstPersonCardAnchorForTest(Anchor);
 	Anchor->RefreshAnchor(0.0f);
 	Anchor->PrimaryComponentTick.ExecuteTick(
@@ -14056,7 +14056,7 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 		return false;
 	}
 
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	TArray<FWacomFirstPersonCardLayerEntry> CardEntries;
 	for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
 	{
@@ -14071,7 +14071,7 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
 		CardEntries.Add(MoveTemp(Entry));
 	}
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), CardEntries);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), CardEntries);
 	HUD->SetFirstPersonCardAnchorForTest(Anchor);
 	Anchor->RefreshAnchor(0.0f);
 	Anchor->PrimaryComponentTick.ExecuteTick(
@@ -14663,8 +14663,8 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		return false;
 	}
 
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(true);
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), CardEntries);
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), CardEntries);
 	HUD->SetFirstPersonCardAnchorForTest(Anchor);
 	Anchor->RefreshAnchor(0.0f);
 	Anchor->PrimaryComponentTick.ExecuteTick(

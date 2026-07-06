@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-06-08
+updated: 2026-07-06
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -91,8 +91,8 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 当前原则：
 
 - 正式 WBP 制作合同优先保留：`BindWidget`、`EditDefaultsOnly` 配置、`BlueprintImplementableEvent`、必要 `BlueprintCallable` 和展示 builder 的 `BlueprintPure` 入口。
-- C++ public 但不应直接 Blueprint 化的诊断、详情显示、测试辅助或内部协调 helper，后续按资产影响和测试覆盖逐个评估。
-- `UWacomRunMenuCardLeaseTestMenu`、Actor `ConfigureDebug...Sample`、first-person legacy comparison / prototype preview 等只作为 prototype / compatibility / debug 入口保留。
+- C++ public 但不应直接 Blueprint 化的诊断、详情显示或内部协调 helper，后续按资产影响和测试覆盖逐个评估。first-person layer / slot / anchor / Run source 的自动化测试入口已收口为 private + `WacomTests/Private` access wrapper；PlayerController Run drop 的 probe / resolve / submit 测试入口也收口到 private friend + `WacomTests/Private` access wrapper；后续不要新增 public callable `ForTest`。
+- `UWacomRunMenuCardLeaseTestMenu` runtime 原型菜单已删除，PlayerController / console runtime 入口同步移除；Actor `ConfigureDebug...Sample`、first-person legacy comparison / prototype preview 等仍只作为 prototype / compatibility / debug 入口保留。
 - Blueprint-visible 项即使没有 C++ 调用方，也可能被 WBP 或 `.uasset` 引用；没有资产审计前不作为删除依据。
 
 历史整理记录见 [Wacom_Public_Surface_And_Docs_History.md](./DevLog/Wacom_Public_Surface_And_Docs_History.md)。

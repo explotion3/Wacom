@@ -583,6 +583,44 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 	}
 };
 
+enum class EWacomFirstPersonCardLayerSourceClearMode : uint8
+{
+	None,
+	RuntimeData,
+	VisualState
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardLayerSourceLifecycleFrame
+{
+	FName SourceId = NAME_None;
+	FWacomFirstPersonCardLayerPresentationFrame PresentationFrame;
+	EWacomFirstPersonCardLayerSourceClearMode ClearMode =
+		EWacomFirstPersonCardLayerSourceClearMode::None;
+
+	bool bCommitPresentationFrame = false;
+	bool bSetTransitionPresentationEnabled = false;
+	bool bTransitionPresentationEnabled = true;
+	bool bSetInteractionEnabled = false;
+	bool bInteractionEnabled = false;
+	bool bCancelActiveDrag = false;
+	bool bBroadcastDragCancel = true;
+
+	FName ResolveSourceId() const
+	{
+		return !SourceId.IsNone() ? SourceId : PresentationFrame.SourceId;
+	}
+
+	static FWacomFirstPersonCardLayerSourceLifecycleFrame FromPresentationFrame(
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+	{
+		FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame;
+		LifecycleFrame.SourceId = Frame.SourceId;
+		LifecycleFrame.PresentationFrame = Frame;
+		LifecycleFrame.bCommitPresentationFrame = true;
+		return LifecycleFrame;
+	}
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 {

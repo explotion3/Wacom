@@ -37,6 +37,44 @@ struct FWacomFirstPersonCardLayerTestAccess
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		const FGuid& CardInstanceId);
 	static void ResetAnchorScreenSmoothing(UWacomFirstPersonCardAnchorComponent& Anchor);
+	static void SetRuntimeCardLayerEntries(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
+	static void SetRuntimeCardLayerPresentationFrame(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
+	static void SetRuntimeCardLayerPresentationFrame(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+	static void SetRuntimeCardLayerTransitionHints(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
+	static void SetRuntimeCardLayerFeedbackHints(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
+	static void SetRuntimeCardLayerTransitionPresentationEnabled(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
+		bool bEnabled);
+	static void SetRuntimeCardLayerData(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId,
+		const TArray<FWacomCardViewData>& Cards);
+	static void ClearRuntimeCardLayerData(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		FName SourceId);
+	static void CommitRuntimeCardLayerFrame(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
+	static void SetFirstPersonCardLayerInteractionEnabled(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		bool bEnabled);
 
 	static void TickSlotMotion(UWacomFirstPersonCardLayerWidget& Layer, float DeltaTime);
 	static UWacomFirstPersonCardLayerSlotWidget* FindSlotWidgetByKey(

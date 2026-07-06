@@ -46,9 +46,9 @@
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Run/WacomRunFirstPersonCardDetailController.h"
+#include "UI/Run/WacomRunFirstPersonCardDropCoordinator.h"
 #include "UI/Run/WacomRunFirstPersonCardDragController.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
-#include "UI/Run/WacomRunMenuCardLeaseTestMenu.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Framework/Application/SlateApplication.h"
@@ -185,93 +185,6 @@ namespace
 		return IsValid(Object) ? Object->GetName() : TEXT("None");
 	}
 
-	const TCHAR* ToRunMenuCardDropIntentString(EWacomRunMenuCardDropIntentKind Kind)
-	{
-		switch (Kind)
-		{
-		case EWacomRunMenuCardDropIntentKind::ProbeZoneTarget:
-			return TEXT("ProbeZoneTarget");
-		case EWacomRunMenuCardDropIntentKind::SubmitZoneTarget:
-			return TEXT("SubmitZoneTarget");
-		case EWacomRunMenuCardDropIntentKind::Reject:
-			return TEXT("Reject");
-		case EWacomRunMenuCardDropIntentKind::None:
-		default:
-			return TEXT("None");
-		}
-	}
-
-	const TCHAR* ToRunMenuCardDropRejectString(EWacomRunMenuCardDropRejectReason Reason)
-	{
-		switch (Reason)
-		{
-		case EWacomRunMenuCardDropRejectReason::NotInExploration:
-			return TEXT("NotInExploration");
-		case EWacomRunMenuCardDropRejectReason::MissingGameMenu:
-			return TEXT("MissingGameMenu");
-		case EWacomRunMenuCardDropRejectReason::MissingMenuLease:
-			return TEXT("MissingMenuLease");
-		case EWacomRunMenuCardDropRejectReason::MissingSession:
-			return TEXT("MissingSession");
-		case EWacomRunMenuCardDropRejectReason::InvalidSourceCard:
-			return TEXT("InvalidSourceCard");
-		case EWacomRunMenuCardDropRejectReason::MissingZoneTarget:
-			return TEXT("MissingZoneTarget");
-		case EWacomRunMenuCardDropRejectReason::UnsupportedTargetKind:
-			return TEXT("UnsupportedTargetKind");
-		case EWacomRunMenuCardDropRejectReason::MenuNotFound:
-			return TEXT("MenuNotFound");
-		case EWacomRunMenuCardDropRejectReason::MenuDoesNotAccept:
-			return TEXT("MenuDoesNotAccept");
-		case EWacomRunMenuCardDropRejectReason::CardNotOwned:
-			return TEXT("CardNotOwned");
-		case EWacomRunMenuCardDropRejectReason::RunValidationFailed:
-			return TEXT("RunValidationFailed");
-		case EWacomRunMenuCardDropRejectReason::SubmitFailed:
-			return TEXT("SubmitFailed");
-		case EWacomRunMenuCardDropRejectReason::None:
-		default:
-			return TEXT("None");
-		}
-	}
-
-	const TCHAR* ToRunMenuCardDropSubmitPolicyString(EWacomRunMenuCardDropSubmitPolicy Policy)
-	{
-		switch (Policy)
-		{
-		case EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard:
-			return TEXT("ControllerDestroyOwnedCard");
-		case EWacomRunMenuCardDropSubmitPolicy::MenuHandled:
-			return TEXT("MenuHandled");
-		case EWacomRunMenuCardDropSubmitPolicy::None:
-		default:
-			return TEXT("None");
-		}
-	}
-
-	void FinalizeRunMenuCardDropDebug(
-		FWacomRunMenuCardDropResolveResult& Result,
-		const FVector2D& PointerPosition,
-		bool bReleased)
-	{
-		Result.DebugSummary = FString::Printf(
-			TEXT("RunMenuCardDropIntent{CardId=%s LeaseId=%s LeaseSource=%s Intent=%s Reject=%s SubmitPolicy=%s SubmitReason=%s ZoneId=%s RunValidation=%s CanSubmit=%s Submitted=%s Pointer=%s Released=%s Target=%s}"),
-			*Result.SourceCardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
-			*Result.LeaseId.ToString(),
-			*Result.LeaseSourceId.ToString(),
-			ToRunMenuCardDropIntentString(Result.IntentKind),
-			ToRunMenuCardDropRejectString(Result.RejectReason),
-			ToRunMenuCardDropSubmitPolicyString(Result.SubmitPolicy),
-			*Result.SubmitReason.ToString(),
-			*Result.ZoneId.ToString(),
-			*Result.RunValidationReason.ToString(),
-			Result.bCanSubmit ? TEXT("true") : TEXT("false"),
-			Result.bSubmitted ? TEXT("true") : TEXT("false"),
-			*PointerPosition.ToString(),
-			bReleased ? TEXT("true") : TEXT("false"),
-			*Result.TargetHandle.ToString());
-	}
-
 	/**
 	 * 从命中 Actor 的组件中查找首个实现了 IWacomInteractionTargetProvider 的，
 	 * 构建统一的交互目标 handle。
@@ -303,51 +216,6 @@ namespace
 		}
 
 		return FWacomInteractionTargetHandle();
-	}
-
-	void FinalizeRunWorldCardDropDebugSummary(
-		FString& OutDebugSummary,
-		const FVector2D& PointerPosition,
-		const FGuid& CardInstanceId,
-		const FWacomInteractionTargetHandle& TargetHandle,
-		const FRunWorldCardInteractionValidation& Validation,
-		const AActor* TargetActor,
-		const UWacomRunWorldCardDropReceiverComponent* Receiver,
-		FName ResolveReason,
-		bool bReleased,
-		bool bSubmitted,
-		FName ToastSource = NAME_None,
-		const FText& ToastText = FText::GetEmpty())
-	{
-		const TCHAR* Phase = bReleased ? TEXT("Release") : TEXT("Preview");
-		OutDebugSummary = FString::Printf(
-			TEXT("RunWorldCardDrop{Phase=%s Card=%s TargetActor=%s Receiver=%s StableId=%s CanSubmit=%s Reason=%s Resolve=%s Submitted=%s Released=%s ToastSource=%s FailureToast=%s Pointer=%s Target=%s Validation=%s}"),
-			Phase,
-			*CardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
-			*GetDebugObjectName(TargetActor),
-			*GetDebugObjectName(Receiver),
-			*TargetHandle.StableTargetId.ToString(),
-			Validation.bCanSubmit ? TEXT("true") : TEXT("false"),
-			*Validation.DisabledReason.ToString(),
-			*ResolveReason.ToString(),
-			bSubmitted ? TEXT("true") : TEXT("false"),
-			bReleased ? TEXT("true") : TEXT("false"),
-			ToastSource.IsNone() ? TEXT("None") : *ToastSource.ToString(),
-			ToastText.IsEmpty() ? TEXT("None") : *ToastText.ToString(),
-			*PointerPosition.ToString(),
-			*TargetHandle.ToString(),
-			*Validation.DebugSummary);
-	}
-
-	FText BuildRunWorldCardDropConfigWarningToast(FName Reason)
-	{
-		if (Reason.IsNone())
-		{
-			return LOCTEXT("RunWorldCardDropConfigWarning", "场景交互配置异常");
-		}
-		return FText::Format(
-			LOCTEXT("RunWorldCardDropConfigWarningWithReason", "场景交互配置异常：{0}"),
-			FText::FromName(Reason));
 	}
 
 }
@@ -851,64 +719,20 @@ void AWacomPlayerController::SetRunFirstPersonCardLayerTransitionSuppressedByGam
 
 void AWacomPlayerController::RegisterRunMenuDropTarget(UWacomRunMenuDropTargetWidget* DropTarget)
 {
-	if (!DropTarget)
-	{
-		return;
-	}
-
-	RunMenuDropTargets.RemoveAll(
-		[](const TWeakObjectPtr<UWacomRunMenuDropTargetWidget>& Existing)
-		{
-			return !Existing.IsValid();
-		});
-	if (!RunMenuDropTargets.ContainsByPredicate(
-		[DropTarget](const TWeakObjectPtr<UWacomRunMenuDropTargetWidget>& Existing)
-		{
-			return Existing.Get() == DropTarget;
-		}))
-	{
-		RunMenuDropTargets.Add(DropTarget);
-	}
+	GetRunFirstPersonCardDropCoordinator().RegisterRunMenuDropTarget(DropTarget);
 }
 
 void AWacomPlayerController::UnregisterRunMenuDropTarget(UWacomRunMenuDropTargetWidget* DropTarget)
 {
-	if (PreviewedRunMenuDropTarget.Get() == DropTarget)
-	{
-		ClearRunMenuDropTargetProbe();
-	}
-
-	RunMenuDropTargets.RemoveAll(
-		[DropTarget](const TWeakObjectPtr<UWacomRunMenuDropTargetWidget>& Existing)
-		{
-			return !Existing.IsValid() || Existing.Get() == DropTarget;
-		});
+	GetRunFirstPersonCardDropCoordinator().UnregisterRunMenuDropTarget(DropTarget);
 }
 
 bool AWacomPlayerController::TryProbeRunMenuDropTargetAtWidgetPosition(
 	const FVector2D& WidgetPosition,
 	FWacomInteractionTargetHandle& OutHandle) const
 {
-	OutHandle = FWacomInteractionTargetHandle();
-
-	for (int32 Index = RunMenuDropTargets.Num() - 1; Index >= 0; --Index)
-	{
-		UWacomRunMenuDropTargetWidget* Target = RunMenuDropTargets[Index].Get();
-		if (!Target || !Target->CanProbeRunMenuDropTarget())
-		{
-			continue;
-		}
-
-		if (Target->ContainsWidgetPosition(WidgetPosition))
-		{
-			OutHandle = Target->BuildZoneTargetHandle(WidgetPosition);
-			return OutHandle.IsValid()
-				&& OutHandle.TargetKind == EWacomInteractionTargetKind::Zone
-				&& !OutHandle.ZoneId.IsNone();
-		}
-	}
-
-	return false;
+	return GetRunFirstPersonCardDropCoordinator()
+		.TryProbeRunMenuDropTargetAtWidgetPosition(WidgetPosition, OutHandle);
 }
 
 void AWacomPlayerController::RefreshRunFirstPersonCardLayerMenuSuppression()
@@ -968,6 +792,167 @@ AWacomPlayerController::GetRunFirstPersonCardDragController() const
 {
 	return const_cast<AWacomPlayerController*>(this)->GetRunFirstPersonCardDragController();
 }
+
+FWacomRunFirstPersonCardDropCoordinator&
+AWacomPlayerController::GetRunFirstPersonCardDropCoordinator()
+{
+	if (!RunFirstPersonCardDropCoordinator)
+	{
+		FWacomRunFirstPersonCardDropCoordinator::FContext DropContext;
+		DropContext.PlayerController = this;
+		DropContext.IsInExplorationFlowFunc =
+			[this]()
+			{
+				return IsInExplorationFlow();
+			};
+		DropContext.HasActiveGameMenuFunc =
+			[this]()
+			{
+				return bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
+					|| ActiveGameMenuWidgets.ContainsByPredicate(
+						[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
+						{
+							return Menu.IsValid();
+						});
+			};
+		DropContext.IsRunWorldCardDropEnabledFunc =
+			[this]()
+			{
+				return bEnableRunWorldCardDrop;
+			};
+		DropContext.ShouldLogRunWorldCardDropFunc =
+			[this]()
+			{
+				return bLogRunWorldCardDrop;
+			};
+		DropContext.ResolveRunFirstPersonCardSourceFunc =
+			[this]()
+			{
+				return RunFirstPersonCardSourceComponent;
+			};
+		DropContext.ResolveFirstPersonCardAnchorFunc =
+			[this]()
+			{
+				return ResolveFirstPersonCardAnchorForRunMenuProbe();
+			};
+		DropContext.ResolveRunSessionFunc =
+			[this]()
+			{
+				return ResolveRunSessionForFirstPersonCardSource();
+			};
+		DropContext.ResolveOwningMenuForLeaseFunc =
+			[this](FName LeaseId)
+			{
+				return ResolveOwningMenuForActiveRunMenuLease(LeaseId);
+			};
+		DropContext.ResolveAppToastSubsystemFunc =
+			[this]()
+			{
+				return ResolveAppToastSubsystem();
+			};
+		DropContext.RefreshRunFirstPersonCardLayerFunc =
+			[this]()
+			{
+				RefreshRunFirstPersonCardLayer();
+			};
+		DropContext.TryProbeRunSceneInteractionTargetAtWidgetPositionFunc =
+			[this](
+				const FVector2D& WidgetPosition,
+				FWacomInteractionTargetHandle& OutHandle)
+			{
+				return TryProbeRunSceneInteractionTargetAtWidgetPosition(
+					WidgetPosition,
+					OutHandle);
+			};
+		DropContext.ResolveRunWorldClickableInteractableFromHandleFunc =
+			[this](
+				const FWacomInteractionTargetHandle& Handle,
+				AActor*& OutInteractableActor,
+				UWacomRunWorldInteractionTargetBridgeComponent*& OutBridge,
+				FName& OutRejectReason)
+			{
+				return ResolveRunWorldClickableInteractableFromHandle(
+					Handle,
+					OutInteractableActor,
+					OutBridge,
+					OutRejectReason);
+			};
+		DropContext.ResolveRunWorldCardDropReceiverFromHandleFunc =
+			[this](const FWacomInteractionTargetHandle& Handle)
+			{
+				return ResolveRunWorldCardDropReceiverFromHandle(Handle);
+			};
+		RunFirstPersonCardDropCoordinator =
+			MakeShared<FWacomRunFirstPersonCardDropCoordinator>(MoveTemp(DropContext));
+	}
+	return *RunFirstPersonCardDropCoordinator;
+}
+
+const FWacomRunFirstPersonCardDropCoordinator&
+AWacomPlayerController::GetRunFirstPersonCardDropCoordinator() const
+{
+	return const_cast<AWacomPlayerController*>(this)->GetRunFirstPersonCardDropCoordinator();
+}
+
+#if WITH_AUTOMATION_TESTS
+FString AWacomPlayerController::GetRunMenuDropProbeDebugSummaryForTest() const
+{
+	return GetRunFirstPersonCardDropCoordinator().GetRunMenuDropProbeDebugSummary();
+}
+
+FString AWacomPlayerController::GetRunWorldCardDropDebugSummaryForTest() const
+{
+	return GetRunFirstPersonCardDropCoordinator().GetRunWorldCardDropDebugSummary();
+}
+
+bool AWacomPlayerController::ApplyRunMenuDropProbeFeedbackForTest(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView,
+	bool bReleased)
+{
+	return GetRunFirstPersonCardDropCoordinator()
+		.ApplyRunMenuDropProbeFeedbackForTest(CardInstanceId, DragView, bReleased);
+}
+
+bool AWacomPlayerController::ApplyRunWorldCardDropProbeFeedbackForTest(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView,
+	bool bReleased)
+{
+	return GetRunFirstPersonCardDropCoordinator()
+		.ApplyRunWorldCardDropProbeFeedbackForTest(CardInstanceId, DragView, bReleased);
+}
+
+FWacomRunMenuCardDropResolveResult
+AWacomPlayerController::ResolveRunMenuCardDropIntentForTest(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView) const
+{
+	return GetRunFirstPersonCardDropCoordinator()
+		.ResolveRunMenuCardDropIntentForTest(CardInstanceId, DragView);
+}
+
+FRunWorldCardInteractionValidation
+AWacomPlayerController::ResolveRunWorldCardDropIntentForTest(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView,
+	FWacomInteractionTargetHandle& OutTargetHandle,
+	AActor*& OutTargetActor,
+	UWacomRunWorldInteractionTargetBridgeComponent*& OutTargetBridge,
+	UWacomRunWorldCardDropReceiverComponent*& OutReceiver,
+	FString& OutDebugSummary) const
+{
+	return GetRunFirstPersonCardDropCoordinator()
+		.ResolveRunWorldCardDropIntentForTest(
+			CardInstanceId,
+			DragView,
+			OutTargetHandle,
+			OutTargetActor,
+			OutTargetBridge,
+			OutReceiver,
+			OutDebugSummary);
+}
+#endif
 
 bool AWacomPlayerController::BuildRunFirstPersonCardDetailViewData(
 	const FGuid& CardInstanceId,
@@ -1808,22 +1793,7 @@ void AWacomPlayerController::ClearRunWorldInteractableHoverPrompt(FName Reason)
 
 void AWacomPlayerController::ClearRunMenuDropTargetProbe()
 {
-	if (UWacomRunMenuDropTargetWidget* Target = PreviewedRunMenuDropTarget.Get())
-	{
-		Target->ClearRunMenuDropPreviewState();
-	}
-	PreviewedRunMenuDropTarget.Reset();
-	LastRunMenuDropProbeDebugSummary = TEXT("RunMenuDropProbe{State=Cleared}");
-
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe())
-	{
-		Anchor->SetFirstPersonCardDragFeedbackTarget(
-			FWacomInteractionTargetHandle(),
-			false,
-			EWacomFirstPersonCardDragTargetFeedbackState::None,
-			TOptional<FVector2D>(),
-			LastRunMenuDropProbeDebugSummary);
-	}
+	GetRunFirstPersonCardDropCoordinator().ClearRunMenuDropTargetProbe();
 }
 
 void AWacomPlayerController::RefreshRunFirstPersonMenuLeaseDragBinding()
@@ -1847,38 +1817,12 @@ AWacomPlayerController::ResolveRunTunnelMovementForCardDragLook() const
 
 bool AWacomPlayerController::ShouldHandleRunFirstPersonMenuDropProbe() const
 {
-	const bool bHasActiveGameMenu =
-		bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| ActiveGameMenuWidgets.ContainsByPredicate(
-			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-			{
-				return Menu.IsValid();
-			});
-	return IsInExplorationFlow()
-		&& bHasActiveGameMenu
-		&& RunFirstPersonCardSourceComponent
-		&& RunFirstPersonCardSourceComponent->HasActiveMenuLease();
+	return GetRunFirstPersonCardDropCoordinator().ShouldHandleRunFirstPersonMenuDropProbe();
 }
 
 bool AWacomPlayerController::ShouldHandleRunWorldCardDropProbe() const
 {
-	if (!bEnableRunWorldCardDrop
-		|| !IsInExplorationFlow()
-		|| !RunFirstPersonCardSourceComponent
-		|| !RunFirstPersonCardSourceComponent->IsRunFirstPersonCardLayerActive()
-		|| RunFirstPersonCardSourceComponent->HasActiveMenuLease())
-	{
-		return false;
-	}
-
-	const bool bHasActiveGameMenu =
-		bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| ActiveGameMenuWidgets.ContainsByPredicate(
-			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-			{
-				return Menu.IsValid();
-			});
-	return !bHasActiveGameMenu;
+	return GetRunFirstPersonCardDropCoordinator().ShouldHandleRunWorldCardDropProbe();
 }
 
 void AWacomPlayerController::PumpFirstPersonCardActiveDragPointer()
@@ -2079,574 +2023,6 @@ void AWacomPlayerController::ClearRunFirstPersonCardDragCameraLookOverride()
 	}
 }
 
-bool AWacomPlayerController::ApplyRunMenuDropProbeFeedback(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView,
-	bool bReleased)
-{
-	const FVector2D ProbePosition = DragView.bHasPointerViewportPosition
-		? DragView.PointerViewportPosition
-		: DragView.CurrentScreenPosition;
-
-	FWacomRunMenuCardDropResolveResult Result =
-		ResolveRunMenuCardDropIntent(CardInstanceId, DragView);
-	if (bReleased && Result.bCanSubmit)
-	{
-		SubmitResolvedRunMenuCardDropIntent(Result);
-		FinalizeRunMenuCardDropDebug(Result, ProbePosition, bReleased);
-	}
-	LastRunMenuDropProbeDebugSummary = Result.DebugSummary;
-
-	if (Result.IntentKind == EWacomRunMenuCardDropIntentKind::None
-		|| !CardInstanceId.IsValid())
-	{
-		ClearRunMenuDropTargetProbe();
-		return false;
-	}
-
-	UWacomRunMenuDropTargetWidget* NewTarget =
-		Cast<UWacomRunMenuDropTargetWidget>(Result.TargetHandle.SourceObject.Get());
-
-	if (UWacomRunMenuDropTargetWidget* PreviousTarget = PreviewedRunMenuDropTarget.Get())
-	{
-		if (PreviousTarget != NewTarget)
-		{
-			PreviousTarget->ClearRunMenuDropPreviewState();
-		}
-	}
-	PreviewedRunMenuDropTarget = NewTarget;
-
-	const bool bHasActiveDrag =
-		DragView.GestureState == EWacomFirstPersonCardGestureState::Inspecting
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard;
-
-	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
-		EWacomFirstPersonCardDragTargetFeedbackState::None;
-	TOptional<FVector2D> FeedbackTargetPosition;
-	if (NewTarget)
-	{
-		EWacomRunMenuDropTargetPreviewState PreviewState =
-			EWacomRunMenuDropTargetPreviewState::Probe;
-		if (Result.IntentKind == EWacomRunMenuCardDropIntentKind::SubmitZoneTarget)
-		{
-			PreviewState = bReleased && Result.bSubmitted
-				? EWacomRunMenuDropTargetPreviewState::Submitted
-				: EWacomRunMenuDropTargetPreviewState::SubmitReady;
-		}
-		else if (Result.IntentKind == EWacomRunMenuCardDropIntentKind::Reject)
-		{
-			PreviewState = EWacomRunMenuDropTargetPreviewState::Invalid;
-		}
-		else if (bReleased)
-		{
-			PreviewState = EWacomRunMenuDropTargetPreviewState::ReleasedProbe;
-		}
-
-		NewTarget->SetRunMenuDropPreviewState(PreviewState);
-		FeedbackState = Result.IntentKind == EWacomRunMenuCardDropIntentKind::Reject
-			? EWacomFirstPersonCardDragTargetFeedbackState::Invalid
-			: EWacomFirstPersonCardDragTargetFeedbackState::ZoneProbe;
-		FeedbackTargetPosition = ProbePosition;
-	}
-	else if (bHasActiveDrag)
-	{
-		FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::Invalid;
-	}
-
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe())
-	{
-		Anchor->SetFirstPersonCardDragFeedbackTarget(
-			Result.TargetHandle,
-			false,
-			FeedbackState,
-			FeedbackTargetPosition,
-			LastRunMenuDropProbeDebugSummary);
-	}
-	return bReleased
-		&& Result.IntentKind == EWacomRunMenuCardDropIntentKind::SubmitZoneTarget
-		&& Result.bSubmitted;
-}
-
-bool AWacomPlayerController::ApplyRunWorldCardDropProbeFeedback(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView,
-	bool bReleased)
-{
-	const FVector2D ProbePosition = DragView.bHasPointerViewportPosition
-		? DragView.PointerViewportPosition
-		: DragView.CurrentScreenPosition;
-
-	FWacomInteractionTargetHandle TargetHandle;
-	AActor* TargetActor = nullptr;
-	UWacomRunWorldInteractionTargetBridgeComponent* TargetBridge = nullptr;
-	UWacomRunWorldCardDropReceiverComponent* Receiver = nullptr;
-	FString DebugSummary;
-	FRunWorldCardInteractionValidation Validation =
-		ResolveRunWorldCardDropIntent(
-			CardInstanceId,
-			DragView,
-			TargetHandle,
-			TargetActor,
-			TargetBridge,
-			Receiver,
-			DebugSummary);
-
-	bool bSubmitted = false;
-	if (bReleased && Validation.bCanSubmit && Receiver)
-	{
-		bSubmitted = SubmitResolvedRunWorldCardDropIntent(
-			CardInstanceId,
-			Receiver,
-			TargetHandle.StableTargetId,
-			Validation);
-	}
-
-	FText FailureToastText = FText::GetEmpty();
-	FName ToastSource = NAME_None;
-	const bool bReleasedOnRunWorldTarget =
-		bReleased && TargetHandle.IsValid();
-	if (bReleasedOnRunWorldTarget && !bSubmitted)
-	{
-		const FName FailureReason = Validation.DisabledReason.IsNone()
-			? FName(TEXT("SubmitFailed"))
-			: Validation.DisabledReason;
-		if (Receiver)
-		{
-			FailureToastText = Receiver->BuildRunWorldCardDropFailureToastText(
-				this,
-				TargetHandle.StableTargetId,
-				CardInstanceId,
-				FailureReason);
-			ToastSource = TEXT("Receiver");
-		}
-		else
-		{
-			FailureToastText = BuildRunWorldCardDropConfigWarningToast(FailureReason);
-			ToastSource = TEXT("ControllerFallback");
-		}
-		if (!FailureToastText.IsEmpty())
-		{
-			if (UWacomAppToastSubsystem* ToastSubsystem = ResolveAppToastSubsystem())
-			{
-				ToastSubsystem->ShowWarning(FailureToastText);
-			}
-		}
-	}
-
-	FinalizeRunWorldCardDropDebugSummary(
-		DebugSummary,
-		ProbePosition,
-		CardInstanceId,
-		TargetHandle,
-		Validation,
-		TargetActor,
-		Receiver,
-		Validation.DisabledReason.IsNone() ? FName(TEXT("Ok")) : Validation.DisabledReason,
-		bReleased,
-		bSubmitted,
-		ToastSource,
-		FailureToastText);
-	LastRunWorldCardDropDebugSummary = DebugSummary;
-
-	UWacomRunWorldInteractionTargetBridgeComponent* PreviousBridge =
-		PreviewedRunWorldCardDropBridge.Get();
-	UWacomRunWorldInteractionTargetBridgeComponent* NewBridge =
-		TargetBridge && Validation.bCanSubmit ? TargetBridge : nullptr;
-	if (PreviousBridge != NewBridge)
-	{
-		if (PreviousBridge)
-		{
-			PreviousBridge->ClearProbePreview();
-		}
-		PreviewedRunWorldCardDropBridge = NewBridge;
-		if (NewBridge)
-		{
-			NewBridge->SetProbePreviewActive(true);
-		}
-	}
-
-	const bool bHasActiveDrag =
-		DragView.GestureState == EWacomFirstPersonCardGestureState::Inspecting
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard;
-
-	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
-		EWacomFirstPersonCardDragTargetFeedbackState::None;
-	TOptional<FVector2D> FeedbackTargetPosition;
-	if (TargetHandle.IsValid())
-	{
-		FeedbackState = Validation.bCanSubmit
-			? EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
-			: EWacomFirstPersonCardDragTargetFeedbackState::Invalid;
-		FeedbackTargetPosition = TargetHandle.ScreenPosition;
-	}
-	else if (bHasActiveDrag)
-	{
-		FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::Invalid;
-		FeedbackTargetPosition = ProbePosition;
-	}
-
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe())
-	{
-		Anchor->SetFirstPersonCardDragFeedbackTarget(
-			TargetHandle,
-			Validation.bCanSubmit,
-			FeedbackState,
-			FeedbackTargetPosition,
-			LastRunWorldCardDropDebugSummary);
-	}
-
-	if (bLogRunWorldCardDrop)
-	{
-		UE_LOG(LogTemp, Display,
-			TEXT("[WacomRunWorldCardDrop] %s"),
-			*LastRunWorldCardDropDebugSummary);
-	}
-
-	if (bSubmitted)
-	{
-		if (UWacomAppToastSubsystem* ToastSubsystem = ResolveAppToastSubsystem())
-		{
-			const FRunWorldCardInteractionRequest Request = Receiver
-				? Receiver->BuildRunWorldCardDropRequest_Implementation(
-					TargetHandle.StableTargetId,
-					CardInstanceId)
-				: FRunWorldCardInteractionRequest();
-			for (const FWacomRunWorldCardInteractionReward& Reward : Request.Rewards)
-			{
-				switch (Reward.Type)
-				{
-				case EWacomRunWorldCardInteractionRewardType::Gold:
-					ToastSubsystem->ShowGoldChanged(Reward.GoldAmount);
-					break;
-				case EWacomRunWorldCardInteractionRewardType::Card:
-					ToastSubsystem->ShowCardGained(Reward.CardDefinition.Get());
-					break;
-				case EWacomRunWorldCardInteractionRewardType::None:
-				default:
-					break;
-				}
-			}
-		}
-		RefreshRunFirstPersonCardLayer();
-	}
-	return bSubmitted;
-}
-
-FWacomRunMenuCardDropResolveResult AWacomPlayerController::ResolveRunMenuCardDropIntent(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView) const
-{
-	const FVector2D ProbePosition = DragView.bHasPointerViewportPosition
-		? DragView.PointerViewportPosition
-		: DragView.CurrentScreenPosition;
-
-	FWacomRunMenuCardDropResolveResult Result;
-	Result.SourceCardInstanceId = CardInstanceId;
-	Result.LeaseId = RunFirstPersonCardSourceComponent
-		? RunFirstPersonCardSourceComponent->GetActiveMenuLeaseId()
-		: NAME_None;
-	Result.LeaseSourceId = RunFirstPersonCardSourceComponent
-		? RunFirstPersonCardSourceComponent->GetActiveMenuLeaseSourceId()
-		: NAME_None;
-
-	auto RejectWith = [&Result, &ProbePosition](EWacomRunMenuCardDropRejectReason Reason)
-	{
-		Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
-		Result.RejectReason = Reason;
-		Result.bCanSubmit = false;
-		FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
-		return Result;
-	};
-
-	if (!IsInExplorationFlow())
-	{
-		return RejectWith(EWacomRunMenuCardDropRejectReason::NotInExploration);
-	}
-
-	const bool bHasActiveGameMenu =
-		bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| ActiveGameMenuWidgets.ContainsByPredicate(
-			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-			{
-				return Menu.IsValid();
-			});
-	if (!bHasActiveGameMenu)
-	{
-		return RejectWith(EWacomRunMenuCardDropRejectReason::MissingGameMenu);
-	}
-	if (!RunFirstPersonCardSourceComponent
-		|| !RunFirstPersonCardSourceComponent->HasActiveMenuLease())
-	{
-		return RejectWith(EWacomRunMenuCardDropRejectReason::MissingMenuLease);
-	}
-	if (!CardInstanceId.IsValid())
-	{
-		return RejectWith(EWacomRunMenuCardDropRejectReason::InvalidSourceCard);
-	}
-	FWacomInteractionTargetHandle TargetHandle;
-	const bool bHasZoneTarget =
-		TryProbeRunMenuDropTargetAtWidgetPosition(ProbePosition, TargetHandle);
-	if (!bHasZoneTarget)
-	{
-		return RejectWith(EWacomRunMenuCardDropRejectReason::MissingZoneTarget);
-	}
-	if (TargetHandle.TargetKind != EWacomInteractionTargetKind::Zone)
-	{
-		Result.TargetHandle = TargetHandle;
-		return RejectWith(EWacomRunMenuCardDropRejectReason::UnsupportedTargetKind);
-	}
-
-	Result.TargetHandle = TargetHandle;
-	Result.ZoneId = TargetHandle.ZoneId;
-	Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
-	Result.RejectReason = EWacomRunMenuCardDropRejectReason::None;
-	Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
-	Result.bCanSubmit = false;
-	Result.bSubmitted = false;
-
-	UWacomMenuWidgetBase* OwningMenu =
-		ResolveOwningMenuForActiveRunMenuLease(Result.LeaseId);
-	if (!OwningMenu)
-	{
-		Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
-		Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuNotFound;
-		FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
-		return Result;
-	}
-
-	Result = OwningMenu->ResolveRunMenuFirstPersonCardDropIntent(Result);
-
-	if (Result.IntentKind != EWacomRunMenuCardDropIntentKind::SubmitZoneTarget
-		|| Result.SubmitPolicy != EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard)
-	{
-		FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
-		return Result;
-	}
-
-	URunSession* ResolvedRunSession = ResolveRunSessionForFirstPersonCardSource();
-	if (!ResolvedRunSession)
-	{
-		Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
-		Result.RejectReason = EWacomRunMenuCardDropRejectReason::MissingSession;
-		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
-		Result.bCanSubmit = false;
-		FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
-		return Result;
-	}
-
-	const FRunDeckOperationValidation Validation =
-		ResolvedRunSession->ValidateDestroyCardByInstance(CardInstanceId);
-	Result.RunValidationReason = Validation.DisabledReason;
-	if (!Validation.bCanExecute)
-	{
-		Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
-		Result.RejectReason = Validation.DisabledReason == FName(TEXT("CardNotOwned"))
-			? EWacomRunMenuCardDropRejectReason::CardNotOwned
-			: EWacomRunMenuCardDropRejectReason::RunValidationFailed;
-		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
-		Result.bCanSubmit = false;
-		FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
-		return Result;
-	}
-
-	Result.IntentKind = EWacomRunMenuCardDropIntentKind::SubmitZoneTarget;
-	Result.RejectReason = EWacomRunMenuCardDropRejectReason::None;
-	Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard;
-	Result.bCanSubmit = true;
-	FinalizeRunMenuCardDropDebug(Result, ProbePosition, /*bReleased*/ false);
-	return Result;
-}
-
-FRunWorldCardInteractionValidation AWacomPlayerController::ResolveRunWorldCardDropIntent(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView,
-	FWacomInteractionTargetHandle& OutTargetHandle,
-	AActor*& OutTargetActor,
-	UWacomRunWorldInteractionTargetBridgeComponent*& OutTargetBridge,
-	UWacomRunWorldCardDropReceiverComponent*& OutReceiver,
-	FString& OutDebugSummary) const
-{
-	OutTargetHandle = FWacomInteractionTargetHandle();
-	OutTargetActor = nullptr;
-	OutTargetBridge = nullptr;
-	OutReceiver = nullptr;
-
-	auto RejectWith = [&](
-		FName Reason,
-		const FWacomInteractionTargetHandle& TargetHandle =
-			FWacomInteractionTargetHandle())
-	{
-		FRunWorldCardInteractionValidation Result;
-		Result.bCanSubmit = false;
-		Result.DisabledReason = Reason;
-		Result.DebugSummary = FString::Printf(
-			TEXT("RunWorldCardInteraction{CanSubmit=false Reason=%s}"),
-			*Reason.ToString());
-		FinalizeRunWorldCardDropDebugSummary(
-			OutDebugSummary,
-			DragView.bHasPointerViewportPosition
-				? DragView.PointerViewportPosition
-				: DragView.CurrentScreenPosition,
-			CardInstanceId,
-			TargetHandle,
-			Result,
-			OutTargetActor,
-			OutReceiver,
-			Reason,
-			/*bReleased*/ false,
-			/*bSubmitted*/ false);
-		return Result;
-	};
-
-	if (!bEnableRunWorldCardDrop)
-	{
-		return RejectWith(TEXT("Disabled"));
-	}
-	if (!ShouldHandleRunWorldCardDropProbe())
-	{
-		return RejectWith(TEXT("Blocked"));
-	}
-	if (!CardInstanceId.IsValid())
-	{
-		return RejectWith(TEXT("InvalidSourceCard"));
-	}
-
-	const FVector2D ProbePosition = DragView.bHasPointerViewportPosition
-		? DragView.PointerViewportPosition
-		: DragView.CurrentScreenPosition;
-	if (!TryProbeRunSceneInteractionTargetAtWidgetPosition(ProbePosition, OutTargetHandle))
-	{
-		return RejectWith(TEXT("MissingRunWorldTarget"));
-	}
-
-	FName ResolveRejectReason = NAME_None;
-	if (!ResolveRunWorldClickableInteractableFromHandle(
-		OutTargetHandle,
-		OutTargetActor,
-		OutTargetBridge,
-		ResolveRejectReason))
-	{
-		return RejectWith(ResolveRejectReason, OutTargetHandle);
-	}
-
-	OutReceiver = ResolveRunWorldCardDropReceiverFromHandle(OutTargetHandle);
-	if (!OutReceiver)
-	{
-		return RejectWith(TEXT("MissingCardDropReceiver"), OutTargetHandle);
-	}
-
-	FRunWorldCardInteractionValidation Validation =
-		OutReceiver->ValidateRunWorldCardDrop_Implementation(
-			const_cast<AWacomPlayerController*>(this),
-			OutTargetHandle.StableTargetId,
-			CardInstanceId);
-	FinalizeRunWorldCardDropDebugSummary(
-		OutDebugSummary,
-		ProbePosition,
-		CardInstanceId,
-		OutTargetHandle,
-		Validation,
-		OutTargetActor,
-		OutReceiver,
-		Validation.DisabledReason.IsNone()
-			? FName(TEXT("Ok"))
-			: Validation.DisabledReason,
-		/*bReleased*/ false,
-		/*bSubmitted*/ false);
-	return Validation;
-}
-
-bool AWacomPlayerController::SubmitResolvedRunMenuCardDropIntent(
-	FWacomRunMenuCardDropResolveResult& Result)
-{
-	if (Result.IntentKind != EWacomRunMenuCardDropIntentKind::SubmitZoneTarget
-		|| !Result.bCanSubmit)
-	{
-		Result.bSubmitted = false;
-		return false;
-	}
-
-	if (Result.SubmitPolicy == EWacomRunMenuCardDropSubmitPolicy::MenuHandled)
-	{
-		UWacomMenuWidgetBase* OwningMenu =
-			ResolveOwningMenuForActiveRunMenuLease(Result.LeaseId);
-		if (!OwningMenu)
-		{
-			Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
-			Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuNotFound;
-			Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
-			Result.bCanSubmit = false;
-			Result.bSubmitted = false;
-			return false;
-		}
-
-		FWacomRunMenuCardDropResolveResult SubmittedResult = Result;
-		const bool bSubmitted =
-			OwningMenu->SubmitRunMenuFirstPersonCardDropIntent(Result, SubmittedResult);
-		Result = SubmittedResult;
-		Result.bSubmitted = bSubmitted && Result.bSubmitted;
-		if (!Result.bSubmitted)
-		{
-			Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
-			if (Result.RejectReason == EWacomRunMenuCardDropRejectReason::None)
-			{
-				Result.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
-			}
-			Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
-			Result.bCanSubmit = false;
-		}
-		return Result.bSubmitted;
-	}
-
-	if (Result.SubmitPolicy != EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard
-		|| !ResolveRunSessionForFirstPersonCardSource())
-	{
-		Result.bSubmitted = false;
-		return false;
-	}
-
-	URunSession* ResolvedRunSession = ResolveRunSessionForFirstPersonCardSource();
-	const bool bDestroyed = ResolvedRunSession->DestroyCardByInstance(Result.SourceCardInstanceId);
-	Result.bSubmitted = bDestroyed;
-	if (!bDestroyed)
-	{
-		Result.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
-		Result.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
-		Result.SubmitPolicy = EWacomRunMenuCardDropSubmitPolicy::None;
-		Result.bCanSubmit = false;
-	}
-	return bDestroyed;
-}
-
-bool AWacomPlayerController::SubmitResolvedRunWorldCardDropIntent(
-	const FGuid& CardInstanceId,
-	UWacomRunWorldCardDropReceiverComponent* Receiver,
-	FName PersistentId,
-	FRunWorldCardInteractionValidation& InOutValidation)
-{
-	if (!Receiver || PersistentId.IsNone() || !CardInstanceId.IsValid())
-	{
-		InOutValidation.bCanSubmit = false;
-		InOutValidation.DisabledReason = TEXT("InvalidSubmitContext");
-		return false;
-	}
-
-	const bool bSubmitted = Receiver->SubmitRunWorldCardDrop_Implementation(
-		this,
-		PersistentId,
-		CardInstanceId,
-		InOutValidation);
-	if (!bSubmitted && InOutValidation.DisabledReason.IsNone())
-	{
-		InOutValidation.DisabledReason = TEXT("SubmitFailed");
-	}
-	return bSubmitted;
-}
-
 UWacomAppToastSubsystem* AWacomPlayerController::ResolveAppToastSubsystem() const
 {
 	UGameInstance* GameInstance = GetGameInstance();
@@ -2699,23 +2075,7 @@ AWacomPlayerController::ResolveRunWorldCardDropReceiverFromHandle(
 
 void AWacomPlayerController::ClearRunWorldCardDropProbe()
 {
-	if (UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
-		PreviewedRunWorldCardDropBridge.Get())
-	{
-		Bridge->ClearProbePreview();
-	}
-	PreviewedRunWorldCardDropBridge.Reset();
-	LastRunWorldCardDropDebugSummary = TEXT("RunWorldCardDrop{State=Cleared}");
-
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe())
-	{
-		Anchor->SetFirstPersonCardDragFeedbackTarget(
-			FWacomInteractionTargetHandle(),
-			false,
-			EWacomFirstPersonCardDragTargetFeedbackState::None,
-			TOptional<FVector2D>(),
-			LastRunWorldCardDropDebugSummary);
-	}
+	GetRunFirstPersonCardDropCoordinator().ClearRunWorldCardDropProbe();
 }
 
 void AWacomPlayerController::RouteHandIndex(int32 OneBasedIndex)
@@ -3028,60 +2388,6 @@ void AWacomPlayerController::TryOpenBackpackFromConsole()
 	FWacomExplorationScreenRouter::OpenBackpack(*this);
 }
 
-void AWacomPlayerController::OpenRunMenuCardLeaseTestMenu()
-{
-	AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
-	if (!GM || GM->GetGameFlowState() != EGameFlowState::Exploration)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[Wacom.OpenRunMenuCardLeaseTestMenu] 当前不在 Exploration，忽略"));
-		return;
-	}
-
-	UGameInstance* GI = GetGameInstance();
-	UWacomGameUIManagerSubsystem* UIManager =
-		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-	if (!UIManager)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[Wacom.OpenRunMenuCardLeaseTestMenu] UIManager 未就位"));
-		return;
-	}
-
-	UIManager->EnsurePrimaryLayout(this);
-	UWacomPrimaryGameLayout* Layout = UIManager->GetPrimaryLayout();
-	if (!Layout)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[Wacom.OpenRunMenuCardLeaseTestMenu] PrimaryLayout 未就位"));
-		return;
-	}
-
-	UCommonActivatableWidgetStack* MenuStack = Layout->GetLayerStack(
-		WacomUITags::UI_Layer_GameMenu.GetTag());
-	if (!MenuStack)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[Wacom.OpenRunMenuCardLeaseTestMenu] GameMenu layer 未就位"));
-		return;
-	}
-
-	if (UCommonActivatableWidget* ActiveWidget = MenuStack->GetActiveWidget())
-	{
-		ActiveWidget->DeactivateWidget();
-	}
-
-	SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(false);
-	UCommonActivatableWidget* PushedWidget = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(),
-		UWacomRunMenuCardLeaseTestMenu::StaticClass());
-	if (PushedWidget)
-	{
-		UE_LOG(LogTemp, Display,
-			TEXT("[Wacom.OpenRunMenuCardLeaseTestMenu] 打开 C++ lease provider 开发验证 prototype 菜单"));
-	}
-}
-
 // ---- Console Commands（调试入口）----
 
 static FAutoConsoleCommandWithWorld GWacomOpenBackpackCmd(
@@ -3122,22 +2428,6 @@ static FAutoConsoleCommandWithWorld GWacomInteractCmd(
 		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))
 		{
 			WPC->TryInteractFromConsole();
-		}
-	}));
-
-static FAutoConsoleCommandWithWorld GWacomOpenRunMenuCardLeaseTestMenuCmd(
-	TEXT("Wacom.OpenRunMenuCardLeaseTestMenu"),
-	TEXT("打开 C++ Run menu card lease provider 开发验证 / prototype 菜单；仅用于 PIE 排查 owned menu lease 与 Zone drop intent，不是正式玩家菜单。"),
-	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
-	{
-		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))
-		{
-			WPC->OpenRunMenuCardLeaseTestMenu();
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[Wacom.OpenRunMenuCardLeaseTestMenu] 找不到 AWacomPlayerController"));
 		}
 	}));
 

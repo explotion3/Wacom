@@ -1060,6 +1060,58 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 void UWacomFirstPersonCardAnchorComponent::CommitRuntimeCardLayerFrame(
 	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
 {
+	ApplyRuntimeCardLayerSourceLifecycleFrame(
+		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(Frame));
+}
+
+void UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerSourceLifecycleFrame(
+	const FWacomFirstPersonCardLayerSourceLifecycleFrame& Frame)
+{
+	const FName SourceId = Frame.ResolveSourceId();
+	if (Frame.bSetTransitionPresentationEnabled
+		&& RuntimeState
+		&& !SourceId.IsNone())
+	{
+		RuntimeState->SetTransitionPresentationEnabled(
+			SourceId,
+			Frame.bTransitionPresentationEnabled);
+	}
+
+	if (Frame.bCommitPresentationFrame)
+	{
+		ApplyRuntimeCardLayerPresentationFrame(Frame.PresentationFrame);
+	}
+
+	if (Frame.bSetInteractionEnabled)
+	{
+		SetFirstPersonCardLayerInteractionEnabled(Frame.bInteractionEnabled);
+	}
+
+	if (Frame.bCancelActiveDrag && CardLayerWidget)
+	{
+		CardLayerWidget->CancelCardDragGesture(Frame.bBroadcastDragCancel);
+	}
+
+	switch (Frame.ClearMode)
+	{
+	case EWacomFirstPersonCardLayerSourceClearMode::RuntimeData:
+		if (!SourceId.IsNone())
+		{
+			ClearRuntimeCardLayerData(SourceId);
+		}
+		break;
+	case EWacomFirstPersonCardLayerSourceClearMode::VisualState:
+		ClearCardLayerVisualState();
+		break;
+	case EWacomFirstPersonCardLayerSourceClearMode::None:
+	default:
+		break;
+	}
+}
+
+void UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerPresentationFrame(
+	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+{
 	if (!RuntimeState || Frame.SourceId.IsNone())
 	{
 		return;

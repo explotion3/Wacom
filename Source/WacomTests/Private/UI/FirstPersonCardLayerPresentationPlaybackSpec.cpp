@@ -111,7 +111,7 @@ namespace WacomFirstPersonCardLayerPresentationPlaybackSpec
 			Anchor->RegisterComponent();
 			Anchor->FollowInterpSpeed = 0.0f;
 			Anchor->bEnableCardLayerPixelSnapping = false;
-			Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(WacomFirstPersonCardLayerSourceIds::BattleHand(), true);
+			FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionPresentationEnabled(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), true);
 		}
 		return Anchor;
 	}
@@ -370,9 +370,10 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 	const FWacomFirstPersonCardLayerEntry RetainedEntry = MakeEntry(RetainedId, TEXT("Retained"));
 	const FWacomFirstPersonCardLayerEntry DrawnEntry = MakeEntry(DrawnId, TEXT("Drawn"));
 
-	Anchor->SetRuntimeCardLayerEntries(SourceId, { DiscardedEntry, RetainedEntry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, SourceId, { DiscardedEntry, RetainedEntry });
 	Anchor->RefreshCardLayerNow(0.0f);
-	UWacomFirstPersonCardLayerWidget* Layer = Anchor->GetAutomationTestViewForTest().CardLayerWidget;
+	UWacomFirstPersonCardLayerWidget* Layer =
+		FWacomFirstPersonCardLayerTestAccess::CardLayer(*Anchor);
 	if (!TestNotNull(TEXT("Card layer widget"), Layer))
 	{
 		PC->Destroy();
@@ -381,7 +382,7 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 	}
 	TestFalse(TEXT("Initial hand has no active playback"), Anchor->HasActiveCardLayerPresentationPlayback());
 
-	Anchor->SetRuntimeCardLayerPresentationFrame(
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(*Anchor,
 		SourceId,
 		{ RetainedEntry },
 		{ MakeTransitionHint(DiscardedId, EWacomFirstPersonCardSlotTransitionKind::Discarded) },
@@ -393,7 +394,7 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.40f);
 	TestFalse(TEXT("Discard playback completes"), Anchor->HasActiveCardLayerPresentationPlayback());
 
-	Anchor->SetRuntimeCardLayerPresentationFrame(
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(*Anchor,
 		SourceId,
 		{ RetainedEntry },
 		{},
@@ -404,7 +405,7 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.40f);
 	TestFalse(TEXT("Retain feedback completes"), Anchor->HasActiveCardLayerPresentationPlayback());
 
-	Anchor->SetRuntimeCardLayerPresentationFrame(
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(*Anchor,
 		SourceId,
 		{ RetainedEntry, DrawnEntry },
 		{ MakeTransitionHint(DrawnId, EWacomFirstPersonCardSlotTransitionKind::Drawn) },
@@ -469,10 +470,10 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 		MakeTransitionHint(DrawnId, EWacomFirstPersonCardSlotTransitionKind::Drawn));
 	PresentationFrame.FeedbackHints.Add(
 		MakeFeedbackHint(RetainedId, EWacomFirstPersonCardLayerFeedbackKind::Retained));
-	Anchor->CommitRuntimeCardLayerFrame(PresentationFrame);
+	FWacomFirstPersonCardLayerTestAccess::CommitRuntimeCardLayerFrame(*Anchor, PresentationFrame);
 
 	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterPresentation =
-		Anchor->GetAutomationTestViewForTest();
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestEqual(
 		TEXT("Presentation frame writes one pending transition"),
 		PendingAfterPresentation.PendingTransitionHintCardIds.Num(),
@@ -493,10 +494,10 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 			SourceId,
 			{ DrawnEntry, RetainedEntry, AddedEntry },
 			EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh);
-	Anchor->CommitRuntimeCardLayerFrame(StateRefreshFrame);
+	FWacomFirstPersonCardLayerTestAccess::CommitRuntimeCardLayerFrame(*Anchor, StateRefreshFrame);
 
 	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterStateRefresh =
-		Anchor->GetAutomationTestViewForTest();
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestEqual(
 		TEXT("State refresh updates entries"),
 		Anchor->GetRuntimeCardLayerCardCount(),
@@ -513,10 +514,10 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 			SourceId,
 			{ PreviewEntry },
 			EWacomFirstPersonCardLayerFrameCommitMode::PreviewOverlay);
-	Anchor->CommitRuntimeCardLayerFrame(PreviewFrame);
+	FWacomFirstPersonCardLayerTestAccess::CommitRuntimeCardLayerFrame(*Anchor, PreviewFrame);
 
 	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterPreview =
-		Anchor->GetAutomationTestViewForTest();
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestEqual(
 		TEXT("Preview overlay updates entries"),
 		Anchor->GetRuntimeCardLayerCardCount(),
@@ -533,10 +534,10 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 			SourceId,
 			{},
 			EWacomFirstPersonCardLayerFrameCommitMode::Suppressed);
-	Anchor->CommitRuntimeCardLayerFrame(SuppressedFrame);
+	FWacomFirstPersonCardLayerTestAccess::CommitRuntimeCardLayerFrame(*Anchor, SuppressedFrame);
 
 	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterSuppressed =
-		Anchor->GetAutomationTestViewForTest();
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestEqual(
 		TEXT("Suppressed frame clears entries"),
 		Anchor->GetRuntimeCardLayerCardCount(),

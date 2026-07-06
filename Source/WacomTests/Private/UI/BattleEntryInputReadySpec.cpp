@@ -195,7 +195,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		1);
 	FWacomFirstPersonCardLayerEntry StaleRunEntry;
 	StaleRunEntry.CardInstanceId = StaleSlot.Entry.CardInstanceId;
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::RunDefault(), { StaleRunEntry });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::RunDefault(), { StaleRunEntry });
 
 	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	HUD->StoreFirstPersonCardTransitionEventsForTest({ OpeningDrawEvent });

@@ -28,6 +28,11 @@ class UWacomFirstPersonCardAnchorComponent;
 class UWacomCardDetailPanel;
 class FWacomRunFirstPersonCardDetailController;
 class FWacomRunFirstPersonCardDragController;
+class FWacomRunFirstPersonCardDropCoordinator;
+#if WITH_AUTOMATION_TESTS
+class AWacomPlayerControllerProbe;
+struct FWacomPlayerControllerRunInteractionTestAccess;
+#endif
 struct FWacomCardDetailViewData;
 struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
@@ -188,11 +193,6 @@ public:
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
 
-	/** Console/prototype entry for the C++ Run menu card lease provider test menu. */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards|Prototype",
-		meta = (ToolTip = "打开 Run first-person card lease 的开发验证 prototype 菜单。仅用于 PIE / 开发排查 owned menu lease 与 Zone drop intent，不是正式玩家菜单流程。"))
-	void OpenRunMenuCardLeaseTestMenu();
-
 	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */
 	void PushMappingContext(UInputMappingContext* IMC, int32 Priority = 0);
 	void PopMappingContext(UInputMappingContext* IMC);
@@ -234,9 +234,6 @@ public:
 	void SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(bool bSuppressed);
 	void RegisterRunMenuDropTarget(UWacomRunMenuDropTargetWidget* DropTarget);
 	void UnregisterRunMenuDropTarget(UWacomRunMenuDropTargetWidget* DropTarget);
-	bool TryProbeRunMenuDropTargetAtWidgetPosition(
-		const FVector2D& WidgetPosition,
-		FWacomInteractionTargetHandle& OutHandle) const;
 
 	/** 战斗场景目标点击路由。由 InputKey 和 BattleHUD 鼠标兜底入口共用。 */
 	bool TryRouteBattleSceneTargetClick(bool bRequireTargetSelect = false);
@@ -341,8 +338,6 @@ protected:
 	void UpdateRunWorldTargetProbePreview();
 	void ClearRunWorldTargetProbePreview();
 	void ClearRunMenuDropTargetProbe();
-	FString GetRunMenuDropProbeDebugSummaryForTest() const { return LastRunMenuDropProbeDebugSummary; }
-	FString GetRunWorldCardDropDebugSummaryForTest() const { return LastRunWorldCardDropDebugSummary; }
 	void HandleRunFirstPersonCardLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleRunFirstPersonCardLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
@@ -355,44 +350,7 @@ protected:
 	void ApplyRunFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
 	void ApplyRunFirstPersonCardPointerCameraLookOverride(const FWacomFirstPersonCardPointerView& PointerView);
 	void ClearRunFirstPersonCardDragCameraLookOverride();
-	bool ApplyRunMenuDropProbeFeedback(
-		const FGuid& CardInstanceId,
-		const FWacomFirstPersonCardDragView& DragView,
-		bool bReleased);
-	FWacomRunMenuCardDropResolveResult ResolveRunMenuCardDropIntent(
-		const FGuid& CardInstanceId,
-		const FWacomFirstPersonCardDragView& DragView) const;
-	bool SubmitResolvedRunMenuCardDropIntent(
-		FWacomRunMenuCardDropResolveResult& Result);
-	bool ApplyRunWorldCardDropProbeFeedback(
-		const FGuid& CardInstanceId,
-		const FWacomFirstPersonCardDragView& DragView,
-		bool bReleased);
-	FRunWorldCardInteractionValidation ResolveRunWorldCardDropIntent(
-		const FGuid& CardInstanceId,
-		const FWacomFirstPersonCardDragView& DragView,
-		FWacomInteractionTargetHandle& OutTargetHandle,
-		AActor*& OutTargetActor,
-		UWacomRunWorldInteractionTargetBridgeComponent*& OutTargetBridge,
-		UWacomRunWorldCardDropReceiverComponent*& OutReceiver,
-		FString& OutDebugSummary) const;
-	bool SubmitResolvedRunWorldCardDropIntent(
-		const FGuid& CardInstanceId,
-		UWacomRunWorldCardDropReceiverComponent* Receiver,
-		FName PersistentId,
-		FRunWorldCardInteractionValidation& InOutValidation);
 	virtual UWacomAppToastSubsystem* ResolveAppToastSubsystem() const;
-
-#if WITH_AUTOMATION_TESTS
-	bool IsRunFirstPersonCardDetailPanelVisibleForTest() const;
-	FText GetRunFirstPersonCardDetailPanelNameTextForTest() const;
-	FVector2D GetRunFirstPersonCardDetailPanelPositionForTest() const;
-	bool IsRunFirstPersonCardDetailPanelPrewarmedForTest() const;
-	bool IsRunFirstPersonCardDetailMotionPendingForTest() const;
-	float GetRunFirstPersonCardDetailPanelOpacityForTest() const;
-	int32 GetRunFirstPersonCardDetailDataApplyCountForTest() const;
-	void TickRunFirstPersonCardDetailForTest(float DeltaTime);
-#endif
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
 	FText BuildCurrentInteractPrompt() const;
@@ -405,6 +363,42 @@ protected:
 private:
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
 	UBattleHUD* GetActiveBattleHUD() const;
+
+	bool TryProbeRunMenuDropTargetAtWidgetPosition(
+		const FVector2D& WidgetPosition,
+		FWacomInteractionTargetHandle& OutHandle) const;
+
+#if WITH_AUTOMATION_TESTS
+	FString GetRunMenuDropProbeDebugSummaryForTest() const;
+	FString GetRunWorldCardDropDebugSummaryForTest() const;
+	bool ApplyRunMenuDropProbeFeedbackForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		bool bReleased);
+	bool ApplyRunWorldCardDropProbeFeedbackForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		bool bReleased);
+	FWacomRunMenuCardDropResolveResult ResolveRunMenuCardDropIntentForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView) const;
+	FRunWorldCardInteractionValidation ResolveRunWorldCardDropIntentForTest(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		FWacomInteractionTargetHandle& OutTargetHandle,
+		AActor*& OutTargetActor,
+		UWacomRunWorldInteractionTargetBridgeComponent*& OutTargetBridge,
+		UWacomRunWorldCardDropReceiverComponent*& OutReceiver,
+		FString& OutDebugSummary) const;
+	bool IsRunFirstPersonCardDetailPanelVisibleForTest() const;
+	FText GetRunFirstPersonCardDetailPanelNameTextForTest() const;
+	FVector2D GetRunFirstPersonCardDetailPanelPositionForTest() const;
+	bool IsRunFirstPersonCardDetailPanelPrewarmedForTest() const;
+	bool IsRunFirstPersonCardDetailMotionPendingForTest() const;
+	float GetRunFirstPersonCardDetailPanelOpacityForTest() const;
+	int32 GetRunFirstPersonCardDetailDataApplyCountForTest() const;
+	void TickRunFirstPersonCardDetailForTest(float DeltaTime);
+#endif
 
 	/** 点击手牌 index（1-based，与按键对应）。 */
 	void RouteHandIndex(int32 OneBasedIndex);
@@ -440,6 +434,8 @@ private:
 	void HideRunFirstPersonCardDetailPanel();
 	FWacomRunFirstPersonCardDragController& GetRunFirstPersonCardDragController();
 	const FWacomRunFirstPersonCardDragController& GetRunFirstPersonCardDragController() const;
+	FWacomRunFirstPersonCardDropCoordinator& GetRunFirstPersonCardDropCoordinator();
+	const FWacomRunFirstPersonCardDropCoordinator& GetRunFirstPersonCardDropCoordinator() const;
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
 	void PumpFirstPersonCardActiveDragPointer();
 	bool TryReleaseFirstPersonCardActiveDragPointer();
@@ -478,31 +474,25 @@ private:
 	TArray<TWeakObjectPtr<UWacomMenuWidgetBase>> ActiveGameMenuWidgets;
 
 	UPROPERTY(Transient)
-	TArray<TWeakObjectPtr<UWacomRunMenuDropTargetWidget>> RunMenuDropTargets;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UWacomRunMenuDropTargetWidget> PreviewedRunMenuDropTarget;
-
-	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomMenuWidgetBase> GameMenuViewpointReturnWidget;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> PreviewedRunWorldCardDropBridge;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> RunFirstPersonCardDetailPanel = nullptr;
 
 	TSharedPtr<FWacomRunFirstPersonCardDetailController> RunFirstPersonCardDetailController;
 	TSharedPtr<FWacomRunFirstPersonCardDragController> RunFirstPersonCardDragController;
+	TSharedPtr<FWacomRunFirstPersonCardDropCoordinator> RunFirstPersonCardDropCoordinator;
 
 	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
 	bool bGameMenuViewpointStageTransitionActive = false;
 	bool bGameMenuViewpointReturnArmed = false;
-	FString LastRunMenuDropProbeDebugSummary;
-	FString LastRunWorldCardDropDebugSummary;
 
 	FTimerHandle RunWorldTargetProbePreviewTimerHandle;
 
 	friend class FWacomRunFirstPersonCardDetailController;
 	friend class FWacomRunFirstPersonCardDragController;
+#if WITH_AUTOMATION_TESTS
+	friend class AWacomPlayerControllerProbe;
+	friend struct FWacomPlayerControllerRunInteractionTestAccess;
+#endif
 };

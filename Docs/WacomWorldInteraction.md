@@ -150,9 +150,9 @@ Bridge 绑定成功后会把 `PartInstanceId` 写入 `UWacomInteractionTargetCom
 - 提供 probe / invalid / released-probe / submit-ready / submitted 轻量 preview。
 - 不直接调用 `URunSession`，也不参与背包旧 UMG DragDrop 规则提交。
 
-PlayerController 只在 Exploration + active GameMenu + active menu lease 的 first-person card drag 中扫描注册过的 drop target widget，按后注册优先作为最上层命中。
+`AWacomPlayerController` 只负责把 menu drop target widget 注册转发给 App-private Run card drop coordinator，并在创建 coordinator 时用显式 context contract 提供 RunSession、active GameMenu、Anchor、toast 和 world target 查询能力。Coordinator 只在 Exploration + active GameMenu + active menu lease 的 first-person card drag 中扫描注册过的 drop target widget，按后注册优先作为最上层命中。
 
-`ResolveRunMenuCardDropIntent()` 统一解析 preview 和 release：
+`FWacomRunFirstPersonCardDropCoordinator` 统一解析 preview 和 release，并把 menu zone / world receiver 作为两个 target adapter 路由：
 
 - 默认是 probe-only。
 - owning menu 可以声明 `SubmitZoneTarget + ControllerDestroyOwnedCard`，用于 prototype 验证。
@@ -176,7 +176,7 @@ PlayerController 只在 Exploration + active GameMenu + active menu lease 的 fi
 
 Battle 已接入 `UBattleSession::ValidateTargetWithCard()`，用于 TargetSelect、first-person drag/drop world target 和 hand-card target validation。UI 只读取 validation result，不直接解析 BattleState。
 
-通用 Run target resolver 尚未独立抽象；当前 Run world / Run menu drop 由 App resolver 识别 target，再进入明确的 RunSession 事务或 owning menu submit policy。
+通用 Run target resolver 尚未独立抽象；当前 Run world / Run menu drop 由 App-private Run card drop coordinator 识别 target adapter，再进入明确的 RunSession 事务或 owning menu submit policy。
 
 ## §8 Debug / Development Entry Points
 

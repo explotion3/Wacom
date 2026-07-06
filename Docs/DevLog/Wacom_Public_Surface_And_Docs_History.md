@@ -25,6 +25,7 @@ tags:
 | V0-DZ | UI / Components 的 `DebugView`、`DebugSummary`、日志开关和 `CallInEditor` 调试入口归到 `Wacom|...|Debug` 并补中文 ToolTip。 |
 | V0-EA | `UWacomRunMenuCardLeaseTestMenu` 标成 development/prototype-only 验证入口，保留 public 路径、控制台命令和测试 probe 继承关系。 |
 | V0-EB | First-person layer / slot / anchor / Run source 的自动化测试访问收口到少数 test view 和 `WacomTests/Private` access wrapper。 |
+| V0-EX | Run card drop router 重构后，`UWacomRunMenuCardLeaseTestMenu` runtime 原型菜单删除，PlayerController / console runtime 入口和测试 probe 继承关系移除；Run card drop coordinator 通过显式 context contract 消费 Controller 能力，不再 friend 读取 Controller 私有状态；first-person layer / slot / anchor / Run source 的 `ForTest` 方法改为 private friend，由 `WacomTests/Private` access wrapper 调用。 |
 | V0-EC | Backpack / BattleHUD 的非 Blueprint 测试 / 诊断 helper 收口到 test view + `WacomTests/Private` access / receiver。 |
 | V0-ED | `Source/WacomApp/Public/Actors` 中 `ConfigureDebug...Sample` 统一归到 `Wacom|...|Prototype`，并保留 Authoring / Debug 的正式分区。 |
 | V0-EE | `Docs/WacomApp.md` 和自动化测试 display name 同步为 Prototype 口径，避免 Prototype 样例入口继续被旧 Authoring 命名误导。 |

@@ -5,6 +5,7 @@
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "UI/Run/WacomRunFirstPersonCardDetailController.h"
+#include "UI/Run/WacomRunFirstPersonCardDropCoordinator.h"
 
 FWacomRunFirstPersonCardDragController::FWacomRunFirstPersonCardDragController(
 	AWacomPlayerController& InPlayerController)
@@ -20,9 +21,8 @@ void FWacomRunFirstPersonCardDragController::RefreshBinding()
 
 	const bool bShouldBind =
 		Anchor
-		&& PlayerController.GetRunFirstPersonCardSourceComponent()
-		&& (PlayerController.GetRunFirstPersonCardSourceComponent()->HasActiveMenuLease()
-			|| PlayerController.ShouldHandleRunWorldCardDropProbe());
+		&& PlayerController.GetRunFirstPersonCardDropCoordinator()
+			.ShouldBindRunFirstPersonCardDropDelegates();
 
 	if ((!bShouldBind || CurrentBoundAnchor != Anchor) && CurrentBoundAnchor)
 	{
@@ -177,15 +177,13 @@ void FWacomRunFirstPersonCardDragController::HandleDragReleased(
 		{
 			PlayerController.GetRunFirstPersonCardDetailController().FinishInspectDetail(CardInstanceId);
 		}
-		PlayerController.ClearRunMenuDropTargetProbe();
-		PlayerController.ClearRunWorldCardDropProbe();
+		PlayerController.GetRunFirstPersonCardDropCoordinator().ClearAllDropProbes();
 		return;
 	}
 
 	if (!IsFormalDragGesture(DragView.GestureState))
 	{
-		PlayerController.ClearRunMenuDropTargetProbe();
-		PlayerController.ClearRunWorldCardDropProbe();
+		PlayerController.GetRunFirstPersonCardDropCoordinator().ClearAllDropProbes();
 		return;
 	}
 
@@ -205,8 +203,7 @@ void FWacomRunFirstPersonCardDragController::HandleDragCancelled(
 	{
 		PlayerController.GetRunFirstPersonCardDetailController().FinishInspectDetail(CardInstanceId);
 	}
-	PlayerController.ClearRunMenuDropTargetProbe();
-	PlayerController.ClearRunWorldCardDropProbe();
+	PlayerController.GetRunFirstPersonCardDropCoordinator().ClearAllDropProbes();
 }
 
 void FWacomRunFirstPersonCardDragController::HandlePointerMoved(
@@ -267,22 +264,8 @@ void FWacomRunFirstPersonCardDragController::HandleFormalDrag(
 			});
 	}
 
-	if (PlayerController.ShouldHandleRunFirstPersonMenuDropProbe())
-	{
-		const bool bKeepReleasePreview =
-			PlayerController.ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, bReleased);
-		if (bReleased && !bKeepReleasePreview)
-		{
-			PlayerController.ClearRunMenuDropTargetProbe();
-		}
-		return;
-	}
-
-	PlayerController.ApplyRunWorldCardDropProbeFeedback(CardInstanceId, DragView, bReleased);
-	if (bReleased)
-	{
-		PlayerController.ClearRunWorldCardDropProbe();
-	}
+	PlayerController.GetRunFirstPersonCardDropCoordinator()
+		.HandleFormalDrag(CardInstanceId, DragView, bReleased);
 }
 
 bool FWacomRunFirstPersonCardDragController::IsFormalDragGesture(

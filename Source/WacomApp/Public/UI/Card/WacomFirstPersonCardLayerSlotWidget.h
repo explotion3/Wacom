@@ -12,6 +12,7 @@ class UOverlay;
 class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
+struct FWacomFirstPersonCardLayerTestAccess;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
@@ -197,22 +198,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsCardLayerInteractionEnabled() const { return bCardLayerInteractionEnabled; }
 
-#if WITH_AUTOMATION_TESTS
-	FWacomFirstPersonCardSlotAutomationTestView GetAutomationTestViewForTest() const;
-	bool RequestHoverForTest();
-	void RequestUnhoverForTest();
-	bool RequestPressForTest();
-	bool RequestMouseUpForTest();
-	void TickSlotMotionForTest(float DeltaTime);
-	void SetLocalHitCanvasSizeOverrideForTest(const TOptional<FVector2D>& InSize);
-	bool RequestHoverAtLocalPositionForTest(const FVector2D& LocalPosition);
-	void RequestMoveAtLocalPositionForTest(const FVector2D& LocalPosition);
-	bool RequestPressAtLocalPositionForTest(const FVector2D& LocalPosition);
-	bool RequestGesturePressForTest(const FVector2D& ScreenPosition);
-	void RequestGestureMoveForTest(float DeltaTime, const FVector2D& ScreenPosition);
-	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
-#endif
-
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardUnhoveredNative;
 	FWacomFirstPersonCardLayerSlotInteractionNative OnCardVisualSlotUpdatedNative;
@@ -302,12 +287,29 @@ private:
 	FVector2D PointerNormalizedViewportPosition = FVector2D::ZeroVector;
 	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 #if WITH_AUTOMATION_TESTS
+	FWacomFirstPersonCardSlotAutomationTestView GetAutomationTestViewForTest() const;
+	bool RequestHoverForTest();
+	void RequestUnhoverForTest();
+	bool RequestPressForTest();
+	bool RequestMouseUpForTest();
+	void TickSlotMotionForTest(float DeltaTime);
+	void SetLocalHitCanvasSizeOverrideForTest(const TOptional<FVector2D>& InSize);
+	bool RequestHoverAtLocalPositionForTest(const FVector2D& LocalPosition);
+	void RequestMoveAtLocalPositionForTest(const FVector2D& LocalPosition);
+	bool RequestPressAtLocalPositionForTest(const FVector2D& LocalPosition);
+	bool RequestGesturePressForTest(const FVector2D& ScreenPosition);
+	void RequestGestureMoveForTest(float DeltaTime, const FVector2D& ScreenPosition);
+	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
+
 	TOptional<FVector2D> LocalHitCanvasSizeOverrideForTest;
 	int32 SlotMotionConfigApplyCountForTest = 0;
 	int32 SlotFeedbackConfigApplyCountForTest = 0;
 	int32 CardDragConfigApplyCountForTest = 0;
 	int32 SlotVisualConfigApplyCountForTest = 0;
 #endif
+
+	friend class UWacomFirstPersonCardLayerWidget;
+	friend struct FWacomFirstPersonCardLayerTestAccess;
 
 	void EnsureCardView();
 	void ApplyCurrentSlotView();

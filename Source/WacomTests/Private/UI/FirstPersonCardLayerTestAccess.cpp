@@ -73,6 +73,88 @@ void FWacomFirstPersonCardLayerTestAccess::ResetAnchorScreenSmoothing(
 	Anchor.ResetAnchorScreenSmoothingForTest();
 }
 
+void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId,
+	const TArray<FWacomFirstPersonCardLayerEntry>& Entries)
+{
+	Anchor.SetRuntimeCardLayerEntries(SourceId, Entries);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+{
+	Anchor.SetRuntimeCardLayerPresentationFrame(Frame);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId,
+	const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+{
+	Anchor.SetRuntimeCardLayerPresentationFrame(
+		SourceId,
+		Entries,
+		TransitionHints,
+		FeedbackHints);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionHints(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints)
+{
+	Anchor.SetRuntimeCardLayerTransitionHints(SourceId, Hints);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerFeedbackHints(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints)
+{
+	Anchor.SetRuntimeCardLayerFeedbackHints(SourceId, Hints);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionPresentationEnabled(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId,
+	bool bEnabled)
+{
+	Anchor.SetRuntimeCardLayerTransitionPresentationEnabled(SourceId, bEnabled);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerData(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId,
+	const TArray<FWacomCardViewData>& Cards)
+{
+	Anchor.SetRuntimeCardLayerData(SourceId, Cards);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::ClearRuntimeCardLayerData(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	FName SourceId)
+{
+	Anchor.ClearRuntimeCardLayerData(SourceId);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::CommitRuntimeCardLayerFrame(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+{
+	Anchor.CommitRuntimeCardLayerFrame(Frame);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	bool bEnabled)
+{
+	Anchor.SetFirstPersonCardLayerInteractionEnabled(bEnabled);
+}
+
 void FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(
 	UWacomFirstPersonCardLayerWidget& Layer,
 	float DeltaTime)

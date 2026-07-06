@@ -616,7 +616,7 @@ bool FWacomUIRunFirstPersonDetailRejectsInvalidSourcesAndHidesOnDragSpec::RunTes
 			FVector2D(740.0f, 700.0f));
 	TArray<FWacomFirstPersonCardLayerEntry> BattleHandEntries;
 	BattleHandEntries.Add(SlotView.Entry);
-	Anchor->SetRuntimeCardLayerEntries(WacomFirstPersonCardLayerSourceIds::BattleHand(), BattleHandEntries);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), BattleHandEntries);
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerCardHovered(
 		PC.Get(),
 		CardInstanceId,
@@ -1922,50 +1922,6 @@ bool FWacomUIRunFirstPersonMenuWidgetOwnedLeaseClearsSpec::RunTest(const FString
 
 	Menu->DeactivateForTest();
 	TestFalse(TEXT("Owned lease is cleared on deactivate"),
-		Source->HasActiveMenuLease());
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunFirstPersonPrototypeTestMenuRequestsOwnedLeaseSpec,
-	"Wacom.UI.RunFirstPersonCardLayer.MenuLeaseProvider.PrototypeTestMenuRequestsOwnedLease",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIRunFirstPersonPrototypeTestMenuRequestsOwnedLeaseSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleFixture Fx;
-	UCardDefinition* Fang = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
-		Fx, TEXT("PoisonFang"), TEXT("毒牙"), 0);
-	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang });
-
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
-	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
-	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
-	State.Backpack = { WacomRunFirstPersonCardLayerSpec::MakeRunCardInstance(Fang) };
-
-	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
-	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
-	TStrongObjectPtr<AWacomPlayerCharacter> CharacterPawn(NewObject<AWacomPlayerCharacter>());
-	PC->SetPawn(CharacterPawn.Get());
-
-	TStrongObjectPtr<UWacomRunMenuCardLeaseTestMenuProbe> Menu(
-		NewObject<UWacomRunMenuCardLeaseTestMenuProbe>(PC.Get()));
-	Menu->SetOwningWacomPlayerControllerForTest(PC.Get());
-	Menu->LeaseRequest.AllowedCardIds = { TEXT("PoisonFang") };
-
-	TestTrue(TEXT("C++ test menu requests owned lease"),
-		Menu->RequestOwnedLeaseNow());
-	TestTrue(TEXT("Result reports one candidate"),
-		Menu->GetLastLeaseResult().CandidateCount == 1);
-
-	UWacomRunFirstPersonCardSourceComponent* Source = PC->GetRunFirstPersonCardSourceComponent();
-	TestTrue(TEXT("PC source has active lease after C++ test menu request"),
-		Source && Source->HasActiveMenuLease());
-
-	Menu->DeactivateForTest();
-	TestFalse(TEXT("C++ test menu owned lease clears on deactivate"),
 		Source->HasActiveMenuLease());
 
 	return true;

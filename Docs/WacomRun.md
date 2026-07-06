@@ -261,7 +261,7 @@ RunFlag 是当前 Run 内的轻量 bool/set 记忆。`RunFlagSet / RunFlagNotSet
 
 `FRunEventChoiceSnapshot::Requirements` 和 `Consequences` 是结构化预览事实。它们记录条件是否满足、支付需求、后果意图、节点跳转和事件结束预览；不模拟金币 clamp、行动点跨时段、副作用压力或后续效果失败。真实结果仍以提交后的 `FRunEventChoiceResult` 和事务状态为准。
 
-卡牌支付通过 active GameMenu 的 Run menu zone drop 提交：PlayerController 只负责命中、preview 和分发，`UWacomRunEventScreen` 接管 release 并调用 `URunSession::ChooseRunEventOptionWithPaidCardResult()`。支付 UI、menu lease 和 drop target 合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#6-run-menu-zone-target) 与 [WacomUI.md](./WacomUI.md)。
+卡牌支付通过 active GameMenu 的 Run menu zone drop 提交：`FWacomRunFirstPersonCardDropCoordinator` 负责命中、preview 和分发，`AWacomPlayerController` 只提供输入/查询上下文，`UWacomRunEventScreen` 接管 release 并调用 `URunSession::ChooseRunEventOptionWithPaidCardResult()`。支付 UI、menu lease 和 drop target 合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#6-run-menu-zone-target) 与 [WacomUI.md](./WacomUI.md)。
 
 `FRunEventChoiceResult` 只表达本次选项直接效果和展示诊断字段，供 UI 和日志展示。成功卡牌支付会记录 `PaidCardDefinition`，仅用于 UI / 日志显示。成功结果还会记录节点变化、事件关闭和事件完成 facts。失败或回滚结果不写入成功 outcome，后续规则不能依赖该结果包反向修改 RunState。
 

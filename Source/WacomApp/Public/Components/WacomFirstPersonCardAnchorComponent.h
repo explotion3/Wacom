@@ -20,6 +20,7 @@ class FWacomFirstPersonCardLayerDelegateRouter;
 class FWacomFirstPersonCardLayerOwner;
 class FWacomFirstPersonCardAnchorRuntimeState;
 struct FWacomFirstPersonCardLayerSlotView;
+struct FWacomFirstPersonCardLayerTestAccess;
 
 struct FWacomFirstPersonCardAnchorRuntimeStateDeleter
 {
@@ -654,29 +655,11 @@ public:
 
 	void CommitRuntimeCardLayerFrame(
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
+	void ApplyRuntimeCardLayerSourceLifecycleFrame(
+		const FWacomFirstPersonCardLayerSourceLifecycleFrame& Frame);
 
-#if WITH_AUTOMATION_TESTS
-	void SetRuntimeCardLayerEntries(FName SourceId, const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
-	void SetRuntimeCardLayerPresentationFrame(
-		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
-	void SetRuntimeCardLayerPresentationFrame(
-		FName SourceId,
-		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
-	void SetRuntimeCardLayerTransitionHints(
-		FName SourceId,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
-	void SetRuntimeCardLayerFeedbackHints(
-		FName SourceId,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
-#endif
-	void SetRuntimeCardLayerTransitionPresentationEnabled(FName SourceId, bool bEnabled);
 	bool HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const;
 	bool HasActiveCardLayerPresentationPlayback() const;
-	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);
-	void ClearRuntimeCardLayerData(FName SourceId);
-	void ClearCardLayerVisualState();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|99 Debug")
 	bool HasRuntimeCardLayerData() const;
@@ -689,12 +672,6 @@ public:
 
 	const TArray<FWacomCardViewData>& GetRuntimeCardLayerData() const;
 	const TArray<FWacomFirstPersonCardLayerEntry>& GetRuntimeCardLayerEntries() const;
-
-	void SetFirstPersonCardLayerInteractionEnabled(bool bEnabled);
-	void SetBattleHandInteractionEnabled(bool bEnabled)
-	{
-		SetFirstPersonCardLayerInteractionEnabled(bEnabled);
-	}
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|90 Development Preview")
 	bool IsCardLayerWidgetActive() const { return CardLayerWidget != nullptr; }
@@ -751,13 +728,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|99 Debug", meta = (ToolTip = "获取第一人称卡牌 Anchor 的单行调试摘要；用于排查 anchor、投影、runtime source 和手势状态。"))
 	FString GetDebugSummary() const;
 
-#if WITH_AUTOMATION_TESTS
-	FWacomFirstPersonCardAnchorAutomationTestView GetAutomationTestViewForTest() const;
-	void SetCardLayerWidgetForTest(UWacomFirstPersonCardLayerWidget* LayerWidget);
-	void SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId);
-	void ResetAnchorScreenSmoothingForTest() { ResetAnchorScreenSmoothing(); }
-#endif
-
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -781,6 +751,32 @@ protected:
 	void UpdateCardLayer();
 
 private:
+#if WITH_AUTOMATION_TESTS
+	FWacomFirstPersonCardAnchorAutomationTestView GetAutomationTestViewForTest() const;
+	void SetCardLayerWidgetForTest(UWacomFirstPersonCardLayerWidget* LayerWidget);
+	void SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId);
+	void ResetAnchorScreenSmoothingForTest() { ResetAnchorScreenSmoothing(); }
+	void SetRuntimeCardLayerEntries(FName SourceId, const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
+	void SetRuntimeCardLayerPresentationFrame(
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
+	void SetRuntimeCardLayerPresentationFrame(
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+	void SetRuntimeCardLayerTransitionHints(
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
+	void SetRuntimeCardLayerFeedbackHints(
+		FName SourceId,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
+#endif
+	void SetRuntimeCardLayerTransitionPresentationEnabled(FName SourceId, bool bEnabled);
+	void SetRuntimeCardLayerData(FName SourceId, const TArray<FWacomCardViewData>& Cards);
+	void ClearRuntimeCardLayerData(FName SourceId);
+	void ClearCardLayerVisualState();
+	void SetFirstPersonCardLayerInteractionEnabled(bool bEnabled);
+
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomFirstPersonCardAnchorDebugWidget> DebugWidget;
 
@@ -808,6 +804,11 @@ private:
 	mutable uint32 LastResolvedCardLayoutConfigHash = 0;
 
 	mutable FWacomFirstPersonCardSlotMotionConfig CachedSlotMotionConfig;
+
+	friend struct FWacomFirstPersonCardLayerTestAccess;
+
+	void ApplyRuntimeCardLayerPresentationFrame(
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
 	mutable FWacomFirstPersonCardSlotVisualConfig CachedSlotVisualConfig;
 	mutable FWacomFirstPersonCardSlotFeedbackConfig CachedSlotFeedbackConfig;
 	mutable FWacomFirstPersonCardDragConfig CachedCardDragConfig;

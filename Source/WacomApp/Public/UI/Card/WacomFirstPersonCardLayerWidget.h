@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerSlotWidget;
+struct FWacomFirstPersonCardLayerTestAccess;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
@@ -197,31 +198,6 @@ public:
 
 	void SetLogSlotMotionDiagnostics(bool bEnabled) { bLogSlotMotionDiagnostics = bEnabled; }
 
-#if WITH_AUTOMATION_TESTS
-	FWacomFirstPersonCardLayerAutomationTestView GetAutomationTestViewForTest() const;
-	void TickSlotMotionForTest(float DeltaTime);
-	UWacomFirstPersonCardLayerSlotWidget* FindSlotWidgetByKeyForTest(const FString& SlotKey) const;
-	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
-	void AddUntrackedSlotChildForTest();
-	void SetViewportSizeOverrideForTest(const FVector2D& WidgetViewportSize);
-	FGuid ResolveHoveredCardAtWidgetPositionForTest(const FVector2D& WidgetPosition);
-	bool HandleSlotPointerEnteredAtWidgetPositionForTest(
-		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
-		const FVector2D& WidgetPosition);
-	bool HandleSlotPointerMovedAtWidgetPositionForTest(
-		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
-		const FVector2D& WidgetPosition);
-	EWacomFirstPersonCardPointerRouteAction HandleSlotPointerMovedRouteActionAtWidgetPositionForTest(
-		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
-		const FVector2D& WidgetPosition);
-	bool RequestPressAtWidgetPositionForTest(const FVector2D& WidgetPosition);
-	EWacomFirstPersonCardPointerRouteAction RequestPressRouteActionAtWidgetPositionForTest(
-		const FVector2D& WidgetPosition);
-	bool RequestReleaseAtWidgetPositionForTest(const FVector2D& WidgetPosition);
-	EWacomFirstPersonCardPointerRouteAction RequestReleaseRouteActionAtWidgetPositionForTest(
-		const FVector2D& WidgetPosition);
-#endif
-
 	FWacomFirstPersonCardLayerInteractionNative OnCardHoveredNative;
 	FWacomFirstPersonCardLayerInteractionNative OnCardUnhoveredNative;
 	FWacomFirstPersonCardLayerInteractionNative OnHoveredCardSlotUpdatedNative;
@@ -283,6 +259,29 @@ private:
 	bool bCardLayerInteractionEnabled = false;
 	bool bLogSlotMotionDiagnostics = false;
 #if WITH_AUTOMATION_TESTS
+	FWacomFirstPersonCardLayerAutomationTestView GetAutomationTestViewForTest() const;
+	void TickSlotMotionForTest(float DeltaTime);
+	UWacomFirstPersonCardLayerSlotWidget* FindSlotWidgetByKeyForTest(const FString& SlotKey) const;
+	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
+	void AddUntrackedSlotChildForTest();
+	void SetViewportSizeOverrideForTest(const FVector2D& WidgetViewportSize);
+	FGuid ResolveHoveredCardAtWidgetPositionForTest(const FVector2D& WidgetPosition);
+	bool HandleSlotPointerEnteredAtWidgetPositionForTest(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
+	bool HandleSlotPointerMovedAtWidgetPositionForTest(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
+	EWacomFirstPersonCardPointerRouteAction HandleSlotPointerMovedRouteActionAtWidgetPositionForTest(
+		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
+		const FVector2D& WidgetPosition);
+	bool RequestPressAtWidgetPositionForTest(const FVector2D& WidgetPosition);
+	EWacomFirstPersonCardPointerRouteAction RequestPressRouteActionAtWidgetPositionForTest(
+		const FVector2D& WidgetPosition);
+	bool RequestReleaseAtWidgetPositionForTest(const FVector2D& WidgetPosition);
+	EWacomFirstPersonCardPointerRouteAction RequestReleaseRouteActionAtWidgetPositionForTest(
+		const FVector2D& WidgetPosition);
+
 	TOptional<FVector2D> WidgetViewportSizeOverrideForTest;
 	int32 SkippedEquivalentSlotRefreshCountForTest = 0;
 	int32 SlotMotionConfigPropagationCountForTest = 0;
@@ -292,6 +291,7 @@ private:
 #endif
 
 	friend class UWacomFirstPersonCardLayerSlotWidget;
+	friend struct FWacomFirstPersonCardLayerTestAccess;
 
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
 	void ApplyLayerVisibility();

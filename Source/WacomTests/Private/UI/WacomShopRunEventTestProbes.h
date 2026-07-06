@@ -21,7 +21,6 @@
 #include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomMenuWidgetBase.h"
-#include "UI/Run/WacomRunMenuCardLeaseTestMenu.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "Engine/HitResult.h"
@@ -259,7 +258,10 @@ private:
 		const FWacomFirstPersonCardDragView& DragView,
 		bool bReleased)
 	{
-		return ApplyRunMenuDropProbeFeedback(CardInstanceId, DragView, bReleased);
+		return AWacomPlayerController::ApplyRunMenuDropProbeFeedbackForTest(
+			CardInstanceId,
+			DragView,
+			bReleased);
 	}
 
 	bool ApplyRunWorldCardDropProbeFeedbackForTest(
@@ -267,7 +269,10 @@ private:
 		const FWacomFirstPersonCardDragView& DragView,
 		bool bReleased)
 	{
-		return ApplyRunWorldCardDropProbeFeedback(CardInstanceId, DragView, bReleased);
+		return AWacomPlayerController::ApplyRunWorldCardDropProbeFeedbackForTest(
+			CardInstanceId,
+			DragView,
+			bReleased);
 	}
 
 	FRunWorldCardInteractionValidation ResolveRunWorldCardDropIntentForTest(
@@ -279,7 +284,7 @@ private:
 		UWacomRunWorldCardDropReceiverComponent*& OutReceiver,
 		FString& OutDebugSummary) const
 	{
-		return ResolveRunWorldCardDropIntent(
+		return AWacomPlayerController::ResolveRunWorldCardDropIntentForTest(
 			CardInstanceId,
 			DragView,
 			OutTargetHandle,
@@ -303,7 +308,7 @@ private:
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView) const
 	{
-		return ResolveRunMenuCardDropIntent(CardInstanceId, DragView);
+		return AWacomPlayerController::ResolveRunMenuCardDropIntentForTest(CardInstanceId, DragView);
 	}
 
 	void SetRunSessionForTest(URunSession* InRunSession)
@@ -853,36 +858,6 @@ protected:
 		}
 		LastDropResultForTest = OutSubmitted;
 		return bMenuSubmitSucceedsForTest;
-	}
-
-private:
-	UPROPERTY(Transient)
-	TObjectPtr<AWacomPlayerController> OwningPlayerControllerForTest = nullptr;
-};
-
-// Keeps the public prototype menu covered without moving the class path used by the console command.
-UCLASS()
-class UWacomRunMenuCardLeaseTestMenuProbe : public UWacomRunMenuCardLeaseTestMenu
-{
-	GENERATED_BODY()
-
-public:
-	void SetOwningWacomPlayerControllerForTest(AWacomPlayerController* InPlayerController)
-	{
-		OwningPlayerControllerForTest = InPlayerController;
-	}
-
-	void DeactivateForTest()
-	{
-		NativeOnDeactivated();
-	}
-
-protected:
-	virtual AWacomPlayerController* ResolveOwningWacomPlayerController() const override
-	{
-		return OwningPlayerControllerForTest
-			? OwningPlayerControllerForTest.Get()
-			: Super::ResolveOwningWacomPlayerController();
 	}
 
 private:

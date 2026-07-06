@@ -191,10 +191,13 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayerInternal(
 	}
 
 	bFirstPersonBattleHandLayerRuntimeActive = true;
-	Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(
-		FirstPersonBattleHandLayerSourceId,
-		true);
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(ShouldEnableFirstPersonBattleHandInteraction());
+	FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame;
+	LifecycleFrame.SourceId = FirstPersonBattleHandLayerSourceId;
+	LifecycleFrame.bSetTransitionPresentationEnabled = true;
+	LifecycleFrame.bTransitionPresentationEnabled = true;
+	LifecycleFrame.bSetInteractionEnabled = true;
+	LifecycleFrame.bInteractionEnabled = ShouldEnableFirstPersonBattleHandInteraction();
+	Anchor->ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
 	BindLayerInteractions(Anchor);
 	LastAnchor = Anchor;
 	if (TransitionHints)
@@ -230,18 +233,19 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer(bool bClearPendingTransiti
 			Anchor->GetRuntimeCardLayerSourceId() == FirstPersonBattleHandLayerSourceId;
 		if (bOwnsBattleHandLayer)
 		{
-			Anchor->SetFirstPersonCardLayerInteractionEnabled(false);
-			Anchor->CancelFirstPersonCardDragGesture(true);
-			Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(
-				FirstPersonBattleHandLayerSourceId,
-				true);
+			FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame;
+			LifecycleFrame.SourceId = FirstPersonBattleHandLayerSourceId;
+			LifecycleFrame.bSetInteractionEnabled = true;
+			LifecycleFrame.bInteractionEnabled = false;
+			LifecycleFrame.bCancelActiveDrag = true;
+			LifecycleFrame.bSetTransitionPresentationEnabled = true;
+			LifecycleFrame.bTransitionPresentationEnabled = true;
+			LifecycleFrame.ClearMode =
+				EWacomFirstPersonCardLayerSourceClearMode::RuntimeData;
+			Anchor->ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
 		}
 
 		UnbindLayerInteractions(Anchor);
-		if (bOwnsBattleHandLayer)
-		{
-			Anchor->ClearRuntimeCardLayerData(FirstPersonBattleHandLayerSourceId);
-		}
 	};
 
 	UWacomFirstPersonCardAnchorComponent* PreviousAnchor = LastAnchor.Get();
@@ -287,17 +291,19 @@ void FWacomBattleHUDFirstPersonHandBridge::SuppressLayerForEntry()
 		return;
 	}
 
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(false);
-	Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(
-		FirstPersonBattleHandLayerSourceId,
-		false);
-	Anchor->CancelFirstPersonCardDragGesture(true);
-	Anchor->ClearCardLayerVisualState();
 	FWacomFirstPersonCardLayerPresentationFrame SuppressedFrame;
 	SuppressedFrame.SourceId = FirstPersonBattleHandLayerSourceId;
 	SuppressedFrame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::Suppressed;
-	Anchor->CommitRuntimeCardLayerFrame(SuppressedFrame);
-	Anchor->SetFirstPersonCardLayerInteractionEnabled(false);
+	FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame =
+		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(
+			SuppressedFrame);
+	LifecycleFrame.bSetInteractionEnabled = true;
+	LifecycleFrame.bInteractionEnabled = false;
+	LifecycleFrame.bSetTransitionPresentationEnabled = true;
+	LifecycleFrame.bTransitionPresentationEnabled = false;
+	LifecycleFrame.bCancelActiveDrag = true;
+	LifecycleFrame.ClearMode = EWacomFirstPersonCardLayerSourceClearMode::VisualState;
+	Anchor->ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
 	LastAnchor = Anchor;
 }
 
@@ -1122,7 +1128,8 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPresentationFrame(
 	{
 		Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame;
 	}
-	Anchor.CommitRuntimeCardLayerFrame(Frame);
+	Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(
+		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(Frame));
 }
 
 FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveDropIntent(
@@ -1450,7 +1457,9 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyTargetPreviewPresentationToLayer
 	PreviewFrame.SourceId = FirstPersonBattleHandLayerSourceId;
 	PreviewFrame.Entries = MoveTemp(CardEntries);
 	PreviewFrame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PreviewOverlay;
-	Anchor->CommitRuntimeCardLayerFrame(PreviewFrame);
+	Anchor->ApplyRuntimeCardLayerSourceLifecycleFrame(
+		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(
+			PreviewFrame));
 	bHasActiveTargetPreviewLayer = true;
 }
 
@@ -1518,7 +1527,9 @@ void FWacomBattleHUDFirstPersonHandBridge::RestoreBaseTargetPreviewLayer()
 	RestoreFrame.SourceId = FirstPersonBattleHandLayerSourceId;
 	RestoreFrame.Entries = MoveTemp(CardEntries);
 	RestoreFrame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
-	Anchor->CommitRuntimeCardLayerFrame(RestoreFrame);
+	Anchor->ApplyRuntimeCardLayerSourceLifecycleFrame(
+		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(
+			RestoreFrame));
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::ApplyPendingTargetingFlag(

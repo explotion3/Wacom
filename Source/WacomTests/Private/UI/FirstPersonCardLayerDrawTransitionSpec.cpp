@@ -490,9 +490,9 @@ bool FWacomFirstPersonCardLayerAnchorPresentationGateDefersDrawHintsTest::RunTes
 
 	const FName BattleHandSourceId = WacomFirstPersonCardLayerSourceIds::BattleHand();
 	const FGuid CardId = FGuid::NewGuid();
-	Anchor->SetRuntimeCardLayerEntries(BattleHandSourceId, { MakeLayerEntry(CardId) });
-	Anchor->SetRuntimeCardLayerTransitionHints(BattleHandSourceId, { MakeDrawnHint(CardId, 0, 1) });
-	Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(BattleHandSourceId, false);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, BattleHandSourceId, { MakeLayerEntry(CardId) });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionHints(*Anchor, BattleHandSourceId, { MakeDrawnHint(CardId, 0, 1) });
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionPresentationEnabled(*Anchor, BattleHandSourceId, false);
 
 	Anchor->PrimaryComponentTick.ExecuteTick(
 		0.0f,
@@ -517,7 +517,7 @@ bool FWacomFirstPersonCardLayerAnchorPresentationGateDefersDrawHintsTest::RunTes
 		TEXT("Closed presentation gate keeps drawn card id pending"),
 		ClosedGateView.PendingTransitionHintCardIds.Contains(CardId));
 
-	Anchor->SetRuntimeCardLayerTransitionPresentationEnabled(BattleHandSourceId, true);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionPresentationEnabled(*Anchor, BattleHandSourceId, true);
 	Anchor->PrimaryComponentTick.ExecuteTick(
 		0.0f,
 		LEVELTICK_All,

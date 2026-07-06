@@ -1156,8 +1156,11 @@ void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerFrame(
 	const bool bEnableRuntimeInteraction =
 		bEnableMenuLeaseDragProbe || bEnableRunWorldCardDropDrag;
 	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableRuntimeInteraction);
-	Anchor.CommitRuntimeCardLayerFrame(Frame);
-	Anchor.SetFirstPersonCardLayerInteractionEnabled(bEnableRuntimeInteraction);
+	FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame =
+		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(Frame);
+	LifecycleFrame.bSetInteractionEnabled = true;
+	LifecycleFrame.bInteractionEnabled = bEnableRuntimeInteraction;
+	Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
 }
 
 void UWacomRunFirstPersonCardSourceComponent::ClearRuntimeCardLayerEntries(
@@ -1166,11 +1169,22 @@ void UWacomRunFirstPersonCardSourceComponent::ClearRuntimeCardLayerEntries(
 {
 	if (Anchor.GetRuntimeCardLayerSourceId() == SourceId)
 	{
-		Anchor.SetFirstPersonCardLayerInteractionEnabled(false);
-		Anchor.CancelFirstPersonCardDragGesture(true);
+		FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame;
+		LifecycleFrame.SourceId = SourceId;
+		LifecycleFrame.bSetInteractionEnabled = true;
+		LifecycleFrame.bInteractionEnabled = false;
+		LifecycleFrame.bCancelActiveDrag = true;
+		LifecycleFrame.ClearMode =
+			EWacomFirstPersonCardLayerSourceClearMode::RuntimeData;
+		Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
 		RestoreMenuLeaseInteractionOverrides();
+		return;
 	}
-	Anchor.ClearRuntimeCardLayerData(SourceId);
+	FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame;
+	LifecycleFrame.SourceId = SourceId;
+	LifecycleFrame.ClearMode =
+		EWacomFirstPersonCardLayerSourceClearMode::RuntimeData;
+	Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
 }
 
 void UWacomRunFirstPersonCardSourceComponent::ApplyMenuLeaseInteractionOverrides(

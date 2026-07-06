@@ -12,6 +12,7 @@
 class UCardDefinition;
 class URunSession;
 class UWacomFirstPersonCardAnchorComponent;
+struct FWacomFirstPersonCardLayerTestAccess;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomRunMenuCardLeaseRequest
@@ -261,16 +262,6 @@ public:
 		const URunSession& Run,
 		TArray<FWacomFirstPersonCardLayerEntry>& OutEntries) const;
 
-#if WITH_AUTOMATION_TESTS
-	const FWacomRunFirstPersonCardSourceRefreshCountersForTest&
-	GetDefaultSourceRefreshCountersForTest() const { return DefaultSourceRefreshCountersForTest; }
-	const FWacomRunFirstPersonCardSourceRefreshCountersForTest&
-	GetProviderLeaseRefreshCountersForTest() const { return ProviderLeaseRefreshCountersForTest; }
-	void ResetRunFirstPersonCardSourcePerfCountersForTest();
-	void SetActiveProviderLeaseRequestForTest(
-		const FWacomRunMenuCardLeaseRequest& Request);
-#endif
-
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
@@ -285,6 +276,16 @@ protected:
 		FName SourceId);
 
 private:
+#if WITH_AUTOMATION_TESTS
+	const FWacomRunFirstPersonCardSourceRefreshCountersForTest&
+	GetDefaultSourceRefreshCountersForTest() const { return DefaultSourceRefreshCountersForTest; }
+	const FWacomRunFirstPersonCardSourceRefreshCountersForTest&
+	GetProviderLeaseRefreshCountersForTest() const { return ProviderLeaseRefreshCountersForTest; }
+	void ResetRunFirstPersonCardSourcePerfCountersForTest();
+	void SetActiveProviderLeaseRequestForTest(
+		const FWacomRunMenuCardLeaseRequest& Request);
+#endif
+
 	struct FDefaultSourceRefreshKey
 	{
 		bool bIsValid = false;
@@ -425,4 +426,6 @@ private:
 	FWacomRunFirstPersonCardSourceRefreshCountersForTest
 		ProviderLeaseRefreshCountersForTest;
 #endif
+
+	friend struct FWacomFirstPersonCardLayerTestAccess;
 };
