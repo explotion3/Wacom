@@ -632,8 +632,8 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		{
 			if (SlotWidgets.IsValidIndex(Index) && SlotWidgets[Index])
 			{
-				SlotWidgets[Index]->SyncLegacyTargetModeForFirstPersonLayer(
-					InSlots[Index].Entry.TargetMode);
+				SlotWidgets[Index]->SyncLegacyDebugTargetModeForFirstPersonLayer(
+					InSlots[Index].Entry.DebugLegacyTargetMode);
 			}
 		}
 		RefreshSlotMotionDebugCounts();

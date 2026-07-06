@@ -549,8 +549,8 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerEntry
 	EWacomFirstPersonCardInteractionIntent InteractionIntent =
 		EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer", meta = (ToolTip = "旧版调试 / 迁移投影字段。正式手势行为请使用 InteractionIntent，不要在 Widget 中直接消费 TargetMode。"))
-	ECardTargetMode TargetMode = ECardTargetMode::None;
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "旧版调试 / 迁移投影字段，仅用于排查 Battle TargetMode 到 UI InteractionIntent 的适配结果。正式手势行为请使用 InteractionIntent。"))
+	ECardTargetMode DebugLegacyTargetMode = ECardTargetMode::None;
 };
 
 enum class EWacomFirstPersonCardLayerFrameCommitMode : uint8

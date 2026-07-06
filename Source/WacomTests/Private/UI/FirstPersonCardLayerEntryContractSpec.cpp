@@ -51,7 +51,7 @@ namespace WacomFirstPersonCardLayerEntryContractSpec
 		Slot.Entry.CardViewData.bDisabled = false;
 		Slot.Entry.InteractionIntent =
 			EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
-		Slot.Entry.TargetMode = ECardTargetMode::None;
+		Slot.Entry.DebugLegacyTargetMode = ECardTargetMode::None;
 		Slot.ScreenPosition = Position;
 		Slot.WidgetPosition = Position;
 		Slot.SnappedWidgetPosition = Position;
@@ -67,7 +67,7 @@ namespace WacomFirstPersonCardLayerEntryContractSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerEntryLegacyTargetProjectionRefreshTest,
-	"Wacom.UI.FirstPersonCardLayer.EntryContract.LegacyTargetModeDoesNotDirtySlotRefresh",
+	"Wacom.UI.FirstPersonCardLayer.EntryContract.DebugLegacyTargetModeDoesNotDirtySlotRefresh",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerEntryLegacyTargetProjectionRefreshTest::RunTest(
@@ -106,7 +106,7 @@ bool FWacomFirstPersonCardLayerEntryLegacyTargetProjectionRefreshTest::RunTest(
 			.SkippedEquivalentSlotRefreshCount;
 
 	FWacomFirstPersonCardLayerSlotView LegacyProjectionChangedSlot = BaseSlot;
-	LegacyProjectionChangedSlot.Entry.TargetMode = ECardTargetMode::HandCard;
+	LegacyProjectionChangedSlot.Entry.DebugLegacyTargetMode = ECardTargetMode::HandCard;
 	LegacyProjectionChangedSlot.Entry.InteractionIntent =
 		BaseSlot.Entry.InteractionIntent;
 	Layer->SetCardSlots({ LegacyProjectionChangedSlot });
@@ -132,7 +132,7 @@ bool FWacomFirstPersonCardLayerEntryLegacyTargetProjectionRefreshTest::RunTest(
 		OriginalWidget);
 	TestEqual(
 		TEXT("Legacy target projection still updates debug slot view"),
-		Layer->GetSlotWidgetAt(0)->GetSlotView().Entry.TargetMode,
+		Layer->GetSlotWidgetAt(0)->GetSlotView().Entry.DebugLegacyTargetMode,
 		ECardTargetMode::HandCard);
 
 	const int32 AfterLegacyProjectionSkipCount =

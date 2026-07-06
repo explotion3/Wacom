@@ -176,7 +176,7 @@ First-person hand 卡面和 first-person viewport 详情都从 `FHandCardSnapsho
 
 被动详情正文的分类由“被动”区块标题承载，正文 token 或 `PassiveLines` 不再携带 `被动：` 前缀。`Passive.DisplayText` 是被动正文的最高优先级来源，适合表达暮气、选择对象、特殊腾挪等尚未完全结构化的规则；没有手写正文且所有被动效果都能结构化时，Builder 才生成“触发条件：”加效果 token。只生成触发条件不能视为完整被动正文，避免后半句被 fallback 屏蔽。
 
-Battle hand entries 由 `WacomBattleCardPresentation` 从 `FHandCardSnapshot` 构建：`ECardTargetMode` 仍作为调试 / 迁移 projection 写入 entry，但只在 Battle adapter 内部映射成 first-person card layer 的 `InteractionIntent`。通用 first-person card layer 公共类型不提供 TargetMode 转换 helper；SlotWidget 只消费 `InteractionIntent` 来决定无目标拖拽或瞄准态，目标合法性和提交仍由 BattleHUD / BattleSession 处理。
+Battle hand entries 由 `WacomBattleCardPresentation` 从 `FHandCardSnapshot` 构建：`ECardTargetMode` 仅作为 `DebugLegacyTargetMode` 调试 / 迁移 projection 写入 entry，并只在 Battle adapter 内部映射成 first-person card layer 的 `InteractionIntent`。通用 first-person card layer 公共类型不提供 TargetMode 转换 helper；SlotWidget 只消费 `InteractionIntent` 来决定无目标拖拽或瞄准态，目标合法性和提交仍由 BattleHUD / BattleSession 处理。
 
 当玩家拖拽手牌并指向敌人部位或目标手牌时，first-person hand bridge 会把当前 `CardInstanceId + TargetHandle` 交给 `UBattleSession::BuildCardTargetPreview()`。Battle 返回的 `FBattleCardTargetPreview` 是只读规则 facts；App 侧随后用 `WacomBattleCardPresentation::BuildTargetPreviewPresentation()` 一次性生成 hand layer entries、源卡详情和可选目标手牌详情。源卡卡面徽章和详情 token 显示目标修正后的主效果预览；若目标是手牌，目标卡自己的卡面费用可以显示预测后的费用，但详情不生成 `[费] before -> after` token。preview 不提交命令、不模拟完整出牌事件链、不修改 Battle state。
 

@@ -278,7 +278,7 @@ namespace WacomFirstPersonCardLayerSpec
 		ECardTargetMode LegacyTargetProjection)
 	{
 		Entry.InteractionIntent = InteractionIntent;
-		Entry.TargetMode = LegacyTargetProjection;
+		Entry.DebugLegacyTargetMode = LegacyTargetProjection;
 	}
 
 	void SetEntryInteractionIntent(
