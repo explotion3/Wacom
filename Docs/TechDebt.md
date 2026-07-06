@@ -61,7 +61,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 legacy bridge 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | Backpack UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper，但视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen` 和局部 WBP 替换视觉 |
-| Backpack / Shop 长列表 | Backpack / SpecialZone / Shop 已有 revision gate、signature dirty gate 和 identity reconcile；Backpack 的 snapshot refresh gate 和普通卡列表 reconcile 已抽到 App-private helper，但 SpecialZone section reconcile 仍在 Screen 中，列表仍是 WrapBox / VerticalBox | 后续优先抽 SpecialZone section reconcile；卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
+| Backpack / Shop 长列表 | Backpack / SpecialZone / Shop 已有 revision gate、signature dirty gate 和 identity reconcile；Backpack 的 snapshot refresh gate、普通卡列表 reconcile 和 SpecialZone section reconcile 已抽到 App-private helper，但列表仍是 WrapBox / VerticalBox | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
 | 像素风 UI 分辨率适配 | 背包卡牌等像素图控件依赖固定 SizeBox 和 `DPI Scale = 1.0`；非整数 DPI 缩放会导致像素点显示不均匀 | 统一设计像素安全缩放档位，并配合 WrapBox / ScrollBox 做布局重排 |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
 | AppToast C++ fallback 表现 | 未配置 settings 时仍直接 AddToViewport，文本显示为主，保留 tone / icon key / lifetime 数据 | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
@@ -81,7 +81,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 |---|---|---|
 | ViewModel FieldNotify 未被 WBP 消费 | C++ 父类用 `OnRunViewModelRefreshedNative` 粗粒度多播 + 手动 SetText | 美术阶段 WBP 配 Global Collection Identifier `WacomRunViewModel`，View Bindings 直接绑字段；全 WBP 后删粗粒度路径 |
 | `OnRunStateChangedNative` 粗粒度广播 | 组合事务已收口为事务末尾一次广播；普通 public mutation 仍保持成功后一次广播 | 订阅方仍按粗粒度事件幂等刷新；新增组合 Run mutation 时补 `Wacom.Run.NotificationCoalescing` 测试 |
-| BackpackScreen Presenter 边界 | Presenter 已抽展示计算；卡牌详情面板生命周期 / source guard / 定位已抽到 App-private detail controller；普通卡牌列表的 identity reconcile / 复用 / 排序 / 移除回调已抽到 App-private deck card list reconciler；DropTarget 只转发拖拽意图，命令提交和确认框统一在 Screen | 如果 Screen 继续膨胀，优先抽 Snapshot refresh dirty gate 或 SpecialZone 区块 reconcile；命令 flow 已有私有对象，先保持 Screen 作为玩家意图入口 |
+| BackpackScreen Presenter 边界 | Presenter 已抽展示计算；卡牌详情面板生命周期 / source guard / 定位已抽到 App-private detail controller；snapshot refresh dirty gate、普通卡牌列表 reconcile 和 SpecialZone 区块 reconcile 已抽到 App-private helper；DropTarget 只转发拖拽意图，命令提交和确认框统一在 Screen | 如果 Screen 继续膨胀，优先审计顶部 stats / section title 刷新和命令 flow 边界；命令 flow 已有私有对象，先保持 Screen 作为玩家意图入口 |
 | BattleHUD coordinator 过重 | HUD 私有 helper 已承接 scene enemy target、presentation、combat log、first-person hand 和 card detail；HUD 仍持有 Session 绑定、Snapshot fanout、命令入口、WBP 绑定、配置和 GC 引用 | 保留 HUD 作为战斗 UI Screen coordinator；后续修改私有 helper 时优先补 HUD 合同测试并复用 harness |
 | WacomApp Public UI API surface | 公开面已完成多轮分类和测试访问收口；当前剩余债务是 prototype / test-only surface、Blueprint-visible 制作面保守保留和资产审计前不删除 | 历史见 [Wacom_Public_Surface_And_Docs_History.md](./DevLog/Wacom_Public_Surface_And_Docs_History.md)；继续按小切片评估，不用“无 C++ 调用”作为删除依据 |
 

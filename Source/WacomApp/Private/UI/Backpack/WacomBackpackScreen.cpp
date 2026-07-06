@@ -10,7 +10,6 @@
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
 #include "Misc/PackageName.h"
 
@@ -22,6 +21,7 @@
 #include "UI/Backpack/WacomBackpackCardDetailController.h"
 #include "UI/Backpack/WacomBackpackCommandFlow.h"
 #include "UI/Backpack/WacomBackpackDeckCardListReconciler.h"
+#include "UI/Backpack/WacomBackpackSpecialZoneListReconciler.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomBackpackStorageRefreshGate.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
@@ -581,73 +581,32 @@ void UWacomBackpackScreen::RebuildFluxContentCards(const FRunBackpackStorageSnap
 
 void UWacomBackpackScreen::RebuildSpecialZones(const FRunBackpackStorageSnapshot& Snapshot)
 {
-	if (SpecialZonesPanel)
-	{
-		TMap<FGuid, UWacomSpecialZoneWidget*> ExistingByOwnerId;
-		for (int32 ChildIndex = 0; ChildIndex < SpecialZonesPanel->GetChildrenCount(); ++ChildIndex)
+	FWacomBackpackSpecialZoneListReconciler::Reconcile(
+		SpecialZonesPanel,
+		Snapshot.SpecialZones,
+		[this](const FRunSpecialStorageView& /*SpecialView*/)
 		{
-			UWacomSpecialZoneWidget* ExistingWidget = Cast<UWacomSpecialZoneWidget>(SpecialZonesPanel->GetChildAt(ChildIndex));
-			if (!ExistingWidget)
+			UClass* ZoneWidgetClass = SpecialZoneWidgetClass ? SpecialZoneWidgetClass.Get() : UWacomSpecialZoneWidget::StaticClass();
+			UWacomSpecialZoneWidget* ZoneWidget = CreateWidget<UWacomSpecialZoneWidget>(this, ZoneWidgetClass);
+			if (ZoneWidget)
 			{
-				continue;
+				ZoneWidget->OnBattleEnabledToggleRequestedNative.AddUObject(this, &UWacomBackpackScreen::HandleBattleEnabledToggle);
+				ZoneWidget->OnCardHoveredNative.AddUObject(this, &UWacomBackpackScreen::HandleCardHovered);
+				ZoneWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomBackpackScreen::HandleCardUnhovered);
 			}
-
-			const FGuid OwnerInstanceId = ExistingWidget->GetOwnerCardInstanceId();
-			if (OwnerInstanceId.IsValid())
-			{
-				ExistingByOwnerId.Add(OwnerInstanceId, ExistingWidget);
-			}
-		}
-
-		TSet<UWacomSpecialZoneWidget*> UsedZoneWidgets;
-		for (int32 DesiredIndex = 0; DesiredIndex < Snapshot.SpecialZones.Num(); ++DesiredIndex)
+			return ZoneWidget;
+		},
+		[this](UWacomSpecialZoneWidget& ZoneWidget, const FRunSpecialStorageView& SpecialView)
 		{
-			const FRunSpecialStorageView& SpecialView = Snapshot.SpecialZones[DesiredIndex];
-			UWacomSpecialZoneWidget* ZoneWidget = ExistingByOwnerId.FindRef(SpecialView.OwnerCard.Instance.InstanceId);
-			if (!ZoneWidget)
-			{
-				UClass* ZoneWidgetClass = SpecialZoneWidgetClass ? SpecialZoneWidgetClass.Get() : UWacomSpecialZoneWidget::StaticClass();
-				ZoneWidget = CreateWidget<UWacomSpecialZoneWidget>(this, ZoneWidgetClass);
-				if (ZoneWidget)
-				{
-					ZoneWidget->OnBattleEnabledToggleRequestedNative.AddUObject(this, &UWacomBackpackScreen::HandleBattleEnabledToggle);
-					ZoneWidget->OnCardHoveredNative.AddUObject(this, &UWacomBackpackScreen::HandleCardHovered);
-					ZoneWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomBackpackScreen::HandleCardUnhovered);
-				}
-			}
-			if (!ZoneWidget)
-			{
-				continue;
-			}
-			ZoneWidget->SetSpecialZoneView(SpecialView, this, CardWidgetClass);
-			UsedZoneWidgets.Add(ZoneWidget);
-
-			if (ZoneWidget->GetParent() == SpecialZonesPanel)
-			{
-				SpecialZonesPanel->ShiftChild(DesiredIndex, ZoneWidget);
-				if (UVerticalBoxSlot* ZoneSlot = Cast<UVerticalBoxSlot>(ZoneWidget->Slot))
-				{
-					ZoneSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-				}
-			}
-			else if (UVerticalBoxSlot* ZoneSlot = SpecialZonesPanel->AddChildToVerticalBox(ZoneWidget))
-			{
-				ZoneSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-				SpecialZonesPanel->ShiftChild(DesiredIndex, ZoneWidget);
-			}
-		}
-		for (const TPair<FGuid, UWacomSpecialZoneWidget*>& ExistingPair : ExistingByOwnerId)
+			ZoneWidget.SetSpecialZoneView(SpecialView, this, CardWidgetClass);
+		},
+		[this](UWacomSpecialZoneWidget* RemovedWidget)
 		{
-			if (ExistingPair.Value && !UsedZoneWidgets.Contains(ExistingPair.Value))
+			if (RemovedWidget && RemovedWidget->ContainsCardWidget(CardDetailSourceWidget.Get()))
 			{
-				if (ExistingPair.Value->ContainsCardWidget(CardDetailSourceWidget.Get()))
-				{
-					HideCardDetailPanel();
-				}
-				ExistingPair.Value->RemoveFromParent();
+				HideCardDetailPanel();
 			}
-		}
-	}
+		});
 }
 
 void UWacomBackpackScreen::RebuildBurdenZone(const FRunBackpackStorageSnapshot& Snapshot)
