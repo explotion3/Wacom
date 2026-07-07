@@ -12,8 +12,10 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
+#include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "BattleHUDTestHarness.h"
 
@@ -37,6 +39,53 @@ namespace WacomBattleHUDFirstPersonSpec
 		}
 
 		return GWorld;
+	}
+
+	UCardDefinition* MakePreviewCard(UObject* Outer, const TCHAR* Name, int32 Cost)
+	{
+		UCardDefinition* Card = NewObject<UCardDefinition>(Outer);
+		if (!Card)
+		{
+			return nullptr;
+		}
+
+		Card->CardId = FName(Name);
+		Card->DisplayName = FText::FromString(Name);
+		Card->Description = FText::FromString(TEXT("Battle HUD first-person card"));
+		Card->BaseCost = Cost;
+		return Card;
+	}
+
+	UBattleSession* CreateMinimalSession(FWacomBattleFixture& Fixture)
+	{
+		UCharacterDefinition* CharacterDefinition = Fixture.MakeCharacter(
+			Fixture.MakeNoopCard(0),
+			Fixture.MakeNoopCard(0),
+			{ Fixture.MakeNoopCard(0) });
+		return Fixture.CreateSession(CharacterDefinition, Fixture.MakeSinglePartEnemy(20, 5, 0), 1);
+	}
+
+	FBattleSnapshot MakeSnapshotWithHand(const TArray<FHandCardSnapshot>& Cards)
+	{
+		FBattleSnapshot Snapshot;
+		Snapshot.Phase = EBattlePhase::PlayerAction;
+		Snapshot.Hand.Cards = Cards;
+		Snapshot.Hand.NormalCardCount = Cards.Num();
+		return Snapshot;
+	}
+
+	FHandCardSnapshot MakeHandCardSnapshot(
+		UCardDefinition* Card,
+		int32 RuntimeCost,
+		bool bPlayable)
+	{
+		FHandCardSnapshot Snapshot;
+		Snapshot.InstanceId = FGuid::NewGuid();
+		Snapshot.Definition = Card;
+		Snapshot.RuntimeCost = RuntimeCost;
+		Snapshot.Zone = EHandZone::Both;
+		Snapshot.bIsPlayable = bPlayable;
+		return Snapshot;
 	}
 
 	FGuid FindFirstHandCardByTargetMode(const FBattleSnapshot& Snapshot, ECardTargetMode TargetMode)
@@ -195,6 +244,213 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 	TestEqual(TEXT("Cleared bridge does not set target select"),
 		HUD->GetUIState(),
 		EBattleUIState::Idle);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDFirstPersonHandStateSpec,
+	"Wacom.UI.Battle.BattleHUD.HandPresentation.RuntimeEntriesPreserveSnapshotState",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDFirstPersonHandStateSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleHUDFirstPersonSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UBattleSession* Session = WacomBattleHUDFirstPersonSpec::CreateMinimalSession(Fx);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Session"), Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+
+	AWacomPlayerCharacter* Character = Harness->AttachFirstPersonCharacter();
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UWacomFirstPersonCardAnchorComponent* Anchor = Harness->FirstPersonAnchor();
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("First-person card anchor"), Anchor))
+	{
+		return false;
+	}
+
+	Harness->SetSession(Session);
+	UCardDefinition* FirstCard = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("Battle.Alpha"),
+		1);
+	UCardDefinition* SecondCard = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("Battle.Beta"),
+		2);
+	if (!TestNotNull(TEXT("First card"), FirstCard)
+		|| !TestNotNull(TEXT("Second card"), SecondCard))
+	{
+		return false;
+	}
+
+	FHandCardSnapshot FirstSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(FirstCard, 7, true);
+	FirstSnapshot.Zone = EHandZone::Left;
+	FHandCardSnapshot SecondSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(SecondCard, 9, false);
+	SecondSnapshot.Zone = EHandZone::Right;
+	const FBattleSnapshot Snapshot =
+		WacomBattleHUDFirstPersonSpec::MakeSnapshotWithHand({ FirstSnapshot, SecondSnapshot });
+
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+
+	TestTrue(TEXT("Runtime hand source is active"), Anchor->HasRuntimeCardLayerData());
+	TestEqual(
+		TEXT("Runtime hand source id"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		WacomFirstPersonCardLayerSourceIds::BattleHand());
+	TestEqual(TEXT("Runtime hand card count"), Anchor->GetRuntimeCardLayerCardCount(), 2);
+	const TArray<FWacomFirstPersonCardLayerEntry>& RuntimeEntries = Anchor->GetRuntimeCardLayerEntries();
+	TestEqual(TEXT("Runtime entry count"), RuntimeEntries.Num(), 2);
+	if (RuntimeEntries.Num() == 2)
+	{
+		TestEqual(TEXT("First identity preserves hand order"), RuntimeEntries[0].CardInstanceId, FirstSnapshot.InstanceId);
+		TestEqual(TEXT("Second identity preserves hand order"), RuntimeEntries[1].CardInstanceId, SecondSnapshot.InstanceId);
+		TestEqual(TEXT("First zone is preserved"), RuntimeEntries[0].Zone, EHandZone::Left);
+		TestEqual(TEXT("Second zone is preserved"), RuntimeEntries[1].Zone, EHandZone::Right);
+		TestFalse(TEXT("First card is not anchor"), RuntimeEntries[0].bIsHandAnchor);
+		TestFalse(TEXT("Second card is not anchor"), RuntimeEntries[1].bIsHandAnchor);
+		TestEqual(TEXT("First card view preserves hand order"), RuntimeEntries[0].CardViewData.Name.ToString(), FString(TEXT("Battle.Alpha")));
+		TestEqual(TEXT("Runtime cost overrides base cost"), RuntimeEntries[0].CardViewData.Cost, 7);
+		TestFalse(TEXT("Playable card is not disabled"), RuntimeEntries[0].CardViewData.bDisabled);
+		TestEqual(TEXT("Second runtime cost overrides base cost"), RuntimeEntries[1].CardViewData.Cost, 9);
+		TestTrue(TEXT("Unplayable card is disabled"), RuntimeEntries[1].CardViewData.bDisabled);
+		TestFalse(TEXT("First card is not pending by default"), RuntimeEntries[0].bIsPendingTargeting);
+		TestFalse(TEXT("Second card is not pending by default"), RuntimeEntries[1].bIsPendingTargeting);
+	}
+
+	HUD->SetTargetSelectionStateForTest(SecondSnapshot.InstanceId);
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+	const TArray<FWacomFirstPersonCardLayerEntry>& PendingEntries = Anchor->GetRuntimeCardLayerEntries();
+	TestEqual(TEXT("Entry count after target select"), PendingEntries.Num(), 2);
+	if (PendingEntries.Num() == 2)
+	{
+		TestFalse(TEXT("Non-pending card remains normal"), PendingEntries[0].bIsPendingTargeting);
+		TestTrue(TEXT("Pending card is marked by current HUD state"), PendingEntries[1].bIsPendingTargeting);
+	}
+
+	HUD->ClearTargetSelectionStateForTest();
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+	const TArray<FWacomFirstPersonCardLayerEntry>& ClearedEntries = Anchor->GetRuntimeCardLayerEntries();
+	TestEqual(TEXT("Entry count after clearing target select"), ClearedEntries.Num(), 2);
+	if (ClearedEntries.Num() == 2)
+	{
+		TestFalse(TEXT("Pending state clears on UI state change"), ClearedEntries[1].bIsPendingTargeting);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDFirstPersonLateCleanupOwnershipSpec,
+	"Wacom.UI.Battle.BattleHUD.HandPresentation.LateCleanupKeepsRunRuntimeSource",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDFirstPersonLateCleanupOwnershipSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleHUDFirstPersonSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* BattleCard = Fx.MakeNoopCard(0);
+	UCardDefinition* RunCard = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("Battle.LateCleanup.Run"),
+		0);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ BattleCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5, 0), 1);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Battle card"), BattleCard)
+		|| !TestNotNull(TEXT("Run card"), RunCard)
+		|| !TestNotNull(TEXT("Session"), Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+
+	AWacomPlayerCharacter* Character = Harness->AttachFirstPersonCharacter();
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UWacomFirstPersonCardAnchorComponent* Anchor = Harness->FirstPersonAnchor();
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("First-person card anchor"), Anchor))
+	{
+		return false;
+	}
+
+	Harness->SetSession(Session);
+	const FBattleSnapshot BattleSnapshot = Session->BuildSnapshot();
+	const FHandCardSnapshot* BattleHandCard =
+		FWacomBattleFixture::FindHandCardByCardId(BattleSnapshot, BattleCard->CardId);
+	if (!TestNotNull(TEXT("Battle hand card"), BattleHandCard))
+	{
+		return false;
+	}
+
+	HUD->SyncFirstPersonBattleHandLayerForTest(BattleSnapshot);
+	TestEqual(
+		TEXT("Battle source owns runtime hand before Run restore"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		WacomFirstPersonCardLayerSourceIds::BattleHand());
+	TestTrue(
+		TEXT("Battle source enables interaction before Run restore"),
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
+
+	FWacomFirstPersonCardLayerEntry RunEntry;
+	RunEntry.CardInstanceId = FGuid::NewGuid();
+	RunEntry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(RunCard);
+	RunEntry.bIsPlayable = true;
+	RunEntry.CardViewData.bDisabled = false;
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(
+		*Anchor,
+		WacomFirstPersonCardLayerSourceIds::RunDefault(),
+		{ RunEntry });
+	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
+	TestEqual(
+		TEXT("Run source takes over before late BattleHUD cleanup"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		WacomFirstPersonCardLayerSourceIds::RunDefault());
+
+	HUD->ClearFirstPersonBattleHandLayerForTest();
+	TestEqual(
+		TEXT("Late BattleHUD cleanup keeps Run source ownership"),
+		Anchor->GetRuntimeCardLayerSourceId(),
+		WacomFirstPersonCardLayerSourceIds::RunDefault());
+	TestTrue(TEXT("Late BattleHUD cleanup keeps Run source data"), Anchor->HasRuntimeCardLayerData());
+	TestEqual(TEXT("Late BattleHUD cleanup keeps Run source entry"), Anchor->GetRuntimeCardLayerEntries().Num(), 1);
+	TestTrue(
+		TEXT("Late BattleHUD cleanup keeps Run interaction enabled"),
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
+
+	const int32 VersionBeforeStaleDelegate = Session->BuildSnapshot().Version;
+	FWacomFirstPersonCardDragView StaleDragView =
+		WacomBattleHUDFirstPersonSpec::MakeCommitDragView(BattleHandCard->InstanceId);
+	Anchor->OnFirstPersonCardLayerDragReleased.Broadcast(BattleHandCard->InstanceId, StaleDragView);
+	TestEqual(
+		TEXT("Late cleanup still unbinds BattleHUD drag delegates"),
+		Session->BuildSnapshot().Version,
+		VersionBeforeStaleDelegate);
+	TestEqual(TEXT("Late cleanup leaves HUD state idle"), HUD->GetUIState(), EBattleUIState::Idle);
 
 	return true;
 }
