@@ -29,7 +29,7 @@ tags:
 | `Effect.GainKeyword` / `Effect.RemoveStatus` 参数 | 借用 `FEffectContext::MetaTag` 或 `TargetZone` 传 Keyword / Status Tag | 同上，收口到专用 `FilterTag` 字段 |
 | `IsDeleteFunctionAvailable` | 接口已存在，但当前 Run 删牌事务和背包 UI 仍按始终可删的简化口径工作 | 等删牌可用性口径确认后，Run 校验和 UI 显隐统一接入 |
 | 手牌锚点左右归属 | `FHandCardSnapshot` 不带左右手角色，UI 用遍历顺序启发式 | 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
-| BattleResult identity 兼容字段 | `FBattleResultPacket` 仍同时暴露 `PartId / Identity / PartKey`、`DestroyedParts / DestroyedPartKeys`；Run 撤离进度的新写入和 Run 结算日志已收敛为 key-first，`DestroyedParts` 仅作旧数据 / 手写 snapshot fallback | 继续把测试、日志和消费者迁到 `FBattleEnemyPartKey` / `DestroyedPartKeys`；确认没有资产 / 蓝图依赖后再降级或移除 legacy projection 字段 |
+| BattleResult identity 兼容字段 | `FBattleResultPacket` 仍同时暴露 `PartId / Identity / PartKey`、`DestroyedParts / DestroyedPartKeys`；Run 撤离进度的新写入、Run 结算日志和 GameMode 撤离全灭判断已收敛为 key-first，`DestroyedParts` 仅作旧数据 / 手写 snapshot fallback | 继续把测试、日志和消费者迁到 `FBattleEnemyPartKey` / `DestroyedPartKeys`；确认没有资产 / 蓝图依赖后再降级或移除 legacy projection 字段 |
 
 ---
 

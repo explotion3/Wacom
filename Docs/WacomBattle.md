@@ -464,7 +464,7 @@ EndTurn presentation journal 的 checkpoint 顺序遵循规则结算顺序。`Tu
 | `KnockdownChoices[]` | `BattleState.PendingKnockdownChoices` | 玩家击倒三选一选择列表 |
 | `GainedCards[]` | `BattleState.PendingGainedCards` | 战斗中获得、战后可能进入 Run 的卡牌 |
 | `DestroyedPartKeys[]` | `BattleState.DestroyedParts -> FBattleEnemyPartKey` | 本场截至结束已破坏部位的稳定公开 key，用于 Run 撤离重入 |
-| `DestroyedParts[]` | `BattleState.DestroyedParts` | 内部 identity 投影，用于 runtime 汇总和 debug；Battle 外规则真相使用 `DestroyedPartKeys[]` |
+| `DestroyedParts[]` | `BattleState.DestroyedParts` | 内部 identity 投影，用于 runtime 汇总和 debug；Battle 外规则真相使用 `DestroyedPartKeys[]`。外部消费者需要计数时使用 packet 的 key-first 入口，只有旧数据 / 手写 packet 缺有效 key 时才 fallback 到该投影 |
 
 Battle 只负责产出战后包。疲劳、伤口、经验、获得卡、撤离进度、节点消耗等战外处理见 [WacomRun §10](./WacomRun.md#wacomrun-battle-settlement)。
 

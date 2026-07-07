@@ -124,7 +124,7 @@ struct WACOMBATTLE_API FBattleEnemyResult
  *   - DestroyedPartKeys：本场战斗中被破坏的稳定部位 key 列表，撤离时持久化
  *
  * 由 UBattleSession::BuildResultPacket() 构造，
- * 由 URunSession::OnBattleFinished(Packet) 消费。
+ * 正式 Run 结算入口为 URunSession::OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)。
  */
 USTRUCT(BlueprintType)
 struct WACOMBATTLE_API FBattleResultPacket
@@ -193,6 +193,56 @@ struct WACOMBATTLE_API FBattleResultPacket
 	/** 本场战斗中所有被破坏的稳定公开部位 key。Run 撤离重入优先读取该字段。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FBattleEnemyPartKey> DestroyedPartKeys;
+
+	/**
+	 * 外部消费者统计已破坏部位数量时使用的 key-first 入口。
+	 *
+	 * 正式 contract 读取 DestroyedPartKeys；只有旧数据 / 手写 packet 没有有效 key 时，
+	 * 才 fallback 到 DestroyedParts 这个内部 identity 投影。
+	 */
+	int32 CountDestroyedPartsKeyFirst() const
+	{
+		TArray<FBattleEnemyPartKey> ValidDestroyedPartKeys;
+		ValidDestroyedPartKeys.Reserve(DestroyedPartKeys.Num());
+		for (const FBattleEnemyPartKey& DestroyedPartKey : DestroyedPartKeys)
+		{
+			if (DestroyedPartKey.IsValidKey())
+			{
+				ValidDestroyedPartKeys.AddUnique(DestroyedPartKey);
+			}
+		}
+		for (const FBattleEnemyResult& EnemyResult : EnemyResults)
+		{
+			for (const FBattleEnemyPartKey& DestroyedPartKey : EnemyResult.DestroyedPartKeys)
+			{
+				if (DestroyedPartKey.IsValidKey())
+				{
+					ValidDestroyedPartKeys.AddUnique(DestroyedPartKey);
+				}
+			}
+		}
+
+		if (ValidDestroyedPartKeys.Num() > 0)
+		{
+			return ValidDestroyedPartKeys.Num();
+		}
+
+		TArray<FBattlePartSlotIdentity> LegacyDestroyedParts;
+		LegacyDestroyedParts.Reserve(DestroyedParts.Num());
+		for (const FBattlePartSlotIdentity& DestroyedPart : DestroyedParts)
+		{
+			LegacyDestroyedParts.AddUnique(DestroyedPart);
+		}
+		for (const FBattleEnemyResult& EnemyResult : EnemyResults)
+		{
+			for (const FBattlePartSlotIdentity& DestroyedPart : EnemyResult.DestroyedParts)
+			{
+				LegacyDestroyedParts.AddUnique(DestroyedPart);
+			}
+		}
+
+		return LegacyDestroyedParts.Num();
+	}
 
 	/** 按敌人槽汇总的战后结果。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")

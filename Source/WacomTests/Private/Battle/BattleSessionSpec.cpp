@@ -238,3 +238,63 @@ bool FWacomBattleResultPacketWithdrawnDerivedFromChoicesSpec::RunTest(const FStr
 
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleResultPacketDestroyedPartCountPrefersKeysSpec,
+	"Wacom.Battle.ResultPacket.DestroyedPartCountPrefersKeys",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleResultPacketDestroyedPartCountPrefersKeysSpec::RunTest(const FString& /*Parameters*/)
+{
+	FBattleResultPacket Packet;
+	Packet.DestroyedPartKeys.Add(FBattleEnemyPartKey::Make(
+		TEXT("Encounter"),
+		TEXT("Enemy"),
+		TEXT("Part.A")));
+	Packet.DestroyedPartKeys.Add(FBattleEnemyPartKey::Make(
+		TEXT("Encounter"),
+		TEXT("Enemy"),
+		TEXT("Part.A")));
+	Packet.DestroyedParts.Add(FBattlePartSlotIdentity::Make(
+		TEXT("LegacyEncounter"),
+		TEXT("LegacyEnemy"),
+		TEXT("Legacy.Part.A")));
+	Packet.DestroyedParts.Add(FBattlePartSlotIdentity::Make(
+		TEXT("LegacyEncounter"),
+		TEXT("LegacyEnemy"),
+		TEXT("Legacy.Part.B")));
+
+	TestEqual(TEXT("Valid stable keys take priority and are unique"),
+		Packet.CountDestroyedPartsKeyFirst(),
+		1);
+
+	FBattleResultPacket EnemyResultPacket;
+	FBattleEnemyResult EnemyResult;
+	EnemyResult.DestroyedPartKeys.Add(FBattleEnemyPartKey::Make(
+		TEXT("Encounter"),
+		TEXT("Enemy"),
+		TEXT("Part.B")));
+	EnemyResultPacket.EnemyResults.Add(EnemyResult);
+
+	TestEqual(TEXT("EnemyResults stable keys are counted when top-level keys are absent"),
+		EnemyResultPacket.CountDestroyedPartsKeyFirst(),
+		1);
+
+	FBattleResultPacket LegacyPacket;
+	LegacyPacket.DestroyedPartKeys.Add(FBattleEnemyPartKey());
+	LegacyPacket.DestroyedParts.Add(FBattlePartSlotIdentity::Make(
+		TEXT("LegacyEncounter"),
+		TEXT("LegacyEnemy"),
+		TEXT("Legacy.Part.A")));
+
+	TestEqual(TEXT("Missing valid keys falls back to legacy identity projection"),
+		LegacyPacket.CountDestroyedPartsKeyFirst(),
+		1);
+
+	FBattleResultPacket EmptyPacket;
+	TestEqual(TEXT("Empty packet has no destroyed parts"),
+		EmptyPacket.CountDestroyedPartsKeyFirst(),
+		0);
+
+	return true;
+}
