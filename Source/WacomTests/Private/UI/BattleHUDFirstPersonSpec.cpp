@@ -709,6 +709,70 @@ bool FWacomUIBattleHUDCardDetailHoverSourceSpec::RunTest(const FString& /*Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailFollowSlotSpec,
+	"Wacom.UI.Battle.BattleHUD.CardDetail.FollowsHoveredSlotLayoutUpdate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailFollowSlotSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(WacomBattleHUDFirstPersonSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), Harness->HUD()))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UCardDefinition* Card = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称跟随详情卡"),
+		1);
+	if (!TestNotNull(TEXT("Card"), Card))
+	{
+		return false;
+	}
+
+	HUD->TakeWidget();
+	HUD->SetCardDetailMotionSpeedsForTest(0.0f, 18.0f, 24.0f);
+	const FHandCardSnapshot CardSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(Card, 1, true);
+	const FBattleSnapshot Snapshot =
+		WacomBattleHUDFirstPersonSpec::MakeSnapshotWithHand({ CardSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	FWacomFirstPersonCardLayerSlotView InitialSlot =
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(
+			CardSnapshot.InstanceId,
+			FVector2D(500.0f, 600.0f));
+	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
+	HUD->TickCardDetailMotionForTest(0.12f);
+	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestTrue(
+		TEXT("First-person detail visible before follow update"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+
+	FWacomFirstPersonCardLayerSlotView UpdatedSlot = InitialSlot;
+	UpdatedSlot.ScreenPosition = FVector2D(700.0f, 600.0f);
+	UpdatedSlot.bIsHovered = true;
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, UpdatedSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
+	const FVector2D UpdatedPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestNotEqual(TEXT("Hovered detail position follows slot layout update"), UpdatedPosition, InitialPosition);
+
+	FWacomFirstPersonCardLayerSlotView OtherSlot = UpdatedSlot;
+	OtherSlot.ScreenPosition = FVector2D(900.0f, 600.0f);
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(FGuid::NewGuid(), OtherSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
+	TestEqual(
+		TEXT("Mismatched layout update does not move current detail"),
+		HUD->GetFirstPersonCardDetailPanelPositionForTest(),
+		UpdatedPosition);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailReadabilityMotionSpec,
 	"Wacom.UI.Battle.BattleHUD.CardDetail.FirstPersonReadabilityMotion",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
