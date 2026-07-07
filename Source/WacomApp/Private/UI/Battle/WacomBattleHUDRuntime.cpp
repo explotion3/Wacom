@@ -475,11 +475,6 @@ void FWacomBattleHUDRuntime::RefreshCommandBarFromCurrentSnapshot()
 	GetCommandBarPresenter().RefreshEmpty();
 }
 
-void FWacomBattleHUDRuntime::OnCardClickedByUser(const FGuid& CardInstanceId)
-{
-	GetTargetingController().HandleCardClicked(CardInstanceId);
-}
-
 void FWacomBattleHUDRuntime::OnEnemyPartClickedByUser(
 	const FWacomInteractionTargetHandle& TargetHandle)
 {

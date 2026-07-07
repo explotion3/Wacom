@@ -7,70 +7,12 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Snapshots/EnemySnapshot.h"
-#include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 
 FWacomBattleHUDTargetingController::FWacomBattleHUDTargetingController(
 	FWacomBattleHUDRuntime& InRuntime)
 	: Runtime(InRuntime)
 {
-}
-
-void FWacomBattleHUDTargetingController::HandleCardClicked(
-	const FGuid& CardInstanceId)
-{
-	Runtime.HideCardDetailPanel();
-
-	if (!Runtime.CanSubmitPlayerActionCommand())
-	{
-		return;
-	}
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	if (Runtime.GetUIState() == EBattleUIState::TargetSelect
-		&& CardInstanceId == Runtime.GetPendingTargetingCardId())
-	{
-		CancelTargetSelect();
-		return;
-	}
-
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	const FHandCardSnapshot* Card = nullptr;
-	for (const FHandCardSnapshot& Candidate : Snapshot.Hand.Cards)
-	{
-		if (Candidate.InstanceId == CardInstanceId)
-		{
-			Card = &Candidate;
-			break;
-		}
-	}
-
-	if (!Card || !Card->Definition || !Card->bIsPlayable)
-	{
-		return;
-	}
-
-	switch (WacomBattleCardPresentation::ResolveCardLayerInteractionIntent(*Card))
-	{
-	case EWacomFirstPersonCardInteractionIntent::CommitNoTarget:
-		Runtime.SubmitPlayCard(CardInstanceId, FGuid());
-		break;
-
-	case EWacomFirstPersonCardInteractionIntent::AimWorldTarget:
-		Runtime.SetPendingTargetingCardId(CardInstanceId);
-		Runtime.SetUIState(EBattleUIState::TargetSelect);
-		break;
-
-	case EWacomFirstPersonCardInteractionIntent::AimCardTarget:
-	case EWacomFirstPersonCardInteractionIntent::DragToDropTarget:
-	default:
-		break;
-	}
 }
 
 void FWacomBattleHUDTargetingController::HandleEnemyPartClicked(

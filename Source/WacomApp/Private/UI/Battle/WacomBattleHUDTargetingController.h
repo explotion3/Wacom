@@ -13,7 +13,6 @@ class FWacomBattleHUDTargetingController
 public:
 	explicit FWacomBattleHUDTargetingController(FWacomBattleHUDRuntime& InRuntime);
 
-	void HandleCardClicked(const FGuid& CardInstanceId);
 	void HandleEnemyPartClicked(const FWacomInteractionTargetHandle& TargetHandle);
 	void CancelTargetSelect();
 	FBattleTargetSelectionView BuildTargetSelectionView() const;

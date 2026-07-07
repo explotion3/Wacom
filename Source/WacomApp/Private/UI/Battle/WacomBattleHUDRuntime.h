@@ -158,7 +158,6 @@ public:
 	void RefreshCommandBarFromSnapshot(const FBattleSnapshot& Snapshot);
 	void RefreshCommandBarFromCurrentSnapshot();
 
-	void OnCardClickedByUser(const FGuid& CardInstanceId);
 	void OnEnemyPartClickedByUser(const FWacomInteractionTargetHandle& TargetHandle);
 	void OnWaitRequested();
 	void OnEndTurnRequested();

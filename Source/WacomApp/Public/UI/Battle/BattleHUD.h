@@ -277,10 +277,10 @@ public:
 	// 子 Widget 通过这些方法通知 HUD 玩家意图。HUD 按状态机决策。
 
 	/**
-	 * 旧点击手牌入口，仅保留给尚未迁移的 WBP / 自动化兼容。
+	 * 旧点击手牌入口，已收口为空兼容入口，避免旧资产加载断裂。
 	 * 新 Battle hand 交互应走 first-person card layer drag / release 或数字快捷键启动拖拽。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (DeprecatedFunction, DeprecationMessage = "OnCardClickedByUser 是旧 2D/点击手牌兼容入口；新手牌交互请通过 first-person card layer drag/release 或 TryStartFirstPersonBattleHandDragByIndex。", ToolTip = "旧点击手牌兼容入口。新 Battle hand 交互请走 first-person card layer drag/release；保留该函数仅为兼容尚未迁移的 WBP / 自动化。"))
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (DeprecatedFunction, DeprecationMessage = "OnCardClickedByUser 已不再提交战斗命令；新手牌交互请通过 first-person card layer drag/release 或 TryStartFirstPersonBattleHandDragByIndex。", ToolTip = "旧点击手牌兼容空入口。不会提交战斗命令；新 Battle hand 交互请走 first-person card layer drag/release。"))
 	void OnCardClickedByUser(const FGuid& CardInstanceId);
 
 	/**

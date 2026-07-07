@@ -381,9 +381,9 @@ void UBattleHUD::SetUIState(EBattleUIState NewState)
 	GetBattleHUDRuntime().SetUIState(NewState);
 }
 
-void UBattleHUD::OnCardClickedByUser(const FGuid& CardInstanceId)
+void UBattleHUD::OnCardClickedByUser(const FGuid& /*CardInstanceId*/)
 {
-	GetBattleHUDRuntime().OnCardClickedByUser(CardInstanceId);
+	// Deprecated compatibility shim. First-person hand submission is handled by drag/release.
 }
 
 void UBattleHUD::OnEnemyPartClickedByUser(const FWacomInteractionTargetHandle& TargetHandle)
