@@ -367,7 +367,7 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 
 运行态 `EncounterId` 仍来自场景 Trigger 的 `PersistentId`，不要用 `EncounterDefinitionId` 替代撤离重入进度 key。同一个 Encounter 资产可被多个 Trigger 复用；只要 Trigger `PersistentId` 不同，它们的 `BattleProgress` 就彼此独立。
 
-战斗结束时，GameMode 先处理战斗 UI 和场景 Trigger，再调用 `OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)` 做 Run 结算。
+战斗结束时，GameMode 先处理战斗 UI 和场景 Trigger，再调用 `OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)` 做 Run 结算。旧 `OnBattleFinished(Packet)` 只作为 Blueprint / 调试兼容包装保留，并已标记 deprecated；它会以 `NAME_None` 结算，不能记录或清理具体 Trigger 的撤离进度。
 
 Outcome 分支：
 

@@ -685,7 +685,10 @@ public:
 	bool BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const;
 
 	/**
-	 * 一场战斗结束时由 GameMode::ExitBattle 调用。
+	 * 旧 no-trigger 兼容包装：等同于 OnBattleFinishedFromTrigger(Packet, NAME_None)。
+	 *
+	 * 正式 GameMode / C++ 测试必须使用 OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)，
+	 * 否则撤离进度和真胜利清理都无法绑定到场景 Trigger。
 	 *
 	 * 战斗结果回传处理：
 	 *   - Outcome 处理：
@@ -701,11 +704,13 @@ public:
 	 *   - 战外不触发失败（bRunActive 保持 true）
 	 *   - 仅累计伤口压力
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run",
+		meta = (DeprecatedFunction,
+			DeprecationMessage = "请改用 OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)。无 Trigger 的兼容入口会把战斗结算落到 NAME_None，无法记录或清理场景 Trigger 进度。"))
 	void OnBattleFinished(const FBattleResultPacket& Packet);
 
 	/**
-	 * OnBattleFinished 扩展版：传入触发战斗的 Trigger 持久化 ID，让 Run 层能：
+	 * 正式战斗结束入口：传入触发战斗的 Trigger 持久化 ID，让 Run 层能：
 	 *   - 撤离时写 RunState.BattleProgress[TriggerId]
 	 *   - 真胜利时清 RunState.BattleProgress[TriggerId]
 	 *

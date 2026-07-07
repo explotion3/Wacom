@@ -13,6 +13,7 @@
 #include "Enemies/EnemyDefinition.h"
 
 #include "UObject/StrongObjectPtr.h"
+#include "UObject/UnrealType.h"
 
 /**
  * Stage 1.2：BattleResultPacket → URunSession::OnBattleFinished 战外结算测试。
@@ -71,6 +72,28 @@ namespace
 		}
 		return Count;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunResultNoTriggerWrapperDeprecatedSpec,
+	"Wacom.Run.Result.NoTriggerWrapperDeprecated",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunResultNoTriggerWrapperDeprecatedSpec::RunTest(const FString& /*Parameters*/)
+{
+	UFunction* Function = URunSession::StaticClass()->FindFunctionByName(
+		GET_FUNCTION_NAME_CHECKED(URunSession, OnBattleFinished));
+	if (!TestNotNull(TEXT("OnBattleFinished function exists"), Function))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("No-trigger wrapper is deprecated for Blueprint callers"),
+		Function->HasMetaData(TEXT("DeprecatedFunction")));
+	TestTrue(TEXT("Deprecation message points to trigger-aware entry"),
+		Function->GetMetaData(TEXT("DeprecationMessage")).Contains(TEXT("OnBattleFinishedFromTrigger")));
+
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
