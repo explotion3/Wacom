@@ -16,6 +16,14 @@ namespace
 	const FName RunFirstPersonCardLayerSuppressedSourceId =
 		WacomFirstPersonCardLayerSourceIds::RunMenuSuppressed();
 
+	EWacomFirstPersonCardLayerFrameCommitMode ResolveRunCardLayerFrameCommitMode(
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+	{
+		return Frame.HasPresentationHints()
+			? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
+			: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
+	}
+
 	EWacomFirstPersonCardInteractionIntent ResolveRunFirstPersonCardInteractionIntent(
 		ERunCardWorkspaceKind WorkspaceKind)
 	{
@@ -537,10 +545,7 @@ UWacomRunFirstPersonCardSourceComponent::BuildRunHandEnteredPresentationFrame(
 		DetermineRunHandEnteredCardIds(Anchor, SourceId, Frame.Entries);
 	Frame.TransitionHints =
 		BuildRunHandEnteredTransitionHints(Frame.Entries, RunHandEnteredCardIds);
-	Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
-	Frame.CommitMode = Frame.ShouldApplyAsPresentationFrame()
-		? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
-		: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
+	Frame.CommitMode = ResolveRunCardLayerFrameCommitMode(Frame);
 	return Frame;
 }
 
@@ -550,7 +555,6 @@ UWacomRunFirstPersonCardSourceComponent::BuildSuppressedPresentationFrame() cons
 	FWacomFirstPersonCardLayerPresentationFrame Frame;
 	Frame.SourceId = RunFirstPersonCardLayerSuppressedSourceId;
 	Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::Suppressed;
-	Frame.bApplyAsPresentationFrame = true;
 	return Frame;
 }
 

@@ -6,6 +6,14 @@
 
 namespace
 {
+	EWacomFirstPersonCardLayerFrameCommitMode ResolveBattleHandPresentationFrameCommitMode(
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+	{
+		return Frame.HasPresentationHints()
+			? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
+			: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
+	}
+
 	bool ContainsHandCardIdForBattleHandPresentation(
 		const FBattleSnapshot& Snapshot,
 		const FGuid& CardInstanceId)
@@ -239,10 +247,7 @@ FWacomBattleHandPresentationController::ConsumePendingHandAnchorEnterFrame()
 		Hint.SequenceCount = FMath::Max(1, SequenceCount);
 		Frame.TransitionHints.Add(Hint);
 	}
-	Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
-	Frame.CommitMode = Frame.ShouldApplyAsPresentationFrame()
-		? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
-		: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
+	Frame.CommitMode = ResolveBattleHandPresentationFrameCommitMode(Frame);
 	MarkSnapshotPresented(PendingHandAnchorEnterSnapshot);
 	ClearPendingHandAnchorEnterFrame();
 	return Frame;
@@ -272,11 +277,8 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 		Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(FrameSnapshot);
 		Frame.TransitionHints = BuildTransitionHints(Baseline, FrameSnapshot);
 		Frame.FeedbackHints = BuildFeedbackHints(FrameSnapshot);
-		Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
-		Frame.CommitMode = Frame.ShouldApplyAsPresentationFrame()
-			? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
-			: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
-		if (Frame.ShouldApplyAsPresentationFrame())
+		Frame.CommitMode = ResolveBattleHandPresentationFrameCommitMode(Frame);
+		if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame)
 		{
 			RecordSubmittedTransitionFrame();
 		}
@@ -306,16 +308,13 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 	Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
 	Frame.TransitionHints = TransitionHints;
 	Frame.FeedbackHints = FeedbackHints;
-	Frame.bApplyAsPresentationFrame = Frame.HasPresentationHints();
-	Frame.CommitMode = Frame.ShouldApplyAsPresentationFrame()
-		? EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
-		: EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
-	if (Frame.ShouldApplyAsPresentationFrame())
+	Frame.CommitMode = ResolveBattleHandPresentationFrameCommitMode(Frame);
+	if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame)
 	{
 		RecordSubmittedTransitionFrame();
 	}
 	MarkSnapshotPresented(Snapshot);
-	if (Frame.ShouldApplyAsPresentationFrame())
+	if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame)
 	{
 		ClearPendingTransitionEvents();
 	}
