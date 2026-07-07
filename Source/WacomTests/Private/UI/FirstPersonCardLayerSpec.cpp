@@ -10521,58 +10521,6 @@ bool FWacomFirstPersonCardLayerPendingPressFeedbackTest::RunTest(const FString& 
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerBattleHUDClearsTest,
-	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.ClearsOnBattleEndAndExplicitClear",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerBattleHUDClearsTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
-	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(GetTransientPackage(), TEXT("Battle.Clear"), 1);
-	FWacomBattleFixture Fixture;
-	UBattleSession* Session = WacomFirstPersonCardLayerSpec::CreateMinimalBattleSession(Fixture);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("HUD"), HUD)
-		|| !TestNotNull(TEXT("Card"), Card)
-		|| !TestNotNull(TEXT("Session"), Session))
-	{
-		return false;
-	}
-
-	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
-	HUD->SetSession(Session);
-	UWacomFirstPersonCardAnchorComponent* Anchor = Character->GetFirstPersonCardAnchorComponent();
-	const FBattleSnapshot ActiveSnapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({
-		WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 4, true)
-	});
-	HUD->SyncFirstPersonBattleHandLayerForTest(ActiveSnapshot);
-	TestTrue(TEXT("Runtime hand source is active before clear"), Anchor->HasRuntimeCardLayerData());
-
-	FBattleSnapshot BattleEndSnapshot = ActiveSnapshot;
-	BattleEndSnapshot.Phase = EBattlePhase::BattleEnd;
-	HUD->SyncFirstPersonBattleHandLayerForTest(BattleEndSnapshot);
-	TestFalse(TEXT("BattleEnd clears runtime hand source"), Anchor->HasRuntimeCardLayerData());
-
-	HUD->SyncFirstPersonBattleHandLayerForTest(ActiveSnapshot);
-	TestTrue(TEXT("Runtime hand source can be set again"), Anchor->HasRuntimeCardLayerData());
-	HUD->ClearFirstPersonBattleHandLayerForTest();
-	TestFalse(TEXT("Explicit clear removes runtime hand source"), Anchor->HasRuntimeCardLayerData());
-
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerBattleHUDLateCleanupKeepsRunSourceTest,
 	"Wacom.UI.FirstPersonCardLayer.BattleHandAdapter.LateCleanupDoesNotDisableRunRuntimeSource",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

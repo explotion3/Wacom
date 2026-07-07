@@ -150,6 +150,16 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 	TestTrue(TEXT("HUD bridge enables first-person hand interaction"),
 		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
+	FBattleSnapshot BattleEndSnapshot = Snapshot;
+	BattleEndSnapshot.Phase = EBattlePhase::BattleEnd;
+	HUD->SyncFirstPersonBattleHandLayerForTest(BattleEndSnapshot);
+	TestFalse(TEXT("BattleEnd clears first-person battle hand source"), Anchor->HasRuntimeCardLayerData());
+
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+	TestTrue(TEXT("HUD bridge can restore runtime hand after BattleEnd clear"), Anchor->HasRuntimeCardLayerData());
+	TestTrue(TEXT("HUD bridge restores first-person hand interaction"),
+		Anchor->IsFirstPersonCardLayerInteractionEnabled());
+
 	TestTrue(TEXT("Battle camera activates for drag override"), BattleCamera->ActivateBattleCameraLook());
 	FWacomFirstPersonCardPointerView PointerView;
 	PointerView.CardInstanceId = CardId;
