@@ -92,7 +92,7 @@ Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.
 
 `UWacomShopScreen` 保留 Screen 生命周期、WBP 绑定、cached shop snapshot、商品行创建和购买意图入口；shop snapshot revision / offer row signature dirty gate 由 `FWacomShopRefreshGate` 承接，商品行的 identity reconcile、排序和移除由 `FWacomShopOfferRowListReconciler` 承接，金币变化仍通过 `CurrentGold` 进入 signature 来刷新购买可用状态。
 
-`UWacomRunEventScreen` 保留 Screen 生命周期、WBP 绑定、cached choices、支付 Zone 映射和玩家意图入口；选项行和支付 DropTarget 的 identity reconcile、排序、复用和移除由 `FWacomRunEventChoiceListReconciler` 承接，稳定键为 `ChoiceId`，避免刷新事件 snapshot 时重建动态 WBP 实例或丢失支付 Zone 表现状态。
+`UWacomRunEventScreen` 保留 Screen 生命周期、WBP 绑定、cached choices、支付 Zone 映射和玩家意图入口；选项行和支付 DropTarget 的 identity reconcile、排序、复用和移除由 `FWacomRunEventChoiceListReconciler` 承接，稳定键为 `ChoiceId`，避免刷新事件 snapshot 时重建动态 WBP 实例或丢失支付 Zone 表现状态。卡牌支付 drop 的 resolve / submit 由 `FWacomRunEventPaymentDropFlow` 承接；Screen 只提供当前 RunSession、cached choices、Zone 映射、Toast 和结束状态，并在 flow 返回后记录调试摘要。
 
 ## §6 卡牌展示与 Builder
 

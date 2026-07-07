@@ -229,7 +229,6 @@ private:
 	bool bDidEndRunEvent = false;
 
 	void RefreshPaymentLeaseFromCachedChoices();
-	bool FindPaymentChoiceForZone(FName ZoneId, FRunEventChoiceSnapshot& OutChoice) const;
 	FString BuildPaymentZoneMappingDebugSummary() const;
 	void RecordPaymentDropResolveDebug(const FWacomRunMenuCardDropResolveResult& Result) const;
 	void RecordPaymentDropSubmitDebug(const FWacomRunMenuCardDropResolveResult& Result) const;
