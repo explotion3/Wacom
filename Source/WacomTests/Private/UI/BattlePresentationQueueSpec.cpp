@@ -18,6 +18,7 @@
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "BattleHUDTestHarness.h"
 
 #include "Engine/Engine.h"
@@ -79,6 +80,26 @@ namespace WacomBattlePresentationQueueSpec
 			}
 		}
 		return FWacomInteractionTargetHandle();
+	}
+
+	FWacomFirstPersonCardDragView MakeNoTargetReleaseDragView(const FGuid& CardInstanceId)
+	{
+		FWacomFirstPersonCardDragView DragView;
+		DragView.CardInstanceId = CardInstanceId;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::ArmedForCommit;
+		DragView.bCommitArmed = true;
+		DragView.PressScreenPosition = FVector2D(500.0f, 600.0f);
+		DragView.CurrentScreenPosition = FVector2D(540.0f, 590.0f);
+		DragView.PointerViewportPosition = DragView.CurrentScreenPosition;
+		DragView.bHasPointerViewportPosition = true;
+		return DragView;
+	}
+
+	void ReleaseNoTargetCardForTest(UWacomBattleHUDDetailTest& HUD, const FGuid& CardInstanceId)
+	{
+		HUD.HandleFirstPersonCardDragReleasedForTest(
+			CardInstanceId,
+			MakeNoTargetReleaseDragView(CardInstanceId));
 	}
 }
 
@@ -230,9 +251,9 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestTrue(TEXT("Target submit block uses PlayCard header"),
 		HUD->GetBattleCombatLogHistoryForTest().Last().HeaderText.ToString().Contains(TEXT("打出")));
 
-	HUD->OnCardClickedByUser(NoTargetCardId);
-	TestEqual(TEXT("No target card can submit while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
-	TestFalse(TEXT("No target submit clears pending while presenting"), HUD->GetPendingTargetingCardId().IsValid());
+	WacomBattlePresentationQueueSpec::ReleaseNoTargetCardForTest(*HUD, NoTargetCardId);
+	TestEqual(TEXT("No-target release can submit while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestFalse(TEXT("No-target release clears pending while presenting"), HUD->GetPendingTargetingCardId().IsValid());
 	TestTrue(TEXT("Presentation queue still has appended events after no-target card"), HUD->IsBattlePresentationBusy());
 	TestEqual(TEXT("No-target submit appends second presentation stack entry"), HUD->GetPresentationStackEntryCountForTest(), 2);
 	TestEqual(TEXT("Second stack entry is newest card"), HUD->GetPresentationStackEntriesForTest()[1].CardInstanceId, NoTargetCardId);
@@ -248,8 +269,8 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestFalse(TEXT("Command bar end turn disabled while pending"), CommandBar->IsEndTurnCommandEnabledForTest());
 
 	const int32 VersionBeforeBlockedCard = Session->BuildSnapshot().Version;
-	HUD->OnCardClickedByUser(NoTargetCardId);
-	TestEqual(TEXT("Pending turn boundary blocks further card submits"), Session->BuildSnapshot().Version, VersionBeforeBlockedCard);
+	WacomBattlePresentationQueueSpec::ReleaseNoTargetCardForTest(*HUD, NoTargetCardId);
+	TestEqual(TEXT("Pending turn boundary blocks further card releases"), Session->BuildSnapshot().Version, VersionBeforeBlockedCard);
 	TestEqual(TEXT("Pending turn boundary does not append another stack entry"), HUD->GetPresentationStackEntryCountForTest(), 2);
 
 	while (HUD->IsBattlePresentationBusy() && !HUD->GetPresentationStackEntriesForTest().IsEmpty()
@@ -486,8 +507,8 @@ bool FWacomUIBattlePresentationQueueBlocksPlayerActionOutsidePlayerPhaseSpec::Ru
 		}
 	}
 	TestTrue(TEXT("Filler card exists"), FillerCardId.IsValid());
-	HUD->OnCardClickedByUser(FillerCardId);
-	TestEqual(TEXT("Card click does not submit during pending knockdown"), Session->BuildSnapshot().Version, VersionBeforeWait);
+	WacomBattlePresentationQueueSpec::ReleaseNoTargetCardForTest(*HUD, FillerCardId);
+	TestEqual(TEXT("Card release does not submit during pending knockdown"), Session->BuildSnapshot().Version, VersionBeforeWait);
 
 	return true;
 }
