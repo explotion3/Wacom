@@ -83,7 +83,6 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | `OnRunStateChangedNative` 粗粒度广播 | 组合事务已收口为事务末尾一次广播；普通 public mutation 仍保持成功后一次广播 | 订阅方仍按粗粒度事件幂等刷新；新增组合 Run mutation 时补 `Wacom.Run.NotificationCoalescing` 测试 |
 | BackpackScreen Presenter 边界 | Presenter 已抽展示计算；卡牌详情面板生命周期 / source guard / 定位已抽到 App-private detail controller；snapshot refresh dirty gate、普通卡牌列表 reconcile 和 SpecialZone 区块 reconcile 已抽到 App-private helper；DropTarget 只转发拖拽意图，命令提交和确认框统一在 Screen | 如果 Screen 继续膨胀，优先审计顶部 stats / section title 刷新和命令 flow 边界；命令 flow 已有私有对象，先保持 Screen 作为玩家意图入口 |
 | RunEventScreen 剩余协调职责 | 选项行 / 支付 DropTarget identity reconcile 已抽到 `FWacomRunEventChoiceListReconciler`；payment drop resolve / submit 已抽到 `FWacomRunEventPaymentDropFlow`；menu lease request 构造已抽到 `FWacomRunEventPaymentLeaseBuilder`；debug view / summary 已抽到 `FWacomRunEventScreenDebugBuilder`；Screen 仍持有 cached choices、支付 Zone 映射、刷新提交和关闭流程 | 后续优先审计 cached choices 与支付 Zone 映射是否能形成更深的 presentation state 模块；保持 Screen 作为刷新、WBP 绑定和玩家意图入口 |
-| BattleHUD coordinator 过重 | HUD 私有 helper 已承接 scene enemy target、presentation、combat log、first-person hand 和 card detail；HUD 仍持有 Session 绑定、Snapshot fanout、命令入口、WBP 绑定、配置和 GC 引用 | 保留 HUD 作为战斗 UI Screen coordinator；后续修改私有 helper 时优先补 HUD 合同测试并复用 harness |
 | WacomApp Public UI API surface | 公开面已完成多轮分类和测试访问收口；当前剩余债务是 prototype / test-only surface、Blueprint-visible 制作面保守保留和资产审计前不删除 | 历史见 [Wacom_Public_Surface_And_Docs_History.md](./DevLog/Wacom_Public_Surface_And_Docs_History.md)；继续按小切片评估，不用“无 C++ 调用”作为删除依据 |
 
 <a id="techdebt-wacomapp-public-ui-api-surface"></a>
@@ -117,6 +116,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - 中毒触发时机，见 `WacomBattle.md §7`
 - 晕厥层数模型，见 `WacomBattle.md §9`
 - BattleHUD 创建职责已迁移到 `UWacomGameUIManagerSubsystem`
+- BattleHUD coordinator 过重已收口：`UBattleHUD` 保留为 Battle Screen façade，业务状态迁入 `FWacomBattleHUDRuntime`，命令、目标选择、Snapshot presentation、scene enemy、presentation、combat log、first-person hand 和 card detail 分别由 App-private runtime / controller / coordinator 承接；后续修改这些 helper 时优先补 HUD 合同测试并复用 `WacomTests/Private` harness。
 - Enhanced Input 入口已由 `UWacomInputContextCoordinatorSubsystem` 统一承接
 - 背包容量、A / B 容器、SpecialZone、负重区规则已在 `WacomRun.md §5` 正式化
 - RunEvent、Shop、AppToast 的基础链路已在 `WacomRun.md`、`WacomApp.md`、`WacomUI.md`、`WacomUIFoundation.md` 和 Data 专题文档正式化

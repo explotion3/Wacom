@@ -1943,7 +1943,7 @@ bool FWacomUIBattleHUDCardDetailPositionSpec::RunTest(const FString& /*Parameter
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDTargetSelectionViewSpec,
-	"Wacom.UI.Battle.BattleHUD.CommandFlow.TargetSelectionView",
+	"Wacom.UI.Battle.BattleHUD.TargetingController.TargetSelectionView",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Parameters*/)
@@ -2019,7 +2019,7 @@ bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Paramete
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardClickFlowSpec,
-	"Wacom.UI.Battle.BattleHUD.CommandFlow.CardClick",
+	"Wacom.UI.Battle.BattleHUD.CommandController.CardClick",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDCardClickFlowSpec::RunTest(const FString& /*Parameters*/)
@@ -2067,7 +2067,7 @@ bool FWacomUIBattleHUDCardClickFlowSpec::RunTest(const FString& /*Parameters*/)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec,
-	"Wacom.UI.Battle.BattleHUD.CommandFlow.WaitEndTurnCancelTargetSelect",
+	"Wacom.UI.Battle.BattleHUD.CommandController.WaitEndTurnCancelTargetSelect",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec::RunTest(const FString& /*Parameters*/)

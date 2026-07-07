@@ -2,59 +2,26 @@
 
 #include "UI/Battle/BattleHUD.h"
 
-#define LOCTEXT_NAMESPACE "WacomBattleHUD"
-#include "UI/Battle/ActionPanel.h"
-#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
-#include "UI/Battle/EquipmentBar.h"
-#include "UI/Battle/BattleCombatLogFeedWidget.h"
-#include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/PlayerStatusBar.h"
-#include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
-#include "UI/Battle/WacomBattlePresentationTargetRegistry.h"
-#include "UI/Battle/WacomBattlePresentationTargetCue.h"
-#include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
-#include "UI/Battle/WacomBattleHUDCardDetailController.h"
-#include "UI/Battle/WacomBattleHUDCombatLogController.h"
-#include "UI/Battle/WacomBattleHUDCommandFlow.h"
-#include "UI/Battle/WacomBattleHUDEventFlow.h"
-#include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
-#include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
-#include "UI/Battle/WacomBattleHUDTargetingFlow.h"
-#include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
-#include "UI/Battle/WacomKnockdownChoiceDialog.h"
-#include "UI/Card/WacomCardDetailPanel.h"
-#include "UI/Card/WacomCardPresentationBuilder.h"
-#include "UI/Common/PileCountView.h"
-#include "UI/Foundation/WacomGameUIManagerSubsystem.h"
-#include "UI/Foundation/WacomUITags.h"
-
-#include "Blueprint/WidgetTree.h"
-#include "Blueprint/WidgetLayoutLibrary.h"
-#include "Components/CanvasPanelSlot.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
-#include "Engine/World.h"
-#include "Engine/GameViewportClient.h"
-#include "GameFramework/Actor.h"
-#include "GameFramework/PlayerController.h"
-#include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "InputCoreTypes.h"
-
-#include "Input/UIActionBindingHandle.h"
 #include "Input/CommonUIInputSettings.h"
+#include "UI/Battle/ActionPanel.h"
+#include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
+#include "UI/Battle/BattlePresentationStackWidget.h"
+#include "UI/Battle/EquipmentBar.h"
+#include "UI/Battle/PlayerStatusBar.h"
+#include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
+#include "UI/Battle/WacomBattleHUDCardDetailController.h"
+#include "UI/Battle/WacomBattleHUDRuntime.h"
+#include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Common/PileCountView.h"
 
-#include "Events/BattleEvent.h"
-#include "Actors/WacomBattleEnemyActor.h"
-#include "Session/BattleSession.h"
-#include "Snapshots/BattleSnapshot.h"
-#include "Types/WacomEnums.h"
+#include "Blueprint/WidgetTree.h"
 
 namespace
 {
-	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
-
 	const TCHAR* LexToString(EWacomBattleCardDropIntentKind IntentKind)
 	{
 		switch (IntentKind)
@@ -112,19 +79,6 @@ namespace
 		default: return TEXT("Unknown");
 		}
 	}
-
-	FText BuildDiscardPileCountDisplayText(const FPileCountsSnapshot& PileCounts)
-	{
-		if (PileCounts.PlayedCount <= 0)
-		{
-			return FText::AsNumber(PileCounts.DiscardCount);
-		}
-
-		return FText::Format(
-			LOCTEXT("DiscardPileWithPlayedCountFormat", "{0}+{1}"),
-			FText::AsNumber(PileCounts.DiscardCount),
-			FText::AsNumber(PileCounts.PlayedCount));
-	}
 }
 
 FString FWacomBattleCardDropResolveResult::ToDebugString() const
@@ -142,79 +96,50 @@ FString FWacomBattleCardDropResolveResult::ToDebugString() const
 		*TargetValidationDebugSummary);
 }
 
-UBattleHUD::~UBattleHUD() = default;
+UBattleHUD::~UBattleHUD()
+{
+	delete BattleHUDRuntime;
+	BattleHUDRuntime = nullptr;
+}
+
+FWacomBattleHUDRuntime& UBattleHUD::GetBattleHUDRuntime()
+{
+	if (!BattleHUDRuntime)
+	{
+		BattleHUDRuntime = new FWacomBattleHUDRuntime(*this);
+	}
+	return *BattleHUDRuntime;
+}
+
+const FWacomBattleHUDRuntime& UBattleHUD::GetBattleHUDRuntime() const
+{
+	return const_cast<UBattleHUD*>(this)->GetBattleHUDRuntime();
+}
 
 void UBattleHUD::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
-	// Widget Tree 尚未构造，ChildBattleWidgets 登记移到 NativeConstruct。
 }
 
 void UBattleHUD::NativeConstruct()
 {
 	Super::NativeConstruct();
-
-	if (!CardDetailPanelClass)
-	{
-		if (UClass* LoadedPanelClass = LoadClass<UWacomCardDetailPanel>(nullptr, CardDetailPanelPath))
-		{
-			CardDetailPanelClass = LoadedPanelClass;
-		}
-		else
-		{
-			CardDetailPanelClass = UWacomCardDetailPanel::StaticClass();
-		}
-	}
-
-	// 此时 RebuildWidget 已执行，BindWidget 字段都填好了。
-	// 登记子 BattleWidget，让基类 SetSession / RefreshFromSnapshot 能递归到它们。
-	ChildBattleWidgets.Reset();
-	if (PlayerStatusBar) { ChildBattleWidgets.Add(PlayerStatusBar); }
-	if (ActionPanel)     { ChildBattleWidgets.Add(ActionPanel); }
-	if (EquipmentBar)    { ChildBattleWidgets.Add(EquipmentBar); }
-	if (CombatLogFeed)   { ChildBattleWidgets.Add(CombatLogFeed); }
-	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
-
-	// 如果 Session 在 RebuildWidget 之前就被 SetSession 过了，
-	// 子 Widget 还没拿到 Session。这里补一次。
-	if (UBattleSession* S = GetSession())
-	{
-		for (const TObjectPtr<UWacomBattleWidgetBase>& Child : ChildBattleWidgets)
-		{
-			if (Child) { Child->SetSession(S); }
-		}
-		RefreshFromSnapshot(S->BuildSnapshot());
-	}
+	GetBattleHUDRuntime().NativeConstruct();
 }
 
 void UBattleHUD::NativeDestruct()
 {
-	bBattleInputReady = true;
-	bFirstPersonBattleHandSuppressedForEntry = false;
-	if (PresentationCoordinator)
+	if (BattleHUDRuntime)
 	{
-		PresentationCoordinator->Shutdown();
-		PresentationCoordinator.Reset();
+		BattleHUDRuntime->NativeDestruct();
 	}
-	ClearFirstPersonBattleHandLayer();
-	ClearBattleEnemyPartWorldTargets();
-	ClearBattlePresentationTargetRegistry();
-	HideCardDetailPanel();
-	GetCardDetailController().RemoveFirstPersonPanelFromViewport();
-	bHasLastBattleSnapshot = false;
-	LastBattleSnapshot = FBattleSnapshot();
-	GetFirstPersonHandBridge().ClearTransitionSnapshot();
-	ClearPendingFirstPersonCardTransitionEvents();
-	ClearBattleSceneEnemyPartHoverProbe(TEXT("HUDDestruct"));
 	Super::NativeDestruct();
 }
 
 void UBattleHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
-	TickCardDetailMotion(InDeltaTime);
-	TickBattleSceneEnemyPartHoverProbe(InDeltaTime);
-	GetFirstPersonHandBridge().TickPendingPresentationFrames(InDeltaTime);
+	GetBattleHUDRuntime().NativeTick(InDeltaTime);
 }
 
 FReply UBattleHUD::NativeOnMouseButtonUp(
@@ -261,500 +186,461 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 
 void UBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
-	HideCardDetailPanel();
-	LastBattleSnapshot = Snap;
-	bHasLastBattleSnapshot = true;
-	SyncFirstPersonBattleHandLayer(Snap);
-
-	// 战斗结束 → 切到 BattleEnd 状态，并广播一次
-	if (Snap.Phase == EBattlePhase::BattleEnd)
-	{
-		ClearPendingFirstPersonCardTransitionEvents();
-		ClearBattlePresentationStack();
-		ClearPendingTurnBoundaryCommand();
-		ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
-		bHasLastBattleSnapshot = false;
-		GetFirstPersonHandBridge().ClearTransitionSnapshot();
-		SetUIState(EBattleUIState::BattleEnd);
-
-		if (!bHasBroadcastBattleEnd)
-		{
-			bHasBroadcastBattleEnd = true;
-			OnBattleEndedNative.Broadcast(Snap.Outcome);
-		}
-	}
-
-	// 手动刷新 PileCountView（它们不是 BattleWidget，不走递归）
-	if (DrawPileView)    { DrawPileView->SetCount(Snap.PileCounts.DrawCount); }
-	if (DiscardPileView)
-	{
-		DiscardPileView->SetCount(Snap.PileCounts.DiscardCount);
-		DiscardPileView->SetCountDisplayText(BuildDiscardPileCountDisplayText(Snap.PileCounts));
-	}
-	if (ExhaustPileView) { ExhaustPileView->SetCount(Snap.PileCounts.ExhaustCount); }
-
-	// 递归下发 Snapshot 给子 Widget
-	Super::NativeRefreshFromSnapshot(Snap);
-	SyncBattleEnemyPartWorldTargets(Snap);
+	GetBattleHUDRuntime().NativeRefreshFromSnapshot(Snap);
 }
 
 void UBattleHUD::NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession)
 {
 	Super::NativeOnSessionChanged(OldSession, NewSession);
-	if (OldSession != NewSession)
-	{
-		bBattleInputReady = true;
-		bFirstPersonBattleHandSuppressedForEntry = false;
-		ClearBattlePresentationQueue();
-		ClearBattlePresentationStack();
-		ClearPendingTurnBoundaryCommand();
-		ClearFirstPersonBattleHandLayer();
-		SetBattleSceneEnemyHosts({});
-		ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
-		ClearPendingFirstPersonCardTransitionEvents();
-		ClearBattlePresentationTargetRegistry();
-	}
-
-	// 新 Session 接入时，重置状态机到 Idle。
-	UIState = EBattleUIState::Idle;
-	bBattleInputReady = true;
-	bFirstPersonBattleHandSuppressedForEntry = false;
-	PendingTargetingCardId.Invalidate();
-	bHasBroadcastBattleEnd = false;
-	bHasLastBattleSnapshot = false;
-	LastBattleSnapshot = FBattleSnapshot();
-	GetFirstPersonHandBridge().ClearTransitionSnapshot();
-	ClearPendingFirstPersonCardTransitionEvents();
-	HideCardDetailPanel();
-	GetCombatLogController().Clear();
-	ClearBattlePresentationStack();
-	ClearPendingTurnBoundaryCommand();
-	ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
-
-	if (NewSession)
-	{
-		ConsumeAndLogEvents();
-	}
+	GetBattleHUDRuntime().NativeOnSessionChanged(OldSession, NewSession);
 }
 
 TOptional<FUIInputConfig> UBattleHUD::GetDesiredInputConfig() const
 {
-	// All：鼠标可见 + 游戏输入透传。这样 UI 可点击，同时 Controller 战斗快捷键仍工作。
 	return FUIInputConfig(ECommonInputMode::All, EMouseCaptureMode::NoCapture);
+}
+
+void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUIState NewState)
+{
+	GetBattleHUDRuntime().NativeOnUIStateChanged(NewState);
+}
+
+void UBattleHUD::RebuildChildBattleWidgetsForRuntime()
+{
+	ChildBattleWidgets.Reset();
+	if (PlayerStatusBar) { ChildBattleWidgets.Add(PlayerStatusBar); }
+	if (ActionPanel) { ChildBattleWidgets.Add(ActionPanel); }
+	if (EquipmentBar) { ChildBattleWidgets.Add(EquipmentBar); }
+	if (CombatLogFeed) { ChildBattleWidgets.Add(CombatLogFeed); }
+	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
+
+	if (UBattleSession* CurrentSession = GetSession())
+	{
+		for (const TObjectPtr<UWacomBattleWidgetBase>& Child : ChildBattleWidgets)
+		{
+			if (Child)
+			{
+				Child->SetSession(CurrentSession);
+			}
+		}
+	}
+}
+
+void UBattleHUD::RefreshChildBattleWidgetsFromSnapshotForRuntime(const FBattleSnapshot& Snap)
+{
+	Super::NativeRefreshFromSnapshot(Snap);
+}
+
+void UBattleHUD::BindFirstPersonCardLayerInteractionsForRuntime(
+	UWacomFirstPersonCardAnchorComponent& Anchor)
+{
+	UnbindFirstPersonCardLayerInteractionsForRuntime(Anchor);
+	Anchor.OnFirstPersonCardLayerCardHovered.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerCardHovered);
+	Anchor.OnFirstPersonCardLayerCardUnhovered.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerCardUnhovered);
+	Anchor.OnFirstPersonCardLayerHoveredCardLayoutUpdated.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated);
+	Anchor.OnFirstPersonCardLayerCardTargetHovered.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerCardTargetHovered);
+	Anchor.OnFirstPersonCardLayerCardTargetUnhovered.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerCardTargetUnhovered);
+	Anchor.OnFirstPersonCardLayerHoveredCardTargetUpdated.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerHoveredCardTargetUpdated);
+	Anchor.OnFirstPersonCardLayerDragStarted.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerDragStarted);
+	Anchor.OnFirstPersonCardLayerDragUpdated.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerDragUpdated);
+	Anchor.OnFirstPersonCardLayerDragReleased.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerDragReleased);
+	Anchor.OnFirstPersonCardLayerDragCancelled.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerDragCancelled);
+	Anchor.OnFirstPersonCardLayerPointerMoved.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerPointerMoved);
+	Anchor.OnFirstPersonCardLayerPointerLeft.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerPointerLeft);
+}
+
+void UBattleHUD::UnbindFirstPersonCardLayerInteractionsForRuntime(
+	UWacomFirstPersonCardAnchorComponent& Anchor)
+{
+	Anchor.OnFirstPersonCardLayerCardHovered.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerCardUnhovered.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerCardTargetHovered.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerCardTargetUnhovered.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerHoveredCardTargetUpdated.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerDragStarted.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerDragUpdated.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerDragReleased.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerDragCancelled.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerPointerMoved.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerPointerLeft.RemoveAll(this);
+}
+
+EBattleUIState UBattleHUD::GetUIState() const
+{
+	return GetBattleHUDRuntime().GetUIState();
+}
+
+bool UBattleHUD::IsInTargetSelect() const
+{
+	return GetBattleHUDRuntime().IsInTargetSelect();
+}
+
+FGuid UBattleHUD::GetPendingTargetingCardId() const
+{
+	return GetBattleHUDRuntime().GetPendingTargetingCardId();
 }
 
 FBattleTargetSelectionView UBattleHUD::BuildTargetSelectionView() const
 {
-	return FWacomBattleHUDTargetingFlow::BuildTargetSelectionView(*this);
+	return GetBattleHUDRuntime().BuildTargetSelectionView();
 }
 
 int32 UBattleHUD::GetBattleCombatLogBlockCount() const
 {
-	return GetCombatLogController().GetBlockCount();
+	return GetBattleHUDRuntime().GetBattleCombatLogBlockCount();
 }
 
 bool UBattleHUD::IsBattlePresentationBusy() const
 {
-	return PresentationCoordinator && PresentationCoordinator->IsBusy();
+	return GetBattleHUDRuntime().IsBattlePresentationBusy();
 }
 
 bool UBattleHUD::CanSubmitPlayerActionCommand() const
 {
-	if (!bBattleInputReady)
-	{
-		return false;
-	}
-	if (PresentationCoordinator && PresentationCoordinator->IsPresentationPlanBusy())
-	{
-		return false;
-	}
-	if (UIState == EBattleUIState::BattleEnd)
-	{
-		return false;
-	}
-	if (HasPendingTurnBoundaryCommand())
-	{
-		return false;
-	}
-
-	const UBattleSession* CurrentSession = GetSession();
-	if (!CurrentSession)
-	{
-		return false;
-	}
-
-	const FBattleSnapshot Snapshot = CurrentSession->BuildSnapshot();
-	return Snapshot.Phase == EBattlePhase::PlayerAction;
+	return GetBattleHUDRuntime().CanSubmitPlayerActionCommand();
 }
 
 void UBattleHUD::SetBattleInputReady(bool bReady)
 {
-	bBattleInputReady = bReady;
+	GetBattleHUDRuntime().SetBattleInputReady(bReady);
+}
+
+bool UBattleHUD::IsBattleInputReady() const
+{
+	return GetBattleHUDRuntime().IsBattleInputReady();
 }
 
 void UBattleHUD::SetFirstPersonBattleHandSuppressedForEntry(bool bSuppressed)
 {
-	if (bFirstPersonBattleHandSuppressedForEntry == bSuppressed)
-	{
-		return;
-	}
+	GetBattleHUDRuntime().SetFirstPersonBattleHandSuppressedForEntry(bSuppressed);
+}
 
-	bFirstPersonBattleHandSuppressedForEntry = bSuppressed;
-	if (bFirstPersonBattleHandSuppressedForEntry)
-	{
-		GetFirstPersonHandBridge().SuppressLayerForEntry();
-	}
+bool UBattleHUD::IsFirstPersonBattleHandSuppressedForEntry() const
+{
+	return GetBattleHUDRuntime().IsFirstPersonBattleHandSuppressedForEntry();
 }
 
 bool UBattleHUD::HasPendingTurnBoundaryCommand() const
 {
-	return PresentationCoordinator && PresentationCoordinator->HasPendingTurnBoundaryCommand();
+	return GetBattleHUDRuntime().HasPendingTurnBoundaryCommand();
 }
 
 FText UBattleHUD::GetPendingTurnBoundaryCommandText() const
 {
-	return PresentationCoordinator
-		? PresentationCoordinator->GetPendingTurnBoundaryCommandText()
-		: FText::GetEmpty();
+	return GetBattleHUDRuntime().GetPendingTurnBoundaryCommandText();
 }
 
 void UBattleHUD::SetBattleSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts)
 {
-	GetSceneEnemyTargetCoordinator().SetSceneEnemyHosts(InHosts);
+	GetBattleHUDRuntime().SetBattleSceneEnemyHosts(InHosts);
 }
 
 bool UBattleHUD::IsBattleSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const
 {
-	return GetSceneEnemyTargetCoordinator().IsSceneEnemyHostInCurrentRegistry(Host);
+	return GetBattleHUDRuntime().IsBattleSceneEnemyHostInCurrentRegistry(Host);
 }
 
 bool UBattleHUD::IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(
 	const FWacomInteractionTargetHandle& TargetHandle) const
 {
-	return GetSceneEnemyTargetCoordinator().IsWorldTargetInCurrentRegistry(TargetHandle);
+	return GetBattleHUDRuntime().IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(TargetHandle);
 }
-
-// ================ 状态机 ================
 
 void UBattleHUD::SetUIState(EBattleUIState NewState)
 {
-	if (UIState == NewState) { return; }
-	const EBattleUIState OldState = UIState;
-	UIState = NewState;
-	NativeOnUIStateChanged(OldState, NewState);
-	BP_OnUIStateChanged(OldState, NewState);
+	GetBattleHUDRuntime().SetUIState(NewState);
 }
-
-void UBattleHUD::NativeOnUIStateChanged(EBattleUIState /*OldState*/, EBattleUIState NewState)
-{
-	if (NewState != EBattleUIState::Idle)
-	{
-		HideCardDetailPanel();
-	}
-	if (NewState == EBattleUIState::BattleEnd)
-	{
-		ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
-	}
-
-	// 状态变化时，让 first-person hand / ActionPanel 重新刷一次（高亮/启用状态）。
-	UBattleSession* S = GetSession();
-	if (!S) { return; }
-	const FBattleSnapshot Snap = S->BuildSnapshot();
-	if (Snap.Phase == EBattlePhase::BattleEnd)
-	{
-		LastBattleSnapshot = FBattleSnapshot();
-		bHasLastBattleSnapshot = false;
-		GetFirstPersonHandBridge().ClearTransitionSnapshot();
-	}
-	else
-	{
-		LastBattleSnapshot = Snap;
-		bHasLastBattleSnapshot = true;
-	}
-	if (ActionPanel)  { ActionPanel->RefreshFromSnapshot(Snap); }
-	SyncFirstPersonBattleHandLayer(Snap);
-	SyncBattleEnemyPartWorldTargets(Snap);
-}
-
-UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor() const
-{
-	return GetFirstPersonHandBridge().ResolveAnchor();
-}
-
-UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveActiveFirstPersonCardAnchor() const
-{
-	return GetFirstPersonHandBridge().ResolveActiveAnchor();
-}
-
-void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
-{
-	GetFirstPersonHandBridge().SyncLayer(Snap);
-}
-
-void UBattleHUD::SyncFirstPersonBattleHandLayer(
-	const FBattleSnapshot& Snap,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
-{
-	GetFirstPersonHandBridge().SyncLayer(Snap, TransitionHints);
-}
-
-void UBattleHUD::SyncFirstPersonBattleHandLayer(
-	const FBattleSnapshot& Snap,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
-{
-	GetFirstPersonHandBridge().SyncLayer(Snap, TransitionHints, FeedbackHints);
-}
-
-void UBattleHUD::RefreshFromPresentationPhase(
-	const FBattleSnapshot& Snap,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
-{
-	HideCardDetailPanel();
-	LastBattleSnapshot = Snap;
-	bHasLastBattleSnapshot = true;
-
-	if (PlayerStatusBar) { PlayerStatusBar->RefreshFromSnapshot(Snap); }
-	if (ActionPanel) { ActionPanel->RefreshFromSnapshot(Snap); }
-	if (EquipmentBar) { EquipmentBar->RefreshFromSnapshot(Snap); }
-	if (CombatLogFeed) { CombatLogFeed->RefreshFromSnapshot(Snap); }
-	if (BattlePresentationStack) { BattlePresentationStack->RefreshFromSnapshot(Snap); }
-	if (DrawPileView) { DrawPileView->SetCount(Snap.PileCounts.DrawCount); }
-	if (DiscardPileView)
-	{
-		DiscardPileView->SetCount(Snap.PileCounts.DiscardCount);
-		DiscardPileView->SetCountDisplayText(BuildDiscardPileCountDisplayText(Snap.PileCounts));
-	}
-	if (ExhaustPileView) { ExhaustPileView->SetCount(Snap.PileCounts.ExhaustCount); }
-
-	SyncFirstPersonBattleHandLayer(Snap, TransitionHints, FeedbackHints);
-	SyncBattleEnemyPartWorldTargets(Snap);
-}
-
-void UBattleHUD::ClearFirstPersonBattleHandLayer()
-{
-	GetFirstPersonHandBridge().ClearLayer();
-}
-
-bool UBattleHUD::ShouldUseFirstPersonBattleHandLayer() const
-{
-	return GetFirstPersonHandBridge().ShouldUseFirstPersonBattleHandLayer();
-}
-
-bool UBattleHUD::ShouldEnableFirstPersonBattleHandInteraction() const
-{
-	return GetFirstPersonHandBridge().ShouldEnableFirstPersonBattleHandInteraction();
-}
-
-void UBattleHUD::BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
-{
-	GetFirstPersonHandBridge().BindLayerInteractions(Anchor);
-}
-
-void UBattleHUD::UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
-{
-	GetFirstPersonHandBridge().UnbindLayerInteractions(Anchor);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerCardHovered(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	GetFirstPersonHandBridge().HandleCardHovered(CardInstanceId, SlotView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerCardUnhovered(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	GetFirstPersonHandBridge().HandleCardUnhovered(CardInstanceId, SlotView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	GetFirstPersonHandBridge().HandleHoveredCardLayoutUpdated(CardInstanceId, SlotView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerCardTargetHovered(
-	const FWacomInteractionTargetHandle& CardTargetHandle,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	GetFirstPersonHandBridge().HandleCardTargetHovered(CardTargetHandle, SlotView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerCardTargetUnhovered(
-	const FWacomInteractionTargetHandle& CardTargetHandle,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	GetFirstPersonHandBridge().HandleCardTargetUnhovered(CardTargetHandle, SlotView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerHoveredCardTargetUpdated(
-	const FWacomInteractionTargetHandle& CardTargetHandle,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	GetFirstPersonHandBridge().HandleHoveredCardTargetUpdated(CardTargetHandle, SlotView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerDragStarted(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView)
-{
-	GetFirstPersonHandBridge().HandleDragStarted(CardInstanceId, DragView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerDragUpdated(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView)
-{
-	GetFirstPersonHandBridge().HandleDragUpdated(CardInstanceId, DragView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerDragReleased(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView)
-{
-	GetFirstPersonHandBridge().HandleDragReleased(CardInstanceId, DragView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerDragCancelled(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView)
-{
-	GetFirstPersonHandBridge().HandleDragCancelled(CardInstanceId, DragView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerPointerMoved(
-	const FWacomFirstPersonCardPointerView& PointerView)
-{
-	GetFirstPersonHandBridge().HandlePointerMoved(PointerView);
-}
-
-void UBattleHUD::HandleFirstPersonCardLayerPointerLeft()
-{
-	GetFirstPersonHandBridge().HandlePointerLeft();
-}
-
-void UBattleHUD::ApplyFirstPersonCardDragCameraLookOverride(
-	const FWacomFirstPersonCardDragView& DragView)
-{
-	GetFirstPersonHandBridge().ApplyDragCameraLookOverride(DragView);
-}
-
-void UBattleHUD::ClearFirstPersonCardDragCameraLookOverride()
-{
-	GetFirstPersonHandBridge().ClearDragCameraLookOverride();
-}
-
-void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView)
-{
-	GetFirstPersonHandBridge().UpdateDragTargetFeedback(CardInstanceId, DragView);
-}
-
-void UBattleHUD::ClearFirstPersonCardDragTargetFeedback()
-{
-	GetFirstPersonHandBridge().ClearDragTargetFeedback();
-}
-
-bool UBattleHUD::IsFirstPersonCardDragActiveForBattleSceneHover() const
-{
-	return GetFirstPersonHandBridge().IsFirstPersonCardDragActiveForBattleSceneHover();
-}
-
-FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView) const
-{
-	return GetFirstPersonHandBridge().ResolveDropIntent(CardInstanceId, DragView);
-}
-
-TArray<FWacomFirstPersonCardTargetAffordance> UBattleHUD::BuildFirstPersonCardTargetAffordances(
-	const FGuid& SourceCardId,
-	const FBattleSnapshot& Snapshot,
-	const UBattleSession& BattleSession) const
-{
-	return GetFirstPersonHandBridge().BuildCardTargetAffordances(SourceCardId, Snapshot, BattleSession);
-}
-
-UWacomBattleEnemyPartWorldTargetBridgeComponent* UBattleHUD::ResolveBattleEnemyPartWorldTargetBridge(
-	const FWacomInteractionTargetHandle& TargetHandle) const
-{
-	return GetSceneEnemyTargetCoordinator().ResolveWorldTargetBridge(TargetHandle);
-}
-
-UWacomBattleEnemyPartPresentationComponent* UBattleHUD::ResolveBattleEnemyPartWorldTargetPresentation(
-	const FWacomInteractionTargetHandle& TargetHandle) const
-{
-	return GetSceneEnemyTargetCoordinator().ResolveWorldTargetPresentation(TargetHandle);
-}
-
-bool UBattleHUD::ProbeFirstPersonCardDragTarget(
-	const FGuid& CardInstanceId,
-	const FWacomFirstPersonCardDragView& DragView,
-	FWacomInteractionTargetHandle& OutTargetHandle,
-	bool& bOutValidTarget) const
-{
-	return GetFirstPersonHandBridge().ProbeDragTarget(CardInstanceId, DragView, OutTargetHandle, bOutValidTarget);
-}
-
-bool UBattleHUD::ShouldShowFirstPersonDragInspectDetail(
-	const FWacomFirstPersonCardDragView& DragView) const
-{
-	return GetFirstPersonHandBridge().ShouldShowDragInspectDetail(DragView);
-}
-
-// ================ 子 Widget 交互入口 ================
 
 void UBattleHUD::OnCardClickedByUser(const FGuid& CardInstanceId)
 {
-	FWacomBattleHUDTargetingFlow::HandleCardClicked(*this, CardInstanceId);
+	GetBattleHUDRuntime().OnCardClickedByUser(CardInstanceId);
 }
 
 void UBattleHUD::OnEnemyPartClickedByUser(const FWacomInteractionTargetHandle& TargetHandle)
 {
-	FWacomBattleHUDTargetingFlow::HandleEnemyPartClicked(*this, TargetHandle);
+	GetBattleHUDRuntime().OnEnemyPartClickedByUser(TargetHandle);
 }
 
 void UBattleHUD::OnWaitRequested()
 {
-	FWacomBattleHUDCommandFlow::SubmitWait(*this);
+	GetBattleHUDRuntime().OnWaitRequested();
 }
 
 void UBattleHUD::OnEndTurnRequested()
 {
-	FWacomBattleHUDCommandFlow::SubmitEndTurn(*this);
+	GetBattleHUDRuntime().OnEndTurnRequested();
 }
 
 void UBattleHUD::CancelTargetSelect()
 {
-	FWacomBattleHUDTargetingFlow::CancelTargetSelect(*this);
+	GetBattleHUDRuntime().CancelTargetSelect();
 }
 
 void UBattleHUD::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
 {
-	FWacomBattleHUDCommandFlow::SubmitKnockdownChoice(*this, Choice);
+	GetBattleHUDRuntime().OnKnockdownChoiceSelected(Choice);
 }
-
-// ================ 内部 ================
 
 void UBattleHUD::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)
 {
-	FWacomBattleHUDCommandFlow::SubmitPlayCard(*this, CardId, TargetPartId);
+	GetBattleHUDRuntime().SubmitPlayCard(CardId, TargetPartId);
 }
 
 void UBattleHUD::SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId)
 {
-	FWacomBattleHUDCommandFlow::SubmitPlayCardOnHandCard(*this, CardId, TargetCardId);
+	GetBattleHUDRuntime().SubmitPlayCardOnHandCard(CardId, TargetCardId);
 }
 
 void UBattleHUD::AfterCommand()
 {
-	FWacomBattleHUDCommandFlow::AfterCommand(*this);
+	GetBattleHUDRuntime().AfterCommand();
+}
+
+void UBattleHUD::ConsumeAndLogEvents()
+{
+	GetBattleHUDRuntime().ConsumeAndLogEvents();
+}
+
+void UBattleHUD::AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block)
+{
+	GetBattleHUDRuntime().AppendBattleCombatLogBlock(Block);
+}
+
+void UBattleHUD::StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>& Events)
+{
+	GetBattleHUDRuntime().StoreFirstPersonCardTransitionEvents(Events);
+}
+
+void UBattleHUD::ClearPendingFirstPersonCardTransitionEvents()
+{
+	GetBattleHUDRuntime().ClearPendingFirstPersonCardTransitionEvents();
+}
+
+void UBattleHUD::RecordFirstPersonPlayCommit(
+	const FGuid& CardInstanceId,
+	const FBattlePartSlotIdentity& TargetPartKey)
+{
+	GetBattleHUDRuntime().RecordFirstPersonPlayCommit(CardInstanceId, TargetPartKey);
+}
+
+TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCardTransitionHints(
+	const FBattleSnapshot& PreviousSnapshot,
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return GetBattleHUDRuntime().BuildFirstPersonCardTransitionHints(PreviousSnapshot, NextSnapshot);
+}
+
+TArray<FWacomFirstPersonCardLayerFeedbackHint> UBattleHUD::BuildFirstPersonCardFeedbackHints(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return GetBattleHUDRuntime().BuildFirstPersonCardFeedbackHints(NextSnapshot);
+}
+
+int32 UBattleHUD::AppendBattlePresentationStackEntry(
+	const FWacomBattleCombatLogCommandContext& CommandContext,
+	const FBattleSnapshot& PreCommandSnapshot)
+{
+	return GetBattleHUDRuntime().AppendBattlePresentationStackEntry(CommandContext, PreCommandSnapshot);
+}
+
+void UBattleHUD::BeginBattlePresentationStackEntryExit(int32 EntryId)
+{
+	GetBattleHUDRuntime().BeginBattlePresentationStackEntryExit(EntryId);
+}
+
+void UBattleHUD::FinishBattlePresentationStackEntryExit(int32 EntryId)
+{
+	GetBattleHUDRuntime().FinishBattlePresentationStackEntryExit(EntryId);
+}
+
+void UBattleHUD::ClearBattlePresentationStack()
+{
+	GetBattleHUDRuntime().ClearBattlePresentationStack();
+}
+
+bool UBattleHUD::HasBattlePresentationStackEntries() const
+{
+	return GetBattleHUDRuntime().HasBattlePresentationStackEntries();
+}
+
+void UBattleHUD::EnqueueBattlePresentationEvents(
+	const TArray<FBattleEvent>& Events,
+	int32 PresentationStackEntryId)
+{
+	GetBattleHUDRuntime().EnqueueBattlePresentationEvents(Events, PresentationStackEntryId);
+}
+
+void UBattleHUD::ClearBattlePresentationQueue()
+{
+	GetBattleHUDRuntime().ClearBattlePresentationQueue();
+}
+
+bool UBattleHUD::IsBattlePresentationQueueBusy() const
+{
+	return GetBattleHUDRuntime().IsBattlePresentationQueueBusy();
+}
+
+void UBattleHUD::QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand Command)
+{
+	GetBattleHUDRuntime().QueuePendingTurnBoundaryCommand(Command);
+}
+
+void UBattleHUD::ClearPendingTurnBoundaryCommand()
+{
+	GetBattleHUDRuntime().ClearPendingTurnBoundaryCommand();
+}
+
+void UBattleHUD::TryExecutePendingTurnBoundaryCommand()
+{
+	GetBattleHUDRuntime().TryExecutePendingTurnBoundaryCommand();
+}
+
+void UBattleHUD::ClearBattlePresentationTargetRegistry()
+{
+	GetBattleHUDRuntime().ClearBattlePresentationTargetRegistry();
+}
+
+FWacomBattlePresentationTargetRegistry& UBattleHUD::GetBattlePresentationTargetRegistry()
+{
+	return GetBattleHUDRuntime().GetBattlePresentationTargetRegistry();
+}
+
+void UBattleHUD::RegisterBattlePresentationTarget(
+	const FBattlePartSlotIdentity& TargetPartKey,
+	UObject* Owner,
+	TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler)
+{
+	GetBattleHUDRuntime().RegisterBattlePresentationTarget(TargetPartKey, Owner, MoveTemp(Handler));
+}
+
+void UBattleHUD::UnregisterBattlePresentationTargetsForOwner(const UObject* Owner)
+{
+	GetBattleHUDRuntime().UnregisterBattlePresentationTargetsForOwner(Owner);
+}
+
+bool UBattleHUD::IsBattlePresentationTargetRegisteredForOwner(const UObject* Owner) const
+{
+	return GetBattleHUDRuntime().IsBattlePresentationTargetRegisteredForOwner(Owner);
+}
+
+void UBattleHUD::PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue)
+{
+	GetBattleHUDRuntime().PlayBattlePresentationCue(Cue);
+}
+
+void UBattleHUD::PushPendingKnockdownChoiceDialog()
+{
+	GetBattleHUDRuntime().PushPendingKnockdownChoiceDialog();
+}
+
+void UBattleHUD::AdvanceBattlePresentationQueueOnce()
+{
+	GetBattleHUDRuntime().AdvanceBattlePresentationQueueOnce();
+}
+
+bool UBattleHUD::IsCardDetailPanelVisible() const
+{
+	return GetBattleHUDRuntime().GetCardDetailController().IsVisible();
+}
+
+FText UBattleHUD::GetCardDetailPanelNameText() const
+{
+	return GetBattleHUDRuntime().GetCardDetailController().GetNameText();
+}
+
+void UBattleHUD::HideCardDetailPanel()
+{
+	GetBattleHUDRuntime().HideCardDetailPanel();
+}
+
+void UBattleHUD::HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId)
+{
+	GetBattleHUDRuntime().HideFirstPersonCardDetailPanelForSource(CardInstanceId);
+}
+
+bool UBattleHUD::IsFirstPersonCardInspectDetailActiveForSource(const FGuid& CardInstanceId) const
+{
+	return GetBattleHUDRuntime().IsFirstPersonCardInspectDetailActiveForSource(CardInstanceId);
+}
+
+UWacomCardDetailPanel* UBattleHUD::EnsureFirstPersonCardDetailPanel()
+{
+	return GetBattleHUDRuntime().EnsureFirstPersonCardDetailPanel();
+}
+
+bool UBattleHUD::ShowFirstPersonCardDetailAtSlot(
+	const FWacomCardDetailViewData& DetailData,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	return GetBattleHUDRuntime().ShowFirstPersonCardDetailAtSlot(DetailData, SlotView);
+}
+
+void UBattleHUD::PositionFirstPersonCardDetailPanelBesideSlot(
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetBattleHUDRuntime().PositionFirstPersonCardDetailPanelBesideSlot(SlotView);
+}
+
+void UBattleHUD::HideFirstPersonCardDetailPanel()
+{
+	GetBattleHUDRuntime().HideFirstPersonCardDetailPanel();
+}
+
+void UBattleHUD::TickCardDetailMotion(float DeltaTime)
+{
+	GetBattleHUDRuntime().TickCardDetailMotion(DeltaTime);
+}
+
+void UBattleHUD::ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost Host)
+{
+	GetBattleHUDRuntime().ForceHideCardDetailHost(Host);
+}
+
+bool UBattleHUD::ComputeFirstPersonCardDetailTarget(
+	const FWacomFirstPersonCardLayerSlotView& SlotView,
+	FVector2D& OutPosition)
+{
+	return GetBattleHUDRuntime().ComputeFirstPersonCardDetailTarget(SlotView, OutPosition);
+}
+
+FVector2D UBattleHUD::ComputeCardDetailPanelPositionBesideStable(
+	const FVector2D& AnchorPosition,
+	const FVector2D& AnchorSize,
+	const FVector2D& LayerSize,
+	const FVector2D& PanelSize,
+	float DetailPadding)
+{
+	return GetBattleHUDRuntime().ComputeCardDetailPanelPositionBesideStable(
+		AnchorPosition,
+		AnchorSize,
+		LayerSize,
+		PanelSize,
+		DetailPadding);
 }
 
 FVector2D UBattleHUD::ComputeCardDetailPanelPositionBeside(
@@ -778,124 +664,43 @@ FVector2D UBattleHUD::ComputeCardDetailPanelPositionBeside(
 		FMath::Clamp(DesiredY, 0.0f, MaxY));
 }
 
-bool UBattleHUD::IsCardDetailPanelVisible() const
-{
-	return GetCardDetailController().IsVisible();
-}
-
-FText UBattleHUD::GetCardDetailPanelNameText() const
-{
-	return GetCardDetailController().GetNameText();
-}
-
-void UBattleHUD::HideCardDetailPanel()
-{
-	GetCardDetailController().HideAll();
-}
-
-void UBattleHUD::HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId)
-{
-	GetCardDetailController().HideFirstPersonForSource(CardInstanceId);
-}
-
-bool UBattleHUD::IsFirstPersonCardInspectDetailActiveForSource(const FGuid& CardInstanceId) const
-{
-	return GetCardDetailController().IsFirstPersonInspectDetailActiveForSource(CardInstanceId);
-}
-
-UWacomCardDetailPanel* UBattleHUD::EnsureFirstPersonCardDetailPanel()
-{
-	return GetCardDetailController().EnsureFirstPersonPanel();
-}
-
-bool UBattleHUD::ShowFirstPersonCardDetailAtSlot(
-	const FWacomCardDetailViewData& DetailData,
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	return GetCardDetailController().ShowFirstPersonAtSlot(DetailData, SlotView);
-}
-
-void UBattleHUD::PositionFirstPersonCardDetailPanelBesideSlot(
-	const FWacomFirstPersonCardLayerSlotView& SlotView)
-{
-	GetCardDetailController().PositionFirstPersonBesideSlot(SlotView);
-}
-
-void UBattleHUD::HideFirstPersonCardDetailPanel()
-{
-	GetCardDetailController().HideFirstPerson();
-}
-
-void UBattleHUD::TickCardDetailMotion(float DeltaTime)
-{
-	GetCardDetailController().TickMotion(DeltaTime);
-}
-
-void UBattleHUD::ForceHideCardDetailHost(ECardDetailHost Host)
-{
-	GetCardDetailController().ForceHideHost(Host);
-}
-
-bool UBattleHUD::ComputeFirstPersonCardDetailTarget(
-	const FWacomFirstPersonCardLayerSlotView& SlotView,
-	FVector2D& OutPosition)
-{
-	return GetCardDetailController().ComputeFirstPersonTarget(SlotView, OutPosition);
-}
-
-FVector2D UBattleHUD::ComputeCardDetailPanelPositionBesideStable(
-	const FVector2D& AnchorPosition,
-	const FVector2D& AnchorSize,
-	const FVector2D& LayerSize,
-	const FVector2D& PanelSize,
-	float DetailPadding)
-{
-	return GetCardDetailController().ComputeStablePosition(
-		AnchorPosition,
-		AnchorSize,
-		LayerSize,
-		PanelSize,
-		DetailPadding);
-}
-
 FVector2D UBattleHUD::GetFirstPersonCardDetailViewportSize() const
 {
-	return GetCardDetailController().GetFirstPersonViewportSize();
+	return GetBattleHUDRuntime().GetFirstPersonCardDetailViewportSize();
 }
 
 void UBattleHUD::SetFirstPersonCardDetailSource(const FGuid& CardInstanceId)
 {
-	GetCardDetailController().SetFirstPersonSource(CardInstanceId);
+	GetBattleHUDRuntime().SetFirstPersonCardDetailSource(CardInstanceId);
 }
 
 void UBattleHUD::ClearFirstPersonCardDetailSource()
 {
-	GetCardDetailController().ClearFirstPersonSource();
+	GetBattleHUDRuntime().ClearFirstPersonCardDetailSource();
 }
 
 bool UBattleHUD::IsCurrentFirstPersonCardDetailSource(const FGuid& CardInstanceId) const
 {
-	return GetCardDetailController().IsCurrentFirstPersonSource(CardInstanceId);
+	return GetBattleHUDRuntime().IsCurrentFirstPersonCardDetailSource(CardInstanceId);
 }
 
 void UBattleHUD::UpdateFirstPersonCardDetailSlot(const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	GetCardDetailController().UpdateFirstPersonSlot(SlotView);
+	GetBattleHUDRuntime().UpdateFirstPersonCardDetailSlot(SlotView);
 }
 
 FVector2D UBattleHUD::GetLastFirstPersonCardDetailPanelPosition() const
 {
-	return GetCardDetailController().GetLastFirstPersonPanelPosition();
+	return GetBattleHUDRuntime().GetLastFirstPersonCardDetailPanelPosition();
 }
 
 const FHandCardSnapshot* UBattleHUD::FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const
 {
-	if (!bHasLastBattleSnapshot || !CardInstanceId.IsValid())
+	if (!GetBattleHUDRuntime().HasLastBattleSnapshot() || !CardInstanceId.IsValid())
 	{
 		return nullptr;
 	}
-
-	for (const FHandCardSnapshot& CardSnapshot : LastBattleSnapshot.Hand.Cards)
+	for (const FHandCardSnapshot& CardSnapshot : GetBattleHUDRuntime().GetLastBattleSnapshot().Hand.Cards)
 	{
 		if (CardSnapshot.InstanceId == CardInstanceId)
 		{
@@ -905,336 +710,264 @@ const FHandCardSnapshot* UBattleHUD::FindLastBattleHandCardSnapshot(const FGuid&
 	return nullptr;
 }
 
-FWacomBattleHUDCardDetailController& UBattleHUD::GetCardDetailController()
-{
-	if (!CardDetailController)
-	{
-		CardDetailController = MakeShared<FWacomBattleHUDCardDetailController>(*this);
-	}
-	return *CardDetailController;
-}
-
-const FWacomBattleHUDCardDetailController& UBattleHUD::GetCardDetailController() const
-{
-	return const_cast<UBattleHUD*>(this)->GetCardDetailController();
-}
-
-FWacomBattleHUDCombatLogController& UBattleHUD::GetCombatLogController()
-{
-	if (!CombatLogController)
-	{
-		CombatLogController = MakeShared<FWacomBattleHUDCombatLogController>(*this);
-	}
-	return *CombatLogController;
-}
-
-const FWacomBattleHUDCombatLogController& UBattleHUD::GetCombatLogController() const
-{
-	return const_cast<UBattleHUD*>(this)->GetCombatLogController();
-}
-
-FWacomBattleHUDFirstPersonHandBridge& UBattleHUD::GetFirstPersonHandBridge()
-{
-	if (!FirstPersonHandBridge)
-	{
-		FirstPersonHandBridge = MakeShared<FWacomBattleHUDFirstPersonHandBridge>(*this);
-	}
-	return *FirstPersonHandBridge;
-}
-
-const FWacomBattleHUDFirstPersonHandBridge& UBattleHUD::GetFirstPersonHandBridge() const
-{
-	return const_cast<UBattleHUD*>(this)->GetFirstPersonHandBridge();
-}
-
-FWacomBattleHUDPresentationCoordinator& UBattleHUD::GetPresentationCoordinator()
-{
-	if (!PresentationCoordinator)
-	{
-		PresentationCoordinator = MakeShared<FWacomBattleHUDPresentationCoordinator>(*this);
-	}
-	return *PresentationCoordinator;
-}
-
-const FWacomBattleHUDPresentationCoordinator& UBattleHUD::GetPresentationCoordinator() const
-{
-	return const_cast<UBattleHUD*>(this)->GetPresentationCoordinator();
-}
-
-FWacomBattleHUDSceneEnemyTargetCoordinator& UBattleHUD::GetSceneEnemyTargetCoordinator()
-{
-	if (!SceneEnemyTargetCoordinator)
-	{
-		SceneEnemyTargetCoordinator = MakeShared<FWacomBattleHUDSceneEnemyTargetCoordinator>(*this);
-	}
-	return *SceneEnemyTargetCoordinator;
-}
-
-const FWacomBattleHUDSceneEnemyTargetCoordinator& UBattleHUD::GetSceneEnemyTargetCoordinator() const
-{
-	return const_cast<UBattleHUD*>(this)->GetSceneEnemyTargetCoordinator();
-}
-
 void UBattleHUD::RebuildBattleSceneEnemyPartWorldTargetRegistry()
 {
-	GetSceneEnemyTargetCoordinator().RebuildRegistry();
+	GetBattleHUDRuntime().RebuildBattleSceneEnemyPartWorldTargetRegistry();
 }
 
 bool UBattleHUD::IsBattleSceneEnemyPartBridgeInCurrentRegistry(
 	const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const
 {
-	return GetSceneEnemyTargetCoordinator().IsBridgeInCurrentRegistry(Bridge);
+	return GetBattleHUDRuntime().IsBattleSceneEnemyPartBridgeInCurrentRegistry(Bridge);
 }
 
 void UBattleHUD::SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap)
 {
-	GetSceneEnemyTargetCoordinator().SyncWorldTargets(Snap);
+	GetBattleHUDRuntime().SyncBattleEnemyPartWorldTargets(Snap);
 }
 
 void UBattleHUD::ClearBattleEnemyPartWorldTargets()
 {
-	GetSceneEnemyTargetCoordinator().ClearWorldTargets();
+	GetBattleHUDRuntime().ClearBattleEnemyPartWorldTargets();
 }
 
 bool UBattleHUD::CanUpdateBattleSceneEnemyPartHoverProbe() const
 {
-	return GetSceneEnemyTargetCoordinator().CanUpdateHoverProbe();
+	return GetBattleHUDRuntime().CanUpdateBattleSceneEnemyPartHoverProbe();
 }
 
-FWacomBattleEnemyPartDragPredictionDebugInput
-UBattleHUD::BuildBattleSceneEnemyPartHoverPredictionInput(
+FWacomBattleEnemyPartDragPredictionDebugInput UBattleHUD::BuildBattleSceneEnemyPartHoverPredictionInput(
 	const FWacomInteractionTargetHandle& TargetHandle) const
 {
-	return GetSceneEnemyTargetCoordinator().BuildHoverPredictionInput(TargetHandle);
+	return GetBattleHUDRuntime().BuildBattleSceneEnemyPartHoverPredictionInput(TargetHandle);
 }
 
 void UBattleHUD::TickBattleSceneEnemyPartHoverProbe(float DeltaTime)
 {
-	GetSceneEnemyTargetCoordinator().TickHoverProbe(DeltaTime);
+	GetBattleHUDRuntime().TickBattleSceneEnemyPartHoverProbe(DeltaTime);
 }
 
 void UBattleHUD::UpdateBattleSceneEnemyPartHoverProbe()
 {
-	GetSceneEnemyTargetCoordinator().UpdateHoverProbe();
+	GetBattleHUDRuntime().UpdateBattleSceneEnemyPartHoverProbe();
 }
 
 void UBattleHUD::ClearBattleSceneEnemyPartHoverProbe(FName Reason)
 {
-	GetSceneEnemyTargetCoordinator().ClearHoverProbe(Reason);
+	GetBattleHUDRuntime().ClearBattleSceneEnemyPartHoverProbe(Reason);
 }
 
-void UBattleHUD::ConsumeAndLogEvents()
+UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveFirstPersonCardAnchor() const
 {
-	FWacomBattleHUDEventFlow::ConsumeAndLogEvents(*this);
+	return GetBattleHUDRuntime().ResolveFirstPersonCardAnchor();
 }
 
-void UBattleHUD::AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block)
+UWacomFirstPersonCardAnchorComponent* UBattleHUD::ResolveActiveFirstPersonCardAnchor() const
 {
-	GetCombatLogController().AppendBlock(Block);
+	return GetBattleHUDRuntime().ResolveActiveFirstPersonCardAnchor();
 }
 
-void UBattleHUD::StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>& Events)
+void UBattleHUD::SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snap)
 {
-	GetFirstPersonHandBridge().StoreTransitionEvents(Events);
+	GetBattleHUDRuntime().SyncFirstPersonBattleHandLayer(Snap);
 }
 
-void UBattleHUD::ClearPendingFirstPersonCardTransitionEvents()
+void UBattleHUD::SyncFirstPersonBattleHandLayer(
+	const FBattleSnapshot& Snap,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
 {
-	GetFirstPersonHandBridge().ClearPendingTransitionEvents();
+	GetBattleHUDRuntime().SyncFirstPersonBattleHandLayer(Snap, TransitionHints);
 }
 
-void UBattleHUD::RecordFirstPersonPlayCommit(
+void UBattleHUD::SyncFirstPersonBattleHandLayer(
+	const FBattleSnapshot& Snap,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+{
+	GetBattleHUDRuntime().SyncFirstPersonBattleHandLayer(Snap, TransitionHints, FeedbackHints);
+}
+
+void UBattleHUD::RefreshFromPresentationPhase(
+	const FBattleSnapshot& Snap,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+{
+	GetBattleHUDRuntime().RefreshFromPresentationPhase(Snap, TransitionHints, FeedbackHints);
+}
+
+void UBattleHUD::ClearFirstPersonBattleHandLayer()
+{
+	GetBattleHUDRuntime().ClearFirstPersonBattleHandLayer();
+}
+
+bool UBattleHUD::ShouldUseFirstPersonBattleHandLayer() const
+{
+	return GetBattleHUDRuntime().ShouldUseFirstPersonBattleHandLayer();
+}
+
+bool UBattleHUD::ShouldEnableFirstPersonBattleHandInteraction() const
+{
+	return GetBattleHUDRuntime().ShouldEnableFirstPersonBattleHandInteraction();
+}
+
+void UBattleHUD::BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
+{
+	GetBattleHUDRuntime().BindFirstPersonBattleHandLayerInteractions(Anchor);
+}
+
+void UBattleHUD::UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
+{
+	GetBattleHUDRuntime().UnbindFirstPersonBattleHandLayerInteractions(Anchor);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerCardHovered(
 	const FGuid& CardInstanceId,
-	const FBattlePartSlotIdentity& TargetPartKey)
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	GetFirstPersonHandBridge().RecordPlayCommit(CardInstanceId, TargetPartKey);
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerCardHovered(CardInstanceId, SlotView);
 }
 
-TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCardTransitionHints(
-	const FBattleSnapshot& PreviousSnapshot,
-	const FBattleSnapshot& NextSnapshot) const
+void UBattleHUD::HandleFirstPersonCardLayerCardUnhovered(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	return GetFirstPersonHandBridge().BuildTransitionHints(PreviousSnapshot, NextSnapshot);
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerCardUnhovered(CardInstanceId, SlotView);
 }
 
-TArray<FWacomFirstPersonCardLayerFeedbackHint> UBattleHUD::BuildFirstPersonCardFeedbackHints(
-	const FBattleSnapshot& NextSnapshot) const
+void UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	return GetFirstPersonHandBridge().BuildFeedbackHints(NextSnapshot);
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerHoveredCardLayoutUpdated(CardInstanceId, SlotView);
 }
 
-int32 UBattleHUD::AppendBattlePresentationStackEntry(
-	const FWacomBattleCombatLogCommandContext& CommandContext,
-	const FBattleSnapshot& PreCommandSnapshot)
+void UBattleHUD::HandleFirstPersonCardLayerCardTargetHovered(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	return GetPresentationCoordinator().AppendStackEntry(CommandContext, PreCommandSnapshot);
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerCardTargetHovered(CardTargetHandle, SlotView);
 }
 
-void UBattleHUD::BeginBattlePresentationStackEntryExit(int32 EntryId)
+void UBattleHUD::HandleFirstPersonCardLayerCardTargetUnhovered(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	GetPresentationCoordinator().BeginStackEntryExit(EntryId);
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerCardTargetUnhovered(CardTargetHandle, SlotView);
 }
 
-void UBattleHUD::FinishBattlePresentationStackEntryExit(int32 EntryId)
+void UBattleHUD::HandleFirstPersonCardLayerHoveredCardTargetUpdated(
+	const FWacomInteractionTargetHandle& CardTargetHandle,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
-	GetPresentationCoordinator().FinishStackEntryExit(EntryId);
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerHoveredCardTargetUpdated(CardTargetHandle, SlotView);
 }
 
-void UBattleHUD::ClearBattlePresentationStack()
+void UBattleHUD::HandleFirstPersonCardLayerDragStarted(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
 {
-	if (PresentationCoordinator)
-	{
-		PresentationCoordinator->ClearStack();
-	}
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerDragStarted(CardInstanceId, DragView);
 }
 
-bool UBattleHUD::HasBattlePresentationStackEntries() const
+void UBattleHUD::HandleFirstPersonCardLayerDragUpdated(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
 {
-	return PresentationCoordinator && PresentationCoordinator->HasStackEntries();
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerDragUpdated(CardInstanceId, DragView);
 }
 
-void UBattleHUD::EnqueueBattlePresentationEvents(
-	const TArray<FBattleEvent>& Events,
-	int32 PresentationStackEntryId)
+void UBattleHUD::HandleFirstPersonCardLayerDragReleased(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
 {
-	GetPresentationCoordinator().EnqueueEvents(Events, PresentationStackEntryId);
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerDragReleased(CardInstanceId, DragView);
 }
 
-void UBattleHUD::ClearBattlePresentationQueue()
+void UBattleHUD::HandleFirstPersonCardLayerDragCancelled(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
 {
-	if (PresentationCoordinator)
-	{
-		PresentationCoordinator->ClearQueue();
-	}
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerDragCancelled(CardInstanceId, DragView);
 }
 
-bool UBattleHUD::IsBattlePresentationQueueBusy() const
+void UBattleHUD::HandleFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView)
 {
-	return PresentationCoordinator && PresentationCoordinator->IsQueueBusy();
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerPointerMoved(PointerView);
 }
 
-void UBattleHUD::QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand Command)
+void UBattleHUD::HandleFirstPersonCardLayerPointerLeft()
 {
-	switch (Command)
-	{
-	case ETurnBoundaryCommand::Wait:
-		GetPresentationCoordinator().QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand::Wait);
-		break;
-	case ETurnBoundaryCommand::EndTurn:
-		GetPresentationCoordinator().QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand::EndTurn);
-		break;
-	case ETurnBoundaryCommand::None:
-	default:
-		break;
-	}
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerPointerLeft();
 }
 
-void UBattleHUD::ClearPendingTurnBoundaryCommand()
+void UBattleHUD::ApplyFirstPersonCardDragCameraLookOverride(
+	const FWacomFirstPersonCardDragView& DragView)
 {
-	if (PresentationCoordinator)
-	{
-		PresentationCoordinator->ClearPendingTurnBoundaryCommand();
-	}
+	GetBattleHUDRuntime().ApplyFirstPersonCardDragCameraLookOverride(DragView);
 }
 
-void UBattleHUD::TryExecutePendingTurnBoundaryCommand()
+void UBattleHUD::ClearFirstPersonCardDragCameraLookOverride()
 {
-	if (PresentationCoordinator)
-	{
-		PresentationCoordinator->TryExecutePendingTurnBoundaryCommand();
-	}
+	GetBattleHUDRuntime().ClearFirstPersonCardDragCameraLookOverride();
 }
 
-FWacomBattlePresentationTargetRegistry& UBattleHUD::GetBattlePresentationTargetRegistry()
+void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView)
 {
-	if (!BattlePresentationTargetRegistry)
-	{
-		BattlePresentationTargetRegistry = MakeShared<FWacomBattlePresentationTargetRegistry>();
-	}
-	return *BattlePresentationTargetRegistry;
+	GetBattleHUDRuntime().UpdateFirstPersonCardDragTargetFeedback(CardInstanceId, DragView);
 }
 
-void UBattleHUD::ClearBattlePresentationTargetRegistry()
+void UBattleHUD::ClearFirstPersonCardDragTargetFeedback()
 {
-	if (BattlePresentationTargetRegistry)
-	{
-		BattlePresentationTargetRegistry->Clear();
-		BattlePresentationTargetRegistry.Reset();
-	}
+	GetBattleHUDRuntime().ClearFirstPersonCardDragTargetFeedback();
 }
 
-void UBattleHUD::RegisterBattlePresentationTarget(
-	const FBattlePartSlotIdentity& TargetPartKey,
-	UObject* Owner,
-	TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler)
+bool UBattleHUD::IsFirstPersonCardDragActiveForBattleSceneHover() const
 {
-	GetBattlePresentationTargetRegistry().Register(TargetPartKey, Owner, MoveTemp(Handler));
+	return GetBattleHUDRuntime().IsFirstPersonCardDragActiveForBattleSceneHover();
 }
 
-void UBattleHUD::UnregisterBattlePresentationTargetsForOwner(const UObject* Owner)
+FWacomBattleCardDropResolveResult UBattleHUD::ResolveFirstPersonCardDropIntent(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView) const
 {
-	if (BattlePresentationTargetRegistry)
-	{
-		BattlePresentationTargetRegistry->UnregisterOwner(Owner);
-	}
+	return GetBattleHUDRuntime().ResolveFirstPersonCardDropIntent(CardInstanceId, DragView);
 }
 
-bool UBattleHUD::IsBattlePresentationTargetRegisteredForOwner(const UObject* Owner) const
+TArray<FWacomFirstPersonCardTargetAffordance> UBattleHUD::BuildFirstPersonCardTargetAffordances(
+	const FGuid& SourceCardId,
+	const FBattleSnapshot& Snapshot,
+	const UBattleSession& BattleSession) const
 {
-	return BattlePresentationTargetRegistry
-		&& BattlePresentationTargetRegistry->ContainsOwner(Owner);
+	return GetBattleHUDRuntime().BuildFirstPersonCardTargetAffordances(SourceCardId, Snapshot, BattleSession);
 }
 
-void UBattleHUD::PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue)
+UWacomBattleEnemyPartWorldTargetBridgeComponent* UBattleHUD::ResolveBattleEnemyPartWorldTargetBridge(
+	const FWacomInteractionTargetHandle& TargetHandle) const
 {
-	if (BattlePresentationTargetRegistry)
-	{
-		BattlePresentationTargetRegistry->PlayCue(Cue);
-	}
+	return GetBattleHUDRuntime().ResolveBattleEnemyPartWorldTargetBridge(TargetHandle);
 }
 
-void UBattleHUD::PushPendingKnockdownChoiceDialog()
+UWacomBattleEnemyPartPresentationComponent* UBattleHUD::ResolveBattleEnemyPartWorldTargetPresentation(
+	const FWacomInteractionTargetHandle& TargetHandle) const
 {
-	UBattleSession* CurrentSession = GetSession();
-	if (!CurrentSession)
-	{
-		return;
-	}
-
-	const FKnockdownChoiceView ChoiceView = CurrentSession->BuildPendingKnockdownChoiceView();
-	if (!ChoiceView.bHasPendingChoice)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[BattleHUD] KnockdownChoiceRequested presentation step has no pending choice view"));
-		return;
-	}
-
-	UGameInstance* GameInstance = GetGameInstance();
-	UWacomGameUIManagerSubsystem* UIManager =
-		GameInstance ? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
-	if (!UIManager)
-	{
-		return;
-	}
-
-	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_Modal.GetTag(),
-		UWacomKnockdownChoiceDialog::StaticClass());
-	UWacomKnockdownChoiceDialog* Dialog = Cast<UWacomKnockdownChoiceDialog>(Pushed);
-	if (!Dialog)
-	{
-		return;
-	}
-
-	Dialog->SetContext(this, ChoiceView);
+	return GetBattleHUDRuntime().ResolveBattleEnemyPartWorldTargetPresentation(TargetHandle);
 }
 
-void UBattleHUD::AdvanceBattlePresentationQueueOnce()
+bool UBattleHUD::ProbeFirstPersonCardDragTarget(
+	const FGuid& CardInstanceId,
+	const FWacomFirstPersonCardDragView& DragView,
+	FWacomInteractionTargetHandle& OutTargetHandle,
+	bool& bOutValidTarget) const
 {
-#if WITH_AUTOMATION_TESTS
-	GetPresentationCoordinator().AdvanceQueueOnce();
-	GetPresentationCoordinator().AdvancePresentationPlanOnce();
-#endif
+	return GetBattleHUDRuntime().ProbeFirstPersonCardDragTarget(CardInstanceId, DragView, OutTargetHandle, bOutValidTarget);
+}
+
+bool UBattleHUD::ShouldShowFirstPersonDragInspectDetail(
+	const FWacomFirstPersonCardDragView& DragView) const
+{
+	return GetBattleHUDRuntime().ShouldShowFirstPersonDragInspectDetail(DragView);
 }
 
 #if WITH_AUTOMATION_TESTS
@@ -1243,20 +976,12 @@ void UBattleHUD::PlayBattlePresentationCueForTest(
 	const FBattlePartSlotIdentity& TargetPartKey,
 	int32 Amount)
 {
-	FWacomBattlePresentationTargetCue Cue;
-	Cue.SourceEventType = SourceEventType;
-	Cue.TargetPartKey = TargetPartKey;
-	Cue.Amount = Amount;
-	PlayBattlePresentationCue(Cue);
+	GetBattleHUDRuntime().PlayBattlePresentationCueForTest(SourceEventType, TargetPartKey, Amount);
 }
 
 void UBattleHUD::PlayTargetConfirmedCueForTest(const FBattlePartSlotIdentity& TargetPartKey)
 {
-	FWacomBattlePresentationTargetCue Cue;
-	Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
-	Cue.TargetPartKey = TargetPartKey;
-	Cue.Duration = 0.10f;
-	PlayBattlePresentationCue(Cue);
+	GetBattleHUDRuntime().PlayTargetConfirmedCueForTest(TargetPartKey);
 }
 
 bool UBattleHUD::EnqueueEndTurnPresentationPlanForTest(
@@ -1264,44 +989,39 @@ bool UBattleHUD::EnqueueEndTurnPresentationPlanForTest(
 	const TArray<FBattleEvent>& Events,
 	const FBattleSnapshot& PostCommandSnapshot)
 {
-	return GetPresentationCoordinator().EnqueueEndTurnPresentationPlan(
-		Journal,
-		Events,
-		PostCommandSnapshot);
+	return GetBattleHUDRuntime().EnqueueEndTurnPresentationPlanForTest(Journal, Events, PostCommandSnapshot);
 }
 
 FWacomBattleHUDAutomationTestView UBattleHUD::GetAutomationTestViewForTest() const
 {
-	static const TArray<FWacomBattlePresentationStackEntryView> EmptyEntries;
-	static const TArray<FWacomBattleCombatLogBlockView> EmptyHistory;
-
-	FWacomBattleHUDAutomationTestView View;
-	View.PresentationTargetCount = BattlePresentationTargetRegistry ? BattlePresentationTargetRegistry->Num() : 0;
-	View.SceneEnemyPartWorldTargetBridgeCount = GetSceneEnemyTargetCoordinator().GetRegisteredBridgeCount();
-	View.PresentationStackEntries = PresentationCoordinator ? &PresentationCoordinator->GetStackEntries() : &EmptyEntries;
-	View.CombatLogHistory = CombatLogController ? &CombatLogController->GetHistory() : &EmptyHistory;
-	if (PresentationCoordinator)
-	{
-		View.bPresentationPlanActive = PresentationCoordinator->IsPresentationPlanBusy();
-		View.PresentationPlanPendingPhaseCount = PresentationCoordinator->GetPendingPresentationPlanPhaseCount();
-		View.ActivePresentationPlanPhaseName = PresentationCoordinator->GetActivePresentationPlanPhaseName();
-		View.PresentationPlanStartedPhaseNames =
-			&PresentationCoordinator->GetStartedPresentationPlanPhaseNamesForTest();
-	}
-	return View;
+	return GetBattleHUDRuntime().GetAutomationTestViewForTest();
 }
 
 TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCardTransitionHintsForRefreshForTest(
 	const FBattleSnapshot& NextSnapshot) const
 {
-	return GetFirstPersonHandBridge().BuildTransitionHintsForRefresh(NextSnapshot);
+	return GetBattleHUDRuntime().BuildFirstPersonCardTransitionHintsForRefreshForTest(NextSnapshot);
 }
 
 void UBattleHUD::SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot)
 {
-	GetFirstPersonHandBridge().SetTransitionSnapshot(Snapshot);
+	GetBattleHUDRuntime().SetFirstPersonCardTransitionSnapshotForTest(Snapshot);
+}
+
+void UBattleHUD::SetTargetSelectionStateForAutomationTest(const FGuid& PendingCardId)
+{
+	GetBattleHUDRuntime().SetPendingTargetingCardId(PendingCardId);
+	SetUIState(EBattleUIState::TargetSelect);
+}
+
+void UBattleHUD::ClearTargetSelectionStateForAutomationTest()
+{
+	GetBattleHUDRuntime().ClearPendingTargetingCardId();
+	SetUIState(EBattleUIState::Idle);
+}
+
+void UBattleHUD::QueuePendingTurnBoundaryWaitForAutomationTest()
+{
+	QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand::Wait);
 }
 #endif
-
-#undef LOCTEXT_NAMESPACE
-

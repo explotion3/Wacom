@@ -13,9 +13,8 @@
 #include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
-#include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
-#include "UI/Battle/WacomBattleHUDCommandFlow.h"
+#include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 
@@ -124,8 +123,8 @@ namespace
 
 }
 
-FWacomBattleHUDFirstPersonHandBridge::FWacomBattleHUDFirstPersonHandBridge(UBattleHUD& InHUD)
-	: HUD(InHUD)
+FWacomBattleHUDFirstPersonHandBridge::FWacomBattleHUDFirstPersonHandBridge(FWacomBattleHUDRuntime& InRuntime)
+	: Runtime(InRuntime)
 {
 }
 
@@ -136,7 +135,7 @@ FWacomBattleHUDFirstPersonHandBridge::~FWacomBattleHUDFirstPersonHandBridge()
 
 UWacomFirstPersonCardAnchorComponent* FWacomBattleHUDFirstPersonHandBridge::ResolveAnchor() const
 {
-	const APlayerController* PC = HUD.GetOwningPlayer();
+	const APlayerController* PC = Runtime.GetOwningPlayer();
 	const AWacomPlayerCharacter* Character = PC ? Cast<AWacomPlayerCharacter>(PC->GetPawn()) : nullptr;
 	return Character ? Character->GetFirstPersonCardAnchorComponent() : nullptr;
 }
@@ -177,7 +176,7 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayerInternal(
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints,
 	const TArray<FWacomFirstPersonCardLayerFeedbackHint>* FeedbackHints)
 {
-	if (HUD.IsFirstPersonBattleHandSuppressedForEntry())
+	if (Runtime.IsFirstPersonBattleHandSuppressedForEntry())
 	{
 		SuppressLayerForEntry();
 		return;
@@ -186,9 +185,9 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayerInternal(
 	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveAnchor();
 	const bool bCanShowBattleHand =
 		ShouldUseFirstPersonBattleHandLayer()
-		&& HUD.GetSession()
+		&& Runtime.GetSession()
 		&& Snapshot.Phase != EBattlePhase::BattleEnd
-		&& HUD.UIState != EBattleUIState::BattleEnd
+		&& Runtime.GetUIState() != EBattleUIState::BattleEnd
 		&& Anchor;
 	if (!bCanShowBattleHand)
 	{
@@ -270,7 +269,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer(bool bClearPendingTransiti
 	bHasActiveCardTargetHandle = false;
 	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
 	LastAnchor.Reset();
-	HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+	Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 	if (bClearPendingTransitionEvents)
 	{
 		ClearPendingTransitionEvents();
@@ -315,12 +314,12 @@ void FWacomBattleHUDFirstPersonHandBridge::SuppressLayerForEntry()
 
 bool FWacomBattleHUDFirstPersonHandBridge::ShouldUseFirstPersonBattleHandLayer() const
 {
-	return !HUD.IsFirstPersonBattleHandSuppressedForEntry();
+	return !Runtime.IsFirstPersonBattleHandSuppressedForEntry();
 }
 
 bool FWacomBattleHUDFirstPersonHandBridge::ShouldEnableFirstPersonBattleHandInteraction() const
 {
-	return ShouldUseFirstPersonBattleHandLayer() && HUD.IsBattleInputReady();
+	return ShouldUseFirstPersonBattleHandLayer() && Runtime.IsBattleInputReady();
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
@@ -338,54 +337,7 @@ void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPers
 		}
 	}
 
-	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerCardTargetHovered.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerCardTargetUnhovered.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerHoveredCardTargetUpdated.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerDragStarted.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerDragReleased.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerCardHovered.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerCardHovered);
-	Anchor->OnFirstPersonCardLayerCardUnhovered.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerCardUnhovered);
-	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerHoveredCardLayoutUpdated);
-	Anchor->OnFirstPersonCardLayerCardTargetHovered.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerCardTargetHovered);
-	Anchor->OnFirstPersonCardLayerCardTargetUnhovered.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerCardTargetUnhovered);
-	Anchor->OnFirstPersonCardLayerHoveredCardTargetUpdated.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerHoveredCardTargetUpdated);
-	Anchor->OnFirstPersonCardLayerDragStarted.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerDragStarted);
-	Anchor->OnFirstPersonCardLayerDragUpdated.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerDragUpdated);
-	Anchor->OnFirstPersonCardLayerDragReleased.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerDragReleased);
-	Anchor->OnFirstPersonCardLayerDragCancelled.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerDragCancelled);
-	Anchor->OnFirstPersonCardLayerPointerMoved.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerPointerMoved);
-	Anchor->OnFirstPersonCardLayerPointerLeft.AddUObject(
-		&HUD,
-		&UBattleHUD::HandleFirstPersonCardLayerPointerLeft);
+	Runtime.Host().BindFirstPersonCardLayerInteractions(*Anchor);
 	LastAnchor = Anchor;
 }
 
@@ -396,18 +348,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UnbindLayerInteractions(UWacomFirstPe
 		return;
 	}
 
-	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerCardTargetHovered.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerCardTargetUnhovered.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerHoveredCardTargetUpdated.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerDragStarted.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerDragUpdated.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerDragReleased.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerDragCancelled.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&HUD);
-	Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&HUD);
+	Runtime.Host().UnbindFirstPersonCardLayerInteractions(*Anchor);
 	if (LastAnchor.Get() == Anchor)
 	{
 		LastAnchor.Reset();
@@ -419,30 +360,30 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleCardHovered(
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
 	if (!ShouldEnableFirstPersonBattleHandInteraction()
-		|| HUD.UIState != EBattleUIState::Idle
+		|| Runtime.GetUIState() != EBattleUIState::Idle
 		|| !CardInstanceId.IsValid()
 		|| !SlotView.bProjected)
 	{
-		HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+		Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 		return;
 	}
 
 	const FHandCardSnapshot* CardSnapshot = FindLastBattleHandCardSnapshot(CardInstanceId);
 	if (!CardSnapshot || !CardSnapshot->Definition)
 	{
-		HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+		Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 		return;
 	}
 
-	HUD.SetFirstPersonCardDetailSource(CardInstanceId);
-	if (HUD.ShowFirstPersonCardDetailAtSlot(
+	Runtime.SetFirstPersonCardDetailSource(CardInstanceId);
+	if (Runtime.ShowFirstPersonCardDetailAtSlot(
 		WacomBattleCardPresentation::BuildCardDetailViewData(*CardSnapshot),
 		SlotView))
 	{
 	}
 	else
 	{
-		HUD.ClearFirstPersonCardDetailSource();
+		Runtime.ClearFirstPersonCardDetailSource();
 	}
 }
 
@@ -450,11 +391,11 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleCardUnhovered(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardLayerSlotView& /*SlotView*/)
 {
-	if (HUD.IsFirstPersonCardInspectDetailActiveForSource(CardInstanceId))
+	if (Runtime.IsFirstPersonCardInspectDetailActiveForSource(CardInstanceId))
 	{
 		return;
 	}
-	HUD.HideFirstPersonCardDetailPanelForSource(CardInstanceId);
+	Runtime.HideFirstPersonCardDetailPanelForSource(CardInstanceId);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::HandleHoveredCardLayoutUpdated(
@@ -462,16 +403,16 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleHoveredCardLayoutUpdated(
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
 	if (!ShouldEnableFirstPersonBattleHandInteraction()
-		|| HUD.UIState != EBattleUIState::Idle
+		|| Runtime.GetUIState() != EBattleUIState::Idle
 		|| !CardInstanceId.IsValid()
-		|| !HUD.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
+		|| !Runtime.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
 		|| !SlotView.bProjected)
 	{
 		return;
 	}
 
-	HUD.UpdateFirstPersonCardDetailSlot(SlotView);
-	HUD.PositionFirstPersonCardDetailPanelBesideSlot(SlotView);
+	Runtime.UpdateFirstPersonCardDetailSlot(SlotView);
+	Runtime.PositionFirstPersonCardDetailPanelBesideSlot(SlotView);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::HandleCardTargetHovered(
@@ -519,9 +460,9 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleCardTargetUnhovered(
 		ActiveDragView.bHasFeedbackTargetScreenPosition = false;
 		ActiveDragView.FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 	}
-	if (HUD.bHasLastBattleSnapshot)
+	if (Runtime.HasLastBattleSnapshot())
 	{
-		RecomposeFirstPersonHandLayer(HUD.LastBattleSnapshot);
+		RecomposeFirstPersonHandLayer(Runtime.GetLastBattleSnapshot());
 	}
 	else
 	{
@@ -529,7 +470,7 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleCardTargetUnhovered(
 	}
 	if (bHasActiveDragView && ActiveDragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard)
 	{
-		HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+		Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 	}
 }
 
@@ -565,15 +506,15 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragStarted(
 	bHasActiveDragView = true;
 	ActiveDragCardInstanceId = CardInstanceId;
 	ActiveDragView = DragView;
-	HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDrag"));
+	Runtime.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDrag"));
 
 	if (ShouldShowDragInspectDetail(DragView))
 	{
 		const FHandCardSnapshot* CardSnapshot = FindLastBattleHandCardSnapshot(CardInstanceId);
 		if (CardSnapshot && CardSnapshot->Definition)
 		{
-			HUD.SetFirstPersonCardDetailSource(CardInstanceId);
-			if (HUD.ShowFirstPersonCardDetailAtSlot(
+			Runtime.SetFirstPersonCardDetailSource(CardInstanceId);
+			if (Runtime.ShowFirstPersonCardDetailAtSlot(
 				WacomBattleCardPresentation::BuildCardDetailViewData(*CardSnapshot),
 				DragView.SourceSlotView))
 			{
@@ -582,7 +523,7 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragStarted(
 	}
 	else
 	{
-		HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+		Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 	}
 
 	HandleDragUpdated(CardInstanceId, DragView);
@@ -600,7 +541,7 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragUpdated(
 	if (!bFirstPersonCardDragActiveForBattleSceneHover)
 	{
 		bFirstPersonCardDragActiveForBattleSceneHover = true;
-		HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDrag"));
+	Runtime.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDrag"));
 	}
 
 	bHasActiveDragView = true;
@@ -619,18 +560,18 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragUpdated(
 	ApplyDragCameraLookOverride(DragView);
 
 	if (ShouldShowDragInspectDetail(DragView)
-		&& HUD.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
+		&& Runtime.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
 		&& DragView.SourceSlotView.bProjected)
 	{
-		HUD.UpdateFirstPersonCardDetailSlot(DragView.SourceSlotView);
-		HUD.PositionFirstPersonCardDetailPanelBesideSlot(DragView.SourceSlotView);
+		Runtime.UpdateFirstPersonCardDetailSlot(DragView.SourceSlotView);
+		Runtime.PositionFirstPersonCardDetailPanelBesideSlot(DragView.SourceSlotView);
 		ClearTargetPreviewLayer();
 		return;
 	}
 	else if (DragView.GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
 		|| DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit)
 	{
-		HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+		Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 		ClearTargetPreviewLayer();
 	}
 
@@ -657,14 +598,14 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragReleased(
 	ActiveDragView = FWacomFirstPersonCardDragView();
 	bHasActiveCardTargetHandle = false;
 	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
-	HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragReleased"));
+	Runtime.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragReleased"));
 	if (UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = CurrentDragPreviewPresentation.Get())
 	{
 		PreviewPresentation->ClearDragTargetPreviewState();
 	}
 	CurrentDragPreviewPresentation.Reset();
 	ClearTargetPreviewLayer();
-	HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+	Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 
 	if (!DropResult.bCanSubmit)
 	{
@@ -674,15 +615,15 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragReleased(
 	switch (DropResult.IntentKind)
 	{
 	case EWacomBattleCardDropIntentKind::PlayCardNoTarget:
-		HUD.SubmitPlayCard(CardInstanceId, FGuid());
+		Runtime.SubmitPlayCard(CardInstanceId, FGuid());
 		return;
 
 	case EWacomBattleCardDropIntentKind::PlayCardWorldTarget:
-		FWacomBattleHUDCommandFlow::SubmitPlayCardOnWorldTarget(HUD, CardInstanceId, DropResult.TargetHandle);
+		Runtime.SubmitPlayCardOnWorldTarget(CardInstanceId, DropResult.TargetHandle);
 		return;
 
 	case EWacomBattleCardDropIntentKind::PlayCardCardTarget:
-		HUD.SubmitPlayCardOnHandCard(CardInstanceId, DropResult.TargetHandle.CardInstanceId);
+		Runtime.SubmitPlayCardOnHandCard(CardInstanceId, DropResult.TargetHandle.CardInstanceId);
 		return;
 
 	default:
@@ -701,10 +642,10 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragCancelled(
 	ActiveDragView = FWacomFirstPersonCardDragView();
 	bHasActiveCardTargetHandle = false;
 	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
-	HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragCancelled"));
+	Runtime.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragCancelled"));
 	ClearDragTargetFeedback();
 	ClearTargetPreviewLayer();
-	HUD.HideFirstPersonCardDetailPanelForSource(CardInstanceId);
+	Runtime.HideFirstPersonCardDetailPanelForSource(CardInstanceId);
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor())
 	{
 		Anchor->SetFirstPersonCardDragFeedbackTarget(
@@ -783,7 +724,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyDragCameraLookOverrideToBattleCa
 	}
 
 	AWacomPlayerCharacter* Character = nullptr;
-	if (const APlayerController* PC = HUD.GetOwningPlayer())
+	if (const APlayerController* PC = Runtime.GetOwningPlayer())
 	{
 		Character = Cast<AWacomPlayerCharacter>(PC->GetPawn());
 	}
@@ -819,7 +760,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPointerCameraLookOverrideToBattl
 	}
 
 	AWacomPlayerCharacter* Character = nullptr;
-	if (const APlayerController* PC = HUD.GetOwningPlayer())
+	if (const APlayerController* PC = Runtime.GetOwningPlayer())
 	{
 		Character = Cast<AWacomPlayerCharacter>(PC->GetPawn());
 	}
@@ -839,7 +780,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPointerCameraLookOverrideToBattl
 
 void FWacomBattleHUDFirstPersonHandBridge::ClearCameraLookOverrideOnBattleCamera()
 {
-	const APlayerController* PC = HUD.GetOwningPlayer();
+	const APlayerController* PC = Runtime.GetOwningPlayer();
 	AWacomPlayerCharacter* Character = PC ? Cast<AWacomPlayerCharacter>(PC->GetPawn()) : nullptr;
 	if (UWacomBattleCameraLookComponent* BattleCamera = Character ? Character->GetBattleCameraLookComponent() : nullptr)
 	{
@@ -865,7 +806,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	TArray<FWacomFirstPersonCardTargetAffordance> CardTargetAffordances;
 	if (DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard)
 	{
-		if (const UBattleSession* CurrentSession = HUD.GetSession())
+		if (const UBattleSession* CurrentSession = Runtime.GetSession())
 		{
 			const FBattleSnapshot CurrentSnapshot = CurrentSession->BuildSnapshot();
 			CardTargetAffordances = BuildCardTargetAffordances(
@@ -925,14 +866,14 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	}
 	if (DropResult.TargetHandle.TargetKind == EWacomInteractionTargetKind::World)
 	{
-		PreviewPresentation = HUD.ResolveBattleEnemyPartWorldTargetPresentation(DropResult.TargetHandle);
+		PreviewPresentation = Runtime.ResolveBattleEnemyPartWorldTargetPresentation(DropResult.TargetHandle);
 	}
 
 	if ((DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardWorldTarget
 			|| DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardCardTarget)
 		&& DropResult.bCanSubmit)
 	{
-		if (const UBattleSession* CurrentSession = HUD.GetSession())
+		if (const UBattleSession* CurrentSession = Runtime.GetSession())
 		{
 			CurrentSnapshot = CurrentSession->BuildSnapshot();
 			TargetPreview = CurrentSession->BuildCardTargetPreview(CardInstanceId, DropResult.TargetHandle);
@@ -952,15 +893,15 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	{
 		const bool bCanReuseActiveTargetPreview =
 			!bForceApplyTargetPreview
-			&& HUD.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
+			&& Runtime.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
 			&& IsSameActiveTargetPreviewState(TargetPreviewPresentation);
 
 		if (bCanReuseActiveTargetPreview)
 		{
 			if (DragView.SourceSlotView.bProjected)
 			{
-				HUD.UpdateFirstPersonCardDetailSlot(DragView.SourceSlotView);
-				HUD.PositionFirstPersonCardDetailPanelBesideSlot(DragView.SourceSlotView);
+				Runtime.UpdateFirstPersonCardDetailSlot(DragView.SourceSlotView);
+				Runtime.PositionFirstPersonCardDetailPanelBesideSlot(DragView.SourceSlotView);
 			}
 		}
 		else
@@ -969,10 +910,10 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 			StoreActiveTargetPreviewState(TargetPreviewPresentation);
 			if (TargetPreviewPresentation.bHasSourceCardDetailViewData)
 			{
-				HUD.SetFirstPersonCardDetailSource(CardInstanceId);
+				Runtime.SetFirstPersonCardDetailSource(CardInstanceId);
 				if (DragView.SourceSlotView.bProjected)
 				{
-					HUD.ShowFirstPersonCardDetailAtSlot(
+					Runtime.ShowFirstPersonCardDetailAtSlot(
 						TargetPreviewPresentation.SourceCardDetailViewData,
 						DragView.SourceSlotView);
 				}
@@ -984,7 +925,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 		ClearTargetPreviewLayer();
 		if (DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard)
 		{
-			HUD.ForceHideCardDetailHost(UBattleHUD::ECardDetailHost::FirstPersonViewport);
+			Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 		}
 	}
 
@@ -1009,7 +950,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 			PredictionDebugInput.SourceCardRuntimeCost = TargetPreview.SourceCardRuntimeCost;
 			PredictionDebugInput.bSourceCardSwift = TargetPreview.bSourceCardSwift;
 		}
-		else if (const UBattleSession* CurrentSession = HUD.GetSession())
+		else if (const UBattleSession* CurrentSession = Runtime.GetSession())
 		{
 			const FBattleSnapshot PredictionSnapshot = CurrentSession->BuildSnapshot();
 			if (const FHandCardSnapshot* SourceSnapshot =
@@ -1118,7 +1059,7 @@ void FWacomBattleHUDFirstPersonHandBridge::RecomposeFirstPersonHandLayer(const F
 	FWacomFirstPersonCardLayerPresentationFrame Frame =
 		PresentationController.BuildFrame(
 			Snapshot,
-			HUD.IsFirstPersonBattleHandSuppressedForEntry());
+			Runtime.IsFirstPersonBattleHandSuppressedForEntry());
 	ApplyPresentationFrame(*Anchor, MoveTemp(Frame));
 	bHasActiveTargetPreviewLayer = false;
 }
@@ -1152,7 +1093,7 @@ FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveD
 		return Result;
 	}
 
-	const UBattleSession* CurrentSession = HUD.GetSession();
+	const UBattleSession* CurrentSession = Runtime.GetSession();
 	if (!CurrentSession)
 	{
 		Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
@@ -1160,7 +1101,7 @@ FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveD
 		return Result;
 	}
 
-	if (!HUD.CanSubmitPlayerActionCommand())
+	if (!Runtime.CanSubmitPlayerActionCommand())
 	{
 		Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
 		Result.RejectReason = EWacomBattleCardDropRejectReason::UIBlocked;
@@ -1240,7 +1181,7 @@ FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveD
 	{
 	case EWacomInteractionTargetKind::World:
 	{
-		if (!HUD.ResolveBattleEnemyPartWorldTargetBridge(CandidateTarget))
+		if (!Runtime.ResolveBattleEnemyPartWorldTargetBridge(CandidateTarget))
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
 			Result.RejectReason = EWacomBattleCardDropRejectReason::InvalidWorldTarget;
@@ -1337,7 +1278,7 @@ FWacomBattleHUDFirstPersonHandBridge::BuildCardTargetAffordances(
 		}
 
 		FWacomInteractionTargetHandle TargetHandle =
-			FWacomInteractionTargetHandle::ForCardTarget(TargetCard.InstanceId, &HUD);
+			FWacomInteractionTargetHandle::ForCardTarget(TargetCard.InstanceId, Runtime.Host().AsObject());
 		const FWacomBattleTargetValidationResult Validation =
 			BattleSession.ValidateTargetWithCard(SourceCardId, TargetHandle);
 		bSourceSupportsCardTargets |=
@@ -1384,7 +1325,7 @@ bool FWacomBattleHUDFirstPersonHandBridge::ProbeDragTarget(
 		return true;
 	}
 
-	const AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(HUD.GetOwningPlayer());
+	const AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(Runtime.GetOwningPlayer());
 	const bool bProbed = DragView.bHasPointerViewportPosition
 		? WacomPC && WacomPC->TryProbeBattleSceneInteractionTargetAtWidgetPosition(
 			DragView.PointerViewportPosition,
@@ -1395,7 +1336,7 @@ bool FWacomBattleHUDFirstPersonHandBridge::ProbeDragTarget(
 		return false;
 	}
 
-	const UBattleSession* CurrentSession = HUD.GetSession();
+	const UBattleSession* CurrentSession = Runtime.GetSession();
 	bOutValidTarget = CurrentSession && CurrentSession->ValidateTargetWithCard(CardInstanceId, OutTargetHandle).bCanTarget;
 	return OutTargetHandle.IsValid();
 }
@@ -1519,7 +1460,7 @@ void FWacomBattleHUDFirstPersonHandBridge::RestoreBaseTargetPreviewLayer()
 	}
 
 	bHasActiveTargetPreviewLayer = false;
-	if (!bFirstPersonBattleHandLayerRuntimeActive || !HUD.bHasLastBattleSnapshot)
+	if (!bFirstPersonBattleHandLayerRuntimeActive || !Runtime.HasLastBattleSnapshot())
 	{
 		return;
 	}
@@ -1531,7 +1472,7 @@ void FWacomBattleHUDFirstPersonHandBridge::RestoreBaseTargetPreviewLayer()
 	}
 
 	TArray<FWacomFirstPersonCardLayerEntry> CardEntries =
-		WacomBattleCardPresentation::BuildCardLayerEntries(HUD.LastBattleSnapshot);
+		WacomBattleCardPresentation::BuildCardLayerEntries(Runtime.GetLastBattleSnapshot());
 	ApplyPendingTargetingFlag(CardEntries);
 	FWacomFirstPersonCardLayerPresentationFrame RestoreFrame;
 	RestoreFrame.SourceId = FirstPersonBattleHandLayerSourceId;
@@ -1546,11 +1487,11 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPendingTargetingFlag(
 	TArray<FWacomFirstPersonCardLayerEntry>& Entries) const
 {
 	const bool bHasPendingTargetingCard =
-		HUD.UIState == EBattleUIState::TargetSelect && HUD.PendingTargetingCardId.IsValid();
+		Runtime.GetUIState() == EBattleUIState::TargetSelect && Runtime.GetPendingTargetingCardId().IsValid();
 	for (FWacomFirstPersonCardLayerEntry& Entry : Entries)
 	{
 		Entry.bIsPendingTargeting = bHasPendingTargetingCard
-			&& Entry.CardInstanceId == HUD.PendingTargetingCardId;
+			&& Entry.CardInstanceId == Runtime.GetPendingTargetingCardId();
 	}
 }
 
@@ -1594,7 +1535,7 @@ void FWacomBattleHUDFirstPersonHandBridge::TickPendingPresentationFrames(float D
 	UWacomFirstPersonCardAnchorComponent* ActiveAnchor = ResolveActiveAnchor();
 	if (!ActiveAnchor
 		|| !bFirstPersonBattleHandLayerRuntimeActive
-		|| HUD.IsFirstPersonBattleHandSuppressedForEntry())
+		|| Runtime.IsFirstPersonBattleHandSuppressedForEntry())
 	{
 		return;
 	}
@@ -1635,7 +1576,7 @@ void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(
 		Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
 		Cue.TargetPartKey = TargetPartKey;
 		Cue.Duration = 0.10f;
-		HUD.PlayBattlePresentationCue(Cue);
+		Runtime.PlayBattlePresentationCue(Cue);
 	}
 
 	PresentationController.RecordPlayCommit(CardInstanceId);
@@ -1680,10 +1621,10 @@ void FWacomBattleHUDFirstPersonHandBridge::SetTransitionSnapshot(const FBattleSn
 const FHandCardSnapshot* FWacomBattleHUDFirstPersonHandBridge::FindLastBattleHandCardSnapshot(
 	const FGuid& CardInstanceId) const
 {
-	if (!HUD.bHasLastBattleSnapshot || !CardInstanceId.IsValid())
+	if (!Runtime.HasLastBattleSnapshot() || !CardInstanceId.IsValid())
 	{
 		return nullptr;
 	}
 
-	return FindHandCardSnapshotForFirstPersonHandBridge(HUD.LastBattleSnapshot, CardInstanceId);
+	return FindHandCardSnapshotForFirstPersonHandBridge(Runtime.GetLastBattleSnapshot(), CardInstanceId);
 }

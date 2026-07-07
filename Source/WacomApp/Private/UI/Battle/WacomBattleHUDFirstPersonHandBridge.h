@@ -4,12 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Runtime/BattlePartSlotIdentity.h"
-#include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHandPresentationController.h"
+#include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Card/WacomFirstPersonCardCameraLookBridge.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
+class FWacomBattleHUDRuntime;
 class UBattleHUD;
 class UBattleSession;
 class UWacomBattleEnemyPartPresentationComponent;
@@ -25,7 +26,7 @@ struct FWacomFirstPersonCardLayerSlotView;
 class FWacomBattleHUDFirstPersonHandBridge
 {
 public:
-	explicit FWacomBattleHUDFirstPersonHandBridge(UBattleHUD& InHUD);
+	explicit FWacomBattleHUDFirstPersonHandBridge(FWacomBattleHUDRuntime& InRuntime);
 	~FWacomBattleHUDFirstPersonHandBridge();
 
 	void SyncLayer(const FBattleSnapshot& Snapshot);
@@ -148,7 +149,7 @@ private:
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		FWacomFirstPersonCardLayerPresentationFrame&& Frame);
 
-	UBattleHUD& HUD;
+	FWacomBattleHUDRuntime& Runtime;
 	FWacomBattleHandPresentationController PresentationController;
 	FWacomFirstPersonCardCameraLookBridge CameraLookBridge;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;

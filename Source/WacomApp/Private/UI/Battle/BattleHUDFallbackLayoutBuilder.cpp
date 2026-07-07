@@ -13,8 +13,6 @@
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Common/PileCountView.h"
 
-#define LOCTEXT_NAMESPACE "WacomBattleHUD"
-
 namespace
 {
 	template <typename TWidget>
@@ -57,7 +55,6 @@ namespace
 		UCanvasPanel* Root,
 		TObjectPtr<UPileCountView>* OutPileView,
 		FName Name,
-		const FText& Label,
 		const FAnchors& Anchors,
 		const FVector2D& Alignment,
 		const FMargin& Offsets)
@@ -68,11 +65,9 @@ namespace
 			return;
 		}
 
-		PileView->SetLabel(Label);
 		SetCanvasSlot(Root->AddChildToCanvas(PileView), Anchors, Alignment, Offsets);
 	}
 }
-
 void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilderContext& Context)
 {
 	if (!Context.Owner || !Context.WidgetTree)
@@ -119,7 +114,6 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 		Root,
 		Context.DrawPileView,
 		TEXT("DrawPileView"),
-		LOCTEXT("DrawPile", "抽牌堆"),
 		FAnchors(0.0f, 1.0f),
 		FVector2D(0.0f, 1.0f),
 		FMargin(20.0f, -20.0f, 80.0f, 80.0f));
@@ -129,7 +123,6 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 		Root,
 		Context.DiscardPileView,
 		TEXT("DiscardPileView"),
-		LOCTEXT("DiscardPile", "弃牌堆"),
 		FAnchors(1.0f, 1.0f),
 		FVector2D(1.0f, 1.0f),
 		FMargin(-200.0f, -20.0f, 80.0f, 80.0f));
@@ -139,7 +132,6 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 		Root,
 		Context.ExhaustPileView,
 		TEXT("ExhaustPileView"),
-		LOCTEXT("ExhaustPile", "消耗牌堆"),
 		FAnchors(1.0f, 1.0f),
 		FVector2D(1.0f, 1.0f),
 		FMargin(-200.0f, -110.0f, 80.0f, 80.0f));
@@ -166,5 +158,3 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 			8);
 	}
 }
-
-#undef LOCTEXT_NAMESPACE

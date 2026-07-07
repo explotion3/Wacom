@@ -1,0 +1,404 @@
+// Copyright Wacom. All Rights Reserved.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Events/BattleEvent.h"
+#include "Presentation/BattlePresentationJournal.h"
+#include "Runtime/BattlePartSlotIdentity.h"
+#include "UI/Battle/BattleHUD.h"
+#include "UI/Battle/WacomBattleCombatLogBuilder.h"
+#include "UI/Battle/WacomBattlePresentationPlan.h"
+#include "UI/Battle/WacomBattlePresentationTargetRegistry.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
+#include "Types/WacomEnums.h"
+#include "Types/WacomInteractionTargetTypes.h"
+
+class AWacomBattleEnemyActor;
+class UActionPanel;
+class UBattleCombatLogFeedWidget;
+class UBattlePresentationStackWidget;
+class UBattleSession;
+class UEquipmentBar;
+class UPlayerStatusBar;
+class UPileCountView;
+class UWacomBattleEnemyPartPresentationComponent;
+class UWacomBattleEnemyPartWorldTargetBridgeComponent;
+class UWacomCardDetailPanel;
+class UWacomFirstPersonCardAnchorComponent;
+class UWacomGameUIManagerSubsystem;
+class FWacomBattleHUDCardDetailController;
+class FWacomBattleHUDCombatLogController;
+class FWacomBattleHUDFirstPersonHandBridge;
+class FWacomBattleHUDPresentationCoordinator;
+class FWacomBattleHUDSceneEnemyTargetCoordinator;
+struct FBattleCommand;
+struct FKnockdownChoiceView;
+struct FBattleSnapshot;
+struct FHandCardSnapshot;
+struct FWacomBattleEnemyPartDragPredictionDebugInput;
+struct FWacomBattlePresentationTargetCue;
+struct FWacomCardDetailViewData;
+struct FWacomFirstPersonCardDragView;
+struct FWacomFirstPersonCardLayerSlotView;
+struct FWacomFirstPersonCardPointerView;
+
+enum class EWacomBattleHUDCardDetailHost : uint8
+{
+	None,
+	FirstPersonViewport,
+};
+
+enum class EWacomBattleHUDTurnBoundaryCommand : uint8
+{
+	None,
+	Wait,
+	EndTurn,
+};
+
+class FWacomBattleHUDRuntime;
+
+class FWacomBattleHUDRuntimeHost
+{
+public:
+	explicit FWacomBattleHUDRuntimeHost(UBattleHUD& InHUD);
+
+	UBattleHUD& GetHUD() const { return HUD; }
+	UObject* AsObject() const;
+	UWorld* GetWorld() const;
+	UGameInstance* GetGameInstance() const;
+	APlayerController* GetOwningPlayer() const;
+	UBattleSession* GetSession() const;
+
+	void RebuildChildBattleWidgets();
+	void RefreshChildBattleWidgetsFromSnapshot(const FBattleSnapshot& Snapshot);
+	void BroadcastBattleEnd(EBattleOutcome Outcome);
+	void NotifyUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
+
+	UPlayerStatusBar* GetPlayerStatusBar() const;
+	UActionPanel* GetActionPanel() const;
+	UEquipmentBar* GetEquipmentBar() const;
+	UPileCountView* GetDrawPileView() const;
+	UPileCountView* GetDiscardPileView() const;
+	UPileCountView* GetExhaustPileView() const;
+	UBattleCombatLogFeedWidget* GetCombatLogFeed() const;
+	UBattlePresentationStackWidget* GetBattlePresentationStack() const;
+	TObjectPtr<UWacomCardDetailPanel>& GetFirstPersonCardDetailPanelSlot() const;
+	TSubclassOf<UWacomCardDetailPanel> GetCardDetailPanelClass() const;
+	void SetCardDetailPanelClass(TSubclassOf<UWacomCardDetailPanel> PanelClass);
+
+	float GetCardDetailPanelPadding() const;
+	FVector2D GetCardDetailPanelEstimatedSize() const;
+	bool IsCardDetailReadabilityPolishEnabled() const;
+	float GetCardDetailHoverDelaySeconds() const;
+	float GetCardDetailFadeInSpeed() const;
+	float GetCardDetailFadeOutSpeed() const;
+	float GetCardDetailFollowSpeed() const;
+	float GetCardDetailPositionResetDistancePixels() const;
+	float GetCardDetailAppearStartScale() const;
+	float GetCardDetailSideSwitchHysteresisPixels() const;
+	int32 GetBattleCombatLogMaxBlocks() const;
+	float GetCardPresentationStackMinimumHoldSeconds() const;
+	int32 GetFirstPersonCardDetailViewportZOrder() const;
+	FVector2D GetFirstPersonCardDetailAnchorBaseSize() const;
+	float GetBattleSceneEnemyPartHoverProbeIntervalSeconds() const;
+
+	void BindFirstPersonCardLayerInteractions(UWacomFirstPersonCardAnchorComponent& Anchor);
+	void UnbindFirstPersonCardLayerInteractions(UWacomFirstPersonCardAnchorComponent& Anchor);
+
+	void PushKnockdownChoiceDialog(const FKnockdownChoiceView& ChoiceView);
+
+private:
+	UBattleHUD& HUD;
+};
+
+class FWacomBattleHUDSnapshotPresenter
+{
+public:
+	explicit FWacomBattleHUDSnapshotPresenter(FWacomBattleHUDRuntime& InRuntime);
+
+	void RefreshFromSnapshot(const FBattleSnapshot& Snapshot);
+	void RefreshFromPresentationPhase(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+
+private:
+	FWacomBattleHUDRuntime& Runtime;
+
+	void RefreshPileViews(const FBattleSnapshot& Snapshot);
+	void RefreshBoundBattleWidgets(const FBattleSnapshot& Snapshot);
+};
+
+class FWacomBattleHUDCommandController
+{
+public:
+	explicit FWacomBattleHUDCommandController(FWacomBattleHUDRuntime& InRuntime);
+
+	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
+	void SubmitPlayCardOnWorldTarget(const FGuid& CardId, const FWacomInteractionTargetHandle& TargetHandle);
+	void SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId);
+	void SubmitWait();
+	void SubmitEndTurn();
+	void SubmitKnockdownChoice(EKnockdownChoice Choice);
+	void AfterCommand();
+	void AfterCommand(
+		const FWacomBattleCombatLogCommandContext& LogContext,
+		const FBattleSnapshot& PreCommandSnapshot);
+
+private:
+	FWacomBattleHUDRuntime& Runtime;
+};
+
+class FWacomBattleHUDTargetingController
+{
+public:
+	explicit FWacomBattleHUDTargetingController(FWacomBattleHUDRuntime& InRuntime);
+
+	void HandleCardClicked(const FGuid& CardInstanceId);
+	void HandleEnemyPartClicked(const FWacomInteractionTargetHandle& TargetHandle);
+	void CancelTargetSelect();
+	FBattleTargetSelectionView BuildTargetSelectionView() const;
+	void ClearTargetSelection();
+
+private:
+	FWacomBattleHUDRuntime& Runtime;
+};
+
+class FWacomBattleHUDRuntime
+{
+public:
+	explicit FWacomBattleHUDRuntime(UBattleHUD& InHUD);
+	~FWacomBattleHUDRuntime();
+
+	FWacomBattleHUDRuntimeHost& Host() { return RuntimeHost; }
+	const FWacomBattleHUDRuntimeHost& Host() const { return RuntimeHost; }
+
+	void NativeConstruct();
+	void NativeDestruct();
+	void NativeTick(float DeltaTime);
+	void NativeRefreshFromSnapshot(const FBattleSnapshot& Snapshot);
+	void NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession);
+	void NativeOnUIStateChanged(EBattleUIState NewState);
+
+	EBattleUIState GetUIState() const { return UIState; }
+	void SetUIState(EBattleUIState NewState);
+	bool IsInTargetSelect() const { return UIState == EBattleUIState::TargetSelect; }
+	FGuid GetPendingTargetingCardId() const { return PendingTargetingCardId; }
+	void SetPendingTargetingCardId(const FGuid& CardInstanceId) { PendingTargetingCardId = CardInstanceId; }
+	void ClearPendingTargetingCardId() { PendingTargetingCardId.Invalidate(); }
+
+	void SetBattleInputReady(bool bReady) { bBattleInputReady = bReady; }
+	bool IsBattleInputReady() const { return bBattleInputReady; }
+	void SetFirstPersonBattleHandSuppressedForEntry(bool bSuppressed);
+	bool IsFirstPersonBattleHandSuppressedForEntry() const { return bFirstPersonBattleHandSuppressedForEntry; }
+
+	bool HasLastBattleSnapshot() const { return bHasLastBattleSnapshot; }
+	const FBattleSnapshot& GetLastBattleSnapshot() const { return LastBattleSnapshot; }
+	void SetLastBattleSnapshot(const FBattleSnapshot& Snapshot);
+	void ClearLastBattleSnapshot();
+
+	UBattleSession* GetSession() const { return RuntimeHost.GetSession(); }
+	APlayerController* GetOwningPlayer() const { return RuntimeHost.GetOwningPlayer(); }
+	UWorld* GetWorld() const { return RuntimeHost.GetWorld(); }
+
+	FBattleTargetSelectionView BuildTargetSelectionView() const;
+	int32 GetBattleCombatLogBlockCount() const;
+	bool IsBattlePresentationBusy() const;
+	bool CanSubmitPlayerActionCommand() const;
+	bool HasPendingTurnBoundaryCommand() const;
+	FText GetPendingTurnBoundaryCommandText() const;
+
+	void OnCardClickedByUser(const FGuid& CardInstanceId);
+	void OnEnemyPartClickedByUser(const FWacomInteractionTargetHandle& TargetHandle);
+	void OnWaitRequested();
+	void OnEndTurnRequested();
+	void CancelTargetSelect();
+	void OnKnockdownChoiceSelected(EKnockdownChoice Choice);
+
+	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
+	void SubmitPlayCardOnWorldTarget(const FGuid& CardId, const FWacomInteractionTargetHandle& TargetHandle);
+	void SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId);
+	void AfterCommand();
+
+	void ConsumeAndLogEvents();
+	bool ConsumeAndLogEvents(
+		const FWacomBattleCombatLogCommandContext& CommandContext,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot);
+
+	void HideCardDetailPanel();
+	void HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId);
+	bool IsFirstPersonCardInspectDetailActiveForSource(const FGuid& CardInstanceId) const;
+	UWacomCardDetailPanel* EnsureFirstPersonCardDetailPanel();
+	bool ShowFirstPersonCardDetailAtSlot(
+		const FWacomCardDetailViewData& DetailData,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void PositionFirstPersonCardDetailPanelBesideSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HideFirstPersonCardDetailPanel();
+	void TickCardDetailMotion(float DeltaTime);
+	void ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost Host);
+	bool ComputeFirstPersonCardDetailTarget(const FWacomFirstPersonCardLayerSlotView& SlotView, FVector2D& OutPosition);
+	FVector2D ComputeCardDetailPanelPositionBesideStable(
+		const FVector2D& AnchorPosition,
+		const FVector2D& AnchorSize,
+		const FVector2D& LayerSize,
+		const FVector2D& PanelSize,
+		float DetailPadding);
+	FVector2D GetFirstPersonCardDetailViewportSize() const;
+	void SetFirstPersonCardDetailSource(const FGuid& CardInstanceId);
+	void ClearFirstPersonCardDetailSource();
+	bool IsCurrentFirstPersonCardDetailSource(const FGuid& CardInstanceId) const;
+	void UpdateFirstPersonCardDetailSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
+	FVector2D GetLastFirstPersonCardDetailPanelPosition() const;
+
+	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
+	void StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>& Events);
+	void ClearPendingFirstPersonCardTransitionEvents();
+	void RecordFirstPersonPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
+	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
+		const FBattleSnapshot& PreviousSnapshot,
+		const FBattleSnapshot& NextSnapshot) const;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFirstPersonCardFeedbackHints(
+		const FBattleSnapshot& NextSnapshot) const;
+
+	int32 AppendBattlePresentationStackEntry(
+		const FWacomBattleCombatLogCommandContext& CommandContext,
+		const FBattleSnapshot& PreCommandSnapshot);
+	void BeginBattlePresentationStackEntryExit(int32 EntryId);
+	void FinishBattlePresentationStackEntryExit(int32 EntryId);
+	void ClearBattlePresentationStack();
+	bool HasBattlePresentationStackEntries() const;
+	void EnqueueBattlePresentationEvents(const TArray<FBattleEvent>& Events, int32 PresentationStackEntryId = INDEX_NONE);
+	void ClearBattlePresentationQueue();
+	bool IsBattlePresentationQueueBusy() const;
+	void QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand Command);
+	void ClearPendingTurnBoundaryCommand();
+	void TryExecutePendingTurnBoundaryCommand();
+	FWacomBattlePresentationTargetRegistry& GetBattlePresentationTargetRegistry();
+	void ClearBattlePresentationTargetRegistry();
+	void RegisterBattlePresentationTarget(
+		const FBattlePartSlotIdentity& TargetPartKey,
+		UObject* Owner,
+		TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler);
+	void UnregisterBattlePresentationTargetsForOwner(const UObject* Owner);
+	bool IsBattlePresentationTargetRegisteredForOwner(const UObject* Owner) const;
+	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
+	void PushPendingKnockdownChoiceDialog();
+	void AdvanceBattlePresentationQueueOnce();
+
+	void SetBattleSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts);
+	bool IsBattleSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const;
+	bool IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(const FWacomInteractionTargetHandle& TargetHandle) const;
+	void RebuildBattleSceneEnemyPartWorldTargetRegistry();
+	bool IsBattleSceneEnemyPartBridgeInCurrentRegistry(const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
+	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snapshot);
+	void ClearBattleEnemyPartWorldTargets();
+	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
+	FWacomBattleEnemyPartDragPredictionDebugInput BuildBattleSceneEnemyPartHoverPredictionInput(
+		const FWacomInteractionTargetHandle& TargetHandle) const;
+	void TickBattleSceneEnemyPartHoverProbe(float DeltaTime);
+	void UpdateBattleSceneEnemyPartHoverProbe();
+	void ClearBattleSceneEnemyPartHoverProbe(FName Reason);
+
+	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
+	UWacomFirstPersonCardAnchorComponent* ResolveActiveFirstPersonCardAnchor() const;
+	void SyncFirstPersonBattleHandLayer(const FBattleSnapshot& Snapshot);
+	void SyncFirstPersonBattleHandLayer(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+	void SyncFirstPersonBattleHandLayer(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+	void RefreshFromPresentationPhase(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+	void ClearFirstPersonBattleHandLayer();
+	bool ShouldUseFirstPersonBattleHandLayer() const;
+	bool ShouldEnableFirstPersonBattleHandInteraction() const;
+	void BindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
+	void UnbindFirstPersonBattleHandLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
+	void HandleFirstPersonCardLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerHoveredCardLayoutUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerCardTargetHovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerCardTargetUnhovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerHoveredCardTargetUpdated(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandleFirstPersonCardLayerPointerLeft();
+	void ApplyFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
+	void ClearFirstPersonCardDragCameraLookOverride();
+	void UpdateFirstPersonCardDragTargetFeedback(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void ClearFirstPersonCardDragTargetFeedback();
+	bool IsFirstPersonCardDragActiveForBattleSceneHover() const;
+	FWacomBattleCardDropResolveResult ResolveFirstPersonCardDropIntent(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView) const;
+	TArray<FWacomFirstPersonCardTargetAffordance> BuildFirstPersonCardTargetAffordances(
+		const FGuid& SourceCardId,
+		const FBattleSnapshot& Snapshot,
+		const UBattleSession& BattleSession) const;
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveBattleEnemyPartWorldTargetBridge(
+		const FWacomInteractionTargetHandle& TargetHandle) const;
+	UWacomBattleEnemyPartPresentationComponent* ResolveBattleEnemyPartWorldTargetPresentation(
+		const FWacomInteractionTargetHandle& TargetHandle) const;
+	bool ProbeFirstPersonCardDragTarget(
+		const FGuid& CardInstanceId,
+		const FWacomFirstPersonCardDragView& DragView,
+		FWacomInteractionTargetHandle& OutTargetHandle,
+		bool& bOutValidTarget) const;
+	bool ShouldShowFirstPersonDragInspectDetail(const FWacomFirstPersonCardDragView& DragView) const;
+
+	FWacomBattleHUDCardDetailController& GetCardDetailController();
+	const FWacomBattleHUDCardDetailController& GetCardDetailController() const;
+	FWacomBattleHUDCombatLogController& GetCombatLogController();
+	const FWacomBattleHUDCombatLogController& GetCombatLogController() const;
+	FWacomBattleHUDFirstPersonHandBridge& GetFirstPersonHandBridge();
+	const FWacomBattleHUDFirstPersonHandBridge& GetFirstPersonHandBridge() const;
+	FWacomBattleHUDPresentationCoordinator& GetPresentationCoordinator();
+	const FWacomBattleHUDPresentationCoordinator& GetPresentationCoordinator() const;
+	FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator();
+	const FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator() const;
+	FWacomBattleHUDCommandController& GetCommandController();
+	FWacomBattleHUDTargetingController& GetTargetingController();
+	FWacomBattleHUDSnapshotPresenter& GetSnapshotPresenter();
+
+#if WITH_AUTOMATION_TESTS
+	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FBattlePartSlotIdentity& TargetPartKey, int32 Amount);
+	void PlayTargetConfirmedCueForTest(const FBattlePartSlotIdentity& TargetPartKey);
+	bool EnqueueEndTurnPresentationPlanForTest(
+		const FBattlePresentationJournal& Journal,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PostCommandSnapshot);
+	FWacomBattleHUDAutomationTestView GetAutomationTestViewForTest() const;
+	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
+		const FBattleSnapshot& NextSnapshot) const;
+	void SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot);
+#endif
+
+private:
+	FWacomBattleHUDRuntimeHost RuntimeHost;
+	TUniquePtr<FWacomBattleHUDSnapshotPresenter> SnapshotPresenter;
+	TUniquePtr<FWacomBattleHUDCommandController> CommandController;
+	TUniquePtr<FWacomBattleHUDTargetingController> TargetingController;
+	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
+	TSharedPtr<FWacomBattleHUDCardDetailController> CardDetailController;
+	TSharedPtr<FWacomBattleHUDCombatLogController> CombatLogController;
+	TSharedPtr<FWacomBattleHUDFirstPersonHandBridge> FirstPersonHandBridge;
+	TSharedPtr<FWacomBattleHUDPresentationCoordinator> PresentationCoordinator;
+	TSharedPtr<FWacomBattleHUDSceneEnemyTargetCoordinator> SceneEnemyTargetCoordinator;
+
+	EBattleUIState UIState = EBattleUIState::Idle;
+	FGuid PendingTargetingCardId;
+	bool bHasBroadcastBattleEnd = false;
+	bool bBattleInputReady = true;
+	bool bFirstPersonBattleHandSuppressedForEntry = false;
+	FBattleSnapshot LastBattleSnapshot;
+	bool bHasLastBattleSnapshot = false;
+};

@@ -5,26 +5,20 @@
 #include "CoreMinimal.h"
 #include "UI/Battle/BattlePresentationStackEntryWidget.h"
 #include "UI/Battle/WacomBattlePresentationPlan.h"
+#include "UI/Battle/WacomBattleHUDRuntime.h"
 
 class FWacomBattleEventPresentationQueue;
-class UBattleHUD;
 struct FBattleEvent;
 struct FBattlePresentationJournal;
 struct FBattleSnapshot;
 struct FWacomBattleCombatLogCommandContext;
 struct FWacomBattlePresentationTargetCue;
-
-enum class EWacomBattleHUDTurnBoundaryCommand : uint8
-{
-	None,
-	Wait,
-	EndTurn,
-};
+class FWacomBattleHUDRuntime;
 
 class FWacomBattleHUDPresentationCoordinator
 {
 public:
-	explicit FWacomBattleHUDPresentationCoordinator(UBattleHUD& InHUD);
+	explicit FWacomBattleHUDPresentationCoordinator(FWacomBattleHUDRuntime& InRuntime);
 	~FWacomBattleHUDPresentationCoordinator();
 
 	void Shutdown();
@@ -86,7 +80,7 @@ public:
 #endif
 
 private:
-	UBattleHUD& HUD;
+	FWacomBattleHUDRuntime& Runtime;
 	TArray<FWacomBattlePresentationStackEntryView> BattlePresentationStackEntries;
 	TSharedPtr<FWacomBattleEventPresentationQueue> BattleEventPresentationQueue;
 	TArray<int32> BattlePresentationStackExitingEntryIds;

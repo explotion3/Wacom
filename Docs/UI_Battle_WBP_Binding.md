@@ -258,15 +258,17 @@ WBP 不应做：不直接提交 `FBattleCommand`；按钮可用性由父类 / HU
 
 父类：`UPileCountView`
 
-推荐绑定：
+用途：抽牌堆 / 弃牌堆 / 消耗牌堆数量显示。牌堆类型由 WBP 中的 Image 素材表达，C++ 不再绑定文字标签或底板。
+
+C++ 绑定：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `LabelText` | `TextBlock` | Optional | 抽牌堆 / 弃牌堆 / 消耗牌堆标签 |
 | `CountText` | `TextBlock` | Optional | 数量；允许 HUD 写入类似 `2+3` 的复合数量文本 |
-| `FrameBorder` | `Border` | Optional | 计数块底板 |
 
-WBP 不应做：不修改牌堆或规则状态。
+WBP 推荐结构：自行添加一个 Image 放抽牌堆 / 弃牌堆 / 消耗牌堆图标，再把 `CountText` 叠到图标合适位置。`LabelText` 和 `FrameBorder` 已不再是制作合同，不要新建或绑定。
+
+WBP 不应做：不修改牌堆或规则状态，不自行计算数量。
 
 ## Enemy Panel WBP
 

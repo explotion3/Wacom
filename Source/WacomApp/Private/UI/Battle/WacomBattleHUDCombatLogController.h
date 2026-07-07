@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 
-class UBattleHUD;
+class FWacomBattleHUDRuntime;
 struct FBattleEvent;
 struct FBattleSnapshot;
 struct FWacomBattleCombatLogCommandContext;
@@ -13,7 +13,7 @@ struct FWacomBattleCombatLogCommandContext;
 class FWacomBattleHUDCombatLogController
 {
 public:
-	explicit FWacomBattleHUDCombatLogController(UBattleHUD& InHUD);
+	explicit FWacomBattleHUDCombatLogController(FWacomBattleHUDRuntime& InRuntime);
 
 	void AppendBlock(const FWacomBattleCombatLogBlockView& Block);
 	void AppendBlock(
@@ -32,6 +32,6 @@ public:
 	}
 
 private:
-	UBattleHUD& HUD;
+	FWacomBattleHUDRuntime& Runtime;
 	TArray<FWacomBattleCombatLogBlockView> BattleCombatLogHistory;
 };

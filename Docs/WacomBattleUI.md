@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-07-06
+updated: 2026-07-07
 tags:
   - wacom/ui
   - wacom/battle
@@ -19,17 +19,20 @@ tags:
 
 ## §1 BattleHUD 职责
 
-`UBattleHUD` 是战斗 UI Screen coordinator。它保留 WBP 绑定、CommonUI 生命周期、`SetSession()`、Snapshot fanout、玩家意图 public 入口、BattleEnd 广播、配置值和 GC 引用。
+`UBattleHUD` 是战斗 UI Screen façade。它保留 WBP 绑定、CommonUI 生命周期、`SetSession()`、Blueprint/public 命令入口、BattleEnd 广播、Authoring 参数和 GC-owned Widget 引用。
 
-`UBattleHUD` 不直接实现战斗规则。玩家命令、目标选择、事件消费、日志、击倒弹窗、表现队列、场景敌人、first-person hand 和卡牌详情运行时状态，分别收口到 `WacomApp/Private/UI/Battle` 的 flow / coordinator / controller helper。
+`UBattleHUD` 不直接实现战斗规则，也不直接持有 command、targeting、snapshot presentation、hand、scene enemy、detail 或 combat log 的业务状态。运行时状态收口到 `WacomApp/Private/UI/Battle/FWacomBattleHUDRuntime`；`FWacomBattleHUDRuntimeHost` 是唯一读取 HUD 私有 WBP / UPROPERTY / GC 引用的 adapter。
 
-BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`。Targeting flow、Combat Log、Debug HUD 和 SceneEnemyHost bridge 都按 enemy slot 遍历部位；不再存在 `Snapshot.Enemy` 第一敌人兼容别名，也不再暴露“Primary scene enemy host”作为 HUD 绑定入口。
+BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`。Targeting controller、Combat Log、Debug HUD 和 SceneEnemyHost bridge 都按 enemy slot 遍历部位；不再存在 `Snapshot.Enemy` 第一敌人兼容别名，也不再暴露“Primary scene enemy host”作为 HUD 绑定入口。
 
 | 区域 | 当前 owner | 边界 |
 |---|---|---|
-| 命令提交 | `FWacomBattleHUDCommandFlow` | 把玩家意图转为 BattleSession command，不写规则细节 |
-| 目标选择 | `FWacomBattleHUDTargetingFlow` | 维护 TargetSelect UI state 和点击入口 |
-| 事件消费 | `FWacomBattleHUDEventFlow` | 消费 `UBattleSession::ConsumeEvents()` 并 fanout |
+| HUD façade / lifecycle | `UBattleHUD` | CommonUI 生命周期、WBP 绑定、Blueprint 入口、Authoring 参数、GC Widget 引用 |
+| Runtime state / ownership | `FWacomBattleHUDRuntime` | HUD UI state、pending target、input gate、battle-end guard、last snapshot、controller 生命周期 |
+| HUD private adapter | `FWacomBattleHUDRuntimeHost` | 唯一读取 HUD 私有 WBP / UPROPERTY / GC 引用的端口 |
+| Snapshot presentation | `FWacomBattleHUDSnapshotPresenter` | Snapshot 刷新顺序、pile count、battle end 清理、child fanout 前后协作 |
+| 命令提交 | `FWacomBattleHUDCommandController` | 把玩家意图转为 BattleSession command，不写规则细节；统一 AfterCommand |
+| 目标选择 | `FWacomBattleHUDTargetingController` | 维护 TargetSelect UI state、pending card 和点击入口 |
 | 场景敌人 | `FWacomBattleHUDSceneEnemyTargetCoordinator` | 同步当前 Trigger Host registry 的 PartActor bridge 和 cue |
 | 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier、EndTurn phase plan |
 | Combat Log | `FWacomBattleHUDCombatLogController` | history、trim、feed sync、readable log |
@@ -195,7 +198,7 @@ BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命�
 | 控件 | 分类 | 语义 |
 |---|---|---|
 | `UPlayerStatusBar` | `Wacom|Battle|Player Status|Authoring` | 显示玩家 HP / Shield / San Snapshot |
-| `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用“标签 + 数量”显示控件；BattleHUD 的弃牌堆格可显示 `弃牌堆数+本回合使用牌堆数` |
+| `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用数量显示控件；牌堆类型由 WBP Image 图标表达，BattleHUD 的弃牌堆格可显示 `弃牌堆数+本回合使用牌堆数` |
 | `UWacomProgressBar` | `Wacom|Common UI|Progress Bar` | 通用数值进度条显示控件 |
 
 BattleHUD 自身配置分类：

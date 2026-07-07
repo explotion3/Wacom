@@ -5,9 +5,10 @@
 #include "CoreMinimal.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
+#include "UI/Battle/WacomBattleHUDRuntime.h"
 
 class AWacomBattleEnemyActor;
-class UBattleHUD;
+class FWacomBattleHUDRuntime;
 class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 struct FBattleSnapshot;
@@ -20,7 +21,7 @@ struct FWacomBattleEnemyPartDragPredictionDebugInput;
 class FWacomBattleHUDSceneEnemyTargetCoordinator
 {
 public:
-	explicit FWacomBattleHUDSceneEnemyTargetCoordinator(UBattleHUD& InHUD);
+	explicit FWacomBattleHUDSceneEnemyTargetCoordinator(FWacomBattleHUDRuntime& InRuntime);
 
 	void SetSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts);
 	bool HasSceneEnemyHost() const;
@@ -53,7 +54,7 @@ private:
 		TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> Presentation;
 	};
 
-	UBattleHUD& HUD;
+	FWacomBattleHUDRuntime& Runtime;
 	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> SceneEnemyHosts;
 	TArray<FSceneEnemyPartWorldTargetEntry> SceneEnemyPartWorldTargets;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> HoveredPresentation;

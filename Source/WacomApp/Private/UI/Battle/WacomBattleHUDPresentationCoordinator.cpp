@@ -2,8 +2,6 @@
 
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 
-#include "UI/Battle/BattleHUD.h"
-
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/Widget.h"
 #include "Events/BattleEvent.h"
@@ -14,9 +12,7 @@
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
-#include "UI/Battle/WacomBattleHUDCommandFlow.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
-#include "UI/Battle/WacomBattleHUDTargetingFlow.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
 namespace
@@ -421,8 +417,8 @@ namespace
 	}
 }
 
-FWacomBattleHUDPresentationCoordinator::FWacomBattleHUDPresentationCoordinator(UBattleHUD& InHUD)
-	: HUD(InHUD)
+FWacomBattleHUDPresentationCoordinator::FWacomBattleHUDPresentationCoordinator(FWacomBattleHUDRuntime& InRuntime)
+	: Runtime(InRuntime)
 {
 }
 
@@ -596,7 +592,7 @@ void FWacomBattleHUDPresentationCoordinator::EnqueueEvents(
 	BattleEventPresentationQueue->EnqueueEvents(
 		Events,
 		PresentationStackEntryId,
-		HUD.CardPresentationStackMinimumHoldSeconds);
+		Runtime.Host().GetCardPresentationStackMinimumHoldSeconds());
 }
 
 bool FWacomBattleHUDPresentationCoordinator::EnqueueEndTurnPresentationPlan(
@@ -662,12 +658,12 @@ void FWacomBattleHUDPresentationCoordinator::QueuePendingTurnBoundaryCommand(
 		return;
 	}
 
-	HUD.ClearBattleSceneEnemyPartHoverProbe(TEXT("PendingTurnBoundary"));
+	Runtime.ClearBattleSceneEnemyPartHoverProbe(TEXT("PendingTurnBoundary"));
 	PendingTurnBoundaryCommand = Command;
-	if (HUD.UIState == EBattleUIState::TargetSelect)
+	if (Runtime.GetUIState() == EBattleUIState::TargetSelect)
 	{
-		HUD.PendingTargetingCardId.Invalidate();
-		HUD.SetUIState(EBattleUIState::Idle);
+		Runtime.ClearPendingTargetingCardId();
+		Runtime.SetUIState(EBattleUIState::Idle);
 	}
 	RefreshCommandAvailabilityWidgets();
 	TryExecutePendingTurnBoundaryCommand();
@@ -708,7 +704,7 @@ void FWacomBattleHUDPresentationCoordinator::TryExecutePendingTurnBoundaryComman
 		return;
 	}
 
-	UBattleSession* CurrentSession = HUD.GetSession();
+	UBattleSession* CurrentSession = Runtime.GetSession();
 	if (!CurrentSession)
 	{
 		ClearPendingTurnBoundaryCommand();
@@ -732,7 +728,7 @@ void FWacomBattleHUDPresentationCoordinator::TryExecutePendingTurnBoundaryComman
 
 void FWacomBattleHUDPresentationCoordinator::HandleQueueStarted()
 {
-	HUD.HideCardDetailPanel();
+	Runtime.HideCardDetailPanel();
 }
 
 void FWacomBattleHUDPresentationCoordinator::HandleQueueFinished()
@@ -744,7 +740,7 @@ void FWacomBattleHUDPresentationCoordinator::HandleQueueFinished()
 		return;
 	}
 
-	UBattleSession* CurrentSession = HUD.GetSession();
+	UBattleSession* CurrentSession = Runtime.GetSession();
 	if (!CurrentSession)
 	{
 		return;
@@ -753,7 +749,7 @@ void FWacomBattleHUDPresentationCoordinator::HandleQueueFinished()
 	const FBattleSnapshot Snapshot = CurrentSession->BuildSnapshot();
 	if (Snapshot.Phase == EBattlePhase::BattleEnd)
 	{
-		HUD.SetUIState(EBattleUIState::BattleEnd);
+		Runtime.SetUIState(EBattleUIState::BattleEnd);
 		return;
 	}
 
@@ -762,21 +758,21 @@ void FWacomBattleHUDPresentationCoordinator::HandleQueueFinished()
 
 void FWacomBattleHUDPresentationCoordinator::HandleBattleEndStep()
 {
-	if (UBattleSession* CurrentSession = HUD.GetSession())
+	if (UBattleSession* CurrentSession = Runtime.GetSession())
 	{
-		HUD.RefreshFromSnapshot(CurrentSession->BuildSnapshot());
+		Runtime.NativeRefreshFromSnapshot(CurrentSession->BuildSnapshot());
 	}
 }
 
 void FWacomBattleHUDPresentationCoordinator::HandleKnockdownChoiceDialogStep()
 {
-	HUD.PushPendingKnockdownChoiceDialog();
+	Runtime.PushPendingKnockdownChoiceDialog();
 }
 
 void FWacomBattleHUDPresentationCoordinator::HandleTargetCueStep(
 	const FWacomBattlePresentationTargetCue& Cue)
 {
-	HUD.PlayBattlePresentationCue(Cue);
+	Runtime.PlayBattlePresentationCue(Cue);
 }
 
 void FWacomBattleHUDPresentationCoordinator::HandleCardStackBoundaryStep(int32 EntryId)
@@ -786,7 +782,7 @@ void FWacomBattleHUDPresentationCoordinator::HandleCardStackBoundaryStep(int32 E
 
 UWorld* FWacomBattleHUDPresentationCoordinator::GetWorld() const
 {
-	return HUD.GetWorld();
+	return Runtime.GetWorld();
 }
 
 #if WITH_AUTOMATION_TESTS
@@ -806,9 +802,9 @@ void FWacomBattleHUDPresentationCoordinator::AdvancePresentationPlanOnce()
 
 void FWacomBattleHUDPresentationCoordinator::SyncStackWidget()
 {
-	if (HUD.BattlePresentationStack)
+	if (UBattlePresentationStackWidget* BattlePresentationStack = Runtime.Host().GetBattlePresentationStack())
 	{
-		HUD.BattlePresentationStack->SetPresentationStackEntries(BattlePresentationStackEntries);
+		BattlePresentationStack->SetPresentationStackEntries(BattlePresentationStackEntries);
 	}
 }
 
@@ -868,11 +864,11 @@ void FWacomBattleHUDPresentationCoordinator::StartNextPresentationPlanPhase()
 void FWacomBattleHUDPresentationCoordinator::StartHandPresentationPlanPhase(
 	FWacomBattlePresentationPhase&& Phase)
 {
-	HUD.RefreshFromPresentationPhase(
+	Runtime.RefreshFromPresentationPhase(
 		Phase.Snapshot,
 		Phase.TransitionHints,
 		Phase.FeedbackHints);
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = HUD.ResolveActiveFirstPersonCardAnchor())
+	if (UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor())
 	{
 		Anchor->RefreshCardLayerNow(0.0f);
 	}
@@ -954,22 +950,22 @@ void FWacomBattleHUDPresentationCoordinator::FinishPresentationPlan()
 	bProcessingPresentationPlan = false;
 	bWaitingForPresentationPlanEventQueue = false;
 
-	if (UBattleSession* CurrentSession = HUD.GetSession())
+	if (UBattleSession* CurrentSession = Runtime.GetSession())
 	{
-		HUD.RefreshFromSnapshot(CurrentSession->BuildSnapshot());
+		Runtime.NativeRefreshFromSnapshot(CurrentSession->BuildSnapshot());
 	}
 	TryExecutePendingTurnBoundaryCommand();
 }
 
 bool FWacomBattleHUDPresentationCoordinator::HasActiveFirstPersonHandPresentationPlayback() const
 {
-	const UWacomFirstPersonCardAnchorComponent* Anchor = HUD.ResolveActiveFirstPersonCardAnchor();
+	const UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor();
 	return Anchor && Anchor->HasActiveCardLayerPresentationPlayback();
 }
 
 bool FWacomBattleHUDPresentationCoordinator::HasPendingFirstPersonHandPresentationFrame() const
 {
-	return HUD.GetFirstPersonHandBridge().HasPendingPresentationFrame();
+	return Runtime.GetFirstPersonHandBridge().HasPendingPresentationFrame();
 }
 
 void FWacomBattleHUDPresentationCoordinator::ExecuteTurnBoundaryCommandNow(
@@ -978,10 +974,10 @@ void FWacomBattleHUDPresentationCoordinator::ExecuteTurnBoundaryCommandNow(
 	switch (Command)
 	{
 	case EWacomBattleHUDTurnBoundaryCommand::Wait:
-		FWacomBattleHUDCommandFlow::SubmitWait(HUD);
+		Runtime.OnWaitRequested();
 		break;
 	case EWacomBattleHUDTurnBoundaryCommand::EndTurn:
-		FWacomBattleHUDCommandFlow::SubmitEndTurn(HUD);
+		Runtime.OnEndTurnRequested();
 		break;
 	case EWacomBattleHUDTurnBoundaryCommand::None:
 	default:
@@ -991,20 +987,20 @@ void FWacomBattleHUDPresentationCoordinator::ExecuteTurnBoundaryCommandNow(
 
 void FWacomBattleHUDPresentationCoordinator::RefreshCommandAvailabilityWidgets()
 {
-	UBattleSession* CurrentSession = HUD.GetSession();
+	UBattleSession* CurrentSession = Runtime.GetSession();
 	if (!CurrentSession)
 	{
 		return;
 	}
 
 	const FBattleSnapshot Snapshot = CurrentSession->BuildSnapshot();
-	if (HUD.ActionPanel)
+	if (UActionPanel* ActionPanel = Runtime.Host().GetActionPanel())
 	{
-		HUD.ActionPanel->RefreshFromSnapshot(Snapshot);
+		ActionPanel->RefreshFromSnapshot(Snapshot);
 	}
 	if (!IsPresentationPlanBusy())
 	{
-		HUD.SyncFirstPersonBattleHandLayer(Snapshot);
+		Runtime.SyncFirstPersonBattleHandLayer(Snapshot);
 	}
-	HUD.SyncBattleEnemyPartWorldTargets(Snapshot);
+	Runtime.SyncBattleEnemyPartWorldTargets(Snapshot);
 }

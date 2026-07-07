@@ -3,12 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/Battle/BattleHUD.h"
 #include "UI/Card/WacomFirstPersonCardDetailMotionController.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
+class FWacomBattleHUDRuntime;
 class UBattleHUD;
 class UWacomCardDetailPanel;
+enum class EWacomBattleHUDCardDetailHost : uint8;
 struct FWacomFirstPersonCardDetailPanelHostContext;
 struct FWacomCardDetailViewData;
 struct FWacomFirstPersonCardLayerSlotView;
@@ -16,7 +17,7 @@ struct FWacomFirstPersonCardLayerSlotView;
 class FWacomBattleHUDCardDetailController
 {
 public:
-	explicit FWacomBattleHUDCardDetailController(UBattleHUD& InHUD);
+	explicit FWacomBattleHUDCardDetailController(FWacomBattleHUDRuntime& InRuntime);
 
 	bool IsVisible() const;
 	FText GetNameText() const;
@@ -33,7 +34,7 @@ public:
 	void HideFirstPerson();
 	void TickMotion(float DeltaTime);
 
-	void ForceHideHost(UBattleHUD::ECardDetailHost Host);
+	void ForceHideHost(EWacomBattleHUDCardDetailHost Host);
 	void ForceHideAll();
 	bool ComputeFirstPersonTarget(const FWacomFirstPersonCardLayerSlotView& SlotView, FVector2D& OutPosition);
 	FVector2D ComputeStablePosition(
@@ -55,6 +56,6 @@ private:
 	FWacomFirstPersonCardDetailMotionConfig BuildMotionConfig() const;
 	FWacomFirstPersonCardDetailPanelHostContext BuildPanelHostContext() const;
 
-	UBattleHUD& HUD;
+	FWacomBattleHUDRuntime& Runtime;
 	FWacomFirstPersonCardDetailMotionController MotionController;
 };

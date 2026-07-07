@@ -2,22 +2,23 @@
 
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 
+#include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomFirstPersonCardDetailPanelHost.h"
 
-FWacomBattleHUDCardDetailController::FWacomBattleHUDCardDetailController(UBattleHUD& InHUD)
-	: HUD(InHUD)
+FWacomBattleHUDCardDetailController::FWacomBattleHUDCardDetailController(FWacomBattleHUDRuntime& InRuntime)
+	: Runtime(InRuntime)
 {
 }
 
 bool FWacomBattleHUDCardDetailController::IsVisible() const
 {
-	return MotionController.IsVisible(HUD.FirstPersonCardDetailPanel);
+	return MotionController.IsVisible(Runtime.Host().GetFirstPersonCardDetailPanelSlot());
 }
 
 FText FWacomBattleHUDCardDetailController::GetNameText() const
 {
-	return MotionController.GetNameText(HUD.FirstPersonCardDetailPanel);
+	return MotionController.GetNameText(Runtime.Host().GetFirstPersonCardDetailPanelSlot());
 }
 
 void FWacomBattleHUDCardDetailController::HideAll()
@@ -30,7 +31,7 @@ void FWacomBattleHUDCardDetailController::HideFirstPersonForSource(
 {
 	MotionController.HideForSource(
 		CardInstanceId,
-		HUD.FirstPersonCardDetailPanel,
+		Runtime.Host().GetFirstPersonCardDetailPanelSlot(),
 		BuildMotionConfig());
 }
 
@@ -43,7 +44,7 @@ bool FWacomBattleHUDCardDetailController::IsFirstPersonInspectDetailActiveForSou
 UWacomCardDetailPanel* FWacomBattleHUDCardDetailController::EnsureFirstPersonPanel()
 {
 	return FWacomFirstPersonCardDetailPanelHost::EnsurePanel(
-		HUD.FirstPersonCardDetailPanel,
+		Runtime.Host().GetFirstPersonCardDetailPanelSlot(),
 		BuildPanelHostContext(),
 		MotionController,
 		BuildMotionConfig());
@@ -81,7 +82,7 @@ void FWacomBattleHUDCardDetailController::PositionFirstPersonBesideSlot(
 	MotionController.UpdateCurrentSlot(
 		MotionController.GetCurrentSource(),
 		SlotView,
-		HUD.FirstPersonCardDetailPanel,
+		Runtime.Host().GetFirstPersonCardDetailPanelSlot(),
 		BuildMotionConfig(),
 		GetFirstPersonViewportSize());
 }
@@ -90,7 +91,7 @@ void FWacomBattleHUDCardDetailController::HideFirstPerson()
 {
 	MotionController.HideForSource(
 		MotionController.GetCurrentSource(),
-		HUD.FirstPersonCardDetailPanel,
+		Runtime.Host().GetFirstPersonCardDetailPanelSlot(),
 		BuildMotionConfig());
 }
 
@@ -98,24 +99,24 @@ void FWacomBattleHUDCardDetailController::TickMotion(float DeltaTime)
 {
 	MotionController.TickMotion(
 		DeltaTime,
-		HUD.FirstPersonCardDetailPanel,
+		Runtime.Host().GetFirstPersonCardDetailPanelSlot(),
 		BuildMotionConfig(),
 		GetFirstPersonViewportSize());
 }
 
-void FWacomBattleHUDCardDetailController::ForceHideHost(UBattleHUD::ECardDetailHost Host)
+void FWacomBattleHUDCardDetailController::ForceHideHost(EWacomBattleHUDCardDetailHost Host)
 {
-	if (Host != UBattleHUD::ECardDetailHost::FirstPersonViewport)
+	if (Host != EWacomBattleHUDCardDetailHost::FirstPersonViewport)
 	{
 		return;
 	}
 
-	MotionController.ForceHideAll(HUD.FirstPersonCardDetailPanel);
+	MotionController.ForceHideAll(Runtime.Host().GetFirstPersonCardDetailPanelSlot());
 }
 
 void FWacomBattleHUDCardDetailController::ForceHideAll()
 {
-	MotionController.ForceHideAll(HUD.FirstPersonCardDetailPanel);
+	MotionController.ForceHideAll(Runtime.Host().GetFirstPersonCardDetailPanelSlot());
 }
 
 bool FWacomBattleHUDCardDetailController::ComputeFirstPersonTarget(
@@ -142,7 +143,7 @@ FVector2D FWacomBattleHUDCardDetailController::ComputeStablePosition(
 		LayerSize,
 		PanelSize,
 		DetailPadding,
-		HUD.CardDetailSideSwitchHysteresisPixels);
+		Runtime.Host().GetCardDetailSideSwitchHysteresisPixels());
 }
 
 FVector2D FWacomBattleHUDCardDetailController::GetFirstPersonViewportSize() const
@@ -174,7 +175,7 @@ void FWacomBattleHUDCardDetailController::UpdateFirstPersonSlot(
 	MotionController.UpdateCurrentSlot(
 		MotionController.GetCurrentSource(),
 		SlotView,
-		HUD.FirstPersonCardDetailPanel,
+		Runtime.Host().GetFirstPersonCardDetailPanelSlot(),
 		BuildMotionConfig(),
 		GetFirstPersonViewportSize());
 }
@@ -182,7 +183,7 @@ void FWacomBattleHUDCardDetailController::UpdateFirstPersonSlot(
 void FWacomBattleHUDCardDetailController::RemoveFirstPersonPanelFromViewport()
 {
 	FWacomFirstPersonCardDetailPanelHost::RemovePanelFromViewport(
-		HUD.FirstPersonCardDetailPanel,
+		Runtime.Host().GetFirstPersonCardDetailPanelSlot(),
 		MotionController);
 }
 
@@ -190,17 +191,17 @@ FWacomFirstPersonCardDetailMotionConfig
 FWacomBattleHUDCardDetailController::BuildMotionConfig() const
 {
 	FWacomFirstPersonCardDetailMotionConfig Config;
-	Config.bEnableReadabilityPolish = HUD.bEnableCardDetailReadabilityPolish;
-	Config.PanelEstimatedSize = HUD.CardDetailPanelEstimatedSize;
-	Config.DetailPadding = HUD.CardDetailPanelPadding;
-	Config.AnchorBaseSize = HUD.FirstPersonCardDetailAnchorBaseSize;
-	Config.HoverDelaySeconds = HUD.CardDetailHoverDelaySeconds;
-	Config.FadeInSpeed = HUD.CardDetailFadeInSpeed;
-	Config.FadeOutSpeed = HUD.CardDetailFadeOutSpeed;
-	Config.FollowSpeed = HUD.CardDetailFollowSpeed;
-	Config.PositionResetDistancePixels = HUD.CardDetailPositionResetDistancePixels;
-	Config.AppearStartScale = HUD.CardDetailAppearStartScale;
-	Config.SideSwitchHysteresisPixels = HUD.CardDetailSideSwitchHysteresisPixels;
+	Config.bEnableReadabilityPolish = Runtime.Host().IsCardDetailReadabilityPolishEnabled();
+	Config.PanelEstimatedSize = Runtime.Host().GetCardDetailPanelEstimatedSize();
+	Config.DetailPadding = Runtime.Host().GetCardDetailPanelPadding();
+	Config.AnchorBaseSize = Runtime.Host().GetFirstPersonCardDetailAnchorBaseSize();
+	Config.HoverDelaySeconds = Runtime.Host().GetCardDetailHoverDelaySeconds();
+	Config.FadeInSpeed = Runtime.Host().GetCardDetailFadeInSpeed();
+	Config.FadeOutSpeed = Runtime.Host().GetCardDetailFadeOutSpeed();
+	Config.FollowSpeed = Runtime.Host().GetCardDetailFollowSpeed();
+	Config.PositionResetDistancePixels = Runtime.Host().GetCardDetailPositionResetDistancePixels();
+	Config.AppearStartScale = Runtime.Host().GetCardDetailAppearStartScale();
+	Config.SideSwitchHysteresisPixels = Runtime.Host().GetCardDetailSideSwitchHysteresisPixels();
 	return Config;
 }
 
@@ -208,11 +209,11 @@ FWacomFirstPersonCardDetailPanelHostContext
 FWacomBattleHUDCardDetailController::BuildPanelHostContext() const
 {
 	FWacomFirstPersonCardDetailPanelHostContext Context;
-	Context.Outer = &HUD;
-	Context.OwningPlayer = HUD.GetOwningPlayer();
-	Context.World = HUD.GetWorld();
-	Context.PanelClass = HUD.CardDetailPanelClass;
-	Context.ViewportZOrder = HUD.FirstPersonCardDetailViewportZOrder;
+	Context.Outer = Runtime.Host().AsObject();
+	Context.OwningPlayer = Runtime.GetOwningPlayer();
+	Context.World = Runtime.GetWorld();
+	Context.PanelClass = Runtime.Host().GetCardDetailPanelClass();
+	Context.ViewportZOrder = Runtime.Host().GetFirstPersonCardDetailViewportZOrder();
 	Context.bCanAddToViewport = true;
 	return Context;
 }

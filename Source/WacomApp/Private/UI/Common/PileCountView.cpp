@@ -3,11 +3,10 @@
 #include "UI/Common/PileCountView.h"
 
 #include "Blueprint/WidgetTree.h"
-#include "Components/Border.h"
-#include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
+#include "Components/TextBlock.h"
 
 TSharedRef<SWidget> UPileCountView::RebuildWidget()
 {
@@ -23,24 +22,8 @@ TSharedRef<SWidget> UPileCountView::RebuildWidget()
 		Root->SetHeightOverride(80.0f);
 		WidgetTree->RootWidget = Root;
 
-		FrameBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("FrameBorder"));
-		FrameBorder->SetBrushColor(DefaultFrameColor);
-		FrameBorder->SetPadding(FMargin(4));
-		Root->AddChild(FrameBorder);
-
-		UVerticalBox* Content = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Content"));
-		FrameBorder->SetContent(Content);
-
-		LabelText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("LabelText"));
-		LabelText->SetText(DefaultLabel);
-		LabelText->SetJustification(ETextJustify::Center);
-		LabelText->SetColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.85f, 0.85f)));
-		{
-			FSlateFontInfo F = LabelText->GetFont();
-			F.Size = 10;
-			LabelText->SetFont(F);
-		}
-		Content->AddChildToVerticalBox(LabelText);
+		UOverlay* Content = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Content"));
+		Root->AddChild(Content);
 
 		CountText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("CountText"));
 		CountText->SetText(FText::AsNumber(0));
@@ -51,7 +34,11 @@ TSharedRef<SWidget> UPileCountView::RebuildWidget()
 			F.Size = 22;
 			CountText->SetFont(F);
 		}
-		Content->AddChildToVerticalBox(CountText);
+		if (UOverlaySlot* CountSlot = Content->AddChildToOverlay(CountText))
+		{
+			CountSlot->SetHorizontalAlignment(HAlign_Center);
+			CountSlot->SetVerticalAlignment(VAlign_Center);
+		}
 	}
 	return Super::RebuildWidget();
 }
@@ -59,14 +46,7 @@ TSharedRef<SWidget> UPileCountView::RebuildWidget()
 void UPileCountView::NativePreConstruct()
 {
 	Super::NativePreConstruct();
-	if (CachedLabel.IsEmpty()) { CachedLabel = DefaultLabel; }
 	RefreshDisplay();
-}
-
-void UPileCountView::SetLabel(FText InLabel)
-{
-	CachedLabel = InLabel;
-	if (LabelText) { LabelText->SetText(InLabel); }
 }
 
 void UPileCountView::SetCount(int32 InCount)
@@ -82,13 +62,7 @@ void UPileCountView::SetCountDisplayText(FText InText)
 	if (CountText) { CountText->SetText(GetCountDisplayText()); }
 }
 
-void UPileCountView::SetFrameColor(FLinearColor Color)
-{
-	if (FrameBorder) { FrameBorder->SetBrushColor(Color); }
-}
-
 void UPileCountView::RefreshDisplay()
 {
-	if (LabelText) { LabelText->SetText(CachedLabel.IsEmpty() ? DefaultLabel : CachedLabel); }
 	if (CountText) { CountText->SetText(GetCountDisplayText()); }
 }

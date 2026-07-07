@@ -20,17 +20,11 @@ class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class AWacomBattleEnemyActor;
 class APlayerController;
-class FWacomBattlePresentationTargetRegistry;
-class FWacomBattleHUDCardDetailController;
-class FWacomBattleHUDCombatLogController;
-class FWacomBattleHUDFirstPersonHandBridge;
-class FWacomBattleHUDSceneEnemyTargetCoordinator;
-class FWacomBattleHUDPresentationCoordinator;
+class FWacomBattleHUDRuntime;
+class FWacomBattleHUDRuntimeHost;
 class UWacomFirstPersonCardAnchorComponent;
+class FWacomBattlePresentationTargetRegistry;
 struct FBattleHUDFallbackLayoutBuilder;
-struct FWacomBattleHUDCommandFlow;
-struct FWacomBattleHUDEventFlow;
-struct FWacomBattleHUDTargetingFlow;
 struct FBattleCommand;
 struct FBattlePresentationJournal;
 struct FWacomBattlePresentationTargetCue;
@@ -39,6 +33,8 @@ struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardDragView;
 struct FWacomCardDetailViewData;
 struct FWacomBattleEnemyPartDragPredictionDebugInput;
+enum class EWacomBattleHUDCardDetailHost : uint8;
+enum class EWacomBattleHUDTurnBoundaryCommand : uint8;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEndedNative, EBattleOutcome);
@@ -166,6 +162,8 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 	int32 PresentationPlanPendingPhaseCount = 0;
 	FName ActivePresentationPlanPhaseName = NAME_None;
 	const TArray<FName>* PresentationPlanStartedPhaseNames = nullptr;
+	bool bHasLastBattleSnapshot = false;
+	int32 LastBattleSnapshotHandCount = 0;
 };
 #endif
 
@@ -261,7 +259,7 @@ public:
 	FVector2D FirstPersonCardDetailAnchorBaseSize = FVector2D(296.0f, 420.0f);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|HUD State", meta = (ToolTip = "当前 BattleHUD UI 状态。只读查询，不修改战斗或 UI 流程。"))
-	EBattleUIState GetUIState() const { return UIState; }
+	EBattleUIState GetUIState() const;
 
 	static FVector2D ComputeCardDetailPanelPositionBeside(
 		const FVector2D& AnchorPosition,
@@ -325,11 +323,11 @@ public:
 
 	/** 当前是否正在选目标。UI 可据此高亮可选敌方部位。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Targeting", meta = (ToolTip = "当前 BattleHUD 是否正在等待玩家选择目标。UI / 场景表现只读消费。"))
-	bool IsInTargetSelect() const { return UIState == EBattleUIState::TargetSelect; }
+	bool IsInTargetSelect() const;
 
 	/** 当前等待目标的卡 ID。IsInTargetSelect == false 时返回 invalid。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Targeting", meta = (ToolTip = "当前等待目标的卡牌实例 ID；不在 TargetSelect 时返回 invalid。"))
-	FGuid GetPendingTargetingCardId() const { return PendingTargetingCardId; }
+	FGuid GetPendingTargetingCardId() const;
 
 	/** 构建当前目标选择表现视图。UI/场景表现只读消费，不修改战斗状态。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Targeting")
@@ -345,9 +343,9 @@ public:
 	bool CanSubmitPlayerActionCommand() const;
 
 	void SetBattleInputReady(bool bReady);
-	bool IsBattleInputReady() const { return bBattleInputReady; }
+	bool IsBattleInputReady() const;
 	void SetFirstPersonBattleHandSuppressedForEntry(bool bSuppressed);
-	bool IsFirstPersonBattleHandSuppressedForEntry() const { return bFirstPersonBattleHandSuppressedForEntry; }
+	bool IsFirstPersonBattleHandSuppressedForEntry() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "是否存在等待表现栈清空后再提交的 Wait / EndTurn 命令。"))
 	bool HasPendingTurnBoundaryCommand() const;
@@ -423,47 +421,19 @@ protected:
 	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;
 
 private:
-	enum class ECardDetailHost : uint8
-	{
-		None,
-		FirstPersonViewport,
-	};
-
-	enum class ETurnBoundaryCommand : uint8
-	{
-		None,
-		Wait,
-		EndTurn,
-	};
-
-	EBattleUIState UIState = EBattleUIState::Idle;
-
-	/** TargetSelect 状态下待确认目标的卡实例 ID。 */
-	FGuid PendingTargetingCardId;
-
-	/** 战斗结束回调是否已广播过。保证只广播一次。 */
-	bool bHasBroadcastBattleEnd = false;
-
-	bool bBattleInputReady = true;
-	bool bFirstPersonBattleHandSuppressedForEntry = false;
-
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> FirstPersonCardDetailPanel;
 
-	UPROPERTY(Transient)
-	FBattleSnapshot LastBattleSnapshot;
-
-	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
-
-	bool bHasLastBattleSnapshot = false;
-	TSharedPtr<FWacomBattleHUDCardDetailController> CardDetailController;
-	TSharedPtr<FWacomBattleHUDCombatLogController> CombatLogController;
-	TSharedPtr<FWacomBattleHUDFirstPersonHandBridge> FirstPersonHandBridge;
-	TSharedPtr<FWacomBattleHUDPresentationCoordinator> PresentationCoordinator;
-	TSharedPtr<FWacomBattleHUDSceneEnemyTargetCoordinator> SceneEnemyTargetCoordinator;
+	FWacomBattleHUDRuntime* BattleHUDRuntime = nullptr;
 
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
+	FWacomBattleHUDRuntime& GetBattleHUDRuntime();
+	const FWacomBattleHUDRuntime& GetBattleHUDRuntime() const;
+	void RebuildChildBattleWidgetsForRuntime();
+	void RefreshChildBattleWidgetsFromSnapshotForRuntime(const FBattleSnapshot& Snap);
+	void BindFirstPersonCardLayerInteractionsForRuntime(UWacomFirstPersonCardAnchorComponent& Anchor);
+	void UnbindFirstPersonCardLayerInteractionsForRuntime(UWacomFirstPersonCardAnchorComponent& Anchor);
 
 	/** 内部：提交 PlayCard 命令 + 事件消费 + 刷新。 */
 	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
@@ -493,7 +463,7 @@ private:
 		int32 PresentationStackEntryId = INDEX_NONE);
 	void ClearBattlePresentationQueue();
 	bool IsBattlePresentationQueueBusy() const;
-	void QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand Command);
+	void QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand Command);
 	void ClearPendingTurnBoundaryCommand();
 	void TryExecutePendingTurnBoundaryCommand();
 	FWacomBattlePresentationTargetRegistry& GetBattlePresentationTargetRegistry();
@@ -519,6 +489,9 @@ private:
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
 		const FBattleSnapshot& NextSnapshot) const;
 	void SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot);
+	void SetTargetSelectionStateForAutomationTest(const FGuid& PendingCardId);
+	void ClearTargetSelectionStateForAutomationTest();
+	void QueuePendingTurnBoundaryWaitForAutomationTest();
 #endif
 
 	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
@@ -534,7 +507,7 @@ private:
 	void PositionFirstPersonCardDetailPanelBesideSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HideFirstPersonCardDetailPanel();
 	void TickCardDetailMotion(float DeltaTime);
-	void ForceHideCardDetailHost(ECardDetailHost Host);
+	void ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost Host);
 	bool ComputeFirstPersonCardDetailTarget(const FWacomFirstPersonCardLayerSlotView& SlotView, FVector2D& OutPosition);
 	FVector2D ComputeCardDetailPanelPositionBesideStable(
 		const FVector2D& AnchorPosition,
@@ -549,16 +522,6 @@ private:
 	void UpdateFirstPersonCardDetailSlot(const FWacomFirstPersonCardLayerSlotView& SlotView);
 	FVector2D GetLastFirstPersonCardDetailPanelPosition() const;
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
-	FWacomBattleHUDCardDetailController& GetCardDetailController();
-	const FWacomBattleHUDCardDetailController& GetCardDetailController() const;
-	FWacomBattleHUDCombatLogController& GetCombatLogController();
-	const FWacomBattleHUDCombatLogController& GetCombatLogController() const;
-	FWacomBattleHUDFirstPersonHandBridge& GetFirstPersonHandBridge();
-	const FWacomBattleHUDFirstPersonHandBridge& GetFirstPersonHandBridge() const;
-	FWacomBattleHUDPresentationCoordinator& GetPresentationCoordinator();
-	const FWacomBattleHUDPresentationCoordinator& GetPresentationCoordinator() const;
-	FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator();
-	const FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator() const;
 	void RebuildBattleSceneEnemyPartWorldTargetRegistry();
 	bool IsBattleSceneEnemyPartBridgeInCurrentRegistry(
 		const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
@@ -630,13 +593,6 @@ private:
 	float BattleSceneEnemyPartHoverProbeIntervalSeconds = 0.03f;
 
 	friend struct FBattleHUDFallbackLayoutBuilder;
-	friend struct FWacomBattleHUDCommandFlow;
-	friend struct FWacomBattleHUDEventFlow;
-	friend struct FWacomBattleHUDTargetingFlow;
-	friend class FWacomBattleHUDCardDetailController;
-	friend class FWacomBattleHUDCombatLogController;
-	friend class FWacomBattleHUDFirstPersonHandBridge;
-	friend class FWacomBattleHUDPresentationCoordinator;
-	friend class FWacomBattleHUDSceneEnemyTargetCoordinator;
+	friend class FWacomBattleHUDRuntimeHost;
 	friend class UWacomBattleHUDDetailTest;
 };

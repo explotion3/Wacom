@@ -303,14 +303,12 @@ public:
 
 	void SetTargetSelectionStateForTest(const FGuid& PendingCardId)
 	{
-		PendingTargetingCardId = PendingCardId;
-		SetUIState(EBattleUIState::TargetSelect);
+		SetTargetSelectionStateForAutomationTest(PendingCardId);
 	}
 
 	void ClearTargetSelectionStateForTest()
 	{
-		PendingTargetingCardId.Invalidate();
-		SetUIState(EBattleUIState::Idle);
+		ClearTargetSelectionStateForAutomationTest();
 	}
 
 	void SetUIStateForTest(EBattleUIState NewState)
@@ -461,17 +459,17 @@ public:
 
 	EBattleUIState GetUIStateForTest() const
 	{
-		return UIState;
+		return GetUIState();
 	}
 
 	bool HasLastBattleSnapshotForTest() const
 	{
-		return bHasLastBattleSnapshot;
+		return AutomationViewForTest().bHasLastBattleSnapshot;
 	}
 
 	int32 GetLastBattleSnapshotHandCountForTest() const
 	{
-		return LastBattleSnapshot.Hand.Cards.Num();
+		return AutomationViewForTest().LastBattleSnapshotHandCount;
 	}
 
 	bool HasLastBattleHandCardForTest(const FGuid& CardInstanceId) const
@@ -521,7 +519,7 @@ public:
 
 	void QueuePendingTurnBoundaryWaitForTest()
 	{
-		QueuePendingTurnBoundaryCommand(ETurnBoundaryCommand::Wait);
+		QueuePendingTurnBoundaryWaitForAutomationTest();
 	}
 
 	void ClearPendingTurnBoundaryCommandForTest()

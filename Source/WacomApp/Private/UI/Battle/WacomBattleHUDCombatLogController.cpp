@@ -2,12 +2,11 @@
 
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
 
-#include "UI/Battle/BattleHUD.h"
-
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/WacomBattleHUDRuntime.h"
 
-FWacomBattleHUDCombatLogController::FWacomBattleHUDCombatLogController(UBattleHUD& InHUD)
-	: HUD(InHUD)
+FWacomBattleHUDCombatLogController::FWacomBattleHUDCombatLogController(FWacomBattleHUDRuntime& InRuntime)
+	: Runtime(InRuntime)
 {
 }
 
@@ -46,7 +45,7 @@ void FWacomBattleHUDCombatLogController::Clear()
 
 void FWacomBattleHUDCombatLogController::Trim()
 {
-	const int32 SafeMaxEntries = FMath::Max(1, HUD.BattleCombatLogMaxBlocks);
+	const int32 SafeMaxEntries = FMath::Max(1, Runtime.Host().GetBattleCombatLogMaxBlocks());
 	if (BattleCombatLogHistory.Num() > SafeMaxEntries)
 	{
 		BattleCombatLogHistory.RemoveAt(0, BattleCombatLogHistory.Num() - SafeMaxEntries);
@@ -55,9 +54,9 @@ void FWacomBattleHUDCombatLogController::Trim()
 
 void FWacomBattleHUDCombatLogController::SyncFeed()
 {
-	if (HUD.CombatLogFeed)
+	if (UBattleCombatLogFeedWidget* CombatLogFeed = Runtime.Host().GetCombatLogFeed())
 	{
-		HUD.CombatLogFeed->MaxVisibleBlocks = FMath::Max(1, HUD.BattleCombatLogMaxBlocks);
-		HUD.CombatLogFeed->SetCombatLogBlocks(BattleCombatLogHistory);
+		CombatLogFeed->MaxVisibleBlocks = FMath::Max(1, Runtime.Host().GetBattleCombatLogMaxBlocks());
+		CombatLogFeed->SetCombatLogBlocks(BattleCombatLogHistory);
 	}
 }
