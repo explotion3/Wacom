@@ -16,6 +16,8 @@ class UWacomRunEventDefinition;
 class UWacomSaveGame;
 struct FBattleInitParams;
 
+enum class ERunUiSnapshotDirtyFlags : uint8;
+
 #if WITH_AUTOMATION_TESTS
 struct FWacomRunSessionTestAccess;
 #endif
@@ -760,7 +762,7 @@ private:
 
 	struct FScopedRunStateNotificationBatch;
 
-	void MarkRunUiSnapshotsDirty(uint8 DirtyFlags);
+	void MarkRunUiSnapshotsDirty(ERunUiSnapshotDirtyFlags DirtyFlags);
 
 	/**
 	 * 当 ExperienceCurrent ≥ ExperienceCapacity 时入账技能（可多次）。

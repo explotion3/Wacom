@@ -19,42 +19,62 @@
 
 // ================ 内部辅助 ================
 
+enum class ERunUiSnapshotDirtyFlags : uint8
+{
+	None = 0,
+	BackpackStorage = 1 << 0,
+	Shop = 1 << 1,
+	Economy = 1 << 2,
+};
+
 namespace
 {
-	enum class ERunUiSnapshotDirtyFlag : uint8
+	ERunUiSnapshotDirtyFlags operator|(
+		ERunUiSnapshotDirtyFlags A,
+		ERunUiSnapshotDirtyFlags B)
 	{
-		None = 0,
-		BackpackStorage = 1 << 0,
-		Shop = 1 << 1,
-		Economy = 1 << 2,
-	};
-
-	uint8 MakeRunUiSnapshotDirtyFlags()
-	{
-		return static_cast<uint8>(ERunUiSnapshotDirtyFlag::None);
+		return static_cast<ERunUiSnapshotDirtyFlags>(
+			static_cast<uint8>(A) | static_cast<uint8>(B));
 	}
 
-	uint8 MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag Flag)
+	ERunUiSnapshotDirtyFlags& operator|=(
+		ERunUiSnapshotDirtyFlags& A,
+		ERunUiSnapshotDirtyFlags B)
 	{
-		return static_cast<uint8>(Flag);
+		A = A | B;
+		return A;
 	}
 
-	uint8 MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag A, ERunUiSnapshotDirtyFlag B)
+	ERunUiSnapshotDirtyFlags MakeRunUiSnapshotDirtyFlags()
 	{
-		return static_cast<uint8>(A) | static_cast<uint8>(B);
+		return ERunUiSnapshotDirtyFlags::None;
 	}
 
-	uint8 MakeRunUiSnapshotDirtyFlags(
-		ERunUiSnapshotDirtyFlag A,
-		ERunUiSnapshotDirtyFlag B,
-		ERunUiSnapshotDirtyFlag C)
+	ERunUiSnapshotDirtyFlags MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags Flag)
 	{
-		return static_cast<uint8>(A) | static_cast<uint8>(B) | static_cast<uint8>(C);
+		return Flag;
 	}
 
-	bool HasRunUiSnapshotDirtyFlag(uint8 DirtyFlags, ERunUiSnapshotDirtyFlag Flag)
+	ERunUiSnapshotDirtyFlags MakeRunUiSnapshotDirtyFlags(
+		ERunUiSnapshotDirtyFlags A,
+		ERunUiSnapshotDirtyFlags B)
 	{
-		return (DirtyFlags & static_cast<uint8>(Flag)) != 0;
+		return A | B;
+	}
+
+	ERunUiSnapshotDirtyFlags MakeRunUiSnapshotDirtyFlags(
+		ERunUiSnapshotDirtyFlags A,
+		ERunUiSnapshotDirtyFlags B,
+		ERunUiSnapshotDirtyFlags C)
+	{
+		return A | B | C;
+	}
+
+	bool HasRunUiSnapshotDirtyFlag(
+		ERunUiSnapshotDirtyFlags DirtyFlags,
+		ERunUiSnapshotDirtyFlags Flag)
+	{
+		return (static_cast<uint8>(DirtyFlags) & static_cast<uint8>(Flag)) != 0;
 	}
 
 	bool ShouldStarterCardStartInBattleDeck(const UCardDefinition* Card)
@@ -289,27 +309,27 @@ namespace
 			Request.BlockedKeywords.Num());
 	}
 
-	uint8 GetRunWorldCardInteractionDirtyFlags(
+	ERunUiSnapshotDirtyFlags GetRunWorldCardInteractionDirtyFlags(
 		const FRunWorldCardInteractionRequest& Request)
 	{
-		uint8 DirtyFlags = MakeRunUiSnapshotDirtyFlags();
+		ERunUiSnapshotDirtyFlags DirtyFlags = MakeRunUiSnapshotDirtyFlags();
 		if (Request.bConsumeCardOnSuccess || GetRunWorldCardInteractionCardRewardCount(Request.Rewards) > 0)
 		{
-			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage);
+			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage);
 		}
 		if (GetRunWorldCardInteractionGoldTotal(Request.Rewards) > 0)
 		{
-			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy);
+			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Economy);
 		}
 		return DirtyFlags;
 	}
 
-	uint8 GetRunEventChoiceResultDirtyFlags(const FRunEventChoiceResult& Result)
+	ERunUiSnapshotDirtyFlags GetRunEventChoiceResultDirtyFlags(const FRunEventChoiceResult& Result)
 	{
-		uint8 DirtyFlags = MakeRunUiSnapshotDirtyFlags();
+		ERunUiSnapshotDirtyFlags DirtyFlags = MakeRunUiSnapshotDirtyFlags();
 		if (Result.PaidCardInstanceId.IsValid())
 		{
-			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage);
+			DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage);
 		}
 		for (const FRunEventChoiceEffectResult& EffectResult : Result.EffectResults)
 		{
@@ -320,11 +340,11 @@ namespace
 			if (EffectResult.EffectType == EWacomRunEventEffectType::GainCard
 				|| EffectResult.EffectType == EWacomRunEventEffectType::RemoveCard)
 			{
-				DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage);
+				DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage);
 			}
 			else if (EffectResult.EffectType == EWacomRunEventEffectType::AddGold)
 			{
-				DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy);
+				DirtyFlags |= MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Economy);
 			}
 		}
 		return DirtyFlags;
@@ -392,17 +412,17 @@ void URunSession::EndRunStateNotificationBatch()
 	BroadcastRunStateChangedImmediately();
 }
 
-void URunSession::MarkRunUiSnapshotsDirty(uint8 DirtyFlags)
+void URunSession::MarkRunUiSnapshotsDirty(ERunUiSnapshotDirtyFlags DirtyFlags)
 {
-	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlag::BackpackStorage))
+	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlags::BackpackStorage))
 	{
 		++BackpackStorageSnapshotRevision;
 	}
-	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlag::Shop))
+	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlags::Shop))
 	{
 		++ShopSnapshotRevision;
 	}
-	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlag::Economy))
+	if (HasRunUiSnapshotDirtyFlag(DirtyFlags, ERunUiSnapshotDirtyFlags::Economy))
 	{
 		++EconomySnapshotRevision;
 	}
@@ -497,9 +517,9 @@ bool URunSession::Initialize(UCharacterDefinition* InCharacter)
 		RunState.RemainingNodeCount);
 	MarkRunUiSnapshotsDirty(
 		MakeRunUiSnapshotDirtyFlags(
-			ERunUiSnapshotDirtyFlag::BackpackStorage,
-			ERunUiSnapshotDirtyFlag::Shop,
-			ERunUiSnapshotDirtyFlag::Economy));
+			ERunUiSnapshotDirtyFlags::BackpackStorage,
+			ERunUiSnapshotDirtyFlags::Shop,
+			ERunUiSnapshotDirtyFlags::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -682,9 +702,9 @@ bool URunSession::ApplySaveGameToRunState(UWacomSaveGame* SaveGame)
 	}
 	MarkRunUiSnapshotsDirty(
 		MakeRunUiSnapshotDirtyFlags(
-			ERunUiSnapshotDirtyFlag::BackpackStorage,
-			ERunUiSnapshotDirtyFlag::Shop,
-			ERunUiSnapshotDirtyFlag::Economy));
+			ERunUiSnapshotDirtyFlags::BackpackStorage,
+			ERunUiSnapshotDirtyFlags::Shop,
+			ERunUiSnapshotDirtyFlags::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -861,7 +881,7 @@ void URunSession::RecomputeBurden()
 	// Public 入口：内部完成容量重算，末尾统一广播一次。
 	// 其他 public 入口会调用 RecomputeBurdenInternal，避免重复广播。
 	RecomputeBurdenInternal();
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
 	NotifyRunStateChanged();
 }
 
@@ -996,7 +1016,7 @@ bool URunSession::SetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnable
 			if (Inst.InstanceId == InstanceId)
 			{
 				Inst.bBattleEnabledInSpecialZone = bEnabled;
-				MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
+				MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
 				NotifyRunStateChanged();
 				return true;
 			}
@@ -1464,7 +1484,7 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 	{
 		RecomputeBurdenInternal();
 	}
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1478,7 +1498,7 @@ void URunSession::AcquireCardToRun(UCardDefinition* Card)
 {
 	if (AcquireCardToRunInternal(Card))
 	{
-		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
 		NotifyRunStateChanged();
 	}
 }
@@ -1508,7 +1528,7 @@ bool URunSession::DestroyCardByInstance(FGuid InstanceId)
 	const bool bOk = DestroyCardByInstanceInternal(InstanceId);
 	if (bOk)
 	{
-		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
 		NotifyRunStateChanged();
 	}
 	return bOk;
@@ -1559,8 +1579,8 @@ bool URunSession::DeleteCardForGoldByInstance(FGuid InstanceId)
 		*InstanceId.ToString(), GoldReward, RunState.Gold);
 	MarkRunUiSnapshotsDirty(
 		MakeRunUiSnapshotDirtyFlags(
-			ERunUiSnapshotDirtyFlag::BackpackStorage,
-			ERunUiSnapshotDirtyFlag::Economy));
+			ERunUiSnapshotDirtyFlags::BackpackStorage,
+			ERunUiSnapshotDirtyFlags::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1599,7 +1619,7 @@ void URunSession::AddGold(int32 Amount)
 		return;
 	}
 	RunState.Gold += Amount;
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Economy));
 	NotifyRunStateChanged();
 }
 
@@ -1617,7 +1637,7 @@ bool URunSession::RemoveGold(int32 Amount)
 		return false;
 	}
 	RunState.Gold -= Amount;
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1662,7 +1682,7 @@ bool URunSession::CollectGoldPickup(FName PersistentId, int32 GoldAmount)
 		*PersistentId.ToString(),
 		GoldAmount,
 		RunState.Gold);
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Economy));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1699,7 +1719,7 @@ bool URunSession::CollectCardPickup(FName PersistentId, UCardDefinition* CardDef
 		TEXT("[RunSession] CollectCardPickup: PersistentId=%s Card=%s"),
 		*PersistentId.ToString(),
 		*GetNameSafe(CardDefinition));
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::BackpackStorage));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1900,7 +1920,7 @@ bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>&
 {
 	if (FRunShopTransaction::BeginVisit(RunState, ShopId, Offers))
 	{
-		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Shop));
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Shop));
 		NotifyRunStateChanged();
 		return true;
 	}
@@ -1918,12 +1938,12 @@ void URunSession::EndShopVisit()
 
 	if (FRunShopTransaction::EndVisit(RunState))
 	{
-		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Shop));
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Shop));
 		ConsumeNode(1);
 	}
 	else
 	{
-		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlag::Shop));
+		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Shop));
 		NotifyRunStateChanged();
 	}
 }
@@ -1949,9 +1969,9 @@ bool URunSession::PurchaseShopOffer(FGuid OfferId)
 
 	MarkRunUiSnapshotsDirty(
 		MakeRunUiSnapshotDirtyFlags(
-			ERunUiSnapshotDirtyFlag::BackpackStorage,
-			ERunUiSnapshotDirtyFlag::Shop,
-			ERunUiSnapshotDirtyFlag::Economy));
+			ERunUiSnapshotDirtyFlags::BackpackStorage,
+			ERunUiSnapshotDirtyFlags::Shop,
+			ERunUiSnapshotDirtyFlags::Economy));
 	NotifyRunStateChanged();
 	return true;
 }
@@ -1973,8 +1993,8 @@ bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
 
 	MarkRunUiSnapshotsDirty(
 		MakeRunUiSnapshotDirtyFlags(
-			ERunUiSnapshotDirtyFlag::BackpackStorage,
-			ERunUiSnapshotDirtyFlag::Economy));
+			ERunUiSnapshotDirtyFlags::BackpackStorage,
+			ERunUiSnapshotDirtyFlags::Economy));
 	NotifyRunStateChanged();
 	return true;
 }

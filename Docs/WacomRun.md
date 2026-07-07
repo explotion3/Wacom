@@ -327,7 +327,7 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 
 - 修改 `RunState` 后仍保留 `NotifyRunStateChanged()` 粗粒度广播。
 - 战斗结算、商店关闭和 RunEvent 选择等组合事务会合并内部通知，在事务末尾广播一次。
-- 会改变 Backpack / Shop / Economy UI Snapshot 事实的事务，必须在广播前通过 `RunSession.cpp` 私有 dirty flags 入口标记对应 revision。
+- 会改变 Backpack / Shop / Economy UI Snapshot 事实的事务，必须在广播前通过 `RunSession.cpp` 私有 typed dirty flags 入口标记对应 revision；不要用裸数值 mask 在多个事务分支里手写 revision 组合。
 - RunEvent 和 Run world card interaction 的影响面由局部 helper 从成功 result / reward / consume fact 统一推导，避免在多个 if 分支里重复写 bump 条件。
 - `Wacom.Run.SnapshotRevisions` 是 revision drift guard；`Wacom.Run.NotificationCoalescing` 是组合事务广播次数 guard。
 
