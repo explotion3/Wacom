@@ -2,7 +2,7 @@
 type: interaction-contract
 scope: wacom-world-interaction
 status: active
-updated: 2026-06-08
+updated: 2026-07-08
 tags:
   - wacom/app
   - wacom/world-interaction
@@ -139,7 +139,7 @@ BattleHUD scene enemy coordinator 扫描当前 Host registry 时会把每个 Par
 
 Bridge 绑定成功后会把 `PartInstanceId` 写入 `UWacomInteractionTargetComponent.TargetId`，把 `PartId` 写入 `StableTargetId`，并把 `EncounterId / EnemySlotId / PartSlotId` 写入 handle 的 Battle slot identity 字段。First-person world drop 使用完整 handle 提交，Battle validation 会拒绝 runtime id 与 slot identity 不一致的目标。BattleHUD 判断 handle 是否属于当前 scene enemy registry 时只按完整 slot identity 匹配，不再通过 `SourceObject` 反查 Bridge 兜底；`SourceObject` 只保留为命中来源和调试弱引用。
 
-`AWacomPlayerController::TryRouteBattleSceneTargetClick()` 通过 cursor trace 命中 Component，扫描 `IWacomInteractionTargetProvider` 构建 handle。只有 `TargetKind=World`、`TargetTag=Interaction.Target.Battle.EnemyPart` 且 handle 属于当前 BattleHUD Host registry 时，才转发为 Battle enemy part 点击。
+Battle scene target click / probe 的正式实现位于 App-private `FWacomBattleSceneInteractionRouter`。`AWacomPlayerController::TryRouteBattleSceneTargetClick()` 等 public 方法只作为输入 façade 保留，并继续提供 protected trace / flow seam 给自动化测试。Router 通过 cursor trace 命中 Component，经共享 `WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit()` 扫描 `IWacomInteractionTargetProvider` 构建 handle；只有 `TargetKind=World`、`TargetTag=Interaction.Target.Battle.EnemyPart` 且 handle 属于当前 BattleHUD Host registry 时，才转发为 Battle enemy part 点击。
 
 ## §6 Run Menu Zone Target
 
@@ -176,7 +176,7 @@ Bridge 绑定成功后会把 `PartInstanceId` 写入 `UWacomInteractionTargetCom
 
 Battle 已接入 `UBattleSession::ValidateTargetWithCard()`，用于 TargetSelect、first-person drag/drop world target 和 hand-card target validation。UI 只读取 validation result，不直接解析 BattleState。
 
-通用 Run target resolver 尚未独立抽象；当前 Run world / Run menu drop 由 App-private Run card drop coordinator 识别 target adapter，再进入明确的 RunSession 事务或 owning menu submit policy。
+命中结果转 `FWacomInteractionTargetHandle` 的组件扫描已收口到 App-private `WacomInteractionTargetHitResolver`，供 Battle scene target 和 Run world target probe 复用。通用 Run target resolver 尚未独立抽象；当前 Run world / Run menu drop 由 App-private Run card drop coordinator 识别 target adapter，再进入明确的 RunSession 事务或 owning menu submit policy。
 
 ## §8 Debug / Development Entry Points
 

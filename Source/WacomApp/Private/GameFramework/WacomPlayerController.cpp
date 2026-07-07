@@ -18,7 +18,7 @@
 #include "Actors/WacomRunTunnelBranchTargetActor.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
-#include "Interaction/WacomInteractionTargetProvider.h"
+#include "GameFramework/WacomBattleSceneInteractionRouter.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
 #include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
@@ -26,6 +26,7 @@
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "RunSession.h"
 #include "Characters/CharacterDefinition.h"
+#include "Interaction/WacomInteractionTargetHitResolver.h"
 #include "Interaction/WacomWorldInteractable.h"
 #include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
@@ -183,39 +184,6 @@ namespace
 	FString GetDebugObjectName(const UObject* Object)
 	{
 		return IsValid(Object) ? Object->GetName() : TEXT("None");
-	}
-
-	/**
-	 * 从命中 Actor 的组件中查找首个实现了 IWacomInteractionTargetProvider 的，
-	 * 构建统一的交互目标 handle。
-	 */
-	FWacomInteractionTargetHandle BuildInteractionTargetHandleFromHit(const FHitResult& HitResult)
-	{
-		AActor* HitActor = HitResult.GetActor();
-		if (!HitActor)
-		{
-			return FWacomInteractionTargetHandle();
-		}
-
-		TArray<UActorComponent*> Components;
-		HitActor->GetComponents(Components);
-		for (UActorComponent* Component : Components)
-		{
-			if (IWacomInteractionTargetProvider* Provider = Cast<IWacomInteractionTargetProvider>(Component))
-			{
-				FWacomInteractionTargetHandle Handle = Provider->BuildWorldTargetHandle();
-				if (Handle.IsValid())
-				{
-					if (HitResult.HasValidHitObjectHandle() || HitResult.Location != FVector::ZeroVector)
-					{
-						Handle.WorldLocation = HitResult.Location;
-					}
-					return Handle;
-				}
-			}
-		}
-
-		return FWacomInteractionTargetHandle();
 	}
 
 }
@@ -1092,139 +1060,38 @@ UBattleHUD* AWacomPlayerController::GetActiveBattleHUD() const
 	return GM ? GM->GetActiveBattleHUD() : nullptr;
 }
 
+FWacomBattleSceneInteractionRouter& AWacomPlayerController::GetBattleSceneInteractionRouter()
+{
+	if (!BattleSceneInteractionRouter)
+	{
+		BattleSceneInteractionRouter =
+			MakeShared<FWacomBattleSceneInteractionRouter>(*this);
+	}
+	return *BattleSceneInteractionRouter;
+}
+
+const FWacomBattleSceneInteractionRouter& AWacomPlayerController::GetBattleSceneInteractionRouter() const
+{
+	return const_cast<AWacomPlayerController*>(this)->GetBattleSceneInteractionRouter();
+}
+
 bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetSelect)
 {
-	UBattleHUD* HUD = nullptr;
-	if (!CanRouteBattleSceneTargetClick(HUD))
-	{
-		if (bLogBattleSceneTargetClickRouting)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=CannotRouteBattleSceneTargetClick requireTargetSelect=%s"),
-				bRequireTargetSelect ? TEXT("true") : TEXT("false"));
-		}
-		return false;
-	}
-	if (bRequireTargetSelect && (!HUD || !HUD->IsInTargetSelect()))
-	{
-		if (bLogBattleSceneTargetClickRouting)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NotInTargetSelect hud=%s requireTargetSelect=%s"),
-				*GetDebugObjectName(HUD),
-				bRequireTargetSelect ? TEXT("true") : TEXT("false"));
-		}
-		return false;
-	}
-
-	FHitResult HitResult;
-	if (!BuildBattleSceneClickHitResult(HitResult))
-	{
-		if (bLogBattleSceneTargetClickRouting)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NoVisibilityHit hud=%s inTargetSelect=%s"),
-				*GetDebugObjectName(HUD),
-				HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
-		}
-		return false;
-	}
-
-	// 通过 IWacomInteractionTargetProvider 接口构建统一 handle，用于 World 目标点击路由。
-	{
-		const FWacomInteractionTargetHandle Handle = BuildInteractionTargetHandleFromHit(HitResult);
-		if (Handle.IsValid() && Handle.TargetKind == EWacomInteractionTargetKind::World
-			&& Handle.TargetTag == WacomTags::Interaction_Target_Battle_EnemyPart
-			&& Handle.HasBattlePartSlotIdentity())
-		{
-			if (!HUD || !HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(Handle))
-			{
-				if (bLogBattleSceneTargetClickRouting)
-				{
-					UE_LOG(LogTemp, Display,
-						TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NotInCurrentSceneEnemyHostRegistry handle=%s inTargetSelect=%s"),
-						*Handle.ToString(),
-						HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
-				}
-				return false;
-			}
-			HUD->OnEnemyPartClickedByUser(Handle);
-			if (bLogBattleSceneTargetClickRouting)
-			{
-				UE_LOG(LogTemp, Display,
-					TEXT("[WacomBattleSceneClickRouter] RouteViaProvider handle=%s inTargetSelect=%s"),
-					*Handle.ToString(),
-					HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
-			}
-			return true;
-		}
-
-		if (bLogBattleSceneTargetClickRouting)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomBattleSceneClickRouter] NoRoute handleValid=%s hitActor=%s"),
-				Handle.IsValid() ? TEXT("true") : TEXT("false"),
-				*GetDebugObjectName(HitResult.GetActor()));
-		}
-		return false;
-	}
+	return GetBattleSceneInteractionRouter().TryRouteTargetClick(bRequireTargetSelect);
 }
 
 bool AWacomPlayerController::TryProbeBattleSceneInteractionTarget(FWacomInteractionTargetHandle& OutHandle) const
 {
-	OutHandle = FWacomInteractionTargetHandle();
-
-	UBattleHUD* HUD = nullptr;
-	if (!CanRouteBattleSceneTargetClick(HUD))
-	{
-		return false;
-	}
-
-	FHitResult HitResult;
-	if (!BuildBattleSceneClickHitResult(HitResult))
-	{
-		return false;
-	}
-
-	OutHandle = BuildInteractionTargetHandleFromHit(HitResult);
-	if (OutHandle.IsValid())
-	{
-		OutHandle.WorldLocation = HitResult.Location;
-		FVector2D ScreenPosition = FVector2D::ZeroVector;
-		if (ProjectWorldLocationToScreen(HitResult.Location, ScreenPosition))
-		{
-			const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
-			OutHandle.ScreenPosition = ScreenPosition / ViewportScale;
-		}
-	}
-	return OutHandle.IsValid();
+	return GetBattleSceneInteractionRouter().TryProbeInteractionTarget(OutHandle);
 }
 
 bool AWacomPlayerController::TryProbeBattleSceneInteractionTargetAtWidgetPosition(
 	const FVector2D& WidgetPosition,
 	FWacomInteractionTargetHandle& OutHandle) const
 {
-	OutHandle = FWacomInteractionTargetHandle();
-
-	UBattleHUD* HUD = nullptr;
-	if (!CanRouteBattleSceneTargetClick(HUD))
-	{
-		return false;
-	}
-
-	FHitResult HitResult;
-	if (!BuildBattleSceneInteractionTargetHitResultAtWidgetPosition(WidgetPosition, HitResult))
-	{
-		return false;
-	}
-
-	OutHandle = BuildInteractionTargetHandleFromHit(HitResult);
-	if (OutHandle.IsValid())
-	{
-		OutHandle.WorldLocation = HitResult.Location;
-		OutHandle.ScreenPosition = WidgetPosition;
-	}
-	return OutHandle.IsValid();
+	return GetBattleSceneInteractionRouter().TryProbeInteractionTargetAtWidgetPosition(
+		WidgetPosition,
+		OutHandle);
 }
 
 bool AWacomPlayerController::TryProbeRunSceneInteractionTarget(FWacomInteractionTargetHandle& OutHandle) const
@@ -1242,7 +1109,7 @@ bool AWacomPlayerController::TryProbeRunSceneInteractionTarget(FWacomInteraction
 		return false;
 	}
 
-	OutHandle = BuildInteractionTargetHandleFromHit(HitResult);
+	OutHandle = WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(HitResult);
 	if (OutHandle.IsValid())
 	{
 		OutHandle.WorldLocation = HitResult.Location;
@@ -1282,7 +1149,7 @@ bool AWacomPlayerController::TryProbeRunSceneInteractionTargetAtWidgetPosition(
 		return false;
 	}
 
-	OutHandle = BuildInteractionTargetHandleFromHit(HitResult);
+	OutHandle = WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(HitResult);
 	if (OutHandle.IsValid())
 	{
 		OutHandle.WorldLocation = HitResult.Location;

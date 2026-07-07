@@ -26,6 +26,7 @@ class UWacomAppToastSubsystem;
 class UWacomRunTunnelMovementComponent;
 class UWacomFirstPersonCardAnchorComponent;
 class UWacomCardDetailPanel;
+class FWacomBattleSceneInteractionRouter;
 class FWacomRunFirstPersonCardDetailController;
 class FWacomRunFirstPersonCardDragController;
 class FWacomRunFirstPersonCardDropCoordinator;
@@ -363,6 +364,8 @@ protected:
 private:
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
 	UBattleHUD* GetActiveBattleHUD() const;
+	FWacomBattleSceneInteractionRouter& GetBattleSceneInteractionRouter();
+	const FWacomBattleSceneInteractionRouter& GetBattleSceneInteractionRouter() const;
 
 	bool TryProbeRunMenuDropTargetAtWidgetPosition(
 		const FVector2D& WidgetPosition,
@@ -479,6 +482,7 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> RunFirstPersonCardDetailPanel = nullptr;
 
+	TSharedPtr<FWacomBattleSceneInteractionRouter> BattleSceneInteractionRouter;
 	TSharedPtr<FWacomRunFirstPersonCardDetailController> RunFirstPersonCardDetailController;
 	TSharedPtr<FWacomRunFirstPersonCardDragController> RunFirstPersonCardDragController;
 	TSharedPtr<FWacomRunFirstPersonCardDropCoordinator> RunFirstPersonCardDropCoordinator;
@@ -489,6 +493,7 @@ private:
 
 	FTimerHandle RunWorldTargetProbePreviewTimerHandle;
 
+	friend class FWacomBattleSceneInteractionRouter;
 	friend class FWacomRunFirstPersonCardDetailController;
 	friend class FWacomRunFirstPersonCardDragController;
 #if WITH_AUTOMATION_TESTS
