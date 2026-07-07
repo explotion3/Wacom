@@ -604,7 +604,7 @@ bool FWacomUIBattleSceneClickRoutesTaggedInteractionTargetSpec::RunTest(const FS
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
 	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, SceneEnemy.Parts[0], SceneEnemy.Parts[0]->GetHitBounds());
 
-	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
 	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 
 	TestTrue(TEXT("Tagged world target routes"), FWacomBattleSceneTargetClickTestAccess::RouteClick(PC));
@@ -684,7 +684,7 @@ bool FWacomUIBattleSceneClickIgnoresUntaggedWorldTargetSpec::RunTest(const FStri
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
 	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, Owner, Primitive);
 
-	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
 	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 	TestFalse(TEXT("Untagged world target does not route as battle enemy part"),
 		FWacomBattleSceneTargetClickTestAccess::RouteClick(PC));
