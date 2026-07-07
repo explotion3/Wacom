@@ -53,6 +53,10 @@ public:
 	{
 		return PendingTurnBoundaryCommand != EWacomBattleHUDTurnBoundaryCommand::None;
 	}
+	EWacomBattleHUDTurnBoundaryCommand GetPendingTurnBoundaryCommand() const
+	{
+		return PendingTurnBoundaryCommand;
+	}
 	FText GetPendingTurnBoundaryCommandText() const;
 	void TryExecutePendingTurnBoundaryCommand();
 
@@ -101,7 +105,7 @@ private:
 
 	void SyncStackWidget();
 	void ExecuteTurnBoundaryCommandNow(EWacomBattleHUDTurnBoundaryCommand Command);
-	void RefreshCommandAvailabilityWidgets();
+	void RefreshCommandBar();
 	void ClearPresentationPlan();
 	void StartNextPresentationPlanPhase();
 	void StartHandPresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);

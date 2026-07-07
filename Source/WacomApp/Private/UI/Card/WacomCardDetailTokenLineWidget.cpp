@@ -8,6 +8,7 @@
 #include "Components/WrapBox.h"
 #include "Components/WrapBoxSlot.h"
 #include "UI/Card/WacomCardDetailTokenWidget.h"
+#include "UI/Card/WacomCardDetailWidgetFactory.h"
 
 UWacomCardDetailTokenLineWidget::UWacomCardDetailTokenLineWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -105,9 +106,10 @@ UWacomCardDetailTokenWidget* UWacomCardDetailTokenLineWidget::FindOrCreateTokenW
 	UClass* WidgetClass = TokenWidgetClass
 		? TokenWidgetClass.Get()
 		: UWacomCardDetailTokenWidget::StaticClass();
-	UWacomCardDetailTokenWidget* TokenWidget = GetWorld()
-		? CreateWidget<UWacomCardDetailTokenWidget>(this, WidgetClass)
-		: NewObject<UWacomCardDetailTokenWidget>(this, WidgetClass);
+	UWacomCardDetailTokenWidget* TokenWidget =
+		WacomCardDetailWidgetFactory::CreateChildUserWidget<UWacomCardDetailTokenWidget>(
+			*this,
+			WidgetClass);
 	if (!TokenWidget)
 	{
 		return nullptr;

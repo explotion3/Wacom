@@ -7,7 +7,6 @@
 #include "Events/BattleEvent.h"
 #include "Presentation/BattlePresentationJournal.h"
 #include "Session/BattleSession.h"
-#include "UI/Battle/ActionPanel.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
@@ -481,7 +480,7 @@ int32 FWacomBattleHUDPresentationCoordinator::AppendStackEntry(
 		: WacomBattleCardPresentation::BuildCardViewData(*CardSnapshot);
 	BattlePresentationStackEntries.Add(Entry);
 	SyncStackWidget();
-	RefreshCommandAvailabilityWidgets();
+	RefreshCommandBar();
 	return Entry.EntryId;
 }
 
@@ -552,7 +551,7 @@ void FWacomBattleHUDPresentationCoordinator::FinishStackEntryExit(int32 EntryId)
 	}
 
 	SyncStackWidget();
-	RefreshCommandAvailabilityWidgets();
+	RefreshCommandBar();
 	TryExecutePendingTurnBoundaryCommand();
 }
 
@@ -622,7 +621,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueEndTurnPresentationPlan(
 	StartedPresentationPlanPhaseNamesForTest.Reset();
 #endif
 	HandleQueueStarted();
-	RefreshCommandAvailabilityWidgets();
+	RefreshCommandBar();
 	StartNextPresentationPlanPhase();
 	return true;
 }
@@ -665,7 +664,7 @@ void FWacomBattleHUDPresentationCoordinator::QueuePendingTurnBoundaryCommand(
 		Runtime.ClearPendingTargetingCardId();
 		Runtime.SetUIState(EBattleUIState::Idle);
 	}
-	RefreshCommandAvailabilityWidgets();
+	RefreshCommandBar();
 	TryExecutePendingTurnBoundaryCommand();
 }
 
@@ -677,7 +676,7 @@ void FWacomBattleHUDPresentationCoordinator::ClearPendingTurnBoundaryCommand()
 	}
 
 	PendingTurnBoundaryCommand = EWacomBattleHUDTurnBoundaryCommand::None;
-	RefreshCommandAvailabilityWidgets();
+	RefreshCommandBar();
 }
 
 FText FWacomBattleHUDPresentationCoordinator::GetPendingTurnBoundaryCommandText() const
@@ -722,7 +721,7 @@ void FWacomBattleHUDPresentationCoordinator::TryExecutePendingTurnBoundaryComman
 
 	const EWacomBattleHUDTurnBoundaryCommand CommandToExecute = PendingTurnBoundaryCommand;
 	PendingTurnBoundaryCommand = EWacomBattleHUDTurnBoundaryCommand::None;
-	RefreshCommandAvailabilityWidgets();
+	RefreshCommandBar();
 	ExecuteTurnBoundaryCommandNow(CommandToExecute);
 }
 
@@ -985,7 +984,7 @@ void FWacomBattleHUDPresentationCoordinator::ExecuteTurnBoundaryCommandNow(
 	}
 }
 
-void FWacomBattleHUDPresentationCoordinator::RefreshCommandAvailabilityWidgets()
+void FWacomBattleHUDPresentationCoordinator::RefreshCommandBar()
 {
 	UBattleSession* CurrentSession = Runtime.GetSession();
 	if (!CurrentSession)
@@ -994,10 +993,7 @@ void FWacomBattleHUDPresentationCoordinator::RefreshCommandAvailabilityWidgets()
 	}
 
 	const FBattleSnapshot Snapshot = CurrentSession->BuildSnapshot();
-	if (UActionPanel* ActionPanel = Runtime.Host().GetActionPanel())
-	{
-		ActionPanel->RefreshFromSnapshot(Snapshot);
-	}
+	Runtime.RefreshCommandBarFromSnapshot(Snapshot);
 	if (!IsPresentationPlanBusy())
 	{
 		Runtime.SyncFirstPersonBattleHandLayer(Snapshot);

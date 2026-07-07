@@ -136,7 +136,7 @@ Run 域 HUD 使用 `UWacomRunViewModelProvider + UWacomRunViewModel` 显示探�
 
 ## §8 AppToast 例外路径
 
-`UWacomAppToastSubsystem` 是战斗外通用反馈出口。它持有唯一 `UWacomAppToastWidget`，直接 `AddToViewport(ZOrder=10000)`，不进入 CommonUI Stack，不改变探索或菜单输入。
+`UWacomAppToastSubsystem` 是战斗外通用反馈出口。它持有唯一 `UWacomAppToastWidget`，在真实本地玩家和 `LocalPlayer` 就绪时直接 `AddToViewport(ZOrder=10000)`，不进入 CommonUI Stack，不改变探索或菜单输入。自动化测试或预热路径可以注入离屏 Widget；这类 Widget 只接收数据和队列刷新，不会被强制加入 viewport。
 
 Toast WBP 注册：
 
@@ -147,10 +147,11 @@ Toast WBP 注册：
 
 当前生命周期：
 
-- 探索局开始时 PlayerController 会预热；首次 Toast 也会懒加载兜底。
+- 探索局开始时 PlayerController 会预热；首次 Toast 也会懒加载兜底；两者都需要真实本地玩家和 `LocalPlayer` 才创建 viewport Widget。
 - 无消息时 Widget `Collapsed`；入队后 `HitTestInvisible`；消息播完后只隐藏，不销毁。
 - Widget `SetIsFocusable(false)`，`GetDesiredInputConfig()` 返回空。
-- Subsystem 跨关卡跟随 GameInstance，但只复用属于当前 World 和当前本地 PlayerController 的缓存 Widget。
+- Subsystem 跨关卡跟随 GameInstance，但只复用属于当前 World 和当前本地 PlayerController 的缓存 Widget；没有运行时 World / PlayerController 的离屏自动化注入 Widget 可以作为测试替身复用。
+- 缓存归属检查只从 owning player / outer 推导 World 和 PlayerController，不直接询问 Widget `GetWorld()`，避免离屏 Widget 在自动化中污染日志。
 - `Deinitialize()` 会移除并清空缓存 Widget。
 
 当前接入包括商店购买、背包移动 / 删除、RunEvent 结果、Run world card drop release 失败和 pickup reward。战斗内玩家日志不走 AppToast，见 [WacomBattleUI.md](./WacomBattleUI.md)。

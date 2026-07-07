@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
 #include "Resolution/BattleTargetValidationResult.h"
+#include "UI/Battle/BattleCommandBarTypes.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
@@ -191,7 +192,7 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  *
  * WBP 子类约定（BindWidget 大部分可选）：
  * - PlayerStatusBar   : UPlayerStatusBar
- * - ActionPanel       : UActionPanel
+ * - CommandBar        : UBattleCommandBarWidget
  * - DrawPileView      : UPileCountView
  * - DiscardPileView   : UPileCountView
  * - ExhaustPileView   : UPileCountView
@@ -385,15 +386,18 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|HUD State", DisplayName = "On UI State Changed", meta = (ToolTip = "BattleHUD UI 状态切换后的 WBP 表现事件。只用于刷新表现，不应直接修改 BattleSession。"))
 	void BP_OnUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
 
+	UFUNCTION()
+	void HandleCommandBarCommandRequested(EWacomBattleCommandId CommandId);
+
 	// ---- BindWidget ----
 
 	/** 玩家状态条。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPlayerStatusBar> PlayerStatusBar;
 
-	/** 操作面板。 */
+	/** 战斗命令条。 */
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<class UActionPanel> ActionPanel;
+	TObjectPtr<class UBattleCommandBarWidget> CommandBar;
 
 	/** 装备条。 */
 	UPROPERTY(meta = (BindWidgetOptional))

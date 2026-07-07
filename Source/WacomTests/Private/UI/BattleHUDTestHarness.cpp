@@ -114,20 +114,20 @@ UBattlePresentationStackWidget* FWacomBattleHUDTestHarness::AttachPresentationSt
 	return PresentationStackPtr.Get();
 }
 
-UWacomActionPanelTestProbe* FWacomBattleHUDTestHarness::AttachActionPanel()
+UWacomBattleCommandBarTestProbe* FWacomBattleHUDTestHarness::AttachCommandBar()
 {
 	if (!HUDPtr)
 	{
 		return nullptr;
 	}
 
-	ActionPanelPtr.Reset(NewObject<UWacomActionPanelTestProbe>(HUDPtr.Get()));
-	if (ActionPanelPtr)
+	CommandBarPtr.Reset(NewObject<UWacomBattleCommandBarTestProbe>(HUDPtr.Get()));
+	if (CommandBarPtr)
 	{
-		ActionPanelPtr->TakeWidget();
-		HUDPtr->SetActionPanelForTest(ActionPanelPtr.Get());
+		CommandBarPtr->TakeWidget();
+		HUDPtr->SetCommandBarForTest(CommandBarPtr.Get());
 	}
-	return ActionPanelPtr.Get();
+	return CommandBarPtr.Get();
 }
 
 AWacomPlayerCharacter* FWacomBattleHUDTestHarness::AttachFirstPersonCharacter()

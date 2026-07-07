@@ -15,6 +15,43 @@
 
 namespace
 {
+	bool CanUseToastViewport(const APlayerController* PlayerController)
+	{
+		return PlayerController
+			&& PlayerController->IsLocalController()
+			&& PlayerController->GetLocalPlayer();
+	}
+
+	const APlayerController* ResolveToastWidgetOwnerNoLog(const UWacomAppToastWidget* Widget)
+	{
+		if (!Widget)
+		{
+			return nullptr;
+		}
+
+		if (const APlayerController* OwningPlayer = Widget->GetOwningPlayer())
+		{
+			return OwningPlayer;
+		}
+
+		return Widget->GetTypedOuter<APlayerController>();
+	}
+
+	const UWorld* ResolveToastWidgetWorldNoLog(const UWacomAppToastWidget* Widget)
+	{
+		if (!Widget)
+		{
+			return nullptr;
+		}
+
+		if (const APlayerController* Owner = ResolveToastWidgetOwnerNoLog(Widget))
+		{
+			return Owner->GetWorld();
+		}
+
+		return Widget->GetTypedOuter<UWorld>();
+	}
+
 	FText GetAppToastCardDisplayName(const UCardDefinition* Card)
 	{
 		if (!Card)
@@ -95,7 +132,7 @@ UWacomAppToastWidget* UWacomAppToastSubsystem::EnsureToastWidget()
 {
 	if (IsValid(ToastWidget))
 	{
-		APlayerController* CurrentPC = FindLocalPlayerController();
+		const APlayerController* CurrentPC = FindLocalPlayerController();
 		if (!IsToastWidgetUsableForCurrentOwner(ToastWidget, CurrentPC))
 		{
 			UE_LOG(LogTemp, Display, TEXT("[AppToast] 缓存 ToastWidget 属于旧 World/PC，重建"));
@@ -105,7 +142,8 @@ UWacomAppToastWidget* UWacomAppToastSubsystem::EnsureToastWidget()
 
 	if (IsValid(ToastWidget))
 	{
-		if (!ToastWidget->IsInViewport() && ToastWidget->GetWorld())
+		const APlayerController* CurrentPC = FindLocalPlayerController();
+		if (!ToastWidget->IsInViewport() && CanUseToastViewport(CurrentPC))
 		{
 			ToastWidget->AddToViewport(/*ZOrder*/ 10000);
 		}
@@ -118,7 +156,7 @@ UWacomAppToastWidget* UWacomAppToastSubsystem::EnsureToastWidget()
 	ToastWidget = nullptr;
 
 	APlayerController* PC = FindLocalPlayerController();
-	if (!PC)
+	if (!CanUseToastViewport(PC))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[AppToast] 本地 PlayerController 未就位，忽略 Toast"));
 		return nullptr;
@@ -164,7 +202,7 @@ APlayerController* UWacomAppToastSubsystem::FindLocalPlayerController() const
 	for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
 	{
 		APlayerController* PC = It->Get();
-		if (PC && PC->IsLocalController())
+		if (CanUseToastViewport(PC))
 		{
 			return PC;
 		}
@@ -182,8 +220,8 @@ bool UWacomAppToastSubsystem::IsToastWidgetUsableForCurrentOwner(
 	}
 
 	const UWorld* CurrentWorld = GetWorld();
-	const UWorld* WidgetWorld = Widget->GetWorld();
-	const APlayerController* WidgetOwner = Widget->GetOwningPlayer();
+	const UWorld* WidgetWorld = ResolveToastWidgetWorldNoLog(Widget);
+	const APlayerController* WidgetOwner = ResolveToastWidgetOwnerNoLog(Widget);
 	// Test/prewarm overrides can surface a transient world after TakeWidget() in UE 5.8.
 	if (!WidgetOwner
 		&& !Widget->IsInViewport()

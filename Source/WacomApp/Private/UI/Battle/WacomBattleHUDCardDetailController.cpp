@@ -6,6 +6,8 @@
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomFirstPersonCardDetailPanelHost.h"
 
+#include "GameFramework/PlayerController.h"
+
 FWacomBattleHUDCardDetailController::FWacomBattleHUDCardDetailController(FWacomBattleHUDRuntime& InRuntime)
 	: Runtime(InRuntime)
 {
@@ -214,6 +216,8 @@ FWacomBattleHUDCardDetailController::BuildPanelHostContext() const
 	Context.World = Runtime.GetWorld();
 	Context.PanelClass = Runtime.Host().GetCardDetailPanelClass();
 	Context.ViewportZOrder = Runtime.Host().GetFirstPersonCardDetailViewportZOrder();
-	Context.bCanAddToViewport = true;
+	Context.bCanAddToViewport = Context.OwningPlayer
+		&& Context.OwningPlayer->IsLocalController()
+		&& Context.OwningPlayer->GetLocalPlayer();
 	return Context;
 }

@@ -9,6 +9,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "UI/Card/WacomCardDetailTokenFlowWidget.h"
+#include "UI/Card/WacomCardDetailWidgetFactory.h"
 
 namespace
 {
@@ -193,8 +194,9 @@ UWacomCardDetailTokenFlowWidget* UWacomCardDetailSectionWidget::EnsureTokenFlowW
 	UClass* WidgetClass = TokenFlowWidgetClass
 		? TokenFlowWidgetClass.Get()
 		: UWacomCardDetailTokenFlowWidget::StaticClass();
-	TokenFlowWidget = GetWorld()
-		? CreateWidget<UWacomCardDetailTokenFlowWidget>(this, WidgetClass)
-		: NewObject<UWacomCardDetailTokenFlowWidget>(this, WidgetClass);
+	TokenFlowWidget =
+		WacomCardDetailWidgetFactory::CreateChildUserWidget<UWacomCardDetailTokenFlowWidget>(
+			*this,
+			WidgetClass);
 	return TokenFlowWidget;
 }

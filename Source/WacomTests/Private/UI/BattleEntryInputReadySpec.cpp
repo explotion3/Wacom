@@ -73,10 +73,10 @@ bool FWacomUIBattleEntryInputReadyBlocksCommandsSpec::RunTest(const FString& /*P
 	}
 
 	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
-	UWacomActionPanelTestProbe* ActionPanel = Harness->AttachActionPanel();
+	UWacomBattleCommandBarTestProbe* CommandBar = Harness->AttachCommandBar();
 	Harness->SetSession(Session);
 	if (!TestNotNull(TEXT("HUD"), HUD)
-		|| !TestNotNull(TEXT("Action panel"), ActionPanel))
+		|| !TestNotNull(TEXT("Command bar"), CommandBar))
 	{
 		return false;
 	}
@@ -85,23 +85,23 @@ bool FWacomUIBattleEntryInputReadyBlocksCommandsSpec::RunTest(const FString& /*P
 	TestEqual(TEXT("Fixture starts in player action phase"), Snapshot.Phase, EBattlePhase::PlayerAction);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	TestTrue(TEXT("HUD accepts player commands by default"), HUD->CanSubmitPlayerActionCommand());
-	TestTrue(TEXT("Wait starts enabled"), ActionPanel->IsWaitButtonEnabledForTest());
-	TestTrue(TEXT("End turn starts enabled"), ActionPanel->IsEndTurnButtonEnabledForTest());
+	TestTrue(TEXT("Wait starts enabled"), CommandBar->IsWaitCommandEnabledForTest());
+	TestTrue(TEXT("End turn starts enabled"), CommandBar->IsEndTurnCommandEnabledForTest());
 
 	HUD->SetBattleInputReady(false);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	TestFalse(TEXT("Battle input ready gate blocks commands"), HUD->CanSubmitPlayerActionCommand());
 	TestFalse(TEXT("Wait disables while battle input is not ready"),
-		ActionPanel->IsWaitButtonEnabledForTest());
+		CommandBar->IsWaitCommandEnabledForTest());
 	TestFalse(TEXT("End turn disables while battle input is not ready"),
-		ActionPanel->IsEndTurnButtonEnabledForTest());
+		CommandBar->IsEndTurnCommandEnabledForTest());
 
 	HUD->SetBattleInputReady(true);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	TestTrue(TEXT("Commands unlock after battle input ready"), HUD->CanSubmitPlayerActionCommand());
-	TestTrue(TEXT("Wait re-enables after battle input ready"), ActionPanel->IsWaitButtonEnabledForTest());
+	TestTrue(TEXT("Wait re-enables after battle input ready"), CommandBar->IsWaitCommandEnabledForTest());
 	TestTrue(TEXT("End turn re-enables after battle input ready"),
-		ActionPanel->IsEndTurnButtonEnabledForTest());
+		CommandBar->IsEndTurnCommandEnabledForTest());
 
 	return true;
 }

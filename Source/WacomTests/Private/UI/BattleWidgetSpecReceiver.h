@@ -7,8 +7,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "UI/Battle/BattleHUD.h"
-#include "UI/Battle/ActionPanel.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/BattleCommandBarWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
@@ -154,24 +154,29 @@ private:
 };
 
 UCLASS()
-class UWacomActionPanelTestProbe : public UActionPanel
+class UWacomBattleCommandBarTestProbe : public UBattleCommandBarWidget
 {
 	GENERATED_BODY()
 
 public:
-	bool IsWaitButtonEnabledForTest() const
+	bool IsWaitCommandEnabledForTest() const
 	{
-		return WaitButton ? WaitButton->GetIsEnabled() : false;
+		return IsCommandEnabled(EWacomBattleCommandId::Wait);
 	}
 
-	bool IsEndTurnButtonEnabledForTest() const
+	bool IsEndTurnCommandEnabledForTest() const
 	{
-		return EndTurnButton ? EndTurnButton->GetIsEnabled() : false;
+		return IsCommandEnabled(EWacomBattleCommandId::EndTurn);
 	}
 
 	FText GetWaitValueTextForTest() const
 	{
-		return WaitValueText ? WaitValueText->GetText() : FText::GetEmpty();
+		return GetCurrentViewData().WaitValueText;
+	}
+
+	FText GetPendingCommandTextForTest() const
+	{
+		return GetCurrentViewData().PendingCommandText;
 	}
 };
 
@@ -562,12 +567,15 @@ public:
 		AppendBattleCombatLogBlock(Block);
 	}
 
-	void SetActionPanelForTest(UActionPanel* InActionPanel)
+	void SetCommandBarForTest(UBattleCommandBarWidget* InCommandBar)
 	{
-		ActionPanel = InActionPanel;
-		if (InActionPanel)
+		CommandBar = InCommandBar;
+		if (InCommandBar)
 		{
-			ChildBattleWidgets.AddUnique(InActionPanel);
+			InCommandBar->OnBattleCommandRequested.RemoveAll(this);
+			InCommandBar->OnBattleCommandRequested.AddDynamic(
+				this,
+				&UBattleHUD::HandleCommandBarCommandRequested);
 		}
 	}
 

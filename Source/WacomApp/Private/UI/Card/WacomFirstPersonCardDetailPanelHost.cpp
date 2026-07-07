@@ -11,6 +11,16 @@
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomFirstPersonCardDetailMotionController.h"
 
+namespace
+{
+	bool HasViewportOwningPlayer(const FWacomFirstPersonCardDetailPanelHostContext& Context)
+	{
+		return Context.OwningPlayer
+			&& Context.OwningPlayer->IsLocalController()
+			&& Context.OwningPlayer->GetLocalPlayer();
+	}
+}
+
 UWacomCardDetailPanel* FWacomFirstPersonCardDetailPanelHost::EnsurePanel(
 	TObjectPtr<UWacomCardDetailPanel>& PanelSlot,
 	const FWacomFirstPersonCardDetailPanelHostContext& Context,
@@ -23,24 +33,22 @@ UWacomCardDetailPanel* FWacomFirstPersonCardDetailPanelHost::EnsurePanel(
 		UClass* PanelClass = Context.PanelClass
 			? Context.PanelClass.Get()
 			: UWacomCardDetailPanel::StaticClass();
-		if (Context.OwningPlayer
-			&& Context.OwningPlayer->IsLocalController()
-			&& Context.OwningPlayer->GetLocalPlayer())
+		if (HasViewportOwningPlayer(Context))
 		{
 			PanelSlot = CreateWidget<UWacomCardDetailPanel>(
 				Context.OwningPlayer,
-				PanelClass);
-		}
-		if (!PanelSlot && Context.World)
-		{
-			PanelSlot = CreateWidget<UWacomCardDetailPanel>(
-				Context.World,
 				PanelClass);
 		}
 		if (!PanelSlot && Context.Outer)
 		{
 			PanelSlot = NewObject<UWacomCardDetailPanel>(
 				Context.Outer,
+				PanelClass);
+		}
+		if (!PanelSlot && Context.World)
+		{
+			PanelSlot = CreateWidget<UWacomCardDetailPanel>(
+				Context.World,
 				PanelClass);
 		}
 	}
@@ -76,7 +84,7 @@ void FWacomFirstPersonCardDetailPanelHost::AddPanelToViewportIfNeeded(
 	UWacomCardDetailPanel& Panel,
 	const FWacomFirstPersonCardDetailPanelHostContext& Context)
 {
-	if (Context.bCanAddToViewport && !Panel.IsInViewport())
+	if (Context.bCanAddToViewport && HasViewportOwningPlayer(Context) && !Panel.IsInViewport())
 	{
 		Panel.AddToViewport(Context.ViewportZOrder);
 	}

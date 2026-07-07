@@ -8,6 +8,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "UI/Card/WacomCardDetailTokenLineWidget.h"
+#include "UI/Card/WacomCardDetailWidgetFactory.h"
 
 UWacomCardDetailTokenFlowWidget::UWacomCardDetailTokenFlowWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -101,9 +102,10 @@ UWacomCardDetailTokenLineWidget* UWacomCardDetailTokenFlowWidget::FindOrCreateLi
 	UClass* WidgetClass = TokenLineWidgetClass
 		? TokenLineWidgetClass.Get()
 		: UWacomCardDetailTokenLineWidget::StaticClass();
-	UWacomCardDetailTokenLineWidget* LineWidget = GetWorld()
-		? CreateWidget<UWacomCardDetailTokenLineWidget>(this, WidgetClass)
-		: NewObject<UWacomCardDetailTokenLineWidget>(this, WidgetClass);
+	UWacomCardDetailTokenLineWidget* LineWidget =
+		WacomCardDetailWidgetFactory::CreateChildUserWidget<UWacomCardDetailTokenLineWidget>(
+			*this,
+			WidgetClass);
 	if (!LineWidget)
 	{
 		return nullptr;

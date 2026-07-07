@@ -6,7 +6,7 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "InputCoreTypes.h"
 #include "Input/CommonUIInputSettings.h"
-#include "UI/Battle/ActionPanel.h"
+#include "UI/Battle/BattleCommandBarWidget.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
@@ -124,11 +124,20 @@ void UBattleHUD::NativeOnInitialized()
 void UBattleHUD::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (CommandBar)
+	{
+		CommandBar->OnBattleCommandRequested.RemoveAll(this);
+		CommandBar->OnBattleCommandRequested.AddDynamic(this, &UBattleHUD::HandleCommandBarCommandRequested);
+	}
 	GetBattleHUDRuntime().NativeConstruct();
 }
 
 void UBattleHUD::NativeDestruct()
 {
+	if (CommandBar)
+	{
+		CommandBar->OnBattleCommandRequested.RemoveAll(this);
+	}
 	if (BattleHUDRuntime)
 	{
 		BattleHUDRuntime->NativeDestruct();
@@ -173,7 +182,7 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			this,
 			WidgetTree,
 			&PlayerStatusBar,
-			&ActionPanel,
+			&CommandBar,
 			&EquipmentBar,
 			&DrawPileView,
 			&DiscardPileView,
@@ -209,7 +218,6 @@ void UBattleHUD::RebuildChildBattleWidgetsForRuntime()
 {
 	ChildBattleWidgets.Reset();
 	if (PlayerStatusBar) { ChildBattleWidgets.Add(PlayerStatusBar); }
-	if (ActionPanel) { ChildBattleWidgets.Add(ActionPanel); }
 	if (EquipmentBar) { ChildBattleWidgets.Add(EquipmentBar); }
 	if (CombatLogFeed) { ChildBattleWidgets.Add(CombatLogFeed); }
 	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
@@ -399,6 +407,25 @@ void UBattleHUD::OnEndTurnRequested()
 void UBattleHUD::CancelTargetSelect()
 {
 	GetBattleHUDRuntime().CancelTargetSelect();
+}
+
+void UBattleHUD::HandleCommandBarCommandRequested(EWacomBattleCommandId CommandId)
+{
+	switch (CommandId)
+	{
+	case EWacomBattleCommandId::Wait:
+		OnWaitRequested();
+		break;
+	case EWacomBattleCommandId::EndTurn:
+		OnEndTurnRequested();
+		break;
+	case EWacomBattleCommandId::CancelTargetSelect:
+		CancelTargetSelect();
+		break;
+	case EWacomBattleCommandId::None:
+	default:
+		break;
+	}
 }
 
 void UBattleHUD::OnKnockdownChoiceSelected(EKnockdownChoice Choice)

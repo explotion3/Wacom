@@ -8,6 +8,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "UI/Card/WacomCardDetailSectionWidget.h"
+#include "UI/Card/WacomCardDetailWidgetFactory.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardDetailPanel"
 
@@ -112,9 +113,10 @@ void UWacomCardDetailPanel::AddSectionData(const FWacomCardDetailSectionData& Se
 	UClass* WidgetClass = SectionWidgetClass
 		? SectionWidgetClass.Get()
 		: UWacomCardDetailSectionWidget::StaticClass();
-	UWacomCardDetailSectionWidget* SectionWidget = GetWorld()
-		? CreateWidget<UWacomCardDetailSectionWidget>(this, WidgetClass)
-		: NewObject<UWacomCardDetailSectionWidget>(this, WidgetClass);
+	UWacomCardDetailSectionWidget* SectionWidget =
+		WacomCardDetailWidgetFactory::CreateChildUserWidget<UWacomCardDetailSectionWidget>(
+			*this,
+			WidgetClass);
 	if (!SectionWidget)
 	{
 		return;

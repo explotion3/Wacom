@@ -10,10 +10,11 @@ class AWacomBattleEnemyPartActor;
 class AWacomBattleHUDLocalPlayerControllerTest;
 class AWacomPlayerCharacter;
 class UBattleCombatLogFeedWidget;
+class UBattleCommandBarWidget;
 class UBattlePresentationStackWidget;
 class UBattleSession;
 class UEnemyDefinition;
-class UWacomActionPanelTestProbe;
+class UWacomBattleCommandBarTestProbe;
 class UWacomBattleCameraLookComponent;
 class UWacomBattleHUDDetailTest;
 class UWacomFirstPersonCardAnchorComponent;
@@ -39,7 +40,7 @@ public:
 	UWacomBattleHUDDetailTest* HUD() const { return HUDPtr.Get(); }
 	UBattleCombatLogFeedWidget* CombatLogFeed() const { return CombatLogFeedPtr.Get(); }
 	UBattlePresentationStackWidget* PresentationStack() const { return PresentationStackPtr.Get(); }
-	UWacomActionPanelTestProbe* ActionPanel() const { return ActionPanelPtr.Get(); }
+	UWacomBattleCommandBarTestProbe* CommandBar() const { return CommandBarPtr.Get(); }
 	AWacomPlayerCharacter* FirstPersonCharacter() const { return FirstPersonCharacterActor.Get(); }
 	UWacomFirstPersonCardAnchorComponent* FirstPersonAnchor() const { return FirstPersonAnchorPtr; }
 	UWacomBattleCameraLookComponent* BattleCameraLook() const { return BattleCameraLookPtr; }
@@ -47,7 +48,7 @@ public:
 
 	UBattleCombatLogFeedWidget* AttachCombatLogFeed();
 	UBattlePresentationStackWidget* AttachPresentationStack();
-	UWacomActionPanelTestProbe* AttachActionPanel();
+	UWacomBattleCommandBarTestProbe* AttachCommandBar();
 	AWacomPlayerCharacter* AttachFirstPersonCharacter();
 	FWacomBattleHUDTestSceneEnemyHost& AttachSceneEnemyHost(
 		UEnemyDefinition* EnemyDefinition,
@@ -68,7 +69,7 @@ private:
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUDPtr;
 	TStrongObjectPtr<UBattleCombatLogFeedWidget> CombatLogFeedPtr;
 	TStrongObjectPtr<UBattlePresentationStackWidget> PresentationStackPtr;
-	TStrongObjectPtr<UWacomActionPanelTestProbe> ActionPanelPtr;
+	TStrongObjectPtr<UWacomBattleCommandBarTestProbe> CommandBarPtr;
 	TWeakObjectPtr<AWacomPlayerCharacter> FirstPersonCharacterActor;
 	UWacomFirstPersonCardAnchorComponent* FirstPersonAnchorPtr = nullptr;
 	UWacomBattleCameraLookComponent* BattleCameraLookPtr = nullptr;

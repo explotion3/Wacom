@@ -4,17 +4,12 @@
 
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Blueprint/WidgetTree.h"
-#include "Cards/CardDefinition.h"
-#include "Commands/BattleCommand.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
-#include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
-#include "Snapshots/EnemySnapshot.h"
-#include "UI/Battle/ActionPanel.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
@@ -23,13 +18,16 @@
 #include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
+#include "UI/Battle/WacomBattleHUDCommandController.h"
+#include "UI/Battle/WacomBattleHUDCommandBarPresenter.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
+#include "UI/Battle/WacomBattleHUDSnapshotPresenter.h"
+#include "UI/Battle/WacomBattleHUDTargetingController.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
-#include "UI/Common/PileCountView.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
 
@@ -38,19 +36,6 @@
 namespace
 {
 	const TCHAR* CardDetailPanelPath = TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C");
-
-	FText BuildDiscardPileCountDisplayText(const FPileCountsSnapshot& PileCounts)
-	{
-		if (PileCounts.PlayedCount <= 0)
-		{
-			return FText::AsNumber(PileCounts.DiscardCount);
-		}
-
-		return FText::Format(
-			LOCTEXT("DiscardPileWithPlayedCountFormat", "{0}+{1}"),
-			FText::AsNumber(PileCounts.DiscardCount),
-			FText::AsNumber(PileCounts.PlayedCount));
-	}
 
 	const TCHAR* HUDEventTypeToString(EBattleEventType Type)
 	{
@@ -103,36 +88,6 @@ namespace
 		}
 	}
 
-	const FEnemyPartSnapshot* FindEnemyPartByInstanceId(const FBattleSnapshot& Snapshot, const FGuid& PartInstanceId)
-	{
-		for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
-		{
-			for (const FEnemyPartSnapshot& Part : Enemy.Parts)
-			{
-				if (Part.InstanceId == PartInstanceId)
-				{
-					return &Part;
-				}
-			}
-		}
-		return nullptr;
-	}
-
-	FWacomInteractionTargetHandle BuildWorldTargetHandleFromPart(
-		const FEnemyPartSnapshot& Part,
-		UObject* SourceObject)
-	{
-		return FWacomInteractionTargetHandle::ForWorldTarget(
-			Part.InstanceId,
-			SourceObject,
-			FVector::ZeroVector,
-			FVector2D::ZeroVector,
-			FGameplayTag(),
-			NAME_None,
-			Part.EncounterId,
-			Part.EnemySlotId,
-			Part.PartSlotId);
-	}
 }
 
 FWacomBattleHUDRuntimeHost::FWacomBattleHUDRuntimeHost(UBattleHUD& InHUD)
@@ -189,7 +144,7 @@ void FWacomBattleHUDRuntimeHost::NotifyUIStateChanged(
 }
 
 UPlayerStatusBar* FWacomBattleHUDRuntimeHost::GetPlayerStatusBar() const { return HUD.PlayerStatusBar; }
-UActionPanel* FWacomBattleHUDRuntimeHost::GetActionPanel() const { return HUD.ActionPanel; }
+UBattleCommandBarWidget* FWacomBattleHUDRuntimeHost::GetCommandBar() const { return HUD.CommandBar; }
 UEquipmentBar* FWacomBattleHUDRuntimeHost::GetEquipmentBar() const { return HUD.EquipmentBar; }
 UPileCountView* FWacomBattleHUDRuntimeHost::GetDrawPileView() const { return HUD.DrawPileView; }
 UPileCountView* FWacomBattleHUDRuntimeHost::GetDiscardPileView() const { return HUD.DiscardPileView; }
@@ -251,538 +206,6 @@ void FWacomBattleHUDRuntimeHost::PushKnockdownChoiceDialog(
 	Dialog->SetContext(&HUD, ChoiceView);
 }
 
-FWacomBattleHUDSnapshotPresenter::FWacomBattleHUDSnapshotPresenter(
-	FWacomBattleHUDRuntime& InRuntime)
-	: Runtime(InRuntime)
-{
-}
-
-void FWacomBattleHUDSnapshotPresenter::RefreshFromSnapshot(
-	const FBattleSnapshot& Snapshot)
-{
-	Runtime.HideCardDetailPanel();
-	Runtime.SetLastBattleSnapshot(Snapshot);
-	Runtime.SyncFirstPersonBattleHandLayer(Snapshot);
-
-	if (Snapshot.Phase == EBattlePhase::BattleEnd)
-	{
-		Runtime.ClearPendingFirstPersonCardTransitionEvents();
-		Runtime.ClearBattlePresentationStack();
-		Runtime.ClearPendingTurnBoundaryCommand();
-		Runtime.ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
-		Runtime.ClearLastBattleSnapshot();
-		Runtime.GetFirstPersonHandBridge().ClearTransitionSnapshot();
-		Runtime.SetUIState(EBattleUIState::BattleEnd);
-	}
-
-	RefreshPileViews(Snapshot);
-	RefreshBoundBattleWidgets(Snapshot);
-	Runtime.SyncBattleEnemyPartWorldTargets(Snapshot);
-}
-
-void FWacomBattleHUDSnapshotPresenter::RefreshFromPresentationPhase(
-	const FBattleSnapshot& Snapshot,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
-{
-	Runtime.HideCardDetailPanel();
-	Runtime.SetLastBattleSnapshot(Snapshot);
-	RefreshBoundBattleWidgets(Snapshot);
-	RefreshPileViews(Snapshot);
-	Runtime.SyncFirstPersonBattleHandLayer(Snapshot, TransitionHints, FeedbackHints);
-	Runtime.SyncBattleEnemyPartWorldTargets(Snapshot);
-}
-
-void FWacomBattleHUDSnapshotPresenter::RefreshPileViews(
-	const FBattleSnapshot& Snapshot)
-{
-	if (UPileCountView* DrawPileView = Runtime.Host().GetDrawPileView())
-	{
-		DrawPileView->SetCount(Snapshot.PileCounts.DrawCount);
-	}
-	if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
-	{
-		DiscardPileView->SetCount(Snapshot.PileCounts.DiscardCount);
-		DiscardPileView->SetCountDisplayText(BuildDiscardPileCountDisplayText(Snapshot.PileCounts));
-	}
-	if (UPileCountView* ExhaustPileView = Runtime.Host().GetExhaustPileView())
-	{
-		ExhaustPileView->SetCount(Snapshot.PileCounts.ExhaustCount);
-	}
-}
-
-void FWacomBattleHUDSnapshotPresenter::RefreshBoundBattleWidgets(
-	const FBattleSnapshot& Snapshot)
-{
-	Runtime.Host().RefreshChildBattleWidgetsFromSnapshot(Snapshot);
-}
-
-FWacomBattleHUDCommandController::FWacomBattleHUDCommandController(
-	FWacomBattleHUDRuntime& InRuntime)
-	: Runtime(InRuntime)
-{
-}
-
-void FWacomBattleHUDCommandController::SubmitPlayCard(
-	const FGuid& CardId,
-	const FGuid& TargetPartId)
-{
-	Runtime.HideCardDetailPanel();
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session || !Runtime.CanSubmitPlayerActionCommand())
-	{
-		return;
-	}
-
-	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-	const FEnemyPartSnapshot* TargetPart = TargetPartId.IsValid()
-		? FindEnemyPartByInstanceId(PreCommandSnapshot, TargetPartId)
-		: nullptr;
-	FWacomBattleCombatLogCommandContext LogContext =
-		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
-			PreCommandSnapshot,
-			CardId,
-			TargetPart ? TargetPart->Identity : FBattlePartSlotIdentity(),
-			FGuid());
-	if (TargetPart)
-	{
-		LogContext.CardTargetPreview =
-			Session->BuildCardTargetPreview(CardId, BuildWorldTargetHandleFromPart(*TargetPart, Runtime.Host().AsObject()));
-	}
-
-	const FBattleCommand Command = TargetPart
-		? FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, TargetPart->PartKey)
-		: FBattleCommand::MakePlayCard(CardId);
-
-	const FWacomStatus Status = Session->SubmitCommand(Command);
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCard failed, code=%d detail=%s"),
-			(int32)Status.Code, *Status.Detail.ToString());
-		return;
-	}
-
-	Runtime.RecordFirstPersonPlayCommit(CardId, TargetPart ? TargetPart->Identity : FBattlePartSlotIdentity());
-	Runtime.ClearPendingTargetingCardId();
-	Runtime.SetUIState(EBattleUIState::Idle);
-	AfterCommand(LogContext, PreCommandSnapshot);
-}
-
-void FWacomBattleHUDCommandController::SubmitPlayCardOnWorldTarget(
-	const FGuid& CardId,
-	const FWacomInteractionTargetHandle& TargetHandle)
-{
-	Runtime.HideCardDetailPanel();
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session || !Runtime.CanSubmitPlayerActionCommand())
-	{
-		return;
-	}
-
-	const FWacomBattleTargetValidationResult Validation =
-		Session->ValidateTargetWithCard(CardId, TargetHandle);
-	if (!Validation.bCanTarget)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[BattleHUD] PlayCard world target rejected by validation: %s"),
-			*Validation.DebugSummary);
-		return;
-	}
-
-	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-	FWacomBattleCombatLogCommandContext LogContext =
-		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
-			PreCommandSnapshot,
-			CardId,
-			FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey),
-			FGuid());
-	LogContext.CardTargetPreview = Session->BuildCardTargetPreview(CardId, TargetHandle);
-
-	const FWacomStatus Status = Session->SubmitCommand(
-		FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, Validation.ResolvedPartKey));
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCardOnWorldTarget failed, code=%d detail=%s"),
-			(int32)Status.Code, *Status.Detail.ToString());
-		return;
-	}
-
-	Runtime.RecordFirstPersonPlayCommit(CardId, FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey));
-	Runtime.ClearPendingTargetingCardId();
-	Runtime.SetUIState(EBattleUIState::Idle);
-	AfterCommand(LogContext, PreCommandSnapshot);
-}
-
-void FWacomBattleHUDCommandController::SubmitPlayCardOnHandCard(
-	const FGuid& CardId,
-	const FGuid& TargetCardId)
-{
-	Runtime.HideCardDetailPanel();
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session || !Runtime.CanSubmitPlayerActionCommand())
-	{
-		return;
-	}
-
-	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-	FWacomBattleCombatLogCommandContext LogContext =
-		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
-			PreCommandSnapshot,
-			CardId,
-			FBattlePartSlotIdentity(),
-			TargetCardId);
-	LogContext.CardTargetPreview = Session->BuildCardTargetPreview(
-		CardId,
-		FWacomInteractionTargetHandle::ForCardTarget(TargetCardId, Runtime.Host().AsObject()));
-
-	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(CardId, TargetCardId));
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCardOnHandCard failed, code=%d detail=%s"),
-			(int32)Status.Code, *Status.Detail.ToString());
-		return;
-	}
-
-	Runtime.RecordFirstPersonPlayCommit(CardId, FBattlePartSlotIdentity());
-	Runtime.ClearPendingTargetingCardId();
-	Runtime.SetUIState(EBattleUIState::Idle);
-	AfterCommand(LogContext, PreCommandSnapshot);
-}
-
-void FWacomBattleHUDCommandController::SubmitWait()
-{
-	Runtime.HideCardDetailPanel();
-
-	if (Runtime.HasBattlePresentationStackEntries())
-	{
-		Runtime.QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand::Wait);
-		return;
-	}
-
-	if (!Runtime.CanSubmitPlayerActionCommand())
-	{
-		return;
-	}
-
-	if (Runtime.GetUIState() == EBattleUIState::TargetSelect)
-	{
-		Runtime.GetTargetingController().ClearTargetSelection();
-	}
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-	const FWacomBattleCombatLogCommandContext LogContext =
-		UWacomBattleCombatLogBuilder::BuildWaitCommandContext(PreCommandSnapshot);
-
-	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakeWait());
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] Wait failed, code=%d"), (int32)Status.Code);
-		return;
-	}
-
-	AfterCommand(LogContext, PreCommandSnapshot);
-}
-
-void FWacomBattleHUDCommandController::SubmitEndTurn()
-{
-	Runtime.HideCardDetailPanel();
-
-	if (Runtime.HasBattlePresentationStackEntries())
-	{
-		Runtime.QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand::EndTurn);
-		return;
-	}
-
-	if (!Runtime.CanSubmitPlayerActionCommand())
-	{
-		return;
-	}
-
-	if (Runtime.GetUIState() == EBattleUIState::TargetSelect)
-	{
-		Runtime.GetTargetingController().ClearTargetSelection();
-	}
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-	const FWacomBattleCombatLogCommandContext LogContext =
-		UWacomBattleCombatLogBuilder::BuildEndTurnCommandContext(PreCommandSnapshot);
-
-	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakeEndTurn());
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] EndTurn failed, code=%d"), (int32)Status.Code);
-		return;
-	}
-
-	AfterCommand(LogContext, PreCommandSnapshot);
-}
-
-void FWacomBattleHUDCommandController::SubmitKnockdownChoice(
-	EKnockdownChoice Choice)
-{
-	Runtime.HideCardDetailPanel();
-
-	if (Choice == EKnockdownChoice::None)
-	{
-		return;
-	}
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
-	const FWacomBattleCombatLogCommandContext LogContext =
-		UWacomBattleCombatLogBuilder::BuildKnockdownChoiceCommandContext(PreCommandSnapshot, Choice);
-
-	const FWacomStatus Status = Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(Choice));
-	if (!Status.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] KnockdownChoice failed, code=%d detail=%s"),
-			(int32)Status.Code, *Status.Detail.ToString());
-		return;
-	}
-
-	AfterCommand(LogContext, PreCommandSnapshot);
-}
-
-void FWacomBattleHUDCommandController::AfterCommand()
-{
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	const FWacomBattleCombatLogCommandContext SystemContext =
-		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot);
-	AfterCommand(SystemContext, Snapshot);
-}
-
-void FWacomBattleHUDCommandController::AfterCommand(
-	const FWacomBattleCombatLogCommandContext& LogContext,
-	const FBattleSnapshot& PreCommandSnapshot)
-{
-	Runtime.HideCardDetailPanel();
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	const FBattleSnapshot PostCommandSnapshot = Session->BuildSnapshot();
-	const bool bPresentationHandled =
-		Runtime.ConsumeAndLogEvents(
-			LogContext,
-			PreCommandSnapshot,
-			PostCommandSnapshot);
-	if (bPresentationHandled)
-	{
-		return;
-	}
-	Runtime.NativeRefreshFromSnapshot(PostCommandSnapshot);
-}
-
-FWacomBattleHUDTargetingController::FWacomBattleHUDTargetingController(
-	FWacomBattleHUDRuntime& InRuntime)
-	: Runtime(InRuntime)
-{
-}
-
-void FWacomBattleHUDTargetingController::HandleCardClicked(
-	const FGuid& CardInstanceId)
-{
-	Runtime.HideCardDetailPanel();
-
-	if (!Runtime.CanSubmitPlayerActionCommand())
-	{
-		return;
-	}
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	if (Runtime.GetUIState() == EBattleUIState::TargetSelect
-		&& CardInstanceId == Runtime.GetPendingTargetingCardId())
-	{
-		CancelTargetSelect();
-		return;
-	}
-
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	const FHandCardSnapshot* Card = nullptr;
-	for (const FHandCardSnapshot& Candidate : Snapshot.Hand.Cards)
-	{
-		if (Candidate.InstanceId == CardInstanceId)
-		{
-			Card = &Candidate;
-			break;
-		}
-	}
-
-	if (!Card || !Card->Definition || !Card->bIsPlayable)
-	{
-		return;
-	}
-
-	switch (Card->Definition->TargetMode)
-	{
-	case ECardTargetMode::None:
-	case ECardTargetMode::Self:
-	case ECardTargetMode::AllEnemyParts:
-		Runtime.SubmitPlayCard(CardInstanceId, FGuid());
-		break;
-
-	case ECardTargetMode::SingleEnemyPart:
-		Runtime.SetPendingTargetingCardId(CardInstanceId);
-		Runtime.SetUIState(EBattleUIState::TargetSelect);
-		break;
-
-	case ECardTargetMode::HandCard:
-	default:
-		break;
-	}
-}
-
-void FWacomBattleHUDTargetingController::HandleEnemyPartClicked(
-	const FWacomInteractionTargetHandle& TargetHandle)
-{
-	Runtime.HideCardDetailPanel();
-
-	if (Runtime.GetUIState() != EBattleUIState::TargetSelect
-		|| !Runtime.GetPendingTargetingCardId().IsValid())
-	{
-		return;
-	}
-	if (!Runtime.CanSubmitPlayerActionCommand())
-	{
-		return;
-	}
-
-	Runtime.SubmitPlayCardOnWorldTarget(Runtime.GetPendingTargetingCardId(), TargetHandle);
-}
-
-void FWacomBattleHUDTargetingController::CancelTargetSelect()
-{
-	Runtime.HideCardDetailPanel();
-
-	if (Runtime.GetUIState() != EBattleUIState::TargetSelect)
-	{
-		return;
-	}
-
-	Runtime.ClearPendingTargetingCardId();
-	Runtime.SetUIState(EBattleUIState::Idle);
-}
-
-FBattleTargetSelectionView FWacomBattleHUDTargetingController::BuildTargetSelectionView() const
-{
-	FBattleTargetSelectionView View;
-	View.bIsTargetSelecting =
-		Runtime.GetUIState() == EBattleUIState::TargetSelect
-		&& Runtime.GetPendingTargetingCardId().IsValid();
-	View.PendingCardInstanceId = View.bIsTargetSelecting ? Runtime.GetPendingTargetingCardId() : FGuid();
-
-	const UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return View;
-	}
-
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	int32 TargetablePartCapacity = 0;
-	for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
-	{
-		TargetablePartCapacity += Enemy.Parts.Num();
-	}
-	View.TargetableParts.Reserve(TargetablePartCapacity);
-	for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
-	{
-		for (const FEnemyPartSnapshot& Part : Enemy.Parts)
-		{
-			FBattleTargetablePartView PartView;
-			PartView.PartInstanceId = Part.InstanceId;
-			if (Part.Definition)
-			{
-				PartView.PartId = Part.Definition->PartId;
-				PartView.PartName = Part.Definition->DisplayName.IsEmpty()
-					? FText::FromName(Part.Definition->PartId)
-					: Part.Definition->DisplayName;
-			}
-
-			if (!View.bIsTargetSelecting)
-			{
-				PartView.bTargetable = false;
-				PartView.DisabledReason = FName(TEXT("NotTargetSelecting"));
-			}
-			else if (Part.bDestroyed)
-			{
-				PartView.bTargetable = false;
-				PartView.DisabledReason = FName(TEXT("PartDestroyed"));
-			}
-			else
-			{
-				const FWacomInteractionTargetHandle Handle = FWacomInteractionTargetHandle::ForWorldTarget(
-					Part.InstanceId,
-					nullptr,
-					FVector::ZeroVector,
-					FVector2D::ZeroVector,
-					FGameplayTag(),
-					Part.Definition ? Part.Definition->PartId : NAME_None,
-					Part.EncounterId,
-					Part.EnemySlotId,
-					Part.PartSlotId);
-				if (Session->ValidateTargetWithCard(View.PendingCardInstanceId, Handle).bCanTarget)
-				{
-					PartView.bTargetable = true;
-					PartView.DisabledReason = NAME_None;
-				}
-				else
-				{
-					PartView.bTargetable = false;
-					PartView.DisabledReason = FName(TEXT("NotValidTargetForCard"));
-				}
-			}
-
-			View.TargetableParts.Add(PartView);
-		}
-	}
-
-	return View;
-}
-
-void FWacomBattleHUDTargetingController::ClearTargetSelection()
-{
-	if (Runtime.GetUIState() == EBattleUIState::TargetSelect
-		|| Runtime.GetPendingTargetingCardId().IsValid())
-	{
-		Runtime.ClearPendingTargetingCardId();
-		Runtime.SetUIState(EBattleUIState::Idle);
-	}
-}
-
 FWacomBattleHUDRuntime::FWacomBattleHUDRuntime(UBattleHUD& InHUD)
 	: RuntimeHost(InHUD)
 {
@@ -809,6 +232,10 @@ void FWacomBattleHUDRuntime::NativeConstruct()
 	{
 		RuntimeHost.RebuildChildBattleWidgets();
 		NativeRefreshFromSnapshot(Session->BuildSnapshot());
+	}
+	else
+	{
+		GetCommandBarPresenter().RefreshEmpty();
 	}
 }
 
@@ -888,6 +315,11 @@ void FWacomBattleHUDRuntime::NativeOnSessionChanged(
 	if (NewSession)
 	{
 		ConsumeAndLogEvents();
+		RefreshCommandBarFromSnapshot(NewSession->BuildSnapshot());
+	}
+	else
+	{
+		GetCommandBarPresenter().RefreshEmpty();
 	}
 }
 
@@ -918,12 +350,20 @@ void FWacomBattleHUDRuntime::NativeOnUIStateChanged(
 	{
 		SetLastBattleSnapshot(Snapshot);
 	}
-	if (UActionPanel* ActionPanel = RuntimeHost.GetActionPanel())
-	{
-		ActionPanel->RefreshFromSnapshot(Snapshot);
-	}
+	RefreshCommandBarFromSnapshot(Snapshot);
 	SyncFirstPersonBattleHandLayer(Snapshot);
 	SyncBattleEnemyPartWorldTargets(Snapshot);
+}
+
+void FWacomBattleHUDRuntime::SetBattleInputReady(bool bReady)
+{
+	if (bBattleInputReady == bReady)
+	{
+		return;
+	}
+
+	bBattleInputReady = bReady;
+	RefreshCommandBarFromCurrentSnapshot();
 }
 
 void FWacomBattleHUDRuntime::SetUIState(EBattleUIState NewState)
@@ -1018,6 +458,23 @@ FText FWacomBattleHUDRuntime::GetPendingTurnBoundaryCommandText() const
 	return PresentationCoordinator
 		? PresentationCoordinator->GetPendingTurnBoundaryCommandText()
 		: FText::GetEmpty();
+}
+
+void FWacomBattleHUDRuntime::RefreshCommandBarFromSnapshot(
+	const FBattleSnapshot& Snapshot)
+{
+	GetCommandBarPresenter().RefreshFromSnapshot(Snapshot);
+}
+
+void FWacomBattleHUDRuntime::RefreshCommandBarFromCurrentSnapshot()
+{
+	if (UBattleSession* Session = GetSession())
+	{
+		RefreshCommandBarFromSnapshot(Session->BuildSnapshot());
+		return;
+	}
+
+	GetCommandBarPresenter().RefreshEmpty();
 }
 
 void FWacomBattleHUDRuntime::OnCardClickedByUser(const FGuid& CardInstanceId)
@@ -1206,6 +663,15 @@ FWacomBattleHUDCommandController& FWacomBattleHUDRuntime::GetCommandController()
 		CommandController = MakeUnique<FWacomBattleHUDCommandController>(*this);
 	}
 	return *CommandController;
+}
+
+FWacomBattleHUDCommandBarPresenter& FWacomBattleHUDRuntime::GetCommandBarPresenter()
+{
+	if (!CommandBarPresenter)
+	{
+		CommandBarPresenter = MakeUnique<FWacomBattleHUDCommandBarPresenter>(*this);
+	}
+	return *CommandBarPresenter;
 }
 
 FWacomBattleHUDTargetingController& FWacomBattleHUDRuntime::GetTargetingController()

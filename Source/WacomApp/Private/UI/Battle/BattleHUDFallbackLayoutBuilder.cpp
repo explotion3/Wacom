@@ -5,7 +5,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
-#include "UI/Battle/ActionPanel.h"
+#include "UI/Battle/BattleCommandBarWidget.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
@@ -91,10 +91,10 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 			FMargin(20.0f, -140.0f, 220.0f, 120.0f));
 	}
 
-	if (UActionPanel* ActionPanel = ConstructWidget(Context.WidgetTree, Context.ActionPanel, TEXT("ActionPanel")))
+	if (UBattleCommandBarWidget* CommandBar = ConstructWidget(Context.WidgetTree, Context.CommandBar, TEXT("CommandBar")))
 	{
 		SetCanvasSlot(
-			Root->AddChildToCanvas(ActionPanel),
+			Root->AddChildToCanvas(CommandBar),
 			FAnchors(1.0f, 1.0f),
 			FVector2D(1.0f, 1.0f),
 			FMargin(-30.0f, -200.0f, 160.0f, 140.0f));

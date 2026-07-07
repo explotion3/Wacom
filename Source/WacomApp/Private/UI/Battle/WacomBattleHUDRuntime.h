@@ -15,8 +15,8 @@
 #include "Types/WacomInteractionTargetTypes.h"
 
 class AWacomBattleEnemyActor;
-class UActionPanel;
 class UBattleCombatLogFeedWidget;
+class UBattleCommandBarWidget;
 class UBattlePresentationStackWidget;
 class UBattleSession;
 class UEquipmentBar;
@@ -29,13 +29,15 @@ class UWacomFirstPersonCardAnchorComponent;
 class UWacomGameUIManagerSubsystem;
 class FWacomBattleHUDCardDetailController;
 class FWacomBattleHUDCombatLogController;
+class FWacomBattleHUDCommandController;
+class FWacomBattleHUDCommandBarPresenter;
 class FWacomBattleHUDFirstPersonHandBridge;
 class FWacomBattleHUDPresentationCoordinator;
 class FWacomBattleHUDSceneEnemyTargetCoordinator;
-struct FBattleCommand;
+class FWacomBattleHUDSnapshotPresenter;
+class FWacomBattleHUDTargetingController;
 struct FKnockdownChoiceView;
 struct FBattleSnapshot;
-struct FHandCardSnapshot;
 struct FWacomBattleEnemyPartDragPredictionDebugInput;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomCardDetailViewData;
@@ -76,7 +78,7 @@ public:
 	void NotifyUIStateChanged(EBattleUIState OldState, EBattleUIState NewState);
 
 	UPlayerStatusBar* GetPlayerStatusBar() const;
-	UActionPanel* GetActionPanel() const;
+	UBattleCommandBarWidget* GetCommandBar() const;
 	UEquipmentBar* GetEquipmentBar() const;
 	UPileCountView* GetDrawPileView() const;
 	UPileCountView* GetDiscardPileView() const;
@@ -112,59 +114,6 @@ private:
 	UBattleHUD& HUD;
 };
 
-class FWacomBattleHUDSnapshotPresenter
-{
-public:
-	explicit FWacomBattleHUDSnapshotPresenter(FWacomBattleHUDRuntime& InRuntime);
-
-	void RefreshFromSnapshot(const FBattleSnapshot& Snapshot);
-	void RefreshFromPresentationPhase(
-		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
-
-private:
-	FWacomBattleHUDRuntime& Runtime;
-
-	void RefreshPileViews(const FBattleSnapshot& Snapshot);
-	void RefreshBoundBattleWidgets(const FBattleSnapshot& Snapshot);
-};
-
-class FWacomBattleHUDCommandController
-{
-public:
-	explicit FWacomBattleHUDCommandController(FWacomBattleHUDRuntime& InRuntime);
-
-	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
-	void SubmitPlayCardOnWorldTarget(const FGuid& CardId, const FWacomInteractionTargetHandle& TargetHandle);
-	void SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId);
-	void SubmitWait();
-	void SubmitEndTurn();
-	void SubmitKnockdownChoice(EKnockdownChoice Choice);
-	void AfterCommand();
-	void AfterCommand(
-		const FWacomBattleCombatLogCommandContext& LogContext,
-		const FBattleSnapshot& PreCommandSnapshot);
-
-private:
-	FWacomBattleHUDRuntime& Runtime;
-};
-
-class FWacomBattleHUDTargetingController
-{
-public:
-	explicit FWacomBattleHUDTargetingController(FWacomBattleHUDRuntime& InRuntime);
-
-	void HandleCardClicked(const FGuid& CardInstanceId);
-	void HandleEnemyPartClicked(const FWacomInteractionTargetHandle& TargetHandle);
-	void CancelTargetSelect();
-	FBattleTargetSelectionView BuildTargetSelectionView() const;
-	void ClearTargetSelection();
-
-private:
-	FWacomBattleHUDRuntime& Runtime;
-};
-
 class FWacomBattleHUDRuntime
 {
 public:
@@ -188,7 +137,7 @@ public:
 	void SetPendingTargetingCardId(const FGuid& CardInstanceId) { PendingTargetingCardId = CardInstanceId; }
 	void ClearPendingTargetingCardId() { PendingTargetingCardId.Invalidate(); }
 
-	void SetBattleInputReady(bool bReady) { bBattleInputReady = bReady; }
+	void SetBattleInputReady(bool bReady);
 	bool IsBattleInputReady() const { return bBattleInputReady; }
 	void SetFirstPersonBattleHandSuppressedForEntry(bool bSuppressed);
 	bool IsFirstPersonBattleHandSuppressedForEntry() const { return bFirstPersonBattleHandSuppressedForEntry; }
@@ -208,6 +157,8 @@ public:
 	bool CanSubmitPlayerActionCommand() const;
 	bool HasPendingTurnBoundaryCommand() const;
 	FText GetPendingTurnBoundaryCommandText() const;
+	void RefreshCommandBarFromSnapshot(const FBattleSnapshot& Snapshot);
+	void RefreshCommandBarFromCurrentSnapshot();
 
 	void OnCardClickedByUser(const FGuid& CardInstanceId);
 	void OnEnemyPartClickedByUser(const FWacomInteractionTargetHandle& TargetHandle);
@@ -366,6 +317,7 @@ public:
 	FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator();
 	const FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator() const;
 	FWacomBattleHUDCommandController& GetCommandController();
+	FWacomBattleHUDCommandBarPresenter& GetCommandBarPresenter();
 	FWacomBattleHUDTargetingController& GetTargetingController();
 	FWacomBattleHUDSnapshotPresenter& GetSnapshotPresenter();
 
@@ -386,6 +338,7 @@ private:
 	FWacomBattleHUDRuntimeHost RuntimeHost;
 	TUniquePtr<FWacomBattleHUDSnapshotPresenter> SnapshotPresenter;
 	TUniquePtr<FWacomBattleHUDCommandController> CommandController;
+	TUniquePtr<FWacomBattleHUDCommandBarPresenter> CommandBarPresenter;
 	TUniquePtr<FWacomBattleHUDTargetingController> TargetingController;
 	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
 	TSharedPtr<FWacomBattleHUDCardDetailController> CardDetailController;

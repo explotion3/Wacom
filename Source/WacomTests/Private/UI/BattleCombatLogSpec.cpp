@@ -1,0 +1,415 @@
+// Copyright Wacom. All Rights Reserved.
+
+#include "Misc/AutomationTest.h"
+
+#include "Cards/CardDefinition.h"
+#include "Characters/CharacterDefinition.h"
+#include "Enemies/EnemyDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
+#include "Fixtures/BattleTestFixtures.h"
+#include "Session/BattleSession.h"
+#include "Snapshots/BattleSnapshot.h"
+#include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/WacomBattleCombatLogBuilder.h"
+#include "UI/BattleWidgetSpecReceiver.h"
+
+#include "BattleHUDTestHarness.h"
+
+#include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "UObject/StrongObjectPtr.h"
+
+namespace WacomBattleCombatLogSpec
+{
+	UWorld* FindAutomationWorld()
+	{
+		if (GEngine)
+		{
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				if (UWorld* World = Context.World())
+				{
+					return World;
+				}
+			}
+		}
+
+		return GWorld;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogBuilderPlayCardSpec,
+	"Wacom.UI.Battle.CombatLog.Builder.PlayCardBlockWithCardAndTargetNames",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogBuilderPlayCardSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> PoisonFang(NewObject<UCardDefinition>());
+	PoisonFang->CardId = TEXT("PoisonFang");
+	PoisonFang->DisplayName = FText::FromString(TEXT("毒牙"));
+
+	TStrongObjectPtr<UEnemyPartDefinition> SnakeHead(NewObject<UEnemyPartDefinition>());
+	SnakeHead->PartId = TEXT("SnakeHead");
+	SnakeHead->DisplayName = FText::FromString(TEXT("蛇头"));
+
+	const FGuid CardId = FGuid::NewGuid();
+	const FGuid TargetPartId = FGuid::NewGuid();
+
+	FBattleSnapshot Snapshot;
+	Snapshot.TurnNumber = 1;
+	FHandCardSnapshot HandCard;
+	HandCard.InstanceId = CardId;
+	HandCard.Definition = PoisonFang.Get();
+	Snapshot.Hand.Cards.Add(HandCard);
+	FEnemyPartSnapshot Part;
+	Part.InstanceId = TargetPartId;
+	Part.Identity = FBattlePartSlotIdentity(TEXT("Encounter"), TEXT("Enemy"), TEXT("Target"));
+	Part.Definition = SnakeHead.Get();
+	FEnemySnapshot EnemySnapshot;
+	EnemySnapshot.EnemySlotId = TEXT("Enemy");
+	EnemySnapshot.Parts.Add(Part);
+	Snapshot.Enemies.Add(EnemySnapshot);
+
+	const FWacomBattleCombatLogCommandContext Context =
+		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(Snapshot, CardId, Part.Identity, FGuid());
+
+	FBattleEvent CardPlayed;
+	CardPlayed.Type = EBattleEventType::CardPlayed;
+	CardPlayed.Sequence = 10;
+	CardPlayed.Amount = 2;
+
+	FBattleEvent Damage;
+	Damage.Type = EBattleEventType::DamageDealt;
+	Damage.Sequence = 11;
+	Damage.Amount = 7;
+
+	const FWacomBattleCombatLogBlockView Block =
+		UWacomBattleCombatLogBuilder::BuildCombatLogBlock(Context, { CardPlayed, Damage }, Snapshot, Snapshot);
+
+	TestTrue(TEXT("PlayCard combat block displays"), Block.bShouldDisplay);
+	TestEqual(TEXT("PlayCard header names card and target"),
+		Block.HeaderText.ToString(),
+		FString(TEXT("打出「毒牙」 -> 蛇头，消耗 2 先机")));
+	TestEqual(TEXT("CardPlayed is folded into header"), Block.DetailLines.Num(), 1);
+	TestEqual(TEXT("Damage appears as detail"), Block.DetailLines[0].MessageText.ToString(), FString(TEXT("造成 7 点伤害")));
+	TestEqual(TEXT("Sequence range starts at first event"), Block.FirstEventSequence, 10);
+	TestEqual(TEXT("Sequence range ends at last event"), Block.LastEventSequence, 11);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogBuilderWaitEndTurnSystemSpec,
+	"Wacom.UI.Battle.CombatLog.Builder.WaitEndTurnAndSystemBlocks",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogBuilderWaitEndTurnSystemSpec::RunTest(const FString& /*Parameters*/)
+{
+	FBattleSnapshot Snapshot;
+	Snapshot.TurnNumber = 2;
+
+	{
+		FBattleEvent WaitEvent;
+		WaitEvent.Type = EBattleEventType::WaitPerformed;
+		WaitEvent.Amount = 3;
+		const FWacomBattleCombatLogBlockView Block =
+			UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+				UWacomBattleCombatLogBuilder::BuildWaitCommandContext(Snapshot),
+				{ WaitEvent },
+				Snapshot,
+				Snapshot);
+		TestEqual(TEXT("Wait header includes initiative push"), Block.HeaderText.ToString(), FString(TEXT("等待：敌方先机 -3")));
+	}
+
+	{
+		FBattleEvent TurnEnded;
+		TurnEnded.Type = EBattleEventType::TurnEnded;
+		TurnEnded.Count = 2;
+		FBattleEvent CardsDrawn;
+		CardsDrawn.Type = EBattleEventType::CardsDrawn;
+		CardsDrawn.Count = 5;
+		const FWacomBattleCombatLogBlockView Block =
+			UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+				UWacomBattleCombatLogBuilder::BuildEndTurnCommandContext(Snapshot),
+				{ TurnEnded, CardsDrawn },
+				Snapshot,
+				Snapshot);
+		TestEqual(TEXT("EndTurn header"), Block.HeaderText.ToString(), FString(TEXT("结束回合")));
+		TestEqual(TEXT("EndTurn details include turn end and draw"), Block.DetailLines.Num(), 2);
+	}
+
+	{
+		FBattleEvent Started;
+		Started.Type = EBattleEventType::BattleStarted;
+		const FWacomBattleCombatLogBlockView Block =
+			UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+				UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot),
+				{ Started },
+				Snapshot,
+				Snapshot);
+		TestEqual(TEXT("System header uses turn"), Block.HeaderText.ToString(), FString(TEXT("战斗记录 · 第 2 回合")));
+		TestEqual(TEXT("System detail includes battle start"), Block.DetailLines[0].MessageText.ToString(), FString(TEXT("战斗开始")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogBuilderMoveEventsSpec,
+	"Wacom.UI.Battle.CombatLog.Builder.MoveEvents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogBuilderMoveEventsSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> RewardCard(NewObject<UCardDefinition>());
+	RewardCard->CardId = TEXT("Reward");
+	RewardCard->DisplayName = FText::FromString(TEXT("毒牙"));
+
+	FBattleSnapshot Snapshot;
+
+	FBattleEvent Hidden;
+	Hidden.Type = EBattleEventType::HandZoneChanged;
+
+	FBattleEvent Discarded;
+	Discarded.Type = EBattleEventType::CardDiscarded;
+	Discarded.HandCardZoneMoveReason = EHandCardZoneMoveReason::Effect;
+
+	FBattleEvent Exhausted;
+	Exhausted.Type = EBattleEventType::CardExhausted;
+	Exhausted.HandCardZoneMoveReason = EHandCardZoneMoveReason::TurnEnd;
+
+	FBattleEvent Gained;
+	Gained.Type = EBattleEventType::CardGained;
+	Gained.CardDefinition = RewardCard.Get();
+
+	const FWacomBattleCombatLogBlockView Block =
+		UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+			UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot),
+			{ Hidden, Discarded, Exhausted, Gained },
+			Snapshot,
+			Snapshot);
+
+	TestEqual(TEXT("Hidden HandZoneChanged is omitted"), Block.DetailLines.Num(), 3);
+	TestEqual(TEXT("Discarded is combat-log visible"), Block.DetailLines[0].MessageText.ToString(), FString(TEXT("效果弃置 1 张牌")));
+	TestEqual(TEXT("Exhausted is combat-log visible"), Block.DetailLines[1].MessageText.ToString(), FString(TEXT("回合结束消耗 1 张牌")));
+	TestEqual(TEXT("Card gained remains visible"), Block.DetailLines[2].MessageText.ToString(), FString(TEXT("获得卡牌：毒牙")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogFeedSpec,
+	"Wacom.UI.Battle.CombatLog.Feed.MirrorsBlocksAndTrims",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>());
+	Feed->MaxVisibleBlocks = 2;
+	Feed->TakeWidget();
+	TestTrue(TEXT("Feed fallback owns a scroll box"), Feed->HasScrollBoxForTest());
+
+	FWacomBattleCombatLogBlockView Hidden;
+	Hidden.bShouldDisplay = false;
+	Hidden.HeaderText = FText::FromString(TEXT("隐藏"));
+
+	FWacomBattleCombatLogBlockView First;
+	First.bShouldDisplay = true;
+	First.HeaderText = FText::FromString(TEXT("打出「毒牙」"));
+
+	FWacomBattleCombatLogBlockView Second;
+	Second.bShouldDisplay = true;
+	Second.HeaderText = FText::FromString(TEXT("等待"));
+
+	FWacomBattleCombatLogBlockView Third;
+	Third.bShouldDisplay = true;
+	Third.HeaderText = FText::FromString(TEXT("结束回合"));
+
+	Feed->SetCombatLogBlocks({ Hidden, First, Second, Third });
+
+	TestEqual(TEXT("Feed filters hidden and trims"), Feed->GetVisibleBlockCount(), 2);
+	TestEqual(TEXT("Feed keeps recent second block"), Feed->GetCurrentBlocks()[0].HeaderText.ToString(), FString(TEXT("等待")));
+	TestEqual(TEXT("Feed keeps latest block"), Feed->GetCurrentBlocks()[1].HeaderText.ToString(), FString(TEXT("结束回合")));
+
+	Feed->ClearCombatLog();
+	TestEqual(TEXT("Feed clears blocks"), Feed->GetVisibleBlockCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCombatLogSpec,
+	"Wacom.UI.Battle.CombatLog.HUD.HistoryAndFeed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCombatLogSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>(HUD.Get()));
+	HUD->BattleCombatLogMaxBlocks = 2;
+	HUD->SetCombatLogFeedForTest(Feed.Get());
+	Feed->TakeWidget();
+
+	FWacomBattleCombatLogBlockView Hidden;
+	Hidden.bShouldDisplay = false;
+	Hidden.HeaderText = FText::FromString(TEXT("隐藏"));
+
+	FWacomBattleCombatLogBlockView First;
+	First.bShouldDisplay = true;
+	First.HeaderText = FText::FromString(TEXT("战斗开始"));
+
+	FWacomBattleCombatLogBlockView Second;
+	Second.bShouldDisplay = true;
+	Second.HeaderText = FText::FromString(TEXT("等待"));
+
+	FWacomBattleCombatLogBlockView Third;
+	Third.bShouldDisplay = true;
+	Third.HeaderText = FText::FromString(TEXT("战斗胜利"));
+
+	HUD->AppendBattleCombatLogBlockForTest(Hidden);
+	HUD->AppendBattleCombatLogBlockForTest(First);
+	HUD->AppendBattleCombatLogBlockForTest(Second);
+	HUD->AppendBattleCombatLogBlockForTest(Third);
+
+	TestEqual(TEXT("HUD combat log history trims to max"), HUD->GetBattleCombatLogBlockCount(), 2);
+	TestEqual(TEXT("HUD keeps recent second block"), HUD->GetBattleCombatLogHistoryForTest()[0].HeaderText.ToString(), FString(TEXT("等待")));
+	TestEqual(TEXT("HUD keeps latest block"), HUD->GetBattleCombatLogHistoryForTest()[1].HeaderText.ToString(), FString(TEXT("战斗胜利")));
+	TestEqual(TEXT("Feed mirrors combat log blocks"), Feed->GetVisibleBlockCount(), 2);
+	TestEqual(TEXT("Feed latest text"), Feed->GetCurrentBlocks()[1].HeaderText.ToString(), FString(TEXT("战斗胜利")));
+
+	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
+	HUD->SetSession(Session.Get());
+	HUD->SetSession(nullptr);
+	TestEqual(TEXT("Session change clears HUD history"), HUD->GetBattleCombatLogBlockCount(), 0);
+	TestEqual(TEXT("Session change clears feed"), Feed->GetVisibleBlockCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDInitialEventsConsumedSpec,
+	"Wacom.UI.Battle.CombatLog.HUD.InitialEventsConsumedOnSessionSet",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDInitialEventsConsumedSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>(HUD.Get()));
+	Feed->TakeWidget();
+	HUD->SetCombatLogFeedForTest(Feed.Get());
+	HUD->SetSession(Session);
+
+	TestTrue(TEXT("SetSession consumes initial visible battle events immediately"),
+		HUD->GetBattleCombatLogBlockCount() > 0);
+	TestTrue(TEXT("Combat log feed receives initial visible battle events"),
+		Feed->GetVisibleBlockCount() > 0);
+
+	const TArray<FWacomBattleCombatLogBlockView> InitialBlocks = HUD->GetBattleCombatLogHistoryForTest();
+	const bool bHasBattleStarted = InitialBlocks.ContainsByPredicate(
+		[](const FWacomBattleCombatLogBlockView& Block)
+		{
+			return Block.DetailLines.ContainsByPredicate(
+				[](const FWacomBattleCombatLogLineView& Line)
+				{
+					return Line.SourceEventType == EBattleEventType::BattleStarted;
+				});
+		});
+	const bool bHasCardsDrawn = InitialBlocks.ContainsByPredicate(
+		[](const FWacomBattleCombatLogBlockView& Block)
+		{
+			return Block.DetailLines.ContainsByPredicate(
+				[](const FWacomBattleCombatLogLineView& Line)
+				{
+					return Line.SourceEventType == EBattleEventType::CardsDrawn;
+				});
+		});
+	TestTrue(TEXT("Initial log includes battle start"), bHasBattleStarted);
+	TestTrue(TEXT("Initial log includes opening draw"), bHasCardsDrawn);
+
+	const int32 EntryCountAfterSetSession = HUD->GetBattleCombatLogBlockCount();
+	HUD->OnWaitRequested();
+
+	const TArray<FWacomBattleCombatLogBlockView> BlocksAfterWait = HUD->GetBattleCombatLogHistoryForTest();
+	const int32 BattleStartedCountAfterWait = BlocksAfterWait.FilterByPredicate(
+		[](const FWacomBattleCombatLogBlockView& Block)
+		{
+			return Block.DetailLines.ContainsByPredicate(
+				[](const FWacomBattleCombatLogLineView& Line)
+				{
+					return Line.SourceEventType == EBattleEventType::BattleStarted;
+				});
+		}).Num();
+	TestEqual(TEXT("Initial battle start is not consumed again after first command"), BattleStartedCountAfterWait, 1);
+	TestTrue(TEXT("Wait appends later command events"),
+		HUD->GetBattleCombatLogBlockCount() > EntryCountAfterSetSession);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCombatLogControllerContractSpec,
+	"Wacom.UI.Battle.CombatLog.Controller.ClearsAndTrimsThroughHUD",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCombatLogControllerContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(WacomBattleCombatLogSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UBattleCombatLogFeedWidget* Feed = Harness->AttachCombatLogFeed();
+	if (!TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("CombatLogFeed"), Feed))
+	{
+		return false;
+	}
+	HUD->BattleCombatLogMaxBlocks = 2;
+
+	FWacomBattleCombatLogBlockView First;
+	First.bShouldDisplay = true;
+	First.HeaderText = FText::FromString(TEXT("第一块"));
+	FWacomBattleCombatLogBlockView Second;
+	Second.bShouldDisplay = true;
+	Second.HeaderText = FText::FromString(TEXT("第二块"));
+	FWacomBattleCombatLogBlockView Third;
+	Third.bShouldDisplay = true;
+	Third.HeaderText = FText::FromString(TEXT("第三块"));
+
+	HUD->AppendBattleCombatLogBlockForTest(First);
+	HUD->AppendBattleCombatLogBlockForTest(Second);
+	HUD->AppendBattleCombatLogBlockForTest(Third);
+	TestEqual(TEXT("HUD exposes trimmed combat log block count"), HUD->GetBattleCombatLogBlockCount(), 2);
+	TestEqual(TEXT("HUD history keeps recent block"),
+		HUD->GetBattleCombatLogHistoryForTest()[0].HeaderText.ToString(),
+		FString(TEXT("第二块")));
+	TestEqual(TEXT("Feed mirrors controller history through HUD"),
+		Feed->GetVisibleBlockCount(),
+		HUD->GetBattleCombatLogBlockCount());
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(Character, Fx.MakeSinglePartEnemy(20, 5, 0), 1);
+	Harness->SetSession(Session);
+	TestTrue(TEXT("SetSession appends initial system-visible combat log"),
+		HUD->GetBattleCombatLogBlockCount() > 0);
+	Harness->SetSession(nullptr);
+	TestEqual(TEXT("Session clear clears combat log through HUD"), HUD->GetBattleCombatLogBlockCount(), 0);
+	TestEqual(TEXT("Session clear syncs feed through HUD"), Feed->GetVisibleBlockCount(), 0);
+
+	return true;
+}

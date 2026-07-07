@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 
-class UActionPanel;
+class UBattleCommandBarWidget;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UEquipmentBar;
@@ -19,7 +19,7 @@ struct FBattleHUDFallbackLayoutBuilderContext
 	UWidgetTree* WidgetTree = nullptr;
 
 	TObjectPtr<UPlayerStatusBar>* PlayerStatusBar = nullptr;
-	TObjectPtr<UActionPanel>* ActionPanel = nullptr;
+	TObjectPtr<UBattleCommandBarWidget>* CommandBar = nullptr;
 	TObjectPtr<UEquipmentBar>* EquipmentBar = nullptr;
 	TObjectPtr<UPileCountView>* DrawPileView = nullptr;
 	TObjectPtr<UPileCountView>* DiscardPileView = nullptr;

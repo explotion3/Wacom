@@ -37,7 +37,7 @@ tags:
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
 | `PlayerStatusBar` | `UPlayerStatusBar` | Optional | 玩家 HP / Shield / 状态图标显示 |
-| `ActionPanel` | `UActionPanel` | Optional | Wait / EndTurn 按钮和等待值 |
+| `CommandBar` | `UBattleCommandBarWidget` | Optional | Wait / EndTurn 命令按钮、等待值和 pending 文案 |
 | `EquipmentBar` | `UEquipmentBar` | Optional | 装备条占位 |
 | `DrawPileView` | `UPileCountView` | Optional | 抽牌堆数量 |
 | `DiscardPileView` | `UPileCountView` | Optional | 弃牌堆数量；当本回合使用牌堆非空时显示为 `弃牌堆数+本回合使用数`，例如 `2+3` |
@@ -56,7 +56,7 @@ WBP 不应做：
 
 最小 PIE 验收：
 
-- 玩家状态、牌堆数量、ActionPanel 和 CombatLogFeed 在 Snapshot 刷新后显示。
+- 玩家状态、牌堆数量、CommandBar 和 CombatLogFeed 在 Snapshot 刷新后显示。
 - `CombatLogFeed` 可滚动，连续出牌后能查看最近命令块。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
 - 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 扫描到的 PartActor Status Badge 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
@@ -265,21 +265,42 @@ WBP 不应做：不提交玩家命令，不修改 BattleSession。
 
 WBP 不应做：不从规则层查询状态，不自行改状态层数，不把 `Status.Shield` 混入状态图标。
 
-### WBP_ActionPanel
+### WBP_BattleCommandBar
 
-父类：`UActionPanel`
+父类：`UBattleCommandBarWidget`
 
 推荐绑定：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `WaitButton` | `Button` | Required | 请求等待 |
-| `EndTurnButton` | `Button` | Required | 请求结束回合 |
-| `WaitLabel` | `TextBlock` | Optional | 等待按钮文字 |
-| `EndTurnLabel` | `TextBlock` | Optional | 结束回合按钮文字 |
-| `WaitValueText` | `TextBlock` | Optional | 当前等待值 |
+| `CommandButtonContainer` | `PanelWidget` | Required | 承载 runtime 生成的命令按钮 |
+| `WaitValueText` | `TextBlock` | Optional | 当前等待值，例如 `Wait Value: 2` |
+| `PendingText` | `TextBlock` | Optional | pending turn-boundary 文案，例如“等待排队中” |
 
-WBP 不应做：不直接提交 `FBattleCommand`；按钮可用性由父类 / HUD state 控制。
+重要变量：
+
+| 变量 | 类型 | 用途 |
+|---|---|---|
+| `CommandButtonWidgetClass` | `TSubclassOf<UWacomBattleCommandButtonWidget>` | 生成 Wait / EndTurn 按钮使用的 WBP 类 |
+
+WBP 不应做：不直接提交 `FBattleCommand`，不自行判断按钮可用性，不把 pending 文案混入 `WaitValueText`。按钮列表由 BattleHUD runtime presenter 推送的 `FWacomBattleCommandBarViewData` 决定；本轮正式可见命令只有 Wait / EndTurn。
+
+CommandBar 的轻量协议定义在 `BattleCommandBarTypes.h`：`EWacomBattleCommandId`、`FWacomBattleCommandButtonView` 和 `FWacomBattleCommandBarViewData` 是 HUD / runtime presenter / tests 共用的 interface；`BattleCommandBarWidget.h` 只承载 UMG Widget 类、WBP 绑定和按钮生成实现。
+
+### WBP_BattleCommandButton
+
+父类：`UWacomBattleCommandButtonWidget`
+
+推荐绑定：
+
+| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
+|---|---|---|---|
+| `ButtonText` | `CommonTextBlock` | Optional | 命令显示名 |
+| `IconImage` | `Image` | Optional | 命令图标 |
+| `InputHintText` | `TextBlock` | Optional | 快捷键 / 手柄提示 |
+| `PendingIndicator` | `Widget` | Optional | 当前命令 pending 时显示 |
+
+WBP 不应做：不在按钮图里调用 HUD / Session；点击只通过父类广播 `EWacomBattleCommandId`，由 `UBattleHUD` 分发到 `OnWaitRequested / OnEndTurnRequested`。
 
 ### WBP_EquipmentBar
 
@@ -364,8 +385,8 @@ WBP 不应做：不直接读取或修改 `UBattleSession`，不在部位 Actor �
 WBP 不应做：不提交战斗命令，不反向写入 Snapshot，不承担 world target/hover/drag preview 反馈。
 ## PIE Smoke Checklist
 
-- `WBP_BattleHUD` 能显示玩家状态、ActionPanel、牌堆数量、CombatLogFeed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。
-- `WaitButton / EndTurnButton` 可点击并由 HUD 状态控制可用性。
+- `WBP_BattleHUD` 能显示玩家状态、CommandBar、牌堆数量、CombatLogFeed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。
+- CommandBar 里的 Wait / EndTurn 可点击并由 HUD runtime view data 控制可用性。
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；PartActor 只显示 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
