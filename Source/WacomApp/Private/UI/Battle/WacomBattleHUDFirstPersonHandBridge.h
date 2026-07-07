@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Runtime/BattlePartSlotIdentity.h"
+#include "UI/Battle/WacomBattleFirstPersonDropResolver.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHandPresentationController.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
@@ -150,6 +151,7 @@ private:
 		FWacomFirstPersonCardLayerPresentationFrame&& Frame);
 
 	FWacomBattleHUDRuntime& Runtime;
+	FWacomBattleFirstPersonDropResolver DropResolver;
 	FWacomBattleHandPresentationController PresentationController;
 	FWacomFirstPersonCardCameraLookBridge CameraLookBridge;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
