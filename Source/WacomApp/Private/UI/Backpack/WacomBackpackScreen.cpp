@@ -21,6 +21,7 @@
 #include "UI/Backpack/WacomBackpackCardDetailController.h"
 #include "UI/Backpack/WacomBackpackCommandFlow.h"
 #include "UI/Backpack/WacomBackpackDeckCardListReconciler.h"
+#include "UI/Backpack/WacomBackpackHeaderPresenter.h"
 #include "UI/Backpack/WacomBackpackSpecialZoneListReconciler.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomBackpackStorageRefreshGate.h"
@@ -489,29 +490,14 @@ void UWacomBackpackScreen::ResetBackpackRefreshDirtyGate()
 
 void UWacomBackpackScreen::RebuildTopStats(UWacomRunViewModel* VM)
 {
-	if (VM)
-	{
-		const FText BattleDeckTitle = UWacomBackpackScreenPresenter::BuildBattleDeckTitleText(
-			VM->GetBattleDeckCount(),
-			VM->GetBattleDeckCapacity());
-		if (BattleDeckTitleText)
-		{
-			BattleDeckTitleText->SetText(BattleDeckTitle);
-		}
-		if (BattleDeckZoneSection)
-		{
-			BattleDeckZoneSection->SetZoneTitleText(BattleDeckTitle);
-		}
-
-		if (BackpackTitleText)
-		{
-			BackpackTitleText->SetText(UWacomBackpackScreenPresenter::BuildBackpackTitleText());
-		}
-		if (GoldText)
-		{
-			GoldText->SetText(UWacomBackpackScreenPresenter::BuildGoldText(VM->GetGold()));
-		}
-	}
+	FWacomBackpackHeaderPresenter::Apply(
+		FWacomBackpackHeaderPresenterContext{
+			BattleDeckTitleText,
+			BackpackTitleText,
+			GoldText,
+			BattleDeckZoneSection
+		},
+		VM);
 }
 
 void UWacomBackpackScreen::RebuildBattleDeckZone(const FRunBackpackStorageSnapshot& Snapshot)
