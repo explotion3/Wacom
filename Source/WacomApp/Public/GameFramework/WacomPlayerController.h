@@ -27,6 +27,7 @@ class UWacomRunTunnelMovementComponent;
 class UWacomFirstPersonCardAnchorComponent;
 class UWacomCardDetailPanel;
 class FWacomBattleSceneInteractionRouter;
+class FWacomRunWorldInteractionRouter;
 class FWacomRunFirstPersonCardDetailController;
 class FWacomRunFirstPersonCardDragController;
 class FWacomRunFirstPersonCardDropCoordinator;
@@ -366,6 +367,8 @@ private:
 	UBattleHUD* GetActiveBattleHUD() const;
 	FWacomBattleSceneInteractionRouter& GetBattleSceneInteractionRouter();
 	const FWacomBattleSceneInteractionRouter& GetBattleSceneInteractionRouter() const;
+	FWacomRunWorldInteractionRouter& GetRunWorldInteractionRouter();
+	const FWacomRunWorldInteractionRouter& GetRunWorldInteractionRouter() const;
 
 	bool TryProbeRunMenuDropTargetAtWidgetPosition(
 		const FVector2D& WidgetPosition,
@@ -408,20 +411,11 @@ private:
 
 	void StartRunWorldTargetProbePreviewLoop();
 	void StopRunWorldTargetProbePreviewLoop();
-	bool CanShowRunWorldInteractableHoverPrompt() const;
-	AActor* ResolveSourceActorFromInteractionTargetHandle(
-		const FWacomInteractionTargetHandle& Handle) const;
 	bool ResolveRunWorldClickableInteractableFromHandle(
 		const FWacomInteractionTargetHandle& Handle,
 		AActor*& OutInteractableActor,
 		UWacomRunWorldInteractionTargetBridgeComponent*& OutBridge,
 		FName& OutRejectReason) const;
-	void UpdateRunWorldInteractableHoverPrompt(
-		const FWacomInteractionTargetHandle& Handle,
-		AActor* InteractableActor);
-	void ClearRunWorldInteractableHoverPrompt(FName Reason);
-	UWacomRunWorldInteractionTargetBridgeComponent* ResolveRunWorldTargetBridgeFromHandle(
-		const FWacomInteractionTargetHandle& Handle) const;
 	UWacomRunWorldCardDropReceiverComponent* ResolveRunWorldCardDropReceiverFromHandle(
 		const FWacomInteractionTargetHandle& Handle) const;
 	void ClearRunWorldCardDropProbe();
@@ -464,16 +458,6 @@ private:
 	TArray<TWeakObjectPtr<AActor>> CandidateInteractables;
 
 	UPROPERTY(Transient)
-	TWeakObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> PreviewedRunWorldTargetBridge;
-
-	UPROPERTY(Transient)
-	TWeakObjectPtr<AActor> HoveredRunWorldInteractableActor;
-
-	FWacomInteractionTargetHandle HoveredRunWorldInteractableHandle;
-	FText HoveredRunWorldInteractablePrompt;
-	FName LastRunWorldInteractableHoverReason = TEXT("None");
-
-	UPROPERTY(Transient)
 	TArray<TWeakObjectPtr<UWacomMenuWidgetBase>> ActiveGameMenuWidgets;
 
 	UPROPERTY(Transient)
@@ -483,6 +467,7 @@ private:
 	TObjectPtr<UWacomCardDetailPanel> RunFirstPersonCardDetailPanel = nullptr;
 
 	TSharedPtr<FWacomBattleSceneInteractionRouter> BattleSceneInteractionRouter;
+	TSharedPtr<FWacomRunWorldInteractionRouter> RunWorldInteractionRouter;
 	TSharedPtr<FWacomRunFirstPersonCardDetailController> RunFirstPersonCardDetailController;
 	TSharedPtr<FWacomRunFirstPersonCardDragController> RunFirstPersonCardDragController;
 	TSharedPtr<FWacomRunFirstPersonCardDropCoordinator> RunFirstPersonCardDropCoordinator;
@@ -494,6 +479,7 @@ private:
 	FTimerHandle RunWorldTargetProbePreviewTimerHandle;
 
 	friend class FWacomBattleSceneInteractionRouter;
+	friend class FWacomRunWorldInteractionRouter;
 	friend class FWacomRunFirstPersonCardDetailController;
 	friend class FWacomRunFirstPersonCardDragController;
 #if WITH_AUTOMATION_TESTS

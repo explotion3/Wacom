@@ -74,7 +74,7 @@ Run world click / hover 使用显式 opt-in：
 - Actor 必须同时实现 `IWacomWorldInteractable` 和 `UWacomRunWorldClickableInteractable`。
 - Actor 必须通过 `UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent` 暴露 `Interaction.Target.Run.Object`。
 - `ClickBounds` 只阻挡 `Visibility` trace，不产生 overlap；`TriggerSphere` 仍只服务 E 键近距离候选注册。
-- PlayerController resolver 会校验 handle、source actor、clickable contract、world interactable contract 和 bridge，再把左键命中转回现有 `TryInteract()`。
+- `FWacomRunWorldInteractionRouter` 会校验 handle、source actor、clickable contract、world interactable contract 和 bridge，再把左键命中转回现有 `TryInteract()`。`AWacomPlayerController` 只保留输入 façade、timer、trace seam、E 键 candidate list 和 debug / WBP 入口。
 
 打开 Backpack / Pause / Shop / RunEvent 等 GameMenu 时，Run world hover/click 不穿透场景。菜单 first-person card drag/drop 正在处理时，也会清理普通 Run world hover prompt 和 probe preview。
 
@@ -176,7 +176,7 @@ Battle scene target click / probe 的正式实现位于 App-private `FWacomBattl
 
 Battle 已接入 `UBattleSession::ValidateTargetWithCard()`，用于 TargetSelect、first-person drag/drop world target 和 hand-card target validation。UI 只读取 validation result，不直接解析 BattleState。
 
-命中结果转 `FWacomInteractionTargetHandle` 的组件扫描已收口到 App-private `WacomInteractionTargetHitResolver`，供 Battle scene target 和 Run world target probe 复用。通用 Run target resolver 尚未独立抽象；当前 Run world / Run menu drop 由 App-private Run card drop coordinator 识别 target adapter，再进入明确的 RunSession 事务或 owning menu submit policy。
+命中结果转 `FWacomInteractionTargetHandle` 的组件扫描已收口到 App-private `WacomInteractionTargetHitResolver`，供 Battle scene target 和 Run world target probe 复用。Run world hover / click / probe 的 handle 校验和 clickable resolver 已收口到 App-private `FWacomRunWorldInteractionRouter`；Run world card drop / Run menu drop 仍由 App-private Run card drop coordinator 识别 target adapter，再进入明确的 RunSession 事务或 owning menu submit policy。
 
 ## §8 Debug / Development Entry Points
 

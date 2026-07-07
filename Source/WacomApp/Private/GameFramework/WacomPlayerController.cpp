@@ -19,15 +19,14 @@
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "Components/WacomRunTunnelMovementComponent.h"
 #include "GameFramework/WacomBattleSceneInteractionRouter.h"
+#include "GameFramework/WacomRunWorldInteractionRouter.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
-#include "Interaction/WacomRunWorldClickableInteractable.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "RunSession.h"
 #include "Characters/CharacterDefinition.h"
-#include "Interaction/WacomInteractionTargetHitResolver.h"
-#include "Interaction/WacomWorldInteractable.h"
+#include "Interaction/WacomWorldInteractableContractHelpers.h"
 #include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "RunStateTypes.h"
@@ -65,120 +64,6 @@ namespace
 		{
 			Slot = LoadObject<UInputAction>(nullptr, Path);
 		}
-	}
-
-	bool IsWorldInteractableActor(const AActor* Actor)
-	{
-		return Actor && Actor->GetClass()->ImplementsInterface(UWacomWorldInteractable::StaticClass());
-	}
-
-	bool IsRunWorldClickableInteractableActor(const AActor* Actor)
-	{
-		return Actor
-			&& Actor->GetClass()->ImplementsInterface(
-				UWacomRunWorldClickableInteractable::StaticClass());
-	}
-
-	FText GetRunWorldClickHoverPromptFromActor(AActor* Actor, AWacomPlayerController* PC)
-	{
-		if (IWacomRunWorldClickableInteractable* Native =
-			Cast<IWacomRunWorldClickableInteractable>(Actor))
-		{
-			if (Actor->GetClass()->IsNative())
-			{
-				return Native->GetRunWorldClickHoverPrompt_Implementation(PC);
-			}
-		}
-		return IsRunWorldClickableInteractableActor(Actor)
-			? IWacomRunWorldClickableInteractable::Execute_GetRunWorldClickHoverPrompt(Actor, PC)
-			: FText::GetEmpty();
-	}
-
-	FWacomRunWorldClickableInteractableDebugView GetRunWorldClickableDebugViewFromActor(
-		AActor* Actor,
-		AWacomPlayerController* PC)
-	{
-		if (IWacomRunWorldClickableInteractable* Native =
-			Cast<IWacomRunWorldClickableInteractable>(Actor))
-		{
-			if (Actor->GetClass()->IsNative())
-			{
-				return Native->GetRunWorldClickableDebugView_Implementation(PC);
-			}
-		}
-	return IsRunWorldClickableInteractableActor(Actor)
-		? IWacomRunWorldClickableInteractable::Execute_GetRunWorldClickableDebugView(Actor, PC)
-		: FWacomRunWorldClickableInteractableDebugView();
-	}
-
-	FName BuildRunWorldClickableHoverReason(
-		const FWacomRunWorldClickableInteractableDebugView& TriggerDebug)
-	{
-		if (TriggerDebug.bIsCompleted)
-		{
-			return TEXT("Completed");
-		}
-		if (TriggerDebug.bCanInteract)
-		{
-			return TEXT("Ok");
-		}
-		return TriggerDebug.RejectReason.IsNone()
-			? TriggerDebug.LastDebugResult
-			: TriggerDebug.RejectReason;
-	}
-
-	FText GetInteractPromptTextFromActor(AActor* Actor, AWacomPlayerController* PC)
-	{
-		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
-		{
-			if (Actor->GetClass()->IsNative())
-			{
-				return Native->GetInteractPromptText_Implementation(PC);
-			}
-		}
-		return IsWorldInteractableActor(Actor)
-			? IWacomWorldInteractable::Execute_GetInteractPromptText(Actor, PC)
-			: FText::GetEmpty();
-	}
-
-	FVector GetInteractLocationFromActor(AActor* Actor, AWacomPlayerController* PC)
-	{
-		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
-		{
-			if (Actor->GetClass()->IsNative())
-			{
-				return Native->GetInteractLocation_Implementation(PC);
-			}
-		}
-		return IsWorldInteractableActor(Actor)
-			? IWacomWorldInteractable::Execute_GetInteractLocation(Actor, PC)
-			: FVector::ZeroVector;
-	}
-
-	bool CanInteractWithActor(AActor* Actor, AWacomPlayerController* PC)
-	{
-		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
-		{
-			if (Actor->GetClass()->IsNative())
-			{
-				return Native->CanInteract_Implementation(PC);
-			}
-		}
-		return IsWorldInteractableActor(Actor)
-			&& IWacomWorldInteractable::Execute_CanInteract(Actor, PC);
-	}
-
-	bool TryInteractWithActor(AActor* Actor, AWacomPlayerController* PC)
-	{
-		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
-		{
-			if (Actor->GetClass()->IsNative())
-			{
-				return Native->TryInteract_Implementation(PC);
-			}
-		}
-		return IsWorldInteractableActor(Actor)
-			&& IWacomWorldInteractable::Execute_TryInteract(Actor, PC);
 	}
 
 	FString GetDebugObjectName(const UObject* Object)
@@ -303,7 +188,10 @@ void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		RunFirstPersonCardDragController->UnbindCurrentBinding();
 	}
 	ClearRunWorldTargetProbePreview();
-	ClearRunWorldInteractableHoverPrompt(TEXT("EndPlay"));
+	if (RunWorldInteractionRouter)
+	{
+		RunWorldInteractionRouter->ClearHoverPrompt(TEXT("EndPlay"));
+	}
 	StopRunWorldTargetProbePreviewLoop();
 	Super::EndPlay(EndPlayReason);
 }
@@ -489,7 +377,10 @@ void AWacomPlayerController::ClearRunFirstPersonCardLayer()
 	ClearRunFirstPersonCardDragCameraLookOverride();
 	ClearRunMenuDropTargetProbe();
 	ClearRunWorldCardDropProbe();
-	ClearRunWorldInteractableHoverPrompt(TEXT("FirstPersonLayerCleared"));
+	if (RunWorldInteractionRouter)
+	{
+		RunWorldInteractionRouter->ClearHoverPrompt(TEXT("FirstPersonLayerCleared"));
+	}
 	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
 	if (RunFirstPersonCardSourceComponent)
@@ -617,7 +508,10 @@ void AWacomPlayerController::RegisterActiveGameMenuWidget(UWacomMenuWidgetBase* 
 	{
 		ActiveGameMenuWidgets.Add(MenuWidget);
 	}
-	ClearRunWorldInteractableHoverPrompt(TEXT("GameMenuActive"));
+	if (RunWorldInteractionRouter)
+	{
+		RunWorldInteractionRouter->ClearHoverPrompt(TEXT("GameMenuActive"));
+	}
 	RefreshRunFirstPersonCardLayerMenuSuppression();
 }
 
@@ -678,9 +572,9 @@ void AWacomPlayerController::SetRunFirstPersonCardLayerTransitionSuppressedByGam
 	}
 
 	bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = bSuppressed;
-	if (bSuppressed)
+	if (bSuppressed && RunWorldInteractionRouter)
 	{
-		ClearRunWorldInteractableHoverPrompt(TEXT("GameMenuTransition"));
+		RunWorldInteractionRouter->ClearHoverPrompt(TEXT("GameMenuTransition"));
 	}
 	RefreshRunFirstPersonCardLayerMenuSuppression();
 }
@@ -1075,6 +969,21 @@ const FWacomBattleSceneInteractionRouter& AWacomPlayerController::GetBattleScene
 	return const_cast<AWacomPlayerController*>(this)->GetBattleSceneInteractionRouter();
 }
 
+FWacomRunWorldInteractionRouter& AWacomPlayerController::GetRunWorldInteractionRouter()
+{
+	if (!RunWorldInteractionRouter)
+	{
+		RunWorldInteractionRouter =
+			MakeShared<FWacomRunWorldInteractionRouter>(*this);
+	}
+	return *RunWorldInteractionRouter;
+}
+
+const FWacomRunWorldInteractionRouter& AWacomPlayerController::GetRunWorldInteractionRouter() const
+{
+	return const_cast<AWacomPlayerController*>(this)->GetRunWorldInteractionRouter();
+}
+
 bool AWacomPlayerController::TryRouteBattleSceneTargetClick(bool bRequireTargetSelect)
 {
 	return GetBattleSceneInteractionRouter().TryRouteTargetClick(bRequireTargetSelect);
@@ -1096,181 +1005,26 @@ bool AWacomPlayerController::TryProbeBattleSceneInteractionTargetAtWidgetPositio
 
 bool AWacomPlayerController::TryProbeRunSceneInteractionTarget(FWacomInteractionTargetHandle& OutHandle) const
 {
-	OutHandle = FWacomInteractionTargetHandle();
-
-	if (!IsInExplorationFlow())
-	{
-		return false;
-	}
-
-	FHitResult HitResult;
-	if (!BuildRunSceneClickHitResult(HitResult))
-	{
-		return false;
-	}
-
-	OutHandle = WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(HitResult);
-	if (OutHandle.IsValid())
-	{
-		OutHandle.WorldLocation = HitResult.Location;
-		FVector2D ScreenPosition = FVector2D::ZeroVector;
-		if (ProjectWorldLocationToScreen(HitResult.Location, ScreenPosition))
-		{
-			const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
-			OutHandle.ScreenPosition = ScreenPosition / ViewportScale;
-		}
-	}
-
-	const bool bAccepted = OutHandle.IsValid()
-		&& OutHandle.TargetKind == EWacomInteractionTargetKind::World
-		&& OutHandle.TargetTag == WacomTags::Interaction_Target_Run_Object
-		&& OutHandle.WorldTargetId.IsValid();
-	if (!bAccepted)
-	{
-		OutHandle = FWacomInteractionTargetHandle();
-	}
-	return bAccepted;
+	return GetRunWorldInteractionRouter().TryProbeSceneInteractionTarget(OutHandle);
 }
 
 bool AWacomPlayerController::TryProbeRunSceneInteractionTargetAtWidgetPosition(
 	const FVector2D& WidgetPosition,
 	FWacomInteractionTargetHandle& OutHandle) const
 {
-	OutHandle = FWacomInteractionTargetHandle();
-
-	if (!IsInExplorationFlow())
-	{
-		return false;
-	}
-
-	FHitResult HitResult;
-	if (!BuildRunSceneInteractionTargetHitResultAtWidgetPosition(WidgetPosition, HitResult))
-	{
-		return false;
-	}
-
-	OutHandle = WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(HitResult);
-	if (OutHandle.IsValid())
-	{
-		OutHandle.WorldLocation = HitResult.Location;
-		OutHandle.ScreenPosition = WidgetPosition;
-	}
-
-	const bool bAccepted = OutHandle.IsValid()
-		&& OutHandle.TargetKind == EWacomInteractionTargetKind::World
-		&& OutHandle.TargetTag == WacomTags::Interaction_Target_Run_Object
-		&& OutHandle.WorldTargetId.IsValid();
-	if (!bAccepted)
-	{
-		OutHandle = FWacomInteractionTargetHandle();
-	}
-	return bAccepted;
+	return GetRunWorldInteractionRouter().TryProbeSceneInteractionTargetAtWidgetPosition(
+		WidgetPosition,
+		OutHandle);
 }
 
 bool AWacomPlayerController::TryRouteRunWorldInteractableClick()
 {
-	if (!bEnableRunWorldInteractableClick)
-	{
-		return false;
-	}
-	if (!IsInExplorationFlow())
-	{
-		return false;
-	}
-	const bool bHasActiveGameMenu =
-		bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| ActiveGameMenuWidgets.ContainsByPredicate(
-			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-			{
-				return Menu.IsValid();
-			});
-	if (bHasActiveGameMenu || ShouldHandleRunFirstPersonMenuDropProbe())
-	{
-		if (bLogRunWorldInteractableClick)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomRunWorldInteractableClick] NoRoute reason=BlockedByMenuOrDrag"));
-		}
-		return false;
-	}
-
-	FWacomInteractionTargetHandle Handle;
-	if (!TryProbeRunSceneInteractionTarget(Handle))
-	{
-		if (bLogRunWorldInteractableClick)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomRunWorldInteractableClick] NoRoute reason=NoRunWorldTarget"));
-		}
-		return false;
-	}
-
-	AActor* TargetActor = nullptr;
-	UWacomRunWorldInteractionTargetBridgeComponent* TargetBridge = nullptr;
-	FName RejectReason = NAME_None;
-	if (!ResolveRunWorldClickableInteractableFromHandle(
-		Handle,
-		TargetActor,
-		TargetBridge,
-		RejectReason))
-	{
-		if (bLogRunWorldInteractableClick)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomRunWorldInteractableClick] NoRoute reason=%s actor=%s bridge=%s handle=%s"),
-				*RejectReason.ToString(),
-				*GetDebugObjectName(TargetActor),
-				*GetDebugObjectName(TargetBridge),
-				*Handle.ToString());
-		}
-		return false;
-	}
-
-	const bool bRouted = TryInteractWithActor(TargetActor, this);
-	if (bLogRunWorldInteractableClick)
-	{
-		UE_LOG(LogTemp, Display,
-			TEXT("[WacomRunWorldInteractableClick] Route actor=%s handle=%s result=%s"),
-			*GetDebugObjectName(TargetActor),
-			*Handle.ToString(),
-			bRouted ? TEXT("true") : TEXT("false"));
-	}
-	return bRouted;
+	return GetRunWorldInteractionRouter().TryRouteInteractableClick();
 }
 
 FString AWacomPlayerController::GetRunWorldInteractableHoverDebugSummary() const
 {
-	AActor* HoverActor = HoveredRunWorldInteractableActor.Get();
-	FWacomRunWorldClickableInteractableDebugView TriggerDebug;
-	if (IsRunWorldClickableInteractableActor(HoverActor))
-	{
-		TriggerDebug =
-			GetRunWorldClickableDebugViewFromActor(
-				HoverActor,
-				const_cast<AWacomPlayerController*>(this));
-	}
-	else
-	{
-		TriggerDebug.ActorName = GetDebugObjectName(HoverActor);
-		TriggerDebug.StableId = HoveredRunWorldInteractableHandle.StableTargetId;
-		TriggerDebug.bHasStableId = !TriggerDebug.StableId.IsNone();
-		TriggerDebug.bImplementsWorldInteractable = IsWorldInteractableActor(HoverActor);
-		TriggerDebug.bImplementsClickableContract = IsRunWorldClickableInteractableActor(HoverActor);
-		TriggerDebug.HoverPrompt = HoveredRunWorldInteractablePrompt.ToString();
-		TriggerDebug.RejectReason = LastRunWorldInteractableHoverReason;
-		TriggerDebug.LastDebugResult = LastRunWorldInteractableHoverReason;
-	}
-
-	return FString::Printf(
-		TEXT("RunWorldInteractableHover{Actor=%s StableId=%s Prompt=%s CanInteract=%s Completed=%s Reason=%s Target=%s Debug=%s}"),
-		*GetDebugObjectName(HoverActor),
-		*HoveredRunWorldInteractableHandle.StableTargetId.ToString(),
-		*HoveredRunWorldInteractablePrompt.ToString(),
-		TriggerDebug.bCanInteract ? TEXT("true") : TEXT("false"),
-		TriggerDebug.bIsCompleted ? TEXT("true") : TEXT("false"),
-		*LastRunWorldInteractableHoverReason.ToString(),
-		*HoveredRunWorldInteractableHandle.ToString(),
-		*FWacomRunWorldClickableInteractableHelper::BuildDebugSummary(TriggerDebug));
+	return GetRunWorldInteractionRouter().BuildHoverDebugSummary();
 }
 
 void AWacomPlayerController::LogRunWorldInteractableHoverDebugSummary() const
@@ -1381,7 +1135,10 @@ void AWacomPlayerController::StartRunWorldTargetProbePreviewLoop()
 	if (!bEnableRunWorldTargetProbePreview && !bEnableRunWorldInteractableHoverPrompt)
 	{
 		ClearRunWorldTargetProbePreview();
-		ClearRunWorldInteractableHoverPrompt(TEXT("Disabled"));
+		if (RunWorldInteractionRouter)
+		{
+			RunWorldInteractionRouter->ClearHoverPrompt(TEXT("Disabled"));
+		}
 		StopRunWorldTargetProbePreviewLoop();
 		return;
 	}
@@ -1411,123 +1168,15 @@ void AWacomPlayerController::StopRunWorldTargetProbePreviewLoop()
 
 void AWacomPlayerController::UpdateRunWorldTargetProbePreview()
 {
-	if (!IsInExplorationFlow())
-	{
-		ClearRunWorldTargetProbePreview();
-		ClearRunWorldInteractableHoverPrompt(TEXT("NotInExploration"));
-		return;
-	}
-
-	FWacomInteractionTargetHandle Handle;
-	const bool bHasRunTarget = TryProbeRunSceneInteractionTarget(Handle);
-	AActor* InteractableActor = nullptr;
-	UWacomRunWorldInteractionTargetBridgeComponent* NewBridge = nullptr;
-	FName ResolveRejectReason = bHasRunTarget
-		? FName(TEXT("NotResolved"))
-		: FName(TEXT("NoRunWorldTarget"));
-	const bool bResolvedClickable = bHasRunTarget
-		&& ResolveRunWorldClickableInteractableFromHandle(
-			Handle,
-			InteractableActor,
-			NewBridge,
-			ResolveRejectReason);
-	const bool bCanShowRunWorldHover = CanShowRunWorldInteractableHoverPrompt();
-	if (!bEnableRunWorldTargetProbePreview || !bCanShowRunWorldHover || !bResolvedClickable)
-	{
-		NewBridge = nullptr;
-	}
-
-	UWacomRunWorldInteractionTargetBridgeComponent* OldBridge = PreviewedRunWorldTargetBridge.Get();
-	if (OldBridge != NewBridge)
-	{
-		if (OldBridge)
-		{
-			OldBridge->ClearProbePreview();
-		}
-
-		PreviewedRunWorldTargetBridge = NewBridge;
-		if (NewBridge)
-		{
-			NewBridge->SetProbePreviewActive(true);
-			if (bLogRunWorldTargetProbePreview)
-			{
-				UE_LOG(LogTemp, Display,
-					TEXT("[WacomRunWorldTargetProbe] Preview handle=%s bridge=%s"),
-					*Handle.ToString(),
-					*GetDebugObjectName(NewBridge));
-			}
-		}
-		else if (bLogRunWorldTargetProbePreview)
-		{
-			UE_LOG(LogTemp, Display, TEXT("[WacomRunWorldTargetProbe] Preview cleared"));
-		}
-	}
-
-	if (!bEnableRunWorldInteractableHoverPrompt)
-	{
-		ClearRunWorldInteractableHoverPrompt(TEXT("Disabled"));
-		return;
-	}
-	if (!bCanShowRunWorldHover)
-	{
-		ClearRunWorldInteractableHoverPrompt(TEXT("BlockedByMenuOrDrag"));
-		return;
-	}
-	if (!bHasRunTarget)
-	{
-		ClearRunWorldInteractableHoverPrompt(TEXT("NoRunWorldTarget"));
-		return;
-	}
-
-	if (!bResolvedClickable)
-	{
-		ClearRunWorldInteractableHoverPrompt(ResolveRejectReason);
-		return;
-	}
-
-	UpdateRunWorldInteractableHoverPrompt(Handle, InteractableActor);
+	GetRunWorldInteractionRouter().UpdateTargetProbePreview();
 }
 
 void AWacomPlayerController::ClearRunWorldTargetProbePreview()
 {
-	if (UWacomRunWorldInteractionTargetBridgeComponent* Bridge = PreviewedRunWorldTargetBridge.Get())
+	if (RunWorldInteractionRouter)
 	{
-		Bridge->ClearProbePreview();
+		RunWorldInteractionRouter->ClearTargetProbePreview();
 	}
-	PreviewedRunWorldTargetBridge.Reset();
-}
-
-bool AWacomPlayerController::CanShowRunWorldInteractableHoverPrompt() const
-{
-	if (!bEnableRunWorldInteractableHoverPrompt || !IsInExplorationFlow())
-	{
-		return false;
-	}
-
-	const bool bHasActiveGameMenu =
-		bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| ActiveGameMenuWidgets.ContainsByPredicate(
-			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-			{
-				return Menu.IsValid();
-			});
-	return !bHasActiveGameMenu && !ShouldHandleRunFirstPersonMenuDropProbe();
-}
-
-AActor* AWacomPlayerController::ResolveSourceActorFromInteractionTargetHandle(
-	const FWacomInteractionTargetHandle& Handle) const
-{
-	UObject* SourceObject = Handle.SourceObject.Get();
-	if (!SourceObject)
-	{
-		return nullptr;
-	}
-
-	if (const UActorComponent* SourceComponent = Cast<UActorComponent>(SourceObject))
-	{
-		return SourceComponent->GetOwner();
-	}
-	return Cast<AActor>(SourceObject);
 }
 
 bool AWacomPlayerController::ResolveRunWorldClickableInteractableFromHandle(
@@ -1536,126 +1185,11 @@ bool AWacomPlayerController::ResolveRunWorldClickableInteractableFromHandle(
 	UWacomRunWorldInteractionTargetBridgeComponent*& OutBridge,
 	FName& OutRejectReason) const
 {
-	OutInteractableActor = nullptr;
-	OutBridge = nullptr;
-	OutRejectReason = NAME_None;
-
-	if (!Handle.IsValid())
-	{
-		OutRejectReason = TEXT("InvalidHandle");
-		return false;
-	}
-	if (Handle.TargetKind != EWacomInteractionTargetKind::World)
-	{
-		OutRejectReason = TEXT("WrongTargetKind");
-		return false;
-	}
-	if (Handle.TargetTag != WacomTags::Interaction_Target_Run_Object)
-	{
-		OutRejectReason = TEXT("WrongTargetTag");
-		return false;
-	}
-	if (!Handle.WorldTargetId.IsValid())
-	{
-		OutRejectReason = TEXT("MissingWorldTargetId");
-		return false;
-	}
-
-	OutInteractableActor = ResolveSourceActorFromInteractionTargetHandle(Handle);
-	if (!OutInteractableActor)
-	{
-		OutRejectReason = TEXT("MissingSourceActor");
-		return false;
-	}
-
-	OutBridge = ResolveRunWorldTargetBridgeFromHandle(Handle);
-	if (!IsWorldInteractableActor(OutInteractableActor))
-	{
-		OutRejectReason = TEXT("MissingWorldInteractableContract");
-		return false;
-	}
-	if (!IsRunWorldClickableInteractableActor(OutInteractableActor))
-	{
-		OutRejectReason = TEXT("MissingClickableContract");
-		return false;
-	}
-	if (!OutBridge)
-	{
-		OutRejectReason = TEXT("MissingRunWorldBridge");
-		return false;
-	}
-
-	OutRejectReason = TEXT("Ok");
-	return true;
-}
-
-void AWacomPlayerController::UpdateRunWorldInteractableHoverPrompt(
-	const FWacomInteractionTargetHandle& Handle,
-	AActor* InteractableActor)
-{
-	if (!InteractableActor)
-	{
-		ClearRunWorldInteractableHoverPrompt(TEXT("MissingInteractableActor"));
-		return;
-	}
-
-	if (!IsRunWorldClickableInteractableActor(InteractableActor))
-	{
-		ClearRunWorldInteractableHoverPrompt(TEXT("MissingClickableContract"));
-		return;
-	}
-
-	const FText NewPrompt = GetRunWorldClickHoverPromptFromActor(InteractableActor, this);
-	const FWacomRunWorldClickableInteractableDebugView TriggerDebug =
-		GetRunWorldClickableDebugViewFromActor(InteractableActor, this);
-	const FName NewReason = BuildRunWorldClickableHoverReason(TriggerDebug);
-
-	const bool bChanged =
-		HoveredRunWorldInteractableActor.Get() != InteractableActor
-		|| !HoveredRunWorldInteractablePrompt.EqualTo(NewPrompt)
-		|| HoveredRunWorldInteractableHandle.StableTargetId != Handle.StableTargetId
-		|| LastRunWorldInteractableHoverReason != NewReason;
-
-	HoveredRunWorldInteractableActor = InteractableActor;
-	HoveredRunWorldInteractableHandle = Handle;
-	HoveredRunWorldInteractablePrompt = NewPrompt;
-	LastRunWorldInteractableHoverReason = NewReason;
-
-	if (bChanged)
-	{
-		RefreshInteractToast();
-		if (bLogRunWorldInteractableHoverPrompt)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomRunWorldInteractableHover] Hover %s"),
-				*GetRunWorldInteractableHoverDebugSummary());
-		}
-	}
-}
-
-void AWacomPlayerController::ClearRunWorldInteractableHoverPrompt(FName Reason)
-{
-	const bool bHadHover =
-		HoveredRunWorldInteractableActor.IsValid()
-		|| !HoveredRunWorldInteractablePrompt.IsEmpty()
-		|| HoveredRunWorldInteractableHandle.IsValid();
-	HoveredRunWorldInteractableActor.Reset();
-	HoveredRunWorldInteractableHandle = FWacomInteractionTargetHandle();
-	HoveredRunWorldInteractablePrompt = FText::GetEmpty();
-	LastRunWorldInteractableHoverReason = Reason.IsNone()
-		? FName(TEXT("Cleared"))
-		: Reason;
-
-	if (bHadHover)
-	{
-		RefreshInteractToast();
-		if (bLogRunWorldInteractableHoverPrompt)
-		{
-			UE_LOG(LogTemp, Display,
-				TEXT("[WacomRunWorldInteractableHover] Cleared reason=%s"),
-				*LastRunWorldInteractableHoverReason.ToString());
-		}
-	}
+	return GetRunWorldInteractionRouter().ResolveClickableInteractableFromHandle(
+		Handle,
+		OutInteractableActor,
+		OutBridge,
+		OutRejectReason);
 }
 
 void AWacomPlayerController::ClearRunMenuDropTargetProbe()
@@ -1898,41 +1432,11 @@ UWacomAppToastSubsystem* AWacomPlayerController::ResolveAppToastSubsystem() cons
 		: nullptr;
 }
 
-UWacomRunWorldInteractionTargetBridgeComponent*
-AWacomPlayerController::ResolveRunWorldTargetBridgeFromHandle(
-	const FWacomInteractionTargetHandle& Handle) const
-{
-	UObject* SourceObject = Handle.SourceObject.Get();
-	if (!SourceObject)
-	{
-		return nullptr;
-	}
-
-	if (UWacomRunWorldInteractionTargetBridgeComponent* Bridge =
-		Cast<UWacomRunWorldInteractionTargetBridgeComponent>(SourceObject))
-	{
-		return Bridge;
-	}
-
-	if (const UActorComponent* SourceComponent = Cast<UActorComponent>(SourceObject))
-	{
-		AActor* SourceOwner = SourceComponent->GetOwner();
-		return SourceOwner ? SourceOwner->FindComponentByClass<UWacomRunWorldInteractionTargetBridgeComponent>() : nullptr;
-	}
-
-	if (const AActor* SourceActor = Cast<AActor>(SourceObject))
-	{
-		return SourceActor->FindComponentByClass<UWacomRunWorldInteractionTargetBridgeComponent>();
-	}
-
-	return nullptr;
-}
-
 UWacomRunWorldCardDropReceiverComponent*
 AWacomPlayerController::ResolveRunWorldCardDropReceiverFromHandle(
 	const FWacomInteractionTargetHandle& Handle) const
 {
-	AActor* SourceActor = ResolveSourceActorFromInteractionTargetHandle(Handle);
+	AActor* SourceActor = GetRunWorldInteractionRouter().ResolveSourceActorFromHandle(Handle);
 	if (!SourceActor)
 	{
 		return nullptr;
@@ -2034,7 +1538,7 @@ void AWacomPlayerController::OnOpenBackpackPressed()
 
 void AWacomPlayerController::RegisterCandidateInteractable(AActor* InteractableActor)
 {
-	if (!IsWorldInteractableActor(InteractableActor))
+	if (!WacomWorldInteractableContractHelpers::IsWorldInteractableActor(InteractableActor))
 	{
 		return;
 	}
@@ -2081,16 +1585,18 @@ AActor* AWacomPlayerController::PickClosestInteractable() const
 	for (const TWeakObjectPtr<AActor>& Weak : CandidateInteractables)
 	{
 		AActor* Candidate = Weak.Get();
-		if (!IsWorldInteractableActor(Candidate))
+		if (!WacomWorldInteractableContractHelpers::IsWorldInteractableActor(Candidate))
 		{
 			continue;
 		}
-		if (!CanInteractWithActor(Candidate, const_cast<AWacomPlayerController*>(this)))
+		if (!WacomWorldInteractableContractHelpers::CanInteractWithActor(
+			Candidate,
+			const_cast<AWacomPlayerController*>(this)))
 		{
 			continue;
 		}
 
-		const FVector InteractLoc = GetInteractLocationFromActor(
+		const FVector InteractLoc = WacomWorldInteractableContractHelpers::GetInteractLocationFromActor(
 			Candidate,
 			const_cast<AWacomPlayerController*>(this));
 		const float SqDist = FVector::DistSquared(InteractLoc, PlayerLoc);
@@ -2105,10 +1611,12 @@ AActor* AWacomPlayerController::PickClosestInteractable() const
 
 FText AWacomPlayerController::BuildCurrentInteractPrompt() const
 {
-	if (HoveredRunWorldInteractableActor.IsValid()
-		&& !HoveredRunWorldInteractablePrompt.IsEmpty())
+	const FText HoverPrompt = RunWorldInteractionRouter
+		? RunWorldInteractionRouter->GetHoverPrompt()
+		: FText::GetEmpty();
+	if (!HoverPrompt.IsEmpty())
 	{
-		return HoveredRunWorldInteractablePrompt;
+		return HoverPrompt;
 	}
 
 	AActor* Best = PickClosestInteractable();
@@ -2116,7 +1624,9 @@ FText AWacomPlayerController::BuildCurrentInteractPrompt() const
 	{
 		return FText::GetEmpty();
 	}
-	return GetInteractPromptTextFromActor(Best, const_cast<AWacomPlayerController*>(this));
+	return WacomWorldInteractableContractHelpers::GetInteractPromptTextFromActor(
+		Best,
+		const_cast<AWacomPlayerController*>(this));
 }
 
 void AWacomPlayerController::RefreshInteractToast()
@@ -2163,7 +1673,7 @@ void AWacomPlayerController::TryInteractFromConsole()
 		UE_LOG(LogTemp, Display, TEXT("[WacomPlayerController] Interact: 没有候选交互对象"));
 		return;
 	}
-	TryInteractWithActor(Best, this);
+	WacomWorldInteractableContractHelpers::TryInteractWithActor(Best, this);
 }
 
 bool AWacomPlayerController::RequestOpenShop(FName ShopId, const TArray<FRunShopOfferInput>& Offers)
@@ -2187,7 +1697,10 @@ void AWacomPlayerController::BeginGameMenuViewpointStageTransition(FName DebugRe
 	const FName HoverClearReason = DebugReason.IsNone()
 		? FName(TEXT("GameMenuViewpointStage"))
 		: FName(*FString::Printf(TEXT("%sViewpointStage"), *DebugReason.ToString()));
-	ClearRunWorldInteractableHoverPrompt(HoverClearReason);
+	if (RunWorldInteractionRouter)
+	{
+		RunWorldInteractionRouter->ClearHoverPrompt(HoverClearReason);
+	}
 	SetRunFirstPersonCardLayerTransitionSuppressedByGameMenu(true);
 	if (AWacomPlayerCharacter* WacomPawn = GetPawn<AWacomPlayerCharacter>())
 	{

@@ -75,6 +75,7 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 - 初始化 `UWacomInputContextCoordinatorSubsystem`，提供探索 / 战斗 mapping context 给 coordinator。
 - 处理探索交互、暂停菜单、背包、商店、RunEvent 打开请求；具体 GameMenu 打开、关闭、异步 Push 和 Shop / RunEvent rollback 由私有 `FWacomExplorationScreenRouter` 承接。
 - 转发战斗快捷键到当前 `UBattleHUD / UBattleSession`；Battle scene target click / probe 由 App-private `FWacomBattleSceneInteractionRouter` 承接，`AWacomPlayerController` 只保留 public façade、trace / flow protected seam 和输入入口。
+- Run world hover / click / probe 由 App-private `FWacomRunWorldInteractionRouter` 承接；`AWacomPlayerController` 保留 timer、InputKey 顺序、trace protected seam、E 键 candidate list 和与 Run card drop coordinator 的 context 注入。
 - 维护探索期 first-person Run Card Workspace source；默认 workspace 当前来自 Run `BattleDeck` 物理卡和可选投影入战卡，GameMenu 可通过 owned menu lease 临时接管候选持有卡显示和 Zone drop。
 - 维护 Run first-person hover / inspect 详情：只在 Exploration 且 `UWacomRunFirstPersonCardSourceComponent` 判定当前 card layer source 属于 Run default source 或 active menu lease 时，通过 `URunSession::FindInstance()` 反查 owned card instance 并显示静态 `UWacomCardDetailPanel`；App-private `FWacomRunFirstPersonCardDetailController` 负责 Anchor hover delegate 绑定、hover / inspect / scrub 决策、Run detail 数据缓存和面板状态，并委托 Battle / Run 共享的 `FWacomFirstPersonCardDetailMotionController` 与 `FWacomFirstPersonCardDetailPanelHost` 处理预热、面板创建、AddToViewport、淡入淡出 / scale / follow motion、稳定换边和 teardown。`AWacomPlayerController` 只作为 UObject delegate endpoint 和 RunSession 查询入口保留。同一张卡的 inspect update / hover layout update 只更新 motion target，不重复构建详情；scrub 到另一张卡时才切换详情数据。`Inspecting` 期间详情保持并支持 scrub 切卡，正式拖拽、进入战斗、source 清理或 lease 结束时隐藏。
 - 维护 Run first-person card drag：App-private `FWacomRunFirstPersonCardDragController` 负责 Anchor drag / pointer delegate 绑定、inspect 与正式拖拽分流、正式拖拽期间详情隐藏；Inspecting / 正式拖拽期间的 camera-look ownership 使用 Battle / Run 共用的 `FWacomFirstPersonCardCameraLookBridge`，`Inspecting` 只刷新读牌详情和相机跟随，不触发投放 probe；正式拖拽 release / preview 统一交给 App-private `FWacomRunFirstPersonCardDropCoordinator`。Coordinator 以 drop transaction/router 形式按 menu lease zone adapter、world receiver adapter 处理 probe / preview / resolve / submit / debug；`AWacomPlayerController` 只保留 UObject delegate endpoint、drop target 注册转发和 RunSession / world hit 查询能力，创建 coordinator 时通过显式 context contract 注入这些能力，不再让 coordinator friend 读取 Controller 私有状态。menu owner / world receiver 继续决定提交结果。
@@ -141,8 +142,8 @@ Run Tunnel 是探索期默认移动模型，不再有正式普通 FPS FreeLook �
 | 入口 | 当前路由 | 规则出口 |
 |---|---|---|
 | E 键近距离交互 | overlap 候选 -> 最近 `IWacomWorldInteractable::TryInteract()` | 对应 Actor 请求 PlayerController / GameMode / RunSession |
-| 鼠标 hover | cursor trace -> interaction target provider -> Run clickable resolver 或 `FWacomBattleSceneInteractionRouter` probe | 只更新提示 / 预览，不提交规则 |
-| 探索左键点击 | Battle scene router target click -> RunTunnel branch click -> Run world interactable click -> `Super::InputKey()` | click 命中后仍回到 `TryInteract()` 或 BattleHUD target command |
+| 鼠标 hover | cursor trace -> interaction target provider -> `FWacomRunWorldInteractionRouter` 或 `FWacomBattleSceneInteractionRouter` probe | 只更新提示 / 预览，不提交规则 |
+| 探索左键点击 | Battle scene router target click -> RunTunnel branch click -> Run world interaction router click -> `Super::InputKey()` | click 命中后仍回到 `TryInteract()` 或 BattleHUD target command |
 | Run world card drop | first-person drag release -> Run world target probe -> `UWacomRunWorldCardDropReceiverComponent` | `URunSession::Validate/SubmitRunWorldCardInteraction()` |
 | Run menu zone drop | active GameMenu + active menu lease -> `UWacomRunMenuDropTargetWidget` Zone probe | owning menu 决定 probe、prototype destroy 或 RunEvent payment submit |
 
