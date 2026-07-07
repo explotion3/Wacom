@@ -210,8 +210,8 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestTrue(TEXT("Command bar end turn stays enabled while presenting"), CommandBar->IsEndTurnCommandEnabledForTest());
 
 	const int32 CombatLogCountBeforeTargetSelect = HUD->GetBattleCombatLogBlockCount();
-	HUD->OnCardClickedByUser(TargetCardId);
-	TestEqual(TEXT("Target card can enter target select while presenting"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
+	TestEqual(TEXT("Target select test state is active while presenting"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 	TestEqual(TEXT("Target card becomes pending while presenting"), HUD->GetPendingTargetingCardId(), TargetCardId);
 	TestEqual(TEXT("Target select alone does not append combat log"), HUD->GetBattleCombatLogBlockCount(), CombatLogCountBeforeTargetSelect);
 
@@ -334,7 +334,7 @@ bool FWacomUIBattlePresentationStackEndTurnBarrierSpec::RunTest(const FString& /
 		return false;
 	}
 
-	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
 	HUD->OnEnemyPartClickedByUser(
 		WacomBattlePresentationQueueSpec::MakeWorldTargetHandleForPart(Session->BuildSnapshot(), TargetPartId));
 	TestEqual(TEXT("PlayCard appends one stack entry"), HUD->GetPresentationStackEntryCountForTest(), 1);
@@ -841,7 +841,7 @@ bool FWacomUIBattleHUDPresentationCoordinatorContractSpec::RunTest(const FString
 	}
 	TestTrue(TEXT("Seed cue makes presentation coordinator busy through HUD"), HUD->IsBattlePresentationBusy());
 
-	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
 	HUD->OnEnemyPartClickedByUser(
 		WacomBattlePresentationQueueSpec::MakeWorldTargetHandleForPart(Session->BuildSnapshot(), TargetPartId));
 	TestTrue(TEXT("PlayCard creates presentation stack busy state"), HUD->IsBattlePresentationBusy());
@@ -944,7 +944,7 @@ bool FWacomUIBattleHUDPresentationCoordinatorTeardownSpec::RunTest(const FString
 	HUD->EnqueueBattlePresentationEventsForTest({ PresentationCueEvent });
 	TestTrue(TEXT("Presentation queue is busy before teardown"), HUD->IsBattlePresentationBusy());
 
-	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
 	HUD->OnEnemyPartClickedByUser(
 		WacomBattlePresentationQueueSpec::MakeWorldTargetHandleForPart(Session->BuildSnapshot(), TargetPartId));
 	HUD->OnWaitRequested();
