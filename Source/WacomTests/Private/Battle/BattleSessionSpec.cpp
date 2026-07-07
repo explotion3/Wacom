@@ -9,6 +9,7 @@
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEvent.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Session/BattleResultPacket.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -146,7 +147,12 @@ bool FWacomBattleSessionPreDestroyedPartsDoNotRequestKnockdownSpec::RunTest(cons
 	}
 
 	const FBattleResultPacket Packet = Session->BuildResultPacket();
-	TestTrue(TEXT("Result packet records pre-destroyed Head"),
+	TestTrue(TEXT("Result packet records pre-destroyed Head key"),
+		Packet.DestroyedPartKeys.Contains(FBattleEnemyPartKey::Make(
+			TEXT("Encounter"),
+			TEXT("Enemy"),
+			TEXT("Test.Part.Head"))));
+	TestTrue(TEXT("Result packet keeps pre-destroyed Head identity projection"),
 		Packet.DestroyedParts.Contains(FBattlePartSlotIdentity::Make(
 			TEXT("Encounter"),
 			TEXT("Enemy"),

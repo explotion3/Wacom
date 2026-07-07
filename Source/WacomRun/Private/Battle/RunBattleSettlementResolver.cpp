@@ -5,6 +5,49 @@
 #include "Cards/CardDefinition.h"
 #include "RunState.h"
 
+namespace
+{
+	int32 PopulateWithdrawnBattleProgressSnapshot(
+		const FBattleResultPacket& Packet,
+		FBattleProgressSnapshot& OutSnapshot)
+	{
+		OutSnapshot.DestroyedPartKeys.Reset();
+		OutSnapshot.DestroyedParts.Reset();
+		OutSnapshot.DestroyedPartKeys.Reserve(
+			Packet.DestroyedPartKeys.Num() + Packet.DestroyedParts.Num());
+
+		for (const FBattleEnemyPartKey& DestroyedPartKey : Packet.DestroyedPartKeys)
+		{
+			if (DestroyedPartKey.IsValidKey())
+			{
+				OutSnapshot.DestroyedPartKeys.AddUnique(DestroyedPartKey);
+			}
+		}
+
+		if (OutSnapshot.DestroyedPartKeys.Num() == 0)
+		{
+			for (const FBattlePartSlotIdentity& DestroyedPart : Packet.DestroyedParts)
+			{
+				if (DestroyedPart.IsValidSlot())
+				{
+					OutSnapshot.DestroyedPartKeys.AddUnique(DestroyedPart.ToEnemyPartKey());
+				}
+			}
+		}
+
+		// Legacy fallback only: new packets should persist keys, not duplicate the
+		// internal identity projection into Run progress.
+		if (OutSnapshot.DestroyedPartKeys.Num() == 0)
+		{
+			OutSnapshot.DestroyedParts = Packet.DestroyedParts;
+		}
+
+		return OutSnapshot.DestroyedPartKeys.Num() > 0
+			? OutSnapshot.DestroyedPartKeys.Num()
+			: OutSnapshot.DestroyedParts.Num();
+	}
+}
+
 bool FRunBattleSettlementResolver::Resolve(
 	FRunState& State,
 	const FBattleResultPacket& Packet,
@@ -19,15 +62,13 @@ bool FRunBattleSettlementResolver::Resolve(
 		{
 			// 撤离：节点不算完成。
 			// 持久化破坏部位列表，下次进入同一战斗 Trigger 时维持破坏态。
+			int32 PersistedDestroyedPartCount = 0;
 			if (!TriggerPersistentId.IsNone())
 			{
 				FBattleProgressSnapshot Snapshot;
-				Snapshot.DestroyedPartKeys = Packet.DestroyedPartKeys;
-				Snapshot.DestroyedParts = Packet.DestroyedParts;
+				PersistedDestroyedPartCount = PopulateWithdrawnBattleProgressSnapshot(Packet, Snapshot);
 				State.BattleProgress.Add(TriggerPersistentId, MoveTemp(Snapshot));
 			}
-			const int32 PersistedDestroyedPartCount =
-				Packet.DestroyedPartKeys.Num() > 0 ? Packet.DestroyedPartKeys.Num() : Packet.DestroyedParts.Num();
 			UE_LOG(LogTemp, Display,
 				TEXT("[RunSession] Battle withdrawn (Trigger=%s, %d parts persisted destroyed)"),
 				*TriggerPersistentId.ToString(),

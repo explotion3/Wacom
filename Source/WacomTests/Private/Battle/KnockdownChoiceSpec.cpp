@@ -12,6 +12,7 @@
 #include "Enemies/EnemyPartDefinition.h"
 #include "Session/BattleSession.h"
 #include "Session/BattleResultPacket.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Snapshots/HandSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
@@ -168,7 +169,14 @@ bool FWacomKnockdownChoiceWithdrawSpec::RunTest(const FString& /*Parameters*/)
 
 	const FBattleResultPacket P = S->BuildResultPacket();
 	TestTrue(TEXT("packet.bWithdrawn=true"),  P.bWithdrawn);
-	TestEqual(TEXT("DestroyedParts 1 项"),  P.DestroyedParts.Num(), 1);
+	TestEqual(TEXT("DestroyedPartKeys 1 项"), P.DestroyedPartKeys.Num(), 1);
+	if (P.DestroyedPartKeys.Num() == 1)
+	{
+		TestEqual(TEXT("DestroyedPartKeys 记录 Head key"),
+			P.DestroyedPartKeys[0],
+			FWacomBattleFixture::FindPartKey(Snap0, 0));
+	}
+	TestEqual(TEXT("DestroyedParts projection 1 项"),  P.DestroyedParts.Num(), 1);
 	TestEqual(TEXT("KnockdownChoices 1 项"),  P.KnockdownChoices.Num(), 1);
 
 	return true;
@@ -654,8 +662,16 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 		{
 			return false;
 		}
-		TestEqual(TEXT("DestroyedParts 1 项"),
-			Progress->DestroyedParts.Num(), 1);
+		TestEqual(TEXT("DestroyedPartKeys 1 项"),
+			Progress->DestroyedPartKeys.Num(), 1);
+		if (Progress->DestroyedPartKeys.Num() == 1)
+		{
+			TestEqual(TEXT("DestroyedPartKeys records Head key"),
+				Progress->DestroyedPartKeys[0],
+				FBattleEnemyPartKey::Make(TriggerId, TEXT("Enemy"), TEXT("Test.Part.Head")));
+		}
+		TestEqual(TEXT("DestroyedParts projection is not duplicated into Run progress"),
+			Progress->DestroyedParts.Num(), 0);
 	}
 
 	// 第二场战斗（重入同一 Trigger）：BuildInitParamsForBattle 应灌入 PreDestroyedParts
@@ -810,7 +826,8 @@ bool FWacomKnockdownChoiceMultiPartSequenceSpec::RunTest(const FString& /*Parame
 	TestTrue(TEXT("Outcome=Victory"), P.Outcome == EBattleOutcome::Victory);
 	TestFalse(TEXT("非撤离"),         P.bWithdrawn);
 	TestEqual(TEXT("KnockdownChoices 3 项"), P.KnockdownChoices.Num(), 3);
-	TestEqual(TEXT("DestroyedParts 3 项"), P.DestroyedParts.Num(), 3);
+	TestEqual(TEXT("DestroyedPartKeys 3 项"), P.DestroyedPartKeys.Num(), 3);
+	TestEqual(TEXT("DestroyedParts projection 3 项"), P.DestroyedParts.Num(), 3);
 
 	return true;
 }

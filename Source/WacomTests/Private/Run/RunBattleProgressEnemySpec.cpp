@@ -180,6 +180,9 @@ bool FWacomRunBattleProgressDestroyedPartKeysRestoreOnlyMatchingEnemySlotSpec::R
 			Progress->DestroyedPartKeys[0],
 			DestroyedRightPartKey);
 	}
+	TestEqual(TEXT("Run progress does not duplicate destroyed identity projection"),
+		Progress->DestroyedParts.Num(),
+		0);
 
 	FBattleInitParams ReentryParams;
 	const bool bBuildOk = Run->BuildInitParamsForBattle(FName(TEXT("ProgressTrigger")), ReentryParams);

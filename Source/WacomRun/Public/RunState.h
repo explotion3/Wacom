@@ -24,7 +24,8 @@ class UWacomRunEventDefinition;
  *
  * 战斗胜利时清理对应 Trigger 的进度。
  *
- * DestroyedPartKeys 是稳定公开真相；DestroyedParts 是内部 identity 投影。
+ * DestroyedPartKeys 是稳定公开真相；DestroyedParts 只作为旧数据 / 手写
+ * snapshot 的内部 identity fallback，新撤离写入不再重复保存该投影。
  * 如果后续需要保存中间血量、部位状态层数等，再扩字段。
  */
 USTRUCT(BlueprintType)

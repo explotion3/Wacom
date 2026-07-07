@@ -373,7 +373,7 @@ Outcome 分支：
 
 | 结果 | Run 处理 |
 |---|---|
-| Victory 且 `bWithdrawn == true` | 撤离；不销毁 Trigger；写 `BattleProgress[TriggerId].DestroyedPartKeys`，并保留 `DestroyedParts` 投影 |
+| Victory 且 `bWithdrawn == true` | 撤离；不销毁 Trigger；写 `BattleProgress[TriggerId].DestroyedPartKeys`；仅无法从旧 / 手写 packet 派生有效 key 时保留 `DestroyedParts` fallback |
 | Victory 且未撤离 | 真胜利；清理 `BattleProgress[TriggerId]`；场景完成状态由 GameMode 调 `MarkTriggerDestroyed(TriggerId)` 写入 `DestroyedTriggerIds` |
 | Defeat | `bRunActive = false` |
 | Undetermined | 不做战外结算并返回 |
@@ -392,7 +392,7 @@ Outcome 分支：
 
 战斗 Trigger 的场景销毁由 GameMode 处理。真胜利会调用 `MarkTriggerDestroyed(PersistentId)` 并 Destroy Actor；撤离不销毁，允许下次重入。
 
-`BattleProgress.DestroyedPartKeys` 是撤离重入的规则真相，身份由 `EncounterId + EnemySlotId + PartSlotId` 匹配，避免多敌人 encounter 中同名部位互相串进度。`DestroyedParts` 是内部 identity 投影，用于当前 runtime / debug 读取；Run 构建战斗参数时不会按旧 PartId 宽匹配。当前 `BattleProgress` 仍不进入 SaveGame。
+`BattleProgress.DestroyedPartKeys` 是撤离重入的规则真相，身份由 `EncounterId + EnemySlotId + PartSlotId` 匹配，避免多敌人 encounter 中同名部位互相串进度。`DestroyedParts` 只作为无法派生有效 key 的旧数据 / 手写测试 snapshot 内部 identity fallback；新撤离进度不再重复写入该投影。Run 构建战斗参数时不会按旧 PartId 宽匹配。当前 `BattleProgress` 仍不进入 SaveGame。
 
 ## §11 PersistentId 规则
 
