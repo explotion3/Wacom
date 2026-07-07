@@ -15,5 +15,5 @@ struct FWacomRunEventPaymentLeaseBuildResult
 struct FWacomRunEventPaymentLeaseBuilder
 {
 	static FWacomRunEventPaymentLeaseBuildResult BuildRequest(
-		const TArray<FRunEventChoiceSnapshot>& Choices);
+		TConstArrayView<FRunEventChoiceSnapshot> Choices);
 };

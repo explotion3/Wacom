@@ -9,7 +9,7 @@ namespace
 }
 
 FWacomRunEventPaymentLeaseBuildResult FWacomRunEventPaymentLeaseBuilder::BuildRequest(
-	const TArray<FRunEventChoiceSnapshot>& Choices)
+	TConstArrayView<FRunEventChoiceSnapshot> Choices)
 {
 	FWacomRunEventPaymentLeaseBuildResult Result;
 	Result.Request.LeaseId = RunEventCardPaymentLeaseId;

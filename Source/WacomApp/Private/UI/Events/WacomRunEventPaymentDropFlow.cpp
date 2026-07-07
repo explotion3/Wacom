@@ -13,26 +13,7 @@ namespace
 		FName ZoneId,
 		FRunEventChoiceSnapshot& OutChoice)
 	{
-		if (ZoneId.IsNone() || !Context.CachedChoices || !Context.PaymentZoneToChoiceId)
-		{
-			return false;
-		}
-
-		const FName* ChoiceId = Context.PaymentZoneToChoiceId->Find(ZoneId);
-		if (!ChoiceId)
-		{
-			return false;
-		}
-
-		for (const FRunEventChoiceSnapshot& Choice : *Context.CachedChoices)
-		{
-			if (Choice.ChoiceId == *ChoiceId)
-			{
-				OutChoice = Choice;
-				return true;
-			}
-		}
-		return false;
+		return Context.PresentationState.FindPaymentChoiceForZone(ZoneId, OutChoice);
 	}
 
 	void MarkPaymentDropRejected(

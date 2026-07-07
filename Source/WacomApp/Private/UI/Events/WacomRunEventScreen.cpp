@@ -22,6 +22,7 @@
 #include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventPaymentDropFlow.h"
 #include "UI/Events/WacomRunEventPaymentLeaseBuilder.h"
+#include "UI/Events/WacomRunEventPresentationState.h"
 #include "UI/Events/WacomRunEventScreenDebugBuilder.h"
 #include "UI/Events/WacomRunEventScreenFlow.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
@@ -49,6 +50,26 @@ namespace
 			return ConfiguredClass;
 		}
 		return TSubclassOf<WidgetType>(WidgetType::StaticClass());
+	}
+
+	FWacomRunEventPresentationStateView BuildRunEventPresentationStateView(
+		const TArray<FRunEventChoiceSnapshot>& CachedChoices,
+		const TMap<FName, FName>& PaymentZoneToChoiceId)
+	{
+		return FWacomRunEventPresentationStateView{
+			&CachedChoices,
+			&PaymentZoneToChoiceId
+		};
+	}
+
+	FWacomRunEventPresentationStateEdit BuildRunEventPresentationStateEdit(
+		TArray<FRunEventChoiceSnapshot>& CachedChoices,
+		TMap<FName, FName>& PaymentZoneToChoiceId)
+	{
+		return FWacomRunEventPresentationStateEdit{
+			&CachedChoices,
+			&PaymentZoneToChoiceId
+		};
 	}
 }
 
@@ -155,8 +176,7 @@ FWacomRunMenuCardDropResolveResult UWacomRunEventScreen::ResolveRunMenuFirstPers
 				nullptr,
 				ResolveRunSession(),
 				nullptr,
-				&CachedChoices,
-				&PaymentZoneToChoiceId,
+				BuildRunEventPresentationStateView(CachedChoices, PaymentZoneToChoiceId),
 				nullptr
 			},
 			Candidate);
@@ -174,8 +194,7 @@ bool UWacomRunEventScreen::SubmitRunMenuFirstPersonCardDropIntent_Implementation
 				this,
 				ResolveRunSession(),
 				ResolveToastSubsystem(),
-				&CachedChoices,
-				&PaymentZoneToChoiceId,
+				BuildRunEventPresentationStateView(CachedChoices, PaymentZoneToChoiceId),
 				&bDidEndRunEvent
 			},
 			Resolved,
@@ -213,8 +232,7 @@ FWacomRunEventScreenDebugView UWacomRunEventScreen::GetRunEventScreenDebugView()
 	return FWacomRunEventScreenDebugBuilder::BuildView(
 		FWacomRunEventScreenDebugBuildContext{
 			ResolveRunSession(),
-			&CachedChoices,
-			&PaymentZoneToChoiceId,
+			BuildRunEventPresentationStateView(CachedChoices, PaymentZoneToChoiceId),
 			LastPaymentDropResolveDebugSummary,
 			LastPaymentDropSubmitDebugSummary
 		});
@@ -285,11 +303,10 @@ UWacomAppToastSubsystem* UWacomRunEventScreen::ResolveToastSubsystem() const
 
 void UWacomRunEventScreen::RebuildChoices()
 {
-	CachedChoices.Reset();
-
 	URunSession* Run = ResolveRunSession();
 	const FRunEventSnapshot Snapshot = Run ? Run->BuildCurrentRunEventSnapshot() : FRunEventSnapshot();
-	CachedChoices = Snapshot.Choices;
+	BuildRunEventPresentationStateEdit(CachedChoices, PaymentZoneToChoiceId)
+		.SetChoices(Snapshot.Choices);
 
 	if (EmptyText)
 	{
@@ -304,7 +321,7 @@ void UWacomRunEventScreen::RebuildChoices()
 			PaymentChoiceMinDesiredWidth,
 			&ChoiceButtonWidgets,
 			&PaymentDropTargets,
-			&PaymentZoneToChoiceId
+			BuildRunEventPresentationStateEdit(CachedChoices, PaymentZoneToChoiceId)
 		},
 		Snapshot.Choices,
 		[this](const FRunEventChoiceSnapshot& /*Choice*/) -> UWacomRunEventChoiceButton*
@@ -372,14 +389,15 @@ bool UWacomRunEventScreen::ChooseChoice(FName ChoiceId)
 		Run,
 		ResolveToastSubsystem(),
 		ChoiceId,
-		CachedChoices,
+		BuildRunEventPresentationStateView(CachedChoices, PaymentZoneToChoiceId),
 		bDidEndRunEvent);
 }
 
 void UWacomRunEventScreen::RefreshPaymentLeaseFromCachedChoices()
 {
 	const FWacomRunEventPaymentLeaseBuildResult PaymentLease =
-		FWacomRunEventPaymentLeaseBuilder::BuildRequest(CachedChoices);
+		FWacomRunEventPaymentLeaseBuilder::BuildRequest(
+			BuildRunEventPresentationStateView(CachedChoices, PaymentZoneToChoiceId).GetChoices());
 	if (!PaymentLease.bHasCandidateCards)
 	{
 		ClearOwnedRunFirstPersonCardLayerMenuLease();

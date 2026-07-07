@@ -45,7 +45,7 @@ bool FWacomRunEventScreenFlow::ChooseChoice(
 	URunSession* Run,
 	UWacomAppToastSubsystem* ToastSubsystem,
 	FName ChoiceId,
-	const TArray<FRunEventChoiceSnapshot>& CachedChoices,
+	FWacomRunEventPresentationStateView PresentationState,
 	bool& bDidEndRunEvent)
 {
 	if (!Run)
@@ -53,17 +53,13 @@ bool FWacomRunEventScreenFlow::ChooseChoice(
 		return false;
 	}
 
-	const FRunEventChoiceSnapshot* CachedChoice = CachedChoices.FindByPredicate(
-		[ChoiceId](const FRunEventChoiceSnapshot& Choice)
-		{
-			return Choice.ChoiceId == ChoiceId;
-		});
-
-	if (CachedChoice && !CachedChoice->bAvailable)
+	FRunEventChoiceSnapshot CachedChoice;
+	if (PresentationState.FindChoice(ChoiceId, CachedChoice)
+		&& !CachedChoice.bAvailable)
 	{
 		FRunEventChoiceResult BlockedResult;
 		BlockedResult.ChoiceId = ChoiceId;
-		BlockedResult.DisabledReason = CachedChoice->DisabledReason;
+		BlockedResult.DisabledReason = CachedChoice.DisabledReason;
 		ShowToasts(
 			ToastSubsystem,
 			UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(BlockedResult));

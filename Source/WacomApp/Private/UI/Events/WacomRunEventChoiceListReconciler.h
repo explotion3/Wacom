@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "RunState.h"
+#include "UI/Events/WacomRunEventPresentationState.h"
 
 class USizeBox;
 class UVerticalBox;
@@ -16,7 +17,7 @@ struct FWacomRunEventChoiceListReconcileContext
 	float PaymentChoiceMinDesiredWidth = 0.0f;
 	TArray<TObjectPtr<UWacomRunEventChoiceButton>>* ChoiceButtonWidgets = nullptr;
 	TArray<TObjectPtr<UWacomRunMenuDropTargetWidget>>* PaymentDropTargets = nullptr;
-	TMap<FName, FName>* PaymentZoneToChoiceId = nullptr;
+	FWacomRunEventPresentationStateEdit PresentationState;
 };
 
 struct FWacomRunEventChoiceListReconciler

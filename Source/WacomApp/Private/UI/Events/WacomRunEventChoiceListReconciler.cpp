@@ -55,7 +55,7 @@ TMap<FName, UWacomRunEventChoiceButton*> BuildExistingChoiceButtonsByChoiceId(
 
 TMap<FName, UWacomRunMenuDropTargetWidget*> BuildExistingDropTargetsByChoiceId(
 	const TArray<TObjectPtr<UWacomRunMenuDropTargetWidget>>& PaymentDropTargets,
-	const TMap<FName, FName>& PaymentZoneToChoiceId)
+	const FWacomRunEventPresentationStateView& PresentationState)
 {
 	TMap<FName, UWacomRunMenuDropTargetWidget*> ExistingByChoiceId;
 	for (UWacomRunMenuDropTargetWidget* DropTarget : PaymentDropTargets)
@@ -65,8 +65,8 @@ TMap<FName, UWacomRunMenuDropTargetWidget*> BuildExistingDropTargetsByChoiceId(
 			continue;
 		}
 
-		const FName ChoiceId = PaymentZoneToChoiceId.FindRef(DropTarget->ZoneId);
-		if (!ChoiceId.IsNone())
+		FName ChoiceId;
+		if (PresentationState.FindChoiceIdForPaymentZone(DropTarget->ZoneId, ChoiceId))
 		{
 			ExistingByChoiceId.Add(ChoiceId, DropTarget);
 		}
@@ -86,7 +86,7 @@ void FWacomRunEventChoiceListReconciler::Reconcile(
 	if (!Context.ChoiceList
 		|| !Context.ChoiceButtonWidgets
 		|| !Context.PaymentDropTargets
-		|| !Context.PaymentZoneToChoiceId)
+		|| !Context.PresentationState.IsValid())
 	{
 		if (Context.ChoiceButtonWidgets)
 		{
@@ -96,22 +96,21 @@ void FWacomRunEventChoiceListReconciler::Reconcile(
 		{
 			Context.PaymentDropTargets->Reset();
 		}
-		if (Context.PaymentZoneToChoiceId)
-		{
-			Context.PaymentZoneToChoiceId->Reset();
-		}
+		Context.PresentationState.ResetPaymentZoneMappings();
 		return;
 	}
 
 	TMap<FName, UWacomRunEventChoiceButton*> ExistingChoiceButtons =
 		BuildExistingChoiceButtonsByChoiceId(*Context.ChoiceButtonWidgets);
 	TMap<FName, UWacomRunMenuDropTargetWidget*> ExistingDropTargets =
-		BuildExistingDropTargetsByChoiceId(*Context.PaymentDropTargets, *Context.PaymentZoneToChoiceId);
+		BuildExistingDropTargetsByChoiceId(
+			*Context.PaymentDropTargets,
+			Context.PresentationState.AsView());
 
 	Context.ChoiceButtonWidgets->Reset();
 	Context.ChoiceButtonWidgets->Reserve(DesiredChoices.Num());
 	Context.PaymentDropTargets->Reset();
-	Context.PaymentZoneToChoiceId->Reset();
+	Context.PresentationState.ResetPaymentZoneMappings();
 
 	TSet<UWacomRunEventChoiceButton*> UsedChoiceButtons;
 	TSet<UWacomRunMenuDropTargetWidget*> UsedDropTargets;
@@ -154,7 +153,7 @@ void FWacomRunEventChoiceListReconciler::Reconcile(
 				}
 
 				WidgetToPlace = DropTarget;
-				Context.PaymentZoneToChoiceId->Add(Choice.PaymentZoneId, Choice.ChoiceId);
+				Context.PresentationState.AddPaymentZoneMapping(Choice.PaymentZoneId, Choice.ChoiceId);
 				Context.PaymentDropTargets->Add(DropTarget);
 				UsedDropTargets.Add(DropTarget);
 			}

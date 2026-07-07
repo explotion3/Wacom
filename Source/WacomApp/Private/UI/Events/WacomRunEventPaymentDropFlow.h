@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "RunState.h"
+#include "UI/Events/WacomRunEventPresentationState.h"
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 
 class URunSession;
@@ -15,8 +16,7 @@ struct FWacomRunEventPaymentDropFlowContext
 	UWacomRunEventScreen* Screen = nullptr;
 	URunSession* Run = nullptr;
 	UWacomAppToastSubsystem* ToastSubsystem = nullptr;
-	const TArray<FRunEventChoiceSnapshot>* CachedChoices = nullptr;
-	const TMap<FName, FName>* PaymentZoneToChoiceId = nullptr;
+	FWacomRunEventPresentationStateView PresentationState;
 	bool* bDidEndRunEvent = nullptr;
 };
 

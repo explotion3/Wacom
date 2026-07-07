@@ -7,12 +7,6 @@
 
 namespace
 {
-	const TArray<FRunEventChoiceSnapshot>& EmptyRunEventChoices()
-	{
-		static const TArray<FRunEventChoiceSnapshot> EmptyChoices;
-		return EmptyChoices;
-	}
-
 	const TCHAR* ToRunMenuCardDropIntentDebugString(EWacomRunMenuCardDropIntentKind Intent)
 	{
 		switch (Intent)
@@ -114,30 +108,13 @@ namespace
 		return TEXT("None");
 	}
 
-	FString BuildPaymentZoneMappingDebugSummary(
-		const TMap<FName, FName>* PaymentZoneToChoiceId)
-	{
-		if (!PaymentZoneToChoiceId)
-		{
-			return FString();
-		}
-
-		TArray<FString> Entries;
-		Entries.Reserve(PaymentZoneToChoiceId->Num());
-		for (const TPair<FName, FName>& Pair : *PaymentZoneToChoiceId)
-		{
-			Entries.Add(FString::Printf(TEXT("%s->%s"), *Pair.Key.ToString(), *Pair.Value.ToString()));
-		}
-		Entries.Sort();
-		return FString::Join(Entries, TEXT(","));
-	}
 }
 
 FWacomRunEventScreenDebugView FWacomRunEventScreenDebugBuilder::BuildView(
 	const FWacomRunEventScreenDebugBuildContext& Context)
 {
-	const TArray<FRunEventChoiceSnapshot>& CachedChoices =
-		Context.CachedChoices ? *Context.CachedChoices : EmptyRunEventChoices();
+	const TConstArrayView<FRunEventChoiceSnapshot> CachedChoices =
+		Context.PresentationState.GetChoices();
 
 	FWacomRunEventScreenDebugView View;
 	View.bHasRunSession = Context.Run != nullptr;
@@ -148,11 +125,10 @@ FWacomRunEventScreenDebugView FWacomRunEventScreenDebugBuilder::BuildView(
 	View.EventId = Snapshot.EventId;
 	View.CurrentNodeId = Snapshot.CurrentNodeId;
 	View.CurrentNodeTitleText = Snapshot.TitleText;
-	View.CachedChoiceCount = CachedChoices.Num();
-	View.PaymentZoneMappingCount =
-		Context.PaymentZoneToChoiceId ? Context.PaymentZoneToChoiceId->Num() : 0;
+	View.CachedChoiceCount = Context.PresentationState.GetChoiceCount();
+	View.PaymentZoneMappingCount = Context.PresentationState.GetPaymentZoneMappingCount();
 	View.PaymentZoneMappingSummary =
-		BuildPaymentZoneMappingDebugSummary(Context.PaymentZoneToChoiceId);
+		Context.PresentationState.BuildPaymentZoneMappingDebugSummary();
 	View.LastPaymentResolveSummary = Context.LastPaymentResolveSummary;
 	View.LastPaymentSubmitSummary = Context.LastPaymentSubmitSummary;
 
