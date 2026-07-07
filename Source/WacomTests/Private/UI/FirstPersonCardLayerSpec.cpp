@@ -9687,64 +9687,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Wacom.UI.FirstPersonCardLayer.DetailProvider.InvalidDataNoops",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerDetailProviderSideHysteresisTest,
-	"Wacom.UI.FirstPersonCardLayer.DetailProvider.SideHysteresisPreventsEdgeFlipFlop",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerDetailProviderSideHysteresisTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
-		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
-		FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
-	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(
-		GetTransientPackage(),
-		TEXT("第一人称详情贴边卡"),
-		1);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("HUD"), HUD)
-		|| !TestNotNull(TEXT("Card"), Card))
-	{
-		return false;
-	}
-
-	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
-	HUD->TakeWidget();
-	HUD->SetCardDetailMotionSpeedsForTest(0.0f, 18.0f, 24.0f);
-	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
-	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
-	HUD->RefreshFromSnapshotForTest(Snapshot);
-
-	FWacomFirstPersonCardLayerSlotView InitialSlot =
-		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId);
-	InitialSlot.ScreenPosition = FVector2D(530.0f, 600.0f);
-	InitialSlot.RenderScale = 1.0f;
-	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
-	HUD->TickCardDetailMotionForTest(0.12f);
-	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
-	TestTrue(TEXT("Initial detail chooses left side when there is room"), InitialPosition.X < 80.0f);
-
-	FWacomFirstPersonCardLayerSlotView SlightlyLeftSlot = InitialSlot;
-	SlightlyLeftSlot.ScreenPosition = FVector2D(490.0f, 600.0f);
-	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, SlightlyLeftSlot);
-	HUD->TickCardDetailMotionForTest(0.01f);
-	TestTrue(TEXT("Side hysteresis keeps near-edge detail on left side"),
-		HUD->GetFirstPersonCardDetailPanelPositionForTest().X < 120.0f);
-
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
 bool FWacomFirstPersonCardLayerDetailProviderInvalidDataTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();

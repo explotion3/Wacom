@@ -830,6 +830,63 @@ bool FWacomUIBattleHUDCardDetailLargeJumpResetSpec::RunTest(const FString& /*Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailSideHysteresisSpec,
+	"Wacom.UI.Battle.BattleHUD.CardDetail.SideHysteresisPreventsEdgeFlipFlop",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailSideHysteresisSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(WacomBattleHUDFirstPersonSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), Harness->HUD()))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UCardDefinition* Card = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称详情贴边卡"),
+		1);
+	if (!TestNotNull(TEXT("Card"), Card))
+	{
+		return false;
+	}
+
+	HUD->TakeWidget();
+	HUD->SetCardDetailMotionSpeedsForTest(0.0f, 18.0f, 24.0f);
+	const FHandCardSnapshot CardSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(Card, 1, true);
+	const FBattleSnapshot Snapshot =
+		WacomBattleHUDFirstPersonSpec::MakeSnapshotWithHand({ CardSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	FWacomFirstPersonCardLayerSlotView InitialSlot =
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(
+			CardSnapshot.InstanceId,
+			FVector2D(530.0f, 600.0f));
+	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
+	HUD->TickCardDetailMotionForTest(0.12f);
+	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestTrue(
+		TEXT("First-person detail visible before side hysteresis update"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+	TestTrue(TEXT("Initial detail chooses left side when there is room"), InitialPosition.X < 80.0f);
+
+	FWacomFirstPersonCardLayerSlotView SlightlyLeftSlot = InitialSlot;
+	SlightlyLeftSlot.ScreenPosition = FVector2D(490.0f, 600.0f);
+	SlightlyLeftSlot.bIsHovered = true;
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, SlightlyLeftSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
+	TestTrue(
+		TEXT("Side hysteresis keeps near-edge detail on left side"),
+		HUD->GetFirstPersonCardDetailPanelPositionForTest().X < 120.0f);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailReadabilityMotionSpec,
 	"Wacom.UI.Battle.BattleHUD.CardDetail.FirstPersonReadabilityMotion",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
