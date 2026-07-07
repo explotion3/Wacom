@@ -9,7 +9,6 @@
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Common/PileCountView.h"
 
@@ -98,15 +97,6 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 			FAnchors(1.0f, 1.0f),
 			FVector2D(1.0f, 1.0f),
 			FMargin(-30.0f, -200.0f, 160.0f, 140.0f));
-	}
-
-	if (UEquipmentBar* EquipmentBar = ConstructWidget(Context.WidgetTree, Context.EquipmentBar, TEXT("EquipmentBar")))
-	{
-		SetCanvasSlot(
-			Root->AddChildToCanvas(EquipmentBar),
-			FAnchors(0.0f, 0.0f),
-			FVector2D(0.0f, 0.0f),
-			FMargin(20.0f, 20.0f, 240.0f, 32.0f));
 	}
 
 	AddPileView(

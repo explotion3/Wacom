@@ -19,7 +19,6 @@ class UBattleCombatLogFeedWidget;
 class UBattleCommandBarWidget;
 class UBattlePresentationStackWidget;
 class UBattleSession;
-class UEquipmentBar;
 class UPlayerStatusBar;
 class UPileCountView;
 class UWacomBattleEnemyPartPresentationComponent;
@@ -79,7 +78,6 @@ public:
 
 	UPlayerStatusBar* GetPlayerStatusBar() const;
 	UBattleCommandBarWidget* GetCommandBar() const;
-	UEquipmentBar* GetEquipmentBar() const;
 	UPileCountView* GetDrawPileView() const;
 	UPileCountView* GetDiscardPileView() const;
 	UPileCountView* GetExhaustPileView() const;

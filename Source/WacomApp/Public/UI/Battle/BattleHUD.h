@@ -196,7 +196,6 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  * - DrawPileView      : UPileCountView
  * - DiscardPileView   : UPileCountView
  * - ExhaustPileView   : UPileCountView
- * - EquipmentBar      : UEquipmentBar
  * - CombatLogFeed     : UBattleCombatLogFeedWidget
  * - BattlePresentationStack : UBattlePresentationStackWidget
  */
@@ -398,10 +397,6 @@ protected:
 	/** 战斗命令条。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UBattleCommandBarWidget> CommandBar;
-
-	/** 装备条。 */
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<class UEquipmentBar> EquipmentBar;
 
 	/** 抽牌堆计数。PileCountView 不是 BattleWidget，Refresh 时手动更新。 */
 	UPROPERTY(meta = (BindWidgetOptional))

@@ -10,7 +10,6 @@
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
@@ -183,7 +182,6 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			WidgetTree,
 			&PlayerStatusBar,
 			&CommandBar,
-			&EquipmentBar,
 			&DrawPileView,
 			&DiscardPileView,
 			&ExhaustPileView,
@@ -218,7 +216,6 @@ void UBattleHUD::RebuildChildBattleWidgetsForRuntime()
 {
 	ChildBattleWidgets.Reset();
 	if (PlayerStatusBar) { ChildBattleWidgets.Add(PlayerStatusBar); }
-	if (EquipmentBar) { ChildBattleWidgets.Add(EquipmentBar); }
 	if (CombatLogFeed) { ChildBattleWidgets.Add(CombatLogFeed); }
 	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
 

@@ -7,7 +7,6 @@
 class UBattleCommandBarWidget;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
-class UEquipmentBar;
 class UPlayerStatusBar;
 class UPileCountView;
 class UWidgetTree;
@@ -20,7 +19,6 @@ struct FBattleHUDFallbackLayoutBuilderContext
 
 	TObjectPtr<UPlayerStatusBar>* PlayerStatusBar = nullptr;
 	TObjectPtr<UBattleCommandBarWidget>* CommandBar = nullptr;
-	TObjectPtr<UEquipmentBar>* EquipmentBar = nullptr;
 	TObjectPtr<UPileCountView>* DrawPileView = nullptr;
 	TObjectPtr<UPileCountView>* DiscardPileView = nullptr;
 	TObjectPtr<UPileCountView>* ExhaustPileView = nullptr;

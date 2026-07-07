@@ -38,7 +38,6 @@ tags:
 |---|---|---|---|
 | `PlayerStatusBar` | `UPlayerStatusBar` | Optional | 玩家 HP / Shield / 状态图标显示 |
 | `CommandBar` | `UBattleCommandBarWidget` | Optional | Wait / EndTurn 命令按钮、等待值和 pending 文案 |
-| `EquipmentBar` | `UEquipmentBar` | Optional | 装备条占位 |
 | `DrawPileView` | `UPileCountView` | Optional | 抽牌堆数量 |
 | `DiscardPileView` | `UPileCountView` | Optional | 弃牌堆数量；当本回合使用牌堆非空时显示为 `弃牌堆数+本回合使用数`，例如 `2+3` |
 | `ExhaustPileView` | `UPileCountView` | Optional | 消耗牌堆数量 |
@@ -323,19 +322,6 @@ CommandBar 的轻量协议定义在 `BattleCommandBarTypes.h`：`EWacomBattleCom
 | `PendingIndicator` | `Widget` | Optional | 当前命令 pending 时显示 |
 
 WBP 不应做：不在按钮图里调用 HUD / Session；点击只通过父类广播 `EWacomBattleCommandId`，由 `UBattleHUD` 分发到 `OnWaitRequested / OnEndTurnRequested`。
-
-### WBP_EquipmentBar
-
-父类：`UEquipmentBar`
-
-推荐绑定：
-
-| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
-|---|---|---|---|
-| `TitleText` | `TextBlock` | Optional | 装备占位标题 |
-| `FrameBorder` | `Border` | Optional | 装备条底板 |
-
-当前 Snapshot 未提供装备数据，装备条只显示占位文案“装备：无”。装备数据接入后，再更新本绑定合同。
 
 ### WBP_PileCountView
 

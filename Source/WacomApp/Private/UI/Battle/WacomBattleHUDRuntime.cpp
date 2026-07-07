@@ -13,7 +13,6 @@
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
-#include "UI/Battle/EquipmentBar.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
@@ -145,7 +144,6 @@ void FWacomBattleHUDRuntimeHost::NotifyUIStateChanged(
 
 UPlayerStatusBar* FWacomBattleHUDRuntimeHost::GetPlayerStatusBar() const { return HUD.PlayerStatusBar; }
 UBattleCommandBarWidget* FWacomBattleHUDRuntimeHost::GetCommandBar() const { return HUD.CommandBar; }
-UEquipmentBar* FWacomBattleHUDRuntimeHost::GetEquipmentBar() const { return HUD.EquipmentBar; }
 UPileCountView* FWacomBattleHUDRuntimeHost::GetDrawPileView() const { return HUD.DrawPileView; }
 UPileCountView* FWacomBattleHUDRuntimeHost::GetDiscardPileView() const { return HUD.DiscardPileView; }
 UPileCountView* FWacomBattleHUDRuntimeHost::GetExhaustPileView() const { return HUD.ExhaustPileView; }
