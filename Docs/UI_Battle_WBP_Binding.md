@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-battle
 status: active
-updated: 2026-06-07
+updated: 2026-07-07
 tags:
   - wacom/ui
   - wacom/wbp
@@ -36,7 +36,7 @@ tags:
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `PlayerStatusBar` | `UPlayerStatusBar` | Optional | 玩家 HP / Shield / San 显示 |
+| `PlayerStatusBar` | `UPlayerStatusBar` | Optional | 玩家 HP / Shield / 状态图标显示 |
 | `ActionPanel` | `UActionPanel` | Optional | Wait / EndTurn 按钮和等待值 |
 | `EquipmentBar` | `UEquipmentBar` | Optional | 装备条占位 |
 | `DrawPileView` | `UPileCountView` | Optional | 抽牌堆数量 |
@@ -221,9 +221,49 @@ WBP 不应做：
 |---|---|---|---|
 | `HpBar` | `UWacomProgressBar` | Optional | 玩家 HP |
 | `ShieldText` | `TextBlock` | Optional | 护盾文本，0 时可隐藏 |
-| `SanText` | `TextBlock` | Optional | San 占位文本 |
+| `StatusList` | `UWacomBattleStatusIconListWidget` | Optional | 玩家 runtime 状态图标行；为空状态时自动隐藏 |
 
 WBP 不应做：不提交玩家命令，不修改 BattleSession。
+
+### WBP_BattleStatusIconList
+
+父类：`UWacomBattleStatusIconListWidget`
+
+用途：把 `Statuses / StatusStacks` 显示为水平状态图标行。玩家状态条本轮正式使用；敌人部位条目可选接入同一控件。
+
+推荐绑定：
+
+| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
+|---|---|---|---|
+| `StatusContainer` | `HorizontalBox` 或其他 `PanelWidget` | Optional | C++ 动态填充状态图标；缺省时 fallback 创建水平列表 |
+
+推荐 WBP 变量：
+
+| 属性 | 用途 |
+|---|---|
+| `StatusIconWidgetClass` | 每个状态图标使用的 Widget 类，推荐 `WBP_BattleStatusIcon` |
+| `PoisonIconBrush / SlowIconBrush / FreezeIconBrush / TwilightIconBrush / StunnedIconBrush` | 各正式状态的图标 Brush |
+| `FallbackStatusIconBrush` | 未知状态或未配置专用 Brush 时的图标 |
+
+刷新语义：
+
+- 固定顺序为 Poison、Slow、Freeze、Twilight、Stunned；未知状态按 tag 名排序。
+- `Status.Shield` 不显示在状态列表里，护盾仍由 HP / Shield UI 单独显示。
+- 空状态时列表整体折叠。
+
+### WBP_BattleStatusIcon
+
+父类：`UWacomBattleStatusIconWidget`
+
+推荐绑定：
+
+| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
+|---|---|---|---|
+| `IconImage` | `Image` | Required | 状态图标 |
+| `StackText` | `TextBlock` | Optional | 角落层数数字；层数最小显示为 1 |
+| `StackBadge` | `Widget` | Optional | 角落层数底板；跟随状态显示/隐藏 |
+
+WBP 不应做：不从规则层查询状态，不自行改状态层数，不把 `Status.Shield` 混入状态图标。
 
 ### WBP_ActionPanel
 
@@ -296,7 +336,7 @@ WBP 不应做：不直接读取或修改 `UBattleSession`，不在部位 Actor �
 
 父类：`UWacomBattleEnemyPartEntryWidget`
 
-用途：敌人面板内的通用部位条目，展示单个部位的名称、HP/MaxHP、护盾、先机、意图和状态文本。
+用途：敌人面板内的通用部位条目，展示单个部位的名称、HP/MaxHP、护盾、先机、意图和状态。当前可继续使用状态文本，也可选接共享状态图标列表。
 
 推荐绑定：
 
@@ -308,13 +348,15 @@ WBP 不应做：不直接读取或修改 `UBattleSession`，不在部位 Actor �
 | `InitiativeText` | `TextBlock` | Optional | 当前先机 |
 | `StatsText` | `TextBlock` | Optional | HP / 护盾 / 先机的汇总兜底文本；正式 WBP 拆出上面三个字段后可以不放 |
 | `IntentText` | `TextBlock` | Optional | 当前意图 |
-| `StatusText` | `TextBlock` | Optional | 状态标签汇总 |
+| `StatusList` | `UWacomBattleStatusIconListWidget` | Optional | 状态图标行；绑定后优先使用图标列表 |
+| `StatusText` | `TextBlock` | Optional | 状态标签汇总；未绑定 `StatusList` 时的回退 |
 | `DestroyedOverlay` | `Widget` | Optional | 部位破坏时的弱化/覆盖层 |
 
 刷新语义：
 
 - Panel 按 `EnemySlotId` 复用敌人组，按 `EnemySlotId + PartSlotId` 复用部位条目；同一部位只更新 view data，不重建条目 Widget。
 - `Shield == 0` 时 `ShieldText` 会清空并折叠；如果 WBP 只绑定 `StatsText` 而未绑定 `HpText / ShieldText / InitiativeText`，汇总文本仍会显示。
+- `StatusList` 绑定时，C++ 使用共享图标列表并隐藏 `StatusText`；未绑定时保留旧状态文本格式。
 - `bDestroyed` 时 `DestroyedOverlay` 显示，条目整体透明度降低。
 - C++ fallback 使用暗色紧凑面板和水平部位条目：部位名、HP、护盾、先机、意图同排展示，状态和破坏标记作为次级信息显示。
 - C++ fallback 自带轻量表现动效：新增条目错峰淡入/轻微下移归位，HP、护盾和破坏状态变化时短促 pulse。正式 WBP 可以用 UMG Animation 覆盖更完整的动效表现。

@@ -13,6 +13,7 @@
 #include "Components/Widget.h"
 #include "Components/SlateWrapperTypes.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
+#include "UI/Battle/WacomBattleStatusIconWidget.h"
 
 namespace
 {
@@ -341,7 +342,15 @@ void UWacomBattleEnemyPartEntryWidget::RefreshText()
 		}
 	}
 
-	if (StatusText)
+	if (StatusList)
+	{
+		StatusList->SetStatuses(CurrentView.RuntimeStatuses, CurrentView.RuntimeStatusStacks);
+		if (StatusText)
+		{
+			StatusText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+	else if (StatusText)
 	{
 		const FText Status = BuildStatusText();
 		StatusText->SetText(Status);

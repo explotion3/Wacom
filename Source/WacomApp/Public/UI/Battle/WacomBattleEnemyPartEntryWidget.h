@@ -11,6 +11,7 @@ class UTextBlock;
 class UBorder;
 class UHorizontalBox;
 class UVerticalBox;
+class UWacomBattleStatusIconListWidget;
 class UWidget;
 
 UCLASS(Blueprintable, meta = (ToolTip = "敌人面板中的单个部位条目。只渲染 FWacomBattleEnemyPartEntryViewData。"))
@@ -86,6 +87,9 @@ private:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> StatusText = nullptr;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWacomBattleStatusIconListWidget> StatusList = nullptr;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> DestroyedOverlay = nullptr;

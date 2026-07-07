@@ -4,6 +4,7 @@
 
 #define LOCTEXT_NAMESPACE "WacomPlayerStatus"
 #include "UI/Common/WacomProgressBar.h"
+#include "UI/Battle/WacomBattleStatusIconWidget.h"
 
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -38,10 +39,14 @@ TSharedRef<SWidget> UPlayerStatusBar::RebuildWidget()
 		ShieldText->SetColorAndOpacity(FSlateColor(FLinearColor(0.7f, 0.9f, 1.0f)));
 		Root->AddChildToVerticalBox(ShieldText);
 
-		// SAN（占位）
-		SanText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("SanText"));
-		SanText->SetText(LOCTEXT("SanDefault", "SAN --"));
-		Root->AddChildToVerticalBox(SanText);
+		StatusList = WidgetTree->ConstructWidget<UWacomBattleStatusIconListWidget>(
+			UWacomBattleStatusIconListWidget::StaticClass(),
+			TEXT("StatusList"));
+		if (UVerticalBoxSlot* StatusSlot = Root->AddChildToVerticalBox(StatusList))
+		{
+			StatusSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
+			StatusSlot->SetHorizontalAlignment(HAlign_Left);
+		}
 	}
 	return Super::RebuildWidget();
 }
@@ -67,9 +72,9 @@ void UPlayerStatusBar::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		}
 	}
 
-	if (SanText)
+	if (StatusList)
 	{
-		SanText->SetText(LOCTEXT("SanDefault", "SAN --"));
+		StatusList->SetStatuses(Snap.Player.Statuses, Snap.Player.StatusStacks);
 	}
 }
 
