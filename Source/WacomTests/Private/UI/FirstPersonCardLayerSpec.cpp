@@ -9683,69 +9683,6 @@ bool FWacomFirstPersonCardLayerEmptyRuntimeSourceTest::RunTest(const FString& Pa
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerDetailProviderStateClearTest,
-	"Wacom.UI.FirstPersonCardLayer.DetailProvider.ClearsOnTargetSelectAndBattleEnd",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerDetailProviderStateClearTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
-		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
-		FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
-	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(
-		GetTransientPackage(),
-		TEXT("第一人称状态详情卡"),
-		1);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("HUD"), HUD)
-		|| !TestNotNull(TEXT("Card"), Card))
-	{
-		return false;
-	}
-
-	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
-	HUD->TakeWidget();
-	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
-	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
-	HUD->RefreshFromSnapshotForTest(Snapshot);
-
-	HUD->HandleFirstPersonCardHoveredForTest(
-		CardSnapshot.InstanceId,
-		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId));
-	HUD->TickCardDetailMotionForTest(0.12f);
-	TestTrue(TEXT("First-person detail is visible before target select"), HUD->IsCardDetailPanelVisible());
-
-	HUD->SetTargetSelectionStateForTest(CardSnapshot.InstanceId);
-	TestFalse(TEXT("Entering TargetSelect hides first-person detail"), HUD->IsCardDetailPanelVisible());
-
-	HUD->ClearTargetSelectionStateForTest();
-	HUD->RefreshFromSnapshotForTest(Snapshot);
-	HUD->HandleFirstPersonCardHoveredForTest(
-		CardSnapshot.InstanceId,
-		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId));
-	HUD->TickCardDetailMotionForTest(0.12f);
-	TestTrue(TEXT("First-person detail can show again after returning Idle"), HUD->IsCardDetailPanelVisible());
-
-	FBattleSnapshot BattleEndSnapshot = Snapshot;
-	BattleEndSnapshot.Phase = EBattlePhase::BattleEnd;
-	HUD->RefreshFromSnapshotForTest(BattleEndSnapshot);
-	TestFalse(TEXT("BattleEnd snapshot hides first-person detail"), HUD->IsCardDetailPanelVisible());
-
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerVisualStateSlotTest,
 	"Wacom.UI.FirstPersonCardLayer.BattleHandState.LayerAppliesPendingTransformWithoutInput",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

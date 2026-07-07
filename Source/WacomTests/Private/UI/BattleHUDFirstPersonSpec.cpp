@@ -947,6 +947,63 @@ bool FWacomUIBattleHUDCardDetailInvalidDataSpec::RunTest(const FString& /*Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailStateClearSpec,
+	"Wacom.UI.Battle.BattleHUD.CardDetail.ClearsOnTargetSelectAndBattleEnd",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailStateClearSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(WacomBattleHUDFirstPersonSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), Harness->HUD()))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UCardDefinition* Card = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称状态详情卡"),
+		1);
+	if (!TestNotNull(TEXT("Card"), Card))
+	{
+		return false;
+	}
+
+	HUD->TakeWidget();
+	const FHandCardSnapshot CardSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(Card, 1, true);
+	const FBattleSnapshot Snapshot =
+		WacomBattleHUDFirstPersonSpec::MakeSnapshotWithHand({ CardSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	HUD->HandleFirstPersonCardHoveredForTest(
+		CardSnapshot.InstanceId,
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(CardSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.12f);
+	TestTrue(TEXT("First-person detail is visible before target select"), HUD->IsCardDetailPanelVisible());
+
+	HUD->SetTargetSelectionStateForTest(CardSnapshot.InstanceId);
+	TestFalse(TEXT("Entering TargetSelect hides first-person detail"), HUD->IsCardDetailPanelVisible());
+
+	HUD->ClearTargetSelectionStateForTest();
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	HUD->HandleFirstPersonCardHoveredForTest(
+		CardSnapshot.InstanceId,
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(CardSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.12f);
+	TestTrue(TEXT("First-person detail can show again after returning Idle"), HUD->IsCardDetailPanelVisible());
+
+	FBattleSnapshot BattleEndSnapshot = Snapshot;
+	BattleEndSnapshot.Phase = EBattlePhase::BattleEnd;
+	HUD->RefreshFromSnapshotForTest(BattleEndSnapshot);
+	TestFalse(TEXT("BattleEnd snapshot hides first-person detail"), HUD->IsCardDetailPanelVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailReadabilityMotionSpec,
 	"Wacom.UI.Battle.BattleHUD.CardDetail.FirstPersonReadabilityMotion",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
