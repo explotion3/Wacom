@@ -21,6 +21,7 @@
 #include "UI/Events/WacomRunEventChoiceListReconciler.h"
 #include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventPaymentDropFlow.h"
+#include "UI/Events/WacomRunEventPaymentLeaseBuilder.h"
 #include "UI/Events/WacomRunEventScreenDebugBuilder.h"
 #include "UI/Events/WacomRunEventScreenFlow.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
@@ -377,33 +378,16 @@ bool UWacomRunEventScreen::ChooseChoice(FName ChoiceId)
 
 void UWacomRunEventScreen::RefreshPaymentLeaseFromCachedChoices()
 {
-	TArray<FGuid> CandidateInstanceIds;
-	for (const FRunEventChoiceSnapshot& Choice : CachedChoices)
-	{
-		if (!Choice.bRequiresOwnedCardPayment)
-		{
-			continue;
-		}
-		for (const FGuid& CandidateId : Choice.PaymentCandidateInstanceIds)
-		{
-			if (CandidateId.IsValid())
-			{
-				CandidateInstanceIds.AddUnique(CandidateId);
-			}
-		}
-	}
-	if (CandidateInstanceIds.IsEmpty())
+	const FWacomRunEventPaymentLeaseBuildResult PaymentLease =
+		FWacomRunEventPaymentLeaseBuilder::BuildRequest(CachedChoices);
+	if (!PaymentLease.bHasCandidateCards)
 	{
 		ClearOwnedRunFirstPersonCardLayerMenuLease();
 		return;
 	}
 
-	FWacomRunMenuCardLeaseRequest Request;
-	Request.LeaseId = TEXT("RunEventCardPayment");
-	Request.SourceId = TEXT("RunEventCardPaymentSource");
-	Request.ExplicitCardInstanceIds = MoveTemp(CandidateInstanceIds);
 	FWacomRunMenuCardLeaseResult LeaseResult;
-	SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult);
+	SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(PaymentLease.Request, LeaseResult);
 }
 
 void UWacomRunEventScreen::RecordPaymentDropResolveDebug(
