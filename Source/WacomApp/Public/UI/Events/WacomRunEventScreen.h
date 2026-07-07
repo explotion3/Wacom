@@ -209,7 +209,6 @@ private:
 #endif
 
 	void RebuildChoices();
-	void AddChoiceButton(const FRunEventChoiceSnapshot& Choice);
 	TSubclassOf<UWacomRunEventChoiceButton> ResolveChoiceButtonWidgetClass() const;
 	TSubclassOf<UWacomRunMenuDropTargetWidget> ResolvePaymentDropTargetWidgetClass() const;
 	void HandleChoiceClicked(FName ChoiceId);

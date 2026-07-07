@@ -9115,6 +9115,67 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"Wacom.UI.Event.MissingConfiguredChildClassesFallbackToNative",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventScreenChoiceListReusesWidgetsSpec,
+	"Wacom.UI.Event.ChoiceListReusesWidgetsAcrossRefresh",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventScreenChoiceListReusesWidgetsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+	UCardDefinition* Fang = Fx.MakeNoopCard(0);
+	Fang->CardId = TEXT("PoisonFang");
+	UCardDefinition* Bag = Fx.MakeNoopCard(0);
+	Bag->Physique.Capacity = 8;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1),
+		Fx.MakeNoopCard(1),
+		{ Bag, Fang });
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(
+		MakeUiRunEventCardPaymentEvent(Run.Get(), Fang));
+	TestTrue(TEXT("Begin payment UI event"),
+		Run->BeginRunEvent(TEXT("Event.UI.Payment.Reuse"), Event.Get()));
+
+	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
+	Screen->SetRunSession(Run.Get());
+	Screen->SetChoiceButtonClassForTest(UWacomRunEventChoiceButtonClassProbe::StaticClass());
+	Screen->SetPaymentDropTargetClassForTest(UWacomRunEventPaymentDropTargetWidgetClassProbe::StaticClass());
+	Screen->TakeWidget();
+	Screen->ActivateWidget();
+	Screen->RefreshEvent();
+
+	UWacomRunEventChoiceButton* FirstChoiceButton =
+		FWacomShopRunEventTestAccess::ChoiceButton(*Screen, 0);
+	UWacomRunMenuDropTargetWidget* FirstDropTarget =
+		FWacomShopRunEventTestAccess::PaymentDropTarget(*Screen, 0);
+	TestNotNull(TEXT("Initial choice button exists"), FirstChoiceButton);
+	TestNotNull(TEXT("Initial payment drop target exists"), FirstDropTarget);
+	if (!FirstChoiceButton || !FirstDropTarget)
+	{
+		return false;
+	}
+
+	Screen->RefreshEvent();
+
+	TestEqual(TEXT("Refresh keeps one choice row"),
+		FWacomShopRunEventTestAccess::View(*Screen).ChoiceCount,
+		1);
+	TestTrue(TEXT("Choice row is reused by stable ChoiceId"),
+		FWacomShopRunEventTestAccess::ChoiceButton(*Screen, 0) == FirstChoiceButton);
+	TestTrue(TEXT("Payment drop target is reused by stable ChoiceId"),
+		FWacomShopRunEventTestAccess::PaymentDropTarget(*Screen, 0) == FirstDropTarget);
+	TestEqual(TEXT("Payment zone mapping survives refresh"),
+		FWacomShopRunEventTestAccess::DebugView(*Screen).PaymentZoneMappingCount,
+		1);
+	TestEqual(TEXT("Payment zone remains assigned"),
+		FirstDropTarget->ZoneId,
+		FName(TEXT("RunEvent.Pay.Fang")));
+
+	return true;
+}
+
 bool FWacomUIRunEventScreenWbpBindingFallbackSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());

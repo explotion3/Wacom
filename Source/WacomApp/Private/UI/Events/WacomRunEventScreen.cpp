@@ -18,6 +18,7 @@
 #include "Engine/GameInstance.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
+#include "UI/Events/WacomRunEventChoiceListReconciler.h"
 #include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventPresentationBuilder.h"
 #include "UI/Events/WacomRunEventScreenFlow.h"
@@ -567,13 +568,6 @@ UWacomAppToastSubsystem* UWacomRunEventScreen::ResolveToastSubsystem() const
 void UWacomRunEventScreen::RebuildChoices()
 {
 	CachedChoices.Reset();
-	ChoiceButtonWidgets.Reset();
-	PaymentZoneToChoiceId.Reset();
-	PaymentDropTargets.Reset();
-	if (ChoiceList)
-	{
-		ChoiceList->ClearChildren();
-	}
 
 	URunSession* Run = ResolveRunSession();
 	const FRunEventSnapshot Snapshot = Run ? Run->BuildCurrentRunEventSnapshot() : FRunEventSnapshot();
@@ -586,61 +580,50 @@ void UWacomRunEventScreen::RebuildChoices()
 			: ESlateVisibility::Collapsed);
 	}
 
-	if (!ChoiceList)
-	{
-		return;
-	}
-
-	for (const FRunEventChoiceSnapshot& Choice : Snapshot.Choices)
-	{
-		AddChoiceButton(Choice);
-	}
-}
-
-void UWacomRunEventScreen::AddChoiceButton(const FRunEventChoiceSnapshot& Choice)
-{
-	if (!WidgetTree || !ChoiceList)
-	{
-		return;
-	}
-
-	UWacomRunEventChoiceButton* ChoiceButtonWidget = WidgetTree->ConstructWidget<UWacomRunEventChoiceButton>(
-		ResolveChoiceButtonWidgetClass());
-	if (!ChoiceButtonWidget)
-	{
-		return;
-	}
-	ChoiceButtonWidget->SetChoiceSnapshot(Choice);
-	ChoiceButtonWidget->OnChoiceClickedNative.AddUObject(this, &UWacomRunEventScreen::HandleChoiceClicked);
-	ChoiceButtonWidgets.Add(ChoiceButtonWidget);
-	UWidget* ChoiceWidget = ChoiceButtonWidget;
-	if (Choice.bRequiresOwnedCardPayment && !Choice.PaymentZoneId.IsNone())
-	{
-		UWacomRunMenuDropTargetWidget* DropTarget =
-			WidgetTree->ConstructWidget<UWacomRunMenuDropTargetWidget>(
-				ResolvePaymentDropTargetWidgetClass(),
-				FName(*FString::Printf(TEXT("RunEventChoiceDrop_%s"), *Choice.ChoiceId.ToString())));
-		if (DropTarget)
+	FWacomRunEventChoiceListReconciler::Reconcile(
+		FWacomRunEventChoiceListReconcileContext{
+			ChoiceList,
+			PaymentChoiceMinDesiredWidth,
+			&ChoiceButtonWidgets,
+			&PaymentDropTargets,
+			&PaymentZoneToChoiceId
+		},
+		Snapshot.Choices,
+		[this](const FRunEventChoiceSnapshot& /*Choice*/) -> UWacomRunEventChoiceButton*
 		{
-			DropTarget->ZoneId = Choice.PaymentZoneId;
-			DropTarget->StableTargetId = Choice.PaymentZoneId;
+			if (!WidgetTree)
+			{
+				return nullptr;
+			}
 
-			USizeBox* ChoiceSize = WidgetTree->ConstructWidget<USizeBox>(
-				USizeBox::StaticClass(),
-				FName(*FString::Printf(TEXT("RunEventChoiceDropSize_%s"), *Choice.ChoiceId.ToString())));
-			ChoiceSize->SetMinDesiredWidth(PaymentChoiceMinDesiredWidth);
-			ChoiceSize->SetContent(ChoiceButtonWidget);
-			DropTarget->SetDropContent(ChoiceSize);
-			ChoiceWidget = DropTarget;
-			PaymentZoneToChoiceId.Add(Choice.PaymentZoneId, Choice.ChoiceId);
-			PaymentDropTargets.Add(DropTarget);
-		}
-	}
-
-	if (UVerticalBoxSlot* ChoiceSlot = ChoiceList->AddChildToVerticalBox(ChoiceWidget))
-	{
-		ChoiceSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-	}
+			UWacomRunEventChoiceButton* ChoiceButtonWidget =
+				WidgetTree->ConstructWidget<UWacomRunEventChoiceButton>(ResolveChoiceButtonWidgetClass());
+			if (ChoiceButtonWidget)
+			{
+				ChoiceButtonWidget->OnChoiceClickedNative.AddUObject(this, &UWacomRunEventScreen::HandleChoiceClicked);
+			}
+			return ChoiceButtonWidget;
+		},
+		[this](const FRunEventChoiceSnapshot& Choice) -> UWacomRunMenuDropTargetWidget*
+		{
+			return WidgetTree
+				? WidgetTree->ConstructWidget<UWacomRunMenuDropTargetWidget>(
+					ResolvePaymentDropTargetWidgetClass(),
+					FName(*FString::Printf(TEXT("RunEventChoiceDrop_%s"), *Choice.ChoiceId.ToString())))
+				: nullptr;
+		},
+		[this](const FRunEventChoiceSnapshot& Choice) -> USizeBox*
+		{
+			return WidgetTree
+				? WidgetTree->ConstructWidget<USizeBox>(
+					USizeBox::StaticClass(),
+					FName(*FString::Printf(TEXT("RunEventChoiceDropSize_%s"), *Choice.ChoiceId.ToString())))
+				: nullptr;
+		},
+		[](UWacomRunEventChoiceButton& ChoiceButtonWidget, const FRunEventChoiceSnapshot& Choice)
+		{
+			ChoiceButtonWidget.SetChoiceSnapshot(Choice);
+		});
 }
 
 TSubclassOf<UWacomRunEventChoiceButton> UWacomRunEventScreen::ResolveChoiceButtonWidgetClass() const

@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-runevent
 status: active
-updated: 2026-06-05
+updated: 2026-07-07
 tags:
   - wacom/ui
   - wacom/wbp
@@ -56,7 +56,7 @@ tags:
 WBP 不应做：
 
 - 不直接调用 `URunSession` 或 RunEvent choice API。
-- 不预放正式选项；`ChoiceList` 由 C++ 刷新事件 snapshot 时清空并重建。
+- 不预放正式选项；`ChoiceList` 由 C++ 刷新事件 snapshot 时按稳定 `ChoiceId` reconcile，WBP 不应缓存动态选项顺序或实例所有权。
 - 不手写支付 Zone 的具体事件含义；Screen 只把 choice snapshot 中的 `ZoneId / StableTargetId` 写入 drop target。
 - 不覆盖 drop target WBP 的 preview scale、颜色或材质参数；这些由 drop target 自身合同控制。
 
@@ -64,7 +64,7 @@ WBP 不应做：
 
 - 注册正式 `WBP_RunEventScreen` 后，打开探索事件时能显示标题、正文和动态选项。
 - 普通选项只创建 `ChoiceButtonWidgetClass`。
-- 需要卡牌支付的选项会创建 `PaymentDropTargetWidgetClass`，并把 choice row 包进该 Zone target。
+- 需要卡牌支付的选项会创建或复用 `PaymentDropTargetWidgetClass`，并把 choice row 包进该 Zone target。
 - `LogRunEventScreenDebugSummary()` 可用于 PIE 排查 active node、choice 可用性、Zone 映射、候选数量和最近 drop 结果。
 
 ## WBP_RunEventChoiceButton
