@@ -142,7 +142,7 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> SpecialZonesHost;
 
-	/** WBP 可绑定的负重区运行时内容槽。未绑定时 C++ fallback 会创建。 */
+	/** WBP 可绑定的负重区运行时内容槽。未绑定时 C++ fallback 会创建；该区只展示负重卡，不创建 DropTarget。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> BurdenZoneHost;
 
@@ -172,9 +172,6 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWrapBox> BurdenCardsBox;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UWacomZoneDropTarget> BurdenDropTarget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> BurdenZoneTitleText;

@@ -37,7 +37,6 @@ struct FBackpackRuntimeZoneBuilderContext
 	TObjectPtr<UWacomDeleteZoneDropTarget>* DeleteDropTarget = nullptr;
 	TObjectPtr<UWacomZoneDropTarget>* BattleDeckDropTarget = nullptr;
 	TObjectPtr<UWacomZoneDropTarget>* BackpackDropTarget = nullptr;
-	TObjectPtr<UWacomZoneDropTarget>* BurdenDropTarget = nullptr;
 };
 
 /**

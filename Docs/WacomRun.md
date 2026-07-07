@@ -177,6 +177,8 @@ B 主卡只能位于 `Backpack` 或 `BattleDeck`，不能进入自己的 Special
 
 通量区超容时，普通卡和 A 类容器卡可进入 `BurdenZone`；B 主卡不会被挪入负重区。备战区超容时，卡优先回通量区，通量区接不住再进负重区。
 
+正式背包 UI 不暴露玩家主动拖入 `BurdenZone` 的 DropTarget。`BurdenZone` 能否接收某张卡仍属于 Run 规则 contract，由 `URunSession::ValidateMoveInstance` / `MoveInstance` 决定；App 层不再用额外 `InvalidTargetZone` 特判覆盖该规则。
+
 负重压力公式：
 
 ```text

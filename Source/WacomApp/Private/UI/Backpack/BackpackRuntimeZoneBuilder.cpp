@@ -54,7 +54,6 @@ void FBackpackRuntimeZoneBuilder::Ensure(const FBackpackRuntimeZoneBuilderContex
 	auto& DeleteDropTarget = *Context.DeleteDropTarget;
 	auto& BattleDeckDropTarget = *Context.BattleDeckDropTarget;
 	auto& BackpackDropTarget = *Context.BackpackDropTarget;
-	auto& BurdenDropTarget = *Context.BurdenDropTarget;
 
 	if (!CardDetailLayer)
 	{
@@ -156,7 +155,6 @@ void FBackpackRuntimeZoneBuilder::Ensure(const FBackpackRuntimeZoneBuilderContex
 	if (!BurdenCardsBox && BurdenZoneHost)
 	{
 		BurdenZoneHost->ClearChildren();
-		BurdenDropTarget = nullptr;
 
 		UVerticalBox* BurdenContent = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BurdenContent"));
 		if (!BurdenZoneTitleText)

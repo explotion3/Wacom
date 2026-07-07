@@ -4,6 +4,7 @@
 
 #include "BackpackScreenTestAccess.h"
 
+#include "Blueprint/WidgetTree.h"
 #include "Blueprint/DragDropOperation.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
@@ -1559,8 +1560,10 @@ bool FWacomUIBackpackBurdenZoneIsSourceOnlySpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(Outer, Run.Get()));
 	TStrongObjectPtr<UWacomCardDragOperation> PreviewOp(
 		MakeBackpackUiCardDragOpForTest(Outer, BattleId, BattleCard, EZoneKind::BattleDeck));
-	TestFalse(TEXT("BurdenZone target rejects preview through Screen flow"),
+	TestTrue(TEXT("Screen preview delegates BurdenZone validity to RunSession"),
 		Screen->CanPreviewZoneDrop(*PreviewOp, EZoneKind::BurdenZone, FGuid()));
+	TestNull(TEXT("Runtime Backpack screen does not construct a BurdenZone drop target"),
+		Screen->WidgetTree ? Screen->WidgetTree->FindWidget(TEXT("BurdenDropTarget")) : nullptr);
 
 	TStrongObjectPtr<UWacomZoneDropTarget> BurdenTarget(NewObject<UWacomZoneDropTarget>());
 	BurdenTarget->Configure(EZoneKind::BurdenZone, FGuid());

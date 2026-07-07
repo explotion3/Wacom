@@ -356,8 +356,7 @@ void UWacomBackpackScreen::EnsureRuntimeZoneWidgets()
 		&BurdenCardsBox,
 		&DeleteDropTarget,
 		&BattleDeckDropTarget,
-		&BackpackDropTarget,
-		&BurdenDropTarget
+		&BackpackDropTarget
 	});
 }
 

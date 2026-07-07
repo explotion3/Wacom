@@ -69,11 +69,6 @@ FRunDeckOperationValidation FWacomBackpackCommandFlow::ValidateZoneDropPreview(
 		return MakeRejectedBackpackOperation(TEXT("CardNotFound"));
 	}
 
-	if (TargetZone == EZoneKind::BurdenZone)
-	{
-		return MakeRejectedBackpackOperation(TEXT("InvalidTargetZone"));
-	}
-
 	if (!Run)
 	{
 		return MakeRejectedBackpackOperation(TEXT("RunSessionMissing"));
