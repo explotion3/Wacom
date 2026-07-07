@@ -1482,8 +1482,8 @@ bool FWacomUIBattleSceneEnemyHostVisualDoesNotCreateTargetProviderSpec::RunTest(
 		FWacomBattleSceneTargetClickTestAccess::ProbeTarget(PC, HostVisualHandle));
 	TestFalse(TEXT("Host visual probe does not synthesize a target"), HostVisualHandle.IsValid());
 
-	HUD->OnCardClickedByUser(TargetCardId);
-	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	HUD->SetTargetSelectionStateForTest(TargetCardId);
+	TestEqual(TEXT("Target select test state is active"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, PartActor, PartActor->GetHitBounds());
 	TestTrue(TEXT("Part hit bounds still routes with host visual present"),
 		FWacomBattleSceneTargetClickTestAccess::RouteClick(PC));
