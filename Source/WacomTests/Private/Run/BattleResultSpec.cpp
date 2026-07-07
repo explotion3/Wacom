@@ -5,6 +5,7 @@
 
 #include "RunSession.h"
 #include "RunStateTypes.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Session/BattleResultPacket.h"
 
 #include "Cards/CardDefinition.h"
@@ -247,7 +248,7 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.Outcome = EBattleOutcome::Victory;
 		FBattleGainedCard GainedCard;
 		GainedCard.Definition = RewardCard;
-		GainedCard.SourcePartId = FName(TEXT("Test.Part.Solo"));
+		GainedCard.SourcePartKey = FBattleEnemyPartKey::Make(TEXT("Encounter"), TEXT("Enemy"), TEXT("Test.Part.Solo"));
 		GainedCard.SourceChoice = EKnockdownChoice::Aid;
 		Packet.GainedCards.Add(GainedCard);
 
@@ -268,7 +269,7 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.bWithdrawn = true;
 		FBattleGainedCard GainedCard;
 		GainedCard.Definition = RewardCard;
-		GainedCard.SourcePartId = FName(TEXT("Test.Part.Solo"));
+		GainedCard.SourcePartKey = FBattleEnemyPartKey::Make(TEXT("Encounter"), TEXT("Enemy"), TEXT("Test.Part.Solo"));
 		GainedCard.SourceChoice = EKnockdownChoice::Destroy;
 		Packet.GainedCards.Add(GainedCard);
 
@@ -288,7 +289,7 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.Outcome = EBattleOutcome::Defeat;
 		FBattleGainedCard GainedCard;
 		GainedCard.Definition = RewardCard;
-		GainedCard.SourcePartId = FName(TEXT("Test.Part.Solo"));
+		GainedCard.SourcePartKey = FBattleEnemyPartKey::Make(TEXT("Encounter"), TEXT("Enemy"), TEXT("Test.Part.Solo"));
 		GainedCard.SourceChoice = EKnockdownChoice::Aid;
 		Packet.GainedCards.Add(GainedCard);
 

@@ -11,6 +11,7 @@
 #include "RunSession.h"
 #include "RunState.h"
 #include "RunStateTypes.h"
+#include "Runtime/BattleEnemyKeys.h"
 #include "Session/BattleResultPacket.h"
 #include "Tags/WacomGameplayTags.h"
 
@@ -234,7 +235,10 @@ bool FWacomRunNotificationBattleSettlementCoalescesSpec::RunTest(const FString& 
 	Packet.KnockdownExpGains.Add(MakeNotificationExpGain(TEXT("Notification.Part.A"), 3));
 	FBattleGainedCard GainedCard;
 	GainedCard.Definition = Reward;
-	GainedCard.SourcePartId = TEXT("Notification.Part.A");
+	GainedCard.SourcePartKey = FBattleEnemyPartKey::Make(
+		TEXT("Notification.Battle.Trigger"),
+		TEXT("Enemy"),
+		TEXT("Notification.Part.A"));
 	GainedCard.SourceChoice = EKnockdownChoice::Aid;
 	Packet.GainedCards.Add(GainedCard);
 

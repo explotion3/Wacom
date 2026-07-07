@@ -46,6 +46,11 @@ namespace
 			? OutSnapshot.DestroyedPartKeys.Num()
 			: OutSnapshot.DestroyedParts.Num();
 	}
+
+	FString GetPartKeyDebugString(const FBattleEnemyPartKey& PartKey)
+	{
+		return PartKey.IsValidKey() ? PartKey.ToDebugString() : FString(TEXT("<invalid>"));
+	}
 }
 
 bool FRunBattleSettlementResolver::Resolve(
@@ -153,9 +158,9 @@ bool FRunBattleSettlementResolver::Resolve(
 			}
 			Callbacks.AcquireCardToRun(GainedCard.Definition.Get());
 			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Gained card from battle: Card=%s, Part=%s, Choice=%d"),
+				TEXT("[RunSession] Gained card from battle: Card=%s, SourcePartKey=%s, Choice=%d"),
 				*GetNameSafe(GainedCard.Definition),
-				*GainedCard.SourcePartId.ToString(),
+				*GetPartKeyDebugString(GainedCard.SourcePartKey),
 				static_cast<int32>(GainedCard.SourceChoice));
 		}
 	}
@@ -172,8 +177,8 @@ bool FRunBattleSettlementResolver::Resolve(
 		default: break;
 		}
 		UE_LOG(LogTemp, Display,
-			TEXT("[RunSession] KnockdownChoice: Part=%s, Choice=%s"),
-			*Choice.PartId.ToString(), ChoiceName);
+			TEXT("[RunSession] KnockdownChoice: PartKey=%s, Choice=%s"),
+			*GetPartKeyDebugString(Choice.PartKey), ChoiceName);
 	}
 
 	return true;

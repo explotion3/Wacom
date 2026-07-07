@@ -269,7 +269,6 @@ bool FWacomKnockdownChoiceRewardCardAidSpec::RunTest(const FString& /*Parameters
 	if (Packet.GainedCards.IsValidIndex(0))
 	{
 		TestEqual(TEXT("Reward definition recorded"), Packet.GainedCards[0].Definition.Get(), RewardCard);
-		TestEqual(TEXT("Reward source part id recorded"), Packet.GainedCards[0].SourcePartId, FName(TEXT("Test.Part.Head")));
 		TestEqual(TEXT("Reward source part key recorded"), Packet.GainedCards[0].SourcePartKey, FWacomBattleFixture::FindPartKey(Snap0, 0));
 		TestEqual(TEXT("Reward source choice recorded"), Packet.GainedCards[0].SourceChoice, EKnockdownChoice::Aid);
 	}
@@ -324,7 +323,6 @@ bool FWacomKnockdownChoiceRewardCardDestroySpec::RunTest(const FString& /*Parame
 	if (Packet.GainedCards.IsValidIndex(0))
 	{
 		TestEqual(TEXT("Reward definition recorded"), Packet.GainedCards[0].Definition.Get(), RewardCard);
-		TestEqual(TEXT("Reward source part id recorded"), Packet.GainedCards[0].SourcePartId, FName(TEXT("Test.Part.Head")));
 		TestEqual(TEXT("Reward source part key recorded"), Packet.GainedCards[0].SourcePartKey, FWacomBattleFixture::FindPartKey(Snap0, 0));
 		TestEqual(TEXT("Reward source choice recorded"), Packet.GainedCards[0].SourceChoice, EKnockdownChoice::Destroy);
 	}

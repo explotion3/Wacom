@@ -386,7 +386,7 @@ Outcome 分支：
 - `bMutualDestruction`：伤口 +10，不直接终止 Run。
 - Victory 包含撤离：结算 `KnockdownExpGains[]` 和 `GainedCards[]`。
 - Defeat / Undetermined 不结算经验和获得卡。
-- `KnockdownChoices[]` 当前只记日志，后续事件分支再消费。
+- `KnockdownChoices[]` 当前只按 `PartKey` 记日志，后续事件分支再消费。
 
 节点消耗不在 `OnBattleFinishedFromTrigger()` 内部完成。当前 `AWacomGameMode::ExitBattle()` 在非 Undetermined 战斗结束后统一 `ConsumeNode(1)`，胜利、失败、撤离都消耗。
 
