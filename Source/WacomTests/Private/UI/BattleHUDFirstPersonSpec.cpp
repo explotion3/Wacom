@@ -135,6 +135,22 @@ namespace WacomBattleHUDFirstPersonSpec
 		Slot.bProjected = true;
 		return Slot;
 	}
+
+	FWacomFirstPersonCardLayerSlotView MakeProjectedDetailSlot(
+		const FGuid& CardInstanceId,
+		const FVector2D& ScreenPosition = FVector2D(700.0f, 520.0f))
+	{
+		FWacomFirstPersonCardLayerSlotView Slot;
+		Slot.Entry.CardInstanceId = CardInstanceId;
+		Slot.ScreenPosition = ScreenPosition;
+		Slot.WidgetPosition = ScreenPosition;
+		Slot.SnappedWidgetPosition = ScreenPosition;
+		Slot.InputHitCenter = ScreenPosition;
+		Slot.RenderScale = 1.0f;
+		Slot.RenderOpacity = 1.0f;
+		Slot.bProjected = true;
+		return Slot;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -594,6 +610,100 @@ bool FWacomUIBattleHUDCardDetailControllerContractSpec::RunTest(const FString& /
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 	TestFalse(TEXT("BattleEnd refresh reports no visible detail"),
 		HUD->IsCardDetailPanelVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailHoverSourceSpec,
+	"Wacom.UI.Battle.BattleHUD.CardDetail.HoverUsesSnapshotCardAndIgnoresStaleUnhover",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailHoverSourceSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(WacomBattleHUDFirstPersonSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), Harness->HUD()))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UCardDefinition* FirstCard = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称详情卡 A"),
+		1);
+	UCardDefinition* SecondCard = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称详情卡 B"),
+		2);
+	if (!TestNotNull(TEXT("First card"), FirstCard)
+		|| !TestNotNull(TEXT("Second card"), SecondCard))
+	{
+		return false;
+	}
+
+	HUD->TakeWidget();
+	const FHandCardSnapshot FirstSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(FirstCard, 1, true);
+	const FHandCardSnapshot SecondSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(SecondCard, 2, true);
+	const FBattleSnapshot Snapshot =
+		WacomBattleHUDFirstPersonSpec::MakeSnapshotWithHand({ FirstSnapshot, SecondSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	TestEqual(TEXT("Detail provider starts from Idle"), HUD->GetUIStateForTest(), EBattleUIState::Idle);
+	TestTrue(TEXT("Detail provider cached snapshot"), HUD->HasLastBattleSnapshotForTest());
+	TestEqual(TEXT("Detail provider cached hand cards"), HUD->GetLastBattleSnapshotHandCountForTest(), 2);
+	TestTrue(TEXT("Detail provider can find first card"), HUD->HasLastBattleHandCardForTest(FirstSnapshot.InstanceId));
+	TestTrue(TEXT("Detail provider can create first-person detail panel"), HUD->EnsureFirstPersonCardDetailPanelForTest());
+	TestTrue(
+		TEXT("First-person detail viewport z-order is above card layer"),
+		HUD->GetFirstPersonCardDetailViewportZOrderForTest() > 9996);
+
+	const FWacomFirstPersonCardLayerSlotView FirstSlot =
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(FirstSnapshot.InstanceId);
+	HUD->HandleFirstPersonCardHoveredForTest(FirstSnapshot.InstanceId, FirstSlot);
+	TestFalse(TEXT("First-person hover waits before showing detail"), HUD->IsCardDetailPanelVisible());
+	HUD->TickCardDetailMotionForTest(0.12f);
+	TestTrue(TEXT("First-person hover shows detail"), HUD->IsCardDetailPanelVisible());
+	TestTrue(
+		TEXT("First-person hover uses viewport detail panel"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+	TestEqual(
+		TEXT("First-person detail uses first snapshot definition"),
+		HUD->GetCardDetailPanelNameText().ToString(),
+		FString(TEXT("第一人称详情卡 A")));
+	TestEqual(
+		TEXT("First-person specific detail has first card name"),
+		HUD->GetFirstPersonCardDetailPanelNameTextForTest().ToString(),
+		FString(TEXT("第一人称详情卡 A")));
+
+	const FWacomFirstPersonCardLayerSlotView SecondSlot =
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(SecondSnapshot.InstanceId);
+	HUD->HandleFirstPersonCardHoveredForTest(SecondSnapshot.InstanceId, SecondSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
+	TestTrue(TEXT("Second first-person hover keeps detail visible"), HUD->IsCardDetailPanelVisible());
+	TestEqual(
+		TEXT("First-person detail replaces source"),
+		HUD->GetCardDetailPanelNameText().ToString(),
+		FString(TEXT("第一人称详情卡 B")));
+
+	HUD->HandleFirstPersonCardUnhoveredForTest(FirstSnapshot.InstanceId, FirstSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
+	TestTrue(TEXT("Old first-person source unhover does not hide current detail"), HUD->IsCardDetailPanelVisible());
+	TestEqual(
+		TEXT("Old first-person source unhover keeps second detail"),
+		HUD->GetCardDetailPanelNameText().ToString(),
+		FString(TEXT("第一人称详情卡 B")));
+
+	HUD->HandleFirstPersonCardUnhoveredForTest(SecondSnapshot.InstanceId, SecondSlot);
+	HUD->TickCardDetailMotionForTest(0.5f);
+	TestFalse(TEXT("Current first-person source unhover hides detail"), HUD->IsCardDetailPanelVisible());
+	TestFalse(
+		TEXT("First-person viewport detail is hidden on current unhover"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 
 	return true;
 }
