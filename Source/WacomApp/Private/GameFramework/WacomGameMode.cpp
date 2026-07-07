@@ -374,11 +374,6 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		return;
 	}
 
-	if (!DefaultCharacter)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] EnterBattle: DefaultCharacter 未配置"));
-		return;
-	}
 	if (!BattleHUDClass)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] EnterBattle: BattleHUDClass 未配置"));
@@ -394,6 +389,12 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
 	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
+	if (!Run)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] EnterBattle: RunSession 未就位，拒绝脱离 RunState 的战斗"));
+		return;
+	}
 
 	UGameInstance* GI = GetGameInstance();
 	UWacomGameUIManagerSubsystem* UIManager =
@@ -406,7 +407,6 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	}
 
 	// 1) 创建 BattleSession + Initialize
-	ActiveSession = NewObject<UBattleSession>(this);
 	int32 EnterBattleEnemySlotCount = 0;
 	const UEnemyDefinition* FirstEnemySlotDefinition = nullptr;
 	{
@@ -414,16 +414,13 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 
 		FirstEnemySlotDefinition = EncounterEnemySlots[0].Enemy;
 
-		// 优先从 RunSession 构造（含角色 / 种子 / 撤离持久化的破坏部位）；
-		// 若 Run 未就绪则回退到 GameMode 字段。
+		// RunSession 是进入战斗的唯一规则入口：角色、种子、备战卡组和撤离重入进度都来自 RunState。
 		const FName TriggerPersistentId = Trigger ? Trigger->PersistentId : NAME_None;
-		if (!Run || !Run->BuildInitParamsForBattle(TriggerPersistentId, Params))
+		if (!Run->BuildInitParamsForBattle(TriggerPersistentId, Params))
 		{
-			Params.Character = DefaultCharacter;
-			Params.EncounterId = TriggerPersistentId.IsNone()
-				? FName(TEXT("Encounter"))
-				: TriggerPersistentId;
-			Params.RandomSeed = DefaultRandomSeed;
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomGameMode] EnterBattle: RunSession 无法构造战斗参数，拒绝 fallback 战斗"));
+			return;
 		}
 
 		// 敌人侧由 App/Trigger 层负责：EncounterDefinition -> EnemySlots。
@@ -431,6 +428,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		PendingBattleTotalPartCount = CountBattleInitEnemyParts(Params);
 		EnterBattleEnemySlotCount = Params.EnemySlots.Num() > 0 ? Params.EnemySlots.Num() : 1;
 
+		ActiveSession = NewObject<UBattleSession>(this);
 		const FWacomStatus Status = ActiveSession->Initialize(Params);
 		if (!Status.IsOk())
 		{

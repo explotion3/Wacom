@@ -62,11 +62,11 @@ public:
 
 	// ---- 配置（默认通过 LoadObject 填好，蓝图/关卡可覆盖）----
 
-	/** 战斗使用的玩家角色配置。 */
+	/** 新 Run bootstrap 使用的默认玩家角色配置；正式进入战斗时角色来自 RunSession / RunState。 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle")
 	TObjectPtr<UCharacterDefinition> DefaultCharacter;
 
-	/** 战斗随机种子。0 表示使用默认。 */
+	/** Legacy prototype field. 正式进入战斗时随机种子来自 RunSession / RunState。 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle")
 	int32 DefaultRandomSeed = 0;
 

@@ -195,7 +195,7 @@ GameMode 进入战斗时：
 1. 设置 `EGameFlowState::Battle`。
 2. 清理探索期 Run first-person default workspace source 和 active menu lease。
 3. Suspend PlayerCharacter 的 Run Tunnel 探索移动；若 Trigger 配置了 battle entry viewpoint，则先把第一人称摄像机 View Pose 对齐到该站位，再启用 Battle camera look。Viewpoint 可配置过渡时间，默认 0 秒立即对齐。
-4. 由 Trigger 的 `EncounterDefinition` 构造敌人槽，并由 RunSession 补齐撤离重入进度。
+4. 由 RunSession 构造战斗玩家侧参数（角色、随机种子、备战卡组、撤离重入进度），由 Trigger 的 `EncounterDefinition` 构造敌人槽；若 RunSession 缺失或无法构造参数，GameMode 会拒绝进入战斗，不再用 `DefaultCharacter / DefaultRandomSeed` 拼 fallback 战斗。
 5. 创建 / 初始化 `UBattleSession`。
 6. 通过 UIManager Push `UBattleHUD` 到 Game 层。
 7. 将 input coordinator 切到 `Battle` profile。
