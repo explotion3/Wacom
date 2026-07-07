@@ -679,13 +679,10 @@ public:
 	 * RunSession 不读取、不接收、不写入敌人定义。调用方（当前为 GameMode / BattleTrigger）
 	 * 负责把 EncounterDefinition 转成 Params.EnemySlots。
 	 *
-	 * @param TriggerPersistentId    触发战斗的 Trigger 的持久化 ID。NAME_None 表示没有持久化进度（如纯测试）
+	 * @param TriggerPersistentId    触发战斗的 Trigger 的持久化 ID。NAME_None 表示没有持久化进度
 	 * @param OutParams              输出参数
 	 */
 	bool BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const;
-
-	/** 兼容老调用点（无 TriggerPersistentId）。等同于 TriggerPersistentId = NAME_None。 */
-	bool BuildInitParamsForBattle(FBattleInitParams& OutParams) const;
 
 	/**
 	 * 一场战斗结束时由 GameMode::ExitBattle 调用。

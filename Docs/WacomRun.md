@@ -353,13 +353,13 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 <a id="wacomrun-battle-settlement"></a>
 ## §10 战斗联动与战后结算
 
-进入战斗前，`URunSession::BuildInitParamsForBattle()` 从 RunState 构造 `FBattleInitParams`。
+进入战斗前，`URunSession::BuildInitParamsForBattle(TriggerPersistentId, OutParams)` 从 RunState 构造 `FBattleInitParams`。
 
 关键输入：
 
 - 角色和战斗随机种子。
 - GameMode 正式进入战斗时必须成功调用 RunSession 构造玩家侧参数；失败时拒绝开战，不再用 GameMode 的 `DefaultCharacter / DefaultRandomSeed` 拼 fallback 战斗。
-- `URunSession::BuildInitParamsForBattle()` 不读取、不接收、不写入敌人定义，也不直接读取 Encounter 资产。敌人规则槽位由 App 层从 `ABattleTriggerActor.EncounterDefinition` 转换为 `FBattleInitParams.EnemySlots`；Battle 初始化以 `EnemySlots` 作为唯一敌人入口。
+- `URunSession::BuildInitParamsForBattle(TriggerPersistentId, OutParams)` 不读取、不接收、不写入敌人定义，也不直接读取 Encounter 资产。敌人规则槽位由 App 层从 `ABattleTriggerActor.EncounterDefinition` 转换为 `FBattleInitParams.EnemySlots`；Battle 初始化以 `EnemySlots` 作为唯一敌人入口。
 - HP 压力阈值 `HighHpThreshold / LowHpThreshold`。
 - `BattleDeck` 中的物理卡。
 - SpecialZone 中勾选入战的卡：只有 B 主卡位于 `BattleDeck`，且主卡有 `CapacityEffect`，其 SpecialZone 内 `bBattleEnabledInSpecialZone == true` 的卡才会入战，并携带主卡容量效果。

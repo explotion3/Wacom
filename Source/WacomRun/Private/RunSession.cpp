@@ -532,11 +532,6 @@ void URunSession::ResetRunState()
 
 // ================ 战斗联动 ================
 
-bool URunSession::BuildInitParamsForBattle(FBattleInitParams& OutParams) const
-{
-	return BuildInitParamsForBattle(NAME_None, OutParams);
-}
-
 bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const
 {
 	if (!RunState.Character)

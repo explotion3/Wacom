@@ -74,7 +74,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | 项 | 临时做法 / 当前决定 | 正式方案 / 处理方向 |
 |---|---|---|
 | `URunSession` 仍承担多个领域流程 | 背包 / 负重 / 永久移除规则、RunEvent 执行、商店事务、战斗回传结算、SaveGame 字段拷贝均已抽到私有 helper；Run UI snapshot revision dirty bitset 已收口为 typed 私有 contract；`RunSession.cpp` 仍保留 public 命令协调、slot IO、时间 / 压力等基础入口 | 暂不继续拆；后续若时间 / 压力或 slot IO 继续膨胀，再按低风险切片拆私有 helper |
-| Run→Battle 入口 legacy fallback | `AWacomGameMode::EnterBattle` 已拒绝缺失 / 无效 RunSession，不再用 `DefaultCharacter / DefaultRandomSeed` 拼脱离 RunState 的 fallback 战斗；`URunSession::BuildInitParamsForBattle(FBattleInitParams&)` 和 `OnBattleFinished(Packet)` no-trigger 兼容入口仍保留给旧测试 / 调试调用点 | 后续清理 no-trigger overload 前先迁移 `BattleResultSpec`、`ExperienceSpec`、`BackpackSpec` 等旧测试到 trigger-aware contract；资产审计后再移除或重命名 GameMode legacy 随机种子字段 |
+| Run→Battle 入口 legacy fallback | `AWacomGameMode::EnterBattle` 已拒绝缺失 / 无效 RunSession，不再用 `DefaultCharacter / DefaultRandomSeed` 拼脱离 RunState 的 fallback 战斗；C++ no-trigger `URunSession::BuildInitParamsForBattle(FBattleInitParams&)` 已移除，Run 侧测试改为显式 trigger-aware contract；BlueprintCallable `OnBattleFinished(Packet)` 包装仍保留给资产 / 调试兼容 | 资产审计后再决定移除或重命名 `OnBattleFinished(Packet)` 包装与 GameMode legacy 随机种子字段；新增 C++ 测试默认调用 `OnBattleFinishedFromTrigger` / `BuildInitParamsForBattle(TriggerId, Params)` |
 
 <a id="techdebt-ui-architecture"></a>
 ## UI 架构债

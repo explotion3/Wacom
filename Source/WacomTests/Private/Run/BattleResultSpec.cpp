@@ -41,6 +41,11 @@ namespace
 		return RunPtr.Get();
 	}
 
+	void FinishBattleForTest(URunSession* Run, const FBattleResultPacket& Packet, const TCHAR* TriggerPersistentId)
+	{
+		Run->OnBattleFinishedFromTrigger(Packet, FName(TriggerPersistentId));
+	}
+
 	int32 CountCardInOwnedZones(const URunSession* Run, const UCardDefinition* Card)
 	{
 		int32 Count = 0;
@@ -85,7 +90,7 @@ bool FWacomRunResultFatigueOnEveryBattleSpec::RunTest(const FString& /*Parameter
 	TestEqual(TEXT("Initial Fatigue=0"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 0);
 
-	Run->OnBattleFinished(Packet);
+	FinishBattleForTest(Run, Packet, TEXT("Run.Result.Fatigue.Victory"));
 
 	TestEqual(TEXT("Fatigue +1 after victory"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 1);
@@ -94,7 +99,7 @@ bool FWacomRunResultFatigueOnEveryBattleSpec::RunTest(const FString& /*Parameter
 	// 失败也加疲劳。
 	FBattleResultPacket DefeatPacket;
 	DefeatPacket.Outcome = EBattleOutcome::Defeat;
-	Run->OnBattleFinished(DefeatPacket);
+	FinishBattleForTest(Run, DefeatPacket, TEXT("Run.Result.Fatigue.Defeat"));
 	TestEqual(TEXT("Fatigue +1 after defeat"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 2);
 	TestFalse(TEXT("bRunActive false after defeat"), Run->IsRunActive());
@@ -117,7 +122,7 @@ bool FWacomRunResultHighHpThresholdAddsWoundSpec::RunTest(const FString& /*Param
 	Packet.Outcome = EBattleOutcome::Victory;
 	Packet.bCrossedHighHpThreshold = true;
 
-	Run->OnBattleFinished(Packet);
+	FinishBattleForTest(Run, Packet, TEXT("Run.Result.HighHpThreshold"));
 	TestEqual(TEXT("Wound +1 from HighHpThreshold"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 1);
 
@@ -139,7 +144,7 @@ bool FWacomRunResultLowHpThresholdAddsWoundSpec::RunTest(const FString& /*Parame
 	Packet.Outcome = EBattleOutcome::Victory;
 	Packet.bCrossedLowHpThreshold = true;
 
-	Run->OnBattleFinished(Packet);
+	FinishBattleForTest(Run, Packet, TEXT("Run.Result.LowHpThreshold"));
 	TestEqual(TEXT("Wound +5 from LowHpThreshold"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 5);
 
@@ -163,7 +168,7 @@ bool FWacomRunResultMutualDestructionAddsWoundSpec::RunTest(const FString& /*Par
 
 	TestTrue(TEXT("bRunActive=true initially"), Run->IsRunActive());
 
-	Run->OnBattleFinished(Packet);
+	FinishBattleForTest(Run, Packet, TEXT("Run.Result.MutualDestruction"));
 
 	TestEqual(TEXT("Wound +10 from MutualDestruction"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 10);
@@ -191,7 +196,7 @@ bool FWacomRunResultAllFlagsAccumulateSpec::RunTest(const FString& /*Parameters*
 	Packet.bCrossedLowHpThreshold = true;
 	Packet.bMutualDestruction = true;
 
-	Run->OnBattleFinished(Packet);
+	FinishBattleForTest(Run, Packet, TEXT("Run.Result.AllFlags"));
 
 	TestEqual(TEXT("Wound +1+5+10=16"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 16);
@@ -218,7 +223,7 @@ bool FWacomRunResultUndeterminedSkipsAccumulationSpec::RunTest(const FString& /*
 	Packet.bCrossedHighHpThreshold = true;
 	Packet.bMutualDestruction = true;
 
-	Run->OnBattleFinished(Packet);
+	FinishBattleForTest(Run, Packet, TEXT("Run.Result.Undetermined"));
 
 	TestEqual(TEXT("Fatigue unchanged on Undetermined"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 0);
@@ -253,7 +258,7 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.GainedCards.Add(GainedCard);
 
 		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
-		Run->OnBattleFinished(Packet);
+		FinishBattleForTest(Run, Packet, TEXT("Run.Result.Reward.Victory"));
 		TestEqual(TEXT("Victory settles gained reward card to Run ownership"),
 			CountCardInOwnedZones(Run, RewardCard),
 			Before + 1);
@@ -274,7 +279,7 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.GainedCards.Add(GainedCard);
 
 		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
-		Run->OnBattleFinished(Packet);
+		FinishBattleForTest(Run, Packet, TEXT("Run.Result.Reward.Withdraw"));
 		TestEqual(TEXT("Withdraw victory still settles already gained reward card"),
 			CountCardInOwnedZones(Run, RewardCard),
 			Before + 1);
@@ -294,7 +299,7 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.GainedCards.Add(GainedCard);
 
 		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
-		Run->OnBattleFinished(Packet);
+		FinishBattleForTest(Run, Packet, TEXT("Run.Result.Reward.Defeat"));
 		TestEqual(TEXT("Defeat does not settle gained reward card"),
 			CountCardInOwnedZones(Run, RewardCard),
 			Before);
