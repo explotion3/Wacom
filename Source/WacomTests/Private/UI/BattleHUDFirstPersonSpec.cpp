@@ -887,6 +887,66 @@ bool FWacomUIBattleHUDCardDetailSideHysteresisSpec::RunTest(const FString& /*Par
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailInvalidDataSpec,
+	"Wacom.UI.Battle.BattleHUD.CardDetail.InvalidDataNoops",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailInvalidDataSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(WacomBattleHUDFirstPersonSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), Harness->HUD()))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UCardDefinition* Card = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称有效详情卡"),
+		1);
+	if (!TestNotNull(TEXT("Card"), Card))
+	{
+		return false;
+	}
+
+	HUD->TakeWidget();
+	FHandCardSnapshot ValidSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(Card, 1, true);
+	FHandCardSnapshot MissingDefinitionSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(nullptr, 1, true);
+	const FBattleSnapshot Snapshot =
+		WacomBattleHUDFirstPersonSpec::MakeSnapshotWithHand({ ValidSnapshot, MissingDefinitionSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	HUD->HandleFirstPersonCardHoveredForTest(
+		ValidSnapshot.InstanceId,
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(ValidSnapshot.InstanceId));
+	HUD->TickCardDetailMotionForTest(0.12f);
+	TestTrue(TEXT("Valid first-person detail is visible before invalid hover"), HUD->IsCardDetailPanelVisible());
+
+	const FGuid MissingSnapshotId = FGuid::NewGuid();
+	HUD->HandleFirstPersonCardHoveredForTest(
+		MissingSnapshotId,
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(MissingSnapshotId));
+	TestFalse(TEXT("Missing snapshot card hides detail"), HUD->IsCardDetailPanelVisible());
+
+	FWacomFirstPersonCardLayerSlotView UnprojectedSlot =
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(ValidSnapshot.InstanceId);
+	UnprojectedSlot.bProjected = false;
+	HUD->HandleFirstPersonCardHoveredForTest(ValidSnapshot.InstanceId, UnprojectedSlot);
+	TestFalse(TEXT("Unprojected first-person slot does not show detail"), HUD->IsCardDetailPanelVisible());
+
+	HUD->HandleFirstPersonCardHoveredForTest(
+		MissingDefinitionSnapshot.InstanceId,
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(MissingDefinitionSnapshot.InstanceId));
+	TestFalse(TEXT("Snapshot card without definition does not show detail"), HUD->IsCardDetailPanelVisible());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailReadabilityMotionSpec,
 	"Wacom.UI.Battle.BattleHUD.CardDetail.FirstPersonReadabilityMotion",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
