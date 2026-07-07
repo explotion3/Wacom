@@ -2,6 +2,7 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Types/WacomEnums.h"
 
@@ -50,5 +51,27 @@ bool FWacomAppGameFlowBattleExitRequestUsesTypedOutcomeSpec::RunTest(const FStri
 		StaticEnum<EBattleOutcome>());
 	TestFalse(TEXT("Outcome is not the legacy raw byte property"),
 		OutcomeProperty->IsA<FByteProperty>());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomAppGameFlowDefaultRandomSeedDeprecatedSpec,
+	"Wacom.App.GameFlow.LegacyDefaults.DefaultRandomSeedDeprecated",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomAppGameFlowDefaultRandomSeedDeprecatedSpec::RunTest(const FString& /*Parameters*/)
+{
+	FProperty* Property = AWacomGameMode::StaticClass()->FindPropertyByName(
+		GET_MEMBER_NAME_CHECKED(AWacomGameMode, DefaultRandomSeed));
+	if (!TestNotNull(TEXT("DefaultRandomSeed property exists for asset compatibility"), Property))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("DefaultRandomSeed is marked deprecated"),
+		Property->HasMetaData(TEXT("DeprecatedProperty")));
+	TestTrue(TEXT("Deprecation message points to RunSession / RunState"),
+		Property->GetMetaData(TEXT("DeprecationMessage")).Contains(TEXT("RunSession")));
+
 	return true;
 }

@@ -66,8 +66,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle")
 	TObjectPtr<UCharacterDefinition> DefaultCharacter;
 
-	/** Legacy prototype field. 正式进入战斗时随机种子来自 RunSession / RunState。 */
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle")
+	/** Deprecated legacy prototype field. 正式进入战斗时随机种子来自 RunSession / RunState。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle",
+		meta = (DeprecatedProperty,
+			DeprecationMessage = "正式进入战斗时随机种子来自 RunSession / RunState。该字段已不参与战斗初始化，请不要在新资产中使用。"))
 	int32 DefaultRandomSeed = 0;
 
 	/**
