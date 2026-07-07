@@ -779,3 +779,183 @@ bool FWacomUIBattlePresentationQueueKnockdownDialogDelayedAndGuardedSpec::RunTes
 
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDPresentationCoordinatorContractSpec,
+	"Wacom.UI.Battle.BattleHUDPresentationCoordinatorPendingBarrierLifecycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDPresentationCoordinatorContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattlePresentationQueueSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->AttachPresentationStack();
+	UWacomBattleCommandBarTestProbe* CommandBar = Harness->AttachCommandBar();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("CommandBar"), CommandBar))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattlePresentationQueueSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	if (!TestTrue(TEXT("Target card exists"), TargetCardId.IsValid())
+		|| !TestTrue(TEXT("Target part exists"), TargetPartId.IsValid()))
+	{
+		return false;
+	}
+
+	FBattleEvent PresentationCueEvent;
+	PresentationCueEvent.Type = EBattleEventType::DamageDealt;
+	PresentationCueEvent.Sequence = 1;
+	PresentationCueEvent.ActorEnemyPartKey = FWacomBattleFixture::FindPartKeyByInstanceId(InitialSnapshot, TargetPartId);
+	PresentationCueEvent.Amount = 1;
+	HUD->EnqueueBattlePresentationEventsForTest({ PresentationCueEvent });
+	if (World)
+	{
+		World->GetTimerManager().Tick(0.01f);
+	}
+	TestTrue(TEXT("Seed cue makes presentation coordinator busy through HUD"), HUD->IsBattlePresentationBusy());
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->OnEnemyPartClickedByUser(
+		WacomBattlePresentationQueueSpec::MakeWorldTargetHandleForPart(Session->BuildSnapshot(), TargetPartId));
+	TestTrue(TEXT("PlayCard creates presentation stack busy state"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("Presentation stack contains played card"), HUD->GetPresentationStackEntryCountForTest(), 1);
+
+	const int32 VersionBeforeWait = Session->BuildSnapshot().Version;
+	HUD->OnWaitRequested();
+	TestTrue(TEXT("Wait is queued through HUD while stack is non-empty"),
+		HUD->HasPendingTurnBoundaryCommandForTest());
+	TestTrue(TEXT("Pending command text remains player readable"),
+		HUD->GetPendingTurnBoundaryCommandText().ToString().Contains(TEXT("等待")));
+	TestFalse(TEXT("Command bar wait is disabled while pending through coordinator"),
+		CommandBar->IsWaitCommandEnabledForTest());
+	TestFalse(TEXT("Command bar end turn is disabled while pending through coordinator"),
+		CommandBar->IsEndTurnCommandEnabledForTest());
+	TestEqual(TEXT("Pending wait does not mutate immediately"),
+		Session->BuildSnapshot().Version,
+		VersionBeforeWait);
+
+	while (HUD->IsBattlePresentationBusy()
+		&& !HUD->GetPresentationStackEntriesForTest().IsEmpty()
+		&& !HUD->GetPresentationStackEntriesForTest()[0].bIsExiting)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+
+	const TArray<FWacomBattlePresentationStackEntryView> EntriesAtBoundary =
+		HUD->GetPresentationStackEntriesForTest();
+	if (!EntriesAtBoundary.IsEmpty())
+	{
+		TestTrue(TEXT("Boundary marks stack entry exiting through HUD"),
+			EntriesAtBoundary[0].bIsExiting);
+		TestTrue(TEXT("Pending command survives stack exit motion"),
+			HUD->HasPendingTurnBoundaryCommandForTest());
+		HUD->FinishPresentationStackEntryExitForTest(EntriesAtBoundary[0].EntryId);
+	}
+	Harness->SettlePresentationQueueAndExitStack();
+	TestFalse(TEXT("Pending command clears after stack drains"),
+		HUD->HasPendingTurnBoundaryCommandForTest());
+	TestEqual(TEXT("Stack drains through HUD"), HUD->GetPresentationStackEntryCountForTest(), 0);
+	TestTrue(TEXT("Pending wait executes after stack drain"),
+		Session->BuildSnapshot().Version > VersionBeforeWait);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDPresentationCoordinatorTeardownSpec,
+	"Wacom.UI.Battle.BattleHUDPresentationCoordinatorTeardownDoesNotTouchDestroyedHUD",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDPresentationCoordinatorTeardownSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattlePresentationQueueSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	Harness->AttachPresentationStack();
+	Harness->AttachCommandBar();
+	Harness->SetSession(Session);
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattlePresentationQueueSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::SingleEnemyPart);
+	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
+	if (!TestTrue(TEXT("Target card exists"), TargetCardId.IsValid())
+		|| !TestTrue(TEXT("Target part exists"), TargetPartId.IsValid()))
+	{
+		return false;
+	}
+
+	FBattleEvent PresentationCueEvent;
+	PresentationCueEvent.Type = EBattleEventType::DamageDealt;
+	PresentationCueEvent.Sequence = 1;
+	PresentationCueEvent.ActorEnemyPartKey = FWacomBattleFixture::FindPartKeyByInstanceId(InitialSnapshot, TargetPartId);
+	PresentationCueEvent.Amount = 1;
+	HUD->EnqueueBattlePresentationEventsForTest({ PresentationCueEvent });
+	TestTrue(TEXT("Presentation queue is busy before teardown"), HUD->IsBattlePresentationBusy());
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	HUD->OnEnemyPartClickedByUser(
+		WacomBattlePresentationQueueSpec::MakeWorldTargetHandleForPart(Session->BuildSnapshot(), TargetPartId));
+	HUD->OnWaitRequested();
+	TestTrue(TEXT("Stack or queue is busy before teardown"), HUD->IsBattlePresentationBusy());
+	TestTrue(TEXT("Pending turn boundary exists before teardown"), HUD->HasPendingTurnBoundaryCommandForTest());
+
+	HUD->NativeDestructForTest();
+
+	TestFalse(TEXT("NativeDestruct clears presentation busy state"), HUD->IsBattlePresentationBusy());
+	TestFalse(TEXT("NativeDestruct clears pending turn boundary"), HUD->HasPendingTurnBoundaryCommandForTest());
+	TestEqual(TEXT("NativeDestruct clears stack entries"), HUD->GetPresentationStackEntryCountForTest(), 0);
+
+	return true;
+}

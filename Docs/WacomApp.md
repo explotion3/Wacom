@@ -94,6 +94,8 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 
 核心蓝图资产归档到 `/Game/Wacom/Core`：GameMode 放 `/Game/Wacom/Core/GameModes`，PlayerCharacter 放 `/Game/Wacom/Core/Player`，PlayerController 放 `/Game/Wacom/Core/Controllers`。Run Tunnel authoring 蓝图放 `/Game/Wacom/Run/Tunnel/Blueprints`。`/Game/Wacom/_GAME` 是历史临时目录，不再作为新增资产入口；具体目录规范见 [Content_Organization.md](./Content_Organization.md)。
 
+`AWacomRunTunnelPaperLayerActor` 是探索纸片层的 C++ 父类：自带一个无碰撞、无阴影的 Plane StaticMeshComponent，蓝图子类可配置材质模板、Texture2D 数组、材质贴图参数名、固定索引或稳定随机种子。该 Actor 只做场景视觉 authoring，默认在 Construction / BeginPlay 创建动态材质实例并把选中的贴图写入材质参数；它不参与 Run Tunnel 移动、节点规则、世界交互或卡牌投放结算。
+
 ---
 
 ## §4 输入协调

@@ -47,6 +47,21 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativePreConstruct() override;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览开关。开启后，单独打开 WBP_BattleStatusIcon 时会显示 PreviewStatusTag / PreviewStackCount，而运行时仍只使用 SetStatusIconView 传入的数据。"))
+	bool bShowDesignTimePreview = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用状态 Tag。为空时默认按 Status.Poison 预览；只影响 UMG 视口预览，不写入 BattleSession。"))
+	FGameplayTag PreviewStatusTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用显示名。为空时按状态 Tag 自动格式化；只影响 UMG 视口预览。"))
+	FText PreviewDisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用层数。显示时最小按 1 处理；只影响 UMG 视口预览。"))
+	int32 PreviewStackCount = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用图标 Brush。为空时优先使用 IconImage 当前在 WBP 中配置的 Brush；仍为空时使用 C++ 默认占位 Brush。"))
+	FSlateBrush PreviewIconBrush;
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> IconImage = nullptr;
 
@@ -60,6 +75,9 @@ private:
 	UPROPERTY(Transient)
 	FWacomBattleStatusIconView CurrentView;
 
+	bool bHasAssignedStatusIconView = false;
+
+	FWacomBattleStatusIconView BuildDesignTimePreviewView() const;
 	void RefreshDisplay();
 };
 
@@ -108,12 +126,23 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (ToolTip = "未知状态或未配置专用 Brush 时使用的 fallback 图标 Brush。"))
 	FSlateBrush FallbackStatusIconBrush;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览开关。开启后，WBP_BattleStatusIconList 会用 PreviewStatuses / PreviewStatusStacks 在 UMG 视口中生成示例状态；运行时仍只消费 Snapshot。"))
+	bool bShowDesignTimePreview = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用状态集合。默认包含 Poison / Slow / Freeze；只影响 UMG 视口预览，不写入 BattleSession。"))
+	FGameplayTagContainer PreviewStatuses;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用状态层数。未配置的状态按 1 显示；只影响 UMG 视口预览。"))
+	TMap<FGameplayTag, int32> PreviewStatusStacks;
+
 private:
 	UPROPERTY(Transient)
 	TArray<FWacomBattleStatusIconView> CurrentViews;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UWacomBattleStatusIconWidget>> IconWidgets;
+
+	bool bHasAssignedStatusIconViews = false;
 
 	TArray<FWacomBattleStatusIconView> BuildStatusIconViews(
 		const FGameplayTagContainer& InStatuses,

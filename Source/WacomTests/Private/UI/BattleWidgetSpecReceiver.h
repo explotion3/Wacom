@@ -178,6 +178,30 @@ public:
 	{
 		return GetCurrentViewData().PendingCommandText;
 	}
+
+	void CreateAuthoredCommandButtonsForTest()
+	{
+		WaitButton = NewObject<UWacomBattleCommandButtonWidget>(this);
+		EndTurnButton = NewObject<UWacomBattleCommandButtonWidget>(this);
+		if (WaitButton)
+		{
+			WaitButton->TakeWidget();
+		}
+		if (EndTurnButton)
+		{
+			EndTurnButton->TakeWidget();
+		}
+	}
+
+	UWacomBattleCommandButtonWidget* GetAuthoredWaitButtonForTest() const
+	{
+		return WaitButton;
+	}
+
+	UWacomBattleCommandButtonWidget* GetAuthoredEndTurnButtonForTest() const
+	{
+		return EndTurnButton;
+	}
 };
 
 UCLASS()

@@ -23,7 +23,9 @@
 #include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartVisualLayerTypes.h"
+#include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
+#include "UI/BattleSceneTargetClickTestAccess.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
@@ -31,6 +33,7 @@
 #include "Engine/EngineTypes.h"
 #include "Engine/World.h"
 #include "Events/BattleEvent.h"
+#include "GameFramework/Actor.h"
 #include "Misc/DataValidation.h"
 #include "Misc/ScopeExit.h"
 #include "PaperFlipbook.h"
@@ -309,6 +312,26 @@ namespace WacomBattleSceneEnemyActorSpec
 			Bridge->GetBoundEnemySlotId(),
 			Bridge->GetBoundPartSlotId());
 	}
+
+	FGuid FindFirstHandCardByTargetMode(const FBattleSnapshot& Snapshot, ECardTargetMode TargetMode)
+	{
+		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+		{
+			if (Card.Definition && Card.Definition->TargetMode == TargetMode)
+			{
+				return Card.InstanceId;
+			}
+		}
+		return FGuid();
+	}
+
+	void SettleBattlePresentationQueue(UWacomBattleHUDDetailTest& HUD, int32 MaxSteps = 32)
+	{
+		for (int32 Iteration = 0; HUD.IsBattlePresentationBusy() && Iteration < MaxSteps; ++Iteration)
+		{
+			HUD.AdvanceBattlePresentationQueueForTest();
+		}
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -511,6 +534,143 @@ bool FWacomUIBattleSceneEnemyPartActorRefreshesFacadeSpec::RunTest(const FString
 		DebugView.StableSceneTargetId);
 	TestTrue(TEXT("Debug summary reports part id"),
 		PartActor->GetBattleSceneEnemyPartDebugSummary().Contains(TEXT("PartId=Test.Part.Head")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartBridgeRuntimeFactsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartBridgeReportsRuntimeInitiativeFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartBridgeRuntimeFactsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(1, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 7, 5, 3);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AActor* Owner = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SpawnParams);
+	if (!TestNotNull(TEXT("Scene owner"), Owner))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Owner))
+		{
+			Owner->Destroy();
+		}
+	};
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		NewObject<UWacomBattleEnemyPartWorldTargetBridgeComponent>(Owner);
+	Owner->AddInstanceComponent(Bridge);
+	Bridge->RegisterComponent();
+	UWacomBattleEnemyPartPresentationComponent* Presentation =
+		NewObject<UWacomBattleEnemyPartPresentationComponent>(Owner);
+	Owner->AddInstanceComponent(Presentation);
+	Presentation->RegisterComponent();
+	Bridge->SetPartId(TEXT("Test.Part.Head"));
+	Bridge->SetBattlePartSlotIdentity(Session->BuildSnapshot().EncounterId, TEXT("Enemy"), TEXT("Test.Part.Head"));
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	FEnemyPartSnapshot MatchedPart;
+	Bridge->SyncFromBattleSnapshot(Snapshot, &MatchedPart);
+	Presentation->CacheRuntimePartFacts(Bridge->PartId, MatchedPart);
+
+	const FWacomBattleEnemyPartWorldTargetDebugView BridgeView = Bridge->GetBattleWorldTargetDebugView();
+	const FWacomBattleEnemyPartPresentationDebugView PresentationView =
+		Presentation->GetBattleEnemyPartPresentationDebugView();
+	TestTrue(TEXT("Bridge binds to runtime snapshot"), BridgeView.bBoundToSnapshot);
+	TestTrue(TEXT("Bridge records runtime part id"), BridgeView.bHasRuntimePartFacts);
+	TestTrue(TEXT("Presentation reports runtime facts"), PresentationView.bHasRuntimePartFacts);
+	TestEqual(TEXT("Presentation reports current initiative"), PresentationView.CurrentInitiative, 7);
+	TestEqual(TEXT("Presentation reports intent id"), PresentationView.CurrentIntentId, FName(TEXT("Test.Part.Head")));
+	TestFalse(TEXT("Presentation reports part not destroyed"), PresentationView.bRuntimePartDestroyed);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartActorWorldTargetHandleSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartActorBuildsWorldTargetHandleForPart",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartActorWorldTargetHandleSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { TargetCard });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid HeadInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+
+	WacomBattleSceneEnemyActorSpec::FSceneEnemyHostActors SceneEnemy =
+		WacomBattleSceneEnemyActorSpec::SpawnSceneEnemyHost(
+			*World,
+			Enemy,
+			{ TEXT("Test.Part.Head") });
+	AWacomBattleEnemyPartActor* PartActor =
+		SceneEnemy.Parts.Num() > 0 ? SceneEnemy.Parts[0] : nullptr;
+	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
+		|| !TestNotNull(TEXT("Part actor"), PartActor))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		WacomBattleSceneEnemyActorSpec::DestroySceneEnemyHost(SceneEnemy);
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	TestTrue(TEXT("Actor bridge binds to snapshot"),
+		PartActor->GetWorldTargetBridgeComponent()->IsBoundToBattlePart());
+	TestEqual(TEXT("Bridge runtime id matches"),
+		PartActor->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
+		HeadInstanceId);
+	TestTrue(TEXT("Bridge reports runtime facts"),
+		PartActor->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bHasRuntimePartFacts);
+	TestEqual(TEXT("Presentation reports runtime initiative"),
+		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView().CurrentInitiative,
+		5);
+	TestEqual(TEXT("Interaction target runtime id"),
+		PartActor->GetInteractionTargetComponent()->GetTargetId(),
+		HeadInstanceId);
+
+	const FWacomInteractionTargetHandle Handle =
+		PartActor->GetInteractionTargetComponent()->BuildWorldTargetHandle();
+	TestEqual(TEXT("Handle world target id"), Handle.WorldTargetId, HeadInstanceId);
+	TestEqual(TEXT("Handle stable id"), Handle.StableTargetId, FName(TEXT("Test.Part.Head")));
+	TestTrue(TEXT("Handle battle enemy tag"),
+		Handle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart));
+	TestTrue(TEXT("Handle source object"),
+		Handle.SourceObject.Get() == PartActor->GetInteractionTargetComponent());
 	return true;
 }
 
@@ -933,6 +1093,241 @@ bool FWacomUIBattleSceneEnemyPartPredictionInvalidTargetSpec::RunTest(const FStr
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartDebugPredictionFactsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartDebugSummaryReportsPredictionReadinessFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartDebugPredictionFactsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyPartActor* PartActor =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	if (!TestNotNull(TEXT("Part actor"), PartActor))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PartActor))
+		{
+			PartActor->Destroy();
+		}
+	};
+
+	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
+		PartActor->GetWorldTargetBridgeComponent();
+	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
+	PredictionInput.bHasSourceCard = true;
+	PredictionInput.SourceCardInstanceId = FGuid::NewGuid();
+	PredictionInput.SourceCardRuntimeCost = 4;
+	PredictionInput.bSourceCardSwift = false;
+	PredictionInput.bPreviewCanSubmit = false;
+	PredictionInput.PreviewRejectReason = TEXT("InvalidWorldTarget");
+	PartActor->GetPresentationComponent()->SetDragTargetPreviewState(
+		EWacomFirstPersonCardDragTargetFeedbackState::Invalid,
+		PredictionInput);
+	const FGuid HoverWorldTargetId = FGuid::NewGuid();
+	PartActor->GetPresentationComponent()->SetHoverProbeState(
+		WacomBattleSceneEnemyActorSpec::MakeBattleEnemyPartHandle(
+			HoverWorldTargetId,
+			Bridge,
+			FVector::ZeroVector,
+			FVector2D(210.0f, 130.0f),
+			WacomTags::Interaction_Target_Battle_EnemyPart,
+			TEXT("Test.Part.Head")),
+		TEXT("Hovered"));
+
+	const FString Summary = PartActor->GetBattleSceneEnemyPartDebugSummary();
+	TestTrue(TEXT("Part summary reports drag cost"), Summary.Contains(TEXT("DragCost=4")));
+	TestTrue(TEXT("Part summary reports swift flag"), Summary.Contains(TEXT("DragSwift=false")));
+	TestTrue(TEXT("Part summary reports submit flag"), Summary.Contains(TEXT("DragCanSubmit=false")));
+	TestTrue(TEXT("Part summary reports reject reason"), Summary.Contains(TEXT("DragReject=InvalidWorldTarget")));
+	TestTrue(TEXT("Part summary reports hover active"), Summary.Contains(TEXT("HoverActive=true")));
+	TestTrue(TEXT("Part summary reports hover stable id"), Summary.Contains(TEXT("HoverStableId=Test.Part.Head")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartPredictionBadgeOffsetSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartPredictionBadgeAppliesConfiguredOffset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartPredictionBadgeOffsetSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(1, 1) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 7, 5, 3);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+
+	WacomBattleSceneEnemyActorSpec::FSceneEnemyHostActors SceneEnemy =
+		WacomBattleSceneEnemyActorSpec::SpawnSceneEnemyHost(*World, Enemy, { TEXT("Test.Part.Head") });
+	AWacomBattleEnemyPartActor* PartActor = SceneEnemy.Parts.Num() > 0 ? SceneEnemy.Parts[0] : nullptr;
+	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
+		|| !TestNotNull(TEXT("Part actor"), PartActor))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		WacomBattleSceneEnemyActorSpec::DestroySceneEnemyHost(SceneEnemy);
+	};
+
+	PartActor->PredictionRelativeLocation = FVector(0.0f, 0.0f, 80.0f);
+	PartActor->PredictionBadgeZOffsetWhenVisible = 36.0f;
+	PartActor->RefreshAuthoringState();
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	const FVector PredictionBaseLocation = PartActor->GetPredictionWidgetComponent()->GetRelativeLocation();
+	PartActor->GetPresentationComponent()->SetHoverProbeState(
+		WacomBattleSceneEnemyActorSpec::MakeBattleEnemyPartHandle(
+			PartActor->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
+			PartActor->GetInteractionTargetComponent(),
+			FVector::ZeroVector,
+			FVector2D(220.0f, 120.0f),
+			WacomTags::Interaction_Target_Battle_EnemyPart,
+			TEXT("Test.Part.Head")),
+		TEXT("Hovered"));
+
+	const FWacomBattleEnemyPartPresentationDebugView DebugView =
+		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
+	TestFalse(TEXT("Hover prediction is handled by enemy panel"), DebugView.PredictionView.bVisible);
+	TestFalse(TEXT("Prediction offset stays inactive for hover"), DebugView.bPredictionBadgeOffsetActive);
+	TestEqual(TEXT("Prediction offset is not applied for hover"),
+		PartActor->GetPredictionWidgetComponent()->GetRelativeLocation().Z,
+		PredictionBaseLocation.Z);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostBadgeStaggerSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostAppliesStableBadgeStaggerToChildPartActors",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostBadgeStaggerSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	WacomBattleSceneEnemyActorSpec::FSceneEnemyHostActors SceneEnemy =
+		WacomBattleSceneEnemyActorSpec::SpawnSceneEnemyHost(
+			*World,
+			Enemy,
+			{ TEXT("Test.Part.Head"), TEXT("Test.Part.Body"), TEXT("Test.Part.Tail") });
+	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
+		|| !TestEqual(TEXT("Three parts spawned"), SceneEnemy.Parts.Num(), 3))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		WacomBattleSceneEnemyActorSpec::DestroySceneEnemyHost(SceneEnemy);
+	};
+
+	SceneEnemy.Host->BadgeStaggerHorizontalStep = 18.0f;
+	SceneEnemy.Host->BadgeStaggerVerticalStep = 12.0f;
+	SceneEnemy.Host->RefreshAttachedPartBadgeLayout();
+
+	TestEqual(TEXT("First stagger index"), SceneEnemy.Parts[0]->GetBadgeLayoutStaggerIndex(), 0);
+	TestEqual(TEXT("Middle stagger index"), SceneEnemy.Parts[1]->GetBadgeLayoutStaggerIndex(), 1);
+	TestEqual(TEXT("Last stagger index"), SceneEnemy.Parts[2]->GetBadgeLayoutStaggerIndex(), 2);
+	TestEqual(TEXT("First stagger offset"),
+		SceneEnemy.Parts[0]->GetBadgeLayoutStaggerOffset(),
+		FVector(0.0f, -18.0f, 12.0f));
+	TestEqual(TEXT("Middle stagger offset"),
+		SceneEnemy.Parts[1]->GetBadgeLayoutStaggerOffset(),
+		FVector::ZeroVector);
+	TestEqual(TEXT("Last stagger offset"),
+		SceneEnemy.Parts[2]->GetBadgeLayoutStaggerOffset(),
+		FVector(0.0f, 18.0f, 12.0f));
+	TestTrue(TEXT("Host debug reports staggered parts"),
+		SceneEnemy.Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("BadgeLayoutAppliedParts=3")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartBadgeLayoutDebugSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartBadgeLayoutDebugReportsReadableFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartBadgeLayoutDebugSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyPartActor* PartActor =
+		World->SpawnActor<AWacomBattleEnemyPartActor>(
+			AWacomBattleEnemyPartActor::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	if (!TestNotNull(TEXT("Part actor"), PartActor))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(PartActor))
+		{
+			PartActor->Destroy();
+		}
+	};
+
+	PartActor->SetBadgeLayoutStagger(2, FVector(0.0f, 20.0f, 10.0f));
+	PartActor->PredictionBadgeScale = 0.77f;
+	PartActor->PredictionBadgeZOffsetWhenVisible = 33.0f;
+	PartActor->RefreshAuthoringState();
+
+	const FWacomBattleSceneEnemyPartDebugView View =
+		PartActor->GetBattleSceneEnemyPartDebugView();
+	TestEqual(TEXT("Debug view reports stagger index"), View.BadgeLayoutStaggerIndex, 2);
+	TestEqual(TEXT("Debug view reports stagger offset"),
+		View.BadgeLayoutStaggerOffset,
+		FVector(0.0f, 20.0f, 10.0f));
+	TestEqual(TEXT("Debug view reports prediction scale"), View.PredictionBadgeScale, 0.77f);
+	const FString Summary = PartActor->GetBattleSceneEnemyPartDebugSummary();
+	TestTrue(TEXT("Summary reports prediction draw size"),
+		Summary.Contains(TEXT("PredictionBadgeDrawSize=")));
+	TestTrue(TEXT("Summary reports stagger index"),
+		Summary.Contains(TEXT("BadgeStaggerIndex=2")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleSceneEnemyHostVisualMakesChildPartsHitOnlySpec,
 	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostVisualMakesChildPartActorsHitOnly",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1008,6 +1403,95 @@ bool FWacomUIBattleSceneEnemyHostVisualMakesChildPartsHitOnlySpec::RunTest(const
 			PartActor->GetPresentationComponent()->FeedbackTargetComponent == PartActor->GetVisualLayersRoot());
 	}
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostVisualDoesNotCreateTargetProviderSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostVisualDoesNotAlterHitBoundsTargetRouting",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostVisualDoesNotCreateTargetProviderSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
+	UCharacterDefinition* Character = Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { TargetCard });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 5, 5, 5);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid TargetCardId = WacomBattleSceneEnemyActorSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::SingleEnemyPart);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity,
+			SpawnParams);
+	WacomBattleSceneEnemyActorSpec::FSceneEnemyHostActors SceneEnemy =
+		WacomBattleSceneEnemyActorSpec::SpawnSceneEnemyHost(
+			*World,
+			Enemy,
+			{ TEXT("Test.Part.Head") });
+	AWacomBattleEnemyPartActor* PartActor =
+		SceneEnemy.Parts.Num() > 0 ? SceneEnemy.Parts[0] : nullptr;
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
+		|| !TestNotNull(TEXT("Part actor"), PartActor)
+		|| !TestTrue(TEXT("Target card exists"), TargetCardId.IsValid()))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		WacomBattleSceneEnemyActorSpec::DestroySceneEnemyHost(SceneEnemy);
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	SceneEnemy.Host->HostSprite = NewObject<UPaperSprite>(SceneEnemy.Host);
+	SceneEnemy.Host->RefreshBattleEnemyPartAuthoringState();
+	UPaperSpriteComponent* HostVisual = SceneEnemy.Host->GetGeneratedHostSpriteVisualComponent();
+	if (!TestNotNull(TEXT("Host visual component"), HostVisual))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	WacomBattleSceneEnemyActorSpec::SettleBattlePresentationQueue(*HUD);
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
+
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, SceneEnemy.Host, HostVisual);
+	FWacomInteractionTargetHandle HostVisualHandle;
+	TestFalse(TEXT("Host visual component is not a battle target provider"),
+		FWacomBattleSceneTargetClickTestAccess::ProbeTarget(PC, HostVisualHandle));
+	TestFalse(TEXT("Host visual probe does not synthesize a target"), HostVisualHandle.IsValid());
+
+	HUD->OnCardClickedByUser(TargetCardId);
+	TestEqual(TEXT("HUD enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, PartActor, PartActor->GetHitBounds());
+	TestTrue(TEXT("Part hit bounds still routes with host visual present"),
+		FWacomBattleSceneTargetClickTestAccess::RouteClick(PC));
+	WacomBattleSceneEnemyActorSpec::SettleBattlePresentationQueue(*HUD);
+	TestEqual(TEXT("HUD returns idle after part target"), HUD->GetUIState(), EBattleUIState::Idle);
+	TestGreaterThan(TEXT("Target card submission advances snapshot"),
+		Session->BuildSnapshot().Version,
+		Snapshot.Version);
 	return true;
 }
 

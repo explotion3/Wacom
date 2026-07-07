@@ -7,6 +7,7 @@
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 
 #include "Components/TextBlock.h"
+#include "Components/Widget.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/SizeBox.h"
@@ -72,11 +73,54 @@ void UPlayerStatusBar::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		}
 	}
 
-	if (StatusList)
+	if (UWacomBattleStatusIconListWidget* ResolvedStatusList = ResolveStatusListWidget())
 	{
-		StatusList->SetStatuses(Snap.Player.Statuses, Snap.Player.StatusStacks);
+		ResolvedStatusList->SetStatuses(Snap.Player.Statuses, Snap.Player.StatusStacks);
 	}
 }
 
-#undef LOCTEXT_NAMESPACE
+UWacomBattleStatusIconListWidget* UPlayerStatusBar::ResolveStatusListWidget()
+{
+	if (StatusList)
+	{
+		return StatusList;
+	}
 
+	if (!WidgetTree)
+	{
+		return nullptr;
+	}
+
+	StatusList = Cast<UWacomBattleStatusIconListWidget>(WidgetTree->FindWidget(TEXT("StatusList")));
+	if (StatusList)
+	{
+		return StatusList;
+	}
+
+	UWacomBattleStatusIconListWidget* UniqueStatusList = nullptr;
+	bool bFoundMultipleStatusLists = false;
+	WidgetTree->ForEachWidget([&UniqueStatusList, &bFoundMultipleStatusLists](UWidget* Widget)
+	{
+		UWacomBattleStatusIconListWidget* Candidate = Cast<UWacomBattleStatusIconListWidget>(Widget);
+		if (!Candidate)
+		{
+			return;
+		}
+
+		if (!UniqueStatusList)
+		{
+			UniqueStatusList = Candidate;
+			return;
+		}
+
+		bFoundMultipleStatusLists = true;
+	});
+
+	if (!bFoundMultipleStatusLists)
+	{
+		StatusList = UniqueStatusList;
+	}
+	return StatusList;
+}
+
+#undef LOCTEXT_NAMESPACE

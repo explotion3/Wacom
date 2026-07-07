@@ -30,4 +30,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Player Status|Authoring", meta = (ToolTip = "护盾为 0 时是否隐藏 ShieldText。只影响玩家状态条显示，不改变 BattleSession 中的护盾数值。"))
 	bool bHideShieldWhenZero = true;
+
+private:
+	UWacomBattleStatusIconListWidget* ResolveStatusListWidget();
 };

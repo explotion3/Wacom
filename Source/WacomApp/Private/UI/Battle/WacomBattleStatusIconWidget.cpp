@@ -36,6 +36,20 @@ namespace
 		return Brush.GetResourceObject() != nullptr || Brush.GetDrawType() != ESlateBrushDrawType::NoDrawType;
 	}
 
+	bool HasUsableBrushSize(const FSlateBrush& Brush)
+	{
+		const FVector2f ImageSize = Brush.GetImageSize();
+		return ImageSize.X > KINDA_SMALL_NUMBER && ImageSize.Y > KINDA_SMALL_NUMBER;
+	}
+
+	void EnsureUsableBrushSize(FSlateBrush& Brush)
+	{
+		if (!HasUsableBrushSize(Brush))
+		{
+			Brush.SetImageSize(FVector2f(DefaultIconSize, DefaultIconSize));
+		}
+	}
+
 	int32 GetStatusSortOrder(const FGameplayTag& Tag)
 	{
 		if (Tag == WacomTags::Status_Poison) { return 0; }
@@ -76,6 +90,7 @@ namespace
 void UWacomBattleStatusIconWidget::SetStatusIconView(const FWacomBattleStatusIconView& InView)
 {
 	CurrentView = InView;
+	bHasAssignedStatusIconView = true;
 	RefreshDisplay();
 }
 
@@ -130,7 +145,35 @@ TSharedRef<SWidget> UWacomBattleStatusIconWidget::RebuildWidget()
 void UWacomBattleStatusIconWidget::NativePreConstruct()
 {
 	Super::NativePreConstruct();
+	if (IsDesignTime() && bShowDesignTimePreview && !bHasAssignedStatusIconView)
+	{
+		CurrentView = BuildDesignTimePreviewView();
+	}
 	RefreshDisplay();
+}
+
+FWacomBattleStatusIconView UWacomBattleStatusIconWidget::BuildDesignTimePreviewView() const
+{
+	FWacomBattleStatusIconView View;
+	View.StatusTag = PreviewStatusTag.IsValid()
+		? PreviewStatusTag
+		: WacomTags::Status_Poison;
+	View.DisplayName = PreviewDisplayName.IsEmpty()
+		? FText::FromString(UWacomBattleEventPresentationBuilder::FormatStatusName(View.StatusTag))
+		: PreviewDisplayName;
+	View.StackCount = FMath::Max(1, PreviewStackCount);
+	View.IconBrush = PreviewIconBrush;
+
+	if (!IsBrushConfigured(View.IconBrush) && IconImage)
+	{
+		View.IconBrush = IconImage->GetBrush();
+	}
+	if (!IsBrushConfigured(View.IconBrush))
+	{
+		ConfigureDefaultBrush(View.IconBrush, FLinearColor(0.70f, 0.72f, 0.76f, 1.0f));
+	}
+	EnsureUsableBrushSize(View.IconBrush);
+	return View;
 }
 
 void UWacomBattleStatusIconWidget::RefreshDisplay()
@@ -141,6 +184,7 @@ void UWacomBattleStatusIconWidget::RefreshDisplay()
 
 	if (IconImage)
 	{
+		EnsureUsableBrushSize(CurrentView.IconBrush);
 		IconImage->SetBrush(CurrentView.IconBrush);
 		IconImage->SetVisibility(bHasStatus ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
@@ -168,6 +212,13 @@ UWacomBattleStatusIconListWidget::UWacomBattleStatusIconListWidget(const FObject
 	ConfigureDefaultBrush(TwilightIconBrush, FLinearColor(0.58f, 0.36f, 0.86f, 1.0f));
 	ConfigureDefaultBrush(StunnedIconBrush, FLinearColor(1.0f, 0.72f, 0.22f, 1.0f));
 	ConfigureDefaultBrush(FallbackStatusIconBrush, FLinearColor(0.70f, 0.72f, 0.76f, 1.0f));
+
+	PreviewStatuses.AddTag(WacomTags::Status_Poison);
+	PreviewStatuses.AddTag(WacomTags::Status_Slow);
+	PreviewStatuses.AddTag(WacomTags::Status_Freeze);
+	PreviewStatusStacks.Add(WacomTags::Status_Poison, 4);
+	PreviewStatusStacks.Add(WacomTags::Status_Slow, 1);
+	PreviewStatusStacks.Add(WacomTags::Status_Freeze, 2);
 }
 
 void UWacomBattleStatusIconListWidget::SetStatuses(
@@ -175,12 +226,18 @@ void UWacomBattleStatusIconListWidget::SetStatuses(
 	const TMap<FGameplayTag, int32>& InStatusStacks)
 {
 	CurrentViews = BuildStatusIconViews(InStatuses, InStatusStacks);
+	bHasAssignedStatusIconViews = true;
 	RefreshDisplay();
 }
 
 void UWacomBattleStatusIconListWidget::SetStatusIconViews(const TArray<FWacomBattleStatusIconView>& InViews)
 {
 	CurrentViews = InViews;
+	for (FWacomBattleStatusIconView& View : CurrentViews)
+	{
+		EnsureUsableBrushSize(View.IconBrush);
+	}
+	bHasAssignedStatusIconViews = true;
 	RefreshDisplay();
 }
 
@@ -203,6 +260,10 @@ TSharedRef<SWidget> UWacomBattleStatusIconListWidget::RebuildWidget()
 void UWacomBattleStatusIconListWidget::NativePreConstruct()
 {
 	Super::NativePreConstruct();
+	if (IsDesignTime() && bShowDesignTimePreview && !bHasAssignedStatusIconViews)
+	{
+		CurrentViews = BuildStatusIconViews(PreviewStatuses, PreviewStatusStacks);
+	}
 	RefreshDisplay();
 }
 
@@ -238,6 +299,7 @@ TArray<FWacomBattleStatusIconView> UWacomBattleStatusIconListWidget::BuildStatus
 		View.DisplayName = FText::FromString(UWacomBattleEventPresentationBuilder::FormatStatusName(Tag));
 		View.StackCount = FMath::Max(1, Stack ? *Stack : 1);
 		View.IconBrush = ResolveIconBrush(Tag);
+		EnsureUsableBrushSize(View.IconBrush);
 		Views.Add(View);
 	}
 

@@ -57,6 +57,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Command Bar|Authoring", meta = (ToolTip = "CommandBar 生成命令按钮时使用的 Widget 类。应继承 UWacomBattleCommandButtonWidget；为空时回退到 C++ 默认按钮。"))
 	TSubclassOf<UWacomBattleCommandButtonWidget> CommandButtonWidgetClass;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Command Bar|Authoring", meta = (ToolTip = "等待按钮的图标 Brush。配置后会写入 WaitButton 的 IconImage；留空时隐藏图标。"))
+	FSlateBrush WaitIconBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Command Bar|Authoring", meta = (ToolTip = "结束回合按钮的图标 Brush。配置后会写入 EndTurnButton 的 IconImage；留空时隐藏图标。"))
+	FSlateBrush EndTurnIconBrush;
+
 	UPROPERTY(BlueprintAssignable, Category = "Wacom|Battle|Command Bar")
 	FWacomBattleCommandRequestedSignature OnBattleCommandRequested;
 
@@ -80,6 +86,9 @@ public:
 		return CommandButtons;
 	}
 
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Command Bar", meta = (ToolTip = "当前 CommandBar 是否使用 WBP 里直接绑定的 WaitButton / EndTurnButton。为 true 时不会从 CommandButtonContainer 动态生成按钮。"))
+	bool UsesAuthoredCommandButtons() const;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
@@ -87,6 +96,12 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> CommandButtonContainer;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWacomBattleCommandButtonWidget> WaitButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWacomBattleCommandButtonWidget> EndTurnButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> WaitValueText;
@@ -104,6 +119,10 @@ private:
 	UFUNCTION()
 	void HandleCommandButtonClicked(EWacomBattleCommandId CommandId);
 
+	void ApplyAuthoringIconBrushes(FWacomBattleCommandBarViewData& ViewData) const;
+	void BindCommandButton(UWacomBattleCommandButtonWidget* Button);
+	void ClearGeneratedCommandButtons();
+	void ApplyAuthoredCommandButtons();
 	void RebuildCommandButtons();
 	UWacomBattleCommandButtonWidget* CreateCommandButtonWidget();
 };

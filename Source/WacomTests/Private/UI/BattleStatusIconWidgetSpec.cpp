@@ -4,6 +4,7 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/PanelWidget.h"
+#include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "GameplayTagContainer.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -94,6 +95,38 @@ bool FWacomUIBattleStatusIconListBuildsSortedViewsSpec::RunTest(const FString& /
 	Widget->SetStatuses(FGameplayTagContainer(), TMap<FGameplayTag, int32>());
 	TestEqual(TEXT("Empty status list collapses"), Widget->GetVisibility(), ESlateVisibility::Collapsed);
 	TestEqual(TEXT("Empty status list removes children"), Container->GetChildrenCount(), 0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleStatusIconNormalizesBrushSizeSpec,
+	"Wacom.UI.Battle.StatusIcons.IconNormalizesBrushSize",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleStatusIconNormalizesBrushSizeSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleStatusIconWidget> Widget(NewObject<UWacomBattleStatusIconWidget>());
+	Widget->TakeWidget();
+
+	FWacomBattleStatusIconView View;
+	View.StatusTag = WacomTags::Status_Poison;
+	View.DisplayName = FText::FromString(TEXT("中毒"));
+	View.StackCount = 2;
+	View.IconBrush.DrawAs = ESlateBrushDrawType::Image;
+	View.IconBrush.SetImageSize(FVector2f::ZeroVector);
+	Widget->SetStatusIconView(View);
+
+	UImage* IconImage = Widget->WidgetTree
+		? Cast<UImage>(Widget->WidgetTree->FindWidget(TEXT("IconImage")))
+		: nullptr;
+	if (!TestNotNull(TEXT("IconImage"), IconImage))
+	{
+		return false;
+	}
+
+	const FVector2f ImageSize = IconImage->GetBrush().GetImageSize();
+	TestTrue(TEXT("Icon brush has usable image size"), ImageSize.X > 0.0f && ImageSize.Y > 0.0f);
 
 	return true;
 }

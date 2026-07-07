@@ -22,6 +22,12 @@ namespace
 	{
 		return Text.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible;
 	}
+
+	bool IsCommandIconBrushConfigured(const FSlateBrush& Brush)
+	{
+		return Brush.GetResourceObject() != nullptr
+			|| !Brush.GetResourceName().IsNone();
+	}
 }
 
 TSharedRef<SWidget> UWacomBattleCommandButtonWidget::RebuildWidget()
@@ -178,14 +184,15 @@ void UBattleCommandBarWidget::NativeConstruct()
 
 void UBattleCommandBarWidget::NativeDestruct()
 {
-	for (TObjectPtr<UWacomBattleCommandButtonWidget>& Button : CommandButtons)
+	if (WaitButton)
 	{
-		if (Button)
-		{
-			Button->OnCommandButtonClicked.RemoveAll(this);
-		}
+		WaitButton->OnCommandButtonClicked.RemoveAll(this);
 	}
-	CommandButtons.Reset();
+	if (EndTurnButton)
+	{
+		EndTurnButton->OnCommandButtonClicked.RemoveAll(this);
+	}
+	ClearGeneratedCommandButtons();
 	Super::NativeDestruct();
 }
 
@@ -193,6 +200,7 @@ void UBattleCommandBarWidget::SetCommandBarViewData(
 	const FWacomBattleCommandBarViewData& InViewData)
 {
 	CurrentViewData = InViewData;
+	ApplyAuthoringIconBrushes(CurrentViewData);
 
 	if (WaitValueText)
 	{
@@ -256,22 +264,116 @@ void UBattleCommandBarWidget::HandleCommandButtonClicked(
 	RequestCommand(CommandId);
 }
 
-void UBattleCommandBarWidget::RebuildCommandButtons()
+bool UBattleCommandBarWidget::UsesAuthoredCommandButtons() const
 {
-	if (!CommandButtonContainer)
+	return WaitButton || EndTurnButton;
+}
+
+void UBattleCommandBarWidget::ApplyAuthoringIconBrushes(
+	FWacomBattleCommandBarViewData& ViewData) const
+{
+	for (FWacomBattleCommandButtonView& CommandView : ViewData.Commands)
+	{
+		const FSlateBrush* IconBrush = nullptr;
+		switch (CommandView.CommandId)
+		{
+		case EWacomBattleCommandId::Wait:
+			IconBrush = &WaitIconBrush;
+			break;
+		case EWacomBattleCommandId::EndTurn:
+			IconBrush = &EndTurnIconBrush;
+			break;
+		default:
+			break;
+		}
+
+		if (IconBrush && IsCommandIconBrushConfigured(*IconBrush))
+		{
+			CommandView.IconBrush = *IconBrush;
+			CommandView.bHasIconBrush = true;
+		}
+	}
+}
+
+void UBattleCommandBarWidget::BindCommandButton(UWacomBattleCommandButtonWidget* Button)
+{
+	if (!Button)
 	{
 		return;
 	}
 
+	Button->OnCommandButtonClicked.RemoveAll(this);
+	Button->OnCommandButtonClicked.AddDynamic(this, &UBattleCommandBarWidget::HandleCommandButtonClicked);
+}
+
+void UBattleCommandBarWidget::ClearGeneratedCommandButtons()
+{
 	for (TObjectPtr<UWacomBattleCommandButtonWidget>& Button : CommandButtons)
 	{
 		if (Button)
 		{
 			Button->OnCommandButtonClicked.RemoveAll(this);
+			Button->RemoveFromParent();
 		}
 	}
-	CommandButtonContainer->ClearChildren();
 	CommandButtons.Reset();
+}
+
+void UBattleCommandBarWidget::ApplyAuthoredCommandButtons()
+{
+	ClearGeneratedCommandButtons();
+
+	int32 VisibleButtonCount = 0;
+	auto ApplyCommandToButton =
+		[this, &VisibleButtonCount](
+			UWacomBattleCommandButtonWidget* Button,
+			EWacomBattleCommandId CommandId)
+		{
+			if (!Button)
+			{
+				return;
+			}
+
+			FWacomBattleCommandButtonView CommandView;
+			if (!FindCommandButtonView(CommandId, CommandView))
+			{
+				CommandView.CommandId = CommandId;
+				CommandView.bVisible = false;
+				CommandView.bEnabled = false;
+			}
+
+			Button->SetCommandView(CommandView);
+			BindCommandButton(Button);
+			if (CommandView.bVisible)
+			{
+				++VisibleButtonCount;
+			}
+		};
+
+	ApplyCommandToButton(WaitButton, EWacomBattleCommandId::Wait);
+	ApplyCommandToButton(EndTurnButton, EWacomBattleCommandId::EndTurn);
+
+	SetVisibility(VisibleButtonCount > 0
+		? ESlateVisibility::Visible
+		: ESlateVisibility::Collapsed);
+}
+
+void UBattleCommandBarWidget::RebuildCommandButtons()
+{
+	if (UsesAuthoredCommandButtons())
+	{
+		ApplyAuthoredCommandButtons();
+		return;
+	}
+
+	if (!CommandButtonContainer)
+	{
+		SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	ClearGeneratedCommandButtons();
+	CommandButtonContainer->ClearChildren();
 
 	TArray<FWacomBattleCommandButtonView> SortedCommands = CurrentViewData.Commands;
 	SortedCommands.StableSort(
@@ -298,7 +400,7 @@ void UBattleCommandBarWidget::RebuildCommandButtons()
 		}
 
 		Button->SetCommandView(CommandView);
-		Button->OnCommandButtonClicked.AddDynamic(this, &UBattleCommandBarWidget::HandleCommandButtonClicked);
+		BindCommandButton(Button);
 		CommandButtons.Add(Button);
 
 		UPanelSlot* PanelSlot = CommandButtonContainer->AddChild(Button);

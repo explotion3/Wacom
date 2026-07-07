@@ -223,6 +223,11 @@ WBP 不应做：
 | `ShieldText` | `TextBlock` | Optional | 护盾文本，0 时可隐藏 |
 | `StatusList` | `UWacomBattleStatusIconListWidget` | Optional | 玩家 runtime 状态图标行；为空状态时自动隐藏 |
 
+制作提示：
+
+- 推荐把状态列表实例直接命名为 `StatusList`。C++ 会在 `StatusList` 未绑定时回退查找唯一一个 `UWacomBattleStatusIconListWidget` 子控件，但存在多个状态列表时不会猜测。
+- `StatusList` 只在 Snapshot 里有非 `Status.Shield` 状态时显示；单纯配置图标 Brush 不会让 PIE 自动出现状态。
+
 WBP 不应做：不提交玩家命令，不修改 BattleSession。
 
 ### WBP_BattleStatusIconList
@@ -244,12 +249,15 @@ WBP 不应做：不提交玩家命令，不修改 BattleSession。
 | `StatusIconWidgetClass` | 每个状态图标使用的 Widget 类，推荐 `WBP_BattleStatusIcon` |
 | `PoisonIconBrush / SlowIconBrush / FreezeIconBrush / TwilightIconBrush / StunnedIconBrush` | 各正式状态的图标 Brush |
 | `FallbackStatusIconBrush` | 未知状态或未配置专用 Brush 时的图标 |
+| `bShowDesignTimePreview` | 设计器预览开关，默认开启；只影响 UMG 视口 |
+| `PreviewStatuses / PreviewStatusStacks` | 设计器预览用状态和层数，默认示例为 Poison / Slow / Freeze |
 
 刷新语义：
 
 - 固定顺序为 Poison、Slow、Freeze、Twilight、Stunned；未知状态按 tag 名排序。
 - `Status.Shield` 不显示在状态列表里，护盾仍由 HP / Shield UI 单独显示。
 - 空状态时列表整体折叠。
+- 运行时 Brush 会自动补一个默认图标尺寸，避免 Texture 已配置但 `ImageSize` 为空时在列表里按 0 尺寸排布。
 
 ### WBP_BattleStatusIcon
 
@@ -263,6 +271,14 @@ WBP 不应做：不提交玩家命令，不修改 BattleSession。
 | `StackText` | `TextBlock` | Optional | 角落层数数字；层数最小显示为 1 |
 | `StackBadge` | `Widget` | Optional | 角落层数底板；跟随状态显示/隐藏 |
 
+推荐 WBP 变量：
+
+| 属性 | 用途 |
+|---|---|
+| `bShowDesignTimePreview` | 单独打开 Icon WBP 时显示预览内容，默认开启 |
+| `PreviewStatusTag / PreviewDisplayName / PreviewStackCount` | 单个 Icon 的设计器预览状态、名称和层数 |
+| `PreviewIconBrush` | 单个 Icon 的设计器预览图标；为空时优先使用 `IconImage` 在 WBP 中配置的 Brush |
+
 WBP 不应做：不从规则层查询状态，不自行改状态层数，不把 `Status.Shield` 混入状态图标。
 
 ### WBP_BattleCommandBar
@@ -273,7 +289,9 @@ WBP 不应做：不从规则层查询状态，不自行改状态层数，不把 
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `CommandButtonContainer` | `PanelWidget` | Required | 承载 runtime 生成的命令按钮 |
+| `WaitButton` | `UWacomBattleCommandButtonWidget` | Optional | 直接放在 CommandBar 中的等待按钮；绑定后由 WBP 控制位置 |
+| `EndTurnButton` | `UWacomBattleCommandButtonWidget` | Optional | 直接放在 CommandBar 中的结束回合按钮；绑定后由 WBP 控制位置 |
+| `CommandButtonContainer` | `PanelWidget` | Optional fallback | 未绑定 `WaitButton / EndTurnButton` 时，承载 runtime 动态生成的命令按钮 |
 | `WaitValueText` | `TextBlock` | Optional | 当前等待值，例如 `Wait Value: 2` |
 | `PendingText` | `TextBlock` | Optional | pending turn-boundary 文案，例如“等待排队中” |
 
@@ -281,9 +299,13 @@ WBP 不应做：不从规则层查询状态，不自行改状态层数，不把 
 
 | 变量 | 类型 | 用途 |
 |---|---|---|
-| `CommandButtonWidgetClass` | `TSubclassOf<UWacomBattleCommandButtonWidget>` | 生成 Wait / EndTurn 按钮使用的 WBP 类 |
+| `CommandButtonWidgetClass` | `TSubclassOf<UWacomBattleCommandButtonWidget>` | fallback 动态生成 Wait / EndTurn 按钮使用的 WBP 类；直接绑定按钮时可不配置 |
+| `WaitIconBrush` | `FSlateBrush` | 等待按钮图标；配置后写入 `WaitButton.IconImage` |
+| `EndTurnIconBrush` | `FSlateBrush` | 结束回合按钮图标；配置后写入 `EndTurnButton.IconImage` |
 
-WBP 不应做：不直接提交 `FBattleCommand`，不自行判断按钮可用性，不把 pending 文案混入 `WaitValueText`。按钮列表由 BattleHUD runtime presenter 推送的 `FWacomBattleCommandBarViewData` 决定；本轮正式可见命令只有 Wait / EndTurn。
+当前推荐做法：在 `WBP_BattleCommandBar` 里直接放两个 `WBP_BattleCommandButton` 实例，分别命名为 `WaitButton` 和 `EndTurnButton`，位置、间距、锚点完全由 CommandBar 资产控制。C++ 会把 Wait / EndTurn 的 view data 写入这两个按钮，并接收它们的点击事件；此模式下不会从 `CommandButtonContainer` 动态生成按钮。按钮图标也在 `WBP_BattleCommandBar` 上配置：设置 `WaitIconBrush / EndTurnIconBrush` 后，子按钮里的 `IconImage` 会随 view data 显示；Brush 留空时图标自动隐藏。
+
+WBP 不应做：不直接提交 `FBattleCommand`，不自行判断按钮可用性，不把 pending 文案混入 `WaitValueText`。按钮可见性、可用性和 pending 状态由 BattleHUD runtime presenter 推送的 `FWacomBattleCommandBarViewData` 决定；本轮正式可见命令只有 Wait / EndTurn。
 
 CommandBar 的轻量协议定义在 `BattleCommandBarTypes.h`：`EWacomBattleCommandId`、`FWacomBattleCommandButtonView` 和 `FWacomBattleCommandBarViewData` 是 HUD / runtime presenter / tests 共用的 interface；`BattleCommandBarWidget.h` 只承载 UMG Widget 类、WBP 绑定和按钮生成实现。
 
