@@ -9688,64 +9688,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerDetailProviderLargeJumpResetTest,
-	"Wacom.UI.FirstPersonCardLayer.DetailProvider.LargeDetailPositionJumpResetsFollow",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerDetailProviderLargeJumpResetTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	AWacomBattleHUDLocalPlayerControllerTest* PC = World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
-		AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
-		FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(GetTransientPackage());
-	UCardDefinition* Card = WacomFirstPersonCardLayerSpec::MakePreviewCard(
-		GetTransientPackage(),
-		TEXT("第一人称详情大跳变卡"),
-		1);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("HUD"), HUD)
-		|| !TestNotNull(TEXT("Card"), Card))
-	{
-		return false;
-	}
-
-	WacomFirstPersonCardLayerSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
-	HUD->TakeWidget();
-	HUD->SetCardDetailMotionSpeedsForTest(1.0f, 18.0f, 24.0f);
-	const FHandCardSnapshot CardSnapshot = WacomFirstPersonCardLayerSpec::MakeHandCardSnapshot(Card, 1, true);
-	const FBattleSnapshot Snapshot = WacomFirstPersonCardLayerSpec::MakeSnapshotWithHand({ CardSnapshot });
-	HUD->RefreshFromSnapshotForTest(Snapshot);
-
-	FWacomFirstPersonCardLayerSlotView InitialSlot =
-		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardSnapshot.InstanceId);
-	InitialSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
-	InitialSlot.RenderScale = 1.0f;
-	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
-	HUD->TickCardDetailMotionForTest(0.12f);
-	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
-
-	FWacomFirstPersonCardLayerSlotView FarSlot = InitialSlot;
-	FarSlot.ScreenPosition = FVector2D(1900.0f, 600.0f);
-	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, FarSlot);
-	HUD->TickCardDetailMotionForTest(0.01f);
-	const FVector2D JumpedPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
-	TestTrue(TEXT("Large detail position jump resets instead of slow drifting"),
-		FVector2D::Distance(JumpedPosition, InitialPosition) > 500.0f);
-
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerDetailProviderSideHysteresisTest,
 	"Wacom.UI.FirstPersonCardLayer.DetailProvider.SideHysteresisPreventsEdgeFlipFlop",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

@@ -773,6 +773,63 @@ bool FWacomUIBattleHUDCardDetailFollowSlotSpec::RunTest(const FString& /*Paramet
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDCardDetailLargeJumpResetSpec,
+	"Wacom.UI.Battle.BattleHUD.CardDetail.LargeDetailPositionJumpResetsFollow",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDCardDetailLargeJumpResetSpec::RunTest(const FString& /*Parameters*/)
+{
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(WacomBattleHUDFirstPersonSpec::FindAutomationWorld());
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), Harness->HUD()))
+	{
+		return false;
+	}
+
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UCardDefinition* Card = WacomBattleHUDFirstPersonSpec::MakePreviewCard(
+		GetTransientPackage(),
+		TEXT("第一人称详情大跳变卡"),
+		1);
+	if (!TestNotNull(TEXT("Card"), Card))
+	{
+		return false;
+	}
+
+	HUD->TakeWidget();
+	HUD->SetCardDetailMotionSpeedsForTest(1.0f, 18.0f, 24.0f);
+	const FHandCardSnapshot CardSnapshot =
+		WacomBattleHUDFirstPersonSpec::MakeHandCardSnapshot(Card, 1, true);
+	const FBattleSnapshot Snapshot =
+		WacomBattleHUDFirstPersonSpec::MakeSnapshotWithHand({ CardSnapshot });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	FWacomFirstPersonCardLayerSlotView InitialSlot =
+		WacomBattleHUDFirstPersonSpec::MakeProjectedDetailSlot(
+			CardSnapshot.InstanceId,
+			FVector2D(500.0f, 600.0f));
+	HUD->HandleFirstPersonCardHoveredForTest(CardSnapshot.InstanceId, InitialSlot);
+	HUD->TickCardDetailMotionForTest(0.12f);
+	const FVector2D InitialPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestTrue(
+		TEXT("First-person detail visible before large jump update"),
+		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+
+	FWacomFirstPersonCardLayerSlotView FarSlot = InitialSlot;
+	FarSlot.ScreenPosition = FVector2D(1900.0f, 600.0f);
+	FarSlot.bIsHovered = true;
+	HUD->HandleFirstPersonCardLayoutUpdatedForTest(CardSnapshot.InstanceId, FarSlot);
+	HUD->TickCardDetailMotionForTest(0.01f);
+	const FVector2D JumpedPosition = HUD->GetFirstPersonCardDetailPanelPositionForTest();
+	TestTrue(
+		TEXT("Large detail position jump resets instead of slow drifting"),
+		FVector2D::Distance(JumpedPosition, InitialPosition) > 500.0f);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailReadabilityMotionSpec,
 	"Wacom.UI.Battle.BattleHUD.CardDetail.FirstPersonReadabilityMotion",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
