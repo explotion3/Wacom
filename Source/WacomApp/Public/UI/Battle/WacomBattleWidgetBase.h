@@ -20,9 +20,9 @@ class UBattleSession;
  *    子类 override NativeRefreshFromSnapshot 做具体刷新。
  *    蓝图子类可以 override BP_OnRefreshedFromSnapshot 做额外表现逻辑。
  *
- * 2. Session 访问：SetSession / GetSession。
- *    Widget 本身不直接调用 Session::SubmitCommand；交互委托传给 HUD，
- *    由 HUD 统一提交。这样 Widget 可以被复用在不同上下文。
+ * 2. Session 注入：SetSession / GetSession 仅作为 C++ owner / legacy WBP 兼容面。
+ *    普通 WBP 制作应只消费 Snapshot / ViewData，并把玩家意图回传 HUD；
+ *    不应从 Widget 直接读取 UBattleSession 或调用战斗规则命令。
  *
  * 子 Widget 的 Session 由父 Widget 在 SetSession 时递推设置。
  */
@@ -38,10 +38,10 @@ public:
 	 * 设置本 Widget 持有的 Session 引用。
 	 * 子类 override NativeOnSessionChanged 做初始化工作（比如订阅事件）。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Widget Session", meta = (ToolTip = "设置该 Battle Widget 当前使用的 UBattleSession。通常由 GameMode、BattleHUD 或父 Battle Widget 注入；子 Widget 不应直接用它提交战斗命令。"))
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Widget Session", meta = (DeprecatedFunction, DeprecationMessage = "SetSession 仅作为 C++ owner 注入和旧 WBP 兼容入口保留。正式 WBP 不应持有或注入 UBattleSession，请由 BattleHUD / 上层 owner 注入并只消费 Snapshot / ViewData。", ToolTip = "设置该 Battle Widget 当前使用的 UBattleSession。仅供 C++ owner 注入和旧 WBP 兼容；正式 WBP 不应直接持有或注入 BattleSession。"))
 	void SetSession(UBattleSession* InSession);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Widget Session", meta = (ToolTip = "当前注入到该 Battle Widget 的 UBattleSession。只用于读取上下文或构建表现，不应绕过 BattleHUD 提交玩家命令。"))
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Widget Session", meta = (DeprecatedFunction, DeprecationMessage = "GetSession 是旧 WBP 兼容入口。正式 Battle Widget 应消费 Snapshot / ViewData，并通过 BattleHUD 命令入口回传玩家意图，不要直接读取 UBattleSession。", ToolTip = "当前注入到该 Battle Widget 的 UBattleSession。旧 WBP 兼容入口；正式 Widget 请改用 Snapshot / ViewData。"))
 	UBattleSession* GetSession() const { return Session; }
 
 	// ---- Snapshot 刷新 ----

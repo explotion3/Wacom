@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-07-07
+updated: 2026-07-08
 tags:
   - wacom/ui
   - wacom/battle
@@ -68,7 +68,7 @@ HUD 状态入口：
 | `Wacom|Battle|Targeting` | TargetSelect 查询、pending card、target selection view |
 | `Wacom|Battle|Presentation Flow` | presentation busy、command gate、pending turn-boundary 查询 |
 
-`UWacomBattleWidgetBase` 是 Battle UI 基类，只负责 `UBattleSession` 引用、Snapshot fanout 和 WBP 表现刷新钩子。`SetSession / GetSession` 属于 `Wacom|Battle|Widget Session`，`BP_OnRefreshedFromSnapshot` 属于 `Wacom|Battle|Snapshot Refresh`。
+`UWacomBattleWidgetBase` 是 Battle UI 基类，只负责 C++ owner session 注入、Snapshot fanout 和 WBP 表现刷新钩子。`SetSession / GetSession` 仍作为 C++ 注入和旧 WBP 兼容入口保留，但 Blueprint surface 已标记 deprecated；正式 WBP 不应直接读取 `UBattleSession`，而应消费 Snapshot / ViewData，并把玩家意图回传 `UBattleHUD`。`BP_OnRefreshedFromSnapshot` 属于 `Wacom|Battle|Snapshot Refresh`。
 
 ## §3 Combat Log 与 Presentation Stack
 
