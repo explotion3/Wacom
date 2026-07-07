@@ -35,8 +35,6 @@
 #include "Types/WacomInteractionTargetTypes.h"
 
 #include "UI/Battle/BattleHUD.h"
-#include "Session/BattleSession.h"
-#include "Snapshots/BattleSnapshot.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Foundation/WacomExplorationHUD.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
@@ -1454,24 +1452,13 @@ void AWacomPlayerController::RouteHandIndex(int32 OneBasedIndex)
 	UBattleHUD* HUD = GetActiveBattleHUD();
 	if (!HUD) { return; }
 
-	UBattleSession* S = HUD->GetSession();
-	if (!S) { return; }
-
-	const FBattleSnapshot Snap = S->BuildSnapshot();
-	const int32 Idx = OneBasedIndex - 1;
-	if (!Snap.Hand.Cards.IsValidIndex(Idx)) { return; }
-
-	const FGuid CardId = Snap.Hand.Cards[Idx].InstanceId;
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchorForRunMenuProbe())
+	TOptional<FVector2D> PointerWidgetPosition;
+	FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
+	if (TryGetMouseWidgetPosition(MouseWidgetPosition))
 	{
-		TOptional<FVector2D> PointerWidgetPosition;
-		FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
-		if (TryGetMouseWidgetPosition(MouseWidgetPosition))
-		{
-			PointerWidgetPosition = MouseWidgetPosition;
-		}
-		Anchor->TryStartFirstPersonCardDragGesture(CardId, PointerWidgetPosition);
+		PointerWidgetPosition = MouseWidgetPosition;
 	}
+	HUD->TryStartFirstPersonBattleHandDragByIndex(OneBasedIndex, PointerWidgetPosition);
 }
 
 void AWacomPlayerController::OnPlayCard1() { RouteHandIndex(1); }

@@ -88,6 +88,9 @@ public:
 	void HandleDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	bool TryStartDragByHandIndex(
+		int32 OneBasedIndex,
+		const TOptional<FVector2D>& InitialPointerWidgetPosition);
 	void HandlePointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
 	void HandlePointerLeft();
 

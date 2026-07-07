@@ -54,7 +54,7 @@ BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`�
 
 HUD 是命令出口。子 Widget 和 WBP 不直接修改 `UBattleSession`，也不在图里实现出牌、等待、结束回合、击倒选择或目标选择规则。
 
-键盘 `IA_Wait` / `IA_EndTurn` 进入 BattleHUD 前由 `AWacomPlayerController` 做 first-person hand 输入仲裁：如果当前卡牌层存在 active gesture，快捷键先取消该手势并被消费；只有卡牌层处于 idle / cancelled 时才调用 `OnWaitRequested` 或 `OnEndTurnRequested`。
+键盘数字牌位快捷键进入 `AWacomPlayerController` 后只提交 one-based hand index 和当前 pointer widget-space 坐标给 `UBattleHUD`；当前可见战斗手牌的 `CardInstanceId` 由 BattleHUD / first-person hand bridge 根据已同步的 hand snapshot 解析，PlayerController 不直接读取 `UBattleSession` 或 `FBattleSnapshot`。键盘 `IA_Wait` / `IA_EndTurn` 进入 BattleHUD 前由 `AWacomPlayerController` 做 first-person hand 输入仲裁：如果当前卡牌层存在 active gesture，快捷键先取消该手势并被消费；只有卡牌层处于 idle / cancelled 时才调用 `OnWaitRequested` 或 `OnEndTurnRequested`。
 
 `BattleInputReady` 是 BattleHUD 级玩家命令 gate，不属于 `UBattleSession` 规则阶段。进入战斗镜头 staging 期间它会临时为 false：CommandBar 按钮禁用，`CanSubmitPlayerActionCommand()` 返回 false，first-person hand release / Wait / EndTurn 等普通玩家命令不会提交；HUD 仍可刷新 Snapshot、同步场景敌人和播放非交互表现。镜头完成并激活 Battle camera look 后，GameMode 再把它恢复为 true。
 

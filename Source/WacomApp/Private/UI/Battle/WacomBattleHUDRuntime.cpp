@@ -496,6 +496,15 @@ void FWacomBattleHUDRuntime::OnEndTurnRequested()
 	GetCommandController().SubmitEndTurn();
 }
 
+bool FWacomBattleHUDRuntime::TryStartFirstPersonBattleHandDragByIndex(
+	int32 OneBasedIndex,
+	const TOptional<FVector2D>& InitialPointerWidgetPosition)
+{
+	return GetFirstPersonHandBridge().TryStartDragByHandIndex(
+		OneBasedIndex,
+		InitialPointerWidgetPosition);
+}
+
 void FWacomBattleHUDRuntime::CancelTargetSelect()
 {
 	GetTargetingController().CancelTargetSelect();

@@ -401,6 +401,15 @@ void UBattleHUD::OnEndTurnRequested()
 	GetBattleHUDRuntime().OnEndTurnRequested();
 }
 
+bool UBattleHUD::TryStartFirstPersonBattleHandDragByIndex(
+	int32 OneBasedIndex,
+	const TOptional<FVector2D>& InitialPointerWidgetPosition)
+{
+	return GetBattleHUDRuntime().TryStartFirstPersonBattleHandDragByIndex(
+		OneBasedIndex,
+		InitialPointerWidgetPosition);
+}
+
 void UBattleHUD::CancelTargetSelect()
 {
 	GetBattleHUDRuntime().CancelTargetSelect();

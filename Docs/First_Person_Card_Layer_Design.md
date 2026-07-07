@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-07-06
+updated: 2026-07-08
 tags:
   - wacom/ui
   - wacom/cards
@@ -197,7 +197,7 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 | drag no-target card | 向上超过 commit distance 后 armed，release 才提交无目标出牌 |
 | drag targeted card | 源卡保持 selected-source，C++ arrow 指向鼠标；release 到合法 target 后提交 |
 
-快捷键 `1~7` 进入拖拽时使用双位置初始化：`PressScreenPosition` 固定为被选中卡牌的基础手牌位置，`CurrentScreenPosition / PointerViewportPosition` 使用 PlayerController 读取到的当前鼠标 widget-space 坐标；没有鼠标坐标时才退回卡牌自身位置。`CurrentPointerView` 只表示普通 hover / pointer view，不作为快捷键拖拽启动坐标来源，避免鼠标悬浮在 B 卡时按 A 卡快捷键却串用 B 的旧 pointer。
+快捷键 `1~7` 进入拖拽时，PlayerController 只收集 one-based hand index 和当前鼠标 widget-space 坐标，再交给 BattleHUD / first-person hand bridge 从已同步的 battle hand snapshot 解析 `CardInstanceId` 并启动 external drag；PlayerController 不读取 `UBattleSession` 或自行构造 `FBattleSnapshot`。拖拽内部使用双位置初始化：`PressScreenPosition` 固定为被选中卡牌的基础手牌位置，`CurrentScreenPosition / PointerViewportPosition` 使用 PlayerController 读取到的当前鼠标 widget-space 坐标；没有鼠标坐标时才退回卡牌自身位置。`CurrentPointerView` 只表示普通 hover / pointer view，不作为快捷键拖拽启动坐标来源，避免鼠标悬浮在 B 卡时按 A 卡快捷键却串用 B 的旧 pointer。
 
 快捷键拖拽启动后，`AWacomPlayerController` 每帧执行 active-drag pointer pump：如果当前 Anchor 的 first-person card layer 存在 active gesture，就优先通过 Slate viewport geometry 读取全局 cursor 在 viewport 内的 widget-space 坐标；如果 Slate viewport geometry 不可用，再退回 `GetMousePosition()` + `UWidgetLayoutLibrary::GetViewportScale()` 的 PlayerController 路径。随后调用 `UpdateFirstPersonCardDragPointer()` 喂给 Layer。Layer 继续复用 active gesture slot 的 `UpdateGesture()` 链路刷新 `DragView`、aim arrow、card target probe 和上层 camera look override。没有 active gesture、读取不到鼠标位置，或当前 active gesture 不是 `ExternalPointer` 来源时，pump 为 no-op，不会改变普通 hover / pointer view，也不会覆盖鼠标来源拖拽的最新指针。左键 release 时，PlayerController 会先尝试释放 active first-person drag：能读取鼠标坐标时先 pump 到最新位置再 release，读取不到时使用 DragView 当前指针位置 release；只有没有 active drag 时，左键 release 才继续走 Battle scene click、Run tunnel branch 或 Run world interactable click 路由。
 

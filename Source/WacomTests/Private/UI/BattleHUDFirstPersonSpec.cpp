@@ -12,7 +12,9 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/FirstPersonCardLayerTestAccess.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
+#include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "BattleHUDTestHarness.h"
 
 #include "Engine/Engine.h"
@@ -61,6 +63,28 @@ namespace WacomBattleHUDFirstPersonSpec
 		DragView.PointerNormalizedViewportPosition = FVector2D(0.65f, 0.42f);
 		DragView.bHasPointerViewportPosition = true;
 		return DragView;
+	}
+
+	FWacomFirstPersonCardLayerSlotView MakeProjectedShortcutSlot(
+		const FGuid& CardInstanceId,
+		int32 Index)
+	{
+		FWacomFirstPersonCardLayerSlotView Slot;
+		Slot.Index = Index;
+		Slot.Entry.CardInstanceId = CardInstanceId;
+		Slot.Entry.bIsPlayable = true;
+		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+		Slot.ScreenPosition = FVector2D(500.0f + 42.0f * static_cast<float>(Index), 600.0f);
+		Slot.WidgetPosition = Slot.ScreenPosition;
+		Slot.SnappedWidgetPosition = Slot.ScreenPosition;
+		Slot.InputHitCenter = Slot.ScreenPosition;
+		Slot.InputHitScale = 1.0f;
+		Slot.InputHitOrder = Index;
+		Slot.RenderScale = 0.55f;
+		Slot.RenderOpacity = 1.0f;
+		Slot.ZOrder = Index;
+		Slot.bProjected = true;
+		return Slot;
 	}
 }
 
@@ -161,6 +185,83 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 	TestEqual(TEXT("Cleared bridge does not set target select"),
 		HUD->GetUIState(),
 		EBattleUIState::Idle);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleHUDFirstPersonHandShortcutByIndexSpec,
+	"Wacom.UI.Battle.BattleHUD.HandPresentation.ShortcutStartsDragByHandIndex",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleHUDFirstPersonHandShortcutByIndexSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleHUDFirstPersonSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeNoopCard(0), Fx.MakeSimpleDamageCard(0, 1), Fx.MakeNoopCard(0) });
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5, 0), 3);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+
+	AWacomPlayerCharacter* Character = Harness->AttachFirstPersonCharacter();
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UWacomFirstPersonCardAnchorComponent* Anchor = Harness->FirstPersonAnchor();
+	if (!TestNotNull(TEXT("Character"), Character)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("First-person card anchor"), Anchor))
+	{
+		return false;
+	}
+
+	Harness->SetSession(Session);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	if (!TestTrue(TEXT("Battle snapshot has at least two hand cards"), Snapshot.Hand.Cards.Num() >= 2))
+	{
+		return false;
+	}
+
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(HUD);
+	if (!TestNotNull(TEXT("Manual first-person card layer"), Layer))
+	{
+		return false;
+	}
+	Layer->TakeWidget();
+	Layer->SetCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetCardLayer(*Anchor, Layer);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	TArray<FWacomFirstPersonCardLayerSlotView> Slots;
+	for (int32 Index = 0; Index < Snapshot.Hand.Cards.Num(); ++Index)
+	{
+		Slots.Add(WacomBattleHUDFirstPersonSpec::MakeProjectedShortcutSlot(
+			Snapshot.Hand.Cards[Index].InstanceId,
+			Index));
+	}
+	Layer->SetCardSlots(Slots);
+
+	TestTrue(TEXT("HUD starts external drag from second battle hand card"),
+		HUD->TryStartFirstPersonBattleHandDragByIndex(2, FVector2D(560.0f, 500.0f)));
+	TestTrue(TEXT("Anchor reports active drag after HUD index shortcut"),
+		Anchor->IsFirstPersonCardDragGestureActive());
+
+	Anchor->CancelFirstPersonCardDragGesture(/*bBroadcastCancel*/ true);
+	TestFalse(TEXT("Invalid hand index is rejected"),
+		HUD->TryStartFirstPersonBattleHandDragByIndex(99, FVector2D(560.0f, 500.0f)));
+	TestFalse(TEXT("Invalid hand index does not start drag"),
+		Anchor->IsFirstPersonCardDragGestureActive());
 
 	return true;
 }

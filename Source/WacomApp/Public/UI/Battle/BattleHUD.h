@@ -300,6 +300,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "玩家点击 EndTurn 后的 BattleHUD 命令入口。BattleHUD 会按表现栈和战斗阶段决定立即提交或进入 pending。"))
 	void OnEndTurnRequested();
 
+	/** 数字快捷键入口：PlayerController 只提交手牌序号和指针位置，当前可见战斗手牌由 HUD/first-person bridge 解析。 */
+	bool TryStartFirstPersonBattleHandDragByIndex(
+		int32 OneBasedIndex,
+		const TOptional<FVector2D>& InitialPointerWidgetPosition = TOptional<FVector2D>());
+
 	/** 取消目标选择（ESC、右键、再次点同一张牌等）。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "取消当前目标选择 UI 状态。只影响 HUD 选择流程，不直接修改 BattleSession。"))
 	void CancelTargetSelect();

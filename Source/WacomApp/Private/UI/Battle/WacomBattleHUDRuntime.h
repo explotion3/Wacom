@@ -162,6 +162,9 @@ public:
 	void OnEnemyPartClickedByUser(const FWacomInteractionTargetHandle& TargetHandle);
 	void OnWaitRequested();
 	void OnEndTurnRequested();
+	bool TryStartFirstPersonBattleHandDragByIndex(
+		int32 OneBasedIndex,
+		const TOptional<FVector2D>& InitialPointerWidgetPosition);
 	void CancelTargetSelect();
 	void OnKnockdownChoiceSelected(EKnockdownChoice Choice);
 

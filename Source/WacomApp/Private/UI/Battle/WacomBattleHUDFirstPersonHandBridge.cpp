@@ -575,6 +575,33 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragCancelled(
 	}
 }
 
+bool FWacomBattleHUDFirstPersonHandBridge::TryStartDragByHandIndex(
+	int32 OneBasedIndex,
+	const TOptional<FVector2D>& InitialPointerWidgetPosition)
+{
+	if (OneBasedIndex <= 0
+		|| !bFirstPersonBattleHandLayerRuntimeActive
+		|| !ShouldEnableFirstPersonBattleHandInteraction()
+		|| !Runtime.HasLastBattleSnapshot())
+	{
+		return false;
+	}
+
+	const int32 CardIndex = OneBasedIndex - 1;
+	const TArray<FHandCardSnapshot>& HandCards = Runtime.GetLastBattleSnapshot().Hand.Cards;
+	if (!HandCards.IsValidIndex(CardIndex)
+		|| !HandCards[CardIndex].InstanceId.IsValid())
+	{
+		return false;
+	}
+
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor();
+	return Anchor
+		&& Anchor->TryStartFirstPersonCardDragGesture(
+			HandCards[CardIndex].InstanceId,
+			InitialPointerWidgetPosition);
+}
+
 void FWacomBattleHUDFirstPersonHandBridge::HandlePointerMoved(
 	const FWacomFirstPersonCardPointerView& PointerView)
 {
