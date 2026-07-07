@@ -213,7 +213,7 @@ First-person card Anchor 在 `BattleCameraLook` 尚未激活但 stage blend acti
 
 ```text
 BattleSession 结算完毕
--> BattleHUD / Controller 通知 GameMode
+-> BattleHUD.OnBattleEndedNative(EBattleOutcome) 通知 GameMode
 -> GameMode.ExitBattle()
 ```
 
@@ -226,11 +226,13 @@ GameMode 退出战斗时：
 5. 从当前 suspended Run Tunnel 构造 `RunTunnelReturn` stage request。
 6. 通过 `FWacomFirstPersonViewStageReturnFlow` 将第一人称视角移动回 Run Tunnel 样条 View Pose。
 7. stage 完成后恢复 PlayerCharacter 探索移动；若回程 blend 为 0 或无法构造 request，则同步恢复。
-8. 调 RunSession 结算战斗结果，并在非 Undetermined 战斗结束后消耗 1 节点。
+8. 从 `UBattleSession::BuildResultPacket()` 构造 `FBattleResultPacket`，调 RunSession 结算战斗结果，并在非 Undetermined 战斗结束后消耗 1 节点。
 9. 真胜利时标记并销毁触发战斗的 BattleTrigger；撤离时不销毁 Trigger，允许玩家再次按 E 重入。
 10. `EGameFlowState` 回到 `Exploration` 后，等待 return staging completion，再重新激活并刷新 Run first-person hand，同时刷新交互 Toast。
 
 退出战斗回到 Exploration 后，PlayerController 会重新激活并刷新 `UWacomRunFirstPersonCardSourceComponent`，让 first-person card layer 再次显示当前默认 Run workspace。当前默认 workspace provider 仍读取 Run `BattleDeck` 物理卡和可选投影卡；这个刷新只读 Run snapshot，不提交 Run 命令；若回程是 deferred blend，刷新必须等镜头回到 RunTunnel 后再发生。
+
+`AWacomPlayerController::RequestExitBattle(EBattleOutcome)` 仅作为外部手动结束战斗的 typed façade 保留，不再接受裸 `uint8` Outcome。正式 BattleEnd 主链路仍是 BattleHUD 根据 Snapshot BattleEnd 广播 `EBattleOutcome`，由 GameMode 在 Session 释放前生成 `FBattleResultPacket` 交给 Run 层。
 
 若进入战斗时使用了 battle entry viewpoint，退出战斗不保存该临时站位。Run Tunnel 仍保留进入战斗前的 Segment / Distance，并负责生成 `RunTunnelReturn` stage request；`ReturnStageBlendTimeSeconds` 默认 0.35 秒，可在 `UWacomRunTunnelMovementComponent` 的 `Wacom|Run Tunnel|Staging` 分类中调整，`ReturnStageBlendCurve` 和 `ReturnStageBlendEasePower` 用同一套 stage blend 曲线语义控制回程节奏。回程过渡期间 BattleHUD 已退场、探索输入仍锁定、first-person Run 手牌为空；`FWacomFirstPersonViewStageReturnFlow` 负责调用 stage coordinator 回到样条 View Pose，并在完成后恢复探索输入。Battle exit return 恢复 RunTunnel 时会按当前鼠标位置保留 / 预热 cursor look offset，不先把镜头拉回样条中心角度，避免回程完成瞬间出现中心回弹。这个 return flow 以后也可被商店、剧情、RunEvent 等临时站位复用。
 

@@ -6,6 +6,7 @@
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "RunStateTypes.h"
+#include "Types/WacomEnums.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
@@ -69,9 +70,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
 	void RequestEnterBattle(ABattleTriggerActor* Trigger);
 
-	/** 由战斗 UI 在 BattleEnd 时调用，转发到 GameMode。 */
+	/** 外部手动结束战斗时调用，转发到 GameMode；正式 BattleEnd 主链路由 BattleHUD typed signal 驱动。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
-	void RequestExitBattle(uint8 Outcome);
+	void RequestExitBattle(EBattleOutcome Outcome);
 
 	virtual void SetPawn(APawn* InPawn) override;
 

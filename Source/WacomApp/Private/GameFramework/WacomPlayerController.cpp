@@ -322,11 +322,11 @@ void AWacomPlayerController::RequestEnterBattle(ABattleTriggerActor* Trigger)
 	}
 }
 
-void AWacomPlayerController::RequestExitBattle(uint8 Outcome)
+void AWacomPlayerController::RequestExitBattle(EBattleOutcome Outcome)
 {
 	if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
 	{
-		GM->ExitBattle(static_cast<EBattleOutcome>(Outcome));
+		GM->ExitBattle(Outcome);
 	}
 	else
 	{

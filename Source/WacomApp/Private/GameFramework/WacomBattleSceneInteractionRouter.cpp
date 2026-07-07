@@ -11,7 +11,7 @@
 
 namespace
 {
-	FString GetDebugObjectName(const UObject* Object)
+	FString GetBattleSceneDebugObjectName(const UObject* Object)
 	{
 		return IsValid(Object) ? Object->GetName() : TEXT("None");
 	}
@@ -50,7 +50,7 @@ bool FWacomBattleSceneInteractionRouter::TryRouteTargetClick(bool bRequireTarget
 		{
 			UE_LOG(LogTemp, Display,
 				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NotInTargetSelect hud=%s requireTargetSelect=%s"),
-				*GetDebugObjectName(HUD),
+				*GetBattleSceneDebugObjectName(HUD),
 				bRequireTargetSelect ? TEXT("true") : TEXT("false"));
 		}
 		return false;
@@ -63,7 +63,7 @@ bool FWacomBattleSceneInteractionRouter::TryRouteTargetClick(bool bRequireTarget
 		{
 			UE_LOG(LogTemp, Display,
 				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NoVisibilityHit hud=%s inTargetSelect=%s"),
-				*GetDebugObjectName(HUD),
+				*GetBattleSceneDebugObjectName(HUD),
 				HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
 		}
 		return false;
@@ -100,7 +100,7 @@ bool FWacomBattleSceneInteractionRouter::TryRouteTargetClick(bool bRequireTarget
 		UE_LOG(LogTemp, Display,
 			TEXT("[WacomBattleSceneClickRouter] NoRoute handleValid=%s hitActor=%s"),
 			Handle.IsValid() ? TEXT("true") : TEXT("false"),
-			*GetDebugObjectName(HitResult.GetActor()));
+			*GetBattleSceneDebugObjectName(HitResult.GetActor()));
 	}
 	return false;
 }

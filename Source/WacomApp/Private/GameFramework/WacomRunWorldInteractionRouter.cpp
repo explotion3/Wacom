@@ -15,7 +15,7 @@
 
 namespace
 {
-	FString GetDebugObjectName(const UObject* Object)
+	FString GetRunWorldDebugObjectName(const UObject* Object)
 	{
 		return IsValid(Object) ? Object->GetName() : TEXT("None");
 	}
@@ -156,8 +156,8 @@ bool FWacomRunWorldInteractionRouter::TryRouteInteractableClick()
 			UE_LOG(LogTemp, Display,
 				TEXT("[WacomRunWorldInteractableClick] NoRoute reason=%s actor=%s bridge=%s handle=%s"),
 				*RejectReason.ToString(),
-				*GetDebugObjectName(TargetActor),
-				*GetDebugObjectName(TargetBridge),
+				*GetRunWorldDebugObjectName(TargetActor),
+				*GetRunWorldDebugObjectName(TargetBridge),
 				*Handle.ToString());
 		}
 		return false;
@@ -169,7 +169,7 @@ bool FWacomRunWorldInteractionRouter::TryRouteInteractableClick()
 	{
 		UE_LOG(LogTemp, Display,
 			TEXT("[WacomRunWorldInteractableClick] Route actor=%s handle=%s result=%s"),
-			*GetDebugObjectName(TargetActor),
+			*GetRunWorldDebugObjectName(TargetActor),
 			*Handle.ToString(),
 			bRouted ? TEXT("true") : TEXT("false"));
 	}
@@ -223,7 +223,7 @@ void FWacomRunWorldInteractionRouter::UpdateTargetProbePreview()
 				UE_LOG(LogTemp, Display,
 					TEXT("[WacomRunWorldTargetProbe] Preview handle=%s bridge=%s"),
 					*Handle.ToString(),
-					*GetDebugObjectName(NewBridge));
+					*GetRunWorldDebugObjectName(NewBridge));
 			}
 		}
 		else if (PlayerController.bLogRunWorldTargetProbePreview)
@@ -479,7 +479,7 @@ FString FWacomRunWorldInteractionRouter::BuildHoverDebugSummary() const
 	}
 	else
 	{
-		TriggerDebug.ActorName = GetDebugObjectName(HoverActor);
+		TriggerDebug.ActorName = GetRunWorldDebugObjectName(HoverActor);
 		TriggerDebug.StableId = HoveredRunWorldInteractableHandle.StableTargetId;
 		TriggerDebug.bHasStableId = !TriggerDebug.StableId.IsNone();
 		TriggerDebug.bImplementsWorldInteractable =
@@ -493,7 +493,7 @@ FString FWacomRunWorldInteractionRouter::BuildHoverDebugSummary() const
 
 	return FString::Printf(
 		TEXT("RunWorldInteractableHover{Actor=%s StableId=%s Prompt=%s CanInteract=%s Completed=%s Reason=%s Target=%s Debug=%s}"),
-		*GetDebugObjectName(HoverActor),
+		*GetRunWorldDebugObjectName(HoverActor),
 		*HoveredRunWorldInteractableHandle.StableTargetId.ToString(),
 		*HoveredRunWorldInteractablePrompt.ToString(),
 		TriggerDebug.bCanInteract ? TEXT("true") : TEXT("false"),
