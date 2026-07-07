@@ -115,7 +115,8 @@ bool FWacomUIBattleHUDCardClickFlowSpec::RunTest(const FString& /*Parameters*/)
 	UCardDefinition* RightHand = Fx.MakeNoopCard(0);
 	UCardDefinition* TargetCard = Fx.MakeSimpleDamageCard(0, 1);
 	UCardDefinition* NoTargetCard = Fx.MakeNoopCard(0);
-	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, { TargetCard, NoTargetCard });
+	UCardDefinition* HandTargetCard = Fx.MakeHandCardCostModifierCard(0, 1, false);
+	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, { TargetCard, NoTargetCard, HandTargetCard });
 	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
@@ -130,9 +131,13 @@ bool FWacomUIBattleHUDCardClickFlowSpec::RunTest(const FString& /*Parameters*/)
 	const FGuid NoTargetCardId = WacomBattleHUDCommandFlowSpec::FindFirstHandCardByTargetMode(
 		InitialSnapshot,
 		ECardTargetMode::None);
+	const FGuid HandTargetCardId = WacomBattleHUDCommandFlowSpec::FindFirstHandCardByTargetMode(
+		InitialSnapshot,
+		ECardTargetMode::HandCard);
 	TestTrue(TEXT("Targeting card is in hand"), TargetCardId.IsValid());
 	TestTrue(TEXT("No-target card is in hand"), NoTargetCardId.IsValid());
-	if (!TargetCardId.IsValid() || !NoTargetCardId.IsValid())
+	TestTrue(TEXT("Hand-card target card is in hand"), HandTargetCardId.IsValid());
+	if (!TargetCardId.IsValid() || !NoTargetCardId.IsValid() || !HandTargetCardId.IsValid())
 	{
 		return false;
 	}
@@ -140,6 +145,10 @@ bool FWacomUIBattleHUDCardClickFlowSpec::RunTest(const FString& /*Parameters*/)
 	HUD->OnCardClickedByUser(TargetCardId);
 	TestEqual(TEXT("Targeting card enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 	TestEqual(TEXT("Targeting card becomes pending"), HUD->GetPendingTargetingCardId(), TargetCardId);
+
+	HUD->OnCardClickedByUser(HandTargetCardId);
+	TestEqual(TEXT("Legacy click ignores hand-card target cards"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	TestEqual(TEXT("Legacy click preserves pending world-target card"), HUD->GetPendingTargetingCardId(), TargetCardId);
 
 	const int32 VersionBeforeNoTarget = Session->BuildSnapshot().Version;
 	HUD->OnCardClickedByUser(NoTargetCardId);

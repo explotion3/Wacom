@@ -176,9 +176,8 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  *
  * 交互流程：
  *   Idle
- *     ├── 点击 first-person hand 卡牌 → HUD 判断 TargetMode
- *     │     ├── None / Self → 直接提交 PlayCard（空目标），回 Idle
- *     │     └── SingleEnemyPart → 切 TargetSelect，记录 Pending 卡
+ *     ├── first-person hand drag/release → HUD bridge 按 InteractionIntent / drop resolver 提交
+ *     ├── legacy 点击手牌入口 → 兼容旧 WBP / 自动化，后续迁移完成后删除
  *     ├── 点击 Wait 按钮 → 提交 Wait，回 Idle
  *     └── 点击 EndTurn 按钮 → 提交 EndTurn，回 Idle
  *
@@ -278,12 +277,10 @@ public:
 	// 子 Widget 通过这些方法通知 HUD 玩家意图。HUD 按状态机决策。
 
 	/**
-	 * 某张手牌被点击。
-	 * - TargetMode == None / Self：立即提交 PlayCard
-	 * - TargetMode == SingleEnemyPart：进入 TargetSelect 状态
-	 * - 其他：当前不支持，忽略
+	 * 旧点击手牌入口，仅保留给尚未迁移的 WBP / 自动化兼容。
+	 * 新 Battle hand 交互应走 first-person card layer drag / release 或数字快捷键启动拖拽。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "玩家点击手牌后的 BattleHUD 命令入口。子 Widget 只上报意图，BattleHUD 负责状态机判断并提交合法 BattleSession 命令。"))
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (DeprecatedFunction, DeprecationMessage = "OnCardClickedByUser 是旧 2D/点击手牌兼容入口；新手牌交互请通过 first-person card layer drag/release 或 TryStartFirstPersonBattleHandDragByIndex。", ToolTip = "旧点击手牌兼容入口。新 Battle hand 交互请走 first-person card layer drag/release；保留该函数仅为兼容尚未迁移的 WBP / 自动化。"))
 	void OnCardClickedByUser(const FGuid& CardInstanceId);
 
 	/**

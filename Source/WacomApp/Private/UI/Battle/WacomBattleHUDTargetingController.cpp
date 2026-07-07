@@ -2,12 +2,12 @@
 
 #include "UI/Battle/WacomBattleHUDTargetingController.h"
 
-#include "Cards/CardDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "GameplayTagContainer.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Snapshots/EnemySnapshot.h"
+#include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 
 FWacomBattleHUDTargetingController::FWacomBattleHUDTargetingController(
@@ -55,20 +55,19 @@ void FWacomBattleHUDTargetingController::HandleCardClicked(
 		return;
 	}
 
-	switch (Card->Definition->TargetMode)
+	switch (WacomBattleCardPresentation::ResolveCardLayerInteractionIntent(*Card))
 	{
-	case ECardTargetMode::None:
-	case ECardTargetMode::Self:
-	case ECardTargetMode::AllEnemyParts:
+	case EWacomFirstPersonCardInteractionIntent::CommitNoTarget:
 		Runtime.SubmitPlayCard(CardInstanceId, FGuid());
 		break;
 
-	case ECardTargetMode::SingleEnemyPart:
+	case EWacomFirstPersonCardInteractionIntent::AimWorldTarget:
 		Runtime.SetPendingTargetingCardId(CardInstanceId);
 		Runtime.SetUIState(EBattleUIState::TargetSelect);
 		break;
 
-	case ECardTargetMode::HandCard:
+	case EWacomFirstPersonCardInteractionIntent::AimCardTarget:
+	case EWacomFirstPersonCardInteractionIntent::DragToDropTarget:
 	default:
 		break;
 	}

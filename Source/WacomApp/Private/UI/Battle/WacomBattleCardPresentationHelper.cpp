@@ -173,6 +173,15 @@ namespace WacomBattleCardPresentation
 			BuildRuntimeContext(CardSnapshot, TargetPreview));
 	}
 
+	EWacomFirstPersonCardInteractionIntent ResolveCardLayerInteractionIntent(
+		const FHandCardSnapshot& CardSnapshot)
+	{
+		return ResolveBattleFirstPersonCardInteractionIntent(
+			CardSnapshot.Definition
+				? CardSnapshot.Definition->TargetMode
+				: ECardTargetMode::None);
+	}
+
 	FWacomFirstPersonCardLayerEntry BuildCardLayerEntry(const FHandCardSnapshot& CardSnapshot)
 	{
 		FWacomFirstPersonCardLayerEntry Entry;
@@ -181,11 +190,7 @@ namespace WacomBattleCardPresentation
 		Entry.Zone = CardSnapshot.Zone;
 		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;
-		Entry.InteractionIntent =
-			ResolveBattleFirstPersonCardInteractionIntent(
-				CardSnapshot.Definition
-					? CardSnapshot.Definition->TargetMode
-					: ECardTargetMode::None);
+		Entry.InteractionIntent = ResolveCardLayerInteractionIntent(CardSnapshot);
 		return Entry;
 	}
 
