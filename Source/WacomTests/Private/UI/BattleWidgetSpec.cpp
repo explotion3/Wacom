@@ -397,51 +397,6 @@ bool FWacomUIBattleHUDCardDetailDefaultsSpec::RunTest(const FString& /*Parameter
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleHUDCardDetailPositionSpec,
-	"Wacom.UI.Battle.BattleHUD.CardDetail.Position",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleHUDCardDetailPositionSpec::RunTest(const FString& /*Parameters*/)
-{
-	const FVector2D PanelSize(360.0f, 420.0f);
-	const FVector2D LayerSize(1200.0f, 800.0f);
-
-	const FVector2D LeftSide = UBattleHUD::ComputeCardDetailPanelPositionBeside(
-		FVector2D(500.0f, 500.0f),
-		FVector2D(120.0f, 160.0f),
-		LayerSize,
-		PanelSize,
-		12.0f);
-	TestEqual(TEXT("Detail panel prefers left side when there is room"), LeftSide, FVector2D(128.0f, 370.0f));
-
-	const FVector2D RightSide = UBattleHUD::ComputeCardDetailPanelPositionBeside(
-		FVector2D(20.0f, 100.0f),
-		FVector2D(120.0f, 160.0f),
-		LayerSize,
-		PanelSize,
-		12.0f);
-	TestEqual(TEXT("Detail panel falls back to right side when left side has no room"), RightSide, FVector2D(152.0f, 0.0f));
-
-	const FVector2D ClampRight = UBattleHUD::ComputeCardDetailPanelPositionBeside(
-		FVector2D(1120.0f, 700.0f),
-		FVector2D(120.0f, 160.0f),
-		LayerSize,
-		PanelSize,
-		12.0f);
-	TestEqual(TEXT("Detail panel uses left side near right edge and clamps vertical position"), ClampRight, FVector2D(748.0f, 380.0f));
-
-	const FVector2D ClampBottom = UBattleHUD::ComputeCardDetailPanelPositionBeside(
-		FVector2D(500.0f, 780.0f),
-		FVector2D(120.0f, 160.0f),
-		LayerSize,
-		PanelSize,
-		12.0f);
-	TestEqual(TEXT("Detail panel clamps to bottom edge"), ClampBottom, FVector2D(128.0f, 380.0f));
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattlePresentationTargetRegistryUnknownTargetNoopsSpec,
 	"Wacom.UI.Battle.PresentationTargetRegistry.UnknownTargetNoops",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

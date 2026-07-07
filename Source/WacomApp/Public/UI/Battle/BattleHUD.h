@@ -260,13 +260,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|HUD State", meta = (ToolTip = "当前 BattleHUD UI 状态。只读查询，不修改战斗或 UI 流程。"))
 	EBattleUIState GetUIState() const;
 
-	static FVector2D ComputeCardDetailPanelPositionBeside(
-		const FVector2D& AnchorPosition,
-		const FVector2D& AnchorSize,
-		const FVector2D& LayerSize,
-		const FVector2D& PanelSize,
-		float Padding);
-
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Card Detail", meta = (ToolTip = "当前战斗卡牌详情面板是否可见。只读查询。"))
 	bool IsCardDetailPanelVisible() const;
 

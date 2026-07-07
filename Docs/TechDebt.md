@@ -141,6 +141,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Card detail `Description` legacy mirror 已清理：`FWacomCardDetailViewData` 不再暴露平行纯文本正文或 `UWacomCardDetailPanel::GetDescriptionText()`；`UCardDefinition::Description` 只作为 Builder 编译“描述”Section 的输入，`FWacomCardViewData.Description` 仍保留为小卡卡面紧凑描述。
 - Card detail document builder 已抽出：`UWacomCardPresentationBuilder` 保留为 public / Blueprint facade，`WacomCardDetailDocumentBuilder` 负责详情 `Sections` 组装，`WacomCardDetailTextCompiler` 只负责编译 token line，Widget 不承载 Description / Passive / Effect 分区逻辑。
 - Card detail viewport / child widget 创建路径已收口：first-person 详情面板由 `FWacomFirstPersonCardDetailPanelHost` 统一判断是否能进入 viewport，详情 section / token 子 Widget 由 App-private `WacomCardDetailWidgetFactory` 创建，离屏自动化不再通过 `GetWorld()` 分支污染日志。
+- BattleHUD 旧 CardDetail immediate positioning helper 已移除：详情面板定位测试和正式路径都以 App-private `FWacomFirstPersonCardDetailMotionController` / `FWacomBattleHUDCardDetailController` 的 stable motion 语义为准。
 - AppToast viewport owner 检查已收口：`UWacomAppToastSubsystem` 只在真实本地玩家和 `LocalPlayer` 就绪时创建 / 加入 viewport，离屏自动化注入 Widget 可复用且不再通过 Widget `GetWorld()` 判定旧 World/PC。
 - Battle Combat Log 合同测试已拆出：`BattleCombatLogSpec.cpp` 覆盖 builder、feed、HUD history 和 controller 合同，统一使用 `Wacom.UI.Battle.CombatLog` 前缀；`BattleWidgetSpec.cpp` 不再承载 combat log 专题。
 - Card face view data builder 已抽出：`UWacomCardPresentationBuilder` 不再直接持有小卡卡面字段、紧凑描述、体格/价值展示和效果徽章映射逻辑，`WacomCardFaceViewDataBuilder` 负责生成 `FWacomCardViewData` 和 `FWacomCardViewEffectBadge`。

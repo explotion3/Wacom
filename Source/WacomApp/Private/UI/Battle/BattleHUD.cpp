@@ -676,27 +676,6 @@ FVector2D UBattleHUD::ComputeCardDetailPanelPositionBesideStable(
 		DetailPadding);
 }
 
-FVector2D UBattleHUD::ComputeCardDetailPanelPositionBeside(
-	const FVector2D& AnchorPosition,
-	const FVector2D& AnchorSize,
-	const FVector2D& LayerSize,
-	const FVector2D& PanelSize,
-	float Padding)
-{
-	const float SafePadding = FMath::Max(0.0f, Padding);
-	const float MaxX = FMath::Max(0.0f, LayerSize.X - PanelSize.X);
-	const float MaxY = FMath::Max(0.0f, LayerSize.Y - PanelSize.Y);
-
-	const float LeftX = AnchorPosition.X - PanelSize.X - SafePadding;
-	const float RightX = AnchorPosition.X + AnchorSize.X + SafePadding;
-	const float DesiredX = LeftX >= 0.0f ? LeftX : RightX;
-	const float DesiredY = AnchorPosition.Y + (AnchorSize.Y - PanelSize.Y) * 0.5f;
-
-	return FVector2D(
-		FMath::Clamp(DesiredX, 0.0f, MaxX),
-		FMath::Clamp(DesiredY, 0.0f, MaxY));
-}
-
 FVector2D UBattleHUD::GetFirstPersonCardDetailViewportSize() const
 {
 	return GetBattleHUDRuntime().GetFirstPersonCardDetailViewportSize();
