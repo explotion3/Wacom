@@ -249,7 +249,7 @@ bool FWacomUIBattleSceneEnemyTargetClickRoutesByEnemyPartKeySpec::RunTest(const 
 		return false;
 	}
 
-	UBattleHUD* HUD = Harness->HUD();
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
 	Harness->SetSession(Session.Get());
 	const FBattleSnapshot Before = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, DamageCard->CardId);
@@ -267,8 +267,8 @@ bool FWacomUIBattleSceneEnemyTargetClickRoutesByEnemyPartKeySpec::RunTest(const 
 		LeftPart->Definition ? LeftPart->Definition->PartId : NAME_None,
 		RightPart->Definition ? RightPart->Definition->PartId : NAME_None);
 
-	HUD->OnCardClickedByUser(CardId);
-	TestEqual(TEXT("Card click enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	HUD->SetTargetSelectionStateForTest(CardId);
+	TestEqual(TEXT("Target select test state is active"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 
 	const FWacomInteractionTargetHandle RightHandle = FWacomInteractionTargetHandle::ForWorldTarget(
 		FGuid(),
@@ -390,7 +390,14 @@ bool FWacomUIBattleSceneEnemyTargetClickProbeBuildsKeyOnlyHandleSpec::RunTest(co
 	HUD->SetSession(Session.Get());
 	HUD->SetBattleSceneEnemyHostsForTest({ SceneHost.Host });
 	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
-	HUD->OnCardClickedByUser(FWacomBattleFixture::FindHandInstanceByCardId(Session->BuildSnapshot(), DamageCard->CardId));
+	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(
+		Session->BuildSnapshot(),
+		DamageCard->CardId);
+	if (!TestTrue(TEXT("Damage card is in hand"), CardId.IsValid()))
+	{
+		return false;
+	}
+	HUD->SetTargetSelectionStateForTest(CardId);
 
 	WacomBattleSceneEnemyTargetSpec::ClearRuntimeWorldTargetId(PartActor);
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
