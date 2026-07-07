@@ -554,7 +554,6 @@ bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleIni
 	OutParams.LowHpThreshold  = RunState.LowHpThreshold;
 
 	// 战斗只读备战卡组。BattleDeckEntries 让来自 SpecialZone 的入战卡携带对应 B 主卡 CapacityEffect。
-	OutParams.BattleDeckOverride.Reset();
 	OutParams.BattleDeckEntries.Reset();
 	OutParams.BattleDeckEntries.Reserve(RunState.BattleDeck.Num());
 	for (const FCardInstance& Inst : RunState.BattleDeck)

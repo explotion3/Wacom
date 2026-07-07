@@ -1429,8 +1429,6 @@ bool FWacomRunDeckBuildInitParamsUsesBattleDeckSpec::RunTest(const FString& /*Pa
 		Params.BattleDeckEntries[0].Definition.Get() == Normal);
 	TestTrue(TEXT("Native BattleDeck entry has no CapacityEffect"),
 		Params.BattleDeckEntries[0].CapacityEffectTags.IsEmpty());
-	TestEqual(TEXT("BattleDeckOverride no longer written by RunSession"),
-		Params.BattleDeckOverride.Num(), 0);
 
 	return true;
 }
@@ -1864,7 +1862,6 @@ bool FWacomRunDeckBuildInitParamsIncludesEnabledSpecialZoneSpec::RunTest(const F
 	}
 
 	TestEqual(TEXT("SpecialZone enabled weapon included once"), SpecialZoneEntries, 1);
-	TestEqual(TEXT("Legacy BattleDeckOverride no longer written by RunSession"), Params.BattleDeckOverride.Num(), 0);
 
 	return true;
 }

@@ -132,7 +132,7 @@ FWacomStatus FBattleInitializer::Initialize(
 	}
 
 	// 战斗只读备战卡组。优先使用 BattleDeckEntries（来自 RunState.BattleDeck
-	// 与 SpecialZone 入战卡），其次使用旧 BattleDeckOverride，空时回退 StarterDeck。
+	// 与 SpecialZone 入战卡），空时回退 Character->StarterDeck 供 direct fixture / debug 使用。
 	if (Params.BattleDeckEntries.Num() > 0)
 	{
 		for (const FBattleDeckEntry& Entry : Params.BattleDeckEntries)
@@ -144,19 +144,6 @@ FWacomStatus FBattleInitializer::Initialize(
 				Entry.Definition.Get(),
 				ECardLocation::Draw,
 				&Entry.CapacityEffectTags);
-			State.Cards.DrawPile.Add(CardId);
-		}
-	}
-	else if (Params.BattleDeckOverride.Num() > 0)
-	{
-		for (const TObjectPtr<const UCardDefinition>& CardDef : Params.BattleDeckOverride)
-		{
-			if (!CardDef) { continue; }
-			const FGuid CardId = CreateCardInstance(
-				State,
-				ReferencedAssets,
-				CardDef.Get(),
-				ECardLocation::Draw);
 			State.Cards.DrawPile.Add(CardId);
 		}
 	}

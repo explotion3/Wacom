@@ -132,8 +132,7 @@ struct WACOMBATTLE_API FKnockdownChoiceView
  *
  * 备战卡组来源（按优先级从高到低）：
  *   1) BattleDeckEntries 非空 → 使用 entries（含 CapacityEffectTags，RunSession 路径）
- *   2) BattleDeckOverride 非空 → 旧路径，仅含 Definition（fixture 向后兼容）
- *   3) 都为空 → 回退到 Character->StarterDeck
+ *   2) 都为空 → 回退到 Character->StarterDeck（direct fixture / debug fallback）
  *
  * 左右手卡始终从 Character 加载，不通过 Override / Entries。
  */
@@ -156,20 +155,6 @@ struct WACOMBATTLE_API FBattleInitParams
 	/** 0 表示基于时间。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	int32 RandomSeed = 0;
-
-	/**
-	 * 备战卡组覆盖（旧字段，仅作为 fixture 向后兼容）。空时使用 Character->StarterDeck。
-	 *
-	 * RunSession::BuildInitParamsForBattle 使用 BattleDeckEntries（携带 CapacityEffectTags）。
-	 * BattleSession::Initialize 的选择规则：
-	 *   1) BattleDeckEntries.Num() > 0 → 用 entries（推荐路径）
-	 *   2) 否则 BattleDeckOverride.Num() > 0 → 旧路径（CapacityEffectTags 留空）
-	 *   3) 否则 → 用 Character->StarterDeck
-	 *
-	 * 仅供 BattleSpec / BattleFixture 等老测试用例继续使用。
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
-	TArray<TObjectPtr<const UCardDefinition>> BattleDeckOverride;
 
 	/**
 	 * 备战卡组入战清单。
