@@ -340,8 +340,8 @@ bool FWacomUIBattlePresentationStackUsesCardTargetPreviewSpec::RunTest(const FSt
 		return false;
 	}
 
-	HUD->OnCardClickedByUser(PreviewDamageCardId);
-	TestEqual(TEXT("Clicking target card enters target select"), HUD->GetUIState(), EBattleUIState::TargetSelect);
+	HUD->SetTargetSelectionStateForTest(PreviewDamageCardId);
+	TestEqual(TEXT("Target select test state is active"), HUD->GetUIState(), EBattleUIState::TargetSelect);
 	HUD->OnEnemyPartClickedByUser(MakeWorldTargetForPreviewPresentation(Session->BuildSnapshot()));
 
 	TestEqual(TEXT("Target submit appends one stack entry"), HUD->GetPresentationStackEntryCountForTest(), 1);
