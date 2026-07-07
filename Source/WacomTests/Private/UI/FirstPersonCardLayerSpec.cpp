@@ -4925,11 +4925,11 @@ bool FWacomFirstPersonCardLayerMissingTargetFallbackTest::RunTest(const FString&
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerCommandFailureNoCommitHintTest,
-	"Wacom.UI.FirstPersonCardLayer.PlayCommit.CommandFailureDoesNotTriggerCommitOrTargetConfirm",
+	FWacomFirstPersonCardLayerUnknownCardPlayedEventNoCommitHintTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayCommit.UnknownCardPlayedEventDoesNotTriggerCommitOrTargetConfirm",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerCommandFailureNoCommitHintTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonCardLayerUnknownCardPlayedEventNoCommitHintTest::RunTest(const FString& Parameters)
 {
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* Character = Fx.MakeCharacter(
@@ -4944,14 +4944,13 @@ bool FWacomFirstPersonCardLayerCommandFailureNoCommitHintTest::RunTest(const FSt
 	HUD->SetSession(Session);
 	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	const FGuid FakeCardId = FGuid::NewGuid();
-	HUD->OnCardClickedByUser(FakeCardId);
 	HUD->StoreFirstPersonCardTransitionEventsForTest({
 		WacomFirstPersonCardLayerSpec::MakeBattleEvent(EBattleEventType::CardPlayed, FakeCardId)
 	});
 	const TArray<FWacomFirstPersonCardLayerTransitionHint> Hints =
 		HUD->BuildFirstPersonCardTransitionHintsForTest(Previous, Session->BuildSnapshot());
 
-	TestEqual(TEXT("Failed command records no transition/commit hints"), Hints.Num(), 0);
+	TestEqual(TEXT("Unknown played card event records no transition/commit hints"), Hints.Num(), 0);
 	return true;
 }
 
