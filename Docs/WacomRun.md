@@ -390,7 +390,7 @@ Outcome 分支：
 
 节点消耗不在 `OnBattleFinishedFromTrigger()` 内部完成。当前 `AWacomGameMode::ExitBattle()` 在非 Undetermined 战斗结束后统一 `ConsumeNode(1)`，胜利、失败、撤离都消耗。
 
-战斗 Trigger 的场景销毁由 GameMode 处理。真胜利会调用 `MarkTriggerDestroyed(PersistentId)` 并 Destroy Actor；撤离不销毁，允许下次重入。若异常路径产生“撤离但全灭”的 packet，GameMode 判断全灭数量时也优先读取 `DestroyedPartKeys`，仅在没有有效 key 时 fallback 到 legacy `DestroyedParts`。
+战斗 Trigger 的场景销毁由 GameMode 处理。真胜利会调用 `MarkTriggerDestroyed(PersistentId)` 并 Destroy Actor；撤离不销毁，允许下次重入。若异常路径产生“撤离但全灭”的 packet，GameMode 判断全灭数量时只统计有效 `DestroyedPartKeys` / `EnemyResults.DestroyedPartKeys`；legacy `DestroyedParts` 只保留给 Run 侧旧数据 / 手写 packet 撤离重入兼容，不再驱动 App 层场景 Trigger 销毁。
 
 `BattleProgress.DestroyedPartKeys` 是撤离重入的规则真相，身份由 `EncounterId + EnemySlotId + PartSlotId` 匹配，避免多敌人 encounter 中同名部位互相串进度。`DestroyedParts` 只作为无法派生有效 key 的旧数据 / 手写测试 snapshot 内部 identity fallback；新撤离进度不再重复写入该投影。Run 构建战斗参数时不会按旧 PartId 宽匹配。当前 `BattleProgress` 仍不进入 SaveGame。
 

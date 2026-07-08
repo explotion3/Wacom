@@ -267,6 +267,9 @@ bool FWacomBattleResultPacketDestroyedPartCountPrefersKeysSpec::RunTest(const FS
 	TestEqual(TEXT("Valid stable keys take priority and are unique"),
 		Packet.CountDestroyedPartsKeyFirst(),
 		1);
+	TestEqual(TEXT("Key-only count ignores legacy identity projection"),
+		Packet.CountDestroyedPartKeysOnly(),
+		1);
 
 	FBattleResultPacket EnemyResultPacket;
 	FBattleEnemyResult EnemyResult;
@@ -279,6 +282,9 @@ bool FWacomBattleResultPacketDestroyedPartCountPrefersKeysSpec::RunTest(const FS
 	TestEqual(TEXT("EnemyResults stable keys are counted when top-level keys are absent"),
 		EnemyResultPacket.CountDestroyedPartsKeyFirst(),
 		1);
+	TestEqual(TEXT("Key-only count includes EnemyResults stable keys"),
+		EnemyResultPacket.CountDestroyedPartKeysOnly(),
+		1);
 
 	FBattleResultPacket LegacyPacket;
 	LegacyPacket.DestroyedPartKeys.Add(FBattleEnemyPartKey());
@@ -290,6 +296,9 @@ bool FWacomBattleResultPacketDestroyedPartCountPrefersKeysSpec::RunTest(const FS
 	TestEqual(TEXT("Missing valid keys falls back to legacy identity projection"),
 		LegacyPacket.CountDestroyedPartsKeyFirst(),
 		1);
+	TestEqual(TEXT("Key-only count does not fall back to legacy identity projection"),
+		LegacyPacket.CountDestroyedPartKeysOnly(),
+		0);
 
 	FBattleResultPacket EmptyPacket;
 	TestEqual(TEXT("Empty packet has no destroyed parts"),

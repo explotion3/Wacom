@@ -226,7 +226,7 @@ GameMode 退出战斗时：
 5. 从当前 suspended Run Tunnel 构造 `RunTunnelReturn` stage request。
 6. 通过 `FWacomFirstPersonViewStageReturnFlow` 将第一人称视角移动回 Run Tunnel 样条 View Pose。
 7. stage 完成后恢复 PlayerCharacter 探索移动；若回程 blend 为 0 或无法构造 request，则同步恢复。
-8. 从 `UBattleSession::BuildResultPacket()` 构造 `FBattleResultPacket`，调 RunSession 结算战斗结果，并在非 Undetermined 战斗结束后消耗 1 节点。
+8. 从 `UBattleSession::BuildResultPacket()` 构造 `FBattleResultPacket`，调 RunSession 结算战斗结果，并在非 Undetermined 战斗结束后消耗 1 节点。GameMode 判断撤离异常全灭时只统计 packet 中有效的 `DestroyedPartKeys` / `EnemyResults.DestroyedPartKeys`，不再用 legacy `DestroyedParts` projection 触发场景 Trigger 销毁。
 9. 真胜利时标记并销毁触发战斗的 BattleTrigger；撤离时不销毁 Trigger，允许玩家再次按 E 重入。
 10. `EGameFlowState` 回到 `Exploration` 后，等待 return staging completion，再重新激活并刷新 Run first-person hand，同时刷新交互 Toast。
 

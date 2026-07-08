@@ -645,7 +645,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		// 若异常路径产生"撤离但所有部位都已毁"，也按胜利清理，避免留下空血敌人反复重入。
 		// 正常规则层会在最后一个存活部位被击倒时禁用撤离。
 		// 失败 / 未定场景也不销毁。
-		const int32 DestroyedPartCount = Packet.CountDestroyedPartsKeyFirst();
+		const int32 DestroyedPartCount = Packet.CountDestroyedPartKeysOnly();
 		const bool bAllPartsDestroyed = PendingBattleTotalPartCount > 0
 			&& DestroyedPartCount >= PendingBattleTotalPartCount;
 		const bool bRealVictory = (Packet.Outcome == EBattleOutcome::Victory)

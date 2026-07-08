@@ -195,12 +195,12 @@ struct WACOMBATTLE_API FBattleResultPacket
 	TArray<FBattleEnemyPartKey> DestroyedPartKeys;
 
 	/**
-	 * 外部消费者统计已破坏部位数量时使用的 key-first 入口。
+	 * 只统计稳定公开 key 的已破坏部位数量。
 	 *
-	 * 正式 contract 读取 DestroyedPartKeys；只有旧数据 / 手写 packet 没有有效 key 时，
-	 * 才 fallback 到 DestroyedParts 这个内部 identity 投影。
+	 * 需要严格排除 legacy fallback 的生产判断应使用该入口，避免把 DestroyedParts
+	 * internal identity projection 重新提升为规则依据。
 	 */
-	int32 CountDestroyedPartsKeyFirst() const
+	int32 CountDestroyedPartKeysOnly() const
 	{
 		TArray<FBattleEnemyPartKey> ValidDestroyedPartKeys;
 		ValidDestroyedPartKeys.Reserve(DestroyedPartKeys.Num());
@@ -221,10 +221,21 @@ struct WACOMBATTLE_API FBattleResultPacket
 				}
 			}
 		}
+		return ValidDestroyedPartKeys.Num();
+	}
 
-		if (ValidDestroyedPartKeys.Num() > 0)
+	/**
+	 * 外部消费者统计已破坏部位数量时使用的 key-first 入口。
+	 *
+	 * 正式 contract 读取 DestroyedPartKeys；只有旧数据 / 手写 packet 没有有效 key 时，
+	 * 才 fallback 到 DestroyedParts 这个内部 identity 投影。
+	 */
+	int32 CountDestroyedPartsKeyFirst() const
+	{
+		const int32 ValidDestroyedPartKeyCount = CountDestroyedPartKeysOnly();
+		if (ValidDestroyedPartKeyCount > 0)
 		{
-			return ValidDestroyedPartKeys.Num();
+			return ValidDestroyedPartKeyCount;
 		}
 
 		TArray<FBattlePartSlotIdentity> LegacyDestroyedParts;
