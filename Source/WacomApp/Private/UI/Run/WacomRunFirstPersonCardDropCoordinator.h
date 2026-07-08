@@ -34,7 +34,7 @@ public:
 		TWeakObjectPtr<AWacomPlayerController> PlayerController;
 
 		TFunction<bool()> IsInExplorationFlowFunc;
-		TFunction<bool()> HasActiveGameMenuFunc;
+		TFunction<bool()> HasActiveRunGameMenuOrTransitionSuppressionFunc;
 		TFunction<bool()> IsRunWorldCardDropEnabledFunc;
 		TFunction<bool()> ShouldLogRunWorldCardDropFunc;
 		TFunction<UWacomRunFirstPersonCardSourceComponent*()> ResolveRunFirstPersonCardSourceFunc;
@@ -65,9 +65,10 @@ public:
 			return IsInExplorationFlowFunc && IsInExplorationFlowFunc();
 		}
 
-		bool HasActiveGameMenu() const
+		bool HasActiveRunGameMenuOrTransitionSuppression() const
 		{
-			return HasActiveGameMenuFunc && HasActiveGameMenuFunc();
+			return HasActiveRunGameMenuOrTransitionSuppressionFunc
+				&& HasActiveRunGameMenuOrTransitionSuppressionFunc();
 		}
 
 		bool IsRunWorldCardDropEnabled() const

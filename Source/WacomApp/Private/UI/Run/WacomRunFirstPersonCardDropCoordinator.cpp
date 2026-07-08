@@ -570,7 +570,7 @@ bool FWacomRunFirstPersonCardDropCoordinator::ShouldHandleRunFirstPersonMenuDrop
 	const UWacomRunFirstPersonCardSourceComponent* Source =
 		Context.ResolveRunFirstPersonCardSource();
 	return Context.IsInExplorationFlow()
-		&& Context.HasActiveGameMenu()
+		&& Context.HasActiveRunGameMenuOrTransitionSuppression()
 		&& Source
 		&& Source->HasActiveMenuLease();
 }
@@ -588,7 +588,7 @@ bool FWacomRunFirstPersonCardDropCoordinator::ShouldHandleRunWorldCardDropProbe(
 		return false;
 	}
 
-	return !Context.HasActiveGameMenu();
+	return !Context.HasActiveRunGameMenuOrTransitionSuppression();
 }
 
 bool FWacomRunFirstPersonCardDropCoordinator::ShouldBindRunFirstPersonCardDropDelegates() const
@@ -852,7 +852,7 @@ FWacomRunFirstPersonCardDropCoordinator::ResolveRunMenuCardDropIntent(
 		return RejectWith(EWacomRunMenuCardDropRejectReason::NotInExploration);
 	}
 
-	if (!Context.HasActiveGameMenu())
+	if (!Context.HasActiveRunGameMenuOrTransitionSuppression())
 	{
 		return RejectWith(EWacomRunMenuCardDropRejectReason::MissingGameMenu);
 	}

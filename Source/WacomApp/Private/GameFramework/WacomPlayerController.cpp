@@ -673,7 +673,7 @@ AWacomPlayerController::GetRunFirstPersonCardDropCoordinator()
 			{
 				return IsInExplorationFlow();
 			};
-		DropContext.HasActiveGameMenuFunc =
+		DropContext.HasActiveRunGameMenuOrTransitionSuppressionFunc =
 			[this]()
 			{
 				return HasActiveRunGameMenuOrTransitionSuppression();
