@@ -116,7 +116,7 @@ APlayerController* FWacomBattleHUDRuntimeHost::GetOwningPlayer() const
 
 UBattleSession* FWacomBattleHUDRuntimeHost::GetSession() const
 {
-	return HUD.GetSession();
+	return HUD.GetInjectedBattleSession();
 }
 
 void FWacomBattleHUDRuntimeHost::RebuildChildBattleWidgets()

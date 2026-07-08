@@ -219,13 +219,13 @@ void UBattleHUD::RebuildChildBattleWidgetsForRuntime()
 	if (CombatLogFeed) { ChildBattleWidgets.Add(CombatLogFeed); }
 	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
 
-	if (UBattleSession* CurrentSession = GetSession())
+	if (UBattleSession* CurrentSession = GetInjectedBattleSession())
 	{
 		for (const TObjectPtr<UWacomBattleWidgetBase>& Child : ChildBattleWidgets)
 		{
 			if (Child)
 			{
-				Child->SetSession(CurrentSession);
+				Child->SetInjectedBattleSession(CurrentSession);
 			}
 		}
 	}

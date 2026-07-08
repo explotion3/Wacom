@@ -30,13 +30,22 @@ bool FWacomUIBattleWidgetBaseSessionBlueprintSurfaceDeprecatedSpec::RunTest(cons
 
 	TestTrue(TEXT("SetSession Blueprint surface is deprecated"),
 		SetSessionFunction->HasMetaData(TEXT("DeprecatedFunction")));
+	TestTrue(TEXT("SetSession Blueprint surface is hidden from new palette"),
+		SetSessionFunction->HasMetaData(TEXT("BlueprintInternalUseOnly")));
 	TestTrue(TEXT("SetSession deprecation points WBP to Snapshot / ViewData"),
 		SetSessionFunction->GetMetaData(TEXT("DeprecationMessage")).Contains(TEXT("Snapshot")));
 
 	TestTrue(TEXT("GetSession Blueprint surface is deprecated"),
 		GetSessionFunction->HasMetaData(TEXT("DeprecatedFunction")));
+	TestTrue(TEXT("GetSession Blueprint surface is hidden from new palette"),
+		GetSessionFunction->HasMetaData(TEXT("BlueprintInternalUseOnly")));
 	TestTrue(TEXT("GetSession deprecation points WBP to BattleHUD commands"),
 		GetSessionFunction->GetMetaData(TEXT("DeprecationMessage")).Contains(TEXT("BattleHUD")));
+
+	TestTrue(TEXT("SetInjectedBattleSession stays C++ only"),
+		WidgetBaseClass->FindFunctionByName(TEXT("SetInjectedBattleSession")) == nullptr);
+	TestTrue(TEXT("GetInjectedBattleSession stays C++ only"),
+		WidgetBaseClass->FindFunctionByName(TEXT("GetInjectedBattleSession")) == nullptr);
 
 	return true;
 }

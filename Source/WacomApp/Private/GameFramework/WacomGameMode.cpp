@@ -458,7 +458,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		WacomPC->ClearRunFirstPersonCardLayer();
 	}
 
-	BattleHUD->SetSession(ActiveSession);
+	BattleHUD->SetInjectedBattleSession(ActiveSession);
 	GuardBattleEntryHUD(BattleHUD);
 	TArray<AWacomBattleEnemyActor*> SceneEnemyHosts;
 	Trigger->BuildBattleSceneEnemyHosts(SceneEnemyHosts);

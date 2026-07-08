@@ -3,7 +3,7 @@
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "Session/BattleSession.h"
 
-void UWacomBattleWidgetBase::SetSession(UBattleSession* InSession)
+void UWacomBattleWidgetBase::SetInjectedBattleSession(UBattleSession* InSession)
 {
 	UBattleSession* Old = Session;
 	Session = InSession;
@@ -13,7 +13,7 @@ void UWacomBattleWidgetBase::SetSession(UBattleSession* InSession)
 	{
 		if (Child)
 		{
-			Child->SetSession(InSession);
+			Child->SetInjectedBattleSession(InSession);
 		}
 	}
 
@@ -21,6 +21,11 @@ void UWacomBattleWidgetBase::SetSession(UBattleSession* InSession)
 	{
 		NativeOnSessionChanged(Old, InSession);
 	}
+}
+
+void UWacomBattleWidgetBase::SetSession(UBattleSession* InSession)
+{
+	SetInjectedBattleSession(InSession);
 }
 
 void UWacomBattleWidgetBase::RefreshFromSnapshot(const FBattleSnapshot& Snap)
