@@ -97,7 +97,7 @@ Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.
 
 ## §6 卡牌展示与 Builder
 
-`UWacomCardPresentationBuilder` 是卡牌 UI 展示数据统一入口和 Blueprint 可用门面。它从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData` 和效果徽章 view，只服务 UI 表现，不参与 Battle 或 Run 结算。小卡卡面数据、紧凑描述、体格/价值展示和效果徽章由 App-private `WacomCardFaceViewDataBuilder` 负责；详情文档的 Section 组装由 App-private `WacomCardDetailDocumentBuilder` 负责，说明模板编译由 App-private `WacomCardExplanationCompiler` 负责。Widget 只消费最终 `FWacomCardViewData` / `Sections`，不推断卡面字段、Effect / Passive 的分区规则。
+`UWacomCardPresentationBuilder` 是卡牌 UI 展示数据统一入口和 Blueprint 可用门面。它从 `UCardDefinition` 生成 `FWacomCardViewData`、`FWacomCardDetailViewData` 和效果徽章 view，只服务 UI 表现，不参与 Battle 或 Run 结算。小卡卡面数据、紧凑描述、体格/价值展示和效果徽章由 App-private `WacomCardFaceViewDataBuilder` 负责；详情文档的 Section 组装由 App-private `WacomCardDetailDocumentBuilder` 负责，说明模板选择和 block 组装由 App-private `WacomCardExplanationCompiler` 负责，`{value:...}` / `{icon:...}` / `{status:...}` / `{keyword:...}` 等 typed slot 到 semantic run 的转换由 App-private `WacomCardExplanationTemplateRenderer` 负责。Widget 只消费最终 `FWacomCardViewData` / `Sections`，不推断卡面字段、Effect / Passive 的分区规则。
 
 Battle 卡面可以额外传入 `FWacomCardPresentationRuntimeContext`（C++ only）来覆盖当前展示事实。该 context 由 `WacomApp/Private/UI/Battle` 从 `FHandCardSnapshot` 构造；拖拽、敌人 hover 或 TargetSelect hover 有候选目标时，可以再叠加 `WacomBattle` 返回的 `FBattleCardTargetPreview` facts。`FBattleCardTargetPreview` 只表示规则事实；App 侧统一通过 `WacomBattleCardPresentation::BuildTargetPreviewPresentation()` 生成 `FWacomBattleCardTargetPreviewPresentation`，其中包含 hand layer entries、source detail 和可选 target hand card detail。Bridge / coordinator 只应用这份 presentation，不在各自路径里重新拼卡面和详情。Builder 只消费这些 UI-only facts，不读取 `UBattleSession`，也不重算战斗规则。
 
