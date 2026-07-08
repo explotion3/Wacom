@@ -25,6 +25,8 @@ public:
 		const UWacomCardDragOperation& CardOp);
 
 	static FGuid ResolveDeleteRequestInstanceId(const UWacomCardDragOperation& CardOp);
+	static FText BuildMoveZoneNameText(EZoneKind Zone);
+	static FText BuildMoveFailureToastText(FName DisabledReason);
 	static FText BuildDeleteFailureToastText(FName DisabledReason);
 
 	static bool HandleZoneDropRequested(

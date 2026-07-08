@@ -45,8 +45,6 @@ public:
 	void SetDropContent(UWidget* InContent);
 	bool TryHandleDropOperation(UDragDropOperation* InOperation);
 	void SetDropTargetState(EWacomDropTargetState InState);
-	static FText FormatZoneNameForToast(EZoneKind Zone);
-	static FText FormatMoveFailureReasonForToast(FName DisabledReason);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Drop")
 	EWacomDropTargetState GetDropTargetState() const { return DropTargetState; }

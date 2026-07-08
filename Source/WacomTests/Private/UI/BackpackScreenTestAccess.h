@@ -12,6 +12,7 @@ class UWacomCardDragOperation;
 class UWacomBackpackScreen;
 class UWacomDeckCardWidget;
 class UWacomSpecialZoneWidget;
+enum class EZoneKind : uint8;
 struct FWacomBackpackScreenAutomationTestView;
 
 struct FWacomBackpackScreenTestAccess
@@ -21,6 +22,8 @@ struct FWacomBackpackScreenTestAccess
 	static void SetRunSession(UWacomBackpackScreen& Screen, URunSession* RunSession);
 	static FWacomBackpackScreenAutomationTestView View(const UWacomBackpackScreen& Screen);
 	static FGuid ResolveDeleteRequestInstanceId(const UWacomCardDragOperation& CardOp);
+	static FText BuildMoveZoneNameText(EZoneKind Zone);
+	static FText BuildMoveFailureToastText(FName DisabledReason);
 	static FText BuildDeleteFailureToastText(FName DisabledReason);
 
 	static UWacomDeckCardWidget* BattleDeckCard(const UWacomBackpackScreen& Screen, int32 Index);

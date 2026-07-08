@@ -280,6 +280,8 @@ private:
 	void RebuildAllForTest() { RebuildAll(); }
 	FWacomBackpackScreenAutomationTestView GetAutomationTestViewForTest() const;
 	static FGuid ResolveDeleteRequestInstanceIdForTest(const UWacomCardDragOperation& CardOp);
+	static FText BuildMoveZoneNameTextForTest(EZoneKind Zone);
+	static FText BuildMoveFailureToastTextForTest(FName DisabledReason);
 	static FText BuildDeleteFailureToastTextForTest(FName DisabledReason);
 
 	void SetRunSessionForTest(URunSession* InRunSession)

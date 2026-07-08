@@ -24,7 +24,7 @@ UI 不直接修改战斗或 Run 状态。Widget 读取 Snapshot、ViewData 或 V
 | 领域 | 数据来源 | 命令出口 |
 |---|---|---|
 | ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 只读显示探索状态和交互提示 |
-| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；DropTarget 只维护 hover/drop 视觉状态，删牌奖励、失败文案、hover preview 和 drop 提交都经私有 command flow 调用 RunSession、Toast 和 Confirm；负重区只渲染 Run snapshot 中的卡牌，不创建 Burden DropTarget；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
+| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；DropTarget 只维护 hover/drop 视觉状态，hover preview、drop 提交、Toast 文案和 Confirm 都经私有 command flow / presentation helper 调用 RunSession、Toast 和 Confirm；负重区只渲染 Run snapshot 中的卡牌，不创建 Burden DropTarget；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
 | Shop | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 flow 编排购买、关闭访问和 Toast |
 | RunEvent | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 flow 编排选项提交、支付、关闭和 Toast |
 | Battle | `FBattleSnapshot`、`FBattleEvent`、Battle ViewData | `UBattleHUD` 是唯一战斗 UI 命令出口 |
@@ -89,7 +89,7 @@ Run UI 只显示 RunSession 的当前事实和 presentation view，不直接改 
 | `UWacomRunMenuWidgetBase` | Run GameMenu base | Backpack / Shop / RunEvent 的 Run 专用菜单血统；承载 Run first-person menu lease / drop 合同 |
 | `UWacomMenuWidgetBase` | Common GameMenu base | 处理 CommonUI activation 和 Back 请求；仅保留 deprecated Run first-person menu lease / drop Blueprint 兼容桥 |
 
-Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。`UWacomBackpackScreen` 保留 Screen 生命周期、WBP 绑定、列表刷新和玩家意图入口；顶部金币 / 备战区标题等 header 标量刷新由 App-private `FWacomBackpackHeaderPresenter` 承接，卡牌详情面板的创建、source guard、显示隐藏和 viewport-safe positioning 由 `FWacomBackpackCardDetailController` 承接，存放区 snapshot revision / signature dirty gate 由 `FWacomBackpackStorageRefreshGate` 承接，普通卡牌列表的 identity reconcile、复用、排序和移除回调由 `FWacomBackpackDeckCardListReconciler` 承接，SpecialZone 区块的 identity reconcile、排序和移除回调由 `FWacomBackpackSpecialZoneListReconciler` 承接，避免在 Screen / SpecialZone Widget 内重复扩散列表算法。
+Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。`UWacomBackpackScreen` 保留 Screen 生命周期、WBP 绑定、列表刷新和玩家意图入口；顶部金币 / 备战区标题等 header 标量刷新由 App-private `FWacomBackpackHeaderPresenter` 承接，移动 / 删牌 Toast 文案由 App-private command presentation helper 承接，卡牌详情面板的创建、source guard、显示隐藏和 viewport-safe positioning 由 `FWacomBackpackCardDetailController` 承接，存放区 snapshot revision / signature dirty gate 由 `FWacomBackpackStorageRefreshGate` 承接，普通卡牌列表的 identity reconcile、复用、排序和移除回调由 `FWacomBackpackDeckCardListReconciler` 承接，SpecialZone 区块的 identity reconcile、排序和移除回调由 `FWacomBackpackSpecialZoneListReconciler` 承接，避免在 Screen / SpecialZone Widget 内重复扩散列表算法。
 
 `UWacomShopScreen` 保留 Screen 生命周期、WBP 绑定、cached shop snapshot、商品行创建和购买意图入口；shop snapshot revision / offer row signature dirty gate 由 `FWacomShopRefreshGate` 承接，商品行的 identity reconcile、排序和移除由 `FWacomShopOfferRowListReconciler` 承接，金币变化仍通过 `CurrentGold` 进入 signature 来刷新购买可用状态。
 

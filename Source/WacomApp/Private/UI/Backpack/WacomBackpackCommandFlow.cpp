@@ -5,8 +5,8 @@
 #include "Cards/CardDefinition.h"
 #include "RunSession.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Backpack/WacomBackpackToastText.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
-#include "UI/Backpack/WacomZoneDropTarget.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Menus/WacomConfirmDialog.h"
 
@@ -55,7 +55,7 @@ void FWacomBackpackCommandFlow::ShowMoveFailureToast(UWacomAppToastSubsystem* To
 {
 	if (ToastSubsystem)
 	{
-		ToastSubsystem->ShowWarning(UWacomZoneDropTarget::FormatMoveFailureReasonForToast(DisabledReason));
+		ToastSubsystem->ShowWarning(BuildMoveFailureToastText(DisabledReason));
 	}
 }
 
@@ -83,25 +83,19 @@ FGuid FWacomBackpackCommandFlow::ResolveDeleteRequestInstanceId(const UWacomCard
 	return CardOp.InstanceId;
 }
 
+FText FWacomBackpackCommandFlow::BuildMoveZoneNameText(EZoneKind Zone)
+{
+	return FWacomBackpackToastText::FormatZoneNameForToast(Zone);
+}
+
+FText FWacomBackpackCommandFlow::BuildMoveFailureToastText(FName DisabledReason)
+{
+	return FWacomBackpackToastText::FormatMoveFailureReasonForToast(DisabledReason);
+}
+
 FText FWacomBackpackCommandFlow::BuildDeleteFailureToastText(FName DisabledReason)
 {
-	if (DisabledReason == DeckReasons::MissingCard())
-	{
-		return LOCTEXT("DeleteFailMissingCard", "无法销毁：没有卡牌数据。");
-	}
-	if (DisabledReason == DeckReasons::CardNotOwned())
-	{
-		return LOCTEXT("DeleteFailCardNotOwned", "无法销毁：这张卡不在当前背包中。");
-	}
-	if (DisabledReason == DeckReasons::Intrinsic())
-	{
-		return LOCTEXT("DeleteFailIntrinsic", "无法销毁：固有卡不能被销毁。");
-	}
-	if (DeckReasons::IsLastCapacityProvider(DisabledReason))
-	{
-		return LOCTEXT("DeleteFailLastCapacityProvider", "无法销毁：这是最后一张背包容量卡。");
-	}
-	return LOCTEXT("DeleteFailUnknown", "无法销毁：当前规则不允许。");
+	return FWacomBackpackToastText::FormatDeleteFailureReasonForToast(DisabledReason);
 }
 
 FRunDeckOperationValidation FWacomBackpackCommandFlow::ValidateDeleteDropPreview(
@@ -154,7 +148,7 @@ bool FWacomBackpackCommandFlow::HandleZoneDropRequested(
 		ToastView.MessageText = FText::Format(
 			LOCTEXT("MoveSuccessToast", "移动卡牌：{0} → {1}"),
 			GetCardDisplayName(CardOp.Definition.Get()),
-			UWacomZoneDropTarget::FormatZoneNameForToast(TargetZone));
+			BuildMoveZoneNameText(TargetZone));
 		ToastView.Tone = EWacomAppToastTone::System;
 		ToastView.IconKey = TEXT("CardMoved");
 		ToastSubsystem->ShowToast(ToastView);
@@ -174,7 +168,7 @@ bool FWacomBackpackCommandFlow::HandleDeleteDropRequested(
 	if (!Validation.bCanExecute)
 	{
 		const FText FailureText = Validation.DisabledReason == DeckReasons::RunSessionMissing()
-			? UWacomZoneDropTarget::FormatMoveFailureReasonForToast(Validation.DisabledReason)
+			? BuildMoveFailureToastText(Validation.DisabledReason)
 			: BuildDeleteFailureToastText(Validation.DisabledReason);
 		ShowWarningToast(&Screen, FailureText);
 		return false;

@@ -37,6 +37,16 @@ FGuid FWacomBackpackScreenTestAccess::ResolveDeleteRequestInstanceId(const UWaco
 	return UWacomBackpackScreen::ResolveDeleteRequestInstanceIdForTest(CardOp);
 }
 
+FText FWacomBackpackScreenTestAccess::BuildMoveZoneNameText(EZoneKind Zone)
+{
+	return UWacomBackpackScreen::BuildMoveZoneNameTextForTest(Zone);
+}
+
+FText FWacomBackpackScreenTestAccess::BuildMoveFailureToastText(FName DisabledReason)
+{
+	return UWacomBackpackScreen::BuildMoveFailureToastTextForTest(DisabledReason);
+}
+
 FText FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(FName DisabledReason)
 {
 	return UWacomBackpackScreen::BuildDeleteFailureToastTextForTest(DisabledReason);

@@ -1200,18 +1200,18 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBackpackToastTextSpec::RunTest(const FString& /*Parameters*/)
 {
-	// Command flow extraction should keep these player-facing texts reachable via public UI wrappers.
+	// Command flow owns these player-facing texts; passive DropTarget widgets only forward drag intent.
 	TestEqual(TEXT("Move success target name"),
-		UWacomZoneDropTarget::FormatZoneNameForToast(EZoneKind::BattleDeck).ToString(),
+		FWacomBackpackScreenTestAccess::BuildMoveZoneNameText(EZoneKind::BattleDeck).ToString(),
 		FString(TEXT("备战区")));
 	TestEqual(TEXT("Move flux full reason"),
-		UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("FluxFull")).ToString(),
+		FWacomBackpackScreenTestAccess::BuildMoveFailureToastText(TEXT("FluxFull")).ToString(),
 		FString(TEXT("无法移动：通量区已满。")));
 	TestEqual(TEXT("Move battle deck full reason"),
-		UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("BattleDeckFull")).ToString(),
+		FWacomBackpackScreenTestAccess::BuildMoveFailureToastText(TEXT("BattleDeckFull")).ToString(),
 		FString(TEXT("无法移动：备战区已满。")));
 	TestEqual(TEXT("Move unknown helper reason falls back"),
-		UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("RunSessionMissing")).ToString(),
+		FWacomBackpackScreenTestAccess::BuildMoveFailureToastText(TEXT("RunSessionMissing")).ToString(),
 		FString(TEXT("无法移动：当前规则不允许。")));
 	TestEqual(TEXT("Delete missing card reason"),
 		FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(TEXT("MissingCard")).ToString(),
