@@ -3,12 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "RunStateTypes.h"
 #include "Types/WacomEnums.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
+#include "UI/Run/WacomRunMenuCardLeaseTypes.h"
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 #include "WacomPlayerController.generated.h"
 
@@ -26,6 +26,7 @@ class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
 class UWacomRunTunnelMovementComponent;
 class UWacomFirstPersonCardAnchorComponent;
+class UWacomRunFirstPersonCardSourceComponent;
 class UWacomCardDetailPanel;
 class FWacomBattleSceneInteractionRouter;
 class FWacomRunWorldInteractionRouter;

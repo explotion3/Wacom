@@ -3,8 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "UI/Foundation/WacomActivatableWidget.h"
+#include "UI/Run/WacomRunMenuCardLeaseTypes.h"
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 #include "WacomMenuWidgetBase.generated.h"
 

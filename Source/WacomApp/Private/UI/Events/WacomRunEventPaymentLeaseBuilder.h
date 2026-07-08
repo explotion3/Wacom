@@ -3,8 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "RunState.h"
+#include "UI/Run/WacomRunMenuCardLeaseTypes.h"
 
 struct FWacomRunEventPaymentLeaseBuildResult
 {

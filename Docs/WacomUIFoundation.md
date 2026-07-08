@@ -114,6 +114,8 @@ CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。
 
 `UWacomMenuWidgetBase` 负责 Menu 模式下的返回键口径：ESC 和 Gamepad FaceButton Right 触发 Back 请求，默认广播 `OnBackRequestedNative` 后 `DeactivateWidget()`。子类只在语义不同，例如 ConfirmDialog 把 Back 当 Cancel 时覆盖。
 
+当前兼容例外：`UWacomMenuWidgetBase` 仍承载 Run first-person menu lease / drop 的 Blueprint 钩子，供 Backpack / Shop / RunEvent 等现有 GameMenu Screen 使用；lease / drop 数据 contract 位于 `UI/Run/`，具体规则仍由 `AWacomPlayerController`、Run menu drop coordinator 或 owning menu flow 提交。后续正式收口方向见 `Docs/TechDebt.md`，不要把新的 Run 规则或一次性菜单状态继续加到 Foundation 基类。
+
 ## §6 Modal 与 MainMenu
 
 `UWacomModalDialog / FWacomDialogButton` 是通用 Modal layer 对话框合同，只负责标题、正文、按钮和关闭回调，不提交 Battle / Run / travel 命令。
