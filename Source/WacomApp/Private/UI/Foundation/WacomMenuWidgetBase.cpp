@@ -8,6 +8,7 @@
 #include "Input/Events.h"
 #include "Input/CommonUIInputTypes.h"
 #include "TimerManager.h"
+#include "UI/Run/WacomRunMenuWidgetBase.h"
 
 UWacomMenuWidgetBase::UWacomMenuWidgetBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -46,6 +47,11 @@ bool UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(
 	FWacomRunMenuCardLeaseRequest Request,
 	FWacomRunMenuCardLeaseResult& OutResult)
 {
+	if (UWacomRunMenuWidgetBase* RunMenu = Cast<UWacomRunMenuWidgetBase>(this))
+	{
+		return RunMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, OutResult);
+	}
+
 	if (Request.LeaseId.IsNone())
 	{
 		Request.LeaseId = FName(*FString::Printf(
@@ -59,37 +65,34 @@ bool UWacomMenuWidgetBase::SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(
 			*GetName()));
 	}
 
-	AWacomPlayerController* WacomPC = ResolveOwningWacomPlayerController();
-	if (!WacomPC)
-	{
-		OutResult = FWacomRunMenuCardLeaseResult();
-		OutResult.LeaseId = Request.LeaseId;
-		OutResult.SourceId = Request.SourceId;
-		OutResult.RejectReason = TEXT("MissingPlayerController");
-		OutResult.DebugSummary = FString::Printf(
-			TEXT("RunMenuCardLeaseProvider{LeaseId=%s SourceId=%s LeaseSet=false Reject=MissingPlayerController}"),
-			*Request.LeaseId.ToString(),
-			*Request.SourceId.ToString());
-		return false;
-	}
+	OutResult = FWacomRunMenuCardLeaseResult();
+	OutResult.LeaseId = Request.LeaseId;
+	OutResult.SourceId = Request.SourceId;
+	OutResult.RejectReason = TEXT("UnsupportedMenuBase");
+	OutResult.DebugSummary = FString::Printf(
+		TEXT("RunMenuCardLeaseProvider{LeaseId=%s SourceId=%s LeaseSet=false Reject=UnsupportedMenuBase}"),
+		*Request.LeaseId.ToString(),
+		*Request.SourceId.ToString());
+	return false;
+}
 
-	const bool bSet =
-		WacomPC->SetRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, OutResult);
-	if (bSet)
+FName UWacomMenuWidgetBase::GetOwnedRunFirstPersonCardLayerMenuLeaseId() const
+{
+	if (const UWacomRunMenuWidgetBase* RunMenu = Cast<UWacomRunMenuWidgetBase>(this))
 	{
-		OwnedRunFirstPersonCardLayerMenuLeaseId = Request.LeaseId;
+		return RunMenu->GetOwnedRunMenuCardLeaseId();
 	}
-	else if (OwnedRunFirstPersonCardLayerMenuLeaseId == Request.LeaseId
-		&& OutResult.RejectReason == FName(TEXT("NoMatchingCandidates")))
-	{
-		OwnedRunFirstPersonCardLayerMenuLeaseId = NAME_None;
-	}
-	return bSet;
+	return NAME_None;
 }
 
 FWacomRunMenuCardDropResolveResult UWacomMenuWidgetBase::ResolveRunMenuFirstPersonCardDropIntent_Implementation(
 	const FWacomRunMenuCardDropResolveResult& Candidate) const
 {
+	if (const UWacomRunMenuWidgetBase* RunMenu = Cast<UWacomRunMenuWidgetBase>(this))
+	{
+		return RunMenu->ResolveRunMenuCardDropIntent(Candidate);
+	}
+
 	FWacomRunMenuCardDropResolveResult Result = Candidate;
 	Result.IntentKind = EWacomRunMenuCardDropIntentKind::ProbeZoneTarget;
 	Result.RejectReason = EWacomRunMenuCardDropRejectReason::MenuDoesNotAccept;
@@ -103,6 +106,11 @@ bool UWacomMenuWidgetBase::SubmitRunMenuFirstPersonCardDropIntent_Implementation
 	const FWacomRunMenuCardDropResolveResult& Resolved,
 	FWacomRunMenuCardDropResolveResult& OutSubmitted)
 {
+	if (UWacomRunMenuWidgetBase* RunMenu = Cast<UWacomRunMenuWidgetBase>(this))
+	{
+		return RunMenu->SubmitRunMenuCardDropIntent(Resolved, OutSubmitted);
+	}
+
 	OutSubmitted = Resolved;
 	OutSubmitted.IntentKind = EWacomRunMenuCardDropIntentKind::Reject;
 	OutSubmitted.RejectReason = EWacomRunMenuCardDropRejectReason::SubmitFailed;
@@ -114,14 +122,15 @@ bool UWacomMenuWidgetBase::SubmitRunMenuFirstPersonCardDropIntent_Implementation
 
 bool UWacomMenuWidgetBase::HasOwnedRunFirstPersonCardLayerMenuLease(FName LeaseId) const
 {
-	return !LeaseId.IsNone()
-		&& OwnedRunFirstPersonCardLayerMenuLeaseId == LeaseId;
+	if (const UWacomRunMenuWidgetBase* RunMenu = Cast<UWacomRunMenuWidgetBase>(this))
+	{
+		return RunMenu->HasOwnedRunMenuCardLease(LeaseId);
+	}
+	return false;
 }
 
 void UWacomMenuWidgetBase::NativeOnDeactivated()
 {
-	ClearOwnedRunFirstPersonCardLayerMenuLease();
-
 	if (AWacomPlayerController* WacomPC = ResolveOwningWacomPlayerController())
 	{
 		WacomPC->UnregisterActiveGameMenuWidget(this);
@@ -158,16 +167,10 @@ void UWacomMenuWidgetBase::FocusFirstButton()
 
 void UWacomMenuWidgetBase::ClearOwnedRunFirstPersonCardLayerMenuLease()
 {
-	if (OwnedRunFirstPersonCardLayerMenuLeaseId.IsNone())
+	if (UWacomRunMenuWidgetBase* RunMenu = Cast<UWacomRunMenuWidgetBase>(this))
 	{
-		return;
+		RunMenu->ClearOwnedRunMenuCardLease();
 	}
-
-	if (AWacomPlayerController* WacomPC = ResolveOwningWacomPlayerController())
-	{
-		WacomPC->ClearRunFirstPersonCardLayerMenuLease(OwnedRunFirstPersonCardLayerMenuLeaseId);
-	}
-	OwnedRunFirstPersonCardLayerMenuLeaseId = NAME_None;
 }
 
 AWacomPlayerController* UWacomMenuWidgetBase::ResolveOwningWacomPlayerController() const

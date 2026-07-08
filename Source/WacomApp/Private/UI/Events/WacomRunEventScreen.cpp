@@ -167,7 +167,7 @@ void UWacomRunEventScreen::NativeOnDeactivated()
 	Super::NativeOnDeactivated();
 }
 
-FWacomRunMenuCardDropResolveResult UWacomRunEventScreen::ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+FWacomRunMenuCardDropResolveResult UWacomRunEventScreen::ResolveRunMenuCardDropIntent_Implementation(
 	const FWacomRunMenuCardDropResolveResult& Candidate) const
 {
 	const FWacomRunMenuCardDropResolveResult Result =
@@ -184,7 +184,7 @@ FWacomRunMenuCardDropResolveResult UWacomRunEventScreen::ResolveRunMenuFirstPers
 	return Result;
 }
 
-bool UWacomRunEventScreen::SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+bool UWacomRunEventScreen::SubmitRunMenuCardDropIntent_Implementation(
 	const FWacomRunMenuCardDropResolveResult& Resolved,
 	FWacomRunMenuCardDropResolveResult& OutSubmitted)
 {
@@ -400,12 +400,12 @@ void UWacomRunEventScreen::RefreshPaymentLeaseFromCachedChoices()
 			BuildRunEventPresentationStateView(CachedChoices, PaymentZoneToChoiceId).GetChoices());
 	if (!PaymentLease.bHasCandidateCards)
 	{
-		ClearOwnedRunFirstPersonCardLayerMenuLease();
+		ClearOwnedRunMenuCardLease();
 		return;
 	}
 
 	FWacomRunMenuCardLeaseResult LeaseResult;
-	SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(PaymentLease.Request, LeaseResult);
+	SetOwnedRunMenuCardLeaseFromRunCards(PaymentLease.Request, LeaseResult);
 }
 
 void UWacomRunEventScreen::RecordPaymentDropResolveDebug(

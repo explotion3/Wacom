@@ -69,7 +69,7 @@ FWacomRunMenuCardDropResolveResult FWacomShopRunEventTestAccess::ResolveDrop(
 	const UWacomRunEventScreen& Screen,
 	const FWacomRunMenuCardDropResolveResult& Candidate)
 {
-	return Screen.ResolveRunMenuFirstPersonCardDropIntent_Implementation(Candidate);
+	return Screen.ResolveRunMenuCardDropIntent_Implementation(Candidate);
 }
 
 bool FWacomShopRunEventTestAccess::SubmitDrop(
@@ -77,7 +77,7 @@ bool FWacomShopRunEventTestAccess::SubmitDrop(
 	const FWacomRunMenuCardDropResolveResult& Resolved,
 	FWacomRunMenuCardDropResolveResult& OutSubmitted)
 {
-	return Screen.SubmitRunMenuFirstPersonCardDropIntent_Implementation(Resolved, OutSubmitted);
+	return Screen.SubmitRunMenuCardDropIntent_Implementation(Resolved, OutSubmitted);
 }
 
 FWacomRunEventScreenDebugView FWacomShopRunEventTestAccess::DebugView(

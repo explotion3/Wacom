@@ -47,6 +47,7 @@
 #include "UI/Run/WacomRunFirstPersonCardDropCoordinator.h"
 #include "UI/Run/WacomRunFirstPersonCardDragController.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
+#include "UI/Run/WacomRunMenuWidgetBase.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Framework/Application/SlateApplication.h"
@@ -1283,7 +1284,7 @@ bool AWacomPlayerController::TryGetMouseWidgetPosition(FVector2D& OutWidgetPosit
 	return true;
 }
 
-UWacomMenuWidgetBase* AWacomPlayerController::ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const
+UWacomRunMenuWidgetBase* AWacomPlayerController::ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const
 {
 	if (LeaseId.IsNone())
 	{
@@ -1292,8 +1293,9 @@ UWacomMenuWidgetBase* AWacomPlayerController::ResolveOwningMenuForActiveRunMenuL
 
 	for (int32 Index = ActiveGameMenuWidgets.Num() - 1; Index >= 0; --Index)
 	{
-		UWacomMenuWidgetBase* Menu = ActiveGameMenuWidgets[Index].Get();
-		if (Menu && Menu->HasOwnedRunFirstPersonCardLayerMenuLease(LeaseId))
+		UWacomRunMenuWidgetBase* Menu =
+			Cast<UWacomRunMenuWidgetBase>(ActiveGameMenuWidgets[Index].Get());
+		if (Menu && Menu->HasOwnedRunMenuCardLease(LeaseId))
 		{
 			return Menu;
 		}

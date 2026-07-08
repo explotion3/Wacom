@@ -20,8 +20,8 @@
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Events/WacomRunEventChoiceButton.h"
 #include "UI/Events/WacomRunEventScreen.h"
-#include "UI/Foundation/WacomMenuWidgetBase.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
+#include "UI/Run/WacomRunMenuWidgetBase.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "Engine/HitResult.h"
 #include "RunState.h"
@@ -792,7 +792,7 @@ private:
 };
 
 UCLASS()
-class UWacomMenuWidgetBaseProbe : public UWacomMenuWidgetBase
+class UWacomMenuWidgetBaseProbe : public UWacomRunMenuWidgetBase
 {
 	GENERATED_BODY()
 
@@ -822,7 +822,7 @@ protected:
 			: Super::ResolveOwningWacomPlayerController();
 	}
 
-	virtual FWacomRunMenuCardDropResolveResult ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+	virtual FWacomRunMenuCardDropResolveResult ResolveRunMenuCardDropIntent_Implementation(
 		const FWacomRunMenuCardDropResolveResult& Candidate) const override
 	{
 		FWacomRunMenuCardDropResolveResult Result = Candidate;
@@ -843,7 +843,7 @@ protected:
 		return Result;
 	}
 
-	virtual bool SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+	virtual bool SubmitRunMenuCardDropIntent_Implementation(
 		const FWacomRunMenuCardDropResolveResult& Resolved,
 		FWacomRunMenuCardDropResolveResult& OutSubmitted) override
 	{

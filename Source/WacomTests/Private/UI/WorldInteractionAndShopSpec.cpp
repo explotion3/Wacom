@@ -2908,7 +2908,7 @@ bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Par
 	LeaseRequest.SourceId = TEXT("Test.Source");
 	LeaseRequest.bAllowAllOwnedCardsWhenNoFilter = true;
 	TestTrue(TEXT("Menu owns active lease"),
-		Menu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(LeaseRequest, LeaseResult));
+		Menu->SetOwnedRunMenuCardLeaseFromRunCards(LeaseRequest, LeaseResult));
 
 	TStrongObjectPtr<UWacomRunMenuDropTargetWidgetProbe> Zone(NewObject<UWacomRunMenuDropTargetWidgetProbe>());
 	Zone->ZoneId = TEXT("RunMenu.Zone.Key");

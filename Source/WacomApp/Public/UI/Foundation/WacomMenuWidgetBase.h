@@ -25,6 +25,10 @@ class AWacomPlayerController;
  * 不提供：
  *   - 任何战斗 / Run 数据访问（Widget 不直接操作业务状态）
  *   - 动画（已有 UWacomActivatableWidget 的 BP_PlayTransition* 钩子可用）
+ *
+ * 兼容例外：
+ *   - deprecated Run first-person menu lease / drop Blueprint 钩子仍保留给旧资产编译。
+ *     正式 Run 菜单能力由 UWacomRunMenuWidgetBase 承载。
  */
 UCLASS(Abstract, Blueprintable)
 class WACOMAPP_API UWacomMenuWidgetBase : public UWacomActivatableWidget
@@ -41,25 +45,27 @@ public:
 	DECLARE_MULTICAST_DELEGATE(FOnBackRequestedNative);
 	FOnBackRequestedNative OnBackRequestedNative;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards",
+		meta = (DeprecatedFunction, DeprecationMessage = "Run first-person menu lease lives on UWacomRunMenuWidgetBase."))
 	bool SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(
 		FWacomRunMenuCardLeaseRequest Request,
 		FWacomRunMenuCardLeaseResult& OutResult);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards")
-	FName GetOwnedRunFirstPersonCardLayerMenuLeaseId() const
-	{
-		return OwnedRunFirstPersonCardLayerMenuLeaseId;
-	}
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards",
+		meta = (DeprecatedFunction, DeprecationMessage = "Run first-person menu lease lives on UWacomRunMenuWidgetBase."))
+	FName GetOwnedRunFirstPersonCardLayerMenuLeaseId() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards",
+		meta = (DeprecatedFunction, DeprecationMessage = "Run first-person menu lease lives on UWacomRunMenuWidgetBase."))
 	void ClearOwnedRunFirstPersonCardLayerMenuLease();
 
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards",
+		meta = (DeprecatedFunction, DeprecationMessage = "Run first-person menu drop lives on UWacomRunMenuWidgetBase."))
 	FWacomRunMenuCardDropResolveResult ResolveRunMenuFirstPersonCardDropIntent(
 		const FWacomRunMenuCardDropResolveResult& Candidate) const;
 
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards")
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Wacom|Run|First Person Cards",
+		meta = (DeprecatedFunction, DeprecationMessage = "Run first-person menu drop lives on UWacomRunMenuWidgetBase."))
 	bool SubmitRunMenuFirstPersonCardDropIntent(
 		const FWacomRunMenuCardDropResolveResult& Resolved,
 		FWacomRunMenuCardDropResolveResult& OutSubmitted);
@@ -80,7 +86,4 @@ protected:
 private:
 	/** 聚焦第一个 enabled 的 UButton 子控件。 */
 	void FocusFirstButton();
-
-	UPROPERTY(Transient)
-	FName OwnedRunFirstPersonCardLayerMenuLeaseId = NAME_None;
 };

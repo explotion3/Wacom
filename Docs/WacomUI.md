@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-ui
 status: active
-updated: 2026-07-07
+updated: 2026-07-08
 tags:
   - wacom/ui
   - wacom/wbp
@@ -86,8 +86,8 @@ Run UI 只显示 RunSession 的当前事实和 presentation view，不直接改 
 | `UWacomBackpackScreen` | GameMenu | 展示背包、备战区、负重区和 SpecialZone；拖拽 hover preview、drop 提交或按钮意图经 Screen flow 进入 RunSession；Screen 不复制负重区规则，目标合法性由 RunSession 决定 |
 | `UWacomShopScreen` | GameMenu | 展示当前商店 snapshot、金币、商品状态；购买和关闭访问经 Screen flow 提交 |
 | `UWacomRunEventScreen` | GameMenu | 展示当前事件节点、选项、支付需求和后果预览；选项提交和卡牌支付经 Screen flow 提交 |
-| `UWacomRunMenuWidgetBase` | Run GameMenu base | Backpack / Shop / RunEvent 的 Run 专用菜单血统；后续承载 Run first-person menu lease / drop 合同 |
-| `UWacomMenuWidgetBase` | Common GameMenu base | 处理 CommonUI activation 和 Back 请求；当前仍保留 Run first-person menu lease / drop Blueprint 兼容桥 |
+| `UWacomRunMenuWidgetBase` | Run GameMenu base | Backpack / Shop / RunEvent 的 Run 专用菜单血统；承载 Run first-person menu lease / drop 合同 |
+| `UWacomMenuWidgetBase` | Common GameMenu base | 处理 CommonUI activation 和 Back 请求；仅保留 deprecated Run first-person menu lease / drop Blueprint 兼容桥 |
 
 Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。`UWacomBackpackScreen` 保留 Screen 生命周期、WBP 绑定、列表刷新和玩家意图入口；顶部金币 / 备战区标题等 header 标量刷新由 App-private `FWacomBackpackHeaderPresenter` 承接，卡牌详情面板的创建、source guard、显示隐藏和 viewport-safe positioning 由 `FWacomBackpackCardDetailController` 承接，存放区 snapshot revision / signature dirty gate 由 `FWacomBackpackStorageRefreshGate` 承接，普通卡牌列表的 identity reconcile、复用、排序和移除回调由 `FWacomBackpackDeckCardListReconciler` 承接，SpecialZone 区块的 identity reconcile、排序和移除回调由 `FWacomBackpackSpecialZoneListReconciler` 承接，避免在 Screen / SpecialZone Widget 内重复扩散列表算法。
 

@@ -18,7 +18,7 @@ class UWacomRunMenuDropTargetWidget;
 class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class UWacomRunFirstPersonCardSourceComponent;
-class UWacomMenuWidgetBase;
+class UWacomRunMenuWidgetBase;
 
 /**
  * App-private coordinator for Run first-person card drop.
@@ -40,7 +40,7 @@ public:
 		TFunction<UWacomRunFirstPersonCardSourceComponent*()> ResolveRunFirstPersonCardSourceFunc;
 		TFunction<UWacomFirstPersonCardAnchorComponent*()> ResolveFirstPersonCardAnchorFunc;
 		TFunction<URunSession*()> ResolveRunSessionFunc;
-		TFunction<UWacomMenuWidgetBase*(FName)> ResolveOwningMenuForLeaseFunc;
+		TFunction<UWacomRunMenuWidgetBase*(FName)> ResolveOwningMenuForLeaseFunc;
 		TFunction<UWacomAppToastSubsystem*()> ResolveAppToastSubsystemFunc;
 		TFunction<void()> RefreshRunFirstPersonCardLayerFunc;
 		TFunction<bool(const FVector2D&, FWacomInteractionTargetHandle&)>
@@ -100,7 +100,7 @@ public:
 			return ResolveRunSessionFunc ? ResolveRunSessionFunc() : nullptr;
 		}
 
-		UWacomMenuWidgetBase* ResolveOwningMenuForLease(FName LeaseId) const
+		UWacomRunMenuWidgetBase* ResolveOwningMenuForLease(FName LeaseId) const
 		{
 			return ResolveOwningMenuForLeaseFunc
 				? ResolveOwningMenuForLeaseFunc(LeaseId)

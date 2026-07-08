@@ -156,9 +156,9 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeOnActivated() override;
 	virtual void NativeOnDeactivated() override;
-	virtual FWacomRunMenuCardDropResolveResult ResolveRunMenuFirstPersonCardDropIntent_Implementation(
+	virtual FWacomRunMenuCardDropResolveResult ResolveRunMenuCardDropIntent_Implementation(
 		const FWacomRunMenuCardDropResolveResult& Candidate) const override;
-	virtual bool SubmitRunMenuFirstPersonCardDropIntent_Implementation(
+	virtual bool SubmitRunMenuCardDropIntent_Implementation(
 		const FWacomRunMenuCardDropResolveResult& Resolved,
 		FWacomRunMenuCardDropResolveResult& OutSubmitted) override;
 

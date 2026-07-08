@@ -9,8 +9,8 @@
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
-#include "UI/Foundation/WacomMenuWidgetBase.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
+#include "UI/Run/WacomRunMenuWidgetBase.h"
 
 #define LOCTEXT_NAMESPACE "WacomRunFirstPersonCardDropCoordinator"
 
@@ -252,7 +252,10 @@ public:
 			Transaction.bReleased
 			&& Probe.MenuResult.IntentKind == EWacomRunMenuCardDropIntentKind::SubmitZoneTarget
 			&& Probe.MenuResult.bSubmitted;
-		SubmitResult.bKeepPreviewAfterRelease = SubmitResult.bSubmitted;
+		SubmitResult.bKeepPreviewAfterRelease =
+			Transaction.bReleased
+			&& Probe.MenuResult.TargetHandle.IsValid()
+			&& Probe.MenuResult.IntentKind != EWacomRunMenuCardDropIntentKind::None;
 		return SubmitResult;
 	}
 
@@ -885,7 +888,7 @@ FWacomRunFirstPersonCardDropCoordinator::ResolveRunMenuCardDropIntent(
 	Result.bCanSubmit = false;
 	Result.bSubmitted = false;
 
-	UWacomMenuWidgetBase* OwningMenu =
+	UWacomRunMenuWidgetBase* OwningMenu =
 		Context.ResolveOwningMenuForLease(Result.LeaseId);
 	if (!OwningMenu)
 	{
@@ -895,7 +898,7 @@ FWacomRunFirstPersonCardDropCoordinator::ResolveRunMenuCardDropIntent(
 		return Result;
 	}
 
-	Result = OwningMenu->ResolveRunMenuFirstPersonCardDropIntent(Result);
+	Result = OwningMenu->ResolveRunMenuCardDropIntent(Result);
 
 	if (Result.IntentKind != EWacomRunMenuCardDropIntentKind::SubmitZoneTarget
 		|| Result.SubmitPolicy != EWacomRunMenuCardDropSubmitPolicy::ControllerDestroyOwnedCard)
@@ -951,7 +954,7 @@ bool FWacomRunFirstPersonCardDropCoordinator::SubmitResolvedRunMenuCardDropInten
 
 	if (Result.SubmitPolicy == EWacomRunMenuCardDropSubmitPolicy::MenuHandled)
 	{
-		UWacomMenuWidgetBase* OwningMenu =
+		UWacomRunMenuWidgetBase* OwningMenu =
 			Context.ResolveOwningMenuForLease(Result.LeaseId);
 		if (!OwningMenu)
 		{
@@ -965,7 +968,7 @@ bool FWacomRunFirstPersonCardDropCoordinator::SubmitResolvedRunMenuCardDropInten
 
 		FWacomRunMenuCardDropResolveResult SubmittedResult = Result;
 		const bool bSubmitted =
-			OwningMenu->SubmitRunMenuFirstPersonCardDropIntent(Result, SubmittedResult);
+			OwningMenu->SubmitRunMenuCardDropIntent(Result, SubmittedResult);
 		Result = SubmittedResult;
 		Result.bSubmitted = bSubmitted && Result.bSubmitted;
 		if (!Result.bSubmitted)

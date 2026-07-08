@@ -1929,7 +1929,7 @@ bool FWacomUIRunFirstPersonMenuWidgetOwnedLeaseClearsSpec::RunTest(const FString
 	Request.AllowedCardDefinitions.Add(Fang);
 	FWacomRunMenuCardLeaseResult Result;
 	TestTrue(TEXT("Menu widget can set owned lease with generated ids"),
-		Menu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, Result));
+		Menu->SetOwnedRunMenuCardLeaseFromRunCards(Request, Result));
 
 	UWacomRunFirstPersonCardSourceComponent* Source = PC->GetRunFirstPersonCardSourceComponent();
 	TestTrue(TEXT("PC source has active menu lease"),
@@ -2290,7 +2290,7 @@ bool FWacomUIRunMenuCardDropProbeOnlySpec::RunTest(const FString& /*Parameters*/
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is set"),
-		ActiveMenu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+		ActiveMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, LeaseResult));
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	FWacomFirstPersonCardDragView DragView;
@@ -2349,7 +2349,7 @@ bool FWacomUIRunMenuCardDropAcceptedZoneSpec::RunTest(const FString& /*Parameter
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is set"),
-		ActiveMenu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+		ActiveMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, LeaseResult));
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	FWacomFirstPersonCardDragView DragView;
@@ -2411,7 +2411,7 @@ bool FWacomUIRunMenuCardDropReleaseDestroysSpec::RunTest(const FString& /*Parame
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is set"),
-		ActiveMenu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+		ActiveMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, LeaseResult));
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	const FGuid PaidId =
@@ -2472,7 +2472,7 @@ bool FWacomUIRunMenuCardDropMenuHandledDoesNotDefaultDestroySpec::RunTest(const 
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is set"),
-		ActiveMenu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+		ActiveMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, LeaseResult));
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	const FGuid PaidId =
@@ -2545,7 +2545,7 @@ bool FWacomUIRunMenuCardDropMenuHandledFailureSpec::RunTest(const FString& /*Par
 	Request.AllowedCardIds.Add(TEXT("PoisonFang"));
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is set"),
-		ActiveMenu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+		ActiveMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, LeaseResult));
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	const FGuid PaidId =
@@ -3466,7 +3466,7 @@ bool FWacomUIRunMenuCardDropValidationFailsSpec::RunTest(const FString& /*Parame
 	Request.ExplicitCardInstanceIds.Add(PaidId);
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is set"),
-		ActiveMenu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+		ActiveMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, LeaseResult));
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
@@ -3534,7 +3534,7 @@ bool FWacomUIRunMenuCardDropRefreshesLeaseSpec::RunTest(const FString& /*Paramet
 	Request.ExplicitCardInstanceIds.Add(State.Backpack[1].InstanceId);
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is set"),
-		ActiveMenu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+		ActiveMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, LeaseResult));
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 	UWacomRunFirstPersonCardSourceComponent* Source = PC->GetRunFirstPersonCardSourceComponent();
 	TestTrue(TEXT("Lease has two candidates"),
@@ -3596,7 +3596,7 @@ bool FWacomUIRunMenuCardDropNoCandidatesClearsLeaseSpec::RunTest(const FString& 
 	Request.ExplicitCardInstanceIds.Add(PaidId);
 	FWacomRunMenuCardLeaseResult LeaseResult;
 	TestTrue(TEXT("Lease is set"),
-		ActiveMenu->SetOwnedRunFirstPersonCardLayerMenuLeaseFromRunCards(Request, LeaseResult));
+		ActiveMenu->SetOwnedRunMenuCardLeaseFromRunCards(Request, LeaseResult));
 	PC->RegisterActiveGameMenuWidget(ActiveMenu.Get());
 
 	FWacomFirstPersonCardDragView DragView;

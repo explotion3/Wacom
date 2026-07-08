@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-ui-foundation
 status: active
-updated: 2026-06-05
+updated: 2026-07-08
 tags:
   - wacom/ui
   - wacom/commonui
@@ -108,13 +108,13 @@ Details / Blueprint 分类口径：
 
 ## §5 Input 与 Menu Back
 
-CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。通用菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入。Backpack / Shop / RunEvent 这类 Run 领域 GameMenu Screen 继承 `UWacomRunMenuWidgetBase`，作为后续承载 Run menu lease / drop 合同的专用血统。
+CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。通用菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入。Backpack / Shop / RunEvent 这类 Run 领域 GameMenu Screen 继承 `UWacomRunMenuWidgetBase`，Run first-person menu lease / drop 合同由该 Run 专用父类承载。
 
 战斗 HUD 和探索 HUD 仍声明自身期望的 UI input config，但底层 gameplay profile 由 `UWacomInputContextCoordinatorSubsystem` 统一应用。探索期固定使用 Run Tunnel 输入模型：Coordinator 切到 `All + NoCapture`、显示鼠标并保持探索 IMC。
 
 `UWacomMenuWidgetBase` 负责 Menu 模式下的返回键口径：ESC 和 Gamepad FaceButton Right 触发 Back 请求，默认广播 `OnBackRequestedNative` 后 `DeactivateWidget()`。子类只在语义不同，例如 ConfirmDialog 把 Back 当 Cancel 时覆盖。
 
-当前兼容例外：`UWacomMenuWidgetBase` 仍承载 Run first-person menu lease / drop 的 Blueprint 钩子，供旧资产节点和现有 GameMenu Screen 过渡使用；Backpack / Shop / RunEvent 已经通过 `UWacomRunMenuWidgetBase` 建立 Run 专用父类。lease / drop 数据 contract 位于 `UI/Run/`，具体规则仍由 `AWacomPlayerController`、Run menu drop coordinator 或 owning menu flow 提交。后续正式收口方向见 `Docs/TechDebt.md`，不要把新的 Run 规则或一次性菜单状态继续加到 Foundation 基类。
+当前兼容例外：`UWacomMenuWidgetBase` 仍保留 deprecated Run first-person menu lease / drop Blueprint 钩子，用于旧资产节点编译和过渡；这些旧钩子只转发到 `UWacomRunMenuWidgetBase`，普通 MainMenu / Pause / Confirm 等 Foundation 菜单不会拥有 Run menu lease。lease / drop 数据 contract 位于 `UI/Run/`，具体规则仍由 `AWacomPlayerController`、Run menu drop coordinator 或 owning menu flow 提交。后续资产清理方向见 `Docs/TechDebt.md`，不要把新的 Run 规则或一次性菜单状态继续加到 Foundation 基类。
 
 ## §6 Modal 与 MainMenu
 

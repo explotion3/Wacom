@@ -15,6 +15,7 @@
 class UInputMappingContext;
 class UInputAction;
 class UWacomMenuWidgetBase;
+class UWacomRunMenuWidgetBase;
 class AWacomRunTunnelBranchTargetActor;
 class ABattleTriggerActor;
 class URunSession;
@@ -448,7 +449,7 @@ private:
 	UWacomRunTunnelMovementComponent* ResolveRunTunnelMovementForCardDragLook() const;
 	bool ShouldHandleRunFirstPersonMenuDropProbe() const;
 	bool ShouldHandleRunWorldCardDropProbe() const;
-	UWacomMenuWidgetBase* ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const;
+	UWacomRunMenuWidgetBase* ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const;
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> RunSession = nullptr;
 

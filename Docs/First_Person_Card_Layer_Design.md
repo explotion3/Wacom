@@ -119,7 +119,7 @@ Runtime source 优先级：
 |---|---|---|
 | Battle runtime hand | `UBattleHUD` first-person hand bridge | 使用 `FBattleSnapshot.Hand.Cards`，启用 battle hand hover / hold / drag |
 | Run default source | `UWacomRunFirstPersonCardSourceComponent` | 探索期显示默认 Run Card Workspace；当前 provider 是 Run BattleDeck 物理卡和可选投影卡，只读展示 |
-| Run menu lease | `UWacomRunMenuWidgetBase` / owning menu（旧 `UWacomMenuWidgetBase` API 兼容桥仍保留） | GameMenu 内临时显示候选持有卡，可启用 hold / drag 到 menu Zone |
+| Run menu lease | `UWacomRunMenuWidgetBase` / owning menu（旧 `UWacomMenuWidgetBase` API 仅作 deprecated 兼容桥） | GameMenu 内临时显示候选持有卡，可启用 hold / drag 到 menu Zone |
 | Development preview | Anchor development preview | PIE / 开发验证，不是 Battle / Run runtime source |
 
 进入战斗时，GameMode / PlayerController 会清理探索期 Run source 和 active menu lease。退出战斗回到 Exploration 后，PlayerController 重新激活 Run first-person source 并刷新当前默认 Run workspace 展示。
