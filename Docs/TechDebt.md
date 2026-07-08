@@ -152,6 +152,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Backpack 删牌区 DropTarget 的规则 helper 已收口：删牌 request instance 解析、奖励文案和失败文案由 `FWacomBackpackCommandFlow` / `UWacomBackpackScreen` automation access 承接，`UWacomDeleteZoneDropTarget` 只维护 drag/drop UI 状态并转发意图。
 - RunEvent 普通选项提交权威已收口：`FWacomRunEventScreenFlow::ChooseChoice` 不再用 cached `FRunEventChoiceSnapshot::bAvailable` 作为提交前 veto，普通点击始终调用 `URunSession::ChooseRunEventOptionWithResult()` 并消费 `FRunEventChoiceResult`。
 - Run Deck 移动事务已收口：`URunSession::MoveInstance()` 不再手写源/目标 zone mutation，已通过校验后的物理区移动、SpecialZone battle flag 清理、B 主卡 entry 保底和负重重算由 `FRunDeckRules::MoveInstance()` 统一承接；显式移动到负重区会刷新负重压力但不立即回填该卡。
+- Run Deck 操作失败 reason contract 已收口：`FRunDeckOperationValidation.DisabledReason` 仍保持 `FName` 兼容面，但生产代码通过 `WacomRunDeckOperationReasons` 获取 deck 原始失败码，RunEvent / UI 可在各自语境内翻译展示文案，不再依赖散落字符串拼写。
 - Battle Combat Log 合同测试已拆出：`BattleCombatLogSpec.cpp` 覆盖 builder、feed、HUD history 和 controller 合同，统一使用 `Wacom.UI.Battle.CombatLog` 前缀；`BattleWidgetSpec.cpp` 不再承载 combat log 专题。
 - Card face view data builder 已抽出：`UWacomCardPresentationBuilder` 不再直接持有小卡卡面字段、紧凑描述、体格/价值展示和效果徽章映射逻辑，`WacomCardFaceViewDataBuilder` 负责生成 `FWacomCardViewData` 和 `FWacomCardViewEffectBadge`。
 - Legacy battle event log 已清理：`UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast`、`BuildLegacyEventBlock()` 和旧 `WBP_BattleEventLogEntry / WBP_BattleEventLogPanel` 残留资产已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。

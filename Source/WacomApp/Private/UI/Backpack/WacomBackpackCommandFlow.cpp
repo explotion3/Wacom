@@ -14,6 +14,8 @@
 
 namespace
 {
+	namespace DeckReasons = WacomRunDeckOperationReasons;
+
 	FRunDeckOperationValidation MakeRejectedBackpackOperation(FName DisabledReason)
 	{
 		FRunDeckOperationValidation Validation;
@@ -65,12 +67,12 @@ FRunDeckOperationValidation FWacomBackpackCommandFlow::ValidateZoneDropPreview(
 {
 	if (!CardOp.InstanceId.IsValid())
 	{
-		return MakeRejectedBackpackOperation(TEXT("CardNotFound"));
+		return MakeRejectedBackpackOperation(DeckReasons::CardNotFound());
 	}
 
 	if (!Run)
 	{
-		return MakeRejectedBackpackOperation(TEXT("RunSessionMissing"));
+		return MakeRejectedBackpackOperation(DeckReasons::RunSessionMissing());
 	}
 
 	return Run->ValidateMoveInstance(CardOp.InstanceId, TargetZone, TargetZoneOwnerInstanceId);
@@ -83,19 +85,19 @@ FGuid FWacomBackpackCommandFlow::ResolveDeleteRequestInstanceId(const UWacomCard
 
 FText FWacomBackpackCommandFlow::BuildDeleteFailureToastText(FName DisabledReason)
 {
-	if (DisabledReason == TEXT("MissingCard"))
+	if (DisabledReason == DeckReasons::MissingCard())
 	{
 		return LOCTEXT("DeleteFailMissingCard", "无法销毁：没有卡牌数据。");
 	}
-	if (DisabledReason == TEXT("CardNotOwned"))
+	if (DisabledReason == DeckReasons::CardNotOwned())
 	{
 		return LOCTEXT("DeleteFailCardNotOwned", "无法销毁：这张卡不在当前背包中。");
 	}
-	if (DisabledReason == TEXT("Intrinsic"))
+	if (DisabledReason == DeckReasons::Intrinsic())
 	{
 		return LOCTEXT("DeleteFailIntrinsic", "无法销毁：固有卡不能被销毁。");
 	}
-	if (DisabledReason == TEXT("LastCapacityProvider") || DisabledReason == TEXT("LastBagProvider"))
+	if (DeckReasons::IsLastCapacityProvider(DisabledReason))
 	{
 		return LOCTEXT("DeleteFailLastCapacityProvider", "无法销毁：这是最后一张背包容量卡。");
 	}
@@ -108,12 +110,12 @@ FRunDeckOperationValidation FWacomBackpackCommandFlow::ValidateDeleteDropPreview
 {
 	if (!ResolveDeleteRequestInstanceId(CardOp).IsValid() || !CardOp.Definition.Get())
 	{
-		return MakeRejectedBackpackOperation(TEXT("MissingCard"));
+		return MakeRejectedBackpackOperation(DeckReasons::MissingCard());
 	}
 
 	if (!Run)
 	{
-		return MakeRejectedBackpackOperation(TEXT("RunSessionMissing"));
+		return MakeRejectedBackpackOperation(DeckReasons::RunSessionMissing());
 	}
 
 	return Run->ValidateDeleteCardForGoldByInstance(ResolveDeleteRequestInstanceId(CardOp));
@@ -142,7 +144,7 @@ bool FWacomBackpackCommandFlow::HandleZoneDropRequested(
 	const bool bMoved = Run->MoveInstance(CardOp.InstanceId, TargetZone, TargetZoneOwnerInstanceId);
 	if (!bMoved)
 	{
-		ShowMoveFailureToast(ToastSubsystem, TEXT("Unknown"));
+		ShowMoveFailureToast(ToastSubsystem, DeckReasons::Unknown());
 		return false;
 	}
 
@@ -171,7 +173,7 @@ bool FWacomBackpackCommandFlow::HandleDeleteDropRequested(
 	const FRunDeckOperationValidation Validation = ValidateDeleteDropPreview(Run, CardOp);
 	if (!Validation.bCanExecute)
 	{
-		const FText FailureText = Validation.DisabledReason == TEXT("RunSessionMissing")
+		const FText FailureText = Validation.DisabledReason == DeckReasons::RunSessionMissing()
 			? UWacomZoneDropTarget::FormatMoveFailureReasonForToast(Validation.DisabledReason)
 			: BuildDeleteFailureToastText(Validation.DisabledReason);
 		ShowWarningToast(&Screen, FailureText);

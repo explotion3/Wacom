@@ -133,6 +133,8 @@ Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCard
 
 同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`；失败路径不修改 RunState。`URunSession::MoveInstance()` 是 public 提交入口，实际校验后 zone mutation、SpecialZone battle flag 清理、B 主卡 SpecialZone entry 保底和负重重算由 `Private/Deck/RunDeckRules.*` 承接。
 
+Deck 操作校验继续通过 `FRunDeckOperationValidation.DisabledReason` 暴露稳定 `FName`，供 Blueprint、UI toast、RunEvent 支付和世界交互诊断兼容使用。生产代码必须通过 `WacomRunDeckOperationReasons` 取得这些 reason ID，不在规则、App flow 或测试里重新手写 deck reason 字符串。`RunEvent` 可以把 deck reason 转译成事件语境 reason（例如“未持有卡”转为“缺少所需卡牌”）；这些展示 / 事件 reason 不等同于 deck 原始失败码。
+
 Run first-person hand 不直接等同于某个物理持有区。`URunSession::BuildRunCardWorkspaceSnapshot()` 提供 Run 层只读 `Run Card Workspace` contract，用来把当前需要展示或操作的一组已拥有卡投影给 App 层：
 
 - `DefaultExploration` workspace 当前读取 `BattleDeck` 物理卡，并可追加 SpecialZone 中随 B 主卡投影入战的卡；投影条目仍保留真实 `PhysicalZone = SpecialZone`、`ZoneOwnerInstanceId` 和 `bIsProjectedBattleDeckCard` metadata。
@@ -488,7 +490,7 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | `Private/Save/RunSaveGameSerializer.*` | `FRunState <-> UWacomSaveGame` 字段拷贝、SaveEntry 写入和读档校验 |
 | `Private/Shops/RunShopTransaction.*` | 商店访问、库存快照和购买事务 helper |
 | `Public/RunState.h` | `FRunState`、商店状态、事件状态、战斗进度快照 |
-| `Public/RunStateTypes.h` | `FCardInstance`、压力枚举、时段枚举、Zone 枚举与背包 Snapshot |
+| `Public/RunStateTypes.h` | `FCardInstance`、压力枚举、时段枚举、Zone 枚举、deck operation reason ID 与背包 Snapshot |
 | `Public/WacomSaveGame.h` | 当前磁盘 schema |
 | `Private/WacomSaveGame.cpp` | SaveVersion 迁移链 |
 

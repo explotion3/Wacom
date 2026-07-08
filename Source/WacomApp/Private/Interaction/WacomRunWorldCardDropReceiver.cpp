@@ -6,11 +6,14 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "RunSession.h"
+#include "RunStateTypes.h"
 
 #define LOCTEXT_NAMESPACE "WacomRunWorldCardDropReceiver"
 
 namespace
 {
+	namespace DeckReasons = WacomRunDeckOperationReasons;
+
 	FRunWorldCardInteractionValidation BuildReceiverReject(FName Reason)
 	{
 		FRunWorldCardInteractionValidation Result;
@@ -49,9 +52,9 @@ namespace
 	{
 		return Reason == TEXT("MissingSourceCard")
 			|| Reason == TEXT("InvalidSourceCard")
-			|| Reason == TEXT("CardNotOwned")
-			|| Reason == TEXT("Intrinsic")
-			|| Reason == TEXT("LastCapacityProvider");
+			|| Reason == DeckReasons::CardNotOwned()
+			|| Reason == DeckReasons::Intrinsic()
+			|| DeckReasons::IsLastCapacityProvider(Reason);
 	}
 
 	FText ResolvePromptOrDefault(const FText& Prompt, const FText& DefaultPrompt)

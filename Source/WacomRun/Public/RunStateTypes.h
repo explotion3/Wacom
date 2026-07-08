@@ -153,6 +153,34 @@ enum class EZoneKind : uint8
 	BurdenZone  UMETA(DisplayName = "负重区"),
 };
 
+/**
+ * Run deck operation failure reason IDs.
+ *
+ * Keep these as FName for Blueprint / UI compatibility, but route all production
+ * code through this namespace so rules, UI toasts and RunEvent adapters cannot
+ * drift by spelling the same reason in different modules.
+ */
+namespace WacomRunDeckOperationReasons
+{
+	WACOMRUN_API const FName& Unknown();
+	WACOMRUN_API const FName& MissingCard();
+	WACOMRUN_API const FName& CardNotOwned();
+	WACOMRUN_API const FName& CardNotFound();
+	WACOMRUN_API const FName& Intrinsic();
+	WACOMRUN_API const FName& LastCapacityProvider();
+	WACOMRUN_API const FName& FluxFull();
+	WACOMRUN_API const FName& BattleDeckFull();
+	WACOMRUN_API const FName& SpecialZoneMissing();
+	WACOMRUN_API const FName& SelfSpecialZone();
+	WACOMRUN_API const FName& TypeBInSpecialZone();
+	WACOMRUN_API const FName& SpecialZoneFull();
+	WACOMRUN_API const FName& TypeBInBurdenZone();
+	WACOMRUN_API const FName& InvalidTargetZone();
+	WACOMRUN_API const FName& RunSessionMissing();
+
+	WACOMRUN_API bool IsLastCapacityProvider(FName DisabledReason);
+}
+
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunDeckOperationValidation
 {

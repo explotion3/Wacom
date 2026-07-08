@@ -8,6 +8,8 @@
 
 namespace
 {
+	namespace DeckReasons = WacomRunDeckOperationReasons;
+
 	TArray<FCardInstance>* FindMutableMovePile(FRunState& State, EZoneKind Zone, FGuid ZoneOwnerInstanceId)
 	{
 		switch (Zone)
@@ -390,29 +392,29 @@ bool FRunDeckRules::HasCapacityProviderAfterDestroyingOwnedInstance(const FRunSt
 FRunDeckOperationValidation FRunDeckRules::ValidatePermanentRemoveCard(const FRunState& State, const UCardDefinition* Card)
 {
 	FRunDeckOperationValidation Result;
-	Result.DisabledReason = TEXT("Unknown");
+	Result.DisabledReason = DeckReasons::Unknown();
 
 	if (!Card)
 	{
-		Result.DisabledReason = TEXT("MissingCard");
+		Result.DisabledReason = DeckReasons::MissingCard();
 		return Result;
 	}
 
 	if (!DoesRunOwnCardDefinition(State, Card))
 	{
-		Result.DisabledReason = TEXT("CardNotOwned");
+		Result.DisabledReason = DeckReasons::CardNotOwned();
 		return Result;
 	}
 
 	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Intrinsic))
 	{
-		Result.DisabledReason = TEXT("Intrinsic");
+		Result.DisabledReason = DeckReasons::Intrinsic();
 		return Result;
 	}
 
 	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingFirstOwnedInstance(State, Card))
 	{
-		Result.DisabledReason = TEXT("LastCapacityProvider");
+		Result.DisabledReason = DeckReasons::LastCapacityProvider();
 		return Result;
 	}
 
@@ -424,31 +426,31 @@ FRunDeckOperationValidation FRunDeckRules::ValidatePermanentRemoveCard(const FRu
 FRunDeckOperationValidation FRunDeckRules::ValidatePermanentRemoveInstance(const FRunState& State, FGuid InstanceId)
 {
 	FRunDeckOperationValidation Result;
-	Result.DisabledReason = TEXT("Unknown");
+	Result.DisabledReason = DeckReasons::Unknown();
 
 	FRunOwnedCardLocation Location;
 	if (!FindOwnedCardInstance(State, InstanceId, Location))
 	{
-		Result.DisabledReason = TEXT("CardNotOwned");
+		Result.DisabledReason = DeckReasons::CardNotOwned();
 		return Result;
 	}
 
 	const UCardDefinition* Card = Location.Instance.Definition;
 	if (!Card)
 	{
-		Result.DisabledReason = TEXT("MissingCard");
+		Result.DisabledReason = DeckReasons::MissingCard();
 		return Result;
 	}
 
 	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Intrinsic))
 	{
-		Result.DisabledReason = TEXT("Intrinsic");
+		Result.DisabledReason = DeckReasons::Intrinsic();
 		return Result;
 	}
 
 	if (IsContainerCard(Card) && !HasCapacityProviderAfterDestroyingOwnedInstance(State, InstanceId))
 	{
-		Result.DisabledReason = TEXT("LastCapacityProvider");
+		Result.DisabledReason = DeckReasons::LastCapacityProvider();
 		return Result;
 	}
 
@@ -469,7 +471,7 @@ bool FRunDeckRules::PermanentRemoveOwnedCard(FRunState& State, UCardDefinition* 
 	{
 		if (OutDisabledReason)
 		{
-			*OutDisabledReason = Card ? FName(TEXT("CardNotOwned")) : FName(TEXT("MissingCard"));
+			*OutDisabledReason = Card ? DeckReasons::CardNotOwned() : DeckReasons::MissingCard();
 		}
 		return false;
 	}
@@ -503,7 +505,7 @@ bool FRunDeckRules::PermanentRemoveOwnedInstance(FRunState& State, FGuid Instanc
 	{
 		if (OutDisabledReason)
 		{
-			*OutDisabledReason = TEXT("CardNotOwned");
+			*OutDisabledReason = DeckReasons::CardNotOwned();
 		}
 		return false;
 	}
@@ -515,7 +517,7 @@ bool FRunDeckRules::PermanentRemoveOwnedInstance(FRunState& State, FGuid Instanc
 	case EZoneKind::Backpack:
 		if (!State.Backpack.IsValidIndex(Location.CardIndex))
 		{
-			if (OutDisabledReason) { *OutDisabledReason = TEXT("CardNotOwned"); }
+			if (OutDisabledReason) { *OutDisabledReason = DeckReasons::CardNotOwned(); }
 			return false;
 		}
 		State.Backpack.RemoveAt(Location.CardIndex);
@@ -524,7 +526,7 @@ bool FRunDeckRules::PermanentRemoveOwnedInstance(FRunState& State, FGuid Instanc
 	case EZoneKind::BattleDeck:
 		if (!State.BattleDeck.IsValidIndex(Location.CardIndex))
 		{
-			if (OutDisabledReason) { *OutDisabledReason = TEXT("CardNotOwned"); }
+			if (OutDisabledReason) { *OutDisabledReason = DeckReasons::CardNotOwned(); }
 			return false;
 		}
 		State.BattleDeck.RemoveAt(Location.CardIndex);
@@ -533,7 +535,7 @@ bool FRunDeckRules::PermanentRemoveOwnedInstance(FRunState& State, FGuid Instanc
 	case EZoneKind::BurdenZone:
 		if (!State.BurdenZone.IsValidIndex(Location.CardIndex))
 		{
-			if (OutDisabledReason) { *OutDisabledReason = TEXT("CardNotOwned"); }
+			if (OutDisabledReason) { *OutDisabledReason = DeckReasons::CardNotOwned(); }
 			return false;
 		}
 		State.BurdenZone.RemoveAt(Location.CardIndex);
@@ -548,7 +550,7 @@ bool FRunDeckRules::PermanentRemoveOwnedInstance(FRunState& State, FGuid Instanc
 			});
 		if (SpecialZoneIndex == INDEX_NONE || !State.SpecialZones[SpecialZoneIndex].Cards.IsValidIndex(Location.CardIndex))
 		{
-			if (OutDisabledReason) { *OutDisabledReason = TEXT("CardNotOwned"); }
+			if (OutDisabledReason) { *OutDisabledReason = DeckReasons::CardNotOwned(); }
 			return false;
 		}
 		State.SpecialZones[SpecialZoneIndex].Cards.RemoveAt(Location.CardIndex);
@@ -558,7 +560,7 @@ bool FRunDeckRules::PermanentRemoveOwnedInstance(FRunState& State, FGuid Instanc
 	default:
 		if (OutDisabledReason)
 		{
-			*OutDisabledReason = TEXT("CardNotOwned");
+			*OutDisabledReason = DeckReasons::CardNotOwned();
 		}
 		return false;
 	}
@@ -672,14 +674,14 @@ int32 FRunDeckRules::CountFluxContentCards(const TArray<FCardInstance>& Pile)
 FRunDeckOperationValidation FRunDeckRules::ValidateMoveInstance(const FRunState& State, FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId)
 {
 	FRunDeckOperationValidation Result;
-	Result.DisabledReason = TEXT("Unknown");
+	Result.DisabledReason = DeckReasons::Unknown();
 
 	FCardInstance Found;
 	EZoneKind FromZone = EZoneKind::Backpack;
 	FGuid FromZoneOwnerInstanceId;
 	if (!FindInstance(State, InstanceId, Found, FromZone, FromZoneOwnerInstanceId))
 	{
-		Result.DisabledReason = TEXT("CardNotFound");
+		Result.DisabledReason = DeckReasons::CardNotFound();
 		return Result;
 	}
 
@@ -694,7 +696,7 @@ FRunDeckOperationValidation FRunDeckRules::ValidateMoveInstance(const FRunState&
 			const int32 EffectiveCount = bInPlaceBackpack ? (CurrentCount - 1) : CurrentCount;
 			if (EffectiveCount >= SumOwnedCardCapacity(State, /*bTypeAOnly=*/true))
 			{
-				Result.DisabledReason = TEXT("FluxFull");
+				Result.DisabledReason = DeckReasons::FluxFull();
 				return Result;
 			}
 		}
@@ -708,7 +710,7 @@ FRunDeckOperationValidation FRunDeckRules::ValidateMoveInstance(const FRunState&
 			: State.BattleDeck.Num();
 		if (EffectiveCount >= SumOwnedCardCapacity(State, /*bTypeAOnly=*/false))
 		{
-			Result.DisabledReason = TEXT("BattleDeckFull");
+			Result.DisabledReason = DeckReasons::BattleDeckFull();
 			return Result;
 		}
 		break;
@@ -720,17 +722,17 @@ FRunDeckOperationValidation FRunDeckRules::ValidateMoveInstance(const FRunState&
 			[&](const FSpecialZone& SZ) { return SZ.OwnerInstanceId == ToZoneOwnerInstanceId; });
 		if (ToSZIdx == INDEX_NONE)
 		{
-			Result.DisabledReason = TEXT("SpecialZoneMissing");
+			Result.DisabledReason = DeckReasons::SpecialZoneMissing();
 			return Result;
 		}
 		if (InstanceId == ToZoneOwnerInstanceId)
 		{
-			Result.DisabledReason = TEXT("SelfSpecialZone");
+			Result.DisabledReason = DeckReasons::SelfSpecialZone();
 			return Result;
 		}
 		if (IsTypeBContainerCard(Found.Definition))
 		{
-			Result.DisabledReason = TEXT("TypeBInSpecialZone");
+			Result.DisabledReason = DeckReasons::TypeBInSpecialZone();
 			return Result;
 		}
 
@@ -741,7 +743,7 @@ FRunDeckOperationValidation FRunDeckRules::ValidateMoveInstance(const FRunState&
 		const int32 EffectiveCount = bInPlaceSameSZ ? (CurrentCount - 1) : CurrentCount;
 		if (EffectiveCount >= GetSpecialZoneCapacityFor(State, ToZoneOwnerInstanceId))
 		{
-			Result.DisabledReason = TEXT("SpecialZoneFull");
+			Result.DisabledReason = DeckReasons::SpecialZoneFull();
 			return Result;
 		}
 		break;
@@ -750,13 +752,13 @@ FRunDeckOperationValidation FRunDeckRules::ValidateMoveInstance(const FRunState&
 	case EZoneKind::BurdenZone:
 		if (IsTypeBContainerCard(Found.Definition))
 		{
-			Result.DisabledReason = TEXT("TypeBInBurdenZone");
+			Result.DisabledReason = DeckReasons::TypeBInBurdenZone();
 			return Result;
 		}
 		break;
 
 	default:
-		Result.DisabledReason = TEXT("InvalidTargetZone");
+		Result.DisabledReason = DeckReasons::InvalidTargetZone();
 		return Result;
 	}
 
@@ -790,7 +792,7 @@ bool FRunDeckRules::MoveInstance(
 	FRunOwnedCardLocation FromLocation;
 	if (!FindOwnedCardInstance(State, InstanceId, FromLocation))
 	{
-		SetMoveDisabledReason(OutDisabledReason, TEXT("CardNotFound"));
+		SetMoveDisabledReason(OutDisabledReason, DeckReasons::CardNotFound());
 		return false;
 	}
 
@@ -811,7 +813,7 @@ bool FRunDeckRules::MoveInstance(
 			*InstanceId.ToString(),
 			(int32)FromLocation.Zone,
 			FromLocation.CardIndex);
-		SetMoveDisabledReason(OutDisabledReason, TEXT("CardNotFound"));
+		SetMoveDisabledReason(OutDisabledReason, DeckReasons::CardNotFound());
 		return false;
 	}
 	if (!TargetPile)
@@ -820,7 +822,7 @@ bool FRunDeckRules::MoveInstance(
 			TEXT("[RunDeckRules] MoveInstance: 目标 zone 查找漂移 ToZone=%d Owner=%s"),
 			(int32)ToZone,
 			*ToZoneOwnerInstanceId.ToString());
-		SetMoveDisabledReason(OutDisabledReason, TEXT("InvalidTargetZone"));
+		SetMoveDisabledReason(OutDisabledReason, DeckReasons::InvalidTargetZone());
 		return false;
 	}
 

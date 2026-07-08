@@ -904,7 +904,7 @@ bool FWacomRunDeckDestroyCardByInstanceSafetySpec::RunTest(const FString& /*Para
 	TestFalse(TEXT("Last capacity provider destroy by instance validation rejected"), Validation.bCanExecute);
 	TestEqual(TEXT("Last capacity provider reason"),
 		Validation.DisabledReason,
-		FName(TEXT("LastCapacityProvider")));
+		WacomRunDeckOperationReasons::LastCapacityProvider());
 	TestFalse(TEXT("Last capacity provider destroy by instance fails"),
 		Run->DestroyCardByInstance(OnlyBagId));
 
@@ -1095,14 +1095,14 @@ bool FWacomRunDeckDeleteCardForGoldValidationSpec::RunTest(const FString& /*Para
 		Run->ValidateDeleteCardForGoldByInstance(WhiteId).bCanExecute);
 	TestEqual(TEXT("Null delete reason"),
 		Run->ValidateDeleteCardForGoldByInstance(FGuid()).DisabledReason,
-		FName(TEXT("CardNotOwned")));
+		WacomRunDeckOperationReasons::CardNotOwned());
 	TestFalse(TEXT("Missing card not owned"), OwnedCardsContainDefinition(Run->GetRunState(), MissingCard));
 	TestEqual(TEXT("Intrinsic delete reason"),
 		Run->ValidateDeleteCardForGoldByInstance(IntrinsicId).DisabledReason,
-		FName(TEXT("Intrinsic")));
+		WacomRunDeckOperationReasons::Intrinsic());
 	TestEqual(TEXT("Last capacity provider delete reason"),
 		Run->ValidateDeleteCardForGoldByInstance(OnlyBagId).DisabledReason,
-		FName(TEXT("LastCapacityProvider")));
+		WacomRunDeckOperationReasons::LastCapacityProvider());
 
 	return true;
 }
@@ -1154,10 +1154,10 @@ bool FWacomRunDeckDeleteCardForGoldByInstanceInvalidReasonSpec::RunTest(const FS
 
 	TestEqual(TEXT("Invalid instance delete reason is CardNotOwned"),
 		Run->ValidateDeleteCardForGoldByInstance(FGuid()).DisabledReason,
-		FName(TEXT("CardNotOwned")));
+		WacomRunDeckOperationReasons::CardNotOwned());
 	TestEqual(TEXT("Missing instance delete reason is CardNotOwned"),
 		Run->ValidateDeleteCardForGoldByInstance(FGuid::NewGuid()).DisabledReason,
-		FName(TEXT("CardNotOwned")));
+		WacomRunDeckOperationReasons::CardNotOwned());
 	TestFalse(TEXT("Missing instance delete rejected"),
 		Run->DeleteCardForGoldByInstance(FGuid::NewGuid()));
 
@@ -1196,7 +1196,7 @@ bool FWacomRunDeckDeleteSameDefinitionCapacityInstanceRulesSpec::RunTest(const F
 		CountOwnedCardsByDefinition(Run->GetRunState(), SharedContainer), 1);
 	TestEqual(TEXT("Last remaining capacity provider rejected"),
 		Run->ValidateDeleteCardForGoldByInstance(SecondId).DisabledReason,
-		FName(TEXT("LastCapacityProvider")));
+		WacomRunDeckOperationReasons::LastCapacityProvider());
 	TestFalse(TEXT("Last remaining capacity provider delete fails"),
 		Run->DeleteCardForGoldByInstance(SecondId));
 
@@ -1463,21 +1463,21 @@ bool FWacomRunDeckMoveInstanceValidationSpec::RunTest(const FString& /*Parameter
 		Run->ValidateMoveInstance(NormalId, EZoneKind::Backpack, FGuid()).bCanExecute);
 	TestEqual(TEXT("Unknown move reason"),
 		Run->ValidateMoveInstance(FGuid::NewGuid(), EZoneKind::Backpack, FGuid()).DisabledReason,
-		FName(TEXT("CardNotFound")));
+		WacomRunDeckOperationReasons::CardNotFound());
 	TestEqual(TEXT("Self special zone reason"),
 		Run->ValidateMoveInstance(SpecialOwnerId, EZoneKind::SpecialZone, SpecialOwnerId).DisabledReason,
-		FName(TEXT("SelfSpecialZone")));
+		WacomRunDeckOperationReasons::SelfSpecialZone());
 	TestEqual(TEXT("TypeB special zone reason"),
 		Run->ValidateMoveInstance(TypeBId, EZoneKind::SpecialZone, SpecialOwnerId).DisabledReason,
-		FName(TEXT("SelfSpecialZone")));
+		WacomRunDeckOperationReasons::SelfSpecialZone());
 	TestEqual(TEXT("TypeB burden reason"),
 		Run->ValidateMoveInstance(TypeBId, EZoneKind::BurdenZone, FGuid()).DisabledReason,
-		FName(TEXT("TypeBInBurdenZone")));
+		WacomRunDeckOperationReasons::TypeBInBurdenZone());
 
 	TestTrue(TEXT("Move one normal to Backpack succeeds"), Run->MoveInstance(NormalId, EZoneKind::Backpack, FGuid()));
 	TestEqual(TEXT("Returning second normal to full flux is rejected"),
 		Run->ValidateMoveInstance(SecondNormalId, EZoneKind::Backpack, FGuid()).DisabledReason,
-		FName(TEXT("FluxFull")));
+		WacomRunDeckOperationReasons::FluxFull());
 
 	return true;
 }

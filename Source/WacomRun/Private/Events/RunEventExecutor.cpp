@@ -9,6 +9,8 @@
 
 namespace
 {
+	namespace DeckReasons = WacomRunDeckOperationReasons;
+
 	bool ChoiceHasRemoveCardEffect(const FWacomRunEventChoiceDefinition& Choice)
 	{
 		return Choice.Effects.ContainsByPredicate(
@@ -20,19 +22,19 @@ namespace
 
 	FName ToRunEventRemoveCardDisabledReason(FName DeckRulesReason)
 	{
-		if (DeckRulesReason == TEXT("CardNotOwned"))
+		if (DeckRulesReason == DeckReasons::CardNotOwned())
 		{
 			return TEXT("MissingRequiredCard");
 		}
-		if (DeckRulesReason == TEXT("Intrinsic"))
+		if (DeckRulesReason == DeckReasons::Intrinsic())
 		{
 			return TEXT("ProtectedCard");
 		}
-		if (DeckRulesReason == TEXT("LastCapacityProvider"))
+		if (DeckReasons::IsLastCapacityProvider(DeckRulesReason))
 		{
 			return TEXT("LastCapacityProvider");
 		}
-		if (DeckRulesReason == TEXT("MissingCard"))
+		if (DeckRulesReason == DeckReasons::MissingCard())
 		{
 			return TEXT("MissingCard");
 		}
@@ -455,7 +457,7 @@ FRunDeckOperationValidation FRunEventExecutor::ValidateChoiceCardPayment(
 	FRunOwnedCardLocation Location;
 	if (!FRunDeckRules::FindOwnedCardInstance(State, PaidCardInstanceId, Location))
 	{
-		Result.DisabledReason = TEXT("CardNotOwned");
+		Result.DisabledReason = DeckReasons::CardNotOwned();
 		return Result;
 	}
 

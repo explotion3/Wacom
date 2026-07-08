@@ -10,6 +10,11 @@
 
 #define LOCTEXT_NAMESPACE "WacomZoneDropTarget"
 
+namespace
+{
+	namespace DeckReasons = WacomRunDeckOperationReasons;
+}
+
 TSharedRef<SWidget> UWacomZoneDropTarget::RebuildWidget()
 {
 	if (!WidgetTree || !WidgetTree->RootWidget)
@@ -109,39 +114,39 @@ FText UWacomZoneDropTarget::FormatZoneNameForToast(EZoneKind Zone)
 
 FText UWacomZoneDropTarget::FormatMoveFailureReasonForToast(FName DisabledReason)
 {
-	if (DisabledReason == TEXT("CardNotFound"))
+	if (DisabledReason == DeckReasons::CardNotFound())
 	{
 		return LOCTEXT("MoveFailCardNotFound", "无法移动：找不到这张卡牌。");
 	}
-	if (DisabledReason == TEXT("FluxFull"))
+	if (DisabledReason == DeckReasons::FluxFull())
 	{
 		return LOCTEXT("MoveFailFluxFull", "无法移动：通量区已满。");
 	}
-	if (DisabledReason == TEXT("BattleDeckFull"))
+	if (DisabledReason == DeckReasons::BattleDeckFull())
 	{
 		return LOCTEXT("MoveFailBattleDeckFull", "无法移动：备战区已满。");
 	}
-	if (DisabledReason == TEXT("SpecialZoneMissing"))
+	if (DisabledReason == DeckReasons::SpecialZoneMissing())
 	{
 		return LOCTEXT("MoveFailSpecialZoneMissing", "无法移动：目标特殊存放区不存在。");
 	}
-	if (DisabledReason == TEXT("SelfSpecialZone"))
+	if (DisabledReason == DeckReasons::SelfSpecialZone())
 	{
 		return LOCTEXT("MoveFailSelfSpecialZone", "无法移动：主卡不能放进自己的特殊存放区。");
 	}
-	if (DisabledReason == TEXT("TypeBInSpecialZone"))
+	if (DisabledReason == DeckReasons::TypeBInSpecialZone())
 	{
 		return LOCTEXT("MoveFailTypeBInSpecialZone", "无法移动：特殊存放区不能收纳另一张主卡。");
 	}
-	if (DisabledReason == TEXT("SpecialZoneFull"))
+	if (DisabledReason == DeckReasons::SpecialZoneFull())
 	{
 		return LOCTEXT("MoveFailSpecialZoneFull", "无法移动：特殊存放区已满。");
 	}
-	if (DisabledReason == TEXT("TypeBInBurdenZone"))
+	if (DisabledReason == DeckReasons::TypeBInBurdenZone())
 	{
 		return LOCTEXT("MoveFailTypeBInBurden", "无法移动：主卡不能进入负重区。");
 	}
-	if (DisabledReason == TEXT("InvalidTargetZone"))
+	if (DisabledReason == DeckReasons::InvalidTargetZone())
 	{
 		return LOCTEXT("MoveFailInvalidTarget", "无法移动：目标区域无效。");
 	}

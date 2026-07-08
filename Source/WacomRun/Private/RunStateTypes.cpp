@@ -8,6 +8,43 @@ namespace
 	{
 		return FMath::Clamp(Value, 0, 100);
 	}
+
+	const FName& LegacyLastBagProvider()
+	{
+		static const FName Reason(TEXT("LastBagProvider"));
+		return Reason;
+	}
+}
+
+#define WACOM_DEFINE_RUN_DECK_OPERATION_REASON(FuncName) \
+	const FName& WacomRunDeckOperationReasons::FuncName() \
+	{ \
+		static const FName Reason(TEXT(#FuncName)); \
+		return Reason; \
+	}
+
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(Unknown)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(MissingCard)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(CardNotOwned)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(CardNotFound)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(Intrinsic)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(LastCapacityProvider)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(FluxFull)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(BattleDeckFull)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(SpecialZoneMissing)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(SelfSpecialZone)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(TypeBInSpecialZone)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(SpecialZoneFull)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(TypeBInBurdenZone)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(InvalidTargetZone)
+WACOM_DEFINE_RUN_DECK_OPERATION_REASON(RunSessionMissing)
+
+#undef WACOM_DEFINE_RUN_DECK_OPERATION_REASON
+
+bool WacomRunDeckOperationReasons::IsLastCapacityProvider(FName DisabledReason)
+{
+	return DisabledReason == LastCapacityProvider()
+		|| DisabledReason == LegacyLastBagProvider();
 }
 
 int32 FPressureValues::Get(EWacomPressureType Type) const

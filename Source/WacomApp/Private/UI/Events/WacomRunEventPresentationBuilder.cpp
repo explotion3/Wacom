@@ -8,6 +8,8 @@
 
 namespace
 {
+	namespace DeckReasons = WacomRunDeckOperationReasons;
+
 	FText GetRunEventCardDisplayName(const UCardDefinition* Card)
 	{
 		if (!Card)
@@ -93,7 +95,7 @@ FText UWacomRunEventPresentationBuilder::FormatDisabledReason(FName DisabledReas
 	{
 		return LOCTEXT("ProtectedCard", "该卡牌不能被移除");
 	}
-	if (DisabledReason == TEXT("LastCapacityProvider"))
+	if (DeckReasons::IsLastCapacityProvider(DisabledReason))
 	{
 		return LOCTEXT("LastCapacityProvider", "这是最后一张背包容量卡");
 	}
@@ -149,7 +151,7 @@ FText UWacomRunEventPresentationBuilder::FormatDisabledReason(FName DisabledReas
 	{
 		return LOCTEXT("PaymentNotRequired", "该选项不需要卡牌支付");
 	}
-	if (DisabledReason == TEXT("CardNotOwned"))
+	if (DisabledReason == DeckReasons::CardNotOwned())
 	{
 		return LOCTEXT("CardNotOwned", "未持有这张卡");
 	}
