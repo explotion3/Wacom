@@ -3,9 +3,8 @@
 #include "WacomCardDetailDocumentBuilder.h"
 
 #include "Cards/CardDefinition.h"
-#include "UI/Card/WacomCardExplanationLexicon.h"
-#include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "WacomCardExplanationCompiler.h"
+#include "WacomCardExplanationLexiconProvider.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardDetailDocumentBuilder"
 
@@ -22,14 +21,6 @@ namespace WacomCardDetailDocumentBuilder
 			return Card->DisplayName.IsEmpty()
 				? FText::FromName(Card->CardId)
 				: Card->DisplayName;
-		}
-
-		UWacomCardExplanationLexicon* LoadExplanationLexicon()
-		{
-			const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
-			return Settings && !Settings->CardExplanationLexicon.IsNull()
-				? Settings->CardExplanationLexicon.LoadSynchronous()
-				: nullptr;
 		}
 
 		FWacomCardPresentationRuntimeContext MakePassiveRuntimeContext(
@@ -55,7 +46,8 @@ namespace WacomCardDetailDocumentBuilder
 			return Data;
 		}
 
-		UWacomCardExplanationLexicon* Lexicon = LoadExplanationLexicon();
+		const UWacomCardExplanationLexicon* Lexicon =
+			WacomCardExplanationLexiconProvider::GetConfiguredLexicon();
 
 		TArray<FWacomCardDetailBlock> DescriptionBlocks;
 		for (int32 EffectIndex = 0; EffectIndex < Card->Effects.Num(); ++EffectIndex)

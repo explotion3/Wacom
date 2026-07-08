@@ -67,7 +67,7 @@ Wacom UI Settings
 
 Backpack、Pause、Shop、RunEvent 通过 `UWacomGameUIManagerSubsystem::PushRegisteredWidgetToLayerAsync()` 打开。Settings 软类未加载时走异步加载；缺失、加载失败、Cast 失败或 Push 失败时回到对应 fallback 或执行访问 rollback。
 
-`CardExplanationLexicon` 和 `CardDetailTheme` 是卡牌详情制作入口，不保存运行时 UI 状态。Lexicon 用 DataAsset 配置效果 / 被动触发的 typed explanation template；Theme 用 DataAsset 配置详情标题 CommonTextStyle、正文 RichText style set 和 inline 图标 / 状态 brush。二者未配置时属于合法 fallback：详情仍会用 C++ 内置模板和 RichTextBlock 默认样式显示。
+`CardExplanationLexicon` 和 `CardDetailTheme` 是卡牌详情制作入口，不保存运行时 UI 状态。Lexicon 用 DataAsset 配置效果 / 被动触发的 typed explanation template；App-private lexicon provider 按 settings 中的软对象路径缓存已加载词典，路径变化或缓存对象失效时才重新同步加载，同一路径加载失败也会缓存为 fallback 结果，未配置时使用 C++ 内置模板。Theme 用 DataAsset 配置详情标题 CommonTextStyle、正文 RichText style set 和 inline 图标 / 状态 brush。二者未配置时属于合法 fallback：详情仍会用 C++ 内置模板和 RichTextBlock 默认样式显示。
 
 ## §3 Settings 校验
 
