@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "RunState.h"
-#include "UI/Events/WacomRunEventPresentationState.h"
 
 class URunSession;
 class UWacomAppToastSubsystem;
@@ -20,7 +19,6 @@ struct FWacomRunEventScreenFlow
 		URunSession* Run,
 		UWacomAppToastSubsystem* ToastSubsystem,
 		FName ChoiceId,
-		FWacomRunEventPresentationStateView PresentationState,
 		bool& bDidEndRunEvent);
 
 	static bool ApplyChoiceResult(

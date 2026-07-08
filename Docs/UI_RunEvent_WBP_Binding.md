@@ -90,7 +90,7 @@ Presentation view 数据源：
 - `RequirementItems` 是 WBP 自定义需求列表的唯一数据源。每项包含 `Text / bSatisfied / DisabledReason / Tone / Kind`。
 - `ConsequenceItems` 是 WBP 自定义后果预览的唯一数据源。每项包含 `Text / Tone / Kind / EffectType`。
 - `ConsequenceItems` 只表达静态配置意图，不模拟实际提交后的金币 clamp、节点变化或事务失败。
-- `BP_OnRunEventChoiceSnapshotApplied` 会在 C++ 应用新 snapshot 并完成默认文本刷新后触发；WBP 可在这里读取 `GetChoiceRequirementView()` 和 `GetChoiceConsequenceView()` 刷新自定义动画、颜色、图标或状态。
+- `BP_OnRunEventChoiceSnapshotApplied` 会在 C++ 应用新 snapshot 并完成默认文本刷新后触发；WBP 可在这里读取 `GetChoiceRequirementView()` 和 `GetChoiceConsequenceView()` 刷新自定义动画、颜色、图标或状态。禁用样式只表达本次 snapshot 的 preview 事实，最终提交仍以 `URunSession` 返回的 `FRunEventChoiceResult` 为准。
 
 WBP 不应做：
 

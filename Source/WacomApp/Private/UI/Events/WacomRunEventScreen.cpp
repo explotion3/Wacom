@@ -389,7 +389,6 @@ bool UWacomRunEventScreen::ChooseChoice(FName ChoiceId)
 		Run,
 		ResolveToastSubsystem(),
 		ChoiceId,
-		BuildRunEventPresentationStateView(CachedChoices, PaymentZoneToChoiceId),
 		bDidEndRunEvent);
 }
 

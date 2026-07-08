@@ -261,7 +261,7 @@ RunEvent 的移除卡搜索四个物理持有区：`Backpack`、`BattleDeck`、`
 
 RunFlag 是当前 Run 内的轻量 bool/set 记忆。`RunFlagSet / RunFlagNotSet` 条件和 `SetRunFlag / ClearRunFlag` 效果都使用 `FlagId`。RunFlag 不是 GameplayTag，不是数值变量，当前不写入 SaveGame。`SetRunFlag / ClearRunFlag` 在 RunEvent working-state 事务内执行；后续 effect 失败时会和其他前置效果一起回滚。
 
-`FRunEventChoiceSnapshot::Requirements` 和 `Consequences` 是结构化预览事实。它们记录条件是否满足、支付需求、后果意图、节点跳转和事件结束预览；不模拟金币 clamp、行动点跨时段、副作用压力或后续效果失败。真实结果仍以提交后的 `FRunEventChoiceResult` 和事务状态为准。
+`FRunEventChoiceSnapshot::Requirements` 和 `Consequences` 是结构化预览事实。它们记录条件是否满足、支付需求、后果意图、节点跳转和事件结束预览；不模拟金币 clamp、行动点跨时段、副作用压力或后续效果失败。Snapshot 的 `bAvailable / DisabledReason` 也只是当前刷新时刻的展示事实，不能作为 UI 提交前的最终 veto。真实结果仍以提交后的 `FRunEventChoiceResult` 和事务状态为准。
 
 卡牌支付通过 active GameMenu 的 Run menu zone drop 提交：`FWacomRunFirstPersonCardDropCoordinator` 负责命中、preview 和分发，`AWacomPlayerController` 只提供输入/查询上下文，`UWacomRunEventScreen` 接管 release 并调用 `URunSession::ChooseRunEventOptionWithPaidCardResult()`。支付 UI、menu lease 和 drop target 合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#6-run-menu-zone-target) 与 [WacomUI.md](./WacomUI.md)。
 

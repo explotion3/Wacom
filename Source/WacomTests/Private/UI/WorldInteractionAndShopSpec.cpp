@@ -9434,6 +9434,55 @@ bool FWacomUIRunEventScreenBlockedChoiceToastSpec::RunTest(const FString& /*Para
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIRunEventScreenStaleUnavailableChoiceUsesRunSessionAuthoritySpec,
+	"Wacom.UI.Event.ScreenStaleUnavailableChoiceUsesRunSessionAuthority",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIRunEventScreenStaleUnavailableChoiceUsesRunSessionAuthoritySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(NewObject<UWacomRunEventDefinition>(Run.Get()));
+	TStrongObjectPtr<UWacomRunEventScreenProbe> Screen(NewObject<UWacomRunEventScreenProbe>());
+
+	Event->EventId = TEXT("Event.UI.StaleChoice");
+	Event->DisplayName = FText::FromString(TEXT("缓存事件"));
+	Event->StartNodeId = TEXT("Start");
+	FWacomRunEventChoiceDefinition Locked;
+	Locked.ChoiceId = TEXT("Locked");
+	Locked.LabelText = FText::FromString(TEXT("金币选项"));
+	FWacomRunEventConditionDefinition GoldCondition;
+	GoldCondition.Type = EWacomRunEventConditionType::MinGold;
+	GoldCondition.Value = 1;
+	Locked.Conditions.Add(GoldCondition);
+	FWacomRunEventNodeDefinition Start;
+	Start.NodeId = TEXT("Start");
+	Start.Choices = { Locked };
+	Event->Nodes = { Start };
+
+	TestTrue(TEXT("Begin stale-cache event succeeds"),
+		Run->BeginRunEvent(TEXT("Event.UI.StaleChoice.Actor"), Event.Get()));
+	Screen->SetRunSession(Run.Get());
+	Screen->TakeWidget();
+	Screen->ActivateWidget();
+	Screen->RefreshEvent();
+
+	TestFalse(TEXT("Cached choice starts unavailable"),
+		FWacomShopRunEventTestAccess::ChoiceSnapshot(*Screen, 0).bAvailable);
+	Run->AddGold(1);
+	TestFalse(TEXT("Cached choice remains stale until Screen refresh"),
+		FWacomShopRunEventTestAccess::ChoiceSnapshot(*Screen, 0).bAvailable);
+
+	TestTrue(TEXT("Choosing stale unavailable choice asks RunSession and succeeds"),
+		FWacomShopRunEventTestAccess::ChooseChoiceAt(*Screen, 0));
+	TestTrue(TEXT("RunEvent remains active after successful non-closing choice"),
+		Run->IsRunEventActive());
+	TestTrue(TEXT("Successful submit refreshes cached choice from RunSession authority"),
+		FWacomShopRunEventTestAccess::ChoiceSnapshot(*Screen, 0).bAvailable);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunEventScreenFlagRewardPreviewSpec,
 	"Wacom.UI.Event.DebugFlagRewardPreviewSummary",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
