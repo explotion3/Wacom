@@ -61,7 +61,6 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
 | 场景敌人表现 polish | 主链路已拆成 `SceneEnemyHost + PartActor + WorldTargetBridge + Presentation`；普通小怪走 Host 整体图 + hit-only 部位，精英 / Boss 走 PartActor VisualLayers | 继续补正式 sprite/flipbook 美术、材质描边、tooltip、风险动效和 PaperZD/Animator 状态机 |
 | CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 legacy bridge 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
-| Card detail MagnitudeModifiers 展示 | 详情说明已覆盖 Effect / Passive 的基础条件门控，但 `FCardEffect.MagnitudeModifiers` 仍只参与 Battle 数值结算，不进入 expanded detail document | 后续在 App-private explanation helper 中生成 modifier 条件说明，例如“若目标中毒则 +3”，仍只读静态字段和 runtime preview facts，不让 Widget 或 UI builder 执行规则 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | UI Style 资产命名 V0 | 通用样式资产已迁到 `/Game/Wacom/UI/Style/`，但仍保留 `tiny_menu_Button`、`MyCommonTextStyle` 等原型命名 | 后续设计系统整理时统一命名为语义化 Style asset，例如 `WBPStyle_Button_CommandPrimary` / `TextStyle_CommandButton`，并通过资产审计确认没有旧路径引用后再重命名 |
 | Backpack UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper；缺席的嵌套 SpecialZone WBP 会静默回 C++ `UWacomSpecialZoneWidget`，不再作为硬路径加载；视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen`、局部 Zone WBP 和可选 `WBP_WacomSpecialZoneWidget` 替换视觉 |
@@ -143,6 +142,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Card detail `TaskLines` 与扁平 `TokenLines` legacy mirror 已清理：`FWacomCardDetailViewData` 的正式详情文档只保留 `Sections`，后续任务、预览或风味文本应新增正式 section，而不是维护平行数组镜像。
 - Card detail `Description` legacy mirror 已清理：`FWacomCardDetailViewData` 不再暴露平行纯文本正文或 `UWacomCardDetailPanel::GetDescriptionText()`；`UCardDefinition::Description` 只保留为小卡 / 其它旧 UI 可用字段，不再进入详情面板。
 - Card detail explanation system 已收口：`UWacomCardPresentationBuilder` 保留为 public / Blueprint facade，`WacomCardDetailDocumentBuilder` 负责详情 `Sections` 组装，`WacomCardExplanationCompiler` 负责 block / section 组装，`WacomCardExplanationTemplateResolver` 负责词典模板选择与 fallback 模板，`WacomCardExplanationTemplateRenderer` 负责 typed slot 到 runs 的转换，Widget 不承载 Description / Passive / Effect 分区逻辑。
+- Card detail MagnitudeModifiers 展示已收口：`FCardEffect.MagnitudeModifiers` 由 App-private explanation helper 生成静态条件 / 数值修正说明；最终数值仍只来自 Battle preview facts 或静态字段，Widget / UI builder 不执行规则判断。
 - Card detail viewport / child widget 创建路径已收口：first-person 详情面板由 `FWacomFirstPersonCardDetailPanelHost` 统一判断是否能进入 viewport，详情 section 子 Widget 由 App-private `WacomCardDetailWidgetFactory` 创建，离屏自动化不再通过 `GetWorld()` 分支污染日志。
 - 旧 card detail token flow 已删除：`UWacomCardDetailTokenFlowWidget / TokenLineWidget / TokenWidget` 和 `WBP_CardDetailTokenFlow / WBP_CardDetailTokenLine / WBP_CardDetailToken` 不再是运行时依赖；避免留下指向已删除 native 类的坏资产。
 - BattleHUD 旧 CardDetail immediate positioning helper 已移除：详情面板定位测试和正式路径都以 App-private `FWacomFirstPersonCardDetailMotionController` / `FWacomBattleHUDCardDetailController` 的 stable motion 语义为准。

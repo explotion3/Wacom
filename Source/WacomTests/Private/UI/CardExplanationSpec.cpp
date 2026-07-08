@@ -93,6 +93,17 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 	Damage.Magnitude = 4;
 	Damage.Condition.ConditionType = WacomTags::Condition_Self_InZone;
 	Damage.Condition.ParamTag = WacomTags::HandZone_Left;
+	FMagnitudeModifier BonusDamage;
+	BonusDamage.Condition.ConditionType = WacomTags::Condition_Target_HasStatus;
+	BonusDamage.Condition.ParamTag = WacomTags::Status_Poison;
+	BonusDamage.Op = EMagnitudeModOp::Add;
+	BonusDamage.Value = 3;
+	FMagnitudeModifier ZoneMultiplier;
+	ZoneMultiplier.Condition.ConditionType = WacomTags::Condition_Self_InZone;
+	ZoneMultiplier.Condition.ParamTag = WacomTags::HandZone_Both;
+	ZoneMultiplier.Op = EMagnitudeModOp::Multiply;
+	ZoneMultiplier.Value = 2;
+	Damage.MagnitudeModifiers = { BonusDamage, ZoneMultiplier };
 	Card->Effects.Add(Damage);
 
 	FCardEffect Poison;
@@ -110,6 +121,8 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 
 	TestTrue(TEXT("Damage effect emits value text"), Description.Contains(TEXT("造成 4 点伤害。")));
 	TestTrue(TEXT("Effect condition emits self zone text"), Description.Contains(TEXT("仅当本卡在左手区时")));
+	TestTrue(TEXT("Effect modifier emits target status add text"), Description.Contains(TEXT("仅当目标有中毒时，数值 +3")));
+	TestTrue(TEXT("Effect modifier emits self zone multiply text"), Description.Contains(TEXT("仅当本卡在双手区时，数值 ×2")));
 	TestTrue(TEXT("Poison effect emits status text"), Description.Contains(TEXT("施加 2 层 中毒。")));
 	TestTrue(TEXT("Discard selected effect emits action text"), Description.Contains(TEXT("弃置目标手牌。")));
 

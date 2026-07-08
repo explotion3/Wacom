@@ -2,6 +2,7 @@
 
 #include "WacomCardExplanationConditionRenderer.h"
 
+#include "Cards/CardEffect.h"
 #include "Cards/EffectCondition.h"
 #include "Tags/WacomGameplayTags.h"
 #include "WacomCardExplanationTemplateRenderer.h"
@@ -52,6 +53,35 @@ namespace WacomCardExplanationConditionRenderer
 				? FText::Format(LOCTEXT("FallbackNegatedCondition", "仅当不满足{0}时"), FallbackCondition)
 				: FText::Format(LOCTEXT("FallbackCondition", "仅当满足{0}时"), FallbackCondition);
 		}
+
+		FText BuildModifierOperationText(const FMagnitudeModifier& Modifier)
+		{
+			switch (Modifier.Op)
+			{
+			case EMagnitudeModOp::Add:
+				return Modifier.Value >= 0
+					? FText::Format(LOCTEXT("ModifierAddPositive", "数值 +{0}"), Modifier.Value)
+					: FText::Format(LOCTEXT("ModifierAddNegative", "数值 {0}"), Modifier.Value);
+			case EMagnitudeModOp::Multiply:
+				return FText::Format(LOCTEXT("ModifierMultiply", "数值 ×{0}"), Modifier.Value);
+			default:
+				return FText::Format(LOCTEXT("ModifierUnknown", "数值修正 {0}"), Modifier.Value);
+			}
+		}
+
+		FText BuildModifierNoteText(const FMagnitudeModifier& Modifier)
+		{
+			const FText OperationText = BuildModifierOperationText(Modifier);
+			if (!Modifier.Condition.IsSet())
+			{
+				return OperationText;
+			}
+
+			return FText::Format(
+				LOCTEXT("ConditionalModifier", "{0}，{1}"),
+				BuildConditionBodyText(Modifier.Condition),
+				OperationText);
+		}
 	}
 
 	void AppendConditionRuns(
@@ -69,6 +99,21 @@ namespace WacomCardExplanationConditionRenderer
 			TEXT("（%s）"),
 			*BuildConditionBodyText(Condition).ToString());
 		WacomCardExplanationTemplateRenderer::AppendTextRun(Block, Note, StableIdPrefix, RunIndex);
+	}
+
+	void AppendMagnitudeModifierRuns(
+		FWacomCardDetailBlock& Block,
+		const TArray<FMagnitudeModifier>& Modifiers,
+		const FString& StableIdPrefix,
+		int32& RunIndex)
+	{
+		for (const FMagnitudeModifier& Modifier : Modifiers)
+		{
+			const FString Note = FString::Printf(
+				TEXT("（%s）"),
+				*BuildModifierNoteText(Modifier).ToString());
+			WacomCardExplanationTemplateRenderer::AppendTextRun(Block, Note, StableIdPrefix, RunIndex);
+		}
 	}
 }
 

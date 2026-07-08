@@ -57,6 +57,11 @@ namespace WacomCardExplanationCompiler
 			Effect.Condition,
 			StableIdPrefix,
 			RunIndex);
+		WacomCardExplanationConditionRenderer::AppendMagnitudeModifierRuns(
+			Block,
+			Effect.MagnitudeModifiers,
+			StableIdPrefix,
+			RunIndex);
 		return Block;
 	}
 
