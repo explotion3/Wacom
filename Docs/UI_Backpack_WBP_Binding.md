@@ -161,12 +161,14 @@ WBP 不应做：
 - 不提供删除按钮；删牌通过拖到删牌区触发。
 - 不直接修改卡牌所在持有区。
 - 不自行构造拖拽 payload。
+- 不根据所在列表、`PhysicalZone` 或 `bBattleEnabledInSpecialZone` 自行判定右键入战是否可用；该 affordance 由 C++ ViewData 写入。
 
 最小验收：
 
 - `CardView` 能显示 `FWacomCardViewData`。
 - 绑定 `CardBody` 后，拖拽源透明度变化可见。
 - 未绑定 `CardView` 时仍能生成拖拽 payload，但没有正式卡面显示。
+- SpecialZone 内容卡和 BattleDeck 投影卡是否可右键切换入战，只由 `FRunStorageCardView.bCanToggleBattleEnabledInSpecialZone` 驱动。
 
 ## WBP_CardView
 

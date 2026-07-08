@@ -2107,6 +2107,8 @@ bool FWacomUIBackpackSpecialZoneWidgetSnapshotSpec::RunTest(const FString& /*Par
 	ContentView.Instance.bBattleEnabledInSpecialZone = true;
 	ContentView.PhysicalZone = EZoneKind::SpecialZone;
 	ContentView.ZoneOwnerInstanceId = OwnerId;
+	ContentView.bCanToggleBattleEnabledInSpecialZone = true;
+	ContentView.bShowBattleEnabledInSpecialZoneBadge = true;
 	View.ContentCards.Add(ContentView);
 
 	int32 ToggleCount = 0;
@@ -2333,7 +2335,12 @@ bool FWacomUIBackpackBattleEnabledToggleRequestSpec::RunTest(const FString& /*Pa
 	FCardInstance Inst;
 	Inst.InstanceId = FGuid::NewGuid();
 	Inst.Definition = Card.Get();
-	Widget->SetCard(Inst, EZoneKind::SpecialZone, FGuid::NewGuid());
+
+	FRunStorageCardView View;
+	View.Instance = Inst;
+	View.PhysicalZone = EZoneKind::SpecialZone;
+	View.ZoneOwnerInstanceId = FGuid::NewGuid();
+	Widget->SetStorageCardView(View);
 
 	int32 ToggleCount = 0;
 	FGuid LastToggledId;
@@ -2347,7 +2354,8 @@ bool FWacomUIBackpackBattleEnabledToggleRequestSpec::RunTest(const FString& /*Pa
 	TestFalse(TEXT("Toggle disabled by default"), Widget->RequestBattleEnabledToggle());
 	TestEqual(TEXT("No request emitted while disabled"), ToggleCount, 0);
 
-	Widget->SetRightClickToggleEnabled(true);
+	View.bCanToggleBattleEnabledInSpecialZone = true;
+	Widget->SetStorageCardView(View);
 	TestTrue(TEXT("Toggle request accepted when enabled"), Widget->RequestBattleEnabledToggle());
 	TestEqual(TEXT("One toggle request emitted"), ToggleCount, 1);
 	TestEqual(TEXT("Toggle request carries instance id"), LastToggledId, Inst.InstanceId);

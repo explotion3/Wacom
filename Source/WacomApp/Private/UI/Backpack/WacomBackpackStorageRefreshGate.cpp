@@ -51,6 +51,8 @@ uint32 HashCardViewForBackpackRefresh(
 	Hash = HashBoolForBackpackRefresh(Hash, CardView.bIsTypeAContainer);
 	Hash = HashBoolForBackpackRefresh(Hash, CardView.bIsTypeBContainer);
 	Hash = HashBoolForBackpackRefresh(Hash, CardView.bIsPhysicalInBattleDeck);
+	Hash = HashBoolForBackpackRefresh(Hash, CardView.bCanToggleBattleEnabledInSpecialZone);
+	Hash = HashBoolForBackpackRefresh(Hash, CardView.bShowBattleEnabledInSpecialZoneBadge);
 	Hash = HashCombine(Hash, static_cast<uint32>(Role));
 	return Hash;
 }

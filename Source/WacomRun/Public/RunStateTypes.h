@@ -307,6 +307,12 @@ struct WACOMRUN_API FRunStorageCardView
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
 	bool bIsPhysicalInBattleDeck = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	bool bCanToggleBattleEnabledInSpecialZone = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	bool bShowBattleEnabledInSpecialZoneBadge = false;
 };
 
 /** 通量存放区查询视图：MainCards 仅保留兼容，当前通量内容包含 A 类容器和普通卡。 */

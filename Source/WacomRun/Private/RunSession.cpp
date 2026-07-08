@@ -1089,6 +1089,10 @@ FRunBackpackStorageSnapshot URunSession::BuildBackpackStorageSnapshot() const
 		View.bIsTypeAContainer = URunSession::IsTypeAContainerCard(Inst.Definition);
 		View.bIsTypeBContainer = URunSession::IsTypeBContainerCard(Inst.Definition);
 		View.bIsPhysicalInBattleDeck = PhysicalZone == EZoneKind::BattleDeck;
+		View.bCanToggleBattleEnabledInSpecialZone =
+			PhysicalZone == EZoneKind::SpecialZone && Inst.InstanceId.IsValid();
+		View.bShowBattleEnabledInSpecialZoneBadge =
+			View.bCanToggleBattleEnabledInSpecialZone && Inst.bBattleEnabledInSpecialZone;
 		return View;
 	};
 

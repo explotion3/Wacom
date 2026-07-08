@@ -355,7 +355,6 @@ void UWacomSpecialZoneWidget::RebuildFromCurrentView()
 		FWacomBackpackDeckCardListItem Desired;
 		Desired.CardView = CardView;
 		Desired.Role = EWacomBackpackDeckCardListReuseRole::SpecialContent;
-		Desired.bRightClickToggleEnabled = true;
 		DesiredContentCards.Add(MoveTemp(Desired));
 	}
 	FWacomBackpackDeckCardListReconciler::Reconcile(

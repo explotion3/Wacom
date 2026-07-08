@@ -45,6 +45,11 @@ public:
 	 */
 	void SetCard(const FCardInstance& Inst, EZoneKind InFromZone, FGuid InFromZoneOwnerInstanceId);
 
+	/**
+	 * 设置背包存放区只读 ViewData。生产列表刷新应优先走本入口，避免 Widget 自行推断规则 affordance。
+	 */
+	void SetStorageCardView(const FRunStorageCardView& StorageCardView);
+
 	/** 获取关联卡定义。 */
 	UCardDefinition* GetCard() const { return Card; }
 

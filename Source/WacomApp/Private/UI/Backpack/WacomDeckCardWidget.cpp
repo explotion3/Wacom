@@ -29,11 +29,23 @@ void UWacomDeckCardWidget::NativeConstruct()
 
 void UWacomDeckCardWidget::SetCard(const FCardInstance& Inst, EZoneKind InFromZone, FGuid InFromZoneOwnerInstanceId)
 {
-	Card = Inst.Definition;
-	InstanceId = Inst.InstanceId;
-	FromZone = InFromZone;
-	FromZoneOwnerInstanceId = (FromZone == EZoneKind::SpecialZone) ? InFromZoneOwnerInstanceId : FGuid();
-	SetBattleEnabledBadgeVisible(FromZone == EZoneKind::SpecialZone && Inst.bBattleEnabledInSpecialZone);
+	FRunStorageCardView StorageCardView;
+	StorageCardView.Instance = Inst;
+	StorageCardView.PhysicalZone = InFromZone;
+	StorageCardView.ZoneOwnerInstanceId = (InFromZone == EZoneKind::SpecialZone) ? InFromZoneOwnerInstanceId : FGuid();
+	StorageCardView.bShowBattleEnabledInSpecialZoneBadge =
+		InFromZone == EZoneKind::SpecialZone && Inst.bBattleEnabledInSpecialZone;
+	SetStorageCardView(StorageCardView);
+}
+
+void UWacomDeckCardWidget::SetStorageCardView(const FRunStorageCardView& StorageCardView)
+{
+	Card = StorageCardView.Instance.Definition;
+	InstanceId = StorageCardView.Instance.InstanceId;
+	FromZone = StorageCardView.PhysicalZone;
+	FromZoneOwnerInstanceId = (FromZone == EZoneKind::SpecialZone) ? StorageCardView.ZoneOwnerInstanceId : FGuid();
+	SetBattleEnabledBadgeVisible(StorageCardView.bShowBattleEnabledInSpecialZoneBadge);
+	SetRightClickToggleEnabled(StorageCardView.bCanToggleBattleEnabledInSpecialZone);
 	RefreshContentFromCard();
 }
 

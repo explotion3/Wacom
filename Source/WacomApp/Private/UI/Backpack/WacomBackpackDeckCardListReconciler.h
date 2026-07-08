@@ -13,7 +13,6 @@ struct FWacomBackpackDeckCardListItem
 	FRunStorageCardView CardView;
 	EWacomBackpackDeckCardListReuseRole Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 	FText ProjectedBadgeText;
-	bool bRightClickToggleEnabled = false;
 };
 
 struct FWacomBackpackDeckCardListReconciler

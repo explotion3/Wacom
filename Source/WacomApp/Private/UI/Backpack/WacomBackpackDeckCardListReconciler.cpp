@@ -156,10 +156,9 @@ void FWacomBackpackDeckCardListReconciler::Reconcile(
 		}
 
 		Widget->PrepareForBackpackListReuse();
-		Widget->SetCard(CardView.Instance, CardView.PhysicalZone, CardView.ZoneOwnerInstanceId);
+		Widget->SetStorageCardView(CardView);
 		Widget->SetMoveEnabled(true);
 		Widget->SetBackpackListReuseRole(Desired.Role);
-		Widget->SetRightClickToggleEnabled(Desired.bRightClickToggleEnabled);
 		Widget->SetProjectedFromBadgeText(Desired.ProjectedBadgeText);
 		UsedWidgets.Add(Widget);
 		if (OutOrderedWidgets)

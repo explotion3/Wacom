@@ -515,7 +515,6 @@ void UWacomBackpackScreen::RebuildBattleDeckZone(const FRunBackpackStorageSnapsh
 			Desired.CardView = ProjectedView;
 			Desired.Role = EWacomBackpackDeckCardListReuseRole::BattleDeckProjected;
 			Desired.ProjectedBadgeText = UWacomBackpackScreenPresenter::BuildBattleDeckProjectedFromBadgeText(ProjectedView, Snapshot);
-			Desired.bRightClickToggleEnabled = true;
 			DesiredCards.Add(MoveTemp(Desired));
 		}
 
