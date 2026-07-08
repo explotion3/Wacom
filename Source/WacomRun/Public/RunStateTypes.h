@@ -171,6 +171,7 @@ namespace WacomRunDeckOperationReasons
 	WACOMRUN_API const FName& FluxFull();
 	WACOMRUN_API const FName& BattleDeckFull();
 	WACOMRUN_API const FName& SpecialZoneMissing();
+	WACOMRUN_API const FName& NotInSpecialZone();
 	WACOMRUN_API const FName& SelfSpecialZone();
 	WACOMRUN_API const FName& TypeBInSpecialZone();
 	WACOMRUN_API const FName& SpecialZoneFull();

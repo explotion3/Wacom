@@ -633,7 +633,7 @@ void UWacomBackpackScreen::RebuildBurdenZone(const FRunBackpackStorageSnapshot& 
 
 void UWacomBackpackScreen::HandleBattleEnabledToggle(FGuid InstanceId)
 {
-	FWacomBackpackCommandFlow::HandleBattleEnabledToggle(GetRunSession(), InstanceId);
+	FWacomBackpackCommandFlow::HandleBattleEnabledToggle(*this, GetRunSession(), InstanceId);
 }
 
 void UWacomBackpackScreen::HandleCardHovered(UWacomDeckCardWidget* SourceWidget)

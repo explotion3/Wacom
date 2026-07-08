@@ -55,5 +55,9 @@ struct FRunDeckRules
 
 	static FRunDeckOperationValidation ValidateMoveInstance(const FRunState& State, FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId);
 	static bool MoveInstance(FRunState& State, FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId, FRunOwnedCardLocation* OutFromLocation = nullptr, FName* OutDisabledReason = nullptr);
+	static FRunDeckOperationValidation ValidateSetSpecialZoneCardBattleEnabled(const FRunState& State, FGuid InstanceId, bool bEnabled);
+	static FRunDeckOperationValidation ValidateToggleSpecialZoneCardBattleEnabled(const FRunState& State, FGuid InstanceId);
+	static bool SetSpecialZoneCardBattleEnabled(FRunState& State, FGuid InstanceId, bool bEnabled, FName* OutDisabledReason = nullptr);
+	static bool ToggleSpecialZoneCardBattleEnabled(FRunState& State, FGuid InstanceId, FName* OutDisabledReason = nullptr);
 	static void RecomputeBurden(FRunState& State, bool bAllowBurdenRefill);
 };

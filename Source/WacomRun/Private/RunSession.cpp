@@ -994,32 +994,44 @@ bool URunSession::SetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnable
 {
 	// 仅切 SpecialZone 内卡牌的参战 flag，不移动卡牌。
 	// 未命中时不修改 RunState、不广播；重复设置同值仍视为成功并广播一次。
-	// 不同于 MoveInstance 复用 FindInstance：本函数需要通过引用直接修改 SpecialZone.Cards
-	// 中的字段，而 FindInstance 输出的是按值拷贝。因此这里直接遍历 SpecialZones。
-
-	if (!InstanceId.IsValid())
+	FName DisabledReason = NAME_None;
+	if (!FRunDeckRules::SetSpecialZoneCardBattleEnabled(RunState, InstanceId, bEnabled, &DisabledReason))
 	{
-		// zero GUID 不在任何 SpecialZone 中，直接拒绝（不警告：UI 端可能在状态过期时调用）。
+		UE_LOG(LogTemp, Verbose,
+			TEXT("[RunSession] SetSpecialZoneCardBattleEnabled: 拒绝 InstanceId=%s Reason=%s"),
+			*InstanceId.ToString(), *DisabledReason.ToString());
 		return false;
 	}
 
-	for (FSpecialZone& SZ : RunState.SpecialZones)
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
+	NotifyRunStateChanged();
+	return true;
+}
+
+FRunDeckOperationValidation URunSession::ValidateSetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnabled) const
+{
+	return FRunDeckRules::ValidateSetSpecialZoneCardBattleEnabled(RunState, InstanceId, bEnabled);
+}
+
+bool URunSession::ToggleSpecialZoneCardBattleEnabled(FGuid InstanceId)
+{
+	FName DisabledReason = NAME_None;
+	if (!FRunDeckRules::ToggleSpecialZoneCardBattleEnabled(RunState, InstanceId, &DisabledReason))
 	{
-		for (FCardInstance& Inst : SZ.Cards)
-		{
-			if (Inst.InstanceId == InstanceId)
-			{
-				Inst.bBattleEnabledInSpecialZone = bEnabled;
-				MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
-				NotifyRunStateChanged();
-				return true;
-			}
-		}
+		UE_LOG(LogTemp, Verbose,
+			TEXT("[RunSession] ToggleSpecialZoneCardBattleEnabled: 拒绝 InstanceId=%s Reason=%s"),
+			*InstanceId.ToString(), *DisabledReason.ToString());
+		return false;
 	}
 
-	// InstanceId 不在任何 SpecialZone 中（可能在 Backpack / BattleDeck / BurdenZone 或不存在）
-	// 未命中失败路径：不修改、不广播、return false。
-	return false;
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
+	NotifyRunStateChanged();
+	return true;
+}
+
+FRunDeckOperationValidation URunSession::ValidateToggleSpecialZoneCardBattleEnabled(FGuid InstanceId) const
+{
+	return FRunDeckRules::ValidateToggleSpecialZoneCardBattleEnabled(RunState, InstanceId);
 }
 
 bool URunSession::IsBagProviderCard(const UCardDefinition* Card)

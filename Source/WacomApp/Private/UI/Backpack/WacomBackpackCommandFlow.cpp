@@ -98,6 +98,11 @@ FText FWacomBackpackCommandFlow::BuildDeleteFailureToastText(FName DisabledReaso
 	return FWacomBackpackToastText::FormatDeleteFailureReasonForToast(DisabledReason);
 }
 
+FText FWacomBackpackCommandFlow::BuildBattleEnabledFailureToastText(FName DisabledReason)
+{
+	return FWacomBackpackToastText::FormatBattleEnabledFailureReasonForToast(DisabledReason);
+}
+
 FRunDeckOperationValidation FWacomBackpackCommandFlow::ValidateDeleteDropPreview(
 	URunSession* Run,
 	const UWacomCardDragOperation& CardOp)
@@ -221,22 +226,40 @@ bool FWacomBackpackCommandFlow::HandleDeleteDropRequested(
 	return Dialog != nullptr;
 }
 
-void FWacomBackpackCommandFlow::HandleBattleEnabledToggle(URunSession* Run, FGuid InstanceId)
+bool FWacomBackpackCommandFlow::HandleBattleEnabledToggle(
+	UWacomBackpackScreen& Screen,
+	URunSession* Run,
+	FGuid InstanceId)
 {
-	if (!Run || !InstanceId.IsValid())
+	if (!InstanceId.IsValid())
 	{
-		return;
+		ShowWarningToast(&Screen, BuildBattleEnabledFailureToastText(DeckReasons::CardNotFound()));
+		return false;
 	}
 
-	FCardInstance Inst;
-	EZoneKind Zone = EZoneKind::Backpack;
-	FGuid ZoneOwner;
-	if (!Run->FindInstance(InstanceId, Inst, Zone, ZoneOwner) || Zone != EZoneKind::SpecialZone)
+	if (!Run)
 	{
-		return;
+		ShowWarningToast(&Screen, BuildBattleEnabledFailureToastText(DeckReasons::RunSessionMissing()));
+		return false;
 	}
 
-	Run->SetSpecialZoneCardBattleEnabled(InstanceId, !Inst.bBattleEnabledInSpecialZone);
+	const FRunDeckOperationValidation Validation =
+		Run->ValidateToggleSpecialZoneCardBattleEnabled(InstanceId);
+	if (!Validation.bCanExecute)
+	{
+		ShowWarningToast(&Screen, BuildBattleEnabledFailureToastText(Validation.DisabledReason));
+		return false;
+	}
+
+	if (!Run->ToggleSpecialZoneCardBattleEnabled(InstanceId))
+	{
+		const FRunDeckOperationValidation RetryValidation =
+			Run->ValidateToggleSpecialZoneCardBattleEnabled(InstanceId);
+		ShowWarningToast(&Screen, BuildBattleEnabledFailureToastText(RetryValidation.DisabledReason));
+		return false;
+	}
+
+	return true;
 }
 
 #undef LOCTEXT_NAMESPACE

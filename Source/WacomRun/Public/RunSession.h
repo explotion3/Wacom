@@ -389,6 +389,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool SetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnabled);
 
+	/**
+	 * 校验 SetSpecialZoneCardBattleEnabled 是否可执行；不修改 RunState。
+	 *
+	 * 当前规则只要求 InstanceId 当前位于任意 SpecialZone。bEnabled 预留给未来按目标状态
+	 * 区分校验的规则，调用方不应自行推断 SpecialZone 归属失败原因。
+	 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
+	FRunDeckOperationValidation ValidateSetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnabled) const;
+
+	/**
+	 * 切换 SpecialZone 中某张 instance 的入战标记。
+	 *
+	 * App/UI 层用于提交“右键切换”意图；当前值读取、合法性校验和 flag mutation 均留在 Run 层。
+	 */
+	bool ToggleSpecialZoneCardBattleEnabled(FGuid InstanceId);
+
+	/** 校验 ToggleSpecialZoneCardBattleEnabled 是否可执行；不修改 RunState。 */
+	FRunDeckOperationValidation ValidateToggleSpecialZoneCardBattleEnabled(FGuid InstanceId) const;
+
 	/** 卡是否带 BagProvider 关键词。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	static bool IsBagProviderCard(const UCardDefinition* Card);

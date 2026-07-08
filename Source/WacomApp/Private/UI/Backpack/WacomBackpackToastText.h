@@ -10,4 +10,5 @@ struct FWacomBackpackToastText
 	static FText FormatZoneNameForToast(EZoneKind Zone);
 	static FText FormatMoveFailureReasonForToast(FName DisabledReason);
 	static FText FormatDeleteFailureReasonForToast(FName DisabledReason);
+	static FText FormatBattleEnabledFailureReasonForToast(FName DisabledReason);
 };

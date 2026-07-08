@@ -131,7 +131,7 @@ Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCard
 | `SpecialZones` | 每张 B 类容器卡各自开辟一个特殊存放区 |
 | `BurdenZone` | 其他区超容后的兜底区 |
 
-同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`；失败路径不修改 RunState。`URunSession::MoveInstance()` 是 public 提交入口，实际校验后 zone mutation、SpecialZone battle flag 清理、B 主卡 SpecialZone entry 保底和负重重算由 `Private/Deck/RunDeckRules.*` 承接。
+同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`；失败路径不修改 RunState。`URunSession::MoveInstance()` 是 public 提交入口，实际校验后 zone mutation、SpecialZone battle flag 清理、B 主卡 SpecialZone entry 保底和负重重算由 `Private/Deck/RunDeckRules.*` 承接。SpecialZone 入战标记的 `SetSpecialZoneCardBattleEnabled()` / `ToggleSpecialZoneCardBattleEnabled()` 同样只在 `InstanceId` 当前位于某个 `SpecialZones.Cards` 时成功；App 层必须先使用 `ValidateSetSpecialZoneCardBattleEnabled()` / `ValidateToggleSpecialZoneCardBattleEnabled()` 或提交 toggle 入口，不自行通过持有区推断失败原因。
 
 Deck 操作校验继续通过 `FRunDeckOperationValidation.DisabledReason` 暴露稳定 `FName`，供 Blueprint、UI toast、RunEvent 支付和世界交互诊断兼容使用。生产代码必须通过 `WacomRunDeckOperationReasons` 取得这些 reason ID，不在规则、App flow 或测试里重新手写 deck reason 字符串。`RunEvent` 可以把 deck reason 转译成事件语境 reason（例如“未持有卡”转为“缺少所需卡牌”）；这些展示 / 事件 reason 不等同于 deck 原始失败码。
 

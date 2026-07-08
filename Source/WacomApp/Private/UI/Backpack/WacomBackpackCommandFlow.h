@@ -28,6 +28,7 @@ public:
 	static FText BuildMoveZoneNameText(EZoneKind Zone);
 	static FText BuildMoveFailureToastText(FName DisabledReason);
 	static FText BuildDeleteFailureToastText(FName DisabledReason);
+	static FText BuildBattleEnabledFailureToastText(FName DisabledReason);
 
 	static bool HandleZoneDropRequested(
 		UWacomBackpackScreen& Screen,
@@ -41,7 +42,10 @@ public:
 		URunSession* Run,
 		const UWacomCardDragOperation& CardOp);
 
-	static void HandleBattleEnabledToggle(URunSession* Run, FGuid InstanceId);
+	static bool HandleBattleEnabledToggle(
+		UWacomBackpackScreen& Screen,
+		URunSession* Run,
+		FGuid InstanceId);
 
 private:
 	static FText GetCardDisplayName(const UCardDefinition* Card);

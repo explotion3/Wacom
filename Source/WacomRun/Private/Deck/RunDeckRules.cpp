@@ -43,6 +43,14 @@ namespace
 			*OutDisabledReason = DisabledReason;
 		}
 	}
+
+	void SetSpecialZoneBattleFlagDisabledReason(FName* OutDisabledReason, FName DisabledReason)
+	{
+		if (OutDisabledReason)
+		{
+			*OutDisabledReason = DisabledReason;
+		}
+	}
 }
 
 bool FRunDeckRules::IsContainerCard(const UCardDefinition* Card)
@@ -765,6 +773,104 @@ FRunDeckOperationValidation FRunDeckRules::ValidateMoveInstance(const FRunState&
 	Result.bCanExecute = true;
 	Result.DisabledReason = NAME_None;
 	return Result;
+}
+
+FRunDeckOperationValidation FRunDeckRules::ValidateSetSpecialZoneCardBattleEnabled(
+	const FRunState& State,
+	FGuid InstanceId,
+	bool /*bEnabled*/)
+{
+	return ValidateToggleSpecialZoneCardBattleEnabled(State, InstanceId);
+}
+
+FRunDeckOperationValidation FRunDeckRules::ValidateToggleSpecialZoneCardBattleEnabled(
+	const FRunState& State,
+	FGuid InstanceId)
+{
+	FRunDeckOperationValidation Result;
+	Result.DisabledReason = DeckReasons::Unknown();
+
+	FCardInstance Found;
+	EZoneKind Zone = EZoneKind::Backpack;
+	FGuid ZoneOwnerInstanceId;
+	if (!FindInstance(State, InstanceId, Found, Zone, ZoneOwnerInstanceId))
+	{
+		Result.DisabledReason = DeckReasons::CardNotFound();
+		return Result;
+	}
+
+	if (Zone != EZoneKind::SpecialZone)
+	{
+		Result.DisabledReason = DeckReasons::NotInSpecialZone();
+		return Result;
+	}
+
+	Result.bCanExecute = true;
+	Result.DisabledReason = NAME_None;
+	return Result;
+}
+
+bool FRunDeckRules::SetSpecialZoneCardBattleEnabled(
+	FRunState& State,
+	FGuid InstanceId,
+	bool bEnabled,
+	FName* OutDisabledReason)
+{
+	SetSpecialZoneBattleFlagDisabledReason(OutDisabledReason, NAME_None);
+
+	const FRunDeckOperationValidation Validation =
+		ValidateSetSpecialZoneCardBattleEnabled(State, InstanceId, bEnabled);
+	if (!Validation.bCanExecute)
+	{
+		SetSpecialZoneBattleFlagDisabledReason(OutDisabledReason, Validation.DisabledReason);
+		return false;
+	}
+
+	for (FSpecialZone& SpecialZone : State.SpecialZones)
+	{
+		for (FCardInstance& Inst : SpecialZone.Cards)
+		{
+			if (Inst.InstanceId == InstanceId)
+			{
+				Inst.bBattleEnabledInSpecialZone = bEnabled;
+				return true;
+			}
+		}
+	}
+
+	SetSpecialZoneBattleFlagDisabledReason(OutDisabledReason, DeckReasons::CardNotFound());
+	return false;
+}
+
+bool FRunDeckRules::ToggleSpecialZoneCardBattleEnabled(
+	FRunState& State,
+	FGuid InstanceId,
+	FName* OutDisabledReason)
+{
+	SetSpecialZoneBattleFlagDisabledReason(OutDisabledReason, NAME_None);
+
+	const FRunDeckOperationValidation Validation =
+		ValidateToggleSpecialZoneCardBattleEnabled(State, InstanceId);
+	if (!Validation.bCanExecute)
+	{
+		SetSpecialZoneBattleFlagDisabledReason(OutDisabledReason, Validation.DisabledReason);
+		return false;
+	}
+
+	for (FSpecialZone& SpecialZone : State.SpecialZones)
+	{
+		for (FCardInstance& Inst : SpecialZone.Cards)
+		{
+			if (Inst.InstanceId == InstanceId)
+			{
+				Inst.bBattleEnabledInSpecialZone = !Inst.bBattleEnabledInSpecialZone;
+				return true;
+			}
+		}
+	}
+
+	SetSpecialZoneBattleFlagDisabledReason(OutDisabledReason, DeckReasons::CardNotFound());
+	return false;
 }
 
 bool FRunDeckRules::MoveInstance(

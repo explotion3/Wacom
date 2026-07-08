@@ -88,4 +88,21 @@ FText FWacomBackpackToastText::FormatDeleteFailureReasonForToast(FName DisabledR
 	return LOCTEXT("DeleteFailUnknown", "无法销毁：当前规则不允许。");
 }
 
+FText FWacomBackpackToastText::FormatBattleEnabledFailureReasonForToast(FName DisabledReason)
+{
+	if (DisabledReason == DeckReasons::RunSessionMissing())
+	{
+		return LOCTEXT("BattleEnabledFailRunMissing", "无法切换入战：当前没有可用的 Run 数据。");
+	}
+	if (DisabledReason == DeckReasons::CardNotFound())
+	{
+		return LOCTEXT("BattleEnabledFailCardNotFound", "无法切换入战：找不到这张卡牌。");
+	}
+	if (DisabledReason == DeckReasons::NotInSpecialZone())
+	{
+		return LOCTEXT("BattleEnabledFailNotInSpecialZone", "无法切换入战：这张卡不在特殊存放区。");
+	}
+	return LOCTEXT("BattleEnabledFailUnknown", "无法切换入战：当前规则不允许。");
+}
+
 #undef LOCTEXT_NAMESPACE
