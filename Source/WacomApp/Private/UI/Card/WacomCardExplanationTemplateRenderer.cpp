@@ -6,6 +6,7 @@
 #include "Cards/CardEffect.h"
 #include "Cards/CardPassive.h"
 #include "Tags/WacomGameplayTags.h"
+#include "WacomCardExplanationText.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardExplanationTemplateRenderer"
 
@@ -66,7 +67,7 @@ namespace WacomCardExplanationTemplateRenderer
 			{
 				return LOCTEXT("StatusShield", "护盾");
 			}
-			return FText::FromString(GetDisplayTagLeafName(StatusTag));
+			return FText::FromString(WacomCardExplanationText::GetDisplayTagLeafName(StatusTag));
 		}
 
 		FGameplayTag ResolveEffectStatusTag(const FCardEffect& Effect)
@@ -231,7 +232,7 @@ namespace WacomCardExplanationTemplateRenderer
 			Run.StableId = StableRunId(StableIdPrefix, RunIndex, TEXT("Keyword"));
 			Run.Kind = EWacomCardDetailRunKind::Keyword;
 			Run.Tag = Tag;
-			Run.Text = FText::FromString(GetDisplayTagLeafName(Tag));
+			Run.Text = FText::FromString(WacomCardExplanationText::GetDisplayTagLeafName(Tag));
 			Run.bSkipped = Block.bSkipped;
 			Block.Runs.Add(MoveTemp(Run));
 			++RunIndex;
@@ -311,14 +312,6 @@ namespace WacomCardExplanationTemplateRenderer
 
 			return false;
 		}
-	}
-
-	FString GetDisplayTagLeafName(const FGameplayTag& Tag)
-	{
-		const FString TagText = Tag.IsValid() ? Tag.ToString() : FString();
-		int32 DotIndex = INDEX_NONE;
-		TagText.FindLastChar(TEXT('.'), DotIndex);
-		return DotIndex == INDEX_NONE ? TagText : TagText.Mid(DotIndex + 1);
 	}
 
 	void AppendTextRun(

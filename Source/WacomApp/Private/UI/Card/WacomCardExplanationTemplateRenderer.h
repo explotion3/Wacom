@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameplayTagContainer.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 
 class UCardDefinition;
@@ -12,8 +11,6 @@ struct FCardPassive;
 
 namespace WacomCardExplanationTemplateRenderer
 {
-	FString GetDisplayTagLeafName(const FGameplayTag& Tag);
-
 	void AppendTextRun(
 		FWacomCardDetailBlock& Block,
 		const FString& Text,
