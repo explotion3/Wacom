@@ -44,44 +44,20 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 {
 	if (!CardWidgetClass)
 	{
-		if (UClass* Loaded = LoadObject<UClass>(
-			nullptr,
-			TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget_C")))
-		{
-			CardWidgetClass = Loaded;
-		}
-		else
-		{
-			CardWidgetClass = UWacomDeckCardWidget::StaticClass();
-		}
+		CardWidgetClass = LoadOptionalWidgetClass<UWacomDeckCardWidget>(
+			TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget_C"));
 	}
 
 	if (!SpecialZoneWidgetClass)
 	{
-		if (UClass* Loaded = LoadObject<UClass>(
-			nullptr,
-			TEXT("/Game/Wacom/UI/Backpack/WBP_WacomSpecialZoneWidget.WBP_WacomSpecialZoneWidget_C")))
-		{
-			SpecialZoneWidgetClass = Loaded;
-		}
-		else
-		{
-			SpecialZoneWidgetClass = UWacomSpecialZoneWidget::StaticClass();
-		}
+		SpecialZoneWidgetClass = LoadOptionalWidgetClass<UWacomSpecialZoneWidget>(
+			TEXT("/Game/Wacom/UI/Backpack/WBP_WacomSpecialZoneWidget.WBP_WacomSpecialZoneWidget_C"));
 	}
 
 	if (!CardDetailPanelClass)
 	{
-		if (UClass* Loaded = LoadObject<UClass>(
-			nullptr,
-			TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C")))
-		{
-			CardDetailPanelClass = Loaded;
-		}
-		else
-		{
-			CardDetailPanelClass = UWacomCardDetailPanel::StaticClass();
-		}
+		CardDetailPanelClass = LoadOptionalWidgetClass<UWacomCardDetailPanel>(
+			TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C"));
 	}
 
 	if (!DeleteZoneSectionWidgetClass)

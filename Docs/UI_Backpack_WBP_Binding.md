@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-backpack
 status: active
-updated: 2026-06-05
+updated: 2026-07-08
 tags:
   - wacom/ui
   - wacom/wbp
@@ -106,6 +106,8 @@ WBP 不应做：
 父类：`UWacomSpecialZoneWidget`
 
 推荐资产：`WBP_WacomSpecialZoneWidget`
+
+该资产是单个 SpecialZone 区块的可选美术制作入口，不是运行时硬依赖。未制作或未在 `UWacomBackpackScreen.SpecialZoneWidgetClass` 指向该资产时，`UWacomBackpackScreen` 会使用 C++ `UWacomSpecialZoneWidget` fallback，并由 `SpecialZonesHost -> SpecialZonesPanel -> UWacomSpecialZoneWidget` 链路动态填充。
 
 推荐绑定：
 
