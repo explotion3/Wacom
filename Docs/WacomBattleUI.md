@@ -209,6 +209,8 @@ BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命�
 
 CommandBar 的轻量协议定义在 `BattleCommandBarTypes.h`：`EWacomBattleCommandId`、`FWacomBattleCommandButtonView` 和 `FWacomBattleCommandBarViewData` 可以被 HUD / runtime presenter / tests 直接使用；`BattleCommandBarWidget.h` 只承载 UMG Widget 实现与 WBP 制作面。当前 `WBP_BattleCommandBar` 推荐直接绑定 `WaitButton / EndTurnButton` 让资产控制位置，并在 CommandBar 上配置 `WaitIconBrush / EndTurnIconBrush`；`CommandButtonContainer` 仅作为未绑定按钮时的动态生成回退。CommandBar ViewData 构建收口在 App-private `FWacomBattleHUDCommandBarPresenter`，`FWacomBattleHUDRuntime` 只保留刷新入口和 command gate 查询。
 
+Battle CommandBar 的 Widget 资产留在 `/Game/Wacom/UI/Battle/Action/`，但通用 CommonUI 样式资产不属于 Battle 业务目录。`WBP_BattleCommandButton` 应引用 `/Game/Wacom/UI/Style/Button/` 下的 `CommonButtonStyle` 和 `/Game/Wacom/UI/Style/Text/` 下的 `CommonTextStyle`；Battle WBP 不通过样式资产推断命令可用性、pending 或规则状态。
+
 BattleHUD 自身配置分类：
 
 | 配置 | 分类 |

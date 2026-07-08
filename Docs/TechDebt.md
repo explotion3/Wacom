@@ -62,6 +62,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | 场景敌人表现 polish | 主链路已拆成 `SceneEnemyHost + PartActor + WorldTargetBridge + Presentation`；普通小怪走 Host 整体图 + hit-only 部位，精英 / Boss 走 PartActor VisualLayers | 继续补正式 sprite/flipbook 美术、材质描边、tooltip、风险动效和 PaperZD/Animator 状态机 |
 | CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 legacy bridge 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
+| UI Style 资产命名 V0 | 通用样式资产已迁到 `/Game/Wacom/UI/Style/`，但仍保留 `tiny_menu_Button`、`MyCommonTextStyle` 等原型命名 | 后续设计系统整理时统一命名为语义化 Style asset，例如 `WBPStyle_Button_CommandPrimary` / `TextStyle_CommandButton`，并通过资产审计确认没有旧路径引用后再重命名 |
 | Backpack UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper；缺席的嵌套 SpecialZone WBP 会静默回 C++ `UWacomSpecialZoneWidget`，不再作为硬路径加载；视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen`、局部 Zone WBP 和可选 `WBP_WacomSpecialZoneWidget` 替换视觉 |
 | Backpack / Shop 长列表 | Backpack / SpecialZone / Shop 已有 revision gate、signature dirty gate 和 identity reconcile；Backpack 的 snapshot refresh gate、普通卡列表 reconcile 和 SpecialZone section reconcile 已抽到 App-private helper，Shop 的 snapshot / offer dirty gate 和 offer row reconcile 已抽到 App-private helper，但列表仍是 WrapBox / VerticalBox | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
 | 像素风 UI 分辨率适配 | 背包卡牌等像素图控件依赖固定 SizeBox 和 `DPI Scale = 1.0`；非整数 DPI 缩放会导致像素点显示不均匀 | 统一设计像素安全缩放档位，并配合 WrapBox / ScrollBox 做布局重排 |

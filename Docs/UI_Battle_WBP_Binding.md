@@ -312,6 +312,17 @@ CommandBar 的轻量协议定义在 `BattleCommandBarTypes.h`：`EWacomBattleCom
 
 父类：`UWacomBattleCommandButtonWidget`
 
+推荐资产路径：`/Game/Wacom/UI/Battle/Action/WBP_BattleCommandButton`
+
+样式资产：
+
+| 资产 | 推荐路径 | 用途 |
+|---|---|---|
+| ButtonStyle | `/Game/Wacom/UI/Style/Button/tiny_menu_Button` | 命令按钮的 CommonButtonStyle |
+| TextStyle | `/Game/Wacom/UI/Style/Text/MyCommonTextStyle` | 命令按钮文字 CommonTextStyle |
+
+`WBP_BattleCommandButton` 是 Battle CommandBar 的业务按钮 Widget；`tiny_menu_Button`、`MyCommonTextStyle` 等通用样式资产不放在 `/Game/Wacom/UI/Battle/Action/`，避免 Battle 目录继续承载跨界面的 Style contract。
+
 推荐绑定：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
