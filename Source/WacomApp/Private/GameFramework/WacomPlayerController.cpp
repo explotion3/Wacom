@@ -603,9 +603,7 @@ void AWacomPlayerController::RefreshRunFirstPersonCardLayerMenuSuppression()
 			return !Existing.IsValid();
 		});
 
-	const bool bShouldSuppress =
-		bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| ActiveGameMenuWidgets.Num() > 0;
+	const bool bShouldSuppress = HasActiveRunGameMenuOrTransitionSuppression();
 	SetRunFirstPersonCardLayerSuppressedByGameMenu(bShouldSuppress);
 	if (!bShouldSuppress)
 	{
@@ -617,6 +615,16 @@ void AWacomPlayerController::RefreshRunFirstPersonCardLayerMenuSuppression()
 	}
 	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
+}
+
+bool AWacomPlayerController::HasActiveRunGameMenuOrTransitionSuppression() const
+{
+	return bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
+		|| ActiveGameMenuWidgets.ContainsByPredicate(
+			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
+			{
+				return Menu.IsValid();
+			});
 }
 
 FWacomRunFirstPersonCardDetailController&
@@ -668,12 +676,7 @@ AWacomPlayerController::GetRunFirstPersonCardDropCoordinator()
 		DropContext.HasActiveGameMenuFunc =
 			[this]()
 			{
-				return bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-					|| ActiveGameMenuWidgets.ContainsByPredicate(
-						[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-						{
-							return Menu.IsValid();
-						});
+				return HasActiveRunGameMenuOrTransitionSuppression();
 			};
 		DropContext.IsRunWorldCardDropEnabledFunc =
 			[this]()

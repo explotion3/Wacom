@@ -114,14 +114,8 @@ bool FWacomRunWorldInteractionRouter::TryRouteInteractableClick()
 	{
 		return false;
 	}
-	const bool bHasActiveGameMenu =
-		PlayerController.bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| PlayerController.ActiveGameMenuWidgets.ContainsByPredicate(
-			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-			{
-				return Menu.IsValid();
-			});
-	if (bHasActiveGameMenu || PlayerController.ShouldHandleRunFirstPersonMenuDropProbe())
+	if (PlayerController.HasActiveRunGameMenuOrTransitionSuppression()
+		|| PlayerController.ShouldHandleRunFirstPersonMenuDropProbe())
 	{
 		if (PlayerController.bLogRunWorldInteractableClick)
 		{
@@ -274,14 +268,8 @@ bool FWacomRunWorldInteractionRouter::CanShowHoverPrompt() const
 		return false;
 	}
 
-	const bool bHasActiveGameMenu =
-		PlayerController.bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| PlayerController.ActiveGameMenuWidgets.ContainsByPredicate(
-			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-			{
-				return Menu.IsValid();
-			});
-	return !bHasActiveGameMenu && !PlayerController.ShouldHandleRunFirstPersonMenuDropProbe();
+	return !PlayerController.HasActiveRunGameMenuOrTransitionSuppression()
+		&& !PlayerController.ShouldHandleRunFirstPersonMenuDropProbe();
 }
 
 AActor* FWacomRunWorldInteractionRouter::ResolveSourceActorFromHandle(
