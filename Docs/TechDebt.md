@@ -146,6 +146,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - AppToast viewport owner 检查已收口：`UWacomAppToastSubsystem` 只在真实本地玩家和 `LocalPlayer` 就绪时创建 / 加入 viewport，离屏自动化注入 Widget 可复用且不再通过 Widget `GetWorld()` 判定旧 World/PC。
 - Run GameMenu suppression 查询已收口：PlayerController、Run world interaction router 和 Run first-person drop context 共用 `HasActiveRunGameMenuOrTransitionSuppression()`，不再重复解释 active GameMenu 与 viewpoint transition suppression 状态。
 - Run first-person menu lease contract 已从具体 source component 头拆出：`FWacomRunMenuCardLeaseRequest / Result` 现在位于 `UI/Run/WacomRunMenuCardLeaseTypes.h`，Foundation / PlayerController public 头不再为了纯 lease 数据依赖 `UWacomRunFirstPersonCardSourceComponent` 完整定义。
+- Run world target handle 接受条件已收口：`FWacomRunWorldInteractionRouter` 的 cursor probe 和 widget-position probe 共用 `IsAcceptedRunWorldTargetHandle()`，避免 Run world click / hover 与 card-drop probe 对 `TargetKind / TargetTag / WorldTargetId` 的判断漂移。
 - Battle Combat Log 合同测试已拆出：`BattleCombatLogSpec.cpp` 覆盖 builder、feed、HUD history 和 controller 合同，统一使用 `Wacom.UI.Battle.CombatLog` 前缀；`BattleWidgetSpec.cpp` 不再承载 combat log 专题。
 - Card face view data builder 已抽出：`UWacomCardPresentationBuilder` 不再直接持有小卡卡面字段、紧凑描述、体格/价值展示和效果徽章映射逻辑，`WacomCardFaceViewDataBuilder` 负责生成 `FWacomCardViewData` 和 `FWacomCardViewEffectBadge`。
 - Legacy battle event log 已清理：`UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast` 和 `BuildLegacyEventBlock()` 已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。

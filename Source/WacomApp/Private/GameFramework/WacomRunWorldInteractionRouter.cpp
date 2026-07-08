@@ -19,6 +19,14 @@ namespace
 	{
 		return IsValid(Object) ? Object->GetName() : TEXT("None");
 	}
+
+	bool IsAcceptedRunWorldTargetHandle(const FWacomInteractionTargetHandle& Handle)
+	{
+		return Handle.IsValid()
+			&& Handle.TargetKind == EWacomInteractionTargetKind::World
+			&& Handle.TargetTag == WacomTags::Interaction_Target_Run_Object
+			&& Handle.WorldTargetId.IsValid();
+	}
 }
 
 FWacomRunWorldInteractionRouter::FWacomRunWorldInteractionRouter(
@@ -56,10 +64,7 @@ bool FWacomRunWorldInteractionRouter::TryProbeSceneInteractionTarget(
 		}
 	}
 
-	const bool bAccepted = OutHandle.IsValid()
-		&& OutHandle.TargetKind == EWacomInteractionTargetKind::World
-		&& OutHandle.TargetTag == WacomTags::Interaction_Target_Run_Object
-		&& OutHandle.WorldTargetId.IsValid();
+	const bool bAccepted = IsAcceptedRunWorldTargetHandle(OutHandle);
 	if (!bAccepted)
 	{
 		OutHandle = FWacomInteractionTargetHandle();
@@ -93,10 +98,7 @@ bool FWacomRunWorldInteractionRouter::TryProbeSceneInteractionTargetAtWidgetPosi
 		OutHandle.ScreenPosition = WidgetPosition;
 	}
 
-	const bool bAccepted = OutHandle.IsValid()
-		&& OutHandle.TargetKind == EWacomInteractionTargetKind::World
-		&& OutHandle.TargetTag == WacomTags::Interaction_Target_Run_Object
-		&& OutHandle.WorldTargetId.IsValid();
+	const bool bAccepted = IsAcceptedRunWorldTargetHandle(OutHandle);
 	if (!bAccepted)
 	{
 		OutHandle = FWacomInteractionTargetHandle();
