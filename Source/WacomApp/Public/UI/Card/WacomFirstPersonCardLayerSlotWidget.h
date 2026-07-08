@@ -35,6 +35,12 @@ struct FWacomFirstPersonCardEnterTransitionPlayback
 	float ArcLiftPixels = 0.0f;
 	float EasePower = 1.0f;
 	bool bBlockInteractionDuringPlayback = true;
+	TSoftObjectPtr<USoundBase> StartSound;
+	float StartSoundVolumeMultiplier = 1.0f;
+	float StartSoundPitchMultiplier = 1.0f;
+	EWacomFirstPersonCardSlotTransitionKind SoundTransitionKind =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
+	bool bStartSoundPlayed = false;
 };
 
 #if WITH_AUTOMATION_TESTS
@@ -76,6 +82,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	float EnterTransitionElapsedSeconds = 0.0f;
 	float EnterTransitionStartDelaySeconds = 0.0f;
 	float EnterTransitionDurationSeconds = 0.0f;
+	int32 EnterTransitionSoundRequestCount = 0;
+	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKind =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
@@ -306,6 +315,9 @@ private:
 	int32 SlotFeedbackConfigApplyCountForTest = 0;
 	int32 CardDragConfigApplyCountForTest = 0;
 	int32 SlotVisualConfigApplyCountForTest = 0;
+	int32 EnterTransitionSoundRequestCountForTest = 0;
+	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKindForTest =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
 #endif
 
 	friend class UWacomFirstPersonCardLayerWidget;
@@ -392,6 +404,7 @@ private:
 		const FWacomFirstPersonCardTransitionMotionProfile& EnterProfile);
 	void ClearEnterTransitionPlayback();
 	bool TickEnterTransitionPlayback(float DeltaTime);
+	void PlayEnterTransitionStartSound();
 	bool IsEnterTransitionPlaybackActive() const { return EnterTransitionPlayback.bActive; }
 	bool IsEnterTransitionBlockingInteraction() const;
 	static FWacomFirstPersonCardLayerSlotView LerpSlotView(

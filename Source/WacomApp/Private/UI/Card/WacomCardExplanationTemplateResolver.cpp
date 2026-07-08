@@ -20,15 +20,19 @@ namespace WacomCardExplanationTemplateResolver
 		{
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Damage))
 			{
-				return LOCTEXT("TemplateDamage", "造成 {value:Magnitude} 点伤害。");
+				return LOCTEXT("TemplateDamage", "{icon:EffectIcon} 造成 {value:Magnitude} 点伤害。");
 			}
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Heal))
 			{
-				return LOCTEXT("TemplateHeal", "恢复 {value:Magnitude} 点生命。");
+				return LOCTEXT("TemplateHeal", "{icon:EffectIcon} 恢复 {value:Magnitude} 点生命。");
 			}
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Status_Shield))
 			{
-				return LOCTEXT("TemplateShield", "获得 {value:Magnitude} 点护盾。");
+				return LOCTEXT("TemplateShield", "{icon:EffectIcon} 获得 {value:Magnitude} 点护盾。");
+			}
+			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Draw))
+			{
+				return LOCTEXT("TemplateDraw", "抽 {value:Magnitude} 张牌。");
 			}
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Poison)
 				|| Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Slow)
@@ -52,6 +56,26 @@ namespace WacomCardExplanationTemplateResolver
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_ExhaustSelected))
 			{
 				return LOCTEXT("TemplateExhaustSelected", "消耗目标手牌。");
+			}
+			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Discard))
+			{
+				return LOCTEXT("TemplateDiscard", "随机弃置 {value:Magnitude} 张手牌。");
+			}
+			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ExhaustSelf))
+			{
+				return LOCTEXT("TemplateExhaustSelf", "此牌打出后进入消耗牌堆。");
+			}
+			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_GainKeyword))
+			{
+				return LOCTEXT("TemplateGainKeyword", "赋予目标手牌关键词。");
+			}
+			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_RemoveStatus))
+			{
+				return LOCTEXT("TemplateRemoveStatus", "移除目标 {value:Magnitude} 层状态。");
+			}
+			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ModifyInitiative))
+			{
+				return LOCTEXT("TemplateModifyInitiative", "目标部位先机变化 {value:Magnitude}。");
 			}
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Shuffle_Random))
 			{

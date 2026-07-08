@@ -51,7 +51,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Detail Theme", meta = (ToolTip = "详情正文 RichText style set。用于 BodyText 的 TextStyleSet。"))
 	TObjectPtr<UDataTable> BodyTextStyleSet = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Detail Theme", meta = (TitleProperty = "Icon", ToolTip = "详情正文内 icon slot 使用的 Brush。v1 RichText fallback 仍会输出文字占位。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Detail Theme", meta = (TitleProperty = "Icon", ToolTip = "详情正文内 icon slot 使用的 Brush。缺少 Brush 时 RichText decorator 会回退到标签文本。"))
 	TArray<FWacomCardDetailIconBrushEntry> IconBrushes;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Detail Theme", meta = (TitleProperty = "StatusTag", ToolTip = "详情正文内 status slot 使用的 Brush。"))
@@ -59,4 +59,13 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Detail Theme", meta = (ToolTip = "未配置 icon/status brush 时的 fallback Brush。"))
 	FSlateBrush FallbackInlineBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Detail Theme", meta = (ToolTip = "详情正文内联图标的渲染偏移，单位为 Slate unit。Y 为负数时图标上移；推荐从 (0, -2) 到 (0, -4) 微调，只影响显示位置，不改变文字排版占位。"))
+	FVector2D InlineIconRenderOffset = FVector2D(0.0f, -2.0f);
+
+	const FSlateBrush* ResolveIconBrush(EWacomCardDetailIcon Icon) const;
+	const FSlateBrush* ResolveStatusBrush(FGameplayTag StatusTag) const;
+	const FSlateBrush* ResolveFallbackInlineBrush() const;
+
+	static bool IsInlineBrushConfigured(const FSlateBrush& Brush);
 };

@@ -7,12 +7,12 @@
 #include "WacomCardDetailRichTextDecorator.generated.h"
 
 /**
- * Extension point for future inline image / tooltip rich text runs.
+ * RichText decorator for card detail inline icon/status markup.
  *
- * v1 renderers emit styled text fallback. This decorator reserves Wacom-specific
- * tag names without making data widgets parse card rules.
+ * Renderers emit Wacom-specific tags; this decorator resolves them through the
+ * active card detail theme without making widgets parse card rules.
  */
-UCLASS(Blueprintable, meta = (ToolTip = "卡牌详情 RichText 扩展点。后续用于 inline icon/status/keyword tooltip；v1 主要保留合同。"))
+UCLASS(Blueprintable, meta = (ToolTip = "卡牌详情 RichText 装饰器。负责把详情正文中的 inline icon/status 标签渲染成主题配置的图标，Widget 不解析卡牌规则。"))
 class WACOMAPP_API UWacomCardDetailRichTextDecorator : public URichTextBlockDecorator
 {
 	GENERATED_BODY()

@@ -24,6 +24,15 @@ namespace
 			&& AreFloatsEquivalent(A.A, B.A);
 	}
 
+	template <typename ObjectType>
+	bool AreSoftObjectsEquivalent(
+		const TSoftObjectPtr<ObjectType>& A,
+		const TSoftObjectPtr<ObjectType>& B)
+	{
+		return A.Get() == B.Get()
+			&& A.ToSoftObjectPath() == B.ToSoftObjectPath();
+	}
+
 	bool IsDefaultMotionProfile(const FWacomFirstPersonCardMotionProfile& Profile)
 	{
 		const FWacomFirstPersonCardMotionProfile DefaultProfile;
@@ -98,6 +107,8 @@ FWacomFirstPersonCardSlotMotionConfig NormalizeSlotMotionConfig(
 	Config.HandAnchorEnterStaggerSeconds = FMath::Max(0.0f, Config.HandAnchorEnterStaggerSeconds);
 	Config.HandAnchorEnterArcLiftPixels = FMath::Max(0.0f, Config.HandAnchorEnterArcLiftPixels);
 	Config.HandAnchorEnterEasePower = FMath::Max(0.1f, Config.HandAnchorEnterEasePower);
+	Config.EnterSoundVolumeMultiplier = FMath::Max(0.0f, Config.EnterSoundVolumeMultiplier);
+	Config.EnterSoundPitchMultiplier = FMath::Max(0.01f, Config.EnterSoundPitchMultiplier);
 	Config.PlayedExitViewportAnchor.X = FMath::Clamp(Config.PlayedExitViewportAnchor.X, 0.0f, 1.0f);
 	Config.PlayedExitViewportAnchor.Y = FMath::Clamp(Config.PlayedExitViewportAnchor.Y, 0.0f, 1.0f);
 	Config.PlayedExitScaleMultiplier = FMath::Max(0.01f, Config.PlayedExitScaleMultiplier);
@@ -158,6 +169,13 @@ bool AreSlotMotionConfigsEquivalent(
 		&& AreFloatsEquivalent(A.HandAnchorEnterArcLiftPixels, B.HandAnchorEnterArcLiftPixels)
 		&& AreFloatsEquivalent(A.HandAnchorEnterEasePower, B.HandAnchorEnterEasePower)
 		&& A.bBlockInteractionDuringHandAnchorEnter == B.bBlockInteractionDuringHandAnchorEnter
+		&& A.bEnableEnterSounds == B.bEnableEnterSounds
+		&& AreSoftObjectsEquivalent(A.DrawnEnterSound, B.DrawnEnterSound)
+		&& AreSoftObjectsEquivalent(A.GainedEnterSound, B.GainedEnterSound)
+		&& AreSoftObjectsEquivalent(A.RunHandEnterSound, B.RunHandEnterSound)
+		&& AreSoftObjectsEquivalent(A.HandAnchorEnterSound, B.HandAnchorEnterSound)
+		&& AreFloatsEquivalent(A.EnterSoundVolumeMultiplier, B.EnterSoundVolumeMultiplier)
+		&& AreFloatsEquivalent(A.EnterSoundPitchMultiplier, B.EnterSoundPitchMultiplier)
 		&& AreVectorsEquivalent(A.PlayedExitOffsetPixels, B.PlayedExitOffsetPixels)
 		&& A.PlayedExitOriginMode == B.PlayedExitOriginMode
 		&& AreVectorsEquivalent(A.PlayedExitViewportAnchor, B.PlayedExitViewportAnchor)

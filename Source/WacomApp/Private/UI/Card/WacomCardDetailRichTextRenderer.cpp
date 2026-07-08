@@ -3,6 +3,7 @@
 #include "UI/Card/WacomCardDetailRichTextRenderer.h"
 
 #include "UI/Card/WacomCardDetailPlainTextRenderer.h"
+#include "WacomCardDetailIconIds.h"
 
 namespace
 {
@@ -15,6 +16,13 @@ namespace
 		return Out;
 	}
 
+	FString EscapeRichTextAttribute(const FString& In)
+	{
+		FString Out = EscapeRichText(In);
+		Out.ReplaceInline(TEXT("\""), TEXT("&quot;"), ESearchCase::CaseSensitive);
+		return Out;
+	}
+
 	FString WrapStyle(const TCHAR* StyleName, const FString& Text)
 	{
 		return Text.IsEmpty()
@@ -22,7 +30,23 @@ namespace
 			: FString::Printf(TEXT("<%s>%s</>"), StyleName, *EscapeRichText(Text));
 	}
 
-	bool ShouldRenderValueSourceText(const FWacomCardDetailRun& Run)
+	FString InlineIconTag(EWacomCardDetailIcon Icon, const FString& Label)
+	{
+		return FString::Printf(
+			TEXT("<wacom-icon id=\"%s\" label=\"%s\"/>"),
+			*EscapeRichTextAttribute(WacomCardDetailIconIds::ToString(Icon)),
+			*EscapeRichTextAttribute(Label));
+	}
+
+	FString InlineStatusTag(const FGameplayTag& StatusTag, const FString& Label)
+	{
+		return FString::Printf(
+			TEXT("<wacom-status tag=\"%s\" label=\"%s\"/>"),
+			*EscapeRichTextAttribute(StatusTag.IsValid() ? StatusTag.ToString() : FString()),
+			*EscapeRichTextAttribute(Label));
+	}
+
+	bool ShouldRenderRichValueSourceText(const FWacomCardDetailRun& Run)
 	{
 		return Run.bHasValueSourceText
 			&& !Run.ValueSourceText.IsEmpty()
@@ -46,14 +70,19 @@ namespace
 						? TEXT("ValueNerfed")
 						: TEXT("Value");
 				const FString StyledValue = WrapStyle(ValueStyle, FString::FromInt(DisplayValue));
-				return ShouldRenderValueSourceText(Run)
+				return ShouldRenderRichValueSourceText(Run)
 					? EscapeRichText(Run.ValueSourceText.ToString() + TEXT(" ")) + StyledValue
 					: StyledValue;
 			}
 		case EWacomCardDetailRunKind::Icon:
-			return WrapStyle(TEXT("Icon"), UWacomCardDetailPlainTextRenderer::RenderRunPlainString(Run));
+			return InlineIconTag(
+				Run.Icon,
+				UWacomCardDetailPlainTextRenderer::RenderRunPlainString(Run));
 		case EWacomCardDetailRunKind::Status:
-			return WrapStyle(TEXT("Status"), UWacomCardDetailPlainTextRenderer::RenderRunPlainString(Run));
+			{
+				const FString Label = UWacomCardDetailPlainTextRenderer::RenderRunPlainString(Run);
+				return InlineStatusTag(Run.Tag, Label) + TEXT(" ") + WrapStyle(TEXT("Status"), Label);
+			}
 		case EWacomCardDetailRunKind::Keyword:
 			return WrapStyle(TEXT("Keyword"), UWacomCardDetailPlainTextRenderer::RenderRunPlainString(Run));
 		case EWacomCardDetailRunKind::Muted:

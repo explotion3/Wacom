@@ -254,7 +254,7 @@ WBP 不应做：
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
 | `TitleText` | `CommonTextBlock` | 区块标题；建议通过 `UWacomCardDetailTheme.TitleTextStyle` 或 WBP 样式统一字体 |
-| `BodyText` | `UWacomCardDetailRichTextBlock` | RichText 正文；C++ 会把 semantic blocks/runs 渲染为 markup 并设置文本 |
+| `BodyText` | `UWacomCardDetailRichTextBlock` | RichText 正文；C++ 会把 semantic blocks/runs 渲染为 markup、自动注册详情 inline icon decorator 并设置文本 |
 
 WBP 不应做：
 
@@ -267,7 +267,8 @@ WBP 不应做：
 - 该 Widget 作为详情区块通用模板使用。
 - 描述和被动都通过同一套 Section 外框显示；正文由 `BodyText` 的 RichText style set 决定字体、颜色、runtime preview 数值语气等视觉。
 - `BodyText` 至少要能显示普通文本、`Value`、`ValueBuffed`、`ValueNerfed`、`Status`、`Keyword`、`Muted` 几类 RichText style。目标预览时正文只显示最终数值，强化值用 `ValueBuffed`，削弱值用 `ValueNerfed`，不再显示 `基础值 -> 预览值`。
-- 未绑定槽位时，C++ 兼容路径会创建基础标题和 RichText 正文。
+- `Status` run 会渲染为 inline 状态图标 + `Status` 文本；`Icon` run 会在模板显式使用 `{icon:EffectIcon}` 时渲染为 inline 效果图标。WBP 不需要手动添加 RichText decorator class。
+- 正式 WBP 必须绑定 `BodyText`；只有未提供 WBP 根布局的 C++ fallback 路径会创建基础标题和 RichText 正文。
 
 ## Card Explanation Assets
 
@@ -276,7 +277,7 @@ WBP 不应做：
 | 资产类型 | 用途 |
 |---|---|
 | `UWacomCardExplanationLexicon` | 配置效果、被动触发、规则专用被动结果、tag 显示名和详情内部 named text/template。精确 `EffectType / Passive.Trigger` 优先，找不到时尝试父 tag fallback。 |
-| `UWacomCardDetailTheme` | 配置标题 CommonTextStyle、正文 RichText style set、inline 图标 / 状态 brush 和 fallback brush。 |
+| `UWacomCardDetailTheme` | 配置标题 CommonTextStyle、正文 RichText style set、`IconBrushes` / `StatusBrushes` / `FallbackInlineBrush` / `InlineIconRenderOffset`。`BodyText` 会自动使用该 Theme 解析 inline 图标；图标垂直位置优先通过 `InlineIconRenderOffset.Y` 微调。 |
 
 模板 slot v1 支持：
 
@@ -284,9 +285,13 @@ WBP 不应做：
 |---|---|
 | `{value:Magnitude}` | 效果数值；未被目标预览改写时可附带 `MagnitudeSourceTemplates` 来源短语，例如“相当于当前费用 2”；目标预览改写后只显示最终数值，并通过 `ValueBuffed / ValueNerfed` 标记强化或削弱。 |
 | `{value:TriggerThreshold}` | 被动触发阈值。 |
-| `{icon:EffectIcon}` | 当前效果图标语义。 |
-| `{status:EffectStatus}` | 当前效果关联状态，例如中毒、冻结、眩晕。 |
+| `{icon:EffectIcon}` | 当前效果图标语义；RichText 正文按 `CardDetailTheme.IconBrushes` 显示 inline 图标，缺图且无 fallback 时退回 label 文本。 |
+| `{status:EffectStatus}` | 当前效果关联状态，例如中毒、冻结、眩晕；RichText 正文按 `CardDetailTheme.StatusBrushes` 显示 inline 状态图标，并继续保留状态中文名。状态图标和中文名之间由 renderer 保留一个空格。 |
 | `{keyword:Tag}` | 当前效果或触发 tag 的关键词显示。 |
+
+默认 Lexicon 中 `Effect.Damage`、`Effect.Heal` 和 `Status.Shield` 模板会显式使用 `{icon:EffectIcon}`，因此详情正文会显示对应 inline 图标；图标具体放在句首、句中或句尾由 DataAsset 模板决定。`Effect.Draw` 默认模板是 `抽 {value:Magnitude} 张牌。`，不会显示抽牌图标，但仍会复用 `MagnitudeSourceTemplates`，例如 RuntimeCost 会显示为“抽 相当于当前费用 2 张牌。”。Discard / ExhaustSelf / GainKeyword / RemoveStatus / ModifyInitiative 等正式效果也应在默认 Lexicon 中有模板；中毒、迟缓、冻结、暮气等状态仍通过 `{status:EffectStatus}` 显示状态图标和状态名。
+
+自动化 `Wacom.UI.CardDetail.Assets.DefaultContent` 会审计默认 `CardExplanationLexicon` 和 `CardDetailTheme`：检查正式效果 / 被动 / 数值来源 / tag 显示名模板、RichText style row，以及关键 icon/status brush 是否能通过精确配置或 fallback brush 解析。新增正式效果 tag 或详情样式行时需要同步该测试。
 
 `PassiveOutcomeTemplates` 当前用于 `Passive.Trigger.OnCompanionCount` 这类运行时真实存在但不走 `Passive.Effects` 的结果说明。`MagnitudeSourceTemplates` 控制 `Magnitude.Source.RuntimeCost / TargetStatusStacks / HandCount` 的来源短语；`TagDisplayNames` 控制中毒 / 迟缓 / 左手区等详情正文显示名；`NamedTexts` 控制“描述 / 被动”、条件句、数值修正句和 `Muted` skip 前缀等详情内部文案。
 

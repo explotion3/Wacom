@@ -96,6 +96,13 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float HandAnchorCardEnterArcLiftPixels = 42.0f;
 	float HandAnchorCardEnterEasePower = 2.0f;
 	bool bBlockInteractionDuringHandAnchorCardEnter = true;
+	bool bEnableCardEnterSounds = true;
+	TSoftObjectPtr<USoundBase> DrawnCardEnterSound;
+	TSoftObjectPtr<USoundBase> GainedCardEnterSound;
+	TSoftObjectPtr<USoundBase> RunHandCardEnterSound;
+	TSoftObjectPtr<USoundBase> HandAnchorCardEnterSound;
+	float CardEnterSoundVolumeMultiplier = 1.0f;
+	float CardEnterSoundPitchMultiplier = 1.0f;
 	FVector2D PlayedCardExitOffsetPixels = FVector2D(0.0f, -120.0f);
 	EWacomFirstPersonCardTransitionOriginMode PlayedCardExitOriginMode =
 		EWacomFirstPersonCardTransitionOriginMode::SlotOffset;

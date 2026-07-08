@@ -5,13 +5,12 @@
 #include "Blueprint/WidgetTree.h"
 #include "CommonTextBlock.h"
 #include "Components/Border.h"
-#include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "UI/Card/WacomCardDetailRichTextBlock.h"
 #include "UI/Card/WacomCardDetailTheme.h"
-#include "UI/Foundation/WacomUIDeveloperSettings.h"
+#include "WacomCardDetailThemeProvider.h"
 
 namespace
 {
@@ -60,14 +59,11 @@ TSharedRef<SWidget> UWacomCardDetailSectionWidget::RebuildWidget()
 			TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 5.f));
 		}
 
-		LinesBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("LinesBox"));
-		RootBox->AddChildToVerticalBox(LinesBox);
-
 		BodyText = WidgetTree->ConstructWidget<UWacomCardDetailRichTextBlock>(
 			UWacomCardDetailRichTextBlock::StaticClass(),
 			TEXT("BodyText"));
 		BodyText->SetAutoWrapText(true);
-		if (UVerticalBoxSlot* BodySlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(BodyText)))
+		if (UVerticalBoxSlot* BodySlot = RootBox->AddChildToVerticalBox(BodyText))
 		{
 			BodySlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
 		}
@@ -104,45 +100,11 @@ void UWacomCardDetailSectionWidget::ApplyCurrentDataToWidgets()
 		TitleText->SetVisibility(CurrentData.Title.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
 
-	UWacomCardDetailRichTextBlock* EffectiveBodyText = EnsureBodyTextWidget();
-	if (EffectiveBodyText)
-	{
-		EffectiveBodyText->SetCardDetailRichText(CurrentData.RichText, ResolveTheme());
-		EffectiveBodyText->SetVisibility(CurrentData.RichText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
-	}
-
-	if (LinesBox)
-	{
-		LinesBox->SetVisibility(CurrentData.RichText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
-	}
-}
-
-UWacomCardDetailRichTextBlock* UWacomCardDetailSectionWidget::EnsureBodyTextWidget()
-{
 	if (BodyText)
 	{
-		return BodyText;
+		BodyText->SetCardDetailRichText(CurrentData.RichText, ResolveTheme());
+		BodyText->SetVisibility(CurrentData.RichText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
-
-	if (!WidgetTree)
-	{
-		return nullptr;
-	}
-
-	BodyText = WidgetTree->ConstructWidget<UWacomCardDetailRichTextBlock>(
-		UWacomCardDetailRichTextBlock::StaticClass(),
-		TEXT("BodyText"));
-	BodyText->SetAutoWrapText(true);
-
-	if (LinesBox)
-	{
-		if (UVerticalBoxSlot* BodySlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(BodyText)))
-		{
-			BodySlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
-		}
-	}
-
-	return BodyText;
 }
 
 const UWacomCardDetailTheme* UWacomCardDetailSectionWidget::ResolveTheme() const
@@ -152,8 +114,5 @@ const UWacomCardDetailTheme* UWacomCardDetailSectionWidget::ResolveTheme() const
 		return CardDetailTheme;
 	}
 
-	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
-	return Settings && !Settings->CardDetailTheme.IsNull()
-		? Settings->CardDetailTheme.LoadSynchronous()
-		: nullptr;
+	return WacomCardDetailThemeProvider::GetConfiguredTheme();
 }

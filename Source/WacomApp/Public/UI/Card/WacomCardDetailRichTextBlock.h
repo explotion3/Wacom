@@ -19,4 +19,13 @@ class WACOMAPP_API UWacomCardDetailRichTextBlock : public URichTextBlock
 public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|CardDetail")
 	void SetCardDetailRichText(FText InText, const UWacomCardDetailTheme* InTheme);
+
+	const UWacomCardDetailTheme* GetCardDetailTheme() const { return CardDetailTheme; }
+	bool HasCardDetailDecoratorRegistered() const;
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomCardDetailTheme> CardDetailTheme = nullptr;
+
+	void EnsureCardDetailDecoratorRegistered();
 };

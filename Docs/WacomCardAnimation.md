@@ -50,7 +50,7 @@ tags:
 - first-person card layer 当前 transition kind 包含 `Default`、`Drawn`、`RunHandEntered`、`Gained`、`HandAnchorEntered`、`Played`、`Discarded`。`RunHandEntered` 是 Run/App-only hand/source 进入语义，v1 复用 `Drawn` 入场 profile；`HandAnchorEntered` 是 UI-only 左右手牌生成入手语义。两者都不属于 `CardsDrawn`。
 - EndTurn journal 现在由 `WacomApp` presentation coordinator 翻译为阶段化 plan：`TurnEndDiscard -> TurnEndRetain -> EnemyAction -> TurnStartDraw -> TurnStartHandAnchorEnter`。手牌阶段等待 first-person card layer 报告播放结束后再进入下一阶段；enemy phase v1 复用现有 battle event presentation queue。
 - `FWacomBattleHandPresentationController` 在非 EndTurn phase plan 路径中，仍把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`，并把 `CardsRetained` 转为同帧 `feedback hints`。
-- `UWacomFirstPersonCardAnchorComponent` 的 `05 Slot Motion` 和 `06 Transition Motion` 是当前卡牌入场、离场和事件感知转场的主要制作参数入口。
+- `UWacomFirstPersonCardAnchorComponent` 的 `05 Slot Motion`、`06 Transition Motion` 和 `07 Transition Audio` 是当前卡牌入场、离场、事件感知转场和入手音效的主要制作参数入口。
 - WBP 可以负责卡面、overlay、材质和局部视觉反馈；核心手牌动画队列不应依赖 UMG Designer timeline。
 
 当前明确不成立的事实：
@@ -185,7 +185,7 @@ EndTurn phase plan 的 `TurnEndRetain` 阶段会在不改变 `CardsRetained` 规
 
 同批可见 `Drawn` 入场的错峰顺序以目标 hand snapshot 中的普通手牌槽位为准：最左侧目标槽先进入，依次到最右侧。`CardsDrawn.CardInstanceIds` 只决定“哪些卡真实入手”，不决定最终 stagger 方向。
 
-当前 layer 可消费 `Drawn` hint，并由 Anchor `06 Transition Motion` 控制来源模式、offset、viewport anchor、scale、angle、duration、stagger、arc lift、ease 和播放期间交互阻塞。
+当前 layer 可消费 `Drawn` hint，并由 Anchor `06 Transition Motion` 控制来源模式、offset、viewport anchor、scale、angle、duration、stagger、arc lift、ease 和播放期间交互阻塞；`07 Transition Audio` 控制抽牌入手音效，声音在对应 slot 实际启动入场 playback 时触发。
 
 Run default source 和 RunEvent / 菜单的 provider-backed menu lease 使用 `RunHandEntered` hint，并通过 `ApplyRuntimeCardLayerSourceLifecycleFrame` 提交 `PresentationFrame`；不再保留 entries-only raw menu lease 作为无动画旁路。若后续某类菜单确实需要跳过入场，应在 frame commit / 动画策略上显式表达，而不是绕开 Run workspace provider。
 
@@ -205,7 +205,7 @@ Run default source 和 RunEvent / 菜单的 provider-backed menu lease 使用 `R
 
 战斗中获得卡牌使用 `CardGained` 事件和 `Gained` hint。它和普通抽牌不同：语义来源是战斗奖励、击倒选择或其他获得入口，不是抽牌堆。
 
-`Gained` 入场和 `Drawn / RunHandEntered / HandAnchorEntered` 一样是有限时长 enter playback，而不是只给新 slot 一个初始 offset 后交给普通 layout motion。Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 决定奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞。
+`Gained` 入场和 `Drawn / RunHandEntered / HandAnchorEntered` 一样是有限时长 enter playback，而不是只给新 slot 一个初始 offset 后交给普通 layout motion。Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 决定奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞；`07 Transition Audio` 下的 `GainedCardEnterSound` 决定奖励卡入手音效。
 
 后续可把 reward source、敌方部位来源、choice 类型转成更丰富的入场 origin，但不能让 first-person card layer 读取击倒规则。
 
@@ -286,6 +286,7 @@ Hover、inspect 和 drag 是交互表现，不属于规则事件动画。
 |---|---|
 | `05 Slot Motion` | 普通 slot motion、enter / exit baseline、reset distance |
 | `06 Transition Motion` | `Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded` 的事件感知来源和运动参数 |
+| `07 Transition Audio` | `Drawn / RunHandEntered / Gained / HandAnchorEntered` 的入场音效和音量 / 音高倍率 |
 | `07 Hover` | hover lift、scale、ZOrder 和命中稳定性 |
 | `09 Gesture` | inspect、drag 起手、commit 距离和 drag 姿态 |
 | `10 Interaction Feedback` | pressed、confirm、commit、deny、retained 等源卡反馈 |

@@ -10,6 +10,8 @@
 #include "Components/OverlaySlot.h"
 #include "Engine/GameViewportClient.h"
 #include "InputCoreTypes.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
@@ -249,7 +251,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 			VisualSlotView.RenderOpacity = FMath::Clamp(SlotMotionConfig.EnterOpacity, 0.0f, 1.0f);
 			if (EnterProfile.DurationSeconds > 0.0f
 				|| EnterProfile.StartDelaySeconds > 0.0f
-				|| EnterProfile.ArcLiftPixels > 0.0f)
+				|| EnterProfile.ArcLiftPixels > 0.0f
+				|| !EnterProfile.StartSound.IsNull())
 			{
 				StartEnterTransitionPlayback(VisualSlotView, EnterProfile);
 			}
@@ -2012,6 +2015,8 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.EnterTransitionElapsedSeconds = EnterTransitionPlayback.ElapsedSeconds;
 	View.EnterTransitionStartDelaySeconds = EnterTransitionPlayback.StartDelaySeconds;
 	View.EnterTransitionDurationSeconds = EnterTransitionPlayback.DurationSeconds;
+	View.EnterTransitionSoundRequestCount = EnterTransitionSoundRequestCountForTest;
+	View.LastEnterTransitionSoundKind = LastEnterTransitionSoundKindForTest;
 	View.SlotMotionConfig = SlotMotionConfig;
 	View.CardDragConfig = CardDragConfig;
 	View.SlotVisualConfig = SlotVisualConfig;
@@ -2544,6 +2549,23 @@ void UWacomFirstPersonCardLayerSlotWidget::StartEnterTransitionPlayback(
 	EnterTransitionPlayback.EasePower = FMath::Max(0.1f, EnterProfile.EasePower);
 	EnterTransitionPlayback.bBlockInteractionDuringPlayback =
 		EnterProfile.bBlockInteractionDuringPlayback;
+	EnterTransitionPlayback.StartSound = EnterProfile.StartSound;
+	EnterTransitionPlayback.StartSoundVolumeMultiplier =
+		FMath::Max(0.0f, EnterProfile.StartSoundVolumeMultiplier);
+	EnterTransitionPlayback.StartSoundPitchMultiplier =
+		FMath::Max(0.01f, EnterProfile.StartSoundPitchMultiplier);
+	EnterTransitionPlayback.SoundTransitionKind = EnterProfile.SoundTransitionKind;
+	EnterTransitionPlayback.bStartSoundPlayed = false;
+	if (EnterTransitionPlayback.StartDelaySeconds <= 0.0f)
+	{
+		PlayEnterTransitionStartSound();
+	}
+	if (EnterTransitionPlayback.StartDelaySeconds <= 0.0f
+		&& EnterTransitionPlayback.DurationSeconds <= 0.0f
+		&& EnterTransitionPlayback.ArcLiftPixels <= 0.0f)
+	{
+		ClearEnterTransitionPlayback();
+	}
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearEnterTransitionPlayback()
@@ -2567,6 +2589,7 @@ bool UWacomFirstPersonCardLayerSlotWidget::TickEnterTransitionPlayback(float Del
 		ApplyVisualSlotView();
 		return false;
 	}
+	PlayEnterTransitionStartSound();
 
 	const FWacomFirstPersonCardLayerSlotView& EffectiveTargetSlotView = GetEffectiveTargetSlotView();
 	const float DurationSeconds = EnterTransitionPlayback.DurationSeconds;
@@ -2598,6 +2621,43 @@ bool UWacomFirstPersonCardLayerSlotWidget::TickEnterTransitionPlayback(float Del
 	}
 
 	return false;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::PlayEnterTransitionStartSound()
+{
+	if (EnterTransitionPlayback.bStartSoundPlayed
+		|| EnterTransitionPlayback.StartSound.IsNull())
+	{
+		return;
+	}
+
+	EnterTransitionPlayback.bStartSoundPlayed = true;
+#if WITH_AUTOMATION_TESTS
+	++EnterTransitionSoundRequestCountForTest;
+	LastEnterTransitionSoundKindForTest = EnterTransitionPlayback.SoundTransitionKind;
+#endif
+
+	USoundBase* Sound = EnterTransitionPlayback.StartSound.Get();
+	if (!Sound)
+	{
+		Sound = EnterTransitionPlayback.StartSound.LoadSynchronous();
+	}
+	if (!Sound)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UGameplayStatics::PlaySound2D(
+		World,
+		Sound,
+		EnterTransitionPlayback.StartSoundVolumeMultiplier,
+		EnterTransitionPlayback.StartSoundPitchMultiplier);
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::IsEnterTransitionBlockingInteraction() const

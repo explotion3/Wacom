@@ -12,6 +12,7 @@ class APlayerController;
 class AWacomPlayerCharacter;
 class UCardDefinition;
 class UMaterialInterface;
+class USoundBase;
 class UWacomCardView;
 class UWacomFirstPersonCardAnchorDebugWidget;
 class UWacomFirstPersonCardViewWidget;
@@ -321,6 +322,27 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "左/右手牌生成入手播放期间是否禁止该卡 hover / press / drag；用于避免生成途中被交互状态打断。"))
 	bool bBlockInteractionDuringHandAnchorCardEnter = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (ToolTip = "是否启用第一人称手牌入场音效；只在对应 transition hint 被实际消费并开始播放时触发，不改变战斗或 Run 规则。"))
+	bool bEnableCardEnterSounds = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "抽牌进入手牌时播放的 UI 2D 音效。留空表示抽牌入场不播放音效。"))
+	TSoftObjectPtr<USoundBase> DrawnCardEnterSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "战斗中获得卡牌进入手牌时播放的 UI 2D 音效。留空表示获得牌入场不播放音效。"))
+	TSoftObjectPtr<USoundBase> GainedCardEnterSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "Run / 探索期手牌进入第一人称手牌层时播放的 UI 2D 音效。留空表示 Run 手牌入场不播放音效。"))
+	TSoftObjectPtr<USoundBase> RunHandCardEnterSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "左/右手牌生成入手时播放的 UI 2D 音效。留空表示手牌锚点入场不播放音效。"))
+	TSoftObjectPtr<USoundBase> HandAnchorCardEnterSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ClampMin = "0.0", UIMin = "0.0", UIMax = "2.0", ToolTip = "入场音效音量倍率；1 为资产原始音量，0 表示静音但仍保留配置路径。"))
+	float CardEnterSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ClampMin = "0.01", UIMin = "0.5", UIMax = "2.0", ToolTip = "入场音效音高倍率；1 为资产原始音高，低于 1 更低沉，高于 1 更尖亮。"))
+	float CardEnterSoundPitchMultiplier = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "卡牌被打出时相对当前位置的离场偏移，单位为 UMG 布局像素；默认向上离开手牌。"))
 	FVector2D PlayedCardExitOffsetPixels = FVector2D(0.0f, -120.0f);

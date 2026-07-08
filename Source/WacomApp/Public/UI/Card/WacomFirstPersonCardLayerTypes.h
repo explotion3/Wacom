@@ -9,6 +9,8 @@
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomFirstPersonCardLayerTypes.generated.h"
 
+class USoundBase;
+
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardAnchorMode : uint8
 {
@@ -855,6 +857,19 @@ struct WACOMAPP_API FWacomFirstPersonCardTransitionMotionProfile
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bBlockInteractionDuringPlayback = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> StartSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float StartSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float StartSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardSlotTransitionKind SoundTransitionKind =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
 };
 
 USTRUCT(BlueprintType)
@@ -1083,6 +1098,27 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bBlockInteractionDuringHandAnchorEnter = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnableEnterSounds = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> DrawnEnterSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> GainedEnterSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> RunHandEnterSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> HandAnchorEnterSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float EnterSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float EnterSoundPitchMultiplier = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);

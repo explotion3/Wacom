@@ -170,6 +170,64 @@ bool FWacomUICardExplanationLexiconSpec::RunTest(const FString& /*Parameters*/)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUICardExplanationRichTextInlineIconSpec,
+	"Wacom.UI.CardExplanation.RichTextInlineIconMarkup",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUICardExplanationRichTextInlineIconSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomCardDetailBlock Block;
+	Block.BlockId = TEXT("InlineIcon.Block");
+	Block.Kind = EWacomCardDetailBlockKind::EffectSentence;
+
+	FWacomCardDetailRun IconRun;
+	IconRun.StableId = TEXT("InlineIcon.Icon");
+	IconRun.Kind = EWacomCardDetailRunKind::Icon;
+	IconRun.Icon = EWacomCardDetailIcon::Damage;
+	Block.Runs.Add(IconRun);
+
+	FWacomCardDetailRun TextRun;
+	TextRun.StableId = TEXT("InlineIcon.Text");
+	TextRun.Kind = EWacomCardDetailRunKind::Text;
+	TextRun.Text = FText::FromString(TEXT("造成 "));
+	Block.Runs.Add(TextRun);
+
+	FWacomCardDetailRun ValueRun;
+	ValueRun.StableId = TEXT("InlineIcon.Value");
+	ValueRun.Kind = EWacomCardDetailRunKind::Value;
+	ValueRun.Value = 4;
+	ValueRun.bHasValue = true;
+	Block.Runs.Add(ValueRun);
+
+	FWacomCardDetailRun StatusRun;
+	StatusRun.StableId = TEXT("InlineIcon.Status");
+	StatusRun.Kind = EWacomCardDetailRunKind::Status;
+	StatusRun.Tag = WacomTags::Status_Poison;
+	StatusRun.Text = FText::FromString(TEXT("中毒"));
+	Block.Runs.Add(StatusRun);
+
+	const FString Plain = UWacomCardDetailPlainTextRenderer::RenderBlockPlainText(Block).ToString();
+	TestTrue(TEXT("Plain text keeps icon fallback"),
+		Plain.Contains(TEXT("[伤]")));
+	TestTrue(TEXT("Plain text keeps status text once"),
+		Plain.Contains(TEXT("中毒")));
+
+	const FString RichText = UWacomCardDetailRichTextRenderer::RenderBlockRichText(Block).ToString();
+	TestTrue(TEXT("Rich text emits wacom-icon markup"),
+		RichText.Contains(TEXT("<wacom-icon id=\"Damage\" label=\"[伤]\"/>")));
+	TestTrue(TEXT("Rich text emits wacom-status markup"),
+		RichText.Contains(TEXT("<wacom-status tag=\"Status.Poison\" label=\"中毒\"/>")));
+	TestTrue(TEXT("Rich text separates status icon from readable text"),
+		RichText.Contains(TEXT("<wacom-status tag=\"Status.Poison\" label=\"中毒\"/> <Status>中毒</>")));
+	TestTrue(TEXT("Rich text keeps value style"),
+		RichText.Contains(TEXT("<Value>4</>")));
+	TestTrue(TEXT("Rich text keeps readable status style"),
+		RichText.Contains(TEXT("<Status>中毒</>")));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUICardExplanationEffectBlocksSpec,
 	"Wacom.UI.CardExplanation.EffectBlocks",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -198,6 +256,16 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 	Damage.MagnitudeModifiers = { BonusDamage, ZoneMultiplier };
 	Card->Effects.Add(Damage);
 
+	FCardEffect Heal;
+	Heal.EffectType = WacomTags::Effect_Heal;
+	Heal.Magnitude = 3;
+	Card->Effects.Add(Heal);
+
+	FCardEffect Shield;
+	Shield.EffectType = WacomTags::Status_Shield;
+	Shield.Magnitude = 5;
+	Card->Effects.Add(Shield);
+
 	FCardEffect Poison;
 	Poison.EffectType = WacomTags::Effect_ApplyStatus_Poison;
 	Poison.Magnitude = 2;
@@ -211,12 +279,36 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 	const FString Description = SectionPlainText(Data, EWacomCardDetailSectionKind::Description);
 
-	TestTrue(TEXT("Damage effect emits value text"), Description.Contains(TEXT("造成 4 点伤害。")));
+	TestTrue(TEXT("Damage effect emits value text"),
+		Description.Contains(TEXT("造成 4 点")) && Description.Contains(TEXT("伤害。")) && Description.Contains(TEXT("[伤]")));
+	TestTrue(TEXT("Heal effect emits value text"),
+		Description.Contains(TEXT("恢复 3 点")) && Description.Contains(TEXT("生命。")) && Description.Contains(TEXT("[疗]")));
+	TestTrue(TEXT("Shield effect emits value text"),
+		Description.Contains(TEXT("获得 5 点")) && Description.Contains(TEXT("护盾。")) && Description.Contains(TEXT("[盾]")));
 	TestTrue(TEXT("Effect condition emits self zone text"), Description.Contains(TEXT("仅当本卡在左手区时")));
 	TestTrue(TEXT("Effect modifier emits target status add text"), Description.Contains(TEXT("仅当目标有中毒时，数值 +3")));
 	TestTrue(TEXT("Effect modifier emits self zone multiply text"), Description.Contains(TEXT("仅当本卡在双手区时，数值 ×2")));
 	TestTrue(TEXT("Poison effect emits status text"), Description.Contains(TEXT("施加 2 层 中毒。")));
 	TestTrue(TEXT("Discard selected effect emits action text"), Description.Contains(TEXT("弃置目标手牌。")));
+
+	if (const FWacomCardDetailSection* DescriptionSection =
+		FindSection(Data, EWacomCardDetailSectionKind::Description))
+	{
+		const FString RichText =
+			UWacomCardDetailRichTextRenderer::RenderSectionRichText(*DescriptionSection).ToString();
+		TestTrue(TEXT("Damage template emits effect icon markup"),
+			RichText.Contains(TEXT("<wacom-icon id=\"Damage\" label=\"[伤]\"/>")));
+		TestTrue(TEXT("Damage template emits value markup"),
+			RichText.Contains(TEXT("造成 <Value>4</> 点")) && RichText.Contains(TEXT("伤害。")));
+		TestTrue(TEXT("Heal template emits effect icon markup"),
+			RichText.Contains(TEXT("<wacom-icon id=\"Heal\" label=\"[疗]\"/>")));
+		TestTrue(TEXT("Heal template emits value markup"),
+			RichText.Contains(TEXT("恢复 <Value>3</> 点")) && RichText.Contains(TEXT("生命。")));
+		TestTrue(TEXT("Shield template emits effect icon markup"),
+			RichText.Contains(TEXT("<wacom-icon id=\"Shield\" label=\"[盾]\"/>")));
+		TestTrue(TEXT("Shield template emits value markup"),
+			RichText.Contains(TEXT("获得 <Value>5</> 点")) && RichText.Contains(TEXT("护盾。")));
+	}
 
 	return true;
 }
@@ -304,6 +396,12 @@ bool FWacomUICardExplanationMagnitudeSourceSpec::RunTest(const FString& /*Parame
 	TargetStacksDamage.TargetZone = WacomTags::Status_Poison;
 	Card->Effects.Add(TargetStacksDamage);
 
+	FCardEffect RuntimeDraw;
+	RuntimeDraw.EffectType = WacomTags::Effect_Draw;
+	RuntimeDraw.Magnitude = 99;
+	RuntimeDraw.MagnitudeSource = WacomTags::Magnitude_Source_RuntimeCost;
+	Card->Effects.Add(RuntimeDraw);
+
 	FWacomCardPresentationRuntimeContext RuntimeContext;
 	RuntimeContext.bHasRuntimeCost = true;
 	RuntimeContext.RuntimeCost = 2;
@@ -320,9 +418,15 @@ bool FWacomUICardExplanationMagnitudeSourceSpec::RunTest(const FString& /*Parame
 	TestTrue(TEXT("Literal magnitude keeps existing wording"),
 		Description.Contains(TEXT("施加 2 层 中毒。")));
 	TestTrue(TEXT("Legacy runtime cost flag renders source phrase"),
-		Description.Contains(TEXT("恢复 相当于当前费用 2 点生命。")));
+		Description.Contains(TEXT("恢复 相当于当前费用 2 点")) &&
+		Description.Contains(TEXT("生命。")) &&
+		Description.Contains(TEXT("[疗]")));
 	TestTrue(TEXT("TargetStatusStacks source renders status display name"),
-		Description.Contains(TEXT("造成 相当于目标中毒层数 4 点伤害。")));
+		Description.Contains(TEXT("造成 相当于目标中毒层数 4 点")) &&
+		Description.Contains(TEXT("伤害。")) &&
+		Description.Contains(TEXT("[伤]")));
+	TestTrue(TEXT("RuntimeCost draw renders source phrase with current value"),
+		Description.Contains(TEXT("抽 相当于当前费用 2 张牌。")));
 
 	if (DescriptionSection)
 	{
@@ -330,8 +434,14 @@ bool FWacomUICardExplanationMagnitudeSourceSpec::RunTest(const FString& /*Parame
 			UWacomCardDetailRichTextRenderer::RenderSectionRichText(*DescriptionSection).ToString();
 		TestTrue(TEXT("Rich text keeps source phrase outside value style"),
 			RichText.Contains(TEXT("相当于当前费用 <Value>2</>")));
+		TestTrue(TEXT("Rich text emits inline status icon markup"),
+			RichText.Contains(TEXT("<wacom-status tag=\"Status.Poison\" label=\"中毒\"/>")));
+		TestTrue(TEXT("Rich text separates inline status icon from status text"),
+			RichText.Contains(TEXT("<wacom-status tag=\"Status.Poison\" label=\"中毒\"/> <Status>中毒</>")));
 		TestTrue(TEXT("Rich text keeps status styling"),
 			RichText.Contains(TEXT("<Status>中毒</>")));
+		TestTrue(TEXT("Rich text renders RuntimeCost draw without effect icon"),
+			RichText.Contains(TEXT("抽 相当于当前费用 <Value>2</> 张牌。")));
 	}
 
 	FWacomCardPresentationRuntimeContext PreviewContext = RuntimeContext;
@@ -398,7 +508,9 @@ bool FWacomUICardExplanationDescriptionFallbackSpec::RunTest(const FString& /*Pa
 	const FString StructuredDescription =
 		SectionPlainText(StructuredData, EWacomCardDetailSectionKind::Description);
 	TestTrue(TEXT("Structured detail still renders effect"),
-		StructuredDescription.Contains(TEXT("造成 3 点伤害。")));
+		StructuredDescription.Contains(TEXT("造成 3 点")) &&
+		StructuredDescription.Contains(TEXT("伤害。")) &&
+		StructuredDescription.Contains(TEXT("[伤]")));
 	TestFalse(TEXT("Structured detail does not append legacy Description"),
 		StructuredDescription.Contains(TEXT("旧描述")));
 
@@ -456,8 +568,10 @@ bool FWacomUICardExplanationRuntimePreviewSpec::RunTest(const FString& /*Paramet
 	TestNotNull(TEXT("Runtime preview emits description section"), DescriptionSection);
 	const FString Description = SectionPlainText(Data, EWacomCardDetailSectionKind::Description);
 
-	TestTrue(TEXT("Runtime preview renders final damage value"), Description.Contains(TEXT("造成 8 点伤害。")));
-	TestTrue(TEXT("Runtime preview renders final reduced value"), Description.Contains(TEXT("恢复 3 点生命。")));
+	TestTrue(TEXT("Runtime preview renders final damage value"),
+		Description.Contains(TEXT("造成 8 点")) && Description.Contains(TEXT("伤害。")) && Description.Contains(TEXT("[伤]")));
+	TestTrue(TEXT("Runtime preview renders final reduced value"),
+		Description.Contains(TEXT("恢复 3 点")) && Description.Contains(TEXT("生命。")) && Description.Contains(TEXT("[疗]")));
 	TestFalse(TEXT("Runtime preview omits old arrow expression"), Description.Contains(TEXT("6 -> 8")));
 	TestTrue(TEXT("Skipped effect gets skipped prefix"), Description.Contains(TEXT("不会生效：施加 2 层 中毒。")));
 	if (DescriptionSection)

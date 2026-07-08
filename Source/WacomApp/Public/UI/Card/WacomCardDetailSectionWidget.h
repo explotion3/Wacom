@@ -7,7 +7,6 @@
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomCardDetailSectionWidget.generated.h"
 
-class UPanelWidget;
 class UTextBlock;
 class UWacomCardDetailRichTextBlock;
 class UWacomCardDetailTheme;
@@ -28,7 +27,10 @@ struct WACOMAPP_API FWacomCardDetailSectionData
 };
 
 /**
- * One reusable detail section, e.g. description, token rules, tasks, changes, or passives.
+ * Reusable card detail section widget.
+ *
+ * The panel passes a semantic section document plus pre-rendered rich text.
+ * This widget only applies title/body styling and does not parse card rules.
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomCardDetailSectionWidget : public UUserWidget
@@ -58,9 +60,6 @@ protected:
 	TObjectPtr<UTextBlock> TitleText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UPanelWidget> LinesBox;
-
-	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWacomCardDetailRichTextBlock> BodyText;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|CardDetail|Theme", meta = (ToolTip = "卡牌详情视觉主题。为空时优先使用 UI Settings 的 CardDetailTheme；仍为空则使用 RichTextBlock 默认样式。"))
@@ -71,6 +70,5 @@ private:
 	FWacomCardDetailSectionData CurrentData;
 
 	void ApplyCurrentDataToWidgets();
-	UWacomCardDetailRichTextBlock* EnsureBodyTextWidget();
 	const UWacomCardDetailTheme* ResolveTheme() const;
 };

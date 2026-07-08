@@ -2001,6 +2001,30 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		return TOptional<FWacomFirstPersonCardTransitionMotionProfile>();
 	}
 
+	Profile.SoundTransitionKind = TransitionHint.TransitionKind;
+	if (SlotMotionConfig.bEnableEnterSounds)
+	{
+		switch (TransitionHint.TransitionKind)
+		{
+		case EWacomFirstPersonCardSlotTransitionKind::Drawn:
+			Profile.StartSound = SlotMotionConfig.DrawnEnterSound;
+			break;
+		case EWacomFirstPersonCardSlotTransitionKind::RunHandEntered:
+			Profile.StartSound = SlotMotionConfig.RunHandEnterSound;
+			break;
+		case EWacomFirstPersonCardSlotTransitionKind::Gained:
+			Profile.StartSound = SlotMotionConfig.GainedEnterSound;
+			break;
+		case EWacomFirstPersonCardSlotTransitionKind::HandAnchorEntered:
+			Profile.StartSound = SlotMotionConfig.HandAnchorEnterSound;
+			break;
+		default:
+			break;
+		}
+		Profile.StartSoundVolumeMultiplier = SlotMotionConfig.EnterSoundVolumeMultiplier;
+		Profile.StartSoundPitchMultiplier = SlotMotionConfig.EnterSoundPitchMultiplier;
+	}
+
 	if (!SlotMotionConfig.bEnableReadableTransitionOrigins)
 	{
 		Profile.OriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;

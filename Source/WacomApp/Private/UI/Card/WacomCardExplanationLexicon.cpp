@@ -83,9 +83,10 @@ namespace
 UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 {
 	EffectTemplates = {
-		MakeTemplateEntry(WacomTags::Effect_Damage, LOCTEXT("DefaultDamage", "造成 {value:Magnitude} 点伤害。")),
-		MakeTemplateEntry(WacomTags::Effect_Heal, LOCTEXT("DefaultHeal", "恢复 {value:Magnitude} 点生命。")),
-		MakeTemplateEntry(WacomTags::Status_Shield, LOCTEXT("DefaultShield", "获得 {value:Magnitude} 点护盾。")),
+		MakeTemplateEntry(WacomTags::Effect_Damage, LOCTEXT("DefaultDamage", "{icon:EffectIcon} 造成 {value:Magnitude} 点伤害。")),
+		MakeTemplateEntry(WacomTags::Effect_Heal, LOCTEXT("DefaultHeal", "{icon:EffectIcon} 恢复 {value:Magnitude} 点生命。")),
+		MakeTemplateEntry(WacomTags::Status_Shield, LOCTEXT("DefaultShield", "{icon:EffectIcon} 获得 {value:Magnitude} 点护盾。")),
+		MakeTemplateEntry(WacomTags::Effect_Draw, LOCTEXT("DefaultDraw", "抽 {value:Magnitude} 张牌。")),
 		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Poison, LOCTEXT("DefaultPoison", "施加 {value:Magnitude} 层 {status:EffectStatus}。")),
 		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Slow, LOCTEXT("DefaultSlow", "施加 {value:Magnitude} 层 {status:EffectStatus}。")),
 		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Freeze, LOCTEXT("DefaultFreeze", "施加 {value:Magnitude} 层 {status:EffectStatus}。")),
@@ -94,6 +95,11 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 		MakeTemplateEntry(WacomTags::Effect_Card_ReduceCost, LOCTEXT("DefaultReduceCost", "目标手牌费用降低 {value:Magnitude}。")),
 		MakeTemplateEntry(WacomTags::Effect_Card_DiscardSelected, LOCTEXT("DefaultDiscardSelected", "弃置目标手牌。")),
 		MakeTemplateEntry(WacomTags::Effect_Card_ExhaustSelected, LOCTEXT("DefaultExhaustSelected", "消耗目标手牌。")),
+		MakeTemplateEntry(WacomTags::Effect_Discard, LOCTEXT("DefaultDiscard", "随机弃置 {value:Magnitude} 张手牌。")),
+		MakeTemplateEntry(WacomTags::Effect_ExhaustSelf, LOCTEXT("DefaultExhaustSelf", "此牌打出后进入消耗牌堆。")),
+		MakeTemplateEntry(WacomTags::Effect_GainKeyword, LOCTEXT("DefaultGainKeyword", "赋予目标手牌关键词。")),
+		MakeTemplateEntry(WacomTags::Effect_RemoveStatus, LOCTEXT("DefaultRemoveStatus", "移除目标 {value:Magnitude} 层状态。")),
+		MakeTemplateEntry(WacomTags::Effect_ModifyInitiative, LOCTEXT("DefaultModifyInitiative", "目标部位先机变化 {value:Magnitude}。")),
 		MakeTemplateEntry(WacomTags::Effect_Shuffle_Random, LOCTEXT("DefaultShuffleRandom", "随机腾挪 1 张手牌。")),
 		MakeTemplateEntry(WacomTags::Effect_Shuffle_FromBothToOther, LOCTEXT("DefaultShuffleFromBothToOther", "将双手区随机 1 张卡牌腾挪至其他区域。")),
 		MakeTemplateEntry(WacomTags::Effect_Shuffle_ToRandomZone, LOCTEXT("DefaultShuffleToRandomZone", "该牌腾挪至随机区域。"))
