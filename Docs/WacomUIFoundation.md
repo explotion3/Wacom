@@ -62,8 +62,12 @@ Wacom UI Settings
 | ShopScreen | `UI.Widget.ShopScreen` -> `UWacomShopScreen` C++ fallback |
 | RunEventScreen | `UI.Widget.RunEventScreen` -> `UWacomRunEventScreen` C++ fallback |
 | AppToast | `AppToastWidgetClass` -> `UWacomAppToastWidget` C++ fallback |
+| CardExplanationLexicon | `CardExplanationLexicon` -> C++ generated explanation fallback |
+| CardDetailTheme | `CardDetailTheme` -> WBP / RichTextBlock 默认样式 |
 
 Backpack、Pause、Shop、RunEvent 通过 `UWacomGameUIManagerSubsystem::PushRegisteredWidgetToLayerAsync()` 打开。Settings 软类未加载时走异步加载；缺失、加载失败、Cast 失败或 Push 失败时回到对应 fallback 或执行访问 rollback。
+
+`CardExplanationLexicon` 和 `CardDetailTheme` 是卡牌详情制作入口，不保存运行时 UI 状态。Lexicon 用 DataAsset 配置效果 / 被动触发的 typed explanation template；Theme 用 DataAsset 配置详情标题 CommonTextStyle、正文 RichText style set 和 inline 图标 / 状态 brush。二者未配置时属于合法 fallback：详情仍会用 C++ 内置模板和 RichTextBlock 默认样式显示。
 
 ## §3 Settings 校验
 
@@ -76,6 +80,8 @@ Wacom UI Settings 是顶层 UI WBP 的唯一项目级覆盖入口。未配置顶
 - `WidgetClasses` 的 tag 必须属于 `UI.Widget.*` 命名空间。
 - `WidgetClasses` 的 class 必须继承 `UWacomActivatableWidget`。
 - `WidgetClasses` 中重复 tag 是错误。
+- `CardExplanationLexicon` 非空时必须继承 `UWacomCardExplanationLexicon`。
+- `CardDetailTheme` 非空时必须继承 `UWacomCardDetailTheme`。
 - `WidgetClasses` 中空 class 是错误；需要 fallback 时删除该条目。
 
 Details / Blueprint 分类口径：

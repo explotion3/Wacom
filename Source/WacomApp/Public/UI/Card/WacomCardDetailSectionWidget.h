@@ -9,7 +9,8 @@
 
 class UPanelWidget;
 class UTextBlock;
-class UWacomCardDetailTokenFlowWidget;
+class UWacomCardDetailRichTextBlock;
+class UWacomCardDetailTheme;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomCardDetailSectionData
@@ -20,10 +21,10 @@ struct WACOMAPP_API FWacomCardDetailSectionData
 	FText Title;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	TArray<FText> Lines;
+	FText RichText;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	TArray<FWacomCardDetailTokenLine> TokenLines;
+	FWacomCardDetailSection Section;
 };
 
 /**
@@ -47,7 +48,7 @@ public:
 	FText GetTitleText() const { return CurrentData.Title; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardDetail")
-	int32 GetLineCount() const { return CurrentData.Lines.Num(); }
+	FText GetBodyRichText() const { return CurrentData.RichText; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -60,16 +61,16 @@ protected:
 	TObjectPtr<UPanelWidget> LinesBox;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UWacomCardDetailTokenFlowWidget> TokenFlowWidget;
+	TObjectPtr<UWacomCardDetailRichTextBlock> BodyText;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|CardDetail|Widget Classes", meta = (ToolTip = "结构化规则 token flow Widget 类。可在 WBP_CardDetailSection 的 Class Defaults 中指定自定义 WBP；为空时使用 C++ 默认类或约定路径 fallback。"))
-	TSubclassOf<UWacomCardDetailTokenFlowWidget> TokenFlowWidgetClass;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|CardDetail|Theme", meta = (ToolTip = "卡牌详情视觉主题。为空时优先使用 UI Settings 的 CardDetailTheme；仍为空则使用 RichTextBlock 默认样式。"))
+	TObjectPtr<UWacomCardDetailTheme> CardDetailTheme = nullptr;
 
 private:
 	UPROPERTY(Transient)
 	FWacomCardDetailSectionData CurrentData;
 
 	void ApplyCurrentDataToWidgets();
-	void ApplyTokenLinesToWidgets();
-	UWacomCardDetailTokenFlowWidget* EnsureTokenFlowWidget();
+	UWacomCardDetailRichTextBlock* EnsureBodyTextWidget();
+	const UWacomCardDetailTheme* ResolveTheme() const;
 };

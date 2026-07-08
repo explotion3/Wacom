@@ -13,6 +13,8 @@
 
 class UWacomActivatableWidget;
 class UWacomAppToastWidget;
+class UWacomCardDetailTheme;
+class UWacomCardExplanationLexicon;
 class UWacomPrimaryGameLayout;
 
 /** 按 GameplayTag 注册的 UI Widget 软类。 */
@@ -54,4 +56,12 @@ public:
 	/** AppToast WBP 类；未配置或加载失败时回退到 C++ 类。 */
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Settings", meta = (ToolTip = "AppToast WBP 类；未配置或加载失败时回退到 C++ 类。它只配置 Toast 表现类，不改变 Toast 触发规则。"))
 	TSoftClassPtr<UWacomAppToastWidget> AppToastWidgetClass;
+
+	/** 卡牌详情说明模板 DataAsset；为空时使用 C++ fallback 模板。 */
+	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Card Detail", meta = (ToolTip = "卡牌详情说明模板 DataAsset。用于把 Effect / Passive facts 编译为详情语义文档；为空时使用 C++ fallback 模板。"))
+	TSoftObjectPtr<UWacomCardExplanationLexicon> CardExplanationLexicon;
+
+	/** 卡牌详情视觉主题 DataAsset；为空时使用 Widget / RichText 自身默认样式。 */
+	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Card Detail", meta = (ToolTip = "卡牌详情视觉主题 DataAsset。用于配置标题 CommonTextStyle、正文 RichText style set 和 inline 图标/状态 Brush；为空时使用 Widget 默认样式。"))
+	TSoftObjectPtr<UWacomCardDetailTheme> CardDetailTheme;
 };

@@ -296,7 +296,7 @@ struct FCardPassive
 | `Passive.Trigger.OnTurnEnd` | Reserved | 否 | 否 |
 | `Passive.Trigger.OnDraw` | Reserved | 否 | 否 |
 
-`DisplayText` 只用于卡牌详情面板的“被动”区块展示。战斗规则仍以 `Trigger / Effects / Condition / TriggerThreshold` 为准。
+`DisplayText` 是旧展示文本，不再进入正式卡牌详情面板。被动详情由 `Trigger / Effects / Condition / TriggerThreshold` 通过 WacomApp explanation template 生成；战斗规则仍只读取结构化字段。
 
 ## §9 扩展制作矩阵时的检查点
 

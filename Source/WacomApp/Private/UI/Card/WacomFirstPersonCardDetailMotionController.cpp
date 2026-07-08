@@ -11,14 +11,16 @@ namespace
 		return Left.ToString() == Right.ToString();
 	}
 
-	bool AreDetailTokensEquivalent(
-		const FWacomCardDetailToken& Left,
-		const FWacomCardDetailToken& Right)
+	bool AreDetailRunsEquivalent(
+		const FWacomCardDetailRun& Left,
+		const FWacomCardDetailRun& Right)
 	{
 		return Left.StableId == Right.StableId
 			&& Left.Kind == Right.Kind
 			&& AreDetailTextsEquivalent(Left.Text, Right.Text)
+			&& Left.SlotName == Right.SlotName
 			&& Left.Icon == Right.Icon
+			&& Left.Tag == Right.Tag
 			&& Left.Value == Right.Value
 			&& Left.bHasValue == Right.bHasValue
 			&& Left.PreviewValue == Right.PreviewValue
@@ -27,9 +29,9 @@ namespace
 			&& Left.bEmphasized == Right.bEmphasized;
 	}
 
-	bool AreDetailTokenArraysEquivalent(
-		const TArray<FWacomCardDetailToken>& Left,
-		const TArray<FWacomCardDetailToken>& Right)
+	bool AreDetailRunArraysEquivalent(
+		const TArray<FWacomCardDetailRun>& Left,
+		const TArray<FWacomCardDetailRun>& Right)
 	{
 		if (Left.Num() != Right.Num())
 		{
@@ -38,7 +40,7 @@ namespace
 
 		for (int32 Index = 0; Index < Left.Num(); ++Index)
 		{
-			if (!AreDetailTokensEquivalent(Left[Index], Right[Index]))
+			if (!AreDetailRunsEquivalent(Left[Index], Right[Index]))
 			{
 				return false;
 			}
@@ -46,9 +48,9 @@ namespace
 		return true;
 	}
 
-	bool AreDetailTokenLinesEquivalent(
-		const TArray<FWacomCardDetailTokenLine>& Left,
-		const TArray<FWacomCardDetailTokenLine>& Right)
+	bool AreDetailBlocksEquivalent(
+		const TArray<FWacomCardDetailBlock>& Left,
+		const TArray<FWacomCardDetailBlock>& Right)
 	{
 		if (Left.Num() != Right.Num())
 		{
@@ -57,9 +59,10 @@ namespace
 
 		for (int32 Index = 0; Index < Left.Num(); ++Index)
 		{
-			if (Left[Index].LineId != Right[Index].LineId
+			if (Left[Index].BlockId != Right[Index].BlockId
 				|| Left[Index].Kind != Right[Index].Kind
-				|| !AreDetailTokenArraysEquivalent(Left[Index].Tokens, Right[Index].Tokens))
+				|| Left[Index].bSkipped != Right[Index].bSkipped
+				|| !AreDetailRunArraysEquivalent(Left[Index].Runs, Right[Index].Runs))
 			{
 				return false;
 			}
@@ -81,7 +84,7 @@ namespace
 			if (Left[Index].SectionId != Right[Index].SectionId
 				|| Left[Index].Kind != Right[Index].Kind
 				|| !AreDetailTextsEquivalent(Left[Index].Title, Right[Index].Title)
-				|| !AreDetailTokenLinesEquivalent(Left[Index].TokenLines, Right[Index].TokenLines))
+				|| !AreDetailBlocksEquivalent(Left[Index].Blocks, Right[Index].Blocks))
 			{
 				return false;
 			}

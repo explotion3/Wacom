@@ -233,97 +233,10 @@ WBP 不应做：
 最小验收：
 
 - `UWacomCardDetailPanel` 只显示 `FWacomCardDetailViewData.Sections`。
-- 面板会把非空描述 token / 主动效果 token / 被动 token 或被动 fallback 数据转成多个 `UWacomCardDetailSectionWidget`。
-- `Description / Effect` token lines 会合并进标题为“描述”的 Section；`Passive` token lines 会进入标题为“被动”的 Section。手写 `Description` 可使用 `{Effect.N}` 显式占位符嵌入主动效果 token，例如 `造成 {Effect.0} 伤害。`；没有手写描述时才显示自动 `Effect` fallback 行。
-- 旧 `Description`、`ChangeLines`、`PassiveLines`、`TaskLines` 和扁平 `TokenLines` 字段已从 `FWacomCardDetailViewData` 删除；被动 fallback 只在没有被动 token 时显示。
+- 面板会把非空 semantic section 动态转成多个 `UWacomCardDetailSectionWidget`。
+- `Description` section 来自卡牌主动效果 explanation blocks；`Passive` section 来自被动触发 explanation block 和被动效果 blocks。
+- `UCardDefinition::Description`、`FCardPassive::DisplayText`、旧 `Description`、`ChangeLines`、`PassiveLines`、`TaskLines`、扁平 `TokenLines` 和旧 token flow 字段都不再进入详情面板。
 - 未绑定 `SectionsBox` 时，C++ 兼容路径会创建基础容器。
-
-## WBP_CardDetailTokenFlow
-
-父类：`UWacomCardDetailTokenFlowWidget`
-
-推荐资产：`WBP_CardDetailTokenFlow`
-
-C++ 默认会按 `/Game/Wacom/UI/Card/WBP_CardDetailTokenFlow.WBP_CardDetailTokenFlow_C` 自动加载该资产；不存在或父类不匹配时退回 `UWacomCardDetailTokenFlowWidget` fallback。
-也可以在 `WBP_CardDetailSection` 的 Class Defaults 里通过 `TokenFlowWidgetClass` 手动指定其它 Flow WBP。
-
-推荐绑定：
-
-| 控件名 | 推荐类型 | 运行时职责 |
-|---|---|---|
-| `LinesBox` | `PanelWidget` | C++ 按 `FWacomCardDetailTokenLine.LineId` 动态填充 / 复用 token 行 |
-
-WBP 不应做：
-
-- 不解析 `UCardDefinition` 或 GameplayTag。
-- 不拼接完整规则文案；只展示传入的 token line。
-
-最小验收：
-
-- `TokenLines` 有多行时按顺序显示。
-- 目标预览刷新时，同 `LineId` 的行复用并更新内容。
-- 未绑定 `LinesBox` 时，C++ fallback 会创建基础 `VerticalBox`。
-
-## WBP_CardDetailTokenLine
-
-父类：`UWacomCardDetailTokenLineWidget`
-
-推荐资产：`WBP_CardDetailTokenLine`
-
-C++ 默认会按 `/Game/Wacom/UI/Card/WBP_CardDetailTokenLine.WBP_CardDetailTokenLine_C` 自动加载该资产；不存在或父类不匹配时退回 `UWacomCardDetailTokenLineWidget` fallback。
-也可以在 `WBP_CardDetailTokenFlow` 的 Class Defaults 里通过 `TokenLineWidgetClass` 手动指定其它 Line WBP。
-
-推荐绑定：
-
-| 控件名 | 推荐类型 | 运行时职责 |
-|---|---|---|
-| `TokensBox` | `PanelWidget` / 推荐 `WrapBox` | C++ 按 token `StableId` 动态填充 / 复用 token widget，并允许一句话自然换行 |
-
-WBP 不应做：
-
-- 不把某类卡牌效果硬编码成固定布局。
-- 不提交战斗、背包或 Run 命令。
-
-最小验收：
-
-- 图标、数字和文本 token 像一句话一样水平排列，宽度不足时换行。
-- `bSkipped` 行会显示 “不会生效：” 前缀。
-- 未绑定 `TokensBox` 时，C++ fallback 会创建基础 `WrapBox`。
-
-## WBP_CardDetailToken
-
-父类：`UWacomCardDetailTokenWidget`
-
-推荐资产：`WBP_CardDetailToken`
-
-C++ 默认会按 `/Game/Wacom/UI/Card/WBP_CardDetailToken.WBP_CardDetailToken_C` 自动加载该资产；不存在或父类不匹配时退回 `UWacomCardDetailTokenWidget` fallback。
-也可以在 `WBP_CardDetailTokenLine` 的 Class Defaults 里通过 `TokenWidgetClass` 手动指定其它 Token WBP。
-
-推荐绑定：
-
-| 控件名 | 推荐类型 | 运行时职责 |
-|---|---|---|
-| `TokenText` | `TextBlock` | 可选。整 token fallback 文本，例如 `[伤]`、`6 -> 8` |
-| `TextText` | `TextBlock` | 可选。Text / Keyword token 文本 |
-| `IconText` | `TextBlock` 或后续 Image | 可选。Icon token 当前 fallback，如 `[伤]`、`[盾]` |
-| `ValueText` | `TextBlock` | 可选。Number token 当前值 |
-| `PreviewArrowText` | `TextBlock` | 可选。有 preview 时显示箭头 |
-| `PreviewValueText` | `TextBlock` | 可选。Number token preview 值 |
-| `SkippedOverlay` | `Widget` | 可选。不会生效状态遮罩 / 弱化层 |
-| `EmphasisOverlay` | `Widget` | 可选。preview 或强调状态高亮层 |
-
-WBP 不应做：
-
-- 不根据中文文本反推 icon 或数值。
-- 不直接读取 Battle / Run 状态。
-
-最小验收：
-
-- 没做专门 WBP 时，C++ fallback 仍显示 `[伤] 6`、`6 -> 8`。
-- 做了专门 WBP 后，可以分别排布 icon、当前值和 preview 值。
-- 如果同时绑定 `TokenText` 和分类型控件（`TextText / IconText / ValueText / PreviewArrowText / PreviewValueText`），运行时会隐藏 `TokenText`，避免同一个 token 显示两遍。只想做简单 fallback 样式时绑定 `TokenText` 即可；正式拆分样式时使用分类型控件。
-- 只有整行纯文本的 `Description` token 会强制占满一整行并启用自动换行；包含 `{Effect.N}` 的描述行会像一句话一样水平排布文本、图标和数字。
-- `StableId` 后续可用于数字 / 图标动效复用，不应在 WBP 里被改写。
 
 ## WBP_CardDetailSection
 
@@ -337,20 +250,42 @@ WBP 不应做：
 
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
-| `TitleText` | `TextBlock` | 区块标题 |
-| `LinesBox` | `PanelWidget` | C++ 动态填充区块文本行，也作为未绑定 token flow 时的 fallback 容器 |
-| `TokenFlowWidget` | `UWacomCardDetailTokenFlowWidget` | 可选。显示结构化规则 token；可放在 Section 蓝图内任意合适位置，未绑定时 C++ 会在 `LinesBox` 中创建 fallback token flow |
+| `TitleText` | `CommonTextBlock` | 区块标题；建议通过 `UWacomCardDetailTheme.TitleTextStyle` 或 WBP 样式统一字体 |
+| `BodyText` | `UWacomCardDetailRichTextBlock` | RichText 正文；C++ 会把 semantic blocks/runs 渲染为 markup 并设置文本 |
 
 WBP 不应做：
 
 - 不提交战斗、背包或 Run 命令。
-- 不把区块模板写成特定卡牌规则入口。
+- 不解析 `UCardDefinition`、`FCardEffect`、`FCardPassive` 或 GameplayTag。
+- 不把区块模板写成特定卡牌规则入口；模板归 `UWacomCardExplanationLexicon` 管。
 
 最小验收：
 
 - 该 Widget 作为详情区块通用模板使用。
-- 描述 token 和被动 token 都通过该 Section 外框显示，所以能复用同一套详情区块 UI。
-- 未绑定槽位时，C++ 兼容路径会创建基础标题和多行文本。
+- 描述和被动都通过同一套 Section 外框显示；正文由 `BodyText` 的 RichText style set 决定字体、颜色、runtime preview 数值语气等视觉。
+- `BodyText` 至少要能显示普通文本、`Value`、`ValueBuffed`、`ValueNerfed`、`Status`、`Keyword`、`Muted` 几类 RichText style。目标预览时正文只显示最终数值，强化值用 `ValueBuffed`，削弱值用 `ValueNerfed`，不再显示 `基础值 -> 预览值`。
+- 未绑定槽位时，C++ 兼容路径会创建基础标题和 RichText 正文。
+
+## Card Explanation Assets
+
+详情正文由 C++ 生成 semantic document，再由 RichText 渲染。美术 / 策划后续主要调整这两个 DataAsset：
+
+| 资产类型 | 用途 |
+|---|---|
+| `UWacomCardExplanationLexicon` | 配置效果和被动触发的 typed explanation template。精确 `EffectType / Passive.Trigger` 优先，找不到时尝试父 tag fallback。 |
+| `UWacomCardDetailTheme` | 配置标题 CommonTextStyle、正文 RichText style set、inline 图标 / 状态 brush 和 fallback brush。 |
+
+模板 slot v1 支持：
+
+| Slot | 说明 |
+|---|---|
+| `{value:Magnitude}` | 效果数值；目标预览时显示最终数值，并通过 `ValueBuffed / ValueNerfed` 标记强化或削弱。 |
+| `{value:TriggerThreshold}` | 被动触发阈值。 |
+| `{icon:EffectIcon}` | 当前效果图标语义。 |
+| `{status:EffectStatus}` | 当前效果关联状态，例如中毒、冻结、眩晕。 |
+| `{keyword:Tag}` | 当前效果或触发 tag 的关键词显示。 |
+
+旧 `WBP_CardDetailTokenFlow / WBP_CardDetailTokenLine / WBP_CardDetailToken` 已删除，不再作为运行时依赖或制作入口；详情正文统一从 semantic `Blocks / Runs` 渲染到 `WBP_CardDetailSection` 的 `BodyText`。
 
 ## WBP_CardEffectBadge
 

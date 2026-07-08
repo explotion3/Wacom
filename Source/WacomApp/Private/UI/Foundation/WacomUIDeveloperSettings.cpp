@@ -3,6 +3,8 @@
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Card/WacomCardDetailTheme.h"
+#include "UI/Card/WacomCardExplanationLexicon.h"
 #include "UI/Events/WacomRunEventScreen.h"
 #include "UI/Foundation/WacomActivatableWidget.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
@@ -43,6 +45,37 @@ namespace
 			return UWacomPauseMenuScreen::StaticClass();
 		}
 		return UWacomActivatableWidget::StaticClass();
+	}
+
+	template<typename ExpectedT>
+	void ValidateSoftObject(
+		const TSoftObjectPtr<ExpectedT>& SoftObject,
+		const FText& FieldLabel,
+		TArray<FText>& OutErrors)
+	{
+		if (SoftObject.IsNull())
+		{
+			return;
+		}
+
+		UObject* LoadedObject = SoftObject.ToSoftObjectPath().TryLoad();
+		if (!LoadedObject)
+		{
+			OutErrors.Add(FText::Format(
+				LOCTEXT("SoftObjectLoadFailed", "{0} 加载失败：{1}"),
+				FieldLabel,
+				FText::FromString(SoftObject.ToString())));
+			return;
+		}
+
+		if (!LoadedObject->IsA(ExpectedT::StaticClass()))
+		{
+			OutErrors.Add(FText::Format(
+				LOCTEXT("SoftObjectWrongClass", "{0} 必须是 {1}，当前为 {2}"),
+				FieldLabel,
+				FText::FromString(ExpectedT::StaticClass()->GetName()),
+				FText::FromString(LoadedObject->GetClass()->GetName())));
+		}
 	}
 
 	template<typename ExpectedT>
@@ -125,6 +158,14 @@ bool UWacomUIDeveloperSettings::ValidateSettings(TArray<FText>& OutErrors) const
 	ValidateSoftClass(
 		AppToastWidgetClass,
 		LOCTEXT("AppToastWidgetClassLabel", "AppToastWidgetClass"),
+		OutErrors);
+	ValidateSoftObject(
+		CardExplanationLexicon,
+		LOCTEXT("CardExplanationLexiconLabel", "CardExplanationLexicon"),
+		OutErrors);
+	ValidateSoftObject(
+		CardDetailTheme,
+		LOCTEXT("CardDetailThemeLabel", "CardDetailTheme"),
 		OutErrors);
 
 	TSet<FGameplayTag> SeenWidgetTags;

@@ -136,12 +136,13 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Legacy 2D battle hand 已清理：`UHandPanel / UCardWidget`、`WBP_HandPanel / WBP_CardWidget` 和独立 legacy hand 测试已删除；BattleHUD 运行时只走 first-person card layer。
 - First-person entry legacy target projection 已清理：`FWacomFirstPersonCardLayerEntry` 正式 interface 只保留 `InteractionIntent`，不再暴露 `DebugLegacyTargetMode`；Battle target-mode 映射只保留在 Battle adapter 私有 helper，Run source 写入 `DragToDropTarget`，hand-card 目标合法性由 Battle validation reject reason 驱动。
 - First-person presentation frame 生产写入已收口：Run source 和 Battle hand presentation controller 不再写 legacy `bApplyAsPresentationFrame`，正式路径显式设置 `CommitMode`；该 legacy 字段仅作为旧调用兼容保留。
-- Card detail `ChangeLines` legacy text path 已清理：`FWacomCardDetailViewData` 不再暴露未渲染的变化文本字段，Battle target preview 文本旁路也已移除；费用和目标预览表现应走卡面数值、`EffectPreviews` 或正式 `Sections` token。
-- Card detail `PassiveLines` legacy mirror 已清理：被动正文只通过正式 `Sections` / passive token line 承载，`Passive.DisplayText` fallback 不再生成平行纯文本字段。
+- Card detail `ChangeLines` legacy text path 已清理：`FWacomCardDetailViewData` 不再暴露未渲染的变化文本字段，Battle target preview 文本旁路也已移除；费用和目标预览表现应走卡面数值、`EffectPreviews` 或正式 `Sections` semantic document。
+- Card detail `PassiveLines` legacy mirror 已清理：被动正文只通过正式 `Sections` / explanation blocks 承载，`Passive.DisplayText` fallback 不再生成平行纯文本字段，也不再作为详情面板输入。
 - Card detail `TaskLines` 与扁平 `TokenLines` legacy mirror 已清理：`FWacomCardDetailViewData` 的正式详情文档只保留 `Sections`，后续任务、预览或风味文本应新增正式 section，而不是维护平行数组镜像。
-- Card detail `Description` legacy mirror 已清理：`FWacomCardDetailViewData` 不再暴露平行纯文本正文或 `UWacomCardDetailPanel::GetDescriptionText()`；`UCardDefinition::Description` 只作为 Builder 编译“描述”Section 的输入，`FWacomCardViewData.Description` 仍保留为小卡卡面紧凑描述。
-- Card detail document builder 已抽出：`UWacomCardPresentationBuilder` 保留为 public / Blueprint facade，`WacomCardDetailDocumentBuilder` 负责详情 `Sections` 组装，`WacomCardDetailTextCompiler` 只负责编译 token line，Widget 不承载 Description / Passive / Effect 分区逻辑。
-- Card detail viewport / child widget 创建路径已收口：first-person 详情面板由 `FWacomFirstPersonCardDetailPanelHost` 统一判断是否能进入 viewport，详情 section / token 子 Widget 由 App-private `WacomCardDetailWidgetFactory` 创建，离屏自动化不再通过 `GetWorld()` 分支污染日志。
+- Card detail `Description` legacy mirror 已清理：`FWacomCardDetailViewData` 不再暴露平行纯文本正文或 `UWacomCardDetailPanel::GetDescriptionText()`；`UCardDefinition::Description` 只保留为小卡 / 其它旧 UI 可用字段，不再进入详情面板。
+- Card detail explanation system 已收口：`UWacomCardPresentationBuilder` 保留为 public / Blueprint facade，`WacomCardDetailDocumentBuilder` 负责详情 `Sections` 组装，`WacomCardExplanationCompiler` 从 effects / passives、runtime preview 和 `UWacomCardExplanationLexicon` 编译 semantic blocks/runs，Widget 不承载 Description / Passive / Effect 分区逻辑。
+- Card detail viewport / child widget 创建路径已收口：first-person 详情面板由 `FWacomFirstPersonCardDetailPanelHost` 统一判断是否能进入 viewport，详情 section 子 Widget 由 App-private `WacomCardDetailWidgetFactory` 创建，离屏自动化不再通过 `GetWorld()` 分支污染日志。
+- 旧 card detail token flow 已删除：`UWacomCardDetailTokenFlowWidget / TokenLineWidget / TokenWidget` 和 `WBP_CardDetailTokenFlow / WBP_CardDetailTokenLine / WBP_CardDetailToken` 不再是运行时依赖；避免留下指向已删除 native 类的坏资产。
 - BattleHUD 旧 CardDetail immediate positioning helper 已移除：详情面板定位测试和正式路径都以 App-private `FWacomFirstPersonCardDetailMotionController` / `FWacomBattleHUDCardDetailController` 的 stable motion 语义为准。
 - AppToast viewport owner 检查已收口：`UWacomAppToastSubsystem` 只在真实本地玩家和 `LocalPlayer` 就绪时创建 / 加入 viewport，离屏自动化注入 Widget 可复用且不再通过 Widget `GetWorld()` 判定旧 World/PC。
 - Run GameMenu suppression 查询已收口：PlayerController、Run world interaction router 和 Run first-person drop context 共用 `HasActiveRunGameMenuOrTransitionSuppression()`，drop context 命名也对齐 active GameMenu / viewpoint transition suppression 语义，不再重复解释这两类状态。

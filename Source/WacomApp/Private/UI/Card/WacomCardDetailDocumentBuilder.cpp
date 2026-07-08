@@ -3,7 +3,9 @@
 #include "WacomCardDetailDocumentBuilder.h"
 
 #include "Cards/CardDefinition.h"
-#include "WacomCardDetailTextCompiler.h"
+#include "UI/Card/WacomCardExplanationLexicon.h"
+#include "UI/Foundation/WacomUIDeveloperSettings.h"
+#include "WacomCardExplanationCompiler.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardDetailDocumentBuilder"
 
@@ -22,15 +24,23 @@ namespace WacomCardDetailDocumentBuilder
 				: Card->DisplayName;
 		}
 
-		bool ShouldAppendGeneratedActiveEffectTokenLines(const UCardDefinition* Card)
+		UWacomCardExplanationLexicon* LoadExplanationLexicon()
 		{
-			if (!Card)
-			{
-				return false;
-			}
+			const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
+			return Settings && !Settings->CardExplanationLexicon.IsNull()
+				? Settings->CardExplanationLexicon.LoadSynchronous()
+				: nullptr;
+		}
 
-			// 手写 Description 是卡牌详情的主阅读文本；自动 Effect 行只在没有描述时补规则。
-			return Card->Description.IsEmpty();
+		FWacomCardPresentationRuntimeContext MakePassiveRuntimeContext(
+			const FWacomCardPresentationRuntimeContext& RuntimeContext)
+		{
+			FWacomCardPresentationRuntimeContext PassiveContext;
+			PassiveContext.bHasRuntimeCost = RuntimeContext.bHasRuntimeCost;
+			PassiveContext.RuntimeCost = RuntimeContext.RuntimeCost;
+			PassiveContext.bHasPlayableState = RuntimeContext.bHasPlayableState;
+			PassiveContext.bIsPlayable = RuntimeContext.bIsPlayable;
+			return PassiveContext;
 		}
 	}
 
@@ -45,39 +55,56 @@ namespace WacomCardDetailDocumentBuilder
 			return Data;
 		}
 
-		TArray<FWacomCardDetailTokenLine> DescriptionSectionLines =
-			WacomCardDetailTextCompiler::BuildAuthoredTextTokenLines(
-				Card,
-				Card->Effects,
-				RuntimeContext,
-				Card->Description,
-				EWacomCardDetailTokenLineKind::Description,
-				TEXT("Description"));
-		if (ShouldAppendGeneratedActiveEffectTokenLines(Card))
+		UWacomCardExplanationLexicon* Lexicon = LoadExplanationLexicon();
+
+		TArray<FWacomCardDetailBlock> DescriptionBlocks;
+		for (int32 EffectIndex = 0; EffectIndex < Card->Effects.Num(); ++EffectIndex)
 		{
-			TArray<FWacomCardDetailTokenLine> EffectLines =
-				WacomCardDetailTextCompiler::BuildEffectTokenLines(Card, RuntimeContext);
-			DescriptionSectionLines.Append(MoveTemp(EffectLines));
+			DescriptionBlocks.Add(WacomCardExplanationCompiler::BuildEffectBlock(
+				Card,
+				Card->Effects[EffectIndex],
+				RuntimeContext,
+				Lexicon,
+				EffectIndex,
+				FString::Printf(TEXT("Effect.%d"), EffectIndex),
+				EWacomCardDetailBlockKind::EffectSentence));
 		}
 
-		TArray<FWacomCardDetailTokenLine> PassiveSectionLines;
-		WacomCardDetailTextCompiler::BuildPassiveTokenLines(
-			Card,
-			RuntimeContext,
-			PassiveSectionLines);
+		TArray<FWacomCardDetailBlock> PassiveBlocks;
+		const FWacomCardPresentationRuntimeContext PassiveRuntimeContext =
+			MakePassiveRuntimeContext(RuntimeContext);
+		for (int32 PassiveIndex = 0; PassiveIndex < Card->Passives.Num(); ++PassiveIndex)
+		{
+			const FCardPassive& Passive = Card->Passives[PassiveIndex];
+			PassiveBlocks.Add(WacomCardExplanationCompiler::BuildPassiveTriggerBlock(
+				Passive,
+				Lexicon,
+				PassiveIndex));
+			for (int32 EffectIndex = 0; EffectIndex < Passive.Effects.Num(); ++EffectIndex)
+			{
+				PassiveBlocks.Add(WacomCardExplanationCompiler::BuildEffectBlock(
+					Card,
+					Passive.Effects[EffectIndex],
+					PassiveRuntimeContext,
+					Lexicon,
+					EffectIndex,
+					FString::Printf(TEXT("Passive.%d.Effect.%d"), PassiveIndex, EffectIndex),
+					EWacomCardDetailBlockKind::PassiveEffect));
+			}
+		}
 
-		WacomCardDetailTextCompiler::AddCardDetailSection(
+		WacomCardExplanationCompiler::AddCardDetailSection(
 			Data,
 			FName(TEXT("Description")),
 			EWacomCardDetailSectionKind::Description,
 			LOCTEXT("DescriptionSectionTitle", "描述"),
-			MoveTemp(DescriptionSectionLines));
-		WacomCardDetailTextCompiler::AddCardDetailSection(
+			MoveTemp(DescriptionBlocks));
+		WacomCardExplanationCompiler::AddCardDetailSection(
 			Data,
 			FName(TEXT("Passive")),
 			EWacomCardDetailSectionKind::Passive,
 			LOCTEXT("PassivesSectionTitle", "被动"),
-			MoveTemp(PassiveSectionLines));
+			MoveTemp(PassiveBlocks));
 		return Data;
 	}
 }

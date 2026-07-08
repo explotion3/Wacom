@@ -93,7 +93,7 @@ class UCardDefinition : public UPrimaryDataAsset
 | 字段 | 语义 |
 |---|---|
 | `CardId` | 内容稳定 ID；用于 debug、测试和运行时实例引用来源，不是 UObject path |
-| `DisplayName / Description` | UI 展示文本；规则不从中文自然语言解析效果。详情面板允许 `Description` 使用显式 `{Effect.N}` 占位符引用主动效果 token，例如 `造成 {Effect.0} 伤害。`；真正规则仍来自 `Effects / Passives` |
+| `DisplayName / Description` | UI 展示文本；规则不从中文自然语言解析效果。`Description` 仍可服务小卡紧凑描述或其它旧 UI，但正式卡牌详情面板不再读取它；详情正文由 `Effects / Passives` 通过 WacomApp 的 semantic explanation document 生成 |
 | `BaseCost` | 基础费用；Battle 会叠加 runtime modifier 后 clamp |
 | `Rarity / Keywords` | 静态标签；标签定义见 [WacomGameplayTags.md](./WacomGameplayTags.md) |
 | `Physique` | 入战 HP、容量和后续耐久相关静态字段 |
@@ -443,11 +443,11 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 | `FIntentEffect` | 敌人意图效果条目：EffectType、Magnitude、Target、Duration |
 | `FEffectCondition` | 效果或 passive 的条件门控 |
 | `FCardZoneHook` | 指定手牌区和触发点的额外效果 |
-| `FCardPassive` | 被动触发点、展示 fallback 文案、效果、条件和阈值 |
+| `FCardPassive` | 被动触发点、旧展示文本、效果、条件和阈值 |
 
 `WacomData` 只定义字段。Battle resolver、dispatcher、validation matrix 和 transient runtime fixture 共同决定这些字段当前是否真正可执行。
 
-`FCardPassive.DisplayText` 只服务详情面板 fallback，不是规则真相。当前 UI 会优先从 `Trigger / Condition / Effects` 生成被动 token；只有 token 无法覆盖时才回退显示 `DisplayText` 或触发 fallback 文案。
+`FCardPassive.DisplayText` 是旧展示文本，不是规则真相。正式卡牌详情面板不再把它作为输入；被动详情由 `Trigger / Condition / Effects / TriggerThreshold` 经 WacomApp explanation compiler 生成 semantic blocks/runs，找不到精确模板时走 tag fallback 或 C++ 可读 fallback。
 
 ## §12 修改数据合同时的检查点
 

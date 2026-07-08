@@ -15,6 +15,7 @@
 #include "UI/Backpack/WacomZoneDropTarget.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomCardDetailPlainTextRenderer.h"
 #include "UI/Card/WacomCardDetailSectionWidget.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomCardView.h"
@@ -45,30 +46,21 @@ namespace
 		return Badge;
 	}
 
-	FWacomCardDetailTokenLine MakeCardDetailTextLineForTest(
-		FName LineId,
-		EWacomCardDetailTokenLineKind Kind,
+	FWacomCardDetailBlock MakeCardDetailTextBlockForTest(
+		FName BlockId,
+		EWacomCardDetailBlockKind Kind,
 		const FString& Text)
 	{
-		FWacomCardDetailToken Token;
-		Token.StableId = FName(*FString::Printf(TEXT("%s.Text"), *LineId.ToString()));
-		Token.Kind = EWacomCardDetailTokenKind::Text;
-		Token.Text = FText::FromString(Text);
+		FWacomCardDetailRun Run;
+		Run.StableId = FName(*FString::Printf(TEXT("%s.Text"), *BlockId.ToString()));
+		Run.Kind = EWacomCardDetailRunKind::Text;
+		Run.Text = FText::FromString(Text);
 
-		FWacomCardDetailTokenLine Line;
-		Line.LineId = LineId;
-		Line.Kind = Kind;
-		Line.Tokens.Add(Token);
-		return Line;
-	}
-
-	FString CardDetailTokenTextForTest(const FWacomCardDetailToken& Token)
-	{
-		if (Token.Kind == EWacomCardDetailTokenKind::Number && Token.bHasValue)
-		{
-			return FString::FromInt(Token.bHasPreviewValue ? Token.PreviewValue : Token.Value);
-		}
-		return Token.Text.ToString();
+		FWacomCardDetailBlock Block;
+		Block.BlockId = BlockId;
+		Block.Kind = Kind;
+		Block.Runs.Add(Run);
+		return Block;
 	}
 
 	FString JoinCardDetailSectionTextForTest(
@@ -83,16 +75,15 @@ namespace
 				continue;
 			}
 
-			for (const FWacomCardDetailTokenLine& Line : Section.TokenLines)
+			const FString SectionText =
+				UWacomCardDetailPlainTextRenderer::RenderSectionPlainText(Section).ToString();
+			if (!SectionText.IsEmpty())
 			{
 				if (!Text.IsEmpty())
 				{
 					Text += TEXT("\n");
 				}
-				for (const FWacomCardDetailToken& Token : Line.Tokens)
-				{
-					Text += CardDetailTokenTextForTest(Token);
-				}
+				Text += SectionText;
 			}
 		}
 		return Text;
@@ -1059,27 +1050,29 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 	Card->CardId = TEXT("TwilightLantern");
 	Card->DisplayName = FText::FromString(TEXT("暮色引虫灯"));
-	Card->Description = FText::FromString(TEXT("造成1暮气，1中毒。"));
+	FCardEffect Poison;
+	Poison.EffectType = WacomTags::Effect_ApplyStatus_Poison;
+	Poison.Magnitude = 1;
+	Card->Effects.Add(Poison);
 
 	FCardPassive Passive;
 	Passive.Trigger = WacomTags::Passive_Trigger_OnCompanionCount;
 	Passive.TriggerThreshold = 3;
-	Passive.DisplayText = FText::FromString(TEXT("每当你打出 3 张伙伴时，使此牌回到手中。"));
 	Card->Passives.Add(Passive);
 
 	const FWacomCardDetailViewData Data = UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 
 	TestEqual(TEXT("Detail name"), Data.Name.ToString(), TEXT("暮色引虫灯"));
-	TestEqual(TEXT("Detail description section keeps authored description"),
+	TestEqual(TEXT("Detail description section uses explanation template"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Description),
-		TEXT("造成1暮气，1中毒。"));
+		TEXT("施加 1 层 中毒。"));
 	TestFalse(TEXT("Description section does not contain passive copy"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Description).Contains(TEXT("被动")));
 	TestTrue(TEXT("Detail document has no task section before schema support"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Task).IsEmpty());
-	TestTrue(TEXT("Passive section uses DisplayText"),
+	TestTrue(TEXT("Passive section uses trigger template"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Passive)
-			.Contains(TEXT("每当你打出 3 张伙伴时，使此牌回到手中。")));
+			.Contains(TEXT("每打出 3 张伙伴：")));
 
 	return true;
 }
@@ -1094,7 +1087,10 @@ bool FWacomUIBackpackCardDetailPassiveFallbackSpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 	Card->CardId = TEXT("PassiveFallbackCard");
 	Card->DisplayName = FText::FromString(TEXT("被动回退卡"));
-	Card->Description = FText::FromString(TEXT("主动效果。"));
+	FCardEffect Damage;
+	Damage.EffectType = WacomTags::Effect_Damage;
+	Damage.Magnitude = 2;
+	Card->Effects.Add(Damage);
 
 	FCardPassive Passive;
 	Passive.Trigger = WacomTags::Passive_Trigger_OnCompanionCount;
@@ -1127,9 +1123,9 @@ bool FWacomUIBackpackCardDetailPanelSectionsSpec::RunTest(const FString& /*Param
 	DescriptionSection.SectionId = FName(TEXT("Description"));
 	DescriptionSection.Kind = EWacomCardDetailSectionKind::Description;
 	DescriptionSection.Title = FText::FromString(TEXT("描述"));
-	DescriptionSection.TokenLines.Add(MakeCardDetailTextLineForTest(
-		FName(TEXT("Description.0")),
-		EWacomCardDetailTokenLineKind::Description,
+	DescriptionSection.Blocks.Add(MakeCardDetailTextBlockForTest(
+		FName(TEXT("Description.0.Block")),
+		EWacomCardDetailBlockKind::Paragraph,
 		TEXT("完整描述文本")));
 	Data.Sections.Add(DescriptionSection);
 
@@ -1137,9 +1133,9 @@ bool FWacomUIBackpackCardDetailPanelSectionsSpec::RunTest(const FString& /*Param
 	PassiveSection.SectionId = FName(TEXT("Passive"));
 	PassiveSection.Kind = EWacomCardDetailSectionKind::Passive;
 	PassiveSection.Title = FText::FromString(TEXT("被动"));
-	PassiveSection.TokenLines.Add(MakeCardDetailTextLineForTest(
-		FName(TEXT("Passive.0")),
-		EWacomCardDetailTokenLineKind::Passive,
+	PassiveSection.Blocks.Add(MakeCardDetailTextBlockForTest(
+		FName(TEXT("Passive.0.Block")),
+		EWacomCardDetailBlockKind::Paragraph,
 		TEXT("回合结束")));
 	Data.Sections.Add(PassiveSection);
 
@@ -1167,16 +1163,14 @@ bool FWacomUIBackpackCardDetailSectionWidgetDataSpec::RunTest(const FString& /*P
 
 	FWacomCardDetailSectionData Data;
 	Data.Title = FText::FromString(TEXT("描述"));
-	Data.Lines.Add(FText::FromString(TEXT("第一行")));
-	Data.Lines.Add(FText::FromString(TEXT("第二行")));
+	Data.RichText = FText::FromString(TEXT("第一行\n第二行"));
 
 	SectionWidget->SetSectionData(Data);
 	SectionWidget->TakeWidget();
 	SectionWidget->SetSectionData(Data);
 
 	TestEqual(TEXT("Section title preserved"), SectionWidget->GetTitleText().ToString(), TEXT("描述"));
-	TestEqual(TEXT("Section line count preserved"), SectionWidget->GetLineCount(), 2);
-	TestEqual(TEXT("Section first line preserved"), SectionWidget->GetSectionData().Lines[0].ToString(), TEXT("第一行"));
+	TestEqual(TEXT("Section rich text preserved"), SectionWidget->GetBodyRichText().ToString(), TEXT("第一行\n第二行"));
 
 	return true;
 }

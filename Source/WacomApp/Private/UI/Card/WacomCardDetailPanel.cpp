@@ -7,6 +7,7 @@
 #include "Components/PanelWidget.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "UI/Card/WacomCardDetailRichTextRenderer.h"
 #include "UI/Card/WacomCardDetailSectionWidget.h"
 #include "UI/Card/WacomCardDetailWidgetFactory.h"
 
@@ -79,7 +80,7 @@ void UWacomCardDetailPanel::ApplyCurrentDataToWidgets()
 
 	for (const FWacomCardDetailSection& Section : CurrentData.Sections)
 	{
-		AddTokenSection(Section.Title, Section.TokenLines);
+		AddSection(Section);
 	}
 
 	SectionsBox->SetVisibility(
@@ -88,27 +89,17 @@ void UWacomCardDetailPanel::ApplyCurrentDataToWidgets()
 			: ESlateVisibility::Collapsed);
 }
 
-void UWacomCardDetailPanel::AddTokenSection(
-	const FText& Title,
-	const TArray<FWacomCardDetailTokenLine>& TokenLines)
+void UWacomCardDetailPanel::AddSection(const FWacomCardDetailSection& Section)
 {
-	if (!SectionsBox || TokenLines.IsEmpty())
+	if (!SectionsBox || Section.Blocks.IsEmpty())
 	{
 		return;
 	}
 
 	FWacomCardDetailSectionData SectionData;
-	SectionData.Title = Title;
-	SectionData.TokenLines = TokenLines;
-	AddSectionData(SectionData);
-}
-
-void UWacomCardDetailPanel::AddSectionData(const FWacomCardDetailSectionData& SectionData)
-{
-	if (!SectionsBox)
-	{
-		return;
-	}
+	SectionData.Title = Section.Title;
+	SectionData.Section = Section;
+	SectionData.RichText = UWacomCardDetailRichTextRenderer::RenderSectionRichText(Section);
 
 	UClass* WidgetClass = SectionWidgetClass
 		? SectionWidgetClass.Get()

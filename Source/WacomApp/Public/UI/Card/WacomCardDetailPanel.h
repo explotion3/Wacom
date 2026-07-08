@@ -57,6 +57,5 @@ private:
 	TArray<TObjectPtr<UWacomCardDetailSectionWidget>> SectionWidgets;
 
 	void ApplyCurrentDataToWidgets();
-	void AddTokenSection(const FText& Title, const TArray<FWacomCardDetailTokenLine>& TokenLines);
-	void AddSectionData(const FWacomCardDetailSectionData& SectionData);
+	void AddSection(const FWacomCardDetailSection& Section);
 };

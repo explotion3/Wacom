@@ -9,12 +9,15 @@
 class UTexture2D;
 
 UENUM(BlueprintType)
-enum class EWacomCardDetailTokenKind : uint8
+enum class EWacomCardDetailRunKind : uint8
 {
 	Text UMETA(DisplayName = "Text"),
+	Value UMETA(DisplayName = "Value"),
 	Icon UMETA(DisplayName = "Icon"),
-	Number UMETA(DisplayName = "Number"),
-	Keyword UMETA(DisplayName = "Keyword")
+	Status UMETA(DisplayName = "Status"),
+	Keyword UMETA(DisplayName = "Keyword"),
+	PreviewDelta UMETA(DisplayName = "Preview Delta"),
+	Muted UMETA(DisplayName = "Muted")
 };
 
 UENUM(BlueprintType)
@@ -30,16 +33,20 @@ enum class EWacomCardDetailIcon : uint8
 	Draw UMETA(DisplayName = "Draw"),
 	Discard UMETA(DisplayName = "Discard"),
 	Exhaust UMETA(DisplayName = "Exhaust"),
+	Slow UMETA(DisplayName = "Slow"),
+	Freeze UMETA(DisplayName = "Freeze"),
+	Twilight UMETA(DisplayName = "Twilight"),
 	Keyword UMETA(DisplayName = "Keyword")
 };
 
 UENUM(BlueprintType)
-enum class EWacomCardDetailTokenLineKind : uint8
+enum class EWacomCardDetailBlockKind : uint8
 {
-	Effect UMETA(DisplayName = "Effect"),
-	Passive UMETA(DisplayName = "Passive"),
-	Change UMETA(DisplayName = "Change"),
-	Description UMETA(DisplayName = "Description"),
+	Paragraph UMETA(DisplayName = "Paragraph"),
+	EffectSentence UMETA(DisplayName = "Effect Sentence"),
+	PassiveTrigger UMETA(DisplayName = "Passive Trigger"),
+	PassiveEffect UMETA(DisplayName = "Passive Effect"),
+	Warning UMETA(DisplayName = "Warning"),
 	Flavor UMETA(DisplayName = "Flavor")
 };
 
@@ -54,13 +61,13 @@ enum class EWacomCardDetailSectionKind : uint8
 };
 
 /**
- * One semantic run inside a card detail line.
+ * One semantic run inside a card detail block.
  *
- * First-pass fallback renders these tokens as text. Later WBP/RichText work can
- * map Icon/Number tokens to inline images, highlights, and animations by StableId.
+ * Runs are UI-only explanation facts. Renderers decide whether they become
+ * rich text markup, fallback plain text, inline images, or tooltip anchors.
  */
 USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomCardDetailToken
+struct WACOMAPP_API FWacomCardDetailRun
 {
 	GENERATED_BODY()
 
@@ -68,13 +75,19 @@ struct WACOMAPP_API FWacomCardDetailToken
 	FName StableId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	EWacomCardDetailTokenKind Kind = EWacomCardDetailTokenKind::Text;
+	EWacomCardDetailRunKind Kind = EWacomCardDetailRunKind::Text;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	FText Text;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FName SlotName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	EWacomCardDetailIcon Icon = EWacomCardDetailIcon::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FGameplayTag Tag;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	int32 Value = 0;
@@ -96,18 +109,21 @@ struct WACOMAPP_API FWacomCardDetailToken
 };
 
 USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomCardDetailTokenLine
+struct WACOMAPP_API FWacomCardDetailBlock
 {
 	GENERATED_BODY()
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	FName LineId;
+	FName BlockId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	EWacomCardDetailTokenLineKind Kind = EWacomCardDetailTokenLineKind::Effect;
+	EWacomCardDetailBlockKind Kind = EWacomCardDetailBlockKind::Paragraph;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	TArray<FWacomCardDetailToken> Tokens;
+	TArray<FWacomCardDetailRun> Runs;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	bool bSkipped = false;
 };
 
 USTRUCT(BlueprintType)
@@ -125,7 +141,7 @@ struct WACOMAPP_API FWacomCardDetailSection
 	FText Title;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
-	TArray<FWacomCardDetailTokenLine> TokenLines;
+	TArray<FWacomCardDetailBlock> Blocks;
 };
 
 /**

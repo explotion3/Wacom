@@ -67,22 +67,22 @@ namespace
 		Test.TestEqual(TEXT("Badge value"), Badges[Index].Value, ExpectedValue);
 	}
 
-	bool HasDetailNumberToken(
+	bool HasDetailValueRun(
 		const FWacomCardDetailViewData& DetailData,
 		int32 ExpectedValue,
 		int32 ExpectedPreviewValue)
 	{
 		for (const FWacomCardDetailSection& Section : DetailData.Sections)
 		{
-			for (const FWacomCardDetailTokenLine& Line : Section.TokenLines)
+			for (const FWacomCardDetailBlock& Block : Section.Blocks)
 			{
-				for (const FWacomCardDetailToken& Token : Line.Tokens)
+				for (const FWacomCardDetailRun& Run : Block.Runs)
 				{
-					if (Token.Kind == EWacomCardDetailTokenKind::Number
-						&& Token.bHasValue
-						&& Token.Value == ExpectedValue
-						&& Token.bHasPreviewValue
-						&& Token.PreviewValue == ExpectedPreviewValue)
+					if (Run.Kind == EWacomCardDetailRunKind::Value
+						&& Run.bHasValue
+						&& Run.Value == ExpectedValue
+						&& Run.bHasPreviewValue
+						&& Run.PreviewValue == ExpectedPreviewValue)
 					{
 						return true;
 					}
@@ -92,19 +92,19 @@ namespace
 		return false;
 	}
 
-	bool HasSkippedDetailIconToken(
+	bool HasSkippedDetailStatusRun(
 		const FWacomCardDetailViewData& DetailData,
-		EWacomCardDetailIcon ExpectedIcon)
+		const FGameplayTag& ExpectedStatusTag)
 	{
 		for (const FWacomCardDetailSection& Section : DetailData.Sections)
 		{
-			for (const FWacomCardDetailTokenLine& Line : Section.TokenLines)
+			for (const FWacomCardDetailBlock& Block : Section.Blocks)
 			{
-				for (const FWacomCardDetailToken& Token : Line.Tokens)
+				for (const FWacomCardDetailRun& Run : Block.Runs)
 				{
-					if (Token.Kind == EWacomCardDetailTokenKind::Icon
-						&& Token.Icon == ExpectedIcon
-						&& Token.bSkipped)
+					if (Run.Kind == EWacomCardDetailRunKind::Status
+						&& Run.Tag.MatchesTagExact(ExpectedStatusTag)
+						&& (Run.bSkipped || Block.bSkipped))
 					{
 						return true;
 					}
@@ -163,16 +163,16 @@ bool FWacomUICardPresentationRuntimeContextSpec::RunTest(const FString& /*Parame
 	Card->Description = FText::GetEmpty();
 	const FWacomCardDetailViewData RuntimeDetail =
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get(), RuntimeContext);
-	TestTrue(TEXT("Runtime detail emits section token lines"), RuntimeDetail.Sections.Num() > 0);
+	TestTrue(TEXT("Runtime detail emits semantic sections"), RuntimeDetail.Sections.Num() > 0);
 
 	const FWacomCardDetailViewData PreviewDetail =
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get(), PreviewContext);
-	TestTrue(TEXT("Preview detail token records damage override"),
-		HasDetailNumberToken(PreviewDetail, 5, 9));
-	TestTrue(TEXT("Preview detail token marks skipped poison"),
-		HasSkippedDetailIconToken(PreviewDetail, EWacomCardDetailIcon::Poison));
-	TestTrue(TEXT("Preview detail token records shield override"),
-		HasDetailNumberToken(PreviewDetail, 6, 12));
+	TestTrue(TEXT("Preview detail run records damage override"),
+		HasDetailValueRun(PreviewDetail, 5, 9));
+	TestTrue(TEXT("Preview detail run marks skipped poison status"),
+		HasSkippedDetailStatusRun(PreviewDetail, WacomTags::Status_Poison));
+	TestTrue(TEXT("Preview detail run records shield override"),
+		HasDetailValueRun(PreviewDetail, 6, 12));
 
 	return true;
 }

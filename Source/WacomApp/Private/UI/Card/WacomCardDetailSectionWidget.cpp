@@ -3,43 +3,38 @@
 #include "UI/Card/WacomCardDetailSectionWidget.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "CommonTextBlock.h"
 #include "Components/Border.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
-#include "UI/Card/WacomCardDetailTokenFlowWidget.h"
-#include "UI/Card/WacomCardDetailWidgetFactory.h"
+#include "UI/Card/WacomCardDetailRichTextBlock.h"
+#include "UI/Card/WacomCardDetailTheme.h"
+#include "UI/Foundation/WacomUIDeveloperSettings.h"
 
 namespace
 {
-	UTextBlock* MakeSectionText(UWidgetTree* WidgetTree, const FName Name, const FText& Text, int32 FontSize, const FLinearColor& Color)
+	UTextBlock* MakeSectionTitleText(
+		UWidgetTree* WidgetTree,
+		const FName Name,
+		const FText& Text)
 	{
 		UTextBlock* TextBlock = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
 		TextBlock->SetText(Text);
 		TextBlock->SetAutoWrapText(true);
-		TextBlock->SetColorAndOpacity(FSlateColor(Color));
+		TextBlock->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.82f, 1.f, 1.f)));
 		FSlateFontInfo Font = TextBlock->GetFont();
-		Font.Size = FontSize;
+		Font.Size = 13;
 		TextBlock->SetFont(Font);
 		return TextBlock;
 	}
 }
 
-UWacomCardDetailSectionWidget::UWacomCardDetailSectionWidget(const FObjectInitializer& ObjectInitializer)
+UWacomCardDetailSectionWidget::UWacomCardDetailSectionWidget(
+	const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	if (UClass* Loaded = LoadObject<UClass>(
-		nullptr,
-		TEXT("/Game/Wacom/UI/Card/WBP_CardDetailTokenFlow.WBP_CardDetailTokenFlow_C"));
-		Loaded && Loaded->IsChildOf(UWacomCardDetailTokenFlowWidget::StaticClass()))
-	{
-		TokenFlowWidgetClass = Loaded;
-	}
-	else
-	{
-		TokenFlowWidgetClass = UWacomCardDetailTokenFlowWidget::StaticClass();
-	}
 }
 
 TSharedRef<SWidget> UWacomCardDetailSectionWidget::RebuildWidget()
@@ -59,12 +54,7 @@ TSharedRef<SWidget> UWacomCardDetailSectionWidget::RebuildWidget()
 		UVerticalBox* RootBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("CardDetailSectionContent"));
 		RootBorder->AddChild(RootBox);
 
-		TitleText = MakeSectionText(
-			WidgetTree,
-			TEXT("TitleText"),
-			FText::GetEmpty(),
-			13,
-			FLinearColor(0.75f, 0.82f, 1.f, 1.f));
+		TitleText = MakeSectionTitleText(WidgetTree, TEXT("TitleText"), FText::GetEmpty());
 		if (UVerticalBoxSlot* TitleSlot = RootBox->AddChildToVerticalBox(TitleText))
 		{
 			TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 5.f));
@@ -72,6 +62,15 @@ TSharedRef<SWidget> UWacomCardDetailSectionWidget::RebuildWidget()
 
 		LinesBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("LinesBox"));
 		RootBox->AddChildToVerticalBox(LinesBox);
+
+		BodyText = WidgetTree->ConstructWidget<UWacomCardDetailRichTextBlock>(
+			UWacomCardDetailRichTextBlock::StaticClass(),
+			TEXT("BodyText"));
+		BodyText->SetAutoWrapText(true);
+		if (UVerticalBoxSlot* BodySlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(BodyText)))
+		{
+			BodySlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+		}
 	}
 
 	return Super::RebuildWidget();
@@ -83,7 +82,8 @@ void UWacomCardDetailSectionWidget::NativeConstruct()
 	ApplyCurrentDataToWidgets();
 }
 
-void UWacomCardDetailSectionWidget::SetSectionData(const FWacomCardDetailSectionData& InData)
+void UWacomCardDetailSectionWidget::SetSectionData(
+	const FWacomCardDetailSectionData& InData)
 {
 	CurrentData = InData;
 	ApplyCurrentDataToWidgets();
@@ -93,110 +93,67 @@ void UWacomCardDetailSectionWidget::ApplyCurrentDataToWidgets()
 {
 	if (TitleText)
 	{
+		if (const UWacomCardDetailTheme* Theme = ResolveTheme())
+		{
+			if (UCommonTextBlock* CommonTitleText = Cast<UCommonTextBlock>(TitleText))
+			{
+				CommonTitleText->SetStyle(Theme->TitleTextStyle);
+			}
+		}
 		TitleText->SetText(CurrentData.Title);
 		TitleText->SetVisibility(CurrentData.Title.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
 
-	if (TokenFlowWidget)
+	UWacomCardDetailRichTextBlock* EffectiveBodyText = EnsureBodyTextWidget();
+	if (EffectiveBodyText)
 	{
-		TokenFlowWidget->SetTokenLinesData(TArray<FWacomCardDetailTokenLine>());
-		TokenFlowWidget->SetVisibility(ESlateVisibility::Collapsed);
+		EffectiveBodyText->SetCardDetailRichText(CurrentData.RichText, ResolveTheme());
+		EffectiveBodyText->SetVisibility(CurrentData.RichText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
 
-	bool bHasTextLines = false;
 	if (LinesBox)
 	{
-		for (int32 ChildIndex = LinesBox->GetChildrenCount() - 1; ChildIndex >= 0; --ChildIndex)
-		{
-			if (LinesBox->GetChildAt(ChildIndex) == TokenFlowWidget)
-			{
-				continue;
-			}
-			LinesBox->RemoveChildAt(ChildIndex);
-		}
-
-		for (int32 Index = 0; Index < CurrentData.Lines.Num(); ++Index)
-		{
-			const FText& Line = CurrentData.Lines[Index];
-			if (Line.IsEmpty())
-			{
-				continue;
-			}
-
-			UTextBlock* LineText = MakeSectionText(
-				WidgetTree,
-				FName(*FString::Printf(TEXT("SectionLine_%d_%d"), GetUniqueID(), Index)),
-				Line,
-				12,
-				FLinearColor(0.92f, 0.9f, 0.84f, 1.f));
-			if (UVerticalBoxSlot* LineSlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(LineText)))
-			{
-				LineSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
-			}
-			bHasTextLines = true;
-		}
-	}
-
-	ApplyTokenLinesToWidgets();
-	const bool bHasTokenFlow = TokenFlowWidget && TokenFlowWidget->GetVisibility() != ESlateVisibility::Collapsed;
-	if (LinesBox)
-	{
-		LinesBox->SetVisibility(
-			bHasTextLines || bHasTokenFlow
-				? ESlateVisibility::HitTestInvisible
-				: ESlateVisibility::Collapsed);
+		LinesBox->SetVisibility(CurrentData.RichText.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
 }
 
-void UWacomCardDetailSectionWidget::ApplyTokenLinesToWidgets()
+UWacomCardDetailRichTextBlock* UWacomCardDetailSectionWidget::EnsureBodyTextWidget()
 {
-	if (CurrentData.TokenLines.IsEmpty())
+	if (BodyText)
 	{
-		return;
+		return BodyText;
 	}
 
-	UWacomCardDetailTokenFlowWidget* FlowWidget = EnsureTokenFlowWidget();
-	if (!FlowWidget)
+	if (!WidgetTree)
 	{
-		return;
+		return nullptr;
 	}
 
-	const bool bHasDesignerParent = FlowWidget->GetParent() != nullptr;
-	const bool bCanAttachFallbackFlow = LinesBox != nullptr;
-	if (!bHasDesignerParent && !bCanAttachFallbackFlow)
-	{
-		FlowWidget->SetVisibility(ESlateVisibility::Collapsed);
-		return;
-	}
+	BodyText = WidgetTree->ConstructWidget<UWacomCardDetailRichTextBlock>(
+		UWacomCardDetailRichTextBlock::StaticClass(),
+		TEXT("BodyText"));
+	BodyText->SetAutoWrapText(true);
 
-	FlowWidget->SetTokenLinesData(CurrentData.TokenLines);
-	if (FlowWidget->GetVisibility() == ESlateVisibility::Collapsed)
+	if (LinesBox)
 	{
-		return;
-	}
-
-	if (!bHasDesignerParent && LinesBox)
-	{
-		if (UVerticalBoxSlot* FlowSlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(FlowWidget)))
+		if (UVerticalBoxSlot* BodySlot = Cast<UVerticalBoxSlot>(LinesBox->AddChild(BodyText)))
 		{
-			FlowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
+			BodySlot->SetPadding(FMargin(0.f, 0.f, 0.f, 3.f));
 		}
 	}
+
+	return BodyText;
 }
 
-UWacomCardDetailTokenFlowWidget* UWacomCardDetailSectionWidget::EnsureTokenFlowWidget()
+const UWacomCardDetailTheme* UWacomCardDetailSectionWidget::ResolveTheme() const
 {
-	if (TokenFlowWidget)
+	if (CardDetailTheme)
 	{
-		return TokenFlowWidget;
+		return CardDetailTheme;
 	}
 
-	UClass* WidgetClass = TokenFlowWidgetClass
-		? TokenFlowWidgetClass.Get()
-		: UWacomCardDetailTokenFlowWidget::StaticClass();
-	TokenFlowWidget =
-		WacomCardDetailWidgetFactory::CreateChildUserWidget<UWacomCardDetailTokenFlowWidget>(
-			*this,
-			WidgetClass);
-	return TokenFlowWidget;
+	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
+	return Settings && !Settings->CardDetailTheme.IsNull()
+		? Settings->CardDetailTheme.LoadSynchronous()
+		: nullptr;
 }
