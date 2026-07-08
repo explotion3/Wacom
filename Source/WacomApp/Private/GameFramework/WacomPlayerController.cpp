@@ -496,11 +496,7 @@ void AWacomPlayerController::RegisterActiveGameMenuWidget(UWacomMenuWidgetBase* 
 	}
 
 	bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
-	ActiveGameMenuWidgets.RemoveAll(
-		[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Existing)
-		{
-			return !Existing.IsValid();
-		});
+	CompactActiveGameMenuWidgets();
 
 	if (!ActiveGameMenuWidgets.Contains(MenuWidget))
 	{
@@ -520,11 +516,7 @@ void AWacomPlayerController::UnregisterActiveGameMenuWidget(UWacomMenuWidgetBase
 		&& (GameMenuViewpointReturnWidget.Get() == MenuWidget
 			|| !GameMenuViewpointReturnWidget.IsValid());
 
-	ActiveGameMenuWidgets.RemoveAll(
-		[MenuWidget](const TWeakObjectPtr<UWacomMenuWidgetBase>& Existing)
-		{
-			return !Existing.IsValid() || Existing.Get() == MenuWidget;
-		});
+	RemoveActiveGameMenuWidget(MenuWidget);
 
 	if (bTrackedGameMenuViewpointMenuClosing)
 	{
@@ -534,7 +526,7 @@ void AWacomPlayerController::UnregisterActiveGameMenuWidget(UWacomMenuWidgetBase
 
 	RefreshRunFirstPersonCardLayerMenuSuppression();
 
-	if (!bTrackedGameMenuViewpointMenuClosing || ActiveGameMenuWidgets.Num() > 0)
+	if (!bTrackedGameMenuViewpointMenuClosing || HasAnyActiveGameMenuWidget())
 	{
 		return;
 	}
@@ -597,11 +589,7 @@ bool AWacomPlayerController::TryProbeRunMenuDropTargetAtWidgetPosition(
 
 void AWacomPlayerController::RefreshRunFirstPersonCardLayerMenuSuppression()
 {
-	ActiveGameMenuWidgets.RemoveAll(
-		[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Existing)
-		{
-			return !Existing.IsValid();
-		});
+	CompactActiveGameMenuWidgets();
 
 	const bool bShouldSuppress = HasActiveRunGameMenuOrTransitionSuppression();
 	SetRunFirstPersonCardLayerSuppressedByGameMenu(bShouldSuppress);
@@ -617,14 +605,37 @@ void AWacomPlayerController::RefreshRunFirstPersonCardLayerMenuSuppression()
 	RefreshRunFirstPersonMenuLeaseDragBinding();
 }
 
+void AWacomPlayerController::CompactActiveGameMenuWidgets()
+{
+	ActiveGameMenuWidgets.RemoveAll(
+		[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Existing)
+		{
+			return !Existing.IsValid();
+		});
+}
+
+void AWacomPlayerController::RemoveActiveGameMenuWidget(UWacomMenuWidgetBase* MenuWidget)
+{
+	ActiveGameMenuWidgets.RemoveAll(
+		[MenuWidget](const TWeakObjectPtr<UWacomMenuWidgetBase>& Existing)
+		{
+			return !Existing.IsValid() || Existing.Get() == MenuWidget;
+		});
+}
+
+bool AWacomPlayerController::HasAnyActiveGameMenuWidget() const
+{
+	return ActiveGameMenuWidgets.ContainsByPredicate(
+		[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
+		{
+			return Menu.IsValid();
+		});
+}
+
 bool AWacomPlayerController::HasActiveRunGameMenuOrTransitionSuppression() const
 {
 	return bRunFirstPersonCardLayerTransitionSuppressedByGameMenu
-		|| ActiveGameMenuWidgets.ContainsByPredicate(
-			[](const TWeakObjectPtr<UWacomMenuWidgetBase>& Menu)
-			{
-				return Menu.IsValid();
-			});
+		|| HasAnyActiveGameMenuWidget();
 }
 
 FWacomRunFirstPersonCardDetailController&

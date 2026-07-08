@@ -422,6 +422,9 @@ private:
 		const FWacomInteractionTargetHandle& Handle) const;
 	void ClearRunWorldCardDropProbe();
 	void RefreshRunFirstPersonCardLayerMenuSuppression();
+	void CompactActiveGameMenuWidgets();
+	void RemoveActiveGameMenuWidget(UWacomMenuWidgetBase* MenuWidget);
+	bool HasAnyActiveGameMenuWidget() const;
 	bool HasActiveRunGameMenuOrTransitionSuppression() const;
 	void FinishGameMenuViewpointStageTransition();
 	FWacomRunFirstPersonCardDetailController& GetRunFirstPersonCardDetailController();
