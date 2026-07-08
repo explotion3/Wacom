@@ -21,7 +21,7 @@ class UBattleSession;
  *    蓝图子类可以 override BP_OnRefreshedFromSnapshot 做额外表现逻辑。
  *
  * 2. Session 注入：SetInjectedBattleSession / GetInjectedBattleSession 是 C++ owner 正式入口。
- *    SetSession / GetSession 仅作为 legacy WBP 兼容面。
+ *    SetSession / GetSession 仅作为 legacy C++ 兼容 wrapper，不暴露给 Blueprint。
  *    普通 WBP 制作应只消费 Snapshot / ViewData，并把玩家意图回传 HUD；
  *    不应从 Widget 直接读取 UBattleSession 或调用战斗规则命令。
  *
@@ -45,13 +45,11 @@ public:
 	UBattleSession* GetInjectedBattleSession() const { return Session; }
 
 	/**
-	 * 旧 WBP 兼容入口。
+	 * 旧 C++ 兼容入口。
 	 * 正式 C++ 路径请使用 SetInjectedBattleSession，正式 WBP 只消费 Snapshot / ViewData。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Widget Session", meta = (BlueprintInternalUseOnly = "true", DeprecatedFunction, DeprecationMessage = "SetSession 是旧 WBP 兼容入口。正式 C++ 注入请用 SetInjectedBattleSession；正式 WBP 不应持有或注入 UBattleSession，请只消费 Snapshot / ViewData。", ToolTip = "旧 WBP 兼容入口。正式 C++ 请使用 SetInjectedBattleSession；正式 WBP 不应直接持有或注入 BattleSession。"))
 	void SetSession(UBattleSession* InSession);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Widget Session", meta = (BlueprintInternalUseOnly = "true", DeprecatedFunction, DeprecationMessage = "GetSession 是旧 WBP 兼容入口。正式 Battle Widget 应消费 Snapshot / ViewData，并通过 BattleHUD 命令入口回传玩家意图，不要直接读取 UBattleSession。", ToolTip = "当前注入到该 Battle Widget 的 UBattleSession。旧 WBP 兼容入口；正式 Widget 请改用 Snapshot / ViewData。"))
 	UBattleSession* GetSession() const { return GetInjectedBattleSession(); }
 
 	// ---- Snapshot 刷新 ----
