@@ -27,7 +27,7 @@ tags:
 |---|---|---|
 | `Status.Slow` 减速数值效果 | 当前状态事实见 [WacomBattle.md](./WacomBattle.md)，待确认公式见 [Questions](./Questions.md#questions-status) | 等减速公式确认后接入 Initiative / Cost 相关结算 |
 | `Status.Twilight` 暮气数值效果 | 当前状态事实见 [WacomBattle.md](./WacomBattle.md)，待确认公式见 [Questions](./Questions.md#questions-status) | 等暮气归属、触发点和数值公式确认后实现 |
-| 暮蛉 `OnTwilightTriggered` | 当前被动触发事实见 [WacomBattle.md](./WacomBattle.md) | 引入运行时效果数值修正机制，让中毒卡牌效果可被实际修正 |
+| 暮蛉 `OnTwilightTriggered` | 当前被动只发触发事件，详情系统不会把旧 DisplayText 中的“中毒卡牌效果 +1”写成已实现结果 | 引入运行时效果数值修正机制，让中毒卡牌效果可被实际修正；规则落地后再补对应 passive outcome / effect 展示 |
 | `FCardPhysique::Durability` | 字段入口见 [WacomData.md](./WacomData.md) | 等耐久系统正式设计后接入；暮色引虫灯是首个需求样例 |
 | 左手主动效果 / 完美释放效果 | 左手 `Effects` / `PerfectReleaseEffects` 仍为空 | 等具体卡牌设计后补效果配置和必要执行器 |
 | 右手“相邻右方伙伴代打” | 未实现 | 依赖 `Target.Adjacent.Right` 的 Target 解析和 Executor 分支 |

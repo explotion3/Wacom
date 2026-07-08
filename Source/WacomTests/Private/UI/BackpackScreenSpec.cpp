@@ -1073,6 +1073,9 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 	TestTrue(TEXT("Passive section uses trigger template"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Passive)
 			.Contains(TEXT("每打出 3 张伙伴：")));
+	TestTrue(TEXT("Passive section uses trigger outcome template"),
+		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Passive)
+			.Contains(TEXT("使此牌回到手中。")));
 
 	return true;
 }
@@ -1103,6 +1106,7 @@ bool FWacomUIBackpackCardDetailPassiveFallbackSpec::RunTest(const FString& /*Par
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Passive);
 	TestTrue(TEXT("Fallback passive section contains threshold"), PassiveSectionText.Contains(TEXT("3")));
 	TestTrue(TEXT("Fallback passive section contains companion"), PassiveSectionText.Contains(TEXT("伙伴")));
+	TestTrue(TEXT("Fallback passive section contains outcome"), PassiveSectionText.Contains(TEXT("使此牌回到手中。")));
 
 	return true;
 }
@@ -1351,9 +1355,14 @@ bool FWacomUIBackpackDisabledDeckCardBlocksDragAndToggleButKeepsHoverSpec::RunTe
 	FCardInstance Inst;
 	Inst.InstanceId = FGuid::NewGuid();
 	Inst.Definition = Card.Get();
-	Widget->SetCard(Inst, EZoneKind::SpecialZone, FGuid::NewGuid());
+
+	FRunStorageCardView View;
+	View.Instance = Inst;
+	View.PhysicalZone = EZoneKind::SpecialZone;
+	View.ZoneOwnerInstanceId = FGuid::NewGuid();
+	View.bCanToggleBattleEnabledInSpecialZone = true;
+	Widget->SetStorageCardView(View);
 	Widget->SetMoveEnabled(false);
-	Widget->SetRightClickToggleEnabled(true);
 
 	int32 HoverCount = 0;
 	int32 ToggleCount = 0;

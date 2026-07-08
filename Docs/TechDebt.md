@@ -66,7 +66,6 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | Backpack UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper；缺席的嵌套 SpecialZone WBP 会静默回 C++ `UWacomSpecialZoneWidget`，不再作为硬路径加载；视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen`、局部 Zone WBP 和可选 `WBP_WacomSpecialZoneWidget` 替换视觉 |
 | Backpack / Shop 长列表 | Backpack / SpecialZone / Shop 已有 revision gate、signature dirty gate 和 identity reconcile；Backpack 的 snapshot refresh gate、普通卡列表 reconcile 和 SpecialZone section reconcile 已抽到 App-private helper，Shop 的 snapshot / offer dirty gate 和 offer row reconcile 已抽到 App-private helper，但列表仍是 WrapBox / VerticalBox | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
 | 像素风 UI 分辨率适配 | 背包卡牌等像素图控件依赖固定 SizeBox 和 `DPI Scale = 1.0`；非整数 DPI 缩放会导致像素点显示不均匀 | 统一设计像素安全缩放档位，并配合 WrapBox / ScrollBox 做布局重排 |
-| DeckCard 右键 toggle setter | 生产链路已改为 `FRunStorageCardView` 驱动右键入战 affordance，但 `UWacomDeckCardWidget::SetRightClickToggleEnabled()` 仍作为 public C++ setter 保留，后续新代码可能绕开 ViewData | 审计剩余测试 / legacy 调用后，将生产入口收窄到 `SetStorageCardView()`，把直接 setter 降为 private/internal 或 tests-only wrapper |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
 | AppToast C++ fallback 表现 | 未配置 settings 时仍使用文字 fallback；viewport 创建已受真实本地玩家 / `LocalPlayer` 条件保护，离屏自动化注入 Widget 不进入 viewport | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
 | PrimaryLayout 固定路径 fallback | PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |
@@ -141,7 +140,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Card detail `ChangeLines` legacy text path 已清理：`FWacomCardDetailViewData` 不再暴露未渲染的变化文本字段，Battle target preview 文本旁路也已移除；费用和目标预览表现应走卡面数值、`EffectPreviews` 或正式 `Sections` semantic document。
 - Card detail `PassiveLines` legacy mirror 已清理：被动正文只通过正式 `Sections` / explanation blocks 承载，`Passive.DisplayText` fallback 不再生成平行纯文本字段，也不再作为详情面板输入。
 - Card detail `TaskLines` 与扁平 `TokenLines` legacy mirror 已清理：`FWacomCardDetailViewData` 的正式详情文档只保留 `Sections`，后续任务、预览或风味文本应新增正式 section，而不是维护平行数组镜像。
-- Card detail `Description` legacy mirror 已清理：`FWacomCardDetailViewData` 不再暴露平行纯文本正文或 `UWacomCardDetailPanel::GetDescriptionText()`；`UCardDefinition::Description` 只保留为小卡 / 其它旧 UI 可用字段，不再进入详情面板。
+- Card detail `Description` legacy mirror 已清理：`FWacomCardDetailViewData` 不再暴露平行纯文本正文或 `UWacomCardDetailPanel::GetDescriptionText()`；`UCardDefinition::Description` 只在没有任何结构化详情 section 时作为普通正文回退，不解析旧占位，也不重新成为规则说明入口。
 - Card detail explanation system 已收口：`UWacomCardPresentationBuilder` 保留为 public / Blueprint facade，`WacomCardDetailDocumentBuilder` 负责详情 `Sections` 组装，`WacomCardExplanationCompiler` 负责 block / section 组装，`WacomCardExplanationTemplateResolver` 负责词典模板选择与 fallback 模板，`WacomCardExplanationTemplateRenderer` 负责 typed slot 到 runs 的转换，Widget 不承载 Description / Passive / Effect 分区逻辑。
 - Card detail MagnitudeModifiers 展示已收口：`FCardEffect.MagnitudeModifiers` 由 App-private explanation helper 生成静态条件 / 数值修正说明；最终数值仍只来自 Battle preview facts 或静态字段，Widget / UI builder 不执行规则判断。
 - Card explanation lexicon 读取已收口：`WacomCardExplanationLexiconProvider` 负责从 UI Settings 读取 `CardExplanationLexicon` 并按软对象路径缓存已加载资产，`WacomCardDetailDocumentBuilder` 不再每次详情构建时直接同步加载 settings asset。
@@ -156,6 +155,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Run world target handle 接受条件已收口：`FWacomRunWorldInteractionRouter` 的 cursor probe 和 widget-position probe 共用 `IsAcceptedRunWorldTargetHandle()`，避免 Run world click / hover 与 card-drop probe 对 `TargetKind / TargetTag / WorldTargetId` 的判断漂移。
 - Backpack 删牌区 DropTarget 的规则 helper 已收口：删牌 request instance 解析、奖励文案和失败文案由 `FWacomBackpackCommandFlow` / `UWacomBackpackScreen` automation access 承接，`UWacomDeleteZoneDropTarget` 只维护 drag/drop UI 状态并转发意图。
 - SpecialZone 入战 toggle 规则和 affordance 已收口：`ValidateSetSpecialZoneCardBattleEnabled()` / `ValidateToggleSpecialZoneCardBattleEnabled()` 通过 `FRunDeckOperationValidation.DisabledReason` 暴露 `CardNotFound / NotInSpecialZone` 等稳定 reason，`FRunStorageCardView` 显式携带右键入战和角标 ViewData，App command flow 只提交 toggle 意图并做 Toast 呈现，不再用 `FindInstance()` 或列表来源自行推断规则失败 / affordance。
+- DeckCard 右键 toggle setter public 面已收口：生产和测试入口都通过 `SetStorageCardView(FRunStorageCardView)` 表达右键入战 affordance，`SetRightClickToggleEnabled()` 只作为 `UWacomDeckCardWidget` 私有实现细节保留。
 - RunEvent 普通选项提交权威已收口：`FWacomRunEventScreenFlow::ChooseChoice` 不再用 cached `FRunEventChoiceSnapshot::bAvailable` 作为提交前 veto，普通点击始终调用 `URunSession::ChooseRunEventOptionWithResult()` 并消费 `FRunEventChoiceResult`。
 - Run Deck 移动事务已收口：`URunSession::MoveInstance()` 不再手写源/目标 zone mutation，已通过校验后的物理区移动、SpecialZone battle flag 清理、B 主卡 entry 保底和负重重算由 `FRunDeckRules::MoveInstance()` 统一承接；显式移动到负重区会刷新负重压力但不立即回填该卡。
 - Run Deck 操作失败 reason contract 已收口：`FRunDeckOperationValidation.DisabledReason` 仍保持 `FName` 兼容面，但生产代码通过 `WacomRunDeckOperationReasons` 获取 deck 原始失败码，RunEvent / UI 可在各自语境内翻译展示文案，不再依赖散落字符串拼写。

@@ -47,7 +47,8 @@ enum class EWacomCardDetailBlockKind : uint8
 	PassiveTrigger UMETA(DisplayName = "Passive Trigger"),
 	PassiveEffect UMETA(DisplayName = "Passive Effect"),
 	Warning UMETA(DisplayName = "Warning"),
-	Flavor UMETA(DisplayName = "Flavor")
+	Flavor UMETA(DisplayName = "Flavor"),
+	PassiveOutcome UMETA(DisplayName = "Passive Outcome")
 };
 
 UENUM(BlueprintType)
@@ -82,6 +83,15 @@ struct WACOMAPP_API FWacomCardDetailRun
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	FName SlotName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FGameplayTag ValueSourceTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	FText ValueSourceText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
+	bool bHasValueSourceText = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardDetail")
 	EWacomCardDetailIcon Icon = EWacomCardDetailIcon::None;

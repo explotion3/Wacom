@@ -3,6 +3,7 @@
 #include "WacomCardExplanationText.h"
 
 #include "Tags/WacomGameplayTags.h"
+#include "UI/Card/WacomCardExplanationLexicon.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardExplanationText"
 
@@ -16,8 +17,27 @@ namespace WacomCardExplanationText
 		return DotIndex == INDEX_NONE ? TagText : TagText.Mid(DotIndex + 1);
 	}
 
-	FText GetDisplayHandZoneName(const FGameplayTag& HandZoneTag)
+	FText GetDisplayTagName(
+		const FGameplayTag& Tag,
+		const UWacomCardExplanationLexicon* Lexicon)
 	{
+		FText DisplayName;
+		if (Lexicon && Lexicon->FindTagDisplayName(Tag, DisplayName))
+		{
+			return DisplayName;
+		}
+		return FText::FromString(GetDisplayTagLeafName(Tag));
+	}
+
+	FText GetDisplayHandZoneName(
+		const FGameplayTag& HandZoneTag,
+		const UWacomCardExplanationLexicon* Lexicon)
+	{
+		FText DisplayName;
+		if (Lexicon && Lexicon->FindTagDisplayName(HandZoneTag, DisplayName))
+		{
+			return DisplayName;
+		}
 		if (HandZoneTag.MatchesTagExact(WacomTags::HandZone_Left))
 		{
 			return LOCTEXT("HandZoneLeft", "左手区");
@@ -33,8 +53,15 @@ namespace WacomCardExplanationText
 		return FText::FromString(GetDisplayTagLeafName(HandZoneTag));
 	}
 
-	FText GetDisplayStatusName(const FGameplayTag& StatusTag)
+	FText GetDisplayStatusName(
+		const FGameplayTag& StatusTag,
+		const UWacomCardExplanationLexicon* Lexicon)
 	{
+		FText DisplayName;
+		if (Lexicon && Lexicon->FindTagDisplayName(StatusTag, DisplayName))
+		{
+			return DisplayName;
+		}
 		if (StatusTag.MatchesTagExact(WacomTags::Status_Poison))
 		{
 			return LOCTEXT("StatusPoison", "中毒");
@@ -60,6 +87,24 @@ namespace WacomCardExplanationText
 			return LOCTEXT("StatusShield", "护盾");
 		}
 		return FText::FromString(GetDisplayTagLeafName(StatusTag));
+	}
+
+	FText ResolveNamedText(
+		const UWacomCardExplanationLexicon* Lexicon,
+		FName Key,
+		const FText& Fallback)
+	{
+		FText Text;
+		return Lexicon && Lexicon->FindNamedText(Key, Text) ? Text : Fallback;
+	}
+
+	FText FormatNamedText(
+		const UWacomCardExplanationLexicon* Lexicon,
+		FName Key,
+		const FText& Fallback,
+		const FFormatOrderedArguments& Arguments)
+	{
+		return FText::Format(ResolveNamedText(Lexicon, Key, Fallback), Arguments);
 	}
 }
 

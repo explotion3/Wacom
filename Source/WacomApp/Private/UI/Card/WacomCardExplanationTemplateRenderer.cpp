@@ -6,6 +6,7 @@
 #include "Cards/CardEffect.h"
 #include "Cards/CardPassive.h"
 #include "Tags/WacomGameplayTags.h"
+#include "UI/Card/WacomCardExplanationLexicon.h"
 #include "WacomCardExplanationText.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardExplanationTemplateRenderer"
@@ -34,6 +35,60 @@ namespace WacomCardExplanationTemplateRenderer
 				return Card ? Card->BaseCost : Effect.Magnitude;
 			}
 			return Effect.Magnitude;
+		}
+
+		FGameplayTag ResolveMagnitudeSourceTag(const FCardEffect& Effect)
+		{
+			if (Effect.MagnitudeSource.IsValid())
+			{
+				return Effect.MagnitudeSource;
+			}
+			if (Effect.bMagnitudeFromRuntimeCost)
+			{
+				return WacomTags::Magnitude_Source_RuntimeCost;
+			}
+			return FGameplayTag();
+		}
+
+		FText ResolveMagnitudeSourceText(
+			const FCardEffect& Effect,
+			const UWacomCardExplanationLexicon* Lexicon)
+		{
+			const FGameplayTag SourceTag = ResolveMagnitudeSourceTag(Effect);
+			if (!SourceTag.IsValid() || SourceTag.MatchesTagExact(WacomTags::Magnitude_Source_Literal))
+			{
+				return FText::GetEmpty();
+			}
+
+			FText Template;
+			FWacomCardExplanationTemplateEntry Entry;
+			if (Lexicon && Lexicon->FindMagnitudeSourceTemplate(SourceTag, Entry))
+			{
+				Template = Entry.Template;
+			}
+			else if (SourceTag.MatchesTagExact(WacomTags::Magnitude_Source_RuntimeCost))
+			{
+				Template = LOCTEXT("MagnitudeSourceRuntimeCostFallback", "相当于当前费用");
+			}
+			else if (SourceTag.MatchesTagExact(WacomTags::Magnitude_Source_TargetStatusStacks))
+			{
+				Template = LOCTEXT("MagnitudeSourceTargetStatusStacksFallback", "相当于目标{Status}层数");
+			}
+			else if (SourceTag.MatchesTagExact(WacomTags::Magnitude_Source_HandCount))
+			{
+				Template = LOCTEXT("MagnitudeSourceHandCountFallback", "相当于当前手牌数量");
+			}
+
+			if (Template.IsEmpty())
+			{
+				return FText::GetEmpty();
+			}
+
+			FFormatNamedArguments Args;
+			Args.Add(
+				TEXT("Status"),
+				WacomCardExplanationText::GetDisplayStatusName(Effect.TargetZone, Lexicon));
+			return FText::Format(Template, Args);
 		}
 
 		FName StableRunId(const FString& Prefix, int32 RunIndex, const FString& Suffix)
@@ -141,6 +196,8 @@ namespace WacomCardExplanationTemplateRenderer
 			FWacomCardDetailBlock& Block,
 			const FName SlotName,
 			int32 Value,
+			FGameplayTag ValueSourceTag,
+			const FText& ValueSourceText,
 			const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview,
 			const FString& StableIdPrefix,
 			int32& RunIndex)
@@ -151,6 +208,12 @@ namespace WacomCardExplanationTemplateRenderer
 			Run.SlotName = SlotName;
 			Run.Value = Value;
 			Run.bHasValue = true;
+			Run.ValueSourceTag = ValueSourceTag;
+			if (!ValueSourceText.IsEmpty())
+			{
+				Run.ValueSourceText = ValueSourceText;
+				Run.bHasValueSourceText = true;
+			}
 			if (Preview && !Preview->bSkip && Preview->bHasMagnitude && Preview->Magnitude != Value)
 			{
 				Run.PreviewValue = Preview->Magnitude;
@@ -180,6 +243,7 @@ namespace WacomCardExplanationTemplateRenderer
 		void AddStatusRun(
 			FWacomCardDetailBlock& Block,
 			FGameplayTag StatusTag,
+			const UWacomCardExplanationLexicon* Lexicon,
 			const FString& StableIdPrefix,
 			int32& RunIndex)
 		{
@@ -187,7 +251,7 @@ namespace WacomCardExplanationTemplateRenderer
 			Run.StableId = StableRunId(StableIdPrefix, RunIndex, TEXT("Status"));
 			Run.Kind = EWacomCardDetailRunKind::Status;
 			Run.Tag = StatusTag;
-			Run.Text = WacomCardExplanationText::GetDisplayStatusName(StatusTag);
+			Run.Text = WacomCardExplanationText::GetDisplayStatusName(StatusTag, Lexicon);
 			Run.bSkipped = Block.bSkipped;
 			Block.Runs.Add(MoveTemp(Run));
 			++RunIndex;
@@ -196,6 +260,7 @@ namespace WacomCardExplanationTemplateRenderer
 		void AddKeywordRun(
 			FWacomCardDetailBlock& Block,
 			FGameplayTag Tag,
+			const UWacomCardExplanationLexicon* Lexicon,
 			const FString& StableIdPrefix,
 			int32& RunIndex)
 		{
@@ -203,7 +268,7 @@ namespace WacomCardExplanationTemplateRenderer
 			Run.StableId = StableRunId(StableIdPrefix, RunIndex, TEXT("Keyword"));
 			Run.Kind = EWacomCardDetailRunKind::Keyword;
 			Run.Tag = Tag;
-			Run.Text = FText::FromString(WacomCardExplanationText::GetDisplayTagLeafName(Tag));
+			Run.Text = WacomCardExplanationText::GetDisplayTagName(Tag, Lexicon);
 			Run.bSkipped = Block.bSkipped;
 			Block.Runs.Add(MoveTemp(Run));
 			++RunIndex;
@@ -217,6 +282,7 @@ namespace WacomCardExplanationTemplateRenderer
 			const FCardPassive* Passive,
 			const FWacomCardPresentationRuntimeContext& RuntimeContext,
 			const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview,
+			const UWacomCardExplanationLexicon* Lexicon,
 			const FString& StableIdPrefix,
 			int32& RunIndex)
 		{
@@ -236,6 +302,8 @@ namespace WacomCardExplanationTemplateRenderer
 						Block,
 						SlotName,
 						GetBaseDisplayMagnitude(Card, *Effect, RuntimeContext),
+						ResolveMagnitudeSourceTag(*Effect),
+						ResolveMagnitudeSourceText(*Effect, Lexicon),
 						Preview,
 						StableIdPrefix,
 						RunIndex);
@@ -247,6 +315,8 @@ namespace WacomCardExplanationTemplateRenderer
 						Block,
 						SlotName,
 						Passive->TriggerThreshold,
+						FGameplayTag(),
+						FText::GetEmpty(),
 						nullptr,
 						StableIdPrefix,
 						RunIndex);
@@ -263,7 +333,7 @@ namespace WacomCardExplanationTemplateRenderer
 				const FGameplayTag StatusTag = ResolveEffectStatusTag(*Effect);
 				if (StatusTag.IsValid())
 				{
-					AddStatusRun(Block, StatusTag, StableIdPrefix, RunIndex);
+					AddStatusRun(Block, StatusTag, Lexicon, StableIdPrefix, RunIndex);
 					return true;
 				}
 			}
@@ -271,12 +341,12 @@ namespace WacomCardExplanationTemplateRenderer
 			{
 				if (Effect && Effect->Target.IsValid())
 				{
-					AddKeywordRun(Block, Effect->Target, StableIdPrefix, RunIndex);
+					AddKeywordRun(Block, Effect->Target, Lexicon, StableIdPrefix, RunIndex);
 					return true;
 				}
 				if (Passive && Passive->Trigger.IsValid())
 				{
-					AddKeywordRun(Block, Passive->Trigger, StableIdPrefix, RunIndex);
+					AddKeywordRun(Block, Passive->Trigger, Lexicon, StableIdPrefix, RunIndex);
 					return true;
 				}
 			}
@@ -294,6 +364,26 @@ namespace WacomCardExplanationTemplateRenderer
 		AddTextRun(Block, Text, StableIdPrefix, RunIndex);
 	}
 
+	void AppendMutedRun(
+		FWacomCardDetailBlock& Block,
+		const FText& Text,
+		const FString& StableIdPrefix,
+		int32& RunIndex)
+	{
+		if (Text.IsEmpty())
+		{
+			return;
+		}
+
+		FWacomCardDetailRun Run;
+		Run.StableId = StableRunId(StableIdPrefix, RunIndex, TEXT("Muted"));
+		Run.Kind = EWacomCardDetailRunKind::Muted;
+		Run.Text = Text;
+		Run.bSkipped = Block.bSkipped;
+		Block.Runs.Add(MoveTemp(Run));
+		++RunIndex;
+	}
+
 	void CompileTemplate(
 		FWacomCardDetailBlock& Block,
 		const FText& Template,
@@ -302,11 +392,12 @@ namespace WacomCardExplanationTemplateRenderer
 		const FCardPassive* Passive,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext,
 		const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview,
+		const UWacomCardExplanationLexicon* Lexicon,
 		const FString& StableIdPrefix)
 	{
 		const FString Source = Template.ToString();
 		int32 Cursor = 0;
-		int32 RunIndex = 0;
+		int32 RunIndex = Block.Runs.Num();
 		while (Cursor < Source.Len())
 		{
 			const int32 OpenIndex = Source.Find(TEXT("{"), ESearchCase::CaseSensitive, ESearchDir::FromStart, Cursor);
@@ -334,6 +425,7 @@ namespace WacomCardExplanationTemplateRenderer
 				Passive,
 				RuntimeContext,
 				Preview,
+				Lexicon,
 				StableIdPrefix,
 				RunIndex))
 			{

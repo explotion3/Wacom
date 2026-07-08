@@ -26,6 +26,18 @@ namespace WacomCardExplanationCompiler
 		const UWacomCardExplanationLexicon* Lexicon,
 		int32 PassiveIndex);
 
+	FWacomCardDetailBlock BuildPassiveOutcomeBlock(
+		const FCardPassive& Passive,
+		const UWacomCardExplanationLexicon* Lexicon,
+		int32 PassiveIndex);
+
+	FWacomCardDetailBlock BuildPlainTextBlock(
+		FName BlockId,
+		EWacomCardDetailBlockKind BlockKind,
+		const FText& Text);
+
+	bool ShouldRenderPassiveEffects(const FCardPassive& Passive);
+
 	void AddCardDetailSection(
 		FWacomCardDetailViewData& Data,
 		FName SectionId,

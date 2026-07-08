@@ -6,6 +6,28 @@
 
 #define LOCTEXT_NAMESPACE "WacomCardExplanationLexicon"
 
+namespace WacomCardExplanationLexiconKeys
+{
+	const FName CardUnknownName(TEXT("Card.UnknownName"));
+	const FName SectionDescriptionTitle(TEXT("Section.DescriptionTitle"));
+	const FName SectionPassiveTitle(TEXT("Section.PassiveTitle"));
+	const FName DetailSkipPrefix(TEXT("Detail.SkipPrefix"));
+	const FName NoteParenthesized(TEXT("Note.Parenthesized"));
+	const FName ConditionUnknownHandZone(TEXT("Condition.UnknownHandZone"));
+	const FName ConditionUnknownStatus(TEXT("Condition.UnknownStatus"));
+	const FName ConditionSelfInZone(TEXT("Condition.SelfInZone"));
+	const FName ConditionSelfNotInZone(TEXT("Condition.SelfNotInZone"));
+	const FName ConditionTargetHasStatus(TEXT("Condition.TargetHasStatus"));
+	const FName ConditionTargetHasNoStatus(TEXT("Condition.TargetHasNoStatus"));
+	const FName ConditionFallback(TEXT("Condition.Fallback"));
+	const FName ConditionFallbackNegated(TEXT("Condition.FallbackNegated"));
+	const FName ModifierAddPositive(TEXT("Modifier.AddPositive"));
+	const FName ModifierAddNegative(TEXT("Modifier.AddNegative"));
+	const FName ModifierMultiply(TEXT("Modifier.Multiply"));
+	const FName ModifierUnknown(TEXT("Modifier.Unknown"));
+	const FName ModifierConditional(TEXT("Modifier.Conditional"));
+}
+
 namespace
 {
 	FWacomCardExplanationTemplateEntry MakeTemplateEntry(
@@ -15,6 +37,26 @@ namespace
 		FWacomCardExplanationTemplateEntry Entry;
 		Entry.KeyTag = KeyTag;
 		Entry.Template = Template;
+		return Entry;
+	}
+
+	FWacomCardExplanationTagDisplayEntry MakeTagDisplayEntry(
+		const FGameplayTag& KeyTag,
+		const FText& DisplayName)
+	{
+		FWacomCardExplanationTagDisplayEntry Entry;
+		Entry.KeyTag = KeyTag;
+		Entry.DisplayName = DisplayName;
+		return Entry;
+	}
+
+	FWacomCardExplanationNamedTextEntry MakeNamedTextEntry(
+		const FName& Key,
+		const FText& Text)
+	{
+		FWacomCardExplanationNamedTextEntry Entry;
+		Entry.Key = Key;
+		Entry.Text = Text;
 		return Entry;
 	}
 
@@ -66,6 +108,49 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 		MakeTemplateEntry(WacomTags::Passive_Trigger_OnDraw, LOCTEXT("DefaultPassiveDraw", "抽到时：")),
 		MakeTemplateEntry(WacomTags::Passive_Trigger_OnDiscard, LOCTEXT("DefaultPassiveDiscard", "弃掉时："))
 	};
+
+	PassiveOutcomeTemplates = {
+		MakeTemplateEntry(WacomTags::Passive_Trigger_OnCompanionCount, LOCTEXT("DefaultPassiveOutcomeCompanionCount", "使此牌回到手中。"))
+	};
+
+	MagnitudeSourceTemplates = {
+		MakeTemplateEntry(WacomTags::Magnitude_Source_RuntimeCost, LOCTEXT("DefaultMagnitudeSourceRuntimeCost", "相当于当前费用")),
+		MakeTemplateEntry(WacomTags::Magnitude_Source_TargetStatusStacks, LOCTEXT("DefaultMagnitudeSourceTargetStatusStacks", "相当于目标{Status}层数")),
+		MakeTemplateEntry(WacomTags::Magnitude_Source_HandCount, LOCTEXT("DefaultMagnitudeSourceHandCount", "相当于当前手牌数量"))
+	};
+
+	TagDisplayNames = {
+		MakeTagDisplayEntry(WacomTags::HandZone_Left, LOCTEXT("DefaultHandZoneLeft", "左手区")),
+		MakeTagDisplayEntry(WacomTags::HandZone_Both, LOCTEXT("DefaultHandZoneBoth", "双手区")),
+		MakeTagDisplayEntry(WacomTags::HandZone_Right, LOCTEXT("DefaultHandZoneRight", "右手区")),
+		MakeTagDisplayEntry(WacomTags::Status_Poison, LOCTEXT("DefaultStatusPoison", "中毒")),
+		MakeTagDisplayEntry(WacomTags::Status_Slow, LOCTEXT("DefaultStatusSlow", "迟缓")),
+		MakeTagDisplayEntry(WacomTags::Status_Freeze, LOCTEXT("DefaultStatusFreeze", "冻结")),
+		MakeTagDisplayEntry(WacomTags::Status_Twilight, LOCTEXT("DefaultStatusTwilight", "暮气")),
+		MakeTagDisplayEntry(WacomTags::Status_Stunned, LOCTEXT("DefaultStatusStunned", "眩晕")),
+		MakeTagDisplayEntry(WacomTags::Status_Shield, LOCTEXT("DefaultStatusShield", "护盾"))
+	};
+
+	NamedTexts = {
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::CardUnknownName, LOCTEXT("DefaultUnknownCardName", "未知卡牌")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::SectionDescriptionTitle, LOCTEXT("DefaultDescriptionTitle", "描述")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::SectionPassiveTitle, LOCTEXT("DefaultPassiveTitle", "被动")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::DetailSkipPrefix, LOCTEXT("DefaultSkipPrefix", "不会生效：")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::NoteParenthesized, LOCTEXT("DefaultParenthesizedNote", "（{0}）")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionUnknownHandZone, LOCTEXT("DefaultUnknownHandZone", "指定区域")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionUnknownStatus, LOCTEXT("DefaultUnknownStatus", "指定状态")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionSelfInZone, LOCTEXT("DefaultSelfInZone", "仅当本卡在{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionSelfNotInZone, LOCTEXT("DefaultSelfNotInZone", "仅当本卡不在{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionTargetHasStatus, LOCTEXT("DefaultTargetHasStatus", "仅当目标有{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionTargetHasNoStatus, LOCTEXT("DefaultTargetHasNoStatus", "仅当目标没有{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionFallback, LOCTEXT("DefaultFallbackCondition", "仅当满足{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionFallbackNegated, LOCTEXT("DefaultFallbackNegatedCondition", "仅当不满足{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierAddPositive, LOCTEXT("DefaultModifierAddPositive", "数值 +{0}")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierAddNegative, LOCTEXT("DefaultModifierAddNegative", "数值 {0}")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierMultiply, LOCTEXT("DefaultModifierMultiply", "数值 ×{0}")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierUnknown, LOCTEXT("DefaultModifierUnknown", "数值修正 {0}")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierConditional, LOCTEXT("DefaultConditionalModifier", "{0}，{1}"))
+	};
 }
 
 bool UWacomCardExplanationLexicon::FindEffectTemplate(
@@ -80,6 +165,48 @@ bool UWacomCardExplanationLexicon::FindPassiveTriggerTemplate(
 	FWacomCardExplanationTemplateEntry& OutEntry) const
 {
 	return FindBestTemplate(PassiveTriggerTemplates, TriggerTag, OutEntry);
+}
+
+bool UWacomCardExplanationLexicon::FindPassiveOutcomeTemplate(
+	FGameplayTag TriggerTag,
+	FWacomCardExplanationTemplateEntry& OutEntry) const
+{
+	return FindBestTemplate(PassiveOutcomeTemplates, TriggerTag, OutEntry);
+}
+
+bool UWacomCardExplanationLexicon::FindMagnitudeSourceTemplate(
+	FGameplayTag MagnitudeSourceTag,
+	FWacomCardExplanationTemplateEntry& OutEntry) const
+{
+	return FindBestTemplate(MagnitudeSourceTemplates, MagnitudeSourceTag, OutEntry);
+}
+
+bool UWacomCardExplanationLexicon::FindTagDisplayName(
+	FGameplayTag Tag,
+	FText& OutDisplayName) const
+{
+	return FindBestTagDisplayName(TagDisplayNames, Tag, OutDisplayName);
+}
+
+bool UWacomCardExplanationLexicon::FindNamedText(
+	FName Key,
+	FText& OutText) const
+{
+	if (Key.IsNone())
+	{
+		return false;
+	}
+
+	for (const FWacomCardExplanationNamedTextEntry& Entry : NamedTexts)
+	{
+		if (Entry.Key == Key && !Entry.Text.IsEmpty())
+		{
+			OutText = Entry.Text;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 bool UWacomCardExplanationLexicon::FindBestTemplate(
@@ -124,6 +251,51 @@ bool UWacomCardExplanationLexicon::FindBestTemplate(
 	}
 
 	OutEntry = *BestEntry;
+	return true;
+}
+
+bool UWacomCardExplanationLexicon::FindBestTagDisplayName(
+	const TArray<FWacomCardExplanationTagDisplayEntry>& Entries,
+	FGameplayTag QueryTag,
+	FText& OutDisplayName)
+{
+	if (!QueryTag.IsValid())
+	{
+		return false;
+	}
+
+	const FWacomCardExplanationTagDisplayEntry* BestEntry = nullptr;
+	int32 BestDepth = INDEX_NONE;
+	for (const FWacomCardExplanationTagDisplayEntry& Entry : Entries)
+	{
+		if (!Entry.KeyTag.IsValid() || Entry.DisplayName.IsEmpty())
+		{
+			continue;
+		}
+
+		if (QueryTag.MatchesTagExact(Entry.KeyTag))
+		{
+			OutDisplayName = Entry.DisplayName;
+			return true;
+		}
+
+		if (QueryTag.MatchesTag(Entry.KeyTag))
+		{
+			const int32 CandidateDepth = TagDepth(Entry.KeyTag);
+			if (!BestEntry || CandidateDepth > BestDepth)
+			{
+				BestEntry = &Entry;
+				BestDepth = CandidateDepth;
+			}
+		}
+	}
+
+	if (!BestEntry)
+	{
+		return false;
+	}
+
+	OutDisplayName = BestEntry->DisplayName;
 	return true;
 }
 

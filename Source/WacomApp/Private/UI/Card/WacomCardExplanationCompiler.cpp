@@ -5,6 +5,12 @@
 #include "WacomCardExplanationConditionRenderer.h"
 #include "WacomCardExplanationTemplateResolver.h"
 #include "WacomCardExplanationTemplateRenderer.h"
+#include "WacomCardExplanationText.h"
+
+#include "Tags/WacomGameplayTags.h"
+#include "UI/Card/WacomCardExplanationLexicon.h"
+
+#define LOCTEXT_NAMESPACE "WacomCardExplanationCompiler"
 
 namespace WacomCardExplanationCompiler
 {
@@ -22,6 +28,11 @@ namespace WacomCardExplanationCompiler
 				}
 			}
 			return nullptr;
+		}
+
+		bool IsRenderableBlock(const FWacomCardDetailBlock& Block)
+		{
+			return !Block.Runs.IsEmpty();
 		}
 	}
 
@@ -41,6 +52,18 @@ namespace WacomCardExplanationCompiler
 		const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview =
 			FindEffectPreview(RuntimeContext, EffectIndex);
 		Block.bSkipped = Preview && Preview->bSkip;
+		if (Block.bSkipped)
+		{
+			int32 RunIndex = Block.Runs.Num();
+			WacomCardExplanationTemplateRenderer::AppendMutedRun(
+				Block,
+				WacomCardExplanationText::ResolveNamedText(
+					Lexicon,
+					WacomCardExplanationLexiconKeys::DetailSkipPrefix,
+					LOCTEXT("SkipPrefix", "不会生效：")),
+				StableIdPrefix,
+				RunIndex);
+		}
 
 		WacomCardExplanationTemplateRenderer::CompileTemplate(
 			Block,
@@ -50,16 +73,19 @@ namespace WacomCardExplanationCompiler
 			nullptr,
 			RuntimeContext,
 			Preview,
+			Lexicon,
 			StableIdPrefix);
 		int32 RunIndex = Block.Runs.Num();
 		WacomCardExplanationConditionRenderer::AppendConditionRuns(
 			Block,
 			Effect.Condition,
+			Lexicon,
 			StableIdPrefix,
 			RunIndex);
 		WacomCardExplanationConditionRenderer::AppendMagnitudeModifierRuns(
 			Block,
 			Effect.MagnitudeModifiers,
+			Lexicon,
 			StableIdPrefix,
 			RunIndex);
 		return Block;
@@ -84,15 +110,72 @@ namespace WacomCardExplanationCompiler
 			&Passive,
 			EmptyContext,
 			nullptr,
+			Lexicon,
 			StableIdPrefix);
 
 		int32 RunIndex = Block.Runs.Num();
 		WacomCardExplanationConditionRenderer::AppendConditionRuns(
 			Block,
 			Passive.Condition,
+			Lexicon,
 			StableIdPrefix,
 			RunIndex);
 		return Block;
+	}
+
+	FWacomCardDetailBlock BuildPassiveOutcomeBlock(
+		const FCardPassive& Passive,
+		const UWacomCardExplanationLexicon* Lexicon,
+		int32 PassiveIndex)
+	{
+		const FString StableIdPrefix = FString::Printf(TEXT("Passive.%d.Outcome"), PassiveIndex);
+		FWacomCardDetailBlock Block;
+		Block.BlockId = FName(*FString::Printf(TEXT("%s.Block"), *StableIdPrefix));
+		Block.Kind = EWacomCardDetailBlockKind::PassiveOutcome;
+
+		FText Template;
+		if (!WacomCardExplanationTemplateResolver::ResolvePassiveOutcomeTemplate(Passive, Lexicon, Template))
+		{
+			return Block;
+		}
+
+		FWacomCardPresentationRuntimeContext EmptyContext;
+		WacomCardExplanationTemplateRenderer::CompileTemplate(
+			Block,
+			Template,
+			nullptr,
+			nullptr,
+			&Passive,
+			EmptyContext,
+			nullptr,
+			Lexicon,
+			StableIdPrefix);
+		return Block;
+	}
+
+	FWacomCardDetailBlock BuildPlainTextBlock(
+		FName BlockId,
+		EWacomCardDetailBlockKind BlockKind,
+		const FText& Text)
+	{
+		FWacomCardDetailBlock Block;
+		Block.BlockId = BlockId;
+		Block.Kind = BlockKind;
+		if (!Text.IsEmpty())
+		{
+			FWacomCardDetailRun Run;
+			Run.StableId = FName(*FString::Printf(TEXT("%s.Run.0.Text"), *BlockId.ToString()));
+			Run.Kind = EWacomCardDetailRunKind::Text;
+			Run.Text = Text;
+			Block.Runs.Add(MoveTemp(Run));
+		}
+		return Block;
+	}
+
+	bool ShouldRenderPassiveEffects(const FCardPassive& Passive)
+	{
+		return !Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnCompanionCount)
+			&& !Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnTwilightTriggered);
 	}
 
 	void AddCardDetailSection(
@@ -105,7 +188,7 @@ namespace WacomCardExplanationCompiler
 		TArray<FWacomCardDetailBlock> NonEmptyBlocks;
 		for (FWacomCardDetailBlock& Block : Blocks)
 		{
-			if (!Block.Runs.IsEmpty())
+			if (IsRenderableBlock(Block))
 			{
 				NonEmptyBlocks.Add(MoveTemp(Block));
 			}
@@ -123,3 +206,5 @@ namespace WacomCardExplanationCompiler
 		Data.Sections.Add(MoveTemp(Section));
 	}
 }
+
+#undef LOCTEXT_NAMESPACE

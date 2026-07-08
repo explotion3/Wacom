@@ -17,4 +17,9 @@ namespace WacomCardExplanationTemplateResolver
 	FText ResolvePassiveTriggerTemplate(
 		const FCardPassive& Passive,
 		const UWacomCardExplanationLexicon* Lexicon);
+
+	bool ResolvePassiveOutcomeTemplate(
+		const FCardPassive& Passive,
+		const UWacomCardExplanationLexicon* Lexicon,
+		FText& OutTemplate);
 }

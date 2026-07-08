@@ -75,9 +75,6 @@ public:
 	/** BattleDeck 视觉投影来源标记。为空时隐藏。 */
 	void SetProjectedFromBadgeText(const FText& InText);
 
-	/** 是否允许右键请求切换 SpecialZone 入战标记。 */
-	void SetRightClickToggleEnabled(bool bEnabled);
-
 	/**
 	 * 移动按钮启用状态。
 	 *
@@ -162,6 +159,7 @@ private:
 	UFUNCTION()
 	void HandleDragOperationFinished(UDragDropOperation* Operation);
 
+	void SetRightClickToggleEnabled(bool bEnabled);
 	void RefreshContentFromCard();
 	FWacomCardViewData BuildCurrentCardViewData() const;
 	void ApplyDragSourceVisualState(bool bDragging);

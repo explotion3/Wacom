@@ -6,6 +6,7 @@
 #include "UI/Card/WacomCardPresentationTypes.h"
 
 class UCardDefinition;
+class UWacomCardExplanationLexicon;
 struct FCardEffect;
 struct FCardPassive;
 
@@ -17,6 +18,12 @@ namespace WacomCardExplanationTemplateRenderer
 		const FString& StableIdPrefix,
 		int32& RunIndex);
 
+	void AppendMutedRun(
+		FWacomCardDetailBlock& Block,
+		const FText& Text,
+		const FString& StableIdPrefix,
+		int32& RunIndex);
+
 	void CompileTemplate(
 		FWacomCardDetailBlock& Block,
 		const FText& Template,
@@ -25,5 +32,6 @@ namespace WacomCardExplanationTemplateRenderer
 		const FCardPassive* Passive,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext,
 		const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview,
+		const UWacomCardExplanationLexicon* Lexicon,
 		const FString& StableIdPrefix);
 }

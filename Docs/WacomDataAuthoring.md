@@ -195,7 +195,7 @@ Magnitude 计算顺序：
 | `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | Status.Poison / Slow / Freeze / Twilight / Stunned | - | Literal / TargetStatusStacks | 不支持 `Status.Shield` |
 | `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal / TargetStatusStacks | 正数增加，负数减少 |
 
-`Magnitude.Source.RuntimeCost` 当前允许用于 `Effect.Damage`、`Effect.ApplyStatus.Poison` 和 `Effect.Draw`。用于 `Effect.Draw` 时，抽牌数量等于本卡打出时的 RuntimeCost，例如基础费用 2 的测试卡默认抽 2 张，费用被改变后按改变后的费用抽。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 指定要读取的状态，只允许 Poison / Slow / Freeze / Twilight / Stunned。`Status.Shield` 不在 `StatusStacks` 中。
+`Magnitude.Source.RuntimeCost` 当前允许用于 `Effect.Damage`、`Effect.ApplyStatus.Poison` 和 `Effect.Draw`。用于 `Effect.Draw` 时，抽牌数量等于本卡打出时的 RuntimeCost，例如基础费用 2 的测试卡默认抽 2 张，费用被改变后按改变后的费用抽。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 指定要读取的状态，只允许 Poison / Slow / Freeze / Twilight / Stunned。`Status.Shield` 不在 `StatusStacks` 中。详情面板会通过 WacomApp 的 `MagnitudeSourceTemplates` 给非 Literal source 增加来源短语，例如 RuntimeCost 显示为“相当于当前费用 2”。
 
 敌人 Intent 效果矩阵：
 
@@ -296,7 +296,7 @@ struct FCardPassive
 | `Passive.Trigger.OnTurnEnd` | Reserved | 否 | 否 |
 | `Passive.Trigger.OnDraw` | Reserved | 否 | 否 |
 
-`DisplayText` 是旧展示文本，不再进入正式卡牌详情面板。被动详情由 `Trigger / Effects / Condition / TriggerThreshold` 通过 WacomApp explanation template 生成；战斗规则仍只读取结构化字段。
+`DisplayText` 是旧展示文本，不再进入正式卡牌详情面板。被动详情由 `Trigger / Effects / Condition / TriggerThreshold` 通过 WacomApp explanation template 生成；`OnCompanionCount` 的回手结果由 `PassiveOutcomeTemplates` 展示，`Passive.Effects` 仍不会执行。无结构化详情的功能卡可以通过 `UCardDefinition::Description` 获得普通正文回退，但该回退不解析 `{Effect.0}`，也不是规则真相。战斗规则仍只读取结构化字段。
 
 ## §9 扩展制作矩阵时的检查点
 
@@ -307,6 +307,7 @@ struct FCardPassive
 3. Data validator 错误 / warning 更新。
 4. `Wacom.Battle.RuleContentMatrix` transient fixture 覆盖。
 5. 真实生成资产 smoke 按需补充。
-6. [WacomGameplayTags.md](./WacomGameplayTags.md) 和本文矩阵同步。
+6. WacomApp UI presentation / explanation template 覆盖；新增 `Magnitude.Source.*` 时同步 `MagnitudeSourceTemplates`。
+7. [WacomGameplayTags.md](./WacomGameplayTags.md) 和本文矩阵同步。
 
 如果 validator 允许但 resolver 静默无效，应优先收紧合同或补 resolver，再放开正式制作。

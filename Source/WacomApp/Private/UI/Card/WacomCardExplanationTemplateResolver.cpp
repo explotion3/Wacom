@@ -104,6 +104,16 @@ namespace WacomCardExplanationTemplateResolver
 				LOCTEXT("TemplatePassiveUnknown", "{0}："),
 				FText::FromString(WacomCardExplanationText::GetDisplayTagLeafName(Passive.Trigger)));
 		}
+
+		bool DefaultPassiveOutcomeTemplate(const FCardPassive& Passive, FText& OutTemplate)
+		{
+			if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnCompanionCount))
+			{
+				OutTemplate = LOCTEXT("TemplatePassiveOutcomeCompanionCount", "使此牌回到手中。");
+				return true;
+			}
+			return false;
+		}
 	}
 
 	FText ResolveEffectTemplate(
@@ -144,6 +154,32 @@ namespace WacomCardExplanationTemplateResolver
 				*Passive.Trigger.ToString());
 		}
 		return DefaultPassiveTriggerTemplate(Passive);
+	}
+
+	bool ResolvePassiveOutcomeTemplate(
+		const FCardPassive& Passive,
+		const UWacomCardExplanationLexicon* Lexicon,
+		FText& OutTemplate)
+	{
+		FWacomCardExplanationTemplateEntry Entry;
+		if (Lexicon && Lexicon->FindPassiveOutcomeTemplate(Passive.Trigger, Entry))
+		{
+			OutTemplate = Entry.Template;
+			return true;
+		}
+		if (DefaultPassiveOutcomeTemplate(Passive, OutTemplate))
+		{
+			return true;
+		}
+		if (Lexicon)
+		{
+			UE_LOG(
+				LogWacomCardExplanationTemplateResolver,
+				Verbose,
+				TEXT("Missing card passive outcome explanation template for '%s'; no outcome block generated."),
+				*Passive.Trigger.ToString());
+		}
+		return false;
 	}
 }
 

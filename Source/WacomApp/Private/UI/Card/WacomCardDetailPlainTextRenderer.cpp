@@ -2,8 +2,6 @@
 
 #include "UI/Card/WacomCardDetailPlainTextRenderer.h"
 
-#include "Tags/WacomGameplayTags.h"
-
 namespace
 {
 	FString ShortTagName(const FGameplayTag& Tag)
@@ -43,31 +41,14 @@ namespace
 		{
 			return FallbackText.ToString();
 		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Poison))
-		{
-			return TEXT("中毒");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Slow))
-		{
-			return TEXT("迟缓");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Freeze))
-		{
-			return TEXT("冻结");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Twilight))
-		{
-			return TEXT("暮气");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Stunned))
-		{
-			return TEXT("眩晕");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Shield))
-		{
-			return TEXT("护盾");
-		}
 		return ShortTagName(StatusTag);
+	}
+
+	bool ShouldRenderValueSourceText(const FWacomCardDetailRun& Run)
+	{
+		return Run.bHasValueSourceText
+			&& !Run.ValueSourceText.IsEmpty()
+			&& (!Run.bHasPreviewValue || Run.PreviewValue == Run.Value);
 	}
 }
 
@@ -90,11 +71,6 @@ FText UWacomCardDetailPlainTextRenderer::RenderBlockPlainText(
 	const FWacomCardDetailBlock& Block)
 {
 	FString Result;
-	if (Block.bSkipped)
-	{
-		Result += TEXT("不会生效：");
-	}
-
 	for (const FWacomCardDetailRun& Run : Block.Runs)
 	{
 		Result += RenderRunPlainString(Run);
@@ -136,11 +112,12 @@ FString UWacomCardDetailPlainTextRenderer::RenderRunPlainString(
 		{
 			return FString();
 		}
-		if (Run.bHasPreviewValue)
 		{
-			return FString::FromInt(Run.PreviewValue);
+			const FString ValueText = FString::FromInt(Run.bHasPreviewValue ? Run.PreviewValue : Run.Value);
+			return ShouldRenderValueSourceText(Run)
+				? FString::Printf(TEXT("%s %s"), *Run.ValueSourceText.ToString(), *ValueText)
+				: ValueText;
 		}
-		return FString::FromInt(Run.Value);
 	case EWacomCardDetailRunKind::PreviewDelta:
 		return Run.bHasValue ? FString::FromInt(Run.Value) : FString();
 	case EWacomCardDetailRunKind::Icon:

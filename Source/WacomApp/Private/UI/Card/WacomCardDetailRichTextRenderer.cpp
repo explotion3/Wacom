@@ -22,6 +22,13 @@ namespace
 			: FString::Printf(TEXT("<%s>%s</>"), StyleName, *EscapeRichText(Text));
 	}
 
+	bool ShouldRenderValueSourceText(const FWacomCardDetailRun& Run)
+	{
+		return Run.bHasValueSourceText
+			&& !Run.ValueSourceText.IsEmpty()
+			&& (!Run.bHasPreviewValue || Run.PreviewValue == Run.Value);
+	}
+
 	FString RenderRun(const FWacomCardDetailRun& Run)
 	{
 		switch (Run.Kind)
@@ -31,16 +38,18 @@ namespace
 			{
 				return FString();
 			}
-			if (Run.bHasPreviewValue)
 			{
-				const TCHAR* PreviewStyle = Run.PreviewValue > Run.Value
+				const int32 DisplayValue = Run.bHasPreviewValue ? Run.PreviewValue : Run.Value;
+				const TCHAR* ValueStyle = Run.bHasPreviewValue && Run.PreviewValue > Run.Value
 					? TEXT("ValueBuffed")
-					: Run.PreviewValue < Run.Value
+					: Run.bHasPreviewValue && Run.PreviewValue < Run.Value
 						? TEXT("ValueNerfed")
 						: TEXT("Value");
-				return WrapStyle(PreviewStyle, FString::FromInt(Run.PreviewValue));
+				const FString StyledValue = WrapStyle(ValueStyle, FString::FromInt(DisplayValue));
+				return ShouldRenderValueSourceText(Run)
+					? EscapeRichText(Run.ValueSourceText.ToString() + TEXT(" ")) + StyledValue
+					: StyledValue;
 			}
-			return WrapStyle(TEXT("Value"), FString::FromInt(Run.Value));
 		case EWacomCardDetailRunKind::Icon:
 			return WrapStyle(TEXT("Icon"), UWacomCardDetailPlainTextRenderer::RenderRunPlainString(Run));
 		case EWacomCardDetailRunKind::Status:
@@ -77,11 +86,6 @@ FText UWacomCardDetailRichTextRenderer::RenderBlockRichText(
 	const FWacomCardDetailBlock& Block)
 {
 	FString Result;
-	if (Block.bSkipped)
-	{
-		Result += WrapStyle(TEXT("Muted"), TEXT("不会生效："));
-	}
-
 	for (const FWacomCardDetailRun& Run : Block.Runs)
 	{
 		Result += RenderRun(Run);

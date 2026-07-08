@@ -236,8 +236,9 @@ WBP 不应做：
 
 - `UWacomCardDetailPanel` 只显示 `FWacomCardDetailViewData.Sections`。
 - 面板会把非空 semantic section 动态转成多个 `UWacomCardDetailSectionWidget`。
-- `Description` section 来自卡牌主动效果 explanation blocks；`Passive` section 来自被动触发 explanation block 和被动效果 blocks。
-- `UCardDefinition::Description`、`FCardPassive::DisplayText`、旧 `Description`、`ChangeLines`、`PassiveLines`、`TaskLines`、扁平 `TokenLines` 和旧 token flow 字段都不再进入详情面板。
+- `Description` section 优先来自卡牌主动效果 explanation blocks；当卡牌没有任何结构化详情 section 且 `UCardDefinition::Description` 非空时，才把 `Description` 作为普通正文回退显示。
+- `Passive` section 来自被动触发 explanation block、规则专用 passive outcome block 和可执行被动效果 blocks。
+- `FCardPassive::DisplayText`、旧平行 `Description`、`ChangeLines`、`PassiveLines`、`TaskLines`、扁平 `TokenLines` 和旧 token flow 字段都不再进入详情面板。
 - 未绑定 `SectionsBox` 时，C++ 兼容路径会创建基础容器。
 
 ## WBP_CardDetailSection
@@ -274,18 +275,20 @@ WBP 不应做：
 
 | 资产类型 | 用途 |
 |---|---|
-| `UWacomCardExplanationLexicon` | 配置效果和被动触发的 typed explanation template。精确 `EffectType / Passive.Trigger` 优先，找不到时尝试父 tag fallback。 |
+| `UWacomCardExplanationLexicon` | 配置效果、被动触发、规则专用被动结果、tag 显示名和详情内部 named text/template。精确 `EffectType / Passive.Trigger` 优先，找不到时尝试父 tag fallback。 |
 | `UWacomCardDetailTheme` | 配置标题 CommonTextStyle、正文 RichText style set、inline 图标 / 状态 brush 和 fallback brush。 |
 
 模板 slot v1 支持：
 
 | Slot | 说明 |
 |---|---|
-| `{value:Magnitude}` | 效果数值；目标预览时显示最终数值，并通过 `ValueBuffed / ValueNerfed` 标记强化或削弱。 |
+| `{value:Magnitude}` | 效果数值；未被目标预览改写时可附带 `MagnitudeSourceTemplates` 来源短语，例如“相当于当前费用 2”；目标预览改写后只显示最终数值，并通过 `ValueBuffed / ValueNerfed` 标记强化或削弱。 |
 | `{value:TriggerThreshold}` | 被动触发阈值。 |
 | `{icon:EffectIcon}` | 当前效果图标语义。 |
 | `{status:EffectStatus}` | 当前效果关联状态，例如中毒、冻结、眩晕。 |
 | `{keyword:Tag}` | 当前效果或触发 tag 的关键词显示。 |
+
+`PassiveOutcomeTemplates` 当前用于 `Passive.Trigger.OnCompanionCount` 这类运行时真实存在但不走 `Passive.Effects` 的结果说明。`MagnitudeSourceTemplates` 控制 `Magnitude.Source.RuntimeCost / TargetStatusStacks / HandCount` 的来源短语；`TagDisplayNames` 控制中毒 / 迟缓 / 左手区等详情正文显示名；`NamedTexts` 控制“描述 / 被动”、条件句、数值修正句和 `Muted` skip 前缀等详情内部文案。
 
 旧 `WBP_CardDetailTokenFlow / WBP_CardDetailTokenLine / WBP_CardDetailToken` 已删除，不再作为运行时依赖或制作入口；详情正文统一从 semantic `Blocks / Runs` 渲染到 `WBP_CardDetailSection` 的 `BodyText`。
 
