@@ -1358,126 +1358,27 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 	//   3) 从 SpecialZone 移出、或从其他 zone 进入 SpecialZone 时，清理
 	//      bBattleEnabledInSpecialZone；同一 SpecialZone 内重排保留原 flag。
 
-	const FRunDeckOperationValidation Validation = ValidateMoveInstance(InstanceId, ToZone, ToZoneOwnerInstanceId);
-	if (!Validation.bCanExecute)
+	FRunOwnedCardLocation FromLocation;
+	FName DisabledReason = NAME_None;
+	if (!FRunDeckRules::MoveInstance(
+		RunState,
+		InstanceId,
+		ToZone,
+		ToZoneOwnerInstanceId,
+		&FromLocation,
+		&DisabledReason))
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("[RunSession] MoveInstance: 拒绝 InstanceId %s ToZone=%d Reason=%s"),
-			*InstanceId.ToString(), (int32)ToZone, *Validation.DisabledReason.ToString());
+			*InstanceId.ToString(), (int32)ToZone, *DisabledReason.ToString());
 		return false;
-	}
-
-	// 1) 找源 zone。InstanceId 在所有 zone 中均不存在时拒绝。
-	FCardInstance Found;
-	EZoneKind     FromZone               = EZoneKind::Backpack;
-	FGuid         FromZoneOwnerInstanceId; // 仅当 FromZone == SpecialZone 时由 FindInstance 写入主卡 InstanceId
-	if (!FindInstance(InstanceId, Found, FromZone, FromZoneOwnerInstanceId))
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] MoveInstance: InstanceId %s 在所有 zone 中不存在，拒绝"),
-			*InstanceId.ToString());
-		return false;
-	}
-
-	// 2) 校验全部通过 → 真正修改 RunState。
-	//    "先从源删除、再追加到目标"：避免在中间态广播。
-	//    保留 InstanceId / Definition / bBattleEnabledInSpecialZone 三字段值不变（迁移整张 instance）。
-	switch (FromZone)
-	{
-	case EZoneKind::Backpack:
-	{
-		const int32 SrcIdx = RunState.Backpack.IndexOfByPredicate(
-			[&](const FCardInstance& I) { return I.InstanceId == InstanceId; });
-		check(SrcIdx != INDEX_NONE);  // FindInstance 已确认存在
-		RunState.Backpack.RemoveAt(SrcIdx);
-		break;
-	}
-	case EZoneKind::BattleDeck:
-	{
-		const int32 SrcIdx = RunState.BattleDeck.IndexOfByPredicate(
-			[&](const FCardInstance& I) { return I.InstanceId == InstanceId; });
-		check(SrcIdx != INDEX_NONE);
-		RunState.BattleDeck.RemoveAt(SrcIdx);
-		break;
-	}
-	case EZoneKind::BurdenZone:
-	{
-		const int32 SrcIdx = RunState.BurdenZone.IndexOfByPredicate(
-			[&](const FCardInstance& I) { return I.InstanceId == InstanceId; });
-		check(SrcIdx != INDEX_NONE);
-		RunState.BurdenZone.RemoveAt(SrcIdx);
-		break;
-	}
-	case EZoneKind::SpecialZone:
-	{
-		// FindInstance 已写入 FromZoneOwnerInstanceId，按 OwnerInstanceId 找到对应 entry，
-		// 再在 Cards 中找 InstanceId 移除。
-		const int32 SrcSZIdx = RunState.SpecialZones.IndexOfByPredicate(
-			[&](const FSpecialZone& SZ) { return SZ.OwnerInstanceId == FromZoneOwnerInstanceId; });
-		check(SrcSZIdx != INDEX_NONE);
-		const int32 SrcIdx = RunState.SpecialZones[SrcSZIdx].Cards.IndexOfByPredicate(
-			[&](const FCardInstance& I) { return I.InstanceId == InstanceId; });
-		check(SrcIdx != INDEX_NONE);
-		RunState.SpecialZones[SrcSZIdx].Cards.RemoveAt(SrcIdx);
-		break;
-	}
-	default:
-		ensureMsgf(false,
-			TEXT("[RunSession] MoveInstance: 未知 FromZone 枚举 %d"), (int32)FromZone);
-		return false;
-	}
-
-	const bool bSameSpecialZoneMove =
-		FromZone == EZoneKind::SpecialZone
-		&& ToZone == EZoneKind::SpecialZone
-		&& FromZoneOwnerInstanceId == ToZoneOwnerInstanceId;
-	if (!bSameSpecialZoneMove && (FromZone == EZoneKind::SpecialZone || ToZone == EZoneKind::SpecialZone))
-	{
-		Found.bBattleEnabledInSpecialZone = false;
-	}
-
-	switch (ToZone)
-	{
-	case EZoneKind::Backpack:
-		RunState.Backpack.Add(Found);
-		break;
-	case EZoneKind::BattleDeck:
-		RunState.BattleDeck.Add(Found);
-		break;
-	case EZoneKind::BurdenZone:
-		RunState.BurdenZone.Add(Found);
-		break;
-	case EZoneKind::SpecialZone:
-	{
-		// 校验阶段已确保 ToZoneOwnerInstanceId 在 SpecialZones 中存在。
-		const int32 ToSZIdx = RunState.SpecialZones.IndexOfByPredicate(
-			[&](const FSpecialZone& SZ) { return SZ.OwnerInstanceId == ToZoneOwnerInstanceId; });
-		check(ToSZIdx != INDEX_NONE);
-		RunState.SpecialZones[ToSZIdx].Cards.Add(Found);
-		break;
-	}
-	default:
-		ensureMsgf(false,
-			TEXT("[RunSession] MoveInstance: 未知 ToZone 枚举 %d 的提交路径"), (int32)ToZone);
-		return false;
-	}
-
-	// B 主卡跨入 Backpack/BattleDeck 时幂等保底追加 SpecialZones entry。
-	// 正常路径上 entry 已存在，本调用主要防御外部直接构造 RunState 的测试路径。
-	if (ToZone == EZoneKind::Backpack || ToZone == EZoneKind::BattleDeck)
-	{
-		EnsureSpecialZoneEntryFor(Found);
 	}
 
 	UE_LOG(LogTemp, Verbose,
 		TEXT("[RunSession] MoveInstance: InstanceId=%s, %d → %d, Backpack=%d, BattleDeck=%d"),
-		*InstanceId.ToString(), (int32)FromZone, (int32)ToZone,
+		*InstanceId.ToString(), (int32)FromLocation.Zone, (int32)ToZone,
 		RunState.Backpack.Num(), RunState.BattleDeck.Num());
 
-	if (ToZone != EZoneKind::BurdenZone)
-	{
-		RecomputeBurdenInternal();
-	}
 	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
 	NotifyRunStateChanged();
 	return true;

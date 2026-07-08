@@ -442,7 +442,7 @@ public:
 	 *                                       c) 目标 SpecialZone.Cards.Num() < GetSpecialZoneCapacityFor(ToZoneOwnerInstanceId)
 	 *                                          （in-place 同 SpecialZone 不计入 capacity）
 	 *                                       d) InstanceId 在所有 zone 中存在 — 由 FindInstance 校验
-	 *   - ToZone == BurdenZone          → 无额外校验（API 允许；UI 不主动暴露此入口）
+	 *   - ToZone == BurdenZone          → B 主卡拒绝进入；其他卡 API 允许（UI 不主动暴露此入口）
 	 *   - InstanceId 在所有 zone 中均不存在 → 拒绝
 	 *
 	 * 行为：
@@ -824,10 +824,10 @@ private:
 	 * 调用点：
 	 *   - `Initialize` 把 StarterDeck 灌入两区时；
 	 *   - `AcquireCardToRun` 新加 B 主卡时；
-	 *   - `MoveInstance` 把 B 主卡 instance 跨入 Backpack/BattleDeck 成功后（防御性保底，
-	 *     正常路径上 entry 在 Initialize / AcquireCardToRun 阶段已创建）。
 	 *
 	 * 不在本函数内广播 OnRunStateChangedNative：调用方公共入口在末尾统一广播一次。
+	 * `FRunDeckRules::MoveInstance` 也会在 B 主卡跨入 Backpack/BattleDeck 成功后
+	 * 直接调用 Deck helper 侧的同名静态规则函数作为防御性保底。
 	 */
 	void EnsureSpecialZoneEntryFor(const FCardInstance& Inst);
 

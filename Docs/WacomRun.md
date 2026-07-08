@@ -131,7 +131,7 @@ Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCard
 | `SpecialZones` | 每张 B 类容器卡各自开辟一个特殊存放区 |
 | `BurdenZone` | 其他区超容后的兜底区 |
 
-同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`；失败路径不修改 RunState。
+同一个 `InstanceId` 同时只能位于一个 Zone。跨区移动走 `MoveInstance()`；失败路径不修改 RunState。`URunSession::MoveInstance()` 是 public 提交入口，实际校验后 zone mutation、SpecialZone battle flag 清理、B 主卡 SpecialZone entry 保底和负重重算由 `Private/Deck/RunDeckRules.*` 承接。
 
 Run first-person hand 不直接等同于某个物理持有区。`URunSession::BuildRunCardWorkspaceSnapshot()` 提供 Run 层只读 `Run Card Workspace` contract，用来把当前需要展示或操作的一组已拥有卡投影给 App 层：
 
@@ -177,7 +177,7 @@ B 主卡只能位于 `Backpack` 或 `BattleDeck`，不能进入自己的 Special
 
 通量区超容时，普通卡和 A 类容器卡可进入 `BurdenZone`；B 主卡不会被挪入负重区。备战区超容时，卡优先回通量区，通量区接不住再进负重区。
 
-正式背包 UI 不暴露玩家主动拖入 `BurdenZone` 的 DropTarget。`BurdenZone` 能否接收某张卡仍属于 Run 规则 contract，由 `URunSession::ValidateMoveInstance` / `MoveInstance` 决定；App 层不再用额外 `InvalidTargetZone` 特判覆盖该规则。
+正式背包 UI 不暴露玩家主动拖入 `BurdenZone` 的 DropTarget。`BurdenZone` 能否接收某张卡仍属于 Run 规则 contract，由 `URunSession::ValidateMoveInstance` / `MoveInstance` 决定；App 层不再用额外 `InvalidTargetZone` 特判覆盖该规则。规则入口显式移动到 `BurdenZone` 时会刷新负重压力，但不会在同一事务里把该卡自动回填到其他可容纳区。
 
 负重压力公式：
 
@@ -480,9 +480,9 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | 文件 | 作用 |
 |---|---|
 | `Public/RunSession.h` | Run 的命令 / 查询入口；UI 和 GameMode 不直接改 RunState |
-| `Private/RunSession.cpp` | 时间、压力、商店 / RunEvent public 入口、战斗回传 public 入口、SaveGame slot IO 的协调实现 |
+| `Private/RunSession.cpp` | 时间、压力、商店 / RunEvent public 入口、战斗回传 public 入口、SaveGame slot IO、dirty revision 和通知广播的协调实现 |
 | `Private/Battle/RunBattleSettlementResolver.*` | 战斗结束回传包的 Run 结算流程 |
-| `Private/Deck/RunDeckRules.*` | 背包、备战区、SpecialZone、负重区的私有规则 helper |
+| `Private/Deck/RunDeckRules.*` | 背包、备战区、SpecialZone、负重区的私有规则 helper；拥有已通过校验后的物理区移动 mutation |
 | `Private/Time/RunTimeRules.*` | 时间、节点消耗、时段推进与时段进入压力副作用 |
 | `Private/Events/RunEventExecutor.*` | RunEvent 事件图解释、选项条件、效果执行和结果包生成 |
 | `Private/Save/RunSaveGameSerializer.*` | `FRunState <-> UWacomSaveGame` 字段拷贝、SaveEntry 写入和读档校验 |

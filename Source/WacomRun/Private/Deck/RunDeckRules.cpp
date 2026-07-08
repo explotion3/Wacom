@@ -6,6 +6,43 @@
 #include "RunState.h"
 #include "Tags/WacomGameplayTags.h"
 
+namespace
+{
+	TArray<FCardInstance>* FindMutableMovePile(FRunState& State, EZoneKind Zone, FGuid ZoneOwnerInstanceId)
+	{
+		switch (Zone)
+		{
+		case EZoneKind::Backpack:
+			return &State.Backpack;
+		case EZoneKind::BattleDeck:
+			return &State.BattleDeck;
+		case EZoneKind::BurdenZone:
+			return &State.BurdenZone;
+		case EZoneKind::SpecialZone:
+		{
+			for (FSpecialZone& SpecialZone : State.SpecialZones)
+			{
+				if (SpecialZone.OwnerInstanceId == ZoneOwnerInstanceId)
+				{
+					return &SpecialZone.Cards;
+				}
+			}
+			return nullptr;
+		}
+		default:
+			return nullptr;
+		}
+	}
+
+	void SetMoveDisabledReason(FName* OutDisabledReason, FName DisabledReason)
+	{
+		if (OutDisabledReason)
+		{
+			*OutDisabledReason = DisabledReason;
+		}
+	}
+}
+
 bool FRunDeckRules::IsContainerCard(const UCardDefinition* Card)
 {
 	return Card != nullptr && Card->Physique.Capacity > 0;
@@ -726,6 +763,94 @@ FRunDeckOperationValidation FRunDeckRules::ValidateMoveInstance(const FRunState&
 	Result.bCanExecute = true;
 	Result.DisabledReason = NAME_None;
 	return Result;
+}
+
+bool FRunDeckRules::MoveInstance(
+	FRunState& State,
+	FGuid InstanceId,
+	EZoneKind ToZone,
+	FGuid ToZoneOwnerInstanceId,
+	FRunOwnedCardLocation* OutFromLocation,
+	FName* OutDisabledReason)
+{
+	if (OutFromLocation)
+	{
+		*OutFromLocation = FRunOwnedCardLocation{};
+	}
+	SetMoveDisabledReason(OutDisabledReason, NAME_None);
+
+	const FRunDeckOperationValidation Validation =
+		ValidateMoveInstance(State, InstanceId, ToZone, ToZoneOwnerInstanceId);
+	if (!Validation.bCanExecute)
+	{
+		SetMoveDisabledReason(OutDisabledReason, Validation.DisabledReason);
+		return false;
+	}
+
+	FRunOwnedCardLocation FromLocation;
+	if (!FindOwnedCardInstance(State, InstanceId, FromLocation))
+	{
+		SetMoveDisabledReason(OutDisabledReason, TEXT("CardNotFound"));
+		return false;
+	}
+
+	TArray<FCardInstance>* SourcePile = FindMutableMovePile(
+		State,
+		FromLocation.Zone,
+		FromLocation.ZoneOwnerInstanceId);
+	TArray<FCardInstance>* TargetPile = FindMutableMovePile(
+		State,
+		ToZone,
+		ToZoneOwnerInstanceId);
+	if (!SourcePile
+		|| !SourcePile->IsValidIndex(FromLocation.CardIndex)
+		|| (*SourcePile)[FromLocation.CardIndex].InstanceId != InstanceId)
+	{
+		ensureMsgf(false,
+			TEXT("[RunDeckRules] MoveInstance: 源 zone 查找漂移 InstanceId=%s Zone=%d Index=%d"),
+			*InstanceId.ToString(),
+			(int32)FromLocation.Zone,
+			FromLocation.CardIndex);
+		SetMoveDisabledReason(OutDisabledReason, TEXT("CardNotFound"));
+		return false;
+	}
+	if (!TargetPile)
+	{
+		ensureMsgf(false,
+			TEXT("[RunDeckRules] MoveInstance: 目标 zone 查找漂移 ToZone=%d Owner=%s"),
+			(int32)ToZone,
+			*ToZoneOwnerInstanceId.ToString());
+		SetMoveDisabledReason(OutDisabledReason, TEXT("InvalidTargetZone"));
+		return false;
+	}
+
+	FCardInstance Found = (*SourcePile)[FromLocation.CardIndex];
+	SourcePile->RemoveAt(FromLocation.CardIndex);
+
+	const bool bSameSpecialZoneMove =
+		FromLocation.Zone == EZoneKind::SpecialZone
+		&& ToZone == EZoneKind::SpecialZone
+		&& FromLocation.ZoneOwnerInstanceId == ToZoneOwnerInstanceId;
+	if (!bSameSpecialZoneMove
+		&& (FromLocation.Zone == EZoneKind::SpecialZone || ToZone == EZoneKind::SpecialZone))
+	{
+		Found.bBattleEnabledInSpecialZone = false;
+	}
+
+	TargetPile->Add(Found);
+
+	if (ToZone == EZoneKind::Backpack || ToZone == EZoneKind::BattleDeck)
+	{
+		EnsureSpecialZoneEntryFor(State, Found);
+	}
+
+	RecomputeBurden(State, /*bAllowBurdenRefill=*/ToZone != EZoneKind::BurdenZone);
+
+	if (OutFromLocation)
+	{
+		*OutFromLocation = FromLocation;
+	}
+	return true;
 }
 
 void FRunDeckRules::RecomputeBurden(FRunState& State, bool bAllowBurdenRefill)

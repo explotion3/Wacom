@@ -1759,6 +1759,106 @@ bool FWacomRunDeckSpecialZoneFlagResetSpec::RunTest(const FString& /*Parameters*
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckSpecialZoneSameZoneMovePreservesFlagSpec,
+	"Wacom.Run.Deck.SpecialZoneSameZoneMovePreservesFlag",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckSpecialZoneSameZoneMovePreservesFlagSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 6);
+	UCardDefinition* TypeB = MakeStage45TypeBCard(Fx, 3);
+	UCardDefinition* FirstStored = Fx.MakeNoopCard(0);
+	UCardDefinition* SecondStored = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA, TypeB });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+	Run->AcquireCardToRun(FirstStored);
+	const FGuid FirstStoredId = Run->GetBackpack().Last().InstanceId;
+	Run->AcquireCardToRun(SecondStored);
+	const FGuid SecondStoredId = Run->GetBackpack().Last().InstanceId;
+
+	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
+	TestTrue(TEXT("Move first card into SpecialZone"),
+		Run->MoveInstance(FirstStoredId, EZoneKind::SpecialZone, OwnerId));
+	TestTrue(TEXT("Move second card into SpecialZone"),
+		Run->MoveInstance(SecondStoredId, EZoneKind::SpecialZone, OwnerId));
+	TestTrue(TEXT("Enable first card battle flag"),
+		Run->SetSpecialZoneCardBattleEnabled(FirstStoredId, true));
+
+	if (!TestEqual(TEXT("Two cards in SpecialZone before same-zone move"),
+		Run->GetRunState().SpecialZones[0].Cards.Num(), 2))
+	{
+		return false;
+	}
+	TestEqual(TEXT("First card starts at index 0"),
+		Run->GetRunState().SpecialZones[0].Cards[0].InstanceId, FirstStoredId);
+	TestTrue(TEXT("First card flag starts enabled"),
+		Run->GetRunState().SpecialZones[0].Cards[0].bBattleEnabledInSpecialZone);
+
+	TestTrue(TEXT("Same SpecialZone move succeeds"),
+		Run->MoveInstance(FirstStoredId, EZoneKind::SpecialZone, OwnerId));
+
+	if (!TestEqual(TEXT("Two cards remain in SpecialZone after same-zone move"),
+		Run->GetRunState().SpecialZones[0].Cards.Num(), 2))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Second card shifts forward"),
+		Run->GetRunState().SpecialZones[0].Cards[0].InstanceId, SecondStoredId);
+	TestEqual(TEXT("Moved card appends to end"),
+		Run->GetRunState().SpecialZones[0].Cards[1].InstanceId, FirstStoredId);
+	TestTrue(TEXT("Same SpecialZone move preserves battle flag"),
+		Run->GetRunState().SpecialZones[0].Cards[1].bBattleEnabledInSpecialZone);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunDeckMoveInstanceToBurdenUpdatesPressureSpec,
+	"Wacom.Run.Deck.MoveInstanceToBurdenUpdatesPressure",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunDeckMoveInstanceToBurdenUpdatesPressureSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* TypeA = MakeBagCard(Fx, 2);
+	UCardDefinition* Stored = Fx.MakeNoopCard(0);
+	UCharacterDefinition* Char = Fx.MakeCharacter(
+		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+		{ TypeA });
+
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	Run->Initialize(Char);
+	Run->AcquireCardToRun(Stored);
+
+	const FGuid StoredId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Stored);
+	TestTrue(TEXT("Stored card starts in Backpack"), StoredId.IsValid());
+	TestEqual(TEXT("Burden pressure starts empty"),
+		Run->GetPressureValue(EWacomPressureType::Burden), 0);
+
+	TestTrue(TEXT("Move to Burden succeeds"),
+		Run->MoveInstance(StoredId, EZoneKind::BurdenZone, FGuid()));
+
+	TestEqual(TEXT("Moved card remains in BurdenZone"),
+		Run->GetRunState().BurdenZone.Num(), 1);
+	if (Run->GetRunState().BurdenZone.Num() == 1)
+	{
+		TestEqual(TEXT("Burden card id"),
+			Run->GetRunState().BurdenZone[0].InstanceId, StoredId);
+	}
+	TestEqual(TEXT("Move to Burden updates pressure"),
+		Run->GetPressureValue(EWacomPressureType::Burden), 1);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunDeckSetSpecialZoneFlagOnlySpec,
 	"Wacom.Run.Deck.SetSpecialZoneFlagOnly",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

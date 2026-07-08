@@ -54,5 +54,6 @@ struct FRunDeckRules
 	static int32 CountFluxContentCards(const TArray<FCardInstance>& Pile);
 
 	static FRunDeckOperationValidation ValidateMoveInstance(const FRunState& State, FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId);
+	static bool MoveInstance(FRunState& State, FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId, FRunOwnedCardLocation* OutFromLocation = nullptr, FName* OutDisabledReason = nullptr);
 	static void RecomputeBurden(FRunState& State, bool bAllowBurdenRefill);
 };

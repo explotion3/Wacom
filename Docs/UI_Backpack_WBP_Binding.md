@@ -38,7 +38,7 @@ tags:
 | `BattleDeckZoneHost` | `PanelWidget` | C++ 填充备战区 DropTarget 和卡牌列表 |
 | `FluxContentDropTargetHost` | `PanelWidget` | C++ 填充通量内容 DropTarget 和内容卡列表 |
 | `SpecialZonesHost` | `PanelWidget` | C++ 动态填充 `UWacomSpecialZoneWidget` |
-| `BurdenZoneHost` | `PanelWidget` | C++ 填充负重区标题、DropTarget 和卡牌列表；无负重卡时折叠 |
+| `BurdenZoneHost` | `PanelWidget` | C++ 填充负重区标题和卡牌列表；正式 UI 不暴露主动拖入负重区的 DropTarget，无负重卡时折叠 |
 | `CardDetailLayer` | `CanvasPanel` | C++ 填充悬浮卡牌详情面板 |
 
 可选绑定：
