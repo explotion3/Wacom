@@ -41,35 +41,6 @@ namespace WacomCardExplanationTemplateRenderer
 			return FName(*FString::Printf(TEXT("%s.Run.%d.%s"), *Prefix, RunIndex, *Suffix));
 		}
 
-		FText DisplayStatusName(const FGameplayTag& StatusTag)
-		{
-			if (StatusTag.MatchesTagExact(WacomTags::Status_Poison))
-			{
-				return LOCTEXT("StatusPoison", "中毒");
-			}
-			if (StatusTag.MatchesTagExact(WacomTags::Status_Slow))
-			{
-				return LOCTEXT("StatusSlow", "迟缓");
-			}
-			if (StatusTag.MatchesTagExact(WacomTags::Status_Freeze))
-			{
-				return LOCTEXT("StatusFreeze", "冻结");
-			}
-			if (StatusTag.MatchesTagExact(WacomTags::Status_Twilight))
-			{
-				return LOCTEXT("StatusTwilight", "暮气");
-			}
-			if (StatusTag.MatchesTagExact(WacomTags::Status_Stunned))
-			{
-				return LOCTEXT("StatusStunned", "眩晕");
-			}
-			if (StatusTag.MatchesTagExact(WacomTags::Status_Shield))
-			{
-				return LOCTEXT("StatusShield", "护盾");
-			}
-			return FText::FromString(WacomCardExplanationText::GetDisplayTagLeafName(StatusTag));
-		}
-
 		FGameplayTag ResolveEffectStatusTag(const FCardEffect& Effect)
 		{
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Poison))
@@ -216,7 +187,7 @@ namespace WacomCardExplanationTemplateRenderer
 			Run.StableId = StableRunId(StableIdPrefix, RunIndex, TEXT("Status"));
 			Run.Kind = EWacomCardDetailRunKind::Status;
 			Run.Tag = StatusTag;
-			Run.Text = DisplayStatusName(StatusTag);
+			Run.Text = WacomCardExplanationText::GetDisplayStatusName(StatusTag);
 			Run.bSkipped = Block.bSkipped;
 			Block.Runs.Add(MoveTemp(Run));
 			++RunIndex;

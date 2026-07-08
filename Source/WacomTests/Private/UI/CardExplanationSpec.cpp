@@ -91,6 +91,8 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 	FCardEffect Damage;
 	Damage.EffectType = WacomTags::Effect_Damage;
 	Damage.Magnitude = 4;
+	Damage.Condition.ConditionType = WacomTags::Condition_Self_InZone;
+	Damage.Condition.ParamTag = WacomTags::HandZone_Left;
 	Card->Effects.Add(Damage);
 
 	FCardEffect Poison;
@@ -107,6 +109,7 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 	const FString Description = SectionPlainText(Data, EWacomCardDetailSectionKind::Description);
 
 	TestTrue(TEXT("Damage effect emits value text"), Description.Contains(TEXT("造成 4 点伤害。")));
+	TestTrue(TEXT("Effect condition emits self zone text"), Description.Contains(TEXT("仅当本卡在左手区时")));
 	TestTrue(TEXT("Poison effect emits status text"), Description.Contains(TEXT("施加 2 层 中毒。")));
 	TestTrue(TEXT("Discard selected effect emits action text"), Description.Contains(TEXT("弃置目标手牌。")));
 
@@ -127,6 +130,9 @@ bool FWacomUICardExplanationPassiveBlocksSpec::RunTest(const FString& /*Paramete
 	FCardPassive Passive;
 	Passive.Trigger = WacomTags::Passive_Trigger_OnCompanionCount;
 	Passive.TriggerThreshold = 3;
+	Passive.Condition.ConditionType = WacomTags::Condition_Target_HasStatus;
+	Passive.Condition.ParamTag = WacomTags::Status_Poison;
+	Passive.Condition.bNegate = true;
 	Passive.DisplayText = FText::FromString(TEXT("这段旧手写说明不应进入详情。"));
 
 	FCardEffect ShuffleSelf;
@@ -140,8 +146,10 @@ bool FWacomUICardExplanationPassiveBlocksSpec::RunTest(const FString& /*Paramete
 	const FString PassiveText = SectionPlainText(Data, EWacomCardDetailSectionKind::Passive);
 
 	TestTrue(TEXT("Passive trigger emits threshold"), PassiveText.Contains(TEXT("每打出 3 张伙伴：")));
+	TestTrue(TEXT("Passive condition emits negated target status text"), PassiveText.Contains(TEXT("仅当目标没有中毒时")));
 	TestTrue(TEXT("Passive effect emits structured text"), PassiveText.Contains(TEXT("该牌腾挪至随机区域。")));
 	TestFalse(TEXT("Passive DisplayText is ignored"), PassiveText.Contains(TEXT("旧手写说明")));
+	TestFalse(TEXT("Passive no longer emits vague condition placeholder"), PassiveText.Contains(TEXT("有条件")));
 
 	return true;
 }

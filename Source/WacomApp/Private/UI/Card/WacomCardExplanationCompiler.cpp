@@ -2,6 +2,7 @@
 
 #include "WacomCardExplanationCompiler.h"
 
+#include "WacomCardExplanationConditionRenderer.h"
 #include "WacomCardExplanationTemplateResolver.h"
 #include "WacomCardExplanationTemplateRenderer.h"
 
@@ -50,6 +51,12 @@ namespace WacomCardExplanationCompiler
 			RuntimeContext,
 			Preview,
 			StableIdPrefix);
+		int32 RunIndex = Block.Runs.Num();
+		WacomCardExplanationConditionRenderer::AppendConditionRuns(
+			Block,
+			Effect.Condition,
+			StableIdPrefix,
+			RunIndex);
 		return Block;
 	}
 
@@ -74,15 +81,12 @@ namespace WacomCardExplanationCompiler
 			nullptr,
 			StableIdPrefix);
 
-		if (Passive.Condition.IsSet())
-		{
-			int32 RunIndex = Block.Runs.Num();
-			WacomCardExplanationTemplateRenderer::AppendTextRun(
-				Block,
-				TEXT("（有条件）"),
-				StableIdPrefix,
-				RunIndex);
-		}
+		int32 RunIndex = Block.Runs.Num();
+		WacomCardExplanationConditionRenderer::AppendConditionRuns(
+			Block,
+			Passive.Condition,
+			StableIdPrefix,
+			RunIndex);
 		return Block;
 	}
 

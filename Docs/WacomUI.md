@@ -105,7 +105,7 @@ Runtime context 当前覆盖：
 
 - 本场 `RuntimeCost`、可用状态、卡面 Cost、disabled overlay，以及 `Magnitude.Source.RuntimeCost` / 旧 `bMagnitudeFromRuntimeCost` 徽章。
 - 按 `EffectIndex` 的目标预览 magnitude override / skip；被 preview 判定不会生效的效果不显示误导性徽章。
-- 详情面板 `Sections`：Builder 从 `Card->Effects`、`Card->Passives`、`FWacomCardPresentationRuntimeContext` 和 `UWacomCardExplanationLexicon` 生成语义 `Blocks / Runs`。`UCardDefinition::Description` 和 `FCardPassive::DisplayText` 不再作为详情面板输入；它们可以继续服务小卡或其它旧 UI。词典模板支持 `{value:Magnitude}`、`{value:TriggerThreshold}`、`{icon:EffectIcon}`、`{status:EffectStatus}`、`{keyword:Tag}` 等 typed slot；目标预览时数值 run 只显示最终数值，RichText 使用 `ValueBuffed / ValueNerfed` 标记强化或削弱，skip 效果会被标记为不会生效。
+- 详情面板 `Sections`：Builder 从 `Card->Effects`、`Card->Passives`、`FEffectCondition`、`FWacomCardPresentationRuntimeContext` 和 `UWacomCardExplanationLexicon` 生成语义 `Blocks / Runs`。`UCardDefinition::Description` 和 `FCardPassive::DisplayText` 不再作为详情面板输入；它们可以继续服务小卡或其它旧 UI。词典模板支持 `{value:Magnitude}`、`{value:TriggerThreshold}`、`{icon:EffectIcon}`、`{status:EffectStatus}`、`{keyword:Tag}` 等 typed slot；`FCardEffect.Condition` 和 `FCardPassive.Condition` 以静态条件说明追加到对应 block，不在 UI 层执行规则判断。目标预览时数值 run 只显示最终数值，RichText 使用 `ValueBuffed / ValueNerfed` 标记强化或削弱，skip 效果会被标记为不会生效。
 
 旧 `FWacomCardDetailViewData.Description`、`ChangeLines`、`PassiveLines`、`TaskLines`、扁平 `TokenLines` 和旧 token flow contract 已删除。详情面板不再暴露平行纯文本正文或 `GetDescriptionText()`；需要显示的正文必须进入正式 `Sections` 语义文档。`FWacomCardViewData.Description` 仍是小卡卡面的紧凑描述，不属于详情面板 contract。
 
