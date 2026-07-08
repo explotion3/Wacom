@@ -279,6 +279,8 @@ private:
 	UWacomSpecialZoneWidget* GetSpecialZoneWidgetForTest(int32 Index) const;
 	void RebuildAllForTest() { RebuildAll(); }
 	FWacomBackpackScreenAutomationTestView GetAutomationTestViewForTest() const;
+	static FGuid ResolveDeleteRequestInstanceIdForTest(const UWacomCardDragOperation& CardOp);
+	static FText BuildDeleteFailureToastTextForTest(FName DisabledReason);
 
 	void SetRunSessionForTest(URunSession* InRunSession)
 	{

@@ -11,7 +11,6 @@
 #include "UI/Backpack/WacomCardDragOperation.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
-#include "UI/Backpack/WacomDeleteZoneDropTarget.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
 #include "UI/Backpack/WacomZoneDropTarget.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
@@ -1201,36 +1200,6 @@ bool FWacomUIBackpackDragOperationDefaultsSpec::RunTest(const FString& /*Paramet
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBackpackDeleteGoldToastPreviewSpec,
-	"Wacom.UI.Backpack.DeleteGoldToastPreview",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBackpackDeleteGoldToastPreviewSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<UCardDefinition> WhiteCard(NewObject<UCardDefinition>());
-	WhiteCard->Rarity = WacomTags::Card_Rarity_White;
-	TStrongObjectPtr<UCardDefinition> BlueCard(NewObject<UCardDefinition>());
-	BlueCard->Rarity = WacomTags::Card_Rarity_Blue;
-	TStrongObjectPtr<UCardDefinition> IntrinsicCard(NewObject<UCardDefinition>());
-	IntrinsicCard->Rarity = WacomTags::Card_Rarity_Intrinsic;
-
-	TestEqual(TEXT("White card delete toast gold preview"),
-		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(WhiteCard.Get()),
-		URunSession::GetDeleteGoldRewardForCard(WhiteCard.Get()));
-	TestEqual(TEXT("Blue card delete toast gold preview"),
-		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(BlueCard.Get()),
-		URunSession::GetDeleteGoldRewardForCard(BlueCard.Get()));
-	TestEqual(TEXT("Intrinsic card delete toast gold preview"),
-		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(IntrinsicCard.Get()),
-		URunSession::GetDeleteGoldRewardForCard(IntrinsicCard.Get()));
-	TestEqual(TEXT("Null card delete toast gold preview"),
-		UWacomDeleteZoneDropTarget::GetDeleteGoldRewardPreviewForToast(nullptr),
-		URunSession::GetDeleteGoldRewardForCard(nullptr));
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackToastTextSpec,
 	"Wacom.UI.Backpack.ToastText",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1251,19 +1220,19 @@ bool FWacomUIBackpackToastTextSpec::RunTest(const FString& /*Parameters*/)
 		UWacomZoneDropTarget::FormatMoveFailureReasonForToast(TEXT("RunSessionMissing")).ToString(),
 		FString(TEXT("无法移动：当前规则不允许。")));
 	TestEqual(TEXT("Delete missing card reason"),
-		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("MissingCard")).ToString(),
+		FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(TEXT("MissingCard")).ToString(),
 		FString(TEXT("无法销毁：没有卡牌数据。")));
 	TestEqual(TEXT("Delete intrinsic reason"),
-		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("Intrinsic")).ToString(),
+		FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(TEXT("Intrinsic")).ToString(),
 		FString(TEXT("无法销毁：固有卡不能被销毁。")));
 	TestEqual(TEXT("Delete not owned reason"),
-		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("CardNotOwned")).ToString(),
+		FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(TEXT("CardNotOwned")).ToString(),
 		FString(TEXT("无法销毁：这张卡不在当前背包中。")));
 	TestEqual(TEXT("Delete last bag reason"),
-		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("LastBagProvider")).ToString(),
+		FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(TEXT("LastBagProvider")).ToString(),
 		FString(TEXT("无法销毁：这是最后一张背包容量卡。")));
 	TestEqual(TEXT("Delete last capacity provider reason"),
-		UWacomDeleteZoneDropTarget::FormatDeleteFailureReasonForToast(TEXT("LastCapacityProvider")).ToString(),
+		FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(TEXT("LastCapacityProvider")).ToString(),
 		FString(TEXT("无法销毁：这是最后一张背包容量卡。")));
 
 	return true;
@@ -1640,12 +1609,12 @@ bool FWacomUIBackpackDeleteZoneUsesInstanceIdPayloadSpec::RunTest(const FString&
 	CardOp->Definition = Card.Get();
 
 	TestEqual(TEXT("DeleteZone request helper uses InstanceId, not Definition identity"),
-		UWacomDeleteZoneDropTarget::GetDeleteInstanceIdForRequest(*CardOp),
+		FWacomBackpackScreenTestAccess::ResolveDeleteRequestInstanceId(*CardOp),
 		InstanceId);
 
 	CardOp->InstanceId = FGuid();
 	TestFalse(TEXT("DeleteZone request helper rejects invalid InstanceId"),
-		UWacomDeleteZoneDropTarget::GetDeleteInstanceIdForRequest(*CardOp).IsValid());
+		FWacomBackpackScreenTestAccess::ResolveDeleteRequestInstanceId(*CardOp).IsValid());
 
 	return true;
 }

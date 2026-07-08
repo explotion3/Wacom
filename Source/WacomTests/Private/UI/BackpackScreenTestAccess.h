@@ -8,6 +8,7 @@
 
 class UDragDropOperation;
 class URunSession;
+class UWacomCardDragOperation;
 class UWacomBackpackScreen;
 class UWacomDeckCardWidget;
 class UWacomSpecialZoneWidget;
@@ -19,6 +20,8 @@ struct FWacomBackpackScreenTestAccess
 	static void Refresh(UWacomBackpackScreen& Screen);
 	static void SetRunSession(UWacomBackpackScreen& Screen, URunSession* RunSession);
 	static FWacomBackpackScreenAutomationTestView View(const UWacomBackpackScreen& Screen);
+	static FGuid ResolveDeleteRequestInstanceId(const UWacomCardDragOperation& CardOp);
+	static FText BuildDeleteFailureToastText(FName DisabledReason);
 
 	static UWacomDeckCardWidget* BattleDeckCard(const UWacomBackpackScreen& Screen, int32 Index);
 	static UWacomDeckCardWidget* FluxContentCard(const UWacomBackpackScreen& Screen, int32 Index);

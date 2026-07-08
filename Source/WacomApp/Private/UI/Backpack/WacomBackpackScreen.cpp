@@ -375,6 +375,16 @@ UWacomSpecialZoneWidget* UWacomBackpackScreen::GetSpecialZoneWidgetForTest(int32
 		: nullptr;
 }
 
+FGuid UWacomBackpackScreen::ResolveDeleteRequestInstanceIdForTest(const UWacomCardDragOperation& CardOp)
+{
+	return FWacomBackpackCommandFlow::ResolveDeleteRequestInstanceId(CardOp);
+}
+
+FText UWacomBackpackScreen::BuildDeleteFailureToastTextForTest(FName DisabledReason)
+{
+	return FWacomBackpackCommandFlow::BuildDeleteFailureToastText(DisabledReason);
+}
+
 FWacomBackpackScreenAutomationTestView UWacomBackpackScreen::GetAutomationTestViewForTest() const
 {
 	FWacomBackpackScreenAutomationTestView View;

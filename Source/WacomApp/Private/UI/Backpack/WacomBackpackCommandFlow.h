@@ -24,6 +24,9 @@ public:
 		URunSession* Run,
 		const UWacomCardDragOperation& CardOp);
 
+	static FGuid ResolveDeleteRequestInstanceId(const UWacomCardDragOperation& CardOp);
+	static FText BuildDeleteFailureToastText(FName DisabledReason);
+
 	static bool HandleZoneDropRequested(
 		UWacomBackpackScreen& Screen,
 		URunSession* Run,

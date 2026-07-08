@@ -32,6 +32,16 @@ FWacomBackpackScreenAutomationTestView FWacomBackpackScreenTestAccess::View(cons
 	return Screen.GetAutomationTestViewForTest();
 }
 
+FGuid FWacomBackpackScreenTestAccess::ResolveDeleteRequestInstanceId(const UWacomCardDragOperation& CardOp)
+{
+	return UWacomBackpackScreen::ResolveDeleteRequestInstanceIdForTest(CardOp);
+}
+
+FText FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(FName DisabledReason)
+{
+	return UWacomBackpackScreen::BuildDeleteFailureToastTextForTest(DisabledReason);
+}
+
 UWacomDeckCardWidget* FWacomBackpackScreenTestAccess::BattleDeckCard(const UWacomBackpackScreen& Screen, int32 Index)
 {
 	return Screen.GetBattleDeckCardWidgetForTest(Index);

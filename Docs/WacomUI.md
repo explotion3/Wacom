@@ -24,7 +24,7 @@ UI 不直接修改战斗或 Run 状态。Widget 读取 Snapshot、ViewData 或 V
 | 领域 | 数据来源 | 命令出口 |
 |---|---|---|
 | ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 只读显示探索状态和交互提示 |
-| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；DropTarget hover preview 和 drop 提交都经私有 command flow 调用 RunSession、Toast 和 Confirm；负重区只渲染 Run snapshot 中的卡牌，不创建 Burden DropTarget；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
+| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；DropTarget 只维护 hover/drop 视觉状态，删牌奖励、失败文案、hover preview 和 drop 提交都经私有 command flow 调用 RunSession、Toast 和 Confirm；负重区只渲染 Run snapshot 中的卡牌，不创建 Burden DropTarget；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
 | Shop | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 flow 编排购买、关闭访问和 Toast |
 | RunEvent | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 flow 编排选项提交、支付、关闭和 Toast |
 | Battle | `FBattleSnapshot`、`FBattleEvent`、Battle ViewData | `UBattleHUD` 是唯一战斗 UI 命令出口 |

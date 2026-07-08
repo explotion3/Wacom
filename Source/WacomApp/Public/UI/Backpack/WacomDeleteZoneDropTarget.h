@@ -6,7 +6,6 @@
 #include "UI/Backpack/WacomZoneDropTarget.h"
 #include "WacomDeleteZoneDropTarget.generated.h"
 
-class UCardDefinition;
 class UWacomCardDragOperation;
 
 /**
@@ -25,15 +24,6 @@ class WACOMAPP_API UWacomDeleteZoneDropTarget : public UWacomZoneDropTarget
 	GENERATED_BODY()
 
 public:
-	/** 测试/诊断用：按当前删牌置换规则预估成功 Toast 中显示的金币数。 */
-	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Delete")
-	static int32 GetDeleteGoldRewardPreviewForToast(UCardDefinition* Card);
-
-	/** 测试/诊断用：删牌请求只认具体卡牌实例。 */
-	static FGuid GetDeleteInstanceIdForRequest(const UWacomCardDragOperation& CardOp);
-
-	static FText FormatDeleteFailureReasonForToast(FName DisabledReason);
-
 protected:
 	virtual bool NativeOnDragOver(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
