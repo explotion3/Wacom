@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/Foundation/WacomMenuWidgetBase.h"
+#include "UI/Run/WacomRunMenuWidgetBase.h"
 #include "RunState.h"
 #include "WacomRunEventScreen.generated.h"
 
@@ -113,7 +113,7 @@ struct WACOMAPP_API FWacomRunEventScreenDebugView
 
 /** 最小可用探索事件界面。 */
 UCLASS(Blueprintable)
-class WACOMAPP_API UWacomRunEventScreen : public UWacomMenuWidgetBase
+class WACOMAPP_API UWacomRunEventScreen : public UWacomRunMenuWidgetBase
 {
 	GENERATED_BODY()
 

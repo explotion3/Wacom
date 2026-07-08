@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/Foundation/WacomMenuWidgetBase.h"
+#include "UI/Run/WacomRunMenuWidgetBase.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "WacomShopScreen.generated.h"
 
@@ -36,7 +36,7 @@ struct FWacomShopScreenAutomationTestView
  * 后续可用正式商店 WBP 子类继承本类替换视觉，但购买和关闭结算仍走本类接口。
  */
 UCLASS(Blueprintable)
-class WACOMAPP_API UWacomShopScreen : public UWacomMenuWidgetBase
+class WACOMAPP_API UWacomShopScreen : public UWacomRunMenuWidgetBase
 {
 	GENERATED_BODY()
 

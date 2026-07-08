@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "RunStateTypes.h"
-#include "UI/Foundation/WacomMenuWidgetBase.h"
+#include "UI/Run/WacomRunMenuWidgetBase.h"
 #include "WacomBackpackScreen.generated.h"
 
 class UButton;
@@ -57,7 +57,7 @@ struct WACOMAPP_API FWacomBackpackScreenAutomationTestView
  *   - 操作命令：Screen 只转发意图；Move/Delete/Toggle 流程由 Private command flow 提交
  */
 UCLASS(Blueprintable)
-class WACOMAPP_API UWacomBackpackScreen : public UWacomMenuWidgetBase
+class WACOMAPP_API UWacomBackpackScreen : public UWacomRunMenuWidgetBase
 {
 	GENERATED_BODY()
 
