@@ -180,6 +180,11 @@ bool FWacomUICardDetailDefaultContentAssetsSpec::RunTest(const FString& /*Parame
 	TestTagDisplayName(*this, *Lexicon, WacomTags::HandZone_Right);
 	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Poison);
 	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Slow);
+	FText SlowDisplayName;
+	TestTrue(TEXT("Lexicon resolves Slow display name"),
+		Lexicon->FindTagDisplayName(WacomTags::Status_Slow, SlowDisplayName));
+	TestEqual(TEXT("Slow uses the canonical Chinese display name"),
+		SlowDisplayName.ToString(), FString(TEXT("减速")));
 	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Freeze);
 	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Twilight);
 	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Stunned);

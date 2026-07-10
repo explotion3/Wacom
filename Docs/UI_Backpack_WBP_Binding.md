@@ -289,11 +289,11 @@ WBP 不应做：
 | `{status:EffectStatus}` | 当前效果关联状态，例如中毒、冻结、眩晕；RichText 正文按 `CardDetailTheme.StatusBrushes` 显示 inline 状态图标，并继续保留状态中文名。状态图标和中文名之间由 renderer 保留一个空格。 |
 | `{keyword:Tag}` | 当前效果或触发 tag 的关键词显示。 |
 
-默认 Lexicon 中 `Effect.Damage`、`Effect.Heal` 和 `Status.Shield` 模板会显式使用 `{icon:EffectIcon}`，因此详情正文会显示对应 inline 图标；图标具体放在句首、句中或句尾由 DataAsset 模板决定。`Effect.Draw` 默认模板是 `抽 {value:Magnitude} 张牌。`，不会显示抽牌图标，但仍会复用 `MagnitudeSourceTemplates`，例如 RuntimeCost 会显示为“抽 相当于当前费用 2 张牌。”。Discard / ExhaustSelf / GainKeyword / RemoveStatus / ModifyInitiative 等正式效果也应在默认 Lexicon 中有模板；中毒、迟缓、冻结、暮气等状态仍通过 `{status:EffectStatus}` 显示状态图标和状态名。
+默认 Lexicon 中 `Effect.Damage`、`Effect.Heal` 和 `Status.Shield` 模板会显式使用 `{icon:EffectIcon}`，因此详情正文会显示对应 inline 图标；图标具体放在句首、句中或句尾由 DataAsset 模板决定。`Effect.Draw` 默认模板是 `抽 {value:Magnitude} 张牌。`，不会显示抽牌图标，但仍会复用 `MagnitudeSourceTemplates`，例如 RuntimeCost 会显示为“抽 相当于当前费用 2 张牌。”。Discard / ExhaustSelf / GainKeyword / RemoveStatus / ModifyInitiative 等正式效果也应在默认 Lexicon 中有模板；中毒、减速、冻结、暮气等状态仍通过 `{status:EffectStatus}` 显示状态图标和状态名。
 
 自动化 `Wacom.UI.CardDetail.Assets.DefaultContent` 会审计默认 `CardExplanationLexicon` 和 `CardDetailTheme`：检查正式效果 / 被动 / 数值来源 / tag 显示名模板、RichText style row，以及关键 icon/status brush 是否能通过精确配置或 fallback brush 解析。新增正式效果 tag 或详情样式行时需要同步该测试。
 
-`PassiveOutcomeTemplates` 当前用于 `Passive.Trigger.OnCompanionCount` 这类运行时真实存在但不走 `Passive.Effects` 的结果说明。`MagnitudeSourceTemplates` 控制 `Magnitude.Source.RuntimeCost / TargetStatusStacks / HandCount` 的来源短语；`TagDisplayNames` 控制中毒 / 迟缓 / 左手区等详情正文显示名；`NamedTexts` 控制“描述 / 被动”、条件句、数值修正句和 `Muted` skip 前缀等详情内部文案。
+`PassiveOutcomeTemplates` 当前用于 `Passive.Trigger.OnCompanionCount` 这类运行时真实存在但不走 `Passive.Effects` 的结果说明。`MagnitudeSourceTemplates` 控制 `Magnitude.Source.RuntimeCost / TargetStatusStacks / HandCount` 的来源短语；`TagDisplayNames` 控制中毒 / 减速 / 左手区等详情正文显示名；`NamedTexts` 控制“描述 / 被动”、条件句、数值修正句和 `Muted` skip 前缀等详情内部文案。
 
 旧 `WBP_CardDetailTokenFlow / WBP_CardDetailTokenLine / WBP_CardDetailToken` 已删除，不再作为运行时依赖或制作入口；详情正文统一从 semantic `Blocks / Runs` 渲染到 `WBP_CardDetailSection` 的 `BodyText`。
 

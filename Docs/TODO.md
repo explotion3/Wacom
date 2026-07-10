@@ -78,6 +78,12 @@ tags:
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
   - 说明：后续只追踪表现体验，如 cue 合并、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
+- [ ] **First-person hand 动效第二阶段：两段式出牌与 fake-3D 次级通道**
+  - 状态：`Ready: 体验 polish`
+  - 归属：App / First-person Card Layer
+  - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
+  - 说明：基础合同已完成显式空帧替换、目标感知 Played、弃牌 stagger、固定离场 playback、phase timeout force-settle 和 plan 交互锁。下一阶段参考 Godot Demo 0.2 的行为节奏，独立实现 anticipation / overshoot / settle 两段式出牌、真实 draw/discard origin、flip、tilt / shadow depth、Exhausted 独立语义、音效预热和 reduced-motion / 全局速度策略；不复制 GPL 代码、shader 或资产。
+
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
   - 状态：`In Progress: 内容扩展`
   - 归属：Battle / Data / Editor

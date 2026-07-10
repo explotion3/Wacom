@@ -1149,6 +1149,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float DiscardedExitAngleOffsetDegrees = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DiscardedExitStaggerSeconds = 0.06f;
 };
 
 USTRUCT(BlueprintType)

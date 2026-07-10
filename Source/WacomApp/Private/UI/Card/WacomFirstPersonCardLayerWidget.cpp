@@ -946,6 +946,27 @@ bool UWacomFirstPersonCardLayerWidget::HasActivePresentationPlayback() const
 	return false;
 }
 
+void UWacomFirstPersonCardLayerWidget::ForceSettlePresentationPlayback()
+{
+	PendingTransitionHintsByKey.Reset();
+	PendingFeedbackHintsByKey.Reset();
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
+	{
+		if (SlotWidget)
+		{
+			SlotWidget->ForceCompletePresentationPlayback();
+		}
+	}
+	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
+	{
+		if (SlotWidget)
+		{
+			SlotWidget->ForceCompletePresentationPlayback();
+		}
+	}
+	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
+}
+
 bool UWacomFirstPersonCardLayerWidget::CanSkipEquivalentSlotRefresh(
 	const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots) const
 {
@@ -2138,6 +2159,8 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		Profile.ViewportAnchor = SlotMotionConfig.PlayedExitViewportAnchor;
 		Profile.ScaleMultiplier = SlotMotionConfig.PlayedExitScaleMultiplier;
 		Profile.AngleOffsetDegrees = SlotMotionConfig.PlayedExitAngleOffsetDegrees;
+		Profile.DurationSeconds = SlotMotionConfig.ExitDuration;
+		Profile.EasePower = SlotMotionConfig.ExitMotionProfile.EasePower;
 		break;
 	case EWacomFirstPersonCardSlotTransitionKind::Discarded:
 		Profile.OriginMode = SlotMotionConfig.DiscardedExitOriginMode;
@@ -2145,6 +2168,10 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		Profile.ViewportAnchor = SlotMotionConfig.DiscardedExitViewportAnchor;
 		Profile.ScaleMultiplier = SlotMotionConfig.DiscardedExitScaleMultiplier;
 		Profile.AngleOffsetDegrees = SlotMotionConfig.DiscardedExitAngleOffsetDegrees;
+		Profile.StartDelaySeconds =
+			FMath::Max(0, TransitionHint.SequenceIndex) * SlotMotionConfig.DiscardedExitStaggerSeconds;
+		Profile.DurationSeconds = SlotMotionConfig.ExitDuration;
+		Profile.EasePower = SlotMotionConfig.ExitMotionProfile.EasePower;
 		break;
 	default:
 		return TOptional<FWacomFirstPersonCardTransitionMotionProfile>();

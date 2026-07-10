@@ -130,7 +130,7 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 		MakeTagDisplayEntry(WacomTags::HandZone_Both, LOCTEXT("DefaultHandZoneBoth", "双手区")),
 		MakeTagDisplayEntry(WacomTags::HandZone_Right, LOCTEXT("DefaultHandZoneRight", "右手区")),
 		MakeTagDisplayEntry(WacomTags::Status_Poison, LOCTEXT("DefaultStatusPoison", "中毒")),
-		MakeTagDisplayEntry(WacomTags::Status_Slow, LOCTEXT("DefaultStatusSlow", "迟缓")),
+		MakeTagDisplayEntry(WacomTags::Status_Slow, LOCTEXT("DefaultStatusSlow", "减速")),
 		MakeTagDisplayEntry(WacomTags::Status_Freeze, LOCTEXT("DefaultStatusFreeze", "冻结")),
 		MakeTagDisplayEntry(WacomTags::Status_Twilight, LOCTEXT("DefaultStatusTwilight", "暮气")),
 		MakeTagDisplayEntry(WacomTags::Status_Stunned, LOCTEXT("DefaultStatusStunned", "眩晕")),

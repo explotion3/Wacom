@@ -147,6 +147,9 @@ bool FWacomUIBattleEndTurnPresentationPlanSequencesPhasesTest::RunTest(const FSt
 		return false;
 	}
 	TestTrue(TEXT("HUD can submit commands before plan starts"), HUD->CanSubmitPlayerActionCommand());
+	TestTrue(
+		TEXT("First-person hand interaction is enabled before the plan starts"),
+		HUD->ShouldEnableFirstPersonBattleHandInteractionForTest());
 
 	const FGuid DiscardedId = FGuid::NewGuid();
 	const FGuid RetainedId = FGuid::NewGuid();
@@ -192,6 +195,9 @@ bool FWacomUIBattleEndTurnPresentationPlanSequencesPhasesTest::RunTest(const FSt
 		FName(TEXT("EnemyAction")));
 	TestEqual(TEXT("Draw phase remains pending after enemy phase starts"), HUD->GetPresentationPlanPendingPhaseCountForTest(), 1);
 	TestFalse(TEXT("Presentation plan blocks player commands"), HUD->CanSubmitPlayerActionCommand());
+	TestFalse(
+		TEXT("Presentation plan locks first-person hand interaction"),
+		HUD->ShouldEnableFirstPersonBattleHandInteractionForTest());
 	TestTrue(TEXT("Enemy phase reuses event queue busy state"), HUD->IsBattlePresentationBusy());
 
 	for (int32 Iteration = 0; HUD->IsBattlePresentationBusy() && Iteration < 16; ++Iteration)
@@ -201,6 +207,9 @@ bool FWacomUIBattleEndTurnPresentationPlanSequencesPhasesTest::RunTest(const FSt
 
 	TestFalse(TEXT("Presentation plan finishes"), HUD->IsPresentationPlanActiveForTest());
 	TestFalse(TEXT("Presentation busy clears after plan"), HUD->IsBattlePresentationBusy());
+	TestTrue(
+		TEXT("First-person hand interaction unlocks after the plan finishes"),
+		HUD->ShouldEnableFirstPersonBattleHandInteractionForTest());
 
 	const TArray<FName> StartedPhases = HUD->GetStartedPresentationPlanPhaseNamesForTest();
 	const TArray<FName> ExpectedPhases = {

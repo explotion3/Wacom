@@ -89,6 +89,7 @@ namespace WacomFirstPersonCardLayerPresentationPlaybackSpec
 		Config.HandAnchorEnterDurationSeconds = 0.2f;
 		Config.HandAnchorEnterStaggerSeconds = 0.0f;
 		Config.ExitDuration = 0.12f;
+		Config.DiscardedExitStaggerSeconds = 0.08f;
 		return Config;
 	}
 
@@ -295,6 +296,108 @@ bool FWacomFirstPersonCardLayerExitPlaybackActiveContractTest::RunTest(const FSt
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDiscardExitStaggersBySequenceTest,
+	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.DiscardExitStaggersBySequence",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDiscardExitStaggersBySequenceTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	Layer->SetSlotMotionConfig(MakeMotionConfig());
+	const FGuid FirstCardId = FGuid::NewGuid();
+	const FGuid SecondCardId = FGuid::NewGuid();
+	const FVector2D FirstStart(180.0f, 260.0f);
+	const FVector2D SecondStart(320.0f, 260.0f);
+	Layer->SetCardSlots({ MakeSlot(FirstCardId, FirstStart), MakeSlot(SecondCardId, SecondStart) });
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	FWacomFirstPersonCardLayerTransitionHint FirstHint =
+		MakeTransitionHint(FirstCardId, EWacomFirstPersonCardSlotTransitionKind::Discarded);
+	FirstHint.SequenceIndex = 0;
+	FirstHint.SequenceCount = 2;
+	FWacomFirstPersonCardLayerTransitionHint SecondHint =
+		MakeTransitionHint(SecondCardId, EWacomFirstPersonCardSlotTransitionKind::Discarded);
+	SecondHint.SequenceIndex = 1;
+	SecondHint.SequenceCount = 2;
+	Layer->SetCardTransitionHints({ FirstHint, SecondHint });
+	Layer->SetCardSlots({});
+
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.04f);
+	UWacomFirstPersonCardLayerSlotWidget* FirstOutgoing =
+		FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 0);
+	UWacomFirstPersonCardLayerSlotWidget* SecondOutgoing =
+		FWacomFirstPersonCardLayerTestAccess::OutgoingSlotAt(*Layer, 1);
+	if (TestNotNull(TEXT("First outgoing card"), FirstOutgoing)
+		&& TestNotNull(TEXT("Second outgoing card"), SecondOutgoing))
+	{
+		TestTrue(
+			TEXT("First discard has begun moving"),
+			FirstOutgoing->GetVisualSlotView().ScreenPosition.Y > FirstStart.Y);
+		TestEqual(
+			TEXT("Second discard waits for its sequence delay"),
+			SecondOutgoing->GetVisualSlotView().ScreenPosition,
+			SecondStart);
+	}
+
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.3f);
+	TestFalse(TEXT("Staggered discard playback eventually settles"), Layer->HasActivePresentationPlayback());
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerForceSettlePresentationPlaybackTest,
+	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.ForceSettleClearsOutgoingPlayback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerForceSettlePresentationPlaybackTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
+	{
+		return false;
+	}
+
+	Layer->SetSlotMotionConfig(MakeMotionConfig());
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(180.0f, 260.0f)) });
+	Layer->SetCardTransitionHints({
+		MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Discarded)
+	});
+	Layer->SetCardSlots({});
+	TestTrue(TEXT("Exit is active before force settle"), Layer->HasActivePresentationPlayback());
+	Layer->ForceSettlePresentationPlayback();
+	TestFalse(TEXT("Force settle clears active presentation playback"), Layer->HasActivePresentationPlayback());
+	TestEqual(TEXT("Force settle removes completed outgoing slots"), Layer->GetOutgoingCardViewCount(), 0);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerRetainedPlaybackActiveContractTest,
 	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.RetainedFeedbackReportsActive",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -412,6 +515,78 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 		{});
 	Anchor->RefreshCardLayerNow(0.0f);
 	TestTrue(TEXT("Draw presentation frame starts playback immediately"), Anchor->HasActiveCardLayerPresentationPlayback());
+
+	PC->Destroy();
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardAnchorEmptyPresentationFrameReplacesPendingHintsTest,
+	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.EmptyPresentationFrameReplacesPendingHints",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardAnchorEmptyPresentationFrameReplacesPendingHintsTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	AWacomPlayerCharacter* Character =
+		World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("Character"), Character))
+	{
+		return false;
+	}
+	PC->Possess(Character);
+
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = AddProbeAnchor(Character);
+	if (!TestNotNull(TEXT("Probe anchor"), Anchor))
+	{
+		PC->Destroy();
+		Character->Destroy();
+		return false;
+	}
+
+	const FName SourceId = WacomFirstPersonCardLayerSourceIds::BattleHand();
+	const FGuid DeferredHintCardId = FGuid::NewGuid();
+	const FGuid InitiallyVisibleCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerPresentationFrame DeferredHintFrame = MakeCommitFrame(
+		SourceId,
+		{ MakeEntry(InitiallyVisibleCardId, TEXT("InitiallyVisible")) },
+		EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame);
+	DeferredHintFrame.TransitionHints.Add(
+		MakeTransitionHint(DeferredHintCardId, EWacomFirstPersonCardSlotTransitionKind::Drawn));
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(*Anchor, DeferredHintFrame);
+	Anchor->RefreshCardLayerNow(0.0f);
+
+	FWacomFirstPersonCardLayerPresentationFrame EmptyReplacementFrame = MakeCommitFrame(
+		SourceId,
+		{ MakeEntry(DeferredHintCardId, TEXT("Replacement")) },
+		EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame);
+	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(*Anchor, EmptyReplacementFrame);
+	Anchor->RefreshCardLayerNow(0.0f);
+
+	UWacomFirstPersonCardLayerWidget* Layer =
+		FWacomFirstPersonCardLayerTestAccess::CardLayer(*Anchor);
+	UWacomFirstPersonCardLayerSlotWidget* ReplacementSlot =
+		Layer ? Layer->GetSlotWidgetAt(0) : nullptr;
+	if (TestNotNull(TEXT("Card layer widget"), Layer)
+		&& TestNotNull(TEXT("Replacement slot"), ReplacementSlot))
+	{
+		const FWacomFirstPersonCardSlotAutomationTestView SlotView =
+			FWacomFirstPersonCardLayerTestAccess::View(*ReplacementSlot);
+		TestFalse(
+			TEXT("Explicit empty presentation frame clears the older deferred transition hint"),
+			SlotView.bEnterTransitionPlaybackActive);
+	}
 
 	PC->Destroy();
 	Character->Destroy();

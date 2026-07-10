@@ -173,6 +173,7 @@ namespace
 		Config.DiscardedCardExitViewportAnchor = Anchor.DiscardedCardExitViewportAnchor;
 		Config.DiscardedCardExitScaleMultiplier = Anchor.DiscardedCardExitScaleMultiplier;
 		Config.DiscardedCardExitAngleOffsetDegrees = Anchor.DiscardedCardExitAngleOffsetDegrees;
+		Config.DiscardedCardExitStaggerSeconds = Anchor.DiscardedCardExitStaggerSeconds;
 	}
 
 	void BuildInteractionConfigFromAnchor(
@@ -418,6 +419,7 @@ namespace
 		MotionConfig.DiscardedExitViewportAnchor = Config.DiscardedCardExitViewportAnchor;
 		MotionConfig.DiscardedExitScaleMultiplier = Config.DiscardedCardExitScaleMultiplier;
 		MotionConfig.DiscardedExitAngleOffsetDegrees = Config.DiscardedCardExitAngleOffsetDegrees;
+		MotionConfig.DiscardedExitStaggerSeconds = Config.DiscardedCardExitStaggerSeconds;
 		return MotionConfig;
 	}
 
@@ -604,6 +606,7 @@ namespace
 		AddVector(Config.DiscardedCardExitViewportAnchor);
 		AddFloat(Config.DiscardedCardExitScaleMultiplier);
 		AddFloat(Config.DiscardedCardExitAngleOffsetDegrees);
+		AddFloat(Config.DiscardedCardExitStaggerSeconds);
 		AddFloat(Config.PendingTargetingLiftPixels);
 		AddFloat(Config.PendingTargetingScale);
 		AddInt(Config.PendingTargetingZOrderBoost);
@@ -1245,6 +1248,19 @@ bool UWacomFirstPersonCardAnchorComponent::HasRuntimeCardLayerPendingPresentatio
 bool UWacomFirstPersonCardAnchorComponent::HasActiveCardLayerPresentationPlayback() const
 {
 	return CardLayerWidget && CardLayerWidget->HasActivePresentationPlayback();
+}
+
+void UWacomFirstPersonCardAnchorComponent::ForceSettleCardLayerPresentationPlayback()
+{
+	if (RuntimeState)
+	{
+		RuntimeState->ClearPresentationFrameHints();
+		RuntimeState->ClearPresentationFrameFeedbackHints();
+	}
+	if (CardLayerWidget)
+	{
+		CardLayerWidget->ForceSettlePresentationPlayback();
+	}
 }
 
 void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerData(

@@ -287,9 +287,10 @@ public:
 
 	void RecordFirstPersonPlayCommitForTest(
 		const FGuid& CardInstanceId,
-		const FBattlePartSlotIdentity& TargetPartKey = FBattlePartSlotIdentity())
+		const FBattlePartSlotIdentity& TargetPartKey = FBattlePartSlotIdentity(),
+		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>())
 	{
-		RecordFirstPersonPlayCommit(CardInstanceId, TargetPartKey);
+		RecordFirstPersonPlayCommit(CardInstanceId, TargetPartKey, TargetWidgetPosition);
 	}
 
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForTest(
@@ -334,6 +335,11 @@ public:
 	void SetTargetSelectionStateForTest(const FGuid& PendingCardId)
 	{
 		SetTargetSelectionStateForAutomationTest(PendingCardId);
+	}
+
+	bool ShouldEnableFirstPersonBattleHandInteractionForTest() const
+	{
+		return ShouldEnableFirstPersonBattleHandInteraction();
 	}
 
 	void ClearTargetSelectionStateForTest()

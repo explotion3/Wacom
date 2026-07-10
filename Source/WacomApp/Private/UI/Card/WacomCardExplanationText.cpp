@@ -68,7 +68,7 @@ namespace WacomCardExplanationText
 		}
 		if (StatusTag.MatchesTagExact(WacomTags::Status_Slow))
 		{
-			return LOCTEXT("StatusSlow", "迟缓");
+			return LOCTEXT("StatusSlow", "减速");
 		}
 		if (StatusTag.MatchesTagExact(WacomTags::Status_Freeze))
 		{

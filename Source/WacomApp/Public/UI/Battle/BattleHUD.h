@@ -439,7 +439,10 @@ private:
 	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
 	void StoreFirstPersonCardTransitionEvents(const TArray<struct FBattleEvent>& Events);
 	void ClearPendingFirstPersonCardTransitionEvents();
-	void RecordFirstPersonPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
+	void RecordFirstPersonPlayCommit(
+		const FGuid& CardInstanceId,
+		const FBattlePartSlotIdentity& TargetPartKey,
+		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;

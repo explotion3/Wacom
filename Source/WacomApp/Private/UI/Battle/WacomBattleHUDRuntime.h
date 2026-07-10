@@ -153,6 +153,7 @@ public:
 	FBattleTargetSelectionView BuildTargetSelectionView() const;
 	int32 GetBattleCombatLogBlockCount() const;
 	bool IsBattlePresentationBusy() const;
+	bool IsBattlePresentationPlanBusy() const;
 	bool CanSubmitPlayerActionCommand() const;
 	bool HasPendingTurnBoundaryCommand() const;
 	FText GetPendingTurnBoundaryCommandText() const;
@@ -168,9 +169,18 @@ public:
 	void CancelTargetSelect();
 	void OnKnockdownChoiceSelected(EKnockdownChoice Choice);
 
-	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
-	void SubmitPlayCardOnWorldTarget(const FGuid& CardId, const FWacomInteractionTargetHandle& TargetHandle);
-	void SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId);
+	void SubmitPlayCard(
+		const FGuid& CardId,
+		const FGuid& TargetPartId,
+		const TOptional<FVector2D>& PresentationTargetWidgetPosition = TOptional<FVector2D>());
+	void SubmitPlayCardOnWorldTarget(
+		const FGuid& CardId,
+		const FWacomInteractionTargetHandle& TargetHandle,
+		const TOptional<FVector2D>& PresentationTargetWidgetPosition = TOptional<FVector2D>());
+	void SubmitPlayCardOnHandCard(
+		const FGuid& CardId,
+		const FGuid& TargetCardId,
+		const TOptional<FVector2D>& PresentationTargetWidgetPosition = TOptional<FVector2D>());
 	void AfterCommand();
 
 	void ConsumeAndLogEvents();
@@ -207,7 +217,10 @@ public:
 	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
 	void StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>& Events);
 	void ClearPendingFirstPersonCardTransitionEvents();
-	void RecordFirstPersonPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
+	void RecordFirstPersonPlayCommit(
+		const FGuid& CardInstanceId,
+		const FBattlePartSlotIdentity& TargetPartKey,
+		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;

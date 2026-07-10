@@ -425,6 +425,11 @@ bool FWacomBattleHUDRuntime::IsBattlePresentationBusy() const
 	return PresentationCoordinator && PresentationCoordinator->IsBusy();
 }
 
+bool FWacomBattleHUDRuntime::IsBattlePresentationPlanBusy() const
+{
+	return PresentationCoordinator && PresentationCoordinator->IsPresentationPlanBusy();
+}
+
 bool FWacomBattleHUDRuntime::CanSubmitPlayerActionCommand() const
 {
 	if (!bBattleInputReady)
@@ -518,21 +523,34 @@ void FWacomBattleHUDRuntime::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
 	GetCommandController().SubmitKnockdownChoice(Choice);
 }
 
-void FWacomBattleHUDRuntime::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)
+void FWacomBattleHUDRuntime::SubmitPlayCard(
+	const FGuid& CardId,
+	const FGuid& TargetPartId,
+	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
-	GetCommandController().SubmitPlayCard(CardId, TargetPartId);
+	GetCommandController().SubmitPlayCard(CardId, TargetPartId, PresentationTargetWidgetPosition);
 }
 
 void FWacomBattleHUDRuntime::SubmitPlayCardOnWorldTarget(
 	const FGuid& CardId,
-	const FWacomInteractionTargetHandle& TargetHandle)
+	const FWacomInteractionTargetHandle& TargetHandle,
+	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
-	GetCommandController().SubmitPlayCardOnWorldTarget(CardId, TargetHandle);
+	GetCommandController().SubmitPlayCardOnWorldTarget(
+		CardId,
+		TargetHandle,
+		PresentationTargetWidgetPosition);
 }
 
-void FWacomBattleHUDRuntime::SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId)
+void FWacomBattleHUDRuntime::SubmitPlayCardOnHandCard(
+	const FGuid& CardId,
+	const FGuid& TargetCardId,
+	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
-	GetCommandController().SubmitPlayCardOnHandCard(CardId, TargetCardId);
+	GetCommandController().SubmitPlayCardOnHandCard(
+		CardId,
+		TargetCardId,
+		PresentationTargetWidgetPosition);
 }
 
 void FWacomBattleHUDRuntime::AfterCommand()
@@ -823,9 +841,13 @@ void FWacomBattleHUDRuntime::ClearPendingFirstPersonCardTransitionEvents()
 
 void FWacomBattleHUDRuntime::RecordFirstPersonPlayCommit(
 	const FGuid& CardInstanceId,
-	const FBattlePartSlotIdentity& TargetPartKey)
+	const FBattlePartSlotIdentity& TargetPartKey,
+	const TOptional<FVector2D>& TargetWidgetPosition)
 {
-	GetFirstPersonHandBridge().RecordPlayCommit(CardInstanceId, TargetPartKey);
+	GetFirstPersonHandBridge().RecordPlayCommit(
+		CardInstanceId,
+		TargetPartKey,
+		TargetWidgetPosition);
 }
 
 TArray<FWacomFirstPersonCardLayerTransitionHint>

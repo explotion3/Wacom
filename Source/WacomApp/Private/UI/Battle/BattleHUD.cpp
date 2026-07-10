@@ -478,9 +478,13 @@ void UBattleHUD::ClearPendingFirstPersonCardTransitionEvents()
 
 void UBattleHUD::RecordFirstPersonPlayCommit(
 	const FGuid& CardInstanceId,
-	const FBattlePartSlotIdentity& TargetPartKey)
+	const FBattlePartSlotIdentity& TargetPartKey,
+	const TOptional<FVector2D>& TargetWidgetPosition)
 {
-	GetBattleHUDRuntime().RecordFirstPersonPlayCommit(CardInstanceId, TargetPartKey);
+	GetBattleHUDRuntime().RecordFirstPersonPlayCommit(
+		CardInstanceId,
+		TargetPartKey,
+		TargetWidgetPosition);
 }
 
 TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCardTransitionHints(

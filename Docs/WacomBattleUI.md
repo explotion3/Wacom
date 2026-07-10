@@ -58,7 +58,7 @@ HUD 是命令出口。子 Widget 和 WBP 不直接修改 `UBattleSession`，也�
 
 `BattleInputReady` 是 BattleHUD 级玩家命令 gate，不属于 `UBattleSession` 规则阶段。进入战斗镜头 staging 期间它会临时为 false：CommandBar 按钮禁用，`CanSubmitPlayerActionCommand()` 返回 false，first-person hand release / Wait / EndTurn 等普通玩家命令不会提交；HUD 仍可刷新 Snapshot、同步场景敌人和播放非交互表现。镜头完成并激活 Battle camera look 后，GameMode 再把它恢复为 true。
 
-EndTurn phase plan 运行期间，`CanSubmitPlayerActionCommand()` 返回 false，避免阶段化弃牌、保留、敌人行动和抽牌被新的玩家命令插入。普通 target cue queue 的旧节奏不因此改变；它仍可作为非阻塞表现队列服务出牌后的轻量反馈。
+EndTurn phase plan 运行期间，`CanSubmitPlayerActionCommand()` 返回 false，first-person hand runtime interaction 也同步关闭并取消已有 hover / drag，避免阶段化弃牌、保留、敌人行动和抽牌被新的玩家输入插入；plan 完成并刷新最终 snapshot 后再恢复。普通 target cue queue 的旧节奏不因此改变；它仍可作为非阻塞表现队列服务出牌后的轻量反馈。
 
 HUD 状态入口：
 
@@ -99,7 +99,7 @@ EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当
 4. `TurnStartDraw`：用 draw checkpoint snapshot 播放新回合 `Drawn` 入场。
 5. `TurnStartHandAnchorEnter`：如果 draw checkpoint 中出现了上一手牌 checkpoint 没有的左/右手 anchor，则在普通抽牌后提交完整 hand snapshot，并播放 `HandAnchorEntered` 生成入手。
 
-手牌 phase 的完成条件由 first-person card layer 的 production playback 状态提供：仍有 active enter、exit outgoing 或 retained feedback 时保持 phase busy；播放结束后才进入下一 phase，并带 timeout 兜底。没有 journal 或 journal 无有效 phase 时，非 EndTurn / fallback 路径继续使用原来的 loose event hints 与 event queue。
+手牌 phase 的完成条件由 first-person card layer 的 production playback 状态提供：仍有 active enter、exit outgoing 或 retained feedback 时保持 phase busy；播放结束后才进入下一 phase。timeout 不是直接跳过：触发时 coordinator 必须先 force-settle 当前 Anchor / Layer，清除 pending hints、收束 active playback 并移除 outgoing slot，再启动下一 phase，避免旧动画跨阶段重叠。没有 journal 或 journal 无有效 phase 时，非 EndTurn / fallback 路径继续使用原来的 loose event hints 与 event queue。
 
 ## §4 Event Presentation Helper
 

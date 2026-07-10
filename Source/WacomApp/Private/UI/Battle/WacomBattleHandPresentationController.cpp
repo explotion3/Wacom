@@ -187,7 +187,9 @@ void FWacomBattleHandPresentationController::StoreTransitionEvents(const TArray<
 	}
 }
 
-void FWacomBattleHandPresentationController::RecordPlayCommit(const FGuid& CardInstanceId)
+void FWacomBattleHandPresentationController::RecordPlayCommit(
+	const FGuid& CardInstanceId,
+	const TOptional<FVector2D>& TargetWidgetPosition)
 {
 	if (!CardInstanceId.IsValid())
 	{
@@ -196,6 +198,7 @@ void FWacomBattleHandPresentationController::RecordPlayCommit(const FGuid& CardI
 
 	FPlayCommitHint CommitHint;
 	CommitHint.CardInstanceId = CardInstanceId;
+	CommitHint.TargetWidgetPosition = TargetWidgetPosition;
 	PendingPlayCommitHints.Add(CommitHint);
 }
 
@@ -308,16 +311,12 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 	Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
 	Frame.TransitionHints = TransitionHints;
 	Frame.FeedbackHints = FeedbackHints;
-	Frame.CommitMode = ResolveBattleHandPresentationFrameCommitMode(Frame);
-	if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame)
-	{
-		RecordSubmittedTransitionFrame();
-	}
+	// An explicit frame is a replacement contract even when both hint channels are empty.
+	// Treating it as a state refresh would leave an older deferred hint alive in the layer.
+	Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame;
+	RecordSubmittedTransitionFrame();
 	MarkSnapshotPresented(Snapshot);
-	if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame)
-	{
-		ClearPendingTransitionEvents();
-	}
+	ClearPendingTransitionEvents();
 	return Frame;
 }
 
@@ -383,9 +382,14 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 		Hint.SequenceCount = FMath::Max(1, SequenceCount);
 		if (TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Played)
 		{
-			if (FindCommitHint(CardInstanceId))
+			if (const FPlayCommitHint* CommitHint = FindCommitHint(CardInstanceId))
 			{
 				Hint.bPlayCommitFeedback = true;
+				if (CommitHint->TargetWidgetPosition.IsSet())
+				{
+					Hint.bHasPlayedExitTargetWidgetPosition = true;
+					Hint.PlayedExitTargetWidgetPosition = CommitHint->TargetWidgetPosition.GetValue();
+				}
 			}
 		}
 		Hints.Add(Hint);
@@ -491,6 +495,21 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 			EWacomFirstPersonCardSlotTransitionKind::Drawn,
 			Index,
 			FallbackDrawnCardHintCount);
+	}
+
+	TArray<FWacomFirstPersonCardLayerTransitionHint*> DiscardHints;
+	for (FWacomFirstPersonCardLayerTransitionHint& Hint : Hints)
+	{
+		if (Hint.TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Discarded)
+		{
+			DiscardHints.Add(&Hint);
+		}
+	}
+	const int32 DiscardSequenceCount = DiscardHints.Num();
+	for (int32 Index = 0; Index < DiscardHints.Num(); ++Index)
+	{
+		DiscardHints[Index]->SequenceIndex = Index;
+		DiscardHints[Index]->SequenceCount = FMath::Max(1, DiscardSequenceCount);
 	}
 
 	return Hints;

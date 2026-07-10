@@ -929,10 +929,20 @@ void FWacomBattleHUDPresentationCoordinator::PollActivePresentationPlanPhase()
 	}
 
 	ActivePresentationPlanPhaseElapsedSeconds += BattlePresentationPlanPollSeconds;
-	if ((!HasActiveFirstPersonHandPresentationPlayback()
-			&& !HasPendingFirstPersonHandPresentationFrame())
-		|| ActivePresentationPlanPhaseElapsedSeconds >= BattlePresentationPlanHandPhaseTimeoutSeconds)
+	const bool bPlaybackFinished =
+		!HasActiveFirstPersonHandPresentationPlayback()
+		&& !HasPendingFirstPersonHandPresentationFrame();
+	const bool bTimedOut =
+		ActivePresentationPlanPhaseElapsedSeconds >= BattlePresentationPlanHandPhaseTimeoutSeconds;
+	if (bPlaybackFinished || bTimedOut)
 	{
+		if (bTimedOut)
+		{
+			if (UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor())
+			{
+				Anchor->ForceSettleCardLayerPresentationPlayback();
+			}
+		}
 		StartNextPresentationPlanPhase();
 		return;
 	}

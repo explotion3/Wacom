@@ -154,6 +154,7 @@ public:
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 	bool HasActivePresentationPlayback() const;
+	void ForceSettlePresentationPlayback();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	int32 GetCardViewCount() const { return SlotWidgets.Num(); }

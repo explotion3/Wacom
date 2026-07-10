@@ -47,20 +47,14 @@ bool FWacomFirstPersonCardLayerOwner::Update(
 	{
 		const TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints =
 			Input.ConsumeTransitionHints();
-		if (TransitionHints.Num() > 0)
-		{
-			WidgetRef->SetCardTransitionHints(TransitionHints);
-		}
+		WidgetRef->SetCardTransitionHints(TransitionHints);
 	}
 
 	if (Input.bCanConsumeFeedbackHints && Input.ConsumeFeedbackHints)
 	{
 		const TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints =
 			Input.ConsumeFeedbackHints();
-		if (FeedbackHints.Num() > 0)
-		{
-			WidgetRef->SetCardFeedbackHints(FeedbackHints);
-		}
+		WidgetRef->SetCardFeedbackHints(FeedbackHints);
 	}
 
 	WidgetRef->SetCardSlots(Input.Slots);

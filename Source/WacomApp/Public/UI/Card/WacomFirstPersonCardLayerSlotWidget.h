@@ -43,6 +43,18 @@ struct FWacomFirstPersonCardEnterTransitionPlayback
 	bool bStartSoundPlayed = false;
 };
 
+struct FWacomFirstPersonCardExitTransitionPlayback
+{
+	bool bActive = false;
+	FWacomFirstPersonCardLayerSlotView StartSlotView;
+	FWacomFirstPersonCardLayerSlotView TargetSlotView;
+	float ElapsedSeconds = 0.0f;
+	float StartDelaySeconds = 0.0f;
+	float DurationSeconds = 0.0f;
+	float ArcLiftPixels = 0.0f;
+	float EasePower = 1.0f;
+};
+
 #if WITH_AUTOMATION_TESTS
 struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 {
@@ -82,6 +94,10 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	float EnterTransitionElapsedSeconds = 0.0f;
 	float EnterTransitionStartDelaySeconds = 0.0f;
 	float EnterTransitionDurationSeconds = 0.0f;
+	bool bExitTransitionPlaybackActive = false;
+	float ExitTransitionElapsedSeconds = 0.0f;
+	float ExitTransitionStartDelaySeconds = 0.0f;
+	float ExitTransitionDurationSeconds = 0.0f;
 	int32 EnterTransitionSoundRequestCount = 0;
 	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKind =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
@@ -129,6 +145,7 @@ public:
 	void TriggerCommitFeedback();
 	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
 	bool HasActivePresentationPlayback() const;
+	void ForceCompletePresentationPlayback();
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
 	void SetSlotVisualConfig(const FWacomFirstPersonCardSlotVisualConfig& InConfig);
 	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
@@ -264,6 +281,7 @@ private:
 	float GestureElapsedSeconds = 0.0f;
 	float ExitMotionElapsedSeconds = 0.0f;
 	FWacomFirstPersonCardEnterTransitionPlayback EnterTransitionPlayback;
+	FWacomFirstPersonCardExitTransitionPlayback ExitTransitionPlayback;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
@@ -274,6 +292,7 @@ private:
 	bool bIsPressedForFirstPersonLayer = false;
 	bool bHasVisualSlotView = false;
 	bool bIsExitingForFirstPersonLayer = false;
+	bool bUsesFixedExitTransitionPlayback = false;
 	bool bWantsSlotMotionTick = false;
 	bool bPreserveGestureReturnMotion = false;
 	bool bGestureTargetValid = false;
@@ -407,6 +426,13 @@ private:
 	void PlayEnterTransitionStartSound();
 	bool IsEnterTransitionPlaybackActive() const { return EnterTransitionPlayback.bActive; }
 	bool IsEnterTransitionBlockingInteraction() const;
+	void StartExitTransitionPlayback(
+		const FWacomFirstPersonCardLayerSlotView& StartSlotView,
+		const FWacomFirstPersonCardLayerSlotView& TargetSlotView,
+		const FWacomFirstPersonCardTransitionMotionProfile& ExitProfile);
+	void ClearExitTransitionPlayback();
+	bool TickExitTransitionPlayback(float DeltaTime);
+	bool IsExitTransitionPlaybackActive() const { return ExitTransitionPlayback.bActive; }
 	static FWacomFirstPersonCardLayerSlotView LerpSlotView(
 		const FWacomFirstPersonCardLayerSlotView& From,
 		const FWacomFirstPersonCardLayerSlotView& To,

@@ -115,6 +115,7 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	FVector2D DiscardedCardExitViewportAnchor = FVector2D(0.5f, 1.0f);
 	float DiscardedCardExitScaleMultiplier = 0.96f;
 	float DiscardedCardExitAngleOffsetDegrees = 0.0f;
+	float DiscardedCardExitStaggerSeconds = 0.06f;
 	float PendingTargetingLiftPixels = 36.0f;
 	float PendingTargetingScale = 1.08f;
 	int32 PendingTargetingZOrderBoost = 1200;

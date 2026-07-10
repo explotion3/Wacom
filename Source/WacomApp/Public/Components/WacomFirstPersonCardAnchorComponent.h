@@ -374,6 +374,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-30.0", UIMax = "30.0", Units = "deg", ToolTip = "弃置离场终点相对当前卡牌角度的额外偏移，单位为度。"))
 	float DiscardedCardExitAngleOffsetDegrees = 0.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "0.0", UIMax = "0.2", Units = "s", ToolTip = "同一批弃牌中每张卡开始离场的错峰间隔，单位为秒；推荐 0.04-0.10，只影响表现顺序，不改变弃牌规则或手牌顺序。"))
+	float DiscardedCardExitStaggerSeconds = 0.06f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|03 Projection", meta = (ToolTip = "是否在投影、边缘下坠、悬停上浮和等待选目标上浮后，把最终卡牌位置吸附到稳定网格；用于减少 UMG 旋转时的位置闪动。"))
 	bool bEnableCardLayerPixelSnapping = true;
 
@@ -682,6 +685,7 @@ public:
 
 	bool HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const;
 	bool HasActiveCardLayerPresentationPlayback() const;
+	void ForceSettleCardLayerPresentationPlayback();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|99 Debug")
 	bool HasRuntimeCardLayerData() const;

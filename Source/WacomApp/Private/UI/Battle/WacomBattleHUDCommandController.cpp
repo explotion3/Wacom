@@ -57,7 +57,8 @@ FWacomBattleHUDCommandController::FWacomBattleHUDCommandController(
 
 void FWacomBattleHUDCommandController::SubmitPlayCard(
 	const FGuid& CardId,
-	const FGuid& TargetPartId)
+	const FGuid& TargetPartId,
+	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
 	Runtime.HideCardDetailPanel();
 
@@ -95,7 +96,10 @@ void FWacomBattleHUDCommandController::SubmitPlayCard(
 		return;
 	}
 
-	Runtime.RecordFirstPersonPlayCommit(CardId, TargetPart ? TargetPart->Identity : FBattlePartSlotIdentity());
+	Runtime.RecordFirstPersonPlayCommit(
+		CardId,
+		TargetPart ? TargetPart->Identity : FBattlePartSlotIdentity(),
+		PresentationTargetWidgetPosition);
 	Runtime.ClearPendingTargetingCardId();
 	Runtime.SetUIState(EBattleUIState::Idle);
 	AfterCommand(LogContext, PreCommandSnapshot);
@@ -103,7 +107,8 @@ void FWacomBattleHUDCommandController::SubmitPlayCard(
 
 void FWacomBattleHUDCommandController::SubmitPlayCardOnWorldTarget(
 	const FGuid& CardId,
-	const FWacomInteractionTargetHandle& TargetHandle)
+	const FWacomInteractionTargetHandle& TargetHandle,
+	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
 	Runtime.HideCardDetailPanel();
 
@@ -141,7 +146,10 @@ void FWacomBattleHUDCommandController::SubmitPlayCardOnWorldTarget(
 		return;
 	}
 
-	Runtime.RecordFirstPersonPlayCommit(CardId, FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey));
+	Runtime.RecordFirstPersonPlayCommit(
+		CardId,
+		FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey),
+		PresentationTargetWidgetPosition);
 	Runtime.ClearPendingTargetingCardId();
 	Runtime.SetUIState(EBattleUIState::Idle);
 	AfterCommand(LogContext, PreCommandSnapshot);
@@ -149,7 +157,8 @@ void FWacomBattleHUDCommandController::SubmitPlayCardOnWorldTarget(
 
 void FWacomBattleHUDCommandController::SubmitPlayCardOnHandCard(
 	const FGuid& CardId,
-	const FGuid& TargetCardId)
+	const FGuid& TargetCardId,
+	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
 	Runtime.HideCardDetailPanel();
 
@@ -178,7 +187,10 @@ void FWacomBattleHUDCommandController::SubmitPlayCardOnHandCard(
 		return;
 	}
 
-	Runtime.RecordFirstPersonPlayCommit(CardId, FBattlePartSlotIdentity());
+	Runtime.RecordFirstPersonPlayCommit(
+		CardId,
+		FBattlePartSlotIdentity(),
+		PresentationTargetWidgetPosition);
 	Runtime.ClearPendingTargetingCardId();
 	Runtime.SetUIState(EBattleUIState::Idle);
 	AfterCommand(LogContext, PreCommandSnapshot);

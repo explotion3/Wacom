@@ -115,6 +115,7 @@ FWacomFirstPersonCardSlotMotionConfig NormalizeSlotMotionConfig(
 	Config.DiscardedExitViewportAnchor.X = FMath::Clamp(Config.DiscardedExitViewportAnchor.X, 0.0f, 1.0f);
 	Config.DiscardedExitViewportAnchor.Y = FMath::Clamp(Config.DiscardedExitViewportAnchor.Y, 0.0f, 1.0f);
 	Config.DiscardedExitScaleMultiplier = FMath::Max(0.01f, Config.DiscardedExitScaleMultiplier);
+	Config.DiscardedExitStaggerSeconds = FMath::Max(0.0f, Config.DiscardedExitStaggerSeconds);
 	return Config;
 }
 
@@ -185,7 +186,8 @@ bool AreSlotMotionConfigsEquivalent(
 		&& A.DiscardedExitOriginMode == B.DiscardedExitOriginMode
 		&& AreVectorsEquivalent(A.DiscardedExitViewportAnchor, B.DiscardedExitViewportAnchor)
 		&& AreFloatsEquivalent(A.DiscardedExitScaleMultiplier, B.DiscardedExitScaleMultiplier)
-		&& AreFloatsEquivalent(A.DiscardedExitAngleOffsetDegrees, B.DiscardedExitAngleOffsetDegrees);
+		&& AreFloatsEquivalent(A.DiscardedExitAngleOffsetDegrees, B.DiscardedExitAngleOffsetDegrees)
+		&& AreFloatsEquivalent(A.DiscardedExitStaggerSeconds, B.DiscardedExitStaggerSeconds);
 }
 
 FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(

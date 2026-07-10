@@ -13,7 +13,9 @@ public:
 	void Reset();
 	void ClearPendingTransitionEvents();
 	void StoreTransitionEvents(const TArray<FBattleEvent>& Events);
-	void RecordPlayCommit(const FGuid& CardInstanceId);
+	void RecordPlayCommit(
+		const FGuid& CardInstanceId,
+		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
 	bool HasPendingTransitionPresentation() const;
 	void PreservePendingEntryRevealForNextRefresh();
 	void DiscardSubmittedTransitionFrame();
@@ -46,6 +48,7 @@ private:
 	struct FPlayCommitHint
 	{
 		FGuid CardInstanceId;
+		TOptional<FVector2D> TargetWidgetPosition;
 	};
 
 	FBattleSnapshot BuildEmptyHandBaseline(const FBattleSnapshot& Snapshot) const;

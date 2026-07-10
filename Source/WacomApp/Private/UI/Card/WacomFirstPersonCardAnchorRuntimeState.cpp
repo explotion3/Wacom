@@ -239,14 +239,13 @@ FWacomFirstPersonCardAnchorRuntimeState::ConsumeFeedbackHintsForCurrentSource()
 
 bool FWacomFirstPersonCardAnchorRuntimeState::HasPresentationFrameHintsForCurrentSource() const
 {
-	return PresentationFrameHintSourceId == SourceId && PresentationFrameHints.Num() > 0;
+	return !SourceId.IsNone() && PresentationFrameHintSourceId == SourceId;
 }
 
 bool FWacomFirstPersonCardAnchorRuntimeState::HasPresentationFrameHintsForSource(FName InSourceId) const
 {
 	return !InSourceId.IsNone()
-		&& PresentationFrameHintSourceId == InSourceId
-		&& PresentationFrameHints.Num() > 0;
+		&& PresentationFrameHintSourceId == InSourceId;
 }
 
 bool FWacomFirstPersonCardAnchorRuntimeState::CanConsumePresentationFrameHintsForCurrentSource() const
@@ -269,14 +268,13 @@ FWacomFirstPersonCardAnchorRuntimeState::ConsumePresentationFrameHintsForCurrent
 
 bool FWacomFirstPersonCardAnchorRuntimeState::HasPresentationFrameFeedbackHintsForCurrentSource() const
 {
-	return PresentationFrameFeedbackHintSourceId == SourceId && PresentationFrameFeedbackHints.Num() > 0;
+	return !SourceId.IsNone() && PresentationFrameFeedbackHintSourceId == SourceId;
 }
 
 bool FWacomFirstPersonCardAnchorRuntimeState::HasPresentationFrameFeedbackHintsForSource(FName InSourceId) const
 {
 	return !InSourceId.IsNone()
-		&& PresentationFrameFeedbackHintSourceId == InSourceId
-		&& PresentationFrameFeedbackHints.Num() > 0;
+		&& PresentationFrameFeedbackHintSourceId == InSourceId;
 }
 
 bool FWacomFirstPersonCardAnchorRuntimeState::CanConsumePresentationFrameFeedbackHintsForCurrentSource() const

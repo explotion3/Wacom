@@ -76,7 +76,10 @@ public:
 	void PreservePendingEntryRevealForNextRefresh();
 	bool HasPendingPresentationFrame() const;
 	void TickPendingPresentationFrames(float DeltaTime);
-	void RecordPlayCommit(const FGuid& CardInstanceId, const FBattlePartSlotIdentity& TargetPartKey);
+	void RecordPlayCommit(
+		const FGuid& CardInstanceId,
+		const FBattlePartSlotIdentity& TargetPartKey,
+		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;

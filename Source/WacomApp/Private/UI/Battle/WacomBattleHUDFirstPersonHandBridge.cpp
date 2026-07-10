@@ -280,7 +280,9 @@ bool FWacomBattleHUDFirstPersonHandBridge::ShouldUseFirstPersonBattleHandLayer()
 
 bool FWacomBattleHUDFirstPersonHandBridge::ShouldEnableFirstPersonBattleHandInteraction() const
 {
-	return ShouldUseFirstPersonBattleHandLayer() && Runtime.IsBattleInputReady();
+	return ShouldUseFirstPersonBattleHandLayer()
+		&& Runtime.IsBattleInputReady()
+		&& !Runtime.IsBattlePresentationPlanBusy();
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
@@ -579,19 +581,29 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragReleased(
 	{
 		return;
 	}
+	const TOptional<FVector2D> PresentationTargetWidgetPosition =
+		DropResult.bHasFeedbackTargetScreenPosition
+			? TOptional<FVector2D>(DropResult.FeedbackTargetScreenPosition)
+			: TOptional<FVector2D>();
 
 	switch (DropResult.IntentKind)
 	{
 	case EWacomBattleCardDropIntentKind::PlayCardNoTarget:
-		Runtime.SubmitPlayCard(CardInstanceId, FGuid());
+		Runtime.SubmitPlayCard(CardInstanceId, FGuid(), PresentationTargetWidgetPosition);
 		return;
 
 	case EWacomBattleCardDropIntentKind::PlayCardWorldTarget:
-		Runtime.SubmitPlayCardOnWorldTarget(CardInstanceId, DropResult.TargetHandle);
+		Runtime.SubmitPlayCardOnWorldTarget(
+			CardInstanceId,
+			DropResult.TargetHandle,
+			PresentationTargetWidgetPosition);
 		return;
 
 	case EWacomBattleCardDropIntentKind::PlayCardCardTarget:
-		Runtime.SubmitPlayCardOnHandCard(CardInstanceId, DropResult.TargetHandle.CardInstanceId);
+		Runtime.SubmitPlayCardOnHandCard(
+			CardInstanceId,
+			DropResult.TargetHandle.CardInstanceId,
+			PresentationTargetWidgetPosition);
 		return;
 
 	default:
@@ -1421,7 +1433,8 @@ void FWacomBattleHUDFirstPersonHandBridge::TickPendingPresentationFrames(float D
 
 void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(
 	const FGuid& CardInstanceId,
-	const FBattlePartSlotIdentity& TargetPartKey)
+	const FBattlePartSlotIdentity& TargetPartKey,
+	const TOptional<FVector2D>& TargetWidgetPosition)
 {
 	if (!CardInstanceId.IsValid())
 	{
@@ -1437,7 +1450,7 @@ void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(
 		Runtime.PlayBattlePresentationCue(Cue);
 	}
 
-	PresentationController.RecordPlayCommit(CardInstanceId);
+	PresentationController.RecordPlayCommit(CardInstanceId, TargetWidgetPosition);
 }
 
 TArray<FWacomFirstPersonCardLayerTransitionHint> FWacomBattleHUDFirstPersonHandBridge::BuildTransitionHints(
